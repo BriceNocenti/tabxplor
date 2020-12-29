@@ -1,0 +1,38 @@
+Package: tablr
+Title: A Tidy Way to Make Multiple Crosstabs, Transform them and Visualise them
+Version: 0.0.0.9000
+Authors@R: 
+    person(given = "Brice",
+           family = "Nocenti",
+           role = c("aut", "cre"),
+           email = "brice.nocenti@gmail.com")
+Description: What the package does (one paragraph).
+License: GPL (>= 3)
+>>>>>>> theirs
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.1.1
+Suggests: 
+    testthat (>= 2.0.0),
+    DescTools (>= 0.99.0)
+Config/testthat/edition: 2
+Imports: 
+    stringr (>= 1.4.0),
+    crayon (>= 1.3.4),
+    dplyr (>= 1.0.0),
+    forcats (>= 0.5.0),
+    magrittr (>= 2.0.0),
+    purrr (>= 0.3.0),
+    rlang (>= 0.4.0),
+    tibble (>= 3.0.0),
+    tidyr (>= 1.0.0),
+    vctrs (>= 0.3.0),
+    cli (>= 2.0.0),
+    tidyselect (>= 1.0.0),
+    stringi (>= 1.5.0),
+    pillar (>= 1.4.0),
+    openxlsx (>= 4.0.0),
+    methods,
+    stats (>= 4.0.0)
+
