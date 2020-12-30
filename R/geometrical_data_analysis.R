@@ -2,7 +2,7 @@
 
 # Geometrical data analysis AC/ACM----------------------------------------------
 
-#Fonction : un thème ggplot2 commun pour habiller les graphes des ACM
+#Fonction : un theme ggplot2 commun pour habiller les graphes des ACM
 #' A ggplot2 Theme for Geometrical Data Analysis
 #'
 #' @param res An object created with \code{FactoMineR::\link[FactoMineR]{MCA}},
@@ -46,24 +46,24 @@ theme_mca <- function(res = res.mca, axes = c(1,2), legend.position = c("none", 
   else { coord_graph <- ggplot2::coord_fixed() }
 
   #if (no_size_scale == FALSE) {
-  scale_size <- ggplot2::scale_size_area(max_size = size_scale_max) #Échelle de taille des points
+  scale_size <- ggplot2::scale_size_area(max_size = size_scale_max)
   #} else {
   #  scale_size <- NULL
   #}
   list(
-    ggplot2::geom_hline(yintercept = 0, color="black", linetype = "dashed"), #Axe horizontal
-    ggplot2::geom_vline(xintercept = 0, color="black", linetype = "dashed"), #Axe vertical
+    ggplot2::geom_hline(yintercept = 0, color="black", linetype = "dashed"), # Horizontal axe
+    ggplot2::geom_vline(xintercept = 0, color="black", linetype = "dashed"), # Vertical axe
     ggplot2::labs(x = first_axe_title, y =  second_axe_title),
     scale_size,
-    scale_color_acm, #Palette de couleurs
+    scale_color_acm, #Color palette
     scale_fill_acm,
-    coord_graph, #Assurer que les proportions relatives des deux axes sont respectées
+    coord_graph, #Assure that proportion between the two axes are kept
     ggplot2::theme_minimal(),
     ggplot2::theme(legend.position = legend.position[1],
                    panel.grid.minor = ggplot2::element_blank(), #element_line(size = 0.05, color="gray96"),
                    panel.grid.major = ggplot2::element_blank(), #element_line(size = 0.05, color="gray96"),
-                   strip.text = ggplot2::element_text(face = "bold"), #Titre des facets
-                   plot.title = ggplot2::element_text(hjust = 0.5, face = "bold"), #Centrer le titre du graphique
+                   strip.text = ggplot2::element_text(face = "bold"), #Titles of facets
+                   plot.title = ggplot2::element_text(hjust = 0.5, face = "bold"), #Center titre of graph
                    axis.title.x = ggplot2::element_text(size = 12, hjust = 1),
                    axis.title.y = ggplot2::element_text(size = 12, hjust = 1) )
   )
@@ -76,10 +76,10 @@ theme_mca <- function(res = res.mca, axes = c(1,2), legend.position = c("none", 
 #     geom_vline(xintercept = 0, color="black", linetype = "dashed"), #Axe vertical
 #     labs(x = paste0("Axe ", axes[1]," (", round(res.ca$eig[axes[1],2], 1), "%)"), # Titres des axes
 #          y = paste0("Axe ", axes[2]," (", round(res.ca$eig[axes[2],2], 1), "%)") ),
-#     scale_size_area(max_size = 10), #Échelle de taille des points
+#     scale_size_area(max_size = 10), #Echelle de taille des points
 #     scale_color_brewer(palette = "Dark2"), #Palette de couleurs
 #     scale_fill_brewer(palette = "Dark2"),
-#     coord_fixed(), #Assurer que les proportions relatives des deux axes sont respectées
+#     coord_fixed(), #Assurer que les proportions relatives des deux axes sont respectees
 #     theme_minimal(),
 #     theme(legend.position = "none",
 #           panel.grid.minor = element_blank(), #element_line(size = 0.05, color="gray96"),
@@ -91,10 +91,9 @@ theme_mca <- function(res = res.mca, axes = c(1,2), legend.position = c("none", 
 #   )
 # }
 
-#Fonction : à ajouter à la fin des graphes pour ouvrir en svg dans firefox (normal),
-# ou pour ouvrir avec ggplotly (affichage interactif d'infos au survol des points)
-#            - Si package (user-friendly) : ggi (sortie graphe interactif)
-#' An Output Function to Draw Dynamic Graphs with ggplot2
+
+
+#' An Output Function to Draw Dynamic Graphs or Save/Open with ggplot2
 #' @description Will be saved in the project directory, //2-Images
 #' @param plot The plot, created with ggplot2.
 #' @param type Draw interactive graph with ggiraph, or save normal graph with ggsave.
@@ -123,7 +122,7 @@ ggout <- function(plot = last_plot(),
     height <- 21
   }
   if (type[1] == "normal") {
-    path <- stringr::str_c("02-Images\\", name, ".", xt)
+    path <- stringr::str_c("Plots\\", name, ".", xt)
 
     if (replace == FALSE) {
       i <- 0
@@ -131,7 +130,7 @@ ggout <- function(plot = last_plot(),
       while (file_do_not_exist == FALSE) {
         if (file.exists(path)) {
           i = i+1
-          path <- stringr::str_c("02-Images\\", name, i, ".", xt)
+          path <- stringr::str_c("Plots\\", name, i, ".", xt)
         } else {
           file_do_not_exist <- TRUE
         }
@@ -213,18 +212,18 @@ ggout <- function(plot = last_plot(),
 # shift_colors = 0
 # type = "text"
 # profiles_tooltip_discard = "^Pas "
-
+#
 # type = "text"
 # sup_vars =  c("PE0", "cah")
 # tooltip_vars_1lv = "ENCADRacm"
 # tooltip_vars = "cah"
 
-# BUGS :             - Couleur du tooltip change inopinément avec labels : signalé david gohel ggiraph
-#                    - légende des couleurs : vilain, "a" en couleur et nom en noir
+# BUGS :             - Couleur du tooltip change inopinement avec labels : signale david gohel ggiraph
+#                    - legende des couleurs : vilain, "a" en couleur et nom en noir
 # Ajouter :          - calculer taille par couleur en option (bof) ?
 #                    - Option color profiles by active_vars / by cah (on ggmca_ind ?) ?
-#                    - Distinguer cah des autres ; la mettre en labels dans type = "text" ? ; tj couleurs liées aux profils (non) ?
-#                    - analyse des données structurées
+#                    - Distinguer cah des autres ; la mettre en labels dans type = "text" ? ; tj couleurs liees aux profils (non) ?
+#                    - analyse des donnees structurees
 
 
 
@@ -343,7 +342,7 @@ ggmca <-
 
 
 
-    #Variables supplémentaires :
+    #Supplementary variables :
     if (length(sup_vars) != 0) {
       #if (missing(dat)) {
       data_name <- as.character(res.mca$call$call$X[[2]])
@@ -363,7 +362,7 @@ ggmca <-
                      dplyr::arrange(noms) ) %>% magrittr::set_names(sup_vars)
 
 
-      #Quand la fonction MCA() a ajouté le nom de la variable au début des noms de modalités, l’enlever
+      #When MCA() added variable name at the beginning of levels names, remove it
       sup_vars_coord %<>%
         purrr::imap(~ dplyr::mutate(.x, noms = fct_clean(noms, stringr::str_c("^", .y, "_")))) %>%  #More precise ?
         purrr::map(~ dplyr::select(., noms, !!dim1, !!dim2))
@@ -387,16 +386,18 @@ ggmca <-
       #     TRUE                    ~ stringr::str_c("(", stringr::str_pad(stringr::str_c(" -", sign(. - dplyr::last(.)) * (. - dplyr::last(.))), 4 + get_digits(.)), "%) ", stringr::str_pad(., 2 + get_digits(.)), "%") )
       #   )
       # }
-      var_spread_chr <- ~ dplyr::case_when(
-        . == dplyr::last(.) ~ stringr::str_c(., "%"),
-        . - dplyr::last(.) > 0         ~ stringr::str_c("(", stringr::str_pad(stringr::str_c("+" , sign(. - dplyr::last(.)) * (. - dplyr::last(.))),
-                                                                              3 + get_digits(.), pad = "#"),
-                                                        "%) ", stringr::str_pad(., 2 + get_digits(.), pad = "#"), "%"),
-        TRUE                    ~ stringr::str_c("(", stringr::str_pad(stringr::str_c(" -", sign(. - dplyr::last(.)) * (. - dplyr::last(.))),
-                                                                       4 + get_digits(.), pad = "#"),
-                                                 "%) ", stringr::str_pad(., 2 + get_digits(.), pad = "#"), "%") ) %>%
-        stringr::str_replace_all("#", " ") #There were unbreakable space ??
-      #If digits are more than 1 : add 1*sign(get_digits(.)) ?
+
+      # # No need when workaround pct + pct vctrs bug :  -----------------
+      # var_spread_chr <- ~ dplyr::case_when(
+      #   . == dplyr::last(.) ~ stringr::str_c(., "%"),
+      #   . - dplyr::last(.) > 0         ~ stringr::str_c("(", stringr::str_pad(stringr::str_c("+" , sign(. - dplyr::last(.)) * (. - dplyr::last(.))),
+      #                                                                         3 + get_digits(.), pad = "#"),
+      #                                                   "%) ", stringr::str_pad(., 2 + get_digits(.), pad = "#"), "%"),
+      #   TRUE                    ~ stringr::str_c("(", stringr::str_pad(stringr::str_c(" -", sign(. - dplyr::last(.)) * (. - dplyr::last(.))),
+      #                                                                  4 + get_digits(.), pad = "#"),
+      #                                            "%) ", stringr::str_pad(., 2 + get_digits(.), pad = "#"), "%") ) %>%
+      #   stringr::str_replace_all("#", stringi::stri_unescape_unicode("\\u202f\\u202f")) #2 unbreakable spaces
+      # #If digits are more than 1 : add 1*sign(get_digits(.)) ?
 
 
 
@@ -435,10 +436,12 @@ ggmca <-
             dplyr::filter(.zone == "base" | .SUP_NAME %in% tooltip_vars |
                             (.SUP_NAME %in% active_vars & .SUP != dplyr::last(.SUP)) |
                             (.SUP_NAME %in% tooltip_vars_1lv & .SUP == dplyr::first(.SUP)) ) %>%
-            dplyr::ungroup()
+            dplyr::ungroup() %>%
+            dplyr::mutate_at("pct", ~ vec_data(.) * 100) # Workaround for vctrs pct + pct bug -------------------
         ) %>% magrittr::set_names(sup_vars)
 
-      #Quand la fonction MCA() a ajouté le nom de la variable au début des noms de modalités, l’enlever
+
+      #When MCA() added variable name at the beginnif of levels names, remove it
       wtables %<>% purrr::imap(~ dplyr::mutate_at(.x, tidyselect::all_of(.y), function(.var) fct_clean(.var, stringr::str_c("^", .y, "_")) ) %>%
                                  dplyr::mutate(.SUP = stringr::str_remove(.SUP, stringr::str_c("^", .SUP_NAME, "_"))) )
 
@@ -450,24 +453,57 @@ ggmca <-
       sup_vars_count <- wtables %>%
         purrr::imap(~ tabdraw(.x, weighted_n, row_var = !!.y, col_var = no_var2, tab_var = no_var3,
                               tot = "row", totaltab = "no", perc = "no") %>%
-                      purrr::map(~ dplyr::mutate(., n = as.double(n)) %>% dplyr::rename(wcount = n) %>% dplyr::rename_at(1, ~"noms")) ) %>%
+                      purrr::map(~ dplyr::mutate(., n = as.double(n)) %>%
+                                   dplyr::rename(wcount = n) %>%
+                                   dplyr::rename_at(1, ~"noms")) ) %>%
         purrr::flatten()
 
       # sup_vars_begin_text <- wtables %>%
       #   purrr::imap(~ dplyr::mutate(.x, clean_levels = fct_clean(!!rlang::sym(.y), stringr::str_c(.y, "_")) ))
       # if (cleannames == TRUE) sup_vars_begin_text %<>% purrr::map(~ dplyr::mutate(., clean_levels = fct_clean(clean_levels)))
       sup_vars_begin_text <- wtables %>%
-        purrr::imap(~ dplyr::mutate(.x, begin_text = stringr::str_c("<b>", !!rlang::sym(.y), "</b>\nEffectifs : ", stringr::str_c(pct, "%")) ) %>%  #, "\n\n<b>Variables actives :</b>"
-                      tabdraw(begin_text, row_var = !!.y, col_var = no_var2, tab_var = no_var3,
+        purrr::imap(~ dplyr::mutate(.x, begin_text = stringr::str_c(
+          "<b>", !!rlang::sym(.y),"</b>\nEffectifs : ", stringr::str_c(round(pct, 0), "%")) ) %>%  #, "\n\n<b>Variables actives :</b>"
+            tabdraw(begin_text, row_var = !!.y, col_var = no_var2, tab_var = no_var3,
                               tot = "row", totaltab = "no", perc = "col") %>%
                       purrr::map(~ dplyr::rename_at(., 1, ~"noms") %>% dplyr::rename(begin_text = n) ) ) %>% purrr::flatten()
 
+      #With no pct + pct vctrs bug
+      # interactive_text <- wtables %>%
+      #   purrr::imap(~ dplyr::group_by(dplyr::filter(.x, .zone == "sup_cols"), .SUP) %>%
+      #                 dplyr::mutate_at("pct", vec_data) %>% # Workaround for vctrs pct + pct bug -------------------
+      #                 dplyr::mutate_at("pct", var_spread_chr) %>% dplyr::ungroup() %>%
+      #                 dplyr::mutate_at("pct", ~ stringr::str_c("\n", .SUP, " : ", .)) %>%
+      #                 tabdraw(pct, row_var = !!.y, col_var = .SUP, tab_var = no_var3,
+      #                         zone = "sup_cols", tot = "row", totaltab = "no", perc = "row") %>%
+      #                 purrr::map(~ dplyr::rename_at(., 1, ~"noms") ) ) %>% purrr::flatten()
+
+      #Workaround for pct + pct vctrs bug --------------------------------------
       interactive_text <- wtables %>%
-        purrr::imap(~ dplyr::group_by(dplyr::filter(.x, .zone == "sup_cols"), .SUP) %>%
-                      dplyr::mutate_at("pct", var_spread_chr) %>% dplyr::ungroup() %>% dplyr::mutate_at("pct", ~ stringr::str_c("\n", .SUP, " : ", .)) %>%
+        purrr::map(~ dplyr::group_by(dplyr::filter(.x, .zone == "sup_cols"), .SUP) %>%
+                     dplyr::mutate(
+                       dev = round(pct - dplyr::last(pct), 0),
+                       pct = dplyr::case_when(
+                         dev == 0 ~ stringr::str_c(round(pct, 0), "%"),
+                         dev >  0 ~ stringr::str_c(
+                           "(", stringr::str_pad(stringr::str_c(
+                             "+" , sign(dev) * (dev)),3 , pad = "#"),"%) ",
+                           stringr::str_pad(round(pct, 0), 2 , pad = "#"), "%"),
+                         dev <  0 ~ stringr::str_c(
+                           "(", stringr::str_pad(stringr::str_c(
+                             "-" , sign(dev) * (dev)),4 , pad = "#"),"%) ",
+                           stringr::str_pad(round(pct, 0), 2 , pad = "#"), "%")
+                       ) %>%
+                         stringr::str_replace_all("#", stringi::stri_unescape_unicode("\\u202f\\u202f")) # 2 unbreakable spaces ??
+                     ) %>%
+                     dplyr::select(- dev) %>%
+                     dplyr::ungroup()
+        ) %>%
+        purrr::imap(~ dplyr::mutate_at(.x, "pct", ~ stringr::str_c("\n", .SUP, " : ", .)) %>%
                       tabdraw(pct, row_var = !!.y, col_var = .SUP, tab_var = no_var3,
                               zone = "sup_cols", tot = "row", totaltab = "no", perc = "row") %>%
-                      purrr::map(~ dplyr::rename_at(., 1, ~"noms") ) ) %>% purrr::flatten()
+                      purrr::map(~ dplyr::rename_at(., 1, ~ "noms") )) %>% purrr::flatten()
+
       tooltip_first_levels <- wtables[[1]] %>% dplyr::filter(.SUP_NAME %in% tooltip_vars) %>%
         dplyr::group_by(.SUP_NAME) %>% dplyr::slice(1) %>% dplyr::pull(.SUP) %>% as.character()       #purrr::map(tooltip_vars, ~ dplyr::pull(dat, !!rlang::sym(.)) %>% levels() %>% .[1])
       active_first_variable <- wtables[[1]] %>% dplyr::filter(.SUP_NAME == active_vars[1]) %>%
@@ -475,7 +511,7 @@ ggmca <-
       interactive_text %<>%
         purrr::map(~ purrr::reduce2(.x = tooltip_first_levels, .y = tooltip_vars, .init = .,
                                     .f = ~ dplyr::mutate_at(..1, dplyr::vars(tidyselect::any_of(..2)),
-                                                            function(.var) stringr::str_c("\n\n<b>Répartition par ", ..3, " :</b>" , .var))) ) %>%
+                                                            function(.var) stringr::str_c("\n\n<b>Repartition par ", ..3, " :</b>" , .var))) ) %>%
         purrr::map(~dplyr::mutate_at(., tidyselect::all_of(active_first_variable),
                                      function(.var) stringr::str_c("\n\n<b>Variables actives :</b>", .var)))
 
@@ -496,16 +532,19 @@ ggmca <-
       if (length(keep_levels   ) >= 1L) sup_vars_coord %<>% purrr::map(~ dplyr::filter(., stringr::str_detect(noms, keep_levels)) )
       if (length(discard_levels) >= 1L) sup_vars_coord %<>% purrr::map(~ dplyr::filter(., ! stringr::str_detect(noms, discard_levels)) )
 
-      #Se debrouiller pour que, si la cah est dans les var sup et dans les profils, les data_id soient les mêmes :
-      # les deux seront colorés lorsqu’on survolera l’un ou l’autre
+
+      #Make that, if ICPC is in sup_vars AND in profiles, ggiraph data_id are the same :
+      # les deux seront colores lorsqu'on survolera l'un ou l'autre
       #sup_vars_coord %<>% purrr::imap(~ dplyr::mutate(.x, sup_var = .y))
-      if (length(cah) != 0 & cah %in% sup_vars) sup_vars_coord %<>%
-        purrr::map_if(names(.) == cah,
-                      ~ dplyr::mutate(., cah_id = as.integer(noms) + 10000L),
-                      .else = ~ dplyr::mutate(., cah_id = NA_integer_))
+      if (length(cah) != 0) {
+        if (cah %in% sup_vars) sup_vars_coord %<>%
+          purrr::map_if(names(.) == cah,
+                        ~ dplyr::mutate(., cah_id = as.integer(noms) + 10000L),
+                        .else = ~ dplyr::mutate(., cah_id = NA_integer_))
+      }
 
 
-      # Variable de couleur (colorvar) selon le nb de variables supplémentaires et le nb de caractères indiqués
+      # Colorvar depending on nb of supplementary variables and nb of characters indicated in nb_char_for_color
       if (length(nb_char_for_color) == 1) {
         sup_vars_coord %<>%
           purrr::map2(sup_vars, ~ dplyr::mutate(.x, colorvar = as.factor(stringr::str_c(.y, "_", stringr::str_sub(numbers, 1, nb_char_for_color)) %>%
@@ -577,17 +616,22 @@ ggmca <-
 
       scale_color_named_vector <- scale_color_points %>% append(scale_color_names) %>% .[!is.na(names(.))]
 
-      if (type[1] %in% c("points", "numbers"))  sup_vars_coord %<>% dplyr::mutate(colorvar_names = as.factor(stringr::str_c("names_", colorvar)))
+      if (type[1] %in% c("points", "numbers"))  sup_vars_coord %<>%
+        dplyr::mutate(colorvar_names = as.factor(stringr::str_c("names_", colorvar)))
       #} else { sup_vars_coord %<>% dplyr::mutate(colorvar_names =  colorvar) }
 
-      if (length(cah) != 0 & cah %in% sup_vars) {
-        sup_vars_coord %<>% dplyr::mutate(id = dplyr::if_else(is.na(cah_id), dplyr::row_number(), cah_id))
+
+      if (length(cah) != 0) {
+        if (cah %in% sup_vars) sup_vars_coord %<>%
+          dplyr::mutate(id = dplyr::if_else(is.na(cah_id),
+                                            dplyr::row_number(),
+                                            cah_id))
       } else {
         sup_vars_coord %<>% dplyr::mutate(id = dplyr::row_number())
       }
 
 
-      # Enlever les caractères spéciaux dans le graph
+      # Remove special chars in graph
       if (cleannames == TRUE) sup_vars_coord %<>%
         dplyr::mutate(noms = #stringr::str_remove_all(noms, cleannames_condition()) %>%
                         stringr::str_replace_all(noms, "[^[:alnum:][:punct:]]", " ") %>% stringr::str_squish() )
@@ -597,7 +641,7 @@ ggmca <-
 
 
 
-    #Variables actives :
+    #Active variables :
     levels_active_vars <- purrr::map(active_vars, ~ dplyr::pull(eval(res.mca$call$call$X[[2]]), .) %>% levels()) %>%
       magrittr::set_names(active_vars) %>% purrr::imap(~ append(.x, stringr::str_c(.y, "_", .x)))
 
@@ -608,7 +652,7 @@ ggmca <-
     if (cleannames == TRUE) active_vars_wcount %<>% purrr::map(~ dplyr::mutate(., noms = fct_clean(noms)))
     active_vars_wcount %<>% purrr::map(~ dplyr::mutate_at(., -1, ~ as_pct(./sum(.))))
 
-    # S'il n'y a aucune variable supplémentaire précisée calculer le tooltip du point moyen à partir des informations de res.mca
+    # If no sup var is given, make tooltip of mean point based on information within res.mca
     if (length(sup_vars) == 0) {
       mean_point_interactive_text <- active_vars_wcount %>%
         purrr::map(~ dplyr::slice(., - nrow(.)) %>% dplyr::mutate(interactive_text = stringr::str_c("\n", noms, " : ", freq, "%")) %>%
@@ -652,7 +696,7 @@ ggmca <-
 
 
 
-    #Calculer les limites du graphique (argument à passer dans ggout pour regler la taille du htmlwidget)
+    #Calculate limites of graph (arguments to be passed in ggout() to set htmlwidget size)
     if (length(sup_vars) != 0) {
       min_max_lims <-
         dplyr::bind_rows(dplyr::select(active_var_coord, !!dim1, !!dim2),
@@ -705,7 +749,7 @@ ggmca <-
     }
 
 
-    #Calculer les profils de réponse de l'ACM ; pondérés : nb d'individus × pond
+    #Calculate profiles of answers of the MCA ; weighted : nb of individuals * weight variable
     if (profiles == TRUE) {
       dat_profils <-
         res.mca$call$X[c(res.mca$call$quali, which(names(res.mca$call$X) == cah))] %>%
@@ -714,7 +758,7 @@ ggmca <-
       if (length(cah) != 0) {
         cah_levels <- dplyr::pull(dat_profils, !!rlang::sym(cah) ) %>% levels
         dat_profils %<>% dplyr::group_by_at(dplyr::vars(-row.w, -!!rlang::sym(cah))) %>%
-          dplyr::summarise(count = sum(n()), wcount = sum(row.w),
+          dplyr::summarise(count = sum(dplyr::n()), wcount = sum(row.w),
                            cah = list(!!rlang::sym(cah)) %>% purrr::map_if(purrr::map_lgl(., ~ nlevels(forcats::fct_drop(.)) == 1),
                                                                            ~ as.character(.[1]), .else = ~ NA_character_) %>%
                              purrr::flatten_chr() %>% factor(),
@@ -722,14 +766,14 @@ ggmca <-
           dplyr::mutate(cah = forcats::fct_relevel(cah, cah_levels))
 
         dat_profils %<>% dplyr::arrange(-wcount) %>% dplyr::mutate(nb = dplyr::row_number(), cah_id = as.integer(cah)) %>%
-          dplyr::group_by(cah) %>% dplyr::mutate(nb_in_cah = dplyr::row_number(), nb_tot_cah = n()) %>% dplyr::ungroup()
+          dplyr::group_by(cah) %>% dplyr::mutate(nb_in_cah = dplyr::row_number(), nb_tot_cah = dplyr::n()) %>% dplyr::ungroup()
       } else {
         dat_profils %<>% dplyr::group_by_at(dplyr::vars(-row.w)) %>%
-          dplyr::summarise(count = sum(n()), wcount = sum(row.w), .groups = "drop") %>%
+          dplyr::summarise(count = sum(dplyr::n()), wcount = sum(row.w), .groups = "drop") %>%
           dplyr::arrange(-wcount) %>% dplyr::mutate(nb = dplyr::row_number())
       }
 
-      res.mca.profils <-   #Refaire l'ACM avec les profils pondérés :
+      res.mca.profils <-   #Refaire l'ACM avec les profils ponderes :
         FactoMineR::MCA(dat_profils[ , 1:(which(colnames(dat_profils) == "count") - 1)],
                         row.w = dat_profils$wcount, ncp = res.mca$call$ncp,
                         graph = FALSE)
@@ -749,9 +793,10 @@ ggmca <-
       if (length(cah) != 0) {
         ind_coord %<>%
           dplyr::mutate(interactive_text = stringr::str_c("<b>Cah : ", cah, #stringr::str_to_lower(cah, locale = "fr"),
-                                                          "\nProfil de réponse n°", nb_in_cah, "/", nb_tot_cah,  "</b>\n",
-                                                          "Nb d’individus : ", format(count, digits = 0, trim = TRUE, big.mark = " "), "\n",
-                                                          "Pondéré : ", format(wcount, digits = 0, trim = TRUE, big.mark = " "), "\n\n",
+                                                          "\nProfil de reponse n", stringi::stri_unescape_unicode("\\u00b0"),
+                                                          nb_in_cah, "/", nb_tot_cah,  "</b>\n",
+                                                          "Nb d'individus : ", format(count, digits = 0, trim = TRUE, big.mark = " "), "\n",
+                                                          "Pondere : ", format(wcount, digits = 0, trim = TRUE, big.mark = " "), "\n\n",
                                                           interactive_text) %>%
                           stringr::str_remove_all("\n#"))
 
@@ -761,9 +806,10 @@ ggmca <-
                                           color = "#eeeeee", na.rm = TRUE, inherit.aes = FALSE, show.legend = FALSE)
       } else {
         ind_coord %<>%
-          dplyr::mutate(interactive_text = stringr::str_c("<b>Profil de réponse n°", nb,  "</b>\n",
-                                                          "Nb d’individus : ", format(count, digits = 0, trim = TRUE, big.mark = " "), "\n",
-                                                          "Pondéré : ", format(wcount, digits = 0, trim = TRUE, big.mark = " "), "\n\n",
+          dplyr::mutate(interactive_text = stringr::str_c("<b>Profil de reponse n", stringi::stri_unescape_unicode("\\u00b0"),
+                                                          nb,  "</b>\n",
+                                                          "Nb d'individus : ", format(count, digits = 0, trim = TRUE, big.mark = " "), "\n",
+                                                          "Pondere : ", format(wcount, digits = 0, trim = TRUE, big.mark = " "), "\n\n",
                                                           interactive_text) %>%
                           stringr::str_remove_all("\n#"))
 
@@ -778,9 +824,9 @@ ggmca <-
     }
 
 
-    #Tracer les graphiques -----------------------------------------------------
+    #Draw plot  -----------------------------------------------------
 
-    #Graphe des variables actives :
+    #Active variables graph
     if (text_repel == FALSE) {
       active_graph <-
         ggiraph::geom_text_interactive(data = active_var_coord,
@@ -806,7 +852,7 @@ ggmca <-
     }
 
 
-    #Point moyen :
+    #Mean point:
     mean_point_graph <-
       ggiraph::geom_point_interactive(data = mean_point_coord,
                                       ggplot2::aes(x = !!dim1, y = !!dim2, tooltip = interactive_text),
@@ -922,11 +968,11 @@ ggmca <-
 
 
 
-#Fonction : tracer le graphe pondéré des individus en triant selon 1 ou 2 variables
-#Type "dodge" : plus lisible car les points sur la même "case" sont décalés
-#Type "facet" : un graphe des individus pour chaque modalité d'une variable
-#Type "profiles" : profils de réponse représentés dans des lettres (def plus haut)
-#Problèmes : - Profiles need ggmca_abrev(), specific to ct2013acm
+#Fonction : tracer le graphe pondere des individus en triant selon 1 ou 2 variables
+#Type "dodge" : plus lisible car les points sur la meme "case" sont decales
+#Type "facet" : un graphe des individus pour chaque modalite d'une variable
+#Type "profiles" : profils de reponse representes dans des lettres (def plus haut)
+#Problemes : - Profiles need ggmca_abrev(), specific to ct2013acm
 #            - Need tooltips to explore the graph of individuals (interactive by point ; hover by color)
 #            - ggmca_ellipses on the same function ?
 #            - Split vars and levels crossing : make standard approach for structured data analysis before coding anything
@@ -958,15 +1004,15 @@ ggmca_ind <- function(res.mca = res.mca, split_var, split_var2, axes = c(1,2), #
   if (missing(split_var)){
     split_var <- NULL
 
-  } else { #S'il y a au moins une variable précisée
+  } else { #If at least one variable is givin
     split_var <- rlang::enquo(split_var)
-    levels_split_var <- levels( #Attention dans res.mca l'ordre n'est pas bon
+    levels_split_var <- levels( #Warning, in res.mca the order of factors is not right
       eval(parse(text = paste0(res.mca$call$call$X[[2]],"$",rlang::as_label(split_var)))))
   }
 
   if (missing(split_var2)) {
     split_var2 <- NULL
-  } else { #Si la deuxième variable est précisée
+  } else { #If a secondary variable is given
     split_var2 <- rlang::enquo(split_var2)
     levels_split_var2 <- levels( #Attention dans res.mca l'ordre n'est pas bon
       eval(parse(text = paste0(res.mca$call$call$X[[2]],"$",rlang::as_label(split_var2)))))
@@ -976,8 +1022,7 @@ ggmca_ind <- function(res.mca = res.mca, split_var, split_var2, axes = c(1,2), #
 
 
 
-
-  #Calculer les profils de réponse de l'ACM ; pondérés : nb d'individus × pond
+  #Calculate profiles of answers of the MCA ; weighted : nb of individuals * weight variable
   dat_profils <- res.mca$call$X %>%
     tibble::add_column(row.w = res.mca$call$row.w)
   dat_profils <-
@@ -990,7 +1035,7 @@ ggmca_ind <- function(res.mca = res.mca, split_var, split_var2, axes = c(1,2), #
     dplyr::summarise(pondpr = sum(row.w)) %>%
     dplyr::arrange(-pondpr) %>% dplyr::ungroup %>%
     dplyr::mutate(row_n = dplyr::row_number(dplyr::desc(pondpr)))
-  #Refaire l'ACM avec les profils pondérés :
+  #Redo MCA with weighted profiles :
   res.mca.profils <-
     FactoMineR::MCA(dat_profils[,1:(which(colnames(dat_profils)=="pondpr" )-1)],
                     quali.sup = (length(res.mca$call$quali)+1):(which(colnames(dat_profils)=="pondpr" )-1),
@@ -998,11 +1043,11 @@ ggmca_ind <- function(res.mca = res.mca, split_var, split_var2, axes = c(1,2), #
                     graph = FALSE)
 
   if ((type %in% c("profiles", "profiles_nb"))){
-    #Créer une variable abrev avec l'abréviation des profils
+    #Create a abrev variable abrev with abreviation of profiles
     dat_profils <- dat_profils %>%
       ggmca_abrev
-    #Si l'affichage des labels de profils se fait par catégories,
-    # les points eux ne sont affichés qu'une seule fois
+    #Si l'affichage des labels de profils se fait par categories,
+    # les points eux ne sont affiches qu'une seule fois
     dat_profils_uniques <- res.mca$call$X[res.mca$call$quali] %>%
       tibble::add_column(row.w = res.mca$call$row.w) %>%
       dplyr::group_by_at(dplyr::vars(-row.w)) %>%
@@ -1014,7 +1059,7 @@ ggmca_ind <- function(res.mca = res.mca, split_var, split_var2, axes = c(1,2), #
                       graph = FALSE)
     unique_profiles_coord <- dat_profils_uniques %>%
       dplyr::bind_cols(tibble::as_tibble(res.mca.profils.uniques$ind$coord))
-    # Afficher des informations de manière interactive quand on survole un point :
+    # Interactive tooltips at mouse hover :
     quali_var_names <- stringr::str_c(colnames(
       res.mca.profils.uniques$call$X)[1:length(res.mca.profils.uniques$call$quali)])
     unique_profiles_coord %<>%
@@ -1032,9 +1077,9 @@ ggmca_ind <- function(res.mca = res.mca, split_var, split_var2, axes = c(1,2), #
 
 
 
-  #Choisir individus et variables nécessaires pour tracer points et ellipses :
+  #Choose individuals and variables necessary to draw points and ellipses
   ind_coord <- dat_profils %>% dplyr::bind_cols(tibble::as_tibble(res.mca.profils$ind$coord))
-  # Afficher des informations de manière interactive quand on survole un point :
+  # Interactive tooltips at mouse hover :
   quali_var_names <- stringr::str_c(colnames(res.mca$call$X)[1:length(res.mca$call$quali)])
   ind_coord %<>%
     dplyr::mutate(interactive_text = stringr::str_c("Effectifs : ", round(pondpr, 0), "\n"))
@@ -1053,7 +1098,7 @@ ggmca_ind <- function(res.mca = res.mca, split_var, split_var2, axes = c(1,2), #
 
   if (missing(split_var2) | is.null(split_var2)) {
     if (missing(split_var) | is.null(split_var)) {
-      # S'il n'y a aucune variable précisée
+      # If no variable is given
       split_var_coord <- tibble::tibble(`Dim 1` = 0,`Dim 2` = 0, `Dim 3` = 0,`Dim 4` = 0,
                                         `Dim 5` = 0,`Dim 6` = 0,`Dim 7` = 0,`Dim 8` = 0)
 
@@ -1065,7 +1110,7 @@ ggmca_ind <- function(res.mca = res.mca, split_var, split_var2, axes = c(1,2), #
       title_var <- ""
 
     } else {
-      #S'il n'y a qu'une variable précisée
+      #If at least one variable is given
       ind_coord %<>% #dplyr::bind_cols(dplyr::select(dat_profils, !!split_var)) %>%
         dplyr::filter(!stringr::str_detect(!!split_var,".NA")) %>%
         dplyr::mutate(!!split_var := forcats::fct_relevel(!!split_var,levels_split_var)) # Bon ordre
@@ -1087,11 +1132,11 @@ ggmca_ind <- function(res.mca = res.mca, split_var, split_var2, axes = c(1,2), #
       }
 
       group_var <- split_var
-      title_var <- paste0(" décomposé selon ", rlang::as_label(split_var))
+      title_var <- paste0(" decompose selon ", rlang::as_label(split_var))
     }
 
   } else {
-    #Si l'utilisateur a précisé une 2e variable : croiser avec la 1ère
+    #If a second variable is given : cross with the first
     ind_coord %<>% #dplyr::bind_cols(dplyr::select(dat_profils, !!split_var, !!split_var2)) %>%
       dplyr::filter(!stringr::str_detect(!!split_var,".NA")) %>%
       dplyr::filter(!stringr::str_detect(!!split_var2,".NA")) %>%
@@ -1139,7 +1184,7 @@ ggmca_ind <- function(res.mca = res.mca, split_var, split_var2, axes = c(1,2), #
       ellipses_ind_coord %<>% dplyr::mutate(crossvar = forcats::fct_drop(crossvar))
     }
 
-    #Calculer les points-modalités de la nouvelle variable :
+    #Calculer les points-modalites de la nouvelle variable :
     dat_profils %<>%
       dplyr::filter(!stringr::str_detect(!!split_var,".NA")) %>%
       dplyr::filter(!stringr::str_detect(!!split_var2,".NA")) %>%
@@ -1147,7 +1192,7 @@ ggmca_ind <- function(res.mca = res.mca, split_var, split_var2, axes = c(1,2), #
     vars_by_crossvar <-
       dat_profils %>%
       dplyr::group_by(!!split_var, !!split_var2, crossvar) %>%
-      dplyr::summarise(n=n()) %>% dplyr::select(-n)
+      dplyr::summarise(n=dplyr::n()) %>% dplyr::select(-n)
     dat_profils %<>% dplyr::select(-!!split_var, -!!split_var2, -cah)
     res.mca.profils <-
       FactoMineR::MCA(dat_profils[,1:(which(colnames(dat_profils)=="pondpr" )-1)],
@@ -1161,18 +1206,18 @@ ggmca_ind <- function(res.mca = res.mca, split_var, split_var2, axes = c(1,2), #
     # dplyr::mutate(crossvar = forcats::fct_relevel(crossvar,levels(crossvar))) %>% #Bon ordre
     # dplyr::arrange(crossvar)
     if ( all(split_var_coord$crossvar == vars_by_crossvar$crossvar) == FALSE ) {
-      stop('Points-modalités dans le mauvais ordre')
+      stop('Points-modalites dans le mauvais ordre')
     }
 
     group_var <- rlang::expr(crossvar)
-    title_var <- paste0(" décomposé selon ", rlang::as_label(split_var),
+    title_var <- paste0(" decompose selon ", rlang::as_label(split_var),
                         " et ", rlang::as_label(split_var2))
   }
 
   if (missing(split_var)|is.null(split_var)) { #S'il n'y a aucune variable
     ind_coord %<>% dplyr::mutate(pond_group = pondpr/sum(pondpr))
   } else {
-    ind_coord %<>% #Prop d'individus dans chaque catégorie (pour taille des points)
+    ind_coord %<>% #Prop d'individus dans chaque categorie (pour taille des points)
       dplyr::group_by(!!group_var) %>%
       dplyr::mutate(pond_group = pondpr/sum(pondpr)) %>%
       dplyr::ungroup()
@@ -1185,7 +1230,7 @@ ggmca_ind <- function(res.mca = res.mca, split_var, split_var2, axes = c(1,2), #
 
 
 
-  #Préparer les ellipses et choisir leur couleur (selon le type de graphe) :
+  #Preparer les ellipses et choisir leur couleur (selon le type de graphe) :
   if (ellipses == TRUE) {
     if (type == "facet") {
       ellipses <- ggplot2::stat_ellipse(data = ellipses_ind_coord,
@@ -1207,24 +1252,24 @@ ggmca_ind <- function(res.mca = res.mca, split_var, split_var2, axes = c(1,2), #
 
 
 
-  #Tracer les graphiques en fonction de leur type :
+  #Draw plot--------------------------------------------------------------------
   if (type == "dodge") {
     ggplot2::ggplot() +
       theme_mca(res = res.mca, axes = axes) +
       ggplot2::labs(title = paste0("Graphe des individus (axes ", axes[1], " et ", axes[2],
                                    ")", title_var
-                                   # "(ellipses à ", ellipse_percent*100,")"
+                                   # "(ellipses a ", ellipse_percent*100,")"
       )) +
-      #Coordonnées des individus :
+      #Coordonnees des individus :
       ggplot2::geom_point(data = ind_coord, #Taille points : proportion dans le total
                           ggplot2::aes(x = !!dim1, y = !!dim2, color = !!group_var, size = pondpr,
                                        text = interactive_text),
                           position = ggplot2::position_dodge(width = 0.2), na.rm = TRUE) +
       ellipses +
-      #Points moyens des modalités :
+      #Points moyens des modalites :
       ggplot2::geom_label(data = split_var_coord,
                           ggplot2::aes(x = !!dim1, y = !!dim2, label = !!group_var, color = !!group_var),
-                          size = 4, fontface = "bold", na.rm = TRUE) #Pour décaler légèrement : nudge_y = 0.1
+                          size = 4, fontface = "bold", na.rm = TRUE) #Pour decaler legerement : nudge_y = 0.1
   } else if (type == "facet") {
 
     if (missing(split_var2) | is.null(split_var2)) {
@@ -1237,12 +1282,12 @@ ggmca_ind <- function(res.mca = res.mca, split_var, split_var2, axes = c(1,2), #
       theme_mca(res = res.mca, axes = axes) +
       ggplot2::labs(title = paste0("Graphe des individus (axes ", axes[1], " et ", axes[2],
                                    ")", title_var)) +
-      #Coordonnées des individus :
+      #Coordonnees des individus :
       ggplot2::geom_point(data = ind_coord, #Taille points : proportion dans chaque groupe
                           ggplot2::aes(x = !!dim1, y = !!dim2, color = !!group_var, size = pond_group,
                                        group = !!group_var, text = interactive_text), na.rm = TRUE) +
       ellipses +
-      #Points moyens des modalités :
+      #Points moyens des modalites :
       ggplot2::geom_point(data = split_var_coord,
                           ggplot2::aes(x = !!dim1, y = !!dim2, group = !!group_var),
                           shape = 17, size = 6, color = "black", na.rm = TRUE) +
@@ -1250,10 +1295,10 @@ ggmca_ind <- function(res.mca = res.mca, split_var, split_var2, axes = c(1,2), #
   } else if (type == "profiles_nb") {
 
     ggplot2::ggplot() +
-      ggplot2::theme_mca(res = res.mca, axes = axes, no_size_scale = TRUE) +
-      ggplot2::labs(title = paste0("Graphe des profils de réponses (axes ",
+      theme_mca(res = res.mca, axes = axes, size_scale_max = 30) +
+      ggplot2::labs(title = paste0("Graphe des profils de reponses (axes ",
                                    axes[1], " et ", axes[2], ")", title_var)) +
-      #Coordonnées des individus :
+      #Coordonnees des individus :
       ggplot2::geom_point(data = unique_profiles_coord,
                           ggplot2::aes(x = !!dim1, y = !!dim2, size = pondpr, text = interactive_text),
                           shape = 21, color = "transparent", fill = "tomato", alpha = 0.8,
@@ -1262,19 +1307,19 @@ ggmca_ind <- function(res.mca = res.mca, split_var, split_var2, axes = c(1,2), #
       ggplot2::geom_text(data = ind_coord,
                          ggplot2::aes(x = !!dim1, y = !!dim2, label = row_n),
                          size = 4, na.rm = TRUE) +
-      ggplot2::scale_size_area(max_size =  30) +  #Échelle de taille des points
+      #ggplot2::scale_size_area(max_size =  30) +  #Echelle de taille des points
       ggplot2::theme(legend.position = "right") #+
-    #Points moyens des modalités :
+    #Points moyens des modalites :
     # geom_label(data = split_var_coord,
     #            ggplot2::aes(x = !!dim1, y = !!dim2, label = !!split_var, color = !!split_var),
     #            size = 4, fontface = "bold")
   } else if (type =="profiles") {
 
     ggplot2::ggplot() +
-      theme_mca(res = res.mca, axes = axes, no_size_scale = TRUE) +
-      ggplot2::labs(title = paste0("Graphe des profils de réponses (axes ",
+      theme_mca(res = res.mca, axes = axes, size_scale_max = 30) +
+      ggplot2::labs(title = paste0("Graphe des profils de reponses (axes ",
                                    axes[1], " et ", axes[2], ")", title_var)) +
-      #Coordonnées des individus :
+      #Coordonnees des individus :
       ggplot2:: geom_point(data = unique_profiles_coord,
                            ggplot2::aes(x = !!dim1, y = !!dim2, size = pondpr, text = interactive_text),
                            shape = 21, color = "transparent", fill = "black", alpha = 0.1,
@@ -1284,7 +1329,7 @@ ggmca_ind <- function(res.mca = res.mca, split_var, split_var2, axes = c(1,2), #
                          ggplot2::aes(x = !!dim1, y = !!dim2, label = abrev,
                                       color = !!group_var),
                          size = 3.5, fontface = "bold", na.rm = TRUE) +
-      ggplot2::scale_size_area(max_size =  30) +  #Échelle de taille des points
+      #ggplot2::scale_size_area(max_size =  30) +  #Echelle de taille des points
       ggplot2::theme(legend.position = "right")
   } else {
     stop('unknown type')
@@ -1304,8 +1349,8 @@ ggmca_ind <- function(res.mca = res.mca, split_var, split_var2, axes = c(1,2), #
 #              percent = 0.95) ; ggout() # Percent : choisir le % de points dans l'ellipse
 # ggmca_ind(res.mca, CSER, STATUTacm, axes = c(1,2),
 #              type = "facet", ellipses = TRUE) +
-#   scale_color_discrete() ; ggout() #Utile quand il y a plus de 8 couleurs à mettre
-#   #Voir les profils de réponses (classés par variables actives ou selon la CAH) :
+#   scale_color_discrete() ; ggout() #Utile quand il y a plus de 8 couleurs a mettre
+#   #Voir les profils de reponses (classes par variables actives ou selon la CAH) :
 # ggmca_ind(res.mca, type = "profiles_nb") ; ggout()
 # ggmca_ind(res.mca, cah, type = "profiles",
 #              max_profiles = 225, ellipses = TRUE) ; ggout("ggplotly")
@@ -1314,16 +1359,16 @@ ggmca_ind <- function(res.mca = res.mca, split_var, split_var2, axes = c(1,2), #
 #              max_profiles = 350) ; ggout()
 # ggmca_ind(res.mca, cah, type = "profiles") ; ggout() # OK avec CAH
 # ggmca_ind(res.mca, cah, type = "profiles", ellipses = TRUE) ; ggout()
-# # Vars non actives : les couleurs ne veulent rien dire (dernier texte superposé gagne)
+# # Vars non actives : les couleurs ne veulent rien dire (dernier texte superpose gagne)
 # ggmca_ind(res.mca, RWDEMacm, SEXE, type = "profiles"); ggout()
 #
-#   #On peut ajouter d'autres éléments ggplot2 à la main avec "+" :
+#   #On peut ajouter d'autres elements ggplot2 a la main avec "+" :
 # ggmca_ind(res.mca, cah, axes = c(1,2), type = "dodge") +
-#   scale_color_viridis(discrete = TRUE, option = "D") ; ggout() #pb = couleur hiérarchisée
-#   #Zoomer sur la partie inférieure gauche (direction par objectifs) :
+#   scale_color_viridis(discrete = TRUE, option = "D") ; ggout() #pb = couleur hierarchisee
+#   #Zoomer sur la partie inferieure gauche (direction par objectifs) :
 # ggmca_ind(res.mca, cah, type = "profiles", max_profiles = 225) +
 #   ylim(NA,0) +  xlim(-0.5,1.3) + theme(legend.position = "none") ; ggout()
-#   #Zoomer sur la partie supérieure gauche (travail à la chaîne) :
+#   #Zoomer sur la partie superieure gauche (travail a la chaine) :
 # ggmca_ind(res.mca, cah, type = "profiles", max_profiles = 500) +
 #   ylim(0,NA) +  xlim(-0.2,1.5) + theme(legend.position = "none") ; ggout()
 #   #Zoomer au milieu :
@@ -1338,8 +1383,8 @@ ggmca_ind <- function(res.mca = res.mca, split_var, split_var2, axes = c(1,2), #
 
 
 
-#Fonction : graphe avec centres de classes, ellipses médianes et modalités:
-#Les graphe pondéré des individus apparaît en fond de trame
+#Fonction : graphe avec centres de classes, ellipses medianes et modalites:
+#Les graphe pondere des individus apparait en fond de trame
 
 #' Graph of Individuals with Concentration Ellipses for MCA
 #' @description To be enhanced.
@@ -1371,7 +1416,7 @@ ggmca_ellipses <- function(res.mca = res.mca, split_var = NULL,
   active_var_coord <- res.mca$var$coord %>%
     tibble::as_tibble(rownames = "noms")
 
-  #Calculer les profils de réponse de l'ACM ; pondérés : nb d'individus × pond
+  #Calculate profiles of answers of the MCA ; weighted : nb of individuals * weight variable
   res.mca$call$X %<>% tibble::add_column(row.w = res.mca$call$row.w)
   dat_profils <-
     res.mca$call$X[,c(res.mca$call$quali,
@@ -1379,7 +1424,7 @@ ggmca_ellipses <- function(res.mca = res.mca, split_var = NULL,
     dplyr::group_by_at(dplyr::vars(-row.w)) %>%
     dplyr::summarise(pondpr = sum(row.w)) %>%
     dplyr::arrange(-pondpr) %>% dplyr::ungroup
-  res.mca.profils <-   #Refaire l'ACM avec les profils pondérés :
+  res.mca.profils <-   #Redo ACM with weighted profiles :
     FactoMineR::MCA(dat_profils[,1:(which(colnames(ct2013profils)=="pondpr" )-1)],
                     row.w = dat_profils$pondpr, ncp = res.mca$call$ncp,
                     graph = FALSE)
@@ -1390,16 +1435,16 @@ ggmca_ellipses <- function(res.mca = res.mca, split_var = NULL,
   ellipses_ind_coord <- res.mca$call$X %>% dplyr::select(!!split_var) %>%
     dplyr::bind_cols( tibble::as_tibble(res.mca$ind$coord) ) %>%
     dplyr::filter(!stringr::str_detect(!!split_var,".NA")) %>%
-    dplyr::mutate(!!split_var := forcats::fct_relevel(!!split_var,levels_split_var)) #Bon ordre
+    dplyr::mutate(!!split_var := forcats::fct_relevel(!!split_var,levels_split_var)) #Right order
 
   if (type == "normal") {
 
     ggplot2::ggplot() +
       theme_mca(res = res.mca, axes = axes) +
-      ggplot2::labs(title = paste0("Les catégories de la variable ", rlang::as_label(split_var),
+      ggplot2::labs(title = paste0("Les categories de la variable ", rlang::as_label(split_var),
                                    " sur les axes ", axes[1], " et ", axes[2],
-                                   " : ellipses à ",
-                                   percent*100, "% et points-modalités")) +
+                                   " : ellipses a ",
+                                   percent*100, "% et points-modalites")) +
       ggplot2::geom_point(data = ind_coord,
                           ggplot2::aes(x = !!dim1, y = !!dim2, size = pondpr),
                           alpha = 0.05, na.rm = TRUE) +
@@ -1418,12 +1463,12 @@ ggmca_ellipses <- function(res.mca = res.mca, split_var = NULL,
                                 fontface = "bold", na.rm = TRUE)
   } else if (type == "multi") {
 
-    #Variante avec trois ellipses imbriquées colorées à l'intérieur :
+    #Variante avec trois ellipses imbriquees colorees a l'interieur :
     ggplot2::ggplot() +
       theme_mca(res = res.mca, axes = axes) +
-      ggplot2::labs(title = paste0("Les catégories de la variable ", rlang::as_label(split_var),
+      ggplot2::labs(title = paste0("Les categories de la variable ", rlang::as_label(split_var),
                                    "sur les axes ", axes[1], " et ", axes[2],
-                                   " : ellipses (à 50%, 86,5% et 95%) et points-modalités")) +
+                                   " : ellipses (a 50%, 86,5% et 95%) et points-modalites")) +
       # geom_point(data = ind_coord,
       #            ggplot2::aes(x = !!dim1, y = !!dim2, size = pondpr),
       #            alpha = 0.05, na.rm = TRUE) +
@@ -1522,11 +1567,11 @@ ggmca_ellipses <- function(res.mca = res.mca, split_var = NULL,
 
 
 
-#Améliorations :
-# - Option voire les croisements (par ex employées NQ des particuliers) ?
-# - Analyse de données structurées
-# - Feature request ggrepel : toutes les flèches en dessous des labels/texts----
-# - Améliorer la façon dont tabw permet d’amener un tableau croisé dans ggca----
+#Ameliorations :
+# - Option voire les croisements (par ex employees NQ des particuliers) ?
+# - Analyse de donnees structurees
+# - Feature request ggrepel : toutes les fleches en dessous des labels/texts----
+# - Ameliorer la facon dont tabw permet d'amener un tableau croise dans ggca----
 
 #' Readable, Interactive and Beautiful Graph for CA
 #' @description A readable, complete and beautiful graph for simple
@@ -1604,10 +1649,10 @@ ggca <-
         ~ stringr::str_extract(noms, "^[^- ]+"),
         TRUE ~ "" ))
 
-    # Enlever les mots entre parenthèses et les nombres
+    # Enlever les mots entre parentheses et les nombres
     if (cleannames == TRUE) row_coord %<>% dplyr::mutate(noms = stringr::str_remove_all(noms, cleannames_condition()))
 
-    # Variable de couleur (colorvar) selon nb de caractères indiqués
+    # Variable de couleur (colorvar) selon nb de caracteres indiques
     row_coord %<>% dplyr::mutate(row_colorvar = as.factor(stringr::str_sub(numbers, 1, rowcolor_numbers)))
     row_colorvar_recode <- levels(row_coord$row_colorvar)
     names(row_colorvar_recode) <- stringr::str_c(1:nlevels(row_coord$row_colorvar))
@@ -1619,7 +1664,7 @@ ggca <-
       # Afficher informations interactives au survol d'un point
       dplyr::mutate(interactive_text = stringr::str_c("<b>", noms, "</b>", "\n", "Effectifs : ",
                                                       round(freq*100, 0), "%"),
-                    noms = stringr::str_replace_all(noms, "[^[:alnum:][:punct:]]", " ") %>% stringr::str_squish()  ) #[^[:alnum:]-/\\(\\)·%:.,;’?!]
+                    noms = stringr::str_replace_all(noms, "[^[:alnum:][:punct:]]", " ") %>% stringr::str_squish()  )
 
     if ("row" %in% tooltips) {
       #Calculer les % par ligne (de la variable colonne)
@@ -1631,14 +1676,17 @@ ggca <-
         dplyr::mutate_all(~ . - .[nrow(row_frequencies)]) %>%
         dplyr::mutate_all(~ dplyr::case_when(
           round(.*100,0) >= 0 ~ stringr::str_c("+", round(.*100, 0), "%"),
-          . < 0 ~ stringr::str_c(" -", round(abs(.)*100, 0), "%")
+          . < 0 ~ stringr::str_c(stringi::stri_unescape_unicode("\\u202f"), #Unbreakable space
+                                 "-", round(abs(.)*100, 0), "%")
         )) %>% dplyr::slice(-nrow(row_frequencies))
       row_frequencies %<>%
         dplyr::slice(-nrow(row_frequencies)) %>%
         dplyr::mutate_all(~ stringr::str_c(round(.*100, 0), "%")) %>%
         dplyr::mutate_all(~dplyr::case_when(
           stringr::str_length(.) >= 3 ~ .,
-          stringr::str_length(.) < 3 ~ stringr::str_c("  ",.),
+          stringr::str_length(.) < 3 ~ stringr::str_c(
+            stringi::stri_unescape_unicode("\\u202f\\u202f"), . #2 unbreakable spaces
+          ),
         ))
       row_frequencies %<>%
         dplyr::bind_rows(row_residuals) %>%
@@ -1674,10 +1722,10 @@ ggca <-
         ~ stringr::str_extract(noms, "^[^- ]+"),
         TRUE ~ "" ))
 
-    # Enlever les mots entre parenthèses et les nombres
+    # Enlever les mots entre parentheses et les nombres
     if (cleannames == TRUE) col_coord %<>%  dplyr::mutate(noms = stringr::str_remove_all(noms, cleannames_condition()))
 
-    # Variable de couleur (colorvar) selon nb de caractères indiqués
+    # Variable de couleur (colorvar) selon nb de caracteres indiques
     col_coord %<>%  dplyr::mutate(col_colorvar = as.factor(stringr::str_sub(numbers, 1, colcolor_numbers)))
     col_colorvar_recode <- levels(col_coord$col_colorvar)
     names(col_colorvar_recode) <- stringr::str_c(1:nlevels(col_coord$col_colorvar))
@@ -1703,14 +1751,16 @@ ggca <-
         dplyr::mutate_all(~ . - .[nrow(col_frequencies)]) %>%
         dplyr::mutate_all(~ dplyr::case_when(
           round(.*100,0) >= 0 ~ stringr::str_c("+", round(.*100, 0), "%"),
-          . < 0 ~ stringr::str_c(" -", round(abs(.)*100, 0), "%")
+          . < 0 ~ stringr::str_c(stringi::stri_unescape_unicode("\\u202f"), #unbreakable space
+                                 "-", round(abs(.)*100, 0), "%")
         )) %>% dplyr::slice(-nrow(col_frequencies))
       col_frequencies %<>%
         dplyr::slice(-nrow(col_frequencies)) %>%
         dplyr::mutate_all(~ stringr::str_c(round(.*100, 0), "%")) %>%
         dplyr::mutate_all(~dplyr::case_when(
           stringr::str_length(.) >= 3 ~ .,
-          stringr::str_length(.) < 3 ~ stringr::str_c("  ",.),
+          stringr::str_length(.) < 3 ~ stringr::str_c(
+            stri_unescape_unicode("\\u202f\\u202f"), .), #Two unbreakable spaces
         ))
       col_frequencies %<>%
         dplyr::bind_rows(col_residuals) %>%
@@ -1781,7 +1831,7 @@ ggca <-
 
 
 
-    #Calculer les limites du graphique (argument à passer dans ggout pour regler la taille du htmlwidget)
+    #Calculer les limites du graphique (argument a passer dans ggout pour regler la taille du htmlwidget)
     min_max_lims <- dplyr::select(all_coord, !!dim1, !!dim2)
 
     if (!missing(xlim)) min_max_lims %<>%  tibble::add_row(!!dim1 := xlim[1]) %>% tibble::add_row(!!dim1 := xlim[2])
@@ -1969,8 +2019,8 @@ ggca <-
 
 
 
-# Un tableau automatique pour aider à interpréter les axes un par un :
-#On part du tableau des contributions des modalités mais « en longeur »
+# Un tableau automatique pour aider a interpreter les axes un par un :
+#On part du tableau des contributions des modalites mais "en longeur"
 #' Helper table to interpret MCA
 #'
 #' @param res.mca An object created with \code{FactoMineR::\link[FactoMineR]{MCA}},
@@ -1982,13 +2032,13 @@ ggca <-
 mca_interpret <- function(res.mca = res.mca) {
   res.mca <- res.mca
   contrib1 <- res.mca$var$contrib %>%
-    tibble::as_tibble(rownames = "Modalités") %>%
-    tidyr::pivot_longer(-Modalités, names_prefix ="Dim ", names_to = "Axe",
+    tibble::as_tibble(rownames = "Modalites") %>%
+    tidyr::pivot_longer(-Modalites, names_prefix ="Dim ", names_to = "Axe",
                         values_to = "Contrib_mod") %>%
     dplyr::select(Axe, tidyselect::everything()) %>% dplyr::arrange(Axe) %>%
     dplyr::mutate(valeur_propre = res.mca$eig[as.integer(Axe),1])
 
-  #Matrice pour savoir les questions auxquelles correspondent les modalités
+  #Matrice pour savoir les questions auxquelles correspondent les modalites
   var_names <- names(res.mca$call$X[res.mca$call$quali])
   question <- contrib1 %>%
     dplyr::select(-Contrib_mod, -valeur_propre)
@@ -1998,8 +2048,8 @@ mca_interpret <- function(res.mca = res.mca) {
       contrib1[,2] == levels(eval(parse(text = paste0("res.mca$call$X$", var_names[i])))),
       TRUE, FALSE))
   }
-  question %<>% dplyr::mutate(Modalités = paste0(Axe, "-", Modalités)) %>%
-    dplyr::select (-Axe) %>%  tibble::column_to_rownames(var = "Modalités")
+  question %<>% dplyr::mutate(Modalites = paste0(Axe, "-", Modalites)) %>%
+    dplyr::select (-Axe) %>%  tibble::column_to_rownames(var = "Modalites")
 
   #Noms des questions
   question_noms <- question %>%
@@ -2025,15 +2075,15 @@ mca_interpret <- function(res.mca = res.mca) {
                        Contrib_q = question_contrib, .before = 1) %>%
     dplyr::select(Axe, tidyselect::everything())
 
-  #Coordonnées et fréquences des modalités (pour calculer contribution des écarts)
+  #Coordonnees et frequences des modalites (pour calculer contribution des ecarts)
   coord_fk <- res.mca$var$coord %>%
-    tibble::as_tibble(rownames = "Modalités") %>%
+    tibble::as_tibble(rownames = "Modalites") %>%
     tibble::add_column(fk = res.mca$call$marge.col) %>%
-    tidyr::pivot_longer(c(-Modalités, -fk), names_prefix ="Dim ", names_to = "Axe",
+    tidyr::pivot_longer(c(-Modalites, -fk), names_prefix ="Dim ", names_to = "Axe",
                         values_to = "coord") %>%
     dplyr::arrange(Axe)
 
-  #Choisir les modalités > à la moyenne, trier par coordonnées positives/négatives
+  #Choisir les modalites > a la moyenne, trier par coordonnees positives/negatives
   contribsup <- contrib %>%
     dplyr::mutate(coord = coord_fk$coord,
                   fk = coord_fk$fk) %>%
@@ -2041,15 +2091,15 @@ mca_interpret <- function(res.mca = res.mca) {
     dplyr::filter(Contrib_mod >= mean(Contrib_mod) ) %>%
     dplyr::arrange(Axe, dplyr::desc(Contrib_q), dplyr::desc(Contrib_mod)) %>%
     #dplyr::arrange(dplyr::desc(Contrib_q)) %>%
-    dplyr::mutate(Modalités_2 = Modalités, contrib_neg = Contrib_mod,
+    dplyr::mutate(Modalites_2 = Modalites, contrib_neg = Contrib_mod,
                   contrib_pos  = Contrib_mod, fneg = fk, fpos = fk,
                   coord_neg = coord, coord_pos = coord) %>%
     dplyr::select(-Contrib_mod) %>%
-    dplyr::mutate_at(dplyr::vars(Modalités, contrib_neg, fneg, coord_neg),~ifelse(coord <= 0, ., NA)) %>%
-    dplyr::mutate_at(dplyr::vars(Modalités_2, contrib_pos, fpos, coord_pos),~ifelse(coord > 0, ., NA)) %>%
+    dplyr::mutate_at(dplyr::vars(Modalites, contrib_neg, fneg, coord_neg),~ifelse(coord <= 0, ., NA)) %>%
+    dplyr::mutate_at(dplyr::vars(Modalites_2, contrib_pos, fpos, coord_pos),~ifelse(coord > 0, ., NA)) %>%
     dplyr::ungroup
 
-  #Ajouter les écarts par questions (en % de la contribution de la question) :
+  #Ajouter les ecarts par questions (en % de la contribution de la question) :
   contribsup %<>%
     dplyr::group_by(Axe, Questions) %>%
     dplyr::mutate(coord_ecart_neg = weighted.mean(coord_neg,fneg, na.rm = TRUE),
@@ -2063,7 +2113,7 @@ mca_interpret <- function(res.mca = res.mca) {
     dplyr::ungroup() %>%
     dplyr::mutate(contrib_ecart = ifelse(is.na(contrib_ecart), NA, contrib_ecart) )
 
-  #Contributions totales (positif/négatif sur l'axe), contrib de l'écart total :
+  #Contributions totales (positif/negatif sur l'axe), contrib de l'ecart total :
   total1 <- contribsup %>%
     dplyr::group_by(Axe) %>%
     dplyr::summarise(contrib_neg = sum(contrib_neg, na.rm = TRUE),
@@ -2073,12 +2123,12 @@ mca_interpret <- function(res.mca = res.mca) {
                      poids_neg = sum(fneg, na.rm = TRUE),
                      poids_pos = sum(fpos, na.rm = TRUE),
                      poids_ecart = 1/( 1/poids_neg + 1/poids_pos), #fii' = 1/(1/fi + 1/fi').
-                     contrib_ecart = poids_ecart * 100 * (coord_pos - coord_neg)^2/mean(valeur_propre) # = fii' (y l - y ')²/??l )
+                     contrib_ecart = poids_ecart * 100 * (coord_pos - coord_neg)^2/mean(valeur_propre) # = fii' (y l - y ')^2/??l )
     ) %>% dplyr::select(-coord_neg, -coord_pos, -poids_neg, -poids_pos, - poids_ecart) %>%
     tibble::add_column(rowposition = "3") %>%
     tibble::add_column(Questions = "Total")
 
-  #Total général (contributions sur l'axe positif + sur l'axe négatif)
+  #Total general (contributions sur l'axe positif + sur l'axe negatif)
   total2 <- contribsup %>%
     dplyr::group_by(Axe) %>%
     dplyr::summarise(contrib_neg = sum(contrib_neg, na.rm = TRUE) +
@@ -2095,18 +2145,18 @@ mca_interpret <- function(res.mca = res.mca) {
   title_lines <- empty_lines %>%
     dplyr::mutate(rowposition = "0",
                   Questions = "",
-                  axe_name = paste0("Interprétation de l'axe ", Axe, " : ",
+                  axe_name = paste0("Interpretation de l'axe ", Axe, " : ",
                                     round(res.mca$eig[as.integer(Axe),1]*100, 1),
                                     "% de la variance totale"))
-  #Répéter les noms des colonnes
+  #Repeter les noms des colonnes
   name_lines <- empty_lines %>%
     dplyr::mutate(rowposition = "1") %>%
     dplyr::mutate(axe_name = "", Questions="Questions", Contrib_q = "Contrib q",
-                  Modalités = "Modalités négatives", Modalités_2 ="Modalités positives",
+                  Modalites = "Modalites negatives", Modalites_2 ="Modalites positives",
                   contrib_neg = "Contrib (neg)", contrib_pos = "Contrib (pos)",
-                  contrib_ecart = "Contrib écart")
+                  contrib_ecart = "Contrib ecart")
 
-  #Assembler le tableau final (composants triés par ordre avec rowposition)
+  #Assembler le tableau final (composants tries par ordre avec rowposition)
   Tableau_final <- contribsup %>%
     dplyr::select(-fneg, -fpos, -coord_neg, -coord_pos, -valeur_propre) %>%
     tibble::add_column(rowposition = "2") %>%
@@ -2138,7 +2188,7 @@ mca_interpret <- function(res.mca = res.mca) {
 
 
 
-#Fonction : fréquences des modalités actives
+#Fonction : frequences des modalites actives
 #' Graph for frequencies of active vars in MCA
 #'
 #' @param res.mca An object created with \code{FactoMineR::\link[FactoMineR]{MCA}},
@@ -2150,12 +2200,12 @@ mca_interpret <- function(res.mca = res.mca) {
 ggmca_freq <- function(res.mca = res.mca) {
   res.mca <- res.mca
   freq <- res.mca$call$marge.col %>%
-    tibble::as_tibble(rownames = "Modalités") %>%
-    dplyr::mutate(fréquences = value*length(res.mca$call$quali)*100) %>% dplyr::select(-value)
+    tibble::as_tibble(rownames = "Modalites") %>%
+    dplyr::mutate(frequences = value*length(res.mca$call$quali)*100) %>% dplyr::select(-value)
 
-  #Retrouver les questions à partir des modalités
+  #Retrouver les questions a partir des modalites
   var_names <- names(res.mca$call$X[res.mca$call$quali])
-  question <- freq %>% dplyr::select (-fréquences)
+  question <- freq %>% dplyr::select (-frequences)
   for (i in 1:length(var_names)) {
     new_var_name <- paste0(i)
     question %<>% dplyr::mutate( !!new_var_name := dplyr::if_else(
@@ -2163,21 +2213,21 @@ ggmca_freq <- function(res.mca = res.mca) {
       TRUE, FALSE))
   }
   question %<>%
-    tibble::column_to_rownames(var = "Modalités") %>% t %>% tibble::as_tibble %>%
+    tibble::column_to_rownames(var = "Modalites") %>% t %>% tibble::as_tibble %>%
     transmute_all(~which(. == TRUE)) %>%  dplyr::slice(1) %>%  t %>%
     purrr::map_chr(~var_names[.])
   freq %<>%
     tibble::add_column(Questions = question_noms, .before = 1) %>%
     dplyr::mutate_if(is.character, as_factor) %>%
-    dplyr::mutate(fréquences = round(fréquences, 0))
-  # dplyr::mutate(fréquences = stringr::str_c(fréquences, "%"))
+    dplyr::mutate(frequences = round(frequences, 0))
+  # dplyr::mutate(frequences = stringr::str_c(frequences, "%"))
 
 
 
-  ggplot2::ggplot(freq, ggplot2::aes(x = Modalités, y = fréquences, fill = Questions)) +
+  ggplot2::ggplot(freq, ggplot2::aes(x = Modalites, y = frequences, fill = Questions)) +
     # geom_hline(yintercept = 50, color="black") +
     ggplot2::geom_bar(stat = "identity") +
-    ggplot2::geom_text(ggplot2::aes(label = stringr::str_c(fréquences, "%")),
+    ggplot2::geom_text(ggplot2::aes(label = stringr::str_c(frequences, "%")),
                        nudge_y = 3, fontface = "bold") +
     # scale_color_brewer(palette = "Dark2") +
     # scale_fill_brewer(palette = "Dark2") +
@@ -2207,7 +2257,7 @@ ggmca_freq <- function(res.mca = res.mca) {
 
 
 
-#Pas terminé/pas utile :
+#Pas termine/pas utile :
 #wtab3_mf1 <- function(data, var1, var2, var3, wt, show_na = FALSE, ...) {
 #
 #
@@ -2227,10 +2277,10 @@ ggmca_freq <- function(res.mca = res.mca) {
 # eval(parse(text = code_lines))
 #
 # names(output) <- names(output) %>%
-#   stringr::str_replace_all("_", " ") #Enlever _ des noms de modalités
+#   stringr::str_replace_all("_", " ") #Enlever _ des noms de modalites
 #
 # output %>%
-#    purrr::map_df(stringr::str_replace_all,"_", " ") %>%  #Enveler _ des noms de modalités
+#    purrr::map_df(stringr::str_replace_all,"_", " ") %>%  #Enveler _ des noms de modalites
 #   # dplyr::mutate(CSEacm = cell_spec(output$CSEacm, "html",
 #   #                            align = ifelse(!grepl("Total", output$CSEacm), "r", "l"))
 #   # )  %>%
@@ -2244,7 +2294,7 @@ ggmca_freq <- function(res.mca = res.mca) {
 #   row_spec(detect_total, bold = T, hline_after = T) %>%
 #   column_spec(ncol(tab), bold = T) %>%
 #   column_spec(2:ncol(tab), width = "2cm")  %>%
-#   footnote(general = "Champ : salariés des organisations, France (hors Mayotte).\nSource : DARES/DREES/DGAFP, Enquête Conditions de travail 2013, volet salariés.",
+#   footnote(general = "Champ : salaries des organisations, France (hors Mayotte).\nSource : DARES/DREES/DGAFP, Enquete Conditions de travail 2013, volet salaries.",
 #            general_title = "")
 # save_kable(file = "table1.html", self_contained = T)
 #
@@ -2257,7 +2307,7 @@ ggmca_freq <- function(res.mca = res.mca) {
 #   adorn_pct_formatting(digits = 0, affix_sign = F) %>%
 #   purrr::map_df(stringr::str_replace_all,"_", " ")
 # names(tab) <- names(tab) %>%
-#   stringr::str_replace_all("_", " ") #Enlever _ des noms de modalités
+#   stringr::str_replace_all("_", " ") #Enlever _ des noms de modalites
 # detect_total <- tab %>%
 #   dplyr::select(CSEacm) %>%
 #   purrr::map(stringr::str_detect,"Total") %>% unlist %>% which(. == TRUE)
@@ -2287,7 +2337,7 @@ ggmca_freq <- function(res.mca = res.mca) {
 #             )) #Need equal columns width
 #
 #
-# #On peut créer des fonctions avec formattable et les citer après :
+# #On peut creer des fonctions avec formattable et les citer apres :
 # total_formatter <-
 #   formatter("span",
 #             style = x ~ style(
@@ -2300,17 +2350,17 @@ ggmca_freq <- function(res.mca = res.mca) {
 
 # f <-
 # "\"\";value $ SUSPENDUf
-#  \"1\"=\"Le contrat a été maintenu\"
-# \" 2\"=\"Le contrat a été rompu ou suspendu\"
+#  \"1\"=\"Le contrat a ete maintenu\"
+# \" 2\"=\"Le contrat a ete rompu ou suspendu\"
 # \"9 \"=\"Ne sait pas\"
 #
 # ;value $ TYPPREf
-# \"1\"=\"Une préretraite d'entreprise ou \"préretraite maison\"\"
-# \"2\"=\"Une allocation de préretraite à financement public (ASFNE, CATS, CAATA)\"
-# \"3\"=\"Une allocation de préretraite de la fonction publique\"
+# \"1\"=\"Une preretraite d'entreprise ou \"preretraite maison\"\"
+# \"2\"=\"Une allocation de preretraite a financement public (ASFNE, CATS, CAATA)\"
+# \"3\"=\"Une allocation de preretraite de la fonction publique\"
 # \"9\"=\"Ne sait pas\"
 # ;"
-# f <- read_file_raw("Enquête Emploi 2013-2018\\formats_sas-EE2018.txt")
+# f <- read_file_raw("Enquete Emploi 2013-2018\\formats_sas-EE2018.txt")
 
 
 
@@ -2447,18 +2497,18 @@ pers_or_plot <-
         )) %>%
         dplyr::mutate(levels = stringr::str_c(levels, " (", freq, ")")) %>%
         dplyr::mutate(`OR (multivariable)` = dplyr::case_when(
-          `OR (multivariable)` == "-" ~ "Référence",
+          `OR (multivariable)` == "-" ~ "Reference",                               #There were unbreakable spaces.
           OR >= 1 & p <  0.001 ~ stringr::str_c(      format(round(  as.numeric(OR), digits = 2), nsmall = 2), "***"),
-          OR >= 1 & p <  0.005 ~ stringr::str_c(      format(round(  as.numeric(OR), digits = 2), nsmall = 2), "** "),
-          OR >= 1 & p <  0.01  ~ stringr::str_c(      format(round(  as.numeric(OR), digits = 2), nsmall = 2), "*  "),
-          OR >= 1 & p >= 0.01  ~ stringr::str_c(      format(round(  as.numeric(OR), digits = 2), nsmall = 2), "    "),
+          OR >= 1 & p <  0.005 ~ stringr::str_c(      format(round(  as.numeric(OR), digits = 2), nsmall = 2), "**" , stri_unescape_unicode("\\u202f")), #Unbreakable space
+          OR >= 1 & p <  0.01  ~ stringr::str_c(      format(round(  as.numeric(OR), digits = 2), nsmall = 2), "*"  , stri_unescape_unicode("\\u202f\\u202f")),
+          OR >= 1 & p >= 0.01  ~ stringr::str_c(      format(round(  as.numeric(OR), digits = 2), nsmall = 2),  stri_unescape_unicode("\\u202f\\u202f\\u202f")),
           OR <  1 & p <  0.001 ~ stringr::str_c("1/", format(round(1/as.numeric(OR), digits = 2), nsmall = 2), "***"),
-          OR <  1 & p <  0.005 ~ stringr::str_c("1/", format(round(1/as.numeric(OR), digits = 2), nsmall = 2), "** "),
-          OR <  1 & p <  0.01  ~ stringr::str_c("1/", format(round(1/as.numeric(OR), digits = 2), nsmall = 2), "*  "),
-          OR <  1 & p >= 0.01  ~ stringr::str_c("1/", format(round(1/as.numeric(OR), digits = 2), nsmall = 2), "    ")
+          OR <  1 & p <  0.005 ~ stringr::str_c("1/", format(round(1/as.numeric(OR), digits = 2), nsmall = 2), "**" , stri_unescape_unicode("\\u202f")),
+          OR <  1 & p <  0.01  ~ stringr::str_c("1/", format(round(1/as.numeric(OR), digits = 2), nsmall = 2), "*"  , stri_unescape_unicode("\\u202f\\u202f")),
+          OR <  1 & p >= 0.01  ~ stringr::str_c("1/", format(round(1/as.numeric(OR), digits = 2), nsmall = 2),  stri_unescape_unicode("\\u202f\\u202f\\u202f"))
         )) %>%
         dplyr::mutate(color = as.factor(dplyr::case_when(
-          `OR (multivariable)` == "Référence" ~ "Référence",
+          `OR (multivariable)` == "Reference" ~ "Reference",
           TRUE ~ "Autre"))) %>%
         dplyr::mutate(index = index + 1) %>%
         tibble::add_row(fit_id = stringr::str_c("Title", 1:2), label = "", Total = 0, index = 0:1,
@@ -2470,7 +2520,7 @@ pers_or_plot <-
 
       first_row <- df.out[1,] %>%
         tibble::add_row(fit_id = "Title1", label = "Variable", Total = 0, index = 0,
-                        levels = "Modalité",
+                        levels = "Modalite",
                         `OR (multivariable)` = "Odds ratio",
                         .before = 1) %>%
         tibble::add_row(fit_id = "Title2", label = "", Total = 0, index = 1,
@@ -2494,11 +2544,11 @@ pers_or_plot <-
                           label = " / rapport de chances", hjust = 0,
                           size = table_text_size, fontface = "bold") +
         ggplot2::annotate("text", x = 0, y = first_row$fit_id[2],
-                          label = " (IC à 95%, échelle logarithmique)", hjust = 0,
+                          label = " (IC a 95%, echelle logarithmique)", hjust = 0,
                           size = table_text_size, fontface = "bold") +
         ggplot2::scale_x_continuous(trans = "log10", breaks = legend_ticks_breaks,
                                     labels = legend_ticks_labels) +
-        ggplot2::scale_fill_manual(values = c(Autre = "#333333", Référence = "#999999")) +
+        ggplot2::scale_fill_manual(values = c(Autre = "#333333", Reference = "#999999")) +
         #xlab("Odds ratio (95% CI, log scale)") +
         ggplot2::theme_classic(14) +
         ggplot2::theme(axis.title.x = ggplot2::element_blank(), #element_text(),

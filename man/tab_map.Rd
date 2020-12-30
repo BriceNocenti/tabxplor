@@ -20,7 +20,9 @@ Apply a function to each table.
 }
 \examples{
 #To calculate row percentages, then cells deviations from columns means :
+\dontrun{
 forcats::gss_cat \%>\%
   tabw(marital, race, perc = "row") \%>\%
   tab_map(~ dplyr::mutate_at(., -1, ~ . - dplyr::last(.)))
+  }
 }

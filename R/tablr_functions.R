@@ -33,9 +33,11 @@ bind_tabs <- function(tabs, by = c("col", "row"), change_names) {
 #'
 #' @examples
 #' #To calculate row percentages, then cells deviations from columns means :
+#' \dontrun{
 #' forcats::gss_cat %>%
 #'   tabw(marital, race, perc = "row") %>%
 #'   tab_map(~ dplyr::mutate_at(., -1, ~ . - dplyr::last(.)))
+#'   }
 tab_map <- function(tabs, .f) {
   if ("single_tabr" %in% class(tabs)) {
     tabs_attr <- tabs %>% attributes()

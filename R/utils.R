@@ -69,7 +69,7 @@ fct_clean <- function(factor, pattern = cleannames_condition()) {
 #'
 #' @examples
 #' forcats::gss_cat %>%
-#' pull(race) %>%
+#' dplyr::pull(race) %>%
 #'   fct_to_na("Other")
 fct_to_na <- function(factor, patternlist){
   if (!is.factor(factor)) { factor %<>% as.factor() }

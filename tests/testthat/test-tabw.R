@@ -1,4 +1,4 @@
-test_that("the crosstab numbers are right", {
+#test_that("the crosstab numbers are right", {
 
 
   # data <- tibble(a = factor(c("Ok", "Ok", "Not ok")),
@@ -6,7 +6,7 @@ test_that("the crosstab numbers are right", {
   #                wt = c(1, 1, 1))
   #
   # tabw(data, a, b, wt = wt)
-})
+#})
 
 
 # test_that("fbind() binds factor (or character)", {

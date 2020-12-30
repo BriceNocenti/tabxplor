@@ -1,4 +1,4 @@
-library(testthat)
-library(tabr)
-
-test_check("tabr")
+# library(testthat)
+# library(tabr)
+#
+# test_check("tabr")

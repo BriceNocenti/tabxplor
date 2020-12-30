@@ -2,7 +2,7 @@
 % Please edit documentation in R/geometrical_data_analysis.R
 \name{ggout}
 \alias{ggout}
-\title{An Output Function to Draw Dynamic Graphs with ggplot2}
+\title{An Output Function to Draw Dynamic Graphs or Save/Open with ggplot2}
 \usage{
 ggout(
   plot = last_plot(),

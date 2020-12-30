@@ -116,7 +116,7 @@
 #'   tabxl()
 #'   }
 tabxl <-
-  function(tabs, path = "Tableau", replace = FALSE, open = TRUE,
+  function(tabs, path = "Tableau", replace = FALSE, open = rlang::is_interactive(),
            colnames_rotation = 45,
            digits_perc = 0, digits_no_perc = 0, digits_quanti = 0, only_one_sheet = FALSE,
            color = c("contrib", "no", "auto"),

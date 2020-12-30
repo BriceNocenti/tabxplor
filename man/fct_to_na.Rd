@@ -19,6 +19,6 @@ Replace Factor Levels with NA
 }
 \examples{
 forcats::gss_cat \%>\%
-pull(race) \%>\%
+dplyr::pull(race) \%>\%
   fct_to_na("Other")
 }

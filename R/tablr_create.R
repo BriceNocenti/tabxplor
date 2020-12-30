@@ -3,7 +3,8 @@
 
 #Fonction tabw : tableau croise pondere compatible tidyverse
 # Ajouter  : - plusieurs tableaux si plusieurs variables sont indiquees (y compris wt) ?
-#            - une fonction tout-en-un pour les etudiants, une autre decomposee pour les utilisateurs du tidyverse ?
+#            - une fonction tout-en-un pour les etudiants,
+#            une autre decomposee pour les utilisateurs du tidyverse ?
 #            - faire des wrappers (versions : normal ; tout est simplifie ; resultats ?)
 #            - Autres fonctions ? : - soustraire moyenne de la colonne/ligne
 #                                   - intervalles de confiance
@@ -13,12 +14,22 @@
 #            - choisir signe pourcentages ou pas dans le format
 # BUGS       - Format de sortie pour les effectifs : double not decimal (ACM output) ?
 #            - Enlever design effect ?
-#            - use stopifnot and switch ----------------------------------------------------------
+#            - use stopifnot and switch ----------------------------------------
 #            - make perc faster, compared to counts ----------------------------
 
-
-
-
+# Family of functions :
+# tab
+# tab_multi
+# tab_sup
+# tab_ci
+#
+# tab_df
+# tab_draw
+#
+# tab_map #tab_map(mutate(., ))
+# tab_map_rownames
+# tab_map_columns
+# tab_map_rowwise #?
 
 #' Crosstabs
 #' @description A full-featured function to create, manipulate and print
@@ -34,6 +45,7 @@
 #' @param show_na Set to \code{FALSE} to exclude individuals with \code{NA} at
 #'  \code{var1}, \code{var2} or \code{var3}.
 #' @param keep_unused_levels Set to \code{TRUE} to keep empty levels of factors.
+#'
 #' @param sup_cols,sup_rows,multicols,multirows,print_sup A character vector of
 #'  supplementary column variables, or supplementary row variables. They can be
 #'  factor/character, but also numeric (in which case a
@@ -59,6 +71,7 @@
 #'  To print all levels, also set \code{not_last_level} to \code{FALSE}.
 #' @param drop_sup_na Set to \code{TRUE} to remove all individuals
 #' with \code{NA} in at least  one supplementary variable.
+#'
 #' @param tot \code{"auto"} prints all totals, unless it is a one-variable
 #'  table. \code{"no"} remove them all, \code{"row"} add a total row, \code{"col"}
 #'  a total column, and \code{"all"} and \code{c("row", "col")} stand for both.
@@ -80,13 +93,16 @@
 #'  Any row/col with less count will be printed in grey in \code{\link{tabxl}}.
 #' @param rare_levels_to_other When set to \code{TRUE}, levels with less count
 #' than minimum_headcount will be merged into an "Other" level.
+#'
 #' @param another_total Set to \code{TRUE} to add another total line.
 #' Useful to compare row frequencies with \code{perc = "row"}, or columns
 #' frequencies with \code{perc = "col"}. It only prints when you pass tabs
 #' into \code{\link{tabxl}}.
+#'
 #' @param sup_contrib Add a column and a row with the contribution of all levels
 #'  to the variance of the tabs. It only prints when you pass tabs
 #'  into \code{\link{tabxl}}.
+#'
 #' @param result Any intermediate result in the calculation of Chi2/variance
 #'  can be printed :
 #'   \itemize{
@@ -105,12 +121,10 @@
 #'  confidence level (number between 0 and 1). Set \code{design_effect = TRUE}
 #'  to increase the confidence intervals, depending on how the \code{wt}
 #'   weight variable distort the structure of data.
+#'
 #' @param force_unique_table If \code{var3} is provided, set to
 #'  \code{TRUE} to print multiple tables into one.
-# @param print_sup If any sup_cols or sup_rows are provided, set to \code{TRUE} to
-#  print them in the main table, without having to use \code{\link{tabxl}}.
-# @param multicols Set to \code{TRUE} to print the table(s) of var1 and sup_cols.
-# @param multirows Set to \code{TRUE} to print the table(s) of var2 and sup_rows.
+#'
 #' @param accelerate If \code{TRUE} makes the function faster, but produces
 #'  less metadata (Chi2, unweighted counts, contributions of cells to variance).
 #  @param ...
@@ -627,6 +641,7 @@ tabr_core <- function(dat, var1, var2, var3, wt,
   sup_rows_text <-  sup_list$sup_rows_text
 
 
+
   #Note : to keep order of levels with dplyr::arrange(), all text vars must always stay factors.
 
   #Faire les group_by une seule fois car ils demandent du temps de calcul :
@@ -820,7 +835,10 @@ tabr_core <- function(dat, var1, var2, var3, wt,
   } else if (perc[1] == "all_tabs")       {
     perc_wtot <- rlang::expr(.wtotn)
   }
-  if (perc[1] != "no") wtable %<>% dplyr::mutate(pct = (weighted_n/!!perc_wtot) %>% tidyr::replace_na(., 0) %>% round(7)  )
+  if (perc[1] != "no") wtable %<>%
+    dplyr::mutate(pct = (weighted_n/!!perc_wtot) %>%
+                    tidyr::replace_na(., 0) %>%
+                    round(7)  )
 
   #Confidence intervals :
   if (confidence_intervals == TRUE) {
@@ -955,15 +973,24 @@ tabr_core <- function(dat, var1, var2, var3, wt,
 
         dplyr::mutate(ctr_no_sign = ctr_abs/Vnuage,
                       contrib = (ctr_no_sign * sign(spread)) %>%
-                        dplyr::if_else(!!var1 == "Total" | !!var2 == "Total", ctr_no_sign, .),
+                        dplyr::if_else(
+                          !!var1 == "Total" | !!var2 == "Total",
+                          ctr_no_sign,
+                          .),
                       ctr_mean = (1/(nbrow * nbcol)) %>%
-                        dplyr::if_else(!!var1 == "Total" | !!var2 == "Total", NA_real_, .) ) %>%
-        dplyr::mutate(dplyr::across(expected:contrib, ~ tidyr::replace_na(., 0) %>% round(7) ))
+                        dplyr::if_else(
+                          !!var1 == "Total" | !!var2 == "Total",
+                          NA_real_,
+                          .) ) %>%
+        dplyr::mutate(dplyr::across(expected:contrib,
+                                    ~ tidyr::replace_na(., 0) %>% round(7) ))
 
 
     } else { #If there is no var2
-      wtable %<>% dplyr::mutate(expected  = 0, spread  = 0, binding_ratio  = 0, ctr_abs  = 0,
-                                Vnuage  = 0, ctr_no_sign  = 0, contrib  = 0, ctr_mean = NA_real_)
+      wtable %<>%
+        dplyr::mutate(expected  = 0, spread  = 0, binding_ratio  = 0,
+                      ctr_abs  = 0,Vnuage  = 0, ctr_no_sign  = 0, contrib  = 0,
+                      ctr_mean = NA_real_)
     }
   }
   #Supprimer variables transitoires
@@ -1072,7 +1099,8 @@ tabr_core <- function(dat, var1, var2, var3, wt,
   }
 
   if (length(sup_cols) != 0 & multirows == FALSE) {
-    dat_group31 <- dat_group3 %>% dplyr::group_by(!!var1, .add = TRUE, .drop = FALSE)
+    dat_group31 <- dat_group3 %>%
+      dplyr::group_by(!!var1, .add = TRUE, .drop = FALSE)
 
     sup_cols <- names(dat) %>% purrr::keep(. %in% sup_cols)
     if (missing(sup_cols_num)) sup_cols_num <- sup_cols %>%
@@ -1212,7 +1240,8 @@ tabr_core <- function(dat, var1, var2, var3, wt,
 
   #Supplementary rows :
   if (length(sup_rows) != 0 & multicols == FALSE) {
-    dat_group32 <- dat_group3 %>% dplyr::group_by(!!var2, .add = TRUE, .drop = FALSE)
+    dat_group32 <- dat_group3 %>%
+      dplyr::group_by(!!var2, .add = TRUE, .drop = FALSE)
 
     sup_rows <- names(dat) %>% purrr::keep(. %in% sup_rows)
     if (missing(sup_rows_num)) sup_rows_num <- sup_rows %>%
@@ -1242,24 +1271,53 @@ tabr_core <- function(dat, var1, var2, var3, wt,
         }
       }
 
-      sup_rows_tabs_text %<>% dplyr::group_by(.SUP_NAME, !!var3, !!var2) %>% dplyr::mutate(.wtot2 = sum(weighted_n))
-      if (accelerate == FALSE) sup_rows_tabs_text %<>% dplyr::mutate(.tot2 = sum(n))
+      sup_rows_tabs_text %<>% dplyr::group_by(.SUP_NAME, !!var3, !!var2) %>%
+        dplyr::mutate(.wtot2 = sum(weighted_n))
+      if (accelerate == FALSE) sup_rows_tabs_text %<>%
+        dplyr::mutate(.tot2 = sum(n))
 
-      sup_rows_tabs_text %<>% dplyr::group_by(.SUP_NAME, !!var3) %>% dplyr::mutate(.wtot3 = sum(weighted_n))
-      if (accelerate == FALSE) sup_rows_tabs_text %<>% dplyr::mutate(.tot3 = sum(n))
+      sup_rows_tabs_text %<>% dplyr::group_by(.SUP_NAME, !!var3) %>%
+        dplyr::mutate(.wtot3 = sum(weighted_n))
+      if (accelerate == FALSE) sup_rows_tabs_text %<>%
+        dplyr::mutate(.tot3 = sum(n))
 
       if (accelerate == FALSE) {
-        sup_rows_tabs_text %<>% dplyr::group_by(.SUP, .add = TRUE) %>%
-          dplyr::bind_rows(dplyr::summarise(., !!var2 := factor("Total"), !!var1 := factor("Total"),
-                                            n = sum(n), weighted_n = sum(weighted_n), .TYPE = dplyr::first(.TYPE),
-                                            .tot2 = dplyr::first(.tot3), .wtot2 = dplyr::first(.wtot3), .zone = factor("sup_rows"),
-                                            .tot3 = dplyr::first(.tot3), .wtot3 = dplyr::first(.wtot3), .groups = "drop") )
-      } else { #if (accelerate == TRUE)
-        sup_rows_tabs_text %<>% dplyr::group_by(.SUP, .add = TRUE) %>%
-          dplyr::bind_rows(dplyr::summarise(., !!var2 := factor("Total"), !!var1 := factor("Total"),
-                                            n = sum(n), weighted_n = sum(weighted_n), .TYPE = dplyr::first(.TYPE),
-                                            .wtot2 = dplyr::first(.wtot3), .zone = factor("sup_rows"),
-                                            .wtot3 = dplyr::first(.wtot3), .groups = "drop") )
+        sup_rows_tabs_text %<>%
+          dplyr::group_by(.SUP, .add = TRUE) %>%
+          dplyr::bind_rows(
+            dplyr::summarise(
+              .,
+              !!var2 := factor("Total"),
+              !!var1 := factor("Total"),
+              n = sum(n),
+              weighted_n = sum(weighted_n),
+              .TYPE = dplyr::first(.TYPE),
+              .tot2 = dplyr::first(.tot3),
+              .wtot2 = dplyr::first(.wtot3),
+              .zone = factor("sup_rows"),
+              .tot3 = dplyr::first(.tot3),
+              .wtot3 = dplyr::first(.wtot3),
+              .groups = "drop"
+            )
+          )
+      } else {
+        #if (accelerate == TRUE)
+        sup_rows_tabs_text %<>%
+          dplyr::group_by(.SUP, .add = TRUE) %>%
+          dplyr::bind_rows(
+            dplyr::summarise(
+              .,
+              !!var2 := factor("Total"),
+              !!var1 := factor("Total"),
+              n = sum(n),
+              weighted_n = sum(weighted_n),
+              .TYPE = dplyr::first(.TYPE),
+              .wtot2 = dplyr::first(.wtot3),
+              .zone = factor("sup_rows"),
+              .wtot3 = dplyr::first(.wtot3),
+              .groups = "drop"
+            )
+          )
       }
 
       #Percentages
@@ -1568,7 +1626,8 @@ get_orig_name <- function(df) { #Thanks to https://stackoverflow.com/questions/3
 
 
 # dat <- ct2013s %>%
-#   dplyr::mutate(no_var2 = "n") %>% dplyr::select(tidyselect::all_of(list_of_vars), EMP2,  no_var2, PR0, pondcal)
+#   dplyr::mutate(no_var2 = "n") %>%
+#   dplyr::select(tidyselect::all_of(list_of_vars), EMP2,  no_var2, PR0, pondcal)
 # var1 <- rlang::expr(EMP2)
 # var2 <- rlang::expr(no_var2)
 # var3 <- rlang::expr(PR0)
@@ -1606,6 +1665,7 @@ get_orig_name <- function(df) { #Thanks to https://stackoverflow.com/questions/3
 # datbase <- dat
 # multicols <- TRUE
 # multirows <- FALSE
+
 #' @keywords internal
 tabr_main <- function(dat, data_name,
                       var1, var2, var3, wt,
