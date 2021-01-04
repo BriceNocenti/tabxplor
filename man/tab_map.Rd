@@ -10,7 +10,9 @@ tab_map(tabs, .f)
 \item{tabs}{A \code{\link{single_tabr}}, many of them gathered in
 a \code{\link{tabr}}, or a list of \code{\link{tabr}}.}
 
-\item{.f}{A \code{\link[purrr]{map}} style function or ~ formula.}
+\item{.f}{A \code{\link[purrr]{map}} style function or ~ formula. In fact
+\code{\link[purrr]{modify}} is used to preserve the attributes of the tables,
+because \code{\link[purrr]{map}} remove them.}
 }
 \value{
 a table or list of tables the same length as tabs.

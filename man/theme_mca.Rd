@@ -28,7 +28,7 @@ theme_mca(
 
 \item{xlim}{Horizontal axe limits.}
 
-\item{ylim}{Vertical axe limitss.}
+\item{ylim}{Vertical axe limits.}
 }
 \value{
 A list of ggplot2 objects.

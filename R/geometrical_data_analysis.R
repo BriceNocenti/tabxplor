@@ -12,7 +12,7 @@
 #' @param no_color_scale When TRUE, color_scale will be provided next.
 #' @param size_scale_max Size of the points.
 #' @param xlim Horizontal axe limits.
-#' @param ylim Vertical axe limitss.
+#' @param ylim Vertical axe limits.
 #'
 #' @return A list of ggplot2 objects.
 #'
@@ -181,7 +181,7 @@ ggout <- function(plot = last_plot(),
 # res.ca <- FES2017 %>%
 #   dplyr::mutate() %>%
 #   tabw(CSER, PR2017ALL1, wt = w5, tot = "no",
-#        rare_levels_to_other = TRUE, subtext = champ_inscrits) %>%
+#        rare_to_other = TRUE, subtext = champ_inscrits) %>%
 #   purrr::flatten_df() %>% dplyr::mutate(dplyr::across(tidyselect::where(is_decimal), as.double)) %>% tibble::column_to_rownames(colnames(.)[1]) %>%
 #   FactoMineR::CA()
 #
@@ -2008,7 +2008,7 @@ ggca <-
 # FES2017 %>%
 #   dplyr::mutate() %>%
 #   tabw(CSER, PR2017ALL1, wt = w5, tot = "no",
-#        rare_levels_to_other = TRUE, subtext = champ_inscrits) %>%
+#        rare_to_other = TRUE, subtext = champ_inscrits) %>%
 #   purrr::flatten_df() %>% dplyr::mutate(dplyr::across(tidyselect::where(rlang::is_decimal), as.double)) %>% tibble::column_to_rownames(colnames(.)[1]) %>%
 #   FactoMineR::CA() %>%
 #   ggca(size_scale_max = 6) %>%  #+ ggtitle("Vote au premier tour 2017 en fonction de la CSP : analyse des correspondances")) %>%

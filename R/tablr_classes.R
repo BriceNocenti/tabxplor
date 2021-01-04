@@ -1,4 +1,6 @@
-# Create class single_tabr--------------------------------------------------------
+#Gérer les conversions !!-------------------------------------------------------
+
+# Create class single_tabr------------------------------------------------------
 # sloop::s3_methods_class("tbl")
 # sloop::s3_get_method(print.tbl)
 # cli::cat_line()
@@ -141,27 +143,35 @@ print.single_tabr <- function(x, ...) {
 #' to be joined into a list of tables.
 #' @param args Arguments of functions \code{\link{tabw}} and
 #' \code{\link{tabmulti}} used when printing the tables with \code{\link{tabxl}}.
-#' @param col_var_sort The variable to use to sort the single tabs.
-#' @param result_var The name of variables to use to reconstite the tables from
-#' wtable with \code{\link{tabdraw}}.
 #' @param pvalue_Chi2 A tibble storing information about pvalues, unweighted
 #' counts, and variances of all the tabs in the list.
+#' #' @param result_var The name of variables to use to reconstite the tables from
+#' wtable with \code{\link{tabdraw}}.
 #' @param wtable A unique \code{\link[tibble]{tibble}} dataframe with all data
 #' necessary to draw the list of tabs.
 #'
 #' @return A list of tables. Objects of class \code{\link{tabr}} are printed
 #' with an adapted method.
 #' @export
-tabr <- function(tabs = list(), args = list(), col_var_sort = character(), result_var = character(), pvalue_Chi2 = tibble::tibble(), wtable = tibble::tibble()) {
+tabr <- function(tabs = list(), args = list(), pvalue_Chi2 = tibble::tibble(), result_var = character(), wtable = tibble::tibble()) {
   tabs <- vctrs::vec_cast(tabs, list()) #take anything coercible as a list
   #tabs %<>% purrr::map(~ single_tabr(.)) #Lose unofficial attributes ?
   wtable <- tibble::as_tibble(wtable) #vctrs::vec_recycle(vctrs::vec_cast(wtable, tibble::tibble()))
   pvalue_Chi2 <- tibble::as_tibble(pvalue_Chi2)
-  col_var_sort <- vctrs::vec_cast(col_var_sort, list())
   result_var <- vctrs::vec_cast(result_var, character())
   args <- vctrs::vec_cast(args, list())
-  new_tabr(tabs, args = args, col_var_sort = col_var_sort, result_var = result_var, pvalue_Chi2 = pvalue_Chi2,  wtable = wtable)
+  new_tabr(tabs, args = args, pvalue_Chi2 = pvalue_Chi2,  result_var = result_var, wtable = wtable)
 }
+
+
+
+
+
+
+
+
+
+
 
 #' @describeIn tabr A test function for class tabr (list of tables)
 #' @export
@@ -170,20 +180,30 @@ is_tabr <- function(x) {
 }
 
 #' @keywords internal
-new_tabr <- function(tabs = list(), args = list(), col_var_sort = list(), result_var = character(), pvalue_Chi2 = tibble::tibble(), wtable = tibble::tibble()) {
-  tabs <- vctrs::vec_assert(tabs, list()) #check type or size
-  result_var <- vctrs::vec_assert(result_var, character())
-  col_var_sort <- vctrs::vec_assert(col_var_sort, list())
+new_tabr <- function(tabs = list(),
+                     args = list(),
+                     pvalue_Chi2 = tibble::tibble(),
+                     result_var = character(),
+                     wtable = tibble::tibble()      ) {
+  if ("tabr" %in% class(tabs)) {
+    tabs <- vctrs::vec_data(tabs)
+  } else {
+    tabs <- vctrs::vec_assert(tabs, list()) #check type or size
+  }
+
   args <- vctrs::vec_assert(args, list())
   #purrr::map(tabs, ~ vctrs::vec_assert(., ptype = single_tabr()) ) #don't work
   #if ( !all(purrr::map_lgl(tabs, ~ is_single_tabr(.))) ) stop("all elements in the list must be of class single_tabr")
   if ( !tibble::is_tibble(wtable)) stop("the wtable (data frame necessary to make the tabs) must be a tibble")
   if ( !tibble::is_tibble(pvalue_Chi2)) stop("data frame with pvalues and variances must be a tibble")
+  result_var <- vctrs::vec_assert(result_var, character())
   #vctrs::vec_assert(wtable, ptype = tibble::tibble()) #check type or size
   #vctrs::vec_assert(digits, ptype = integer(), size = 1)
-  vctrs::new_vctr(tabs, args = args, col_var_sort = col_var_sort, result_var = result_var, pvalue_Chi2 = pvalue_Chi2, wtable = wtable,
+  vctrs::new_vctr(tabs, args = args, pvalue_Chi2 = pvalue_Chi2,
+                  result_var = result_var, wtable = wtable,
                   class = "tabr", inherit_base_type = TRUE)
 }
+
 
 
 #' Print method for class tabr
@@ -213,5 +233,89 @@ print.tabr <- function(x, ...) {
 # class(wtable)
 # class(tibble::tibble())
 
+
+
+
+
+
+#Create class tabr_df -------------------------------------------------------
+
+# The helper to the function is the former tabr_core function
+# Class tabr_df
+# @description
+# @param wtable A unique \code{\link[tibble]{tibble}} dataframe with all data
+# necessary to draw the list of tabs.
+# @param perc The type of percentages to calculate.
+# @param col_var_sort The variable to use to sort the single tabs.
+#
+# @return A dataframe.
+# @export
+# tabr_df__CLASS <- function(wtable = tibble::tibble(),
+#                     perc = c("no", "row", "col", "all", "all_tabs"),
+#                     wt = character(),
+#                     col_var_sort = list("no"),
+#                     data = tibble()) {
+#   wtable <- tibble::as_tibble(wtable)
+#   perc <- vctrs::vec_cast(perc[1], character())
+#   wt <- vctrs::vec_cast(perc[1], character())
+#   col_var_sort <- vctrs::vec_cast(col_var_sort, list())
+#   data <- tibble::as_tibble(data)
+#   new_tabr_df(wtable = wtable, perc = perc, wt = wt, col_var_sort = col_var_sort,
+#                data = data)
+# }
+
+
+#' @describeIn tabr_df A test function for class tabr_df (dataframe for multiple tables)
+#' @export
+is_tabr_df <- function(x) {
+  inherits(x, "tabr_df")
+}
+
+#' @keywords internal
+new_tabr_df <- function(wtable = tibble::tibble(),
+                        perc = c("no", "row", "col", "all", "all_tabs"),
+                        wt = character(),
+                        col_var_sort = list("no"),
+                        data = tibble()) {
+  if ( !tibble::is_tibble(wtable)) {
+    stop("the wtable (data frame necessary to make the tabs) must be a tibble")
+  }
+  if (!perc[1] %in% c("no", "row", "col", "all", "all_tabs")) {
+    stop("perc must be 'no', 'row', 'col', 'all' or 'all_tabs'")
+  }
+  wt <- vctrs::vec_assert(wt, character())
+  col_var_sort <- vctrs::vec_assert(col_var_sort, list())
+  if ( !tibble::is_tibble(data)) {
+    stop("the original input data frame must be a tibble")
+  }
+  tibble::new_tibble(wtable, nrow = nrow(wtable), class = "tabr_df", perc = perc,
+                     wt = wt,
+                     col_var_sort = col_var_sort,
+                     data = data)
+}
+
+
+
+#' Print method for class tabr_df
+#'
+#' @param x A tabr_df object
+#' @param ... Arguments passed to print.default
+#'
+#' @return The printed table dataframe.
+#' @export
+print.tabr_df <- function(x, ...) {
+  if (nrow(x) > 0 & ncol(x) > 0) {
+    out <- x
+    cli::cat_line(format(pillar::colonnade(out))) #Less formatting but no "A tibble::tibble" introduction
+  } else {
+    cli::cat_line("# A tabr_df: 0 x 0", col = "grey")
+  }
+}
+
+# print.tabr_df <- function(x, ...) {
+#   x <-
+#     `attributes<-`(x, list("names" = purrr::pluck(x, purrr::attr_getter("names"))))
+#   print.default(x, ...)
+# }
 
 

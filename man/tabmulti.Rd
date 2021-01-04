@@ -19,9 +19,7 @@ tabmulti(
   digits = 0,
   cleannames = FALSE,
   subtext,
-  sort_by = "no",
-  accelerate = FALSE,
-  ...
+  sort_by = "no"
 )
 }
 \arguments{

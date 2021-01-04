@@ -6,15 +6,15 @@
 \usage{
 tabxl(
   tabs,
-  path = "Tableau",
+  path = "Tabs\\\\Tab",
   replace = FALSE,
-  open = TRUE,
+  open = rlang::is_interactive(),
   colnames_rotation = 45,
   digits_perc = 0,
   digits_no_perc = 0,
   digits_quanti = 0,
   only_one_sheet = FALSE,
-  color = c("contrib", "no", "auto"),
+  color = c("auto", "contrib", "no"),
   hide_near_zero = c("auto", 0.0049, Inf),
   compact = FALSE,
   perc_color_breaks = c("+0.05", "+0.10", "+0.15", "+0.25", "*2", "+0.35", "-0.05",

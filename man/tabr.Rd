@@ -8,9 +8,8 @@
 tabr(
   tabs = list(),
   args = list(),
-  col_var_sort = character(),
-  result_var = character(),
   pvalue_Chi2 = tibble::tibble(),
+  result_var = character(),
   wtable = tibble::tibble()
 )
 
@@ -23,13 +22,10 @@ to be joined into a list of tables.}
 \item{args}{Arguments of functions \code{\link{tabw}} and
 \code{\link{tabmulti}} used when printing the tables with \code{\link{tabxl}}.}
 
-\item{col_var_sort}{The variable to use to sort the single tabs.}
-
-\item{result_var}{The name of variables to use to reconstite the tables from
-wtable with \code{\link{tabdraw}}.}
-
 \item{pvalue_Chi2}{A tibble storing information about pvalues, unweighted
-counts, and variances of all the tabs in the list.}
+counts, and variances of all the tabs in the list.
+#' @param result_var The name of variables to use to reconstite the tables from
+wtable with \code{\link{tabdraw}}.}
 
 \item{wtable}{A unique \code{\link[tibble]{tibble}} dataframe with all data
 necessary to draw the list of tabs.}
