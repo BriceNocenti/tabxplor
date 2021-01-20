@@ -58,9 +58,9 @@
 
 #' Crosstabs : Excel output with conditionnal formatting
 #'
-#' @param tabs Table(s) created with \code{\link{tabw}}. Strictly speaking, it
-#' can be an object of class \code{\link{single_tabr}}, several of them
-#' gathered in a \code{\link{tabr}}, or a list code{\link{tabr}}.
+#' @param tabs Table(s) created with \code{\link{tab}}. Strictly speaking, it
+#' can be an object of class \code{\link{single_tab}}, several of them
+#' gathered in a \code{\link{tab}}, or a list code{\link{tab}}.
 #' @param path,replace,open The name, and possibly the path, of the Excel file
 #' to create (without the .xlsx extension). Default path to working directory.
 #' Use \code{replace = TRUE} to overwrite existing files. Use \code{open = TRUE}
@@ -109,13 +109,13 @@
 #' \dontrun{
 #' forcats::gss_cat %>%
 #' tabw(marital, race, perc = "row") %>%
-#'   tabxl()
+#'   tab_xl()
 #'
 #' forcats::gss_cat %>%
 #'   tabw(marital, race) %>%
-#'   tabxl()
+#'   tab_xl()
 #'   }
-tabxl <-
+tab_xl <-
   function(tabs, path = "Tabs\\Tab", replace = FALSE, open = rlang::is_interactive(),
            colnames_rotation = 45,
            digits_perc = 0, digits_no_perc = 0, digits_quanti = 0, only_one_sheet = FALSE,
@@ -138,42 +138,42 @@ tabxl <-
 
     whole_is_unique_table <- !is.null(purrr::pluck(tabs, purrr::attr_getter("is_unique_table")))
 
-    if ("tabr_df" %in% class(tabs) )  tabs <- tabdraw(tabs)
+    if ("tab_df" %in% class(tabs) )  tabs <- tab_draw(tabs)
 
-    if ("tabr" %in% class(tabs)){
+    if ("tab" %in% class(tabs)){
       tabs <- list(tabs)
 
-    } else if (whole_is_unique_table) { #"single_tabr" %in% class(tabs)
-      tabs <- list(purrr::pluck(tabs, purrr::attr_getter("tabr")))
+    } else if (whole_is_unique_table) { #"single_tab" %in% class(tabs)
+      tabs <- list(purrr::pluck(tabs, purrr::attr_getter("tab")))
 
     } else  {
       where_unique_table <- purrr::map_lgl(tabs, ~ !is.null(purrr::pluck(., purrr::attr_getter("is_unique_table"))))
 
       if (any(where_unique_table)) {
-        tabs[where_unique_table] <- tabs[where_unique_table] %>% purrr::map(~ purrr::pluck(., purrr::attr_getter("tabr")))
+        tabs[where_unique_table] <- tabs[where_unique_table] %>% purrr::map(~ purrr::pluck(., purrr::attr_getter("tab")))
       }
 
-      where_tabr <- purrr::map_lgl(tabs, ~ "tabr" %in% class(.) )
-      if (any(! where_tabr)) {
-        where_depth2 <- tabs[!where_tabr] %>%
-          purrr::map_depth(2, ~ "tabr" %in% class(.) ) %>%
+      where_tab <- purrr::map_lgl(tabs, ~ "tab" %in% class(.) )
+      if (any(! where_tab)) {
+        where_depth2 <- tabs[!where_tab] %>%
+          purrr::map_depth(2, ~ "tab" %in% class(.) ) %>%
           purrr::map(~purrr::flatten_lgl(.) %>% all()) %>% purrr::flatten_lgl()
-        if (any(! where_depth2)) stop("some elements are not tabrs, or buried too deep in a list (level 3 or more)")
-        tabs <- list(tabs[where_tabr]) %>% append(tabs[!where_tabr]) %>% purrr::flatten()
+        if (any(! where_depth2)) stop("some elements are not tabs, or buried too deep in a list (level 3 or more)")
+        tabs <- list(tabs[where_tab]) %>% append(tabs[!where_tab]) %>% purrr::flatten()
       }
     }
 
 
     #Try with :
-    #purrr::map(1:max(1, purrr::vec_depth(sup_vars_tabs) - 2), ~ purrr::map_depth(sup_vars_tabs, ., ~ "tabr" %in% class(.))) %>% purrr::transpose()
+    #purrr::map(1:max(1, purrr::vec_depth(sup_vars_tabs) - 2), ~ purrr::map_depth(sup_vars_tabs, ., ~ "tab" %in% class(.))) %>% purrr::transpose()
 
     #Will miss a any() somewhere
-    #vars_depth <- purrr::map(1:max(1, purrr::vec_depth(sup_vars_tabs) - 2), ~ purrr::map_depth(sup_vars_tabs, ., ~ "tabr" %in% class(.))) %>% purrr::transpose() %>%
+    #vars_depth <- purrr::map(1:max(1, purrr::vec_depth(sup_vars_tabs) - 2), ~ purrr::map_depth(sup_vars_tabs, ., ~ "tab" %in% class(.))) %>% purrr::transpose() %>%
     #  purrr::map(purrr::flatten) %>% purrr::map(purrr::flatten_lgl) %>% purrr::map_int(which)
 
     tabsbase <- tabs
     tabs <- tabs %>% purrr::map(~`attr<-`(., "args", NULL) %>% `attr<-`("wtable", NULL))
-    empty_tabs <- tabs %>% purrr::map(~ purrr::list_along(.)) %>% purrr::map_depth(2, ~ single_tabr())
+    empty_tabs <- tabs %>% purrr::map(~ purrr::list_along(.)) %>% purrr::map_depth(2, ~ single_tab())
 
     #Remove sup columns and row if they were printed in the main tables
     print_sup_cols <- tabsbase %>% purrr::map(~ purrr::map_lgl(., ~ purrr::pluck(., purrr::attr_getter("print_sup"))[1]) )
@@ -203,7 +203,7 @@ tabxl <-
       purrr::map(~ purrr::map_chr(., ~ purrr::pluck(., purrr::attr_getter("perc"))) ) %>%
       purrr::flatten_chr()
 
-    #Transformations which rely on informations into the main tabrs :
+    #Transformations which rely on informations into the main tabs :
     #(when attribute is not found, set to default)
     wtables             <- tabsbase %>% purrr::map(~ purrr::pluck(., purrr::attr_getter("wtable")))
     col_var_sort        <- tabsbase %>% purrr::map(~ purrr::pluck(., purrr::attr_getter("col_var_sort"))) %>%
@@ -237,7 +237,7 @@ tabxl <-
       purrr::map_if(purrr::map_lgl(., rlang::is_null), ~ "table")
     digits              <- tabsbase %>% purrr::map(~ purrr::pluck(., purrr::attr_getter("args"))$digits            ) %>%
       purrr::map_if(purrr::map_lgl(., rlang::is_null), ~ 0)
-    sup_contrib_tabr    <- tabsbase %>% purrr::map(~ purrr::pluck(., purrr::attr_getter("args"))$sup_contrib       ) %>%
+    sup_contrib_tab    <- tabsbase %>% purrr::map(~ purrr::pluck(., purrr::attr_getter("args"))$sup_contrib       ) %>%
       purrr::map_if(purrr::map_lgl(., rlang::is_null), ~ FALSE)
     minimum_headcount   <- tabsbase %>% purrr::map(~ purrr::pluck(., purrr::attr_getter("args"))$minimum_headcount ) %>%
       purrr::map_if(purrr::map_lgl(., rlang::is_null), ~ 30)
@@ -262,7 +262,7 @@ tabxl <-
     if (only_one_sheet == TRUE) newsheet <- 1:length(newsheet) == 1
     #tabs_confidence_intervals <- empty_tabs %>% purrr::map2(confidence_intervals, ~ purrr::map_lgl(.x, function(var) .y)) %>% purrr::flatten_lgl()
     sup_contrib               <- empty_tabs %>%
-      purrr::map2(sup_contrib_tabr, ~ purrr::map_lgl(.x, function(var) .y)) %>%
+      purrr::map2(sup_contrib_tab, ~ purrr::map_lgl(.x, function(var) .y)) %>%
       purrr::flatten_lgl() & compact == FALSE
     varnames                  <- empty_tabs %>%
       purrr::map2(varnames, ~ purrr::map(.x, function(var) .y)) %>%
@@ -296,7 +296,7 @@ tabxl <-
 
 
 
-    #Print the summary tab with the Chi2 probs of all tabrs
+    #Print the summary tab with the Chi2 probs of all tabs
     pvalue_Chi2_print   <- tabsbase %>% purrr::map(~ purrr::pluck(., purrr::attr_getter("pvalue_Chi2")))
     if (all(purrr::map_lgl(pvalue_Chi2_print, ~ ! rlang::is_null(.)))) {
       pChi2 <- purrr::map_lgl(pvalue_Chi2_print, ~ nrow(.) > 1)
@@ -316,7 +316,7 @@ tabxl <-
 
     insufficient_headcount_var1 <-
       purrr::pmap(list(wtables, only_total_columns, totaltab, keep_unused_levels, minimum_headcount), #col_var_sort,
-                  ~ tabdraw(..1, n, tot = ..2, totaltab = ..3, keep_unused_levels = ..4) %>% #perc = "no", col_var_sort = ..5
+                  ~ tab_draw(..1, n, tot = ..2, totaltab = ..3, keep_unused_levels = ..4) %>% #perc = "no", col_var_sort = ..5
                     purrr::map_if(purrr::map_lgl(., ~ ncol(.) >= 2),
                                   function(.tab) which(dplyr::pull(.tab, 2) < ..5 ) + 1L,
                                   .else = ~ integer()) ) %>%
@@ -327,7 +327,7 @@ tabxl <-
                    purrr::discard(. == "row"))
     insufficient_headcount_var2 <-
       purrr::pmap(list(wtables, only_total_rows, totaltab, keep_unused_levels,  minimum_headcount), #col_var_sort,
-                  ~ tabdraw(..1, n, tot = ..2, totaltab = ..3, keep_unused_levels = ..4, reverse_row_col = TRUE) %>% #perc = "no", col_var_sort = ..5,
+                  ~ tab_draw(..1, n, tot = ..2, totaltab = ..3, keep_unused_levels = ..4, reverse_row_col = TRUE) %>% #perc = "no", col_var_sort = ..5,
                     purrr::map_if(purrr::map_lgl(., ~ ncol(.) >= 2),
                                   function(.tab) which(dplyr::pull(.tab, 2) < ..5) + 1L,
                                   .else = ~ integer())  ) %>%
@@ -335,10 +335,10 @@ tabxl <-
 
 
     #Sup contribs
-    if (color[1] %in% c("contrib", "auto") | any(purrr::flatten_lgl(sup_contrib_tabr)) ) {
+    if (color[1] %in% c("contrib", "auto") | any(purrr::flatten_lgl(sup_contrib_tab)) ) {
       # contrib_tabs <-
       #   purrr::pmap(list(wtables, totals, totaltab, keep_unused_levels, col_var_sort),
-      #        ~ tabdraw(..1, contrib, tot = ..2, totaltab = ..3, keep_unused_levels = ..4) ) %>% #perc = "no", col_var_sort = ..5
+      #        ~ tab_draw(..1, contrib, tot = ..2, totaltab = ..3, keep_unused_levels = ..4) ) %>% #perc = "no", col_var_sort = ..5
       #   purrr::map_depth(2, ~ dplyr::mutate(., dplyr::across(where(~ is_pct(.) | is_decimal(.)), as.double))) %>% purrr::flatten()
       # contrib_matrixes <-
       #   purrr::pmap(list(contrib_tabs,
@@ -350,7 +350,7 @@ tabxl <-
       contrib_tabs <-
         pmap_if(list(wtables, totaltab, keep_unused_levels), #col_var_sort
                 contrib_condition,
-                ~ tabdraw(..1, contrib, tot = c("row", "col"), totaltab = ..2, keep_unused_levels = ..3)) #perc = "no", col_var_sort = ..4
+                ~ tab_draw(..1, contrib, tot = c("row", "col"), totaltab = ..2, keep_unused_levels = ..3)) #perc = "no", col_var_sort = ..4
       contrib_tabs[!contrib_condition] <- empty_tabs[!contrib_condition]
 
       contrib_tabs <- contrib_tabs %>%
@@ -382,7 +382,7 @@ tabxl <-
       sup_cols_tabs <-
         pmap_if(list(wtables, result_sup_text_var, result_sup_num_var, totals, totaltab, keep_unused_levels), #col_var_sort
                        sup_cols,
-                       ~ tabdraw(..1, result_text = !!rlang::sym(..2), result_num = !!rlang::sym(..3), col_var = .SUP, zone = "sup_cols", tot = ..4,
+                       ~ tab_draw(..1, result_text = !!rlang::sym(..2), result_num = !!rlang::sym(..3), col_var = .SUP, zone = "sup_cols", tot = ..4,
                                  totaltab = ..5, keep_unused_levels = ..6)) %>% #perc = "col", col_var_sort = ..7
         purrr::map_if(!sup_cols, ~ "no")
       empty <- ! purrr::map_lgl(sup_cols_tabs, ~ "list" %in% class(.))
@@ -408,7 +408,7 @@ tabxl <-
       sup_rows_tabs <-
         pmap_if(list(wtables, result_sup_text_var, result_sup_num_var, totals, keep_unused_levels), #col_var_sort
                        sup_rows,
-                       ~ tabdraw(..1, result_text = !!rlang::sym(..2), result_num = !!rlang::sym(..3), row_var = .SUP, zone = "sup_rows", tot = ..4,  #subtext ?
+                       ~ tab_draw(..1, result_text = !!rlang::sym(..2), result_num = !!rlang::sym(..3), row_var = .SUP, zone = "sup_rows", tot = ..4,  #subtext ?
                                  totaltab = "table", keep_unused_levels = ..5)) #, perc = "row"
       empty <- ! purrr::map_lgl(sup_rows_tabs, ~ "list" %in% class(.))
       sup_rows_tabs[empty] <- empty_tabs[empty]
@@ -416,7 +416,7 @@ tabxl <-
         purrr::map_if(sup_rows, ~ purrr::map(., ~ dplyr::mutate(., dplyr::across(where(~ is_pct(.) | is_decimal(.)), as.double)))) %>%
         purrr::flatten()
 
-      tabdraw(wtables[[1]], result_text = !!rlang::sym(result_sup_text_var[[1]]), result_num = !!rlang::sym(result_sup_num_var[[1]]),
+      tab_draw(wtables[[1]], result_text = !!rlang::sym(result_sup_text_var[[1]]), result_num = !!rlang::sym(result_sup_num_var[[1]]),
               row_var = .SUP, zone = "sup_rows", tot = totals[[1]],  #subtext ?
               totaltab = "table", keep_unused_levels = keep_unused_levels[[1]]) #, perc = "row"
 
@@ -441,7 +441,7 @@ tabxl <-
       another_totcol_tabs <-
         pmap_if(list(wtables, only_total_columns, totaltab, keep_unused_levels), #col_var_sort
                        an_totcol_condition,
-                       ~ tabdraw(..1, an_totcol, tot = ..2, totaltab = ..3, keep_unused_levels = ..4) %>% #perc = "col", col_var_sort = ..5
+                       ~ tab_draw(..1, an_totcol, tot = ..2, totaltab = ..3, keep_unused_levels = ..4) %>% #perc = "col", col_var_sort = ..5
                          purrr::map(~ dplyr::select(., -1)))
       empty <- ! purrr::map_lgl(another_totcol_tabs, ~ "list" %in% class(.))
       another_totcol_tabs[empty] <- empty_tabs[empty]
@@ -455,7 +455,7 @@ tabxl <-
       another_totrow_tabs <-
         pmap_if(list(wtables, only_total_rows, totaltab, keep_unused_levels),
                        an_totrow_condition,
-                       ~ tabdraw(..1, an_totrow, tot = ..2, totaltab = ..3, keep_unused_levels = ..4)) #, perc = "row"
+                       ~ tab_draw(..1, an_totrow, tot = ..2, totaltab = ..3, keep_unused_levels = ..4)) #, perc = "row"
       empty <- ! purrr::map_lgl(another_totrow_tabs, ~ "list" %in% class(.))
       another_totrow_tabs[empty] <- empty_tabs[empty]
       another_totrow_tabs %<>%
@@ -464,7 +464,7 @@ tabxl <-
     }
 
 
-    #Transformations which rely on informations into single_tabrs :
+    #Transformations which rely on informations into single_tabs :
     #tabs_percentages       <- tabsbase %>% purrr::map(~ purrr::map_chr(., ~ purrr::pluck(., purrr::attr_getter("perc"))) ) %>% purrr::flatten_chr()
     #Calculate here and not in attributes ? ----
     tabs_total_table       <- tabsbase %>%
@@ -516,7 +516,7 @@ tabxl <-
     totr <- total_rows %>% purrr::map_lgl(~ !is.na(.))
     totc <- total_cols %>% purrr::map_lgl(~ !is.na(.))
 
-    if (color[1] %in% c("contrib", "auto") | any(purrr::flatten_lgl(sup_contrib_tabr)) ) {
+    if (color[1] %in% c("contrib", "auto") | any(purrr::flatten_lgl(sup_contrib_tab)) ) {
       contrib_tabs_totcol <- purrr::map_if(contrib_tabs_totcol, !totr, ~ dplyr::slice(., - nrow(.)))
       contrib_tabs_totrow <- purrr::map_if(contrib_tabs_totrow, !totc, ~ dplyr::select(., - Total))
     }
@@ -2423,4 +2423,4 @@ tabxl <-
   }
 
 
-#tabs %>% tabxl(compact = TRUE, color = "contrib")
+#tabs %>% tab_xl(compact = TRUE, color = "contrib")

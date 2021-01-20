@@ -1,12 +1,12 @@
 #Gérer les conversions !!-------------------------------------------------------
 
-# Create class single_tabr------------------------------------------------------
+# Create class single_tab------------------------------------------------------
 # sloop::s3_methods_class("tbl")
 # sloop::s3_get_method(print.tbl)
 # cli::cat_line()
 # sloop::s3_get_method(format.tbl)
 # tibble::trunc_mat #Gives classes :
-# c("trunc_mat_single_tabr", "trunc_mat_tbl_df", "trunc_mat_tbl", "trunc_mat_data.frame", "trunc_mat")
+# c("trunc_mat_single_tab", "trunc_mat_tbl_df", "trunc_mat_tbl", "trunc_mat_data.frame", "trunc_mat")
 # sloop::s3_methods_class("tibble::trunc_mat")
 # sloop::s3_get_method(format.tibble::trunc_mat)
 # sloop::s3_get_method(print.tibble::trunc_mat)
@@ -14,29 +14,29 @@
 # sloop::s3_get_method(format.pillar_colonnade)
 # sloop::s3_get_method(print.pillar_colonnade)
 # pillar::squeeze
-# sloop::s3_methods_class("single_tabr")
+# sloop::s3_methods_class("single_tab")
 
 
-#' Class single_tabr
+#' Class single_tab
 #'
 #' @param x A table, stored into a \code{\link[tibble]{tibble}} data.frame.
-#' It is generally made with \code{\link{tabw}} or \code{\link{tabmulti}}.
+#' It is generally made with \code{\link{tab}} or \code{\link{tab_multi}}.
 #' @param perc The type of percentages of this table : "no", "row", "col", "all"
 #'  or "all_tabs".
 #' @param pvalue_Chi2 A tibble storing information about pvalues, unweighted
 #' counts, and variances.
-#' @param total_table TRUE when it is the total table of a \code{\link{tabr}}
+#' @param total_table TRUE when it is the total table of a \code{\link{tab}}
 #' (list of tables).
 #' @param subtext A character vector to print legend lines under the table
-#' with \code{\link{tabxl}}
+#' with \code{\link{tab_xl}}
 #' @param force_unique_table TRUE when multiple tables are bound into one.
 #' @param print_sup TRUE when supplementary rows and cols are printed into the
 #' main table.
 #'
-#' @return A table of class single_tabr.
+#' @return A table of class single_tab.
 #' @export
 #  @examples
-single_tabr <-
+single_tab <-
   function(x = tibble::tibble(), perc = "no", pvalue_Chi2 = tibble::tibble(), total_table = FALSE,
            subtext = "", force_unique_table = FALSE, print_sup = c(FALSE, FALSE)) {
     x <- tibble::as_tibble(x)
@@ -46,27 +46,27 @@ single_tabr <-
     subtext <- as.character(subtext)
     force_unique_table <- as.logical(force_unique_table[1])
     print_sup <- as.logical(print_sup)
-    new_single_tabr(x, nrow = nrow(x), perc = perc, pvalue_Chi2 = pvalue_Chi2,
+    new_single_tab(x, nrow = nrow(x), perc = perc, pvalue_Chi2 = pvalue_Chi2,
                     total_table = total_table, subtext = subtext,
-                    force_unique_table = force_unique_table, print_sup = print_sup) # validate_single_tabr(new_single_tabr(x))
+                    force_unique_table = force_unique_table, print_sup = print_sup) # validate_single_tab(new_single_tab(x))
   }
 
 # Useful test fonction :
-#' @describeIn single_tabr A test function for class single_tabr
+#' @describeIn single_tab A test function for class single_tab
 #' @export
-is_single_tabr <- function(x) {
-  inherits(x, "single_tabr")
+is_single_tab <- function(x) {
+  inherits(x, "single_tab")
 }
 
-# as_single_tabr <- function(x, ...) {
-#   UseMethod("as_single_tabr")
+# as_single_tab <- function(x, ...) {
+#   UseMethod("as_single_tab")
 # }
-# as_single_tabr.default <- function(x, ...) {
-#   #vctrs::vec_cast(x, single_tabr())
+# as_single_tab.default <- function(x, ...) {
+#   #vctrs::vec_cast(x, single_tab())
 # }
 
 #' @keywords internal
-new_single_tabr <-
+new_single_tab <-
   function(x = tibble::tibble(), nrow = 0L, perc = "no", pvalue_Chi2 = tibble::tibble(), total_table = FALSE,
            subtext = "", force_unique_table = FALSE, print_sup = c(FALSE, FALSE),  ..., class = NULL) {
     #x <- vctrs::vec_assert(x, tibble::tibble()) #check type or size
@@ -78,21 +78,21 @@ new_single_tabr <-
     subtext <- vctrs::vec_assert(subtext, ptype = character())
     force_unique_table <- vctrs::vec_assert(force_unique_table, ptype = logical(), size = 1)
     print_sup <- vctrs::vec_assert(print_sup, ptype = logical(), size = 2)
-    tibble::new_tibble(x, nrow = nrow, class = "single_tabr", perc = perc, pvalue_Chi2 = pvalue_Chi2,
+    tibble::new_tibble(x, nrow = nrow, class = "single_tab", perc = perc, pvalue_Chi2 = pvalue_Chi2,
                        total_table = total_table, subtext = subtext,
                        force_unique_table = force_unique_table, print_sup = print_sup) #... ?
   }
 
-#' Print method for class single_tabr
+#' Print method for class single_tab
 #'
-#' @param x An object of class single_tabr.
+#' @param x An object of class single_tab.
 #' @param ... Arguments passed to print.default
 #'
 #' @return The printed single table.
 #' @export
 #'
 # @examples
-print.single_tabr <- function(x, ...) {
+print.single_tab <- function(x, ...) {
   #cli::cat_line(format(x, ..., n = 30, width = 500)) #Can be use to color bg and text
 
   if (nrow(x) > 0 & ncol(x) > 0) {
@@ -121,7 +121,7 @@ print.single_tabr <- function(x, ...) {
     }
     cli::cat_line(format(pillar::colonnade(out, width = 500))) #Less formatting but no "A tibble::tibble" introduction
   } else {
-    cli::cat_line("# A single_tabr: 0 x 0", col = "grey")
+    cli::cat_line("# A single_tab: 0 x 0", col = "grey")
   }
 
   #invisible(x)
@@ -133,67 +133,66 @@ print.single_tabr <- function(x, ...) {
 
 
 
-#Create class tabr -------------------------------------------------------
+#Create class tab -------------------------------------------------------
 
-#  @examples
+# The standard tab function had taken the place of the friendly helper.
+# Class tab
+# @description
+# @param tabs Dataframes, possible of class single_tab,
+# to be joined into a list of tables.
+# @param args Arguments of functions \code{\link{tab}} and
+# \code{\link{tab_multi}} used when printing the tables with \code{\link{tab_xl}}.
+# @param pvalue_Chi2 A tibble storing information about pvalues, unweighted
+# counts, and variances of all the tabs in the list.
+# #' @param result_var The name of variables to use to reconstite the tables from
+# wtable with \code{\link{tab_draw}}.
+# @param wtable A unique \code{\link[tibble]{tibble}} dataframe with all data
+# necessary to draw the list of tabs.
+#
+# @return A list of tables. Objects of class \code{\link{tab}} are printed
+# with an adapted method.
+# @export
+# tab <- function(tabs = list(), args = list(), pvalue_Chi2 = tibble::tibble(), result_var = character(), wtable = tibble::tibble()) {
+#   tabs <- vctrs::vec_cast(tabs, list()) #take anything coercible as a list
+#   #tabs %<>% purrr::map(~ single_tab(.)) #Lose unofficial attributes ?
+#   wtable <- tibble::as_tibble(wtable) #vctrs::vec_recycle(vctrs::vec_cast(wtable, tibble::tibble()))
+#   pvalue_Chi2 <- tibble::as_tibble(pvalue_Chi2)
+#   result_var <- vctrs::vec_cast(result_var, character())
+#   args <- vctrs::vec_cast(args, list())
+#   new_tab(tabs, args = args, pvalue_Chi2 = pvalue_Chi2,  result_var = result_var, wtable = wtable)
+# }
 
-#' Class tabr
-#  @description
-#' @param tabs Dataframes, possible of class single_tabr,
-#' to be joined into a list of tables.
-#' @param args Arguments of functions \code{\link{tabw}} and
-#' \code{\link{tabmulti}} used when printing the tables with \code{\link{tabxl}}.
-#' @param pvalue_Chi2 A tibble storing information about pvalues, unweighted
-#' counts, and variances of all the tabs in the list.
-#' #' @param result_var The name of variables to use to reconstite the tables from
-#' wtable with \code{\link{tabdraw}}.
-#' @param wtable A unique \code{\link[tibble]{tibble}} dataframe with all data
-#' necessary to draw the list of tabs.
-#'
-#' @return A list of tables. Objects of class \code{\link{tabr}} are printed
-#' with an adapted method.
+
+
+
+
+
+
+
+
+
+
+#' @describeIn tab A test function for class tab (list of tables)
 #' @export
-tabr <- function(tabs = list(), args = list(), pvalue_Chi2 = tibble::tibble(), result_var = character(), wtable = tibble::tibble()) {
-  tabs <- vctrs::vec_cast(tabs, list()) #take anything coercible as a list
-  #tabs %<>% purrr::map(~ single_tabr(.)) #Lose unofficial attributes ?
-  wtable <- tibble::as_tibble(wtable) #vctrs::vec_recycle(vctrs::vec_cast(wtable, tibble::tibble()))
-  pvalue_Chi2 <- tibble::as_tibble(pvalue_Chi2)
-  result_var <- vctrs::vec_cast(result_var, character())
-  args <- vctrs::vec_cast(args, list())
-  new_tabr(tabs, args = args, pvalue_Chi2 = pvalue_Chi2,  result_var = result_var, wtable = wtable)
-}
-
-
-
-
-
-
-
-
-
-
-
-#' @describeIn tabr A test function for class tabr (list of tables)
-#' @export
-is_tabr <- function(x) {
-  inherits(x, "tabr")
+is_tab <- function(x) {
+  inherits(x, "tab")
 }
 
 #' @keywords internal
-new_tabr <- function(tabs = list(),
+new_tab <- function(tabs = list(),
                      args = list(),
                      pvalue_Chi2 = tibble::tibble(),
                      result_var = character(),
                      wtable = tibble::tibble()      ) {
-  if ("tabr" %in% class(tabs)) {
+  if ("tab" %in% class(tabs)) {
     tabs <- vctrs::vec_data(tabs)
   } else {
     tabs <- vctrs::vec_assert(tabs, list()) #check type or size
   }
 
   args <- vctrs::vec_assert(args, list())
-  #purrr::map(tabs, ~ vctrs::vec_assert(., ptype = single_tabr()) ) #don't work
-  #if ( !all(purrr::map_lgl(tabs, ~ is_single_tabr(.))) ) stop("all elements in the list must be of class single_tabr")
+  #purrr::map(tabs, ~ vctrs::vec_assert(., ptype = single_tab()) ) #don't work
+  #if ( !all(purrr::map_lgl(tabs, ~ is_single_tab(.))) ) stop("all elements in the list must be of class single_tab")
   if ( !tibble::is_tibble(wtable)) stop("the wtable (data frame necessary to make the tabs) must be a tibble")
   if ( !tibble::is_tibble(pvalue_Chi2)) stop("data frame with pvalues and variances must be a tibble")
   result_var <- vctrs::vec_assert(result_var, character())
@@ -201,21 +200,21 @@ new_tabr <- function(tabs = list(),
   #vctrs::vec_assert(digits, ptype = integer(), size = 1)
   vctrs::new_vctr(tabs, args = args, pvalue_Chi2 = pvalue_Chi2,
                   result_var = result_var, wtable = wtable,
-                  class = "tabr", inherit_base_type = TRUE)
+                  class = "tab", inherit_base_type = TRUE)
 }
 
 
 
-#' Print method for class tabr
+#' Print method for class tab
 #'
-#' @param x A tabr object
+#' @param x A tab object
 #' @param ... Arguments passed to print.default
 #'
 #' @return The printed list of tables, preceded by a pvalue_Chi2 summary.
 #' @export
 #'
 # @examples
-print.tabr <- function(x, ...) {
+print.tab <- function(x, ...) {
   cat("\n")
   purrr::pluck(x, purrr::attr_getter("pvalue_Chi2")) %>% pillar::colonnade(has_row_id = FALSE) %>% print()
   cat("\n")
@@ -225,8 +224,8 @@ print.tabr <- function(x, ...) {
 # sloop::s3_dispatch(print(tabs))
 # sloop::s3_get_method(print.default)
 
-#tabr(tabs, wtable)
-# single_tabr()
+#tab(tabs, wtable)
+# single_tab()
 # purrr::map(tabs, ~class(.))
 
 # class(tabs)
@@ -238,10 +237,10 @@ print.tabr <- function(x, ...) {
 
 
 
-#Create class tabr_df -------------------------------------------------------
+#Create class tab_df -------------------------------------------------------
 
-# The helper to the function is the former tabr_core function
-# Class tabr_df
+# The helper to the function is the former tab_df function
+# Class tab_df
 # @description
 # @param wtable A unique \code{\link[tibble]{tibble}} dataframe with all data
 # necessary to draw the list of tabs.
@@ -250,7 +249,7 @@ print.tabr <- function(x, ...) {
 #
 # @return A dataframe.
 # @export
-# tabr_df__CLASS <- function(wtable = tibble::tibble(),
+# tab_df__CLASS <- function(wtable = tibble::tibble(),
 #                     perc = c("no", "row", "col", "all", "all_tabs"),
 #                     wt = character(),
 #                     col_var_sort = list("no"),
@@ -260,19 +259,19 @@ print.tabr <- function(x, ...) {
 #   wt <- vctrs::vec_cast(perc[1], character())
 #   col_var_sort <- vctrs::vec_cast(col_var_sort, list())
 #   data <- tibble::as_tibble(data)
-#   new_tabr_df(wtable = wtable, perc = perc, wt = wt, col_var_sort = col_var_sort,
+#   new_tab_df(wtable = wtable, perc = perc, wt = wt, col_var_sort = col_var_sort,
 #                data = data)
 # }
 
 
-#' @describeIn tabr_df A test function for class tabr_df (dataframe for multiple tables)
+#' @describeIn tab_df A test function for class tab_df (dataframe for multiple tables)
 #' @export
-is_tabr_df <- function(x) {
-  inherits(x, "tabr_df")
+is_tab_df <- function(x) {
+  inherits(x, "tab_df")
 }
 
 #' @keywords internal
-new_tabr_df <- function(wtable = tibble::tibble(),
+new_tab_df <- function(wtable = tibble::tibble(),
                         perc = c("no", "row", "col", "all", "all_tabs"),
                         wt = character(),
                         col_var_sort = list("no"),
@@ -288,7 +287,7 @@ new_tabr_df <- function(wtable = tibble::tibble(),
   if ( !tibble::is_tibble(data)) {
     stop("the original input data frame must be a tibble")
   }
-  tibble::new_tibble(wtable, nrow = nrow(wtable), class = "tabr_df", perc = perc,
+  tibble::new_tibble(wtable, nrow = nrow(wtable), class = "tab_df", perc = perc,
                      wt = wt,
                      col_var_sort = col_var_sort,
                      data = data)
@@ -296,23 +295,23 @@ new_tabr_df <- function(wtable = tibble::tibble(),
 
 
 
-#' Print method for class tabr_df
+#' Print method for class tab_df
 #'
-#' @param x A tabr_df object
+#' @param x A tab_df object
 #' @param ... Arguments passed to print.default
 #'
 #' @return The printed table dataframe.
 #' @export
-print.tabr_df <- function(x, ...) {
+print.tab_df <- function(x, ...) {
   if (nrow(x) > 0 & ncol(x) > 0) {
     out <- x
     cli::cat_line(format(pillar::colonnade(out))) #Less formatting but no "A tibble::tibble" introduction
   } else {
-    cli::cat_line("# A tabr_df: 0 x 0", col = "grey")
+    cli::cat_line("# A tab_df: 0 x 0", col = "grey")
   }
 }
 
-# print.tabr_df <- function(x, ...) {
+# print.tab_df <- function(x, ...) {
 #   x <-
 #     `attributes<-`(x, list("names" = purrr::pluck(x, purrr::attr_getter("names"))))
 #   print.default(x, ...)

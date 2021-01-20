@@ -7,8 +7,8 @@
 tab_map(tabs, .f)
 }
 \arguments{
-\item{tabs}{A \code{\link{single_tabr}}, many of them gathered in
-a \code{\link{tabr}}, or a list of \code{\link{tabr}}.}
+\item{tabs}{A \code{\link{single_tab}}, many of them gathered in
+a \code{\link{tab}}, or a list of \code{\link{tab}}.}
 
 \item{.f}{A \code{\link[purrr]{map}} style function or ~ formula. In fact
 \code{\link[purrr]{modify}} is used to preserve the attributes of the tables,

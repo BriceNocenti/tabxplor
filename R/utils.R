@@ -618,7 +618,7 @@ prepare_fct_recode <- function(df_in, df_out, var,  mode = c("text", "numbers", 
 # databases <- emploi_data_list[!emploi_data_names %in% c("ee1969_74", "ee2013_18")]
 # vars <- c("ANNEE", "SO", "CSE") #c("ANNEE", "SO", "EXTRI")
 
-#' Bind dataframes for tabw / tabmulti
+#' Bind dataframes for tabw / tab_multi
 #'
 #' @param databases Dataframes to be binded by rows.
 #' @param vars Selected variables.

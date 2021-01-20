@@ -20,7 +20,7 @@ ggmca(
   keep_levels,
   discard_levels,
   profiles = TRUE,
-  profiles_tooltip_discard = "^Pas |Non ",
+  profiles_tooltip_discard = "^Pas |Non |Not |No",
   cah,
   max_profiles,
   nb_char_for_color = rep(0, length(sup_vars)),
@@ -80,13 +80,13 @@ will be discarded.}
 of the graph with light-grey points. When hovering with mouse, the answers of
 individuals to active variables will appears. If \code{cah} is provided,
 to hover near one point will color all the points of the same
-\code{\link[FactoMineR]{ICPC}} class.}
+\code{\link[FactoMineR]{HCPC}} class.}
 
 \item{profiles_tooltip_discard}{A regex pattern to remove useless levels
 among interactive tooltips for profiles of answers (ex. : levels expressing
 "no" answers).}
 
-\item{cah}{A variable made with \code{\link[FactoMineR]{ICPC}}, to link
+\item{cah}{A variable made with \code{\link[FactoMineR]{HCPC}}, to link
 the answers-profiles points who share the same ICPC class (will be colored
 together at mouse hover).}
 
@@ -126,7 +126,7 @@ Interactive tooltips, appearing when  hovering near points with mouse,
 allow to keep in mind many important data (tables of active variables,
 and additionnal chosen variables) while reading the graph.
 Profiles of answers (from the graph of "individuals") are drawn in the back,
-and can be linked to \code{FactoMineR::\link[FactoMineR]{ICPC}} classes.
+and can be linked to \code{FactoMineR::\link[FactoMineR]{HCPC}} classes.
 Since it is made in the spirit of \code{\link{ggplot2}}, it is possible to
 change theme or add another plot elements with \code{+}. Then, interactive
 tooltips won't appear until you pass the result throught \code{\link{ggout}}.

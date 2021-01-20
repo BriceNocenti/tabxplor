@@ -1,6 +1,6 @@
 
-# Enhancements : it must apply on attributes if modifications are to be kept with tabxl()
-bind_tabs <- function(tabs, by = c("col", "row"), change_names) {
+# Enhancements : it must apply on attributes if modifications are to be kept with tab_xl()
+tab_bind <- function(tabs, by = c("col", "row"), change_names) {
   if (!missing(change_names)) {
     tabs %<>%
       purrr::map(~ magrittr::set_colnames(.,
@@ -24,8 +24,8 @@ bind_tabs <- function(tabs, by = c("col", "row"), change_names) {
 
 #' Apply a function to each table.
 #'
-#' @param tabs A \code{\link{single_tabr}}, many of them gathered in
-#' a \code{\link{tabr}}, or a list of \code{\link{tabr}}.
+#' @param tabs A \code{\link{single_tab}}, many of them gathered in
+#' a \code{\link{tab}}, or a list of \code{\link{tab}}.
 #' @param .f A \code{\link[purrr]{map}} style function or ~ formula. In fact
 #' \code{\link[purrr]{modify}} is used to preserve the attributes of the tables,
 #' because \code{\link[purrr]{map}} remove them.
@@ -42,25 +42,25 @@ bind_tabs <- function(tabs, by = c("col", "row"), change_names) {
 #'   tab_map(~ dplyr::mutate_at(., -1, ~ . - dplyr::last(.)))
 #'   }
 tab_map <- function(tabs, .f) {
-  if ("single_tabr" %in% class(tabs) | "tabr_df" %in% class(tabs) ) {
+  if ("single_tab" %in% class(tabs) | "tab_df" %in% class(tabs) ) {
     #tabs_attr <- tabs %>% attributes()
     purrr::modify_depth(tabs, 0, .f) #%>% `attributes<-`(tabs_attr)
 
-  } else if ("tabr" %in% class(tabs) | all(purrr::map_lgl(tabs, ~ "tabr_df" %in% class(.)))) {
+  } else if ("tab" %in% class(tabs) | all(purrr::map_lgl(tabs, ~ "tab_df" %in% class(.)))) {
     #tabs_attr <- tabs %>% attributes()
     purrr::modify_depth(tabs, 1, .f) #%>% `attributes<-`(tabs_attr)
-  } else if (all(purrr::map_lgl(tabs, ~ "tabr" %in% class(.)))) {
-    # vars_depth <- purrr::map(1:max(1, purrr::vec_depth(tabs) - 2), ~ purrr::map_depth(tabs, ., ~ "tabr" %in% class(.))) %>% purrr::transpose() %>%
+  } else if (all(purrr::map_lgl(tabs, ~ "tab" %in% class(.)))) {
+    # vars_depth <- purrr::map(1:max(1, purrr::vec_depth(tabs) - 2), ~ purrr::map_depth(tabs, ., ~ "tab" %in% class(.))) %>% purrr::transpose() %>%
     #   purrr::map(purrr::flatten) %>% purrr::map(purrr::flatten_lgl) %>% purrr::map_int(which)
     #tabs_attr <- purrr::map(tabs, attributes)
     purrr::map_depth(tabs, 2, .f) #%>% purrr::map2(tabs_attr, ~`attributes<-`(.x, .y))
-  } else if (all(purrr::map_depth(tabs, 2, ~ "tabr" %in% class(.)) %>%
+  } else if (all(purrr::map_depth(tabs, 2, ~ "tab" %in% class(.)) %>%
                  purrr::map(~purrr::flatten_lgl(.)) %>%
                  purrr::flatten_lgl())) {
     #tabs_attr <- purrr::map_depth(tabs, 2, attributes)
     purrr::map_depth(tabs, 3, .f) #%>% purrr::map2(tabs_attr, ~ purrr::map2(.x, .y, ~ `attributes<-`(.x, .y)))
   }  else {
-    stop("some elements of the list are not of class tabr, single_tabr or tabr_df")
+    stop("some elements of the list are not of class tab, single_tab or tab_df")
   }
 }
 

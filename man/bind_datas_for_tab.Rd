@@ -2,7 +2,7 @@
 % Please edit documentation in R/utils.R
 \name{bind_datas_for_tab}
 \alias{bind_datas_for_tab}
-\title{Bind dataframes for tabw / tabmulti}
+\title{Bind dataframes for tabw / tab_multi}
 \usage{
 bind_datas_for_tab(databases, vars)
 }
@@ -15,5 +15,5 @@ bind_datas_for_tab(databases, vars)
 A tibble.
 }
 \description{
-Bind dataframes for tabw / tabmulti
+Bind dataframes for tabw / tab_multi
 }

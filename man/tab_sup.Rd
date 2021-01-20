@@ -18,9 +18,9 @@ tab_sup(
 )
 }
 \arguments{
-\item{data_or_tabs}{An object of class \code{tabr} or \code{single_tabr}
-made with \code{\link{tab}} or \code{\link{tabdraw}}, or a dataframe
-of class \code{tabr_df} made with \code{\link{tabr_core}}.}
+\item{data_or_tabs}{An object of class \code{tab} or \code{single_tab}
+made with \code{\link{tab}} or \code{\link{tab_draw}}, or a dataframe
+of class \code{tab_df} made with \code{\link{tab_df}}.}
 
 \item{sup_cols, sup_rows, print_sup}{A character vector of
 supplementary column variables, or/and supplementary row variables.
@@ -29,7 +29,7 @@ They can be factor/character, but also numeric (in which case a
 of \code{var1}/\code{var2}). \code{sup_cols} and \code{sup_rows} won't
 be printed in the results unless :
 \itemize{
-\item you pass the tabs to \code{\link{tabxl}}
+\item you pass the tabs to \code{\link{tab_xl}}
 \item you set print_sup to \code{TRUE} : it draws a table with all
 principals AND supplementary variables (confusing and not recommended).
 }}
@@ -56,7 +56,7 @@ prefix numbers like "1-", and text in parenthesis.}
 }
 \value{
 Tables with metadata to draw supplementary rows and colums with
-\code{\link[tibble]{tabxl}}, or tables with printed supplementary rows/cols.
+\code{\link{tab_xl}}, or tables with printed supplementary rows/cols.
 }
 \description{
 Add supplementary columns or rows to a crosstab
@@ -71,6 +71,6 @@ forcats::gss_cat \%>\%
   dplyr::mutate(marital = forcats::fct_relevel(marital, "Married")) \%>\%
   tab(relig, race, perc = "row", rare_to_other = TRUE) \%>\%
   tab_sup(sup_rows = c("marital", "age", "tvhours")) \%>\%
-  tabxl()
+  tab_xl()
 }
 }

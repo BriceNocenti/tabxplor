@@ -2,11 +2,13 @@
 % Please edit documentation in R/tablr_create.R
 \name{tab_prepare}
 \alias{tab_prepare}
-\title{Prepare data for \code{\link{tab}} or \code{\link{tabmulti}}}
+\title{Prepare data for \code{\link{tab_df}}.}
 \usage{
 tab_prepare(
   dat,
-  ...,
+  var1,
+  var2,
+  var3,
   show_na = TRUE,
   cleannames = TRUE,
   rare_to_other = FALSE,
@@ -16,8 +18,8 @@ tab_prepare(
 \arguments{
 \item{dat}{A dataframe.}
 
-\item{...}{\code{\link[dplyr]{dplyr_tidy_select}} One or more unquoted
-expressions separated by commas or strings separated by commas.}
+\item{var1, var2, var3}{Variables must be the same that will then pass in
+\code{\link{tab_df}}.}
 
 \item{show_na}{When \code{TRUE}, \code{NA} values are replaced by explicit
 \code{"NA"} values.}
@@ -31,14 +33,14 @@ than minimum_headcount will be merged into an "Other" level.}
 \item{minimum_headcount}{The minimum unweighted count in each variable.}
 }
 \description{
-Prepare data for \code{\link{tab}} or \code{\link{tabmulti}}
+Prepare data for \code{\link{tab_df}}.
 }
 \examples{
 \dontrun{
 forcats::gss_cat \%>\%
   tab_prepare(marital, relig, race, rare_to_other = TRUE) \%>\%
-  tabr_core(marital, relig, race, perc = "col") \%>\%
-  tabdraw(totaltab = "line") \%>\%
-  tabxl(compact = TRUE)
+  tab_df(marital, relig, race, perc = "col") \%>\%
+  tab_draw(totaltab = "line") \%>\%
+  tab_xl(compact = TRUE)
   }
 }

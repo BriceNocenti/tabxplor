@@ -10,7 +10,7 @@
 #                                   - intervalles de confiance
 #                                   - passer sup_contrib, etc., à l'extérieur,
 # Ajouter ?
-#            - regles de formatage conditionnel a passer dans tabxl ?
+#            - regles de formatage conditionnel a passer dans tab_xl ?
 #            - choisir signe pourcentages ou pas dans le format
 # BUGS       - Format de sortie pour les effectifs : double not decimal (ACM output) ?
 #            - Enlever design effect ?
@@ -33,10 +33,10 @@
 
 #' Crosstabs
 #' @description A full-featured function to create, manipulate and print
-#'  crosstabs. It can be decomposed in several functnsio : data is prepared with
-#'  \code{\print{tab_prepare}} ; calculations are made on a single dataframe
-#'  with \code{\print{tabr_core}} ; the result is finally "widened" and split
-#'  in as many tables as necessary with \code{\print{tabdraw}}.
+#'  crosstabs. It can be decomposed in several functions : data is prepared with
+#'  \code{\link{tab_prepare}} ; calculations are made on a single dataframe
+#'  with \code{\link{tab_df}} ; the result is finally "widened" and split
+#'  in as many tables as necessary with \code{\link{tab_draw}}.
 #'  You can then modify tables with any functions using \code{\link{tab_map}}.
 #' @param data A data frame.
 #' @param var1,var2,var3 \code{var1} is the row variable. \code{var2} is the
@@ -62,20 +62,20 @@
 #' @param cleannames Set to \code{TRUE} to clean levels names, by removing
 #' prefix numbers like "1-", and text in parenthesis.
 #' @param subtext A character vector to print legend rows under the
-#' (list of) table(s) in \code{\link{tabxl}}
+#' (list of) table(s) in \code{\link{tab_xl}}
 #' @param sort_by A variable to sort rows in each table with. It must be one
 #'  of the principal or supplementary column variables.
 #' @param minimum_headcount The minimum unweighted count in each row/col.
-#'  Any row/col with less count will be printed in grey in \code{\link{tabxl}}.
+#'  Any row/col with less count will be printed in grey in \code{\link{tab_xl}}.
 #' @param rare_to_other When set to \code{TRUE}, levels with less count
 #' than minimum_headcount will be merged into an "Other" level.
 #' @param another_total Set to \code{TRUE} to add another total line.
 #' Useful to compare row frequencies with \code{perc = "row"}, or columns
 #' frequencies with \code{perc = "col"}. It only prints when you pass tabs
-#' into \code{\link{tabxl}}.
+#' into \code{\link{tab_xl}}.
 #' @param sup_contrib Add a column and a row with the contribution of all levels
 #'  to the variance of the tabs. It only prints when you pass tabs
-#'  into \code{\link{tabxl}}.
+#'  into \code{\link{tab_xl}}.
 #' @param result Any intermediate result in the calculation of Chi2/variance
 #'  can be printed :
 #'   \itemize{
@@ -94,10 +94,10 @@
 #'  less metadata (Chi2, unweighted counts, contributions of cells to variance).
 #'
 #' @return If \code{var3} is empty, a single table with
-#' class \code{\link{single_tabr}}, which is a special
+#' class \code{\link{single_tab}}, which is a special
 #'  \code{\link[tibble]{tibble}} with adapted printing method.
 #'  If \code{var3} is provided, a list of single tables, with class
-#'   \code{\link{tabr}} (a list of \code{\link[tibble]{tibble}}).
+#'   \code{\link{tab}} (a list of \code{\link[tibble]{tibble}}).
 #'   The variables classes depend on the chosen parameters (\code{\link{pct}},
 #'   \code{double}, \code{character}). You can then add supplementary rows or
 #'   cols with \code{\link{tab_sup}}. You can also modify tables with any
@@ -119,8 +119,23 @@
 #' \dontrun{
 #' forcats::gss_cat %>%
 #'   tabw(marital, race, perc = "row") %>%
-#'   tabxl()
+#'   tab_xl()
 #' }
+#'
+#' # To program several tables with different parameters at the same time :
+#' purrr::pmap(
+#'   tibble::tribble(
+#'     ~var1    , ~var2 ,  ~perc,
+#'     "marital", "race",  "no" ,
+#'     "marital", "race",  "row",
+#'     "marital", "race",  "col",
+#'     "relig"  , "race",  "no" ,
+#'     "relig"  , "race",  "row",
+#'     "relig"  , "race",  "col",
+#'   ),
+#'   .f = tab,
+#'   data = forcats::gss_cat, sort_by = c("White", "desc")) #%>%
+#' #tab_xl(only_one_sheet = TRUE)
 tab <-
   function(data, var1, var2, var3, wt, show_na = TRUE, keep_unused_levels = FALSE,
            #sup_cols = NULL, sup_rows = NULL, only_first_level = TRUE, not_last_level = TRUE, drop_sup_na = FALSE,
@@ -136,7 +151,7 @@ tab <-
 
 
 
-    # if ( is.data.frame(data) | ! is_tabr(data)) {
+    # if ( is.data.frame(data) | ! is_tab(data)) {
     #   original_data <- data
     #   original_tablist <- NULL
 
@@ -147,12 +162,12 @@ tab <-
     }
     # }
 
-    # if (is_tabr(data) | all(purrr::map_lgl(data, ~ is_tabr(.)))) {
+    # if (is_tab(data) | all(purrr::map_lgl(data, ~ is_tab(.)))) {
     #   # if (force_unique_table == TRUE){
     #   #   stop("Cannot use tabw with pipe/from tab with force_unique_table == TRUE") }
     #   original_data <- NULL
     #   original_tablist <- data
-    #   if (is_tabr(data)) {
+    #   if (is_tab(data)) {
     #     original_args <- purrr::pluck(data, purrr::attr_getter("args"))
     #   } else {
     #     original_args <- purrr::pluck(data[[1]], purrr::attr_getter("args"))
@@ -184,7 +199,7 @@ tab <-
     #   # ls()[purrr::map_lgl(ls(), ~ any(class(get(.)) == "data.frame"))]
     #   # data <- get(data_name)
     #    }
-    # if (!("data.frame" %in% class(data)) & ! is_tabr(data)) stop("data is of the wrong type")
+    # if (!("data.frame" %in% class(data)) & ! is_tab(data)) stop("data is of the wrong type")
 
 
     if (missing(var1) & missing(var2)) stop("var1 or var2 needed")
@@ -249,8 +264,8 @@ tab <-
     if (rlang::quo_name(wt) == "no_weight") {no_weight <- TRUE} else {no_weight <- FALSE}
 
     data <-
-      tab_internal_prepare(data, !!var1, !!var2, !!var3,
-                       show_na = show_na,cleannames = cleannames,
+      tab_prepare(data, !!var1, !!var2, !!var3,
+                       show_na = show_na, cleannames = cleannames,
                        minimum_headcount = minimum_headcount, rare_to_other = rare_to_other)
 
 
@@ -258,7 +273,7 @@ tab <-
       stringr::str_remove(cleannames_condition())
 
     wtable <-
-      tabr_core(data, !!var1, !!var2, !!var3, !!wt, perc,
+      tab_df(data, !!var1, !!var2, !!var3, !!wt, perc,
                 digits, sort_by = sort_by, accelerate = accelerate) #another_total = another_total,
 
     #Sortie du tableau et mise en forme --------------------------------------
@@ -310,7 +325,7 @@ tab <-
     #if (multicols == FALSE & multirows == FALSE) {
 
     tabs <- wtable %>%
-      tabdraw(!!result_base_var, row_var = !!var1, col_var = !!var2, tab_var = !!var3,
+      tab_draw(!!result_base_var, row_var = !!var1, col_var = !!var2, tab_var = !!var3,
               tot = tot, totaltab = totaltab[1], keep_unused_levels = keep_unused_levels,
               subtext = subtext)  #col_var_sort = col_var_sort, #perc = perc[1]
     #}
@@ -321,6 +336,18 @@ tab <-
     # Put Chi2 table in function
     count_text <- stringi::stri_unescape_unicode("Individus enqu\\u00eat\\u00e9s")
     Chi2_text  <- stringi::stri_unescape_unicode("Prob. du Chi\\u00b2")
+
+    general_title <- dplyr::case_when(
+      ! stringr::str_detect(rlang::quo_name(var1), "^no_var" ) &
+        ! stringr::str_detect(rlang::quo_name(var2), "^no_var" )
+      ~ stringr::str_c(rlang::quo_name(var1), " par ", rlang::quo_name(var2) ),
+
+      stringr::str_detect(rlang::quo_name(var1), "^no_var" )
+      ~ rlang::quo_name(var2),
+
+      stringr::str_detect(rlang::quo_name(var2), "^no_var" )
+      ~ rlang::quo_name(var1)    )
+
     if (accelerate == FALSE) {
       #if (multicols == FALSE & multirows == FALSE) {
 
@@ -328,7 +355,7 @@ tab <-
       #Chi2 test (remove cols or lines with just zeros) :
       if (no_var2 == FALSE & no_var1 == FALSE) {
         pvalue <- wtable %>%
-          tabdraw(n, row_var = !!var1, col_var = !!var2, tab_var = !!var3,
+          tab_draw(n, row_var = !!var1, col_var = !!var2, tab_var = !!var3,
                   tot = "no", totaltab = stringr::str_replace(totaltab, "line", "no"),
                   keep_unused_levels = keep_unused_levels) %>% #, col_var_sort = col_var_sort
           purrr::map(~ dplyr::mutate(., dplyr::across(where(is.numeric), as.double)) %>%
@@ -351,17 +378,6 @@ tab <-
         pvalue <- purrr::map_int(1:length(tabs), ~ 0L) %>% as_pct()
         pvalue_warning <- purrr::map_chr(1:length(tabs), ~ "")
       }
-
-      general_title <- dplyr::case_when(
-        ! stringr::str_detect(rlang::quo_name(var1), "^no_var" ) &
-          ! stringr::str_detect(rlang::quo_name(var2), "^no_var" )
-        ~ stringr::str_c(rlang::quo_name(var1), " par ", rlang::quo_name(var2) ),
-
-        stringr::str_detect(rlang::quo_name(var1), "^no_var" )
-        ~ rlang::quo_name(var2),
-
-        stringr::str_detect(rlang::quo_name(var2), "^no_var" )
-        ~ rlang::quo_name(var1)    )
 
       pvalue_Chi2 <-
         dplyr::summarise(dplyr::group_by(wtable, !!var3),
@@ -396,7 +412,7 @@ tab <-
       if (no_var3 == TRUE) pvalue_Chi2 %<>% dplyr::mutate_at(1, ~ general_title)
     }
 
-    if (force_unique_table == TRUE & length(tabs) >= 2) { #Destroy class tabr
+    if (force_unique_table == TRUE & length(tabs) >= 2) { #Destroy class tab
       tabs <- tabs %>%
         purrr::map_if(1:length(.) != length(.),
                       ~ tibble::add_row(., !!var1 := factor(
@@ -405,7 +421,7 @@ tab <-
                         dplyr::mutate_at(dplyr::vars(tidyselect::any_of("|")),
                                          ~ tidyr::replace_na(., " "))  ) %>% #There were unbreakable space ??
         dplyr::bind_rows() %>%
-        new_single_tabr(nrow = nrow(.), perc = perc,
+        new_single_tab(nrow = nrow(.), perc = perc,
                         pvalue_Chi2 = pvalue_Chi2, total_table = FALSE,
                         subtext = subtext, force_unique_table = TRUE) %>%
         list() %>% magrittr::set_names(general_title)
@@ -419,11 +435,11 @@ tab <-
 
 
     #Set metadatas :
-    # Many where put into tabs while changing their classes to "single_tabr"
-    #  and "tabr" (tabdraw function).
-    # Now we want to add attribute to the object of class "tabr".
+    # Many where put into tabs while changing their classes to "single_tab"
+    #  and "tab" (tab_draw function).
+    # Now we want to add attribute to the object of class "tab".
 
-    #General attributes, always attached to the tabr
+    #General attributes, always attached to the tab
     result_var <-  c("result_base_var"     = rlang::quo_name(result_base_var) )
 
     # if (multicols == TRUE | multirows == TRUE) sup_cols <- sup_rows <- NULL
@@ -442,18 +458,18 @@ tab <-
     )
 
 
-    args_from_tabdraw <- tabs %>%
+    args_from_tab_draw <- tabs %>%
       purrr::pluck(purrr::attr_getter("args")) %>%
       purrr::discard(names(.) %in% names(args_news))
 
     tabs <- tabs %>%
-      magrittr::set_attr("pvalue_Chi2", pvalue_Chi2) %>%
-      magrittr::set_attr("args", append(args_from_tabdraw, args_news)) %>%
-      magrittr::set_attr("result_var", result_var)
+      `attr<-`("pvalue_Chi2", pvalue_Chi2) %>%
+      `attr<-`("args", append(args_from_tab_draw, args_news)) %>%
+      `attr<-`("result_var", result_var)
 
-    #If unique table, print the single_tabr, and attach the tabr in attribute
+    #If unique table, print the single_tab, and attach the tab in attribute
     if (length(tabs) == 1) {
-      tabs <- tabs[[1]] %>% `attr<-`("tabr", tabs) %>%
+      tabs <- tabs[[1]] %>% `attr<-`("tab", tabs) %>%
         `attr<-`("is_unique_table", TRUE)
     }
 
@@ -461,7 +477,7 @@ tab <-
     #tabs %<>% purrr::map(~ dplyr::rename_at(., dplyr::vars(1), ~ title) )
 
     # if (!is.null(original_tablist)) {
-    #   if (is_tabr(original_tablist)) {
+    #   if (is_tab(original_tablist)) {
     #     tabs <- append(list(original_tablist), list(tabs))
     #   } else {
     #     tabs <- append(original_tablist, list(tabs))
@@ -530,39 +546,39 @@ tab <-
 #' @param cleannames Set to \code{TRUE} to clean levels names, by removing
 #' prefix numbers like "1-", and text in parenthesis.
 #' @param subtext A character vector to print legend rows under the
-#' (list of) table(s) in \code{\link{tabxl}}
+#' (list of) table(s) in \code{\link{tab_xl}}
 #' @param sort_by A variable to sort rows in each table with. It must be among
 #'  \code{explanatory_vars}.
 #' @param accelerate If \code{TRUE} makes the function faster, but produces
 #'  less metadata (Chi2, unweighted counts, contributions of cells to variance).
 #'
 #' @return When \code{var3} is empty, a single table with
-#' class \code{\link{single_tabr}}, which is a special
+#' class \code{\link{single_tab}}, which is a special
 #'  \code{\link[tibble]{tibble}} with adapted printing method.
 #'  When \code{var3} is provided, a list of single tables, with class
-#'   \code{\link{tabr}} (a list of \code{\link[tibble]{tibble}}).
+#'   \code{\link{tab}} (a list of \code{\link[tibble]{tibble}}).
 #'   The columns are of class pct, with a names column of
 #'   class factor. You can then modify tables with any functions
 #'   with \code{\link{tab_map}}.
 #' @export
 #'
 #' @examples
-#' tabmulti(dplyr::storms, category, explanatory_vars =  c("pressure", "wind"))
+#' tab_multi(dplyr::storms, category, explanatory_vars =  c("pressure", "wind"))
 #'
-#' tabmulti(forcats::gss_cat, year, explanatory_vars =  c("race", "marital"),
+#' tab_multi(forcats::gss_cat, year, explanatory_vars =  c("race", "marital"),
 #'          only_first_level = FALSE, not_last_level = FALSE)
 #'
 #' \dontrun{
 #'   dplyr::storms %>%
-#'     tabmulti(category, c("pressure", "wind"), transpose_table = TRUE) %>%
-#'     tabxl()
+#'     tab_multi(category, c("pressure", "wind"), transpose_table = TRUE) %>%
+#'     tab_xl()
 #' }
-tabmulti <- function(data, dependent_var, explanatory_vars, tab_var, wt,
+tab_multi <- function(data, dependent_var, explanatory_vars, tab_var, wt,
                      transpose_table = FALSE, only_first_level = TRUE, not_last_level = TRUE,
                      totaltab = c("table", "line", "no"), show_na = TRUE, drop_sup_na = FALSE,
                      digits = 0, cleannames = FALSE, subtext, sort_by = "no") { #Use  tidydots ?
 
-  # if (is.data.frame(data) | ! is_tabr(data)) {
+  # if (is.data.frame(data) | ! is_tab(data)) {
   #   original_data <- data
   #   original_tablist <- NULL
 
@@ -573,12 +589,12 @@ tabmulti <- function(data, dependent_var, explanatory_vars, tab_var, wt,
   }
   # }
 
-  # if (is_tabr(data) | all(purrr::map_lgl(data, ~ is_tabr(.)))) {
+  # if (is_tab(data) | all(purrr::map_lgl(data, ~ is_tab(.)))) {
   #   # if (force_unique_table == TRUE){
   #   #   stop("Cannot use tabw with pipe/from tab with force_unique_table == TRUE") }
   #   original_data <- NULL
   #   original_tablist <- data
-  #   if (is_tabr(data)) {
+  #   if (is_tab(data)) {
   #     original_args <- purrr::pluck(data, purrr::attr_getter("args"))
   #   } else {
   #     original_args <- purrr::pluck(data[[1]], purrr::attr_getter("args"))
@@ -596,7 +612,7 @@ tabmulti <- function(data, dependent_var, explanatory_vars, tab_var, wt,
   #   data <- original_args$original_data
   #   data_name <- original_args$original_data_name
   # }
-  # if (!("data.frame" %in% class(data)) & ! is_tabr(data)) stop("data is of the wrong type")
+  # if (!("data.frame" %in% class(data)) & ! is_tab(data)) stop("data is of the wrong type")
 
 
 
@@ -635,37 +651,38 @@ tabmulti <- function(data, dependent_var, explanatory_vars, tab_var, wt,
   }
 
   data <- data %>%
-    tab_internal_prepare(!!var1, !!var2, !!var3,
-                         show_na = show_na, cleannames = cleannames) %>%
-    tab_prepare(!!!rlang::syms(explanatory_vars), show_na = ! drop_sup_na,
+    tab_prepare(!!var1, !!var2, !!var3,
+                show_na = show_na, cleannames = cleannames) %>%
+    tab_sup_prepare(!!!rlang::syms(explanatory_vars),
+                drop_sup_na = drop_sup_na,
                 cleannames = cleannames)
 
   perc <- if (transpose_table) {"col"} else {"row"}
   tot  <- if (transpose_table) {"row"} else {"col"}
 
   sup_list <- if (transpose_table) {
-    tabr_make_sup_list(data, sup_rows = explanatory_vars)
+    tab_make_sup_list(data, sup_rows = explanatory_vars)
   } else {
-    tabr_make_sup_list(data, sup_cols = explanatory_vars)
+    tab_make_sup_list(data, sup_cols = explanatory_vars)
   }
 
   wtable <- data %>%
-    tab_sup_core(!!var1, !!var2, !!var3, !!wt, perc = perc,
+    tab_sup_df(!!var1, !!var2, !!var3, !!wt, perc = perc,
                   sup_list = sup_list,
                   only_first_level = only_first_level,
                   not_last_level = not_last_level,
                   digits = digits) %>% #tot = c("row", "col")
-    tabr_col_var_sort(sort_by = sort_by)
+    tab_sort_rows(sort_by = sort_by)
 
   if (transpose_table) {
     tabs <-  wtable %>%
-      tabdraw(pct, res, .SUP, !!var2, !!var3,
+      tab_draw(pct, res, .SUP, !!var2, !!var3,
               zone = "sup_rows", totaltab = totaltab[1], #tot = c("row", "col")
               subtext = subtext) #%>%  # keep_unused_levels = FALSE
     #purrr::map(~ dplyr::mutate(., .SUP = fct_replace(.SUP, "^Total", "Ensemble")))
   } else {
     tabs <-  wtable %>%
-      tabdraw(pct, res, !!var1, .SUP, !!var3,
+      tab_draw(pct, res, !!var1, .SUP, !!var3,
               zone = "sup_cols", totaltab = totaltab[1], #tot = c("row", "col")
               subtext = subtext) #%>% purrr::map(~ dplyr::rename(., Ensemble = Total))
 
@@ -701,7 +718,7 @@ tabmulti <- function(data, dependent_var, explanatory_vars, tab_var, wt,
   #
   # if (multirows == TRUE) {
   #   tabs <- wtable %>%
-  #     tabdraw(pct, res, .SUP, !!var2, !!var3,
+  #     tab_draw(pct, res, .SUP, !!var2, !!var3,
   #             zone = "sup_rows", tot = tot, totaltab = totaltab[1], #perc = "col",
   #             keep_unused_levels = keep_unused_levels, subtext = subtext) %>%
 
@@ -727,12 +744,12 @@ tabmulti <- function(data, dependent_var, explanatory_vars, tab_var, wt,
   # #}
 
 
-  tabs <- new_tabr(tabs, args = append(args_old, args_new), wtable = wtable,
+  tabs <- new_tab(tabs, args = append(args_old, args_new), wtable = wtable,
                    result_var = result_var)
 
-  #Si tableau unique, afficher le single_tabr, et attacher le tabr en attribut
+  #Si tableau unique, afficher le single_tab, et attacher le tab en attribut
   if (length(tabs) == 1) {
-    tabs <- tabs[[1]] %>% `attr<-`("tabr", tabs) %>%
+    tabs <- tabs[[1]] %>% `attr<-`("tab", tabs) %>%
       `attr<-`("is_unique_table", TRUE)
   }
   return(tabs)
@@ -740,11 +757,12 @@ tabmulti <- function(data, dependent_var, explanatory_vars, tab_var, wt,
 
 #Decomposed functions ----------------------------------------------------------
 
+
 #Ajouter : - Rename levels "Total" and "Ensemble"
-#' Prepare data for \code{\link{tab}} or \code{\link{tabmulti}}
+#' Prepare data for \code{\link{tab_df}}.
 #' @param dat A dataframe.
-#' @param ... \code{\link[dplyr]{dplyr_tidy_select}} One or more unquoted
-#' expressions separated by commas or strings separated by commas.
+#' @param var1,var2,var3 Variables must be the same that will then pass in
+#' \code{\link{tab_df}}.
 #' @param show_na When \code{TRUE}, \code{NA} values are replaced by explicit
 #' \code{"NA"} values.
 #' @param cleannames Set to \code{TRUE} to clean levels names, by removing
@@ -758,60 +776,64 @@ tabmulti <- function(data, dependent_var, explanatory_vars, tab_var, wt,
 #' \dontrun{
 #' forcats::gss_cat %>%
 #'   tab_prepare(marital, relig, race, rare_to_other = TRUE) %>%
-#'   tabr_core(marital, relig, race, perc = "col") %>%
-#'   tabdraw(totaltab = "line") %>%
-#'   tabxl(compact = TRUE)
+#'   tab_df(marital, relig, race, perc = "col") %>%
+#'   tab_draw(totaltab = "line") %>%
+#'   tab_xl(compact = TRUE)
 #'   }
-
 tab_prepare <-
-  function(dat, ..., show_na = TRUE,
-           cleannames = TRUE, rare_to_other = FALSE,
-           minimum_headcount = 30) {
-    variables <- rlang::ensyms(...)
+  function(dat, var1, var2, var3,
+           show_na = TRUE, cleannames = TRUE,
+           rare_to_other = FALSE, minimum_headcount = 30) {
 
-    vars_not_numeric <-
-      dplyr::select(dat, !!!variables) %>%
-      dplyr::select_if(~ ! is.numeric(.)) %>% colnames() %>% rlang::syms()
-
-    dat <- dat %>%
-      dplyr::mutate_at(dplyr::vars(!!!vars_not_numeric), as.factor)
-
-    if (show_na == TRUE) dat <- dat %>%
-      dplyr::mutate_at(dplyr::vars(!!!vars_not_numeric),
-                       forcats::fct_explicit_na,
-                       na_level = "NA")
-
-
-    if(rare_to_other == TRUE) {
-      dat %<>%
-        dplyr::mutate_at(dplyr::vars(!!!vars_not_numeric),
-                         ~ forcats::fct_lump_min(.,
-                                                 minimum_headcount,
-                                                 other_level = "Autres")
-        )
-    }
-    dat <- dat %>%  #Remove unused levels anyway
-      dplyr::mutate_at(dplyr::vars(!!!vars_not_numeric), forcats::fct_drop)
-
-
-    if (cleannames == TRUE)  dat <- dat %>%
-      dplyr::mutate_at(as.character(vars_not_numeric), fct_clean)
-
-
-    #If sex is in supplementary var, see % of women and not men
-    if ("SEXE" %in% names(dat)){
-      if (!stringr::str_detect(levels(dat$SEXE)[1], "f|F")) dat %<>%
-        dplyr::mutate(SEXE = forcats::fct_rev(SEXE))
+    if (missing(var1)) {
+      dat %<>% dplyr::mutate(no_var1 = factor("n"))
+      var1 <- rlang::expr(no_var1)
+    } else {
+      var1 <- rlang::ensym(var1)
     }
 
-    # dat %<>% dplyr::select(!!var3, !!var1, !!var2, !!wt, tidyselect::all_of(c(sup_cols, sup_rows))) %>%
-    #   dplyr::select(where(is.factor), where(is.numeric)) %>%
-    #   dplyr::select(!!var3, !!var1, !!var2, !!wt, tidyselect::everything())
+    if (missing(var2)) {
+      dat %<>% dplyr::mutate(no_var2 = factor("n"))
+      var2 <- rlang::expr(no_var2)
+    } else {
+      var2 <- rlang::ensym(var2)
+    }
+
+    if (missing(var3)) {
+      dat %<>% dplyr::mutate(no_var3 = factor(" "))
+      var3 <- rlang::expr(no_var3)
+    } else {
+      var3 <- rlang::ensym(var3)
+    }
+
+    if (rlang::quo_name(var3) == "no_var3") {no_var3 <- TRUE} else {no_var3 <- FALSE}
 
     dat <- dat %>%
-      dplyr::select(!!!variables, dplyr::everything()) %>%
-      dplyr::select(where(is.factor), where(is.numeric), dplyr::everything())
+      dplyr::mutate_at(tidyselect::all_of(c(rlang::quo_name(var1),
+                                            rlang::quo_name(var2),
+                                            rlang::quo_name(var3))), as.factor)
 
+    dat <- dat %>%
+      tab_sup_prepare(!!var1, !!var2, !!var3,
+                      drop_sup_na = ! show_na, cleannames = cleannames,
+                      rare_to_other = rare_to_other,
+                      minimum_headcount = minimum_headcount)
+
+    if (rare_to_other == TRUE & no_var3 == FALSE) {
+      # We only count third variable's minimum headcount for the row variable,
+      #  otherwise we get problems.
+      levelsvar1 <- dplyr::pull(dat, !!var1) %>%
+        levels() %>%
+        append("Autres") %>%
+        unique()
+
+      dat <- dat %>% dplyr::group_by(!!var3) %>%
+        dplyr::mutate(!!var1 := forcats::fct_lump_min(!!var1, minimum_headcount,
+                                                      other_level = "Autres")) %>%
+        dplyr::ungroup() %>%
+        dplyr::mutate(!!var1 := forcats::fct_relevel(!!var1, levelsvar1))
+
+    }
     return(dat)
   }
 
@@ -836,19 +858,19 @@ tab_prepare <-
 #' @param accelerate If \code{TRUE} makes the function faster, but produces less
 #'  metadata (no Chi2, unweighted counts, contributions of cells to variance).
 #'
-#' @return A dataframe of class \code{\print{tabr_df}}, with data and metadata
-#' needed to print tables with \code{\print{tabdraw}} (or directly
-#'  \code{\print{tabxl}} if you want default values for \code{\print{tabdraw}}).
+#' @return A dataframe of class \code{\link{tab_df}}, with data and metadata
+#' needed to print tables with \code{\link{tab_draw}} (or directly
+#'  \code{\link{tab_xl}} if you want default values for \code{\link{tab_draw}}).
 #' @export
 #'
 #' @examples
-#' tabr_core(forcats::gss_cat, marital, race, perc = "row")
+#' tab_df(forcats::gss_cat, marital, race, perc = "row")
 #'
 #' \dontrun{
-#' tabr_core(forcats::gss_cat, marital, race, perc = "col") %>%
-#'   tabxl()
+#' tab_df(forcats::gss_cat, marital, race, perc = "col") %>%
+#'   tab_xl()
 #' }
-tabr_core <- function(dat, var1, var2, var3, wt,
+tab_df <- function(dat, var1, var2, var3, wt,
                       perc = c("no", "row", "col", "all", "all_tabs"),
                       #keep_unused_levels = FALSE,
                       #minimum_headcount = 30,
@@ -1142,9 +1164,9 @@ tabr_core <- function(dat, var1, var2, var3, wt,
     }
   }
 
-  wtable <- new_tabr_df(wtable, perc[1], data = datbase, wt = as.character(wt))
+  wtable <- new_tab_df(wtable, perc[1], data = datbase, wt = as.character(wt))
 
-  wtable <- tabr_col_var_sort(wtable, sort_by, !!var1, !!var2, !!var3)
+  wtable <- tab_sort_rows(wtable, sort_by, !!var1, !!var2, !!var3)
 
   return(wtable)
 }
@@ -1152,21 +1174,21 @@ tabr_core <- function(dat, var1, var2, var3, wt,
 
 #From the database to actual tables
 #' Draw tables from dataframe
-#' @description Draw tables from \code{dataframe} of class \code{tabr_df}, made
-#' with \code{\link{tabr_core}}.
+#' @description Draw tables from \code{dataframe} of class \code{tab_df}, made
+#' with \code{\link{tab_df}}.
 #'
-#' @param wtable A dataframe with class \code{tabr_df}.
+#' @param wtable A dataframe with class \code{tab_df}.
 #' @param result_text The variable containing the results to print with factors.
 #' When empty, the \code{weighted_n} variable is taken
 #' with no percentages, the \code{pct} with percentages.
 #' @param result_num The variable containing the results to print with
 #' numeric variables. When empty, \code{res} variable is taken.
 #' @param row_var The row variable. When empty, takes the \code{var1} of
-#' the \code{tabr_df}.
+#' the \code{tab_df}.
 #' @param col_var The column variable. When empty, takes the \code{var2} of
-#' the \code{tabr_df}.
+#' the \code{tab_df}.
 #' @param tab_var The table variable. When empty, takes the \code{var3} of
-#' the \code{tabr_df}.
+#' the \code{tab_df}.
 #' @param zone #The type of table to draw :
 #' \itemize{
 #' \item \code{"base"} is the standard crosstab
@@ -1181,23 +1203,23 @@ tabr_core <- function(dat, var1, var2, var3, wt,
 #'  reduced to a single row. \code{"no"} means it will be totally removed.
 #' @param keep_unused_levels Set to \code{TRUE} to keep empty levels of factors.
 #' @param subtext A character vector to print legend rows under the
-#' (list of) table(s) in \code{\link{tabxl}}
+#' (list of) table(s) in \code{\link{tab_xl}}
 #' @param reverse_row_col Transpose tables, with the row variable in colums
 #' and the column variable in rows.
 #'
-#' @return A list of tables of class \code{\link{tabr}},
-#' or a \code{\link{single_tabr}}.
+#' @return A list of tables of class \code{\link{tab}},
+#' or a \code{\link{single_tab}}.
 #' @export
 #'
 #' @examples
 #' \dontrun{
 #' forcats::gss_cat %>%
 #'   tab_prepare(marital, relig, race, rare_to_other = TRUE) %>%
-#'   tabr_core(marital, relig, race, perc = "col") %>%
-#'   tabdraw(totaltab = "line") %>%
-#'   tabxl(compact = TRUE)
+#'   tab_df(marital, relig, race, perc = "col") %>%
+#'   tab_draw(totaltab = "line") %>%
+#'   tab_xl(compact = TRUE)
 #'   }
-tabdraw <-
+tab_draw <-
   function(wtable, result_text, result_num, row_var, col_var, tab_var,
            zone = c("base","sup_cols", "sup_rows"), tot = c("row", "col"),
            totaltab = c("table", "line", "no"), keep_unused_levels = FALSE,
@@ -1290,28 +1312,55 @@ tabdraw <-
     #}
 
 
-    tabdraw_core <- function(wtable, result, row_var, col_var, tab_var, #Only quosures/exprs
-                             .sheet_names = sheet_names, .subtots_name = subtots_name,
-                             .subtots_name_named = subtots_name_named, .reverse_row_col = reverse_row_col) {
+    tab_draw_core <- function(wtable, result, row_var, col_var, tab_var, #Only quosures/exprs
+                              .sheet_names = sheet_names, .subtots_name = subtots_name,
+                              .subtots_name_named = subtots_name_named, .reverse_row_col = reverse_row_col) {
 
       wtable %<>% dplyr::group_by(!!tab_var) %>% dplyr::group_split()
 
       if (col_var_sort[[1]][1] != "no") {
-        wtable %<>% purrr::map2(col_var_sort[1:length(wtable)], ~ dplyr::mutate_at(.x, dplyr::vars(!!row_var), function(var) forcats::fct_relevel(var, .y)) %>%
-                                  dplyr::arrange(.zone, .TYPE, .SUP_NAME, !!row_var, !!col_var) )
+        wtable %<>%
+          purrr::map2(col_var_sort[1:length(wtable)],
+                      ~ dplyr::mutate_at(.x, dplyr::vars(!!row_var),
+                                         function(var) forcats::fct_relevel(var, .y)))
+        if (all(purrr::map_lgl(wtable, ~ ".SUP_NAME" %in% colnames(.) ))) {
+          wtable <-
+            purrr::map(wtable, ~ dplyr::arrange(., .zone, .TYPE, .SUP_NAME,
+                                                !!row_var, !!col_var) )
+        } else {
+          wtable <-
+            purrr::map(wtable, ~ dplyr::arrange(., .zone, .TYPE,
+                                                !!row_var, !!col_var) ) #Ok or bugs ?
+        }
       }
 
       if (.reverse_row_col == FALSE) {
         wtable %>%
-          purrr::map(~ tidyr::pivot_wider(., id_cols = !!row_var, names_from = !!col_var, values_from = !!result) ) %>%
-          purrr::map2(.subtots_name_named[1:length(.)], ~ dplyr::mutate_at(.x, dplyr::vars(1), ~ suppressWarnings(forcats::fct_recode(., !!!.y)))) %>%
-          purrr::map(~ dplyr::mutate_at(., dplyr::vars(1), ~ forcats::fct_expand(., .subtots_name))) %>%
+          purrr::map(~ tidyr::pivot_wider(., id_cols = !!row_var,
+                                          names_from = !!col_var,
+                                          values_from = !!result) ) %>%
+          purrr::map2(.subtots_name_named[1:length(.)],
+                      ~ dplyr::mutate_at(
+                        .x,
+                        dplyr::vars(1),
+                        ~ suppressWarnings(forcats::fct_recode(., !!!.y))
+                      )) %>%
+          purrr::map(~ dplyr::mutate_at(., dplyr::vars(1),
+                                        ~ forcats::fct_expand(., .subtots_name))) %>%
           magrittr::set_names(.sheet_names[1:length(.)])
       } else {
         wtable %>%
-          purrr::map(~ tidyr::pivot_wider(., id_cols = !!col_var, names_from = !!row_var, values_from = !!result) ) %>%
-          purrr::map2(.subtots_name_named[1:length(.)], ~ dplyr::mutate_at(.x, dplyr::vars(1), ~ suppressWarnings(forcats::fct_recode(., !!!.y)))) %>%
-          purrr::map(~ dplyr::mutate_at(., dplyr::vars(1), ~ forcats::fct_expand(., .subtots_name))) %>%
+          purrr::map(~ tidyr::pivot_wider(., id_cols = !!col_var,
+                                          names_from = !!row_var,
+                                          values_from = !!result) ) %>%
+          purrr::map2(.subtots_name_named[1:length(.)],
+                      ~ dplyr::mutate_at(
+                        .x,
+                        dplyr::vars(1),
+                        ~ suppressWarnings(forcats::fct_recode(., !!!.y))
+                      )) %>%
+          purrr::map(~ dplyr::mutate_at(., dplyr::vars(1),
+                                        ~ forcats::fct_expand(., .subtots_name))) %>%
           magrittr::set_names(.sheet_names[1:length(.)])
       }
     }
@@ -1325,13 +1374,15 @@ tabdraw <-
     # print(tab_var)
 
     if (nrow(wtable_text) != 0) tabs_text <- wtable_text %>%
-      tabdraw_core(result_text, row_var, col_var, tab_var)
+      tab_draw_core(result_text, row_var, col_var, tab_var)
     if (nrow(wtable_num) != 0) tabs_num <- wtable_num %>%
-      tabdraw_core(result_num, row_var, col_var, tab_var)
+      tab_draw_core(result_num, row_var, col_var, tab_var)
 
     if (nrow(wtable_text) != 0 & nrow(wtable_num) != 0) {
       #tabs <- purrr::map2(tabs_text, tabs_num, ~ dplyr::full_join(.x, .y, by = rlang::quo_name(row_var)))
-      tabs <- purrr::map2(tabs_text, tabs_num, purrr::quietly(~ dplyr::full_join(.x, .y))) %>% purrr::map(~ .$result)
+      tabs <-
+        purrr::map2(tabs_text, tabs_num, purrr::quietly(~ dplyr::full_join(.x, .y))) %>%
+        purrr::map(~ .$result)
     } else if (nrow(wtable_text) != 0) {
       tabs <- tabs_text
     } else if (nrow(wtable_num) != 0) {
@@ -1347,13 +1398,13 @@ tabdraw <-
           purrr::splice(list(subtext)),
         rep(FALSE, length(tabs) - 1) %>% as.list() %>%
           purrr::splice(list(totaltab[1] %in% c("line", "table"))) ),
-        ~ new_single_tabr(..1,
+        ~ new_single_tab(..1,
                           nrow = nrow(..1),
                           perc = perc[1],
                           subtext = ..2,
                           total_table = ..3)  )
 
-    args_tabdraw <- list(
+    args_tab_draw <- list(
       "perc" = perc[1],
       "keep_unused_levels" = keep_unused_levels,
       "totals" = tot,
@@ -1362,18 +1413,20 @@ tabdraw <-
       "multicols" = FALSE,
       "multirows" = FALSE,
       "sup_contrib" = FALSE,
-      "wt" = purrr::pluck(wtable_base, purrr::attr_getter("wt")) #if (no_weight == FALSE) {rlang::quo_name(wt)} else {NA_character_},
+      "wt" = purrr::pluck(wtable_base, purrr::attr_getter("wt"))
     )
 
-    new_tabr(tabs, wtable = wtable_base, args = args_tabdraw)
+    new_tab(tabs, wtable = wtable_base, args = args_tab_draw)
   }
 
 
 
+
+
 #' Add supplementary columns or rows to a crosstab
-#' @param data_or_tabs An object of class \code{tabr} or \code{single_tabr}
-#' made with \code{\link{tab}} or \code{\link{tabdraw}}, or a dataframe
-#' of class \code{tabr_df} made with \code{\link{tabr_core}}.
+#' @param data_or_tabs An object of class \code{tab} or \code{single_tab}
+#' made with \code{\link{tab}} or \code{\link{tab_draw}}, or a dataframe
+#' of class \code{tab_df} made with \code{\link{tab_df}}.
 #' @param sup_cols,sup_rows,print_sup A character vector of
 #'  supplementary column variables, or/and supplementary row variables.
 #'  They can be factor/character, but also numeric (in which case a
@@ -1381,7 +1434,7 @@ tabdraw <-
 #'  of \code{var1}/\code{var2}). \code{sup_cols} and \code{sup_rows} won't
 #'  be printed in the results unless :
 #'  \itemize{
-#'   \item you pass the tabs to \code{\link{tabxl}}
+#'   \item you pass the tabs to \code{\link{tab_xl}}
 #'   \item you set print_sup to \code{TRUE} : it draws a table with all
 #'   principals AND supplementary variables (confusing and not recommended).
 #' }
@@ -1402,7 +1455,7 @@ tabdraw <-
 #' @param digits The number of digits to print, as an integer.
 #'
 #' @return Tables with metadata to draw supplementary rows and colums with
-#' \code{\link[tibble]{tabxl}}, or tables with printed supplementary rows/cols.
+#' \code{\link{tab_xl}}, or tables with printed supplementary rows/cols.
 #' @export
 #'
 #' @examples
@@ -1415,7 +1468,7 @@ tabdraw <-
 #'   dplyr::mutate(marital = forcats::fct_relevel(marital, "Married")) %>%
 #'   tab(relig, race, perc = "row", rare_to_other = TRUE) %>%
 #'   tab_sup(sup_rows = c("marital", "age", "tvhours")) %>%
-#'   tabxl()
+#'   tab_xl()
 #' }
 tab_sup <- function(data_or_tabs,
                     sup_cols = NULL, sup_rows = NULL,
@@ -1423,11 +1476,11 @@ tab_sup <- function(data_or_tabs,
                     drop_sup_na = FALSE, cleannames = FALSE, digits = 0L,
                     print_sup = FALSE) {
 
-  if ("tabr_df" %in% class(data_or_tabs) ) {
+  if ("tab_df" %in% class(data_or_tabs) ) {
     wtable <- data_or_tabs
-    tabs <- tabdraw(wtable)  #row_var = !!var1, col_var = !!var2, tab_var = !!var3 #col_var_sort = col_var_sort, #perc = perc[1]
+    tabs <- tab_draw(wtable)  #row_var = !!var1, col_var = !!var2, tab_var = !!var3 #col_var_sort = col_var_sort, #perc = perc[1]
     args <- NULL
-    #Defaults, to pass to the next tabdraw :
+    #Defaults, to pass to the next tab_draw :
     tot                <- c("row", "col")
     totaltab           <- "table"
     keep_unused_levels <- FALSE
@@ -1439,12 +1492,12 @@ tab_sup <- function(data_or_tabs,
     #   stringr::str_detect(rlang::quo_name(var1), "^no_var" ) ~ rlang::quo_name(var2),
     #   stringr::str_detect(rlang::quo_name(var2), "^no_var" ) ~ rlang::quo_name(var1)    )
   } else {
-    if ("tabr" %in% class(data_or_tabs) ) {
+    if ("tab" %in% class(data_or_tabs) ) {
       tabs <- data_or_tabs
-    } else if ("single_tabr" %in% class(data_or_tabs)) {
-      tabs <- data_or_tabs %>% purrr::pluck(purrr::attr_getter("tabr"))
+    } else if ("single_tab" %in% class(data_or_tabs)) {
+      tabs <- data_or_tabs %>% purrr::pluck(purrr::attr_getter("tab"))
     } else {
-      stop("data is of the wrong class (neither tabr, single_tabr of tabr_df")
+      stop("data is of the wrong class (neither tab, single_tab of tab_df")
     }
     wtable <- tabs %>% purrr::pluck(purrr::attr_getter("wtable"))
 
@@ -1471,13 +1524,14 @@ tab_sup <- function(data_or_tabs,
   }
 
   data <- wtable %>% purrr::pluck(purrr::attr_getter("data")) %>%
-    tab_prepare(!!!rlang::syms(c(sup_cols, sup_rows)),
-                show_na = !drop_sup_na, cleannames = cleannames)
+    tab_sup_prepare(!!!rlang::syms(c(sup_cols, sup_rows)),
+                drop_sup_na = drop_sup_na,
+                cleannames = cleannames)
 
-  sup_list <- data %>% tabr_make_sup_list(sup_cols, sup_rows)
+  sup_list <- data %>% tab_make_sup_list(sup_cols, sup_rows)
 
   wtable_sup <-
-    tab_sup_core(data, !!var1, !!var2, !!var3, !!wt, perc,
+    tab_sup_df(data, !!var1, !!var2, !!var3, !!wt, perc,
                  sup_list = sup_list,
                  only_first_level = only_first_level,
                  not_last_level = not_last_level,
@@ -1490,20 +1544,20 @@ tab_sup <- function(data_or_tabs,
                   weighted_n, .TYPE, tidyselect::everything())
 
   wtable <- wtable %>% #magrittr::set_attributes(wtable_attr)
-    new_tabr_df(perc = perc, wt = as.character(wt), data = data)
+    new_tab_df(perc = perc, wt = as.character(wt), data = data)
 
-  wtable <- tabr_col_var_sort(wtable, sort_by, !!var1, !!var2, !!var3)
+  wtable <- tab_sort_rows(wtable, sort_by, !!var1, !!var2, !!var3)
 
 
   wtable %>%
-    tabdraw(pct, res, !!var1, .SUP, !!var3,
+    tab_draw(pct, res, !!var1, .SUP, !!var3,
             zone = "sup_cols", tot = tot, totaltab = totaltab[1], #perc = "col",
             keep_unused_levels = keep_unused_levels, subtext = subtext)
 
   if (print_sup == TRUE) {
 
     if (length(sup_cols) != 0) sup_cols_tabs <- wtable %>%
-        tabdraw(pct, res, !!var1, .SUP, !!var3,
+        tab_draw(pct, res, !!var1, .SUP, !!var3,
                 zone = "sup_cols", tot = tot, totaltab = totaltab[1], #perc = "col",
                 keep_unused_levels = keep_unused_levels, subtext = subtext) #    wtable, row_var, col_var, tab_var, result_text, result_num,
 
@@ -1513,13 +1567,13 @@ tab_sup <- function(data_or_tabs,
 
     if (length(sup_rows) != 0 & sup_rows_condition_compatibilities) {
       sup_rows_tabs <- wtable %>%
-        tabdraw(pct, res, .SUP, !!var2, !!var3,
+        tab_draw(pct, res, .SUP, !!var2, !!var3,
                 zone = "sup_rows", tot = tot, totaltab = totaltab[1], #"table", #perc = "row",
                 keep_unused_levels = keep_unused_levels, subtext = subtext)
     }
 
     if (length(sup_rows) != 0 & ! sup_rows_condition_compatibilities) {
-      warning("cannot print supplementary row in console, because vector type is different from tabs columns : set print_sup = FALSE and export to Excel with tabxl")
+      warning("cannot print supplementary row in console, because vector type is different from tabs columns : set print_sup = FALSE and export to Excel with tab_xl")
     }
 
     if (length(sup_cols) != 0) tabs <-
@@ -1562,12 +1616,12 @@ tab_sup <- function(data_or_tabs,
   args_old <- purrr::discard(args, names(args) %in% names(args_new))
 
   #Ajouter calcul Chi2 ici si la table vient d'être faite ? ----
-  tabs <- new_tabr(tabs, args = append(args_old, args_new), wtable = wtable,
+  tabs <- new_tab(tabs, args = append(args_old, args_new), wtable = wtable,
                    result_var = result_var)
 
-  #Si tableau unique, afficher le single_tabr, et attacher le tabr en attribut
+  #Si tableau unique, afficher le single_tab, et attacher le tab en attribut
   if (length(tabs) == 1) {
-    tabs <- tabs[[1]] %>% `attr<-`("tabr", tabs) %>%
+    tabs <- tabs[[1]] %>% `attr<-`("tab", tabs) %>%
       `attr<-`("is_unique_table", TRUE)
   }
 
@@ -1577,71 +1631,84 @@ tab_sup <- function(data_or_tabs,
 
 
 
-#tabr internal functions -------------------------------------------------------
+#tab internal functions -------------------------------------------------------
+
 
 #Ajouter : - Rename levels "Total" and "Ensemble"
+# Prepare data for \code{\link{tab_sup}}.
+# @param dat A dataframe.
+# @param ... \code{\link[dplyr]{dplyr_tidy_select}} One or more unquoted
+# expressions separated by commas or strings separated by commas.
+# @param drop_sup_na When \code{FALSE}, \code{NA} values are
+# replaced by explicit \code{"NA"} values.
+# @param cleannames Set to \code{TRUE} to clean levels names, by removing
+# prefix numbers like \code{"1-"}, and text in parentheses.
+# @param rare_to_other When set to \code{TRUE}, levels with less count
+# than minimum_headcount will be merged into an "Other" level.
+# @param minimum_headcount The minimum unweighted count in each variable.
+#
+# @export
+# @examples
 #' @keywords internal
-tab_internal_prepare <-
-  function(dat, var1, var2, var3, show_na = TRUE, cleannames = TRUE,
-           rare_to_other = FALSE, minimum_headcount = 30) {
+tab_sup_prepare <-
+  function(dat, ..., drop_sup_na = FALSE,
+           cleannames = TRUE, rare_to_other = FALSE,
+           minimum_headcount = 30) {
+    variables <- rlang::ensyms(...)
 
-    if (missing(var1)) {
-      dat %<>% dplyr::mutate(no_var1 = factor("n"))
-      var1 <- rlang::expr(no_var1)
-    } else {
-      var1 <- rlang::ensym(var1)
-    }
-
-    if (missing(var2)) {
-      dat %<>% dplyr::mutate(no_var2 = factor("n"))
-      var2 <- rlang::expr(no_var2)
-    } else {
-      var2 <- rlang::ensym(var2)
-    }
-
-    if (missing(var3)) {
-      dat %<>% dplyr::mutate(no_var3 = factor(" "))
-      var3 <- rlang::expr(no_var3)
-    } else {
-      var3 <- rlang::ensym(var3)
-    }
-
-    if (rlang::quo_name(var3) == "no_var3") {no_var3 <- TRUE} else {no_var3 <- FALSE}
+    vars_not_numeric <-
+      dplyr::select(dat, !!!variables) %>%
+      dplyr::select_if(~ ! is.numeric(.)) %>% colnames() %>% rlang::syms()
 
     dat <- dat %>%
-      dplyr::mutate_at(tidyselect::all_of(c(rlang::quo_name(var1),
-                                            rlang::quo_name(var2),
-                                            rlang::quo_name(var3))), as.factor)
+      dplyr::mutate_at(dplyr::vars(!!!vars_not_numeric), as.factor)
 
     dat <- dat %>%
-      tab_prepare(!!var1, !!var2, !!var3,
-                  show_na = show_na, cleannames = cleannames,
-                  rare_to_other = rare_to_other,
-                  minimum_headcount = minimum_headcount)
+      dplyr::mutate(dplyr::across(where(is.ordered), ~ magrittr::set_class(., class(.) %>% .[. != "ordered"])))
+
+    if (drop_sup_na == FALSE) dat <- dat %>%
+      dplyr::mutate_at(dplyr::vars(!!!vars_not_numeric),
+                       forcats::fct_explicit_na,
+                       na_level = "NA")
 
 
-
-    if (rare_to_other == TRUE & no_var3 == FALSE) {
-      # We only count third variable's minimum headcount for the row variable,
-      #  otherwise we get problems.
-      levelsvar1 <- dplyr::pull(dat, !!var1) %>%
-        levels() %>%
-        append("Autres") %>%
-        unique()
-
-      dat <- dat %>% dplyr::group_by(!!var3) %>%
-        dplyr::mutate(!!var1 := forcats::fct_lump_min(!!var1, minimum_headcount,
-                                                      other_level = "Autres")) %>%
-        dplyr::ungroup() %>%
-        dplyr::mutate(!!var1 := forcats::fct_relevel(!!var1, levelsvar1))
-
+    if(rare_to_other == TRUE) {
+      dat %<>%
+        dplyr::mutate_at(dplyr::vars(!!!vars_not_numeric),
+                         ~ forcats::fct_lump_min(.,
+                                                 minimum_headcount,
+                                                 other_level = "Autres")
+        )
     }
+    dat <- dat %>%  #Remove unused levels anyway
+      dplyr::mutate_at(dplyr::vars(!!!vars_not_numeric), forcats::fct_drop)
+
+
+    if (cleannames == TRUE)  dat <- dat %>%
+      dplyr::mutate_at(as.character(vars_not_numeric), fct_clean)
+
+
+    #If sex is in supplementary var, see % of women and not men
+    if ("SEXE" %in% names(dat)){
+      if (!stringr::str_detect(levels(dat$SEXE)[1], "f|F")) dat %<>%
+        dplyr::mutate(SEXE = forcats::fct_rev(SEXE))
+    }
+
+    # dat %<>% dplyr::select(!!var3, !!var1, !!var2, !!wt, tidyselect::all_of(c(sup_cols, sup_rows))) %>%
+    #   dplyr::select(where(is.factor), where(is.numeric)) %>%
+    #   dplyr::select(!!var3, !!var1, !!var2, !!wt, tidyselect::everything())
+
+    dat <- dat %>%
+      dplyr::select(!!!variables, dplyr::everything()) %>%
+      dplyr::select(where(is.factor), where(is.numeric), dplyr::everything())
+
     return(dat)
   }
 
 
+
 #' @keywords internal
-tab_sup_core <- function(data, var1, var2, var3, wt, perc,
+tab_sup_df <- function(data, var1, var2, var3, wt, perc,
                          sup_list,
                          only_first_level = TRUE,
                          not_last_level = TRUE,
@@ -1936,8 +2003,10 @@ tab_sup_core <- function(data, var1, var2, var3, wt, perc,
                                           weighted_n = dplyr::first(.wtot1),
                                           pct = as_pct(vctrs::vec_data(dplyr::first(.wtot1))/
                                                          vctrs::vec_data(dplyr::first(.wtot3))),
-                                          .groups = "drop")) %>%
-        dplyr::ungroup()
+                                          .wtot1 = dplyr::first(.wtot1),
+                                          .wtot3 = dplyr::first(.wtot3),
+                                          .groups = "drop")) #%>%
+        #dplyr::ungroup()
     }
   }
 
@@ -2108,8 +2177,10 @@ tab_sup_core <- function(data, var1, var2, var3, wt, perc,
                                           weighted_n = dplyr::first(.wtot2),
                                           pct = as_pct(vctrs::vec_data(dplyr::first(.wtot2))/
                                                          vctrs::vec_data(dplyr::first(.wtot3))),
-                                          .groups = "drop")) %>%
-        dplyr::ungroup()
+                                          .wtot1 = dplyr::first(.wtot2),
+                                          .wtot3 = dplyr::first(.wtot3),
+                                          .groups = "drop")) #%>%
+        #dplyr::ungroup()
     }
 
 
@@ -2159,7 +2230,7 @@ tab_sup_core <- function(data, var1, var2, var3, wt, perc,
       forcats::fct_recode(!!var3, "Ensemble" = "Total"))
     )
 
-  new_tabr_df(wtable_sup, perc[1], data = tibble::tibble(), wt = as.character(wt))
+  new_tab_df(wtable_sup, perc[1], data = tibble::tibble(), wt = as.character(wt))
 
 }
 
@@ -2167,9 +2238,9 @@ tab_sup_core <- function(data, var1, var2, var3, wt, perc,
 
 
 #' @keywords internal
-tabr_col_var_sort <- function(wtable, sort_by = "no", row_var, col_var, tab_var) {
+tab_sort_rows <- function(wtable, sort_by = "no", row_var, col_var, tab_var) {
 
-  if (sort_by == "no") {
+  if (sort_by[1] == "no") {
     return(wtable)
     }
 
@@ -2180,40 +2251,66 @@ tabr_col_var_sort <- function(wtable, sort_by = "no", row_var, col_var, tab_var)
   if (missing(tab_var)) {tab_var <- rlang::sym(names(wtable)[2])
   } else {tab_var <- rlang::ensym(tab_var)}
 
+  perc <- wtable %>% purrr::pluck(purrr::attr_getter("perc"))
+
   #Sort row variable by another variable (change the order of factor levels ;
   # can't be done before data is split by var3 => must be done while drawing the tabs)
-    desc_order <- ifelse(is.na(sort_by[2] == "desc"), FALSE, sort_by[2] == "desc")
+    desc_order <- if (is.na(sort_by[2] == "desc")) {FALSE} else {sort_by[2] == "desc"}
     if (sort_by[1] %in% (dplyr::pull(wtable, !!col_var) %>% levels()) ) {
-      col_var_sort <-  wtable %>%
-        dplyr::filter(.zone == "base" & !!col_var == sort_by[1]) %>% dplyr::group_by(!!tab_var) %>% dplyr::group_split() %>%
-        purrr::map(~dplyr::mutate_at(., dplyr::vars(!!row_var), ~ forcats::fct_reorder(., pct1, .fun = sum, .desc = desc_order) %>%
-                                       forcats::fct_relevel("Total", after = Inf) ) %>%
+     sort_var <- if (perc == "no") {rlang::sym("weighted_n")} else {rlang::sym("pct")} #Result ?
+       col_var_sort <-  wtable %>%
+        dplyr::filter(.zone == "base" & !!col_var == sort_by[1]) %>%
+        dplyr::group_by(!!tab_var) %>%
+        dplyr::group_split() %>%
+        purrr::map(~ #dplyr::mutate(., pct1 = vctrs::vec_data(.wtot1)/
+                     #                vctrs::vec_data(.wtot3)) %>%
+                     dplyr::mutate_at(., dplyr::vars(!!row_var),
+                                      ~ forcats::fct_reorder(., !!sort_var,
+                                                             .fun = sum,
+                                                             .desc = desc_order) %>%
+                                        forcats::fct_relevel("Total",
+                                                             after = Inf) ) %>%
                      dplyr::pull(!!row_var) %>% levels() )  #.desc = TRUE #  #dplyr::arrange(!!row_var)
 
-    } else if (sort_by[1] %in% (dplyr::pull(dplyr::filter(wtable, .zone == "sup_cols"), .SUP) %>% levels()) ) {
+    } else if (sort_by[1] %in% (dplyr::pull(dplyr::filter(wtable,
+                                                          .zone == "sup_cols"),
+                                            .SUP) %>% levels()) ) {
 
-      wtable_sup_sort <- wtable %>% dplyr::filter(.zone == "sup_cols" & .SUP == sort_by[1])
+      wtable_sup_sort <- wtable %>%
+        dplyr::filter(.zone == "sup_cols" & .SUP == sort_by[1])
 
-      sort_text_num <- wtable_sup_sort %>% dplyr::pull(.TYPE) %>% forcats::fct_drop() %>% levels()
+      sort_text_num <- wtable_sup_sort %>%
+        dplyr::pull(.TYPE) %>% forcats::fct_drop() %>% levels()
 
       if (sort_text_num == "num") {
-        col_var_sort <- wtable_sup_sort %>% dplyr::group_by(!!tab_var) %>% dplyr::group_split() %>%
-          purrr::map(~ dplyr::mutate_at(., dplyr::vars(!!row_var), ~ forcats::fct_reorder(., res, .fun = sum, .desc = desc_order) %>%
-                                          forcats::fct_relevel("Total", after = Inf) ) %>%
+        col_var_sort <- wtable_sup_sort %>%
+          dplyr::group_by(!!tab_var) %>%
+          dplyr::group_split() %>%
+          purrr::map(~ dplyr::mutate_at(., dplyr::vars(!!row_var),
+                                        ~ forcats::fct_reorder(., res, .fun = sum,
+                                                               .desc = desc_order) %>%
+                                          forcats::fct_relevel("Total",
+                                                               after = Inf) ) %>%
                        dplyr::pull(!!row_var) %>% levels())  #.desc = TRUE #
       } else if (sort_text_num == "factor") {
-        col_var_sort <- wtable_sup_sort %>% dplyr::group_by(!!tab_var) %>% dplyr::group_split() %>%
-          purrr::map(~ dplyr::mutate_at(., dplyr::vars(!!row_var), ~forcats::fct_reorder(., pct, .fun = sum, .desc = desc_order) %>%
-                                          forcats::fct_relevel("Total", after = Inf) ) %>%
+        col_var_sort <- wtable_sup_sort %>% dplyr::group_by(!!tab_var) %>%
+          dplyr::group_split() %>%
+          purrr::map(~ dplyr::mutate_at(., dplyr::vars(!!row_var),
+                                        ~forcats::fct_reorder(., pct, .fun = sum,
+                                                              .desc = desc_order) %>%
+                                          forcats::fct_relevel("Total",
+                                                               after = Inf) ) %>%
                        dplyr::pull(!!row_var) %>% levels())  #.desc = TRUE #
       }
     } else {
-      warning(stringr::str_c("Sorting column ", sort_by[1],
-                             " was found neither in levels of the second variable nor in supplementary columns")) # or another total ?
+      warning(stringr::str_c(
+        "Sorting column ", sort_by[1],
+        " was found neither in levels of the second variable nor in supplementary columns"
+      )) # or another total ?
       col_var_sort <- list(levels(dplyr::pull(wtable, !!row_var)))
     }
 
-  wtable %>% `attr<-`("col_var_sort", col_var_sort)
+    wtable %>% `attr<-`("col_var_sort", col_var_sort)
 }
 
 
@@ -2287,7 +2384,7 @@ get_orig_name <- function(df) { #Thanks to https://stackoverflow.com/questions/3
 
 #Classer les variables supplementaires en texte / numeriques (before that dat must be reorder with numeric vars at the end)
 #' @keywords internal
-tabr_make_sup_list <- function(dat, sup_cols = NULL, sup_rows = NULL) {
+tab_make_sup_list <- function(dat, sup_cols = NULL, sup_rows = NULL) {
   sup_cols <- names(dat) %>% purrr::keep(. %in% sup_cols)
   sup_cols_num  <- sup_cols %>% purrr::map_lgl(~ dplyr::pull(dat, !!rlang::sym(.)) %>% is.numeric())
   sup_cols_text <- sup_cols %>% purrr::map_lgl(~ dplyr::pull(dat, !!rlang::sym(.)) %>% is.factor() |
