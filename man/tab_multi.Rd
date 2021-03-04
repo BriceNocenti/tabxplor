@@ -87,9 +87,9 @@ or in rows with \code{transpose_table = TRUE}. Another variable can be used
 to produce as many crosstabs as it has levels. Wrapper around \code{tabw}.
 }
 \examples{
-tab_multi(dplyr::storms, category, explanatory_vars =  c("pressure", "wind"))
+tab_multi(dplyr::storms, category, explanatory_vars = c("pressure", "wind"))
 
-tab_multi(forcats::gss_cat, year, explanatory_vars =  c("race", "marital"),
+tab_multi(forcats::gss_cat, year, explanatory_vars = c("race", "marital"),
          only_first_level = FALSE, not_last_level = FALSE)
 
 \dontrun{

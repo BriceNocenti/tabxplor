@@ -146,7 +146,7 @@ dplyr::storms \%>\%
 
 \dontrun{
 forcats::gss_cat \%>\%
-  tabw(marital, race, perc = "row") \%>\%
+  tab(marital, race, perc = "row") \%>\%
   tab_xl()
 }
 
