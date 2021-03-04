@@ -1,6 +1,6 @@
 Package: tablr
 Title: A Tidy Way to Make Multiple Crosstabs, Transform them and Visualise them
-Version: 0.0.0.9000
+Version: 0.2.1
 Authors@R: 
     person(given = "Brice",
            family = "Nocenti",
