@@ -8,6 +8,8 @@
 }
 \arguments{
 \item{x}{A pct object.}
+
+\item{...}{Other parameter.}
 }
 \value{
 A pct printed in a pillar.

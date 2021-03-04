@@ -46,7 +46,7 @@ new_decimal <- function(x = double(), digits = 2L) {
 #' Print method for class decimal
 #'
 #' @param x A decimal object.
-#' @param ...
+#' @param ... Other parameter.
 #'
 #' @return The decimal printed.
 #' @export
@@ -61,6 +61,7 @@ format.decimal <- function(x, ...) {
 #' Pillar_shaft method for class decimal
 #'
 #' @param x A decimal object.
+#' @param ... Other parameter.
 #'
 #' @return A decimal printed in a pillar.
 #' @importFrom pillar pillar_shaft
@@ -89,10 +90,16 @@ as_decimal.default <- function(x, ...) {
 #   new_decimal(value)
 # }
 
+#' @param x The decimal.
+#'
+#' @param ... Other.
+#'
 #' @export
-as.character.decimal <- function(x, ...) formatC(as.double(x), get_digits(x), format = "f")
-#' @export
-as.character.decimal <- NULL
+as.character.decimal <- function(x, ...) {
+  formatC(as.double(x), get_digits(x), format = "f")
+}
+# export
+# as.character.decimal <- NULL
 
 
 
@@ -152,15 +159,17 @@ vec_cast.decimal.pct  <- function(x, to, ...) new_decimal(vctrs::vec_data(x), di
 
 
 #Set arithmetic operations :
+#' @method vec_arith decimal
 #' @export
 vec_arith.decimal <- function(op, x, y, ...) {
   UseMethod("vec_arith.decimal", y)
 }
+#' @method vec_arith.decimal default
 #' @export
 vec_arith.decimal.default <- function(op, x, y, ...) {
   vctrs::stop_incompatible_op(op, x, y)
 }
-
+#' @method vec_arith.decimal decimal
 #' @export
 vec_arith.decimal.decimal <- function(op, x, y, ...) {
   new_decimal(vctrs::vec_arith_base(op, x, y),
@@ -176,29 +185,31 @@ vec_arith.decimal.decimal <- function(op, x, y, ...) {
   # )
 }
 
+#' @method vec_arith.decimal numeric
 #' @export
 vec_arith.decimal.numeric <- function(op, x, y, ...) {
   new_decimal(vctrs::vec_arith_base(op, x, y),
               digits = max(get_digits(x), get_digits(y)))
 }
+#' @method vec_arith.numeric decimal
 #' @export
 vec_arith.numeric.decimal <- function(op, x, y, ...) {
   new_decimal(vctrs::vec_arith_base(op, x, y),
               digits = max(get_digits(x), get_digits(y)))
 }
-
+#' @method vec_arith.pct decimal
 #' @export
 vec_arith.pct.decimal <- function(op, x, y, ...) {
   new_pct(vctrs::vec_arith_base(op, x, y),
           digits = max(get_digits(x), get_digits(y) - 2L))
 }
-
+#' @method vec_arith.decimal pct
 #' @export
 vec_arith.decimal.pct <- function(op, x, y, ...) {
   new_pct(vctrs::vec_arith_base(op, x, y),
           digits = max(get_digits(x) - 2L, get_digits(y)))
 }
-
+#' @method vec_arith.decimal MISSING
 #' @export
 vec_arith.decimal.MISSING <- function(op, x, y, ...) { #unary + and - operators
   switch(op,

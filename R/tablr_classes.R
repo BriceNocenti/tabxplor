@@ -172,6 +172,8 @@ print.single_tab <- function(x, ...) {
 
 
 
+#' @param x The object to test.
+#'
 #' @describeIn tab A test function for class tab (list of tables)
 #' @export
 is_tab <- function(x) {
@@ -264,6 +266,8 @@ print.tab <- function(x, ...) {
 # }
 
 
+#' @param x The object to test.
+#'
 #' @describeIn tab_df A test function for class tab_df (dataframe for multiple tables)
 #' @export
 is_tab_df <- function(x) {

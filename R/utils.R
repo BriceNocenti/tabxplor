@@ -3,7 +3,7 @@
 
 #' Pipe operator
 #'
-#' See \code{magrittr::\link[magrittr:pipe]{\%>\% / \%<>\%}} for details.
+#' See \code{magrittr::\link[magrittr:pipe]{\%>\%}} for details.
 #'
 #' @name %>%
 #' @rdname pipe
@@ -13,17 +13,17 @@
 #' @usage lhs \%>\% rhs
 NULL
 
-
+#' Assignment pipe operator
+#'
 #' See \code{magrittr::\link[magrittr:pipe]{\%<>\%}} for details.
 #'
 #' @name %<>%
 #' @rdname pipe
 #' @keywords internal
+#' @export
 #' @importFrom magrittr %<>%
 #' @usage lhs \%<>\% rhs
 NULL
-
-
 
 
 
@@ -329,6 +329,7 @@ compare_levels <-
 #' @param .p Predicate.
 #' @param .f Function if TRUE.
 #' @param .else Function if FALSE.
+#' @param ... Other parameter to pass to the function.
 #'
 #' @return A list of same length.
 #' @export
@@ -364,6 +365,7 @@ pmap_if <- function(.l, .p, .f, ..., .else = NULL) {
 #' @param .p Predicate.
 #' @param .f Function if TRUE.
 #' @param .else Function if FALSE.
+#' @param ... Other parameter to pass to the function.
 #'
 #' @return A list of the same length.
 #' @export

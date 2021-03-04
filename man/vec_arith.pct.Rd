@@ -4,7 +4,7 @@
 \alias{vec_arith.pct}
 \title{Vec_arith method for pct}
 \usage{
-vec_arith.pct(op, x, y, ...)
+\method{vec_arith}{pct}(op, x, y, ...)
 }
 \arguments{
 \item{op}{Operation to do.}
@@ -12,8 +12,9 @@ vec_arith.pct(op, x, y, ...)
 \item{x}{Pct object.}
 
 \item{y}{Second object.}
+
+\item{...}{Other parameter.}
 }
 \description{
 Vec_arith method for pct
 }
-\keyword{internal}

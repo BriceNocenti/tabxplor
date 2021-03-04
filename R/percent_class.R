@@ -68,7 +68,7 @@ as_pct.default <- function(x, digits = 0L, ...) {
 
 # @describeIn as_pct there must be numbers in the vector
 #' @export
-as_pct.character <- function(x, digits = 0L) {
+as_pct.character <- function(x, digits = 0L, ...) {
   digits <- vctrs::vec_recycle(vctrs::vec_cast(digits, integer()), 1L)
   value <- as.numeric(gsub(" *% *$", "", x)) / 100
   new_pct(value, digits)
@@ -92,7 +92,7 @@ set_digits <- function(x, value) `attr<-`(x, "digits", as.integer(value)) # To s
 #' Print method for class pct
 #'
 #' @param x A pct object.
-#' @param ...
+#' @param ... Other parameter.
 #'
 #' @return The pct printed.
 #' @export
@@ -114,6 +114,8 @@ format.pct <- function(x, ...) {
 #' Pillar_shaft method for class pct
 #'
 #' @param x A pct object.
+#' @param ... Other parameter.
+#'
 #'
 #' @return A pct printed in a pillar.
 #' @importFrom pillar pillar_shaft
@@ -194,26 +196,26 @@ vec_cast.character.pct  <- function(x, to, ...) formatC(as.double(vctrs::vec_dat
 #You'll also get mostly correct behaviour for c().
 
 
-
-
+# Thank you very much it works perfectly (I had tried with ```@method```, but not consistently enougth to put it in the generic) !
+# Just a detail : with ```vec_arith pct default``` , I have a "Warning: [D:\... ] @method  can have at most 2 words"
+# I replaced with ```vec_arith.pct default``` and it worked.
 
 #' Vec_arith method for pct
 #' @param op Operation to do.
 #'
 #' @param x Pct object.
 #' @param y Second object.
+#' @param ... Other parameter.
 #'
-#' @keywords internal
+#' @method vec_arith pct
 #' @export
 vec_arith.pct <- function(op, x, y, ...) {
-  print("goes by generic vec_arith.pct")
   UseMethod("vec_arith.pct", y)
 }
 
-
+#' @method vec_arith.pct default
 #' @export
 vec_arith.pct.default <- function(op, x, y, ...) {
-  print("vec_arith.pct.default")
   # new_pct(vctrs::vec_arith_base(op, x, y),
   #         digits = max(get_digits(x), get_digits(y)))
   vctrs::stop_incompatible_op(op, x, y)
@@ -222,10 +224,9 @@ vec_arith.pct.default <- function(op, x, y, ...) {
 #vctrs:::vec_arith.default # stop_incompatible_op(op, x, y)
 
 
+#' @method vec_arith.pct pct
 #' @export
-# @method vec_arith.pct pct
 vec_arith.pct.pct <- function(op, x, y, ...) {
-  print("vec_arith.pct.pct")
   # new_pct(vctrs::vec_arith_base(op, x, y),
   #         digits = max(get_digits(x), get_digits(y)))
   switch(
@@ -238,23 +239,22 @@ vec_arith.pct.pct <- function(op, x, y, ...) {
   )
 }
 
+#' @method vec_arith.pct numeric
 #' @export
-# @method vec_arith.pct numeric
 vec_arith.pct.numeric <- function(op, x, y, ...) {
-  print("vec_arith.pct.numeric")
   new_pct(vctrs::vec_arith_base(op, x, y),
           digits = max(get_digits(x), get_digits(y)))
 }
 
 
+#' @method vec_arith.numeric pct
 #' @export
-# @method vec_arith.numeric pct
 vec_arith.numeric.pct <- function(op, x, y, ...) {
-  print("vec_arith.numeric.pct")
   new_pct(vctrs::vec_arith_base(op, x, y),
           digits = max(get_digits(x), get_digits(y)))
 }
 
+#' @method vec_arith.pct MISSING
 #' @export
 vec_arith.pct.MISSING <- function(op, x, y, ...) { #unary + and - operators
   switch(op,

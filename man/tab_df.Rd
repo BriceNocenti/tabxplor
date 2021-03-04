@@ -20,6 +20,8 @@ tab_df(
 )
 }
 \arguments{
+\item{x}{The object to test.}
+
 \item{dat}{A data frame.}
 
 \item{var1, var2, var3}{\code{var1} is the row variable. \code{var2} is the

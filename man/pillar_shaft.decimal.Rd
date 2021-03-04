@@ -8,6 +8,8 @@
 }
 \arguments{
 \item{x}{A decimal object.}
+
+\item{...}{Other parameter.}
 }
 \value{
 A decimal printed in a pillar.

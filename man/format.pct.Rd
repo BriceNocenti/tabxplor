@@ -9,7 +9,7 @@
 \arguments{
 \item{x}{A pct object.}
 
-\item{...}{}
+\item{...}{Other parameter.}
 }
 \value{
 The pct printed.

@@ -70,9 +70,6 @@ prefix numbers like "1-", and text in parenthesis.}
 
 \item{sort_by}{A variable to sort rows in each table with. It must be among
 \code{explanatory_vars}.}
-
-\item{accelerate}{If \code{TRUE} makes the function faster, but produces
-less metadata (Chi2, unweighted counts, contributions of cells to variance).}
 }
 \value{
 When \code{var3} is empty, a single table with

@@ -13,6 +13,8 @@ pmap_if(.l, .p, .f, ..., .else = NULL)
 
 \item{.f}{Function if TRUE.}
 
+\item{...}{Other parameter to pass to the function.}
+
 \item{.else}{Function if FALSE.}
 }
 \value{

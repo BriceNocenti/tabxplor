@@ -9,7 +9,7 @@
 \arguments{
 \item{x}{A decimal object.}
 
-\item{...}{}
+\item{...}{Other parameter.}
 }
 \value{
 The decimal printed.
