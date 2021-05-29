@@ -19,7 +19,9 @@ tab_multi(
   digits = 0,
   cleannames = FALSE,
   subtext,
-  sort_by = "no"
+  sort_by = "no",
+  minimum_headcount = 30,
+  rare_to_other = FALSE
 )
 }
 \arguments{
@@ -70,6 +72,12 @@ prefix numbers like "1-", and text in parenthesis.}
 
 \item{sort_by}{A variable to sort rows in each table with. It must be among
 \code{explanatory_vars}.}
+
+\item{minimum_headcount}{The minimum unweighted count in each row/col.
+Any row/col with less count will be printed in grey in \code{\link{tab_xl}}.}
+
+\item{rare_to_other}{When set to \code{TRUE}, levels with less count
+than minimum_headcount will be merged into an "Other" level.}
 }
 \value{
 When \code{var3} is empty, a single table with

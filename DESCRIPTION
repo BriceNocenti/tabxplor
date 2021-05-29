@@ -1,12 +1,12 @@
 Package: tablr
-Title: A Tidy Way to Make Multiple Crosstabs, Transform them and Visualise them
+Title: user-friendly and tidy R crosstabs
 Version: 0.2.1.9000
 Authors@R: 
     person(given = "Brice",
            family = "Nocenti",
            role = c("aut", "cre"),
            email = "brice.nocenti@gmail.com")
-Description: What the package does (one paragraph).
+Description: If R makes complex things simple, it can sometimes make simple things difficult. This is why tablr try to make it easy to deal with multiple crosstabs: to create, manipulate, color and export tabs and lists of tabs to Excel. All functions are tidyverse-propelled, render tibbles, and are pipe-friendly. In development.
 License: GPL (>= 3)
 Encoding: UTF-8
 LazyData: true
@@ -33,8 +33,5 @@ Imports:
     pillar (>= 1.4.0),
     openxlsx (>= 4.0.0),
     methods,
-    stats (>= 4.0.0),
-    FactoMineR (>= 2.0.0),
-    ggiraph (>= 0.7.0),
-    ggplot2 (>= 3.0.0),
-    widgetframe (>= 0.3.0)
+    stats (>= 4.0.0)
+

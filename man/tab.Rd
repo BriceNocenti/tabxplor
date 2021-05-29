@@ -153,13 +153,13 @@ forcats::gss_cat \%>\%
 # To program several tables with different parameters at the same time :
 purrr::pmap(
   tibble::tribble(
-    ~var1    , ~var2 ,  ~perc,
-    "marital", "race",  "no" ,
-    "marital", "race",  "row",
-    "marital", "race",  "col",
-    "relig"  , "race",  "no" ,
-    "relig"  , "race",  "row",
-    "relig"  , "race",  "col",
+    ~var1    , ~var2       ,  ~perc,
+    "marital", "race"      ,  "no" ,
+    "marital", "race"      ,  "row",
+    "marital", "race"      ,  "col",
+    "relig"  , "race"      ,  "no" ,
+    "relig"  , "race"      ,  "row",
+    "relig"  , "race"      ,  "col",
   ),
   .f = tab,
   data = forcats::gss_cat, sort_by = c("White", "desc")) #\%>\%

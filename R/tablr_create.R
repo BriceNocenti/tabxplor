@@ -1,7 +1,7 @@
 #Fonctions user-friendly tableaux croises---------------------------------------
 
 
-#Fonction tabw : tableau croise pondere compatible tidyverse
+#Fonction tab : tableau croise pondere compatible tidyverse
 # Ajouter  : - plusieurs tableaux si plusieurs variables sont indiquees (y compris wt) ?
 #            - une fonction tout-en-un pour les etudiants,
 #            une autre decomposee pour les utilisateurs du tidyverse ?
@@ -12,10 +12,17 @@
 # Ajouter ?
 #            - regles de formatage conditionnel a passer dans tab_xl ?
 #            - choisir signe pourcentages ou pas dans le format
+#            - total supplémentaire avec effectifs non pondéré par ligne ?
+#            - une condition filter en argument pour passer dans tribble (utilisée au dernier moment) ? Et donc une liste pour subtext ?
 # BUGS       - Format de sortie pour les effectifs : double not decimal (ACM output) ?
 #            - Enlever design effect ?
 #            - use stopifnot and switch ----------------------------------------
 #            - make perc faster, compared to counts ----------------------------
+#            - rename variables if "NA", "NULL", "Total", "Ensemble", "no_var", etc.
+#            - Unweighted counts in the title of each graph.
+#            - Error when after cleannames, two levels have the same name ("P6Q_27-OQ-A aliment ♂ PME" / "P6Q_28-OQ-A aliment ♂ PME")
+#            - Totaltab = "no" don’t work anymore.
+#            - Error with empty tabs when calculating Chi2
 
 # Family of functions :
 # tab
@@ -26,7 +33,6 @@
 # tab_df
 # tab_draw
 #
-# tab_map #tab_map(mutate(., ))
 # tab_map_rownames
 # tab_map_columns
 # tab_map_rowwise #?
@@ -125,13 +131,13 @@
 #' # To program several tables with different parameters at the same time :
 #' purrr::pmap(
 #'   tibble::tribble(
-#'     ~var1    , ~var2 ,  ~perc,
-#'     "marital", "race",  "no" ,
-#'     "marital", "race",  "row",
-#'     "marital", "race",  "col",
-#'     "relig"  , "race",  "no" ,
-#'     "relig"  , "race",  "row",
-#'     "relig"  , "race",  "col",
+#'     ~var1    , ~var2       ,  ~perc,
+#'     "marital", "race"      ,  "no" ,
+#'     "marital", "race"      ,  "row",
+#'     "marital", "race"      ,  "col",
+#'     "relig"  , "race"      ,  "no" ,
+#'     "relig"  , "race"      ,  "row",
+#'     "relig"  , "race"      ,  "col",
 #'   ),
 #'   .f = tab,
 #'   data = forcats::gss_cat, sort_by = c("White", "desc")) #%>%
@@ -209,7 +215,8 @@ tab <-
     if (tot[1] == "all") tot <- c("row", "col")
     if (tot[1] == "auto" & missing(var2) == TRUE ) tot <- c("row")
     if (tot[1] == "auto" & missing(var1) == TRUE ) tot <- c("col")
-    if (tot[1] == "auto" & missing(var1) == FALSE & missing(var2) == FALSE ) tot <- c("row", "col")
+    if (tot[1] == "auto" & missing(var1) == FALSE & missing(var2) == FALSE) tot <- c("row", "col")
+
 
     if ( (missing(var1) == TRUE | missing(var2) == TRUE ) & result[1] != "observed" ) {
       result <- "observed"
@@ -232,6 +239,10 @@ tab <-
       var1 <- rlang::expr(no_var1)
     } else {
       var1 <- rlang::ensym(var1)
+      if (as.character(var1) %in% c("NA", "NULL", "no")) {
+        data %<>% dplyr::mutate(no_var1 = factor("n"))
+        var1 <- rlang::expr(no_var1)
+      }
     }
 
     if (missing(var2)) {
@@ -239,6 +250,10 @@ tab <-
       var2 <- rlang::expr(no_var2)
     } else {
       var2 <- rlang::ensym(var2)
+      if (as.character(var2) %in% c("NA", "NULL", "no")) {
+        data %<>% dplyr::mutate(no_var2 = factor("n"))
+        var2 <- rlang::expr(no_var2)
+      }
     }
 
     if (missing(var3)) {
@@ -246,6 +261,10 @@ tab <-
       var3 <- rlang::expr(no_var3)
     } else {
       var3 <- rlang::ensym(var3)
+      if (as.character(var3) %in% c("NA", "NULL", "no")) {
+        data %<>% dplyr::mutate(no_var3 = factor(" "))
+        var3 <- rlang::expr(no_var3)
+      }
     }
 
     if (missing(wt)) {
@@ -253,6 +272,10 @@ tab <-
       wt <- rlang::expr(no_weight)
     } else {
       wt <- rlang::ensym(wt)
+      if (as.character(wt) %in% c("NA", "NULL", "no")) {
+        data %<>% dplyr::mutate(no_weight = 1)
+        wt <- rlang::expr(no_weight)
+      }
     }
 
     #dat <- data %>% dplyr::select(!!var1, !!var2, !!var3, !!wt,
@@ -509,6 +532,7 @@ tab <-
 # sort_by = "no"
 # accelerate = FALSE
 
+#À ajouter :       - En dessous, un tableau des variances par variable explicative (et tab_var) ?
 
 #' Multiple crosstabs
 #' @description Cross one variable with many others, in colums by default,
@@ -549,6 +573,10 @@ tab <-
 #' (list of) table(s) in \code{\link{tab_xl}}
 #' @param sort_by A variable to sort rows in each table with. It must be among
 #'  \code{explanatory_vars}.
+#' @param minimum_headcount The minimum unweighted count in each row/col.
+#'  Any row/col with less count will be printed in grey in \code{\link{tab_xl}}.
+#' @param rare_to_other When set to \code{TRUE}, levels with less count
+#' than minimum_headcount will be merged into an "Other" level.
 #'
 #' @return When \code{var3} is empty, a single table with
 #' class \code{\link{single_tab}}, which is a special
@@ -574,7 +602,8 @@ tab <-
 tab_multi <- function(data, dependent_var, explanatory_vars, tab_var, wt,
                      transpose_table = FALSE, only_first_level = TRUE, not_last_level = TRUE,
                      totaltab = c("table", "line", "no"), show_na = TRUE, drop_sup_na = FALSE,
-                     digits = 0, cleannames = FALSE, subtext, sort_by = "no") { #Use  tidydots ?
+                     digits = 0, cleannames = FALSE, subtext, sort_by = "no",
+                     minimum_headcount = 30, rare_to_other = FALSE) { #Use  tidydots ?
 
   # if (is.data.frame(data) | ! is_tab(data)) {
   #   original_data <- data
@@ -639,6 +668,10 @@ tab_multi <- function(data, dependent_var, explanatory_vars, tab_var, wt,
     var3 <- rlang::expr(no_var3)
   } else {
     var3 <- rlang::ensym(tab_var)
+    if (as.character(var3) %in% c("NA", "NULL", "no")) {
+      data %<>% dplyr::mutate(no_var3 = factor(" "))
+      var3 <- rlang::expr(no_var3)
+    }
   }
 
   if (missing(wt)) {
@@ -646,14 +679,20 @@ tab_multi <- function(data, dependent_var, explanatory_vars, tab_var, wt,
     wt <- rlang::expr(no_weight)
   } else {
     wt <- rlang::ensym(wt)
+    if (as.character(wt) %in% c("NA", "NULL", "no")) {
+      data %<>% dplyr::mutate(no_weight = 1)
+      wt <- rlang::expr(no_weight)
+    }
   }
 
   data <- data %>%
     tab_prepare(!!var1, !!var2, !!var3,
-                show_na = show_na, cleannames = cleannames) %>%
+                show_na = show_na, cleannames = cleannames,
+                rare_to_other = rare_to_other, minimum_headcount = minimum_headcount) %>%
     tab_sup_prepare(!!!rlang::syms(explanatory_vars),
                 drop_sup_na = drop_sup_na,
-                cleannames = cleannames)
+                cleannames = cleannames,
+                rare_to_other = rare_to_other, minimum_headcount = minimum_headcount)
 
   perc <- if (transpose_table) {"col"} else {"row"}
   tot  <- if (transpose_table) {"row"} else {"col"}
@@ -664,20 +703,23 @@ tab_multi <- function(data, dependent_var, explanatory_vars, tab_var, wt,
     tab_make_sup_list(data, sup_cols = explanatory_vars)
   }
 
+  #data %>% purrr::map(~ is.na(.) %>% which() %>% length()) %>% print()
+
+
   wtable <- data %>%
     tab_sup_df(!!var1, !!var2, !!var3, !!wt, perc = perc,
-                  sup_list = sup_list,
-                  only_first_level = only_first_level,
-                  not_last_level = not_last_level,
-                  digits = digits) %>% #tot = c("row", "col")
+               sup_list = sup_list,
+               only_first_level = only_first_level,
+               not_last_level = not_last_level,
+               digits = digits) %>% #tot = c("row", "col")
     tab_sort_rows(sort_by = sort_by)
 
   if (transpose_table) {
     tabs <-  wtable %>%
       tab_draw(pct, res, .SUP, !!var2, !!var3,
-              zone = "sup_rows", totaltab = totaltab[1], #tot = c("row", "col")
-              subtext = subtext) #%>%  # keep_unused_levels = FALSE
-    #purrr::map(~ dplyr::mutate(., .SUP = fct_replace(.SUP, "^Total", "Ensemble")))
+               zone = "sup_rows", totaltab = totaltab[1], #tot = c("row", "col")
+               subtext = subtext) %>%  # keep_unused_levels = FALSE
+      purrr::map(~ dplyr::rename_at(., length(colnames(.)), ~ "Ensemble"))
   } else {
     tabs <-  wtable %>%
       tab_draw(pct, res, !!var1, .SUP, !!var3,
@@ -703,7 +745,9 @@ tab_multi <- function(data, dependent_var, explanatory_vars, tab_var, wt,
                     "sup_rows_num"     = sup_list$sup_rows_num,
                     "only_first_level" = only_first_level,
                     "not_last_level"   = not_last_level,
-                    "drop_sup_na"      = drop_sup_na            )
+                    "drop_sup_na"      = drop_sup_na,
+                    "minimum_headcount" = minimum_headcount,
+                    "rare_to_other"= rare_to_other)
 
 
   args_old <- tabs %>% purrr::pluck(purrr::attr_getter("args"))
@@ -753,10 +797,13 @@ tab_multi <- function(data, dependent_var, explanatory_vars, tab_var, wt,
   return(tabs)
 }
 
+
+
 #Decomposed functions ----------------------------------------------------------
 
 
 #Ajouter : - Rename levels "Total" and "Ensemble"
+#          - like tab and tab_multi, putting NA in a variable set no_var
 #' Prepare data for \code{\link{tab_df}}.
 #' @param dat A dataframe.
 #' @param var1,var2,var3 Variables must be the same that will then pass in
@@ -1143,7 +1190,7 @@ tab_df <- function(dat, var1, var2, var3, wt,
                                                      "contrib", "ctr_mean", "expected", "spread", "binding_ratio", "ctr_no_sign")),
                                 ~ pct(., digits = digits))) %>%
     dplyr::mutate(dplyr::across(tidyselect::any_of(c("moe_wn", ".tot1", ".wtot1", ".tot2", ".wtot2",
-                                                     ".tot3", ".wtot3", ".totn", ".wtotn")),  #"n", "weighted_n"
+                                                     ".tot3", ".wtot3", ".totn", ".wtotn", "n", "weighted_n")),
                                 ~ decimal(., digits = 0L))) %>%
     dplyr::mutate(dplyr::across(tidyselect::any_of(c("ctr_abs", "Vnuage")),
                                 ~ decimal(., digits = digits + 2L)))
@@ -1187,7 +1234,7 @@ tab_df <- function(dat, var1, var2, var3, wt,
 #' the \code{tab_df}.
 #' @param tab_var The table variable. When empty, takes the \code{var3} of
 #' the \code{tab_df}.
-#' @param zone #The type of table to draw :
+#' @param zone The type of table to draw :
 #' \itemize{
 #' \item \code{"base"} is the standard crosstab
 #' \item \code{"sup_cols"} is the table of supplementary columns
@@ -1381,6 +1428,16 @@ tab_draw <-
       tabs <-
         purrr::map2(tabs_text, tabs_num, purrr::quietly(~ dplyr::full_join(.x, .y))) %>%
         purrr::map(~ .$result)
+      tabs <- tabs %>%
+        purrr::map(~ dplyr::select(.,
+                                   -tidyselect::any_of(c("Total", "Ensemble")),
+                                   tidyselect::everything()) %>%
+                     dplyr::arrange(dplyr::across(1, ~ stringr::str_detect(
+                       ., "^Total |^TOTAL |^Ensemble |^ENSEMBLE "
+                     )))
+        )
+
+
     } else if (nrow(wtable_text) != 0) {
       tabs <- tabs_text
     } else if (nrow(wtable_num) != 0) {
@@ -1419,7 +1476,7 @@ tab_draw <-
 
 
 
-
+#Add error message when tab_sup used with tab_multi -----
 
 #' Add supplementary columns or rows to a crosstab
 #' @param data_or_tabs An object of class \code{tab} or \code{single_tab}
@@ -1633,6 +1690,7 @@ tab_sup <- function(data_or_tabs,
 
 
 #Ajouter : - Rename levels "Total" and "Ensemble"
+#Bug :     - If drop_sup_na = TRUE, NA for numeric variables are kept ----
 # Prepare data for \code{\link{tab_sup}}.
 # @param dat A dataframe.
 # @param ... \code{\link[dplyr]{dplyr_tidy_select}} One or more unquoted
@@ -1739,13 +1797,16 @@ tab_sup_df <- function(data, var1, var2, var3, wt, perc,
     dplyr::select(!!var1, !!var2, !!var3, !!wt, tidyselect::all_of(c(sup_cols, sup_rows)))
 
   #Remove all the NAs of explanatory variables
-  # (if drop_sup_na == FALSE, there where made explicit with dat_prepare) :
-  dat <- dat %>% dplyr::filter_all(~ !is.na(.))
+  #if drop_sup_na == FALSE, all factors (not numeric) where made explicit with dat_prepare :
+  #print(dplyr::filter_all(dat, ~ is.na(.)))
+
+  #dat %>% purrr::map(~ is.na(.) %>% which() %>% length()) %>% print()
+
+  dat <- dat %>% dplyr::filter_if(is.factor, ~ !is.na(.))
+
+
 
   dat_group3 <- dat %>% dplyr::group_by(!!var3, .add = TRUE, .drop = FALSE)
-
-
-
 
   if (only_first_level == TRUE) {
     supvars_3levels <-
@@ -1884,9 +1945,7 @@ tab_sup_df <- function(data, var1, var2, var3, wt, perc,
                                           n = sum(n), weighted_n = sum(weighted_n), .groups = "drop"))
       # }
 
-      sup_cols_tabs_text %<>% dplyr::group_by(.SUP_NAME, !!var3, !!var1) %>% dplyr::mutate(.wtot1 = sum(weighted_n))
-
-      #if (accelerate == FALSE) sup_cols_tabs_text %<>% dplyr::mutate(.tot1 = sum(n)) #TRUE ?
+      sup_cols_tabs_text %<>% dplyr::group_by(.SUP_NAME, !!var3, !!var1) %>% dplyr::mutate(.tot1 = sum(n), .wtot1 = sum(weighted_n))
 
       sup_cols_tabs_text %<>% dplyr::group_by(.SUP_NAME, !!var3) %>% dplyr::mutate(.wtot3 = sum(weighted_n))
 
@@ -1903,6 +1962,7 @@ tab_sup_df <- function(data, var1, var2, var3, wt, perc,
         sup_cols_tabs_text %<>% dplyr::group_by(.SUP_NAME, !!var3, .SUP) %>%
           dplyr::bind_rows(dplyr::summarise(., !!var1 := factor("Total"), !!var2 := factor("Total"),
                                             n = sum(n), weighted_n = sum(weighted_n), .TYPE = dplyr::first(.TYPE),
+                                            .tot1 = sum(.tot1),
                                             .wtot1 = dplyr::first(.wtot3), .zone = factor("sup_cols"),
                                             .wtot3 = dplyr::first(.wtot3), .groups = "drop") )
      # }
@@ -1998,9 +2058,11 @@ tab_sup_df <- function(data, var1, var2, var3, wt, perc,
         dplyr::bind_rows(dplyr::summarise(., .SUP_NAME = "Ensemble", .SUP = "Ensemble",
                                           .zone = "sup_cols",
                                           .TYPE = "factor", !!var2 := "sup_cols",
+                                          n = dplyr::first(.tot1),
                                           weighted_n = dplyr::first(.wtot1),
                                           pct = as_pct(vctrs::vec_data(dplyr::first(.wtot1))/
                                                          vctrs::vec_data(dplyr::first(.wtot3))),
+                                          .tot1 = dplyr::first(.tot1),
                                           .wtot1 = dplyr::first(.wtot1),
                                           .wtot3 = dplyr::first(.wtot3),
                                           .groups = "drop")) #%>%
@@ -2037,9 +2099,7 @@ tab_sup_df <- function(data, var1, var2, var3, wt, perc,
       }
 
       sup_rows_tabs_text %<>% dplyr::group_by(.SUP_NAME, !!var3, !!var2) %>%
-        dplyr::mutate(.wtot2 = sum(weighted_n))
-      # if (accelerate == FALSE) sup_rows_tabs_text %<>%
-      #   dplyr::mutate(.tot2 = sum(n)) #TRUE ?
+        dplyr::mutate(.tot2 = sum(n), .wtot2 = sum(weighted_n))
 
       sup_rows_tabs_text %<>% dplyr::group_by(.SUP_NAME, !!var3) %>%
         dplyr::mutate(.wtot3 = sum(weighted_n))
@@ -2074,9 +2134,10 @@ tab_sup_df <- function(data, var1, var2, var3, wt, perc,
             .,
             !!var2 := factor("Total"),
             !!var1 := factor("Total"),
-           # n = sum(n),
+            # n = sum(n),
             weighted_n = sum(weighted_n),
             .TYPE = dplyr::first(.TYPE),
+            .tot2 = sum(.tot2),
             .wtot2 = dplyr::first(.wtot3),
             .zone = factor("sup_rows"),
             .wtot3 = dplyr::first(.wtot3),
@@ -2172,10 +2233,12 @@ tab_sup_df <- function(data, var1, var2, var3, wt, perc,
         dplyr::bind_rows(dplyr::summarise(., .SUP_NAME = "Ensemble", .SUP = "Ensemble",
                                           .zone = "sup_rows",
                                           .TYPE = "factor", !!var1 := "sup_rows",
+                                          n = dplyr::first(.tot2),
                                           weighted_n = dplyr::first(.wtot2),
                                           pct = as_pct(vctrs::vec_data(dplyr::first(.wtot2))/
                                                          vctrs::vec_data(dplyr::first(.wtot3))),
-                                          .wtot1 = dplyr::first(.wtot2),
+                                          .tot2 = dplyr::first(.tot2),
+                                          .wtot2 = dplyr::first(.wtot2),
                                           .wtot3 = dplyr::first(.wtot3),
                                           .groups = "drop")) #%>%
         #dplyr::ungroup()
@@ -2218,7 +2281,7 @@ tab_sup_df <- function(data, var1, var2, var3, wt, perc,
                                                      "contrib", "ctr_mean", "expected", "spread", "binding_ratio", "ctr_no_sign")),
                                 ~ pct(., digits = digits))) %>%
     dplyr::mutate(dplyr::across(tidyselect::any_of(c("moe_wn", ".tot1", ".wtot1", ".tot2", ".wtot2",
-                                                     ".tot3", ".wtot3", ".totn", ".wtotn")),  #"n", "weighted_n"
+                                                     ".tot3", ".wtot3", ".totn", ".wtotn", "n", "weighted_n")),
                                 ~ decimal(., digits = 0L))) %>%
     dplyr::mutate(dplyr::across(tidyselect::any_of(c("ctr_abs", "Vnuage")),
                                 ~ decimal(., digits = digits + 2L)))

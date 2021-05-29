@@ -38,7 +38,7 @@ the \code{tab_df}.}
 \item{tab_var}{The table variable. When empty, takes the \code{var3} of
 the \code{tab_df}.}
 
-\item{zone}{#The type of table to draw :
+\item{zone}{The type of table to draw :
 \itemize{
 \item \code{"base"} is the standard crosstab
 \item \code{"sup_cols"} is the table of supplementary columns

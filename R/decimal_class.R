@@ -90,8 +90,8 @@ as_decimal.default <- function(x, ...) {
 #   new_decimal(value)
 # }
 
+#’ as.character.decimal
 #' @param x The decimal.
-#'
 #' @param ... Other.
 #'
 #' @export

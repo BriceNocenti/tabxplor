@@ -19,7 +19,7 @@ knitr::opts_chunk$set(
 
 <!-- badges: end -->
 
-If R makes complex things simple, it can sometimes make simple things difficult. This is why tablr try to make it easy to deal with multiple crosstabs: to create, manipulate, color and export tabs and lists of tabs to Excel. All functions are tidyverse-propelled, render tibbles, and are pipe-friendly. In development.
+If R makes complex things simple, it can sometimes make simple things difficult. This is why tablr tries to make it easy to deal with multiple crosstabs: to create, manipulate, color and export tabs and lists of tabs to Excel. All functions are tidyverse-propelled, render tibbles, and are pipe-friendly. In development.
 
 ## Installation
 

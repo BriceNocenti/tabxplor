@@ -7,7 +7,7 @@
 <!-- badges: end -->
 
 If R makes complex things simple, it can sometimes make simple things
-difficult. This is why tablr try to make it easy to deal with multiple
+difficult. This is why tablr tries to make it easy to deal with multiple
 crosstabs: to create, manipulate, color and export tabs and lists of
 tabs to Excel. All functions are tidyverse-propelled, render tibbles,
 and are pipe-friendly. In development.
@@ -31,15 +31,15 @@ analysis workflows.
 ``` r
 library(tablr)
 tab(forcats::gss_cat, marital, race)
-#>   marital         Other Black White Total
-#>   <fct>           <dbl> <dbl> <dbl> <dbl>
-#> 1 "No answer"         2     2    13    17
-#> 2 "Never married"   633  1305  3478  5416
-#> 3 "Separated"       110   196   437   743
-#> 4 "Divorced"        212   495  2676  3383
-#> 5 "Widowed"          70   262  1475  1807
-#> 6 "Married"         932   869  8316 10117
-#> 7 "Total "         1959  3129 16395 21483
+#>   marital         Other Black  White  Total
+#>   <fct>           <dec> <dec>  <dec>  <dec>
+#> 1 "No answer"         2     2     13     17
+#> 2 "Never married"   633 1 305  3 478  5 416
+#> 3 "Separated"       110   196    437    743
+#> 4 "Divorced"        212   495  2 676  3 383
+#> 5 "Widowed"          70   262  1 475  1 807
+#> 6 "Married"         932   869  8 316 10 117
+#> 7 "Total "        1 959 3 129 16 395 21 483
 ```
 
 It comes with options to weight the table, print percentages and totals,

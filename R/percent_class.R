@@ -82,6 +82,7 @@ get_digits <- function(x) as.integer(attr(x, "digits")) # Helper to extract the 
 #' @rdname get_digits
 #' @param value The number of digits to print, as an integer.
 #' @return \code{\link{set_digits}} : a vector with the right number of digits.
+#' @export
 set_digits <- function(x, value) `attr<-`(x, "digits", as.integer(value)) # To set digits
 
 

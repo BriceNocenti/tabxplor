@@ -1,21 +1,19 @@
 
 # #tabs <- tabw(FES2017, CSER, PR2017ALL1, SEXE, wt = w6)
 # #contrib_calc = "whole", sup_cols = "SD46"
-
-# path = "Tableau"
+#
+# path = "Tabs\\Tab"
 # replace = FALSE
-# open = TRUE
+# open = rlang::is_interactive()
 # colnames_rotation = 45
-# digits_perc = 3
-# digits_no_perc = 3
-# digits_quanti = 3
+# digits_perc = digits_no_perc = digits_quanti = 0
 # only_one_sheet = FALSE
-# color = "contrib" # "no" #"auto" # c("no", "auto", "contrib")
-# hide_near_zero = c("auto", 0.0049, Inf)
+# color = "auto"
+# hide_near_zero = "auto"
 # compact = FALSE
 # perc_color_breaks = c("+0.05","+0.10","+0.15","+0.25","*2","+0.35",
 #                       "-0.05","-0.10","-0.15","-0.25",     "-0.35")
-# cell_contrib_color_coeffs = c("1", "2", "5", "-1","-2", "-5")
+# cell_contrib_color_coeffs = c(0.5, 1, 2, 5, 10, -0.5, -1,-2, -5, -10)
 
 # #Multicols et multirows :
 
@@ -51,10 +49,28 @@
 
 
 # Mettre en forme la sortie Excel d'un tableau :
-# BUGS :                  -
-# Possibilites d'ajouts : - variance, pvalue, etc. a droite et pas dessous.
+# BUGS :                  - If tabs are modified with tab_map, everything recalculated from tab_df is false... #####
+#                         - Now test is var1 and var2 levels are se same on tabs/wtables : ambiguous
+#                         - Prepare another total directly on tab_xl, without tab_draw ? Make it auto ?
+#                         - Sup_cols print the Total col again.
+#                         - S’il manque une colonne sup quand plusieurs tabs par page, aligner avec les bonnes colonnes.
+#                         - Another total, sup_cols et insufficient headcount ne sont pas classées via sort_by...
+#                         - Refaire l’articulation des différents tableaux avec left_join (avec warnings si changements)
+#                         - "sheetName too long! Max length is 31 characters"
+# Possibilites d'ajouts : - variance, pvalue, etc. : dans un tableau après chaque liste of tabs, compact par défaut (ou à droite et pas dessous?)
 #                         - only_one_sheet ne fonctionne pas du tout avec des variables differentes en col
-#                         - utiliser le format table de Excel ?
+#                         - auto on same sheet when var2 levels are the same
+#                         - (utiliser le format table de Excel ?)
+#                         - Best fonts. Monospace : DejaVu Sans Mono (Source Code Pro Medium)
+#                         - openxlsx::addStyle(stack = TRUE) # If TRUE the new style is merged with any existing cell styles
+#                         - Plus que de sauter une petite ligne entre tableaux : une double bordure (voir si OK word)
+#                         - Dans Excel, marge d’erreur sous forme de calcul (ou plusieurs colonnes) pour garder chiffre exact
+#                         - Calcul des marges d’erreur dans l’espace à droite (en répétant chaque colonne pour détailler le calcul ?)
+#                         - Pour calculer les MOE des variables quanti, il faut une colonne SD systématiquement (ou l’info en nested).
+#                         - Proposer plusieurs calcul de couleurs (signif / moyenne, lignes deux à deux, tableau à tableau, moyenne
+#                         d’ensemble....), avec possibilité d’en choisir plusieurs, générant plusieurs tableaux.
+#                         - Comparaison paire par paire : le mieux c’est un autre tableau ou les paires sont regroupées, sans ligne total
+#                         (avec une croisement entre la troisième variable et la variable « paires » ?).
 
 #' Crosstabs : Excel output with conditionnal formatting
 #'
@@ -136,6 +152,7 @@ tab_xl <-
                                                  "49") )
     }
 
+
     whole_is_unique_table <- !is.null(purrr::pluck(tabs, purrr::attr_getter("is_unique_table")))
 
     if ("tab_df" %in% class(tabs) )  tabs <- tab_draw(tabs)
@@ -144,14 +161,20 @@ tab_xl <-
       tabs <- list(tabs)
 
     } else if (whole_is_unique_table) { #"single_tab" %in% class(tabs)
-      tabs <- list(purrr::pluck(tabs, purrr::attr_getter("tab")))
+
+      tabs <-
+        list(tabs) %>% `attributes<-`(attributes(purrr::pluck(tabs, purrr::attr_getter("tab"))))
+      #list(purrr::pluck(tabs, purrr::attr_getter("tab")))
 
     } else  {
       where_unique_table <- purrr::map_lgl(tabs, ~ !is.null(purrr::pluck(., purrr::attr_getter("is_unique_table"))))
 
       if (any(where_unique_table)) {
-        tabs[where_unique_table] <- tabs[where_unique_table] %>% purrr::map(~ purrr::pluck(., purrr::attr_getter("tab")))
-      }
+        tabs_tab_attributes <- tabs[where_unique_table] %>%
+          purrr::map(~ purrr::pluck(., purrr::attr_getter("tab"))) %>% purrr::map(attributes)
+        tabs[where_unique_table] <- tabs[where_unique_table] %>%
+          purrr::map2(tabs_tab_attributes, ~ `attributes<-`(list(.x), .y) )
+              }
 
       where_tab <- purrr::map_lgl(tabs, ~ "tab" %in% class(.) )
       if (any(! where_tab)) {
@@ -222,10 +245,10 @@ tab_xl <-
     multicols_quanti_var<- tabs %>%
       purrr::map2(multicols,
                   ~ purrr::map_if(.x, rep(.y, length(.x)),
-                                             ~ which(purrr::map_lgl(., ~ is_decimal(.))),
+                                             ~ which(purrr::map_lgl(., ~ ! is_pct(.) & ! is.character(.) & ! is.factor(.))),
                                   .else = ~ integer())) %>%
       purrr::flatten()
-    multirows_quanti_var<- empty_tabs %>% purrr::map_depth(2, ~ integer())
+    multirows_quanti_var<- empty_tabs %>% purrr::map_depth(2, ~ integer()) #DON’T WORK ?
     multirows_quanti_var[multirows] %<>%
       purrr::map2(purrr::map(sup_rows_num[multirows], ~ which(.) + 1),
                   ~ purrr::map(.x, function(.tab) .y))
@@ -245,8 +268,8 @@ tab_xl <-
     #confidence_intervals<- tabsbase %>% purrr::map(~ purrr::pluck(., purrr::attr_getter("args"))$confidence_intervals)
 
     varnames            <- wtables %>%
-      purrr::map(~ c(names(.)[3], names(.)[4], names(.)[2])) %>%
-      purrr::map(~ dplyr::if_else(stringr::str_detect(., "^no_var"), "", .))
+      purrr::map(~ c(names(.)[3], names(.)[4], names(.)[2]))
+
 
     #Put defaults if not found ?
     result_base_var     <- tabsbase %>%
@@ -259,13 +282,15 @@ tab_xl <-
     newsheet <- tabsbase %>%
       purrr::map(~ 1:length(.) == 1) %>%
       purrr::flatten_lgl()
+    newsheet_base <- newsheet
     if (only_one_sheet == TRUE) newsheet <- 1:length(newsheet) == 1
     #tabs_confidence_intervals <- empty_tabs %>% purrr::map2(confidence_intervals, ~ purrr::map_lgl(.x, function(var) .y)) %>% purrr::flatten_lgl()
     sup_contrib               <- empty_tabs %>%
       purrr::map2(sup_contrib_tab, ~ purrr::map_lgl(.x, function(var) .y)) %>%
       purrr::flatten_lgl() & compact == FALSE
-    varnames                  <- empty_tabs %>%
-      purrr::map2(varnames, ~ purrr::map(.x, function(var) .y)) %>%
+    varnames_tabs             <- varnames %>% purrr::map(~ dplyr::if_else(stringr::str_detect(., "^no_var"), "", .))
+    varnames_tabs             <- empty_tabs %>%
+      purrr::map2(varnames_tabs, ~ purrr::map(.x, function(var) .y)) %>%
       purrr::flatten()
     totals_tabs_str           <- empty_tabs %>%
       purrr::map2(totals, ~ purrr::map(.x, function(var) .y))
@@ -295,7 +320,6 @@ tab_xl <-
     # }
 
 
-
     #Print the summary tab with the Chi2 probs of all tabs
     pvalue_Chi2_print   <- tabsbase %>% purrr::map(~ purrr::pluck(., purrr::attr_getter("pvalue_Chi2")))
     if (all(purrr::map_lgl(pvalue_Chi2_print, ~ ! rlang::is_null(.)))) {
@@ -310,32 +334,108 @@ tab_xl <-
       pvalue_Chi2_print %>% pillar::colonnade() %>% print()
     }
 
-    only_total_columns <- totals %>%
-      purrr::map(~ append(., "only_totcol") %>%
-                   purrr::discard(. == "col"))
 
-    insufficient_headcount_var1 <-
-      purrr::pmap(list(wtables, only_total_columns, totaltab, keep_unused_levels, minimum_headcount), #col_var_sort,
-                  ~ tab_draw(..1, n, tot = ..2, totaltab = ..3, keep_unused_levels = ..4) %>% #perc = "no", col_var_sort = ..5
-                    purrr::map_if(purrr::map_lgl(., ~ ncol(.) >= 2),
-                                  function(.tab) which(dplyr::pull(.tab, 2) < ..5 ) + 1L,
-                                  .else = ~ integer()) ) %>%
-      purrr::flatten()    #INSUFF : NULLs are now integer(0) ?
+    #Test if variables names have been modified with tab_map after tabs being draw
+    #(if yes, do not draw insufficient headcount, contrib, another_total)
+    #(not enough, cause can be changed and keep same name)
+    #(too much, cause variables can be renamed and yet stay the same...)
+    #(sup_cols and sup_rows are not yet tested)
+    #(it is not a solid approach at all...)
+
+
+    var1_actual_levels <- tabs %>%
+      purrr::map_depth(2, ~ dplyr::pull(., 1) %>%
+                         as.character() %>%
+                         unique() %>%
+                         purrr::discard(stringr::str_detect(., "^Total|^Ensemble"))) %>%
+    purrr::map(~ purrr::flatten_chr(unique(.)))
+
+    var2_actual_levels <- tabs %>%
+      purrr::map_depth(2, ~ names(.[-1]) %>%
+                         purrr::discard(stringr::str_detect(., "^Total|^Ensemble"))) %>%
+      purrr::map(~ purrr::flatten_chr(unique(.)))
+
+    var1_wtable_levels <- wtables %>%
+      purrr::map(~ dplyr::pull(., 3) %>%
+                   levels() %>%
+                   purrr::discard(stringr::str_detect(., "^Total|^Ensemble")))
+    var2_wtable_levels <- wtables %>%
+      purrr::map(~ dplyr::pull(., 4) %>%
+                   levels() %>%
+                   purrr::discard(stringr::str_detect(., "^Total|^Ensemble")))
+
+    # var1_actual_length <- tabs %>%
+    #   purrr::map_depth(2, ~ dplyr::pull(., 1) %>% length()) %>%
+    #   purrr::map(~ purrr::flatten_int(.))
+    #
+    # var2_actual_length <- tabs %>%
+    #   purrr::map_depth(2, ~ names(.[-1]) %>% length())
+    #
+    # var1_wtable_length <- wtables %>%
+    #   purrr::map(~ dplyr::pull(., 3) %>% levels() %>% length())
+    #
+    # var2_wtable_length <- wtables %>%
+    #   purrr::map(~ dplyr::pull(., 4) %>% levels() %>% length())
+
+    var1_unchanged <-
+      list (var1_actual_levels, var1_wtable_levels) %>%
+      purrr::pmap_lgl(~ all(..1 %in% ..2) & all(..2 %in% ..1))
+
+    var2_unchanged <-
+      list (var2_actual_levels, var2_wtable_levels) %>%
+      purrr::pmap_lgl(~ all(..1 %in% ..2) & all(..2 %in% ..1))
+
+    var1_var2_unchanged <- purrr::map2_lgl(var1_unchanged, var2_unchanged, ~ .x & .y)
+
+
+    #Insufficient headcounts :
+
+    draw_vars <-
+      list(multicols, multirows, varnames) %>%
+      purrr::pmap(~ dplyr::case_when(
+        ..1 == TRUE                 ~ c(..3[1], ".SUP", ..3[3], "sup_cols"),
+        ..2 == TRUE                 ~ c(".SUP", ..3[2], ..3[3], "sup_rows"),
+        ..1 == FALSE & ..2 == FALSE ~ ..3 %>% append("base")
+      ))
+
+     only_total_columns <- totals %>%
+      purrr::map(~ append(., "only_totcol") %>% purrr::discard(. == "col"))
+
+    # insufficient_headcount_var1 <-
+    #   purrr::pmap(list(wtables, only_total_columns, totaltab, keep_unused_levels, minimum_headcount), #col_var_sort,
+    #               ~ tab_draw(..1, n, tot = ..2, totaltab = ..3, keep_unused_levels = ..4) %>% #perc = "no", col_var_sort = ..5
+    #                 purrr::map_if(purrr::map_lgl(., ~ ncol(.) >= 2),
+    #                               function(.tab) which(dplyr::pull(.tab, 2) < ..5 ) + 1L,
+    #                               .else = ~ integer()) ) %>%
+    #   purrr::flatten()    #INSUFF : NULLs are now integer(0) ?
+
+     insufficient_headcount_var1 <-
+       purrr::pmap(list(purrr::map(wtables, dplyr::filter, .TYPE != "num"), draw_vars,
+                        only_total_columns, totaltab, keep_unused_levels,
+                        purrr::map_if(minimum_headcount, !var1_unchanged, ~ 0)), #col_var_sort,
+                   ~ tab_draw(..1, n, row_var = !!rlang::sym(..2[1]), col_var = !!rlang::sym(..2[2]), tab_var = !!rlang::sym(..2[3]), zone = ..2[4],
+                              tot = ..3, totaltab = ..4, keep_unused_levels = ..5) %>% #perc = "no", col_var_sort = ..5
+                     purrr::map_if(purrr::map_lgl(., ~ ncol(.) >= 2),
+                                   function(.tab) which(dplyr::pull(.tab, 2) < ..6 ) + 1L,
+                                   .else = ~ integer()) ) %>%
+       purrr::flatten()
 
     only_total_rows <- totals %>%
-      purrr::map(~ append(., "only_totrow") %>%
-                   purrr::discard(. == "row"))
+      purrr::map(~ append(., "only_totrow") %>% purrr::discard(. == "row"))
     insufficient_headcount_var2 <-
-      purrr::pmap(list(wtables, only_total_rows, totaltab, keep_unused_levels,  minimum_headcount), #col_var_sort,
-                  ~ tab_draw(..1, n, tot = ..2, totaltab = ..3, keep_unused_levels = ..4, reverse_row_col = TRUE) %>% #perc = "no", col_var_sort = ..5,
+      purrr::pmap(list(purrr::map(wtables, dplyr::filter, .TYPE != "num"),
+                       draw_vars, only_total_rows, totaltab, keep_unused_levels,
+                       purrr::map_if(minimum_headcount, !var2_unchanged, ~ 0)), #col_var_sort,
+                  ~ tab_draw(..1, n, row_var = !!rlang::sym(..2[1]), col_var = !!rlang::sym(..2[2]), tab_var = !!rlang::sym(..2[3]), zone = ..2[4],
+                             tot = ..3, totaltab = ..4, keep_unused_levels = ..5, reverse_row_col = TRUE) %>% #perc = "no", col_var_sort = ..5,
                     purrr::map_if(purrr::map_lgl(., ~ ncol(.) >= 2),
-                                  function(.tab) which(dplyr::pull(.tab, 2) < ..5) + 1L,
+                                  function(.tab) which(dplyr::pull(.tab, 2) < ..6) + 1L,
                                   .else = ~ integer())  ) %>%
       purrr::flatten()
 
 
     #Sup contribs
-    if (color[1] %in% c("contrib", "auto") | any(purrr::flatten_lgl(sup_contrib_tab)) ) {
+    if ((color[1] %in% c("contrib", "auto") | any(purrr::flatten_lgl(sup_contrib_tab))) & ! any(var1_var2_unchanged) ) {
       # contrib_tabs <-
       #   purrr::pmap(list(wtables, totals, totaltab, keep_unused_levels, col_var_sort),
       #        ~ tab_draw(..1, contrib, tot = ..2, totaltab = ..3, keep_unused_levels = ..4) ) %>% #perc = "no", col_var_sort = ..5
@@ -346,7 +446,8 @@ tab_xl <-
       #             purrr::map_if(contrib_tabs, purrr::map_lgl(totals_tabs, ~ "row" %in% .), ~ nrow(.), .else = ~ nrow(.) + 1) ),
       #        ~ dplyr::select(..1, -1, - colnames(.)[..2]) %>% dplyr::slice(-..3) )  contrib_tabs <-
       contrib_condition <- wtables %>% purrr::map(~ dplyr::filter(., .zone == "base") ) %>%
-        purrr::map_lgl(~ ncol(.) != 0 & nrow(.) != 0)
+        purrr::map_lgl(~ ncol(.) != 0 & nrow(.) != 0) %>%
+        purrr::map2_lgl(var1_var2_unchanged, ~ .x & .y)
       contrib_tabs <-
         pmap_if(list(wtables, totaltab, keep_unused_levels), #col_var_sort
                 contrib_condition,
@@ -416,9 +517,10 @@ tab_xl <-
         purrr::map_if(sup_rows, ~ purrr::map(., ~ dplyr::mutate(., dplyr::across(where(~ is_pct(.) | is_decimal(.)), as.double)))) %>%
         purrr::flatten()
 
-      tab_draw(wtables[[1]], result_text = !!rlang::sym(result_sup_text_var[[1]]), result_num = !!rlang::sym(result_sup_num_var[[1]]),
-              row_var = .SUP, zone = "sup_rows", tot = totals[[1]],  #subtext ?
-              totaltab = "table", keep_unused_levels = keep_unused_levels[[1]]) #, perc = "row"
+      #???
+      # tab_draw(wtables[[1]], result_text = !!rlang::sym(result_sup_text_var[[1]]), result_num = !!rlang::sym(result_sup_num_var[[1]]),
+      #         row_var = .SUP, zone = "sup_rows", tot = totals[[1]],  #subtext ?
+      #         totaltab = "table", keep_unused_levels = keep_unused_levels[[1]]) #, perc = "row"
 
       #purrr::map(wtables, ~dplyr::mutate_at(., dplyr::vars(tidyselect::any_of("res")), ~ as_pct(.))) #convert quanti to pct, otherwise wrond bind
 
@@ -436,7 +538,7 @@ tab_xl <-
     }
 
     #Another totals :
-    an_totcol_condition <- purrr::map_lgl(wtables, ~ "an_totcol" %in% names(.))
+    an_totcol_condition <- purrr::map2_lgl(wtables, var1_unchanged, ~ "an_totcol" %in% names(.x) & .y)
     if ( any(an_totcol_condition) ) {
       another_totcol_tabs <-
         pmap_if(list(wtables, only_total_columns, totaltab, keep_unused_levels), #col_var_sort
@@ -450,7 +552,8 @@ tab_xl <-
         purrr::flatten()
     }
 
-    an_totrow_condition <- purrr::map_lgl(wtables, ~ "an_totrow" %in% names(.)) & compact == FALSE
+    an_totrow_condition <-
+      purrr::map2_lgl(wtables, var2_unchanged, ~ "an_totrow" %in% names(.x) & .y) & compact == FALSE
     if ( any(an_totrow_condition) ) {
       another_totrow_tabs <-
         pmap_if(list(wtables, only_total_rows, totaltab, keep_unused_levels),
@@ -505,6 +608,7 @@ tab_xl <-
 
 
 
+
     #FOR EACH TABLE :
     # Cols and rows to be formated as percentages/numbers, with conditional formatting
     total_rows <- purrr::map2(totals_tabs, purrr::map_depth(tabs, 2, ~ nrow(.) + 1) %>%
@@ -516,7 +620,7 @@ tab_xl <-
     totr <- total_rows %>% purrr::map_lgl(~ !is.na(.))
     totc <- total_cols %>% purrr::map_lgl(~ !is.na(.))
 
-    if (color[1] %in% c("contrib", "auto") | any(purrr::flatten_lgl(sup_contrib_tab)) ) {
+    if ((color[1] %in% c("contrib", "auto") | any(purrr::flatten_lgl(sup_contrib_tab))) & ! any(var1_var2_unchanged)  ) {
       contrib_tabs_totcol <- purrr::map_if(contrib_tabs_totcol, !totr, ~ dplyr::slice(., - nrow(.)))
       contrib_tabs_totrow <- purrr::map_if(contrib_tabs_totrow, !totc, ~ dplyr::select(., - Total))
     }
@@ -632,8 +736,14 @@ tab_xl <-
     nbrow_sub %<>% purrr::map_if(contrib_var == 1, ~ . + 2L) %>% purrr::flatten_int()
     nbrow_start_row <- nbrow_sub + subtext_rows - 1L
 
-    # Add empty line if subtext is the last object
-    nbrow_start_row %<>% purrr::map_if(subtext_rows >= 1, ~ . + 1L) %>% purrr::flatten_int()
+    # Add empty line if subtext is the last object (or if compact == TRUE)
+    if (compact == TRUE) {
+      nbrow_start_row %<>%
+        purrr::map_if(newsheet_base[-1] %>% append(FALSE), ~ . + 1L) %>% purrr::flatten_int()
+    } else {
+      nbrow_start_row %<>% purrr::map_if(subtext_rows >= 1, ~ . + 1L) %>% purrr::flatten_int()
+    }
+
 
     #Vector to purrr::map things on all sup cols/rows, or subtext rows (of type 0:1)
     nbcsup <- sup_cols_var %>% purrr::map(~ ifelse(. >= 1L, . - 1L, 0L)) %>% purrr::map(~ 0L:.)
@@ -668,7 +778,7 @@ tab_xl <-
     hd_remove <- dplyr::if_else(hd_remove == 0L, FALSE, TRUE)
     hd_remove[w_nsheet_start] <- FALSE
 
-    sheet_titles <- w_nsheet_start %>% purrr::map(~ varnames[.]) %>%  purrr::flatten() %>%
+    sheet_titles <- w_nsheet_start %>% purrr::map(~ varnames_tabs[.]) %>%  purrr::flatten() %>%
       purrr::map_if(purrr::map_lgl(., ~ length(.) > 1), ~ stringr::str_c(.[1], " par ", .[2]), .else ~ .[1]) %>%
       purrr::flatten_chr()
     sheet_titles <- dplyr::if_else(duplicated(sheet_titles),
@@ -744,7 +854,7 @@ tab_xl <-
     }
 
 
-    openxlsx::modifyBaseFont(wb, fontSize = 11, fontName = "Verdana")
+    openxlsx::modifyBaseFont(wb, fontSize = 10, fontName = "DejaVu Sans Condensed") #"Verdana", "DejaVu Sans Condensed"
 
     if (colnames_rotation == 0) {
       base_style <-
@@ -812,8 +922,12 @@ tab_xl <-
                               textDecoration = "Bold", border = "TopBottomLeftRight")
       phantom_headers <-
         openxlsx::createStyle(halign = "left", valign = "bottom", wrapText = TRUE,
-                              textDecoration = "Bold",
+                              textDecoration = "Bold", fontSize = 2,
                               border = "Bottom")
+
+      phantom_headers_no_bottom <-
+        openxlsx::createStyle(halign = "left", valign = "bottom", wrapText = TRUE,
+                              textDecoration = "Bold", fontSize = 2)
 
       last_row_no_total <-
         openxlsx::createStyle(halign = "right", valign = "top", numFmt = numformats,
@@ -929,8 +1043,12 @@ tab_xl <-
                               textDecoration = "Bold", border = "TopBottomLeftRight")
       phantom_headers <-
         openxlsx::createStyle(halign = "left", valign = "bottom", wrapText = TRUE,
-                              textDecoration = "Bold", #textRotation = colnames_rotation,
+                              textDecoration = "Bold", fontSize = 2, #textRotation = colnames_rotation,
                               border = "Bottom")
+
+      phantom_headers_no_bottom <-
+        openxlsx::createStyle(halign = "left", valign = "bottom", wrapText = TRUE,
+                              textDecoration = "Bold", fontSize = 2)
 
       last_row_no_total <-
         openxlsx::createStyle(halign = "right", valign = "top", numFmt = numformats,
@@ -1169,9 +1287,10 @@ tab_xl <-
 
 
 
-    # Reduce heigth of first line for compact tabs
+    # Reduce heigth of first line for compact tabs (except newsheet)
+    # (set font size to 2, but after all formatings, to export into Word)
     if (compact == TRUE) {
-      purrr::walk2(sheetnb[newsheet == FALSE], start_row[newsheet == FALSE],
+      purrr::walk2(sheetnb[newsheet_base == FALSE], start_row[newsheet_base == FALSE],
                    ~ openxlsx::setRowHeights(wb, sheet = .x, rows = 1 + .y,
                                              heights = 3))
     }
@@ -2036,7 +2155,7 @@ tab_xl <-
                                          startRow = .start_row + 2,
                                          startCol = ncol(.tabs) + .nbcol_ct))
       purrr::pwalk(append(maplist_contrib_col_headers,
-                          list(purrr::map(varnames[contrib_var == 1 & !hd_remove], ~ .[1]))),
+                          list(purrr::map(varnames_tabs[contrib_var == 1 & !hd_remove], ~ .[1]))),
                    function(.sheetnb, .start_row, .tabs, .nbcol_ct, .var1_name)
                      openxlsx::writeData(wb, .sheetnb, stringr::str_c("Contributions de ", .var1_name,
                                                                       " a la variance du tableau"),
@@ -2076,7 +2195,7 @@ tab_xl <-
                                          startRow = .start_row + nrow(.tabs) + .nbrow_ct,
                                          startCol = 2))
       purrr::pwalk(append(maplist_contrib_row,
-                          list(purrr::map(varnames[contrib_var == 1], ~ .[2]))),
+                          list(purrr::map(varnames_tabs[contrib_var == 1], ~ .[2]))),
                    function(.sheetnb, .start_row, .tabs, .nbrow_ct, .var2_name)
                      openxlsx::writeData(wb, .sheetnb, stringr::str_c("Contributions de ", .var2_name,
                                                                       " a la variance du tableau"),
@@ -2101,6 +2220,22 @@ tab_xl <-
                                         cols = ncol(.tabs)))
     }
 
+    #To reduce height of first line for compact tabs when exporting into Word
+    if (compact == TRUE) {
+      purrr::pwalk(list(sheetnb[newsheet_base == FALSE], start_row[newsheet_base == FALSE],
+                        tabs[newsheet_base == FALSE]),
+                   function(.sheetnb, .start_row, .tabs)
+                     openxlsx::addStyle(wb, .sheetnb, style = phantom_headers, gridExpand = T,
+                                        rows = .start_row + 1, cols = 1:ncol(.tabs)))
+
+      purrr::pwalk(list(sheetnb[newsheet_base == FALSE], start_row[newsheet_base == FALSE],
+                        tabs[newsheet_base == FALSE]),
+                   function(.sheetnb, .start_row, .tabs)
+                     openxlsx::addStyle(wb, .sheetnb, style = phantom_headers_no_bottom, gridExpand = T,
+                                        rows = .start_row + 1, cols = ncol(.tabs)+1))
+
+
+    }
 
 
 

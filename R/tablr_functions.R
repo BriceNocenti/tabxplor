@@ -44,25 +44,61 @@ tab_bind <- function(tabs, by = c("col", "row"), change_names) {
 tab_map <- function(tabs, .f) {
   if ("single_tab" %in% class(tabs) | "tab_df" %in% class(tabs) ) {
     #tabs_attr <- tabs %>% attributes()
-    purrr::modify_depth(tabs, 0, .f) #%>% `attributes<-`(tabs_attr)
+    tabs <- purrr::modify_depth(tabs, 0, .f) #%>% `attributes<-`(tabs_attr)
 
   } else if ("tab" %in% class(tabs) | all(purrr::map_lgl(tabs, ~ "tab_df" %in% class(.)))) {
     #tabs_attr <- tabs %>% attributes()
-    purrr::modify_depth(tabs, 1, .f) #%>% `attributes<-`(tabs_attr)
-  } else if (all(purrr::map_lgl(tabs, ~ "tab" %in% class(.)))) {
-    # vars_depth <- purrr::map(1:max(1, purrr::vec_depth(tabs) - 2), ~ purrr::map_depth(tabs, ., ~ "tab" %in% class(.))) %>% purrr::transpose() %>%
-    #   purrr::map(purrr::flatten) %>% purrr::map(purrr::flatten_lgl) %>% purrr::map_int(which)
-    #tabs_attr <- purrr::map(tabs, attributes)
-    purrr::map_depth(tabs, 2, .f) #%>% purrr::map2(tabs_attr, ~`attributes<-`(.x, .y))
-  } else if (all(purrr::map_depth(tabs, 2, ~ "tab" %in% class(.)) %>%
-                 purrr::map(~purrr::flatten_lgl(.)) %>%
-                 purrr::flatten_lgl())) {
-    #tabs_attr <- purrr::map_depth(tabs, 2, attributes)
-    purrr::map_depth(tabs, 3, .f) #%>% purrr::map2(tabs_attr, ~ purrr::map2(.x, .y, ~ `attributes<-`(.x, .y)))
-  }  else {
-    stop("some elements of the list are not of class tab, single_tab or tab_df")
+    tabs <- purrr::modify_depth(tabs, 1, .f) #%>% `attributes<-`(tabs_attr)
+  # } else if (all(purrr::map_lgl(tabs, ~ "tab" %in% class(.)))) {
+  #   # vars_depth <- purrr::map(1:max(1, purrr::vec_depth(tabs) - 2), ~ purrr::map_depth(tabs, ., ~ "tab" %in% class(.))) %>% purrr::transpose() %>%
+  #   #   purrr::map(purrr::flatten) %>% purrr::map(purrr::flatten_lgl) %>% purrr::map_int(which)
+  #   #tabs_attr <- purrr::map(tabs, attributes)
+  #   purrr::map_depth(tabs, 2, .f) #%>% purrr::map2(tabs_attr, ~`attributes<-`(.x, .y))
+  # } else if (all(purrr::map_depth(tabs, 2, ~ "tab" %in% class(.)) %>%
+  #                purrr::map(~purrr::flatten_lgl(.)) %>%
+  #                purrr::flatten_lgl())) {
+  #   #tabs_attr <- purrr::map_depth(tabs, 2, attributes)
+  #   purrr::map_depth(tabs, 3, .f) #%>% purrr::map2(tabs_attr, ~ purrr::map2(.x, .y, ~ `attributes<-`(.x, .y)))
+  } else {
+
+    where_unique_table <- purrr::map_lgl(tabs, ~ !is.null(purrr::pluck(., purrr::attr_getter("is_unique_table"))))
+
+    if (any(where_unique_table)) tabs[where_unique_table] <-
+        purrr::modify_depth(tabs[where_unique_table], 1, .f)
+
+    where_tab <- purrr::map_lgl(tabs, ~ "tab" %in% class(.) )
+
+    if (any(where_tab)) tabs[where_tab] <-
+      purrr::modify_depth(tabs[where_tab], 2, .f)
+
+    if (any(! where_unique_table & ! where_tab)) {
+      where_unique_table2 <- tabs[! where_unique_table & ! where_tab] %>%
+        purrr::map_depth(2, ~ !is.null(purrr::pluck(., purrr::attr_getter("is_unique_table"))) ) %>%
+        purrr::map_depth(1, purrr::flatten_lgl)
+
+      tabs[! where_unique_table & ! where_tab] <- tabs[! where_unique_table & ! where_tab] %>%
+        purrr::map2(where_unique_table2, ~ purrr::modify_if(.x, .y, .f))
+
+      where_table2 <- tabs[! where_unique_table & ! where_tab] %>%
+        purrr::map_depth(2, ~ "tab" %in% class(.) ) %>%
+        purrr::map_depth(1, purrr::flatten_lgl)
+
+      tabs[! where_unique_table & ! where_tab] <-
+        tabs[! where_unique_table & ! where_tab] %>%
+        purrr::map2(where_table2, ~ purrr::map_if(.x, .y, ~ purrr::modify(., .f)))
+
+      where_depth2 <-
+        purrr::map2(where_unique_table2, where_table2, ~ .x | .y)
+
+      if (! purrr::map_lgl(where_depth2, ~ all(.)) %>% all()) {
+        stop("some elements are not tabs, or buried too deep in a list (level 3 or more)")
+      }
+    }
+
   }
+  return(tabs)
 }
+
 
 
 # @param confidence_intervals,conf_level,design_effect Set
