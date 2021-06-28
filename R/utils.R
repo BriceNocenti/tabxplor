@@ -25,7 +25,10 @@ NULL
 #' @usage lhs \%<>\% rhs
 NULL
 
-
+# Rlang .data to bind data masking variable in dplyr
+#' @keywords internal
+#' @importFrom rlang .data
+NULL
 
 #Use fct_c and fct_unify !! ----------------------------------------------------
 

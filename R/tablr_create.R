@@ -36,6 +36,8 @@
 # tab_map_rownames
 # tab_map_columns
 # tab_map_rowwise #?
+#
+# tab_transpose
 
 #' Crosstabs
 #' @description A full-featured function to create, manipulate and print
