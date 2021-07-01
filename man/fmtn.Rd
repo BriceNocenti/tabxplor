@@ -19,7 +19,7 @@ fmtn(
   in_totrow = rep(FALSE, length(n)),
   in_tottab = rep(FALSE, length(n)),
   col_var = NA_character_,
-  total_col = FALSE,
+  totcol = FALSE,
   pct_type = NA_character_
 )
 
@@ -36,7 +36,7 @@ new_fmtn(
   in_totrow = rep(FALSE, length(n)),
   in_tottab = rep(FALSE, length(n)),
   col_var = NA_character_,
-  total_col = FALSE,
+  totcol = FALSE,
   pct_type = NA_character_
 )
 

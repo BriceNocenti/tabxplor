@@ -65,7 +65,7 @@ fmtn <- function(type      = "n",
                  in_totrow = rep(FALSE, length(n)),
                  in_tottab = rep(FALSE, length(n)),
                  col_var   = NA_character_,
-                 total_col = FALSE,
+                 totcol = FALSE,
                  pct_type  = NA_character_) {
 
   max_size <- list(n, wn, pct, digits, ctr, mean, sd, ci) %>% #type
@@ -85,13 +85,13 @@ fmtn <- function(type      = "n",
   in_tottab <- vec_recycle(vec_cast(in_tottab, logical()), size = max_size)
 
   col_var   <- vec_recycle(vec_cast(col_var  , character()), size = 1)
-  total_col <- vec_recycle(vec_cast(total_col, logical()  ), size = 1)
+  totcol <- vec_recycle(vec_cast(totcol, logical()  ), size = 1)
   pct_type  <- vec_recycle(vec_cast(pct_type , character()), size = 1)
 
   new_fmtn(type = type, n = n, wn = wn, pct = pct, digits = digits,
            ctr = ctr, mean = mean, sd = sd, ci = ci,
            in_totrow = in_totrow, in_tottab = in_tottab,
-           col_var = col_var, total_col = total_col, pct_type = pct_type)
+           col_var = col_var, totcol = totcol, pct_type = pct_type)
 }
 
 
@@ -111,14 +111,14 @@ new_fmtn <- function(type      = "n",
                      in_totrow = rep(FALSE   , length(n)),
                      in_tottab = rep(FALSE   , length(n)),
                      col_var   = NA_character_,
-                     total_col = FALSE,
+                     totcol = FALSE,
                      pct_type  = NA_character_) {
    stopifnot(
     all(type %in% c("n", "wn", "pct", "pct_ci", "ctr", "mean", "mean_ci", "sd", "ci")),
     pct_type %in% c("row", "col", "all", "all_tabs", "mixed", NA_character_)
     )
 
-  # list(type, n, wn, pct, digits, ctr, mean, sd, ci, col_var, total_col, pct_type) %>%
+  # list(type, n, wn, pct, digits, ctr, mean, sd, ci, col_var, totcol, pct_type) %>%
   #   purrr::map(print)
   # cat("\n")
 
@@ -137,13 +137,13 @@ new_fmtn <- function(type      = "n",
   vec_assert(in_tottab, logical())
 
   vec_assert(col_var  , character(), size = 1)
-  vec_assert(total_col, logical()  , size = 1)
+  vec_assert(totcol, logical()  , size = 1)
   vec_assert(pct_type , character(), size = 1)
 
   new_rcrd(list(type = type, n = n, wn = wn, pct = pct, digits = digits,
                 ctr = ctr, mean = mean, sd = sd, ci = ci,
                 in_totrow = in_totrow, in_tottab = in_tottab),
-           col_var = col_var, total_col = total_col, pct_type = pct_type, class = "fmtn")
+           col_var = col_var, totcol = totcol, pct_type = pct_type, class = "fmtn")
   #access with fields() n_fields() field() `field<-`() ; vec_data() return the tibble with all fields
 }
 
@@ -224,22 +224,20 @@ get_ci     <- fmt_field_factory("ci")
 is_in_totrow  <- fmt_field_factory("in_totrow")
 is_in_tottab  <- fmt_field_factory("in_tottab")
 
-c(fmtn("n", 0), fmtn("n", 0)) %>% in_tottab()
-
 get_col_var   <- purrr::attr_getter("col_var")
-get_total_col <- purrr::attr_getter("total_col")
+is_totcol     <- purrr::attr_getter("totcol")
 get_pct_type  <- purrr::attr_getter("pct_type")
 
-tab_get_col_var   <- function(tabs) purrr::map(tabs, ~ get_col_var(.)  ) %>%
-  purrr::map_if(purrr::map_lgl(., is.null), ~ NA_character_) %>% purrr::flatten_chr()
-tab_get_total_col <- function(tabs) purrr::map(tabs, ~ get_total_col(.))  %>%
-  purrr::map_if(purrr::map_lgl(., is.null), ~ FALSE) %>% purrr::flatten_lgl()
-tab_get_pct_type  <- function(tabs) purrr::map(tabs, ~ get_pct_type(.) ) %>%
-  purrr::map_if(purrr::map_lgl(., is.null), ~ NA_character_) %>% purrr::flatten_chr()
+# tab_get_col_var   <- function(tabs) purrr::map(tabs, ~ get_col_var(.)  ) %>%
+#   purrr::map_if(purrr::map_lgl(., is.null), ~ NA_character_) %>% purrr::flatten_chr()
+# tab_is_totcol <- function(tabs) purrr::map(tabs, ~ is_totcol(.))  %>%
+#   purrr::map_if(purrr::map_lgl(., is.null), ~ FALSE) %>% purrr::flatten_lgl()
+# tab_get_pct_type  <- function(tabs) purrr::map(tabs, ~ get_pct_type(.) ) %>%
+#   purrr::map_if(purrr::map_lgl(., is.null), ~ NA_character_) %>% purrr::flatten_chr()
+#
+# tab_is_fmtn <- function(tabs) purrr::map_lgl(tabs, is_fmtn)
 
-tab_is_fmtn <- function(tabs) purrr::map_lgl(tabs, is_fmtn)
-
-#At variable level ?
+#At variable level
 is_row_pct <- function(tabs) {
   tidyr::replace_na(tab_get_pct_type(tabs) == "row", FALSE)
 }
@@ -269,15 +267,14 @@ set_mean   <- fmt_set_field_factory("mean")
 set_sd     <- fmt_set_field_factory("sd")
 set_ci     <- fmt_set_field_factory("ci")
 
-fmt_set_attributes_factory <- function(attr) {
-  function(fmtn, value) {
-    #value <- vec_recycle(value, size = 1)
-    `attr<-`(fmtn, attr, value)
-  }
-}
-set_col_var   <- fmt_set_attributes_factory("col_var"  )
-set_total_col <- fmt_set_attributes_factory("total_col")
-set_pct_type  <- fmt_set_attributes_factory("pct_type" )
+as_totrow  <- function(fmtn, value = TRUE) `field<-`(fmtn, "in_totrow",
+                                                     vec_recycle(value, length(fmtn)))
+as_tottab  <- function(fmtn, value = TRUE) `field<-`(fmtn, "in_tottab",
+                                                     vec_recycle(value, length(fmtn)))
+
+set_col_var   <- function(fmtn, value)        `attr<-`(fmtn ,"col_var" , value)
+as_totcol     <- function(fmtn, value = TRUE) `attr<-`(fmtn ,"totcol"  , value)
+set_pct_type  <- function(fmtn, value)        `attr<-`(fmtn ,"pct_type", value)
 
 fmt_is_type_factory <- function(x, y = character()) {
   function(fmtn) {
@@ -460,9 +457,9 @@ vec_ptype2.fmtn.fmtn    <- function(x, y, ...) new_fmtn(
   col_var   = dplyr::if_else(get_col_var(x)   == get_col_var(y),
                              true = get_col_var(x),
                              false  = vec_recycle("several_vars", length(get_col_var(x)))),
-  total_col = dplyr::if_else(get_total_col(x) == get_total_col(y),
-                             true = get_total_col(x),
-                             false  = vec_recycle(FALSE, length(get_total_col(x)))),
+  totcol = dplyr::if_else(is_totcol(x) == is_totcol(y),
+                             true = is_totcol(x),
+                             false  = vec_recycle(FALSE, length(is_totcol(x)))),
   pct_type  = dplyr::if_else(get_pct_type(x)  == get_pct_type(y),
                              true = get_pct_type(x),
                              false  = vec_recycle("mixed", length(get_pct_type(x))))
@@ -488,14 +485,17 @@ vec_cast.fmtn.fmtn       <- function(x, to, ...) new_fmtn(type   = get_type  (x)
                                                           sd     = get_sd    (x),
                                                           ci     = get_ci    (x),
 
+                                                          in_totrow = is_in_totrow(x),
+                                                          in_tottab = is_in_tottab(x),
+
                                                           col_var   = get_col_var(to),
-                                                          total_col = get_total_col(to),
+                                                          totcol    = is_totcol(to),
                                                           pct_type  = get_pct_type(to)  )
 
 #' @export
 vec_cast.fmtn.double     <- function(x, to, ...) fmtn(type = "wn", wn = x,
                                                       col_var   = get_col_var(to),
-                                                      total_col = get_total_col(to),
+                                                      totcol = is_totcol(to),
                                                       pct_type  = get_pct_type(to)  )
 #' @method vec_cast.double fmtn
 #' @export
@@ -504,7 +504,7 @@ vec_cast.double.fmtn     <- function(x, to, ...) get_num(x) %>% as.double() #fie
 #' @export
 vec_cast.fmtn.integer    <- function(x, to, ...) fmtn(n = x,
                                                       col_var   = get_col_var(to),
-                                                      total_col = get_total_col(to),
+                                                      totcol = is_totcol(to),
                                                       pct_type  = get_pct_type(to)  ) #new_fmtn(pct = as.double(x))
 #' @method vec_cast.integer fmtn
 #' @export
@@ -590,11 +590,14 @@ vec_arith.fmtn.fmtn <- function(op, x, y, ...) {
       sd     = rep_NA_real,
       ci     = rep_NA_real,
 
+      in_totrow = is_in_totrow(x) & is_in_totrow(y), # Just x ?
+      in_tottab = is_in_tottab(x) & is_in_tottab(y),
+
       col_var   = dplyr::if_else(same_var, get_col_var(x),
                                  vec_recycle("several_vars", length(get_col_var(x)))),
-      total_col = FALSE,
+      totcol = FALSE,
       pct_type  = dplyr::if_else(same_pct, get_pct_type(x),
-                                 vec_recycle("mixed", length(get_col_var(x))))
+                                 vec_recycle("mixed", length(get_pct_type(x))))
     ),
     "/" = ,
     "*" = new_fmtn(
@@ -608,11 +611,14 @@ vec_arith.fmtn.fmtn <- function(op, x, y, ...) {
       sd     = rep_NA_real,
       ci     = rep_NA_real,
 
+      in_totrow = is_in_totrow(x),
+      in_tottab = is_in_tottab(x),
+
       col_var   = dplyr::if_else(same_var, get_col_var(x),
                                  vec_recycle("several_vars", length(get_col_var(x)))),
-      total_col = FALSE,
+      totcol = FALSE,
       pct_type  = dplyr::if_else(same_pct, get_pct_type(x),
-                                 vec_recycle("mixed", length(get_col_var(x))))
+                                 vec_recycle("mixed", length(get_pct_type(x))))
     ),
     stop_incompatible_op(op, x, y)
   )
@@ -687,8 +693,11 @@ vec_math.fmtn <- function(.fn, .x, ...) {
                           sd     = NA_real_,
                           ci     = NA_real_,
 
+                          in_totrow = FALSE,
+                          in_tottab = all(is_in_tottab(.x)), #any ?
+
                           col_var   = get_col_var(.x),
-                          total_col = get_total_col(.x),
+                          totcol = is_totcol(.x),
                           pct_type  = get_pct_type(.x)
          ),
          "mean" = new_fmtn(type   = get_type(.x)[1],
@@ -703,8 +712,11 @@ vec_math.fmtn <- function(.fn, .x, ...) {
                            sd     = NA_real_,
                            ci     = NA_real_,
 
+                           in_totrow = FALSE,
+                           in_tottab = all(is_in_tottab(.x)), #any ?
+
                            col_var   = get_col_var(.x),
-                           total_col = get_total_col(.x),
+                           totcol = is_totcol(.x),
                            pct_type  = get_pct_type(.x)
          ),
          vec_math_base(.fn, get_num(.x), ...) )
@@ -718,6 +730,8 @@ vec_math.fmtn <- function(.fn, .x, ...) {
 
 
 
+# c(fmtn("n", 0), fmtn("n", 0)) %>% is_in_totrow()
+# c(fmtn("n", 0), fmtn("n", 0)) %>% is_in_tottab()
 
 
 

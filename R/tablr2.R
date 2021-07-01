@@ -97,7 +97,8 @@ tab_prepare <-
 # tibble::tribble(~data, ~var1, ~var2, ~..., ~wt,
 #                 dat_group123, rlang::as_label(var1), rlang::as_label(var2), as.character(var3), rlang::as_label(wt)) %>%
 #   purrr::pmap(tab_core)
-tab_core <- function(data, var1, var2, ..., wt, digits = 0, is_grouped = FALSE) {
+tab_core <- function(data, var1, var2, ..., wt,
+                     digits = 0, subtext = "", is_grouped = FALSE) {
   if (missing(var1)) {
     data <- data %>% dplyr::mutate(no_var1 = factor("n"))
     var1 <- rlang::expr(no_var1)
@@ -192,7 +193,7 @@ tab_core <- function(data, var1, var2, ..., wt, digits = 0, is_grouped = FALSE) 
     tidyr::pivot_wider(names_from = !!fct_var, values_from = !!num_var,
                        values_fill = fmtn0("mean", digits))
 
-  tabs #%>% dplyr::group_by(!!!var3)
+  new_tab(tabs, subtext) #%>% dplyr::group_by(!!!var3)
 }
 
 
@@ -336,6 +337,7 @@ stopifnot(levels %in% c("first", "all"),
 }
 
 
+
 tab_totaltab <- function(tabs, totaltab = c("table", "line", "no")) {
   tabs_syms <- tab_cols_syms(tabs)
   var3_names  <- tabs_syms[[1]]
@@ -346,21 +348,22 @@ tab_totaltab <- function(tabs, totaltab = c("table", "line", "no")) {
   if (length(var3_names) == 0) return(tabs)
 
   # "no" removes all lines starting with "Ensemble" in the grouping variables
-  totaltable <- switch(totaltab[1],
-                       "no"    = tabs %>%
-                         dplyr::with_groups(NULL, ~ dplyr::filter(., dplyr::across(
-                           !!!var3_names, ~ ! stringr::str_detect(., "^Ensemble"))
-                         )),
+  totaltable <- switch(
+    totaltab[1],
+    "no"    = tabs %>%
+      dplyr::with_groups(NULL, ~ dplyr::filter(., dplyr::across(
+        !!!var3_names, ~ ! stringr::str_detect(., "^Ensemble"))
+      )),
 
-                       "table" = tabs %>%
-                         dplyr::group_by(!!var2_name) %>%
-                         dplyr::summarise(dplyr::across(where(is_fmtn), sum)),
+    "table" = tabs %>%
+      dplyr::group_by(!!var2_name) %>%
+      dplyr::summarise(dplyr::across(where(is_fmtn), ~ as_tottab(sum(.) ))),
 
-                       "line"  = tabs %>%
-                         dplyr::group_by(!!var2_name) %>%
-                         dplyr::summarise(dplyr::across(where(is_fmtn), sum)) %>%
-                         dplyr::summarise(dplyr::across(where(is_fmtn), sum)) %>%
-                         dplyr::mutate(!!var2_name := "TOTAL ENSEMBLE") #English trad Overall ?
+    "line"  = tabs %>%
+      dplyr::group_by(!!var2_name) %>%
+      dplyr::summarise(dplyr::across(where(is_fmtn), ~ as_tottab(sum(.)) )) %>%
+      dplyr::summarise(dplyr::across(where(is_fmtn), sum)) %>%
+      dplyr::mutate(!!var2_name := "TOTAL ENSEMBLE") #English trad Overall ?
   )
   if (totaltab[1] == "no") return(totaltable)
 
@@ -370,6 +373,8 @@ tab_totaltab <- function(tabs, totaltab = c("table", "line", "no")) {
 
   tabs %>% dplyr::bind_rows(totaltable)
 }
+
+
 
 tab_cols_syms <- function(tabs) {
   var1_levels <- names(tabs)[purrr::map_lgl(tabs, is_fmtn)] %>% rlang::syms()
@@ -450,7 +455,7 @@ tab_tot <- function(tabs,
     var2_levels <- dplyr::pull(tabs, !!var2_name) %>% levels()
 
     totrows <-
-      dplyr::summarise(tabs[gis,], dplyr::across(where(is_fmtn), sum)) %>%
+      dplyr::summarise(tabs[gis,], dplyr::across(where(is_fmtn), ~ as_totrow(sum(.)) )) %>%
       dplyr::bind_cols(var3_totals[gig,]) %>%
       dplyr::mutate(!!var2_name := forcats::fct_expand(!!var2_name, var2_levels)) #%>%
     #dplyr::relocate(!!var2_name, .after = gr[length(gr)])
@@ -481,8 +486,8 @@ tab_tot <- function(tabs,
   if ("col" %in% tot) {
     tabs <- tabs %>%
       dplyr::rowwise() %>%  # c_across don’t work : good workaround with quosures
-      dplyr::mutate(Total = sum(!!!var1_levels) %>% set_total_col(TRUE)) #%>%
-      #dplyr::ungroup() %>% dplyr::mutate(Total = set_total_col(Total, TRUE))
+      dplyr::mutate(Total = sum(!!!var1_levels) %>% as_totcol()) #%>%
+      #dplyr::ungroup() %>% dplyr::mutate(Total = as_totcol(Total))
 }
 
   tabs %>% dplyr::group_by(!!!var3_names)
@@ -618,7 +623,7 @@ tab_tot <- function(tabs,
   #   if ("wn" %in% fields) c_wn  <- purrr::map(wn, ~ rowSums(.) %>% as.double())
   #
   #   if (! "Total" %in% names(previous_totcol)) {
-  #     total_col <-
+  #     totcol <-
   #       ls(pattern = "^c_num$|^c_type$|^c_digits$|^c_ns$|^c_wn$") %>% as.list() %>%
   #       purrr::set_names(stringr::str_remove(., "^c_") %>% stringr::str_replace("^ns$", "n")) %>%
   #       purrr::map(~ rlang::sym(.) %>% rlang::eval_tidy()) %>%   #%>% tibble::tibble(All = .) %>%
@@ -629,7 +634,7 @@ tab_tot <- function(tabs,
   #     # previous_totcol %>% dplyr::group_split(.keep = FALSE) %>%
   #     #   purrr::map2(c_wn, ~ dplyr::mutate(.x, Total = `field<-`(Total, "wn", .y))) %>% .[[1]] %>%
   #     #   dplyr::pull(Total) %>% vec_data()
-  #     total_col <-
+  #     totcol <-
   #       purrr::reduce2(
   #         fields,
   #         rlang::syms(paste0("c_", fields) %>% stringr::str_replace("^c_n$", "c_ns")),
@@ -644,7 +649,7 @@ tab_tot <- function(tabs,
   # tabs <- dplyr::group_split(tabs)
   #
   # if ("col" %in% tot) tabs <- tabs %>%
-  #   purrr::map2(total_col, ~ dplyr::bind_cols(.x, .y))
+  #   purrr::map2(totcol, ~ dplyr::bind_cols(.x, .y))
   #
   # if ("row" %in% tot) tabs <- tabs %>%
   #   purrr::map2(total_row, ~ dplyr::bind_rows(.x, .y))

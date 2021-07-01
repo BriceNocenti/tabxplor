@@ -398,11 +398,11 @@ tab_xl <-
         ..1 == FALSE & ..2 == FALSE ~ ..3 %>% append("base")
       ))
 
-     only_total_columns <- totals %>%
+     only_totcols <- totals %>%
       purrr::map(~ append(., "only_totcol") %>% purrr::discard(. == "col"))
 
     # insufficient_headcount_var1 <-
-    #   purrr::pmap(list(wtables, only_total_columns, totaltab, keep_unused_levels, minimum_headcount), #col_var_sort,
+    #   purrr::pmap(list(wtables, only_totcols, totaltab, keep_unused_levels, minimum_headcount), #col_var_sort,
     #               ~ tab_draw(..1, n, tot = ..2, totaltab = ..3, keep_unused_levels = ..4) %>% #perc = "no", col_var_sort = ..5
     #                 purrr::map_if(purrr::map_lgl(., ~ ncol(.) >= 2),
     #                               function(.tab) which(dplyr::pull(.tab, 2) < ..5 ) + 1L,
@@ -411,7 +411,7 @@ tab_xl <-
 
      insufficient_headcount_var1 <-
        purrr::pmap(list(purrr::map(wtables, dplyr::filter, .TYPE != "num"), draw_vars,
-                        only_total_columns, totaltab, keep_unused_levels,
+                        only_totcols, totaltab, keep_unused_levels,
                         purrr::map_if(minimum_headcount, !var1_unchanged, ~ 0)), #col_var_sort,
                    ~ tab_draw(..1, n, row_var = !!rlang::sym(..2[1]), col_var = !!rlang::sym(..2[2]), tab_var = !!rlang::sym(..2[3]), zone = ..2[4],
                               tot = ..3, totaltab = ..4, keep_unused_levels = ..5) %>% #perc = "no", col_var_sort = ..5
@@ -541,7 +541,7 @@ tab_xl <-
     an_totcol_condition <- purrr::map2_lgl(wtables, var1_unchanged, ~ "an_totcol" %in% names(.x) & .y)
     if ( any(an_totcol_condition) ) {
       another_totcol_tabs <-
-        pmap_if(list(wtables, only_total_columns, totaltab, keep_unused_levels), #col_var_sort
+        pmap_if(list(wtables, only_totcols, totaltab, keep_unused_levels), #col_var_sort
                        an_totcol_condition,
                        ~ tab_draw(..1, an_totcol, tot = ..2, totaltab = ..3, keep_unused_levels = ..4) %>% #perc = "col", col_var_sort = ..5
                          purrr::map(~ dplyr::select(., -1)))
@@ -614,11 +614,11 @@ tab_xl <-
     total_rows <- purrr::map2(totals_tabs, purrr::map_depth(tabs, 2, ~ nrow(.) + 1) %>%
                                 purrr::flatten(),
                               ~ ifelse("row" %in% .x, .y, integer()))
-    total_cols <- purrr::map2(totals_tabs, purrr::map_depth(tabs, 2, ~ ncol(.) ) %>%
+    totcols <- purrr::map2(totals_tabs, purrr::map_depth(tabs, 2, ~ ncol(.) ) %>%
                                 purrr::flatten(),
                               ~ ifelse("col" %in% .x, .y, integer()))
     totr <- total_rows %>% purrr::map_lgl(~ !is.na(.))
-    totc <- total_cols %>% purrr::map_lgl(~ !is.na(.))
+    totc <- totcols %>% purrr::map_lgl(~ !is.na(.))
 
     if ((color[1] %in% c("contrib", "auto") | any(purrr::flatten_lgl(sup_contrib_tab))) & ! any(var1_var2_unchanged)  ) {
       contrib_tabs_totcol <- purrr::map_if(contrib_tabs_totcol, !totr, ~ dplyr::slice(., - nrow(.)))
@@ -693,7 +693,7 @@ tab_xl <-
     } else {
       sup_rows_var <- tabs %>% purrr::map_int(~ 0L)
     }
-    another_total_cols_var <- empty_tabs %>% purrr::map2(an_totcol_condition, ~ purrr::map_int(.x, function(var) ifelse(.y, 1L, 0L))) %>% purrr::flatten_int()
+    another_totcols_var <- empty_tabs %>% purrr::map2(an_totcol_condition, ~ purrr::map_int(.x, function(var) ifelse(.y, 1L, 0L))) %>% purrr::flatten_int()
     another_total_rows_var <- empty_tabs %>% purrr::map2(an_totrow_condition, ~ purrr::map_int(.x, function(var) ifelse(.y, 1L, 0L))) %>% purrr::flatten_int()
     contrib_var <- sup_contrib %>% purrr::map_int(~ ifelse(., 1L, 0L))
     #Vnuage[is.na(Vnuage)] <- purrr::map(Vnuage[is.na(Vnuage)], ~ NULL)
@@ -718,9 +718,9 @@ tab_xl <-
 
     #Position of each supplementary element (from ncol(tabs) or nrow(tabs))
     nbcol_tot       <- tabs %>% purrr::map_int(~ 2L)
-    nbcol_sup       <- nbcol_tot + another_total_cols_var
+    nbcol_sup       <- nbcol_tot + another_totcols_var
     nbcol_ct        <- nbcol_sup + sup_cols_var
-    nbcol_ct <- list(nbcol_ct, another_total_cols_var, sup_cols_var) %>%
+    nbcol_ct <- list(nbcol_ct, another_totcols_var, sup_cols_var) %>%
       purrr::pmap(~ dplyr::if_else(..2 + ..3 >= 1, .x + 1L, .x)) %>% purrr::as_vector()
 
     nbrow_tot       <- tabs %>% purrr::map_int(~ 2L)
@@ -876,20 +876,20 @@ tab_xl <-
         openxlsx::createStyle(halign = "center", valign = "bottom", wrapText = TRUE,
                               textDecoration = "Bold", border = "TopBottom",
                               fontColour = "#909090")
-      total_column_style <-
+      totcol_style <-
         openxlsx::createStyle(halign = "left", valign = "top", numFmt = numformats,
                               textDecoration = "Bold", border = "LeftRight")
-      total_column_no_perc <-
+      totcol_no_perc <-
         openxlsx::createStyle(halign = "left", valign = "top", numFmt = numformats_no_perc,
                               textDecoration = "Bold", border = "LeftRight")
-      total_column_quanti <-
+      totcol_quanti <-
         openxlsx::createStyle(halign = "left", valign = "top", numFmt = numformats_quanti,
                               textDecoration = "Bold", border = "LeftRight")
-      total_column_insufficient_headcount <-
+      totcol_insufficient_headcount <-
         openxlsx::createStyle(halign = "left", valign = "top", numFmt = numformats,
                               textDecoration = "Bold", border = "LeftRight",
                               fontColour = "#909090")
-      total_column_insufficient_headcount_no_perc <-
+      totcol_insufficient_headcount_no_perc <-
         openxlsx::createStyle(halign = "left", valign = "top", numFmt = numformats_no_perc,
                               textDecoration = "Bold", border = "LeftRight",
                               fontColour = "#909090")
@@ -944,11 +944,11 @@ tab_xl <-
       last_row_no_total_insufficient_headcount_no_perc <-
         openxlsx::createStyle(halign = "right", valign = "top", numFmt = numformats_no_perc,
                               border = "Bottom",fontColour = "#909090", wrapText = TRUE)
-      last_row_no_total_total_column_insufficient_headcount <-
+      last_row_no_total_totcol_insufficient_headcount <-
         openxlsx::createStyle(halign = "left", valign = "top", numFmt = numformats,
                               textDecoration = "Bold", border = c("left", "right", "bottom"),
                               fontColour = "#909090")
-      last_row_no_total_total_column_insufficient_headcount_no_perc <-
+      last_row_no_total_totcol_insufficient_headcount_no_perc <-
         openxlsx::createStyle(halign = "left", valign = "top", numFmt = numformats_no_perc,
                               textDecoration = "Bold", border = c("left", "right", "bottom"),
                               fontColour = "#909090")
@@ -998,20 +998,20 @@ tab_xl <-
                               textDecoration = "Bold", textRotation = colnames_rotation,
                               border = c("bottom", "left", "right", "top"),
                               fontColour = "#909090")
-      total_column_style <-
+      totcol_style <-
         openxlsx::createStyle(halign = "right", valign = "top", numFmt = numformats,
                               textDecoration = "Bold", border = "LeftRight")
-      total_column_no_perc <-
+      totcol_no_perc <-
         openxlsx::createStyle(halign = "right", valign = "top", numFmt = numformats_no_perc,
                               textDecoration = "Bold", border = "LeftRight")
-      total_column_quanti <-
+      totcol_quanti <-
         openxlsx::createStyle(halign = "right", valign = "top", numFmt = numformats_quanti,
                               textDecoration = "Bold", border = "LeftRight")
-      total_column_insufficient_headcount <-
+      totcol_insufficient_headcount <-
         openxlsx::createStyle(halign = "right", valign = "top", numFmt = numformats,
                               textDecoration = "Bold", border = "LeftRight",
                               fontColour = "#909090")
-      total_column_insufficient_headcount_no_perc <-
+      totcol_insufficient_headcount_no_perc <-
         openxlsx::createStyle(halign = "right", valign = "top", numFmt = numformats_no_perc,
                               textDecoration = "Bold", border = "LeftRight",
                               fontColour = "#909090")
@@ -1065,11 +1065,11 @@ tab_xl <-
       last_row_no_total_insufficient_headcount_no_perc <-
         openxlsx::createStyle(halign = "right", valign = "top", numFmt = numformats_no_perc,
                               border = c("left", "right", "bottom"),fontColour = "#909090", wrapText = TRUE)
-      last_row_no_total_total_column_insufficient_headcount <-
+      last_row_no_total_totcol_insufficient_headcount <-
         openxlsx::createStyle(halign = "right", valign = "top", numFmt = numformats,
                               textDecoration = "Bold", border = c("left", "right", "bottom"),
                               fontColour = "#909090")
-      last_row_no_total_total_column_insufficient_headcount_no_perc <-
+      last_row_no_total_totcol_insufficient_headcount_no_perc <-
         openxlsx::createStyle(halign = "right", valign = "top", numFmt = numformats_no_perc,
                               textDecoration = "Bold", border = c("left", "right", "bottom"),
                               fontColour = "#909090")
@@ -1207,7 +1207,7 @@ tab_xl <-
                                                numFmt = "0%")
     row_sup_quali_right <- openxlsx::createStyle(halign = "right", valign = "bottom", border = "TopBottomLeftRight",
                                                  numFmt = "0%")
-    no_total_col_row_sup_quali_right <-
+    no_totcol_row_sup_quali_right <-
       openxlsx::createStyle(halign = "right", valign = "bottom", border = c("top", "bottom", "right"),
                             numFmt = "0%")
     row_sup_quanti_row <-
@@ -1216,7 +1216,7 @@ tab_xl <-
     row_sup_quanti_right <-
       openxlsx::createStyle(halign = "right", valign = "bottom", border = "TopBottomLeftRight",
                             numFmt = numformats_quanti)
-    no_total_col_row_sup_quanti_right <-
+    no_totcol_row_sup_quanti_right <-
       openxlsx::createStyle(halign = "right", valign = "bottom", border = c("top", "bottom", "right"),
                             numFmt = numformats_quanti)
 
@@ -1298,8 +1298,8 @@ tab_xl <-
     purrr::pwalk(list(sheetnb, tabs, purrr::map(totc, ~ dplyr::if_else(., 1.45, 13))),
                  ~openxlsx::setColWidths(wb, sheet = ..1, cols = ncol(..2) + 1, widths = ..3))
 
-    if (any(purrr::map_lgl(another_total_cols_var, ~ . == 1)) ) {
-      purrr::pwalk(list(sheetnb, tabs, nbcol_tot) %>% purrr::map(~ purrr::keep(., purrr::map_lgl(another_total_cols_var, ~ . == 1))),
+    if (any(purrr::map_lgl(another_totcols_var, ~ . == 1)) ) {
+      purrr::pwalk(list(sheetnb, tabs, nbcol_tot) %>% purrr::map(~ purrr::keep(., purrr::map_lgl(another_totcols_var, ~ . == 1))),
                    function(.sheetnb, .tabs, .nbcol_tot)
                      openxlsx::setColWidths(wb, sheet = .sheetnb, cols = ncol(.tabs) + .nbcol_tot,
                                             widths = 10.64))
@@ -1412,7 +1412,7 @@ tab_xl <-
         maplist_percentages_totc <- maplist %>%
           purrr::map(~ purrr::keep(., pct_condition & totc))
         purrr::pwalk(maplist_percentages_totc, function(.sheetnb, .start_row, .tabs)
-          openxlsx::addStyle(wb, .sheetnb, style = total_column_style, gridExpand = T,
+          openxlsx::addStyle(wb, .sheetnb, style = totcol_style, gridExpand = T,
                              rows = .start_row + 2:(nrow(.tabs)+1),  cols = ncol(.tabs)))
       }
 
@@ -1482,7 +1482,7 @@ tab_xl <-
                                           gridExpand = T,
                                           rows = ..2 + ..4, cols = 2:ncol(..3)))
         purrr::pwalk(maplist_perc_insufficient_headcount_var1,
-                     ~ openxlsx::addStyle(wb, sheet = ..1, style = total_column_insufficient_headcount,
+                     ~ openxlsx::addStyle(wb, sheet = ..1, style = totcol_insufficient_headcount,
                                           gridExpand = T,
                                           rows = ..2 + ..4,  cols = ncol(..3)))
         purrr::pwalk(maplist_perc_insufficient_headcount_var1,
@@ -1500,7 +1500,7 @@ tab_xl <-
                                             gridExpand = T,
                                             rows = ..2 + ..4, cols = 2:ncol(..3)))
           purrr::pwalk(maplist_perc_insufficient_headcount_var1_no_totr,
-                       ~ openxlsx::addStyle(wb, sheet = ..1, style = last_row_no_total_total_column_insufficient_headcount,
+                       ~ openxlsx::addStyle(wb, sheet = ..1, style = last_row_no_total_totcol_insufficient_headcount,
                                             gridExpand = T,
                                             rows = ..2 + ..4,  cols = ncol(..3)))
           purrr::pwalk(maplist_perc_insufficient_headcount_var1_no_totr,
@@ -1513,7 +1513,7 @@ tab_xl <-
         #     append(list(insufficient_headcount_var1)) %>%
         #     purrr::map(~ purrr::keep(., ihv1_perc_no_totc))
         #   purrr::pwalk(maplist_perc_insufficient_headcount_var1_no_totc,
-        #         ~ openxlsx::addStyle(wb, sheet = ..1, style = total_column_insufficient_headcount,
+        #         ~ openxlsx::addStyle(wb, sheet = ..1, style = totcol_insufficient_headcount,
         #                    gridExpand = T,
         #                    rows = ..2 + ..4,  cols = ncol(..3)))
         # }
@@ -1587,7 +1587,7 @@ tab_xl <-
         maplist_no_perc_totc <- maplist %>%
           purrr::map(~ purrr::keep(., tabs_percentages == "no" & totc))
         purrr::pwalk(maplist_no_perc_totc, function(.sheetnb, .start_row, .tabs)
-          openxlsx::addStyle(wb, .sheetnb, style = total_column_no_perc, gridExpand = T,
+          openxlsx::addStyle(wb, .sheetnb, style = totcol_no_perc, gridExpand = T,
                              rows = .start_row + 2:(nrow(.tabs)+1),  cols = ncol(.tabs)))
       }
 
@@ -1656,7 +1656,7 @@ tab_xl <-
                                           gridExpand = T,
                                           rows = ..2 + ..4, cols = 2:ncol(..3)))
         purrr::pwalk(maplist_no_perc_insufficient_headcount_var1,
-                     ~ openxlsx::addStyle(wb, sheet = ..1, style = total_column_insufficient_headcount_no_perc,
+                     ~ openxlsx::addStyle(wb, sheet = ..1, style = totcol_insufficient_headcount_no_perc,
                                           gridExpand = T,
                                           rows = ..2 + ..4,  cols = ncol(..3)))
         purrr::pwalk(maplist_no_perc_insufficient_headcount_var1,
@@ -1676,7 +1676,7 @@ tab_xl <-
                                             gridExpand = T,
                                             rows = ..2 + ..4, cols = 2:ncol(..3)))
           purrr::pwalk(maplist_no_perc_insufficient_headcount_var1_no_totr,
-                       ~ openxlsx::addStyle(wb, sheet = ..1, style = last_row_no_total_total_column_insufficient_headcount_no_perc,
+                       ~ openxlsx::addStyle(wb, sheet = ..1, style = last_row_no_total_totcol_insufficient_headcount_no_perc,
                                             gridExpand = T,
                                             rows = ..2 + ..4,  cols = ncol(..3)))
           purrr::pwalk(maplist_no_perc_insufficient_headcount_var1_no_totr,
@@ -1754,7 +1754,7 @@ tab_xl <-
                                        gridExpand = T,
                                        rows = ..2 + ..4, cols = 2:(ncol(..3) - 1)))
       purrr::pwalk(maplist_quanti_rows,
-                   ~openxlsx::addStyle(wb, sheet = ..1, style = total_column_quanti,
+                   ~openxlsx::addStyle(wb, sheet = ..1, style = totcol_quanti,
                                        gridExpand = T,
                                        rows = ..2 + ..4,  cols = ncol(..3)))
     }
@@ -1858,13 +1858,13 @@ tab_xl <-
 
     #Supplementary totals :
     #Total columns (for line percentages) :
-    if (any(purrr::map_lgl(another_total_cols_var, ~ . == 1)) ) {
+    if (any(purrr::map_lgl(another_totcols_var, ~ . == 1)) ) {
       maplist_tot_col <-                list(sheetnb, start_row, tabs, nbcol_tot) %>%
-        purrr::map(~ purrr::keep(., another_total_cols_var == 1))
+        purrr::map(~ purrr::keep(., another_totcols_var == 1))
       maplist_tot_col_headers <-        list(sheetnb, start_row, tabs, nbcol_tot) %>%
-        purrr::map(~ purrr::keep(., another_total_cols_var == 1 & !hd_remove))
+        purrr::map(~ purrr::keep(., another_totcols_var == 1 & !hd_remove))
       maplist_tot_col_headers_remove <- list(sheetnb, start_row, tabs, nbcol_tot) %>%
-        purrr::map(~ purrr::keep(., another_total_cols_var == 1 & hd_remove))
+        purrr::map(~ purrr::keep(., another_totcols_var == 1 & hd_remove))
 
       purrr::pwalk(append(maplist_tot_col,
                           list(another_totcol_tabs[another_total_cols_var == 1])),

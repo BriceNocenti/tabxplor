@@ -29,32 +29,30 @@
 #' @export
 #  @examples
 new_tab <-
-  function(tabs = tibble::tibble(), chi2 = tibble::tibble(pvalue = double(),
-                                                          var    = double(),
-                                                          count  = integer()),
-           total_table = FALSE, subtext = "", ...) {
+  function(tabs = tibble::tibble(), subtext = "",
+           chi2 = tibble::tibble(pvalue = double(),
+                                 var    = double(),
+                                 count  = integer()),
+           ...) {
     stopifnot(is.data.frame(tabs))
+    vec_assert(subtext    , character())
     #vec_recycle(vec_cast(nrow, integer()), size = 1)
-    stopifnot(is.data.frame(chi2))
+    # stopifnot(is.data.frame(chi2))
     vec_assert(chi2, tibble::tibble(pvalue = double(),
                                     var    = double(),
                                     count  = integer()) )
     # vec_assert(chi2$pvalue, double())
     # vec_assert(chi2$var   , double())
     # vec_assert(chi2$count , integer())
-    vec_assert(total_table, logical(), size = 1)
-    vec_assert(subtext    , character())
 
-    tibble::new_tibble(tabs, chi2 = chi2, total_table = total_table,
-                       subtext = subtext,
+    tibble::new_tibble(tabs, subtext = subtext, chi2 = chi2,
                        nrow = nrow(tabs), class = "tab", ...) #... ?
   }
 # tab <-
-#   function(tabs = tibble::tibble(), chi2 = tibble::tibble(), total_table = FALSE,
+#   function(tabs = tibble::tibble(), chi2 = tibble::tibble(),
 #            subtext = "") {
 #     tabs <- tibble::as_tibble(tabs)
 #     chi2 <- tibble::as_tibble(chi2)
-#     total_table <- as.logical(total_table[1])
 #     subtext <- as.character(subtext)
 #     new_tab(tabs, nrow = nrow(tabs), perc = perc, chi2 = chi2,
 #                     total_table = total_table, subtext = subtext)
@@ -69,9 +67,8 @@ is_tab <- function(x) {
   inherits(x, "tab")
 }
 
-get_chi2        <- purrr::attr_getter("chi2")
-get_total_table <- purrr::attr_getter("total_table")
-get_subtext     <- purrr::attr_getter("subtext")
+get_subtext <- purrr::attr_getter("subtext")
+get_chi2    <- purrr::attr_getter("chi2")
 
 # # In doc exemple they do :
 #  df_colour <- function(x) {
@@ -171,14 +168,14 @@ print.tab <- function(x, ...) {
 # have a subclass of tibble. This eventually calls the data frame methods df_ptype2() and
 # tib_ptype2() which match the columns and their types.
 #' @export
-tab_cast <- function(x, to, total_table = FALSE, ..., x_arg = "", to_arg = "") {
-out <- tib_cast(x, to, ..., x_arg = x_arg, to_arg = to_arg)
+tab_cast <- function(x, to, ..., x_arg = "", to_arg = "") {
+  out <- tib_cast(x, to, ..., x_arg = x_arg, to_arg = to_arg)
 
-chi2        <- vec_rbind(get_chi2(x), get_chi2(to))
-subtext     <- vec_c(get_subtext(x), get_subtext(to)) %>% unique()
-if (length(subtext) > 1) subtext <- subtext[subtext != ""]
+  subtext     <- vec_c(get_subtext(x), get_subtext(to)) %>% unique()
+  if (length(subtext) > 1) subtext <- subtext[subtext != ""]
+  chi2        <- vec_rbind(get_chi2(x), get_chi2(to))
 
-new_tab(out, chi2 = chi2, total_table = total_table, subtext = subtext)
+  new_tab(out, subtext = subtext, chi2 = chi2,)
 }
 
 #' @export
@@ -190,7 +187,7 @@ tab_ptype2 <- function(x, y, ..., x_arg = "", y_arg = "") {
   subtext     <- vec_c(get_subtext(x), get_subtext(y)) %>% unique()
   if (length(subtext) > 1) subtext <- subtext[subtext != ""]
 
-  new_tab(out, chi2 = chi2, total_table = total_table, subtext = subtext)
+  new_tab(out, subtext = subtext, chi2 = chi2)
 }
 
 
@@ -206,7 +203,7 @@ vec_cast.tab.tab <- function(x, to, ...) {
 
 # The methods for combining our class with tibbles follow the same pattern. For ptype2 we return
 # our class in both cases because it is the richer type:
-  #' @export
+#' @export
 vec_ptype2.tab.tbl_df <- function(x, y, ...) {
   tab_ptype2(x, y, ...)
 }
