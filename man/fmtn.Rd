@@ -7,42 +7,56 @@
 \title{Create a vector of class formatted numbers.}
 \usage{
 fmtn(
-  num = double(),
   type = "n",
-  digits = 0L,
-  n = NA_integer_,
-  wn = NA_real_,
-  sd = NA_real_,
-  ci = NA_real_
+  n = integer(),
+  wn = rep(NA_real_, length(n)),
+  pct = rep(NA_real_, length(n)),
+  digits = rep(0L, length(n)),
+  ctr = rep(NA_real_, length(n)),
+  mean = rep(NA_real_, length(n)),
+  sd = rep(NA_real_, length(n)),
+  ci = rep(NA_real_, length(n)),
+  in_totrow = rep(FALSE, length(n)),
+  in_tottab = rep(FALSE, length(n)),
+  col_var = NA_character_,
+  total_col = FALSE,
+  pct_type = NA_character_
 )
 
 new_fmtn(
-  num = double(),
-  type = rep("n", length(num)),
-  digits = rep(0L, length(num)),
-  n = rep(NA_integer_, length(num)),
-  wn = rep(NA_real_, length(num)),
-  sd = rep(NA_real_, length(num)),
-  ci = rep(NA_real_, length(num))
+  type = "n",
+  n = integer(),
+  wn = rep(NA_real_, length(n)),
+  pct = rep(NA_real_, length(n)),
+  digits = rep(0L, length(n)),
+  ctr = rep(NA_real_, length(n)),
+  mean = rep(NA_real_, length(n)),
+  sd = rep(NA_real_, length(n)),
+  ci = rep(NA_real_, length(n)),
+  in_totrow = rep(FALSE, length(n)),
+  in_tottab = rep(FALSE, length(n)),
+  col_var = NA_character_,
+  total_col = FALSE,
+  pct_type = NA_character_
 )
 
 is_fmtn(x)
 }
 \arguments{
-\item{num}{A double vector. For \code{\link{fmtn}} and \code{\link{as_fmtn}},
-anything coercible to double.}
-
 \item{type}{The type of printing or background calculation, "n" for counts, "pct" for
 percentages, "mean" for means.}
-
-\item{digits}{The number of digits, as an integer or integer vector of the length of the
-data. It can then be changed with \code{vctrs::`field<-`(x, "digits", value)}.}
 
 \item{n}{The underlying count, as an integer vector of the same length, used with
 type = "pct" to calculate confidence intervals.}
 
 \item{wn}{The underlying weighted counts, as an integer vector of the same length. It
 it used in certain operations on \code{\link{fmtn}}, like means.}
+
+\item{pct}{A double vector. For \code{\link{fmtn}} and \code{\link{as_fmtn}},
+anything coercible to double.}
+
+\item{digits}{The number of digits, as an integer or integer vector of the length of the
+data. It can then be changed with \code{vctrs::`field<-`(x, "digits", value)}.}
 
 \item{sd}{The standards deviations, used with type = "mean" to calculate confidence
 intervals.}

@@ -7,12 +7,12 @@
 \method{print}{tab}(x, ...)
 }
 \arguments{
-\item{x}{A tab object}
+\item{x}{An object of class tab.}
 
 \item{...}{Arguments passed to print.default}
 }
 \value{
-The printed list of tables, preceded by a pvalue_Chi2 summary.
+The printed single table.
 }
 \description{
 Print method for class tab

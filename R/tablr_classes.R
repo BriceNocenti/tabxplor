@@ -1,6 +1,4 @@
-#Gérer les conversions !!-------------------------------------------------------
-
-# Create class single_tab------------------------------------------------------
+# Create class tab -----------------------------------------------------------------------
 # sloop::s3_methods_class("tbl")
 # sloop::s3_get_method(print.tbl)
 # cli::cat_line()
@@ -17,94 +15,109 @@
 # sloop::s3_methods_class("single_tab")
 
 
-#' Class single_tab
+#' Class tab
 #'
-#' @param x A table, stored into a \code{\link[tibble]{tibble}} data.frame.
+#' @param tabs A table, stored into a \code{\link[tibble]{tibble}} data.frame.
 #' It is generally made with \code{\link{tab}} or \code{\link{tab_multi}}.
-#' @param perc The type of percentages of this table : "no", "row", "col", "all"
-#'  or "all_tabs".
-#' @param pvalue_Chi2 A tibble storing information about pvalues, unweighted
-#' counts, and variances.
+#' @param chi2 A tibble storing information about pvalues and variances.
 #' @param total_table TRUE when it is the total table of a \code{\link{tab}}
 #' (list of tables).
 #' @param subtext A character vector to print legend lines under the table
 #' with \code{\link{tab_xl}}
-#' @param force_unique_table TRUE when multiple tables are bound into one.
-#' @param print_sup TRUE when supplementary rows and cols are printed into the
-#' main table.
 #'
-#' @return A table of class single_tab.
+#' @return A table of class tab.
 #' @export
 #  @examples
-single_tab <-
-  function(x = tibble::tibble(), perc = "no", pvalue_Chi2 = tibble::tibble(), total_table = FALSE,
-           subtext = "", force_unique_table = FALSE, print_sup = c(FALSE, FALSE)) {
-    x <- tibble::as_tibble(x)
-    perc <- as.character(perc[1])
-    pvalue_Chi2 <- tibble::as_tibble(pvalue_Chi2)
-    total_table <- as.logical(total_table[1])
-    subtext <- as.character(subtext)
-    force_unique_table <- as.logical(force_unique_table[1])
-    print_sup <- as.logical(print_sup)
-    new_single_tab(x, nrow = nrow(x), perc = perc, pvalue_Chi2 = pvalue_Chi2,
-                    total_table = total_table, subtext = subtext,
-                    force_unique_table = force_unique_table, print_sup = print_sup) # validate_single_tab(new_single_tab(x))
+new_tab <-
+  function(tabs = tibble::tibble(), chi2 = tibble::tibble(pvalue = double(),
+                                                          var    = double(),
+                                                          count  = integer()),
+           total_table = FALSE, subtext = "", ...) {
+    stopifnot(is.data.frame(tabs))
+    #vec_recycle(vec_cast(nrow, integer()), size = 1)
+    stopifnot(is.data.frame(chi2))
+    vec_assert(chi2, tibble::tibble(pvalue = double(),
+                                    var    = double(),
+                                    count  = integer()) )
+    # vec_assert(chi2$pvalue, double())
+    # vec_assert(chi2$var   , double())
+    # vec_assert(chi2$count , integer())
+    vec_assert(total_table, logical(), size = 1)
+    vec_assert(subtext    , character())
+
+    tibble::new_tibble(tabs, chi2 = chi2, total_table = total_table,
+                       subtext = subtext,
+                       nrow = nrow(tabs), class = "tab", ...) #... ?
   }
+# tab <-
+#   function(tabs = tibble::tibble(), chi2 = tibble::tibble(), total_table = FALSE,
+#            subtext = "") {
+#     tabs <- tibble::as_tibble(tabs)
+#     chi2 <- tibble::as_tibble(chi2)
+#     total_table <- as.logical(total_table[1])
+#     subtext <- as.character(subtext)
+#     new_tab(tabs, nrow = nrow(tabs), perc = perc, chi2 = chi2,
+#                     total_table = total_table, subtext = subtext)
+#   }
+
+# Functions to work with class tab -------------------------------------------------------
 
 # Useful test fonction :
-#' @describeIn single_tab A test function for class single_tab
+#' @describeIn tab A test function for class tab
 #' @export
-is_single_tab <- function(x) {
-  inherits(x, "single_tab")
+is_tab <- function(x) {
+  inherits(x, "tab")
 }
 
-# as_single_tab <- function(x, ...) {
-#   UseMethod("as_single_tab")
+get_chi2        <- purrr::attr_getter("chi2")
+get_total_table <- purrr::attr_getter("total_table")
+get_subtext     <- purrr::attr_getter("subtext")
+
+# # In doc exemple they do :
+#  df_colour <- function(x) {
+# if (inherits(x, "my_tibble")) {
+#   attr(x, "colour")
+# } else {
+#   NULL
 # }
-# as_single_tab.default <- function(x, ...) {
-#   #vctrs::vec_cast(x, single_tab())
 # }
 
-#' @keywords internal
-new_single_tab <-
-  function(x = tibble::tibble(), nrow = 0L, perc = "no", pvalue_Chi2 = tibble::tibble(), total_table = FALSE,
-           subtext = "", force_unique_table = FALSE, print_sup = c(FALSE, FALSE),  ..., class = NULL) {
-    #x <- vctrs::vec_assert(x, tibble::tibble()) #check type or size
-    nrow <- vctrs::vec_assert(nrow, ptype = integer(), size = 1)
-    if (nrow == 0L) nrow <- nrow(x)
-    perc <- vctrs::vec_assert(perc, ptype = character(), size = 1)
-    #pvalue_Chi2 <- vctrs::vec_assert(pvalue_Chi2, ptype = tibble::tibble())
-    total_table <- vctrs::vec_assert(total_table, ptype = logical(), size = 1)
-    subtext <- vctrs::vec_assert(subtext, ptype = character())
-    force_unique_table <- vctrs::vec_assert(force_unique_table, ptype = logical(), size = 1)
-    print_sup <- vctrs::vec_assert(print_sup, ptype = logical(), size = 2)
-    tibble::new_tibble(x, nrow = nrow, class = "single_tab", perc = perc, pvalue_Chi2 = pvalue_Chi2,
-                       total_table = total_table, subtext = subtext,
-                       force_unique_table = force_unique_table, print_sup = print_sup) #... ?
-  }
 
-#' Print method for class single_tab
+# as_tab <- function(x, ...) {
+#   UseMethod("as_tab")
+# }
+# as_tab.default <- function(x, ...) {
+#   #vctrs::vec_cast(x, tab())
+# }
+
+
+
+
+
+#Methods for class tab -------------------------------------------------------------------
+
+#' Print method for class tab
 #'
-#' @param x An object of class single_tab.
+#' @param x An object of class tab.
 #' @param ... Arguments passed to print.default
-#'
 #' @return The printed single table.
 #' @export
-#'
-# @examples
-print.single_tab <- function(x, ...) {
+print.tab <- function(x, ...) {
+  # cat(sprintf("<%s: %s>\n", class(x)[[1]], df_colour(x)))
+  # cli::cat_line(format(x)[-1])
+
   #cli::cat_line(format(x, ..., n = 30, width = 500)) #Can be use to color bg and text
 
   if (nrow(x) > 0 & ncol(x) > 0) {
     out <- x
     if (class(dplyr::pull(x, 1)) %in% c("factor", "character")) {
-      #First column must be same length for all tabs
-      # (for that must be a factor with the levels of all the other tables)
-      out <- dplyr::mutate_at(x, dplyr::vars(1), ~ as.factor(.))
-      max_length_all <- dplyr::pull(out, 1) %>% levels() %>% stringr::str_length() %>% max(na.rm = TRUE)
-      if (dplyr::pull(out, 1) %>% stringr::str_length() %>% max(na.rm = TRUE) < max_length_all) {
-        out <- dplyr::mutate_at(out, dplyr::vars(1), ~ `levels<-`(., stringr::str_pad(levels(.), max_length_all - 2, "right")))
-      }
+      # #First column must be same length for all tabs
+      # # (for that must be a factor with the levels of all the other tables)
+      # out <- dplyr::mutate_at(x, dplyr::vars(1), ~ as.factor(.))
+      # max_length_all <- dplyr::pull(out, 1) %>% levels() %>% stringr::str_length() %>% max(na.rm = TRUE)
+      # if (dplyr::pull(out, 1) %>% stringr::str_length() %>% max(na.rm = TRUE) < max_length_all) {
+      #   out <- dplyr::mutate_at(out, dplyr::vars(1), ~ `levels<-`(., stringr::str_pad(levels(.), max_length_all - 2, "right")))
+      # }
       #Truncate first column if too long
       if (dplyr::pull(out, 1) %>% stringr::str_length() %>% max(na.rm = TRUE) > 30) {
         out <-
@@ -121,204 +134,250 @@ print.single_tab <- function(x, ...) {
     }
     cli::cat_line(format(pillar::colonnade(out, width = 500))) #Less formatting but no "A tibble::tibble" introduction
   } else {
-    cli::cat_line("# A single_tab: 0 x 0", col = "grey")
+    cli::cat_line("# A tab: 0 x 0", col = "grey")
   }
 
   #invisible(x)
 }
 
+#Two possibility : by rows ; by cols ???
+#Two type vectors : columns and rows
+
+#Put informations on fmtn on printing ?
+#tabs %>% dplyr::group_indices()
+
+
 #Add with pillar_shaft : - contributions to variance (in attribute)
 
 
+# #Define abbreviated type name (for tibble::tibble headers)
+# #' @export
+# vec_ptype_abbr.tab <- function(x, ...) {
+#   "tab"
+# }
+
+# # Include numbers of digits and types in the printed name
+#  #' @export
+#  vec_ptype_full.tab <- function(x, ...) {
+#    "tab-"
+#  }
+
+
+# (from vctrs documentation)
+# The coercion methods for data frames operate in two steps:
+#   • They check for compatible subclass attributes. In our case the tibble colour has to be the
+# same, or be undefined.
+# • They call their parent methods, in this case tib_ptype2() and tib_cast() because we
+# have a subclass of tibble. This eventually calls the data frame methods df_ptype2() and
+# tib_ptype2() which match the columns and their types.
+#' @export
+tab_cast <- function(x, to, total_table = FALSE, ..., x_arg = "", to_arg = "") {
+out <- tib_cast(x, to, ..., x_arg = x_arg, to_arg = to_arg)
+
+chi2        <- vec_rbind(get_chi2(x), get_chi2(to))
+subtext     <- vec_c(get_subtext(x), get_subtext(to)) %>% unique()
+if (length(subtext) > 1) subtext <- subtext[subtext != ""]
+
+new_tab(out, chi2 = chi2, total_table = total_table, subtext = subtext)
+}
+
+#' @export
+tab_ptype2 <- function(x, y, ..., x_arg = "", y_arg = "") {
+  out <- tib_ptype2(x, y, ..., x_arg = x_arg, y_arg = y_arg)
+  #colour <- df_colour(x) %||% df_colour(y)
+
+  chi2        <- vec_rbind(get_chi2(x), get_chi2(y))
+  subtext     <- vec_c(get_subtext(x), get_subtext(y)) %>% unique()
+  if (length(subtext) > 1) subtext <- subtext[subtext != ""]
+
+  new_tab(out, chi2 = chi2, total_table = total_table, subtext = subtext)
+}
+
+
+#Let’s now implement the coercion methods, starting with the self-self methods.
+#' @export
+vec_ptype2.tab.tab <- function(x, y, ...) {
+  tab_ptype2(x, y, ...)
+}
+#' @export
+vec_cast.tab.tab <- function(x, to, ...) {
+  tab_cast(x, to, ...)
+}
+
+# The methods for combining our class with tibbles follow the same pattern. For ptype2 we return
+# our class in both cases because it is the richer type:
+  #' @export
+vec_ptype2.tab.tbl_df <- function(x, y, ...) {
+  tab_ptype2(x, y, ...)
+}
+#' @export
+vec_ptype2.tbl_df.tab <- function(x, y, ...) {
+  tab_ptype2(x, y, ...)
+}
+#' @export
+vec_cast.tab.tbl_df <- function(x, to, ...) {
+  tab_cast(x, to, ...)
+}
+#' @export
+vec_cast.tbl_df.tab <- function(x, to, ...) {
+  tib_cast(x, to, ...)
+}
+
+#' @export
+vec_ptype2.tab.data.frame <- function(x, y, ...) {
+  tab_ptype2(x, y, ...)
+}
+#' @export
+vec_ptype2.data.frame.tab <- function(x, y, ...) {
+  tab_ptype2(x, y, ...)
+}
+#' @export
+vec_cast.tab.data.frame <- function(x, to, ...) {
+  tab_cast(x, to, ...)
+}
+#' @export
+vec_cast.data.frame.tab <- function(x, to, ...) {
+  df_cast(x, to, ...)
+}
 
 
 
-#Create class tab -------------------------------------------------------
 
-# The standard tab function had taken the place of the friendly helper.
-# Class tab
-# @description
-# @param tabs Dataframes, possible of class single_tab,
-# to be joined into a list of tables.
-# @param args Arguments of functions \code{\link{tab}} and
-# \code{\link{tab_multi}} used when printing the tables with \code{\link{tab_xl}}.
-# @param pvalue_Chi2 A tibble storing information about pvalues, unweighted
-# counts, and variances of all the tabs in the list.
-# #' @param result_var The name of variables to use to reconstite the tables from
-# wtable with \code{\link{tab_draw}}.
-# @param wtable A unique \code{\link[tibble]{tibble}} dataframe with all data
-# necessary to draw the list of tabs.
+
+
+
+
+
+
+
+
+# Tests -----
+# new_tab() %>% get_chi2()
+# new_tab() %>% get_total_table()
+# new_tab() %>% get_subtext()
+
+# vec_ptype2(new_tab(), new_tab()) %>% attributes()
 #
-# @return A list of tables. Objects of class \code{\link{tab}} are printed
-# with an adapted method.
-# @export
-# tab <- function(tabs = list(), args = list(), pvalue_Chi2 = tibble::tibble(), result_var = character(), wtable = tibble::tibble()) {
-#   tabs <- vctrs::vec_cast(tabs, list()) #take anything coercible as a list
-#   #tabs %<>% purrr::map(~ single_tab(.)) #Lose unofficial attributes ?
-#   wtable <- tibble::as_tibble(wtable) #vctrs::vec_recycle(vctrs::vec_cast(wtable, tibble::tibble()))
-#   pvalue_Chi2 <- tibble::as_tibble(pvalue_Chi2)
-#   result_var <- vctrs::vec_cast(result_var, character())
-#   args <- vctrs::vec_cast(args, list())
-#   new_tab(tabs, args = args, pvalue_Chi2 = pvalue_Chi2,  result_var = result_var, wtable = wtable)
-# }
-
-
-
-
-
-
-
-
-
-
-
-#' @param x The object to test.
-#'
-#' @describeIn tab A test function for class tab (list of tables)
-#' @export
-is_tab <- function(x) {
-  inherits(x, "tab")
-}
-
-#' @keywords internal
-new_tab <- function(tabs = list(),
-                     args = list(),
-                     pvalue_Chi2 = tibble::tibble(),
-                     result_var = character(),
-                     wtable = tibble::tibble()      ) {
-  if ("tab" %in% class(tabs)) {
-    tabs <- vctrs::vec_data(tabs)
-  } else {
-    tabs <- vctrs::vec_assert(tabs, list()) #check type or size
-  }
-
-  args <- vctrs::vec_assert(args, list())
-  #purrr::map(tabs, ~ vctrs::vec_assert(., ptype = single_tab()) ) #don't work
-  #if ( !all(purrr::map_lgl(tabs, ~ is_single_tab(.))) ) stop("all elements in the list must be of class single_tab")
-  if ( !tibble::is_tibble(wtable)) stop("the wtable (data frame necessary to make the tabs) must be a tibble")
-  if ( !tibble::is_tibble(pvalue_Chi2)) stop("data frame with pvalues and variances must be a tibble")
-  result_var <- vctrs::vec_assert(result_var, character())
-  #vctrs::vec_assert(wtable, ptype = tibble::tibble()) #check type or size
-  #vctrs::vec_assert(digits, ptype = integer(), size = 1)
-  vctrs::new_vctr(tabs, args = args, pvalue_Chi2 = pvalue_Chi2,
-                  result_var = result_var, wtable = wtable,
-                  class = "tab", inherit_base_type = TRUE)
-}
-
-
-
-#' Print method for class tab
-#'
-#' @param x A tab object
-#' @param ... Arguments passed to print.default
-#'
-#' @return The printed list of tables, preceded by a pvalue_Chi2 summary.
-#' @export
-#'
-# @examples
-print.tab <- function(x, ...) {
-  cat("\n")
-  purrr::pluck(x, purrr::attr_getter("pvalue_Chi2")) %>% pillar::colonnade(has_row_id = FALSE) %>% print()
-  cat("\n")
-  x <- `attributes<-`(x, list("names" = purrr::pluck(x, purrr::attr_getter("names"))))
-  print.default(x, ...)
-}
-# sloop::s3_dispatch(print(tabs))
-# sloop::s3_get_method(print.default)
-
-#tab(tabs, wtable)
-# single_tab()
-# purrr::map(tabs, ~class(.))
-
-# class(tabs)
-# class(wtable)
-# class(tibble::tibble())
-
-
-
-
-
-
-#Create class tab_df -------------------------------------------------------
-
-# The helper to the function is the former tab_df function
-# Class tab_df
-# @description
-# @param wtable A unique \code{\link[tibble]{tibble}} dataframe with all data
-# necessary to draw the list of tabs.
-# @param perc The type of percentages to calculate.
-# @param col_var_sort The variable to use to sort the single tabs.
+# vec_rbind(red, red)
+# vec_rbind(green, green)
+# vec_rbind(green, red)
 #
-# @return A dataframe.
-# @export
-# tab_df__CLASS <- function(wtable = tibble::tibble(),
-#                     perc = c("no", "row", "col", "all", "all_tabs"),
-#                     wt = character(),
-#                     col_var_sort = list("no"),
-#                     data = tibble()) {
-#   wtable <- tibble::as_tibble(wtable)
-#   perc <- vctrs::vec_cast(perc[1], character())
-#   wt <- vctrs::vec_cast(perc[1], character())
-#   col_var_sort <- vctrs::vec_cast(col_var_sort, list())
-#   data <- tibble::as_tibble(data)
-#   new_tab_df(wtable = wtable, perc = perc, wt = wt, col_var_sort = col_var_sort,
-#                data = data)
+# vec_rbind(red, tibble::tibble(x = 10:12))
+# vec_rbind(red, data.frame(x = 10:12))
+
+
+
+# vctrs documentation --------------------------------------------------------------------
+
+# howto-faq-coercion-data-frame
+# FAQ - How to implement ptype2 and cast methods? (Data frames)
+# Description
+# This guide provides a practical recipe for implementing vec_ptype2() and vec_cast() methods
+# for coercions of data frame subclasses. Related topics:
+#   • For an overview of the coercion mechanism in vctrs, see ?theory-faq-coercion.
+# • For an example of implementing coercion methods for simple vectors, see ?howto-faq-coercion.
+# Coercion of data frames occurs when different data frame classes are combined in some way. The
+# two main methods of combination are currently row-binding with vec_rbind() and col-binding
+# with vec_cbind() (which are in turn used by a number of dplyr and tidyr functions). These functions
+# take multiple data frame inputs and automatically coerce them to their common type.
+# vctrs is generally strict about the kind of automatic coercions that are performed when combining
+# inputs. In the case of data frames we have decided to be a bit less strict for convenience. Instead of
+# throwing an incompatible type error, we fall back to a base data frame or a tibble if we don’t know
+# how to combine two data frame subclasses. It is still a good idea to specify the proper coercion
+# behaviour for your data frame subclasses as soon as possible.
+# We will see two examples in this guide. The first example is about a data frame subclass that has
+# no particular attributes to manage. In the second example, we implement coercion methods for a
+# tibble subclass that includes potentially incompatible attributes.
+
+# Roxygen workflow:
+#   To implement methods for generics, first import the generics in your namespace and redocument:
+#   #' @importFrom vctrs vec_ptype2 vec_cast
+#   NULL
+# Note that for each batches of methods that you add to your package, you need to export the
+# methods and redocument immediately, even during development. Otherwise they won’t be in
+# scope when you run unit tests e.g. with testthat.
+# Implementing double dispatch methods is very similar to implementing regular S3 methods. In
+# these examples we are using roxygen2 tags to register the methods, but you can also register the
+# methods manually in your NAMESPACE file or lazily with s3_register().
+
+# Parent methods:
+#   Most of the common type determination should be performed by the parent class. In vctrs, double
+# dispatch is implemented in such a way that you need to call the methods for the parent class manually.
+# For vec_ptype2() this means you need to call df_ptype2() (for data frame subclasses) or
+# tib_ptype2() (for tibble subclasses). Similarly, df_cast() and tib_cast() are the workhorses
+# for vec_cast() methods of subtypes of data.frame and tbl_df. These functions take the union
+# of the columns in x and y, and ensure shared columns have the same type.
+# These functions are much less strict than vec_ptype2() and vec_cast() as they accept any
+# subclass of data frame as input. They always return a data.frame or a tbl_df. You will probably
+# want to write similar functions for your subclass to avoid repetition in your code. You may want
+# to export them as well if you are expecting other people to derive from your class.
+
+# A data.table example:
+# […]
+
+# #A tibble example:
+# #  In this example we implement coercion methods for a tibble subclass that carries a colour as a
+# #scalar metadata:
+#
+#   # User constructor
+#   my_tibble <- function(colour = NULL, ...) {
+#     new_my_tibble(tibble::tibble(...), colour = colour)
+#   }
+# # Developer constructor
+# new_my_tibble <- function(x, colour = NULL) {
+#   stopifnot(is.data.frame(x))
+#   tibble::new_tibble(
+#     x,
+#     colour = colour,
+#     class = "my_tibble",
+#     nrow = nrow(x)
+#   )
 # }
-
-
-#' @param x The object to test.
-#'
-#' @describeIn tab_df A test function for class tab_df (dataframe for multiple tables)
-#' @export
-is_tab_df <- function(x) {
-  inherits(x, "tab_df")
-}
-
-#' @keywords internal
-new_tab_df <- function(wtable = tibble::tibble(),
-                        perc = c("no", "row", "col", "all", "all_tabs"),
-                        wt = character(),
-                        col_var_sort = list("no"),
-                        data = tibble()) {
-  if ( !tibble::is_tibble(wtable)) {
-    stop("the wtable (data frame necessary to make the tabs) must be a tibble")
-  }
-  if (!perc[1] %in% c("no", "row", "col", "all", "all_tabs")) {
-    stop("perc must be 'no', 'row', 'col', 'all' or 'all_tabs'")
-  }
-  wt <- vctrs::vec_assert(wt, character())
-  col_var_sort <- vctrs::vec_assert(col_var_sort, list())
-  if ( !tibble::is_tibble(data)) {
-    stop("the original input data frame must be a tibble")
-  }
-  tibble::new_tibble(wtable, nrow = nrow(wtable), class = "tab_df", perc = perc,
-                     wt = wt,
-                     col_var_sort = col_var_sort,
-                     data = data)
-}
-
-
-
-#' Print method for class tab_df
-#'
-#' @param x A tab_df object
-#' @param ... Arguments passed to print.default
-#'
-#' @return The printed table dataframe.
-#' @export
-print.tab_df <- function(x, ...) {
-  if (nrow(x) > 0 & ncol(x) > 0) {
-    out <- x
-    cli::cat_line(format(pillar::colonnade(out))) #Less formatting but no "A tibble::tibble" introduction
-  } else {
-    cli::cat_line("# A tab_df: 0 x 0", col = "grey")
-  }
-}
-
-# print.tab_df <- function(x, ...) {
-#   x <-
-#     `attributes<-`(x, list("names" = purrr::pluck(x, purrr::attr_getter("names"))))
-#   print.default(x, ...)
+# df_colour <- function(x) {
+#   if (inherits(x, "my_tibble")) {
+#     attr(x, "colour")
+#   } else {
+#     NULL
+#   }
 # }
-
-
+# #'@export
+# print.my_tibble <- function(x, ...) {
+#   cat(sprintf("<%s: %s>\n", class(x)[[1]], df_colour(x)))
+#   cli::cat_line(format(x)[-1])
+# }
+# #This subclass is very simple. All it does is modify the header.
+# red <- my_tibble("red", x = 1, y = 1:2)
+# red
+# #> <my_tibble: red>
+# #> x y
+# #> <dbl> <int>
+# #> 1 1 1
+# #> 2 1 2
+# red[2]
+# #> <my_tibble: red>
+# #> y
+# #> <int>
+# #> 1 1
+# #> 2 2
+# green <- my_tibble("green", z = TRUE)
+# green
+# #> <my_tibble: green>
+# #> z
+#
+# #> <lgl>
+# #> 1 TRUE
+# #Combinations do not work properly out of the box, instead vctrs falls back to a bare tibble:
+#   vec_rbind(red, tibble::tibble(x = 10:12))
+# #> # A tibble: 5 x 2
+# #> x y
+# #> <dbl> <int>
+# #> 1 1 1
+# #> 2 1 2
+# #> 3 10 NA
+# #> 4 11 NA
+# #> 5 12 NA
+# # Instead of falling back to a data frame, we would like to return a <my_tibble> when combined
+# # with a data frame or a tibble. Because this subclass has more metadata than normal data frames
+# # (it has a colour), it is a supertype of tibble and data frame, i.e. it is the richer type. This is similar
+# # to how a grouped tibble is a more general type than a tibble or a data frame. Conceptually, the
+# # latter are pinned to a single constant group.

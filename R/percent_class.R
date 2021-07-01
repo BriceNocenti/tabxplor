@@ -1,4 +1,4 @@
-# # Create percent class (https://vctrs.r-lib.org/articles/pillar.html)-----------
+ # Create percent class (https://vctrs.r-lib.org/articles/pillar.html)-----------
 #
 # # Rename class tablr_percent ? -------------------------------------------------
 # # Create class numtab / numt, with a "type" attribute to print like pct ? ------
