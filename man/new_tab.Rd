@@ -2,31 +2,29 @@
 % Please edit documentation in R/tablr_classes.R
 \name{new_tab}
 \alias{new_tab}
-\title{Class tab}
+\title{A construction for class tab}
 \usage{
 new_tab(
   tabs = tibble::tibble(),
-  chi2 = tibble::tibble(pvalue = double(), var = double(), count = integer()),
-  total_table = FALSE,
   subtext = "",
-  ...
+  chi2 = tibble::tibble(tables = character(), pvalue = double(), df = integer(),
+    variance = double(), count = integer()),
+  ...,
+  class = character()
 )
 }
 \arguments{
 \item{tabs}{A table, stored into a \code{\link[tibble]{tibble}} data.frame.
 It is generally made with \code{\link{tab}} or \code{\link{tab_multi}}.}
 
-\item{chi2}{A tibble storing information about pvalues and variances.}
-
-\item{total_table}{TRUE when it is the total table of a \code{\link{tab}}
-(list of tables).}
-
 \item{subtext}{A character vector to print legend lines under the table
 with \code{\link{tab_xl}}}
+
+\item{chi2}{A tibble storing information about pvalues and variances.}
 }
 \value{
 A table of class tab.
 }
 \description{
-Class tab
+A construction for class tab
 }

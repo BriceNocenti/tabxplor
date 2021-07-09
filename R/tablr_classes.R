@@ -1,3 +1,12 @@
+# Special tibble class needed for printing, even if the most meaningful attributes
+#  where passed to fmt class variables (only chi2 and subtext remains at tab level) :
+#  my implementation relies on "grouped_df" class structure, and to manage it, it is
+#  necessary to add one method for class "grouped_tab" for each dplyr function...
+#  (Thank to Giulia Pais, Davis Vaughan and Hadley Wickham,
+#   https://github.com/tidyverse/dplyr/issues/5480).
+
+# grouped_tab class still don’t handle [] ----
+
 # Create class tab -----------------------------------------------------------------------
 # sloop::s3_methods_class("tbl")
 # sloop::s3_get_method(print.tbl)
@@ -15,13 +24,11 @@
 # sloop::s3_methods_class("single_tab")
 
 
-#' Class tab
+#' A construction for class tab
 #'
 #' @param tabs A table, stored into a \code{\link[tibble]{tibble}} data.frame.
 #' It is generally made with \code{\link{tab}} or \code{\link{tab_multi}}.
 #' @param chi2 A tibble storing information about pvalues and variances.
-#' @param total_table TRUE when it is the total table of a \code{\link{tab}}
-#' (list of tables).
 #' @param subtext A character vector to print legend lines under the table
 #' with \code{\link{tab_xl}}
 #'
@@ -30,33 +37,38 @@
 #  @examples
 new_tab <-
   function(tabs = tibble::tibble(), subtext = "",
-           chi2 = tibble::tibble(pvalue = double(),
-                                 var    = double(),
-                                 count  = integer()),
-           ...) {
+           chi2 = tibble::tibble(tables   = character(),
+                                 pvalue   = double()   ,
+                                 df       = integer()  ,
+                                 variance = double()   ,
+                                 count    = integer()   ),
+           ..., class = character()) {
     stopifnot(is.data.frame(tabs))
     vec_assert(subtext    , character())
-    #vec_recycle(vec_cast(nrow, integer()), size = 1)
-    # stopifnot(is.data.frame(chi2))
-    vec_assert(chi2, tibble::tibble(pvalue = double(),
-                                    var    = double(),
-                                    count  = integer()) )
-    # vec_assert(chi2$pvalue, double())
-    # vec_assert(chi2$var   , double())
-    # vec_assert(chi2$count , integer())
 
-    tibble::new_tibble(tabs, subtext = subtext, chi2 = chi2,
-                       nrow = nrow(tabs), class = "tab", ...) #... ?
+    tibble::new_tibble(tabs, subtext = subtext, chi2 = chi2, ...,
+                       nrow = nrow(tabs), class = c(class, "tab")) #... ?
   }
-# tab <-
-#   function(tabs = tibble::tibble(), chi2 = tibble::tibble(),
-#            subtext = "") {
-#     tabs <- tibble::as_tibble(tabs)
-#     chi2 <- tibble::as_tibble(chi2)
-#     subtext <- as.character(subtext)
-#     new_tab(tabs, nrow = nrow(tabs), perc = perc, chi2 = chi2,
-#                     total_table = total_table, subtext = subtext)
-#   }
+
+#' @export
+new_grouped_tab <-
+  function(tabs = tibble::tibble(), groups,
+           subtext = "",
+           chi2 = tibble::tibble(tables   = character(),
+                                 pvalue   = double()   ,
+                                 df       = integer()  ,
+                                 variance = double()   ,
+                                 count    = integer()   ),
+           ..., class = character()) {
+    if (missing(groups)) groups <- attr(tabs, "groups")
+    class <- c(class, c("grouped_tab", "grouped_df"))
+
+    new_tab(tabs, groups = groups,
+            subtext = subtext, chi2 = chi2,
+            ...,
+            class = class)
+  }
+
 
 # Functions to work with class tab -------------------------------------------------------
 
@@ -89,58 +101,66 @@ get_chi2    <- purrr::attr_getter("chi2")
 
 
 
-
-
 #Methods for class tab -------------------------------------------------------------------
 
-#' Print method for class tab
-#'
-#' @param x An object of class tab.
-#' @param ... Arguments passed to print.default
-#' @return The printed single table.
 #' @export
 print.tab <- function(x, ...) {
-  # cat(sprintf("<%s: %s>\n", class(x)[[1]], df_colour(x)))
-  # cli::cat_line(format(x)[-1])
-
-  #cli::cat_line(format(x, ..., n = 30, width = 500)) #Can be use to color bg and text
-
-  if (nrow(x) > 0 & ncol(x) > 0) {
-    out <- x
-    if (class(dplyr::pull(x, 1)) %in% c("factor", "character")) {
-      # #First column must be same length for all tabs
-      # # (for that must be a factor with the levels of all the other tables)
-      # out <- dplyr::mutate_at(x, dplyr::vars(1), ~ as.factor(.))
-      # max_length_all <- dplyr::pull(out, 1) %>% levels() %>% stringr::str_length() %>% max(na.rm = TRUE)
-      # if (dplyr::pull(out, 1) %>% stringr::str_length() %>% max(na.rm = TRUE) < max_length_all) {
-      #   out <- dplyr::mutate_at(out, dplyr::vars(1), ~ `levels<-`(., stringr::str_pad(levels(.), max_length_all - 2, "right")))
-      # }
-      #Truncate first column if too long
-      if (dplyr::pull(out, 1) %>% stringr::str_length() %>% max(na.rm = TRUE) > 30) {
-        out <-
-          dplyr::mutate_at(out, dplyr::vars(1), ~ `levels<-`(., dplyr::if_else(stringr::str_length(levels(.)) > 30,
-                                                                               stringr::str_trunc(levels(.), 30),
-                                                                               levels(.) )))
-      }
-    }
-    #Truncate columns names if too long
-    if (any(stringr::str_length(colnames(out)) > 15) ) {
-      out <- magrittr::set_colnames(out, dplyr::if_else(stringr::str_length(colnames(out)) > 15,
-                                                        stringr::str_trunc(colnames(out), 15),
-                                                        colnames(out) ) )
-    }
-    cli::cat_line(format(pillar::colonnade(out, width = 500))) #Less formatting but no "A tibble::tibble" introduction
-  } else {
-    cli::cat_line("# A tab: 0 x 0", col = "grey")
-  }
-
-  #invisible(x)
+  cli::cat_line(format(x, ..., n = 300)) #width = 500
 }
+
+#' @export
+print.grouped_tab <- function(x, ...) {
+  cli::cat_line(format(x, ..., n = 300)) #width = 500
+}
+
+# #' Print method for class tab
+# #'
+# #' @param x An object of class tab.
+# #' @param ... Arguments passed to print.default
+# #' @return The printed single table.
+# #' @export
+# print.tab <- function(x, ...) {
+#   # cat(sprintf("<%s: %s>\n", class(x)[[1]], df_colour(x)))
+#   # cli::cat_line(format(x)[-1])
+#
+#   #cli::cat_line(format(x, ..., n = 30, width = 500)) #Can be use to color bg and text
+#
+#   if (nrow(x) > 0 & ncol(x) > 0) {
+#     out <- x
+#     if (class(dplyr::pull(x, 1)) %in% c("factor", "character")) {
+#       # #First column must be same length for all tabs
+#       # # (for that must be a factor with the levels of all the other tables)
+#       # out <- dplyr::mutate_at(x, dplyr::vars(1), ~ as.factor(.))
+#       # max_length_all <- dplyr::pull(out, 1) %>% levels() %>% stringr::str_length() %>% max(na.rm = TRUE)
+#       # if (dplyr::pull(out, 1) %>% stringr::str_length() %>% max(na.rm = TRUE) < max_length_all) {
+#       #   out <- dplyr::mutate_at(out, dplyr::vars(1), ~ `levels<-`(., stringr::str_pad(levels(.), max_length_all - 2, "right")))
+#       # }
+#       #Truncate first column if too long
+#       if (dplyr::pull(out, 1) %>% stringr::str_length() %>% max(na.rm = TRUE) > 30) {
+#         out <-
+#           dplyr::mutate_at(out, dplyr::vars(1), ~ `levels<-`(., dplyr::if_else(stringr::str_length(levels(.)) > 30,
+#                                                                                stringr::str_trunc(levels(.), 30),
+#                                                                                levels(.) )))
+#       }
+#     }
+#     #Truncate columns names if too long
+#     if (any(stringr::str_length(colnames(out)) > 15) ) {
+#       out <- magrittr::set_colnames(out, dplyr::if_else(stringr::str_length(colnames(out)) > 15,
+#                                                         stringr::str_trunc(colnames(out), 15),
+#                                                         colnames(out) ) )
+#     }
+#     cli::cat_line(format(pillar::colonnade(out, width = 500))) #Less formatting but no "A tibble::tibble" introduction
+#   } else {
+#     cli::cat_line("# A tab: 0 x 0", col = "grey")
+#   }
+#
+#   #invisible(x)
+# }
 
 #Two possibility : by rows ; by cols ???
 #Two type vectors : columns and rows
 
-#Put informations on fmtn on printing ?
+#Put informations on fmt on printing ?
 #tabs %>% dplyr::group_indices()
 
 
@@ -160,6 +180,29 @@ print.tab <- function(x, ...) {
 #  }
 
 
+
+# If n_groups == 1, then go back to new_tab ----
+
+
+#' @importFrom dplyr group_by
+#' @method group_by tab
+#' @export
+group_by.tab <- function(.data,
+                         ...,
+                         .add = FALSE,
+                         .drop = group_by_drop_default(.data)) {
+  out <- NextMethod()
+  groups <- dplyr::group_data(out)
+  new_grouped_tab(out, groups,
+                  subtext = get_subtext(.data), chi2 = get_chi2(.data))
+}
+
+#' @importFrom dplyr ungroup
+#' @method ungroup grouped_tab
+#' @export
+
+
+
 # (from vctrs documentation)
 # The coercion methods for data frames operate in two steps:
 #   • They check for compatible subclass attributes. In our case the tibble colour has to be the
@@ -175,7 +218,7 @@ tab_cast <- function(x, to, ..., x_arg = "", to_arg = "") {
   if (length(subtext) > 1) subtext <- subtext[subtext != ""]
   chi2        <- vec_rbind(get_chi2(x), get_chi2(to))
 
-  new_tab(out, subtext = subtext, chi2 = chi2,)
+  new_tab(out, subtext = subtext, chi2 = chi2)
 }
 
 #' @export
@@ -201,8 +244,8 @@ vec_cast.tab.tab <- function(x, to, ...) {
   tab_cast(x, to, ...)
 }
 
-# The methods for combining our class with tibbles follow the same pattern. For ptype2 we return
-# our class in both cases because it is the richer type:
+# The methods for combining our class with tibbles follow the same pattern.
+# For ptype2 we return our class in both cases because it is the richer type
 #' @export
 vec_ptype2.tab.tbl_df <- function(x, y, ...) {
   tab_ptype2(x, y, ...)
@@ -240,7 +283,293 @@ vec_cast.data.frame.tab <- function(x, to, ...) {
 
 
 
+#Methods for class grouped_tab------------------------------------------------------------
+ungroup.grouped_tab <- function (x, ...)
+{
+  if (missing(...)) {
+    new_tab(x, subtext = get_subtext(x), chi2 = get_chi2(x))
+  }
+  else {
+    old_groups <- dplyr::group_vars(x)
+    to_remove <- tidyselect::vars_select(names(x), ...)
+    new_groups <- setdiff(old_groups, to_remove)
+    dplyr::group_by(x, !!!syms(new_groups))
+  }
+}
 
+lv1_group_vars <- function(tabs) {
+  groupvars <- dplyr::group_vars(tabs)
+  all(purrr::map_lgl(groupvars,
+                 ~ nlevels(forcats::fct_drop(dplyr::pull(tabs, .))) == 1)) |
+    length(groupvars) == 0
+}
+
+#' @importFrom dplyr mutate
+#' @method mutate grouped_tab
+#' @export
+mutate.grouped_tab <- function(.data, ...) {
+  out <- NextMethod()
+  groups <- dplyr::group_data(out)
+  if (lv1_group_vars(out)) {
+    new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+  } else {
+    new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+  }
+
+}
+
+
+
+
+#' @importFrom dplyr transmute
+#' @method transmute grouped_tab
+#' @export
+transmute.grouped_tab <- function(.data, ...) {
+  out <- NextMethod()
+  groups <- dplyr::group_data(out)
+  if (lv1_group_vars(out)) {
+    new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+  } else {
+    new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+  }
+}
+
+#' @importFrom dplyr summarise
+#' @method summarise grouped_tab
+#' @export
+summarise.grouped_tab <- function(.data, ..., .groups = NULL) {
+  out <- NextMethod()
+  groups <- dplyr::group_data(out)
+  if (lv1_group_vars(out)) {
+    new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+  } else {
+    new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+  }
+}
+
+#' @importFrom dplyr filter
+#' @method filter grouped_tab
+#' @export
+filter.grouped_tab <- function(.data, ..., .preserve = FALSE) {
+  out <- NextMethod()
+  groups <- dplyr::group_data(out)
+  if (lv1_group_vars(out)) {
+    new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+  } else {
+    new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+  }
+}
+
+# slice not working with grouped_tab ----
+#' @importFrom dplyr slice
+#' @method slice grouped_tab
+#' @export
+slice.grouped_tab <- function(.data, ..., .preserve = FALSE) {
+  out <- NextMethod()
+  groups <- dplyr::group_data(out)
+  if (lv1_group_vars(out)) {
+    new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+  } else {
+    new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+  }
+}
+
+#' @importFrom dplyr arrange
+#' @method arrange grouped_tab
+#' @export
+arrange.grouped_tab <- function(.data, ..., .by_group = FALSE) {
+  out <- NextMethod()
+  groups <- dplyr::group_data(out)
+  if (lv1_group_vars(out)) {
+    new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+  } else {
+    new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+  }
+}
+
+#' @importFrom dplyr select
+#' @method select grouped_tab
+#' @export
+select.grouped_tab <- function(.data, ...) {
+  out <- NextMethod()
+  groups <- dplyr::group_data(out)
+  if (lv1_group_vars(out)) {
+    new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+  } else {
+    new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+  }
+}
+
+#' @importFrom dplyr relocate
+#' @method relocate grouped_tab
+#' @export
+relocate.grouped_tab <- function(.data, ..., .before = NULL, .after = NULL) {
+  out <- NextMethod()
+  groups <- dplyr::group_data(out)
+  if (lv1_group_vars(out)) {
+    new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+  } else {
+    new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+  }
+}
+
+#' @importFrom dplyr rename
+#' @method rename grouped_tab
+#' @export
+rename.grouped_tab <- function(.data, ...) {
+  out <- NextMethod()
+  groups <- dplyr::group_data(out)
+  if (lv1_group_vars(out)) {
+    new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+  } else {
+    new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+  }
+}
+
+#' @importFrom dplyr rename_with
+#' @method rename_with grouped_tab
+#' @export
+rename_with.grouped_tab <- function(.data, .fn, .cols = everything(), ...) {
+  out <- NextMethod()
+  groups <- dplyr::group_data(out)
+  if (lv1_group_vars(out)) {
+    new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+  } else {
+    new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+  }
+}
+
+#' @importFrom dplyr distinct
+#' @method distinct grouped_tab
+#' @export
+distinct.grouped_tab <- function(.data, ...,  .keep_all = FALSE) {
+  out <- NextMethod()
+  groups <- dplyr::group_data(out)
+  if (lv1_group_vars(out)) {
+    new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+  } else {
+    new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+  }
+}
+
+
+
+
+
+
+
+
+#' @export
+gtab_cast <- function(x, to, ..., x_arg = "", to_arg = "") {
+  #based upon vctrs:::gdf_cast()
+  df <- df_cast(x, to, ..., x_arg = x_arg, to_arg = to_arg)
+  vars <- dplyr::group_vars(to)
+  drop <- dplyr::group_by_drop_default(to)
+  gdf <- dplyr::grouped_df(df, vars, drop = drop)
+
+  groups <- dplyr::group_data(gdf)
+  new_grouped_tab(gdf, groups, subtext = get_subtext(to), chi2 = get_chi2(to))
+}
+
+#' @export
+gtab_ptype2 <- function(x, y, ..., x_arg = "", y_arg = "") {
+  #based upon vctrs:::gdf_ptype2
+  common <- df_ptype2(x, y, ..., x_arg = x_arg, y_arg = y_arg)
+  x_vars <- dplyr::group_vars(x)
+  y_vars <- dplyr::group_vars(y)
+  vars <- union(x_vars, y_vars)
+  drop <- dplyr::group_by_drop_default(x) && dplyr::group_by_drop_default(y)
+  gdf <-  dplyr::grouped_df(common, vars, drop = drop)
+
+  groups <- dplyr::group_data(gdf)
+  new_grouped_tab(gdf, groups, subtext = get_subtext(x), chi2 = get_chi2(x))
+  }
+
+#Self-self
+#' @export
+vec_ptype2.grouped_tab.grouped_tab <- function(x, y, ...) {
+  gtab_ptype2(x, y, ...)
+}
+#' @export
+vec_cast.grouped_tab.grouped_tab <- function(x, to, ...) {
+  gtab_cast(x, to, ...)
+}
+
+#grouped_tab / grouped_df
+#' @export
+vec_ptype2.grouped_tab.grouped_df <- function(x, y, ...) {
+  gtab_ptype2(x, y, ...)
+}
+#' @export
+vec_ptype2.grouped_df.grouped_tab <- function(x, y, ...) {
+  gtab_ptype2(x, y, ...)
+}
+#' @export
+vec_cast.grouped_tab.grouped_df <- function(x, to, ...) {
+  gtab_cast(x, to, ...)
+}
+#' @export
+vec_cast.grouped_df.grouped_tab <- function(x, to, ...) {
+  #vctrs:::gdf_cast
+  df <- df_cast(x, to, ...)
+  vars <- dplyr::group_vars(to)
+  drop <- dplyr::group_by_drop_default(to)
+  dplyr::grouped_df(df, vars, drop = drop)
+}
+
+#grouped_tab / tab
+#' @export
+vec_ptype2.grouped_tab.tab <- function(x, y, ...) {
+  gtab_ptype2(x, y, ...)
+}
+#' @export
+vec_ptype2.tab.grouped_tab <- function(x, y, ...) {
+  gtab_ptype2(x, y, ...)
+}
+#' @export
+vec_cast.grouped_tab.tab <- function(x, to, ...) {
+  gtab_cast(x, to, ...)
+}
+#' @export
+vec_cast.tab.grouped_tab <- function(x, to, ...) {
+  tab_cast(x, to, ...)
+}
+
+#grouped_tab / tbl_df
+#' @export
+vec_ptype2.grouped_tab.tbl_df <- function(x, y, ...) {
+  gtab_ptype2(x, y, ...)
+}
+#' @export
+vec_ptype2.tbl_df.grouped_tab <- function(x, y, ...) {
+  gtab_ptype2(x, y, ...)
+}
+#' @export
+vec_cast.grouped_tab.tbl_df <- function(x, to, ...) {
+  gtab_cast(x, to, ...)
+}
+#' @export
+vec_cast.tbl_df.grouped_tab <- function(x, to, ...) {
+  tib_cast(x, to, ...)
+}
+
+#grouped_tab / data.frame
+#' @export
+vec_ptype2.grouped_tab.data.frame <- function(x, y, ...) {
+  gtab_ptype2(x, y, ...)
+}
+#' @export
+vec_ptype2.data.frame.grouped_tab <- function(x, y, ...) {
+  gtab_ptype2(x, y, ...)
+}
+#' @export
+vec_cast.grouped_tab.data.frame <- function(x, to, ...) {
+  gtab_cast(x, to, ...)
+}
+#' @export
+vec_cast.data.frame.grouped_tab <- function(x, to, ...) {
+  df_cast(x, to, ...)
+}
 
 
 

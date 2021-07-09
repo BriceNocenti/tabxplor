@@ -6,8 +6,8 @@
 \usage{
 tab_prepare(
   data,
-  var1,
-  var2,
+  row_var,
+  col_var,
   ...,
   show_na = TRUE,
   cleannames = TRUE,
@@ -18,7 +18,7 @@ tab_prepare(
 \arguments{
 \item{data}{A dataframe.}
 
-\item{var1, var2, var3}{Variables must be the same that will then pass in
+\item{row_var, col_var, tab_vars}{Variables must be the same that will then pass in
 \code{\link{tab_df}}.}
 
 \item{show_na}{When \code{TRUE}, \code{NA} values are replaced by explicit

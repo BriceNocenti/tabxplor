@@ -358,85 +358,85 @@
 #
 #
 #
-#     # Put Chi2 table in function
-#     count_text <- stringi::stri_unescape_unicode("Individus enqu\\u00eat\\u00e9s")
-#     Chi2_text  <- stringi::stri_unescape_unicode("Prob. du Chi\\u00b2")
+# # Put Chi2 table in function
+# count_text <- stringi::stri_unescape_unicode("Individus enqu\\u00eat\\u00e9s")
+# Chi2_text  <- stringi::stri_unescape_unicode("Prob. du Chi\\u00b2")
 #
-#     general_title <- dplyr::case_when(
-#       ! stringr::str_detect(rlang::quo_name(var1), "^no_var" ) &
-#         ! stringr::str_detect(rlang::quo_name(var2), "^no_var" )
-#       ~ stringr::str_c(rlang::quo_name(var1), " par ", rlang::quo_name(var2) ),
+# general_title <- dplyr::case_when(
+#   ! stringr::str_detect(rlang::quo_name(var1), "^no_var" ) &
+#     ! stringr::str_detect(rlang::quo_name(var2), "^no_var" )
+#   ~ stringr::str_c(rlang::quo_name(var1), " par ", rlang::quo_name(var2) ),
 #
-#       stringr::str_detect(rlang::quo_name(var1), "^no_var" )
-#       ~ rlang::quo_name(var2),
+#   stringr::str_detect(rlang::quo_name(var1), "^no_var" )
+#   ~ rlang::quo_name(var2),
 #
-#       stringr::str_detect(rlang::quo_name(var2), "^no_var" )
-#       ~ rlang::quo_name(var1)    )
+#   stringr::str_detect(rlang::quo_name(var2), "^no_var" )
+#   ~ rlang::quo_name(var1)    )
 #
-#     if (accelerate == FALSE) {
-#       #if (multicols == FALSE & multirows == FALSE) {
-#
-#
-#       #Chi2 test (remove cols or lines with just zeros) :
-#       if (no_var2 == FALSE & no_var1 == FALSE) {
-#         pvalue <- wtable %>%
-#           tab_draw(n, row_var = !!var1, col_var = !!var2, tab_var = !!var3,
-#                   tot = "no", totaltab = stringr::str_replace(totaltab, "line", "no"),
-#                   keep_unused_levels = keep_unused_levels) %>% #, col_var_sort = col_var_sort
-#           purrr::map(~ dplyr::mutate(., dplyr::across(where(is.numeric), as.double)) %>%
-#                        tibble::column_to_rownames(rlang::quo_name(var1)) %>%
-#                        dplyr::select_if(colSums(.) != 0) %>%
-#                        dplyr::filter(rowSums(.) != 0)  ) %>%
-#           purrr::map(purrr::possibly(purrr::quietly(~ stats::chisq.test(.)),
-#                                      tibble::tibble(warnings = "", result = tibble::tibble(p.value = NA_real_)) ) )
-#         pvalue_warning <- pvalue %>% purrr::map(~ .$warnings) %>%
-#           purrr::map_if(purrr::map_lgl(., ~ length(.) == 0), ~ "")
-#         pvalue <- pvalue %>%
-#           purrr::map(~ .$result) %>% purrr::map_dbl(~ .$p.value) %>%
-#           as_pct(digits = 6)
-#         if (no_var3 == FALSE & totaltab[1] == "line") {
-#           pvalue %<>% append(c("Ensemble" = pct(NA_real_)))
-#           pvalue_warning %<>% append("")
-#         }
-#
-#       } else { #If there is no var2
-#         pvalue <- purrr::map_int(1:length(tabs), ~ 0L) %>% as_pct()
-#         pvalue_warning <- purrr::map_chr(1:length(tabs), ~ "")
-#       }
-#
-#       pvalue_Chi2 <-
-#         dplyr::summarise(dplyr::group_by(wtable, !!var3),
-#                          !!count_text := dplyr::first(.tot3),
-#                          "Variance" = dplyr::first(Vnuage), .groups = "drop") %>%
-#         dplyr::mutate_at(3, ~ set_digits(., 5)) %>%
-#         tibble::add_column(!!Chi2_text := pvalue,
-#                            "warning" = pvalue_warning) %>%
-#         dplyr::rename_at(1, ~ "Tableaux")
-#       if (no_var3 == FALSE & totaltab[1] == "no") pvalue_Chi2 <-
-#         pvalue_Chi2[-nrow(pvalue_Chi2),]
-#       if (no_var3 == TRUE) pvalue_Chi2 %<>% dplyr::mutate_at(1, ~ general_title)
-#       pvalue_Chi2 %<>% dplyr::mutate_at(dplyr::vars(1), ~ dplyr::if_else(
-#         stringr::str_detect(warning, "incorrect"),
-#         stringr::str_c(., " (!)"),
-#         as.character(.))) %>%
-#         dplyr::select(-warning) #%>% dplyr::mutate_at(1, ~dplyr::if_else(`Prob. du Chi\\u00b2` > 0.5, crayon::red(.), crayon::green(.)))
+# if (accelerate == FALSE) {
+#   #if (multicols == FALSE & multirows == FALSE) {
 #
 #
-#     } else { # if (accelerate == TRUE)
-#       pvalue <- purrr::map_dbl(1:length(tabs), ~ NA_real_) %>% as_pct()
-#       pvalue_Chi2 <-
-#         dplyr::summarise(dplyr::group_by(wtable, !!var3),
-#                          !!count_text := as_decimal(NA_real_),
-#                          "Variance" = as_decimal(NA_real_), .groups = "drop") %>%
-#         dplyr::mutate_at(3, ~ set_digits(., 5))
-#
-#       if (no_var3 == FALSE & totaltab[1] == "no") pvalue_Chi2 <-
-#         pvalue_Chi2[-nrow(pvalue_Chi2),]
-#       pvalue_Chi2 %<>% tibble::add_column(!!Chi2_text := pvalue) %>%
-#         dplyr::rename_at(1, ~ "Tableaux")
-#       if (no_var3 == TRUE) pvalue_Chi2 %<>% dplyr::mutate_at(1, ~ general_title)
+#   #Chi2 test (remove cols or lines with just zeros) :
+#   if (no_var2 == FALSE & no_var1 == FALSE) {
+#     pvalue <- wtable %>%
+#       tab_draw(n, row_var = !!var1, col_var = !!var2, tab_var = !!var3,
+#               tot = "no", totaltab = stringr::str_replace(totaltab, "line", "no"),
+#               keep_unused_levels = keep_unused_levels) %>% #, col_var_sort = col_var_sort
+#       purrr::map(~ dplyr::mutate(., dplyr::across(where(is.numeric), as.double)) %>%
+#                    tibble::column_to_rownames(rlang::quo_name(var1)) %>%
+#                    dplyr::select_if(colSums(.) != 0) %>%
+#                    dplyr::filter(rowSums(.) != 0)  ) %>%
+#       purrr::map(purrr::possibly(purrr::quietly(~ stats::chisq.test(.)),
+#                                  tibble::tibble(warnings = "", result = tibble::tibble(p.value = NA_real_)) ) )
+#     pvalue_warning <- pvalue %>% purrr::map(~ .$warnings) %>%
+#       purrr::map_if(purrr::map_lgl(., ~ length(.) == 0), ~ "")
+#     pvalue <- pvalue %>%
+#       purrr::map(~ .$result) %>% purrr::map_dbl(~ .$p.value) %>%
+#       as_pct(digits = 6)
+#     if (no_var3 == FALSE & totaltab[1] == "line") {
+#       pvalue %<>% append(c("Ensemble" = pct(NA_real_)))
+#       pvalue_warning %<>% append("")
 #     }
 #
+#   } else { #If there is no var2
+#     pvalue <- purrr::map_int(1:length(tabs), ~ 0L) %>% as_pct()
+#     pvalue_warning <- purrr::map_chr(1:length(tabs), ~ "")
+#   }
+#
+#   pvalue_Chi2 <-
+#     dplyr::summarise(dplyr::group_by(wtable, !!var3),
+#                      !!count_text := dplyr::first(.tot3),
+#                      "Variance" = dplyr::first(Vnuage), .groups = "drop") %>%
+#     dplyr::mutate_at(3, ~ set_digits(., 5)) %>%
+#     tibble::add_column(!!Chi2_text := pvalue,
+#                        "warning" = pvalue_warning) %>%
+#     dplyr::rename_at(1, ~ "Tableaux")
+#   if (no_var3 == FALSE & totaltab[1] == "no") pvalue_Chi2 <-
+#     pvalue_Chi2[-nrow(pvalue_Chi2),]
+#   if (no_var3 == TRUE) pvalue_Chi2 %<>% dplyr::mutate_at(1, ~ general_title)
+#   pvalue_Chi2 %<>% dplyr::mutate_at(dplyr::vars(1), ~ dplyr::if_else(
+#     stringr::str_detect(warning, "incorrect"),
+#     stringr::str_c(., " (!)"),
+#     as.character(.))) %>%
+#     dplyr::select(-warning) #%>% dplyr::mutate_at(1, ~dplyr::if_else(`Prob. du Chi\\u00b2` > 0.5, crayon::red(.), crayon::green(.)))
+#
+#
+# } else { # if (accelerate == TRUE)
+#   pvalue <- purrr::map_dbl(1:length(tabs), ~ NA_real_) %>% as_pct()
+#   pvalue_Chi2 <-
+#     dplyr::summarise(dplyr::group_by(wtable, !!var3),
+#                      !!count_text := as_decimal(NA_real_),
+#                      "Variance" = as_decimal(NA_real_), .groups = "drop") %>%
+#     dplyr::mutate_at(3, ~ set_digits(., 5))
+#
+#   if (no_var3 == FALSE & totaltab[1] == "no") pvalue_Chi2 <-
+#     pvalue_Chi2[-nrow(pvalue_Chi2),]
+#   pvalue_Chi2 %<>% tibble::add_column(!!Chi2_text := pvalue) %>%
+#     dplyr::rename_at(1, ~ "Tableaux")
+#   if (no_var3 == TRUE) pvalue_Chi2 %<>% dplyr::mutate_at(1, ~ general_title)
+# }
+
 #     if (force_unique_table == TRUE & length(tabs) >= 2) { #Destroy class tab
 #       tabs <- tabs %>%
 #         purrr::map_if(1:length(.) != length(.),
