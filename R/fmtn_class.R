@@ -509,6 +509,9 @@ format.fmt <- function(x, ...) {
   # out[is.na(x)] <- NA
 }
 
+#print negative digits ----
+
+
 
 
 #' Pillar_shaft method for class fmt
@@ -552,7 +555,7 @@ pillar_shaft.fmt <- function(x, ...) {
 # fmt(0.712, 2) %>% vec_data() %>% vec_cast(double())
 
 
-
+#pct = "col" calculation doesn't work (add cols, 200% !)
 
 #Define abbreviated type name (for tibble::tibble headers)
 #' @export
@@ -707,7 +710,7 @@ vec_arith.fmt.fmt <- function(op, x, y, ...) {
       wn     = vec_arith_base(op, get_wn(x) , get_wn(y) ), #%>% positive_double(),
       pct    = ifelse(same_pct & x_pct != "col",
                       yes  = vec_arith_base(op, get_pct(x), get_pct(y)),
-                      no = NA_real_) %>% tidyr::replace_na(NA_real_),
+                      no = NA_real_) %>% tidyr::replace_na(NA_real_), #NA_real_
       digits = pmax(get_digits(x), get_digits(y)),
       ctr    = rep_NA_real, # ???
       mean   = vec_arith_base(op, get_mean(x) * get_wn(.x), get_mean(y) * get_wn(y)) /
@@ -809,9 +812,10 @@ vec_math.fmt <- function(.fn, .x, ...) {
                           digits = min(get_digits(.x)),
                           n      = vec_math_base(.fn, get_n(.x)  , ...),
                           wn     = vec_math_base(.fn, get_wn(.x) , ...),
-                          pct    = ifelse(get_pct_type(.x)  != "row",
+                          pct    = ifelse(! get_pct_type(.x) %in% c("row", "col"),
                                           yes = vec_math_base(.fn, get_pct(.x), ...),
-                                          no  = NA_real_) %>% tidyr::replace_na(NA_real_),
+                                          no  = NA_real_) %>%
+                           tidyr::replace_na(NA_real_),
                           ctr    = NA_real_,
                           mean   = vec_math_base("sum", get_mean(.x) * get_wn(.x), ...) /
                             vec_math_base("sum", get_wn(.x), ...),

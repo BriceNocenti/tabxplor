@@ -514,7 +514,7 @@ tab_tot <- function(tabs, tot = c("row", "col"), name = "Total",
 
     if (length(groups) != 0) {
       group_vars_totals <- dplyr::group_keys(dplyr::filter(tabs, !tottab_line)) %>% #dplyr::mutate(bis = PR0) %>%
-        tidyr::unite(!!row_var, sep = "/") %>%
+        tidyr::unite(!!row_var, sep = " / ") %>%
         dplyr::mutate(!!row_var := paste(name[1], !!row_var) %>%
                         stringr::str_to_upper() %>% forcats::as_factor())  #stringr::str_remove_all()
     } else {
@@ -584,6 +584,8 @@ tab_tot <- function(tabs, tot = c("row", "col"), name = "Total",
 
 
 tab_match_groups_and_totrows <- function(tabs) {
+  #chi2 : not to match groups and totrows with alltabs ? ----
+
   #tab_vars <- tab_get_vars(tabs)$tab_vars
   groups   <- dplyr::group_vars(tabs)
 
@@ -670,16 +672,18 @@ tab_add_totcol_if_no <- function(tabs) {
 
 
 
-tab_pct <- function(tabs, pct = c("row", "col", "all", "all_tabs")) { #Add keep/change grouping ?
+tab_pct <- function(tabs, pct = c("row", "col", "all", "all_tabs", "no")) { #Add keep/change grouping ?
   #stopifnot(pct[1] %in% c("row", "col", "all", "all_tabs", "no"))
 
 
   if (pct[1] == "no") {
     tabs <- tabs %>% dplyr::mutate(dplyr::across(
       where(is_fmt),
-      ~ ifelse(is_pct(.),
-               set_pct(NA_real_) %>% set_pct_type("no") %>% set_type("wn"),
-               .)
+      ~ dplyr::if_else(
+        condition = is_pct(.),
+        true  = set_pct(., NA_real_) %>% set_pct_type(NA_character_) %>%
+          set_type("wn"),
+        false = .)
     ))
     return(tabs)
   }
@@ -825,6 +829,8 @@ stopifnot(ci[1] %in% c("abs", "diff_col", "diff_row",
            "no"              = tabs
     )
 
+  #Problems with ci = "no" ----
+  #ci = "no" get means to pct !
 
   #Formulas :
   zscore <- zscore_formula(conf_level)
@@ -898,7 +904,7 @@ stopifnot(ci[1] %in% c("abs", "diff_col", "diff_row",
 
            "diff_spread_col" = ,
            "diff_col" = tabs %>% dplyr::mutate(dplyr::across(!!totvar,
-                                                        ~ set_ci(., NA_real_))),
+                                                             ~ set_ci(., NA_real_))),
            "diff_spread_row" = ,
            "diff_row" = tabs %>%
              dplyr::mutate(dplyr::across(
@@ -909,11 +915,14 @@ stopifnot(ci[1] %in% c("abs", "diff_col", "diff_row",
                  false     = get_ci(.)  ))
              )),
 
-           "no"  = tabs %>% dplyr::mutate(dplyr::across(where(is_fmt), ~ dplyr::if_else(
-             condition = is_mean_ci(.),
-             true      = set_type(., "mean"),
-             false     = set_type(., "pct")
-           )  ))
+           "no"  = tabs %>%
+             dplyr::mutate(dplyr::across(
+               where(is_fmt),
+               ~ dplyr::case_when(
+                 is_mean(.) ~ set_type(., "mean"),
+                 is_pct(.)  ~ set_type(., "pct" ),
+                 TRUE       ~ .
+               )   ))
     )
 
   if (lv1_group_vars(tabs)) {
