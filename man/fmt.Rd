@@ -11,6 +11,7 @@ fmt(
   n = integer(),
   wn = rep(NA_real_, length(n)),
   pct = rep(NA_real_, length(n)),
+  diff = rep(NA_real_, length(n)),
   digits = rep(0L, length(n)),
   ctr = rep(NA_real_, length(n)),
   mean = rep(NA_real_, length(n)),
@@ -20,7 +21,10 @@ fmt(
   in_tottab = rep(FALSE, length(n)),
   col_var = NA_character_,
   totcol = FALSE,
-  pct_type = NA_character_
+  pct_type = NA_character_,
+  ci_type = NA_character_,
+  color = NA_character_,
+  comp_all = FALSE
 )
 
 new_fmt(
@@ -28,6 +32,7 @@ new_fmt(
   n = integer(),
   wn = rep(NA_real_, length(n)),
   pct = rep(NA_real_, length(n)),
+  diff = rep(NA_real_, length(n)),
   digits = rep(0L, length(n)),
   ctr = rep(NA_real_, length(n)),
   mean = rep(NA_real_, length(n)),
@@ -37,7 +42,10 @@ new_fmt(
   in_tottab = rep(FALSE, length(n)),
   col_var = NA_character_,
   totcol = FALSE,
-  pct_type = NA_character_
+  pct_type = NA_character_,
+  ci_type = NA_character_,
+  color = NA_character_,
+  comp_all = FALSE
 )
 
 is_fmt(x)

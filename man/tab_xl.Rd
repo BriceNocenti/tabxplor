@@ -2,7 +2,7 @@
 % Please edit documentation in R/tabxl2.R
 \name{tab_xl}
 \alias{tab_xl}
-\title{Crosstabs : Excel output with conditionnal formatting}
+\title{Crosstabs : Excel output with conditional formatting}
 \usage{
 tab_xl(
   tabs,
@@ -13,11 +13,13 @@ tab_xl(
   remove_tab_vars = TRUE,
   colwidth = "auto",
   only_one_sheet = FALSE,
-  color = c("auto", "contrib", "no"),
+  min_counts = 30,
+  color = "auto",
+  comp = "all",
   hide_near_zero = "auto",
-  perc_color_breaks = c("+0.05", "+0.10", "+0.15", "+0.25", "*2", "+0.35", "-0.05",
-    "-0.10", "-0.15", "-0.25", "-0.35"),
-  cell_contrib_color_coeffs = c(0.5, 1, 2, 5, 10, -0.5, -1, -2, -5, -10)
+  pct_breaks = get_color_breaks("pct"),
+  mean_breaks = get_color_breaks("mean"),
+  contrib_breaks = get_color_breaks("contrib")
 )
 }
 \arguments{
@@ -54,12 +56,12 @@ colored in light gray in Excel, to help to focus on other ones. Use doubles
 to set the value under which numbers are colored in gray.
 \code{hide_near_zero = Inf} if you don't want to use this feature.}
 
-\item{perc_color_breaks}{The values to use to color deviations from the mean,
+\item{pct_breaks}{The values to use to color deviations from the mean,
 when the table shows \code{"row"} or \code{"col"} percentages and
 \code{color = "auto"}. They must be numbers between - 1 and 1
 (i.e. -100\% and +100\%).}
 
-\item{cell_contrib_color_coeffs}{The values to use to color cell
+\item{contrib_breaks}{The values to use to color cell
 contributions to variance : \code{1} means above/under the average
 contribution of cells to variance, \code{10} means 10 times the average
 contribution. Must be positive numbers for
@@ -80,7 +82,7 @@ An Excel file with the tables as a side-effect. Invisibly returns
 \code{tabs}.
 }
 \description{
-Crosstabs : Excel output with conditionnal formatting
+Crosstabs : Excel output with conditional formatting
 }
 \examples{
 \dontrun{

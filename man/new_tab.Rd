@@ -7,8 +7,8 @@
 new_tab(
   tabs = tibble::tibble(),
   subtext = "",
-  chi2 = tibble::tibble(tables = character(), pvalue = double(), df = integer(),
-    variance = double(), count = integer()),
+  chi2 = tibble::tibble(tables = character(), pvalue = double(), df = integer(), cells
+    = integer(), variance = double(), count = integer()),
   ...,
   class = character()
 )

@@ -40,11 +40,12 @@ new_tab <-
            chi2 = tibble::tibble(tables   = character(),
                                  pvalue   = double()   ,
                                  df       = integer()  ,
+                                 cells    = integer()  ,
                                  variance = double()   ,
                                  count    = integer()   ),
            ..., class = character()) {
     stopifnot(is.data.frame(tabs))
-    vec_assert(subtext    , character())
+    #vec_assert(subtext    , character())
 
     tibble::new_tibble(tabs, subtext = subtext, chi2 = chi2, ...,
                        nrow = nrow(tabs), class = c(class, "tab")) #... ?
@@ -57,6 +58,7 @@ new_grouped_tab <-
            chi2 = tibble::tibble(tables   = character(),
                                  pvalue   = double()   ,
                                  df       = integer()  ,
+                                 cells    = integer()  ,
                                  variance = double()   ,
                                  count    = integer()   ),
            ..., class = character()) {
@@ -68,6 +70,7 @@ new_grouped_tab <-
             ...,
             class = class)
   }
+
 
 
 # Functions to work with class tab -------------------------------------------------------
@@ -99,6 +102,14 @@ get_chi2    <- purrr::attr_getter("chi2")
 #   #vctrs::vec_cast(x, tab())
 # }
 
+untab <- function(tabs) {
+  if (lv1_group_vars(tabs)) {
+    `class<-`(tabs, class(tabs) %>% purrr::discard(. == "tab"))
+  } else {
+    `class<-`(tabs, class(tabs) %>%
+                        purrr::discard(. %in% c("grouped_tab", "tab")))
+  }
+  }
 
 
 #Methods for class tab -------------------------------------------------------------------
@@ -429,7 +440,8 @@ rename.grouped_tab <- function(.data, ...) {
 #' @importFrom dplyr rename_with
 #' @method rename_with grouped_tab
 #' @export
-rename_with.grouped_tab <- function(.data, .fn, .cols = everything(), ...) {
+rename_with.grouped_tab <- function(.data, .fn,
+                                    .cols = dplyr::everything(), ...) {
   out <- NextMethod()
   groups <- dplyr::group_data(out)
   if (lv1_group_vars(out)) {
