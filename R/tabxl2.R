@@ -284,7 +284,7 @@ tab_xl <-
     sheet <- 1L:length(tabs)
     start <- rep(0L, length(tabs))
 
-    #Not working for ci = "abs"
+    #Not working for ci = "cell"
     tabs_num <-
       purrr::map(tabs, ~ dplyr::mutate(., dplyr::across(where(is_fmt), get_num)) %>%
                    tibble::as_tibble())
@@ -315,7 +315,7 @@ tab_xl <-
     pct_cols <- purrr::map(types, ~ tidyr::replace_na(
       purrr::map_lgl(., ~ all(. == "pct")), FALSE
     ))
-    pct_type <- purrr::map(tabs, get_pct_type) #%>%
+    type <- purrr::map(tabs, get_type) #%>%
     # purrr::map2(pct_cols, ~ purrr::map_if(.x, !.y, ~ NA_character_) %>%
     #               purrr::flatten_chr() %>%
     #               purrr::set_names(names(.x)))
@@ -325,8 +325,8 @@ tab_xl <-
     #     length(unique(.)) > 1, "mixed", unique(.)
     #   )  ) )
 
-    cols_type_pct <-  purrr::map(tabs, cols_by_type_pct)
-    # purrr::map2(pct_type, cols_by_type,
+    cols_type_pct <-  purrr::map(tabs, get_type) #cols_by_type_pct
+    # purrr::map2(type, cols_by_type,
     #             ~ purrr::map2_chr(.x, .y, function(.pct, .type)
     #               dplyr::if_else(.type == "pct", .pct, .type)  )
     # )
@@ -1500,33 +1500,6 @@ tab_xl <-
 
 
 
-
-
-detect_totcols <- function(tabs) {
-  #detect totcols by col vars names, no position ? ----
-  # get_var <- tab_get_vars(tabs)
-  tot <- which(is_totcol(tabs))
-
-  purrr::map(1:ncol(tabs), function(.i)
-    tidyr::replace_na(names(tot[tot >= .i])[1], "")) %>%
-    rlang::syms() %>%
-    purrr::set_names(names(tabs))
-
-}
-
-
-
-cols_by_type_pct <- function(tabs) {
-  types <-
-    purrr::map_if(tabs, is_fmt, ~ get_type(.), .else = ~ NA_character_) %>%
-    purrr::map_chr(~ dplyr::if_else(length(unique(.)) > 1, "mixed", unique(.)))
-
-  purrr::map2_chr(get_pct_type(tabs), types, function(.pct, .type)
-    dplyr::if_else(.type == "pct", .pct, .type)  )
-}
-
-
-
 #Calculate excel references of relevant cells
 xl_index <- function(cols = "", rows = "", start_row = 0L, offset = 1L,
                      fixedcol = FALSE, fixedrow = FALSE) {
@@ -1541,11 +1514,6 @@ xl_index <- function(cols = "", rows = "", start_row = 0L, offset = 1L,
                                              LETTERS[.[1] %%  26]) ),
          fixr, as.character(rows + start_row + offset)                       )
 }
-
-
-
-
-
 
 
 

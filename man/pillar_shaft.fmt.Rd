@@ -2,7 +2,7 @@
 % Please edit documentation in R/fmtn_class.R
 \name{pillar_shaft.fmt}
 \alias{pillar_shaft.fmt}
-\title{Pillar_shaft method for class fmt}
+\title{Pillar_shaft method to print class fmt in a tibble::tibble column}
 \usage{
 \method{pillar_shaft}{fmt}(x, ...)
 }
@@ -15,5 +15,5 @@
 A fmt printed in a pillar.
 }
 \description{
-Pillar_shaft method for class fmt
+Pillar_shaft method to print class fmt in a tibble::tibble column
 }

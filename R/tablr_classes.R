@@ -309,10 +309,12 @@ ungroup.grouped_tab <- function (x, ...)
 }
 
 lv1_group_vars <- function(tabs) {
-  groupvars <- dplyr::group_vars(tabs)
-  all(purrr::map_lgl(groupvars,
-                 ~ nlevels(forcats::fct_drop(dplyr::pull(tabs, .))) == 1)) |
-    length(groupvars) == 0
+  dplyr::n_groups(tabs) <= 1
+
+  #groupvars <- dplyr::group_vars(tabs)
+  # all(purrr::map_lgl(groupvars,
+  #                ~ nlevels(forcats::fct_drop(dplyr::pull(tabs, .))) == 1)) |
+  #   length(groupvars) == 0
 }
 
 #' @importFrom dplyr mutate

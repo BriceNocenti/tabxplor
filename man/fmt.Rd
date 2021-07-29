@@ -7,55 +7,60 @@
 \title{Create a vector of class formatted numbers.}
 \usage{
 fmt(
-  type = "n",
   n = integer(),
+  type = "n",
+  digits = rep(0L, length(n)),
+  display = dplyr::case_when(type == "mean" ~ "mean", type \%in\% c("row", "col",
+    "all", "all_tabs") ~ "pct", TRUE ~ "n"),
   wn = rep(NA_real_, length(n)),
   pct = rep(NA_real_, length(n)),
-  diff = rep(NA_real_, length(n)),
-  digits = rep(0L, length(n)),
-  ctr = rep(NA_real_, length(n)),
   mean = rep(NA_real_, length(n)),
+  diff = rep(NA_real_, length(n)),
+  ctr = rep(NA_real_, length(n)),
   var = rep(NA_real_, length(n)),
   ci = rep(NA_real_, length(n)),
   in_totrow = rep(FALSE, length(n)),
   in_tottab = rep(FALSE, length(n)),
-  col_var = NA_character_,
+  comp_all = FALSE,
+  ci_type = "",
+  col_var = "",
   totcol = FALSE,
-  pct_type = NA_character_,
-  ci_type = NA_character_,
-  color = NA_character_,
-  comp_all = FALSE
+  color = ""
 )
 
 new_fmt(
-  type = "n",
   n = integer(),
+  type = "n",
+  digits = rep(0L, length(n)),
+  display = dplyr::case_when(type == "mean" ~ "mean", type \%in\% c("row", "col",
+    "all", "all_tabs") ~ "pct", TRUE ~ "n"),
   wn = rep(NA_real_, length(n)),
   pct = rep(NA_real_, length(n)),
-  diff = rep(NA_real_, length(n)),
-  digits = rep(0L, length(n)),
-  ctr = rep(NA_real_, length(n)),
   mean = rep(NA_real_, length(n)),
+  diff = rep(NA_real_, length(n)),
+  ctr = rep(NA_real_, length(n)),
   var = rep(NA_real_, length(n)),
   ci = rep(NA_real_, length(n)),
   in_totrow = rep(FALSE, length(n)),
   in_tottab = rep(FALSE, length(n)),
-  col_var = NA_character_,
+  comp_all = FALSE,
+  ci_type = "",
+  col_var = "",
   totcol = FALSE,
-  pct_type = NA_character_,
-  ci_type = NA_character_,
-  color = NA_character_,
-  comp_all = FALSE
+  color = ""
 )
 
 is_fmt(x)
 }
 \arguments{
-\item{type}{The type of printing or background calculation, "n" for counts, "pct" for
-percentages, "mean" for means.}
-
 \item{n}{The underlying count, as an integer vector of the same length, used with
-type = "pct" to calculate confidence intervals.}
+display = "pct" to calculate confidence intervals.}
+
+\item{digits}{The number of digits, as an integer or integer vector of the length of the
+data. It can then be changed with \code{vctrs::`field<-`(x, "digits", value)}.}
+
+\item{display}{The display of printing or background calculation, "n" for counts, "pct" for
+percentages, "mean" for means.}
 
 \item{wn}{The underlying weighted counts, as an integer vector of the same length. It
 it used in certain operations on \code{\link{fmt}}, like means.}
@@ -63,10 +68,7 @@ it used in certain operations on \code{\link{fmt}}, like means.}
 \item{pct}{A double vector. For \code{\link{fmt}} and \code{\link{as_fmt}},
 anything coercible to double.}
 
-\item{digits}{The number of digits, as an integer or integer vector of the length of the
-data. It can then be changed with \code{vctrs::`field<-`(x, "digits", value)}.}
-
-\item{var}{The standards deviations, used with type = "mean" to calculate confidence
+\item{var}{The standards deviations, used with display = "mean" to calculate confidence
 intervals.}
 
 \item{ci}{The confidence intervals to print, if they have been calculated.}
@@ -94,7 +96,7 @@ or  mean, and can be used to calculate and print confidence intervals.
 }}
 
 \examples{
-num1 <- fmt(c(0.7, 1.2, 7), type = c("n", "pct", "mean"), digits = c(0, 1, 2),
+num1 <- fmt(c(0.7, 1.2, 7), display = c("n", "pct", "mean"), digits = c(0, 1, 2),
 n = c(5, 10, 15), wn = c(4.7, 12.1, 13.9) )
 num1
 num1[1] + num1[2] + num1[3]

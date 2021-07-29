@@ -130,21 +130,6 @@ tab_core <- function(data, row_var, col_var, ..., wt,
     }
   }
 
-  # if (missing(tab_vars)) {
-  #   data     <- data %>% dplyr::mutate(no_tab_vars = factor(" "))
-  #   tab_vars <- rlang::exprs(no_tab_vars)
-  # } else {
-  #   tab_vars     <- rlang::enquo(tab_vars)
-  #   pos_tab_vars <- tidyselect::eval_select(tab_vars, data)
-  #   tab_vars     <- rlang::syms(names(pos_tab_vars))
-  #   NA_tab_vars  <- purrr::map_lgl(tab_vars,
-  #                                  ~ as.character(.) %in% c("NA", "NULL", "no"))
-  #   if (all(NA_tab_vars) ) {
-  #     data     <- data %>% dplyr::mutate(no_tab_vars = factor(" "))
-  #     tab_vars <- rlang::exprs(no_tab_vars)
-  #   }
-  # }
-
   if (missing(...)) {
     data <- data %>% dplyr::mutate(no_tab_vars = factor(" "))
     tab_vars <- rlang::exprs(no_tab_vars)
@@ -167,7 +152,7 @@ tab_core <- function(data, row_var, col_var, ..., wt,
     data <- data %>% dplyr::mutate(no_weight = 1)
     wt <- rlang::expr(no_weight)
   } else {
-    wt     <- rlang::enquo(wt)
+    wt    <- rlang::enquo(wt)
     NA_wt <- is.na(as.character(rlang::get_expr(wt)))
     if (all(NA_wt)) {
       data <- data %>% dplyr::mutate(no_weight = 1)
@@ -221,25 +206,26 @@ tab_core <- function(data, row_var, col_var, ..., wt,
   tabs <-
     switch(type,
            "factor"  = data %>%
-             dplyr::summarise(nums = new_fmt(type    = "wn",
-                                             digits  = as.integer(digits),
-                                             n       = dplyr::n(),
-                                             wn      = sum(!!wt),
-                                             col_var = rlang::as_name(col_var)#,
-                                             #nlvs    = nlvs
+             dplyr::summarise(nums = new_fmt(display = "wn"                   ,
+                                             digits  = as.integer(digits)     ,
+                                             n       = dplyr::n()             ,
+                                             wn      = sum(!!wt)              ,
+                                             type    = "n"                    ,
+                                             col_var = rlang::as_name(col_var)
              ),
              .groups = 'drop') %>%
              tidyr::pivot_wider(names_from = !!col_var, values_from = nums,
-                                values_fill = fmt0("wn", digits)),
+                                values_fill = fmt0("wn", digits, type = "n")),
 
            "numeric" = data %>%
              dplyr::summarise(!!num_var := new_fmt(
-               type    = "mean",
-               digits  = as.integer(digits),
-               n       = dplyr::n(),
-               wn      = sum(!!wt),
+               display = "mean"                                      ,
+               digits  = as.integer(digits)                          ,
+               n       = dplyr::n()                                  ,
+               wn      = sum(!!wt)                                   ,
                mean    = weighted.mean(!!num_var, !!wt, na.rm = TRUE),
                var     = weighted.var (!!num_var, !!wt, na.rm = TRUE),
+               type    = "mean"                                      ,
                col_var = rlang::as_name(col_var)
              ),
              .groups = "drop")
@@ -247,8 +233,7 @@ tab_core <- function(data, row_var, col_var, ..., wt,
 
   if (row_var_type == "numeric") tabs <- tabs %>%
     tidyr::pivot_wider(names_from = !!fct_var, values_from = !!num_var,
-                       values_fill = fmt0("mean", digits))
-
+                       values_fill = fmt0("mean", digits, type = "mean"))
 
   tab_var_1lv <- all(purrr::map_lgl(dplyr::select(tabs, !!!tab_vars),
                                     ~ nlevels(forcats::fct_drop(.)) == 1))
@@ -573,11 +558,11 @@ tab_many <- function(data, row_var, col_vars, tab_vars, wt, levels = "all",
 # Do not depend on groups
 tab_totaltab <- function(tabs, totaltab = c("table", "line", "no"),
                          name = "Ensemble", data = NULL) {
-  get_vars <- tab_get_vars(tabs)
-  row_var  <- rlang::sym(get_vars$row_var)
-  tab_vars <- rlang::syms(get_vars$tab_vars)
-  mean_vars <- purrr::map_lgl(tabs, ~ all(is_mean(.))) %>%
-    purrr::keep(. == TRUE) %>% names()
+  get_vars  <- tab_get_vars(tabs)
+  row_var   <- rlang::sym(get_vars$row_var)
+  tab_vars  <- rlang::syms(get_vars$tab_vars)
+  mean_vars <- (get_type(tabs) == "mean") %>% purrr::keep(., .) %>% names()
+
 
   groups  <- dplyr::group_vars(tabs)
   subtext <- get_subtext(tabs)
@@ -630,8 +615,9 @@ tab_totaltab <- function(tabs, totaltab = c("table", "line", "no"),
   # If there are mean columns, the calculation of variances, necessary to
   #  calculate confidence intervals, needs access to the original database
   if (length(mean_vars) != 0 & !is.null(data)) {
+
     mean_calc <- switch(
-      totaltab,
+      totaltab[1],
       "table" = purrr::map(mean_vars, ~ tab_core(data, !!row_var,
                                                  col_var = !!rlang::sym(.))),
       "line" = purrr::map(mean_vars, ~tab_core(data, col_var = !!rlang::sym(.)))
@@ -643,11 +629,11 @@ tab_totaltab <- function(tabs, totaltab = c("table", "line", "no"),
       dplyr::select(-tidyselect::any_of("no_row_var")) %>%
       dplyr::mutate(dplyr::across(where(is_fmt), ~ as_tottab(.)))
 
-    if (totaltab == "line") mean_calc <- mean_calc %>%
+    if (totaltab[1] == "line") mean_calc <- mean_calc %>%
       dplyr::mutate(dplyr::across(where(is_fmt), ~ as_totrow(.)))
 
     totaltable <- switch(
-      totaltab,
+      totaltab[1],
       "table" = dplyr::left_join(dplyr::select(totaltable,
                                                -tidyselect::all_of(mean_vars)),
                                  mean_calc, by = as.character(row_var)),
@@ -683,10 +669,9 @@ tab_tot <- function(tabs, tot = c("row", "col"), name = "Total",
   row_var         <- rlang::sym(get_vars$row_var)
   #col_vars        <- rlang::sym(get_vars$col_vars)
   col_vars_levels_mean <- purrr::map(get_vars$col_vars_levels, rlang::syms)
-  mean_vars <- purrr::map_lgl(tabs, ~ all(is_mean(.))) %>%
-    purrr::keep(. == TRUE) %>% names()
+  mean_vars <- get_type(tabs) == "mean"
   col_vars_levels <- col_vars_levels_mean %>%
-    purrr::discard(names(.) %in% mean_vars)
+    purrr::discard(names(.) %in% names(mean_vars))
   tab_vars        <- rlang::syms(get_vars$tab_vars)
 
   groups <- dplyr::group_vars(tabs)
@@ -745,11 +730,13 @@ tab_tot <- function(tabs, tot = c("row", "col"), name = "Total",
 
     #For mean vars, calculate variances based on original datas
     # (necessary to calculate confidence intervals)
-    if (length(mean_vars) != 0 & !is.null(data)) {
+    if (any(mean_vars) & !is.null(data)) {
+      mean_names <- names(mean_vars[mean_vars])
+
       mean_calc <-
-        purrr::map(mean_vars, ~ tab_core(data, row_var = NA_character_,
-                                         col_var = tidyselect::all_of(.),
-                                         purrr::map_chr(tab_vars, as.character))
+        purrr::map(mean_names, ~ tab_core(data, row_var = NA_character_,
+                                          col_var = tidyselect::all_of(.),
+                                          purrr::map_chr(tab_vars, as.character))
         )
 
       mean_calc <-
@@ -764,7 +751,7 @@ tab_tot <- function(tabs, tot = c("row", "col"), name = "Total",
 
       if (general_totrow_condition) {
         general_totrow <-
-          purrr::map(mean_vars,
+          purrr::map(mean_names,
                      ~ tab_core(data, row_var = NA_character_,
                                 col_var = tidyselect::all_of(.))
           )
@@ -784,7 +771,7 @@ tab_tot <- function(tabs, tot = c("row", "col"), name = "Total",
 
       totrows <- dplyr::left_join(
         dplyr::select(totrows,
-                      -tidyselect::all_of(mean_vars)),
+                      -tidyselect::all_of(mean_names)),
         mean_calc,
         by = purrr::map_chr(tab_vars, as.character)
       )
@@ -876,10 +863,10 @@ tab_match_groups_and_totrows <- function(tabs) {
       #   warning("no total row(s) found. One added for the whole table")
       # }
     } else if ( !any(is_tottab(tabs)) ) { #If there are no groups
-      warning("no groups and no total row(s) found. One added for the whole table")
+      warning("no groups nor total row(s) found. One added for the whole table")
       return(tab_tot(tabs, "row"))
     } else {
-      warning("no groups and total row(s), but total table found. ",
+      warning("no groups nor total row(s), but total table found. ",
               "Grouped upon tab_vars and total rows added")
       tab_vars <- rlang::syms(tab_get_vars(tabs)$tab_vars)
       return(dplyr::group_by(tabs, !!!tab_vars) %>% tab_tot("row"))
@@ -918,7 +905,7 @@ tab_match_groups_and_totrows <- function(tabs) {
     }
 
     # Otherwise return a df grouped with the total rows groups, in a new variable
-    warning("grouping variable(s) not corresponding to total_rows : ",
+    warning("grouping variable(s) not corresponding to total_rows, ",
             "new groups calculated, based on actual total_rows")
     return(dplyr::relocate(tabs_totrow_groups, totrow_groups, .before = 1) %>%
              dplyr::group_by(totrow_groups)
@@ -931,26 +918,43 @@ tab_match_groups_and_totrows <- function(tabs) {
 
 
 tab_add_totcol_if_no <- function(tabs) {
-  if (!any(is_totcol(tabs)) &
-      ! all( purrr::map_lgl(tabs[purrr::map_lgl(tabs, is_fmt)], ~ all(is_mean(.)) ) )
-  ) {
+  if (!any(is_totcol(tabs)) & ! all(get_type(tabs) == "mean") ) {
     tabs <- tabs %>% tab_tot("col", totcol = "last")
-    warning("no total column : one was added (from the first column variable)")
+    warning("no total column, one was added (from the last non-mean column)")
   }
   tabs
+}
+
+tab_match_comp_and_tottab <- function(tabs, comp) {
+  comp_all        <- purrr::map(tabs, get_comp_all) %>% purrr::flatten_lgl()
+  comp            <- if (comp == "null"& any(comp_all)) {"all"} else {comp}
+
+  if(comp == "tab" & any(comp_all) ) {
+    warning("since at least one column already have pct diffs from mean, ",
+            "variance calculations, or confidence intervals, with comparisons ",
+            "with the total row of the total table, comp is set to 'all'")
+    comp <- "all"
+  }
+  if (comp == "null") comp <- "tab"
+  if(comp == "all" & !any(is_tottab(tabs) & is_totrow(tabs)) ) {
+    warning("since 'comp' is 'all', a total table (tab_totaltab) with a ",
+            "total row was added")
+    tabs <- tabs %>% tab_totaltab('line')
+  }
+
+  tabs %>% dplyr::mutate(dplyr::across(where(is_fmt), ~ set_comp(., comp)))
 }
 
 
 
 tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no"),
-                    digits = NULL, diff = TRUE, comp = "tab", color = FALSE) { #Add keep/change grouping ?
+                    digits = NULL, diff = TRUE, comp = NULL, color = FALSE) { #Add keep/change grouping ?
   #stopifnot(pct[1] %in% c("row", "col", "all", "all_tabs", "no"))
   get_vars         <- tab_get_vars(tabs)
   #row_var         <- rlang::sym(get_vars$row_var) #col_var ??
   col_vars_with_all<- rlang::syms(get_vars$col_vars)
-  col_vars   <- col_vars_with_all %>% purrr::discard(. == "all_col_vars")
-  col_means        <- purrr::map_lgl(tabs, ~ all(is_mean(.))) %>%
-    purrr::keep(. == TRUE) %>% names()
+  col_vars_no_all  <- col_vars_with_all %>% purrr::discard(. == "all_col_vars")
+  col_means  <- (get_type(tabs) == "mean") %>% purrr::keep(., .) %>% names()
   # col_vars_levels <- purrr::map(get_vars$col_vars_levels, rlang::syms)
   tab_vars         <- rlang::syms(get_vars$tab_vars)
 
@@ -959,34 +963,25 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
   chi2    <- get_chi2(tabs)
 
 
-  pct <- vec_recycle(pct, length(col_vars)) %>% purrr::set_names(col_vars)
+  pct <- vec_recycle(pct, length(col_vars_no_all)) %>%
+    purrr::set_names(col_vars_no_all)
   pct[col_means] <- "no"
 
   if (all(pct == "no")) {
     tabs <- tabs %>% dplyr::mutate(dplyr::across(
-      where(is_fmt),
-      ~ dplyr::if_else(
-        condition = is_pct(.),
-        true  = set_pct(., NA_real_) %>% set_pct_type(NA_character_) %>%
-          set_type("wn"),
-        false = .)
+      where(~ get_type(.) %in% c("row", "col", "all", "all_tabs")),
+      ~ set_pct(., NA_real_) %>% set_type("n") %>%
+        set_display("wn")
     ))
     return(tabs)
   }
 
-  pct <- c(pct, all_col_vars = dplyr::last(pct[pct != "no"]))
-  pct <- purrr::map_chr(tabs, ~ pct[get_col_var(.)] ) %>%
-    tidyr::replace_na("no")
-  row_pct      <- names(pct)[pct == "row"]
-  col_pct      <- names(pct)[pct == "col"]
-  all_pct      <- names(pct)[pct == "all"]
-  all_tabs_pct <- names(pct)[pct == "all_tabs"]
   #Ready table for percentages (need total rows and cols, compatible grouping)
   if (any(pct == "all_tabs")) {
     if ( !(is_tottab(tabs[nrow(tabs),]) &
            is_totrow(tabs[nrow(tabs),]) &
            any(is_totcol(tabs))) ) {
-      warning("since percentages are 'all_tabs', a total table (tab_totaltab)",
+      warning("since percentages are 'all_tabs', a total table (tab_totaltab) ",
               "was added")
       if (!is_tottab(tabs[nrow(tabs),])) {
         tabs <- tabs %>% tab_totaltab('line')
@@ -998,44 +993,28 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
     }
   }
 
-
-  if (any(pct %in% c("col", "all") )) tabs <- tabs %>%
-    tab_match_groups_and_totrows() #need ungroup first for all_tabs ----
-  if (any(pct %in% c("row", "all") )) tabs <- tabs %>%
-    tab_add_totcol_if_no()
-
-  if(comp == "all" & !any(is_tottab(tabs) & is_totrow(tabs)) ) {
-    warning("since 'comp' is 'all', a total table (tab_totaltab) with a ",
-            "total row was added")
-    tabs <- tabs %>% tab_totaltab('line')
+  if ( any(pct %in% c("col", "all") ) | (any(pct == "row") & diff == TRUE) ) {
+    tabs <- tabs %>% tab_match_groups_and_totrows()
   }
 
-  #  switch(pct[1],
-  #        "row"      = tabs <- tabs %>% tab_add_totcol_if_no(),
-  #
-  #        "col"      = tabs <- tabs %>% tab_match_groups_and_totrows(),
-  #
-  #        "all"      = tabs <- tabs %>% tab_match_groups_and_totrows() %>%
-  #          tab_add_totcol_if_no(),
-  #
-  #        "all_tabs" = {
-  #          if ( !(is_tottab(tabs[nrow(tabs),]) &
-  #                 is_totrow(tabs[nrow(tabs),]) &
-  #                 any(is_totcol(tabs))) ) {
-  #            warning("since percentages are 'all_tabs', a total table (tab_totaltab)",
-  #                    "was added")
-  #            if (!is_tottab(tabs[nrow(tabs),])) {
-  #              tabs <- tabs %>% tab_totaltab('line')
-  #            }
-  #
-  #            tabs <- tabs %>% dplyr::ungroup() %>%
-  #              tab_match_groups_and_totrows() %>%
-  #              tab_add_totcol_if_no()
-  #          }
-  #
-  #          tabs <- tabs %>% dplyr::ungroup()
-  #        }
-  # )
+  if ( any(pct %in% c("row", "all")) | (any(pct == "col") & diff == TRUE) ) {
+    tabs <- tabs %>% tab_add_totcol_if_no()
+  }
+
+
+  tabs <- tabs %>%
+    tab_match_comp_and_tottab(comp = ifelse(is.null(comp), "null", comp))
+  comp <- if (any(purrr::map(tabs, get_comp_all) %>% purrr::flatten_lgl())) {
+    "all" } else { "tab" }
+
+  pct <- c(pct, all_col_vars = dplyr::last(pct[pct != "no"]))
+  pct <- purrr::map_chr(tabs, ~ pct[get_col_var(.)] ) %>%
+    tidyr::replace_na("no")
+  row_pct      <- names(pct)[pct == "row"]
+  col_pct      <- names(pct)[pct == "col"]
+  all_pct      <- names(pct)[pct == "all"]
+  all_tabs_pct <- names(pct)[pct == "all_tabs"]
+
 
   #Calculate percentages
   pct_formula <- function(x, pct, tot) {
@@ -1053,16 +1032,17 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
   if (any(pct != "all_tabs")) {
     pct_nat <- pct %>% stringr::str_replace("all_tabs", "no") %>%
       purrr::set_names(names(pct))
+
     tabs <- tabs %>%
       dplyr::mutate(dplyr::across(
-        where(~ is_fmt(.) & !all(is_mean(.)) ),
+        where(~ is_fmt(.) & !get_type(.) == "mean"),
         ~ set_pct(., pct_formula(
           .,
           pct = pct_nat[[dplyr::cur_column()]],
           tot = rlang::eval_tidy(tot_cols[[dplyr::cur_column()]])
         )) %>%
-          set_type(ifelse(pct_nat[[dplyr::cur_column()]] != "no", "pct", "wn")) %>%
-          set_pct_type(pct_nat[[dplyr::cur_column()]])
+          set_display(ifelse(pct_nat[[dplyr::cur_column()]] != "no", "pct", "wn")) %>%
+          set_type(pct_nat[[dplyr::cur_column()]])
       ))
   }
 
@@ -1077,7 +1057,7 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
             pct = "all_tabs",
             tot = rlang::eval_tidy(tot_cols[[dplyr::cur_column()]])
           )) %>%
-            set_type("pct") %>% set_pct_type("all_tabs")
+            set_display("pct") %>% set_type("all_tabs")
         ))
       )
   }
@@ -1110,7 +1090,7 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
       ~ dplyr::if_else(dplyr::row_number()==dplyr::n(), set_digits(., 0L), .))) %>%
     dplyr::group_by(!!!rlang::syms(groups))
 
-  type <- cols_by_type_pct(tabs) #%>% tidyr::replace_na("no")
+  type <- get_type(tabs)
   #Calculate diffs (used to color pct depending on spread from row or col mean)
   if ( diff == TRUE & any(type %in% c("row", "col", "mean")) ) {
     diff_formula <- function(x, type, tot) {
@@ -1118,8 +1098,6 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
              "row"     =  get_pct(x)  - get_pct(dplyr::last(x  )),
              "col"     =  get_pct(x)  - get_pct(tot             ),
              "mean"    =  get_mean(x) / get_mean(dplyr::last(x) ),
-             # "all"     =  get_pct(x) - get_pct(dplyr::last(tot)),
-             # "all_tabs"=  get_pct(x) - get_pct(dplyr::last(tot)),
              NA_real_)
     }
 
@@ -1149,10 +1127,6 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
         ))
     }
 
-    if(!is.null(comp)) {
-      tabs <- tabs %>%
-        dplyr::mutate(dplyr::across(where(is_fmt), ~ set_comp(., comp)))
-    }
 
     if (color == TRUE) {
       tabs <- tabs %>%
@@ -1165,7 +1139,6 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
           )) ))
     }
   }
-
 
   tabs <- tabs %>% dplyr::select(-tidyselect::any_of("totrow_groups"))
 
@@ -1187,7 +1160,7 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
 #     ci,
 #     "col"      = ci_formula_factory(tot),
 #     "row"      = ci_formula_factory( dplyr::last(x) ),
-#     "abs"      = ci_formula_factory(fmt0(pct)),
+#     "cell"      = ci_formula_factory(fmt0(pct)),
 #     #"totaltab" = function(x, tot, zscore) ,
 #     # "r_to_r"   = function(x, nx, y, ny, zscore) ,
 #     # "c_to_c"   = function(x, nx, y, ny, zscore) ,
@@ -1216,12 +1189,10 @@ zscore_formula <- function(conf_level) {
 #Ci spread (negative numbers mean no significant difference)
 tab_ci <- function(tabs,
                    ci = "auto",
-                   comp = c("tab", "all"),
-                   conf_level = 0.95,
+                   comp = NULL,
+                   conf_level = 0.95, color = NULL,
                    visible = FALSE) {
-  stopifnot(all(ci %in% c("auto", "abs", "diff", "spread", "no",
-                          "diff_col", "diff_row",
-                          "spread_col", "spread_row")), #"r_to_r", "c_to_c", "tab_to_tab",
+  stopifnot(all(ci %in% c("auto", "cell", "diff", "spread", "no")), #"r_to_r", "c_to_c", "tab_to_tab",
             all(comp %in%  c("tab", "all"))
   )
 
@@ -1230,20 +1201,28 @@ tab_ci <- function(tabs,
 
   get_vars        <- tab_get_vars(tabs)
   col_vars_with_all <- rlang::syms(get_vars$col_vars)
-  col_vars   <- col_vars_with_all %>% purrr::discard(. == "all_col_vars")
+  col_vars_no_all   <- col_vars_with_all %>% purrr::discard(. == "all_col_vars")
 
   fmtc <- purrr::map_lgl(tabs, is_fmt)
-  ci <- vec_recycle(ci, length(col_vars)) %>% purrr::set_names(col_vars)
+  ci <- vec_recycle(ci, length(col_vars_no_all)) %>%
+    purrr::set_names(col_vars_no_all)
   ci <- c(ci, all_col_vars = dplyr::last(ci[ci != "no"]))
   ci <- purrr::map_chr(tabs, ~ ci[get_col_var(.)] ) %>%
     tidyr::replace_na(NA_character_)
 
-  visible <- vec_recycle(visible, length(col_vars)) %>% purrr::set_names(col_vars)
+  visible <- vec_recycle(visible, length(col_vars_no_all)) %>%
+    purrr::set_names(col_vars_no_all)
   visible <- c(visible, all_col_vars = dplyr::last(visible[visible != "no"]))
   visible <- purrr::map_lgl(tabs, ~ visible[get_col_var(.)] ) %>%
     tidyr::replace_na(FALSE)
 
-  cols_type <- cols_by_type_pct(tabs)
+
+  tabs <- tabs %>%
+    tab_match_comp_and_tottab(comp = ifelse(is.null(comp), "null", comp))
+  comp <- if (any(purrr::map(tabs, get_comp_all) %>% purrr::flatten_lgl())) {
+    "all" } else { "tab" }
+
+  type <- get_type(tabs)
 
   tot_cols <- detect_totcols(tabs)
   tot_cols[is.na(ci)] <- list(rlang::sym(""))
@@ -1251,16 +1230,14 @@ tab_ci <- function(tabs,
     purrr::discard(. == "")
 
   ci[fmtc] <- dplyr::case_when(
-    !cols_type[fmtc] %in% c("mean", "row", "col", "all", "all_tabs") ~ "no"  ,
-    ci[fmtc] == "abs"                                            ~ "abs"       ,
-    ci[fmtc] == "diff"   & cols_type[fmtc] %in% c("row","mean")  ~ "diff_row"  ,
-    ci[fmtc] == "diff"   & cols_type[fmtc] == "col"              ~ "diff_col"  ,
-    ci[fmtc] == "spread" & cols_type[fmtc] %in% c("row", "mean") ~ "spread_row",
-    ci[fmtc] == "spread" & cols_type[fmtc] == "col"              ~ "spread_col",
+    !type[fmtc] %in% c("mean", "row", "col", "all", "all_tabs") ~ "no"    ,
+    ci[fmtc] == "cell"                                          ~ "cell"  ,
+    ci[fmtc] == "diff"   & type[fmtc] %in% c("row","mean")  ~ "diff_row"  ,
+    ci[fmtc] == "diff"   & type[fmtc] == "col"              ~ "diff_col"  ,
 
-    ci[fmtc] == "auto"   & cols_type[fmtc] %in% c("row","mean")  ~ "diff_row"  ,
-    ci[fmtc] == "auto"   & cols_type[fmtc] == "col"              ~ "diff_col"  ,
-    ci[fmtc] == "auto"   & cols_type[fmtc] %in% c("all","all_tabs") ~ "abs"    ,
+    ci[fmtc] == "auto"   & type[fmtc] %in% c("row","mean")  ~ "diff_row"  ,
+    ci[fmtc] == "auto"   & type[fmtc] == "col"              ~ "diff_col"  ,
+    ci[fmtc] == "auto"   & type[fmtc] %in% c("all","all_tabs") ~ "cell"   ,
 
     TRUE                                                       ~ "no"
   )
@@ -1268,8 +1245,8 @@ tab_ci <- function(tabs,
 
   #Depending of column type and ci type, not calculate ci
   ci <- dplyr::if_else(
-    condition = (!cols_type %in% c("row", "col", "all", "all_tabs", "mean")) |
-      (ci %in% c("diff_col", "spread_col") & cols_type == "mean"),
+    condition = (!type %in% c("row", "col", "all", "all_tabs", "mean")) |
+      (ci %in% c("diff_col", "spread_col") & type == "mean"),
     true = "no",
     false = ci
   )
@@ -1284,15 +1261,11 @@ tab_ci <- function(tabs,
 
   if (any(ci_yes)) {
     #Ready table for percentages (needed totals, compatible grouping)
-    if ( any(ci %in% c("diff_col", "spread_col")) ) {
-      tabs <- tabs %>% tab_add_totcol_if_no()
-    }
-
-    if ( any(ci %in% c("diff_row", "spread_row")) ) {
-      tabs <-
-        switch(comp[1],
-               "tab" = tabs %>% tab_match_groups_and_totrows(),
-               "all" = tabs %>% dplyr::ungroup()              )
+    if ( any(ci == "diff_col" ) ) tabs <- tabs %>% tab_add_totcol_if_no()
+    if ( any(ci == "diff_row") ) {
+      tabs <- switch(comp[1],
+                     "tab" = tabs %>% tab_match_groups_and_totrows(),
+                     "all" = tabs %>% dplyr::ungroup()               )
     }
     #comp == "all", test if there is a total table with totalrow ----
     #Problems with ci = "no" ? ----
@@ -1303,14 +1276,14 @@ tab_ci <- function(tabs,
     #Compute all variables needed to calculate ci in different tabs
     xbase <- tabs_nogroup %>%
       dplyr::mutate(dplyr::across(.fns =  ~ dplyr::if_else(
-        condition = get_type(.) == "mean",
+        condition = get_display(.) == "mean",
         true      = get_mean(.),
         false     = get_pct(.)
       )))
 
     xvar <- tabs_nogroup %>%
       dplyr::mutate(dplyr::across(.fns = ~ dplyr::if_else(
-        condition = get_type(.) == "mean",
+        condition = get_display(.) == "mean",
         true      = get_var(.),
         false     = NA_real_
       )))
@@ -1320,40 +1293,28 @@ tab_ci <- function(tabs,
       dplyr::filter(ci_yes) %>%
       purrr::pmap_df(function(ci, tot_cols, names) switch(
         ci,
-        "abs"        = NA_real_,
-        "diff_col"   = ,
-        "spread_col" = dplyr::pull(tabs, !!tot_cols),
-        "diff_row"   = ,
-        "spread_row" =
-          dplyr::mutate(tabs, comp = dplyr::last(!!names)) %>%
+        "cell"     = NA_real_,
+        "diff_col" = dplyr::pull(tabs, !!tot_cols),
+        "diff_row" = dplyr::mutate(tabs, comp = dplyr::last(!!names)) %>%
           dplyr::pull(comp)
       ))
 
     yvar <- ybase %>%
-      dplyr::mutate(dplyr::across(
-        where(~ !all(is_mean(.))),
-        ~ NA_real_
-      )) %>%
-      dplyr::mutate(dplyr::across(
-        where(~ is_fmt(.) & all(is_mean(.))),
-        get_var
-      ))
+      dplyr::mutate(dplyr::across(where(~ !get_type(.)=="mean"), ~NA_real_)) %>%
+      dplyr::mutate(dplyr::across(where(~ get_type(.) =="mean"), get_var))
 
     ybase <- ybase %>%
       dplyr::mutate(dplyr::across(
-        where(~ is_fmt(.) & !all(is_mean(.))),
+        where(~ is_fmt(.) & !get_type(.) == "mean"),
         get_pct
       )) %>%
-      dplyr::mutate(dplyr::across(
-        where(~ is_fmt(.) & all(is_mean(.))),
-        get_mean
-      ))
+      dplyr::mutate(dplyr::across( where(~ get_type(.) == "mean"), get_mean))
 
     xn <-
-      tibble::tibble(cols_type, tot_cols, names = rlang::syms(names(tabs))) %>%
+      tibble::tibble(type, tot_cols, names = rlang::syms(names(tabs))) %>%
       dplyr::filter(ci_yes) %>%
-      purrr::pmap_df(function(cols_type, tot_cols, names) switch(
-        cols_type,
+      purrr::pmap_df(function(type, tot_cols, names) switch(
+        type,
         "row"      = dplyr::pull(tabs, !!tot_cols) %>% get_n(),
         "mean"     = dplyr::pull(tabs, !!names   ) %>% get_n(),
         "col"      = dplyr::mutate(tabs, xn = dplyr::last(get_n(!!names)) ) %>%
@@ -1365,14 +1326,13 @@ tab_ci <- function(tabs,
       ))
 
     yn <-
-      tibble::tibble(ci, cols_type, tot_cols, names = rlang::syms(names(tabs))) %>%
+      tibble::tibble(ci, type, tot_cols, names = rlang::syms(names(tabs))) %>%
       dplyr::filter(ci_yes) %>%
-      purrr::pmap_df(function(ci, cols_type, tot_cols, names) switch(
+      purrr::pmap_df(function(ci, type, tot_cols, names) switch(
         ci,
-        "abs"        = NA_real_,
-        "diff_col"   = ,
-        "spread_col" =
-          switch(cols_type,
+        "cell"       = NA_real_,
+        "diff_col"   =
+          switch(type,
                  "row"      = dplyr::pull(tabs, !!tot_cols) %>% get_n(),
                  "col"      = ,
                  "all"      = ,
@@ -1381,9 +1341,8 @@ tab_ci <- function(tabs,
                    dplyr::pull(yn),
                  NA_real_
           ),
-        "diff_row"   = ,
-        "spread_row" =
-          switch(cols_type,
+        "diff_row"   =
+          switch(type,
                  "mean"     = ,
                  "col"      =
                    dplyr::transmute(tabs, yn = dplyr::last(get_n(!!names)) ) %>%
@@ -1410,10 +1369,10 @@ tab_ci <- function(tabs,
       zs * sqrt( xvar/xn + yvar/yn )
     }
 
-    ci_mean_spread <-  function(xmean, xvar, xn, ymean, yvar, yn) {
-      diff <-  xmean - ymean
-      abs(diff) - zs * sqrt( xvar/yn + yvar/yn )
-    }
+    # ci_mean_spread <-  function(xmean, xvar, xn, ymean, yvar, yn) {
+    #   diff <-  xmean - ymean
+    #   abs(diff) - zs * sqrt( xvar/yn + yvar/yn )
+    # }
 
     ci_base <- function(xpct, xn) {
       zs * sqrt(xpct*(1 - xpct)/xn)
@@ -1423,10 +1382,10 @@ tab_ci <- function(tabs,
       zs * sqrt( xpct*(1 - xpct)/xn   +   ypct*(1 - ypct)/yn )
     }
 
-    ci_diff_spread <-  function(xpct, xn, ypct, yn) {
-      diff <-  abs(xpct - ypct)
-      diff - zs * sqrt( xpct*(1 - xpct)/xn   +   ypct*(1 - ypct)/yn )
-    }
+    # ci_diff_spread <-  function(xpct, xn, ypct, yn) {
+    #   diff <-  abs(xpct - ypct)
+    #   diff - zs * sqrt( xpct*(1 - xpct)/xn   +   ypct*(1 - ypct)/yn )
+    # }
 
     #Calculate the confidence intervals
     ci_map <-
@@ -1436,9 +1395,9 @@ tab_ci <- function(tabs,
       purrr::map(~purrr::map(., ~ .)) %>%
       purrr::transpose() %>% purrr::map(~ tibble::as_tibble(.)) %>%
       tibble::tibble(.name_repair = ~ "ci_map") %>%
-      tibble::add_column(ci = ci[ci_yes], cols_type = cols_type[ci_yes]) %>%
+      tibble::add_column(ci = ci[ci_yes], type = type[ci_yes]) %>%
       dplyr::mutate(ci_map = dplyr::if_else(
-        ci %in% c("diff_col", "diff_row", "spread_col", "spread_row"),
+        ci %in% c("diff_col", "diff_row"),
         true  = purrr::map(ci_map, ~ dplyr::mutate(., xn = dplyr::if_else(
           condition =
             ( comp == "tab" & is_totrow(tabs) ) |
@@ -1451,29 +1410,29 @@ tab_ci <- function(tabs,
       )
 
     calculations <- ci_map %>%
-      purrr::pmap(function(ci_map, ci, cols_type)
+      purrr::pmap(function(ci_map, ci, type)
         dplyr::mutate(ci_map, res = switch(
           ci,
-          "abs"        = switch(cols_type,
-                                "mean" = ci_mean(xvar = xvar, xn = xn),
-                                ci_base(xpct = xbase, xn = xn)
+          "cell"        = switch(type,
+                                 "mean" = ci_mean(xvar = xvar, xn = xn),
+                                 ci_base(xpct = xbase, xn = xn)
           ),
           "diff_col"   = ,
-          "diff_row"   = switch(cols_type,
+          "diff_row"   = switch(type,
                                 "mean" = ci_mean_diff(xvar = xvar, xn = xn,
                                                       yvar = yvar, yn = yn),
                                 ci_diff(xpct = xbase, xn = xn,
                                         ypct = ybase, yn = yn)
           ),
-          "spread_col" = ,
-          "spread_row" = switch(cols_type,
-                                "mean" = ci_mean_spread(
-                                  xmean = xbase,  xvar = xvar, xn = xn,
-                                  ymean = ybase,  yvar = yvar, yn = yn
-                                ),
-                                ci_diff_spread(xpct = xbase, xn = xn,
-                                               ypct = ybase, yn = yn)
-          ),
+          # "spread_col" = ,
+          # "spread_row" = switch(type,
+          #                       "mean" = ci_mean_spread(
+          #                         xmean = xbase,  xvar = xvar, xn = xn,
+          #                         ymean = ybase,  yvar = yvar, yn = yn
+          #                       ),
+          #                       ci_diff_spread(xpct = xbase, xn = xn,
+          #                                      ypct = ybase, yn = yn)
+          # ),
           "no"         = NA_real_,
         ) ) )
 
@@ -1481,21 +1440,20 @@ tab_ci <- function(tabs,
 
     tabs[ci_yes] <- purrr::map2_df(tabs[ci_yes], result, ~ set_ci(.x, .y) )
 
-    #Change ci_type, even for totals with no ci result
-    if (comp == "all") ci_with_tot <-
-      stringr::str_replace(ci_with_tot, "row", "row_all") %>%
-      purrr::set_names(names(ci_with_tot))
+    #Change ci_type and color, even for totals with no ci result
+    ci_with_tot <- stringr::str_remove(ci_with_tot, "_row|_col")
+    ci_yes_tot  <- !is.na(ci_with_tot) & !ci_with_tot == "no"
 
-    mean_vars <- purrr::map_lgl(tabs, ~ all(is_mean(.))) %>%
-      purrr::keep(. == TRUE) %>% names()
+    tabs[ci_yes_tot] <-
+      purrr::map2_df(tabs[ci_yes_tot],
+                     ci_with_tot[ci_yes_tot],
+                     ~ set_ci_type(.x, .y) %>%
+                       set_color(
+                         ifelse(!is.null(color[1]), color[1], get_color(.))
+                       ))
 
-    ci_with_tot[mean_vars] <- stringr::str_c(ci_with_tot[mean_vars], "_mean")
-    ci_with_tot <- ci_with_tot %>% purrr::set_names(names(tabs))
-    ci_yes_tot <- !is.na(ci_with_tot) & !ci_with_tot == "no"
-
-    tabs[ci_yes_tot] <- purrr::map2_df(tabs[ci_yes_tot],
-                                       ci_with_tot[ci_yes_tot],
-                                       ~ set_ci_type(.x, .y))
+    tabs <- tabs %>%
+      dplyr::mutate(dplyr::across(where(is_fmt), ~ set_comp(., comp[1])))
 
     # Change types for columns where visible = TRUE
     if (any(visible)) {
@@ -1504,14 +1462,10 @@ tab_ci <- function(tabs,
           tidyselect::all_of(names(visible)[visible]),
           ~ switch(
             ci[dplyr::cur_column()],
-            "abs"        = dplyr::if_else(condition = is_mean(.),
-                                          true      = set_type(., "mean_ci"),
-                                          false     = set_type(., "pct_ci" ) ),
-            # "no"         = dplyr::case_when(is_mean(.) ~ set_type(., "mean"),
-            #                                 is_pct(.)  ~ set_type(., "pct" ),
-            #                                 is_ci(.)   ~ set_type(., "pct" ),
-            #                                 TRUE       ~ .                   ),
-            set_type(., "ci")
+            "cell" = dplyr::if_else(condition = get_type(.) == "mean",
+                                    true      = set_display(., "mean_ci"),
+                                    false     = set_display(., "pct_ci" ) ),
+            set_display(., "ci")
           ) ) )
     }
   }
@@ -1526,25 +1480,42 @@ tab_ci <- function(tabs,
 
 
 
-var_contrib <- function(x, tot, type = c("ctr", "expected_freq", "spread",
+var_contrib <- function(x, tot, calc = c("ctr", "expected_freq", "spread",
                                          "binding_ratio",
-                                         "ctr_with_sign")) {
-  observed_freq     <- get_wn(x) / get_wn(dplyr::last(tot))
-  expected_freq     <- get_wn(dplyr::last(x)) * get_wn(tot) / get_wn(dplyr::last(tot))^2
+                                         "ctr_with_sign"),
+                        comp = NULL) {
+  # x   <- tabs$Encadrant
+  # tot <- tabs$Total
+  xout             <- get_wn(x)
+  tot <- get_wn(tot)
+  if (!is.null(comp)) { if (comp == "all") {
+    tot_row_or_tab <- is_totrow(x[-length(x)]) | is_tottab(x[-length(x)])
+    xout[-length(x)] <-
+      dplyr::if_else(tot_row_or_tab, rep(0, length(x) -1), xout[-length(x)])
+
+    tot[-length(x)] <-
+      dplyr::if_else(tot_row_or_tab, rep(0, length(x) -1), tot [-length(x)])
+  }}
+
+  observed_freq     <- xout / dplyr::last(tot)
+  expected_freq     <- dplyr::last(xout) * tot / dplyr::last(tot)^2
   spread            <- observed_freq - expected_freq
-  switch(type[1],
+  switch(calc[1],
          "ctr"           = spread^2 / expected_freq, # = expected_freq * binding_ratio^2,
          "spread"        = spread                  ,
          "binding_ratio" = spread   / expected_freq,
          "expected_freq" = expected_freq           ,
          "ctr_with_sign" = sign(spread) * spread ^2 / expected_freq
   )
+  #tidyr::replace_na(res, 0)
 }
 
 
 
 
-tab_chi2 <- function(tabs, calc = c("ctr", "p", "var", "counts")) {
+tab_chi2 <- function(tabs, calc = c("ctr", "p", "var", "counts"),
+                     comp = NULL, color = c("no", "auto", "all", "all_pct")
+) {
   get_vars        <- tab_get_vars(tabs)
   row_var         <- get_vars$row_var
   #col_vars        <- rlang::sym(get_vars$col_vars)
@@ -1552,18 +1523,24 @@ tab_chi2 <- function(tabs, calc = c("ctr", "p", "var", "counts")) {
   groups          <- rlang::syms(dplyr::group_vars(tabs))
   #ngroups         <- dplyr::n_groups(tabs)
 
-  stopifnot(all(calc %in% c("ctr", "p", "var", "counts")))
-
+  stopifnot(all(calc %in% c("all", "ctr", "p", "var", "counts")))
   if ("all" %in% calc) calc <- c("ctr", "p", "var", "counts")
   subtext         <- get_subtext(tabs)
 
+  tabs <- tabs %>%
+    tab_match_comp_and_tottab(comp = ifelse(is.null(comp), "null", comp))
+  comp <- if (any(purrr::map(tabs, get_comp_all) %>% purrr::flatten_lgl())) {
+    "all" } else { "tab" }
   tabs <- tabs %>% tab_match_groups_and_totrows() %>% tab_add_totcol_if_no()
+
+   if (comp == "all") tabs <- tabs %>% dplyr::ungroup()
+
   tot_cols <- detect_totcols(tabs)
 
   is_a_mean <-
     purrr::map_lgl(col_vars_levels,
                    ~ purrr::map_lgl(dplyr::select(dplyr::ungroup(tabs), !!!.),
-                                    ~ any(is_mean(.))) %>% any() #1st: any/all?
+                                    ~ get_type(.) == "mean") %>% any()
     )
   all_col_tot <- names(col_vars_levels) == "all_col_vars"
 
@@ -1577,22 +1554,24 @@ tab_chi2 <- function(tabs, calc = c("ctr", "p", "var", "counts")) {
   if ("ctr" %in% calc | "var" %in% calc) {
     tabs <- tabs %>%
       dplyr::mutate(dplyr::across(
-        where(~ is_fmt(.) & ! all(is_mean(.))),
+        where(~ is_fmt(.) & !get_type(.) == "mean"),
         ~ set_var(., var_contrib(
           .,
-          rlang::eval_tidy(tot_cols[[dplyr::cur_column()]]),
-          type = "ctr_with_sign"
+          tot  = rlang::eval_tidy(tot_cols[[dplyr::cur_column()]]),
+          calc = "ctr_with_sign",
+          comp = comp
         ) )
       ))
-    #tabs %>% dplyr::mutate(dplyr::across( where(is_fmt), ~ get_var(.)   ))
+    # tabs %>% dplyr::mutate(dplyr::across( where(is_fmt), ~ get_var(.)   ))
 
 
     #Calculate variances (per groups and per column variables)
     variances_calc <-
       purrr::map_if(col_vars_levels, !is_a_mean & !all_col_tot,
-                    .f    = ~ dplyr::select(tabs, !!!groups, !!!.) %>% #
+                    .f    = ~ dplyr::select(tabs, !!!groups, !!!.) %>%
                       dplyr::select(where(~ !is_totcol(.))) %>%
-                      dplyr::mutate(dplyr::across(where(is_fmt), ~ abs(get_var(.)))),
+                      dplyr::mutate(dplyr::across(where(is_fmt),
+                                                  ~ abs(get_var(.)))),
                     .else = ~ NA_real_ #Weighted mean of variances ?
       )
 
@@ -1606,45 +1585,88 @@ tab_chi2 <- function(tabs, calc = c("ctr", "p", "var", "counts")) {
 
     variances_by_group <-
       purrr::map_if(variances_calc[!all_col_tot], !is_a_mean[!all_col_tot],
-                    .f    = ~ dplyr::group_split(.[!is_totrow(tabs),], .keep = FALSE) %>%
+                    .f    = ~ dplyr::group_split(.[!is_totrow(tabs),]) %>% #.keep = FALSE
+                      purrr::map(~ dplyr::select(., where(is.double))) %>%
                       purrr::map_dbl(~ rowSums(., na.rm = TRUE) %>% sum(na.rm = TRUE)),
-                    .else = ~ NA_real_ #rep(NA_real_, ngroups) #Weighted mean of variances ?
+                    .else = ~ NA_real_ #Weighted mean of variances ?
       )
 
-    cells <- rlang::rep_along(variances_calc[!all_col_tot], NA_integer_)
-    cells[!is_a_mean[!all_col_tot]] <-
-      variances_calc[!all_col_tot & !is_a_mean] %>%
-      purrr::map2(col_vars_levels_no_tot[!all_col_tot & !is_a_mean],
-                  ~ tibble::add_column(.x, totrows = is_totrow(tabs)) %>%
-                    dplyr::filter(!totrows) %>%
-                    dplyr::mutate(dplyr::across(
-                      where(is.double), ~ dplyr::if_else(is.na(.), 0, 1) %>%
-                        dplyr::if_else(totrows, 0, .)
-                    )) %>%
-                    dplyr::select(-totrows) %>%
-                    dplyr::summarise(cells = sum(!!!.y), .groups = "drop") %>%
-                    dplyr::pull(cells)
 
+    cells_calc <- cells_by_group <-
+      rlang::rep_along(variances_calc[!all_col_tot], NA_integer_)
+
+    cells_calc[!is_a_mean[!all_col_tot]] <-
+      variances_calc[!all_col_tot & !is_a_mean] %>%
+      purrr::map(~ tibble::add_column(.x,  totrows = is_totrow(tabs)) %>%
+                   dplyr::mutate(dplyr::across(
+                     where(is.double), ~ dplyr::if_else(is.na(.), 0, 1) %>%
+                       dplyr::if_else(totrows, 0, .)
+                   )) %>%
+                   dplyr::select(-totrows)
+      )
+
+    cells_by_row <- cells_calc[!is_a_mean & !all_col_tot] %>%
+      purrr::map2(col_vars_levels_no_tot[!all_col_tot & !is_a_mean],
+                  ~ dplyr::mutate(.x, cells = sum(!!!.y), .groups = "drop") %>%
+                    dplyr::pull(cells)
+      )
+
+    cells_by_group[!is_a_mean[!all_col_tot]] <-
+      cells_calc[!is_a_mean[!all_col_tot]] %>%
+      purrr::map2(col_vars_levels_no_tot[!all_col_tot & !is_a_mean],
+                  ~ dplyr::summarise(.x[!is_totrow(tabs),],
+                                     cells = sum(!!!.y), .groups = "drop") %>%
+                    dplyr::pull(cells)
       )
   }
+
 
   #Calculate relative contributions to variance
   if ("ctr" %in% calc) {
     tabs <-
-      purrr::reduce2(col_vars_levels[!is_a_mean & !all_col_tot], variances_by_row,
-                     .init = tabs, .f = function(.tab, .levels, .variance)
-                       tibble::add_column(.tab, .var = .variance) %>%
+      purrr::reduce2(col_vars_levels[!is_a_mean & !all_col_tot],
+                     purrr::transpose(list(var = variances_by_row,
+                                           cell = cells_by_row)),
+                     .init = tabs, .f = function(.tab, .levels, .l)
+                       tibble::add_column(.tab,
+                                          .var  = .l[["var"]],
+                                          .cell = .l[["cell"]]) %>%
                        dplyr::mutate(dplyr::across(
                          tidyselect::all_of(purrr::map_chr(.levels, as.character)),
-                         ~ set_ctr(., .var))) %>%
-                       select(-.var)
+                         ~ dplyr::if_else(condition = is_totrow(.),
+                                          true      = set_ctr(., 1/.cell),
+                                          false     = set_ctr(., .var   ) )
+                       )) %>%
+                       select(-.var, -.cell)
       )
 
     tabs <- tabs %>%
-      dplyr::mutate(dplyr::across( where(is_fmt),
-                                   ~ set_ctr(., get_var(.) / get_ctr(.))
+      dplyr::mutate(dplyr::across(
+        where(is_fmt),
+        ~ dplyr::if_else(condition = (comp == "tab" & is_totrow(.)) |
+                           (comp == "all" & is_totrow(.) & is_tottab(.)),
+                         true      = .,
+                         false     = set_ctr(., get_var(.) / get_ctr(.)) )
       ))
-    #tabs %>% dplyr::mutate(dplyr::across( where(is_fmt), ~ set_type(., "ctr")  ))
+
+    tabs <- tabs %>%
+      dplyr::mutate(dplyr::across(where(is_fmt), ~ set_comp(., comp[1])))
+
+    if (color[1] != "no" & !is.na(color[1])) {
+      color_condition <-
+        switch(color[1],
+               "auto"    = c("n", "all", "all_tabs"),
+               "all"     = c("n", "row", "col", "all", "all_tabs"),
+               "pct_all" = c("all", "all_tabs")
+        )
+      tabs <- tabs %>% dplyr::mutate(dplyr::across(
+        where(~ get_type(.x) %in% color_condition),
+        ~ set_color(., "contrib")
+      ))
+    }
+
+    # tabs %>% dplyr::mutate(dplyr::across(where(is_fmt), get_ctr))
+    # tabs %>% dplyr::mutate(dplyr::across(where(is_fmt), ~ set_display(., "ctr")))
 
 
 
@@ -1656,25 +1678,31 @@ tab_chi2 <- function(tabs, calc = c("ctr", "p", "var", "counts")) {
     #                      true      = set_ctr(., sum(abs(get_ctr(.)))),
     #                      false     = . )
     #   ))
-    # #tabs %>%  dplyr::mutate(dplyr::across( where(is_fmt), ~ set_type(., "ctr")  ))
+    # #tabs %>%  dplyr::mutate(dplyr::across( where(is_fmt), ~ set_display(., "ctr")  ))
 
 
     #mean_contrib <- contrib_no_sign %>% map(~ 1 / ( ncol(.) * nrow(.) ) )
   }
 
+  tabs2 <- if (comp == "all") {
+    tabs[!is_totrow(tabs) & !is_tottab(tabs),]
+  } else {
+    tabs[!is_totrow(tabs),]
+  }
+
 
   #Calculate unweighted counts
   if ("counts" %in% calc) {
-    counts <-
-      purrr::map(col_vars_levels[!all_col_tot],
-                 ~ dplyr::select(tabs[!is_totrow(tabs),], !!!groups, !!!.) %>%
-                   dplyr::select(where(~ !is_totcol(.))) %>%
-                   dplyr::group_split(.keep = FALSE) %>%
-                   purrr::map_int(~ dplyr::mutate(., dplyr::across(where(is_fmt),
-                                                                   ~ get_n(.))) %>%
-                                    rowSums() %>% sum() %>% as.integer()
-                   )
-      )
+    counts <-  purrr::map(
+      col_vars_levels[!all_col_tot],
+      ~ dplyr::select(tabs2, !!!groups, !!!.) %>%
+        dplyr::select(where(~ !is_totcol(.))) %>%
+        dplyr::group_split() %>%
+        purrr::map( ~ dplyr::select(., where(is_fmt)) ) %>%
+        purrr::map_int(~ dplyr::mutate(.,dplyr::across(.fns = get_n)) %>%
+                         rowSums() %>% sum() %>% as.integer()
+        )
+    )
   }
 
 
@@ -1696,10 +1724,11 @@ tab_chi2 <- function(tabs, calc = c("ctr", "p", "var", "counts")) {
 
     pvalues <-
       purrr::map_if(col_vars_levels[!all_col_tot], !is_a_mean[!all_col_tot],
-                    ~ dplyr::select(tabs[!is_totrow(tabs),], !!!groups, !!!.) %>%
-                      dplyr::group_split(.keep = FALSE) %>%
+                    ~ dplyr::select(tabs2, !!!groups, !!!.) %>%
+                      dplyr::group_split() %>%
+                      purrr::map( ~ dplyr::select(., where(is_fmt)) ) %>%
                       purrr::map(
-                        ~ dplyr::mutate(., dplyr::across(where(is_fmt), get_n)) %>%
+                        ~ dplyr::mutate(., dplyr::across(.fns = get_n)) %>%
                           dplyr::select(-where(~ sum(., na.rm = TRUE) == 0)) %>%
                           dplyr::rowwise() %>%
                           dplyr::filter(! sum(dplyr::c_across(),
@@ -1746,24 +1775,20 @@ tab_chi2 <- function(tabs, calc = c("ctr", "p", "var", "counts")) {
     pvalue_df <- NA_integer_
   }
   if (!"var"    %in% calc) {
-    cells              <- NA_integer_
+    cells_by_group     <- NA_integer_
     variances_by_group <- NA_real_
   }
   if (!"counts" %in% calc) counts <- NA_integer_
 
-
-  tables             %>% purrr::map(length)
-  counts             %>% purrr::map(length)
-  pvalue_p           %>% purrr::map(length)
-  variances_by_group %>% purrr::map(length)
-  cells              %>% purrr::map(length)
-  pvalue_df          %>% purrr::map(length)
-
-
+  purrr::map(counts            , length)
+  purrr::map(pvalue_p          , length)
+  purrr::map(variances_by_group, length)
+  purrr::map(cells_by_group    , length)
+  purrr::map(pvalue_df         , length)
 
   chi2 <-
     purrr::pmap(list(counts, pvalue_p, #pvalue_w,
-                     variances_by_group, cells, pvalue_df),
+                     variances_by_group, cells_by_group, pvalue_df),
                 ~ dplyr::bind_cols(tables,
                                    tibble::tibble(count    = ..1,
                                                   pvalue   = ..2,
@@ -1786,18 +1811,22 @@ tab_chi2 <- function(tabs, calc = c("ctr", "p", "var", "counts")) {
                           values_to = .y) %>%
       dplyr::mutate(dplyr::across(
         where(is.double),
-        ~ fmt(type = "var", n =  0L, var  = ., col_var = "chi2_cols")
+        ~ fmt(display = "var", type = "n", n =  0L, var  = .,
+              col_var = "chi2_cols")
       ))
   ) %>% purrr::map_if(append(FALSE, rep(TRUE, length(.) - 1)),
                       ~ dplyr::select(., where(is_fmt))
   ) %>% dplyr::bind_cols() %>%
     dplyr::mutate(dplyr::across(where(is_fmt), ~ dplyr::case_when(
-      `chi2 stats` == "variance" ~ set_digits(., 4),
-      `chi2 stats` == "pvalue"   ~ set_type(., "pct") %>%
-        set_pct(get_var(.)) %>% set_digits(., 2),
+      `chi2 stats` == "variance" ~ set_digits(., 4L),
+      `chi2 stats` == "pvalue"   ~ set_display(., "pct") %>%
+        set_pct(get_var(.)) %>% set_digits(., 2L),
+      `chi2 stats` == "count"    ~ as_totrow(.),
       TRUE                       ~ .
     ))) %>% new_tab()
 
+
+  tabs <- tabs %>% dplyr::select(-tidyselect::any_of("tottabs"))
 
   if (lv1_group_vars(tabs)) {
     new_tab(tabs, subtext = subtext, chi2 = chi2)
