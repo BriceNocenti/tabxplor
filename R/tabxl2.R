@@ -122,7 +122,6 @@ tab_xl <-
            colwidth = "auto",
            only_one_sheet = FALSE, min_counts = 30,
            color = "auto", #c("auto", "contrib", "diff", "diff_no_ci", "diff_after_ci", "no"), # just_row_col ?
-           comp = "all",
            hide_near_zero = "auto", #c("auto", 0.0049, Inf),
            #no_contribs = FALSE, no_sup = FALSE, no_another_tot = FALSE, no_sup = FALSE, #title
            pct_breaks     = get_color_breaks("pct"),
@@ -138,14 +137,17 @@ tab_xl <-
     chi2    <- purrr::map(tabs, get_chi2)
     colwidth       <- vec_recycle(colwidth,       length(tabs))
     hide_near_zero <- vec_recycle(hide_near_zero, length(tabs))
-    comp           <- vec_recycle(comp,           length(tabs))
     color <- vec_recycle(color, length(tabs))
 
     get_vars        <- purrr::map(tabs, tab_get_vars)
     col_vars_levels_alltot <- purrr::map(get_vars, ~ purrr::map(.$col_vars_levels, rlang::syms))
     col_vars_levels <- purrr::map(col_vars_levels_alltot, ~ .[names(.) != "all_col_vars"] )
     tab_vars <- purrr::map(get_vars, ~ .$tab_vars)
-
+    comp     <- dplyr::if_else(
+      purrr::map_lgl(tabs, ~purrr::map_lgl(.x, get_comp_all) %>%
+                       purrr::discard(is.na(.)) %>% any()),
+      "all",
+      "tab" )
     #needed args attributes : ----
     #insufficient_counts
 
@@ -156,23 +158,43 @@ tab_xl <-
     no_chi2 <- purrr::map_lgl(chi2, ~ nrow(.) == 0)
 
     prep_tabs_chi2 <- tabs[!no_chi2] %>%
-      purrr::map(~ tibble::add_column(., totrows = is_totrow(.)) %>%
-                   dplyr::mutate(`chi2 stats` = dplyr::case_when(
-                     totrows                                       ~ NA_character_,
-                     dplyr::lead(totrows, n = 1L, default = FALSE) ~ "count"   ,
-                     dplyr::lead(totrows, n = 2L, default = FALSE) ~ "pvalue"  ,
-                     dplyr::lead(totrows, n = 3L, default = FALSE) ~ "variance",
-                     dplyr::lead(totrows, n = 4L, default = FALSE) ~ "cells"   ,
-                     dplyr::lead(totrows, n = 5L, default = FALSE) ~ "df"      ,
-                     TRUE                                          ~ NA_character_
-                   )) %>% dplyr::select(-totrows, - where(is_fmt)) %>%
-                   dplyr::ungroup()
+      purrr::map_if(comp == "tab",
+                    ~ tibble::add_column(., totrows = is_totrow(.)) %>%
+                      dplyr::mutate(`chi2 stats` = dplyr::case_when(
+                        totrows                                       ~ NA_character_,
+                        dplyr::lead(totrows, n = 1L, default = FALSE) ~ "count"   ,
+                        dplyr::lead(totrows, n = 2L, default = FALSE) ~ "pvalue"  ,
+                        dplyr::lead(totrows, n = 3L, default = FALSE) ~ "variance",
+                        dplyr::lead(totrows, n = 4L, default = FALSE) ~ "cells"   ,
+                        dplyr::lead(totrows, n = 5L, default = FALSE) ~ "df"      ,
+                        TRUE                                          ~ NA_character_
+                      )) %>%
+                      dplyr::select(-totrows, - where(is_fmt)) %>%
+                      dplyr::ungroup(),
+
+                    .else = ~ dplyr::ungroup(.) %>%
+                      dplyr::mutate(
+                        last = dplyr::row_number() == dplyr::n(),
+                        `chi2 stats` = dplyr::case_when(
+                          last                                       ~ NA_character_,
+                          dplyr::lead(last, n = 1L, default = FALSE) ~ "count"   ,
+                          dplyr::lead(last, n = 2L, default = FALSE) ~ "pvalue"  ,
+                          dplyr::lead(last, n = 3L, default = FALSE) ~ "variance",
+                          dplyr::lead(last, n = 4L, default = FALSE) ~ "cells"   ,
+                          dplyr::lead(last, n = 5L, default = FALSE) ~ "df"      ,
+                          TRUE                                       ~ NA_character_
+                        )) %>%
+                      dplyr::select(-last, -where(is_fmt))
       )
+
+    join_vars <- purrr::map2(
+      tab_vars[!no_chi2], comp[!no_chi2],
+      ~ if (.y == "tab") {append(., "chi2 stats")} else {"chi2 stats"}
+    )
 
     tabs_chi2 <- rep(list(tibble::tibble()), length(chi2))
     tabs_chi2[!no_chi2] <-
-      purrr::pmap(list(prep_tabs_chi2, chi2[!no_chi2],
-                       purrr::map(tab_vars[!no_chi2], ~ append(., "chi2 stats")) ),
+      purrr::pmap(list(prep_tabs_chi2, chi2[!no_chi2], join_vars),
                   ~ dplyr::left_join(..1, ..2, by = ..3, suffix = c(" ", "")) %>%
                     dplyr::select(`chi2 stats`, where(is_fmt)) %>%
                     dplyr::mutate(dplyr::across(
@@ -181,11 +203,12 @@ tab_xl <-
                     )) %>%
                     dplyr::mutate(dplyr::across(
                       where(is_fmt), get_num
-                      #as_totrow(.var, FALSE) %>% as_tottab(FALSE)
                     )) %>% dplyr::mutate(`chi2 stats` =
                                            stringr::str_c(`chi2 stats`, " :"))
       )
 
+    join_vars2 <- purrr::map2(tab_vars[!no_chi2], comp[!no_chi2],
+                              ~ if (.y == "tab") {.} else {character()} )
     nbcells <- rep(list(tibble::tibble()), length(chi2))
     nbcells[!no_chi2] <-  chi2[!no_chi2] %>%
       purrr::map(~dplyr::filter(., `chi2 stats` == "cells" ) %>%
@@ -194,8 +217,9 @@ tab_xl <-
                                                ~ as.integer(get_num(.)))) %>%
                    dplyr::select(-where(~ is.integer(.) & all(is.na(.))))
       )
+
     nbcells[!no_chi2]  <-
-      purrr::pmap(list(tabs[!no_chi2], nbcells[!no_chi2], tab_vars[!no_chi2]),
+      purrr::pmap(list(tabs[!no_chi2], nbcells[!no_chi2], join_vars2),
                   ~ dplyr::ungroup(dplyr::select(..1, -where(is_fmt))) %>%
                     dplyr::left_join(..2, by = ..3, suffix = c(".var", ""))
       )
@@ -209,7 +233,7 @@ tab_xl <-
                    dplyr::select(-where(~ is.logical(.) & all(is.na(.))))
       )
     pvalues[!no_chi2]  <-
-      purrr::pmap(list(tabs[!no_chi2], pvalues[!no_chi2], tab_vars[!no_chi2]),
+      purrr::pmap(list(tabs[!no_chi2], pvalues[!no_chi2], join_vars2),
                   ~ dplyr::ungroup(dplyr::select(..1, -where(is_fmt))) %>%
                     dplyr::left_join(..2, by = ..3, suffix = c(".var", ""))
       )
@@ -242,16 +266,8 @@ tab_xl <-
     }
 
     ci_types <- rep(list(character(0)), length(tabs))
-    ci_types <- purrr::map(tabs[!no_ci], ~ purrr::map_chr(.x, get_ci_type) %>%
-                             stringr::str_remove("_mean$") %>%
-                             purrr::set_names(names(.x))
-                           )
-
-      # ci_spread <-
-    #   purrr::map(ci_types, ~ which(. %in% c("spread_col", "spread_row",
-    #                                         "spread_row_all")))
-
-    #ci_types and spread not the right length without tab vars ----
+    ci_types <- purrr::map(tabs[!no_ci], ~ purrr::map_chr(.x, get_ci_type)
+    )
 
 
 
@@ -289,10 +305,10 @@ tab_xl <-
       purrr::map(tabs, ~ dplyr::mutate(., dplyr::across(where(is_fmt), get_num)) %>%
                    tibble::as_tibble())
 
-    totrows <- purrr::map(totrowsTF, which)
+    totrows  <- purrr::map(totrowsTF, which)
     tot_rows <- purrr::map2(totrows, start, ~ .x + .y + 1L)
-    group_ind <- purrr::map(tabs, dplyr::group_indices)
-    end_group   <- purrr::map(group_ind, ~ which(.[-1] != .[-length(.)] ) ) %>%
+    group_ind<- purrr::map(tabs, dplyr::group_indices)
+    end_group<- purrr::map(group_ind, ~ which(.[-1] != .[-length(.)] ) ) %>%
       purrr::map2(start, ~ .x + .y + 1)
     rows_nb  <- purrr::map2(tabs, start, ~ as.integer(1:nrow(.x) + .y + 1L))
     # start_group <- purrr::map(group_ind, ~ .[-length(.)] != .[-1]   )
@@ -303,125 +319,130 @@ tab_xl <-
     txt_cols <- purrr::map(tabs, ~ which(purrr::map_lgl(., ~ !is_fmt(.))))
     row_var_cols <- purrr::map(txt_cols, ~ .[length(.)])
     fmt_cols <- purrr::map(tabs, ~ which(purrr::map_lgl(., ~ is_fmt(.))))
-    totcols <- purrr::map(totcols, which)
+    totcols  <- purrr::map(totcols, which)
 
     col_vars_names <- purrr::map(tabs, ~ get_col_var(.))
     end_col_var <-
       purrr::map(col_vars_names,
                  ~ which(tidyr::replace_na( .[-length(.)]  != .[-1], FALSE)))
-    types <- purrr::map(tabs, ~ purrr::map_if(
-      ., is_fmt, .f = ~ get_type(.), .else = ~ NA_character_
+    display <- purrr::map(tabs, ~ purrr::map_if(
+      ., is_fmt, .f = ~ get_display(.), .else = ~ NA_character_
     ))
-    pct_cols <- purrr::map(types, ~ tidyr::replace_na(
-      purrr::map_lgl(., ~ all(. == "pct")), FALSE
+
+    type  <- purrr::map(tabs, get_type)
+
+    color <- purrr::map(tabs, get_color)
+
+    mean_contrib <- purrr::pmap(list(tabs, color, fmt_cols), ~ purrr::map2_df(
+      ..1[..3],
+      ..2[..3],
+      ~ if (.y == "contrib") { get_mean_contrib(.x) } else { NA_real_ }
     ))
-    type <- purrr::map(tabs, get_type) #%>%
-    # purrr::map2(pct_cols, ~ purrr::map_if(.x, !.y, ~ NA_character_) %>%
-    #               purrr::flatten_chr() %>%
-    #               purrr::set_names(names(.x)))
 
-    # cols_by_type <-
-    #   purrr::map(types, ~ purrr::map_chr(., ~ dplyr::if_else(
-    #     length(unique(.)) > 1, "mixed", unique(.)
-    #   )  ) )
+    color_type <- purrr::map2(color, type, ~ dplyr::case_when(
+      .x %in% c("no", "") ~ NA_character_      ,
+      .x == "contrib"     ~ "contrib"          ,
+      .y == "mean"        ~ paste0(.x, "_mean"),
+      TRUE                ~ .x
+    ) %>% purrr::set_names(names(.x))) %>%
+      purrr::map2(fmt_cols, ~ .x[.y])
 
-    cols_type_pct <-  purrr::map(tabs, get_type) #cols_by_type_pct
-    # purrr::map2(type, cols_by_type,
-    #             ~ purrr::map2_chr(.x, .y, function(.pct, .type)
-    #               dplyr::if_else(.type == "pct", .pct, .type)  )
-    # )
-
-    if (any(!no_ci)) {
-      cols_type_pct_ci <-
-        purrr::pmap(
-          list(cols_type_pct, no_ci, ci_types), function(type, no, ci)
-            dplyr::case_when(
-              type == "row"  & !no & ci %in% c("diff_row"  , "diff_row_all"  )
-              ~ "row_ci_diff"        ,
-
-              type == "row"  & !no & ci %in% c("spread_row", "spread_row_all")
-              ~ "row_ci_spread" ,
-
-              type == "col"  & !no & ci == "diff_col"
-              ~ "col_ci_diff"        ,
-
-              type == "col"  & !no & ci == "spread_col"
-              ~ "col_ci_spread" ,
-
-              type == "mean" & !no & ci %in% c("diff_row"  , "diff_row_all"  )
-              ~ "mean_ci_diff"       ,
-
-              type == "mean" & !no & ci %in% c("spread_row", "spread_row_all")
-              ~ "mean_ci_spread",
-
-              TRUE            ~ type
-            )) %>%
-        purrr::map(~ purrr::set_names(., 1:length(.)) %>%
-                     purrr::discard(is.na(.) | . %in% c("mixed", "pct_ci", "mean_ci",
-                                                        "var", "ci", "n"))
-        )
-    }
+    # switch(color_type,
+    #        "diff_mean"     = ,
+    #        "diff_ci_mean"  = ,
+    #        "after_ci_mean" = ,
+    #        "diff"          = ,
+    #        "diff_ci"       = ,
+    #        "after_ci"      = ,
+    #        "contrib"       = ,
+    #        )
 
 
-    mixed_pct_cols <- purrr::map(cols_type_pct, ~ purrr::keep(., . == "mixed"))
-
-    spreads <-
-      purrr::map2(tabs, cols_type_pct, ~ dplyr::mutate(.x, dplyr::across(
-        tidyselect::all_of(names(.y)[tidyr::replace_na(
-          .y %in% c("row", "col", "mean", "ctr"), FALSE)]),
-        ~ get_num(.))) %>%
-          tibble::as_tibble()
-      )
-
-    spreads <-
-      purrr::map2(spreads, totrowsTF,
-                  ~ tibble::add_column(.x, totrows = .y) %>%
-                    dplyr::mutate(totrows = cumsum(totrows) - totrows + 1L)
-      ) %>%
-      purrr::map_if(comp == "tab", ~ dplyr::group_by(., totrows))
-
-    spreads <-
-      purrr::map2(spreads, cols_type_pct, function(.tab, .type)
-        dplyr::mutate(.tab, dplyr::across(
-          tidyselect::all_of(names(.type)[tidyr::replace_na(.type == "row", FALSE)]),
-          ~ . - dplyr::last(.)
-        )) %>%
-          dplyr::mutate(dplyr::across(
-            tidyselect::all_of(names(.type)[tidyr::replace_na(.type == "mean", FALSE)]),
-            ~ . / dplyr::last(.)
-          )) %>%
-          dplyr::ungroup() %>% dplyr::select(-totrows)
-      )
-
-    tot_cols_sl <- purrr::map(tabs, detect_totcols)
-
-    spreads <-
-      purrr::pmap(list(spreads, cols_type_pct, tot_cols_sl), function(.tab, .type, .tot)
-        map2_if(.tab, .tot, tidyr::replace_na(.type == "col", FALSE),
-                function(.var, .tot) .var - rlang::eval_tidy(.tot, data = .tab)
-        ) %>% dplyr::bind_cols()
-      )
-
-    spreads[!no_chi2] <-
-      purrr::pmap(
-        list(spreads[!no_chi2], cols_type_pct[!no_chi2], nbcells[!no_chi2]),
-        function(.tab, .type, .cells)
-          dplyr::mutate(.tab, dplyr::across(
-            tidyselect::all_of(names(.type)[
-              tidyr::replace_na(.type %in% c("wn", "all", "all_tabs", "ctr"), FALSE)
-            ] ) &
-              where(function(.var) is_fmt(.var) & get_col_var(.var) %in% names(.cells)
-              ),
-            function(.var) get_ctr(.var) * rlang::eval_tidy(
-              rlang::sym(get_col_var(.var)), data = .cells)
-          ))
-      )
-    spreads <- spreads %>%
-      purrr::map(~ dplyr::mutate(., dplyr::across(where(is_fmt), ~ NA_real_)))
 
 
-    cols_type_pct <-
-      purrr::map(cols_type_pct,
+    display_out_of_type <- purrr::map2(
+      display, type,
+      ~ purrr::map2_df(.x, .y, function(.disp, .t) dplyr::case_when(
+        is.na(.disp)                                                ~ NA  ,
+        .t == "mean" & .disp != "mean"                              ~ TRUE,
+        .t %in% c("row", "col", "all", "all_tabs") & .disp != "pct" ~ TRUE,
+        TRUE                                                        ~ FALSE
+      )))
+
+
+
+    # if (any(!no_ci)) {
+    #   type_with_ci <-
+    #     purrr::pmap(
+    #       list(type, no_ci, ci_types), function(type, no, ci)
+    #         dplyr::case_when(
+    #           type == "row"  & !no & ci == "diff" ~ "row_ci" ,
+    #           type == "col"  & !no & ci == "diff" ~ "col_ci" ,
+    #           type == "mean" & !no & ci == "diff" ~ "mean_ci",
+    #           TRUE                                ~ type
+    #         )) %>%
+    #     purrr::map(~ purrr::set_names(., 1:length(.)) %>%
+    #                  purrr::discard(is.na(.) | . %in% c("n", "")) #c("mixed", "pct_ci", "mean_ci","var", "ci", "n")
+    #     )
+    # }
+    #
+    # spreads <-
+    #   purrr::map2(tabs, type, ~ dplyr::mutate(.x, dplyr::across(
+    #     tidyselect::all_of(names(.y)[tidyr::replace_na(
+    #       .y %in% c("row", "col", "mean", "ctr"), FALSE)]),
+    #     ~ get_num(.))) %>%
+    #       tibble::as_tibble()
+    #   )
+    #
+    # spreads <-
+    #   purrr::map2(spreads, totrowsTF,
+    #               ~ tibble::add_column(.x, totrows = .y) %>%
+    #                 dplyr::mutate(totrows = cumsum(totrows) - totrows + 1L)
+    #   ) %>%
+    #   purrr::map_if(comp == "tab", ~ dplyr::group_by(., totrows))
+    #
+    # spreads <-
+    #   purrr::map2(spreads, type, function(.tab, .type)
+    #     dplyr::mutate(.tab, dplyr::across(
+    #       tidyselect::all_of(names(.type)[tidyr::replace_na(.type == "row", FALSE)]),
+    #       ~ . - dplyr::last(.)
+    #     )) %>%
+    #       dplyr::mutate(dplyr::across(
+    #         tidyselect::all_of(names(.type)[tidyr::replace_na(.type == "mean", FALSE)]),
+    #         ~ . / dplyr::last(.)
+    #       )) %>%
+    #       dplyr::ungroup() %>% dplyr::select(-totrows)
+    #   )
+    #
+    # tot_cols_sl <- purrr::map(tabs, detect_totcols)
+    #
+    # spreads <-
+    #   purrr::pmap(list(spreads, type, tot_cols_sl), function(.tab, .type, .tot)
+    #     map2_if(.tab, .tot, tidyr::replace_na(.type == "col", FALSE),
+    #             function(.var, .tot) .var - rlang::eval_tidy(.tot, data = .tab)
+    #     ) %>% dplyr::bind_cols()
+    #   )
+    #
+    # spreads[!no_chi2] <-
+    #   purrr::pmap(
+    #     list(spreads[!no_chi2], type[!no_chi2], nbcells[!no_chi2]),
+    #     function(.tab, .type, .cells)
+    #       dplyr::mutate(.tab, dplyr::across(
+    #         tidyselect::all_of(names(.type)[
+    #           tidyr::replace_na(.type %in% c("wn", "all", "all_tabs", "ctr"), FALSE)
+    #         ] ) &
+    #           where(function(.var) is_fmt(.var) & get_col_var(.var) %in% names(.cells)
+    #           ),
+    #         function(.var) get_ctr(.var) * rlang::eval_tidy(
+    #           rlang::sym(get_col_var(.var)), data = .cells)
+    #       ))
+    #   )
+    # spreads <- spreads %>%
+    #   purrr::map(~ dplyr::mutate(., dplyr::across(where(is_fmt), ~ NA_real_)))
+    #
+
+    display <-
+      purrr::map(display,
                  ~ purrr::set_names(., 1:length(.)) %>%
                    purrr::discard(is.na(.) | . %in% c("mixed", "pct_ci", "mean_ci",
                                                       "var", "ci", "n"))
@@ -618,7 +639,7 @@ tab_xl <-
       totcols_ci[!no_ci]     <- totcols[!no_ci] %>%
         purrr::map2(offset[!no_ci] , ~ c(.x, .x + .y))
 
-       ci_types
+      ci_types
 
       st_ci_nums <- openxlsx::createStyle(numFmt = "0.0%")
 
@@ -628,7 +649,7 @@ tab_xl <-
                      style = st_ci_nums)
 
       ci_mean_cols <-
-        purrr::map(cols_type_pct, ~ which(. %in% c("mean", "mean_ci"))) %>%
+        purrr::map(display, ~ which(. %in% c("mean", "mean_ci"))) %>%
         purrr::map2(offset, ~ .x + .y)
       st_ci_nums_mean <- openxlsx::createStyle(numFmt = "#,##0.0")
 
@@ -774,9 +795,9 @@ tab_xl <-
                    style = st_insufficient_counts)
 
     #Digits ----------------------------------------------------------------
-    numfmt <- function(n, type) {
-      ci    <- type %in% c("pct_ci", "mean_ci")
-      pct   <- type %in% c("pct", "ctr", "ci")
+    numfmt <- function(n, display) {
+      ci    <- display %in% c("pct_ci", "mean_ci")
+      pct   <- display %in% c("pct", "ctr", "ci")
       n_inf <- n < 0
       n_0   <- n == 0
 
@@ -803,16 +824,16 @@ tab_xl <-
     }
 
     digits_map <-
-      list(sheet, digits, types, start, 1:length(sheet)) %>%
-      purrr::pmap(function(sheet, .n, .type, .start, .tab_nb)
-        purrr::pmap(list(.n, .type, 1:length(.n)), function(n, type, .lgth)
+      list(sheet, digits, display, start, 1:length(sheet)) %>%
+      purrr::pmap(function(sheet, .n, .display, .start, .tab_nb)
+        purrr::pmap(list(.n, .display, 1:length(.n)), function(n, display, .lgth)
           tibble::tibble(sheet = sheet, cols = .lgth,
                          rows = 1:length(n) + .start + 1,
-                         type = type, n = n, tab_nb = .tab_nb)
+                         display = display, n = n, tab_nb = .tab_nb)
         ) %>% dplyr::bind_rows()
       ) %>% dplyr::bind_rows() %>%
-      dplyr::filter(!is.na(type) & !is.na(n)) %>%
-      dplyr::mutate(num_format = forcats::as_factor(numfmt(n, type))) %>%
+      dplyr::filter(!is.na(display) & !is.na(n)) %>%
+      dplyr::mutate(num_format = forcats::as_factor(numfmt(n, display))) %>%
       dplyr::group_by(num_format) %>%
       dplyr::mutate(num_name = paste0("st_digits", as.integer(num_format)))
 
@@ -867,26 +888,26 @@ tab_xl <-
                         rep(NA_real_, lbrk - length(mean_breaks)))
     contrib_breaks <- c(contrib_breaks,
                         rep(NA_real_, lbrk - length(contrib_breaks)))
-    pct_breaks_after_ci  <- pct_breaks - pct_breaks[1]
-    mean_breaks_after_ci <- mean_breaks/mean_breaks[1]
+    pct_ci_breaks  <- pct_breaks - pct_breaks[1]
+    mean_ci_breaks <- mean_breaks/mean_breaks[1]
 
     if (lbrk >= 2) {
-    pct_breakssup            <- c(pct_breaks[2:lbrk]          , Inf)
-    mean_breakssup           <- c(mean_breaks[2:lbrk]         , Inf)
-    coeffssup                <- c(contrib_breaks[2:lbrk]      , Inf)
-    pct_breaks_after_ci_sup  <- c(pct_breaks_after_ci[2:lbrk] , Inf)
-    mean_breaks_after_ci_sup <- c(mean_breaks_after_ci[2:lbrk], Inf)
+      pct_brksup     <- c(pct_breaks    [2:lbrk], Inf)
+      mean_brksup    <- c(mean_breaks   [2:lbrk], Inf)
+      contrib_brksup <- c(contrib_breaks[2:lbrk], Inf)
+      pct_ci_brksup  <- c(pct_ci_breaks [2:lbrk], Inf)
+      mean_ci_brksup <- c(mean_ci_breaks[2:lbrk], Inf)
     } else {
-      pct_breakssup <- mean_breakssup <- coeffssup <-
-        pct_breaks_after_ci_sup <- mean_breaks_after_ci_sup <- Inf
+      pct_brksup <- mean_brksup <- contrib_brksup <-
+        pct_ci_brksup <- mean_ci_brksup <- Inf
     }
 
     style_select <- switch(lbrk,
-                          "1" = 2,
-                          "2" = c(2, 4),
-                          "3" = c(1, 3, 4),
-                          "4" = 1:4,
-                          "5" = 1:5
+                           "1" = 2,
+                           "2" = c(2, 4),
+                           "3" = c(1, 3, 4),
+                           "4" = 1:4,
+                           "5" = 1:5
     )
 
     style_pos <- style_pos[style_select] %>% c(rep(NA_real_, lbrk - length(.)))
@@ -900,17 +921,17 @@ tab_xl <-
       contrib_breaks <- contrib_breaks[1:5]
     }
 
-    pct_breaks               <- pct_breaks               %>% c(., -.)
-    mean_breaks              <- mean_breaks              %>% c(., 1/.)
-    contrib_breaks           <- contrib_breaks           %>% c(., -.)
-    pct_breaks_after_ci      <- pct_breaks_after_ci      %>% c(., .)
-    mean_breaks_after_ci     <- mean_breaks_after_ci     %>% c(., 1/.)
+    pct_brk         <- pct_breaks      %>% c(., -.)
+    mean_brk        <- mean_breaks     %>% c(., 1/.)
+    contrib_brk     <- contrib_breaks  %>% c(., -.)
+    pct_ci_brk      <- pct_ci_breaks   %>% c(., -.)
+    mean_ci_brk     <- mean_ci_breaks  %>% c(., -.) #then - again
 
-    pct_breakssup            <- pct_breakssup            %>% c(., -.)
-    mean_breakssup           <- mean_breakssup           %>% c(., 1/.)
-    coeffssup                <- coeffssup                %>% c(., -.)
-    pct_breaks_after_ci_sup  <- pct_breaks_after_ci_sup  %>% c(., .)
-    mean_breaks_after_ci_sup <- mean_breaks_after_ci_sup %>% c(., 1/.)
+    pct_brksup     <- pct_brksup       %>% c(., -.)
+    mean_brksup    <- mean_brksup      %>% c(., 1/.)
+    contrib_brksup <- contrib_brksup   %>% c(., -.)
+    pct_ci_brksup  <- pct_ci_brksup    %>% c(., -.)
+    mean_ci_brksup <- mean_ci_brksup   %>% c(., -.) #then - again
 
     style <- c(style_pos, style_neg)
 
@@ -918,29 +939,54 @@ tab_xl <-
 
     conditional_fmt_styles <- tibble::tibble(
       style, sign,
-      pct_breaks, mean_breaks, contrib_breaks,
-      pct_breaks_after_ci, mean_breaks_after_ci,
-      pct_breakssup, mean_breakssup, coeffssup,
-      pct_breaks_after_ci_sup,mean_breaks_after_ci_sup
+      pct_brk, mean_brk, contrib_brk,
+      pct_ci_brk, mean_ci_brk,
+      pct_brksup, mean_brksup, contrib_brksup,
+      pct_ci_brksup, mean_ci_brksup
     )
+
+    color_selections <-
+      purrr::map(tabs, ~ purrr::map(
+        .[purrr::map_lgl(., is_fmt)],
+        ~ fmt_color_selection(., force_breaks = conditional_fmt_styles) %>%
+          purrr::map(which)
+      ) %>% tibble::as_tibble() )
+
+    brk <-
+      purrr::pmap(list(color, type, tabs), ~ purrr::map2(
+        ..1[purrr::map_lgl(..3, is_fmt)], ..2[purrr::map_lgl(..3, is_fmt)],
+        function(.c, .t) switch(
+          .c,
+          "diff"     = ,
+          "diff_ci"  = switch(.t,
+                              "mean" = list(mean_brk, mean_brksup),
+                              list(pct_brk, pct_brksup)),
+          "after_ci" = switch(.t,
+                              "mean" = list(mean_ci_brk, mean_ci_brksup),
+                              list(pct_ci_brk, pct_ci_brksup)),
+          "contrib"  = list(contrib_brk, contrib_brksup),
+          NA_real_) %>%
+          purrr::transpose() %>%
+          purrr::map(purrr::flatten_chr)
+      ) %>% tibble::as_tibble())
 
 
 
     # Database of parameters to map conditional formatting to excel ------------
 
-    #kept types for conditional formatting :
+    #kept display for conditional formatting :
     # c("row", "col", "all", "all_tabs", "wn", "ctr", "mean")
     # warning with mixed_pct_cols ? ----
 
-    #For each table, create one line of parameters for earch column types ;
+    #For each table, create one line of parameters for earch column display ;
     # and in each type, one line for each continuous set of columns
     conditional_fmt_map <-
-      tibble::tibble(sheet, type_ci = cols_type_pct_ci, type = cols_type_pct,
-                     cols = purrr::map(cols_type_pct, ~ as.integer(names(.))),
+      tibble::tibble(sheet, type = type, color = color,
+                     cols = purrr::map(type, ~ as.integer(names(.))),
                      totrows, totcols, tab_nb = 1:length(sheet), comp, spreads,
-                     start, color) %>%
-      tidyr::unnest(c(type, type_ci, cols)) %>%
-      dplyr::group_by(sheet, type_ci) %>%
+                     start) %>%
+      tidyr::unnest(c(type, color, cols)) %>%
+      dplyr::group_by(sheet, color) %>% #type_ci
       dplyr::mutate(ct = cols != dplyr::lag(cols + 1, default = TRUE),
                     ct = cumsum(as.integer(ct))) %>%
       tidyr::nest(cols = cols) %>%
@@ -1047,7 +1093,7 @@ tab_xl <-
       dplyr::select(tab_nb, sheet, type, ct, cols, rows, totcols, totrows,
                     col1, row1, dplyr::everything())
 
-    #Not calculate cols if not necessary by types ----
+    #Not calculate cols if not necessary by display ----
 
     if (any(!no_ci)) {
       conditional_fmt_map <- conditional_fmt_map %>%
@@ -1089,8 +1135,6 @@ tab_xl <-
       tmean_af_ci  <- color == "diff_after_ci" & type_ci == "mean_ci_diff"
       tmean_af_cis <- color == "diff_after_ci" & type_ci == "mean_ci_spread"
       #tctr2  <- type == "ctr"
-
-      #comp must be the same in ci and tab_xl : make attribute ? ----
 
       # ci_types
       # ci_spread
@@ -1181,8 +1225,8 @@ tab_xl <-
 
 
       # rule_ctr2 <- function(cel1, ctr) {   # B2 > 2 * nb_cells
-      #   function(pct_breaks, mean_breaks, sign,  contrib_breaks)
-      #     paste0(cel1, sign, contrib_breaks, "/")
+      #   function(pct_brk, mean_brk, sign,  contrib_brk)
+      #     paste0(cel1, sign, contrib_brk, "/")
       # }
       #contrib :
       # ...nbcell, "-", ...nbcell, "+",
@@ -1225,10 +1269,10 @@ tab_xl <-
 
     tibble::tibble(
       style, sign,
-      pct_breaks, mean_breaks, contrib_breaks,
-      pct_breaks_after_ci, mean_breaks_after_ci,
-      pct_breakssup, mean_breakssup, coeffssup,
-      pct_breaks_after_ci_sup,mean_breaks_after_ci_sup
+      pct_brk, mean_brk, contrib_brk,
+      pct_ci_brk, mean_ci_brk,
+      pct_brksup, mean_brksup, contrib_brksup,
+      pct_ci_brksup,mean_ci_brksup
     )
 
     # Create conditional formatting rules for each shade of green/orange ;
@@ -1241,31 +1285,31 @@ tab_xl <-
           color == "diff_after_ci" &
             type_ci %in% c("row_ci_diff", "col_ci_diff",
                            "row_ci_spread", "col_ci_spread")
-                                                       ~ pct_breaks_after_ci,
+          ~ pct_ci_brk,
           color == "diff_after_ci" &
             type_ci %in% c("mean_ci_spread", "mean_ci_diff")
-                                                       ~ mean_breaks_after_ci,
-          type %in% c("row", "col")                    ~ pct_breaks ,
-          type == "mean"                               ~ mean_breaks,
-          type %in% c("all", "all_tabs", "wn", "ctr")  ~ contrib_breaks,
+          ~ mean_ci_brk,
+          type %in% c("row", "col")                    ~ pct_brk ,
+          type == "mean"                               ~ mean_brk,
+          type %in% c("all", "all_tabs", "wn", "ctr")  ~ contrib_brk,
         ),
         brksup = dplyr::case_when(
           color == "diff_after_ci" &
             type_ci %in% c("row_ci_diff", "col_ci_diff",
                            "row_ci_spread", "col_ci_spread")
-                                                       ~ pct_breaks_after_ci_sup,
+          ~ pct_ci_brksup,
           color == "diff_after_ci" &
             type_ci %in% c("mean_ci_spread", "mean_ci_diff")
-                                                       ~ mean_breaks_after_ci_sup,
-          type %in% c("row", "col")                    ~ pct_breakssup ,
-          type == "mean"                               ~ mean_breakssup,
-          type %in% c("all", "all_tabs", "wn", "ctr")  ~ coeffssup
+          ~ mean_ci_brksup,
+          type %in% c("row", "col")                    ~ pct_brksup,
+          type == "mean"                               ~ mean_brksup,
+          type %in% c("all", "all_tabs", "wn", "ctr")  ~ contrib_brksup
         )
       ) %>%
-      dplyr::select(-pct_breaks, -mean_breaks, -contrib_breaks,
-        -pct_breaks_after_ci, -mean_breaks_after_ci,
-        -pct_breakssup, -mean_breakssup, -coeffssup,
-        -pct_breaks_after_ci_sup, -mean_breaks_after_ci_sup    ) %>%
+      dplyr::select(-pct_brk, -mean_brk, -contrib_brk,
+                    -pct_ci_brk, -mean_ci_brk,
+                    -pct_brksup, -mean_brksup, -contrib_brksup,
+                    -pct_ci_brksup, -mean_ci_brksup    ) %>%
       dplyr::filter(! (is.na(cel1) | is.na(brk) ) # |
                     #      (type == "row"              & is.na(totr   ) ) |
                     #      (type %in% c("col", "mean") & is.na(totc   ) ) |
@@ -1297,8 +1341,8 @@ tab_xl <-
             )
         ))
 
-    # c("pct_breaks_after_ci",
-    #   "mean_breaks_after_ci", "pct_breaks_after_ci_sup", "mean_breaks_after_ci_sup")
+    # c("pct_ci_brk",
+    #   "mean_ci_brk", "pct_ci_brksup", "mean_ci_brksup")
 
 
     #    cfmt_final$brksup[cfmt_final$type %in% c("all", "all_tabs", "wn", "ctr")]
