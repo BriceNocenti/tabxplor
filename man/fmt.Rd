@@ -21,10 +21,13 @@ fmt(
   ci = rep(NA_real_, length(n)),
   in_totrow = rep(FALSE, length(n)),
   in_tottab = rep(FALSE, length(n)),
+  in_refrow = rep(FALSE, length(n)),
   comp_all = NA,
+  diff_type = "",
   ci_type = "",
   col_var = "",
   totcol = FALSE,
+  refcol = FALSE,
   color = ""
 )
 
@@ -43,10 +46,13 @@ new_fmt(
   ci = rep(NA_real_, length(n)),
   in_totrow = rep(FALSE, length(n)),
   in_tottab = rep(FALSE, length(n)),
+  in_refrow = rep(FALSE, length(n)),
   comp_all = NA,
+  diff_type = "",
   ci_type = "",
   col_var = "",
   totcol = FALSE,
+  refcol = FALSE,
   color = ""
 )
 

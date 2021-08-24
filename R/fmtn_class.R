@@ -69,12 +69,15 @@ fmt <- function(n         = integer(),
 
                 in_totrow = rep(FALSE, length(n)),
                 in_tottab = rep(FALSE, length(n)),
+                in_refrow = rep(FALSE, length(n)),
 
 
                 comp_all  = NA   ,
+                diff_type = ""   ,
                 ci_type   = ""   ,
                 col_var   = ""   ,
                 totcol    = FALSE,
+                refcol    = FALSE,
                 color     = ""    ) {
 
   max_size <- list(n, wn, pct, digits, ctr, mean, var, ci) %>% #display
@@ -93,20 +96,24 @@ fmt <- function(n         = integer(),
 
   in_totrow <- vec_recycle(vec_cast(in_totrow, logical()), size = max_size)
   in_tottab <- vec_recycle(vec_cast(in_tottab, logical()), size = max_size)
+  in_refrow <- vec_recycle(vec_cast(in_refrow, logical()), size = max_size)
 
   type      <- vec_recycle(vec_cast(type     , character()), size = 1)
   comp_all  <- vec_recycle(vec_cast(comp_all , logical()  ), size = 1)
+  diff_type <- vec_recycle(vec_cast(diff_type, character()), size = 1)
   ci_type   <- vec_recycle(vec_cast(ci_type  , character()), size = 1)
   col_var   <- vec_recycle(vec_cast(col_var  , character()), size = 1)
   totcol    <- vec_recycle(vec_cast(totcol   , logical()  ), size = 1)
+  refcol    <- vec_recycle(vec_cast(totcol   , logical()  ), size = 1)
   color     <- vec_recycle(vec_cast(color    , character()), size = 1)
 
   new_fmt(n = n, display = display, digits = digits,
           wn = wn, pct = pct,  mean = mean,
           diff = diff, ctr = ctr,var = var, ci = ci,
-          in_totrow = in_totrow, in_tottab = in_tottab,
-          type = type, comp_all = comp_all, ci_type = ci_type,
-          col_var = col_var, totcol = totcol, color = color) #nlvs = nlvs,
+          in_totrow = in_totrow, in_tottab = in_tottab, in_refrow = in_refrow,
+          type = type, comp_all = comp_all,  diff_type = diff_type,
+          ci_type = ci_type, col_var = col_var, totcol = totcol, refcol = refcol,
+          color = color) #nlvs = nlvs,
 }
 
 
@@ -133,11 +140,14 @@ new_fmt <- function(n         = integer(),
 
                     in_totrow = rep(FALSE   , length(n)),
                     in_tottab = rep(FALSE   , length(n)),
+                    in_refrow = rep(FALSE   , length(n)),
 
                     comp_all  = NA   ,
+                    diff_type = ""   ,
                     ci_type   = ""   ,
                     col_var   = ""   ,
                     totcol    = FALSE,
+                    refcol    = FALSE,
                     color     = ""
 ) {
   # stopifnot(
@@ -170,12 +180,15 @@ new_fmt <- function(n         = integer(),
   # vec_assert(totcol  , logical()  , size = 1)
   # vec_assert(color   , character(), size = 1)
 
-  new_rcrd(list(n = n, display = display, digits = digits,
-                wn = wn, pct = pct, mean = mean,
-                diff = diff, ctr = ctr, var = var, ci = ci,
-                in_totrow = in_totrow, in_tottab = in_tottab),
-           type = type, comp_all = comp_all, ci_type = ci_type,
-           col_var = col_var, totcol = totcol, color = color,  class = "fmt")
+  new_rcrd(
+    list(n = n, display = display, digits = digits,
+         wn = wn, pct = pct, mean = mean,
+         diff = diff, ctr = ctr, var = var, ci = ci,
+         in_totrow = in_totrow, in_tottab = in_tottab,
+         in_refrow = in_refrow),
+    type = type, comp_all = comp_all, diff_type = diff_type,
+    ci_type = ci_type, col_var = col_var, totcol = totcol, refcol = refcol,
+    color = color,  class = "fmt")
   #access with fields() n_fields() field() `field<-`() ; vec_data() return the tibble with all fields
 }
 
@@ -273,11 +286,15 @@ get_mean   <- fmt_field_factory("mean")
 get_var    <- fmt_field_factory("var")
 get_ci     <- fmt_field_factory("ci")
 
+
+
 get_mean_contrib <- function(x) {
   comp    <- get_comp_all(x)
   totrows <- is_totrow(x)
   tottabs <- is_tottab(x)
   ctr     <- get_ctr(x)
+
+  if (!any(totrows)) return(rep(NA_real_, length(x)))
 
   if (comp) {
     rep(ctr[totrows & tottabs], length(x))
@@ -292,44 +309,41 @@ get_mean_contrib <- function(x) {
 }
 
 #' @keywords internal
-get_row_means <- function(x) {
-  comp    <- get_comp_all(x)
-  totrows <- is_totrow(x)
+get_ref_means <- function(x) {
+  comp      <- get_comp_all(x)
+  diff_type <- get_diff_type(x)
+
+  refrows <- if (diff_type == "first") { is_refrow(x) } else { is_totrow(x) }
   tottabs <- is_tottab(x)
   mean    <- get_mean(x)
 
   if (comp) {
-    rep(mean[totrows & tottabs], length(x))
+    rep(mean[refrows & tottabs], length(x))
   } else {
     tibble::tibble(
       mean = mean,
-      gr = cumsum(as.integer(totrows)) - as.integer(totrows) ) %>%
+      gr = cumsum(as.integer(refrows)) - as.integer(refrows) ) %>%
       dplyr::mutate(nb = dplyr::row_number()) %>%
       dplyr::with_groups(gr, ~ dplyr::mutate(., nb = dplyr::last(nb))) %>%
-      dplyr::mutate(row_means = mean[nb]) %>% dplyr::pull(row_means)
+      dplyr::mutate(ref_means = mean[nb]) %>% dplyr::pull(ref_means)
   }
 }
 
-#Detect cells in total rows (for fmt vectors values)
+#Detect cells in total rows
 #' @export
 is_totrow <- function(x, ...) UseMethod("is_totrow")
 #' @export
 is_totrow.default  <-  function(x, ...) rep(FALSE, length(x)) #{
-#   ifelse(! is.null(field(x, "in_totrow")),
-#          yes = field(x, "in_totrow"),
-#          no  = vec_recycle(FALSE, length(x)))
-# }
 #' @export
 is_totrow.fmt <- function(x, ...) field(x, "in_totrow")
 #' @export
 is_totrow.data.frame <- function(x, ..., partial = FALSE) {
   totrow_cells_test <- dplyr::ungroup(x) %>% dplyr::select(where(is_fmt)) %>%
-    #dplyr::select(-ENCADRacm_Total, -SEXE_Total) %>%
     purrr::map_df(~ is_totrow(.))
 
   if (partial == TRUE) {
     totrow_cells_test %>%
-      dplyr::rowwise() %>% dplyr::transmute(partial = any(dplyr::c_across()))  %>%
+      dplyr::rowwise() %>% dplyr::transmute(partial = any(dplyr::c_across())) %>%
       dplyr::pull(partial)
   } else {
     test_result <- totrow_cells_test %>%
@@ -344,7 +358,36 @@ is_totrow.data.frame <- function(x, ..., partial = FALSE) {
   }
 }
 
-#Detect cells in total rows (for fmt vectors values)
+#Detect cells in reference rows
+#' @export
+is_refrow <- function(x, ...) UseMethod("is_refrow")
+#' @export
+is_refrow.default  <-  function(x, ...) rep(FALSE, length(x)) #{
+#' @export
+is_refrow.fmt <- function(x, ...) field(x, "in_refrow")
+#' @export
+is_refrow.data.frame <- function(x, ..., partial = TRUE) {
+  refrow_cells_test <- dplyr::ungroup(x) %>% dplyr::select(where(is_fmt)) %>%
+    purrr::map_df(~ is_refrow(.))
+
+  if (partial == TRUE) {
+    refrow_cells_test %>%
+      dplyr::rowwise() %>% dplyr::transmute(partial = any(dplyr::c_across())) %>%
+      dplyr::pull(partial)
+  } else {
+    test_result <- refrow_cells_test %>%
+      dplyr::rowwise() %>%
+      dplyr::transmute(complete = all(dplyr::c_across()),
+                       partial  = any(dplyr::c_across()) & ! complete)
+    if (any(test_result$partial)) {
+      warning("partial total rows (with some fmt cells not tagged 'refrow') ",
+              "were not taken into account ")
+    }
+    test_result$complete
+  }
+}
+
+#Detect cells in total tables
 #' @export
 is_tottab <- function(x, ...) UseMethod("is_tottab")
 #' @export
@@ -410,6 +453,22 @@ get_comp_all <- function(x, replace_na = TRUE) {
   comp
 }
 
+# Get differences types (for fmt or tab)
+#' @export
+get_diff_type <- function(x, ...) UseMethod("get_diff_type")
+#' @export
+get_diff_type.default     <- function(x, ...) {
+  ifelse(! is.null(purrr::attr_getter("diff_type")(x)),
+         yes = purrr::attr_getter("diff_type")(x),
+         no  = "") #NA_character_
+}
+#' @export
+get_diff_type.fmt <- purrr::attr_getter("diff_type")
+#' @export
+get_diff_type.data.frame <- function(x, ...) {
+  purrr::map_chr(x, ~ get_diff_type(.))
+}
+
 
 # Get confidence intervals types (for fmt or tab)
 #' @export
@@ -456,6 +515,20 @@ is_totcol.fmt <- purrr::attr_getter("totcol")
 #' @export
 is_totcol.data.frame <- function(x, ...) purrr::map_lgl(x, ~ is_totcol(.))
 
+# Detect reference columns (for fmt or tab)
+#' @export
+is_refcol <- function(x, ...) UseMethod("is_refcol")
+#' @export
+is_refcol.default     <- function(x, ...) {
+  ifelse(! is.null(purrr::attr_getter("refcol")(x)),
+         yes = purrr::attr_getter("refcol")(x),
+         no  = FALSE)
+}
+#' @export
+is_refcol.fmt <- purrr::attr_getter("refcol")
+#' @export
+is_refcol.data.frame <- function(x, ...) purrr::map_lgl(x, ~ is_refcol(.))
+
 
 #For each column, detect which total column it depends on
 detect_totcols <- function(tabs) {
@@ -467,6 +540,30 @@ detect_totcols <- function(tabs) {
     rlang::syms() %>%
     purrr::set_names(names(tabs))
 }
+
+detect_firstcol <- function(tabs) {
+  col_vars <- get_col_var(tabs)
+  firstcol <- which(col_vars != dplyr::lag(col_vars, default = NA_character_))
+  if (any(col_vars == "all_col_vars")) firstcol <- firstcol %>%
+    purrr::discard(names(.) == names(col_vars)[col_vars == "all_col_vars"])
+
+  res <- purrr::map(1:ncol(tabs), function(.i)
+    tidyr::replace_na(
+      dplyr::last(names(firstcol[firstcol <= .i]) ),
+      "")) %>%
+    rlang::syms() %>%
+    purrr::set_names(names(tabs))
+
+  if (any(col_vars == "all_col_vars")) {
+    #   res_all_col <- tabs[as.character(res[col_vars == "all_col_vars"])]
+    #
+    # if (get_type(res_all_col) == "mean") res[col_vars == "all_col_vars"] <-
+    #     rlang::syms("")
+    res[col_vars == "all_col_vars"] <- rlang::syms("")
+  }
+  res
+}
+
 
 # Get color (for fmt or tab)
 #' @export
@@ -483,7 +580,6 @@ get_color.fmt <- purrr::attr_getter("color")
 get_color.data.frame <- function(x, ...) {
   purrr::map_chr(x, ~ get_color(.))
 }
-
 
 
 
@@ -508,6 +604,10 @@ as_totrow  <- function(fmt, in_totrow = TRUE) {
   vec_assert(in_totrow, logical())
   `field<-`(fmt, "in_totrow", vec_recycle(in_totrow, length(fmt)))
 }
+as_refrow  <- function(fmt, in_refrow = TRUE) {
+  vec_assert(in_refrow, logical())
+  `field<-`(fmt, "in_refrow", vec_recycle(in_refrow, length(fmt)))
+}
 as_tottab  <- function(fmt, in_tottab = TRUE) {
   vec_assert(in_tottab, logical())
   `field<-`(fmt, "in_tottab", vec_recycle(in_tottab, length(fmt)))
@@ -521,18 +621,27 @@ as_totcol     <- function(fmt, totcol = TRUE) {
   vec_assert(totcol, logical(), size = 1)
   `attr<-`(fmt ,"totcol"  , totcol)
 }
+as_refcol     <- function(fmt, refcol = TRUE) {
+  vec_assert(refcol, logical(), size = 1)
+  `attr<-`(fmt ,"refcol"  , refcol)
+}
 set_type      <- function(fmt, type) {
   if (type %in% c("no", "", NA_character_)) type <- "n"
   stopifnot(type %in% c("row", "col", "all", "all_tabs", "mean", "n"))
   `attr<-`(fmt ,"type"    , type)
 }
+set_diff_type   <- function(fmt, diff_type) {
+  stopifnot(diff_type %in% c("tot", "first", "no", "", NA_character_))
+  `attr<-`(fmt ,"diff_type" , diff_type)
+}
 set_ci_type   <- function(fmt, ci_type) {
-  stopifnot(ci_type %in% c("cell", "diff", "no", "", NA_character_))
+  stopifnot(ci_type %in% c("cell", "diff", "diff_row", "diff_col",
+                           "no", "", NA_character_))
   `attr<-`(fmt ,"ci_type" , ci_type)
 }
 set_color     <- function(fmt, color) {
   if (color %in% c("no", "")) color <- NA_character_
-  stopifnot(color %in% c("diff", "diff_ci", "after_ci", "contrib",
+  stopifnot(color %in% c("diff", "diff_ci", "after_ci", "contrib", "ci",
                          "", NA_character_))
   `attr<-`(fmt ,"color"   , color)
 }
@@ -616,7 +725,7 @@ format.fmt <- function(x, ...) {
   out[n_wn] <- out[n_wn] %>% prettyNum(big.mark = " ", preserve.width = "individual")
   out[pct_or_pct_ci] <- out[pct_or_pct_ci] %>% stringr::str_replace("^100.0+$", "100")
   out[na_out] <- NA
-  out[pct_or_pct_ci] <- paste0(out[pct_or_pct_ci], "%")
+  out[pct_or_pct_ci] <- paste0(out[pct_or_pct_ci],"%") #pillar::style_subtle(
 
   if (any(pct_ci_only) | any(mean_ci_only)) conf_int <- get_ci(x)
 
@@ -651,7 +760,7 @@ format.fmt <- function(x, ...) {
                          "all"     = ,
                          "all_tabs"= paste0("±", out[type_ci], "%") )
 
-  out <- stringr::str_pad(out, max(stringr::str_length(out), na.rm = TRUE))
+  #out <- stringr::str_pad(out, max(stringr::str_length(out), na.rm = TRUE))
   out
 }
 
@@ -670,20 +779,15 @@ format.fmt <- function(x, ...) {
 #' @importFrom pillar pillar_shaft
 #' @export
 pillar_shaft.fmt <- function(x, ...) {
-# print color type somewhere (and brk legend beneath ?) ----
+  # print color type somewhere (and brk legend beneath ?) ----
 
   out     <- format(x)
-  na_out  <- is.na(out)
 
   display <- get_display(x)
   nas  <- is.na(display)
-  ok   <- !na_out & !nas
 
   type <- get_type(x)
   comp <- get_comp_all(x)
-
-  disp_diff_ci <- ok & display %in% c("diff", "ci")
-  disp_ctr     <- ok & display == "ctr"
 
   ci_type   <- get_ci_type(x)
   pct       <- get_type(x)
@@ -693,14 +797,28 @@ pillar_shaft.fmt <- function(x, ...) {
   totrows   <- is_totrow(x)
   tottabs   <- is_tottab(x)
 
-  if (any(disp_diff_ci)) {
-    ref_tot <- get_reference_total(x[disp_diff_ci], mode = "cells")
-    totfmt  <- set_display(x[disp_diff_ci],
+  disp_diff <- display == "diff"
+  disp_ci   <- display == "ci" & ci_type == "diff"
+  disp_ctr  <- display == "ctr"
+
+  if (any(disp_diff)) {
+    ref     <- get_reference(x[disp_diff], mode = "cells")
+    reffmt  <- set_display(x[disp_diff],
+                           ifelse(type %in% c("n", "mean"), "mean", "pct")) %>%
+      format() #%>% stringr::str_trim()
+    out[disp_diff] <- dplyr::if_else(ref,
+                                     paste0("ref:", reffmt),
+                                     out[disp_diff])
+  }
+
+  if (any(disp_ci)) {
+    ref     <- get_reference(x[disp_ci], mode = "cells")
+    reffmt  <- set_display(x[disp_ci],
                            ifelse(type %in% c("n", "mean"), "mean", "pct")) %>%
       format()
-    out[disp_diff_ci] <- dplyr::if_else(ref_tot,
-                                        paste0("ref:", totfmt),
-                                        out[disp_diff_ci])
+    out[disp_ci] <- dplyr::if_else(ref,
+                                   paste0("ref:x-", reffmt),
+                                   out[disp_ci])
   }
 
   if (any(disp_ctr)) {
@@ -713,26 +831,20 @@ pillar_shaft.fmt <- function(x, ...) {
       stringr::str_remove("mean:Inf%|NA")
   }
 
+  if (color == "contrib" & !any(totrows)) warning(
+    "cannot print color == 'contrib' with no total rows to store ",
+    "information about mean contributions to variance"
+  )  # store mean_contrib in a field of fmt ? ----
 
-  if (!is.na(color) & color != "") {
+  na_out  <- is.na(out)
+  ok      <- !na_out & !nas
+
+
+  if (!is.na(color) & color != "" & !(color == "contrib" & !any(totrows))) {
     color_selection <- fmt_color_selection(x)
 
-    color_styles <-
-      if (stringr::str_detect(color_styles_all[[1]], "^bg")) {
-        switch(as.character(length(color_selection)),
-               "2"  = c(3, 8)           ,
-               "4"  = c(1, 3, 6, 8)     ,
-               "6"  = c(1, 3, 5, 6, 8, 10),
-               "8"  = c(1:3, 4, 6:8, 10),
-               "10" = 1:10               )
-      } else {
-        switch(as.character(length(color_selection)),
-               "2"  = c(5, 10) ,
-               "4"  = c(3, 5, 8, 10)    ,
-               "6"  = c(3:5, 8:10)      ,
-               "8"  = c(2:5, 7:10)      ,
-               "10" = 1:10               )
-      }
+    color_styles <- get_color_styles(length(color_selection))
+
 
     color_styles <- color_styles_all[color_styles]
 
@@ -740,13 +852,13 @@ pillar_shaft.fmt <- function(x, ...) {
       purrr::map_lgl(~ ! any(purrr::flatten_lgl(.)))
 
     out[ok] <-
-      purrr::reduce2(.init = out[ok], .x = color_selection, .y = color_styles,
+      purrr::reduce2(.init = out[ok], .x = purrr::map(color_selection, ~ .[ok]),
+                     .y = color_styles,
                      ~ dplyr::if_else(..2, rlang::exec(..3, ..1), ..1) )
+    totals <- get_reference(x, mode = "all_totals") #c("cells", "lines")
 
-
-    totals <- get_reference_total(x, mode = "all_totals") #c("cells", "lines")
-
-    out[ok & unselected & !totals] <- fmtgrey3(out[ok & unselected & !totals])
+    out[ok & unselected & !totals] <-  #fmtgrey3
+      pillar::style_subtle(out[ok & unselected & !totals])
 
     #Columns with no color
   } else {
@@ -760,12 +872,12 @@ pillar_shaft.fmt <- function(x, ...) {
     #                                         paste0(out, "|"))
 
     # - normal cells a bit grayer to see the totals better
-    totals <- get_reference_total(x, mode = "all_totals")
+    totals <- get_reference(x, mode = "all_totals")
     out[ok & !totals] <- fmtgrey4(out[ok & !totals])
 
     out[ok] <- out[ok] %>%
-      stringr::str_replace("^0%$|^-0%$", crayon::silver("0%")) %>% # 0 in gray
-      stringr::str_replace("^0$|^0$", crayon::silver("0"))
+      stringr::str_replace("^0%$|^-0%$", pillar::style_subtle("0%")) %>% # 0 in gray
+      stringr::str_replace("^0$|^0$", pillar::style_subtle("0"))
   }
 
   pillar::new_pillar_shaft_simple(out, align = "right", na = "")
@@ -792,20 +904,20 @@ fmt_color_selection <- function(x, force_color, force_breaks) {
     contrib_brksup <- force_breaks$contrib_brksup
   }
 
-  diff <- if (color %in% c("diff", "diff_ci", "after_ci") ) {
+  diff <- if (color %in% c("diff", "diff_ci", "after_ci", "ci") ) {
     get_diff(x)
   } else {
     NA_real_ #vec_recycle(NA_real_, length(x))
   }
 
-  ci <- if (color %in% c("diff_ci", "after_ci") & type_ci == "diff" ) {
+  ci <- if (color %in% c("diff_ci", "after_ci", "ci") & type_ci == "diff" ) {
     get_ci(x)
   } else {
     NA_real_
   }
 
-  row_means <- if (color %in% c("diff_ci", "after_ci") & type == "mean") {
-    get_row_means(x)
+  ref_means <- if (color %in% c("diff_ci", "after_ci", "ci") & type == "mean") {
+    get_ref_means(x)
   } else {
     NA_real_
   }
@@ -826,6 +938,11 @@ fmt_color_selection <- function(x, force_color, force_breaks) {
     switch(color,
            "diff"     = ,
            "diff_ci"  = if (type == "mean") mean_brk    else pct_brk   ,
+           "ci"       = if (type == "mean"){
+             mean_ci_brk[c(1, length(mean_ci_brk)/2 + 1)]
+           } else {
+             pct_ci_brk[c(1, length(pct_ci_brk)/2 + 1)]
+           } ,
            "after_ci" = if (type == "mean") mean_ci_brk else pct_ci_brk,
            "contrib"  = contrib_brk                                     )
 
@@ -833,20 +950,46 @@ fmt_color_selection <- function(x, force_color, force_breaks) {
     switch(color,
            "diff"     = ,
            "diff_ci"  = if (type == "mean") mean_brksup    else pct_brksup   ,
+           "ci"       = if (type == "mean") {
+             mean_ci_brksup[c(length(mean_ci_brksup)/2, length(mean_ci_brksup))]
+           }  else {
+             pct_ci_brksup[c(length(pct_ci_brksup)/2, length(pct_ci_brksup))]
+           },
            "after_ci" = if (type == "mean") mean_ci_brksup else pct_ci_brksup,
            "contrib"  = contrib_brksup                                        )
 
-purrr::map2(brk, brksup,
+  purrr::map2(brk, brksup,
               ~ color_formula(type = type, color = color,
-                              diff = diff, ci = ci, row_means = row_means,
+                              diff = diff, ci = ci, ref_means = ref_means,
                               ctr = ctr, mean_ctr = mean_ctr,
                               brk = .x, brksup = .y)
   ) %>% purrr::set_names(as.character(round(brk, 2)))
 }
 
 
+# diff >= 1                                              &
+#   (1 + abs(1 - diff) ) * ref_means  >  (ref_means + ci) * brk[1]   &
+#   abs(1 - diff) * ref_means  <  (ref_means + ci) * brksup[1]
+#
+#
+# ref_means + abs(1 - diff) * ref_means  > (ref_means + ci) * brk[1]
+# ref_means + abs(1 - diff) * ref_means  > ref_means * brk[1] + ci * brk[1]
+# abs(1 - diff) * ref_means > ref_means * brk[1] - ref_means + ci * brk[1]
+# abs(1 - diff) * ref_means > ref_means * (brk[1] - 1) + ci * brk[1]
+#
+# (ref + ci) * brk -ref
+#
+# abs(1 - diff) > brk[1] - 1 + ci/ref_means * brk[1]
+# abs(1 - diff) + 1 > brk[1] * (ci/ref_means + 1)
+#
+# (1 + abs(1 - diff)) * ref_means   > ref_means * brk[1] + ci * brk[1]
+#
 
-color_formula <- function(type, color, diff, ci, row_means,
+
+
+
+
+color_formula <- function(type, color, diff, ci, ref_means,
                           ctr, mean_ctr, brk, brksup) {
   means <- type %in% c("mean", "n")
 
@@ -860,29 +1003,45 @@ color_formula <- function(type, color, diff, ci, row_means,
 
       "diff_ci"  = dplyr::case_when(
         means & brk >= 1    ~ diff > brk & diff < brksup &
-          abs(1 - diff) * row_means - ci > 0,
+          abs(1 - diff) * ref_means - ci > 0,
 
         means & brk <  1    ~ diff < brk & diff > brksup &
-          abs(1 - diff) * row_means - ci > 0,
+          abs(1 - diff) * ref_means - ci > 0,
 
         !means & brk >= 0   ~ diff > brk & diff < brksup & abs(diff) - ci > 0,
         !means & brk <  0   ~ diff < brk & diff > brksup & abs(diff) - ci > 0 ),
 
+      "ci"       = dplyr::case_when(
+        means & (brk == 1)
+        ~ diff >= 1  &  abs(1 - diff) * ref_means > ci,
+
+        means & (brk == -1)
+        ~ diff  < 1  &  abs(1 - diff) * ref_means > ci,
+
+        !means & brk == 0 & brksup > 0
+        ~ diff >= 0  &  abs(diff) > ci,
+
+        !means & brk == 0 & brksup < 0
+        ~ diff  < 0  &  abs(diff) > ci
+      ),
+
       "after_ci" = dplyr::case_when(
-        means & brk >= 0
-        ~ diff >= 1                                &
-          abs(1 - diff) * row_means > ci *   brk   &
-          abs(1 - diff) * row_means < ci *   brksup ,
+        means & brk > 0
+        ~ diff >= 1                                                         &
+          ref_means + abs(1 - diff) * ref_means  > (ref_means + ci) * brk   &
+          ref_means + abs(1 - diff) * ref_means  < (ref_means + ci) * brksup ,
+        #wrong : abs(1 - diff) > ci * brk
+        #wrong : abs(1 - diff) * ref_means  >  (ref_means + ci) * brk
 
-        means & brk <  0
-        ~ diff  < 1                               &
-          abs(1 - diff) * row_means > ci * -brk   &
-          abs(1 - diff) * row_means < ci * -brksup ,
+        means & brk < 0
+        ~ diff < 1                                                           &
+          ref_means + abs(1 - diff) * ref_means  > (ref_means + ci) * -brk   &
+          ref_means + abs(1 - diff) * ref_means  < (ref_means + ci) * -brksup ,
 
-        !means & brk >= 0
+        !means & brk >= 0 & brksup > 0
         ~ diff >= 0  &  abs(diff) - ci > brk   &  abs(diff) - ci < brksup,
 
-        !means & brk <  0
+        !means & brk <  0 & brksup < 0
         ~ diff  < 0  &  abs(diff) - ci > -brk  &  abs(diff) - ci < -brksup),
 
       "contrib"     = if (brk >= 0) {
@@ -898,33 +1057,314 @@ color_formula <- function(type, color, diff, ci, row_means,
 
 
 
-get_reference_total <- function(x, mode = c("cells", "lines", "all_totals")) {
+tab_color_legend <- function(x, colored = TRUE) {
+  color     <- get_color(x)
+  type      <- get_type(x)
+  diff_type <- get_diff_type(x)
+  col_vars_levels <- tab_get_vars(x)$col_vars_levels %>%
+    purrr::discard(names(.) == "all_col_vars")
+
+  color_type <- col_vars_levels %>%
+    purrr::map(~ get_color_type(color[.], type[.]) %>%
+                 purrr::flatten_chr()) %>%
+    purrr::map_chr(~ dplyr::if_else(
+      condition = length(unique(.x)) == 1,
+      true      = .x[1],
+      false     = "mixed"                 )
+    )
+
+  diff_type <- col_vars_levels %>%
+    purrr::map(~ diff_type[.]) %>%
+    purrr::map_chr(~ dplyr::if_else(
+      condition = length(unique(.x)) == 1,
+      true      = .x[1],
+      false     = "mixed"                 )
+    )
+
+  if (all(is.na(color_type) | color_type %in% c("", "no"))) return(NULL)
+
+  breaks_with_op <- function(breaks, color_type) purrr::map_chr(
+    breaks,
+    ~ switch(
+      color_type,
+      "diff_mean"     = ,
+      "diff_ci_mean"  = dplyr::if_else(
+        condition = stringr::str_detect(.x, "^-"),
+        true      = paste0("/", stringr::str_remove(.x, "^-")),
+        false     = paste0("×", .x)
+      ),
+      "diff"          = ,
+      "diff_ci"       = ,
+      "after_ci"      = dplyr::if_else(
+        condition = stringr::str_detect(.x, "^-"),
+        true      = .x,
+        false     = paste0("+", .x)
+      ),
+      "after_ci_mean" = paste0("×", stringr::str_remove(.x, "^-")),
+      "contrib"       = paste0("×", stringr::str_remove(.x, "^-")),
+      #"ci_mean"       = ,
+      "ci"            = "",      #just 1 ?
+      .x
+    ) )
+
+  color_formula_chr <- function(color_type, ref, sign, breaks) {
+    purrr::map2_chr(breaks, sign, function(.breaks, .sign)
+      switch(
+        color_type,
+        "diff_mean"     = , # 1/mean and sign /
+        "diff"          = paste0("x", .sign, ref, " ", .breaks),
+        "diff_ci_mean"  = ,
+        "diff_ci"       = paste0("|x-", ref, "|>ci & x", .sign,
+                                 ref, " ", .breaks),
+        #"ci_mean"       = ,
+        "ci"            = paste0("|x-", ref, "| > ci"),      #just 1 ?
+        "after_ci_mean" = paste0(ref, " + |x-", ref, "| > (", ref, " + ci) ", .breaks), #×
+        "after_ci"      = paste0("|x-", ref, "| > ci ", .breaks), #+ -
+        "contrib"       = paste0("contrib > mean_ctr "     , .breaks),  #×
+        character()
+      ))
+  }
+
+
+  color_table <-
+    tibble::tibble(color_type, diff_type, names = names(color_type)) %>%
+    dplyr::filter(!is.na(color_type) & !color_type %in% c("no", "")) %>%
+    dplyr::group_by(color_type) %>%
+    dplyr::mutate(etc = dplyr::if_else(dplyr::row_number() > 3, ",...", "") ) %>%
+    dplyr::slice(1:3) %>%
+    dplyr::summarise(names = paste0(names, collapse = ", "),
+                     etc = dplyr::first(etc),
+                     diff_type = dplyr::first(diff_type),
+                     .groups = "drop") %>%
+    dplyr::mutate(
+      names = paste0(names, etc)
+    )
+
+  if (colored == TRUE) color_table <- color_table %>%
+    dplyr::mutate(names = stringr::str_pad(names,
+                                           max(stringr::str_length(names)),
+                                           side = "right"))
+
+  color_table <- color_table %>%
+    dplyr::mutate(
+      breaks = brk_from_color(color_type),
+      breaks = dplyr::if_else(color_type %in% c("diff_mean", "diff_ci_mean"),
+                              true  = purrr::map(breaks,
+                                                 ~ .[1:(length(.)/2)] %>%
+                                                   c(., purrr::map(., `-`))
+                              ),
+                              false = breaks),
+      breaks = dplyr::if_else(
+        condition = color_type %in% c("diff", "diff_ci", "after_ci"),
+        true      = purrr::map(breaks,
+                               ~ paste0(sprintf("%1.0f",
+                                                purrr::map_dbl(., ~ .[1]) * 100),
+                                        "%") ),
+        false     = purrr::map(breaks,
+                               ~ sprintf("%1.3g", purrr::map_dbl(., ~ .[1]))),
+      ) %>%
+        purrr::map2(color_type, ~ breaks_with_op(.x, .y)),
+      ref  = purrr::map_chr(diff_type, ~ switch(., "first" = "x1", "tot")),
+      sign = purrr::map(breaks, ~ 1:length(.)) %>%
+        purrr::map(~ dplyr::if_else(condition = . >= max(.)/2 +1,
+                                    true      = " < ",
+                                    false     = " > ")),
+    )
+
+  if (colored == TRUE) color_table <- color_table %>%
+    dplyr::mutate(
+      styles = purrr::map(breaks, ~ get_color_styles(length(.))),
+      styles = purrr::map(styles, ~ color_styles_all[.]),
+      breaks = purrr::map2(styles, breaks,
+                           ~ purrr::map2_chr(.x, .y, rlang::exec) )
+    )
+
+  color_table <- color_table %>%
+    dplyr::mutate(
+      color_scale = list(color_type, ref, sign, breaks,
+                         purrr::map(breaks, ~ 1:length(.))) %>%
+        purrr::pmap(~ dplyr::if_else(
+          condition = ..5 %in% c(1, max(..5)/2 + 1),
+          true      = color_formula_chr(color_type = ..1, ref = ..2,
+                                        sign = ..3, breaks = ..4),
+          false     = ..4
+        ))
+    )
+
+  color_table <-
+    if (colored == TRUE) {
+      color_table %>% dplyr::mutate(
+        color_scale = purrr::map_chr(color_scale, ~ paste0(
+          .,
+          collapse = pillar::style_subtle("; ")          )
+        ),
+        names = pillar::style_subtle(paste0(names, ": "))
+      )
+    } else {
+      color_table %>% dplyr::mutate(
+        color_scale = purrr::map_chr(color_scale, ~ paste0(., collapse = "; " )),
+        names = paste0(names, ": ")
+      )
+    }
+
+  paste0(color_table$names, color_table$color_scale)
+  # %>% cli::cat_line()
+  # stringr::str_remove("\\+0.0+")
+}
+# tab_color_legend(tabs[[7]]) %>% cli::cat_line()
+# tab_color_legend(tabs[[7]], colored = FALSE)
+
+
+brk_from_color <- function(color_type) {
+  purrr::map(color_type, ~
+               switch(.x,
+                      "diff_mean"     = ,
+                      "diff_ci_mean"  = list(mean_brk, mean_brksup),
+                      "after_ci_mean" = list(mean_ci_brk, mean_ci_brksup),
+                      "diff"          = ,
+                      "diff_ci"       = list(pct_brk, pct_brksup),
+                      "after_ci"      = list(pct_ci_brk, pct_ci_brksup),
+                      "contrib"       = list(contrib_brk, contrib_brksup),
+                      "ci"            = ,
+                      "ci_mean"       = list(0, Inf), #list(c(0, 0), c(Inf, -Inf)),
+                      list()
+               ) %>%
+               purrr::transpose() %>%
+               purrr::map(purrr::flatten_dbl)
+  )
+}
+
+#' @keywords internal
+get_color_type <- function(color, type) {
+  purrr::map2(color, type, ~ dplyr::case_when(
+    .x == "contrib" ~ "contrib",
+    .x == "ci"      ~ "ci"     ,
+
+    .x %in% c("diff", "diff_ci", "after_ci") & .y == "mean"
+    ~ paste0(.x, "_mean"),
+
+    .x %in% c("diff", "diff_ci", "after_ci") &
+      .y %in% c("row", "col", "all", "all_tabs")
+    ~ .x
+
+  ) %>% purrr::set_names(names(.x)))
+}
+
+get_color_styles <- function(length) {
+  if (stringr::str_detect(color_styles_all[[1]], "^bg")) {
+    switch(as.character(length),
+           "1"  = c(3)              ,
+           "2"  = c(3, 8)           ,
+           "4"  = c(1, 3, 6, 8)     ,
+           "6"  = c(1, 3, 5, 6, 8, 10),
+           "8"  = c(1:3, 4, 6:8, 10),
+           "10" = 1:10               )
+  } else {
+    switch(as.character(length),
+           "1"  = c(3)              ,
+           "2"  = c(3, 8)           ,
+           "4"  = c(3, 5, 8, 10)    ,
+           "6"  = c(3:5, 8:10)      ,
+           "8"  = c(2:5, 7:10)      ,
+           "10" = 1:10               )
+  }
+}
+
+
+# brk_from_color <- function(color, type) {
+#   means <- type == "mean"
+#   purrr::map2(color, means,
+#               ~ switch(
+#                 .x,
+#                 "diff"          = ,
+#                 "diff_ci"       = if (.y) {
+#                   list(mean_brk, mean_brksup)
+#                 } else {
+#                   list(pct_brk, pct_brksup)
+#                 },
+#                 "after_ci"      = if (.y) {
+#                   list(mean_ci_brk, mean_ci_brksup)
+#                 } else {
+#                   list(pct_ci_brk, pct_ci_brksup)
+#                 },
+#                 "contrib"       = list(contrib_brk, contrib_brksup),
+#                 list()
+#               ) %>%
+#                 purrr::transpose() %>%
+#                 purrr::map(purrr::flatten_chr)
+#   )
+# }
+
+get_reference <- function(x, mode = c("cells", "lines", "all_totals")) {
   type        <- get_type(x)
+  diff_type   <- get_diff_type(x)
   comp_all    <- get_comp_all(x)
   totcol      <- is_totcol(x)
   totrows     <- is_totrow(x)
   tottab_line <- is_tottab(x) & totrows
 
-  switch(mode[1],
-         "cells"      = dplyr::case_when(
-           type %in% c("row", "mean") & !comp_all ~ totrows & !totcol     ,
-           type %in% c("row", "mean") &  comp_all ~ tottab_line & !totcol ,
-           type == "col"                          ~ totcol & !totrows     ,
-           type == "all"                          ~ totrows & totcol      ,
-           type == "all_tabs"                     ~ tottab_line & totcol  ,
-           TRUE                                   ~ rep(FALSE, length(x)   )
-         ),
-         "lines"      = dplyr::case_when(
-           type %in% c("row", "mean") & !comp_all ~ totrows               ,
-           type %in% c("row", "mean") &  comp_all ~ tottab_line           ,
-           type == "col"                          ~ rep(totcol, length(x)),
-           type == "all"                          ~ totrows & totcol      ,
-           type == "all_tabs"                     ~ tottab_line & totcol  ,
-           TRUE                                   ~ rep(FALSE, length(x)   )
-         ),
-         "all_totals" = if(comp_all) tottab_line | totcol else totrows | totcol,
-  )
+  refrows     <- is_refrow(x)
+  refcol      <- is_refcol(x)
+  tottab_ref  <- is_tottab(x) & refrows
+
+  if (diff_type == "first") {
+    switch(mode[1],
+           "cells"      = dplyr::case_when(
+             type %in% c("row", "mean") & !comp_all ~ refrows & !totcol     ,
+             type %in% c("row", "mean") &  comp_all ~ tottab_ref & !totcol  ,
+             type == "col"                          ~ refcol & !totrows     ,
+             TRUE                                   ~ rep(FALSE, length(x)   )
+           ),
+           "lines"      = dplyr::case_when(
+             type %in% c("row", "mean") & !comp_all ~ refrows               ,
+             type %in% c("row", "mean") &  comp_all ~ tottab_ref            ,
+             type == "col"                          ~ rep(refcol, length(x)),
+             TRUE                                   ~ rep(FALSE, length(x)   )
+           ),
+           "all_totals" = dplyr::case_when(
+             type %in% c("row", "mean") & !comp_all ~ refrows | totcol      ,
+             type %in% c("row", "mean") &  comp_all ~ tottab_ref | totcol   ,
+             type == "col"                          ~ totrows | refcol      ,
+             TRUE                                   ~ rep(FALSE, length(x)   )
+           )
+    )
+
+  } else {
+    switch(mode[1],
+           "cells"      = dplyr::case_when(
+             type %in% c("row", "mean") & !comp_all ~ totrows & !totcol     ,
+             type %in% c("row", "mean") &  comp_all ~ tottab_line & !totcol ,
+             type == "col"                          ~ totcol & !totrows     ,
+             type == "all"                          ~ totrows & totcol      ,
+             type == "all_tabs"                     ~ tottab_line & totcol  ,
+             TRUE                                   ~ rep(FALSE, length(x)   )
+           ),
+           "lines"      = dplyr::case_when(
+             type %in% c("row", "mean") & !comp_all ~ totrows               ,
+             type %in% c("row", "mean") &  comp_all ~ tottab_line           ,
+             type == "col"                          ~ rep(totcol, length(x)),
+             type == "all"                          ~ totrows & totcol      ,
+             type == "all_tabs"                     ~ tottab_line & totcol  ,
+             TRUE                                   ~ rep(FALSE, length(x)   )
+           ),
+           "all_totals" = dplyr::case_when(
+             type %in% c("n", "col", "all") |
+               (type %in% c("row", "mean") & !comp_all)
+             ~ totrows | totcol,
+
+             type == "all_tabs" | (type %in% c("row", "mean") &  comp_all)
+             ~ tottab_line | totcol,
+             # type == "col"                          ~ rep(totcol, length(x)),
+             # type == "all"                          ~ totrows & totcol      ,
+             # type == "all_tabs"                     ~ tottab_line & totcol  ,
+             TRUE                                   ~ rep(FALSE, length(x)   )
+           )
+    )
+  }
 }
+
+
+
 
 
 
@@ -954,16 +1394,16 @@ vec_ptype_abbr.fmt <- function(x, ...) {
   display  <- ifelse(length(display) > 1, "mixed", display)
   type     <- get_type(x)
   row_mean <- type %in% c("row", "mean")
-  if (type %in% c("row", "col", "all", "all_tabs")) type <- paste0("%", type)
+  if (type %in% c("row", "col", "all", "all_tabs")) type <- paste0(type, "%")
   ci <- get_ci_type(x)
   if (display == "ci" & ci %in% c("cell", "diff")) display <- paste0("ci_", ci)
 
   out <- paste0(type, "-", display) %>%
-    stringr::str_replace("-n-n", "-n") %>%
-    stringr::str_replace("-mean-mean", "-mean") %>%
-    stringr::str_replace("-mixed-mixed", "-mixed") %>%
-    stringr::str_replace("(%.+)-pct", "\\1") %>%
-    stringr::str_remove("-NA")
+    stringr::str_replace("^n-n", "n") %>%
+    stringr::str_replace("^mean-mean", "mean") %>%
+    stringr::str_replace("^mixed-mixed", "mixed") %>%
+    stringr::str_replace("([^%]+%)-pct", "\\1") %>%
+    stringr::str_remove("^NA")
   if (get_comp_all(x)) out <- paste0(out, "-all")
 
   out
@@ -977,7 +1417,7 @@ vec_ptype_full.fmt <- function(x, ...) {
   display  <- ifelse(length(display) > 1, "mixed", display)
   type     <- get_type(x)
   row_mean <- type %in% c("row", "mean")
-  if (type %in% c("row", "col", "all", "all_tabs")) type <- paste0("%", type)
+  if (type %in% c("row", "col", "all", "all_tabs")) type <- paste0(type, "%")
   ci <- get_ci_type(x)
   if (display == "ci" & ci %in% c("cell", "diff")) display <- paste0("ci_", ci)
 
@@ -985,7 +1425,7 @@ vec_ptype_full.fmt <- function(x, ...) {
     stringr::str_replace("-n-n", "-n") %>%
     stringr::str_replace("-mean-mean", "-mean") %>%
     stringr::str_replace("-mixed-mixed", "-mixed") %>%
-    stringr::str_replace("(%.+)-pct", "\\1") %>%
+    stringr::str_replace("([^%]+%)-pct", "\\1") %>%
     stringr::str_remove("-NA")
   if (get_comp_all(x)) out <- paste0(out, "-all")
 
@@ -1215,6 +1655,8 @@ color_styles_all <- green_red
 
 #Color breaks for printing fmt ------------------------------------------------
 
+#calculate pct breaks based on the number of levels ? ----
+
 pct_breaks      <- c(0.05, 0.1, 0.2, 0.3)
 mean_breaks     <- c(1.15, 1.5, 2, 4)
 contrib_breaks  <- c(1, 2, 5, 10)
@@ -1269,9 +1711,9 @@ set_color_breaks <- function(pct_breaks, mean_breaks, contrib_breaks) {
     pct_brk         <- pct_breaks     %>% c(., -.)
     pct_brksup      <- c(pct_breaks   [2:length(pct_breaks)    ], Inf)
     pct_brksup      <- pct_brksup     %>% c(., -.)
-    pct_ci_brk      <- pct_ci_breaks  %>% c(., .)
+    pct_ci_brk      <- pct_ci_breaks  %>% c(., -.)
     pct_ci_brksup   <- c(pct_ci_breaks[2:length(pct_ci_breaks) ], Inf)
-    pct_ci_brksup   <- pct_ci_brksup  %>% c(., .)
+    pct_ci_brksup   <- pct_ci_brksup  %>% c(., -.)
     assign("pct_breaks"   , pct_breaks   , pos = "package:tablr")
     assign("pct_ci_breaks", pct_ci_breaks, pos = "package:tablr")
     assign("pct_brk"      , pct_brk      , pos = "package:tablr")
@@ -1288,9 +1730,9 @@ set_color_breaks <- function(pct_breaks, mean_breaks, contrib_breaks) {
     mean_brk        <- mean_breaks    %>% c(., 1/.)
     mean_brksup     <- c(mean_breaks   [2:length(mean_breaks)   ], Inf)
     mean_brksup     <- mean_brksup    %>% c(., 1/.)
-    mean_ci_brk     <- mean_ci_breaks %>% c(., 1/.)
+    mean_ci_brk     <- mean_ci_breaks %>% c(., -.) #then - again
     mean_ci_brksup  <- c(mean_ci_breaks[2:length(mean_ci_breaks)], Inf)
-    mean_ci_brksup  <- mean_ci_brksup %>% c(., 1/.)
+    mean_ci_brksup  <- mean_ci_brksup %>% c(., -.) #then - again
     assign("mean_breaks"   , mean_breaks   , pos = "package:tablr")
     assign("mean_ci_breaks", mean_ci_breaks, pos = "package:tablr")
     assign("mean_brk"      , mean_brk      , pos = "package:tablr")
@@ -1298,6 +1740,7 @@ set_color_breaks <- function(pct_breaks, mean_breaks, contrib_breaks) {
     assign("mean_ci_brk"   , mean_ci_brk   , pos = "package:tablr")
     assign("mean_ci_brksup", mean_ci_brksup, pos = "package:tablr")
   }
+
 
   if (!missing(contrib_breaks)) {
     stopifnot(is.numeric(contrib_breaks) ,
@@ -1337,7 +1780,6 @@ get_full_color_breaks <- function() {
 # contrib_breaks = c(0.5 , 1   , 2   , 5   , 10  )
 
 
-
 #Coertion and convertion methods for formatted numbers -------------------------
 
 #Make our fmt class coercible with herself, and back and forth with double and integer vectors :
@@ -1347,12 +1789,16 @@ vec_ptype2.fmt.fmt    <- function(x, y, ...) {
   same_type    <- type_x == get_type(y)
   comp_x       <- get_comp_all(x, replace_na = FALSE)
   same_comp    <- comp_x == get_comp_all(y, replace_na = FALSE)
+  diff_type_x  <- get_diff_type(x)
+  same_diff_type <- diff_type_x == get_diff_type(y)
   ci_type_x    <- get_ci_type(x)
   same_ci_type <- ci_type_x == get_ci_type(y)
   col_var_x    <- get_col_var(x)
   same_col_var <- col_var_x == get_col_var(y)
   totcol_x     <- is_totcol(x)
   same_totcol  <- totcol_x == is_totcol(y)
+  refcol_x     <- is_refcol(x)
+  same_refcol  <- refcol_x == is_refcol(y)
   color_x      <- get_color(x)
   same_color   <- color_x == get_color(y)
   #l            <- length(x)
@@ -1360,9 +1806,11 @@ vec_ptype2.fmt.fmt    <- function(x, y, ...) {
   new_fmt(
     type     = dplyr::if_else(same_type   , type_x   , "mixed"       ),
     comp_all = dplyr::if_else(same_comp   , comp_x   , FALSE         ),
+    diff_type= dplyr::if_else(same_diff_type, diff_type_x, ""        ),
     ci_type  = dplyr::if_else(same_ci_type, ci_type_x, ""            ),
     col_var  = dplyr::if_else(same_col_var, col_var_x, "several_vars"),
     totcol   = dplyr::if_else(same_totcol , totcol_x , FALSE         ),
+    refcol   = dplyr::if_else(same_refcol , refcol_x , FALSE         ),
     color    = dplyr::if_else(same_color  , color_x  , ""            )
   )
   # new_fmt(
@@ -1409,13 +1857,16 @@ vec_cast.fmt.fmt  <- function(x, to, ...)
           ci        = get_ci      (x),
 
           in_totrow = is_totrow   (x),
+          in_refrow = is_refrow   (x),
           in_tottab = is_tottab   (x),
 
           type      = get_type    (to),
           comp_all  = get_comp_all(to, replace_na = FALSE),
+          diff_type = get_diff_type(to),
           ci_type   = get_ci_type (to),
           col_var   = get_col_var (to),
           totcol    = is_totcol   (to),
+          refcol    = is_refcol   (to),
           color     = get_color   (to)
 
   )
@@ -1426,9 +1877,11 @@ vec_cast.fmt.double   <- function(x, to, ...)
       display = "wn", wn = x     ,
       type     = get_type    (to),
       comp_all = get_comp_all(to, replace_na = FALSE),
+      diff_type = get_diff_type(to),
       ci_type  = get_ci_type (to),
       col_var  = get_col_var (to),
       totcol   = is_totcol   (to),
+      refcol    = is_refcol   (to),
       color    = get_color   (to),
 
   )
@@ -1441,9 +1894,11 @@ vec_cast.fmt.integer <- function(x, to, ...)
   fmt(n        = x               ,
       type     = get_type    (to),
       comp_all = get_comp_all(to, replace_na = FALSE),
+      diff_type = get_diff_type(to),
       ci_type  = get_ci_type (to),
       col_var  = get_col_var (to),
       totcol   = is_totcol   (to),
+      refcol    = is_refcol   (to),
       color    = get_color   (to)
 
   ) #new_fmt(pct = as.double(x))
@@ -1505,6 +1960,8 @@ vec_arith.fmt.fmt <- function(op, x, y, ...) {
   same_type    <- type_x == get_type(y)
   comp_x       <- get_comp_all(x, replace_na = FALSE)
   same_comp    <- comp_x == get_comp_all(y, replace_na = FALSE)
+  diff_type_x  <- get_diff_type(x)
+  same_diff_type <- diff_type_x == get_diff_type(y)
   ci_type_x    <- get_ci_type(x)
   same_ci_type <- ci_type_x == get_ci_type(y)
   col_var_x    <- get_col_var(x)
@@ -1542,13 +1999,16 @@ vec_arith.fmt.fmt <- function(op, x, y, ...) {
       ci      = rep_NA_real,
 
       in_totrow = is_totrow(x) & is_totrow(y), # Just x ?
+      in_refrow = is_refrow(x) & is_refrow(y),
       in_tottab = is_tottab(x) & is_tottab(y),
 
       type     = dplyr::if_else(same_type   , type_x   , "mixed"       ),
       comp_all = dplyr::if_else(same_comp   , comp_x   , FALSE         ),
+      diff_type= dplyr::if_else(same_diff_type, diff_type_x, ""        ),
       ci_type  = dplyr::if_else(same_ci_type, ci_type_x, ""            ),
       col_var  = dplyr::if_else(same_col_var, col_var_x, "several_vars"),
       totcol   = FALSE                                                  ,
+      refcol   = FALSE                                                  ,
       color    = get_color(x)
 
       # type     = dplyr::if_else(same_type,
@@ -1578,13 +2038,16 @@ vec_arith.fmt.fmt <- function(op, x, y, ...) {
       ci     = rep_NA_real,
 
       in_totrow = is_totrow(x),
+      in_refrow = is_refrow(x),
       in_tottab = is_tottab(x),
 
       type     = dplyr::if_else(same_type   , type_x   , "mixed"       ),
       comp_all = dplyr::if_else(same_comp   , comp_x   , FALSE         ),
+      diff_type= dplyr::if_else(same_diff_type, diff_type_x, ""        ),
       ci_type  = dplyr::if_else(same_ci_type, ci_type_x, ""            ),
       col_var  = dplyr::if_else(same_col_var, col_var_x, "several_vars"),
-      totcol   = FALSE,
+      totcol   = FALSE                                                  ,
+      refcol   = FALSE                                                  ,
       color    = get_color(x)
 
       # type     = dplyr::if_else(same_type,
@@ -1676,13 +2139,16 @@ vec_math.fmt <- function(.fn, .x, ...) {
                          ci     = NA_real_,
 
                          in_totrow = all(is_totrow(.x)),
+                         in_refrow = all(is_refrow(.x)),
                          in_tottab = all(is_tottab(.x)), #any ?
 
                          type      = get_type    (.x),
                          comp_all  = get_comp_all(.x, replace_na = FALSE),
+                         diff_type = get_diff_type(.x),
                          ci_type   = get_ci_type (.x),
                          col_var   = get_col_var (.x),
                          totcol    = is_totcol   (.x),
+                         refcol    = is_refcol   (.x),
                          color     = get_color   (.x)
          ),
          "mean" = new_fmt(display = get_display(.x)[1],
@@ -1699,13 +2165,16 @@ vec_math.fmt <- function(.fn, .x, ...) {
                           ci      = NA_real_,
 
                           in_totrow = FALSE,
+                          in_refrow = FALSE,
                           in_tottab = all(is_tottab(.x)), #any ?
 
                           type      = get_type    (.x),
                           comp_all  = get_comp_all(.x, replace_na = FALSE),
+                          diff_type = get_diff_type(.x),
                           ci_type   = get_ci_type (.x),
                           col_var   = get_col_var (.x),
                           totcol    = is_totcol   (.x),
+                          refcol    = is_refcol   (.x),
                           color     = get_color   (.x)
          ),
          vec_math_base(.fn, get_num(.x), ...) )

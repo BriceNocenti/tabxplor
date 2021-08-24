@@ -12,10 +12,10 @@ tab_xl(
   colnames_rotation = 0,
   remove_tab_vars = TRUE,
   colwidth = "auto",
-  only_one_sheet = FALSE,
+  print_ci = TRUE,
+  print_color_legend = TRUE,
+  sheets = "tabs",
   min_counts = 30,
-  color = "auto",
-  comp = "all",
   hide_near_zero = "auto",
   pct_breaks = get_color_breaks("pct"),
   mean_breaks = get_color_breaks("mean"),
@@ -34,22 +34,6 @@ if you don't want to automatically open the tables in Excel (or another
 software associated with .xlsx files).}
 
 \item{colnames_rotation}{Rotate the names of columns to an angle (in degrees).}
-
-\item{only_one_sheet}{When \code{TRUE}, all tables are printed on the
-same sheet.}
-
-\item{color}{Color cells, based on their deviation from the mean, using
-Excel conditional formatting. In rows and cols, attractions /
-over-represented levels are colored in shades of green,
-and aversions / under-represented levels are colored in shades of orange.
-\itemize{
-\item \code{"auto"} : tabs with \code{"row"} or \code{"col"} percentages
-are colored based on deviations from margins,
-other tabs on contributions to variance
-\item \code{"contrib"} : for all tabs, color intensity is based on the
-relative contribution of cells to variance (Chi2 metric)
-\item \code{"no"} : no conditional formatting
-}}
 
 \item{hide_near_zero}{By default, values printed as 0 are automatically
 colored in light gray in Excel, to help to focus on other ones. Use doubles
@@ -72,6 +56,22 @@ attractions (green), negative numbers for repulsions (orange).}
 \item{digits_no_perc}{Number of digits to print for counts.}
 
 \item{digits_quanti}{Number of digits to print for quantitative variables.}
+
+\item{unique_sheet}{When \code{TRUE}, all tables are printed on the
+same sheet.}
+
+\item{color}{Color cells, based on their deviation from the mean, using
+Excel conditional formatting. In rows and cols, attractions /
+over-represented levels are colored in shades of green,
+and aversions / under-represented levels are colored in shades of orange.
+\itemize{
+\item \code{"auto"} : tabs with \code{"row"} or \code{"col"} percentages
+are colored based on deviations from margins,
+other tabs on contributions to variance
+\item \code{"contrib"} : for all tabs, color intensity is based on the
+relative contribution of cells to variance (Chi2 metric)
+\item \code{"no"} : no conditional formatting
+}}
 
 \item{compact}{Create the more compact table possible by removing
 unnecessary rows (Chi2, unweighted counts, \code{sup_rows}). Useful if there

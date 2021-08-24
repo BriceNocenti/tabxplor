@@ -7,30 +7,31 @@
 tab_prepare(
   data,
   row_var,
-  col_var,
-  ...,
-  show_na = TRUE,
+  col_vars,
+  tab_vars,
+  na = "keep",
   cleannames = TRUE,
   rare_to_other = FALSE,
-  minimum_headcount = 30
+  n_min = 30,
+  other_level = "Others"
 )
 }
 \arguments{
 \item{data}{A dataframe.}
 
-\item{row_var, col_var, tab_vars}{Variables must be the same that will then pass in
+\item{row_var, col_vars, tab_vars}{Variables must be the same that will then pass in
 \code{\link{tab_df}}.}
-
-\item{show_na}{When \code{TRUE}, \code{NA} values are replaced by explicit
-\code{"NA"} values.}
 
 \item{cleannames}{Set to \code{TRUE} to clean levels names, by removing
 prefix numbers like \code{"1-"}, and text in parentheses.}
 
 \item{rare_to_other}{When set to \code{TRUE}, levels with less count
-than minimum_headcount will be merged into an "Other" level.}
+than n_min will be merged into an "Other" level.}
 
-\item{minimum_headcount}{The minimum unweighted count in each variable.}
+\item{n_min}{The minimum unweighted count in each variable.}
+
+\item{show_na}{When \code{TRUE}, \code{NA} values are replaced by explicit
+\code{"NA"} values.}
 }
 \description{
 Prepare data for \code{\link{tab_df}}.

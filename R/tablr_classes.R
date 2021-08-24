@@ -115,14 +115,38 @@ untab <- function(tabs) {
 #Methods for class tab -------------------------------------------------------------------
 
 #' @export
-print.tab <- function(x, ...) {
-  cli::cat_line(format(x, ..., n = 300)) #width = 500
-}
+#' @method print tab
+print.tab <- function(x, ..., n = 100, width = NULL, n_extra = NULL) {
+  print_colors <- tab_color_legend(x)
+  subtext <- get_subtext(x) %>% purrr::discard(. == "")
+  cli::cat_line(format(x, ..., n = n, width = width, n_extra = n_extra))
+  if (length(print_colors) != 0) cli::cat_line(paste0(
+    pillar::style_subtle("# "), print_colors
+    ))
+  if (length(subtext) != 0) cli::cat_line(pillar::style_subtle(
+    paste0("# ", subtext)
+    ))
+  invisible(x)
+  }
 
 #' @export
-print.grouped_tab <- function(x, ...) {
-  cli::cat_line(format(x, ..., n = 300)) #width = 500
+#' @method print grouped_tab
+print.grouped_tab <- function(x, ..., n = 100, width = NULL, n_extra = NULL) {
+  print_colors <- tab_color_legend(x)
+  subtext <- get_subtext(x) %>% purrr::discard(. == "")
+  cli::cat_line(format(x, ..., n = n, width = width, n_extra = n_extra))
+  if (length(print_colors) != 0) cli::cat_line(paste0(
+    pillar::style_subtle("# "), print_colors
+  ))
+  if (length(subtext) != 0) cli::cat_line(pillar::style_subtle(
+    paste0("# ", subtext)
+  ))
+  invisible(x)
 }
+
+# test <- "\033[3m\033[38;5;246m<fct>\033[39m\033[23m"
+# crayon::col_nchar(test)
+# crayon::col_substr(test, 2, 4) %>% cli::cat_line()
 
 # #' Print method for class tab
 # #'
