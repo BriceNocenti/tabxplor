@@ -1,5 +1,4 @@
-#Fonctions et options pour travailler sur des factors ou des listes-------------
-
+#Fonctions and options to work with factors and lists -------------
 
 #' Pipe operator
 #'
@@ -13,18 +12,6 @@
 #' @usage lhs \%>\% rhs
 NULL
 
-#' Assignment pipe operator
-#'
-#' See \code{magrittr::\link[magrittr:pipe]{\%<>\%}} for details.
-#'
-#' @name %<>%
-#' @rdname pipe
-#' @keywords internal
-#' @export
-#' @importFrom magrittr %<>%
-#' @usage lhs \%<>\% rhs
-NULL
-
 # Rlang .data to bind data masking variable in dplyr
 #' @keywords internal
 #' @importFrom rlang .data
@@ -34,7 +21,8 @@ NULL
 
 #' A regex pattern to clean the names of factors.
 #' @export
-cleannames_condition <- function() "^[^- ]+-(?![[:lower:]])|^[^- ]+(?<![[:lower:]])-| *\\(.+\\)"
+cleannames_condition <- function()
+  "^[^- ]+-(?![[:lower:]])|^[^- ]+(?<![[:lower:]])-| *\\(.+\\)"
 
 #Use fct_relabel instead of pers functions ! -----------------------------------
 #' Clean factor levels.
@@ -53,7 +41,7 @@ fct_clean <- function(factor, pattern = cleannames_condition()) {
 
 # fct_clean <- function(factor, pattern = cleannames_condition()){
 #   if(is.data.frame(factor)) {stop("must be a vector, not a data.frame")}
-#   if (!is.factor(factor)) { factor %<>% as.factor() }
+#   if (!is.factor(factor)) { factor <- factor %>%  as.factor() }
 #   levels <- factor %>%  levels() %>%
 #     magrittr::set_names(purrr::map(., ~stringr::str_remove_all(.,pattern)))
 #   return(forcats::fct_recode(factor, !!!levels))
@@ -75,8 +63,8 @@ fct_clean <- function(factor, pattern = cleannames_condition()) {
 #' dplyr::pull(race) %>%
 #'   fct_to_na("Other")
 fct_to_na <- function(factor, patternlist){
-  if (!is.factor(factor)) { factor %<>% as.factor() }
-  patternlist %<>% magrittr::set_names(rep("NULL", length(.)))
+  if (!is.factor(factor)) { factor <- factor %>% as.factor() }
+  patternlist <- patternlist %>% magrittr::set_names(rep("NULL", length(.)))
   forcats::fct_recode(factor, !!!patternlist)
 }
 
@@ -93,7 +81,7 @@ fct_to_na <- function(factor, patternlist){
 # @examples
 fct_replace <- function(factor, pattern, replacement){
   if (is.data.frame(factor)) {stop("must be a vector, not a data.frame")}
-  if (!is.factor(factor)) { factor %<>% as.factor() }
+  if (!is.factor(factor)) { factor <- factor %>% as.factor() }
   levels <- factor %>% levels() %>%
     magrittr::set_names(purrr::map(., ~ stringr::str_replace_all(., pattern, replacement)))
   return(forcats::fct_recode(factor, !!!levels))
@@ -113,7 +101,7 @@ fct_replace <- function(factor, pattern, replacement){
 # @examples
 fct_rename <- function (factor, pattern_replacement_named_vector){
   if(is.data.frame(factor)) {stop("must be a vector, not a data.frame")}
-  if (!is.factor(factor)) { factor %<>% as.factor() }
+  if (!is.factor(factor)) { factor <- factor %>% as.factor() }
   if (!is.null(pattern_replacement_named_vector)) {
     factor <- purrr::reduce2(pattern_replacement_named_vector,
                              names(pattern_replacement_named_vector),
@@ -136,7 +124,7 @@ fct_rename <- function (factor, pattern_replacement_named_vector){
 # @examples
 fct_detect_replace <- function(factor, pattern, replacement, negate = FALSE){
   if (is.data.frame(factor)) {stop("must be a vector, not a data.frame")}
-  if (!is.factor(factor)) { factor %<>% as.factor() }
+  if (!is.factor(factor)) { factor <- factor %>% as.factor() }
   if (negate == FALSE) {
     levels <- factor %>% levels() %>%
       magrittr::set_names(purrr::map(., ~ dplyr::if_else(stringr::str_detect(., pattern), replacement, .) ))
@@ -154,20 +142,20 @@ fct_detect_replace <- function(factor, pattern, replacement, negate = FALSE){
 fct_detect_rename <- function (factor, pattern_replacement_named_vector){
   if(is.data.frame(factor)) {stop("must be a vector, not a data.frame")}
   if (!is.null(pattern_replacement_named_vector)) {
-    if (!is.factor(factor)) { factor %<>% as.factor() }
+    if (!is.factor(factor)) { factor <- factor %>% as.factor() }
     levels <- factor %>% levels() %>% magrittr::set_names(., .)
     new_levels_list <- purrr::map(levels, function(.lv) purrr::imap(pattern_replacement_named_vector,
                                                                     ~ dplyr::if_else(stringr::str_detect(.lv, .x), .y, .lv) ) %>% purrr::flatten_chr()  )
     new_levels <- purrr::map2(levels, new_levels_list, ~ .y[which(!.y %in% .x)] )
-    new_levels %<>% purrr::imap(~ ifelse(length(.) == 0, .y, .x))
+    new_levels <- new_levels %>% purrr::imap(~ ifelse(length(.) == 0, .y, .x))
     if ( any(purrr::map_lgl(new_levels, ~ length(.) >= 2 )) ) {
       warning_levels <- new_levels[which(purrr::map_lgl(new_levels, ~ length(.) >= 2 ))]
       warning(stringr::str_c(c(" two search patterns or more applies to the same level (only the first was kept) : ",
                                rep("", length(warning_levels) - 1)), warning_levels))
       new_levels %>% purrr::map(~ .[1])
     }
-    levels %<>% magrittr::set_names(new_levels)
-    factor %<>% forcats::fct_recode(!!!levels) %>% forcats::fct_relevel(sort)
+    levels <- levels %>% magrittr::set_names(new_levels)
+    factor <- factor %>% forcats::fct_recode(!!!levels) %>% forcats::fct_relevel(sort)
 
   }
   return(factor)
@@ -190,14 +178,14 @@ fct_detect_rename <- function (factor, pattern_replacement_named_vector){
 fct_case_when_recode <- function (factor, pattern_replacement_named_vector,
                                   .else = levels(factor) ){
   if(is.data.frame(factor)) {stop("must be a vector, not a data.frame")}
-  if (!is.factor(factor)) { factor %<>% as.factor() }
+  if (!is.factor(factor)) { factor <- factor %>% as.factor() }
   if (!is.null(pattern_replacement_named_vector)) {
     cases_list <-
       purrr::imap(pattern_replacement_named_vector,
                   ~ list(!! levels(factor) %>% stringr::str_detect(.x) ~ .y)
       ) %>% purrr::flatten() %>% append(!! TRUE ~ .else)
 
-    factor %<>% `levels<-`(dplyr::case_when(!!! cases_list)) %>%
+    factor <- factor %>% `levels<-`(dplyr::case_when(!!! cases_list)) %>%
       forcats::fct_recode(NULL = "NULL") %>% forcats::fct_relevel(sort)
   }
   return(factor)
@@ -222,7 +210,7 @@ fct_levels_from_vector <- function (data_to, data_from, var) {
   data_from <- data_from
 
   if (!is.factor(dplyr::pull(data_from, !!var))) {
-    data_from %<>% dplyr::mutate(!!var := as.factor(!!var))
+    data_from <- data_from %>% dplyr::mutate(!!var := as.factor(!!var))
   }
 
   if (!all(names(data_from) %in% names(data_to))) {
@@ -230,7 +218,7 @@ fct_levels_from_vector <- function (data_to, data_from, var) {
     detect_strings <- stringr::str_c("^", stringr::str_extract(levels_recode, "^[^-]+"))
     levels_recode <- detect_strings %>% magrittr::set_names(levels_recode)
 
-    data_to %<>% dplyr::mutate(!!var := fct_detect_rename(!!var, levels_recode))
+    data_to <- data_to %>% dplyr::mutate(!!var := fct_detect_rename(!!var, levels_recode))
   }
   return(data_to)
 }
@@ -293,7 +281,8 @@ compare_levels <-
       purrr::map_if(non_empty_db, ~ dplyr::if_else(. %in% levelsdb[[first_non_empty_db]],
                                                    "Same      : \"",
                                                    "Different : \""))
-    comp_true_false[[first_non_empty_db]] %<>% stringr::str_replace("^Same", "Base")
+    comp_true_false[[first_non_empty_db]] <-comp_true_false[[first_non_empty_db]] %>%
+      stringr::str_replace("^Same", "Base")
     #%>%
     #magrittr::set_names(stringr::str_c(names(.), " (compared to ", names(levelsdb)[first_non_empty_db], ")"))
 
@@ -335,7 +324,7 @@ compare_levels <-
 #' @param ... Other parameter to pass to the function.
 #'
 #' @return A list of same length.
-#' @export
+#' @keywords internal
 #'
 # @examples
 pmap_if <- function(.l, .p, .f, ..., .else = NULL) {
@@ -371,7 +360,7 @@ pmap_if <- function(.l, .p, .f, ..., .else = NULL) {
 #' @param ... Other parameter to pass to the function.
 #'
 #' @return A list of the same length.
-#' @export
+#' @keywords internal
 #'
 # @examples
 map2_if <- function(.x, .y, .p, .f, ..., .else = NULL) {
@@ -422,7 +411,7 @@ as_predicate  <- function (.fn, ..., .mapper)
   if (.mapper) {
     .fn <- purrr::as_mapper(.fn, ...)
   }
-  function(...) { #Simfiied, no purrr:::as_predicate_friendly_type_of
+  function(...) { #Simplified, no purrr:::as_predicate_friendly_type_of
     out <- .fn(...)
     if (!rlang::is_bool(out)) {
       msg <- sprintf("Predicate functions must return a single `TRUE` or `FALSE`")
@@ -431,7 +420,7 @@ as_predicate  <- function (.fn, ..., .mapper)
   }
 }
 
-#Needed to use where() (it's internal) : quote aut of tidyselect:::where -------
+#Needed to use where() (it's internal) : quote authors of tidyselect:::where -------
 #' @keywords internal
 where <- function (fn)
 {
@@ -453,14 +442,14 @@ where <- function (fn)
 #' @param name_out The name of the database to be formatted.
 #'
 #' @return A file with code.
-#' @export
+#' @keywords internal
 #'
 # @examples
 formats_SAS_to_R <- function(path, name_in, name_out) {
   f <- stringi::stri_read_raw(path)
   format <- stringi::stri_enc_detect(f)
   format <- format[[1]]$Encoding[1]
-  f %<>% stringr::str_conv(format)
+  f <- f %>% stringr::str_conv(format)
 
 
   # f <- stringr::str_replace_all(f, c("\\$pe "="$PE ", "\\$pe "="$PE ", "\\$csei "="$CSEI ", "\\$cse "="$CSE ", "\\$cser "="$CSER ", "\\$naf4l "="$NAF4 ", "\\$naf17l "="$NAF17 ",
@@ -473,7 +462,7 @@ formats_SAS_to_R <- function(path, name_in, name_out) {
   #                           "(\\$[^, ]+)SIX[?= ,]"="\\16 ", "(\\$[^, ]+)SEPT[?= ,]"="\\17 ", "(\\$[^, ]+)HUIT[?= ,]"="\\18 ", "(\\$[^, ]+)NEUF[?= ,]"="\\19 ",
   #                           "(\\$[^, ]+)DIX[?= ,]"="\\110 ", "(\\$[^, ]+)ONZE[?= ,]"="\\111 ", "(\\$[^, ]+)UN[?= ,]"="\\11 "))
 
-  f %<>% stringr::str_replace_all(c("(\\$[[^0-9 ]]+\\d+)l"="\\1")) %>%  #Les formats qui finissent par un nombre peuvent se voire ajouter un l dans SAS.
+  f <- f %>% stringr::str_replace_all(c("(\\$[[^0-9 ]]+\\d+)l"="\\1")) %>%  #Les formats qui finissent par un nombre peuvent se voire ajouter un l dans SAS.
     stringr::str_replace_all("\\\"\\\"", "\\\"") %>%  #Enlever les doubles guillemets.
     stringr::str_replace_all("'", "'") %>%  #Remplacer les apostrophes par d'autres.
     stringr::str_replace_all(coll("\u20AC"), "euros") %>%
@@ -485,7 +474,7 @@ formats_SAS_to_R <- function(path, name_in, name_out) {
     stringr::str_replace_all("\n +\\\"", "\n\\\"") %>%  #Enlever espace en debut de ligne
     stringr::str_remove_all("(?<= )\\\"|\\\"(?= )")  #Enlever les guillemets suivi/precedes d'un espace
 
-  f %<>%
+  f <- f %>%
     stringr::str_replace_all(c("VALUE"="value", "Value"="value")) %>%
     stringr::str_replace_all("(\"[^;]+);[?= ]", "\\1,") %>% #Enlever les ; suivi par un espace (milieu de " par ex)
     stringr::str_replace_all("(\"[^;]+);[?=\\w]", "\\1,") %>% #Enlever les ; suivi par une lettre (idem)
@@ -499,14 +488,14 @@ formats_SAS_to_R <- function(path, name_in, name_out) {
     stringr::str_extract_all("(value [^;]+;)", "\\1")  #Garder les chaines entre Value et ; -> vecteur
   #t(f) #Transposer lignes et colonnes
 
-  f %<>%
+  f <- f %>%
     #CT2013: stringr::str_replace_all("(\\\"[^=]+)=(\\\"[^\"]+\")", "\\1-\\2=\\1") %>% #Inverser ancienne modalite/nouvelle mod (SAS/R)
     stringr::str_replace_all("\\\"(.+)\\\"=\\\"(.+)\\\"", "\\\"\\1-\\2\\\"=\\\"\\1\\\"") %>%  #Inverser ancienne modalite/nouvelle mod (SAS/R). Les ? ? corrigent une erreur.
     #CT2013: stringr::str_replace_all(f, "(\\\"[^=]+=\\\"[^\"]+\")", "\\1,\n") %>% #Virgule et saut de ligne entre chaque modalite
     stringr::str_replace_all("(\\\"[^=]+=\\\"[^\"]+\")", "\\1,") %>% #La meme sans le saut de ligne
     stringr::str_replace_all("(\\$.+)f", "\\1")  #INSEE recent : enlever le f a la fin des noms de variables
 
-  f %<>%
+  f <- f %>%
     stringr::str_replace_all(";", ") }") %>% #Remplacer point-virgule par parenthese
     stringr::str_replace_all(",\n\\)", ")") %>% #Pas de virgule avant parenthese
     stringr::str_replace_all(",\n.+\\)", ")\n") %>% #Idem. Rajouter un saut de ligne
@@ -520,7 +509,7 @@ formats_SAS_to_R <- function(path, name_in, name_out) {
     ) %>%
     stringr::str_replace_all("if\\(\"\\$", "if(\"")
 
-  f %<>%
+  f <- f %>%
     stringr::str_replace_all(",[^<]*<-", " <-") %>%
     # stringr::str_replace_all("euros", "???") %>%
     stringr::str_replace_all("'", "'") #%>%
@@ -559,7 +548,7 @@ formats_SAS_to_R <- function(path, name_in, name_out) {
 #' @param text The character vector of length 1 with text.
 #'
 #' @return Code to be copied in console.
-#' @export
+#' @keywords internal
 #'
 # @examples
 prepare_fct_recode <- function(df_in, df_out, var,  mode = c("text", "numbers", "numbers_vector"),
@@ -567,7 +556,7 @@ prepare_fct_recode <- function(df_in, df_out, var,  mode = c("text", "numbers", 
   text <- text
   lines <- stringr::str_c(text, "\n") %>%
     stringr::str_extract_all(".*\n") %>% unlist
-  lines %<>% stringr::str_replace_all("\n", "") %>%
+  lines <- lines %>% stringr::str_replace_all("\n", "") %>%
     stringr::str_replace_all("\\t+", " ") %>%
     stringr::str_replace_all("^ +", "") %>%
     stringr::str_replace_all(" +$", "")
@@ -585,7 +574,7 @@ prepare_fct_recode <- function(df_in, df_out, var,  mode = c("text", "numbers", 
     numb <- numbers
     numb <- stringr::str_c(numbers, "\n") %>%
       stringr::str_extract_all(".*\n") %>% unlist
-    numb %<>% stringr::str_replace_all("\n", "") %>%
+    numb <- numb %>% stringr::str_replace_all("\n", "") %>%
       stringr::str_replace_all("\\t+", " ") %>%
       stringr::str_replace_all("^ +", "") %>%
       stringr::str_replace_all(" +$", "")
@@ -596,7 +585,7 @@ prepare_fct_recode <- function(df_in, df_out, var,  mode = c("text", "numbers", 
     lines <- dplyr::bind_cols(numb, lines)
   }
 
-  lines %<>% dplyr::filter(!stringr::str_detect(name,"^\\s*$")) %>%
+  lines <- lines %>% dplyr::filter(!stringr::str_detect(name,"^\\s*$")) %>%
     dplyr::mutate(first_letter = stringr::str_to_upper(stringr::str_sub(name, 1, 1)),
                   other_letters = stringr::str_sub(name, 2, -1) ) %>%
     dplyr::mutate(name = stringr::str_c(first_letter, other_letters)) %>%
@@ -623,7 +612,7 @@ prepare_fct_recode <- function(df_in, df_out, var,  mode = c("text", "numbers", 
 # databases <- emploi_data_list[!emploi_data_names %in% c("ee1969_74", "ee2013_18")]
 # vars <- c("ANNEE", "SO", "CSE") #c("ANNEE", "SO", "EXTRI")
 
-#' Bind dataframes for tabw / tab_multi
+#' Bind dataframes for tab / tab_many
 #'
 #' @param databases Dataframes to be binded by rows.
 #' @param vars Selected variables.
@@ -636,18 +625,18 @@ bind_datas_for_tab <- function(databases, vars) {
   if ("character" %in% class(databases)) {
     databases <- databases
     vars <- as.character(vars)
-    databases %<>% purrr::map(~ eval(str2expression(.))) %>%
+    databases <- databases %>% purrr::map(~ eval(str2expression(.))) %>%
       purrr::map(~ dplyr::select(., tidyselect::all_of(vars)))
   } else if (all(purrr::map_lgl(databases, ~ "data.frame" %in% class(.)))) {
-    databases %<>% purrr::map(~ dplyr::select(., tidyselect::all_of(vars)))
+    databases <- databases %>% purrr::map(~ dplyr::select(., tidyselect::all_of(vars)))
   } else {stop("entry is not character vector or list of data.frames")}
   vars_factors <- #TRUE = Variable is a factor in at least one database.
     vars[purrr::map_lgl(vars, function (.vars)
       any(purrr::map_lgl(databases, ~ "factor" %in% class(dplyr::pull(., .vars)))))]
-  databases %<>% purrr::map(~ dplyr::mutate_at(., vars_factors, ~ as.factor(.)))
+  databases <- databases %>% purrr::map(~ dplyr::mutate_at(., vars_factors, ~ as.factor(.)))
   levels_of_all_factors <- purrr::map(vars_factors, function(.vars)
     purrr::map(databases, ~ dplyr::pull(., .vars) ) %>% forcats::lvls_union()   )
-  databases %<>% purrr::map(function(.db)
+  databases <- databases %>% purrr::map(function(.db)
     purrr::reduce2(vars_factors, levels_of_all_factors,
                    .init = .db,
                    .f = function(.result, .vars, .levels)

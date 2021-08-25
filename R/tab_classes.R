@@ -7,6 +7,18 @@
 
 # grouped_tab class still don’t handle [] ----
 
+#Import dplyr in NAMESPACE :
+# dplyr is imported as a "Depends" package, otherwise dplyr::filter, needed for methods,
+# cannot be found by roxygen2 because it replaces base::filter.
+
+#' Internal dplyr methods
+#' @rawNamespace import(dplyr, except = data_frame)
+#  otherwise, conflict with vctrs. Thanks to Thomas :
+#  https://stackoverflow.com/questions/51899220/import-all-the-functions-of-a-package-except-one-when-building-a-package
+#' @keywords internal
+#' @name tabxplor-dplyr
+NULL
+
 # Create class tab -----------------------------------------------------------------------
 # sloop::s3_methods_class("tbl")
 # sloop::s3_get_method(print.tbl)
@@ -23,16 +35,18 @@
 # pillar::squeeze
 # sloop::s3_methods_class("single_tab")
 
-
-#' A construction for class tab
+#' A constructor for class tab
 #'
 #' @param tabs A table, stored into a \code{\link[tibble]{tibble}} data.frame.
-#' It is generally made with \code{\link{tab}} or \code{\link{tab_multi}}.
-#' @param chi2 A tibble storing information about pvalues and variances.
-#' @param subtext A character vector to print legend lines under the table
-#' with \code{\link{tab_xl}}
+#' It is generally made with \code{\link{tab}}, \code{\link{tab_many}}
+#' or \code{\link{tab_core}}.
+#' @param subtext A character vector to print legend lines under the table.
+#' @param chi2 A tibble storing information about pvalues and variances, to fill with
+#' \code{\link{tab_chi2}}.
+#' @param ... Needed to implement subclasses.
+#' @param class Needed to implement subclasses.
 #'
-#' @return A table of class tab.
+#' @return A \code{tibble} of class \code{tab}.
 #' @export
 #  @examples
 new_tab <-
@@ -48,9 +62,11 @@ new_tab <-
     #vec_assert(subtext    , character())
 
     tibble::new_tibble(tabs, subtext = subtext, chi2 = chi2, ...,
-                       nrow = nrow(tabs), class = c(class, "tab")) #... ?
+                       nrow = nrow(tabs), class = c(class, "tab"))
   }
 
+#' @param groups The grouping data.
+#' @rdname new_tab
 #' @export
 new_grouped_tab <-
   function(tabs = tibble::tibble(), groups,
@@ -76,7 +92,8 @@ new_grouped_tab <-
 # Functions to work with class tab -------------------------------------------------------
 
 # Useful test fonction :
-#' @describeIn tab A test function for class tab
+#' @describeIn tab_many a test function for class tab
+#' @param x A object to test with \code{\link{is_tab}}.
 #' @export
 is_tab <- function(x) {
   inherits(x, "tab")
@@ -102,6 +119,7 @@ get_chi2    <- purrr::attr_getter("chi2")
 #   #vctrs::vec_cast(x, tab())
 # }
 
+#' @keywords internal
 untab <- function(tabs) {
   if (lv1_group_vars(tabs)) {
     `class<-`(tabs, class(tabs) %>% purrr::discard(. == "tab"))
@@ -219,7 +237,7 @@ print.grouped_tab <- function(x, ..., n = 100, width = NULL, n_extra = NULL) {
 # If n_groups == 1, then go back to new_tab ----
 
 
-#' @importFrom dplyr group_by
+# @importFrom dplyr group_by # not needed since tabxplor import dplyr as a "Depends" package
 #' @method group_by tab
 #' @export
 group_by.tab <- function(.data,
@@ -232,19 +250,24 @@ group_by.tab <- function(.data,
                   subtext = get_subtext(.data), chi2 = get_chi2(.data))
 }
 
-#' @importFrom dplyr ungroup
-#' @method ungroup grouped_tab
-#' @export
-
 
 
 # (from vctrs documentation)
 # The coercion methods for data frames operate in two steps:
-#   • They check for compatible subclass attributes. In our case the tibble colour has to be the
-# same, or be undefined.
+# • They check for compatible subclass attributes. In our case the tibble colour has to
+# be the same, or be undefined.
 # • They call their parent methods, in this case tib_ptype2() and tib_cast() because we
 # have a subclass of tibble. This eventually calls the data frame methods df_ptype2() and
 # tib_ptype2() which match the columns and their types.
+
+#' Coercion between two tab
+#' @param x,y,to Subclasses of data frame.
+#' @param ... For future extensions.
+#' @param x_arg Argument names for x and y. These are used in error messages to inform
+#' the user about the locations of incompatible types.
+#' @param to_arg Argument names for x and to. These are used in error messages to inform
+#' the user about the locations of incompatible types.
+#'
 #' @export
 tab_cast <- function(x, to, ..., x_arg = "", to_arg = "") {
   out <- tib_cast(x, to, ..., x_arg = x_arg, to_arg = to_arg)
@@ -256,6 +279,9 @@ tab_cast <- function(x, to, ..., x_arg = "", to_arg = "") {
   new_tab(out, subtext = subtext, chi2 = chi2)
 }
 
+#' @rdname tab_cast
+#' @param y_arg Argument names for x and y. These are used in error messages to inform
+#' the user about the locations of incompatible types.
 #' @export
 tab_ptype2 <- function(x, y, ..., x_arg = "", y_arg = "") {
   out <- tib_ptype2(x, y, ..., x_arg = x_arg, y_arg = y_arg)
@@ -319,6 +345,9 @@ vec_cast.data.frame.tab <- function(x, to, ...) {
 
 
 #Methods for class grouped_tab------------------------------------------------------------
+# @importFrom dplyr ungroup
+#' @method ungroup grouped_tab
+#' @export
 ungroup.grouped_tab <- function (x, ...)
 {
   if (missing(...)) {
@@ -326,12 +355,13 @@ ungroup.grouped_tab <- function (x, ...)
   }
   else {
     old_groups <- dplyr::group_vars(x)
-    to_remove <- tidyselect::vars_select(names(x), ...)
+    to_remove  <- tidyselect::vars_select(names(x), ...)
     new_groups <- setdiff(old_groups, to_remove)
     dplyr::group_by(x, !!!syms(new_groups))
   }
 }
 
+#' @keywords internal
 lv1_group_vars <- function(tabs) {
   dplyr::n_groups(tabs) <= 1
 
@@ -341,7 +371,7 @@ lv1_group_vars <- function(tabs) {
   #   length(groupvars) == 0
 }
 
-#' @importFrom dplyr mutate
+# @importFrom dplyr mutate
 #' @method mutate grouped_tab
 #' @export
 mutate.grouped_tab <- function(.data, ...) {
@@ -358,7 +388,7 @@ mutate.grouped_tab <- function(.data, ...) {
 
 
 
-#' @importFrom dplyr transmute
+# @importFrom dplyr transmute
 #' @method transmute grouped_tab
 #' @export
 transmute.grouped_tab <- function(.data, ...) {
@@ -371,7 +401,7 @@ transmute.grouped_tab <- function(.data, ...) {
   }
 }
 
-#' @importFrom dplyr summarise
+# @importFrom dplyr summarise
 #' @method summarise grouped_tab
 #' @export
 summarise.grouped_tab <- function(.data, ..., .groups = NULL) {
@@ -384,21 +414,22 @@ summarise.grouped_tab <- function(.data, ..., .groups = NULL) {
   }
 }
 
-#' @importFrom dplyr filter
+# @importFrom dplyr filter
 #' @method filter grouped_tab
+# @rdname filter
 #' @export
 filter.grouped_tab <- function(.data, ..., .preserve = FALSE) {
   out <- NextMethod()
-  groups <- dplyr::group_data(out)
   if (lv1_group_vars(out)) {
     new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
   } else {
+    groups <- dplyr::group_data(out)
     new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
   }
 }
 
-# slice not working with grouped_tab ----
-#' @importFrom dplyr slice
+# slice not working with grouped_tab ? ----
+# @importFrom dplyr slice
 #' @method slice grouped_tab
 #' @export
 slice.grouped_tab <- function(.data, ..., .preserve = FALSE) {
@@ -411,7 +442,7 @@ slice.grouped_tab <- function(.data, ..., .preserve = FALSE) {
   }
 }
 
-#' @importFrom dplyr arrange
+# @importFrom dplyr arrange
 #' @method arrange grouped_tab
 #' @export
 arrange.grouped_tab <- function(.data, ..., .by_group = FALSE) {
@@ -424,7 +455,7 @@ arrange.grouped_tab <- function(.data, ..., .by_group = FALSE) {
   }
 }
 
-#' @importFrom dplyr select
+# @importFrom dplyr select
 #' @method select grouped_tab
 #' @export
 select.grouped_tab <- function(.data, ...) {
@@ -437,7 +468,7 @@ select.grouped_tab <- function(.data, ...) {
   }
 }
 
-#' @importFrom dplyr relocate
+# @importFrom dplyr relocate
 #' @method relocate grouped_tab
 #' @export
 relocate.grouped_tab <- function(.data, ..., .before = NULL, .after = NULL) {
@@ -450,7 +481,7 @@ relocate.grouped_tab <- function(.data, ..., .before = NULL, .after = NULL) {
   }
 }
 
-#' @importFrom dplyr rename
+# @importFrom dplyr rename
 #' @method rename grouped_tab
 #' @export
 rename.grouped_tab <- function(.data, ...) {
@@ -463,7 +494,7 @@ rename.grouped_tab <- function(.data, ...) {
   }
 }
 
-#' @importFrom dplyr rename_with
+# @importFrom dplyr rename_with
 #' @method rename_with grouped_tab
 #' @export
 rename_with.grouped_tab <- function(.data, .fn,
@@ -477,7 +508,7 @@ rename_with.grouped_tab <- function(.data, .fn,
   }
 }
 
-#' @importFrom dplyr distinct
+# @importFrom dplyr distinct
 #' @method distinct grouped_tab
 #' @export
 distinct.grouped_tab <- function(.data, ...,  .keep_all = FALSE) {
@@ -496,7 +527,7 @@ distinct.grouped_tab <- function(.data, ...,  .keep_all = FALSE) {
 
 
 
-
+#' @rdname tab_cast
 #' @export
 gtab_cast <- function(x, to, ..., x_arg = "", to_arg = "") {
   #based upon vctrs:::gdf_cast()
@@ -509,6 +540,7 @@ gtab_cast <- function(x, to, ..., x_arg = "", to_arg = "") {
   new_grouped_tab(gdf, groups, subtext = get_subtext(to), chi2 = get_chi2(to))
 }
 
+#' @rdname tab_cast
 #' @export
 gtab_ptype2 <- function(x, y, ..., x_arg = "", y_arg = "") {
   #based upon vctrs:::gdf_ptype2
@@ -608,6 +640,398 @@ vec_cast.grouped_tab.data.frame <- function(x, to, ...) {
 vec_cast.data.frame.grouped_tab <- function(x, to, ...) {
   df_cast(x, to, ...)
 }
+
+
+
+
+
+#Colors for printing fmt in tabs -------------------------------------------------------
+pos5  <- crayon::make_style(rgb(0, 5, 0, maxColorValue = 5),
+                            colors = crayon::num_colors(forget = TRUE)) #hcl(120, 200, 100)
+pos4  <- crayon::make_style(rgb(1, 5, 1, maxColorValue = 5))
+pos3  <- crayon::make_style(rgb(3, 5, 1, maxColorValue = 5))
+pos2  <- crayon::make_style(rgb(4, 5, 1, maxColorValue = 5))
+pos1  <- crayon::make_style(rgb(4, 4, 1, maxColorValue = 5)) #5, 5, 1
+
+neg5  <- crayon::make_style(rgb(5, 0, 0, maxColorValue = 5))
+neg4  <- crayon::make_style(rgb(5, 1, 0, maxColorValue = 5))
+neg3  <- crayon::make_style(rgb(5, 2, 1, maxColorValue = 5))
+neg2  <- crayon::make_style(rgb(5, 3, 1, maxColorValue = 5))
+neg1  <- crayon::make_style(rgb(4, 3, 2, maxColorValue = 5))
+
+fmtgrey4 <- crayon::make_style(grey(0.9), grey = TRUE)
+fmtgrey3 <- crayon::make_style(grey(0.7), grey = TRUE)
+fmtgrey2 <- crayon::make_style(grey(0.5), grey = TRUE)
+fmtgrey1 <- crayon::make_style(grey(0.3), grey = TRUE)
+
+posb5  <- crayon::make_style(rgb(0, 0, 5, maxColorValue = 5)) #hcl(120, 200, 100)
+posb4  <- crayon::make_style(rgb(0, 1, 5, maxColorValue = 5))
+posb3  <- crayon::make_style(rgb(0, 3, 5, maxColorValue = 5))
+posb2  <- crayon::make_style(rgb(1, 4, 5, maxColorValue = 5))
+posb1  <- crayon::make_style(rgb(2, 5, 5, maxColorValue = 5))
+
+negb5  <- crayon::make_style(rgb(5, 0, 0, maxColorValue = 5))
+negb4  <- crayon::make_style(rgb(5, 0, 1, maxColorValue = 5))
+negb3  <- crayon::make_style(rgb(5, 1, 1, maxColorValue = 5))
+negb2  <- crayon::make_style(rgb(5, 1, 3, maxColorValue = 5))
+negb1  <- crayon::make_style(rgb(5, 2, 3, maxColorValue = 5))
+
+
+
+# cat("\n",
+#     pos1("42%" ), neg1("42%\n" ),
+#     pos2("42%" ), neg2("42%\n" ),
+#     pos3("42%" ), neg3("42%\n" ),
+#     pos4("42%" ), neg4("42%\n" ),
+#     pos5("42%" ), neg5("42%\n" ),
+#     "\n",
+#     posb1("42%"), negb1("42%\n" ),
+#     posb2("42%" ), negb2("42%\n" ),
+#     posb3("42%" ), negb3("42%\n" ),
+#     posb4("42%" ), negb4("42%\n" ),
+#     posb5("42%" ), negb5("42%\n" ),
+#     "\n",
+#     "42%"       ,       "42%\n" ,
+#     fmtgrey4("42%"), fmtgrey4("42%\n"),
+#     fmtgrey3("42%"), fmtgrey3("42%\n"),
+#     fmtgrey2("42%"), fmtgrey2("42%\n"),
+#     fmtgrey1("42%"), fmtgrey1("42%\n") )
+
+bgpos5   <- crayon::make_style(rgb(0, 5, 0, maxColorValue = 5), bg = TRUE) #hcl(120, 200, 100)
+bgpos4   <- crayon::make_style(rgb(0, 4, 0, maxColorValue = 5), bg = TRUE)
+bgpos3   <- crayon::make_style(rgb(0, 3, 0, maxColorValue = 5), bg = TRUE)
+bgpos2   <- crayon::make_style(rgb(0, 2, 0, maxColorValue = 5), bg = TRUE)
+bgpos1   <- crayon::make_style(rgb(0, 1, 0, maxColorValue = 5), bg = TRUE) #5, 5, 1
+
+bgneg5   <- crayon::make_style(rgb(5, 0, 0, maxColorValue = 5), bg = TRUE)
+bgneg4   <- crayon::make_style(rgb(4, 0, 0, maxColorValue = 5), bg = TRUE)
+bgneg3   <- crayon::make_style(rgb(3, 0, 0, maxColorValue = 5), bg = TRUE)
+bgneg2   <- crayon::make_style(rgb(2, 0, 0, maxColorValue = 5), bg = TRUE)
+bgneg1   <- crayon::make_style(rgb(1, 0, 0, maxColorValue = 5), bg = TRUE)
+
+bgposb5  <- crayon::make_style(rgb(0, 0, 5, maxColorValue = 5), bg = TRUE) #hcl(120, 200, 100)
+bgposb4  <- crayon::make_style(rgb(0, 0, 4, maxColorValue = 5), bg = TRUE)
+bgposb3  <- crayon::make_style(rgb(0, 0, 3, maxColorValue = 5), bg = TRUE)
+bgposb2  <- crayon::make_style(rgb(0, 0, 2, maxColorValue = 5), bg = TRUE)
+bgposb1  <- crayon::make_style(rgb(0, 0, 1, maxColorValue = 5), bg = TRUE)
+
+bgnegb5  <- crayon::make_style(rgb(5, 0, 0, maxColorValue = 5), bg = TRUE)
+bgnegb4  <- crayon::make_style(rgb(4, 0, 0, maxColorValue = 5), bg = TRUE)
+bgnegb3  <- crayon::make_style(rgb(3, 0, 0, maxColorValue = 5), bg = TRUE)
+bgnegb2  <- crayon::make_style(rgb(2, 0, 0, maxColorValue = 5), bg = TRUE)
+bgnegb1  <- crayon::make_style(rgb(1, 0, 0, maxColorValue = 5), bg = TRUE)
+
+# cat("\n",
+#     bgpos1("42%"  ), bgneg1("42%\n" ),
+#     bgpos2("42%"  ), bgneg2("42%\n" ),
+#     bgpos3("42%"  ), bgneg3("42%\n" ),
+#     bgpos4("42%"  ), bgneg4("42%\n" ),
+#     bgpos5("42%"  ), bgneg5("42%\n" ),
+#     "\n",
+#     bgposb1("42%" ), bgnegb1("42%\n" ),
+#     bgposb2("42%" ), bgnegb2("42%\n" ),
+#     bgposb3("42%" ), bgnegb3("42%\n" ),
+#     bgposb4("42%" ), bgnegb4("42%\n" ),
+#     bgposb5("42%" ), bgnegb5("42%\n" ),
+#     "\n",
+#     "42%"       ,       "42%\n" ,
+#     fmtgrey4("42%"), fmtgrey4("42%\n"),
+#     fmtgrey3("42%"), fmtgrey3("42%\n"),
+#     fmtgrey2("42%"), fmtgrey2("42%\n"),
+#     fmtgrey1("42%"), fmtgrey1("42%\n") )
+
+
+
+
+# pos4  <- crayon::make_style(hsv(122/360, 1   , 1  ),
+#                             colors = crayon::num_colors(forget = TRUE)) #hcl(120, 200, 100)
+# pos3  <- crayon::make_style(hsv(122/360, 0.75, 1  ))
+# pos2  <- crayon::make_style(hsv(122/360, 0.50, 1  ))
+# pos1  <- crayon::make_style(hsv(122/360, 0.20, 0.8))
+# #pos5  <- crayon::make_style(hsv(122/360, 0.20, 0.8))
+#
+# neg4  <- crayon::make_style(hsv( 27/360, 1   , 1  ))
+# neg3  <- crayon::make_style(hsv( 27/360, 0.75, 1  ))
+# neg2  <- crayon::make_style(hsv( 27/360, 0.50, 1  ))
+# neg1  <- crayon::make_style(hsv( 27/360, 0.20, 0.8))
+# #neg5  <- crayon::make_style(hsv( 27/360, 0.2, 0.8))
+#
+# fmtgrey3 <- crayon::make_style(grey(0.9), grey = TRUE)
+# fmtgrey2 <- crayon::make_style(grey(0.6), grey = TRUE)
+# fmtgrey1 <- crayon::make_style(grey(0.4), grey = TRUE)
+#
+#
+# posb4  <- crayon::make_style(hsv(210/360, 1    , 1  )) #hcl(120, 200, 100)
+# posb3  <- crayon::make_style(hsv(210/360, 0.755, 1  ))
+# posb2  <- crayon::make_style(hsv(210/360, 0.550, 1  ))
+# posb1  <- crayon::make_style(hsv(210/360, 0.355, 0.8))
+# #posb5  <- crayon::make_style(hsv(210/360, 0.2, 0.8))
+#
+# negb4  <- crayon::make_style(hsv(0      , 1   , 1  ))
+# negb3  <- crayon::make_style(hsv(0      , 0.75, 1  ))
+# negb2  <- crayon::make_style(hsv(0      , 0.55, 1  ))
+# negb1  <- crayon::make_style(hsv(0      , 0.35, 0.8))
+# #negb5  <- crayon::make_style(hsv(0      , 0.2, 0.8))
+#
+# # cat("\n",
+# #     pos1("42%" ), neg1("42%\n" ),
+# #     pos2("42%" ), neg2("42%\n" ),
+# #     pos3("42%" ), neg3("42%\n" ),
+# #     pos4("42%" ), neg4("42%\n" ),
+# #     #pos5("42%" ), neg5("42%\n" ),
+# #     "\n",
+# #     posb1("42%"), negb1("42%\n" ),
+# #     posb2("42%" ), negb2("42%\n" ),
+# #     posb3("42%" ), negb3("42%\n" ),
+# #     posb4("42%" ), negb4("42%\n" ),
+# #     #posb5("42%" ), negb5("42%\n" ),
+# #     "\n",
+# #     "42%"       ,       "42%\n" ,
+# #     fmtgrey1("42%"), fmtgrey1("42%\n"),
+# #     fmtgrey2("42%"), fmtgrey2("42%\n"),
+# #     fmtgrey3("42%"), fmtgrey3("42%\n") )
+#
+# # crayon::show_ansi_colors()
+
+
+
+# #Background colors
+# bgpos4   <- crayon::make_style(hsv(122/360, 1   , 1  ), bg = TRUE)
+# bgpos3   <- crayon::make_style(hsv(122/360, 0.7 , 0.7), bg = TRUE)
+# bgpos2   <- crayon::make_style(hsv(122/360, 0.50, 0.5), bg = TRUE)
+# bgpos1   <- crayon::make_style(hsv(122/360, 0.50, 0.3), bg = TRUE)
+# bgpos5   <- crayon::make_style(hsv(122/360, 0.20, 0.8), bg = TRUE)
+#
+# bgneg4   <- crayon::make_style(hsv( 27/360, 1   , 1  ), bg = TRUE)
+# bgneg3   <- crayon::make_style(hsv( 27/360, 0.7 , 1  ), bg = TRUE)
+# bgneg2   <- crayon::make_style(hsv( 27/360, 0.50, 0.6), bg = TRUE)
+# bgneg1   <- crayon::make_style(hsv( 27/360, 0.50, 0.3), bg = TRUE)
+# bgneg5   <- crayon::make_style(hsv( 27/360, 0.2 , 0.8), bg = TRUE)
+#
+# bgposb4  <- crayon::make_style(hsv(210/360, 1   , 1  ), bg = TRUE)
+# bgposb3  <- crayon::make_style(hsv(210/360, 0.7 , 1  ), bg = TRUE)
+# bgposb2  <- crayon::make_style(hsv(210/360, 0.50, 0.6), bg = TRUE)
+# bgposb1  <- crayon::make_style(hsv(210/360, 0.50, 0.3), bg = TRUE)
+# bgposb5  <- crayon::make_style(hsv(210/360, 0.30 , 0.8), bg = TRUE)
+#
+# bgnegb4  <- crayon::make_style(hsv(0      , 1   , 1  ), bg = TRUE)
+# bgnegb3  <- crayon::make_style(hsv(0      , 0.7 , 1  ), bg = TRUE)
+# bgnegb2  <- crayon::make_style(hsv(0      , 0.50, 0.6), bg = TRUE)
+# bgnegb1  <- crayon::make_style(hsv(0      , 0.50, 0.3), bg = TRUE)
+# bgnegb5  <- crayon::make_style(hsv(0      , 0.2  , 0.8), bg = TRUE)
+#
+#
+# # cat("\n",
+# #     bgpos1("42%"  ), bgneg1("42%\n"  ),
+# #     bgpos2("42%"  ), bgneg2("42%\n"  ),
+# #     bgpos3("42%"  ), bgneg3("42%\n"  ),
+# #     bgpos4("42%"  ), bgneg4("42%\n"  ),
+# #     #bgpos5$black("42%"  ), bgneg5$black("42%\n"  ),
+# #     "\n",
+# #     bgposb1("42%" ), bgnegb1("42%\n" ),
+# #     bgposb2("42%" ), bgnegb2("42%\n" ),
+# #     bgposb3("42%" ), bgnegb3("42%\n" ),
+# #     bgposb4("42%" ), bgnegb4("42%\n" ),
+# #     #bgposb5$black("42%" ), bgnegb5$black("42%\n" ),
+# #     "\n",
+# #     "42%"        ,       "42%\n"  ,
+# #     fmtgrey1("42%") , fmtgrey1("42%\n" ),
+# #     fmtgrey2("42%") , fmtgrey2("42%\n" ),
+# #     fmtgrey3("42%") , fmtgrey3("42%\n" ) )
+
+green_red <-
+  c(pos1 = "pos1", pos2 = "pos2", pos3 = "pos3", pos4 = "pos4", pos5 = "pos5",
+    neg1 = "neg1", neg2 = "neg2", neg3 = "neg3", neg4 = "neg4", neg5 = "neg5" )
+blue_red <-
+  c(pos1 = "posb1", pos2 = "posb2", pos3 = "posb3", pos4 = "posb4", pos5 = "posb5",
+    neg1 = "negb1", neg2 = "negb2", neg3 = "negb3", neg4 = "negb4", neg5 = "negb5" )
+green_red_bg <-
+  c(pos1 = "bgpos1", pos2 = "bgpos2", pos3 = "bgpos3", pos4 = "bgpos4", pos5 = "bgpos5",
+    neg1 = "bgneg1", neg2 = "bgneg2", neg3 = "bgneg3", neg4 = "bgneg4", neg5 = "bgneg5" )
+blue_red_bg <-
+  c(pos1 = "bgposb1", pos2 = "bgposb2", pos3 = "bgposb3", pos4 = "bgposb4", pos5 = "bgposb5",
+    neg1 = "bgnegb1", neg2 = "bgnegb2", neg3 = "bgnegb3", neg4 = "bgnegb4", neg5 = "bgnegb5"  )
+greys <-
+  c(pos1 = "fmtgrey1", pos2 = "fmtgrey2", pos3 = "fmtgrey3", pos4 = "white")
+
+
+#' Define the color style used to print tibbles of class \code{\link{tab}}
+#' @describeIn tab_many define the color style used to print tibbles of class \code{\link{tab}}
+#' @param styles The style chosen in \code{tab_color_style()}, among \code{"green_red"},
+#'  \code{"blue_red"}, \code{"green_red_bg"} and \code{"blue_red_bg"}.
+#'
+#' @return
+#' @export
+#'
+#' @examples #
+#' # To change the overall color style used to print all \code{\link{tab}} :
+#'  \dontrun{tab_color_style("blue_red_bg")}
+tab_color_style <-
+  function(styles = c("green_red", "blue_red",
+                      "green_red_bg", "blue_red_bg")
+  ) {
+    assign("color_styles_all", rlang::eval_tidy(rlang::sym(styles[1])),
+           pos = "package:tabxplor" #globalenv() #
+    )
+  }
+color_styles_all <- green_red
+
+#Color breaks for printing fmt in tabs ------------------------------------------------
+
+#calculate pct breaks based on the number of levels ? ----
+
+pct_breaks      <- c(0.05, 0.1, 0.2, 0.3)
+mean_breaks     <- c(1.15, 1.5, 2, 4)
+contrib_breaks  <- c(1, 2, 5, 10)
+
+pct_ci_breaks   <- pct_breaks - pct_breaks[1]
+mean_ci_breaks  <- mean_breaks / mean_breaks[1]
+
+pct_brksup      <- c(pct_breaks    [2:length(pct_breaks)    ], Inf)
+mean_brksup     <- c(mean_breaks   [2:length(mean_breaks)   ], Inf)
+contrib_brksup  <- c(contrib_breaks[2:length(contrib_breaks)], Inf)
+pct_ci_brksup   <- c(pct_ci_breaks [2:length(pct_ci_breaks) ], Inf)
+mean_ci_brksup  <- c(mean_ci_breaks[2:length(mean_ci_breaks)], Inf)
+
+pct_brk         <- pct_breaks     %>% c(., -.)
+mean_brk        <- mean_breaks    %>% c(., 1/.)
+contrib_brk     <- contrib_breaks %>% c(., -.)
+pct_ci_brk      <- pct_ci_breaks  %>% c(., -.)
+mean_ci_brk     <- mean_ci_breaks %>% c(., -.) #then - again
+
+pct_brksup      <- pct_brksup     %>% c(., -.)
+mean_brksup     <- mean_brksup    %>% c(., 1/.)
+contrib_brksup  <- contrib_brksup %>% c(., -.)
+pct_ci_brksup   <- pct_ci_brksup  %>% c(., -.)
+mean_ci_brksup  <- mean_ci_brksup %>% c(., -.) #then - again
+
+#' Get the breaks currently used to print colors
+#' @describeIn tab_many get the breaks currently used to print colors
+#' @param brk When missing, return all color breaks. Specify to return a given color
+#' break, among \code{"pct"}, \code{"mean"}, \code{"contrib"}, \code{"pct_ci"} and
+#' \code{"mean_ci"}.
+#'
+#' @export
+get_color_breaks <- function(brk) {
+  if (missing(brk)) {
+    return(
+      list(pct_breaks = pct_breaks, mean_breaks = mean_breaks,
+           contrib_breaks = contrib_breaks, pct_ci_breaks = pct_ci_breaks,
+           mean_ci_breaks = mean_ci_breaks)
+    )
+  }
+  switch (brk,
+          "pct"     = pct_breaks    ,
+          "mean"    = mean_breaks   ,
+          "contrib" = contrib_breaks,
+          "pct_ci"  = pct_ci_breaks ,
+          "mean_ci" = mean_ci_breaks
+  )
+}
+
+#' Set the breaks used to print colors
+#' @describeIn tab_many set the breaks used to print colors
+#' @description Only breaks for attractions/surrepresentations (in green) should be given,
+#' as a vector of positive doubles, with length between 1 and 5.
+#' Breaks for repulsions/subrepresentations (in orange/red) will simply be the opposite.
+#' @param pct_breaks If they are to be changed, the breaks used for percentages.
+#' Default to \code{c(0.05, 0.1, 0.2, 0.3)} : first color used when the pct of a cell
+#' is +5% superior to the pct of the related total ; second color used when
+#' it is +10% superior ; third +20% superior ; fourth +30% superior.
+#' The opposite for cells inferior to the total.
+#' With \code{color = "after_ci"}, the first break is substracted from all breaks
+#' (default becomes \code{c(0, 0.05, 0.15, 0.25)} : +0%, +5%, +15%, +25%).
+#' @param mean_breaks If they are to be changed, the breaks used for means.
+#' Default to \code{c(1.15, 1.5, 2, 4)} : first color used when the mean of a cell
+#' is superior to 1.15 times the mean of the related total row ; second color
+#' used when it is superior to 1.5 times ; etc.
+#' The opposite for cells inferior to the total.
+#' With \code{color = "after_ci"}, the first break is divided from all breaks
+#' (default becomes \code{c(1, 1.3, 1.7, 3.5)}).
+#' @param contrib_breaks If they are to be changed, the breaks used for contributions to
+#' variance. Default to \code{c(1, 2, 5, 10)} : first color used when the contribution of
+#' a cell is superior to the mean contribution ; second color used when it is superior to
+#' 2 times the mean contribution ; etc. The global color (for example green or
+#' red/orange) is given by the sign of the spread.
+#'
+#' @export
+set_color_breaks <- function(pct_breaks, mean_breaks, contrib_breaks) {
+
+  if (!missing(pct_breaks)) {
+    stopifnot(is.numeric(pct_breaks)     ,
+              length(pct_breaks)     <= 5,
+              all(pct_breaks         >= 0))
+    pct_ci_breaks   <- pct_breaks - pct_breaks[1]
+    pct_brk         <- pct_breaks     %>% c(., -.)
+    pct_brksup      <- c(pct_breaks   [2:length(pct_breaks)    ], Inf)
+    pct_brksup      <- pct_brksup     %>% c(., -.)
+    pct_ci_brk      <- pct_ci_breaks  %>% c(., -.)
+    pct_ci_brksup   <- c(pct_ci_breaks[2:length(pct_ci_breaks) ], Inf)
+    pct_ci_brksup   <- pct_ci_brksup  %>% c(., -.)
+    assign("pct_breaks"   , pct_breaks   , pos = "package:tabxplor")
+    assign("pct_ci_breaks", pct_ci_breaks, pos = "package:tabxplor")
+    assign("pct_brk"      , pct_brk      , pos = "package:tabxplor")
+    assign("pct_brksup"   , pct_brksup   , pos = "package:tabxplor")
+    assign("pct_ci_brk"   , pct_ci_brk   , pos = "package:tabxplor")
+    assign("pct_ci_brksup", pct_ci_brksup, pos = "package:tabxplor")
+  }
+
+  if (!missing(mean_breaks)) {
+    stopifnot(is.numeric(mean_breaks)    ,
+              length(mean_breaks)    <= 5,
+              all(mean_breaks        >= 0))
+    mean_ci_breaks  <- mean_breaks / mean_breaks[1]
+    mean_brk        <- mean_breaks    %>% c(., 1/.)
+    mean_brksup     <- c(mean_breaks   [2:length(mean_breaks)   ], Inf)
+    mean_brksup     <- mean_brksup    %>% c(., 1/.)
+    mean_ci_brk     <- mean_ci_breaks %>% c(., -.) #then - again
+    mean_ci_brksup  <- c(mean_ci_breaks[2:length(mean_ci_breaks)], Inf)
+    mean_ci_brksup  <- mean_ci_brksup %>% c(., -.) #then - again
+    assign("mean_breaks"   , mean_breaks   , pos = "package:tabxplor")
+    assign("mean_ci_breaks", mean_ci_breaks, pos = "package:tabxplor")
+    assign("mean_brk"      , mean_brk      , pos = "package:tabxplor")
+    assign("mean_brksup"   , mean_brksup   , pos = "package:tabxplor")
+    assign("mean_ci_brk"   , mean_ci_brk   , pos = "package:tabxplor")
+    assign("mean_ci_brksup", mean_ci_brksup, pos = "package:tabxplor")
+  }
+
+
+  if (!missing(contrib_breaks)) {
+    stopifnot(is.numeric(contrib_breaks) ,
+              length(contrib_breaks) <= 5,
+              all(contrib_breaks     >= 0))
+    contrib_brk     <- contrib_breaks %>% c(., -.)
+    contrib_brksup  <- c(contrib_breaks[2:length(contrib_breaks)], Inf)
+    contrib_brksup  <- contrib_brksup %>% c(., -.)
+    assign("contrib_breaks", contrib_breaks, pos = "package:tabxplor")
+    assign("contrib_brk"   , contrib_brk   , pos = "package:tabxplor")
+    assign("contrib_brksup", contrib_brksup, pos = "package:tabxplor")
+  }
+}
+
+#' @keywords internal
+get_full_color_breaks <- function() {
+  list(pct_brk        = pct_brk       ,
+       pct_brksup     = pct_brksup    ,
+       pct_ci_brk     = pct_ci_brk    ,
+       pct_ci_brksup  = pct_ci_brksup ,
+       mean_brk       = mean_brk      ,
+       mean_brksup    = mean_brksup   ,
+       mean_ci_brk    = mean_ci_brk   ,
+       mean_ci_brksup = mean_ci_brksup,
+       contrib_brk    = contrib_brk   ,
+       contrib_brksup = contrib_brksup )
+}
+
+# get_color_breaks()
+#
+# set_color_breaks(pct_breaks = c(0.05, 0.10, 0.15, 0.25, 0.35))
+
+# get_full_color_breaks()
+
+# pct_breaks     = c(0.05, 0.10, 0.15, 0.25, 0.35)
+# mean_breaks    = c(1.15, 1.25, 1.5 , 2   , 4   )
+# contrib_breaks = c(0.5 , 1   , 2   , 5   , 10  )
 
 
 

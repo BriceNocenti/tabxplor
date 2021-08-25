@@ -1,55 +1,105 @@
-# Create formated numbers class -----------
+# Create formated numbers class ----------------------------------------------------------
 #Import vctrs in NAMESPACE :
 #' Internal vctrs methods
 #'
 #' @import vctrs
 #' @keywords internal
-#' @name percent-vctrs
+#' @name tabxplor-vctrs
 NULL
 
-#' Create a vector of class formatted numbers.
 
-#' @param x A double vector. For \code{\link{fmt}} and \code{\link{as_fmt}},
-#' anything coercible to double.
-#' @param digits The number of digits to print. It can then be changed
-#' with \code{\link{set_digits}}.
+#' Create a vector of class formatted numbers
+#' @description \code{fmt} vectors are the class that powers \pkg{tabxplor} and
+#' \code{\link{tab}} tibbles.
+#' As a \code{\link[vctrs:new_rcrd]{record}}, it stores all data necessary to
+#' calculate percentages, Chi2 metadata or confidence intervals, but also to format and
+#' color the table to help the user to read it. You can access this data, or change it,
+#' using a whole set of functions made to work with tabxplor formatted numbers.
+#' \code{fmt} vectors can use all standard operations, like +, -, sum(), or c(),
+#' using \pkg{vctrs}.
 #'
-#' @return A numeric vector of class fmt.
+#' @param n The underlying count, as an integer vector of length \code{n()}. It is used
+#' to calculate confidence intervals for percentages.
+#' @param type The type of the column, which defines the type of background calculation
+#' to be made :
+#' \itemize{
+#'   \item \code{"n"}: counts
+#'   \item \code{"mean"}: mean column (from numeric variables)
+#'   \item \code{"row"}: row percentages
+#'   \item \code{"col"}: column percentages
+#'   \item \code{"all"}: frequencies by subtable/group (i.e. by \code{tab_vars})
+#'   \item \code{"all_tabs"}: frequencies for the whole table
+#' }
+#' @param digits The number of digits, as an integer, or an integer vector the length
+#' of \code{n}.
+#' @param display The display type : the name of the field you want to show when printing
+#' the vector. Among \code{"n"}, \code{"wn"}, \code{"pct"}, \code{"diff"}, \code{"ctr"},
+#'  \code{"mean"}, \code{"var"}, \code{"ci"},
+#'  \code{"pct_ci"} (percentages with visible confidence interval),
+#'  \code{"mean_ci"} (means with visible confidence interval). As a single string, or a
+#'  character vector the length of \code{n}.
+#' @param wn The underlying weighted counts, as a double vector the length of
+#' \code{n}. It is used in certain operations on \code{\link{fmt}}, like means.
+#' @param pct The percentages, as a double vector the length of \code{n}.
+#'  Calculate with \code{\link{tab_pct}}.
+#' @param mean The means, as a double vector the length of \code{n}.
+#' @param diff The differences (from totals or first cells),
+#' as a double vector the length of \code{n}. Used to set colors for means and
+#'  row or col percentages. Calculate with \code{\link{tab_pct}}.
+#' @param ctr The contributions of cells to (sub)tables variances,
+#' as a double vector the length of \code{n}. Used to print colors when
+#' \code{color = "contrib"}. The mean contribution of each (sub)table is written on
+#' total rows (then, colors don't print well without total rows).
+#' Calculate with \code{\link{tab_chi2}}.
+#' @param var The cells variances, as a double vector the length of \code{n}.
+#' Used with \code{type = "mean"} to calculate confidence intervals.
+#' Calculate with \code{tab_core}.
+#' @param ci The confidence intervals, as a double vector the length of \code{n}.
+#' Used to print colors (\code{"diff_ci"}, \code{"after_ci"}).
+#' Calculate with \code{tab_ci}.
+#' @param in_totrow \code{TRUE} when the cell is part of a total row
+#' @param in_tottab \code{TRUE} when the cell is part of a total table
+#' @param in_refrow \code{TRUE} when the cell is part of a reference row
+#' (cf. \code{diff_type})
+#' @param comp_all  \code{FALSE} when the comparison level is the subtable/group,
+#' \code{TRUE} when it is the whole table
+#' @param diff_type The type of difference of the vector (calculate
+#' with \code{\link{tab_pct}}) :
+#' \itemize{
+#'   \item \code{""} or \code{"no"}: no differences have been calculated
+#'   \item \code{"tot"}: the reference row (or column) is the total row (or column)
+#'   \item \code{"first"}: the reference row (or column) is the first row (or column)
+#' }
+#' @param ci_type The type of confidence intervals of the vector (calculate
+#'  with \code{\link{tab_ci}}) :
+#' \itemize{
+#'   \item \code{""} or \code{"no"}: no ci have been calculated
+#'   \item \code{"cell"}: absolute confidence intervals of cells percentages.
+#'   \item \code{"diff"}: confidence intervals of the difference between a cell and the
+#'   relative total cell (or relative first cell when \code{diff_type = "first"}).
+#'   \item \code{"auto"}: \code{"diff"} for means and row/col percentages,
+#'   \code{"cell"} for frequencies ("all", "all_tabs").
+#'  }
+#' @param col_var The name of the \code{col_var} used to calculate the vector
+#' @param totcol \code{TRUE} when the vector is a total column
+#' @param refcol \code{TRUE} when the vector is a reference column
+#' @param color The type of color to print :
+#' \itemize{
+#'   \item \code{"no"}: no colors are printed.
+#'   \item \code{"diff"}: color percentages and means based on cells differences from
+#'   totals (or from first cells when \code{diff = "first"}).
+#'   \item \code{"diff_ci"}: color pct and means based on cells differences from totals
+#'   or first cells, removing coloring when the confidence interval of this difference
+#'   is higher than the difference itself.
+#'   \item \code{"after_ci"}: idem, but cut off the confidence interval from the
+#'   difference first.
+#'   \item \code{"contrib"}: color cells based on their contribution to variance
+#'   (except mean columns, from numeric variables).
+#' }
+#' @return A vector of class \code{fmt}.
 #' @export
 #'
-#' @examples num1 <- fmt(c(0.7, 1.2, 7), display = c("n", "pct", "mean"), digits = c(0, 1, 2),
-#' n = c(5, 10, 15), wn = c(4.7, 12.1, 13.9) )
-#' num1
-#' num1[1] + num1[2] + num1[3]
-#' # To access the underlying data :
-#' sum(num1[1], num1[2], num1[3]) %>% vctrs::vec_data()
-#' # To access the underlying weighted counts :
-#' fmt(1, wn = 20) %>% vctrs::field("wn")
-
-#' Create a vector of class formatted numbers.
-#' @description fmt vectors can be used to print each number with the chosen digits or as
-#' percentages in a \code{\link[tablr]{tab}}, while keeping the underlying numeric data
-#' for maths. It also keeps track of the counts and weighted counts beneath any percentage
-#' or  mean, and can be used to calculate and print confidence intervals.
-#' \code{fmt} can use all standard operations, like +, -, sum(), or c(), using vctrs.
-#' @param pct A double vector. For \code{\link{fmt}} and \code{\link{as_fmt}},
-#' anything coercible to double.
-#' @param display The display of printing or background calculation, "n" for counts, "pct" for
-#' percentages, "mean" for means.
-#' @param digits The number of digits, as an integer or integer vector of the length of the
-#' data. It can then be changed with \code{vctrs::`field<-`(x, "digits", value)}.
-#' @param n The underlying count, as an integer vector of the same length, used with
-#' display = "pct" to calculate confidence intervals.
-#' @param wn The underlying weighted counts, as an integer vector of the same length. It
-#' it used in certain operations on \code{\link{fmt}}, like means.
-#' @param var The standards deviations, used with display = "mean" to calculate confidence
-#' intervals.
-#' @param ci The confidence intervals to print, if they have been calculated.
-#'
-#' @return A numeric vector of class fmt.
-#' @export
-#'
-#' @examples fmt(0.7, "pct")
+#' @examples fmt(7, "row", pct = 0.6)
 fmt <- function(n         = integer(),
                 type      = "n",
 
@@ -113,13 +163,13 @@ fmt <- function(n         = integer(),
           in_totrow = in_totrow, in_tottab = in_tottab, in_refrow = in_refrow,
           type = type, comp_all = comp_all,  diff_type = diff_type,
           ci_type = ci_type, col_var = col_var, totcol = totcol, refcol = refcol,
-          color = color) #nlvs = nlvs,
+          color = color)
 }
 
 
 
 # Constructor :
-#' @describeIn fmt A constructor for class fmt.
+#' @describeIn fmt a constructor for class fmt.
 #' @export
 new_fmt <- function(n         = integer(),
                     type      = "n"          ,
@@ -192,6 +242,7 @@ new_fmt <- function(n         = integer(),
   #access with fields() n_fields() field() `field<-`() ; vec_data() return the tibble with all fields
 }
 
+#' @keywords internal
 fmt0 <- function(display = "n", digits = 0, type = "n") {
   new_fmt(n = 0L, display = display, digits = as.integer(digits), type = type)
   # switch (display,
@@ -206,7 +257,7 @@ fmt0 <- function(display = "n", digits = 0, type = "n") {
   #   "ci"      = new_fmt(display = display, n = 0L, ci = 0,                   digits = as.integer(digits)),
   # )
 }
-#' @describeIn fmt A test function for class fmt.
+#' @describeIn fmt a test function for class fmt.
 #' @export
 is_fmt <- function(x) {
   inherits(x, "fmt")
@@ -253,22 +304,21 @@ is_fmt <- function(x) {
 # Functions to work with formatted numbers------------------------------------------------
 # to get and set the different fields directly
 
-# #' Work with number of digits for formatted numbers
-# #' @param x A vector of class \code{\link{fmt}}
-# #' @return \code{\link{get_digits}} : an integer vector with the number of digits.
-# #' @export
-# get_digits <- function(x) as.integer(attr(x, "digits")) # Helper to extract the digits attribute.
-# #' @rdname get_digits
-# #' @param value The number of digits to print, as an integer.
-# #' @return \code{\link{set_digits}} : a vector with the right number of digits.
-# #' @export
-# set_digits <- function(x, value) `attr<-`(x, "digits", vec_recycle(vec_cast(value, integer()), length(x))) # To set digits
-
+#' @keywords internal
 fmt_field_factory <- function(x) {
   function(fmt) field(fmt, x)
 }
-get_display<- fmt_field_factory("display")
+
+#' @describeIn fmt get the "display" field of a \code{fmt} vector
+#' @param fmt The formatted number in which you want to find data for "get" functions,
+#' to modify data for "set" functions.
+#' @export
+get_display <- fmt_field_factory("display")
+#' @describeIn fmt get the "n" field (unweighted counts)
+#' @export
 get_n      <- fmt_field_factory("n")
+#' @describeIn fmt get the "wn" field (weighted counts)
+#' @export
 get_wn     <- function(fmt) { #If there is no weighted counts, take counts
   out <- field(fmt, "wn")
   if (any(is.na(out))) {
@@ -277,17 +327,30 @@ get_wn     <- function(fmt) { #If there is no weighted counts, take counts
   }
   out
 }
+#' @describeIn fmt get the "pct" field
+#' @export
 get_pct    <- fmt_field_factory("pct")
+#' @describeIn fmt get the "pct" field
+#' @export
 get_diff   <- fmt_field_factory("diff")
 #get_pct_ci <- function(fmt) field("pct")
+#' @describeIn fmt get the "diff" field (differences from totals or first cells)
+#' @export
 get_digits <- fmt_field_factory("digits")
+#' @describeIn fmt get the "ctr" field (relative contributions of cells to variance)
+#' @export
 get_ctr    <- fmt_field_factory("ctr")
+#' @describeIn fmt get the "mean" field
+#' @export
 get_mean   <- fmt_field_factory("mean")
+#' @describeIn fmt get the "var" field (cell variances of means)
+#' @export
 get_var    <- fmt_field_factory("var")
+#' @describeIn fmt get the "ci" field (confidence intervals)
+#' @export
 get_ci     <- fmt_field_factory("ci")
 
-
-
+#' @keywords internal
 get_mean_contrib <- function(x) {
   comp    <- get_comp_all(x)
   totrows <- is_totrow(x)
@@ -329,7 +392,10 @@ get_ref_means <- function(x) {
   }
 }
 
-#Detect cells in total rows
+#' @describeIn fmt test function to detect cells in total rows
+#' (at \code{fmt} level or \code{tab} level)
+#' @param x The object to test.
+#' @param ... Used in methods to add arguments in the future.
 #' @export
 is_totrow <- function(x, ...) UseMethod("is_totrow")
 #' @export
@@ -358,7 +424,8 @@ is_totrow.data.frame <- function(x, ..., partial = FALSE) {
   }
 }
 
-#Detect cells in reference rows
+#' @describeIn fmt test function to detect cells in reference rows
+#' (at \code{fmt} level or \code{tab} level)
 #' @export
 is_refrow <- function(x, ...) UseMethod("is_refrow")
 #' @export
@@ -387,7 +454,8 @@ is_refrow.data.frame <- function(x, ..., partial = TRUE) {
   }
 }
 
-#Detect cells in total tables
+#' @describeIn fmt test function to detect cells in total tables
+#' (at \code{fmt} level or \code{tab} level)
 #' @export
 is_tottab <- function(x, ...) UseMethod("is_tottab")
 #' @export
@@ -421,7 +489,7 @@ is_tottab.data.frame <- function(x, ..., partial = FALSE) {
 }
 
 
-# Get types (for fmt or tab)
+#' @describeIn fmt get types of fmt columns (at \code{fmt} level or \code{tab} level)
 #' @export
 get_type <- function(x, ...) UseMethod("get_type")
 #' @export
@@ -431,9 +499,10 @@ get_type.default     <- function(x, ...) {
          no  = "") #NA_character_
 }
 #' @export
-get_type.fmt <- purrr::attr_getter("type")
+get_type.fmt <- function(x, ...) attr(x, "type", exact = TRUE)
 #' @export
 get_type.data.frame <- function(x, ...) purrr::map_chr(x, ~ get_type(.))
+
 
 
 # cols_by_type_pct <- function(tabs) {
@@ -445,7 +514,11 @@ get_type.data.frame <- function(x, ...) purrr::map_chr(x, ~ get_type(.))
 #     dplyr::if_else(.type == "pct", .pct, .type)  )
 # }
 
-
+#' @describeIn fmt get comparison level of fmt columns
+#' @param replace_na By default, \code{\link{get_comp_all}} takes NA in comparison level
+#' to be a \code{FALSE} (=comparison at subtables/groups level). Set to \code{FALSE}
+#' to avoid this behavior.
+#' @export
 get_comp_all <- function(x, replace_na = TRUE) {
   comp <- attr(x, "comp_all", exact = TRUE)
   if (is.null(comp)) return(NA)
@@ -453,7 +526,7 @@ get_comp_all <- function(x, replace_na = TRUE) {
   comp
 }
 
-# Get differences types (for fmt or tab)
+#' @describeIn fmt get differences type of fmt columns (at \code{fmt} level or \code{tab} level)
 #' @export
 get_diff_type <- function(x, ...) UseMethod("get_diff_type")
 #' @export
@@ -463,14 +536,15 @@ get_diff_type.default     <- function(x, ...) {
          no  = "") #NA_character_
 }
 #' @export
-get_diff_type.fmt <- purrr::attr_getter("diff_type")
+get_diff_type.fmt <- function(x, ...) attr(x, "diff_type", exact = TRUE)
 #' @export
 get_diff_type.data.frame <- function(x, ...) {
   purrr::map_chr(x, ~ get_diff_type(.))
 }
 
 
-# Get confidence intervals types (for fmt or tab)
+#' @describeIn fmt get confidence intervals type of fmt columns
+#' (at \code{fmt} level or \code{tab} level)
 #' @export
 get_ci_type <- function(x, ...) UseMethod("get_ci_type")
 #' @export
@@ -480,14 +554,15 @@ get_ci_type.default     <- function(x, ...) {
          no  = "") #NA_character_
 }
 #' @export
-get_ci_type.fmt <- purrr::attr_getter("ci_type")
+get_ci_type.fmt <- function(x, ...) attr(x, "ci_type", exact = TRUE)
 #' @export
 get_ci_type.data.frame <- function(x, ...) {
   purrr::map_chr(x, ~ get_ci_type(.))
 }
 
 
-# Get names of column variable (for fmt or tab)
+#' @describeIn fmt get names of column variable of fmt columns
+#' (at \code{fmt} level or \code{tab} level)
 #' @export
 get_col_var <- function(x, ...) UseMethod("get_col_var")
 #' @export
@@ -497,11 +572,12 @@ get_col_var.default     <- function(x, ...) {
          no  = "") #NA_character_
 }
 #' @export
-get_col_var.fmt <- purrr::attr_getter("col_var")
+get_col_var.fmt <- function(x, ...) attr(x, "col_var", exact = TRUE)
 #' @export
 get_col_var.data.frame <- function(x, ...) purrr::map_chr(x, ~ get_col_var(.))
 
-# Detect total columns (for fmt or tab)
+#' @describeIn fmt test function for total columns
+#' (at \code{fmt} level or \code{tab} level)
 #' @export
 is_totcol <- function(x, ...) UseMethod("is_totcol")
 #' @export
@@ -511,11 +587,12 @@ is_totcol.default     <- function(x, ...) {
          no  = FALSE)
 }
 #' @export
-is_totcol.fmt <- purrr::attr_getter("totcol")
+is_totcol.fmt <- function(x, ...) attr(x, "totcol", exact = TRUE)
 #' @export
 is_totcol.data.frame <- function(x, ...) purrr::map_lgl(x, ~ is_totcol(.))
 
-# Detect reference columns (for fmt or tab)
+#' @describeIn fmt test function for reference columns
+#' (at \code{fmt} level or \code{tab} level)
 #' @export
 is_refcol <- function(x, ...) UseMethod("is_refcol")
 #' @export
@@ -525,12 +602,13 @@ is_refcol.default     <- function(x, ...) {
          no  = FALSE)
 }
 #' @export
-is_refcol.fmt <- purrr::attr_getter("refcol")
+is_refcol.fmt <- function(x, ...) attr(x, "refcol", exact = TRUE)
 #' @export
 is_refcol.data.frame <- function(x, ...) purrr::map_lgl(x, ~ is_refcol(.))
 
 
 #For each column, detect which total column it depends on
+#' @keywords internal
 detect_totcols <- function(tabs) {
   #detect totcols by col vars names, no position ? ----
   tot <- which(is_totcol(tabs))
@@ -541,6 +619,7 @@ detect_totcols <- function(tabs) {
     purrr::set_names(names(tabs))
 }
 
+#' @keywords internal
 detect_firstcol <- function(tabs) {
   col_vars <- get_col_var(tabs)
   firstcol <- which(col_vars != dplyr::lag(col_vars, default = NA_character_))
@@ -565,7 +644,7 @@ detect_firstcol <- function(tabs) {
 }
 
 
-# Get color (for fmt or tab)
+#' @describeIn fmt get color (at \code{fmt} level or \code{tab} level)
 #' @export
 get_color <- function(x, ...) UseMethod("get_color")
 #' @export
@@ -575,80 +654,128 @@ get_color.default     <- function(x, ...) {
          no  = "") #NA_character_
 }
 #' @export
-get_color.fmt <- purrr::attr_getter("color")
+get_color.fmt <- function(x, ...) attr(x, "color", exact = TRUE)
 #' @export
 get_color.data.frame <- function(x, ...) {
   purrr::map_chr(x, ~ get_color(.))
 }
 
 
-
+#' @keywords internal
 fmt_set_field_factory <- function(x, cast) {
   function(fmt, value) {
     value <- vec_cast(value, cast) %>% vec_recycle(size = length(fmt))
     `field<-`(fmt, x, value)
   }
 }
+#' @describeIn fmt set the "display" field of a \code{fmt} vector
+#' @param value The value you want to inject in some \code{fmt} vector’s field
+#' or attribute using a given "set" function.
+#' @export
 set_display <- fmt_set_field_factory("display", cast = character())
+#' @describeIn fmt set the "n" field (unweighted counts)
+#' @export
 set_n       <- fmt_set_field_factory("n"      , cast = integer()  )
+#' @describeIn fmt set the "wn" field (weighted counts)
+#' @export
 set_wn      <- fmt_set_field_factory("wn"     , cast = double()   )
+#' @describeIn fmt set the "pct" field
+#' @export
 set_pct     <- fmt_set_field_factory("pct"    , cast = double()   )
+#' @describeIn fmt set the "diff" field
+#' @export
 set_diff    <- fmt_set_field_factory("diff"   , cast = double()   )
+#' @describeIn fmt set the "digits" field (differences from totals or first cells)
+#' @export
 set_digits  <- fmt_set_field_factory("digits" , cast = integer()  )
+#' @describeIn fmt set the "ctr" field (relative contributions of cells to variance)
+#' @export
 set_ctr     <- fmt_set_field_factory("ctr"    , cast = double()   )
+#' @describeIn fmt set the "mean" field
+#' @export
 set_mean    <- fmt_set_field_factory("mean"   , cast = double()   )
+#' @describeIn fmt set the "var" field (cell variances of means)
+#' @export
 set_var     <- fmt_set_field_factory("var"    , cast = double()   )
+#' @describeIn fmt set the "ci" field (confidence intervals)
+#' @export
 set_ci      <- fmt_set_field_factory("ci"     , cast = double()   )
 
+
+#' @describeIn fmt set the "in_totrow" field (belong to total row)
+#' @export
 as_totrow  <- function(fmt, in_totrow = TRUE) {
   vec_assert(in_totrow, logical())
   `field<-`(fmt, "in_totrow", vec_recycle(in_totrow, length(fmt)))
 }
+#' @describeIn fmt set the "in_refrow field (belong to reference row)
+#' @export
 as_refrow  <- function(fmt, in_refrow = TRUE) {
   vec_assert(in_refrow, logical())
   `field<-`(fmt, "in_refrow", vec_recycle(in_refrow, length(fmt)))
 }
+#' @describeIn fmt set the "in_tottab" field (belong to total table)
+#' @export
 as_tottab  <- function(fmt, in_tottab = TRUE) {
   vec_assert(in_tottab, logical())
   `field<-`(fmt, "in_tottab", vec_recycle(in_tottab, length(fmt)))
 }
 
+
+#' @describeIn fmt set the "col_var" attribute of a \code{fmt} vector
+#' @export
 set_col_var   <- function(fmt, col_var) {
   vec_assert(col_var, character(), size = 1)
   `attr<-`(fmt ,"col_var" , col_var)
 }
+#' @describeIn fmt set the "totcol" attribute of a \code{fmt} vector
+#' @export
 as_totcol     <- function(fmt, totcol = TRUE) {
   vec_assert(totcol, logical(), size = 1)
   `attr<-`(fmt ,"totcol"  , totcol)
 }
+#' @describeIn fmt set the "ref_col" attribute of a \code{fmt} vector
+#' @export
 as_refcol     <- function(fmt, refcol = TRUE) {
   vec_assert(refcol, logical(), size = 1)
   `attr<-`(fmt ,"refcol"  , refcol)
 }
+#' @describeIn fmt set the column type attribute of a \code{fmt} vector
+#' @export
 set_type      <- function(fmt, type) {
   if (type %in% c("no", "", NA_character_)) type <- "n"
   stopifnot(type %in% c("row", "col", "all", "all_tabs", "mean", "n"))
   `attr<-`(fmt ,"type"    , type)
 }
+#' @describeIn fmt set the differences type attribute of a \code{fmt} vector
+#' @export
 set_diff_type   <- function(fmt, diff_type) {
   stopifnot(diff_type %in% c("tot", "first", "no", "", NA_character_))
   `attr<-`(fmt ,"diff_type" , diff_type)
 }
+#' @describeIn fmt set the confidence intervals type attribute of a \code{fmt} vector
+#' @export
 set_ci_type   <- function(fmt, ci_type) {
   stopifnot(ci_type %in% c("cell", "diff", "diff_row", "diff_col",
                            "no", "", NA_character_))
   `attr<-`(fmt ,"ci_type" , ci_type)
 }
+#' @describeIn fmt set the color attribute of a \code{fmt} vector
+#' @export
 set_color     <- function(fmt, color) {
   if (color %in% c("no", "")) color <- NA_character_
   stopifnot(color %in% c("diff", "diff_ci", "after_ci", "contrib", "ci",
                          "", NA_character_))
   `attr<-`(fmt ,"color"   , color)
 }
+#' @describeIn fmt set the comparison level attribute of a \code{fmt} vector
+#' @export
 set_comp      <- function(fmt, value = c("tab", "all")) {
   `attr<-`(fmt, "comp_all", value == "all")
 }
 
+#' @describeIn fmt get the currently displayed field
+#' @export
 get_num <- function(x) {
   out     <- get_n(x)
   display <- get_display(x)
@@ -665,6 +792,8 @@ get_num <- function(x) {
   out
 }
 
+#' @describeIn fmt set the currently displayed field (not changing display type)
+#' @export
 set_num <- function(x, value) {
   out     <- set_n(x, value)
   display <- get_display(x)
@@ -691,8 +820,6 @@ set_num <- function(x, value) {
 #'
 #' @return The fmt printed.
 #' @export
-# @keywords internal
-# @examples
 format.fmt <- function(x, ...) {
   #out <- formatC(signif(vec_data(x) * 100, get_digits(x))) #vec_data() correct printing problems
   #sprintf(paste0("%-0.", get_digits(x), "f"), x * 100)
@@ -709,6 +836,7 @@ format.fmt <- function(x, ...) {
   type       <- get_type(x)
   ci_type <- get_ci_type(x)
 
+  pm <- stringi::stri_unescape_unicode("\\u00b1") # sign "plus minus"
 
   pct_or_ci     <- ok & display %in% c("pct", "pct_ci", "diff", "ci", "ctr") &
     !(display == "ci" & type == "mean")
@@ -725,16 +853,17 @@ format.fmt <- function(x, ...) {
   out[n_wn] <- out[n_wn] %>% prettyNum(big.mark = " ", preserve.width = "individual")
   out[pct_or_pct_ci] <- out[pct_or_pct_ci] %>% stringr::str_replace("^100.0+$", "100")
   out[na_out] <- NA
-  out[pct_or_pct_ci] <- paste0(out[pct_or_pct_ci],"%") #pillar::style_subtle(
+  out[pct_or_pct_ci] <- paste0(out[pct_or_pct_ci],"%") #pillar::style_subtle()
 
   if (any(pct_ci_only) | any(mean_ci_only)) conf_int <- get_ci(x)
 
   if (any(pct_ci_only)) {
     pct_conf_int_pct_ci <-
-      paste0(" ±",
+      paste0(" ", pm,
              sprintf(paste0("%-0.", digits[pct_ci_only] + 1, "f"),
                      conf_int[pct_ci_only] * 100)) %>%
-      stringr::str_remove("^ ±0$|^ ±0.0+$|^ ±-0.0+$|^ ±NA") %>%
+      stringr::str_remove(paste0("^ ", pm, "0$|^ ", pm, "0.0+$|^ ", pm, "-0.0+$|^ ",
+                                 pm, "NA")) %>%
       stringr::str_pad(max(stringr::str_length(.)))
 
     out[pct_ci_only] <- paste0(out[pct_ci_only], pct_conf_int_pct_ci)
@@ -743,10 +872,11 @@ format.fmt <- function(x, ...) {
   if (any(mean_ci_only)) {
     conf_int <- get_ci(x)
     mean_conf_int_pct_ci <-
-      paste0(" ±",
+      paste0(" ", pm,
              sprintf(paste0("%-0.", digits[mean_ci_only], "f"),
                      conf_int[mean_ci_only])) %>%
-      stringr::str_remove("^ ±0$|^ ±0.0+$|^ ±-0.0+$|^ ±NA") %>%
+      stringr::str_remove("^ ", pm, "0$|^ ", pm, "0.0+$|^ ", pm, "-0.0+$|^ ",
+                          pm, "NA") %>%
       stringr::str_pad(max(stringr::str_length(.)))
 
     out[mean_ci_only] <- paste0(out[mean_ci_only], mean_conf_int_pct_ci)
@@ -754,11 +884,11 @@ format.fmt <- function(x, ...) {
 
   out[type_ci] <- switch(type,
                          "n"       = ,
-                         "mean"    = paste0("±", out[type_ci]),
+                         "mean"    = paste0(pm, out[type_ci]),
                          "row"     = ,
                          "col"     = ,
                          "all"     = ,
-                         "all_tabs"= paste0("±", out[type_ci], "%") )
+                         "all_tabs"= paste0(pm, out[type_ci], "%") )
 
   #out <- stringr::str_pad(out, max(stringr::str_length(out), na.rm = TRUE))
   out
@@ -769,7 +899,7 @@ format.fmt <- function(x, ...) {
 
 
 
-#' Pillar_shaft method to print class fmt in a tibble::tibble column
+#' Pillar_shaft method to print class fmt in a \code{\link[tibble:tibble]{tibble}} column
 #'
 #' @param x A fmt object.
 #' @param ... Other parameter.
@@ -885,13 +1015,13 @@ pillar_shaft.fmt <- function(x, ...) {
 
 
 
-
+#' @keywords internal
 fmt_color_selection <- function(x, force_color, force_breaks) {
   type    <- get_type (x)
   type_ci <- get_ci_type(x)
   color   <- if (missing(force_color)) get_color(x) else force_color
 
-  if (!missing(force_breaks)) { #if missing, take them in env of package::tablr
+  if (!missing(force_breaks)) { #if missing, take them in env of package::tabxplor
     mean_brk       <- force_breaks$mean_brk
     pct_brk        <- force_breaks$pct_brk
     mean_ci_brk    <- force_breaks$mean_ci_brk
@@ -986,9 +1116,7 @@ fmt_color_selection <- function(x, force_color, force_breaks) {
 #
 
 
-
-
-
+#' @keywords internal
 color_formula <- function(type, color, diff, ci, ref_means,
                           ctr, mean_ctr, brk, brksup) {
   means <- type %in% c("mean", "n")
@@ -1056,7 +1184,7 @@ color_formula <- function(type, color, diff, ci, ref_means,
 }
 
 
-
+#' @keywords internal
 tab_color_legend <- function(x, colored = TRUE) {
   color     <- get_color(x)
   type      <- get_type(x)
@@ -1083,6 +1211,8 @@ tab_color_legend <- function(x, colored = TRUE) {
 
   if (all(is.na(color_type) | color_type %in% c("", "no"))) return(NULL)
 
+  cross <- stringi::stri_unescape_unicode("\\u00d7")
+
   breaks_with_op <- function(breaks, color_type) purrr::map_chr(
     breaks,
     ~ switch(
@@ -1091,7 +1221,7 @@ tab_color_legend <- function(x, colored = TRUE) {
       "diff_ci_mean"  = dplyr::if_else(
         condition = stringr::str_detect(.x, "^-"),
         true      = paste0("/", stringr::str_remove(.x, "^-")),
-        false     = paste0("×", .x)
+        false     = paste0(cross, .x) # sign * in cross
       ),
       "diff"          = ,
       "diff_ci"       = ,
@@ -1100,8 +1230,8 @@ tab_color_legend <- function(x, colored = TRUE) {
         true      = .x,
         false     = paste0("+", .x)
       ),
-      "after_ci_mean" = paste0("×", stringr::str_remove(.x, "^-")),
-      "contrib"       = paste0("×", stringr::str_remove(.x, "^-")),
+      "after_ci_mean" = paste0(cross, stringr::str_remove(.x, "^-")),
+      "contrib"       = paste0(cross, stringr::str_remove(.x, "^-")),
       #"ci_mean"       = ,
       "ci"            = "",      #just 1 ?
       .x
@@ -1118,9 +1248,9 @@ tab_color_legend <- function(x, colored = TRUE) {
                                  ref, " ", .breaks),
         #"ci_mean"       = ,
         "ci"            = paste0("|x-", ref, "| > ci"),      #just 1 ?
-        "after_ci_mean" = paste0(ref, " + |x-", ref, "| > (", ref, " + ci) ", .breaks), #×
+        "after_ci_mean" = paste0(ref, " + |x-", ref, "| > (", ref, " + ci) ", .breaks),
         "after_ci"      = paste0("|x-", ref, "| > ci ", .breaks), #+ -
-        "contrib"       = paste0("contrib > mean_ctr "     , .breaks),  #×
+        "contrib"       = paste0("contrib > mean_ctr "     , .breaks),
         character()
       ))
   }
@@ -1214,7 +1344,7 @@ tab_color_legend <- function(x, colored = TRUE) {
 # tab_color_legend(tabs[[7]]) %>% cli::cat_line()
 # tab_color_legend(tabs[[7]], colored = FALSE)
 
-
+#' @keywords internal
 brk_from_color <- function(color_type) {
   purrr::map(color_type, ~
                switch(.x,
@@ -1250,6 +1380,7 @@ get_color_type <- function(color, type) {
   ) %>% purrr::set_names(names(.x)))
 }
 
+#' @keywords internal
 get_color_styles <- function(length) {
   if (stringr::str_detect(color_styles_all[[1]], "^bg")) {
     switch(as.character(length),
@@ -1295,6 +1426,7 @@ get_color_styles <- function(length) {
 #   )
 # }
 
+#' @keywords internal
 get_reference <- function(x, mode = c("cells", "lines", "all_totals")) {
   type        <- get_type(x)
   diff_type   <- get_diff_type(x)
@@ -1368,10 +1500,10 @@ get_reference <- function(x, mode = c("cells", "lines", "all_totals")) {
 
 
 
-is_RStudio <- function() Sys.getenv("RSTUDIO") == "1"
-#.Platform$GUI == "RStudio"
-
-is_dark <- ifelse(is_RStudio(), rstudioapi::getThemeInfo()$dark, FALSE)
+# is_RStudio <- function() Sys.getenv("RSTUDIO") == "1"
+# #.Platform$GUI == "RStudio"
+#
+# is_dark <- ifelse(is_RStudio(), rstudioapi::getThemeInfo()$dark, FALSE)
 
 # format.pillar_shaft_fmt <- function(x, width, ...) {
 #   if (get_max_extent(x$deg_min) <= width) {
@@ -1383,8 +1515,6 @@ is_dark <- ifelse(is_RStudio(), rstudioapi::getThemeInfo()$dark, FALSE)
 #   pillar::new_ornament(ornament, align = "right")
 # }
 
-# When methods don't work, there is still a way to convert fmt to double :
-# fmt(0.712, 2) %>% vec_data() %>% vec_cast(double())
 
 
 #Define abbreviated display name (for tibble::tibble headers)
@@ -1431,354 +1561,9 @@ vec_ptype_full.fmt <- function(x, ...) {
 
   out
 }
-
-
-
-#Colors for printing fmt -------------------------------------------------------
-pos5  <- crayon::make_style(rgb(0, 5, 0, maxColorValue = 5),
-                            colors = crayon::num_colors(forget = TRUE)) #hcl(120, 200, 100)
-pos4  <- crayon::make_style(rgb(1, 5, 1, maxColorValue = 5))
-pos3  <- crayon::make_style(rgb(3, 5, 1, maxColorValue = 5))
-pos2  <- crayon::make_style(rgb(4, 5, 1, maxColorValue = 5))
-pos1  <- crayon::make_style(rgb(4, 4, 1, maxColorValue = 5)) #5, 5, 1
-
-neg5  <- crayon::make_style(rgb(5, 0, 0, maxColorValue = 5))
-neg4  <- crayon::make_style(rgb(5, 1, 0, maxColorValue = 5))
-neg3  <- crayon::make_style(rgb(5, 2, 1, maxColorValue = 5))
-neg2  <- crayon::make_style(rgb(5, 3, 1, maxColorValue = 5))
-neg1  <- crayon::make_style(rgb(4, 3, 2, maxColorValue = 5))
-
-fmtgrey4 <- crayon::make_style(grey(0.9), grey = TRUE)
-fmtgrey3 <- crayon::make_style(grey(0.7), grey = TRUE)
-fmtgrey2 <- crayon::make_style(grey(0.5), grey = TRUE)
-fmtgrey1 <- crayon::make_style(grey(0.3), grey = TRUE)
-
-posb5  <- crayon::make_style(rgb(0, 0, 5, maxColorValue = 5)) #hcl(120, 200, 100)
-posb4  <- crayon::make_style(rgb(0, 1, 5, maxColorValue = 5))
-posb3  <- crayon::make_style(rgb(0, 3, 5, maxColorValue = 5))
-posb2  <- crayon::make_style(rgb(1, 4, 5, maxColorValue = 5))
-posb1  <- crayon::make_style(rgb(2, 5, 5, maxColorValue = 5))
-
-negb5  <- crayon::make_style(rgb(5, 0, 0, maxColorValue = 5))
-negb4  <- crayon::make_style(rgb(5, 0, 1, maxColorValue = 5))
-negb3  <- crayon::make_style(rgb(5, 1, 1, maxColorValue = 5))
-negb2  <- crayon::make_style(rgb(5, 1, 3, maxColorValue = 5))
-negb1  <- crayon::make_style(rgb(5, 2, 3, maxColorValue = 5))
-
-
-
-# cat("\n",
-#     pos1("42%" ), neg1("42%\n" ),
-#     pos2("42%" ), neg2("42%\n" ),
-#     pos3("42%" ), neg3("42%\n" ),
-#     pos4("42%" ), neg4("42%\n" ),
-#     pos5("42%" ), neg5("42%\n" ),
-#     "\n",
-#     posb1("42%"), negb1("42%\n" ),
-#     posb2("42%" ), negb2("42%\n" ),
-#     posb3("42%" ), negb3("42%\n" ),
-#     posb4("42%" ), negb4("42%\n" ),
-#     posb5("42%" ), negb5("42%\n" ),
-#     "\n",
-#     "42%"       ,       "42%\n" ,
-#     fmtgrey4("42%"), fmtgrey4("42%\n"),
-#     fmtgrey3("42%"), fmtgrey3("42%\n"),
-#     fmtgrey2("42%"), fmtgrey2("42%\n"),
-#     fmtgrey1("42%"), fmtgrey1("42%\n") )
-
-bgpos5   <- crayon::make_style(rgb(0, 5, 0, maxColorValue = 5), bg = TRUE) #hcl(120, 200, 100)
-bgpos4   <- crayon::make_style(rgb(0, 4, 0, maxColorValue = 5), bg = TRUE)
-bgpos3   <- crayon::make_style(rgb(0, 3, 0, maxColorValue = 5), bg = TRUE)
-bgpos2   <- crayon::make_style(rgb(0, 2, 0, maxColorValue = 5), bg = TRUE)
-bgpos1   <- crayon::make_style(rgb(0, 1, 0, maxColorValue = 5), bg = TRUE) #5, 5, 1
-
-bgneg5   <- crayon::make_style(rgb(5, 0, 0, maxColorValue = 5), bg = TRUE)
-bgneg4   <- crayon::make_style(rgb(4, 0, 0, maxColorValue = 5), bg = TRUE)
-bgneg3   <- crayon::make_style(rgb(3, 0, 0, maxColorValue = 5), bg = TRUE)
-bgneg2   <- crayon::make_style(rgb(2, 0, 0, maxColorValue = 5), bg = TRUE)
-bgneg1   <- crayon::make_style(rgb(1, 0, 0, maxColorValue = 5), bg = TRUE)
-
-bgposb5  <- crayon::make_style(rgb(0, 0, 5, maxColorValue = 5), bg = TRUE) #hcl(120, 200, 100)
-bgposb4  <- crayon::make_style(rgb(0, 0, 4, maxColorValue = 5), bg = TRUE)
-bgposb3  <- crayon::make_style(rgb(0, 0, 3, maxColorValue = 5), bg = TRUE)
-bgposb2  <- crayon::make_style(rgb(0, 0, 2, maxColorValue = 5), bg = TRUE)
-bgposb1  <- crayon::make_style(rgb(0, 0, 1, maxColorValue = 5), bg = TRUE)
-
-bgnegb5  <- crayon::make_style(rgb(5, 0, 0, maxColorValue = 5), bg = TRUE)
-bgnegb4  <- crayon::make_style(rgb(4, 0, 0, maxColorValue = 5), bg = TRUE)
-bgnegb3  <- crayon::make_style(rgb(3, 0, 0, maxColorValue = 5), bg = TRUE)
-bgnegb2  <- crayon::make_style(rgb(2, 0, 0, maxColorValue = 5), bg = TRUE)
-bgnegb1  <- crayon::make_style(rgb(1, 0, 0, maxColorValue = 5), bg = TRUE)
-
-# cat("\n",
-#     bgpos1("42%"  ), bgneg1("42%\n" ),
-#     bgpos2("42%"  ), bgneg2("42%\n" ),
-#     bgpos3("42%"  ), bgneg3("42%\n" ),
-#     bgpos4("42%"  ), bgneg4("42%\n" ),
-#     bgpos5("42%"  ), bgneg5("42%\n" ),
-#     "\n",
-#     bgposb1("42%" ), bgnegb1("42%\n" ),
-#     bgposb2("42%" ), bgnegb2("42%\n" ),
-#     bgposb3("42%" ), bgnegb3("42%\n" ),
-#     bgposb4("42%" ), bgnegb4("42%\n" ),
-#     bgposb5("42%" ), bgnegb5("42%\n" ),
-#     "\n",
-#     "42%"       ,       "42%\n" ,
-#     fmtgrey4("42%"), fmtgrey4("42%\n"),
-#     fmtgrey3("42%"), fmtgrey3("42%\n"),
-#     fmtgrey2("42%"), fmtgrey2("42%\n"),
-#     fmtgrey1("42%"), fmtgrey1("42%\n") )
-
-
-
-
-# pos4  <- crayon::make_style(hsv(122/360, 1   , 1  ),
-#                             colors = crayon::num_colors(forget = TRUE)) #hcl(120, 200, 100)
-# pos3  <- crayon::make_style(hsv(122/360, 0.75, 1  ))
-# pos2  <- crayon::make_style(hsv(122/360, 0.50, 1  ))
-# pos1  <- crayon::make_style(hsv(122/360, 0.20, 0.8))
-# #pos5  <- crayon::make_style(hsv(122/360, 0.20, 0.8))
-#
-# neg4  <- crayon::make_style(hsv( 27/360, 1   , 1  ))
-# neg3  <- crayon::make_style(hsv( 27/360, 0.75, 1  ))
-# neg2  <- crayon::make_style(hsv( 27/360, 0.50, 1  ))
-# neg1  <- crayon::make_style(hsv( 27/360, 0.20, 0.8))
-# #neg5  <- crayon::make_style(hsv( 27/360, 0.2, 0.8))
-#
-# fmtgrey3 <- crayon::make_style(grey(0.9), grey = TRUE)
-# fmtgrey2 <- crayon::make_style(grey(0.6), grey = TRUE)
-# fmtgrey1 <- crayon::make_style(grey(0.4), grey = TRUE)
-#
-#
-# posb4  <- crayon::make_style(hsv(210/360, 1    , 1  )) #hcl(120, 200, 100)
-# posb3  <- crayon::make_style(hsv(210/360, 0.755, 1  ))
-# posb2  <- crayon::make_style(hsv(210/360, 0.550, 1  ))
-# posb1  <- crayon::make_style(hsv(210/360, 0.355, 0.8))
-# #posb5  <- crayon::make_style(hsv(210/360, 0.2, 0.8))
-#
-# negb4  <- crayon::make_style(hsv(0      , 1   , 1  ))
-# negb3  <- crayon::make_style(hsv(0      , 0.75, 1  ))
-# negb2  <- crayon::make_style(hsv(0      , 0.55, 1  ))
-# negb1  <- crayon::make_style(hsv(0      , 0.35, 0.8))
-# #negb5  <- crayon::make_style(hsv(0      , 0.2, 0.8))
-#
-# # cat("\n",
-# #     pos1("42%" ), neg1("42%\n" ),
-# #     pos2("42%" ), neg2("42%\n" ),
-# #     pos3("42%" ), neg3("42%\n" ),
-# #     pos4("42%" ), neg4("42%\n" ),
-# #     #pos5("42%" ), neg5("42%\n" ),
-# #     "\n",
-# #     posb1("42%"), negb1("42%\n" ),
-# #     posb2("42%" ), negb2("42%\n" ),
-# #     posb3("42%" ), negb3("42%\n" ),
-# #     posb4("42%" ), negb4("42%\n" ),
-# #     #posb5("42%" ), negb5("42%\n" ),
-# #     "\n",
-# #     "42%"       ,       "42%\n" ,
-# #     fmtgrey1("42%"), fmtgrey1("42%\n"),
-# #     fmtgrey2("42%"), fmtgrey2("42%\n"),
-# #     fmtgrey3("42%"), fmtgrey3("42%\n") )
-#
-# # crayon::show_ansi_colors()
-
-
-
-# #Background colors
-# bgpos4   <- crayon::make_style(hsv(122/360, 1   , 1  ), bg = TRUE)
-# bgpos3   <- crayon::make_style(hsv(122/360, 0.7 , 0.7), bg = TRUE)
-# bgpos2   <- crayon::make_style(hsv(122/360, 0.50, 0.5), bg = TRUE)
-# bgpos1   <- crayon::make_style(hsv(122/360, 0.50, 0.3), bg = TRUE)
-# bgpos5   <- crayon::make_style(hsv(122/360, 0.20, 0.8), bg = TRUE)
-#
-# bgneg4   <- crayon::make_style(hsv( 27/360, 1   , 1  ), bg = TRUE)
-# bgneg3   <- crayon::make_style(hsv( 27/360, 0.7 , 1  ), bg = TRUE)
-# bgneg2   <- crayon::make_style(hsv( 27/360, 0.50, 0.6), bg = TRUE)
-# bgneg1   <- crayon::make_style(hsv( 27/360, 0.50, 0.3), bg = TRUE)
-# bgneg5   <- crayon::make_style(hsv( 27/360, 0.2 , 0.8), bg = TRUE)
-#
-# bgposb4  <- crayon::make_style(hsv(210/360, 1   , 1  ), bg = TRUE)
-# bgposb3  <- crayon::make_style(hsv(210/360, 0.7 , 1  ), bg = TRUE)
-# bgposb2  <- crayon::make_style(hsv(210/360, 0.50, 0.6), bg = TRUE)
-# bgposb1  <- crayon::make_style(hsv(210/360, 0.50, 0.3), bg = TRUE)
-# bgposb5  <- crayon::make_style(hsv(210/360, 0.30 , 0.8), bg = TRUE)
-#
-# bgnegb4  <- crayon::make_style(hsv(0      , 1   , 1  ), bg = TRUE)
-# bgnegb3  <- crayon::make_style(hsv(0      , 0.7 , 1  ), bg = TRUE)
-# bgnegb2  <- crayon::make_style(hsv(0      , 0.50, 0.6), bg = TRUE)
-# bgnegb1  <- crayon::make_style(hsv(0      , 0.50, 0.3), bg = TRUE)
-# bgnegb5  <- crayon::make_style(hsv(0      , 0.2  , 0.8), bg = TRUE)
-#
-#
-# # cat("\n",
-# #     bgpos1("42%"  ), bgneg1("42%\n"  ),
-# #     bgpos2("42%"  ), bgneg2("42%\n"  ),
-# #     bgpos3("42%"  ), bgneg3("42%\n"  ),
-# #     bgpos4("42%"  ), bgneg4("42%\n"  ),
-# #     #bgpos5$black("42%"  ), bgneg5$black("42%\n"  ),
-# #     "\n",
-# #     bgposb1("42%" ), bgnegb1("42%\n" ),
-# #     bgposb2("42%" ), bgnegb2("42%\n" ),
-# #     bgposb3("42%" ), bgnegb3("42%\n" ),
-# #     bgposb4("42%" ), bgnegb4("42%\n" ),
-# #     #bgposb5$black("42%" ), bgnegb5$black("42%\n" ),
-# #     "\n",
-# #     "42%"        ,       "42%\n"  ,
-# #     fmtgrey1("42%") , fmtgrey1("42%\n" ),
-# #     fmtgrey2("42%") , fmtgrey2("42%\n" ),
-# #     fmtgrey3("42%") , fmtgrey3("42%\n" ) )
-
-green_red <-
-  c(pos1 = "pos1", pos2 = "pos2", pos3 = "pos3", pos4 = "pos4", pos5 = "pos5",
-    neg1 = "neg1", neg2 = "neg2", neg3 = "neg3", neg4 = "neg4", neg5 = "neg5" )
-blue_red <-
-  c(pos1 = "posb1", pos2 = "posb2", pos3 = "posb3", pos4 = "posb4", pos5 = "posb5",
-    neg1 = "negb1", neg2 = "negb2", neg3 = "negb3", neg4 = "negb4", neg5 = "negb5" )
-green_red_bg <-
-  c(pos1 = "bgpos1", pos2 = "bgpos2", pos3 = "bgpos3", pos4 = "bgpos4", pos5 = "bgpos5",
-    neg1 = "bgneg1", neg2 = "bgneg2", neg3 = "bgneg3", neg4 = "bgneg4", neg5 = "bgneg5" )
-blue_red_bg <-
-  c(pos1 = "bgposb1", pos2 = "bgposb2", pos3 = "bgposb3", pos4 = "bgposb4", pos5 = "bgposb5",
-    neg1 = "bgnegb1", neg2 = "bgnegb2", neg3 = "bgnegb3", neg4 = "bgnegb4", neg5 = "bgnegb5"  )
-greys <-
-  c(pos1 = "fmtgrey1", pos2 = "fmtgrey2", pos3 = "fmtgrey3", pos4 = "white")
-
-tab_color_style <-
-  function(styles = c("green_red", "blue_red",
-                      "green_red_bg", "blue_red_bg")
-  ) {
-    assign("color_styles_all", rlang::eval_tidy(rlang::sym(styles[1])),
-           pos = "package:tablr" #globalenv() #
-    )
-  }
-color_styles_all <- green_red
-
-#Color breaks for printing fmt ------------------------------------------------
-
-#calculate pct breaks based on the number of levels ? ----
-
-pct_breaks      <- c(0.05, 0.1, 0.2, 0.3)
-mean_breaks     <- c(1.15, 1.5, 2, 4)
-contrib_breaks  <- c(1, 2, 5, 10)
-
-pct_ci_breaks   <- pct_breaks - pct_breaks[1]
-mean_ci_breaks  <- mean_breaks / mean_breaks[1]
-
-pct_brksup      <- c(pct_breaks    [2:length(pct_breaks)    ], Inf)
-mean_brksup     <- c(mean_breaks   [2:length(mean_breaks)   ], Inf)
-contrib_brksup  <- c(contrib_breaks[2:length(contrib_breaks)], Inf)
-pct_ci_brksup   <- c(pct_ci_breaks [2:length(pct_ci_breaks) ], Inf)
-mean_ci_brksup  <- c(mean_ci_breaks[2:length(mean_ci_breaks)], Inf)
-
-pct_brk         <- pct_breaks     %>% c(., -.)
-mean_brk        <- mean_breaks    %>% c(., 1/.)
-contrib_brk     <- contrib_breaks %>% c(., -.)
-pct_ci_brk      <- pct_ci_breaks  %>% c(., -.) #not same as tab_xl
-mean_ci_brk     <- mean_ci_breaks %>% c(., -.) #then - again
-
-pct_brksup      <- pct_brksup     %>% c(., -.)
-mean_brksup     <- mean_brksup    %>% c(., 1/.)
-contrib_brksup  <- contrib_brksup %>% c(., -.)
-pct_ci_brksup   <- pct_ci_brksup  %>% c(., -.) #not same as tab_xl
-mean_ci_brksup  <- mean_ci_brksup %>% c(., -.) #then - again
-
-#' @export
-get_color_breaks <- function(brk) {
-  if (missing(brk)) {
-    return(
-      list(pct_breaks = pct_breaks, mean_breaks = mean_breaks,
-           contrib_breaks = contrib_breaks, pct_ci_breaks = pct_ci_breaks,
-           mean_ci_breaks = mean_ci_breaks)
-    )
-  }
-  switch (brk,
-          "pct"     = pct_breaks    ,
-          "mean"    = mean_breaks   ,
-          "contrib" = contrib_breaks,
-          "pct_ci"  = pct_ci_breaks ,
-          "mean_ci" = mean_ci_breaks
-  )
-}
-
-#' @export
-set_color_breaks <- function(pct_breaks, mean_breaks, contrib_breaks) {
-
-  if (!missing(pct_breaks)) {
-    stopifnot(is.numeric(pct_breaks)     ,
-              length(pct_breaks)     <= 5,
-              all(pct_breaks         >= 0))
-    pct_ci_breaks   <- pct_breaks - pct_breaks[1]
-    pct_brk         <- pct_breaks     %>% c(., -.)
-    pct_brksup      <- c(pct_breaks   [2:length(pct_breaks)    ], Inf)
-    pct_brksup      <- pct_brksup     %>% c(., -.)
-    pct_ci_brk      <- pct_ci_breaks  %>% c(., -.)
-    pct_ci_brksup   <- c(pct_ci_breaks[2:length(pct_ci_breaks) ], Inf)
-    pct_ci_brksup   <- pct_ci_brksup  %>% c(., -.)
-    assign("pct_breaks"   , pct_breaks   , pos = "package:tablr")
-    assign("pct_ci_breaks", pct_ci_breaks, pos = "package:tablr")
-    assign("pct_brk"      , pct_brk      , pos = "package:tablr")
-    assign("pct_brksup"   , pct_brksup   , pos = "package:tablr")
-    assign("pct_ci_brk"   , pct_ci_brk   , pos = "package:tablr")
-    assign("pct_ci_brksup", pct_ci_brksup, pos = "package:tablr")
-  }
-
-  if (!missing(mean_breaks)) {
-    stopifnot(is.numeric(mean_breaks)    ,
-              length(mean_breaks)    <= 5,
-              all(mean_breaks        >= 0))
-    mean_ci_breaks  <- mean_breaks / mean_breaks[1]
-    mean_brk        <- mean_breaks    %>% c(., 1/.)
-    mean_brksup     <- c(mean_breaks   [2:length(mean_breaks)   ], Inf)
-    mean_brksup     <- mean_brksup    %>% c(., 1/.)
-    mean_ci_brk     <- mean_ci_breaks %>% c(., -.) #then - again
-    mean_ci_brksup  <- c(mean_ci_breaks[2:length(mean_ci_breaks)], Inf)
-    mean_ci_brksup  <- mean_ci_brksup %>% c(., -.) #then - again
-    assign("mean_breaks"   , mean_breaks   , pos = "package:tablr")
-    assign("mean_ci_breaks", mean_ci_breaks, pos = "package:tablr")
-    assign("mean_brk"      , mean_brk      , pos = "package:tablr")
-    assign("mean_brksup"   , mean_brksup   , pos = "package:tablr")
-    assign("mean_ci_brk"   , mean_ci_brk   , pos = "package:tablr")
-    assign("mean_ci_brksup", mean_ci_brksup, pos = "package:tablr")
-  }
-
-
-  if (!missing(contrib_breaks)) {
-    stopifnot(is.numeric(contrib_breaks) ,
-              length(contrib_breaks) <= 5,
-              all(contrib_breaks     >= 0))
-    contrib_brk     <- contrib_breaks %>% c(., -.)
-    contrib_brksup  <- c(contrib_breaks[2:length(contrib_breaks)], Inf)
-    contrib_brksup  <- contrib_brksup %>% c(., -.)
-    assign("contrib_breaks", contrib_breaks, pos = "package:tablr")
-    assign("contrib_brk"   , contrib_brk   , pos = "package:tablr")
-    assign("contrib_brksup", contrib_brksup, pos = "package:tablr")
-  }
-}
-
-#' @keywords internal
-get_full_color_breaks <- function() {
-  list(pct_brk        = pct_brk       ,
-       pct_brksup     = pct_brksup    ,
-       pct_ci_brk     = pct_ci_brk    ,
-       pct_ci_brksup  = pct_ci_brksup ,
-       mean_brk       = mean_brk      ,
-       mean_brksup    = mean_brksup   ,
-       mean_ci_brk    = mean_ci_brk   ,
-       mean_ci_brksup = mean_ci_brksup,
-       contrib_brk    = contrib_brk   ,
-       contrib_brksup = contrib_brksup )
-}
-
-# get_color_breaks()
-#
-# set_color_breaks(pct_breaks = c(0.05, 0.10, 0.15, 0.25, 0.35))
-
-# get_full_color_breaks()
-
-# pct_breaks     = c(0.05, 0.10, 0.15, 0.25, 0.35)
-# mean_breaks    = c(1.15, 1.25, 1.5 , 2   , 4   )
-# contrib_breaks = c(0.5 , 1   , 2   , 5   , 10  )
-
+# x <- fmt(7, "row", pct = 0.6)
+# x %>% vec_data()
+# x %>% attributes()
 
 #Coertion and convertion methods for formatted numbers -------------------------
 

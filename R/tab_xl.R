@@ -1,67 +1,50 @@
 
 
-
-# Mettre en forme la sortie Excel d'un tableau :
-# BUGS :                  -
-# Possibilites d'ajouts : -
-
-#' Crosstabs : Excel output with conditional formatting
+#' Excel output for crosstables, with formatting and colors
 #'
-#' @param tabs Table(s) created with \code{\link{tab}}. Strictly speaking, it
-#' can be an object of class \code{\link{single_tab}}, several of them
-#' gathered in a \code{\link{tab}}, or a list code{\link{tab}}.
+#' @param tabs A crosstable made with \code{\link{tab}}, \code{\link{tab_many}} or
+#' \code{\link{tab_core}}, or a list of such crosstables.
 #' @param path,replace,open The name, and possibly the path, of the Excel file
 #' to create (without the .xlsx extension). Default path to working directory.
 #' Use \code{replace = TRUE} to overwrite existing files. Use \code{open = TRUE}
 #' if you don't want to automatically open the tables in Excel (or another
 #' software associated with .xlsx files).
 #' @param colnames_rotation Rotate the names of columns to an angle (in degrees).
-#' @param digits_perc Number of digits to print for percentages.
-#' @param digits_no_perc Number of digits to print for counts.
-#' @param digits_quanti Number of digits to print for quantitative variables.
-#' @param unique_sheet When \code{TRUE}, all tables are printed on the
-#'  same sheet.
-#' @param color Color cells, based on their deviation from the mean, using
-#' Excel conditional formatting. In rows and cols, attractions /
-#' over-represented levels are colored in shades of green,
-#' and aversions / under-represented levels are colored in shades of orange.
+#' @param remove_tab_vars By default, \code{tab_vars} columns are removed to gain space.
+#' Set to \code{FALSE} to keep them.
+#' @param colwidth The standard colwidth for numeric columns, as a number.
+#' Default to \code{"auto"}.
+#' @param print_ci By default provided confidence intervals are printed in another table,
+#' left to the base table. Set to \code{FALSE} to dismiss.
+#' @param print_color_legend Should the color legends be printed with the subtexts ?
+#' @param sheets The Excel sheets options :
 #' \itemize{
-#'    \item \code{"auto"} : tabs with \code{"row"} or \code{"col"} percentages
-#'    are colored based on deviations from margins,
-#'    other tabs on contributions to variance
-#'    \item \code{"contrib"} : for all tabs, color intensity is based on the
-#'    relative contribution of cells to variance (Chi2 metric)
-#'    \item \code{"no"} : no conditional formatting
-#'    }
-#' @param hide_near_zero By default, values printed as 0 are automatically
-#' colored in light gray in Excel, to help to focus on other ones. Use doubles
-#' to set the value under which numbers are colored in gray.
-#' \code{hide_near_zero = Inf} if you don't want to use this feature.
-#' @param compact Create the more compact table possible by removing
-#' unnecessary rows (Chi2, unweighted counts, \code{sup_rows}). Useful if there
-#' is \code{var3}/\code{tab_var}.
-#' @param pct_breaks The values to use to color deviations from the mean,
-#' when the table shows \code{"row"} or \code{"col"} percentages and
-#' \code{color = "auto"}. They must be numbers between - 1 and 1
-#' (i.e. -100% and +100%).
-#' @param contrib_breaks The values to use to color cell
-#' contributions to variance : \code{1} means above/under the average
-#' contribution of cells to variance, \code{10} means 10 times the average
-#' contribution. Must be positive numbers for
-#' attractions (green), negative numbers for repulsions (orange).
+#'   \item \code{"tabs"}: a new sheet is created for each table
+#'   \item \code{"unique"}: all tables are on the same sheet
+#'   \item \code{"auto"}: subsequent tables with the same columns are printed on the
+#'    same sheets
+#' }
+#' @param min_counts The total count under which a column or row is turned pale grey
+#' because there is not enought observation for it to be significative. Default to 30.
+#' @param hide_near_zero By default all cells displayed as 0 (even rounded)
+#' turn pale grey, to make the repartition of empty cells (and other cells) more visible.
+#' Provide a number to turn grey every cell below it. Set to \code{Inf} not to use
+#' this feature.
+#' @param pct_breaks The breaks used to color percentages.
+#' @param mean_breaks The breaks used to color means.
+#' @param contrib_breaks The breaks used to color contributions of cells to variance.
 #'
-#' @return An Excel file with the tables as a side-effect. Invisibly returns
-#' \code{tabs}.
+#' @return The table(s) with formatting and colors in an Excel file.
 #' @export
 #'
 #' @examples
 #' \dontrun{
 #' forcats::gss_cat %>%
-#' tabw(marital, race, perc = "row") %>%
+#'   tab(marital, race, perc = "row") %>%
 #'   tab_xl()
 #'
 #' forcats::gss_cat %>%
-#'   tabw(marital, race) %>%
+#'   tab(marital, race) %>%
 #'   tab_xl()
 #'   }
 tab_xl <-
@@ -849,7 +832,7 @@ tab_xl <-
         TRUE                     ~ paste0("#,##0.", rep0_n)
       )
 
-      dplyr::if_else(ci, paste0("±", res), res)
+      dplyr::if_else(ci, paste0(stringi::stri_unescape_unicode("\\u00b1"), res), res)
     }
 
     digits_map <-

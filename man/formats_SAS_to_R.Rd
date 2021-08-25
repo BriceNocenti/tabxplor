@@ -19,3 +19,4 @@ A file with code.
 \description{
 INSEE SAS formats to R : translate code
 }
+\keyword{internal}
