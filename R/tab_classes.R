@@ -164,8 +164,6 @@ print.tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = NULL,
   # writeLines(format(x, width = width, ..., n = n, max_extra_cols = max_extra_cols,
   #                   max_footer_lines = max_footer_lines))
   invisible(x)
-
-  NextMethod()
   }
 
 #' @export

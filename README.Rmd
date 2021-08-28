@@ -39,8 +39,10 @@ The main functions are made to be user-friendly and time-saving is data analysis
 ``` r 
 library(tabxplor)
 ```
-```{r, echo = 2}
+``` {r, include = FALSE}
 library(tabxplor)
+```
+```{r, echo = TRUE}
 tab(forcats::gss_cat, marital, race)
 ```
 

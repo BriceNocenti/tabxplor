@@ -35,36 +35,19 @@ analysis workflows.
 library(tabxplor)
 ```
 
-    #> Loading required package: dplyr
-    #> 
-    #> Attaching package: 'dplyr'
-    #> The following objects are masked from 'package:stats':
-    #> 
-    #>     filter, lag
-    #> The following objects are masked from 'package:base':
-    #> 
-    #>     intersect, setdiff, setequal, union
-    tab(forcats::gss_cat, marital, race)
-    #> # A tabxplor tab: 7 x 5
-    #>   marital        Other  Black  White Total_race
-    #>   <fct>         <n-wn> <n-wn> <n-wn>     <n-wn>
-    #> 1 No answer          2      2     13         17
-    #> 2 Never married    633  1 305  3 478      5 416
-    #> 3 Separated        110    196    437        743
-    #> 4 Divorced         212    495  2 676      3 383
-    #> 5 Widowed           70    262  1 475      1 807
-    #> 6 Married          932    869  8 316     10 117
-    #> 7 Total          1 959  3 129 16 395     21 483
-    #> # A tabxplor tab: 7 x 5
-    #>   marital        Other  Black  White Total_race
-    #>   <fct>         <n-wn> <n-wn> <n-wn>     <n-wn>
-    #> 1 No answer          2      2     13         17
-    #> 2 Never married    633  1 305  3 478      5 416
-    #> 3 Separated        110    196    437        743
-    #> 4 Divorced         212    495  2 676      3 383
-    #> 5 Widowed           70    262  1 475      1 807
-    #> 6 Married          932    869  8 316     10 117
-    #> 7 Total          1 959  3 129 16 395     21 483
+``` r
+tab(forcats::gss_cat, marital, race)
+#> # A tabxplor tab: 7 x 5
+#>   marital        Other  Black  White Total_race
+#>   <fct>         <n-wn> <n-wn> <n-wn>     <n-wn>
+#> 1 No answer          2      2     13         17
+#> 2 Never married    633  1 305  3 478      5 416
+#> 3 Separated        110    196    437        743
+#> 4 Divorced         212    495  2 676      3 383
+#> 5 Widowed           70    262  1 475      1 807
+#> 6 Married          932    869  8 316     10 117
+#> 7 Total          1 959  3 129 16 395     21 483
+```
 
 When one of the row or column variables is numeric, `tab` calculates
 means by category of the other variable.
@@ -124,18 +107,6 @@ tab(storms, category, status, sup_cols = c("pressure", "wind"))
 #> 7 5                           0                0        68           68      916
 #> 8 Total                   2 545            4 374     3 091       10 010      992
 #> # ... with 1 more variable: wind <mean>
-#> # A tabxplor tab: 8 x 7
-#>   category `tropical depressio~ `tropical storm` hurricane Total_status pressure
-#>   <fct>                  <n-wn>           <n-wn>    <n-wn>       <n-wn>   <mean>
-#> 1 -1                      2 545                0         0        2 545    1 008
-#> 2 0                           0            4 373         0        4 373      999
-#> 3 1                           0                1     1 684        1 685      982
-#> 4 2                           0                0       628          628      967
-#> 5 3                           0                0       363          363      954
-#> 6 4                           0                0       348          348      940
-#> 7 5                           0                0        68           68      916
-#> 8 Total                   2 545            4 374     3 091       10 010      992
-#> # ... with 1 more variable: wind <mean>
 ```
 
 ## References and comparison levels for colors
@@ -180,14 +151,6 @@ tab(forcats::gss_cat, race, marital, pct = "row", ci = "cell")
 #> 2 Black      0% ±0.1        42% ±1.7   6% ±0.8 16% ±1.3 8% ±1.0 28% ±1.6
 #> 3 White      0%             21% ±0.6   3% ±0.2 16% ±0.6 9% ±0.4 51% ±0.8
 #> 4 Total      0%             25%        3%      16%      8%      47%     
-#> # ... with 1 more variable: Total_marital <row%>
-#> # A tabxplor tab: 4 x 8
-#>   race  `No answer` `Never married` Separated Divorced Widowed  Married
-#>   <fct>      <row%>          <row%>    <row%>   <row%>  <row%>   <row%>
-#> 1 Other     0% ±0.1        32% ±2.1   6% ±1.0 11% ±1.4 4% ±0.8 48% ±2.2
-#> 2 Black     0% ±0.1        42% ±1.7   6% ±0.8 16% ±1.3 8% ±1.0 28% ±1.6
-#> 3 White     0%             21% ±0.6   3% ±0.2 16% ±0.6 9% ±0.4 51% ±0.8
-#> 4 Total     0%             25%        3%      16%      8%      47%     
 #> # ... with 1 more variable: Total_marital <row%>
 ```
 
@@ -243,14 +206,6 @@ tab(forcats::gss_cat, race, marital, chi2 = TRUE)
 #> 2 Black            2           1 305       196      495     262     869
 #> 3 White           13           3 478       437    2 676   1 475   8 316
 #> 4 Total           17           5 416       743    3 383   1 807  10 117
-#> # ... with 1 more variable: Total_marital <n-wn>
-#> # A tabxplor tab: 4 x 8
-#>   race  `No answer` `Never married` Separated Divorced Widowed Married
-#>   <fct>      <n-wn>          <n-wn>    <n-wn>   <n-wn>  <n-wn>  <n-wn>
-#> 1 Other           2             633       110      212      70     932
-#> 2 Black           2           1 305       196      495     262     869
-#> 3 White          13           3 478       437    2 676   1 475   8 316
-#> 4 Total          17           5 416       743    3 383   1 807  10 117
 #> # ... with 1 more variable: Total_marital <n-wn>
 ```
 
