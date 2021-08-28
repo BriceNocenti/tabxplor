@@ -1,4 +1,4 @@
-Package: tablr
+Package: tabxplor
 Title: user-friendly and tidy R crosstabs
 Version: 0.2.1.9000
 Authors@R: 
@@ -6,32 +6,31 @@ Authors@R:
            family = "Nocenti",
            role = c("aut", "cre"),
            email = "brice.nocenti@gmail.com")
-Description: If R makes complex things simple, it can sometimes make simple things difficult. This is why tablr try to make it easy to deal with multiple crosstabs: to create, manipulate, color and export tabs and lists of tabs to Excel. All functions are tidyverse-propelled, render tibbles, and are pipe-friendly. In development.
+Description: If R makes complex things simple, it can sometimes make simple things difficult. This is why tabxplor try to make it easy to deal with multiple crosstabs: to create, manipulate, color and export tabs and lists of tabs to Excel. All functions are tidyverse-propelled, render tibbles, and are pipe-friendly. In development.
 License: GPL (>= 3)
 Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.1.1
 Suggests: 
-    testthat (>= 2.0.0),
-    DescTools (>= 0.99.0)
-Config/testthat/edition: 2
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
 Imports: 
     stringr (>= 1.4.0),
     crayon (>= 1.3.4),
-    dplyr (>= 1.0.0),
     forcats (>= 0.5.0),
     magrittr (>= 1.5.0),
     purrr (>= 0.3.0),
     rlang (>= 0.4.0),
-    tibble (>= 3.0.0),
+    tibble (>= 3.1.0),
     tidyr (>= 1.0.0),
     vctrs (>= 0.3.0),
     cli (>= 2.0.0),
     tidyselect (>= 1.0.0),
     stringi (>= 1.4.6),
-    pillar (>= 1.4.0),
+    pillar (>= 1.6.0),
     openxlsx (>= 4.0.0),
     methods,
     stats (>= 4.0.0)
-
+Depends: 
+    dplyr (>= 1.0.0)
