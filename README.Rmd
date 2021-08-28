@@ -13,6 +13,22 @@ knitr::opts_chunk$set(
 )
 ```
 
+```{r echo=FALSE}
+options(crayon.enabled = TRUE)
+knitr::knit_hooks$set(output = function(x, options){
+  paste0(
+    '<pre class="r-output"><code>',
+    fansi::sgr_to_html(x = htmltools::htmlEscape(x), warn = FALSE),
+    '</code></pre>'
+  )
+})
+
+num_colors <- function(forget = TRUE) 256
+library(crayon)
+assignInNamespace("num_colors", num_colors, pos = "package:crayon") 
+```
+
+
 # tabxplor
 
 <!-- badges: start -->
@@ -38,7 +54,7 @@ The main functions are made to be user-friendly and time-saving is data analysis
 
 `tab` makes a simple crosstable:
 
-```{r, echo = TRUE}
+```{r, echo = 2}
 library(tabxplor)
 tab(forcats::gss_cat, marital, race)
 ```
@@ -94,7 +110,7 @@ It it possible to print confidence intervals for each cell:
 tab(forcats::gss_cat, race, marital, pct = "row", ci = "cell")
 ```
 
-It is also possible to use confidence intervals to enhance colors helpers. With `color = "diff_ci`, the cells are only colored if the confidence interval of the difference between them and their reference cell (in total or first row/col) is superior to the difference itself. Otherwise, it means the cell is not significantly different from it's reference in the total (or first) row: it turns grey, and the reader is not anymore tempted to overinterpret the difference.
+It is also possible to use confidence intervals to enhance colors helpers. With `color = "diff_ci"`, the cells are only colored if the confidence interval of the difference between them and their reference cell (in total or first row/col) is superior to the difference itself. Otherwise, it means the cell is not significantly different from it's reference in the total (or first) row: it turns grey, and the reader is not anymore tempted to overinterpret the difference.
 
 ``` {r, echo = TRUE}
 tab(forcats::gss_cat, race, marital, pct = "row", color = "diff_ci")
@@ -138,9 +154,9 @@ tab(data, race, marital, year, pct = "row") %>%
 ```
 
 
-# Draw more complex tables with `tab_many`
+## Draw more complex tables with `tab_many`
 
-`tab` is a wrapper around the more powerful function `tab_many`, which can be used to customized your table.
+`tab` is a wrapper around the more powerful function `tab_many`, which can be used to customise your tables.
 
 It's possible, for example, to make a summary table of as many columns variables as you want (showing all levels, or showing only one specific level like here):
 ``` {r, echo = TRUE}
@@ -179,7 +195,7 @@ tabs %>% tab_xl(replace = TRUE, sheets = "unique")
 ```
 
 
-## Program with `tabxplor`
+## Programming with `tabxplor`
 When not doing data analysis but writing functions, you can use the sub-functions of `tab_many` step by step to attain more flexibility or speed. That way, it's possible to write new functions to customize your tables even more.
 
 ``` r
@@ -196,7 +212,7 @@ data %>%
   tab_chi2(calc = "p")
 ```
 
-The whole architecture of `tabxplor` is powered by a special vector class, named `fmt` for formatted numbers. As a `vctrs::record`, it stores behind the scenes all data necessary to calculate printed results, formats and colors. A whole set of functions are available to access or transform this data, like `is_fmt`, `is_totrow`, `is_totcol` or `is_tottab`. 
+The whole architecture of `tabxplor` is powered by a special vector class, named `fmt` for formatted numbers. As a `vctrs::record`, it stores behind the scenes all the data necessary to calculate printed results, formats and colors. A whole set of functions are available to access or transform this data, like `is_totrow`, `is_totcol` or `is_tottab`. 
 `?fmt` to get more information.
 
 The simple way to recover the underlying numbers as numeric vectors is `get_num`: 
