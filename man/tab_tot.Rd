@@ -8,7 +8,7 @@ tab_tot(
   tabs,
   tot = c("row", "col"),
   name = "Total",
-  totcol = c("last", "each"),
+  totcol = "last",
   data = NULL
 )
 }

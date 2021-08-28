@@ -5,7 +5,7 @@
 #  (Thank to Giulia Pais, Davis Vaughan and Hadley Wickham,
 #   https://github.com/tidyverse/dplyr/issues/5480).
 
-# grouped_tab class still don’t handle [] ----
+# grouped_tab class still don't handle [] ----
 
 #Import dplyr in NAMESPACE :
 # dplyr is imported as a "Depends" package, otherwise dplyr::filter, needed for methods,
@@ -125,116 +125,186 @@ untab <- function(tabs) {
     `class<-`(tabs, class(tabs) %>% purrr::discard(. == "tab"))
   } else {
     `class<-`(tabs, class(tabs) %>%
-                        purrr::discard(. %in% c("grouped_tab", "tab")))
+                purrr::discard(. %in% c("grouped_tab", "tab")))
   }
-  }
+}
 
 
-#Methods for class tab -------------------------------------------------------------------
+#Methods to print class tab --------------------------------------------------------------
 
 #' @export
 #' @method print tab
-print.tab <- function(x, ..., n = 100, width = NULL, n_extra = NULL) {
-  print_colors <- tab_color_legend(x)
-  subtext <- get_subtext(x) %>% purrr::discard(. == "")
-  cli::cat_line(format(x, ..., n = n, width = width, n_extra = n_extra))
-  if (length(print_colors) != 0) cli::cat_line(paste0(
-    pillar::style_subtle("# "), print_colors
-    ))
-  if (length(subtext) != 0) cli::cat_line(pillar::style_subtle(
-    paste0("# ", subtext)
-    ))
-  invisible(x)
+print.tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = NULL,
+                      max_footer_lines = NULL, min_row_var = 30) {
+  print_chi2(x, width = width)
+
+  # Use pillar::char() on row_var to control truncation
+  row_var   <- tab_get_vars(x)$row_var
+  n_row_var <- which(names(x) == row_var)
+
+  out <- dplyr::mutate(x, dplyr::across(
+    tidyselect::all_of(row_var),
+    ~ pillar::char(as.character(.), min_chars = min_row_var)
+  ))
+
+  out <- format(out, width = width, ..., n = n, max_extra_cols = max_extra_cols,
+                max_footer_lines = max_footer_lines)
+
+  # bad workaround to retransform the <char> type into <fct>
+  if (length(n_row_var) != 0) {
+    regular_ex <-
+      paste0("^(", paste0(rep("[^<]+<", n_row_var), collapse = ""), ")<char>") %>%
+      stringr::str_replace("<\\)<", ")<")
+
+    out[4] <- out[4] %>% stringr::str_replace(regular_ex, "\\1<fct> ")
   }
 
-#' @export
-#' @method print grouped_tab
-print.grouped_tab <- function(x, ..., n = 100, width = NULL, n_extra = NULL) {
-  print_colors <- tab_color_legend(x)
-  subtext <- get_subtext(x) %>% purrr::discard(. == "")
-  cli::cat_line(format(x, ..., n = n, width = width, n_extra = n_extra))
-  if (length(print_colors) != 0) cli::cat_line(paste0(
-    pillar::style_subtle("# "), print_colors
-  ))
-  if (length(subtext) != 0) cli::cat_line(pillar::style_subtle(
-    paste0("# ", subtext)
-  ))
+
+  writeLines(out)
   invisible(x)
 }
 
-# test <- "\033[3m\033[38;5;246m<fct>\033[39m\033[23m"
-# crayon::col_nchar(test)
-# crayon::col_substr(test, 2, 4) %>% cli::cat_line()
+#' @export
+#' @method print grouped_tab
+print.grouped_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = NULL,
+                              max_footer_lines = NULL, min_row_var = 30) {
+  print_chi2(x, width = width)
 
-# #' Print method for class tab
-# #'
-# #' @param x An object of class tab.
-# #' @param ... Arguments passed to print.default
-# #' @return The printed single table.
-# #' @export
-# print.tab <- function(x, ...) {
-#   # cat(sprintf("<%s: %s>\n", class(x)[[1]], df_colour(x)))
-#   # cli::cat_line(format(x)[-1])
-#
-#   #cli::cat_line(format(x, ..., n = 30, width = 500)) #Can be use to color bg and text
-#
-#   if (nrow(x) > 0 & ncol(x) > 0) {
-#     out <- x
-#     if (class(dplyr::pull(x, 1)) %in% c("factor", "character")) {
-#       # #First column must be same length for all tabs
-#       # # (for that must be a factor with the levels of all the other tables)
-#       # out <- dplyr::mutate_at(x, dplyr::vars(1), ~ as.factor(.))
-#       # max_length_all <- dplyr::pull(out, 1) %>% levels() %>% stringr::str_length() %>% max(na.rm = TRUE)
-#       # if (dplyr::pull(out, 1) %>% stringr::str_length() %>% max(na.rm = TRUE) < max_length_all) {
-#       #   out <- dplyr::mutate_at(out, dplyr::vars(1), ~ `levels<-`(., stringr::str_pad(levels(.), max_length_all - 2, "right")))
-#       # }
-#       #Truncate first column if too long
-#       if (dplyr::pull(out, 1) %>% stringr::str_length() %>% max(na.rm = TRUE) > 30) {
-#         out <-
-#           dplyr::mutate_at(out, dplyr::vars(1), ~ `levels<-`(., dplyr::if_else(stringr::str_length(levels(.)) > 30,
-#                                                                                stringr::str_trunc(levels(.), 30),
-#                                                                                levels(.) )))
-#       }
-#     }
-#     #Truncate columns names if too long
-#     if (any(stringr::str_length(colnames(out)) > 15) ) {
-#       out <- magrittr::set_colnames(out, dplyr::if_else(stringr::str_length(colnames(out)) > 15,
-#                                                         stringr::str_trunc(colnames(out), 15),
-#                                                         colnames(out) ) )
-#     }
-#     cli::cat_line(format(pillar::colonnade(out, width = 500))) #Less formatting but no "A tibble::tibble" introduction
-#   } else {
-#     cli::cat_line("# A tab: 0 x 0", col = "grey")
-#   }
-#
-#   #invisible(x)
-# }
+  # Use pillar::char() on row_var to control truncation
+  row_var   <- tab_get_vars(x)$row_var
+  n_row_var <- which(names(x) == row_var)
 
-#Two possibility : by rows ; by cols ???
-#Two type vectors : columns and rows
+  out <- dplyr::mutate(x, dplyr::across(
+    tidyselect::all_of(row_var),
+    ~ pillar::char(as.character(.), min_chars = min_row_var)
+  ))
 
-#Put informations on fmt on printing ?
-#tabs %>% dplyr::group_indices()
+  out <- format(out, width = width, ..., n = n, max_extra_cols = max_extra_cols,
+                max_footer_lines = max_footer_lines)
+
+  # bad workaround to retransform the <char> type into <fct>
+  regular_ex <-
+    paste0("^(", paste0(rep("[^<]+<", n_row_var), collapse = ""), ")<char>") %>%
+    stringr::str_replace("<\\)<", ")<")
+
+  out[4] <- out[4] %>% stringr::str_replace(regular_ex, "\\1<fct> ")
+
+  writeLines(out)
+  invisible(x)
+}
+
+#' @keywords internal
+print_chi2 <- function(x, width = NULL) {
+  chi2 <- get_chi2(x)
+  if (nrow(chi2) == 0) return(NULL)
+
+  chi2 <- chi2 %>% dplyr::select(-row_var) %>%
+    dplyr::filter(!`chi2 stats` %in% c("cells"))
+
+  fmt_cols <- purrr::map_lgl(chi2, is_fmt) %>% purrr::keep(. == TRUE) %>%
+    names() #%>% rlang::syms()
+  if (length(fmt_cols) != 0) {
+    row_all_na <- chi2 %>%
+      select(where(is_fmt)) %>%
+      purrr::map_df(is.na)
+    row_all_na <- row_all_na %>%
+      dplyr::rowwise() %>%
+      dplyr::mutate(empty = all(dplyr::c_across())) %>%
+      dplyr::pull(empty)
+
+    chi2 <- chi2 %>% dplyr::filter(!row_all_na)
+  }
+
+  chi2 <- chi2 %>%
+    dplyr::mutate(dplyr::across(where(is_fmt),
+                                ~ `class<-`(., c("tab_chi2_fmt", class(.)))  ))
+
+  nrow_chi2 <- nrow(chi2)
+  if (nrow_chi2 == 0) return(NULL)
+
+  ind <- chi2 %>% dplyr::group_by(dplyr::across(where(is.factor))) %>%
+    dplyr::group_indices()
+  ind   <- c(TRUE, ind != dplyr::lead(ind, default = max(ind) + 1) )
+
+  chi2 <- chi2 %>%
+    dplyr::mutate(dplyr::across(
+      where(is.factor),
+      ~ dplyr::if_else(. == dplyr::lag(., default = paste0(as.character(.[1]), "a")),
+                       true = stringi::stri_unescape_unicode("\\u00a0"),
+                       false = as.character(.))
+      %>% as.factor()
+    ))
+
+  # setup <- pillar::tbl_format_setup(chi2, width = NULL)
+  setup <- pillar::tbl_format_setup(chi2, width = width, n = Inf)
+  body_no_type <- tbl_format_body(chi2, setup)[-2]
+  body_no_type <- body_no_type %>%
+    stringr::str_replace("`chi2 stats`", "chi2 stats  ") %>%
+    crayon::col_substr(stringr::str_length(nrow_chi2) + 2L, crayon::col_nchar(.))
+  body_no_type[ind] <- crayon::underline(body_no_type[ind] )
+  body_no_type <- body_no_type %>% `class<-`("pillar_vertical")
+
+  cli::cat_line(body_no_type)
+  cli::cat_line()
+}
 
 
-#Add with pillar_shaft : - contributions to variance (in attribute)
+# Change headers
+#' @export
+#' @method tbl_sum tab
+tbl_sum.tab <- function(x, ...) {
+  tbl_header <- NextMethod()
+  names(tbl_header)[1] <- "A tabxplor tab"
+  tbl_header
+}
+#' @export
+#' @method tbl_sum grouped_tab
+tbl_sum.grouped_tab <- function(x, ...) {
+  grouped_tbl_header <- NextMethod()
+  names(grouped_tbl_header)[1] <- "A tabxplor tab"
+  grouped_tbl_header
+}
 
 
-# #Define abbreviated type name (for tibble::tibble headers)
-# #' @export
-# vec_ptype_abbr.tab <- function(x, ...) {
-#   "tab"
-# }
+# Change footer
+#' @importFrom pillar tbl_format_footer
+#' @export
+#' @method tbl_format_footer tab
+tbl_format_footer.tab <- function(x, setup, ...) {
+  default_footer <- NextMethod()
 
-# # Include numbers of digits and types in the printed name
-#  #' @export
-#  vec_ptype_full.tab <- function(x, ...) {
-#    "tab-"
-#  }
+  print_colors <- tab_color_legend(x)
+  subtext <- get_subtext(x) %>% purrr::discard(. == "")
+  if (length(print_colors) != 0) print_colors <- paste0(
+    pillar::style_subtle("# "), print_colors
+  )
+  if (length(subtext) != 0) subtext <- pillar::style_subtle( paste0("# ", subtext) )
+
+  c(default_footer, print_colors, subtext)
+}
+
+
+#Change body
+#' @importFrom pillar tbl_format_body
+#' @export
+#' @method tbl_format_body tab
+tbl_format_body.tab <- function(x, setup, ...) {
+  default_body <- NextMethod()
+
+  body_data  <- default_body[-(1:2)]
+  ind   <- dplyr::group_indices(setup$x)[1:length(body_data)]
+  ind   <- ind != dplyr::lag(ind, default = 1L)
+  body_data <- body_data %>%
+    purrr::map2(ind, ~ if (.y) {c("", .x)} else {.x}) %>%
+    purrr::flatten_chr()
+
+  c(default_body[1:2], body_data) %>% `class<-`("pillar_vertical")
+}
 
 
 
-# If n_groups == 1, then go back to new_tab ----
+
+#Methods for class tab -------------------------------------------------------------------
 
 
 # @importFrom dplyr group_by # not needed since tabxplor import dplyr as a "Depends" package
@@ -249,14 +319,14 @@ group_by.tab <- function(.data,
   new_grouped_tab(out, groups,
                   subtext = get_subtext(.data), chi2 = get_chi2(.data))
 }
-
+# If n_groups == 1, then go back to new_tab ? ----
 
 
 # (from vctrs documentation)
 # The coercion methods for data frames operate in two steps:
-# • They check for compatible subclass attributes. In our case the tibble colour has to
+# They check for compatible subclass attributes. In our case the tibble colour has to
 # be the same, or be undefined.
-# • They call their parent methods, in this case tib_ptype2() and tib_cast() because we
+# They call their parent methods, in this case tib_ptype2() and tib_cast() because we
 # have a subclass of tibble. This eventually calls the data frame methods df_ptype2() and
 # tib_ptype2() which match the columns and their types.
 
@@ -295,7 +365,7 @@ tab_ptype2 <- function(x, y, ..., x_arg = "", y_arg = "") {
 }
 
 
-#Let’s now implement the coercion methods, starting with the self-self methods.
+#Let's now implement the coercion methods, starting with the self-self methods.
 #' @export
 vec_ptype2.tab.tab <- function(x, y, ...) {
   tab_ptype2(x, y, ...)
@@ -455,6 +525,8 @@ arrange.grouped_tab <- function(.data, ..., .by_group = FALSE) {
   }
 }
 
+
+
 # @importFrom dplyr select
 #' @method select grouped_tab
 #' @export
@@ -553,7 +625,7 @@ gtab_ptype2 <- function(x, y, ..., x_arg = "", y_arg = "") {
 
   groups <- dplyr::group_data(gdf)
   new_grouped_tab(gdf, groups, subtext = get_subtext(x), chi2 = get_chi2(x))
-  }
+}
 
 #Self-self
 #' @export
@@ -643,38 +715,36 @@ vec_cast.data.frame.grouped_tab <- function(x, to, ...) {
 
 
 
-
-
 #Colors for printing fmt in tabs -------------------------------------------------------
-pos5  <- crayon::make_style(rgb(0, 5, 0, maxColorValue = 5),
-                            colors = crayon::num_colors(forget = TRUE)) #hcl(120, 200, 100)
-pos4  <- crayon::make_style(rgb(1, 5, 1, maxColorValue = 5))
-pos3  <- crayon::make_style(rgb(3, 5, 1, maxColorValue = 5))
-pos2  <- crayon::make_style(rgb(4, 5, 1, maxColorValue = 5))
-pos1  <- crayon::make_style(rgb(4, 4, 1, maxColorValue = 5)) #5, 5, 1
+pos5     <- crayon::make_style(pos5 = rgb(0, 5, 0, maxColorValue = 5),
+                               colors = crayon::num_colors(forget = TRUE)) #hcl(120, 200, 100)
+pos4     <- crayon::make_style(pos4     = rgb(1, 5, 1, maxColorValue = 5))
+pos3     <- crayon::make_style(pos3     = rgb(3, 5, 1, maxColorValue = 5))
+pos2     <- crayon::make_style(pos2     = rgb(4, 5, 1, maxColorValue = 5))
+pos1     <- crayon::make_style(pos1     = rgb(4, 4, 1, maxColorValue = 5)) #5, 5, 1
 
-neg5  <- crayon::make_style(rgb(5, 0, 0, maxColorValue = 5))
-neg4  <- crayon::make_style(rgb(5, 1, 0, maxColorValue = 5))
-neg3  <- crayon::make_style(rgb(5, 2, 1, maxColorValue = 5))
-neg2  <- crayon::make_style(rgb(5, 3, 1, maxColorValue = 5))
-neg1  <- crayon::make_style(rgb(4, 3, 2, maxColorValue = 5))
+neg5     <- crayon::make_style(neg5     = rgb(5, 0, 0, maxColorValue = 5))
+neg4     <- crayon::make_style(neg4     = rgb(5, 1, 0, maxColorValue = 5))
+neg3     <- crayon::make_style(neg3     = rgb(5, 2, 1, maxColorValue = 5))
+neg2     <- crayon::make_style(neg2     = rgb(5, 3, 1, maxColorValue = 5))
+neg1     <- crayon::make_style(neg1     = rgb(4, 3, 2, maxColorValue = 5))
 
-fmtgrey4 <- crayon::make_style(grey(0.9), grey = TRUE)
-fmtgrey3 <- crayon::make_style(grey(0.7), grey = TRUE)
-fmtgrey2 <- crayon::make_style(grey(0.5), grey = TRUE)
-fmtgrey1 <- crayon::make_style(grey(0.3), grey = TRUE)
+fmtgrey4 <- crayon::make_style(fmtgrey4 = grey(0.9), grey = TRUE)
+fmtgrey3 <- crayon::make_style(fmtgrey3 = grey(0.7), grey = TRUE)
+fmtgrey2 <- crayon::make_style(fmtgrey2 = grey(0.5), grey = TRUE)
+fmtgrey1 <- crayon::make_style(fmtgrey1 = grey(0.3), grey = TRUE)
 
-posb5  <- crayon::make_style(rgb(0, 0, 5, maxColorValue = 5)) #hcl(120, 200, 100)
-posb4  <- crayon::make_style(rgb(0, 1, 5, maxColorValue = 5))
-posb3  <- crayon::make_style(rgb(0, 3, 5, maxColorValue = 5))
-posb2  <- crayon::make_style(rgb(1, 4, 5, maxColorValue = 5))
-posb1  <- crayon::make_style(rgb(2, 5, 5, maxColorValue = 5))
+posb5    <- crayon::make_style(posb5    = rgb(0, 0, 5, maxColorValue = 5)) #hcl(120, 200, 100)
+posb4    <- crayon::make_style(posb4    = rgb(0, 1, 5, maxColorValue = 5))
+posb3    <- crayon::make_style(posb3    = rgb(0, 3, 5, maxColorValue = 5))
+posb2    <- crayon::make_style(posb2    = rgb(1, 4, 5, maxColorValue = 5))
+posb1    <- crayon::make_style(posb1    = rgb(2, 5, 5, maxColorValue = 5))
 
-negb5  <- crayon::make_style(rgb(5, 0, 0, maxColorValue = 5))
-negb4  <- crayon::make_style(rgb(5, 0, 1, maxColorValue = 5))
-negb3  <- crayon::make_style(rgb(5, 1, 1, maxColorValue = 5))
-negb2  <- crayon::make_style(rgb(5, 1, 3, maxColorValue = 5))
-negb1  <- crayon::make_style(rgb(5, 2, 3, maxColorValue = 5))
+negb5    <- crayon::make_style(negb5    = rgb(5, 0, 0, maxColorValue = 5))
+negb4    <- crayon::make_style(negb4    = rgb(5, 0, 1, maxColorValue = 5))
+negb3    <- crayon::make_style(negb3    = rgb(5, 1, 1, maxColorValue = 5))
+negb2    <- crayon::make_style(negb2    = rgb(5, 1, 3, maxColorValue = 5))
+negb1    <- crayon::make_style(negb1    = rgb(5, 2, 3, maxColorValue = 5))
 
 
 
@@ -697,29 +767,29 @@ negb1  <- crayon::make_style(rgb(5, 2, 3, maxColorValue = 5))
 #     fmtgrey2("42%"), fmtgrey2("42%\n"),
 #     fmtgrey1("42%"), fmtgrey1("42%\n") )
 
-bgpos5   <- crayon::make_style(rgb(0, 5, 0, maxColorValue = 5), bg = TRUE) #hcl(120, 200, 100)
-bgpos4   <- crayon::make_style(rgb(0, 4, 0, maxColorValue = 5), bg = TRUE)
-bgpos3   <- crayon::make_style(rgb(0, 3, 0, maxColorValue = 5), bg = TRUE)
-bgpos2   <- crayon::make_style(rgb(0, 2, 0, maxColorValue = 5), bg = TRUE)
-bgpos1   <- crayon::make_style(rgb(0, 1, 0, maxColorValue = 5), bg = TRUE) #5, 5, 1
+bgpos5   <- crayon::make_style(bgpos5  = rgb(0, 5, 0, maxColorValue = 5), bg = TRUE) #hcl(120, 200, 100)
+bgpos4   <- crayon::make_style(bgpos4  = rgb(0, 4, 0, maxColorValue = 5), bg = TRUE)
+bgpos3   <- crayon::make_style(bgpos3  = rgb(0, 3, 0, maxColorValue = 5), bg = TRUE)
+bgpos2   <- crayon::make_style(bgpos2  = rgb(0, 2, 0, maxColorValue = 5), bg = TRUE)
+bgpos1   <- crayon::make_style(bgpos1  = rgb(0, 1, 0, maxColorValue = 5), bg = TRUE) #5, 5, 1
 
-bgneg5   <- crayon::make_style(rgb(5, 0, 0, maxColorValue = 5), bg = TRUE)
-bgneg4   <- crayon::make_style(rgb(4, 0, 0, maxColorValue = 5), bg = TRUE)
-bgneg3   <- crayon::make_style(rgb(3, 0, 0, maxColorValue = 5), bg = TRUE)
-bgneg2   <- crayon::make_style(rgb(2, 0, 0, maxColorValue = 5), bg = TRUE)
-bgneg1   <- crayon::make_style(rgb(1, 0, 0, maxColorValue = 5), bg = TRUE)
+bgneg5   <- crayon::make_style(bgneg5  = rgb(5, 0, 0, maxColorValue = 5), bg = TRUE)
+bgneg4   <- crayon::make_style(bgneg4  = rgb(4, 0, 0, maxColorValue = 5), bg = TRUE)
+bgneg3   <- crayon::make_style(bgneg3  = rgb(3, 0, 0, maxColorValue = 5), bg = TRUE)
+bgneg2   <- crayon::make_style(bgneg2  = rgb(2, 0, 0, maxColorValue = 5), bg = TRUE)
+bgneg1   <- crayon::make_style(bgneg1  = rgb(1, 0, 0, maxColorValue = 5), bg = TRUE)
 
-bgposb5  <- crayon::make_style(rgb(0, 0, 5, maxColorValue = 5), bg = TRUE) #hcl(120, 200, 100)
-bgposb4  <- crayon::make_style(rgb(0, 0, 4, maxColorValue = 5), bg = TRUE)
-bgposb3  <- crayon::make_style(rgb(0, 0, 3, maxColorValue = 5), bg = TRUE)
-bgposb2  <- crayon::make_style(rgb(0, 0, 2, maxColorValue = 5), bg = TRUE)
-bgposb1  <- crayon::make_style(rgb(0, 0, 1, maxColorValue = 5), bg = TRUE)
+bgposb5  <- crayon::make_style(bgposb5 = rgb(0, 0, 5, maxColorValue = 5), bg = TRUE) #hcl(120, 200, 100)
+bgposb4  <- crayon::make_style(bgposb4 = rgb(0, 0, 4, maxColorValue = 5), bg = TRUE)
+bgposb3  <- crayon::make_style(bgposb3 = rgb(0, 0, 3, maxColorValue = 5), bg = TRUE)
+bgposb2  <- crayon::make_style(bgposb2 = rgb(0, 0, 2, maxColorValue = 5), bg = TRUE)
+bgposb1  <- crayon::make_style(bgposb1 = rgb(0, 0, 1, maxColorValue = 5), bg = TRUE)
 
-bgnegb5  <- crayon::make_style(rgb(5, 0, 0, maxColorValue = 5), bg = TRUE)
-bgnegb4  <- crayon::make_style(rgb(4, 0, 0, maxColorValue = 5), bg = TRUE)
-bgnegb3  <- crayon::make_style(rgb(3, 0, 0, maxColorValue = 5), bg = TRUE)
-bgnegb2  <- crayon::make_style(rgb(2, 0, 0, maxColorValue = 5), bg = TRUE)
-bgnegb1  <- crayon::make_style(rgb(1, 0, 0, maxColorValue = 5), bg = TRUE)
+bgnegb5  <- crayon::make_style(bgnegb5 = rgb(5, 0, 0, maxColorValue = 5), bg = TRUE)
+bgnegb4  <- crayon::make_style(bgnegb4 = rgb(4, 0, 0, maxColorValue = 5), bg = TRUE)
+bgnegb3  <- crayon::make_style(bgnegb3 = rgb(3, 0, 0, maxColorValue = 5), bg = TRUE)
+bgnegb2  <- crayon::make_style(bgnegb2 = rgb(2, 0, 0, maxColorValue = 5), bg = TRUE)
+bgnegb1  <- crayon::make_style(bgnegb1 = rgb(1, 0, 0, maxColorValue = 5), bg = TRUE)
 
 # cat("\n",
 #     bgpos1("42%"  ), bgneg1("42%\n" ),
@@ -1062,15 +1132,15 @@ get_full_color_breaks <- function() {
 # Description
 # This guide provides a practical recipe for implementing vec_ptype2() and vec_cast() methods
 # for coercions of data frame subclasses. Related topics:
-#   • For an overview of the coercion mechanism in vctrs, see ?theory-faq-coercion.
-# • For an example of implementing coercion methods for simple vectors, see ?howto-faq-coercion.
+#  - For an overview of the coercion mechanism in vctrs, see ?theory-faq-coercion.
+#  - For an example of implementing coercion methods for simple vectors, see ?howto-faq-coercion.
 # Coercion of data frames occurs when different data frame classes are combined in some way. The
 # two main methods of combination are currently row-binding with vec_rbind() and col-binding
 # with vec_cbind() (which are in turn used by a number of dplyr and tidyr functions). These functions
 # take multiple data frame inputs and automatically coerce them to their common type.
 # vctrs is generally strict about the kind of automatic coercions that are performed when combining
 # inputs. In the case of data frames we have decided to be a bit less strict for convenience. Instead of
-# throwing an incompatible type error, we fall back to a base data frame or a tibble if we don’t know
+# throwing an incompatible type error, we fall back to a base data frame or a tibble if we don't know
 # how to combine two data frame subclasses. It is still a good idea to specify the proper coercion
 # behaviour for your data frame subclasses as soon as possible.
 # We will see two examples in this guide. The first example is about a data frame subclass that has
@@ -1082,7 +1152,7 @@ get_full_color_breaks <- function() {
 #   #' @importFrom vctrs vec_ptype2 vec_cast
 #   NULL
 # Note that for each batches of methods that you add to your package, you need to export the
-# methods and redocument immediately, even during development. Otherwise they won’t be in
+# methods and redocument immediately, even during development. Otherwise they won't be in
 # scope when you run unit tests e.g. with testthat.
 # Implementing double dispatch methods is very similar to implementing regular S3 methods. In
 # these examples we are using roxygen2 tags to register the methods, but you can also register the
@@ -1101,7 +1171,7 @@ get_full_color_breaks <- function() {
 # to export them as well if you are expecting other people to derive from your class.
 
 # A data.table example:
-# […]
+# [...]
 
 # #A tibble example:
 # #  In this example we implement coercion methods for a tibble subclass that carries a colour as a

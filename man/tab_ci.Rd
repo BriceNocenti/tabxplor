@@ -30,7 +30,7 @@ confidence intervals for rows and means be calculated for each subtable/group
 (\code{comp = "all"}) ?
 When \code{comp = "all"} and \code{diff = "first"}, cells are compared to the first
 cell of the total table instead.
-This parameter doesn’t affect column percentages.
+This parameter doesn't affect column percentages.
 \code{comp} must be set once and for all the first time you use \code{\link{tab_chi2}},
 \code{\link{tab_pct}} with rows, or \code{\link{tab_ci}}.}
 

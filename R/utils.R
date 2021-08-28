@@ -434,7 +434,6 @@ where <- function (fn)
   }
 }
 
-
 #' INSEE SAS formats to R : translate code
 #'
 #' @param path The path of the file to be created

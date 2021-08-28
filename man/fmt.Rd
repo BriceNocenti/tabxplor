@@ -97,7 +97,9 @@ new_fmt(
   col_var = "",
   totcol = FALSE,
   refcol = FALSE,
-  color = ""
+  color = "",
+  ...,
+  class = character()
 )
 
 is_fmt(x)
@@ -290,18 +292,20 @@ difference first.
 (except mean columns, from numeric variables).
 }}
 
+\item{...}{Used in methods to add arguments in the future.}
+
+\item{class}{Subclasses to assign to the new object, default: none.}
+
 \item{x}{The object to test.}
 
 \item{fmt}{The formatted number in which you want to find data for "get" functions,
 to modify data for "set" functions.}
 
-\item{...}{Used in methods to add arguments in the future.}
-
 \item{replace_na}{By default, \code{\link{get_comp_all}} takes NA in comparison level
 to be a \code{FALSE} (=comparison at subtables/groups level). Set to \code{FALSE}
 to avoid this behavior.}
 
-\item{value}{The value you want to inject in some \code{fmt} vector’s field
+\item{value}{The value you want to inject in some \code{fmt} vector's field
 or attribute using a given "set" function.}
 }
 \value{
@@ -394,7 +398,7 @@ using \pkg{vctrs}.
 
 \item \code{as_totrow}: set the "in_totrow" field (belong to total row)
 
-\item \code{as_refrow}: set the "in_refrow field (belong to reference row)
+\item \code{as_refrow}: set the "in_refrow" field (belong to reference row)
 
 \item \code{as_tottab}: set the "in_tottab" field (belong to total table)
 

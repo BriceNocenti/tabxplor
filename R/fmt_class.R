@@ -170,6 +170,7 @@ fmt <- function(n         = integer(),
 
 # Constructor :
 #' @describeIn fmt a constructor for class fmt.
+#' @param class Subclasses to assign to the new object, default: none.
 #' @export
 new_fmt <- function(n         = integer(),
                     type      = "n"          ,
@@ -198,7 +199,8 @@ new_fmt <- function(n         = integer(),
                     col_var   = ""   ,
                     totcol    = FALSE,
                     refcol    = FALSE,
-                    color     = ""
+                    color     = ""   ,
+                    ..., class = character()
 ) {
   # stopifnot(
   #   all(display %in% c("n", "wn", "pct", "pct_ci", "ctr", "mean", "mean_ci", "var", "ci")),
@@ -238,9 +240,13 @@ new_fmt <- function(n         = integer(),
          in_refrow = in_refrow),
     type = type, comp_all = comp_all, diff_type = diff_type,
     ci_type = ci_type, col_var = col_var, totcol = totcol, refcol = refcol,
-    color = color,  class = "fmt")
+    color = color,  class = c(class, "fmt"))
   #access with fields() n_fields() field() `field<-`() ; vec_data() return the tibble with all fields
 }
+
+
+
+
 
 #' @keywords internal
 fmt0 <- function(display = "n", digits = 0, type = "n") {
@@ -416,7 +422,7 @@ is_totrow.data.frame <- function(x, ..., partial = FALSE) {
       dplyr::rowwise() %>%
       dplyr::transmute(complete = all(dplyr::c_across()),
                        partial  = any(dplyr::c_across()) & ! complete)
-    if (any(test_result$partial)) {
+    if (tidyr::replace_na(any(test_result$partial), FALSE)) {
       warning("partial total rows (with some fmt cells not tagged 'totrow') ",
               "were not taken into account ")
     }
@@ -446,7 +452,7 @@ is_refrow.data.frame <- function(x, ..., partial = TRUE) {
       dplyr::rowwise() %>%
       dplyr::transmute(complete = all(dplyr::c_across()),
                        partial  = any(dplyr::c_across()) & ! complete)
-    if (any(test_result$partial)) {
+    if (tidyr::replace_na(any(test_result$partial), FALSE)) {
       warning("partial total rows (with some fmt cells not tagged 'refrow') ",
               "were not taken into account ")
     }
@@ -480,7 +486,7 @@ is_tottab.data.frame <- function(x, ..., partial = FALSE) {
       dplyr::rowwise() %>%
       dplyr::transmute(complete = all(dplyr::c_across()),
                        partial  = any(dplyr::c_across()) & ! complete)
-    if (any(test_result$partial)) {
+    if (tidyr::replace_na(any(test_result$partial), FALSE)) {
       warning("partial total rows (with some fmt cells not tagged 'totrow') ",
               "were not taken into account ")
     }
@@ -669,7 +675,7 @@ fmt_set_field_factory <- function(x, cast) {
   }
 }
 #' @describeIn fmt set the "display" field of a \code{fmt} vector
-#' @param value The value you want to inject in some \code{fmt} vector’s field
+#' @param value The value you want to inject in some \code{fmt} vector's field
 #' or attribute using a given "set" function.
 #' @export
 set_display <- fmt_set_field_factory("display", cast = character())
@@ -708,7 +714,7 @@ as_totrow  <- function(fmt, in_totrow = TRUE) {
   vec_assert(in_totrow, logical())
   `field<-`(fmt, "in_totrow", vec_recycle(in_totrow, length(fmt)))
 }
-#' @describeIn fmt set the "in_refrow field (belong to reference row)
+#' @describeIn fmt set the "in_refrow" field (belong to reference row)
 #' @export
 as_refrow  <- function(fmt, in_refrow = TRUE) {
   vec_assert(in_refrow, logical())
@@ -795,16 +801,18 @@ get_num <- function(x) {
 #' @describeIn fmt set the currently displayed field (not changing display type)
 #' @export
 set_num <- function(x, value) {
-  out     <- set_n(x, value)
+  value <- vec_recycle(value, length(x))
+  out     <- x
   display <- get_display(x)
   nas     <- is.na(display)
-  out[!nas & display == "wn"  ] <- set_wn  (x, value)[!nas & display == "wn"  ]
-  out[!nas & display == "pct" ] <- set_pct (x, value)[!nas & display == "pct" ]
-  out[!nas & display == "diff"] <- set_pct (x, value)[!nas & display == "diff"]
-  out[!nas & display == "ctr" ] <- set_ctr (x, value)[!nas & display == "ctr" ]
-  out[!nas & display == "mean"] <- set_mean(x, value)[!nas & display == "mean"]
-  out[!nas & display == "var" ] <- set_var (x, value)[!nas & display == "var" ]
-  out[!nas & display == "ci"  ] <- set_ci  (x, value)[!nas & display == "ci"  ]
+  out[!nas & display == "n"   ] <- set_n   (x[!nas & display == "n"   ], value[!nas & display == "n"   ])
+  out[!nas & display == "wn"  ] <- set_wn  (x[!nas & display == "wn"  ], value[!nas & display == "wn"  ])
+  out[!nas & display == "pct" ] <- set_pct (x[!nas & display == "pct" ], value[!nas & display == "pct" ])
+  out[!nas & display == "diff"] <- set_pct (x[!nas & display == "diff"], value[!nas & display == "diff"])
+  out[!nas & display == "ctr" ] <- set_ctr (x[!nas & display == "ctr" ], value[!nas & display == "ctr" ])
+  out[!nas & display == "mean"] <- set_mean(x[!nas & display == "mean"], value[!nas & display == "mean"])
+  out[!nas & display == "var" ] <- set_var (x[!nas & display == "var" ], value[!nas & display == "var" ])
+  out[!nas & display == "ci"  ] <- set_ci  (x[!nas & display == "ci"  ], value[!nas & display == "ci"  ])
   out
 }
 
@@ -875,8 +883,8 @@ format.fmt <- function(x, ...) {
       paste0(" ", pm,
              sprintf(paste0("%-0.", digits[mean_ci_only], "f"),
                      conf_int[mean_ci_only])) %>%
-      stringr::str_remove("^ ", pm, "0$|^ ", pm, "0.0+$|^ ", pm, "-0.0+$|^ ",
-                          pm, "NA") %>%
+      stringr::str_remove(paste0("^ ", pm, "0$|^ ", pm, "0.0+$|^ ", pm, "-0.0+$|^ ",
+                                 pm, "NA")) %>%
       stringr::str_pad(max(stringr::str_length(.)))
 
     out[mean_ci_only] <- paste0(out[mean_ci_only], mean_conf_int_pct_ci)
@@ -927,9 +935,9 @@ pillar_shaft.fmt <- function(x, ...) {
   totrows   <- is_totrow(x)
   tottabs   <- is_tottab(x)
 
-  disp_diff <- display == "diff"
-  disp_ci   <- display == "ci" & ci_type == "diff"
-  disp_ctr  <- display == "ctr"
+  disp_diff <- display == "diff" & !nas
+  disp_ci   <- display == "ci" & ci_type == "diff" & !nas
+  disp_ctr  <- display == "ctr" & !nas
 
   if (any(disp_diff)) {
     ref     <- get_reference(x[disp_diff], mode = "cells")
@@ -975,7 +983,6 @@ pillar_shaft.fmt <- function(x, ...) {
 
     color_styles <- get_color_styles(length(color_selection))
 
-
     color_styles <- color_styles_all[color_styles]
 
     unselected <- purrr::transpose(color_selection) %>%
@@ -1001,9 +1008,9 @@ pillar_shaft.fmt <- function(x, ...) {
     #                                         paste0(crayon::underline(out), "|"),
     #                                         paste0(out, "|"))
 
-    # - normal cells a bit grayer to see the totals better
-    totals <- get_reference(x, mode = "all_totals")
-    out[ok & !totals] <- fmtgrey4(out[ok & !totals])
+    # # - normal cells a bit grayer to see the totals better
+    # totals <- get_reference(x, mode = "all_totals")
+    # out[ok & !totals] <- fmtgrey4(out[ok & !totals])
 
     out[ok] <- out[ok] %>%
       stringr::str_replace("^0%$|^-0%$", pillar::style_subtle("0%")) %>% # 0 in gray
@@ -1013,6 +1020,26 @@ pillar_shaft.fmt <- function(x, ...) {
   pillar::new_pillar_shaft_simple(out, align = "right", na = "")
 }
 
+#' @export
+# @keywords internal
+# @method pillar_shaft tab_chi2_fmt
+pillar_shaft.tab_chi2_fmt <- function(x, ...) {
+  # print color type somewhere (and brk legend beneath ?) ----
+
+  out     <- format(x)
+  display <- get_display(x)
+  nas     <- is.na(display)
+
+  pvalues <- out[!nas & display == "pct"]
+  p_values <- get_num(x)[!nas & display == "pct"]
+
+  out[!nas & display == "pct"] <-
+    dplyr::if_else(condition = p_values >= 0.05,
+                   true      = neg5(pvalues),
+                   false     = pos5(pvalues) )
+
+  pillar::new_pillar_shaft_simple(out, align = "right", na = "")
+}
 
 
 #' @keywords internal
@@ -1306,7 +1333,10 @@ tab_color_legend <- function(x, colored = TRUE) {
       styles = purrr::map(breaks, ~ get_color_styles(length(.))),
       styles = purrr::map(styles, ~ color_styles_all[.]),
       breaks = purrr::map2(styles, breaks,
-                           ~ purrr::map2_chr(.x, .y, rlang::exec) )
+                           ~ purrr::map2_chr(
+                             .x, .y,
+                             ~ rlang::exec(.x, rlang::sym(.y))
+                           ))
     )
 
   color_table <- color_table %>%
@@ -1533,8 +1563,9 @@ vec_ptype_abbr.fmt <- function(x, ...) {
     stringr::str_replace("^mean-mean", "mean") %>%
     stringr::str_replace("^mixed-mixed", "mixed") %>%
     stringr::str_replace("([^%]+%)-pct", "\\1") %>%
-    stringr::str_remove("^NA")
-  if (get_comp_all(x)) out <- paste0(out, "-all")
+    stringr::str_remove("^NA") %>%
+    stringr::str_remove("_ci$")
+  #if (get_comp_all(x)) out <- paste0(out, "-all")
 
   out
 }
@@ -1556,8 +1587,9 @@ vec_ptype_full.fmt <- function(x, ...) {
     stringr::str_replace("-mean-mean", "-mean") %>%
     stringr::str_replace("-mixed-mixed", "-mixed") %>%
     stringr::str_replace("([^%]+%)-pct", "\\1") %>%
-    stringr::str_remove("-NA")
-  if (get_comp_all(x)) out <- paste0(out, "-all")
+    stringr::str_remove("-NA") %>%
+    stringr::str_remove("_ci$")
+  #if (get_comp_all(x)) out <- paste0(out, "-all")
 
   out
 }
@@ -1573,7 +1605,8 @@ vec_ptype2.fmt.fmt    <- function(x, y, ...) {
   type_x       <- get_type(x)
   same_type    <- type_x == get_type(y)
   comp_x       <- get_comp_all(x, replace_na = FALSE)
-  same_comp    <- comp_x == get_comp_all(y, replace_na = FALSE)
+  comp_y       <- get_comp_all(y, replace_na = FALSE)
+  same_comp    <- comp_x == comp_y | (is.na(comp_x) & is.na(comp_y))
   diff_type_x  <- get_diff_type(x)
   same_diff_type <- diff_type_x == get_diff_type(y)
   ci_type_x    <- get_ci_type(x)
@@ -1744,7 +1777,8 @@ vec_arith.fmt.fmt <- function(op, x, y, ...) {
   type_x       <- get_type(x)
   same_type    <- type_x == get_type(y)
   comp_x       <- get_comp_all(x, replace_na = FALSE)
-  same_comp    <- comp_x == get_comp_all(y, replace_na = FALSE)
+  comp_y       <- get_comp_all(y, replace_na = FALSE)
+  same_comp    <- comp_x == comp_y | (is.na(comp_x) & is.na(comp_y))
   diff_type_x  <- get_diff_type(x)
   same_diff_type <- diff_type_x == get_diff_type(y)
   ci_type_x    <- get_ci_type(x)
@@ -1964,115 +1998,3 @@ vec_math.fmt <- function(.fn, .x, ...) {
          ),
          vec_math_base(.fn, get_num(.x), ...) )
 }
-
-
-
-
-
-
-
-
-
-# c(fmt("n", 0), fmt("n", 0)) %>% is_totrow()
-# c(fmt("n", 0), fmt("n", 0)) %>% is_tottab()
-
-
-
-
-# Tests-------------------------------------------------------------------------
-# #test of class :
-# fmt(1)
-# fmt(1) %>% class()
-# fmt(1) %>% is_fmt()
-# fmt(1) %>% is.double()
-# fmt(1) %>% is.numeric()
-#
-# #test of printing :
-# num1 <- fmt(n = c(5, 10, 15), type = "n", display = c("n", "row", "mean"),
-#             wn = c(4.7, 12.1, 13.9), digits = 1, pct = c(NA, 0.63, NA),
-#             mean = c(NA, NA, 27.3))
-# num2 <- fmt(n = c(15, 10, 5), type = "row", display = c("n", "row", "mean"),
-#             wn = c(13.9, 12.1, 4.7), digits = 0, pct = c(NA, 0.22, NA),
-#             mean = c(NA, NA, 21))
-# tibble::tibble(num1)
-# fmt(1) %>% vec_data()
-#
-# #test of common type :
-# vec_ptype_show(fmt(1, "row", pct = 0.255), fmt(2, "row", pct = 0.987))
-# vec_ptype_show(fmt(), double(), fmt())
-# vec_ptype_common(fmt(1, "row", pct = 0.255), fmt(2, "row", pct = 0.987))
-# vec_ptype2(fmt(1, "row", pct = 0.255), fmt(2, "row", pct = 0.987))
-# vec_ptype2(fmt(1, "row", pct = 0.255), fmt(2, "col", pct = 0.987))
-#
-# #test of conversion :
-# vec_cast(fmt(1, "row", pct = 0.255), fmt(2, "row", pct = 0.987))
-# vec_cast(5, fmt())
-# vec_cast(5L, fmt())
-# vec_cast(fmt(6), double())
-# vec_cast(fmt(6), integer())
-# vec_cast(fmt(1, "row", pct = 0.6005), character())
-# vec_cast(NA, fmt())
-#
-# #test of combination :
-# vec_c(fmt(1, "row", pct = 0.255), fmt(2, "row", pct = 0.987)) #%>% get_digits()
-# c(fmt(1), fmt(2))
-# vec_c(fmt(3), 1)
-# vec_c(fmt(3), 1L)
-# vec_c(NA, fmt(4))
-#
-# #test of comparison :
-# fmt(1) == 1
-# sort(c(fmt(2), fmt(1)))
-#
-# #test of arithmetics :
-# (fmt(5 , "n"   , 0, wn = 5.1)               + fmt(  1, "n"   , 0, pct  = 0.25000001, wn =  1.5 )) %>% vec_data()
-# (fmt(15, "row" , 1, pct =  0.55, wn = 15.1) - fmt(  2, "mean", 0, mean = 0.25000001, wn =  2.5 )) %>% vec_data()
-# (fmt(15, "row" , 1, pct =  0.55, wn = 15.1) - fmt( 20, "mean", 0, mean = 0.75000001, wn = 20.5 )) %>% vec_data()
-# (fmt(25, "row" , 2, pct =  0.55, wn = 25.1) / fmt(  3, "row" , 3, pct  = 0.25000001, wn =  3.5 )) %>% vec_data()
-# (fmt(35, "row" , 3, pct =  0.55, wn = 35.1) * fmt(  4, "row" , 0, pct  = 0.25000001, wn =  4.5 )) %>% vec_data()
-# (fmt(45, "row" , 4, pct =  0.55, wn = 45.1) + 0.0077778) %>% vec_data()
-# (fmt(55, "mean", 3, mean = 0.55, wn = 55.1) - 1)
-# (fmt(65, "n"   , 2, pct =  0.55, wn = 65.1) / 2)
-# fmt(75, "row" ,-1, pct =  0.55, wn = 75.1) * 3
-# fmt(1) + 1
-# 1 + fmt(1, "row", pct = 0.12)
-# 1 - fmt(1, "row", pct = 0.12)
-# 2 / fmt(3, "row", pct = 0.12)
-# 5 * fmt(1, "n", 2)
-# -fmt(1, "row", pct = 0.12)
-# (fmt(1) + 0.0077778) %>% as.double()
-# sum(fmt(1), fmt(1)) #%>% vec_data()
-# mean(c(fmt(1, "n", 2), fmt(1, "n", 2))) %>% vec_data()
-#
-#
-# x <- fmt(n = c(2, 1), type = "row", pct = c(0.5, 1.5)) #wn = c(0.7, 2.4)
-# y <- fmt(n = c(3, 9), type = "n"  , pct = c(0.5, 1.5)) #wn = c(0.7, 2.4)
-# z <- c(x, y)
-#
-# x ; y ; z
-#
-# get_type(x)
-# get_n(x)
-# get_wn(x)
-# get_pct(x)
-# get_digits(x)
-# get_ctr(x)
-# get_mean(x)
-# get_var(x)
-# get_ci(x)
-#
-#
-# get_num(z)
-# set_num(z, c(1, 2, 3, 4))
-#
-# sum(x) #
-# sum(y) #
-# sum(z) #
-#
-# (get_pct(x)[1]*get_n(x)[1] + get_pct(x)[2]*get_n(x)[2]) / (get_n(x)[1] + get_n(x)[2])
-# get_n(y)[1] + get_n(y)[2]
-# (get_pct(z)[1]*get_n(z)[1] + get_pct(z)[2]*get_n(z)[2] + get_pct(z)[3]*get_n(z)[3] + get_pct(z)[4]*get_n(z)[4]) / (get_n(z)[1] + get_n(z)[2] + get_n(z)[3] + get_n(z)[4])
-#
-# sum(x) %>% vec_data()
-# sum(y) %>% vec_data()
-# sum(z) %>% vec_data()

@@ -8,23 +8,23 @@ tab(
   data,
   row_var,
   col_var,
-  ...,
+  tab_vars,
   wt,
   sup_cols,
   na = "keep",
   digits = 0,
+  pct = "no",
+  color = "no",
+  diff = "tot",
+  comp = "tab",
   totaltab = "line",
   totaltab_name = "Ensemble",
   tot = c("row", "col"),
   total_names = "Total",
-  pct = "no",
-  diff = "tot",
-  comp = "tab",
-  chi2 = FALSE,
-  ci = "no",
+  chi2 = NULL,
+  ci = NULL,
   conf_level = 0.95,
-  ci_visible = FALSE,
-  color = "no",
+  ci_visible = NULL,
   subtext = "",
   cleannames = FALSE,
   rare_to_other = FALSE,
@@ -40,7 +40,7 @@ tab(
 and the column variable, which will be printed with one level per column.
 For numeric variables means are calculated, in a single column.}
 
-\item{...}{<\link[tidyr:tidyr_tidy_select]{tidy-select}> Tab variables :
+\item{tab_vars}{<\link[tidyr:tidyr_tidy_select]{tidy-select}> Tab variables :
 a subtable is made for each combination of levels of the selected variables.
 Leave empty to make a simple crosstab. All \code{tab_vars} are converted to factor.}
 
@@ -67,6 +67,51 @@ kept to calculate the base table, always removed to calculate supplementary cols
 number of digits for each \code{sup_cols}, an integer vector of length
 1 + \code{sup_cols} (the first being the number of digits for the base table).}
 
+\item{pct}{The type of percentages to calculate, passed to \code{\link{tab_pct}} :
+\itemize{
+\item \code{"row"}: row percentages.
+\item \code{"col"}: column percentages.
+\item \code{"all"}: frequencies for each subtable/group, if there is \code{tab_vars}.
+\item \code{"all_tabs"}: frequencies for the whole (set of) table(s).
+}}
+
+\item{color}{The type of colors to print, as a single string :
+\itemize{
+\item \code{"no"}: by default, no colors are printed.
+\item \code{"diff"}: color percentages and means based on cells differences from
+totals (or from first cells when \code{diff = "first"}).
+\item \code{"diff_ci"}: color pct and means based on cells differences from totals
+or first cells, removing coloring when the confidence interval of this difference
+is higher than the difference itself.
+\item \code{"after_ci"}: idem, but cut off the confidence interval from the
+difference first.
+\item \code{"contrib"}: color cells based on their contribution to variance
+(except mean columns, from numeric variables).
+\item \code{"auto"}: frequencies (\code{pct = "all"}, \code{pct = "all_tabs"})
+and counts are colored with \code{"contrib"}.
+When \code{ci = "diff"}, row and col percentages are colored with "after_ci" ;
+otherwise they are colored with "diff".
+}}
+
+\item{diff}{The reference cell to calculate differences (used to print \code{colors}) :
+\itemize{
+\item \code{"tot"}: by default, cells differences from total rows are calculated with
+\code{pct = "row"}, and cells differences from total columns with \code{pct = "col"}.
+\item \code{"first"}: calculate cells differences from the first cell
+of the row or column (useful to color temporal evolutions).
+\item \code{"no"}: not use diffs to gain calculation time.
+}}
+
+\item{comp}{The comparison level : by subtables/groups, or for the whole table.
+\itemize{
+\item \code{"tab"}: by default, contributions to variance,
+row differences from totals/first cells, and row confidence intervals for these
+differences, are calculated for each \code{tab_vars} group.
+\item \code{"all"}: compare cells to the general total line (provided there is
+a total table with a total row), or with the first line of the total table
+when \code{diff = "first"}.
+}}
+
 \item{totaltab}{The total table, to create with \code{\link{tab_totaltab}},
 if there are subtables/groups (i.e. when \code{tab_vars} is provided) :
 \itemize{
@@ -92,38 +137,12 @@ columns.
 Use syntax of type \code{c("Total row", "Total column")} to set different names for
 rows and cols.}
 
-\item{pct}{The type of percentages to calculate, passed to \code{\link{tab_pct}} :
-\itemize{
-\item \code{"row"}: row percentages.
-\item \code{"col"}: column percentages.
-\item \code{"all"}: frequencies for each subtable/group, if there is \code{tab_vars}.
-\item \code{"all_tabs"}: frequencies for the whole (set of) table(s).
-}}
-
-\item{diff}{The reference cell to calculate differences (used to print \code{colors}) :
-\itemize{
-\item \code{"tot"}: by default, cells differences from total rows are calculated with
-\code{pct = "row"}, and cells differences from total columns with \code{pct = "col"}.
-\item \code{"first"}: calculate cells differences from the first cell
-of the row or column (useful to color temporal evolutions).
-\item \code{"no"}: not use diffs to gain calculation time.
-}}
-
-\item{comp}{The comparison level : by subtables/groups, or for the whole table.
-\itemize{
-\item \code{"tab"}: by default, contributions to variance,
-row differences from totals/first cells, and row confidence intervals for these
-differences, are calculated for each \code{tab_vars} group.
-\item \code{"all"}: compare cells to the general total line (provided there is
-a total table with a total row), or with the first line of the total table
-when \code{diff = "first"}.
-}}
-
 \item{chi2}{Set to \code{TRUE} to calculate Chi2 summaries with \code{\link{tab_chi2}}.
 Useful to print metadata, and to color cells based on their contribution to variance
-(\code{color = "contrib"}).}
+(\code{color = "contrib"}). Automatically added if needed for \code{color}.}
 
-\item{ci}{The type of confidence intervals to calculate, passed to \code{\link{tab_ci}} :
+\item{ci}{The type of confidence intervals to calculate, passed to \code{\link{tab_ci}}
+(automatically added if needed for \code{color}) :
 \itemize{
 \item \code{"cell"}: absolute confidence intervals of cells percentages.
 \item \code{"diff"}: confidence intervals of the difference between a cell and the
@@ -137,24 +156,6 @@ Default to 0.95 (95\%).}
 
 \item{ci_visible}{By default, confidence intervals are calculated and used to set
 colors, but not printed. Set to \code{TRUE} to print them in the result.}
-
-\item{color}{The type of colors to print, as a single string :
-\itemize{
-\item \code{"no"}: by default, no colors are printed.
-\item \code{"diff"}: color percentages and means based on cells differences from
-totals (or from first cells when \code{diff = "first"}).
-\item \code{"diff_ci"}: color pct and means based on cells differences from totals
-or first cells, removing coloring when the confidence interval of this difference
-is higher than the difference itself.
-\item \code{"after_ci"}: idem, but cut off the confidence interval from the
-difference first.
-\item \code{"contrib"}: color cells based on their contribution to variance
-(except mean columns, from numeric variables).
-\item \code{"auto"}: frequencies (\code{pct = "all"}, \code{pct = "all_tabs"})
-and counts are colored with \code{"contrib"}.
-When \code{ci = "diff"}, row and col percentages are colored with "after_ci" ;
-otherwise they are colored with "diff".
-}}
 
 \item{subtext}{A character vector to print rows of legend under the table.}
 

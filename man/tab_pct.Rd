@@ -39,7 +39,7 @@ Should they be calculated for the whole table (\code{comp = "all"} :
 comparison of each cell to the total row of the total table) ?
 When \code{comp = "all"} and \code{diff = "first"}, cells are compared to the first
 cell of the total table instead.
-This parameter doesn’t affect column percentages.
+This parameter doesn't affect column percentages.
 \code{comp} must be set once and for all the first time you use \code{\link{tab_chi2}},
 \code{\link{tab_pct}} with rows, or \code{\link{tab_ci}}.}
 

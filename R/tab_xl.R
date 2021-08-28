@@ -62,6 +62,7 @@ tab_xl <-
               length(mean_breaks   ) >= 1,
               length(contrib_breaks) >= 1 )
 
+    tabs_base <- tabs
     if (is.data.frame(tabs)) tabs <- list(tabs)
     chi2           <- purrr::map(tabs, get_chi2)
     colwidth       <- vec_recycle(colwidth,       length(tabs))
@@ -220,6 +221,7 @@ tab_xl <-
     insuff_counts_col_var <- insc$insuff_counts_col_var
 
     no_chi2 <- purrr::map_lgl(chi2, ~ nrow(.) == 0)
+    tabs_chi2 <- rep(list(tibble::tibble()), length(chi2))
 
     if (any(!no_chi2)) {
       prep_tabs_chi2 <- tabs[!no_chi2] %>%
@@ -258,7 +260,6 @@ tab_xl <-
         ~ if (.y == "tab") {append(., "chi2 stats")} else {"chi2 stats"}
       )
 
-      tabs_chi2 <- rep(list(tibble::tibble()), length(chi2))
       tabs_chi2[!no_chi2] <-
         purrr::pmap(list(prep_tabs_chi2, chi2[!no_chi2], join_vars),
                     ~ dplyr::left_join(..1, ..2, by = ..3, suffix = c(" ", "")) %>%
@@ -1119,7 +1120,9 @@ tab_xl <-
     print(path)
     openxlsx::saveWorkbook(wb, path, overwrite = TRUE)
     if (open == TRUE) { openxlsx::openXL(path) } #file.show
-  }
+
+     invisible(tabs_base)
+     }
 
 
 
