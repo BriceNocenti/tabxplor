@@ -147,22 +147,26 @@ print.tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = NULL,
     ~ pillar::char(as.character(.), min_chars = min_row_var)
   ))
 
+  # out <- format(out, width = NULL)
   out <- format(out, width = width, ..., n = n, max_extra_cols = max_extra_cols,
                 max_footer_lines = max_footer_lines)
 
-  # bad workaround to retransform the <char> type into <fct>
+  # very bad workaround to retransform the <char> type into <fct>
   if (length(n_row_var) != 0) {
     regular_ex <-
       paste0("^(", paste0(rep("[^<]+<", n_row_var), collapse = ""), ")<char>") %>%
       stringr::str_replace("<\\)<", ")<")
 
-    out[4] <- out[4] %>% stringr::str_replace(regular_ex, "\\1<fct> ")
+    out[3] <- out[3] %>% stringr::str_replace(regular_ex, "\\1<fct> ")
   }
-
-
   writeLines(out)
+
+  # writeLines(format(x, width = width, ..., n = n, max_extra_cols = max_extra_cols,
+  #                   max_footer_lines = max_footer_lines))
   invisible(x)
-}
+
+  NextMethod()
+  }
 
 #' @export
 #' @method print grouped_tab
@@ -179,19 +183,24 @@ print.grouped_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = NU
     ~ pillar::char(as.character(.), min_chars = min_row_var)
   ))
 
+  # out <- format(out, width = NULL)
   out <- format(out, width = width, ..., n = n, max_extra_cols = max_extra_cols,
                 max_footer_lines = max_footer_lines)
 
-  # bad workaround to retransform the <char> type into <fct>
-  regular_ex <-
-    paste0("^(", paste0(rep("[^<]+<", n_row_var), collapse = ""), ")<char>") %>%
-    stringr::str_replace("<\\)<", ")<")
+  # very bad workaround to retransform the <char> type into <fct>
+  if (length(n_row_var) != 0) {
+    regular_ex <-
+      paste0("^(", paste0(rep("[^<]+<", n_row_var), collapse = ""), ")<char>") %>%
+      stringr::str_replace("<\\)<", ")<")
 
-  out[4] <- out[4] %>% stringr::str_replace(regular_ex, "\\1<fct> ")
-
+    out[4] <- out[4] %>% stringr::str_replace(regular_ex, "\\1<fct> ")
+  }
   writeLines(out)
+
+  # writeLines(format(x, width = width, ..., n = n, max_extra_cols = max_extra_cols,
+  #                   max_footer_lines = max_footer_lines))
   invisible(x)
-}
+  }
 
 #' @keywords internal
 print_chi2 <- function(x, width = NULL) {
@@ -205,12 +214,12 @@ print_chi2 <- function(x, width = NULL) {
     names() #%>% rlang::syms()
   if (length(fmt_cols) != 0) {
     row_all_na <- chi2 %>%
-      select(where(is_fmt)) %>%
+      dplyr::select(where(is_fmt)) %>%
       purrr::map_df(is.na)
     row_all_na <- row_all_na %>%
       dplyr::rowwise() %>%
       dplyr::mutate(empty = all(dplyr::c_across())) %>%
-      dplyr::pull(empty)
+      dplyr::pull(.data$empty)
 
     chi2 <- chi2 %>% dplyr::filter(!row_all_na)
   }
@@ -338,7 +347,8 @@ group_by.tab <- function(.data,
 #' @param to_arg Argument names for x and to. These are used in error messages to inform
 #' the user about the locations of incompatible types.
 #'
-#' @export
+#' @keywords internal
+# @export
 tab_cast <- function(x, to, ..., x_arg = "", to_arg = "") {
   out <- tib_cast(x, to, ..., x_arg = x_arg, to_arg = to_arg)
 
@@ -352,7 +362,8 @@ tab_cast <- function(x, to, ..., x_arg = "", to_arg = "") {
 #' @rdname tab_cast
 #' @param y_arg Argument names for x and y. These are used in error messages to inform
 #' the user about the locations of incompatible types.
-#' @export
+#' @keywords internal
+# @export
 tab_ptype2 <- function(x, y, ..., x_arg = "", y_arg = "") {
   out <- tib_ptype2(x, y, ..., x_arg = x_arg, y_arg = y_arg)
   #colour <- df_colour(x) %||% df_colour(y)
@@ -600,7 +611,8 @@ distinct.grouped_tab <- function(.data, ...,  .keep_all = FALSE) {
 
 
 #' @rdname tab_cast
-#' @export
+#' @keywords internal
+# @export
 gtab_cast <- function(x, to, ..., x_arg = "", to_arg = "") {
   #based upon vctrs:::gdf_cast()
   df <- df_cast(x, to, ..., x_arg = x_arg, to_arg = to_arg)
@@ -613,7 +625,8 @@ gtab_cast <- function(x, to, ..., x_arg = "", to_arg = "") {
 }
 
 #' @rdname tab_cast
-#' @export
+#' @keywords internal
+# @export
 gtab_ptype2 <- function(x, y, ..., x_arg = "", y_arg = "") {
   #based upon vctrs:::gdf_ptype2
   common <- df_ptype2(x, y, ..., x_arg = x_arg, y_arg = y_arg)

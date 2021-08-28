@@ -32,3 +32,4 @@ the user about the locations of incompatible types.}
 \description{
 Coercion between two tab
 }
+\keyword{internal}
