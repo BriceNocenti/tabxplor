@@ -192,8 +192,9 @@
 #'}
 #'
 #' # You can also add supplementary columns, text or numeric:
+#' \dontrun{
 #' tab(dplyr::storms, category, status, sup_cols = c("pressure", "wind"))
-#'
+#'}
 #'
 #' # Colors to help the user read the table:
 #' data <- forcats::gss_cat |>
@@ -1030,7 +1031,7 @@ tab_spread <- function(tabs, spread_vars, names_prefix, names_sort = FALSE,
 
 
 
-#' @describeIn tab_many Get the variables names of a \code{tibble} of class \code{tab}
+#' @describeIn tab_many Get the variables names of a \pkg{tabxplor} \code{tab}
 #' @param tabs A \code{tibble} of class \code{tab}, made with \code{\link{tab}},
 #' \code{\link{tab_many}} or \code{\link{tab_core}}.
 #' @param vars In `tab_get_vars`, a character vector containing the wanted vars names:
@@ -1375,13 +1376,14 @@ tab_core <- function(data, row_var, col_var, ..., wt,
 #' be detected using \code{\link{is_tottab}}.
 #' @export
 #'
-#' @examples data <- dplyr::starwars |>
+#' @examples \dontrun{ data <- dplyr::starwars |>
 #' tab_prepare(sex, hair_color, gender, rare_to_other = TRUE,
 #'             n_min = 5, na = "keep")
 #'
 #' data |>
 #'   tab_core(sex, hair_color, gender) |>
 #'   tab_totaltab("line")
+#'   }
 tab_totaltab <- function(tabs, totaltab = c("table", "line", "no"),
                          name = "Ensemble", data = NULL) {
   get_vars  <- tab_get_vars(tabs)
@@ -1506,11 +1508,12 @@ tab_totaltab <- function(tabs, totaltab = c("table", "line", "no"),
 #'  \code{\link{is_totrow}}, and total columns using \code{\link{is_totcol}}.
 #' @export
 #'
-#' @examples data <- dplyr::starwars |> tab_prepare(sex, hair_color)
+#' @examples \dontrun{data <- dplyr::starwars |> tab_prepare(sex, hair_color)
 #'
 #' data |>
 #'   tab_core(sex, hair_color) |>
 #'   tab_tot("col", totcol = "each")
+#'   }
 tab_tot <- function(tabs, tot = c("row", "col"), name = "Total",
                     totcol = "last", data = NULL) {
   stopifnot(
@@ -2942,11 +2945,13 @@ tab_prepare_core <-
     data <- data %>%
       dplyr::mutate(dplyr::across(tidyselect::all_of(vars_not_numeric),
                                   as.factor))
+
+    #remove class ordered
     data <- data %>%
       dplyr::mutate(dplyr::across(
         where(is.ordered),
         ~ magrittr::set_class(., class(.)[class(.) != "ordered"])
-      )) #remove class ordered ----
+      ))
 
 
 

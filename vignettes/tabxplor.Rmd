@@ -1,44 +1,47 @@
 ---
-output: github_document
+title: "Introduction to tabxplor"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Introduction to tabxplor}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
 ---
-
-<!-- README.md is generated from README.Rmd. Please edit that file -->
 
 ```{r, include = FALSE}
 knitr::opts_chunk$set(
   collapse = TRUE,
-  comment = "#>",
-  fig.path = "man/figures/README-",
-  out.width = "100%"
+  comment = "#>"
 )
 ```
 
-# tabxplor
-
-<!-- badges: start -->
-
-[![Travis build status](https://travis-ci.com/BriceNocenti/tabxplor.svg?branch=master)](https://travis-ci.com/BriceNocenti/tabxplor)
-<!-- badges: end -->
-
-If R makes complex things simple, it can sometimes make simple things difficult. This is why `tabxplor` tries to make it easy to deal with multiple crosstabs: to create and manipulate them, but also to read them, using color helpers to highlight important information. It would love to enhance your data exploration experience with simple yet powerful tools. All functions are tidyverse-propelled, pipe-friendly, and render tibbles, which can be easily modified using `dplyr`. Tables can be exported to Excel with formats and colors.
-
-## Installation
-
-You can install tabxplor from github with:
-
-``` r
-# install.packages("devtools")
-devtools::install_github("BriceNocenti/tabxplor")
+```{r setup}
+library(tabxplor)
 ```
 
-## Base usage: crosstables with color helpers
+```{r, echo = FALSE, include = FALSE}
+options(crayon.enabled = TRUE)
+knitr::knit_hooks$set(output = function(x, options){
+  paste0(
+    '<pre class="r-output"><code>',
+    fansi::sgr_to_html(x = htmltools::htmlEscape(x), warn = FALSE),
+    '</code></pre>'
+  )
+})
+
+num_colors <- function(forget = TRUE) 256
+library(crayon)
+assignInNamespace("num_colors", num_colors, pos = "package:crayon")
+```
+
+`tabxplor` tries to make it easy to deal with multiple crosstabs: to create and manipulate them, but also to read them, using color helpers to highlight important information, and simplify your experience of data exploration. All functions are tidyverse-propelled, pipe-friendly, and render tibbles, which can be easily modified using `dplyr`. Tables can be exported to Excel with formats and colors.
+
+## Base usage: crosstables with color helpers for data exploration
 
 The main functions are made to be user-friendly and time-saving is data analysis workflows.
 
 `tab` makes a simple crosstable:
 
 ```{r, echo = TRUE}
-library(tabxplor)
 tab(forcats::gss_cat, marital, race)
 ```
 
@@ -46,7 +49,7 @@ When one of the row or column variables is numeric, `tab` calculates means by ca
 
 `tab` comes with options to weight the table, print percentages, manage totals, digits and missing values, add legends, gather rare categories in a "Others" level.
 
-``` r
+``` {.r}
 tab(forcats::gss_cat, marital, race, pct = "row", na = "drop", subtext = gss,
 rare_to_other = TRUE, n_min = 1000, other_level = "Custom_other_level_name")
 ```
@@ -55,14 +58,13 @@ When a third variable is provided, `tab` makes a table with as many subtables as
 
 Colors may be added to highlight over-represented and under-represented cells, and therefore help the user read the table. By default, with `color = "diff"`, colors are based on the differences between a cell and it's related total (which only works with means and row or col pct). When a percentage is superior to the average percentage of the line or column, it appears with shades of green. When it's inferior, it appears with shades of red/orange. A color legend is added below the table. Note that, for now, colors are made to stand out with dark themes in RStudio, not ligth ones.
 
-```r
+```{r, echo = TRUE}
 data <- forcats::gss_cat %>% 
   dplyr::filter(year %in% c(2000, 2006, 2012), !marital %in% c("No answer", "Widowed"))
 gss  <- "Source: General social survey 2000-2014"
 gss2 <- "Source: General social survey 2000, 2006 and 2012"
 tab(data, race, marital, year, subtext = gss2, pct = "row", color = "diff")
 ```
-![](.readme_images/tabxplor1_group.jpg)
 
 The `sup_cols` argument adds supplementary column variables to the table. With numeric variables, it calculates the mean for each category or the row variable. With text variables, only the first level is kept (you can choose which one to use by placing it first with `forcats::fct_relevel`). Use `tab_many` to keep all levels.
 
@@ -76,19 +78,17 @@ By default, to calculate colors, each cell is compared to the subtable's related
 
 When a third variable or more are provided, it's possible to compare with the general total line instead, by setting `comp = "all"`. Here, only the last total row is highlighted (TOTAL ENSEMBLE appears in white but other total rows in grey).
 
-```r
+```{r, echo = TRUE}
 tab(data, race, marital, year, subtext = gss2, pct = "row", color = "diff", comp = "all")
 ```
-![](.readme_images/tabxplor2_comp_all.jpg)
 
 With `diff = "first"`, each row (or column) is compared to the first row (or column), which is particularly helpful to highlight historical evolutions. The first rows then appears in white (while totals are themselves colored like normal lines).
 
-```r
+```{r, echo = TRUE}
 data <- data %>% dplyr::mutate(year = as.factor(year))
 tab(data, year, marital, race, pct = "row", color = "diff", diff = "first", tot = "col",
     totaltab = "table")
 ```
-![](.readme_images/tabxplor3_first.jpg)
 
 ## Confidence intervals
 
@@ -100,17 +100,15 @@ tab(forcats::gss_cat, race, marital, pct = "row", ci = "cell")
 
 It is also possible to use confidence intervals to enhance colors helpers. With `color = "diff_ci"`, the cells are only colored if the confidence interval of the difference between them and their reference cell (in total or first row/col) is superior to the difference itself. Otherwise, it means the cell is not significantly different from it's reference in the total (or first) row: it turns grey, and the reader is not anymore tempted to overinterpret the difference.
 
-```r
+```{r, echo = TRUE}
 tab(forcats::gss_cat, race, marital, pct = "row", color = "diff_ci")
 ```
-![](.readme_images/tabxplor4_diff_ci.jpg)
 
 Finally, another calculation appears helpful: the difference between the cell and the total, minus the confidence interval of this difference (or in other word, what remains of that difference after having substrated the confidence interval). `ci = "after_ci"` highligths all the cells whose value is significatively different from the relative total (or first cell). This is particularly useful when working on small populations: we can see at a glance which numbers we have right to read and interpret.
 
-```r
+```{r, echo = TRUE}
 tab(forcats::gss_cat, race, marital, subtext = gss, pct = "row", color = "after_ci")
 ```
-![](.readme_images/tabxplor5_after_ci.jpg)
 
 ## Chi2 stats and contributions of cells to variance
 
@@ -122,16 +120,15 @@ tab(forcats::gss_cat, race, marital, chi2 = TRUE)
 
 Chi2 stats can also be used to color cells based on their contributions to the variance of the (sub)table, with `color = "contrib"`. By default, only the cells whose contribution is superior to the mean contribution are colored. It highlights the cells which would stand out in a correspondance analysis (the two related categories would be located at the edges of the first axes ; here, being black is associated with never married and being separated).
 
-```r
+```{r, echo = TRUE}
 tab(forcats::gss_cat, race, marital, color = "contrib")
 ```
-![](.readme_images/tabxplor6_contrib.jpg)
 
 ## Combine tabxplor and dplyr
 
 The result of `tab` is a `tibble::tibble` dataframe with class `tab`. It gets it's own printing methods but, in the same time, can be transformed using most dplyr verbs, like a normal tibble.
 
-``` r
+``` {.r}
 library(dplyr)
 tab(storms, category, status, sup_cols = c("pressure", "wind")) %>%
   filter(category != "-1") %>%
@@ -141,7 +138,7 @@ dplyr::select(-`tropical depression`)
 
 With `dplyr::arrange`, don't forget to keep the order of tab variables and total rows:
 
-``` r
+``` {.r}
 tab(data, race, marital, year, pct = "row") %>%
   arrange(year, is_totrow(.), desc(Married))
 ```
@@ -152,7 +149,8 @@ tab(data, race, marital, year, pct = "row") %>%
 
 It's possible, for example, to make a summary table of as many columns variables as you want (showing all levels, or showing only one specific level like here):
 
-```r
+```{r, echo = TRUE}
+library(dplyr)
 first_lvs <- c("Married", "$25000 or more", "Strong republican", "Protestant")
 data <- forcats::gss_cat %>% mutate(across(
   where(is.factor),
@@ -161,11 +159,10 @@ data <- forcats::gss_cat %>% mutate(across(
 tab_many(data, race, c(marital, rincome, partyid, relig, age, tvhours),
          levels = "first", pct = "row", chi2 = TRUE, color = "auto")
 ```
-![](.readme_images/tabxplor7_tab_many.jpg)
 
 Using `tab` or `tab_many` with `purrr::map` and `tibble::tribble`, you can program several tables with different parameters all at once, in a readable way:
 
-``` r
+``` {.r}
 tabs <-
   purrr::pmap(
     tibble::tribble(
@@ -185,7 +182,7 @@ tabs <-
 
 `tab_xl` exports any table or list of tables to Excel, with all colors, chi2 stats and formatting. On Excel, it is still possible to do calculations on raw numbers.
 
-``` r
+``` {.r}
 tabs %>% tab_xl(replace = TRUE, sheets = "unique")
 ```
 
@@ -193,7 +190,7 @@ tabs %>% tab_xl(replace = TRUE, sheets = "unique")
 
 When not doing data analysis but writing functions, you can use the sub-functions of `tab_many` step by step to attain more flexibility or speed. That way, it's possible to write new functions to customize your tables even more.
 
-``` r
+``` {.r}
 data <- dplyr::starwars %>%
   tab_prepare(sex, hair_color, gender, rare_to_other = TRUE,
               n_min = 5, na = "keep")
@@ -211,14 +208,14 @@ The whole architecture of `tabxplor` is powered by a special vector class, named
 
 The simple way to recover the underlying numbers as numeric vectors is `get_num`:
 
-``` r
+``` {.r}
 tab(data, race, marital, year, pct = "row") %>%
   mutate(across(where(is_fmt), get_num))
 ```
 
 To render character vectors (without colors), use `format`:
 
-``` r
+``` {.r}
 tab(data, race, marital, year, pct = "row") %>%
   mutate(across(where(is_fmt), format))
 ```

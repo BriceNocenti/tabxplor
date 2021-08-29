@@ -271,7 +271,7 @@ Breaks for repulsions/subrepresentations (in orange/red) will simply be the oppo
 }
 \section{Functions}{
 \itemize{
-\item \code{tab_get_vars}: Get the variables names of a \code{tibble} of class \code{tab}
+\item \code{tab_get_vars}: Get the variables names of a \pkg{tabxplor} \code{tab}
 
 \item \code{is_tab}: a test function for class tab
 

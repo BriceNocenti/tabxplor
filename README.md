@@ -4,6 +4,9 @@
 # tabxplor
 
 <!-- badges: start -->
+
+[![Travis build
+status](https://travis-ci.com/BriceNocenti/tabxplor.svg?branch=master)](https://travis-ci.com/BriceNocenti/tabxplor)
 <!-- badges: end -->
 
 If R makes complex things simple, it can sometimes make simple things
@@ -25,10 +28,6 @@ devtools::install_github("BriceNocenti/tabxplor")
 ```
 
 ## Base usage: crosstables with color helpers
-
-``` r
-library(tabxplor)
-```
 
 The main functions are made to be user-friendly and time-saving is data
 analysis workflows.
@@ -321,9 +320,9 @@ data %>%
 The whole architecture of `tabxplor` is powered by a special vector
 class, named `fmt` for formatted numbers. As a `vctrs::record`, it
 stores behind the scenes all the data necessary to calculate printed
-results, formats and colors. A whole set of functions are available to
-access or transform this data, like `is_totrow`, `is_totcol` or
-`is_tottab`. `?fmt` to get more information.
+results, formats and colors. A set of functions are available to access
+or transform this data, like `is_totrow`, `is_totcol` or `is_tottab`.
+`?fmt` to get more information.
 
 The simple way to recover the underlying numbers as numeric vectors is
 `get_num`:

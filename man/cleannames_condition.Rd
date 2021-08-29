@@ -9,3 +9,4 @@ cleannames_condition()
 \description{
 A regex pattern to clean the names of factors.
 }
+\keyword{internal}

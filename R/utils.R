@@ -1,4 +1,3 @@
-#Fonctions and options to work with factors and lists -------------
 
 #' Pipe operator
 #'
@@ -17,10 +16,11 @@ NULL
 #' @importFrom rlang .data
 NULL
 
-#Use fct_c and fct_unify !! ----------------------------------------------------
+#Fonctions and options to work with factors and lists -------------
 
 #' A regex pattern to clean the names of factors.
-#' @export
+#' @keywords internal
+# @export
 cleannames_condition <- function()
   "^[^- ]+-(?![[:lower:]])|^[^- ]+(?<![[:lower:]])-| *\\(.+\\)"
 
@@ -234,7 +234,7 @@ fct_levels_from_vector <- function (data_to, data_from, var) {
 
 #' Compare levels of factors in many df
 #'
-#' @param databases Data to use.
+#' @param data Data to use.
 #' @param vars Variables to compare levels.
 #'
 #' @return A list with results.
@@ -243,14 +243,14 @@ fct_levels_from_vector <- function (data_to, data_from, var) {
 #'
 # @examples
 compare_levels <-
-  function(databases, vars = c("var1", "var2")) {
-    if ("character" %in% class(databases)) {
-      db_names <- databases
-      db <- databases %>% purrr::map(~ eval(str2expression(.)) %>%
+  function(data, vars = c("var1", "var2")) {
+    if ("character" %in% class(data)) {
+      db_names <- data
+      db <- data %>% purrr::map(~ eval(str2expression(.)) %>%
                                        dplyr::select(tidyselect::any_of(vars)) ) %>%
-        magrittr::set_names(databases)
-    } else if (all(purrr::map_lgl(databases, ~ "data.frame" %in% class(.)))) {
-      db <- databases %>% purrr::map(~ dplyr::select(., tidyselect::any_of(vars)))
+        magrittr::set_names(data)
+    } else if (all(purrr::map_lgl(data, ~ "data.frame" %in% class(.)))) {
+      db <- data %>% purrr::map(~ dplyr::select(., tidyselect::any_of(vars)))
       db_names <- names(db)
     }
 
@@ -301,25 +301,7 @@ compare_levels <-
 
 
 
-
-
-
-# #To find code of invisible functions in packages :
-# getAnywhere("probe")
-# getAnywhere("probe")[2]
-# # To use them :
-# #purrr:::probe
-
-
-# .x <- emploi_data_list %>% map(~ dplyr::select(., any_of(c("ANNEE", "STATUT", "TIT", "TITC"))) )
-# .l <- list(.x, fct_dplyr::case_when_vars, fct_dplyr::case_when_recode_named_vector_map)
-# .p <- emploi_if_82_18
-# .f <-  ~ dplyr::mutate(..1, CONTR = fct_cross(!!..2[[1]], fct_explicit_na(!!..2[[2]], "NA-NA")) %>%
-#                   fct_replace("^([^-]+)-([^:]+):([^-]+)-(.+)", "\\1:\\3-\\2/\\4") %>%
-#                   fct_dplyr::case_when_recode(..3) )  #~ tabw(., PE0, perc = "col")
-# .else = NULL
-
-# Adapt map_if function to pmap et map2 ----------------
+# Adapt purrr::map_if function to pmap et map2
 # (when FALSE the result is the first element of .l, or the content of .else)
 
 #' A generalised map_if
@@ -336,15 +318,7 @@ compare_levels <-
 # @examples
 pmap_if <- function(.l, .p, .f, ..., .else = NULL) {
   .x <- .l[[1]]
-  # .f <- as_mapper(.f, ...)
   sel <- probe(.x, .p)
-  #   if (rlang::is_logical(.p)) { # fonction probe
-  #   stopifnot(length(.p) == length(.x))
-  #   .p
-  # } else {
-  #   .p <- as_predicate(.p, ..., .mapper = TRUE)
-  #   map_lgl(.x, .p, ...)
-  # }
 
   out <- purrr::list_along(.x)
   out[sel] <- purrr::pmap(purrr::map(.l, ~ .[sel]), .f, ...) # .Call(pmap_impl, environment(), ".l", ".f", "list")
@@ -372,13 +346,6 @@ pmap_if <- function(.l, .p, .f, ..., .else = NULL) {
 # @examples
 map2_if <- function(.x, .y, .p, .f, ..., .else = NULL) {
   sel <- probe(.x, .p)
-  #   if (rlang::is_logical(.p)) { # fonction probe
-  #   stopifnot(length(.p) == length(.x))
-  #   .p
-  # } else {
-  #   .p <- as_predicate(.p, ..., .mapper = TRUE)
-  #   map_lgl(.x, .p, ...)
-  # }
 
   out <- purrr::list_along(.x)
   out[sel] <- purrr::map2(.x[sel], .y[sel], .f, ...)
@@ -397,7 +364,9 @@ map2_if <- function(.x, .y, .p, .f, ..., .else = NULL) {
 
 #purrr internal functions dependencies (CRAN does'nt accept :::)
 
-#Quote authors of purrr:::probe ---------------------------
+# purrr:::probe
+# GNU GPL-3 Licence https://purrr.tidyverse.org/LICENSE.html
+# Thanks to Hadley Wickham and Lionel Henry
 #' @keywords internal
 probe <- function (.x, .p, ...)
 {
@@ -411,7 +380,9 @@ probe <- function (.x, .p, ...)
   }
 }
 
-#Quote authors of purrr:::as_predicate --------------------------
+#purrr:::as_predicate
+# GNU GPL-3 Licence : https://purrr.tidyverse.org/LICENSE.html
+# Thanks to Hadley Wickham and Lionel Henry
 #' @keywords internal
 as_predicate  <- function (.fn, ..., .mapper)
 {
@@ -427,7 +398,9 @@ as_predicate  <- function (.fn, ..., .mapper)
   }
 }
 
-#Needed to use where() (it's internal) : quote authors of tidyselect:::where -------
+#tidyselect:::where
+# MIT + Lience : https://tidyselect.r-lib.org/LICENSE.html
+# Thanks to Hadley Wickham and Lionel Henry
 #' @keywords internal
 where <- function (fn)
 {
@@ -457,67 +430,51 @@ formats_SAS_to_R <- function(path, name_in, name_out) {
   format <- format[[1]]$Encoding[1]
   f <- f %>% stringr::str_conv(format)
 
-
-  # f <- stringr::str_replace_all(f, c("\\$pe "="$PE ", "\\$pe "="$PE ", "\\$csei "="$CSEI ", "\\$cse "="$CSE ", "\\$cser "="$CSER ", "\\$naf4l "="$NAF4 ", "\\$naf17l "="$NAF17 ",
-  #                           "\\$naf38l "="$NAF38 ", "\\$naf88l "="$NAF88 ")) #Specifiques CT2013 : quelques variables min en maj.
-  # Variables terminant par des chiffes en lettres --> en chiffre
-  # f <- stringr::str_replace_all(f, c("(\\$[^, ]+)deux[?= ,]"="\\12 ", "(\\$[^, ]+)trois[?= ,]"="\\13 ", "(\\$[^, ]+)quatre[?= ,]"="\\14 ","(\\$[^, ]+)cinq[?= ,]"="\\15 ",
-  #                           "(\\$[^, ]+)six[?= ,]"="\\16 ", "(\\$[^, ]+)sept[?= ,]"="\\17 ", "(\\$[^, ]+)huit[?= ,]"="\\18 ", "(\\$[^, ]+)neuf[?= ,]"="\\19 ",
-  #                           "(\\$[^, ]+)dix[?= ,]"="\\110 ", "(\\$[^, ]+)onze[?= ,]"="\\111 ", "(\\$[^, ]+)un[?= ,]"="\\11 "))
-  # f <- stringr::str_replace_all(f, c("(\\$[^, ]+)DEUX[?= ,]"="\\12 ", "(\\$[^, ]+)TROIS[?= ,]"="\\13 ", "(\\$[^, ]+)QUATRE[?= ,]"="\\14 ", "(\\$[^, ]+)CINQ[?= ,]"="\\15 ",
-  #                           "(\\$[^, ]+)SIX[?= ,]"="\\16 ", "(\\$[^, ]+)SEPT[?= ,]"="\\17 ", "(\\$[^, ]+)HUIT[?= ,]"="\\18 ", "(\\$[^, ]+)NEUF[?= ,]"="\\19 ",
-  #                           "(\\$[^, ]+)DIX[?= ,]"="\\110 ", "(\\$[^, ]+)ONZE[?= ,]"="\\111 ", "(\\$[^, ]+)UN[?= ,]"="\\11 "))
-
-  f <- f %>% stringr::str_replace_all(c("(\\$[[^0-9 ]]+\\d+)l"="\\1")) %>%  #Les formats qui finissent par un nombre peuvent se voire ajouter un l dans SAS.
-    stringr::str_replace_all("\\\"\\\"", "\\\"") %>%  #Enlever les doubles guillemets.
-    stringr::str_replace_all("'", "'") %>%  #Remplacer les apostrophes par d'autres.
+  f <- f %>% stringr::str_replace_all(c("(\\$[[^0-9 ]]+\\d+)l"="\\1")) %>%
+    stringr::str_replace_all("\\\"\\\"", "\\\"") %>%
+    stringr::str_replace_all("'", "'") %>%
     stringr::str_replace_all(stringr::coll("\u20AC"), "euros") %>%
-    stringr::str_remove_all(" +\n") %>%  #Enlever espace avant saut de ligne
-    stringr::str_replace_all("(?<=\\=) +\\\"", "\"") %>% #Enlever espace entre = et "
-    stringr::str_remove_all("(?<=\") +(?=\\=)") %>% #Enlever espace entre " et =
-    stringr::str_replace_all(" +(\\\"\\=)", "\\1") %>% #Enlever espace entre nombre et "=
-    stringr::str_replace_all("(?<=\") +([^ ]+\\\"\\=)", "\"\\1") %>% #Enlever espace entre " et nombre
-    stringr::str_replace_all("\n +\\\"", "\n\\\"") %>%  #Enlever espace en debut de ligne
-    stringr::str_remove_all("(?<= )\\\"|\\\"(?= )")  #Enlever les guillemets suivi/precedes d'un espace
+    stringr::str_remove_all(" +\n") %>%
+    stringr::str_replace_all("(?<=\\=) +\\\"", "\"") %>%
+    stringr::str_remove_all("(?<=\") +(?=\\=)") %>%
+    stringr::str_replace_all(" +(\\\"\\=)", "\\1") %>%
+    stringr::str_replace_all("(?<=\") +([^ ]+\\\"\\=)", "\"\\1") %>%
+    stringr::str_replace_all("\n +\\\"", "\n\\\"") %>%
+    stringr::str_remove_all("(?<= )\\\"|\\\"(?= )")
 
   f <- f %>%
     stringr::str_replace_all(c("VALUE"="value", "Value"="value")) %>%
-    stringr::str_replace_all("(\"[^;]+);[?= ]", "\\1,") %>% #Enlever les ; suivi par un espace (milieu de " par ex)
-    stringr::str_replace_all("(\"[^;]+);[?=\\w]", "\\1,") %>% #Enlever les ; suivi par une lettre (idem)
-    stringr::str_replace_all(",alue ", "; value ") %>%  #Corriger le probleme cree par la ligne precedente.
-    stringr::str_replace_all("(/)(\\*).+(\\*)(/)", "") %>%  #Enlever les commentaires
-    stringr::str_replace_all(c("\n"=" ", "\t"="")) %>%  #Enlever les sauts de ligne et les tabulations
-    #stringr::str_replace_all("Other[^;]+;", ";") %>%  #Enlever les Other=
-    #stringr::str_replace_all("other[^;]+;", ";") %>%  #Enlever les other=
-    stringr::str_replace_all("\\$ ", "$") %>% #Enlever l'espace apres $ s'il y en a un
-    stringr::str_replace_all(c("^ $"="", "^$"="", "\n \n"="", "\n  \n"="", "\n\n"="")) %>% #Enlever les lignes vides.
-    stringr::str_extract_all("(value [^;]+;)", "\\1")  #Garder les chaines entre Value et ; -> vecteur
-  #t(f) #Transposer lignes et colonnes
+    stringr::str_replace_all("(\"[^;]+);[?= ]", "\\1,") %>%
+    stringr::str_replace_all("(\"[^;]+);[?=\\w]", "\\1,") %>%
+    stringr::str_replace_all(",alue ", "; value ") %>%
+    stringr::str_replace_all("(/)(\\*).+(\\*)(/)", "") %>%
+    stringr::str_replace_all(c("\n"=" ", "\t"="")) %>%
+    stringr::str_replace_all("\\$ ", "$") %>%
+    stringr::str_replace_all(c("^ $"="", "^$"="", "\n \n"="", "\n  \n"="", "\n\n"="")) %>%
+    stringr::str_extract_all("(value [^;]+;)", "\\1")
 
   f <- f %>%
-    #CT2013: stringr::str_replace_all("(\\\"[^=]+)=(\\\"[^\"]+\")", "\\1-\\2=\\1") %>% #Inverser ancienne modalite/nouvelle mod (SAS/R)
-    stringr::str_replace_all("\\\"(.+)\\\"=\\\"(.+)\\\"", "\\\"\\1-\\2\\\"=\\\"\\1\\\"") %>%  #Inverser ancienne modalite/nouvelle mod (SAS/R). Les ? ? corrigent une erreur.
-    #CT2013: stringr::str_replace_all(f, "(\\\"[^=]+=\\\"[^\"]+\")", "\\1,\n") %>% #Virgule et saut de ligne entre chaque modalite
-    stringr::str_replace_all("(\\\"[^=]+=\\\"[^\"]+\")", "\\1,") %>% #La meme sans le saut de ligne
-    stringr::str_replace_all("(\\$.+)f", "\\1")  #INSEE recent : enlever le f a la fin des noms de variables
+    #CT2013: stringr::str_replace_all("(\\\"[^=]+)=(\\\"[^\"]+\")", "\\1-\\2=\\1") %>%
+    stringr::str_replace_all("\\\"(.+)\\\"=\\\"(.+)\\\"", "\\\"\\1-\\2\\\"=\\\"\\1\\\"") %>%
+    #CT2013: stringr::str_replace_all(f, "(\\\"[^=]+=\\\"[^\"]+\")", "\\1,\n") %>%
+    stringr::str_replace_all("(\\\"[^=]+=\\\"[^\"]+\")", "\\1,") %>%
+    stringr::str_replace_all("(\\$.+)f", "\\1")
 
   f <- f %>%
-    stringr::str_replace_all(";", ") }") %>% #Remplacer point-virgule par parenthese
-    stringr::str_replace_all(",\n\\)", ")") %>% #Pas de virgule avant parenthese
-    stringr::str_replace_all(",\n.+\\)", ")\n") %>% #Idem. Rajouter un saut de ligne
-    #CT2013 stringr::str_replace_all(f, "value [^$]*([^ ]+)", paste0(,n,"\\1"," <- forcats::fct_recode(",n,"NF","\\1",",\n") ) %>%  #Celle de dessous est plus precise.
+    stringr::str_replace_all(";", ") }") %>%
+    stringr::str_replace_all(",\n\\)", ")") %>%
+    stringr::str_replace_all(",\n.+\\)", ")\n") %>%
     stringr::str_replace_all("value ([[a-zA-Z0-9_\\$]]+)",
                              stringr::str_c("\n",
-                                            "if(\"\\1\" %in% names(", name_out,  # le if
+                                            "if(\"\\1\" %in% names(", name_out,
                                             ") & !is.numeric(", name_out,"\\1", ") ) {\n",
-                                            name_out,"\\1"," <- forcats::fct_recode(", # normal
+                                            name_out,"\\1"," <- forcats::fct_recode(",
                                             name_in,"\\1",",\n")
     ) %>%
     stringr::str_replace_all("if\\(\"\\$", "if(\"")
 
   f <- f %>%
     stringr::str_replace_all(",[^<]*<-", " <-") %>%
-    # stringr::str_replace_all("euros", "???") %>%
     stringr::str_replace_all("'", "'") #%>%
   #stringr::str_conv("UTF-8")
 
@@ -528,17 +485,15 @@ formats_SAS_to_R <- function(path, name_in, name_out) {
     path_out <- stringr::str_c("formats_R-", name_out, ".R")
   }
 
-  #Pour regler les problemes d'encodage d'abord on ouvre une connection vers un fichier, ensuite on sink
-  # con <- file("Sink.R", open = "wt", encoding = "latin1")
+
   file.create(path_out)
-  con <- file(path_out, open = "wt", encoding = "UTF-8")# "latin1"  #paste0("formats_R-",name_out)
-  sink(con) #Fonction pour envoyer le contenu ecrit dans la console dans un fichier.
-  #CT2013 cat(f, sep = "\n\n")  #Afficher avec les sauts de lignes entre les variables.
-  cat(f) #Afficher sans sauts de ligne si le tri est fait par modalites.
-  sink() #Revenir en mode console.
+  con <- file(path_out, open = "wt", encoding = "UTF-8")
+  sink(con)
+  cat(f)
+  sink()
   close(con)
-  # file.show("Sink.R") # Ouvrir le resultat.
-  #file.show(path_out) # Ouvrir le resultat.
+  # file.show(path_out) # Ouvrir le resultat.
+
   return(path_out)
 }
 

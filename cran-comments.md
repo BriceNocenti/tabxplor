@@ -1,5 +1,5 @@
 
-First submission of the tabxplor package to CRAN
+First submission of the tabxplor package to CRAN.
 
 ## Test environments
 * local Windows 10 install, R 4.1.1
@@ -10,4 +10,4 @@ First submission of the tabxplor package to CRAN
 There were no ERRORs, WARNINGs or NOTEs. 
 
 ## Downstream dependencies
-There are currently no downstream dependencies for this package
+There are currently no downstream dependencies for this package.

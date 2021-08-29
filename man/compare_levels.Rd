@@ -4,10 +4,10 @@
 \alias{compare_levels}
 \title{Compare levels of factors in many df}
 \usage{
-compare_levels(databases, vars = c("var1", "var2"))
+compare_levels(data, vars = c("var1", "var2"))
 }
 \arguments{
-\item{databases}{Data to use.}
+\item{data}{Data to use.}
 
 \item{vars}{Variables to compare levels.}
 }
