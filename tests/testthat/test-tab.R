@@ -1,6 +1,6 @@
 
 data <- dplyr::starwars |>
-  tab_prepare(sex, c("hair_color", "eye_color", "mass"), gender,
+  tab_prepare("sex", c("hair_color", "eye_color", "mass"), "gender",
               rare_to_other = TRUE, n_min = 5, na = "drop")
 
 # starwars %>% dplyr::select(where(is.character)) %>% purrr::map(~ as.factor(.) %>%
@@ -10,25 +10,25 @@ data <- dplyr::starwars |>
 # forcats::gss_cat
 
 testthat::test_that("tab works with missing, NULL, NA, etc., in variables", {
-  tab(data, gender, sex, NA_character_) |> testthat::expect_s3_class("tab")
-  tab(data, gender, NA_character_)      |> testthat::expect_s3_class("tab")
-  tab(data, NA_character_, sex)         |> testthat::expect_s3_class("tab")
-  tab(data, gender, sex, NULL)          |> testthat::expect_s3_class("tab")
-  #tab(data, gender, sex, "")           |> testthat::expect_s3_class("tab")
-  #tab(data, gender, sex, "no")         |> testthat::expect_s3_class("tab")
+  tab(data, "gender", "sex", NA_character_) |> testthat::expect_s3_class("tab")
+  tab(data, "gender", NA_character_)        |> testthat::expect_s3_class("tab")
+  tab(data, NA_character_, "sex")           |> testthat::expect_s3_class("tab")
+  tab(data, "gender", "sex", NULL)          |> testthat::expect_s3_class("tab")
+  #tab(data, "gender", "sex", "")           |> testthat::expect_s3_class("tab")
+  #tab(data, "gender", "sex", "no")         |> testthat::expect_s3_class("tab")
 
-  tab_many(data, gender)
+  tab_many(data, "gender")
   tab_many(data, "gender")
   tab_many(data, col_vars = "sex")
-  tab_many(data, gender, col_vars = NULL         , tab_vars = NULL)          |>
+  tab_many(data, "gender", col_vars = NULL         , tab_vars = NULL)          |>
     testthat::expect_s3_class("tab")
-  tab_many(data, gender, col_vars = NA_character_, tab_vars = NA_character_) |>
+  tab_many(data, "gender", col_vars = NA_character_, tab_vars = NA_character_) |>
     testthat::expect_s3_class("tab")
-  tab_many(data, gender, col_vars = ""           , tab_vars = "")            |>
+  tab_many(data, "gender", col_vars = ""           , tab_vars = "")            |>
     testthat::expect_s3_class("tab")
-  tab_many(data, gender, col_vars = "no"         , tab_vars = "no")          |>
+  tab_many(data, "gender", col_vars = "no"         , tab_vars = "no")          |>
     testthat::expect_s3_class("tab")
-  tab_many(data, gender, col_vars = hair_color   , tab_vars = sex)           |>
+  tab_many(data, gender, col_vars = hair_color , tab_vars = sex)           |>
     testthat::expect_s3_class("tab")
 })
 
@@ -120,7 +120,7 @@ testthat::test_that("tab work with tribble", {
 })
 
 
-tabs <- tab_many(data, sex, c(hair_color, eye_color, mass), gender,
+tabs <- tab_many(data, "sex", c("hair_color", "eye_color", "mass"), "gender",
                  totaltab = "no", totrow = FALSE, totcol = "no")
 
 testthat::test_that("tab_totaltab works with all arguments (and with tab_tot)", {

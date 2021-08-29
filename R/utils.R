@@ -31,8 +31,8 @@ cleannames_condition <- function()
 #' @param pattern A pattern.
 #'
 #' @return A factor.
-#' @export
-#'
+#' @keywords internal
+# @export
 # @examples
 fct_clean <- function(factor, pattern = cleannames_condition()) {
   forcats::fct_relabel(factor, ~ stringr::str_remove_all(.x, pattern))
@@ -56,12 +56,13 @@ fct_clean <- function(factor, pattern = cleannames_condition()) {
 #' @param patternlist A character vector of levels.
 #'
 #' @return A factor.
-#' @export
-#'
-#' @examples
-#' forcats::gss_cat %>%
-#' dplyr::pull(race) %>%
-#'   fct_to_na("Other")
+#' @keywords internal
+# @export
+#
+# @examples
+# forcats::gss_cat %>%
+# dplyr::pull(race) %>%
+#   fct_to_na("Other")
 fct_to_na <- function(factor, patternlist){
   if (!is.factor(factor)) { factor <- factor %>% as.factor() }
   patternlist <- patternlist %>% magrittr::set_names(rep("NULL", length(.)))
@@ -76,7 +77,8 @@ fct_to_na <- function(factor, patternlist){
 #' @param replacement A character of length 1.
 #'
 #' @return A factor
-#' @export
+#' @keywords internal
+# @export
 #'
 # @examples
 fct_replace <- function(factor, pattern, replacement){
@@ -96,7 +98,8 @@ fct_replace <- function(factor, pattern, replacement){
 #' regular expressions to find in values, replacements in names.
 #'
 #' @return A factor.
-#' @export
+#' @keywords internal
+# @export
 #'
 # @examples
 fct_rename <- function (factor, pattern_replacement_named_vector){
@@ -119,7 +122,8 @@ fct_rename <- function (factor, pattern_replacement_named_vector){
 #' @param negate A factor.
 #'
 #' @return A factor.
-#' @export
+#' @keywords internal
+# @export
 #'
 # @examples
 fct_detect_replace <- function(factor, pattern, replacement, negate = FALSE){
@@ -172,7 +176,8 @@ fct_detect_rename <- function (factor, pattern_replacement_named_vector){
 #' with no pattern.
 #'
 #' @return A factor.
-#' @export
+#' @keywords internal
+# @export
 #'
 # @examples
 fct_case_when_recode <- function (factor, pattern_replacement_named_vector,
@@ -200,7 +205,8 @@ fct_case_when_recode <- function (factor, pattern_replacement_named_vector,
 #' @param var The variable : must exist on both df.
 #'
 #' @return A factor.
-#' @export
+#' @keywords internal
+# @export
 #'
 # @examples
 fct_levels_from_vector <- function (data_to, data_from, var) {
@@ -232,7 +238,8 @@ fct_levels_from_vector <- function (data_to, data_from, var) {
 #' @param vars Variables to compare levels.
 #'
 #' @return A list with results.
-#' @export
+#' @keywords internal
+# @export
 #'
 # @examples
 compare_levels <-
@@ -464,7 +471,7 @@ formats_SAS_to_R <- function(path, name_in, name_out) {
   f <- f %>% stringr::str_replace_all(c("(\\$[[^0-9 ]]+\\d+)l"="\\1")) %>%  #Les formats qui finissent par un nombre peuvent se voire ajouter un l dans SAS.
     stringr::str_replace_all("\\\"\\\"", "\\\"") %>%  #Enlever les doubles guillemets.
     stringr::str_replace_all("'", "'") %>%  #Remplacer les apostrophes par d'autres.
-    stringr::str_replace_all(coll("\u20AC"), "euros") %>%
+    stringr::str_replace_all(stringr::coll("\u20AC"), "euros") %>%
     stringr::str_remove_all(" +\n") %>%  #Enlever espace avant saut de ligne
     stringr::str_replace_all("(?<=\\=) +\\\"", "\"") %>% #Enlever espace entre = et "
     stringr::str_remove_all("(?<=\") +(?=\\=)") %>% #Enlever espace entre " et =
@@ -550,7 +557,8 @@ formats_SAS_to_R <- function(path, name_in, name_out) {
 #' @keywords internal
 #'
 # @examples
-prepare_fct_recode <- function(df_in, df_out, var,  mode = c("text", "numbers", "numbers_vector"),
+prepare_fct_recode <- function(df_in, df_out, var,  mode = c("text", "numbers",
+                                                             "numbers_vector"),
                                numbers, text){
   text <- text
   lines <- stringr::str_c(text, "\n") %>%
@@ -561,13 +569,16 @@ prepare_fct_recode <- function(df_in, df_out, var,  mode = c("text", "numbers", 
     stringr::str_replace_all(" +$", "")
 
   if (mode == "normal") {
-    lines <- tibble::enframe(lines, name = "number", value = "name") %>% dplyr::mutate(number = as.character(number))
+    lines <- tibble::enframe(lines, name = "number", value = "name") %>%
+      dplyr::mutate(number = as.character(.data$number))
 
   } else if (mode == "numbers") {
     number <- lines %>% stringr::str_match("^\\d*\\w*") %>% tibble::as_tibble()
     name <- lines %>% stringr::str_split("^\\d*[^\\s]*", n = 2, simplify = TRUE) %>%
-      tibble::as_tibble() %>% dplyr::select(V2) %>% dplyr::mutate(V2 = stringr::str_replace_all(V2, "^ *", ""))
-    lines <- dplyr::bind_cols(number, name) %>% dplyr::rename(number = V1, name = V2)
+      tibble::as_tibble() %>% dplyr::select(.data$V2) %>%
+      dplyr::mutate(V2 = stringr::str_replace_all(.data$V2, "^ *", ""))
+    lines <- dplyr::bind_cols(number, name) %>%
+      dplyr::rename(number = .data$V1, name = .data$V2)
 
   } else if (mode == "numbers_vector") {
     numb <- numbers
@@ -577,24 +588,31 @@ prepare_fct_recode <- function(df_in, df_out, var,  mode = c("text", "numbers", 
       stringr::str_replace_all("\\t+", " ") %>%
       stringr::str_replace_all("^ +", "") %>%
       stringr::str_replace_all(" +$", "")
-    numb <- tibble::enframe(numb, name = "shit", value = "number") %>% dplyr::select(number)
+    numb <- tibble::enframe(numb, name = "shit", value = "number") %>%
+      dplyr::select(number)
 
-    lines <- tibble::enframe(lines, name = "number", value = "name") %>% dplyr::select(name)
+    lines <- tibble::enframe(lines, name = "number", value = "name") %>%
+      dplyr::select(name)
 
     lines <- dplyr::bind_cols(numb, lines)
   }
 
-  lines <- lines %>% dplyr::filter(!stringr::str_detect(name,"^\\s*$")) %>%
-    dplyr::mutate(first_letter = stringr::str_to_upper(stringr::str_sub(name, 1, 1)),
-                  other_letters = stringr::str_sub(name, 2, -1) ) %>%
-    dplyr::mutate(name = stringr::str_c(first_letter, other_letters)) %>%
-    dplyr::select(-first_letter, -other_letters) %>%
-    dplyr::mutate(mod_line = stringr::str_c("\"", number,"-", name,"\" = \"", number,  "\",\n"))
+  lines <- lines %>% dplyr::filter(!stringr::str_detect(.data$name,"^\\s*$")) %>%
+    dplyr::mutate(first_letter = stringr::str_to_upper(stringr::str_sub(.data$name,
+                                                                        1, 1)),
+                  other_letters = stringr::str_sub(.data$name, 2, -1) ) %>%
+    dplyr::mutate(name = stringr::str_c(.data$first_letter, .data$other_letters)) %>%
+    dplyr::select(-.data$first_letter, -.data$other_letters) %>%
+    dplyr::mutate(mod_line = stringr::str_c("\"", .data$number,"-", .data$name,"\" = \"",
+                                            .data$number,  "\",\n"))
   first_line <-
-    tibble::tibble(number = "0", mod_line = stringr::str_c(df_out, "$", var, " <- forcats::fct_recode(", df_in, "$", var, ",\n") )
+    tibble::tibble(number = "0",
+                   mod_line = stringr::str_c(df_out, "$", var,
+                                             " <- forcats::fct_recode(", df_in, "$",
+                                             var, ",\n") )
   last_line <- tibble::tibble(number = "0", mod_line = ")")
   res <- dplyr::bind_rows(first_line, lines, last_line) %>%
-    dplyr::select(mod_line) %>% dplyr::pull()
+    dplyr::select(.data$mod_line) %>% dplyr::pull()
   cat(res, "\n\n")
   return(invisible(res))
 }
@@ -613,29 +631,29 @@ prepare_fct_recode <- function(df_in, df_out, var,  mode = c("text", "numbers", 
 
 #' Bind dataframes for tab / tab_many
 #'
-#' @param databases Dataframes to be binded by rows.
+#' @param data Dataframes to be binded by rows.
 #' @param vars Selected variables.
 #'
 #' @return A tibble.
-#' @export
-#'
+# @export
+#' @keywords internal
 # @examples
-bind_datas_for_tab <- function(databases, vars) {
-  if ("character" %in% class(databases)) {
-    databases <- databases
+bind_datas_for_tab <- function(data, vars) {
+  if ("character" %in% class(data)) {
+    data <- data
     vars <- as.character(vars)
-    databases <- databases %>% purrr::map(~ eval(str2expression(.))) %>%
+    data <- data %>% purrr::map(~ eval(str2expression(.))) %>%
       purrr::map(~ dplyr::select(., tidyselect::all_of(vars)))
-  } else if (all(purrr::map_lgl(databases, ~ "data.frame" %in% class(.)))) {
-    databases <- databases %>% purrr::map(~ dplyr::select(., tidyselect::all_of(vars)))
+  } else if (all(purrr::map_lgl(data, ~ "data.frame" %in% class(.)))) {
+    data <- data %>% purrr::map(~ dplyr::select(., tidyselect::all_of(vars)))
   } else {stop("entry is not character vector or list of data.frames")}
   vars_factors <- #TRUE = Variable is a factor in at least one database.
     vars[purrr::map_lgl(vars, function (.vars)
-      any(purrr::map_lgl(databases, ~ "factor" %in% class(dplyr::pull(., .vars)))))]
-  databases <- databases %>% purrr::map(~ dplyr::mutate_at(., vars_factors, ~ as.factor(.)))
+      any(purrr::map_lgl(data, ~ "factor" %in% class(dplyr::pull(., .vars)))))]
+  data <- data %>% purrr::map(~ dplyr::mutate_at(., vars_factors, ~ as.factor(.)))
   levels_of_all_factors <- purrr::map(vars_factors, function(.vars)
-    purrr::map(databases, ~ dplyr::pull(., .vars) ) %>% forcats::lvls_union()   )
-  databases <- databases %>% purrr::map(function(.db)
+    purrr::map(data, ~ dplyr::pull(., .vars) ) %>% forcats::lvls_union()   )
+  data <- data %>% purrr::map(function(.db)
     purrr::reduce2(vars_factors, levels_of_all_factors,
                    .init = .db,
                    .f = function(.result, .vars, .levels)
@@ -643,7 +661,7 @@ bind_datas_for_tab <- function(databases, vars) {
     ) ) %>%
     dplyr::bind_rows() %>%
     dplyr::mutate_if(is.factor, ~ forcats::fct_relevel(., sort) )
-  return(databases)
+  return(data)
 }
 
 

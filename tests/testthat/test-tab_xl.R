@@ -1,5 +1,3 @@
-
-
 testthat::test_that("tab_xl creates an Excel file", {
   tabs <-
     purrr::pmap(

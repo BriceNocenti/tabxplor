@@ -19,7 +19,7 @@ knitr::opts_chunk$set(
 
 <!-- badges: end -->
 
-If R makes complex things simple, it can sometimes make simple things difficult. This is why `tabxplor` tries to make it easy to deal with multiple crosstabs: to create and manipulate them, but also to read them, using color helpers to highlight the important information. It will to enhance your data exploration experience with simple yet powerful tools. All functions are tidyverse-propelled, pipe-friendly, and render tibbles, which can be easily modified using `dplyr`. Tables can be exported to Excel with formats and colors.
+If R makes complex things simple, it can sometimes make simple things difficult. This is why `tabxplor` tries to make it easy to deal with multiple crosstabs: to create and manipulate them, but also to read them, using color helpers to highlight important information. It would love to enhance your data exploration experience with simple yet powerful tools. All functions are tidyverse-propelled, pipe-friendly, and render tibbles, which can be easily modified using `dplyr`. Tables can be exported to Excel with formats and colors.
 
 ## Installation
 
@@ -31,18 +31,15 @@ devtools::install_github("BriceNocenti/tabxplor")
 ```
 
 ## Base usage: crosstables with color helpers
-
+``` r 
+library(tabxplor)
+```
 The main functions are made to be user-friendly and time-saving is data analysis workflows.
 
 `tab` makes a simple crosstable:
 
-``` r 
-library(tabxplor)
-```
-``` {r, include = FALSE}
-library(tabxplor)
-```
 ```{r, echo = TRUE}
+library(tabxplor)
 tab(forcats::gss_cat, marital, race)
 ```
 
@@ -71,7 +68,7 @@ tab(data, race, marital, year, subtext = gss2, pct = "row", color = "diff")
 The `sup_cols` argument adds supplementary column variables to the table. With numeric variables, it calculates the mean for each category or the row variable. With text variables, only the first level is kept (you can choose which one to use by placing it first with `forcats::fct_relevel`). Use `tab_many` to keep all levels.
 
 ```{r, echo = TRUE}
-tab(storms, category, status, sup_cols = c("pressure", "wind"))
+tab(dplyr::storms, category, status, sup_cols = c("pressure", "wind"))
 ```
 
 ## References and comparison levels for colors
@@ -139,7 +136,7 @@ The result of `tab` is a `tibble::tibble` dataframe with class `tab`. It gets it
 library(dplyr)
 tab(storms, category, status, sup_cols = c("pressure", "wind")) %>%
   filter(category != "-1") %>%
-  select(-`No answer`) %>%
+dplyr::select(-`tropical depression`)
   arrange(is_totrow(.), desc(category)) # use is_totrow to keep total rows
 ```
 

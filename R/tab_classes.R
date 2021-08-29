@@ -1,23 +1,33 @@
 # Special tibble class needed for printing, even if the most meaningful attributes
 #  where passed to fmt class variables (only chi2 and subtext remains at tab level) :
-#  my implementation relies on "grouped_df" class structure, and to manage it, it is
+#  the implementation relies on "grouped_df" class structure, and to manage it, it is
 #  necessary to add one method for class "grouped_tab" for each dplyr function...
 #  (Thank to Giulia Pais, Davis Vaughan and Hadley Wickham,
 #   https://github.com/tidyverse/dplyr/issues/5480).
 
 # grouped_tab class still don't handle [] ----
 
-#Import dplyr in NAMESPACE :
-# dplyr is imported as a "Depends" package, otherwise dplyr::filter, needed for methods,
-# cannot be found by roxygen2 because it replaces base::filter.
+# Problem with methods for dplyr::filter, because it replaces base::filter,
+# which cannot be detached in namespace
 
-#' Internal dplyr methods
-#' @rawNamespace import(dplyr, except = data_frame)
-#  otherwise, conflict with vctrs. Thanks to Thomas :
-#  https://stackoverflow.com/questions/51899220/import-all-the-functions-of-a-package-except-one-when-building-a-package
-#' @keywords internal
-#' @name tabxplor-dplyr
-NULL
+# #Import dplyr in NAMESPACE :
+# # dplyr is imported as a "Depends" package, otherwise dplyr::filter, needed for methods,
+# # cannot be found by roxygen2 because it replaces base::filter.
+#
+# #' Internal dplyr methods
+# #' @rawNamespace import(dplyr, except = data_frame)
+# #  otherwise, conflict with vctrs. Thanks to Thomas :
+# #  https://stackoverflow.com/questions/51899220/import-all-the-functions-of-a-package-except-one-when-building-a-package
+# #' @keywords internal
+# #' @name tabxplor-dplyr
+# NULL
+
+# #' To allow dplyr::filter to be used for methods
+# #' @rawNamespace import(base, except = filter)
+# #' @keywords internal
+# #' @name no_base_filter
+# NULL
+
 
 # Create class tab -----------------------------------------------------------------------
 # sloop::s3_methods_class("tbl")
@@ -164,7 +174,7 @@ print.tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = NULL,
   # writeLines(format(x, width = width, ..., n = n, max_extra_cols = max_extra_cols,
   #                   max_footer_lines = max_footer_lines))
   invisible(x)
-  }
+}
 
 #' @export
 #' @method print grouped_tab
@@ -198,15 +208,17 @@ print.grouped_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = NU
   # writeLines(format(x, width = width, ..., n = n, max_extra_cols = max_extra_cols,
   #                   max_footer_lines = max_footer_lines))
   invisible(x)
-  }
+}
 
 #' @keywords internal
 print_chi2 <- function(x, width = NULL) {
   chi2 <- get_chi2(x)
+  if (is.null(chi2)) return(NULL)
   if (nrow(chi2) == 0) return(NULL)
+  # if (is.na(chi2)) return(NULL)
 
-  chi2 <- chi2 %>% dplyr::select(-row_var) %>%
-    dplyr::filter(!`chi2 stats` %in% c("cells"))
+  chi2 <- chi2 %>% dplyr::select(-.data$row_var) %>%
+    dplyr::filter(!.data$`chi2 stats` %in% c("cells"))
 
   fmt_cols <- purrr::map_lgl(chi2, is_fmt) %>% purrr::keep(. == TRUE) %>%
     names() #%>% rlang::syms()
@@ -257,6 +269,7 @@ print_chi2 <- function(x, width = NULL) {
 
 
 # Change headers
+#' @importFrom dplyr tbl_sum
 #' @export
 #' @method tbl_sum tab
 tbl_sum.tab <- function(x, ...) {
@@ -302,7 +315,7 @@ tbl_format_body.tab <- function(x, setup, ...) {
   ind   <- dplyr::group_indices(setup$x)[1:length(body_data)]
   ind   <- ind != dplyr::lag(ind, default = 1L)
   body_data <- body_data %>%
-    purrr::map2(ind, ~ if (.y) {c("", .x)} else {.x}) %>%
+    purrr::map2(ind, function(.x, .y) if (.y) {c("", .x)} else {.x}) %>%
     purrr::flatten_chr()
 
   c(default_body[1:2], body_data) %>% `class<-`("pillar_vertical")
@@ -313,20 +326,34 @@ tbl_format_body.tab <- function(x, setup, ...) {
 
 #Methods for class tab -------------------------------------------------------------------
 
-
-# @importFrom dplyr group_by # not needed since tabxplor import dplyr as a "Depends" package
+# importFrom not needed when tabxplor import dplyr as a "Depends" package
+#' @importFrom dplyr group_by
 #' @method group_by tab
 #' @export
 group_by.tab <- function(.data,
                          ...,
                          .add = FALSE,
-                         .drop = group_by_drop_default(.data)) {
+                         .drop = dplyr::group_by_drop_default(.data)) {
   out <- NextMethod()
   groups <- dplyr::group_data(out)
   new_grouped_tab(out, groups,
                   subtext = get_subtext(.data), chi2 = get_chi2(.data))
 }
-# If n_groups == 1, then go back to new_tab ? ----
+
+
+#' @importFrom dplyr rowwise
+#' @method rowwise tab
+#' @export
+rowwise.tab <- function(.data, ...) {
+  out <- NextMethod()
+  groups <- dplyr::group_data(out)
+  out <- new_grouped_tab(out, groups,
+                         subtext = get_subtext(.data), chi2 = get_chi2(.data))
+
+  `class<-`(out, stringr::str_replace(class(out), "grouped_df", "rowwise_df"))
+}
+
+
 
 
 # (from vctrs documentation)
@@ -348,11 +375,11 @@ group_by.tab <- function(.data,
 #' @keywords internal
 # @export
 tab_cast <- function(x, to, ..., x_arg = "", to_arg = "") {
-  out <- tib_cast(x, to, ..., x_arg = x_arg, to_arg = to_arg)
+  out <- vctrs::tib_cast(x, to, ..., x_arg = x_arg, to_arg = to_arg)
 
-  subtext     <- vec_c(get_subtext(x), get_subtext(to)) %>% unique()
+  subtext     <- vctrs::vec_c(get_subtext(x), get_subtext(to)) %>% unique()
   if (length(subtext) > 1) subtext <- subtext[subtext != ""]
-  chi2        <- vec_rbind(get_chi2(x), get_chi2(to))
+  chi2        <- vctrs::vec_rbind(get_chi2(x), get_chi2(to))
 
   new_tab(out, subtext = subtext, chi2 = chi2)
 }
@@ -363,11 +390,11 @@ tab_cast <- function(x, to, ..., x_arg = "", to_arg = "") {
 #' @keywords internal
 # @export
 tab_ptype2 <- function(x, y, ..., x_arg = "", y_arg = "") {
-  out <- tib_ptype2(x, y, ..., x_arg = x_arg, y_arg = y_arg)
+  out <- vctrs::tib_ptype2(x, y, ..., x_arg = x_arg, y_arg = y_arg)
   #colour <- df_colour(x) %||% df_colour(y)
 
-  chi2        <- vec_rbind(get_chi2(x), get_chi2(y))
-  subtext     <- vec_c(get_subtext(x), get_subtext(y)) %>% unique()
+  chi2        <- vctrs::vec_rbind(get_chi2(x), get_chi2(y))
+  subtext     <- vctrs::vec_c(get_subtext(x), get_subtext(y)) %>% unique()
   if (length(subtext) > 1) subtext <- subtext[subtext != ""]
 
   new_tab(out, subtext = subtext, chi2 = chi2)
@@ -400,7 +427,7 @@ vec_cast.tab.tbl_df <- function(x, to, ...) {
 }
 #' @export
 vec_cast.tbl_df.tab <- function(x, to, ...) {
-  tib_cast(x, to, ...)
+  vctrs::tib_cast(x, to, ...)
 }
 
 #' @export
@@ -417,14 +444,23 @@ vec_cast.tab.data.frame <- function(x, to, ...) {
 }
 #' @export
 vec_cast.data.frame.tab <- function(x, to, ...) {
-  df_cast(x, to, ...)
+  vctrs::df_cast(x, to, ...)
 }
 
 
 
 
 #Methods for class grouped_tab------------------------------------------------------------
-# @importFrom dplyr ungroup
+
+# just modify the methodes currently used by dplyr class "grouped_df" (not relative to groups)
+# .S3methods(class = "grouped_df")
+
+# dplyr_col_modify      dplyr_reconstruct     dplyr_row_slice
+# ungroup               distinct_        rename_     select_     summarise
+# [                     [<-          [[<-
+# cbind                 rbind  rowwise
+
+#' @importFrom dplyr ungroup
 #' @method ungroup grouped_tab
 #' @export
 ungroup.grouped_tab <- function (x, ...)
@@ -436,7 +472,7 @@ ungroup.grouped_tab <- function (x, ...)
     old_groups <- dplyr::group_vars(x)
     to_remove  <- tidyselect::vars_select(names(x), ...)
     new_groups <- setdiff(old_groups, to_remove)
-    dplyr::group_by(x, !!!syms(new_groups))
+    dplyr::group_by(x, !!!rlang::syms(new_groups))
   }
 }
 
@@ -450,37 +486,127 @@ lv1_group_vars <- function(tabs) {
   #   length(groupvars) == 0
 }
 
-# @importFrom dplyr mutate
-#' @method mutate grouped_tab
+
+#' @importFrom dplyr dplyr_row_slice
+#' @method dplyr_row_slice grouped_tab
 #' @export
-mutate.grouped_tab <- function(.data, ...) {
+dplyr_row_slice.grouped_tab <- function(data, i, ...) {
+  out <- NextMethod()
+  if (lv1_group_vars(out)) {
+    new_tab(out, subtext = get_subtext(data), chi2 = get_chi2(data))
+  } else {
+    groups <- dplyr::group_data(out)
+    new_grouped_tab(out, groups, subtext = get_subtext(data), chi2 = get_chi2(data))
+  }
+}
+# dplyr:::dplyr_row_slice.grouped_df
+
+#' @importFrom dplyr dplyr_col_modify
+#' @method dplyr_col_modify grouped_tab
+#' @export
+dplyr_col_modify.grouped_tab <- function(data, cols) {
+  out <- NextMethod()
+  if (lv1_group_vars(out)) {
+    new_tab(out, subtext = get_subtext(data), chi2 = get_chi2(data))
+  } else {
+    groups <- dplyr::group_data(out)
+    new_grouped_tab(out, groups, subtext = get_subtext(data), chi2 = get_chi2(data))
+  }
+}
+# dplyr:::dplyr_col_modify.grouped_df
+
+#' @importFrom dplyr dplyr_reconstruct
+#' @method dplyr_reconstruct grouped_tab
+#' @export
+dplyr_reconstruct.grouped_tab <- function(data, template) {
+  out <- NextMethod()
+  if (lv1_group_vars(out)) {
+    new_tab(out, subtext = get_subtext(data), chi2 = get_chi2(data))
+  } else {
+    groups <- dplyr::group_data(out)
+    new_grouped_tab(out, groups, subtext = get_subtext(data), chi2 = get_chi2(data))
+  }
+}
+# dplyr:::dplyr_reconstruct.grouped_df
+
+#' @method `[` grouped_tab
+#' @export
+`[.grouped_tab` <- function(x, i, j, drop = FALSE) {
+  out <- NextMethod()
+  if (lv1_group_vars(out)) {
+    new_tab(out, subtext = get_subtext(x), chi2 = get_chi2(x))
+  } else {
+    groups <- dplyr::group_data(out)
+    new_grouped_tab(out, groups, subtext = get_subtext(x), chi2 = get_chi2(x))
+  }
+}
+# dplyr:::`[.grouped_df`
+
+#' @method `[<-` grouped_tab
+#' @export
+`[<-.grouped_tab` <- function(x, i, j, ..., value) {
+  out <- NextMethod()
+  if (lv1_group_vars(out)) {
+    new_tab(out, subtext = get_subtext(x), chi2 = get_chi2(x))
+  } else {
+    groups <- dplyr::group_data(out)
+    new_grouped_tab(out, groups, subtext = get_subtext(x), chi2 = get_chi2(x))
+  }
+}
+# dplyr:::`[<-.grouped_df`
+
+#' @method `[[<-` grouped_tab
+#' @export
+`[[<-.grouped_tab` <- function(x, ..., value) {
+  out <- NextMethod()
+  if (lv1_group_vars(out)) {
+    new_tab(out, subtext = get_subtext(x), chi2 = get_chi2(x))
+  } else {
+    groups <- dplyr::group_data(out)
+    new_grouped_tab(out, groups, subtext = get_subtext(x), chi2 = get_chi2(x))
+  }
+}
+# dplyr:::`[[<-.grouped_df`
+
+#' @importFrom dplyr rowwise
+#' @method rowwise grouped_tab
+#' @export
+rowwise.grouped_tab <- function(.data, ...) {
   out <- NextMethod()
   groups <- dplyr::group_data(out)
-  if (lv1_group_vars(out)) {
-    new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
-  } else {
-    new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
-  }
+
+  out <- new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+  `class<-`(out, stringr::str_replace(class(out), "grouped_df", "rowwise_df"))
 
 }
 
+# #' @method rbind grouped_tab
+# #' @export
+# rbind.grouped_tab <- function(...) {
+#   out <- NextMethod()
+#   groups <- dplyr::group_data(out)
+#   if (lv1_group_vars(out)) {
+#     new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+#   } else {
+#     new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+#   }
+# }
+# # dplyr:::rbind.grouped_df
+#
+# #' @method cbind grouped_tab
+# #' @export
+# cbind.grouped_tab <- function(...) {
+#   out <- NextMethod()
+#   groups <- dplyr::group_data(out)
+#   if (lv1_group_vars(out)) {
+#     new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+#   } else {
+#     new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+#   }
+# }
+# # dplyr:::cbind.grouped_df
 
-
-
-# @importFrom dplyr transmute
-#' @method transmute grouped_tab
-#' @export
-transmute.grouped_tab <- function(.data, ...) {
-  out <- NextMethod()
-  groups <- dplyr::group_data(out)
-  if (lv1_group_vars(out)) {
-    new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
-  } else {
-    new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
-  }
-}
-
-# @importFrom dplyr summarise
+#' @importFrom dplyr summarise
 #' @method summarise grouped_tab
 #' @export
 summarise.grouped_tab <- function(.data, ..., .groups = NULL) {
@@ -493,50 +619,8 @@ summarise.grouped_tab <- function(.data, ..., .groups = NULL) {
   }
 }
 
-# @importFrom dplyr filter
-#' @method filter grouped_tab
-# @rdname filter
-#' @export
-filter.grouped_tab <- function(.data, ..., .preserve = FALSE) {
-  out <- NextMethod()
-  if (lv1_group_vars(out)) {
-    new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
-  } else {
-    groups <- dplyr::group_data(out)
-    new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
-  }
-}
 
-# slice not working with grouped_tab ? ----
-# @importFrom dplyr slice
-#' @method slice grouped_tab
-#' @export
-slice.grouped_tab <- function(.data, ..., .preserve = FALSE) {
-  out <- NextMethod()
-  groups <- dplyr::group_data(out)
-  if (lv1_group_vars(out)) {
-    new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
-  } else {
-    new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
-  }
-}
-
-# @importFrom dplyr arrange
-#' @method arrange grouped_tab
-#' @export
-arrange.grouped_tab <- function(.data, ..., .by_group = FALSE) {
-  out <- NextMethod()
-  groups <- dplyr::group_data(out)
-  if (lv1_group_vars(out)) {
-    new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
-  } else {
-    new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
-  }
-}
-
-
-
-# @importFrom dplyr select
+#' @importFrom dplyr select
 #' @method select grouped_tab
 #' @export
 select.grouped_tab <- function(.data, ...) {
@@ -549,20 +633,7 @@ select.grouped_tab <- function(.data, ...) {
   }
 }
 
-# @importFrom dplyr relocate
-#' @method relocate grouped_tab
-#' @export
-relocate.grouped_tab <- function(.data, ..., .before = NULL, .after = NULL) {
-  out <- NextMethod()
-  groups <- dplyr::group_data(out)
-  if (lv1_group_vars(out)) {
-    new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
-  } else {
-    new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
-  }
-}
-
-# @importFrom dplyr rename
+#' @importFrom dplyr rename
 #' @method rename grouped_tab
 #' @export
 rename.grouped_tab <- function(.data, ...) {
@@ -575,11 +646,10 @@ rename.grouped_tab <- function(.data, ...) {
   }
 }
 
-# @importFrom dplyr rename_with
+#' @importFrom dplyr rename_with
 #' @method rename_with grouped_tab
 #' @export
-rename_with.grouped_tab <- function(.data, .fn,
-                                    .cols = dplyr::everything(), ...) {
+rename_with.grouped_tab <- function(.data, .fn, .cols = dplyr::everything(), ...) {
   out <- NextMethod()
   groups <- dplyr::group_data(out)
   if (lv1_group_vars(out)) {
@@ -589,10 +659,25 @@ rename_with.grouped_tab <- function(.data, .fn,
   }
 }
 
-# @importFrom dplyr distinct
-#' @method distinct grouped_tab
+# not for grouped_df
+#' @importFrom dplyr relocate
+#' @method relocate grouped_tab
 #' @export
-distinct.grouped_tab <- function(.data, ...,  .keep_all = FALSE) {
+relocate.grouped_tab <- function(.data, ...) { #.before = NULL, .after = NULL
+  out <- NextMethod()
+  groups <- dplyr::group_data(out)
+  if (lv1_group_vars(out)) {
+    new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+  } else {
+    new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+  }
+} # dplyr:::relocate.grouped_df
+
+
+#' @importFrom dplyr distinct_
+#' @method distinct_ grouped_tab
+#' @export
+distinct_.grouped_tab <- function(.data, ..., .dots = list(), .keep_all = FALSE) {
   out <- NextMethod()
   groups <- dplyr::group_data(out)
   if (lv1_group_vars(out)) {
@@ -601,8 +686,165 @@ distinct.grouped_tab <- function(.data, ...,  .keep_all = FALSE) {
     new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
   }
 }
+# dplyr:::distinct_.grouped_df
 
 
+
+#
+# # Past methods, not needed anymore :
+#
+# #' @importFrom dplyr mutate
+# #' @method mutate grouped_tab
+# #' @export
+# mutate.grouped_tab <- function(.data, ...) {
+#   out <- NextMethod()
+#   groups <- dplyr::group_data(out)
+#   if (lv1_group_vars(out)) {
+#     new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+#   } else {
+#     new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+#   }
+#
+# }
+#
+#
+#
+#
+# #' @importFrom dplyr transmute
+# #' @method transmute grouped_tab
+# #' @export
+# transmute.grouped_tab <- function(.data, ...) {
+#   out <- NextMethod()
+#   groups <- dplyr::group_data(out)
+#   if (lv1_group_vars(out)) {
+#     new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+#   } else {
+#     new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+#   }
+# }
+#
+# #' @importFrom dplyr summarise
+# #' @method summarise grouped_tab
+# #' @export
+# summarise.grouped_tab <- function(.data, ..., .groups = NULL) {
+#   out <- NextMethod()
+#   groups <- dplyr::group_data(out)
+#   if (lv1_group_vars(out)) {
+#     new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+#   } else {
+#     new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+#   }
+# }
+#
+# #' @importFrom dplyr filter
+# #' @method filter grouped_tab
+# # @rdname filter
+# #' @export
+# filter.grouped_tab <- function(.data, ..., .preserve = FALSE) {
+#   out <- NextMethod()
+#   if (lv1_group_vars(out)) {
+#     new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+#   } else {
+#     groups <- dplyr::group_data(out)
+#     new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+#   }
+# }
+#
+#
+# # slice not working with grouped_tab ? ----
+# #' @importFrom dplyr slice
+# #' @method slice grouped_tab
+# #' @export
+# slice.grouped_tab <- function(.data, ..., .preserve = FALSE) {
+#   out <- NextMethod()
+#   groups <- dplyr::group_data(out)
+#   if (lv1_group_vars(out)) {
+#     new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+#   } else {
+#     new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+#   }
+# }
+#
+# #' @importFrom dplyr arrange
+# #' @method arrange grouped_tab
+# #' @export
+# arrange.grouped_tab <- function(.data, ..., .by_group = FALSE) {
+#   out <- NextMethod()
+#   groups <- dplyr::group_data(out)
+#   if (lv1_group_vars(out)) {
+#     new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+#   } else {
+#     new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+#   }
+# }
+#
+#
+#
+# #' @importFrom dplyr select
+# #' @method select grouped_tab
+# #' @export
+# select.grouped_tab <- function(.data, ...) {
+#   out <- NextMethod()
+#   groups <- dplyr::group_data(out)
+#   if (lv1_group_vars(out)) {
+#     new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+#   } else {
+#     new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+#   }
+# }
+#
+# #' @importFrom dplyr relocate
+# #' @method relocate grouped_tab
+# #' @export
+# relocate.grouped_tab <- function(.data, ..., .before = NULL, .after = NULL) {
+#   out <- NextMethod()
+#   groups <- dplyr::group_data(out)
+#   if (lv1_group_vars(out)) {
+#     new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+#   } else {
+#     new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+#   }
+# }
+#
+# #' @importFrom dplyr rename
+# #' @method rename grouped_tab
+# #' @export
+# rename.grouped_tab <- function(.data, ...) {
+#   out <- NextMethod()
+#   groups <- dplyr::group_data(out)
+#   if (lv1_group_vars(out)) {
+#     new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+#   } else {
+#     new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+#   }
+# }
+#
+# #' @importFrom dplyr rename_with
+# #' @method rename_with grouped_tab
+# #' @export
+# rename_with.grouped_tab <- function(.data, .fn,
+#                                     .cols = dplyr::everything(), ...) {
+#   out <- NextMethod()
+#   groups <- dplyr::group_data(out)
+#   if (lv1_group_vars(out)) {
+#     new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+#   } else {
+#     new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+#   }
+# }
+#
+# #' @importFrom dplyr distinct
+# #' @method distinct grouped_tab
+# #' @export
+# distinct.grouped_tab <- function(.data, ...,  .keep_all = FALSE) {
+#   out <- NextMethod()
+#   groups <- dplyr::group_data(out)
+#   if (lv1_group_vars(out)) {
+#     new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+#   } else {
+#     new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+#   }
+# }
 
 
 
@@ -613,7 +855,7 @@ distinct.grouped_tab <- function(.data, ...,  .keep_all = FALSE) {
 # @export
 gtab_cast <- function(x, to, ..., x_arg = "", to_arg = "") {
   #based upon vctrs:::gdf_cast()
-  df <- df_cast(x, to, ..., x_arg = x_arg, to_arg = to_arg)
+  df <- vctrs::df_cast(x, to, ..., x_arg = x_arg, to_arg = to_arg)
   vars <- dplyr::group_vars(to)
   drop <- dplyr::group_by_drop_default(to)
   gdf <- dplyr::grouped_df(df, vars, drop = drop)
@@ -627,7 +869,7 @@ gtab_cast <- function(x, to, ..., x_arg = "", to_arg = "") {
 # @export
 gtab_ptype2 <- function(x, y, ..., x_arg = "", y_arg = "") {
   #based upon vctrs:::gdf_ptype2
-  common <- df_ptype2(x, y, ..., x_arg = x_arg, y_arg = y_arg)
+  common <- vctrs::df_ptype2(x, y, ..., x_arg = x_arg, y_arg = y_arg)
   x_vars <- dplyr::group_vars(x)
   y_vars <- dplyr::group_vars(y)
   vars <- union(x_vars, y_vars)
@@ -664,7 +906,7 @@ vec_cast.grouped_tab.grouped_df <- function(x, to, ...) {
 #' @export
 vec_cast.grouped_df.grouped_tab <- function(x, to, ...) {
   #vctrs:::gdf_cast
-  df <- df_cast(x, to, ...)
+  df <- vctrs::df_cast(x, to, ...)
   vars <- dplyr::group_vars(to)
   drop <- dplyr::group_by_drop_default(to)
   dplyr::grouped_df(df, vars, drop = drop)
@@ -703,7 +945,7 @@ vec_cast.grouped_tab.tbl_df <- function(x, to, ...) {
 }
 #' @export
 vec_cast.tbl_df.grouped_tab <- function(x, to, ...) {
-  tib_cast(x, to, ...)
+  vctrs::tib_cast(x, to, ...)
 }
 
 #grouped_tab / data.frame
@@ -721,41 +963,42 @@ vec_cast.grouped_tab.data.frame <- function(x, to, ...) {
 }
 #' @export
 vec_cast.data.frame.grouped_tab <- function(x, to, ...) {
-  df_cast(x, to, ...)
+  vctrs::df_cast(x, to, ...)
 }
 
 
 
+
+
 #Colors for printing fmt in tabs -------------------------------------------------------
-pos5     <- crayon::make_style(pos5 = rgb(0, 5, 0, maxColorValue = 5),
-                               colors = crayon::num_colors(forget = TRUE)) #hcl(120, 200, 100)
-pos4     <- crayon::make_style(pos4     = rgb(1, 5, 1, maxColorValue = 5))
-pos3     <- crayon::make_style(pos3     = rgb(3, 5, 1, maxColorValue = 5))
-pos2     <- crayon::make_style(pos2     = rgb(4, 5, 1, maxColorValue = 5))
-pos1     <- crayon::make_style(pos1     = rgb(4, 4, 1, maxColorValue = 5)) #5, 5, 1
+pos5     <- crayon::make_style(pos5     = rgb(0, 5, 0, maxColorValue = 5), colors = 256) #hcl(120, 200, 100)
+pos4     <- crayon::make_style(pos4     = rgb(1, 5, 1, maxColorValue = 5), colors = 256)
+pos3     <- crayon::make_style(pos3     = rgb(3, 5, 1, maxColorValue = 5), colors = 256)
+pos2     <- crayon::make_style(pos2     = rgb(4, 5, 1, maxColorValue = 5), colors = 256)
+pos1     <- crayon::make_style(pos1     = rgb(4, 4, 1, maxColorValue = 5), colors = 256) #5, 5, 1
 
-neg5     <- crayon::make_style(neg5     = rgb(5, 0, 0, maxColorValue = 5))
-neg4     <- crayon::make_style(neg4     = rgb(5, 1, 0, maxColorValue = 5))
-neg3     <- crayon::make_style(neg3     = rgb(5, 2, 1, maxColorValue = 5))
-neg2     <- crayon::make_style(neg2     = rgb(5, 3, 1, maxColorValue = 5))
-neg1     <- crayon::make_style(neg1     = rgb(4, 3, 2, maxColorValue = 5))
+neg5     <- crayon::make_style(neg5     = rgb(5, 0, 0, maxColorValue = 5), colors = 256)
+neg4     <- crayon::make_style(neg4     = rgb(5, 1, 0, maxColorValue = 5), colors = 256)
+neg3     <- crayon::make_style(neg3     = rgb(5, 2, 1, maxColorValue = 5), colors = 256)
+neg2     <- crayon::make_style(neg2     = rgb(5, 3, 1, maxColorValue = 5), colors = 256)
+neg1     <- crayon::make_style(neg1     = rgb(4, 3, 2, maxColorValue = 5), colors = 256)
 
-fmtgrey4 <- crayon::make_style(fmtgrey4 = grey(0.9), grey = TRUE)
-fmtgrey3 <- crayon::make_style(fmtgrey3 = grey(0.7), grey = TRUE)
-fmtgrey2 <- crayon::make_style(fmtgrey2 = grey(0.5), grey = TRUE)
-fmtgrey1 <- crayon::make_style(fmtgrey1 = grey(0.3), grey = TRUE)
+fmtgrey4 <- crayon::make_style(fmtgrey4 = grey(0.9), grey = TRUE, colors = 256)
+fmtgrey3 <- crayon::make_style(fmtgrey3 = grey(0.7), grey = TRUE, colors = 256)
+fmtgrey2 <- crayon::make_style(fmtgrey2 = grey(0.5), grey = TRUE, colors = 256)
+fmtgrey1 <- crayon::make_style(fmtgrey1 = grey(0.3), grey = TRUE, colors = 256)
 
-posb5    <- crayon::make_style(posb5    = rgb(0, 0, 5, maxColorValue = 5)) #hcl(120, 200, 100)
-posb4    <- crayon::make_style(posb4    = rgb(0, 1, 5, maxColorValue = 5))
-posb3    <- crayon::make_style(posb3    = rgb(0, 3, 5, maxColorValue = 5))
-posb2    <- crayon::make_style(posb2    = rgb(1, 4, 5, maxColorValue = 5))
-posb1    <- crayon::make_style(posb1    = rgb(2, 5, 5, maxColorValue = 5))
+posb5    <- crayon::make_style(posb5    = rgb(0, 0, 5, maxColorValue = 5), colors = 256) #hcl(120, 200, 100)
+posb4    <- crayon::make_style(posb4    = rgb(0, 1, 5, maxColorValue = 5), colors = 256)
+posb3    <- crayon::make_style(posb3    = rgb(0, 3, 5, maxColorValue = 5), colors = 256)
+posb2    <- crayon::make_style(posb2    = rgb(1, 4, 5, maxColorValue = 5), colors = 256)
+posb1    <- crayon::make_style(posb1    = rgb(2, 5, 5, maxColorValue = 5), colors = 256)
 
-negb5    <- crayon::make_style(negb5    = rgb(5, 0, 0, maxColorValue = 5))
-negb4    <- crayon::make_style(negb4    = rgb(5, 0, 1, maxColorValue = 5))
-negb3    <- crayon::make_style(negb3    = rgb(5, 1, 1, maxColorValue = 5))
-negb2    <- crayon::make_style(negb2    = rgb(5, 1, 3, maxColorValue = 5))
-negb1    <- crayon::make_style(negb1    = rgb(5, 2, 3, maxColorValue = 5))
+negb5    <- crayon::make_style(negb5    = rgb(5, 0, 0, maxColorValue = 5), colors = 256)
+negb4    <- crayon::make_style(negb4    = rgb(5, 0, 1, maxColorValue = 5), colors = 256)
+negb3    <- crayon::make_style(negb3    = rgb(5, 1, 1, maxColorValue = 5), colors = 256)
+negb2    <- crayon::make_style(negb2    = rgb(5, 1, 3, maxColorValue = 5), colors = 256)
+negb1    <- crayon::make_style(negb1    = rgb(5, 2, 3, maxColorValue = 5), colors = 256)
 
 
 
@@ -778,29 +1021,29 @@ negb1    <- crayon::make_style(negb1    = rgb(5, 2, 3, maxColorValue = 5))
 #     fmtgrey2("42%"), fmtgrey2("42%\n"),
 #     fmtgrey1("42%"), fmtgrey1("42%\n") )
 
-bgpos5   <- crayon::make_style(bgpos5  = rgb(0, 5, 0, maxColorValue = 5), bg = TRUE) #hcl(120, 200, 100)
-bgpos4   <- crayon::make_style(bgpos4  = rgb(0, 4, 0, maxColorValue = 5), bg = TRUE)
-bgpos3   <- crayon::make_style(bgpos3  = rgb(0, 3, 0, maxColorValue = 5), bg = TRUE)
-bgpos2   <- crayon::make_style(bgpos2  = rgb(0, 2, 0, maxColorValue = 5), bg = TRUE)
-bgpos1   <- crayon::make_style(bgpos1  = rgb(0, 1, 0, maxColorValue = 5), bg = TRUE) #5, 5, 1
+bgpos5   <- crayon::make_style(bgpos5  = rgb(0, 5, 0, maxColorValue = 5), bg = TRUE, colors = 256) #hcl(120, 200, 100)
+bgpos4   <- crayon::make_style(bgpos4  = rgb(0, 4, 0, maxColorValue = 5), bg = TRUE, colors = 256)
+bgpos3   <- crayon::make_style(bgpos3  = rgb(0, 3, 0, maxColorValue = 5), bg = TRUE, colors = 256)
+bgpos2   <- crayon::make_style(bgpos2  = rgb(0, 2, 0, maxColorValue = 5), bg = TRUE, colors = 256)
+bgpos1   <- crayon::make_style(bgpos1  = rgb(0, 1, 0, maxColorValue = 5), bg = TRUE, colors = 256) #5, 5, 1
 
-bgneg5   <- crayon::make_style(bgneg5  = rgb(5, 0, 0, maxColorValue = 5), bg = TRUE)
-bgneg4   <- crayon::make_style(bgneg4  = rgb(4, 0, 0, maxColorValue = 5), bg = TRUE)
-bgneg3   <- crayon::make_style(bgneg3  = rgb(3, 0, 0, maxColorValue = 5), bg = TRUE)
-bgneg2   <- crayon::make_style(bgneg2  = rgb(2, 0, 0, maxColorValue = 5), bg = TRUE)
-bgneg1   <- crayon::make_style(bgneg1  = rgb(1, 0, 0, maxColorValue = 5), bg = TRUE)
+bgneg5   <- crayon::make_style(bgneg5  = rgb(5, 0, 0, maxColorValue = 5), bg = TRUE, colors = 256)
+bgneg4   <- crayon::make_style(bgneg4  = rgb(4, 0, 0, maxColorValue = 5), bg = TRUE, colors = 256)
+bgneg3   <- crayon::make_style(bgneg3  = rgb(3, 0, 0, maxColorValue = 5), bg = TRUE, colors = 256)
+bgneg2   <- crayon::make_style(bgneg2  = rgb(2, 0, 0, maxColorValue = 5), bg = TRUE, colors = 256)
+bgneg1   <- crayon::make_style(bgneg1  = rgb(1, 0, 0, maxColorValue = 5), bg = TRUE, colors = 256)
 
-bgposb5  <- crayon::make_style(bgposb5 = rgb(0, 0, 5, maxColorValue = 5), bg = TRUE) #hcl(120, 200, 100)
-bgposb4  <- crayon::make_style(bgposb4 = rgb(0, 0, 4, maxColorValue = 5), bg = TRUE)
-bgposb3  <- crayon::make_style(bgposb3 = rgb(0, 0, 3, maxColorValue = 5), bg = TRUE)
-bgposb2  <- crayon::make_style(bgposb2 = rgb(0, 0, 2, maxColorValue = 5), bg = TRUE)
-bgposb1  <- crayon::make_style(bgposb1 = rgb(0, 0, 1, maxColorValue = 5), bg = TRUE)
+bgposb5  <- crayon::make_style(bgposb5 = rgb(0, 0, 5, maxColorValue = 5), bg = TRUE, colors = 256) #hcl(120, 200, 100)
+bgposb4  <- crayon::make_style(bgposb4 = rgb(0, 0, 4, maxColorValue = 5), bg = TRUE, colors = 256)
+bgposb3  <- crayon::make_style(bgposb3 = rgb(0, 0, 3, maxColorValue = 5), bg = TRUE, colors = 256)
+bgposb2  <- crayon::make_style(bgposb2 = rgb(0, 0, 2, maxColorValue = 5), bg = TRUE, colors = 256)
+bgposb1  <- crayon::make_style(bgposb1 = rgb(0, 0, 1, maxColorValue = 5), bg = TRUE, colors = 256)
 
-bgnegb5  <- crayon::make_style(bgnegb5 = rgb(5, 0, 0, maxColorValue = 5), bg = TRUE)
-bgnegb4  <- crayon::make_style(bgnegb4 = rgb(4, 0, 0, maxColorValue = 5), bg = TRUE)
-bgnegb3  <- crayon::make_style(bgnegb3 = rgb(3, 0, 0, maxColorValue = 5), bg = TRUE)
-bgnegb2  <- crayon::make_style(bgnegb2 = rgb(2, 0, 0, maxColorValue = 5), bg = TRUE)
-bgnegb1  <- crayon::make_style(bgnegb1 = rgb(1, 0, 0, maxColorValue = 5), bg = TRUE)
+bgnegb5  <- crayon::make_style(bgnegb5 = rgb(5, 0, 0, maxColorValue = 5), bg = TRUE, colors = 256)
+bgnegb4  <- crayon::make_style(bgnegb4 = rgb(4, 0, 0, maxColorValue = 5), bg = TRUE, colors = 256)
+bgnegb3  <- crayon::make_style(bgnegb3 = rgb(3, 0, 0, maxColorValue = 5), bg = TRUE, colors = 256)
+bgnegb2  <- crayon::make_style(bgnegb2 = rgb(2, 0, 0, maxColorValue = 5), bg = TRUE, colors = 256)
+bgnegb1  <- crayon::make_style(bgnegb1 = rgb(1, 0, 0, maxColorValue = 5), bg = TRUE, colors = 256)
 
 # cat("\n",
 #     bgpos1("42%"  ), bgneg1("42%\n" ),

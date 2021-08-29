@@ -2,6 +2,7 @@
 % Please edit documentation in R/tab.R, R/tab_classes.R
 \name{tab_many}
 \alias{tab_many}
+\alias{tab_get_vars}
 \alias{is_tab}
 \alias{tab_color_style}
 \alias{get_color_breaks}
@@ -38,6 +39,8 @@ tab_many(
   filter,
   listed = FALSE
 )
+
+tab_get_vars(tabs, vars = c("row_var", "col_vars", "tab_vars"))
 
 is_tab(x)
 
@@ -204,6 +207,12 @@ more visible into the code.}
 with as many fmt columns as there is levels in all \code{col_vars}. Set to \code{TRUE}
 to keep it as a list of individual tables, with one table for each \code{col_vars}.}
 
+\item{tabs}{A \code{tibble} of class \code{tab}, made with \code{\link{tab}},
+\code{\link{tab_many}} or \code{\link{tab_core}}.}
+
+\item{vars}{In \code{tab_get_vars}, a character vector containing the wanted vars names:
+\code{"row_var"}, \code{"col_vars"} or \code{"tab_vars"}.}
+
 \item{x}{A object to test with \code{\link{is_tab}}.}
 
 \item{styles}{The style chosen in \code{tab_color_style()}, among \code{"green_red"},
@@ -237,11 +246,13 @@ red/orange) is given by the sign of the spread.}
 }
 \value{
 A \code{tibble} of class \code{tab}, possibly with colored reading helpers.
-All non-text columns are of class \code{\link[fmt]{formatted numbers}}, storing all
+All non-text columns are of class \code{\link{fmt}}, storing all
 the data necessary to print formats and colors. Columns with \code{row_var} and
 \code{tab_vars} are of class \code{factor} : every added \code{factor} will be
 considered as a \code{tab_vars} and used for grouping. To add text columns without
 using them in calculations, be sure they are of class \code{character}.
+
+A list with the variables names.
 
 
 }
@@ -260,6 +271,8 @@ Breaks for repulsions/subrepresentations (in orange/red) will simply be the oppo
 }
 \section{Functions}{
 \itemize{
+\item \code{tab_get_vars}: Get the variables names of a \code{tibble} of class \code{tab}
+
 \item \code{is_tab}: a test function for class tab
 
 \item \code{tab_color_style}: define the color style used to print tibbles of class \code{\link{tab}}
@@ -270,6 +283,33 @@ Breaks for repulsions/subrepresentations (in orange/red) will simply be the oppo
 }}
 
 \examples{
+# Make a summary table with many col_vars, showing only one specific level :
+\dontrun{
+library(dplyr)
+first_lvs <- c("Married", "$25000 or more", "Strong republican", "Protestant")
+data <- forcats::gss_cat |> mutate(across(
+  where(is.factor),
+  ~ forcats::fct_relevel(., first_lvs[first_lvs \%in\% levels(.)])
+))
+tab_many(data, race, c(marital, rincome, partyid, relig, age, tvhours),
+         levels = "first", pct = "row", chi2 = TRUE, color = "auto")
+}
+
+# Can be used with map and tribble to program several tables with different parameters
+#  all at once, in a readable way:
+\dontrun{
+library(purrr)
+library(tibble)
+pmap(
+  tribble(
+    ~row_var, ~col_vars       , ~pct , ~filter              , ~subtext               ,
+    "race"  , "marital"       , "row", NULL                 , "Source: GSS 2000-2014",
+    "relig" , c("race", "age"), "row", "year \%in\% 2000:2010", "Source: GSS 2000-2010",
+    NA_character_, "race"     , "no" , NULL                 , "Source: GSS 2000-2014",
+  ),
+  .f = tab_many,
+  data = forcats::gss_cat, color = "auto", chi2 = TRUE)
+}
 #
 # To change the overall color style used to print all \code{\link{tab}} :
  \dontrun{tab_color_style("blue_red_bg")}

@@ -33,3 +33,14 @@ A \code{tibble} of class \code{tab}, with less rows and more columns.
 \description{
 Spread a tab, passing a tab variable to column
 }
+\examples{
+data <- forcats::gss_cat |> dplyr::filter(year \%in\% c(2000, 2014))
+
+tabs <-
+  tab(data, relig, marital, c(year, race), pct = "row", totaltab = "no", color = "diff",
+      rare_to_other = TRUE)
+
+tabs |>
+  dplyr::select(year, race, relig, Married) |>
+  tab_spread(race)
+}

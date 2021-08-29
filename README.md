@@ -9,8 +9,8 @@
 If R makes complex things simple, it can sometimes make simple things
 difficult. This is why `tabxplor` tries to make it easy to deal with
 multiple crosstabs: to create and manipulate them, but also to read
-them, using color helpers to highlight the important information. It
-will to enhance your data exploration experience with simple yet
+them, using color helpers to highlight important information. It would
+love to enhance your data exploration experience with simple yet
 powerful tools. All functions are tidyverse-propelled, pipe-friendly,
 and render tibbles, which can be easily modified using `dplyr`. Tables
 can be exported to Excel with formats and colors.
@@ -26,6 +26,10 @@ devtools::install_github("BriceNocenti/tabxplor")
 
 ## Base usage: crosstables with color helpers
 
+``` r
+library(tabxplor)
+```
+
 The main functions are made to be user-friendly and time-saving is data
 analysis workflows.
 
@@ -33,9 +37,6 @@ analysis workflows.
 
 ``` r
 library(tabxplor)
-```
-
-``` r
 tab(forcats::gss_cat, marital, race)
 #> # A tabxplor tab: 7 x 5
 #>   marital        Other  Black  White Total_race
@@ -94,7 +95,7 @@ or the row variable. With text variables, only the first level is kept
 `forcats::fct_relevel`). Use `tab_many` to keep all levels.
 
 ``` r
-tab(storms, category, status, sup_cols = c("pressure", "wind"))
+tab(dplyr::storms, category, status, sup_cols = c("pressure", "wind"))
 #> # A tabxplor tab: 8 x 7
 #>   category `tropical depressio~ `tropical storm` hurricane Total_status pressure
 #>   <fct>                  <n-wn>           <n-wn>    <n-wn>       <n-wn>   <mean>
@@ -233,7 +234,7 @@ using most dplyr verbs, like a normal tibble.
 library(dplyr)
 tab(storms, category, status, sup_cols = c("pressure", "wind")) %>%
   filter(category != "-1") %>%
-  select(-`No answer`) %>%
+dplyr::select(-`tropical depression`)
   arrange(is_totrow(.), desc(category)) # use is_totrow to keep total rows
 ```
 

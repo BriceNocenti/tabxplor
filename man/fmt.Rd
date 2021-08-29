@@ -2,52 +2,17 @@
 % Please edit documentation in R/fmt_class.R
 \name{fmt}
 \alias{fmt}
-\alias{new_fmt}
 \alias{is_fmt}
-\alias{get_display}
-\alias{get_n}
-\alias{get_wn}
-\alias{get_pct}
-\alias{get_diff}
-\alias{get_digits}
-\alias{get_ctr}
-\alias{get_mean}
-\alias{get_var}
-\alias{get_ci}
-\alias{is_totrow}
-\alias{is_refrow}
-\alias{is_tottab}
-\alias{get_type}
-\alias{get_comp_all}
-\alias{get_diff_type}
-\alias{get_ci_type}
-\alias{get_col_var}
-\alias{is_totcol}
-\alias{is_refcol}
-\alias{get_color}
-\alias{set_display}
-\alias{set_n}
-\alias{set_wn}
-\alias{set_pct}
-\alias{set_diff}
-\alias{set_digits}
-\alias{set_ctr}
-\alias{set_mean}
-\alias{set_var}
-\alias{set_ci}
-\alias{as_totrow}
-\alias{as_refrow}
-\alias{as_tottab}
-\alias{set_col_var}
-\alias{as_totcol}
-\alias{as_refcol}
-\alias{set_type}
-\alias{set_diff_type}
-\alias{set_ci_type}
-\alias{set_color}
-\alias{set_comp}
 \alias{get_num}
 \alias{set_num}
+\alias{get_type}
+\alias{set_type}
+\alias{is_totrow}
+\alias{as_totrow}
+\alias{is_tottab}
+\alias{as_tottab}
+\alias{is_totcol}
+\alias{as_totcol}
 \title{Create a vector of class formatted numbers}
 \usage{
 fmt(
@@ -75,129 +40,34 @@ fmt(
   color = ""
 )
 
-new_fmt(
-  n = integer(),
-  type = "n",
-  digits = rep(0L, length(n)),
-  display = dplyr::case_when(type == "mean" ~ "mean", type \%in\% c("row", "col",
-    "all", "all_tabs") ~ "pct", TRUE ~ "n"),
-  wn = rep(NA_real_, length(n)),
-  pct = rep(NA_real_, length(n)),
-  mean = rep(NA_real_, length(n)),
-  diff = rep(NA_real_, length(n)),
-  ctr = rep(NA_real_, length(n)),
-  var = rep(NA_real_, length(n)),
-  ci = rep(NA_real_, length(n)),
-  in_totrow = rep(FALSE, length(n)),
-  in_tottab = rep(FALSE, length(n)),
-  in_refrow = rep(FALSE, length(n)),
-  comp_all = NA,
-  diff_type = "",
-  ci_type = "",
-  col_var = "",
-  totcol = FALSE,
-  refcol = FALSE,
-  color = "",
-  ...,
-  class = character()
-)
-
 is_fmt(x)
-
-get_display(fmt)
-
-get_n(fmt)
-
-get_wn(fmt)
-
-get_pct(fmt)
-
-get_diff(fmt)
-
-get_digits(fmt)
-
-get_ctr(fmt)
-
-get_mean(fmt)
-
-get_var(fmt)
-
-get_ci(fmt)
-
-is_totrow(x, ...)
-
-is_refrow(x, ...)
-
-is_tottab(x, ...)
-
-get_type(x, ...)
-
-get_comp_all(x, replace_na = TRUE)
-
-get_diff_type(x, ...)
-
-get_ci_type(x, ...)
-
-get_col_var(x, ...)
-
-is_totcol(x, ...)
-
-is_refcol(x, ...)
-
-get_color(x, ...)
-
-set_display(fmt, value)
-
-set_n(fmt, value)
-
-set_wn(fmt, value)
-
-set_pct(fmt, value)
-
-set_diff(fmt, value)
-
-set_digits(fmt, value)
-
-set_ctr(fmt, value)
-
-set_mean(fmt, value)
-
-set_var(fmt, value)
-
-set_ci(fmt, value)
-
-as_totrow(fmt, in_totrow = TRUE)
-
-as_refrow(fmt, in_refrow = TRUE)
-
-as_tottab(fmt, in_tottab = TRUE)
-
-set_col_var(fmt, col_var)
-
-as_totcol(fmt, totcol = TRUE)
-
-as_refcol(fmt, refcol = TRUE)
-
-set_type(fmt, type)
-
-set_diff_type(fmt, diff_type)
-
-set_ci_type(fmt, ci_type)
-
-set_color(fmt, color)
-
-set_comp(fmt, value = c("tab", "all"))
 
 get_num(x)
 
 set_num(x, value)
+
+get_type(x, ...)
+
+set_type(x, type)
+
+is_totrow(x, ...)
+
+as_totrow(x, in_totrow = TRUE)
+
+is_tottab(x, ...)
+
+as_tottab(x, in_tottab = TRUE)
+
+is_totcol(x, ...)
+
+as_totcol(x, totcol = TRUE)
 }
 \arguments{
 \item{n}{The underlying count, as an integer vector of length \code{n()}. It is used
 to calculate confidence intervals for percentages.}
 
 \item{type}{The type of the column, which defines the type of background calculation
-to be made :
+to be made (as a single string, since it's not a field but an attribute) :
 \itemize{
 \item \code{"n"}: counts
 \item \code{"mean"}: mean column (from numeric variables)
@@ -292,21 +162,12 @@ difference first.
 (except mean columns, from numeric variables).
 }}
 
-\item{...}{Used in methods to add arguments in the future.}
+\item{x}{The object to test, to get a field in, or to modify.}
 
-\item{class}{Subclasses to assign to the new object, default: none.}
-
-\item{x}{The object to test.}
-
-\item{fmt}{The formatted number in which you want to find data for "get" functions,
-to modify data for "set" functions.}
-
-\item{replace_na}{By default, \code{\link{get_comp_all}} takes NA in comparison level
-to be a \code{FALSE} (=comparison at subtables/groups level). Set to \code{FALSE}
-to avoid this behavior.}
-
-\item{value}{The value you want to inject in some \code{fmt} vector's field
+\item{value}{The value you want to inject in some \code{fmt} vector's vctrs::field
 or attribute using a given "set" function.}
+
+\item{...}{Used in methods to add arguments in the future.}
 }
 \value{
 A vector of class \code{fmt}.
@@ -314,115 +175,113 @@ A vector of class \code{fmt}.
 \description{
 \code{fmt} vectors are the class that powers \pkg{tabxplor} and
 \code{\link{tab}} tibbles.
-As a \code{\link[vctrs:new_rcrd]{record}}, it stores all data necessary to
+As a \code{\link[vctrs:new_rcrd]{record}}, they stores all data necessary to
 calculate percentages, Chi2 metadata or confidence intervals, but also to format and
-color the table to help the user to read it. You can access this data, or change it,
-using a whole set of functions made to work with tabxplor formatted numbers.
+color the table to help the user read it. You can access this data with
+\code{\link[vctrs:field]{vctrs::field}}, or change it with
+\code{\link[vctrs:field]{vctrs:`field<-`}}. A \code{fmt} vector have 13 fields :
+\code{n}, \code{digits}, \code{display}, \code{wn}, \code{pct}, \code{mean},
+\code{diff}, \code{ctr}, \code{var}, \code{ci}, \code{in_totrow},  \code{in_tottab},
+\code{in_refrow}. Other arguments are attributes, attached not to each value, but to
+the whole vector, like \code{type}, \code{totcol} or \code{color}. You can get them
+with \code{\link[base:attr]{attr}} and modify them with
+\code{\link[base:attr]{`attr<-`}}. Special functions listed below are made to
+facilitate programming with with \pkg{tabxplor} formatted numbers.
 \code{fmt} vectors can use all standard operations, like +, -, sum(), or c(),
 using \pkg{vctrs}.
 }
 \section{Functions}{
 \itemize{
-\item \code{new_fmt}: a constructor for class fmt.
-
 \item \code{is_fmt}: a test function for class fmt.
-
-\item \code{get_display}: get the "display" field of a \code{fmt} vector
-
-\item \code{get_n}: get the "n" field (unweighted counts)
-
-\item \code{get_wn}: get the "wn" field (weighted counts)
-
-\item \code{get_pct}: get the "pct" field
-
-\item \code{get_diff}: get the "pct" field
-
-\item \code{get_digits}: get the "diff" field (differences from totals or first cells)
-
-\item \code{get_ctr}: get the "ctr" field (relative contributions of cells to variance)
-
-\item \code{get_mean}: get the "mean" field
-
-\item \code{get_var}: get the "var" field (cell variances of means)
-
-\item \code{get_ci}: get the "ci" field (confidence intervals)
-
-\item \code{is_totrow}: test function to detect cells in total rows
-(at \code{fmt} level or \code{tab} level)
-
-\item \code{is_refrow}: test function to detect cells in reference rows
-(at \code{fmt} level or \code{tab} level)
-
-\item \code{is_tottab}: test function to detect cells in total tables
-(at \code{fmt} level or \code{tab} level)
-
-\item \code{get_type}: get types of fmt columns (at \code{fmt} level or \code{tab} level)
-
-\item \code{get_comp_all}: get comparison level of fmt columns
-
-\item \code{get_diff_type}: get differences type of fmt columns (at \code{fmt} level or \code{tab} level)
-
-\item \code{get_ci_type}: get confidence intervals type of fmt columns
-(at \code{fmt} level or \code{tab} level)
-
-\item \code{get_col_var}: get names of column variable of fmt columns
-(at \code{fmt} level or \code{tab} level)
-
-\item \code{is_totcol}: test function for total columns
-(at \code{fmt} level or \code{tab} level)
-
-\item \code{is_refcol}: test function for reference columns
-(at \code{fmt} level or \code{tab} level)
-
-\item \code{get_color}: get color (at \code{fmt} level or \code{tab} level)
-
-\item \code{set_display}: set the "display" field of a \code{fmt} vector
-
-\item \code{set_n}: set the "n" field (unweighted counts)
-
-\item \code{set_wn}: set the "wn" field (weighted counts)
-
-\item \code{set_pct}: set the "pct" field
-
-\item \code{set_diff}: set the "diff" field
-
-\item \code{set_digits}: set the "digits" field (differences from totals or first cells)
-
-\item \code{set_ctr}: set the "ctr" field (relative contributions of cells to variance)
-
-\item \code{set_mean}: set the "mean" field
-
-\item \code{set_var}: set the "var" field (cell variances of means)
-
-\item \code{set_ci}: set the "ci" field (confidence intervals)
-
-\item \code{as_totrow}: set the "in_totrow" field (belong to total row)
-
-\item \code{as_refrow}: set the "in_refrow" field (belong to reference row)
-
-\item \code{as_tottab}: set the "in_tottab" field (belong to total table)
-
-\item \code{set_col_var}: set the "col_var" attribute of a \code{fmt} vector
-
-\item \code{as_totcol}: set the "totcol" attribute of a \code{fmt} vector
-
-\item \code{as_refcol}: set the "ref_col" attribute of a \code{fmt} vector
-
-\item \code{set_type}: set the column type attribute of a \code{fmt} vector
-
-\item \code{set_diff_type}: set the differences type attribute of a \code{fmt} vector
-
-\item \code{set_ci_type}: set the confidence intervals type attribute of a \code{fmt} vector
-
-\item \code{set_color}: set the color attribute of a \code{fmt} vector
-
-\item \code{set_comp}: set the comparison level attribute of a \code{fmt} vector
 
 \item \code{get_num}: get the currently displayed field
 
 \item \code{set_num}: set the currently displayed field (not changing display type)
+
+\item \code{get_type}: get types of fmt columns (at \code{fmt} level or \code{tab} level)
+
+\item \code{set_type}: set the column type attribute of a \code{fmt} vector
+
+\item \code{is_totrow}: test function to detect cells in total rows
+(at \code{fmt} level or \code{tab} level)
+
+\item \code{as_totrow}: set the "in_totrow" field (belong to total row)
+
+\item \code{is_tottab}: test function to detect cells in total tables
+(at \code{fmt} level or \code{tab} level)
+
+\item \code{as_tottab}: set the "in_tottab" field (belong to total table)
+
+\item \code{is_totcol}: test function for total columns
+(at \code{fmt} level or \code{tab} level)
+
+\item \code{as_totcol}: set the "totcol" attribute of a \code{fmt} vector
 }}
 
 \examples{
-fmt(7, "row", pct = 0.6)
+f <- fmt(n = c(7, 19, 2), type = "row", pct = c(0.25, 0.679, 0.07))
+f
+
+# To get the currently displayed field :
+get_num(f)
+
+# To modify the currently displayed field :
+set_num(f, c(1, 0, 0))
+
+
+# See all the underlying fields of a fmt vector :
+vctrs::vec_data(f)
+
+# To get the numbers of digits :
+vctrs::field(f, "digits")
+
+# To get the count :
+vctrs::field(f, "n")
+
+# To get the display :
+vctrs::field(f, "display")
+
+# To modify the percentages :
+vctrs::`field<-`(f, "pct", c(1, 0, 0))
+
+
+# See all the attributes of a fmt vector :
+attributes(f)
+
+# To modify the "type" attribute of a fmt vector :
+set_type(f, "col")
+
+# To modify the "color" attribute of a fmt vector :
+`attr<-`(f, "color", "contrib")
+
+
+library(dplyr)
+tabs <- tab(starwars, sex, hair_color, gender, na = "drop", pct = "row",
+            rare_to_other = TRUE, n_min = 5)
+
+# To identify the total columns, and work with them :
+is_totcol(tabs)
+tabs |> mutate(across(where(is_totcol), ~ "total column"))
+
+# To identify the total rows, and work with them :
+is_totrow(tabs)
+tabs |>
+  mutate(across(
+    where(is_fmt),
+    ~ if_else(is_totrow(.), true = "into_total_row", false = "normal_cell")
+  ))
+
+# To identify the total tables, and work with them :
+tottabs <- is_tottab(tabs)
+tabs |> tibble::add_column(tottabs) |>
+  mutate(total = if_else(tottabs, "part of a total table", "normal cell"))
+
+# To access the displayed numbers, as numeric vectors :
+tabs |> mutate(across(where(is_fmt), get_num))
+
+# To access the displayed numbers, as character vectors (without colors) :
+tabs |> mutate(across(where(is_fmt), format))
+
+# To access the (non-displayed) differences of the cells percentages from totals :
+tabs |> mutate(across(where(is_fmt), ~ vctrs::field(., "diff")))
 }

@@ -4,10 +4,10 @@
 \alias{bind_datas_for_tab}
 \title{Bind dataframes for tab / tab_many}
 \usage{
-bind_datas_for_tab(databases, vars)
+bind_datas_for_tab(data, vars)
 }
 \arguments{
-\item{databases}{Dataframes to be binded by rows.}
+\item{data}{Dataframes to be binded by rows.}
 
 \item{vars}{Selected variables.}
 }
@@ -17,3 +17,4 @@ A tibble.
 \description{
 Bind dataframes for tab / tab_many
 }
+\keyword{internal}

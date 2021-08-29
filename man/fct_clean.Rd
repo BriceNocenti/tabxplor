@@ -17,3 +17,4 @@ A factor.
 \description{
 Clean factor levels.
 }
+\keyword{internal}

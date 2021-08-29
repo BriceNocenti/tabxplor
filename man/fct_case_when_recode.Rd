@@ -25,3 +25,4 @@ A factor.
 \description{
 Recode Factor Levels with Multiple Patterns Detection
 }
+\keyword{internal}

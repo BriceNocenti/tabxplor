@@ -33,3 +33,12 @@ be detected using \code{\link{is_tottab}}.
 \description{
 Add total table to a \code{\link[tabxplor]{tab}}
 }
+\examples{
+data <- dplyr::starwars |>
+tab_prepare(sex, hair_color, gender, rare_to_other = TRUE,
+            n_min = 5, na = "keep")
+
+data |>
+  tab_core(sex, hair_color, gender) |>
+  tab_totaltab("line")
+}

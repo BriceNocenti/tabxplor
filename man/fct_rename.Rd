@@ -18,3 +18,4 @@ A factor.
 \description{
 Recode Factor Levels using Multiple Patterns
 }
+\keyword{internal}

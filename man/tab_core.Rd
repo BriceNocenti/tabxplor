@@ -39,7 +39,7 @@ performance.}
 \value{
 A \code{tibble} of class \code{tab}. If \code{...} (\code{tab_vars}) are
 provided, a \code{tab} of class \code{grouped_tab}.
-All non-text columns are of class \code{\link[fmt]{formatted numbers}}, storing all
+All non-text columns are of class \code{\link{fmt}}, storing all
 the data necessary to print formats and colors. Columns with \code{row_var} and
 \code{tab_vars} are of class \code{factor} : every added \code{factor} will be
 considered as a \code{tab_vars} and used for grouping. To add text columns without
@@ -47,4 +47,17 @@ using them in calculations, be sure they are of class \code{character}.
 }
 \description{
 Plain single crosstable
+}
+\examples{
+# A typical workflow with tabxplor step-by-step functions :
+\dontrun{
+data <- dplyr::starwars |> tab_prepare(sex, hair_color)
+
+data |>
+  tab_core(sex, hair_color) |>
+  tab_tot()  |>
+  tab_chi2() |>
+  tab_pct()  |>
+  tab_ci(color = "after_ci")
+}
 }

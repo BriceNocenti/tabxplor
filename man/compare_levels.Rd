@@ -17,3 +17,4 @@ A list with results.
 \description{
 Compare levels of factors in many df
 }
+\keyword{internal}

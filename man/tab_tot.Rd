@@ -38,7 +38,9 @@ A \code{tibble} of class \code{tab}. Total rows can then be detected using
 Add totals to a \code{\link[tabxplor]{tab}}
 }
 \examples{
-# Total rows depend on grouping variables. They can be added on subgroups of the table
-# independently :
-\dontrun{tab_tot(tabs[1:6], "row")}
+data <- dplyr::starwars |> tab_prepare(sex, hair_color)
+
+data |>
+  tab_core(sex, hair_color) |>
+  tab_tot("col", totcol = "each")
 }

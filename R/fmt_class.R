@@ -1,4 +1,4 @@
-# Create formated numbers class ----------------------------------------------------------
+# Create formated numbers class
 #Import vctrs in NAMESPACE :
 #' Internal vctrs methods
 #'
@@ -7,21 +7,36 @@
 #' @name tabxplor-vctrs
 NULL
 
+# binding for global variables not found by R cmd check
+. = NULL
+globalVariables(c(":="))
+
+
+# EXPORTED FUNCTIONS TO WORK WITH CLASS FMT ##############################################
+
 
 #' Create a vector of class formatted numbers
 #' @description \code{fmt} vectors are the class that powers \pkg{tabxplor} and
 #' \code{\link{tab}} tibbles.
-#' As a \code{\link[vctrs:new_rcrd]{record}}, it stores all data necessary to
+#' As a \code{\link[vctrs:new_rcrd]{record}}, they stores all data necessary to
 #' calculate percentages, Chi2 metadata or confidence intervals, but also to format and
-#' color the table to help the user to read it. You can access this data, or change it,
-#' using a whole set of functions made to work with tabxplor formatted numbers.
+#' color the table to help the user read it. You can access this data with
+#' \code{\link[vctrs:field]{vctrs::field}}, or change it with
+#' \code{\link[vctrs:field]{vctrs:`field<-`}}. A \code{fmt} vector have 13 fields :
+#' \code{n}, \code{digits}, \code{display}, \code{wn}, \code{pct}, \code{mean},
+#' \code{diff}, \code{ctr}, \code{var}, \code{ci}, \code{in_totrow},  \code{in_tottab},
+#' \code{in_refrow}. Other arguments are attributes, attached not to each value, but to
+#' the whole vector, like \code{type}, \code{totcol} or \code{color}. You can get them
+#' with \code{\link[base:attr]{attr}} and modify them with
+#' \code{\link[base:attr]{`attr<-`}}. Special functions listed below are made to
+#' facilitate programming with with \pkg{tabxplor} formatted numbers.
 #' \code{fmt} vectors can use all standard operations, like +, -, sum(), or c(),
 #' using \pkg{vctrs}.
 #'
 #' @param n The underlying count, as an integer vector of length \code{n()}. It is used
 #' to calculate confidence intervals for percentages.
 #' @param type The type of the column, which defines the type of background calculation
-#' to be made :
+#' to be made (as a single string, since it's not a field but an attribute) :
 #' \itemize{
 #'   \item \code{"n"}: counts
 #'   \item \code{"mean"}: mean column (from numeric variables)
@@ -45,7 +60,7 @@ NULL
 #' @param mean The means, as a double vector the length of \code{n}.
 #' @param diff The differences (from totals or first cells),
 #' as a double vector the length of \code{n}. Used to set colors for means and
-#'  row or col percentages. Calculate with \code{\link{tab_pct}}.
+#' row or col percentages. Calculate with \code{\link{tab_pct}}.
 #' @param ctr The contributions of cells to (sub)tables variances,
 #' as a double vector the length of \code{n}. Used to print colors when
 #' \code{color = "contrib"}. The mean contribution of each (sub)table is written on
@@ -99,7 +114,71 @@ NULL
 #' @return A vector of class \code{fmt}.
 #' @export
 #'
-#' @examples fmt(7, "row", pct = 0.6)
+#' @examples f <- fmt(n = c(7, 19, 2), type = "row", pct = c(0.25, 0.679, 0.07))
+#' f
+#'
+#' # To get the currently displayed field :
+#' get_num(f)
+#'
+#' # To modify the currently displayed field :
+#' set_num(f, c(1, 0, 0))
+#'
+#'
+#' # See all the underlying fields of a fmt vector :
+#' vctrs::vec_data(f)
+#'
+#' # To get the numbers of digits :
+#' vctrs::field(f, "digits")
+#'
+#' # To get the count :
+#' vctrs::field(f, "n")
+#'
+#' # To get the display :
+#' vctrs::field(f, "display")
+#'
+#' # To modify the percentages :
+#' vctrs::`field<-`(f, "pct", c(1, 0, 0))
+#'
+#'
+#' # See all the attributes of a fmt vector :
+#' attributes(f)
+#'
+#' # To modify the "type" attribute of a fmt vector :
+#' set_type(f, "col")
+#'
+#' # To modify the "color" attribute of a fmt vector :
+#' `attr<-`(f, "color", "contrib")
+#'
+#'
+#' library(dplyr)
+#' tabs <- tab(starwars, sex, hair_color, gender, na = "drop", pct = "row",
+#'             rare_to_other = TRUE, n_min = 5)
+#'
+#' # To identify the total columns, and work with them :
+#' is_totcol(tabs)
+#' tabs |> mutate(across(where(is_totcol), ~ "total column"))
+#'
+#' # To identify the total rows, and work with them :
+#' is_totrow(tabs)
+#' tabs |>
+#'   mutate(across(
+#'     where(is_fmt),
+#'     ~ if_else(is_totrow(.), true = "into_total_row", false = "normal_cell")
+#'   ))
+#'
+#' # To identify the total tables, and work with them :
+#' tottabs <- is_tottab(tabs)
+#' tabs |> tibble::add_column(tottabs) |>
+#'   mutate(total = if_else(tottabs, "part of a total table", "normal cell"))
+#'
+#' # To access the displayed numbers, as numeric vectors :
+#' tabs |> mutate(across(where(is_fmt), get_num))
+#'
+#' # To access the displayed numbers, as character vectors (without colors) :
+#' tabs |> mutate(across(where(is_fmt), format))
+#'
+#' # To access the (non-displayed) differences of the cells percentages from totals :
+#' tabs |> mutate(across(where(is_fmt), ~ vctrs::field(., "diff")))
 fmt <- function(n         = integer(),
                 type      = "n",
 
@@ -133,29 +212,29 @@ fmt <- function(n         = integer(),
   max_size <- list(n, wn, pct, digits, ctr, mean, var, ci) %>% #display
     purrr::map_int(length) %>% max()
 
-  display <- vec_recycle(vec_cast(display, character()), size = max_size)
-  n       <- vec_recycle(vec_cast(n      , integer())  , size = max_size)
-  wn      <- vec_recycle(vec_cast(wn     , double())   , size = max_size) #anything coercible as a double
-  pct     <- vec_recycle(vec_cast(pct    , double())   , size = max_size)
-  diff    <- vec_recycle(vec_cast(diff   , double())   , size = max_size)
-  digits  <- vec_recycle(vec_cast(digits , integer())  , size = max_size)
-  ctr     <- vec_recycle(vec_cast(ctr    , double())   , size = max_size)
-  mean    <- vec_recycle(vec_cast(mean   , double())   , size = max_size)
-  var     <- vec_recycle(vec_cast(var    , double())   , size = max_size)
-  ci      <- vec_recycle(vec_cast(ci     , double())   , size = max_size)
+  display <- vctrs::vec_recycle(vctrs::vec_cast(display, character()), size = max_size)
+  n       <- vctrs::vec_recycle(vctrs::vec_cast(n      , integer())  , size = max_size)
+  wn      <- vctrs::vec_recycle(vctrs::vec_cast(wn     , double())   , size = max_size) #anything coercible as a double
+  pct     <- vctrs::vec_recycle(vctrs::vec_cast(pct    , double())   , size = max_size)
+  diff    <- vctrs::vec_recycle(vctrs::vec_cast(diff   , double())   , size = max_size)
+  digits  <- vctrs::vec_recycle(vctrs::vec_cast(digits , integer())  , size = max_size)
+  ctr     <- vctrs::vec_recycle(vctrs::vec_cast(ctr    , double())   , size = max_size)
+  mean    <- vctrs::vec_recycle(vctrs::vec_cast(mean   , double())   , size = max_size)
+  var     <- vctrs::vec_recycle(vctrs::vec_cast(var    , double())   , size = max_size)
+  ci      <- vctrs::vec_recycle(vctrs::vec_cast(ci     , double())   , size = max_size)
 
-  in_totrow <- vec_recycle(vec_cast(in_totrow, logical()), size = max_size)
-  in_tottab <- vec_recycle(vec_cast(in_tottab, logical()), size = max_size)
-  in_refrow <- vec_recycle(vec_cast(in_refrow, logical()), size = max_size)
+  in_totrow <- vctrs::vec_recycle(vctrs::vec_cast(in_totrow, logical()), size = max_size)
+  in_tottab <- vctrs::vec_recycle(vctrs::vec_cast(in_tottab, logical()), size = max_size)
+  in_refrow <- vctrs::vec_recycle(vctrs::vec_cast(in_refrow, logical()), size = max_size)
 
-  type      <- vec_recycle(vec_cast(type     , character()), size = 1)
-  comp_all  <- vec_recycle(vec_cast(comp_all , logical()  ), size = 1)
-  diff_type <- vec_recycle(vec_cast(diff_type, character()), size = 1)
-  ci_type   <- vec_recycle(vec_cast(ci_type  , character()), size = 1)
-  col_var   <- vec_recycle(vec_cast(col_var  , character()), size = 1)
-  totcol    <- vec_recycle(vec_cast(totcol   , logical()  ), size = 1)
-  refcol    <- vec_recycle(vec_cast(totcol   , logical()  ), size = 1)
-  color     <- vec_recycle(vec_cast(color    , character()), size = 1)
+  type      <- vctrs::vec_recycle(vctrs::vec_cast(type     , character()), size = 1)
+  comp_all  <- vctrs::vec_recycle(vctrs::vec_cast(comp_all , logical()  ), size = 1)
+  diff_type <- vctrs::vec_recycle(vctrs::vec_cast(diff_type, character()), size = 1)
+  ci_type   <- vctrs::vec_recycle(vctrs::vec_cast(ci_type  , character()), size = 1)
+  col_var   <- vctrs::vec_recycle(vctrs::vec_cast(col_var  , character()), size = 1)
+  totcol    <- vctrs::vec_recycle(vctrs::vec_cast(totcol   , logical()  ), size = 1)
+  refcol    <- vctrs::vec_recycle(vctrs::vec_cast(totcol   , logical()  ), size = 1)
+  color     <- vctrs::vec_recycle(vctrs::vec_cast(color    , character()), size = 1)
 
   new_fmt(n = n, display = display, digits = digits,
           wn = wn, pct = pct,  mean = mean,
@@ -166,12 +245,211 @@ fmt <- function(n         = integer(),
           color = color)
 }
 
-
-
-# Constructor :
-#' @describeIn fmt a constructor for class fmt.
-#' @param class Subclasses to assign to the new object, default: none.
+#' @describeIn fmt a test function for class fmt.
 #' @export
+is_fmt <- function(x) {
+  inherits(x, "fmt")
+}
+
+
+# #' A function to convert vectors to class fmt.
+# #' @param x A vector coercible to double, or a character vector with numbers.
+# #' @param ... The number of digits as an integer, to be passed to the method.
+# #'
+# #' @export
+# as_fmt <- function(x, ...) {
+#   UseMethod("as_fmt")
+# }
+
+# # @describeIn as_fmt
+# #' @export
+# as_fmt.default <- function(x, digits = rep(0L, length(x)), #display = rep("count", length(x)),
+#                             # n = rep(NA_integer_, length(x)), wn = rep(NA_real_, length(x)),
+#                             # var = rep(NA_real_, length(x)), ci = rep(NA_real_, length(x)),
+#                             ...) {
+#   new_fmt(vec_data(x))
+# }
+
+
+
+#' @describeIn fmt get the currently displayed field
+#' @export
+get_num <- function(x) {
+  out     <- get_n(x)
+  display <- get_display(x)
+  nas     <- is.na(display)
+  out[!nas & display == "wn"     ] <- get_wn  (x)[!nas & display == "wn"     ]
+  out[!nas & display == "pct"    ] <- get_pct (x)[!nas & display == "pct"    ]
+  out[!nas & display == "diff"   ] <- get_diff(x)[!nas & display == "diff"   ]
+  out[!nas & display == "pct_ci" ] <- get_pct (x)[!nas & display == "pct_ci" ]
+  out[!nas & display == "ctr"    ] <- get_ctr (x)[!nas & display == "ctr"    ]
+  out[!nas & display == "mean"   ] <- get_mean(x)[!nas & display == "mean"   ]
+  out[!nas & display == "mean_ci"] <- get_mean(x)[!nas & display == "mean_ci"]
+  out[!nas & display == "var"    ] <- get_var (x)[!nas & display == "var"    ]
+  out[!nas & display == "ci"     ] <- get_ci  (x)[!nas & display == "ci"     ]
+  out
+}
+
+#' @describeIn fmt set the currently displayed field (not changing display type)
+#' @param value The value you want to inject in some \code{fmt} vector's vctrs::field
+#' or attribute using a given "set" function.
+#' @export
+set_num <- function(x, value) {
+  value <- vctrs::vec_recycle(value, length(x))
+  out     <- x
+  display <- get_display(x)
+  nas     <- is.na(display)
+  out[!nas & display == "n"   ] <- set_n   (x[!nas & display == "n"   ], value[!nas & display == "n"   ])
+  out[!nas & display == "wn"  ] <- set_wn  (x[!nas & display == "wn"  ], value[!nas & display == "wn"  ])
+  out[!nas & display == "pct" ] <- set_pct (x[!nas & display == "pct" ], value[!nas & display == "pct" ])
+  out[!nas & display == "diff"] <- set_pct (x[!nas & display == "diff"], value[!nas & display == "diff"])
+  out[!nas & display == "ctr" ] <- set_ctr (x[!nas & display == "ctr" ], value[!nas & display == "ctr" ])
+  out[!nas & display == "mean"] <- set_mean(x[!nas & display == "mean"], value[!nas & display == "mean"])
+  out[!nas & display == "var" ] <- set_var (x[!nas & display == "var" ], value[!nas & display == "var" ])
+  out[!nas & display == "ci"  ] <- set_ci  (x[!nas & display == "ci"  ], value[!nas & display == "ci"  ])
+  out
+}
+
+#' @describeIn fmt get types of fmt columns (at \code{fmt} level or \code{tab} level)
+#' @export
+get_type <- function(x, ...) UseMethod("get_type")
+#' @export
+get_type.default     <- function(x, ...) {
+  ifelse(! is.null(purrr::attr_getter("type")(x)),
+         yes = purrr::attr_getter("type")(x),
+         no  = "") #NA_character_
+}
+#' @export
+get_type.fmt <- function(x, ...) attr(x, "type", exact = TRUE)
+#' @export
+get_type.data.frame <- function(x, ...) purrr::map_chr(x, ~ get_type(.))
+
+#' @describeIn fmt set the column type attribute of a \code{fmt} vector
+#' @export
+set_type      <- function(x, type) {
+  if (type %in% c("no", "", NA_character_)) type <- "n"
+  stopifnot(type %in% c("row", "col", "all", "all_tabs", "mean", "n"))
+  `attr<-`(x ,"type"    , type)
+}
+
+
+
+
+#' @describeIn fmt test function to detect cells in total rows
+#' (at \code{fmt} level or \code{tab} level)
+#' @param x The object to test, to get a field in, or to modify.
+#' @param ... Used in methods to add arguments in the future.
+#' @export
+is_totrow <- function(x, ...) UseMethod("is_totrow")
+#' @export
+is_totrow.default  <-  function(x, ...) rep(FALSE, length(x)) #{
+#' @export
+is_totrow.fmt <- function(x, ...) vctrs::field(x, "in_totrow")
+#' @export
+is_totrow.data.frame <- function(x, ..., partial = FALSE) {
+  totrow_cells_test <- dplyr::ungroup(x) %>% dplyr::select(where(is_fmt)) %>%
+    purrr::map_df(~ is_totrow(.))
+
+  if (partial == TRUE) {
+    totrow_cells_test %>%
+      dplyr::rowwise() %>% dplyr::transmute(partial = any(dplyr::c_across())) %>%
+      dplyr::pull(.data$partial)
+  } else {
+    test_result <- totrow_cells_test %>%
+      dplyr::rowwise() %>%
+      dplyr::transmute(complete = all(dplyr::c_across()),
+                       partial  = any(dplyr::c_across()) & !.data$complete)
+    if (tidyr::replace_na(any(test_result$partial), FALSE)) {
+      warning("partial total rows (with some fmt cells not tagged 'totrow') ",
+              "were not taken into account ")
+    }
+    test_result$complete
+  }
+}
+
+#' @describeIn fmt set the "in_totrow" field (belong to total row)
+#' @export
+as_totrow  <- function(x, in_totrow = TRUE) {
+  vctrs::vec_assert(in_totrow, logical())
+  vctrs::`field<-`(x, "in_totrow", vctrs::vec_recycle(in_totrow, length(x)))
+}
+
+
+#' @describeIn fmt test function to detect cells in total tables
+#' (at \code{fmt} level or \code{tab} level)
+#' @export
+is_tottab <- function(x, ...) UseMethod("is_tottab")
+#' @export
+is_tottab.default  <-  function(x, ...) rep(FALSE, length(x)) #{
+#   ifelse(! is.null(vctrs::field(x, "in_tottab")),
+#          yes = vctrs::field(x, "in_tottab"),
+#          no  = vctrs::vec_recycle(FALSE, length(x)))
+# }
+#' @export
+is_tottab.fmt <- function(x, ...) vctrs::field(x, "in_tottab")
+#' @export
+is_tottab.data.frame <- function(x, ..., partial = FALSE) {
+  tottab_cells_test <- dplyr::ungroup(x) %>% dplyr::select(where(is_fmt)) %>%
+    purrr::map_df(~ is_tottab(.))
+
+  if (partial == TRUE) {
+    tottab_cells_test %>%
+      dplyr::rowwise() %>% dplyr::transmute(partial = any(dplyr::c_across())) %>%
+      dplyr::pull(.data$partial)
+  } else {
+    test_result <- tottab_cells_test %>%
+      dplyr::rowwise() %>%
+      dplyr::transmute(complete = all(dplyr::c_across()),
+                       partial  = any(dplyr::c_across()) & !.data$complete)
+    if (tidyr::replace_na(any(test_result$partial), FALSE)) {
+      warning("partial total rows (with some fmt cells not tagged 'totrow') ",
+              "were not taken into account ")
+    }
+    test_result$complete
+  }
+}
+
+#' @describeIn fmt set the "in_tottab" field (belong to total table)
+#' @export
+as_tottab  <- function(x, in_tottab = TRUE) {
+  vctrs::vec_assert(in_tottab, logical())
+  vctrs::`field<-`(x, "in_tottab", vctrs::vec_recycle(in_tottab, length(x)))
+}
+
+#' @describeIn fmt test function for total columns
+#' (at \code{fmt} level or \code{tab} level)
+#' @export
+is_totcol <- function(x, ...) UseMethod("is_totcol")
+#' @export
+is_totcol.default     <- function(x, ...) {
+  ifelse(! is.null(purrr::attr_getter("totcol")(x)),
+         yes = purrr::attr_getter("totcol")(x),
+         no  = FALSE)
+}
+#' @export
+is_totcol.fmt <- function(x, ...) attr(x, "totcol", exact = TRUE)
+#' @export
+is_totcol.data.frame <- function(x, ...) purrr::map_lgl(x, ~ is_totcol(.))
+
+
+#' @describeIn fmt set the "totcol" attribute of a \code{fmt} vector
+#' @export
+as_totcol     <- function(x, totcol = TRUE) {
+  vctrs::vec_assert(totcol, logical(), size = 1)
+  `attr<-`(x ,"totcol"  , totcol)
+}
+
+
+
+
+# INTERNAL FUNCTIONS #####################################################################
+
+
+# @describeIn
+#' fmt a constructor for class fmt.
+#' @param class Subclasses to assign to the new object, default: none.
+#' @keywords internal
+# @export
 new_fmt <- function(n         = integer(),
                     type      = "n"          ,
 
@@ -211,28 +489,28 @@ new_fmt <- function(n         = integer(),
   #   purrr::map(print)
   # cat("\n")
 
-  #vec_assert(display, character()) #check display or size
-  display <- vec_recycle(display, size = length(n))
-  # vec_assert(n     , integer()) #, size = length(n)
-  # vec_assert(wn    , double() ) #, size = length(n)
-  # vec_assert(pct   , double() ) #, size = length(n)
-  # vec_assert(digits, integer()) #, size = length(n)
-  # vec_assert(ctr   , double() ) #, size = length(n)
-  # vec_assert(mean  , double() ) #, size = length(n)
-  # vec_assert(var   , double() ) #, size = length(n)
-  # vec_assert(ci    , double() ) #, size = length(n)
+  #vctrs::vec_assert(display, character()) #check display or size
+  display <- vctrs::vec_recycle(display, size = length(n))
+  # vctrs::vec_assert(n     , integer()) #, size = length(n)
+  # vctrs::vec_assert(wn    , double() ) #, size = length(n)
+  # vctrs::vec_assert(pct   , double() ) #, size = length(n)
+  # vctrs::vec_assert(digits, integer()) #, size = length(n)
+  # vctrs::vec_assert(ctr   , double() ) #, size = length(n)
+  # vctrs::vec_assert(mean  , double() ) #, size = length(n)
+  # vctrs::vec_assert(var   , double() ) #, size = length(n)
+  # vctrs::vec_assert(ci    , double() ) #, size = length(n)
   #
-  # vec_assert(in_totrow, logical())
-  # vec_assert(in_tottab, logical())
+  # vctrs::vec_assert(in_totrow, logical())
+  # vctrs::vec_assert(in_tottab, logical())
   #
-  # vec_assert(type    , character(), size = 1)
-  # vec_assert(comp_all, logical()  , size = 1)
-  # vec_assert(ci_type , character(), size = 1)
-  # vec_assert(col_var , character(), size = 1)
-  # vec_assert(totcol  , logical()  , size = 1)
-  # vec_assert(color   , character(), size = 1)
+  # vctrs::vec_assert(type    , character(), size = 1)
+  # vctrs::vec_assert(comp_all, logical()  , size = 1)
+  # vctrs::vec_assert(ci_type , character(), size = 1)
+  # vctrs::vec_assert(col_var , character(), size = 1)
+  # vctrs::vec_assert(totcol  , logical()  , size = 1)
+  # vctrs::vec_assert(color   , character(), size = 1)
 
-  new_rcrd(
+  vctrs::new_rcrd(
     list(n = n, display = display, digits = digits,
          wn = wn, pct = pct, mean = mean,
          diff = diff, ctr = ctr, var = var, ci = ci,
@@ -241,7 +519,8 @@ new_fmt <- function(n         = integer(),
     type = type, comp_all = comp_all, diff_type = diff_type,
     ci_type = ci_type, col_var = col_var, totcol = totcol, refcol = refcol,
     color = color,  class = c(class, "fmt"))
-  #access with fields() n_fields() field() `field<-`() ; vec_data() return the tibble with all fields
+  #access with fields() n_fields() vctrs::field() vctrs::`field<-`() ;
+  #vec_data() return the tibble with all fields
 }
 
 
@@ -263,97 +542,67 @@ fmt0 <- function(display = "n", digits = 0, type = "n") {
   #   "ci"      = new_fmt(display = display, n = 0L, ci = 0,                   digits = as.integer(digits)),
   # )
 }
-#' @describeIn fmt a test function for class fmt.
-#' @export
-is_fmt <- function(x) {
-  inherits(x, "fmt")
-}
-
-# switch(display,
-#        "n")
-#
-# switch(type,
-#        "mean",
-#        "row",
-#        "col",
-#        "all",
-#        "all_tabs",
-#        "n"
-# )
-#
-# switch(ci_type,
-#        "cell",
-#        "diff",
-#        NA_character_)
-
-
-# #' A function to convert vectors to class fmt.
-# #' @param x A vector coercible to double, or a character vector with numbers.
-# #' @param ... The number of digits as an integer, to be passed to the method.
-# #'
-# #' @export
-# as_fmt <- function(x, ...) {
-#   UseMethod("as_fmt")
-# }
-
-# # @describeIn as_fmt
-# #' @export
-# as_fmt.default <- function(x, digits = rep(0L, length(x)), #display = rep("count", length(x)),
-#                             # n = rep(NA_integer_, length(x)), wn = rep(NA_real_, length(x)),
-#                             # var = rep(NA_real_, length(x)), ci = rep(NA_real_, length(x)),
-#                             ...) {
-#   new_fmt(vec_data(x))
-# }
 
 
 
-# Functions to work with formatted numbers------------------------------------------------
-# to get and set the different fields directly
+
+# Internal functions to get fields and attributes of class fmt
 
 #' @keywords internal
 fmt_field_factory <- function(x) {
-  function(fmt) field(fmt, x)
+  function(fmt) vctrs::field(fmt, x)
 }
 
-#' @describeIn fmt get the "display" field of a \code{fmt} vector
+# @describeIn fmt
+#' get the "display" field of a \code{fmt} vector
 #' @param fmt The formatted number in which you want to find data for "get" functions,
 #' to modify data for "set" functions.
-#' @export
+#' @keywords internal
+# @export
 get_display <- fmt_field_factory("display")
-#' @describeIn fmt get the "n" field (unweighted counts)
-#' @export
+# @describeIn fmt get the "n" field (unweighted counts)
+#' @keywords internal
+# @export
 get_n      <- fmt_field_factory("n")
-#' @describeIn fmt get the "wn" field (weighted counts)
-#' @export
+# @describeIn fmt get the "wn" field (weighted counts)
+#' @keywords internal
+# @export
 get_wn     <- function(fmt) { #If there is no weighted counts, take counts
-  out <- field(fmt, "wn")
+  out <- vctrs::field(fmt, "wn")
   if (any(is.na(out))) {
-    counts <- field(fmt, "n") %>% as.double()
+    counts <- vctrs::field(fmt, "n") %>% as.double()
     out[is.na(out)] <- counts[is.na(out)]
   }
   out
 }
-#' @describeIn fmt get the "pct" field
-#' @export
+# @describeIn fmt get the "pct" field
+#' @keywords internal
+# @export
 get_pct    <- fmt_field_factory("pct")
-#' @describeIn fmt get the "pct" field
-#' @export
+# @describeIn fmt get the "pct" field
+#' @keywords internal
+# @export
 get_diff   <- fmt_field_factory("diff")
-#get_pct_ci <- function(fmt) field("pct")
-#' @describeIn fmt get the "diff" field (differences from totals or first cells)
-#' @export
+#get_pct_ci <- function(fmt) vctrs::field("pct")
+# @describeIn fmt get the "diff" field (differences from totals or first cells)
+#' @keywords internal
+# @export
 get_digits <- fmt_field_factory("digits")
-#' @describeIn fmt get the "ctr" field (relative contributions of cells to variance)
-#' @export
+# @describeIn fmt get the "ctr" field (relative contributions of cells to variance)
+#' @keywords internal
+# @export
 get_ctr    <- fmt_field_factory("ctr")
-#' @describeIn fmt get the "mean" field
-#' @export
+# @describeIn fmt get the "mean" field
+#' @keywords internal
+# @export
 get_mean   <- fmt_field_factory("mean")
-#' @describeIn fmt get the "var" field (cell variances of means)
-#' @export
+# @describeIn fmt get the "var" field (cell variances of means)
+#' @keywords internal
+# @export
 get_var    <- fmt_field_factory("var")
-#' @describeIn fmt get the "ci" field (confidence intervals)
-#' @export
+# @describeIn fmt get the "ci" field (confidence intervals)
+#' @keywords internal
+# @export
 get_ci     <- fmt_field_factory("ci")
 
 #' @keywords internal
@@ -372,8 +621,8 @@ get_mean_contrib <- function(x) {
       ctr = ctr,
       gr = cumsum(as.integer(totrows)) - as.integer(totrows) ) %>%
       dplyr::mutate(nb = dplyr::row_number()) %>%
-      dplyr::with_groups(gr, ~ dplyr::mutate(., nb = dplyr::last(nb))) %>%
-      dplyr::mutate(mean_ctr = ctr[nb]) %>% dplyr::pull(mean_ctr)
+      dplyr::with_groups(.data$gr, ~ dplyr::mutate(., nb = dplyr::last(.data$nb))) %>%
+      dplyr::mutate(mean_ctr = .data$ctr[.data$nb]) %>% dplyr::pull(.data$mean_ctr)
   }
 }
 
@@ -393,51 +642,28 @@ get_ref_means <- function(x) {
       mean = mean,
       gr = cumsum(as.integer(refrows)) - as.integer(refrows) ) %>%
       dplyr::mutate(nb = dplyr::row_number()) %>%
-      dplyr::with_groups(gr, ~ dplyr::mutate(., nb = dplyr::last(nb))) %>%
-      dplyr::mutate(ref_means = mean[nb]) %>% dplyr::pull(ref_means)
+      dplyr::with_groups(.data$gr, ~ dplyr::mutate(., nb = dplyr::last(.data$nb))) %>%
+      dplyr::mutate(ref_means = .data$mean[.data$nb]) %>% dplyr::pull(.data$ref_means)
   }
 }
 
-#' @describeIn fmt test function to detect cells in total rows
-#' (at \code{fmt} level or \code{tab} level)
-#' @param x The object to test.
-#' @param ... Used in methods to add arguments in the future.
-#' @export
-is_totrow <- function(x, ...) UseMethod("is_totrow")
-#' @export
-is_totrow.default  <-  function(x, ...) rep(FALSE, length(x)) #{
-#' @export
-is_totrow.fmt <- function(x, ...) field(x, "in_totrow")
-#' @export
-is_totrow.data.frame <- function(x, ..., partial = FALSE) {
-  totrow_cells_test <- dplyr::ungroup(x) %>% dplyr::select(where(is_fmt)) %>%
-    purrr::map_df(~ is_totrow(.))
+# "every S3 method must be exported, even if the generic is not"
 
-  if (partial == TRUE) {
-    totrow_cells_test %>%
-      dplyr::rowwise() %>% dplyr::transmute(partial = any(dplyr::c_across())) %>%
-      dplyr::pull(partial)
-  } else {
-    test_result <- totrow_cells_test %>%
-      dplyr::rowwise() %>%
-      dplyr::transmute(complete = all(dplyr::c_across()),
-                       partial  = any(dplyr::c_across()) & ! complete)
-    if (tidyr::replace_na(any(test_result$partial), FALSE)) {
-      warning("partial total rows (with some fmt cells not tagged 'totrow') ",
-              "were not taken into account ")
-    }
-    test_result$complete
-  }
-}
-
-#' @describeIn fmt test function to detect cells in reference rows
-#' (at \code{fmt} level or \code{tab} level)
-#' @export
+# @describeIn fmt test function to detect cells in reference rows
+# (at \code{fmt} level or \code{tab} level)
+#' @keywords internal
+# @export
 is_refrow <- function(x, ...) UseMethod("is_refrow")
+#' @method is_refrow default
+# @keywords internal
 #' @export
 is_refrow.default  <-  function(x, ...) rep(FALSE, length(x)) #{
+#' @method is_refrow fmt
+# @keywords internal
 #' @export
-is_refrow.fmt <- function(x, ...) field(x, "in_refrow")
+is_refrow.fmt <- function(x, ...) vctrs::field(x, "in_refrow")
+#' @method is_refrow data.frame
+# @keywords internal
 #' @export
 is_refrow.data.frame <- function(x, ..., partial = TRUE) {
   refrow_cells_test <- dplyr::ungroup(x) %>% dplyr::select(where(is_fmt)) %>%
@@ -446,12 +672,12 @@ is_refrow.data.frame <- function(x, ..., partial = TRUE) {
   if (partial == TRUE) {
     refrow_cells_test %>%
       dplyr::rowwise() %>% dplyr::transmute(partial = any(dplyr::c_across())) %>%
-      dplyr::pull(partial)
+      dplyr::pull(.data$partial)
   } else {
     test_result <- refrow_cells_test %>%
       dplyr::rowwise() %>%
       dplyr::transmute(complete = all(dplyr::c_across()),
-                       partial  = any(dplyr::c_across()) & ! complete)
+                       partial  = any(dplyr::c_across()) & !.data$complete)
     if (tidyr::replace_na(any(test_result$partial), FALSE)) {
       warning("partial total rows (with some fmt cells not tagged 'refrow') ",
               "were not taken into account ")
@@ -460,71 +686,14 @@ is_refrow.data.frame <- function(x, ..., partial = TRUE) {
   }
 }
 
-#' @describeIn fmt test function to detect cells in total tables
-#' (at \code{fmt} level or \code{tab} level)
-#' @export
-is_tottab <- function(x, ...) UseMethod("is_tottab")
-#' @export
-is_tottab.default  <-  function(x, ...) rep(FALSE, length(x)) #{
-#   ifelse(! is.null(field(x, "in_tottab")),
-#          yes = field(x, "in_tottab"),
-#          no  = vec_recycle(FALSE, length(x)))
-# }
-#' @export
-is_tottab.fmt <- function(x, ...) field(x, "in_tottab")
-#' @export
-is_tottab.data.frame <- function(x, ..., partial = FALSE) {
-  tottab_cells_test <- dplyr::ungroup(x) %>% dplyr::select(where(is_fmt)) %>%
-    purrr::map_df(~ is_tottab(.))
 
-  if (partial == TRUE) {
-    tottab_cells_test %>%
-      dplyr::rowwise() %>% dplyr::transmute(partial = any(dplyr::c_across())) %>%
-      dplyr::pull(partial)
-  } else {
-    test_result <- tottab_cells_test %>%
-      dplyr::rowwise() %>%
-      dplyr::transmute(complete = all(dplyr::c_across()),
-                       partial  = any(dplyr::c_across()) & ! complete)
-    if (tidyr::replace_na(any(test_result$partial), FALSE)) {
-      warning("partial total rows (with some fmt cells not tagged 'totrow') ",
-              "were not taken into account ")
-    }
-    test_result$complete
-  }
-}
-
-
-#' @describeIn fmt get types of fmt columns (at \code{fmt} level or \code{tab} level)
-#' @export
-get_type <- function(x, ...) UseMethod("get_type")
-#' @export
-get_type.default     <- function(x, ...) {
-  ifelse(! is.null(purrr::attr_getter("type")(x)),
-         yes = purrr::attr_getter("type")(x),
-         no  = "") #NA_character_
-}
-#' @export
-get_type.fmt <- function(x, ...) attr(x, "type", exact = TRUE)
-#' @export
-get_type.data.frame <- function(x, ...) purrr::map_chr(x, ~ get_type(.))
-
-
-
-# cols_by_type_pct <- function(tabs) {
-#   types <-
-#     purrr::map_if(tabs, is_fmt, ~ get_type(.), .else = ~ NA_character_) %>%
-#     purrr::map_chr(~ dplyr::if_else(length(unique(.)) > 1, "mixed", unique(.)))
-#
-#   purrr::map2_chr(get_type(tabs), types, function(.pct, .type)
-#     dplyr::if_else(.type == "pct", .pct, .type)  )
-# }
-
-#' @describeIn fmt get comparison level of fmt columns
+# @describeIn fmt
+#' get comparison level of fmt columns
 #' @param replace_na By default, \code{\link{get_comp_all}} takes NA in comparison level
 #' to be a \code{FALSE} (=comparison at subtables/groups level). Set to \code{FALSE}
 #' to avoid this behavior.
-#' @export
+#' @keywords internal
+# @export
 get_comp_all <- function(x, replace_na = TRUE) {
   comp <- attr(x, "comp_all", exact = TRUE)
   if (is.null(comp)) return(NA)
@@ -532,83 +701,99 @@ get_comp_all <- function(x, replace_na = TRUE) {
   comp
 }
 
-#' @describeIn fmt get differences type of fmt columns (at \code{fmt} level or \code{tab} level)
-#' @export
+# @describeIn fmt get differences type of fmt columns (at \code{fmt} level or \code{tab} level)
+#' @keywords internal
+# @export
 get_diff_type <- function(x, ...) UseMethod("get_diff_type")
-#' @export
+#' @method get_diff_type default
+#' @keywords internal
+# @export
 get_diff_type.default     <- function(x, ...) {
   ifelse(! is.null(purrr::attr_getter("diff_type")(x)),
          yes = purrr::attr_getter("diff_type")(x),
          no  = "") #NA_character_
 }
+#' @method get_diff_type fmt
+# @keywords internal
 #' @export
 get_diff_type.fmt <- function(x, ...) attr(x, "diff_type", exact = TRUE)
+#' @method get_diff_type data.frame
+# @keywords internal
 #' @export
 get_diff_type.data.frame <- function(x, ...) {
   purrr::map_chr(x, ~ get_diff_type(.))
 }
 
 
-#' @describeIn fmt get confidence intervals type of fmt columns
+# @describeIn fmt get confidence intervals type of fmt columns
 #' (at \code{fmt} level or \code{tab} level)
-#' @export
+#' @keywords internal
+# @export
 get_ci_type <- function(x, ...) UseMethod("get_ci_type")
+#' @method get_ci_type default
+# @keywords internal
 #' @export
 get_ci_type.default     <- function(x, ...) {
   ifelse(! is.null(purrr::attr_getter("ci_type")(x)),
          yes = purrr::attr_getter("ci_type")(x),
          no  = "") #NA_character_
 }
+#' @method get_ci_type fmt
+# @keywords internal
 #' @export
 get_ci_type.fmt <- function(x, ...) attr(x, "ci_type", exact = TRUE)
+#' @method get_ci_type data.frame
+# @keywords internal
 #' @export
 get_ci_type.data.frame <- function(x, ...) {
   purrr::map_chr(x, ~ get_ci_type(.))
 }
 
 
-#' @describeIn fmt get names of column variable of fmt columns
+# @describeIn fmt get names of column variable of fmt columns
 #' (at \code{fmt} level or \code{tab} level)
-#' @export
+#' @keywords internal
+# @export
 get_col_var <- function(x, ...) UseMethod("get_col_var")
+#' @method get_col_var default
+# @keywords internal
 #' @export
 get_col_var.default     <- function(x, ...) {
   ifelse(! is.null(purrr::attr_getter("col_var")(x)),
          yes = purrr::attr_getter("col_var")(x),
          no  = "") #NA_character_
 }
+#' @method get_col_var fmt
+# @keywords internal
 #' @export
 get_col_var.fmt <- function(x, ...) attr(x, "col_var", exact = TRUE)
+#' @method get_col_var data.frame
+# @keywords internal
 #' @export
 get_col_var.data.frame <- function(x, ...) purrr::map_chr(x, ~ get_col_var(.))
 
-#' @describeIn fmt test function for total columns
-#' (at \code{fmt} level or \code{tab} level)
-#' @export
-is_totcol <- function(x, ...) UseMethod("is_totcol")
-#' @export
-is_totcol.default     <- function(x, ...) {
-  ifelse(! is.null(purrr::attr_getter("totcol")(x)),
-         yes = purrr::attr_getter("totcol")(x),
-         no  = FALSE)
-}
-#' @export
-is_totcol.fmt <- function(x, ...) attr(x, "totcol", exact = TRUE)
-#' @export
-is_totcol.data.frame <- function(x, ...) purrr::map_lgl(x, ~ is_totcol(.))
 
-#' @describeIn fmt test function for reference columns
-#' (at \code{fmt} level or \code{tab} level)
-#' @export
+
+
+# @describeIn fmt test function for reference columns
+# (at \code{fmt} level or \code{tab} level)
+#' @keywords internal
+# @export
 is_refcol <- function(x, ...) UseMethod("is_refcol")
+#' @method is_refcol default
+# @keywords internal
 #' @export
 is_refcol.default     <- function(x, ...) {
   ifelse(! is.null(purrr::attr_getter("refcol")(x)),
          yes = purrr::attr_getter("refcol")(x),
          no  = FALSE)
 }
+#' @method is_refcol fmt
+# @keywords internal
 #' @export
 is_refcol.fmt <- function(x, ...) attr(x, "refcol", exact = TRUE)
+#' @method is_refcol data.frame
+# @keywords internal
 #' @export
 is_refcol.data.frame <- function(x, ...) purrr::map_lgl(x, ~ is_refcol(.))
 
@@ -650,172 +835,140 @@ detect_firstcol <- function(tabs) {
 }
 
 
-#' @describeIn fmt get color (at \code{fmt} level or \code{tab} level)
-#' @export
+# @describeIn fmt get color (at \code{fmt} level or \code{tab} level)
+#' @keywords internal
+# @export
 get_color <- function(x, ...) UseMethod("get_color")
+#' @method get_color default
+# @keywords internal
 #' @export
 get_color.default     <- function(x, ...) {
   ifelse(! is.null(purrr::attr_getter("color")(x)),
          yes = purrr::attr_getter("color")(x),
          no  = "") #NA_character_
 }
+#' @method get_color fmt
+# @keywords internal
 #' @export
 get_color.fmt <- function(x, ...) attr(x, "color", exact = TRUE)
+#' @method get_color data.frame
+# @keywords internal
 #' @export
 get_color.data.frame <- function(x, ...) {
   purrr::map_chr(x, ~ get_color(.))
 }
 
 
+# Internal functions to modify class fmt
+
 #' @keywords internal
 fmt_set_field_factory <- function(x, cast) {
   function(fmt, value) {
-    value <- vec_cast(value, cast) %>% vec_recycle(size = length(fmt))
-    `field<-`(fmt, x, value)
+    value <- vctrs::vec_cast(value, cast) %>% vctrs::vec_recycle(size = length(fmt))
+    vctrs::`field<-`(fmt, x, value)
   }
 }
-#' @describeIn fmt set the "display" field of a \code{fmt} vector
-#' @param value The value you want to inject in some \code{fmt} vector's field
-#' or attribute using a given "set" function.
-#' @export
+# @describeIn fmt set the "display" vctrs::field of a \code{fmt} vector
+#' @keywords internal
+# @export
 set_display <- fmt_set_field_factory("display", cast = character())
-#' @describeIn fmt set the "n" field (unweighted counts)
-#' @export
+# @describeIn fmt set the "n" field (unweighted counts)
+#' @keywords internal
+# @export
 set_n       <- fmt_set_field_factory("n"      , cast = integer()  )
-#' @describeIn fmt set the "wn" field (weighted counts)
-#' @export
+# @describeIn fmt set the "wn" field (weighted counts)
+#' @keywords internal
+# @export
 set_wn      <- fmt_set_field_factory("wn"     , cast = double()   )
-#' @describeIn fmt set the "pct" field
-#' @export
+# @describeIn fmt set the "pct" field
+#' @keywords internal
+# @export
 set_pct     <- fmt_set_field_factory("pct"    , cast = double()   )
-#' @describeIn fmt set the "diff" field
-#' @export
+# @describeIn fmt set the "diff" field
+#' @keywords internal
+# @export
 set_diff    <- fmt_set_field_factory("diff"   , cast = double()   )
-#' @describeIn fmt set the "digits" field (differences from totals or first cells)
-#' @export
+# @describeIn fmt set the "digits" field (differences from totals or first cells)
+#' @keywords internal
+# @export
 set_digits  <- fmt_set_field_factory("digits" , cast = integer()  )
-#' @describeIn fmt set the "ctr" field (relative contributions of cells to variance)
-#' @export
+# @describeIn fmt set the "ctr" field (relative contributions of cells to variance)
+#' @keywords internal
+# @export
 set_ctr     <- fmt_set_field_factory("ctr"    , cast = double()   )
-#' @describeIn fmt set the "mean" field
-#' @export
+# @describeIn fmt set the "mean" field
+#' @keywords internal
+# @export
 set_mean    <- fmt_set_field_factory("mean"   , cast = double()   )
-#' @describeIn fmt set the "var" field (cell variances of means)
-#' @export
+# @describeIn fmt set the "var" field (cell variances of means)
+#' @keywords internal
+# @export
 set_var     <- fmt_set_field_factory("var"    , cast = double()   )
-#' @describeIn fmt set the "ci" field (confidence intervals)
-#' @export
+# @describeIn fmt set the "ci" field (confidence intervals)
+#' @keywords internal
+# @export
 set_ci      <- fmt_set_field_factory("ci"     , cast = double()   )
 
 
-#' @describeIn fmt set the "in_totrow" field (belong to total row)
-#' @export
-as_totrow  <- function(fmt, in_totrow = TRUE) {
-  vec_assert(in_totrow, logical())
-  `field<-`(fmt, "in_totrow", vec_recycle(in_totrow, length(fmt)))
-}
-#' @describeIn fmt set the "in_refrow" field (belong to reference row)
-#' @export
+# @describeIn fmt set the "in_refrow" field (belong to reference row)
+#' @keywords internal
+# @export
 as_refrow  <- function(fmt, in_refrow = TRUE) {
-  vec_assert(in_refrow, logical())
-  `field<-`(fmt, "in_refrow", vec_recycle(in_refrow, length(fmt)))
-}
-#' @describeIn fmt set the "in_tottab" field (belong to total table)
-#' @export
-as_tottab  <- function(fmt, in_tottab = TRUE) {
-  vec_assert(in_tottab, logical())
-  `field<-`(fmt, "in_tottab", vec_recycle(in_tottab, length(fmt)))
+  vctrs::vec_assert(in_refrow, logical())
+  vctrs::`field<-`(fmt, "in_refrow", vctrs::vec_recycle(in_refrow, length(fmt)))
 }
 
-
-#' @describeIn fmt set the "col_var" attribute of a \code{fmt} vector
-#' @export
+# @describeIn fmt set the "col_var" attribute of a \code{fmt} vector
+#' @keywords internal
+# @export
 set_col_var   <- function(fmt, col_var) {
-  vec_assert(col_var, character(), size = 1)
+  vctrs::vec_assert(col_var, character(), size = 1)
   `attr<-`(fmt ,"col_var" , col_var)
 }
-#' @describeIn fmt set the "totcol" attribute of a \code{fmt} vector
-#' @export
-as_totcol     <- function(fmt, totcol = TRUE) {
-  vec_assert(totcol, logical(), size = 1)
-  `attr<-`(fmt ,"totcol"  , totcol)
-}
-#' @describeIn fmt set the "ref_col" attribute of a \code{fmt} vector
-#' @export
+
+# @describeIn fmt set the "ref_col" attribute of a \code{fmt} vector
+#' @keywords internal
+# @export
 as_refcol     <- function(fmt, refcol = TRUE) {
-  vec_assert(refcol, logical(), size = 1)
+  vctrs::vec_assert(refcol, logical(), size = 1)
   `attr<-`(fmt ,"refcol"  , refcol)
 }
-#' @describeIn fmt set the column type attribute of a \code{fmt} vector
-#' @export
-set_type      <- function(fmt, type) {
-  if (type %in% c("no", "", NA_character_)) type <- "n"
-  stopifnot(type %in% c("row", "col", "all", "all_tabs", "mean", "n"))
-  `attr<-`(fmt ,"type"    , type)
-}
-#' @describeIn fmt set the differences type attribute of a \code{fmt} vector
-#' @export
+
+# @describeIn fmt set the differences type attribute of a \code{fmt} vector
+#' @keywords internal
+# @export
 set_diff_type   <- function(fmt, diff_type) {
   stopifnot(diff_type %in% c("tot", "first", "no", "", NA_character_))
   `attr<-`(fmt ,"diff_type" , diff_type)
 }
-#' @describeIn fmt set the confidence intervals type attribute of a \code{fmt} vector
-#' @export
+# @describeIn fmt set the confidence intervals type attribute of a \code{fmt} vector
+#' @keywords internal
+# @export
 set_ci_type   <- function(fmt, ci_type) {
   stopifnot(ci_type %in% c("cell", "diff", "diff_row", "diff_col",
                            "no", "", NA_character_))
   `attr<-`(fmt ,"ci_type" , ci_type)
 }
-#' @describeIn fmt set the color attribute of a \code{fmt} vector
-#' @export
+# @describeIn fmt set the color attribute of a \code{fmt} vector
+#' @keywords internal
+# @export
 set_color     <- function(fmt, color) {
   if (color %in% c("no", "")) color <- NA_character_
   stopifnot(color %in% c("diff", "diff_ci", "after_ci", "contrib", "ci",
                          "", NA_character_))
   `attr<-`(fmt ,"color"   , color)
 }
-#' @describeIn fmt set the comparison level attribute of a \code{fmt} vector
-#' @export
+# @describeIn fmt set the comparison level attribute of a \code{fmt} vector
+#' @keywords internal
+# @export
 set_comp      <- function(fmt, value = c("tab", "all")) {
   `attr<-`(fmt, "comp_all", value == "all")
 }
 
-#' @describeIn fmt get the currently displayed field
-#' @export
-get_num <- function(x) {
-  out     <- get_n(x)
-  display <- get_display(x)
-  nas     <- is.na(display)
-  out[!nas & display == "wn"     ] <- get_wn  (x)[!nas & display == "wn"     ]
-  out[!nas & display == "pct"    ] <- get_pct (x)[!nas & display == "pct"    ]
-  out[!nas & display == "diff"   ] <- get_diff(x)[!nas & display == "diff"   ]
-  out[!nas & display == "pct_ci" ] <- get_pct (x)[!nas & display == "pct_ci" ]
-  out[!nas & display == "ctr"    ] <- get_ctr (x)[!nas & display == "ctr"    ]
-  out[!nas & display == "mean"   ] <- get_mean(x)[!nas & display == "mean"   ]
-  out[!nas & display == "mean_ci"] <- get_mean(x)[!nas & display == "mean_ci"]
-  out[!nas & display == "var"    ] <- get_var (x)[!nas & display == "var"    ]
-  out[!nas & display == "ci"     ] <- get_ci  (x)[!nas & display == "ci"     ]
-  out
-}
 
-#' @describeIn fmt set the currently displayed field (not changing display type)
-#' @export
-set_num <- function(x, value) {
-  value <- vec_recycle(value, length(x))
-  out     <- x
-  display <- get_display(x)
-  nas     <- is.na(display)
-  out[!nas & display == "n"   ] <- set_n   (x[!nas & display == "n"   ], value[!nas & display == "n"   ])
-  out[!nas & display == "wn"  ] <- set_wn  (x[!nas & display == "wn"  ], value[!nas & display == "wn"  ])
-  out[!nas & display == "pct" ] <- set_pct (x[!nas & display == "pct" ], value[!nas & display == "pct" ])
-  out[!nas & display == "diff"] <- set_pct (x[!nas & display == "diff"], value[!nas & display == "diff"])
-  out[!nas & display == "ctr" ] <- set_ctr (x[!nas & display == "ctr" ], value[!nas & display == "ctr" ])
-  out[!nas & display == "mean"] <- set_mean(x[!nas & display == "mean"], value[!nas & display == "mean"])
-  out[!nas & display == "var" ] <- set_var (x[!nas & display == "var" ], value[!nas & display == "var" ])
-  out[!nas & display == "ci"  ] <- set_ci  (x[!nas & display == "ci"  ], value[!nas & display == "ci"  ])
-  out
-}
 
+
+# METHODS FOR CLASS FMT #################################################################
 
 # Format/printing methods for class fmnt ---------------------------------------
 #The first method for every class should almost always be a format() method.
@@ -972,7 +1125,7 @@ pillar_shaft.fmt <- function(x, ...) {
   if (color == "contrib" & !any(totrows)) warning(
     "cannot print color == 'contrib' with no total rows to store ",
     "information about mean contributions to variance"
-  )  # store mean_contrib in a field of fmt ? ----
+  )  # store mean_contrib in a vctrs::field of fmt ? ----
 
   na_out  <- is.na(out)
   ok      <- !na_out & !nas
@@ -1064,7 +1217,7 @@ fmt_color_selection <- function(x, force_color, force_breaks) {
   diff <- if (color %in% c("diff", "diff_ci", "after_ci", "ci") ) {
     get_diff(x)
   } else {
-    NA_real_ #vec_recycle(NA_real_, length(x))
+    NA_real_ #vctrs::vec_recycle(NA_real_, length(x))
   }
 
   ci <- if (color %in% c("diff_ci", "after_ci", "ci") & type_ci == "diff" ) {
@@ -1285,44 +1438,44 @@ tab_color_legend <- function(x, colored = TRUE) {
 
   color_table <-
     tibble::tibble(color_type, diff_type, names = names(color_type)) %>%
-    dplyr::filter(!is.na(color_type) & !color_type %in% c("no", "")) %>%
-    dplyr::group_by(color_type) %>%
+    dplyr::filter(!is.na(.data$color_type) & !.data$color_type %in% c("no", "")) %>%
+    dplyr::group_by(.data$color_type) %>%
     dplyr::mutate(etc = dplyr::if_else(dplyr::row_number() > 3, ",...", "") ) %>%
     dplyr::slice(1:3) %>%
-    dplyr::summarise(names = paste0(names, collapse = ", "),
-                     etc = dplyr::first(etc),
-                     diff_type = dplyr::first(diff_type),
+    dplyr::summarise(names = paste0(.data$names, collapse = ", "),
+                     etc = dplyr::first(.data$etc),
+                     diff_type = dplyr::first(.data$diff_type),
                      .groups = "drop") %>%
     dplyr::mutate(
-      names = paste0(names, etc)
+      names = paste0(.data$names, .data$etc)
     )
 
   if (colored == TRUE) color_table <- color_table %>%
-    dplyr::mutate(names = stringr::str_pad(names,
-                                           max(stringr::str_length(names)),
+    dplyr::mutate(names = stringr::str_pad(.data$names,
+                                           max(stringr::str_length(.data$names)),
                                            side = "right"))
 
   color_table <- color_table %>%
     dplyr::mutate(
-      breaks = brk_from_color(color_type),
-      breaks = dplyr::if_else(color_type %in% c("diff_mean", "diff_ci_mean"),
-                              true  = purrr::map(breaks,
+      breaks = brk_from_color(.data$color_type),
+      breaks = dplyr::if_else(.data$color_type %in% c("diff_mean", "diff_ci_mean"),
+                              true  = purrr::map(.data$breaks,
                                                  ~ .[1:(length(.)/2)] %>%
                                                    c(., purrr::map(., `-`))
                               ),
-                              false = breaks),
+                              false = .data$breaks),
       breaks = dplyr::if_else(
-        condition = color_type %in% c("diff", "diff_ci", "after_ci"),
-        true      = purrr::map(breaks,
+        condition = .data$color_type %in% c("diff", "diff_ci", "after_ci"),
+        true      = purrr::map(.data$breaks,
                                ~ paste0(sprintf("%1.0f",
                                                 purrr::map_dbl(., ~ .[1]) * 100),
                                         "%") ),
-        false     = purrr::map(breaks,
+        false     = purrr::map(.data$breaks,
                                ~ sprintf("%1.3g", purrr::map_dbl(., ~ .[1]))),
       ) %>%
-        purrr::map2(color_type, ~ breaks_with_op(.x, .y)),
-      ref  = purrr::map_chr(diff_type, ~ switch(., "first" = "x1", "tot")),
-      sign = purrr::map(breaks, ~ 1:length(.)) %>%
+        purrr::map2(.data$color_type, ~ breaks_with_op(.x, .y)),
+      ref  = purrr::map_chr(.data$diff_type, ~ switch(., "first" = "x1", "tot")),
+      sign = purrr::map(.data$breaks, ~ 1:length(.)) %>%
         purrr::map(~ dplyr::if_else(condition = . >= max(.)/2 +1,
                                     true      = " < ",
                                     false     = " > ")),
@@ -1330,9 +1483,9 @@ tab_color_legend <- function(x, colored = TRUE) {
 
   if (colored == TRUE) color_table <- color_table %>%
     dplyr::mutate(
-      styles = purrr::map(breaks, ~ get_color_styles(length(.))),
-      styles = purrr::map(styles, ~ color_styles_all[.]),
-      breaks = purrr::map2(styles, breaks,
+      styles = purrr::map(.data$breaks, ~ get_color_styles(length(.))),
+      styles = purrr::map(.data$styles, ~ color_styles_all[.]),
+      breaks = purrr::map2(.data$styles, .data$breaks,
                            ~ purrr::map2_chr(
                              .x, .y,
                              ~ rlang::exec(.x, rlang::sym(.y))
@@ -1341,8 +1494,8 @@ tab_color_legend <- function(x, colored = TRUE) {
 
   color_table <- color_table %>%
     dplyr::mutate(
-      color_scale = list(color_type, ref, sign, breaks,
-                         purrr::map(breaks, ~ 1:length(.))) %>%
+      color_scale = list(.data$color_type, .data$ref, .data$sign, .data$breaks,
+                         purrr::map(.data$breaks, ~ 1:length(.))) %>%
         purrr::pmap(~ dplyr::if_else(
           condition = ..5 %in% c(1, max(..5)/2 + 1),
           true      = color_formula_chr(color_type = ..1, ref = ..2,
@@ -1354,16 +1507,16 @@ tab_color_legend <- function(x, colored = TRUE) {
   color_table <-
     if (colored == TRUE) {
       color_table %>% dplyr::mutate(
-        color_scale = purrr::map_chr(color_scale, ~ paste0(
+        color_scale = purrr::map_chr(.data$color_scale, ~ paste0(
           .,
           collapse = pillar::style_subtle("; ")          )
         ),
-        names = pillar::style_subtle(paste0(names, ": "))
+        names = pillar::style_subtle(paste0(.data$names, ": "))
       )
     } else {
       color_table %>% dplyr::mutate(
-        color_scale = purrr::map_chr(color_scale, ~ paste0(., collapse = "; " )),
-        names = paste0(names, ": ")
+        color_scale = purrr::map_chr(.data$color_scale, ~ paste0(., collapse = "; " )),
+        names = paste0(.data$names, ": ")
       )
     }
 
@@ -1636,19 +1789,19 @@ vec_ptype2.fmt.fmt    <- function(x, y, ...) {
   #                             false = "mixed"),
   #   comp_all = dplyr::if_else(same_comp,
   #                             true  = comp_x,
-  #                             false = vec_recycle(FALSE, l )),
+  #                             false = vctrs::vec_recycle(FALSE, l )),
   #   ci_type  = dplyr::if_else(same_ci_type,
   #                             true  = ci_type_x,
-  #                             false = vec_recycle(NA_character_, l )),
+  #                             false = vctrs::vec_recycle(NA_character_, l )),
   #   col_var  = dplyr::if_else(same_col_var,
   #                             true  = col_var_x,
-  #                             false = vec_recycle("several_vars", l )),
+  #                             false = vctrs::vec_recycle("several_vars", l )),
   #   totcol   = dplyr::if_else(same_totcol,
   #                             true  = totcol_x,
-  #                             false = vec_recycle(FALSE, l )),
+  #                             false = vctrs::vec_recycle(FALSE, l )),
   #   color    = dplyr::if_else(same_color,
   #                             true  = color_x,
-  #                             false = vec_recycle(NA_character_, l))
+  #                             false = vctrs::vec_recycle(NA_character_, l))
   # )
 }
 #' @export
@@ -1705,7 +1858,7 @@ vec_cast.fmt.double   <- function(x, to, ...)
   )
 #' @method vec_cast.double fmt
 #' @export
-vec_cast.double.fmt  <- function(x, to, ...) get_num(x) %>% as.double() #field(x, "pct")
+vec_cast.double.fmt  <- function(x, to, ...) get_num(x) %>% as.double() #vctrs::field(x, "pct")
 
 #' @export
 vec_cast.fmt.integer <- function(x, to, ...)
@@ -1722,7 +1875,7 @@ vec_cast.fmt.integer <- function(x, to, ...)
   ) #new_fmt(pct = as.double(x))
 #' @method vec_cast.integer fmt
 #' @export
-vec_cast.integer.fmt    <- function(x, to, ...) get_num(x) %>% as.integer() #field(x, "pct") %>% as.integer()
+vec_cast.integer.fmt    <- function(x, to, ...) get_num(x) %>% as.integer() #vctrs::field(x, "pct") %>% as.integer()
 
 #' @method vec_cast.character fmt
 #' @export
@@ -1738,7 +1891,7 @@ vec_proxy_compare.fmt <- function(x, ...) {
   get_num(x)
 }
 
-#Once you've implemented vec_ptype2() and vec_cast(), you get vec_c(), [<-, and [[<- implementations for free.
+#Once you've implemented vec_ptype2() and vctrs::vec_cast(), you get vec_c(), [<-, and [[<- implementations for free.
 #You'll also get mostly correct behaviour for c().
 
 
@@ -1764,7 +1917,7 @@ vec_arith.fmt <- function(op, x, y, ...) {
 #' @method vec_arith.fmt default
 #' @export
 vec_arith.fmt.default <- function(op, x, y, ...) {
-  vec_arith_base(op, get_num(x), vec_data(y))
+  vctrs::vec_arith_base(op, get_num(x), vctrs::vec_data(y))
   #stop_incompatible_op(op, x, y)
 }
 
@@ -1804,16 +1957,16 @@ vec_arith.fmt.fmt <- function(op, x, y, ...) {
     "+" = ,
     "-" = new_fmt(
       display = get_display(x),      #dplyr::if_else(get_display(x) == get_display(x)), true = get_display(x), false = "n),
-      n       = vec_arith_base(op, get_n(x)  , get_n(y)  ), #%>% positive_integer(),
-      wn      = vec_arith_base(op, get_wn(x) , get_wn(y) ), #%>% positive_double(),
+      n       = vctrs::vec_arith_base(op, get_n(x)  , get_n(y)  ), #%>% positive_integer(),
+      wn      = vctrs::vec_arith_base(op, get_wn(x) , get_wn(y) ), #%>% positive_double(),
       pct     = ifelse(same_type & ! type_x %in% c("col", "mean", "n"),
-                       yes  = vec_arith_base(op, get_pct(x), get_pct(y)),
+                       yes  = vctrs::vec_arith_base(op, get_pct(x), get_pct(y)),
                        no = NA_real_) %>% tidyr::replace_na(NA_real_), #NA_real_
       diff    = rep_NA_real,
       digits  = pmax(get_digits(x), get_digits(y)),
       ctr     = rep_NA_real, # ???
-      mean    = vec_arith_base(op, get_mean(x) * get_wn(x), get_mean(y) * get_wn(y)) /
-        vec_arith_base("+", get_wn(x) , get_wn(y) ),# weighted mean
+      mean    = vctrs::vec_arith_base(op, get_mean(x) * get_wn(x), get_mean(y) * get_wn(y)) /
+        vctrs::vec_arith_base("+", get_wn(x) , get_wn(y) ),# weighted mean
       var     = rep_NA_real,
       ci      = rep_NA_real,
 
@@ -1832,23 +1985,23 @@ vec_arith.fmt.fmt <- function(op, x, y, ...) {
 
       # type     = dplyr::if_else(same_type,
       #                           true  = type_x,
-      #                           false = vec_recycle("mixed", l )),
+      #                           false = vctrs::vec_recycle("mixed", l )),
       # comp_all = dplyr::if_else(same_comp,
       #                           true  = comp_x,
-      #                           false = vec_recycle(FALSE, l )),
+      #                           false = vctrs::vec_recycle(FALSE, l )),
       # ci_type  = dplyr::if_else(same_ci_type,
       #                           true  = ci_type_x,
-      #                           false = vec_recycle(NA_character_, l )),
+      #                           false = vctrs::vec_recycle(NA_character_, l )),
       # col_var  = dplyr::if_else(same_col_var,
       #                           true  = col_var_x,
-      #                           false = vec_recycle("several_vars", l )),
+      #                           false = vctrs::vec_recycle("several_vars", l )),
     ),
     "/" = ,
     "*" = new_fmt(
       display   = get_display(x),
       n      = get_n(x)   ,
       wn     = get_wn(x)  ,
-      pct    = vec_arith_base(op, get_pct(x), get_pct(y)), #Remove multiplication ?
+      pct    = vctrs::vec_arith_base(op, get_pct(x), get_pct(y)), #Remove multiplication ?
       diff   = rep_NA_real,
       digits = pmax(get_digits(x), get_digits(y)),
       ctr    = rep_NA_real,
@@ -1871,46 +2024,46 @@ vec_arith.fmt.fmt <- function(op, x, y, ...) {
 
       # type     = dplyr::if_else(same_type,
       #                           true  = type_x,
-      #                           false = vec_recycle("mixed", l )),
+      #                           false = vctrs::vec_recycle("mixed", l )),
       # comp_all = dplyr::if_else(same_comp,
       #                           true  = comp_x,
-      #                           false = vec_recycle(FALSE, l )),
+      #                           false = vctrs::vec_recycle(FALSE, l )),
       # ci_type  = dplyr::if_else(same_ci_type,
       #                           true  = ci_type_x,
-      #                           false = vec_recycle(NA_character_, l )),
+      #                           false = vctrs::vec_recycle(NA_character_, l )),
       # col_var  = dplyr::if_else(same_col_var,
       #                           true  = col_var_x,
-      #                           false = vec_recycle("several_vars", l )),
+      #                           false = vctrs::vec_recycle("several_vars", l )),
     ),
-    stop_incompatible_op(op, x, y)
+    vctrs::stop_incompatible_op(op, x, y)
   )
 }
 
 #' @method vec_arith.fmt numeric
 #' @export
 vec_arith.fmt.numeric <- function(op, x, y, ...) {
-  set_num(x, vec_arith_base(op, get_num(x), y))
-  # new_fmt(pct    = vec_arith_base(op, field(x, "pct"), y),
-  #          display   = field(x, "display"  ),
-  #          digits = field(x, "digits"),
-  #          n      = field(x, "n"     ),
-  #          wn     = field(x, "wn"    ),
-  #          var     = field(x, "var"    ),
-  #          ci     = field(x, "ci"    )                     )
+  set_num(x, vctrs::vec_arith_base(op, get_num(x), y))
+  # new_fmt(pct    = vec_arith_base(op, vctrs::field(x, "pct"), y),
+  #          display   = vctrs::field(x, "display"  ),
+  #          digits = vctrs::field(x, "digits"),
+  #          n      = vctrs::field(x, "n"     ),
+  #          wn     = vctrs::field(x, "wn"    ),
+  #          var     = vctrs::field(x, "var"    ),
+  #          ci     = vctrs::field(x, "ci"    )                     )
 }
 
 
 #' @method vec_arith.numeric fmt
 #' @export
 vec_arith.numeric.fmt <- function(op, x, y, ...) {
-  set_num(y, vec_arith_base(op, x, get_num(y)))
-  # new_fmt(pct    = vec_arith_base(op, x, field(y, "pct")),
-  #          display   = field(y, "display"  ),
-  #          digits = field(y, "digits"),
-  #          n      = field(y, "n"     ),
-  #          wn     = field(y, "wn"    ),
-  #          var     = field(y, "var"    ),
-  #          ci     = field(y, "ci"    )                     )
+  set_num(y, vctrs::vec_arith_base(op, x, get_num(y)))
+  # new_fmt(pct    = vec_arith_base(op, x, vctrs::field(y, "pct")),
+  #          display   = vctrs::field(y, "display"  ),
+  #          digits = vctrs::field(y, "digits"),
+  #          n      = vctrs::field(y, "n"     ),
+  #          wn     = vctrs::field(y, "wn"    ),
+  #          var     = vctrs::field(y, "var"    ),
+  #          ci     = vctrs::field(y, "ci"    )                     )
 }
 
 #' @method vec_arith.fmt MISSING
@@ -1918,15 +2071,15 @@ vec_arith.numeric.fmt <- function(op, x, y, ...) {
 vec_arith.fmt.MISSING <- function(op, x, y, ...) { #unary + and - operators
   switch(op,
          `-` = set_num(x, get_num(x) * -1),
-         # new_fmt(pct    = field(x, "pct"   ) * -1,
-         #              display   = field(x, "display"  ),
-         #              digits = field(x, "digits"),
-         #              n      = field(x, "n"     ),
-         #              wn     = field(x, "wn"    ),
-         #              var     = field(x, "var"    ),
-         #              ci     = field(x, "ci"    )       ),
+         # new_fmt(pct    = vctrs::field(x, "pct"   ) * -1,
+         #              display   = vctrs::field(x, "display"  ),
+         #              digits = vctrs::field(x, "digits"),
+         #              n      = vctrs::field(x, "n"     ),
+         #              wn     = vctrs::field(x, "wn"    ),
+         #              var     = vctrs::field(x, "var"    ),
+         #              ci     = vctrs::field(x, "ci"    )       ),
          `+` = x,
-         stop_incompatible_op(op, x, y)
+         vctrs::stop_incompatible_op(op, x, y)
   )
 }
 
@@ -1944,16 +2097,16 @@ vec_math.fmt <- function(.fn, .x, ...) {
   switch(.fn,
          "sum" = new_fmt(display   = get_display(.x)[1],
                          digits = min(get_digits(.x)),
-                         n      = vec_math_base(.fn, get_n(.x)  , ...),
-                         wn     = vec_math_base(.fn, get_wn(.x) , ...),
+                         n      = vctrs::vec_math_base(.fn, get_n(.x)  , ...),
+                         wn     = vctrs::vec_math_base(.fn, get_wn(.x) , ...),
                          pct    = ifelse(! get_type(.x) %in% c("row", "col"),
-                                         yes = vec_math_base(.fn, get_pct(.x), ...),
+                                         yes = vctrs::vec_math_base(.fn, get_pct(.x), ...),
                                          no  = NA_real_) %>%
                            tidyr::replace_na(NA_real_),
                          diff   = NA_real_,
                          ctr    = NA_real_,
-                         mean   = vec_math_base("sum", get_mean(.x) * get_wn(.x), ...) /
-                           vec_math_base("sum", get_wn(.x), ...),
+                         mean   = vctrs::vec_math_base("sum", get_mean(.x) * get_wn(.x), ...) /
+                           vctrs:: vec_math_base("sum", get_wn(.x), ...),
                          var    = NA_real_,
                          ci     = NA_real_,
 
@@ -1972,14 +2125,14 @@ vec_math.fmt <- function(.fn, .x, ...) {
          ),
          "mean" = new_fmt(display = get_display(.x)[1],
                           digits  = max(get_digits(.x)),
-                          n       = vec_math_base("sum", get_n(.x)  , ...),
-                          wn      = vec_math_base("sum", get_wn(.x) , ...),
-                          pct     = vec_math_base("sum", get_pct(.x) * get_wn(.x), ...) /
-                            vec_math_base("sum", get_wn(.x), ...),
+                          n       = vctrs::vec_math_base("sum", get_n(.x)  , ...),
+                          wn      = vctrs::vec_math_base("sum", get_wn(.x) , ...),
+                          pct     = vctrs::vec_math_base("sum", get_pct(.x) * get_wn(.x), ...) /
+                            vctrs::vec_math_base("sum", get_wn(.x), ...),
                           diff    = NA_real_,
                           ctr     = NA_real_,
-                          mean    = vec_math_base("sum", get_mean(.x) * get_wn(.x), ...) /
-                            vec_math_base("sum", get_wn(.x), ...),
+                          mean    = vctrs::vec_math_base("sum", get_mean(.x) * get_wn(.x), ...) /
+                            vctrs::vec_math_base("sum", get_wn(.x), ...),
                           var     = NA_real_,
                           ci      = NA_real_,
 
@@ -1996,5 +2149,7 @@ vec_math.fmt <- function(.fn, .x, ...) {
                           refcol    = is_refcol   (.x),
                           color     = get_color   (.x)
          ),
-         vec_math_base(.fn, get_num(.x), ...) )
+         vctrs::vec_math_base(.fn, get_num(.x), ...) )
 }
+
+

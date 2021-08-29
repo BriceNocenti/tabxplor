@@ -57,3 +57,18 @@ totals/first cells) and confidence intervals.
 \description{
 Add confidence intervals to a \code{\link[tabxplor]{tab}}
 }
+\examples{
+# A typical workflow with tabxplor step-by-step functions :
+\dontrun{
+data <- dplyr::starwars |>
+  tab_prepare(sex, hair_color, gender, rare_to_other = TRUE,
+              n_min = 5, na = "keep")
+
+data |>
+  tab_core(sex, hair_color, gender) |>
+  tab_totaltab("line")  |>
+  tab_tot()  |>
+  tab_pct(comp = "all")  |>
+  tab_ci("diff", color = "after_ci")
+  }
+}

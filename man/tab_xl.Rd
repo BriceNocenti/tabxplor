@@ -78,9 +78,5 @@ Excel output for crosstables, with formatting and colors
 forcats::gss_cat \%>\%
   tab(marital, race, perc = "row") \%>\%
   tab_xl()
-
-forcats::gss_cat \%>\%
-  tab(marital, race) \%>\%
-  tab_xl()
   }
 }

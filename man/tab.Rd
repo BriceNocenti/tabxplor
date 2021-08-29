@@ -178,7 +178,7 @@ more visible into the code.}
 }
 \value{
 A \code{tibble} of class \code{tab}, possibly with colored reading helpers.
-All non-text columns are of class \code{\link[fmt]{formatted numbers}}, storing all
+All non-text columns are of class \code{\link{fmt}}, storing all
 the data necessary to print formats and colors. Columns with \code{row_var} and
 \code{tab_vars} are of class \code{factor} : every added \code{factor} will be
 considered as a \code{tab_vars} and used for grouping. To add text columns without
@@ -193,4 +193,58 @@ Since objects of class \code{tab} are also of class \code{tibble}, you can then 
 like \code{\link[dplyr:arrange]{arrange}}, \code{\link[dplyr:filter]{filter}}
 or \code{\link[dplyr:mutate]{mutate}}.
 Wrapper around the more powerful \code{\link{tab_many}}.
+}
+\examples{
+# A simple crosstable:
+tab(forcats::gss_cat, marital, race)
+
+# With one numeric row or col variables it calculates means by category:
+tab(forcats::gss_cat, marital, age)
+
+# With more variables provided, `tab` makes a subtables for each combination of levels:
+\dontrun{
+tab(forcats::gss_cat, marital, tab_vars = c(year, race))
+}
+
+# You can also add supplementary columns, text or numeric:
+tab(dplyr::storms, category, status, sup_cols = c("pressure", "wind"))
+
+
+# Colors to help the user read the table:
+data <- forcats::gss_cat |>
+  dplyr::filter(year \%in\% c(2000, 2006, 2012), !marital \%in\% c("No answer", "Widowed"))
+gss  <- "Source: General social survey 2000-2014"
+gss2 <- "Source: General social survey 2000, 2006 and 2012"
+
+# Differences between the cell and it's subtable's total cell:
+tab(data, race, marital, year, subtext = gss2, pct = "row", color = "diff")
+
+# Differences between the cell and the whole table's general total cell:
+tab(data, race, marital, year, subtext = gss2, pct = "row", color = "diff", comp = "all")
+
+# Historical differences:
+data2 <- data |> dplyr::mutate(year = as.factor(year))
+tab(data2, year, marital, race, subtext = gss2, pct = "row",
+    color = "diff", diff = "first", tot = "col")
+
+# Differences with the total, except if their confidences intervals are superior to them:
+tab(forcats::gss_cat, race, marital, subtext = gss, pct = "row", color = "diff_ci")
+
+# Same differences, minus their confidence intervals:
+tab(forcats::gss_cat, race, marital, subtext = gss, pct = "row", color = "after_ci")
+
+# Contribution of cells to table's variance, like in a correspondence analysis:
+tab(forcats::gss_cat, race, marital, subtext = gss, color = "contrib")
+
+
+# Since the result is a tibble, you can use all dplyr verbs to modify it :
+library(dplyr)
+tab(dplyr::storms, category, status, sup_cols = c("pressure", "wind")) |>
+  dplyr::filter(category != "-1") |>
+  dplyr::select(-`tropical depression`) \%>\%
+  dplyr::arrange(is_totrow(.), desc(category))
+
+# With `dplyr::arrange`, don't forget to keep the order of tab variables and total rows:
+tab(data, race, marital, year, pct = "row") \%>\%
+  dplyr::arrange(year, is_totrow(.), desc(Married))
 }

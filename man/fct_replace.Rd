@@ -19,3 +19,4 @@ A factor
 \description{
 Recode factor levels using \code{\link[stringr]{str_replace_all}}.
 }
+\keyword{internal}

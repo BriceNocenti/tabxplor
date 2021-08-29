@@ -21,3 +21,4 @@ A factor.
 \description{
 Recode factor levels using \code{\link[stringr]{str_detect}}.
 }
+\keyword{internal}

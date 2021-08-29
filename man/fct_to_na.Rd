@@ -17,8 +17,4 @@ A factor.
 \description{
 Replace Factor Levels with NA
 }
-\examples{
-forcats::gss_cat \%>\%
-dplyr::pull(race) \%>\%
-  fct_to_na("Other")
-}
+\keyword{internal}
