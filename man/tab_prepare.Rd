@@ -43,7 +43,7 @@ than \code{n_min} will be merged into an "Other" level.}
 Prepare data for \code{\link{tab_core}}.
 }
 \examples{
-data <- dplyr::starwars |>
+data <- dplyr::starwars \%>\%
 tab_prepare(sex, hair_color, gender, rare_to_other = TRUE,
             n_min = 5, na = "keep")
 data

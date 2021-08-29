@@ -70,16 +70,16 @@ testthat::test_that("arithmetic between fmt and fmt works", {
 })
 
 testthat::test_that("arithmetic between fmt and numeric works", {
-  (fmt(45, "row" , 4, pct =  0.55, wn = 5.1) + 0.7)|> testthat::expect_s3_class("fmt")
-  (fmt(55, "mean", 3, mean = 2.55, wn = 55.1) - 1) |> testthat::expect_s3_class("fmt")
-  (fmt(65, "row", 2, pct =  0.55, wn = 65.1) / 2)  |> testthat::expect_s3_class("fmt")
-  (fmt(75, "n" ,-1, pct =  0.55, wn = 75.1) * 3)   |> testthat::expect_s3_class("fmt")
-  (fmt(1) + 1)                                     |> testthat::expect_s3_class("fmt")
-  (1 + fmt(1, "row", pct = 0.12))                  |> testthat::expect_s3_class("fmt")
-  (1 - fmt(1, "row", pct = 0.12))                  |> testthat::expect_s3_class("fmt")
-  (2 / fmt(3, "row", pct = 0.12))                  |> testthat::expect_s3_class("fmt")
-  (5 * fmt(1, "n", 2)           )                  |> testthat::expect_s3_class("fmt")
-  (-fmt(1, "row", pct = 0.12)   )                  |> testthat::expect_s3_class("fmt")
+  (fmt(45, "row" , 4, pct =  0.55, wn = 5.1) + 0.7)%>% testthat::expect_s3_class("fmt")
+  (fmt(55, "mean", 3, mean = 2.55, wn = 55.1) - 1) %>% testthat::expect_s3_class("fmt")
+  (fmt(65, "row", 2, pct =  0.55, wn = 65.1) / 2)  %>% testthat::expect_s3_class("fmt")
+  (fmt(75, "n" ,-1, pct =  0.55, wn = 75.1) * 3)   %>% testthat::expect_s3_class("fmt")
+  (fmt(1) + 1)                                     %>% testthat::expect_s3_class("fmt")
+  (1 + fmt(1, "row", pct = 0.12))                  %>% testthat::expect_s3_class("fmt")
+  (1 - fmt(1, "row", pct = 0.12))                  %>% testthat::expect_s3_class("fmt")
+  (2 / fmt(3, "row", pct = 0.12))                  %>% testthat::expect_s3_class("fmt")
+  (5 * fmt(1, "n", 2)           )                  %>% testthat::expect_s3_class("fmt")
+  (-fmt(1, "row", pct = 0.12)   )                  %>% testthat::expect_s3_class("fmt")
 })
 
 testthat::test_that("math (sum and mean) between fmt and fmt works", {

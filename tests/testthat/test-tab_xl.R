@@ -10,9 +10,9 @@ testthat::test_that("tab_xl creates an Excel file", {
       .f = tab_many,
       data = forcats::gss_cat, color = "auto", chi2 = TRUE)
 
-  tabs |>
+  tabs %>%
     tab_xl(path = "tests\\tab_xl_test", sheets = "unique",
-           replace = TRUE, open = FALSE) |>
+           replace = TRUE, open = FALSE) %>%
     testthat::expect_invisible()
 
  testthat::expect_true(file.exists("tests\\tab_xl_test.xlsx"))

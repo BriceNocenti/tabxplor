@@ -799,7 +799,7 @@ tab_xl <-
       dplyr::filter(purrr::map_lgl(.data$rows, ~ length(.) != 0))
 
     if (nrow(insuff_row_map) != 0) {
-      insuff_row_map |> dplyr::group_by(.data$sheet, .data$rows) %>%
+      insuff_row_map %>% dplyr::group_by(.data$sheet, .data$rows) %>%
         dplyr::summarise(sheet = dplyr::last(sheet),
                          cols  = list(.data$cols),
                          rows  = dplyr::last(.data$rows), .groups = "drop") %>%

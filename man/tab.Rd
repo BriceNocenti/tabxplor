@@ -207,11 +207,12 @@ tab(forcats::gss_cat, marital, tab_vars = c(year, race))
 }
 
 # You can also add supplementary columns, text or numeric:
+\dontrun{
 tab(dplyr::storms, category, status, sup_cols = c("pressure", "wind"))
-
+}
 
 # Colors to help the user read the table:
-data <- forcats::gss_cat |>
+data <- forcats::gss_cat \%>\%
   dplyr::filter(year \%in\% c(2000, 2006, 2012), !marital \%in\% c("No answer", "Widowed"))
 gss  <- "Source: General social survey 2000-2014"
 gss2 <- "Source: General social survey 2000, 2006 and 2012"
@@ -223,7 +224,7 @@ tab(data, race, marital, year, subtext = gss2, pct = "row", color = "diff")
 tab(data, race, marital, year, subtext = gss2, pct = "row", color = "diff", comp = "all")
 
 # Historical differences:
-data2 <- data |> dplyr::mutate(year = as.factor(year))
+data2 <- data \%>\% dplyr::mutate(year = as.factor(year))
 tab(data2, year, marital, race, subtext = gss2, pct = "row",
     color = "diff", diff = "first", tot = "col")
 
@@ -239,8 +240,8 @@ tab(forcats::gss_cat, race, marital, subtext = gss, color = "contrib")
 
 # Since the result is a tibble, you can use all dplyr verbs to modify it :
 library(dplyr)
-tab(dplyr::storms, category, status, sup_cols = c("pressure", "wind")) |>
-  dplyr::filter(category != "-1") |>
+tab(dplyr::storms, category, status, sup_cols = c("pressure", "wind")) \%>\%
+  dplyr::filter(category != "-1") \%>\%
   dplyr::select(-`tropical depression`) \%>\%
   dplyr::arrange(is_totrow(.), desc(category))
 

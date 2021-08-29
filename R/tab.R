@@ -197,7 +197,7 @@
 #'}
 #'
 #' # Colors to help the user read the table:
-#' data <- forcats::gss_cat |>
+#' data <- forcats::gss_cat %>%
 #'   dplyr::filter(year %in% c(2000, 2006, 2012), !marital %in% c("No answer", "Widowed"))
 #' gss  <- "Source: General social survey 2000-2014"
 #' gss2 <- "Source: General social survey 2000, 2006 and 2012"
@@ -209,7 +209,7 @@
 #' tab(data, race, marital, year, subtext = gss2, pct = "row", color = "diff", comp = "all")
 #'
 #' # Historical differences:
-#' data2 <- data |> dplyr::mutate(year = as.factor(year))
+#' data2 <- data %>% dplyr::mutate(year = as.factor(year))
 #' tab(data2, year, marital, race, subtext = gss2, pct = "row",
 #'     color = "diff", diff = "first", tot = "col")
 #'
@@ -225,8 +225,8 @@
 #'
 #' # Since the result is a tibble, you can use all dplyr verbs to modify it :
 #' library(dplyr)
-#' tab(dplyr::storms, category, status, sup_cols = c("pressure", "wind")) |>
-#'   dplyr::filter(category != "-1") |>
+#' tab(dplyr::storms, category, status, sup_cols = c("pressure", "wind")) %>%
+#'   dplyr::filter(category != "-1") %>%
 #'   dplyr::select(-`tropical depression`) %>%
 #'   dplyr::arrange(is_totrow(.), desc(category))
 #'
@@ -532,7 +532,7 @@ tab <- function(data, row_var, col_var, tab_vars, wt, sup_cols,
 #' \dontrun{
 #' library(dplyr)
 #' first_lvs <- c("Married", "$25000 or more", "Strong republican", "Protestant")
-#' data <- forcats::gss_cat |> mutate(across(
+#' data <- forcats::gss_cat %>% mutate(across(
 #'   where(is.factor),
 #'   ~ forcats::fct_relevel(., first_lvs[first_lvs %in% levels(.)])
 #' ))
@@ -800,7 +800,7 @@ tab_many <- function(data, row_var, col_vars, tab_vars, wt,
   duplicated_levels <- tabs %>%
     purrr::map(~ names(.) %>% purrr::discard(. %in% c(row_var, tab_vars))) %>%
     purrr::flatten_chr() #%>% .[duplicated(.)] %>% unique()
-  duplicated_levels <- duplicated_levels[duplicated(duplicated_levels)] |> unique()
+  duplicated_levels <- duplicated_levels[duplicated(duplicated_levels)] %>% unique()
 
   if (length(duplicated_levels) != 0) {
     # warning(paste0("some levels names are the same for different variables : ",
@@ -875,7 +875,7 @@ tab_many <- function(data, row_var, col_vars, tab_vars, wt,
 
     if (tot_cols_type == "all_col_vars") {
       no_last_tot <- is_totcol(tabs) #%>% .[.] %>% names()
-      no_last_tot <- no_last_tot[no_last_tot]|> names()
+      no_last_tot <- no_last_tot[no_last_tot]%>% names()
       last_tot <- dplyr::last(no_last_tot)
       no_last_tot <- no_last_tot %>% purrr::discard(. == last_tot)
       tabs <- tabs %>% dplyr::select(-tidyselect::all_of(no_last_tot)) %>%
@@ -925,14 +925,14 @@ tab_many <- function(data, row_var, col_vars, tab_vars, wt,
 #' @return A \code{tibble} of class \code{tab}, with less rows and more columns.
 #' @export
 #'
-#' @examples data <- forcats::gss_cat |> dplyr::filter(year %in% c(2000, 2014))
+#' @examples data <- forcats::gss_cat %>% dplyr::filter(year %in% c(2000, 2014))
 #'
 #' tabs <-
 #'   tab(data, relig, marital, c(year, race), pct = "row", totaltab = "no", color = "diff",
 #'       rare_to_other = TRUE)
 #'
-#' tabs |>
-#'   dplyr::select(year, race, relig, Married) |>
+#' tabs %>%
+#'   dplyr::select(year, race, relig, Married) %>%
 #'   tab_spread(race)
 tab_spread <- function(tabs, spread_vars, names_prefix, names_sort = FALSE,
                        totname = "Total") {
@@ -992,7 +992,7 @@ tab_spread <- function(tabs, spread_vars, names_prefix, names_sort = FALSE,
 
     tabs <- tabs %>% dplyr::mutate(
       !!rlang::sym(row_var) := forcats::fct_recode(!!rlang::sym(row_var),
-                                                   !!!new_levels) |>
+                                                   !!!new_levels) %>%
         forcats::fct_relevel(unique(names(new_levels)), after = Inf)
     ) %>%
       dplyr::select(-.data$tottab_rows, -.data$tottab_line)
@@ -1017,7 +1017,7 @@ tab_spread <- function(tabs, spread_vars, names_prefix, names_sort = FALSE,
     )
   }
 
-   tabs <- tabs |>  dplyr::arrange(!!!rlang::syms(tab_vars_new), !!rlang::sym(row_var))
+   tabs <- tabs %>%  dplyr::arrange(!!!rlang::syms(tab_vars_new), !!rlang::sym(row_var))
 
   if (lv1_group_vars(tabs)) {
     new_tab(tabs, subtext = subtext, chi2 = chi2)
@@ -1094,7 +1094,7 @@ tab_get_vars <- function(tabs, vars = c("row_var", "col_vars", "tab_vars")) {
 #' @param other_level The name of the "Other" level, as a character vector of length one.
 #'
 #' @export
-#' @examples data <- dplyr::starwars |>
+#' @examples data <- dplyr::starwars %>%
 #' tab_prepare(sex, hair_color, gender, rare_to_other = TRUE,
 #'             n_min = 5, na = "keep")
 #' data
@@ -1157,7 +1157,7 @@ tab_prepare <-
       data <- data %>% dplyr::group_by(!!!tab_vars) %>%
         dplyr::mutate(!!row_var := forcats::fct_lump_min(!!row_var, n_min,
                                                          other_level = other_level)) %>%
-        dplyr::ungroup() |>
+        dplyr::ungroup() %>%
       dplyr::mutate(!!row_var := forcats::fct_relevel(
         !!row_var,
         levelsrow_var[levelsrow_var %in% levels(!!row_var)]
@@ -1205,13 +1205,13 @@ tab_prepare <-
 #'
 #' @examples # A typical workflow with tabxplor step-by-step functions :
 #' \dontrun{
-#' data <- dplyr::starwars |> tab_prepare(sex, hair_color)
+#' data <- dplyr::starwars %>% tab_prepare(sex, hair_color)
 #'
-#' data |>
-#'   tab_core(sex, hair_color) |>
-#'   tab_tot()  |>
-#'   tab_chi2() |>
-#'   tab_pct()  |>
+#' data %>%
+#'   tab_core(sex, hair_color) %>%
+#'   tab_tot()  %>%
+#'   tab_chi2() %>%
+#'   tab_pct()  %>%
 #'   tab_ci(color = "after_ci")
 #' }
 tab_core <- function(data, row_var, col_var, ..., wt,
@@ -1376,12 +1376,12 @@ tab_core <- function(data, row_var, col_var, ..., wt,
 #' be detected using \code{\link{is_tottab}}.
 #' @export
 #'
-#' @examples \dontrun{ data <- dplyr::starwars |>
+#' @examples \dontrun{ data <- dplyr::starwars %>%
 #' tab_prepare(sex, hair_color, gender, rare_to_other = TRUE,
 #'             n_min = 5, na = "keep")
 #'
-#' data |>
-#'   tab_core(sex, hair_color, gender) |>
+#' data %>%
+#'   tab_core(sex, hair_color, gender) %>%
 #'   tab_totaltab("line")
 #'   }
 tab_totaltab <- function(tabs, totaltab = c("table", "line", "no"),
@@ -1508,10 +1508,10 @@ tab_totaltab <- function(tabs, totaltab = c("table", "line", "no"),
 #'  \code{\link{is_totrow}}, and total columns using \code{\link{is_totcol}}.
 #' @export
 #'
-#' @examples \dontrun{data <- dplyr::starwars |> tab_prepare(sex, hair_color)
+#' @examples \dontrun{data <- dplyr::starwars %>% tab_prepare(sex, hair_color)
 #'
-#' data |>
-#'   tab_core(sex, hair_color) |>
+#' data %>%
+#'   tab_core(sex, hair_color) %>%
 #'   tab_tot("col", totcol = "each")
 #'   }
 tab_tot <- function(tabs, tot = c("row", "col"), name = "Total",
@@ -1735,14 +1735,14 @@ tab_tot <- function(tabs, tot = c("row", "col"), name = "Total",
 #'
 #' @examples # A typical workflow with tabxplor step-by-step functions :
 #' \dontrun{
-#' data <- dplyr::starwars |>
+#' data <- dplyr::starwars %>%
 #'   tab_prepare(sex, hair_color, gender, rare_to_other = TRUE,
 #'               n_min = 5, na = "keep")
 #'
-#' data |>
-#'   tab_core(sex, hair_color, gender) |>
-#'   tab_totaltab("line")  |>
-#'   tab_tot() |>
+#' data %>%
+#'   tab_core(sex, hair_color, gender) %>%
+#'   tab_totaltab("line")  %>%
+#'   tab_tot() %>%
 #'   tab_pct("row", comp = "all", color = TRUE)
 #'   }
 tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no"),
@@ -2050,15 +2050,15 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
 #'
 #' @examples # A typical workflow with tabxplor step-by-step functions :
 #' \dontrun{
-#' data <- dplyr::starwars |>
+#' data <- dplyr::starwars %>%
 #'   tab_prepare(sex, hair_color, gender, rare_to_other = TRUE,
 #'               n_min = 5, na = "keep")
 #'
-#' data |>
-#'   tab_core(sex, hair_color, gender) |>
-#'   tab_totaltab("line")  |>
-#'   tab_tot()  |>
-#'   tab_pct(comp = "all")  |>
+#' data %>%
+#'   tab_core(sex, hair_color, gender) %>%
+#'   tab_totaltab("line")  %>%
+#'   tab_tot()  %>%
+#'   tab_pct(comp = "all")  %>%
 #'   tab_ci("diff", color = "after_ci")
 #'   }
 tab_ci <- function(tabs,
@@ -2390,14 +2390,14 @@ tab_ci <- function(tabs,
 #'
 #' @examples # A typical workflow with tabxplor step-by-step functions :
 #' \dontrun{
-#' data <- dplyr::starwars |>
+#' data <- dplyr::starwars %>%
 #'   tab_prepare(sex, hair_color, gender, rare_to_other = TRUE,
 #'               n_min = 5, na = "keep")
 #'
-#' data |>
-#'   tab_core(sex, hair_color, gender) |>
-#'   tab_totaltab("line")  |>
-#'   tab_tot()  |>
+#' data %>%
+#'   tab_core(sex, hair_color, gender) %>%
+#'   tab_totaltab("line")  %>%
+#'   tab_tot()  %>%
 #'   tab_chi2(calc = c("p", "ctr"), color = TRUE)
 #'   }
 tab_chi2 <- function(tabs, calc = c("ctr", "p", "var", "counts"),
@@ -2436,7 +2436,7 @@ tab_chi2 <- function(tabs, calc = c("ctr", "p", "var", "counts"),
   all_col_tot <- names(col_vars_levels) == "all_col_vars"
 
   tot_cols_names <- purrr::map_lgl(tabs, is_totcol) #%>%  .[.] %>% names()
-  tot_cols_names <- tot_cols_names[tot_cols_names] |> names()
+  tot_cols_names <- tot_cols_names[tot_cols_names] %>% names()
   col_vars_levels_no_tot <-
     purrr::map(col_vars_levels,~ purrr::discard(., . %in% tot_cols_names ) )
 

@@ -41,15 +41,15 @@ test_that("dplyr::rename, rename_with and relocate preserves class tab", {
 
 test_that("[<- and [[<- preserves class tab", {
   tabs[4]     <- dplyr::mutate(tabs[4], dplyr::across(.fns = ~ set_display(., "ctr")))
-  tabs[[2]]   <- tabs[[2]] |> set_digits(3)
+  tabs[[2]]   <- tabs[[2]] %>% set_digits(3)
   tabs[[2, 1]] <- factor("White")
   expect_s3_class(tabs, "tab")
 })
 
 
 
-grouped_tabs <- forcats::gss_cat |>
-  dplyr::filter(year %in% c(2000, 2014)) |>
+grouped_tabs <- forcats::gss_cat %>%
+  dplyr::filter(year %in% c(2000, 2014)) %>%
   tab(race, marital, year)
 
 test_that("dplyr::ungroup preserves class tab", {
@@ -101,7 +101,7 @@ test_that("dplyr::rename, rename_with and relocate preserves class grouped_tab",
 
 test_that("[<- and [[<- preserves class grouped_tab", {
   grouped_tabs[4]     <- dplyr::mutate(grouped_tabs[4], dplyr::across(.fns = ~ set_display(., "ctr")))
-  grouped_tabs[[2]]   <- grouped_tabs[[2]] |> forcats::fct_recode("kéké" = "Black")
+  grouped_tabs[[2]]   <- grouped_tabs[[2]] %>% forcats::fct_recode("kéké" = "Black")
   grouped_tabs[[2,2]] <- factor("White")
   expect_s3_class(grouped_tabs, "grouped_tab")
 })

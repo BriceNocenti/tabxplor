@@ -287,7 +287,7 @@ Breaks for repulsions/subrepresentations (in orange/red) will simply be the oppo
 \dontrun{
 library(dplyr)
 first_lvs <- c("Married", "$25000 or more", "Strong republican", "Protestant")
-data <- forcats::gss_cat |> mutate(across(
+data <- forcats::gss_cat \%>\% mutate(across(
   where(is.factor),
   ~ forcats::fct_relevel(., first_lvs[first_lvs \%in\% levels(.)])
 ))

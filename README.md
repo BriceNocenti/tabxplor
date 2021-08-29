@@ -20,7 +20,13 @@ can be exported to Excel with formats and colors.
 
 ## Installation
 
-You can install tabxplor from github with:
+You can install tabxplor from CRAN with:
+
+``` r
+install.packages("tabxplor")
+```
+
+Or from github with:
 
 ``` r
 # install.packages("devtools")

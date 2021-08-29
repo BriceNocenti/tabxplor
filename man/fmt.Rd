@@ -261,11 +261,11 @@ tabs <- tab(starwars, sex, hair_color, gender, na = "drop", pct = "row",
 
 # To identify the total columns, and work with them :
 is_totcol(tabs)
-tabs |> mutate(across(where(is_totcol), ~ "total column"))
+tabs \%>\% mutate(across(where(is_totcol), ~ "total column"))
 
 # To identify the total rows, and work with them :
 is_totrow(tabs)
-tabs |>
+tabs \%>\%
   mutate(across(
     where(is_fmt),
     ~ if_else(is_totrow(.), true = "into_total_row", false = "normal_cell")
@@ -273,15 +273,15 @@ tabs |>
 
 # To identify the total tables, and work with them :
 tottabs <- is_tottab(tabs)
-tabs |> tibble::add_column(tottabs) |>
+tabs \%>\% tibble::add_column(tottabs) \%>\%
   mutate(total = if_else(tottabs, "part of a total table", "normal cell"))
 
 # To access the displayed numbers, as numeric vectors :
-tabs |> mutate(across(where(is_fmt), get_num))
+tabs \%>\% mutate(across(where(is_fmt), get_num))
 
 # To access the displayed numbers, as character vectors (without colors) :
-tabs |> mutate(across(where(is_fmt), format))
+tabs \%>\% mutate(across(where(is_fmt), format))
 
 # To access the (non-displayed) differences of the cells percentages from totals :
-tabs |> mutate(across(where(is_fmt), ~ vctrs::field(., "diff")))
+tabs \%>\% mutate(across(where(is_fmt), ~ vctrs::field(., "diff")))
 }

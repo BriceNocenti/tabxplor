@@ -51,13 +51,13 @@ Plain single crosstable
 \examples{
 # A typical workflow with tabxplor step-by-step functions :
 \dontrun{
-data <- dplyr::starwars |> tab_prepare(sex, hair_color)
+data <- dplyr::starwars \%>\% tab_prepare(sex, hair_color)
 
-data |>
-  tab_core(sex, hair_color) |>
-  tab_tot()  |>
-  tab_chi2() |>
-  tab_pct()  |>
+data \%>\%
+  tab_core(sex, hair_color) \%>\%
+  tab_tot()  \%>\%
+  tab_chi2() \%>\%
+  tab_pct()  \%>\%
   tab_ci(color = "after_ci")
 }
 }
