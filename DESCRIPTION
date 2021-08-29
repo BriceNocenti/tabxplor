@@ -1,6 +1,6 @@
 Package: tabxplor
-Title: user-friendly crosstables with color helpers for data exploration
-Version: 0.2.1.9000
+Title: User-friendly Crosstables with Color Helpers for Data Exploration
+Version: 1.0.0
 Authors@R: 
     person(given = "Brice",
            family = "Nocenti",
