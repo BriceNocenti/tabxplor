@@ -304,7 +304,7 @@ compare_levels <-
 # Adapt purrr::map_if function to pmap et map2
 # (when FALSE the result is the first element of .l, or the content of .else)
 
-#' A generalised map_if
+#' A generalized map_if
 #'
 #' @param .l List of lists.
 #' @param .p Predicate.
@@ -586,7 +586,7 @@ prepare_fct_recode <- function(df_in, df_out, var,  mode = c("text", "numbers",
 
 #' Bind dataframes for tab / tab_many
 #'
-#' @param data Dataframes to be binded by rows.
+#' @param data Dataframes to be bound by rows.
 #' @param vars Selected variables.
 #'
 #' @return A tibble.

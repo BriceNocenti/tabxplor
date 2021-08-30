@@ -6,17 +6,17 @@
 <!-- badges: start -->
 
 [![Travis build
-status](https://travis-ci.com/BriceNocenti/tabxplor.svg?branch=master)](https://travis-ci.com/BriceNocenti/tabxplor)
+status](https://www.travis-ci.com/BriceNocenti/tabxplor.svg?branch=master)](https://www.travis-ci.com/BriceNocenti/tabxplor)
 <!-- badges: end -->
 
 If R makes complex things simple, it can sometimes make simple things
 difficult. This is why `tabxplor` tries to make it easy to deal with
-multiple crosstabs: to create and manipulate them, but also to read
-them, using color helpers to highlight important information. It would
-love to enhance your data exploration experience with simple yet
-powerful tools. All functions are tidyverse-propelled, pipe-friendly,
-and render tibbles, which can be easily modified using `dplyr`. Tables
-can be exported to Excel with formats and colors.
+multiple cross-tables: to create and manipulate them, but also to read
+them, using color helpers to highlight important informations. It would
+love to enhance your data exploration experience with simple yetpowerful
+tools. All functions are propelled by `tidyverse`, pipe-friendly, and
+render `tibble` data frames which can be easily manipulated with
+`dplyr`. Tables can be exported to Excel with formats and colors.
 
 ## Installation
 
@@ -26,12 +26,12 @@ You can install tabxplor from CRAN with:
 install.packages("tabxplor")
 ```
 
-## Base usage: crosstables with color helpers
+## Base usage: cross-tables with color helpers
 
 The main functions are made to be user-friendly and time-saving is data
 analysis workflows.
 
-`tab` makes a simple crosstable:
+`tab` makes a simple cross-table:
 
 ``` r
 library(tabxplor)
@@ -63,8 +63,8 @@ rare_to_other = TRUE, n_min = 1000, other_level = "Custom_other_level_name")
 When a third variable is provided, `tab` makes a table with as many
 subtables as it has levels. With several `tab_vars`, it makes a subtable
 for each combination of their levels. The result is grouped: in dplyr,
-operations like sum() or all() are done within each subtable, and not
-for the whole dataframe.
+operations like `sum()` or `all()` are done within each subtable, and
+not for the whole dataframe.
 
 Colors may be added to highlight over-represented and under-represented
 cells, and therefore help the user read the table. By default, with
@@ -73,8 +73,8 @@ it’s related total (which only works with means and row or col pct).
 When a percentage is superior to the average percentage of the line or
 column, it appears with shades of green. When it’s inferior, it appears
 with shades of red/orange. A color legend is added below the table. Note
-that, for now, colors are made to stand out with dark themes in RStudio,
-not ligth ones.
+that, for now, colors are made to stand out with dark themes (for
+example in RStudio), not light ones.
 
 ``` r
 data <- forcats::gss_cat %>% 
@@ -159,7 +159,7 @@ confidence interval of the difference between them and their reference
 cell (in total or first row/col) is superior to the difference itself.
 Otherwise, it means the cell is not significantly different from it’s
 reference in the total (or first) row: it turns grey, and the reader is
-not anymore tempted to overinterpret the difference.
+not anymore tempted to over-interpret the difference.
 
 ``` r
 tab(forcats::gss_cat, race, marital, pct = "row", color = "diff_ci")
@@ -169,12 +169,11 @@ tab(forcats::gss_cat, race, marital, pct = "row", color = "diff_ci")
 
 Finally, another calculation appears helpful: the difference between the
 cell and the total, minus the confidence interval of this difference (or
-in other word, what remains of that difference after having substrated
+in other word, what remains of that difference after having subtracted
 the confidence interval). `ci = "after_ci"` highligths all the cells
-whose value is significatively different from the relative total (or
-first cell). This is particularly useful when working on small
-populations: we can see at a glance which numbers we have right to read
-and interpret.
+whose value is significantly different from the relative total (or first
+cell). This is particularly useful when working on small populations: we
+can see at a glance which numbers we have right to read and interpret.
 
 ``` r
 tab(forcats::gss_cat, race, marital, subtext = gss, pct = "row", color = "after_ci")
@@ -188,7 +187,7 @@ tab(forcats::gss_cat, race, marital, subtext = gss, pct = "row", color = "after_
 freedom (df), unweighted count, pvalue and (sub)table’s variance. Chi2
 pvalue is colored in green when inferior to 5%, and in red when superior
 or equal to 5%, meaning that the table is not significantly different
-from the independant hypothesis (the two variables may be independant).
+from the independent hypothesis (the two variables may be independent).
 
 ``` r
 tab(forcats::gss_cat, race, marital, chi2 = TRUE)
@@ -212,7 +211,7 @@ Chi2 stats can also be used to color cells based on their contributions
 to the variance of the (sub)table, with `color = "contrib"`. By default,
 only the cells whose contribution is superior to the mean contribution
 are colored. It highlights the cells which would stand out in a
-correspondance analysis (the two related categories would be located at
+correspondence analysis (the two related categories would be located at
 the edges of the first axes ; here, being black is associated with never
 married and being separated).
 
@@ -222,11 +221,11 @@ tab(forcats::gss_cat, race, marital, color = "contrib")
 
 ![](.readme_images/tabxplor6_contrib.jpg)
 
-## Combine tabxplor and dplyr
+## Combine `tabxplor` and `dplyr`
 
-The result of `tab` is a `tibble::tibble` dataframe with class `tab`. It
-gets it’s own printing methods but, in the same time, can be transformed
-using most dplyr verbs, like a normal tibble.
+The result of `tab` is a `tibble::tibble` data frame with class `tab`.
+It gets it’s own printing methods but, in the same time, can be
+transformed using most `dplyr` verbs, like a normal `tibble`.
 
 ``` r
 library(dplyr)
@@ -247,7 +246,7 @@ tab(data, race, marital, year, pct = "row") %>%
 ## Draw more complex tables with `tab_many`
 
 `tab` is a wrapper around the more powerful function `tab_many`, which
-can be used to customise your tables.
+can be used to customize your tables.
 
 It’s possible, for example, to make a summary table of as many columns
 variables as you want (showing all levels, or showing only one specific

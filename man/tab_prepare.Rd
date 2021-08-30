@@ -21,8 +21,8 @@ tab_prepare(
 
 \item{row_var, col_vars, tab_vars}{Variables then to be passed in \code{\link{tab_core}}.}
 
-\item{na}{\code{na = "keep"} prints NA's as explicit "NA" level.
-\code{na = "drop"} removes NA levels before making each table
+\item{na}{\code{na = "keep"} prints \code{NA}'s as explicit \code{"NA"} level.
+\code{na = "drop"} removes \code{NA} levels before making each table
 (tabs made with different column variables may have a different number of
 observations, and won't exactly have the same total columns).
 \code{na = "drop_all"} first removes observations with NA in any selected variable,
@@ -43,8 +43,9 @@ than \code{n_min} will be merged into an "Other" level.}
 Prepare data for \code{\link{tab_core}}.
 }
 \examples{
-data <- dplyr::starwars \%>\%
+\donttest{data <- dplyr::starwars \%>\%
 tab_prepare(sex, hair_color, gender, rare_to_other = TRUE,
             n_min = 5, na = "keep")
 data
+}
 }

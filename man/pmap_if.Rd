@@ -2,7 +2,7 @@
 % Please edit documentation in R/utils.R
 \name{pmap_if}
 \alias{pmap_if}
-\title{A generalised map_if}
+\title{A generalized map_if}
 \usage{
 pmap_if(.l, .p, .f, ..., .else = NULL)
 }
@@ -21,6 +21,6 @@ pmap_if(.l, .p, .f, ..., .else = NULL)
 A list of same length.
 }
 \description{
-A generalised map_if
+A generalized map_if
 }
 \keyword{internal}

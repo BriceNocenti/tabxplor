@@ -7,7 +7,7 @@
 bind_datas_for_tab(data, vars)
 }
 \arguments{
-\item{data}{Dataframes to be binded by rows.}
+\item{data}{Dataframes to be bound by rows.}
 
 \item{vars}{Selected variables.}
 }

@@ -1,18 +1,18 @@
 Package: tabxplor
-Title: User-friendly Crosstables with Color Helpers for Data Exploration
+Title: User-Friendly Tables with Color Helpers for Data Exploration
 Version: 1.0.0
 Authors@R: 
     person(given = "Brice",
            family = "Nocenti",
            role = c("aut", "cre"),
            email = "brice.nocenti@gmail.com")
-Description: If R makes complex things simple, it can sometimes make simple things 
-    difficult. This is why tabxplor tries to make it easy to deal with multiple crosstabs: 
-    to create and manipulate them, but also to read them, using color helpers to highlight 
-    important information. It would love to enhance your data exploration experience with 
-    simple yet powerful tools. All functions are tidyverse-propelled, pipe-friendly, 
-    and render tibbles, which can be easily modified using dplyr. Tables can be exported 
-    to Excel with formats and colors.
+Description: Make it easy to deal with multiple cross-tables in data 
+    exploration, by creating them, manipulating them, and adding color 
+    helpers to highlight important informations. All functions are "tidy",
+    pipe-friendly, and render data frames which can be easily manipulated.
+    Tables can be exported to Excel with formats and colors.
+URL: https://github.com/BriceNocenti/tabxplor
+BugReports: https://github.com/BriceNocenti/tabxplor/issues
 License: GPL (>= 3)
 Encoding: UTF-8
 LazyData: true

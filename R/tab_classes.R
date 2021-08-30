@@ -1256,15 +1256,15 @@ get_color_breaks <- function(brk) {
 
 #' Set the breaks used to print colors
 #' @describeIn tab_many set the breaks used to print colors
-#' @description Only breaks for attractions/surrepresentations (in green) should be given,
-#' as a vector of positive doubles, with length between 1 and 5.
-#' Breaks for repulsions/subrepresentations (in orange/red) will simply be the opposite.
+#' @description Only breaks for attractions/over-representations (in green) should be
+#' given, as a vector of positive doubles, with length between 1 and 5.
+#' Breaks for aversions/under-representations (in orange/red) will simply be the opposite.
 #' @param pct_breaks If they are to be changed, the breaks used for percentages.
 #' Default to \code{c(0.05, 0.1, 0.2, 0.3)} : first color used when the pct of a cell
 #' is +5% superior to the pct of the related total ; second color used when
 #' it is +10% superior ; third +20% superior ; fourth +30% superior.
 #' The opposite for cells inferior to the total.
-#' With \code{color = "after_ci"}, the first break is substracted from all breaks
+#' With \code{color = "after_ci"}, the first break is subtracted from all breaks
 #' (default becomes \code{c(0, 0.05, 0.15, 0.25)} : +0%, +5%, +15%, +25%).
 #' @param mean_breaks If they are to be changed, the breaks used for means.
 #' Default to \code{c(1.15, 1.5, 2, 4)} : first color used when the mean of a cell

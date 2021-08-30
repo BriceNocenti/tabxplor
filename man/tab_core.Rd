@@ -2,7 +2,7 @@
 % Please edit documentation in R/tab.R
 \name{tab_core}
 \alias{tab_core}
-\title{Plain single crosstable}
+\title{Plain single cross-table}
 \usage{
 tab_core(
   data,
@@ -23,7 +23,7 @@ and the column variable, which will be printed with one level per column.
 For numeric variables means are calculated, in a single column.}
 
 \item{...}{Tab variables : a subtable is made for each combination of levels of the
-selected variables. Leave empty to make a simple crosstab. All tab variables
+selected variables. Leave empty to make a simple cross-table. All tab variables
 are converted to factor.}
 
 \item{wt}{A weight variable, of class numeric. Leave empty for unweighted results.}
@@ -46,11 +46,11 @@ considered as a \code{tab_vars} and used for grouping. To add text columns witho
 using them in calculations, be sure they are of class \code{character}.
 }
 \description{
-Plain single crosstable
+Plain single cross-table
 }
 \examples{
 # A typical workflow with tabxplor step-by-step functions :
-\dontrun{
+\donttest{
 data <- dplyr::starwars \%>\% tab_prepare(sex, hair_color)
 
 data \%>\%
