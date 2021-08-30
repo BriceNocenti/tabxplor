@@ -2,7 +2,7 @@
 % Please edit documentation in R/tab_xl.R
 \name{tab_xl}
 \alias{tab_xl}
-\title{Excel output for crosstables, with formatting and colors}
+\title{Excel output for tabxplor tables, with formatting and colors}
 \usage{
 tab_xl(
   tabs,
@@ -23,8 +23,8 @@ tab_xl(
 )
 }
 \arguments{
-\item{tabs}{A crosstable made with \code{\link{tab}}, \code{\link{tab_many}} or
-\code{\link{tab_core}}, or a list of such crosstables.}
+\item{tabs}{A table made with \code{\link{tab}}, \code{\link{tab_many}} or
+\code{\link{tab_core}}, or a list of such tables.}
 
 \item{path, replace, open}{The name, and possibly the path, of the Excel file
 to create (without the .xlsx extension). Default path to working directory.
@@ -37,7 +37,7 @@ software associated with .xlsx files).}
 \item{remove_tab_vars}{By default, \code{tab_vars} columns are removed to gain space.
 Set to \code{FALSE} to keep them.}
 
-\item{colwidth}{The standard colwidth for numeric columns, as a number.
+\item{colwidth}{The standard width for numeric columns, as a number.
 Default to \code{"auto"}.}
 
 \item{print_ci}{By default provided confidence intervals are printed in another table,
@@ -54,10 +54,10 @@ same sheets
 }}
 
 \item{min_counts}{The total count under which a column or row is turned pale grey
-because there is not enought observation for it to be significative. Default to 30.}
+because there is not enough observation for it to be significant. Default to 30.}
 
 \item{hide_near_zero}{By default all cells displayed as 0 (even rounded)
-turn pale grey, to make the repartition of empty cells (and other cells) more visible.
+turn pale grey, to make the distribution of empty cells (and other cells) more visible.
 Provide a number to turn grey every cell below it. Set to \code{Inf} not to use
 this feature.}
 
@@ -71,12 +71,12 @@ this feature.}
 The table(s) with formatting and colors in an Excel file.
 }
 \description{
-Excel output for crosstables, with formatting and colors
+Excel output for tabxplor tables, with formatting and colors
 }
 \examples{
 \dontrun{
 forcats::gss_cat \%>\%
-  tab(marital, race, perc = "row") \%>\%
+  tab(marital, race, pct = "row", color = "diff") \%>\%
   tab_xl()
   }
 }

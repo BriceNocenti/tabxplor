@@ -1,9 +1,9 @@
 
 
-#' Excel output for crosstables, with formatting and colors
+#' Excel output for tabxplor tables, with formatting and colors
 #'
-#' @param tabs A crosstable made with \code{\link{tab}}, \code{\link{tab_many}} or
-#' \code{\link{tab_core}}, or a list of such crosstables.
+#' @param tabs A table made with \code{\link{tab}}, \code{\link{tab_many}} or
+#' \code{\link{tab_core}}, or a list of such tables.
 #' @param path,replace,open The name, and possibly the path, of the Excel file
 #' to create (without the .xlsx extension). Default path to working directory.
 #' Use \code{replace = TRUE} to overwrite existing files. Use \code{open = TRUE}
@@ -12,7 +12,7 @@
 #' @param colnames_rotation Rotate the names of columns to an angle (in degrees).
 #' @param remove_tab_vars By default, \code{tab_vars} columns are removed to gain space.
 #' Set to \code{FALSE} to keep them.
-#' @param colwidth The standard colwidth for numeric columns, as a number.
+#' @param colwidth The standard width for numeric columns, as a number.
 #' Default to \code{"auto"}.
 #' @param print_ci By default provided confidence intervals are printed in another table,
 #' left to the base table. Set to \code{FALSE} to dismiss.
@@ -25,9 +25,9 @@
 #'    same sheets
 #' }
 #' @param min_counts The total count under which a column or row is turned pale grey
-#' because there is not enought observation for it to be significative. Default to 30.
+#' because there is not enough observation for it to be significant. Default to 30.
 #' @param hide_near_zero By default all cells displayed as 0 (even rounded)
-#' turn pale grey, to make the repartition of empty cells (and other cells) more visible.
+#' turn pale grey, to make the distribution of empty cells (and other cells) more visible.
 #' Provide a number to turn grey every cell below it. Set to \code{Inf} not to use
 #' this feature.
 #' @param pct_breaks The breaks used to color percentages.
@@ -40,7 +40,7 @@
 #' @examples
 #' \dontrun{
 #' forcats::gss_cat %>%
-#'   tab(marital, race, perc = "row") %>%
+#'   tab(marital, race, pct = "row", color = "diff") %>%
 #'   tab_xl()
 #'   }
 tab_xl <-

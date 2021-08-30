@@ -18,7 +18,7 @@ tab_ci(
 \code{\link{tab_many}}.}
 
 \item{ci}{The type of ci to calculate. Set to "cell" to calculate absolute confidence
-intervals. Set to "diff" to calculte the confidence intervals of the difference
+intervals. Set to "diff" to calculate the confidence intervals of the difference
 between a cell and the relative total cell (or the first cell,
 when \code{diff = "first"} in \code{\link{tab_pct}}). By default, "diff" ci are
 calculated for means and row and col percentages, "cell" ci for frequencies ("all",
@@ -59,7 +59,7 @@ Add confidence intervals to a \code{\link[tabxplor]{tab}}
 }
 \examples{
 # A typical workflow with tabxplor step-by-step functions :
-\dontrun{
+\donttest{
 data <- dplyr::starwars \%>\%
   tab_prepare(sex, hair_color, gender, rare_to_other = TRUE,
               n_min = 5, na = "keep")

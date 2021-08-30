@@ -2,7 +2,7 @@
 % Please edit documentation in R/tab.R
 \name{tab}
 \alias{tab}
-\title{Single crosstable, with color helpers}
+\title{Single cross-table, with color helpers}
 \usage{
 tab(
   data,
@@ -42,7 +42,7 @@ For numeric variables means are calculated, in a single column.}
 
 \item{tab_vars}{<\link[tidyr:tidyr_tidy_select]{tidy-select}> Tab variables :
 a subtable is made for each combination of levels of the selected variables.
-Leave empty to make a simple crosstab. All \code{tab_vars} are converted to factor.}
+Leave empty to make a simple cross-table. All \code{tab_vars} are converted to factor.}
 
 \item{wt}{A weight variable, of class numeric. Leave empty for unweighted results.}
 
@@ -54,10 +54,10 @@ To keep all levels of other \code{col_vars}, or other types of percentages,
 use \code{\link{tab_many}} instead.}
 
 \item{na}{The policy to adopt with missing values, as a single string (for a more
-precise control over the behavior of NA's, vectorised for each variable,
+precise control over the behavior of \code{NA}'s, vectorized for each variable,
 use \code{\link{tab_many}}).
 \itemize{
-\item \code{"keep"}: by default, NA's of row, col and tab variables are printed
+\item \code{"keep"}: by default, \code{NA}'s of row, col and tab variables are printed
 as explicit "NA" level. Observations with NA in \code{sup_cols} variables are always
 kept to calculate the base table, always removed to calculate supplementary cols.
 \item \code{"drop"}: removes NA of row, col and tab variables.
@@ -186,7 +186,7 @@ using them in calculations, be sure they are of class \code{character}.
 }
 \description{
 A full-featured function to create, manipulate and format single
-crosstables, using colors to make the printed tab more easily readable
+cross-tables, using colors to make the printed tab more easily readable
 (in R terminal or exported to Excel with \code{\link{tab_xl}}).
 Since objects of class \code{tab} are also of class \code{tibble}, you can then use all
 \pkg{dplyr} verbs to modify the result, like \code{\link[dplyr:select]{select}},
@@ -195,19 +195,19 @@ or \code{\link[dplyr:mutate]{mutate}}.
 Wrapper around the more powerful \code{\link{tab_many}}.
 }
 \examples{
-# A simple crosstable:
+# A simple cross-table:
 tab(forcats::gss_cat, marital, race)
 
 # With one numeric row or col variables it calculates means by category:
 tab(forcats::gss_cat, marital, age)
 
 # With more variables provided, `tab` makes a subtables for each combination of levels:
-\dontrun{
+\donttest{
 tab(forcats::gss_cat, marital, tab_vars = c(year, race))
 }
 
 # You can also add supplementary columns, text or numeric:
-\dontrun{
+\donttest{
 tab(dplyr::storms, category, status, sup_cols = c("pressure", "wind"))
 }
 
@@ -218,15 +218,22 @@ gss  <- "Source: General social survey 2000-2014"
 gss2 <- "Source: General social survey 2000, 2006 and 2012"
 
 # Differences between the cell and it's subtable's total cell:
+\donttest{
 tab(data, race, marital, year, subtext = gss2, pct = "row", color = "diff")
+}
 
 # Differences between the cell and the whole table's general total cell:
-tab(data, race, marital, year, subtext = gss2, pct = "row", color = "diff", comp = "all")
+\donttest{
+tab(data, race, marital, year, subtext = gss2, pct = "row", color = "diff",
+  comp = "all")
+}
 
 # Historical differences:
+\donttest{
 data2 <- data \%>\% dplyr::mutate(year = as.factor(year))
 tab(data2, year, marital, race, subtext = gss2, pct = "row",
     color = "diff", diff = "first", tot = "col")
+    }
 
 # Differences with the total, except if their confidences intervals are superior to them:
 tab(forcats::gss_cat, race, marital, subtext = gss, pct = "row", color = "diff_ci")
@@ -239,13 +246,17 @@ tab(forcats::gss_cat, race, marital, subtext = gss, color = "contrib")
 
 
 # Since the result is a tibble, you can use all dplyr verbs to modify it :
+\donttest{
 library(dplyr)
 tab(dplyr::storms, category, status, sup_cols = c("pressure", "wind")) \%>\%
   dplyr::filter(category != "-1") \%>\%
   dplyr::select(-`tropical depression`) \%>\%
   dplyr::arrange(is_totrow(.), desc(category))
+}
 
+\donttest{
 # With `dplyr::arrange`, don't forget to keep the order of tab variables and total rows:
 tab(data, race, marital, year, pct = "row") \%>\%
   dplyr::arrange(year, is_totrow(.), desc(Married))
+  }
 }

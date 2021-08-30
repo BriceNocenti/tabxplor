@@ -7,7 +7,7 @@
 \alias{tab_color_style}
 \alias{get_color_breaks}
 \alias{set_color_breaks}
-\title{Many crosstables as one, with color helpers}
+\title{Many cross-tables as one, with color helpers}
 \usage{
 tab_many(
   data,
@@ -66,7 +66,7 @@ To pass many variables you may use syntax \code{col_vars = c(col_var1, col_var2,
 \item{tab_vars}{<\link[tidyr:tidyr_tidy_select]{tidy-select}>
 One subtable is made for each combination of levels of the tab variables.
 To pass many variables you may use syntax \code{tab_vars = c(tab_var1, tab_var2, ...)}.
-All tab variables are converted to factor. Leave empty to make a simple crosstab.}
+All tab variables are converted to factor. Leave empty to make a simple table.}
 
 \item{wt}{A weight variable, of class numeric. Leave empty for unweighted results.}
 
@@ -80,8 +80,8 @@ use \code{\link[dplyr:select]{dplyr::select}}) :
 \item{na}{The policy to adopt with missing values. It can be a single string, or a
 character vector the same length of the number of variables (row + cols + tabs) :
 \itemize{
-\item \code{na = "keep"}: by default, prints NA's as explicit \code{"NA"} level.
-\item \code{na = "drop"}: removes NA levels before making each table
+\item \code{na = "keep"}: by default, prints \code{NA}'s as explicit \code{"NA"} level.
+\item \code{na = "drop"}: removes \code{NA} levels before making each table
 (tabs made with different column variables may have a different number of
 observations, and won't exactly have the same total columns).
 \item \code{na = "drop_all"}: first removes observations with NA in any related
@@ -227,7 +227,7 @@ Default to \code{c(0.05, 0.1, 0.2, 0.3)} : first color used when the pct of a ce
 is +5\% superior to the pct of the related total ; second color used when
 it is +10\% superior ; third +20\% superior ; fourth +30\% superior.
 The opposite for cells inferior to the total.
-With \code{color = "after_ci"}, the first break is substracted from all breaks
+With \code{color = "after_ci"}, the first break is subtracted from all breaks
 (default becomes \code{c(0, 0.05, 0.15, 0.25)} : +0\%, +5\%, +15\%, +25\%).}
 
 \item{mean_breaks}{If they are to be changed, the breaks used for means.
@@ -257,7 +257,7 @@ A list with the variables names.
 
 }
 \description{
-A full-featured function to create, manipulate and format many crosstables
+A full-featured function to create, manipulate and format many cross-tables
 as one, using colors to make the printed tab more easily readable (in R terminal or
 exported to Excel with \code{\link{tab_xl}}).
 Since objects of class \code{tab} are also of class \code{tibble}, you can then use all
@@ -265,9 +265,9 @@ Since objects of class \code{tab} are also of class \code{tibble}, you can then 
 like \code{\link[dplyr:arrange]{arrange}}, \code{\link[dplyr:filter]{filter}}
 or \code{\link[dplyr:mutate]{mutate}}.
 
-Only breaks for attractions/surrepresentations (in green) should be given,
-as a vector of positive doubles, with length between 1 and 5.
-Breaks for repulsions/subrepresentations (in orange/red) will simply be the opposite.
+Only breaks for attractions/over-representations (in green) should be
+given, as a vector of positive doubles, with length between 1 and 5.
+Breaks for aversions/under-representations (in orange/red) will simply be the opposite.
 }
 \section{Functions}{
 \itemize{
@@ -284,7 +284,7 @@ Breaks for repulsions/subrepresentations (in orange/red) will simply be the oppo
 
 \examples{
 # Make a summary table with many col_vars, showing only one specific level :
-\dontrun{
+\donttest{
 library(dplyr)
 first_lvs <- c("Married", "$25000 or more", "Strong republican", "Protestant")
 data <- forcats::gss_cat \%>\% mutate(across(
@@ -297,7 +297,7 @@ tab_many(data, race, c(marital, rincome, partyid, relig, age, tvhours),
 
 # Can be used with map and tribble to program several tables with different parameters
 #  all at once, in a readable way:
-\dontrun{
+\donttest{
 library(purrr)
 library(tibble)
 pmap(

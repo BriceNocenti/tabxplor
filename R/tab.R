@@ -19,7 +19,7 @@
 # #'   tab(status, category) %>%
 # #'   tab_sup(sup_rows = c("pressure", "wind"), print_sup = TRUE)
 # #'
-# #' \dontrun{
+# #' \donttest{
 # #' forcats::gss_cat %>%
 # #'   tab(marital, race, perc = "row") %>%
 # #'   tab_xl()
@@ -45,9 +45,9 @@
 # MAIN USER-FRIENDLY FUNCTIONS ###########################################################
 
 
-#' Single crosstable, with color helpers
+#' Single cross-table, with color helpers
 #' @description A full-featured function to create, manipulate and format single
-#' crosstables, using colors to make the printed tab more easily readable
+#' cross-tables, using colors to make the printed tab more easily readable
 #' (in R terminal or exported to Excel with \code{\link{tab_xl}}).
 #' Since objects of class \code{tab} are also of class \code{tibble}, you can then use all
 #' \pkg{dplyr} verbs to modify the result, like \code{\link[dplyr:select]{select}},
@@ -60,7 +60,7 @@
 #'  For numeric variables means are calculated, in a single column.
 #' @param tab_vars <\link[tidyr:tidyr_tidy_select]{tidy-select}> Tab variables :
 #' a subtable is made for each combination of levels of the selected variables.
-#' Leave empty to make a simple crosstab. All \code{tab_vars} are converted to factor.
+#' Leave empty to make a simple cross-table. All \code{tab_vars} are converted to factor.
 #' @param wt A weight variable, of class numeric. Leave empty for unweighted results.
 #' @param sup_cols <\link[tidyr:tidyr_tidy_select]{tidy-select}>
 #' Supplementary columns variables, with only the first level printed, and row percentages
@@ -69,10 +69,10 @@
 #' To keep all levels of other \code{col_vars}, or other types of percentages,
 #' use \code{\link{tab_many}} instead.
 #' @param na The policy to adopt with missing values, as a single string (for a more
-#' precise control over the behavior of NA's, vectorised for each variable,
+#' precise control over the behavior of \code{NA}'s, vectorized for each variable,
 #' use \code{\link{tab_many}}).
 #' \itemize{
-#'   \item \code{"keep"}: by default, NA's of row, col and tab variables are printed
+#'   \item \code{"keep"}: by default, \code{NA}'s of row, col and tab variables are printed
 #'   as explicit "NA" level. Observations with NA in \code{sup_cols} variables are always
 #'   kept to calculate the base table, always removed to calculate supplementary cols.
 #'   \item \code{"drop"}: removes NA of row, col and tab variables.
@@ -180,19 +180,19 @@
 #' using them in calculations, be sure they are of class \code{character}.
 #' @export
 #'
-#' @examples # A simple crosstable:
+#' @examples # A simple cross-table:
 #' tab(forcats::gss_cat, marital, race)
 #'
 #' # With one numeric row or col variables it calculates means by category:
 #' tab(forcats::gss_cat, marital, age)
 #'
 #' # With more variables provided, `tab` makes a subtables for each combination of levels:
-#' \dontrun{
+#' \donttest{
 #' tab(forcats::gss_cat, marital, tab_vars = c(year, race))
 #'}
 #'
 #' # You can also add supplementary columns, text or numeric:
-#' \dontrun{
+#' \donttest{
 #' tab(dplyr::storms, category, status, sup_cols = c("pressure", "wind"))
 #'}
 #'
@@ -203,15 +203,22 @@
 #' gss2 <- "Source: General social survey 2000, 2006 and 2012"
 #'
 #' # Differences between the cell and it's subtable's total cell:
+#' \donttest{
 #' tab(data, race, marital, year, subtext = gss2, pct = "row", color = "diff")
+#' }
 #'
 #' # Differences between the cell and the whole table's general total cell:
-#' tab(data, race, marital, year, subtext = gss2, pct = "row", color = "diff", comp = "all")
+#' \donttest{
+#' tab(data, race, marital, year, subtext = gss2, pct = "row", color = "diff",
+#'   comp = "all")
+#' }
 #'
 #' # Historical differences:
+#' \donttest{
 #' data2 <- data %>% dplyr::mutate(year = as.factor(year))
 #' tab(data2, year, marital, race, subtext = gss2, pct = "row",
 #'     color = "diff", diff = "first", tot = "col")
+#'     }
 #'
 #' # Differences with the total, except if their confidences intervals are superior to them:
 #' tab(forcats::gss_cat, race, marital, subtext = gss, pct = "row", color = "diff_ci")
@@ -224,15 +231,19 @@
 #'
 #'
 #' # Since the result is a tibble, you can use all dplyr verbs to modify it :
+#' \donttest{
 #' library(dplyr)
 #' tab(dplyr::storms, category, status, sup_cols = c("pressure", "wind")) %>%
 #'   dplyr::filter(category != "-1") %>%
 #'   dplyr::select(-`tropical depression`) %>%
 #'   dplyr::arrange(is_totrow(.), desc(category))
+#'}
 #'
+#'\donttest{
 #' # With `dplyr::arrange`, don't forget to keep the order of tab variables and total rows:
 #' tab(data, race, marital, year, pct = "row") %>%
 #'   dplyr::arrange(year, is_totrow(.), desc(Married))
+#'   }
 tab <- function(data, row_var, col_var, tab_vars, wt, sup_cols,
                 na = "keep", digits = 0,
                 pct = "no", color = "no", diff = "tot", comp = "tab",
@@ -385,8 +396,8 @@ tab <- function(data, row_var, col_var, tab_vars, wt, sup_cols,
 
 
 
-#' Many crosstables as one, with color helpers
-#' @description A full-featured function to create, manipulate and format many crosstables
+#' Many cross-tables as one, with color helpers
+#' @description A full-featured function to create, manipulate and format many cross-tables
 #' as one, using colors to make the printed tab more easily readable (in R terminal or
 #' exported to Excel with \code{\link{tab_xl}}).
 #' Since objects of class \code{tab} are also of class \code{tibble}, you can then use all
@@ -403,7 +414,7 @@ tab <- function(data, row_var, col_var, tab_vars, wt, sup_cols,
 #' @param tab_vars <\link[tidyr:tidyr_tidy_select]{tidy-select}>
 #' One subtable is made for each combination of levels of the tab variables.
 #' To pass many variables you may use syntax \code{tab_vars = c(tab_var1, tab_var2, ...)}.
-#' All tab variables are converted to factor. Leave empty to make a simple crosstab.
+#' All tab variables are converted to factor. Leave empty to make a simple table.
 #' @param wt A weight variable, of class numeric. Leave empty for unweighted results.
 #' @param levels The levels of \code{col_vars} to keep (for more complex selections
 #'  use \code{\link[dplyr:select]{dplyr::select}}) :
@@ -414,8 +425,8 @@ tab <- function(data, row_var, col_var, tab_vars, wt, sup_cols,
 #' @param na The policy to adopt with missing values. It can be a single string, or a
 #' character vector the same length of the number of variables (row + cols + tabs) :
 #' \itemize{
-#'   \item \code{na = "keep"}: by default, prints NA's as explicit \code{"NA"} level.
-#'   \item \code{na = "drop"}: removes NA levels before making each table
+#'   \item \code{na = "keep"}: by default, prints \code{NA}'s as explicit \code{"NA"} level.
+#'   \item \code{na = "drop"}: removes \code{NA} levels before making each table
 #'   (tabs made with different column variables may have a different number of
 #'   observations, and won't exactly have the same total columns).
 #'   \item \code{na = "drop_all"}: first removes observations with NA in any related
@@ -529,7 +540,7 @@ tab <- function(data, row_var, col_var, tab_vars, wt, sup_cols,
 #' @export
 #'
 #' @examples # Make a summary table with many col_vars, showing only one specific level :
-#' \dontrun{
+#' \donttest{
 #' library(dplyr)
 #' first_lvs <- c("Married", "$25000 or more", "Strong republican", "Protestant")
 #' data <- forcats::gss_cat %>% mutate(across(
@@ -542,7 +553,7 @@ tab <- function(data, row_var, col_var, tab_vars, wt, sup_cols,
 #'
 #' # Can be used with map and tribble to program several tables with different parameters
 #' #  all at once, in a readable way:
-#' \dontrun{
+#' \donttest{
 #' library(purrr)
 #' library(tibble)
 #' pmap(
@@ -1081,8 +1092,8 @@ tab_get_vars <- function(tabs, vars = c("row_var", "col_vars", "tab_vars")) {
 #' @param row_var,col_vars,tab_vars Variables then to be passed in \code{\link{tab_core}}.
 #' @param cleannames Set to \code{TRUE} to clean levels names, by removing
 #' prefix numbers like \code{"1-"}, and text in parentheses.
-#' @param na \code{na = "keep"} prints NA's as explicit "NA" level.
-#' \code{na = "drop"} removes NA levels before making each table
+#' @param na \code{na = "keep"} prints \code{NA}'s as explicit \code{"NA"} level.
+#' \code{na = "drop"} removes \code{NA} levels before making each table
 #'   (tabs made with different column variables may have a different number of
 #'   observations, and won't exactly have the same total columns).
 #' \code{na = "drop_all"} first removes observations with NA in any selected variable,
@@ -1094,10 +1105,11 @@ tab_get_vars <- function(tabs, vars = c("row_var", "col_vars", "tab_vars")) {
 #' @param other_level The name of the "Other" level, as a character vector of length one.
 #'
 #' @export
-#' @examples data <- dplyr::starwars %>%
+#' @examples \donttest{data <- dplyr::starwars %>%
 #' tab_prepare(sex, hair_color, gender, rare_to_other = TRUE,
 #'             n_min = 5, na = "keep")
 #' data
+#' }
 tab_prepare <-
   function(data, row_var, col_vars, tab_vars,
            na = "keep", cleannames = TRUE,
@@ -1178,14 +1190,14 @@ tab_prepare <-
 #                 dat_group123, rlang::as_label(row_var), rlang::as_label(col_var), as.character(tab_vars), rlang::as_label(wt)) %>%
 #   purrr::pmap(tab_core)
 
-#' Plain single crosstable
+#' Plain single cross-table
 # @description
 #' @param data A data frame.
 #' @param row_var,col_var The row variable, which will be printed with one level per line,
 #'  and the column variable, which will be printed with one level per column.
 #'  For numeric variables means are calculated, in a single column.
 #' @param ... Tab variables : a subtable is made for each combination of levels of the
-#' selected variables. Leave empty to make a simple crosstab. All tab variables
+#' selected variables. Leave empty to make a simple cross-table. All tab variables
 #' are converted to factor.
 #' @param wt A weight variable, of class numeric. Leave empty for unweighted results.
 #' @param digits The number of digits to print, as a single integer.
@@ -1204,7 +1216,7 @@ tab_prepare <-
 #' @export
 #'
 #' @examples # A typical workflow with tabxplor step-by-step functions :
-#' \dontrun{
+#' \donttest{
 #' data <- dplyr::starwars %>% tab_prepare(sex, hair_color)
 #'
 #' data %>%
@@ -1376,7 +1388,7 @@ tab_core <- function(data, row_var, col_var, ..., wt,
 #' be detected using \code{\link{is_tottab}}.
 #' @export
 #'
-#' @examples \dontrun{ data <- dplyr::starwars %>%
+#' @examples \donttest{ data <- dplyr::starwars %>%
 #' tab_prepare(sex, hair_color, gender, rare_to_other = TRUE,
 #'             n_min = 5, na = "keep")
 #'
@@ -1508,7 +1520,7 @@ tab_totaltab <- function(tabs, totaltab = c("table", "line", "no"),
 #'  \code{\link{is_totrow}}, and total columns using \code{\link{is_totcol}}.
 #' @export
 #'
-#' @examples \dontrun{data <- dplyr::starwars %>% tab_prepare(sex, hair_color)
+#' @examples \donttest{data <- dplyr::starwars %>% tab_prepare(sex, hair_color)
 #'
 #' data %>%
 #'   tab_core(sex, hair_color) %>%
@@ -1734,7 +1746,7 @@ tab_tot <- function(tabs, tot = c("row", "col"), name = "Total",
 #' @export
 #'
 #' @examples # A typical workflow with tabxplor step-by-step functions :
-#' \dontrun{
+#' \donttest{
 #' data <- dplyr::starwars %>%
 #'   tab_prepare(sex, hair_color, gender, rare_to_other = TRUE,
 #'               n_min = 5, na = "keep")
@@ -2012,7 +2024,7 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
 #' @param tabs A \code{tibble} of class \code{tab} made with \code{\link{tab_core}} or
 #' \code{\link{tab_many}}.
 #' @param ci The type of ci to calculate. Set to "cell" to calculate absolute confidence
-#' intervals. Set to "diff" to calculte the confidence intervals of the difference
+#' intervals. Set to "diff" to calculate the confidence intervals of the difference
 #' between a cell and the relative total cell (or the first cell,
 #'  when \code{diff = "first"} in \code{\link{tab_pct}}). By default, "diff" ci are
 #'  calculated for means and row and col percentages, "cell" ci for frequencies ("all",
@@ -2049,7 +2061,7 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
 #' @export
 #'
 #' @examples # A typical workflow with tabxplor step-by-step functions :
-#' \dontrun{
+#' \donttest{
 #' data <- dplyr::starwars %>%
 #'   tab_prepare(sex, hair_color, gender, rare_to_other = TRUE,
 #'               n_min = 5, na = "keep")
@@ -2389,7 +2401,7 @@ tab_ci <- function(tabs,
 #' @export
 #'
 #' @examples # A typical workflow with tabxplor step-by-step functions :
-#' \dontrun{
+#' \donttest{
 #' data <- dplyr::starwars %>%
 #'   tab_prepare(sex, hair_color, gender, rare_to_other = TRUE,
 #'               n_min = 5, na = "keep")

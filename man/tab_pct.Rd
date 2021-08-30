@@ -55,7 +55,7 @@ Add percentages and diffs to a \code{\link[tabxplor]{tab}}
 }
 \examples{
 # A typical workflow with tabxplor step-by-step functions :
-\dontrun{
+\donttest{
 data <- dplyr::starwars \%>\%
   tab_prepare(sex, hair_color, gender, rare_to_other = TRUE,
               n_min = 5, na = "keep")
