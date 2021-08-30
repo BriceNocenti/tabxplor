@@ -26,13 +26,6 @@ You can install tabxplor from CRAN with:
 install.packages("tabxplor")
 ```
 
-Or from github with:
-
-``` r
-# install.packages("devtools")
-devtools::install_github("BriceNocenti/tabxplor")
-```
-
 ## Base usage: crosstables with color helpers
 
 The main functions are made to be user-friendly and time-saving is data

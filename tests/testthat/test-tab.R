@@ -10,26 +10,26 @@ data <- dplyr::starwars %>%
 # forcats::gss_cat
 
 testthat::test_that("tab works with missing, NULL, NA, etc., in variables", {
-  tab(data, "gender", "sex", NA_character_) %>% testthat::expect_s3_class("tab")
-  tab(data, "gender", NA_character_)        %>% testthat::expect_s3_class("tab")
-  tab(data, NA_character_, "sex")           %>% testthat::expect_s3_class("tab")
-  tab(data, "gender", "sex", NULL)          %>% testthat::expect_s3_class("tab")
-  #tab(data, "gender", "sex", "")           %>% testthat::expect_s3_class("tab")
-  #tab(data, "gender", "sex", "no")         %>% testthat::expect_s3_class("tab")
+  tab(data, "gender", "sex", NA_character_) %>% testthat::expect_s3_class("tabxplor_tab")
+  tab(data, "gender", NA_character_)        %>% testthat::expect_s3_class("tabxplor_tab")
+  tab(data, NA_character_, "sex")           %>% testthat::expect_s3_class("tabxplor_tab")
+  tab(data, "gender", "sex", NULL)          %>% testthat::expect_s3_class("tabxplor_tab")
+  #tab(data, "gender", "sex", "")           %>% testthat::expect_s3_class("tabxplor_tab")
+  #tab(data, "gender", "sex", "no")         %>% testthat::expect_s3_class("tabxplor_tab")
 
   tab_many(data, "gender")
   tab_many(data, "gender")
   tab_many(data, col_vars = "sex")
   tab_many(data, "gender", col_vars = NULL         , tab_vars = NULL)          %>%
-    testthat::expect_s3_class("tab")
+    testthat::expect_s3_class("tabxplor_tab")
   tab_many(data, "gender", col_vars = NA_character_, tab_vars = NA_character_) %>%
-    testthat::expect_s3_class("tab")
+    testthat::expect_s3_class("tabxplor_tab")
   tab_many(data, "gender", col_vars = ""           , tab_vars = "")            %>%
-    testthat::expect_s3_class("tab")
+    testthat::expect_s3_class("tabxplor_tab")
   tab_many(data, "gender", col_vars = "no"         , tab_vars = "no")          %>%
-    testthat::expect_s3_class("tab")
+    testthat::expect_s3_class("tabxplor_tab")
   tab_many(data, gender, col_vars = hair_color , tab_vars = sex)           %>%
-    testthat::expect_s3_class("tab")
+    testthat::expect_s3_class("tabxplor_tab")
 })
 
 testthat::test_that("all tab functions works with no tab_vars", {
@@ -40,7 +40,7 @@ testthat::test_that("all tab functions works with no tab_vars", {
     tab_pct() %>%
     tab_ci("diff", color = "after_ci") %>%
     tab_chi2() %>%
-    testthat::expect_s3_class("tab")
+    testthat::expect_s3_class("tabxplor_tab")
 })
 
 testthat::test_that("all tab functions works with no col_var", {
@@ -51,7 +51,7 @@ testthat::test_that("all tab functions works with no col_var", {
     tab_pct("col") %>%
     tab_ci("diff", color = "after_ci") %>%
     tab_chi2() %>%
-    testthat::expect_s3_class("tab")
+    testthat::expect_s3_class("tabxplor_tab")
 })
 
 testthat::test_that("all tab functions works with no row_var", {
@@ -62,7 +62,7 @@ testthat::test_that("all tab functions works with no row_var", {
     tab_pct() %>%
     tab_ci() %>%
     tab_chi2() %>%
-    testthat::expect_s3_class("tab")
+    testthat::expect_s3_class("tabxplor_tab")
 })
 
 testthat::test_that("all tab functions works with totaltab = 'line'", {
@@ -73,7 +73,7 @@ testthat::test_that("all tab functions works with totaltab = 'line'", {
     tab_pct() %>%
     tab_ci("diff", color = "after_ci") %>%
     tab_chi2() %>%
-    testthat::expect_s3_class("tab")
+    testthat::expect_s3_class("tabxplor_tab")
 })
 
 testthat::test_that("all tab functions work with only one mean column (with color)", {
@@ -150,9 +150,9 @@ tabs <- tabs %>% tab_totaltab()
 
 testthat::test_that("tab_tot works with all arguments", {
   tabs %>% tab_tot("col") %>% tab_tot("row") %>% tab_tot("no") %>%
-    testthat::expect_s3_class("tab")
+    testthat::expect_s3_class("tabxplor_tab")
 
-  tabs %>% tab_tot(totcol = "each") %>% testthat::expect_s3_class("tab")
+  tabs %>% tab_tot(totcol = "each") %>% testthat::expect_s3_class("tabxplor_tab")
 })
 #tab_tot("row") can't be done on different groups of rows independently
 # tabs[is_tottab(tabs),] <- tabs[is_tottab(tabs),] %>% tab_tot("row")
@@ -188,10 +188,10 @@ testthat::test_that("tab_pct works with groups, ungroup, and warnings", {
 
 testthat::test_that("tab_pct works with tot = 'each'", {
   tabs2 <- tabs %>% tab_tot(totcol = "each")
-  tabs2 %>% tab_pct("row")      %>% testthat::expect_s3_class("tab")
-  tabs2 %>% tab_pct("col")      %>% testthat::expect_s3_class("tab")
-  tabs2 %>% tab_pct("all")      %>% testthat::expect_s3_class("tab")
-  tabs2 %>% tab_pct("all_tabs") %>% testthat::expect_s3_class("tab")
+  tabs2 %>% tab_pct("row")      %>% testthat::expect_s3_class("tabxplor_tab")
+  tabs2 %>% tab_pct("col")      %>% testthat::expect_s3_class("tabxplor_tab")
+  tabs2 %>% tab_pct("all")      %>% testthat::expect_s3_class("tabxplor_tab")
+  tabs2 %>% tab_pct("all_tabs") %>% testthat::expect_s3_class("tabxplor_tab")
 })
 
 
@@ -203,9 +203,9 @@ testthat::test_that("tab_ci works (with tab_pct)", {
     testthat::expect_warning("comp were set to 'tab'")
 
   tabs %>% tab_pct("row", comp = "all") %>% tab_ci("diff", color = "after_ci") %>%
-    testthat::expect_s3_class("tab")
+    testthat::expect_s3_class("tabxplor_tab")
 
-  tabs %>% tab_pct("col") %>% tab_ci(color = "diff_ci") %>% testthat::expect_s3_class("tab")
+  tabs %>% tab_pct("col") %>% tab_ci(color = "diff_ci") %>% testthat::expect_s3_class("tabxplor_tab")
 
   testthat::expect_true(
   tabs %>% tab_pct("row") %>% tab_ci("cell", visible = TRUE) %>%
@@ -218,10 +218,10 @@ testthat::test_that("tab_ci works (with tab_pct)", {
   )
 
   # tabs %>% tab_pct("all")               %>% tab_ci("cell", visible = TRUE)  %>%
-  #   testthat::expect_s3_class("tab")
+  #   testthat::expect_s3_class("tabxplor_tab")
 
   tabs %>% tab_pct("all_tabs") %>% tab_ci("cell", color = "after_ci") %>%
-    testthat::expect_s3_class("tab")
+    testthat::expect_s3_class("tabxplor_tab")
 })
 # Can we sum variances for means ? Answer : no, weighted mean is an approximation
 # tabs1 <- tab_core(data, PE0, REVMENSC, PR0, EMP_ADM_ENT) %>% tab_ci() %>%
@@ -261,11 +261,11 @@ testthat::test_that("tab_ci works (with tab_pct)", {
 #' @keywords internal
 expect_color <- function(object) {
   # 1. Capture object and label
-  act <- quasi_label(rlang::enquo(object), arg = "object")
+  act <- testthat::quasi_label(rlang::enquo(object), arg = "object")
 
   # 2. Call expect()
   act$color <- fmt_color_selection(act$val) %>% purrr::flatten_lgl()
-  expect(
+  testthat::expect(
     any(act$color),
     sprintf("%s doesn't return any colored cell.", act$lab)
   )

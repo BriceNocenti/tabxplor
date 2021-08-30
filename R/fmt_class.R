@@ -16,8 +16,8 @@ globalVariables(c(":="))
 
 
 #' Create a vector of class formatted numbers
-#' @description \code{fmt} vectors are the class that powers \pkg{tabxplor} and
-#' \code{\link{tab}} tibbles.
+#' @description \code{fmt} vectors, of class \code{tabxplor_fmt}, powers \pkg{tabxplor}
+#' and \code{\link{tab}} tibbles.
 #' As a \code{\link[vctrs:new_rcrd]{record}}, they stores all data necessary to
 #' calculate percentages, Chi2 metadata or confidence intervals, but also to format and
 #' color the table to help the user read it. You can access this data with
@@ -30,7 +30,7 @@ globalVariables(c(":="))
 #' with \code{\link[base:attr]{attr}} and modify them with
 #' \code{\link[base:attr]{attr<-}}. Special functions listed below are made to
 #' facilitate programming with with \pkg{tabxplor} formatted numbers.
-#' \code{fmt} vectors can use all standard operations, like +, -, sum(), or c(),
+#' \code{taxplfmt} vectors can use all standard operations, like +, -, sum(), or c(),
 #' using \pkg{vctrs}.
 #'
 #' @param n The underlying count, as an integer vector of length \code{n()}. It is used
@@ -111,7 +111,7 @@ globalVariables(c(":="))
 #'   \item \code{"contrib"}: color cells based on their contribution to variance
 #'   (except mean columns, from numeric variables).
 #' }
-#' @return A vector of class \code{fmt}.
+#' @return A vector of class \code{tabxplor_fmt}.
 #' @export
 #'
 #' @examples f <- fmt(n = c(7, 19, 2), type = "row", pct = c(0.25, 0.679, 0.07))
@@ -248,7 +248,7 @@ fmt <- function(n         = integer(),
 #' @describeIn fmt a test function for class fmt.
 #' @export
 is_fmt <- function(x) {
-  inherits(x, "fmt")
+  inherits(x, "tabxplor_fmt")
 }
 
 
@@ -319,8 +319,9 @@ get_type.default     <- function(x, ...) {
          yes = purrr::attr_getter("type")(x),
          no  = "") #NA_character_
 }
+#' @method get_type tabxplor_fmt
 #' @export
-get_type.fmt <- function(x, ...) attr(x, "type", exact = TRUE)
+get_type.tabxplor_fmt <- function(x, ...) attr(x, "type", exact = TRUE)
 #' @export
 get_type.data.frame <- function(x, ...) purrr::map_chr(x, ~ get_type(.))
 
@@ -343,8 +344,9 @@ set_type      <- function(x, type) {
 is_totrow <- function(x, ...) UseMethod("is_totrow")
 #' @export
 is_totrow.default  <-  function(x, ...) rep(FALSE, length(x)) #{
+#' @method is_totrow tabxplor_fmt
 #' @export
-is_totrow.fmt <- function(x, ...) vctrs::field(x, "in_totrow")
+is_totrow.tabxplor_fmt <- function(x, ...) vctrs::field(x, "in_totrow")
 #' @export
 is_totrow.data.frame <- function(x, ..., partial = FALSE) {
   totrow_cells_test <- dplyr::ungroup(x) %>% dplyr::select(where(is_fmt)) %>%
@@ -385,8 +387,9 @@ is_tottab.default  <-  function(x, ...) rep(FALSE, length(x)) #{
 #          yes = vctrs::field(x, "in_tottab"),
 #          no  = vctrs::vec_recycle(FALSE, length(x)))
 # }
+#' @method is_tottab tabxplor_fmt
 #' @export
-is_tottab.fmt <- function(x, ...) vctrs::field(x, "in_tottab")
+is_tottab.tabxplor_fmt <- function(x, ...) vctrs::field(x, "in_tottab")
 #' @export
 is_tottab.data.frame <- function(x, ..., partial = FALSE) {
   tottab_cells_test <- dplyr::ungroup(x) %>% dplyr::select(where(is_fmt)) %>%
@@ -427,7 +430,7 @@ is_totcol.default     <- function(x, ...) {
          no  = FALSE)
 }
 #' @export
-is_totcol.fmt <- function(x, ...) attr(x, "totcol", exact = TRUE)
+is_totcol.tabxplor_fmt <- function(x, ...) attr(x, "totcol", exact = TRUE)
 #' @export
 is_totcol.data.frame <- function(x, ...) purrr::map_lgl(x, ~ is_totcol(.))
 
@@ -518,7 +521,7 @@ new_fmt <- function(n         = integer(),
          in_refrow = in_refrow),
     type = type, comp_all = comp_all, diff_type = diff_type,
     ci_type = ci_type, col_var = col_var, totcol = totcol, refcol = refcol,
-    color = color,  class = c(class, "fmt"))
+    color = color,  class = c(class, "tabxplor_fmt"))
   #access with fields() n_fields() vctrs::field() vctrs::`field<-`() ;
   #vec_data() return the tibble with all fields
 }
@@ -658,10 +661,10 @@ is_refrow <- function(x, ...) UseMethod("is_refrow")
 # @keywords internal
 #' @export
 is_refrow.default  <-  function(x, ...) rep(FALSE, length(x)) #{
-#' @method is_refrow fmt
+#' @method is_refrow tabxplor_fmt
 # @keywords internal
 #' @export
-is_refrow.fmt <- function(x, ...) vctrs::field(x, "in_refrow")
+is_refrow.tabxplor_fmt <- function(x, ...) vctrs::field(x, "in_refrow")
 #' @method is_refrow data.frame
 # @keywords internal
 #' @export
@@ -713,10 +716,10 @@ get_diff_type.default     <- function(x, ...) {
          yes = purrr::attr_getter("diff_type")(x),
          no  = "") #NA_character_
 }
-#' @method get_diff_type fmt
+#' @method get_diff_type tabxplor_fmt
 # @keywords internal
 #' @export
-get_diff_type.fmt <- function(x, ...) attr(x, "diff_type", exact = TRUE)
+get_diff_type.tabxplor_fmt <- function(x, ...) attr(x, "diff_type", exact = TRUE)
 #' @method get_diff_type data.frame
 # @keywords internal
 #' @export
@@ -738,10 +741,10 @@ get_ci_type.default     <- function(x, ...) {
          yes = purrr::attr_getter("ci_type")(x),
          no  = "") #NA_character_
 }
-#' @method get_ci_type fmt
+#' @method get_ci_type tabxplor_fmt
 # @keywords internal
 #' @export
-get_ci_type.fmt <- function(x, ...) attr(x, "ci_type", exact = TRUE)
+get_ci_type.tabxplor_fmt <- function(x, ...) attr(x, "ci_type", exact = TRUE)
 #' @method get_ci_type data.frame
 # @keywords internal
 #' @export
@@ -763,10 +766,10 @@ get_col_var.default     <- function(x, ...) {
          yes = purrr::attr_getter("col_var")(x),
          no  = "") #NA_character_
 }
-#' @method get_col_var fmt
+#' @method get_col_var tabxplor_fmt
 # @keywords internal
 #' @export
-get_col_var.fmt <- function(x, ...) attr(x, "col_var", exact = TRUE)
+get_col_var.tabxplor_fmt <- function(x, ...) attr(x, "col_var", exact = TRUE)
 #' @method get_col_var data.frame
 # @keywords internal
 #' @export
@@ -788,10 +791,10 @@ is_refcol.default     <- function(x, ...) {
          yes = purrr::attr_getter("refcol")(x),
          no  = FALSE)
 }
-#' @method is_refcol fmt
+#' @method is_refcol tabxplor_fmt
 # @keywords internal
 #' @export
-is_refcol.fmt <- function(x, ...) attr(x, "refcol", exact = TRUE)
+is_refcol.tabxplor_fmt <- function(x, ...) attr(x, "refcol", exact = TRUE)
 #' @method is_refcol data.frame
 # @keywords internal
 #' @export
@@ -847,10 +850,10 @@ get_color.default     <- function(x, ...) {
          yes = purrr::attr_getter("color")(x),
          no  = "") #NA_character_
 }
-#' @method get_color fmt
+#' @method get_color tabxplor_fmt
 # @keywords internal
 #' @export
-get_color.fmt <- function(x, ...) attr(x, "color", exact = TRUE)
+get_color.tabxplor_fmt <- function(x, ...) attr(x, "color", exact = TRUE)
 #' @method get_color data.frame
 # @keywords internal
 #' @export
@@ -859,7 +862,7 @@ get_color.data.frame <- function(x, ...) {
 }
 
 
-# Internal functions to modify class fmt
+# Internal functions to modify class tabxplor_fmt
 
 #' @keywords internal
 fmt_set_field_factory <- function(x, cast) {
@@ -968,23 +971,20 @@ set_comp      <- function(fmt, value = c("tab", "all")) {
 
 
 
-# METHODS FOR CLASS FMT #################################################################
+# METHODS FOR CLASS tabxplor_fmt #########################################################
 
-# Format/printing methods for class fmnt ---------------------------------------
+# Format/printing methods for class tabxplor_fmt -----------------------------------------
 #The first method for every class should almost always be a format() method.
 #This should return a character vector the same length as x.
 
-#' Print method for class fmt
+#' Print method for class tabxplor_fmt
 #'
 #' @param x A fmt object.
 #' @param ... Other parameter.
 #'
 #' @return The fmt printed.
 #' @export
-format.fmt <- function(x, ...) {
-  #out <- formatC(signif(vec_data(x) * 100, get_digits(x))) #vec_data() correct printing problems
-  #sprintf(paste0("%-0.", get_digits(x), "f"), x * 100)
-
+format.tabxplor_fmt <- function(x, ...) {
   out    <- get_num(x)
   na_out <- is.na(out)
 
@@ -1069,7 +1069,7 @@ format.fmt <- function(x, ...) {
 #' @return A fmt printed in a pillar.
 #' @importFrom pillar pillar_shaft
 #' @export
-pillar_shaft.fmt <- function(x, ...) {
+pillar_shaft.tabxplor_fmt <- function(x, ...) {
   # print color type somewhere (and brk legend beneath ?) ----
 
   out     <- format(x)
@@ -1702,7 +1702,7 @@ get_reference <- function(x, mode = c("cells", "lines", "all_totals")) {
 
 #Define abbreviated display name (for tibble::tibble headers)
 #' @export
-vec_ptype_abbr.fmt <- function(x, ...) {
+vec_ptype_abbr.tabxplor_fmt <- function(x, ...) {
   display  <- get_display(x) %>% unique()
   display  <- ifelse(length(display) > 1, "mixed", display)
   type     <- get_type(x)
@@ -1726,7 +1726,7 @@ vec_ptype_abbr.fmt <- function(x, ...) {
 
 # Include numbers of digits and types in the printed name
 #' @export
-vec_ptype_full.fmt <- function(x, ...) {
+vec_ptype_full.tabxplor_fmt <- function(x, ...) {
   display  <- get_display(x) %>% unique()
   display  <- ifelse(length(display) > 1, "mixed", display)
   type     <- get_type(x)
@@ -1752,9 +1752,10 @@ vec_ptype_full.fmt <- function(x, ...) {
 
 #Coertion and convertion methods for formatted numbers -------------------------
 
-#Make our fmt class coercible with herself, and back and forth with double and integer vectors :
+#Make our tabxplor_fmt class coercible with herself, and back and forth with double and
+# integer vectors :
 #' @export
-vec_ptype2.fmt.fmt    <- function(x, y, ...) {
+vec_ptype2.tabxplor_fmt.tabxplor_fmt    <- function(x, y, ...) {
   type_x       <- get_type(x)
   same_type    <- type_x == get_type(y)
   comp_x       <- get_comp_all(x, replace_na = FALSE)
@@ -1805,17 +1806,17 @@ vec_ptype2.fmt.fmt    <- function(x, y, ...) {
   # )
 }
 #' @export
-vec_ptype2.fmt.double  <- function(x, y, ...) x # new_fmt() #double()
+vec_ptype2.tabxplor_fmt.double  <- function(x, y, ...) x # new_fmt() #double()
 #' @export
-vec_ptype2.double.fmt  <- function(x, y, ...) y # new_fmt() #double()
+vec_ptype2.double.tabxplor_fmt  <- function(x, y, ...) y # new_fmt() #double()
 #' @export
-vec_ptype2.fmt.integer <- function(x, y, ...) x # fmt() #double()
+vec_ptype2.tabxplor_fmt.integer <- function(x, y, ...) x # fmt() #double()
 #' @export
-vec_ptype2.integer.fmt <- function(x, y, ...) y # new_fmt() #double()
+vec_ptype2.integer.tabxplor_fmt <- function(x, y, ...) y # new_fmt() #double()
 
 # Conversions :
 #' @export
-vec_cast.fmt.fmt  <- function(x, to, ...)
+vec_cast.tabxplor_fmt.tabxplor_fmt  <- function(x, to, ...)
   new_fmt(display   = get_display (x),
           n         = get_n       (x),
           wn        = get_wn      (x),
@@ -1843,7 +1844,7 @@ vec_cast.fmt.fmt  <- function(x, to, ...)
   )
 
 #' @export
-vec_cast.fmt.double   <- function(x, to, ...)
+vec_cast.tabxplor_fmt.double   <- function(x, to, ...)
   fmt(n = NA_integer_            ,
       display = "wn", wn = x     ,
       type     = get_type    (to),
@@ -1856,12 +1857,12 @@ vec_cast.fmt.double   <- function(x, to, ...)
       color    = get_color   (to),
 
   )
-#' @method vec_cast.double fmt
+#' @method vec_cast.double tabxplor_fmt
 #' @export
-vec_cast.double.fmt  <- function(x, to, ...) get_num(x) %>% as.double() #vctrs::field(x, "pct")
+vec_cast.double.tabxplor_fmt  <- function(x, to, ...) get_num(x) %>% as.double() #vctrs::field(x, "pct")
 
 #' @export
-vec_cast.fmt.integer <- function(x, to, ...)
+vec_cast.tabxplor_fmt.integer <- function(x, to, ...)
   fmt(n        = x               ,
       type     = get_type    (to),
       comp_all = get_comp_all(to, replace_na = FALSE),
@@ -1873,21 +1874,21 @@ vec_cast.fmt.integer <- function(x, to, ...)
       color    = get_color   (to)
 
   ) #new_fmt(pct = as.double(x))
-#' @method vec_cast.integer fmt
+#' @method vec_cast.integer tabxplor_fmt
 #' @export
-vec_cast.integer.fmt    <- function(x, to, ...) get_num(x) %>% as.integer() #vctrs::field(x, "pct") %>% as.integer()
+vec_cast.integer.tabxplor_fmt    <- function(x, to, ...) get_num(x) %>% as.integer() #vctrs::field(x, "pct") %>% as.integer()
 
-#' @method vec_cast.character fmt
+#' @method vec_cast.character tabxplor_fmt
 #' @export
-vec_cast.character.fmt  <- function(x, to, ...) format(x)
+vec_cast.character.tabxplor_fmt  <- function(x, to, ...) format(x)
 
 #Comparisons and sorting :
 #' @export
-vec_proxy_equal.fmt   <- function(x, ...) {
+vec_proxy_equal.tabxplor_fmt   <- function(x, ...) {
   get_num(x)
 }
 #' @export
-vec_proxy_compare.fmt <- function(x, ...) {
+vec_proxy_compare.tabxplor_fmt <- function(x, ...) {
   get_num(x)
 }
 
@@ -1898,8 +1899,8 @@ vec_proxy_compare.fmt <- function(x, ...) {
 #Arithmetic operations :
 
 # Thank you very much it works perfectly (I had tried with ```@method```, but not consistently enougth to put it in the generic) !
-# Just a detail : with ```vec_arith fmt default``` , I have a "Warning: [D:\... ] @method  can have at most 2 words"
-# I replaced with ```vec_arith.fmt default``` and it worked.
+# Just a detail : with ```vec_arith tabxplor_fmt  default``` , I have a "Warning: [D:\... ] @method  can have at most 2 words"
+# I replaced with ```vec_arith.tabxplor_fmt default``` and it worked.
 
 #' Vec_arith method for fmt
 #' @param op Operation to do.
@@ -1908,15 +1909,15 @@ vec_proxy_compare.fmt <- function(x, ...) {
 #' @param y Second object.
 #' @param ... Other parameter.
 #'
-#' @method vec_arith fmt
+#' @method vec_arith tabxplor_fmt
 #' @export
-vec_arith.fmt <- function(op, x, y, ...) {
-  UseMethod("vec_arith.fmt", y)
+vec_arith.tabxplor_fmt <- function(op, x, y, ...) {
+  UseMethod("vec_arith.tabxplor_fmt", y)
 }
 
-#' @method vec_arith.fmt default
+#' @method vec_arith.tabxplor_fmt default
 #' @export
-vec_arith.fmt.default <- function(op, x, y, ...) {
+vec_arith.tabxplor_fmt.default <- function(op, x, y, ...) {
   vctrs::vec_arith_base(op, get_num(x), vctrs::vec_data(y))
   #stop_incompatible_op(op, x, y)
 }
@@ -1924,9 +1925,9 @@ vec_arith.fmt.default <- function(op, x, y, ...) {
 # positive_double <- function(n) n * sign(n)
 # positive_integer <- function(n) as.integer(n * sign(n))
 
-#' @method vec_arith.fmt fmt
+#' @method vec_arith.tabxplor_fmt tabxplor_fmt
 #' @export
-vec_arith.fmt.fmt <- function(op, x, y, ...) {
+vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
   type_x       <- get_type(x)
   same_type    <- type_x == get_type(y)
   comp_x       <- get_comp_all(x, replace_na = FALSE)
@@ -2039,9 +2040,9 @@ vec_arith.fmt.fmt <- function(op, x, y, ...) {
   )
 }
 
-#' @method vec_arith.fmt numeric
+#' @method vec_arith.tabxplor_fmt numeric
 #' @export
-vec_arith.fmt.numeric <- function(op, x, y, ...) {
+vec_arith.tabxplor_fmt.numeric <- function(op, x, y, ...) {
   set_num(x, vctrs::vec_arith_base(op, get_num(x), y))
   # new_fmt(pct    = vec_arith_base(op, vctrs::field(x, "pct"), y),
   #          display   = vctrs::field(x, "display"  ),
@@ -2053,9 +2054,9 @@ vec_arith.fmt.numeric <- function(op, x, y, ...) {
 }
 
 
-#' @method vec_arith.numeric fmt
+#' @method vec_arith.numeric tabxplor_fmt
 #' @export
-vec_arith.numeric.fmt <- function(op, x, y, ...) {
+vec_arith.numeric.tabxplor_fmt <- function(op, x, y, ...) {
   set_num(y, vctrs::vec_arith_base(op, x, get_num(y)))
   # new_fmt(pct    = vec_arith_base(op, x, vctrs::field(y, "pct")),
   #          display   = vctrs::field(y, "display"  ),
@@ -2066,9 +2067,9 @@ vec_arith.numeric.fmt <- function(op, x, y, ...) {
   #          ci     = vctrs::field(y, "ci"    )                     )
 }
 
-#' @method vec_arith.fmt MISSING
+#' @method vec_arith.tabxplor_fmt MISSING
 #' @export
-vec_arith.fmt.MISSING <- function(op, x, y, ...) { #unary + and - operators
+vec_arith.tabxplor_fmt.MISSING <- function(op, x, y, ...) { #unary + and - operators
   switch(op,
          `-` = set_num(x, get_num(x) * -1),
          # new_fmt(pct    = vctrs::field(x, "pct"   ) * -1,
@@ -2088,7 +2089,7 @@ vec_arith.fmt.MISSING <- function(op, x, y, ...) { #unary + and - operators
 # (direct operations on counts,
 # automatically calculate weighted means for pct and means, erase var and ci)
 #' @export
-vec_math.fmt <- function(.fn, .x, ...) {
+vec_math.tabxplor_fmt <- function(.fn, .x, ...) {
   if (!is.na(get_type(.x) ) & get_type(.x) == "mixed") warning(
     "operation ", .fn,
     " within a variable mixing different types of percentages"

@@ -1194,11 +1194,11 @@ tab_prepare <-
 #' use in \code{\link{tab_many}} only, since repeating grouping operations reduce
 #' performance.
 #'
-#' @return A \code{tibble} of class \code{tab}. If \code{...} (\code{tab_vars}) are
-#' provided, a \code{tab} of class \code{grouped_tab}.
-#' All non-text columns are of class \code{\link{fmt}}, storing all
-#' the data necessary to print formats and colors. Columns with \code{row_var} and
-#' \code{tab_vars} are of class \code{factor} : every added \code{factor} will be
+#' @return A \code{tibble} of class \code{tabxplor_tab}. If \code{...} (\code{tab_vars})
+#'  are provided, a \code{tab} of class \code{tabxplor_grouped_tab}.
+#' All non-text columns are \code{\link{fmt}} vectors of class \code{tabxplor_fmt},
+#' storing all the data necessary to print formats and colors. Columns with \code{row_var}
+#' and \code{tab_vars} are of class \code{factor} : every added \code{factor} will be
 #' considered as a \code{tab_vars} and used for grouping. To add text columns without
 #' using them in calculations, be sure they are of class \code{character}.
 #' @export

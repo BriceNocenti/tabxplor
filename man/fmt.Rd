@@ -170,11 +170,11 @@ or attribute using a given "set" function.}
 \item{...}{Used in methods to add arguments in the future.}
 }
 \value{
-A vector of class \code{fmt}.
+A vector of class \code{tabxplor_fmt}.
 }
 \description{
-\code{fmt} vectors are the class that powers \pkg{tabxplor} and
-\code{\link{tab}} tibbles.
+\code{fmt} vectors, of class \code{tabxplor_fmt}, powers \pkg{tabxplor}
+and \code{\link{tab}} tibbles.
 As a \code{\link[vctrs:new_rcrd]{record}}, they stores all data necessary to
 calculate percentages, Chi2 metadata or confidence intervals, but also to format and
 color the table to help the user read it. You can access this data with
@@ -187,7 +187,7 @@ the whole vector, like \code{type}, \code{totcol} or \code{color}. You can get t
 with \code{\link[base:attr]{attr}} and modify them with
 \code{\link[base:attr]{attr<-}}. Special functions listed below are made to
 facilitate programming with with \pkg{tabxplor} formatted numbers.
-\code{fmt} vectors can use all standard operations, like +, -, sum(), or c(),
+\code{taxplfmt} vectors can use all standard operations, like +, -, sum(), or c(),
 using \pkg{vctrs}.
 }
 \section{Functions}{

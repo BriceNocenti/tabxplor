@@ -3,7 +3,7 @@
 \name{new_tab}
 \alias{new_tab}
 \alias{new_grouped_tab}
-\title{A constructor for class tab}
+\title{A constructor for class tabxplor_tab}
 \usage{
 new_tab(
   tabs = tibble::tibble(),
@@ -41,8 +41,8 @@ or \code{\link{tab_core}}.}
 \item{groups}{The grouping data.}
 }
 \value{
-A \code{tibble} of class \code{tab}.
+A \code{tibble} of class \code{tabxplor_tab}.
 }
 \description{
-A constructor for class tab
+A constructor for class tabxplor_tab
 }

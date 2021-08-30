@@ -1,7 +1,7 @@
 # Special tibble class needed for printing, even if the most meaningful attributes
 #  where passed to fmt class variables (only chi2 and subtext remains at tab level) :
 #  the implementation relies on "grouped_df" class structure, and to manage it, it is
-#  necessary to add one method for class "grouped_tab" for each dplyr function...
+#  necessary to add one method for class "tabxplor_grouped_tab" for each dplyr function...
 #  (Thank to Giulia Pais, Davis Vaughan and Hadley Wickham,
 #   https://github.com/tidyverse/dplyr/issues/5480).
 
@@ -29,7 +29,7 @@
 # NULL
 
 
-# Create class tab -----------------------------------------------------------------------
+# Create class tabxplor_tab --------------------------------------------------------------
 # sloop::s3_methods_class("tbl")
 # sloop::s3_get_method(print.tbl)
 # cli::cat_line()
@@ -45,7 +45,7 @@
 # pillar::squeeze
 # sloop::s3_methods_class("single_tab")
 
-#' A constructor for class tab
+#' A constructor for class tabxplor_tab
 #'
 #' @param tabs A table, stored into a \code{\link[tibble]{tibble}} data.frame.
 #' It is generally made with \code{\link{tab}}, \code{\link{tab_many}}
@@ -56,7 +56,7 @@
 #' @param ... Needed to implement subclasses.
 #' @param class Needed to implement subclasses.
 #'
-#' @return A \code{tibble} of class \code{tab}.
+#' @return A \code{tibble} of class \code{tabxplor_tab}.
 #' @export
 #  @examples
 new_tab <-
@@ -72,7 +72,7 @@ new_tab <-
     #vec_assert(subtext    , character())
 
     tibble::new_tibble(tabs, subtext = subtext, chi2 = chi2, ...,
-                       nrow = nrow(tabs), class = c(class, "tab"))
+                       nrow = nrow(tabs), class = c(class, "tabxplor_tab"))
   }
 
 #' @param groups The grouping data.
@@ -89,7 +89,7 @@ new_grouped_tab <-
                                  count    = integer()   ),
            ..., class = character()) {
     if (missing(groups)) groups <- attr(tabs, "groups")
-    class <- c(class, c("grouped_tab", "grouped_df"))
+    class <- c(class, c("tabxplor_grouped_tab", "grouped_df"))
 
     new_tab(tabs, groups = groups,
             subtext = subtext, chi2 = chi2,
@@ -99,14 +99,14 @@ new_grouped_tab <-
 
 
 
-# Functions to work with class tab -------------------------------------------------------
+# Functions to work with class tabxplor_tab ----------------------------------------------
 
 # Useful test fonction :
-#' @describeIn tab_many a test function for class tab
+#' @describeIn tab_many a test function for class tabxplor_tab
 #' @param x A object to test with \code{\link{is_tab}}.
 #' @export
 is_tab <- function(x) {
-  inherits(x, "tab")
+  inherits(x, "tabxplor_tab")
 }
 
 get_subtext <- purrr::attr_getter("subtext")
@@ -132,19 +132,19 @@ get_chi2    <- purrr::attr_getter("chi2")
 #' @keywords internal
 untab <- function(tabs) {
   if (lv1_group_vars(tabs)) {
-    `class<-`(tabs, class(tabs) %>% purrr::discard(. == "tab"))
+    `class<-`(tabs, class(tabs) %>% purrr::discard(. == "tabxplor_tab"))
   } else {
     `class<-`(tabs, class(tabs) %>%
-                purrr::discard(. %in% c("grouped_tab", "tab")))
+                purrr::discard(. %in% c("tabxplor_grouped_tab", "tabxplor_tab")))
   }
 }
 
 
-#Methods to print class tab --------------------------------------------------------------
+#Methods to print class tabxplor_tab -----------------------------------------------------
 
 #' @export
-#' @method print tab
-print.tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = NULL,
+#' @method print tabxplor_tab
+print.tabxplor_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = NULL,
                       max_footer_lines = NULL, min_row_var = 30) {
   print_chi2(x, width = width)
 
@@ -177,9 +177,10 @@ print.tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = NULL,
 }
 
 #' @export
-#' @method print grouped_tab
-print.grouped_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = NULL,
-                              max_footer_lines = NULL, min_row_var = 30) {
+#' @method print tabxplor_grouped_tab
+print.tabxplor_grouped_tab <- function(x, width = NULL, ..., n = 100,
+                                       max_extra_cols = NULL,max_footer_lines = NULL,
+                                       min_row_var = 30) {
   print_chi2(x, width = width)
 
   # Use pillar::char() on row_var to control truncation
@@ -271,15 +272,15 @@ print_chi2 <- function(x, width = NULL) {
 # Change headers
 #' @importFrom dplyr tbl_sum
 #' @export
-#' @method tbl_sum tab
-tbl_sum.tab <- function(x, ...) {
+#' @method tbl_sum tabxplor_tab
+tbl_sum.tabxplor_tab <- function(x, ...) {
   tbl_header <- NextMethod()
   names(tbl_header)[1] <- "A tabxplor tab"
   tbl_header
 }
 #' @export
-#' @method tbl_sum grouped_tab
-tbl_sum.grouped_tab <- function(x, ...) {
+#' @method tbl_sum tabxplor_grouped_tab
+tbl_sum.tabxplor_grouped_tab <- function(x, ...) {
   grouped_tbl_header <- NextMethod()
   names(grouped_tbl_header)[1] <- "A tabxplor tab"
   grouped_tbl_header
@@ -289,8 +290,8 @@ tbl_sum.grouped_tab <- function(x, ...) {
 # Change footer
 #' @importFrom pillar tbl_format_footer
 #' @export
-#' @method tbl_format_footer tab
-tbl_format_footer.tab <- function(x, setup, ...) {
+#' @method tbl_format_footer tabxplor_tab
+tbl_format_footer.tabxplor_tab <- function(x, setup, ...) {
   default_footer <- NextMethod()
 
   print_colors <- tab_color_legend(x)
@@ -307,8 +308,8 @@ tbl_format_footer.tab <- function(x, setup, ...) {
 #Change body
 #' @importFrom pillar tbl_format_body
 #' @export
-#' @method tbl_format_body tab
-tbl_format_body.tab <- function(x, setup, ...) {
+#' @method tbl_format_body tabxplor_tab
+tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
   default_body <- NextMethod()
 
   body_data  <- default_body[-(1:2)]
@@ -324,13 +325,13 @@ tbl_format_body.tab <- function(x, setup, ...) {
 
 
 
-#Methods for class tab -------------------------------------------------------------------
+#Methods for class tabxplor_tab ----------------------------------------------------------
 
 # importFrom not needed when tabxplor import dplyr as a "Depends" package
 #' @importFrom dplyr group_by
-#' @method group_by tab
+#' @method group_by tabxplor_tab
 #' @export
-group_by.tab <- function(.data,
+group_by.tabxplor_tab <- function(.data,
                          ...,
                          .add = FALSE,
                          .drop = dplyr::group_by_drop_default(.data)) {
@@ -342,9 +343,9 @@ group_by.tab <- function(.data,
 
 
 #' @importFrom dplyr rowwise
-#' @method rowwise tab
+#' @method rowwise tabxplor_tab
 #' @export
-rowwise.tab <- function(.data, ...) {
+rowwise.tabxplor_tab <- function(.data, ...) {
   out <- NextMethod()
   groups <- dplyr::group_data(out)
   out <- new_grouped_tab(out, groups,
@@ -403,47 +404,47 @@ tab_ptype2 <- function(x, y, ..., x_arg = "", y_arg = "") {
 
 #Let's now implement the coercion methods, starting with the self-self methods.
 #' @export
-vec_ptype2.tab.tab <- function(x, y, ...) {
+vec_ptype2.tabxplor_tab.tabxplor_tab <- function(x, y, ...) {
   tab_ptype2(x, y, ...)
 }
 #' @export
-vec_cast.tab.tab <- function(x, to, ...) {
+vec_cast.tabxplor_tab.tabxplor_tab <- function(x, to, ...) {
   tab_cast(x, to, ...)
 }
 
 # The methods for combining our class with tibbles follow the same pattern.
 # For ptype2 we return our class in both cases because it is the richer type
 #' @export
-vec_ptype2.tab.tbl_df <- function(x, y, ...) {
+vec_ptype2.tabxplor_tab.tbl_df <- function(x, y, ...) {
   tab_ptype2(x, y, ...)
 }
 #' @export
-vec_ptype2.tbl_df.tab <- function(x, y, ...) {
+vec_ptype2.tbl_df.tabxplor_tab <- function(x, y, ...) {
   tab_ptype2(x, y, ...)
 }
 #' @export
-vec_cast.tab.tbl_df <- function(x, to, ...) {
+vec_cast.tabxplor_tab.tbl_df <- function(x, to, ...) {
   tab_cast(x, to, ...)
 }
 #' @export
-vec_cast.tbl_df.tab <- function(x, to, ...) {
+vec_cast.tbl_df.tabxplor_tab <- function(x, to, ...) {
   vctrs::tib_cast(x, to, ...)
 }
 
 #' @export
-vec_ptype2.tab.data.frame <- function(x, y, ...) {
+vec_ptype2.tabxplor_tab.data.frame <- function(x, y, ...) {
   tab_ptype2(x, y, ...)
 }
 #' @export
-vec_ptype2.data.frame.tab <- function(x, y, ...) {
+vec_ptype2.data.frame.tabxplor_tab <- function(x, y, ...) {
   tab_ptype2(x, y, ...)
 }
 #' @export
-vec_cast.tab.data.frame <- function(x, to, ...) {
+vec_cast.tabxplor_tab.data.frame <- function(x, to, ...) {
   tab_cast(x, to, ...)
 }
 #' @export
-vec_cast.data.frame.tab <- function(x, to, ...) {
+vec_cast.data.frame.tabxplor_tab <- function(x, to, ...) {
   vctrs::df_cast(x, to, ...)
 }
 
@@ -461,9 +462,9 @@ vec_cast.data.frame.tab <- function(x, to, ...) {
 # cbind                 rbind  rowwise
 
 #' @importFrom dplyr ungroup
-#' @method ungroup grouped_tab
+#' @method ungroup tabxplor_grouped_tab
 #' @export
-ungroup.grouped_tab <- function (x, ...)
+ungroup.tabxplor_grouped_tab <- function (x, ...)
 {
   if (missing(...)) {
     new_tab(x, subtext = get_subtext(x), chi2 = get_chi2(x))
@@ -488,9 +489,9 @@ lv1_group_vars <- function(tabs) {
 
 
 #' @importFrom dplyr dplyr_row_slice
-#' @method dplyr_row_slice grouped_tab
+#' @method dplyr_row_slice tabxplor_grouped_tab
 #' @export
-dplyr_row_slice.grouped_tab <- function(data, i, ...) {
+dplyr_row_slice.tabxplor_grouped_tab <- function(data, i, ...) {
   out <- NextMethod()
   if (lv1_group_vars(out)) {
     new_tab(out, subtext = get_subtext(data), chi2 = get_chi2(data))
@@ -502,9 +503,9 @@ dplyr_row_slice.grouped_tab <- function(data, i, ...) {
 # dplyr:::dplyr_row_slice.grouped_df
 
 #' @importFrom dplyr dplyr_col_modify
-#' @method dplyr_col_modify grouped_tab
+#' @method dplyr_col_modify tabxplor_grouped_tab
 #' @export
-dplyr_col_modify.grouped_tab <- function(data, cols) {
+dplyr_col_modify.tabxplor_grouped_tab <- function(data, cols) {
   out <- NextMethod()
   if (lv1_group_vars(out)) {
     new_tab(out, subtext = get_subtext(data), chi2 = get_chi2(data))
@@ -516,9 +517,9 @@ dplyr_col_modify.grouped_tab <- function(data, cols) {
 # dplyr:::dplyr_col_modify.grouped_df
 
 #' @importFrom dplyr dplyr_reconstruct
-#' @method dplyr_reconstruct grouped_tab
+#' @method dplyr_reconstruct tabxplor_grouped_tab
 #' @export
-dplyr_reconstruct.grouped_tab <- function(data, template) {
+dplyr_reconstruct.tabxplor_grouped_tab <- function(data, template) {
   out <- NextMethod()
   if (lv1_group_vars(out)) {
     new_tab(out, subtext = get_subtext(data), chi2 = get_chi2(data))
@@ -529,9 +530,9 @@ dplyr_reconstruct.grouped_tab <- function(data, template) {
 }
 # dplyr:::dplyr_reconstruct.grouped_df
 
-#' @method `[` grouped_tab
+#' @method `[` tabxplor_grouped_tab
 #' @export
-`[.grouped_tab` <- function(x, i, j, drop = FALSE) {
+`[.tabxplor_grouped_tab` <- function(x, i, j, drop = FALSE) {
   out <- NextMethod()
   if (lv1_group_vars(out)) {
     new_tab(out, subtext = get_subtext(x), chi2 = get_chi2(x))
@@ -542,9 +543,9 @@ dplyr_reconstruct.grouped_tab <- function(data, template) {
 }
 # dplyr:::`[.grouped_df`
 
-#' @method `[<-` grouped_tab
+#' @method `[<-` tabxplor_grouped_tab
 #' @export
-`[<-.grouped_tab` <- function(x, i, j, ..., value) {
+`[<-.tabxplor_grouped_tab` <- function(x, i, j, ..., value) {
   out <- NextMethod()
   if (lv1_group_vars(out)) {
     new_tab(out, subtext = get_subtext(x), chi2 = get_chi2(x))
@@ -555,9 +556,9 @@ dplyr_reconstruct.grouped_tab <- function(data, template) {
 }
 # dplyr:::`[<-.grouped_df`
 
-#' @method `[[<-` grouped_tab
+#' @method `[[<-` tabxplor_grouped_tab
 #' @export
-`[[<-.grouped_tab` <- function(x, ..., value) {
+`[[<-.tabxplor_grouped_tab` <- function(x, ..., value) {
   out <- NextMethod()
   if (lv1_group_vars(out)) {
     new_tab(out, subtext = get_subtext(x), chi2 = get_chi2(x))
@@ -569,9 +570,9 @@ dplyr_reconstruct.grouped_tab <- function(data, template) {
 # dplyr:::`[[<-.grouped_df`
 
 #' @importFrom dplyr rowwise
-#' @method rowwise grouped_tab
+#' @method rowwise tabxplor_grouped_tab
 #' @export
-rowwise.grouped_tab <- function(.data, ...) {
+rowwise.tabxplor_grouped_tab <- function(.data, ...) {
   out <- NextMethod()
   groups <- dplyr::group_data(out)
 
@@ -580,9 +581,9 @@ rowwise.grouped_tab <- function(.data, ...) {
 
 }
 
-# #' @method rbind grouped_tab
+# #' @method rbind tabxplor_grouped_tab
 # #' @export
-# rbind.grouped_tab <- function(...) {
+# rbind.tabxplor_grouped_tab <- function(...) {
 #   out <- NextMethod()
 #   groups <- dplyr::group_data(out)
 #   if (lv1_group_vars(out)) {
@@ -593,9 +594,9 @@ rowwise.grouped_tab <- function(.data, ...) {
 # }
 # # dplyr:::rbind.grouped_df
 #
-# #' @method cbind grouped_tab
+# #' @method cbind tabxplor_grouped_tab
 # #' @export
-# cbind.grouped_tab <- function(...) {
+# cbind.tabxplor_grouped_tab <- function(...) {
 #   out <- NextMethod()
 #   groups <- dplyr::group_data(out)
 #   if (lv1_group_vars(out)) {
@@ -607,9 +608,9 @@ rowwise.grouped_tab <- function(.data, ...) {
 # # dplyr:::cbind.grouped_df
 
 #' @importFrom dplyr summarise
-#' @method summarise grouped_tab
+#' @method summarise tabxplor_grouped_tab
 #' @export
-summarise.grouped_tab <- function(.data, ..., .groups = NULL) {
+summarise.tabxplor_grouped_tab <- function(.data, ..., .groups = NULL) {
   out <- NextMethod()
   groups <- dplyr::group_data(out)
   if (lv1_group_vars(out)) {
@@ -621,9 +622,9 @@ summarise.grouped_tab <- function(.data, ..., .groups = NULL) {
 
 
 #' @importFrom dplyr select
-#' @method select grouped_tab
+#' @method select tabxplor_grouped_tab
 #' @export
-select.grouped_tab <- function(.data, ...) {
+select.tabxplor_grouped_tab <- function(.data, ...) {
   out <- NextMethod()
   groups <- dplyr::group_data(out)
   if (lv1_group_vars(out)) {
@@ -634,9 +635,9 @@ select.grouped_tab <- function(.data, ...) {
 }
 
 #' @importFrom dplyr rename
-#' @method rename grouped_tab
+#' @method rename tabxplor_grouped_tab
 #' @export
-rename.grouped_tab <- function(.data, ...) {
+rename.tabxplor_grouped_tab <- function(.data, ...) {
   out <- NextMethod()
   groups <- dplyr::group_data(out)
   if (lv1_group_vars(out)) {
@@ -647,9 +648,9 @@ rename.grouped_tab <- function(.data, ...) {
 }
 
 #' @importFrom dplyr rename_with
-#' @method rename_with grouped_tab
+#' @method rename_with tabxplor_grouped_tab
 #' @export
-rename_with.grouped_tab <- function(.data, .fn, .cols = dplyr::everything(), ...) {
+rename_with.tabxplor_grouped_tab <- function(.data, .fn, .cols = dplyr::everything(), ...) {
   out <- NextMethod()
   groups <- dplyr::group_data(out)
   if (lv1_group_vars(out)) {
@@ -661,9 +662,9 @@ rename_with.grouped_tab <- function(.data, .fn, .cols = dplyr::everything(), ...
 
 # not for grouped_df
 #' @importFrom dplyr relocate
-#' @method relocate grouped_tab
+#' @method relocate tabxplor_grouped_tab
 #' @export
-relocate.grouped_tab <- function(.data, ...) { #.before = NULL, .after = NULL
+relocate.tabxplor_grouped_tab <- function(.data, ...) { #.before = NULL, .after = NULL
   out <- NextMethod()
   groups <- dplyr::group_data(out)
   if (lv1_group_vars(out)) {
@@ -675,9 +676,9 @@ relocate.grouped_tab <- function(.data, ...) { #.before = NULL, .after = NULL
 
 
 #' @importFrom dplyr distinct_
-#' @method distinct_ grouped_tab
+#' @method distinct_ tabxplor_grouped_tab
 #' @export
-distinct_.grouped_tab <- function(.data, ..., .dots = list(), .keep_all = FALSE) {
+distinct_.tabxplor_grouped_tab <- function(.data, ..., .dots = list(), .keep_all = FALSE) {
   out <- NextMethod()
   groups <- dplyr::group_data(out)
   if (lv1_group_vars(out)) {
@@ -694,9 +695,9 @@ distinct_.grouped_tab <- function(.data, ..., .dots = list(), .keep_all = FALSE)
 # # Past methods, not needed anymore :
 #
 # #' @importFrom dplyr mutate
-# #' @method mutate grouped_tab
+# #' @method mutate tabxplor_grouped_tab
 # #' @export
-# mutate.grouped_tab <- function(.data, ...) {
+# mutate.tabxplor_grouped_tab <- function(.data, ...) {
 #   out <- NextMethod()
 #   groups <- dplyr::group_data(out)
 #   if (lv1_group_vars(out)) {
@@ -711,9 +712,9 @@ distinct_.grouped_tab <- function(.data, ..., .dots = list(), .keep_all = FALSE)
 #
 #
 # #' @importFrom dplyr transmute
-# #' @method transmute grouped_tab
+# #' @method transmute tabxplor_grouped_tab
 # #' @export
-# transmute.grouped_tab <- function(.data, ...) {
+# transmute.tabxplor_grouped_tab <- function(.data, ...) {
 #   out <- NextMethod()
 #   groups <- dplyr::group_data(out)
 #   if (lv1_group_vars(out)) {
@@ -724,9 +725,9 @@ distinct_.grouped_tab <- function(.data, ..., .dots = list(), .keep_all = FALSE)
 # }
 #
 # #' @importFrom dplyr summarise
-# #' @method summarise grouped_tab
+# #' @method summarise tabxplor_grouped_tab
 # #' @export
-# summarise.grouped_tab <- function(.data, ..., .groups = NULL) {
+# summarise.tabxplor_grouped_tab <- function(.data, ..., .groups = NULL) {
 #   out <- NextMethod()
 #   groups <- dplyr::group_data(out)
 #   if (lv1_group_vars(out)) {
@@ -737,10 +738,10 @@ distinct_.grouped_tab <- function(.data, ..., .dots = list(), .keep_all = FALSE)
 # }
 #
 # #' @importFrom dplyr filter
-# #' @method filter grouped_tab
+# #' @method filter tabxplor_grouped_tab
 # # @rdname filter
 # #' @export
-# filter.grouped_tab <- function(.data, ..., .preserve = FALSE) {
+# filter.tabxplor_grouped_tab <- function(.data, ..., .preserve = FALSE) {
 #   out <- NextMethod()
 #   if (lv1_group_vars(out)) {
 #     new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
@@ -753,9 +754,9 @@ distinct_.grouped_tab <- function(.data, ..., .dots = list(), .keep_all = FALSE)
 #
 # # slice not working with grouped_tab ? ----
 # #' @importFrom dplyr slice
-# #' @method slice grouped_tab
+# #' @method slice tabxplor_grouped_tab
 # #' @export
-# slice.grouped_tab <- function(.data, ..., .preserve = FALSE) {
+# slice.tabxplor_grouped_tab <- function(.data, ..., .preserve = FALSE) {
 #   out <- NextMethod()
 #   groups <- dplyr::group_data(out)
 #   if (lv1_group_vars(out)) {
@@ -766,9 +767,9 @@ distinct_.grouped_tab <- function(.data, ..., .dots = list(), .keep_all = FALSE)
 # }
 #
 # #' @importFrom dplyr arrange
-# #' @method arrange grouped_tab
+# #' @method arrange tabxplor_grouped_tab
 # #' @export
-# arrange.grouped_tab <- function(.data, ..., .by_group = FALSE) {
+# arrange.tabxplor_grouped_tab <- function(.data, ..., .by_group = FALSE) {
 #   out <- NextMethod()
 #   groups <- dplyr::group_data(out)
 #   if (lv1_group_vars(out)) {
@@ -781,9 +782,9 @@ distinct_.grouped_tab <- function(.data, ..., .dots = list(), .keep_all = FALSE)
 #
 #
 # #' @importFrom dplyr select
-# #' @method select grouped_tab
+# #' @method select tabxplor_grouped_tab
 # #' @export
-# select.grouped_tab <- function(.data, ...) {
+# select.tabxplor_grouped_tab <- function(.data, ...) {
 #   out <- NextMethod()
 #   groups <- dplyr::group_data(out)
 #   if (lv1_group_vars(out)) {
@@ -794,9 +795,9 @@ distinct_.grouped_tab <- function(.data, ..., .dots = list(), .keep_all = FALSE)
 # }
 #
 # #' @importFrom dplyr relocate
-# #' @method relocate grouped_tab
+# #' @method relocate tabxplor_grouped_tab
 # #' @export
-# relocate.grouped_tab <- function(.data, ..., .before = NULL, .after = NULL) {
+# relocate.tabxplor_grouped_tab <- function(.data, ..., .before = NULL, .after = NULL) {
 #   out <- NextMethod()
 #   groups <- dplyr::group_data(out)
 #   if (lv1_group_vars(out)) {
@@ -807,9 +808,9 @@ distinct_.grouped_tab <- function(.data, ..., .dots = list(), .keep_all = FALSE)
 # }
 #
 # #' @importFrom dplyr rename
-# #' @method rename grouped_tab
+# #' @method rename tabxplor_grouped_tab
 # #' @export
-# rename.grouped_tab <- function(.data, ...) {
+# rename.tabxplor_grouped_tab <- function(.data, ...) {
 #   out <- NextMethod()
 #   groups <- dplyr::group_data(out)
 #   if (lv1_group_vars(out)) {
@@ -820,9 +821,9 @@ distinct_.grouped_tab <- function(.data, ..., .dots = list(), .keep_all = FALSE)
 # }
 #
 # #' @importFrom dplyr rename_with
-# #' @method rename_with grouped_tab
+# #' @method rename_with tabxplor_grouped_tab
 # #' @export
-# rename_with.grouped_tab <- function(.data, .fn,
+# rename_with.tabxplor_grouped_tab <- function(.data, .fn,
 #                                     .cols = dplyr::everything(), ...) {
 #   out <- NextMethod()
 #   groups <- dplyr::group_data(out)
@@ -834,9 +835,9 @@ distinct_.grouped_tab <- function(.data, ..., .dots = list(), .keep_all = FALSE)
 # }
 #
 # #' @importFrom dplyr distinct
-# #' @method distinct grouped_tab
+# #' @method distinct tabxplor_grouped_tab
 # #' @export
-# distinct.grouped_tab <- function(.data, ...,  .keep_all = FALSE) {
+# distinct.tabxplor_grouped_tab <- function(.data, ...,  .keep_all = FALSE) {
 #   out <- NextMethod()
 #   groups <- dplyr::group_data(out)
 #   if (lv1_group_vars(out)) {
@@ -882,29 +883,29 @@ gtab_ptype2 <- function(x, y, ..., x_arg = "", y_arg = "") {
 
 #Self-self
 #' @export
-vec_ptype2.grouped_tab.grouped_tab <- function(x, y, ...) {
+vec_ptype2.tabxplor_grouped_tab.tabxplor_grouped_tab <- function(x, y, ...) {
   gtab_ptype2(x, y, ...)
 }
 #' @export
-vec_cast.grouped_tab.grouped_tab <- function(x, to, ...) {
+vec_cast.tabxplor_grouped_tab.tabxplor_grouped_tab <- function(x, to, ...) {
   gtab_cast(x, to, ...)
 }
 
 #grouped_tab / grouped_df
 #' @export
-vec_ptype2.grouped_tab.grouped_df <- function(x, y, ...) {
+vec_ptype2.tabxplor_grouped_tab.grouped_df <- function(x, y, ...) {
   gtab_ptype2(x, y, ...)
 }
 #' @export
-vec_ptype2.grouped_df.grouped_tab <- function(x, y, ...) {
+vec_ptype2.grouped_df.tabxplor_grouped_tab <- function(x, y, ...) {
   gtab_ptype2(x, y, ...)
 }
 #' @export
-vec_cast.grouped_tab.grouped_df <- function(x, to, ...) {
+vec_cast.tabxplor_grouped_tab.grouped_df <- function(x, to, ...) {
   gtab_cast(x, to, ...)
 }
 #' @export
-vec_cast.grouped_df.grouped_tab <- function(x, to, ...) {
+vec_cast.grouped_df.tabxplor_grouped_tab <- function(x, to, ...) {
   #vctrs:::gdf_cast
   df <- vctrs::df_cast(x, to, ...)
   vars <- dplyr::group_vars(to)
@@ -914,55 +915,55 @@ vec_cast.grouped_df.grouped_tab <- function(x, to, ...) {
 
 #grouped_tab / tab
 #' @export
-vec_ptype2.grouped_tab.tab <- function(x, y, ...) {
+vec_ptype2.tabxplor_grouped_tab.tabxplor_tab <- function(x, y, ...) {
   gtab_ptype2(x, y, ...)
 }
 #' @export
-vec_ptype2.tab.grouped_tab <- function(x, y, ...) {
+vec_ptype2.tabxplor_tab.tabxplor_grouped_tab <- function(x, y, ...) {
   gtab_ptype2(x, y, ...)
 }
 #' @export
-vec_cast.grouped_tab.tab <- function(x, to, ...) {
+vec_cast.tabxplor_grouped_tab.tabxplor_tab <- function(x, to, ...) {
   gtab_cast(x, to, ...)
 }
 #' @export
-vec_cast.tab.grouped_tab <- function(x, to, ...) {
+vec_cast.tabxplor_tab.tabxplor_grouped_tab <- function(x, to, ...) {
   tab_cast(x, to, ...)
 }
 
 #grouped_tab / tbl_df
 #' @export
-vec_ptype2.grouped_tab.tbl_df <- function(x, y, ...) {
+vec_ptype2.tabxplor_grouped_tab.tbl_df <- function(x, y, ...) {
   gtab_ptype2(x, y, ...)
 }
 #' @export
-vec_ptype2.tbl_df.grouped_tab <- function(x, y, ...) {
+vec_ptype2.tbl_df.tabxplor_grouped_tab <- function(x, y, ...) {
   gtab_ptype2(x, y, ...)
 }
 #' @export
-vec_cast.grouped_tab.tbl_df <- function(x, to, ...) {
+vec_cast.tabxplor_grouped_tab.tbl_df <- function(x, to, ...) {
   gtab_cast(x, to, ...)
 }
 #' @export
-vec_cast.tbl_df.grouped_tab <- function(x, to, ...) {
+vec_cast.tbl_df.tabxplor_grouped_tab <- function(x, to, ...) {
   vctrs::tib_cast(x, to, ...)
 }
 
 #grouped_tab / data.frame
 #' @export
-vec_ptype2.grouped_tab.data.frame <- function(x, y, ...) {
+vec_ptype2.tabxplor_grouped_tab.data.frame <- function(x, y, ...) {
   gtab_ptype2(x, y, ...)
 }
 #' @export
-vec_ptype2.data.frame.grouped_tab <- function(x, y, ...) {
+vec_ptype2.data.frame.tabxplor_grouped_tab <- function(x, y, ...) {
   gtab_ptype2(x, y, ...)
 }
 #' @export
-vec_cast.grouped_tab.data.frame <- function(x, to, ...) {
+vec_cast.tabxplor_grouped_tab.data.frame <- function(x, to, ...) {
   gtab_cast(x, to, ...)
 }
 #' @export
-vec_cast.data.frame.grouped_tab <- function(x, to, ...) {
+vec_cast.data.frame.tabxplor_grouped_tab <- function(x, to, ...) {
   vctrs::df_cast(x, to, ...)
 }
 
@@ -1424,7 +1425,7 @@ get_full_color_breaks <- function() {
 # want to write similar functions for your subclass to avoid repetition in your code. You may want
 # to export them as well if you are expecting other people to derive from your class.
 
-# A data.table example:
+# A data.tabxplor_tab le example:
 # [...]
 
 # #A tibble example:

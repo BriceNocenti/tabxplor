@@ -273,7 +273,7 @@ Breaks for repulsions/subrepresentations (in orange/red) will simply be the oppo
 \itemize{
 \item \code{tab_get_vars}: Get the variables names of a \pkg{tabxplor} \code{tab}
 
-\item \code{is_tab}: a test function for class tab
+\item \code{is_tab}: a test function for class tabxplor_tab
 
 \item \code{tab_color_style}: define the color style used to print tibbles of class \code{\link{tab}}
 
