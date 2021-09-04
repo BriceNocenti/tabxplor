@@ -5,3 +5,5 @@
 ^\.readme_images$
 ^cran-comments\.md$
 ^\.travis\.yml$
+^CRAN-RELEASE$
+^\.github$

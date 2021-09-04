@@ -16,15 +16,22 @@ First submission of the tabxplor package to CRAN.
    - Windows x86_64-w64-mingw32 (64-bit), R-devel
 
 ## R CMD check results
-There were no ERRORs, WARNINGs or NOTEs. 
+* local Windows 10 and Ubuntu 16.04 (on travis-ci) :
+    There were no ERRORs, WARNINGs or NOTEs. 
 
 * https://builder.r-hub.io : 
-    1 note : 
+    No ERRORs, no WARNINGs, 1 NOTE : 
         New submission
 
 * https://win-builder.r-project.org : 
-    1 note :
+    No ERRORs, no WARNINGs, 1 NOTE : 
         New submission
+		
+		Found the following (possibly) invalid URLs:
+          URL: https://www.travis-ci.com/BriceNocenti/tabxplor
+          From: README.md
+          Status: 404
+          Message: Not Found
 
 ## Downstream dependencies
 There are currently no downstream dependencies for this package.

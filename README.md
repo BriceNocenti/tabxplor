@@ -5,8 +5,7 @@
 
 <!-- badges: start -->
 
-[![Travis build
-status](https://www.travis-ci.com/BriceNocenti/tabxplor.svg?branch=master)](https://www.travis-ci.com/BriceNocenti/tabxplor)
+[![R-CMD-check](https://github.com/BriceNocenti/tabxplor/workflows/R-CMD-check/badge.svg)](https://github.com/BriceNocenti/tabxplor/actions)
 <!-- badges: end -->
 
 If R makes complex things simple, it can sometimes make simple things

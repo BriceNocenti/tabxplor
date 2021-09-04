@@ -16,8 +16,7 @@ knitr::opts_chunk$set(
 # tabxplor
 
 <!-- badges: start -->
-
-[![Travis build status](https://www.travis-ci.com/BriceNocenti/tabxplor.svg?branch=master)](https://www.travis-ci.com/BriceNocenti/tabxplor)
+[![R-CMD-check](https://github.com/BriceNocenti/tabxplor/workflows/R-CMD-check/badge.svg)](https://github.com/BriceNocenti/tabxplor/actions)
 <!-- badges: end -->
 
 If R makes complex things simple, it can sometimes make simple things difficult. This is why `tabxplor` tries to make it easy to deal with multiple cross-tables: to create and manipulate them, but also to read them, using color helpers to highlight important informations. It would love to enhance your data exploration experience with simple yetpowerful tools. All functions are propelled by `tidyverse`, pipe-friendly, and render `tibble` data frames which can be easily manipulated with `dplyr`. Tables can be exported to Excel with formats and colors.
