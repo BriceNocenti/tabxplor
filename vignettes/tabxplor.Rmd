@@ -16,6 +16,7 @@ knitr::opts_chunk$set(
 
 ```{r setup}
 library(tabxplor)
+set_color_style(type = "text", theme = "light")
 ```
 
 ```{r, echo = FALSE, include = FALSE}
@@ -49,14 +50,14 @@ When one of the row or column variables is numeric, `tab` calculates means by ca
 
 `tab` comes with options to weight the table, print percentages, manage totals, digits and missing values, add legends, gather rare categories in a "Others" level.
 
-``` {.r}
+``` r
 tab(forcats::gss_cat, marital, race, pct = "row", na = "drop", subtext = gss,
 rare_to_other = TRUE, n_min = 1000, other_level = "Custom_other_level_name")
 ```
 
 When a third variable is provided, `tab` makes a table with as many subtables as it has levels. With several `tab_vars`, it makes a subtable for each combination of their levels. The result is grouped: in `dplyr`, operations like `sum()` or `all()` are done within each subtable, and not for the whole dataframe.
 
-Colors may be added to highlight over-represented and under-represented cells, and therefore help the user read the table. By default, with `color = "diff"`, colors are based on the differences between a cell and it's related total (which only works with means and row or col pct). When a percentage is superior to the average percentage of the line or column, it appears with shades of green. When it's inferior, it appears with shades of red/orange. A color legend is added below the table. Note that, for now, colors are made to stand out with dark themes in RStudio, not light ones.
+Colors may be added to highlight over-represented and under-represented cells, and therefore help the user read the table. By default, with `color = "diff"`, colors are based on the differences between a cell and it's related total (which only works with means and row or col pct). When a percentage is superior to the average percentage of the line or column, it appears with shades of green (or blue). When it's inferior, it appears with shades of red/orange. A color legend is added below the table. In RStudio colors are adapted to the theme, light or dark. 
 
 ```{r, echo = TRUE}
 data <- forcats::gss_cat %>% 
@@ -128,7 +129,7 @@ tab(forcats::gss_cat, race, marital, color = "contrib")
 
 The result of `tab` is a `tibble::tibble` dataframe with class `tab`. It gets it's own printing methods but, in the same time, can be transformed using most dplyr verbs, like a normal tibble.
 
-``` {.r}
+``` r
 library(dplyr)
 tab(storms, category, status, sup_cols = c("pressure", "wind")) %>%
   filter(category != "-1") %>%
@@ -138,7 +139,7 @@ dplyr::select(-`tropical depression`)
 
 With `dplyr::arrange`, don't forget to keep the order of tab variables and total rows:
 
-``` {.r}
+``` r
 tab(data, race, marital, year, pct = "row") %>%
   arrange(year, is_totrow(.), desc(Married))
 ```
@@ -156,13 +157,14 @@ data <- forcats::gss_cat %>% mutate(across(
   where(is.factor),
   ~ forcats::fct_relevel(., first_lvs[first_lvs %in% levels(.)])
 ))
-tab_many(data, race, c(marital, rincome, partyid, relig, age, tvhours),
+tabs <- tab_many(data, race, c(marital, rincome, partyid, relig, age, tvhours),
          levels = "first", pct = "row", chi2 = TRUE, color = "auto")
+tabs
 ```
 
 Using `tab` or `tab_many` with `purrr::map` and `tibble::tribble`, you can program several tables with different parameters all at once, in a readable way:
 
-``` {.r}
+``` r
 tabs <-
   purrr::pmap(
     tibble::tribble(
@@ -178,11 +180,20 @@ tabs <-
     data = forcats::gss_cat, color = "auto", chi2 = TRUE)
 ```
 
-## Export to Excel
+## Export to html or Excel
+To export a table to html with colors, tabxplor uses `knitr::kable` and `kableExtra`:
+``` {r, echo = TRUE} 
+tabs %>% tab_kable()
+
+```
+To print an html table by default (for example, in RStudio viewer), use tabxplor options:
+``` r 
+options(tabxplor.output = "kable") # default to options(tabxplor.output = "console")
+```
 
 `tab_xl` exports any table or list of tables to Excel, with all colors, chi2 stats and formatting. On Excel, it is still possible to do calculations on raw numbers.
 
-``` {.r}
+``` r
 tabs %>% tab_xl(replace = TRUE, sheets = "unique")
 ```
 
@@ -190,7 +201,7 @@ tabs %>% tab_xl(replace = TRUE, sheets = "unique")
 
 When not doing data analysis but writing functions, you can use the sub-functions of `tab_many` step by step to attain more flexibility or speed. That way, it's possible to write new functions to customize your tables even more.
 
-``` {.r}
+``` r
 data <- dplyr::starwars %>%
   tab_prepare(sex, hair_color, gender, rare_to_other = TRUE,
               n_min = 5, na = "keep")
@@ -208,14 +219,14 @@ The whole architecture of `tabxplor` is powered by a special vector class, named
 
 The simple way to recover the underlying numbers as numeric vectors is `get_num`:
 
-``` {.r}
+``` r
 tab(data, race, marital, year, pct = "row") %>%
   mutate(across(where(is_fmt), get_num))
 ```
 
 To render character vectors (without colors), use `format`:
 
-``` {.r}
+``` r
 tab(data, race, marital, year, pct = "row") %>%
   mutate(across(where(is_fmt), format))
 ```

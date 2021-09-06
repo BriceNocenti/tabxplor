@@ -60,7 +60,7 @@ tab_xl <-
            call. = FALSE)
     }
 
-     stopifnot(length(pct_breaks    ) >= 1,
+     stopifnot(length(pct_breaks   ) >= 1,
               length(mean_breaks   ) >= 1,
               length(contrib_breaks) >= 1 )
 
@@ -139,16 +139,11 @@ tab_xl <-
                    "st_minus5")
 
     lbrk <- max(length(pct_breaks), length(mean_breaks), length(contrib_breaks))
-    pct_breaks     <- c(pct_breaks    ,
-                        rep(NA_real_, lbrk - length(pct_breaks)))
-    mean_breaks    <- c(mean_breaks   ,
-                        rep(NA_real_, lbrk - length(mean_breaks)))
-    contrib_breaks <- c(contrib_breaks,
-                        rep(NA_real_, lbrk - length(contrib_breaks)))
+
     pct_ci_breaks  <- pct_breaks - pct_breaks[1]
     mean_ci_breaks <- mean_breaks/mean_breaks[1]
 
-    if (lbrk >= 2) {
+     if (lbrk >= 2) {
       pct_brksup     <- c(pct_breaks    [2:lbrk], Inf)
       mean_brksup    <- c(mean_breaks   [2:lbrk], Inf)
       contrib_brksup <- c(contrib_breaks[2:lbrk], Inf)
@@ -158,6 +153,13 @@ tab_xl <-
       pct_brksup <- mean_brksup <- contrib_brksup <-
         pct_ci_brksup <- mean_ci_brksup <- Inf
     }
+
+    pct_breaks     <- c(pct_breaks    ,
+                        rep(NA_real_, lbrk - length(pct_breaks)))
+    mean_breaks    <- c(mean_breaks   ,
+                        rep(NA_real_, lbrk - length(mean_breaks)))
+    contrib_breaks <- c(contrib_breaks,
+                        rep(NA_real_, lbrk - length(contrib_breaks)))
 
     style_select <- switch(lbrk,
                            "1" = 2,
@@ -178,11 +180,11 @@ tab_xl <-
       contrib_breaks <- contrib_breaks[1:5]
     }
 
-    pct_brk         <- pct_breaks      %>% c(., -.)
-    mean_brk        <- mean_breaks     %>% c(., 1/.)
-    contrib_brk     <- contrib_breaks  %>% c(., -.)
-    pct_ci_brk      <- pct_ci_breaks   %>% c(., -.)
-    mean_ci_brk     <- mean_ci_breaks  %>% c(., -.) #then - again
+    pct_breaks         <- pct_breaks      %>% c(., -.)
+    mean_breaks        <- mean_breaks     %>% c(., 1/.)
+    contrib_breaks     <- contrib_breaks  %>% c(., -.)
+    pct_ci_breaks      <- pct_ci_breaks   %>% c(., -.)
+    mean_ci_breaks     <- mean_ci_breaks  %>% c(., -.) #then - again
 
     pct_brksup     <- pct_brksup       %>% c(., -.)
     mean_brksup    <- mean_brksup      %>% c(., 1/.)
@@ -196,8 +198,8 @@ tab_xl <-
 
     conditional_fmt_styles <- tibble::tibble(
       style, sign,
-      pct_brk, mean_brk, contrib_brk,
-      pct_ci_brk, mean_ci_brk,
+      pct_breaks, mean_breaks, contrib_breaks,
+      pct_ci_breaks, mean_ci_breaks,
       pct_brksup, mean_brksup, contrib_brksup,
       pct_ci_brksup, mean_ci_brksup
     )
@@ -1590,8 +1592,8 @@ insufficient_counts <- function(tabs, min_counts = 30) {
 #
 #
 #   # rule_ctr2 <- function(cel1, ctr) {   # B2 > 2 * nb_cells
-#   #   function(pct_brk, mean_brk, sign,  contrib_brk)
-#   #     paste0(cel1, sign, contrib_brk, "/")
+#   #   function(pct_breaks, mean_breaks, sign,  contrib_breaks)
+#   #     paste0(cel1, sign, contrib_breaks, "/")
 #   # }
 #   #contrib :
 #   # ...nbcell, "-", ...nbcell, "+",
@@ -1634,8 +1636,8 @@ insufficient_counts <- function(tabs, min_counts = 30) {
 #
 # tibble::tibble(
 #   style, sign,
-#   pct_brk, mean_brk, contrib_brk,
-#   pct_ci_brk, mean_ci_brk,
+#   pct_breaks, mean_breaks, contrib_breaks,
+#   pct_ci_breaks, mean_ci_breaks,
 #   pct_brksup, mean_brksup, contrib_brksup,
 #   pct_ci_brksup,mean_ci_brksup
 # )
@@ -1650,13 +1652,13 @@ insufficient_counts <- function(tabs, min_counts = 30) {
 #       color == "diff_after_ci" &
 #         type_ci %in% c("row_ci_diff", "col_ci_diff",
 #                        "row_ci_spread", "col_ci_spread")
-#       ~ pct_ci_brk,
+#       ~ pct_ci_breaks,
 #       color == "diff_after_ci" &
 #         type_ci %in% c("mean_ci_spread", "mean_ci_diff")
-#       ~ mean_ci_brk,
-#       type %in% c("row", "col")                    ~ pct_brk ,
-#       type == "mean"                               ~ mean_brk,
-#       type %in% c("all", "all_tabs", "wn", "ctr")  ~ contrib_brk,
+#       ~ mean_ci_breaks,
+#       type %in% c("row", "col")                    ~ pct_breaks ,
+#       type == "mean"                               ~ mean_breaks,
+#       type %in% c("all", "all_tabs", "wn", "ctr")  ~ contrib_breaks,
 #     ),
 #     brksup = dplyr::case_when(
 #       color == "diff_after_ci" &
@@ -1671,8 +1673,8 @@ insufficient_counts <- function(tabs, min_counts = 30) {
 #       type %in% c("all", "all_tabs", "wn", "ctr")  ~ contrib_brksup
 #     )
 #   ) %>%
-#   dplyr::select(-pct_brk, -mean_brk, -contrib_brk,
-#                 -pct_ci_brk, -mean_ci_brk,
+#   dplyr::select(-pct_breaks, -mean_breaks, -contrib_breaks,
+#                 -pct_ci_breaks, -mean_ci_breaks,
 #                 -pct_brksup, -mean_brksup, -contrib_brksup,
 #                 -pct_ci_brksup, -mean_ci_brksup    ) %>%
 #   dplyr::filter(! (is.na(cel1) | is.na(brk) ) # |
@@ -1706,8 +1708,8 @@ insufficient_counts <- function(tabs, min_counts = 30) {
 #         )
 #     ))
 #
-# # c("pct_ci_brk",
-# #   "mean_ci_brk", "pct_ci_brksup", "mean_ci_brksup")
+# # c("pct_ci_breaks",
+# #   "mean_ci_breaks", "pct_ci_brksup", "mean_ci_brksup")
 #
 #
 # #    cfmt_final$brksup[cfmt_final$type %in% c("all", "all_tabs", "wn", "ctr")]

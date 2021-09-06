@@ -4,9 +4,10 @@
 \alias{tab_many}
 \alias{tab_get_vars}
 \alias{is_tab}
-\alias{tab_color_style}
-\alias{get_color_breaks}
+\alias{set_color_style}
+\alias{get_color_style}
 \alias{set_color_breaks}
+\alias{get_color_breaks}
 \title{Many cross-tables as one, with color helpers}
 \usage{
 tab_many(
@@ -44,13 +45,13 @@ tab_get_vars(tabs, vars = c("row_var", "col_vars", "tab_vars"))
 
 is_tab(x)
 
-tab_color_style(
-  styles = c("green_red", "blue_red", "green_red_bg", "blue_red_bg")
-)
+set_color_style(type = c("text", "bg"), theme = NULL)
 
-get_color_breaks(brk)
+get_color_style(mode = c("crayon", "color_code"), type = NULL, theme = NULL)
 
 set_color_breaks(pct_breaks, mean_breaks, contrib_breaks)
+
+get_color_breaks(brk, type = c("positive", "all"))
 }
 \arguments{
 \item{data}{A data frame.}
@@ -215,12 +216,14 @@ to keep it as a list of individual tables, with one table for each \code{col_var
 
 \item{x}{A object to test with \code{\link{is_tab}}.}
 
-\item{styles}{The style chosen in \code{tab_color_style()}, among \code{"green_red"},
-\code{"blue_red"}, \code{"green_red_bg"} and \code{"blue_red_bg"}.}
+\item{type}{Default to \code{"positive"}, which just print breaks for positive spreads.
+Set to \code{all} to get breaks for negative spreads as well.}
 
-\item{brk}{When missing, return all color breaks. Specify to return a given color
-break, among \code{"pct"}, \code{"mean"}, \code{"contrib"}, \code{"pct_ci"} and
-\code{"mean_ci"}.}
+\item{theme}{For \code{set_color_style} and \code{get_color_style}, is your console
+or html table background \code{"light"} or \code{"dark"} ? Default to RStudio theme.}
+
+\item{mode}{By default, \code{get_color_style} returns a list of \pkg{crayon} coloring
+functions. Set to \code{"color_code"} to return html color codes.}
 
 \item{pct_breaks}{If they are to be changed, the breaks used for percentages.
 Default to \code{c(0.05, 0.1, 0.2, 0.3)} : first color used when the pct of a cell
@@ -243,6 +246,10 @@ variance. Default to \code{c(1, 2, 5, 10)} : first color used when the contribut
 a cell is superior to the mean contribution ; second color used when it is superior to
 2 times the mean contribution ; etc. The global color (for example green or
 red/orange) is given by the sign of the spread.}
+
+\item{brk}{When missing, return all color breaks. Specify to return a given color
+break, among \code{"pct"}, \code{"mean"}, \code{"contrib"}, \code{"pct_ci"} and
+\code{"mean_ci"}.}
 }
 \value{
 A \code{tibble} of class \code{tab}, possibly with colored reading helpers.
@@ -254,7 +261,11 @@ using them in calculations, be sure they are of class \code{character}.
 
 A list with the variables names.
 
+Set global options \code{"tabxplor.color_style_type"} and
+\code{"tabxplor.color_style_theme"}, used when printing \code{\link{tab}} objects.
 
+Create an object named \code{tabxplor_color_breaks} in the global
+environnement, used when printing \code{\link{tab}} objects.
 }
 \description{
 A full-featured function to create, manipulate and format many cross-tables
@@ -275,11 +286,13 @@ Breaks for aversions/under-representations (in orange/red) will simply be the op
 
 \item \code{is_tab}: a test function for class tabxplor_tab
 
-\item \code{tab_color_style}: define the color style used to print tibbles of class \code{\link{tab}}
+\item \code{set_color_style}: define the color style used to print \code{\link{tab}}.
 
-\item \code{get_color_breaks}: get the breaks currently used to print colors
+\item \code{get_color_style}: get color styles as \pkg{crayon} functions.
 
 \item \code{set_color_breaks}: set the breaks used to print colors
+
+\item \code{get_color_breaks}: get the breaks currently used to print colors
 }}
 
 \examples{
@@ -310,7 +323,8 @@ pmap(
   .f = tab_many,
   data = forcats::gss_cat, color = "auto", chi2 = TRUE)
 }
-#
-# To change the overall color style used to print all \code{\link{tab}} :
- \dontrun{tab_color_style("blue_red_bg")}
+set_color_style(type = "bg")
+set_color_breaks(pct_breaks = c(0.05, 0.15, 0.3),
+mean_breaks = c(1.15, 2, 4),
+contrib_breaks = c(1, 2, 5)     )
 }

@@ -1,22 +1,25 @@
-First submission of the tabxplor package to CRAN.
+## Resubmission
+This is a resubmission. In this version I have:
+
+* Passed from travis-ci to github actions, which removes the URL Not Found note in the travis readme badge.
 
 ## Test environments
-* local Windows 10 install, R 4.1.1 and R 4.2.0
-* Ubuntu 16.04 (on travis-ci), R 4.0.2
+* local Windows 10 install, R 4.1.1 and R devel (4.2.0)
+* Ubuntu 20.04.3 (on github actions), R 4.1.1
 
 * https://builder.r-hub.io :
    - Windows Server 2008 R2 SP1, R-devel 
-   (Build ID: tabxplor_1.0.0.tar.gz-75cda68ea002493dab89f7086628cb84)
+   (Build ID: tabxplor_1.0.0.tar.gz-85c78a10c0a24f4b8cfde40d5c13749e)
    - Ubuntu Linux 20.04.1 LTS, R-release, GCC, 
-   (Build ID: tabxplor_1.0.0.tar.gz-55f449f642c6460aabd99f66adb5d81f)
+   (Build ID: tabxplor_1.0.0.tar.gz-046dcbb21a50422fb853418e09a05bc0)
    - Fedora Linux, R-devel, clang, gfortran, 
-   (Build ID: tabxplor_1.0.0.tar.gz-a5b89ac1d46648afafa5073b9ce66f41)
+   (Build ID: tabxplor_1.0.0.tar.gz-752c05a6ddd24d98a34d45d5691592c9)
 
-* https://win-builder.r-project.org/05l3bh05ZDLF/ : 
+* https://win-builder.r-project.org/k582lkjFeCFd/ : 
    - Windows x86_64-w64-mingw32 (64-bit), R-devel
 
 ## R CMD check results
-* local Windows 10 and Ubuntu 16.04 (on travis-ci) :
+* local Windows 10 and Ubuntu 16.04 (on github actions) :
     There were no ERRORs, WARNINGs or NOTEs. 
 
 * https://builder.r-hub.io : 
@@ -26,12 +29,6 @@ First submission of the tabxplor package to CRAN.
 * https://win-builder.r-project.org : 
     No ERRORs, no WARNINGs, 1 NOTE : 
         New submission
-		
-		Found the following (possibly) invalid URLs:
-          URL: https://www.travis-ci.com/BriceNocenti/tabxplor
-          From: README.md
-          Status: 404
-          Message: Not Found
 
 ## Downstream dependencies
 There are currently no downstream dependencies for this package.

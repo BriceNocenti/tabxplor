@@ -640,16 +640,20 @@ tab_many <- function(data, row_var, col_vars, tab_vars, wt,
     totaltab   <- vctrs::vec_recycle(totaltab  , 1     )
     conf_level <- vctrs::vec_recycle(conf_level, 1     )
     color      <- vctrs::vec_recycle(color     , 1     )
+
+    if (comp[1] == "all" & totaltab == "no") { # just if tab_vars ?
+      warning("comp = 'all' need total table with total row to compare with")
+      totaltab <- "line"
+    }
+
   } else {
     totaltab   <- vctrs::vec_recycle(totaltab  , nvars )
     conf_level <- vctrs::vec_recycle(conf_level, nvars )
     color      <- vctrs::vec_recycle(color     , nvars )
+
+    if (comp[1] == "all" & any(totaltab == "no")) totaltab[totaltab == "no"] <- "line"
   }
 
-  if (comp[1] == "all" & totaltab == "no") { # just if tab_vars ?
-    warning("comp = 'all' need total table with total row to compare with")
-    totaltab <- "line"
-  }
   if (color[1] == "contrib" & totrow == FALSE) {
     warning("color == 'contrib' need total rows to store information about ",
             "mean contributions to variance")
@@ -658,13 +662,13 @@ tab_many <- function(data, row_var, col_vars, tab_vars, wt,
 
   # Manage total rows and cols arguments
   if (totcol[1] %in% c("last", "all_col_vars")) {
-    totcol <- col_vars[nvars]
+    totcol <- col_vars_text[col_vars_text] %>% names() %>% dplyr::last()
   } else if (totcol[1] == "each") {
     totcol <- col_vars[col_vars_text]
   } else if (all(totcol %in% col_vars)) {
-    totcol <- col_vars[col_vars %in% totcol]
+    totcol <- col_vars[col_vars %in% totcol & col_vars_text]
   } else if (all(totcol %in% c("col", "no"))) {
-    totcol <- col_vars[which(totcol == "col")]
+    totcol <- col_vars[which(totcol == "col" & col_vars_text)] # which ?
   } else if (is.numeric(totcol)) {
     if (any(totcol > nvars)) stop("some totcol indexes are superior to the",
                                   " number of col_vars")
@@ -852,6 +856,7 @@ tab_many <- function(data, row_var, col_vars, tab_vars, wt,
     tottest <- if (all( (dplyr::select(dplyr::ungroup(tabs) , where(is_fmt)) %>%
                          purrr::map_chr(get_type) ) == "mean") ) {
       "row" } else { "both" }
+
     tabs <- tab_tot(tabs, tot = tottest, totcol = "each", name = total_names,
                     data = data)
   }
@@ -886,10 +891,10 @@ tab_many <- function(data, row_var, col_vars, tab_vars, wt,
 
     if (tot_cols_type == "all_col_vars") {
       no_last_tot <- is_totcol(tabs) #%>% .[.] %>% names()
-      no_last_tot <- no_last_tot[no_last_tot]%>% names()
+      no_last_tot <- no_last_tot[no_last_tot] %>% names()
       last_tot <- dplyr::last(no_last_tot)
-      no_last_tot <- no_last_tot %>% purrr::discard(. == last_tot)
-      tabs <- tabs %>% dplyr::select(-tidyselect::all_of(no_last_tot)) %>%
+      no_last_tot <- no_last_tot %>% purrr::discard(. == last_tot | is.na(.))
+      tabs <- tabs %>% dplyr::select(-tidyselect::any_of(no_last_tot)) %>%
         dplyr::relocate(where(is_totcol), .after = tidyselect::last_col()) %>%
         dplyr::rename_with(~ total_names[2], .cols = tidyselect::all_of(last_tot)) %>%
         dplyr::mutate(dplyr::across(tidyselect::last_col(),
@@ -898,14 +903,15 @@ tab_many <- function(data, row_var, col_vars, tab_vars, wt,
   }
 
   if (totrow == FALSE & tot_cols_type != "no_no_create") {
+    totrows     <- is_totrow(tabs)
+    tottab_rows <- is_tottab(tabs)
+    tottab_line <- length(tottab_rows[tottab_rows]) == 1 & tottab_rows
+
     tabs <- tabs %>%
-      tibble::add_column(
-        totrows = is_totrow(tabs),
-        tottab_rows = is_tottab(tabs),
-        tottab_line = length(.data$tottab_rows[.data$tottab_rows]) == 1 & .data$totrows) %>%
+      tibble::add_column(totrows = totrows, tottab_line = tottab_line) %>%
       dplyr::filter(!.data$totrows | .data$tottab_line) %>%
-      dplyr::select(-.data$totrows, -.data$tottab_rows, -.data$tottab_line)
-  }
+      dplyr::select(-.data$totrows, -.data$tottab_line)
+    }
 
   chi2 <- get_chi2(tabs)
   if (! lv1_group_vars(tabs)) {
@@ -1559,7 +1565,7 @@ tab_tot <- function(tabs, tot = c("row", "col"), name = "Total",
   if ("row" %in% tot | tot[1] == "no") {
     totrows     <- is_totrow(tabs)
     tottab_rows <- is_tottab(tabs)
-    tottab_line <- length(tottab_rows[tottab_rows]) == 1 & totrows
+    tottab_line <- length(tottab_rows[tottab_rows]) == 1 & tottab_rows #& totrows
 
     if (any(totrows)) tabs <- tabs %>%
       tibble::add_column(totrows, tottab_line) %>%
@@ -1577,7 +1583,7 @@ tab_tot <- function(tabs, tot = c("row", "col"), name = "Total",
   if ("row" %in% tot) {
     totrows     <- is_totrow(tabs)
     tottab_rows <- is_tottab(tabs)
-    tottab_line <- length(tottab_rows[tottab_rows]) == 1 & totrows
+    tottab_line <- length(tottab_rows[tottab_rows]) == 1 & tottab_rows #& totrows
 
     tabs <- tabs %>% tibble::add_column(tottab_rows, tottab_line)
 

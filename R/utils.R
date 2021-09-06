@@ -16,6 +16,33 @@ NULL
 #' @importFrom rlang .data
 NULL
 
+# Global options :
+
+
+#' @keywords internal
+.onLoad <- function(libname, pkgname) {
+  # options "tabxplor.color_style_type" and "tabxplor.color_style_theme" :
+  set_color_style()
+
+  # option "tabxplor.color_breaks" :
+  set_color_breaks(pct_breaks = c(0.05, 0.1, 0.2, 0.3),
+                   mean_breaks = c(1.15, 1.5, 2, 4),
+                   contrib_breaks = c(1, 2, 5, 10)  )
+
+  options("tabxplor.output" = "console") # options("tabxplor.output" = "kable")
+
+  invisible()
+}
+
+# getOption("tabxplor.color_breaks")
+# getOption("tabxplor.color_style_theme")
+# getOption("tabxplor.color_style_type")
+# get_color_breaks()
+# get_color_style()
+
+
+
+
 #Fonctions and options to work with factors and lists -------------
 
 #' A regex pattern to clean the names of factors.
@@ -247,7 +274,7 @@ compare_levels <-
     if ("character" %in% class(data)) {
       db_names <- data
       db <- data %>% purrr::map(~ eval(str2expression(.)) %>%
-                                       dplyr::select(tidyselect::any_of(vars)) ) %>%
+                                  dplyr::select(tidyselect::any_of(vars)) ) %>%
         magrittr::set_names(data)
     } else if (all(purrr::map_lgl(data, ~ "data.frame" %in% class(.)))) {
       db <- data %>% purrr::map(~ dplyr::select(., tidyselect::any_of(vars)))

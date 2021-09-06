@@ -25,6 +25,13 @@ You can install tabxplor from CRAN with:
 install.packages("tabxplor")
 ```
 
+Or from github with :
+
+``` r
+# install.packages(devtools)
+devtools::install_github("BriceNocenti/tabxplor")
+```
+
 ## Base usage: cross-tables with color helpers
 
 The main functions are made to be user-friendly and time-saving is data
@@ -70,10 +77,9 @@ cells, and therefore help the user read the table. By default, with
 `color = "diff"`, colors are based on the differences between a cell and
 it’s related total (which only works with means and row or col pct).
 When a percentage is superior to the average percentage of the line or
-column, it appears with shades of green. When it’s inferior, it appears
-with shades of red/orange. A color legend is added below the table. Note
-that, for now, colors are made to stand out with dark themes (for
-example in RStudio), not light ones.
+column, it appears with shades of green (or blue). When it’s inferior,
+it appears with shades of red/orange. A color legend is added below the
+table. In RStudio colors are adapted to the theme, light or dark.
 
 ``` r
 data <- forcats::gss_cat %>% 
@@ -283,7 +289,25 @@ tabs <-
     data = forcats::gss_cat, color = "auto", chi2 = TRUE)
 ```
 
-## Export to Excel
+## Export to html or Excel
+
+To export a table to html with colors, tabxplor uses `knitr::kable` and
+`kableExtra`:
+
+``` r
+tabs <- tab(forcats::gss_cat, race, marital, subtext = "Source: GSS 2000-2014", 
+            pct = "row", color = "diff")
+tabs %>% tab_kable()
+```
+
+![](.readme_images/tabxplor8_tab_kable.jpg)
+
+To print an html table by default (for example, in RStudio viewer), use
+tabxplor options:
+
+``` r
+options(tabxplor.output = "kable") # default to options(tabxplor.output = "console")
+```
 
 `tab_xl` exports any table or list of tables to Excel, with all colors,
 chi2 stats and formatting. On Excel, it is still possible to do

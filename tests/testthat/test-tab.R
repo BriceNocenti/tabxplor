@@ -17,9 +17,6 @@ testthat::test_that("tab works with missing, NULL, NA, etc., in variables", {
   #tab(data, "gender", "sex", "")           %>% testthat::expect_s3_class("tabxplor_tab")
   #tab(data, "gender", "sex", "no")         %>% testthat::expect_s3_class("tabxplor_tab")
 
-  tab_many(data, "gender")
-  tab_many(data, "gender")
-  tab_many(data, col_vars = "sex")
   tab_many(data, "gender", col_vars = NULL         , tab_vars = NULL)          %>%
     testthat::expect_s3_class("tabxplor_tab")
   tab_many(data, "gender", col_vars = NA_character_, tab_vars = NA_character_) %>%
@@ -118,6 +115,8 @@ testthat::test_that("tab work with tribble", {
     purrr::pmap(tab, data = data) %>%
     testthat::expect_type("list")
 })
+
+tab(data = data, sex, mass, gender)
 
 
 tabs <- tab_many(data, "sex", c("hair_color", "eye_color", "mass"), "gender",
@@ -275,52 +274,26 @@ expect_color <- function(object) {
 }
 
 testthat::test_that("printing colors works", {
+  set_color_style(type = "bg", theme = "dark")
   tab(data, sex, hair_color, pct = "row", color = "diff"    ) %>% print() %>%
     testthat::expect_output()
+  set_color_style(type = "text", theme = "dark")
+  set_color_breaks(pct_breaks = c(0.05, 0.15, 0.3),
+                   mean_breaks = c(1.15,  2, 4),
+                   contrib_breaks = c(1, 2, 5)     )
   tab(data, sex, hair_color, pct = "row", color = "diff_ci" ) %>% print() %>%
     testthat::expect_output()
+  set_color_style(type = "bg", theme = "light")
   tab(data, sex, hair_color, pct = "row", color = "after_ci") %>% print() %>%
     testthat::expect_output()
+
+  set_color_style(type = "text")
+  set_color_breaks(pct_breaks = c(0.05, 0.1, 0.2, 0.3),
+                   mean_breaks = c(1.15, 1.5, 2, 4),
+                   contrib_breaks = c(1, 2, 5, 10)     )
   tab(data, sex, hair_color, pct = "row", color = "contrib" ) %>% print() %>%
     testthat::expect_output()
 })
-
-# == Failed tests ================================================================
-#   -- Error (test-tab.R:242:3): printing colors works -----------------------------
-#   Error: Problem with `mutate()` column `breaks`.
-# i `breaks = purrr::map2(styles, breaks, ~purrr::map2_chr(.x, .y, rlang::exec))`.
-# x could not find function "pos2"
-# Backtrace:
-#   x
-# 1. +-testthat::expect_output(...) test-tab.R:242:2
-# 2. | \-testthat:::quasi_capture(...)
-# 3. |   +-testthat:::.capture(...)
-# 4. |   | \-testthat::capture_output_lines(code, print, width = width)
-# 5. |   |   \-testthat:::eval_with_output(code, print = print, width = width)
-# 6. |   |     +-withr::with_output_sink(temp, withVisible(code))
-# 7. |   |     | \-base::force(code)
-# 8. |   |     \-base::withVisible(code)
-# 9. |   \-rlang::eval_bare(quo_get_expr(.quo), quo_get_env(.quo))
-# 10. +-base::print(tab(data, sex, hair_color, pct = "row", color = "diff"))
-# 11. +-tabxplor:::print.tab(...)
-# 12. | \-tabxplor:::tab_color_legend(x)
-# 13. |   \-`%>%`(...)
-# 14. +-dplyr::mutate(...)
-# 15. +-dplyr:::mutate.data.frame(...)
-# 16. | \-dplyr:::mutate_cols(.data, ..., caller_env = caller_env())
-# 17. |   +-base::withCallingHandlers(...)
-# 18. |   \-mask$eval_all_mutate(quo)
-# 19. +-purrr::map2(styles, breaks, ~purrr::map2_chr(.x, .y, rlang::exec))
-# 20. | \-tabxplor:::.f(.x[[1L]], .y[[1L]], ...)
-# 21. |   \-purrr::map2_chr(.x, .y, rlang::exec)
-# 22. |     \-rlang:::.f(.x[[i]], .y[[i]], ...)
-# 23. \-base::.handleSimpleError(...)
-# 24.   \-dplyr:::h(simpleError(msg, call))
-#
-# [ FAIL 1 | WARN 0 | SKIP 0 | PASS 67 ]
-# Error: Test failures
-# Execution halted
-
 
 
 testthat::test_that("tab colors are calculated with counts and pct", {

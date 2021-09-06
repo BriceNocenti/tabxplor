@@ -1134,9 +1134,9 @@ pillar_shaft.tabxplor_fmt <- function(x, ...) {
   if (!is.na(color) & color != "" & !(color == "contrib" & !any(totrows))) {
     color_selection <- fmt_color_selection(x)
 
-    color_styles <- get_color_styles(length(color_selection))
+    color_styles <- select_in_color_style(length(color_selection))
 
-    color_styles <- color_styles_all[color_styles]
+    color_styles <- get_color_style()[color_styles]
 
     unselected <- purrr::transpose(color_selection) %>%
       purrr::map_lgl(~ ! any(purrr::flatten_lgl(.)))
@@ -1183,13 +1183,15 @@ pillar_shaft.tab_chi2_fmt <- function(x, ...) {
   display <- get_display(x)
   nas     <- is.na(display)
 
+  color_style <- get_color_style()
+
   pvalues <- out[!nas & display == "pct"]
   p_values <- get_num(x)[!nas & display == "pct"]
 
   out[!nas & display == "pct"] <-
     dplyr::if_else(condition = p_values >= 0.05,
-                   true      = neg5(pvalues),
-                   false     = pos5(pvalues) )
+                   true      = color_style$neg5(pvalues),
+                   false     = color_style$pos5(pvalues) )
 
   pillar::new_pillar_shaft_simple(out, align = "right", na = "")
 }
@@ -1200,18 +1202,32 @@ fmt_color_selection <- function(x, force_color, force_breaks) {
   type    <- get_type (x)
   type_ci <- get_ci_type(x)
   color   <- if (missing(force_color)) get_color(x) else force_color
+  # color <- get_color(x)
 
-  if (!missing(force_breaks)) { #if missing, take them in env of package::tabxplor
-    mean_brk       <- force_breaks$mean_brk
-    pct_brk        <- force_breaks$pct_brk
-    mean_ci_brk    <- force_breaks$mean_ci_brk
-    pct_ci_brk     <- force_breaks$pct_ci_brk
-    contrib_brk    <- force_breaks$contrib_brk
+  if (!missing(force_breaks)) {
+    mean_breaks    <- force_breaks$mean_breaks
+    pct_breaks     <- force_breaks$pct_breaks
+    mean_ci_breaks <- force_breaks$mean_ci_breaks
+    pct_ci_breaks  <- force_breaks$pct_ci_breaks
+    contrib_breaks <- force_breaks$contrib_breaks
     mean_brksup    <- force_breaks$mean_brksup
     pct_brksup     <- force_breaks$pct_brksup
     mean_ci_brksup <- force_breaks$mean_ci_brksup
     pct_ci_brksup  <- force_breaks$pct_ci_brksup
     contrib_brksup <- force_breaks$contrib_brksup
+  } else {
+    tabxplor_color_breaks <- getOption("tabxplor.color_breaks")
+
+    mean_breaks    <- tabxplor_color_breaks$mean_breaks
+    pct_breaks     <- tabxplor_color_breaks$pct_breaks
+    mean_ci_breaks <- tabxplor_color_breaks$mean_ci_breaks
+    pct_ci_breaks  <- tabxplor_color_breaks$pct_ci_breaks
+    contrib_breaks <- tabxplor_color_breaks$contrib_breaks
+    mean_brksup    <- tabxplor_color_breaks$mean_brksup
+    pct_brksup     <- tabxplor_color_breaks$pct_brksup
+    mean_ci_brksup <- tabxplor_color_breaks$mean_ci_brksup
+    pct_ci_brksup  <- tabxplor_color_breaks$pct_ci_brksup
+    contrib_brksup <- tabxplor_color_breaks$contrib_brksup
   }
 
   diff <- if (color %in% c("diff", "diff_ci", "after_ci", "ci") ) {
@@ -1247,14 +1263,14 @@ fmt_color_selection <- function(x, force_color, force_breaks) {
   brk <-
     switch(color,
            "diff"     = ,
-           "diff_ci"  = if (type == "mean") mean_brk    else pct_brk   ,
+           "diff_ci"  = if (type == "mean") mean_breaks    else pct_breaks   ,
            "ci"       = if (type == "mean"){
-             mean_ci_brk[c(1, length(mean_ci_brk)/2 + 1)]
+             mean_ci_breaks[c(1, length(mean_ci_breaks)/2 + 1)]
            } else {
-             pct_ci_brk[c(1, length(pct_ci_brk)/2 + 1)]
+             pct_ci_breaks[c(1, length(pct_ci_breaks)/2 + 1)]
            } ,
-           "after_ci" = if (type == "mean") mean_ci_brk else pct_ci_brk,
-           "contrib"  = contrib_brk                                     )
+           "after_ci" = if (type == "mean") mean_ci_breaks else pct_ci_breaks,
+           "contrib"  = contrib_breaks                                     )
 
   brksup <-
     switch(color,
@@ -1363,9 +1379,10 @@ color_formula <- function(type, color, diff, ci, ref_means,
   tidyr::replace_na(res, FALSE)
 }
 
-
 #' @keywords internal
-tab_color_legend <- function(x, colored = TRUE) {
+tab_color_legend <- function(x, colored = TRUE, mode = c("console", "html"),
+                             html_theme = NULL, html_type = NULL, text_color = NULL,
+                             grey_color = NULL) {
   color     <- get_color(x)
   type      <- get_type(x)
   diff_type <- get_diff_type(x)
@@ -1424,7 +1441,7 @@ tab_color_legend <- function(x, colored = TRUE) {
         "diff_mean"     = , # 1/mean and sign /
         "diff"          = paste0("x", .sign, ref, " ", .breaks),
         "diff_ci_mean"  = ,
-        "diff_ci"       = paste0("|x-", ref, "%>%ci & x", .sign,
+        "diff_ci"       = paste0("|x-", ref, "|>ci & x", .sign,
                                  ref, " ", .breaks),
         #"ci_mean"       = ,
         "ci"            = paste0("|x-", ref, "| > ci"),      #just 1 ?
@@ -1481,16 +1498,47 @@ tab_color_legend <- function(x, colored = TRUE) {
                                     false     = " > ")),
     )
 
-  if (colored == TRUE) color_table <- color_table %>%
+  if (colored == TRUE & mode[1] == "console") color_table <- color_table %>%
     dplyr::mutate(
-      styles = purrr::map(.data$breaks, ~ get_color_styles(length(.))),
-      styles = purrr::map(.data$styles, ~ color_styles_all[.]),
+      styles = purrr::map(.data$breaks, ~ select_in_color_style(length(.))),
+      styles = purrr::map(.data$styles, ~ get_color_style()[.]),
       breaks = purrr::map2(.data$styles, .data$breaks,
                            ~ purrr::map2_chr(
                              .x, .y,
                              ~ rlang::exec(.x, rlang::sym(.y))
                            ))
     )
+
+  if (colored == TRUE & mode[1] == "html") {
+    if (html_type == "text") {
+      color_table <- color_table %>%
+        dplyr::mutate(
+          styles = purrr::map(.data$breaks, ~ select_in_color_style(length(.))),
+          styles = purrr::map(.data$styles, ~ get_color_style(mode  = "color_code",
+                                                              theme = html_theme,
+                                                              type  = html_type)[.]),
+          breaks = purrr::map2(.data$styles, .data$breaks,
+                               ~ purrr::map2_chr(
+                                 .x, .y,
+                                 ~ kableExtra::text_spec(.y, color = .x)
+                               ))
+        )
+    } else {
+      color_table <- color_table %>%
+        dplyr::mutate(
+          styles = purrr::map(.data$breaks, ~ select_in_color_style(length(.))),
+          styles = purrr::map(.data$styles, ~ get_color_style(mode  = "color_code",
+                                                              theme = html_theme,
+                                                              type  = html_type)[.]),
+          breaks = purrr::map2(.data$styles, .data$breaks,
+                               ~ purrr::map2_chr(
+                                 .x, .y,
+                                 ~ kableExtra::text_spec(.y, background = .x)
+                               ))
+        )
+    }
+  }
+
 
   color_table <- color_table %>%
     dplyr::mutate(
@@ -1504,21 +1552,32 @@ tab_color_legend <- function(x, colored = TRUE) {
         ))
     )
 
-  color_table <-
-    if (colored == TRUE) {
-      color_table %>% dplyr::mutate(
-        color_scale = purrr::map_chr(.data$color_scale, ~ paste0(
-          .,
-          collapse = pillar::style_subtle("; ")          )
-        ),
-        names = pillar::style_subtle(paste0(.data$names, ": "))
-      )
+  if (colored == TRUE) {
+    if (mode[1] == "console") {
+      color_table <- color_table %>%
+        dplyr::mutate(
+          color_scale = purrr::map_chr(.data$color_scale, ~ paste0(
+            .,
+            collapse = pillar::style_subtle("; ")          )
+          ),
+          names = pillar::style_subtle(paste0(.data$names, ": "))
+        )
     } else {
-      color_table %>% dplyr::mutate(
+      color_table <- color_table %>%
+        dplyr::mutate(
+          color_scale = purrr::map_chr(.data$color_scale, ~ paste0(., collapse = "; ")
+          ), #%>% stringr::str_replace_all(";", kableExtra::text_spec(";", color = grey_color)),
+          names = paste0(.data$names, ": ") %>% kableExtra::text_spec(color = grey_color)
+        )
+    }
+
+  } else {
+    color_table <- color_table %>%
+      dplyr::mutate(
         color_scale = purrr::map_chr(.data$color_scale, ~ paste0(., collapse = "; " )),
         names = paste0(.data$names, ": ")
       )
-    }
+  }
 
   paste0(color_table$names, color_table$color_scale)
   # %>% cli::cat_line()
@@ -1529,15 +1588,22 @@ tab_color_legend <- function(x, colored = TRUE) {
 
 #' @keywords internal
 brk_from_color <- function(color_type) {
+  tabxplor_color_breaks <- getOption("tabxplor.color_breaks")
+
   purrr::map(color_type, ~
                switch(.x,
                       "diff_mean"     = ,
-                      "diff_ci_mean"  = list(mean_brk, mean_brksup),
-                      "after_ci_mean" = list(mean_ci_brk, mean_ci_brksup),
+                      "diff_ci_mean"  = list(tabxplor_color_breaks$mean_breaks,
+                                             tabxplor_color_breaks$mean_brksup),
+                      "after_ci_mean" = list(tabxplor_color_breaks$mean_ci_breaks,
+                                             tabxplor_color_breaks$mean_ci_brksup),
                       "diff"          = ,
-                      "diff_ci"       = list(pct_brk, pct_brksup),
-                      "after_ci"      = list(pct_ci_brk, pct_ci_brksup),
-                      "contrib"       = list(contrib_brk, contrib_brksup),
+                      "diff_ci"       = list(tabxplor_color_breaks$pct_breaks,
+                                             tabxplor_color_breaks$pct_brksup),
+                      "after_ci"      = list(tabxplor_color_breaks$pct_ci_breaks,
+                                             tabxplor_color_breaks$pct_ci_brksup),
+                      "contrib"       = list(tabxplor_color_breaks$contrib_breaks,
+                                             tabxplor_color_breaks$contrib_brksup),
                       "ci"            = ,
                       "ci_mean"       = list(0, Inf), #list(c(0, 0), c(Inf, -Inf)),
                       list()
@@ -1564,8 +1630,9 @@ get_color_type <- function(color, type) {
 }
 
 #' @keywords internal
-get_color_styles <- function(length) {
-  if (stringr::str_detect(color_styles_all[[1]], "^bg")) {
+select_in_color_style <- function(length) {
+
+  if (stringr::str_detect(get_color_style()$pos1, "#CCFFCC|#000033e")) {
     switch(as.character(length),
            "1"  = c(3)              ,
            "2"  = c(3, 8)           ,
@@ -1592,16 +1659,16 @@ get_color_styles <- function(length) {
 #                 .x,
 #                 "diff"          = ,
 #                 "diff_ci"       = if (.y) {
-#                   list(mean_brk, mean_brksup)
+#                   list(mean_breaks, mean_brksup)
 #                 } else {
-#                   list(pct_brk, pct_brksup)
+#                   list(pct_breaks, pct_brksup)
 #                 },
 #                 "after_ci"      = if (.y) {
-#                   list(mean_ci_brk, mean_ci_brksup)
+#                   list(mean_ci_breaks, mean_ci_brksup)
 #                 } else {
-#                   list(pct_ci_brk, pct_ci_brksup)
+#                   list(pct_ci_breaks, pct_ci_brksup)
 #                 },
-#                 "contrib"       = list(contrib_brk, contrib_brksup),
+#                 "contrib"       = list(contrib_breaks, contrib_brksup),
 #                 list()
 #               ) %>%
 #                 purrr::transpose() %>%
