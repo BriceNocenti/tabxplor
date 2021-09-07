@@ -344,6 +344,8 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #' background. By default it takes \code{getOption("tabxplor.color_style_type")}.
 #' @param theme By default, a white table with black text, Set to \code{"dark"} for a
 #' black table with white text.
+#' @param kable By default an html table is returned. Set to \code{FALSE} to return the
+#' data frame table with cells formatted for html.
 #' @param ... Other arguments to pass to
 #' \code{\link[kableExtra:kable_styling]{kableExtra::kable_styling}}.
 #'
