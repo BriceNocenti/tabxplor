@@ -1,4 +1,4 @@
-# tabxplor (development version)
+# tabxplor 1.0.1
 * Added possibility to export tables in html using `kableExtra`.
 
 ## Bug corrections :
