@@ -306,7 +306,7 @@ To print an html table by default (for example, in RStudio viewer), use
 tabxplor options:
 
 ``` r
-options(tabxplor.output = "kable") # default to options(tabxplor.output = "console")
+options(tabxplor.print = "kable") # default to options(tabxplor.print = "console")
 ```
 
 `tab_xl` exports any table or list of tables to Excel, with all colors,

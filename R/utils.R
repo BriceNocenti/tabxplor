@@ -29,7 +29,11 @@ NULL
                    mean_breaks = c(1.15, 1.5, 2, 4),
                    contrib_breaks = c(1, 2, 5, 10)  )
 
-  options("tabxplor.output" = "console") # options("tabxplor.output" = "kable")
+  options("tabxplor.print" = "console") # options("tabxplor.print" = "kable")
+
+  options("tabxplor.output_kable" = FALSE)
+
+  options("tabxplor.cleannames" = FALSE)
 
   invisible()
 }

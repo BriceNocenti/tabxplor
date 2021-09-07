@@ -10,7 +10,7 @@ tab_prepare(
   col_vars,
   tab_vars,
   na = "keep",
-  cleannames = TRUE,
+  cleannames = NULL,
   rare_to_other = FALSE,
   n_min = 30,
   other_level = "Others"

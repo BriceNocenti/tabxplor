@@ -253,9 +253,12 @@ tab <- function(data, row_var, col_var, tab_vars, wt, sup_cols,
                 chi2 = NULL,
                 ci = NULL, conf_level = 0.95, ci_visible = NULL,
 
-                subtext = "", cleannames = FALSE,
+                subtext = "", cleannames = NULL,
                 rare_to_other = FALSE, n_min = 30, other_level = "Others",
                 filter) {
+
+  cleannames <-
+    if (is.null(cleannames)) { getOption("tabxplor.cleannames") } else {cleannames}
 
   row_var_quo <- rlang::enquo(row_var)
   if (quo_miss_na_null_empty_no(row_var_quo)) {
@@ -575,9 +578,13 @@ tab_many <- function(data, row_var, col_vars, tab_vars, wt,
                      ci = "no", conf_level = 0.95, ci_visible = FALSE,
                      color = "no",
                      subtext = "",
-                     cleannames = FALSE,
+                     cleannames = NULL,
                      rare_to_other = FALSE, n_min = 30, other_level = "Others",
                      filter, listed = FALSE) {
+
+  cleannames <-
+    if (is.null(cleannames)) { getOption("tabxplor.cleannames") } else {cleannames}
+
   stopifnot(levels %in% c("first", "all"),
             is.numeric(digits),
             is.character(na), is.logical(cleannames), is.logical(listed)
@@ -922,6 +929,10 @@ tab_many <- function(data, row_var, col_vars, tab_vars, wt,
     tabs <- new_tab(tabs, subtext = subtext, chi2 = chi2)
   }
 
+  if (getOption("tabxplor.output_kable") == TRUE) {
+    tabs <- tabs %>% tab_kable()
+  }
+
   tabs
 }
 
@@ -1118,9 +1129,11 @@ tab_get_vars <- function(tabs, vars = c("row_var", "col_vars", "tab_vars")) {
 #' }
 tab_prepare <-
   function(data, row_var, col_vars, tab_vars,
-           na = "keep", cleannames = TRUE,
+           na = "keep", cleannames = NULL,
            rare_to_other = FALSE, n_min = 30, other_level = "Others") {
 
+    cleannames <-
+      if (is.null(cleannames)) { getOption("tabxplor.cleannames") } else {cleannames}
 
     row_var_quo <- rlang::enquo(row_var)
     if (quo_miss_na_null_empty_no(row_var_quo)) {
@@ -2948,8 +2961,11 @@ var_contrib <- function(x, tot, calc = c("ctr", "expected_freq", "spread",
 #' @keywords internal
 tab_prepare_core <-
   function(data, ..., na = "keep",
-           cleannames = TRUE, rare_to_other = FALSE,
+           cleannames = NULL, rare_to_other = FALSE,
            n_min = 30, other_level = "Others") {
+
+    cleannames <-
+      if (is.null(cleannames)) { getOption("tabxplor.cleannames") } else {cleannames}
 
     variables     <- rlang::expr(c(...))
     pos_variables <- tidyselect::eval_select(variables, data)

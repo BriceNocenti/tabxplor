@@ -148,7 +148,7 @@ print.tabxplor_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = N
                                max_footer_lines = NULL, min_row_var = 30) {
   print_chi2(x, width = width)
 
-  if (getOption("tabxplor.output") == "kable") {
+  if (getOption("tabxplor.print") == "kable") {
     tabs <- tab_kable(tabs)
     print(tabs)
     return(tabs)
@@ -189,7 +189,7 @@ print.tabxplor_grouped_tab <- function(x, width = NULL, ..., n = 100,
                                        min_row_var = 30) {
   print_chi2(x, width = width)
 
-  if (getOption("tabxplor.output") == "kable") {
+  if (getOption("tabxplor.print") == "kable") {
     tabs <- tab_kable(tabs)
     print(tabs)
     return(tabs)
@@ -337,17 +337,19 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 
 
 
-#' Print a tabxplor table with kable
+#' Print a tabxplor table in html
 #'
 #' @param tabs A table made with \code{\link{tab}} or \code{\link{tab_many}}.
 #' @param color_type  Set to \code{"text"} to color the text, \code{"bg"} to color the
 #' background. By default it takes \code{getOption("tabxplor.color_style_type")}.
 #' @param theme By default, a white table with black text, Set to \code{"dark"} for a
 #' black table with white text.
+#' @param kable By default an html table is returned. Set to \code{FALSE} to return the
+#' data frame table with cells formatted for html.
 #' @param ... Other arguments to pass to
 #' \code{\link[kableExtra:kable_styling]{kableExtra::kable_styling}}.
 #'
-#' @return An html table, opened in the viewer in RStudio.
+#' @return An html table (opened in the viewer in RStudio).
 #' @export
 #'
 #' @examples
@@ -357,37 +359,44 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #' }
 #'
 tab_kable <- function(tabs,
-                            theme = c("light", "dark"),
-                            color_type = NULL,
-                            ...) {
-
-  tab_vars <- tab_get_vars(tabs)$tab_vars
-
+                      theme = c("light", "dark"),
+                      color_type = NULL,
+                      ...) {
   #theme <- if (is.null(theme)) { getOption("tabxplor.color_style_theme") } else { theme }
   color_type <-
     if (is.null(color_type)) { getOption("tabxplor.color_style_type") } else {color_type}
 
+  tab_vars <- tab_get_vars(tabs)$tab_vars
+  subtext  <- get_subtext(tabs) %>% purrr::discard(. == "")
 
   new_group <- tabs %>% #dplyr::group_by(dplyr::across(where(is.factor))) %>%
     dplyr::group_indices()
   new_group <- which(new_group != dplyr::lead(new_group, default = max(new_group) + 1))
 
 
-  tabs <- tabs %>% dplyr::ungroup() %>%
-    dplyr::select(-tidyselect::all_of(tab_vars))
+  tabs <- tabs %>% dplyr::ungroup() %>% dplyr::select(-tidyselect::all_of(tab_vars))
 
+  color_cols     <- get_color(tabs)
+  fmt_no_colors  <- purrr::map_lgl(tabs, is_fmt) &
+                           (color_cols %in% c("", "no") | is.na(color_cols))
+  fmt_no_colors  <- names(fmt_no_colors)[fmt_no_colors]
+  color_cols     <- which(!color_cols %in% c("", "no") & !is.na(color_cols))
   fmt_cols <- which(purrr::map_lgl(tabs, is_fmt))
+  color_cols_fmt <- names(color_cols)[names(color_cols) %in% names(fmt_cols)]
+
   other_cols <- which(purrr::map_lgl(tabs, ~ !is_fmt(.)))
 
-  totcols  <- which(is_totcol(tabs))
-
-
-  totrows  <- which(is_totrow(tabs))
+  totcols     <- which(is_totcol(tabs))
+  totrows     <- which(is_totrow(tabs))
   no_totrows  <- which(!is_totrow(tabs))
 
-  text_color <- dplyr::if_else(theme[1] == "light", "#000000", "#FFFFFF")
-  grey_color <- dplyr::if_else(theme[1] == "light", "#888888", "#BBBBBB")
-  bg_color   <- dplyr::if_else(theme[1] == "light", "#FFFFFF", "#333333")
+  new_col_var <- get_col_var(tabs)
+  new_col_var[names(other_cols)] <- names(other_cols)
+  new_col_var <- which(new_col_var != dplyr::lead(new_col_var, default = "._at_the_end"))
+
+  text_color  <- dplyr::if_else(theme[1] == "light", "#000000", "#FFFFFF")
+  grey_color  <- dplyr::if_else(theme[1] == "light", "#888888", "#BBBBBB")
+  grey_color2 <- dplyr::if_else(theme[1] == "light", "#111111", "#EEEEEE")
 
   references <- tabs[fmt_cols] %>%
     purrr::map(~ get_reference(., mode = "all_totals") %>%
@@ -396,30 +405,37 @@ tab_kable <- function(tabs,
                  list() %>% purrr::set_names(text_color)
     )
 
-  new_col_var <- get_col_var(tabs)
-  new_col_var[names(other_cols)] <- names(other_cols)
-  new_col_var <- which(new_col_var != dplyr::lead(new_col_var, default = "._at_the_end"))
+  color_selection <- references
 
+  if (length(color_cols_fmt) != 0) {
+    color_selection[color_cols_fmt] <- purrr::map(tabs[color_cols], fmt_color_selection)
 
-  color_selection <- purrr::map(tabs[fmt_cols], fmt_color_selection)
+    color_styles <- purrr::map(color_selection[color_cols_fmt],
+                               ~ select_in_color_style(length(.)))
 
-  color_styles <- purrr::map(color_selection, ~ select_in_color_style(length(.)))
+    color_styles <- purrr::map(color_styles, ~ get_color_style(mode = "color_code",
+                                                               type = color_type[1],
+                                                               theme = theme[1])[.])
 
-  color_styles <- purrr::map(color_styles, ~ get_color_style(mode = "color_code",
-                                                             type = color_type[1],
-                                                             theme = theme[1])[.])
+    color_selection[color_cols_fmt] <- color_selection[color_cols_fmt] %>%
+      purrr::map2(color_styles, ~ purrr::set_names(.x, .y)) %>%
+      purrr::map(~ purrr::imap(., ~ dplyr::if_else(condition = .x,
+                                                   true      = .y,
+                                                   false     = "no_color")) ) %>%
+      purrr::map2(references[color_cols_fmt], ~ c(.x, .y) %>%
+                    purrr::reduce(~ dplyr::if_else(.x == "no_color", .y, .x)) %>%
+                    stringr::str_replace(., "no_color", grey_color) %>%
+                    tidyr::replace_na(grey_color)
+      )
+  }
 
-  color_selection <- color_selection %>%
-    purrr::map2(color_styles, ~ purrr::set_names(.x, .y)) %>%
-    purrr::map(~ purrr::imap(., ~ dplyr::if_else(condition = .x,
-                                                 true      = .y,
-                                                 false     = "no_color")) ) %>%
-    purrr::map2(references, ~ c(.x, .y) %>%
-                  purrr::reduce(~ dplyr::if_else(.x == "no_color", .y, .x)) %>%
-                  stringr::str_replace(., "no_color", grey_color) %>%
-                  tidyr::replace_na(grey_color)
-    )
-
+  if (length(fmt_no_colors) != 0) {
+  color_selection[fmt_no_colors] <- color_selection[fmt_no_colors] %>%
+      purrr::map(~ purrr::flatten_chr(.) %>%
+                   stringr::str_replace(., "no_color", grey_color2) %>%
+                   tidyr::replace_na(grey_color2)
+                 )
+}
 
 
   if (color_type == "text") {
@@ -429,23 +445,30 @@ tab_kable <- function(tabs,
         ~ format(.) %>%
           kableExtra::cell_spec(
             align = "r",
-            bold  = !color_selection[[dplyr::cur_column()]] %in% c(grey_color), #text_color
+            bold  = !color_selection[[dplyr::cur_column()]] %in% c(grey_color, grey_color2), #text_color
             color =  color_selection[[dplyr::cur_column()]],
-            tooltip = switch(
-              get_color(.),
-              "diff"     = paste0("diff: ",
-                                  dplyr::if_else(get_diff(.) >= 0, "+", "-"),
-                                  format(set_display(., "diff")) %>%
-                                    stringr::str_remove("-")                ),
-              "diff_ci"  = ,
-              "after_ci" = paste0("diff: ",
-                                  dplyr::if_else(get_diff(.) >= 0, "+", "-"),
-                                  format(set_display(., "diff")) %>%
-                                    stringr::str_remove("-"),
-                                  " ; ci: ", format(set_display(., "ci"))     ),
-              "contrib"  = paste0("contrib: ", format(set_display(., "ctr")) ),
-              NULL
-            ) %>% stringr::str_remove("; ci: NA|diff: NA ;" )
+            tooltip = paste0("diff: ",
+                             dplyr::if_else(get_diff(.) >= 0, "+", "-"),
+                             format(set_display(., "diff")) %>%
+                               stringr::str_remove("-"),
+                             " ; ci: ", format(set_display(., "ci")),
+                             " ; contrib: ", format(set_display(., "ctr")) ) %>%
+              stringr::str_remove_all("; ci: NA|diff: NA ;|; contrib: NA" )
+            # tooltip = switch(
+            #   get_color(.),
+            #   "diff"     = paste0("diff: ",
+            #                       dplyr::if_else(get_diff(.) >= 0, "+", "-"),
+            #                       format(set_display(., "diff")) %>%
+            #                         stringr::str_remove("-")                ),
+            #   "diff_ci"  = ,
+            #   "after_ci" = paste0("diff: ",
+            #                       dplyr::if_else(get_diff(.) >= 0, "+", "-"),
+            #                       format(set_display(., "diff")) %>%
+            #                         stringr::str_remove("-"),
+            #                       " ; ci: ", format(set_display(., "ci"))     ),
+            #   "contrib"  = paste0("contrib: ", format(set_display(., "ctr")) ),
+            #   NULL
+            # ) %>% stringr::str_remove("; ci: NA|diff: NA ;" )
           )
       ))
 
@@ -456,7 +479,8 @@ tab_kable <- function(tabs,
 
     txt_color_selection <- color_selection %>%
       purrr::map(~ dplyr::if_else(stringr::str_detect(., text_color) |
-                                    stringr::str_detect(., grey_color),
+                                    stringr::str_detect(., grey_color) |
+                                    stringr::str_detect(., grey_color2),
                                   true  = .,
                                   false = text_color)               )
 
@@ -466,28 +490,53 @@ tab_kable <- function(tabs,
         ~ format(.) %>%
           kableExtra::cell_spec(
             align = "r",
-            bold  = !color_selection[[dplyr::cur_column()]] %in% c(grey_color), #text_color
+            bold  = color_selection[[dplyr::cur_column()]] %in% c(text_color), #text_color
             color      = txt_color_selection[[dplyr::cur_column()]],
             background = bg_color_selection[[dplyr::cur_column()]],
-            tooltip = switch(
-              get_color(.),
-              "diff"     = paste0("diff: ",
-                                  dplyr::if_else(get_diff(.) >= 0, "+", "-"),
-                                  format(set_display(., "diff")) %>%
-                                    stringr::str_remove("-")                ),
-              "diff_ci"  = ,
-              "after_ci" = paste0("diff: ",
-                                  dplyr::if_else(get_diff(.) >= 0, "+", "-"),
-                                  format(set_display(., "diff")) %>%
-                                    stringr::str_remove("-"),
-                                  " ; ci: ", format(set_display(., "ci"))     ),
-              "contrib"  = paste0("contrib: ", format(set_display(., "ctr")) ),
-              NULL
-            ) %>% stringr::str_remove("; ci: NA|diff: NA ;" )
+            tooltip = paste0("diff: ",
+                             dplyr::if_else(get_diff(.) >= 0, "+", "-"),
+                             format(set_display(., "diff")) %>%
+                               stringr::str_remove("-"),
+                             " ; ci: ", format(set_display(., "ci")),
+                             " ; contrib: ", format(set_display(., "ctr")) ) %>%
+              stringr::str_remove_all("; ci: NA|diff: NA ;|; contrib: NA" )
+            # tooltip = switch(
+            #   get_color(.),
+            #   "diff"     = paste0("diff: ",
+            #                       dplyr::if_else(get_diff(.) >= 0, "+", "-"),
+            #                       format(set_display(., "diff")) %>%
+            #                         stringr::str_remove("-")                ),
+            #   "diff_ci"  = ,
+            #   "after_ci" = paste0("diff: ",
+            #                       dplyr::if_else(get_diff(.) >= 0, "+", "-"),
+            #                       format(set_display(., "diff")) %>%
+            #                         stringr::str_remove("-"),
+            #                       " ; ci: ", format(set_display(., "ci"))     ),
+            #   "contrib"  = paste0("contrib: ", format(set_display(., "ctr")) ),
+            #   NULL
+            # ) %>% stringr::str_remove("; ci: NA|diff: NA ;" )
           )
       ))
   }
 
+# refs2 <- tabs[[fmt_cols[1]]] %>% get_reference(mode = "all_totals")
+#
+#   out <- out %>%
+#     dplyr::mutate(dplyr::across(
+#       where(~ !is_fmt(.)),
+#       ~ as.character(.) %>% kableExtra::cell_spec(align = "r", bold  = refs2)
+#       ))
+
+  if (length(color_cols) != 0) subtext <- c(tab_color_legend(tabs,
+                                                             mode = "html",
+                                                             html_type  = color_type[1],
+                                                             html_theme = theme[1],
+                                                             text_color = text_color,
+                                                             grey_color = grey_color),
+                                            subtext)
+  #}
+
+  #if (kable == FALSE) {
   out <- knitr::kable(out, escape = FALSE)
 
   if (theme[1] == "light") {
@@ -502,6 +551,7 @@ tab_kable <- function(tabs,
 
   } else {
     out <- out %>% kableExtra::kable_material_dark(
+      lightable_options = "hover",
       bootstrap_options = c("hover", "condensed", "responsive"), #"striped",
       full_width = FALSE,
       html_font = "DejaVu Sans Condensed", # row_label_position
@@ -511,21 +561,19 @@ tab_kable <- function(tabs,
 
   }
 
-  subtext <- c(tab_color_legend(tabs,
-                                mode = "html",
-                                html_type  = color_type[1],
-                                html_theme = theme[1],
-                                text_color = text_color,
-                                grey_color = grey_color),
-               get_subtext(tabs)) %>% purrr::discard(. == "")
+  refs2 <- tabs[[fmt_cols[1]]] %>% get_reference(mode = "all_totals") %>% which()
 
-  out <- out %>% kableExtra::add_footnote(subtext, notation = "none", escape = FALSE)
+  if (length(subtext) != 0) {
+    out <- out %>% kableExtra::add_footnote(subtext, notation = "none", escape = FALSE)
+  }
 
-  out %>%
+
+  out <- out %>%
     kableExtra::row_spec(
       0, color = text_color, bold = TRUE,
       extra_css = "border-top: 0px solid ; border-bottom: 1px solid ;"
     ) %>%
+    kableExtra::row_spec(refs2, bold = TRUE) %>%
     kableExtra::row_spec(
       totrows, #bold = TRUE,
       extra_css = "border-top: 1px solid ; border-bottom: 1px solid ;"
@@ -536,6 +584,9 @@ tab_kable <- function(tabs,
     kableExtra::column_spec(totcols, bold = TRUE, border_left = TRUE) %>%
     kableExtra::row_spec(new_group, extra_css = "border-bottom: 1px solid ;") %>%
     kableExtra::row_spec(nrow(tabs), extra_css = "border-bottom: 1px solid")
+  #}
+
+  out
 }
 
 
