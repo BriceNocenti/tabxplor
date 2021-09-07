@@ -17,9 +17,6 @@ background. By default it takes \code{getOption("tabxplor.color_style_type")}.}
 
 \item{...}{Other arguments to pass to
 \code{\link[kableExtra:kable_styling]{kableExtra::kable_styling}}.}
-
-\item{kable}{By default an html table is returned. Set to \code{FALSE} to return the
-data frame table with cells formatted for html.}
 }
 \value{
 An html table (opened in the viewer in RStudio).
