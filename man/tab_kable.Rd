@@ -2,7 +2,7 @@
 % Please edit documentation in R/tab_classes.R
 \name{tab_kable}
 \alias{tab_kable}
-\title{Print a tabxplor table with kable}
+\title{Print a tabxplor table in html}
 \usage{
 tab_kable(tabs, theme = c("light", "dark"), color_type = NULL, ...)
 }
@@ -19,10 +19,10 @@ background. By default it takes \code{getOption("tabxplor.color_style_type")}.}
 \code{\link[kableExtra:kable_styling]{kableExtra::kable_styling}}.}
 }
 \value{
-An html table, opened in the viewer in RStudio.
+An html table (opened in the viewer in RStudio).
 }
 \description{
-Print a tabxplor table with kable
+Print a tabxplor table in html
 }
 \examples{
 \donttest{

@@ -33,7 +33,7 @@ tab_many(
   ci_visible = FALSE,
   color = "no",
   subtext = "",
-  cleannames = FALSE,
+  cleannames = NULL,
   rare_to_other = FALSE,
   n_min = 30,
   other_level = "Others",
