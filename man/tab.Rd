@@ -142,14 +142,17 @@ Useful to print metadata, and to color cells based on their contribution to vari
 (\code{color = "contrib"}). Automatically added if needed for \code{color}.}
 
 \item{ci}{The type of confidence intervals to calculate, passed to \code{\link{tab_ci}}
-(automatically added if needed for \code{color}) :
+(automatically added if needed for \code{color}).
 \itemize{
 \item \code{"cell"}: absolute confidence intervals of cells percentages.
 \item \code{"diff"}: confidence intervals of the difference between a cell and the
 relative total cell (or relative first cell when \code{diff = "first"}).
 \item \code{"auto"}: \code{ci = "diff"} for means and row/col percentages,
 \code{ci = "cell"} for frequencies ("all", "all_tabs").
-}}
+}
+By default, for percentages, with \code{ci = "cell"} Wilson's method is used,
+and with \code{ci = "diff"} Wald's method along Agresti and Caffo's adjustment.
+Means use classic method. This can be changed in \code{\link{tab_ci}}.}
 
 \item{conf_level}{The confidence level, as a single numeric between 0 and 1.
 Default to 0.95 (95\%).}

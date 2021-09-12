@@ -152,14 +152,17 @@ when \code{diff = "first"}.
 Useful to print metadata, and to color cells based on their contribution to variance
 (\code{color = "contrib"}).}
 
-\item{ci}{The type of confidence intervals to calculate, passed to \code{\link{tab_ci}} :
+\item{ci}{The type of confidence intervals to calculate, passed to \code{\link{tab_ci}}
 \itemize{
 \item \code{"cell"}: absolute confidence intervals of cells percentages.
 \item \code{"diff"}: confidence intervals of the difference between a cell and the
 relative total cell (or relative first cell when \code{diff = "first"}).
 \item \code{"auto"}: \code{ci = "diff"} for means and row/col percentages,
 \code{ci = "cell"} for frequencies ("all", "all_tabs").
-}}
+}
+By default, for percentages, with \code{ci = "cell"} Wilson's method is used,
+and with \code{ci = "diff"} Wald's method along Agresti and Caffo's adjustment.
+Means use classic method. This can be changed in \code{\link{tab_ci}}.}
 
 \item{conf_level}{The confidence level, as a single numeric between 0 and 1.
 Default to 0.95 (95\%).}
@@ -261,11 +264,17 @@ using them in calculations, be sure they are of class \code{character}.
 
 A list with the variables names.
 
+A single logical.
+
 Set global options \code{"tabxplor.color_style_type"} and
 \code{"tabxplor.color_style_theme"}, used when printing \code{\link{tab}} objects.
 
-Create an object named \code{tabxplor_color_breaks} in the global
-environnement, used when printing \code{\link{tab}} objects.
+A vector of crayon color functions, or a vector of color html codes.
+
+Set the global option "tabxplor.color_breaks" as a list different double
+vectors, and also returns it invisibly.
+
+The color breaks as a double vector, or list of double vectors.
 }
 \description{
 A full-featured function to create, manipulate and format many cross-tables
@@ -288,7 +297,7 @@ Breaks for aversions/under-representations (in orange/red) will simply be the op
 
 \item \code{set_color_style}: define the color style used to print \code{\link{tab}}.
 
-\item \code{get_color_style}: get color styles as \pkg{crayon} functions.
+\item \code{get_color_style}: get color styles as \pkg{crayon} functions or html codes.
 
 \item \code{set_color_breaks}: set the breaks used to print colors
 
@@ -324,7 +333,9 @@ pmap(
   data = forcats::gss_cat, color = "auto", chi2 = TRUE)
 }
 set_color_style(type = "bg")
-set_color_breaks(pct_breaks = c(0.05, 0.15, 0.3),
-mean_breaks = c(1.15, 2, 4),
-contrib_breaks = c(1, 2, 5)     )
+set_color_breaks(
+  pct_breaks = c(0.05, 0.15, 0.3),
+  mean_breaks = c(1.15, 2, 4),
+  contrib_breaks = c(1, 2, 5)
+)
 }

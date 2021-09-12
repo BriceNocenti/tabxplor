@@ -42,6 +42,8 @@ or \code{\link{tab_core}}.}
 }
 \value{
 A \code{tibble} of class \code{tabxplor_tab}.
+
+A \code{tibble} of class \code{tabxplor_grouped_tab}.
 }
 \description{
 A constructor for class tabxplor_tab

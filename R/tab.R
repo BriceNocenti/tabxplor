@@ -71,7 +71,7 @@
 #' @param na The policy to adopt with missing values, as a single string (for a more
 #' precise control over the behavior of \code{NA}'s, vectorized for each variable,
 #' use \code{\link{tab_many}}).
-#' \itemize{
+#'  \itemize{
 #'   \item \code{"keep"}: by default, \code{NA}'s of row, col and tab variables are printed
 #'   as explicit "NA" level. Observations with NA in \code{sup_cols} variables are always
 #'   kept to calculate the base table, always removed to calculate supplementary cols.
@@ -82,7 +82,7 @@
 #' 1 + \code{sup_cols} (the first being the number of digits for the base table).
 #' @param totaltab The total table, to create with \code{\link{tab_totaltab}},
 #' if there are subtables/groups (i.e. when \code{tab_vars} is provided) :
-#' \itemize{
+#'  \itemize{
 #'   \item \code{"line"}: by default, add a general total line (necessary for
 #'   calculations with \code{comp = "all"})
 #'   \item \code{"table"}: add a complete total table
@@ -91,7 +91,7 @@
 #'  }
 #' @param totaltab_name The name of the total table, as a single string.
 #' @param tot The totals, to create with \code{\link{tab_tot}} :
-#' \itemize{
+#'  \itemize{
 #'   \item \code{c("col", "row")} or \code{"both"} : by default, both total rows and total
 #'   columns.
 #'   \item \code{"row"}: only total rows.
@@ -102,14 +102,14 @@
 #' Use syntax of type \code{c("Total row", "Total column")} to set different names for
 #' rows and cols.
 #' @param pct The type of percentages to calculate, passed to \code{\link{tab_pct}} :
-#' \itemize{
+#'  \itemize{
 #'   \item \code{"row"}: row percentages.
 #'   \item \code{"col"}: column percentages.
 #'   \item \code{"all"}: frequencies for each subtable/group, if there is \code{tab_vars}.
 #'   \item \code{"all_tabs"}: frequencies for the whole (set of) table(s).
 #' }
 #' @param diff The reference cell to calculate differences (used to print \code{colors}) :
-#' \itemize{
+#'  \itemize{
 #'   \item \code{"tot"}: by default, cells differences from total rows are calculated with
 #'   \code{pct = "row"}, and cells differences from total columns with \code{pct = "col"}.
 #'   \item \code{"first"}: calculate cells differences from the first cell
@@ -129,20 +129,23 @@
 #' Useful to print metadata, and to color cells based on their contribution to variance
 #'  (\code{color = "contrib"}). Automatically added if needed for \code{color}.
 #' @param ci The type of confidence intervals to calculate, passed to \code{\link{tab_ci}}
-#' (automatically added if needed for \code{color}) :
-#' \itemize{
-#'   \item \code{"cell"}: absolute confidence intervals of cells percentages.
-#'   \item \code{"diff"}: confidence intervals of the difference between a cell and the
-#'   relative total cell (or relative first cell when \code{diff = "first"}).
-#'   \item \code{"auto"}: \code{ci = "diff"} for means and row/col percentages,
-#'   \code{ci = "cell"} for frequencies ("all", "all_tabs").
-#'  }
+#'  (automatically added if needed for \code{color}).
+#'   \itemize{
+#'    \item \code{"cell"}: absolute confidence intervals of cells percentages.
+#'    \item \code{"diff"}: confidence intervals of the difference between a cell and the
+#'    relative total cell (or relative first cell when \code{diff = "first"}).
+#'    \item \code{"auto"}: \code{ci = "diff"} for means and row/col percentages,
+#'      \code{ci = "cell"} for frequencies ("all", "all_tabs").
+#'   }
+#'  By default, for percentages, with \code{ci = "cell"} Wilson's method is used,
+#'  and with \code{ci = "diff"} Wald's method along Agresti and Caffo's adjustment.
+#'  Means use classic method. This can be changed in \code{\link{tab_ci}}.
 #' @param conf_level The confidence level, as a single numeric between 0 and 1.
 #' Default to 0.95 (95%).
 #' @param ci_visible By default, confidence intervals are calculated and used to set
 #' colors, but not printed. Set to \code{TRUE} to print them in the result.
 #' @param color The type of colors to print, as a single string :
-#' \itemize{
+#'  \itemize{
 #'   \item \code{"no"}: by default, no colors are printed.
 #'   \item \code{"diff"}: color percentages and means based on cells differences from
 #'   totals (or from first cells when \code{diff = "first"}).
@@ -157,7 +160,7 @@
 #'   and counts are colored with \code{"contrib"}.
 #'   When \code{ci = "diff"}, row and col percentages are colored with "after_ci" ;
 #'   otherwise they are colored with "diff".
-#' }
+#'  }
 #' @param subtext A character vector to print rows of legend under the table.
 #' @param cleannames Set to \code{TRUE} to clean levels names, by removing
 #' prefix numbers like "1-", and text in parenthesis. All data formatting arguments are
@@ -488,14 +491,17 @@ tab <- function(data, row_var, col_var, tab_vars, wt, sup_cols,
 #' @param chi2 Set to \code{TRUE} to calculate Chi2 summaries with \code{\link{tab_chi2}}.
 #' Useful to print metadata, and to color cells based on their contribution to variance
 #'  (\code{color = "contrib"}).
-#' @param ci The type of confidence intervals to calculate, passed to \code{\link{tab_ci}} :
-#' \itemize{
-#'   \item \code{"cell"}: absolute confidence intervals of cells percentages.
-#'   \item \code{"diff"}: confidence intervals of the difference between a cell and the
-#'   relative total cell (or relative first cell when \code{diff = "first"}).
-#'   \item \code{"auto"}: \code{ci = "diff"} for means and row/col percentages,
-#'   \code{ci = "cell"} for frequencies ("all", "all_tabs").
-#'  }
+#' @param ci The type of confidence intervals to calculate, passed to \code{\link{tab_ci}}
+#'   \itemize{
+#'    \item \code{"cell"}: absolute confidence intervals of cells percentages.
+#'    \item \code{"diff"}: confidence intervals of the difference between a cell and the
+#'    relative total cell (or relative first cell when \code{diff = "first"}).
+#'    \item \code{"auto"}: \code{ci = "diff"} for means and row/col percentages,
+#'    \code{ci = "cell"} for frequencies ("all", "all_tabs").
+#'   }
+#'  By default, for percentages, with \code{ci = "cell"} Wilson's method is used,
+#'  and with \code{ci = "diff"} Wald's method along Agresti and Caffo's adjustment.
+#'  Means use classic method. This can be changed in \code{\link{tab_ci}}.
 #' @param conf_level The confidence level, as a single numeric between 0 and 1.
 #' Default to 0.95 (95%).
 #' @param ci_visible By default, confidence intervals are calculated and used to set
@@ -909,6 +915,12 @@ tab_many <- function(data, row_var, col_vars, tab_vars, wt,
     }
   }
 
+  # Lone total column to "Total" with no col_var name
+  totnames <- names(tabs)[stringr::str_detect(names(tabs),
+                                              paste0("^", total_names[2], "_"))]
+  if ( length(totnames) == 1 ) tabs <- tabs %>%
+    dplyr::rename(!!rlang::sym(total_names[2]) := !!rlang::sym(totnames))
+
   if (totrow == FALSE & tot_cols_type != "no_no_create") {
     totrows     <- is_totrow(tabs)
     tottab_rows <- is_tottab(tabs)
@@ -918,7 +930,7 @@ tab_many <- function(data, row_var, col_vars, tab_vars, wt,
       tibble::add_column(totrows = totrows, tottab_line = tottab_line) %>%
       dplyr::filter(!.data$totrows | .data$tottab_line) %>%
       dplyr::select(-.data$totrows, -.data$tottab_line)
-    }
+  }
 
   chi2 <- get_chi2(tabs)
   if (! lv1_group_vars(tabs)) {
@@ -1045,7 +1057,7 @@ tab_spread <- function(tabs, spread_vars, names_prefix, names_sort = FALSE,
     )
   }
 
-   tabs <- tabs %>%  dplyr::arrange(!!!rlang::syms(tab_vars_new), !!rlang::sym(row_var))
+  tabs <- tabs %>%  dplyr::arrange(!!!rlang::syms(tab_vars_new), !!rlang::sym(row_var))
 
   if (lv1_group_vars(tabs)) {
     new_tab(tabs, subtext = subtext, chi2 = chi2)
@@ -1121,6 +1133,7 @@ tab_get_vars <- function(tabs, vars = c("row_var", "col_vars", "tab_vars")) {
 #' @param n_min The count under which a level is aggregated in the "Other" level.
 #' @param other_level The name of the "Other" level, as a character vector of length one.
 #'
+#' @return A modified data.frame.
 #' @export
 #' @examples \donttest{data <- dplyr::starwars %>%
 #' tab_prepare(sex, hair_color, gender, rare_to_other = TRUE,
@@ -1189,14 +1202,14 @@ tab_prepare <-
         dplyr::mutate(!!row_var := forcats::fct_lump_min(!!row_var, n_min,
                                                          other_level = other_level)) %>%
         dplyr::ungroup() %>%
-      dplyr::mutate(!!row_var := forcats::fct_relevel(
-        !!row_var,
-        levelsrow_var[levelsrow_var %in% levels(!!row_var)]
-      ))
+        dplyr::mutate(!!row_var := forcats::fct_relevel(
+          !!row_var,
+          levelsrow_var[levelsrow_var %in% levels(!!row_var)]
+        ))
 
-  }
-    data
     }
+    data
+  }
 
 
 
@@ -1337,12 +1350,13 @@ tab_core <- function(data, row_var, col_var, ..., wt,
   tabs <-
     switch(type,
            "factor"  = data %>%
-             dplyr::summarise(nums = new_fmt(display = "wn"                   ,
-                                             digits  = as.integer(digits)     ,
-                                             n       = dplyr::n()             ,
-                                             wn      = sum(!!wt)              ,
-                                             type    = "n"                    ,
-                                             col_var = rlang::as_name(col_var)
+             dplyr::summarise(nums = new_fmt(
+               display = dplyr::if_else(wt == "no_weight", "n", "wn"),
+               digits  = as.integer(digits)     ,
+               n       = dplyr::n()             ,
+               wn      = sum(!!wt)              ,
+               type    = "n"                    ,
+               col_var = rlang::as_name(col_var)
              ),
              .groups = 'drop') %>%
              tidyr::pivot_wider(names_from = !!col_var, values_from = .data$nums,
@@ -2059,10 +2073,17 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
 #'  \code{\link{tab_pct}} with rows, or \code{\link{tab_ci}}.
 #' @param conf_level The confidence level, as a single numeric between 0 and 1.
 #' Default to 0.95 (95%).
-#' @param color Set to "diff_ci" to color cells based on their differences from totals or
-#' first cells, removing coloring when the confidence interval of this difference
-#' is higher than the difference itself. Set to "after_ci" to cut off the confidence
-#' interval from the difference.
+#' @param method_cell Character string specifying which method to use with percentages
+#'  for \code{ci = "cell"}. This can be one out of:
+#' "wald", "wilson", "wilsoncc", "agresti-coull", "jeffreys", "modified wilson",
+#' "modified jeffreys", "clopper-pearson", "arcsine", "logit", "witting", "pratt",
+#' "midp", "lik" and "blaker". Defaults to "wilson".
+#' See \code{\link[DescTools:BinomCI]{BinomCI}}.
+#' @param method_diff Character string specifying which method to use with percentages
+#' for \code{ci = "diff"}. This can be one out of: "wald", "waldcc", "ac", "score",
+#' "scorecc", "mn", "mee", "blj", "ha", "hal", "jp". Defaults to "ac", Wald interval with
+#' the adjustment according to Agresti, Caffo for difference in proportions and
+#' independent samples. See \code{\link[DescTools:BinomDiffCI]{BinomDiffCI}}.
 #' @param color The type of colors to print, as a single string.
 #' \itemize{
 #'   \item \code{"no"}: by default, no colors are printed
@@ -2095,7 +2116,9 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
 tab_ci <- function(tabs,
                    ci = "auto",
                    comp = NULL,
-                   conf_level = 0.95, color = "no",
+                   conf_level = 0.95,
+                   method_cell = "wilson", method_diff = "ac",
+                   color = "no",
                    visible = FALSE) {
   stopifnot(all(ci %in% c("auto", "cell", "diff", "no")), #"r_to_r", "c_to_c", "tab_to_tab",
             all(comp %in%  c("tab", "all"))
@@ -2296,23 +2319,24 @@ tab_ci <- function(tabs,
       zs * sqrt( xvar/xn + yvar/yn )
     }
 
-    # ci_mean_spread <-  function(xmean, xvar, xn, ymean, yvar, yn) {
-    #   diff <-  xmean - ymean
-    #   abs(diff) - zs * sqrt( xvar/yn + yvar/yn )
-    # }
-
     ci_base <- function(xpct, xn) {
-      zs * sqrt(xpct*(1 - xpct)/xn)
+      #zs * sqrt(xpct*(1 - xpct)/xn)
+
+      DescTools::BinomCI(xpct * xn, xn,
+                         conf.level = conf_level, method = method_cell) %>%
+        as.data.frame() %>% dplyr::mutate(ci = .data$upr.ci - .data$est ) %>%
+        dplyr::pull(.data$ci)
     }
 
     ci_diff <-  function(xpct, xn, ypct, yn) {
-      zs * sqrt( xpct*(1 - xpct)/xn   +   ypct*(1 - ypct)/yn )
-    }
+      #zs * sqrt( xpct*(1 - xpct)/xn   +   ypct*(1 - ypct)/yn )
 
-    # ci_diff_spread <-  function(xpct, xn, ypct, yn) {
-    #   diff <-  abs(xpct - ypct)
-    #   diff - zs * sqrt( xpct*(1 - xpct)/xn   +   ypct*(1 - ypct)/yn )
-    # }
+      DescTools::BinomDiffCI(x1 = xpct * xn, n1 = xn,
+                             x2 = ypct * yn, n2 = yn,
+                             conf.level = conf_level, method = method_diff)  %>%
+        as.data.frame() %>% dplyr::mutate(ci = .data$upr.ci - .data$est ) %>%
+        dplyr::pull(.data$ci)
+    }
 
     #Calculate the confidence intervals
     tabs <- tabs %>%

@@ -12,10 +12,11 @@ If R makes complex things simple, it can sometimes make simple things
 difficult. This is why `tabxplor` tries to make it easy to deal with
 multiple cross-tables: to create and manipulate them, but also to read
 them, using color helpers to highlight important informations. It would
-love to enhance your data exploration experience with simple yetpowerful
-tools. All functions are propelled by `tidyverse`, pipe-friendly, and
-render `tibble` data frames which can be easily manipulated with
-`dplyr`. Tables can be exported to Excel with formats and colors.
+love to enhance your data exploration experience with simple yet
+powerful tools. All functions are propelled by `tidyverse`,
+pipe-friendly, and render `tibble` data frames which can be easily
+manipulated with `dplyr`. Tables can be exported to Excel and in html
+with formats and colors.
 
 ## Installation
 
@@ -43,15 +44,15 @@ analysis workflows.
 library(tabxplor)
 tab(forcats::gss_cat, marital, race)
 #> # A tabxplor tab: 7 x 5
-#>   marital        Other  Black  White Total_race
-#>   <fct>         <n-wn> <n-wn> <n-wn>     <n-wn>
-#> 1 No answer          2      2     13         17
-#> 2 Never married    633  1 305  3 478      5 416
-#> 3 Separated        110    196    437        743
-#> 4 Divorced         212    495  2 676      3 383
-#> 5 Widowed           70    262  1 475      1 807
-#> 6 Married          932    869  8 316     10 117
-#> 7 Total          1 959  3 129 16 395     21 483
+#>   marital       Other Black  White  Total
+#>   <fct>           <n>   <n>    <n>    <n>
+#> 1 No answer         2     2     13     17
+#> 2 Never married   633 1 305  3 478  5 416
+#> 3 Separated       110   196    437    743
+#> 4 Divorced        212   495  2 676  3 383
+#> 5 Widowed          70   262  1 475  1 807
+#> 6 Married         932   869  8 316 10 117
+#> 7 Total         1 959 3 129 16 395 21 483
 ```
 
 When one of the row or column variables is numeric, `tab` calculates
@@ -100,17 +101,16 @@ or the row variable. With text variables, only the first level is kept
 ``` r
 tab(dplyr::storms, category, status, sup_cols = c("pressure", "wind"))
 #> # A tabxplor tab: 8 x 7
-#>   category `tropical depressio~ `tropical storm` hurricane Total_status pressure
-#>   <fct>                  <n-wn>           <n-wn>    <n-wn>       <n-wn>   <mean>
-#> 1 -1                      2 545                0         0        2 545    1 008
-#> 2 0                           0            4 373         0        4 373      999
-#> 3 1                           0                1     1 684        1 685      982
-#> 4 2                           0                0       628          628      967
-#> 5 3                           0                0       363          363      954
-#> 6 4                           0                0       348          348      940
-#> 7 5                           0                0        68           68      916
-#> 8 Total                   2 545            4 374     3 091       10 010      992
-#> # ... with 1 more variable: wind <mean>
+#>   category `tropical depressi~ `tropical storm` hurricane   Total pressure  wind
+#>   <fct>              <n-mixed>        <n-mixed> <n-mixed> <n-mix>   <mean> <mea>
+#> 1 -1                     2 545                0         0   2 545    1 008    27
+#> 2 0                          0            4 373         0   4 373      999    46
+#> 3 1                          0                1     1 684   1 685      982    71
+#> 4 2                          0                0       628     628      967    89
+#> 5 3                          0                0       363     363      954   105
+#> 6 4                          0                0       348     348      940   122
+#> 7 5                          0                0        68      68      916   145
+#> 8 Total                  2 545            4 374     3 091  10 010      992    53
 ```
 
 ## References and comparison levels for colors
@@ -149,13 +149,12 @@ It it possible to print confidence intervals for each cell:
 ``` r
 tab(forcats::gss_cat, race, marital, pct = "row", ci = "cell")
 #> # A tabxplor tab: 4 x 8
-#>   race   `No answer` `Never married` Separated Divorced Widowed  Married
-#>   <fct>       <row%>          <row%>    <row%>   <row%>  <row%>   <row%>
-#> 1 Other      0% ±0.1        32% ±2.1   6% ±1.0 11% ±1.4 4% ±0.8 48% ±2.2
-#> 2 Black      0% ±0.1        42% ±1.7   6% ±0.8 16% ±1.3 8% ±1.0 28% ±1.6
-#> 3 White      0%             21% ±0.6   3% ±0.2 16% ±0.6 9% ±0.4 51% ±0.8
-#> 4 Total      0%             25%        3%      16%      8%      47%     
-#> # ... with 1 more variable: Total_marital <row%>
+#>   race   `No answer` `Never married` Separated Divorced Widowed  Married  Total
+#>   <fct>       <row%>          <row%>    <row%>   <row%>  <row%>   <row%> <row%>
+#> 1 Other      0% ±0.3        32% ±2.1   6% ±1.1 11% ±1.5 4% ±0.9 48% ±2.2   100%
+#> 2 Black      0% ±0.2        42% ±1.7   6% ±0.9 16% ±1.3 8% ±1.0 28% ±1.6   100%
+#> 3 White      0% ±0.1        21% ±0.6   3% ±0.3 16% ±0.6 9% ±0.4 51% ±0.8   100%
+#> 4 Total      0%             25%        3%      16%      8%      47%        100%
 ```
 
 It is also possible to use confidence intervals to enhance colors
@@ -203,13 +202,12 @@ tab(forcats::gss_cat, race, marital, chi2 = TRUE)
 #> count           21 483
 #> 
 #> # A tabxplor tab: 4 x 8
-#>   race   `No answer` `Never married` Separated Divorced Widowed Married
-#>   <fct>       <n-wn>          <n-wn>    <n-wn>   <n-wn>  <n-wn>  <n-wn>
-#> 1 Other            2             633       110      212      70     932
-#> 2 Black            2           1 305       196      495     262     869
-#> 3 White           13           3 478       437    2 676   1 475   8 316
-#> 4 Total           17           5 416       743    3 383   1 807  10 117
-#> # ... with 1 more variable: Total_marital <n-wn>
+#>   race   `No answer` `Never married` Separated Divorced Widowed Married  Total
+#>   <fct>          <n>             <n>       <n>      <n>     <n>     <n>    <n>
+#> 1 Other            2             633       110      212      70     932  1 959
+#> 2 Black            2           1 305       196      495     262     869  3 129
+#> 3 White           13           3 478       437    2 676   1 475   8 316 16 395
+#> 4 Total           17           5 416       743    3 383   1 807  10 117 21 483
 ```
 
 Chi2 stats can also be used to color cells based on their contributions
@@ -292,7 +290,9 @@ tabs <-
 ## Export to html or Excel
 
 To export a table to html with colors, tabxplor uses `knitr::kable` and
-`kableExtra`:
+`kableExtra`. In this format differences from totals, confidence
+intervals, contribution to variance, and unweighted counts, are
+available in a tooltip at cells hover.
 
 ``` r
 tabs <- tab(forcats::gss_cat, race, marital, subtext = "Source: GSS 2000-2014", 

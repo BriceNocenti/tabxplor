@@ -39,6 +39,9 @@ than \code{n_min} will be merged into an "Other" level.}
 
 \item{other_level}{The name of the "Other" level, as a character vector of length one.}
 }
+\value{
+A modified data.frame.
+}
 \description{
 Prepare data for \code{\link{tab_core}}.
 }

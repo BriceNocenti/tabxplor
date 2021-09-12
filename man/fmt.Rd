@@ -171,6 +171,28 @@ or attribute using a given "set" function.}
 }
 \value{
 A vector of class \code{tabxplor_fmt}.
+
+A logical vector.
+
+A double vector.
+
+A modified fmt vector.
+
+A character vector with the vectors type.
+
+A modified fmt vector.
+
+A logical vector with the fmt vectors totrow field.
+
+A modified fmt vector with totrow field changed.
+
+A logical vector with the fmt vectors tottab field.
+
+A modified fmt vector with tottab field changed.
+
+A logical vector with the fmt vectors totcol attribute.
+
+A modified fmt vector with totcol attribute changed.
 }
 \description{
 \code{fmt} vectors, of class \code{tabxplor_fmt}, powers \pkg{tabxplor}

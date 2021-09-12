@@ -35,6 +35,8 @@ NULL
 
   options("tabxplor.cleannames" = FALSE)
 
+  options("tabxplor.export_dir" = NULL)
+
   invisible()
 }
 

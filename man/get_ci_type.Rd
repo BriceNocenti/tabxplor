@@ -2,11 +2,34 @@
 % Please edit documentation in R/fmt_class.R
 \name{get_ci_type}
 \alias{get_ci_type}
-\title{(at \code{fmt} level or \code{tab} level)}
+\alias{get_ci_type.default}
+\alias{get_ci_type.tabxplor_fmt}
+\alias{get_ci_type.data.frame}
+\title{Get confidence intervals type of fmt columns(at \code{fmt} level or \code{tab} level)}
 \usage{
 get_ci_type(x, ...)
+
+\method{get_ci_type}{default}(x, ...)
+
+\method{get_ci_type}{tabxplor_fmt}(x, ...)
+
+\method{get_ci_type}{data.frame}(x, ...)
+}
+\arguments{
+\item{x}{An object to get attribute in.}
+
+\item{...}{For future extensions.}
 }
 \description{
-(at \code{fmt} level or \code{tab} level)
+Get confidence intervals type of fmt columns(at \code{fmt} level or \code{tab} level)
 }
+\section{Methods (by class)}{
+\itemize{
+\item \code{default}: default method
+
+\item \code{tabxplor_fmt}: fmt method
+
+\item \code{data.frame}: data.frame method
+}}
+
 \keyword{internal}

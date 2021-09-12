@@ -2,9 +2,24 @@
 % Please edit documentation in R/fmt_class.R
 \name{vec_arith.tabxplor_fmt}
 \alias{vec_arith.tabxplor_fmt}
+\alias{vec_arith.tabxplor_fmt.default}
+\alias{vec_arith.tabxplor_fmt.tabxplor_fmt}
+\alias{vec_arith.tabxplor_fmt.numeric}
+\alias{vec_arith.numeric.tabxplor_fmt}
+\alias{vec_arith.tabxplor_fmt.MISSING}
 \title{Vec_arith method for fmt}
 \usage{
 \method{vec_arith}{tabxplor_fmt}(op, x, y, ...)
+
+\method{vec_arith.tabxplor_fmt}{default}(op, x, y, ...)
+
+\method{vec_arith.tabxplor_fmt}{tabxplor_fmt}(op, x, y, ...)
+
+\method{vec_arith.tabxplor_fmt}{numeric}(op, x, y, ...)
+
+\method{vec_arith.numeric}{tabxplor_fmt}(op, x, y, ...)
+
+\method{vec_arith.tabxplor_fmt}{MISSING}(op, x, y, ...)
 }
 \arguments{
 \item{op}{Operation to do.}
@@ -15,6 +30,22 @@
 
 \item{...}{Other parameter.}
 }
+\value{
+A fmt vector
+}
 \description{
 Vec_arith method for fmt
 }
+\section{Methods (by class)}{
+\itemize{
+\item \code{default}: default vec_arith method for fmt
+
+\item \code{tabxplor_fmt}: vec_arith method for fmt + fmt
+
+\item \code{numeric}: vec_arith method for fmt + numeric
+
+\item \code{tabxplor_fmt}: vec_arith method for numeric + fmt
+
+\item \code{MISSING}: vec_arith method for -fmt
+}}
+

@@ -6,7 +6,7 @@
 \usage{
 tab_xl(
   tabs,
-  path = "Tabs\\\\Tab",
+  path = NULL,
   replace = FALSE,
   open = rlang::is_interactive(),
   colnames_rotation = 0,
@@ -26,8 +26,10 @@ tab_xl(
 \item{tabs}{A table made with \code{\link{tab}}, \code{\link{tab_many}} or
 \code{\link{tab_core}}, or a list of such tables.}
 
-\item{path, replace, open}{The name, and possibly the path, of the Excel file
-to create (without the .xlsx extension). Default path to working directory.
+\item{path, replace, open}{The name, and possibly the path, of the Excel file to
+create (possibly without the .xlsx extension). Default path to temporary directory.
+Set global option \code{"tabxplor.export_dir"} with \code{link[base:options]{options}}
+to change default directory.
 Use \code{replace = TRUE} to overwrite existing files. Use \code{open = TRUE}
 if you don't want to automatically open the tables in Excel (or another
 software associated with .xlsx files).}
@@ -68,13 +70,14 @@ this feature.}
 \item{contrib_breaks}{The breaks used to color contributions of cells to variance.}
 }
 \value{
-The table(s) with formatting and colors in an Excel file.
+The table(s) with formatting and colors in an Excel file, as a side effect.
+Invisibly returns \code{tabs}.
 }
 \description{
 Excel output for tabxplor tables, with formatting and colors
 }
 \examples{
-\dontrun{
+\donttest{
 forcats::gss_cat \%>\%
   tab(marital, race, pct = "row", color = "diff") \%>\%
   tab_xl()

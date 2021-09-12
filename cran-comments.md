@@ -1,7 +1,13 @@
 ## Resubmission
-This is a resubmission. In this version I have:
+This is a second resubmission. In this version I have, as suggested by Uwe Ligges and Julia Haider (thanks to them) :
 
-* Passed from travis-ci to github actions, which removes the URL Not Found note in the travis readme badge.
+* Added `\value` and parameters to .Rd files regarding exported methods, and to functions with missing Rd-tags.
+
+* Replaced `\dontrun{}` by `\donttest` when used in examples that can in fact be executed (tab_xl.Rd), since the 5 seconds limit is nearly reached.
+
+* Ensured functions do not write by default or in examples/vignettes/tests in the user's home filespace, by using `tempdir()` (in `tab_xl`, which exports tables to Excel, and in tests and examples for this function).
+
+* Passed from travis-ci to github actions, which removes the "URL Not Found" note in the travis readme badge.
 
 ## Test environments
 * local Windows 10 install, R 4.1.1 and R devel (4.2.0)
@@ -9,17 +15,17 @@ This is a resubmission. In this version I have:
 
 * https://builder.r-hub.io :
    - Windows Server 2008 R2 SP1, R-devel 
-   (Build ID: tabxplor_1.0.0.tar.gz-85c78a10c0a24f4b8cfde40d5c13749e)
+   (Build ID: tabxplor_1.0.1.tar.gz-c68138b508ec4799a5d205b0c494328c)
    - Ubuntu Linux 20.04.1 LTS, R-release, GCC, 
-   (Build ID: tabxplor_1.0.0.tar.gz-046dcbb21a50422fb853418e09a05bc0)
+   (Build ID: tabxplor_1.0.1.tar.gz-bbcf056bfae74d71b713b325c2ff1b60)
    - Fedora Linux, R-devel, clang, gfortran, 
-   (Build ID: tabxplor_1.0.0.tar.gz-752c05a6ddd24d98a34d45d5691592c9)
+   (Build ID: tabxplor_1.0.1.tar.gz-2cb8f9d1de234aec8f85a01c6f71a946)
 
 * https://win-builder.r-project.org/k582lkjFeCFd/ : 
    - Windows x86_64-w64-mingw32 (64-bit), R-devel
 
 ## R CMD check results
-* local Windows 10 and Ubuntu 16.04 (on github actions) :
+* local Windows 10 and Ubuntu 20.04 (on github actions) :
     There were no ERRORs, WARNINGs or NOTEs. 
 
 * https://builder.r-hub.io : 

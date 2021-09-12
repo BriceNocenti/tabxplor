@@ -77,6 +77,7 @@ new_tab <-
 
 #' @param groups The grouping data.
 #' @rdname new_tab
+#' @return A \code{tibble} of class \code{tabxplor_grouped_tab}.
 #' @export
 new_grouped_tab <-
   function(tabs = tibble::tibble(), groups,
@@ -104,6 +105,7 @@ new_grouped_tab <-
 # Useful test fonction :
 #' @describeIn tab_many a test function for class tabxplor_tab
 #' @param x A object to test with \code{\link{is_tab}}.
+#' @return A single logical.
 #' @export
 is_tab <- function(x) {
   inherits(x, "tabxplor_tab")
@@ -142,16 +144,27 @@ untab <- function(tabs) {
 
 #Methods to print class tabxplor_tab -----------------------------------------------------
 
+#' Printing method for class tabxplor_tab
+#' @param x Object to format or print.
+#' @param ... Passed on to \code{tbl_format_setup()}.
+#' @param n Number of rows to show.
+#' @param width Width of text output to generate.
+#' @param max_extra_cols Number of extra columns to print abbreviated information for,
+#'   if the width is too small for the entire tibble.
+#' @param max_footer_lines Maximum number of footer lines.
+#' @param min_row_var Minimum number of characters for the row variable. Default to 30.
+#'
 #' @export
+#' @return A printed table.
 #' @method print tabxplor_tab
 print.tabxplor_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = NULL,
                                max_footer_lines = NULL, min_row_var = 30) {
   print_chi2(x, width = width)
 
   if (getOption("tabxplor.print") == "kable") {
-    tabs <- tab_kable(tabs)
-    print(tabs)
-    return(tabs)
+    x <- tab_kable(x)
+    print(x)
+    return(invisible(x))
   }
 
   # Use pillar::char() on row_var to control truncation
@@ -182,7 +195,18 @@ print.tabxplor_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = N
   invisible(x)
 }
 
+#' Printing method for class tabxplor_grouped_tab
+#' @param x Object to format or print.
+#' @param ... Passed on to \code{tbl_format_setup()}.
+#' @param n Number of rows to show.
+#' @param width Width of text output to generate.
+#' @param max_extra_cols Number of extra columns to print abbreviated information for,
+#'   if the width is too small for the entire tibble.
+#' @param max_footer_lines Maximum number of footer lines.
+#' @param min_row_var Minimum number of characters for the row variable. Default to 30.
+#'
 #' @export
+#' @return A printed grouped table.
 #' @method print tabxplor_grouped_tab
 print.tabxplor_grouped_tab <- function(x, width = NULL, ..., n = 100,
                                        max_extra_cols = NULL,max_footer_lines = NULL,
@@ -190,9 +214,9 @@ print.tabxplor_grouped_tab <- function(x, width = NULL, ..., n = 100,
   print_chi2(x, width = width)
 
   if (getOption("tabxplor.print") == "kable") {
-    tabs <- tab_kable(tabs)
-    print(tabs)
-    return(tabs)
+    x <- tab_kable(x)
+    print(x)
+    return(invisible(x))
   }
 
   # Use pillar::char() on row_var to control truncation
@@ -281,8 +305,11 @@ print_chi2 <- function(x, width = NULL) {
 }
 
 
-# Change headers
+#' Table headers for class tab
 #' @importFrom dplyr tbl_sum
+#' @param x An object of class tabxplor_tab
+#' @param ... Other parameters.
+#' @return A table header
 #' @export
 #' @method tbl_sum tabxplor_tab
 tbl_sum.tabxplor_tab <- function(x, ...) {
@@ -290,6 +317,10 @@ tbl_sum.tabxplor_tab <- function(x, ...) {
   names(tbl_header)[1] <- "A tabxplor tab"
   tbl_header
 }
+#' Table headers for class grouped tab
+#' @return A table header
+#' @param x An object of class tabxplor_tab
+#' @param ... Other parameters.
 #' @export
 #' @method tbl_sum tabxplor_grouped_tab
 tbl_sum.tabxplor_grouped_tab <- function(x, ...) {
@@ -299,8 +330,11 @@ tbl_sum.tabxplor_grouped_tab <- function(x, ...) {
 }
 
 
-# Change footer
+#' Table footer for class tab
 #' @importFrom pillar tbl_format_footer
+#' @param x An object of class tabxplor_tab
+#' @param setup A setup object from the table
+#' @param ... Other parameters.
 #' @export
 #' @method tbl_format_footer tabxplor_tab
 tbl_format_footer.tabxplor_tab <- function(x, setup, ...) {
@@ -317,8 +351,11 @@ tbl_format_footer.tabxplor_tab <- function(x, setup, ...) {
 }
 
 
-#Change body
+#' Table body for class tab
 #' @importFrom pillar tbl_format_body
+#' @param x An object of class tabxplor_tab
+#' @param setup A setup object from the table
+#' @param ... Other parameters.
 #' @export
 #' @method tbl_format_body tabxplor_tab
 tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
@@ -347,7 +384,9 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #' @param ... Other arguments to pass to
 #' \code{\link[kableExtra:kable_styling]{kableExtra::kable_styling}}.
 #'
-#' @return An html table (opened in the viewer in RStudio).
+#' @return A html table (opened in the viewer in RStudio). Differences from totals,
+#' confidence intervals, contribution to variance, and unweighted counts,
+#' are available in an html tooltip at cells hover.
 #' @export
 #'
 #' @examples
@@ -373,10 +412,11 @@ tab_kable <- function(tabs,
 
 
   tabs <- tabs %>% dplyr::ungroup() %>% dplyr::select(-tidyselect::all_of(tab_vars))
+  row_var <- which(names(tabs) == tab_get_vars(tabs)$row_var)
 
   color_cols     <- get_color(tabs)
   fmt_no_colors  <- purrr::map_lgl(tabs, is_fmt) &
-                           (color_cols %in% c("", "no") | is.na(color_cols))
+    (color_cols %in% c("", "no") | is.na(color_cols))
   fmt_no_colors  <- names(fmt_no_colors)[fmt_no_colors]
   color_cols     <- which(!color_cols %in% c("", "no") & !is.na(color_cols))
   fmt_cols <- which(purrr::map_lgl(tabs, is_fmt))
@@ -428,13 +468,12 @@ tab_kable <- function(tabs,
   }
 
   if (length(fmt_no_colors) != 0) {
-  color_selection[fmt_no_colors] <- color_selection[fmt_no_colors] %>%
+    color_selection[fmt_no_colors] <- color_selection[fmt_no_colors] %>%
       purrr::map(~ purrr::flatten_chr(.) %>%
                    stringr::str_replace(., "no_color", grey_color2) %>%
                    tidyr::replace_na(grey_color2)
-                 )
-}
-
+      )
+  }
 
   if (color_type == "text") {
     out <- tabs %>%
@@ -445,28 +484,7 @@ tab_kable <- function(tabs,
             align = "r",
             bold  = !color_selection[[dplyr::cur_column()]] %in% c(grey_color, grey_color2), #text_color
             color =  color_selection[[dplyr::cur_column()]],
-            tooltip = paste0("diff: ",
-                             dplyr::if_else(get_diff(.) >= 0, "+", "-"),
-                             format(set_display(., "diff")) %>%
-                               stringr::str_remove("-"),
-                             " ; ci: ", format(set_display(., "ci")),
-                             " ; contrib: ", format(set_display(., "ctr")) ) %>%
-              stringr::str_remove_all("; ci: NA|diff: NA ;|; contrib: NA" )
-            # tooltip = switch(
-            #   get_color(.),
-            #   "diff"     = paste0("diff: ",
-            #                       dplyr::if_else(get_diff(.) >= 0, "+", "-"),
-            #                       format(set_display(., "diff")) %>%
-            #                         stringr::str_remove("-")                ),
-            #   "diff_ci"  = ,
-            #   "after_ci" = paste0("diff: ",
-            #                       dplyr::if_else(get_diff(.) >= 0, "+", "-"),
-            #                       format(set_display(., "diff")) %>%
-            #                         stringr::str_remove("-"),
-            #                       " ; ci: ", format(set_display(., "ci"))     ),
-            #   "contrib"  = paste0("contrib: ", format(set_display(., "ctr")) ),
-            #   NULL
-            # ) %>% stringr::str_remove("; ci: NA|diff: NA ;" )
+            tooltip = tab_kable_print_tooltip(.)
           )
       ))
 
@@ -491,39 +509,18 @@ tab_kable <- function(tabs,
             bold  = color_selection[[dplyr::cur_column()]] %in% c(text_color), #text_color
             color      = txt_color_selection[[dplyr::cur_column()]],
             background = bg_color_selection[[dplyr::cur_column()]],
-            tooltip = paste0("diff: ",
-                             dplyr::if_else(get_diff(.) >= 0, "+", "-"),
-                             format(set_display(., "diff")) %>%
-                               stringr::str_remove("-"),
-                             " ; ci: ", format(set_display(., "ci")),
-                             " ; contrib: ", format(set_display(., "ctr")) ) %>%
-              stringr::str_remove_all("; ci: NA|diff: NA ;|; contrib: NA" )
-            # tooltip = switch(
-            #   get_color(.),
-            #   "diff"     = paste0("diff: ",
-            #                       dplyr::if_else(get_diff(.) >= 0, "+", "-"),
-            #                       format(set_display(., "diff")) %>%
-            #                         stringr::str_remove("-")                ),
-            #   "diff_ci"  = ,
-            #   "after_ci" = paste0("diff: ",
-            #                       dplyr::if_else(get_diff(.) >= 0, "+", "-"),
-            #                       format(set_display(., "diff")) %>%
-            #                         stringr::str_remove("-"),
-            #                       " ; ci: ", format(set_display(., "ci"))     ),
-            #   "contrib"  = paste0("contrib: ", format(set_display(., "ctr")) ),
-            #   NULL
-            # ) %>% stringr::str_remove("; ci: NA|diff: NA ;" )
+            tooltip = tab_kable_print_tooltip(.)
           )
       ))
   }
 
-# refs2 <- tabs[[fmt_cols[1]]] %>% get_reference(mode = "all_totals")
-#
-#   out <- out %>%
-#     dplyr::mutate(dplyr::across(
-#       where(~ !is_fmt(.)),
-#       ~ as.character(.) %>% kableExtra::cell_spec(align = "r", bold  = refs2)
-#       ))
+  # refs2 <- tabs[[fmt_cols[1]]] %>% get_reference(mode = "all_totals")
+  #
+  #   out <- out %>%
+  #     dplyr::mutate(dplyr::across(
+  #       where(~ !is_fmt(.)),
+  #       ~ as.character(.) %>% kableExtra::cell_spec(align = "r", bold  = refs2)
+  #       ))
 
   if (length(color_cols) != 0) subtext <- c(tab_color_legend(tabs,
                                                              mode = "html",
@@ -532,9 +529,7 @@ tab_kable <- function(tabs,
                                                              text_color = text_color,
                                                              grey_color = grey_color),
                                             subtext)
-  #}
 
-  #if (kable == FALSE) {
   out <- knitr::kable(out, escape = FALSE)
 
   if (theme[1] == "light") {
@@ -580,9 +575,64 @@ tab_kable <- function(tabs,
     kableExtra::column_spec(unique(c(new_col_var, ncol(tabs))), border_right = TRUE) %>%
     kableExtra::column_spec(other_cols, border_left = TRUE) %>%
     kableExtra::column_spec(totcols, bold = TRUE, border_left = TRUE) %>%
+    kableExtra::column_spec(row_var, width_min = 20) %>%
     kableExtra::row_spec(new_group, extra_css = "border-bottom: 1px solid ;") %>%
     kableExtra::row_spec(nrow(tabs), extra_css = "border-bottom: 1px solid")
-  #}
+
+  out
+}
+
+
+
+
+#' @keywords internal
+tab_kable_print_tooltip <- function(x) {
+  ref     <- get_reference(x, mode = "cells")
+  totcol  <- is_totcol(x)
+  totrows <- is_totrow(x)
+  tottabs <- is_tottab(x)
+
+  diff     <- get_diff(x)
+  ok_diff  <- !is.na(diff) & !((totcol | totrows) & get_pct(x) == 1)
+  out_diff <- dplyr::case_when(
+    ref & any(ok_diff)    ~ "diff: ref",
+    ok_diff & diff >= 0   ~ paste0("diff: ", "+", format(set_display(x, "diff")) ),
+    ok_diff & diff < 0    ~ paste0("diff: ",      format(set_display(x, "diff")) ),
+    TRUE                  ~ ""
+  )
+
+  ci_type  <- get_ci_type(x)
+  ci_start <- switch(ci_type, "cell" = "ci: ", "")
+  out_ci   <- dplyr::if_else(condition = !is.na(get_ci(x)),
+                             true      = paste0(ci_start, format(set_display(x, "ci")) ),
+                             false     = "")
+
+  out_diff <- switch(ci_type,
+                     "diff" = paste0(out_diff, " ", stringr::str_remove(out_ci, "%$")),
+                     out_diff)
+  out_ci   <- switch(ci_type, "cell" = out_ci, "")
+
+
+  mctr <- if (get_comp_all(x)) { totrows & tottabs & !totcol } else { totrows & !totcol }
+  ctr_start <- dplyr::if_else(mctr,"mean_ctr: ", "contrib: ")
+  out_ctr <- dplyr::if_else(condition = !is.na(get_ctr(x)) & !get_ctr(x) == Inf &
+                              !((totcol | totrows) & get_pct(x) == 1 ),
+                            true      = paste0(ctr_start, format(set_display(x, "ctr")) %>%
+                                                 stringr::str_remove("^-")),
+                            false     = "")
+
+  out_n <- dplyr::if_else(condition = !is.na(get_n(x)) & !get_display(x) %in% c("n"),
+                          true      = paste0("n: ", format(set_display(x, "n")) ),
+                          false     = "")
+
+  out <- paste(out_diff, out_ci, out_ctr, out_n, sep = " ; ") %>%
+    stringr::str_replace_all(";  ; ", "; ") %>%
+    stringr::str_replace_all(";  ; ", "; ") %>%
+    stringr::str_replace_all(";  ; ", "; ") %>%
+    stringr::str_remove("^ *; *") %>%
+    stringr::str_remove(" *; *$")
+
+  out[is.na(out) | out == "NA"] <- ""
 
   out
 }
@@ -594,11 +644,28 @@ tab_kable <- function(tabs,
 
 
 
+
+
+
+
+
 #Methods for class tabxplor_tab ----------------------------------------------------------
 
 # importFrom not needed when tabxplor import dplyr as a "Depends" package
+
+#' group_by method for class tabxplor_tab
 #' @importFrom dplyr group_by
+#' @param .data A tibble of class \code{tabxplor_tab}.
+#' @param ... Variables or computations to group by.
+#' @param .add When \code{FALSE}, the default, \code{group_by()} will
+#'   override existing groups. To add to the existing groups, use
+#'   \code{.add = TRUE}.
+#' @param .drop Drop groups formed by factor levels that don't appear in the
+#'   data? The default is \code{TRUE} except when \code{.data} has been previously
+#'   grouped with \code{.drop = FALSE}.
+
 #' @method group_by tabxplor_tab
+#' @return A tibble of class \code{tabxplor_grouped_tab}.
 #' @export
 group_by.tabxplor_tab <- function(.data,
                                   ...,
@@ -610,9 +677,14 @@ group_by.tabxplor_tab <- function(.data,
                   subtext = get_subtext(.data), chi2 = get_chi2(.data))
 }
 
-
+#' rowwise method for class tabxplor_tab
 #' @importFrom dplyr rowwise
+#' @param .data A tibble of class \code{tabxplor_tab}.
+#' @param ... Variables to be preserved
+#'   when calling \code{summarise()}. This is typically a set of variables whose
+#'   combination uniquely identify each row.
 #' @method rowwise tabxplor_tab
+#' @return A tibble of class \code{tabxplor_grouped_tab} and \code{rowwise_df}.
 #' @export
 rowwise.tabxplor_tab <- function(.data, ...) {
   out <- NextMethod()
@@ -639,9 +711,12 @@ rowwise.tabxplor_tab <- function(.data, ...) {
 #' @param ... For future extensions.
 #' @param x_arg Argument names for x and y. These are used in error messages to inform
 #' the user about the locations of incompatible types.
+#' @param y_arg Argument names for x and y. These are used in error messages to inform
+#' the user about the locations of incompatible types.
 #' @param to_arg Argument names for x and to. These are used in error messages to inform
 #' the user about the locations of incompatible types.
 #'
+#' @return A tibble of class \code{tabxplor_tab}.
 #' @keywords internal
 # @export
 tab_cast <- function(x, to, ..., x_arg = "", to_arg = "") {
@@ -655,8 +730,7 @@ tab_cast <- function(x, to, ..., x_arg = "", to_arg = "") {
 }
 
 #' @rdname tab_cast
-#' @param y_arg Argument names for x and y. These are used in error messages to inform
-#' the user about the locations of incompatible types.
+#' @return A tibble of class \code{tabxplor_tab}.
 #' @keywords internal
 # @export
 tab_ptype2 <- function(x, y, ..., x_arg = "", y_arg = "") {
@@ -672,10 +746,13 @@ tab_ptype2 <- function(x, y, ..., x_arg = "", y_arg = "") {
 
 
 #Let's now implement the coercion methods, starting with the self-self methods.
+#' @return A tibble of class \code{tabxplor_grouped_tab}.
+#' @describeIn tab_cast find common ptype between tabxplor_tab and tabxplor_tab
 #' @export
 vec_ptype2.tabxplor_tab.tabxplor_tab <- function(x, y, ...) {
   tab_ptype2(x, y, ...)
 }
+#' @describeIn tab_cast convert tabxplor_tab to tabxplor_tab
 #' @export
 vec_cast.tabxplor_tab.tabxplor_tab <- function(x, to, ...) {
   tab_cast(x, to, ...)
@@ -683,35 +760,43 @@ vec_cast.tabxplor_tab.tabxplor_tab <- function(x, to, ...) {
 
 # The methods for combining our class with tibbles follow the same pattern.
 # For ptype2 we return our class in both cases because it is the richer type
+
 #' @export
 vec_ptype2.tabxplor_tab.tbl_df <- function(x, y, ...) {
   tab_ptype2(x, y, ...)
 }
+#' @describeIn tab_cast find common ptype between tbl_df and tabxplor_tab
 #' @export
 vec_ptype2.tbl_df.tabxplor_tab <- function(x, y, ...) {
   tab_ptype2(x, y, ...)
 }
+#' @describeIn tab_cast convert tbl_df to tabxplor_tab
 #' @export
 vec_cast.tabxplor_tab.tbl_df <- function(x, to, ...) {
   tab_cast(x, to, ...)
 }
+#' @describeIn tab_cast convert tabxplor_tab to tbl_df
 #' @export
 vec_cast.tbl_df.tabxplor_tab <- function(x, to, ...) {
   vctrs::tib_cast(x, to, ...)
 }
 
+#' @describeIn tab_cast find common ptype between tabxplor_tab and data.frame
 #' @export
 vec_ptype2.tabxplor_tab.data.frame <- function(x, y, ...) {
   tab_ptype2(x, y, ...)
 }
+#' @describeIn tab_cast find common ptype between data.frame and tabxplor_tab
 #' @export
 vec_ptype2.data.frame.tabxplor_tab <- function(x, y, ...) {
   tab_ptype2(x, y, ...)
 }
+#' @describeIn tab_cast convert data.frame to tabxplor_tab
 #' @export
 vec_cast.tabxplor_tab.data.frame <- function(x, to, ...) {
   tab_cast(x, to, ...)
 }
+#' @describeIn tab_cast convert tabxplor_tab to data.frame
 #' @export
 vec_cast.data.frame.tabxplor_tab <- function(x, to, ...) {
   vctrs::df_cast(x, to, ...)
@@ -730,8 +815,12 @@ vec_cast.data.frame.tabxplor_tab <- function(x, to, ...) {
 # [                     [<-          [[<-
 # cbind                 rbind  rowwise
 
+#' ungroup method for class tabxplor_grouped_tab
 #' @importFrom dplyr ungroup
+#' @param x A tibble of class \code{tabxplor_grouped_tab}.
+#' @param ... Variables to remove from the grouping.
 #' @method ungroup tabxplor_grouped_tab
+#' @return An object of class \code{tabxplor_tab} or \code{tabxplor_grouped_tab}.
 #' @export
 ungroup.tabxplor_grouped_tab <- function (x, ...)
 {
@@ -757,8 +846,13 @@ lv1_group_vars <- function(tabs) {
 }
 
 
+#' dplyr_row_slice method for class tabxplor_grouped_tab
 #' @importFrom dplyr dplyr_row_slice
 #' @method dplyr_row_slice tabxplor_grouped_tab
+#' @param data A data frame.
+#' @param i A numeric or logical vector that indexes the rows of \code{.data}.
+#' @param ... Future parameters.
+#' @return An object of class \code{tabxplor_grouped_tab}.
 #' @export
 dplyr_row_slice.tabxplor_grouped_tab <- function(data, i, ...) {
   out <- NextMethod()
@@ -771,8 +865,13 @@ dplyr_row_slice.tabxplor_grouped_tab <- function(data, i, ...) {
 }
 # dplyr:::dplyr_row_slice.grouped_df
 
+#' dplyr_col_modify method for class tabxplor_grouped_tab
 #' @importFrom dplyr dplyr_col_modify
 #' @method dplyr_col_modify tabxplor_grouped_tab
+#' @param data A data frame.
+#' @param cols A named list used modify columns. A \code{NULL} value should remove
+#'   an existing column.
+#' @return An object of class \code{tabxplor_grouped_tab}.
 #' @export
 dplyr_col_modify.tabxplor_grouped_tab <- function(data, cols) {
   out <- NextMethod()
@@ -785,8 +884,12 @@ dplyr_col_modify.tabxplor_grouped_tab <- function(data, cols) {
 }
 # dplyr:::dplyr_col_modify.grouped_df
 
+#' dplyr_reconstruct method for class tabxplor_grouped_tab
 #' @importFrom dplyr dplyr_reconstruct
 #' @method dplyr_reconstruct tabxplor_grouped_tab
+#' @param data A data frame.
+#' @param template Template to use for restoring attributes
+#' @return An object of class \code{tabxplor_grouped_tab}.
 #' @export
 dplyr_reconstruct.tabxplor_grouped_tab <- function(data, template) {
   out <- NextMethod()
@@ -799,7 +902,14 @@ dplyr_reconstruct.tabxplor_grouped_tab <- function(data, template) {
 }
 # dplyr:::dplyr_reconstruct.grouped_df
 
+# subset method for class tabxplor_grouped_tab
+# @param x A tabxplor_grouped_tab object.
+# @param i,j Indices
+# @param drop For matrices and arrays. If TRUE the result is coerced to the lowest
+# possible dimension (see the examples). This only works for extracting elements,
+# not for the replacement.
 #' @method `[` tabxplor_grouped_tab
+# @return An object of class \code{tabxplor_grouped_tab}.
 #' @export
 `[.tabxplor_grouped_tab` <- function(x, i, j, drop = FALSE) {
   out <- NextMethod()
@@ -812,7 +922,12 @@ dplyr_reconstruct.tabxplor_grouped_tab <- function(data, template) {
 }
 # dplyr:::`[.grouped_df`
 
+# set subset method for class tabxplor_grouped_tab
+# @param x A tabxplor_grouped_tab object.
+# @param i,j,... Indices.
+# @param value The new value.
 #' @method `[<-` tabxplor_grouped_tab
+# @return An object of class \code{tabxplor_grouped_tab}.
 #' @export
 `[<-.tabxplor_grouped_tab` <- function(x, i, j, ..., value) {
   out <- NextMethod()
@@ -825,7 +940,12 @@ dplyr_reconstruct.tabxplor_grouped_tab <- function(data, template) {
 }
 # dplyr:::`[<-.grouped_df`
 
+# set sub-subset method for class tabxplor_grouped_tab
+# @param x A tabxplor_grouped_tab object.
+# @param ... Indices
+# @param value The new value.
 #' @method `[[<-` tabxplor_grouped_tab
+# @return An object of class \code{tabxplor_grouped_tab}.
 #' @export
 `[[<-.tabxplor_grouped_tab` <- function(x, ..., value) {
   out <- NextMethod()
@@ -838,8 +958,14 @@ dplyr_reconstruct.tabxplor_grouped_tab <- function(data, template) {
 }
 # dplyr:::`[[<-.grouped_df`
 
+#' rowwise method for class tabxplor_grouped_tab
 #' @importFrom dplyr rowwise
 #' @method rowwise tabxplor_grouped_tab
+#' @param .data A tibble of class \code{tabxplor_tab}.
+#' @param ... Variables to be preserved
+#'   when calling summarise(). This is typically a set of variables whose
+#'   combination uniquely identify each row.
+#' @return An object of class \code{tabxplor_grouped_tab} and \code{rowwise_df}.
 #' @export
 rowwise.tabxplor_grouped_tab <- function(.data, ...) {
   out <- NextMethod()
@@ -847,7 +973,6 @@ rowwise.tabxplor_grouped_tab <- function(.data, ...) {
 
   out <- new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
   `class<-`(out, stringr::str_replace(class(out), "grouped_df", "rowwise_df"))
-
 }
 
 # #' @method rbind tabxplor_grouped_tab
@@ -876,8 +1001,14 @@ rowwise.tabxplor_grouped_tab <- function(.data, ...) {
 # }
 # # dplyr:::cbind.grouped_df
 
+#' summarise method for class tabxplor_grouped_tab
 #' @importFrom dplyr summarise
 #' @method summarise tabxplor_grouped_tab
+#' @param .data A tibble of class \code{tabxplor_tab}.
+#' @param ... Name-value pairs of summary functions. The name will be the name of the
+#' variable in the result.
+#' @param .groups Grouping structure of the result.
+#' @return An object of class \code{tabxplor_grouped_tab}.
 #' @export
 summarise.tabxplor_grouped_tab <- function(.data, ..., .groups = NULL) {
   out <- NextMethod()
@@ -890,8 +1021,14 @@ summarise.tabxplor_grouped_tab <- function(.data, ..., .groups = NULL) {
 }
 
 
+#' select method for class tabxplor_grouped_tab
 #' @importFrom dplyr select
 #' @method select tabxplor_grouped_tab
+#' @param .data A tibble of class \code{tabxplor_tab}.
+#' @param ... One or more unquoted expressions separated by commas. Variable names can be
+#' used as if they were positions in the data frame, so expressions like \code{x:y} can
+#'   be used to select a range of variables.
+#' @return An object of class \code{tabxplor_grouped_tab}.
 #' @export
 select.tabxplor_grouped_tab <- function(.data, ...) {
   out <- NextMethod()
@@ -903,8 +1040,12 @@ select.tabxplor_grouped_tab <- function(.data, ...) {
   }
 }
 
+#' rename method for class tabxplor_grouped_tab
 #' @importFrom dplyr rename
 #' @method rename tabxplor_grouped_tab
+#' @param .data A tibble of class \code{tabxplor_tab}.
+#' @param ... Use \code{new_name = old_name} to rename selected variables.
+#' @return An object of class \code{tabxplor_grouped_tab}.
 #' @export
 rename.tabxplor_grouped_tab <- function(.data, ...) {
   out <- NextMethod()
@@ -916,8 +1057,15 @@ rename.tabxplor_grouped_tab <- function(.data, ...) {
   }
 }
 
+#' rename_with method for class tabxplor_grouped_tab
 #' @importFrom dplyr rename_with
 #' @method rename_with tabxplor_grouped_tab
+#' @param .data A tibble of class \code{tabxplor_tab}.
+#' @param ... Additional arguments passed onto \code{.fn}.
+#' @param .fn A function used to transform the selected \code{.cols}. Should
+#'   return a character vector the same length as the input.
+#' @param .cols Columns to rename; defaults to all columns.
+#' @return An object of class \code{tabxplor_grouped_tab}.
 #' @export
 rename_with.tabxplor_grouped_tab <- function(.data, .fn, .cols = dplyr::everything(), ...) {
   out <- NextMethod()
@@ -929,9 +1077,16 @@ rename_with.tabxplor_grouped_tab <- function(.data, .fn, .cols = dplyr::everythi
   }
 }
 
+
 # not for grouped_df
+#' relocate method for class tabxplor_grouped_tab
 #' @importFrom dplyr relocate
 #' @method relocate tabxplor_grouped_tab
+#' @param .data A tibble of class \code{tabxplor_tab}.
+#' @param ... Columns to move.
+# @param .before,.after Destination of columns selected by \code{...}. Supplying neither
+#'  will move columns to the left-hand side; specifying both is an error.
+#' @return An object of class \code{tabxplor_grouped_tab}.
 #' @export
 relocate.tabxplor_grouped_tab <- function(.data, ...) { #.before = NULL, .after = NULL
   out <- NextMethod()
@@ -943,178 +1098,30 @@ relocate.tabxplor_grouped_tab <- function(.data, ...) { #.before = NULL, .after 
   }
 } # dplyr:::relocate.grouped_df
 
+# #' distinct_ method for class tabxplor_grouped_tab
+# #' @importFrom dplyr distinct_
+# #' @method distinct_ tabxplor_grouped_tab
+# #' @param .data A tibble of class \code{tabxplor_tab}.
+# #' @return An object of class \code{tabxplor_grouped_tab}.
+# #' @export
+# distinct_.tabxplor_grouped_tab <- function(.data, ..., .dots = list(), .keep_all = FALSE) {
+#   out <- NextMethod()
+#   groups <- dplyr::group_data(out)
+#   if (lv1_group_vars(out)) {
+#     new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+#   } else {
+#     new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+#   }
+# }
+# # dplyr:::distinct_.grouped_df
 
-#' @importFrom dplyr distinct_
-#' @method distinct_ tabxplor_grouped_tab
-#' @export
-distinct_.tabxplor_grouped_tab <- function(.data, ..., .dots = list(), .keep_all = FALSE) {
-  out <- NextMethod()
-  groups <- dplyr::group_data(out)
-  if (lv1_group_vars(out)) {
-    new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
-  } else {
-    new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
-  }
-}
-# dplyr:::distinct_.grouped_df
 
 
 
-#
-# # Past methods, not needed anymore :
-#
-# #' @importFrom dplyr mutate
-# #' @method mutate tabxplor_grouped_tab
-# #' @export
-# mutate.tabxplor_grouped_tab <- function(.data, ...) {
-#   out <- NextMethod()
-#   groups <- dplyr::group_data(out)
-#   if (lv1_group_vars(out)) {
-#     new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
-#   } else {
-#     new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
-#   }
-#
-# }
-#
-#
-#
-#
-# #' @importFrom dplyr transmute
-# #' @method transmute tabxplor_grouped_tab
-# #' @export
-# transmute.tabxplor_grouped_tab <- function(.data, ...) {
-#   out <- NextMethod()
-#   groups <- dplyr::group_data(out)
-#   if (lv1_group_vars(out)) {
-#     new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
-#   } else {
-#     new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
-#   }
-# }
-#
-# #' @importFrom dplyr summarise
-# #' @method summarise tabxplor_grouped_tab
-# #' @export
-# summarise.tabxplor_grouped_tab <- function(.data, ..., .groups = NULL) {
-#   out <- NextMethod()
-#   groups <- dplyr::group_data(out)
-#   if (lv1_group_vars(out)) {
-#     new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
-#   } else {
-#     new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
-#   }
-# }
-#
-# #' @importFrom dplyr filter
-# #' @method filter tabxplor_grouped_tab
-# # @rdname filter
-# #' @export
-# filter.tabxplor_grouped_tab <- function(.data, ..., .preserve = FALSE) {
-#   out <- NextMethod()
-#   if (lv1_group_vars(out)) {
-#     new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
-#   } else {
-#     groups <- dplyr::group_data(out)
-#     new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
-#   }
-# }
-#
-#
-# # slice not working with grouped_tab ? ----
-# #' @importFrom dplyr slice
-# #' @method slice tabxplor_grouped_tab
-# #' @export
-# slice.tabxplor_grouped_tab <- function(.data, ..., .preserve = FALSE) {
-#   out <- NextMethod()
-#   groups <- dplyr::group_data(out)
-#   if (lv1_group_vars(out)) {
-#     new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
-#   } else {
-#     new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
-#   }
-# }
-#
-# #' @importFrom dplyr arrange
-# #' @method arrange tabxplor_grouped_tab
-# #' @export
-# arrange.tabxplor_grouped_tab <- function(.data, ..., .by_group = FALSE) {
-#   out <- NextMethod()
-#   groups <- dplyr::group_data(out)
-#   if (lv1_group_vars(out)) {
-#     new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
-#   } else {
-#     new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
-#   }
-# }
-#
-#
-#
-# #' @importFrom dplyr select
-# #' @method select tabxplor_grouped_tab
-# #' @export
-# select.tabxplor_grouped_tab <- function(.data, ...) {
-#   out <- NextMethod()
-#   groups <- dplyr::group_data(out)
-#   if (lv1_group_vars(out)) {
-#     new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
-#   } else {
-#     new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
-#   }
-# }
-#
-# #' @importFrom dplyr relocate
-# #' @method relocate tabxplor_grouped_tab
-# #' @export
-# relocate.tabxplor_grouped_tab <- function(.data, ..., .before = NULL, .after = NULL) {
-#   out <- NextMethod()
-#   groups <- dplyr::group_data(out)
-#   if (lv1_group_vars(out)) {
-#     new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
-#   } else {
-#     new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
-#   }
-# }
-#
-# #' @importFrom dplyr rename
-# #' @method rename tabxplor_grouped_tab
-# #' @export
-# rename.tabxplor_grouped_tab <- function(.data, ...) {
-#   out <- NextMethod()
-#   groups <- dplyr::group_data(out)
-#   if (lv1_group_vars(out)) {
-#     new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
-#   } else {
-#     new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
-#   }
-# }
-#
-# #' @importFrom dplyr rename_with
-# #' @method rename_with tabxplor_grouped_tab
-# #' @export
-# rename_with.tabxplor_grouped_tab <- function(.data, .fn,
-#                                     .cols = dplyr::everything(), ...) {
-#   out <- NextMethod()
-#   groups <- dplyr::group_data(out)
-#   if (lv1_group_vars(out)) {
-#     new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
-#   } else {
-#     new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
-#   }
-# }
-#
-# #' @importFrom dplyr distinct
-# #' @method distinct tabxplor_grouped_tab
-# #' @export
-# distinct.tabxplor_grouped_tab <- function(.data, ...,  .keep_all = FALSE) {
-#   out <- NextMethod()
-#   groups <- dplyr::group_data(out)
-#   if (lv1_group_vars(out)) {
-#     new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
-#   } else {
-#     new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
-#   }
-# }
+
+
+
+
 
 
 
@@ -1151,28 +1158,34 @@ gtab_ptype2 <- function(x, y, ..., x_arg = "", y_arg = "") {
 }
 
 #Self-self
+#' @describeIn tab_cast find common ptype between tabxplor_grouped_tab and tabxplor_grouped_tab
 #' @export
 vec_ptype2.tabxplor_grouped_tab.tabxplor_grouped_tab <- function(x, y, ...) {
   gtab_ptype2(x, y, ...)
 }
+#' @describeIn tab_cast convert tabxplor_grouped_tab to tabxplor_grouped_tab
 #' @export
 vec_cast.tabxplor_grouped_tab.tabxplor_grouped_tab <- function(x, to, ...) {
   gtab_cast(x, to, ...)
 }
 
 #grouped_tab / grouped_df
+#' @describeIn tab_cast find common ptype between tabxplor_grouped_tab and grouped_df
 #' @export
 vec_ptype2.tabxplor_grouped_tab.grouped_df <- function(x, y, ...) {
   gtab_ptype2(x, y, ...)
 }
+#' @describeIn tab_cast find common ptype between grouped_df and tabxplor_grouped_tab
 #' @export
 vec_ptype2.grouped_df.tabxplor_grouped_tab <- function(x, y, ...) {
   gtab_ptype2(x, y, ...)
 }
+#' @describeIn tab_cast convert grouped_df to tabxplor_grouped_tab
 #' @export
 vec_cast.tabxplor_grouped_tab.grouped_df <- function(x, to, ...) {
   gtab_cast(x, to, ...)
 }
+#' @describeIn tab_cast convert tabxplor_grouped_tab to grouped_df
 #' @export
 vec_cast.grouped_df.tabxplor_grouped_tab <- function(x, to, ...) {
   #vctrs:::gdf_cast
@@ -1183,54 +1196,66 @@ vec_cast.grouped_df.tabxplor_grouped_tab <- function(x, to, ...) {
 }
 
 #grouped_tab / tab
+#' @describeIn tab_cast find common ptype between tabxplor_grouped_tab and tabxplor_tab
 #' @export
 vec_ptype2.tabxplor_grouped_tab.tabxplor_tab <- function(x, y, ...) {
   gtab_ptype2(x, y, ...)
 }
+#' @describeIn tab_cast find common ptype between tabxplor_tab and tabxplor_grouped_tab
 #' @export
 vec_ptype2.tabxplor_tab.tabxplor_grouped_tab <- function(x, y, ...) {
   gtab_ptype2(x, y, ...)
 }
+#' @describeIn tab_cast convert tabxplor_tab to tabxplor_grouped_tab
 #' @export
 vec_cast.tabxplor_grouped_tab.tabxplor_tab <- function(x, to, ...) {
   gtab_cast(x, to, ...)
 }
+#' @describeIn tab_cast convert tabxplor_grouped_tab to tabxplor_tab
 #' @export
 vec_cast.tabxplor_tab.tabxplor_grouped_tab <- function(x, to, ...) {
   tab_cast(x, to, ...)
 }
 
 #grouped_tab / tbl_df
+#' @describeIn tab_cast find common ptype between tabxplor_grouped_tab and tbl_df
 #' @export
 vec_ptype2.tabxplor_grouped_tab.tbl_df <- function(x, y, ...) {
   gtab_ptype2(x, y, ...)
 }
+#' @describeIn tab_cast find common ptype between tbl_df and tabxplor_grouped_tab
 #' @export
 vec_ptype2.tbl_df.tabxplor_grouped_tab <- function(x, y, ...) {
   gtab_ptype2(x, y, ...)
 }
+#' @describeIn tab_cast convert tbl_df to tabxplor_grouped_tab
 #' @export
 vec_cast.tabxplor_grouped_tab.tbl_df <- function(x, to, ...) {
   gtab_cast(x, to, ...)
 }
+#' @describeIn tab_cast convert tabxplor_grouped_tab to tbl_df
 #' @export
 vec_cast.tbl_df.tabxplor_grouped_tab <- function(x, to, ...) {
   vctrs::tib_cast(x, to, ...)
 }
 
 #grouped_tab / data.frame
+#' @describeIn tab_cast find common ptype between tabxplor_grouped_tab and data.frame
 #' @export
 vec_ptype2.tabxplor_grouped_tab.data.frame <- function(x, y, ...) {
   gtab_ptype2(x, y, ...)
 }
+#' @describeIn tab_cast find common ptype between data.frame and tabxplor_grouped_tab
 #' @export
 vec_ptype2.data.frame.tabxplor_grouped_tab <- function(x, y, ...) {
   gtab_ptype2(x, y, ...)
 }
+#' @describeIn tab_cast convert data.frame to tabxplor_grouped_tab
 #' @export
 vec_cast.tabxplor_grouped_tab.data.frame <- function(x, to, ...) {
   gtab_cast(x, to, ...)
 }
+#' @describeIn tab_cast convert tabxplor_grouped_tab to data.frame
 #' @export
 vec_cast.data.frame.tabxplor_grouped_tab <- function(x, to, ...) {
   vctrs::df_cast(x, to, ...)
@@ -1328,9 +1353,10 @@ set_color_style <- function(type = c("text", "bg"),
 
 }
 
-#' @describeIn tab_many get color styles as \pkg{crayon} functions.
+#' @describeIn tab_many get color styles as \pkg{crayon} functions or html codes.
 #' @param mode By default, \code{get_color_style} returns a list of \pkg{crayon} coloring
 #' functions. Set to \code{"color_code"} to return html color codes.
+#' @return A vector of crayon color functions, or a vector of color html codes.
 #' @export
 get_color_style <- function(mode = c("crayon", "color_code"),
                             type = NULL, theme = NULL) {
@@ -1410,12 +1436,14 @@ get_color_style <- function(mode = c("crayon", "color_code"),
 #' 2 times the mean contribution ; etc. The global color (for example green or
 #' red/orange) is given by the sign of the spread.
 #'
-#' @return Create an object named \code{tabxplor_color_breaks} in the global
-#' environnement, used when printing \code{\link{tab}} objects.
+#' @return Set the global option "tabxplor.color_breaks" as a list different double
+#' vectors, and also returns it invisibly.
 #' @export
-#' @examples set_color_breaks(pct_breaks = c(0.05, 0.15, 0.3),
-#' mean_breaks = c(1.15, 2, 4),
-#' contrib_breaks = c(1, 2, 5)     )
+#' @examples set_color_breaks(
+#'   pct_breaks = c(0.05, 0.15, 0.3),
+#'   mean_breaks = c(1.15, 2, 4),
+#'   contrib_breaks = c(1, 2, 5)
+#' )
 set_color_breaks <- function(pct_breaks, mean_breaks, contrib_breaks) {
   # Defaults are set at the first use of print.tabxplor_tab method :
   #   pct_breaks = c(0.05, 0.1, 0.2, 0.3),
@@ -1537,6 +1565,7 @@ set_color_breaks <- function(pct_breaks, mean_breaks, contrib_breaks) {
 #' @param type Default to \code{"positive"}, which just print breaks for positive spreads.
 #' Set to \code{all} to get breaks for negative spreads as well.
 #'
+#' @return The color breaks as a double vector, or list of double vectors.
 #' @export
 get_color_breaks <- function(brk, type = c("positive", "all")) {
   tabxplor_color_breaks <- getOption("tabxplor.color_breaks")

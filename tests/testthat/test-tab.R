@@ -300,9 +300,9 @@ testthat::test_that("tab colors are calculated with counts and pct", {
 
 tab(data, sex, hair_color, pct = "row", color = "diff"    )  %>% dplyr::pull(brown) %>%
   expect_color()
-tab(data, sex, hair_color, pct = "row", color = "diff_ci" )  %>% dplyr::pull(brown) %>%
+tab(data, sex, hair_color, pct = "row", color = "diff_ci" )  %>% dplyr::pull(`NA`) %>%
   expect_color()
-tab(data, sex, hair_color, pct = "row", color = "after_ci")  %>% dplyr::pull(brown) %>%
+tab(data, sex, hair_color, pct = "row", color = "after_ci")  %>% dplyr::pull(`NA`) %>%
   expect_color()
 tab(data, sex, hair_color, pct = "row", color = "contrib" )  %>% dplyr::pull(brown) %>%
   expect_color()
@@ -321,7 +321,7 @@ tab(data, sex, hair_color, pct = "all_tabs", color = "auto") %>% dplyr::pull(bro
 tab(data, sex, hair_color, pct = "row", sup_cols = eye_color, color = "diff"    ) %>%
   dplyr::pull(black_eye_color) %>% expect_color()
 tab(data, sex, hair_color, pct = "row", sup_cols = eye_color, color = "diff_ci" ) %>%
-  dplyr::pull(black_eye_color) %>% expect_color()
+  dplyr::pull(`NA`) %>% expect_color()
 tab(data, sex, hair_color, pct = "row", sup_cols = eye_color, color = "auto"    ) %>%
   dplyr::pull(black_eye_color) %>% expect_color()
 })

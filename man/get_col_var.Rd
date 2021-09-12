@@ -2,11 +2,34 @@
 % Please edit documentation in R/fmt_class.R
 \name{get_col_var}
 \alias{get_col_var}
-\title{(at \code{fmt} level or \code{tab} level)}
+\alias{get_col_var.default}
+\alias{get_col_var.tabxplor_fmt}
+\alias{get_col_var.data.frame}
+\title{Get names of column variable of fmt columns (at \code{fmt} level or \code{tab} level)}
 \usage{
 get_col_var(x, ...)
+
+\method{get_col_var}{default}(x, ...)
+
+\method{get_col_var}{tabxplor_fmt}(x, ...)
+
+\method{get_col_var}{data.frame}(x, ...)
+}
+\arguments{
+\item{x}{An object to get attribute in.}
+
+\item{...}{For future extensions.}
 }
 \description{
-(at \code{fmt} level or \code{tab} level)
+Get names of column variable of fmt columns (at \code{fmt} level or \code{tab} level)
 }
+\section{Methods (by class)}{
+\itemize{
+\item \code{default}: default method
+
+\item \code{tabxplor_fmt}: fmt method
+
+\item \code{data.frame}: data.frame method
+}}
+
 \keyword{internal}

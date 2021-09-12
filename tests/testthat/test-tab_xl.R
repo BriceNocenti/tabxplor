@@ -10,14 +10,16 @@ testthat::test_that("tab_xl creates an Excel file", {
       .f = tab_many,
       data = forcats::gss_cat, color = "auto", chi2 = TRUE)
 
+  test_path <- file.path(tempdir(), "tab_xl_test.xlsx")
+
   tabs %>%
-    tab_xl(path = "tests\\tab_xl_test", sheets = "unique",
+    tab_xl(path = test_path, sheets = "unique",
            replace = TRUE, open = FALSE) %>%
     testthat::expect_invisible()
 
- testthat::expect_true(file.exists("tests\\tab_xl_test.xlsx"))
+ testthat::expect_true(file.exists(test_path))
 
- file.remove("tests\\tab_xl_test.xlsx")
+ file.remove(test_path)
 })
 
 

@@ -246,6 +246,7 @@ fmt <- function(n         = integer(),
 }
 
 #' @describeIn fmt a test function for class fmt.
+#' @return A logical vector.
 #' @export
 is_fmt <- function(x) {
   inherits(x, "tabxplor_fmt")
@@ -273,6 +274,7 @@ is_fmt <- function(x) {
 
 
 #' @describeIn fmt get the currently displayed field
+#' @return A double vector.
 #' @export
 get_num <- function(x) {
   out     <- get_n(x)
@@ -293,6 +295,7 @@ get_num <- function(x) {
 #' @describeIn fmt set the currently displayed field (not changing display type)
 #' @param value The value you want to inject in some \code{fmt} vector's vctrs::field
 #' or attribute using a given "set" function.
+#' @return A modified fmt vector.
 #' @export
 set_num <- function(x, value) {
   value <- vctrs::vec_recycle(value, length(x))
@@ -311,21 +314,33 @@ set_num <- function(x, value) {
 }
 
 #' @describeIn fmt get types of fmt columns (at \code{fmt} level or \code{tab} level)
+#' @param x The object to test, to get a field in, or to modify.
+#' @param ... Used in methods to add arguments in the future.
+#' @return A character vector with the vectors type.
 #' @export
 get_type <- function(x, ...) UseMethod("get_type")
+#' Get types of fmt columns
+#' @inheritParams get_type
+#' @return An empty character vector.
 #' @export
 get_type.default     <- function(x, ...) {
   ifelse(! is.null(purrr::attr_getter("type")(x)),
          yes = purrr::attr_getter("type")(x),
          no  = "") #NA_character_
 }
+#' Get types of fmt columns
 #' @method get_type tabxplor_fmt
+#' @inheritParams get_type
+#' @return A single string with the vector's type.
 #' @export
 get_type.tabxplor_fmt <- function(x, ...) attr(x, "type", exact = TRUE)
+#' Get types of fmt columns
+#' @inheritParams get_type
+#' @return A character vector with the data.frame column's types.
 #' @export
 get_type.data.frame <- function(x, ...) purrr::map_chr(x, ~ get_type(.))
-
 #' @describeIn fmt set the column type attribute of a \code{fmt} vector
+#' @return A modified fmt vector.
 #' @export
 set_type      <- function(x, type) {
   if (type %in% c("no", "", NA_character_)) type <- "n"
@@ -338,15 +353,24 @@ set_type      <- function(x, type) {
 
 #' @describeIn fmt test function to detect cells in total rows
 #' (at \code{fmt} level or \code{tab} level)
-#' @param x The object to test, to get a field in, or to modify.
-#' @param ... Used in methods to add arguments in the future.
+#' @return A logical vector with the fmt vectors totrow field.
 #' @export
 is_totrow <- function(x, ...) UseMethod("is_totrow")
+#' Test function to detect cells in total rows
+#' @inheritParams get_type
+#' @return A logical vector with \code{FALSE}.
 #' @export
 is_totrow.default  <-  function(x, ...) rep(FALSE, length(x)) #{
+#' Test function to detect cells in total rows
 #' @method is_totrow tabxplor_fmt
+#' @inheritParams get_type
+#' @return A logical vector with the totrow field.
 #' @export
 is_totrow.tabxplor_fmt <- function(x, ...) vctrs::field(x, "in_totrow")
+#' Test function to detect cells in total rows
+#' @inheritParams get_type
+#' @param partial Should partial total rows be counted as total rows ? Default to FALSE.
+#' @return A list of logical vectors, with the data.frame column's totrow fields.
 #' @export
 is_totrow.data.frame <- function(x, ..., partial = FALSE) {
   totrow_cells_test <- dplyr::ungroup(x) %>% dplyr::select(where(is_fmt)) %>%
@@ -370,6 +394,7 @@ is_totrow.data.frame <- function(x, ..., partial = FALSE) {
 }
 
 #' @describeIn fmt set the "in_totrow" field (belong to total row)
+#' @return A modified fmt vector with totrow field changed.
 #' @export
 as_totrow  <- function(x, in_totrow = TRUE) {
   vctrs::vec_assert(in_totrow, logical())
@@ -377,19 +402,28 @@ as_totrow  <- function(x, in_totrow = TRUE) {
 }
 
 
+
+
 #' @describeIn fmt test function to detect cells in total tables
 #' (at \code{fmt} level or \code{tab} level)
+#' @return A logical vector with the fmt vectors tottab field.
 #' @export
 is_tottab <- function(x, ...) UseMethod("is_tottab")
+#' Test function to detect cells in total tables
+#' @inheritParams get_type
+#' @return A logical vector with \code{FALSE}.
 #' @export
 is_tottab.default  <-  function(x, ...) rep(FALSE, length(x)) #{
-#   ifelse(! is.null(vctrs::field(x, "in_tottab")),
-#          yes = vctrs::field(x, "in_tottab"),
-#          no  = vctrs::vec_recycle(FALSE, length(x)))
-# }
+#' Test function to detect cells in total tables
 #' @method is_tottab tabxplor_fmt
+#' @inheritParams get_type
+#' @return A logical vector with the tottab field.
 #' @export
 is_tottab.tabxplor_fmt <- function(x, ...) vctrs::field(x, "in_tottab")
+#' Test function to detect cells in total tables
+#' @inheritParams get_type
+#' @param partial Should partial total tabs be counted as total tabs ? Default to FALSE.
+#' @return A list of logical vectors, with the data.frame column's tottab fields.
 #' @export
 is_tottab.data.frame <- function(x, ..., partial = FALSE) {
   tottab_cells_test <- dplyr::ungroup(x) %>% dplyr::select(where(is_fmt)) %>%
@@ -413,29 +447,45 @@ is_tottab.data.frame <- function(x, ..., partial = FALSE) {
 }
 
 #' @describeIn fmt set the "in_tottab" field (belong to total table)
+#' @return A modified fmt vector with tottab field changed.
 #' @export
 as_tottab  <- function(x, in_tottab = TRUE) {
   vctrs::vec_assert(in_tottab, logical())
   vctrs::`field<-`(x, "in_tottab", vctrs::vec_recycle(in_tottab, length(x)))
 }
 
+
+
+
+
 #' @describeIn fmt test function for total columns
 #' (at \code{fmt} level or \code{tab} level)
+#' @return A logical vector with the fmt vectors totcol attribute.
 #' @export
 is_totcol <- function(x, ...) UseMethod("is_totcol")
+#' Test function for total columns
+#' @inheritParams get_type
+#' @return A single logical vector with the totcol attribute
 #' @export
 is_totcol.default     <- function(x, ...) {
   ifelse(! is.null(purrr::attr_getter("totcol")(x)),
          yes = purrr::attr_getter("totcol")(x),
          no  = FALSE)
 }
+#' Test function for total columns
+#' @inheritParams get_type
+#' @return A single logical vector with the totcol attribute
 #' @export
 is_totcol.tabxplor_fmt <- function(x, ...) attr(x, "totcol", exact = TRUE)
+#' Test function for total columns
+#' @inheritParams get_type
+#' @return A logical vector, with the data.frame column's totcol attributes.
 #' @export
 is_totcol.data.frame <- function(x, ...) purrr::map_lgl(x, ~ is_totcol(.))
 
 
 #' @describeIn fmt set the "totcol" attribute of a \code{fmt} vector
+#' @return A modified fmt vector with totcol attribute changed.
 #' @export
 as_totcol     <- function(x, totcol = TRUE) {
   vctrs::vec_assert(totcol, logical(), size = 1)
@@ -650,23 +700,46 @@ get_ref_means <- function(x) {
   }
 }
 
-# "every S3 method must be exported, even if the generic is not"
+# "every S3 method must be exported, even if the generic is not" Really (->CRAN pb) ??
 
-# @describeIn fmt test function to detect cells in reference rows
-# (at \code{fmt} level or \code{tab} level)
+# #' @return A character vector with the vectors type.
+# #' @return An empty character vector.
+# #' @return A single string with the vector's type.
+# #' @return A character vector with the data.frame column's types.
+# #' @return A modified fmt vector.
+#
+# #' @return A logical vector with the fmt vectors tottab field.
+# #' @return A logical vector with \code{FALSE}.
+# #' @return A logical vector with the tottab field.
+# #' @return A list of logical vectors, with the data.frame column's tottab fields.
+# #' @return A modified fmt vector with tottab field changed.
+#
+# #' @return A logical vector with the fmt vectors totcol attribute.
+# #' @return A logical vector with \code{FALSE}.
+# #' @return A single logical vector with the totcol attribute
+# #' @return A logical vector, with the data.frame column's totcol attributes.
+# #' @return A modified fmt vector with totcol attribute changed.
+
+
+#' Test function to detect cells in reference rows
+#' @param x An object to get field in.
+#' @param ... For future extensions.
 #' @keywords internal
 # @export
 is_refrow <- function(x, ...) UseMethod("is_refrow")
 #' @method is_refrow default
 # @keywords internal
+#' @describeIn is_refrow default method
 #' @export
 is_refrow.default  <-  function(x, ...) rep(FALSE, length(x)) #{
 #' @method is_refrow tabxplor_fmt
 # @keywords internal
+#' @describeIn is_refrow fmt method
 #' @export
 is_refrow.tabxplor_fmt <- function(x, ...) vctrs::field(x, "in_refrow")
 #' @method is_refrow data.frame
 # @keywords internal
+#' @describeIn is_refrow data.frame method
 #' @export
 is_refrow.data.frame <- function(x, ..., partial = TRUE) {
   refrow_cells_test <- dplyr::ungroup(x) %>% dplyr::select(where(is_fmt)) %>%
@@ -690,8 +763,9 @@ is_refrow.data.frame <- function(x, ..., partial = TRUE) {
 }
 
 
-# @describeIn fmt
-#' get comparison level of fmt columns
+
+#' Get comparison level of fmt columns
+#' @param x An object to get attributes in.
 #' @param replace_na By default, \code{\link{get_comp_all}} takes NA in comparison level
 #' to be a \code{FALSE} (=comparison at subtables/groups level). Set to \code{FALSE}
 #' to avoid this behavior.
@@ -704,23 +778,32 @@ get_comp_all <- function(x, replace_na = TRUE) {
   comp
 }
 
-# @describeIn fmt get differences type of fmt columns (at \code{fmt} level or \code{tab} level)
+
+
+
+
+#' Get differences type of fmt columns (at \code{fmt} level or \code{tab} level)
+#' @param x An object to get attribute in.
+#' @param ... For future extensions.
 #' @keywords internal
 # @export
 get_diff_type <- function(x, ...) UseMethod("get_diff_type")
 #' @method get_diff_type default
-#' @keywords internal
-# @export
+# @keywords internal
+#' @describeIn get_diff_type default method
+#' @export
 get_diff_type.default     <- function(x, ...) {
   ifelse(! is.null(purrr::attr_getter("diff_type")(x)),
          yes = purrr::attr_getter("diff_type")(x),
          no  = "") #NA_character_
 }
 #' @method get_diff_type tabxplor_fmt
+#' @describeIn get_diff_type fmt method
 # @keywords internal
 #' @export
 get_diff_type.tabxplor_fmt <- function(x, ...) attr(x, "diff_type", exact = TRUE)
 #' @method get_diff_type data.frame
+#' @describeIn get_diff_type data.frame method
 # @keywords internal
 #' @export
 get_diff_type.data.frame <- function(x, ...) {
@@ -728,12 +811,18 @@ get_diff_type.data.frame <- function(x, ...) {
 }
 
 
-# @describeIn fmt get confidence intervals type of fmt columns
-#' (at \code{fmt} level or \code{tab} level)
+
+
+
+
+#' Get confidence intervals type of fmt columns(at \code{fmt} level or \code{tab} level)
+#' @param x An object to get attribute in.
+#' @param ... For future extensions.
 #' @keywords internal
 # @export
 get_ci_type <- function(x, ...) UseMethod("get_ci_type")
 #' @method get_ci_type default
+#' @describeIn get_ci_type default method
 # @keywords internal
 #' @export
 get_ci_type.default     <- function(x, ...) {
@@ -742,10 +831,12 @@ get_ci_type.default     <- function(x, ...) {
          no  = "") #NA_character_
 }
 #' @method get_ci_type tabxplor_fmt
+#' @describeIn get_ci_type fmt method
 # @keywords internal
 #' @export
 get_ci_type.tabxplor_fmt <- function(x, ...) attr(x, "ci_type", exact = TRUE)
 #' @method get_ci_type data.frame
+#' @describeIn get_ci_type data.frame method
 # @keywords internal
 #' @export
 get_ci_type.data.frame <- function(x, ...) {
@@ -753,12 +844,16 @@ get_ci_type.data.frame <- function(x, ...) {
 }
 
 
-# @describeIn fmt get names of column variable of fmt columns
-#' (at \code{fmt} level or \code{tab} level)
+
+
+#' Get names of column variable of fmt columns (at \code{fmt} level or \code{tab} level)
+#' @param x An object to get attribute in.
+#' @param ... For future extensions.
 #' @keywords internal
 # @export
 get_col_var <- function(x, ...) UseMethod("get_col_var")
 #' @method get_col_var default
+#' @describeIn get_col_var default method
 # @keywords internal
 #' @export
 get_col_var.default     <- function(x, ...) {
@@ -767,24 +862,27 @@ get_col_var.default     <- function(x, ...) {
          no  = "") #NA_character_
 }
 #' @method get_col_var tabxplor_fmt
+#' @describeIn get_col_var fmt method
 # @keywords internal
 #' @export
 get_col_var.tabxplor_fmt <- function(x, ...) attr(x, "col_var", exact = TRUE)
 #' @method get_col_var data.frame
+#' @describeIn get_col_var data.frame method
 # @keywords internal
 #' @export
 get_col_var.data.frame <- function(x, ...) purrr::map_chr(x, ~ get_col_var(.))
 
 
 
-
-# @describeIn fmt test function for reference columns
-# (at \code{fmt} level or \code{tab} level)
+#' Test function for reference columns (at \code{fmt} level or \code{tab} level)
+#' @param x An object to get field in.
+#' @param ... For future extensions.
 #' @keywords internal
 # @export
 is_refcol <- function(x, ...) UseMethod("is_refcol")
 #' @method is_refcol default
-# @keywords internal
+#' @describeIn is_refcol default method
+# keywords internal
 #' @export
 is_refcol.default     <- function(x, ...) {
   ifelse(! is.null(purrr::attr_getter("refcol")(x)),
@@ -792,10 +890,12 @@ is_refcol.default     <- function(x, ...) {
          no  = FALSE)
 }
 #' @method is_refcol tabxplor_fmt
+#' @describeIn is_refcol fmt method
 # @keywords internal
 #' @export
 is_refcol.tabxplor_fmt <- function(x, ...) attr(x, "refcol", exact = TRUE)
 #' @method is_refcol data.frame
+#' @describeIn is_refcol data.frame method
 # @keywords internal
 #' @export
 is_refcol.data.frame <- function(x, ...) purrr::map_lgl(x, ~ is_refcol(.))
@@ -838,11 +938,16 @@ detect_firstcol <- function(tabs) {
 }
 
 
-# @describeIn fmt get color (at \code{fmt} level or \code{tab} level)
+
+
+#' Get color (at \code{fmt} level or \code{tab} level)
+#' @param x An object to get attribute in.
+#' @param ... For future extensions.
 #' @keywords internal
 # @export
 get_color <- function(x, ...) UseMethod("get_color")
 #' @method get_color default
+#' @describeIn get_color default method
 # @keywords internal
 #' @export
 get_color.default     <- function(x, ...) {
@@ -851,10 +956,12 @@ get_color.default     <- function(x, ...) {
          no  = "") #NA_character_
 }
 #' @method get_color tabxplor_fmt
+#' @describeIn get_color fmt method
 # @keywords internal
 #' @export
 get_color.tabxplor_fmt <- function(x, ...) attr(x, "color", exact = TRUE)
 #' @method get_color data.frame
+#' @describeIn get_color data.frame method
 # @keywords internal
 #' @export
 get_color.data.frame <- function(x, ...) {
@@ -1173,7 +1280,11 @@ pillar_shaft.tabxplor_fmt <- function(x, ...) {
   pillar::new_pillar_shaft_simple(out, align = "right", na = "")
 }
 
+#' Print Chi2 tables columns
+#' @param x A fmt object.
+#' @param ... Other parameter.
 #' @export
+#' @return A Chi2 table column printed in a pillar.
 # @keywords internal
 # @method pillar_shaft tab_chi2_fmt
 pillar_shaft.tab_chi2_fmt <- function(x, ...) {
@@ -1767,7 +1878,10 @@ get_reference <- function(x, mode = c("cells", "lines", "all_totals")) {
 
 
 
-#Define abbreviated display name (for tibble::tibble headers)
+#' Abbreviated display name for class fmt in tibbles
+#' @param x A fmt object.
+#' @param ... Other parameter.
+#' @return A single string with abbreviated fmt type.
 #' @export
 vec_ptype_abbr.tabxplor_fmt <- function(x, ...) {
   display  <- get_display(x) %>% unique()
@@ -1791,7 +1905,10 @@ vec_ptype_abbr.tabxplor_fmt <- function(x, ...) {
 }
 
 
-# Include numbers of digits and types in the printed name
+#' Printed type for class fmt
+#' @param x A fmt object.
+#' @param ... Other parameter.
+#' @return A single string with full fmt type.
 #' @export
 vec_ptype_full.tabxplor_fmt <- function(x, ...) {
   display  <- get_display(x) %>% unique()
@@ -1821,6 +1938,11 @@ vec_ptype_full.tabxplor_fmt <- function(x, ...) {
 
 #Make our tabxplor_fmt class coercible with herself, and back and forth with double and
 # integer vectors :
+#' Find common ptype between fmt and fmt
+#' @param x A fmt object.
+#' @param y A fmt object.
+#' @param ... Other parameter.
+#' @return A fmt vector
 #' @export
 vec_ptype2.tabxplor_fmt.tabxplor_fmt    <- function(x, y, ...) {
   type_x       <- get_type(x)
@@ -1872,16 +1994,41 @@ vec_ptype2.tabxplor_fmt.tabxplor_fmt    <- function(x, y, ...) {
   #                             false = vctrs::vec_recycle(NA_character_, l))
   # )
 }
+#' Find common ptype between fmt and double
+#' @param x A fmt vector
+#' @param y A double vector
+#' @param ... Other parameter.
+#' @return A fmt vector
 #' @export
 vec_ptype2.tabxplor_fmt.double  <- function(x, y, ...) x # new_fmt() #double()
+#' Find common ptype between double and fmt
+#' @param x A double vector
+#' @param y A fmt vector
+#' @param ... Other parameter.
+#' #' @return A fmt vector
 #' @export
 vec_ptype2.double.tabxplor_fmt  <- function(x, y, ...) y # new_fmt() #double()
+#' Find common ptype between fmt and integer
+#' @param x A fmt vector
+#' @param y An integer vector
+#' @param ... Other parameter.
+#' #' @return A fmt vector
 #' @export
 vec_ptype2.tabxplor_fmt.integer <- function(x, y, ...) x # fmt() #double()
+#' Find common ptype between integer and fmt
+#' @param x An integer vector
+#' @param y A fmt vector
+#' @param ... Other parameter.
+#' #' @return A fmt vector
 #' @export
 vec_ptype2.integer.tabxplor_fmt <- function(x, y, ...) y # new_fmt() #double()
 
 # Conversions :
+#' Convert fmt into fmt
+#' @param x A fmt vector
+#' @param to A fmt vector
+#' @param ... Other parameter.
+#' #' @return A fmt vector
 #' @export
 vec_cast.tabxplor_fmt.tabxplor_fmt  <- function(x, to, ...)
   new_fmt(display   = get_display (x),
@@ -1910,6 +2057,11 @@ vec_cast.tabxplor_fmt.tabxplor_fmt  <- function(x, to, ...)
 
   )
 
+#' Convert double into fmt
+#' @param x A double vector
+#' @param to A fmt vector
+#' @param ... Other parameter.
+#' #' @return A fmt vector
 #' @export
 vec_cast.tabxplor_fmt.double   <- function(x, to, ...)
   fmt(n = NA_integer_            ,
@@ -1924,10 +2076,20 @@ vec_cast.tabxplor_fmt.double   <- function(x, to, ...)
       color    = get_color   (to),
 
   )
+#' Convert fmt into double
+#' @param x A fmt vector
+#' @param to A double vector
+#' @param ... Other parameter.
+#' @return A double vector
 #' @method vec_cast.double tabxplor_fmt
 #' @export
 vec_cast.double.tabxplor_fmt  <- function(x, to, ...) get_num(x) %>% as.double() #vctrs::field(x, "pct")
 
+#' Convert integer into fmt
+#' @param x A integer vector
+#' @param to A fmt vector
+#' @param ... Other parameter.
+#' @return A fmt vector
 #' @export
 vec_cast.tabxplor_fmt.integer <- function(x, to, ...)
   fmt(n        = x               ,
@@ -1941,19 +2103,37 @@ vec_cast.tabxplor_fmt.integer <- function(x, to, ...)
       color    = get_color   (to)
 
   ) #new_fmt(pct = as.double(x))
+#' Convert fmt into integer
+#' @param x A integer vector
+#' @param to A fmt vector
+#' @param ... Other parameter.
+#' #' @return An integer vector
 #' @method vec_cast.integer tabxplor_fmt
 #' @export
 vec_cast.integer.tabxplor_fmt    <- function(x, to, ...) get_num(x) %>% as.integer() #vctrs::field(x, "pct") %>% as.integer()
 
+#' Convert fmt into character
+#' @param x A fmt vector
+#' @param to A character vector
+#' @param ... Other parameter
+#' #' @return A character vector
 #' @method vec_cast.character tabxplor_fmt
 #' @export
 vec_cast.character.tabxplor_fmt  <- function(x, to, ...) format(x)
 
 #Comparisons and sorting :
+#' Test equality with fmt vector
+#' @param x A fmt vector
+#' @param ... Other parameter
+#' @return A double vector
 #' @export
 vec_proxy_equal.tabxplor_fmt   <- function(x, ...) {
   get_num(x)
 }
+#' Compare with fmt vector
+#' @param x A fmt vector
+#' @param ... Other parameter
+#' @return A double vector
 #' @export
 vec_proxy_compare.tabxplor_fmt <- function(x, ...) {
   get_num(x)
@@ -1976,12 +2156,15 @@ vec_proxy_compare.tabxplor_fmt <- function(x, ...) {
 #' @param y Second object.
 #' @param ... Other parameter.
 #'
+#' @return A fmt vector
 #' @method vec_arith tabxplor_fmt
 #' @export
 vec_arith.tabxplor_fmt <- function(op, x, y, ...) {
   UseMethod("vec_arith.tabxplor_fmt", y)
 }
 
+#' @describeIn vec_arith.tabxplor_fmt default vec_arith method for fmt
+# @return A fmt vector
 #' @method vec_arith.tabxplor_fmt default
 #' @export
 vec_arith.tabxplor_fmt.default <- function(op, x, y, ...) {
@@ -1992,6 +2175,8 @@ vec_arith.tabxplor_fmt.default <- function(op, x, y, ...) {
 # positive_double <- function(n) n * sign(n)
 # positive_integer <- function(n) as.integer(n * sign(n))
 
+#' @describeIn vec_arith.tabxplor_fmt vec_arith method for fmt + fmt
+# @return A fmt vector
 #' @method vec_arith.tabxplor_fmt tabxplor_fmt
 #' @export
 vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
@@ -2107,6 +2292,8 @@ vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
   )
 }
 
+#' @describeIn vec_arith.tabxplor_fmt vec_arith method for fmt + numeric
+# @return A fmt vector
 #' @method vec_arith.tabxplor_fmt numeric
 #' @export
 vec_arith.tabxplor_fmt.numeric <- function(op, x, y, ...) {
@@ -2120,7 +2307,8 @@ vec_arith.tabxplor_fmt.numeric <- function(op, x, y, ...) {
   #          ci     = vctrs::field(x, "ci"    )                     )
 }
 
-
+#' @describeIn vec_arith.tabxplor_fmt vec_arith method for numeric + fmt
+# @return A fmt vector
 #' @method vec_arith.numeric tabxplor_fmt
 #' @export
 vec_arith.numeric.tabxplor_fmt <- function(op, x, y, ...) {
@@ -2134,6 +2322,8 @@ vec_arith.numeric.tabxplor_fmt <- function(op, x, y, ...) {
   #          ci     = vctrs::field(y, "ci"    )                     )
 }
 
+#' @describeIn vec_arith.tabxplor_fmt vec_arith method for -fmt
+# @return A fmt vector
 #' @method vec_arith.tabxplor_fmt MISSING
 #' @export
 vec_arith.tabxplor_fmt.MISSING <- function(op, x, y, ...) { #unary + and - operators
@@ -2155,6 +2345,11 @@ vec_arith.tabxplor_fmt.MISSING <- function(op, x, y, ...) { #unary + and - opera
 #Mathematical operations :
 # (direct operations on counts,
 # automatically calculate weighted means for pct and means, erase var and ci)
+#' Vec_math method for class fmt
+#' @param .fn A function
+#' @param .x A fmt object
+#' @param ... Other parameter
+#' @return A fmt vector
 #' @export
 vec_math.tabxplor_fmt <- function(.fn, .x, ...) {
   if (!is.na(get_type(.x) ) & get_type(.x) == "mixed") warning(

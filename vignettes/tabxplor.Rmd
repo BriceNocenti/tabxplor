@@ -34,7 +34,7 @@ library(crayon)
 assignInNamespace("num_colors", num_colors, pos = "package:crayon")
 ```
 
-`tabxplor` tries to make it easy to deal with multiple cross-table: to create and manipulate them, but also to read them, using color helpers to highlight important informations, and simplify your experience of data exploration. All functions are `tidyverse` propelled, pipe-friendly, and render `tibble` data frames which can be easily manipulated with `dplyr`. Tables can be exported to Excel with formats and colors.
+`tabxplor` tries to make it easy to deal with multiple cross-tables: to create and manipulate them, but also to read them, using color helpers to highlight important informations, and simplify your experience of data exploration. All functions are `tidyverse` propelled, pipe-friendly, and render `tibble` data frames which can be easily manipulated with `dplyr`. Tables can be exported to Excel and in html with formats and colors.
 
 ## Base usage: cross-tables with color helpers for data exploration
 
@@ -181,7 +181,7 @@ tabs <-
 ```
 
 ## Export to html or Excel
-To export a table to html with colors, tabxplor uses `knitr::kable` and `kableExtra`:
+To export a table to html with colors, tabxplor uses `knitr::kable` and `kableExtra`. In this format differences from totals, confidence intervals, contribution to variance, and unweighted counts, are available in a tooltip at cells hover.
 ``` {r, echo = TRUE} 
 tabs %>% tab_kable()
 

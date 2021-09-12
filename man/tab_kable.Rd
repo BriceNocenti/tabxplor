@@ -19,7 +19,9 @@ background. By default it takes \code{getOption("tabxplor.color_style_type")}.}
 \code{\link[kableExtra:kable_styling]{kableExtra::kable_styling}}.}
 }
 \value{
-An html table (opened in the viewer in RStudio).
+A html table (opened in the viewer in RStudio). Differences from totals,
+confidence intervals, contribution to variance, and unweighted counts,
+are available in an html tooltip at cells hover.
 }
 \description{
 Print a tabxplor table in html

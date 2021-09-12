@@ -10,7 +10,7 @@ Description: Make it easy to deal with multiple cross-tables in data
     exploration, by creating them, manipulating them, and adding color 
     helpers to highlight important informations. All functions are "tidy",
     pipe-friendly, and render data frames which can be easily manipulated.
-    Tables can be exported to Excel with formats and colors.
+    Tables can be exported to Excel and in html with formats and colors.
 URL: https://github.com/BriceNocenti/tabxplor
 BugReports: https://github.com/BriceNocenti/tabxplor/issues
 License: GPL (>= 3)
@@ -44,5 +44,6 @@ Imports:
     pillar (>= 1.6.0),
     methods (>= 4.0.0),
     stats (>= 4.0.0),
-    kableExtra (>= 1.3.0)
+    kableExtra (>= 1.3.0),
+    DescTools (>= 0.99.0)
 VignetteBuilder: knitr

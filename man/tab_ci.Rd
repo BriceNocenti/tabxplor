@@ -9,6 +9,8 @@ tab_ci(
   ci = "auto",
   comp = NULL,
   conf_level = 0.95,
+  method_cell = "wilson",
+  method_diff = "ac",
   color = "no",
   visible = FALSE
 )
@@ -36,6 +38,19 @@ This parameter doesn't affect column percentages.
 
 \item{conf_level}{The confidence level, as a single numeric between 0 and 1.
 Default to 0.95 (95\%).}
+
+\item{method_cell}{Character string specifying which method to use with percentages
+for \code{ci = "cell"}. This can be one out of:
+"wald", "wilson", "wilsoncc", "agresti-coull", "jeffreys", "modified wilson",
+"modified jeffreys", "clopper-pearson", "arcsine", "logit", "witting", "pratt",
+"midp", "lik" and "blaker". Defaults to "wilson".
+See \code{\link[DescTools:BinomCI]{BinomCI}}.}
+
+\item{method_diff}{Character string specifying which method to use with percentages
+for \code{ci = "diff"}. This can be one out of: "wald", "waldcc", "ac", "score",
+"scorecc", "mn", "mee", "blj", "ha", "hal", "jp". Defaults to "ac", Wald interval with
+the adjustment according to Agresti, Caffo for difference in proportions and
+independent samples. See \code{\link[DescTools:BinomDiffCI]{BinomDiffCI}}.}
 
 \item{color}{The type of colors to print, as a single string.
 \itemize{

@@ -4,8 +4,10 @@
 #'
 #' @param tabs A table made with \code{\link{tab}}, \code{\link{tab_many}} or
 #' \code{\link{tab_core}}, or a list of such tables.
-#' @param path,replace,open The name, and possibly the path, of the Excel file
-#' to create (without the .xlsx extension). Default path to working directory.
+#' @param path,replace,open The name, and possibly the path, of the Excel file to
+#' create (possibly without the .xlsx extension). Default path to temporary directory.
+#' Set global option \code{"tabxplor.export_dir"} with \code{link[base:options]{options}}
+#' to change default directory.
 #' Use \code{replace = TRUE} to overwrite existing files. Use \code{open = TRUE}
 #' if you don't want to automatically open the tables in Excel (or another
 #' software associated with .xlsx files).
@@ -34,17 +36,18 @@
 #' @param mean_breaks The breaks used to color means.
 #' @param contrib_breaks The breaks used to color contributions of cells to variance.
 #'
-#' @return The table(s) with formatting and colors in an Excel file.
+#' @return  The table(s) with formatting and colors in an Excel file, as a side effect.
+#'  Invisibly returns \code{tabs}.
 #' @export
 #'
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' forcats::gss_cat %>%
 #'   tab(marital, race, pct = "row", color = "diff") %>%
 #'   tab_xl()
 #'   }
 tab_xl <-
-  function(tabs, path = "Tabs\\Tab", replace = FALSE, open = rlang::is_interactive(),
+  function(tabs, path = NULL, replace = FALSE, open = rlang::is_interactive(),
            colnames_rotation = 0, remove_tab_vars = TRUE,
            colwidth = "auto", print_ci = TRUE, print_color_legend = TRUE,
            sheets = "tabs", min_counts = 30,
@@ -1109,6 +1112,15 @@ tab_xl <-
     }
 
     #Save to file --------------------------------------------------------------
+    if (is.null(path)) {
+      path <- getOption("tabxplor.export_dir")
+      if (is.null(path)) {
+        path <- file.path(tempdir(), "Tab")
+      } else {
+        path <- file.path(path, "Tab")
+      }
+    }
+
     if (stringr::str_detect(path, "\\\\|/")) {
       dir_path <- path %>% stringr::str_remove("\\\\[^\\\\]+$|/[^/]+$")
       if (! dir.exists(dir_path))  dir.create(dir_path, recursive = TRUE)
