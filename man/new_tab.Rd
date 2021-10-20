@@ -27,7 +27,7 @@ new_grouped_tab(
 \arguments{
 \item{tabs}{A table, stored into a \code{\link[tibble]{tibble}} data.frame.
 It is generally made with \code{\link{tab}}, \code{\link{tab_many}}
-or \code{\link{tab_core}}.}
+or \code{\link{tab_plain}}.}
 
 \item{subtext}{A character vector to print legend lines under the table.}
 

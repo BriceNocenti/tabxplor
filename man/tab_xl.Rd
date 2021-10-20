@@ -12,19 +12,17 @@ tab_xl(
   colnames_rotation = 0,
   remove_tab_vars = TRUE,
   colwidth = "auto",
-  print_ci = TRUE,
+  print_ci = FALSE,
   print_color_legend = TRUE,
   sheets = "tabs",
   min_counts = 30,
   hide_near_zero = "auto",
-  pct_breaks = get_color_breaks("pct"),
-  mean_breaks = get_color_breaks("mean"),
-  contrib_breaks = get_color_breaks("contrib")
+  color_type = "text"
 )
 }
 \arguments{
 \item{tabs}{A table made with \code{\link{tab}}, \code{\link{tab_many}} or
-\code{\link{tab_core}}, or a list of such tables.}
+\code{\link{tab_plain}}, or a list of such tables.}
 
 \item{path, replace, open}{The name, and possibly the path, of the Excel file to
 create (possibly without the .xlsx extension). Default path to temporary directory.
@@ -63,18 +61,16 @@ turn pale grey, to make the distribution of empty cells (and other cells) more v
 Provide a number to turn grey every cell below it. Set to \code{Inf} not to use
 this feature.}
 
-\item{pct_breaks}{The breaks used to color percentages.}
-
-\item{mean_breaks}{The breaks used to color means.}
-
-\item{contrib_breaks}{The breaks used to color contributions of cells to variance.}
+\item{color_type}{By default, the background is colored. Set to \code{text} to color
+the text instead.}
 }
 \value{
 The table(s) with formatting and colors in an Excel file, as a side effect.
 Invisibly returns \code{tabs}.
 }
 \description{
-Excel output for tabxplor tables, with formatting and colors
+To modify the colors used into the Excel table, you can change the
+global options with \code{\link{set_color_style}} and \code{\link{set_color_breaks}}.
 }
 \examples{
 \donttest{

@@ -2,6 +2,7 @@
 % Please edit documentation in R/tab.R
 \name{tab_core}
 \alias{tab_core}
+\alias{tab_plain}
 \title{Plain single cross-table}
 \usage{
 tab_core(
@@ -12,7 +13,22 @@ tab_core(
   wt,
   digits = 0,
   subtext = "",
-  is_grouped = FALSE
+  is_grouped = FALSE,
+  num = FALSE,
+  df = FALSE
+)
+
+tab_plain(
+  data,
+  row_var,
+  col_var,
+  ...,
+  wt,
+  digits = 0,
+  subtext = "",
+  is_grouped = FALSE,
+  num = FALSE,
+  df = FALSE
 )
 }
 \arguments{
@@ -35,8 +51,16 @@ are converted to factor.}
 \item{is_grouped}{Set to \code{TRUE} if the data is already grouped. For internal
 use in \code{\link{tab_many}} only, since repeating grouping operations reduce
 performance.}
+
+\item{num}{Set to \code{TRUE} to obtain a table with normal numeric vectors (not fmt).}
+
+\item{df}{Set to \code{TRUE} to obtain a plain data.frame (not a tibble),
+with normal numeric vectors (not fmt). Useful, for example, to pass the table to
+correspondence analysis with \code{\link[FactoMineR:CA]{FactoMineR::CA}}.}
 }
 \value{
+A \code{tibble} of class \code{tabxplor_tab}.
+
 A \code{tibble} of class \code{tabxplor_tab}. If \code{...} (\code{tab_vars})
 are provided, a \code{tab} of class \code{tabxplor_grouped_tab}.
 All non-text columns are \code{\link{fmt}} vectors of class \code{tabxplor_fmt},
@@ -48,13 +72,18 @@ using them in calculations, be sure they are of class \code{character}.
 \description{
 Plain single cross-table
 }
+\section{Functions}{
+\itemize{
+\item \code{tab_core}: deprecated
+}}
+
 \examples{
 # A typical workflow with tabxplor step-by-step functions :
 \donttest{
 data <- dplyr::starwars \%>\% tab_prepare(sex, hair_color)
 
 data \%>\%
-  tab_core(sex, hair_color) \%>\%
+  tab_plain(sex, hair_color) \%>\%
   tab_tot()  \%>\%
   tab_chi2() \%>\%
   tab_pct()  \%>\%

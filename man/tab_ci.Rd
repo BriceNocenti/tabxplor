@@ -16,7 +16,7 @@ tab_ci(
 )
 }
 \arguments{
-\item{tabs}{A \code{tibble} of class \code{tab} made with \code{\link{tab_core}} or
+\item{tabs}{A \code{tibble} of class \code{tab} made with \code{\link{tab_plain}} or
 \code{\link{tab_many}}.}
 
 \item{ci}{The type of ci to calculate. Set to "cell" to calculate absolute confidence
@@ -80,7 +80,7 @@ data <- dplyr::starwars \%>\%
               n_min = 5, na = "keep")
 
 data \%>\%
-  tab_core(sex, hair_color, gender) \%>\%
+  tab_plain(sex, hair_color, gender) \%>\%
   tab_totaltab("line")  \%>\%
   tab_tot()  \%>\%
   tab_pct(comp = "all")  \%>\%

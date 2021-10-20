@@ -107,7 +107,7 @@ Calculate with \code{\link{tab_chi2}}.}
 
 \item{var}{The cells variances, as a double vector the length of \code{n}.
 Used with \code{type = "mean"} to calculate confidence intervals.
-Calculate with \code{tab_core}.}
+Calculate with \code{tab_plain}.}
 
 \item{ci}{The confidence intervals, as a double vector the length of \code{n}.
 Used to print colors (\code{"diff_ci"}, \code{"after_ci"}).

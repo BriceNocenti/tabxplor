@@ -12,7 +12,7 @@ tab_totaltab(
 )
 }
 \arguments{
-\item{tabs}{A \code{tibble} of class \code{tab}, made with \code{\link{tab_core}} or
+\item{tabs}{A \code{tibble} of class \code{tab}, made with \code{\link{tab_plain}} or
 \code{\link{tab_many}}.}
 
 \item{totaltab}{If there are subtables, corresponding to the levels of tab_vars,
@@ -39,7 +39,7 @@ tab_prepare(sex, hair_color, gender, rare_to_other = TRUE,
             n_min = 5, na = "keep")
 
 data \%>\%
-  tab_core(sex, hair_color, gender) \%>\%
+  tab_plain(sex, hair_color, gender) \%>\%
   tab_totaltab("line")
   }
 }

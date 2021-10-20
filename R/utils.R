@@ -37,6 +37,10 @@ NULL
 
   options("tabxplor.export_dir" = NULL)
 
+  options("tabxplor.kable_popover" = FALSE)
+
+  options("tabxplor.ci_print" = "moe") # or "ci"
+
   invisible()
 }
 

@@ -2,7 +2,7 @@
 % Please edit documentation in R/tab.R
 \name{tab_prepare}
 \alias{tab_prepare}
-\title{Prepare data for \code{\link{tab_core}}.}
+\title{Prepare data for \code{\link{tab_plain}}.}
 \usage{
 tab_prepare(
   data,
@@ -19,7 +19,7 @@ tab_prepare(
 \arguments{
 \item{data}{A dataframe.}
 
-\item{row_var, col_vars, tab_vars}{Variables then to be passed in \code{\link{tab_core}}.}
+\item{row_var, col_vars, tab_vars}{Variables then to be passed in \code{\link{tab_plain}}.}
 
 \item{na}{\code{na = "keep"} prints \code{NA}'s as explicit \code{"NA"} level.
 \code{na = "drop"} removes \code{NA} levels before making each table
@@ -43,7 +43,7 @@ than \code{n_min} will be merged into an "Other" level.}
 A modified data.frame.
 }
 \description{
-Prepare data for \code{\link{tab_core}}.
+Prepare data for \code{\link{tab_plain}}.
 }
 \examples{
 \donttest{data <- dplyr::starwars \%>\%

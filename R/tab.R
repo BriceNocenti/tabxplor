@@ -763,7 +763,7 @@ tab_many <- function(data, row_var, col_vars, tab_vars, wt,
   tabs <-
     purrr::pmap(list(col_vars, digits),
                 function(.col_vars, .digits)
-                  tab_core(data, !!row_var, !!.col_vars, !!!tab_vars, wt = !!wt,
+                  tab_plain(data, !!row_var, !!.col_vars, !!!tab_vars, wt = !!wt,
                            digits = .digits)) %>%
     purrr::set_names(col_vars)
 
@@ -953,7 +953,7 @@ tab_many <- function(data, row_var, col_vars, tab_vars, wt,
 #' Spread a tab, passing a tab variable to column
 #'
 #' @param tabs A \code{tibble} of class \code{tab}, made with \code{\link{tab}},
-#' \code{\link{tab_many}} or \code{\link{tab_core}}.
+#' \code{\link{tab_many}} or \code{\link{tab_plain}}.
 #' @param spread_vars <\link[tidyr:tidyr_tidy_select]{tidy-select}>  The tab variables
 #' to pass to column, with a syntax of type \code{c(var1, var2, ...)}.
 #' @param names_prefix String added to the start of every variable name.
@@ -1073,7 +1073,7 @@ tab_spread <- function(tabs, spread_vars, names_prefix, names_sort = FALSE,
 
 #' @describeIn tab_many Get the variables names of a \pkg{tabxplor} \code{tab}
 #' @param tabs A \code{tibble} of class \code{tab}, made with \code{\link{tab}},
-#' \code{\link{tab_many}} or \code{\link{tab_core}}.
+#' \code{\link{tab_many}} or \code{\link{tab_plain}}.
 #' @param vars In `tab_get_vars`, a character vector containing the wanted vars names:
 #' \code{"row_var"}, \code{"col_vars"} or \code{"tab_vars"}.
 #'
@@ -1115,10 +1115,10 @@ tab_get_vars <- function(tabs, vars = c("row_var", "col_vars", "tab_vars")) {
 
 # STEP-BY-STEP FUNCTIONS -----------------------------------------------------------------
 
-#' Prepare data for \code{\link{tab_core}}.
+#' Prepare data for \code{\link{tab_plain}}.
 #'
 #' @param data A dataframe.
-#' @param row_var,col_vars,tab_vars Variables then to be passed in \code{\link{tab_core}}.
+#' @param row_var,col_vars,tab_vars Variables then to be passed in \code{\link{tab_plain}}.
 #' @param cleannames Set to \code{TRUE} to clean levels names, by removing
 #' prefix numbers like \code{"1-"}, and text in parentheses.
 #' @param na \code{na = "keep"} prints \code{NA}'s as explicit \code{"NA"} level.
@@ -1211,8 +1211,61 @@ tab_prepare <-
     data
   }
 
+#' @describeIn tab_plain deprecated
+#' @return A \code{tibble} of class \code{tabxplor_tab}.
+#' @export
+tab_core <- function(data, row_var, col_var, ..., wt,
+                     digits = 0, subtext = "", is_grouped = FALSE,
+                     num = FALSE, df = FALSE) {
+  .Deprecated("tab_plain")
 
+  row_var_quo <- rlang::enquo(row_var)
+  if (quo_miss_na_null_empty_no(row_var_quo)) {
+    data <- data %>% dplyr::mutate(no_row_var = factor("n"))
+    row_var <- rlang::sym("no_row_var")
+  } else {
+    row_var <- rlang::ensym(row_var)
+  }
 
+  col_var_quo <- rlang::enquo(col_var)
+  if (quo_miss_na_null_empty_no(col_var_quo)) {
+    data <- data %>% dplyr::mutate(no_col_var = factor("n"))
+    col_var <- rlang::sym("no_col_var")
+  } else {
+    col_var <- rlang::ensym(col_var)
+  }
+
+  if (missing(...)) {
+    data <- data %>% dplyr::mutate(no_tab_vars = factor(" "))
+    tab_vars <- rlang::syms("no_tab_vars")
+  } else {
+    tab_vars_quo <- rlang::enquos(...)
+
+    NA_tab_vars  <- purrr::map(tab_vars_quo,
+                               ~ is.na(as.character(rlang::get_expr(.)))) %>%
+      purrr::flatten_lgl()
+    if (all(NA_tab_vars) ) {
+      data <- data %>% dplyr::mutate(no_tab_vars = factor(" "))
+      tab_vars <- rlang::syms("no_tab_vars")
+    } else {
+      tab_vars     <- rlang::expr(c(...))
+      pos_tab_vars <- tidyselect::eval_select(tab_vars, data)
+      tab_vars     <- rlang::syms(names(pos_tab_vars))
+    }
+  }
+
+  wt_quo <- rlang::enquo(wt)
+  if (quo_miss_na_null_empty_no(wt_quo)) {
+    data <- data %>% dplyr::mutate(no_weight = factor("n"))
+    wt <- rlang::sym("no_weight")
+  } else {
+    wt <- rlang::ensym(wt)
+  }
+
+  tab_plain(data = data, row_var = !!row_var, col_var = !!col_var, !!!tab_vars, wt = !!wt,
+            digits = digits, subtext = subtext, is_grouped = is_grouped,
+            num = num, df = df)
+}
 
 
 # Group over factors only, to let the opportunity to the user to add character vars
@@ -1220,7 +1273,7 @@ tab_prepare <-
 #Do tidy-dots work with tribble and pmap ?
 # tibble::tribble(~data, ~row_var, ~col_var, ~..., ~wt,
 #                 dat_group123, rlang::as_label(row_var), rlang::as_label(col_var), as.character(tab_vars), rlang::as_label(wt)) %>%
-#   purrr::pmap(tab_core)
+#   purrr::pmap(tab_plain)
 
 #' Plain single cross-table
 # @description
@@ -1237,6 +1290,10 @@ tab_prepare <-
 #' @param is_grouped Set to \code{TRUE} if the data is already grouped. For internal
 #' use in \code{\link{tab_many}} only, since repeating grouping operations reduce
 #' performance.
+#' @param num Set to \code{TRUE} to obtain a table with normal numeric vectors (not fmt).
+#' @param df  Set to \code{TRUE} to obtain a plain data.frame (not a tibble),
+#' with normal numeric vectors (not fmt). Useful, for example, to pass the table to
+#' correspondence analysis with \code{\link[FactoMineR:CA]{FactoMineR::CA}}.
 #'
 #' @return A \code{tibble} of class \code{tabxplor_tab}. If \code{...} (\code{tab_vars})
 #'  are provided, a \code{tab} of class \code{tabxplor_grouped_tab}.
@@ -1252,14 +1309,15 @@ tab_prepare <-
 #' data <- dplyr::starwars %>% tab_prepare(sex, hair_color)
 #'
 #' data %>%
-#'   tab_core(sex, hair_color) %>%
+#'   tab_plain(sex, hair_color) %>%
 #'   tab_tot()  %>%
 #'   tab_chi2() %>%
 #'   tab_pct()  %>%
 #'   tab_ci(color = "after_ci")
 #' }
-tab_core <- function(data, row_var, col_var, ..., wt,
-                     digits = 0, subtext = "", is_grouped = FALSE) {
+tab_plain <- function(data, row_var, col_var, ..., wt,
+                     digits = 0, subtext = "", is_grouped = FALSE,
+                     num = FALSE, df = FALSE) {
 
 
   row_var_quo <- rlang::enquo(row_var)
@@ -1312,10 +1370,14 @@ tab_core <- function(data, row_var, col_var, ..., wt,
   data <- data %>% dplyr::select(!!row_var, !!col_var, !!!tab_vars, !!wt) %>%
     dplyr::with_groups(NULL,
                        ~ dplyr::filter(., dplyr::across(
-                         !!col_var, #!!row_var |  | !!!tab_vars,
-                         ~ ! is.na(.)
+                        tidyselect::all_of(c(rlang::as_name(col_var),
+                                             rlang::as_name(row_var),
+                                             purrr::map_chr(tab_vars, rlang::as_name))),
+                         ~ !is.na(.)
                        ))) %>%
     dplyr::mutate(!!wt := as.numeric(!!wt))
+
+  if (nrow(data) == 0) stop("data is of length 0 (possibly after filter or na = 'drop')")
 
   row_var_type <- ifelse (is.numeric(dplyr::pull(data, !!row_var) ),
                           "numeric", "factor")
@@ -1347,6 +1409,40 @@ tab_core <- function(data, row_var, col_var, ..., wt,
 
   # nlvs <- nlevels(dplyr::pull(data, !!col_var))
 
+  if (df | num) {
+    tabs <-
+      switch(type,
+             "factor"  = data %>%
+               dplyr::summarise(nums = sum(!!wt, na.rm = TRUE), .groups = 'drop') %>%
+               tidyr::pivot_wider(names_from = !!col_var, values_from = .data$nums, values_fill = 0),
+
+             "numeric" = data %>%
+               dplyr::summarise(!!num_var := stats::weighted.mean(!!num_var, !!wt, na.rm = TRUE),
+                                .groups = "drop")
+      ) %>%
+      select(-tidyselect::any_of("no_tab_vars"))
+
+    if (df) {
+      text_cols <- tabs %>% purrr::map_lgl(~ !is.double(.))
+      text_cols <- names(text_cols)[which(text_cols)]
+      new_rownames  <- paste0(text_cols, collapse = "_")
+
+      if (length(text_cols) >= 2) {
+        tabs <- tabs %>%
+          dplyr::mutate(!!new_rownames :=
+                          paste(!!!purrr::map(text_cols, rlang::sym), sep = "_")) %>%
+          dplyr::select(-tidyselect::all_of(text_cols)) %>%
+          dplyr::relocate(where(is.character), .before = 1) %>%
+          tibble::column_to_rownames(var = new_rownames)
+      } else {
+        tabs <- tabs %>% tibble::column_to_rownames(var = rlang::as_name(row_var))
+      }
+
+    }
+
+    return(tabs)
+  }
+
   tabs <-
     switch(type,
            "factor"  = data %>%
@@ -1354,7 +1450,7 @@ tab_core <- function(data, row_var, col_var, ..., wt,
                display = dplyr::if_else(wt == "no_weight", "n", "wn"),
                digits  = as.integer(digits)     ,
                n       = dplyr::n()             ,
-               wn      = sum(!!wt)              ,
+               wn      = sum(!!wt, na.rm = TRUE)              ,
                type    = "n"                    ,
                col_var = rlang::as_name(col_var)
              ),
@@ -1367,9 +1463,9 @@ tab_core <- function(data, row_var, col_var, ..., wt,
                display = "mean"                                      ,
                digits  = as.integer(digits)                          ,
                n       = dplyr::n()                                  ,
-               wn      = sum(!!wt)                                   ,
+               wn      = sum(!!wt, na.rm = TRUE)                                   ,
                mean    = stats::weighted.mean(!!num_var, !!wt, na.rm = TRUE),
-               var     = weighted.var (!!num_var, !!wt, na.rm = TRUE),
+               var     = weighted.var(!!num_var, !!wt, na.rm = TRUE),
                type    = "mean"                                      ,
                col_var = rlang::as_name(col_var)
              ),
@@ -1389,7 +1485,6 @@ tab_core <- function(data, row_var, col_var, ..., wt,
   #   }
   # }
 
-
   tab_var_1lv <- all(purrr::map_lgl(dplyr::select(tabs, !!!tab_vars),
                                     ~ nlevels(forcats::fct_drop(.)) == 1))
 
@@ -1406,7 +1501,7 @@ tab_core <- function(data, row_var, col_var, ..., wt,
 
 #' Add total table to a \code{\link[tabxplor]{tab}}
 #'
-#' @param tabs A \code{tibble} of class \code{tab}, made with \code{\link{tab_core}} or
+#' @param tabs A \code{tibble} of class \code{tab}, made with \code{\link{tab_plain}} or
 #' \code{\link{tab_many}}.
 #' @param totaltab If there are subtables, corresponding to the levels of tab_vars,
 #' \code{totaltab = "table"} add a complete total table.
@@ -1426,7 +1521,7 @@ tab_core <- function(data, row_var, col_var, ..., wt,
 #'             n_min = 5, na = "keep")
 #'
 #' data %>%
-#'   tab_core(sex, hair_color, gender) %>%
+#'   tab_plain(sex, hair_color, gender) %>%
 #'   tab_totaltab("line")
 #'   }
 tab_totaltab <- function(tabs, totaltab = c("table", "line", "no"),
@@ -1492,9 +1587,9 @@ tab_totaltab <- function(tabs, totaltab = c("table", "line", "no"),
 
     mean_calc <- switch(
       totaltab[1],
-      "table" = purrr::map(mean_vars, ~ tab_core(data, !!row_var,
+      "table" = purrr::map(mean_vars, ~ tab_plain(data, !!row_var,
                                                  col_var = !!rlang::sym(.))),
-      "line" = purrr::map(mean_vars, ~tab_core(data, col_var = !!rlang::sym(.)))
+      "line" = purrr::map(mean_vars, ~tab_plain(data, col_var = !!rlang::sym(.)))
     )
 
     mean_calc <-
@@ -1536,7 +1631,7 @@ tab_totaltab <- function(tabs, totaltab = c("table", "line", "no"),
 
 #' Add totals to a \code{\link[tabxplor]{tab}}
 # @description
-#' @param tabs A \code{tibble} of class \code{tab}, made with \code{\link{tab_core}} or
+#' @param tabs A \code{tibble} of class \code{tab}, made with \code{\link{tab_plain}} or
 #' \code{\link{tab_many}}.
 #' @param tot \code{c("col", "row")} and \code{"both"} print total rows and total columns.
 #'  Set to \code{"row"} or \code{"col"} to print only one type.
@@ -1556,7 +1651,7 @@ tab_totaltab <- function(tabs, totaltab = c("table", "line", "no"),
 #' @examples \donttest{data <- dplyr::starwars %>% tab_prepare(sex, hair_color)
 #'
 #' data %>%
-#'   tab_core(sex, hair_color) %>%
+#'   tab_plain(sex, hair_color) %>%
 #'   tab_tot("col", totcol = "each")
 #'   }
 tab_tot <- function(tabs, tot = c("row", "col"), name = "Total",
@@ -1642,7 +1737,7 @@ tab_tot <- function(tabs, tot = c("row", "col"), name = "Total",
       mean_names <- names(mean_vars[mean_vars])
 
       mean_calc <-
-        purrr::map(mean_names, ~ tab_core(data, row_var = NA_character_,
+        purrr::map(mean_names, ~ tab_plain(data, row_var = NA_character_,
                                           col_var = !!rlang::sym(.),
                                           purrr::map_chr(tab_vars, as.character))
         )
@@ -1660,7 +1755,7 @@ tab_tot <- function(tabs, tot = c("row", "col"), name = "Total",
       if (general_totrow_condition) {
         general_totrow <-
           purrr::map(mean_names,
-                     ~ tab_core(data, row_var = NA_character_,
+                     ~ tab_plain(data, row_var = NA_character_,
                                 col_var = tidyselect::all_of(.))
           )
 
@@ -1747,7 +1842,7 @@ tab_tot <- function(tabs, tot = c("row", "col"), name = "Total",
 
 #' Add percentages and diffs to a \code{\link[tabxplor]{tab}}
 #'
-#' @param tabs A \code{tibble} of class \code{tab} made with \code{\link{tab_core}} or
+#' @param tabs A \code{tibble} of class \code{tab} made with \code{\link{tab_plain}} or
 #' \code{\link{tab_many}}.
 #' @param pct The type of percentages to calculate. \code{"row"} draw row percentages.
 #' Set to \code{"col"} for column percentages. Set to \code{"all"} for frequencies
@@ -1785,7 +1880,7 @@ tab_tot <- function(tabs, tot = c("row", "col"), name = "Total",
 #'               n_min = 5, na = "keep")
 #'
 #' data %>%
-#'   tab_core(sex, hair_color, gender) %>%
+#'   tab_plain(sex, hair_color, gender) %>%
 #'   tab_totaltab("line")  %>%
 #'   tab_tot() %>%
 #'   tab_pct("row", comp = "all", color = TRUE)
@@ -2054,7 +2149,7 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
 #Ci spread (negative numbers mean no significant difference)
 #' Add confidence intervals to a \code{\link[tabxplor]{tab}}
 #'
-#' @param tabs A \code{tibble} of class \code{tab} made with \code{\link{tab_core}} or
+#' @param tabs A \code{tibble} of class \code{tab} made with \code{\link{tab_plain}} or
 #' \code{\link{tab_many}}.
 #' @param ci The type of ci to calculate. Set to "cell" to calculate absolute confidence
 #' intervals. Set to "diff" to calculate the confidence intervals of the difference
@@ -2107,7 +2202,7 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
 #'               n_min = 5, na = "keep")
 #'
 #' data %>%
-#'   tab_core(sex, hair_color, gender) %>%
+#'   tab_plain(sex, hair_color, gender) %>%
 #'   tab_totaltab("line")  %>%
 #'   tab_tot()  %>%
 #'   tab_pct(comp = "all")  %>%
@@ -2418,7 +2513,7 @@ tab_ci <- function(tabs,
 
 #' Add Chi2 summaries to a \code{\link[tabxplor]{tab}}
 #'
-#' @param tabs A \code{tibble} of class \code{tab}, made with \code{\link{tab_core}} or
+#' @param tabs A \code{tibble} of class \code{tab}, made with \code{\link{tab_plain}} or
 #' \code{\link{tab_many}}.
 #' @param calc By default all elements of the Chi2 summary are calculated :
 #' contributions to variance, pvalue, variance and unweighted count. You can choose which
@@ -2450,7 +2545,7 @@ tab_ci <- function(tabs,
 #'               n_min = 5, na = "keep")
 #'
 #' data %>%
-#'   tab_core(sex, hair_color, gender) %>%
+#'   tab_plain(sex, hair_color, gender) %>%
 #'   tab_totaltab("line")  %>%
 #'   tab_tot()  %>%
 #'   tab_chi2(calc = c("p", "ctr"), color = TRUE)

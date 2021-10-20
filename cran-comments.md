@@ -1,13 +1,5 @@
-## Resubmission
-This is a second resubmission. In this version I have, as suggested by Uwe Ligges and Julia Haider (thanks to them) :
-
-* Added `\value` and parameters to .Rd files regarding exported methods, and to functions with missing Rd-tags.
-
-* Replaced `\dontrun{}` by `\donttest` when used in examples that can in fact be executed (tab_xl.Rd), since the 5 seconds limit is nearly reached.
-
-* Ensured functions do not write by default or in examples/vignettes/tests in the user's home filespace, by using `tempdir()` (in `tab_xl`, which exports tables to Excel, and in tests and examples for this function).
-
-* Passed from travis-ci to github actions, which removes the "URL Not Found" note in the travis readme badge.
+## New version (with bug corrections)
+This is the first submission (of the second version to be submitted to CRAN). 
 
 ## Test environments
 * local Windows 10 install, R 4.1.1 and R devel (4.2.0)
@@ -21,7 +13,7 @@ This is a second resubmission. In this version I have, as suggested by Uwe Ligge
    - Fedora Linux, R-devel, clang, gfortran, 
    (Build ID: tabxplor_1.0.1.tar.gz-2cb8f9d1de234aec8f85a01c6f71a946)
 
-* https://win-builder.r-project.org/k582lkjFeCFd/ : 
+* https://win-builder.r-project.org/9rMIuFnkUF8O/ : 
    - Windows x86_64-w64-mingw32 (64-bit), R-devel
 
 ## R CMD check results
@@ -37,4 +29,4 @@ This is a second resubmission. In this version I have, as suggested by Uwe Ligge
         New submission
 
 ## Downstream dependencies
-There are currently no downstream dependencies for this package.
+The only downstream dependency is with de package `ggfacto`, which have been submitted to CRAN by myself today (=> it works).

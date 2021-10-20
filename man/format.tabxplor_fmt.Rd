@@ -4,15 +4,17 @@
 \alias{format.tabxplor_fmt}
 \title{Print method for class tabxplor_fmt}
 \usage{
-\method{format}{tabxplor_fmt}(x, ...)
+\method{format}{tabxplor_fmt}(x, ..., html = FALSE)
 }
 \arguments{
 \item{x}{A fmt object.}
 
-\item{...}{Other parameter.}
+\item{...}{Other parameters.}
+
+\item{html}{Should html tags be added (to print confidence intervals as subscripts) ?}
 }
 \value{
-The fmt printed.
+The fmt printed in a character vector.
 }
 \description{
 Print method for class tabxplor_fmt

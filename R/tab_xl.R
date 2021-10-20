@@ -1,9 +1,9 @@
 
-
 #' Excel output for tabxplor tables, with formatting and colors
-#'
+#' @description To modify the colors used into the Excel table, you can change the
+#' global options with \code{\link{set_color_style}} and \code{\link{set_color_breaks}}.
 #' @param tabs A table made with \code{\link{tab}}, \code{\link{tab_many}} or
-#' \code{\link{tab_core}}, or a list of such tables.
+#' \code{\link{tab_plain}}, or a list of such tables.
 #' @param path,replace,open The name, and possibly the path, of the Excel file to
 #' create (possibly without the .xlsx extension). Default path to temporary directory.
 #' Set global option \code{"tabxplor.export_dir"} with \code{link[base:options]{options}}
@@ -32,9 +32,11 @@
 #' turn pale grey, to make the distribution of empty cells (and other cells) more visible.
 #' Provide a number to turn grey every cell below it. Set to \code{Inf} not to use
 #' this feature.
-#' @param pct_breaks The breaks used to color percentages.
-#' @param mean_breaks The breaks used to color means.
-#' @param contrib_breaks The breaks used to color contributions of cells to variance.
+#' @param color_type By default, the background is colored. Set to \code{text} to color
+#' the text instead.
+# @param pct_breaks The breaks used to color percentages.
+# @param mean_breaks The breaks used to color means.
+# @param contrib_breaks The breaks used to color contributions of cells to variance.
 #'
 #' @return  The table(s) with formatting and colors in an Excel file, as a side effect.
 #'  Invisibly returns \code{tabs}.
@@ -49,13 +51,13 @@
 tab_xl <-
   function(tabs, path = NULL, replace = FALSE, open = rlang::is_interactive(),
            colnames_rotation = 0, remove_tab_vars = TRUE,
-           colwidth = "auto", print_ci = TRUE, print_color_legend = TRUE,
+           colwidth = "auto", print_ci = FALSE, print_color_legend = TRUE,
            sheets = "tabs", min_counts = 30,
-           hide_near_zero = "auto", #c("auto", 0.0049, Inf),
-
-           pct_breaks     = get_color_breaks("pct"),
-           mean_breaks    = get_color_breaks("mean"),
-           contrib_breaks = get_color_breaks("contrib") #c(1, 2, 5, -1,-2, -5)
+           hide_near_zero = "auto", #, #c("auto", 0.0049, Inf),
+           color_type = "text"
+           # pct_breaks     = get_color_breaks("pct"),
+           # mean_breaks    = get_color_breaks("mean"),
+           # contrib_breaks = get_color_breaks("contrib") #c(1, 2, 5, -1,-2, -5)
   ) {
     if (!requireNamespace("openxlsx", quietly = TRUE)) {
       stop(paste0("Package \"openxlsx\" needed for this function to work. ",
@@ -63,9 +65,9 @@ tab_xl <-
            call. = FALSE)
     }
 
-     stopifnot(length(pct_breaks   ) >= 1,
-              length(mean_breaks   ) >= 1,
-              length(contrib_breaks) >= 1 )
+    # stopifnot(length(pct_breaks   ) >= 1,
+    #          length(mean_breaks   ) >= 1,
+    #          length(contrib_breaks) >= 1 )
 
     tabs_base <- tabs
     if (is.data.frame(tabs)) tabs <- list(tabs)
@@ -120,92 +122,122 @@ tab_xl <-
 
 
     # conditional formatting styles
-    # Above mean : shades of green  (for example, 5% to 35%)
-    st_plus1  <- openxlsx::createStyle(fgFill = "#e6f2e6")            #f2f9f2  #b3d9b5
-    st_plus2  <- openxlsx::createStyle(fgFill = "#b3d9b5")            #b3d9b5  #8ec690
-    st_plus3  <- openxlsx::createStyle(fgFill = "#82c083")            #68b36b  #68b36b
-    st_plus4  <- openxlsx::createStyle(fgFill = "#48ad4c")            #3c903f  #43a047
-    st_plus5  <- openxlsx::createStyle(fgFill = "#3a8a3d")            #2c5e2c  #3c903f   #fontColour = "#ffffff"
+    # # Above mean : shades of green  (for example, 5% to 35%)
+    # st_plus1  <- openxlsx::createStyle(fgFill = "#e6f2e6")            #f2f9f2  #b3d9b5
+    # st_plus2  <- openxlsx::createStyle(fgFill = "#b3d9b5")            #b3d9b5  #8ec690
+    # st_plus3  <- openxlsx::createStyle(fgFill = "#82c083")            #68b36b  #68b36b
+    # st_plus4  <- openxlsx::createStyle(fgFill = "#48ad4c")            #3c903f  #43a047
+    # st_plus5  <- openxlsx::createStyle(fgFill = "#3a8a3d")            #2c5e2c  #3c903f   #fontColour = "#ffffff"
+    #
+    # # Below mean : shades of orange (for example, -5% to -35%)
+    # st_minus1 <- openxlsx::createStyle(fgFill = "#ffeddf")  #fff6ef   #ffeddf     #fbcaa2   #f7c3c2
+    # st_minus2 <- openxlsx::createStyle(fgFill = "#fbcaa2")            #fbcaa2     #f9b57d   #f4afae
+    # st_minus3 <- openxlsx::createStyle(fgFill = "#fcb073")            #f7a058     #f7a058   #ef8885
+    # st_minus4 <- openxlsx::createStyle(fgFill = "#de873f")  #b66f36   #de873f     #f79646   #ea605d
+    # st_minus5 <- openxlsx::createStyle(fgFill = "#c36a21")  #b66f36               #de873f   #e53935   #, fontColour = "#ffffff"
+    #
+    # st_plus1_ci  <- openxlsx::createStyle(fontColour = "#2e6e31")
+    # st_minus1_ci <- openxlsx::createStyle(fontColour = "#9c551a")
+    #
+    # style_pos <- c("st_plus1", "st_plus2", "st_plus3", "st_plus4", "st_plus5")
+    # style_neg <- c("st_minus1" , "st_minus2", "st_minus3", "st_minus4",
+    #                "st_minus5")
+    #
+    # lbrk <- max(length(pct_breaks), length(mean_breaks), length(contrib_breaks))
+    #
+    # pct_ci_breaks  <- pct_breaks - pct_breaks[1]
+    # mean_ci_breaks <- mean_breaks/mean_breaks[1]
+    #
+    #  if (lbrk >= 2) {
+    #   pct_brksup     <- c(pct_breaks    [2:lbrk], Inf)
+    #   mean_brksup    <- c(mean_breaks   [2:lbrk], Inf)
+    #   contrib_brksup <- c(contrib_breaks[2:lbrk], Inf)
+    #   pct_ci_brksup  <- c(pct_ci_breaks [2:lbrk], Inf)
+    #   mean_ci_brksup <- c(mean_ci_breaks[2:lbrk], Inf)
+    # } else {
+    #   pct_brksup <- mean_brksup <- contrib_brksup <-
+    #     pct_ci_brksup <- mean_ci_brksup <- Inf
+    # }
+    #
+    # pct_breaks     <- c(pct_breaks    ,
+    #                     rep(NA_real_, lbrk - length(pct_breaks)))
+    # mean_breaks    <- c(mean_breaks   ,
+    #                     rep(NA_real_, lbrk - length(mean_breaks)))
+    # contrib_breaks <- c(contrib_breaks,
+    #                     rep(NA_real_, lbrk - length(contrib_breaks)))
+    #
+    # style_select <- switch(lbrk,
+    #                        "1" = 2,
+    #                        "2" = c(2, 4),
+    #                        "3" = c(1, 3, 4),
+    #                        "4" = 1:4,
+    #                        "5" = 1:5
+    # )
+    #
+    # style_pos <- style_pos[style_select] %>% c(rep(NA_real_, lbrk - length(.)))
+    # style_neg <- style_neg[style_select] %>% c(rep(NA_real_, lbrk - length(.)))
+    #
+    # if (lbrk > 5) {
+    #   warning("length of color breaks > 5 : only the first 5 taken")
+    #   lbrk <- 5
+    #   pct_breaks     <- pct_breaks    [1:5]
+    #   mean_breaks    <- mean_breaks   [1:5]
+    #   contrib_breaks <- contrib_breaks[1:5]
+    # }
+    #
+    # pct_breaks         <- pct_breaks      %>% c(., -.)
+    # mean_breaks        <- mean_breaks     %>% c(., 1/.)
+    # contrib_breaks     <- contrib_breaks  %>% c(., -.)
+    # pct_ci_breaks      <- pct_ci_breaks   %>% c(., -.)
+    # mean_ci_breaks     <- mean_ci_breaks  %>% c(., -.) #then - again
+    #
+    # pct_brksup     <- pct_brksup       %>% c(., -.)
+    # mean_brksup    <- mean_brksup      %>% c(., 1/.)
+    # contrib_brksup <- contrib_brksup   %>% c(., -.)
+    # pct_ci_brksup  <- pct_ci_brksup    %>% c(., -.)
+    # mean_ci_brksup <- mean_ci_brksup   %>% c(., -.) #then - again
 
-    # Below mean : shades of orange (for example, -5% to -35%)
-    st_minus1 <- openxlsx::createStyle(fgFill = "#ffeddf")  #fff6ef   #ffeddf     #fbcaa2   #f7c3c2
-    st_minus2 <- openxlsx::createStyle(fgFill = "#fbcaa2")            #fbcaa2     #f9b57d   #f4afae
-    st_minus3 <- openxlsx::createStyle(fgFill = "#fcb073")            #f7a058     #f7a058   #ef8885
-    st_minus4 <- openxlsx::createStyle(fgFill = "#de873f")  #b66f36   #de873f     #f79646   #ea605d
-    st_minus5 <- openxlsx::createStyle(fgFill = "#c36a21")  #b66f36               #de873f   #e53935   #, fontColour = "#ffffff"
-
-    st_plus1_ci  <- openxlsx::createStyle(fontColour = "#2e6e31")
-    st_minus1_ci <- openxlsx::createStyle(fontColour = "#9c551a")
-
-    style_pos <- c("st_plus1", "st_plus2", "st_plus3", "st_plus4", "st_plus5")
-    style_neg <- c("st_minus1" , "st_minus2", "st_minus3", "st_minus4",
-                   "st_minus5")
-
-    lbrk <- max(length(pct_breaks), length(mean_breaks), length(contrib_breaks))
-
-    pct_ci_breaks  <- pct_breaks - pct_breaks[1]
-    mean_ci_breaks <- mean_breaks/mean_breaks[1]
-
-     if (lbrk >= 2) {
-      pct_brksup     <- c(pct_breaks    [2:lbrk], Inf)
-      mean_brksup    <- c(mean_breaks   [2:lbrk], Inf)
-      contrib_brksup <- c(contrib_breaks[2:lbrk], Inf)
-      pct_ci_brksup  <- c(pct_ci_breaks [2:lbrk], Inf)
-      mean_ci_brksup <- c(mean_ci_breaks[2:lbrk], Inf)
-    } else {
-      pct_brksup <- mean_brksup <- contrib_brksup <-
-        pct_ci_brksup <- mean_ci_brksup <- Inf
+    colorToStyle <- function(x) {
+      if (color_type == "text") {
+        openxlsx::createStyle(fontColour = x, textDecoration = "bold")
+      } else {
+        openxlsx::createStyle(fgFill = x)
+      }
     }
 
-    pct_breaks     <- c(pct_breaks    ,
-                        rep(NA_real_, lbrk - length(pct_breaks)))
-    mean_breaks    <- c(mean_breaks   ,
-                        rep(NA_real_, lbrk - length(mean_breaks)))
-    contrib_breaks <- c(contrib_breaks,
-                        rep(NA_real_, lbrk - length(contrib_breaks)))
+    #tabxplor_color_breaks <- getOption("tabxplor.color_breaks")
 
-    style_select <- switch(lbrk,
-                           "1" = 2,
-                           "2" = c(2, 4),
-                           "3" = c(1, 3, 4),
-                           "4" = 1:4,
-                           "5" = 1:5
-    )
+    styles <- get_color_style("color_code", theme = "light", type = color_type)
 
-    style_pos <- style_pos[style_select] %>% c(rep(NA_real_, lbrk - length(.)))
-    style_neg <- style_neg[style_select] %>% c(rep(NA_real_, lbrk - length(.)))
+    pos1 <- colorToStyle(styles["pos1"])
+    pos2 <- colorToStyle(styles["pos2"])
+    pos3 <- colorToStyle(styles["pos3"])
+    pos4 <- colorToStyle(styles["pos4"])
+    pos5 <- colorToStyle(styles["pos5"])
+    neg1 <- colorToStyle(styles["neg1"])
+    neg2 <- colorToStyle(styles["neg2"])
+    neg3 <- colorToStyle(styles["neg3"])
+    neg4 <- colorToStyle(styles["neg4"])
+    neg5 <- colorToStyle(styles["neg5"])
 
-    if (lbrk > 5) {
-      warning("length of color breaks > 5 : only the first 5 taken")
-      lbrk <- 5
-      pct_breaks     <- pct_breaks    [1:5]
-      mean_breaks    <- mean_breaks   [1:5]
-      contrib_breaks <- contrib_breaks[1:5]
-    }
+    styles <- names(styles) #[select_in_color_style(length(tabxplor_color_breaks[[1]]))]
 
-    pct_breaks         <- pct_breaks      %>% c(., -.)
-    mean_breaks        <- mean_breaks     %>% c(., 1/.)
-    contrib_breaks     <- contrib_breaks  %>% c(., -.)
-    pct_ci_breaks      <- pct_ci_breaks   %>% c(., -.)
-    mean_ci_breaks     <- mean_ci_breaks  %>% c(., -.) #then - again
+    #sign  <- c(rep(">", length(styles)/2L), rep("<", length(styles)/2L))
 
-    pct_brksup     <- pct_brksup       %>% c(., -.)
-    mean_brksup    <- mean_brksup      %>% c(., 1/.)
-    contrib_brksup <- contrib_brksup   %>% c(., -.)
-    pct_ci_brksup  <- pct_ci_brksup    %>% c(., -.)
-    mean_ci_brksup <- mean_ci_brksup   %>% c(., -.) #then - again
-
-    style <- c(style_pos, style_neg)
-
-    sign = c(rep(">", lbrk), rep("<", lbrk))
-
-    conditional_fmt_styles <- tibble::tibble(
-      style, sign,
-      pct_breaks, mean_breaks, contrib_breaks,
-      pct_ci_breaks, mean_ci_breaks,
-      pct_brksup, mean_brksup, contrib_brksup,
-      pct_ci_brksup, mean_ci_brksup
-    )
+    # conditional_fmt_styles <- tibble::tibble(
+    #   styles,
+    #   sign,
+    #   pct_breaks     = tabxplor_color_breaks$pct_breaks    ,
+    #   mean_breaks    = tabxplor_color_breaks$mean_breaks   ,
+    #   contrib_breaks = tabxplor_color_breaks$contrib_breaks,
+    #   pct_ci_breaks  = tabxplor_color_breaks$pct_ci_breaks ,
+    #   mean_ci_breaks = tabxplor_color_breaks$mean_ci_breaks,
+    #   pct_brksup     = tabxplor_color_breaks$pct_brksup    ,
+    #   mean_brksup    = tabxplor_color_breaks$mean_brksup   ,
+    #   contrib_brksup = tabxplor_color_breaks$contrib_brksup,
+    #   pct_ci_brksup  = tabxplor_color_breaks$pct_ci_brksup ,
+    #   mean_ci_brksup = tabxplor_color_breaks$mean_ci_brksup,
+    # )
 
     subtext      <- purrr::map(tabs, get_subtext) #need breaks calculation first
     if (print_color_legend == TRUE) {
@@ -466,8 +498,8 @@ tab_xl <-
 
     sheet_titles <-
       purrr::pmap_chr(list(tabs,
-                      purrr::map(row_var[newsheet], as.character),
-                      purrr::map(col_vars[newsheet], as.character)),
+                           purrr::map(row_var[newsheet], as.character),
+                           purrr::map(col_vars[newsheet], as.character)),
                       ~ tab_get_titles(..1, ..2, ..3, max = 1)
       ) %>% stringr::str_sub(., 1, 27)
 
@@ -933,19 +965,28 @@ tab_xl <-
 
 
     #conditional formatting (made with normal color formatting) ----------------
+    # color_selections <-
+    #   purrr::map2(tabs, color_cols, ~ purrr::map(
+    #     .x[.y],
+    #     ~ fmt_color_selection(., force_breaks = conditional_fmt_styles) %>%
+    #       purrr::map(which)
+    #   ) )
+
     color_selections <-
       purrr::map2(tabs, color_cols, ~ purrr::map(
         .x[.y],
-        ~ fmt_color_selection(., force_breaks = conditional_fmt_styles) %>%
-          purrr::map(which)
+        ~ fmt_color_selection(.) %>% purrr::map(which)
       ) )
 
     conditional_fmt_map <-
       tibble::tibble(sheet, cols = color_cols, rows = color_selections,
                      start, offset) %>%
       tidyr::unnest(c(.data$cols, .data$rows)) %>%
-      tibble::add_column(style = list(style)) %>%
+      dplyr::mutate(style = purrr::map(.data$rows, ~ select_in_color_style(length(.))),
+                    style = purrr::map(.data$style, ~ styles[.])) %>%
+      # tibble::add_column(style = list(style)) %>%
       tidyr::unnest(c(.data$rows, .data$style)) %>%
+      #tidyr::unnest(.data$rows) %>%
       dplyr::filter(purrr::map_lgl(.data$rows, ~ length(.) != 0)) %>%
       dplyr::mutate(cols  = purrr::map2(.data$cols, .data$rows,
                                         ~ rep(.x, length(.y))),
@@ -966,54 +1007,54 @@ tab_xl <-
           style = rlang::eval_tidy(rlang::sym(style))
         ))
 
-    if (any(!no_ci)) {
-      color_selections_ci <-
-        purrr::map2(tabs_ci[!no_ci], color_cols[!no_ci], ~ purrr::map(
-          .x[.y],
-          ~ fmt_color_selection(
-            ., force_breaks =
-              conditional_fmt_styles[c(1, nrow(conditional_fmt_styles)/2+1),]) %>%
-            purrr::map(which)
-        ) )
-
-      conditional_fmt_map <-
-        tibble::tibble(sheet = sheet[!no_ci],
-                       cols = purrr::map2(color_cols[!no_ci], offset[!no_ci],
-                                          ~ .x + .y),
-                       rows = color_selections_ci, start) %>%
-        tidyr::unnest(c(.data$cols, .data$rows)) %>%
-        tibble::add_column(style = list(
-          paste0(   .data$style[c(1, length(.data$style)/2 + 1)],    "_ci") #.data$ ??
-        )) %>%
-        tidyr::unnest(c(.data$rows, .data$style)) %>%
-        dplyr::filter(purrr::map_lgl(.data$rows, ~ length(.) != 0)) %>%
-        dplyr::mutate(cols  = purrr::map2(.data$cols, .data$rows,
-                                          ~ rep(.x, length(.y))),
-                      rows  = purrr::map2(.data$rows, .data$start, ~ .x + .y + 1L)) %>%
-        dplyr::group_by(.data$sheet, .data$style) %>%
-        dplyr::summarise(cols = list(.data$cols), rows = list(.data$rows),
-                         offset = .data$offset[1],
-                         .groups = "drop") %>%
-        dplyr::mutate(dplyr::across(tidyselect::all_of(c("cols", "rows")),
-                                    ~ purrr::map(., purrr::flatten_int)))
-
-      conditional_fmt_map %>%
-        dplyr::select(.data$sheet, .data$rows, .data$cols, .data$style) %>%
-        purrr::pwalk(function(sheet, cols, rows, style)
-          openxlsx::addStyle(
-            wb = wb, stack = TRUE,
-            sheet = sheet, cols = cols, rows = rows,
-            style = rlang::eval_tidy(rlang::sym(style))
-          ))
-
-      st_ci_ref <- openxlsx::createStyle(fontColour = "black")
-
-      ci_ref_map %>%
-        dplyr::select(sheet, cols = .data$startCol, rows = .data$startRow) %>%
-        purrr::pwalk(openxlsx::addStyle, wb = wb, stack = TRUE,
-                     style = st_ci_ref)
-
-    }
+    # if (any(!no_ci)) {
+    #   color_selections_ci <-
+    #     purrr::map2(tabs_ci[!no_ci], color_cols[!no_ci], ~ purrr::map(
+    #       .x[.y],
+    #       ~ fmt_color_selection(
+    #         ., force_breaks =
+    #           conditional_fmt_styles[c(1, nrow(conditional_fmt_styles)/2+1),]) %>%
+    #         purrr::map(which)
+    #     ) )
+    #
+    #   conditional_fmt_map <-
+    #     tibble::tibble(sheet = sheet[!no_ci],
+    #                    cols = purrr::map2(color_cols[!no_ci], offset[!no_ci],
+    #                                       ~ .x + .y),
+    #                    rows = color_selections_ci, start) %>%
+    #     tidyr::unnest(c(.data$cols, .data$rows)) %>%
+    #     tibble::add_column(style = list(
+    #       paste0(   style[c(1, length(style)/2 + 1)],    "_ci") #.data$ ??
+    #     )) %>%
+    #     tidyr::unnest(c(.data$rows, .data$style)) %>%
+    #     dplyr::filter(purrr::map_lgl(.data$rows, ~ length(.) != 0)) %>%
+    #     dplyr::mutate(cols  = purrr::map2(.data$cols, .data$rows,
+    #                                       ~ rep(.x, length(.y))),
+    #                   rows  = purrr::map2(.data$rows, .data$start, ~ .x + .y + 1L)) %>%
+    #     dplyr::group_by(.data$sheet, .data$style) %>%
+    #     dplyr::summarise(cols = list(.data$cols), rows = list(.data$rows),
+    #                      offset = offset[1],
+    #                      .groups = "drop") %>%
+    #     dplyr::mutate(dplyr::across(tidyselect::all_of(c("cols", "rows")),
+    #                                 ~ purrr::map(., purrr::flatten_int)))
+    #
+    #   conditional_fmt_map %>%
+    #     dplyr::select(.data$sheet, .data$rows, .data$cols, .data$style) %>%
+    #     purrr::pwalk(function(sheet, cols, rows, style)
+    #       openxlsx::addStyle(
+    #         wb = wb, stack = TRUE,
+    #         sheet = sheet, cols = cols, rows = rows,
+    #         style = rlang::eval_tidy(rlang::sym(style))
+    #       ))
+    #
+    #   st_ci_ref <- openxlsx::createStyle(fontColour = "black")
+    #
+    #   ci_ref_map %>%
+    #     dplyr::select(sheet, cols = .data$startCol, rows = .data$startRow) %>%
+    #     purrr::pwalk(openxlsx::addStyle, wb = wb, stack = TRUE,
+    #                  style = st_ci_ref)
+    #
+    # }
 
     #Numbers near zero in white gray -------------------------------------------
     style_zero <- openxlsx::createStyle(fontColour = "#EAEAEA")
@@ -1117,7 +1158,7 @@ tab_xl <-
       if (is.null(path)) {
         path <- file.path(tempdir(), "Tab")
       } else {
-        path <- file.path(path, "Tab")
+        path <- file.path(path) #"Tab"
       }
     }
 

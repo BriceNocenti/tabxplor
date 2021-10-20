@@ -12,7 +12,7 @@ tab_chi2(
 )
 }
 \arguments{
-\item{tabs}{A \code{tibble} of class \code{tab}, made with \code{\link{tab_core}} or
+\item{tabs}{A \code{tibble} of class \code{tab}, made with \code{\link{tab_plain}} or
 \code{\link{tab_many}}.}
 
 \item{calc}{By default all elements of the Chi2 summary are calculated :
@@ -52,7 +52,7 @@ data <- dplyr::starwars \%>\%
               n_min = 5, na = "keep")
 
 data \%>\%
-  tab_core(sex, hair_color, gender) \%>\%
+  tab_plain(sex, hair_color, gender) \%>\%
   tab_totaltab("line")  \%>\%
   tab_tot()  \%>\%
   tab_chi2(calc = c("p", "ctr"), color = TRUE)

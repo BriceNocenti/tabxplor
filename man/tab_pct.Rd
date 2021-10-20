@@ -14,7 +14,7 @@ tab_pct(
 )
 }
 \arguments{
-\item{tabs}{A \code{tibble} of class \code{tab} made with \code{\link{tab_core}} or
+\item{tabs}{A \code{tibble} of class \code{tab} made with \code{\link{tab_plain}} or
 \code{\link{tab_many}}.}
 
 \item{pct}{The type of percentages to calculate. \code{"row"} draw row percentages.
@@ -61,7 +61,7 @@ data <- dplyr::starwars \%>\%
               n_min = 5, na = "keep")
 
 data \%>\%
-  tab_core(sex, hair_color, gender) \%>\%
+  tab_plain(sex, hair_color, gender) \%>\%
   tab_totaltab("line")  \%>\%
   tab_tot() \%>\%
   tab_pct("row", comp = "all", color = TRUE)

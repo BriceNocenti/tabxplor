@@ -49,7 +49,7 @@
 #'
 #' @param tabs A table, stored into a \code{\link[tibble]{tibble}} data.frame.
 #' It is generally made with \code{\link{tab}}, \code{\link{tab_many}}
-#' or \code{\link{tab_core}}.
+#' or \code{\link{tab_plain}}.
 #' @param subtext A character vector to print legend lines under the table.
 #' @param chi2 A tibble storing information about pvalues and variances, to fill with
 #' \code{\link{tab_chi2}}.
@@ -373,7 +373,6 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 
 
 
-
 #' Print a tabxplor table in html
 #'
 #' @param tabs A table made with \code{\link{tab}} or \code{\link{tab_many}}.
@@ -381,7 +380,23 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #' background. By default it takes \code{getOption("tabxplor.color_style_type")}.
 #' @param theme By default, a white table with black text, Set to \code{"dark"} for a
 #' black table with white text.
-#' @param ... Other arguments to pass to
+#' @param html_24_bit Should specific 24bits colors palettes be used ? Default to
+#'  \code{getOption("tabxplor.color_html_24_bit")}
+#' @param tooltips By default, hmtl tooltips are used to display additionnal informations
+#' at mouse hover. Set to \code{FALSE} to discard.
+#' @param popover By default, takes \code{getOption("tabxplor.kable_popover")}. When
+#' `FALSE`, html tooltips are of the base kind : they can't be used with floating table of
+#' content in pkg{rmarkdown} documents. Set to `TRUE` to use \pkg{kableExtra} html
+#' popovers instead, which are compatible with floating toc. Remember
+#' to enable the `popover` module by copying the following code into your document :
+#' \code{<script>
+#' $(document).ready(function(){
+#'   $('[data-toggle="popover"]').popover();
+#' });
+#' </script>
+#'}
+#' You can then use a `css` chunk in rmarkdown to change popovers colors.
+#' @param ... Other arguments to pass to \code{\link[knitr:kable]{knitr::kable}} and
 #' \code{\link[kableExtra:kable_styling]{kableExtra::kable_styling}}.
 #'
 #' @return A html table (opened in the viewer in RStudio). Differences from totals,
@@ -396,12 +411,18 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #' }
 #'
 tab_kable <- function(tabs,
-                      theme = c("light", "dark"),
-                      color_type = NULL,
+                      theme = c("light", "dark"), color_type = NULL, html_24_bit = NULL,
+                      tooltips = TRUE, popover = NULL,
                       ...) {
   #theme <- if (is.null(theme)) { getOption("tabxplor.color_style_theme") } else { theme }
   color_type <-
     if (is.null(color_type)) { getOption("tabxplor.color_style_type") } else {color_type}
+
+  html_24_bit <-
+    if (is.null(html_24_bit)) {getOption("tabxplor.color_html_24_bit")} else {html_24_bit}
+
+
+  popover <- if (is.null(popover)) {getOption("tabxplor.kable_popover")} else {popover}
 
   tab_vars <- tab_get_vars(tabs)$tab_vars
   subtext  <- get_subtext(tabs) %>% purrr::discard(. == "")
@@ -453,7 +474,8 @@ tab_kable <- function(tabs,
 
     color_styles <- purrr::map(color_styles, ~ get_color_style(mode = "color_code",
                                                                type = color_type[1],
-                                                               theme = theme[1])[.])
+                                                               theme = theme[1],
+                                                               html_24_bit = html_24_bit[1])[.])
 
     color_selection[color_cols_fmt] <- color_selection[color_cols_fmt] %>%
       purrr::map2(color_styles, ~ purrr::set_names(.x, .y)) %>%
@@ -479,12 +501,13 @@ tab_kable <- function(tabs,
     out <- tabs %>%
       dplyr::mutate(dplyr::across(
         where(is_fmt),
-        ~ format(.) %>%
+        ~ format(., html = TRUE) %>%
           kableExtra::cell_spec(
-            align = "r",
+            #align = "r", # not working
             bold  = !color_selection[[dplyr::cur_column()]] %in% c(grey_color, grey_color2), #text_color
             color =  color_selection[[dplyr::cur_column()]],
-            tooltip = tab_kable_print_tooltip(.)
+            tooltip = if (!popover & tooltips) {tab_kable_print_tooltip(.)} else {NULL},
+            popover = if (popover & tooltips) {tab_kable_print_tooltip(., popover = TRUE)} else {NULL}
           )
       ))
 
@@ -505,11 +528,12 @@ tab_kable <- function(tabs,
         where(is_fmt),
         ~ format(.) %>%
           kableExtra::cell_spec(
-            align = "r",
+            #align = "r", # not working
             bold  = color_selection[[dplyr::cur_column()]] %in% c(text_color), #text_color
             color      = txt_color_selection[[dplyr::cur_column()]],
             background = bg_color_selection[[dplyr::cur_column()]],
-            tooltip = tab_kable_print_tooltip(.)
+            tooltip = if (!popover & tooltips) {tab_kable_print_tooltip(.)} else {NULL},
+            popover = if (popover & tooltips) {tab_kable_print_tooltip(., popover = TRUE)} else {NULL}
           )
       ))
   }
@@ -526,19 +550,23 @@ tab_kable <- function(tabs,
                                                              mode = "html",
                                                              html_type  = color_type[1],
                                                              html_theme = theme[1],
+                                                             html_24_bit = html_24_bit[1],
                                                              text_color = text_color,
                                                              grey_color = grey_color),
                                             subtext)
 
-  out <- knitr::kable(out, escape = FALSE)
+
+  out <- knitr::kable(out, escape = FALSE,
+                      table.attr = "style=\"border-top: 0; border-bottom: 0;\"", ...)
+  # table.attr changes css style of table_classic (no upper and lower big lines)
 
   if (theme[1] == "light") {
     out <- out %>% kableExtra::kable_classic(
-      lightable_options = "hover",
+      lightable_options = "hover", # "striped", ?
       #bootstrap_options = c("hover", "condensed", "responsive", "bordered"), #"striped",
       full_width = FALSE,
       html_font = "DejaVu Sans Condensed", # row_label_position
-      fixed_thead = TRUE,
+      #fixed_thead = TRUE,
       ...
     )
 
@@ -554,58 +582,79 @@ tab_kable <- function(tabs,
 
   }
 
-  refs2 <- tabs[[fmt_cols[1]]] %>% get_reference(mode = "all_totals") %>% which()
+refs2 <- tabs[[fmt_cols[1]]] %>% get_reference(mode = "all_totals") %>% which()
 
-  if (length(subtext) != 0) {
-    out <- out %>% kableExtra::add_footnote(subtext, notation = "none", escape = FALSE)
-  }
+if (length(subtext) != 0) {
+  out <- out %>% kableExtra::add_footnote(subtext, notation = "none", escape = FALSE)
+}
 
 
-  out <- out %>%
-    kableExtra::row_spec(
-      0, color = text_color, bold = TRUE,
-      extra_css = "border-top: 0px solid ; border-bottom: 1px solid ;"
-    ) %>%
-    kableExtra::row_spec(refs2, bold = TRUE) %>%
-    kableExtra::row_spec(
-      totrows, #bold = TRUE,
-      extra_css = "border-top: 1px solid ; border-bottom: 1px solid ;"
-    ) %>%
-    #kableExtra::row_spec(no_totrows, extra_css = "border-top: 0px solid ;") %>%
-    kableExtra::column_spec(unique(c(new_col_var, ncol(tabs))), border_right = TRUE) %>%
-    kableExtra::column_spec(other_cols, border_left = TRUE) %>%
-    kableExtra::column_spec(totcols, bold = TRUE, border_left = TRUE) %>%
-    kableExtra::column_spec(row_var, width_min = 20) %>%
-    kableExtra::row_spec(new_group, extra_css = "border-bottom: 1px solid ;") %>%
-    kableExtra::row_spec(nrow(tabs), extra_css = "border-bottom: 1px solid")
+out <- out %>%
+  kableExtra::row_spec(
+    0, color = text_color, bold = TRUE,
+    extra_css = "border-top: 0px solid ; border-bottom: 1px solid ;"
+  ) %>%
+  kableExtra::row_spec(refs2, bold = TRUE) %>%
+  kableExtra::row_spec(
+    totrows, #bold = TRUE,
+    extra_css = "border-top: 1px solid ; border-bottom: 1px solid ;"
+  ) %>%
+  #kableExtra::row_spec(no_totrows, extra_css = "border-top: 0px solid ;") %>%
+  kableExtra::column_spec(fmt_cols, extra_css = "white-space: nowrap;") %>%
+  kableExtra::column_spec(unique(c(new_col_var, ncol(tabs))), border_right = TRUE) %>%
+  kableExtra::column_spec(other_cols, border_left = TRUE) %>%
+  kableExtra::column_spec(totcols, bold = TRUE, border_left = TRUE, width_min = 11) %>%
+  kableExtra::column_spec(row_var, width_min = 20) %>%
+  kableExtra::row_spec(new_group, extra_css = "border-bottom: 1px solid ;") %>%
+  kableExtra::row_spec(nrow(tabs), extra_css = "border-bottom: 1px solid")
 
-  out
+
+# .lightable-classic {
+#   border-top: 0 ;
+#   border-bottom: 0 ;
+# }
+#
+# .lightable-classic tfoot {
+#   font-size: 90%;
+# }
+
+out
 }
 
 
 
 
 #' @keywords internal
-tab_kable_print_tooltip <- function(x) {
+tab_kable_print_tooltip <- function(x, popover = FALSE) {
+
   ref     <- get_reference(x, mode = "cells")
   totcol  <- is_totcol(x)
   totrows <- is_totrow(x)
   tottabs <- is_tottab(x)
+  type    <- get_type(x)
 
   diff     <- get_diff(x)
+  digits   <- get_digits(x)
   ok_diff  <- !is.na(diff) & !((totcol | totrows) & get_pct(x) == 1)
   out_diff <- dplyr::case_when(
     ref & any(ok_diff)    ~ "diff: ref",
-    ok_diff & diff >= 0   ~ paste0("diff: ", "+", format(set_display(x, "diff")) ),
-    ok_diff & diff < 0    ~ paste0("diff: ",      format(set_display(x, "diff")) ),
-    TRUE                  ~ ""
+    ok_diff & type == "mean" ~ paste0("diff: ", stringi::stri_unescape_unicode("\\u00d7"), #multiplication sign
+                                      format(set_display(x, "diff")) ),
+    ok_diff & diff >= 0      ~ paste0("diff: ", "+", format(set_display(x, "diff")) ),
+    ok_diff & diff < 0       ~ paste0("diff: ",      format(set_display(x, "diff")) ),
+    TRUE                     ~ ""
   )
 
   ci_type  <- get_ci_type(x)
   ci_start <- switch(ci_type, "cell" = "ci: ", "")
-  out_ci   <- dplyr::if_else(condition = !is.na(get_ci(x)),
-                             true      = paste0(ci_start, format(set_display(x, "ci")) ),
-                             false     = "")
+  out_ci   <- dplyr::if_else(
+    condition = !is.na(get_ci(x)),
+    true      = paste0(ci_start, format(set_display(x, "ci") %>%
+                                          set_digits(dplyr::if_else(digits == 0L,
+                                                                    digits + 1L,
+                                                                    digits))) ),
+    false     = ""
+  )
 
   out_diff <- switch(ci_type,
                      "diff" = paste0(out_diff, " ", stringr::str_remove(out_ci, "%$")),
@@ -633,6 +682,8 @@ tab_kable_print_tooltip <- function(x) {
     stringr::str_remove(" *; *$")
 
   out[is.na(out) | out == "NA"] <- ""
+
+  if (popover) out <- kableExtra::spec_popover(out, position = "left")
 
   out
 }
@@ -1264,6 +1315,65 @@ vec_cast.data.frame.tabxplor_grouped_tab <- function(x, to, ...) {
 
 #Colors for printing fmt in tabs -------------------------------------------------------
 
+# # Test function to see how colors print
+# #' @keywords internal
+# color_graph <- function(former = NULL, new = NULL, new2 = NULL, new3 = NULL) {
+#   HCLformer <- tibble::as_tibble(t(round(jamba::col2hcl(former)[-4,], 0)))
+#   HCLnew    <- tibble::as_tibble(t(round(jamba::col2hcl(new   )[-4,], 0)))
+#   HCLnew2   <- tibble::as_tibble(t(round(jamba::col2hcl(new2  )[-4,], 0)))
+#   HCLnew3   <- tibble::as_tibble(t(round(jamba::col2hcl(new3  )[-4,], 0)))
+#
+#   colors <- tibble::tibble(
+#     color = rep(c(former, new, new2, new3), 4),
+#     text = c(former, new, new2, new3,
+#              HCLformer$H, HCLnew$H, HCLnew2$H, HCLnew3$H,
+#              HCLformer$C, HCLnew$C, HCLnew2$C, HCLnew3$C,
+#              HCLformer$L, HCLnew$L, HCLnew2$L, HCLnew3$L ),
+#     x = rep(c(if(length(former) != 0){1:length(former)} else {NULL},
+#               if(length(new   ) != 0){1:length(new)   } else {NULL},
+#               if(length(new2  ) != 0){1:length(new2)  } else {NULL},
+#               if(length(new3  ) != 0){1:length(new3)  } else {NULL} ), 4),
+#     y = c(rep(1 , length(former)),
+#           rep(0 , length(new   )),
+#           rep(-1, length(new2  )),
+#           rep(-2, length(new3  )),
+#
+#           rep(-4, length(former)),
+#           rep(-5, length(new   )),
+#           rep(-6, length(new2  )),
+#           rep(-7, length(new3  )),
+#
+#           rep(-9, length(former)),
+#           rep(-10, length(new   )),
+#           rep(-11, length(new2  )),
+#           rep(-12, length(new3  )),
+#
+#           rep(-14, length(former)),
+#           rep(-15, length(new   )),
+#           rep(-16, length(new2  )),
+#           rep(-17, length(new3  ))
+#     )
+#   )
+#   color_scale <- c(if(length(former) != 0){former} else {NULL},
+#                    if(length(new   ) != 0){new   } else {NULL},
+#                    if(length(new2  ) != 0){new2  } else {NULL},
+#                    if(length(new3  ) != 0){new3  } else {NULL}
+#   ) %>% purrr::set_names(.)
+#   color_scale <- color_scale[!duplicated(names(color_scale))]
+#
+#   ggplot2::ggplot(colors, ggplot2::aes(x = x, y = y, color = color, label = text)) +
+#     ggplot2::geom_text(fontface = "bold") +
+#     ggplot2::scale_color_manual(values = color_scale) +
+#     ggplot2::theme_minimal() +
+#     ggplot2::theme(panel.grid = ggplot2::element_line(colour = "white")) +
+#     ggplot2::ylim(-18, 3) +
+#     ggplot2::annotate("text", x = 1, y =   2, label = "Colors :") +
+#     ggplot2::annotate("text", x = 1, y =  -3, label = "Hue :") +
+#     ggplot2::annotate("text", x = 1, y =  -8, label = "Chroma :") +
+#     ggplot2::annotate("text", x = 1, y = -13, label = "Luminance :")
+#
+# }
+
 #' @keywords internal
 color_style_text_dark <-
   c(pos1 = rgb(4, 4, 1, maxColorValue = 5),
@@ -1276,8 +1386,8 @@ color_style_text_dark <-
     neg2 = rgb(5, 3, 1, maxColorValue = 5),
     neg3 = rgb(5, 2, 1, maxColorValue = 5),
     neg4 = rgb(5, 1, 0, maxColorValue = 5),
-    neg5 = rgb(5, 0, 0, maxColorValue = 5) ) %>%
-  purrr::map(~ crayon::make_style(., colors = 256))
+    neg5 = rgb(5, 0, 0, maxColorValue = 5) ) #%>%
+#purrr::map(~ crayon::make_style(., colors = 256))
 
 #' @keywords internal
 color_style_text_light <-
@@ -1291,8 +1401,75 @@ color_style_text_light <-
     neg2 = rgb(5, 3, 1, maxColorValue = 5),
     neg3 = rgb(5, 2, 0, maxColorValue = 5),
     neg4 = rgb(5, 1, 1, maxColorValue = 5),
-    neg5 = rgb(5, 0, 0, maxColorValue = 5) ) %>%
-  purrr::map(~ crayon::make_style(., colors = 256))
+    neg5 = rgb(5, 0, 0, maxColorValue = 5) ) #%>%
+#purrr::map(~ crayon::make_style(., colors = 256))
+
+
+# # #install_github("jmw86069/jamba", upgrade = "never")
+# former <-  c(white = "#111111",
+#              grey = "#888888",
+#              pos1 = "#66CCFF",
+#              pos2 = "#33FFFF",
+#              pos3 = "#00CCFF",
+#              pos4 = "#0066FF",
+#              pos5 = "#0000FF",
+#              neg1 = "#CC9966",
+#              neg2 = "#FF9933",
+#              neg3 = "#FF6600",
+#              neg4 = "#FF3333",
+#              neg5 = "#FF0000" )
+#
+#
+# change <- jamba::col2hcl("#4EE6B9")
+# change[1,] <- 180
+# change <- jamba::hcl2col(change)
+# change
+#
+# # c(white = "#111111", grey = "#bbbbbb",
+# #         "#e4e65e", "#C7D62C", "#83BB3F", "#3BA240", "#1b6e20",
+# #         "#fdd835", "#ffb300", "#FF8138", "#ff3d00", "#cb0000" )
+# #
+# new1 <- c(white = "#111111", grey = "#bbbbbb",
+#           "#7BF245", "#1de9b6", "#26c6da", "#1e88e5", "#0019ff",
+#           "#fdd835", "#ffb300", "#FF8138", "#ff3d00", "#cb0000" )
+#
+#
+# new2 <- c(white = "#111111", grey = "#bbbbbb",
+#           "#93ED75", "#4EE6B9", "#00bcd4", "#1e88e5", "#0019ff",
+#           "#fdd835", "#ffb300", "#FF8138", "#ff3d00", "#cb0000" )
+#
+# new3 <- c(white = "#111111", grey = "#bbbbbb",
+#           "#93ED75", "#1AE6D6", "#00bcd4", "#1e88e5", "#0019ff",
+#           "#fdd835", "#ffb300", "#FF8138", "#ff3d00", "#cb0000" )
+# color_graph(former, new1, new2, new3)
+
+#' @keywords internal
+color_style_text_light_24_blue_red <-
+  c(pos1 = "#93ED75",   #  c(pos1 = "#e4e65e",
+    pos2 = "#1AE6D6",   #    pos2 = "#cddc39", "#4EE6B9"
+    pos3 = "#00bcd4",   #    pos3 = "#8bc34a",
+    pos4 = "#1e88e5",   #    pos4 = "#589E38",
+    pos5 = "#0019ff",   #    pos5 = "#1b6e20",
+
+    neg1 = "#fdd835",   #    neg1 = "#ffeb3b",
+    neg2 = "#ffb300",   #    neg2 = "#ffc400",
+    neg3 = "#FF8138",   #    neg3 = "#ff9100",
+    neg4 = "#ff3d00",   #    neg4 = "#ff3d00",
+    neg5 = "#cb0000" )  #    neg5 = "#cb0000" )
+
+#' @keywords internal
+color_style_text_light_24_green_red <-
+  c(pos1 = "#e4e65e",   #  c(pos1 = "#e4e65e",
+    pos2 = "#C7D62C",   #    pos2 = "#cddc39",
+    pos3 = "#83BB3F",   #    pos3 = "#8bc34a",
+    pos4 = "#3BA240",   #    pos4 = "#589E38",
+    pos5 = "#1b6e20",   #    pos5 = "#1b6e20",
+
+    neg1 = "#fdd835",   #    neg1 = "#ffeb3b",
+    neg2 = "#ffb300",   #    neg2 = "#ffc400",
+    neg3 = "#FF8138",   #    neg3 = "#ff9100",
+    neg4 = "#ff3d00",   #    neg4 = "#ff3d00",
+    neg5 = "#cb0000" )  #    neg5 = "#cb0000" )
 
 #' @keywords internal
 color_style_bg_light <-
@@ -1306,8 +1483,8 @@ color_style_bg_light <-
     neg2 = rgb(5, 3, 3, maxColorValue = 5),
     neg3 = rgb(5, 2, 2, maxColorValue = 5),
     neg4 = rgb(5, 1, 1, maxColorValue = 5),
-    neg5 = rgb(5, 0, 0, maxColorValue = 5) ) %>%
-  purrr::map(~ crayon::make_style(., bg = TRUE, colors = 256))
+    neg5 = rgb(5, 0, 0, maxColorValue = 5) ) #%>%
+#purrr::map(~ crayon::make_style(., bg = TRUE, colors = 256))
 
 #' @keywords internal
 color_style_bg_dark <-
@@ -1321,8 +1498,10 @@ color_style_bg_dark <-
     neg2 = rgb(2, 0, 0, maxColorValue = 5),
     neg3 = rgb(3, 0, 0, maxColorValue = 5),
     neg4 = rgb(4, 0, 0, maxColorValue = 5),
-    neg5 = rgb(5, 0, 0, maxColorValue = 5) ) %>%
-  purrr::map(~ crayon::make_style(., bg = TRUE, colors = 256))
+    neg5 = rgb(5, 0, 0, maxColorValue = 5) ) #%>%
+#purrr::map(~ crayon::make_style(., bg = TRUE, colors = 256))
+
+
 
 
 #' Define the color style used to print \code{\link{tab}}
@@ -1331,6 +1510,13 @@ color_style_bg_dark <-
 #'  \code{"text"} to color the text, \code{"bg"} to color the background.
 #' @param theme For \code{set_color_style} and \code{get_color_style}, is your console
 #' or html table background \code{"light"} or \code{"dark"} ? Default to RStudio theme.
+#' @param html_24_bit Should specific 24bits colors palettes be used for html tables ?
+#' With light themes only. Default to \code{getOption("tabxplor.color_html_24_bit")}
+#' @param custom_palette Possibility to provide a custom color styles, as a character
+#' vector of 10 html color codes (the five first for over-representated numbers,
+#' the five last for under-representated ones). The result is saved to
+#' \code{options("tabxplor.color_style")}. To discard, relaunch the function with
+#' \code{custom_palette = NULL}.
 #'
 #' @return Set global options \code{"tabxplor.color_style_type"} and
 #' \code{"tabxplor.color_style_theme"}, used when printing \code{\link{tab}} objects.
@@ -1338,9 +1524,14 @@ color_style_bg_dark <-
 #'
 #' @examples set_color_style(type = "bg")
 set_color_style <- function(type = c("text", "bg"),
-                            theme = NULL) {
+                            theme = NULL,
+                            html_24_bit = c("blue_red", "green_red", "no"),
+                            custom_palette = NULL) {
   stopifnot(all(type %in% c("text", "bg")))
   options("tabxplor.color_style_type" = type[1])
+
+  stopifnot(all(html_24_bit %in% c("green_red", "blue_red", "no")))
+  options("tabxplor.color_html_24_bit" = html_24_bit[1])
 
   if (is.null(theme)) {
     is_RStudio <- function() Sys.getenv("RSTUDIO") == "1" & rlang::is_interactive()  #.Platform$GUI == "RStudio"
@@ -1351,6 +1542,21 @@ set_color_style <- function(type = c("text", "bg"),
     options("tabxplor.color_style_theme" = theme)
   }
 
+  if (length(custom_palette) != 0) {
+    if (length(custom_palette) != 10 | !is.character(custom_palette)) stop(
+      "custom_palette should be a character vector of length 10"
+    )
+    options("tabxplor.color_style" = purrr::set_names(
+      custom_palette,
+      c("pos1","pos2","pos3","pos4","pos5","neg1","neg2","neg3","neg4","neg5")
+    ))
+    return(invisible(custom_palette))
+  } else {
+    options("tabxplor.color_style" = NULL)
+    return(invisible())
+  }
+
+  # assign("tabxplor_color_breaks", tabxplor_color_breaks, pos = rlang::global_env() )
 }
 
 #' @describeIn tab_many get color styles as \pkg{crayon} functions or html codes.
@@ -1359,26 +1565,41 @@ set_color_style <- function(type = c("text", "bg"),
 #' @return A vector of crayon color functions, or a vector of color html codes.
 #' @export
 get_color_style <- function(mode = c("crayon", "color_code"),
-                            type = NULL, theme = NULL) {
+                            type = NULL, theme = NULL, html_24_bit = NULL) {
 
   type  <- if (is.null(type )) {getOption("tabxplor.color_style_type" )} else {type }
   theme <- if (is.null(theme)) {getOption("tabxplor.color_style_theme")} else {theme}
+  html_24_bit <-
+    if (is.null(html_24_bit)) {getOption("tabxplor.color_html_24_bit")} else {html_24_bit}
 
-  color_style <-
-    switch(type,
-           "text" = switch(theme,
-                           "dark"  = color_style_text_dark,
-                           "light" = color_style_text_light
-           ),
+  if (mode[1] == "crayon") html_24_bit <- "no"
 
-           "bg"   = switch(theme,
-                           "light" = color_style_bg_light,
-                           "dark"  = color_style_bg_dark
-           )
-    )
+  custom_palette <- getOption("tabxplor.color_style")
+  if (is.null(custom_palette)) {
+    color_style <-
+      switch(type,
+             "text" = switch(theme,
+                             "dark"  = color_style_text_dark,
+                             "light" = switch(html_24_bit,
+                                              "green_red" = color_style_text_light_24_green_red,
+                                              "blue_red"  = color_style_text_light_24_blue_red,
+                                              "no"        = color_style_text_light)
+             ),
 
-  if (mode[1] == "color_code") color_style <- color_style %>%
-    purrr::map_chr(~ attr(., "_styles", exact = TRUE) %>% names())
+             "bg"   = switch(theme,
+                             "light" = color_style_bg_light,
+                             "dark"  = color_style_bg_dark
+             )
+      )
+
+    # if (mode[1] == "color_code" & !color_bits == "24") color_style <- color_style %>%
+    #   purrr::map_chr(~ attr(., "_styles", exact = TRUE) %>% names())
+  } else {
+    color_style <- custom_palette
+  }
+
+  if (mode[1] == "crayon") color_style <- color_style %>%
+    purrr::map(~ crayon::make_style(., bg = type[1] == "bg", colors = 256))
 
   color_style
 }

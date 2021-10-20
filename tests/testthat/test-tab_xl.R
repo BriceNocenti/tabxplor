@@ -22,4 +22,19 @@ testthat::test_that("tab_xl creates an Excel file", {
  file.remove(test_path)
 })
 
+testthat::test_that("tab_xl work with  after_ci", {
+  tabs <-tab(forcats::gss_cat, race, marital, pct = "row", color = "after_ci")
+
+  test_path <- file.path(tempdir(), "tab_xl_test.xlsx")
+
+  tabs %>%
+    tab_xl(path = test_path, sheets = "unique",
+           replace = TRUE, open = FALSE) %>%
+    testthat::expect_invisible()
+
+  testthat::expect_true(file.exists(test_path))
+
+  file.remove(test_path)
+})
+
 

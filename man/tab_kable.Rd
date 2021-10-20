@@ -4,7 +4,15 @@
 \alias{tab_kable}
 \title{Print a tabxplor table in html}
 \usage{
-tab_kable(tabs, theme = c("light", "dark"), color_type = NULL, ...)
+tab_kable(
+  tabs,
+  theme = c("light", "dark"),
+  color_type = NULL,
+  html_24_bit = NULL,
+  tooltips = TRUE,
+  popover = NULL,
+  ...
+)
 }
 \arguments{
 \item{tabs}{A table made with \code{\link{tab}} or \code{\link{tab_many}}.}
@@ -15,7 +23,26 @@ black table with white text.}
 \item{color_type}{Set to \code{"text"} to color the text, \code{"bg"} to color the
 background. By default it takes \code{getOption("tabxplor.color_style_type")}.}
 
-\item{...}{Other arguments to pass to
+\item{html_24_bit}{Should specific 24bits colors palettes be used ? Default to
+\code{getOption("tabxplor.color_html_24_bit")}}
+
+\item{tooltips}{By default, hmtl tooltips are used to display additionnal informations
+at mouse hover. Set to \code{FALSE} to discard.}
+
+\item{popover}{By default, takes \code{getOption("tabxplor.kable_popover")}. When
+\code{FALSE}, html tooltips are of the base kind : they can't be used with floating table of
+content in pkg{rmarkdown} documents. Set to \code{TRUE} to use \pkg{kableExtra} html
+popovers instead, which are compatible with floating toc. Remember
+to enable the \code{popover} module by copying the following code into your document :
+\code{<script>
+$(document).ready(function(){
+  $('[data-toggle="popover"]').popover();
+});
+</script>
+}
+You can then use a \code{css} chunk in rmarkdown to change popovers colors.}
+
+\item{...}{Other arguments to pass to \code{\link[knitr:kable]{knitr::kable}} and
 \code{\link[kableExtra:kable_styling]{kableExtra::kable_styling}}.}
 }
 \value{

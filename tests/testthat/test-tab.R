@@ -31,7 +31,7 @@ testthat::test_that("tab works with missing, NULL, NA, etc., in variables", {
 
 testthat::test_that("all tab functions works with no tab_vars", {
   data %>% #with no tab_vars
-    tab_core(sex, hair_color, wt = mass) %>%
+    tab_plain(sex, hair_color, wt = mass) %>%
     tab_totaltab() %>%
     tab_tot() %>%
     tab_pct() %>%
@@ -42,7 +42,7 @@ testthat::test_that("all tab functions works with no tab_vars", {
 
 testthat::test_that("all tab functions works with no col_var", {
   data %>%
-    tab_core(sex) %>%
+    tab_plain(sex) %>%
     tab_totaltab() %>%
     tab_tot() %>%
     tab_pct("col") %>%
@@ -53,7 +53,7 @@ testthat::test_that("all tab functions works with no col_var", {
 
 testthat::test_that("all tab functions works with no row_var", {
   data %>%
-    tab_core(col_var = hair_color) %>%
+    tab_plain(col_var = hair_color) %>%
     tab_totaltab() %>%
     tab_tot() %>%
     tab_pct() %>%
@@ -64,7 +64,7 @@ testthat::test_that("all tab functions works with no row_var", {
 
 testthat::test_that("all tab functions works with totaltab = 'line'", {
   data %>%
-    tab_core(sex, hair_color, gender) %>%
+    tab_plain(sex, hair_color, gender) %>%
     tab_totaltab("line") %>%
     tab_tot() %>%
     tab_pct() %>%
@@ -76,7 +76,7 @@ testthat::test_that("all tab functions works with totaltab = 'line'", {
 testthat::test_that("all tab functions work with only one mean column (with color)", {
   testthat::expect_true(
     !is.na(tab_prepare(data, sex, mass) %>%
-             tab_core(sex, mass) %>%
+             tab_plain(sex, mass) %>%
              tab_tot("row", data = data) %>%
              tab_pct(color = TRUE)%>%
              tab_ci("diff", color = "after_ci") %>%
@@ -223,9 +223,9 @@ testthat::test_that("tab_ci works (with tab_pct)", {
     testthat::expect_s3_class("tabxplor_tab")
 })
 # Can we sum variances for means ? Answer : no, weighted mean is an approximation
-# tabs1 <- tab_core(data, PE0, REVMENSC, PR0, EMP_ADM_ENT) %>% tab_ci() %>%
+# tabs1 <- tab_plain(data, PE0, REVMENSC, PR0, EMP_ADM_ENT) %>% tab_ci() %>%
 #   dplyr::mutate(sd = get_sd(REVMENSC), wn = get_wn(REVMENSC), n = get_n(REVMENSC))
-# tabs2 <- tab_core(data, EMP_ADM_ENT, REVMENSC, PR0) %>% tab_ci() %>%
+# tabs2 <- tab_plain(data, EMP_ADM_ENT, REVMENSC, PR0) %>% tab_ci() %>%
 #   dplyr::mutate(sd = get_sd(REVMENSC), wn = get_wn(REVMENSC), n = get_n(REVMENSC))
 #
 # tabs2
@@ -355,7 +355,7 @@ testthat::test_that("tab colors are calculated with mean columns", {
 # })
 #
 # profvis({ #180 ms (essentially summarise, which calls vec_assert in new_fmt)
-#   tabs <-  tab_core(dat_group123, !!row_var, !!col_var, !!!tab_vars, wt = !!wt, is_grouped = TRUE)
+#   tabs <-  tab_plain(dat_group123, !!row_var, !!col_var, !!!tab_vars, wt = !!wt, is_grouped = TRUE)
 # })        #100 ms with no vec_assert
 #
 # profvis({ #240 ms (essentially across and two summarise, with new_fmt as well)
@@ -385,7 +385,7 @@ testthat::test_that("tab colors are calculated with mean columns", {
 #   data <-  tab_prepare(ct2013acm, !!row_var, !!col_var, !!!tab_vars,
 #     rare_to_other = TRUE)
 #   dat_group123 <-dplyr::group_by(data, !!!tab_vars, !!row_var, !!col_var)
-#   tabs <-  tab_core(dat_group123, !!row_var, !!col_var, !!!tab_vars, wt = !!wt,
+#   tabs <-  tab_plain(dat_group123, !!row_var, !!col_var, !!!tab_vars, wt = !!wt,
 #     is_grouped = TRUE)
 #   tabs <-  tab_totaltab(tabs)
 #   tabs <-  tab_tot(tabs)

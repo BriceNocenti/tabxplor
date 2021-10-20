@@ -13,7 +13,7 @@ tab_tot(
 )
 }
 \arguments{
-\item{tabs}{A \code{tibble} of class \code{tab}, made with \code{\link{tab_core}} or
+\item{tabs}{A \code{tibble} of class \code{tab}, made with \code{\link{tab_plain}} or
 \code{\link{tab_many}}.}
 
 \item{tot}{\code{c("col", "row")} and \code{"both"} print total rows and total columns.
@@ -41,7 +41,7 @@ Add totals to a \code{\link[tabxplor]{tab}}
 \donttest{data <- dplyr::starwars \%>\% tab_prepare(sex, hair_color)
 
 data \%>\%
-  tab_core(sex, hair_color) \%>\%
+  tab_plain(sex, hair_color) \%>\%
   tab_tot("col", totcol = "each")
   }
 }

@@ -45,9 +45,19 @@ tab_get_vars(tabs, vars = c("row_var", "col_vars", "tab_vars"))
 
 is_tab(x)
 
-set_color_style(type = c("text", "bg"), theme = NULL)
+set_color_style(
+  type = c("text", "bg"),
+  theme = NULL,
+  html_24_bit = c("blue_red", "green_red", "no"),
+  custom_palette = NULL
+)
 
-get_color_style(mode = c("crayon", "color_code"), type = NULL, theme = NULL)
+get_color_style(
+  mode = c("crayon", "color_code"),
+  type = NULL,
+  theme = NULL,
+  html_24_bit = NULL
+)
 
 set_color_breaks(pct_breaks, mean_breaks, contrib_breaks)
 
@@ -212,7 +222,7 @@ with as many fmt columns as there is levels in all \code{col_vars}. Set to \code
 to keep it as a list of individual tables, with one table for each \code{col_vars}.}
 
 \item{tabs}{A \code{tibble} of class \code{tab}, made with \code{\link{tab}},
-\code{\link{tab_many}} or \code{\link{tab_core}}.}
+\code{\link{tab_many}} or \code{\link{tab_plain}}.}
 
 \item{vars}{In \code{tab_get_vars}, a character vector containing the wanted vars names:
 \code{"row_var"}, \code{"col_vars"} or \code{"tab_vars"}.}
@@ -224,6 +234,15 @@ Set to \code{all} to get breaks for negative spreads as well.}
 
 \item{theme}{For \code{set_color_style} and \code{get_color_style}, is your console
 or html table background \code{"light"} or \code{"dark"} ? Default to RStudio theme.}
+
+\item{html_24_bit}{Should specific 24bits colors palettes be used for html tables ?
+With light themes only. Default to \code{getOption("tabxplor.color_html_24_bit")}}
+
+\item{custom_palette}{Possibility to provide a custom color styles, as a character
+vector of 10 html color codes (the five first for over-representated numbers,
+the five last for under-representated ones). The result is saved to
+\code{options("tabxplor.color_style")}. To discard, relaunch the function with
+\code{custom_palette = NULL}.}
 
 \item{mode}{By default, \code{get_color_style} returns a list of \pkg{crayon} coloring
 functions. Set to \code{"color_code"} to return html color codes.}

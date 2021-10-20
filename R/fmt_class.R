@@ -68,7 +68,7 @@ globalVariables(c(":="))
 #' Calculate with \code{\link{tab_chi2}}.
 #' @param var The cells variances, as a double vector the length of \code{n}.
 #' Used with \code{type = "mean"} to calculate confidence intervals.
-#' Calculate with \code{tab_core}.
+#' Calculate with \code{tab_plain}.
 #' @param ci The confidence intervals, as a double vector the length of \code{n}.
 #' Used to print colors (\code{"diff_ci"}, \code{"after_ci"}).
 #' Calculate with \code{tab_ci}.
@@ -1080,6 +1080,20 @@ set_comp      <- function(fmt, value = c("tab", "all")) {
 
 # METHODS FOR CLASS tabxplor_fmt #########################################################
 
+#' @keywords internal
+print_num <- function(num, digits) {
+  sprintf(paste0("%-0.", digits, "f"), num) %>%
+    stringr::str_replace("^0.0+$|^-0.0+$", "0") %>%
+    stringr::str_replace("^100.0+$", "100")
+}
+
+ci_html_subscript <- function(x, html = FALSE) {
+  if (html) x <- dplyr::if_else(stringr::str_detect(x,"^ *$" ),
+                                true  = "",
+                                false = paste0("$_{", x, "}$"))
+  x
+}
+
 # Format/printing methods for class tabxplor_fmt -----------------------------------------
 #The first method for every class should almost always be a format() method.
 #This should return a character vector the same length as x.
@@ -1087,76 +1101,101 @@ set_comp      <- function(fmt, value = c("tab", "all")) {
 #' Print method for class tabxplor_fmt
 #'
 #' @param x A fmt object.
-#' @param ... Other parameter.
+#' @param ... Other parameters.
+#' @param html Should html tags be added (to print confidence intervals as subscripts) ?
 #'
-#' @return The fmt printed.
+#' @return The fmt printed in a character vector.
 #' @export
-format.tabxplor_fmt <- function(x, ...) {
+format.tabxplor_fmt <- function(x, ..., html = FALSE) {
   out    <- get_num(x)
   na_out <- is.na(out)
 
   display <- get_display(x)
   nas  <- is.na(display)
   digits <- get_digits(x)
+  digits[!nas & display == "n"] <- 0
 
   ok <- !na_out & !nas
 
-  type       <- get_type(x)
+  type    <- get_type(x)
   ci_type <- get_ci_type(x)
 
   pm <- stringi::stri_unescape_unicode("\\u00b1") # sign "plus minus"
 
   pct_or_ci     <- ok & display %in% c("pct", "pct_ci", "diff", "ci", "ctr") &
-    !(display == "ci" & type == "mean")
-  pct_or_pct_ci <- ok & display %in% c("pct", "pct_ci", "diff", "ctr")
-  pct_ci_only   <- ok & display == "pct_ci"
+    !(display %in% c("ci", "diff") & type == "mean")
+  pct_ci  <- ok & display == "pct_ci"
+  mean_ci <- ok & display == "mean_ci"
+  diff_mean <- display == "diff" & type == "mean"
+  plus_ci <- pct_ci | mean_ci
+  #pct_or_pct_ci <- ok & display %in% c("pct", "pct_ci", "diff", "ctr")
+  pct_no_ci     <- ok & display %in% c("pct", "diff", "ctr") & !(display == "diff" & type == "mean")
   n_wn          <- ok & (display %in% c("n", "wn", "mean", "mean_ci", "var") |
                            (display == "ci" & type == "mean") )
   type_ci       <- ok & display == "ci"
-  mean_ci_only  <- ok & display == "mean_ci"
 
   out[pct_or_ci] <- out[pct_or_ci] * 100
-  out[!na_out] <- sprintf(paste0("%-0.", digits[!na_out], "f"), out[!na_out]) %>%
-    stringr::str_replace("^0.0+$|^-0.0+$", "0")
+  digits[diff_mean] <- dplyr::if_else(digits[diff_mean] == 0, 1, digits[diff_mean])
+
+  if (any(plus_ci)) {
+    ci_print_trim <- function(x) {
+      x <- stringr::str_remove_all(x, paste0("^", pm, "0$|^", pm, "0.0+$|^", pm, "-0.0+$|^",
+                                             pm, "NA"))
+      stringr::str_pad(x, max(stringr::str_length(x)))
+    }
+
+
+    # ci_print_pad <- function(x) {
+    #   stringr::str_pad(x, max(stringr::str_length(x)))
+    # }
+    ci <- get_ci(x)[plus_ci]
+
+    if (getOption("tabxplor.ci_print") == "moe") {
+      out_ci <-
+        paste0(print_num(out[plus_ci], digits[plus_ci]),
+               dplyr::if_else(pct_ci[plus_ci], "%", ""),
+               ci_print_trim(paste0(pm, sprintf(
+                 paste0("%-0.",
+                        digits[plus_ci] + dplyr::if_else(pct_ci[plus_ci] & digits[plus_ci] == 0, 1L, 0L),
+                        "f"), dplyr::if_else(pct_ci[plus_ci], ci * 100, ci)
+               )) ) %>% ci_html_subscript(html = html)
+        )
+    } else {
+      lower <- dplyr::if_else(condition = mean_ci[plus_ci],
+                              true      = pmax(out[plus_ci] - ci, 0),
+                              false     = pmax(out[plus_ci] - ci * 100, 0) )
+
+      upper <- dplyr::if_else(condition = mean_ci[plus_ci],
+                              true      = out[plus_ci] + ci,
+                              false     = pmin(out[plus_ci] + ci, 100) )
+      out_ci <- dplyr::if_else(
+        condition = is.na(lower) | is.na(upper) | round(lower, digits) == round(upper, digits),
+        true      = print_num(out[plus_ci], digits[plus_ci]),
+        false     = paste0(
+          sprintf(paste0("%-0.", digits[plus_ci], "f"), lower),
+          stringi::stri_unescape_unicode("\\u00b7"), # middle-point
+          sprintf(paste0("%-0.", digits[plus_ci], "f"), upper)
+        )
+      )
+      out_ci <- paste0(out_ci, dplyr::if_else(pct_ci[plus_ci], "%", ""))
+    }
+  }
+
+  out[!na_out] <- print_num(out[!na_out], digits[!na_out])
+  out[ na_out] <- NA
+  if (any(plus_ci)) out[plus_ci] <- out_ci
   out[n_wn] <- out[n_wn] %>% prettyNum(big.mark = " ", preserve.width = "individual")
-  out[pct_or_pct_ci] <- out[pct_or_pct_ci] %>% stringr::str_replace("^100.0+$", "100")
-  out[na_out] <- NA
-  out[pct_or_pct_ci] <- paste0(out[pct_or_pct_ci],"%") #pillar::style_subtle()
+  out[pct_no_ci] <- paste0(out[pct_no_ci], "%") #pillar::style_subtle()
 
-  if (any(pct_ci_only) | any(mean_ci_only)) conf_int <- get_ci(x)
-
-  if (any(pct_ci_only)) {
-    pct_conf_int_pct_ci <-
-      paste0(" ", pm,
-             sprintf(paste0("%-0.", digits[pct_ci_only] + 1, "f"),
-                     conf_int[pct_ci_only] * 100)) %>%
-      stringr::str_remove(paste0("^ ", pm, "0$|^ ", pm, "0.0+$|^ ", pm, "-0.0+$|^ ",
-                                 pm, "NA")) %>%
-      stringr::str_pad(max(stringr::str_length(.)))
-
-    out[pct_ci_only] <- paste0(out[pct_ci_only], pct_conf_int_pct_ci)
-  }
-
-  if (any(mean_ci_only)) {
-    conf_int <- get_ci(x)
-    mean_conf_int_pct_ci <-
-      paste0(" ", pm,
-             sprintf(paste0("%-0.", digits[mean_ci_only], "f"),
-                     conf_int[mean_ci_only])) %>%
-      stringr::str_remove(paste0("^ ", pm, "0$|^ ", pm, "0.0+$|^ ", pm, "-0.0+$|^ ",
-                                 pm, "NA")) %>%
-      stringr::str_pad(max(stringr::str_length(.)))
-
-    out[mean_ci_only] <- paste0(out[mean_ci_only], mean_conf_int_pct_ci)
-  }
-
-  out[type_ci] <- switch(type,
-                         "n"       = ,
-                         "mean"    = paste0(pm, out[type_ci]),
-                         "row"     = ,
-                         "col"     = ,
-                         "all"     = ,
-                         "all_tabs"= paste0(pm, out[type_ci], "%") )
+  out[type_ci] <- switch(
+    type,
+    "n"       = ,
+    "mean"    = paste0(pm, out[type_ci]),
+    "row"     = ,
+    "col"     = ,
+    "all"     = ,
+    "all_tabs"= paste0(pm, out[type_ci], "%")
+  )
 
   #out <- stringr::str_pad(out, max(stringr::str_length(out), na.rm = TRUE))
   out
@@ -1344,7 +1383,7 @@ fmt_color_selection <- function(x, force_color, force_breaks) {
   diff <- if (color %in% c("diff", "diff_ci", "after_ci", "ci") ) {
     get_diff(x)
   } else {
-    NA_real_ #vctrs::vec_recycle(NA_real_, length(x))
+    rep(NA_real_, length(x))  #vctrs::vec_recycle(NA_real_, length(x))
   }
 
   ci <- if (color %in% c("diff_ci", "after_ci", "ci") & type_ci == "diff" ) {
@@ -1360,7 +1399,9 @@ fmt_color_selection <- function(x, force_color, force_breaks) {
   }
 
   ctr <- if (color == "contrib") {
-    get_ctr(x)
+    dplyr::if_else(is_totrow(x),
+                   true  = NA_real_,
+                   false =  get_ctr(x))
   } else {
     NA_real_
   }
@@ -1403,6 +1444,12 @@ fmt_color_selection <- function(x, force_color, force_breaks) {
   ) %>% purrr::set_names(as.character(round(brk, 2)))
 }
 
+# !means & brk >= 0 & brksup > 0
+# ~ diff >= 0  &  abs(diff) - ci > brk   &  abs(diff) - ci < brksup,
+#
+# !means & brk <=  0 & brksup < 0
+# ~ diff  < 0  &  abs(diff) - ci > -brk  &  abs(diff) - ci < -brksup),
+
 
 # diff >= 1                                              &
 #   (1 + abs(1 - diff) ) * ref_means  >  (ref_means + ci) * brk[1]   &
@@ -1421,6 +1468,9 @@ fmt_color_selection <- function(x, force_color, force_breaks) {
 #
 # (1 + abs(1 - diff)) * ref_means   > ref_means * brk[1] + ci * brk[1]
 #
+
+# ctr >= brk[1] * mean_ctr & ctr < brksup[1] * mean_ctr
+# ctr >= brk[2] * mean_ctr & ctr < brksup[2] * mean_ctr
 
 
 #' @keywords internal
@@ -1476,14 +1526,15 @@ color_formula <- function(type, color, diff, ci, ref_means,
         !means & brk >= 0 & brksup > 0
         ~ diff >= 0  &  abs(diff) - ci > brk   &  abs(diff) - ci < brksup,
 
-        !means & brk <  0 & brksup < 0
+        !means & brk <= 0 & brksup < 0
         ~ diff  < 0  &  abs(diff) - ci > -brk  &  abs(diff) - ci < -brksup),
 
       "contrib"     = if (brk >= 0) {
-        ctr > brk * mean_ctr & ctr < brksup * mean_ctr
+        ctr >= brk * mean_ctr & ctr < brksup * mean_ctr
       } else {
-        ctr < brk * mean_ctr & ctr > brksup * mean_ctr
+        ctr <= brk * mean_ctr & ctr > brksup * mean_ctr
       },
+
       rep(FALSE, length(diff))
     )
 
@@ -1492,7 +1543,8 @@ color_formula <- function(type, color, diff, ci, ref_means,
 
 #' @keywords internal
 tab_color_legend <- function(x, colored = TRUE, mode = c("console", "html"),
-                             html_theme = NULL, html_type = NULL, text_color = NULL,
+                             html_theme = NULL, html_type = NULL, html_24_bit,
+                             text_color = NULL,
                              grey_color = NULL) {
   color     <- get_color(x)
   type      <- get_type(x)
@@ -1545,38 +1597,56 @@ tab_color_legend <- function(x, colored = TRUE, mode = c("console", "html"),
       .x
     ) )
 
-  color_formula_chr <- function(color_type, ref, sign, breaks) {
-    purrr::map2_chr(breaks, sign, function(.breaks, .sign)
-      switch(
-        color_type,
-        "diff_mean"     = , # 1/mean and sign /
-        "diff"          = paste0("x", .sign, ref, " ", .breaks),
-        "diff_ci_mean"  = ,
-        "diff_ci"       = paste0("|x-", ref, "|>ci & x", .sign,
-                                 ref, " ", .breaks),
-        #"ci_mean"       = ,
-        "ci"            = paste0("|x-", ref, "| > ci"),      #just 1 ?
-        "after_ci_mean" = paste0(ref, " + |x-", ref, "| > (", ref, " + ci) ", .breaks),
-        "after_ci"      = paste0("|x-", ref, "| > ci ", .breaks), #+ -
-        "contrib"       = paste0("contrib > mean_ctr "     , .breaks),
-        character()
-      ))
-  }
+  color_formula_chr <- function(color_type, ref, sign, breaks, mode = "console") {
+    if (mode == "console") {
+      purrr::map2_chr(breaks, sign, function(.breaks, .sign)
+        switch(
+          color_type,
+          "diff_mean"     = , # 1/mean and sign /
+          "diff"          = paste0("x", .sign, ref, " ", .breaks),
+          "diff_ci_mean"  = ,
+          "diff_ci"       = paste0("|x-", ref, "|>ci & x", .sign,
+                                   ref, " ", .breaks),
+          #"ci_mean"       = ,
+          "ci"            = paste0("|x-", ref, "| > ci"),      #just 1 ?
+          "after_ci_mean" = paste0(ref, " + |x-", ref, "| > (", ref, " + ci) ", .breaks),
+          "after_ci"      = paste0("|x-", ref, "| > ci ", .breaks), #+ -
+          "contrib"       = paste0("contrib > mean_ctr "     , .breaks),
+          character()
+        ))
 
+    } else { # mode == "html"
+      purrr::map2_chr(breaks, sign, function(.breaks, .sign)
+        switch(
+          color_type,
+          "diff_mean"     = , # 1/mean and sign /
+          "diff"          = paste0("x", .sign, ref, " ", "<b>", .breaks, "</b>"),
+          "diff_ci_mean"  = ,
+          "diff_ci"       = paste0("|x-", ref, "|>ci & x", .sign,
+                                   ref, " ","<b>", .breaks, "</b>"),
+          #"ci_mean"       = ,
+          "ci"            = paste0("|x-", ref, "| > ci"),      #just 1 ?
+          "after_ci_mean" = paste0(ref, " + |x-", ref, "| > (", ref, " + ci) ", "<b>",
+                                   .breaks, "</b>"),
+          "after_ci"      = paste0("|x-", ref, "| > ci ", "<b>", .breaks, "</b>"), #+ -
+          "contrib"       = paste0("contrib > mean_ctr ", "<b>", .breaks, "</b>"),
+          character()
+        ))
+    }
+
+  }
 
   color_table <-
     tibble::tibble(color_type, diff_type, names = names(color_type)) %>%
     dplyr::filter(!is.na(.data$color_type) & !.data$color_type %in% c("no", "")) %>%
     dplyr::group_by(.data$color_type) %>%
-    dplyr::mutate(etc = dplyr::if_else(dplyr::row_number() > 3, ",...", "") ) %>%
+    dplyr::mutate(etc = dplyr::if_else(dplyr::row_number() >= 3, ",...", "") ) %>%
     dplyr::slice(1:3) %>%
     dplyr::summarise(names = paste0(.data$names, collapse = ", "),
                      etc = dplyr::first(.data$etc),
                      diff_type = dplyr::first(.data$diff_type),
                      .groups = "drop") %>%
-    dplyr::mutate(
-      names = paste0(.data$names, .data$etc)
-    )
+    dplyr::mutate(names = paste0(.data$names, .data$etc))
 
   if (colored == TRUE) color_table <- color_table %>%
     dplyr::mutate(names = stringr::str_pad(.data$names,
@@ -1627,7 +1697,8 @@ tab_color_legend <- function(x, colored = TRUE, mode = c("console", "html"),
           styles = purrr::map(.data$breaks, ~ select_in_color_style(length(.))),
           styles = purrr::map(.data$styles, ~ get_color_style(mode  = "color_code",
                                                               theme = html_theme,
-                                                              type  = html_type)[.]),
+                                                              type  = html_type,
+                                                              html_24_bit = html_24_bit)[.]),
           breaks = purrr::map2(.data$styles, .data$breaks,
                                ~ purrr::map2_chr(
                                  .x, .y,
@@ -1658,8 +1729,8 @@ tab_color_legend <- function(x, colored = TRUE, mode = c("console", "html"),
         purrr::pmap(~ dplyr::if_else(
           condition = ..5 %in% c(1, max(..5)/2 + 1),
           true      = color_formula_chr(color_type = ..1, ref = ..2,
-                                        sign = ..3, breaks = ..4),
-          false     = ..4
+                                        sign = ..3, breaks = ..4, mode = mode[1]),
+          false     = if (mode[1] == "console") { ..4 } else { paste0("<b>", ..4, "</b>")}
         ))
     )
 
@@ -1673,6 +1744,7 @@ tab_color_legend <- function(x, colored = TRUE, mode = c("console", "html"),
           ),
           names = pillar::style_subtle(paste0(.data$names, ": "))
         )
+
     } else {
       color_table <- color_table %>%
         dplyr::mutate(
