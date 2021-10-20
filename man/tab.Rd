@@ -236,7 +236,7 @@ tab(data, race, marital, year, subtext = gss2, pct = "row", color = "diff",
 data2 <- data \%>\% dplyr::mutate(year = as.factor(year))
 tab(data2, year, marital, race, subtext = gss2, pct = "row",
     color = "diff", diff = "first", tot = "col")
-    }
+
 
 # Differences with the total, except if their confidences intervals are superior to them:
 tab(forcats::gss_cat, race, marital, subtext = gss, pct = "row", color = "diff_ci")
@@ -246,7 +246,7 @@ tab(forcats::gss_cat, race, marital, subtext = gss, pct = "row", color = "after_
 
 # Contribution of cells to table's variance, like in a correspondence analysis:
 tab(forcats::gss_cat, race, marital, subtext = gss, color = "contrib")
-
+}
 
 # Since the result is a tibble, you can use all dplyr verbs to modify it :
 \donttest{

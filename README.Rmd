@@ -75,7 +75,7 @@ tab(dplyr::storms, category, status, sup_cols = c("pressure", "wind"))
 
 ## References and comparison levels for colors
 
-By default, to calculate colors, each cell is compared to the subtable's related total.
+By default, to calculate colors, each cell is compared to the subtable's related total. 
 
 When a third variable or more are provided, it's possible to compare with the general total line instead, by setting `comp = "all"`. Here, only the last total row is highlighted (TOTAL ENSEMBLE appears in white but other total rows in grey).
 

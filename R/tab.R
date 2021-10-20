@@ -221,7 +221,7 @@
 #' data2 <- data %>% dplyr::mutate(year = as.factor(year))
 #' tab(data2, year, marital, race, subtext = gss2, pct = "row",
 #'     color = "diff", diff = "first", tot = "col")
-#'     }
+#'
 #'
 #' # Differences with the total, except if their confidences intervals are superior to them:
 #' tab(forcats::gss_cat, race, marital, subtext = gss, pct = "row", color = "diff_ci")
@@ -231,7 +231,7 @@
 #'
 #' # Contribution of cells to table's variance, like in a correspondence analysis:
 #' tab(forcats::gss_cat, race, marital, subtext = gss, color = "contrib")
-#'
+#'}
 #'
 #' # Since the result is a tibble, you can use all dplyr verbs to modify it :
 #' \donttest{
@@ -965,7 +965,8 @@ tab_many <- function(data, row_var, col_vars, tab_vars, wt,
 #' @return A \code{tibble} of class \code{tab}, with less rows and more columns.
 #' @export
 #'
-#' @examples data <- forcats::gss_cat %>% dplyr::filter(year %in% c(2000, 2014))
+#' @examples
+#' \donttest{ data <- forcats::gss_cat %>% dplyr::filter(year %in% c(2000, 2014))
 #'
 #' tabs <-
 #'   tab(data, relig, marital, c(year, race), pct = "row", totaltab = "no", color = "diff",
@@ -974,6 +975,7 @@ tab_many <- function(data, row_var, col_vars, tab_vars, wt,
 #' tabs %>%
 #'   dplyr::select(year, race, relig, Married) %>%
 #'   tab_spread(race)
+#'   }
 tab_spread <- function(tabs, spread_vars, names_prefix, names_sort = FALSE,
                        totname = "Total") {
   spread_vars     <- rlang::enquo(spread_vars)
@@ -1293,7 +1295,7 @@ tab_core <- function(data, row_var, col_var, ..., wt,
 #' @param num Set to \code{TRUE} to obtain a table with normal numeric vectors (not fmt).
 #' @param df  Set to \code{TRUE} to obtain a plain data.frame (not a tibble),
 #' with normal numeric vectors (not fmt). Useful, for example, to pass the table to
-#' correspondence analysis with \code{\link[FactoMineR:CA]{FactoMineR::CA}}.
+#' correspondence analysis with FactoMineR::CA.
 #'
 #' @return A \code{tibble} of class \code{tabxplor_tab}. If \code{...} (\code{tab_vars})
 #'  are provided, a \code{tab} of class \code{tabxplor_grouped_tab}.

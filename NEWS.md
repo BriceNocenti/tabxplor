@@ -7,7 +7,7 @@
 * `tab_core` was deprecated and renamed `tab_plain` for more clarity. Added options to render a table with normal numeric vectors instead of fmt, and to render a plain data.frame instead of a tibble. 
 * Two way to print confidence intervals, using global option `"tabxplor.ci_print"` : `"moe"`, for margin of errors, prints as `12%±1.1` ; `"ci"` prints the interval `11·13%`.
 * In `tab_kable`, confidence intervals of type `"cell` with print type `"moe"` appear in subscript. 
-* In `tab_xl`, colors now are the same and works in the same way than `tab` and `tab_kable`.
+* In `tab_xl`, colors now are the same and works in the same way that `tab` and `tab_kable`.
 
 ## Bug corrections :
 * With `tab` argument `color = "after_ci"`, when `diff` is negative, cells between 0 and -5% don't get colors.

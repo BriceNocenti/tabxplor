@@ -110,7 +110,7 @@ tab(dplyr::storms, category, status, sup_cols = c("pressure", "wind"))
 #> 5 3                          0                0       363     363      954   105
 #> 6 4                          0                0       348     348      940   122
 #> 7 5                          0                0        68      68      916   145
-#> 8 Total                  2 545            4 374     3 091  10 010      992    53
+#> 8 Total                  2 545            4 374     3 091     100      992    53
 ```
 
 ## References and comparison levels for colors
@@ -149,12 +149,12 @@ It it possible to print confidence intervals for each cell:
 ``` r
 tab(forcats::gss_cat, race, marital, pct = "row", ci = "cell")
 #> # A tabxplor tab: 4 x 8
-#>   race   `No answer` `Never married` Separated Divorced Widowed  Married  Total
-#>   <fct>       <row%>          <row%>    <row%>   <row%>  <row%>   <row%> <row%>
-#> 1 Other      0% ±0.3        32% ±2.1   6% ±1.1 11% ±1.5 4% ±0.9 48% ±2.2   100%
-#> 2 Black      0% ±0.2        42% ±1.7   6% ±0.9 16% ±1.3 8% ±1.0 28% ±1.6   100%
-#> 3 White      0% ±0.1        21% ±0.6   3% ±0.3 16% ±0.6 9% ±0.4 51% ±0.8   100%
-#> 4 Total      0%             25%        3%      16%      8%      47%        100%
+#>   race   `No answer` `Never married` Separated Divorced Widowed Married  Total
+#>   <fct>       <row%>          <row%>    <row%>   <row%>  <row%>  <row%> <row%>
+#> 1 Other       0%±0.3         32%±2.1    6%±1.1  11%±1.5  4%±0.9 48%±2.2   100%
+#> 2 Black       0%±0.2         42%±1.7    6%±0.9  16%±1.3  8%±1.0 28%±1.6   100%
+#> 3 White       0%±0.1         21%±0.6    3%±0.3  16%±0.6  9%±0.4 51%±0.8   100%
+#> 4 Total       0%             25%        3%      16%      8%     47%       100%
 ```
 
 It is also possible to use confidence intervals to enhance colors

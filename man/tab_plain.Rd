@@ -56,7 +56,7 @@ performance.}
 
 \item{df}{Set to \code{TRUE} to obtain a plain data.frame (not a tibble),
 with normal numeric vectors (not fmt). Useful, for example, to pass the table to
-correspondence analysis with \code{\link[FactoMineR:CA]{FactoMineR::CA}}.}
+correspondence analysis with FactoMineR::CA.}
 }
 \value{
 A \code{tibble} of class \code{tabxplor_tab}.
