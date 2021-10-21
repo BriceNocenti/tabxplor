@@ -382,7 +382,7 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #' black table with white text.
 #' @param html_24_bit Should specific 24bits colors palettes be used ? Default to
 #'  \code{getOption("tabxplor.color_html_24_bit")}
-#' @param tooltips By default, hmtl tooltips are used to display additionnal informations
+#' @param tooltips By default, html tooltips are used to display additional informations
 #' at mouse hover. Set to \code{FALSE} to discard.
 #' @param popover By default, takes \code{getOption("tabxplor.kable_popover")}. When
 #' `FALSE`, html tooltips are of the base kind : they can't be used with floating table of
@@ -1513,8 +1513,8 @@ color_style_bg_dark <-
 #' @param html_24_bit Should specific 24bits colors palettes be used for html tables ?
 #' With light themes only. Default to \code{getOption("tabxplor.color_html_24_bit")}
 #' @param custom_palette Possibility to provide a custom color styles, as a character
-#' vector of 10 html color codes (the five first for over-representated numbers,
-#' the five last for under-representated ones). The result is saved to
+#' vector of 10 html color codes (the five first for over-represented numbers,
+#' the five last for under-represented ones). The result is saved to
 #' \code{options("tabxplor.color_style")}. To discard, relaunch the function with
 #' \code{custom_palette = NULL}.
 #'

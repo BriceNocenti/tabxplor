@@ -330,7 +330,7 @@ data <- dplyr::starwars %>%
               n_min = 5, na = "keep")
 
 data %>%
-  tab_core(sex, hair_color, gender) %>%
+  tab_plain(sex, hair_color, gender) %>%
   tab_totaltab("line")  %>%
   tab_tot()  %>%
   tab_pct(comp = "all")  %>%
@@ -358,4 +358,13 @@ To render character vectors (without colors), use `format`:
 ``` r
 tab(data, race, marital, year, pct = "row") %>%
   mutate(across(where(is_fmt), format))
+```
+
+For the simplest table, with only numeric counts (no `fmt`), or even as
+normal data.frame (not a `tibble`):
+
+``` r
+# combine with `tab_prepare` to handle missing values
+tab_plain(data, race, marital, num = TRUE) # counts as numeric vector
+tab_plain(data, race, marital, df = TRUE)  # same, with unique class = "data.frame"
 ```

@@ -26,7 +26,7 @@ background. By default it takes \code{getOption("tabxplor.color_style_type")}.}
 \item{html_24_bit}{Should specific 24bits colors palettes be used ? Default to
 \code{getOption("tabxplor.color_html_24_bit")}}
 
-\item{tooltips}{By default, hmtl tooltips are used to display additionnal informations
+\item{tooltips}{By default, html tooltips are used to display additional informations
 at mouse hover. Set to \code{FALSE} to discard.}
 
 \item{popover}{By default, takes \code{getOption("tabxplor.kable_popover")}. When

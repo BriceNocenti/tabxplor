@@ -144,7 +144,7 @@ rows and cols.}
 \item \code{"tot"}: by default, cells differences from total rows are calculated with
 \code{pct = "row"}, and cells differences from total columns with \code{pct = "col"}.
 \item \code{"first"}: calculate cells differences from the first cell
-of the row or column (useful to color temporal evolutions).
+of the row or column (useful to color temporal developments).
 \item \code{"no"}: not use diffs to gain calculation time.
 }}
 
@@ -239,8 +239,8 @@ or html table background \code{"light"} or \code{"dark"} ? Default to RStudio th
 With light themes only. Default to \code{getOption("tabxplor.color_html_24_bit")}}
 
 \item{custom_palette}{Possibility to provide a custom color styles, as a character
-vector of 10 html color codes (the five first for over-representated numbers,
-the five last for under-representated ones). The result is saved to
+vector of 10 html color codes (the five first for over-represented numbers,
+the five last for under-represented ones). The result is saved to
 \code{options("tabxplor.color_style")}. To discard, relaunch the function with
 \code{custom_palette = NULL}.}
 

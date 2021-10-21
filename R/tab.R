@@ -113,7 +113,7 @@
 #'   \item \code{"tot"}: by default, cells differences from total rows are calculated with
 #'   \code{pct = "row"}, and cells differences from total columns with \code{pct = "col"}.
 #'   \item \code{"first"}: calculate cells differences from the first cell
-#' of the row or column (useful to color temporal evolutions).
+#' of the row or column (useful to color temporal developments).
 #'   \item \code{"no"}: not use diffs to gain calculation time.
 #' }
 #' @param comp The comparison level : by subtables/groups, or for the whole table.
@@ -476,7 +476,7 @@ tab <- function(data, row_var, col_var, tab_vars, wt, sup_cols,
 #'   \item \code{"tot"}: by default, cells differences from total rows are calculated with
 #'   \code{pct = "row"}, and cells differences from total columns with \code{pct = "col"}.
 #'   \item \code{"first"}: calculate cells differences from the first cell
-#' of the row or column (useful to color temporal evolutions).
+#' of the row or column (useful to color temporal developments).
 #'   \item \code{"no"}: not use diffs to gain calculation time.
 #' }
 #' @param comp The comparison level : by subtables/groups, or for the whole table.
@@ -1295,7 +1295,7 @@ tab_core <- function(data, row_var, col_var, ..., wt,
 #' @param num Set to \code{TRUE} to obtain a table with normal numeric vectors (not fmt).
 #' @param df  Set to \code{TRUE} to obtain a plain data.frame (not a tibble),
 #' with normal numeric vectors (not fmt). Useful, for example, to pass the table to
-#' correspondence analysis with FactoMineR::CA.
+#' correspondence analysis with \pkg{FactoMineR}.
 #'
 #' @return A \code{tibble} of class \code{tabxplor_tab}. If \code{...} (\code{tab_vars})
 #'  are provided, a \code{tab} of class \code{tabxplor_grouped_tab}.
@@ -1855,7 +1855,7 @@ tab_tot <- function(tabs, tot = c("row", "col"), name = "Total",
 #' @param diff By default, with \code{pct = "row"}, differences from total rows are
 #' calculated, and with \code{pct = "col"} differences from total columns.
 #' Set to \code{diff = "first"} to calculate differences with the first cell
-#' of the row/col (useful to color temporal evolutions). When not using diffs for colors,
+#' of the row/col (useful to color temporal developments). When not using diffs for colors,
 #' set to \code{diff = "no"} to gain calculation time. Diffs are also calculated for
 #' mean columns (made from numeric variables).
 #' @param comp Comparison level. When \code{tab_vars} are present, should the row

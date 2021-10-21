@@ -34,6 +34,12 @@ library(crayon)
 assignInNamespace("num_colors", num_colors, pos = "package:crayon")
 ```
 
+```{css, echo = FALSE}
+.lightable-classic tfoot {
+  font-size: 90%;
+}
+```
+
 `tabxplor` tries to make it easy to deal with multiple cross-tables: to create and manipulate them, but also to read them, using color helpers to highlight important informations, and simplify your experience of data exploration. All functions are `tidyverse` propelled, pipe-friendly, and render `tibble` data frames which can be easily manipulated with `dplyr`. Tables can be exported to Excel and in html with formats and colors.
 
 ## Base usage: cross-tables with color helpers for data exploration
@@ -58,6 +64,10 @@ rare_to_other = TRUE, n_min = 1000, other_level = "Custom_other_level_name")
 When a third variable is provided, `tab` makes a table with as many subtables as it has levels. With several `tab_vars`, it makes a subtable for each combination of their levels. The result is grouped: in `dplyr`, operations like `sum()` or `all()` are done within each subtable, and not for the whole dataframe.
 
 Colors may be added to highlight over-represented and under-represented cells, and therefore help the user read the table. By default, with `color = "diff"`, colors are based on the differences between a cell and it's related total (which only works with means and row or col pct). When a percentage is superior to the average percentage of the line or column, it appears with shades of green (or blue). When it's inferior, it appears with shades of red/orange. A color legend is added below the table. In RStudio colors are adapted to the theme, light or dark. 
+
+``` {r, include = FALSE}
+options(tabxplor.output_kable = TRUE)
+```
 
 ```{r, echo = TRUE}
 data <- forcats::gss_cat %>% 
@@ -150,7 +160,11 @@ tab(data, race, marital, year, pct = "row") %>%
 
 It's possible, for example, to make a summary table of as many columns variables as you want (showing all levels, or showing only one specific level like here):
 
-```{r, echo = TRUE}
+``` {r, include = FALSE}
+options(tabxplor.output_kable = FALSE)
+```
+
+```{r, echo = TRUE, message = FALSE}
 library(dplyr)
 first_lvs <- c("Married", "$25000 or more", "Strong republican", "Protestant")
 data <- forcats::gss_cat %>% mutate(across(
@@ -181,10 +195,9 @@ tabs <-
 ```
 
 ## Export to html or Excel
-To export a table to html with colors, tabxplor uses `knitr::kable` and `kableExtra`. In this format differences from totals, confidence intervals, contribution to variance, and unweighted counts, are available in a tooltip at cells hover.
+To export a table to html with colors, like most of them in the current vignette, tabxplor uses `knitr::kable` and `kableExtra`. In this format differences from totals, confidence intervals, contribution to variance, and unweighted counts, are available in a tooltip at cells hover.
 ``` {r, echo = TRUE} 
 tabs %>% tab_kable()
-
 ```
 To print an html table by default (for example, in RStudio viewer), use tabxplor options:
 ``` r 
@@ -207,7 +220,7 @@ data <- dplyr::starwars %>%
               n_min = 5, na = "keep")
 
 data %>%
-  tab_core(sex, hair_color, gender) %>%
+  tab_plain(sex, hair_color, gender) %>%
   tab_totaltab("line")  %>%
   tab_tot()  %>%
   tab_pct(comp = "all")  %>%
@@ -229,4 +242,11 @@ To render character vectors (without colors), use `format`:
 ``` r
 tab(data, race, marital, year, pct = "row") %>%
   mutate(across(where(is_fmt), format))
+```
+
+For the simplest table, with only numeric counts (no `fmt`), or even as normal data.frame (not a `tibble`): 
+``` r
+# combine with `tab_prepare` to handle missing values
+tab_plain(data, race, marital, num = TRUE) # counts as numeric vector
+tab_plain(data, race, marital, df = TRUE)  # same, with unique class = "data.frame"
 ```

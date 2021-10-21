@@ -28,7 +28,7 @@ or an integer vector the same length than \code{col_vars}.}
 \item{diff}{By default, with \code{pct = "row"}, differences from total rows are
 calculated, and with \code{pct = "col"} differences from total columns.
 Set to \code{diff = "first"} to calculate differences with the first cell
-of the row/col (useful to color temporal evolutions). When not using diffs for colors,
+of the row/col (useful to color temporal developments). When not using diffs for colors,
 set to \code{diff = "no"} to gain calculation time. Diffs are also calculated for
 mean columns (made from numeric variables).}
 
