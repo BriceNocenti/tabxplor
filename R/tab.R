@@ -865,6 +865,7 @@ tab_many <- function(data, row_var, col_vars, tab_vars, wt,
   if (totaltab != "no") tabs <- tab_totaltab(tabs, totaltab,
                                              name = totaltab_name, data = data)
 
+
   if (tot_cols_type != "no_no_create" | totrow == TRUE) {
     tottest <- if (all( (dplyr::select(dplyr::ungroup(tabs) , where(is_fmt)) %>%
                          purrr::map_chr(get_type) ) == "mean") ) {
@@ -1598,7 +1599,7 @@ tab_totaltab <- function(tabs, totaltab = c("table", "line", "no"),
                     ~ dplyr::full_join(.x, .y, by = switch(totaltab[1],
                                                            "table" = as.character(row_var),
                                                            "line"  =  "no_row_var") ) ) %>%
-      dplyr::select(-tidyselect::any_of("no_row_var")) %>%
+      dplyr::select(-tidyselect::starts_with("no_row_var")) %>%
       dplyr::mutate(dplyr::across(where(is_fmt), ~ as_tottab(.)))
 
     if (totaltab[1] == "line") mean_calc <- mean_calc %>%
@@ -1765,7 +1766,7 @@ tab_tot <- function(tabs, tot = c("row", "col"), name = "Total",
         general_totrow <-
           purrr::reduce(general_totrow,
                         ~ dplyr::full_join(.x, .y ,by = character() ) ) %>%
-          dplyr::select(-tidyselect::any_of("no_row_var")) %>%
+          dplyr::select(-tidyselect::starts_with("no_row_var")) %>%
           dplyr::mutate(dplyr::across(where(is_fmt), ~ as_tottab(as_totrow(.))))
 
         general_totrow  <- dplyr::group_keys(tabs) %>%
