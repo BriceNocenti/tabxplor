@@ -4,7 +4,7 @@
 \alias{format.tabxplor_fmt}
 \title{Print method for class tabxplor_fmt}
 \usage{
-\method{format}{tabxplor_fmt}(x, ..., html = FALSE)
+\method{format}{tabxplor_fmt}(x, ..., html = FALSE, na = NA)
 }
 \arguments{
 \item{x}{A fmt object.}
@@ -12,6 +12,8 @@
 \item{...}{Other parameters.}
 
 \item{html}{Should html tags be added (to print confidence intervals as subscripts) ?}
+
+\item{na}{How \code{NA}s should be printed. Default to \code{NA}.}
 }
 \value{
 The fmt printed in a character vector.

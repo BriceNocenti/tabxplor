@@ -3,7 +3,8 @@
 # tabxplor (dev version)
 
 ## Bug corrections :
-`tab_many` : bug with totaltab when two numeric column variables (and a tabs_var)
+* `tab_many` : bug with totaltab when two numeric column variables (and a tabs_var)
+* `tab_spread` not working with two `tab_vars`. Ok with a workaround, but would need to calculate one subtotal for each level of `spread_vars` in `tab_totaltab` to fully work (and, then, to fully hierarchise total tables...). 
 
 
 # tabxplor 1.0.2

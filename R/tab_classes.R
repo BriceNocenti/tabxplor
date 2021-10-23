@@ -501,7 +501,7 @@ tab_kable <- function(tabs,
     out <- tabs %>%
       dplyr::mutate(dplyr::across(
         where(is_fmt),
-        ~ format(., html = TRUE) %>%
+        ~ format(., html = TRUE, na = "") %>%
           kableExtra::cell_spec(
             #align = "r", # not working
             bold  = !color_selection[[dplyr::cur_column()]] %in% c(grey_color, grey_color2), #text_color

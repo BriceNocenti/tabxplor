@@ -689,14 +689,16 @@ get_ref_means <- function(x) {
   mean    <- get_mean(x)
 
   if (comp) {
-    rep(mean[refrows & tottabs], length(x))
+   refs <- mean[refrows & tottabs]
+   if (length(refs) == 0) {rep(NA_real_, length(x))} else {rep(mean[refs], length(x))}
   } else {
     tibble::tibble(
       mean = mean,
       gr = cumsum(as.integer(refrows)) - as.integer(refrows) ) %>%
       dplyr::mutate(nb = dplyr::row_number()) %>%
       dplyr::with_groups(.data$gr, ~ dplyr::mutate(., nb = dplyr::last(.data$nb))) %>%
-      dplyr::mutate(ref_means = .data$mean[.data$nb]) %>% dplyr::pull(.data$ref_means)
+      dplyr::mutate(ref_means = .data$mean[.data$nb]) %>%
+      dplyr::pull(.data$ref_means)
   }
 }
 
@@ -1103,10 +1105,11 @@ ci_html_subscript <- function(x, html = FALSE) {
 #' @param x A fmt object.
 #' @param ... Other parameters.
 #' @param html Should html tags be added (to print confidence intervals as subscripts) ?
+#' @param na How `NA`s should be printed. Default to `NA`.
 #'
 #' @return The fmt printed in a character vector.
 #' @export
-format.tabxplor_fmt <- function(x, ..., html = FALSE) {
+format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA) {
   out    <- get_num(x)
   na_out <- is.na(out)
 
@@ -1182,7 +1185,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE) {
   }
 
   out[!na_out] <- print_num(out[!na_out], digits[!na_out])
-  out[ na_out] <- NA
+  out[na_out] <- na
   if (any(plus_ci)) out[plus_ci] <- out_ci
   out[n_wn] <- out[n_wn] %>% prettyNum(big.mark = " ", preserve.width = "individual")
   out[pct_no_ci] <- paste0(out[pct_no_ci], "%") #pillar::style_subtle()

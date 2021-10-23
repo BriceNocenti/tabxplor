@@ -259,6 +259,7 @@ tab_xl <-
     insuff_counts_row_var <- insc$insuff_counts_row_var
     insuff_counts_col_var <- insc$insuff_counts_col_var
 
+
     no_chi2 <- purrr::map_lgl(chi2, ~ nrow(.) == 0)
     tabs_chi2 <- rep(list(tibble::tibble()), length(chi2))
 

@@ -10,7 +10,8 @@ tab_pct(
   digits = NULL,
   diff = c("tot", "first", "no"),
   comp = NULL,
-  color = FALSE
+  color = FALSE,
+  just_diff = FALSE
 )
 }
 \arguments{
@@ -45,6 +46,9 @@ This parameter doesn't affect column percentages.
 
 \item{color}{Set to \code{TRUE} to color the resulting tab based on differences (from
 totals or from the first cell).}
+
+\item{just_diff}{If percentages are already calculated and you just want
+to recalculate differences.}
 }
 \value{
 A \code{tibble} of class \code{tab}, with percentages displayed, possibly
