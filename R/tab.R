@@ -1593,10 +1593,11 @@ tab_totaltab <- function(tabs, totaltab = c("table", "line", "no"),
                                                  col_var = !!rlang::sym(.))),
       "line" = purrr::map(mean_vars, ~tab_plain(data, col_var = !!rlang::sym(.)))
     )
-
     mean_calc <-
       purrr::reduce(mean_calc,
-                    ~ dplyr::full_join(.x, .y, by = as.character(row_var)) ) %>%
+                    ~ dplyr::full_join(.x, .y, by = switch(totaltab[1],
+                                                           "table" = as.character(row_var),
+                                                           "line"  =  "no_row_var") ) ) %>%
       dplyr::select(-tidyselect::any_of("no_row_var")) %>%
       dplyr::mutate(dplyr::across(where(is_fmt), ~ as_tottab(.)))
 
@@ -1758,7 +1759,7 @@ tab_tot <- function(tabs, tot = c("row", "col"), name = "Total",
         general_totrow <-
           purrr::map(mean_names,
                      ~ tab_plain(data, row_var = NA_character_,
-                                col_var = tidyselect::all_of(.))
+                                col_var = !!rlang::sym(.))
           )
 
         general_totrow <-
