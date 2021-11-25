@@ -540,15 +540,15 @@ formats_SAS_to_R <- function(path, name_in, name_out) {
 #'
 #' @param .data The data frame.
 #' @param .cols <\link[tidyr:tidyr_tidy_select]{tidy-select}> The variables to recode.
-#' @param .data_name The name of the output data frame, if different from the input data
-#'  frame.
+#' @param .data_out_name The name of the output data frame, if different from the
+#' input data frame.
 #' @param cat By default the result is written in a temporary file and opened. Set to
 #' false to get a data frame with a character variable instead.
 #'
 #' @return A temporary R file. A `tibble` with the recode text as a character variable is
 #'  returned invisibly (or as main result if `cat = TRUE`).
 # @export
-recode_helper <- function(.data, .cols = everything(), .data_out_name, cat = TRUE) {
+fct_recode_helper <- function(.data, .cols = -where(is.numeric), .data_out_name, cat = TRUE) {
   .data_in_name <- rlang::enquo(.data) %>% rlang::as_name()
   if(missing(.data_out_name)) .data_out_name <- .data_in_name
 
@@ -573,7 +573,7 @@ recode_helper <- function(.data, .cols = everything(), .data_out_name, cat = TRU
                          .x, "\n)\n\n"
 
     )) %>% purrr::flatten_chr() %>%
-    tibble(recode = .)
+    tibble::tibble(recode = .)
 
   if (cat == FALSE) return(recode)
 
