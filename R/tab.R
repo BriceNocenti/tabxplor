@@ -736,8 +736,13 @@ tab_many <- function(data, row_var, col_vars, tab_vars, wt,
   # if (!missing(filter)) data <- dplyr::filter(data, {{filter}})
 
   data <- data %>% dplyr::filter(dplyr::across(
-    !!!tab_vars | !!row_var, ~ !is.na(.)  # where(is.factor) &
+    !!!tab_vars | !!row_var, ~ !is.na(.)
   ))
+
+  #Remove rows with missing values or 0 in weight, for them not to be added in raw counts
+  zero_weight <- dplyr::pull(data, !!wt)
+  zero_weight <- is.na(zero_weight) | zero_weight == 0
+  if (any(zero_weight))  data <- data %>% dplyr::filter(!zero_weight)
 
   # Where only first levels are kept, merge others to minimise useless calculations
   lv1 <- lvs == "first" & col_vars_text
@@ -1523,7 +1528,8 @@ tab_plain <- function(data, row_var, col_var, ..., wt,
       switch(type,
              "factor"  = data %>%
                dplyr::summarise(nums = sum(!!wt, na.rm = TRUE), .groups = 'drop') %>%
-               tidyr::pivot_wider(names_from = !!col_var, values_from = .data$nums, values_fill = 0),
+               tidyr::pivot_wider(names_from = !!col_var, names_sort = TRUE,
+                                  values_from = .data$nums, values_fill = 0),
 
              "numeric" = data %>%
                dplyr::summarise(!!num_var := stats::weighted.mean(!!num_var, !!wt, na.rm = TRUE),
@@ -1559,12 +1565,13 @@ tab_plain <- function(data, row_var, col_var, ..., wt,
                display = dplyr::if_else(wt == "no_weight", "n", "wn"),
                digits  = as.integer(digits)     ,
                n       = dplyr::n()             ,
-               wn      = sum(!!wt, na.rm = TRUE)              ,
+               wn      = if (wt != "no_weight") {sum(!!wt, na.rm = TRUE)} else {NA_real_},
                type    = "n"                    ,
                col_var = rlang::as_name(col_var)
              ),
              .groups = 'drop') %>%
-             tidyr::pivot_wider(names_from = !!col_var, values_from = .data$nums,
+             tidyr::pivot_wider(names_from = !!col_var,  names_sort = TRUE,
+                                values_from = .data$nums,
                                 values_fill = fmt0("wn", digits, type = "n")),
 
            "numeric" = data %>%
@@ -1572,7 +1579,7 @@ tab_plain <- function(data, row_var, col_var, ..., wt,
                display = "mean"                                      ,
                digits  = as.integer(digits)                          ,
                n       = dplyr::n()                                  ,
-               wn      = sum(!!wt, na.rm = TRUE)                                   ,
+               wn      = if (wt != "no_weight") {sum(!!wt, na.rm = TRUE)} else {NA_real_},
                mean    = stats::weighted.mean(!!num_var, !!wt, na.rm = TRUE),
                var     = weighted.var(!!num_var, !!wt, na.rm = TRUE),
                type    = "mean"                                      ,
@@ -1580,7 +1587,6 @@ tab_plain <- function(data, row_var, col_var, ..., wt,
              ),
              .groups = "drop")
     )
-
 
 
   # if (row_var_type == "numeric") {

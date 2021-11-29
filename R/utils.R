@@ -542,7 +542,8 @@ formats_SAS_to_R <- function(path, name_in, name_out) {
 #' @param .cols <\link[tidyr:tidyr_tidy_select]{tidy-select}> The variables to recode.
 #' @param .data_out_name The name of the output data frame, if different from the
 #' input data frame.
-#' @param cat By default the result is written in a temporary file and opened. Set to
+#' @param cat By default the result is written in the console if there are less than
+#' 6 variables, written in a temporary file and opened otherwise. Set to
 #' false to get a data frame with a character variable instead.
 #'
 #' @return A temporary R file. A `tibble` with the recode text as a character variable is
@@ -577,13 +578,16 @@ fct_recode_helper <- function(.data, .cols = -where(is.numeric), .data_out_name,
 
   if (cat == FALSE) return(recode)
 
-  path <- tempfile("", fileext = ".R")
-  writeLines(recode$recode, path, useBytes = TRUE)
+  if (ncol(.data) <= 5) {
+    cat(recode$recode)
+  } else {
+    path <- tempfile("", fileext = ".R")
+    writeLines(recode$recode, path, useBytes = TRUE)
+    file.show(path)
+  }
 
-  file.show(path)
   invisible(recode)
 }
-
 
 
 #' Prepare fct_recode

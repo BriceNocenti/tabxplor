@@ -1,11 +1,15 @@
 # tabxplor (development version)
 
-# tabxplor (dev version)
+## Added :
+*  Remove rows with missing values or 0 in `wt` (weight), for them not to be added in counts (excepted in `tab_plain`)
 
 ## Bug corrections :
 * `tab_many` : bug with totaltab when two numeric column variables (and a tabs_var)
-* `tab_spread` not working with two `tab_vars`. Ok with a workaround, but would need to calculate one subtotal for each level of `spread_vars` in `tab_totaltab` to fully work (and, then, to fully hierarchise total tables...). 
-
+* `tab_spread` not working with two `tab_vars`. Ok with a workaround, but would need to calculate one subtotal for each level of `spread_vars` in * `tab_totaltab` to fully work (and, then, to fully hierarchise total tables...). 
+* `wt` argument procudes missing values with NA ; NA in weight variable are now automatically removed (excepted in `tab_plain`)
+* Addition between `fmt` vectors wasn't working no more with percentages
+* In `tab_plain`, `col_var` was not sorted anymore (`names_sort = TRUE` added in `pivot_wider`)
+* `tab_color_legend()` was not working when some cols were colored and some not colored
 
 # tabxplor 1.0.2
 

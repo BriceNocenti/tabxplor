@@ -13,6 +13,8 @@
 \alias{as_tottab}
 \alias{is_totcol}
 \alias{as_totcol}
+\alias{get_digits}
+\alias{set_digits}
 \title{Create a vector of class formatted numbers}
 \usage{
 fmt(
@@ -61,6 +63,10 @@ as_tottab(x, in_tottab = TRUE)
 is_totcol(x, ...)
 
 as_totcol(x, totcol = TRUE)
+
+get_digits(fmt)
+
+set_digits(fmt, value)
 }
 \arguments{
 \item{n}{The underlying count, as an integer vector of length \code{n()}. It is used
@@ -168,6 +174,8 @@ difference first.
 or attribute using a given "set" function.}
 
 \item{...}{Used in methods to add arguments in the future.}
+
+\item{fmt}{A fmt vector to test or to modify fields.}
 }
 \value{
 A vector of class \code{tabxplor_fmt}.
@@ -238,6 +246,10 @@ using \pkg{vctrs}.
 (at \code{fmt} level or \code{tab} level)
 
 \item \code{as_totcol}: set the "totcol" attribute of a \code{fmt} vector
+
+\item \code{get_digits}: get the "digits" field
+
+\item \code{set_digits}: set the "digits" field
 }}
 
 \examples{

@@ -101,16 +101,16 @@ or the row variable. With text variables, only the first level is kept
 ``` r
 tab(dplyr::storms, category, status, sup_cols = c("pressure", "wind"))
 #> # A tabxplor tab: 8 x 7
-#>   category `tropical depressi~ `tropical storm` hurricane   Total pressure  wind
-#>   <fct>              <n-mixed>        <n-mixed> <n-mixed> <n-mix>   <mean> <mea>
-#> 1 -1                     2 545                0         0   2 545    1 008    27
-#> 2 0                          0            4 373         0   4 373      999    46
-#> 3 1                          0                1     1 684   1 685      982    71
-#> 4 2                          0                0       628     628      967    89
-#> 5 3                          0                0       363     363      954   105
-#> 6 4                          0                0       348     348      940   122
-#> 7 5                          0                0        68      68      916   145
-#> 8 Total                  2 545            4 374     3 091     100      992    53
+#>   category hurricane `tropical depressi~ `tropical storm`   Total pressure  wind
+#>   <fct>    <n-mixed>           <n-mixed>        <n-mixed> <n-mix>   <mean> <mea>
+#> 1 -1               0               2 545                0   2 545    1 008    27
+#> 2 0                0                   0            4 373   4 373      999    46
+#> 3 1            1 684                   0                1   1 685      982    71
+#> 4 2              628                   0                0     628      967    89
+#> 5 3              363                   0                0     363      954   105
+#> 6 4              348                   0                0     348      940   122
+#> 7 5               68                   0                0      68      916   145
+#> 8 Total        3 091               2 545            4 374     100      992    53
 ```
 
 ## References and comparison levels for colors

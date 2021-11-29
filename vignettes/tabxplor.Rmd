@@ -18,7 +18,7 @@ knitr::opts_chunk$set(
 library(tabxplor)
 set_color_style(type = "text", theme = "light")
 ```
-
+ 
 ```{r, echo = FALSE, include = FALSE}
 options(crayon.enabled = TRUE)
 knitr::knit_hooks$set(output = function(x, options){

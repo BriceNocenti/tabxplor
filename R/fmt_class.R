@@ -98,6 +98,7 @@ globalVariables(c(":="))
 #' @param col_var The name of the \code{col_var} used to calculate the vector
 #' @param totcol \code{TRUE} when the vector is a total column
 #' @param refcol \code{TRUE} when the vector is a reference column
+#' @param fmt A fmt vector to test or to modify fields.
 #' @param color The type of color to print :
 #' \itemize{
 #'   \item \code{"no"}: no colors are printed.
@@ -632,14 +633,14 @@ get_wn     <- function(fmt) { #If there is no weighted counts, take counts
 #' @keywords internal
 # @export
 get_pct    <- fmt_field_factory("pct")
-# @describeIn fmt get the "pct" field
+# @describeIn fmt get the "diff" field (differences from totals or first cells)
 #' @keywords internal
 # @export
 get_diff   <- fmt_field_factory("diff")
 #get_pct_ci <- function(fmt) vctrs::field("pct")
-# @describeIn fmt get the "diff" field (differences from totals or first cells)
-#' @keywords internal
-# @export
+#' @describeIn fmt get the "digits" field
+# @keywords internal
+#' @export
 get_digits <- fmt_field_factory("digits")
 # @describeIn fmt get the "ctr" field (relative contributions of cells to variance)
 #' @keywords internal
@@ -996,16 +997,16 @@ set_wn      <- fmt_set_field_factory("wn"     , cast = double()   )
 #' @keywords internal
 # @export
 set_pct     <- fmt_set_field_factory("pct"    , cast = double()   )
-# @describeIn fmt set the "diff" field
+# @describeIn fmt set the "diff" field (differences from totals or first cells)
 #' @keywords internal
 # @export
 set_diff    <- fmt_set_field_factory("diff"   , cast = double()   )
-# @describeIn fmt set the "digits" field (differences from totals or first cells)
-#' @keywords internal
-# @export
+#' @describeIn fmt set the "digits" field
+# @keywords internal
+#' @export
 set_digits  <- fmt_set_field_factory("digits" , cast = integer()  )
 # @describeIn fmt set the "ctr" field (relative contributions of cells to variance)
-#' @keywords internal
+# @keywords internal
 # @export
 set_ctr     <- fmt_set_field_factory("ctr"    , cast = double()   )
 # @describeIn fmt set the "mean" field
@@ -1074,7 +1075,7 @@ set_color     <- function(fmt, color) {
 #' @keywords internal
 # @export
 set_comp      <- function(fmt, value = c("tab", "all")) {
-  `attr<-`(fmt, "comp_all", value == "all")
+  `attr<-`(fmt, "comp_all", value == "all") # PB ??
 }
 
 
@@ -1550,6 +1551,11 @@ tab_color_legend <- function(x, colored = TRUE, mode = c("console", "html"),
                              text_color = NULL,
                              grey_color = NULL) {
   color     <- get_color(x)
+
+  x <- x[!is.na(color) & !color %in% c("no", "")]
+
+  color <- get_color(x)
+
   type      <- get_type(x)
   diff_type <- get_diff_type(x)
   col_vars_levels <- tab_get_vars(x)$col_vars_levels %>%
@@ -2287,9 +2293,11 @@ vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
       display = get_display(x),      #dplyr::if_else(get_display(x) == get_display(x)), true = get_display(x), false = "n),
       n       = vctrs::vec_arith_base(op, get_n(x)  , get_n(y)  ), #%>% positive_integer(),
       wn      = vctrs::vec_arith_base(op, get_wn(x) , get_wn(y) ), #%>% positive_double(),
-      pct     = ifelse(same_type & ! type_x %in% c("col", "mean", "n"),
-                       yes  = vctrs::vec_arith_base(op, get_pct(x), get_pct(y)),
-                       no = NA_real_) %>% tidyr::replace_na(NA_real_), #NA_real_
+      pct     = if (same_type & !type_x %in% c("col", "mean", "n") ) {
+        tidyr::replace_na(vctrs::vec_arith_base(op, get_pct(x), get_pct(y)), NA_real_)
+      } else {
+        rep_NA_real
+      },
       diff    = rep_NA_real,
       digits  = pmax(get_digits(x), get_digits(y)),
       ctr     = rep_NA_real, # ???

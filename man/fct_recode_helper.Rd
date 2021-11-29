@@ -19,7 +19,8 @@ fct_recode_helper(
 \item{.data_out_name}{The name of the output data frame, if different from the
 input data frame.}
 
-\item{cat}{By default the result is written in a temporary file and opened. Set to
+\item{cat}{By default the result is written in the console if there are less than
+6 variables, written in a temporary file and opened otherwise. Set to
 false to get a data frame with a character variable instead.}
 }
 \value{

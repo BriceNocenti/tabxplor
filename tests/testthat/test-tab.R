@@ -1,4 +1,3 @@
-
 data <- dplyr::starwars %>%
   tab_prepare("sex", c("hair_color", "eye_color", "mass"), "gender",
               rare_to_other = TRUE, n_min = 5, na = "drop")
