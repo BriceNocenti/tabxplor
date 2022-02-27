@@ -43,6 +43,11 @@ analysis workflows.
 ``` r
 library(tabxplor)
 tab(forcats::gss_cat, marital, race)
+#> Warning: data frame results in `filter()` are deprecated, use `if_any()` or
+#> `if_all()`.
+
+#> Warning: data frame results in `filter()` are deprecated, use `if_any()` or
+#> `if_all()`.
 #> # A tabxplor tab: 7 x 5
 #>   marital       Other Black  White  Total
 #>   <fct>           <n>   <n>    <n>    <n>
@@ -100,17 +105,22 @@ or the row variable. With text variables, only the first level is kept
 
 ``` r
 tab(dplyr::storms, category, status, sup_cols = c("pressure", "wind"))
+#> Warning: data frame results in `filter()` are deprecated, use `if_any()` or
+#> `if_all()`.
+
+#> Warning: data frame results in `filter()` are deprecated, use `if_any()` or
+#> `if_all()`.
 #> # A tabxplor tab: 8 x 7
-#>   category hurricane `tropical depressi~ `tropical storm`   Total pressure  wind
-#>   <fct>    <n-mixed>           <n-mixed>        <n-mixed> <n-mix>   <mean> <mea>
-#> 1 -1               0               2 545                0   2 545    1 008    27
-#> 2 0                0                   0            4 373   4 373      999    46
-#> 3 1            1 684                   0                1   1 685      982    71
-#> 4 2              628                   0                0     628      967    89
-#> 5 3              363                   0                0     363      954   105
-#> 6 4              348                   0                0     348      940   122
-#> 7 5               68                   0                0      68      916   145
-#> 8 Total        3 091               2 545            4 374     100      992    53
+#>   category hurricane `tropical depressi~` `tropical storm`  Total pressure  wind
+#>   <fct>    <n-mixed>            <n-mixed>        <n-mixed> <n-mi>   <mean> <mea>
+#> 1 -1               0                2 898                0  2 898    1 008    27
+#> 2 0                0                    0            5 347  5 347      999    46
+#> 3 1            1 933                    0                1  1 934      981    71
+#> 4 2              749                    0                0    749      967    89
+#> 5 3              434                    0                0    434      954   104
+#> 6 4              411                    0                0    411      939   122
+#> 7 5               86                    0                0     86      917   146
+#> 8 Total        3 613                2 898            5 348 11 859      992    54
 ```
 
 ## References and comparison levels for colors
@@ -148,6 +158,11 @@ It it possible to print confidence intervals for each cell:
 
 ``` r
 tab(forcats::gss_cat, race, marital, pct = "row", ci = "cell")
+#> Warning: data frame results in `filter()` are deprecated, use `if_any()` or
+#> `if_all()`.
+
+#> Warning: data frame results in `filter()` are deprecated, use `if_any()` or
+#> `if_all()`.
 #> # A tabxplor tab: 4 x 8
 #>   race   `No answer` `Never married` Separated Divorced Widowed Married  Total
 #>   <fct>       <row%>          <row%>    <row%>   <row%>  <row%>  <row%> <row%>
@@ -195,6 +210,11 @@ from the independent hypothesis (the two variables may be independent).
 
 ``` r
 tab(forcats::gss_cat, race, marital, chi2 = TRUE)
+#> Warning: data frame results in `filter()` are deprecated, use `if_any()` or
+#> `if_all()`.
+
+#> Warning: data frame results in `filter()` are deprecated, use `if_any()` or
+#> `if_all()`.
 #> chi2 stats     marital
 #> df                  12
 #> variance        0.0464

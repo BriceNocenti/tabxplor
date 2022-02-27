@@ -1481,9 +1481,10 @@ tab_plain <- function(data, row_var, col_var, ..., wt,
 
   #remove all unwanted NAs for col var (those for row and tab vars were removed
   #in tab_may, those we want to keep were turned to explicit in dat_prepare)
-  data <- data %>% dplyr::select(!!row_var, !!col_var, !!!tab_vars, !!wt) %>%
+  data <- data %>%
+    dplyr::select(!!row_var, !!col_var, !!!tab_vars, !!wt) %>%
     dplyr::with_groups(NULL,
-                       ~ dplyr::filter(., dplyr::across(
+                       ~ dplyr::filter(., dplyr::if_any(
                          tidyselect::all_of(c(rlang::as_name(col_var),
                                               rlang::as_name(row_var),
                                               purrr::map_chr(tab_vars, rlang::as_name))),

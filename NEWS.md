@@ -10,6 +10,8 @@
 * Addition between `fmt` vectors wasn't working no more with percentages
 * In `tab_plain`, `col_var` was not sorted anymore (`names_sort = TRUE` added in `pivot_wider`)
 * `tab_color_legend()` was not working when some cols were colored and some not colored
+* In `tab()` functions, correction was made to remove a new R 4.1.2 dplyr warning message (data frame results in `filter()` are deprecated, use `if_any()` or `if_all()`). 
+
 
 # tabxplor 1.0.2
 
