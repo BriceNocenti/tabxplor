@@ -43,12 +43,7 @@ analysis workflows.
 ``` r
 library(tabxplor)
 tab(forcats::gss_cat, marital, race)
-#> Warning: data frame results in `filter()` are deprecated, use `if_any()` or
-#> `if_all()`.
-
-#> Warning: data frame results in `filter()` are deprecated, use `if_any()` or
-#> `if_all()`.
-#> # A tabxplor tab: 7 x 5
+#> # A tabxplor tab: 7 × 5
 #>   marital       Other Black  White  Total
 #>   <fct>           <n>   <n>    <n>    <n>
 #> 1 No answer         2     2     13     17
@@ -105,13 +100,8 @@ or the row variable. With text variables, only the first level is kept
 
 ``` r
 tab(dplyr::storms, category, status, sup_cols = c("pressure", "wind"))
-#> Warning: data frame results in `filter()` are deprecated, use `if_any()` or
-#> `if_all()`.
-
-#> Warning: data frame results in `filter()` are deprecated, use `if_any()` or
-#> `if_all()`.
-#> # A tabxplor tab: 8 x 7
-#>   category hurricane `tropical depressi~` `tropical storm`  Total pressure  wind
+#> # A tabxplor tab: 8 × 7
+#>   category hurricane `tropical depressi…` `tropical storm`  Total pressure  wind
 #>   <fct>    <n-mixed>            <n-mixed>        <n-mixed> <n-mi>   <mean> <mea>
 #> 1 -1               0                2 898                0  2 898    1 008    27
 #> 2 0                0                    0            5 347  5 347      999    46
@@ -158,12 +148,7 @@ It it possible to print confidence intervals for each cell:
 
 ``` r
 tab(forcats::gss_cat, race, marital, pct = "row", ci = "cell")
-#> Warning: data frame results in `filter()` are deprecated, use `if_any()` or
-#> `if_all()`.
-
-#> Warning: data frame results in `filter()` are deprecated, use `if_any()` or
-#> `if_all()`.
-#> # A tabxplor tab: 4 x 8
+#> # A tabxplor tab: 4 × 8
 #>   race   `No answer` `Never married` Separated Divorced Widowed Married  Total
 #>   <fct>       <row%>          <row%>    <row%>   <row%>  <row%>  <row%> <row%>
 #> 1 Other       0%±0.3         32%±2.1    6%±1.1  11%±1.5  4%±0.9 48%±2.2   100%
@@ -210,18 +195,13 @@ from the independent hypothesis (the two variables may be independent).
 
 ``` r
 tab(forcats::gss_cat, race, marital, chi2 = TRUE)
-#> Warning: data frame results in `filter()` are deprecated, use `if_any()` or
-#> `if_all()`.
-
-#> Warning: data frame results in `filter()` are deprecated, use `if_any()` or
-#> `if_all()`.
 #> chi2 stats     marital
 #> df                  12
 #> variance        0.0464
 #> pvalue              0%
 #> count           21 483
 #> 
-#> # A tabxplor tab: 4 x 8
+#> # A tabxplor tab: 4 × 8
 #>   race   `No answer` `Never married` Separated Divorced Widowed Married  Total
 #>   <fct>          <n>             <n>       <n>      <n>     <n>     <n>    <n>
 #> 1 Other            2             633       110      212      70     932  1 959

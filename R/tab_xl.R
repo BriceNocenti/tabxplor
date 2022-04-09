@@ -1230,8 +1230,8 @@ tab_get_titles <- function(tabs, row, col, tab, max = 3) {
 xl_index <- function(cols = "", rows = "", start_row = 0L, offset = 1L,
                      fixedcol = FALSE, fixedrow = FALSE) {
 
-  if (class(cols) == "list") cols <- purrr::map_int(cols, ~ .[1])
-  if (class(rows) == "list") rows <- purrr::map_int(rows, ~ .[1])
+  if (is.list(cols)) cols <- purrr::map_int(cols, ~ .[1])
+  if (is.list(rows)) rows <- purrr::map_int(rows, ~ .[1])
 
   fixc <- if (fixedcol) { "$" } else { "" }
   fixr <- if (fixedrow) { "$" } else { "" }

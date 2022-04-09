@@ -735,7 +735,7 @@ tab_many <- function(data, row_var, col_vars, tab_vars, wt,
     )
   # if (!missing(filter)) data <- dplyr::filter(data, {{filter}})
 
-  data <- data %>% dplyr::filter(dplyr::across(
+  data <- data %>% dplyr::filter(dplyr::if_all(
     !!!tab_vars | !!row_var, ~ !is.na(.)
   ))
 
@@ -1484,7 +1484,7 @@ tab_plain <- function(data, row_var, col_var, ..., wt,
   data <- data %>%
     dplyr::select(!!row_var, !!col_var, !!!tab_vars, !!wt) %>%
     dplyr::with_groups(NULL,
-                       ~ dplyr::filter(., dplyr::if_any(
+                       ~ dplyr::filter(., dplyr::if_all(
                          tidyselect::all_of(c(rlang::as_name(col_var),
                                               rlang::as_name(row_var),
                                               purrr::map_chr(tab_vars, rlang::as_name))),
@@ -3095,12 +3095,15 @@ tab_match_groups_and_totrows <- function(tabs) {
 
 #' @keywords internal
 tab_add_totcol_if_no <- function(tabs) {
-  if (!any(is_totcol(tabs)) & ! all(get_type(tabs) == "mean") ) {
-    tabs <- tabs %>% tab_tot("col", totcol = "last")
-    warning("no total column, one was added (from the last non-mean column)")
+    if (!any(is_totcol(tabs)) & ! all(get_type(tabs) == "mean")) { # & !only_one_column
+      only_one_column <- length(which(purrr::map_lgl(tabs, is_fmt))) == 1L
+      tabs <- tabs %>% tab_tot("col", totcol = "last")
+    if (!only_one_column) warning("no total column, one was added (from the last non-mean column)")
   }
   tabs
 }
+
+
 
 
 
@@ -3242,7 +3245,7 @@ tab_prepare_core <-
       tidyselect::all_of(keep),
       forcats::fct_explicit_na, na_level = "NA"
     ))
-    data <- data %>% dplyr::filter(dplyr::across(
+    data <- data %>% dplyr::filter(dplyr::if_all(
       tidyselect::all_of(drop_all),
       ~ !is.na(.)
     ))

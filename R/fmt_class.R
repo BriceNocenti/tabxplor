@@ -494,6 +494,27 @@ as_totcol     <- function(x, totcol = TRUE) {
 }
 
 
+#' Get HTML Color Code of a fmt vector
+#' @param fmt A fmt vector.
+#'
+#' @return A character vector with html color codes, of the length of the initial vector.
+#' @export
+  fmt_get_color_code <- function(fmt) {
+  color_selection <- fmt_color_selection(fmt) %>% purrr::map(which)
+
+  color_styles <- select_in_color_style(length(color_selection))
+  color_styles <- get_color_style("color_code", type = "text", theme = "light")[color_styles]
+
+  color_positions <- color_selection %>%
+    purrr::map2(color_styles, ~ purrr::set_names(.x, stringr::str_to_upper(.y))) %>%
+    purrr::flatten_int()
+
+  no_color <- 1:length(fmt)
+  no_color <- purrr::set_names(no_color[!no_color %in% color_positions], NA_character_)
+
+  names(sort(c(color_positions, no_color)))
+}
+
 
 
 # INTERNAL FUNCTIONS #####################################################################
