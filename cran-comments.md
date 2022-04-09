@@ -1,11 +1,13 @@
-## New version (with bug corrections and few added functionalities)
-This is the first submission (of the second version of tabxplor to be submitted to CRAN). 
+## New version 1.0.3 (bug corrections and few added functionalities)
+This is the first submission of this version of tabxplor. 
+It is essentialy bug corrections, and removal of dplyr release version 
+new warning messages.
 
 ## Test environments
-* local Windows 10 install, R 4.1.2 and R devel (4.3.0)
-* Ubuntu 20.04.3 (on github actions), R 4.1.1
+* local Windows 10 install, R 4.1.2 and R devel
+* Ubuntu 20.04.4 LTS (on github actions), R 4.1.3
 
-* https://builder.r-hub.io : (version name was wrong but content was right)
+* https://builder.r-hub.io : (version number was wrong but content was right)
    - Windows Server 2022, R-devel, 64 bit
    (Build ID: tabxplor_1.0.2.9002.tar.gz-a1195122ee0441f2b28584bc9eef2f2c)
    - Ubuntu Linux 20.04.1 LTS, R-release, GCC
@@ -13,8 +15,8 @@ This is the first submission (of the second version of tabxplor to be submitted 
    - Fedora Linux, R-devel, clang, gfortran
    (Build ID: tabxplor_1.0.2.9002.tar.gz-d932174a226649d180e9a03c012e8856)
 
-* https://win-builder.r-project.org/0L279RGSAhBD/ : 
-   - Windows x86_64-w64-mingw32 (64-bit), R-release
+* https://win-builder.r-project.org/w65K9i9xhO0F/ : 
+   - Windows x86_64-w64-mingw32 (64-bit), R-devel
 
 ## R CMD check results
 * local Windows 10 and Ubuntu 20.04 (on github actions) :
