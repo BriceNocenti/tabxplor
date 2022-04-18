@@ -494,16 +494,24 @@ as_totcol     <- function(x, totcol = TRUE) {
 }
 
 
-#' Get HTML Color Code of a fmt vector
-#' @param fmt A fmt vector.
-#'
+#' @describeIn tab_many Get HTML Color Code of a fmt vector
 #' @return A character vector with html color codes, of the length of the initial vector.
 #' @export
-  fmt_get_color_code <- function(fmt) {
+#'
+#' @examples
+#' \donttest{
+#' tabs <- tab(forcats::gss_cat, race, marital, pct = "row", color = "diff")
+#' dplyr::mutate(tabs, across(where(is_fmt), fmt_get_color_code))
+#'}
+
+fmt_get_color_code <- function(fmt, type = "text", theme = "light", html_24_bit = NULL) {
+  if (is.null(html_24_bit)) {getOption("tabxplor.color_html_24_bit")} else {html_24_bit}
+
   color_selection <- fmt_color_selection(fmt) %>% purrr::map(which)
 
   color_styles <- select_in_color_style(length(color_selection))
-  color_styles <- get_color_style("color_code", type = "text", theme = "light")[color_styles]
+  color_styles <- get_color_style("color_code", type = type, theme = theme,
+                                  html_24_bit = html_24_bit)[color_styles]
 
   color_positions <- color_selection %>%
     purrr::map2(color_styles, ~ purrr::set_names(.x, stringr::str_to_upper(.y))) %>%

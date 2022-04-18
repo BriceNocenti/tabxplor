@@ -1511,8 +1511,7 @@ tab_plain <- function(data, row_var, col_var, ..., wt,
 
   if (! is_grouped) {
     data <- switch(type,
-                   "factor"   = dplyr::group_by(data, !!!tab_vars, !!row_var,
-                                                !!col_var),
+                   "factor"   = dplyr::group_by(data, !!!tab_vars, !!row_var, !!col_var),
                    "numeric"  = dplyr::group_by(data, !!!tab_vars, !!fct_var     ) )
   }
 
@@ -1573,7 +1572,8 @@ tab_plain <- function(data, row_var, col_var, ..., wt,
              .groups = 'drop') %>%
              tidyr::pivot_wider(names_from = !!col_var,  names_sort = TRUE,
                                 values_from = .data$nums,
-                                values_fill = fmt0("wn", digits, type = "n")),
+                                values_fill = fmt0(dplyr::if_else(wt == "no_weight", "n", "wn"),
+                                                   digits, type = "n")),
 
            "numeric" = data %>%
              dplyr::summarise(!!num_var := new_fmt(
