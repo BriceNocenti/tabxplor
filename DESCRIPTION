@@ -44,5 +44,6 @@ Imports:
     pillar (>= 1.6.0),
     stats (>= 4.0.0),
     kableExtra (>= 1.3.0),
-    DescTools (>= 0.99.0)
+    DescTools (>= 0.99.0),
+    data.table
 VignetteBuilder: knitr

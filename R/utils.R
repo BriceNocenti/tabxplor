@@ -19,6 +19,7 @@ NULL
 # Global options :
 
 
+
 #' @keywords internal
 .onLoad <- function(libname, pkgname) {
   # options "tabxplor.color_style_type" and "tabxplor.color_style_theme" :

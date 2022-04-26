@@ -7,9 +7,10 @@
 #' @name tabxplor-vctrs
 NULL
 
+
 # binding for global variables not found by R cmd check
 . = NULL
-globalVariables(c(":="))
+globalVariables(c(":=", ".SD", ".N"))
 
 
 # EXPORTED FUNCTIONS TO WORK WITH CLASS FMT ##############################################
@@ -572,6 +573,14 @@ new_fmt <- function(n         = integer(),
   #   purrr::map(print)
   # cat("\n")
 
+  # list(n = n, display = display, digits = digits,
+  #      wn = wn, pct = pct, mean = mean,
+  #      diff = diff, ctr = ctr, var = var, ci = ci,
+  #      in_totrow = in_totrow, in_tottab = in_tottab,
+  #      in_refrow = in_refrow) |>
+  #   purrr::map(length) |> print()
+  # cat("\n")
+
   #vctrs::vec_assert(display, character()) #check display or size
   display <- vctrs::vec_recycle(display, size = length(n))
   # vctrs::vec_assert(n     , integer()) #, size = length(n)
@@ -714,7 +723,7 @@ get_ref_means <- function(x) {
   comp      <- get_comp_all(x)
   diff_type <- get_diff_type(x)
 
-  refrows <- if (diff_type == "first") { is_refrow(x) } else { is_totrow(x) }
+  refrows <- if (diff_type == "tot") { is_totrow(x) } else { is_refrow(x) }
   tottabs <- is_tottab(x)
   mean    <- get_mean(x)
 
@@ -1080,7 +1089,7 @@ as_refcol     <- function(fmt, refcol = TRUE) {
 #' @keywords internal
 # @export
 set_diff_type   <- function(fmt, diff_type) {
-  stopifnot(diff_type %in% c("tot", "first", "no", "", NA_character_))
+  #stopifnot(diff_type %in% c("tot", "first", "no", "", NA_character_))
   `attr<-`(fmt ,"diff_type" , diff_type)
 }
 # @describeIn fmt set the confidence intervals type attribute of a \code{fmt} vector
@@ -1310,7 +1319,7 @@ pillar_shaft.tabxplor_fmt <- function(x, ...) {
   ok      <- !na_out & !nas
 
 
-  if (!is.na(color) & color != "" & !(color == "contrib" & !any(totrows))) {
+  if (!is.na(color) & ! color %in% c("no", "") & !(color == "contrib" & !any(totrows))) {
     color_selection <- fmt_color_selection(x)
 
     color_styles <- select_in_color_style(length(color_selection))
@@ -1710,7 +1719,9 @@ tab_color_legend <- function(x, colored = TRUE, mode = c("console", "html"),
                                ~ sprintf("%1.3g", purrr::map_dbl(., ~ .[1]))),
       ) %>%
         purrr::map2(.data$color_type, ~ breaks_with_op(.x, .y)),
-      ref  = purrr::map_chr(.data$diff_type, ~ switch(., "first" = "x1", "tot")),
+      ref  = purrr::map_chr(.data$diff_type, ~ if (is.na(suppressWarnings(as.integer(.)))) {
+        switch(., "first" = "x1", "tot" = "tot", .data$diff_type)
+      } else {paste0("x", as.integer(.))} ),
       sign = purrr::map(.data$breaks, ~ 1:length(.)) %>%
         purrr::map(~ dplyr::if_else(condition = . >= max(.)/2 +1,
                                     true      = " < ",
@@ -1910,29 +1921,7 @@ get_reference <- function(x, mode = c("cells", "lines", "all_totals")) {
   refcol      <- is_refcol(x)
   tottab_ref  <- is_tottab(x) & refrows
 
-  if (diff_type == "first") {
-    switch(mode[1],
-           "cells"      = dplyr::case_when(
-             type %in% c("row", "mean") & !comp_all ~ refrows & !totcol     ,
-             type %in% c("row", "mean") &  comp_all ~ tottab_ref & !totcol  ,
-             type == "col"                          ~ refcol & !totrows     ,
-             TRUE                                   ~ rep(FALSE, length(x)   )
-           ),
-           "lines"      = dplyr::case_when(
-             type %in% c("row", "mean") & !comp_all ~ refrows               ,
-             type %in% c("row", "mean") &  comp_all ~ tottab_ref            ,
-             type == "col"                          ~ rep(refcol, length(x)),
-             TRUE                                   ~ rep(FALSE, length(x)   )
-           ),
-           "all_totals" = dplyr::case_when(
-             type %in% c("row", "mean") & !comp_all ~ refrows | totcol      ,
-             type %in% c("row", "mean") &  comp_all ~ tottab_ref | totcol   ,
-             type == "col"                          ~ totrows | refcol      ,
-             TRUE                                   ~ rep(FALSE, length(x)   )
-           )
-    )
-
-  } else {
+  if (diff_type == "tot") {
     switch(mode[1],
            "cells"      = dplyr::case_when(
              type %in% c("row", "mean") & !comp_all ~ totrows & !totcol     ,
@@ -1963,6 +1952,28 @@ get_reference <- function(x, mode = c("cells", "lines", "all_totals")) {
              TRUE                                   ~ rep(FALSE, length(x)   )
            )
     )
+  } else {
+    switch(mode[1],
+           "cells"      = dplyr::case_when(
+             type %in% c("row", "mean") & !comp_all ~ refrows & !totcol     ,
+             type %in% c("row", "mean") &  comp_all ~ tottab_ref & !totcol  ,
+             type == "col"                          ~ refcol & !totrows     ,
+             TRUE                                   ~ rep(FALSE, length(x)   )
+           ),
+           "lines"      = dplyr::case_when(
+             type %in% c("row", "mean") & !comp_all ~ refrows               ,
+             type %in% c("row", "mean") &  comp_all ~ tottab_ref            ,
+             type == "col"                          ~ rep(refcol, length(x)),
+             TRUE                                   ~ rep(FALSE, length(x)   )
+           ),
+           "all_totals" = dplyr::case_when(
+             type %in% c("row", "mean") & !comp_all ~ refrows | totcol      ,
+             type %in% c("row", "mean") &  comp_all ~ tottab_ref | totcol   ,
+             type == "col"                          ~ totrows | refcol      ,
+             TRUE                                   ~ rep(FALSE, length(x)   )
+           )
+    )
+
   }
 }
 
@@ -2175,15 +2186,15 @@ vec_cast.tabxplor_fmt.tabxplor_fmt  <- function(x, to, ...)
 #' @export
 vec_cast.tabxplor_fmt.double   <- function(x, to, ...)
   fmt(n = NA_integer_            ,
-      display = "wn", wn = x     ,
-      type     = get_type    (to),
-      comp_all = get_comp_all(to, replace_na = FALSE),
+      display   = "wn", wn = x     ,
+      type      = get_type    (to),
+      comp_all  = get_comp_all(to, replace_na = FALSE),
       diff_type = get_diff_type(to),
-      ci_type  = get_ci_type (to),
-      col_var  = get_col_var (to),
-      totcol   = is_totcol   (to),
+      ci_type   = get_ci_type (to),
+      col_var   = get_col_var (to),
+      totcol    = is_totcol   (to),
       refcol    = is_refcol   (to),
-      color    = get_color   (to),
+      color     = get_color   (to),
 
   )
 #' Convert fmt into double

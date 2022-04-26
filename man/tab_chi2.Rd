@@ -49,12 +49,10 @@ Add Chi2 summaries to a \code{\link[tabxplor]{tab}}
 \donttest{
 data <- dplyr::starwars \%>\%
   tab_prepare(sex, hair_color, gender, rare_to_other = TRUE,
-              n_min = 5, na = "keep")
+              n_min = 5, na_drop_all = sex)
 
 data \%>\%
-  tab_plain(sex, hair_color, gender) \%>\%
-  tab_totaltab("line")  \%>\%
-  tab_tot()  \%>\%
+  tab_plain(sex, hair_color, gender, tot = c("row", "col")) \%>\%
   tab_chi2(calc = c("p", "ctr"), color = TRUE)
   }
 }

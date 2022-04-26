@@ -21,10 +21,9 @@ tab(
   totaltab_name = "Ensemble",
   tot = c("row", "col"),
   total_names = "Total",
-  chi2 = NULL,
-  ci = NULL,
+  chi2 = FALSE,
+  ci = "no",
   conf_level = 0.95,
-  ci_visible = NULL,
   subtext = "",
   cleannames = NULL,
   rare_to_other = FALSE,
@@ -157,9 +156,6 @@ Means use classic method. This can be changed in \code{\link{tab_ci}}.}
 \item{conf_level}{The confidence level, as a single numeric between 0 and 1.
 Default to 0.95 (95\%).}
 
-\item{ci_visible}{By default, confidence intervals are calculated and used to set
-colors, but not printed. Set to \code{TRUE} to print them in the result.}
-
 \item{subtext}{A character vector to print rows of legend under the table.}
 
 \item{cleannames}{Set to \code{TRUE} to clean levels names, by removing
@@ -178,6 +174,9 @@ first, as a single string (which will be converted to code, i.e. to a call).
 Useful when printing multiples tabs with \code{\link[tibble:tribble]{tibble::tribble}},
 to use different filters for similar tables or simply make the field of observation
 more visible into the code.}
+
+\item{ci_visible}{By default, confidence intervals are calculated and used to set
+colors, but not printed. Set to \code{TRUE} to print them in the result.}
 }
 \value{
 A \code{tibble} of class \code{tab}, possibly with colored reading helpers.
@@ -201,8 +200,6 @@ Wrapper around the more powerful \code{\link{tab_many}}.
 # A simple cross-table:
 tab(forcats::gss_cat, marital, race)
 
-# With one numeric row or col variables it calculates means by category:
-tab(forcats::gss_cat, marital, age)
 
 # With more variables provided, `tab` makes a subtables for each combination of levels:
 \donttest{

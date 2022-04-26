@@ -62,7 +62,7 @@ Add percentages and diffs to a \code{\link[tabxplor]{tab}}
 \donttest{
 data <- dplyr::starwars \%>\%
   tab_prepare(sex, hair_color, gender, rare_to_other = TRUE,
-              n_min = 5, na = "keep")
+              n_min = 5, na_drop_all = sex)
 
 data \%>\%
   tab_plain(sex, hair_color, gender) \%>\%

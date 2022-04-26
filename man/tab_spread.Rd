@@ -9,8 +9,7 @@ tab_spread(
   spread_vars,
   names_prefix,
   names_sort = FALSE,
-  totname = "Total",
-  recalculate = TRUE
+  totname = "Total"
 )
 }
 \arguments{
@@ -27,11 +26,6 @@ to pass to column, with a syntax of type \code{c(var1, var2, ...)}.}
 If \code{FALSE}, the default, column names are ordered by first appearance.}
 
 \item{totname}{The new name of the total rows, as a single string.}
-
-\item{recalculate}{Where there is several \code{tab_vars}, some totals are missing in the
-spreaded table. By default, \code{tab_spread} try to recalculate them based on \code{pct} and \code{wn}.
-Warning : with \code{means}, a weighted mean is calculated, which is only an approximation.
-Set to \code{FALSE} to avoid this behavior.}
 }
 \value{
 A \code{tibble} of class \code{tab}, with less rows and more columns.

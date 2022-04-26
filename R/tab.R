@@ -1,3 +1,9 @@
+#Import data.table in NAMESPACE :
+#' Internal data.table methods
+#' @import data.table
+#' @keywords internal
+#' @name tabxplor-data.table
+NULL
 
 
 # To possibly add :
@@ -186,8 +192,8 @@
 #' @examples # A simple cross-table:
 #' tab(forcats::gss_cat, marital, race)
 #'
-#' # With one numeric row or col variables it calculates means by category:
-#' tab(forcats::gss_cat, marital, age)
+# # With one numeric row or col variables it calculates means by category:
+# tab(forcats::gss_cat, marital, age)
 #'
 #' # With more variables provided, `tab` makes a subtables for each combination of levels:
 #' \donttest{
@@ -253,8 +259,8 @@ tab <- function(data, row_var, col_var, tab_vars, wt, sup_cols,
 
                 totaltab = "line", totaltab_name = "Ensemble",
                 tot = c("row", "col"), total_names = "Total",
-                chi2 = NULL,
-                ci = NULL, conf_level = 0.95, ci_visible = NULL,
+                chi2 = FALSE,
+                ci = "no", conf_level = 0.95,
 
                 subtext = "", cleannames = NULL,
                 rare_to_other = FALSE, n_min = 30, other_level = "Others",
@@ -281,123 +287,63 @@ tab <- function(data, row_var, col_var, tab_vars, wt, sup_cols,
 
   tab_vars <- rlang::enquo(tab_vars)
   if (quo_miss_na_null_empty_no(tab_vars)) {
-    data     <- data %>% dplyr::mutate(no_tab_vars = factor(" "))
-    tab_vars <- "no_tab_vars"
+    tab_vars <- character()
   } else {
-    pos_tab_vars <- tidyselect::eval_select(tab_vars, data)
-    tab_vars     <- names(pos_tab_vars)
+    tab_vars <- names(tidyselect::eval_select(tab_vars, data))
   }
 
-  # if (missing(...)) {
-  #   data <- data %>% dplyr::mutate(no_tab_vars = factor(" "))
-  #   tab_vars <- "no_tab_vars" #rlang::exprs(no_tab_vars)
-  # } else {
-  #   tab_vars_quo <- rlang::enquos(...)
-  #
-  #   NA_tab_vars  <- purrr::map(tab_vars_quo,
-  #                              ~ is.na(as.character(rlang::get_expr(.)))) %>%
-  #     purrr::flatten_lgl()
-  #   if (all(NA_tab_vars) ) {
-  #     data <- data %>% dplyr::mutate(no_tab_vars = factor(" "))
-  #     tab_vars <- "no_tab_vars"
-  #   } else {
-  #     tab_vars     <- rlang::expr(c(...))
-  #     pos_tab_vars <- tidyselect::eval_select(tab_vars, data)
-  #     tab_vars     <- names(pos_tab_vars) #rlang::syms(
-  #   }
-  # }
-  #
   sup_cols <- rlang::enquo(sup_cols)
   if (quo_miss_na_null_empty_no(sup_cols)) {
     sup_cols <- character()
   } else {
-    pos_sup_cols <- tidyselect::eval_select(sup_cols, data)
-    sup_cols     <- names(pos_sup_cols)
+    sup_cols <- names(tidyselect::eval_select(sup_cols, data))
   }
 
   wt_quo <- rlang::enquo(wt)
   if (quo_miss_na_null_empty_no(wt_quo)) {
-    data <- data %>% dplyr::mutate(no_weight = factor("n"))
-    wt <- rlang::sym("no_weight")
+    wt <- character()
   } else {
     wt <- rlang::ensym(wt)
   }
 
+  vctrs::vec_assert(comp, size = 1)
   vctrs::vec_assert(color, size = 1)
   vctrs::vec_assert(pct  , size = 1)
   vctrs::vec_assert(diff , size = 1)
-  mean_col <- (is.numeric(dplyr::pull(data, row_var)) |
-                 is.numeric(dplyr::pull(data, col_var)))
-  ci_diff <- if (!is.null(ci)) { ci == "diff" } else { FALSE }
-  if (color == "auto") color <- dplyr::case_when(
-    (mean_col | pct %in% c("row", "col")) & ci_diff ~ "after_ci",
-    (mean_col | pct %in% c("row", "col"))           ~ "diff"    ,
-    TRUE                                            ~ "contrib" ,
-  )
-  if (color %in% c("diff", "diff_ci", "after_ci") &
-      pct %in% c("no", "all", "all_tabs")         &
-      !mean_col) {
-    stop(paste0("color = '", color, "' can't be calculated with pct = 'all' or with ",
-                "counts (for those categories, only color = 'contrib' is possible)"))
-  }
+  vctrs::vec_assert(na, size = 1)
+  stopifnot(na %in% c("keep", "drop"))
+
+  na_drop_all <- switch(na,
+                        "keep" = character(),
+                        "drop" = c(as.character(row_var), as.character(col_var),
+                                   as.character(tab_vars)))
 
   stopifnot(all(tot %in% c("row", "col", "both", "no", "")))
   if (tot[1] == "both") tot <- c("row", "col")
-  totcol <- if ("col" %in% tot) { col_var } else { "no" } # ?
 
-  if (!is.null(chi2)) if (color == "contrib" & chi2 == FALSE)
-    warning("since color = 'contrib', contributions of cells to the variance of tables
-              must be calculated : chi2 was set to TRUE")
-  if (color == "contrib"){ chi2 <- TRUE } else { if (is.null(chi2)) chi2 <- FALSE }
-
-  if (color %in% c("diff", "diff_ci", "after_ci") & !diff %in% c("tot", "first")) {
-    stop("since color = 'diff', diff must be set to 'tot' or 'first' ")
-  }
-
-  if (!is.null(ci)) if (color %in% c("diff_ci", "after_ci") & ci != "diff")
-    rlang::warn(
-      paste0("since color = '", color, "', the confidence intervals of cells differences",
-             " from totals (or first cells) must be calculated : ci was set to 'diff' ")
-    )
-  if (color %in% c("diff_ci", "after_ci")) {
-    ci <- "diff"
-  } else {
-    if (is.null(ci)) ci <- "no"
-  }
-
-  vctrs::vec_assert(na, size = 1)
-  stopifnot(na %in% c("keep", "drop"))
-  if (na[1] == "keep") na <- c(rep("keep", 2 + length(tab_vars)),
-                               rep("drop", length(sup_cols)))
-  if (na[1] == "drop") na <- c(rep("drop_all", 2 + length(tab_vars)),
-                               rep("drop", length(sup_cols)))
-
-  if (ci == "cell" & is.null(ci_visible)) ci_visible <- TRUE
-  if (is.null(ci_visible))               ci_visible <- FALSE
 
   tab_many(data = data, row_var = !!row_var,
            col_vars = tidyselect::all_of(c(col_var, sup_cols)),
            tab_vars = tidyselect::all_of(tab_vars),
            wt = !!wt,
            levels = c("all", rep("first", length(sup_cols))),
-           na = na,
+           na = na, na_drop_all = tidyselect::all_of(na_drop_all),
            filter = if (!missing(filter)) !!rlang::enquo(filter),
            digits = digits, cleannames = cleannames,
            rare_to_other = rare_to_other, n_min = n_min, other_level = other_level,
            totaltab = totaltab, totaltab_name = totaltab_name,
            totrow = "row" %in% tot,
-           totcol = totcol,
+           totcol = if ("col" %in% tot) { col_var } else { "no" }, # ?
            total_names = total_names,
            pct  = c(pct , rep("row", length(sup_cols))),
-           diff = c(diff, rep(diff , length(sup_cols))),
+           diff = diff, #c(diff, rep(diff , length(sup_cols))),
            comp = comp,
            chi2 = chi2,
            ci = ci,
-           conf_level = conf_level, ci_visible = ci_visible,
+           conf_level = conf_level,
            color = color,
-           subtext = subtext, listed = FALSE)
+           subtext = subtext)
 }
-
 
 
 
@@ -408,11 +354,12 @@ tab <- function(data, row_var, col_var, tab_vars, wt, sup_cols,
 #' exported to Excel with \code{\link{tab_xl}}).
 #' Since objects of class \code{tab} are also of class \code{tibble}, you can then use all
 #' \pkg{dplyr} verbs to modify the result, like \code{\link[dplyr:select]{select}},
-#' like \code{\link[dplyr:arrange]{arrange}}, \code{\link[dplyr:filter]{filter}}
+#' \code{\link[dplyr:arrange]{arrange}}, \code{\link[dplyr:filter]{filter}}
 #' or \code{\link[dplyr:mutate]{mutate}}.
 #' @param data A data frame.
-#' @param row_var The row variable, which will be printed with one level per line.
-#' For numeric variables means are calculated, in a single row.
+#' @param row_vars The row variable, which will be printed with one level per line.
+#' If numeric, it will be converted to factor. If more than one row_var if provided,
+#' a different table is made for each of them.
 #' @param col_vars <\link[tidyr:tidyr_tidy_select]{tidy-select}>
 #' One column is printed for each level of each column variable.
 #' For numeric variables means are calculated, in a single column.
@@ -423,26 +370,25 @@ tab <- function(data, row_var, col_var, tab_vars, wt, sup_cols,
 #' All tab variables are converted to factor. Leave empty to make a simple table.
 #' @param wt A weight variable, of class numeric. Leave empty for unweighted results.
 #' @param levels The levels of \code{col_vars} to keep (for more complex selections
-#'  use \code{\link[dplyr:select]{dplyr::select}}) :
+#'  use \code{\link[dplyr:select]{dplyr::select}}). The argument is vectorised over `col_vars`.
 #' \itemize{
 #'   \item \code{"all"}: by default, all levels are kept.
 #'   \item \code{"first"}: only keep the first level of each \code{col_vars}
 #'   }
-#' @param na The policy to adopt with missing values. It can be a single string, or a
-#' character vector the same length of the number of variables (row + cols + tabs) :
+#' @param na The policy to adopt with missing values. It must be a single string.
 #' \itemize{
 #'   \item \code{na = "keep"}: by default, prints \code{NA}'s as explicit \code{"NA"} level.
 #'   \item \code{na = "drop"}: removes \code{NA} levels before making each table
 #'   (tabs made with different column variables may have a different number of
 #'   observations, and won't exactly have the same total columns).
-#'   \item \code{na = "drop_all"}: first removes observations with NA in any related
-#'   variable, for all tables (tabs for each column variable will have the same number of
-#'   observations).
 #'   }
+#' @param na_drop_all <\link[tidyr:tidyr_tidy_select]{tidy-select}>
+#' The name of the variables for which you want to remove all observations with `NA` for
+#' all tables (tabs for each column variable will have the same number of observations).
 #' @param digits The number of digits to print, as a single integer, or an integer vector
-#' the same length as \code{col_vars}.
-#' @param totaltab The total table, to create with \code{\link{tab_totaltab}},
-#' if there are subtables/groups (i.e. when \code{tab_vars} is provided) :
+#' the same length as \code{col_vars}. The argument is vectorisez over `col_vars`.
+#' @param totaltab The total table, if there are subtables/groups
+#'  (i.e. when \code{tab_vars} is provided). Vectorised over `row_vars`.
 #' \itemize{
 #'   \item \code{"line"}: by default, add a general total line (necessary for
 #'   calculations with \code{comp = "all"})
@@ -453,8 +399,8 @@ tab <- function(data, row_var, col_var, tab_vars, wt, sup_cols,
 #' @param totaltab_name The name of the total table, as a single string.
 #' @param totrow By default, total rows are printed.
 #' Set to \code{FALSE} to remove them (after calculations if needed). Arguments relative
-#' to totals are passed to \code{\link{tab_tot}}.
-#' @param totcol The policy with total columns :
+#' to totals are passed to \code{\link{tab_tot}}. Vectorised over `row_vars`.
+#' @param totcol The policy with total columns. Vectorised over `col_vars`.
 #' \itemize{
 #'   \item \code{"last"}: by default, only prints a total column for the last
 #'   column variable (of class factor, not numeric).
@@ -471,15 +417,24 @@ tab <- function(data, row_var, col_var, tab_vars, wt, sup_cols,
 #'   \item \code{"all"}: frequencies for each subtable/group, if there is \code{tab_vars}.
 #'   \item \code{"all_tabs"}: frequencies for the whole (set of) table(s).
 #' }
-#' @param diff The reference cell to calculate differences (used to print \code{colors}) :
+#' The argument is vectorised over both `row_vars` and `col_vars`. You can then write as
+#'  the following :
+#' `pct = list(row_var1 = list("row", "col", "col"), row_var2 = list("col", "row", "row"))`
+#' @param diff The reference cell to calculate differences (used to print \code{colors}).
+#' Vectorisez over `row_vars`.
 #' \itemize{
 #'   \item \code{"tot"}: by default, cells differences from total rows are calculated with
 #'   \code{pct = "row"}, and cells differences from total columns with \code{pct = "col"}.
 #'   \item \code{"first"}: calculate cells differences from the first cell
 #' of the row or column (useful to color temporal developments).
-#'   \item \code{"no"}: not use diffs to gain calculation time.
+#'   \item \code{n}: when `diff` is an integer, the nth row (or column) is used for comparison.
+#'   \item \code{"regex"}: when `diff` is a string, it it used as a regular expression,
+#'   to match with the names of the rows (or columns). Be precise enough to match only one
+#'   column or row, otherwise you get a warning message.
+#'   \item \code{"no"}: not use diffs.
 #' }
 #' @param comp The comparison level : by subtables/groups, or for the whole table.
+#' Vectorised over `row_vars`.
 #' \itemize{
 #'   \item \code{"tab"}: by default, contributions to variance,
 #' row differences from totals/first cells, and row confidence intervals for these
@@ -490,8 +445,9 @@ tab <- function(data, row_var, col_var, tab_vars, wt, sup_cols,
 #' }
 #' @param chi2 Set to \code{TRUE} to calculate Chi2 summaries with \code{\link{tab_chi2}}.
 #' Useful to print metadata, and to color cells based on their contribution to variance
-#'  (\code{color = "contrib"}).
-#' @param ci The type of confidence intervals to calculate, passed to \code{\link{tab_ci}}
+#'  (\code{color = "contrib"}). Vectorised over `row_vars`.
+#' @param ci The type of confidence intervals to calculate, passed to \code{\link{tab_ci}}.
+#' Vectorised over `row_vars`.
 #'   \itemize{
 #'    \item \code{"cell"}: absolute confidence intervals of cells percentages.
 #'    \item \code{"diff"}: confidence intervals of the difference between a cell and the
@@ -504,9 +460,9 @@ tab <- function(data, row_var, col_var, tab_vars, wt, sup_cols,
 #'  Means use classic method. This can be changed in \code{\link{tab_ci}}.
 #' @param conf_level The confidence level, as a single numeric between 0 and 1.
 #' Default to 0.95 (95%).
-#' @param ci_visible By default, confidence intervals are calculated and used to set
-#' colors, but not printed. Set to \code{TRUE} to print them in the result.
-#' @param color The type of colors to print, as a single string :
+# @param ci_visible By default, confidence intervals are calculated and used to set
+# colors, but not printed. Set to \code{TRUE} to print them in the result.
+#' @param color The type of colors to print, as a single string. Vectorised over `row_vars`.
 #' \itemize{
 #'   \item \code{"no"}: by default, no colors are printed.
 #'   \item \code{"diff"}: color percentages and means based on cells differences from
@@ -536,11 +492,9 @@ tab <- function(data, row_var, col_var, tab_vars, wt, sup_cols,
 #' Useful when printing multiples tabs with \code{\link[tibble:tribble]{tibble::tribble}},
 #' to use different filters for similar tables or simply make the field of observation
 #' more visible into the code.
-#' @param listed By default the result is a single table, grouped by \code{tab_vars}, and
-#' with as many fmt columns as there is levels in all \code{col_vars}. Set to \code{TRUE}
-#' to keep it as a list of individual tables, with one table for each \code{col_vars}.
 #'
 #' @return A \code{tibble} of class \code{tab}, possibly with colored reading helpers.
+#' When there are two `row_vars` or more, a list of \code{tibble} of class \code{tab}.
 #' All non-text columns are of class \code{\link{fmt}}, storing all
 #' the data necessary to print formats and colors. Columns with \code{row_var} and
 #' \code{tab_vars} are of class \code{factor} : every added \code{factor} will be
@@ -575,37 +529,39 @@ tab <- function(data, row_var, col_var, tab_vars, wt, sup_cols,
 #'   .f = tab_many,
 #'   data = forcats::gss_cat, color = "auto", chi2 = TRUE)
 #' }
-tab_many <- function(data, row_var, col_vars, tab_vars, wt,
-                     levels = "all", na = "keep", digits = 0,
+tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
+                     levels = "all", na = "keep", na_drop_all, digits = 0,
                      totaltab = "line", totaltab_name = "Ensemble",
                      totrow = TRUE, totcol = "last", total_names = "Total",
-                     pct = "no", diff = "tot", comp = c("tab", "all"),
+                     pct = "no", diff = "tot", comp = "tab",
                      chi2 = FALSE,
-                     ci = "no", conf_level = 0.95, ci_visible = FALSE,
+                     ci = "no", conf_level = 0.95, #ci_visible = FALSE,
                      color = "no",
                      subtext = "",
                      cleannames = NULL,
                      rare_to_other = FALSE, n_min = 30, other_level = "Others",
-                     filter, listed = FALSE#,
+                     filter #, listed = FALSE,
                      #spread_vars = NULL, names_prefix, names_sort = FALSE
-                     ) {
+) {
 
   cleannames <-
     if (is.null(cleannames)) { getOption("tabxplor.cleannames") } else {cleannames}
 
-  stopifnot(levels %in% c("first", "all"),
-            is.numeric(digits),
-            is.character(na), is.logical(cleannames), is.logical(listed)
-  )
+  stopifnot(levels %in% c("first", "all"))
   lvs <- levels
 
-  row_var_quo <- rlang::enquo(row_var)
-  if (quo_miss_na_null_empty_no(row_var_quo)) {
-    data <- data %>% dplyr::mutate(no_row_var = factor("n"))
-    row_var <- rlang::sym("no_row_var")
+  row_vars <- rlang::enquo(row_vars)
+  if (quo_miss_na_null_empty_no(row_vars)) {
+    data     <- data %>% dplyr::mutate(no_row_var = factor("n"))
+    row_vars <- rlang::syms("no_row_var")
+    pos_row_vars <- tidyselect::eval_select("no_row_var", data)
   } else {
-    row_var <- rlang::ensym(row_var)
+    pos_row_vars <- tidyselect::eval_select(row_vars, data)
+    row_vars     <- rlang::syms(names(pos_row_vars))
   }
+  # row_vars_num  <- purrr::map_lgl(data[pos_row_vars], is.numeric)
+  # row_vars_text <- purrr::map_lgl(data[pos_row_vars],
+  #                                 ~ is.factor(.) | is.character(.))
 
   col_vars <- rlang::enquo(col_vars)
   if (quo_miss_na_null_empty_no(col_vars)) {
@@ -622,8 +578,8 @@ tab_many <- function(data, row_var, col_vars, tab_vars, wt,
 
   tab_vars <- rlang::enquo(tab_vars)
   if (quo_miss_na_null_empty_no(tab_vars)) {
-    data     <- data %>% dplyr::mutate(no_tab_vars = factor(" "))
-    tab_vars <- rlang::syms("no_tab_vars")
+    #data     <- data %>% dplyr::mutate(no_tab_vars = factor(" "))
+    tab_vars <- character() #rlang::syms("no_tab_vars")
   } else {
     pos_tab_vars <- tidyselect::eval_select(tab_vars, data)
     tab_vars     <- rlang::syms(names(pos_tab_vars))
@@ -631,51 +587,44 @@ tab_many <- function(data, row_var, col_vars, tab_vars, wt,
 
   wt_quo <- rlang::enquo(wt)
   if (quo_miss_na_null_empty_no(wt_quo)) {
-    data <- data %>% dplyr::mutate(no_weight = factor("n"))
-    wt <- rlang::sym("no_weight")
+    #data <- data %>% dplyr::mutate(no_weight = factor("n"))
+    wt <- character() #rlang::sym("no_weight")
   } else {
     wt <- rlang::ensym(wt)
   }
   # print(tab_vars) ; print(row_var) ; print(wt) ; print(col_vars)
 
-  # Vectorise arguments when possible
-  nvars        <- length(col_vars)
-  lvs          <- vctrs::vec_recycle(lvs        , nvars)
-  digits       <- vctrs::vec_recycle(digits     , nvars)
-  total_names  <- vctrs::vec_recycle(total_names, 2    )
-  chi2         <- vctrs::vec_recycle(chi2       , 1    )
-  pct          <- vctrs::vec_recycle(pct        , nvars)
-  diff         <- vctrs::vec_recycle(diff       , nvars)
-  ci           <- vctrs::vec_recycle(ci         , nvars)
-  ci_visible   <- vctrs::vec_recycle(ci_visible , nvars)
-
-  #drop_sup_na <- vec_recycle(drop_sup_na, nvars, x_arg = "drop_sup_na")
-  #cleannames  <- vec_recycle(cleannames , nvars, x_arg = "cleannames" )
-  if (listed == FALSE) {
-    totaltab   <- vctrs::vec_recycle(totaltab  , 1     )
-    conf_level <- vctrs::vec_recycle(conf_level, 1     )
-    color      <- vctrs::vec_recycle(color     , 1     )
-
-    if (comp[1] == "all" & totaltab == "no") { # just if tab_vars ?
-      warning("comp = 'all' need total table with total row to compare with")
-      totaltab <- "line"
-    }
-
-  } else {
-    totaltab   <- vctrs::vec_recycle(totaltab  , nvars )
-    conf_level <- vctrs::vec_recycle(conf_level, nvars )
-    color      <- vctrs::vec_recycle(color     , nvars )
-
-    if (comp[1] == "all" & any(totaltab == "no")) totaltab[totaltab == "no"] <- "line"
+  if (missing(na_drop_all)) {
+    na_drop_all <- character()
+  } else{
+    na_drop_all <- names(tidyselect::eval_select(rlang::enquo(na_drop_all), data))
   }
 
-  if (color[1] == "contrib" & totrow == FALSE) {
-    warning("color == 'contrib' need total rows to store information about ",
-            "mean contributions to variance")
-    totrow <- TRUE
-  }
+  tab_row_names  <- as.character(c(tab_vars, row_vars))
 
-  # Manage total rows and cols arguments
+
+
+  #The philosophy of tab_many is that :
+  # - many col_vars are to be with the same kind of pct and colors (+ comp + diff + ci)
+  # - many row_vars can have different colors and different parameters (otherwise tribble)
+
+  #Arguments vectorised over row : tested in tab_plain/tab_num
+  nrowvars    <- length(row_vars)
+  totaltab    <- vctrs::vec_recycle(totaltab, nrowvars)
+  totrow      <- vctrs::vec_recycle(totrow  , nrowvars)
+  diff        <- vctrs::vec_recycle(diff    , nrowvars)
+  comp        <- vctrs::vec_recycle(comp    , nrowvars)
+  color       <- vctrs::vec_recycle(color   , nrowvars)
+  #ci_visible <- vctrs::vec_recycle(ci_visible, nrowvars)
+
+  #Arguments vectorised over row : tested here or in tab_num (not in tab_plain)
+  ci          <- vctrs::vec_recycle(ci      , nrowvars)
+  chi2        <- vctrs::vec_recycle(chi2    , nrowvars)
+
+  #Arguments vectorised over columns : tested here
+  ncolvars    <- length(col_vars)
+  lvs         <- vctrs::vec_recycle(lvs   , ncolvars)
+  digits      <- vctrs::vec_recycle(digits, ncolvars)
   if (totcol[1] %in% c("last", "all_col_vars")) {
     totcol <- col_vars_text[col_vars_text] %>% names() %>% dplyr::last()
   } else if (totcol[1] == "each") {
@@ -685,22 +634,104 @@ tab_many <- function(data, row_var, col_vars, tab_vars, wt,
   } else if (all(totcol %in% c("col", "no"))) {
     totcol <- col_vars[which(totcol == "col" & col_vars_text)] # which ?
   } else if (is.numeric(totcol)) {
-    if (any(totcol > nvars)) stop("some totcol indexes are superior to the",
-                                  " number of col_vars")
+    if (any(totcol > ncolvars)) stop("some totcol indexes are superior to the",
+                                     " number of col_vars")
     totcol <- col_vars[unique(as.integer(totcol))]
   } else {
     stop("totcol must be 'last', 'each', a vector of col_vars names, ",
          "a vector of 'col'/'no', or a vector of col_vars indexes")
   }
-
   tot_cols_type <- dplyr::case_when(
     identical(totcol, col_vars)                                ~ "each",
-    identical(totcol, col_vars[nvars])                         ~ "all_col_vars",
+    identical(totcol, col_vars[ncolvars])                      ~ "all_col_vars",
     length(totcol) == 0 &
       (any(chi2 != FALSE) | any(pct != "no") | any(ci != "no"))~ "no_delete",
     length(totcol) == 0                                        ~ "no_no_create",
     TRUE                                                       ~ "some"
   )
+
+
+
+  #Arguments vectorised over columns or rows : test in tab_plain/tab_num
+  stopifnot(length(pct) >= 1)
+  pct_vect <-
+    if (is.character(pct) & length(pct) == 1) {
+      rep(list(
+        rep(pct, length(col_vars))
+      ),
+      length(row_vars),
+      )
+    } else if (is.character(pct) & length(row_vars) == 1) {
+     list(vctrs::vec_recycle(pct, length(col_vars)))
+    } else if (is.character(pct) & length(col_vars) == 1) {
+      as.list(vctrs::vec_recycle(pct, length(row_vars)))
+    } else if (is.list(pct) & length(pct) == length(row_vars) &
+               all(purrr::map_int(pct, length) == length(col_vars))) {
+      pct
+    } else {
+      stop("pct can't be recycled to the lengths or row_vars and col_vars (see documentation `?tab_many`)")
+    }
+
+
+  #Unique arguments :
+  total_names <- vctrs::vec_recycle(total_names, 2)
+  conf_level  <- vctrs::vec_recycle(conf_level , 1)
+  na          <- vctrs::vec_recycle(na , 1)
+
+
+  # Tests to be done before tab_plain / tab_num
+  color_auto_text <- color == "auto" & ! sum(col_vars_text) == 0
+  if (any(color_auto_text)) color <- dplyr::case_when(
+    purrr::map_lgl(pct_vect, ~ all(.[col_vars_text] %in% c("row", "col"))) & ci == "diff" ~ "after_ci",
+    purrr::map_lgl(pct_vect, ~ all(.[col_vars_text] %in% c("row", "col")))                ~ "diff"    ,
+    purrr::map_lgl(pct_vect, ~ all(.[col_vars_text] %in% c("", "no", "all", "all_tabs"))) ~ "contrib" ,
+    TRUE                                                                             ~ "no" ,
+  )
+  if (length(row_vars) == 1) color <- color[1]
+
+
+  ctr_no_row <- color == "contrib" & totrow == FALSE
+  if (any(ctr_no_row)) {
+    warning("total rows were added, since color == 'contrib' needs them ",
+            "to store information about mean contributions to variance")
+    totrow[ctr_no_row] <- TRUE
+  }
+
+  ctr_no_chi2 <- color == "contrib" & chi2 == FALSE
+  if (any(ctr_no_chi2)) {
+    #warning("since color == 'contrib' need chi2 data, chi2 was set to `TRUE` for the relevant row_vars")
+    chi2[ctr_no_chi2] <- TRUE
+    }
+  # if (!is.null(chi2)) if (color == "contrib" & chi2 == FALSE)
+  #   warning("since color = 'contrib', contributions of cells to the variance of tables
+  #             must be calculated : chi2 was set to TRUE")
+  # if (color == "contrib"){ chi2 <- TRUE } else { if (is.null(chi2)) chi2 <- FALSE }
+
+  #Where ? In tab_plain ?
+  # color_wrong_pct <- color %in% c("diff", "diff_ci", "after_ci") &
+  #   all(pct %in% c("no", "all", "all_tabs")) & sum(col_vars_text) != 0
+  # if (any(color_wrong_pct)) {
+  #   stop(paste0("color = '", color, "' can't be calculated with pct = 'all' or with ",
+  #               "counts (for those categories, only color = 'contrib' is possible)"))
+  # }
+
+  color_wrong_diff <- color %in% c("diff", "diff_ci", "after_ci") &
+    ( diff %in% c("no", "") | is.na(diff) )
+  if(any(color_wrong_diff)) {
+    stop("since color = 'diff' for some tables, diff must be provided for those tables")
+  }
+
+  color_wrong_ci <- color %in% c("diff_ci", "after_ci") & ci != "diff"
+  if (any(color_wrong_ci)) {
+    # rlang::warn(
+    #   paste0("since color = '", color, "' for some tables, the confidence intervals " ,
+    #          "of cells differences from totals (or reference cells) must be calculated ",
+    #          "ci was set to 'diff' for those tables")
+    # )
+    ci[color_wrong_ci] <- "diff"
+  }
+
+
 
 
   # Allow to type expression as string in filter (to work with tibble::tribble)
@@ -714,35 +745,84 @@ tab_many <- function(data, row_var, col_vars, tab_vars, wt,
     with_filter <- TRUE
   }
 
-  #Prepare the data with explicits NA, etc.
-  data <- data %>% dplyr::select(!!!tab_vars, !!row_var, !!wt, !!!col_vars,
+
+  #Prepare the data
+  data <- data %>% dplyr::select(!!!tab_vars, !!!row_vars, !!wt, !!!col_vars,
                                  tidyselect::any_of(".filter"))
+
+  #  Filters : here after selection (operations on rows copy all columns on memory),
+  #     orwhen the tables are made for more speed :
+  # - na = "drop_all" removes NAs here in tab_prepare (slower), i.e. for all tables mades
+  # - na = "drop" : NA in factors and numeric will be removed in each tab_plain/tab_num
+  # - na = "keep" : NA in factors (not numeric) will be made explicit in each tab_plain/tab_num
 
   if (with_filter == TRUE) data <- data %>% dplyr::filter(.data$.filter) %>%
     dplyr::select(-.data$.filter)
 
-  # All filters here, after selection (operations on rows copy all columns
-  # on memory) : remove NAs for row and tab variables
-  # (those of col vars will be taken care of at the creation of each core table)
-  # - all factors (not numeric) with "keep" where made explicit with dat_prepare
+  #If all variables on a subtable are "drop_all", then put na = "keep" to gain time
+  if (na == "drop_all") {
+    na_drop_all <- as.character(c(row_vars, col_vars, tab_vars))
+    na_text <- "keep"
+    na_num  <- "keep"
+
+  } else {
+    if (missing(na_drop_all)) {
+      na_drop_all <- character()
+    } else{
+      na_drop_all <- names(tidyselect::eval_select(rlang::enquo(na_drop_all), data))
+    }
+
+    na_text <-
+      purrr::map(as.character(row_vars),
+                 ~ purrr::map2_lgl(., as.character(col_vars[col_vars_text]),
+                                   ~ all(c(.x, .y, as.character(tab_vars)) %in% na_drop_all)
+                 ) ) |>
+      purrr::map(~ dplyr::if_else(., "keep", na))
+
+    na_num <-
+      purrr::map(as.character(row_vars),
+                 ~ all(c(., as.character(tab_vars)) %in% na_drop_all)
+      ) |>
+      purrr::map(~ dplyr::if_else(., "keep", na))
+  }
+
   data <- data %>%
     tab_prepare(
-      row_var = !!row_var, col_vars = as.character(col_vars),
-      tab_vars = as.character(tab_vars),
-      na = na,
+      as.character(c(row_vars, col_vars, tab_vars)),
+      na_drop_all = tidyselect::all_of(na_drop_all),
       cleannames = cleannames,
       rare_to_other = rare_to_other, n_min = n_min, other_level = other_level
     )
   # if (!missing(filter)) data <- dplyr::filter(data, {{filter}})
 
-  data <- data %>% dplyr::filter(dplyr::if_all(
-    !!!tab_vars | !!row_var, ~ !is.na(.)
-  ))
+
+  if (rare_to_other == TRUE & length(tab_vars) != 0) {
+    # We only count tab variable's minimum counts for the row variable,
+    #  otherwise we get problems.
+    data <- data %>%
+      dplyr::group_by(!!!tab_vars) %>%
+      dplyr::mutate(dplyr::across(tidyselect::all_of(as.character(row_vars)),
+                                  ~ forcats::fct_lump_min(., n_min,
+                                                          other_level = other_level))) %>%
+      dplyr::ungroup() %>%
+      dplyr::mutate(dplyr::across(as.character(row_vars), function(.x) forcats::fct_relevel(
+        .x,
+        unique(append(levels(dplyr::pull(data, dplyr::cur_column())), other_level)) %>%
+          purrr::discard(!. %in% levels(.x)))
+      ))
+  }
+
 
   #Remove rows with missing values or 0 in weight, for them not to be added in raw counts
-  zero_weight <- dplyr::pull(data, !!wt)
-  zero_weight <- is.na(zero_weight) | zero_weight == 0
-  if (any(zero_weight))  data <- data %>% dplyr::filter(!zero_weight)
+  # remove zero weight in tab_prepare ?
+  if (length(wt) != 0) {
+    zero_weight <- dplyr::pull(data, !!wt)
+    zero_weight <- is.na(zero_weight) | zero_weight == 0
+    if (any(zero_weight)) {
+      message(paste0(sum(zero_weight), " rows with zero or NA weights were removed"))
+      data <- data %>% dplyr::filter(!zero_weight)
+    }
+  }
 
   # Where only first levels are kept, merge others to minimise useless calculations
   lv1 <- lvs == "first" & col_vars_text
@@ -752,202 +832,276 @@ tab_many <- function(data, row_var, col_vars, tab_vars, wt,
                      ~ is.factor(.) & nlevels(.) >= 3) & lv1
 
     if (any(col_vars_3levels)) {
+
+      rm_levels_by_col_vars <- dplyr::select(data, !!!col_vars[col_vars_3levels]) |>
+        purrr::map(~ purrr::set_names(c(levels(.)[-1], "NA"), "remove_levels"))
+
       data <- data %>%
         dplyr::mutate(dplyr::across(
           tidyselect::all_of(as.character(col_vars[col_vars_3levels])),
-          ~ .
+          ~ suppressWarnings(forcats::fct_explicit_na(., na_level = "NA") |>
+                               forcats::fct_recode(rlang::splice(rm_levels_by_col_vars[[dplyr::cur_column()]] )))
         ))
-
     }
 
-    remove_levels <- purrr::map(dplyr::select(data, !!!col_vars[lv1]),
-                                ~ levels(.)[-1]) # ~ levels(.) %>% .[-1]
+    remove_levels <- purrr::map(dplyr::select(data, !!!col_vars[lv1]), ~ levels(.)[-1])
   }
 
 
   #Make a table for each column variable and store them in a list
   #dat_group3 <- data %>% dplyr::group_by(!!!tab_vars, .add = TRUE, .drop = FALSE)
-  tabs <-
-    purrr::pmap(list(col_vars, digits),
-                function(.col_vars, .digits)
-                  tab_plain(data, !!row_var, !!.col_vars, !!!tab_vars, wt = !!wt,
-                            digits = .digits)) %>%
-    purrr::set_names(col_vars)
-
-  #Add total table, total rows and cols, chi2 stats, pct, confidence intervals
-  #  if the result is a list or tables
-  if (listed == TRUE) {
-    ctt  <- totaltab != "no"
-    cchi <- chi2     != "no" & col_vars_text
-    #cpct <- pct      != "no" & col_vars_text
-    cci  <- ci       != "no" & col_vars_text
-
-    color_diff <- color == "diff" | (color == "auto" & ci != "diff")
-    color_ctr  <- dplyr::case_when(
-      color %in% c("no", "diff", "diff_ci", "after_ci") ~ "no"  ,
-      color == "auto"                                   ~ "auto",
-      color == "contrib"                                ~ "all" ,
-    )
-    color_ci <- dplyr::case_when(
-      color %in% c("diff_ci", "after_ci")               ~ color     ,
-      color == "auto" & ci == "diff"                    ~ "after_ci",
-      TRUE                                              ~ "no"      ,
-    )
-
-    tabs[ctt] <- tibble::tibble(tabs = tabs[ctt], totaltab = totaltab[ctt],
-                                name = totaltab_name) %>%
-      purrr::pmap(tab_totaltab, data = data)
-
-    if (tot_cols_type != "no_no_create" | totrow == TRUE) {
-      tabs <- tibble::tibble(tabs, tot = "both", name = total_names) %>%
-        purrr::pmap(tab_tot, totcol = "each", data = data)
-    }
-
-    tabs[cchi] <- tibble::tibble(tabs = tabs[cchi], comp = comp[1],
-                                 color = color_ctr) %>%
-      purrr::pmap(tab_chi2)
-
-    tabs <- tibble::tibble(tabs, pct, comp = comp[1], diff = diff, #[cpct]
-                           color = color_diff) %>%
-      #dplyr::filter(cpct) %>%
-      purrr::pmap(tab_pct)
-
-    tabs[cci] <- tibble::tibble(tabs, ci, comp = comp[1], conf_level = conf_level,
-                                color = color_ci, visible = ci_visible) %>%
-      dplyr::filter(cci) %>%
-      purrr::pmap(tab_ci)
-
-    #  remove unwanted levels (keep only the first when levels = "first")
-    if (any(lv1)) tabs[lv1] <- tabs[lv1] %>%
-      purrr::map2(remove_levels,
-                  ~ dplyr::select(.x, -tidyselect::all_of(.y),
-                                  -tidyselect::any_of("Total")))
-    #  add remove unwanted totals for listed result ----
-    tabs <- purrr::map_if(tabs, purrr::map_lgl(tabs, dplyr::is_grouped_df),
-                          .f    = ~ new_tab(., subtext = subtext),
-                          .else = ~ new_grouped_tab(., dplyr::group_data(.),
-                                                    subtext = subtext))
-    return(tabs)
-  }
-
-  #If the result is unique table, join the list of tabs into a single table,
-  # managing duplicated levels
-  duplicated_levels <- tabs %>%
-    purrr::map(~ names(.) %>% purrr::discard(. %in% c(row_var, tab_vars))) %>%
-    purrr::flatten_chr() #%>% .[duplicated(.)] %>% unique()
-  duplicated_levels <- duplicated_levels[duplicated(duplicated_levels)] %>% unique()
-
-  if (length(duplicated_levels) != 0) {
-    # warning(paste0("some levels names are the same for different variables : ",
-    #                paste0(duplicated_levels, collapse = ", ")))
-    tabs <- tabs %>%
-      purrr::imap(~ dplyr::rename_with(.x, function(.names)
-        dplyr::if_else(.names %in% duplicated_levels,
-                       paste0(.names, "_", .y), .names)))
-  }
-
-  join_by <- as.character(c(tab_vars, row_var)) %>%
-    purrr::discard(. == "no_tab_vars")
-  tabs <- purrr::reduce(tabs, dplyr::full_join, by = join_by)
 
 
   color_diff <- color == "diff" | (color == "auto" & any(ci != "diff"))
-  color_ctr  <- switch(color,
-                       "no"       = "no"  ,
-                       "auto"     = "auto",
-                       "diff"     = "no"  ,
-                       "diff_ci"  = "no"  ,
-                       "after_ci" = "no"  ,
-                       "contrib"  = "all"  )
-  color_ci   <- switch(
-    color,
-    "no"       = "no"      ,
-    "auto"     = dplyr::if_else(any(ci == "diff"), "after_ci", "no"),
-    "diff"     = "no"      ,
-    "diff_ci"  = "diff_ci" ,
-    "after_ci" = "after_ci",
-    "contrib"  = "no"
+  color_ctr  <- dplyr::recode(color,
+                              "no"       = "no"  ,
+                              "auto"     = "auto",
+                              "diff"     = "no"  ,
+                              "diff_ci"  = "no"  ,
+                              "after_ci" = "no"  ,
+                              "contrib"  = "all"  )
+  color_ci   <- dplyr::recode(color,
+                              "no"       = "no"      ,
+                              "auto"     = dplyr::if_else(any(ci == "diff"), "after_ci", "no"),
+                              "diff"     = "no"      ,
+                              "diff_ci"  = "diff_ci" ,
+                              "after_ci" = "after_ci",
+                              "contrib"  = "no"
   )
 
-  if (totaltab != "no") tabs <- tab_totaltab(tabs, totaltab,
-                                             name = totaltab_name, data = data)
+  color_num <- dplyr::recode(color,
+                             "contrib"  = "no" ,
+                             .default = color  )
 
 
-  if (tot_cols_type != "no_no_create" | totrow == TRUE) {
-    tottest <- if (all( (dplyr::select(dplyr::ungroup(tabs) , where(is_fmt)) %>%
-                         purrr::map_chr(get_type) ) == "mean") ) {
-      "row" } else { "both" }
 
-    tabs <- tab_tot(tabs, tot = tottest, totcol = "each", name = total_names,
-                    data = data)
+  #Calculate all numeric variables in one time (for each row_var)
+  if (sum(col_vars_num) != 0) {
+    tabs_num <- purrr::pmap(list(row_vars, totaltab, totrow   ,
+                                 diff    , comp    , color_num,  ci, na_num),
+                            ~ tab_num(data,
+                                      !!..1,
+                                      as.character(col_vars)[col_vars_num],
+                                      as.character(tab_vars),
+                                      wt         = !!wt,
+                                      na         = ..8,
+                                      digits     = digits[col_vars_num],
+                                      diff       = ..4,
+                                      ci         = ..7,
+                                      conf_level = conf_level,
+                                      comp       = ..5,
+                                      color      = ..6,
+                                      totaltab   = ..2,
+                                      totaltab_name = totaltab_name,
+                                      tot        = dplyr::if_else(..3, "row", "no"),
+                                      total_names= total_names
+                            )
+    ) %>%
+      purrr::set_names(row_vars)
   }
 
-  if (chi2 == TRUE) tabs <- tab_chi2(tabs, comp = comp[1], color = color_ctr)
 
-  # if (any(pct != "no")) # tab_pct nearly always needed, even with means, to calc diff
-  #                           but than way, comp is set to "tab" even when not needed ?
-  tabs <- tab_pct(tabs, pct, comp = comp[1], diff = diff, color = color_diff)
 
-  if (any(ci != "no")) {
-    tabs <- tab_ci(tabs, ci = ci, comp = comp[1], conf_level = conf_level,
-                   visible = ci_visible, color = color_ci)
-  }
+  if (sum(col_vars_text) != 0) {
+    tabs_text <-     # By column first
+      purrr::pmap(list(row_vars, totaltab, totrow, pct_vect, diff, comp, na_text, color_diff),
 
-  #Remove unwanted levels (keep only the first when levels = "first")
-  if (any(lv1)) {
-    remove_levels <-
-      purrr::imap(remove_levels, ~ c(.x, paste0(.x, "_", .y))) %>%
-      purrr::flatten_chr()
+                  ~ purrr::pmap(list(col_vars[col_vars_text], digits[col_vars_text], ..7, ..4[col_vars_text]),
+                                function(.col_vars, .digits, .na, .pct)
+                                  tab_plain(data,
+                                            !!..1,
+                                            !!.col_vars,
+                                            as.character(tab_vars),
+                                            wt = !!wt,
+                                            na         = .na,
+                                            digits     = .digits,
+                                            pct        = .pct,
+                                            diff       = ..5,
+                                            comp       = ..6,
+                                            color      = ..8,
+                                            #subtext   = "",
+                                            totaltab   = ..2,
+                                            totaltab_name = totaltab_name,
+                                            tot        = c( "row", "col"), #totrow vectorised ? ----
+                                            total_names= total_names)) %>%
+                    purrr::set_names(col_vars[col_vars_text])
 
-    tabs <- tabs %>% dplyr::select(-tidyselect::any_of(remove_levels))
-  }
+      ) %>%
+      purrr::set_names(row_vars)
+    #tot_cols_type != "no_no_create" | totrow == TRUE
 
-  #Remove unwanted totals
-  if (!tot_cols_type %in% c("each", "no_no_create")) {
-    if (tot_cols_type == "no_delete") tabs <- tabs %>%
-        dplyr::select(-where(is_totcol))
-    if (tot_cols_type == "some") tabs <- tabs %>%
-        dplyr::select(-(where(~ is_totcol(.) & ! get_col_var(.) %in% totcol) )
+
+    #If the result is unique table, join the list of tabs into a single table,
+    # managing duplicated levels
+    duplicated_levels <- tabs_text %>%
+      purrr::map(~ purrr::map(., ~ purrr::discard(names(.),
+                                                  names(.) %in% c(row_vars, tab_vars))) %>%
+                   purrr::flatten_chr() #%>% .[duplicated(.)] %>% unique())
+      ) |>
+      purrr::map(~ .[duplicated(.)] %>% unique()) |> purrr::flatten_chr() |> unique()
+
+    if (length(duplicated_levels) != 0) {
+      tabs_text <- tabs_text %>%
+        purrr::map(~ purrr::imap(., ~ dplyr::rename_with(.x, function(.names)
+          dplyr::if_else(.names %in% duplicated_levels, paste0(.names, "_", .y), .names)))
+        )
+    }
+
+    tabs_text <- purrr::map2(tabs_text, as.character(row_vars), ~ purrr::reduce(
+      .x,
+      dplyr::full_join,
+      by = c(as.character(tab_vars), .y) #[tab_vars != "no_tab_vars"]
+    ))
+
+
+    if (any(chi2)) {
+      tabs_text[chi2] <-
+        purrr::pmap(list(tabs_text[chi2], comp[chi2], color_ctr[chi2]),
+                    ~ tab_chi2(..1, comp = ..2, color = ..3))
+    }
+
+    if (any(ci != "no")) {
+      tabs_text[ci != "no"] <-
+        purrr::pmap(
+          list(tabs_text[ci != "no"], ci[ci != "no"], comp[ci != "no"],
+               color_ci[ci != "no"], visible = ci[ci != "no"] == "cell"),
+          ~ tab_ci(..1, ci = ..2, comp = ..3, conf_level = conf_level, color = ..4, visible = ..5)
         )
 
-    if (tot_cols_type == "all_col_vars") {
-      no_last_tot <- is_totcol(tabs) #%>% .[.] %>% names()
-      no_last_tot <- no_last_tot[no_last_tot] %>% names()
-      last_tot <- dplyr::last(no_last_tot)
-      no_last_tot <- no_last_tot %>% purrr::discard(. == last_tot | is.na(.))
-      tabs <- tabs %>% dplyr::select(-tidyselect::any_of(no_last_tot)) %>%
-        dplyr::relocate(where(is_totcol), .after = tidyselect::last_col()) %>%
-        dplyr::rename_with(~ total_names[2], .cols = tidyselect::all_of(last_tot)) %>%
-        dplyr::mutate(dplyr::across(tidyselect::last_col(),
-                                    ~ set_col_var(., "all_col_vars")))
+      # if (any(ci == "cell")) tabs_text[ci == "cell"] <- tabs_text[ci == "cell"] |>
+      #     purrr::map(~ dplyr::mutate(., dplyr::across(where(is_fmt), ~ set_display(.,"mean_ci"))))
     }
+
+
+
+    #Remove unwanted levels (keep only the first when levels = "first")
+    if (any(lv1)) {
+      remove_levels <-
+        purrr::imap(remove_levels, ~ c(.x, paste0(.x, "_", .y))) %>%
+        purrr::flatten_chr()
+
+      tabs_text <- tabs_text %>% purrr::map(~ dplyr::select(., -tidyselect::any_of(remove_levels)))
+    }
+
+
+    #Remove unwanted total columns
+    if (!tot_cols_type %in% c("each", "no_no_create")) {
+      if (tot_cols_type == "no_delete") tabs_text <- tabs_text %>%
+          purrr::map(~dplyr::select(., -where(is_totcol)))
+      if (tot_cols_type == "some") tabs_text <- tabs_text %>%
+          purrr::map(~dplyr::select(., -(where(~ is_totcol(.) & !get_col_var(.) %in% totcol) ))
+          )
+
+      if (tot_cols_type == "all_col_vars") {
+        no_last_tot <- tabs_text %>%
+          purrr::map(is_totcol) %>%
+          purrr::map(~ names(.[.])) %>%
+          purrr::flatten_chr() %>% unique()
+        last_tot <- dplyr::last(no_last_tot)
+        no_last_tot <- no_last_tot[no_last_tot != last_tot & !is.na(no_last_tot)]
+
+        tabs_text <- tabs_text %>%
+          purrr::map(~dplyr::select(., -tidyselect::any_of(no_last_tot)) %>%
+                       dplyr::relocate(where(is_totcol), .after = tidyselect::last_col()) %>%
+                       dplyr::rename_with(~ total_names[2], .cols = tidyselect::all_of(last_tot)) %>%
+                       dplyr::mutate(dplyr::across(tidyselect::last_col(),
+                                                   ~ set_col_var(., "all_col_vars")))
+          )
+      }
+    }
+
+    # Lone total column to "Total" with no col_var name
+    totnames <-
+      purrr::map(tabs_text,
+                 ~names(.)[stringr::str_detect(names(.),
+                                               paste0("^", total_names[2], "_"))]) |>
+      purrr::flatten_chr()
+
+    if ( length(totnames) == 1 ) tabs_text <- purrr::map(tabs_text, ~ dplyr::rename(
+      ., tidyselect::any_of(purrr::set_names(totnames,
+                                             rep(total_names[2], length(totnames))) )
+    ) )
+
+
+    # #By rows first
+    # tabs_text <-
+    #   purrr::pmap(list(col_vars[col_vars_text], digits[col_vars_text]),
+    #               function(.col_vars, .digits)
+    #
+    #                 purrr::map_dfr(row_vars, function(.row_vars)
+    #
+    #                   tab_plain(data, !!.row_vars, !!.col_vars, !!!tab_vars, wt = !!wt,
+    #                             na = na, digits = .digits,
+    #                             totrow = totrow, totcol = totcol, totaltab = totaltab) |>
+    #                     #                     dplyr::ungroup() |>
+    #                     dplyr::mutate(variable = factor(rlang::as_name(.row_vars)), .before = 1) |>
+    #                     dplyr::rename(tidyselect::all_of(
+    #                       purrr::set_names(rlang::as_name(.row_vars), "row_var")
+    #                     ))
+    #                 )
+    #
+    #   ) %>%
+    #   purrr::set_names(col_vars[col_vars_text])
   }
 
-  # Lone total column to "Total" with no col_var name
-  totnames <- names(tabs)[stringr::str_detect(names(tabs),
-                                              paste0("^", total_names[2], "_"))]
-  if ( length(totnames) == 1 ) tabs <- tabs %>%
-    dplyr::rename(!!rlang::sym(total_names[2]) := !!rlang::sym(totnames))
 
-  if (totrow == FALSE & tot_cols_type != "no_no_create") {
-    totrows     <- is_totrow(tabs)
-    tottab_rows <- is_tottab(tabs)
-    tottab_line <- length(tottab_rows[tottab_rows]) == 1 & tottab_rows
 
-    tabs <- tabs %>%
-      tibble::add_column(totrows = totrows, tottab_line = tottab_line) %>%
-      dplyr::filter(!.data$totrows | .data$tottab_line) %>%
-      dplyr::select(-.data$totrows, -.data$tottab_line)
-  }
 
-  chi2 <- get_chi2(tabs)
-  if (is.null(chi2)) chi2 <- new_tab() %>% attr("chi2")
-  if (! lv1_group_vars(tabs)) {
-    tabs <- tabs %>% dplyr::group_by(!!!tab_vars)
-    groups <- dplyr::group_data(tabs)
-    tabs <- new_grouped_tab(tabs, groups = groups, subtext = subtext, chi2 = chi2)
+  if (sum(col_vars_num) != 0 & sum(col_vars_text) != 0) {
+    tabs <- purrr::pmap(list(tabs_text, tabs_num, as.character(row_vars)),
+                        ~ dplyr::full_join(..1, ..2,
+                                           by = c(as.character(tab_vars), ..3)) #[tab_vars != "no_tab_vars"]
+    )
+
+    col_vars_order <- tabs |>
+      purrr::map(~ purrr::map(.,
+                              ~ purrr::map(get_col_var(.),
+                                           ~ which(as.character(col_vars) == .)  ) ) |>
+                   purrr::flatten()
+      ) |>
+      purrr::map(~ purrr::map_if(., names(.) %in% tab_row_names, ~ 0L) |>
+                   purrr::map_int(~ if (length(.) == 0) {length(col_vars) + 1L} else {.}) |>
+                   sort() |> names()
+      )
+
+    tabs <- tabs |> purrr::map2(col_vars_order, ~ dplyr::select(.x, tidyselect::any_of(.y)))
+
+  } else if (sum(col_vars_num) != 0) {
+    tabs <- tabs_num
+    remove(tabs_num)
+
   } else {
-    tabs <- new_tab(tabs, subtext = subtext, chi2 = chi2)
+    tabs <- tabs_text
+    remove(tabs_text)
+  }
+
+
+
+  #Remove unwanted total rows
+  no_totrow <- totrow == FALSE & tot_cols_type != "no_no_create"
+  if (any(no_totrow)) {
+    totrows     <- purrr::map(tabs[no_totrow], ~ is_totrow(.))
+    tottab_rows <- purrr::map(tabs[no_totrow], ~ is_tottab(.))
+    tottab_line <- purrr::map(tottab_rows[no_totrow], ~ length(.[.]) == 1 & .)
+
+    tabs[no_totrow] <-
+      purrr::pmap( list(tabs[no_totrow],totrows, tottab_line),
+                   ~ tibble::add_column(..1, totrows = ..2, tottab_line = ..3) %>%
+                     dplyr::filter(!.data$totrows | .data$tottab_line) %>%
+                     dplyr::select(-.data$totrows, -.data$tottab_line)
+      )
+  }
+
+  chi2 <- purrr::map(tabs, get_chi2)
+  chi2 <- purrr::map_if(chi2, purrr::map_lgl(chi2, is.null), ~ attr(new_tab(), "chi2"))
+
+  if (!any(purrr::map_lgl(tabs, lv1_group_vars)) ) {
+    tabs <- tabs %>% purrr::map(~ dplyr::group_by(., !!!tab_vars))
+    groups <- purrr::map(tabs, dplyr::group_data)
+    tabs <- purrr::pmap(list(tabs, groups, chi2),
+                        ~ new_grouped_tab(..1, groups = ..2, subtext = subtext, chi2 = ..3))
+  } else {
+    tabs <- purrr::map2(tabs, chi2, ~ new_tab(.x, subtext = subtext, chi2 = .y))
   }
 
   # if (length(spread_vars) >= 1) {
@@ -968,13 +1122,22 @@ tab_many <- function(data, row_var, col_vars, tab_vars, wt,
   #
   # }
 
+  if (is.list(tabs) & !is.data.frame(tabs) & length(tabs) == 1) tabs <- tabs[[1]]
 
-  if (getOption("tabxplor.output_kable") == TRUE) {
-    tabs <- tabs %>% tab_kable()
-  }
+  if (getOption("tabxplor.output_kable") == TRUE) tabs <- tabs %>% tab_kable()
 
   tabs
 }
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -990,10 +1153,10 @@ tab_many <- function(data, row_var, col_vars, tab_vars, wt,
 #'  {spread_var}_{col_var_level}. Should then the column names be sorted ?
 #'  If \code{FALSE}, the default, column names are ordered by first appearance.
 #' @param totname The new name of the total rows, as a single string.
-#' @param recalculate Where there is several `tab_vars`, some totals are missing in the
-#' spreaded table. By default, `tab_spread` try to recalculate them based on `pct` and `wn`.
-#' Warning : with `means`, a weighted mean is calculated, which is only an approximation.
-#' Set to `FALSE` to avoid this behavior.
+# @param recalculate Where there is several `tab_vars`, some totals are missing in the
+# spreaded table. By default, `tab_spread` try to recalculate them based on `pct` and `wn`.
+# Warning : with `means`, a weighted mean is calculated, which is only an approximation.
+# Set to `FALSE` to avoid this behavior.
 #'
 #' @return A \code{tibble} of class \code{tab}, with less rows and more columns.
 #' @export
@@ -1010,7 +1173,8 @@ tab_many <- function(data, row_var, col_vars, tab_vars, wt,
 #'   tab_spread(race)
 #'   }
 tab_spread <- function(tabs, spread_vars, names_prefix, names_sort = FALSE,
-                       totname = "Total", recalculate = TRUE) {
+                       totname = "Total" #, recalculate = TRUE
+                       ) {
   spread_vars     <- rlang::enquo(spread_vars)
   pos_spread_vars <- tidyselect::eval_select(spread_vars, tabs)
   spread_vars     <- names(pos_spread_vars)
@@ -1046,70 +1210,70 @@ tab_spread <- function(tabs, spread_vars, names_prefix, names_sort = FALSE,
     # if two tab_vars or more, calculate totals for each level of spread_var
     if (length(tab_vars_new) != 0 & any(tottab_rows)) {
 
-      if (recalculate) {
-        if (any(get_type(tabs) == "mean")) {
-          warning(paste0("Since there are several tab_vars, some totals are missing. ",
-                         "Means for the new general total row were recalculated based on a ",
-                         "weighted mean, which is only an approximation"))
-        }
-        new_totals <- tabs %>%
-          dplyr::filter(.data$totrows) %>%
-          dplyr::group_by(!!!rlang::syms(spread_vars)) %>%
-          dplyr::summarise(dplyr::across(
-            where(is_fmt),
-            ~ new_fmt(display = get_display(.)[1],
-                      digits  = max(get_digits(.)),
-                      n       = sum(get_n(.), na.rm = TRUE),
-                      wn      = sum(get_wn(.), na.rm = TRUE),
-                      pct     = sum(get_wn(.), na.rm = TRUE) / sum(get_wn(.)/get_pct(.), na.rm = TRUE),
-                      diff    = NA_real_,
-                      ctr     = NA_real_,
-                      mean    = stats::weighted.mean(get_mean(.), get_wn(.), na.rm = TRUE),
-                      var     = NA_real_,
-                      ci      = NA_real_,
-
-                      in_totrow = TRUE,
-                      in_refrow = FALSE,
-                      in_tottab = all(is_tottab(.)), #any ?
-
-                      type      = get_type    (.),
-                      comp_all  = get_comp_all(., replace_na = FALSE),
-                      diff_type = get_diff_type(.),
-                      ci_type   = get_ci_type (.),
-                      col_var   = get_col_var (.),
-                      totcol    = is_totcol   (.),
-                      refcol    = is_refcol   (.),
-                      color     = get_color   (.)
-            ), .groups = "drop"
-          ))
-        tabs_colors <- get_color(tabs)
-
-        ensemble_names <- tabs %>%
-          dplyr::filter(tottab_line) %>%
-          dplyr::ungroup() %>%
-          select(tab_vars_new) %>% purrr::map_chr(~ as.character(dplyr::first(.)))
-
-        total_ensemble <- tabs %>%
-          dplyr::filter(tottab_line) %>%
-          dplyr::pull(row_var) %>% as.character()
-
-        new_totals <- new_totals %>%
-          tab_pct(just_diff = TRUE) %>%
-          dplyr::mutate(dplyr::across(where(is_fmt),
-                                      ~ set_color(., tabs_colors[dplyr::cur_column()]))) %>%
-          dplyr::mutate(!!rlang::sym(row_var) := factor(total_ensemble))
-
-        new_totals <- new_totals %>%
-          purrr::reduce2(.x = names(ensemble_names), .y = ensemble_names, .init = new_totals,
-                         .f = ~ dplyr::mutate(..1, !!rlang::sym(..2) := factor(..3))
-          )  %>%
-          dplyr::filter(!is_tottab(.))
-
-      }
+      # if (recalculate) {
+      #   if (any(get_type(tabs) == "mean")) {
+      #     warning(paste0("Since there are several tab_vars, some totals are missing. ",
+      #                    "Means for the new general total row were recalculated based on a ",
+      #                    "weighted mean, which is only an approximation"))
+      #   }
+      #   new_totals <- tabs %>%
+      #     dplyr::filter(.data$totrows) %>%
+      #     dplyr::group_by(!!!rlang::syms(spread_vars)) %>%
+      #     dplyr::summarise(dplyr::across(
+      #       where(is_fmt),
+      #       ~ new_fmt(display = get_display(.)[1],
+      #                 digits  = max(get_digits(.)),
+      #                 n       = sum(get_n(.), na.rm = TRUE),
+      #                 wn      = sum(get_wn(.), na.rm = TRUE),
+      #                 pct     = sum(get_wn(.), na.rm = TRUE) / sum(get_wn(.)/get_pct(.), na.rm = TRUE),
+      #                 diff    = NA_real_,
+      #                 ctr     = NA_real_,
+      #                 mean    = stats::weighted.mean(get_mean(.), get_wn(.), na.rm = TRUE),
+      #                 var     = NA_real_,
+      #                 ci      = NA_real_,
+      #
+      #                 in_totrow = TRUE,
+      #                 in_refrow = FALSE,
+      #                 in_tottab = all(is_tottab(.)), #any ?
+      #
+      #                 type      = get_type    (.),
+      #                 comp_all  = get_comp_all(., replace_na = FALSE),
+      #                 diff_type = get_diff_type(.),
+      #                 ci_type   = get_ci_type (.),
+      #                 col_var   = get_col_var (.),
+      #                 totcol    = is_totcol   (.),
+      #                 refcol    = is_refcol   (.),
+      #                 color     = get_color   (.)
+      #       ), .groups = "drop"
+      #     ))
+      #   tabs_colors <- get_color(tabs)
+      #
+      #   ensemble_names <- tabs %>%
+      #     dplyr::filter(tottab_line) %>%
+      #     dplyr::ungroup() %>%
+      #     select(tab_vars_new) %>% purrr::map_chr(~ as.character(dplyr::first(.)))
+      #
+      #   total_ensemble <- tabs %>%
+      #     dplyr::filter(tottab_line) %>%
+      #     dplyr::pull(row_var) %>% as.character()
+      #
+      #   new_totals <- new_totals %>%
+      #     tab_pct(just_diff = TRUE) %>%
+      #     dplyr::mutate(dplyr::across(where(is_fmt),
+      #                                 ~ set_color(., tabs_colors[dplyr::cur_column()]))) %>%
+      #     dplyr::mutate(!!rlang::sym(row_var) := factor(total_ensemble))
+      #
+      #   new_totals <- new_totals %>%
+      #     purrr::reduce2(.x = names(ensemble_names), .y = ensemble_names, .init = new_totals,
+      #                    .f = ~ dplyr::mutate(..1, !!rlang::sym(..2) := factor(..3))
+      #     )  %>%
+      #     dplyr::filter(!is_tottab(.))
+      #
+      # }
 
       tabs <- tabs %>% dplyr::filter(!tottab_line)
 
-      if (recalculate) tabs <- tabs %>% dplyr::bind_rows(new_totals)
+      #if (recalculate) tabs <- tabs %>% dplyr::bind_rows(new_totals)
     }
 
     new_levels <- tabs %>%
@@ -1251,135 +1415,207 @@ tab_get_vars <- function(tabs, vars = c("row_var", "col_vars", "tab_vars")) {
 #' @export
 #' @examples \donttest{data <- dplyr::starwars %>%
 #' tab_prepare(sex, hair_color, gender, rare_to_other = TRUE,
-#'             n_min = 5, na = "keep")
+#'             n_min = 5, na_drop_all = sex)
 #' data
 #' }
 tab_prepare <-
-  function(data, row_var, col_vars, tab_vars,
-           na = "keep", cleannames = NULL,
-           rare_to_other = FALSE, n_min = 30, other_level = "Others") {
+  function(data, ..., na_drop_all,
+           cleannames = NULL, rare_to_other = FALSE,
+           n_min = 30, other_level = "Others") {
 
     cleannames <-
       if (is.null(cleannames)) { getOption("tabxplor.cleannames") } else {cleannames}
 
-    row_var_quo <- rlang::enquo(row_var)
-    if (quo_miss_na_null_empty_no(row_var_quo)) {
-      data <- data %>% dplyr::mutate(no_row_var = factor("n"))
-      row_var <- rlang::sym("no_row_var")
-    } else {
-      row_var <- rlang::ensym(row_var)
+    variables     <- rlang::expr(c(...))
+    pos_variables <- tidyselect::eval_select(variables, data)
+    variables     <- names(pos_variables)
+
+    if (missing(na_drop_all)) {
+      na_drop_all <- character()
+    } else{
+      na_drop_all <- names(tidyselect::eval_select(rlang::enquo(na_drop_all), data))
     }
 
-    col_vars <- rlang::enquo(col_vars)
-    if (quo_miss_na_null_empty_no(col_vars)) {
-      data     <- data %>% dplyr::mutate(no_col_var = factor("n"))
-      col_vars <- rlang::syms("no_col_var")
-      pos_col_vars <- tidyselect::eval_select("no_col_var", data)
-    } else {
-      pos_col_vars <- tidyselect::eval_select(col_vars, data)
-      col_vars     <- rlang::syms(names(pos_col_vars))
+
+
+    #Convert to data.table and back divide the time by two with large dataframes
+    if (length(na_drop_all) != 0) {
+      data.table::setDT(data)
+      data <- tibble::as_tibble(stats::na.omit(data, na_drop_all))
+      #data <- tidyr::drop_na(data, tidyselect::all_of(na_drop_all))
     }
 
-    tab_vars <- rlang::enquo(tab_vars)
-    if (quo_miss_na_null_empty_no(tab_vars)) {
-      data     <- data %>% dplyr::mutate(no_tab_vars = factor(" "))
-      tab_vars <- rlang::syms("no_tab_vars")
-    } else {
-      pos_tab_vars <- tidyselect::eval_select(tab_vars, data)
-      tab_vars     <- rlang::syms(names(pos_tab_vars))
-    }
+    vars_not_numeric <-
+      dplyr::select(data[pos_variables], where(~ !is.numeric(.))) %>%
+      colnames() #%>% rlang::syms()                # is.integer(.) | is.double()
 
-    no_tab_vars <- as.character(tab_vars)[[1]] == "no_tab_vars"
+    #Transform characters to factors first ? Time taker.
+    # data <- data %>%
+    #   dplyr::mutate(dplyr::across(
+    #     tidyselect::all_of(vars_not_numeric) & where(~ !is.factor(.)),
+    #     as.factor
+    #   ))
 
-
-    data <- data %>% dplyr::mutate(dplyr::across(
-      !!!tab_vars | ((!!row_var | !!!col_vars) & !where(is.numeric)),
-      as.factor
-    ))
-
+    #remove class ordered
     data <- data %>%
-      tab_prepare_core(!!row_var, !!!col_vars, !!!tab_vars,
-                       na = na,
-                       cleannames = cleannames,
-                       rare_to_other = rare_to_other,
-                       n_min = n_min, other_level = other_level)
+      dplyr::mutate(dplyr::across(
+        where(is.ordered),
+        ~ magrittr::set_class(., class(.)[class(.) != "ordered"])
+      ))
 
-    if (rare_to_other == TRUE & no_tab_vars == FALSE) {
-      # We only count tab variable's minimum counts for the row variable,
-      #  otherwise we get problems.
-      levelsrow_var <- dplyr::pull(data, !!row_var) %>%
-        levels() %>%
-        append(other_level) %>%
-        unique()
-
-      data <- data %>% dplyr::group_by(!!!tab_vars) %>%
-        dplyr::mutate(!!row_var := forcats::fct_lump_min(!!row_var, n_min,
-                                                         other_level = other_level)) %>%
-        dplyr::ungroup() %>%
-        dplyr::mutate(!!row_var := forcats::fct_relevel(
-          !!row_var,
-          levelsrow_var[levelsrow_var %in% levels(!!row_var)]
-        ))
-
+    if(rare_to_other == TRUE) {
+      data <- data %>%
+        dplyr::mutate(dplyr::across(tidyselect::all_of(vars_not_numeric),
+                                    ~ forcats::fct_lump_min(.,
+                                                            n_min,
+                                                            other_level = other_level))
+        )
     }
+
+    # Remove unused levels : time taker
+    # data <- data %>%  #Remove unused levels anyway
+    #   dplyr::mutate(dplyr::across(tidyselect::all_of(vars_not_numeric),
+    #                               forcats::fct_drop))
+
+    if (cleannames == TRUE)  data <- data %>%
+      dplyr::mutate(dplyr::across(
+        tidyselect::all_of(vars_not_numeric),
+        ~forcats::fct_relabel(., ~stringr::str_remove_all(., cleannames_condition() ))
+      ))
+
     data
   }
 
-#' @describeIn tab_plain deprecated
-#' @return A \code{tibble} of class \code{tabxplor_tab}.
-#' @export
-tab_core <- function(data, row_var, col_var, ..., wt,
-                     digits = 0, subtext = "", is_grouped = FALSE,
-                     num = FALSE, df = FALSE) {
-  .Deprecated("tab_plain")
 
-  row_var_quo <- rlang::enquo(row_var)
-  if (quo_miss_na_null_empty_no(row_var_quo)) {
-    data <- data %>% dplyr::mutate(no_row_var = factor("n"))
-    row_var <- rlang::sym("no_row_var")
-  } else {
-    row_var <- rlang::ensym(row_var)
-  }
 
-  col_var_quo <- rlang::enquo(col_var)
-  if (quo_miss_na_null_empty_no(col_var_quo)) {
-    data <- data %>% dplyr::mutate(no_col_var = factor("n"))
-    col_var <- rlang::sym("no_col_var")
-  } else {
-    col_var <- rlang::ensym(col_var)
-  }
+# tab_prepare_legacy <-
+#   function(data, row_vars, col_vars, tab_vars,
+#            na = "keep", cleannames = NULL,
+#            rare_to_other = FALSE, n_min = 30, other_level = "Others") {
+#
+#     cleannames <-
+#       if (is.null(cleannames)) { getOption("tabxplor.cleannames") } else {cleannames}
+#
+#     row_vars <- rlang::enquo(row_vars)
+#     if (quo_miss_na_null_empty_no(row_vars)) {
+#       data     <- data %>% dplyr::mutate(no_col_var = factor("n"))
+#       row_vars <- rlang::syms("no_row_var")
+#       pos_row_vars <- tidyselect::eval_select("no_row_var", data)
+#     } else {
+#       pos_row_vars <- tidyselect::eval_select(row_vars, data)
+#       row_vars     <- rlang::syms(names(pos_row_vars))
+#     }
+#
+#     col_vars <- rlang::enquo(col_vars)
+#     if (quo_miss_na_null_empty_no(col_vars)) {
+#       data     <- data %>% dplyr::mutate(no_col_var = factor("n"))
+#       col_vars <- rlang::syms("no_col_var")
+#       pos_col_vars <- tidyselect::eval_select("no_col_var", data)
+#     } else {
+#       pos_col_vars <- tidyselect::eval_select(col_vars, data)
+#       col_vars     <- rlang::syms(names(pos_col_vars))
+#     }
+#
+#     tab_vars <- rlang::enquo(tab_vars)
+#     if (quo_miss_na_null_empty_no(tab_vars)) {
+#       data     <- data %>% dplyr::mutate(no_tab_vars = factor(" "))
+#       tab_vars <- rlang::syms("no_tab_vars")
+#     } else {
+#       pos_tab_vars <- tidyselect::eval_select(tab_vars, data)
+#       tab_vars     <- rlang::syms(names(pos_tab_vars))
+#     }
+#
+#     no_tab_vars <- as.character(tab_vars)[[1]] == "no_tab_vars"
+#
+#     # data <- data %>% dplyr::mutate(dplyr::across(
+#     #   !!!tab_vars | ((!!row_var | !!!col_vars) & !where(is.numeric)),
+#     #   as.factor
+#     # ))
+#
+#     # na = "drop_all" for each row_var ?
+#
+#     data <- data %>%
+#       tab_prepare_core(!!!row_vars, !!!col_vars, !!!tab_vars,
+#                        na = na,
+#                        cleannames = cleannames,
+#                        rare_to_other = rare_to_other,
+#                        n_min = n_min, other_level = other_level)
+#
+#     if (rare_to_other == TRUE & no_tab_vars == FALSE) {
+#       # We only count tab variable's minimum counts for the row variable,
+#       #  otherwise we get problems.
+#       data <- data %>%
+#         dplyr::group_by(!!!tab_vars) %>%
+#         dplyr::mutate(dplyr::across(tidyselect::all_of(as.character(row_vars)),
+#                                     ~ forcats::fct_lump_min(., n_min,
+#                                                             other_level = other_level))) %>%
+#         dplyr::ungroup() %>%
+#         dplyr::mutate(dplyr::across(as.character(row_vars), function(.x) forcats::fct_relevel(
+#           .x,
+#           unique(append(levels(dplyr::pull(data, dplyr::cur_column())), other_level)) %>%
+#             purrr::discard(!. %in% levels(.x)))
+#         ))
+#
+#     }
+#     data
+#   }
+#
 
-  if (missing(...)) {
-    data <- data %>% dplyr::mutate(no_tab_vars = factor(" "))
-    tab_vars <- rlang::syms("no_tab_vars")
-  } else {
-    tab_vars_quo <- rlang::enquos(...)
-
-    NA_tab_vars  <- purrr::map(tab_vars_quo,
-                               ~ is.na(as.character(rlang::get_expr(.)))) %>%
-      purrr::flatten_lgl()
-    if (all(NA_tab_vars) ) {
-      data <- data %>% dplyr::mutate(no_tab_vars = factor(" "))
-      tab_vars <- rlang::syms("no_tab_vars")
-    } else {
-      tab_vars     <- rlang::expr(c(...))
-      pos_tab_vars <- tidyselect::eval_select(tab_vars, data)
-      tab_vars     <- rlang::syms(names(pos_tab_vars))
-    }
-  }
-
-  wt_quo <- rlang::enquo(wt)
-  if (quo_miss_na_null_empty_no(wt_quo)) {
-    data <- data %>% dplyr::mutate(no_weight = factor("n"))
-    wt <- rlang::sym("no_weight")
-  } else {
-    wt <- rlang::ensym(wt)
-  }
-
-  tab_plain(data = data, row_var = !!row_var, col_var = !!col_var, !!!tab_vars, wt = !!wt,
-            digits = digits, subtext = subtext, is_grouped = is_grouped,
-            num = num, df = df)
-}
+# #' @describeIn tab_plain deprecated
+# #' @return A \code{tibble} of class \code{tabxplor_tab}.
+# #' @export
+# tab_core <- function(data, row_var, col_var, ..., wt,
+#                      digits = 0, subtext = "", is_grouped = FALSE,
+#                      num = FALSE, df = FALSE) {
+#   .Deprecated("tab_plain")
+#
+#   row_var_quo <- rlang::enquo(row_var)
+#   if (quo_miss_na_null_empty_no(row_var_quo)) {
+#     data <- data %>% dplyr::mutate(no_row_var = factor("n"))
+#     row_var <- rlang::sym("no_row_var")
+#   } else {
+#     row_var <- rlang::ensym(row_var)
+#   }
+#
+#   col_var_quo <- rlang::enquo(col_var)
+#   if (quo_miss_na_null_empty_no(col_var_quo)) {
+#     data <- data %>% dplyr::mutate(no_col_var = factor("n"))
+#     col_var <- rlang::sym("no_col_var")
+#   } else {
+#     col_var <- rlang::ensym(col_var)
+#   }
+#
+#   if (missing(...)) {
+#     data <- data %>% dplyr::mutate(no_tab_vars = factor(" "))
+#     tab_vars <- rlang::syms("no_tab_vars")
+#   } else {
+#     tab_vars_quo <- rlang::enquos(...)
+#
+#     NA_tab_vars  <- purrr::map(tab_vars_quo,
+#                                ~ is.na(as.character(rlang::get_expr(.)))) %>%
+#       purrr::flatten_lgl()
+#     if (all(NA_tab_vars) ) {
+#       data <- data %>% dplyr::mutate(no_tab_vars = factor(" "))
+#       tab_vars <- rlang::syms("no_tab_vars")
+#     } else {
+#       tab_vars     <- rlang::expr(c(...))
+#       pos_tab_vars <- tidyselect::eval_select(tab_vars, data)
+#       tab_vars     <- rlang::syms(names(pos_tab_vars))
+#     }
+#   }
+#
+#   wt_quo <- rlang::enquo(wt)
+#   if (quo_miss_na_null_empty_no(wt_quo)) {
+#     data <- data %>% dplyr::mutate(no_weight = factor("n"))
+#     wt <- rlang::sym("no_weight")
+#   } else {
+#     wt <- rlang::ensym(wt)
+#   }
+#
+#   tab_plain(data = data, row_var = !!row_var, col_var = !!col_var, !!!tab_vars, wt = !!wt,
+#             digits = digits, subtext = subtext, #is_grouped = is_grouped,
+#             num = num, df = df)
+# }
 
 
 # Group over factors only, to let the opportunity to the user to add character vars
@@ -1429,10 +1665,13 @@ tab_core <- function(data, row_var, col_var, ..., wt,
 #'   tab_pct()  %>%
 #'   tab_ci(color = "after_ci")
 #' }
-tab_plain <- function(data, row_var, col_var, ..., wt,
-                      digits = 0, subtext = "", is_grouped = FALSE,
-                      num = FALSE, df = FALSE) {
-
+tab_plain <- function(data, row_var, col_var, tab_vars, wt,
+                      pct = "no", diff = "tot", comp = "tab", color = TRUE,
+                      digits = 0, na = "keep", subtext = "",
+                      totaltab = "line", totaltab_name = "Ensemble",
+                      tot = NULL, total_names = "Total",
+                      num = FALSE, df = FALSE
+) {
 
   row_var_quo <- rlang::enquo(row_var)
   if (quo_miss_na_null_empty_no(row_var_quo)) {
@@ -1450,144 +1689,603 @@ tab_plain <- function(data, row_var, col_var, ..., wt,
     col_var <- rlang::ensym(col_var)
   }
 
-  if (missing(...)) {
-    data <- data %>% dplyr::mutate(no_tab_vars = factor(" "))
-    tab_vars <- rlang::syms("no_tab_vars")
+  tab_vars <- rlang::enquo(tab_vars)
+  if (quo_miss_na_null_empty_no(tab_vars)) {
+    tab_vars <- character()
   } else {
-    tab_vars_quo <- rlang::enquos(...)
-
-    NA_tab_vars  <- purrr::map(tab_vars_quo,
-                               ~ is.na(as.character(rlang::get_expr(.)))) %>%
-      purrr::flatten_lgl()
-    if (all(NA_tab_vars) ) {
-      data <- data %>% dplyr::mutate(no_tab_vars = factor(" "))
-      tab_vars <- rlang::syms("no_tab_vars")
-    } else {
-      tab_vars     <- rlang::expr(c(...))
-      pos_tab_vars <- tidyselect::eval_select(tab_vars, data)
-      tab_vars     <- rlang::syms(names(pos_tab_vars))
-    }
+    pos_tab_vars <- tidyselect::eval_select(tab_vars, data)
+    tab_vars     <- rlang::syms(names(pos_tab_vars))
   }
+
+  # if (missing(...)) {
+  #   #data <- data %>% dplyr::mutate(no_tab_vars = factor(" "))
+  #   tab_vars <- character() #rlang::syms("no_tab_vars")
+  # } else {
+  #   tab_vars_quo <- rlang::enquos(...)
+  #   NA_tab_vars  <- purrr::map(tab_vars_quo,
+  #                              ~ is.na(as.character(rlang::get_expr(.)))) %>%
+  #     purrr::flatten_lgl()
+  #   if (all(NA_tab_vars) ) {
+  #     #data <- data %>% dplyr::mutate(no_tab_vars = factor(" "))
+  #     tab_vars <- character() #rlang::syms("no_tab_vars")
+  #   } else {
+  #     tab_vars     <- rlang::expr(c(...))
+  #     pos_tab_vars <- tidyselect::eval_select(tab_vars, data)
+  #     tab_vars     <- rlang::syms(names(pos_tab_vars))
+  #   }
+  # }
 
   wt_quo <- rlang::enquo(wt)
   if (quo_miss_na_null_empty_no(wt_quo)) {
-    data <- data %>% dplyr::mutate(no_weight = factor("n"))
-    wt <- rlang::sym("no_weight")
+    wt <- character()
   } else {
     wt <- rlang::ensym(wt)
   }
 
-  #forbid the level to have the name of the variable, othewise problems ----
 
-  #remove all unwanted NAs for col var (those for row and tab vars were removed
-  #in tab_may, those we want to keep were turned to explicit in dat_prepare)
-  data <- data %>%
-    dplyr::select(!!row_var, !!col_var, !!!tab_vars, !!wt) %>%
-    dplyr::with_groups(NULL,
-                       ~ dplyr::filter(., dplyr::if_all(
-                         tidyselect::all_of(c(rlang::as_name(col_var),
-                                              rlang::as_name(row_var),
-                                              purrr::map_chr(tab_vars, rlang::as_name))),
-                         ~ !is.na(.)
-                       ))) %>%
-    dplyr::mutate(!!wt := as.numeric(!!wt))
 
-  if (nrow(data) == 0) stop("data is of length 0 (possibly after filter or na = 'drop')")
+  vctrs::vec_assert(pct, size = 1)
+  vctrs::vec_assert(diff, size = 1)
+  vctrs::vec_assert(digits, size = 1)
+  digits <- vctrs::vec_cast(digits, integer())
+  vctrs::vec_assert(na, size = 1)
+  stopifnot(na %in% c("keep", "drop"))
+  vctrs::vec_assert(totaltab_name, size = 1)
+  total_names  <- vctrs::vec_recycle(total_names, 2)
 
-  row_var_type <- ifelse (is.numeric(dplyr::pull(data, !!row_var) ),
-                          "numeric", "factor")
-  col_var_type <- ifelse (is.numeric(dplyr::pull(data, !!col_var) ),
-                          "numeric", "factor")
-  if (row_var_type == "numeric" & col_var_type == "numeric") {
-    stop("row_var and col_var are both numeric : only one of them can be")
-  }
-  type <- ifelse(row_var_type == "numeric" | col_var_type == "numeric",
-                 "numeric", "factor")
+  #pct
+  stopifnot(pct %in% c("no", "row", "col", "all", "all_tabs"))
+  if (pct == "all_tabs" & length(tab_vars) == 0) pct <- "all"
 
-  if (type == "numeric") {
-    num_var <- switch(row_var_type, "numeric" = row_var, "factor" = col_var)
-    fct_var <- switch(row_var_type, "numeric" = col_var, "factor" = row_var)
+  if (color & diff == "no") {
+    warning("since color is TRUE/`diff`, diff can't be `no` and was set to `tot`")
+    diff <- "tot"
   }
 
-  if (! is_grouped) {
-    data <- switch(type,
-                   "factor"   = dplyr::group_by(data, !!!tab_vars, !!row_var, !!col_var),
-                   "numeric"  = dplyr::group_by(data, !!!tab_vars, !!fct_var     ) )
-  }
+  #tot
+  if (is.null(tot)) {
+    tot <- switch(pct,
+                  "no"  = "no",
+                  "row" = , #switch(diff, "tot" = c("row", "col"), "col"),
+                  "col" = , #switch(diff, "tot" = c("row", "col"), "row"),
+                  "all" = ,
+                  "all_tabs" = c("row", "col"),
+    )
 
-  if (type == "numeric") {
-    if (rlang::as_name(num_var) %in% dplyr::group_vars(data)) {
-      data <- dplyr::ungroup(data, !!num_var)
+  } else {
+    stopifnot(all(tot %in% c("row", "col", "both", "no", "")))
+    if (tot[1] == "both") tot <- c("row", "col")
+
+    if (!"col" %in% tot) {
+      if (pct == "row") {
+        warning("since pct == 'row', a total column was added")
+        tot <- c(tot, "col")
+      }
+      if (color & pct == "col" & diff == "tot") {
+        warning("since color == TRUE and pct == 'col' and diff == 'tot', a total column was added")
+        tot <- c(tot, "col")
+      }
+      if (pct %in% c("all", "all_tabs")) {
+        warning("since pct == 'all' or 'all_tabs', a total column was added")
+        tot <- c(tot, "col")
+      }
+    }
+
+    if (!"row" %in% tot) {
+      if (pct == "col") {
+        warning("since pct == 'row', total rows were added")
+        tot <- c(tot, "row")
+      }
+      if (color & pct == "row" & diff == "tot") {
+        warning("since color == TRUE and pct == 'row' and diff == 'tot', total rows were added")
+        tot <- c(tot, "row")
+      }
+      if (pct %in% c("all", "all_tabs")) {
+        warning("since pct == 'all' or 'all_tabs', total rows were added")
+        tot <- c(tot, "row")
+      }
     }
   }
+
+    #comp
+  vctrs::vec_assert(comp, size = 1)
+  stopifnot(comp %in% c("tab", "all", "") | is.na(comp) | is.null(comp))
+
+  if (comp == "all" & length(tab_vars) == 0) comp <- "tab"
+
+  #Totaltab
+  if (length(tab_vars) == 0) totaltab <- "no"
+
+  if (((comp[1] == "all" & diff == "tot") | pct == "all_tabs") &
+      !totaltab %in% c("table", "line")) {
+    warning("since comp = 'all', a total table was added to compare with")
+    totaltab <-  "line"
+  }
+
+  if (comp[1] == "all" & !diff %in% c("tot", "no", "") & totaltab != "table") {
+    warning("since comp = 'all', a full total table was added to compare with")
+    totaltab <- "table"
+  }
+
+
+  #forbid the level to have the name of the variable, otherwise problems ----
+
+
+  data <- data %>%
+    dplyr::select(!!!tab_vars, !!row_var, !!col_var, !!wt) %>%
+    dplyr::mutate(dplyr::across(!!wt & !where(is.numeric), as.numeric))
+  #Vars are not changed to factors here, but after data.table
+
+  tab_row_names  <- as.character(c(tab_vars, row_var))
+
+  #If variables are in double in cols and rows, duplicate them and manage data.table
+  col_var_in_row_var <- tab_row_names %in% as.character(col_var)
+  if (any(col_var_in_row_var)) {
+    in_col_vars <- tab_row_names[col_var_in_row_var]
+
+    data <- data |>
+      dplyr::mutate(dplyr::across(tidyselect::all_of(in_col_vars), ~ ., .names = "{.col}_colvarbis"))
+    tabs_vars2 <-
+      if (length(tab_vars) != 0) {
+        dplyr::recode(as.character(tab_vars),
+                      !!!purrr::set_names(paste0(in_col_vars, "_colvarbis"),
+                                          in_col_vars))
+      } else {
+        character()
+      }
+
+    row_var2 <- dplyr::recode(as.character(row_var),
+                              !!!purrr::set_names(paste0(in_col_vars, "_colvarbis"),
+                                                  in_col_vars))
+    tab_row_names2 <- c(tabs_vars2, row_var2)
+  } else {
+    tab_row_names2 <- tab_row_names
+  }
+
+
+
+  #Make all calculations with data.table to gain time
+  data.table::setDT(data)
+  data.table::setnames(data, as.character(col_var), "col_var", skip_absent = TRUE)
+
+  if (nrow(data) == 0) stop("data is of length 0 (possibly after filter or na = 'drop_all')")
+
+  # row_var_type <- ifelse(is.numeric(dplyr::pull(data, !!row_var) ),
+  #                        "numeric", "factor")
+  # col_var_type <- ifelse(is.numeric(dplyr::pull(data, !!col_var) ),
+  #                        "numeric", "factor")
+  # if (row_var_type == "numeric" & col_var_type == "numeric") {
+  #   stop("row_var and col_var are both numeric : only one of them can be")
+  # }
+  # type <- ifelse(row_var_type == "numeric" | col_var_type == "numeric",
+  #                "numeric", "factor")
+  #
+  # if (type == "numeric") {
+  #   num_var <- switch(row_var_type, "numeric" = row_var, "factor" = col_var)
+  #   fct_var <- switch(row_var_type, "numeric" = col_var, "factor" = row_var)
+  # }
+
+  # if (!is_grouped) {
+  #   data <- switch(type,
+  #                  "factor"   = dplyr::group_by(data, !!!tab_vars, !!row_var, !!col_var),
+  #                  "numeric"  = dplyr::group_by(data, !!!tab_vars, !!fct_var     ) )
+  # }
+  #
+  # if (type == "numeric") {
+  #   if (rlang::as_name(num_var) %in% dplyr::group_vars(data)) {
+  #     data <- dplyr::ungroup(data, !!num_var)
+  #   }
+  # }
 
   # nlvs <- nlevels(dplyr::pull(data, !!col_var))
 
   if (df | num) {
     tabs <-
-      switch(type,
-             "factor"  = data %>%
-               dplyr::summarise(nums = sum(!!wt, na.rm = TRUE), .groups = 'drop') %>%
-               tidyr::pivot_wider(names_from = !!col_var, names_sort = TRUE,
-                                  values_from = .data$nums, values_fill = 0),
+      data.table::dcast(
+        data[, .(n  = if(length(wt) != 0) {integer() } else {.N },
+                 wn = if(length(wt) != 0) { sum(eval(wt), na.rm = TRUE) } else {double()}),
+             keyby = eval(c(tab_row_names2, "col_var"))],
+        formula = ... ~ col_var,
+        value.var = if (length(wt) != 0) {c("wn")} else {"n"},
+        fill = 0
+      )
 
-             "numeric" = data %>%
-               dplyr::summarise(!!num_var := stats::weighted.mean(!!num_var, !!wt, na.rm = TRUE),
-                                .groups = "drop")
-      ) %>%
-      select(-tidyselect::any_of("no_tab_vars"))
+  } else {
+    tabs <-
+      data.table::dcast(
+        data[, .(n  = .N,
+                 wn = if(length(wt) != 0) { sum(eval(wt), na.rm = TRUE) } else {double()}),
+             keyby = eval(c(tab_row_names2, "col_var"))],
+        formula = ... ~ col_var,
+        value.var = if (length(wt) != 0) {c("n", "wn")} else {"n"},
+        fill = 0
+      )
+  }
 
-    if (df) {
-      text_cols <- tabs %>% purrr::map_lgl(~ !is.double(.))
-      text_cols <- names(text_cols)[which(text_cols)]
-      new_rownames  <- paste0(text_cols, collapse = "_")
 
-      if (length(text_cols) >= 2) {
-        tabs <- tabs %>%
-          dplyr::mutate(!!new_rownames :=
-                          paste(!!!purrr::map(text_cols, rlang::sym), sep = "_")) %>%
-          dplyr::select(-tidyselect::all_of(text_cols)) %>%
-          dplyr::relocate(where(is.character), .before = 1) %>%
-          tibble::column_to_rownames(var = new_rownames)
-      } else {
-        tabs <- tabs %>% tibble::column_to_rownames(var = rlang::as_name(row_var))
+  if (any(col_var_in_row_var)) {
+    colvarbis <- names(tabs)[stringr::str_detect(names(tabs), "_colvarbis$")]
+    data.table::setnames(tabs, colvarbis, stringr::str_remove(colvarbis, "_colvarbis$"),
+                         skip_absent = TRUE)
+  }
+
+  not_fct <- !purrr::map_lgl(dplyr::select(tabs, tidyselect::all_of(tab_row_names)), is.factor)
+  if (any(not_fct)) {
+    tabs[, names(not_fct)[not_fct] := purrr::map(.SD, forcats::as_factor),
+         .SDcols = names(not_fct)[not_fct]]
+  }
+
+
+  na_cols <- names(tabs) %in% c("n_NA", "wn_NA", "NA")
+  if (any(na_cols)) {
+    if (na == "drop") {
+      suppressWarnings(tabs[, `:=`(n_NA = NULL, wn_NA = NULL, `NA` = NULL)])
+    } else {
+      data.table::setcolorder(tabs, c(names(tabs)[!na_cols], names(tabs)[na_cols]))
+    }
+  }
+
+  na_rows <- tabs %>%
+    dplyr::select(!!!tab_vars, !!row_var) %>%
+    dplyr::mutate(na_rows = dplyr::if_any(.fns = is.na)) |>
+    dplyr::pull(.data$na_rows)
+
+  if (any(na_rows)) {
+    if (na == "drop") {
+      tabs <- tabs[-which(na_rows), ]
+    } else {
+      data.table::setorderv(
+        tabs, tab_row_names, na.last = TRUE
+      )[, paste0(tab_row_names) := lapply(.SD, forcats::fct_explicit_na, na_level = "NA"),
+        .SDcols = tab_row_names]
+    }
+  }
+
+  num_cols <- tabs %>% purrr::map_lgl(is.numeric)
+  num_cols <- names(num_cols)[num_cols]
+
+  if (totaltab %in% c("table", "line")) {
+    tabs_totaltab <- switch(
+      totaltab[1],
+      "table" = tabs[, c(purrr::set_names(rep("Total", length(tab_vars)),
+                                          as.character(tab_vars)),
+                         purrr::map(.SD, sum, na.rm = TRUE)),
+                     .SDcols = num_cols,
+                     keyby = eval(as.character(row_var))],
+
+      "line" = tabs[, c(purrr::set_names(rep("Total", length(tab_row_names)),
+                                         tab_row_names),
+                        purrr::map(.SD, sum, na.rm = TRUE)),
+                    .SDcols = num_cols]
+    )
+
+    tabs <- rbind(tabs, tabs_totaltab)
+    data.table::setorderv(tabs, tab_row_names)
+  }
+
+
+
+  if ("row" %in% tot) {
+    if (length(tab_vars) != 0) {
+      group_vars <- rev(purrr::accumulate(as.character(tab_vars) , ~ c(.x, .y)))
+      total_vars <- purrr::map(group_vars,
+                               ~ c(as.character(tab_vars)[!as.character(tab_vars) %in% .],
+                                   as.character(row_var)))
+    } else {
+      group_vars <- list(character())
+      total_vars <- as.character(row_var)
+    }
+
+
+    tabs_tot <-
+      purrr::map2_dfr(group_vars, total_vars,
+                      ~ tabs[, c(purrr::set_names(rep("Total", length(.y)), eval(.y)),
+                                 purrr::map(.SD, sum, na.rm = TRUE)),
+                             .SDcols = num_cols,
+                             keyby = eval(.x)]
+      )
+
+    tabs_tot <-data.table::setorderv(tabs_tot, tab_row_names) |> unique()
+
+    if (totaltab == "line") {
+      no_totaltab_line <- dplyr::select(tabs_tot, tidyselect::all_of(tab_row_names)) %>%
+        dplyr::transmute(total_line = dplyr::if_any(tidyselect::everything(), ~ . != "Total")) %>%
+        tibble::deframe() %>% which()
+
+      tabs_tot <-  tabs_tot[no_totaltab_line, ]
+    }
+
+    tabs <- rbind(tabs, tabs_tot)
+    data.table::setorderv(tabs, tab_row_names)
+  }
+
+  totrow_vector <- dplyr::pull(tabs, !!row_var) == "Total"
+  tottab_vector <- dplyr::transmute(tabs, tottab = dplyr::if_all(
+    tidyselect::any_of(as.character(tab_vars)),
+    ~ . == "Total"
+  )) |>
+    tibble::deframe()
+
+
+
+  if (df | num) {
+    if (length(wt) == 0) {
+      tabs[, wn := NULL]
+    } else {
+      tabs[, n := NULL]
+    }
+
+    if (df) return(as_df_merge_rownames(tabs, rlang::as_name(row_var)))
+
+    return(dplyr::group_by(new_tab(tibble::as_tibble(tabs)), !!!tab_vars))
+
+  } else {
+    if (length(wt) == 0) {
+      tabs[, wn := NULL]
+
+      text_vars <- !purrr::map_lgl(tabs, is.numeric)
+      text_vars <- text_vars[text_vars]
+
+      if ("col" %in% tot) {
+        tabs[, Total := as.integer(rowSums(tabs[, -text_vars, with = FALSE]))] #Problems if not integer.
+      }
+      tabs_n <- tabs
+
+    } else {
+      text_vars <- !purrr::map_lgl(tabs, is.numeric)
+      n_index  <- stringr::str_detect(names(tabs), "^n_")  | text_vars
+      wn_index <- stringr::str_detect(names(tabs), "^wn_") | text_vars
+
+      text_vars <- text_vars[text_vars]
+
+      tabs_n  <- data.table::setnames(tabs[, n_index, with = FALSE] ,
+                                      function(.x) stringr::str_remove(.x, "^n_" ))
+      tabs_wn <- data.table::setnames(tabs[, wn_index, with = FALSE],
+                                      function(.x) stringr::str_remove(.x, "^wn_"))
+
+      if ("col" %in% tot) {
+        tabs_n [, Total := as.integer(rowSums(tabs_n[, -names(text_vars), with = FALSE] ))] #Problems if not integer.
+        tabs_wn[, Total := rowSums(tabs_wn[, -names(text_vars), with = FALSE])]
       }
 
     }
+  }
+  tabs_text <- tabs[, names(text_vars), with = FALSE] #tibble::as_tibble()
+  cols <- purrr::map_lgl(tabs_n, is.numeric)
+  cols <- cols[cols]
 
-    return(tabs)
+
+  #Percentages
+  if (pct != "no") {
+    if (length(wt) == 0) {
+      tabs_pct <- data.table::copy(tabs_n)
+      tabs_pct[, names(cols) := purrr::map(.SD, as.double), .SDcols = names(cols) ]
+    } else {
+      tabs_pct <- data.table::copy(tabs_wn)
+    }
+
+    switch(
+      pct,
+      "row"      = tabs_pct[, names(cols) := purrr::map(.SD, ~ . / Total),
+                            .SDcols = names(cols)],
+
+      "col"      = tabs_pct[, names(cols) := purrr::map(.SD, ~ . / dplyr::last(.)),
+                            by = eval(as.character(tab_vars)),
+                            .SDcols = names(cols)],
+
+      "all"      = tabs_pct[, names(cols) := purrr::map(.SD, ~ . / dplyr::last(Total)),
+                            by = eval(as.character(tab_vars)),
+                            .SDcols = names(cols)],
+
+      "all_tabs" = tabs_pct[, names(cols) := purrr::map(.SD, ~ . / dplyr::last(Total)),
+                            .SDcols = names(cols)]
+    )
+
+    tabs_pct[, names(cols) := purrr::map(.SD, ~ tidyr::replace_na(., 0)),
+             .SDcols = names(cols)]
+
+
+    #Differences
+    if (diff != "no" & pct %in% c("row", "col")) {
+      tabs_diff <- data.table::copy(tabs_pct)
+
+      diff_index <-  function(diff, row_var, num_names) {
+        if (diff == "tot"   ) return(-1L)
+        if (diff == "first" ) return(1L )
+        if (is.numeric(diff)) return(as.integer(diff[1]))
+
+        index <-
+          switch(pct,
+                 "row" = which(stringr::str_detect(row_var, diff)),
+
+                 "col" = which(stringr::str_detect(num_names, diff))
+          )
+        if (length(index) >= 2) {
+          switch(pct,
+                 "row" = warning(paste0(
+                   "with diff = '", diff, "' , several rows were found as ",
+                   "reference for comparison ; only the first was kept ; ",
+                   "to remove this warning, precise the value of diff ",
+                   "until there is only one row_var level matched"
+                 )),
+
+                 "col" = warning(paste0(
+                   "with diff = '", diff, "' , several columns were found as ",
+                   "reference for comparison ; only the first was kept ; ",
+                   "to remove this warning, precise the value of diff ",
+                   "until there is only one column matched"
+                 ))
+          )
+        }
+        index <- tidyr::replace_na(dplyr::first(index), 0)
+
+        if (length(index) == 0) index <- 0
+
+        index
+      }
+
+      if (pct == "row") {
+
+        if (diff != "tot") {
+          refrows <-
+            if(comp == "tab") {
+              tibble::as_tibble(tabs[, tab_row_names, with = FALSE]) |>
+                dplyr::group_by(!!!tab_vars) |>
+                dplyr::transmute(
+                  var =
+                    dplyr::row_number() == if (diff_index(diff, !!row_var) == -1) {
+                      dplyr::n()
+                    } else {
+                      diff_index(diff, !!row_var)
+                    }
+                ) |>
+                dplyr::pull(var)
+
+            } else {
+              tibble::as_tibble(tabs[, tab_row_names, with = FALSE]) |>
+                dplyr::mutate(tottab_vector = tottab_vector) |>
+                dplyr::group_by(!!!tab_vars) |>
+                dplyr::transmute(
+                  var = dplyr::if_else(
+                    condition = .data$tottab_vector,
+                    true  = dplyr::row_number() == if (diff_index(diff, !!row_var) == -1) {
+                      dplyr::n()
+                    } else {
+                      diff_index(diff, !!row_var)
+                    },
+                    false = FALSE
+                  )
+                ) |>
+                dplyr::pull(var)
+            }
+          #tabs_diff$DIPLOME[refrows] |> as.character()
+
+          if (!any(refrows)) {
+            warning(paste0(
+              "in diff = '", diff, "' , no rows were found as reference for comparison ; ",
+              "to remove this warning, precise the value of diff ",
+              "until there is one row_var level matched"
+            ))
+          }
+        } else {
+          refrows <- if (comp == "tab") { totrow_vector } else { totrow_vector & tottab_vector }
+        }
+        refrows <- tidyr::replace_na(refrows, FALSE)
+
+        comp_group <- if (comp == "tab") { as.character(tab_vars) } else { character() }
+
+        tabs_diff[, ref_rows___ := refrows]
+
+        tabs_diff[,
+                  c(names(cols), "ref_rows___") := purrr::map_if(
+                    .SD,
+                    purrr::map_lgl(.SD, is.numeric),
+                    ~ . - dplyr::nth(., tidyr::replace_na(which(ref_rows___)[1], 0) )
+                  ),
+                  by = eval(comp_group),
+                  .SDcols = c(names(cols), "ref_rows___")]
+
+        tabs_diff[, ref_rows___ := NULL] #keep it for ci ?
+      }
+
+      if (pct == "col") {
+        refcols <- dplyr::nth(names(cols), diff_index(diff, num_names = names(cols)))
+        refcols_vector <- names(cols) == refcols
+
+        if (length(refcols) != 0 & !is.na(refcols)) {
+          tabs_diff[, names(cols) := purrr::map(.SD,~ . - eval(rlang::sym(refcols)) ),
+                    .SDcols = names(cols)]
+
+        } else {
+          remove(refcols, refcols_vector)
+          warning(paste0(
+            "in diff = '", diff, "' , no columns were found as reference for comparison ; ",
+            "to remove this warning, precise the value of diff ",
+            "until there is one column matched"
+          ))
+          tabs_diff[, names(cols) := purrr::map(.SD, ~ NA_real_), .SDcols = names(cols)]
+        }
+      }
+
+    }
+  }
+
+
+
+  #Make the final table with fmt vectors
+  # remove(list = c("tabs_n", "tabs_wn", "tabs_pct", "tabs_diff", "tabs_ci", "refcols_vector", "refrows"))
+  tabs_n [, names(text_vars) := NULL]
+  if (exists("tabs_wn"  , rlang::current_env(), inherits = F)) tabs_wn  [, names(text_vars) := NULL]
+  if (exists("tabs_pct" , rlang::current_env(), inherits = F)) tabs_pct [, names(text_vars) := NULL]
+  if (exists("tabs_diff", rlang::current_env(), inherits = F)) tabs_diff[, names(text_vars) := NULL]
+  #if (exists("tabs_ci"  , rlang::current_env(), inherits = F)) tabs_ci  [, names(text_vars) := NULL]
+
+  totcol_vector <- names(tabs_n) == "Total"
+  NA_reals <- rep(NA_real_, nrow(tabs_n))
+
+  if (diff == "tot") refrows <- rep(FALSE, nrow(tabs_n))
+
+  refrows <- if (exists("refrows", rlang::current_env(), inherits = F)) {
+    refrows
+  } else {
+    rep(FALSE, nrow(tabs_n))
   }
 
   tabs <-
-    switch(type,
-           "factor"  = data %>%
-             dplyr::summarise(nums = new_fmt(
-               display = dplyr::if_else(wt == "no_weight", "n", "wn"),
-               digits  = as.integer(digits)     ,
-               n       = dplyr::n()             ,
-               wn      = if (wt != "no_weight") {sum(!!wt, na.rm = TRUE)} else {NA_real_},
-               type    = "n"                    ,
-               col_var = rlang::as_name(col_var)
-             ),
-             .groups = 'drop') %>%
-             tidyr::pivot_wider(names_from = !!col_var,  names_sort = TRUE,
-                                values_from = .data$nums,
-                                values_fill = fmt0(dplyr::if_else(wt == "no_weight", "n", "wn"),
-                                                   digits, type = "n")),
+    list(tabs_n,
+         if (exists("tabs_wn"  , rlang::current_env(), inherits = F)) { tabs_wn   } else { list(NA_reals) },
+         if (exists("tabs_pct" , rlang::current_env(), inherits = F)) { tabs_pct  } else { list(NA_reals) },
+         if (exists("tabs_diff", rlang::current_env(), inherits = F)) { tabs_diff } else { list(NA_reals) },
+         totcol_vector,
+         if (exists("refcols_vector", rlang::current_env(), inherits = F)) { refcols_vector } else {
+           rep(FALSE, length(cols)) }
+    ) |>
+    purrr::pmap_dfc(~ new_fmt(
+      display   = dplyr::case_when(pct != "no"     ~ "pct",
+                                   length(wt) != 0 ~ "wn" ,
+                                   TRUE            ~ "n"   ),
+      digits    = vec_recycle(as.integer(digits), length(..1)),
+      n         = as.integer(..1),
+      wn        = ..2,
+      pct       = ..3,
+      diff      = ..4,
+      #ci        = ,
+      in_totrow = totrow_vector,
+      in_tottab = tottab_vector,
+      in_refrow = refrows,
+      totcol    = ..5,
+      refcol    = ..6,
+      color     = dplyr::case_when(
+        color == FALSE                                    ~ "",
+        row_var == "no_row_var" | col_var == "no_col_var" ~ "",
+        pct %in% c("row", "col") & diff != "no"           ~ "diff",
+        TRUE                                              ~ ""
+      ),
+      type      = dplyr::if_else(pct != "no", pct, "n"),
+      diff_type = switch(as.character(diff), "no" = "", "tot" = "tot", as.character(diff)),
+      #ci_type   = ,
+      comp      = dplyr::if_else(pct != "no" & diff != "no", comp == "all", NA),
+      col_var   = rlang::as_name(col_var)
+    ))
 
-           "numeric" = data %>%
-             dplyr::summarise(!!num_var := new_fmt(
-               display = "mean"                                      ,
-               digits  = as.integer(digits)                          ,
-               n       = dplyr::n()                                  ,
-               wn      = if (wt != "no_weight") {sum(!!wt, na.rm = TRUE)} else {NA_real_},
-               mean    = stats::weighted.mean(!!num_var, !!wt, na.rm = TRUE),
-               var     = weighted.var(!!num_var, !!wt, na.rm = TRUE),
-               type    = "mean"                                      ,
-               col_var = rlang::as_name(col_var)
-             ),
-             .groups = "drop")
-    )
+  tabs <- dplyr::bind_cols(tibble::as_tibble(tabs_text), tabs)
+
+  #Rename totals
+  if ("row" %in% tot & total_names[1] != "Total") tabs <- tabs |>
+    dplyr::mutate(!!row_var := forcats::fct_recode(!!row_var,
+                                                   purrr::set_names("Total", total_names[1])))
+  if ("col" %in% tot & total_names[2] != "Total") tabs <- tabs |>
+    dplyr::rename(tidyselect::any_of(purrr::set_names("Total", total_names[2])))
+
+  if (totaltab %in% c("line", "table") &  totaltab_name != "Total") {
+    tabs <- tabs |> dplyr::mutate(dplyr::across(
+      tidyselect::all_of(as.character(tab_vars)),
+      ~ dplyr::if_else(tottab_vector,
+                       true  = factor(totaltab_name, c(levels(.), totaltab_name)),
+                       false = .) |>
+        forcats::fct_drop()
+    ))
+  }
 
 
   # if (row_var_type == "numeric") {
@@ -1601,8 +2299,9 @@ tab_plain <- function(data, row_var, col_var, ..., wt,
   #   }
   # }
 
+
   tab_var_1lv <- all(purrr::map_lgl(dplyr::select(tabs, !!!tab_vars),
-                                    ~ nlevels(forcats::fct_drop(.)) == 1))
+                                    ~ length(unique(.)) == 1))
 
   if (tab_var_1lv) {
     new_tab(tabs, subtext = subtext) %>%
@@ -1612,6 +2311,850 @@ tab_plain <- function(data, row_var, col_var, ..., wt,
     new_grouped_tab(tabs, dplyr::group_data(tabs), subtext = subtext)
   }
 }
+
+
+
+
+
+
+
+tab_num <- function(data, row_var, col_vars, tab_vars, wt,
+                    diff = "tot", ci = NULL, conf_level = 0.95, #ci_visible = FALSE,
+                    comp = c("tab", "all"), color = c("auto", "diff", "diff_ci", "after_ci"),
+                    digits = 0, na = c("keep", "drop"), subtext = "", #is_grouped = FALSE,
+                    totaltab = "line", totaltab_name = "Ensemble",
+                    tot = NULL, total_names = "Total",
+                    num = FALSE, df = FALSE
+) {
+
+  row_var_quo <- rlang::enquo(row_var)
+  if (quo_miss_na_null_empty_no(row_var_quo)) {
+    data <- data %>% dplyr::mutate(no_row_var = factor("n"))
+    row_var <- rlang::sym("no_row_var")
+  } else {
+    row_var <- rlang::ensym(row_var)
+  }
+
+  col_vars <- rlang::enquo(col_vars)
+  if (quo_miss_na_null_empty_no(col_vars)) {
+    data     <- data %>% dplyr::mutate(no_col_var = factor("n"))
+    col_vars <- rlang::syms("no_col_var")
+    pos_col_vars <- tidyselect::eval_select("no_col_var", data)
+  } else {
+    pos_col_vars <- tidyselect::eval_select(col_vars, data)
+    col_vars     <- rlang::syms(names(pos_col_vars))
+  }
+
+  tab_vars <- rlang::enquo(tab_vars)
+  if (quo_miss_na_null_empty_no(tab_vars)) {
+    tab_vars <- character()
+  } else {
+    pos_tab_vars <- tidyselect::eval_select(tab_vars, data)
+    tab_vars     <- rlang::syms(names(pos_tab_vars))
+  }
+
+  wt_quo <- rlang::enquo(wt)
+  if (quo_miss_na_null_empty_no(wt_quo)) {
+    wt <- character()
+  } else {
+    wt <- rlang::ensym(wt)
+  }
+
+  tab_row_names <- purrr::map_chr(c(tab_vars, row_var), rlang::as_name)
+
+  #forbid the level to have the name of the variable, othewise problems ----
+
+
+
+  vctrs::vec_assert(diff, size = 1)
+  # ci    <-  ci[1]
+  # stopifnot(ci %in% c("diff", "cell", "no", ""))
+  comp  <-  comp[1]
+  stopifnot(comp %in% c("tab", "all", "") | is.na(comp) | is.null(comp))
+  digits <- vctrs::vec_recycle(vctrs::vec_cast(digits, integer()), length(col_vars))
+  na <- na[1]
+  stopifnot(na %in% c("keep", "drop"))
+  vctrs::vec_assert(totaltab_name, size = 1)
+  total_names  <- vctrs::vec_recycle(total_names, 2)
+  color <-  color[1]
+  stopifnot(color %in% c("auto", "diff", "diff_ci", "after_ci", "no", ""))
+
+  ci_diff <- if (!is.null(ci)) { ci == "diff" } else { FALSE }
+  ci_cell <- if (!is.null(ci)) { ci == "cell" } else { FALSE }
+
+  color <- dplyr::case_when(
+    row_var == "no_row_var" | "no_col_var" %in% col_vars     ~ "",
+    color == "auto" & !diff %in% c("no", "") & ci_diff       ~ "after_ci",
+    color == "auto" & !diff %in% c("no", "") & !ci_cell      ~ "diff",
+    color == "auto"                                          ~ "",
+    TRUE                                                     ~ color
+  )
+
+  if (row_var == "no_row_var" | "no_col_var" %in% col_vars) color <- ""
+
+  if (color %in% c("diff", "diff_ci", "after_ci") & diff %in% c("no", "")) {
+    warning("since color = 'diff', diff must be provided and was set to 'tot'")
+    diff <- "tot"
+  }
+
+  if (!is.null(ci)) if (color %in% c("diff_ci", "after_ci") & ci != "diff")
+    rlang::warn(
+      paste0("since color = '", color, "', the confidence intervals of cells differences",
+             " from totals (or others cells) must be calculated : ci was set to 'diff' ")
+    )
+  if (color %in% c("diff_ci", "after_ci")) {
+    ci <- "diff"
+  } else {
+    if (is.null(ci)) ci <- "no"
+  }
+
+  if (ci == "diff" & diff %in% c("no", "")) {
+    warning("since ci = 'diff', a diff was added with diff = 'tot'")
+    diff <- "tot"
+  }
+
+  ci_visible <- ci == "cell"
+
+
+  if (is.null(tot)) {
+    tot <- if (diff == "tot" & color %in% c("diff", "diff_ci", "after_ci")) {"row"} else {"no"}
+
+  } else {
+    stopifnot(all(tot %in% c("row", "col", "both", "no", "")))
+    if (tot[1] == "both") tot <- "row"
+
+    if ((color %in% c("diff", "diff_ci", "after_ci") | diff == "tot") & !tot %in% "row") {
+      #warning("since color = '", color, "' and diff = 'tot', a total row was added")
+      tot <- "row"
+    }
+  }
+
+
+  if (comp == "all" & length(tab_vars) == 0) comp <- "tab"
+
+  if (length(tab_vars) == 0) totaltab <- "no"
+
+  if (comp[1] == "all" & diff == "tot" & !totaltab %in% c("table", "line")) {
+    warning("since comp = 'all', a total table was added to compare with")
+    totaltab <-  "line"
+  }
+
+  if (comp[1] == "all" & !diff %in% c("tot", "no", "") & totaltab != "table") {
+    warning("since comp = 'all', a full total table was added to compare with")
+    totaltab <- "table"
+  }
+
+
+
+
+  data <- data %>%
+    dplyr::select(!!!tab_vars, !!row_var, !!!col_vars, !!wt) %>%
+    dplyr::mutate(dplyr::across((!!wt | tidyselect::all_of(as.character(col_vars))) &
+                                  !where(is.numeric), as.numeric)
+    )
+
+
+  #Faster with data.table
+  data.table::setDT(data)
+  #data.table::setkeyv(data, tab_row_names) #slower with key, even with simple "by"
+
+  # Remove NA's in factors here, otherwise they are kept in totals after
+  if (na == "drop") data <- stats::na.omit(data, tab_row_names) # 0.5 sec
+
+
+  if (nrow(data) == 0) stop("data is of length 0 (possibly after filter or na = 'drop')")
+
+  # row_var_type <- ifelse(is.numeric(dplyr::pull(data, !!row_var) ),
+  #                        "numeric", "factor")
+  # col_var_type <- ifelse(is.numeric(dplyr::pull(data, !!col_var) ),
+  #                        "numeric", "factor")
+  # if (row_var_type == "numeric" & col_var_type == "numeric") {
+  #   stop("row_var and col_var are both numeric : only one of them can be")
+  # }
+  # type <- ifelse(row_var_type == "numeric" | col_var_type == "numeric",
+  #                "numeric", "factor")
+  #
+  # if (type == "numeric") {
+  #   num_var <- switch(row_var_type, "numeric" = row_var, "factor" = col_var)
+  #   fct_var <- switch(row_var_type, "numeric" = col_var, "factor" = row_var)
+  # }
+
+  # if (!is_grouped) {
+  #   data <- switch(type,
+  #                  "factor"   = dplyr::group_by(data, !!!tab_vars, !!row_var, !!col_var),
+  #                  "numeric"  = dplyr::group_by(data, !!!tab_vars, !!fct_var     ) )
+  # }
+  #
+  # if (type == "numeric") {
+  #   if (rlang::as_name(num_var) %in% dplyr::group_vars(data)) {
+  #     data <- dplyr::ungroup(data, !!num_var)
+  #   }
+  # }
+
+  # nlvs <- nlevels(dplyr::pull(data, !!col_var))
+
+  #        "numeric" = data %>%
+  #          dplyr::summarise(!!num_var := stats::weighted.mean(!!num_var, !!wt, na.rm = TRUE),
+  #                           .groups = "drop")
+  # ) %>%
+
+
+  #data <- data |> dplyr::group_by(!!!tab_vars, !!row_var)
+
+  # if (df | num) {
+  #  tabs <- data |>
+  #     dplyr::summarise(across(all_of(as.character(col_vars)), list(
+  #       mean = ~ stats::weighted.mean(., !!wt, na.rm = TRUE)
+  #     )),
+  #     .groups = "drop"
+  #     )
+  #
+  # } else {
+
+
+  if (df | num) {
+    tabs <-
+      if (length(wt) == 0) {
+        data[, purrr::map(.SD,  ~mean(., na.rm = TRUE)),
+             .SDcols = as.character(col_vars),
+             keyby = c(tab_row_names)]
+
+      } else {
+        data[, purrr::map_if(.SD,
+                             names(.SD) != as.character(wt),
+                             ~ round(stats::weighted.mean(., eval(wt), na.rm = TRUE), 10),
+                             .else = ~ NA_real_),
+             .SDcols = as.character(c(col_vars, wt)),
+             keyby = c(tab_row_names)][, wt := NULL]
+      }
+
+  } else {
+    # with data.table
+    if (length(wt) == 0) {
+      tabs <- #4.1 sec
+        data[,
+             c(list(n  = .N),
+
+               purrr::set_names(purrr::map(.SD,  ~mean(., na.rm = TRUE)),
+                                paste0(as.character(col_vars), "_mean")),
+
+               purrr::set_names(purrr::map(.SD, ~ var(., na.rm = TRUE)),
+                                paste0(as.character(col_vars), "_var"))
+             ),
+             .SDcols = as.character(col_vars),
+             keyby = c(tab_row_names)]
+
+    } else {
+      tabs <- #11.01 sec without key ; 13.35 with key... # is is long to weigth results
+        data[,
+             c(list(n  = .N,
+                    wn = sum(eval(wt), na.rm = TRUE)),
+
+               purrr::set_names(purrr::map_if(.SD,
+                                              names(.SD) != as.character(wt),
+                                              ~ round(stats::weighted.mean(., eval(wt), na.rm = TRUE), 10),
+                                              .else = ~ NA_real_),
+                                paste0(as.character(c(col_vars, wt)), "_mean")),
+
+               purrr::set_names(purrr::map_if(.SD,
+                                              names(.SD) != as.character(wt),
+                                              ~ weighted.var(., eval(wt), na.rm = TRUE),
+                                              .else = ~ NA_real_),
+                                paste0(as.character(c(col_vars, wt)), "_var"))
+             ),
+             .SDcols = as.character(c(col_vars, wt)),
+             keyby = c(tab_row_names)][, paste0(wt, c("_mean", "_var")) := NULL]
+    }
+
+    # # groupingsets() could be used to calculate table, totals and total table at once
+    # #   but it does not gain times (problem : Total are named NA and mixed with true NAs...)
+    # if ("row" %in% tot | totaltab %in% c("line", "table")) {
+    #   group_sets <- tab_row_names |> purrr::accumulate(~ c(.x, .y))
+    #   group_sets <- rev(group_sets)
+    #   if (!"row" %in% tot) group_sets <- dplyr::last(group_sets)
+    #   if(totaltab == "table") group_sets <- c(group_sets, as.character(row_var))
+    #   group_sets <- c(group_sets, list(character()))
+    #
+    # tictoc::tic()
+    # tabs <- #56.7 sec with totals and total table
+    #   data.table::groupingsets(data,
+    #        c(list(n  = .N,
+    #               wn = sum(eval(wt), na.rm = TRUE)),
+    #
+    #          purrr::set_names(purrr::map_if(.SD,
+    #                                         names(.SD) != as.character(wt),
+    #                                         ~ round(stats::weighted.mean(., eval(wt), na.rm = TRUE), 10),
+    #                                         .else = ~ NA_real_),
+    #                           paste0(as.character(c(col_vars, wt)), "_mean")),
+    #
+    #          purrr::set_names(purrr::map_if(.SD,
+    #                                         names(.SD) != as.character(wt),
+    #                                         ~ weighted.var(., eval(wt), na.rm = TRUE),
+    #                                         .else = ~ NA_real_),
+    #                           paste0(as.character(c(col_vars, wt)), "_var"))
+    #        ),
+    #        .SDcols = as.character(c(col_vars, wt)),
+    #        by = c(tab_row_names),
+    #        sets = group_sets,
+    #        )[, paste0(wt, c("_mean", "_var")) := NULL]
+    # tictoc::toc()
+    #
+    # data.table::setorderv(tabs, tab_row_names)
+    # }
+  }
+
+  not_fct <- !purrr::map_lgl(dplyr::select(tabs, tidyselect::any_of(tab_row_names)), is.factor)
+  if (any(not_fct)) {
+    # not_fct_names <- names(not_fct)[not_fct]
+    tabs[, names(not_fct)[not_fct] := purrr::map(.SD, as.factor),
+         .SDcols = names(not_fct)[not_fct]]
+  }
+
+  if (na == "keep") {
+    data.table::setorderv(
+      tabs, tab_row_names, na.last = TRUE
+    )[, paste0(tab_row_names) := lapply(.SD, forcats::fct_explicit_na, na_level = "NA"),
+      .SDcols = tab_row_names]
+  }
+
+
+
+
+
+  # tabs <- data |>
+  #   dplyr::summarise(dplyr::across(tidyselect::all_of(as.character(col_vars)), ~ new_fmt(
+  #     display = "mean",
+  #     digits  = as.integer(digits),
+  #     n       = dplyr::n(),
+  #     wn      = if (wt != "no_weight") {sum(!!wt, na.rm = TRUE)} else {NA_real_},
+  #     mean    = stats::weighted.mean(., !!wt, na.rm = TRUE),
+  #     var     = weighted.var(., !!wt, na.rm = TRUE),
+  #     type    = "mean",
+  #     col_var = dplyr::cur_column()
+  #   )),
+  #   .groups = "drop")
+  # #}
+  #
+  # na_rows <- tabs %>%
+  #   dplyr::select(!!!tab_vars, !!row_var) %>%
+  #   dplyr::mutate(na_rows = dplyr::if_any(.fns = is.na)) |>
+  #   dplyr::pull(.data$na_rows)
+  #
+  # if (any(na_rows)) {
+  #   if (na == "drop") {
+  #     tabs <- tabs[-which(na_rows), ]
+  #   } else {
+  #     tabs <- tabs %>%
+  #       dplyr::mutate(dplyr::across(tidyselect::all_of(tab_row_names),
+  #                                   ~ forcats::fct_explicit_na(., na_level = "NA"))) %>%
+  #       dplyr::arrange(!!!tab_vars, !!row_var)
+  #
+  #     #data.table::setorderv(
+  #     #  tabs, tab_row_names, na.last = TRUE
+  #     #)[, paste0(tab_row_names) := lapply(.SD, forcats::fct_explicit_na, na_level = "NA"),
+  #     #  .SDcols = tab_row_names]
+  #   }
+  # }
+
+
+  #Calculate means and variances for all totals and subtotals
+
+  if ("row" %in% tot | totaltab %in% c("line", "table")) {
+    if (length(tab_vars) != 0) {
+      group_vars <- c(as.character(tab_vars)) |> purrr::accumulate(~ c(.x, .y))
+      group_vars <- c(rev(group_vars), list(character()))
+    } else {
+      group_vars <- list(character())
+    }
+    if (!"row" %in% tot) group_vars <- dplyr::last(group_vars)
+
+
+    if (df | num) {
+      if (length(wt) == 0) {
+        tabs_tot <-
+          purrr::map_dfr(
+            group_vars,
+            ~ data[, c(purrr::set_names(rep("Total", length(c(tab_vars[!tab_vars %in% .], row_var))),
+                                        as.character(c(tab_vars[!tab_vars %in% .], row_var)) ),
+
+                       purrr::map(.SD,  ~mean(., na.rm = TRUE)) ),
+                   .SDcols = as.character(col_vars),
+                   keyby = eval(.)]
+          )
+
+      } else {
+        tabs_tot <-
+          purrr::map_dfr(
+            group_vars,
+            ~ data[, c(purrr::set_names(rep("Total", length(c(tab_vars[!tab_vars %in% .], row_var))),
+                                        as.character(c(tab_vars[!tab_vars %in% .], row_var)) ),
+
+                       purrr::map_if(.SD,
+                                     names(.SD) != as.character(wt),
+                                     ~ round(stats::weighted.mean(., eval(wt), na.rm = TRUE), 10),
+                                     .else = ~ NA_real_)),
+                   .SDcols = as.character(c(col_vars, wt)),
+                   keyby = eval(.)][, wt := NULL]
+          )
+      }
+
+    } else {
+      if (length(wt) == 0) {
+        tabs_tot <-  #9.75 sec
+          purrr::map_dfr(
+            group_vars,
+            ~ data[,
+                   c(purrr::set_names(rep("Total", length(c(tab_vars[!tab_vars %in% .], row_var))),
+                                      as.character(c(tab_vars[!tab_vars %in% .], row_var)) ),
+
+                     list(n  = .N),
+
+                     purrr::set_names(purrr::map(.SD,  ~mean(., na.rm = TRUE)),
+                                      paste0(as.character(col_vars), "_mean")),
+
+                     purrr::set_names(purrr::map(.SD, ~ var(., na.rm = TRUE)),
+                                      paste0(as.character(col_vars), "_var"))
+                   ),
+                   .SDcols = as.character(col_vars),
+                   keyby = eval(.)]
+          )
+
+      } else {
+        tabs_tot <-  #31.83 sec
+          purrr::map_dfr(
+            group_vars,
+            ~ data[,
+                   c(purrr::set_names(rep("Total", length(c(tab_vars[!tab_vars %in% .], row_var))),
+                                      as.character(c(tab_vars[!tab_vars %in% .], row_var)) ),
+                     list(n  = .N,
+                          wn = sum(eval(wt), na.rm = TRUE)),
+
+                     purrr::set_names(purrr::map_if(.SD,
+                                                    names(.SD) != as.character(wt),
+                                                    ~ round(stats::weighted.mean(., eval(wt), na.rm = TRUE), 10),
+                                                    .else = ~ NA_real_),
+                                      paste0(as.character(c(col_vars, wt)), "_mean")),
+
+                     purrr::set_names(purrr::map_if(.SD,
+                                                    names(.SD) != as.character(wt),
+                                                    ~ weighted.var(., eval(wt), na.rm = TRUE),
+                                                    .else = ~ NA_real_),
+                                      paste0(as.character(c(col_vars, wt)), "_var"))
+                   ),
+                   .SDcols = as.character(c(col_vars, wt)),
+                   keyby = eval(.)][, paste0(wt, c("_mean", "_var")) := NULL]
+          )
+      }
+    }
+
+    not_fct <- !purrr::map_lgl(dplyr::select(tabs_tot, tidyselect::any_of(tab_row_names)), is.factor)
+    if (any(not_fct)) {
+      # not_fct_names <- names(not_fct)[not_fct]
+      tabs_tot[, names(not_fct)[not_fct] := purrr::map(.SD, forcats::as_factor),
+               .SDcols = names(not_fct)[not_fct]]
+    }
+
+    if (na == "keep" & length(tab_vars) != 0) {
+      data.table::setorderv(
+        tabs_tot, as.character(tab_vars), na.last = TRUE
+      )[, as.character(tab_vars) := lapply(.SD, forcats::fct_explicit_na, na_level = "NA"),
+        .SDcols = as.character(tab_vars)]
+    }
+
+    tabs <- rbind(tabs, tabs_tot)
+    data.table::setorderv(tabs, tab_row_names)
+
+
+    # tabs_tot <-
+    #   purrr::map_dfr(ungroup_vars,
+    #                  ~ dplyr::ungroup(data, !!!.x) |> #win nearly no time compared to group_by(!!!tab_vars)
+    #                    dplyr::summarise(
+    #                      dplyr::across(all_of(purrr::map_chr(.x, rlang::as_name)), ~ factor("Total")),
+    #                      dplyr::across(all_of(as.character(col_vars)), function(.var) new_fmt(
+    #                        display   = "mean",
+    #                        digits    = as.integer(digits),
+    #                        n         = dplyr::n(),
+    #                        wn        = if (wt != "no_weight") {sum(!!wt, na.rm = TRUE)} else {NA_real_},
+    #                        mean      = stats::weighted.mean(.var, !!wt, na.rm = TRUE),
+    #                        var       = weighted.var(.var, !!wt, na.rm = TRUE),
+    #                        type      = "mean",
+    #                        col_var   = dplyr::cur_column(),
+    #                        in_totrow = TRUE,
+    #                        in_tottab = length(.x) == length(tab_vars) + 1L,
+    #                      )),
+    #                      .groups = "drop")
+    #   )
+    #
+    # na_rows <- tabs_tot %>%
+    #   dplyr::select(!!!tab_vars) %>%
+    #   dplyr::transmute(na_rows = dplyr::if_any(.fns = is.na)) |> tibble::deframe()
+    #
+    # if (any(na_rows)) {
+    #   if (na == "drop") {
+    #     tabs_tot <- tabs_tot[-which(na_rows), ]
+    #   } else {
+    #     tabs_tot <- tabs_tot %>%
+    #       dplyr::mutate(dplyr::across(tidyselect::all_of(as.character(tab_vars)),
+    #                                   ~ forcats::fct_explicit_na(., na_level = "NA"))) %>%
+    #       dplyr::arrange(!!!tab_vars, !!row_var)
+    #
+    #   }
+    # }
+  }
+
+  #Calculate means and variances for total table
+  if (totaltab == "table") {
+
+    if (df | num) {
+      if (length(wt) == 0) {
+        tabs_totaltab <-
+          data[, c(purrr::set_names(rep("Total", length(tab_vars)), as.character(tab_vars)),
+                   purrr::map(.SD,  ~mean(., na.rm = TRUE)) ),
+               .SDcols = as.character(col_vars),
+               keyby = eval(as.character(row_var))]
+
+      } else {
+        tabs_totaltab <-
+          data[, c(purrr::set_names(rep("Total", length(tab_vars)), as.character(tab_vars)),
+                   purrr::map_if(.SD,
+                                 names(.SD) != as.character(wt),
+                                 ~ round(stats::weighted.mean(., eval(wt), na.rm = TRUE), 10),
+                                 .else = ~ NA_real_)),
+               .SDcols = as.character(c(col_vars, wt)),
+               keyby = eval(as.character(row_var))][, wt := NULL]
+      }
+
+    } else {
+      if (length(wt) == 0) {
+        tabs_totaltab <-
+          data[,
+               c(purrr::set_names(rep("Total", length(tab_vars)), as.character(tab_vars)),
+
+                 list(n  = .N),
+
+                 purrr::set_names(purrr::map(.SD,  ~mean(., na.rm = TRUE)),
+                                  paste0(as.character(col_vars), "_mean")),
+
+                 purrr::set_names(purrr::map(.SD, ~ var(., na.rm = TRUE)),
+                                  paste0(as.character(col_vars), "_var"))
+               ),
+               .SDcols = as.character(col_vars),
+               keyby = eval(as.character(row_var))]
+
+      } else {
+        tabs_totaltab <-
+          data[,
+               c(purrr::set_names(rep("Total", length(tab_vars)), as.character(tab_vars)),
+
+                 list(n  = .N,
+                      wn = sum(eval(wt), na.rm = TRUE)),
+
+                 purrr::set_names(purrr::map_if(.SD,
+                                                names(.SD) != as.character(wt),
+                                                ~ round(stats::weighted.mean(., eval(wt), na.rm = TRUE), 10),
+                                                .else = ~ NA_real_),
+                                  paste0(as.character(c(col_vars, wt)), "_mean")),
+
+                 purrr::set_names(purrr::map_if(.SD,
+                                                names(.SD) != as.character(wt),
+                                                ~ weighted.var(., eval(wt), na.rm = TRUE),
+                                                .else = ~ NA_real_),
+                                  paste0(as.character(c(col_vars, wt)), "_var"))
+               ),
+               .SDcols = as.character(c(col_vars, wt)),
+               keyby = eval(as.character(row_var))][, paste0(wt, c("_mean", "_var")) := NULL]
+      }
+    }
+
+    not_fct <- !purrr::map_lgl(dplyr::select(tabs_totaltab, tidyselect::any_of(tab_row_names)), is.factor)
+    if (any(not_fct)) {
+      # not_fct_names <- names(not_fct)[not_fct]
+      tabs_totaltab[, names(not_fct)[not_fct] := purrr::map(.SD, forcats::as_factor),
+                    .SDcols = names(not_fct)[not_fct]]
+    }
+
+    if (na == "keep") {
+      data.table::setorderv(
+        tabs_totaltab, as.character(row_var), na.last = TRUE
+      )[, as.character(row_var) := lapply(.SD, forcats::fct_explicit_na, na_level = "NA"),
+        .SDcols = as.character(row_var)]
+    }
+
+
+    tabs <- rbind(tabs, tabs_totaltab)
+    data.table::setorderv(tabs, tab_row_names)
+
+
+    # tabs_totaltab <- dplyr::group_by(data, !!row_var) |>
+    #   dplyr::summarise(
+    #     dplyr::across(tidyselect::all_of(purrr::map_chr(tab_vars, rlang::as_name)),
+    #                   ~ factor("Total")),
+    #     dplyr::across(tidyselect::all_of(as.character(col_vars)), function(.var) new_fmt(
+    #       display   = "mean",
+    #       digits    = as.integer(digits),
+    #       n         = dplyr::n(),
+    #       wn        = if (wt != "no_weight") {sum(!!wt, na.rm = TRUE)} else {NA_real_},
+    #       mean      = stats::weighted.mean(.var, !!wt, na.rm = TRUE),
+    #       var       = weighted.var(.var, !!wt, na.rm = TRUE),
+    #       type      = "mean",
+    #       col_var   = dplyr::cur_column(),
+    #       in_totrow = TRUE,
+    #       in_tottab = TRUE
+    #     )),
+    #     .groups = "drop")
+  }
+
+  if (df | num) {
+    if (df) return(as_df_merge_rownames(tabs, rlang::as_name(row_var)))
+
+    return(dplyr::group_by(new_tab(tibble::as_tibble(tabs)),
+                           !!!tab_vars))
+  }
+
+
+
+  totrow_vector <- dplyr::pull(tabs, !!row_var) == "Total"
+  tottab_vector <- dplyr::transmute(tabs, tottab = dplyr::if_all(
+    tidyselect::all_of(as.character(tab_vars)),
+    ~ . == "Total"
+  )) |>
+    tibble::deframe()
+  comp_group <- if (comp == "tab") { as.character(tab_vars) } else { character() }
+
+  diff_index_mean <-  function(diff, row_var, num_names) { #needed for ci too
+    if (diff == "tot"   ) return(-1L)
+    if (diff == "first" ) return(1L )
+    if (is.numeric(diff)) return(as.integer(diff[1]))
+
+    index <- which(stringr::str_detect(row_var, diff))
+
+    if (length(index) >= 2) warning(paste0(
+      "with diff = '", diff, "' , several rows were found as ",
+      "reference for comparison ; only the first was kept ; ",
+      "to remove this warning, precise the value of diff ",
+      "until there is only one row_var level matched"
+    ))
+
+    index <- tidyr::replace_na(dplyr::first(index), 0)
+    if (length(index) == 0) index <- 0
+
+    index
+  }
+
+
+  #Differences and confidence intervals
+  if (!diff %in% c("no", "") | ci %in% c("cell", "diff")) {
+
+    if (diff != "tot") {
+      refrows <-
+        if(comp == "tab") {
+          tibble::as_tibble(tabs[, tab_row_names, with = FALSE]) |>
+            dplyr::group_by(!!!tab_vars) |>
+            dplyr::transmute(
+              var =
+                dplyr::row_number() == if (diff_index_mean(diff, !!row_var) == -1) {
+                  dplyr::n()
+                } else {
+                  diff_index_mean(diff, !!row_var)
+                }
+            ) |>
+            dplyr::pull(var)
+
+        } else {
+          tibble::as_tibble(tabs[, tab_row_names, with = FALSE]) |>
+            dplyr::mutate(tottab_vector = tottab_vector) |>
+            dplyr::group_by(!!!tab_vars) |>
+            dplyr::transmute(
+              var = dplyr::if_else(
+                condition = .data$tottab_vector,
+                true  = dplyr::row_number() == if (diff_index_mean(diff, !!row_var) == -1) {
+                  dplyr::n()
+                } else {
+                  diff_index_mean(diff, !!row_var)
+                },
+                false = FALSE
+              )
+            ) |>
+            dplyr::pull(var)
+        }
+
+      if (!any(refrows)) {
+        warning(paste0(
+          "in diff = '", diff, "' , no rows were found as reference for comparison ; ",
+          "to remove this warning, precise the value of diff ",
+          "until there is one row_var level matched"
+        ))
+      }
+
+    } else {
+      refrows <- if (comp == "tab") { totrow_vector } else { totrow_vector & tottab_vector }
+    }
+    #tabs_diff$DIPLOME[refrows] |> as.character()
+
+
+
+    refrows <- tidyr::replace_na(refrows, FALSE)
+
+    tabs[, ref_rows___ := refrows]
+
+    #Differences
+    if (!diff %in% c("no", "") ) {
+      tabs[, paste0(col_vars, "_diff") := purrr::map(
+        rlang::syms(paste0(col_vars, "_mean")),
+        ~ eval(.) / dplyr::nth(eval(.), tidyr::replace_na(which(ref_rows___)[1], 0) ) #diff_index_mean(diff, eval(row_var))
+      ),
+      by = eval(comp_group)]
+    }
+
+
+
+
+    #Confidence intervals
+    if (ci == "cell") {
+
+      tabs[, paste0(col_vars, "_ci") := purrr::map(
+        col_vars,
+        ~ ci_mean(xvar = eval(rlang::sym(paste0(., "_var"))),
+                  xn   = eval(rlang::sym("n")),
+                  conf_level = conf_level)
+      )]
+
+    } else if (ci == "diff") {
+      tabs[, paste0(col_vars, "_ci") := purrr::map(
+        col_vars,
+        ~ ci_mean_diff(xvar = eval(rlang::sym(paste0(., "_var"))),
+                       xn   = eval(rlang::sym("n")),
+                       yvar = dplyr::nth(eval(rlang::sym(paste0(., "_var"))),
+                                         tidyr::replace_na(which(ref_rows___)[1], 0) ), #diff_index_mean(diff, eval(row_var))
+                       yn   = dplyr::nth(eval(rlang::sym("n")),
+                                         tidyr::replace_na(which(ref_rows___)[1], 0) ), #diff_index_mean(diff, eval(row_var))
+                       conf_level = conf_level)
+      ),
+      by = eval(comp_group)]
+
+      tabs[, paste0(col_vars, "_ci") :=
+             purrr::map(.SD, ~ dplyr::if_else(1:.N %in% which(refrows),
+                                              true  = NA_real_,
+                                              false = .)),
+           .SDcols = paste0(col_vars, "_ci") ]
+    }
+
+    tabs[, ref_rows___ := NULL]
+  }
+
+
+
+
+
+  #Make the final table with fmt vectors
+  # remove(list = c("tabs_n", "tabs_wn", "tabs_pct", "tabs_diff", "tabs_ci", "refcols_vector", "refrows"))
+
+  text_vars <- !purrr::map_lgl(tabs, is.numeric)
+  NA_reals <- rep(NA_real_, nrow(tabs))
+
+  n <- as.integer(tabs[["n"]])
+  wn <- if ("wn" %in% names(tabs)) { tabs[["wn"]] } else { NA_reals }
+
+
+  tabs_mean  <-
+    data.table::setnames(tabs[, stringr::str_detect(names(tabs), "_mean$"), with = FALSE] ,
+                         function(.x) stringr::str_remove(.x, "_mean$" ))
+
+  tabs_var  <-
+    data.table::setnames(tabs[, stringr::str_detect(names(tabs), "_var$"), with = FALSE],
+                         function(.x) stringr::str_remove(.x, "_var$" ))
+
+
+  are_diff <- stringr::str_detect(names(tabs), "_diff$")
+  tabs_diff  <-
+    if (any(are_diff)) {
+      data.table::setnames(tabs[, are_diff, with = FALSE] ,
+                           function(.x) stringr::str_remove(.x, "_diff$" ))
+    } else {
+      list(NA_reals)
+    }
+
+  are_ci <- stringr::str_detect(names(tabs), "_ci$")
+  tabs_ci  <-
+    if (any(are_ci)) {
+      data.table::setnames(tabs[, are_ci, with = FALSE] ,
+                           function(.x) stringr::str_remove(.x, "_ci$" ))
+    } else {
+      list(NA_reals)
+    }
+
+  tabs_text <- tabs[, text_vars, with = FALSE]
+
+  if (diff %in% c("tot", "no", "")) refrows <- rep(FALSE, nrow(tabs))
+
+
+  tabs <-
+    list(tabs_mean, tabs_var, tabs_diff, tabs_ci, as.character(col_vars), digits) |>
+    purrr::pmap_dfc(~ new_fmt(
+      display   = if (ci_visible) { "mean_ci" } else { "mean" },
+      digits    = vec_recycle(..6, length(..1)),
+      n         = n,
+      wn        = wn,
+      mean      = ..1,
+      var       = ..2,
+      diff      = ..3,
+      ci        = ..4,
+      in_totrow = totrow_vector,
+      in_tottab = tottab_vector,
+      in_refrow = refrows,
+      color     = color,
+      type      = "mean",
+      diff_type = switch(as.character(diff), "no" = "", "tot" = "tot", as.character(diff)),
+      ci_type   = ci, #dplyr::if_else(ci == "diff", "diff", ci),
+      comp      = dplyr::if_else(diff != "no" | ci != "no", comp == "all", NA),
+      col_var   = ..5
+    ))
+
+  tabs <- dplyr::bind_cols(tibble::as_tibble(tabs_text), tabs)
+
+
+  #Rename totals
+  if ("row" %in% tot & total_names[1] != "Total") tabs <- tabs |>
+    dplyr::mutate(!!row_var := forcats::fct_recode(!!row_var,
+                                                   purrr::set_names("Total", total_names[1])))
+  if ("col" %in% tot & total_names[2] != "Total") tabs <- tabs |>
+    dplyr::rename(tidyselect::any_of(purrr::set_names("Total", total_names[2])))
+
+  if (totaltab %in% c("line", "table") &  totaltab_name != "Total") {
+    tabs <- tabs |> dplyr::mutate(dplyr::across(
+      tidyselect::all_of(as.character(tab_vars)),
+      ~ dplyr::if_else(tottab_vector,
+                       true  = factor(totaltab_name, c(levels(.), totaltab_name)),
+                       false = .) |>
+        forcats::fct_drop()
+    ))
+  }
+
+  # Add argument to transpose the table ?
+  # if (row_var_type == "numeric") {
+  #   tabs <- tabs %>%
+  #   tidyr::pivot_wider(names_from = !!fct_var, values_from = !!num_var,
+  #                      names_glue = "{.value}_{.name}",
+  #                      values_fill = fmt0("mean", digits, type = "mean"))
+  #   if (as.character(tab_vars) == "no_tab_vars") {
+  #     tabs <- tabs %>% dplyr::mutate(no_row_var = factor("no_row_var")) %>%
+  #       dplyr::relocate(no_row_var, .before = 1)
+  #   }
+  # }
+
+
+  tab_var_1lv <- all(purrr::map_lgl(dplyr::select(tabs, !!!tab_vars),
+                                    ~ length(unique(.)) == 1))
+
+  if (tab_var_1lv) {
+    new_tab(tabs, subtext = subtext) %>%
+      dplyr::select(-tidyselect::any_of(purrr::map_chr(tab_vars, as.character)))
+  } else {
+    tabs <- tabs %>% dplyr::group_by(!!!tab_vars)
+    new_grouped_tab(tabs, dplyr::group_data(tabs), subtext = subtext)
+  }
+}
+
 
 
 
@@ -1634,7 +3177,7 @@ tab_plain <- function(data, row_var, col_var, ..., wt,
 #'
 #' @examples \donttest{ data <- dplyr::starwars %>%
 #' tab_prepare(sex, hair_color, gender, rare_to_other = TRUE,
-#'             n_min = 5, na = "keep")
+#'             n_min = 5, na_drop_all = sex)
 #'
 #' data %>%
 #'   tab_plain(sex, hair_color, gender) %>%
@@ -1642,6 +3185,8 @@ tab_plain <- function(data, row_var, col_var, ..., wt,
 #'   }
 tab_totaltab <- function(tabs, totaltab = c("table", "line", "no"),
                          name = "Ensemble", data = NULL) {
+  .Deprecated("tab_plain() and tab_num(), which now have a totaltab argument")
+
   get_vars  <- tab_get_vars(tabs)
 
   row_var   <- rlang::sym(get_vars$row_var)
@@ -1773,6 +3318,8 @@ tab_totaltab <- function(tabs, totaltab = c("table", "line", "no"),
 #'   }
 tab_tot <- function(tabs, tot = c("row", "col"), name = "Total",
                     totcol = "last", data = NULL) {
+  .Deprecated("tab_plain() and tab_num(), which now have a tot argument")
+
   stopifnot(
     tot %in% c("no", "row", "col", "both"),
     totcol %in% c("last", "each", "no", "")
@@ -1996,7 +3543,7 @@ tab_tot <- function(tabs, tot = c("row", "col"), name = "Total",
 #' \donttest{
 #' data <- dplyr::starwars %>%
 #'   tab_prepare(sex, hair_color, gender, rare_to_other = TRUE,
-#'               n_min = 5, na = "keep")
+#'               n_min = 5, na_drop_all = sex)
 #'
 #' data %>%
 #'   tab_plain(sex, hair_color, gender) %>%
@@ -2007,6 +3554,9 @@ tab_tot <- function(tabs, tot = c("row", "col"), name = "Total",
 tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no"),
                     digits = NULL, diff = c("tot", "first", "no"),
                     comp = NULL, color = FALSE, just_diff = FALSE) { #Add keep/change grouping ?
+
+  .Deprecated("tab_plain() and tab_num(), which now have pct and diff arguments")
+
   #stopifnot(pct[1] %in% c("row", "col", "all", "all_tabs", "no"))
   get_vars         <- tab_get_vars(tabs)
   #row_var         <- rlang::sym(get_vars$row_var) #col_var ??
@@ -2076,14 +3626,14 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
 
 
       #Calculate percentages
-      pct_formula <- function(x, pct, tot) {
-        switch(pct,
-               "row"     =  get_wn(x) / get_wn(tot             ),
-               "col"     =  get_wn(x) / get_wn(dplyr::last(x)  ),
-               "all"     =  get_wn(x) / get_wn(dplyr::last(tot)),
-               "all_tabs"=  get_wn(x) / get_wn(dplyr::last(tot)),
-               NA_real_)
-      }
+      # pct_formula <- function(x, pct, tot) {
+      #   switch(pct,
+      #          "row"     =  get_wn(x) / get_wn(tot             ),
+      #          "col"     =  get_wn(x) / get_wn(dplyr::last(x)  ),
+      #          "all"     =  get_wn(x) / get_wn(dplyr::last(tot)),
+      #          "all_tabs"=  get_wn(x) / get_wn(dplyr::last(tot)),
+      #          NA_real_)
+      # }
       #For each var, the first total column at the right is taken
       tot_cols <- detect_totcols(tabs)
 
@@ -2158,22 +3708,21 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
   type <- get_type(tabs)
   #Calculate diffs (used to color pct depending on spread from row or col mean)
   if (diff[1] != "no" & any(type %in% c("row", "col", "mean")) ) {
-    diff_formula <- function(x, type, ref) {
-      switch(
-        diff[1],
-        "tot"   = switch(type,
-                         "row"     =  get_pct(x)  - get_pct(dplyr::last(x  )),
-                         "col"     =  get_pct(x)  - get_pct(ref             ),
-                         "mean"    =  get_mean(x) / get_mean(dplyr::last(x) ),
-                         NA_real_),
-        "first" = switch(type,
-                         "row"     =  get_pct(x)  - get_pct(dplyr::first(x  )),
-                         "col"     =  get_pct(x)  - get_pct(ref              ),
-                         "mean"    =  get_mean(x) / get_mean(dplyr::first(x) ),
-                         NA_real_)
-      )
-
-    }
+    # diff_formula <- function(x, type, diff, ref) {
+    #   switch(
+    #     diff, #diff[1] before
+    #     "tot"   = switch(type,
+    #                      "row"     =  get_pct(x)  - get_pct(dplyr::last(x  )),
+    #                      "col"     =  get_pct(x)  - get_pct(ref             ),
+    #                      "mean"    =  get_mean(x) / get_mean(dplyr::last(x) ),
+    #                      NA_real_),
+    #     "first" = switch(type,
+    #                      "row"     =  get_pct(x)  - get_pct(dplyr::first(x  )),
+    #                      "col"     =  get_pct(x)  - get_pct(ref              ),
+    #                      "mean"    =  get_mean(x) / get_mean(dplyr::first(x) ),
+    #                      NA_real_)
+    #   )
+    # }
 
     if (diff[1] == "tot"  ) reference <- detect_totcols(tabs)
     if (diff[1] == "first") {
@@ -2206,6 +3755,7 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
             ~ set_diff(., diff_formula(
               .,
               type = type[[dplyr::cur_column()]],
+              diff = diff[1],
               ref  = rlang::eval_tidy(reference[[dplyr::cur_column()]])
             )) %>% set_diff_type(diff[1])
           ))
@@ -2220,6 +3770,7 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
           ~ set_diff(., diff_formula(
             .,
             type = type[[dplyr::cur_column()]],
+            diff = diff[1],
             ref  = rlang::eval_tidy(reference[[dplyr::cur_column()]])
           )) %>% set_diff_type(diff[1])
         ))
@@ -2324,13 +3875,11 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
 #' \donttest{
 #' data <- dplyr::starwars %>%
 #'   tab_prepare(sex, hair_color, gender, rare_to_other = TRUE,
-#'               n_min = 5, na = "keep")
+#'               n_min = 5, na_drop_all = sex)
 #'
 #' data %>%
-#'   tab_plain(sex, hair_color, gender) %>%
-#'   tab_totaltab("line")  %>%
-#'   tab_tot()  %>%
-#'   tab_pct(comp = "all")  %>%
+#'   tab_plain(sex, hair_color, gender, tot = c("row", col"),
+#'     pct = "row", comp = "all) %>%
 #'   tab_ci("diff", color = "after_ci")
 #'   }
 tab_ci <- function(tabs,
@@ -2378,9 +3927,9 @@ tab_ci <- function(tabs,
   ref_cols  <- detect_firstcol(tabs)
   ref_cols[is.na(ci)] <- list(rlang::sym(""))
 
-  ref_cols <- dplyr::if_else(diff_type == "first",
-                             true  = ref_cols,
-                             false = tot_cols     ) %>%
+  ref_cols <- dplyr::if_else(diff_type == "tot",
+                             true  = tot_cols,
+                             false = ref_cols     ) %>%
     purrr::set_names(names(diff_type)) #keep ci_yes ?
   names_refcols <- ref_cols %>% purrr::map_chr(as.character) %>% unique() %>%
     purrr::discard(. == "")
@@ -2441,8 +3990,8 @@ tab_ci <- function(tabs,
     ref_rows <- tabs %>% dplyr::transmute(dplyr::across(
       !!row_select,
       ~ .[dplyr::last(which(switch(get_diff_type(.),
-                                   "first" = is_refrow(.),
-                                   is_totrow(.))))]
+                                   "tot" = is_totrow(.),
+                                   is_refrow(.)         )))]
     ))
 
     tot_rows <- tabs %>% dplyr::transmute(dplyr::across(
@@ -2454,8 +4003,8 @@ tab_ci <- function(tabs,
       !!ci_select,
       ~ tidyr::replace_na(dplyr::row_number() ==
                             dplyr::last(which(switch(get_diff_type(.),
-                                                     "first" = is_refrow(.),
-                                                     is_totrow(.)))),
+                                                     "tot" = is_totrow(.) ,
+                                                     is_refrow(.)))),
                           FALSE)
     ))
 
@@ -2514,14 +4063,15 @@ tab_ci <- function(tabs,
                  "diff_row" = switch(
                    get_type(.),
                    "mean" = .[dplyr::last(which(switch(get_diff_type(.),
-                                                       "first" = is_refrow(.),
-                                                       is_totrow(.))))] %>%
+                                                       "tot" = is_totrow(.),
+                                                       is_refrow(.))))] %>%
                      get_n(), # = n of ref_rows (copy error with groups)
+
                    rlang::eval_tidy(
                      tot_cols[[dplyr::cur_column()]]
                    )[dplyr::last(which(switch(get_diff_type(.),
-                                              "first" = is_refrow(.),
-                                              is_totrow(.))))] %>%
+                                              "tot" = is_totrow(.),
+                                              is_refrow(.))))] %>%
                      get_n()
                  )
         )
@@ -2667,12 +4217,10 @@ tab_ci <- function(tabs,
 #' \donttest{
 #' data <- dplyr::starwars %>%
 #'   tab_prepare(sex, hair_color, gender, rare_to_other = TRUE,
-#'               n_min = 5, na = "keep")
+#'               n_min = 5, na_drop_all = sex)
 #'
 #' data %>%
-#'   tab_plain(sex, hair_color, gender) %>%
-#'   tab_totaltab("line")  %>%
-#'   tab_tot()  %>%
+#'   tab_plain(sex, hair_color, gender, tot = c("row", "col")) %>%
 #'   tab_chi2(calc = c("p", "ctr"), color = TRUE)
 #'   }
 tab_chi2 <- function(tabs, calc = c("ctr", "p", "var", "counts"),
@@ -3095,9 +4643,9 @@ tab_match_groups_and_totrows <- function(tabs) {
 
 #' @keywords internal
 tab_add_totcol_if_no <- function(tabs) {
-    if (!any(is_totcol(tabs)) & ! all(get_type(tabs) == "mean")) { # & !only_one_column
-      only_one_column <- length(which(purrr::map_lgl(tabs, is_fmt))) == 1L
-      tabs <- tabs %>% tab_tot("col", totcol = "last")
+  if (!any(is_totcol(tabs)) & ! all(get_type(tabs) == "mean")) { # & !only_one_column
+    only_one_column <- length(which(purrr::map_lgl(tabs, is_fmt))) == 1L
+    tabs <- tabs %>% tab_tot("col", totcol = "last")
     if (!only_one_column) warning("no total column, one was added (from the last non-mean column)")
   }
   tabs
@@ -3156,8 +4704,10 @@ tab_match_comp_and_tottab <- function(tabs, comp) {
 #' @keywords internal
 weighted.var <- function(x, wt, na.rm = FALSE) {
   #Nwt_non_zero <- length((wt)[wt != 0])
-  sum(wt * (x - stats::weighted.mean(x, wt, na.rm = na.rm))^2,  na.rm = na.rm) /
-    ( sum(wt, na.rm = na.rm) )
+  round(
+    sum(wt * (x - stats::weighted.mean(x, wt, na.rm = na.rm))^2,  na.rm = na.rm) /
+      ( sum(wt, na.rm = na.rm) ),
+    10)
   #((Nwt_non_zero - 1) / Nwt_non_zero) *
 } #Same results as sqrt(Hmisc::wtd.var(!!num_var, !!wt, na.rm = TRUE, method = "ML")
 
@@ -3170,6 +4720,66 @@ zscore_formula <- function(conf_level) {
   stats::qnorm((1 - conf_level)/2,lower.tail = FALSE)
 }
 
+
+#' @keywords internal
+ci_mean      <- function(xvar, xn, conf_level) {
+  zscore_formula(conf_level) * sqrt( xvar / xn )
+}
+
+#' @keywords internal
+ci_mean_diff <- function(xvar, xn, yvar, yn, conf_level) {
+  zscore_formula(conf_level) * sqrt( xvar/xn + yvar/yn )
+}
+
+# #' @keywords internal
+# ci_base <- function(xpct, xn, conf_level) {
+#   #zs * sqrt(xpct*(1 - xpct)/xn)
+#
+#   DescTools::BinomCI(xpct * xn, xn,
+#                      conf.level = conf_level, method = method_cell) %>%
+#     as.data.frame() %>% dplyr::mutate(ci = .data$upr.ci - .data$est ) %>%
+#     dplyr::pull(.data$ci)
+# }
+#
+# #' @keywords internal
+# ci_diff <-  function(xpct, xn, ypct, yn, conf_level) {
+#   #zs * sqrt( xpct*(1 - xpct)/xn   +   ypct*(1 - ypct)/yn )
+#
+#   DescTools::BinomDiffCI(x1 = xpct * xn, n1 = xn,
+#                          x2 = ypct * yn, n2 = yn,
+#                          conf.level = conf_level, method = method_diff)  %>%
+#     as.data.frame() %>% dplyr::mutate(ci = .data$upr.ci - .data$est ) %>%
+#     dplyr::pull(.data$ci)
+# }
+
+
+
+#' @keywords internal
+pct_formula <- function(x, pct, tot) {
+  switch(pct,
+         "row"     =  get_wn(x) / get_wn(tot             ),
+         "col"     =  get_wn(x) / get_wn(dplyr::last(x)  ),
+         "all"     =  get_wn(x) / get_wn(dplyr::last(tot)),
+         "all_tabs"=  get_wn(x) / get_wn(dplyr::last(tot)),
+         NA_real_)
+}
+
+#' @keywords internal
+diff_formula <- function(x, type, diff, ref) {
+  switch(
+    diff,
+    "tot"   = switch(type,
+                     "row"     =  get_pct(x)  - get_pct(dplyr::last(x  )),
+                     "col"     =  get_pct(x)  - get_pct(ref             ),
+                     "mean"    =  get_mean(x) / get_mean(dplyr::last(x) ),
+                     NA_real_),
+    "first" = switch(type,
+                     "row"     =  get_pct(x)  - get_pct(dplyr::first(x  )),
+                     "col"     =  get_pct(x)  - get_pct(ref              ),
+                     "mean"    =  get_mean(x) / get_mean(dplyr::first(x) ),
+                     NA_real_)
+  )
+}
 
 
 #' @keywords internal
@@ -3205,81 +4815,6 @@ var_contrib <- function(x, tot, calc = c("ctr", "expected_freq", "spread",
 
 
 
-#' @keywords internal
-tab_prepare_core <-
-  function(data, ..., na = "keep",
-           cleannames = NULL, rare_to_other = FALSE,
-           n_min = 30, other_level = "Others") {
-
-    cleannames <-
-      if (is.null(cleannames)) { getOption("tabxplor.cleannames") } else {cleannames}
-
-    variables     <- rlang::expr(c(...))
-    pos_variables <- tidyselect::eval_select(variables, data)
-    variables     <- names(pos_variables)
-
-
-    vars_not_numeric <-
-      dplyr::select(data[pos_variables], where(~ !is.numeric(.))) %>%
-      colnames() #%>% rlang::syms()                # is.integer(.) | is.double()
-
-    data <- data %>%
-      dplyr::mutate(dplyr::across(tidyselect::all_of(vars_not_numeric),
-                                  as.factor))
-
-    #remove class ordered
-    data <- data %>%
-      dplyr::mutate(dplyr::across(
-        where(is.ordered),
-        ~ magrittr::set_class(., class(.)[class(.) != "ordered"])
-      ))
-
-
-
-
-    na <- vctrs::vec_recycle(na, length(variables)) %>% purrr::set_names(variables)
-    keep     <- variables[na == "keep" & variables %in% vars_not_numeric]
-
-    drop_all <- variables[na == "drop_all"]
-    data <- data %>% dplyr::mutate(dplyr::across(
-      tidyselect::all_of(keep),
-      forcats::fct_explicit_na, na_level = "NA"
-    ))
-    data <- data %>% dplyr::filter(dplyr::if_all(
-      tidyselect::all_of(drop_all),
-      ~ !is.na(.)
-    ))
-
-    if(rare_to_other == TRUE) {
-      data <- data %>%
-        dplyr::mutate(dplyr::across(tidyselect::all_of(vars_not_numeric),
-                                    ~ forcats::fct_lump_min(.,
-                                                            n_min,
-                                                            other_level = other_level))
-        )
-    }
-    data <- data %>%  #Remove unused levels anyway
-      dplyr::mutate(dplyr::across(tidyselect::all_of(vars_not_numeric),
-                                  forcats::fct_drop))
-
-
-    if (cleannames == TRUE)  data <- data %>%
-      dplyr::mutate(dplyr::across(tidyselect::all_of(vars_not_numeric), fct_clean))
-
-
-    #If sex is in supplementary var, see % of women and not men
-    if ("SEX" %in% names(data) | "SEXE" %in% names(data)){
-      if (!stringr::str_detect(levels(data$SEXE)[1], "w|W|f|F")) data <- data %>%
-          dplyr::mutate(SEXE = forcats::fct_rev(.data$SEXE))
-    }
-
-    # data <- data %>%  dplyr::select(!!tab_vars, !!row_var, !!col_var, !!wt,
-    # tidyselect::all_of(c(sup_cols, sup_rows))) %>%
-    #   dplyr::select(where(is.factor), where(is.numeric)) %>%
-    #   dplyr::select(!!tab_vars, !!row_var, !!col_var, !!wt, tidyselect::everything())
-
-    data
-  }
 
 #' @keywords internal
 quo_miss_na_null_empty_no <- function(quo) {
@@ -3289,6 +4824,30 @@ quo_miss_na_null_empty_no <- function(quo) {
   all(is.na(quo) | quo %in% c("", "no"))
 }
 
+
+#' @keywords internal
+as_df_merge_rownames <- function(tabs, row_var) {
+  text_cols <- !purrr::map_lgl(tabs, is.numeric)
+  text_cols <- names(text_cols)[which(text_cols)]
+  new_rownames  <- paste0(text_cols, collapse = "_")
+
+  if (length(text_cols) >= 2) {
+    tabs <- tabs %>%
+      tibble::as_tibble() %>%
+      dplyr::mutate(!!new_rownames :=
+                      paste(!!!purrr::map(text_cols, rlang::sym), sep = "_")) %>%
+      dplyr::select(-tidyselect::all_of(text_cols)) %>%
+      dplyr::relocate(where(is.character), .before = 1) %>%
+      tibble::column_to_rownames(var = new_rownames)
+  } else {
+    #tabs <- tabs %>% tibble::column_to_rownames(var = rlang::as_name(row_var))
+    rnames <- as.character(tabs[[row_var]])
+    tabs[, eval(row_var) := NULL]
+    data.table::setDF(tabs, rownames = rnames)
+  }
+
+  tabs
+}
 
 
 

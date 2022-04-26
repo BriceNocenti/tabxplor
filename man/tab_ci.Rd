@@ -77,13 +77,11 @@ Add confidence intervals to a \code{\link[tabxplor]{tab}}
 \donttest{
 data <- dplyr::starwars \%>\%
   tab_prepare(sex, hair_color, gender, rare_to_other = TRUE,
-              n_min = 5, na = "keep")
+              n_min = 5, na_drop_all = sex)
 
 data \%>\%
-  tab_plain(sex, hair_color, gender) \%>\%
-  tab_totaltab("line")  \%>\%
-  tab_tot()  \%>\%
-  tab_pct(comp = "all")  \%>\%
+  tab_plain(sex, hair_color, gender, tot = c("row", col"),
+    pct = "row", comp = "all) \%>\%
   tab_ci("diff", color = "after_ci")
   }
 }
