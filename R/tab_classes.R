@@ -306,7 +306,7 @@ print_chi2 <- function(x, width = NULL) {
 
 
 #' Table headers for class tab
-#' @importFrom dplyr tbl_sum
+#' @importFrom pillar tbl_sum
 #' @param x An object of class tabxplor_tab
 #' @param ... Other parameters.
 #' @return A table header
