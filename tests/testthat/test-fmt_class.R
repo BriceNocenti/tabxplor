@@ -86,6 +86,37 @@ testthat::test_that("math (sum and mean) between fmt and fmt works", {
   testthat::expect_equal(get_n(sum(fmt(1), fmt(1))), 2)
   testthat::expect_equal(get_n(mean(fmt(1, "n", 2), fmt(1, "n", 2))), 1)
 })
+
+testthat::test_that("fmt vectors works with mutate", {
+
+  data <- dplyr::starwars %>%
+    tab_prepare("sex", "hair_color", "eye_color", "mass", "gender",
+                rare_to_other = TRUE, n_min = 5)
+
+  tab_num(data, sex, c(height, birth_year), gender, comp = "all") |>
+    dplyr::mutate(dplyr::across(
+      c(height, birth_year),
+      ~ dplyr::mutate(., var = sqrt(var), display = "var", digits = 2L) |> set_color("no"),
+      .names = "{.col}_sd"
+    )) |>
+    dplyr::pull(height_sd) |>
+    testthat::expect_s3_class("tabxplor_fmt")
+
+})
+
+testthat::test_that("fmt work with $", { #and [[
+  fmt_vect <- fmt(n = c(1, 2), type = "n")
+  testthat::expect_equal(fmt_vect$n, c(1, 2))
+  testthat::expect_equal(fmt_vect$digits, c(0, 0))
+  #testthat::expect_equal(fmt_vect[["n"]], c(1, 2))
+  #testthat::expect_equal(fmt_vect[[2, "n"]], 2)
+})
+
+
+
+
+
+
 # x <- fmt(n = c(2, 1), type = "row", pct = c(0.5, 1.5)) #wn = c(0.7, 2.4)
 # y <- fmt(n = c(3, 9), type = "n"  , pct = c(0.5, 1.5)) #wn = c(0.7, 2.4)
 # z <- c(x, y)

@@ -9,10 +9,10 @@ tab_ci(
   ci = "auto",
   comp = NULL,
   conf_level = 0.95,
-  method_cell = "wilson",
-  method_diff = "ac",
   color = "no",
-  visible = FALSE
+  visible = FALSE,
+  method_cell = "wilson",
+  method_diff = "ac"
 )
 }
 \arguments{
@@ -21,36 +21,20 @@ tab_ci(
 
 \item{ci}{The type of ci to calculate. Set to "cell" to calculate absolute confidence
 intervals. Set to "diff" to calculate the confidence intervals of the difference
-between a cell and the relative total cell (or the first cell,
-when \code{diff = "first"} in \code{\link{tab_pct}}). By default, "diff" ci are
-calculated for means and row and col percentages, "cell" ci for frequencies ("all",
-"all_tabs").}
+between a cell and the relative total cell (or the reference cell,
+when \code{diff} is not \code{"tot"} in \code{\link{tab_plain}} or \code{\link{tab_num}}).
+By default, "diff" ci are calculated for means and row and col percentages,
+"cell" ci for frequencies ("all", "all_tabs").}
 
-\item{comp}{Comparison level. When \code{tab_vars} are present, should \code{"diff"}
-confidence intervals for rows and means be calculated for each subtable/group
-(by default \code{comp = "tab"}) ? Should they be calculated for the whole table
+\item{comp}{Comparison level. When \code{tab_vars} are present, should the
+contributions to variance be calculated for each subtable/group (by default,
+\code{comp = "tab"}) ? Should they be calculated for the whole table
 (\code{comp = "all"}) ?
-When \code{comp = "all"} and \code{diff = "first"}, cells are compared to the first
-cell of the total table instead.
-This parameter doesn't affect column percentages.
-\code{comp} must be set once and for all the first time you use \code{\link{tab_chi2}},
-\code{\link{tab_pct}} with rows, or \code{\link{tab_ci}}.}
+\code{comp} must be set once and for all the first time you use \code{\link{tab_plain}},
+\code{\link{tab_num}} or \code{\link{tab_chi2}} with rows, or \code{\link{tab_ci}}.}
 
 \item{conf_level}{The confidence level, as a single numeric between 0 and 1.
 Default to 0.95 (95\%).}
-
-\item{method_cell}{Character string specifying which method to use with percentages
-for \code{ci = "cell"}. This can be one out of:
-"wald", "wilson", "wilsoncc", "agresti-coull", "jeffreys", "modified wilson",
-"modified jeffreys", "clopper-pearson", "arcsine", "logit", "witting", "pratt",
-"midp", "lik" and "blaker". Defaults to "wilson".
-See \code{\link[DescTools:BinomCI]{BinomCI}}.}
-
-\item{method_diff}{Character string specifying which method to use with percentages
-for \code{ci = "diff"}. This can be one out of: "wald", "waldcc", "ac", "score",
-"scorecc", "mn", "mee", "blj", "ha", "hal", "jp". Defaults to "ac", Wald interval with
-the adjustment according to Agresti, Caffo for difference in proportions and
-independent samples. See \code{\link[DescTools:BinomDiffCI]{BinomDiffCI}}.}
 
 \item{color}{The type of colors to print, as a single string.
 \itemize{
@@ -64,6 +48,19 @@ difference
 
 \item{visible}{By default confidence intervals are calculated and used to set colors,
 but not printed. Set to \code{TRUE} to print them in the result.}
+
+\item{method_cell}{Character string specifying which method to use with percentages
+for \code{ci = "cell"}. This can be one out of:
+"wald", "wilson", "wilsoncc", "agresti-coull", "jeffreys", "modified wilson",
+"modified jeffreys", "clopper-pearson", "arcsine", "logit", "witting", "pratt",
+"midp", "lik" and "blaker". Defaults to "wilson".
+See \code{\link[DescTools:BinomCI]{BinomCI}}.}
+
+\item{method_diff}{Character string specifying which method to use with percentages
+for \code{ci = "diff"}. This can be one out of: "wald", "waldcc", "ac", "score",
+"scorecc", "mn", "mee", "blj", "ha", "hal", "jp". Defaults to "ac", Wald interval with
+the adjustment according to Agresti, Caffo for difference in proportions and
+independent samples. See \code{\link[DescTools:BinomDiffCI]{BinomDiffCI}}.}
 }
 \value{
 A \code{tibble} of class \code{tab}, colored based on differences (from
@@ -80,8 +77,8 @@ data <- dplyr::starwars \%>\%
               n_min = 5, na_drop_all = sex)
 
 data \%>\%
-  tab_plain(sex, hair_color, gender, tot = c("row", col"),
-    pct = "row", comp = "all) \%>\%
-  tab_ci("diff", color = "after_ci")
+  tab_plain(sex, hair_color, gender, tot = c("row", "col"),
+    pct = "row", comp = "all") \%>\%
+    tab_ci("diff", color = "after_ci")
   }
 }

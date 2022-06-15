@@ -122,7 +122,6 @@ testthat::test_that("tab_num works with with df and num", {
 })
 
 
-
 testthat::test_that("tab et tab_many works with missing, NULL, NA, etc., in variables", {
   tab(data, "gender", "sex", NA_character_) %>% testthat::expect_s3_class("tabxplor_tab")
   tab(data, "gender", NA_character_)        %>% testthat::expect_s3_class("tabxplor_tab")
@@ -338,7 +337,7 @@ testthat::test_that("tab work with tribble (even many tab_vars)", {
 #
 #
 # tabs <- tabs %>% tab_tot() %>%
-#   dplyr::mutate(dplyr::across(where(is_fmt), ~ set_comp(., NA)))
+#   dplyr::mutate(dplyr::across(where(is_fmt), ~ set_comp_all(., NA)))
 #
 # testthat::test_that("tab_ci works (with tab_pct)", {
 #   tabs %>% tab_pct("row") %>% tab_ci("diff", comp = "all") %>%
@@ -462,15 +461,14 @@ testthat::test_that("tab colors are calculated with text supplementary columns",
 })
 
 testthat::test_that("tab colors are calculated with mean supplementary columns", {
-  tab(data, sex, mass, color = "auto")                                         %>% dplyr::pull(mass) %>% expect_color()
-  tab(data, sex, hair_color, pct = "row", sup_cols = mass, color = "diff"    ) %>% dplyr::pull(mass) %>% expect_color()
-  tab(data, sex, hair_color, pct = "row", sup_cols = mass, color = "diff_ci" ) %>% dplyr::pull(mass) %>% expect_color()
-  tab(data, sex, hair_color, pct = "row", sup_cols = mass, color = "after_ci") %>% dplyr::pull(mass) %>% expect_color()
-  tab(data, sex, hair_color, pct = "row", sup_cols = mass, color = "auto"    ) %>% dplyr::pull(mass) %>% expect_color()
+  tab(dplyr::storms, category, wind, color = "auto")                         %>% dplyr::pull(wind) %>% expect_color()
+  tab(dplyr::storms, category, status, sup_cols =  wind, color = "diff"    ) %>% dplyr::pull(wind) %>% expect_color()
+  tab(dplyr::storms, category, status, sup_cols =  wind, color = "diff_ci" ) %>% dplyr::pull(wind) %>% expect_color()
+  tab(dplyr::storms, category, status, sup_cols =  wind, color = "after_ci") %>% dplyr::pull(wind) %>% expect_color()
 
+  tab(dplyr::storms, category, status, sup_cols =  wind, color = "auto"    ) |> testthat::expect_s3_class("tabxplor_tab")
   tab(dplyr::storms, category, status, sup_cols = c("pressure", "wind")) |> testthat::expect_s3_class("tabxplor_tab")
   })
-
 
 
 # #Performance profiles 2021 -------------------------------------------------------------

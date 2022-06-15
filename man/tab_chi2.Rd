@@ -23,8 +23,8 @@ are computed by selecting elements in the vector \code{c("ctr", "p", "var", "cou
 contributions to variance be calculated for each subtable/group (by default,
 \code{comp = "tab"}) ? Should they be calculated for the whole table
 (\code{comp = "all"}) ?
-\code{comp} must be set once and for all the first time you use \code{\link{tab_chi2}},
-\code{\link{tab_pct}} with rows, or \code{\link{tab_ci}}.}
+\code{comp} must be set once and for all the first time you use \code{\link{tab_plain}},
+\code{\link{tab_num}} or \code{\link{tab_chi2}} with rows, or \code{\link{tab_ci}}.}
 
 \item{color}{The type of colors to print, as a single string.
 \itemize{

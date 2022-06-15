@@ -57,17 +57,3 @@ colored based on differences from totals or first cell.
 \description{
 Add percentages and diffs to a \code{\link[tabxplor]{tab}}
 }
-\examples{
-# A typical workflow with tabxplor step-by-step functions :
-\donttest{
-data <- dplyr::starwars \%>\%
-  tab_prepare(sex, hair_color, gender, rare_to_other = TRUE,
-              n_min = 5, na_drop_all = sex)
-
-data \%>\%
-  tab_plain(sex, hair_color, gender) \%>\%
-  tab_totaltab("line")  \%>\%
-  tab_tot() \%>\%
-  tab_pct("row", comp = "all", color = TRUE)
-  }
-}

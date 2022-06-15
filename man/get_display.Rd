@@ -4,10 +4,10 @@
 \alias{get_display}
 \title{get the "display" field of a \code{fmt} vector}
 \usage{
-get_display(fmt)
+get_display(x)
 }
 \arguments{
-\item{fmt}{The formatted number in which you want to find data for "get" functions,
+\item{x}{The formatted number in which you want to find data for "get" functions,
 to modify data for "set" functions.}
 }
 \description{

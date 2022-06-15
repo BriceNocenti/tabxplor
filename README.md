@@ -15,8 +15,9 @@ them, using color helpers to highlight important informations. It would
 love to enhance your data exploration experience with simple yet
 powerful tools. All functions are propelled by `tidyverse`,
 pipe-friendly, and render `tibble` data frames which can be easily
-manipulated with `dplyr`. Tables can be exported to Excel and in html
-with formats and colors.
+manipulated with `dplyr`. In the same time, time-taking operations are
+done with `data.table` to go faster with big dataframes. Tables can be
+exported to Excel and in html with formats and colors.
 
 ## Installation
 
@@ -35,7 +36,7 @@ devtools::install_github("BriceNocenti/tabxplor")
 
 ## Base usage: cross-tables with color helpers
 
-The main functions are made to be user-friendly and time-saving is data
+The main functions are made to be user-friendly and time-saving in data
 analysis workflows.
 
 `tab` makes a simple cross-table:
@@ -350,40 +351,30 @@ tab_chi2(calc = "p")
 ```
 
 The whole architecture of `tabxplor` is powered by a special vector
-class, named `fmt` for formatted numbers. As a `vctrs::record`, it
-stores behind the scenes all the data necessary to calculate printed
+class, named `tabxplor_fmt` for formatted numbers. As a `vctrs::record`,
+it stores behind the scenes all the data necessary to calculate printed
 results, formats and colors. A set of functions are available to access
-or transform this data, like `is_totrow`, `is_totcol` or `is_tottab`.
-`?fmt` to get more information.
+or transform this data. `?fmt` to get more information.
 
 The simple way to recover the underlying numbers as numeric vectors is
-`get_num`:
+`get_num`, which extract the currently displayed field whatever it is :
 
 ``` r
-tab(data, race, marital, year, pct = "row") %>%
-mutate(across(where(is_fmt), get_num))
+tabs <- tab(forcats::gss_cat, race, marital, pct = "row")
+tabs %>% dplyr::mutate(across(where(is_fmt), get_num))
+#> # A tabxplor tab: 4 × 8
+#>   race   `No answer` `Never married` Separated Divorced Widowed Married Total
+#>   <fct>        <dbl>           <dbl>     <dbl>    <dbl>   <dbl>   <dbl> <dbl>
+#> 1 Other     0.00102            0.323    0.0562    0.108  0.0357   0.476     1
+#> 2 Black     0.000639           0.417    0.0626    0.158  0.0837   0.278     1
+#> 3 White     0.000793           0.212    0.0267    0.163  0.0900   0.507     1
+#> 4 Total     0.000791           0.252    0.0346    0.157  0.0841   0.471     1
 ```
 
 To render character vectors (without colors), use `format`:
 
 ``` r
-tab(data, race, marital, year, pct = "row") %>%
-mutate(across(where(is_fmt), format))
-```
-
-To get the underlying fields, use `vctrs::fields` :
-
-``` r
-tab(data, race, marital, year, pct = "row") %>%
-mutate(across(where(is_fmt), ~ vctrs::field(., "pct")))
-```
-
-To replace a field, use `vctrs` `field<-`. For example, to change the
-displayed field :
-
-``` r
-tab(data, race, marital, year, pct = "row") %>%
-mutate(across(where(is_fmt), ~ vctrs::`field<-`(., "display", rep("diff", length(.)))))
+tabs %>% mutate(across(where(is_fmt), format))
 ```
 
 The following fields compose any `fmt` column (though many can be `NA`
@@ -421,65 +412,116 @@ if not calculated) :
 -   `in_refrow` : `TRUE` if the cell is part of a reference row, `FALSE`
     otherwise (logical)
 
-Each `fmt` column also have attributes, which you can get or set with
-`attr` and `attr<-` :
+``` r
+vctrs::vec_data(tabs$Married)
+#>       n display digits wn       pct mean         diff ctr var ci in_totrow
+#> 1   932     pct      0 NA 0.4757529   NA  0.004822432  NA  NA NA     FALSE
+#> 2   869     pct      0 NA 0.2777245   NA -0.193205991  NA  NA NA     FALSE
+#> 3  8316     pct      0 NA 0.5072278   NA  0.036297310  NA  NA NA     FALSE
+#> 4 10117     pct      0 NA 0.4709305   NA  0.000000000  NA  NA NA      TRUE
+#>   in_tottab in_refrow
+#> 1     FALSE     FALSE
+#> 2     FALSE     FALSE
+#> 3     FALSE     FALSE
+#> 4     FALSE     FALSE
+```
 
--   type : the type of the `fmt` vector, among
-    `c("n", "mean", "row", "col", "all", "all_tabs")` ; it determines
-    the calculations that are done with `tab_` funcionts
+To get those underlying fields you can either use `vctrs::fields` or,
+more simply, `$` :
 
--   totcol : `TRUE` if the column is a total column, `FALSE` otherwise
-    (logical)
+``` r
+tabs %>% mutate(across(where(is_fmt), ~ vctrs::field(., "pct") ))
 
--   refcol : `TRUE` if the column is a reference column for comparison,
-    `FALSE` otherwise (logical)
+tabs$Married$pct
+tabs$Married$n
+tabs %>% mutate(across(where(is_fmt), ~ .$n))
+```
 
--   color : the calculation to make to print colors ; among
+To modify a field, you can use `vctrs` `field<-`. For example, to change
+the displayed field :
+
+``` r
+tab(data, race, marital, year, pct = "row") %>%
+mutate(across(where(is_fmt), ~ vctrs::`field<-`(., "display", rep("diff", length(.)))))
+```
+
+Faster to write and easier to read, you can also use `dplyr::mutate()`
+on an `fmt` vector. For example, to create a new column with standards
+deviations and display it with decimals :
+
+``` r
+tab_num(data, race, c(age, tvhours), marital, digits = 1L, comp = "all") |>
+  dplyr::mutate(dplyr::across( #Mutate over the whole table.
+    c(age, tvhours),
+    ~ dplyr::mutate(., #Mutate over each fmt vector's underlying data.frame.
+                    var     = sqrt(var), 
+                    display = "var", 
+                    digits  = 2L) |> 
+      set_color("no"),
+    .names = "{.col}_sd"
+  ))
+```
+
+Some helper functions exists for total rows, total tables and reference
+rows (`is_totrow()` / `as_totrow()`, `is_tottab()` / `as_tottab()`,
+`is_refrow()` / `as_refrow()`) :
+
+``` r
+tab(data, race, marital, year, pct = "row") %>%
+  dplyr::mutate(across( 
+    where(is_fmt),
+    ~ dplyr::if_else(is_totrow(.), 
+                true  = mutate(., digits = 1L), 
+                false = mutate(., digits = 2L))
+  ))
+```
+
+Each `fmt` column have attributes, which you can access or modify with
+`get_` and `set_` functions :
+
+-   type / `get_type()` / `set_type()` : the type of the `fmt` vector,
+    among `c("n", "mean", "row", "col", "all", "all_tabs")` ; it
+    determines which calculations are done within `tab_` functions.
+
+-   totcol / `is_totcol()` / `as_totcol()` : `TRUE` if the column is a
+    total column, `FALSE` otherwise (logical)
+
+-   refcol / `is_refcol()` / `as_refcol()` : `TRUE` if the column is a
+    reference column for comparison, `FALSE` otherwise (logical)
+
+-   color / `get_color()` / `set_color()` : the calculation to make to
+    print colors ; among
     `c("", "no", "diff", "diff_ci", "after_ci", "contrib")`
 
--   col_var : the name of the column variable (there can be many in one
-    single table)
+-   col_var / `get_col_var()` / `set_col_var()` : the name of the column
+    variable (there can be many in one single table)
 
--   comp_all : when there are `tab_vars`, is the reference for
-    comparison the total row of the subtable (`FALSE`), or the general
-    total line (`TRUE`) ?
+-   comp_all / `get_comp_all` / `set_comp_all()` : when there are
+    `tab_vars`, is the reference for comparison the subtable (`FALSE`),
+    or the total table (`TRUE`) ?
 
--   diff_type : the type of difference, either `no`, `"tot"` for totals,
-    an index, or a regular expression
+-   diff_type / `get_diff_type()` / `set_diff_type()` : the type of
+    difference calculated, either `"no"`, `"tot"` for totals, an index,
+    or a regular expression.
 
--   ci_type : the type of confidence interval, either `"cell"` or
-    `"diff"`
+-   ci_type / `get_ci_type()` / `set_ci_type()` : the type of confidence
+    interval, either `"cell"` or `"diff"`
 
-Specific functions can also be used : `is_totrow()` / `as_totrow()`,
-`is_totcol()` / `as_totcol()`, `is_tottab()` / `as_tottab()`
-
-For example, to add digits to all columns except the total :
+For example, to print the number of observations of the total column :
 
 ``` r
 tab(data, race, marital, year, pct = "row") %>%
-  mutate(across(
-    where(~ is_fmt(.) & !is_totcol(.)),
-    ~ vctrs::`field<-`(., "digits", rep(1L, length(.))) 
-  ))
+  mutate(across(where(is_totcol), ~ mutate(., display = "n") ))
 ```
 
-Or, for total rows :
+Note that, if `tab_vars` are provided, the table is grouped and all
+operations are made within groups. To remove grouping (for example when
+it gives errors), use `dplyr::ungroup()`.
+
+If you only need the simplest table, with only numeric counts (no
+`fmt`), or even a base `data.frame` (not a `tibble`) :
 
 ``` r
-tab(data, race, marital, year, pct = "row") %>%
-  dplyr::mutate(across(
-    where(is_fmt),
-    ~ if_else(is_totrow(.), 
-                true  = vctrs::`field<-`(., "digits", rep(1L, length(.))) , 
-                false = vctrs::`field<-`(., "digits", rep(2L, length(.))) )
-  ))
-```
-
-For the simplest table, with only numeric counts (no `fmt`), or even as
-normal data.frame (not a `tibble`):
-
-``` r
-# combine with `tab_prepare` to handle missing values
 tab_plain(data, race, marital, num = TRUE) # counts as a numeric vector
 tab_plain(data, race, marital, df = TRUE)  # same, with unique class = "data.frame"
 ```

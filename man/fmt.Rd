@@ -13,6 +13,20 @@
 \alias{as_tottab}
 \alias{is_totcol}
 \alias{as_totcol}
+\alias{is_refrow}
+\alias{as_refrow}
+\alias{get_comp_all}
+\alias{set_comp_all}
+\alias{get_diff_type}
+\alias{set_diff_type}
+\alias{get_ci_type}
+\alias{set_ci_type}
+\alias{get_col_var}
+\alias{set_col_var}
+\alias{is_refcol}
+\alias{as_refcol}
+\alias{get_color}
+\alias{set_color}
 \alias{get_digits}
 \alias{set_digits}
 \title{Create a vector of class formatted numbers}
@@ -64,13 +78,41 @@ is_totcol(x, ...)
 
 as_totcol(x, totcol = TRUE)
 
-get_digits(fmt)
+is_refrow(x, ...)
 
-set_digits(fmt, value)
+as_refrow(x, in_refrow = TRUE)
+
+get_comp_all(x, replace_na = TRUE)
+
+set_comp_all(x, comp_all = FALSE)
+
+get_diff_type(x, ...)
+
+set_diff_type(x, diff_type)
+
+get_ci_type(x, ...)
+
+set_ci_type(x, ci_type)
+
+get_col_var(x, ...)
+
+set_col_var(x, col_var)
+
+is_refcol(x, ...)
+
+as_refcol(x, refcol = TRUE)
+
+get_color(x, ...)
+
+set_color(x, color)
+
+get_digits(x)
+
+set_digits(x, value)
 }
 \arguments{
 \item{n}{The underlying count, as an integer vector of length \code{n()}. It is used
-to calculate confidence intervals for percentages.}
+to calculate confidence intervals.}
 
 \item{type}{The type of the column, which defines the type of background calculation
 to be made (as a single string, since it's not a field but an attribute) :
@@ -175,7 +217,9 @@ or attribute using a given "set" function.}
 
 \item{...}{Used in methods to add arguments in the future.}
 
-\item{fmt}{A fmt vector to test or to modify fields.}
+\item{replace_na}{By default, \code{\link{get_comp_all}} takes NA in comparison level
+to be a \code{FALSE} (=comparison at subtables/groups level). Set to \code{FALSE}
+to avoid this behavior.}
 }
 \value{
 A vector of class \code{tabxplor_fmt}.
@@ -201,6 +245,32 @@ A modified fmt vector with tottab field changed.
 A logical vector with the fmt vectors totcol attribute.
 
 A modified fmt vector with totcol attribute changed.
+
+A logical vector with the fmt vectors in_refrow field
+
+A modified fmt vector with in_refrom field changed.
+
+A modified fmt vector with comp attribute changed.
+
+A logical vector with the fmt vectors type attributes
+
+A modified fmt vector.
+
+A logical vector with the fmt vectors ci_type attributes
+
+A modified fmt vector.
+
+A logical vector with the fmt vectors col_var attributes
+
+A modified fmt vector.
+
+A logical vector with the fmt vectors is_refcol attributes
+
+A modified fmt vector.
+
+A logical vector with the fmt vectors color attributes
+
+A modified fmt vector.
 }
 \description{
 \code{fmt} vectors, of class \code{tabxplor_fmt}, powers \pkg{tabxplor}
@@ -247,12 +317,43 @@ using \pkg{vctrs}.
 
 \item \code{as_totcol}: set the "totcol" attribute of a \code{fmt} vector
 
+\item \code{is_refrow}: test function to detect cells in reference rows
+(at \code{fmt} level or \code{tab} level)
+
+\item \code{as_refrow}: set the "in_refrow" field (belong to reference row)
+
+\item \code{get_comp_all}: get comparison level of fmt columns
+
+\item \code{set_comp_all}: set the comparison level attribute of a \code{fmt} vector
+
+\item \code{get_diff_type}: get differences type of fmt columns (at \code{fmt} level or \code{tab} level)
+
+\item \code{set_diff_type}: set the differences type attribute of a \code{fmt} vector
+
+\item \code{get_ci_type}: get confidence intervals type of fmt columns (at \code{fmt} level or \code{tab} level)
+
+\item \code{set_ci_type}: set the confidence intervals type attribute of a \code{fmt} vector
+
+\item \code{get_col_var}: get names of column variable of fmt columns (at \code{fmt} level or \code{tab} level)
+
+\item \code{set_col_var}: set the "col_var" attribute of a \code{fmt} vector
+
+\item \code{is_refcol}: test function for reference columns (at \code{fmt} level or \code{tab} level)
+
+\item \code{as_refcol}: set the "ref_col" attribute of a \code{fmt} vector
+
+\item \code{get_color}: get color (at \code{fmt} level or \code{tab} level)
+
+\item \code{set_color}: set the "color" attribute of a \code{fmt} vector
+
 \item \code{get_digits}: get the "digits" field
 
 \item \code{set_digits}: set the "digits" field
 }}
 
 \examples{
+library(dplyr)
+
 f <- fmt(n = c(7, 19, 2), type = "row", pct = c(0.25, 0.679, 0.07))
 f
 
@@ -263,21 +364,26 @@ get_num(f)
 set_num(f, c(1, 0, 0))
 
 
-# See all the underlying fields of a fmt vector :
+# See all the underlying fields of a fmt vector (a data frame with a number of rows
+#  equal to the length of the vector) :
 vctrs::vec_data(f)
 
 # To get the numbers of digits :
 vctrs::field(f, "digits")
+f$digits
 
 # To get the count :
 vctrs::field(f, "n")
+f$n
 
 # To get the display :
 vctrs::field(f, "display")
+f$display
 
-# To modify the percentages :
+# To modify a field, you can use `dplyr::mutate` on the fmt vector,
+# referring to the names of the columns of the underlying data.frame (`vctrs::vec_data`) :
 vctrs::`field<-`(f, "pct", c(1, 0, 0))
-
+mutate(f, pct = c(1, 0, 0))
 
 # See all the attributes of a fmt vector :
 attributes(f)
@@ -286,10 +392,11 @@ attributes(f)
 set_type(f, "col")
 
 # To modify the "color" attribute of a fmt vector :
-`attr<-`(f, "color", "contrib")
+set_color(f, "contrib")
 
 
-library(dplyr)
+
+
 tabs <- tab(starwars, sex, hair_color, gender, na = "drop", pct = "row",
             rare_to_other = TRUE, n_min = 5)
 
@@ -318,4 +425,19 @@ tabs \%>\% mutate(across(where(is_fmt), format))
 
 # To access the (non-displayed) differences of the cells percentages from totals :
 tabs \%>\% mutate(across(where(is_fmt), ~ vctrs::field(., "diff")))
+
+
+# To do more complex operations, like creating a new column with standard deviation and
+# print it with 2 decimals, use `dplyr::mutate` on all the fmt columns of a table :
+
+tab_num(forcats::gss_cat, race, c(age, tvhours), marital, digits = 1L, comp = "all") |>
+  dplyr::mutate(dplyr::across( #Mutate over the whole table.
+    c(age, tvhours),
+    ~ dplyr::mutate(.,         #Mutate over each fmt vector's underlying data.frame.
+                    var     = sqrt(var),
+                    display = "var",
+                    digits  = 2L) |>
+      set_color("no"),
+    .names = "{.col}_sd"
+  ))
 }
