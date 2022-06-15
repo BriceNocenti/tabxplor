@@ -1,21 +1,20 @@
-## New version 1.0.3 (bug corrections and few added functionalities)
-This is the first submission of this version of tabxplor. 
-It is essentialy bug corrections, and removal of dplyr release version 
-new warning messages.
+## New version 1.1.0
+This is the first submission of this version of tabxplor.
+
 
 ## Test environments
 * local Windows 10 install, R 4.1.2 and R devel
 * Ubuntu 20.04.4 LTS (on github actions), R 4.1.3
 
-* https://builder.r-hub.io : (version number was wrong but content was right)
+* https://builder.r-hub.io :
    - Windows Server 2022, R-devel, 64 bit
-   (Build ID: tabxplor_1.0.2.9002.tar.gz-a1195122ee0441f2b28584bc9eef2f2c)
+   (Build ID: tabxplor_1.1.0.tar.gz-0cdd2a3d908a4b5c9d52b79a5f22ed28)
    - Ubuntu Linux 20.04.1 LTS, R-release, GCC
-   (Build ID: tabxplor_1.0.2.9002.tar.gz-a70fe5b1fe494d56a85887d0c05da3cd)
+   (Build ID: tabxplor_1.1.0.tar.gz-3ea82e499ca642c88ef66323202fb3b2)
    - Fedora Linux, R-devel, clang, gfortran
-   (Build ID: tabxplor_1.0.2.9002.tar.gz-d932174a226649d180e9a03c012e8856)
+   (Build ID: tabxplor_1.1.0.tar.gz-927e2978668e414d89a76f11b417ea28)
 
-* https://win-builder.r-project.org/w65K9i9xhO0F/ : 
+* https://win-builder.r-project.org/Td05gkys9Fcd : 
    - Windows x86_64-w64-mingw32 (64-bit), R-devel
 
 ## R CMD check results
@@ -23,7 +22,11 @@ new warning messages.
     No ERRORs, no WARNINGs, no NOTEs. 
 
 * https://builder.r-hub.io : 
-    No ERRORs, no WARNINGs, no NOTEs.
+    No ERRORs, no WARNINGs. 
+    
+    1 NOTE, but only on Windows Server 2022 : « checking for detritus in the temp directory 
+    ... Found the following files/directories: 'lastMiKTeXException' ». 
+    I checked on the forums : it seems to come from the server. 
 
 * https://win-builder.r-project.org : 
     No ERRORs, no WARNINGs, no NOTEs.

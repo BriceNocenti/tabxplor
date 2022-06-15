@@ -1,5 +1,3 @@
-# tabxplor (development version)
-
 
 # tabxplor 1.1.0 
 
