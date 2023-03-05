@@ -1,3 +1,16 @@
+# tabxplor (development version)
+
+
+## Added : 
+* `fct_recode_helper()` : helper function to recode multiple variables with `forcats::fct_recode`.
+* `complete_partial_totals()` : complete partial total rows, total tables, and reference rows.
+
+## Bug corrections :
+* `tab_spread` : incomplete subtables led to partial total rows, total tables and reference rows.
+* `tab_xl` : with `sheets = "unique"`, multiple empty sheets were created anyway
+* `crayon()` error with colors in tabs printing on R 4.2.2
+* color printing was not working with only one numeric `col_var`
+
 
 # tabxplor 1.1.0 
 
@@ -10,7 +23,7 @@
 
 ## Added :
 *  Remove rows with missing values or 0 in `wt` (weight), for them not to be added in counts (except in `tab_plain`)
-*  `fmt_get_color_code()` to get the html color codes of a table as a character vector
+*  `fmt_get_color_code()` : get the html color codes of a table as a character vector
 
 ## Bug corrections :
 * `tab_many` : bug with totaltab when two numeric column variables (and a tabs_var)

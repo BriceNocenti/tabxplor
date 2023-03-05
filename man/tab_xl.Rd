@@ -15,7 +15,8 @@ tab_xl(
   print_ci = FALSE,
   print_color_legend = TRUE,
   sheets = "tabs",
-  min_counts = 30,
+  n_min = 0,
+  titles,
   hide_near_zero = "auto",
   color_type = "text"
 )
@@ -27,8 +28,9 @@ tab_xl(
 \item{path, replace, open}{The name, and possibly the path, of the Excel file to
 create (possibly without the .xlsx extension). Default path to temporary directory.
 Set global option \code{"tabxplor.export_dir"} with \code{link[base:options]{options}}
-to change default directory.
-Use \code{replace = TRUE} to overwrite existing files. Use \code{open = TRUE}
+to change default directory. By default replace is \code{TRUE} when \code{path} is provided,
+\code{FALSE} when \code{path} is not provided.
+Use \code{replace = TRUE} to overwrite existing files. Use \code{open = FALSE}
 if you don't want to automatically open the tables in Excel (or another
 software associated with .xlsx files).}
 
@@ -40,8 +42,8 @@ Set to \code{FALSE} to keep them.}
 \item{colwidth}{The standard width for numeric columns, as a number.
 Default to \code{"auto"}.}
 
-\item{print_ci}{By default provided confidence intervals are printed in another table,
-left to the base table. Set to \code{FALSE} to dismiss.}
+\item{print_ci}{Set to \code{TRUE} to print confidence intervals in another table,
+at the left of the base table.}
 
 \item{print_color_legend}{Should the color legends be printed with the subtexts ?}
 
@@ -53,16 +55,20 @@ left to the base table. Set to \code{FALSE} to dismiss.}
 same sheets
 }}
 
-\item{min_counts}{The total count under which a column or row is turned pale grey
-because there is not enough observation for it to be significant. Default to 30.}
+\item{n_min}{The total count under which a column or row is turned pale grey
+because there is not enough observation for it to be significant.
+Default to 0 (not used).}
+
+\item{titles}{The titles of the different tables, as a character vector. When missing
+titles are given based on the names of the variables.}
 
 \item{hide_near_zero}{By default all cells displayed as 0 (even rounded)
 turn pale grey, to make the distribution of empty cells (and other cells) more visible.
 Provide a number to turn grey every cell below it. Set to \code{Inf} not to use
 this feature.}
 
-\item{color_type}{By default, the background is colored. Set to \code{text} to color
-the text instead.}
+\item{color_type}{By default, the text is colored. Set to \code{"bg"} to color
+the background instead.}
 }
 \value{
 The table(s) with formatting and colors in an Excel file, as a side effect.

@@ -16,7 +16,62 @@ NULL
 #' @importFrom rlang .data
 NULL
 
-# Global options :
+
+
+#' fct_recode helper to recode multiple variables
+#'
+#' @param .data The data frame.
+#' @param .cols <\link[tidyr:tidyr_tidy_select]{tidy-select}> The variables to recode.
+#' @param .data_out_name The name of the output data frame, if different from the
+#' input data frame.
+#' @param cat By default the result is written in the console if there are less than
+#' 6 variables, written in a temporary file and opened otherwise. Set to
+#' false to get a data frame with a character variable instead.
+#'
+#' @return When the number of variables is less than 5, a text in console as a side effect.
+#' With more than 5 variables, a temporary R file. A `tibble` with the recode text as a
+#' character variable is returned invisibly (or as main result if `cat = TRUE`).
+#' @export
+fct_recode_helper <- function(.data, .cols = -where(is.numeric), .data_out_name, cat = TRUE) {
+  .data_in_name <- rlang::enquo(.data) %>% rlang::as_name()
+  if(missing(.data_out_name)) .data_out_name <- .data_in_name
+
+  pos_cols <- tidyselect::eval_select(rlang::enquo(.cols), .data)
+  .data <- .data[pos_cols]
+  .data <- .data %>% dplyr::mutate(dplyr::across(.fns = as.factor))
+
+  recode <- .data %>%
+    purrr::map(~ paste0("\"",
+                        #stringi::stri_escape_unicode(
+                        stringr::str_replace_all(
+                          levels(.), "\"", "'"
+                          #)
+                        ),
+                        "\"")) %>%
+    purrr::map(
+      ~ paste0(stringr::str_pad(., max(stringr::str_length(.)), "right"), " = ",
+               stringr::str_pad(., max(stringr::str_length(.)), "right"), collapse = ",\n")
+    ) %>%
+    purrr::imap(~ paste0(.data_out_name, "$", .y, " <- fct_recode(\n",
+                         .data_in_name, "$", .y, ",\n",
+                         .x, "\n)\n\n"
+
+    )) %>% purrr::flatten_chr() %>%
+    tibble::tibble(recode = .)
+
+  if (cat == FALSE) return(recode)
+
+  if (ncol(.data) <= 5) {
+    cat(recode$recode)
+  } else {
+    path <- tempfile("", fileext = ".R")
+    writeLines(recode$recode, path, useBytes = TRUE)
+    file.show(path)
+  }
+
+  invisible(recode)
+}
+
 
 
 
@@ -457,138 +512,72 @@ where <- function (fn)
 #' @param path The path of the file to be created
 #' @param name_in The name of the unformatted database
 #' @param name_out The name of the database to be formatted.
+#' @param open Should the file be opened, or just its path printed ?
+#' @param remove_final_f Remove the final f in variables names in the sas file ?
+#' @param not_if_numeric Should the code prevent numeric variables to get recoded ?
 #'
-#' @return A file with code.
+#' @return A file with R code.
 #' @keywords internal
 #'
 # @examples
-formats_SAS_to_R <- function(path, name_in, name_out) {
+formats_SAS_to_R <- function (path, name_in, name_out, open = TRUE, remove_final_f = TRUE,
+                              not_if_numeric = TRUE) {
   f <- stringi::stri_read_raw(path)
   format <- stringi::stri_enc_detect(f)
   format <- format[[1]]$Encoding[1]
-  f <- f %>% stringr::str_conv(format)
 
-  f <- f %>% stringr::str_replace_all(c("(\\$[[^0-9 ]]+\\d+)l"="\\1")) %>%
-    stringr::str_replace_all("\\\"\\\"", "\\\"") %>%
-    stringr::str_replace_all("'", "'") %>%
-    stringr::str_replace_all(stringr::coll("\u20AC"), "euros") %>%
-    stringr::str_remove_all(" +\n") %>%
-    stringr::str_replace_all("(?<=\\=) +\\\"", "\"") %>%
-    stringr::str_remove_all("(?<=\") +(?=\\=)") %>%
-    stringr::str_replace_all(" +(\\\"\\=)", "\\1") %>%
-    stringr::str_replace_all("(?<=\") +([^ ]+\\\"\\=)", "\"\\1") %>%
-    stringr::str_replace_all("\n +\\\"", "\n\\\"") %>%
-    stringr::str_remove_all("(?<= )\\\"|\\\"(?= )")
+  con <- file(path, encoding = format)
 
-  f <- f %>%
-    stringr::str_replace_all(c("VALUE"="value", "Value"="value")) %>%
-    stringr::str_replace_all("(\"[^;]+);[?= ]", "\\1,") %>%
-    stringr::str_replace_all("(\"[^;]+);[?=\\w]", "\\1,") %>%
-    stringr::str_replace_all(",alue ", "; value ") %>%
-    stringr::str_replace_all("(/)(\\*).+(\\*)(/)", "") %>%
-    stringr::str_replace_all(c("\n"=" ", "\t"="")) %>%
-    stringr::str_replace_all("\\$ ", "$") %>%
-    stringr::str_replace_all(c("^ $"="", "^$"="", "\n \n"="", "\n  \n"="", "\n\n"="")) %>%
-    stringr::str_extract_all("(value [^;]+;)", "\\1")
+  f <- readLines(con)
+  f <- f |> stringr::str_remove_all("\t") |> stringr::str_replace_all("'", stringi::stri_unescape_unicode("\\u2019")) |>
+    stringr::str_replace_all("\"", "'")
+  f <- f[stringr::str_detect(f, "value *\\$|=") & ! stringr::str_detect(f, "^proc")]
 
-  f <- f %>%
-    #CT2013: stringr::str_replace_all("(\\\"[^=]+)=(\\\"[^\"]+\")", "\\1-\\2=\\1") %>%
-    stringr::str_replace_all("\\\"(.+)\\\"=\\\"(.+)\\\"", "\\\"\\1-\\2\\\"=\\\"\\1\\\"") %>%
-    #CT2013: stringr::str_replace_all(f, "(\\\"[^=]+=\\\"[^\"]+\")", "\\1,\n") %>%
-    stringr::str_replace_all("(\\\"[^=]+=\\\"[^\"]+\")", "\\1,") %>%
-    stringr::str_replace_all("(\\$.+)f", "\\1")
+  f[stringr::str_detect(f, "=")] <- f[stringr::str_detect(f, "=")] |> stringr::str_squish() |>
+    stringr::str_replace("' += +'", "'='") |>
+    stringr::str_replace("'([^']+)'='([^']+)'", "'\\1-\\2' = '\\1',")
 
-  f <- f %>%
-    stringr::str_replace_all(";", ") }") %>%
-    stringr::str_replace_all(",\n\\)", ")") %>%
-    stringr::str_replace_all(",\n.+\\)", ")\n") %>%
-    stringr::str_replace_all("value ([[a-zA-Z0-9_\\$]]+)",
-                             stringr::str_c("\n",
-                                            "if(\"\\1\" %in% names(", name_out,
-                                            ") & !is.numeric(", name_out,"\\1", ") ) {\n",
-                                            name_out,"\\1"," <- forcats::fct_recode(",
-                                            name_in,"\\1",",\n")
-    ) %>%
-    stringr::str_replace_all("if\\(\"\\$", "if(\"")
+  f_var <-  f[stringr::str_detect(f, "value *\\$")] |> stringr::str_extract("[^ ]+$")
+  if (remove_final_f) f_var <- f_var |> stringr::str_remove("f$")
 
-  f <- f %>%
-    stringr::str_replace_all(",[^<]*<-", " <-") %>%
-    stringr::str_replace_all("'", "'") #%>%
-  #stringr::str_conv("UTF-8")
+  if (not_if_numeric) {
+    f[stringr::str_detect(f, "value *\\$")] <-
+      paste0("if('", f_var, "' %in% names(", name_out,
+             ") & !is.numeric(", name_out, "$", f_var, ")) {\n",
+             name_out, "$", f_var, " <- forcats::fct_recode(", name_in, "$", f_var, ","
+      )
+  } else {
+    f[stringr::str_detect(f, "value *\\$")] <-
+      paste0("if('", f_var, "' %in% names(", name_out, ")) {\n",
+             name_out, "$", f_var, " <- forcats::fct_recode(as.factor(", name_in, "$", f_var, "),"
+      )
+  }
+  data <-
+    dplyr::tibble(f = f) |>
+    dplyr::mutate(group = stringr::str_detect(f, "^if\\(") |> as.integer() |> cumsum()) |>
+    dplyr::group_by(.data$group) |>
+    dplyr::mutate(f = dplyr::if_else(dplyr::row_number() == dplyr::n(), paste0(f, ")\n}\n"), f)) |>
+    dplyr::ungroup()
 
-  if(stringr::str_detect(path, "\\\\|/")) {
-    path_out <- stringr::str_c(stringr::str_replace_all(path, "/", "\\\\") %>% stringr::str_remove("[^\\\\]+$"),
+  if (stringr::str_detect(path, "\\\\|/")) {
+    path_out <- stringr::str_c(stringr::str_replace_all(path,
+                                                        "/", "\\\\") %>% stringr::str_remove("[^\\\\]+$"),
                                "formats_R-", name_out, ".R")
   } else {
     path_out <- stringr::str_c("formats_R-", name_out, ".R")
   }
 
-  #path_out <- tempfile("recode", fileext = ".R")
-  writeLines(f, path_out, useBytes = TRUE)
+  writeLines(data$f, path_out, useBytes = TRUE)
 
-  # file.create(path_out)
-  # con <- file(path_out, open = "wt", encoding = "UTF-8")
-  # sink(con)
-  # cat(f)
-  # sink()
-  # close(con)
-  # file.show(path_out) # Ouvrir le resultat.
-
-  return(path_out)
-}
-
-#' fct_recode helper to recode multiple variables
-#'
-#' @param .data The data frame.
-#' @param .cols <\link[tidyr:tidyr_tidy_select]{tidy-select}> The variables to recode.
-#' @param .data_out_name The name of the output data frame, if different from the
-#' input data frame.
-#' @param cat By default the result is written in the console if there are less than
-#' 6 variables, written in a temporary file and opened otherwise. Set to
-#' false to get a data frame with a character variable instead.
-#'
-#' @return A temporary R file. A `tibble` with the recode text as a character variable is
-#'  returned invisibly (or as main result if `cat = TRUE`).
-# @export
-fct_recode_helper <- function(.data, .cols = -where(is.numeric), .data_out_name, cat = TRUE) {
-  .data_in_name <- rlang::enquo(.data) %>% rlang::as_name()
-  if(missing(.data_out_name)) .data_out_name <- .data_in_name
-
-  pos_cols <- tidyselect::eval_select(rlang::enquo(.cols), .data)
-  .data <- .data[pos_cols]
-  .data <- .data %>% dplyr::mutate(dplyr::across(.fns = as.factor))
-
-  recode <- .data %>%
-    purrr::map(~ paste0("\"",
-                        #stringi::stri_escape_unicode(
-                        stringr::str_replace_all(
-                          levels(.), "\"", "'"
-                          #)
-                        ),
-                        "\"")) %>%
-    purrr::map(
-      ~ paste0(stringr::str_pad(., max(stringr::str_length(.)), "right"), " = ",
-               stringr::str_pad(., max(stringr::str_length(.)), "right"), collapse = ",\n")
-    ) %>%
-    purrr::imap(~ paste0(.data_out_name, "$", .y, " <- fct_recode(\n",
-                         .data_in_name, "$", .y, ",\n",
-                         .x, "\n)\n\n"
-
-    )) %>% purrr::flatten_chr() %>%
-    tibble::tibble(recode = .)
-
-  if (cat == FALSE) return(recode)
-
-  if (ncol(.data) <= 5) {
-    cat(recode$recode)
+  if(open) {
+    file.show(path_out)
   } else {
-    path <- tempfile("", fileext = ".R")
-    writeLines(recode$recode, path, useBytes = TRUE)
-    file.show(path)
+    message(path_out)
   }
 
-  invisible(recode)
+  invisible(path_out)
 }
+
 
 
 #' Prepare fct_recode

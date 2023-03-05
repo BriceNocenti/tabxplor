@@ -35,8 +35,8 @@ fmt(
   n = integer(),
   type = "n",
   digits = rep(0L, length(n)),
-  display = dplyr::case_when(type == "mean" ~ "mean", type \%in\% c("row", "col",
-    "all", "all_tabs") ~ "pct", TRUE ~ "n"),
+  display = dplyr::case_when(type == "mean" ~ "mean", type \%in\% c("row", "col", "all",
+    "all_tabs") ~ "pct", TRUE ~ "n"),
   wn = rep(NA_real_, length(n)),
   pct = rep(NA_real_, length(n)),
   mean = rep(NA_real_, length(n)),
@@ -292,65 +292,65 @@ using \pkg{vctrs}.
 }
 \section{Functions}{
 \itemize{
-\item \code{is_fmt}: a test function for class fmt.
+\item \code{is_fmt()}: a test function for class fmt.
 
-\item \code{get_num}: get the currently displayed field
+\item \code{get_num()}: get the currently displayed field
 
-\item \code{set_num}: set the currently displayed field (not changing display type)
+\item \code{set_num()}: set the currently displayed field (not changing display type)
 
-\item \code{get_type}: get types of fmt columns (at \code{fmt} level or \code{tab} level)
+\item \code{get_type()}: get types of fmt columns (at \code{fmt} level or \code{tab} level)
 
-\item \code{set_type}: set the column type attribute of a \code{fmt} vector
+\item \code{set_type()}: set the column type attribute of a \code{fmt} vector
 
-\item \code{is_totrow}: test function to detect cells in total rows
+\item \code{is_totrow()}: test function to detect cells in total rows
 (at \code{fmt} level or \code{tab} level)
 
-\item \code{as_totrow}: set the "in_totrow" field (belong to total row)
+\item \code{as_totrow()}: set the "in_totrow" field (belong to total row)
 
-\item \code{is_tottab}: test function to detect cells in total tables
+\item \code{is_tottab()}: test function to detect cells in total tables
 (at \code{fmt} level or \code{tab} level)
 
-\item \code{as_tottab}: set the "in_tottab" field (belong to total table)
+\item \code{as_tottab()}: set the "in_tottab" field (belong to total table)
 
-\item \code{is_totcol}: test function for total columns
+\item \code{is_totcol()}: test function for total columns
 (at \code{fmt} level or \code{tab} level)
 
-\item \code{as_totcol}: set the "totcol" attribute of a \code{fmt} vector
+\item \code{as_totcol()}: set the "totcol" attribute of a \code{fmt} vector
 
-\item \code{is_refrow}: test function to detect cells in reference rows
+\item \code{is_refrow()}: test function to detect cells in reference rows
 (at \code{fmt} level or \code{tab} level)
 
-\item \code{as_refrow}: set the "in_refrow" field (belong to reference row)
+\item \code{as_refrow()}: set the "in_refrow" field (belong to reference row)
 
-\item \code{get_comp_all}: get comparison level of fmt columns
+\item \code{get_comp_all()}: get comparison level of fmt columns
 
-\item \code{set_comp_all}: set the comparison level attribute of a \code{fmt} vector
+\item \code{set_comp_all()}: set the comparison level attribute of a \code{fmt} vector
 
-\item \code{get_diff_type}: get differences type of fmt columns (at \code{fmt} level or \code{tab} level)
+\item \code{get_diff_type()}: get differences type of fmt columns (at \code{fmt} level or \code{tab} level)
 
-\item \code{set_diff_type}: set the differences type attribute of a \code{fmt} vector
+\item \code{set_diff_type()}: set the differences type attribute of a \code{fmt} vector
 
-\item \code{get_ci_type}: get confidence intervals type of fmt columns (at \code{fmt} level or \code{tab} level)
+\item \code{get_ci_type()}: get confidence intervals type of fmt columns (at \code{fmt} level or \code{tab} level)
 
-\item \code{set_ci_type}: set the confidence intervals type attribute of a \code{fmt} vector
+\item \code{set_ci_type()}: set the confidence intervals type attribute of a \code{fmt} vector
 
-\item \code{get_col_var}: get names of column variable of fmt columns (at \code{fmt} level or \code{tab} level)
+\item \code{get_col_var()}: get names of column variable of fmt columns (at \code{fmt} level or \code{tab} level)
 
-\item \code{set_col_var}: set the "col_var" attribute of a \code{fmt} vector
+\item \code{set_col_var()}: set the "col_var" attribute of a \code{fmt} vector
 
-\item \code{is_refcol}: test function for reference columns (at \code{fmt} level or \code{tab} level)
+\item \code{is_refcol()}: test function for reference columns (at \code{fmt} level or \code{tab} level)
 
-\item \code{as_refcol}: set the "ref_col" attribute of a \code{fmt} vector
+\item \code{as_refcol()}: set the "ref_col" attribute of a \code{fmt} vector
 
-\item \code{get_color}: get color (at \code{fmt} level or \code{tab} level)
+\item \code{get_color()}: get color (at \code{fmt} level or \code{tab} level)
 
-\item \code{set_color}: set the "color" attribute of a \code{fmt} vector
+\item \code{set_color()}: set the "color" attribute of a \code{fmt} vector
 
-\item \code{get_digits}: get the "digits" field
+\item \code{get_digits()}: get the "digits" field
 
-\item \code{set_digits}: set the "digits" field
+\item \code{set_digits()}: set the "digits" field
+
 }}
-
 \examples{
 library(dplyr)
 

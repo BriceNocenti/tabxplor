@@ -24,8 +24,9 @@ input data frame.}
 false to get a data frame with a character variable instead.}
 }
 \value{
-A temporary R file. A \code{tibble} with the recode text as a character variable is
-returned invisibly (or as main result if \code{cat = TRUE}).
+When the number of variables is less than 5, a text in console as a side effect.
+With more than 5 variables, a temporary R file. A \code{tibble} with the recode text as a
+character variable is returned invisibly (or as main result if \code{cat = TRUE}).
 }
 \description{
 fct_recode helper to recode multiple variables

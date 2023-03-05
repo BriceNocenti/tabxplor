@@ -945,7 +945,7 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
     #tot_cols_type != "no_no_create" | totrow == TRUE
 
 
-    #If the result is unique table, join the list of tabs into a single table,
+    #Join the list of tabs into a single table,
     # managing duplicated levels
     duplicated_levels <- tabs_text %>%
       purrr::map(~ purrr::map(., ~ purrr::discard(names(.),
@@ -964,17 +964,20 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
     tabs_text <- purrr::map2(tabs_text, as.character(row_vars), ~ purrr::reduce(
       .x,
       dplyr::full_join,
-      by = c(as.character(tab_vars), .y) #[tab_vars != "no_tab_vars"]
+      by = c(as.character(tab_vars), .y)
     ))
-
 
     if (any(chi2)) {
       tabs_text[chi2] <-
         purrr::pmap(list(tabs_text[chi2], comp[chi2], color_ctr[chi2]),
                     ~ tab_chi2(tabs = ..1, comp = ..2, color = ..3))
     }
+    chi2 <- purrr::map(tabs_text, get_chi2)
+    chi2 <- purrr::map_if(chi2, purrr::map_lgl(chi2, is.null), ~ attr(new_tab(), "chi2"))
 
-    if (any(ci != "no")) {
+
+
+        if (any(ci != "no")) {
       tabs_text[ci != "no"] <-
         purrr::pmap(
           list(tabs_text[ci != "no"], ci[ci != "no"], comp[ci != "no"],
@@ -1107,8 +1110,7 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
       )
   }
 
-  chi2 <- purrr::map(tabs, get_chi2)
-  chi2 <- purrr::map_if(chi2, purrr::map_lgl(chi2, is.null), ~ attr(new_tab(), "chi2"))
+  if (is.logical(chi2)) { chi2 <- list(attr(new_tab(), "chi2")) }
 
   if (!any(purrr::map_lgl(tabs, lv1_group_vars)) ) {
     tabs <- tabs %>% purrr::map(~ dplyr::group_by(., !!!tab_vars))
@@ -1351,6 +1353,9 @@ tab_spread <- function(tabs, spread_vars, names_prefix, names_sort = FALSE,
   }
 
   tabs <- tabs %>%  dplyr::arrange(!!!rlang::syms(tab_vars_new), !!rlang::sym(row_var))
+
+  tabs <- complete_partial_totals(tabs)
+
 
   if (lv1_group_vars(tabs)) {
     new_tab(tabs, subtext = subtext, chi2 = chi2)
@@ -1975,6 +1980,8 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
                                       function(.x) stringr::str_remove(.x, "^n_" ))
       tabs_wn <- data.table::setnames(tabs[, wn_index, with = FALSE],
                                       function(.x) stringr::str_remove(.x, "^wn_"))
+
+      tabs_wn[, (names(tabs_wn)) := purrr::map(.SD, as.double)]
 
       if ("col" %in% tot) {
         tabs_n [, "Total" := as.integer(rowSums(tabs_n[, -names(text_vars), with = FALSE] ))] #Problems if not integer.
@@ -3177,6 +3184,15 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
     data.table::setnames(tabs[, stringr::str_detect(names(tabs), "_mean$"), with = FALSE] ,
                          function(.x) stringr::str_remove(.x, "_mean$" ))
 
+  #Nan to NA
+  tabs_mean <- tibble::as_tibble(tabs_mean) |>
+    dplyr::mutate(dplyr::across(
+      where(~ any(is.nan(.))),
+      ~ dplyr::if_else(is.nan(.), NA_real_, .)
+    )) |>
+    data.table::as.data.table()
+
+
   tabs_var  <-
     data.table::setnames(tabs[, stringr::str_detect(names(tabs), "_var$"), with = FALSE],
                          function(.x) stringr::str_remove(.x, "_var$" ))
@@ -4339,16 +4355,16 @@ tab_ci <- function(tabs,
 #' possibly colored based on contributions of cells to variance.
 #' @export
 #'
-#' @examples # A typical workflow with tabxplor step-by-step functions :
-#' \donttest{
-#' data <- dplyr::starwars %>%
-#'   tab_prepare(sex, hair_color, gender, rare_to_other = TRUE,
-#'               n_min = 5, na_drop_all = sex)
-#'
-#' data %>%
-#'   tab_plain(sex, hair_color, gender, tot = c("row", "col")) %>%
-#'   tab_chi2(calc = c("p", "ctr"), color = TRUE)
-#'   }
+# @examples # A typical workflow with tabxplor step-by-step functions :
+# \donttest{
+# data <- dplyr::starwars %>%
+#   tab_prepare(sex, hair_color, gender, rare_to_other = TRUE,
+#               n_min = 5, na_drop_all = sex)
+#
+# data %>%
+#   tab_plain(sex, hair_color, gender, tot = c("row", "col")) %>%
+#   tab_chi2(calc = c("p", "ctr"), color = TRUE)
+#   }
 tab_chi2 <- function(tabs, calc = c("ctr", "p", "var", "counts"),
                      comp = NULL, color = c("no", "auto", "all", "all_pct")
 ) {
@@ -4681,6 +4697,7 @@ tab_chi2 <- function(tabs, calc = c("ctr", "p", "var", "counts"),
                     chi2 = chi2)
   }
 }
+
 
 
 

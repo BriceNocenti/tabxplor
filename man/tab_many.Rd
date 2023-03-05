@@ -329,19 +329,19 @@ Breaks for aversions/under-representations (in orange/red) will simply be the op
 }
 \section{Functions}{
 \itemize{
-\item \code{tab_get_vars}: Get the variables names of a \pkg{tabxplor} \code{tab}
+\item \code{tab_get_vars()}: Get the variables names of a \pkg{tabxplor} \code{tab}
 
-\item \code{is_tab}: a test function for class tabxplor_tab
+\item \code{is_tab()}: a test function for class tabxplor_tab
 
-\item \code{set_color_style}: define the color style used to print \code{\link{tab}}.
+\item \code{set_color_style()}: define the color style used to print \code{\link{tab}}.
 
-\item \code{get_color_style}: get color styles as \pkg{crayon} functions or html codes.
+\item \code{get_color_style()}: get color styles as \pkg{crayon} functions or html codes.
 
-\item \code{set_color_breaks}: set the breaks used to print colors
+\item \code{set_color_breaks()}: set the breaks used to print colors
 
-\item \code{get_color_breaks}: get the breaks currently used to print colors
+\item \code{get_color_breaks()}: get the breaks currently used to print colors
+
 }}
-
 \examples{
 # Make a summary table with many col_vars, showing only one specific level :
 \donttest{

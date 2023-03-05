@@ -7,8 +7,9 @@
 #' @param path,replace,open The name, and possibly the path, of the Excel file to
 #' create (possibly without the .xlsx extension). Default path to temporary directory.
 #' Set global option \code{"tabxplor.export_dir"} with \code{link[base:options]{options}}
-#' to change default directory.
-#' Use \code{replace = TRUE} to overwrite existing files. Use \code{open = TRUE}
+#' to change default directory. By default replace is `TRUE` when `path` is provided,
+#' `FALSE` when `path` is not provided.
+#' Use \code{replace = TRUE} to overwrite existing files. Use \code{open = FALSE}
 #' if you don't want to automatically open the tables in Excel (or another
 #' software associated with .xlsx files).
 #' @param colnames_rotation Rotate the names of columns to an angle (in degrees).
@@ -16,8 +17,10 @@
 #' Set to \code{FALSE} to keep them.
 #' @param colwidth The standard width for numeric columns, as a number.
 #' Default to \code{"auto"}.
-#' @param print_ci By default provided confidence intervals are printed in another table,
-#' left to the base table. Set to \code{FALSE} to dismiss.
+#' @param print_ci Set to \code{TRUE} to print confidence intervals in another table,
+#' at the left of the base table.
+#' @param titles The titles of the different tables, as a character vector. When missing
+#'   titles are given based on the names of the variables.
 #' @param print_color_legend Should the color legends be printed with the subtexts ?
 #' @param sheets The Excel sheets options :
 #' \itemize{
@@ -26,14 +29,15 @@
 #'   \item \code{"auto"}: subsequent tables with the same columns are printed on the
 #'    same sheets
 #' }
-#' @param min_counts The total count under which a column or row is turned pale grey
-#' because there is not enough observation for it to be significant. Default to 30.
+#' @param n_min The total count under which a column or row is turned pale grey
+#' because there is not enough observation for it to be significant.
+#' Default to 0 (not used).
 #' @param hide_near_zero By default all cells displayed as 0 (even rounded)
 #' turn pale grey, to make the distribution of empty cells (and other cells) more visible.
 #' Provide a number to turn grey every cell below it. Set to \code{Inf} not to use
 #' this feature.
-#' @param color_type By default, the background is colored. Set to \code{text} to color
-#' the text instead.
+#' @param color_type By default, the text is colored. Set to \code{"bg"} to color
+#' the background instead.
 # @param pct_breaks The breaks used to color percentages.
 # @param mean_breaks The breaks used to color means.
 # @param contrib_breaks The breaks used to color contributions of cells to variance.
@@ -52,7 +56,7 @@ tab_xl <-
   function(tabs, path = NULL, replace = FALSE, open = rlang::is_interactive(),
            colnames_rotation = 0, remove_tab_vars = TRUE,
            colwidth = "auto", print_ci = FALSE, print_color_legend = TRUE,
-           sheets = "tabs", min_counts = 30,
+           sheets = "tabs", n_min = 0, titles,
            hide_near_zero = "auto", #, #c("auto", 0.0049, Inf),
            color_type = "text"
            # pct_breaks     = get_color_breaks("pct"),
@@ -64,6 +68,8 @@ tab_xl <-
                   "You can install it with : install.packages('openxlsx')"),
            call. = FALSE)
     }
+
+    if (length(replace) == 0) replace <- length(path) != 0
 
     # stopifnot(length(pct_breaks   ) >= 1,
     #          length(mean_breaks   ) >= 1,
@@ -241,59 +247,112 @@ tab_xl <-
 
     subtext      <- purrr::map(tabs, get_subtext) #need breaks calculation first
     if (print_color_legend == TRUE) {
-      color_legend <- purrr::map(tabs, ~ tab_color_legend(., colored = FALSE))
-      color_legend <- color_legend %>%
-        purrr::map_if(purrr::map_lgl(., ~ !is.null(.)),
-                      ~ purrr::map_if(., 1:length(.) == 1,
-                                      ~ paste0("Colors: ", .)) %>%
-                        purrr::flatten_chr())
+      color_legend <- purrr::map(tabs, ~ tab_color_legend(., colored = FALSE,
+                                                          add_color_and_diff_types = TRUE))
+      # color_legend <- color_legend %>%
+      #   purrr::map_if(purrr::map_lgl(., ~ !is.null(.)),
+      #                 ~ purrr::map_if(., 1:length(.) == 1,
+      #                                 ~ paste0("Colors: ", .)) %>%
+      #                   purrr::flatten_chr())
       subtext      <- purrr::map2(subtext, color_legend, ~ c(.y, .x))
     }
 
-    titles <-
-      purrr::pmap(list(tabs, row_vars, col_vars_plain, tab_vars),
-                  ~ tab_get_titles(..1, ..2, ..3, ..4)
-      )
 
-    insc <- insufficient_counts(tabs, min_counts = min_counts)
-    insuff_counts_row_var <- insc$insuff_counts_row_var
-    insuff_counts_col_var <- insc$insuff_counts_col_var
+    if (missing(titles)) {
+      titles <-
+        purrr::pmap_chr(list(tabs, row_vars, col_vars_plain, tab_vars),
+                    ~ tab_get_titles(..1, ..2, ..3, ..4)
+        )
+    } else {
+      titles <- vctrs::vec_recycle(titles, length(tabs))
+    }
+
+
+    if (n_min > 0) {
+      insc <-  insufficient_counts(tabs, n_min = n_min)
+      insuff_counts_row_var <- insc$insuff_counts_row_var
+      insuff_counts_col_var <- insc$insuff_counts_col_var
+    }
+
+
+
+
 
 
     no_chi2 <- purrr::map_lgl(chi2, ~ nrow(.) == 0)
     tabs_chi2 <- rep(list(tibble::tibble()), length(chi2))
 
     if (any(!no_chi2)) {
-      prep_tabs_chi2 <- tabs[!no_chi2] %>%
-        purrr::map_if(
-          comp == "tab",
-          ~ tibble::add_column(., totrows = is_totrow(.)) %>%
-            dplyr::mutate(`chi2 stats` = dplyr::case_when(
-              .data$totrows                                       ~ NA_character_,
-              dplyr::lead(.data$totrows, n = 1L, default = FALSE) ~ "count"   ,
-              dplyr::lead(.data$totrows, n = 2L, default = FALSE) ~ "pvalue"  ,
-              dplyr::lead(.data$totrows, n = 3L, default = FALSE) ~ "variance",
-              dplyr::lead(.data$totrows, n = 4L, default = FALSE) ~ "cells"   ,
-              dplyr::lead(.data$totrows, n = 5L, default = FALSE) ~ "df"      ,
-              TRUE                                                ~ NA_character_
-            )) %>%
-            dplyr::select(-totrows, - where(is_fmt)) %>%
-            dplyr::ungroup(),
+      prep_tabs_chi2 <- rep(list(NULL), length(tabs[!no_chi2]))
 
-          .else = ~ dplyr::ungroup(.) %>%
-            dplyr::mutate(
-              last = dplyr::row_number() == dplyr::n(),
-              `chi2 stats` = dplyr::case_when(
-                .data$last                                       ~ NA_character_,
-                dplyr::lead(.data$last, n = 1L, default = FALSE) ~ "count"   ,
-                dplyr::lead(.data$last, n = 2L, default = FALSE) ~ "pvalue"  ,
-                dplyr::lead(.data$last, n = 3L, default = FALSE) ~ "variance",
-                dplyr::lead(.data$last, n = 4L, default = FALSE) ~ "cells"   ,
-                dplyr::lead(.data$last, n = 5L, default = FALSE) ~ "df"      ,
-                TRUE                                             ~ NA_character_
+      if (any(!no_chi2 & comp == "tab")) {
+        prep_tabs_chi2[comp[!no_chi2] == "tab"] <- tabs[!no_chi2 & comp == "tab"] %>%
+          purrr::map(
+            ~ tibble::add_column(., totrows = is_totrow(.)) %>%
+              dplyr::mutate(`chi2 stats` = dplyr::case_when(
+                .data$totrows                                       ~ NA_character_,
+                dplyr::lead(.data$totrows, n = 1L, default = FALSE) ~ "count"   ,
+                dplyr::lead(.data$totrows, n = 2L, default = FALSE) ~ "pvalue"  ,
+                dplyr::lead(.data$totrows, n = 3L, default = FALSE) ~ "variance",
+                dplyr::lead(.data$totrows, n = 4L, default = FALSE) ~ "cells"   ,
+                dplyr::lead(.data$totrows, n = 5L, default = FALSE) ~ "df"      ,
+                TRUE                                                ~ NA_character_
               )) %>%
-            dplyr::select(-last, -where(is_fmt))
-        )
+              dplyr::select(-.data$totrows, - where(is_fmt)) %>%
+              dplyr::ungroup()
+          )
+      }
+
+      if (any(!no_chi2 & comp != "tab")) {
+        prep_tabs_chi2[comp[!no_chi2] != "tab"] <- tabs[!no_chi2 & comp != "tab"] %>%
+          purrr::map(
+            dplyr::ungroup(.) %>%
+              dplyr::mutate(
+                last = dplyr::row_number() == dplyr::n(),
+                `chi2 stats` = dplyr::case_when(
+                  .data$last                                       ~ NA_character_,
+                  dplyr::lead(.data$last, n = 1L, default = FALSE) ~ "count"   ,
+                  dplyr::lead(.data$last, n = 2L, default = FALSE) ~ "pvalue"  ,
+                  dplyr::lead(.data$last, n = 3L, default = FALSE) ~ "variance",
+                  dplyr::lead(.data$last, n = 4L, default = FALSE) ~ "cells"   ,
+                  dplyr::lead(.data$last, n = 5L, default = FALSE) ~ "df"      ,
+                  TRUE                                             ~ NA_character_
+                )) %>%
+              dplyr::select(-.data$last, -where(is_fmt))
+          )
+      }
+
+      # prep_tabs_chi2 <- tabs[!no_chi2] %>%
+      #   purrr::map_if(
+      #     comp == "tab",
+      #     ~ tibble::add_column(., totrows = is_totrow(.)) %>%
+      #       dplyr::mutate(`chi2 stats` = dplyr::case_when(
+      #         .data$totrows                                       ~ NA_character_,
+      #         dplyr::lead(.data$totrows, n = 1L, default = FALSE) ~ "count"   ,
+      #         dplyr::lead(.data$totrows, n = 2L, default = FALSE) ~ "pvalue"  ,
+      #         dplyr::lead(.data$totrows, n = 3L, default = FALSE) ~ "variance",
+      #         dplyr::lead(.data$totrows, n = 4L, default = FALSE) ~ "cells"   ,
+      #         dplyr::lead(.data$totrows, n = 5L, default = FALSE) ~ "df"      ,
+      #         TRUE                                                ~ NA_character_
+      #       )) %>%
+      #       dplyr::select(-totrows, - where(is_fmt)) %>%
+      #       dplyr::ungroup(),
+      #
+      #     .else = ~ dplyr::ungroup(.) %>%
+      #       dplyr::mutate(
+      #         last = dplyr::row_number() == dplyr::n(),
+      #         `chi2 stats` = dplyr::case_when(
+      #           .data$last                                       ~ NA_character_,
+      #           dplyr::lead(.data$last, n = 1L, default = FALSE) ~ "count"   ,
+      #           dplyr::lead(.data$last, n = 2L, default = FALSE) ~ "pvalue"  ,
+      #           dplyr::lead(.data$last, n = 3L, default = FALSE) ~ "variance",
+      #           dplyr::lead(.data$last, n = 4L, default = FALSE) ~ "cells"   ,
+      #           dplyr::lead(.data$last, n = 5L, default = FALSE) ~ "df"      ,
+      #           TRUE                                             ~ NA_character_
+      #         )) %>%
+      #       dplyr::select(-last, -where(is_fmt))
+      #   )
+
 
       join_vars <- purrr::map2(
         tab_vars[!no_chi2], comp[!no_chi2],
@@ -302,11 +361,14 @@ tab_xl <-
 
       tabs_chi2[!no_chi2] <-
         purrr::pmap(list(prep_tabs_chi2, chi2[!no_chi2], join_vars),
-                    ~ dplyr::left_join(..1, ..2, by = ..3, suffix = c(" ", "")) %>%
+                    ~ dplyr::left_join(..1, ..2, by = ..3, suffix = c(" ", ""),
+                                       na_matches = "never") %>%
                       dplyr::select(.data$`chi2 stats`, where(is_fmt)) %>%
                       dplyr::mutate(dplyr::across(
                         where(is_fmt),
-                        function(.var) tidyr::replace_na(.var, fmt0(type = "var"))
+                        function(.var) tidyr::replace_na(.var, mutate(fmt0(type = "var"),
+                                                                      var = NA_real_,
+                                                                      n   = NA_integer_) )
                       )) %>%
                       dplyr::mutate(dplyr::across(
                         where(is_fmt), get_num
@@ -349,7 +411,8 @@ tab_xl <-
       tabs <-
         purrr::map2(tabs, tab_vars, ~ dplyr::select(dplyr::ungroup(.x),
                                                     -tidyselect::all_of(.y)))
-      insuff_counts_col_var <- insuff_counts_col_var %>%
+
+      if (n_min > 0) insuff_counts_col_var <- insuff_counts_col_var %>%
         purrr::map2(tab_vars, ~ dplyr::select(dplyr::ungroup(.x),
                                               -tidyselect::all_of(.y)))
     }
@@ -461,8 +524,8 @@ tab_xl <-
     rows_nb  <- purrr::map2(tabs, start, ~ as.integer(1:nrow(.x) + .y + 1L))
 
     all_cols <- purrr::map(tabs, ~ 1:ncol(.))
-    all_cols_chi2_ci <- purrr::pmap(list(tabs, tabs_chi2, tabs_ci),
-                                    ~ 1:(ncol(..1) + ncol(..2) + ncol(..3)) )
+    # all_cols_chi2_ci <- purrr::pmap(list(tabs, tabs_chi2, tabs_ci),
+    #                                 ~ 1:(ncol(..1) + ncol(..2) + ncol(..3)) )
     txt_cols <- purrr::map(tabs, ~ which(purrr::map_lgl(., ~ !is_fmt(.))))
     row_var_cols <- purrr::map(txt_cols, ~ .[length(.)])
     fmt_cols <- purrr::map(tabs, ~ which(purrr::map_lgl(., ~ is_fmt(.))))
@@ -489,20 +552,22 @@ tab_xl <-
 
     type       <- type  %>% purrr::map2(fmt_cols, ~ .x[.y])
 
+    if (n_min > 0) {
     insuff_counts_row_var <-
       purrr::map2(insuff_counts_row_var, start,
                   ~ purrr::map(.x, function(.var) which(.var) + .y + 1))
     insuff_counts_col_var <- insuff_counts_col_var %>%
       purrr::map(~ .[purrr::map_lgl(., is.logical)]) %>%
       purrr::map_depth(2, which)
-
+}
 
     sheet_titles <-
-      purrr::pmap_chr(list(tabs,
-                           purrr::map(row_var[newsheet], as.character),
-                           purrr::map(col_vars[newsheet], as.character)),
-                      ~ tab_get_titles(..1, ..2, ..3, max = 1)
-      ) %>% stringr::str_sub(., 1, 27)
+    # purrr::pmap_chr(list(tabs[newsheet],
+    #                      purrr::map(row_var[newsheet], as.character),
+    #                      purrr::map(col_vars[newsheet], as.character)),
+    #                 ~ tab_get_titles(..1, ..2, ..3, max = 1)
+    # ) %>%
+    titles[newsheet] |> stringr::str_sub(1, 25)
 
     sheet_titles <- dplyr::if_else(duplicated(sheet_titles),
                                    stringr::str_c(sheet_titles, ".2"),
@@ -536,7 +601,7 @@ tab_xl <-
     purrr::walk(unique(sheet),
                 ~ openxlsx::showGridLines(wb, sheet = .x, showGridLines = FALSE))
     purrr::walk(unique(sheet),
-                ~ openxlsx::freezePane(wb, sheet = .x, firstActiveRow  = 3,
+                ~ openxlsx::freezePane(wb, sheet = .x, firstActiveRow  = 3L,
                                        firstCol = TRUE))
 
     st_titles <- openxlsx::createStyle(fontSize = 12, textDecoration = "bold")
@@ -724,7 +789,43 @@ tab_xl <-
                      style = st_ci_borders)
     }
 
-    # Sep between col_vars and groups (copy for ci tabs) -----------------------
+    # Borders and text formating ---------------------------------------------------------
+    # Headers and total columns
+    headers <- if (colnames_rotation == 0) {
+      openxlsx::createStyle(halign = "center", valign = "bottom", wrapText = TRUE,
+                            textDecoration = "Bold", border = "TopBottom",
+                            fontSize = 9)
+    } else {
+      openxlsx::createStyle(
+        halign = "left", valign = "bottom", wrapText = TRUE,
+        textDecoration = "Bold", textRotation = colnames_rotation,
+        border = c("bottom", "top"), fontSize = 9 # "left", "right",
+      )
+    }
+
+    tibble::tibble(sheet, rows = start + 1, cols = all_cols_ci) %>%
+      purrr::pwalk(openxlsx::addStyle, wb = wb, gridExpand = TRUE, stack = T,
+                   style = headers)
+
+    st_bottomline <-
+      openxlsx::createStyle(border = "bottom", borderStyle = "thin")
+
+    tibble::tibble(sheet, rows = purrr::map2(tabs, start, ~ nrow(.) + .y + 1L),
+                   cols = all_cols_ci) %>%
+      purrr::pwalk(openxlsx::addStyle, wb = wb, gridExpand = TRUE, stack = T,
+                   style = st_bottomline)
+
+
+    st_totcols <-
+      openxlsx::createStyle(halign = "left", valign = "top",
+                            textDecoration = "Bold", border = "LeftRight")
+
+    tibble::tibble(sheet, rows = rows_nb, cols = totcols_ci) %>%
+      dplyr::filter(purrr::map_lgl(totcols, ~ length(.) != 0) ) %>%
+      purrr::pwalk(openxlsx::addStyle, wb = wb, gridExpand = TRUE, stack = T,
+                   style = st_totcols)
+
+    # Sep between col_vars and groups (copy for ci tabs)
     st_end_col_var <- openxlsx::createStyle(border = "right")
 
     tibble::tibble(sheet, rows = purrr::map(rows_nb, ~ c(min(. -1), .)),
@@ -742,23 +843,7 @@ tab_xl <-
       purrr::pwalk(openxlsx::addStyle, wb = wb, gridExpand = TRUE, stack = T,
                    style = st_end_group)
 
-    # Headers and totals -----------------------------------------------------
-    headers <- if (colnames_rotation == 0) {
-      openxlsx::createStyle(halign = "center", valign = "bottom", wrapText = TRUE,
-                            textDecoration = "Bold", border = "TopBottom",
-                            fontSize = 9)
-    } else {
-      openxlsx::createStyle(
-        halign = "left", valign = "bottom", wrapText = TRUE,
-        textDecoration = "Bold", textRotation = colnames_rotation,
-        border = c("bottom", "top"), fontSize = 9 # "left", "right",
-      )
-    }
-
-    tibble::tibble(sheet, rows = start + 1, cols = all_cols_ci) %>%
-      purrr::pwalk(openxlsx::addStyle, wb = wb, gridExpand = TRUE, stack = T,
-                   style = headers)
-
+    # Total rows
     st_totrows <-
       openxlsx::createStyle(halign = "right", valign = "top",
                             textDecoration = "Bold", border = "TopBottom",
@@ -779,71 +864,61 @@ tab_xl <-
       purrr::pwalk(openxlsx::addStyle, wb = wb, gridExpand = TRUE, stack = T,
                    style = st_totrows_text)
 
-    st_totcols <-
-      openxlsx::createStyle(halign = "left", valign = "top",
-                            textDecoration = "Bold", border = "LeftRight")
-
-    tibble::tibble(sheet, rows = rows_nb, cols = totcols_ci) %>%
-      dplyr::filter(purrr::map_lgl(totcols, ~ length(.) != 0) ) %>%
+    st_bottom_left_cells <-  openxlsx::createStyle(halign = "left", valign = "top")
+    tibble::tibble(sheet, rows = tot_rows, cols = totcols) %>%
       purrr::pwalk(openxlsx::addStyle, wb = wb, gridExpand = TRUE, stack = T,
-                   style = st_totcols)
-
-    st_bottomline <-
-      openxlsx::createStyle(border = "bottom", borderStyle = "thin")
-
-    tibble::tibble(sheet, rows = purrr::map2(tabs, start, ~ nrow(.) + .y + 1L),
-                   cols = all_cols_ci) %>%
-      purrr::pwalk(openxlsx::addStyle, wb = wb, gridExpand = TRUE, stack = T,
-                   style = st_bottomline)
+                   style = st_bottom_left_cells)
 
 
     # Insufficient counts ----------------------------------------------------
-    st_insufficient_counts <- openxlsx::createStyle(fontColour = "#909090")
+    if (n_min > 0) {
+      st_insufficient_counts <- openxlsx::createStyle(fontColour = "#909090")
 
-    insuff_col_cols <-
-      purrr::map2(insuff_counts_col_var, row_var_cols, ~ 1:length(.x) + .y)
+      insuff_col_cols <-
+        purrr::map2(insuff_counts_col_var, row_var_cols, ~ 1:length(.x) + .y)
 
-    insuff_col_map <-
-      tibble::tibble(sheet, insuff_counts_col_var, insuff_col_cols, start) %>%
-      purrr::pmap(~ purrr::map2_df(
-        ..2, ..3,
-        function(.x, .y) tibble::tibble(sheet = ..1,
-                                        cols  = .y, rows  = list(.x + ..4 + 1)
-        ) ) ) %>%
-      dplyr::bind_rows() %>%
-      dplyr::filter(purrr::map_lgl(.data$rows, ~ length(.) != 0))
+      insuff_col_map <-
+        tibble::tibble(sheet, insuff_counts_col_var, insuff_col_cols, start) %>%
+        purrr::pmap(~ purrr::map2_df(
+          ..2, ..3,
+          function(.x, .y) tibble::tibble(sheet = ..1,
+                                          cols  = .y, rows  = list(.x + ..4 + 1)
+          ) ) ) %>%
+        dplyr::bind_rows() %>%
+        dplyr::filter(purrr::map_lgl(.data$rows, ~ length(.) != 0))
 
-    if (nrow(insuff_col_map) != 0) purrr::pwalk(insuff_col_map,
-                                                openxlsx::addStyle,
-                                                wb = wb,
-                                                gridExpand = TRUE, stack = T,
-                                                style = st_insufficient_counts)
+      if (nrow(insuff_col_map) != 0) purrr::pwalk(insuff_col_map,
+                                                  openxlsx::addStyle,
+                                                  wb = wb,
+                                                  gridExpand = TRUE, stack = T,
+                                                  style = st_insufficient_counts)
 
-    insuff_row_rows <-
-      purrr::map2(insuff_counts_row_var, col_vars_names, function(ins, cols)
-        purrr::map_if(1:length(cols), cols %in% names(ins),
-                      .f    = ~ ins[cols[.]] %>% purrr::map(as.integer),
-                      .else = ~ list(integer())
-        ) %>% purrr::set_names(names(cols)) %>% purrr::map(purrr::flatten_int)
-      )
+      insuff_row_rows <-
+        purrr::map2(insuff_counts_row_var, col_vars_names, function(ins, cols)
+          purrr::map_if(1:length(cols), cols %in% names(ins),
+                        .f    = ~ ins[cols[.]] %>% purrr::map(as.integer),
+                        .else = ~ list(integer())
+          ) %>% purrr::set_names(names(cols)) %>% purrr::map(purrr::flatten_int)
+        )
 
-    insuff_row_map <-
-      purrr::map2(sheet, insuff_row_rows, function(sh, ins) purrr::map2_df(
-        ins, 1:length(ins),
-        function(.x, .y) tibble::tibble(sheet = sh,
-                                        cols  = .y, rows  = list(.x)
-        ) ) ) %>%
-      dplyr::bind_rows() %>%
-      dplyr::filter(purrr::map_lgl(.data$rows, ~ length(.) != 0))
+      insuff_row_map <-
+        purrr::map2(sheet, insuff_row_rows, function(sh, ins) purrr::map2_df(
+          ins, 1:length(ins),
+          function(.x, .y) tibble::tibble(sheet = sh,
+                                          cols  = .y, rows  = list(.x)
+          ) ) ) %>%
+        dplyr::bind_rows() %>%
+        dplyr::filter(purrr::map_lgl(.data$rows, ~ length(.) != 0))
 
-    if (nrow(insuff_row_map) != 0) {
-      insuff_row_map %>% dplyr::group_by(.data$sheet, .data$rows) %>%
-        dplyr::summarise(sheet = dplyr::last(sheet),
-                         cols  = list(.data$cols),
-                         rows  = dplyr::last(.data$rows), .groups = "drop") %>%
-        purrr::pwalk(openxlsx::addStyle, wb = wb, gridExpand = TRUE, stack = T,
-                     style = st_insufficient_counts)
+      if (nrow(insuff_row_map) != 0) {
+        insuff_row_map %>% dplyr::group_by(.data$sheet, .data$rows) %>%
+          dplyr::summarise(sheet = dplyr::last(sheet),
+                           cols  = list(.data$cols),
+                           rows  = dplyr::last(.data$rows), .groups = "drop") %>%
+          purrr::pwalk(openxlsx::addStyle, wb = wb, gridExpand = TRUE, stack = T,
+                       style = st_insufficient_counts)
 
+      }
     }
 
     #Digits ----------------------------------------------------------------
@@ -965,7 +1040,7 @@ tab_xl <-
     }
 
 
-    #conditional formatting (made with normal color formatting) ----------------
+    #Conditional formatting (made with normal color formatting) ----------------
     # color_selections <-
     #   purrr::map2(tabs, color_cols, ~ purrr::map(
     #     .x[.y],
@@ -1061,8 +1136,9 @@ tab_xl <-
     style_zero <- openxlsx::createStyle(fontColour = "#EAEAEA")
     near0_auto <- hide_near_zero == "auto"
 
+
     if (any(near0_auto)) {
-      digits_map %>%
+      near_zero_map <- digits_map %>%
         dplyr::ungroup() %>%
         dplyr::filter(.data$tab_nb %in% (1:length(tabs))[near0_auto]) %>%
         dplyr::mutate(digits = dplyr::if_else(
@@ -1071,17 +1147,21 @@ tab_xl <-
           true      = .data$digits + 2L,
           false     = .data$digits                                     ),
           hide_near_zero = 0.49 * 10^(-.data$digits)) %>%
+        dplyr::arrange(.data$hide_near_zero) |>
         dplyr::mutate(continuous = .data$rows != dplyr::lag(.data$rows + 1,
                                                             default = TRUE),
                       continuous = cumsum(as.integer(.data$continuous))) %>%
         tidyr::nest(rows = .data$rows) %>%
         dplyr::mutate(rows = purrr::map(.data$rows, ~ dplyr::pull(., .data$rows))) %>%
+        dplyr::arrange(.data$hide_near_zero, .data$cols) |>
         dplyr::mutate(continuous = .data$cols != dplyr::lag(.data$cols + 1,
                                                             default = TRUE),
                       continuous = cumsum(as.integer(.data$continuous))) %>%
         tidyr::nest(cols = .data$cols) %>%
-        dplyr::mutate(cols = purrr::map(.data$cols, ~ dplyr::pull(., .data$cols))) %>% # .data$ ?
-        dplyr::mutate(rule = purrr::map(hide_near_zero, ~ c(-., .)) ) %>%
+        dplyr::mutate(cols = purrr::map(.data$cols, ~ dplyr::pull(., .data$cols))) %>%
+        dplyr::mutate(rule = purrr::map(hide_near_zero, ~ c(-., .)) )
+
+      near_zero_map |>
         dplyr::select(.data$sheet, .data$cols, .data$rows, .data$rule) %>%
         purrr::pwalk(openxlsx::conditionalFormatting,
                      wb = wb, style = style_zero, type = "between")
@@ -1244,10 +1324,10 @@ xl_index <- function(cols = "", rows = "", start_row = 0L, offset = 1L,
 
 
 
-
-
 #' @keywords internal
-insufficient_counts <- function(tabs, min_counts = 30) {
+insufficient_counts <- function(tabs, n_min = 30) {
+  #if (n_min =)
+
   get_vars        <- purrr::map(tabs, tab_get_vars)
   row_var         <- purrr::map(get_vars, ~ rlang::sym(.$row_var))
   col_vars_alltot <- purrr::map(get_vars, ~ rlang::syms(.$col_vars))
@@ -1301,7 +1381,7 @@ insufficient_counts <- function(tabs, min_counts = 30) {
         purrr::map(.levels, function(..levels)
           dplyr::select(dplyr::ungroup(.tab), !!!..levels) %>%
             dplyr::select(where(is_totcol)) %>%
-            dplyr::mutate(dplyr::across(dplyr::everything(), ~ get_n(.) < min_counts)) %>%
+            dplyr::mutate(dplyr::across(dplyr::everything(), ~ get_n(.) < n_min)) %>%
             tibble::deframe()
         )
       )
@@ -1324,7 +1404,7 @@ insufficient_counts <- function(tabs, min_counts = 30) {
                         where(~ tidyr::replace_na(
                           get_col_var(.) == "all_col_vars", FALSE)
                         )) %>%
-          dplyr::mutate(dplyr::across(.fns = ~ get_n(.) < min_counts)) %>%
+          dplyr::mutate(dplyr::across(.fns = ~ get_n(.) < n_min)) %>%
           tibble::deframe()
       )
       )
@@ -1361,7 +1441,7 @@ insufficient_counts <- function(tabs, min_counts = 30) {
             dplyr::mutate(dplyr::across(where(is_fmt), get_n)) %>%
             dplyr::rowwise() %>%
             dplyr::transmute(insuff_counts_row_var =
-                               sum(!!!..levels, na.rm = TRUE) < min_counts) %>%
+                               sum(!!!..levels, na.rm = TRUE) < n_min) %>%
             dplyr::pull(insuff_counts_row_var)
         )
       )
@@ -1379,7 +1459,7 @@ insufficient_counts <- function(tabs, min_counts = 30) {
     insuff_counts_col_var[one_totrow] <-
       purrr::map(tabs[one_totrow],
                  ~ dplyr::mutate(., dplyr::across(
-                   where(is_fmt), ~ get_n(dplyr::last(.)) < min_counts
+                   where(is_fmt), ~ get_n(dplyr::last(.)) < n_min
                  ))
       )
   }
@@ -1388,7 +1468,7 @@ insufficient_counts <- function(tabs, min_counts = 30) {
     insuff_counts_col_var[!one_totrow] <-
       purrr::map(tabs[!one_totrow],
                  ~ dplyr::mutate(., dplyr::across(
-                   where(is_fmt), ~ sum(get_n(.)) < min_counts))
+                   where(is_fmt), ~ sum(get_n(.)) < n_min))
       )
   }
 
@@ -1800,13 +1880,11 @@ insufficient_counts <- function(tabs, min_counts = 30) {
 
 
 
-
 # A ajouter :
 #   Pour le montant maximal d'un individu (<85% de total), il faudrait creer un fichier a part.
 #   Pour les totaux : erreur s'ils ne contiennent pas l'intitule "Total|Ensemble" (s'il a ete modifie) ;
 #       erreur si "Total|Ensemble" hors d'un total.
 #   Calculer les totaux par formules ?
-#   Un seul tableau si ce n'est pas pondere (all(wn == n)).
 #   Les parametres a utiliser dans tab_pct / tab_ci
 #   Un fichier par tableau ?
 
@@ -1817,12 +1895,78 @@ insufficient_counts <- function(tabs, min_counts = 30) {
 # DGFiP donnees fiscales : aucune case ne doit comporter moins de 11 individus.
 # DARES : minimum 5 individus/menages ; minimum 3 entreprises (max < 85%)
 
-#' @keywords internal
-tab_xl_secrecy <-
-  function(tabs, path = NULL, replace = FALSE, open = rlang::is_interactive(),
+
+#' Excel output for tabxplor tables with confidentiality rules.
+#' @description Excel output for tabxplor tables, with colors to show if counts
+#'  and percentages respect statistical confidentiality rules. Don't forget to provide
+#'  `subtext = c("Source : description of the source of the data")` in `tab` or `tab_many`,
+#'  otherwise it is not possible to assess, for your reader, which confidentiality rules
+#'  applies. For the same reason, you must supply a description of all variables in
+#'   `var_labels`.
+#' @param tabs A table made with \code{\link{tab}}, \code{\link{tab_many}} or
+#' \code{\link{tab_plain}}, or a list of such tables.
+#' @param path,replace,open The name, and possibly the path, of the Excel file to
+#' create (possibly without the .xlsx extension). Default path to temporary directory.
+#' Set global option \code{"tabxplor.export_dir"} with \code{link[base:options]{options}}
+#' to change default directory. By default replace is `TRUE` when `path` is provided,
+#' `FALSE` when `path` is not provided.
+#' Use \code{replace = TRUE} to overwrite existing files. Use \code{open = FALSE}
+#' if you don't want to automatically open the tables in Excel (or another
+#' software associated with .xlsx files).
+#' @param colnames_rotation Rotate the names of columns to an angle (in degrees).
+#' @param colwidth The standard width for numeric columns, as a number.
+#' Default to 10.
+#' @param print_color_legend Should the color legends be printed with the subtexts ?
+#' @param sheets The Excel sheets options :
+#' \itemize{
+#'   \item \code{"unique"}: all tables are on the same sheet
+#'   \item \code{"tabs"}: a new sheet is created for each table
+#'   \item \code{"auto"}: subsequent tables with the same columns are printed on the
+#'    same sheets
+#' }
+#' @param titles The titles of the different tables, as a character vector. When missing
+#'   titles are given based on the names of the variables.
+#' @param recalculate_totcols By default, total columns are recalculated from counts if
+#'   there are many `col_vars` but only one total column. Provide a logical vector the
+#'   length of the number of tables, or a single logical, to choose the wanted behavior.
+#'   The fastest way to do it is to use `tab_many()` with `totcol = "each"` before.
+#' @param n_min The total count under which a column or row doesnt respect statistical
+#' confidentiality. Default to 5.
+#' @param pct_max The row or column percentage above which, knowing the column category,
+#'   it becomes possible to guess the row category, or the other way round.
+#'   Default to 0.95 (95%).
+#' @param var_labels The description of all the variables, necessary to assess that
+#' the tables don't break confidentiality rules, as a character vector of the type
+#'   `c('variable1' = 'description of the variable', 'variable2' = ...)`
+#' @param hide_near_zero By default all cells displayed as 0 (even rounded)
+#' turn pale grey, to make the distribution of empty cells (and other cells) more visible.
+#' Provide a number to turn grey every cell below it. Set to \code{Inf} not to use
+#' this feature.
+#' @param color_type By default, the text is colored. Set to \code{"bg"} to color
+#' the background instead.
+# @param pct_breaks The breaks used to color percentages.
+# @param mean_breaks The breaks used to color means.
+# @param contrib_breaks The breaks used to color contributions of cells to variance.
+#'
+#' @return  The table(s) with formatting and colors in an Excel file, as a side effect.
+#'  Invisibly returns \code{tabs}.
+#' @export
+#' @examples
+#' \donttest{
+#' forcats::gss_cat |>
+#'   tab(race, marital, year, pct = "row", color = "diff",
+#'      subtext = c('Source : National Opinion Research Center, General Social Survey.')) |>
+#'   tab_xl_confidential(titles = "Marital status by race",
+#'      var_labels = c("marital" = "marital status", "race" = "race",
+#'      "year" = "year of survey"))
+#'   }
+tab_xl_confidential <-
+  function(tabs, path = NULL, replace = NULL, open = rlang::is_interactive(),
            n_min = 5, pct_max = 0.95,
-           colnames_rotation = 0, colwidth = 7, sheets = "tabs",
-           var_labels = character()
+           recalculate_totcols = NULL, var_labels = character(),
+           colnames_rotation = 0, colwidth = 10, sheets = "unique",
+           print_color_legend = TRUE, titles,
+           hide_near_zero = "auto", color_type = "text"
   ) {
     if (!requireNamespace("openxlsx", quietly = TRUE)) {
       stop(paste0("Package \"openxlsx\" needed for this function to work. ",
@@ -1830,10 +1974,15 @@ tab_xl_secrecy <-
            call. = FALSE)
     }
 
+    if (length(replace) == 0) replace <- length(path) != 0
+
+
     tabs_base <- tabs
     if (is.data.frame(tabs)) tabs <- list(tabs)
     chi2           <- purrr::map(tabs, get_chi2)
-    #colwidth       <- vctrs::vec_recycle(colwidth,       length(tabs))
+    colwidth       <- vctrs::vec_recycle(colwidth,       length(tabs))
+    hide_near_zero <- vctrs::vec_recycle(hide_near_zero, length(tabs))
+
 
     get_vars        <- purrr::map(tabs, tab_get_vars)
     col_vars_levels_alltot <- purrr::map(get_vars, ~ purrr::map(.$col_vars_levels,
@@ -1852,9 +2001,14 @@ tab_xl_secrecy <-
     col_vars_plain  <- purrr::map(get_vars, ~ .$col_vars %>%
                                     purrr::discard(. == "all_col_vars"))
     tab_vars <- purrr::map(get_vars, ~ .$tab_vars)
+    comp     <- dplyr::if_else(
+      purrr::map_lgl(tabs, ~purrr::map_lgl(.x, get_comp_all) %>%
+                       purrr::discard(is.na(.)) %>% any()),
+      "all",
+      "tab" )
 
 
-
+    #Sheets
     stopifnot(sheets %in% c("tabs", "unique", "auto") |
                 (is.integer(sheets) & length(sheets) == length(tabs)))
     sheet <-
@@ -1874,68 +2028,320 @@ tab_xl_secrecy <-
         sheets
       }
 
-    titles <-
-      purrr::pmap(list(tabs, row_vars, col_vars_plain, tab_vars),
-                  ~ tab_get_titles(..1, ..2, ..3, ..4)
-      )
 
-    subtext <- purrr::map(tabs, get_subtext) #need breaks calculation first
+    #Colors
+    colorToStyle <- function(x) {
+      if (color_type == "text") {
+        openxlsx::createStyle(fontColour = x, textDecoration = "bold")
+      } else {
+        openxlsx::createStyle(fgFill = x)
+      }
+    }
+
+    #tabxplor_color_breaks <- getOption("tabxplor.color_breaks")
+
+    styles <- get_color_style("color_code", theme = "light", type = color_type)
+
+    pos1 <- colorToStyle(styles["pos1"])
+    pos2 <- colorToStyle(styles["pos2"])
+    pos3 <- colorToStyle(styles["pos3"])
+    pos4 <- colorToStyle(styles["pos4"])
+    pos5 <- colorToStyle(styles["pos5"])
+    neg1 <- colorToStyle(styles["neg1"])
+    neg2 <- colorToStyle(styles["neg2"])
+    neg3 <- colorToStyle(styles["neg3"])
+    neg4 <- colorToStyle(styles["neg4"])
+    neg5 <- colorToStyle(styles["neg5"])
+
+    styles <- names(styles) #[select_in_color_style(length(tabxplor_color_breaks[[1]]))]
+
+    #Titles
+    if (missing(titles)) {
+      titles <-
+        purrr::pmap(list(tabs, row_vars, col_vars_plain, tab_vars),
+                    ~ tab_get_titles(..1, ..2, ..3, ..4)
+        )
+    } else {
+      titles <- vctrs::vec_recycle(titles, length(tabs))
+    }
+
+    #Subtexts
+    subtext      <- purrr::map(tabs, get_subtext) #need breaks calculation first
+    if (print_color_legend == TRUE) {
+      color_legend <- purrr::map(tabs, ~ tab_color_legend(., colored = FALSE,
+                                                          add_color_and_diff_types = TRUE,
+                                                          all_variables_names = TRUE))
+      # color_legend <- color_legend %>%
+      #   purrr::map_if(purrr::map_lgl(., ~ !is.null(.)),
+      #                 ~ purrr::map_if(., 1:length(.) == 1,
+      #                                 ~ paste0("Colors: ", .)) %>%
+      #                   purrr::flatten_chr())
+      subtext      <- purrr::map2(subtext, color_legend, ~ c(.y, .x))
+    }
 
     no_source <- purrr::map_lgl(subtext, ~ !any(stringr::str_detect(., "Source")))
     if (any(no_source)) stop(paste0(
-      "some tabs get no Source description in subtext: ",
+      "to permit to assess confidentiality, you must add",
+      " subtext = c('Source : description of the source.')",
+      " in tab(), for the following tables: ",
       paste0("tab ", which(no_source), ", ", as.character(titles[no_source]), collapse = " ; ")
     ))
 
 
-    col_var_of_totcols <- purrr::map(tabs, ~ dplyr::select(dplyr::ungroup(.), where(~  is_totcol(.))) |>
-                                       get_col_var())
-    mean_cols <- purrr::map(tabs, ~ get_type(.) == "mean") |>
-      purrr::map(~ purrr::keep(names(.), .))
+    # Chi2 tables
+    no_chi2 <- purrr::map_lgl(chi2, ~ nrow(.) == 0)
+    tabs_chi2 <- rep(list(tibble::tibble()), length(chi2))
+    if (any(!no_chi2)) {
+      prep_tabs_chi2 <- rep(list(NULL), length(tabs[!no_chi2]))
 
-    col_vars_plain_no_mean  <- purrr::map2(col_vars_plain, mean_cols, ~ .x[! .x %in% .y])
-    missing_totcols <-purrr::map2_lgl(col_vars_plain_no_mean, col_var_of_totcols,
-                                      ~ any(!.x %in% .y))
-    if (any(missing_totcols)) {
-      message("recalculate one total column for each col_vars")
+      if (any(!no_chi2 & comp == "tab")) {
+        prep_tabs_chi2[comp[!no_chi2] == "tab"] <- tabs[!no_chi2 & comp == "tab"] %>%
+          purrr::map(
+            ~ tibble::add_column(., totrows = is_totrow(.)) %>%
+              dplyr::mutate(`chi2 stats` = dplyr::case_when(
+                .data$totrows                                       ~ NA_character_,
+                #dplyr::lead(.data$totrows, n = 1L, default = FALSE) ~ "count"   ,
+                dplyr::lead(.data$totrows, n = 1L, default = FALSE) ~ "pvalue"  ,
+                dplyr::lead(.data$totrows, n = 2L, default = FALSE) ~ "variance",
+                dplyr::lead(.data$totrows, n = 3L, default = FALSE) ~ "cells"   ,
+                dplyr::lead(.data$totrows, n = 4L, default = FALSE) ~ "df"      ,
+                TRUE                                                ~ NA_character_
+              )) %>%
+              dplyr::select(-.data$totrows, - where(is_fmt)) %>%
+              dplyr::ungroup()
+          )
+      }
+
+      if (any(!no_chi2 & comp != "tab")) {
+        prep_tabs_chi2[comp[!no_chi2] != "tab"] <- tabs[!no_chi2 & comp != "tab"] %>%
+          purrr::map(
+            dplyr::ungroup(.) %>%
+              dplyr::mutate(
+                last = dplyr::row_number() == dplyr::n(),
+                `chi2 stats` = dplyr::case_when(
+                  .data$last                                       ~ NA_character_,
+                  #dplyr::lead(.data$last, n = 1L, default = FALSE) ~ "count"   ,
+                  dplyr::lead(.data$last, n = 1L, default = FALSE) ~ "pvalue"  ,
+                  dplyr::lead(.data$last, n = 2L, default = FALSE) ~ "variance",
+                  dplyr::lead(.data$last, n = 3L, default = FALSE) ~ "cells"   ,
+                  dplyr::lead(.data$last, n = 4L, default = FALSE) ~ "df"      ,
+                  TRUE                                             ~ NA_character_
+                )) %>%
+              dplyr::select(-.data$last, -where(is_fmt))
+          )
+      }
+
+      # prep_tabs_chi2 <- tabs[!no_chi2] %>%
+      #   purrr::map_if(
+      #     comp == "tab",
+      #     ~ tibble::add_column(., totrows = is_totrow(.)) %>%
+      #       dplyr::mutate(`chi2 stats` = dplyr::case_when(
+      #         .data$totrows                                       ~ NA_character_,
+      #         dplyr::lead(.data$totrows, n = 1L, default = FALSE) ~ "count"   ,
+      #         dplyr::lead(.data$totrows, n = 2L, default = FALSE) ~ "pvalue"  ,
+      #         dplyr::lead(.data$totrows, n = 3L, default = FALSE) ~ "variance",
+      #         dplyr::lead(.data$totrows, n = 4L, default = FALSE) ~ "cells"   ,
+      #         dplyr::lead(.data$totrows, n = 5L, default = FALSE) ~ "df"      ,
+      #         TRUE                                                ~ NA_character_
+      #       )) %>%
+      #       dplyr::select(-totrows, - where(is_fmt)) %>%
+      #       dplyr::ungroup(),
+      #
+      #     .else = ~ dplyr::ungroup(.) %>%
+      #       dplyr::mutate(
+      #         last = dplyr::row_number() == dplyr::n(),
+      #         `chi2 stats` = dplyr::case_when(
+      #           .data$last                                       ~ NA_character_,
+      #           dplyr::lead(.data$last, n = 1L, default = FALSE) ~ "count"   ,
+      #           dplyr::lead(.data$last, n = 2L, default = FALSE) ~ "pvalue"  ,
+      #           dplyr::lead(.data$last, n = 3L, default = FALSE) ~ "variance",
+      #           dplyr::lead(.data$last, n = 4L, default = FALSE) ~ "cells"   ,
+      #           dplyr::lead(.data$last, n = 5L, default = FALSE) ~ "df"      ,
+      #           TRUE                                             ~ NA_character_
+      #         )) %>%
+      #       dplyr::select(-last, -where(is_fmt))
+      #   )
+
+      join_vars <- purrr::map2(
+        tab_vars[!no_chi2], comp[!no_chi2],
+        ~ if (.y == "tab") {append(., "chi2 stats")} else {"chi2 stats"}
+      )
+
+      tabs_chi2[!no_chi2] <-
+        purrr::pmap(list(prep_tabs_chi2, chi2[!no_chi2], join_vars),
+                    ~ dplyr::left_join(..1, ..2, by = ..3, suffix = c(" ", ""),
+                                       na_matches = "never") %>%
+                      dplyr::select(.data$`chi2 stats`, where(is_fmt)) %>%
+                      dplyr::mutate(dplyr::across(
+                        where(is_fmt),
+                        function(.var) tidyr::replace_na(.var, mutate(fmt0(type = "var"),
+                                                                      var = NA_real_,
+                                                                      n   = NA_integer_) )
+                      )) %>%
+                      dplyr::mutate(dplyr::across(
+                        where(is_fmt), get_num
+                      )) %>% dplyr::mutate(`chi2 stats` =
+                                             stringr::str_c(.data$`chi2 stats`, " :"))
+        )
+    }
+
+
+    #Remove count rows and count columns if type if not "n"
+    #tabs[[1]] <- tabs[[1]] |> mutate(n = mutate(Total, display = "n"))
+    #tabs[[1]] <- dplyr::mutate(dplyr::ungroup(tabs[[1]]), dplyr::across(
+    #   where(is_fmt),
+    #   ~ dplyr::if_else(dplyr::row_number() == 1, set_display(., "n"), .)
+    # )) |>
+    #   dplyr::group_by(year)
+
+    count_rows_to_remove <-
+      purrr::map2(tabs, purrr::map(tabs, ~ which(purrr::map_lgl(., is_fmt))),
+                  ~ purrr::map(dplyr::select(dplyr::ungroup(.x), tidyselect::all_of(.y)),
+                               ~ get_display(.) %in% c("n", "wn") & get_type(.) != "n") |>
+                    tibble::as_tibble()
+      )
+
+    count_rows_to_remove <- count_rows_to_remove |>
+      purrr::map(~ dplyr::transmute(., count_rows = dplyr::if_all(everything())) |>
+                   tibble::deframe()
+      )
+
+    text_count_rows_to_remove <-
+      purrr::imap_dfr(count_rows_to_remove,
+                      ~ tibble::tibble(tab_nb = .y, removed_rows = list(which(.x)))) |>
+      dplyr::filter(purrr::map_lgl(.data$removed_rows, ~ length(.) != 0)) |>
+      dplyr::mutate(text = paste0("table ", .data$tab_nb, ", row ",
+                                  paste0(purrr::map_chr(.data$removed_rows, as.character),
+                                         collapse = ", ")))
+
+    if (nrow(text_count_rows_to_remove) > 0) message(paste0(
+      "some rows with counts were removed: ",
+      text_count_rows_to_remove |> dplyr::pull(.data$text) |> paste0(collapse = "; ")
+    ))
+
+    tabs <-
+      purrr::map2(tabs, count_rows_to_remove,
+                  ~ tibble::add_column(.x, count_rows = .y) |>
+                    dplyr::filter(!count_rows) |>
+                    select(-count_rows)
+      )
+
+    count_cols_to_remove <-
+      purrr::map2(tabs, purrr::map(tabs, ~ purrr::map_lgl(., is_fmt)),
+                  ~ which(purrr::map_if(.x, .y,
+                                        ~ any(get_display(.) %in% c("n", "wn")) & get_type(.) != "n",
+                                        .else = ~ FALSE) |>
+                            purrr::flatten_lgl()
+                  )
+      )
+
+    text_count_cols_to_remove <-
+      purrr::pmap_dfr(list(count_cols_to_remove, 1:length(tabs), purrr::map(tabs, names) ),
+                      ~ tibble::tibble(tab_nb = ..2, removed_cols = list(..3[..1]))) |>
+      dplyr::filter(purrr::map_lgl(.data$removed_cols, ~ length(.) != 0)) |>
+      dplyr::mutate(text = paste0("table ", .data$tab_nb, ", column ",
+                                  paste0(.data$removed_cols,
+                                         collapse = ", ")))
+
+    if (nrow(text_count_cols_to_remove) > 0) message(paste0(
+      "some columns with counts were removed: ",
+      text_count_cols_to_remove |> dplyr::pull(.data$text) |>  paste0(collapse = "; ")
+    ))
+
+    tabs <- purrr::map2(tabs, count_cols_to_remove,
+                        ~ dplyr::select(.x, -all_of(.y))
+    )
+
+
+    #Recalculate some total columns
+    if (length(recalculate_totcols) == 0) {
+      col_var_of_totcols <-
+        purrr::map(tabs, ~ dplyr::select(dplyr::ungroup(.), where(~  is_totcol(.))) |>
+                     get_col_var())
+      mean_cols <- purrr::map(tabs, ~ get_type(.) == "mean") |>
+        purrr::map(~ purrr::keep(names(.), .))
+
+      col_vars_plain_no_mean  <- purrr::map2(col_vars_plain, mean_cols, ~ .x[! .x %in% .y])
+      recalculate_totcols <-purrr::map2_lgl(col_vars_plain_no_mean, col_var_of_totcols,
+                                            ~ length(.x) >= 2 & any(!.x %in% .y))
+    } else {
+      recalculate_totcols <- vctrs::vec_recycle(recalculate_totcols, length(tabs))
+    }
+
+    if (any(recalculate_totcols)) {
+      message(paste0(
+        "recalculating a total column for each col_vars, for the following tables: ",
+        paste0(which(recalculate_totcols), collapse = ", "),
+        ". To gain speed, use tab_many(..., totcol = 'each') before."
+      ))
+
       tabs <- purrr::map_if(
-        tabs, missing_totcols,
-        ~ tab_tot(dplyr::select(., -where(is_totcol)),
-                  tot = "col", totcol = "each")
+        tabs, recalculate_totcols,
+        ~ tab_tot(dplyr::select(., -where(is_totcol)), tot = "col", totcol = "each")
       )
     }
 
+
+
+
+    #Transform initial tables to isolate percentages, counts, means
     tabs <- tabs |>
-    purrr::map(~purrr::set_names(., dplyr::if_else(
-      condition = get_col_var(.) != "",
-      true      = paste0(get_col_var(.), "___", names(.)
-                         #stringr::str_remove(names(.), paste0("_", get_col_var(.)))
-                         ),
-      false     = names(.)
-    )))
+      purrr::map(~purrr::set_names(., dplyr::if_else(
+        condition = get_col_var(.) != "",
+        true      = paste0(get_col_var(.), "___", names(.)
+                           #stringr::str_remove(names(.), paste0("_", get_col_var(.)))
+        ),
+        false     = names(.)
+      )))
 
-    tabs_fmt <- purrr::map(tabs, ~ which(purrr::map_lgl(., is_fmt)))
+    tabs <- tabs |> purrr::map(dplyr::ungroup)
 
+    tabs_fmt <- purrr::map(tabs, ~ purrr::map_lgl(., is_fmt))
 
-    # tabs_names <- purrr::map(tabs_fmt, names)
+    tabs_need_wn <- purrr::map2(tabs, tabs_fmt,
+                                ~ which(purrr::map_if(.x, .y,
+                                                      ~ ! isTRUE(all.equal(get_wn(.), get_n(.), tolerance = 1e-05)),
+                                                      .else = ~ FALSE) |>
+                                          purrr::flatten_lgl()
+                                )
+    )
+    tabs_fmt <- purrr::map(tabs_fmt, which)
+
+    tabs <- tabs |>
+      purrr::map(~dplyr::rename_with(., ~ stringr::str_replace(., "\\[", "{") |>
+                                       stringr::str_replace("\\]", "}")))
 
     tabs <-
-      purrr::map2(tabs, tabs_fmt,
-                  ~ dplyr::ungroup(.) %>%
-                    dplyr::mutate(dplyr::across(all_of(.y),
-                                                ~ set_display(.x, "n"),
-                                                .names = "{.col}_n")) %>%
-                    dplyr::mutate(dplyr::across(all_of(.y),
-                                                ~ set_display(.x, "wn"),
-                                                .names = "{.col}_wn")) %>%
-                    dplyr::mutate(dplyr::across(all_of(.y) & where(~ get_type(.x) == "mean"),
-                                                ~ set_display(.x, "mean"),
-                                                .names = "{.col}_mean")) %>%
-                    dplyr::mutate(dplyr::across(all_of(.y) & where(~ get_type(.x) == "mean"),
-                                                ~ set_display(.x, "var"),
-                                                .names = "{.col}_var")) %>%
-                    dplyr::select(-all_of(.y))
-      )
+      purrr::pmap(
+        list(tabs, tabs_fmt, tabs_need_wn),
+        ~ dplyr::mutate(..1, dplyr::across(all_of(..2) & where(~ get_type(.) %in% c("col", "row", "all", "all_tabs")),
+                                           ~ set_display(., "pct"),
+                                           .names = paste0("{.col} [pct]")
+        )
+        ) %>%
+          dplyr::mutate(dplyr::across(all_of(..2) & where(~ get_type(.) == "mean"),
+                                      ~ set_display(., "mean"),
+                                      .names = "{.col} [mean]")) %>%
+          dplyr::mutate(dplyr::across(all_of(..2) & where(~ get_type(.) == "mean"),
+                                      ~ mutate(set_color(set_digits(set_display(., "var"),
+                                                                    get_digits(.) + 1),
+                                                         color = ""),
+                                               var = sqrt(var)),
+                                      .names = "{.col} [sd]")) %>%
+          dplyr::mutate(dplyr::across(all_of(..2),
+                                      ~ set_color(set_digits(set_display(., "n"), 0L), color = ""),
+                                      .names = "{.col} [n]")) %>%
+          dplyr::mutate(dplyr::across(all_of(..3),
+                                      ~ set_color(set_digits(set_display(., "wn"), 0L), color = ""),
+                                      .names = "{.col} [wn]")) %>%
+          dplyr::select(-all_of(..2))
+      ) |>
+      purrr::map(~purrr::set_names(., stringr::str_replace(names(.),
+                                                           "[pct]$",
+                                                           paste0("[", get_type(.), "_pct]")))) |>
+      purrr::map(~purrr::set_names(., stringr::str_replace(names(.),
+                                                           "\\[",
+                                                           paste0("[var:", get_col_var(.), "] ["))))
 
     tabs <-
       purrr::pmap(list(tabs, tab_vars, row_vars,
@@ -1950,13 +2356,14 @@ tab_xl_secrecy <-
         true      = stringr::str_remove(names(.), "^[^_]+___"),
         false     = names(.)
       ))) |>
-      purrr::map2(tab_vars, ~ group_by(.x, !!rlang::sym(.y)))
+      purrr::map2(tab_vars, ~ group_by(.x, !!!rlang::syms(.y)))
 
     tabs_num <-
       purrr::map(tabs,
-                 ~ dplyr::mutate(dplyr::ungroup(.),
-                                 dplyr::across(where(is_fmt), get_num)) )
+                 ~ dplyr::mutate(., dplyr::across(where(is_fmt), get_num)) )
 
+
+    # Informations about rows and columns
     get_vars        <- purrr::map(tabs, tab_get_vars)
     row_var         <- purrr::map(get_vars, ~ rlang::sym(.$row_var))
     col_vars_alltot <- purrr::map(get_vars, ~ rlang::syms(.$col_vars))
@@ -1973,82 +2380,12 @@ tab_xl_secrecy <-
     #groups  <- purrr::map(tabs, dplyr::group_vars)
 
     totrowsTF <- purrr::map(tabs, is_totrow)
-    totcols   <- purrr::map(tabs, is_totcol)
+    totcols     <- purrr::map(tabs, is_totcol)
     all_totcols <- purrr::map(col_vars_alltot, ~ . == "all_col_vars")
 
-    newsheet = sheet != dplyr::lag(sheet, default = -1L)
-
-    start <- tibble::tibble(newsheet, rows = purrr::map_int(tabs, nrow),
-                            sub = purrr::map_int(subtext, length)) %>%
-      dplyr::group_by(gr = cumsum(as.integer(.data$newsheet))) %>%
-      dplyr::mutate(start = dplyr::lag(cumsum(.data$rows + .data$sub + 5L + 8L), #8= description
-                                       default = 0L) + 1L) %>%
-      dplyr::pull(.data$start)
-
-    totrows  <- purrr::map(totrowsTF, which)
-    tot_rows <- purrr::map2(totrows, start, ~ .x + .y + 1L)
-    group_ind<- purrr::map(tabs, dplyr::group_indices)
-    end_group<- purrr::map(group_ind, ~ which(.[-1] != .[-length(.)] ) ) %>%
-      purrr::map2(start, ~ .x + .y + 1)
-    rows_nb  <- purrr::map2(tabs, start, ~ as.integer(1:nrow(.x) + .y + 1L))
-
-    all_cols <- purrr::map(tabs, ~ 1:ncol(.))
-    txt_cols <- purrr::map(tabs, ~ which(purrr::map_lgl(., ~ !is_fmt(.))))
-    row_var_cols <- purrr::map(txt_cols, ~ .[length(.)])
-    fmt_cols <- purrr::map(tabs, ~ which(purrr::map_lgl(., ~ is_fmt(.))))
-    totcols  <- purrr::map(totcols, which)
-
-    n_cols <- purrr::map(tabs, ~ which(stringr::str_detect(names(.), "_n$") ) )
-    totcols_or_mean_n <-
-      purrr::map(tabs, ~ which(stringr::str_detect(names(.), "_n$") &
-                                 (is_totcol(.) | get_type(.) == "mean") )
-                 )
 
 
-
-    col_vars_names <- purrr::map(tabs, ~ get_col_var(.) )
-    end_col_var <-
-      purrr::map(col_vars_names,
-                 ~ which(. != "" & . != dplyr::lead(., default = NA_character_))
-      )
-
-    end_display <-  purrr::map(tabs, ~ stringr::str_extract(names(.), "_[^_]+$"))
-    end_display <-  purrr::map(col_vars_names,
-                               ~ which(. != "" & . != dplyr::lead(., default = NA_character_))
-    )
-
-
-    display <- purrr::map2(tabs, fmt_cols, ~ purrr::map(.x[.y], get_display))
-    digits  <- purrr::map2(tabs, fmt_cols, ~ purrr::map(.x[.y], get_digits ))
-
-    type <- purrr::map(tabs, get_type)
-
-    type <- type %>% purrr::map2(fmt_cols, ~ .x[.y])
-
-
-
-
-    sheet_titles <-
-      purrr::pmap_chr(list(tabs,
-                           purrr::map(row_var[newsheet], as.character),
-                           purrr::map(col_vars[newsheet], as.character)),
-                      ~ tab_get_titles(..1, ..2, ..3, max = 1)
-      ) %>% stringr::str_sub(., 1, 27)
-
-    sheet_titles <- dplyr::if_else(duplicated(sheet_titles),
-                                   stringr::str_c(sheet_titles, ".2"),
-                                   sheet_titles)
-    nb <- 2
-    while (length(unique(sheet_titles)) != length(sheet_titles)) {
-      nb <- nb + 1
-      sheet_titles <-
-        dplyr::if_else(duplicated(sheet_titles),
-                       stringr::str_c(stringr::str_remove(sheet_titles, "..$"),
-                                      ".", nb),
-                       sheet_titles)
-    }
-
-    #Variable labels ----
+    #Variable labels and description ----
     unique_vars <- unique(purrr::flatten_chr(c(
       purrr::map(row_vars, ~ as.character(.)),
       purrr::map(col_vars, ~ as.character(.)),
@@ -2057,7 +2394,7 @@ tab_xl_secrecy <-
 
     not_in_var_labels <- !unique_vars %in% names(var_labels)
     if (any(not_in_var_labels)) stop(paste(
-      "you must describe the following variables with 'var_labels = c('description' = 'variable', ...)' :",
+      "you must describe the following variables with 'var_labels = c('variable' = 'description', ...)' :",
       paste0(unique_vars[not_in_var_labels], collapse = ", ")
     ))
 
@@ -2078,15 +2415,148 @@ tab_xl_secrecy <-
                     .else = ~ ""
       )
 
-    # tabs
-    # tabs_fmt
-    # tabs_num
+    # lines_colvars <-
+    #   purrr::map(tabs,
+    #              ~ dplyr::bind_rows(
+    #                dplyr::mutate(dplyr::slice(dplyr::ungroup(.), 1),
+    #                              dplyr::across(.fns = get_col_var)),
+    #                # dplyr::mutate(dplyr::slice(dplyr::ungroup(.), 1),
+    #                #               dplyr::across(.fns = ~ dplyr::case_when(is_totcol(.) ~ "TRUE",
+    #                #                                                       is_fmt(.)    ~ "FALSE",
+    #                #                                                       TRUE         ~ "")))
+    #              ) %>%
+    #                dplyr::mutate(dplyr::across(1, ~ c("col_vars" #, "totcol"
+    #                )))
+    #   )
+
+    description <-
+      purrr::pmap(list(row_vars_labels, col_vars_labels, tab_vars_labels),
+                  ~ {
+                    description <- tibble::tibble(description = c("Description des variables :",
+                                                                  paste0("  ", ..1),
+                                                                  paste0("  ", ..2),
+                                                                  paste0("  ", ..3),
+                                                                  "",
+                                                                  "Formatages conditionnels (verification de confidentialite) :"
+                    ))
+
+                    if (n_min != 0 & !is.na(n_min)) {
+                      description <-  description |>
+                        tibble::add_row(description = paste0("  Regle entreprise : ",
+                                                             "les totaux (ligne ou colonne) avec ",
+                                                             "n (effectif non pondere) < ", n_min,
+                                                             " sont colores en rouge (vert clair sinon)"))
+                    }
+
+                    if (!is.na(pct_max)) {
+                      description <-  description |>
+                        tibble::add_row(description = paste0("  Regle individus/menages : ",
+                                                             "les cases totalisant plus de ",
+                                                             round(pct_max*100), " % de leur ",
+                                                             "ligne ou colonne (n) ",
+                                                             "sont colorees en orange (bleu clair/gris sinon)"))
+                    }
+
+                    description <-  description |>
+                      tibble::add_row(description = "") |>
+                      tibble::add_row(description = paste0(
+                        "Types de colonnes : [pct] = pourcentages ;",
+                        " [n] = effectifs non ponderes ; [wn] = effectifs ponderes ;",
+                        " [mean] = moyenne ; [sd] = ecart-type"))
+
+                    description
+                  }
+      )
+
+    # col_rowvars <-
+    #   purrr::map(tabs,
+    #              ~ tibble::tibble(
+    #              totrow = dplyr::if_else(is_totrow(.), "TRUE", "FALSE"),
+    #              tottab = dplyr::if_else(is_tottab(.), "TRUE", "FALSE")
+    #              )
+    #   )
+    #
 
 
 
-    #  past_labels <-
-    #  var_labels
-    # attr(glm_data_cah_orga$AGE4     , "label") <- "Age"
+    # Informations about rows and columns
+    newsheet = sheet != dplyr::lag(sheet, default = -1L)
+
+    start <- tibble::tibble(newsheet, rows = purrr::map_int(tabs, nrow),
+                            sub = purrr::pmap_int(list(subtext, description), #lines_colvars
+                                                  ~ length(..1) + nrow(..2))) %>%
+      dplyr::group_by(gr = cumsum(as.integer(.data$newsheet))) %>%
+      dplyr::mutate(start = dplyr::lag(cumsum(.data$rows + .data$sub + 7L),
+                                       default = 0L) + 1L) %>%
+      dplyr::pull(.data$start)
+
+
+    totrows  <- purrr::map(totrowsTF, which)
+    tot_rows <- purrr::map2(totrows, start, ~ .x + .y + 1L)
+    group_ind<- purrr::map(tabs, dplyr::group_indices)
+    end_group<- purrr::map(group_ind, ~ which(.[-1] != .[-length(.)] ) ) %>%
+      purrr::map2(start, ~ .x + .y + 1)
+    rows_nb  <- purrr::map2(tabs, start, ~ as.integer(1:nrow(.x) + .y + 1L))
+
+    all_cols <- purrr::map(tabs, ~ 1:ncol(.))
+    txt_cols <- purrr::map(tabs, ~ which(purrr::map_lgl(., ~ !is_fmt(.))))
+    row_var_cols <- purrr::map(txt_cols, ~ .[length(.)])
+    fmt_cols <- purrr::map(tabs, ~ which(purrr::map_lgl(., ~ is_fmt(.))))
+    totcols  <- purrr::map(totcols, which)
+
+    n_cols <- purrr::map(tabs, ~ which(stringr::str_detect(names(.), "\\[n\\]$") ) )
+    totcols_or_mean_n <-
+      purrr::map(tabs, ~ which(stringr::str_detect(names(.), "\\[n\\]$") &
+                                 (is_totcol(.) | get_type(.) == "mean") )
+      )
+
+    col_vars_names <- purrr::map(tabs, ~ get_col_var(.) )
+    end_col_var <-
+      purrr::map(col_vars_names,
+                 ~ which(. != "" & . != dplyr::lead(., default = NA_character_))
+      )
+
+    display <- purrr::map2(tabs, fmt_cols, ~ purrr::map(.x[.y], get_display))
+    digits  <- purrr::map2(tabs, fmt_cols, ~ purrr::map(.x[.y], get_digits ))
+
+    type  <- purrr::map(tabs, get_type)
+
+    color <- purrr::map(tabs, get_color)
+    diff_type <- purrr::map(tabs, get_diff_type)
+
+    color_type <- get_color_type(color, type)
+
+    color_cols <- purrr::map(color_type, ~which(!is.na(.)))
+    color_type <- color_type %>% purrr::map2(color_cols, ~ .x[.y])
+    # plain_type_for_color <- type %>% purrr::map2(color_cols, ~ .x[.y])
+
+    type       <- type  %>% purrr::map2(fmt_cols, ~ .x[.y])
+
+
+    #Excel sheet titles
+    sheet_titles <-
+      purrr::pmap_chr(list(tabs[newsheet],
+                           purrr::map(row_var[newsheet], as.character),
+                           purrr::map(col_vars[newsheet], as.character)),
+                      ~ tab_get_titles(..1, ..2, ..3, max = 1)
+      ) %>% stringr::str_sub(., 1, 25)
+
+    sheet_titles <- dplyr::if_else(duplicated(sheet_titles),
+                                   stringr::str_c(sheet_titles, ".2"),
+                                   sheet_titles)
+    nb <- 2
+    while (length(unique(sheet_titles)) != length(sheet_titles)) {
+      nb <- nb + 1
+      sheet_titles <-
+        dplyr::if_else(duplicated(sheet_titles),
+                       stringr::str_c(stringr::str_remove(sheet_titles, "..$"),
+                                      ".", nb),
+                       sheet_titles)
+    }
+
+
+
+
 
 
     #Create workbook and global formatting -------------------------------------
@@ -2103,80 +2573,11 @@ tab_xl_secrecy <-
     #                                     rows = .start + 1,
     #                                     cols = 2:ncol(.tabs)))
 
-    lines_colvars <-
-    purrr::map(tabs,
-               ~ dplyr::bind_rows(
-                 dplyr::mutate(dplyr::slice(dplyr::ungroup(.), 1),
-                               dplyr::across(.fns = get_col_var)),
-                 # dplyr::mutate(dplyr::slice(dplyr::ungroup(.), 1),
-                 #               dplyr::across(.fns = ~ dplyr::case_when(is_totcol(.) ~ "TRUE",
-                 #                                                       is_fmt(.)    ~ "FALSE",
-                 #                                                       TRUE         ~ "")))
-               ) %>%
-                 dplyr::mutate(dplyr::across(1, ~ c("col_vars" #, "totcol"
-                 )))
-    )
-
-    purrr::pwalk(list(sheet, start, lines_colvars, tabs, purrr::map_int(subtext, length)),
-                 ~ openxlsx::writeData(wb, sheet = ..1, ..3,
-                                       startRow = ..2 + nrow(..4) + ..5 + 3, startCol = 1,
-                                       colNames = FALSE))
-
-    #Description
-    description <-
-    purrr::pmap(list(row_vars_labels, col_vars_labels, tab_vars_labels),
-                ~ {
-                 description <- tibble::tibble(description = c("Description des variables :",
-                                                paste0("  ", ..1),
-                                                paste0("  ", ..2),
-                                                paste0("  ", ..3),
-                                                "",
-                                                "Formatages conditionnels (verification de confidentialite) :"
-                                                ))
-
-                 if (n_min != 0 & !is.na(n_min)) {
-                   description <-  description |>
-                     tibble::add_row(description = paste0("  Regle entreprise : ",
-                                                          "totaux (ligne ou colonne) avec ",
-                                                          "effectif non pondere n < ", n_min,
-                                                          " colores en rouge (vert clair sinon)"))
-                 }
-
-                 if (!is.na(pct_max)) {
-                   description <-  description |>
-                     tibble::add_row(description = paste0("  Regle individus/menages : ",
-                                                          "cases totalisant plus de ",
-                                                          round(pct_max*100), " % de leur ",
-                                                          "ligne ou colonne (n) ",
-                                                          "colorees en orange (bleu tres clair sinon)"))
-                 }
-
-                 description
-                   }
-                  )
-
-    purrr::pwalk(list(sheet, start, description, tabs, purrr::map_int(subtext, length)),
-                 ~ openxlsx::writeData(wb, sheet = ..1, ..3,
-                                       startRow = ..2 + nrow(..4) + ..5 + 5, startCol = 1,
-                                       colNames = FALSE))
-
-    # col_rowvars <-
-    #   purrr::map(tabs,
-    #              ~ tibble::tibble(
-    #              totrow = dplyr::if_else(is_totrow(.), "TRUE", "FALSE"),
-    #              tottab = dplyr::if_else(is_tottab(.), "TRUE", "FALSE")
-    #              )
-    #   )
-    #
-    # purrr::pwalk(list(sheet, start, col_rowvars, tabs),
-    #              ~ openxlsx::writeData(wb, sheet = ..1, ..3,
-    #                                    startRow = ..2 + 1, startCol = ncol(..4) + 2))
-
     openxlsx::modifyBaseFont(wb, fontSize = 10, fontName = "DejaVu Sans Condensed") #"Verdana", "DejaVu Sans Condensed"
     purrr::walk(unique(sheet),
                 ~ openxlsx::showGridLines(wb, sheet = .x, showGridLines = FALSE))
     purrr::walk(unique(sheet),
-                ~ openxlsx::freezePane(wb, sheet = .x, firstActiveRow  = 3,
+                ~ openxlsx::freezePane(wb, sheet = .x, firstActiveRow  = 3L,
                                        firstCol = TRUE))
 
     st_titles <- openxlsx::createStyle(fontSize = 12, textDecoration = "bold")
@@ -2185,6 +2586,8 @@ tab_xl_secrecy <-
       dplyr::select(.data$sheet, rows = .data$startRow, cols = .data$startCol) %>%
       purrr::pwalk(openxlsx::addStyle, wb = wb, stack = TRUE, style = st_titles)
 
+
+    #   Print subtext
     subtext_style <- openxlsx::createStyle(halign = "left", valign = "center",
                                            fontSize = 9)
     tibble::tibble(sheet, x = subtext, startCol = 1L,
@@ -2200,54 +2603,146 @@ tab_xl_secrecy <-
       purrr::pwalk(openxlsx::addStyle, wb = wb, stack = TRUE, gridExpand = TRUE,
                    style = subtext_style)
 
+    # #   Print line colvars
+    # purrr::pwalk(list(sheet, start, lines_colvars, tabs, purrr::map_int(subtext, length)),
+    #              ~ openxlsx::writeData(wb, sheet = ..1, ..3,
+    #                                    startRow = ..2 + nrow(..4) + ..5 + 3, startCol = 1,
+    #                                    colNames = FALSE))
+
+    #   Print description
+    purrr::pwalk(list(sheet, start, description, tabs, purrr::map_int(subtext,~ length(.))),
+                 ~ openxlsx::writeData(wb, sheet = ..1, ..3,
+                                       startRow = ..2 + nrow(..4) + ..5 + 3, startCol = 1,
+                                       colNames = FALSE))
+    ##   Print col_rowvars
+    # purrr::pwalk(list(sheet, start, col_rowvars, tabs),
+    #              ~ openxlsx::writeData(wb, sheet = ..1, ..3,
+    #                                    startRow = ..2 + 1, startCol = ncol(..4) + 2))
 
 
 
-    # # Count tables ----------------------------------------------
-    # offset  <- rep(0L, length(tabs))
-    # # ci_col1 <- rep(list(integer()), length(tabs))
-    # # ci_cols <- rep(list(integer()), length(tabs))
-    #   ci_col1 <- purrr::map(tabs, ~ ncol(.) + 1L)
-    #
-    #   ci_cols <- purrr::map2(ci_col1, tabs_ci, ~ (.x + 1L):(.x - 1L + ncol(.y)) ) %>%
-    #     purrr::map2(tabs_ci, ~ purrr::set_names(.x, names(.y)[-1]))
-    #
-    #   tibble::tibble(sheet = sheet, x = tabs_ci_num,
-    #                  startRow = purrr::map(start, ~. + 1L), startCol = ci_col1) %>%
-    #     dplyr::filter(!no_ci) %>%
-    #     purrr::pwalk(openxlsx::writeData, wb = wb)
-    #
-    #   tibble::tibble(sheet = sheet, cols = ci_col1,
-    #                  rows = purrr::map2(rows_nb, start, ~ c(.y + 1, .x))) %>%
-    #     dplyr::filter(!no_ci) %>%
-    #     purrr::pwalk(openxlsx::deleteData, wb = wb, gridExpand = TRUE)
-    #
-    #   offset[!no_ci] <- purrr::map2_int(fmt_cols, ci_cols, ~ .y[1] - .x[1])
-    #   fmt_cols[!no_ci]    <- fmt_cols[!no_ci] %>%
-    #     purrr::map2(offset[!no_ci] , ~ c(.x, .x + .y))
-    #
-    #   all_cols[!no_ci]    <- all_cols[!no_ci] %>%
-    #     purrr::map2(ci_cols[!no_ci] , ~ c(.x, .y))
-    #
-    #   end_col_var[!no_ci] <- end_col_var[!no_ci] %>%
-    #     purrr::map2(offset[!no_ci] , ~ c(.x, .x + .y))
-    #
-    #   totcols[!no_ci]     <- totcols[!no_ci] %>%
-    #     purrr::map2(offset[!no_ci] , ~ c(.x, .x + .y))
-    #
-    #   st_ci_borders <- openxlsx::createStyle(border = "right")
-    #
-    #   tibble::tibble(sheet = sheet, rows = rows_nb,
-    #                  cols = purrr::map2(ci_col1, ci_cols,
-    #                                     ~ c(.x, .y[length(.y)])) ) %>%
-    #     dplyr::filter(!no_ci) %>%
-    #     purrr::pwalk(openxlsx::addStyle, wb = wb, gridExpand = TRUE, stack = T,
-    #                  style = st_ci_borders)
-    #
+
+
+    #Chi2 and variance informations --------------------------------------------
+    chi2_col1 <- purrr::map(tabs, ~ ncol(.) + 1)
+    chi2_cols <- rep(list(integer()), length(tabs))
+    if (any(!no_chi2)) {
+      chi2_cols[!no_chi2] <-
+        purrr::map2(chi2_col1[!no_chi2], tabs_chi2[!no_chi2],
+                    ~ (.x + 1):(.x - 1 + ncol(.y)) )
+
+      purrr::pwalk(list(sheet[!no_chi2], start[!no_chi2],
+                        chi2_col1[!no_chi2], tabs_chi2[!no_chi2]),
+                   ~ openxlsx::writeData(wb, sheet = ..1, ..4,
+                                         startRow = ..2 + 1, startCol = ..3))
+
+      st_chi1 <- openxlsx::createStyle(halign = "right")
+      tibble::tibble(sheet = sheet[!no_chi2], rows = rows_nb[!no_chi2],
+                     cols = chi2_col1[!no_chi2]) %>%
+        purrr::pwalk(openxlsx::addStyle, wb = wb, style = st_chi1,
+                     gridExpand = T, stack = T)
+
+      # count_chi2 <-
+      #   purrr::map2(tabs_chi2[!no_chi2], start[!no_chi2],
+      #               ~ which(
+      #                 dplyr::pull(.x, `chi2 stats`) == "count :") + .y + 1)
+      df_cells_chi2 <-
+        purrr::map2(tabs_chi2[!no_chi2], start[!no_chi2],
+                    ~ which(dplyr::pull(.x, `chi2 stats`) %in%
+                              c("cells :", "df :")) + .y + 1)
+      pvalue_chi2 <-
+        purrr::map2(tabs_chi2[!no_chi2], start[!no_chi2],
+                    ~ which(dplyr::pull(.x, `chi2 stats`) %in%
+                              c("pvalue :")) + .y + 1)
+      variance_chi2 <-
+        purrr::map2(tabs_chi2[!no_chi2], start[!no_chi2],
+                    ~ which(dplyr::pull(.x, `chi2 stats`) %in%
+                              c("variance :")) + .y + 1)
+
+      # c_n   <- purrr::map_lgl(count_chi2, ~ length(.) != 0)
+      # if (any(c_n)) {
+      #   st_n <- openxlsx::createStyle(numFmt = "#,##0", border = "bottom",
+      #                                 borderStyle = "dashed")
+      #   tibble::tibble(sheet = sheet[!no_chi2], rows = count_chi2,
+      #                  cols = chi2_cols[!no_chi2]) %>%
+      #     dplyr::filter(c_n) %>%
+      #     purrr::pwalk(openxlsx::addStyle, wb = wb, style = st_n,
+      #                  gridExpand = T, stack = T)
+      # }
+      c_df  <- purrr::map_lgl(df_cells_chi2, ~ length(.) != 0)
+      if (any(c_df)) {
+        st_df <- openxlsx::createStyle(numFmt = "#,##0")
+        tibble::tibble(sheet = sheet[!no_chi2], rows = df_cells_chi2,
+                       cols = chi2_cols[!no_chi2]) %>%
+          dplyr::filter(c_df) %>%
+          purrr::pwalk(openxlsx::addStyle, wb = wb, style = st_df,
+                       gridExpand = T, stack = T)
+      }
+      c_p   <- purrr::map_lgl(pvalue_chi2, ~ length(.) != 0)
+      if (any(c_p)) {
+        st_p     <- openxlsx::createStyle(numFmt     = "0.00%",
+                                          fontColour = "forestgreen",
+                                          border = "bottom",
+                                          borderStyle = "dashed")
+
+        tibble::tibble(sheet = sheet[!no_chi2], rows = pvalue_chi2,
+                       cols = chi2_cols[!no_chi2]) %>%
+          dplyr::filter(c_p) %>%
+          purrr::pwalk(openxlsx::addStyle, wb = wb, style = st_p,
+                       gridExpand = T, stack = T)
+
+        st_p_inf <- openxlsx::createStyle(fontColour = "red")
+        pvalue_chi2_inf <-
+          tibble::tibble(tab = tabs_chi2, start) %>%
+          dplyr::filter(!no_chi2) %>%
+          purrr::pmap(function(tab, start, cols)
+            purrr::map(2:ncol(tab), function(col)
+              which(
+                dplyr::pull(tab, col) >= 0.05 &
+                  dplyr::pull(tab, .data$`chi2 stats`) %in% c("pvalue :")
+              ) + start + 1L
+            ) %>% purrr::flatten_int() %>% unique() %>% sort()
+          )
+
+        tibble::tibble(sheet = sheet[!no_chi2], rows = pvalue_chi2_inf,
+                       chi2_col1 = chi2_col1[!no_chi2],
+                       cols = chi2_cols[!no_chi2]) %>%
+          tidyr::unnest(tidyselect::all_of(c("chi2_col1", "rows"))) %>%
+          dplyr::mutate(rule = ">= 0.05") %>%
+          purrr::pwalk(openxlsx::conditionalFormatting, wb = wb,
+                       style = st_p_inf)
+      }
+      c_var <- purrr::map_lgl(variance_chi2, ~ length(.) != 0)
+      if (any(c_var)) {
+        st_var <- openxlsx::createStyle(numFmt = "#,##0.0000",
+                                        textDecoration = "bold")
+        tibble::tibble(sheet = sheet[!no_chi2], rows = variance_chi2[!no_chi2],
+                       cols = chi2_cols[!no_chi2]) %>%
+          dplyr::filter(c_var) %>%
+          purrr::pwalk(openxlsx::addStyle, wb = wb, style = st_var,
+                       gridExpand = T, stack = T)
+      }
+
+      headers_chi2 <- openxlsx::createStyle(
+        halign = "center", valign = "bottom", wrapText = TRUE,
+        textDecoration = "Bold", fontSize = 9)
+      tibble::tibble(sheet, rows = start + 1, cols = chi2_cols) %>%
+        dplyr::filter(!no_chi2) %>%
+        purrr::pwalk(openxlsx::addStyle, wb = wb, gridExpand = TRUE, stack = T,
+                     style = headers_chi2)
+
+      headers_chi2_col1 <- openxlsx::createStyle(halign = "right")
+      tibble::tibble(sheet, rows = start + 1, cols = chi2_col1) %>%
+        dplyr::filter(!no_chi2) %>%
+        purrr::pwalk(openxlsx::addStyle, wb = wb, gridExpand = TRUE, stack = T,
+                     style = headers_chi2_col1)
+
+    }
 
 
 
-    # Headers and totals (start) -----------------------------------------------------
+    # Borders and text formating ---------------------------------------------------------
+    # Headers and total columns
     headers <- if (colnames_rotation == 0) {
       openxlsx::createStyle(halign = "center", valign = "bottom", wrapText = TRUE,
                             textDecoration = "Bold", border = "TopBottom",
@@ -2265,8 +2760,7 @@ tab_xl_secrecy <-
                    style = headers)
 
     st_bottomline <-
-      openxlsx::createStyle(halign = "right", valign = "top",
-        border = "bottom", borderStyle = "thin")
+      openxlsx::createStyle(border = "bottom", borderStyle = "thin")
 
     tibble::tibble(sheet, rows = purrr::map2(tabs, start, ~ nrow(.) + .y + 1L),
                    cols = all_cols) %>%
@@ -2274,7 +2768,7 @@ tab_xl_secrecy <-
                    style = st_bottomline)
 
     st_totcols <-
-      openxlsx::createStyle(halign = "left", #valign = "top",
+      openxlsx::createStyle(halign = "left", valign = "top",
                             textDecoration = "Bold", border = "LeftRight")
 
     tibble::tibble(sheet, rows = rows_nb, cols = totcols) %>%
@@ -2282,14 +2776,13 @@ tab_xl_secrecy <-
       purrr::pwalk(openxlsx::addStyle, wb = wb, gridExpand = TRUE, stack = T,
                    style = st_totcols)
 
-
-
-    # Sep between col_vars and groups --------------------------------------
+    # Sep between col_vars and groups
     st_end_col_var <- openxlsx::createStyle(border = "right")
+
     tibble::tibble(sheet, rows = purrr::map(rows_nb, ~ c(min(. -1), .)),
-                   cols = purrr::pmap(list(txt_cols,
+                   cols = purrr::pmap(list(txt_cols, end_col_var, #ci_col1,
                                            purrr::map(totcols, ~ c(. - 1L, .))),
-                                      ~ c(..1, ..2) %>% unique())) %>%
+                                      ~ c(..1, ..2, ..3) %>% unique())) %>%
       dplyr::filter(purrr::map_lgl(.data$cols, ~ length(.) != 0) ) %>%
       purrr::pwalk(openxlsx::addStyle, wb = wb, gridExpand = TRUE, stack = T,
                    style = st_end_col_var)
@@ -2301,16 +2794,14 @@ tab_xl_secrecy <-
       purrr::pwalk(openxlsx::addStyle, wb = wb, gridExpand = TRUE, stack = T,
                    style = st_end_col_var2)
 
-
     st_end_group <- openxlsx::createStyle(border = "bottom")
+
     tibble::tibble(sheet, rows = end_group, cols = all_cols) %>%
       dplyr::filter(purrr::map_lgl(.data$rows, ~ length(.) != 0) ) %>%
       purrr::pwalk(openxlsx::addStyle, wb = wb, gridExpand = TRUE, stack = T,
                    style = st_end_group)
 
-
-    # Headers and totals (following) ----
-
+    # Total rows
     st_totrows <-
       openxlsx::createStyle(halign = "right", valign = "top",
                             textDecoration = "Bold", border = "TopBottom",
@@ -2331,11 +2822,158 @@ tab_xl_secrecy <-
       purrr::pwalk(openxlsx::addStyle, wb = wb, gridExpand = TRUE, stack = T,
                    style = st_totrows_text)
 
-     st_bottom_left_cells <-  openxlsx::createStyle(halign = "left", valign = "top")
-     tibble::tibble(sheet, rows = tot_rows, cols = totcols) %>%
-       purrr::pwalk(openxlsx::addStyle, wb = wb, gridExpand = TRUE, stack = T,
-                    style = st_bottom_left_cells)
+    st_bottom_left_cells <-  openxlsx::createStyle(halign = "left", valign = "top")
+    tibble::tibble(sheet, rows = tot_rows, cols = totcols) %>%
+      purrr::pwalk(openxlsx::addStyle, wb = wb, gridExpand = TRUE, stack = T,
+                   style = st_bottom_left_cells)
 
+
+
+    #Digits ----------------------------------------------------------------
+    numfmt <- function(n, type, display) {
+      display <- vctrs::vec_recycle(display, length(n))
+
+      base_plus_ci <- display %in% c("pct_ci", "mean_ci")
+      pct     <- display %in% c("pct", "ctr") |
+        (display == "ci" & type %in% c("row", "col", "all", "all_tabs"))
+      ci      <- display == "ci"
+      n_inf   <- n < 0
+      n_0     <- n == 0
+
+      rep0_n <- purrr::map_chr(abs(n), ~ paste0(rep("0", .), collapse = ""))
+
+      res <- dplyr::case_when(
+        base_plus_ci             ~ "TEXT",
+
+        pct & n_inf              ~ NA_character_,
+        pct & n_0                ~ "0%",
+        pct                      ~ paste0("0.", rep0_n, "%"),
+
+        n_0                      ~ "#,##0",
+        n_inf                    ~ paste0(
+          "#,",
+          purrr::map_chr(abs(n), ~ paste0(rep("#", 2 - . %%3 ),
+                                          collapse = "")),
+          purrr::map_chr(abs(n), ~ paste0(rep("0", 1 + . %%3 ),
+                                          collapse = "")),
+          purrr::map_chr(abs(n), ~ paste0(rep(",",    . %/%3 ),
+                                          collapse = ""))      ),
+        TRUE                     ~ paste0("#,##0.", rep0_n)
+      )
+
+      dplyr::if_else(ci, paste0(stringi::stri_unescape_unicode("\\u00b1"), res), res)
+    }
+
+    digits_map <-
+      tibble::tibble(sheet, digits, cols = fmt_cols,
+                     type, display, start, tab_nb = 1:length(sheet)) %>%
+      tidyr::unnest(c(.data$digits, .data$display, .data$type, .data$cols)) %>%
+      dplyr::mutate(rows = purrr::map2(.data$digits, .data$start,
+                                       ~ 1:length(.x)+ .y + 1L)) %>%
+      tidyr::unnest(c(.data$digits, .data$display, .data$rows)) %>%
+      dplyr::filter(!is.na(.data$display) & !is.na(.data$digits)) %>%
+      dplyr::mutate(num_format =
+                      forcats::as_factor(numfmt(.data$digits, .data$type,
+                                                .data$display))) %>%
+      dplyr::group_by(.data$num_format) %>%
+      dplyr::mutate(num_name = paste0("st_digits", as.integer(.data$num_format)))
+
+    #assign one variable for each number style
+    number_styles <- digits_map %>%
+      dplyr::summarise(num_name = dplyr::last(.data$num_name), .groups = "drop") %>%
+      dplyr::select(.data$num_name, .data$num_format) %>% tibble::deframe() %>%
+      purrr::map(~ openxlsx::createStyle(fontName = "DejaVu Sans",
+                                         numFmt = as.character(.)))
+
+    purrr::iwalk(number_styles,
+                 ~ assign(.y, .x, pos = parent.env(rlang::current_env())))
+
+    digits_map %>% dplyr::group_by(.data$sheet, .data$num_name) %>%
+      dplyr::summarise(cols = list(.data$cols), rows = list(.data$rows),
+                       .groups = "drop") %>%
+      dplyr::relocate(.data$num_name, .after = -1) %>%
+      purrr::pwalk(function(sheet, cols, rows, num_name) openxlsx::addStyle(
+        wb, stack = TRUE,
+        sheet = sheet, cols = cols, rows = rows,
+        style = rlang::eval_tidy(rlang::sym(num_name))
+      ))
+
+    color_selections <-
+      purrr::map2(tabs, color_cols, ~ purrr::map(
+        .x[.y],
+        ~ fmt_color_selection(.) %>% purrr::map(which)
+      ) )
+
+    conditional_fmt_map <-
+      tibble::tibble(sheet, cols = color_cols, rows = color_selections,
+                     start) %>%
+      tidyr::unnest(c(.data$cols, .data$rows)) %>%
+      dplyr::mutate(style = purrr::map(.data$rows, ~ select_in_color_style(length(.))),
+                    style = purrr::map(.data$style, ~ styles[.])) %>%
+      # tibble::add_column(style = list(style)) %>%
+      tidyr::unnest(c(.data$rows, .data$style)) %>%
+      #tidyr::unnest(.data$rows) %>%
+      dplyr::filter(purrr::map_lgl(.data$rows, ~ length(.) != 0)) %>%
+      dplyr::mutate(cols  = purrr::map2(.data$cols, .data$rows,
+                                        ~ rep(.x, length(.y))),
+                    rows  = purrr::map2(.data$rows, .data$start, ~ .x + .y + 1L)) %>%
+      dplyr::group_by(.data$sheet, .data$style) %>%
+      dplyr::summarise(cols = list(.data$cols), rows = list(.data$rows),
+                       .groups = "drop") %>%
+      dplyr::mutate(dplyr::across(tidyselect::all_of(c("cols", "rows")),
+                                  ~ purrr::map(., purrr::flatten_int)))
+
+    conditional_fmt_map %>%
+      dplyr::select(.data$sheet, .data$rows, .data$cols, .data$style) %>%
+      purrr::pwalk(function(sheet, cols, rows, style)
+        openxlsx::addStyle(
+          wb = wb, stack = TRUE,
+          sheet = sheet, cols = cols, rows = rows,
+          style = rlang::eval_tidy(rlang::sym(style))
+        ))
+
+    #Numbers near zero in white gray -------------------------------------------
+    style_zero <- openxlsx::createStyle(fontColour = "#EAEAEA")
+    near0_auto <- hide_near_zero == "auto"
+
+    if (any(near0_auto)) {
+      near_zero_map <- digits_map %>%
+        dplyr::ungroup() %>%
+        dplyr::filter(.data$tab_nb %in% (1:length(tabs))[near0_auto]) %>%
+        dplyr::mutate(digits = dplyr::if_else(
+          condition = .data$display %in% c("pct", "diff", "ctr") |
+            (.data$display == "ci" & .data$type %in% c("row", "col", "all", "all_tabs")),
+          true      = .data$digits + 2L,
+          false     = .data$digits                                     ),
+          hide_near_zero = 0.49 * 10^(-.data$digits)) %>%
+        dplyr::arrange(.data$hide_near_zero) |>
+        dplyr::mutate(continuous = .data$rows != dplyr::lag(.data$rows + 1,
+                                                            default = TRUE),
+                      continuous = cumsum(as.integer(.data$continuous))) %>%
+        tidyr::nest(rows = .data$rows) %>%
+        dplyr::mutate(rows = purrr::map(.data$rows, ~ dplyr::pull(., .data$rows))) %>%
+        dplyr::arrange(.data$hide_near_zero, .data$cols) |>
+        dplyr::mutate(continuous = .data$cols != dplyr::lag(.data$cols + 1,
+                                                            default = TRUE),
+                      continuous = cumsum(as.integer(.data$continuous))) %>%
+        tidyr::nest(cols = .data$cols) %>%
+        dplyr::mutate(cols = purrr::map(.data$cols, ~ dplyr::pull(., .data$cols))) %>%
+        dplyr::mutate(rule = purrr::map(hide_near_zero, ~ c(-., .)) )
+
+      near_zero_map |>
+        dplyr::select(.data$sheet, .data$cols, .data$rows, .data$rule) %>%
+        purrr::pwalk(openxlsx::conditionalFormatting,
+                     wb = wb, style = style_zero, type = "between")
+    }
+
+    if (any(!near0_auto)) {
+      tibble::tibble(sheet, cols = all_cols, rows = rows_nb) %>%
+        dplyr::filter(!near0_auto) %>%
+        tibble::add_column(rule = purrr::map(hide_near_zero[!near0_auto],
+                                             ~ c(-., .))) %>%
+        purrr::pwalk(openxlsx::conditionalFormatting,
+                     wb = wb, style = style_zero, type = "between")
+    }
 
 
 
@@ -2359,6 +2997,7 @@ tab_xl_secrecy <-
         tidyr::unnest(.data$cols) %>%
         mutate(first_cell = paste0(openxlsx::int2col(.data$cols),
                                    purrr::map_int(.data$rows, ~ .[1])))
+
 
       n_min_totcols_map_data |>
         dplyr::mutate(rule = paste0("AND(", .data$first_cell, "<", n_min, ", ",
@@ -2396,20 +3035,21 @@ tab_xl_secrecy <-
         purrr::pwalk(openxlsx::conditionalFormatting, wb = wb, style = posStyle)
     }
 
-    # In red when any percentage is equal to more than pct_max % of row or col totals
+    # In orange when any percentage is equal to more than pct_max % of row or col totals
     if (pct_max > 0) {
 
       pct_max_map_data <-
-        tibble::tibble(sheet, fmt_cols, n_cols, totcols,
-                       rows_nb, tot_rows, end_group) |>
-        dplyr::mutate(totcols_n = purrr::map2(.data$n_cols, .data$totcols, ~ .y[.y %in% .x]), ) |>
+        tibble::tibble(sheet, fmt_cols, n_cols, totcols, rows_nb, tot_rows) |> #end_group
+        dplyr::mutate(tab_nb = dplyr::row_number(),
+                      totcols_n = purrr::map2(.data$n_cols, .data$totcols, ~ .y[.y %in% .x]), ) |>
         tidyr::unnest(.data$totcols_n) |>
-        dplyr::group_by(.data$sheet) |>
-        dplyr::mutate(
-          col_start_n = dplyr::if_else(dplyr::row_number() == 1L,
-                                       true  = min(purrr::flatten_int(purrr::map(.data$fmt_cols, ~ .[1]))) - 1L,
-                                       false = dplyr::lag(.data$totcols_n))
-        ) |>
+        dplyr::group_by(.data$tab_nb) |>
+        dplyr::mutate(col_start_n = dplyr::if_else(
+          dplyr::row_number() == 1L,
+          true  = min(purrr::flatten_int(purrr::map(.data$fmt_cols, ~ .[1]))) - 1L,
+          false = dplyr::lag(.data$totcols_n)
+        )) |>
+        dplyr::relocate(.data$totcols_n, .after = .data$col_start_n) |>
         dplyr::ungroup() |>
         dplyr::mutate(cols = purrr::pmap(list(.data$n_cols, .data$col_start_n, .data$totcols_n),
                                          ~ ..1[..1 > ..2 & ..1 < ..3]),
@@ -2420,6 +3060,7 @@ tab_xl_secrecy <-
                       contiguous_rows = cumsum(.data$contiguous_rows)) |>
         tidyr::nest(rows = .data$rows) |>
         dplyr::ungroup() |>
+        #dplyr::filter(purrr::map2_lgl(.data$cols, .data$rows, ~length(.x) != 0 & length(.y) != 0)) |>
         dplyr::mutate(
           rows     = purrr::map(.data$rows, ~ dplyr::pull(., "rows")),
           tot_rows = purrr::map2_int(.data$tot_rows, .data$rows, ~ .x[.x == dplyr::last(.y) + 1L] ),
@@ -2432,19 +3073,18 @@ tab_xl_secrecy <-
                                    "$", .data$tot_rows)
         )
 
-       pct_max_map_data |>
+      pct_max_map_data |>
         dplyr::mutate(rule = paste0("OR(", .data$first_cell, "/", .data$totcol_1st_cell, ">=", pct_max,
                                     ", ", .data$first_cell, "/",.data$totrow_1st_cell, ">=", pct_max, ")" )) |>
         dplyr::select(.data$sheet, .data$cols, .data$rows, .data$rule) |>
         purrr::pwalk(openxlsx::conditionalFormatting, wb = wb,  style = negStyle_pct)
 
-       pct_max_map_data |>
-         dplyr::mutate(rule = paste0("AND(", .data$first_cell, "/", .data$totcol_1st_cell, "<", pct_max,
-                                     ", ", .data$first_cell, "/",.data$totrow_1st_cell, "<", pct_max, ")" )) |>
-         dplyr::select(.data$sheet, .data$cols, .data$rows, .data$rule)|>
-         purrr::pwalk(openxlsx::conditionalFormatting, wb = wb,  style = posStyle_pct)
+      pct_max_map_data |>
+        dplyr::mutate(rule = paste0("AND(", .data$first_cell, "/", .data$totcol_1st_cell, "<", pct_max,
+                                    ", ", .data$first_cell, "/",.data$totrow_1st_cell, "<", pct_max, ")" )) |>
+        dplyr::select(.data$sheet, .data$cols, .data$rows, .data$rule)|>
+        purrr::pwalk(openxlsx::conditionalFormatting, wb = wb,  style = posStyle_pct)
 
-      #dplyr::pull(cols)
 
     }
 
@@ -2452,64 +3092,70 @@ tab_xl_secrecy <-
 
 
 
+
     #Colwidths and rowheights --------------------------------------------------
     tibble::tibble(sheet, cols = txt_cols) %>%
-      purrr::pwalk(openxlsx::setColWidths, wb = wb, widths = 20) #"auto" -> title takes all
+      purrr::pwalk(openxlsx::setColWidths, wb = wb, widths = 20)
 
-    #if (any(!autocw)) {
-    tibble::tibble(sheet, cols = fmt_cols, widths = colwidth) %>%
-      #dplyr::filter(!autocw) %>%
-      #dplyr::group_by(.data$sheet) %>%
-      #dplyr::mutate(widths = max(as.double(.data$widths))  ) %>%
-      #dplyr::ungroup() %>%
-      purrr::pwalk(openxlsx::setColWidths, wb = wb)
-    #}
+    autocw <- purrr::map_lgl(colwidth, ~ . == "auto")
 
-    tibble::tibble(sheet, cols = totcols, widths = 10) %>%
-      purrr::pwalk(openxlsx::setColWidths, wb = wb)
+    if (any(!autocw)) {
+      tibble::tibble(sheet, cols = fmt_cols,
+                     widths = colwidth) %>%
+        dplyr::filter(!autocw) %>%
+        dplyr::group_by(.data$sheet) %>%
+        dplyr::mutate(widths = max(as.double(.data$widths))  ) %>%
+        dplyr::ungroup() %>%
+        purrr::pwalk(openxlsx::setColWidths, wb = wb)
+    }
 
-    tibble::tibble(sheet, cols = end_col_var, widths = 15) %>%
-      purrr::pwalk(openxlsx::setColWidths, wb = wb)
 
-    # if (any(autocw)) {
-    #   if (colnames_rotation > 0) {
-    #     if (colnames_rotation > 30 & colnames_rotation < 60) {
-    #       purrr::pwalk(list(sheet[autocw], fmt_cols[autocw], ci_cols[autocw]),
-    #                    ~ openxlsx::setColWidths(wb, sheet = ..1,
-    #                                             cols = c(..2, ..3),
-    #                                             widths = 8))
-    #       # purrr::pwalk(list(sheet, tabs, purrr::map(totc, ~ dplyr::if_else(., 13, 8))),
-    #       #              ~ openxlsx::setColWidths(wb, sheet = ..1, cols = ncol(..2), widths = ..3))
-    #     } else if (colnames_rotation > 60) {
-    #       purrr::pwalk(list(sheet[autocw], fmt_cols[autocw], ci_cols[autocw]),
-    #                    ~ openxlsx::setColWidths(
-    #                      wb, sheet = ..1, cols = c(..2, ..3),
-    #                      widths = 6 + 8*cos(colnames_rotation/90*pi/2)
-    #                    )) #Entre 6 et 14
-    #       # purrr::pwalk(list(sheet, tabs, purrr::map(totc, ~ dplyr::if_else(., 13, 6 + 8*cos(colnames_rotation/90*pi/2)))),
-    #       #              ~ openxlsx::setColWidths(wb, sheet = ..1, cols = ncol(..2), widths = ..3))
-    #     }
+    if (any(autocw)) {
+      if (colnames_rotation > 0) {
+        if (colnames_rotation > 30 & colnames_rotation < 60) {
+          purrr::pwalk(list(sheet[autocw], fmt_cols[autocw] ), #ci_cols[autocw]
+                       ~ openxlsx::setColWidths(wb, sheet = ..1,
+                                                cols = ..2,
+                                                widths = 8))
+          # purrr::pwalk(list(sheet, tabs, purrr::map(totc, ~ dplyr::if_else(., 13, 8))),
+          #              ~ openxlsx::setColWidths(wb, sheet = ..1, cols = ncol(..2), widths = ..3))
+        } else if (colnames_rotation > 60) {
+          purrr::pwalk(list(sheet[autocw], fmt_cols[autocw]), #ci_cols[autocw]
+                       ~ openxlsx::setColWidths(
+                         wb, sheet = ..1, cols = ..2,
+                         widths = 6 + 8*cos(colnames_rotation/90*pi/2)
+                       )) #Entre 6 et 14
+          # purrr::pwalk(list(sheet, tabs, purrr::map(totc, ~ dplyr::if_else(., 13, 6 + 8*cos(colnames_rotation/90*pi/2)))),
+          #              ~ openxlsx::setColWidths(wb, sheet = ..1, cols = ncol(..2), widths = ..3))
+        }
+
+        purrr::walk(sheet[autocw],
+                    ~ openxlsx::setRowHeights(
+                      wb, sheet = ., rows = 1,
+                      heights = 13.8 + 105*sin(colnames_rotation/90*pi/2)
+                    ))
+
+        #Enlarge columns if there is confidence intervals
+        # if (any(tab_with_CI_on_sheet)) {
+        #   purrr::walk2(1:length(tab_with_CI_on_sheet)[tab_with_CI_on_sheet],
+        #         purrr::map(tabs_on_same_sheet, ~ ncol(tabs[[.[1]]]))[tab_with_CI_on_sheet],
+        #         ~ openxlsx::setColWidths(wb, sheet = .x, cols = 2:(.y-1), widths = 14))
+        # }
+
+      } else {
+        purrr::pwalk(list(sheet[autocw], fmt_cols[autocw]), #ci_cols[autocw]
+                     ~ openxlsx::setColWidths(wb, sheet = ..1,
+                                              cols = ..2,
+                                              widths = "auto")) #13
+      }
+    }
+
+    # tibble::tibble(sheet, cols = totcols, widths = 10) %>%
+    #   purrr::pwalk(openxlsx::setColWidths, wb = wb)
     #
-    #     purrr::walk(sheet[autocw],
-    #                 ~ openxlsx::setRowHeights(
-    #                   wb, sheet = ., rows = 1,
-    #                   heights = 13.8 + 105*sin(colnames_rotation/90*pi/2)
-    #                 ))
-    #
-    #     #Enlarge columns if there is confidence intervals
-    #     # if (any(tab_with_CI_on_sheet)) {
-    #     #   purrr::walk2(1:length(tab_with_CI_on_sheet)[tab_with_CI_on_sheet],
-    #     #         purrr::map(tabs_on_same_sheet, ~ ncol(tabs[[.[1]]]))[tab_with_CI_on_sheet],
-    #     #         ~ openxlsx::setColWidths(wb, sheet = .x, cols = 2:(.y-1), widths = 14))
-    #     # }
-    #
-    #   } else {
-    #     purrr::pwalk(list(sheet[autocw], fmt_cols[autocw], ci_cols[autocw]),
-    #                  ~ openxlsx::setColWidths(wb, sheet = ..1,
-    #                                           cols = c(..2, ..3),
-    #                                           widths = "auto")) #13
-    #   }
-    # }
+    # tibble::tibble(sheet, cols = end_col_var, widths = 15) %>%
+    #   purrr::pwalk(openxlsx::setColWidths, wb = wb)
+
 
     #Save to file --------------------------------------------------------------
     if (is.null(path)) {
@@ -2556,6 +3202,755 @@ tab_xl_secrecy <-
 
 
 
-# xl_to_tab_CASD <- function() {
+
+# -----
+
+# # @keywords internal
+# tab_xl_confidential_legacy <- # ----
+#   function(tabs, path = NULL, replace = TRUE, open = rlang::is_interactive(),
+#            n_min = 5, pct_max = 0.95,
+#            colnames_rotation = 0, colwidth = 7, sheets = "tabs",
+#            var_labels = character()
+#   ) {
+#     if (!requireNamespace("openxlsx", quietly = TRUE)) {
+#       stop(paste0("Package \"openxlsx\" needed for this function to work. ",
+#                   "You can install it with : install.packages('openxlsx')"),
+#            call. = FALSE)
+#     }
 #
-# }
+#     tabs_base <- tabs
+#     if (is.data.frame(tabs)) tabs <- list(tabs)
+#     chi2           <- purrr::map(tabs, get_chi2)
+#     #colwidth       <- vctrs::vec_recycle(colwidth,       length(tabs))
+#
+#     get_vars        <- purrr::map(tabs, tab_get_vars)
+#     col_vars_levels_alltot <- purrr::map(get_vars, ~ purrr::map(.$col_vars_levels,
+#                                                                 rlang::syms))
+#     col_vars_levels <- purrr::map(col_vars_levels_alltot,
+#                                   ~ .[names(.) != "all_col_vars"] )
+#     col_vars_levels_no_tot <-
+#       purrr::map2(col_vars_levels, purrr::map(tabs, ~ is_totcol(.) %>%
+#                                                 purrr::keep(. == TRUE) %>%
+#                                                 names()),
+#                   ~ purrr::map(.x, function(.) as.character(.) %>%
+#                                  purrr::discard(. %in% .y) ) %>%
+#                     purrr::flatten_chr()
+#       )
+#     row_vars        <- purrr::map(get_vars, ~ .$row_var)
+#     col_vars_plain  <- purrr::map(get_vars, ~ .$col_vars %>%
+#                                     purrr::discard(. == "all_col_vars"))
+#     tab_vars <- purrr::map(get_vars, ~ .$tab_vars)
+#
+#
+#
+#     stopifnot(sheets %in% c("tabs", "unique", "auto") |
+#                 (is.integer(sheets) & length(sheets) == length(tabs)))
+#     sheet <-
+#       if (is.character(sheets)) {
+#         switch(sheets,
+#                "tabs"    = 1L:length(tabs)      ,
+#                "unique"  = rep(1L, length(tabs)),
+#                "auto"    = purrr::map2_lgl(
+#                  col_vars_levels_no_tot,
+#                  dplyr::lag(col_vars_levels_no_tot,
+#                             default = col_vars_levels_no_tot[1]),
+#                  ~ !identical(sort(.x), sort(.y))
+#                ) %>%
+#                  as.integer() %>% cumsum() + 1L
+#         )
+#       } else if (is.integer(sheets)) {
+#         sheets
+#       }
+#
+#     titles <-
+#       purrr::pmap(list(tabs, row_vars, col_vars_plain, tab_vars),
+#                   ~ tab_get_titles(..1, ..2, ..3, ..4)
+#       )
+#
+#     subtext <- purrr::map(tabs, get_subtext) #need breaks calculation first
+#
+#     no_source <- purrr::map_lgl(
+#       subtext,
+#       ~ !any(stringr::str_detect(., stringr::regex("Source", ignore_case = TRUE)))
+#     )
+#     if (any(no_source)) stop(paste0(
+#       "some tabs get no Source description in subtext: ",
+#       paste0("tab ", which(no_source), ", ", as.character(titles[no_source]), collapse = " ; ")
+#     ))
+#
+#
+#     col_var_of_totcols <- purrr::map(tabs, ~ dplyr::select(dplyr::ungroup(.), where(~  is_totcol(.))) |>
+#                                        get_col_var())
+#     mean_cols <- purrr::map(tabs, ~ get_type(.) == "mean") |>
+#       purrr::map(~ purrr::keep(names(.), .))
+#
+#     col_vars_plain_no_mean  <- purrr::map2(col_vars_plain, mean_cols, ~ .x[! .x %in% .y])
+#     missing_totcols <-purrr::map2_lgl(col_vars_plain_no_mean, col_var_of_totcols,
+#                                       ~ any(!.x %in% .y))
+#     if (any(missing_totcols)) {
+#       message("recalculate one total column for each col_vars")
+#       tabs <- purrr::map_if(
+#         tabs, missing_totcols,
+#         ~ tab_tot(dplyr::select(., -where(is_totcol)),
+#                   tot = "col", totcol = "each")
+#       )
+#     }
+#
+#     tabs <- tabs |>
+#     purrr::map(~purrr::set_names(., dplyr::if_else(
+#       condition = get_col_var(.) != "",
+#       true      = paste0(get_col_var(.), "___", names(.)
+#                          #stringr::str_remove(names(.), paste0("_", get_col_var(.)))
+#                          ),
+#       false     = names(.)
+#     )))
+#
+#     tabs_fmt <- purrr::map(tabs, ~ which(purrr::map_lgl(., is_fmt)))
+#
+#
+#     # tabs_names <- purrr::map(tabs_fmt, names)
+#
+#     tabs <-
+#       purrr::map2(tabs, tabs_fmt,
+#                   ~ dplyr::ungroup(.) %>%
+#                     dplyr::mutate(dplyr::across(all_of(.y),
+#                                                 ~ set_display(.x, "n"),
+#                                                 .names = "{.col}_n")) %>%
+#                     dplyr::mutate(dplyr::across(all_of(.y),
+#                                                 ~ set_display(.x, "wn"),
+#                                                 .names = "{.col}_wn")) %>%
+#                     dplyr::mutate(dplyr::across(all_of(.y) & where(~ get_type(.x) == "mean"),
+#                                                 ~ set_display(.x, "mean"),
+#                                                 .names = "{.col}_mean")) %>%
+#                     dplyr::mutate(dplyr::across(all_of(.y) & where(~ get_type(.x) == "mean"),
+#                                                 ~ set_display(.x, "var"),
+#                                                 .names = "{.col}_var")) %>%
+#                     dplyr::select(-all_of(.y))
+#       )
+#
+#     tabs <-
+#       purrr::pmap(list(tabs, tab_vars, row_vars,
+#                        purrr::map(get_vars, ~ as.character(.$col_vars))),
+#                   ~ dplyr::select(..1,
+#                                   tidyselect::all_of(..2),
+#                                   tidyselect::all_of(..3),
+#                                   tidyselect::starts_with(..4))
+#       ) |>
+#       purrr::map(~ purrr::set_names(., dplyr::if_else(
+#         condition = get_col_var(.) != "",
+#         true      = stringr::str_remove(names(.), "^[^_]+___"),
+#         false     = names(.)
+#       ))) |>
+#       purrr::map2(tab_vars, ~ group_by(.x, !!!rlang::syms(.y)))
+#
+#     tabs_num <-
+#       purrr::map(tabs,
+#                  ~ dplyr::mutate(dplyr::ungroup(.),
+#                                  dplyr::across(where(is_fmt), get_num)) )
+#
+#     get_vars        <- purrr::map(tabs, tab_get_vars)
+#     row_var         <- purrr::map(get_vars, ~ rlang::sym(.$row_var))
+#     col_vars_alltot <- purrr::map(get_vars, ~ rlang::syms(.$col_vars))
+#     col_vars        <- purrr::map(col_vars_alltot,
+#                                   ~ .[!. %in% c("all_col_vars", "chi2_cols")] )
+#     col_vars_levels_alltot <- purrr::map(get_vars,
+#                                          ~ purrr::map(.$col_vars_levels,
+#                                                       rlang::syms))
+#     col_vars_levels <- purrr::map(col_vars_levels_alltot,
+#                                   ~ .[!names(.) %in% c("all_col_vars",
+#                                                        "chi2_cols")] )
+#     tab_vars <- purrr::map(get_vars, ~ .$tab_vars)
+#
+#     #groups  <- purrr::map(tabs, dplyr::group_vars)
+#
+#     totrowsTF <- purrr::map(tabs, is_totrow)
+#     totcols   <- purrr::map(tabs, is_totcol)
+#     all_totcols <- purrr::map(col_vars_alltot, ~ . == "all_col_vars")
+#
+#     newsheet = sheet != dplyr::lag(sheet, default = -1L)
+#
+#
+#
+#
+#     #Variable labels and description ----
+#     unique_vars <- unique(purrr::flatten_chr(c(
+#       purrr::map(row_vars, ~ as.character(.)),
+#       purrr::map(col_vars, ~ as.character(.)),
+#       purrr::map(tab_vars, ~ as.character(.))
+#     )))
+#
+#     not_in_var_labels <- !unique_vars %in% names(var_labels)
+#     if (any(not_in_var_labels)) stop(paste(
+#       "you must describe the following variables with 'var_labels = c('variable' = 'description', ...)' :",
+#       paste0(unique_vars[not_in_var_labels], collapse = ", ")
+#     ))
+#
+#     row_vars_labels <- purrr::map(row_vars, ~ paste0(
+#       "Variable de ligne : ",
+#       paste0("'", as.character(.), "' = ", var_labels[as.character(.)], collapse = " ; ")
+#     ))
+#     col_vars_labels <- purrr::map(col_vars, ~ paste0(
+#       "Variables de colonne : ",
+#       paste0("'",as.character(.), "' = ", var_labels[as.character(.)], collapse = " ; ")
+#     ))
+#     tab_vars_labels <-
+#       purrr::map_if(tab_vars, purrr::map_lgl(tab_vars, ~ length(.) != 0),
+#                     ~ paste0(
+#                       "Variables de sous-tableau : ",
+#                       paste0("'",as.character(.), "' = ", var_labels[as.character(.)], collapse = " ; ")
+#                     ),
+#                     .else = ~ ""
+#       )
+#
+#     lines_colvars <-
+#       purrr::map(tabs,
+#                  ~ dplyr::bind_rows(
+#                    dplyr::mutate(dplyr::slice(dplyr::ungroup(.), 1),
+#                                  dplyr::across(.fns = get_col_var)),
+#                    # dplyr::mutate(dplyr::slice(dplyr::ungroup(.), 1),
+#                    #               dplyr::across(.fns = ~ dplyr::case_when(is_totcol(.) ~ "TRUE",
+#                    #                                                       is_fmt(.)    ~ "FALSE",
+#                    #                                                       TRUE         ~ "")))
+#                  ) %>%
+#                    dplyr::mutate(dplyr::across(1, ~ c("col_vars" #, "totcol"
+#                    )))
+#       )
+#
+#     description <-
+#       purrr::pmap(list(row_vars_labels, col_vars_labels, tab_vars_labels),
+#                   ~ {
+#                     description <- tibble::tibble(description = c("Description des variables :",
+#                                                                   paste0("  ", ..1),
+#                                                                   paste0("  ", ..2),
+#                                                                   paste0("  ", ..3),
+#                                                                   "",
+#                                                                   "Formatages conditionnels (verification de confidentialite) :"
+#                     ))
+#
+#                     if (n_min != 0 & !is.na(n_min)) {
+#                       description <-  description |>
+#                         tibble::add_row(description = paste0("  Regle entreprise : ",
+#                                                              "totaux (ligne ou colonne) avec ",
+#                                                              "effectif non pondere n < ", n_min,
+#                                                              " colores en rouge (vert clair sinon)"))
+#                     }
+#
+#                     if (!is.na(pct_max)) {
+#                       description <-  description |>
+#                         tibble::add_row(description = paste0("  Regle individus/menages : ",
+#                                                              "cases totalisant plus de ",
+#                                                              round(pct_max*100), " % de leur ",
+#                                                              "ligne ou colonne (n) ",
+#                                                              "colorees en orange (bleu tres clair sinon)"))
+#                     }
+#
+#                     description
+#                   }
+#       )
+#
+#
+#
+#
+#     start <- tibble::tibble(newsheet, rows = purrr::map_int(tabs, nrow),
+#                             sub = purrr::pmap_int(list(subtext, lines_colvars, description),
+#                                                   ~ length(..1) + length(..2) + length(..3))) %>%
+#       dplyr::group_by(gr = cumsum(as.integer(.data$newsheet))) %>%
+#       dplyr::mutate(start = dplyr::lag(cumsum(.data$rows + .data$sub + 5L),
+#                                        default = 0L) + 1L) %>%
+#       dplyr::pull(.data$start)
+#
+#     totrows  <- purrr::map(totrowsTF, which)
+#     tot_rows <- purrr::map2(totrows, start, ~ .x + .y + 1L)
+#     group_ind<- purrr::map(tabs, dplyr::group_indices)
+#     end_group<- purrr::map(group_ind, ~ which(.[-1] != .[-length(.)] ) ) %>%
+#       purrr::map2(start, ~ .x + .y + 1)
+#     rows_nb  <- purrr::map2(tabs, start, ~ as.integer(1:nrow(.x) + .y + 1L))
+#
+#     all_cols <- purrr::map(tabs, ~ 1:ncol(.))
+#     txt_cols <- purrr::map(tabs, ~ which(purrr::map_lgl(., ~ !is_fmt(.))))
+#     row_var_cols <- purrr::map(txt_cols, ~ .[length(.)])
+#     fmt_cols <- purrr::map(tabs, ~ which(purrr::map_lgl(., ~ is_fmt(.))))
+#     totcols  <- purrr::map(totcols, which)
+#
+#     n_cols <- purrr::map(tabs, ~ which(stringr::str_detect(names(.), "_n$") ) )
+#     totcols_or_mean_n <-
+#       purrr::map(tabs, ~ which(stringr::str_detect(names(.), "_n$") &
+#                                  (is_totcol(.) | get_type(.) == "mean") )
+#                  )
+#
+#
+#
+#     col_vars_names <- purrr::map(tabs, ~ get_col_var(.) )
+#     end_col_var <-
+#       purrr::map(col_vars_names,
+#                  ~ which(. != "" & . != dplyr::lead(., default = NA_character_))
+#       )
+#
+#     end_display <-  purrr::map(tabs, ~ stringr::str_extract(names(.), "_[^_]+$"))
+#     end_display <-  purrr::map(col_vars_names,
+#                                ~ which(. != "" & . != dplyr::lead(., default = NA_character_))
+#     )
+#
+#
+#     display <- purrr::map2(tabs, fmt_cols, ~ purrr::map(.x[.y], get_display))
+#     digits  <- purrr::map2(tabs, fmt_cols, ~ purrr::map(.x[.y], get_digits ))
+#
+#     type <- purrr::map(tabs, get_type)
+#
+#     type <- type %>% purrr::map2(fmt_cols, ~ .x[.y])
+#
+#
+#
+#
+#     sheet_titles <-
+#       purrr::pmap_chr(list(tabs,
+#                            purrr::map(row_var[newsheet], as.character),
+#                            purrr::map(col_vars[newsheet], as.character)),
+#                       ~ tab_get_titles(..1, ..2, ..3, max = 1)
+#       ) %>% stringr::str_sub(., 1, 27)
+#
+#     sheet_titles <- dplyr::if_else(duplicated(sheet_titles),
+#                                    stringr::str_c(sheet_titles, ".2"),
+#                                    sheet_titles)
+#     nb <- 2
+#     while (length(unique(sheet_titles)) != length(sheet_titles)) {
+#       nb <- nb + 1
+#       sheet_titles <-
+#         dplyr::if_else(duplicated(sheet_titles),
+#                        stringr::str_c(stringr::str_remove(sheet_titles, "..$"),
+#                                       ".", nb),
+#                        sheet_titles)
+#     }
+#
+#
+#
+#
+#
+#     #Create workbook and global formatting -------------------------------------
+#     wb <- openxlsx::createWorkbook()
+#     sheet_titles %>% purrr::walk(~ openxlsx::addWorksheet(wb, .))
+#     purrr::pwalk(list(sheet, start, tabs_num),
+#                  ~ openxlsx::writeData(wb, sheet = ..1, ..3,
+#                                        startRow = ..2 + 1, startCol = 1,
+#                                        borders = "surrounding"))
+#     # #On a sheet, if colnames are the same, just keep the first :
+#     # purrr::pwalk(list(sheet[hd_remove], start[hd_remove],  tabs[hd_remove]),
+#     #              function(.sheet, .start, .tabs)
+#     #                openxlsx::deleteData(wb, sheet = .sheet, gridExpand = TRUE,
+#     #                                     rows = .start + 1,
+#     #                                     cols = 2:ncol(.tabs)))
+#
+#
+#
+#     # col_rowvars <-
+#     #   purrr::map(tabs,
+#     #              ~ tibble::tibble(
+#     #              totrow = dplyr::if_else(is_totrow(.), "TRUE", "FALSE"),
+#     #              tottab = dplyr::if_else(is_tottab(.), "TRUE", "FALSE")
+#     #              )
+#     #   )
+#     #
+#     # purrr::pwalk(list(sheet, start, col_rowvars, tabs),
+#     #              ~ openxlsx::writeData(wb, sheet = ..1, ..3,
+#     #                                    startRow = ..2 + 1, startCol = ncol(..4) + 2))
+#
+#     openxlsx::modifyBaseFont(wb, fontSize = 10, fontName = "DejaVu Sans Condensed") #"Verdana", "DejaVu Sans Condensed"
+#     purrr::walk(unique(sheet),
+#                 ~ openxlsx::showGridLines(wb, sheet = .x, showGridLines = FALSE))
+#     purrr::walk(unique(sheet),
+#                 ~ openxlsx::freezePane(wb, sheet = .x, firstActiveRow  = 3,
+#                                        firstCol = TRUE))
+#
+#     st_titles <- openxlsx::createStyle(fontSize = 12, textDecoration = "bold")
+#     tibble::tibble(sheet, startRow = start + 1L - 1L, startCol = 1L, x = titles) %>%
+#       purrr::pwalk(openxlsx::writeData, wb = wb) %>%
+#       dplyr::select(.data$sheet, rows = .data$startRow, cols = .data$startCol) %>%
+#       purrr::pwalk(openxlsx::addStyle, wb = wb, stack = TRUE, style = st_titles)
+#
+#     # Print subtext
+#     subtext_style <- openxlsx::createStyle(halign = "left", valign = "center",
+#                                            fontSize = 9)
+#     tibble::tibble(sheet, x = subtext, startCol = 1L,
+#                    startRow = purrr::map2_int(start, tabs,
+#                                               ~ nrow(.y) + .x + 2L)) %>%
+#       dplyr::filter(purrr::map_lgl(subtext, ~ length(.) != 0)) %>%
+#       dplyr::filter(purrr::map_lgl(subtext, ~ any(!is.na(.) & . != ""))) %>%
+#       purrr::pwalk(openxlsx::writeData, wb = wb) %>%
+#       dplyr::mutate(rows = purrr::map2(.data$startRow, .data$x,
+#                                        ~ .x:(.x + length(.y) - 1)),
+#                     cols = .data$startCol) %>%
+#       dplyr::select(-.data$startRow, -.data$startCol, -.data$x) %>%
+#       purrr::pwalk(openxlsx::addStyle, wb = wb, stack = TRUE, gridExpand = TRUE,
+#                    style = subtext_style)
+#
+#     # Print lines_colvars
+#     purrr::pwalk(list(sheet, start, lines_colvars, tabs, purrr::map_int(subtext, length)),
+#                  ~ openxlsx::writeData(wb, sheet = ..1, ..3,
+#                                        startRow = ..2 + nrow(..4) + ..5 + 3, startCol = 1,
+#                                        colNames = FALSE))
+#
+#
+#     # Print description
+#     purrr::pwalk(list(sheet, start, description, tabs, purrr::map_int(subtext, length)),
+#                  ~ openxlsx::writeData(wb, sheet = ..1, ..3,
+#                                        startRow = ..2 + nrow(..4) + ..5 + 5, startCol = 1,
+#                                        colNames = FALSE))
+#
+#
+#
+#
+#     # # Count tables ----------------------------------------------
+#     # offset  <- rep(0L, length(tabs))
+#     # # ci_col1 <- rep(list(integer()), length(tabs))
+#     # # ci_cols <- rep(list(integer()), length(tabs))
+#     #   ci_col1 <- purrr::map(tabs, ~ ncol(.) + 1L)
+#     #
+#     #   ci_cols <- purrr::map2(ci_col1, tabs_ci, ~ (.x + 1L):(.x - 1L + ncol(.y)) ) %>%
+#     #     purrr::map2(tabs_ci, ~ purrr::set_names(.x, names(.y)[-1]))
+#     #
+#     #   tibble::tibble(sheet = sheet, x = tabs_ci_num,
+#     #                  startRow = purrr::map(start, ~. + 1L), startCol = ci_col1) %>%
+#     #     dplyr::filter(!no_ci) %>%
+#     #     purrr::pwalk(openxlsx::writeData, wb = wb)
+#     #
+#     #   tibble::tibble(sheet = sheet, cols = ci_col1,
+#     #                  rows = purrr::map2(rows_nb, start, ~ c(.y + 1, .x))) %>%
+#     #     dplyr::filter(!no_ci) %>%
+#     #     purrr::pwalk(openxlsx::deleteData, wb = wb, gridExpand = TRUE)
+#     #
+#     #   offset[!no_ci] <- purrr::map2_int(fmt_cols, ci_cols, ~ .y[1] - .x[1])
+#     #   fmt_cols[!no_ci]    <- fmt_cols[!no_ci] %>%
+#     #     purrr::map2(offset[!no_ci] , ~ c(.x, .x + .y))
+#     #
+#     #   all_cols[!no_ci]    <- all_cols[!no_ci] %>%
+#     #     purrr::map2(ci_cols[!no_ci] , ~ c(.x, .y))
+#     #
+#     #   end_col_var[!no_ci] <- end_col_var[!no_ci] %>%
+#     #     purrr::map2(offset[!no_ci] , ~ c(.x, .x + .y))
+#     #
+#     #   totcols[!no_ci]     <- totcols[!no_ci] %>%
+#     #     purrr::map2(offset[!no_ci] , ~ c(.x, .x + .y))
+#     #
+#     #   st_ci_borders <- openxlsx::createStyle(border = "right")
+#     #
+#     #   tibble::tibble(sheet = sheet, rows = rows_nb,
+#     #                  cols = purrr::map2(ci_col1, ci_cols,
+#     #                                     ~ c(.x, .y[length(.y)])) ) %>%
+#     #     dplyr::filter(!no_ci) %>%
+#     #     purrr::pwalk(openxlsx::addStyle, wb = wb, gridExpand = TRUE, stack = T,
+#     #                  style = st_ci_borders)
+#     #
+#
+#
+#     # Borders and text formating ---------------------------------------------------------
+#     # Headers and total columns
+#     headers <- if (colnames_rotation == 0) {
+#       openxlsx::createStyle(halign = "center", valign = "bottom", wrapText = TRUE,
+#                             textDecoration = "Bold", border = "TopBottom",
+#                             fontSize = 9)
+#     } else {
+#       openxlsx::createStyle(
+#         halign = "left", valign = "bottom", wrapText = TRUE,
+#         textDecoration = "Bold", textRotation = colnames_rotation,
+#         border = c("bottom", "top"), fontSize = 9 # "left", "right",
+#       )
+#     }
+#
+#     tibble::tibble(sheet, rows = start + 1, cols = all_cols) %>%
+#       purrr::pwalk(openxlsx::addStyle, wb = wb, gridExpand = TRUE, stack = T,
+#                    style = headers)
+#
+#     st_bottomline <-
+#       openxlsx::createStyle(halign = "right", valign = "top",
+#         border = "bottom", borderStyle = "thin")
+#
+#     tibble::tibble(sheet, rows = purrr::map2(tabs, start, ~ nrow(.) + .y + 1L),
+#                    cols = all_cols) %>%
+#       purrr::pwalk(openxlsx::addStyle, wb = wb, gridExpand = TRUE, stack = T,
+#                    style = st_bottomline)
+#
+#     st_totcols <-
+#       openxlsx::createStyle(halign = "left", #valign = "top",
+#                             textDecoration = "Bold", border = "LeftRight")
+#
+#     tibble::tibble(sheet, rows = rows_nb, cols = totcols) %>%
+#       dplyr::filter(purrr::map_lgl(totcols, ~ length(.) != 0) ) %>%
+#       purrr::pwalk(openxlsx::addStyle, wb = wb, gridExpand = TRUE, stack = T,
+#                    style = st_totcols)
+#
+#
+#
+#     # Sep between col_vars and groups
+#     st_end_col_var <- openxlsx::createStyle(border = "right")
+#     tibble::tibble(sheet, rows = purrr::map(rows_nb, ~ c(min(. -1), .)),
+#                    cols = purrr::pmap(list(txt_cols,
+#                                            purrr::map(totcols, ~ c(. - 1L, .))),
+#                                       ~ c(..1, ..2) %>% unique())) %>%
+#       dplyr::filter(purrr::map_lgl(.data$cols, ~ length(.) != 0) ) %>%
+#       purrr::pwalk(openxlsx::addStyle, wb = wb, gridExpand = TRUE, stack = T,
+#                    style = st_end_col_var)
+#
+#     st_end_col_var2 <- openxlsx::createStyle(border = "right", borderStyle = "double")
+#     tibble::tibble(sheet, rows = purrr::map(rows_nb, ~ c(min(. -1), .)),
+#                    cols = end_col_var) %>%
+#       dplyr::filter(purrr::map_lgl(.data$cols, ~ length(.) != 0) ) %>%
+#       purrr::pwalk(openxlsx::addStyle, wb = wb, gridExpand = TRUE, stack = T,
+#                    style = st_end_col_var2)
+#
+#
+#     st_end_group <- openxlsx::createStyle(border = "bottom")
+#     tibble::tibble(sheet, rows = end_group, cols = all_cols) %>%
+#       dplyr::filter(purrr::map_lgl(.data$rows, ~ length(.) != 0) ) %>%
+#       purrr::pwalk(openxlsx::addStyle, wb = wb, gridExpand = TRUE, stack = T,
+#                    style = st_end_group)
+#
+#
+#     # Total rows
+#     st_totrows <-
+#       openxlsx::createStyle(halign = "right", valign = "top",
+#                             textDecoration = "Bold", border = "TopBottom",
+#                             borderStyle = c("thin", "double"))
+#
+#     tibble::tibble(sheet, rows = tot_rows, cols = fmt_cols) %>%
+#       dplyr::filter(purrr::map_lgl(.data$rows, ~ length(.) != 0) ) %>%
+#       purrr::pwalk(openxlsx::addStyle, wb = wb, gridExpand = TRUE, stack = T,
+#                    style = st_totrows)
+#
+#     st_totrows_text <-
+#       openxlsx::createStyle(halign = "left", valign = "top", wrapText = TRUE,
+#                             textDecoration = "Bold", border = "TopBottom",
+#                             borderStyle = c("thin", "double"))
+#
+#     tibble::tibble(sheet, rows = tot_rows, cols = txt_cols) %>%
+#       dplyr::filter(purrr::map_lgl(.data$rows, ~ length(.) != 0) ) %>%
+#       purrr::pwalk(openxlsx::addStyle, wb = wb, gridExpand = TRUE, stack = T,
+#                    style = st_totrows_text)
+#
+#      st_bottom_left_cells <-  openxlsx::createStyle(halign = "left", valign = "top")
+#      tibble::tibble(sheet, rows = tot_rows, cols = totcols) %>%
+#        purrr::pwalk(openxlsx::addStyle, wb = wb, gridExpand = TRUE, stack = T,
+#                     style = st_bottom_left_cells)
+#
+#
+#
+#
+#     #Conditionnal formatting --------------------------------------------------
+#     negStyle <- openxlsx::createStyle(bgFill = "#FF2F2F") #FFC7CE #FF0000
+#     posStyle <- openxlsx::createStyle(bgFill = "#ECFAEF") #C6EFCE #82C083
+#
+#     negStyle_pct <- openxlsx::createStyle(bgFill = "#FF970D") #F9B073
+#     posStyle_pct <- openxlsx::createStyle(bgFill = "#EAF1FA") #E4F8E8
+#
+#
+#     #ggplot2::ggplot(data = tibble::tibble(a = 1, b = 1), ggplot2::aes(x = a, y = b)) +
+#     #  ggplot2::geom_label(label = "This is a test", color = "black", fill = "red", size = 6) +
+#     #  ggplot2::theme_minimal()
+#
+#     # In red when totals in line or column are inferior to 'n_min'
+#     if (n_min > 0 ) {
+#       #Total columns (and mean n)
+#       n_min_totcols_map_data <-
+#         tibble::tibble(sheet, rows = rows_nb, cols = totcols_or_mean_n) %>%
+#         tidyr::unnest(.data$cols) %>%
+#         mutate(first_cell = paste0(openxlsx::int2col(.data$cols),
+#                                    purrr::map_int(.data$rows, ~ .[1])))
+#
+#       n_min_totcols_map_data |>
+#         dplyr::mutate(rule = paste0("AND(", .data$first_cell, "<", n_min, ", ",
+#                                     .data$first_cell, "<>", 0, ")")) |>
+#         purrr::pwalk(openxlsx::conditionalFormatting, wb = wb, style = negStyle)
+#
+#       n_min_totcols_map_data |>
+#         dplyr::mutate(rule = paste0("AND(", .data$first_cell, ">=", n_min, ", ",
+#                                     .data$first_cell, "<>", 0, ")")) |>
+#         purrr::pwalk(openxlsx::conditionalFormatting, wb = wb,style = posStyle)
+#
+#
+#       #Total rows
+#       n_min_totrows_map_data <-
+#         tibble::tibble(sheet, rows = tot_rows, cols = n_cols) %>%
+#         tidyr::unnest(.data$rows) %>%
+#         tidyr::unnest(.data$cols) |>
+#         dplyr::group_by(.data$sheet, .data$rows) |>
+#         dplyr::mutate(contiguous_cols = .data$cols != dplyr::lag(.data$cols, default = .data$cols[1] - 1L) + 1L,
+#                       contiguous_cols = cumsum(.data$contiguous_cols)) |>
+#         tidyr::nest(cols = .data$cols) |>
+#         mutate(cols = purrr::map(.data$cols, ~ dplyr::pull(., "cols")),
+#                first_cell = paste0(openxlsx::int2col(purrr::map_int(.data$cols, ~ .[1])),
+#                                    .data$rows)
+#         )
+#
+#       n_min_totrows_map_data |>
+#         dplyr::mutate(rule = paste0("AND(", .data$first_cell, "<", n_min, ", ",
+#                                     .data$first_cell, "<>", 0, ")")) |>
+#         purrr::pwalk(openxlsx::conditionalFormatting, wb = wb, style = negStyle)
+#
+#       n_min_totrows_map_data |>
+#         dplyr::mutate(rule = paste0("AND(", .data$first_cell, ">=", n_min, ", ",
+#                                     .data$first_cell, "<>", 0, ")")) |>
+#         purrr::pwalk(openxlsx::conditionalFormatting, wb = wb, style = posStyle)
+#     }
+#
+#     # In red when any percentage is equal to more than pct_max % of row or col totals
+#     if (pct_max > 0) {
+#
+#       pct_max_map_data <-
+#         tibble::tibble(sheet, fmt_cols, n_cols, totcols,
+#                        rows_nb, tot_rows, end_group) |>
+#         dplyr::mutate(totcols_n = purrr::map2(.data$n_cols, .data$totcols, ~ .y[.y %in% .x]), ) |>
+#         tidyr::unnest(.data$totcols_n) |>
+#         dplyr::group_by(.data$sheet) |>
+#         dplyr::mutate(
+#           col_start_n = dplyr::if_else(dplyr::row_number() == 1L,
+#                                        true  = min(purrr::flatten_int(purrr::map(.data$fmt_cols, ~ .[1]))) - 1L,
+#                                        false = dplyr::lag(.data$totcols_n))
+#         ) |>
+#         dplyr::ungroup() |>
+#         dplyr::mutate(cols = purrr::pmap(list(.data$n_cols, .data$col_start_n, .data$totcols_n),
+#                                          ~ ..1[..1 > ..2 & ..1 < ..3]),
+#                       rows = purrr::map2(.data$rows_nb, .data$tot_rows, ~ .x[!.x %in% .y])) |>
+#         tidyr::unnest(.data$rows) |>
+#         dplyr::group_by(.data$sheet, .data$cols) |>
+#         dplyr::mutate(contiguous_rows = .data$rows != dplyr::lag(.data$rows, default = .data$rows[1] - 1L) + 1L,
+#                       contiguous_rows = cumsum(.data$contiguous_rows)) |>
+#         tidyr::nest(rows = .data$rows) |>
+#         dplyr::ungroup() |>
+#         dplyr::mutate(
+#           rows     = purrr::map(.data$rows, ~ dplyr::pull(., "rows")),
+#           tot_rows = purrr::map2_int(.data$tot_rows, .data$rows, ~ .x[.x == dplyr::last(.y) + 1L] ),
+#
+#           first_cell = paste0(openxlsx::int2col(purrr::map_int(.data$cols, ~ .[1])),
+#                               purrr::map_int(.data$rows, ~ .[1])),
+#           totcol_1st_cell = paste0("$", openxlsx::int2col(.data$totcols_n),
+#                                    purrr::map_int(.data$rows, ~ .[1])),
+#           totrow_1st_cell = paste0(openxlsx::int2col(purrr::map_int(.data$cols, ~ .[1])),
+#                                    "$", .data$tot_rows)
+#         )
+#
+#        pct_max_map_data |>
+#         dplyr::mutate(rule = paste0("OR(", .data$first_cell, "/", .data$totcol_1st_cell, ">=", pct_max,
+#                                     ", ", .data$first_cell, "/",.data$totrow_1st_cell, ">=", pct_max, ")" )) |>
+#         dplyr::select(.data$sheet, .data$cols, .data$rows, .data$rule) |>
+#         purrr::pwalk(openxlsx::conditionalFormatting, wb = wb,  style = negStyle_pct)
+#
+#        pct_max_map_data |>
+#          dplyr::mutate(rule = paste0("AND(", .data$first_cell, "/", .data$totcol_1st_cell, "<", pct_max,
+#                                      ", ", .data$first_cell, "/",.data$totrow_1st_cell, "<", pct_max, ")" )) |>
+#          dplyr::select(.data$sheet, .data$cols, .data$rows, .data$rule)|>
+#          purrr::pwalk(openxlsx::conditionalFormatting, wb = wb,  style = posStyle_pct)
+#
+#       #dplyr::pull(cols)
+#
+#     }
+#
+#
+#
+#
+#
+#     #Colwidths and rowheights --------------------------------------------------
+#     tibble::tibble(sheet, cols = txt_cols) %>%
+#       purrr::pwalk(openxlsx::setColWidths, wb = wb, widths = 20) #"auto" -> title takes all
+#
+#     #if (any(!autocw)) {
+#     tibble::tibble(sheet, cols = fmt_cols, widths = colwidth) %>%
+#       #dplyr::filter(!autocw) %>%
+#       #dplyr::group_by(.data$sheet) %>%
+#       #dplyr::mutate(widths = max(as.double(.data$widths))  ) %>%
+#       #dplyr::ungroup() %>%
+#       purrr::pwalk(openxlsx::setColWidths, wb = wb)
+#     #}
+#
+#     tibble::tibble(sheet, cols = totcols, widths = 10) %>%
+#       purrr::pwalk(openxlsx::setColWidths, wb = wb)
+#
+#     tibble::tibble(sheet, cols = end_col_var, widths = 15) %>%
+#       purrr::pwalk(openxlsx::setColWidths, wb = wb)
+#
+#     # if (any(autocw)) {
+#     #   if (colnames_rotation > 0) {
+#     #     if (colnames_rotation > 30 & colnames_rotation < 60) {
+#     #       purrr::pwalk(list(sheet[autocw], fmt_cols[autocw], ci_cols[autocw]),
+#     #                    ~ openxlsx::setColWidths(wb, sheet = ..1,
+#     #                                             cols = c(..2, ..3),
+#     #                                             widths = 8))
+#     #       # purrr::pwalk(list(sheet, tabs, purrr::map(totc, ~ dplyr::if_else(., 13, 8))),
+#     #       #              ~ openxlsx::setColWidths(wb, sheet = ..1, cols = ncol(..2), widths = ..3))
+#     #     } else if (colnames_rotation > 60) {
+#     #       purrr::pwalk(list(sheet[autocw], fmt_cols[autocw], ci_cols[autocw]),
+#     #                    ~ openxlsx::setColWidths(
+#     #                      wb, sheet = ..1, cols = c(..2, ..3),
+#     #                      widths = 6 + 8*cos(colnames_rotation/90*pi/2)
+#     #                    )) #Entre 6 et 14
+#     #       # purrr::pwalk(list(sheet, tabs, purrr::map(totc, ~ dplyr::if_else(., 13, 6 + 8*cos(colnames_rotation/90*pi/2)))),
+#     #       #              ~ openxlsx::setColWidths(wb, sheet = ..1, cols = ncol(..2), widths = ..3))
+#     #     }
+#     #
+#     #     purrr::walk(sheet[autocw],
+#     #                 ~ openxlsx::setRowHeights(
+#     #                   wb, sheet = ., rows = 1,
+#     #                   heights = 13.8 + 105*sin(colnames_rotation/90*pi/2)
+#     #                 ))
+#     #
+#     #     #Enlarge columns if there is confidence intervals
+#     #     # if (any(tab_with_CI_on_sheet)) {
+#     #     #   purrr::walk2(1:length(tab_with_CI_on_sheet)[tab_with_CI_on_sheet],
+#     #     #         purrr::map(tabs_on_same_sheet, ~ ncol(tabs[[.[1]]]))[tab_with_CI_on_sheet],
+#     #     #         ~ openxlsx::setColWidths(wb, sheet = .x, cols = 2:(.y-1), widths = 14))
+#     #     # }
+#     #
+#     #   } else {
+#     #     purrr::pwalk(list(sheet[autocw], fmt_cols[autocw], ci_cols[autocw]),
+#     #                  ~ openxlsx::setColWidths(wb, sheet = ..1,
+#     #                                           cols = c(..2, ..3),
+#     #                                           widths = "auto")) #13
+#     #   }
+#     # }
+#
+#     #Save to file --------------------------------------------------------------
+#     if (is.null(path)) {
+#       path <- getOption("tabxplor.export_dir")
+#       if (is.null(path)) {
+#         path <- file.path(tempdir(), "Tab")
+#       } else {
+#         path <- file.path(path) #"Tab"
+#       }
+#     }
+#
+#     if (stringr::str_detect(path, "\\\\|/")) {
+#       dir_path <- path %>% stringr::str_remove("\\\\[^\\\\]+$|/[^/]+$")
+#       if (! dir.exists(dir_path))  dir.create(dir_path, recursive = TRUE)
+#     }
+#     path_name <- stringr::str_remove(path, "\\.xlsx$")
+#     if (! stringr::str_detect(path, "\\.xlsx$")) path <-
+#       stringr::str_c(path, ".xlsx")
+#     if (replace == FALSE) {
+#       i <- 0
+#       file_do_not_exist <- FALSE
+#       while (file_do_not_exist == FALSE) {
+#         if (file.exists(path)) {
+#           i = i+1
+#           path <- stringr::str_c(path_name, i, ".xlsx")
+#         } else {
+#           path <-
+#             stringr::str_c(path_name, dplyr::if_else(i == 0,
+#                                                      "",
+#                                                      stringr::str_c(i)),
+#                            ".xlsx")
+#           file_do_not_exist <- TRUE
+#         }
+#       }
+#     }
+#     print(path)
+#     openxlsx::saveWorkbook(wb, path, overwrite = TRUE)
+#     if (open == TRUE) { openxlsx::openXL(path) } #file.show
+#
+#     invisible(tabs_base)
+#   }
+#
+#
+#
+#
+#
+# # xl_to_tab_CASD <- function() {
+# #
+# # }

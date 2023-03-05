@@ -38,14 +38,17 @@ Vec_arith method for fmt
 }
 \section{Methods (by class)}{
 \itemize{
-\item \code{default}: default vec_arith method for fmt
+\item \code{vec_arith.tabxplor_fmt(default)}: default vec_arith method for fmt
 
-\item \code{tabxplor_fmt}: vec_arith method for fmt + fmt
+\item \code{vec_arith.tabxplor_fmt(tabxplor_fmt)}: vec_arith method for fmt + fmt
 
-\item \code{numeric}: vec_arith method for fmt + numeric
+\item \code{vec_arith.tabxplor_fmt(numeric)}: vec_arith method for fmt + numeric
 
-\item \code{tabxplor_fmt}: vec_arith method for numeric + fmt
+\item \code{vec_arith.tabxplor_fmt(MISSING)}: vec_arith method for -fmt
 
-\item \code{MISSING}: vec_arith method for -fmt
 }}
+\section{Functions}{
+\itemize{
+\item \code{vec_arith.numeric(tabxplor_fmt)}: vec_arith method for numeric + fmt
 
+}}

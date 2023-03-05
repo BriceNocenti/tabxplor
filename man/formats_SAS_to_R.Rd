@@ -4,7 +4,14 @@
 \alias{formats_SAS_to_R}
 \title{INSEE SAS formats to R : translate code}
 \usage{
-formats_SAS_to_R(path, name_in, name_out)
+formats_SAS_to_R(
+  path,
+  name_in,
+  name_out,
+  open = TRUE,
+  remove_final_f = TRUE,
+  not_if_numeric = TRUE
+)
 }
 \arguments{
 \item{path}{The path of the file to be created}
@@ -12,9 +19,15 @@ formats_SAS_to_R(path, name_in, name_out)
 \item{name_in}{The name of the unformatted database}
 
 \item{name_out}{The name of the database to be formatted.}
+
+\item{open}{Should the file be opened, or just its path printed ?}
+
+\item{remove_final_f}{Remove the final f in variables names in the sas file ?}
+
+\item{not_if_numeric}{Should the code prevent numeric variables to get recoded ?}
 }
 \value{
-A file with code.
+A file with R code.
 }
 \description{
 INSEE SAS formats to R : translate code
