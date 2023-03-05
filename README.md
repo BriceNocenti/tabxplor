@@ -46,6 +46,11 @@ analysis workflows.
 ``` r
 library(tabxplor)
 tab(forcats::gss_cat, marital, race)
+#> Warning: There was 1 warning in `dplyr::mutate()`.
+#> ℹ In argument: `na_rows = dplyr::if_any(.fns = is.na)`.
+#> Caused by warning:
+#> ! Using `if_any()` without supplying `.cols` was deprecated in dplyr 1.1.0.
+#> ℹ Please supply `.cols` instead.
 #> # A tabxplor tab: 7 × 5
 #>   marital       Other Black  White  Total
 #>   <fct>           <n>   <n>    <n>    <n>
@@ -103,17 +108,24 @@ or the row variable. With text variables, only the first level is kept
 
 ``` r
 tab(dplyr::storms, category, status, sup_cols = c("pressure", "wind"))
-#> # A tabxplor tab: 8 × 7
-#>   category hurricane `tropical depressi…` `tropical storm`  Total pressure  wind
-#>   <fct>          <n>                  <n>              <n>    <n>   <mean> <mea>
-#> 1 -1               0                2 898                0  2 898    1 008    27
-#> 2 0                0                    0            5 347  5 347      999    46
-#> 3 1            1 933                    0                1  1 934      981    71
-#> 4 2              749                    0                0    749      967    89
-#> 5 3              434                    0                0    434      954   104
-#> 6 4              411                    0                0    411      939   122
-#> 7 5               86                    0                0     86      917   146
-#> 8 Total        3 613                2 898            5 348 11 859      992    54
+#> Warning: `fct_explicit_na()` was deprecated in forcats 1.0.0.
+#> ℹ Please use `fct_na_value_to_level()` instead.
+#> ℹ The deprecated feature was likely used in the base package.
+#>   Please report the issue to the authors.
+#> # A tabxplor tab: 7 × 13
+#>   category disturbance extratr…¹ hurri…² other…³ subtr…⁴ subtr…⁵ tropi…⁶ tropi…⁷
+#>   <fct>            <n>       <n>     <n>     <n>     <n>     <n>     <n>     <n>
+#> 1 1                  0         0   2 478       0       0       0       0       0
+#> 2 2                  0         0     973       0       0       0       0       0
+#> 3 3                  0         0     579       0       0       0       0       0
+#> 4 4                  0         0     539       0       0       0       0       0
+#> 5 5                  0         0     115       0       0       0       0       0
+#> 6 NA               146     2 068       0   1 405     151     292   3 525   6 684
+#> 7 Total            146     2 068   4 684   1 405     151     292   3 525   6 684
+#> # … with 4 more variables: `tropical wave` <n>, Total <n>, pressure <mean>,
+#> #   wind <mean>, and abbreviated variable names ¹​extratropical, ²​hurricane,
+#> #   ³​`other low`, ⁴​`subtropical depression`, ⁵​`subtropical storm`,
+#> #   ⁶​`tropical depression`, ⁷​`tropical storm`
 ```
 
 ## References and comparison levels for colors
@@ -164,6 +176,11 @@ It it possible to print confidence intervals for each cell:
 
 ``` r
 tab(forcats::gss_cat, race, marital, pct = "row", ci = "cell")
+#> Warning: There was 1 warning in `dplyr::transmute()`.
+#> ℹ In argument: `complete = dplyr::if_all()`.
+#> Caused by warning:
+#> ! Using `if_all()` without supplying `.cols` was deprecated in dplyr 1.1.0.
+#> ℹ Please supply `.cols` instead.
 #> # A tabxplor tab: 4 × 8
 #>   race   `No answer` `Never married` Separated Divorced Widowed Married  Total
 #>   <fct>       <row%>          <row%>    <row%>   <row%>  <row%>  <row%> <row%>
@@ -211,11 +228,24 @@ from the independent hypothesis (the two variables may be independent).
 
 ``` r
 tab(forcats::gss_cat, race, marital, chi2 = TRUE)
-#> chi2 stats     marital
-#> df                  12
-#> variance        0.0464
-#> pvalue              0%
-#> count           21 483
+#> Warning: There was 1 warning in `dplyr::mutate()`.
+#> ℹ In argument: `dplyr::across(.fns = get_n)`.
+#> Caused by warning:
+#> ! Using `across()` without supplying `.cols` was deprecated in dplyr 1.1.0.
+#> ℹ Please supply `.cols` instead.
+#> Warning: There was 1 warning in `dplyr::filter()`.
+#> ℹ In argument: `!sum(dplyr::c_across(), na.rm = TRUE) == 0`.
+#> ℹ In row 1.
+#> Caused by warning:
+#> ! Using `c_across()` without supplying `cols` was deprecated in dplyr 1.1.0.
+#> ℹ Please supply `cols` instead.
+#> ℹ The deprecated feature was likely used in the tabxplor package.
+#>   Please report the issue at <]8;;https://github.com/BriceNocenti/tabxplor/issueshttps://github.com/BriceNocenti/tabxplor/issues]8;;>.
+#> chi2 stats      marital
+#> df                   12
+#> variance         0.0464
+#> pvalue               0%
+#> count            21 483
 #> 
 #> # A tabxplor tab: 4 × 8
 #>   race   `No answer` `Never married` Separated Divorced Widowed Married  Total
