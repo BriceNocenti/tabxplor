@@ -1493,7 +1493,7 @@ pillar_shaft.tab_chi2_fmt <- function(x, ...) {
 #' mutate method to access vctrs::fields of tabxplor_fmt vectors
 #' @importFrom dplyr mutate
 #' @method mutate tabxplor_fmt
-#' @param x A tabxplor_fmt column.
+#' @param .data A tabxplor_fmt column.
 #' @param ... <[`data-masking`][dplyr_data_masking]> Name-value pairs.
 #'   The name gives the name of the column in the output (do not change it).
 #'
@@ -1504,13 +1504,13 @@ pillar_shaft.tab_chi2_fmt <- function(x, ...) {
 #'     if ungrouped).
 #' @return An object of class \code{tabxplor_fmt}.
 #' @export
-mutate.tabxplor_fmt <- function(x, ...) {
+mutate.tabxplor_fmt <- function(.data, ...) {
   dots <- rlang::enquos(...)
 
-  x |>
+  .data |>
     vctrs::vec_proxy() |>
     dplyr::mutate(!!!dots, .keep = "all", .before = NULL, .after = NULL) |>
-    vctrs::vec_restore(x)
+    vctrs::vec_restore(.data)
 }
 
 #' $ method for class tabxplor_fmt

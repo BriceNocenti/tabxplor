@@ -730,18 +730,18 @@ group_by.tabxplor_tab <- function(.data,
 
 #' rowwise method for class tabxplor_tab
 #' @importFrom dplyr rowwise
-#' @param .data A tibble of class \code{tabxplor_tab}.
+#' @param data A tibble of class \code{tabxplor_tab}.
 #' @param ... Variables to be preserved
 #'   when calling \code{summarise()}. This is typically a set of variables whose
 #'   combination uniquely identify each row.
 #' @method rowwise tabxplor_tab
 #' @return A tibble of class \code{tabxplor_grouped_tab} and \code{rowwise_df}.
 #' @export
-rowwise.tabxplor_tab <- function(.data, ...) {
+rowwise.tabxplor_tab <- function(data, ...) {
   out <- NextMethod()
   groups <- dplyr::group_data(out)
   out <- new_grouped_tab(out, groups,
-                         subtext = get_subtext(.data), chi2 = get_chi2(.data))
+                         subtext = get_subtext(data), chi2 = get_chi2(data))
 
   `class<-`(out, stringr::str_replace(class(out), "grouped_df", "rowwise_df"))
 }
@@ -1012,17 +1012,17 @@ dplyr_reconstruct.tabxplor_grouped_tab <- function(data, template) {
 #' rowwise method for class tabxplor_grouped_tab
 #' @importFrom dplyr rowwise
 #' @method rowwise tabxplor_grouped_tab
-#' @param .data A tibble of class \code{tabxplor_tab}.
+#' @param data A tibble of class \code{tabxplor_tab}.
 #' @param ... Variables to be preserved
 #'   when calling summarise(). This is typically a set of variables whose
 #'   combination uniquely identify each row.
 #' @return An object of class \code{tabxplor_grouped_tab} and \code{rowwise_df}.
 #' @export
-rowwise.tabxplor_grouped_tab <- function(.data, ...) {
+rowwise.tabxplor_grouped_tab <- function(data, ...) {
   out <- NextMethod()
   groups <- dplyr::group_data(out)
 
-  out <- new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+  out <- new_grouped_tab(out, groups, subtext = get_subtext(data), chi2 = get_chi2(data))
   `class<-`(out, stringr::str_replace(class(out), "grouped_df", "rowwise_df"))
 }
 

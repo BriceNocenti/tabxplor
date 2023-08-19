@@ -4,10 +4,10 @@
 \alias{rowwise.tabxplor_grouped_tab}
 \title{rowwise method for class tabxplor_grouped_tab}
 \usage{
-\method{rowwise}{tabxplor_grouped_tab}(.data, ...)
+\method{rowwise}{tabxplor_grouped_tab}(data, ...)
 }
 \arguments{
-\item{.data}{A tibble of class \code{tabxplor_tab}.}
+\item{data}{A tibble of class \code{tabxplor_tab}.}
 
 \item{...}{Variables to be preserved
 when calling summarise(). This is typically a set of variables whose

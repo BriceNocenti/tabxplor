@@ -112,20 +112,22 @@ tab(dplyr::storms, category, status, sup_cols = c("pressure", "wind"))
 #> ℹ Please use `fct_na_value_to_level()` instead.
 #> ℹ The deprecated feature was likely used in the base package.
 #>   Please report the issue to the authors.
+#> This warning is displayed once every 8 hours.
+#> Call `lifecycle::last_lifecycle_warnings()` to see where this warning was
+#> generated.
 #> # A tabxplor tab: 7 × 13
-#>   category disturbance extratr…¹ hurri…² other…³ subtr…⁴ subtr…⁵ tropi…⁶ tropi…⁷
-#>   <fct>            <n>       <n>     <n>     <n>     <n>     <n>     <n>     <n>
-#> 1 1                  0         0   2 478       0       0       0       0       0
-#> 2 2                  0         0     973       0       0       0       0       0
-#> 3 3                  0         0     579       0       0       0       0       0
-#> 4 4                  0         0     539       0       0       0       0       0
-#> 5 5                  0         0     115       0       0       0       0       0
-#> 6 NA               146     2 068       0   1 405     151     292   3 525   6 684
-#> 7 Total            146     2 068   4 684   1 405     151     292   3 525   6 684
-#> # … with 4 more variables: `tropical wave` <n>, Total <n>, pressure <mean>,
-#> #   wind <mean>, and abbreviated variable names ¹​extratropical, ²​hurricane,
-#> #   ³​`other low`, ⁴​`subtropical depression`, ⁵​`subtropical storm`,
-#> #   ⁶​`tropical depression`, ⁷​`tropical storm`
+#>   category disturbance extratropical hurricane `other low`
+#>   <fct>            <n>           <n>       <n>         <n>
+#> 1 1                  0             0     2 478           0
+#> 2 2                  0             0       973           0
+#> 3 3                  0             0       579           0
+#> 4 4                  0             0       539           0
+#> 5 5                  0             0       115           0
+#> 6 NA               146         2 068         0       1 405
+#> 7 Total            146         2 068     4 684       1 405
+#> # ℹ 8 more variables: `subtropical depression` <n>, `subtropical storm` <n>,
+#> #   `tropical depression` <n>, `tropical storm` <n>, `tropical wave` <n>,
+#> #   Total <n>, pressure <mean>, wind <mean>
 ```
 
 ## References and comparison levels for colors
@@ -240,7 +242,7 @@ tab(forcats::gss_cat, race, marital, chi2 = TRUE)
 #> ! Using `c_across()` without supplying `cols` was deprecated in dplyr 1.1.0.
 #> ℹ Please supply `cols` instead.
 #> ℹ The deprecated feature was likely used in the tabxplor package.
-#>   Please report the issue at <]8;;https://github.com/BriceNocenti/tabxplor/issueshttps://github.com/BriceNocenti/tabxplor/issues]8;;>.
+#>   Please report the issue at <https://github.com/BriceNocenti/tabxplor/issues>.
 #> chi2 stats      marital
 #> df                   12
 #> variance         0.0464
@@ -412,37 +414,36 @@ tabs %>% mutate(across(where(is_fmt), format))
 The following fields compose any `fmt` column (though many can be `NA`
 if not calculated) :
 
--   `display` : name of the field to display, customisable for each cell
-    (character)
+- `display` : name of the field to display, customisable for each cell
+  (character)
 
--   `n` : raw count (integer)
+- `n` : raw count (integer)
 
--   `wn` : weighted count
+- `wn` : weighted count
 
--   `pct` : percentages
+- `pct` : percentages
 
--   `diff` : differences from totals or reference cells
+- `diff` : differences from totals or reference cells
 
--   `digits` : digits to display, customisable for each cell (integer)
+- `digits` : digits to display, customisable for each cell (integer)
 
--   `ctr` : contributions of cells to variance (with
-    `color = "contrib"`)
+- `ctr` : contributions of cells to variance (with `color = "contrib"`)
 
--   `mean` : means (for numeric column variables)
+- `mean` : means (for numeric column variables)
 
--   `var` : variance (for numeric column variables ; Chi2 variance with
-    `pct`)
+- `var` : variance (for numeric column variables ; Chi2 variance with
+  `pct`)
 
--   `ci` : confidence intervals
+- `ci` : confidence intervals
 
--   `in_totrow` : `TRUE` if the cell is part of a total row, `FALSE`
-    otherwise (logical)
+- `in_totrow` : `TRUE` if the cell is part of a total row, `FALSE`
+  otherwise (logical)
 
--   `in_tottab` : `TRUE` if the cell is part of a total table, `FALSE`
-    otherwise (logical)
+- `in_tottab` : `TRUE` if the cell is part of a total table, `FALSE`
+  otherwise (logical)
 
--   `in_refrow` : `TRUE` if the cell is part of a reference row, `FALSE`
-    otherwise (logical)
+- `in_refrow` : `TRUE` if the cell is part of a reference row, `FALSE`
+  otherwise (logical)
 
 ``` r
 vctrs::vec_data(tabs$Married)
@@ -511,33 +512,33 @@ tab(data, race, marital, year, pct = "row") %>%
 Each `fmt` column have attributes, which you can access or modify with
 `get_` and `set_` functions :
 
--   type / `get_type()` / `set_type()` : the type of the `fmt` vector,
-    among `c("n", "mean", "row", "col", "all", "all_tabs")` ; it
-    determines which calculations are done within `tab_` functions.
+- type / `get_type()` / `set_type()` : the type of the `fmt` vector,
+  among `c("n", "mean", "row", "col", "all", "all_tabs")` ; it
+  determines which calculations are done within `tab_` functions.
 
--   totcol / `is_totcol()` / `as_totcol()` : `TRUE` if the column is a
-    total column, `FALSE` otherwise (logical)
+- totcol / `is_totcol()` / `as_totcol()` : `TRUE` if the column is a
+  total column, `FALSE` otherwise (logical)
 
--   refcol / `is_refcol()` / `as_refcol()` : `TRUE` if the column is a
-    reference column for comparison, `FALSE` otherwise (logical)
+- refcol / `is_refcol()` / `as_refcol()` : `TRUE` if the column is a
+  reference column for comparison, `FALSE` otherwise (logical)
 
--   color / `get_color()` / `set_color()` : the calculation to make to
-    print colors ; among
-    `c("", "no", "diff", "diff_ci", "after_ci", "contrib")`
+- color / `get_color()` / `set_color()` : the calculation to make to
+  print colors ; among
+  `c("", "no", "diff", "diff_ci", "after_ci", "contrib")`
 
--   col_var / `get_col_var()` / `set_col_var()` : the name of the column
-    variable (there can be many in one single table)
+- col_var / `get_col_var()` / `set_col_var()` : the name of the column
+  variable (there can be many in one single table)
 
--   comp_all / `get_comp_all` / `set_comp_all()` : when there are
-    `tab_vars`, is the reference for comparison the subtable (`FALSE`),
-    or the total table (`TRUE`) ?
+- comp_all / `get_comp_all` / `set_comp_all()` : when there are
+  `tab_vars`, is the reference for comparison the subtable (`FALSE`), or
+  the total table (`TRUE`) ?
 
--   diff_type / `get_diff_type()` / `set_diff_type()` : the type of
-    difference calculated, either `"no"`, `"tot"` for totals, an index,
-    or a regular expression.
+- diff_type / `get_diff_type()` / `set_diff_type()` : the type of
+  difference calculated, either `"no"`, `"tot"` for totals, an index, or
+  a regular expression.
 
--   ci_type / `get_ci_type()` / `set_ci_type()` : the type of confidence
-    interval, either `"cell"` or `"diff"`
+- ci_type / `get_ci_type()` / `set_ci_type()` : the type of confidence
+  interval, either `"cell"` or `"diff"`
 
 For example, to print the number of observations of the total column :
 

@@ -4,10 +4,10 @@
 \alias{mutate.tabxplor_fmt}
 \title{mutate method to access vctrs::fields of tabxplor_fmt vectors}
 \usage{
-\method{mutate}{tabxplor_fmt}(x, ...)
+\method{mutate}{tabxplor_fmt}(.data, ...)
 }
 \arguments{
-\item{x}{A tabxplor_fmt column.}
+\item{.data}{A tabxplor_fmt column.}
 
 \item{...}{<\code{\link[=dplyr_data_masking]{data-masking}}> Name-value pairs.
 The name gives the name of the column in the output (do not change it).
