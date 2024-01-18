@@ -31,7 +31,7 @@ at mouse hover. Set to \code{FALSE} to discard.}
 
 \item{popover}{By default, takes \code{getOption("tabxplor.kable_popover")}. When
 \code{FALSE}, html tooltips are of the base kind : they can't be used with floating table of
-content in pkg{rmarkdown} documents. Set to \code{TRUE} to use \pkg{kableExtra} html
+content in \pkg{rmarkdown} documents. Set to \code{TRUE} to use \pkg{kableExtra} html
 popovers instead, which are compatible with floating toc. Remember
 to enable the \code{popover} module by copying the following code into your document :
 \code{<script>

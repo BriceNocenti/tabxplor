@@ -409,8 +409,8 @@ is_totrow.data.frame <- function(x, ..., partial = FALSE) {
     totrow_cells_test |> dplyr::transmute(var = dplyr::if_any()) |> tibble::deframe()
   } else {
     test_result <- totrow_cells_test %>%
-      dplyr::transmute(complete = dplyr::if_all(),
-                       partial  = dplyr::if_all(-.data$complete) & !.data$complete)
+      dplyr::transmute(complete = dplyr::if_all(.cols = dplyr::everything() ),
+                       partial  = dplyr::if_all(-"complete") & !.data$complete)
     if (tidyr::replace_na(any(test_result$partial), FALSE)) {
       warning("partial total rows (with some fmt cells not tagged 'totrow') ",
               "were not taken into account ")
@@ -511,8 +511,8 @@ is_tottab.data.frame <- function(x, ..., partial = FALSE) {
     tottab_cells_test %>% dplyr::transmute(var = dplyr::if_any()) %>% tibble::deframe()
   } else {
     test_result <- tottab_cells_test %>%
-      dplyr::transmute(complete = dplyr::if_all(),
-                       partial  = dplyr::if_all(-.data$complete) & !.data$complete)
+      dplyr::transmute(complete = dplyr::if_all(.cols = dplyr::everything() ),
+                       partial  = dplyr::if_all(-"complete") & !.data$complete)
     if (tidyr::replace_na(any(test_result$partial), FALSE)) {
       warning("partial total rows (with some fmt cells not tagged 'totrow') ",
               "were not taken into account ")
@@ -599,8 +599,8 @@ is_refrow.data.frame <- function(x, ..., partial = TRUE) {
     refrow_cells_test %>% dplyr::transmute(var = dplyr::if_any()) %>% tibble::deframe()
   } else {
     test_result <- refrow_cells_test %>%
-      dplyr::transmute(complete = dplyr::if_all(),
-                       partial  = dplyr::if_all(-.data$complete) & !.data$complete)
+      dplyr::transmute(complete = dplyr::if_all(.cols = dplyr::everything() ),
+                       partial  = dplyr::if_all(-"complete") & !.data$complete)
     if (tidyr::replace_na(any(test_result$partial), FALSE)) {
       warning("partial total rows (with some fmt cells not tagged 'refrow') ",
               "were not taken into account ")
@@ -1078,7 +1078,7 @@ get_mean_contrib <- function(x) {
       ctr = ctr,
       gr = cumsum(as.integer(totrows)) - as.integer(totrows) ) %>%
       dplyr::mutate(nb = dplyr::row_number()) %>%
-      dplyr::with_groups(.data$gr, ~ dplyr::mutate(., nb = dplyr::last(.data$nb))) %>%
+      dplyr::with_groups("gr", ~ dplyr::mutate(., nb = dplyr::last(.data$nb))) %>%
       dplyr::mutate(mean_ctr = .data$ctr[.data$nb]) %>% dplyr::pull(.data$mean_ctr)
   }
 }
@@ -1100,7 +1100,7 @@ get_ref_means <- function(x) {
       mean = mean,
       gr = cumsum(as.integer(refrows)) - as.integer(refrows) ) %>%
       dplyr::mutate(nb = dplyr::row_number()) %>%
-      dplyr::with_groups(.data$gr, ~ dplyr::mutate(., nb = dplyr::last(.data$nb))) %>%
+      dplyr::with_groups("gr", ~ dplyr::mutate(., nb = dplyr::last(.data$nb))) %>%
       dplyr::mutate(ref_means = .data$mean[.data$nb]) %>%
       dplyr::pull(.data$ref_means)
   }

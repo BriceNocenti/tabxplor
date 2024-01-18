@@ -42,7 +42,7 @@ testthat::test_that("dplyr::rename, rename_with and relocate preserves class tab
 })
 
 testthat::test_that("[<- and [[<- preserves class tabxplor_tab", {
-  tabs[4]     <- dplyr::mutate(tabs[4], dplyr::across(.fns = ~ set_display(., "ctr")))
+  tabs[4]     <- dplyr::mutate(tabs[4], dplyr::across(.cols = dplyr::everything(), .fns = ~ set_display(., "ctr")))
   tabs[[2]]   <- tabs[[2]] %>% set_digits(3)
   tabs[[2, 1]] <- factor("White")
   testthat::expect_s3_class(tabs, "tabxplor_tab")
@@ -110,7 +110,7 @@ testthat::test_that("dplyr::rename, rename_with and relocate preserves class tab
 
 testthat::test_that("[<- and [[<- preserves class tabxplor_grouped_tab", {
   grouped_tabs[4]     <- dplyr::mutate(grouped_tabs[4],
-                                       dplyr::across(.fns = ~ set_display(., "ctr")))
+                                       dplyr::across(.cols = dplyr::everything(), .fns = ~ set_display(., "ctr")))
   grouped_tabs[[2]]   <- grouped_tabs[[2]] %>% forcats::fct_recode("kéké" = "Black")
   grouped_tabs[[2,2]] <- factor("White")
   testthat::expect_s3_class(grouped_tabs, "tabxplor_grouped_tab")

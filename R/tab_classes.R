@@ -254,7 +254,7 @@ print_chi2 <- function(x, width = NULL) {
   if (nrow(chi2) == 0) return(NULL)
   # if (is.na(chi2)) return(NULL)
 
-  chi2 <- chi2 %>% dplyr::select(-.data$row_var) %>%
+  chi2 <- chi2 %>% dplyr::select(-"row_var") %>%
     dplyr::filter(!.data$`chi2 stats` %in% c("cells"))
 
   fmt_cols <- purrr::map_lgl(chi2, is_fmt) %>% purrr::keep(. == TRUE) %>%
@@ -265,7 +265,7 @@ print_chi2 <- function(x, width = NULL) {
       purrr::map_df(is.na)
     row_all_na <- row_all_na %>%
       dplyr::rowwise() %>%
-      dplyr::mutate(empty = all(dplyr::c_across())) %>%
+      dplyr::mutate(empty = all(dplyr::c_across(cols = dplyr::everything()))) %>%
       dplyr::pull(.data$empty)
 
     chi2 <- chi2 %>% dplyr::filter(!row_all_na)
@@ -386,7 +386,7 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #' at mouse hover. Set to \code{FALSE} to discard.
 #' @param popover By default, takes \code{getOption("tabxplor.kable_popover")}. When
 #' `FALSE`, html tooltips are of the base kind : they can't be used with floating table of
-#' content in pkg{rmarkdown} documents. Set to `TRUE` to use \pkg{kableExtra} html
+#' content in \pkg{rmarkdown} documents. Set to `TRUE` to use \pkg{kableExtra} html
 #' popovers instead, which are compatible with floating toc. Remember
 #' to enable the `popover` module by copying the following code into your document :
 #' \code{<script>

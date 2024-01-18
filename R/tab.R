@@ -771,7 +771,7 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
   # - na = "keep" : NA in factors (not numeric) will be made explicit in each tab_plain/tab_num
 
   if (with_filter == TRUE) data <- data %>% dplyr::filter(.data$.filter) %>%
-    dplyr::select(-.data$.filter)
+    dplyr::select(-".filter")
 
   #If all variables on a subtable are "drop_all", then put na = "keep" to gain time
   if (na == "drop_all") {
@@ -853,7 +853,7 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
       data <- data %>%
         dplyr::mutate(dplyr::across(
           tidyselect::all_of(as.character(col_vars[col_vars_3levels])),
-          ~ suppressWarnings(forcats::fct_explicit_na(., na_level = "NA") |>
+          ~ suppressWarnings(forcats::fct_na_value_to_level(., level = "NA") |>
                                forcats::fct_recode(rlang::splice(rm_levels_by_col_vars[[dplyr::cur_column()]] )))
         ))
     }
@@ -1106,7 +1106,7 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
       purrr::pmap( list(tabs[no_totrow],totrows, tottab_line),
                    ~ tibble::add_column(..1, totrows = ..2, tottab_line = ..3) %>%
                      dplyr::filter(!.data$totrows | .data$tottab_line) %>%
-                     dplyr::select(-.data$totrows, -.data$tottab_line)
+                     dplyr::select(-"totrows", -"tottab_line")
       )
   }
 
@@ -1167,7 +1167,7 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
 #' to pass to column, with a syntax of type \code{c(var1, var2, ...)}.
 #' @param names_prefix String added to the start of every variable name.
 #' @param names_sort If no \code{names_prefix} is given, new names takes the form
-#'  {spread_var}_{col_var_level}. Should then the column names be sorted ?
+#'  \code{spread_var}_\code{col_var_level}. Should then the column names be sorted ?
 #'  If \code{FALSE}, the default, column names are ordered by first appearance.
 #' @param totname The new name of the total rows, as a single string.
 # @param recalculate Where there is several `tab_vars`, some totals are missing in the
@@ -1309,7 +1309,7 @@ tab_spread <- function(tabs, spread_vars, names_prefix, names_sort = FALSE,
     #     dplyr::group_keys(dplyr::filter(tabs, !tottab_line)) %>% #dplyr::mutate(bis = PR0) %>%
     #     dplyr::select(-tidyselect::all_of(spread_vars)) %>%
     #     tidyr::unite(!!row_var, sep = " / ") %>%
-    #     dplyr::mutate(dplyr::across(.fns = ~ paste(totname, .))) %>%
+    #     dplyr::mutate(dplyr::across(.cols = dplyr::everything(), .fns = ~ paste(totname, .))) %>%
     #     tibble::deframe() %>%
     #     stringr::str_to_upper() %>% forcats::as_factor()
     # } else {
@@ -1331,7 +1331,7 @@ tab_spread <- function(tabs, spread_vars, names_prefix, names_sort = FALSE,
                                                    !!!new_levels) %>%
         forcats::fct_relevel(unique(names(new_levels)), after = Inf)
     ) %>%
-      dplyr::select(-.data$totrows, -.data$tottab_rows, -.data$tottab_line)
+      dplyr::select(-"totrows", -"tottab_rows", -"tottab_line")
   }
 
   if ( !missing(names_prefix) ) {
@@ -1859,7 +1859,7 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
 
   na_rows <- tabs %>%
     dplyr::select(!!!tab_vars, !!row_var) %>%
-    dplyr::mutate(na_rows = dplyr::if_any(.fns = is.na)) |>
+    dplyr::mutate(na_rows = dplyr::if_any(.cols = dplyr::everything(), .fns = is.na)) |>
     dplyr::pull(.data$na_rows)
 
   if (any(na_rows)) {
@@ -1868,7 +1868,7 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
     } else {
       data.table::setorderv(
         tabs, tab_row_names, na.last = TRUE
-      )[, paste0(tab_row_names) := lapply(.SD, forcats::fct_explicit_na, na_level = "NA"),
+      )[, paste0(tab_row_names) := lapply(.SD, forcats::fct_na_value_to_level, level = "NA"),
         .SDcols = tab_row_names]
     }
   }
@@ -2240,7 +2240,7 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
         #forcats::fct_recode(!!row_var,
         #                               purrr::set_names("Total", total_names[1]))
       ) |>
-      select(-.data$tabs_tot_names)
+      select(-"tabs_tot_names")
   }
 
   if ("col" %in% tot & total_names[2] != "Total") tabs <- tabs |>
@@ -2560,7 +2560,7 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
 
   # if (df | num) {
   #  tabs <- data |>
-  #     dplyr::summarise(across(all_of(as.character(col_vars)), list(
+  #     dplyr::summarise(across(tidyselect::all_of(as.character(col_vars)), list(
   #       mean = ~ stats::weighted.mean(., !!wt, na.rm = TRUE)
   #     )),
   #     .groups = "drop"
@@ -2682,7 +2682,7 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
   if (na == "keep") {
     data.table::setorderv(
       tabs, tab_row_names, na.last = TRUE
-    )[, paste0(tab_row_names) := lapply(.SD, forcats::fct_explicit_na, na_level = "NA"),
+    )[, paste0(tab_row_names) := lapply(.SD, forcats::fct_na_value_to_level, level = "NA"),
       .SDcols = tab_row_names]
   }
 
@@ -2706,7 +2706,7 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
   #
   # na_rows <- tabs %>%
   #   dplyr::select(!!!tab_vars, !!row_var) %>%
-  #   dplyr::mutate(na_rows = dplyr::if_any(.fns = is.na)) |>
+  #   dplyr::mutate(na_rows = dplyr::if_any(.cols = dplyr::everything(), .fns = is.na)) |>
   #   dplyr::pull(.data$na_rows)
   #
   # if (any(na_rows)) {
@@ -2715,12 +2715,12 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
   #   } else {
   #     tabs <- tabs %>%
   #       dplyr::mutate(dplyr::across(tidyselect::all_of(tab_row_names),
-  #                                   ~ forcats::fct_explicit_na(., na_level = "NA"))) %>%
+  #                                   ~ forcats::fct_na_value_to_level(., level = "NA"))) %>%
   #       dplyr::arrange(!!!tab_vars, !!row_var)
   #
   #     #data.table::setorderv(
   #     #  tabs, tab_row_names, na.last = TRUE
-  #     #)[, paste0(tab_row_names) := lapply(.SD, forcats::fct_explicit_na, na_level = "NA"),
+  #     #)[, paste0(tab_row_names) := lapply(.SD, forcats::fct_na_value_to_level, level = "NA"),
   #     #  .SDcols = tab_row_names]
   #   }
   # }
@@ -2851,7 +2851,7 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
     if (na == "keep" & length(tab_vars) != 0) {
       data.table::setorderv(
         tabs_tot, as.character(tab_vars), na.last = TRUE
-      )[, as.character(tab_vars) := lapply(.SD, forcats::fct_explicit_na, na_level = "NA"),
+      )[, as.character(tab_vars) := lapply(.SD, forcats::fct_na_value_to_level, level = "NA"),
         .SDcols = as.character(tab_vars)]
     }
 
@@ -2863,8 +2863,8 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
     #   purrr::map_dfr(ungroup_vars,
     #                  ~ dplyr::ungroup(data, !!!.x) |> #win nearly no time compared to group_by(!!!tab_vars)
     #                    dplyr::summarise(
-    #                      dplyr::across(all_of(purrr::map_chr(.x, rlang::as_name)), ~ factor("Total")),
-    #                      dplyr::across(all_of(as.character(col_vars)), function(.var) new_fmt(
+    #                      dplyr::across(tidyselect::all_of(purrr::map_chr(.x, rlang::as_name)), ~ factor("Total")),
+    #                      dplyr::across(tidyselect::all_of(as.character(col_vars)), function(.var) new_fmt(
     #                        display   = "mean",
     #                        digits    = as.integer(digits),
     #                        n         = dplyr::n(),
@@ -2881,7 +2881,7 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
     #
     # na_rows <- tabs_tot %>%
     #   dplyr::select(!!!tab_vars) %>%
-    #   dplyr::transmute(na_rows = dplyr::if_any(.fns = is.na)) |> tibble::deframe()
+    #   dplyr::transmute(na_rows = dplyr::if_any(.cols = dplyr::everything(), .fns = is.na)) |> tibble::deframe()
     #
     # if (any(na_rows)) {
     #   if (na == "drop") {
@@ -2889,7 +2889,7 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
     #   } else {
     #     tabs_tot <- tabs_tot %>%
     #       dplyr::mutate(dplyr::across(tidyselect::all_of(as.character(tab_vars)),
-    #                                   ~ forcats::fct_explicit_na(., na_level = "NA"))) %>%
+    #                                   ~ forcats::fct_na_value_to_level(., level = "NA"))) %>%
     #       dplyr::arrange(!!!tab_vars, !!row_var)
     #
     #   }
@@ -2985,7 +2985,7 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
     if (na == "keep") {
       data.table::setorderv(
         tabs_totaltab, as.character(row_var), na.last = TRUE
-      )[, as.character(row_var) := lapply(.SD, forcats::fct_explicit_na, na_level = "NA"),
+      )[, as.character(row_var) := lapply(.SD, forcats::fct_na_value_to_level, level = "NA"),
         .SDcols = as.character(row_var)]
     }
 
@@ -3276,7 +3276,7 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
         #forcats::fct_recode(!!row_var,
         #                               purrr::set_names("Total", total_names[1]))
       ) |>
-      select(-.data$tabs_tot_names)
+      select(-"tabs_tot_names")
   }
 
   if ("col" %in% tot & total_names[2] != "Total") tabs <- tabs |>
@@ -3360,7 +3360,7 @@ tab_totaltab <- function(tabs, totaltab = c("table", "line", "no"),
   tottab_rows <- is_tottab(tabs)
   if (any(tottab_rows)) tabs <- tabs %>%
     tibble::add_column(tottab = tottab_rows) %>%
-    dplyr::filter(!.data$tottab) %>% dplyr::select(-.data$tottab)
+    dplyr::filter(!.data$tottab) %>% dplyr::select(-"tottab")
 
   if (totaltab[1] == "no") return(tabs)
 
@@ -3368,12 +3368,12 @@ tab_totaltab <- function(tabs, totaltab = c("table", "line", "no"),
   totaltable <- switch(
     totaltab[1],
     "table" = tibble::as_tibble(tabs) %>% tibble::add_column(totrow = is_totrow(.)) %>%
-      dplyr::filter(!.data$totrow) %>% dplyr::select(-.data$totrow) %>%
+      dplyr::filter(!.data$totrow) %>% dplyr::select(-"totrow") %>%
       dplyr::group_by(!!row_var) %>%
       dplyr::summarise(dplyr::across(where(is_fmt), ~ as_tottab(sum(.) ))),
 
     "line"  = tibble::as_tibble(tabs) %>% tibble::add_column(totrow = is_totrow(.)) %>%
-      dplyr::filter(!.data$totrow) %>% dplyr::select(-.data$totrow) %>%
+      dplyr::filter(!.data$totrow) %>% dplyr::select(-"totrow") %>%
       dplyr::group_by(!!row_var) %>%
       dplyr::summarise(dplyr::across(where(is_fmt), sum)) %>%
       dplyr::summarise(dplyr::across(where(is_fmt), ~ as_totrow(as_tottab(sum(.))))) %>%
@@ -3512,7 +3512,7 @@ tab_tot <- function(tabs, tot = c("row", "col"), name = "Total",
     if (any(totrows)) tabs <- tabs %>%
       tibble::add_column(totrows, tottab_line) %>%
       dplyr::filter(!.data$totrows | .data$tottab_line) %>%
-      dplyr::select(-.data$totrows, -.data$tottab_line)
+      dplyr::select(-"totrows", -"tottab_line")
   }
 
   if ("col" %in% tot | tot[1] == "no") tabs <- tabs %>%
@@ -3603,7 +3603,7 @@ tab_tot <- function(tabs, tot = c("row", "col"), name = "Total",
 
     tabs <- dplyr::bind_rows(tabs, totrows) %>%
       dplyr::arrange(.by_group = TRUE) %>%
-      dplyr::select(-.data$tottab_line, -.data$tottab_rows)
+      dplyr::select(-"tottab_line", -"tottab_rows")
   }
 
 
@@ -4459,7 +4459,7 @@ tab_chi2 <- function(tabs, calc = c("ctr", "p", "var", "counts"),
                      where(is.double), ~ dplyr::if_else(.data$totrows, 0,
                                                         dplyr::if_else(is.na(.), 0, 1))
                    )) %>%
-                   dplyr::select(-.data$totrows)
+                   dplyr::select(-"totrows")
       )
 
 
@@ -4495,7 +4495,7 @@ tab_chi2 <- function(tabs, calc = c("ctr", "p", "var", "counts"),
                                           true      = set_ctr(., 1/.data$.cell),
                                           false     = set_ctr(., .data$.var   ) )
                        )) %>%
-                       dplyr::select(-.data$.var, -.data$.cell)
+                       dplyr::select(-".var", -".cell")
       )
 
     tabs <- tabs %>%
@@ -4558,7 +4558,7 @@ tab_chi2 <- function(tabs, calc = c("ctr", "p", "var", "counts"),
         dplyr::select(where(~ !is_totcol(.))) %>%
         dplyr::group_split() %>%
         purrr::map( ~ dplyr::select(., where(is_fmt)) ) %>%
-        purrr::map_int(~ dplyr::mutate(.,dplyr::across(.fns = get_n)) %>%
+        purrr::map_int(~ dplyr::mutate(.,dplyr::across(.cols = dplyr::everything(), .fns = get_n)) %>%
                          rowSums() %>% sum() %>% as.integer()
         )
     )
@@ -4587,10 +4587,10 @@ tab_chi2 <- function(tabs, calc = c("ctr", "p", "var", "counts"),
                       dplyr::group_split() %>%
                       purrr::map( ~ dplyr::select(., where(is_fmt)) ) %>%
                       purrr::map(
-                        ~ dplyr::mutate(., dplyr::across(.fns = get_n)) %>%
+                        ~ dplyr::mutate(., dplyr::across(.cols = dplyr::everything(), .fns = get_n)) %>%
                           dplyr::select(-where(~ sum(., na.rm = TRUE) == 0)) %>%
                           dplyr::rowwise() %>%
-                          dplyr::filter(! sum(dplyr::c_across(),
+                          dplyr::filter(! sum(dplyr::c_across(cols = dplyr::everything()),
                                               na.rm = TRUE) == 0 ) %>%
                           dplyr::ungroup()
                       ) %>%
@@ -4614,7 +4614,7 @@ tab_chi2 <- function(tabs, calc = c("ctr", "p", "var", "counts"),
   #if (length(groups) != 0) {
   tables <- tabs[!is_totrow(tabs),] %>% dplyr::select(!where(is_totcol)) %>%
     dplyr::summarise(row_var = factor(row_var), .groups = "drop") #%>%
-  #dplyr::mutate(dplyr::across(.fns = ~ stringr::str_remove_all(., "/") ))
+  #dplyr::mutate(dplyr::across(.cols = dplyr::everything(), .fns = ~ stringr::str_remove_all(., "/") ))
 
 
   # if (length(groups) != 0) tables <- tables %>%
@@ -5009,14 +5009,14 @@ relabel_levels_in_varnames <- function(data, col_vars) {
 #
 # #Compute all variables needed to calculate ci in different tabs
 # xbase <- tabs_nogroup %>%
-#   dplyr::mutate(dplyr::across(.fns =  ~ dplyr::if_else(
+#   dplyr::mutate(dplyr::across(.cols = dplyr::everything(), .fns =  ~ dplyr::if_else(
 #     condition = get_display(.) == "mean",
 #     true      = get_mean(.),
 #     false     = get_pct(.)
 #   )))
 #
 # xvar <- tabs_nogroup %>%
-#   dplyr::mutate(dplyr::across(.fns = ~ dplyr::if_else(
+#   dplyr::mutate(dplyr::across(.cols = dplyr::everything(), .fns = ~ dplyr::if_else(
 #     condition = get_display(.) == "mean",
 #     true      = get_var(.),
 #     false     = NA_real_

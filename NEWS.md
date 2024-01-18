@@ -1,5 +1,4 @@
-# tabxplor (development version)
-
+# tabxplor 1.1.1
 
 ## Added : 
 * `fct_recode_helper()` : helper function to recode multiple variables with `forcats::fct_recode`.

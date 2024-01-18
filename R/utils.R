@@ -38,7 +38,7 @@ fct_recode_helper <- function(.data, .cols = -where(is.numeric), .data_out_name,
 
   pos_cols <- tidyselect::eval_select(rlang::enquo(.cols), .data)
   .data <- .data[pos_cols]
-  .data <- .data %>% dplyr::mutate(dplyr::across(.fns = as.factor))
+  .data <- .data %>% dplyr::mutate(dplyr::across(.cols = dplyr::everything(), .fns = as.factor))
 
   recode <- .data %>%
     purrr::map(~ paste0("\"",
@@ -611,7 +611,7 @@ prepare_fct_recode <- function(df_in, df_out, var,  mode = c("text", "numbers",
   } else if (mode == "numbers") {
     number <- lines %>% stringr::str_match("^\\d*\\w*") %>% tibble::as_tibble()
     name <- lines %>% stringr::str_split("^\\d*[^\\s]*", n = 2, simplify = TRUE) %>%
-      tibble::as_tibble() %>% dplyr::select(.data$V2) %>%
+      tibble::as_tibble() %>% dplyr::select("V2") %>%
       dplyr::mutate(V2 = stringr::str_replace_all(.data$V2, "^ *", ""))
     lines <- dplyr::bind_cols(number, name) %>%
       dplyr::rename(number = .data$V1, name = .data$V2)
@@ -638,7 +638,7 @@ prepare_fct_recode <- function(df_in, df_out, var,  mode = c("text", "numbers",
                                                                         1, 1)),
                   other_letters = stringr::str_sub(.data$name, 2, -1) ) %>%
     dplyr::mutate(name = stringr::str_c(.data$first_letter, .data$other_letters)) %>%
-    dplyr::select(-.data$first_letter, -.data$other_letters) %>%
+    dplyr::select(-"first_letter", -"other_letters") %>%
     dplyr::mutate(mod_line = stringr::str_c("\"", .data$number,"-", .data$name,"\" = \"",
                                             .data$number,  "\",\n"))
   first_line <-
@@ -648,7 +648,7 @@ prepare_fct_recode <- function(df_in, df_out, var,  mode = c("text", "numbers",
                                              var, ",\n") )
   last_line <- tibble::tibble(number = "0", mod_line = ")")
   res <- dplyr::bind_rows(first_line, lines, last_line) %>%
-    dplyr::select(.data$mod_line) %>% dplyr::pull()
+    dplyr::select("mod_line") %>% dplyr::pull()
   cat(res, "\n\n")
   return(invisible(res))
 }

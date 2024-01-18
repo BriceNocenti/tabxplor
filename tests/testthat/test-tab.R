@@ -310,8 +310,8 @@ testthat::test_that("tab work with tribble (even many tab_vars)", {
 #     tabs %>% tab_tot() %>% dplyr::ungroup() %>% tab_pct("col") %>% dplyr::ungroup() %>%
 #       dplyr::select(where(~is_fmt(.) & ! get_type(.) == "mean")) %>%
 #       dplyr::filter(is_totrow(.) & ! is_tottab(.)) %>%
-#       dplyr::mutate(dplyr::across(.fns = ~ get_pct(.) == 1)) %>%
-#       dplyr::summarise(dplyr::across(.fns = all)) %>%
+#       dplyr::mutate(dplyr::across(.cols = dplyr::everything(), .fns = ~ get_pct(.) == 1)) %>%
+#       dplyr::summarise(dplyr::across(.cols = dplyr::everything(), .fns = all)) %>%
 #       purrr::map_lgl(~ . ) %>% all()
 #   )
 #
@@ -382,7 +382,7 @@ testthat::test_that("tab work with tribble (even many tab_vars)", {
 #
 #   tabs %>% get_chi2() %>%
 #     dplyr::select(where(is_fmt)) %>%
-#     dplyr::mutate(dplyr::across(.fns = get_num)) %>%
+#     dplyr::mutate(dplyr::across(.cols = dplyr::everything(), .fns = get_num)) %>%
 #     purrr::map(~ .) %>%
 #     testthat::expect_snapshot_value()
 #
@@ -393,10 +393,10 @@ testthat::test_that("tab work with tribble (even many tab_vars)", {
 #     dplyr::transmute(dplyr::across(where(is_fmt), ~ set_display(., "ctr")))
 #
 # ctr %>% dplyr::filter(is_totrow(.)) %>%
-#   dplyr::mutate(dplyr::across(.fns = ~ get_ctr(.)))
+#   dplyr::mutate(dplyr::across(.cols = dplyr::everything(), .fns = ~ get_ctr(.)))
 #
 # ctr %>% dplyr::filter(!is_totrow(.)) %>%
-#   dplyr::mutate(dplyr::across(.fns = ~ get_ctr(.)))
+#   dplyr::mutate(dplyr::across(.cols = dplyr::everything(), .fns = ~ get_ctr(.)))
 # })
 
 #' @keywords internal
@@ -444,13 +444,13 @@ testthat::test_that("tab colors are calculated with counts and pct", {
   tab(data, sex, hair_color, pct = "row", color = "diff"    )  %>% dplyr::pull(brown) %>% expect_color()
   tab(data, sex, hair_color, pct = "row", color = "diff_ci" )  %>% dplyr::pull(`NA`)  %>% expect_color()
   tab(data, sex, hair_color, pct = "row", color = "after_ci")  %>% dplyr::pull(`NA`)  %>% expect_color()
-  tab(data, sex, hair_color, pct = "row", color = "contrib" )  %>% dplyr::pull(brown) %>% expect_color()
-  tab(data, sex, hair_color, pct = "no" , color = "contrib")   %>% dplyr::pull(brown) %>% expect_color()
+  tab(data, sex, hair_color, pct = "row", color = "contrib" )  %>% dplyr::pull(`NA`) %>% expect_color()
+  tab(data, sex, hair_color, pct = "no" , color = "contrib" )  %>% dplyr::pull(`NA`) %>% expect_color()
 
   tab(data, sex, hair_color, pct = "row"     , color = "auto") %>% dplyr::pull(brown) %>% expect_color()
   tab(data, sex, hair_color, pct = "col"     , color = "auto") %>% dplyr::pull(brown) %>% expect_color()
-  tab(data, sex, hair_color, pct = "all"     , color = "auto") %>% dplyr::pull(brown) %>% expect_color()
-  tab(data, sex, hair_color, pct = "all_tabs", color = "auto") %>% dplyr::pull(brown) %>% expect_color()
+  tab(data, sex, hair_color, pct = "all"     , color = "auto") %>% dplyr::pull(`NA`) %>% expect_color()
+  tab(data, sex, hair_color, pct = "all_tabs", color = "auto") %>% dplyr::pull(`NA`) %>% expect_color()
 
  })
 

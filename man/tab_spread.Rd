@@ -22,7 +22,7 @@ to pass to column, with a syntax of type \code{c(var1, var2, ...)}.}
 \item{names_prefix}{String added to the start of every variable name.}
 
 \item{names_sort}{If no \code{names_prefix} is given, new names takes the form
-{spread_var}_{col_var_level}. Should then the column names be sorted ?
+\code{spread_var}_\code{col_var_level}. Should then the column names be sorted ?
 If \code{FALSE}, the default, column names are ordered by first appearance.}
 
 \item{totname}{The new name of the total rows, as a single string.}
