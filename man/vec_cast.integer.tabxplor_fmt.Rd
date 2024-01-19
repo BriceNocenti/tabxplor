@@ -11,8 +11,10 @@
 
 \item{to}{A fmt vector}
 
-\item{...}{Other parameter.
-#' @return An integer vector}
+\item{...}{Other parameter.}
+}
+\value{
+An integer vector
 }
 \description{
 Convert fmt into integer

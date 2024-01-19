@@ -1,4 +1,35 @@
-## New version 1.1.1
+## New version 1.1.1 : second submission
+
+Thank to Benjamin Altmann for his comments : 
+
+1) Only undirected quotation marks in DESCRIPTION (quotations, names, software names...). 
+  Answer : taken into account.
+
+2) Please add \value to .Rd files regarding exported methods and explain
+the functions results in the documentation. Please write about the
+structure of the output (class) and also what the output means. (If a
+function does not return a value, please document that too, e.g.
+\value{No return value, called for side effects} or similar)
+Missing Rd-tags:
+      pipe.Rd: \arguments,  \value
+      tbl_format_footer.tabxplor_tab.Rd: \value
+      vec_cast.character.tabxplor_fmt.Rd: \value
+      vec_cast.integer.tabxplor_fmt.Rd: \value
+      vec_cast.tabxplor_fmt.double.Rd: \value
+      vec_cast.tabxplor_fmt.tabxplor_fmt.Rd: \value
+      vec_ptype2.double.tabxplor_fmt.Rd: \value
+      vec_ptype2.integer.tabxplor_fmt.Rd: \value
+      vec_ptype2.tabxplor_fmt.integer.Rd: \value
+  Answer : I added the value missing in those Rd-tags, and others (and arguments for pipe.Rd). 
+
+3) Please ensure that your functions do not write by default or in your
+examples/vignettes/tests in the user's home filespace (including the
+package directory and getwd()). This is not allowed by CRAN policies.
+Please omit any default path in writing functions. In your
+examples/vignettes/tests you can write to tempdir(). -> R/tab_xl.R
+  Answer : checked that functions/examples/vignettes/tests only write in tempdir().
+
+# First submission
 1 NOTE : « New submission.
          CRAN repository db overrides: X-CRAN-Comment: Archived on 2022-09-06 
          as check problems were not corrected in time. »
@@ -14,6 +45,7 @@ tabxplor was removed from CRAN in september 2022
 
 ## Test environments
 * local Windows 10 install, R devel
+  
 
 * https://builder.r-hub.io :
    - Windows Server 2022, R-devel, 64 bit
@@ -28,6 +60,7 @@ tabxplor was removed from CRAN in september 2022
 
 * https://win-builder.r-project.org/LMI113o7S0rR: 
    - Windows Server 2022 x64, R 4.3.2 (2023-10-31 ucrt)
+
 
 ## R CMD check results
 * local Windows 10:
@@ -45,9 +78,9 @@ tabxplor was removed from CRAN in september 2022
         Found the following files/directories: ''NULL'' »
     I checked on the forums : the two former notes seems to come from the rhub server. 
     
-
 * https://win-builder.r-project.org : 
     No ERRORs, no WARNINGs, 1 NOTE (New submission + Package was archived on CRAN).
+
 
 ## Downstream dependencies
 The only downstream dependency is with my package `ggfacto`, which works well with the 

@@ -9,6 +9,9 @@
 #' @export
 #' @importFrom magrittr %>%
 #' @usage lhs \%>\% rhs
+#' @param lhs A value or the magrittr placeholder.
+#' @param rhs A function call using the magrittr semantics.
+#' @return Pipe an object forward into a function or call expression.
 NULL
 
 # Rlang .data to bind data masking variable in dplyr

@@ -5,7 +5,7 @@
 
 <!-- badges: start -->
 
-[![R-CMD-check](https://github.com/BriceNocenti/tabxplor/workflows/R-CMD-check/badge.svg)](https://github.com/BriceNocenti/tabxplor/actions)
+[![R-CMD-check](https://github.com/BriceNocenti/tabxplor/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/BriceNocenti/tabxplor/actions/workflows/R-CMD-check.yaml)
 <!-- badges: end -->
 
 If R makes complex things simple, it can sometimes make simple things

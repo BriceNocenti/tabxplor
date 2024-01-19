@@ -5,6 +5,7 @@
 \alias{tab_ptype2}
 \alias{vec_ptype2.tabxplor_tab.tabxplor_tab}
 \alias{vec_cast.tabxplor_tab.tabxplor_tab}
+\alias{vec_ptype2.tabxplor_tab.tbl_df}
 \alias{vec_ptype2.tbl_df.tabxplor_tab}
 \alias{vec_cast.tabxplor_tab.tbl_df}
 \alias{vec_cast.tbl_df.tabxplor_tab}
@@ -41,6 +42,8 @@ tab_ptype2(x, y, ..., x_arg = "", y_arg = "")
 \method{vec_ptype2}{tabxplor_tab.tabxplor_tab}(x, y, ...)
 
 \method{vec_cast}{tabxplor_tab.tabxplor_tab}(x, to, ...)
+
+\method{vec_ptype2}{tabxplor_tab.tbl_df}(x, y, ...)
 
 \method{vec_ptype2}{tbl_df.tabxplor_tab}(x, y, ...)
 
@@ -115,7 +118,61 @@ A tibble of class \code{tabxplor_tab}.
 
 A tibble of class \code{tabxplor_tab}.
 
-A tibble of class \code{tabxplor_grouped_tab}.
+A tibble of class \code{tabxplor_tab}.
+
+A tibble of class \code{tabxplor_tab}.
+
+A tibble of class \code{tabxplor_tab}.
+
+A tibble.
+
+A tibble of class \code{tabxplor_tab}.
+
+A tibble.
+
+A tibble of class \code{tabxplor_tab}.
+
+A data.frame.
+
+A tibble of class \code{tabxplor_tab}.
+
+A data.frame.
+
+An object of class \code{tabxplor_grouped_tab}.
+
+An object of class \code{tabxplor_grouped_tab}.
+
+An object of class \code{tabxplor_grouped_tab}.
+
+An object of class \code{grouped_df}.
+
+An object of class \code{tabxplor_grouped_tab}.
+
+An object of class \code{grouped_df}.
+
+An object of class \code{tabxplor_grouped_tab}.
+
+An object of class \code{tabxplor_tab}.
+
+An object of class \code{tabxplor_grouped_tab}.
+
+An object of class \code{tabxplor_tab}.
+
+An object of class \code{tabxplor_grouped_tab}.
+
+An object of class \code{tbl_df}.
+
+An object of class \code{tabxplor_grouped_tab}.
+
+An object of class \code{tbl_df}.
+
+An object of class \code{tabxplor_grouped_tab}.
+
+An data.frame.
+
+An object of class \code{tabxplor_grouped_tab}.
+
+An data.frame.
 }
 \description{
 Coercion between two tab
@@ -125,6 +182,8 @@ Coercion between two tab
 \item \code{vec_ptype2(tabxplor_tab.tabxplor_tab)}: find common ptype between tabxplor_tab and tabxplor_tab
 
 \item \code{vec_cast(tabxplor_tab.tabxplor_tab)}: convert tabxplor_tab to tabxplor_tab
+
+\item \code{vec_ptype2(tabxplor_tab.tbl_df)}: find common ptype between tabxplor_tab and tbl_df
 
 \item \code{vec_ptype2(tbl_df.tabxplor_tab)}: find common ptype between tbl_df and tabxplor_tab
 

@@ -11,8 +11,10 @@
 
 \item{to}{A fmt vector}
 
-\item{...}{Other parameter.
-#' @return A fmt vector}
+\item{...}{Other parameter.}
+}
+\value{
+A fmt vector
 }
 \description{
 Convert fmt into fmt

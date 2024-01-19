@@ -32,6 +32,16 @@
 }
 \value{
 A fmt vector
+
+A fmt vector
+
+A fmt vector
+
+A fmt vector
+
+A fmt vector
+
+A fmt vector
 }
 \description{
 Vec_arith method for fmt

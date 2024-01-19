@@ -8,7 +8,7 @@
 NULL
 
 
-# binding for global variables not found by R cmd check
+# binding for global variables not found by R CMD check
 . = NULL
 globalVariables(c(":=", ".SD", ".N"))
 
@@ -2314,7 +2314,7 @@ vec_ptype2.tabxplor_fmt.integer <- function(x, y, ...) x # fmt() #double()
 #' @param x An integer vector
 #' @param y A fmt vector
 #' @param ... Other parameter.
-#' #' @return A fmt vector
+#' @return A fmt vector
 #' @export
 vec_ptype2.integer.tabxplor_fmt <- function(x, y, ...) y # new_fmt() #double()
 
@@ -2323,7 +2323,7 @@ vec_ptype2.integer.tabxplor_fmt <- function(x, y, ...) y # new_fmt() #double()
 #' @param x A fmt vector
 #' @param to A fmt vector
 #' @param ... Other parameter.
-#' #' @return A fmt vector
+#' @return A fmt vector
 #' @export
 vec_cast.tabxplor_fmt.tabxplor_fmt  <- function(x, to, ...)
   new_fmt(display   = get_display (x),
@@ -2356,7 +2356,7 @@ vec_cast.tabxplor_fmt.tabxplor_fmt  <- function(x, to, ...)
 #' @param x A double vector
 #' @param to A fmt vector
 #' @param ... Other parameter.
-#' #' @return A fmt vector
+#' @return A fmt vector
 #' @export
 vec_cast.tabxplor_fmt.double   <- function(x, to, ...)
   fmt(n = NA_integer_            ,
@@ -2402,7 +2402,7 @@ vec_cast.tabxplor_fmt.integer <- function(x, to, ...)
 #' @param x A integer vector
 #' @param to A fmt vector
 #' @param ... Other parameter.
-#' #' @return An integer vector
+#' @return An integer vector
 #' @method vec_cast.integer tabxplor_fmt
 #' @export
 vec_cast.integer.tabxplor_fmt    <- function(x, to, ...) get_num(x) %>% as.integer() #vctrs::field(x, "pct") %>% as.integer()
@@ -2411,7 +2411,7 @@ vec_cast.integer.tabxplor_fmt    <- function(x, to, ...) get_num(x) %>% as.integ
 #' @param x A fmt vector
 #' @param to A character vector
 #' @param ... Other parameter
-#' #' @return A character vector
+#' @return A character vector
 #' @method vec_cast.character tabxplor_fmt
 #' @export
 vec_cast.character.tabxplor_fmt  <- function(x, to, ...) format(x)
@@ -2459,7 +2459,7 @@ vec_arith.tabxplor_fmt <- function(op, x, y, ...) {
 }
 
 #' @describeIn vec_arith.tabxplor_fmt default vec_arith method for fmt
-# @return A fmt vector
+#' @return A fmt vector
 #' @method vec_arith.tabxplor_fmt default
 #' @export
 vec_arith.tabxplor_fmt.default <- function(op, x, y, ...) {
@@ -2471,7 +2471,7 @@ vec_arith.tabxplor_fmt.default <- function(op, x, y, ...) {
 # positive_integer <- function(n) as.integer(n * sign(n))
 
 #' @describeIn vec_arith.tabxplor_fmt vec_arith method for fmt + fmt
-# @return A fmt vector
+#' @return A fmt vector
 #' @method vec_arith.tabxplor_fmt tabxplor_fmt
 #' @export
 vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
@@ -2590,7 +2590,7 @@ vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
 }
 
 #' @describeIn vec_arith.tabxplor_fmt vec_arith method for fmt + numeric
-# @return A fmt vector
+#' @return A fmt vector
 #' @method vec_arith.tabxplor_fmt numeric
 #' @export
 vec_arith.tabxplor_fmt.numeric <- function(op, x, y, ...) {
@@ -2605,7 +2605,7 @@ vec_arith.tabxplor_fmt.numeric <- function(op, x, y, ...) {
 }
 
 #' @describeIn vec_arith.tabxplor_fmt vec_arith method for numeric + fmt
-# @return A fmt vector
+#' @return A fmt vector
 #' @method vec_arith.numeric tabxplor_fmt
 #' @export
 vec_arith.numeric.tabxplor_fmt <- function(op, x, y, ...) {
@@ -2620,7 +2620,7 @@ vec_arith.numeric.tabxplor_fmt <- function(op, x, y, ...) {
 }
 
 #' @describeIn vec_arith.tabxplor_fmt vec_arith method for -fmt
-# @return A fmt vector
+#' @return A fmt vector
 #' @method vec_arith.tabxplor_fmt MISSING
 #' @export
 vec_arith.tabxplor_fmt.MISSING <- function(op, x, y, ...) { #unary + and - operators

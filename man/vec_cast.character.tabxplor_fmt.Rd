@@ -11,8 +11,10 @@
 
 \item{to}{A character vector}
 
-\item{...}{Other parameter
-#' @return A character vector}
+\item{...}{Other parameter}
+}
+\value{
+A character vector
 }
 \description{
 Convert fmt into character
