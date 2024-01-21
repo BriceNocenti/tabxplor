@@ -11,8 +11,10 @@
 
 \item{y}{An integer vector}
 
-\item{...}{Other parameter.
-#' @return A fmt vector}
+\item{...}{Other parameter.}
+}
+\value{
+A fmt vector
 }
 \description{
 Find common ptype between fmt and integer

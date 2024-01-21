@@ -2300,14 +2300,14 @@ vec_ptype2.tabxplor_fmt.double  <- function(x, y, ...) x # new_fmt() #double()
 #' @param x A double vector
 #' @param y A fmt vector
 #' @param ... Other parameter.
-#' #' @return A fmt vector
+#' @return A fmt vector
 #' @export
 vec_ptype2.double.tabxplor_fmt  <- function(x, y, ...) y # new_fmt() #double()
 #' Find common ptype between fmt and integer
 #' @param x A fmt vector
 #' @param y An integer vector
 #' @param ... Other parameter.
-#' #' @return A fmt vector
+#' @return A fmt vector
 #' @export
 vec_ptype2.tabxplor_fmt.integer <- function(x, y, ...) x # fmt() #double()
 #' Find common ptype between integer and fmt

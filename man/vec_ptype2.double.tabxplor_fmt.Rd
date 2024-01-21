@@ -11,8 +11,10 @@
 
 \item{y}{A fmt vector}
 
-\item{...}{Other parameter.
-#' @return A fmt vector}
+\item{...}{Other parameter.}
+}
+\value{
+A fmt vector
 }
 \description{
 Find common ptype between double and fmt

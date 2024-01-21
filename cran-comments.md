@@ -1,11 +1,30 @@
-## New version 1.1.1 : second submission
+## New version 1.1.1 : 
+
+
+# Third submission 
+
+Thanks to Victoria Wimmer for her comment : 
+« We still see:
+Please add \value to .Rd files regarding exported methods and explain
+the functions results in the documentation. Please write about the
+structure of the output (class) and also what the output means. (If a
+function does not return a value, please document that too, e.g.
+\value{No return value, called for side effects} or similar)
+Missing Rd-tags:
+      vec_ptype2.double.tabxplor_fmt.Rd: \value
+      vec_ptype2.tabxplor_fmt.integer.Rd: \value
+» 
+  Answer : sorry, it was a syntax problem in Roxygen (doubled comment) :   #' #' @return
+
+
+# Second submission
 
 Thank to Benjamin Altmann for his comments : 
 
-1) Only undirected quotation marks in DESCRIPTION (quotations, names, software names...). 
+1) "Only undirected quotation marks in DESCRIPTION (quotations, names, software names...)." 
   Answer : taken into account.
 
-2) Please add \value to .Rd files regarding exported methods and explain
+2) "Please add \value to .Rd files regarding exported methods and explain
 the functions results in the documentation. Please write about the
 structure of the output (class) and also what the output means. (If a
 function does not return a value, please document that too, e.g.
@@ -19,14 +38,14 @@ Missing Rd-tags:
       vec_cast.tabxplor_fmt.tabxplor_fmt.Rd: \value
       vec_ptype2.double.tabxplor_fmt.Rd: \value
       vec_ptype2.integer.tabxplor_fmt.Rd: \value
-      vec_ptype2.tabxplor_fmt.integer.Rd: \value
+      vec_ptype2.tabxplor_fmt.integer.Rd: \value"
   Answer : I added the value missing in those Rd-tags, and others (and arguments for pipe.Rd). 
 
-3) Please ensure that your functions do not write by default or in your
+3) "Please ensure that your functions do not write by default or in your
 examples/vignettes/tests in the user's home filespace (including the
 package directory and getwd()). This is not allowed by CRAN policies.
 Please omit any default path in writing functions. In your
-examples/vignettes/tests you can write to tempdir(). -> R/tab_xl.R
+examples/vignettes/tests you can write to tempdir(). -> R/tab_xl.R"
   Answer : checked that functions/examples/vignettes/tests only write in tempdir().
 
 # First submission
@@ -46,37 +65,52 @@ tabxplor was removed from CRAN in september 2022
 ## Test environments
 * local Windows 10 install, R devel
   
+* github Actions : https://github.com/BriceNocenti/tabxplor/actions/runs/7586115180 
+   - macOS 12.7.2, R-release
+   - Microsoft Windows Server 2022, R-release
+   - Ubuntu Linux 22.04.3 LTS, R-devel
+   - Ubuntu Linux 22.04.3 LTS, R-release
+   - Ubuntu Linux 22.04.3 LTS, R-oldrel-1
 
 * https://builder.r-hub.io :
    - Windows Server 2022, R-devel, 64 bit
-   (Build ID: tabxplor_1.1.1.tar.gz-117901e917fa40cb8a634b4f0b930a5a)
+   https://builder.r-hub.io/status/tabxplor_1.1.1.tar.gz-001807fcc2934f4b97ea4be05f2d681c
    - Ubuntu Linux 20.04.1 LTS, R-release, GCC
-   (Build ID: tabxplor_1.1.1.tar.gz-fb162797410a4e2b823626fd9093db0c)
+   https://builder.r-hub.io/status/tabxplor_1.1.1.tar.gz-6428111f280743a6be10efb251c32797
    - Fedora Linux, R-devel, clang, gfortran
-   (Build ID: tabxplor_1.1.1.tar.gz-ff6c901f8025410e88e2d58bdb71f1b0)
+   https://builder.r-hub.io/status/tabxplor_1.1.1.tar.gz-6f051813429240b49e9d07798cea3488
 
-* https://win-builder.r-project.org/WNdIWx9698Vl: 
+* https://win-builder.r-project.org/DB48DM5FSDyS: 
    - Windows Server 2022 x64, R-devel
-
-* https://win-builder.r-project.org/LMI113o7S0rR: 
-   - Windows Server 2022 x64, R 4.3.2 (2023-10-31 ucrt)
 
 
 ## R CMD check results
 * local Windows 10:
     No ERRORs, no WARNINGs, no NOTEs. 
 
+* github Actions : 
+    No ERRORs, no WARNINGs, no NOTEs. 
+
 * https://builder.r-hub.io : 
     No ERRORs, no WARNINGs. 
     
-    3 NOTE (only on Windows Server 2022) : 
+    3 NOTEs (on Windows Server 2022) : 
       - New submission + Package was archived on CRAN
-      
       - « checking for detritus in the temp directory 
         ... Found the following files/directories: 'lastMiKTeXException' ». 
       - « checking for non-standard things in the check directory ... NOTE
         Found the following files/directories: ''NULL'' »
     I checked on the forums : the two former notes seems to come from the rhub server. 
+    
+    3 NOTES (Ubuntu + Fedora) : 
+     - New submission + Package was archived on CRAN
+     - "checking examples ... [4s/18s] NOTE
+       Examples with CPU (user + system) or elapsed time > 5s
+            user system elapsed
+       fmt 1.626   0.06   6.985"
+     - "checking HTML version of manual ... NOTE
+       Skipping checking HTML validation: no command 'tidy' found"
+    
     
 * https://win-builder.r-project.org : 
     No ERRORs, no WARNINGs, 1 NOTE (New submission + Package was archived on CRAN).
