@@ -11,6 +11,7 @@ tab_kable(
   html_24_bit = NULL,
   tooltips = TRUE,
   popover = NULL,
+  color_legend = TRUE,
   ...
 )
 }
@@ -39,7 +40,9 @@ $(document).ready(function(){
   $('[data-toggle="popover"]').popover();
 });
 </script>
-}
+}}
+
+\item{color_legend}{Print colors legend below the table ?
 You can then use a \code{css} chunk in rmarkdown to change popovers colors.}
 
 \item{...}{Other arguments to pass to \code{\link[knitr:kable]{knitr::kable}} and

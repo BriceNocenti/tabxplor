@@ -1,6 +1,6 @@
 Package: tabxplor
 Title: User-Friendly Tables with Color Helpers for Data Exploration
-Version: 1.1.1
+Version: 1.1.2
 Authors@R: 
     person(given = "Brice",
            family = "Nocenti",

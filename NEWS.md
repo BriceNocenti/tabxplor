@@ -1,3 +1,13 @@
+# tabxplor 1.1.2
+
+## Added : 
+* `tab_kable()` : a `color_legend` argument have been added, to possibly remove the legend.
+
+## Bug corrections :
+* `tab_color_legend` had a mistake causing an error
+
+
+
 # tabxplor 1.1.1
 
 ## Added : 

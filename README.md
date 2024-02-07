@@ -23,7 +23,7 @@ with formats and colors.
 
 ## Installation
 
-You can install tabxplor from CRAN with:
+You can install tabxplor from CRAN with :
 
 ``` r
 install.packages("tabxplor")

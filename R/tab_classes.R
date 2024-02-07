@@ -397,6 +397,7 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #' });
 #' </script>
 #'}
+#' @param color_legend Print colors legend below the table ?
 #' You can then use a `css` chunk in rmarkdown to change popovers colors.
 #' @param ... Other arguments to pass to \code{\link[knitr:kable]{knitr::kable}} and
 #' \code{\link[kableExtra:kable_styling]{kableExtra::kable_styling}}.
@@ -414,7 +415,7 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #'
 tab_kable <- function(tabs,
                       theme = c("light", "dark"), color_type = NULL, html_24_bit = NULL,
-                      tooltips = TRUE, popover = NULL,
+                      tooltips = TRUE, popover = NULL, color_legend = TRUE,
                       ...) {
   #theme <- if (is.null(theme)) { getOption("tabxplor.color_style_theme") } else { theme }
   color_type <-
@@ -548,6 +549,7 @@ tab_kable <- function(tabs,
   #       ~ as.character(.) %>% kableExtra::cell_spec(align = "r", bold  = refs2)
   #       ))
 
+  if (color_legend) {
   if (length(color_cols) != 0) subtext <- c(tab_color_legend(tabs,
                                                              mode = "html",
                                                              html_type  = color_type[1],
@@ -556,7 +558,7 @@ tab_kable <- function(tabs,
                                                              text_color = text_color,
                                                              grey_color = grey_color),
                                             subtext)
-
+  }
 
   out <- knitr::kable(out, escape = FALSE,
                       table.attr = "style=\"border-top: 0; border-bottom: 0;\"", ...)

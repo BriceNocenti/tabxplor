@@ -1891,7 +1891,7 @@ tab_color_legend <- function(x, colored = TRUE, mode = c("console", "html"),
       ) %>%
         purrr::map2(.data$color_type, ~ breaks_with_op(.x, .y)),
       ref  = purrr::map_chr(.data$diff_type, ~ if (is.na(suppressWarnings(as.integer(.)))) {
-        switch(., "first" = "x1", "tot" = "tot", .data$diff_type)
+        switch(., "first" = "x1", "tot" = "tot", .) # error : . replaced .data$diff_type (error length 3 but need 1)
       } else {paste0("x", as.integer(.))} ),
       sign = purrr::map(.data$breaks, ~ 1:length(.)) %>%
         purrr::map(~ dplyr::if_else(condition = . >= max(.)/2 +1,
