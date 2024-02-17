@@ -560,7 +560,7 @@ tab_kable <- function(tabs,
                                             subtext)
   }
 
-  out <- knitr::kable(out, escape = FALSE,
+  out <- knitr::kable(out, escape = FALSE, format = "html",
                       table.attr = "style=\"border-top: 0; border-bottom: 0;\"", ...)
   # table.attr changes css style of table_classic (no upper and lower big lines)
 
