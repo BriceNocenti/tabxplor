@@ -46,7 +46,8 @@ $(document).ready(function(){
 \item{color_legend}{Print colors legend below the table ?
 You can then use a \code{css} chunk in rmarkdown to change popovers colors.}
 
-\item{caption}{The table caption.}
+\item{caption}{The table caption. For formatting, you need to use a \code{css}
+with \verb{caption\{\}}in rmarkdown.}
 
 \item{...}{Other arguments to pass to \code{\link[kableExtra:kable_styling]{kableExtra::kable_styling}}.}
 }

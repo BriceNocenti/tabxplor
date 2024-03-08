@@ -247,8 +247,8 @@ tab_xl <-
 
     subtext <- purrr::map(tabs, get_subtext) #need breaks calculation first
     subtext <- subtext |>
-      purrr::map(~ str_replace_all(., "\\\n", " ")  |>
-                   str_replace_all(" +", " ")
+      purrr::map(~ stringr::str_replace_all(., "\\\n", " ")  |>
+                   stringr::str_replace_all(" +", " ")
       )
     if (print_color_legend == TRUE) {
       color_legend <- purrr::map(tabs, ~ tab_color_legend(., colored = FALSE,

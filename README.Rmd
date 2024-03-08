@@ -24,7 +24,7 @@ If R makes complex things simple, it can sometimes make simple things difficult.
 
 ## Installation
 
-You can install tabxplor from CRAN with :
+You can install tabxplor from CRAN with:
 
 ``` r
 install.packages("tabxplor")
