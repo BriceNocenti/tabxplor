@@ -245,7 +245,11 @@ tab_xl <-
     #   mean_ci_brksup = tabxplor_color_breaks$mean_ci_brksup,
     # )
 
-    subtext      <- purrr::map(tabs, get_subtext) #need breaks calculation first
+    subtext <- purrr::map(tabs, get_subtext) #need breaks calculation first
+    subtext <- subtext |>
+      purrr::map(~ str_replace_all(., "\\\n", " ")  |>
+                   str_replace_all(" +", " ")
+      )
     if (print_color_legend == TRUE) {
       color_legend <- purrr::map(tabs, ~ tab_color_legend(., colored = FALSE,
                                                           add_color_and_diff_types = TRUE))

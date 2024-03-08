@@ -12,6 +12,7 @@ tab_kable(
   tooltips = TRUE,
   popover = NULL,
   color_legend = TRUE,
+  caption = NULL,
   ...
 )
 }
@@ -45,8 +46,9 @@ $(document).ready(function(){
 \item{color_legend}{Print colors legend below the table ?
 You can then use a \code{css} chunk in rmarkdown to change popovers colors.}
 
-\item{...}{Other arguments to pass to \code{\link[knitr:kable]{knitr::kable}} and
-\code{\link[kableExtra:kable_styling]{kableExtra::kable_styling}}.}
+\item{caption}{The table caption.}
+
+\item{...}{Other arguments to pass to \code{\link[kableExtra:kable_styling]{kableExtra::kable_styling}}.}
 }
 \value{
 A html table (opened in the viewer in RStudio). Differences from totals,

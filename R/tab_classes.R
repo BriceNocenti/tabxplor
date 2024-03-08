@@ -399,9 +399,10 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #'}
 #' @param color_legend Print colors legend below the table ?
 #' You can then use a `css` chunk in rmarkdown to change popovers colors.
-#' @param ... Other arguments to pass to \code{\link[knitr:kable]{knitr::kable}} and
-#' \code{\link[kableExtra:kable_styling]{kableExtra::kable_styling}}.
-#'
+#' @param caption The table caption. For formatting, you need to use a `css`
+#' with `caption{}`in rmarkdown.
+#' @param ... Other arguments to pass to \code{\link[kableExtra:kable_styling]{kableExtra::kable_styling}}.
+
 #' @return A html table (opened in the viewer in RStudio). Differences from totals,
 #' confidence intervals, contribution to variance, and unweighted counts,
 #' are available in an html tooltip at cells hover.
@@ -415,7 +416,7 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #'
 tab_kable <- function(tabs,
                       theme = c("light", "dark"), color_type = NULL, html_24_bit = NULL,
-                      tooltips = TRUE, popover = NULL, color_legend = TRUE,
+                      tooltips = TRUE, popover = NULL, color_legend = TRUE, caption = NULL,
                       ...) {
   #theme <- if (is.null(theme)) { getOption("tabxplor.color_style_theme") } else { theme }
   color_type <-
@@ -561,7 +562,8 @@ tab_kable <- function(tabs,
   }
 
   out <- knitr::kable(out, escape = FALSE, format = "html",
-                      table.attr = "style=\"border-top: 0; border-bottom: 0;\"", ...)
+                      table.attr = "style=\"border-top: 0; border-bottom: 0;\"",
+                      caption = caption)
   # table.attr changes css style of table_classic (no upper and lower big lines)
 
   if (theme[1] == "light") {
