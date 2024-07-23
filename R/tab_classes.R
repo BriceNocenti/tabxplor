@@ -158,7 +158,7 @@ untab <- function(tabs) {
 #' @return A printed table.
 #' @method print tabxplor_tab
 print.tabxplor_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = NULL,
-                               max_footer_lines = NULL, min_row_var = 30) {
+                               max_footer_lines = NULL, min_row_var = 30, get_text = FALSE) {
   print_chi2(x, width = width)
 
   if (getOption("tabxplor.print") == "kable") {
@@ -188,11 +188,16 @@ print.tabxplor_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = N
 
     out[3] <- out[3] %>% stringr::str_replace(regular_ex, "\\1<fct> ")
   }
-  writeLines(out)
+
 
   # writeLines(format(x, width = width, ..., n = n, max_extra_cols = max_extra_cols,
   #                   max_footer_lines = max_footer_lines))
-  invisible(x)
+  if (get_text) {
+    out
+  } else {
+    writeLines(out)
+    invisible(x)
+  }
 }
 
 #' Printing method for class tabxplor_grouped_tab
@@ -210,7 +215,7 @@ print.tabxplor_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = N
 #' @method print tabxplor_grouped_tab
 print.tabxplor_grouped_tab <- function(x, width = NULL, ..., n = 100,
                                        max_extra_cols = NULL,max_footer_lines = NULL,
-                                       min_row_var = 30) {
+                                       min_row_var = 30, get_text = FALSE) {
   print_chi2(x, width = width)
 
   if (getOption("tabxplor.print") == "kable") {
@@ -240,12 +245,17 @@ print.tabxplor_grouped_tab <- function(x, width = NULL, ..., n = 100,
 
     out[4] <- out[4] %>% stringr::str_replace(regular_ex, "\\1<fct> ")
   }
-  writeLines(out)
 
   # writeLines(format(x, width = width, ..., n = n, max_extra_cols = max_extra_cols,
   #                   max_footer_lines = max_footer_lines))
-  invisible(x)
-}
+  if (get_text) {
+    out
+  } else {
+    writeLines(out)
+    invisible(x)
+  }
+
+  }
 
 #' @keywords internal
 print_chi2 <- function(x, width = NULL) {
@@ -285,7 +295,8 @@ print_chi2 <- function(x, width = NULL) {
   chi2 <- chi2 %>%
     dplyr::mutate(dplyr::across(
       where(is.factor),
-      ~ dplyr::if_else(. == dplyr::lag(., default = paste0(as.character(.[1]), "a")),
+      ~ dplyr::if_else(. == dplyr::lag(as.character(.), default = paste0(as.character(dplyr::first(.)), "a")),
+                       #. == dplyr::lag(., default = paste0(as.character(.[1]), "a")),
                        true = stringi::stri_unescape_unicode("\\u00a0"),
                        false = as.character(.))
       %>% as.factor()
@@ -365,7 +376,7 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 
   body_data  <- default_body[-(1:2)]
   ind   <- dplyr::group_indices(setup$x)[1:length(body_data)]
-  ind   <- ind != dplyr::lag(ind, default = 1L)
+  ind   <- tidyr::replace_na(ind != dplyr::lag(ind, default = 1L), FALSE)
   body_data <- body_data %>%
     purrr::map2(ind, function(.x, .y) if (.y) {c("", .x)} else {.x}) %>%
     purrr::flatten_chr()
@@ -401,6 +412,10 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #' You can then use a `css` chunk in rmarkdown to change popovers colors.
 #' @param caption The table caption. For formatting, you need to use a `css`
 #' with `caption{}`in rmarkdown.
+#' @param wrap_rows By default, rownames are wrapped when larger than 30 characters.
+#' @param wrap_cols By default, colnames are wrapped when larger than 12 characters.
+#' @param whitespace_only Set to `FALSE` to wrap also on non whitespace characters.
+#' @param unbreakable_spaces Set to `FALSE` to keep normal spaces in text (auto-break).
 #' @param ... Other arguments to pass to \code{\link[kableExtra:kable_styling]{kableExtra::kable_styling}}.
 
 #' @return A html table (opened in the viewer in RStudio). Differences from totals,
@@ -413,10 +428,12 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #' tabs <- tab(forcats::gss_cat, race, marital, year, pct = "row", color = "diff")
 #' tab_kable(tabs, theme = "light", color_type = "text")
 #' }
-#'
 tab_kable <- function(tabs,
                       theme = c("light", "dark"), color_type = NULL, html_24_bit = NULL,
                       tooltips = TRUE, popover = NULL, color_legend = TRUE, caption = NULL,
+                      get_data = FALSE,
+                      wrap_rows = 35, wrap_cols = 15,
+                      whitespace_only = TRUE, unbreakable_spaces = TRUE,
                       ...) {
   #theme <- if (is.null(theme)) { getOption("tabxplor.color_style_theme") } else { theme }
   color_type <-
@@ -437,6 +454,12 @@ tab_kable <- function(tabs,
 
 
   tabs <- tabs %>% dplyr::ungroup() %>% dplyr::select(-tidyselect::all_of(tab_vars))
+
+  tabs <- tabs |>
+    tab_wrap_text(wrap_rows = wrap_rows, wrap_cols = wrap_cols, exdent = 1,
+                  whitespace_only = whitespace_only, unbreakable_spaces = unbreakable_spaces)
+
+
   row_var <- which(names(tabs) == tab_get_vars(tabs)$row_var)
 
   color_cols     <- get_color(tabs)
@@ -542,6 +565,8 @@ tab_kable <- function(tabs,
       ))
   }
 
+  if (get_data) return(out)
+
   # refs2 <- tabs[[fmt_cols[1]]] %>% get_reference(mode = "all_totals")
   #
   #   out <- out %>%
@@ -560,6 +585,8 @@ tab_kable <- function(tabs,
                                                              grey_color = grey_color),
                                             subtext)
   }
+
+
 
   out <- knitr::kable(out, escape = FALSE, format = "html",
                       table.attr = "style=\"border-top: 0; border-bottom: 0;\"",
@@ -626,6 +653,429 @@ out <- out %>%
 
 out
 }
+
+
+#' Print a tabxplor table as plot
+#'
+#' @param tabs A table made with \code{\link{tab}} or \code{\link{tab_many}}.
+#' @param color_type  Set to \code{"text"} to color the text, \code{"bg"} to color the
+#' background. By default it takes \code{getOption("tabxplor.color_style_type")}.
+#' @param theme By default, a white table with black text, Set to \code{"dark"} for a
+#' black table with white text.
+#' @param html_24_bit Should specific 24bits colors palettes be used ? Default to
+#'  \code{getOption("tabxplor.color_html_24_bit")}
+#' @param color_legend Print colors legend below the table ?
+#' @param caption The table caption.
+#' @param wrap_rows By default, rownames are wrapped when larger than 30 characters.
+#' @param wrap_cols By default, colnames are wrapped when larger than 12 characters.
+#' @param whitespace_only Set to `FALSE` to wrap also on non whitespace characters.
+#' @param unbreakable_spaces Set to `FALSE` to keep normal spaces in text (auto-break).
+#' @return A \code{\link[ggplot2]{ggplot}} object to be printed in the
+#' `RStudio` Plots pane, using \code{\link[ggpubr]{ggtexttable}}.
+#' @export
+#'
+#' @examples
+#' \donttest{
+#' tab(forcats::gss_cat, race, marital, year, pct = "row", color = "diff") |>
+#'   tab_plot(tabs)
+#' }
+#'
+tab_plot <- function(tabs,
+                     theme = c("light", "dark"), color_type = NULL, html_24_bit = NULL,
+                     color_legend = TRUE, caption = NULL,
+                     wrap_rows = 35, wrap_cols = 14,
+                     whitespace_only = TRUE, unbreakable_spaces = TRUE) {
+  #theme <- if (is.null(theme)) { getOption("tabxplor.color_style_theme") } else { theme }
+  color_type <-
+    if (is.null(color_type)) { getOption("tabxplor.color_style_type") } else {color_type}
+
+  html_24_bit <-
+    if (is.null(html_24_bit)) {getOption("tabxplor.color_html_24_bit")} else {html_24_bit}
+
+  row_var  <- tab_get_vars(tabs)$row_var
+  tab_vars <- tab_get_vars(tabs)$tab_vars
+  subtext  <- get_subtext(tabs) %>% purrr::discard(. == "")
+
+  new_group <- tabs %>% #dplyr::group_by(dplyr::across(where(is.factor))) %>%
+    dplyr::group_indices()
+  new_group <- which(new_group != dplyr::lead(new_group, default = max(new_group) + 1))
+
+
+  tabs <- tabs |> dplyr::ungroup() |> dplyr::select(-tidyselect::all_of(tab_vars))
+
+  tabs <- tabs |>
+    tab_wrap_text(wrap_rows = wrap_rows, wrap_cols = wrap_cols, exdent = 1,
+                  whitespace_only = whitespace_only, unbreakable_spaces = unbreakable_spaces)
+
+
+  color_cols     <- get_color(tabs)
+  fmt_no_colors  <- purrr::map_lgl(tabs, is_fmt) &
+    (color_cols %in% c("", "no") | is.na(color_cols))
+  fmt_no_colors  <- names(fmt_no_colors)[fmt_no_colors]
+  color_cols     <- which(!color_cols %in% c("", "no") & !is.na(color_cols))
+  fmt_cols <- which(purrr::map_lgl(tabs, is_fmt))
+  color_cols_fmt <- names(color_cols)[names(color_cols) %in% names(fmt_cols)]
+
+  other_cols <- which(purrr::map_lgl(tabs, ~ !is_fmt(.)))
+
+  totcols     <- which(is_totcol(tabs))
+  totrows     <- which(is_totrow(tabs))
+  no_totrows  <- which(!is_totrow(tabs))
+
+  new_col_var <- get_col_var(tabs)
+  new_col_var[names(other_cols)] <- names(other_cols)
+  new_col_var <- which(new_col_var != dplyr::lead(new_col_var, default = "._at_the_end"))
+
+  refs2 <- tabs[[fmt_cols[1]]] %>% get_reference(mode = "all_totals") %>% which()
+
+  text_color  <- dplyr::if_else(theme[1] == "light", "#000000", "#FFFFFF")
+  grey_color  <- dplyr::if_else(theme[1] == "light", "#888888", "#BBBBBB")
+  grey_color2 <- dplyr::if_else(theme[1] == "light", "#111111", "#EEEEEE")
+
+  references <- tabs[fmt_cols] %>%
+    purrr::map(~ get_reference(., mode = "all_totals") %>%
+                 dplyr::if_else(true      = text_color,
+                                false     = "no_color") %>%
+                 list() %>% purrr::set_names(text_color)
+    )
+
+  color_selection <- references
+
+
+
+
+  if (length(color_cols_fmt) != 0) {
+    color_selection[color_cols_fmt] <- purrr::map(tabs[color_cols], fmt_color_selection)
+
+    color_styles <- purrr::map(color_selection[color_cols_fmt],
+                               ~ select_in_color_style(length(.)))
+
+    color_styles <- purrr::map(color_styles, ~ get_color_style(mode = "color_code",
+                                                               type = color_type[1],
+                                                               theme = theme[1],
+                                                               html_24_bit = html_24_bit[1])[.])
+
+    color_selection[color_cols_fmt] <- color_selection[color_cols_fmt] %>%
+      purrr::map2(color_styles, ~ purrr::set_names(.x, .y)) %>%
+      purrr::map(~ purrr::imap(., ~ dplyr::if_else(condition = .x,
+                                                   true      = .y,
+                                                   false     = "no_color")) ) %>%
+      purrr::map2(references[color_cols_fmt], ~ c(.x, .y) %>%
+                    purrr::reduce(~ dplyr::if_else(.x == "no_color", .y, .x)) %>%
+                    stringr::str_replace(., "no_color", grey_color) %>%
+                    tidyr::replace_na(grey_color)
+      )
+  }
+
+  if (length(fmt_no_colors) != 0) {
+    color_selection[fmt_no_colors] <- color_selection[fmt_no_colors] %>%
+      purrr::map(~ purrr::flatten_chr(.) %>%
+                   stringr::str_replace(., "no_color", grey_color2) %>%
+                   tidyr::replace_na(grey_color2)
+      )
+  }
+
+
+  if (length(other_cols) != 0) {
+    color_selection <-
+     dplyr::bind_cols(as.list(
+      dplyr::mutate(tabs[other_cols], dplyr::across(tidyselect::everything(),
+                                                    ~ text_color)),
+    ),
+    color_selection
+    )
+
+  } else {
+    color_selection <- color_selection |> dplyr::bind_cols()
+  }
+
+  face_selection <- color_selection |>
+    dplyr::mutate(dplyr::across(
+      dplyr::everything(),
+      ~ dplyr::if_else(
+        !. %in% c(text_color, grey_color, grey_color2) |
+          dplyr::cur_column() %in% names(totcols) |
+          dplyr::row_number() %in% refs2,
+        true  = "bold",
+        false = "plain")
+    ))
+
+  # unbreakable space at the starting of names, otherwise doesn't fit with hjust = "right"
+  tabs <- tabs |>
+    dplyr::mutate(dplyr::across(
+      1,
+      ~ forcats::fct_relabel(., ~ paste0(paste0(rep(unbrk, 3), collapse = ""), .))
+    ))
+
+  tabs_gg <- tabs |>
+    dplyr::mutate(dplyr::across(where(is_fmt), format)) |>
+    ggpubr::ggtexttable(
+      rows = NULL, # base_size = 11,
+      theme = ggpubr::ttheme("blank",
+                             padding = grid::unit(c(8, 3), "mm"), # c(h, v)
+                             tbody.style = ggpubr::tbody_style(
+                               color = "black", #face = "plain", #parse = TRUE,
+                               size      = 11,
+                               fill      = "white", #c("grey95", "grey90"),
+                               linewidth = 0,
+                               linecolor = "black",
+
+                               hjust = 1, x = 0.95 # right ajust
+                             )),
+    )
+
+  # tabs |>
+  #   dplyr::mutate(dplyr::across(where(is_fmt), format)) |>
+  #   ggpubr::ggtexttable(
+  #     rows = NULL, theme = ggpubr::ttheme("blank"),
+  #   )
+
+  # c("default", "blank", "classic", "minimal", "light",
+  #   "lBlack", "lBlue", "lRed", "lGreen", "lViolet", "lCyan", "lOrange", "lBlackWhite", "lBlueWhite", "lRedWhite", "lGreenWhite", "lVioletWhite", "lCyanWhite", "lOrangeWhite",
+  #   "mBlack", "mBlue", "mRed", "mGreen", "mViolet", "mCyan", "mOrange", "mBlackWhite", "mBlueWhite", "mRedWhite", "mGreenWhite", "mVioletWhite", "mCyanWhite", "mOrangeWhite"
+  #   )
+
+
+
+
+if (color_type == "text") {
+
+    for(j in 1:ncol(tabs)) {
+      for(i in 1:nrow(tabs)) {
+        tabs_gg <- tabs_gg |> ggpubr::table_cell_font(
+          row    = i + 1,
+          column = j,
+          color  = color_selection[[j]][[i]],
+          face   = face_selection[[j]][[i]]
+        )
+      }
+    }
+
+  } else {
+    bg_color_selection  <- color_selection %>%
+      purrr::map_dfc(~ stringr::str_replace_all(., text_color, "none") %>%
+                       stringr::str_replace_all(grey_color, "none")        )
+
+    txt_color_selection <- color_selection %>%
+      purrr::map_dfc(~ dplyr::if_else(stringr::str_detect(., text_color) |
+                                        stringr::str_detect(., grey_color) |
+                                        stringr::str_detect(., grey_color2),
+                                      true  = .,
+                                      false = text_color)               )
+
+    for(j in 1:ncol(tabs)) {
+      for(i in 1:nrow(tabs)) {
+        tabs_gg <- tabs_gg |>
+          ggpubr::table_cell_font(
+            row    = i + 1,
+            column = j,
+            color  = txt_color_selection[[j]][[i]],
+            face   = face_selection[[j]][[i]]
+          ) |>
+          ggpubr::table_cell_bg(
+            row    = i + 1,
+            column = j,
+            fill   = ifelse(bg_color_selection[[j]][[i]] != "none",
+                            bg_color_selection[[j]][[i]],
+                            dplyr::if_else(theme[1] == "light", "white", "black")
+
+
+            ),
+            linewidth  = 0
+
+            )
+
+      }
+    }
+    # tabs_gg
+
+  }
+# tabs_gg
+
+
+
+  tabs_gg <- tabs_gg |>
+    ggpubr::tab_add_border(from.row = 1, linetype = 1, linewidth = 2, linecolor = "black") |>
+    #ggpubr::thead_add_border(linetype = 1, linewidth = 2, linecolor = "black") |>
+    ggpubr::tab_add_hline(
+      at.row = unique(c(1, totrows, totrows + 1, new_group)), row.side = "bottom",
+      linetype = 1, linewidth = 2, linecolor = "black",
+    ) |>
+    # ggpubr::tab_add_hline(
+    #   at.row = totrows, row.side = "top",
+    #   linetype = 1, linewidth = 2, linecolor = "black",
+    # ) |>
+    ggpubr::tab_add_vline(
+      at.column = unique(c(new_col_var, totcols - 1)), column.side = "right",
+      linetype = 1, linewidth = 2, linecolor = "black",
+    ) |>
+    ggpubr::tab_add_vline(
+      at.column = unique(c(other_cols, totcols)), column.side = "left",
+      linetype = 1, linewidth = 2, linecolor = "black",
+     ) #|>
+    # ggpubr::tab_add_vline(
+    #   at.column = totcols - 1L, column.side = "right",
+    #   linetype = 1, linewidth = 2, linecolor = "black",
+    # )
+
+    ## bold
+    # kableExtra::row_spec(refs2, bold = TRUE) %>%
+
+    ## wrap
+    # kableExtra::column_spec(fmt_cols, extra_css = "white-space: nowrap;") %>%
+
+
+
+if (color_legend & length(color_cols) != 0) {
+
+  color_legend <- tab_color_legend(tabs,
+                                   mode = "html",
+                                   html_type  = color_type[1],
+                                   html_theme = theme[1],
+                                   html_24_bit = html_24_bit[1],
+                                   text_color = text_color,
+                                   grey_color = grey_color) |>
+    stringr::str_split("</span>|<span style=\"") |>
+    purrr::imap_dfr(
+      ~ tibble::tibble(n = as.integer(.y), base = .x)
+    ) |>
+    dplyr::mutate(
+      base = stringr::str_remove_all(.data$base, "<b>|</b>") |>
+        #stringr::str_remove_all("^;") |>
+        stringr::str_squish(), # |>
+        #stringr::str_replace(":$", " "),
+      color = stringr::str_extract(.data$base, "^color: rgba.[^\\)]+") |>
+        stringr::str_remove_all("color: rgba\\("),
+      text  = stringr::str_remove(.data$base, '^.+!important;\\" >'),
+
+      # base = stringr::str_remove_all(base, "</b>; "),
+    ) |>
+    dplyr::filter(!base %in% c("", ";")) |>
+    dplyr::group_by(n) |>
+    dplyr::mutate(bold = stringr::str_detect(.data$base, "color: rgba") &
+                    dplyr::row_number() != 1 ) |>
+    dplyr::ungroup() |>
+    tidyr::separate(col = .data$color, into = c("c1", "c2", "c3", "c4"), sep = ", ") |>
+    dplyr::mutate(
+      text  = dplyr::if_else(.data$bold, paste0(text, " ;"), text),
+      dplyr::across(tidyselect::all_of(c("c1", "c2", "c3", "c4")),
+             ~dplyr::if_else(!is.na(.), as.integer(.), 0L)),
+      color      = rgb(.data$c1/255, .data$c2/255, .data$c3/255),
+      #bold_start = bold & !dplyr::lag(bold, default = FALSE),
+      #bold_stop  = bold & !dplyr::lead(bold, default = FALSE)
+    ) |>
+    dplyr::select("n", "text", "color") |>  # bold_start, bold_stop,
+    dplyr::group_by("n") |>
+    dplyr::group_split()
+
+
+  color_legend <- color_legend |>
+    purrr::map_dfr(
+      ~ purrr::map_dfr(unique(.$color), function(.color)
+        . |>
+          dplyr::mutate(
+            in_color = color %in% .color,
+            group    = cumsum(in_color != dplyr::lag(in_color, default = FALSE))
+          ) |>
+          dplyr::group_by(group) |>
+          dplyr::summarise(
+            in_color = dplyr::first(in_color),
+            text     = paste(text, collapse = " "),
+            .groups  = "drop"
+          ) |>
+          dplyr::mutate(text = dplyr::if_else(in_color,
+                                              true  = paste0('"', text, '"'),
+                                              false = paste0('phantom("', text, '")' ))
+          ) |>
+          dplyr::summarise(
+            text = paste0("bold(", paste(text, collapse = " * "),")") |>
+              stringr::str_squish(),
+          ) |>
+          dplyr::mutate(
+            color = .color,
+            n     = dplyr::first(.$n),
+            .before = 1
+          )
+
+      )
+    )
+
+  if (length(subtext) != 0) {
+    color_legend <- color_legend |>
+      dplyr::bind_rows(
+        tibble::tibble(text  = paste0('"', subtext, '"'),
+                       color = text_color,
+                       n = (max(color_legend$n) + 1):(max(color_legend$n) + length(subtext))
+        )
+      )
+  }
+
+
+# If no color legend, just subtext
+  } else if (length(subtext) != 0) {
+    color_legend <-
+        tibble::tibble(text  = paste0('"', subtext, '"'),
+                       color = text_color,
+                       n     = 1:length(subtext)
+        )
+
+  } else {
+    color_legend <- NULL
+  }
+
+  if (length(color_legend) != 0) {
+    if (nrow(color_legend) != 0) {
+      color_legend_plot <- color_legend |>
+        dplyr::group_by(!!rlang::sym("n")) |>
+        dplyr::group_split() |>
+        purrr::map(
+          ~ dplyr::mutate(., n = max(.data$n) - .data$n) |>
+            ggplot2::ggplot(ggplot2::aes(y     = .data$n,
+                                         label = .data$text,
+                                         color = .data$color)) +
+            ggplot2::geom_text(x = 0, parse = TRUE, hjust = 0, size = 3) +
+            ggplot2::scale_color_identity() +
+            ggplot2::theme_void() #+
+            #ggplot2::theme()
+        )
+      # color_legend_plot
+
+      for (i in 1:length(color_legend_plot)) {
+        # ggpubr::tab_add_footnote
+        tabgrob    <- get_tablegrob(tabs_gg)
+        legendgrob <- cowplot::as_grob(color_legend_plot[[i]])
+
+        tabgrob <- gtable::gtable_add_rows(
+          tabgrob,
+          heights = grid::grobHeight(legendgrob) +
+            ggplot2::unit(1 + dplyr::if_else(i == 1, 0.5, 0), "line"),
+          pos = -1
+        )
+        tabgrob <- gtable::gtable_add_grob(tabgrob, legendgrob, t = nrow(tabgrob),
+                                           b = nrow(tabgrob), l = 1, r = ncol(tabgrob))
+        tabs_gg <- tab_return_same_class_as_input(tabgrob, input = tabs_gg)
+      }
+    }
+  }
+
+
+  # Align the whole plot top left
+  tabgrob <- get_tablegrob(tabs_gg)
+  tabgrob <- justify_grob(tabgrob)
+  tabs_gg <- tab_return_same_class_as_input(tabgrob, input = tabs_gg)
+
+  # tabs_gg$height <- grid::grobHeight(tabgrob) |> grid::convertHeight(unitTo = "points") # |> as.double()
+  # tabs_gg$width  <- grid::grobWidth(tabgrob)  |> grid::convertWidth (unitTo = "points") # |> as.double()
+  # # seem not ok...
+
+  return(tabs_gg)
+}
+
+
+
+
+
+
 
 
 
@@ -695,6 +1145,57 @@ tab_kable_print_tooltip <- function(x, popover = FALSE) {
 }
 
 
+
+
+
+
+#' @keywords internal
+tab_wrap_text <- function(tabs, wrap_rows = 35L, wrap_cols = 15L, exdent = 1,
+                          whitespace_only = TRUE, unbreakable_spaces = TRUE) {
+  #all_row_vars <- c(tab_get_vars(tabs)$row_var, tab_get_vars(tabs)$tab_vars)
+
+  if (wrap_rows == Inf & wrap_cols == Inf) return(tabs)
+
+  tabs <- tabs |>
+    dplyr::rename_with(
+      ~ stringr::str_wrap(., wrap_cols, exdent = 0, whitespace_only = whitespace_only)
+    ) |>
+    dplyr::mutate(
+      dplyr::across(
+        where(is.factor),
+        ~ forcats::fct_relabel(
+          ., ~ stringr::str_wrap(.,
+                                 wrap_rows,
+                                 exdent          = exdent,
+                                 whitespace_only = whitespace_only)
+        )
+      ),
+      dplyr::across(
+        where(is.character),
+        ~ stringr::str_wrap(., wrap_rows, exdent = exdent, whitespace_only = whitespace_only)
+      )
+    )
+
+  if (unbreakable_spaces) {
+    tabs <- tabs |>
+      dplyr::rename_with(
+        ~ stringr::str_replace(., " ", unbrk)
+      ) |>
+      dplyr::mutate(
+        dplyr::across(
+          where(is.factor),
+          ~ forcats::fct_relabel(., ~ stringr::str_replace(., " ", unbrk) )
+        ),
+        dplyr::across(
+        where(is.character), #tidyselect::all_of(all_row_vars),
+        ~ stringr::str_replace(., " ", unbrk)
+      ),
+
+      )
+  }
+
+  return(tabs)
+}
 
 
 

@@ -1,0 +1,253 @@
+---
+name:  jmvtab
+title: Crosstables
+menuGroup: tabxplor
+version: '1.0.0'
+jas: '1.2'
+# weightsSupport: 'full'
+
+options:
+    - name: data
+      type: Data
+
+    - name: row_vars
+      title: "<b>row_vars = <i>(row variable)</i></b>"
+      type: Variable
+      permitted: [numeric, factor]
+      default: NULL
+      #suggested: [ordinal, nominal, nominaltext]
+      #permitted: [continuous, ordinal, nominal, nominaltext]
+
+    - name: col_vars
+      title: "<b>col_vars = <i>(column variables)</i></b>"
+      type: Variables
+      permitted: [numeric, factor]
+      default: NULL
+      #suggested: [continuous, ordinal, nominal, nominaltext]
+      #permitted: [continuous, ordinal, nominal, nominaltext]
+
+    - name: tab_vars
+      title: "<b>tab_vars = <i>(subtables variables)</i></b>"
+      type: Variables
+      permitted: [factor]
+      default: NULL
+      #suggested: [ordinal, nominal, nominaltext]
+      #permitted: [ordinal, nominal, nominaltext]
+
+    - name: wt
+      title: "<b>wt = <i>(weights)</i></b>"
+      type: Variable
+      suggested:
+        - continuous
+      permitted:
+        - numeric
+      default: NULL
+
+# Percentages, colors and Chi2
+    - name: pct
+      title: pct = (Percentages)
+      type: List
+      options:
+        - title: "no (counts)"
+          name:  no
+        - title: row
+          name:  row
+        - title: "col (column)"
+          name:  col
+        - title: all
+          name:  all
+        - title: all_tabs
+          name:  all_tabs
+      default: no
+
+    - name: color
+      title: color = (Color)
+      type: List
+      options:
+        - title: no # "" ?
+          name:  no
+        - title: "diff <i>(differences from total, or reference cell)</i>"
+          name:  diff
+        - title: "diff_ci <i>(differences, only if significant)</i>"
+          name:  diff_ci
+        - title: "after_ci <i>(diff, after substracting conf. interval)</i>"
+          name:  after_ci
+        - title: "contrib <i>(relative contribution to variance)</i>"
+          name:  contrib
+        - title: auto
+          name:  auto
+      default: no
+
+    - name: chi2
+      title: "" #"chi2 = <i>(Chi2 test)</i>"
+      type: Bool
+      default: true
+
+    - name: totaltab
+      title: "totaltab = <i>(add a total table)</i>"
+      type: List
+      options:
+        - title: line
+          name:  line
+        - title: table
+          name:  table
+        - title: no
+          name:  no
+      default: line
+
+
+# Missing values and levels
+    - name: na
+      title: "na = <i>(missing values)</i>"
+      type: List
+      options:
+        - title: keep
+          name:  keep
+        - title: "drop <i>(for each col_var)</i>"
+          name:  drop
+        - title: "drop_all <i>(for all col_vars)</i>"
+          name:  drop_all
+      default: keep
+
+    - name: lvs
+      title: levels
+      type: List
+      options:
+        - title: all
+          name:  all
+        - title: first
+          name:  first
+        - title: auto
+          name:  auto
+      default: all
+
+    - name: other_if_less_than
+      title: ""
+      type: Number
+      min: 0
+      default: 0
+
+    - name: cleannames
+      title: ""
+      type: Bool
+      default: false
+
+  # n_min = 30, # rare_to_other = FALSE,  # other_level = "Others",
+  # totcol = "last",
+  # totaltab_name = "Ensemble",
+  # totrow = TRUE,
+  # total_names = "Total",
+
+
+# References (points of comparison)
+    - name: diff
+      title: "diff = <i>(differences)</i>"
+      type: List
+      options:
+        - title: tot
+          name:  tot
+        - title: first
+          name:  first
+        # - title: other
+        #   name:  other
+        # - title: no # "" ?
+        #   name:  no
+      default: tot
+
+    - name: comp
+      title: comp
+      type: List
+      options:
+        - title: "tab <i>(compare in each subtable)</i>"
+          name:  tab
+        - title: "all <i>(compare with the total subtable)</i>"
+          name:  all
+
+# Confidence intervals
+    - name: ci
+      title: "ci = <i>(confidence intervals)</i>"
+      type: List
+      options:
+        - title: auto
+          name:  auto
+        - title: "cell <i>(ci for each cell)</i>"
+          name:  cell
+        - title: "diff <i>(ci on the difference with reference)</i>"
+          name:  diff
+      default: auto
+
+    - name: conf_level
+      title: ""
+      type: Number
+      min: 0
+      max: 1
+      default: 0.95
+
+  # method_cell = "wilson",
+  #  "wald", "wilson", "wilsoncc", "agresti-coull", "jeffreys", "modified wilson", "modified jeffreys", "clopper-pearson", "arcsine", "logit", "witting", "pratt", "midp", "lik", "blaker"
+
+  # method_diff = "ac",
+  #  "wald", "waldcc", "ac", "score", "scorecc", "mn", "mee", "blj", "ha", "hal", "jp"
+
+
+
+
+
+# Other formatting
+    - name: wrap_rows
+      title: ""
+      type: Number
+      min: 0
+      default: 35
+
+    - name: wrap_cols
+      title: ""
+      type: Number
+      min: 0
+      default: 15
+
+     # filter
+
+    - name: display
+      title: "" # Display
+      type: List
+      options:
+        - title: "auto"
+          name:  auto
+        - title: "n <i>(unweighted counts)</i>"
+          name:  n
+        - title: "wn <i>(weighted counts)</i>"
+          name:  wn
+        - title: "pct <i>(percentages)</i>"
+          name:  pct
+        - title: "diff <i>(differences from total, or reference cell)</i>"
+          name:  diff
+        - title: "ctr <i>(relative contributions to variance)</i>"
+          name:  ctr
+        - title: "mean <i>(mean, for numeric variables)</i>"
+          name:  mean
+        - title: "var <i>(variance)</i>"
+          name:  var
+        - title: "ci <i>(confidence intervals)</i>"
+          name:  ci
+        - title: "pct_ci <i>(percentages with visible conf. intervals)</i>"
+          name:  pct_ci
+        - title: "mean_ci <i>(means with visible conf. intervals)</i>"
+          name:  mean_ci
+      default: auto
+
+    - name: subtext
+      title: "" # subtext
+      type: String
+      default: ""
+
+    - name: digits
+      title: ""
+      type: Number
+      min: 0
+      max: 0
+      default: 0
+
+...
+
+

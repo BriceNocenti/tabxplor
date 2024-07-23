@@ -4584,6 +4584,7 @@ tab_chi2 <- function(tabs, calc = c("ctr", "p", "var", "counts"),
     pvalues <-
       purrr::map_if(col_vars_levels[!all_col_tot], !is_a_mean[!all_col_tot],
                     ~ dplyr::select(tabs2, !!!groups, !!!.) %>%
+                      dplyr::select(where(~ !is_totcol(.))) %>% # ?????
                       dplyr::group_split() %>%
                       purrr::map( ~ dplyr::select(., where(is_fmt)) ) %>%
                       purrr::map(

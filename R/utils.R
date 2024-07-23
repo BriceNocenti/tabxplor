@@ -704,3 +704,84 @@ bind_datas_for_tab <- function(data, vars) {
 }
 
 
+
+#' @keywords internal
+unbrk <- stringi::stri_unescape_unicode("\\u202f") # unbreakable space
+
+
+
+
+
+# ggpubr functions (for tab_plot() as tableGrob ) ----
+
+# ggpubr:::is_tablegrob
+#' @keywords internal
+is_tablegrob <- function (tab) {
+  inherits(tab, "gtable") & inherits(tab, "grob")
+}
+
+# ggpubr:::is_ggtexttable
+#' @keywords internal
+is_ggtexttable <- function (tab) {
+  !is.null(attr(tab, "ggtexttableGrob"))
+}
+
+# ggpubr:::as_ggtexttable
+#' @keywords internal
+as_ggtexttable <- function (tabgrob) {
+  res <- ggpubr::as_ggplot(tabgrob)
+  attr(res, "ggtexttableGrob") <- tabgrob
+  res
+}
+
+# ggpubr:::get_tablegrob
+#' @keywords internal
+get_tablegrob <- function (tab)
+{
+  if (is_ggtexttable(tab)) {
+    tabgrob <- attr(tab, "ggtexttableGrob")
+  }
+  else if (is_tablegrob(tab)) {
+    tabgrob <- tab
+  }
+  else {
+    stop("tab should be an object from either ggpubr::ggtexttable() or gridExtra::tableGrob().")
+  }
+  tabgrob
+}
+
+# ggpubr:::tab_return_same_class_as_input
+#' @keywords internal
+tab_return_same_class_as_input <- function (tabgrob, input) {
+  if (is_ggtexttable(input)) {
+    return(as_ggtexttable(tabgrob))
+  }
+  else if (is_tablegrob(input)) {
+    return(tabgrob)
+  }
+  tabgrob
+}
+
+### https://stackoverflow.com/questions/32106333/align-grob-at-fixed-top-center-position-regardless-of-size
+justify_grob <- function(grob, hjust = "left", vjust = "top", pad = 5){
+  w <- sum(grob$widths)
+  h <- sum(grob$heights)
+  xy <- list(x = switch(hjust,
+                        center = 0.5 + grid::unit(pad, "points"),
+                        left = 0.5*w + grid::unit(pad, "points"),
+                        right = grid::unit(1,"npc") - 0.5*w - grid::unit(pad, "points")),
+             y = switch(vjust,
+                        center = 0.5 + grid::unit(pad, "points"),
+                        bottom = 0.5*h + grid::unit(pad, "points"),
+                        top = grid::unit(1,"npc") - 0.5*h - grid::unit(pad, "points") ) )
+  if (is.null(grob$vp)) {
+    grob$vp <- grid::viewport(x = xy[[1]], y = xy[[2]] )
+  } else {
+    grob$vp$x <- xy[[1]]
+    grob$vp$y <- xy[[2]]
+  }
+
+  return(grob)
+}
+
+

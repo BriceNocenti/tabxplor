@@ -13,7 +13,7 @@ Compared to 1.1.2, it's just minor bug corrections.
    - Ubuntu Linux 22.04.3 LTS, R-release
    - Ubuntu Linux 22.04.3 LTS, R-oldrel-1
 
-* https://win-builder.r-project.org/jRPaogf0SZ7Z: 
+* https://win-builder.r-project.org/X7DgK8941apC
    - Windows Server 2022 x64, R-devel
 
 
