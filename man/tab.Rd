@@ -15,7 +15,8 @@ tab(
   digits = 0,
   pct = "no",
   color = "no",
-  diff = "tot",
+  ref = "auto",
+  ref2 = "first",
   comp = "tab",
   totaltab = "line",
   totaltab_name = "Ensemble",
@@ -24,10 +25,10 @@ tab(
   chi2 = FALSE,
   ci = "no",
   conf_level = 0.95,
+  OR = "no",
   subtext = "",
   cleannames = NULL,
-  rare_to_other = FALSE,
-  n_min = 30,
+  other_if_less_than = 0,
   other_level = "Others",
   filter
 )
@@ -77,7 +78,7 @@ number of digits for each \code{sup_cols}, an integer vector of length
 \itemize{
 \item \code{"no"}: by default, no colors are printed.
 \item \code{"diff"}: color percentages and means based on cells differences from
-totals (or from first cells when \code{diff = "first"}).
+totals (or from first cells when \code{ref = "first"}).
 \item \code{"diff_ci"}: color pct and means based on cells differences from totals
 or first cells, removing coloring when the confidence interval of this difference
 is higher than the difference itself.
@@ -91,14 +92,26 @@ When \code{ci = "diff"}, row and col percentages are colored with "after_ci" ;
 otherwise they are colored with "diff".
 }}
 
-\item{diff}{The reference cell to calculate differences (used to print \code{colors}) :
+\item{ref}{The reference cell to calculate differences and ratios
+(used to print \code{colors}) :
 \itemize{
-\item \code{"tot"}: by default, cells differences from total rows are calculated with
-\code{pct = "row"}, and cells differences from total columns with \code{pct = "col"}.
-\item \code{"first"}: calculate cells differences from the first cell
+\item \code{"auto"}: by default, cell difference from the corresponding total
+(rows or cols depending on \code{pct = "row"} or \code{pct = "col"}) is
+used for \code{diff} ; cell ratio from the first line (or col) is use for \code{OR}
+(odds ratio/relative risks ratio).
+\item \code{"tot"}: totals are always used.
+\item \code{"first"}: calculate cell difference or ratio from the first cell
 of the row or column (useful to color temporal developments).
-\item \code{"no"}: not use diffs to gain calculation time.
+\item \code{n}: when \code{ref} is an integer, the nth row (or column) is used for comparison.
+\item \code{"regex"}: when \code{ref} is a string, it it used as a regular expression,
+to match with the names of the rows (or columns). Be precise enough to match only one
+column or row, otherwise you get a warning message.
+\item \code{"no"}: not use ref and not calculate diffs to gain calculation time.
 }}
+
+\item{ref2}{A second reference cell is needed to calculate odds ratios
+(or relative risks ratios). The first cell of the row or column is used by default.
+See \code{ref} above for the full list of possible values.}
 
 \item{comp}{The comparison level : by subtables/groups, or for the whole table.
 \itemize{
@@ -107,7 +120,7 @@ row differences from totals/first cells, and row confidence intervals for these
 differences, are calculated for each \code{tab_vars} group.
 \item \code{"all"}: compare cells to the general total line (provided there is
 a total table with a total row), or with the first line of the total table
-when \code{diff = "first"}.
+when \code{ref = "first"}.
 }}
 
 \item{totaltab}{The total table, if there are subtables/groups
@@ -144,7 +157,7 @@ Useful to print metadata, and to color cells based on their contribution to vari
 \itemize{
 \item \code{"cell"}: absolute confidence intervals of cells percentages.
 \item \code{"diff"}: confidence intervals of the difference between a cell and the
-relative total cell (or relative first cell when \code{diff = "first"}).
+relative total cell (or relative first cell when \code{ref = "first"}).
 \item \code{"auto"}: \code{ci = "diff"} for means and row/col percentages,
 \code{ci = "cell"} for frequencies ("all", "all_tabs").
 }
@@ -161,10 +174,8 @@ Default to 0.95 (95\%).}
 prefix numbers like "1-", and text in parenthesis. All data formatting arguments are
 passed to \code{\link{tab_prepare}}.}
 
-\item{rare_to_other}{When set to \code{TRUE}, levels with less count
-than \code{n_min} will be merged into an "Other" level.}
-
-\item{n_min}{The count under which a level is aggregated in the "Other" level.}
+\item{other_if_less_than}{When set to a positive integer, levels with less count
+than it will be merged into an "Others" level.}
 
 \item{other_level}{The name of the "Other" level, as a single string.}
 
@@ -228,7 +239,7 @@ tab(data, race, marital, year, subtext = gss2, pct = "row", color = "diff",
 \donttest{
 data2 <- data \%>\% dplyr::mutate(year = as.factor(year))
 tab(data2, year, marital, race, subtext = gss2, pct = "row",
-    color = "diff", diff = "first", tot = "col")
+    color = "diff", ref = "first", tot = "col")
 
 
 # Differences with the total, except if their confidences intervals are superior to them:

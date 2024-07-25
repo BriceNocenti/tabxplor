@@ -26,18 +26,19 @@ tab_many(
   totcol = "last",
   total_names = "Total",
   pct = "no",
-  diff = "tot",
+  ref = "tot",
+  ref2 = "first",
   comp = "tab",
   chi2 = FALSE,
   ci = "no",
   conf_level = 0.95,
   method_cell = "wilson",
   method_diff = "ac",
+  OR = "no",
   color = "no",
   subtext = "",
   cleannames = NULL,
-  rare_to_other = FALSE,
-  n_min = 30,
+  other_if_less_than = 0,
   other_level = "Others",
   filter
 )
@@ -88,6 +89,8 @@ use \code{\link[dplyr:select]{dplyr::select}}). The argument is vectorised over 
 \itemize{
 \item \code{"all"}: by default, all levels are kept.
 \item \code{"first"}: only keep the first level of each \code{col_vars}
+\item \code{"auto"}: keep the first level when \code{col_var} is only two levels,
+keep all levels otherwise
 }}
 
 \item{na}{The policy to adopt with missing values. It must be a single string.
@@ -144,19 +147,26 @@ The argument is vectorised over both \code{row_vars} and \code{col_vars}. You ca
 the following :
 \code{pct = list(row_var1 = list("row", "col", "col"), row_var2 = list("col", "row", "row"))}}
 
-\item{diff}{The reference cell to calculate differences (used to print \code{colors}).
-Vectorisez over \code{row_vars}.
+\item{ref}{The reference cell to calculate differences and ratios
+(used to print \code{colors}) :
 \itemize{
-\item \code{"tot"}: by default, cells differences from total rows are calculated with
-\code{pct = "row"}, and cells differences from total columns with \code{pct = "col"}.
-\item \code{"first"}: calculate cells differences from the first cell
+\item \code{"auto"}: by default, cell difference from the corresponding total
+(rows or cols depending on \code{pct = "row"} or \code{pct = "col"}) is
+used for \code{diff} ; cell ratio from the first line (or col) is use for \code{OR}
+(odds ratio/relative risks ratio).
+\item \code{"tot"}: totals are always used.
+\item \code{"first"}: calculate cell difference or ratio from the first cell
 of the row or column (useful to color temporal developments).
-\item \code{n}: when \code{diff} is an integer, the nth row (or column) is used for comparison.
-\item \code{"regex"}: when \code{diff} is a string, it it used as a regular expression,
+\item \code{n}: when \code{ref} is an integer, the nth row (or column) is used for comparison.
+\item \code{"regex"}: when \code{ref} is a string, it it used as a regular expression,
 to match with the names of the rows (or columns). Be precise enough to match only one
 column or row, otherwise you get a warning message.
-\item \code{"no"}: not use diffs.
+\item \code{"no"}: not use ref and not calculate diffs to gain calculation time.
 }}
+
+\item{ref2}{A second reference cell is needed to calculate odds ratios
+(or relative risks ratios). The first cell of the row or column is used by default.
+See \code{ref} above for the full list of possible values.}
 
 \item{comp}{The comparison level : by subtables/groups, or for the whole table.
 Vectorised over \code{row_vars}.
@@ -166,7 +176,7 @@ row differences from totals/first cells, and row confidence intervals for these
 differences, are calculated for each \code{tab_vars} group.
 \item \code{"all"}: compare cells to the general total line (provided there is
 a total table with a total row), or with the reference line of the total table
-when \code{diff = "first"}, an integer or a regular expression.
+when \code{ref = "first"}, an integer or a regular expression.
 }}
 
 \item{chi2}{Set to \code{TRUE} to calculate Chi2 summaries with \code{\link{tab_chi2}}.
@@ -178,7 +188,7 @@ Vectorised over \code{row_vars}.
 \itemize{
 \item \code{"cell"}: absolute confidence intervals of cells percentages.
 \item \code{"diff"}: confidence intervals of the difference between a cell and the
-relative total cell (or relative first cell when \code{diff = "first"}).
+relative total cell (or relative first cell when \code{ref = "first"}).
 \item \code{"auto"}: \code{ci = "diff"} for means and row/col percentages,
 \code{ci = "cell"} for frequencies ("all", "all_tabs").
 }
@@ -206,7 +216,7 @@ independent samples. See \code{\link[DescTools:BinomDiffCI]{BinomDiffCI}}.}
 \itemize{
 \item \code{"no"}: by default, no colors are printed.
 \item \code{"diff"}: color percentages and means based on cells differences from
-totals (or from first cells when \code{diff = "first"}).
+totals (or from first cells when \code{ref = "first"}).
 \item \code{"diff_ci"}: color pct and means based on cells differences from totals
 or first cells, removing coloring when the confidence interval of this difference
 is higher than the difference itself.
@@ -226,10 +236,8 @@ otherwise they are colored with "diff".
 prefix numbers like "1-", and text in parenthesis. All data formatting arguments are
 passed to \code{\link{tab_prepare}}.}
 
-\item{rare_to_other}{When set to \code{TRUE}, levels with less count
-than \code{n_min} will be merged into an "Other" level.}
-
-\item{n_min}{The count under which a level is aggregated in the "Other" level.}
+\item{other_if_less_than}{When set to a positive integer, levels with less count
+than it will be merged into an "Others" level.}
 
 \item{other_level}{The name of the "Other" level, as a single string.}
 

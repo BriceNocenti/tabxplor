@@ -785,3 +785,29 @@ justify_grob <- function(grob, hjust = "left", vjust = "top", pad = 5){
 }
 
 
+
+
+# # cowplot:::as_grob.ggplot
+# as_grob.ggplot <- function (plot, device = NULL) {
+#   if (is.null(device)) {
+#     device <- null_dev_env$current
+#   }
+#   cur_dev <- grDevices::dev.cur()
+#   device(width = 6, height = 6)
+#   null_dev <- grDevices::dev.cur()
+#   on.exit({
+#     grDevices::dev.off(null_dev)
+#     if (cur_dev > 1) grDevices::dev.set(cur_dev)
+#   })
+#   ggplot2::ggplotGrob(plot)
+# }
+
+
+
+
+
+
+
+
+
+

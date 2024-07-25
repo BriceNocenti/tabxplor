@@ -220,19 +220,19 @@ children:
         stretchFactor: 1
         children:
           - type: Label
-            label: "diff = <i>(reference for difference)</i>"
+            label: "ref = <i>(ref row or col for diff and OR)</i>"
             children:
               - type: RadioButton
                 name: diff_1
-                optionName: diff
+                optionName: ref
                 optionPart: "tot"
               - type: RadioButton
                 name: diff_2
-                optionName: diff
+                optionName: ref
                 optionPart: "first"
               # - type: RadioButton
               #   name: diff_3
-              #   optionName: diff
+              #   optionName: ref
               #   optionPart: "other"
               #   children:
               #     - type: TextBox

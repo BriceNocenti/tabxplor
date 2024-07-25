@@ -73,6 +73,8 @@ globalVariables(c(":=", ".SD", ".N"))
 #' @param ci The confidence intervals, as a double vector the length of \code{n}.
 #' Used to print colors (\code{"diff_ci"}, \code{"after_ci"}).
 #' Calculate with \code{tab_ci}.
+#' @param rr The relative risk, as a double vector the length of \code{n}.
+#' @param or The odds ratio or relative risk ratio, as a double vector the length of \code{n}.
 #' @param in_totrow \code{TRUE} when the cell is part of a total row
 #' @param in_tottab \code{TRUE} when the cell is part of a total table
 #' @param in_refrow \code{TRUE} when the cell is part of a reference row
@@ -106,7 +108,7 @@ globalVariables(c(":=", ".SD", ".N"))
 #' \itemize{
 #'   \item \code{"no"}: no colors are printed.
 #'   \item \code{"diff"}: color percentages and means based on cells differences from
-#'   totals (or from first cells when \code{diff = "first"}).
+#'   totals (or from first cells when \code{ref = "first"}).
 #'   \item \code{"diff_ci"}: color pct and means based on cells differences from totals
 #'   or first cells, removing coloring when the confidence interval of this difference
 #'   is higher than the difference itself.
@@ -165,7 +167,7 @@ globalVariables(c(":=", ".SD", ".N"))
 #'
 #'
 #' tabs <- tab(starwars, sex, hair_color, gender, na = "drop", pct = "row",
-#'             rare_to_other = TRUE, n_min = 5)
+#'             other_if_less_than = 5)
 #'
 #' # To identify the total columns, and work with them :
 #' is_totcol(tabs)
@@ -223,6 +225,8 @@ fmt <- function(n         = integer(),
                 ctr       = rep(NA_real_, length(n)),
                 var       = rep(NA_real_, length(n)),
                 ci        = rep(NA_real_, length(n)),
+                rr        = rep(NA_real_, length(n)),
+                or        = rep(NA_real_, length(n)),
 
                 in_totrow = rep(FALSE, length(n)),
                 in_tottab = rep(FALSE, length(n)),
@@ -250,6 +254,8 @@ fmt <- function(n         = integer(),
   mean    <- vctrs::vec_recycle(vctrs::vec_cast(mean   , double())   , size = max_size)
   var     <- vctrs::vec_recycle(vctrs::vec_cast(var    , double())   , size = max_size)
   ci      <- vctrs::vec_recycle(vctrs::vec_cast(ci     , double())   , size = max_size)
+  rr      <- vctrs::vec_recycle(vctrs::vec_cast(rr     , double())   , size = max_size)
+  or      <- vctrs::vec_recycle(vctrs::vec_cast(or     , double())   , size = max_size)
 
   in_totrow <- vctrs::vec_recycle(vctrs::vec_cast(in_totrow, logical()), size = max_size)
   in_tottab <- vctrs::vec_recycle(vctrs::vec_cast(in_tottab, logical()), size = max_size)
@@ -266,7 +272,7 @@ fmt <- function(n         = integer(),
 
   new_fmt(n = n, display = display, digits = digits,
           wn = wn, pct = pct,  mean = mean,
-          diff = diff, ctr = ctr,var = var, ci = ci,
+          diff = diff, ctr = ctr,var = var, ci = ci, rr = rr, or = or,
           in_totrow = in_totrow, in_tottab = in_tottab, in_refrow = in_refrow,
           type = type, comp_all = comp_all,  diff_type = diff_type,
           ci_type = ci_type, col_var = col_var, totcol = totcol, refcol = refcol,
@@ -317,6 +323,9 @@ get_num <- function(x) {
   out[!nas & display == "mean_ci"] <- get_mean(x)[!nas & display == "mean_ci"]
   out[!nas & display == "var"    ] <- get_var (x)[!nas & display == "var"    ]
   out[!nas & display == "ci"     ] <- get_ci  (x)[!nas & display == "ci"     ]
+  out[!nas & display == "rr"     ] <- get_rr  (x)[!nas & display == "rr"     ]
+  out[!nas & display == "or"     ] <- get_or  (x)[!nas & display == "or"     ]
+  out[!nas & display == "or_pct" ] <- get_or  (x)[!nas & display == "or_pct" ]
   out
 }
 
@@ -338,6 +347,8 @@ set_num <- function(x, value) {
   out[!nas & display == "mean"] <- set_mean(x[!nas & display == "mean"], value[!nas & display == "mean"])
   out[!nas & display == "var" ] <- set_var (x[!nas & display == "var" ], value[!nas & display == "var" ])
   out[!nas & display == "ci"  ] <- set_ci  (x[!nas & display == "ci"  ], value[!nas & display == "ci"  ])
+  out[!nas & display == "rr"  ] <- set_ci  (x[!nas & display == "rr"  ], value[!nas & display == "rr"  ])
+  out[!nas & display == "or"  ] <- set_ci  (x[!nas & display == "or"  ], value[!nas & display == "or"  ])
   out
 }
 
@@ -530,7 +541,34 @@ as_tottab  <- function(x, in_tottab = TRUE) {
 }
 
 
-
+#' @describeIn fmt set the "display" vctrs::field of a \code{fmt} vector, or of
+#' all of them in the whole tibble.
+#' @return The entered objects, with all fmt vectors with the wanted display.
+#' @export
+set_display <- function(x, value) UseMethod("set_display")
+#' Set the "display" vctrs::field of a \code{fmt} vector.
+#' @inheritParams fmt
+#' @return The entered vector (nothing happens).
+#' @export
+set_display.default <- function(x, value) {
+return(x)
+}
+#' Set the "display" vctrs::field of a \code{fmt} vector.
+#' @inheritParams fmt
+#' @return A fmt vectors with the wanted display.
+#' @export
+set_display.tabxplor_fmt <- function(x, value) {
+  value <- vctrs::vec_cast(value, character()) %>% vctrs::vec_recycle(size = length(x))
+  vctrs::`field<-`(x, "display", value)
+}
+#' Set the "display" vctrs::field of a \code{fmt} vector.
+#' @inheritParams fmt
+#' @return The entered objects, with all fmt vectors with the wanted display.
+#' @export
+set_display.data.frame <- function(x, value) {
+  x |>
+    dplyr::mutate(dplyr::across(dplyr::where(is_fmt), ~ set_display(., value)))
+}
 
 
 #' @describeIn fmt test function for total columns
@@ -840,7 +878,8 @@ get_color.data.frame <- function(x, ...) {
 #' @export
 set_color     <- function(x, color) {
   if (color %in% c("no", NA_character_)) color <- "" #NA_character_
-  stopifnot(color %in% c("diff", "diff_ci", "after_ci", "contrib", "ci",
+  if (color == "or") color <- "OR"
+  stopifnot(color %in% c("diff", "diff_ci", "after_ci", "contrib", "ci", "OR",
                          "", NA_character_))
   `attr<-`(x ,"color", color)
 }
@@ -915,6 +954,8 @@ new_fmt <- function(n         = integer(),
                     ctr       = rep(NA_real_, length(n)),
                     var       = rep(NA_real_, length(n)),
                     ci        = rep(NA_real_, length(n)),
+                    rr        = rep(NA_real_, length(n)),
+                    or        = rep(NA_real_, length(n)),
 
                     in_totrow = rep(FALSE   , length(n)),
                     in_tottab = rep(FALSE   , length(n)),
@@ -970,7 +1011,7 @@ new_fmt <- function(n         = integer(),
   vctrs::new_rcrd(
     list(n = n, display = display, digits = digits,
          wn = wn, pct = pct, mean = mean,
-         diff = diff, ctr = ctr, var = var, ci = ci,
+         diff = diff, ctr = ctr, var = var, ci = ci, rr = rr, or = or,
          in_totrow = in_totrow, in_tottab = in_tottab,
          in_refrow = in_refrow),
     type = type, comp_all = comp_all, diff_type = diff_type,
@@ -1061,6 +1102,14 @@ get_var    <- fmt_field_factory("var")
 #' @keywords internal
 # @export
 get_ci     <- fmt_field_factory("ci")
+# @describeIn fmt get the "rr" field (relative risk)
+#' @keywords internal
+# @export
+get_rr     <- fmt_field_factory("rr")
+# @describeIn fmt get the "or" field (odds ratio or relative risk ratio)
+#' @keywords internal
+# @export
+get_or     <- fmt_field_factory("or")
 
 #' @keywords internal
 get_mean_contrib <- function(x) {
@@ -1174,10 +1223,6 @@ fmt_set_field_factory <- function(.field, cast) {
     vctrs::`field<-`(x, .field, value)
   }
 }
-# @describeIn fmt set the "display" vctrs::field of a \code{fmt} vector
-#' @keywords internal
-# @export
-set_display <- fmt_set_field_factory("display", cast = character())
 # @describeIn fmt set the "n" field (unweighted counts)
 #' @keywords internal
 # @export
@@ -1214,6 +1259,15 @@ set_var     <- fmt_set_field_factory("var"    , cast = double()   )
 #' @keywords internal
 # @export
 set_ci      <- fmt_set_field_factory("ci"     , cast = double()   )
+# @describeIn fmt set the "rr" field (relative risk)
+#' @keywords internal
+# @export
+set_rr      <- fmt_set_field_factory("rr"     , cast = double()   )
+# @describeIn fmt set the "or" field (odds ratio or relative risk ratio)
+#' @keywords internal
+# @export
+set_or      <- fmt_set_field_factory("or"     , cast = double()   )
+
 
 
 
@@ -1273,7 +1327,8 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA) {
   plus_ci <- pct_ci | mean_ci
   #pct_or_pct_ci <- ok & display %in% c("pct", "pct_ci", "diff", "ctr")
   pct_no_ci     <- ok & display %in% c("pct", "diff", "ctr") & !(display == "diff" & type == "mean")
-  n_wn          <- ok & (display %in% c("n", "wn", "mean", "mean_ci", "var") |
+  n_wn          <- ok & (display %in% c("n", "wn", "mean", "mean_ci", "var", "rr", "or", "or_pct",
+                                        "OR", "OR_pct") |
                            (display == "ci" & type == "mean") )
   type_ci       <- ok & display == "ci"
 
@@ -1380,6 +1435,8 @@ pillar_shaft.tabxplor_fmt <- function(x, ...) {
   disp_diff <- display == "diff" & !nas
   disp_ci   <- display == "ci" & ci_type == "diff" & !nas
   disp_ctr  <- display == "ctr" & !nas
+  disp_or   <- display == "or" & !nas
+  disp_or_pct<-display == "or_pct" & !nas
 
   if (any(disp_diff)) {
     ref     <- get_reference(x[disp_diff], mode = "cells")
@@ -1409,6 +1466,32 @@ pillar_shaft.tabxplor_fmt <- function(x, ...) {
     }
     out[mctr] <- paste0("mean:", stringr::str_trim(out[mctr])) %>%
       stringr::str_remove("mean:Inf%|NA")
+  }
+
+  if (any(disp_or)) {
+    # refcol  <- is_refcol(x)
+    ref     <- get_reference(x[disp_or], mode = "all_totals")
+    reffmt  <- set_display(x[disp_or], "pct") %>% # ifelse(refcol, "pct", "rr")
+      set_digits(0L) |> format() #%>% stringr::str_trim()
+    reffmt <- stringr::str_pad(reffmt, max(stringr::str_length(reffmt)) )
+    out[disp_or] <- dplyr::if_else(
+      ref,
+      paste0(stringr::str_replace(out[disp_or], "1.0+", "1"),
+            " (", reffmt, ")"),
+      out[disp_or]
+    )
+    # out[disp_or] <- dplyr::case_when(
+    #   ref & type == "row" & refcol ~ paste0("1 (ref)"),
+    #   ref & type == "row"          ~ paste0("1 (rel ", reffmt, ")"),
+    #   ref & type == "col" & refrows~ paste0("1 (ref)"),
+    #   ref & type == "col"          ~ paste0("1 (rel ", reffmt, ")"),
+    #   TRUE                         ~ out[disp_or]
+    # )
+  }
+
+  if (any(disp_or_pct)) {
+    reffmt  <- set_display(x[disp_or_pct], "pct") |> set_digits(0L) |> format()
+    out[disp_or_pct] <- paste0(out[disp_or_pct], " (", reffmt, ")")
   }
 
   if (color == "contrib" & !any(totrows)) warning(
@@ -1605,6 +1688,24 @@ fmt_color_selection <- function(x, force_color, force_breaks) {
     NA_real_
   }
 
+  # rr <- if (color %in% c("OR") ) {
+  #   get_rr(x)
+  # } else {
+  #   NA_real_
+  # }
+
+  or <- if (color %in% c("OR") ) {
+    get_or(x)
+  } else {
+    NA_real_
+  }
+
+  # pct <- if (color %in% c("OR") ) {
+  #   get_pct(x)
+  # } else {
+  #   NA_real_
+  # }
+
   brk <-
     switch(color,
            "diff"     = ,
@@ -1615,7 +1716,9 @@ fmt_color_selection <- function(x, force_color, force_breaks) {
              pct_ci_breaks[c(1, length(pct_ci_breaks)/2 + 1)]
            } ,
            "after_ci" = if (type == "mean") mean_ci_breaks else pct_ci_breaks,
-           "contrib"  = contrib_breaks                                     )
+           "contrib"  = contrib_breaks,
+           "OR"       = mean_breaks
+           )
 
   brksup <-
     switch(color,
@@ -1627,12 +1730,15 @@ fmt_color_selection <- function(x, force_color, force_breaks) {
              pct_ci_brksup[c(length(pct_ci_brksup)/2, length(pct_ci_brksup))]
            },
            "after_ci" = if (type == "mean") mean_ci_brksup else pct_ci_brksup,
-           "contrib"  = contrib_brksup                                        )
+           "contrib"  = contrib_brksup,
+           "OR"       = mean_brksup
+           )
 
   purrr::map2(brk, brksup,
               ~ color_formula(type = type, color = color,
                               diff = diff, ci = ci, ref_means = ref_means,
                               ctr = ctr, mean_ctr = mean_ctr,
+                              or = or, # rr = rr, pct = pct,
                               brk = .x, brksup = .y)
   ) %>% purrr::set_names(as.character(round(brk, 2)))
 }
@@ -1668,7 +1774,7 @@ fmt_color_selection <- function(x, force_color, force_breaks) {
 
 #' @keywords internal
 color_formula <- function(type, color, diff, ci, ref_means,
-                          ctr, mean_ctr, brk, brksup) {
+                          ctr, mean_ctr, or, brk, brksup) {
   means <- type %in% c("mean", "n")
 
   res <-
@@ -1678,6 +1784,10 @@ color_formula <- function(type, color, diff, ci, ref_means,
         if( (!means & brk >= 0) | (means & brk >= 1) ) {
           diff > brk & diff < brksup} else {
             diff < brk & diff > brksup},
+
+      "OR"     = if(brk >= 1) {
+        or > brk & or < brksup} else {
+          or < brk & or > brksup},
 
       "diff_ci"  = dplyr::case_when(
         means & brk >= 1    ~ diff > brk & diff < brksup &
@@ -1792,6 +1902,11 @@ tab_color_legend <- function(x, colored = TRUE, mode = c("console", "html"),
       "contrib"       = paste0(cross, stringr::str_remove(.x, "^-")),
       #"ci_mean"       = ,
       "ci"            = "",      #just 1 ?
+      "OR"            = dplyr::if_else(
+        condition = stringr::str_detect(.x, "^-"),
+        true      = paste0("1/", stringr::str_remove(.x, "^-")),
+        false     = .x
+      ),
       .x
     ) )
 
@@ -1810,6 +1925,7 @@ tab_color_legend <- function(x, colored = TRUE, mode = c("console", "html"),
           "after_ci_mean" = paste0(ref, " + |x-", ref, "| > (", ref, " + ci) ", .breaks),
           "after_ci"      = paste0("|x-", ref, "| > ci ", .breaks), #+ -
           "contrib"       = paste0("contrib > mean_ctr "     , .breaks),
+          "OR"            = paste0("OR", .sign, .breaks),
           character()
         ))
 
@@ -1828,6 +1944,7 @@ tab_color_legend <- function(x, colored = TRUE, mode = c("console", "html"),
                                    .breaks, "</b>"),
           "after_ci"      = paste0("|x-", ref, "| > ci ", "<b>", .breaks, "</b>"), #+ -
           "contrib"       = paste0("contrib > mean_ctr ", "<b>", .breaks, "</b>"),
+          "OR"            = paste0("OR", .sign, "<b>", .breaks, "</b>"),
           character()
         ))
     }
@@ -1858,7 +1975,7 @@ tab_color_legend <- function(x, colored = TRUE, mode = c("console", "html"),
     color_table <- color_table |>
       dplyr::mutate(names = paste0(
         "[color:", .data$color_type, "] ",
-        dplyr::if_else(color_type %in% c("diff_mean", "diff", "diff_ci_mean",
+        dplyr::if_else(color_type %in% c("diff_mean", "diff", "OR", "diff_ci_mean",
                                          "diff_ci", "after_ci_mean", "after_ci"),
           true  = paste0("[diff:", .data$diff_type, "] "),
           false = ""),
@@ -1874,7 +1991,7 @@ tab_color_legend <- function(x, colored = TRUE, mode = c("console", "html"),
   color_table <- color_table %>%
     dplyr::mutate(
       breaks = brk_from_color(.data$color_type),
-      breaks = dplyr::if_else(.data$color_type %in% c("diff_mean", "diff_ci_mean"),
+      breaks = dplyr::if_else(.data$color_type %in% c("diff_mean", "diff_ci_mean", "OR"),
                               true  = purrr::map(.data$breaks,
                                                  ~ .[1:(length(.)/2)] %>%
                                                    c(., purrr::map(., `-`))
@@ -1995,6 +2112,7 @@ brk_from_color <- function(color_type) {
 
   purrr::map(color_type, ~
                switch(.x,
+                      "OR"            = ,
                       "diff_mean"     = ,
                       "diff_ci_mean"  = list(tabxplor_color_breaks$mean_breaks,
                                              tabxplor_color_breaks$mean_brksup),
@@ -2021,6 +2139,7 @@ get_color_type <- function(color, type) {
   purrr::map2(color, type, ~ dplyr::case_when(
     .x == "contrib" ~ "contrib",
     .x == "ci"      ~ "ci"     ,
+    .x == "OR"      ~ "OR"     ,
 
     .x %in% c("diff", "diff_ci", "after_ci") & .y == "mean"
     ~ paste0(.x, "_mean"),
@@ -2095,7 +2214,39 @@ get_reference <- function(x, mode = c("cells", "lines", "all_totals")) {
   refcol      <- is_refcol(x)
   tottab_ref  <- is_tottab(x) & refrows
 
-  if (diff_type == "tot") {
+  color       <- get_color(x)
+
+  if (color == "OR") {
+    switch(mode[1],
+           "cells"      = dplyr::case_when(
+             type %in% c("row", "mean") & !comp_all ~ refrows               ,
+             type %in% c("row", "mean") &  comp_all ~ tottab_ref            ,
+             type == "col"                          ~ rep(refcol, length(x)),
+             TRUE                                   ~ rep(FALSE, length(x)   )
+           ),
+           "lines"      = dplyr::case_when(
+             type %in% c("row", "mean") & !comp_all ~ refrows               ,
+             type %in% c("row", "mean") &  comp_all ~ tottab_ref            ,
+             type == "col"                          ~ rep(refcol, length(x)),
+             TRUE                                   ~ rep(FALSE, length(x)   )
+           ),
+           "all_totals" = dplyr::case_when(
+             type %in% c("row", "mean") & diff_type == "tot" & !comp_all
+             ~ totrows | refcol,
+
+             type %in% c("row", "mean") & diff_type == "tot" &  comp_all
+             ~ tottab_line | refcol,
+
+             type == "col" & diff_type == "tot"     ~ totrows | refcol,
+
+             type %in% c("row", "mean") & !comp_all ~ refrows | refcol      ,
+             type %in% c("row", "mean") &  comp_all ~ tottab_ref | refcol   ,
+             type == "col"                          ~ refrows | refcol      ,
+             TRUE                                   ~ rep(FALSE, length(x)   )
+           )
+    )
+
+  } else if (diff_type == "tot") {
     switch(mode[1],
            "cells"      = dplyr::case_when(
              type %in% c("row", "mean") & !comp_all ~ totrows & !totcol     ,
@@ -2118,7 +2269,7 @@ get_reference <- function(x, mode = c("cells", "lines", "all_totals")) {
                (type %in% c("row", "mean") & !comp_all)
              ~ totrows | totcol,
 
-             type == "all_tabs" | (type %in% c("row", "mean") &  comp_all)
+             type == "all_tabs" | (type %in% c("row", "mean") & comp_all)
              ~ tottab_line | totcol,
              # type == "col"                          ~ rep(totcol, length(x)),
              # type == "all"                          ~ totrows & totcol      ,
@@ -2336,6 +2487,8 @@ vec_cast.tabxplor_fmt.tabxplor_fmt  <- function(x, to, ...)
           mean      = get_mean    (x),
           var       = get_var     (x),
           ci        = get_ci      (x),
+          rr        = get_rr      (x),
+          or        = get_or      (x),
 
           in_totrow = is_totrow   (x),
           in_refrow = is_refrow   (x),
@@ -2519,6 +2672,8 @@ vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
         vctrs::vec_arith_base("+", get_wn(x) , get_wn(y) ),# weighted mean
       var     = rep_NA_real,
       ci      = rep_NA_real,
+      rr      = rep_NA_real,
+      or      = rep_NA_real,
 
       in_totrow = is_totrow(x) & is_totrow(y), # Just x ?
       in_refrow = is_refrow(x) & is_refrow(y),
@@ -2558,6 +2713,8 @@ vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
       mean   = rep_NA_real,
       var    = rep_NA_real,
       ci     = rep_NA_real,
+      rr     = rep_NA_real,
+      or     = rep_NA_real,
 
       in_totrow = is_totrow(x),
       in_refrow = is_refrow(x),
@@ -2669,6 +2826,8 @@ vec_math.tabxplor_fmt <- function(.fn, .x, ...) {
                            vctrs:: vec_math_base("sum", get_wn(.x), ...),
                          var    = NA_real_,
                          ci     = NA_real_,
+                         rr     = NA_real_,
+                         or     = NA_real_,
 
                          in_totrow = all(is_totrow(.x)),
                          in_refrow = all(is_refrow(.x)),
@@ -2695,6 +2854,8 @@ vec_math.tabxplor_fmt <- function(.fn, .x, ...) {
                             vctrs::vec_math_base("sum", get_wn(.x), ...),
                           var     = NA_real_,
                           ci      = NA_real_,
+                          rr      = NA_real_,
+                          or      = NA_real_,
 
                           in_totrow = FALSE,
                           in_refrow = FALSE,

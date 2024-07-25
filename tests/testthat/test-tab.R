@@ -1,6 +1,6 @@
 data <- dplyr::starwars %>%
   tab_prepare("sex", "hair_color", "eye_color", "mass", "gender",
-              rare_to_other = TRUE, n_min = 5)
+              other_if_less_than = 5)
 
 # starwars %>% dplyr::select(where(is.character)) %>% purrr::map(~ as.factor(.) %>%
 #   levels())
@@ -55,25 +55,25 @@ testthat::test_that("tab_plain works with pct and diffs", {
   tab_plain(data, sex, hair_color, gender, pct = "all")               |> testthat::expect_s3_class("tabxplor_tab")
   tab_plain(data, sex, hair_color, gender, pct = "all_tabs")          |> testthat::expect_s3_class("tabxplor_tab")
 
-  tab_plain(data, sex, hair_color, pct = "row", diff = "^male")        |> testthat::expect_s3_class("tabxplor_tab")
-  tab_plain(data, sex, hair_color, gender, pct = "row", diff = 2)     |> testthat::expect_s3_class("tabxplor_tab")
+  tab_plain(data, sex, hair_color, pct = "row", ref = "^male")        |> testthat::expect_s3_class("tabxplor_tab")
+  tab_plain(data, sex, hair_color, gender, pct = "row", ref = 2)     |> testthat::expect_s3_class("tabxplor_tab")
 
   tab_plain(data, sex, hair_color, gender, pct = "row", comp = "all") |> testthat::expect_s3_class("tabxplor_tab")
-  tab_plain(data, sex, hair_color, gender, pct = "row", diff = "tot",
+  tab_plain(data, sex, hair_color, gender, pct = "row", ref = "tot",
             comp = "all")                                             |> testthat::expect_s3_class("tabxplor_tab")
-  tab_plain(data, sex, hair_color, gender, pct = "row", diff = 3,
+  tab_plain(data, sex, hair_color, gender, pct = "row", ref = 3,
             comp = "all", totaltab = "table")                         |> testthat::expect_s3_class("tabxplor_tab")
 
-  tab_plain(data, sex, hair_color, pct = "col", diff = "brown")       |> testthat::expect_s3_class("tabxplor_tab")
-  tab_plain(data, sex, hair_color, pct = "col", diff = 3)             |> testthat::expect_s3_class("tabxplor_tab")
+  tab_plain(data, sex, hair_color, pct = "col", ref = "brown")       |> testthat::expect_s3_class("tabxplor_tab")
+  tab_plain(data, sex, hair_color, pct = "col", ref = 3)             |> testthat::expect_s3_class("tabxplor_tab")
 
   #warnings
-  tab_plain(data, sex, hair_color, pct = "row", diff = 47)                |> testthat::expect_warning()
-  tab_plain(data, sex, hair_color, pct = "row", diff = "no_existing_cat") |> testthat::expect_warning()
-  tab_plain(data, sex, hair_color, pct = "col", diff = 47)                |> testthat::expect_warning()
-  tab_plain(data, sex, hair_color, pct = "col", diff = "no_existing_cat") |> testthat::expect_warning()
+  tab_plain(data, sex, hair_color, pct = "row", ref = 47)                |> testthat::expect_warning()
+  tab_plain(data, sex, hair_color, pct = "row", ref = "no_existing_cat") |> testthat::expect_warning()
+  tab_plain(data, sex, hair_color, pct = "col", ref = 47)                |> testthat::expect_warning()
+  tab_plain(data, sex, hair_color, pct = "col", ref = "no_existing_cat") |> testthat::expect_warning()
   #tab_plain(data, sex, hair_color, pct = "col", comp = "all")             |> testthat::expect_warning()
-  #tab_plain(data, sex, hair_color, gender, pct = "col", diff = "black", comp = "all") |> testthat::expect_warning()
+  #tab_plain(data, sex, hair_color, gender, pct = "col", ref = "black", comp = "all") |> testthat::expect_warning()
   #tab_plain(data, sex, hair_color, gender, pct = "col", comp = "all")     |> testthat::expect_warning()
 })
 
@@ -82,7 +82,7 @@ testthat::test_that("tab_num works with missing, NULL, NA, etc.", {
   # set_color_breaks(mean_breaks = c(1.05, 1.10, 1.20, 1.50))
   tab_num(data, sex, height, na = "drop")                                       %>% testthat::expect_s3_class("tabxplor_tab")
   tab_num(data, sex, height, wt = mass)                                         %>% testthat::expect_s3_class("tabxplor_tab")
-  tab_num(data, sex, height, diff = "no", ci = "no", tot = "row")               %>% testthat::expect_s3_class("tabxplor_tab")
+  tab_num(data, sex, height, ref = "no", ci = "no", tot = "row")               %>% testthat::expect_s3_class("tabxplor_tab")
   tab_num(data, sex, c(height, birth_year))                                     %>% testthat::expect_s3_class("tabxplor_tab")
   tab_num(data, sex, c(height, birth_year), gender, tot = "row",totaltab = "table") %>% testthat::expect_s3_class("tabxplor_tab")
   tab_num(data, sex, c(height, birth_year), c(gender, eye_color), comp = "all") %>% testthat::expect_s3_class("tabxplor_tab")
@@ -90,7 +90,7 @@ testthat::test_that("tab_num works with missing, NULL, NA, etc.", {
 
 
 testthat::test_that("tab_num works with diff and ci", {
-  tab_num(data, sex, c(height, birth_year), na = "drop", diff = "no")        %>% testthat::expect_s3_class("tabxplor_tab")
+  tab_num(data, sex, c(height, birth_year), na = "drop", ref = "no")        %>% testthat::expect_s3_class("tabxplor_tab")
   tab_num(data, sex, c(height, birth_year), na = "drop")
 
   tab_num(data, sex, c(height, birth_year), na = "drop", color = "diff")     %>% testthat::expect_s3_class("tabxplor_tab")
@@ -98,8 +98,8 @@ testthat::test_that("tab_num works with diff and ci", {
   tab_num(data, sex, c(height, birth_year), na = "drop", color = "after_ci") %>% testthat::expect_s3_class("tabxplor_tab")
   tab_num(data, sex, c(height, birth_year), na = "drop", color = "")         %>% testthat::expect_s3_class("tabxplor_tab")
 
-  tab_num(data, sex, c(height, birth_year), na = "drop", diff = "^male")     %>% testthat::expect_s3_class("tabxplor_tab")
-  tab_num(data, sex, c(height, birth_year), na = "drop", diff = 3,
+  tab_num(data, sex, c(height, birth_year), na = "drop", ref = "^male")     %>% testthat::expect_s3_class("tabxplor_tab")
+  tab_num(data, sex, c(height, birth_year), na = "drop", ref = 3,
           color = "diff_ci", tot = "row")                                    %>% testthat::expect_s3_class("tabxplor_tab")
   tab_num(data, sex, c(height, birth_year), na = "drop", color = "after_ci") %>% testthat::expect_s3_class("tabxplor_tab")
 
@@ -222,7 +222,7 @@ testthat::test_that("all tab functions works with totaltab = 'line'", {
 testthat::test_that("tab_num works (with color)", {
   testthat::expect_true(
     !is.na(tab_prepare(data, sex, mass) %>%
-             tab_num(sex, mass, tot = "row", diff = "tot", color = "after_ci") %>%
+             tab_num(sex, mass, tot = "row", ref = "tot", color = "after_ci") %>%
 
              tab_chi2() %>%
              dplyr::pull(mass) %>% vec_data() %>% dplyr::pull(var) %>% dplyr::last())
@@ -477,7 +477,7 @@ testthat::test_that("tab colors are calculated with mean supplementary columns",
 #
 # #Decomposed :
 # profvis({  #90 ms
-#   data <-  tab_prepare(ct2013acm, !!row_var, !!col_var, !!!tab_vars, rare_to_other = TRUE)
+#   data <-  tab_prepare(ct2013acm, !!row_var, !!col_var, !!!tab_vars, other_if_less_than = 30)
 # })
 #
 # profvis({  #10 ms
@@ -513,7 +513,7 @@ testthat::test_that("tab colors are calculated with mean supplementary columns",
 # #Whole :
 # profvis({
 #   data <-  tab_prepare(ct2013acm, !!row_var, !!col_var, !!!tab_vars,
-#     rare_to_other = TRUE)
+#     other_if_less_than = 30)
 #   dat_group123 <-dplyr::group_by(data, !!!tab_vars, !!row_var, !!col_var)
 #   tabs <-  tab_plain(dat_group123, !!row_var, !!col_var, !!!tab_vars, wt = !!wt,
 #     is_grouped = TRUE)

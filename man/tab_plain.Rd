@@ -11,9 +11,11 @@ tab_plain(
   tab_vars,
   wt,
   pct = "no",
-  diff = "tot",
+  ref = "tot",
+  ref2 = "first",
   comp = "tab",
   color = TRUE,
+  OR = "no",
   digits = 0,
   na = "keep",
   subtext = "",
@@ -47,14 +49,26 @@ are converted to factor.}
 \item \code{"all_tabs"}: frequencies for the whole (set of) table(s).
 }}
 
-\item{diff}{The reference cell to calculate differences (used to print \code{colors}) :
+\item{ref}{The reference cell to calculate differences and ratios
+(used to print \code{colors}) :
 \itemize{
-\item \code{"tot"}: by default, cells differences from total rows are calculated with
-\code{pct = "row"}, and cells differences from total columns with \code{pct = "col"}.
-\item \code{"first"}: calculate cells differences from the first cell
+\item \code{"auto"}: by default, cell difference from the corresponding total
+(rows or cols depending on \code{pct = "row"} or \code{pct = "col"}) is
+used for \code{diff} ; cell ratio from the first line (or col) is use for \code{OR}
+(odds ratio/relative risks ratio).
+\item \code{"tot"}: totals are always used.
+\item \code{"first"}: calculate cell difference or ratio from the first cell
 of the row or column (useful to color temporal developments).
-\item \code{"no"}: not use diffs to gain calculation time.
+\item \code{n}: when \code{ref} is an integer, the nth row (or column) is used for comparison.
+\item \code{"regex"}: when \code{ref} is a string, it it used as a regular expression,
+to match with the names of the rows (or columns). Be precise enough to match only one
+column or row, otherwise you get a warning message.
+\item \code{"no"}: not use ref and not calculate diffs to gain calculation time.
 }}
+
+\item{ref2}{A second reference cell is needed to calculate odds ratios
+(or relative risks ratios). The first cell of the row or column is used by default.
+See \code{ref} above for the full list of possible values.}
 
 \item{comp}{Comparison level. When \code{tab_vars} are present, should the
 contributions to variance be calculated for each subtable/group (by default,
@@ -64,7 +78,7 @@ contributions to variance be calculated for each subtable/group (by default,
 \code{\link{tab_num}} or \code{\link{tab_chi2}} with rows, or \code{\link{tab_ci}}.}
 
 \item{color}{\code{TRUE} print the color percentages and means based on cells differences from
-totals or reference cell, as provided by \code{diff}. Default to \code{FALSE}, no colors.}
+totals or reference cell, as provided by \code{ref}. Default to \code{FALSE}, no colors.}
 
 \item{digits}{The number of digits to print, as a single integer.}
 

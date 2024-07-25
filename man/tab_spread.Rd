@@ -38,7 +38,7 @@ Spread a tab, passing a tab variable to column
 
 tabs <-
   tab(data, relig, marital, c(year, race), pct = "row", totaltab = "no",
-      color = "diff", tot = "row", rare_to_other = TRUE)
+      color = "diff", tot = "row", other_if_less_than = 30)
 
 tabs \%>\%
   dplyr::select(year, race, relig, Married) \%>\%

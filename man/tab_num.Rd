@@ -10,7 +10,7 @@ tab_num(
   col_vars,
   tab_vars,
   wt,
-  diff = "tot",
+  ref = "tot",
   ci = NULL,
   conf_level = 0.95,
   comp = c("tab", "all"),
@@ -42,13 +42,21 @@ are converted to factor.}
 
 \item{wt}{A weight variable, of class numeric. Leave empty for unweighted results.}
 
-\item{diff}{The reference cell to calculate differences (used to print \code{colors}) :
+\item{ref}{The reference cell to calculate differences and ratios
+(used to print \code{colors}) :
 \itemize{
-\item \code{"tot"}: by default, cells differences from total rows are calculated with
-\code{pct = "row"}, and cells differences from total columns with \code{pct = "col"}.
-\item \code{"first"}: calculate cells differences from the first cell
+\item \code{"auto"}: by default, cell difference from the corresponding total
+(rows or cols depending on \code{pct = "row"} or \code{pct = "col"}) is
+used for \code{diff} ; cell ratio from the first line (or col) is use for \code{OR}
+(odds ratio/relative risks ratio).
+\item \code{"tot"}: totals are always used.
+\item \code{"first"}: calculate cell difference or ratio from the first cell
 of the row or column (useful to color temporal developments).
-\item \code{"no"}: not use diffs to gain calculation time.
+\item \code{n}: when \code{ref} is an integer, the nth row (or column) is used for comparison.
+\item \code{"regex"}: when \code{ref} is a string, it it used as a regular expression,
+to match with the names of the rows (or columns). Be precise enough to match only one
+column or row, otherwise you get a warning message.
+\item \code{"no"}: not use ref and not calculate diffs to gain calculation time.
 }}
 
 \item{ci}{The type of confidence intervals to calculate, passed to \code{\link{tab_ci}}
@@ -56,7 +64,7 @@ of the row or column (useful to color temporal developments).
 \itemize{
 \item \code{"cell"}: absolute confidence intervals of cells percentages.
 \item \code{"diff"}: confidence intervals of the difference between a cell and the
-relative total cell (or relative first cell when \code{diff = "first"}).
+relative total cell (or relative first cell when \code{ref = "first"}).
 \item \code{"auto"}: \code{ci = "diff"} for means and row/col percentages,
 \code{ci = "cell"} for frequencies ("all", "all_tabs").
 }
@@ -75,7 +83,7 @@ contributions to variance be calculated for each subtable/group (by default,
 \code{\link{tab_num}} or \code{\link{tab_chi2}} with rows, or \code{\link{tab_ci}}.}
 
 \item{color}{\code{TRUE} print the color percentages and means based on cells differences from
-totals or reference cell, as provided by \code{diff}. Default to \code{FALSE}, no colors.}
+totals or reference cell, as provided by \code{ref}. Default to \code{FALSE}, no colors.}
 
 \item{digits}{The number of digits to print, as a single integer.}
 
@@ -124,6 +132,10 @@ rows and cols.}
 \item{df}{Set to \code{TRUE} to obtain a plain data.frame (not a \code{tibble}),
 with normal numeric vectors (not \code{fmt}). Useful, for example, to pass the table to
 correspondence analysis with \pkg{FactoMineR}.}
+
+\item{ref2}{A second reference cell is needed to calculate odds ratios
+(or relative risks ratios). The first cell of the row or column is used by default.
+See \code{ref} above for the full list of possible values.}
 }
 \value{
 A \code{tibble} of class \code{tabxplor_tab}. If \code{...} (\code{tab_vars})

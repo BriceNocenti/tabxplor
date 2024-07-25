@@ -58,7 +58,7 @@ When one of the row or column variables is numeric, `tab` calculates means by ca
 
 ``` r
 tab(forcats::gss_cat, marital, race, pct = "row", na = "drop", 
-rare_to_other = TRUE, n_min = 1000, other_level = "Custom_other_level_name")
+other_if_less_than = 1000, other_level = "Custom_other_level_name")
 ```
 
 When a third variable is provided, `tab` makes a table with as many subtables as it has levels. With several `tab_vars`, it makes a subtable for each combination of their levels. The result is grouped: in `dplyr`, operations like `sum()` or `all()` are done within each subtable, and not for the whole dataframe.
@@ -93,22 +93,22 @@ When a third variable or more are provided, it's possible to compare with the ge
 tab(data, race, marital, year, subtext = gss2, pct = "row", color = "diff", comp = "all")
 ```
 
-With `diff = "first"`, each row (or column) is compared to the first row (or column), which is particularly helpful to highlight historical evolutions. The first rows then appears in white (while rows totals are themselves colored like normal lines). 
+With `ref = "first"`, each row (or column) is compared to the first row (or column), which is particularly helpful to highlight historical evolutions. The first rows then appears in white (while rows totals are themselves colored like normal lines). 
 
 ```{r, echo = TRUE}
 data <- data %>% dplyr::mutate(year = as.factor(year))
-tab(data, year, marital, race, pct = "row", color = "diff", diff = "first", tot = "col",
+tab(data, year, marital, race, pct = "row", color = "diff", ref = "first", tot = "col",
     totaltab = "table")
 ```
 
-When `diff` is a number, the nth row (or column) is used for comparison. 
+When `ref`` is a number, the nth row (or column) is used for comparison. 
 ``` {r, echo = TRUE}
-tab(data, year, marital, race, pct = "row", color = "diff", diff = 3)
+tab(data, year, marital, race, pct = "row", color = "diff", ref = 3)
 ```
 
-Finally, when `diff` is a string, it it used as a regular expression, to match with the names of the rows (or columns). 
+Finally, when `ref`` is a string, it it used as a regular expression, to match with the names of the rows (or columns). 
 ``` {r, echo = TRUE}
-tab(data, year, marital, race, pct = "col", tot = "row", color = "diff", diff = "Married")
+tab(data, year, marital, race, pct = "col", tot = "row", color = "diff", ref = "Married")
 ```
 
 ## Confidence intervals
@@ -227,8 +227,8 @@ When not doing data analysis but writing functions, you can use the sub-function
 
 ``` r
 data <- dplyr::starwars %>%
-tab_prepare(sex, hair_color, gender, rare_to_other = TRUE,
-n_min = 5, na_drop_all = sex)
+tab_prepare(sex, hair_color, gender, other_if_less_than = 5, 
+na_drop_all = sex)
 
 data %>%
 tab_plain(sex, hair_color, gender, tot = c("row", "col"), pct = "row", comp = "all") %>%
@@ -293,10 +293,17 @@ tabs$Married$n
 tabs %>% mutate(across(where(is_fmt), ~ .$n))
 ```
 
-To modify a field, you can use `vctrs` `field<-`. For example, to change the displayed field :
+To change the field currently displayed, for the whole table or a single vector, 
+you can use `set_display()`:
 ``` r
-tab(data, race, marital, year, pct = "row") %>%
-mutate(across(where(is_fmt), ~ vctrs::`field<-`(., "display", rep("diff", length(.)))))
+tabs |> set_display("diff")
+tabs |> mutate(across(where(is_fmt), ~ set_display(., "diff")))
+```
+
+To modify a field, you can use `vctrs` `field<-`. For example, to change the number of digits :
+``` r
+tab(forcats::gss_cat, race, marital, pct = "row") |> 
+    mutate(across(where(is_fmt), ~ vctrs::`field<-`(., "digits", rep(2L, length(.)))))
 ```
 
 Faster to write and easier to read, you can also use `dplyr::mutate()` on an `fmt` vector. 

@@ -91,7 +91,7 @@ testthat::test_that("fmt vectors works with mutate", {
 
   data <- dplyr::starwars %>%
     tab_prepare("sex", "hair_color", "eye_color", "mass", "gender",
-                rare_to_other = TRUE, n_min = 5)
+                other_if_less_than = 5)
 
   tab_num(data, sex, c(height, birth_year), gender, comp = "all") |>
     dplyr::mutate(dplyr::across(

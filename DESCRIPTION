@@ -23,12 +23,17 @@ Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.1
 Suggests: 
     fansi (>= 0.5.0),
-    ggpubr,
     htmltools (>= 0.5.0),
     jmvcore (>= 0.5.0),
     knitr,
     openxlsx (>= 4.0.0),
     R6,
+    ggpubr (>= 0.6.0),
+    ggplot2 (>= 3.4.0),
+    cowplot (>= 1.1.1), 
+    gtable, 
+    grDevices,
+    grid, 
     rmarkdown,
     rstudioapi (>= 0.1),
     testthat (>= 3.0.0)

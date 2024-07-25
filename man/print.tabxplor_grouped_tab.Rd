@@ -11,7 +11,8 @@
   n = 100,
   max_extra_cols = NULL,
   max_footer_lines = NULL,
-  min_row_var = 30
+  min_row_var = 30,
+  get_text = FALSE
 )
 }
 \arguments{

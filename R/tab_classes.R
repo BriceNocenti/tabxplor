@@ -153,7 +153,8 @@ untab <- function(tabs) {
 #'   if the width is too small for the entire tibble.
 #' @param max_footer_lines Maximum number of footer lines.
 #' @param min_row_var Minimum number of characters for the row variable. Default to 30.
-#'
+#' @param get_text Set to `TRUE` to get the text as a character vector
+#' instead of a printed output.
 #' @export
 #' @return A printed table.
 #' @method print tabxplor_tab
@@ -209,6 +210,8 @@ print.tabxplor_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = N
 #'   if the width is too small for the entire tibble.
 #' @param max_footer_lines Maximum number of footer lines.
 #' @param min_row_var Minimum number of characters for the row variable. Default to 30.
+#' @param get_text Set to `TRUE` to get the text as a character vector
+#' instead of a printed output.
 #'
 #' @export
 #' @return A printed grouped table.
@@ -416,6 +419,7 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #' @param wrap_cols By default, colnames are wrapped when larger than 12 characters.
 #' @param whitespace_only Set to `FALSE` to wrap also on non whitespace characters.
 #' @param unbreakable_spaces Set to `FALSE` to keep normal spaces in text (auto-break).
+#' @param get_data Get the transformed data instead of the html table.
 #' @param ... Other arguments to pass to \code{\link[kableExtra:kable_styling]{kableExtra::kable_styling}}.
 
 #' @return A html table (opened in the viewer in RStudio). Differences from totals,
@@ -676,8 +680,8 @@ out
 #'
 #' @examples
 #' \donttest{
-#' tab(forcats::gss_cat, race, marital, year, pct = "row", color = "diff") |>
-#'   tab_plot(tabs)
+#' tab(forcats::gss_cat, race, marital, pct = "row", color = "diff") |>
+#'   tab_plot()
 #' }
 #'
 tab_plot <- function(tabs,
@@ -685,6 +689,21 @@ tab_plot <- function(tabs,
                      color_legend = TRUE, caption = NULL,
                      wrap_rows = 35, wrap_cols = 14,
                      whitespace_only = TRUE, unbreakable_spaces = TRUE) {
+  if (!requireNamespace("ggpubr", quietly = TRUE)) {
+    stop(paste0("Package \"ggpubr\" needed for this function to work. ",
+                "You can install it with : install.packages('ggpubr')"),
+         call. = FALSE)
+  }
+  if (!requireNamespace("gtable", quietly = TRUE)) {
+    stop(paste0("Package \"gtable\" needed for this function to work. ",
+                "You can install it with : install.packages('gtable')"),
+         call. = FALSE)
+  }
+  if (!requireNamespace("ggplot2", quietly = TRUE)) {
+    stop(paste0("Package \"ggplot2\" needed for this function to work. ",
+                "You can install it with : install.packages('ggplot2')"),
+         call. = FALSE)
+  }
   #theme <- if (is.null(theme)) { getOption("tabxplor.color_style_theme") } else { theme }
   color_type <-
     if (is.null(color_type)) { getOption("tabxplor.color_style_type") } else {color_type}
@@ -950,17 +969,17 @@ if (color_legend & length(color_cols) != 0) {
 
       # base = stringr::str_remove_all(base, "</b>; "),
     ) |>
-    dplyr::filter(!base %in% c("", ";")) |>
-    dplyr::group_by(n) |>
+    dplyr::filter(!.data$base %in% c("", ";")) |>
+    dplyr::group_by("n") |>
     dplyr::mutate(bold = stringr::str_detect(.data$base, "color: rgba") &
                     dplyr::row_number() != 1 ) |>
     dplyr::ungroup() |>
     tidyr::separate(col = .data$color, into = c("c1", "c2", "c3", "c4"), sep = ", ") |>
     dplyr::mutate(
-      text  = dplyr::if_else(.data$bold, paste0(text, " ;"), text),
+      text  = dplyr::if_else(.data$bold, paste0(.data$text, " ;"), .data$text),
       dplyr::across(tidyselect::all_of(c("c1", "c2", "c3", "c4")),
              ~dplyr::if_else(!is.na(.), as.integer(.), 0L)),
-      color      = rgb(.data$c1/255, .data$c2/255, .data$c3/255),
+      color      = grDevices::rgb(.data$c1/255, .data$c2/255, .data$c3/255),
       #bold_start = bold & !dplyr::lag(bold, default = FALSE),
       #bold_stop  = bold & !dplyr::lead(bold, default = FALSE)
     ) |>
@@ -980,15 +999,15 @@ if (color_legend & length(color_cols) != 0) {
           dplyr::group_by(group) |>
           dplyr::summarise(
             in_color = dplyr::first(in_color),
-            text     = paste(text, collapse = " "),
+            text     = paste(.data$text, collapse = " "),
             .groups  = "drop"
           ) |>
           dplyr::mutate(text = dplyr::if_else(in_color,
-                                              true  = paste0('"', text, '"'),
-                                              false = paste0('phantom("', text, '")' ))
+                                              true  = paste0('"', .data$text, '"'),
+                                              false = paste0('phantom("', .data$text, '")' ))
           ) |>
           dplyr::summarise(
-            text = paste0("bold(", paste(text, collapse = " * "),")") |>
+            text = paste0("bold(", paste(.data$text, collapse = " * "),")") |>
               stringr::str_squish(),
           ) |>
           dplyr::mutate(

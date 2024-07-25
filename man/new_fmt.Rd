@@ -17,6 +17,8 @@ new_fmt(
   ctr = rep(NA_real_, length(n)),
   var = rep(NA_real_, length(n)),
   ci = rep(NA_real_, length(n)),
+  rr = rep(NA_real_, length(n)),
+  or = rep(NA_real_, length(n)),
   in_totrow = rep(FALSE, length(n)),
   in_tottab = rep(FALSE, length(n)),
   in_refrow = rep(FALSE, length(n)),

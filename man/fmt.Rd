@@ -11,6 +11,7 @@
 \alias{as_totrow}
 \alias{is_tottab}
 \alias{as_tottab}
+\alias{set_display}
 \alias{is_totcol}
 \alias{as_totcol}
 \alias{is_refrow}
@@ -44,6 +45,8 @@ fmt(
   ctr = rep(NA_real_, length(n)),
   var = rep(NA_real_, length(n)),
   ci = rep(NA_real_, length(n)),
+  rr = rep(NA_real_, length(n)),
+  or = rep(NA_real_, length(n)),
   in_totrow = rep(FALSE, length(n)),
   in_tottab = rep(FALSE, length(n)),
   in_refrow = rep(FALSE, length(n)),
@@ -73,6 +76,8 @@ as_totrow(x, in_totrow = TRUE)
 is_tottab(x, ...)
 
 as_tottab(x, in_tottab = TRUE)
+
+set_display(x, value)
 
 is_totcol(x, ...)
 
@@ -161,6 +166,10 @@ Calculate with \code{tab_plain}.}
 Used to print colors (\code{"diff_ci"}, \code{"after_ci"}).
 Calculate with \code{tab_ci}.}
 
+\item{rr}{The relative risk, as a double vector the length of \code{n}.}
+
+\item{or}{The odds ratio or relative risk ratio, as a double vector the length of \code{n}.}
+
 \item{in_totrow}{\code{TRUE} when the cell is part of a total row}
 
 \item{in_tottab}{\code{TRUE} when the cell is part of a total table}
@@ -200,7 +209,7 @@ relative total cell (or relative first cell when \code{diff_type = "first"}).
 \itemize{
 \item \code{"no"}: no colors are printed.
 \item \code{"diff"}: color percentages and means based on cells differences from
-totals (or from first cells when \code{diff = "first"}).
+totals (or from first cells when \code{ref = "first"}).
 \item \code{"diff_ci"}: color pct and means based on cells differences from totals
 or first cells, removing coloring when the confidence interval of this difference
 is higher than the difference itself.
@@ -241,6 +250,8 @@ A modified fmt vector with totrow field changed.
 A logical vector with the fmt vectors tottab field.
 
 A modified fmt vector with tottab field changed.
+
+The entered objects, with all fmt vectors with the wanted display.
 
 A logical vector with the fmt vectors totcol attribute.
 
@@ -311,6 +322,9 @@ using \pkg{vctrs}.
 (at \code{fmt} level or \code{tab} level)
 
 \item \code{as_tottab()}: set the "in_tottab" field (belong to total table)
+
+\item \code{set_display()}: set the "display" vctrs::field of a \code{fmt} vector, or of
+all of them in the whole tibble.
 
 \item \code{is_totcol()}: test function for total columns
 (at \code{fmt} level or \code{tab} level)
@@ -398,7 +412,7 @@ set_color(f, "contrib")
 
 
 tabs <- tab(starwars, sex, hair_color, gender, na = "drop", pct = "row",
-            rare_to_other = TRUE, n_min = 5)
+            other_if_less_than = 5)
 
 # To identify the total columns, and work with them :
 is_totcol(tabs)

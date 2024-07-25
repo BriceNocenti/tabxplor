@@ -58,7 +58,8 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
             pct                = self$options$pct,
             color              = self$options$color,
             na                 = self$options$na,
-            diff               = self$options$diff,
+            ref                = self$options$ref,
+            ref2               = self$options$ref2,
             comp               = self$options$comp,
             ci                 = self$options$ci,
             conf_level         = self$options$conf_level,
@@ -68,8 +69,7 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
             totaltab           = self$options$totaltab,
 
             digits             = self$options$digits,
-            rare_to_other      = self$options$other_if_less_than >= 1,
-            n_min              = self$options$other_if_less_than,
+            other_if_less_than = self$options$other_if_less_than,
             subtext            = self$options$subtext
           )
 

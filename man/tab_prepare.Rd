@@ -9,8 +9,7 @@ tab_prepare(
   ...,
   na_drop_all,
   cleannames = NULL,
-  rare_to_other = FALSE,
-  n_min = 30,
+  other_if_less_than = 0,
   other_level = "Others"
 )
 }
@@ -25,10 +24,8 @@ observation with a \code{NA} in any of the chosen variables.}
 \item{cleannames}{Set to \code{TRUE} to clean levels names, by removing
 prefix numbers like \code{"1-"}, and text in parentheses.}
 
-\item{rare_to_other}{When set to \code{TRUE}, levels with less count
-than \code{n_min} will be merged into an "Other" level.}
-
-\item{n_min}{The count under which a level is aggregated in the "Other" level.}
+\item{other_if_less_than}{When set to a positive integer, levels with less count
+than it will be merged into an "Others" level.}
 
 \item{other_level}{The name of the "Other" level, as a character vector of length one.}
 }
@@ -40,8 +37,8 @@ Prepare data for \code{\link{tab_plain}}.
 }
 \examples{
 \donttest{data <- dplyr::starwars \%>\%
-tab_prepare(sex, hair_color, gender, rare_to_other = TRUE,
-            n_min = 5, na_drop_all = sex)
+tab_prepare(sex, hair_color, gender, other_if_less_than = 5,
+            na_drop_all = sex)
 data
 }
 }

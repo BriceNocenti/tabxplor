@@ -8,7 +8,7 @@ tab_pct(
   tabs,
   pct = "row",
   digits = NULL,
-  diff = c("tot", "first", "no"),
+  ref = c("tot", "first", "no"),
   comp = NULL,
   color = FALSE,
   just_diff = FALSE
@@ -26,19 +26,29 @@ Set to \code{"all_tabs"} to calculate frequencies based on the whole (set of) ta
 \item{digits}{The number of digits to print for percentages. As a single integer,
 or an integer vector the same length than \code{col_vars}.}
 
-\item{diff}{By default, with \code{pct = "row"}, differences from total rows are
-calculated, and with \code{pct = "col"} differences from total columns.
-Set to \code{diff = "first"} to calculate differences with the first cell
-of the row/col (useful to color temporal developments). When not using diffs for colors,
-set to \code{diff = "no"} to gain calculation time. Diffs are also calculated for
-mean columns (made from numeric variables).}
+\item{ref}{The reference cell to calculate differences and ratios
+(used to print \code{colors}) :
+\itemize{
+\item \code{"auto"}: by default, cell difference from the corresponding total
+(rows or cols depending on \code{pct = "row"} or \code{pct = "col"}) is
+used for \code{diff} ; cell ratio from the first line (or col) is use for \code{OR}
+(odds ratio/relative risks ratio).
+\item \code{"tot"}: totals are always used.
+\item \code{"first"}: calculate cell difference or ratio from the first cell
+of the row or column (useful to color temporal developments).
+\item \code{n}: when \code{ref} is an integer, the nth row (or column) is used for comparison.
+\item \code{"regex"}: when \code{ref} is a string, it it used as a regular expression,
+to match with the names of the rows (or columns). Be precise enough to match only one
+column or row, otherwise you get a warning message.
+\item \code{"no"}: not use ref and not calculate diffs to gain calculation time.
+}}
 
 \item{comp}{Comparison level. When \code{tab_vars} are present, should the row
 differences be calculated for each subtable/group (by default \code{comp = "tab"} :
 comparison of each cell to the relative total row) ?
 Should they be calculated for the whole table (\code{comp = "all"} :
 comparison of each cell to the total row of the total table) ?
-When \code{comp = "all"} and \code{diff = "first"}, cells are compared to the first
+When \code{comp = "all"} and \code{ref = "first"}, cells are compared to the first
 cell of the total table instead.
 This parameter doesn't affect column percentages.
 \code{comp} must be set once and for all the first time you use \code{\link{tab_chi2}},

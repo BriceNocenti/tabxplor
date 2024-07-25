@@ -8,3 +8,7 @@
 ^CRAN-RELEASE$
 ^\.github$
 ^CRAN-SUBMISSION$
+[.]jmo$
+^build/
+^jamovi/
+

@@ -6,23 +6,27 @@
 \usage{
 jmvtab(
   data,
-  row_vars,
-  col_vars,
-  tab_vars,
-  wt,
+  row_vars = NULL,
+  col_vars = NULL,
+  tab_vars = NULL,
+  wt = NULL,
   pct = "no",
   color = "no",
+  chi2 = TRUE,
+  totaltab = "line",
   na = "keep",
-  diff = "tot",
-  comp_all = FALSE,
+  lvs = "all",
+  other_if_less_than = 0,
+  cleannames = FALSE,
+  ref = "tot",
+  comp,
   ci = "auto",
   conf_level = 0.95,
-  chi2 = TRUE,
-  cleannames = FALSE,
-  levels = "all",
-  other_if_less_than = 0,
+  wrap_rows = 35,
+  wrap_cols = 15,
   display = "auto",
-  subtext
+  subtext = "",
+  digits = 0
 )
 }
 \arguments{
@@ -40,33 +44,48 @@ jmvtab(
 
 \item{color}{.}
 
+\item{chi2}{.}
+
+\item{totaltab}{.}
+
 \item{na}{.}
 
-\item{diff}{.}
+\item{lvs}{.}
 
-\item{comp_all}{.}
+\item{other_if_less_than}{.}
+
+\item{cleannames}{.}
+
+\item{comp}{.}
 
 \item{ci}{.}
 
 \item{conf_level}{.}
 
-\item{chi2}{.}
+\item{wrap_rows}{.}
 
-\item{cleannames}{.}
-
-\item{levels}{.}
-
-\item{other_if_less_than}{.}
+\item{wrap_cols}{.}
 
 \item{display}{.}
 
 \item{subtext}{.}
+
+\item{digits}{.}
+
+\item{diff}{.}
 }
 \value{
 A results object containing:
 \tabular{llllll}{
-\code{results$text} \tab \tab \tab \tab \tab a preformatted \cr
+\code{results$plot} \tab \tab \tab \tab \tab an image \cr
+\code{results$chi2_table} \tab \tab \tab \tab \tab a table \cr
 }
+
+Tables can be converted to data frames with \code{asDF} or \code{\link{as.data.frame}}. For example:
+
+\code{results$chi2_table$asDF}
+
+\code{as.data.frame(results$chi2_table)}
 }
 \description{
 Crosstables

@@ -132,7 +132,7 @@ options:
       type: Bool
       default: false
 
-  # n_min = 30, # rare_to_other = FALSE,  # other_level = "Others",
+  # other_level = "Others",
   # totcol = "last",
   # totaltab_name = "Ensemble",
   # totrow = TRUE,
@@ -140,8 +140,8 @@ options:
 
 
 # References (points of comparison)
-    - name: diff
-      title: "diff = <i>(differences)</i>"
+    - name: ref
+      title: "ref = <i>(ref row or col for diff and OR)</i>"
       type: List
       options:
         - title: tot
