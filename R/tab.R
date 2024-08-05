@@ -180,6 +180,8 @@ NULL
 #'   difference first.
 #'   \item \code{"contrib"}: color cells based on their contribution to variance
 #'   (except mean columns, from numeric variables).
+#'   \item \code{"OR"}: for `pct == "col"` or `pct == "row"`,
+#'   color based on odds ratios (or relative risks ratios)
 #'   \item \code{"auto"}: frequencies (\code{pct = "all"}, \code{pct = "all_tabs"})
 #'   and counts are colored with \code{"contrib"}.
 #'   When \code{ci = "diff"}, row and col percentages are colored with "after_ci" ;
@@ -272,17 +274,14 @@ NULL
 #'   dplyr::arrange(year, is_totrow(.), desc(Married))
 #'   }
 tab <- function(data, row_var, col_var, tab_vars, wt, sup_cols,
-                na = "keep", digits = 0,
-                pct = "no", color = "no", ref = "auto", ref2 = "first", comp = "tab",
-
-                totaltab = "line", totaltab_name = "Ensemble",
-                tot = c("row", "col"), total_names = "Total",
-                chi2 = FALSE,
+                pct = "no", color = "no", OR = "no", chi2 = FALSE,
+                na = "keep",  cleannames = NULL,
+                other_if_less_than = 0, other_level = tr_("Others"),
+                ref = "auto", ref2 = "first", comp = "tab",
                 ci = "no", conf_level = 0.95,
-                OR = "no",
-
-                subtext = "", cleannames = NULL,
-                other_if_less_than = 0, other_level = "Others",
+                totaltab = "line", totaltab_name = tr_("Ensemble"),
+                tot = c("row", "col"), total_names = tr_("Total"),
+                subtext = "", digits = 0,
                 filter) {
 
   cleannames <-
@@ -404,6 +403,7 @@ tab <- function(data, row_var, col_var, tab_vars, wt, sup_cols,
 #'   \item \code{na = "drop"}: removes \code{NA} levels before making each table
 #'   (tabs made with different column variables may have a different number of
 #'   observations, and won't exactly have the same total columns).
+#'   \item \code{"drop_all"}: remove `NA`'s for all variables before making the tables.
 #'   }
 #' @param na_drop_all <\link[tidyr:tidyr_tidy_select]{tidy-select}>
 #' Removes all observations with a `NA` in any of the chosen variables, for all tables
@@ -522,6 +522,8 @@ tab <- function(data, row_var, col_var, tab_vars, wt, sup_cols,
 #'   difference first.
 #'   \item \code{"contrib"}: color cells based on their contribution to variance
 #'   (except mean columns, from numeric variables).
+#'   \item \code{"OR"}: for `pct == "col"` or `pct == "row"`,
+#'   color based on odds ratios (or relative risks ratios)
 #'   \item \code{"auto"}: frequencies (\code{pct = "all"}, \code{pct = "all_tabs"})
 #'   and counts are colored with \code{"contrib"}.
 #'   When \code{ci = "diff"}, row and col percentages are colored with "after_ci" ;
@@ -578,18 +580,15 @@ tab <- function(data, row_var, col_var, tab_vars, wt, sup_cols,
 #'   data = forcats::gss_cat, color = "auto", chi2 = TRUE)
 #' }
 tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
-                     levels = "all", na = "keep", na_drop_all, digits = 0,
-                     totaltab = "line", totaltab_name = "Ensemble",
-                     totrow = TRUE, totcol = "last", total_names = "Total",
-                     pct = "no", ref = "tot", ref2 = "first", comp = "tab",
-                     chi2 = FALSE,
+                     pct = "no", color = "no", OR = "no", chi2 = FALSE,
+                     na = "keep", levels = "all", na_drop_all, cleannames = NULL,
+                     other_if_less_than = 0, other_level = tr_("Others"), rare_to_other,
+                     ref = "auto", ref2 = "first", comp = "tab",
                      ci = "no", conf_level = 0.95, #ci_visible = FALSE,
                      method_cell = "wilson", method_diff = "ac",
-                     OR = "no",
-                     color = "no",
-                     subtext = "",
-                     cleannames = NULL,
-                     other_if_less_than = 0, other_level = "Others",
+                     totaltab = "line", totaltab_name = tr_("Ensemble"),
+                     totrow = TRUE, totcol = "last", total_names = tr_("Total"),
+                     digits = 0, subtext = "",
                      filter #, listed = FALSE,
                      #spread_vars = NULL, names_prefix, names_sort = FALSE
 ) {
@@ -662,7 +661,9 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
   nrowvars    <- length(row_vars)
   totaltab    <- vctrs::vec_recycle(totaltab, nrowvars)
   totrow      <- vctrs::vec_recycle(totrow  , nrowvars)
-  ref         <- vctrs::vec_recycle(ref    , nrowvars)
+  ref         <- vctrs::vec_recycle(ref     , nrowvars)
+  ref2        <- vctrs::vec_recycle(ref2    , nrowvars)
+  OR          <- vctrs::vec_recycle(OR      , nrowvars)
   comp        <- vctrs::vec_recycle(comp    , nrowvars)
   color       <- vctrs::vec_recycle(color   , nrowvars)
   #ci_visible <- vctrs::vec_recycle(ci_visible, nrowvars)
@@ -730,12 +731,22 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
 
 
   # Tests to be done before tab_plain / tab_num
+  OR[OR == "no" & color %in% c("OR", "or")] <- "OR"
+
   color_auto_text <- color == "auto" & ! sum(col_vars_text) == 0
   if (any(color_auto_text)) color <- dplyr::case_when(
+    purrr::map2_lgl(
+      pct_vect, OR,
+      ~ all(.x[col_vars_text] %in% c("row", "col") &
+              .y[col_vars_text] %in% c("OR", "OR_pct", "or", "or_pct")
+      )
+    )
+    ~ "OR",
+
     purrr::map_lgl(pct_vect, ~ all(.[col_vars_text] %in% c("row", "col"))) & ci == "diff" ~ "after_ci",
     purrr::map_lgl(pct_vect, ~ all(.[col_vars_text] %in% c("row", "col")))                ~ "diff"    ,
     purrr::map_lgl(pct_vect, ~ all(.[col_vars_text] %in% c("", "no", "all", "all_tabs"))) ~ "contrib" ,
-    TRUE                                                                             ~ "no" ,
+    TRUE                                                                                  ~ "no" ,
   )
   if (length(row_vars) == 1) color <- color[1]
 
@@ -877,16 +888,17 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
 
 
   if(any(lvs == "auto")) {
+    # print(lvs)
     lvs <- purrr::map2_chr(
-      dplyr::select(data, tidyselect::all_of(col_vars)),
       lvs,
-      ~dplyr::if_else(.y == "auto",
-                      true  = dplyr::if_else(nlevels(forcats::fct_drop(.x)) == 2L,
-                                             true  = "first",
-                                             false = "all"),
-                      false = .y
-      )
+      dplyr::select(data, !!!col_vars),
+      ~ if (.x == "auto") {
+        if(nlevels(forcats::fct_drop(.y)) == 2L) "first" else "all"
+      } else {
+        .x
+      }
     )
+
   }
 
   # Where only first levels are kept, merge others to minimise useless calculations
@@ -917,26 +929,31 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
   #dat_group3 <- data %>% dplyr::group_by(!!!tab_vars, .add = TRUE, .drop = FALSE)
 
 
-  color_diff <- color == "diff" | (color == "auto" & any(ci != "diff"))
+  color_diff_OR <-
+    color %in% c("diff", "OR") | (color == "auto" & any(ci != "diff"))
+
   color_ctr  <- dplyr::recode(color,
                               "no"       = "no"  ,
                               "auto"     = "auto",
                               "diff"     = "no"  ,
                               "diff_ci"  = "no"  ,
                               "after_ci" = "no"  ,
-                              "contrib"  = "all"  )
+                              "contrib"  = "all" ,
+                              "OR"       = "no"   )
   color_ci   <- dplyr::recode(color,
                               "no"       = "no"      ,
                               "auto"     = dplyr::if_else(any(ci == "diff"), "after_ci", "no"),
                               "diff"     = "no"      ,
                               "diff_ci"  = "diff_ci" ,
                               "after_ci" = "after_ci",
-                              "contrib"  = "no"
+                              "contrib"  = "no"      ,
+                              "OR"       = "no"
   )
 
   color_num <- dplyr::recode(color,
                              "contrib"  = "no" ,
-                             .default = color  )
+                             "OR"       = "no" ,
+                             .default = color   )
 
 
 
@@ -969,7 +986,7 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
 
   if (sum(col_vars_text) != 0) {
     tabs_text <-     # By column first
-      purrr::pmap(list(row_vars, totaltab, totrow, pct_vect, ref, ref2, comp, OR, na_text, color_diff),
+      purrr::pmap(list(row_vars, totaltab, totrow, pct_vect, ref, ref2, comp, OR, na_text, color_diff_OR),
 
                   ~ purrr::pmap(list(col_vars[col_vars_text], digits[col_vars_text], ..9, ..4[col_vars_text]),
                                 function(.col_vars, .digits, .na, .pct)
@@ -984,7 +1001,7 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
                                             ref        = ..5,
                                             ref2       = ..6,
                                             comp       = ..7,
-                                            OR         = ..8, # ADD OR
+                                            OR         = ..8,
                                             color      = ..10,
                                             #subtext   = "",
                                             totaltab   = ..2,
@@ -1243,7 +1260,7 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
 #'   tab_spread(race)
 #'   }
 tab_spread <- function(tabs, spread_vars, names_prefix, names_sort = FALSE,
-                       totname = "Total" #, recalculate = TRUE
+                       totname = tr_("Total") #, recalculate = TRUE
 ) {
   spread_vars     <- rlang::enquo(spread_vars)
   pos_spread_vars <- tidyselect::eval_select(spread_vars, tabs)
@@ -1308,7 +1325,7 @@ tab_spread <- function(tabs, spread_vars, names_prefix, names_sort = FALSE,
       #
       #                 type      = get_type    (.),
       #                 comp_all  = get_comp_all(., replace_na = FALSE),
-      #                 diff_type = get_diff_type(.),
+      #                 ref = get_ref_type(.),
       #                 ci_type   = get_ci_type (.),
       #                 col_var   = get_col_var (.),
       #                 totcol    = is_totcol   (.),
@@ -1488,7 +1505,7 @@ tab_get_vars <- function(tabs, vars = c("row_var", "col_vars", "tab_vars")) {
 tab_prepare <-
   function(data, ..., na_drop_all,
            cleannames = NULL, other_if_less_than = 0,
-           other_level = "Others") {
+           other_level = tr_("Others")) {
 
     cleannames <-
       if (is.null(cleannames)) { getOption("tabxplor.cleannames") } else {cleannames}
@@ -1666,11 +1683,12 @@ tab_prepare <-
 #'   tab_ci(color = "after_ci")
 #' }
 tab_plain <- function(data, row_var, col_var, tab_vars, wt,
-                      pct = "no", ref = "tot", ref2 = "first", comp = "tab",
-                      color = TRUE,
-                      OR = "no", digits = 0, na = "keep", subtext = "",
-                      totaltab = "line", totaltab_name = "Ensemble",
-                      tot = NULL, total_names = "Total",
+                      pct = "no", color = TRUE, OR = "no",
+                      na = "keep",
+                      ref = "auto", ref2 = "first", comp = "tab",
+                      totaltab = "line", totaltab_name = tr_("Ensemble"),
+                      tot = NULL, total_names = tr_("Total"),
+                      subtext = "", digits = 0,
                       num = FALSE, df = FALSE
 ) {
 
@@ -1729,8 +1747,6 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
   vctrs::vec_assert(ref, size = 1)
   vctrs::vec_assert(ref2, size = 1)
   vctrs::vec_assert(OR, size = 1)
-  vctrs::vec_assert(digits, size = 1)
-  digits <- vctrs::vec_cast(digits, integer())
   vctrs::vec_assert(na, size = 1)
   stopifnot(na %in% c("keep", "drop"))
   vctrs::vec_assert(totaltab_name, size = 1)
@@ -1738,8 +1754,8 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
 
   #pct
   stopifnot(pct %in% c("no", "row", "col", "all", "all_tabs"))
-  if (is.logical(OR)) if(OR) OR <- "OR"
-  stopifnot(OR %in% c("no", "OR", "OR_pct"))
+  if (is.logical(OR)) if(OR) OR <- "OR" else OR <- "no"
+  stopifnot(OR %in% c("no", "OR", "OR_pct", "or", "or_pct"))
   if (pct == "all_tabs" & length(tab_vars) == 0) pct <- "all"
 
   if (color & ref == "no") {
@@ -1798,12 +1814,16 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
 
   if (comp == "all" & length(tab_vars) == 0) comp <- "tab"
 
-  # ref
+  #ref
   if (ref == "auto") {
    ref <- if (OR != "no") {"first"} else {"tot"}
   }
 
-  #Totaltab
+  #digits
+  vctrs::vec_assert(digits, size = 1)
+  digits <- vctrs::vec_cast(digits, integer())
+
+  #totaltab
   if (length(tab_vars) == 0) totaltab <- "no"
 
   if (((comp[1] == "all" & ref == "tot") | pct == "all_tabs") &
@@ -2121,7 +2141,7 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
                             row_var       = row_var,
                             tottab_vector = tottab_vector,
                             totrow_vector = totrow_vector,
-                            pct           = pct,
+                            #pct           = pct,
                             num_names     = names(cols)
                             )
 
@@ -2147,7 +2167,11 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
           # Relative risks
           tabs_rr <- data.table::copy(tabs_pct)
 
-          refcols <- dplyr::nth(names(cols), diff_index(ref2, num_names = names(cols), pct = pct))
+          refcols <- dplyr::nth(names(cols),
+                                diff_index(ref2,
+                                           row_var   = dplyr::pull(tabs_rr, !!row_var),
+                                           num_names = names(cols),
+                                           pct       = "col"))
           refcols_vector <- names(cols) == refcols
 
 
@@ -2185,7 +2209,9 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
 
 
       if (pct == "col") {
-        refcols <- dplyr::nth(names(cols), diff_index(ref, num_names = names(cols), pct = pct))
+        refcols <- dplyr::nth(names(cols), diff_index(ref,
+                                                      num_names = names(cols),
+                                                      pct       = pct))
         refcols_vector <- names(cols) == refcols
 
         if (length(refcols) != 0 & !is.na(refcols)) {
@@ -2216,7 +2242,7 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
                               row_var       = row_var,
                               tottab_vector = tottab_vector,
                               totrow_vector = totrow_vector,
-                              pct           = pct,
+                              #pct           = pct,
                               num_names     = names(cols)
                               )
 
@@ -2330,7 +2356,7 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
         TRUE                                              ~ ""
       ),
       type      = dplyr::if_else(pct != "no", pct, "n"),
-      diff_type = switch(as.character(ref), "no" = "", "tot" = "tot", as.character(ref)),
+      ref = switch(as.character(ref), "no" = "", "tot" = "tot", as.character(ref)),
       #ci_type   = ,
       comp      = dplyr::if_else(pct != "no" & ref != "no", comp == "all", NA),
       col_var   = rlang::as_name(col_var)
@@ -2512,12 +2538,13 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
 #' tab_num(data, category, wind, tot = "row", color = "after_ci")
 #' }
 tab_num <- function(data, row_var, col_vars, tab_vars, wt,
-                    ref = "tot", ci = NULL, conf_level = 0.95, #ci_visible = FALSE,
-                    comp = c("tab", "all"), color = c("auto", "diff", "diff_ci", "after_ci"),
-                    digits = 0, na = c("keep", "drop", "drop_fct", "drop_num"),
-                    totaltab = "line", totaltab_name = "Ensemble",
-                    tot = NULL, total_names = "Total",
-                    subtext = "", num = FALSE, df = FALSE
+                    color = c("auto", "diff", "diff_ci", "after_ci"),
+                    na = c("keep", "drop", "drop_fct", "drop_num"),
+                    ref = "tot", comp = c("tab", "all"),
+                    ci = NULL, conf_level = 0.95, #ci_visible = FALSE,
+                    totaltab = "line", totaltab_name = tr_("Ensemble"),
+                    tot = NULL, total_names = tr_("Total"),
+                    subtext = "", digits = 0, num = FALSE, df = FALSE
 ) {
 
   row_var_quo <- rlang::enquo(row_var)
@@ -2622,6 +2649,9 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
     }
   }
 
+  if (ref == "auto") {
+    ref <- "tot"  # ref <- if (OR != "no") {"first"} else {"tot"}
+  }
 
   if (comp == "all" & length(tab_vars) == 0) comp <- "tab"
 
@@ -3373,7 +3403,7 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
       in_refrow = refrows,
       color     = color,
       type      = "mean",
-      diff_type = switch(as.character(ref), "no" = "", "tot" = "tot", as.character(ref)),
+      ref = switch(as.character(ref), "no" = "", "tot" = "tot", as.character(ref)),
       ci_type   = ci, #dplyr::if_else(ci == "diff", "diff", ci),
       comp      = dplyr::if_else(ref != "no" | ci != "no", comp == "all", NA),
       col_var   = ..7
@@ -3476,7 +3506,7 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
 #'   tab_totaltab("line")
 #'   }
 tab_totaltab <- function(tabs, totaltab = c("table", "line", "no"),
-                         name = "Ensemble", data = NULL) {
+                         name = tr_("Ensemble"), data = NULL) {
   #.Deprecated("tab_plain() and tab_num(), which now have a totaltab argument")
 
   get_vars  <- tab_get_vars(tabs)
@@ -3608,7 +3638,7 @@ tab_totaltab <- function(tabs, totaltab = c("table", "line", "no"),
 #'   tab_plain(sex, hair_color) %>%
 #'   tab_tot("col", totcol = "each")
 #'   }
-tab_tot <- function(tabs, tot = c("row", "col"), name = "Total",
+tab_tot <- function(tabs, tot = c("row", "col"), name = tr_("Total"),
                     totcol = "last", data = NULL) {
   #.Deprecated("tab_plain() and tab_num(), which now have a tot argument")
 
@@ -4209,14 +4239,14 @@ tab_ci <- function(tabs,
   names_totcols <- tot_cols %>% purrr::map_chr(as.character) %>% unique() %>%
     purrr::discard(. == "")
 
-  diff_type <- get_diff_type(tabs)
+  ref <- get_ref_type(tabs)
   ref_cols  <- detect_firstcol(tabs)
   ref_cols[is.na(ci)] <- list(rlang::sym(""))
 
-  ref_cols <- dplyr::if_else(diff_type == "tot",
+  ref_cols <- dplyr::if_else(ref == "tot",
                              true  = tot_cols,
                              false = ref_cols     ) %>%
-    purrr::set_names(names(diff_type)) #keep ci_yes ?
+    purrr::set_names(names(ref)) #keep ci_yes ?
   names_refcols <- ref_cols %>% purrr::map_chr(as.character) %>% unique() %>%
     purrr::discard(. == "")
 
@@ -4275,7 +4305,7 @@ tab_ci <- function(tabs,
 
     ref_rows <- tabs %>% dplyr::transmute(dplyr::across(
       !!row_select,
-      ~ .[dplyr::last(which(switch(get_diff_type(.),
+      ~ .[dplyr::last(which(switch(get_ref_type(.),
                                    "tot" = is_totrow(.),
                                    is_refrow(.)         )))]
     ))
@@ -4288,7 +4318,7 @@ tab_ci <- function(tabs,
     ref_to_na <- tabs %>% dplyr::transmute(dplyr::across(
       !!ci_select,
       ~ tidyr::replace_na(dplyr::row_number() ==
-                            dplyr::last(which(switch(get_diff_type(.),
+                            dplyr::last(which(switch(get_ref_type(.),
                                                      "tot" = is_totrow(.) ,
                                                      is_refrow(.)))),
                           FALSE)
@@ -4348,14 +4378,14 @@ tab_ci <- function(tabs,
                  )[dplyr::last(which(is_totrow(.)))] %>% get_n(),
                  "diff_row" = switch(
                    get_type(.),
-                   "mean" = .[dplyr::last(which(switch(get_diff_type(.),
+                   "mean" = .[dplyr::last(which(switch(get_ref_type(.),
                                                        "tot" = is_totrow(.),
                                                        is_refrow(.))))] %>%
                      get_n(), # = n of ref_rows (copy error with groups)
 
                    rlang::eval_tidy(
                      tot_cols[[dplyr::cur_column()]]
-                   )[dplyr::last(which(switch(get_diff_type(.),
+                   )[dplyr::last(which(switch(get_ref_type(.),
                                               "tot" = is_totrow(.),
                                               is_refrow(.))))] %>%
                      get_n()
@@ -5154,7 +5184,10 @@ relabel_levels_in_varnames <- function(data, col_vars) {
 diff_index <-  function(ref, row_var, num_names, pct) {
   if (ref == "tot"   ) return(-1L)
   if (ref == "first" ) return(1L )
-  if (is.numeric(ref)) return(as.integer(ref[1]))
+  if (is.numeric(ref) | !is.na(suppressWarnings(as.integer(ref)))
+  ) {
+    return(as.integer(ref[1]))
+  }
 
   index <-
     switch(pct,
@@ -5188,7 +5221,7 @@ diff_index <-  function(ref, row_var, num_names, pct) {
 
 #' @keywords internal
 calculate_refrows <- function(tabs, ref, comp, tab_row_names, tab_vars,
-                              row_var, tottab_vector, totrow_vector, pct,
+                              row_var, tottab_vector, totrow_vector, # pct,
                               num_names) {
   if (ref != "tot") {
     refrows <-
@@ -5199,10 +5232,10 @@ calculate_refrows <- function(tabs, ref, comp, tab_row_names, tab_vars,
             var =
               dplyr::row_number() == if (diff_index(ref, !!row_var,
                                                     num_names = num_names,
-                                                    pct = pct) == -1) {
+                                                    pct = "row") == -1) {
                 dplyr::n()
               } else {
-                diff_index(ref, !!row_var, num_names = num_names, pct = pct)
+                diff_index(ref, !!row_var, num_names = num_names, pct = "row")
               }
           ) |>
           dplyr::pull("var")
@@ -5216,10 +5249,10 @@ calculate_refrows <- function(tabs, ref, comp, tab_row_names, tab_vars,
               condition = .data$tottab_vector,
               true  = dplyr::row_number() == if (diff_index(ref, !!row_var,
                                                             num_names = num_names,
-                                                            pct = pct) == -1) {
+                                                            pct = "row") == -1) {
                 dplyr::n()
               } else {
-                diff_index(ref, !!row_var, num_names = num_names, pct = pct)
+                diff_index(ref, !!row_var, num_names = num_names, pct = "row")
               },
               false = FALSE
             )

@@ -11,7 +11,7 @@ tab_plain(
   tab_vars,
   wt,
   pct = "no",
-  ref = "tot",
+  ref = "auto",
   ref2 = "first",
   comp = "tab",
   color = TRUE,
@@ -20,9 +20,9 @@ tab_plain(
   na = "keep",
   subtext = "",
   totaltab = "line",
-  totaltab_name = "Ensemble",
+  totaltab_name = tr_("Ensemble"),
   tot = NULL,
-  total_names = "Total",
+  total_names = tr_("Total"),
   num = FALSE,
   df = FALSE
 )
@@ -78,7 +78,17 @@ contributions to variance be calculated for each subtable/group (by default,
 \code{\link{tab_num}} or \code{\link{tab_chi2}} with rows, or \code{\link{tab_ci}}.}
 
 \item{color}{\code{TRUE} print the color percentages and means based on cells differences from
-totals or reference cell, as provided by \code{ref}. Default to \code{FALSE}, no colors.}
+totals or reference cell, as provided by \code{ref}. If \code{OR} is provided,
+odds ratios are used for colors instead. Default to \code{FALSE}, no colors.}
+
+\item{OR}{With \code{pct = "row"} or \code{pct = "col"}, calculate and print odds ratios
+(for binary variables) or relative risks ratios (for variables with 3 levels
+or more).
+\itemize{
+\item \code{"no"}: by default, no OR are calculated.
+\item \code{"OR"}: print OR (instead of percentages).
+\item \code{"OR_pct"}: print OR, with percentages in bracket.
+}}
 
 \item{digits}{The number of digits to print, as a single integer.}
 

@@ -30,6 +30,9 @@ if the width is too small for the entire tibble.}
 \item{max_footer_lines}{Maximum number of footer lines.}
 
 \item{min_row_var}{Minimum number of characters for the row variable. Default to 30.}
+
+\item{get_text}{Set to \code{TRUE} to get the text as a character vector
+instead of a printed output.}
 }
 \value{
 A printed grouped table.

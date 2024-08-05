@@ -1,0 +1,256 @@
+{
+    "domain": "messages",
+    "locale_data": {
+        "messages": {
+            "": {
+                "domain": "messages",
+                "plural_forms": "nplurals=2; plural=(n != 1);",
+                "lang": "fr"
+            },
+            "<b>col_vars = <i>(column variables)</i></b>": [
+                "<b>col_vars = <i>(variables de colonne)</i></b>"
+            ],
+            "<b>Confidence intervals</b>": [
+                "<b>Intervalles de confiance</b>"
+            ],
+            "<b>Levels and missing values</b>": [
+                "<b>Valeurs manquantes et modalités</b>"
+            ],
+            "<b>Other formatting</b>": [
+                "<b>Autres mises en forme</b>"
+            ],
+            "<b>Percentages, colors and Chi2 test </b>": [
+                "<b>Pourcentages, couleurs et test du Chi2</b>"
+            ],
+            "<b>References (points of comparison)</b>": [
+                "<b>Références (points de comparaison)</b>"
+            ],
+            "<b>row_vars = <i>(row variable)</i></b>": [
+                "<b>row_vars = <i>(variable de ligne)</i></b>"
+            ],
+            "<b>tab_vars = <i>(subtables variables)</i></b>": [
+                "<b>tab_vars = <i>(variables de sous-tableaux)</i></b>"
+            ],
+            "<b>wt = <i>(weights)</i></b>": [
+                "<b>wt = <i>(poids)</i></b>"
+            ],
+            "after_ci <i>(diff, after substracting margin of error)</i>": [
+                "after_ci <i>(diff, après soustraction marge d'erreur)</i>"
+            ],
+            "all": [
+                "all"
+            ],
+            "all <i>(compare with the total subtable)</i>": [
+                "all <i>(comparer avec le total général)</i>"
+            ],
+            "all_tabs": [
+                "all_tabs"
+            ],
+            "auto": [
+                "auto"
+            ],
+            "auto/tot/<i>{row_number}</i>/<i>{row_name}</i>": [
+                "auto/tot/<i>{num_ligne}</i>/<i>{nom_ligne}</i>"
+            ],
+            "cell <i>(ci for each cell)</i>": [
+                "cell <i>(IC pour chaque case)</i>"
+            ],
+            "chi2 = <i>(Chi2 test)</i>": [
+                "chi2 = <i>(test du Chi2)</i>"
+            ],
+            "Chi2 Test": [
+                "Test du Chi2"
+            ],
+            "ci <i>(confidence intervals)</i>": [
+                "ci <i>(IC, intervalles de confiance)</i>"
+            ],
+            "ci <i>(interval display: [inf;sup])</i>": [
+                "ci <i>(format: [inf;sup])</i>"
+            ],
+            "ci = <i>(confidence intervals)</i>": [
+                "ci = <i>(intervalles de confiance, IC)</i>"
+            ],
+            "cleannames =": [
+                "cleannames = <i>(nettoyer noms)</i>"
+            ],
+            "col (column)": [
+                "col (colonne)"
+            ],
+            "color = (Color)": [
+                "color = (Couleur)"
+            ],
+            "color = <i>(what to use for color helpers)</i>": [
+                "color = <i>(aides à l'interprétation)</i>"
+            ],
+            "comp": [
+                "comp"
+            ],
+            "comp = <i>(reference table with tab_vars)</i>": [
+                "comp = <i>(tableau de référence, avec tab_vars)</i>"
+            ],
+            "conf_level = <i>(confidence level)</i>": [
+                "conf_level = <i>(seuil de confiance)</i>"
+            ],
+            "contrib <i>(relative contribution to variance)</i>": [
+                "contrib <i>(contribution relative à la variance)</i>"
+            ],
+            "Crosstables": [
+                "Tableaux croisés"
+            ],
+            "ctr <i>(relative contributions to variance)</i>": [
+                "ctr <i>(contribution relative à la variance)</i>"
+            ],
+            "diff <i>(ci on the difference with reference)</i>": [
+                "diff <i>(IC sur la différence avec la référence)</i>"
+            ],
+            "diff <i>(differences from total, or reference cell)</i>": [
+                "diff <i>(différences par rapport au total/référence)</i>"
+            ],
+            "diff_ci <i>(differences, only if significant)</i>": [
+                "diff_ci <i>(différences, seulement si significatives)</i>"
+            ],
+            "digits = <i>(number of digits)</i>": [
+                "digits = <i>(nombre de chiffres après la virgule)</i>"
+            ],
+            "display = <i>(which information to display in the table ?)</i>": [
+                "display = <i>(quelle information afficher dans le tableau ?)</i>"
+            ],
+            "drop <i>(for each col_var)</i>": [
+                "drop <i>(enlever, par col_var)</i>"
+            ],
+            "drop_all <i>(for all col_vars)</i>": [
+                "drop_all <i>(pour toutes)</i>"
+            ],
+            "first": [
+                "first"
+            ],
+            "first/tot/<i>{col_number}</i>": [
+                "first/tot/<i>{num_colonne}</i>"
+            ],
+            "keep": [
+                "keep (conserver NAs)"
+            ],
+            "levels": [
+                "levels"
+            ],
+            "levels = <i>(which lvs to keep)</i>": [
+                "levels = <i>(modalités)</i>"
+            ],
+            "line": [
+                "line (seulement une ligne)"
+            ],
+            "Make it easy to deal with multiple cross-tables in data exploration, by creating them, manipulating them, and adding color helpers to highlight important informations (differences from totals, comparisons between lines or columns, contributions to variance, confidence intervals, odds ratios, etc.). All functions are pipe-friendly and render data frames which can be easily manipulated. In the same time, time-taking operations are done with 'data.table' to go faster with big dataframes. Tables can be exported to 'Excel', plot and html with formats and colors.": [
+                "Tableaux croisés multiples faciles à manipuler en exploration de données, avec aides à l'interprétation pour colorer les informations importantes (différences par rapport au total, comparaison entre lignes, contributions à la variance, intervalles de confiance, rapports de chances, etc.) Toutes les fonctions sont adaptées au pipe (|> ou %>%) et retournent des data.frames aisément manipulables. Les opérations les plus lourdes sont réalisées en `data.table` pour gagner du temps avec les grandes bases de données. Les tableaux peuvent être exportés en format `Excel`, graphique ou html avec la mise en forme et les couleurs."
+            ],
+            "mean <i>(mean, for numeric variables)</i>": [
+                "mean <i>(moyenne, pour les variables numériques)</i>"
+            ],
+            "mean_ci <i>(means with visible conf. intervals)</i>": [
+                "mean_ci <i>(moyennes avec IC visibles)</i>"
+            ],
+            "moe <i>(display: pct±margin of error)</i>": [
+                "moe <i>(format: pct±marge d'ereur)</i>"
+            ],
+            "n <i>(unweighted counts)</i>": [
+                "n <i>(effectifs non pondérés)</i>"
+            ],
+            "na = <i>(missing values)</i>": [
+                "na = <i>(valeurs manquantes)</i>"
+            ],
+            "no": [
+                "no"
+            ],
+            "no (counts)": [
+                "no (effectifs)"
+            ],
+            "options('tabxplor.ci_print' = ...)": [
+                "options('tabxplor.ci_print' = ...)"
+            ],
+            "OR": [
+                "OR"
+            ],
+            "OR <i>(odds ratios or relative risks ratios)</i>": [
+                "OR <i>(odds ratios, rapports de chance)</i>"
+            ],
+            "OR = <i>(Odds Ratio)</i>": [
+                "OR = <i>(Odds Ratio, rapports de chance)</i>"
+            ],
+            "OR_pct": [
+                "OR_pct <i>(odds ratios, % visibles)</i>"
+            ],
+            "OR_pct <i>(odds ratios with visible percentages)</i>": [
+                "OR_pct  <i>(odds ratios avec pourcentages visibles)</i>"
+            ],
+            "other_if_less_than =": [
+                "other_if_less_than = <br> <i>(regrouper modalités rares)</i>"
+            ],
+            "pct <i>(percentages)</i>": [
+                "pct <i>(pourcentages)</i>"
+            ],
+            "pct = (Percentages)": [
+                "pct = (Pourcentages)"
+            ],
+            "pct = <i>(type of percentages)</i>": [
+                "pct = <i>(type de pourcentages)</i>"
+            ],
+            "pct_ci <i>(percentages with visible conf. intervals)</i>": [
+                "pct_ci <i>(pourcentages avec IC visibles)</i>"
+            ],
+            "ref = <i>(reference row/col for diff/OR)</i>": [
+                "ref = <i>(ligne/col de référence pour diff/OR)</i>"
+            ],
+            "ref2 = <i>(2nd reference col/row for OR)</i>": [
+                "ref2 = <i>(2e col/ligne de référence pour OR)</i>"
+            ],
+            "row": [
+                "row (ligne)"
+            ],
+            "row_var": [
+                "row_var"
+            ],
+            "subtext = <i>(text to print below the table)</i>": [
+                "subtext = <i>(texte en dessous du tableau)</i>"
+            ],
+            "tab <i>(compare in each subtable)</i>": [
+                "tab <i>(comparer par sous-tableaux)</i>"
+            ],
+            "table": [
+                "table (sous-tableau complet)"
+            ],
+            "Table": [
+                "Tableau"
+            ],
+            "tabxplor": [
+                "tabxplor"
+            ],
+            "The row variable, which will be printed with one level per line. If numeric, it will be converted to factor.": [
+                "La variable de ligne, affichée avec une modalité sur chaque ligne. Si numérique, elle sera convertie en variable catégorielle."
+            ],
+            "Total": [
+                "Total"
+            ],
+            "totaltab = <i>(add a total table)</i>": [
+                "totaltab = <i>(ajouter un tableau Total général)</i>"
+            ],
+            "totaltab = <i>(with tab_vars, add a total table)</i>": [
+                "totaltab = <i>(avec tab_vars, ajouter un tableau Total général)</i>"
+            ],
+            "User-Friendly Tables with Color Helpers for Data Exploration": [
+                "Tableaux avec aides à l'interprétation pour l'exploration de données"
+            ],
+            "var <i>(variance)</i>": [
+                "var <i>(variance)</i>"
+            ],
+            "wn <i>(weighted counts)</i>": [
+                "wn <i>(effectifs pondérés)</i>"
+            ],
+            "wrap_cols = <i>(nb chars for line break)</i>": [
+                "wrap_cols = <i>(nb lettres avant saut de ligne)</i>"
+            ],
+            "wrap_rows = <i>(nb chars for line break)</i>": [
+                "wrap_rows = <i>(nb lettres avant saut de ligne)</i>"
+            ]
+        }
+    },
+    "code": "fr"
+}

@@ -77,6 +77,18 @@ testthat::test_that("tab_plain works with pct and diffs", {
   #tab_plain(data, sex, hair_color, gender, pct = "col", comp = "all")     |> testthat::expect_warning()
 })
 
+testthat::test_that("tab_plain works with OR", {
+  tab_plain(data, sex, hair_color, pct = "row", OR = "OR")            |> testthat::expect_s3_class("tabxplor_tab")
+  tab_plain(data, sex, hair_color, pct = "col", OR = "OR_pct")        |> testthat::expect_s3_class("tabxplor_tab")
+
+  tab_plain(data, sex, hair_color, pct = "row", OR = "OR", ref = "^male")       |> testthat::expect_s3_class("tabxplor_tab")
+  tab_plain(data, sex, hair_color, gender, pct = "row", OR = "OR", ref = 2)     |> testthat::expect_s3_class("tabxplor_tab")
+
+  tab_plain(data, sex, hair_color, gender, pct = "row", OR = "OR", ref = "tot",
+            comp = "all")                                             |> testthat::expect_s3_class("tabxplor_tab")
+  tab_plain(data, sex, hair_color, gender, pct = "row", OR = "OR", ref = 3,
+            comp = "all", totaltab = "table")                         |> testthat::expect_s3_class("tabxplor_tab")
+})
 
 testthat::test_that("tab_num works with missing, NULL, NA, etc.", {
   # set_color_breaks(mean_breaks = c(1.05, 1.10, 1.20, 1.50))
@@ -446,6 +458,7 @@ testthat::test_that("tab colors are calculated with counts and pct", {
   tab(data, sex, hair_color, pct = "row", color = "after_ci")  %>% dplyr::pull(`NA`)  %>% expect_color()
   tab(data, sex, hair_color, pct = "row", color = "contrib" )  %>% dplyr::pull(`NA`) %>% expect_color()
   tab(data, sex, hair_color, pct = "no" , color = "contrib" )  %>% dplyr::pull(`NA`) %>% expect_color()
+  tab(data, sex, hair_color, pct = "row", color = "OR"      )  %>% dplyr::pull(brown) %>% expect_color()
 
   tab(data, sex, hair_color, pct = "row"     , color = "auto") %>% dplyr::pull(brown) %>% expect_color()
   tab(data, sex, hair_color, pct = "col"     , color = "auto") %>% dplyr::pull(brown) %>% expect_color()

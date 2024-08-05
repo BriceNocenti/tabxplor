@@ -18,7 +18,7 @@
 \alias{as_refrow}
 \alias{get_comp_all}
 \alias{set_comp_all}
-\alias{get_diff_type}
+\alias{get_ref_type}
 \alias{set_diff_type}
 \alias{get_ci_type}
 \alias{set_ci_type}
@@ -51,7 +51,7 @@ fmt(
   in_tottab = rep(FALSE, length(n)),
   in_refrow = rep(FALSE, length(n)),
   comp_all = NA,
-  diff_type = "",
+  ref = "",
   ci_type = "",
   col_var = "",
   totcol = FALSE,
@@ -91,9 +91,9 @@ get_comp_all(x, replace_na = TRUE)
 
 set_comp_all(x, comp_all = FALSE)
 
-get_diff_type(x, ...)
+get_ref_type(x, ...)
 
-set_diff_type(x, diff_type)
+set_diff_type(x, ref)
 
 get_ci_type(x, ...)
 
@@ -175,18 +175,12 @@ Calculate with \code{tab_ci}.}
 \item{in_tottab}{\code{TRUE} when the cell is part of a total table}
 
 \item{in_refrow}{\code{TRUE} when the cell is part of a reference row
-(cf. \code{diff_type})}
+(cf. \code{ref})}
 
 \item{comp_all}{\code{FALSE} when the comparison level is the subtable/group,
 \code{TRUE} when it is the whole table}
 
-\item{diff_type}{The type of difference of the vector (calculate
-with \code{\link{tab_pct}}) :
-\itemize{
-\item \code{""} or \code{"no"}: no differences have been calculated
-\item \code{"tot"}: the reference row (or column) is the total row (or column)
-\item \code{"first"}: the reference row (or column) is the first row (or column)
-}}
+\item{ref}{The type of difference of the vector. Cf. \code{\link{tab}}.}
 
 \item{ci_type}{The type of confidence intervals of the vector (calculate
 with \code{\link{tab_ci}}) :
@@ -194,7 +188,7 @@ with \code{\link{tab_ci}}) :
 \item \code{""} or \code{"no"}: no ci have been calculated
 \item \code{"cell"}: absolute confidence intervals of cells percentages.
 \item \code{"diff"}: confidence intervals of the difference between a cell and the
-relative total cell (or relative first cell when \code{diff_type = "first"}).
+relative total cell (or relative first cell when \code{ref = "first"}).
 \item \code{"auto"}: \code{"diff"} for means and row/col percentages,
 \code{"cell"} for frequencies ("all", "all_tabs").
 }}
@@ -340,7 +334,7 @@ all of them in the whole tibble.
 
 \item \code{set_comp_all()}: set the comparison level attribute of a \code{fmt} vector
 
-\item \code{get_diff_type()}: get differences type of fmt columns (at \code{fmt} level or \code{tab} level)
+\item \code{get_ref_type()}: get differences type of fmt columns (at \code{fmt} level or \code{tab} level)
 
 \item \code{set_diff_type()}: set the differences type attribute of a \code{fmt} vector
 

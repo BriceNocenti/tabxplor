@@ -9,7 +9,7 @@ tab_spread(
   spread_vars,
   names_prefix,
   names_sort = FALSE,
-  totname = "Total"
+  totname = tr_("Total")
 )
 }
 \arguments{

@@ -4,18 +4,40 @@ title: Crosstables
 jrs:   '1.1'
 
 items:
-    # - name: text
-    #   title: Crosstables
-    #   type: Html
 
-    # - name: plot
-    #   title: Html table
-    #   type: Html
+    # Empty plot needed to be able to set the value of the plotting zone
+    - name: plot
+      title: ""
+      type: Image
+      width:  1080
+      height: 0
+      renderFun: .plot
 
+    - name: html_table
+      title: Table
+      type: Html
 
-    # - name:  text
-    #   title: Crosstables
-    #   type:  Preformatted
+    - name:  chi2_table
+      title: Chi2 Test
+      type:  Table
+      rows:  0
+      columns:
+        # - name: tab_vars
+        #   type: text
+        #   combineBelow: true
+        - name: row_var
+          title: row_var
+          type: text
+          #content: ($key)
+          #combineBelow: true
+        # - name: "chi2 stats"
+        #   type: text
+        # - name: df
+        #   type: integer
+        # - name: p
+        #   type: number
+        #   format: zto,pvalue
+
 
     # - name: freqs
     #   title: CrossTables
@@ -47,31 +69,14 @@ items:
     #       format: zto,pvalue
 
 
-    - name: plot
-      title: Table
-      type: Image
-      width:  720
-      height: 200
-      renderFun: .plot
-
-    - name:  chi2_table
-      title: Chi2 Test
-      type:  Table
-      rows:  0
-      columns:
-        # - name: tab_vars
-        #   type: text
-        #   combineBelow: true
-        - name: row_var
-          title: row_var
-          type: text
-          #content: ($key)
-          #combineBelow: true
-        # - name: "chi2 stats"
-        #   type: text
-        # - name: df
-        #   type: integer
-        # - name: p
-        #   type: number
-        #   format: zto,pvalue
+    # - name: plot
+    #   title: Table
+    #   type: Image
+    #   width:  720
+    #   height: 200
+    #   renderFun: .plot
+    #
+    # - name: plot_legend
+    #   title: ""
+    #   type: Html
 ...

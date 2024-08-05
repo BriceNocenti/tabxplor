@@ -5,37 +5,38 @@ stage: 0
 compilerMode: tame
 children:
   - type: VariableSupplier
+    name: variablesupplier
     persistentItems: false
     stretchFactor: 1
     children:
       - type: TargetLayoutBox
-        label: "<b>row_vars = <i>(row variable)</i></b>"
+        label: <b>row_vars = <i>(row variable)</i></b>
         children:
           - type: VariablesListBox
             name: row_vars
             maxItemCount: 1
             isTarget: true
       - type: TargetLayoutBox
-        label: "<b>col_vars = <i>(column variables)</i></b>"
+        label: <b>col_vars = <i>(column variables)</i></b>
         children:
           - type: VariablesListBox
             name: col_vars
             isTarget: true
       - type: TargetLayoutBox
-        label: "<b>tab_vars = <i>(subtables variables)</i></b>"
+        label: <b>tab_vars = <i>(subtables variables)</i></b>
         children:
           - type: VariablesListBox
             name: tab_vars
             isTarget: true
       - type: TargetLayoutBox
-        label: "<b>wt = <i>(weights)</i></b>"
+        label: <b>wt = <i>(weights)</i></b>
         children:
           - type: VariablesListBox
             name: wt
             maxItemCount: 1
             isTarget: true
   - type: CollapseBox
-    label: "<b>Percentages, colors and Chi2 test </b>"
+    label: <b>Percentages, colors and Chi2 test </b>
     stretchFactor: 1
     collapsed: false
     children:
@@ -49,7 +50,7 @@ children:
             stretchFactor: 2
             children:
               - type: Label
-                label: "pct = <i>(type of percentages)</i>"
+                label: pct = <i>(type of percentages)</i>
                 fitToGrid: true
                 children:
                   - type: RadioButton
@@ -79,7 +80,7 @@ children:
             stretchFactor: 3
             children:
               - type: Label
-                label: "color = <i>(what to use for colors)</i>"
+                label: color = <i>(what to use for color helpers)</i>
                 fitToGrid: true
                 children:
                   - type: RadioButton
@@ -90,14 +91,17 @@ children:
                     name: color_2
                     optionName: color
                     optionPart: diff
+                    enable: (pct:row || pct:col)
                   - type: RadioButton
                     name: color_3
                     optionName: color
                     optionPart: diff_ci
+                    enable: (pct:row || pct:col)
                   - type: RadioButton
                     name: color_4
                     optionName: color
                     optionPart: after_ci
+                    enable: (pct:row || pct:col)
                   - type: RadioButton
                     name: color_5
                     optionName: color
@@ -105,41 +109,44 @@ children:
                   - type: RadioButton
                     name: color_6
                     optionName: color
-                    optionPart: auto
+                    optionPart: OR
+                    enable: (pct:row || pct:col)
           - type: LayoutBox
             cell:
               column: 0
               row: 1
-            style: inline
             stretchFactor: 2
             children:
               - type: Label
-                label: "chi2 = <i>(Chi2 test)</i>"
+                label: OR = <i>(Odds Ratio)</i>
                 children:
-                  - type: CheckBox
-                    name: chi2
+                  - type: RadioButton
+                    name: OR_1
+                    optionName: OR
+                    optionPart: 'no'
+                    enable: (pct:row || pct:col)
+                  - type: RadioButton
+                    name: OR_2
+                    optionName: OR
+                    optionPart: OR
+                    enable: (pct:row || pct:col)
+                  - type: RadioButton
+                    name: OR_3
+                    optionName: OR
+                    optionPart: OR_pct
+                    enable: (pct:row || pct:col)
           - type: LayoutBox
             cell:
               column: 1
               row: 1
+            style: inline
             stretchFactor: 3
             children:
               - type: Label
-                label: "totaltab = <i>(with tab_vars, add a total table)</i>"
-                fitToGrid: true
+                label: chi2 = <i>(Chi2 test)</i>
                 children:
-                  - type: RadioButton
-                    name: totaltab_1
-                    optionName: totaltab
-                    optionPart: line
-                  - type: RadioButton
-                    name: totaltab_2
-                    optionName: totaltab
-                    optionPart: table
-                  - type: RadioButton
-                    name: totaltab_3
-                    optionName: totaltab
-                    optionPart: no
+                  - type: CheckBox
+                    name: chi2
   - type: CollapseBox
     label: <b>Levels and missing values</b>
     stretchFactor: 1
@@ -153,20 +160,20 @@ children:
         stretchFactor: 1
         children:
           - type: Label
-            label: "na = <i>(missing values)</i> "
+            label: 'na = <i>(missing values)</i> '
             children:
               - type: RadioButton
                 name: na_1
                 optionName: na
-                optionPart: "keep"
+                optionPart: keep
               - type: RadioButton
                 name: na_2
                 optionName: na
-                optionPart: "drop"
+                optionPart: drop
               - type: RadioButton
                 name: na_3
                 optionName: na
-                optionPart: "drop_all"
+                optionPart: drop_all
       - type: LayoutBox
         margin: small
         cell:
@@ -175,20 +182,20 @@ children:
         stretchFactor: 1
         children:
           - type: Label
-            label: "levels = <i>(which lvs to keep)</i>"
+            label: levels = <i>(which lvs to keep)</i>
             children:
               - type: RadioButton
                 name: lvs_1
                 optionName: lvs
-                optionPart: "all"
+                optionPart: all
               - type: RadioButton
                 name: lvs_2
                 optionName: lvs
-                optionPart: "first"
+                optionPart: first
               - type: RadioButton
                 name: lvs_3
                 optionName: lvs
-                optionPart: "auto"
+                optionPart: auto
       - type: LayoutBox
         margin: none
         cell:
@@ -197,18 +204,18 @@ children:
         stretchFactor: 1
         children:
           - type: Label
-            label: "other_if_less_than ="
+            label: other_if_less_than =
             children:
               - type: TextBox
                 name: other_if_less_than
                 format: number
           - type: Label
-            label: "cleannames ="
+            label: cleannames =
             children:
               - type: CheckBox
                 name: cleannames
   - type: CollapseBox
-    label: "<b>References (points of comparison)</b>"
+    label: <b>References (points of comparison)</b>
     stretchFactor: 1
     collapsed: true
     children:
@@ -220,25 +227,11 @@ children:
         stretchFactor: 1
         children:
           - type: Label
-            label: "ref = <i>(ref row or col for diff and OR)</i>"
+            label: ref = <i>(reference row/col for diff/OR)</i>
             children:
-              - type: RadioButton
-                name: diff_1
-                optionName: ref
-                optionPart: "tot"
-              - type: RadioButton
-                name: diff_2
-                optionName: ref
-                optionPart: "first"
-              # - type: RadioButton
-              #   name: diff_3
-              #   optionName: ref
-              #   optionPart: "other"
-              #   children:
-              #     - type: TextBox
-              #       name: diff_3
-              #       format: string
-              #       enable: (diff_3)
+              - type: TextBox
+                name: ref
+                format: string
       - type: LayoutBox
         margin: none
         cell:
@@ -247,87 +240,18 @@ children:
         stretchFactor: 1
         children:
           - type: Label
-            label: "comp = <i>(reference table with tab_vars)</i>"
+            label: comp = <i>(reference table with tab_vars)</i>
             children:
               - type: RadioButton
                 name: comp_1
                 optionName: comp
                 optionPart: tab
+                #enable: tab_vars !== ""
               - type: RadioButton
                 name: comp_2
                 optionName: comp
                 optionPart: all
-  - type: CollapseBox
-    label: "<b>Confidence intervals</b>"
-    stretchFactor: 1
-    collapsed: true
-    children:
-      - type: LayoutBox
-        margin: none
-        cell:
-          column: 0
-          row: 0
-        stretchFactor: 1
-        children:
-          - type: Label
-            label: "ci = <i>(confidence intervals)</i>"
-            children:
-              - type: RadioButton
-                name: ci_1
-                optionName: ci
-                optionPart: auto
-              - type: RadioButton
-                name: ci_2
-                optionName: ci
-                optionPart: cell
-              - type: RadioButton
-                name: ci_3
-                optionName: ci
-                optionPart: diff
-      - type: LayoutBox
-        margin: none
-        cell:
-          column: 1
-          row: 0
-        stretchFactor: 1
-        children:
-          - type: Label
-            label: "conf_level = <i>(confidence level)</i>"
-            children:
-              - type: TextBox
-                name: conf_level
-                format: number
-  - type: CollapseBox
-    label: "<b>Other formatting</b>"
-    stretchFactor: 1
-    collapsed: true
-    children:
-      - type: LayoutBox
-        margin: none
-        cell:
-          column: 0
-          row: 0
-        stretchFactor: 1
-        children:
-          - type: Label
-            label: "wrap_rows = <i>(nb chars for line break)</i>"
-            children:
-              - type: TextBox
-                name: wrap_rows
-                format: number
-      - type: LayoutBox
-        margin: none
-        cell:
-          column: 1
-          row: 0
-        stretchFactor: 1
-        children:
-          - type: Label
-            label: "wrap_cols = <i>(nb chars for line break)</i>"
-            children:
-              - type: TextBox
-                name: wrap_cols
-                format: number
+                #enable: tab_vars !== ""
       - type: LayoutBox
         margin: none
         cell:
@@ -336,7 +260,141 @@ children:
         stretchFactor: 0
         children:
           - type: Label
-            label: "display = <i>(which information to display in the table ?)</i>"
+            label: ref2 = <i>(2nd reference col/row for OR)</i>
+            children:
+              - type: TextBox
+                name: ref2
+                format: string
+                enable: (OR == 'OR' || OR == 'OR_pct')
+  - type: CollapseBox
+    label: <b>Confidence intervals</b>
+    stretchFactor: 1
+    collapsed: true
+    children:
+      - type: LayoutBox
+        margin: none
+        cell:
+          column: 0
+          row: 0
+        stretchFactor: 1
+        children:
+          - type: Label
+            label: ci = <i>(confidence intervals)</i>
+            children:
+              - type: RadioButton
+                name: ci_1
+                optionName: ci
+                optionPart: auto
+                enable: (pct:row || pct:col)
+              - type: RadioButton
+                name: ci_2
+                optionName: ci
+                optionPart: cell
+                enable: (pct:row || pct:col)
+              - type: RadioButton
+                name: ci_3
+                optionName: ci
+                optionPart: diff
+                enable: (pct:row || pct:col)
+      - type: LayoutBox
+        margin: none
+        cell:
+          column: 1
+          row: 0
+        stretchFactor: 1
+        children:
+          - type: Label
+            label: "options('tabxplor.ci_print' = ...)"
+            children:
+              - type: RadioButton
+                name: ci_print_1
+                optionName: ci_print
+                optionPart: moe
+                enable: ((pct:row || pct:col) && ci:cell)
+              - type: RadioButton
+                name: ci_print_2
+                optionName: ci_print
+                optionPart: ci
+                enable: ((pct:row || pct:col) && ci:cell)
+      - type: LayoutBox
+        margin: none
+        cell:
+          column: 0
+          row: 1
+        stretchFactor: 0
+        children:
+          - type: Label
+            label: conf_level = <i>(confidence level)</i>
+            children:
+              - type: TextBox
+                name: conf_level
+                format: number
+                enable: (pct:row || pct:col)
+  - type: CollapseBox
+    label: <b>Other formatting</b>
+    stretchFactor: 1
+    collapsed: true
+    children:
+      - type: LayoutBox
+        cell:
+          column: 0
+          row: 0
+        stretchFactor: 0
+        children:
+          - type: Label
+            label: totaltab = <i>(with tab_vars, add a total table)</i>
+            fitToGrid: true
+            children:
+              - type: RadioButton
+                name: totaltab_1
+                optionName: totaltab
+                optionPart: line
+                #enable: (!tab_vars == null && !tab_vars == undefined)
+              - type: RadioButton
+                name: totaltab_2
+                optionName: totaltab
+                optionPart: table
+                #enable: (!tab_vars == null && !tab_vars == undefined)
+              - type: RadioButton
+                name: totaltab_3
+                optionName: totaltab
+                optionPart: 'no'
+                #enable: (!tab_vars == null && !tab_vars == undefined)
+      - type: LayoutBox
+        margin: none
+        cell:
+          column: 0
+          row: 1
+        stretchFactor: 1
+        children:
+          - type: Label
+            label: wrap_rows = <i>(nb chars for line break)</i>
+            children:
+              - type: TextBox
+                name: wrap_rows
+                format: number
+      - type: LayoutBox
+        margin: none
+        cell:
+          column: 1
+          row: 1
+        stretchFactor: 1
+        children:
+          - type: Label
+            label: wrap_cols = <i>(nb chars for line break)</i>
+            children:
+              - type: TextBox
+                name: wrap_cols
+                format: number
+      - type: LayoutBox
+        margin: none
+        cell:
+          column: 0
+          row: 2
+        stretchFactor: 0
+        children:
+          - type: Label
+            label: display = <i>(which information to display in the table ?)</i>
             children:
               - type: ComboBox
                 name: display
@@ -344,11 +402,11 @@ children:
         margin: none
         cell:
           column: 0
-          row: 2
+          row: 3
         stretchFactor: 1
         children:
           - type: Label
-            label: "subtext = <i>(text to print below the table)</i>"
+            label: subtext = <i>(text to print below the table)</i>
             children:
               - type: TextBox
                 name: subtext
@@ -357,14 +415,12 @@ children:
         margin: none
         cell:
           column: 1
-          row: 2
+          row: 3
         stretchFactor: 1
         children:
           - type: Label
-            label: "digits = <i>(number of digits)</i>"
+            label: digits = <i>(number of digits)</i>
             children:
               - type: TextBox
                 name: digits
                 format: number
-
-

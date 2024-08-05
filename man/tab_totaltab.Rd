@@ -7,7 +7,7 @@
 tab_totaltab(
   tabs,
   totaltab = c("table", "line", "no"),
-  name = "Ensemble",
+  name = tr_("Ensemble"),
   data = NULL
 )
 }

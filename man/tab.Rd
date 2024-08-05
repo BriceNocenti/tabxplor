@@ -19,9 +19,9 @@ tab(
   ref2 = "first",
   comp = "tab",
   totaltab = "line",
-  totaltab_name = "Ensemble",
+  totaltab_name = tr_("Ensemble"),
   tot = c("row", "col"),
-  total_names = "Total",
+  total_names = tr_("Total"),
   chi2 = FALSE,
   ci = "no",
   conf_level = 0.95,
@@ -29,7 +29,7 @@ tab(
   subtext = "",
   cleannames = NULL,
   other_if_less_than = 0,
-  other_level = "Others",
+  other_level = tr_("Others"),
   filter
 )
 }
@@ -86,6 +86,8 @@ is higher than the difference itself.
 difference first.
 \item \code{"contrib"}: color cells based on their contribution to variance
 (except mean columns, from numeric variables).
+\item \code{"OR"}: for \code{pct == "col"} or \code{pct == "row"},
+color based on odds ratios (or relative risks ratios)
 \item \code{"auto"}: frequencies (\code{pct = "all"}, \code{pct = "all_tabs"})
 and counts are colored with \code{"contrib"}.
 When \code{ci = "diff"}, row and col percentages are colored with "after_ci" ;
@@ -167,6 +169,15 @@ Means use classic method. This can be changed in \code{\link{tab_ci}}.}
 
 \item{conf_level}{The confidence level, as a single numeric between 0 and 1.
 Default to 0.95 (95\%).}
+
+\item{OR}{With \code{pct = "row"} or \code{pct = "col"}, calculate and print odds ratios
+(for binary variables) or relative risks ratios (for variables with 3 levels
+or more).
+\itemize{
+\item \code{"no"}: by default, no OR are calculated.
+\item \code{"OR"}: print OR (instead of percentages).
+\item \code{"OR_pct"}: print OR, with percentages in bracket.
+}}
 
 \item{subtext}{A character vector to print rows of legend under the table.}
 

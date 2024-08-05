@@ -13,8 +13,7 @@ tab_plot(
   caption = NULL,
   wrap_rows = 35,
   wrap_cols = 14,
-  whitespace_only = TRUE,
-  unbreakable_spaces = TRUE
+  whitespace_only = TRUE
 )
 }
 \arguments{
@@ -38,20 +37,18 @@ background. By default it takes \code{getOption("tabxplor.color_style_type")}.}
 \item{wrap_cols}{By default, colnames are wrapped when larger than 12 characters.}
 
 \item{whitespace_only}{Set to \code{FALSE} to wrap also on non whitespace characters.}
-
-\item{unbreakable_spaces}{Set to \code{FALSE} to keep normal spaces in text (auto-break).}
 }
 \value{
 A \code{\link[ggplot2]{ggplot}} object to be printed in the
-\code{RStudio} Plots pane, using \code{\link[ggpubr]{ggtexttable}}.
+\code{RStudio} Plots pane or exported as image, using \code{\link[ggpubr]{ggtexttable}}.
 }
 \description{
 Print a tabxplor table as plot
 }
 \examples{
 \donttest{
-tab(forcats::gss_cat, race, marital, year, pct = "row", color = "diff") |>
-  tab_plot(tabs)
+tab(forcats::gss_cat, race, marital, pct = "row", color = "diff") |>
+  tab_plot()
 }
 
 }

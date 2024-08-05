@@ -18,9 +18,9 @@ tab_num(
   digits = 0,
   na = c("keep", "drop", "drop_fct", "drop_num"),
   totaltab = "line",
-  totaltab_name = "Ensemble",
+  totaltab_name = tr_("Ensemble"),
   tot = NULL,
-  total_names = "Total",
+  total_names = tr_("Total"),
   subtext = "",
   num = FALSE,
   df = FALSE
@@ -132,10 +132,6 @@ rows and cols.}
 \item{df}{Set to \code{TRUE} to obtain a plain data.frame (not a \code{tibble}),
 with normal numeric vectors (not \code{fmt}). Useful, for example, to pass the table to
 correspondence analysis with \pkg{FactoMineR}.}
-
-\item{ref2}{A second reference cell is needed to calculate odds ratios
-(or relative risks ratios). The first cell of the row or column is used by default.
-See \code{ref} above for the full list of possible values.}
 }
 \value{
 A \code{tibble} of class \code{tabxplor_tab}. If \code{...} (\code{tab_vars})

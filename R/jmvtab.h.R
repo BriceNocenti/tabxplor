@@ -13,15 +13,18 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             pct = "no",
             color = "no",
             chi2 = TRUE,
-            totaltab = "line",
+            OR = "no",
             na = "keep",
             lvs = "all",
             other_if_less_than = 0,
             cleannames = FALSE,
-            ref = "tot",
-            comp = NULL,
+            ref = "auto",
+            ref2 = "first",
+            comp = "tab",
             ci = "auto",
             conf_level = 0.95,
+            ci_print = "moe",
+            totaltab = "line",
             wrap_rows = 35,
             wrap_cols = 15,
             display = "auto",
@@ -40,10 +43,17 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 permitted=list(
                     "numeric",
                     "factor"),
-                default=NULL)
+                default=NULL,
+                suggested=list(
+                    "nominal",
+                    "ordinal"))
             private$..col_vars <- jmvcore::OptionVariables$new(
                 "col_vars",
                 col_vars,
+                suggested=list(
+                    "nominal",
+                    "ordinal",
+                    "continuous"),
                 permitted=list(
                     "numeric",
                     "factor"),
@@ -51,6 +61,9 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             private$..tab_vars <- jmvcore::OptionVariables$new(
                 "tab_vars",
                 tab_vars,
+                suggested=list(
+                    "nominal",
+                    "ordinal"),
                 permitted=list(
                     "factor"),
                 default=NULL)
@@ -81,20 +94,20 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                     "diff_ci",
                     "after_ci",
                     "contrib",
-                    "auto"),
+                    "OR"),
                 default="no")
             private$..chi2 <- jmvcore::OptionBool$new(
                 "chi2",
                 chi2,
                 default=TRUE)
-            private$..totaltab <- jmvcore::OptionList$new(
-                "totaltab",
-                totaltab,
+            private$..OR <- jmvcore::OptionList$new(
+                "OR",
+                OR,
                 options=list(
-                    "line",
-                    "table",
-                    "no"),
-                default="line")
+                    "no",
+                    "OR",
+                    "OR_pct"),
+                default="no")
             private$..na <- jmvcore::OptionList$new(
                 "na",
                 na,
@@ -120,19 +133,21 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 "cleannames",
                 cleannames,
                 default=FALSE)
-            private$..diff <- jmvcore::OptionList$new(
-                "diff",
-                diff,
-                options=list(
-                    "tot",
-                    "first"),
-                default="tot")
+            private$..ref <- jmvcore::OptionString$new(
+                "ref",
+                ref,
+                default="auto")
+            private$..ref2 <- jmvcore::OptionString$new(
+                "ref2",
+                ref2,
+                default="first")
             private$..comp <- jmvcore::OptionList$new(
                 "comp",
                 comp,
                 options=list(
                     "tab",
-                    "all"))
+                    "all"),
+                default="tab")
             private$..ci <- jmvcore::OptionList$new(
                 "ci",
                 ci,
@@ -147,6 +162,21 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 min=0,
                 max=1,
                 default=0.95)
+            private$..ci_print <- jmvcore::OptionList$new(
+                "ci_print",
+                ci_print,
+                options=list(
+                    "moe",
+                    "ci"),
+                default="moe")
+            private$..totaltab <- jmvcore::OptionList$new(
+                "totaltab",
+                totaltab,
+                options=list(
+                    "line",
+                    "table",
+                    "no"),
+                default="line")
             private$..wrap_rows <- jmvcore::OptionNumber$new(
                 "wrap_rows",
                 wrap_rows,
@@ -171,7 +201,9 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                     "var",
                     "ci",
                     "pct_ci",
-                    "mean_ci"),
+                    "mean_ci",
+                    "OR",
+                    "OR_pct"),
                 default="auto")
             private$..subtext <- jmvcore::OptionString$new(
                 "subtext",
@@ -191,15 +223,18 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$.addOption(private$..pct)
             self$.addOption(private$..color)
             self$.addOption(private$..chi2)
-            self$.addOption(private$..totaltab)
+            self$.addOption(private$..OR)
             self$.addOption(private$..na)
             self$.addOption(private$..lvs)
             self$.addOption(private$..other_if_less_than)
             self$.addOption(private$..cleannames)
-            self$.addOption(private$..diff)
+            self$.addOption(private$..ref)
+            self$.addOption(private$..ref2)
             self$.addOption(private$..comp)
             self$.addOption(private$..ci)
             self$.addOption(private$..conf_level)
+            self$.addOption(private$..ci_print)
+            self$.addOption(private$..totaltab)
             self$.addOption(private$..wrap_rows)
             self$.addOption(private$..wrap_cols)
             self$.addOption(private$..display)
@@ -214,15 +249,18 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         pct = function() private$..pct$value,
         color = function() private$..color$value,
         chi2 = function() private$..chi2$value,
-        totaltab = function() private$..totaltab$value,
+        OR = function() private$..OR$value,
         na = function() private$..na$value,
         lvs = function() private$..lvs$value,
         other_if_less_than = function() private$..other_if_less_than$value,
         cleannames = function() private$..cleannames$value,
-        diff = function() private$..diff$value,
+        ref = function() private$..ref$value,
+        ref2 = function() private$..ref2$value,
         comp = function() private$..comp$value,
         ci = function() private$..ci$value,
         conf_level = function() private$..conf_level$value,
+        ci_print = function() private$..ci_print$value,
+        totaltab = function() private$..totaltab$value,
         wrap_rows = function() private$..wrap_rows$value,
         wrap_cols = function() private$..wrap_cols$value,
         display = function() private$..display$value,
@@ -236,15 +274,18 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         ..pct = NA,
         ..color = NA,
         ..chi2 = NA,
-        ..totaltab = NA,
+        ..OR = NA,
         ..na = NA,
         ..lvs = NA,
         ..other_if_less_than = NA,
         ..cleannames = NA,
-        ..diff = NA,
+        ..ref = NA,
+        ..ref2 = NA,
         ..comp = NA,
         ..ci = NA,
         ..conf_level = NA,
+        ..ci_print = NA,
+        ..totaltab = NA,
         ..wrap_rows = NA,
         ..wrap_cols = NA,
         ..display = NA,
@@ -257,6 +298,7 @@ jmvtabResults <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
     inherit = jmvcore::Group,
     active = list(
         plot = function() private$.items[["plot"]],
+        html_table = function() private$.items[["html_table"]],
         chi2_table = function() private$.items[["chi2_table"]]),
     private = list(),
     public=list(
@@ -268,10 +310,14 @@ jmvtabResults <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$add(jmvcore::Image$new(
                 options=options,
                 name="plot",
-                title="Table",
-                width=720,
-                height=200,
+                title="",
+                width=1080,
+                height=0,
                 renderFun=".plot"))
+            self$add(jmvcore::Html$new(
+                options=options,
+                name="html_table",
+                title="Table"))
             self$add(jmvcore::Table$new(
                 options=options,
                 name="chi2_table",
@@ -301,37 +347,114 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 pause = NULL,
                 completeWhenFilled = FALSE,
                 requiresMissings = FALSE,
-                weightsSupport = 'auto')
+                weightsSupport = 'full')
         }))
 
 #' Crosstables
 #'
 #' 
-#' @param data .
-#' @param row_vars .
-#' @param col_vars .
-#' @param tab_vars .
-#' @param wt .
-#' @param pct .
-#' @param color .
-#' @param chi2 .
-#' @param totaltab .
-#' @param na .
-#' @param lvs .
-#' @param other_if_less_than .
-#' @param cleannames .
-#' @param diff .
-#' @param comp .
-#' @param ci .
-#' @param conf_level .
-#' @param wrap_rows .
-#' @param wrap_cols .
-#' @param display .
-#' @param subtext .
-#' @param digits .
+#' @param data A data.frame.
+#' @param row_vars The row variable, which will be printed with one level per
+#'   line. If numeric, it will be converted to factor.
+#' @param col_vars One column is printed for each level of each column
+#'   variable. For numeric variables means are calculated, in a single column.
+#' @param tab_vars One subtable is made for each combination of levels of the
+#'   tab variables. All tab variables are converted to factor. Leave empty to
+#'   make a simple table.
+#' @param wt A weight variable, of class numeric. Leave empty for unweighted
+#'   results.
+#' @param pct The type of percentages to calculate :  \itemize{    \item
+#'   \code{"row"}: row percentages.    \item \code{"col"}: column percentages.
+#'   \item \code{"all"}: frequencies for each subtable/group, if there is
+#'   \code{tab_vars}.    \item \code{"all_tabs"}: frequencies for the whole (set
+#'   of) table(s).  }
+#' @param color The type of colors to print, as a single string. Vectorised
+#'   over \code{row_vars}.  \itemize{    \item \code{"no"}: by default, no
+#'   colors are printed.    \item \code{"diff"}: color percentages and means
+#'   based on cells differences from    totals (or from first cells when
+#'   \code{ref = "first"}).    \item \code{"diff_ci"}: color pct and means based
+#'   on cells differences from totals    or first cells, removing coloring when
+#'   the confidence interval of this difference    is higher than the difference
+#'   itself.    \item \code{"after_ci"}: idem, but cut off the confidence
+#'   interval from the    difference first.    \item \code{"contrib"}: color
+#'   cells based on their contribution to variance    (except mean columns, from
+#'   numeric variables).    \item \code{"OR"}: for \code{pct == "col"} or
+#'   \code{pct == "row"},    color based on odds ratios (or relative risks
+#'   ratios)  }
+#' @param chi2 Set to \code{TRUE} to make a Chi2 and add summary stats. Also
+#'   useful to color cells based on their contribution to variance.
+#' @param OR With \code{pct = "row"} or \code{pct = "col"}, calculate and
+#'   print odds ratios  (for binary variables) or relative risks ratios (for
+#'   variables with 3 levels  or more). \itemize{  \item \code{"no"}: by
+#'   default, no OR are calculated.  \item \code{"OR"}: print OR (instead of
+#'   percentages).  \item \code{"OR_pct"}: print OR, with percentages in
+#'   bracket. }
+#' @param na The policy to adopt with missing values. It must be a single
+#'   string.  \itemize{    \item \code{na = "keep"}: by default, prints
+#'   \code{NA}'s as explicit \code{"NA"} level.    \item \code{na = "drop"}:
+#'   removes \code{NA} levels before making each table    (tabs made with
+#'   different column variables may have a different number of    observations,
+#'   and won't exactly have the same total columns).    }
+#' @param lvs The levels of \code{col_vars} to keep.  \itemize{    \item
+#'   \code{"all"}: by default, all levels are kept.    \item \code{"first"}:
+#'   only keep the first level of each \code{col_vars}    \item \code{"auto"}:
+#'   keep the first level when \code{col_var} is only two levels,    keep all
+#'   levels otherwise.    }
+#' @param other_if_less_than When set to a positive integer, levels with less
+#'   count than it will be merged into an "Others" level.
+#' @param cleannames Set to \code{TRUE} to clean levels names, by removing
+#'   prefix numbers like "1-", and text in parenthesis.
+#' @param ref The reference cell to calculate differences and ratios   (used
+#'   to print \code{colors}) :   \itemize{    \item \code{"auto"}: by default,
+#'   cell difference from the corresponding total    (rows or cols depending on
+#'   \code{pct = "row"} or \code{pct = "col"}) is    used for \code{diff} ; cell
+#'   ratio from the first line (or col) is use for \code{OR}    (odds
+#'   ratio/relative risks ratio).    \item \code{"tot"}: totals are always used.
+#'   \item \code{"first"}: calculate cell difference or ratio from the first
+#'   cell  of the row or column (useful to color temporal developments).
+#'   \item \code{n}: when \code{ref} is an integer, the nth row (or column) is
+#'   used for comparison.    \item \code{"regex"}: when \code{ref} is a string,
+#'   it it used as a regular expression,    to match with the names of the rows
+#'   (or columns). Be precise enough to match only one    column or row,
+#'   otherwise you get a warning message.    \item \code{"no"}: not use ref and
+#'   not calculate diffs to gain calculation time.  }
+#' @param ref2 A second reference cell is needed to calculate odds ratios  (or
+#'   relative risks ratios). The first cell of the row or column is used by
+#'   default.  See \code{ref}  for the full list of possible values.
+#' @param comp The comparison level : by subtables/groups, or for the whole
+#'   table.
+#' @param ci The type of confidence intervals to calculate, passed to
+#'   \code{\link{tab_ci}}.     \itemize{      \item \code{"cell"}: absolute
+#'   confidence intervals of cells percentages.      \item \code{"diff"}:
+#'   confidence intervals of the difference between a cell and the      relative
+#'   total cell (or relative first cell when \code{ref = "first"}).      \item
+#'   \code{"auto"}: \code{ci = "diff"} for means and row/col percentages,
+#'   \code{ci = "cell"} for frequencies ("all", "all_tabs").     } By default,
+#'   for percentages, with \code{ci = "cell"} Wilson's method is used, and with
+#'   \code{ci = "diff"} Wald's method along Agresti and Caffo's adjustment.
+#'   Means use classic method.
+#' @param conf_level The confidence level, as a single numeric between 0 and
+#'   1. Default to 0.95 (95\%).
+#' @param ci_print By default confidence interval are printed with the pct+moe
+#'   display. Set to "ci" to use the interval display instead.
+#' @param totaltab The total table, if there are subtables/groups   (i.e. when
+#'   \code{tab_vars} is provided). Vectorised over \code{row_vars}.  \itemize{
+#'   \item \code{"line"}: by default, add a general total line (necessary for
+#'   calculations with \code{comp = "all"})    \item \code{"table"}: add a
+#'   complete total table   (i.e. \code{row_var} by \code{col_vars} without
+#'   \code{tab_vars}).    \item \code{"no"}: not to draw any total table.   }
+#' @param wrap_rows By default, rownames are wrapped when larger than 30
+#'   characters.
+#' @param wrap_cols By default, colnames are wrapped when larger than 12
+#'   characters.
+#' @param display The information to display in the table.
+#' @param subtext A character vector to print rows of legend under the table.
+#' @param digits The number of digits to print, as a single integer, or an
+#'   integer vector the same length as \code{col_vars}.
 #' @return A results object containing:
 #' \tabular{llllll}{
 #'   \code{results$plot} \tab \tab \tab \tab \tab an image \cr
+#'   \code{results$html_table} \tab \tab \tab \tab \tab a html \cr
 #'   \code{results$chi2_table} \tab \tab \tab \tab \tab a table \cr
 #' }
 #'
@@ -351,15 +474,18 @@ jmvtab <- function(
     pct = "no",
     color = "no",
     chi2 = TRUE,
-    totaltab = "line",
+    OR = "no",
     na = "keep",
     lvs = "all",
     other_if_less_than = 0,
     cleannames = FALSE,
-    ref = "tot",
-    comp,
+    ref = "auto",
+    ref2 = "first",
+    comp = "tab",
     ci = "auto",
     conf_level = 0.95,
+    ci_print = "moe",
+    totaltab = "line",
     wrap_rows = 35,
     wrap_cols = 15,
     display = "auto",
@@ -391,15 +517,18 @@ jmvtab <- function(
         pct = pct,
         color = color,
         chi2 = chi2,
-        totaltab = totaltab,
+        OR = OR,
         na = na,
         lvs = lvs,
         other_if_less_than = other_if_less_than,
         cleannames = cleannames,
-        diff = diff,
+        ref = ref,
+        ref2 = ref2,
         comp = comp,
         ci = ci,
         conf_level = conf_level,
+        ci_print = ci_print,
+        totaltab = totaltab,
         wrap_rows = wrap_rows,
         wrap_cols = wrap_cols,
         display = display,

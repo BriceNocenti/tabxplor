@@ -10,7 +10,7 @@ tab_prepare(
   na_drop_all,
   cleannames = NULL,
   other_if_less_than = 0,
-  other_level = "Others"
+  other_level = tr_("Others")
 )
 }
 \arguments{

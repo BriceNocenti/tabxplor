@@ -23,7 +23,7 @@ new_fmt(
   in_tottab = rep(FALSE, length(n)),
   in_refrow = rep(FALSE, length(n)),
   comp_all = NA,
-  diff_type = "",
+  ref = "",
   ci_type = "",
   col_var = "",
   totcol = FALSE,

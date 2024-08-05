@@ -103,10 +103,6 @@ or the row variable. With text variables, only the first level is kept
 
 ``` r
 tab(dplyr::storms, category, status, sup_cols = c("pressure", "wind"))
-#> Warning in tab_num(data, !!..1, as.character(col_vars)[col_vars_num],
-#> as.character(tab_vars), : in ref = 'auto' , no rows were found as reference for
-#> comparison ; to remove this warning, precise the value of ref until there is
-#> one row_var level matched
 #> # A tabxplor tab: 7 × 13
 #>   category disturbance extratropical hurricane `other low`
 #>   <fct>            <n>           <n>       <n>         <n>
@@ -515,9 +511,9 @@ Each `fmt` column have attributes, which you can access or modify with
   `tab_vars`, is the reference for comparison the subtable (`FALSE`), or
   the total table (`TRUE`) ?
 
-- diff_type / `get_diff_type()` / `set_diff_type()` : the type of
-  difference calculated, either `"no"`, `"tot"` for totals, an index, or
-  a regular expression.
+- ref / `get_ref_type()` / `set_diff_type()` : the type of difference
+  calculated, either `"no"`, `"tot"` for totals, an index, or a regular
+  expression.
 
 - ci_type / `get_ci_type()` / `set_ci_type()` : the type of confidence
   interval, either `"cell"` or `"diff"`

@@ -7,7 +7,7 @@
 tab_tot(
   tabs,
   tot = c("row", "col"),
-  name = "Total",
+  name = tr_("Total"),
   totcol = "last",
   data = NULL
 )

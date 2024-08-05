@@ -2526,7 +2526,7 @@ tab_xl_confidential <-
     type  <- purrr::map(tabs, get_type)
 
     color <- purrr::map(tabs, get_color)
-    diff_type <- purrr::map(tabs, get_diff_type)
+    ref <- purrr::map(tabs, get_ref_type)
 
     color_type <- get_color_type(color, type)
 

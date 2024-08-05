@@ -343,7 +343,7 @@ Each `fmt` column have attributes, which you can access or modify with `get_` an
 
 - comp_all / `get_comp_all` / `set_comp_all()` : when there are `tab_vars`, is the reference for comparison the subtable (`FALSE`), or the total table (`TRUE`) ?
 
-- diff_type / `get_diff_type()` / `set_diff_type()` : the type of difference calculated, either `"no"`, `"tot"` for totals, an index, or a regular expression. 
+- ref / `get_ref_type()` / `set_diff_type()` : the type of difference calculated, either `"no"`, `"tot"` for totals, an index, or a regular expression. 
 
 - ci_type / `get_ci_type()` / `set_ci_type()` : the type of confidence interval, either `"cell"` or `"diff"`
 

@@ -4,35 +4,58 @@ title: Crosstables
 menuGroup: tabxplor
 version: '1.0.0'
 jas: '1.2'
-# weightsSupport: 'full'
+weightsSupport: 'full'
+# description:
+#     R: >
+#      Use `tab_many()` in `Jamovi` with an user interface ; useful to learn
+#      programming with `tabxplor`.
 
 options:
     - name: data
       type: Data
+      description:
+          R: >
+           A data.frame.
 
     - name: row_vars
       title: "<b>row_vars = <i>(row variable)</i></b>"
       type: Variable
       permitted: [numeric, factor]
       default: NULL
-      #suggested: [ordinal, nominal, nominaltext]
-      #permitted: [continuous, ordinal, nominal, nominaltext]
+      suggested:
+        - nominal
+        - ordinal
+      description:
+          R: >
+            The row variable, which will be printed with one level per line.
+            If numeric, it will be converted to factor.
 
     - name: col_vars
       title: "<b>col_vars = <i>(column variables)</i></b>"
       type: Variables
+      suggested:
+        - nominal
+        - ordinal
+        - continuous
       permitted: [numeric, factor]
       default: NULL
-      #suggested: [continuous, ordinal, nominal, nominaltext]
-      #permitted: [continuous, ordinal, nominal, nominaltext]
+      description:
+          R: >
+           One column is printed for each level of each column variable.
+           For numeric variables means are calculated, in a single column.
 
     - name: tab_vars
       title: "<b>tab_vars = <i>(subtables variables)</i></b>"
       type: Variables
+      suggested:
+        - nominal
+        - ordinal
       permitted: [factor]
       default: NULL
-      #suggested: [ordinal, nominal, nominaltext]
-      #permitted: [ordinal, nominal, nominaltext]
+      description:
+          R: >
+           One subtable is made for each combination of levels of the tab variables.
+           All tab variables are converted to factor. Leave empty to make a simple table.
 
     - name: wt
       title: "<b>wt = <i>(weights)</i></b>"
@@ -42,6 +65,9 @@ options:
       permitted:
         - numeric
       default: NULL
+      description:
+          R: >
+           A weight variable, of class numeric. Leave empty for unweighted results.
 
 # Percentages, colors and Chi2
     - name: pct
@@ -59,6 +85,15 @@ options:
         - title: all_tabs
           name:  all_tabs
       default: no
+      description:
+          R: >
+           The type of percentages to calculate :
+            \itemize{
+              \item \code{"row"}: row percentages.
+              \item \code{"col"}: column percentages.
+              \item \code{"all"}: frequencies for each subtable/group, if there is \code{tab_vars}.
+              \item \code{"all_tabs"}: frequencies for the whole (set of) table(s).
+            }
 
     - name: color
       title: color = (Color)
@@ -70,31 +105,63 @@ options:
           name:  diff
         - title: "diff_ci <i>(differences, only if significant)</i>"
           name:  diff_ci
-        - title: "after_ci <i>(diff, after substracting conf. interval)</i>"
+        - title: "after_ci <i>(diff, after substracting margin of error)</i>"
           name:  after_ci
         - title: "contrib <i>(relative contribution to variance)</i>"
           name:  contrib
-        - title: auto
-          name:  auto
+        - title: "OR <i>(odds ratios or relative risks ratios)</i>"
+          name:  OR
+        # - title: auto
+        #   name:  auto
       default: no
+      description:
+          R: >
+           The type of colors to print, as a single string. Vectorised over `row_vars`.
+            \itemize{
+              \item \code{"no"}: by default, no colors are printed.
+              \item \code{"diff"}: color percentages and means based on cells differences from
+              totals (or from first cells when \code{ref = "first"}).
+              \item \code{"diff_ci"}: color pct and means based on cells differences from totals
+              or first cells, removing coloring when the confidence interval of this difference
+              is higher than the difference itself.
+              \item \code{"after_ci"}: idem, but cut off the confidence interval from the
+              difference first.
+              \item \code{"contrib"}: color cells based on their contribution to variance
+              (except mean columns, from numeric variables).
+              \item \code{"OR"}: for `pct == "col"` or `pct == "row"`,
+              color based on odds ratios (or relative risks ratios)
+            }
 
     - name: chi2
       title: "" #"chi2 = <i>(Chi2 test)</i>"
       type: Bool
       default: true
+      description:
+          R: >
+           Set to \code{TRUE} to make a Chi2 and add summary stats.
+           Also useful to color cells based on their contribution to variance.
 
-    - name: totaltab
-      title: "totaltab = <i>(add a total table)</i>"
+    - name: OR
+      title: OR
       type: List
       options:
-        - title: line
-          name:  line
-        - title: table
-          name:  table
         - title: no
           name:  no
-      default: line
-
+        - title: OR
+          name:  OR
+        - title: OR_pct
+          name:  OR_pct
+      default: no
+      description:
+          R: >
+           With `pct = "row"` or `pct = "col"`, calculate and print odds ratios
+            (for binary variables) or relative risks ratios (for variables with 3 levels
+            or more).
+           \itemize{
+            \item \code{"no"}: by default, no OR are calculated.
+            \item \code{"OR"}: print OR (instead of percentages).
+            \item \code{"OR_pct"}: print OR, with percentages in bracket.
+           }
 
 # Missing values and levels
     - name: na
@@ -108,6 +175,15 @@ options:
         - title: "drop_all <i>(for all col_vars)</i>"
           name:  drop_all
       default: keep
+      description:
+          R: >
+           The policy to adopt with missing values. It must be a single string.
+            \itemize{
+              \item \code{na = "keep"}: by default, prints \code{NA}'s as explicit \code{"NA"} level.
+              \item \code{na = "drop"}: removes \code{NA} levels before making each table
+              (tabs made with different column variables may have a different number of
+              observations, and won't exactly have the same total columns).
+              }
 
     - name: lvs
       title: levels
@@ -120,39 +196,102 @@ options:
         - title: auto
           name:  auto
       default: all
+      description:
+          R: >
+           The levels of \code{col_vars} to keep.
+            \itemize{
+              \item \code{"all"}: by default, all levels are kept.
+              \item \code{"first"}: only keep the first level of each \code{col_vars}
+              \item \code{"auto"}: keep the first level when `col_var` is only two levels,
+              keep all levels otherwise.
+              }
 
     - name: other_if_less_than
       title: ""
       type: Number
       min: 0
       default: 0
+      description:
+          R: >
+           When set to a positive integer, levels with less count
+           than it will be merged into an "Others" level.
 
     - name: cleannames
       title: ""
       type: Bool
       default: false
+      description:
+          R: >
+           Set to \code{TRUE} to clean levels names, by removing
+           prefix numbers like "1-", and text in parenthesis.
 
-  # other_level = "Others",
-  # totcol = "last",
-  # totaltab_name = "Ensemble",
-  # totrow = TRUE,
-  # total_names = "Total",
+# other_level = "Others",
+# totcol = "last",
+# totaltab_name = "Ensemble",
+# totrow = TRUE,
+# total_names = "Total",
 
 
 # References (points of comparison)
+
+    # - name: ref
+    #   title: "ref = <i>(ref row/col for diff and OR)</i>"
+    #   type: List
+    #   options:
+    #     - title: auto
+    #       name:  auto
+    #     - title: tot
+    #       name:  tot
+    #     - title: first
+    #       name:  first
+    #     # - title: other
+    #     #   name:  other
+    #     # - title: no # "" ?
+    #     #   name:  no
+    #   default: auto
+
     - name: ref
-      title: "ref = <i>(ref row or col for diff and OR)</i>"
-      type: List
-      options:
-        - title: tot
-          name:  tot
-        - title: first
-          name:  first
-        # - title: other
-        #   name:  other
-        # - title: no # "" ?
-        #   name:  no
-      default: tot
+      title: "auto/tot/<i>{row_number}</i>/<i>{row_name}</i>"
+      type: String
+      default: auto
+      description:
+          R: >
+           The reference cell to calculate differences and ratios
+             (used to print \code{colors}) :
+             \itemize{
+              \item \code{"auto"}: by default, cell difference from the corresponding total
+              (rows or cols depending on \code{pct = "row"} or \code{pct = "col"}) is
+              used for `diff` ; cell ratio from the first line (or col) is use for `OR`
+              (odds ratio/relative risks ratio).
+              \item \code{"tot"}: totals are always used.
+              \item \code{"first"}: calculate cell difference or ratio from the first cell
+            of the row or column (useful to color temporal developments).
+              \item \code{n}: when `ref` is an integer, the nth row (or column) is used for comparison.
+              \item \code{"regex"}: when `ref` is a string, it it used as a regular expression,
+              to match with the names of the rows (or columns). Be precise enough to match only one
+              column or row, otherwise you get a warning message.
+              \item \code{"no"}: not use ref and not calculate diffs to gain calculation time.
+            }
+
+# - name: ref2
+#   title: "ref2 = <i>(2nd ref row/col for OR)</i>"
+#   type: List
+#   options:
+#     - title: first
+#       name:  first
+#     - title: tot
+#       name:  tot
+#   default: first
+
+    - name: ref2
+      title: "first/tot/<i>{col_number}</i>"
+      type: String
+      default: first
+      description:
+          R: >
+           A second reference cell is needed to calculate odds ratios
+            (or relative risks ratios). The first cell of the row or column is used by default.
+            See `ref`  for the full list of possible values.
 
     - name: comp
       title: comp
@@ -162,6 +301,10 @@ options:
           name:  tab
         - title: "all <i>(compare with the total subtable)</i>"
           name:  all
+      default: tab
+      description:
+          R: >
+           The comparison level : by subtables/groups, or for the whole table.
 
 # Confidence intervals
     - name: ci
@@ -175,6 +318,19 @@ options:
         - title: "diff <i>(ci on the difference with reference)</i>"
           name:  diff
       default: auto
+      description:
+          R: >
+           The type of confidence intervals to calculate, passed to \code{\link{tab_ci}}.
+               \itemize{
+                \item \code{"cell"}: absolute confidence intervals of cells percentages.
+                \item \code{"diff"}: confidence intervals of the difference between a cell and the
+                relative total cell (or relative first cell when \code{ref = "first"}).
+                \item \code{"auto"}: \code{ci = "diff"} for means and row/col percentages,
+                \code{ci = "cell"} for frequencies ("all", "all_tabs").
+               }
+           By default, for percentages, with \code{ci = "cell"} Wilson's method is used,
+           and with \code{ci = "diff"} Wald's method along Agresti and Caffo's adjustment.
+           Means use classic method.
 
     - name: conf_level
       title: ""
@@ -182,31 +338,78 @@ options:
       min: 0
       max: 1
       default: 0.95
+      description:
+          R: >
+           The confidence level, as a single numeric between 0 and 1.
+           Default to 0.95 (95%).
 
-  # method_cell = "wilson",
-  #  "wald", "wilson", "wilsoncc", "agresti-coull", "jeffreys", "modified wilson", "modified jeffreys", "clopper-pearson", "arcsine", "logit", "witting", "pratt", "midp", "lik", "blaker"
+    - name: ci_print
+      title: "options('tabxplor.ci_print' = ...)"
+      type: List
+      options:
+        - title: "moe <i>(display: pct±margin of error)</i>"
+          name:  moe
+        - title: "ci <i>(interval display: [inf;sup])</i>"
+          name:  ci
+      default: moe
+      description:
+          R: >
+           By default confidence interval are printed with the pct+moe display.
+           Set to "ci" to use the interval display instead.
 
-  # method_diff = "ac",
-  #  "wald", "waldcc", "ac", "score", "scorecc", "mn", "mee", "blj", "ha", "hal", "jp"
+# method_cell = "wilson",
+#  "wald", "wilson", "wilsoncc", "agresti-coull", "jeffreys", "modified wilson", "modified jeffreys", "clopper-pearson", "arcsine", "logit", "witting", "pratt", "midp", "lik", "blaker"
+
+# method_diff = "ac",
+#  "wald", "waldcc", "ac", "score", "scorecc", "mn", "mee", "blj", "ha", "hal", "jp"
 
 
 
 
 
 # Other formatting
+    - name: totaltab
+      title: "totaltab = <i>(add a total table)</i>"
+      type: List
+      options:
+        - title: line
+          name:  line
+        - title: table
+          name:  table
+        - title: no
+          name:  no
+      default: line
+      description:
+          R: >
+           The total table, if there are subtables/groups
+             (i.e. when \code{tab_vars} is provided). Vectorised over `row_vars`.
+            \itemize{
+              \item \code{"line"}: by default, add a general total line (necessary for
+              calculations with \code{comp = "all"})
+              \item \code{"table"}: add a complete total table
+             (i.e. \code{row_var} by \code{col_vars} without \code{tab_vars}).
+              \item \code{"no"}: not to draw any total table.
+             }
+
     - name: wrap_rows
       title: ""
       type: Number
       min: 0
       default: 35
+      description:
+          R: >
+           By default, rownames are wrapped when larger than 30 characters.
 
     - name: wrap_cols
       title: ""
       type: Number
       min: 0
       default: 15
+      description:
+          R: >
+           By default, colnames are wrapped when larger than 12 characters.
 
-     # filter
+# filter
 
     - name: display
       title: "" # Display
@@ -234,12 +437,22 @@ options:
           name:  pct_ci
         - title: "mean_ci <i>(means with visible conf. intervals)</i>"
           name:  mean_ci
+        - title: "OR <i>(odds ratios or relative risks ratios)</i>"
+          name:  OR
+        - title: "OR_pct <i>(odds ratios with visible percentages)</i>"
+          name:  OR_pct
       default: auto
+      description:
+          R: >
+           The information to display in the table.
 
     - name: subtext
       title: "" # subtext
       type: String
       default: ""
+      description:
+          R: >
+           A character vector to print rows of legend under the table.
 
     - name: digits
       title: ""
@@ -247,6 +460,10 @@ options:
       min: 0
       max: 0
       default: 0
+      description:
+          R: >
+           The number of digits to print, as a single integer, or an integer vector
+           the same length as \code{col_vars}.
 
 ...
 

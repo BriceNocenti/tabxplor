@@ -13,11 +13,11 @@ tab_kable(
   popover = NULL,
   color_legend = TRUE,
   caption = NULL,
+  html_font = "\\"Arial\\", arial, helvetica, sans-serif",
   get_data = FALSE,
   wrap_rows = 35,
   wrap_cols = 15,
   whitespace_only = TRUE,
-  unbreakable_spaces = TRUE,
   ...
 )
 }
@@ -54,13 +54,16 @@ You can then use a \code{css} chunk in rmarkdown to change popovers colors.}
 \item{caption}{The table caption. For formatting, you need to use a \code{css}
 with \verb{caption\{\}}in rmarkdown.}
 
+\item{html_font}{A string for HTML css font. For example,
+\code{html_font = '"Arial Narrow", arial, helvetica, sans-serif'}.}
+
+\item{get_data}{Get the transformed data instead of the html table.}
+
 \item{wrap_rows}{By default, rownames are wrapped when larger than 30 characters.}
 
 \item{wrap_cols}{By default, colnames are wrapped when larger than 12 characters.}
 
 \item{whitespace_only}{Set to \code{FALSE} to wrap also on non whitespace characters.}
-
-\item{unbreakable_spaces}{Set to \code{FALSE} to keep normal spaces in text (auto-break).}
 
 \item{...}{Other arguments to pass to \code{\link[kableExtra:kable_styling]{kableExtra::kable_styling}}.}
 }

@@ -21,12 +21,12 @@ tab_many(
   na_drop_all,
   digits = 0,
   totaltab = "line",
-  totaltab_name = "Ensemble",
+  totaltab_name = tr_("Ensemble"),
   totrow = TRUE,
   totcol = "last",
-  total_names = "Total",
+  total_names = tr_("Total"),
   pct = "no",
-  ref = "tot",
+  ref = "auto",
   ref2 = "first",
   comp = "tab",
   chi2 = FALSE,
@@ -39,7 +39,7 @@ tab_many(
   subtext = "",
   cleannames = NULL,
   other_if_less_than = 0,
-  other_level = "Others",
+  other_level = tr_("Others"),
   filter
 )
 
@@ -212,6 +212,15 @@ for \code{ci = "diff"}. This can be one out of: "wald", "waldcc", "ac", "score",
 the adjustment according to Agresti, Caffo for difference in proportions and
 independent samples. See \code{\link[DescTools:BinomDiffCI]{BinomDiffCI}}.}
 
+\item{OR}{With \code{pct = "row"} or \code{pct = "col"}, calculate and print odds ratios
+(for binary variables) or relative risks ratios (for variables with 3 levels
+or more).
+\itemize{
+\item \code{"no"}: by default, no OR are calculated.
+\item \code{"OR"}: print OR (instead of percentages).
+\item \code{"OR_pct"}: print OR, with percentages in bracket.
+}}
+
 \item{color}{The type of colors to print, as a single string. Vectorised over \code{row_vars}.
 \itemize{
 \item \code{"no"}: by default, no colors are printed.
@@ -224,6 +233,8 @@ is higher than the difference itself.
 difference first.
 \item \code{"contrib"}: color cells based on their contribution to variance
 (except mean columns, from numeric variables).
+\item \code{"OR"}: for \code{pct == "col"} or \code{pct == "row"},
+color based on odds ratios (or relative risks ratios)
 \item \code{"auto"}: frequencies (\code{pct = "all"}, \code{pct = "all_tabs"})
 and counts are colored with \code{"contrib"}.
 When \code{ci = "diff"}, row and col percentages are colored with "after_ci" ;
