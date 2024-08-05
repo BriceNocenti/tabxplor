@@ -11,25 +11,25 @@ tab(
   tab_vars,
   wt,
   sup_cols,
-  na = "keep",
-  digits = 0,
   pct = "no",
   color = "no",
+  OR = "no",
+  chi2 = FALSE,
+  na = "keep",
+  cleannames = NULL,
+  other_if_less_than = 0,
+  other_level = tr_("Others"),
   ref = "auto",
   ref2 = "first",
   comp = "tab",
+  ci = "no",
+  conf_level = 0.95,
   totaltab = "line",
   totaltab_name = tr_("Ensemble"),
   tot = c("row", "col"),
   total_names = tr_("Total"),
-  chi2 = FALSE,
-  ci = "no",
-  conf_level = 0.95,
-  OR = "no",
   subtext = "",
-  cleannames = NULL,
-  other_if_less_than = 0,
-  other_level = tr_("Others"),
+  digits = 0,
   filter
 )
 }
@@ -52,19 +52,6 @@ Supplementary columns variables, with only the first level printed, and row perc
 To pass many variables you may use syntax \code{sup_cols = c(sup_col1, sup_col2, ...)}.
 To keep all levels of other \code{col_vars}, or other types of percentages,
 use \code{\link{tab_many}} instead.}
-
-\item{na}{The policy to adopt for missing values, as a single string :
-\itemize{
-\item \code{"keep"}: by default, \code{NA}'s of row, col and tab variables
-are printed as an explicit \code{"NA"} level.
-\item \code{"drop"}: remove \code{NA}'s in row, col and tab variables before calculations
-are done. Supplementary columns are then calculated for observations with no \code{NA} in
-any of the row, col and tab variables.
-}}
-
-\item{digits}{The number of digits to print, as a single integer. To print a different
-number of digits for each \code{sup_cols}, an integer vector of length
-1 + \code{sup_cols} (the first being the number of digits for the base table).}
 
 \item{pct}{The type of percentages to calculate :
 \itemize{
@@ -93,6 +80,37 @@ and counts are colored with \code{"contrib"}.
 When \code{ci = "diff"}, row and col percentages are colored with "after_ci" ;
 otherwise they are colored with "diff".
 }}
+
+\item{OR}{With \code{pct = "row"} or \code{pct = "col"}, calculate and print odds ratios
+(for binary variables) or relative risks ratios (for variables with 3 levels
+or more).
+\itemize{
+\item \code{"no"}: by default, no OR are calculated.
+\item \code{"OR"}: print OR (instead of percentages).
+\item \code{"OR_pct"}: print OR, with percentages in bracket.
+}}
+
+\item{chi2}{Set to \code{TRUE} to calculate Chi2 summaries with \code{\link{tab_chi2}}.
+Useful to print metadata, and to color cells based on their contribution to variance
+(\code{color = "contrib"}). Automatically added if needed for \code{color}.}
+
+\item{na}{The policy to adopt for missing values, as a single string :
+\itemize{
+\item \code{"keep"}: by default, \code{NA}'s of row, col and tab variables
+are printed as an explicit \code{"NA"} level.
+\item \code{"drop"}: remove \code{NA}'s in row, col and tab variables before calculations
+are done. Supplementary columns are then calculated for observations with no \code{NA} in
+any of the row, col and tab variables.
+}}
+
+\item{cleannames}{Set to \code{TRUE} to clean levels names, by removing
+prefix numbers like "1-", and text in parenthesis. All data formatting arguments are
+passed to \code{\link{tab_prepare}}.}
+
+\item{other_if_less_than}{When set to a positive integer, levels with less count
+than it will be merged into an "Others" level.}
+
+\item{other_level}{The name of the "Other" level, as a single string.}
 
 \item{ref}{The reference cell to calculate differences and ratios
 (used to print \code{colors}) :
@@ -125,6 +143,22 @@ a total table with a total row), or with the first line of the total table
 when \code{ref = "first"}.
 }}
 
+\item{ci}{The type of confidence intervals to calculate, passed to \code{\link{tab_ci}}
+(automatically added if needed for \code{color}).
+\itemize{
+\item \code{"cell"}: absolute confidence intervals of cells percentages.
+\item \code{"diff"}: confidence intervals of the difference between a cell and the
+relative total cell (or relative first cell when \code{ref = "first"}).
+\item \code{"auto"}: \code{ci = "diff"} for means and row/col percentages,
+\code{ci = "cell"} for frequencies ("all", "all_tabs").
+}
+By default, for percentages, with \code{ci = "cell"} Wilson's method is used,
+and with \code{ci = "diff"} Wald's method along Agresti and Caffo's adjustment.
+Means use classic method. This can be changed in \code{\link{tab_ci}}.}
+
+\item{conf_level}{The confidence level, as a single numeric between 0 and 1.
+Default to 0.95 (95\%).}
+
 \item{totaltab}{The total table, if there are subtables/groups
 (i.e. when \code{tab_vars} is provided) :
 \itemize{
@@ -150,45 +184,11 @@ columns.
 Use syntax of type \code{c("Total row", "Total column")} to set different names for
 rows and cols.}
 
-\item{chi2}{Set to \code{TRUE} to calculate Chi2 summaries with \code{\link{tab_chi2}}.
-Useful to print metadata, and to color cells based on their contribution to variance
-(\code{color = "contrib"}). Automatically added if needed for \code{color}.}
-
-\item{ci}{The type of confidence intervals to calculate, passed to \code{\link{tab_ci}}
-(automatically added if needed for \code{color}).
-\itemize{
-\item \code{"cell"}: absolute confidence intervals of cells percentages.
-\item \code{"diff"}: confidence intervals of the difference between a cell and the
-relative total cell (or relative first cell when \code{ref = "first"}).
-\item \code{"auto"}: \code{ci = "diff"} for means and row/col percentages,
-\code{ci = "cell"} for frequencies ("all", "all_tabs").
-}
-By default, for percentages, with \code{ci = "cell"} Wilson's method is used,
-and with \code{ci = "diff"} Wald's method along Agresti and Caffo's adjustment.
-Means use classic method. This can be changed in \code{\link{tab_ci}}.}
-
-\item{conf_level}{The confidence level, as a single numeric between 0 and 1.
-Default to 0.95 (95\%).}
-
-\item{OR}{With \code{pct = "row"} or \code{pct = "col"}, calculate and print odds ratios
-(for binary variables) or relative risks ratios (for variables with 3 levels
-or more).
-\itemize{
-\item \code{"no"}: by default, no OR are calculated.
-\item \code{"OR"}: print OR (instead of percentages).
-\item \code{"OR_pct"}: print OR, with percentages in bracket.
-}}
-
 \item{subtext}{A character vector to print rows of legend under the table.}
 
-\item{cleannames}{Set to \code{TRUE} to clean levels names, by removing
-prefix numbers like "1-", and text in parenthesis. All data formatting arguments are
-passed to \code{\link{tab_prepare}}.}
-
-\item{other_if_less_than}{When set to a positive integer, levels with less count
-than it will be merged into an "Others" level.}
-
-\item{other_level}{The name of the "Other" level, as a single string.}
+\item{digits}{The number of digits to print, as a single integer. To print a different
+number of digits for each \code{sup_cols}, an integer vector of length
+1 + \code{sup_cols} (the first being the number of digits for the base table).}
 
 \item{filter}{A \code{\link[dplyr:filter]{dplyr::filter}} to apply to the data frame
 first, as a single string (which will be converted to code, i.e. to a call).

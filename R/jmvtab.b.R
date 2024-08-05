@@ -4,29 +4,40 @@
 jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
     "jmvtabClass",
     inherit = jmvtabBase,
-    # ### Active bindings ----
-    # active = list(
-    #   wt = function() {
-    #     if ( ! is.null(self$options$wt)) {
-    #       return(self$options$wt)
-    #     } else if ( ! is.null(attr(self$data, "jmv-weights-name"))) {
-    #       return (attr(self$data, "jmv-weights-name"))
-    #     }
-    #     NULL
-    #   }
-    # ),
+    ### Active bindings ----
+    active = list(
+      wt = function() {
+        if (!is.null(self$options$wt)) {
+          return(self$options$wt)
+        } else if ( ! is.null(attr(self$data, "jmv-weights-name"))) {
+          return (attr(self$data, "jmv-weights-name"))
+        }
+        NULL
+      }
+    ),
     private = list(
         .run = function() {
 
-          wt <- if (!is.null(self$options$wt)) {
-            rlang::sym(self$options$wt)
-          # } else if (!is.null(attr(self$data, "jmv-weights-name")) ) {
-          #   rlang::sym(attr(self$data, "jmv-weights-name"))
-          # } else if (!is.null(self$wt) ){
-          #   self$wt
+          wt <- if (!is.null(self$wt)) {
+            rlang::sym(self$wt)
+            # } else if (!is.null(attr(self$data, "jmv-weights-name")) ) {
+            #   rlang::sym(attr(self$data, "jmv-weights-name"))
+            # } else if (!is.null(self$wt) ){
+            #   self$wt
           } else {
             character()
           }
+
+          # wt <- if (!is.null(self$options$wt)) {
+          #   rlang::sym(self$options$wt)
+          # # } else if (!is.null(attr(self$data, "jmv-weights-name")) ) {
+          # #   rlang::sym(attr(self$data, "jmv-weights-name"))
+          # # } else if (!is.null(self$wt) ){
+          # #   self$wt
+          # } else {
+          #   character()
+          # }
+
 
 
           # if (length(self$wt) > 0) {

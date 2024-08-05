@@ -16,30 +16,30 @@ tab_many(
   col_vars,
   tab_vars,
   wt,
-  levels = "all",
+  pct = "no",
+  color = "no",
+  OR = "no",
+  chi2 = FALSE,
   na = "keep",
+  levels = "all",
   na_drop_all,
-  digits = 0,
+  cleannames = NULL,
+  other_if_less_than = 0,
+  other_level = tr_("Others"),
+  ref = "auto",
+  ref2 = "first",
+  comp = "tab",
+  ci = "no",
+  conf_level = 0.95,
+  method_cell = "wilson",
+  method_diff = "ac",
   totaltab = "line",
   totaltab_name = tr_("Ensemble"),
   totrow = TRUE,
   totcol = "last",
   total_names = tr_("Total"),
-  pct = "no",
-  ref = "auto",
-  ref2 = "first",
-  comp = "tab",
-  chi2 = FALSE,
-  ci = "no",
-  conf_level = 0.95,
-  method_cell = "wilson",
-  method_diff = "ac",
-  OR = "no",
-  color = "no",
+  digits = 0,
   subtext = "",
-  cleannames = NULL,
-  other_if_less_than = 0,
-  other_level = tr_("Others"),
   filter
 )
 
@@ -84,58 +84,6 @@ All tab variables are converted to factor. Leave empty to make a simple table.}
 
 \item{wt}{A weight variable, of class numeric. Leave empty for unweighted results.}
 
-\item{levels}{The levels of \code{col_vars} to keep (for more complex selections
-use \code{\link[dplyr:select]{dplyr::select}}). The argument is vectorised over \code{col_vars}.
-\itemize{
-\item \code{"all"}: by default, all levels are kept.
-\item \code{"first"}: only keep the first level of each \code{col_vars}
-\item \code{"auto"}: keep the first level when \code{col_var} is only two levels,
-keep all levels otherwise
-}}
-
-\item{na}{The policy to adopt with missing values. It must be a single string.
-\itemize{
-\item \code{na = "keep"}: by default, prints \code{NA}'s as explicit \code{"NA"} level.
-\item \code{na = "drop"}: removes \code{NA} levels before making each table
-(tabs made with different column variables may have a different number of
-observations, and won't exactly have the same total columns).
-}}
-
-\item{na_drop_all}{<\link[tidyr:tidyr_tidy_select]{tidy-select}>
-Removes all observations with a \code{NA} in any of the chosen variables, for all tables
-(tabs for each column variable will have the same number of observations).}
-
-\item{digits}{The number of digits to print, as a single integer, or an integer vector
-the same length as \code{col_vars}. The argument is vectorisez over \code{col_vars}.}
-
-\item{totaltab}{The total table, if there are subtables/groups
-(i.e. when \code{tab_vars} is provided). Vectorised over \code{row_vars}.
-\itemize{
-\item \code{"line"}: by default, add a general total line (necessary for
-calculations with \code{comp = "all"})
-\item \code{"table"}: add a complete total table
-(i.e. \code{row_var} by \code{col_vars} without \code{tab_vars}).
-\item \code{"no"}: not to draw any total table.
-}}
-
-\item{totaltab_name}{The name of the total table, as a single string.}
-
-\item{totrow}{By default, total rows are printed.
-Set to \code{FALSE} to remove them (after calculations if needed).
-Vectorised over \code{row_vars}.}
-
-\item{totcol}{The policy with total columns. Vectorised over \code{col_vars}.
-\itemize{
-\item \code{"last"}: by default, only prints a total column for the last
-column variable (of class factor, not numeric).
-\item \code{"each"}: print a total column for each column variable.
-\item \code{"no"}: remove all total columns (after calculations if needed).
-}}
-
-\item{total_names}{The names of the totals, as a character vector of length one or two.
-Use syntax of type \code{c("Total row", "Total column")} to set different names for
-rows and cols.}
-
 \item{pct}{The type of percentages to calculate :
 \itemize{
 \item \code{"row"}: row percentages.
@@ -146,6 +94,70 @@ rows and cols.}
 The argument is vectorised over both \code{row_vars} and \code{col_vars}. You can then write as
 the following :
 \code{pct = list(row_var1 = list("row", "col", "col"), row_var2 = list("col", "row", "row"))}}
+
+\item{color}{The type of colors to print, as a single string. Vectorised over \code{row_vars}.
+\itemize{
+\item \code{"no"}: by default, no colors are printed.
+\item \code{"diff"}: color percentages and means based on cells differences from
+totals (or from first cells when \code{ref = "first"}).
+\item \code{"diff_ci"}: color pct and means based on cells differences from totals
+or first cells, removing coloring when the confidence interval of this difference
+is higher than the difference itself.
+\item \code{"after_ci"}: idem, but cut off the confidence interval from the
+difference first.
+\item \code{"contrib"}: color cells based on their contribution to variance
+(except mean columns, from numeric variables).
+\item \code{"OR"}: for \code{pct == "col"} or \code{pct == "row"},
+color based on odds ratios (or relative risks ratios)
+\item \code{"auto"}: frequencies (\code{pct = "all"}, \code{pct = "all_tabs"})
+and counts are colored with \code{"contrib"}.
+When \code{ci = "diff"}, row and col percentages are colored with "after_ci" ;
+otherwise they are colored with "diff".
+}}
+
+\item{OR}{With \code{pct = "row"} or \code{pct = "col"}, calculate and print odds ratios
+(for binary variables) or relative risks ratios (for variables with 3 levels
+or more).
+\itemize{
+\item \code{"no"}: by default, no OR are calculated.
+\item \code{"OR"}: print OR (instead of percentages).
+\item \code{"OR_pct"}: print OR, with percentages in bracket.
+}}
+
+\item{chi2}{Set to \code{TRUE} to calculate Chi2 summaries with \code{\link{tab_chi2}}.
+Useful to print metadata, and to color cells based on their contribution to variance
+(\code{color = "contrib"}). Vectorised over \code{row_vars}.}
+
+\item{na}{The policy to adopt with missing values. It must be a single string.
+\itemize{
+\item \code{na = "keep"}: by default, prints \code{NA}'s as explicit \code{"NA"} level.
+\item \code{na = "drop"}: removes \code{NA} levels before making each table
+(tabs made with different column variables may have a different number of
+observations, and won't exactly have the same total columns).
+\item \code{"drop_all"}: remove \code{NA}'s for all variables before making the tables.
+}}
+
+\item{levels}{The levels of \code{col_vars} to keep (for more complex selections
+use \code{\link[dplyr:select]{dplyr::select}}). The argument is vectorised over \code{col_vars}.
+\itemize{
+\item \code{"all"}: by default, all levels are kept.
+\item \code{"first"}: only keep the first level of each \code{col_vars}
+\item \code{"auto"}: keep the first level when \code{col_var} is only two levels,
+keep all levels otherwise
+}}
+
+\item{na_drop_all}{<\link[tidyr:tidyr_tidy_select]{tidy-select}>
+Removes all observations with a \code{NA} in any of the chosen variables, for all tables
+(tabs for each column variable will have the same number of observations).}
+
+\item{cleannames}{Set to \code{TRUE} to clean levels names, by removing
+prefix numbers like "1-", and text in parenthesis. All data formatting arguments are
+passed to \code{\link{tab_prepare}}.}
+
+\item{other_if_less_than}{When set to a positive integer, levels with less count
+than it will be merged into an "Others" level.}
+
+\item{other_level}{The name of the "Other" level, as a single string.}
 
 \item{ref}{The reference cell to calculate differences and ratios
 (used to print \code{colors}) :
@@ -179,10 +191,6 @@ a total table with a total row), or with the reference line of the total table
 when \code{ref = "first"}, an integer or a regular expression.
 }}
 
-\item{chi2}{Set to \code{TRUE} to calculate Chi2 summaries with \code{\link{tab_chi2}}.
-Useful to print metadata, and to color cells based on their contribution to variance
-(\code{color = "contrib"}). Vectorised over \code{row_vars}.}
-
 \item{ci}{The type of confidence intervals to calculate, passed to \code{\link{tab_ci}}.
 Vectorised over \code{row_vars}.
 \itemize{
@@ -212,45 +220,38 @@ for \code{ci = "diff"}. This can be one out of: "wald", "waldcc", "ac", "score",
 the adjustment according to Agresti, Caffo for difference in proportions and
 independent samples. See \code{\link[DescTools:BinomDiffCI]{BinomDiffCI}}.}
 
-\item{OR}{With \code{pct = "row"} or \code{pct = "col"}, calculate and print odds ratios
-(for binary variables) or relative risks ratios (for variables with 3 levels
-or more).
+\item{totaltab}{The total table, if there are subtables/groups
+(i.e. when \code{tab_vars} is provided). Vectorised over \code{row_vars}.
 \itemize{
-\item \code{"no"}: by default, no OR are calculated.
-\item \code{"OR"}: print OR (instead of percentages).
-\item \code{"OR_pct"}: print OR, with percentages in bracket.
+\item \code{"line"}: by default, add a general total line (necessary for
+calculations with \code{comp = "all"})
+\item \code{"table"}: add a complete total table
+(i.e. \code{row_var} by \code{col_vars} without \code{tab_vars}).
+\item \code{"no"}: not to draw any total table.
 }}
 
-\item{color}{The type of colors to print, as a single string. Vectorised over \code{row_vars}.
+\item{totaltab_name}{The name of the total table, as a single string.}
+
+\item{totrow}{By default, total rows are printed.
+Set to \code{FALSE} to remove them (after calculations if needed).
+Vectorised over \code{row_vars}.}
+
+\item{totcol}{The policy with total columns. Vectorised over \code{col_vars}.
 \itemize{
-\item \code{"no"}: by default, no colors are printed.
-\item \code{"diff"}: color percentages and means based on cells differences from
-totals (or from first cells when \code{ref = "first"}).
-\item \code{"diff_ci"}: color pct and means based on cells differences from totals
-or first cells, removing coloring when the confidence interval of this difference
-is higher than the difference itself.
-\item \code{"after_ci"}: idem, but cut off the confidence interval from the
-difference first.
-\item \code{"contrib"}: color cells based on their contribution to variance
-(except mean columns, from numeric variables).
-\item \code{"OR"}: for \code{pct == "col"} or \code{pct == "row"},
-color based on odds ratios (or relative risks ratios)
-\item \code{"auto"}: frequencies (\code{pct = "all"}, \code{pct = "all_tabs"})
-and counts are colored with \code{"contrib"}.
-When \code{ci = "diff"}, row and col percentages are colored with "after_ci" ;
-otherwise they are colored with "diff".
+\item \code{"last"}: by default, only prints a total column for the last
+column variable (of class factor, not numeric).
+\item \code{"each"}: print a total column for each column variable.
+\item \code{"no"}: remove all total columns (after calculations if needed).
 }}
+
+\item{total_names}{The names of the totals, as a character vector of length one or two.
+Use syntax of type \code{c("Total row", "Total column")} to set different names for
+rows and cols.}
+
+\item{digits}{The number of digits to print, as a single integer, or an integer vector
+the same length as \code{col_vars}. The argument is vectorisez over \code{col_vars}.}
 
 \item{subtext}{A character vector to print rows of legend under the table.}
-
-\item{cleannames}{Set to \code{TRUE} to clean levels names, by removing
-prefix numbers like "1-", and text in parenthesis. All data formatting arguments are
-passed to \code{\link{tab_prepare}}.}
-
-\item{other_if_less_than}{When set to a positive integer, levels with less count
-than it will be merged into an "Others" level.}
-
-\item{other_level}{The name of the "Other" level, as a single string.}
 
 \item{filter}{A \code{\link[dplyr:filter]{dplyr::filter}} to apply to the data frame
 first, as a single string (which will be converted to code, i.e. to a call).

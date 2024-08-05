@@ -1150,6 +1150,8 @@ if (color_legend & length(color_cols) != 0) {
       }
 
 
+      cowplot::set_null_device("png") # "pdf", "png", "cairo", "agg"
+
       tabgrob    <- get_tablegrob(tabs_gg) |> justify_grob()
       legendgrob <- get_tablegrob(tab_legend_plot) |> justify_grob()
 

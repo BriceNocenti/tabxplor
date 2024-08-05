@@ -10,18 +10,18 @@ tab_num(
   col_vars,
   tab_vars,
   wt,
+  color = c("auto", "diff", "diff_ci", "after_ci"),
+  na = c("keep", "drop", "drop_fct", "drop_num"),
   ref = "tot",
+  comp = c("tab", "all"),
   ci = NULL,
   conf_level = 0.95,
-  comp = c("tab", "all"),
-  color = c("auto", "diff", "diff_ci", "after_ci"),
-  digits = 0,
-  na = c("keep", "drop", "drop_fct", "drop_num"),
   totaltab = "line",
   totaltab_name = tr_("Ensemble"),
   tot = NULL,
   total_names = tr_("Total"),
   subtext = "",
+  digits = 0,
   num = FALSE,
   df = FALSE
 )
@@ -42,6 +42,22 @@ are converted to factor.}
 
 \item{wt}{A weight variable, of class numeric. Leave empty for unweighted results.}
 
+\item{color}{\code{TRUE} print the color percentages and means based on cells differences from
+totals or reference cell, as provided by \code{ref}. Default to \code{FALSE}, no colors.}
+
+\item{na}{The policy to adopt for missing values in row and tab variables (factors),
+as a single string.
+\itemize{
+\item \code{"keep"}: by default, \code{NA}'s of row and tab variables
+are printed as an explicit \code{"NA"} level.
+\item \code{"drop"}: remove \code{NA}'s in row and tab variables.
+}
+\code{NA}s in numeric variables are always removed when calculating means. For that reason
+the \code{n} field of each resulting \code{\link{fmt}} column, used to calculate confidence
+intervals, only takes into account the complete observations (without \code{NA}).
+To drop all rows with \code{NA} in any numeric variable first, use \code{\link{tab_prepare}}
+or \code{\link{tab_many}} with the \code{na_drop_all} argument.}
+
 \item{ref}{The reference cell to calculate differences and ratios
 (used to print \code{colors}) :
 \itemize{
@@ -59,6 +75,13 @@ column or row, otherwise you get a warning message.
 \item \code{"no"}: not use ref and not calculate diffs to gain calculation time.
 }}
 
+\item{comp}{Comparison level. When \code{tab_vars} are present, should the
+contributions to variance be calculated for each subtable/group (by default,
+\code{comp = "tab"}) ? Should they be calculated for the whole table
+(\code{comp = "all"}) ?
+\code{comp} must be set once and for all the first time you use \code{\link{tab_plain}},
+\code{\link{tab_num}} or \code{\link{tab_chi2}} with rows, or \code{\link{tab_ci}}.}
+
 \item{ci}{The type of confidence intervals to calculate, passed to \code{\link{tab_ci}}
 (automatically added if needed for \code{color}).
 \itemize{
@@ -74,31 +97,6 @@ Means use classic method. This can be changed in \code{\link{tab_ci}}.}
 
 \item{conf_level}{The confidence level for the confidence intervals,
 as a single numeric between 0 and 1. Default to 0.95 (95\%).}
-
-\item{comp}{Comparison level. When \code{tab_vars} are present, should the
-contributions to variance be calculated for each subtable/group (by default,
-\code{comp = "tab"}) ? Should they be calculated for the whole table
-(\code{comp = "all"}) ?
-\code{comp} must be set once and for all the first time you use \code{\link{tab_plain}},
-\code{\link{tab_num}} or \code{\link{tab_chi2}} with rows, or \code{\link{tab_ci}}.}
-
-\item{color}{\code{TRUE} print the color percentages and means based on cells differences from
-totals or reference cell, as provided by \code{ref}. Default to \code{FALSE}, no colors.}
-
-\item{digits}{The number of digits to print, as a single integer.}
-
-\item{na}{The policy to adopt for missing values in row and tab variables (factors),
-as a single string.
-\itemize{
-\item \code{"keep"}: by default, \code{NA}'s of row and tab variables
-are printed as an explicit \code{"NA"} level.
-\item \code{"drop"}: remove \code{NA}'s in row and tab variables.
-}
-\code{NA}s in numeric variables are always removed when calculating means. For that reason
-the \code{n} field of each resulting \code{\link{fmt}} column, used to calculate confidence
-intervals, only takes into account the complete observations (without \code{NA}).
-To drop all rows with \code{NA} in any numeric variable first, use \code{\link{tab_prepare}}
-or \code{\link{tab_many}} with the \code{na_drop_all} argument.}
 
 \item{totaltab}{The total table,
 if there are subtables/groups (i.e. when \code{tab_vars} is provided) :
@@ -126,6 +124,8 @@ Use syntax of type \code{c("Total row", "Total column")} to set different names 
 rows and cols.}
 
 \item{subtext}{A character vector to print rows of legend under the table.}
+
+\item{digits}{The number of digits to print, as a single integer.}
 
 \item{num}{Set to \code{TRUE} to obtain a table with normal numeric vectors (not \code{fmt}).}
 

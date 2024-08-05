@@ -11,18 +11,18 @@ tab_plain(
   tab_vars,
   wt,
   pct = "no",
+  color = TRUE,
+  OR = "no",
+  na = "keep",
   ref = "auto",
   ref2 = "first",
   comp = "tab",
-  color = TRUE,
-  OR = "no",
-  digits = 0,
-  na = "keep",
-  subtext = "",
   totaltab = "line",
   totaltab_name = tr_("Ensemble"),
   tot = NULL,
   total_names = tr_("Total"),
+  subtext = "",
+  digits = 0,
   num = FALSE,
   df = FALSE
 )
@@ -47,6 +47,26 @@ are converted to factor.}
 \item \code{"col"}: column percentages.
 \item \code{"all"}: frequencies for each subtable/group, if there is \code{tab_vars}.
 \item \code{"all_tabs"}: frequencies for the whole (set of) table(s).
+}}
+
+\item{color}{\code{TRUE} print the color percentages and means based on cells differences from
+totals or reference cell, as provided by \code{ref}. If \code{OR} is provided,
+odds ratios are used for colors instead. Default to \code{FALSE}, no colors.}
+
+\item{OR}{With \code{pct = "row"} or \code{pct = "col"}, calculate and print odds ratios
+(for binary variables) or relative risks ratios (for variables with 3 levels
+or more).
+\itemize{
+\item \code{"no"}: by default, no OR are calculated.
+\item \code{"OR"}: print OR (instead of percentages).
+\item \code{"OR_pct"}: print OR, with percentages in bracket.
+}}
+
+\item{na}{The policy to adopt with missing values, as a single string.
+\itemize{
+\item \code{"keep"}: by default, \code{NA}'s of row, col and tab variables
+are printed as explicit "NA" level.
+\item \code{"drop"}: removes NA of row, col and tab variables.
 }}
 
 \item{ref}{The reference cell to calculate differences and ratios
@@ -77,30 +97,6 @@ contributions to variance be calculated for each subtable/group (by default,
 \code{comp} must be set once and for all the first time you use \code{\link{tab_plain}},
 \code{\link{tab_num}} or \code{\link{tab_chi2}} with rows, or \code{\link{tab_ci}}.}
 
-\item{color}{\code{TRUE} print the color percentages and means based on cells differences from
-totals or reference cell, as provided by \code{ref}. If \code{OR} is provided,
-odds ratios are used for colors instead. Default to \code{FALSE}, no colors.}
-
-\item{OR}{With \code{pct = "row"} or \code{pct = "col"}, calculate and print odds ratios
-(for binary variables) or relative risks ratios (for variables with 3 levels
-or more).
-\itemize{
-\item \code{"no"}: by default, no OR are calculated.
-\item \code{"OR"}: print OR (instead of percentages).
-\item \code{"OR_pct"}: print OR, with percentages in bracket.
-}}
-
-\item{digits}{The number of digits to print, as a single integer.}
-
-\item{na}{The policy to adopt with missing values, as a single string.
-\itemize{
-\item \code{"keep"}: by default, \code{NA}'s of row, col and tab variables
-are printed as explicit "NA" level.
-\item \code{"drop"}: removes NA of row, col and tab variables.
-}}
-
-\item{subtext}{A character vector to print rows of legend under the table.}
-
 \item{totaltab}{The total table,
 if there are subtables/groups (i.e. when \code{tab_vars} is provided) :
 \itemize{
@@ -125,6 +121,10 @@ columns.
 \item{total_names}{The names of the totals, as a character vector of length one or two.
 Use syntax of type \code{c("Total row", "Total column")} to set different names for
 rows and cols.}
+
+\item{subtext}{A character vector to print rows of legend under the table.}
+
+\item{digits}{The number of digits to print, as a single integer.}
 
 \item{num}{Set to \code{TRUE} to obtain a table with normal numeric vectors (not fmt).}
 

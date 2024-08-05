@@ -135,8 +135,8 @@ Means use classic method.}
 \item Default to 0.95 (95\\%).
 }}
 
-\item{ci_print}{By default confidence interval are printed with te pct+moe
-display. Set to "ci" to use the \link{inf;sup} display instead.}
+\item{ci_print}{By default confidence interval are printed with the pct+moe
+display. Set to "ci" to use the interval display instead.}
 
 \item{totaltab}{The total table, if there are subtables/groups   (i.e. when
 \code{tab_vars} is provided). Vectorised over \code{row_vars}.  \itemize{
