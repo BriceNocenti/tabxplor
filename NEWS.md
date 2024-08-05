@@ -1,7 +1,14 @@
+# tabxplor 1.2.0
+
+## Added : 
+* `jmvtab() ` : implementation of `tab_many()` for Jamovi, with a user interface
+* `tab_plot()` : print tables as `ggplot`, to export as images.
+* `tab_wrap_text()` : a function to wrap text in rownames and colnames.
+
 # tabxplor 1.1.3
 
 ## Bug corrections :
-* `tab_kable()` : html tags in tables where no longer working and where appearing as text (`knitr::kable()` now needs a `format = "html"` argument)
+* `tab_kable()` : html tags in tables were no longer working and were appearing as text (`knitr::kable()` now needs a `format = "html"` argument)
 
 
 
