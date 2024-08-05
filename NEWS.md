@@ -2,8 +2,8 @@
 
 ## Added : 
 * `jmvtab() ` : implementation of `tab_many()` for Jamovi, with a user interface
-* `tab_plot()` : print tables as `ggplot`, to export as images.
-* `tab_wrap_text()` : a function to wrap text in rownames and colnames.
+* `tab_plot()` : print tables as `ggplot`, to export as images
+* `tab_wrap_text()` : function to wrap text in rownames and colnames
 
 # tabxplor 1.1.3
 

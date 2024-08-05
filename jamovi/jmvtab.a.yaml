@@ -214,16 +214,17 @@ options:
       description:
           R: >
            When set to a positive integer, levels with less count
-           than it will be merged into an "Others" level.
+           than that will be merged into an "Others" level.
 
     - name: cleannames
       title: ""
       type: Bool
-      default: false
+      default: true
       description:
           R: >
-           Set to \code{TRUE} to clean levels names, by removing
+           By default, clean levels names, by removing
            prefix numbers like "1-", and text in parenthesis.
+           Set to `FALSE` to avoid this behaviour.
 
 # other_level = "Others",
 # totcol = "last",

@@ -17,7 +17,7 @@ jmvtab(
   na = "keep",
   lvs = "all",
   other_if_less_than = 0,
-  cleannames = FALSE,
+  cleannames = TRUE,
   ref = "auto",
   ref2 = "first",
   comp = "tab",
@@ -92,10 +92,11 @@ keep the first level when \code{col_var} is only two levels,    keep all
 levels otherwise.    }}
 
 \item{other_if_less_than}{When set to a positive integer, levels with less
-count than it will be merged into an "Others" level.}
+count than that will be merged into an "Others" level.}
 
-\item{cleannames}{Set to \code{TRUE} to clean levels names, by removing
-prefix numbers like "1-", and text in parenthesis.}
+\item{cleannames}{By default, clean levels names, by removing prefix
+numbers like "1-", and text in parenthesis. Set to \code{FALSE} to avoid
+this behaviour.}
 
 \item{ref}{The reference cell to calculate differences and ratios   (used
 to print \code{colors}) :   \itemize{    \item \code{"auto"}: by default,

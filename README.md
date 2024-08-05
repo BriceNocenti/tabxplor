@@ -86,7 +86,7 @@ it appears with shades of red/orange. A color legend is added below the
 table. In RStudio colors are adapted to the theme, light or dark.
 
 ``` r
-data <- forcats::gss_cat %>% 
+data <- forcats::gss_cat |> 
   dplyr::filter(year %in% c(2000, 2006, 2012), !marital %in% c("No answer", "Widowed"))
 gss  <- "Source: General social survey 2000-2014"
 gss2 <- "Source: General social survey 2000, 2006 and 2012"
@@ -140,7 +140,7 @@ evolutions. The first rows then appears in white (while rows totals are
 themselves colored like normal lines).
 
 ``` r
-data <- data %>% dplyr::mutate(year = as.factor(year))
+data <- data |> dplyr::mutate(year = as.factor(year))
 tab(data, year, marital, race, pct = "row", color = "diff", ref = "first", tot = "col",
 totaltab = "table")
 ```
@@ -250,8 +250,8 @@ transformed using most `dplyr` verbs, like a normal `tibble`.
 
 ``` r
 library(dplyr)
-tab(storms, category, status, sup_cols = c("pressure", "wind")) %>%
-filter(category != "-1") %>%
+tab(storms, category, status, sup_cols = c("pressure", "wind")) |>
+filter(category != "-1") |>
 dplyr::select(-`tropical depression`)
 arrange(is_totrow(.), desc(category)) # use is_totrow to keep total rows order
 ```
@@ -260,7 +260,7 @@ With `dplyr::arrange`, don’t forget to keep the order of tab variables
 and total rows:
 
 ``` r
-tab(data, race, marital, year, pct = "row") %>%
+tab(data, race, marital, year, pct = "row") |>
 arrange(year, is_totrow(.), desc(Married))
 ```
 
@@ -275,7 +275,7 @@ level like here):
 
 ``` r
 first_lvs <- c("Married", "$25000 or more", "Strong republican", "Protestant")
-data <- forcats::gss_cat %>% mutate(across(
+data <- forcats::gss_cat |> mutate(across(
 where(is.factor),
 ~ forcats::fct_relevel(., first_lvs[first_lvs %in% levels(.)])
 ))
@@ -305,7 +305,7 @@ NA_character_, "race"     , "no" , NULL                 , "Source: GSS 2000-2014
 data = forcats::gss_cat, color = "auto", chi2 = TRUE)
 ```
 
-## Export to html or Excel
+## Export to html, Excel or plot
 
 To export a table to html with colors, tabxplor uses `knitr::kable` and
 `kableExtra`. In this format differences from totals, confidence
@@ -315,7 +315,7 @@ available in a tooltip at cells hover.
 ``` r
 tabs <- tab(forcats::gss_cat, race, marital, subtext = "Source: GSS 2000-2014", 
 pct = "row", color = "diff")
-tabs %>% tab_kable()
+tabs |> tab_kable()
 ```
 
 ![](.readme_images/tabxplor8_tab_kable.jpg)
@@ -333,7 +333,13 @@ calculations on raw numbers (display is rounded but, below, decimals are
 kept).
 
 ``` r
-tabs %>% tab_xl(replace = TRUE, sheets = "unique")
+tabs |> tab_xl(replace = TRUE, sheets = "unique")
+```
+
+`tab_plot` exports any table as a plot image.
+
+``` r
+tabs |> tab_plot()
 ```
 
 ## Programming with `tabxplor`
@@ -344,13 +350,13 @@ speed. That way, it’s possible to write new functions to customize your
 tables even more.
 
 ``` r
-data <- dplyr::starwars %>%
+data <- dplyr::starwars |>
 tab_prepare(sex, hair_color, gender, other_if_less_than = 5,
 na_drop_all = sex)
 
-data %>%
-tab_plain(sex, hair_color, gender, tot = c("row", "col"), pct = "row", comp = "all") %>%
-tab_ci("diff", color = "after_ci")  %>%
+data |>
+tab_plain(sex, hair_color, gender, tot = c("row", "col"), pct = "row", comp = "all") |>
+tab_ci("diff", color = "after_ci")  |>
 tab_chi2(calc = "p")
 ```
 
@@ -365,7 +371,7 @@ The simple way to recover the underlying numbers as numeric vectors is
 
 ``` r
 tabs <- tab(forcats::gss_cat, race, marital, pct = "row")
-tabs %>% dplyr::mutate(across(where(is_fmt), get_num))
+tabs |> dplyr::mutate(across(where(is_fmt), get_num))
 #> # A tabxplor tab: 4 × 8
 #>   race   `No answer` `Never married` Separated Divorced Widowed Married Total
 #>   <fct>        <dbl>           <dbl>     <dbl>    <dbl>   <dbl>   <dbl> <dbl>
@@ -378,7 +384,7 @@ tabs %>% dplyr::mutate(across(where(is_fmt), get_num))
 To render character vectors (without colors), use `format`:
 
 ``` r
-tabs %>% mutate(across(where(is_fmt), format))
+tabs |> mutate(across(where(is_fmt), format))
 ```
 
 The following fields compose any `fmt` column (though many can be `NA`
@@ -405,6 +411,10 @@ if not calculated) :
   `pct`)
 
 - `ci` : confidence intervals
+
+- `rr` : relative risks, needed to calculate odds ratio
+
+- `or` : odds ratios (or relative risks ratios)
 
 - `in_totrow` : `TRUE` if the cell is part of a total row, `FALSE`
   otherwise (logical)
@@ -433,7 +443,7 @@ To get those underlying fields you can either use `vctrs::fields` or,
 more simply, `$` :
 
 ``` r
-tabs %>% mutate(across(where(is_fmt), ~ vctrs::field(., "pct") ))
+tabs |> mutate(across(where(is_fmt), ~ vctrs::field(., "pct") ))
 
 tabs$Married$pct
 tabs$Married$n
@@ -478,7 +488,7 @@ rows (`is_totrow()` / `as_totrow()`, `is_tottab()` / `as_tottab()`,
 `is_refrow()` / `as_refrow()`) :
 
 ``` r
-tab(data, race, marital, year, pct = "row") %>%
+tab(data, race, marital, year, pct = "row") |>
   dplyr::mutate(across( 
     where(is_fmt),
     ~ dplyr::if_else(is_totrow(.), 
@@ -521,7 +531,7 @@ Each `fmt` column have attributes, which you can access or modify with
 For example, to print the number of observations of the total column :
 
 ``` r
-tab(data, race, marital, year, pct = "row") %>%
+tab(data, race, marital, year, pct = "row") |>
   mutate(across(where(is_totcol), ~ mutate(., display = "n") ))
 ```
 

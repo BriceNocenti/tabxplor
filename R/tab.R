@@ -701,6 +701,11 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
     TRUE                                                       ~ "some"
   )
 
+  if (all( pct == "row" & OR %in% c("OR", "or", "OR_pct", "or_pct"))  ) {
+    tot_cols_type <- "no_delete"
+  }
+
+
 
 
   #Arguments vectorised over columns or rows : test in tab_plain/tab_num
@@ -929,8 +934,14 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
   #dat_group3 <- data %>% dplyr::group_by(!!!tab_vars, .add = TRUE, .drop = FALSE)
 
 
-  color_diff_OR <-
-    color %in% c("diff", "OR") | (color == "auto" & any(ci != "diff"))
+  color_diff_OR <- dplyr::case_when(
+    color %in% c("OR", "or")     ~ "OR",
+    color %in% c("diff", "auto") ~ "diff",
+    TRUE                         ~ "no"
+  )
+  # color %in% c("diff", "OR") | (color == "auto" & any(ci != "diff"))
+
+
 
   color_ctr  <- dplyr::recode(color,
                               "no"       = "no"  ,
@@ -1166,16 +1177,18 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
 
 
   #Remove unwanted total rows
-  no_totrow <- totrow == FALSE & tot_cols_type != "no_no_create"
+  no_totrow <- (totrow == FALSE |
+                  (pct == "col" &  OR %in% c("OR", "or", "OR_pct", "or_pct")) &
+                  tot_cols_type != "no_no_create")
   if (any(no_totrow)) {
     totrows     <- purrr::map(tabs[no_totrow], ~ is_totrow(.))
     tottab_rows <- purrr::map(tabs[no_totrow], ~ is_tottab(.))
     tottab_line <- purrr::map(tottab_rows[no_totrow], ~ length(.[.]) == 1 & .)
 
-    tabs[no_totrow] <-
-      purrr::pmap( list(tabs[no_totrow],totrows, tottab_line),
-                   ~ tibble::add_column(..1, totrows = ..2, tottab_line = ..3) %>%
-                     dplyr::filter(!.data$totrows | .data$tottab_line) %>%
+  tabs[no_totrow] <-
+    purrr::pmap( list(tabs[no_totrow],totrows, tottab_line),
+                 ~ tibble::add_column(..1, totrows = ..2, tottab_line = ..3) %>%
+                   dplyr::filter(!.data$totrows | .data$tottab_line) %>%
                      dplyr::select(-"totrows", -"tottab_line")
       )
   }
@@ -1655,9 +1668,14 @@ tab_prepare <-
 #'   \item \code{"OR"}: print OR (instead of percentages).
 #'   \item \code{"OR_pct"}: print OR, with percentages in bracket.
 #' }
-#' @param color `TRUE` print the color percentages and means based on cells differences from
-#'   totals or reference cell, as provided by `ref`. If `OR` is provided,
-#'   odds ratios are used for colors instead. Default to `FALSE`, no colors.
+#' @param color The type of colors to print, as a single string :
+#'  \itemize{
+#'   \item \code{"no"}: by default, no colors are printed.
+#'   \item \code{"diff"}: color percentages and means based on cells differences from
+#'   totals (or from first cells when \code{ref = "first"}).
+#'   \item \code{"OR"}: for `pct == "col"` or `pct == "row"`,
+#'   color based on odds ratios (or relative risks ratios)
+#'  }
 #' @param subtext A character vector to print rows of legend under the table.
 #' @param num Set to \code{TRUE} to obtain a table with normal numeric vectors (not fmt).
 #' @param df  Set to \code{TRUE} to obtain a plain data.frame (not a tibble),
@@ -1683,7 +1701,7 @@ tab_prepare <-
 #'   tab_ci(color = "after_ci")
 #' }
 tab_plain <- function(data, row_var, col_var, tab_vars, wt,
-                      pct = "no", color = TRUE, OR = "no",
+                      pct = "no", color = "no", OR = "no",
                       na = "keep",
                       ref = "auto", ref2 = "first", comp = "tab",
                       totaltab = "line", totaltab_name = "Ensemble",
@@ -1758,8 +1776,8 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
   stopifnot(OR %in% c("no", "OR", "OR_pct", "or", "or_pct"))
   if (pct == "all_tabs" & length(tab_vars) == 0) pct <- "all"
 
-  if (color & ref == "no") {
-    warning("since color is TRUE/`diff`, ref can't be `no` and was set to `tot`")
+  if (color != "no" & ref == "no") {
+    warning("since color is ", color, " ref can't be `no` and was set to `tot`")
     ref <- "tot"
   }
 
@@ -1782,8 +1800,8 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
         warning("since pct == 'row', a total column was added")
         tot <- c(tot, "col")
       }
-      if (color & pct == "col" & ref == "tot") {
-        warning("since color == TRUE and pct == 'col' and ref == 'tot', a total column was added")
+      if (color != "no" & pct == "col" & ref == "tot") {
+        warning("since color == ", color, " and pct == 'col' and ref == 'tot', a total column was added")
         tot <- c(tot, "col")
       }
       if (pct %in% c("all", "all_tabs")) {
@@ -1797,8 +1815,8 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
         warning("since pct == 'row', total rows were added")
         tot <- c(tot, "row")
       }
-      if (color & pct == "row" & ref == "tot") {
-        warning("since color == TRUE and pct == 'row' and ref == 'tot', total rows were added")
+      if (color != "no" & pct == "row" & ref == "tot") {
+        warning("since color == ", color, " and pct == 'row' and ref == 'tot', total rows were added")
         tot <- c(tot, "row")
       }
       if (pct %in% c("all", "all_tabs")) {
@@ -1816,7 +1834,7 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
 
   #ref
   if (ref == "auto") {
-   ref <- if (OR != "no") {"first"} else {"tot"}
+   ref <- if (OR != "no" | color %in% c("or", "OR")) {"first"} else {"tot"}
   }
 
   #digits
@@ -2162,7 +2180,7 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
 
 
         # Odds ratio (when pct = "row")
-        if (OR %in% c("OR", "OR_pct", "or", "or_pct")) {
+        if (OR %in% c("OR", "OR_pct", "or", "or_pct") | color %in% c("or", "OR")) {
 
           # Relative risks
           tabs_rr <- data.table::copy(tabs_pct)
@@ -2229,7 +2247,7 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
 
 
         # Odds ratio (when pct = "col")
-        if (OR %in% c("OR", "OR_pct", "or", "or_pct")) {
+        if (OR %in% c("OR", "OR_pct", "or", "or_pct") | color %in% c("or", "OR")) {
 
           # Relative risks
           tabs_rr <- data.table::copy(tabs_pct)
@@ -2325,7 +2343,7 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
     ) |>
     purrr::pmap_dfc(~ new_fmt(
       display   = dplyr::case_when(
-        pct != "no" & OR %in% c("OR", "or")         ~ "or",
+        pct %in% c("row", "col") & OR %in% c("OR", "or") ~ "or",
         pct != "no" & OR %in% c("OR_pct", "or_pct") ~ "or_pct",
         pct != "no"                                 ~ "pct",
         length(wt) != 0                             ~ "wn" ,
@@ -2345,10 +2363,11 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
       totcol    = ..7,
       refcol    = ..8,
       color     = dplyr::case_when(
-        color == FALSE                                    ~ "",
+        color %in% c("", "no")                            ~ "",
         row_var == "no_row_var" | col_var == "no_col_var" ~ "",
 
-        pct %in% c("row", "col") & OR %in% c("OR", "or", "OR_pct", "or_pct") &
+        color %in% c("OR", "or") & pct %in% c("row", "col") &
+          # OR %in% c("OR", "or", "OR_pct", "or_pct") &
           ref != "no" & ref2 != "no"
         ~ "OR",
 

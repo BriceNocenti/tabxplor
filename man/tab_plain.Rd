@@ -11,16 +11,16 @@ tab_plain(
   tab_vars,
   wt,
   pct = "no",
-  color = TRUE,
+  color = "no",
   OR = "no",
   na = "keep",
   ref = "auto",
   ref2 = "first",
   comp = "tab",
   totaltab = "line",
-  totaltab_name = tr_("Ensemble"),
+  totaltab_name = "Ensemble",
   tot = NULL,
-  total_names = tr_("Total"),
+  total_names = "Total",
   subtext = "",
   digits = 0,
   num = FALSE,
@@ -49,9 +49,14 @@ are converted to factor.}
 \item \code{"all_tabs"}: frequencies for the whole (set of) table(s).
 }}
 
-\item{color}{\code{TRUE} print the color percentages and means based on cells differences from
-totals or reference cell, as provided by \code{ref}. If \code{OR} is provided,
-odds ratios are used for colors instead. Default to \code{FALSE}, no colors.}
+\item{color}{The type of colors to print, as a single string :
+\itemize{
+\item \code{"no"}: by default, no colors are printed.
+\item \code{"diff"}: color percentages and means based on cells differences from
+totals (or from first cells when \code{ref = "first"}).
+\item \code{"OR"}: for \code{pct == "col"} or \code{pct == "row"},
+color based on odds ratios (or relative risks ratios)
+}}
 
 \item{OR}{With \code{pct = "row"} or \code{pct = "col"}, calculate and print odds ratios
 (for binary variables) or relative risks ratios (for variables with 3 levels

@@ -17,7 +17,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             na = "keep",
             lvs = "all",
             other_if_less_than = 0,
-            cleannames = FALSE,
+            cleannames = TRUE,
             ref = "auto",
             ref2 = "first",
             comp = "tab",
@@ -132,7 +132,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             private$..cleannames <- jmvcore::OptionBool$new(
                 "cleannames",
                 cleannames,
-                default=FALSE)
+                default=TRUE)
             private$..ref <- jmvcore::OptionString$new(
                 "ref",
                 ref,
@@ -401,9 +401,10 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   keep the first level when \code{col_var} is only two levels,    keep all
 #'   levels otherwise.    }
 #' @param other_if_less_than When set to a positive integer, levels with less
-#'   count than it will be merged into an "Others" level.
-#' @param cleannames Set to \code{TRUE} to clean levels names, by removing
-#'   prefix numbers like "1-", and text in parenthesis.
+#'   count than that will be merged into an "Others" level.
+#' @param cleannames By default, clean levels names, by removing prefix
+#'   numbers like "1-", and text in parenthesis. Set to \code{FALSE} to avoid
+#'   this behaviour.
 #' @param ref The reference cell to calculate differences and ratios   (used
 #'   to print \code{colors}) :   \itemize{    \item \code{"auto"}: by default,
 #'   cell difference from the corresponding total    (rows or cols depending on
@@ -478,7 +479,7 @@ jmvtab <- function(
     na = "keep",
     lvs = "all",
     other_if_less_than = 0,
-    cleannames = FALSE,
+    cleannames = TRUE,
     ref = "auto",
     ref2 = "first",
     comp = "tab",

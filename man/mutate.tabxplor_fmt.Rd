@@ -9,7 +9,7 @@
 \arguments{
 \item{.data}{A tabxplor_fmt column.}
 
-\item{...}{<\code{\link[=dplyr_data_masking]{data-masking}}> Name-value pairs.
+\item{...}{Name-value pairs.
 The name gives the name of the column in the output (do not change it).
 
 The value can be:
