@@ -724,6 +724,11 @@ tab_plot <- function(tabs,
                 "You can install it with : install.packages('ggplot2')"),
          call. = FALSE)
   }
+  if (!requireNamespace("cowplot", quietly = TRUE)) {
+    stop(paste0("Package \"cowplot\" needed for this function to work. ",
+                "You can install it with : install.packages('cowplot')"),
+         call. = FALSE)
+  }
   #theme <- if (is.null(theme)) { getOption("tabxplor.color_style_theme") } else { theme }
   color_type <-
     if (is.null(color_type)) { getOption("tabxplor.color_style_type") } else {color_type}
@@ -744,7 +749,7 @@ tab_plot <- function(tabs,
 
   tabs <- tabs |>
     tab_wrap_text(wrap_rows = wrap_rows, wrap_cols = wrap_cols, exdent = 1,
-                  whitespace_only = whitespace_only, unbreakable_spaces = TRUE)
+                  whitespace_only = whitespace_only, unbreakable_spaces = FALSE)
 
 
   color_cols     <- get_color(tabs)
@@ -845,12 +850,20 @@ tab_plot <- function(tabs,
         where(is_fmt),
         ~ format(., special_formatting = TRUE)
       ),
-      # unbreakable space at the starting of names, otherwise doesn't fit with hjust = "right"
-      dplyr::across(
-        1,
-        ~ forcats::fct_relabel(., ~ paste0(paste0(rep(unbrk, 4), collapse = ""),
-                                           .))
-      )
+      dplyr::across( # otherwise, unbreakable spaces fail in some graphic devices
+        where(is.factor),
+        ~ forcats::fct_relabel(., ~ stringr::str_replace_all(., unbrk, " "))
+      ),
+      dplyr::across( # otherwise, unbreakable spaces fail in some graphic devices
+        where(is.character),
+        ~ stringr::str_replace_all(., unbrk, " ")
+      ),
+      # # unbreakable space at the starting of names, otherwise doesn't fit with hjust = "right"
+      # dplyr::across(
+      #   1,
+      #   ~ forcats::fct_relabel(., ~ paste0(paste0(rep(unbrk, 4), collapse = ""),
+      #                                      .))
+      # )
     ) |>
 
     ggpubr::ggtexttable(
@@ -1019,6 +1032,12 @@ if (color_legend & length(color_cols) != 0) {
       #bold_stop  = bold & !dplyr::lead(bold, default = FALSE)
     ) |>
     dplyr::select("n", "text", "color") |> # bold_start, bold_stop,
+    dplyr::mutate(
+      dplyr::across( # otherwise, unbreakable spaces fail in some graphic devices
+        where(is.character),
+        ~ stringr::str_replace_all(., unbrk, " ")
+      ),
+    ) |>
     dplyr::group_by(!!rlang::sym("n")) |>
     dplyr::group_split(.keep = FALSE)
 
@@ -1320,13 +1339,14 @@ tab_kable_print_tooltip <- function(x, popover = FALSE) {
                           true      = paste0("n: ", format(set_display(x, "n")) ),
                           false     = "")
 
-  out <- paste(out_pct, out_mean, out_sd, out_rr, out_or, out_diff,
+  out <- paste(out_pct, out_mean, out_sd, out_diff, out_rr, out_or,
                out_ci, out_ctr, out_n, sep = " ; ") %>%
     stringr::str_replace_all(";  ; ", "; ") %>%
     stringr::str_replace_all(";  ; ", "; ") %>%
     stringr::str_replace_all(";  ; ", "; ") %>%
     stringr::str_remove("^ *; *") %>%
-    stringr::str_remove(" *; *$")
+    stringr::str_remove(" *; *$") |>
+    stringr::str_remove("NA *;")
 
   out[is.na(out) | out == "NA"] <- ""
 

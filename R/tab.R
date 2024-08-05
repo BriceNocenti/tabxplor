@@ -1522,7 +1522,7 @@ tab_prepare <-
 
 
 
-    #Convert to data.table and back divide the time by two with large dataframes
+    #Converting to data.table and back divides the time by two with large dataframes
     if (length(na_drop_all) != 0) {
       data.table::setDT(data)
       data <- tibble::as_tibble(stats::na.omit(data, na_drop_all))

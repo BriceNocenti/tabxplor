@@ -4,64 +4,59 @@
 jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
     "jmvtabClass",
     inherit = jmvtabBase,
-    ### Active bindings ----
-    active = list(
-      wt = function() {
-        if (!is.null(self$options$wt)) {
-          return(self$options$wt)
-        } else if ( ! is.null(attr(self$data, "jmv-weights-name"))) {
-          return (attr(self$data, "jmv-weights-name"))
-        }
-        NULL
-      }
-    ),
+    # ### Active bindings ----
+    # active = list(
+    #   wt = function() {
+    #     if (!is.null(self$options$wt)) {
+    #       return(self$options$wt)
+    #     } else if ( ! is.null(attr(self$data, "jmv-weights-name"))) {
+    #       return (attr(self$data, "jmv-weights-name"))
+    #     }
+    #     NULL
+    #   }
+    # ),
     private = list(
         .run = function() {
 
-          wt <- if (!is.null(self$wt)) {
-            rlang::sym(self$wt)
-            # } else if (!is.null(attr(self$data, "jmv-weights-name")) ) {
-            #   rlang::sym(attr(self$data, "jmv-weights-name"))
-            # } else if (!is.null(self$wt) ){
-            #   self$wt
+          data <- self$data
+
+          # Note : self$data only contains the selected variables,
+          #  but not wt if it was given in Jamovi with Data >>> Weights) :
+          #  it needs to be added manually
+          if (!is.null(self$options$wt)) {
+            wt <- rlang::sym(self$options$wt)
+          } else if (!is.null(attr(data, "jmv-weights"))) {
+            data[['.COUNTS']] <- jmvcore::toNumeric(attr(data, "jmv-weights"))
+            wt <- rlang::sym(".COUNTS")
           } else {
-            character()
+            wt <- character()
           }
 
-          # wt <- if (!is.null(self$options$wt)) {
-          #   rlang::sym(self$options$wt)
-          # # } else if (!is.null(attr(self$data, "jmv-weights-name")) ) {
-          # #   rlang::sym(attr(self$data, "jmv-weights-name"))
-          # # } else if (!is.null(self$wt) ){
-          # #   self$wt
-          # } else {
-          #   character()
-          # }
-
-
-
-          # if (length(self$wt) > 0) {
-          #   message <- ..('The data is weighted by the variable {}.', wt)
-          #   type <- NoticeType$WARNING
-          #
-          #   weightsNotice <- jmvcore::Notice$new(
-          #     self$options,
-          #     name='.weights',
-          #     type=type,
-          #     content=message)
-          #   self$results$insert(1, weightsNotice)
-          # }
+          # weightsNotice <- jmvcore::Notice$new(
+          #   self$options,
+          #   name='.wt',
+          #   #type=type,
+          #   content = paste0(purrr::map(attributes(self$data), ~ as.character(.[1:10])) |> purrr::flatten_chr(),
+          #                    collapse = "<br><br>" )
+          #   #   paste0(
+          #   #   #"names = " , names(self$data), collapse = ", "
+          #   #   #"weight variable is ", self$wt, "", class(self$wt) #,
+          #   #                  #"jmv-weights:", attr(self$data, "jmv-weights-name"),
+          #   #                  #class(attr(self$data, "jmv-weights-name"))
+          #   # )
+          #     )
+          # self$results$insert(1, weightsNotice)
 
           row_var  <- self$options$row_vars[1]
           col_vars <- self$options$col_vars
           tab_vars <- self$options$tab_vars # tab_vars <- tab_get_vars(tabs)$tab_vars
 
           tabs <- tab_many(
-            data               = self$data,
+            data               = data,
             row_vars           = all_of(self$options$row_vars),
             col_vars           = all_of(self$options$col_vars),
             tab_vars           = all_of(self$options$tab_vars),
-            wt                 = !!wt, # !!(self$wt),
+            wt                 = !!wt,
             pct                = self$options$pct,
             color              = self$options$color,
             na                 = self$options$na,
@@ -89,69 +84,8 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
               mutate(across(where(is_fmt), ~ set_display(., "pct_ci")))
           }
 
-          # tabs <- tabs |>
-          #   tab_wrap_text(wrap_rows = self$options$wrap_rows,
-          #                 wrap_cols = self$options$wrap_cols,
-          #                 exdent = 0)
 
 
-          # tabs_hmtl <- tab_kable(
-          #   tabs, # html_font =
-          # ) #|>
-          #   #as.character()
-
-          # # not working
-          # if (!interactive()) {
-          #   tabs_hmtl <-
-          #     paste0(
-          #       "<style> .parent{width: min-content;} </style>",
-          #       as.character(tabs_hmtl),
-          #       collapse = "\n\n"
-          #     )|>
-          #     vctrs::vec_restore(tabs_hmtl)
-          # }
-
-          #"<style>
-          # .html {height: 100%;}
-          # .body {min-height: 100%;}
-          # </style>
-          # "
-
-          #"<style>
-          # * {
-          #     margin: 0;
-          #     padding: 0;
-          #     box-sizing: border-box;
-          # }
-          # </style>
-          # "
-
-          #"<style>
-          # .body {
-          #     max-width: 720px;
-          # }
-          # </style>
-          #
-          # "
-
-          #           #if (!interactive()) {
-          #           tabs_hmtl  <-
-          #             paste0(
-          # #               "<style>
-          # # .body {
-          # #     max-width: 720px;
-          # # }
-          # # </style>
-          # #
-          # # ",
-          #
-          # as.character(tabs_hmtl),
-          # collapse = "\n\n"
-          #             )|>
-          #             vctrs::vec_restore(tabs_hmtl)
-          #           #}
-
-          # as.character(tabs_hmtl) |> cat()
 
           ci_print_option <- getOption('tabxplor.ci_print')
 
