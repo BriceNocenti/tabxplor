@@ -276,11 +276,11 @@ NULL
 tab <- function(data, row_var, col_var, tab_vars, wt, sup_cols,
                 pct = "no", color = "no", OR = "no", chi2 = FALSE,
                 na = "keep",  cleannames = NULL,
-                other_if_less_than = 0, other_level = tr_("Others"),
+                other_if_less_than = 0, other_level = "Others",
                 ref = "auto", ref2 = "first", comp = "tab",
                 ci = "no", conf_level = 0.95,
-                totaltab = "line", totaltab_name = tr_("Ensemble"),
-                tot = c("row", "col"), total_names = tr_("Total"),
+                totaltab = "line", totaltab_name = "Ensemble",
+                tot = c("row", "col"), total_names = "Total",
                 subtext = "", digits = 0,
                 filter) {
 
@@ -582,12 +582,12 @@ tab <- function(data, row_var, col_var, tab_vars, wt, sup_cols,
 tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
                      pct = "no", color = "no", OR = "no", chi2 = FALSE,
                      na = "keep", levels = "all", na_drop_all, cleannames = NULL,
-                     other_if_less_than = 0, other_level = tr_("Others"),
+                     other_if_less_than = 0, other_level = "Others",
                      ref = "auto", ref2 = "first", comp = "tab",
                      ci = "no", conf_level = 0.95, #ci_visible = FALSE,
                      method_cell = "wilson", method_diff = "ac",
-                     totaltab = "line", totaltab_name = tr_("Ensemble"),
-                     totrow = TRUE, totcol = "last", total_names = tr_("Total"),
+                     totaltab = "line", totaltab_name = "Ensemble",
+                     totrow = TRUE, totcol = "last", total_names = "Total",
                      digits = 0, subtext = "",
                      filter #, listed = FALSE,
                      #spread_vars = NULL, names_prefix, names_sort = FALSE
@@ -731,7 +731,7 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
 
 
   # Tests to be done before tab_plain / tab_num
-  OR[OR == "no" & color %in% c("OR", "or")] <- "OR"
+  # OR[OR == "no" & color %in% c("OR", "or")] <- "OR"
 
   color_auto_text <- color == "auto" & ! sum(col_vars_text) == 0
   if (any(color_auto_text)) color <- dplyr::case_when(
@@ -1260,7 +1260,7 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
 #'   tab_spread(race)
 #'   }
 tab_spread <- function(tabs, spread_vars, names_prefix, names_sort = FALSE,
-                       totname = tr_("Total") #, recalculate = TRUE
+                       totname = "Total" #, recalculate = TRUE
 ) {
   spread_vars     <- rlang::enquo(spread_vars)
   pos_spread_vars <- tidyselect::eval_select(spread_vars, tabs)
@@ -1505,7 +1505,7 @@ tab_get_vars <- function(tabs, vars = c("row_var", "col_vars", "tab_vars")) {
 tab_prepare <-
   function(data, ..., na_drop_all,
            cleannames = NULL, other_if_less_than = 0,
-           other_level = tr_("Others")) {
+           other_level = "Others") {
 
     cleannames <-
       if (is.null(cleannames)) { getOption("tabxplor.cleannames") } else {cleannames}
@@ -1686,8 +1686,8 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
                       pct = "no", color = TRUE, OR = "no",
                       na = "keep",
                       ref = "auto", ref2 = "first", comp = "tab",
-                      totaltab = "line", totaltab_name = tr_("Ensemble"),
-                      tot = NULL, total_names = tr_("Total"),
+                      totaltab = "line", totaltab_name = "Ensemble",
+                      tot = NULL, total_names = "Total",
                       subtext = "", digits = 0,
                       num = FALSE, df = FALSE
 ) {
@@ -2542,8 +2542,8 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
                     na = c("keep", "drop", "drop_fct", "drop_num"),
                     ref = "tot", comp = c("tab", "all"),
                     ci = NULL, conf_level = 0.95, #ci_visible = FALSE,
-                    totaltab = "line", totaltab_name = tr_("Ensemble"),
-                    tot = NULL, total_names = tr_("Total"),
+                    totaltab = "line", totaltab_name = "Ensemble",
+                    tot = NULL, total_names = "Total",
                     subtext = "", digits = 0, num = FALSE, df = FALSE
 ) {
 
@@ -3506,7 +3506,7 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
 #'   tab_totaltab("line")
 #'   }
 tab_totaltab <- function(tabs, totaltab = c("table", "line", "no"),
-                         name = tr_("Ensemble"), data = NULL) {
+                         name = "Ensemble", data = NULL) {
   #.Deprecated("tab_plain() and tab_num(), which now have a totaltab argument")
 
   get_vars  <- tab_get_vars(tabs)
@@ -3638,7 +3638,7 @@ tab_totaltab <- function(tabs, totaltab = c("table", "line", "no"),
 #'   tab_plain(sex, hair_color) %>%
 #'   tab_tot("col", totcol = "each")
 #'   }
-tab_tot <- function(tabs, tot = c("row", "col"), name = tr_("Total"),
+tab_tot <- function(tabs, tot = c("row", "col"), name = "Total",
                     totcol = "last", data = NULL) {
   #.Deprecated("tab_plain() and tab_num(), which now have a tot argument")
 

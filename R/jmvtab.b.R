@@ -72,7 +72,13 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
 
             digits             = self$options$digits,
             other_if_less_than = self$options$other_if_less_than,
-            subtext            = self$options$subtext
+            subtext            = self$options$subtext,
+
+
+
+            totaltab_name      = gettext("Ensemble", domain = "R-tabxplor"),
+            total_names        = gettext("Total", domain = "R-tabxplor"),
+            other_level        = gettext("Others", domain = "R-tabxplor")
           )
 
           if (self$options$display != "auto") {
