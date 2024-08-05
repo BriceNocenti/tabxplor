@@ -58,6 +58,7 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
             tab_vars           = all_of(self$options$tab_vars),
             wt                 = !!wt,
             pct                = self$options$pct,
+            OR                 = self$options$OR,
             color              = self$options$color,
             na                 = self$options$na,
             ref                = self$options$ref,

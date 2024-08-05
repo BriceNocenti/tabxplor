@@ -1795,7 +1795,7 @@ fmt_color_selection <- function(x, force_color, force_breaks) {
   #   NA_real_
   # }
 
-  or <- if (color %in% c("OR") ) {
+  or <- if (color %in% c("OR", "or") ) {
     get_or(x)
   } else {
     NA_real_
@@ -1818,7 +1818,8 @@ fmt_color_selection <- function(x, force_color, force_breaks) {
            } ,
            "after_ci" = if (type == "mean") mean_ci_breaks else pct_ci_breaks,
            "contrib"  = contrib_breaks,
-           "OR"       = mean_breaks
+           "or"       = ,
+           "OR"       = mean_breaks,
            )
 
   brksup <-
@@ -1832,6 +1833,7 @@ fmt_color_selection <- function(x, force_color, force_breaks) {
            },
            "after_ci" = if (type == "mean") mean_ci_brksup else pct_ci_brksup,
            "contrib"  = contrib_brksup,
+           "or"       = ,
            "OR"       = mean_brksup
            )
 
@@ -1885,6 +1887,8 @@ color_formula <- function(type, color, diff, ci, ref_means,
         if( (!means & brk >= 0) | (means & brk >= 1) ) {
           diff > brk & diff < brksup} else {
             diff < brk & diff > brksup},
+
+      "or"     = ,
 
       "OR"     = if(brk >= 1) {
         or > brk & or < brksup} else {
@@ -2003,6 +2007,7 @@ tab_color_legend <- function(x, colored = TRUE, mode = c("console", "html"),
       "contrib"       = paste0(cross, stringr::str_remove(.x, "^-")),
       #"ci_mean"       = ,
       "ci"            = "",      #just 1 ?
+      "or"            = ,
       "OR"            = dplyr::if_else(
         condition = stringr::str_detect(.x, "^-"),
         true      = paste0("1/", stringr::str_remove(.x, "^-")),
@@ -2026,6 +2031,7 @@ tab_color_legend <- function(x, colored = TRUE, mode = c("console", "html"),
           "after_ci_mean" = paste0(ref, " + |x-", ref, "| > (", ref, " + ci) ", .breaks),
           "after_ci"      = paste0("|x-", ref, "| > ci ", .breaks), #+ -
           "contrib"       = paste0("contrib > mean_ctr "     , .breaks),
+          "or"            = ,
           "OR"            = paste0("OR", .sign, .breaks),
           character()
         ))
@@ -2045,6 +2051,7 @@ tab_color_legend <- function(x, colored = TRUE, mode = c("console", "html"),
                                    .breaks, "</b>"),
           "after_ci"      = paste0("|x-", ref, "| > ci ", "<b>", .breaks, "</b>"), #+ -
           "contrib"       = paste0("contrib > mean_ctr ", "<b>", .breaks, "</b>"),
+          "or"            = ,
           "OR"            = paste0("OR", .sign, "<b>", .breaks, "</b>"),
           character()
         ))
@@ -2076,7 +2083,7 @@ tab_color_legend <- function(x, colored = TRUE, mode = c("console", "html"),
     color_table <- color_table |>
       dplyr::mutate(names = paste0(
         "[color:", .data$color_type, "] ",
-        dplyr::if_else(color_type %in% c("diff_mean", "diff", "OR", "diff_ci_mean",
+        dplyr::if_else(color_type %in% c("diff_mean", "diff", "OR", "or", "diff_ci_mean",
                                          "diff_ci", "after_ci_mean", "after_ci"),
           true  = paste0("[diff:", .data$ref, "] "),
           false = ""),
@@ -2092,7 +2099,7 @@ tab_color_legend <- function(x, colored = TRUE, mode = c("console", "html"),
   color_table <- color_table %>%
     dplyr::mutate(
       breaks = brk_from_color(.data$color_type),
-      breaks = dplyr::if_else(.data$color_type %in% c("diff_mean", "diff_ci_mean", "OR"),
+      breaks = dplyr::if_else(.data$color_type %in% c("diff_mean", "diff_ci_mean", "OR", "or"),
                               true  = purrr::map(.data$breaks,
                                                  ~ .[1:(length(.)/2)] %>%
                                                    c(., purrr::map(., `-`))
@@ -2213,6 +2220,7 @@ brk_from_color <- function(color_type) {
 
   purrr::map(color_type, ~
                switch(.x,
+                      "or"            = ,
                       "OR"            = ,
                       "diff_mean"     = ,
                       "diff_ci_mean"  = list(tabxplor_color_breaks$mean_breaks,
@@ -2240,7 +2248,7 @@ get_color_type <- function(color, type) {
   purrr::map2(color, type, ~ dplyr::case_when(
     .x == "contrib" ~ "contrib",
     .x == "ci"      ~ "ci"     ,
-    .x == "OR"      ~ "OR"     ,
+    .x %in% c("OR", "or")  ~ "OR"     ,
 
     .x %in% c("diff", "diff_ci", "after_ci") & .y == "mean"
     ~ paste0(.x, "_mean"),
@@ -2317,7 +2325,7 @@ get_reference <- function(x, mode = c("cells", "lines", "all_totals")) {
 
   color       <- get_color(x)
 
-  if (color == "OR") {
+  if (color %in% c("OR", "or")) {
     switch(mode[1],
            "cells"      = dplyr::case_when(
              type %in% c("row", "mean") & !comp_all ~ refrows               ,
