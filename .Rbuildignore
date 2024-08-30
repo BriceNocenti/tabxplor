@@ -9,6 +9,7 @@
 ^\.github$
 ^CRAN-SUBMISSION$
 [.]jmo$
-^build/
+^build/js/
+^build/R
 ^jamovi/
 

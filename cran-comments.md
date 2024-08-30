@@ -1,6 +1,7 @@
-## New version 1.2.0 : first submission
+## New version 1.2.0 : second submission
 
-(Already submitted in the beginning of august, but it was CRAN's well deserved vacations.)
+There was a note "Package has a VignetteBuilder field but no prebuilt vignette index", 
+
 
 
 ## Test environments
