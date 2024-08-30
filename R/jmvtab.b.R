@@ -51,6 +51,9 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
           col_vars <- self$options$col_vars
           tab_vars <- self$options$tab_vars # tab_vars <- tab_get_vars(tabs)$tab_vars
 
+          # for now, error without at least row_var and col_vars
+          if (length(row_var) > 0 | length(col_vars) > 0) {
+
           tabs <- tab_many(
             data               = data,
             row_vars           = all_of(self$options$row_vars),
@@ -455,6 +458,9 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
           # Plot
           #image <- self$results$plot
           #image$setState(tabs)
+
+          }
+
         },
         .plot = function(image, ...) {
           # plotData <- image$state

@@ -297,9 +297,9 @@ jmvtabResults <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
     "jmvtabResults",
     inherit = jmvcore::Group,
     active = list(
-        plot = function() private$.items[["plot"]],
         html_table = function() private$.items[["html_table"]],
-        chi2_table = function() private$.items[["chi2_table"]]),
+        chi2_table = function() private$.items[["chi2_table"]],
+        plot = function() private$.items[["plot"]]),
     private = list(),
     public=list(
         initialize=function(options) {
@@ -307,13 +307,6 @@ jmvtabResults <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 options=options,
                 name="",
                 title="Crosstables")
-            self$add(jmvcore::Image$new(
-                options=options,
-                name="plot",
-                title="",
-                width=1080,
-                height=0,
-                renderFun=".plot"))
             self$add(jmvcore::Html$new(
                 options=options,
                 name="html_table",
@@ -327,7 +320,14 @@ jmvtabResults <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                     list(
                         `name`="row_var", 
                         `title`="row_var", 
-                        `type`="text"))))}))
+                        `type`="text"))))
+            self$add(jmvcore::Image$new(
+                options=options,
+                name="plot",
+                title="",
+                width=1080,
+                height=0,
+                renderFun=".plot"))}))
 
 jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
     "jmvtabBase",
@@ -454,9 +454,9 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   integer vector the same length as \code{col_vars}.
 #' @return A results object containing:
 #' \tabular{llllll}{
-#'   \code{results$plot} \tab \tab \tab \tab \tab an image \cr
 #'   \code{results$html_table} \tab \tab \tab \tab \tab a html \cr
 #'   \code{results$chi2_table} \tab \tab \tab \tab \tab a table \cr
+#'   \code{results$plot} \tab \tab \tab \tab \tab an image \cr
 #' }
 #'
 #' Tables can be converted to data frames with \code{asDF} or \code{\link{as.data.frame}}. For example:

@@ -5,13 +5,6 @@ jrs:   '1.1'
 
 items:
 
-    # Empty plot needed to be able to set the value of the plotting zone
-    - name: plot
-      title: ""
-      type: Image
-      width:  1080
-      height: 0
-      renderFun: .plot
 
     - name: html_table
       title: Table
@@ -38,6 +31,13 @@ items:
         #   type: number
         #   format: zto,pvalue
 
+    # Empty plot needed to be able to set the value of the plotting zone
+    - name: plot
+      title: ""
+      type: Image
+      width:  1080
+      height: 0
+      renderFun: .plot
 
     # - name: freqs
     #   title: CrossTables

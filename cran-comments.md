@@ -1,6 +1,6 @@
 ## New version 1.2.0 : first submission
 
-
+(Already submitted in the beginning of august, but it was CRAN's well deserved vacations.)
 
 
 ## Test environments
