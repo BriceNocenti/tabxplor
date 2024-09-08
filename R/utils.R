@@ -84,11 +84,15 @@ fct_recode_helper <- function(.data, .cols = -where(is.numeric), .data_out_name,
   set_color_style()
 
   # option "tabxplor.color_breaks" :
-  set_color_breaks(pct_breaks = c(0.05, 0.1, 0.2, 0.3),
-                   mean_breaks = c(1.15, 1.5, 2, 4),
-                   contrib_breaks = c(1, 2, 5, 10)  )
+  set_color_breaks(pct_breaks       = c(0.05, 0.1, 0.2, 2, 0.3),
+                   #pct_ratio_breaks = 2,
+                   mean_breaks      = c(1.15, 1.5, 2, 4),
+                   contrib_breaks   = c(1, 2, 5, 10)  )
 
   options("tabxplor.print" = "console") # options("tabxplor.print" = "kable")
+
+  options("tabxplor.kable_html_font" =
+            '"DejaVu Sans Condensed", "Arial", arial, helvetica, sans-serif')
 
   options("tabxplor.output_kable" = FALSE)
 
@@ -99,6 +103,8 @@ fct_recode_helper <- function(.data, .cols = -where(is.numeric), .data_out_name,
   options("tabxplor.kable_popover" = FALSE)
 
   options("tabxplor.ci_print" = "moe") # or "ci"
+
+  options("tabxplor.always_add_css_in_tab_kable" = TRUE)
 
   invisible()
 }
@@ -706,11 +712,10 @@ bind_datas_for_tab <- function(data, vars) {
 
 # Escaped characters ----
 #' @keywords internal
-unbrk <- stringi::stri_unescape_unicode("\\u202f") # unbreakable space
-
+unbrk      <- stringi::stri_unescape_unicode("\\u202f") # unbreakable space
 sigma_sign <- stringi::stri_unescape_unicode("\\u03c3") # sigma for sd
-
-
+mult_sign  <- stringi::stri_unescape_unicode("\\u00d7")
+cross      <- stringi::stri_unescape_unicode("\\u00d7")
 
 # # Not working
 # # Css link towards https://github.com/web-fonts/dejavu-sans-condensed

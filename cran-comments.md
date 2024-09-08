@@ -1,20 +1,21 @@
 ## New version 1.2.0 : second submission
 
-There was a note "Package has a VignetteBuilder field but no prebuilt vignette index", 
-
+There was a "Package has a VignetteBuilder field but no prebuilt vignette index" note I
+ thought was due to win-builder, but was in fact my fault : 
+ corrected by removing "^build/" from .Rbuildignore.
 
 
 ## Test environments
 * local Windows 10 install, R devel
   
-* github Actions : https://github.com/BriceNocenti/tabxplor/actions/runs/10252977573
+* github Actions : https://github.com/BriceNocenti/tabxplor/actions/runs/10629699251
    - macOS 12.7.2, R-release
    - Microsoft Windows Server 2022, R-release
    - Ubuntu Linux 22.04.3 LTS, R-devel
    - Ubuntu Linux 22.04.3 LTS, R-release
    - Ubuntu Linux 22.04.3 LTS, R-oldrel-1
 
-* https://win-builder.r-project.org/VE1T7gUg0vH1
+* https://win-builder.r-project.org/520eZbrsVNAA
    - Windows Server 2022 x64, R-devel
 
 
@@ -27,8 +28,7 @@ There was a note "Package has a VignetteBuilder field but no prebuilt vignette i
 
 
 * https://win-builder.r-project.org : 
-    No ERRORs, no WARNINGs, 1 NOTE : 
-    - Package has a VignetteBuilder field but no prebuilt vignette index.
+    No ERRORs, no WARNINGs, no NOTEs.
 
 
 ## Downstream dependencies

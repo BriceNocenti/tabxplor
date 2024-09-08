@@ -25,8 +25,9 @@ black table with white text.}
 \item{color_type}{Set to \code{"text"} to color the text, \code{"bg"} to color the
 background. By default it takes \code{getOption("tabxplor.color_style_type")}.}
 
-\item{html_24_bit}{Should specific 24bits colors palettes be used ? Default to
-\code{getOption("tabxplor.color_html_24_bit")}}
+\item{html_24_bit}{Use 24bits colors palettes for html tables : set to \code{"green_red"}
+or \code{"blue_red"}. Only with \code{mode = "color_code"} (not \code{mode = "crayon"}) and
+\verb{theme = "light}. Default to \code{getOption("tabxplor.color_html_24_bit")}.}
 
 \item{color_legend}{Print colors legend below the table ?}
 

@@ -76,9 +76,9 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
 
             digits             = self$options$digits,
             other_if_less_than = self$options$other_if_less_than,
+            add_n              = self$options$add_n,
+            add_pct            = self$options$add_pct,
             subtext            = self$options$subtext,
-
-
 
             totaltab_name      = gettext("Ensemble", domain = "R-tabxplor"),
             total_names        = gettext("Total", domain = "R-tabxplor"),
@@ -312,10 +312,10 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
                       true  = dplyr::if_else(
                         . >= 0.05,
                         true  = paste0('<b><p style = "color:red;margin:0;padding:0;">',
-                                       .,
+                                       format(.),
                                        '</p></b>'),
                         false = paste0('<b><p style = "color:green;margin:0;padding:0">',
-                                       .,
+                                       format(.),
                                        '</p></b>')
                       ),
                       false = .

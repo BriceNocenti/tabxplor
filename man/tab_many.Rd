@@ -38,6 +38,8 @@ tab_many(
   totrow = TRUE,
   totcol = "last",
   total_names = "Total",
+  add_n = TRUE,
+  add_pct = FALSE,
   digits = 0,
   subtext = "",
   filter
@@ -248,6 +250,13 @@ column variable (of class factor, not numeric).
 Use syntax of type \code{c("Total row", "Total column")} to set different names for
 rows and cols.}
 
+\item{add_n}{For \code{pct = "row"} or \code{pct = "col"}, set to \code{FALSE} not to add another
+column or row with unweighted counts (\code{n}).}
+
+\item{add_pct}{Set to \code{TRUE} to add a column with the frequencies of the row
+variable (for \code{pct = "row"}) or a row with the frequencies of the column variable
+(for  \code{pct = "col"}).}
+
 \item{digits}{The number of digits to print, as a single integer, or an integer vector
 the same length as \code{col_vars}. The argument is vectorisez over \code{col_vars}.}
 
@@ -273,8 +282,9 @@ Set to \code{all} to get breaks for negative spreads as well.}
 \item{theme}{For \code{set_color_style} and \code{get_color_style}, is your console
 or html table background \code{"light"} or \code{"dark"} ? Default to RStudio theme.}
 
-\item{html_24_bit}{Should specific 24bits colors palettes be used for html tables ?
-With light themes only. Default to \code{getOption("tabxplor.color_html_24_bit")}}
+\item{html_24_bit}{Use 24bits colors palettes for html tables : set to \code{"green_red"}
+or \code{"blue_red"}. Only with \code{mode = "color_code"} (not \code{mode = "crayon"}) and
+\verb{theme = "light}. Default to \code{getOption("tabxplor.color_html_24_bit")}.}
 
 \item{custom_palette}{Possibility to provide a custom color styles, as a character
 vector of 10 html color codes (the five first for over-represented numbers,
@@ -286,12 +296,13 @@ the five last for under-represented ones). The result is saved to
 functions. Set to \code{"color_code"} to return html color codes.}
 
 \item{pct_breaks}{If they are to be changed, the breaks used for percentages.
-Default to \code{c(0.05, 0.1, 0.2, 0.3)} : first color used when the pct of a cell
+Default to \code{c(0.05, 0.1, 0.2, 2, 0.3)} : first color used when the pct of a cell
 is +5\% superior to the pct of the related total ; second color used when
-it is +10\% superior ; third +20\% superior ; fourth +30\% superior.
-The opposite for cells inferior to the total.
+it is +10\% superior ; third +20\% superior ; fourth *2 superior ;
+fifth +30\% superior. When > 1, it does not take differences but ratio.
+The opposite for cells inferior to the total (without the *2 rule).
 With \code{color = "after_ci"}, the first break is subtracted from all breaks
-(default becomes \code{c(0, 0.05, 0.15, 0.25)} : +0\%, +5\%, +15\%, +25\%).}
+(default becomes \code{c(0, 0.05, 0.15, 2, 0.25)} : +0\%, +5\%, +15\%, *2, +25\%).}
 
 \item{mean_breaks}{If they are to be changed, the breaks used for means.
 Default to \code{c(1.15, 1.5, 2, 4)} : first color used when the mean of a cell

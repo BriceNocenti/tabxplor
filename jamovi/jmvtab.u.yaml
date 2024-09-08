@@ -406,6 +406,30 @@ children:
         stretchFactor: 1
         children:
           - type: Label
+            label: add_n = <i>(see unweighted counts)</i>
+            children:
+              - type: CheckBox
+                name: add_n
+      - type: LayoutBox
+        margin: none
+        cell:
+          column: 1
+          row: 3
+        stretchFactor: 1
+        children:
+          - type: Label
+            label: add_pct = <i>(see frequencies of 100% total)</i>
+            children:
+              - type: CheckBox
+                name: add_pct
+      - type: LayoutBox
+        margin: none
+        cell:
+          column: 0
+          row: 4
+        stretchFactor: 1
+        children:
+          - type: Label
             label: subtext = <i>(text to print below the table)</i>
             children:
               - type: TextBox
@@ -415,7 +439,7 @@ children:
         margin: none
         cell:
           column: 1
-          row: 3
+          row: 4
         stretchFactor: 1
         children:
           - type: Label

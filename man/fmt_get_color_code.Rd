@@ -15,8 +15,9 @@ fmt_get_color_code(x, type = "text", theme = "light", html_24_bit = NULL)
 \item{theme}{For \code{set_color_style} and \code{get_color_style}, is your console
 or html table background \code{"light"} or \code{"dark"} ? Default to RStudio theme.}
 
-\item{html_24_bit}{Should specific 24bits colors palettes be used for html tables ?
-With light themes only. Default to \code{getOption("tabxplor.color_html_24_bit")}}
+\item{html_24_bit}{Use 24bits colors palettes for html tables : set to \code{"green_red"}
+or \code{"blue_red"}. Only with \code{mode = "color_code"} (not \code{mode = "crayon"}) and
+\verb{theme = "light}. Default to \code{getOption("tabxplor.color_html_24_bit")}.}
 }
 \value{
 A character vector with html color codes, of the length of the initial vector.

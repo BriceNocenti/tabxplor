@@ -46,6 +46,12 @@
             "A weight variable, of class numeric. Leave empty for unweighted results.": [
                 ""
             ],
+            "add_n = <i>(see unweighted counts)</i>": [
+                "add_n = <i>(voir effectifs non pondérés)</i>"
+            ],
+            "add_pct = <i>(see frequencies of 100% total)</i>": [
+                "add_pct = <i>(voir freq. des totaux à 100%)</i>"
+            ],
             "after_ci <i>(diff, after substracting margin of error)</i>": [
                 "after_ci <i>(diff, après soustraction marge d'erreur)</i>"
             ],
@@ -65,6 +71,9 @@
                 "auto/tot/<i>{num_ligne}</i>/<i>{nom_ligne}</i>"
             ],
             "By default confidence interval are printed with the pct+moe display. Set to \"ci\" to use the interval display instead.": [
+                ""
+            ],
+            "By default, clean levels names, by removing prefix numbers like \"1-\", and text in parenthesis. Set to `FALSE` to avoid this behaviour.": [
                 ""
             ],
             "By default, colnames are wrapped when larger than 12 characters.": [
@@ -147,6 +156,9 @@
             ],
             "first/tot/<i>{col_number}</i>": [
                 "first/tot/<i>{num_colonne}</i>"
+            ],
+            "For `pct = \"row\"` or `pct = \"col\"`, set to `FALSE` not to add another column or row with unweighted counts (`n`).": [
+                ""
             ],
             "keep": [
                 "keep (conserver NAs)"
@@ -235,10 +247,10 @@
             "row_var": [
                 "row_var"
             ],
-            "Set to code{TRUE} to clean levels names, by removing prefix numbers like \"1-\", and text in parenthesis.": [
+            "Set to code{TRUE} to make a Chi2 and add summary stats. Also useful to color cells based on their contribution to variance.": [
                 ""
             ],
-            "Set to code{TRUE} to make a Chi2 and add summary stats. Also useful to color cells based on their contribution to variance.": [
+            "Set to `TRUE` to add a column with the frequencies of the row variable (for `pct = \"row\"`) or a row with the frequencies of the column variable (for  `pct = \"col\"`)": [
                 ""
             ],
             "subtext = <i>(text to print below the table)</i>": [
@@ -295,12 +307,6 @@
             "Total": [
                 "Total"
             ],
-            "Ensemble": [
-                "Ensemble"
-            ],
-            "Others": [
-                "Autres"
-            ],
             "totaltab = <i>(add a total table)</i>": [
                 "totaltab = <i>(ajouter un tableau Total général)</i>"
             ],
@@ -313,7 +319,7 @@
             "var <i>(variance)</i>": [
                 "var <i>(variance)</i>"
             ],
-            "When set to a positive integer, levels with less count than it will be merged into an \"Others\" level.": [
+            "When set to a positive integer, levels with less count than that will be merged into an \"Others\" level.": [
                 ""
             ],
             "With `pct = \"row\"` or `pct = \"col\"`, calculate and print odds ratios\n (for binary variables) or relative risks ratios (for variables with 3 levels\n or more).\nitemize{\n item code{\"no\"}: by default, no OR are calculated.\n item code{\"OR\"}: print OR (instead of percentages).\n item code{\"OR_pct\"}: print OR, with percentages in bracket.\n}": [

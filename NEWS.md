@@ -1,5 +1,9 @@
 # tabxplor (development version)
 
+## Added : 
+* `kable_tabxplor_style()` : same html table style than `tab_kable()`, but for any data.frame.
+
+
 # tabxplor 1.2.0
 
 ## Added : 

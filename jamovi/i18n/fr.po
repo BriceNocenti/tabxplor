@@ -66,6 +66,14 @@ msgstr ""
 msgid "A weight variable, of class numeric. Leave empty for unweighted results."
 msgstr ""
 
+#: jmvtab/ui[5][4][0].label
+msgid "add_n = <i>(see unweighted counts)</i>"
+msgstr "add_n = <i>(voir effectifs non pondérés)</i>"
+
+#: jmvtab/ui[5][5][0].label
+msgid "add_pct = <i>(see frequencies of 100% total)</i>"
+msgstr "add_pct = <i>(voir freq. des totaux à 100%)</i>"
+
 #: jmvtab/options/color/after_ci.title
 msgid "after_ci <i>(diff, after substracting margin of error)</i>"
 msgstr "after_ci <i>(diff, après soustraction marge d'erreur)</i>"
@@ -96,6 +104,10 @@ msgstr "auto/tot/<i>{num_ligne}</i>/<i>{nom_ligne}</i>"
 
 #: jmvtab/options/ci_print.description.R
 msgid "By default confidence interval are printed with the pct+moe display. Set to \"ci\" to use the interval display instead."
+msgstr ""
+
+#: jmvtab/options/cleannames.description.R
+msgid "By default, clean levels names, by removing prefix numbers like \"1-\", and text in parenthesis. Set to `FALSE` to avoid this behaviour."
 msgstr ""
 
 #: jmvtab/options/wrap_cols.description.R
@@ -188,7 +200,7 @@ msgstr "diff <i>(différences par rapport au total/référence)</i>"
 msgid "diff_ci <i>(differences, only if significant)</i>"
 msgstr "diff_ci <i>(différences, seulement si significatives)</i>"
 
-#: jmvtab/ui[5][5][0].label
+#: jmvtab/ui[5][7][0].label
 msgid "digits = <i>(number of digits)</i>"
 msgstr "digits = <i>(nombre de chiffres après la virgule)</i>"
 
@@ -212,6 +224,10 @@ msgstr "first"
 #: jmvtab/options/ref2.title
 msgid "first/tot/<i>{col_number}</i>"
 msgstr "first/tot/<i>{num_colonne}</i>"
+
+#: jmvtab/options/add_n.description.R
+msgid "For `pct = \"row\"` or `pct = \"col\"`, set to `FALSE` not to add another column or row with unweighted counts (`n`)."
+msgstr ""
 
 #: jmvtab/options/na/keep.title
 msgid "keep"
@@ -335,15 +351,15 @@ msgstr "row (ligne)"
 msgid "row_var"
 msgstr "row_var"
 
-#: jmvtab/options/cleannames.description.R
-msgid "Set to \code{TRUE} to clean levels names, by removing prefix numbers like \"1-\", and text in parenthesis."
-msgstr ""
-
 #: jmvtab/options/chi2.description.R
 msgid "Set to \code{TRUE} to make a Chi2 and add summary stats. Also useful to color cells based on their contribution to variance."
 msgstr ""
 
-#: jmvtab/ui[5][4][0].label
+#: jmvtab/options/add_pct.description.R
+msgid "Set to `TRUE` to add a column with the frequencies of the row variable (for `pct = \"row\"`) or a row with the frequencies of the column variable (for  `pct = \"col\"`)"
+msgstr ""
+
+#: jmvtab/ui[5][6][0].label
 msgid "subtext = <i>(text to print below the table)</i>"
 msgstr "subtext = <i>(texte en dessous du tableau)</i>"
 
@@ -479,14 +495,6 @@ msgstr ""
 msgid "Total"
 msgstr "Total"
 
-#: R\jmvtab.b.R
-msgid "Ensemble"
-msgstr "Ensemble"
-
-#: R\jmvtab.b.R
-msgid "Others"
-msgstr "Autres"
-
 #: jmvtab/options/totaltab.title
 msgid "totaltab = <i>(add a total table)</i>"
 msgstr "totaltab = <i>(ajouter un tableau Total général)</i>"
@@ -504,7 +512,7 @@ msgid "var <i>(variance)</i>"
 msgstr "var <i>(variance)</i>"
 
 #: jmvtab/options/other_if_less_than.description.R
-msgid "When set to a positive integer, levels with less count than it will be merged into an \"Others\" level."
+msgid "When set to a positive integer, levels with less count than that will be merged into an \"Others\" level."
 msgstr ""
 
 #: jmvtab/options/OR.description.R

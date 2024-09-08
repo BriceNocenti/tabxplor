@@ -396,8 +396,9 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #' background. By default it takes \code{getOption("tabxplor.color_style_type")}.
 #' @param theme By default, a white table with black text, Set to \code{"dark"} for a
 #' black table with white text.
-#' @param html_24_bit Should specific 24bits colors palettes be used ? Default to
-#'  \code{getOption("tabxplor.color_html_24_bit")}
+#' @param html_24_bit Use 24bits colors palettes for html tables : set to `"green_red"`
+#' or `"blue_red"`. Only with `mode = "color_code"` (not `mode = "crayon"`) and
+#' `theme = "light`. Default to \code{getOption("tabxplor.color_html_24_bit")}.
 #' @param tooltips By default, html tooltips are used to display additional informations
 #' at mouse hover. Set to \code{FALSE} to discard.
 #' @param popover By default, takes \code{getOption("tabxplor.kable_popover")}. When
@@ -413,8 +414,13 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #'}
 #' @param color_legend Print colors legend below the table ?
 #' You can then use a `css` chunk in rmarkdown to change popovers colors.
-#' @param html_font A string for HTML css font. For example,
-#'  `html_font = '"Arial Narrow", arial, helvetica, sans-serif'`.
+#' @param full_width A TRUE or FALSE variable controlling whether the HTML table
+#' should have the preferable format for full_width. If not specified, a HTML
+#' table will have full width by default but this option will be set to FALSE for
+#' a LaTeX table.
+#' @param html_font A string for HTML css font. By default, it uses
+#'  `'"DejaVu Sans Condensed", "Arial", arial, helvetica, sans-serif'`. Set another
+#'  default by setting `options("tabxplor.kable_html_font" = )`.
 #' @param caption The table caption. For formatting, you need to use a `css`
 #' with `caption{}`in rmarkdown.
 #' @param wrap_rows By default, rownames are wrapped when larger than 30 characters.
@@ -436,9 +442,11 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #' }
 tab_kable <- function(tabs,
                       theme = c("light", "dark"), color_type = NULL, html_24_bit = NULL,
-                      tooltips = TRUE, popover = NULL, color_legend = TRUE, caption = NULL,
-                      html_font = '"Arial", arial, helvetica, sans-serif',
+                      tooltips = TRUE, popover = NULL, color_legend = TRUE,
+                      caption = knitr::opts_current$get("tab.cap"),
+                      html_font = NULL,
                       get_data = FALSE,
+                      full_width = FALSE,
                       wrap_rows = 35, wrap_cols = 15,
                       whitespace_only = TRUE, # unbreakable_spaces = TRUE,
                       ...) {
@@ -448,6 +456,10 @@ tab_kable <- function(tabs,
 
   html_24_bit <-
     if (is.null(html_24_bit)) {getOption("tabxplor.color_html_24_bit")} else {html_24_bit}
+
+  html_font <-
+    if (is.null(html_font)) {getOption("tabxplor.kable_html_font")} else {html_font}
+
 
 
   popover <- if (is.null(popover)) {getOption("tabxplor.kable_popover")} else {popover}
@@ -478,6 +490,7 @@ tab_kable <- function(tabs,
     (color_cols %in% c("", "no") | is.na(color_cols))
   fmt_no_colors  <- names(fmt_no_colors)[fmt_no_colors]
   color_cols     <- which(!color_cols %in% c("", "no") & !is.na(color_cols))
+  type_cols      <- which(!color_cols %in% c("", "no") & !is.na(color_cols))
   fmt_cols <- which(purrr::map_lgl(tabs, is_fmt))
   color_cols_fmt <- names(color_cols)[names(color_cols) %in% names(fmt_cols)]
 
@@ -507,13 +520,21 @@ tab_kable <- function(tabs,
   if (length(color_cols_fmt) != 0) {
     color_selection[color_cols_fmt] <- purrr::map(tabs[color_cols], fmt_color_selection)
 
-    color_styles <- purrr::map(color_selection[color_cols_fmt],
-                               ~ select_in_color_style(length(.)))
+    color_styles <- purrr::pmap(list(color_selection[color_cols_fmt],
+                                     get_color(tabs)[color_cols_fmt],
+                                     get_type(tabs)[color_cols_fmt]
+    ),
+    ~ select_in_color_style(
+      names(..1),
+      pct_diff =  ..2 %in% c("diff", "diff_ci", "after_ci") &
+        !..3 %in% c("n", "mean")
+    ))
 
-    color_styles <- purrr::map(color_styles, ~ get_color_style(mode = "color_code",
-                                                               type = color_type[1],
-                                                               theme = theme[1],
-                                                               html_24_bit = html_24_bit[1])[.])
+    color_styles <- purrr::map(color_styles,
+                               ~ get_color_style(mode = "color_code",
+                                                 type = color_type[1],
+                                                 theme = theme[1],
+                                                 html_24_bit = html_24_bit[1])[.])
 
     color_selection[color_cols_fmt] <- color_selection[color_cols_fmt] %>%
       purrr::map2(color_styles, ~ purrr::set_names(.x, .y)) %>%
@@ -612,7 +633,7 @@ tab_kable <- function(tabs,
     out <- out %>% kableExtra::kable_classic(
       lightable_options = "hover", # "striped", ?
       #bootstrap_options = c("hover", "condensed", "responsive", "bordered"), #"striped",
-      full_width = FALSE,
+      full_width = full_width,
       html_font = html_font, # "DejaVu Sans Condensed", # row_label_position
       #fixed_thead = TRUE,
       ...
@@ -622,7 +643,7 @@ tab_kable <- function(tabs,
     out <- out %>% kableExtra::kable_material_dark(
       lightable_options = "hover",
       bootstrap_options = c("hover", "condensed", "responsive"), #"striped",
-      full_width = FALSE,
+      full_width = full_width,
       html_font = html_font, # "DejaVu Sans Condensed", # row_label_position
       #fixed_thead = TRUE,
       ...
@@ -658,22 +679,191 @@ out <- out %>%
   kableExtra::row_spec(1:nrow(tabs), extra_css = "vertical-align: top; line-height: 0.85;padding: 3px;")
 
 
-# Add custom css "inst/tab.css"
-out <- paste0(
+if (getOption("tabxplor.always_add_css_in_tab_kable") | interactive()) {
+  out <- paste0(
 
-  htmltools::includeCSS(system.file("tab.css", package = "tabxplor")),
-  "\n",
-  # "<script type=\"text/x-mathjax-config\">MathJax.Hub.Config({tex2jax: {inlineMath: [[\"$\",\"$\"]]}})</script>",
-  # "<script async src=\"https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML\"></script>",
-  # "\n",
-  as.character(out) #|>
+    htmltools::includeCSS(system.file("tab.css", package = "tabxplor")),
+    "\n",
+    # "<script type=\"text/x-mathjax-config\">MathJax.Hub.Config({tex2jax: {inlineMath: [[\"$\",\"$\"]]}})</script>",
+    # "<script async src=\"https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML\"></script>",
+    # "\n",
+    as.character(out) #|>
     #stringr::str_replace_all("<td style", '<td class = "align-top"; style')
-) |>
-  vctrs::vec_restore(out)
+  ) |>
+    vctrs::vec_restore(out)
+}
 
 
 out
 }
+
+
+
+#' Print a tabxplor table in html
+#'
+#' @param tabs A data.frame.
+#' @param theme By default, a white table with black text, Set to \code{"dark"} for a
+#' black table with white text.
+#' @param total_in_bold Should rows and cols with "Total" string be set in bold ?
+#' @param all_column_borders Put a vertical border around each column ?
+#' @param html_font A string for HTML css font. By default, it uses
+#'  `'"DejaVu Sans Condensed", "Arial", arial, helvetica, sans-serif'`. Set another
+#'  default by setting `options("tabxplor.kable_html_font" = )`.
+#' @param caption The table caption. For formatting, you need to use a `css`
+#' with `caption{}`in rmarkdown.
+#' @param full_width A TRUE or FALSE variable controlling whether the HTML table
+#' should have the preferable format for full_width. If not specified, a HTML
+#' table will have full width by default but this option will be set to FALSE for
+#' a LaTeX table.
+#' @param wrap_rows By default, rownames are wrapped when larger than 30 characters.
+#' @param wrap_cols By default, colnames are wrapped when larger than 12 characters.
+#' @param whitespace_only Set to `FALSE` to wrap also on non whitespace characters.
+# @param unbreakable_spaces Set to `FALSE` to keep normal spaces in text (auto-break).
+#' @param subtext A character vector to print rows of legend under the table.
+#' @param ... Other arguments to pass to \code{\link[kableExtra:kable_styling]{kableExtra::kable_styling}}.
+
+
+#' @return A html table (opened in the viewer in RStudio). Differences from totals,
+#' confidence intervals, contribution to variance, and unweighted counts,
+#' are available in an html tooltip at cells hover.
+#' @export
+#'
+#' @examples
+#' \donttest{
+#' tabs <- tibble::tibble(nm      = c("First", "Second", "Total"),
+#'                        column1 = c(1, 2, 3),
+#'                        column2 = c(4, 5, 6)                    )
+#' kable_tabxplor_style(tabs)
+#' }
+kable_tabxplor_style <- function(tabs,
+                                 caption = knitr::opts_current$get("tab.cap"),
+                                 theme = c("light", "dark"),
+                                 total_in_bold = TRUE, all_column_borders = FALSE,
+                                 html_font = NULL,
+                                 full_width = FALSE,
+                                 wrap_rows = 35, wrap_cols = 15,
+                                 whitespace_only = TRUE, # unbreakable_spaces = TRUE,
+                                 subtext = "",
+                                 ...) {
+
+  html_font <-
+    if (is.null(html_font)) {getOption("tabxplor.kable_html_font")} else {html_font}
+
+
+  tabs <- tabs %>% dplyr::ungroup()
+
+  tabs <- tabs |>
+    tab_wrap_text(wrap_rows = wrap_rows,
+                  wrap_cols = wrap_cols,
+                  exdent = 2,
+                  whitespace_only = whitespace_only,
+                  unbreakable_spaces = TRUE,
+                  brk = "<br>")
+
+  alignement <- tabs |>
+    purrr::map_chr(
+      ~ dplyr::if_else(condition = is_fmt(.) | is.numeric(.),
+                       true      = "r",
+                       false     = "l")
+    )
+
+  out <- tabs |> knitr::kable(escape = FALSE, format = "html", align = alignement,
+                              #table.attr = "style=\"border-top: 0; border-bottom: 0; cellspacing: -10pt\"",
+                              caption = caption)
+  # table.attr changes css style of table_classic (no upper and lower big lines)
+
+  if (theme[1] == "light") {
+    out <- out %>% kableExtra::kable_classic(
+      lightable_options = "hover", # "striped", ?
+      #bootstrap_options = c("hover", "condensed", "responsive", "bordered"), #"striped",
+      full_width = full_width,
+      html_font = html_font, # "DejaVu Sans Condensed", # row_label_position
+      #fixed_thead = TRUE,
+      ...
+    )
+
+  } else {
+    out <- out %>% kableExtra::kable_material_dark(
+      lightable_options = "hover",
+      bootstrap_options = c("hover", "condensed", "responsive"), #"striped",
+      full_width = full_width,
+      html_font = html_font, # "DejaVu Sans Condensed", # row_label_position
+      #fixed_thead = TRUE,
+      ...
+    )
+
+  }
+
+  if (length(subtext) != 0) {
+    if (subtext != "") out <- out %>% kableExtra::add_footnote(subtext, notation = "none", escape = FALSE)
+  }
+
+  totcols <- which(stringr::str_detect(names(tabs), "^Total|^Ensemble"))
+  totrows <- which(stringr::str_detect(tabs[[1]], "^Total|^Ensemble"))
+
+  out <- out %>%
+    kableExtra::row_spec(
+      0, bold = TRUE, # color = "black"
+      extra_css = "border-top: 0px solid ; border-bottom: 1px solid ;font-size: 90%;vertical-align: bottom;line-height: 0.9;padding: 3px;text-align: center;" #
+    ) %>%
+    #kableExtra::row_spec(refs2, bold = TRUE) %>%
+    kableExtra::row_spec(
+      nrow(tabs), extra_css = "border-bottom: 1px solid ;"
+    ) %>%
+     #kableExtra::column_spec(fmt_cols, extra_css = "white-space: nowrap;") %>%
+    #kableExtra::column_spec(unique(c(new_col_var, ncol(tabs))), border_right = TRUE) %>%
+    #kableExtra::column_spec(other_cols, border_left = TRUE) %>%
+    kableExtra::column_spec(1, width_min = 20, border_left = TRUE, border_right = TRUE) %>%
+    kableExtra::column_spec(ncol(tabs), border_right = TRUE) %>%
+     #kableExtra::row_spec(new_group, extra_css = "border-bottom: 1px solid;") %>%
+    #kableExtra::row_spec(nrow(tabs), extra_css = "border-bottom: 1px solid;") |>
+    kableExtra::row_spec(
+      1:nrow(tabs),
+      extra_css = "vertical-align: top; line-height: 0.85;padding: 3px;white-space: nowrap;"
+    )
+
+  if (total_in_bold) {
+    out <- out |>
+      kableExtra::row_spec(
+        totrows, bold = TRUE,
+        extra_css = "border-top: 1px solid ; border-bottom: 1px solid ;"
+      ) |>
+      kableExtra::column_spec(totcols, bold = TRUE, width_min = 11, border_left = TRUE)
+
+    } else {
+      out <- out |>
+        kableExtra::row_spec(
+          totrows,
+          extra_css = "border-top: 1px solid ; border-bottom: 1px solid ;"
+        ) |>
+        kableExtra::column_spec(totcols, width_min = 11, border_left = TRUE)
+    }
+
+  if (all_column_borders) {
+    out <- out |> kableExtra::column_spec(1:ncol(tabs), border_left = TRUE)
+  }
+
+
+  if (getOption("tabxplor.always_add_css_in_tab_kable") | interactive()) {
+    out <- paste0(
+
+      htmltools::includeCSS(system.file("tab.css", package = "tabxplor")),
+      "\n",
+      # "<script type=\"text/x-mathjax-config\">MathJax.Hub.Config({tex2jax: {inlineMath: [[\"$\",\"$\"]]}})</script>",
+      # "<script async src=\"https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML\"></script>",
+      # "\n",
+      as.character(out) #|>
+      #stringr::str_replace_all("<td style", '<td class = "align-top"; style')
+    ) |>
+      vctrs::vec_restore(out)
+  }
+
+
+  out
+}
+
+
+
 
 
 
@@ -686,8 +876,9 @@ out
 #' background. By default it takes \code{getOption("tabxplor.color_style_type")}.
 #' @param theme By default, a white table with black text, Set to \code{"dark"} for a
 #' black table with white text.
-#' @param html_24_bit Should specific 24bits colors palettes be used ? Default to
-#'  \code{getOption("tabxplor.color_html_24_bit")}
+#' @param html_24_bit Use 24bits colors palettes for html tables : set to `"green_red"`
+#' or `"blue_red"`. Only with `mode = "color_code"` (not `mode = "crayon"`) and
+#' `theme = "light`. Default to \code{getOption("tabxplor.color_html_24_bit")}.
 #' @param color_legend Print colors legend below the table ?
 #' @param caption The table caption.
 #' @param wrap_rows By default, rownames are wrapped when larger than 30 characters.
@@ -791,13 +982,21 @@ tab_plot <- function(tabs,
   if (length(color_cols_fmt) != 0) {
     color_selection[color_cols_fmt] <- purrr::map(tabs[color_cols], fmt_color_selection)
 
-    color_styles <- purrr::map(color_selection[color_cols_fmt],
-                               ~ select_in_color_style(length(.)))
+    color_styles <- purrr::pmap(list(color_selection[color_cols_fmt],
+                                     get_color(tabs)[color_cols_fmt],
+                                     get_type(tabs)[color_cols_fmt]
+    ),
+    ~ select_in_color_style(
+      names(..1),
+      pct_diff =  ..2 %in% c("diff", "diff_ci", "after_ci") &
+        !..3 %in% c("n", "mean")
+    ))
 
-    color_styles <- purrr::map(color_styles, ~ get_color_style(mode = "color_code",
-                                                               type = color_type[1],
-                                                               theme = theme[1],
-                                                               html_24_bit = html_24_bit[1])[.])
+    color_styles <- purrr::map(color_styles,
+                               ~ get_color_style(mode = "color_code",
+                                                 type = color_type[1],
+                                                 theme = theme[1],
+                                                 html_24_bit = html_24_bit[1])[.])
 
     color_selection[color_cols_fmt] <- color_selection[color_cols_fmt] %>%
       purrr::map2(color_styles, ~ purrr::set_names(.x, .y)) %>%
@@ -1274,8 +1473,9 @@ tab_kable_print_tooltip <- function(x, popover = FALSE) {
     ref & any(ok_diff)       ~ "diff: ref",
     ok_diff & type == "mean" ~ paste0("diff: ", stringi::stri_unescape_unicode("\\u00d7"), #multiplication sign
                                       format(set_display(x, "diff")) ),
-    ok_diff & diff >= 0      ~ paste0("diff: ", "+", format(set_display(x, "diff")) ),
-    ok_diff & diff < 0       ~ paste0("diff: ",      format(set_display(x, "diff")) ),
+    ok_diff                  ~ paste0("diff: ",      format(set_display(x, "diff")) ),
+    # ok_diff & diff >= 0      ~ paste0("diff: ", "+", format(set_display(x, "diff")) ),
+    # ok_diff & diff < 0       ~ paste0("diff: ",      format(set_display(x, "diff")) ),
     TRUE                     ~ ""
   )
 
@@ -2208,33 +2408,41 @@ vec_cast.data.frame.tabxplor_grouped_tab <- function(x, to, ...) {
 
 #' @keywords internal
 color_style_text_dark <-
-  c(pos1 = rgb(4, 4, 1, maxColorValue = 5),
-    pos2 = rgb(4, 5, 1, maxColorValue = 5),
-    pos3 = rgb(3, 5, 1, maxColorValue = 5),
-    pos4 = rgb(1, 5, 1, maxColorValue = 5),
-    pos5 = rgb(0, 5, 0, maxColorValue = 5),
+  c(pos1 = "#CCCC33", # rgb(4, 4, 1, maxColorValue = 5),
+    pos2 = "#CCFF33", # rgb(4, 5, 1, maxColorValue = 5),
+    pos3 = "#99FF33", # rgb(3, 5, 1, maxColorValue = 5),
+    pos4 = "#33FF33", # rgb(1, 5, 1, maxColorValue = 5),
+    pos5 = "#00FF00", # rgb(0, 5, 0, maxColorValue = 5),
 
-    neg1 = rgb(4, 3, 2, maxColorValue = 5),
-    neg2 = rgb(5, 3, 1, maxColorValue = 5),
-    neg3 = rgb(5, 2, 1, maxColorValue = 5),
-    neg4 = rgb(5, 1, 0, maxColorValue = 5),
-    neg5 = rgb(5, 0, 0, maxColorValue = 5) ) #%>%
+    neg1 = "#CC9966", # rgb(4, 3, 2, maxColorValue = 5),
+    neg2 = "#FF9933", # rgb(5, 3, 1, maxColorValue = 5),
+    neg3 = "#FF6633", # rgb(5, 2, 1, maxColorValue = 5),
+    neg4 = "#FF3300", # rgb(5, 1, 0, maxColorValue = 5),
+    neg5 = "#FF0000",  # rgb(5, 0, 0, maxColorValue = 5)
+
+    ratio ="#3366FF"  # "#7B1FA2",
+
+  ) # |>
 #purrr::map(~ crayon::make_style(., colors = 256))
 
 #' @keywords internal
 color_style_text_light <-
-  c(pos1 = rgb(2, 4, 5, maxColorValue = 5),
-    pos2 = rgb(1, 5, 5, maxColorValue = 5),
-    pos3 = rgb(0, 4, 5, maxColorValue = 5),
-    pos4 = rgb(0, 2, 5, maxColorValue = 5),
-    pos5 = rgb(0, 0, 5, maxColorValue = 5),
+  c(pos1 = "#66CCFF", # rgb(2, 4, 5, maxColorValue = 5),
+    pos2 = "#33FFFF", # rgb(1, 5, 5, maxColorValue = 5),
+    pos3 = "#00CCFF", # rgb(0, 4, 5, maxColorValue = 5),
+    pos4 = "#0066FF", # rgb(0, 2, 5, maxColorValue = 5),
+    pos5 = "#0000FF", # rgb(0, 0, 5, maxColorValue = 5),
 
-    neg1 = rgb(4, 3, 2, maxColorValue = 5),
-    neg2 = rgb(5, 3, 1, maxColorValue = 5),
-    neg3 = rgb(5, 2, 0, maxColorValue = 5),
-    neg4 = rgb(5, 1, 1, maxColorValue = 5),
-    neg5 = rgb(5, 0, 0, maxColorValue = 5) ) #%>%
-#purrr::map(~ crayon::make_style(., colors = 256))
+    neg1 =  "#CC9966", # rgb(4, 3, 2, maxColorValue = 5),
+    neg2 =  "#FF9933", # rgb(5, 3, 1, maxColorValue = 5),
+    neg3 =  "#FF6600", # rgb(5, 2, 0, maxColorValue = 5),
+    neg4 =  "#FF3333", # rgb(5, 1, 1, maxColorValue = 5),
+    neg5 =  "#FF0000",  # rgb(5, 0, 0, maxColorValue = 5)
+
+    ratio = "#6633CC" # "#6600CC"
+  ) #|>
+    #purrr::map(~ crayon::make_style(., colors = 256))
+
 
 
 # # #install_github("jmw86069/jamba", upgrade = "never")
@@ -2287,7 +2495,15 @@ color_style_text_light_24_blue_red <-
     neg2 = "#ffb300",   #    neg2 = "#ffc400",
     neg3 = "#FF8138",   #    neg3 = "#ff9100",
     neg4 = "#ff3d00",   #    neg4 = "#ff3d00",
-    neg5 = "#cb0000" )  #    neg5 = "#cb0000" )
+    neg5 = "#cb0000",
+
+    ratio = "#673AB7"
+    #   "#8E24AA", "#7B1FA2" "#6A1B9A"
+    # "#673AB7", "#5E35B1", "#512DA8", "#4527A0"
+
+  )  #    neg5 = "#cb0000" )
+
+# pct_ratio_color_style <- c(ratio = "#6A1B9A")
 
 #' @keywords internal
 color_style_text_light_24_green_red <-
@@ -2301,38 +2517,48 @@ color_style_text_light_24_green_red <-
     neg2 = "#ffb300",   #    neg2 = "#ffc400",
     neg3 = "#FF8138",   #    neg3 = "#ff9100",
     neg4 = "#ff3d00",   #    neg4 = "#ff3d00",
-    neg5 = "#cb0000" )  #    neg5 = "#cb0000" )
+    neg5 = "#cb0000",
+
+    ratio ="#1976D2"   # "#7B1FA2",
+
+    )  #    neg5 = "#cb0000" )
 
 #' @keywords internal
-color_style_bg_light <-
-  c(pos1 = rgb(4, 5, 4, maxColorValue = 5), # also change in select_in_color_style()
-    pos2 = rgb(3, 5, 3, maxColorValue = 5),
-    pos3 = rgb(2, 5, 2, maxColorValue = 5),
-    pos4 = rgb(1, 5, 1, maxColorValue = 5),
-    pos5 = rgb(0, 5, 0, maxColorValue = 5),
+color_style_bg_light <- # also change in select_in_color_style()
+  c(pos1 = "#CCFFCC", # rgb(4, 5, 4, maxColorValue = 5),
+    pos2 = "#99FF99", # rgb(3, 5, 3, maxColorValue = 5),
+    pos3 = "#66FF66", # rgb(2, 5, 2, maxColorValue = 5),
+    pos4 = "#33FF33", # rgb(1, 5, 1, maxColorValue = 5),
+    pos5 = "#00FF00", # rgb(0, 5, 0, maxColorValue = 5),
 
-    neg1 = rgb(5, 4, 4, maxColorValue = 5),
-    neg2 = rgb(5, 3, 3, maxColorValue = 5),
-    neg3 = rgb(5, 2, 2, maxColorValue = 5),
-    neg4 = rgb(5, 1, 1, maxColorValue = 5),
-    neg5 = rgb(5, 0, 0, maxColorValue = 5) ) #%>%
+    neg1 = "#FFCCCC", # rgb(5, 4, 4, maxColorValue = 5),
+    neg2 = "#FF9999", # rgb(5, 3, 3, maxColorValue = 5),
+    neg3 = "#FF6666", # rgb(5, 2, 2, maxColorValue = 5),
+    neg4 = "#FF3333", # rgb(5, 1, 1, maxColorValue = 5),
+    neg5 = "#FF0000",  # rgb(5, 0, 0, maxColorValue = 5)
+
+    ratio ="#6699FF" # rgb(3, 0, 5, maxColorValue = 5) #  "#9900FF" "#6600FF", "#6600CC"
+
+    ) #%>%
 #purrr::map(~ crayon::make_style(., bg = TRUE, colors = 256))
 
 #' @keywords internal
-color_style_bg_dark <-
-  c(pos1 = rgb(0, 0, 1, maxColorValue = 5), # also change in select_in_color_style()
-    pos2 = rgb(0, 0, 2, maxColorValue = 5),
-    pos3 = rgb(0, 0, 3, maxColorValue = 5),
-    pos4 = rgb(0, 0, 4, maxColorValue = 5),
-    pos5 = rgb(0, 0, 5, maxColorValue = 5),
+color_style_bg_dark <- # also change in select_in_color_style()
+  c(pos1 = "#000033", #rgb(0, 0, 1, maxColorValue = 5),
+    pos2 = "#000066", #rgb(0, 0, 2, maxColorValue = 5),
+    pos3 = "#000099", #rgb(0, 0, 3, maxColorValue = 5),
+    pos4 = "#0000CC", #rgb(0, 0, 4, maxColorValue = 5),
+    pos5 = "#0000FF", #rgb(0, 0, 5, maxColorValue = 5),
 
-    neg1 = rgb(1, 0, 0, maxColorValue = 5),
-    neg2 = rgb(2, 0, 0, maxColorValue = 5),
-    neg3 = rgb(3, 0, 0, maxColorValue = 5),
-    neg4 = rgb(4, 0, 0, maxColorValue = 5),
-    neg5 = rgb(5, 0, 0, maxColorValue = 5) ) #%>%
+    neg1 = "#330000", #rgb(1, 0, 0, maxColorValue = 5),
+    neg2 = "#660000", #rgb(2, 0, 0, maxColorValue = 5),
+    neg3 = "#990000", #rgb(3, 0, 0, maxColorValue = 5),
+    neg4 = "#CC0000", #rgb(4, 0, 0, maxColorValue = 5),
+    neg5 = "#FF0000", #rgb(5, 0, 0, maxColorValue = 5)
+
+    ratio ="#6600CC"  # "#7B1FA2",
+    ) #%>%
 #purrr::map(~ crayon::make_style(., bg = TRUE, colors = 256))
-
 
 
 
@@ -2342,8 +2568,9 @@ color_style_bg_dark <-
 #'  \code{"text"} to color the text, \code{"bg"} to color the background.
 #' @param theme For \code{set_color_style} and \code{get_color_style}, is your console
 #' or html table background \code{"light"} or \code{"dark"} ? Default to RStudio theme.
-#' @param html_24_bit Should specific 24bits colors palettes be used for html tables ?
-#' With light themes only. Default to \code{getOption("tabxplor.color_html_24_bit")}
+#' @param html_24_bit Use 24bits colors palettes for html tables : set to `"green_red"`
+#' or `"blue_red"`. Only with `mode = "color_code"` (not `mode = "crayon"`) and
+#' `theme = "light`. Default to \code{getOption("tabxplor.color_html_24_bit")}.
 #' @param custom_palette Possibility to provide a custom color styles, as a character
 #' vector of 10 html color codes (the five first for over-represented numbers,
 #' the five last for under-represented ones). The result is saved to
@@ -2376,11 +2603,11 @@ set_color_style <- function(type = c("text", "bg"),
 
   if (length(custom_palette) != 0) {
     if (length(custom_palette) != 10 | !is.character(custom_palette)) stop(
-      "custom_palette should be a character vector of length 10"
+      "custom_palette should be a character vector of length 11"
     )
     options("tabxplor.color_style" = purrr::set_names(
       custom_palette,
-      c("pos1","pos2","pos3","pos4","pos5","neg1","neg2","neg3","neg4","neg5")
+      c("pos1","pos2","pos3","pos4","pos5", "neg1","neg2","neg3","neg4","neg5", "ratio")
     ))
     return(invisible(custom_palette))
   } else {
@@ -2470,12 +2697,13 @@ get_color_style <- function(mode = c("crayon", "color_code"),
 #' given, as a vector of positive doubles, with length between 1 and 5.
 #' Breaks for aversions/under-representations (in orange/red) will simply be the opposite.
 #' @param pct_breaks If they are to be changed, the breaks used for percentages.
-#' Default to \code{c(0.05, 0.1, 0.2, 0.3)} : first color used when the pct of a cell
+#' Default to \code{c(0.05, 0.1, 0.2, 2, 0.3)} : first color used when the pct of a cell
 #' is +5% superior to the pct of the related total ; second color used when
-#' it is +10% superior ; third +20% superior ; fourth +30% superior.
-#' The opposite for cells inferior to the total.
+#' it is +10% superior ; third +20% superior ; fourth *2 superior ;
+#' fifth +30% superior. When > 1, it does not take differences but ratio.
+#' The opposite for cells inferior to the total (without the *2 rule).
 #' With \code{color = "after_ci"}, the first break is subtracted from all breaks
-#' (default becomes \code{c(0, 0.05, 0.15, 0.25)} : +0%, +5%, +15%, +25%).
+#' (default becomes \code{c(0, 0.05, 0.15, 2, 0.25)} : +0%, +5%, +15%, *2, +25%).
 #' @param mean_breaks If they are to be changed, the breaks used for means.
 #' Default to \code{c(1.15, 1.5, 2, 4)} : first color used when the mean of a cell
 #' is superior to 1.15 times the mean of the related total row ; second color
@@ -2503,73 +2731,122 @@ set_color_breaks <- function(pct_breaks, mean_breaks, contrib_breaks) {
   #   mean_breaks = c(1.15, 1.5, 2, 4),
   #   contrib_breaks = c(1, 2, 5, 10)
 
-  if (missing(pct_breaks) | missing(mean_breaks) | missing(contrib_breaks)) {
+  if (missing(pct_breaks) | missing(mean_breaks) | missing(contrib_breaks)   ) {
     former_breaks <- getOption("tabxplor.color_breaks")
   }
 
   if (!missing(pct_breaks)) {
     stopifnot(is.numeric(pct_breaks)     ,
               length(pct_breaks)     <= 5,
+              sum(pct_breaks > 1)    <= 1,         # not several *2 rule
               all(pct_breaks         >= 0))
-    pct_ci_breaks   <- pct_breaks - pct_breaks[1]
-    pct_brksup      <- c(pct_breaks   [2:length(pct_breaks)    ], Inf)
-    pct_brksup      <- pct_brksup     %>% c(., -.)
-    pct_breaks      <- pct_breaks     %>% c(., -.)
 
-    pct_ci_brksup   <- c(pct_ci_breaks[2:length(pct_ci_breaks) ], Inf)
-    pct_ci_brksup   <- pct_ci_brksup  %>% c(., -.)
-    pct_ci_breaks   <- pct_ci_breaks  %>% c(., -.)
+    pct_ratio_breaks <- pct_breaks[pct_breaks > 1] # *2 rule
+    # if (length(pct_ratio_breaks) > 0) {
+    #   pct_ratio_breaks <- c(
+    #     dplyr::if_else(which(pct_breaks > 1) == 1, 0, pct_breaks[which(pct_breaks > 1) -1 ] ),
+    #     pct_breaks[pct_breaks > 1]
+    #   )
+    #
+    #   pct_ratio_brksup <- c(
+    #     pct_breaks[pct_breaks > 1],
+    #     dplyr::if_else(which(pct_breaks > 1) == length(pct_breaks),
+    #                    true  = Inf,
+    #                    false = pct_breaks[which(pct_breaks > 1) + 1 ] )
+    #   )
+    #
+    #   pct_breaks       <- pct_breaks[pct_breaks <= 1]
+    #
+    # } else {
+    #   pct_ratio_breaks <- NA_real_
+    #   pct_ratio_brksup <- NA_real_
+    # }
+
+    pct_ci_breaks   <- pct_breaks - dplyr::if_else(pct_breaks > 1,
+                                                   true  = 0,
+                                                   false = pct_breaks[1])
+    #pct_brksup      <- c(pct_breaks[2:length(pct_breaks)    ], Inf)
+    #pct_brksup      <- pct_brksup     %>% c(., -.[. <= 1 | . == Inf])
+    pct_breaks      <- pct_breaks     %>% c(., -.[. <= 1 | . == Inf])
+
+    #pct_ci_brksup   <- c(pct_ci_breaks[2:length(pct_ci_breaks) ], Inf)
+    #pct_ci_brksup   <- pct_ci_brksup  %>% c(., -.[. <= 1 | . == Inf])
+    pct_ci_breaks   <- pct_ci_breaks  %>% c(., -.[. <= 1 | . == Inf])
+
 
   } else {
     pct_breaks      <- former_breaks$pct_breaks
     pct_brksup      <- former_breaks$pct_brksup
     pct_ci_breaks   <- former_breaks$pct_ci_breaks
     pct_ci_brksup   <- former_breaks$pct_ci_brksup
+    # pct_ratio_breaks<- former_breaks$pct_ratio_breaks
+    # pct_ratio_brksup<- former_breaks$pct_ratio_brksup
   }
+
+  # if (!missing(pct_ratio_breaks)) {
+  #   stopifnot(is.numeric(pct_ratio_breaks)     ,
+  #             length(pct_ratio_breaks)     <= 1,
+  #             all(pct_ratio_breaks         >= 0))
+  #   pct_ratio_brksup      <- c(pct_ratio_breaks, Inf)
+  #   pct_ratio_breaks      <- c(0, pct_ratio_breaks)
+  #
+  #   # pct_ratio_ci_brksup   <- c(pct_ratio_ci_breaks[2:length(pct_ratio_ci_breaks) ], Inf)
+  #   # pct_ratio_ci_brksup   <- pct_ratio_ci_brksup  %>% c(., -.)
+  #   # pct_ratio_ci_breaks   <- pct_ratio_ci_breaks  %>% c(., -.)
+  #
+  # } else {
+  #   pct_ratio_breaks      <- former_breaks$pct_ratio_breaks
+  #   pct_ratio_brksup      <- former_breaks$pct_ratio_brksup
+  #   # pct_ratio_ci_breaks   <- former_breaks$pct_ratio_ci_breaks
+  #   # pct_ratio_ci_brksup   <- former_breaks$pct_ratio_ci_brksup
+  # }
 
   if (!missing(mean_breaks)) {
     stopifnot(is.numeric(mean_breaks)    ,
               length(mean_breaks)    <= 5,
               all(mean_breaks        >= 0))
     mean_ci_breaks  <- mean_breaks / mean_breaks[1]
-    mean_brksup     <- c(mean_breaks   [2:length(mean_breaks)   ], Inf)
-    mean_brksup     <- mean_brksup    %>% c(., 1/.)
+    #mean_brksup     <- c(mean_breaks   [2:length(mean_breaks)   ], Inf)
+    #mean_brksup     <- mean_brksup    %>% c(., 1/.)
     mean_breaks     <- mean_breaks    %>% c(., 1/.)
 
-    mean_ci_brksup  <- c(mean_ci_breaks[2:length(mean_ci_breaks)], Inf)
-    mean_ci_brksup  <- mean_ci_brksup %>% c(., -.) #then - again
+    #mean_ci_brksup  <- c(mean_ci_breaks[2:length(mean_ci_breaks)], Inf)
+    #mean_ci_brksup  <- mean_ci_brksup %>% c(., -.) #then - again
     mean_ci_breaks  <- mean_ci_breaks %>% c(., -.) #then - again
 
   } else {
     mean_breaks     <- former_breaks$mean_breaks
-    mean_brksup     <- former_breaks$mean_brksup
+    #mean_brksup     <- former_breaks$mean_brksup
     mean_ci_breaks  <- former_breaks$mean_ci_breaks
-    mean_ci_brksup  <- former_breaks$mean_ci_brksup
+    #mean_ci_brksup  <- former_breaks$mean_ci_brksup
   }
 
   if (!missing(contrib_breaks)) {
     stopifnot(is.numeric(contrib_breaks) ,
               length(contrib_breaks) <= 5,
               all(contrib_breaks     >= 0))
-    contrib_brksup  <- c(contrib_breaks[2:length(contrib_breaks)], Inf)
-    contrib_brksup  <- contrib_brksup %>% c(., -.)
+    #contrib_brksup  <- c(contrib_breaks[2:length(contrib_breaks)], Inf)
+    #contrib_brksup  <- contrib_brksup %>% c(., -.)
     contrib_breaks  <- contrib_breaks %>% c(., -.)
 
   } else {
     contrib_breaks  <- former_breaks$contrib_breaks
-    contrib_brksup  <- former_breaks$contrib_brksup
+    #contrib_brksup  <- former_breaks$contrib_brksup
   }
 
-  tabxplor_color_breaks <- list(pct_breaks     = pct_breaks    ,
-                                pct_brksup     = pct_brksup    ,
-                                pct_ci_breaks  = pct_ci_breaks ,
-                                pct_ci_brksup  = pct_ci_brksup ,
-                                mean_breaks    = mean_breaks   ,
-                                mean_brksup    = mean_brksup   ,
-                                mean_ci_breaks = mean_ci_breaks,
-                                mean_ci_brksup = mean_ci_brksup,
-                                contrib_breaks = contrib_breaks,
-                                contrib_brksup = contrib_brksup )
+  tabxplor_color_breaks <- list(pct_breaks       = pct_breaks      ,
+                                #pct_brksup       = pct_brksup      ,
+                                pct_ci_breaks    = pct_ci_breaks   ,
+                                #pct_ci_brksup    = pct_ci_brksup   ,
+                                # pct_ratio_breaks = pct_ratio_breaks,
+                                # pct_ratio_brksup = pct_ratio_brksup,
+                                mean_breaks      = mean_breaks     ,
+                                #mean_brksup      = mean_brksup     ,
+                                mean_ci_breaks   = mean_ci_breaks  ,
+                                #mean_ci_brksup   = mean_ci_brksup  ,
+                                contrib_breaks   = contrib_breaks  #,
+                                # contrib_brksup   = contrib_brksup
+                                )
 
   options("tabxplor.color_breaks" = tabxplor_color_breaks)
 

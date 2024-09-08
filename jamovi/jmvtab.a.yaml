@@ -447,6 +447,25 @@ options:
           R: >
            The information to display in the table.
 
+    - name: add_n
+      title: "" #
+      type: Bool
+      default: true
+      description:
+          R: >
+           For `pct = "row"` or `pct = "col"`, set to `FALSE` not to add another
+           column or row with unweighted counts (`n`).
+
+    - name: add_pct
+      title: "" #
+      type: Bool
+      default: false
+      description:
+          R: >
+           Set to `TRUE` to add a column with the frequencies of the row
+           variable (for `pct = "row"`) or a row with the frequencies of the column variable
+           (for  `pct = "col"`)
+
     - name: subtext
       title: "" # subtext
       type: String

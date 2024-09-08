@@ -12,9 +12,10 @@ tab_kable(
   tooltips = TRUE,
   popover = NULL,
   color_legend = TRUE,
-  caption = NULL,
-  html_font = "\\"Arial\\", arial, helvetica, sans-serif",
+  caption = knitr::opts_current$get("tab.cap"),
+  html_font = NULL,
   get_data = FALSE,
+  full_width = FALSE,
   wrap_rows = 35,
   wrap_cols = 15,
   whitespace_only = TRUE,
@@ -30,8 +31,9 @@ black table with white text.}
 \item{color_type}{Set to \code{"text"} to color the text, \code{"bg"} to color the
 background. By default it takes \code{getOption("tabxplor.color_style_type")}.}
 
-\item{html_24_bit}{Should specific 24bits colors palettes be used ? Default to
-\code{getOption("tabxplor.color_html_24_bit")}}
+\item{html_24_bit}{Use 24bits colors palettes for html tables : set to \code{"green_red"}
+or \code{"blue_red"}. Only with \code{mode = "color_code"} (not \code{mode = "crayon"}) and
+\verb{theme = "light}. Default to \code{getOption("tabxplor.color_html_24_bit")}.}
 
 \item{tooltips}{By default, html tooltips are used to display additional informations
 at mouse hover. Set to \code{FALSE} to discard.}
@@ -54,10 +56,16 @@ You can then use a \code{css} chunk in rmarkdown to change popovers colors.}
 \item{caption}{The table caption. For formatting, you need to use a \code{css}
 with \verb{caption\{\}}in rmarkdown.}
 
-\item{html_font}{A string for HTML css font. For example,
-\code{html_font = '"Arial Narrow", arial, helvetica, sans-serif'}.}
+\item{html_font}{A string for HTML css font. By default, it uses
+\code{'"DejaVu Sans Condensed", "Arial", arial, helvetica, sans-serif'}. Set another
+default by setting \code{options("tabxplor.kable_html_font" = )}.}
 
 \item{get_data}{Get the transformed data instead of the html table.}
+
+\item{full_width}{A TRUE or FALSE variable controlling whether the HTML table
+should have the preferable format for full_width. If not specified, a HTML
+table will have full width by default but this option will be set to FALSE for
+a LaTeX table.}
 
 \item{wrap_rows}{By default, rownames are wrapped when larger than 30 characters.}
 

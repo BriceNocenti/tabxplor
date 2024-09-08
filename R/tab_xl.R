@@ -225,6 +225,7 @@ tab_xl <-
     neg3 <- colorToStyle(styles["neg3"])
     neg4 <- colorToStyle(styles["neg4"])
     neg5 <- colorToStyle(styles["neg5"])
+    ratio <- colorToStyle(styles["ratio"])
 
     styles <- names(styles) #[select_in_color_style(length(tabxplor_color_breaks[[1]]))]
 
@@ -545,7 +546,6 @@ tab_xl <-
     digits  <- purrr::map2(tabs, fmt_cols, ~ purrr::map(.x[.y], get_digits ))
 
     type  <- purrr::map(tabs, get_type)
-
     color <- purrr::map(tabs, get_color)
 
     color_type <- get_color_type(color, type)
@@ -1060,10 +1060,21 @@ tab_xl <-
 
     conditional_fmt_map <-
       tibble::tibble(sheet, cols = color_cols, rows = color_selections,
+                     color_type = color_type,
                      start, offset) %>%
-      tidyr::unnest(tidyselect::all_of(c("cols", "rows"))) %>%
-      dplyr::mutate(style = purrr::map(.data$rows, ~ select_in_color_style(length(.))),
-                    style = purrr::map(.data$style, ~ styles[.])) %>%
+      tidyr::unnest(tidyselect::all_of(c("cols", "rows", "color_type"))) %>%
+      dplyr::mutate(
+        style = purrr::map2(
+          .data$rows,
+          .data$color_type,
+          ~ select_in_color_style(
+            names(.x),
+            pct_diff = .y %in% c("diff", "diff_ci", "after_ci")
+          )
+        ),
+        style = purrr::map(.data$style, ~ styles[.])
+      ) %>%
+      dplyr::select(-"color_type") |>
       # tibble::add_column(style = list(style)) %>%
       tidyr::unnest(tidyselect::all_of(c("rows", "style"))) %>%
       #tidyr::unnest(.data$rows) %>%
@@ -2056,6 +2067,7 @@ tab_xl_confidential <-
     neg3 <- colorToStyle(styles["neg3"])
     neg4 <- colorToStyle(styles["neg4"])
     neg5 <- colorToStyle(styles["neg5"])
+    ratio<- colorToStyle(styles["ratio"])
 
     styles <- names(styles) #[select_in_color_style(length(tabxplor_color_breaks[[1]]))]
 
@@ -2908,12 +2920,25 @@ tab_xl_confidential <-
         ~ fmt_color_selection(.) %>% purrr::map(which)
       ) )
 
-    conditional_fmt_map <-
+
+      conditional_fmt_map <-
       tibble::tibble(sheet, cols = color_cols, rows = color_selections,
+                     color_type = color_type,
                      start) %>%
-      tidyr::unnest(tidyselect::all_of(c("cols", "rows"))) %>%
-      dplyr::mutate(style = purrr::map(.data$rows, ~ select_in_color_style(length(.))),
-                    style = purrr::map(.data$style, ~ styles[.])) %>%
+      tidyr::unnest(tidyselect::all_of(c("cols", "rows", "color_type"))) %>%
+      dplyr::mutate(
+        style = purrr::map2(
+          .data$rows,
+          .data$color_type,
+          ~ select_in_color_style(
+            names(.x),
+            pct_diff = .y %in% c("diff", "diff_ci", "after_ci")
+          )
+        ),
+
+        style = purrr::map(.data$style, ~ styles[.])
+        ) %>%
+      dplyr::select(-"color_type") |>
       # tibble::add_column(style = list(style)) %>%
       tidyr::unnest(tidyselect::all_of(c("rows", "style"))) %>%
       #tidyr::unnest(.data$rows) %>%
