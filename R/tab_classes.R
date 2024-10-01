@@ -419,7 +419,7 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #' table will have full width by default but this option will be set to FALSE for
 #' a LaTeX table.
 #' @param html_font A string for HTML css font. By default, it uses
-#'  `'"DejaVu Sans Condensed", "Arial", arial, helvetica, sans-serif'`. Set another
+#'  `'"DejaVu Sans", "Arial", arial, helvetica, sans-serif'`. Set another
 #'  default by setting `options("tabxplor.kable_html_font" = )`.
 #' @param caption The table caption. For formatting, you need to use a `css`
 #' with `caption{}`in rmarkdown.
@@ -651,7 +651,12 @@ tab_kable <- function(tabs,
 
   }
 
-refs2 <- tabs[[fmt_cols[1]]] %>% get_reference(mode = "all_totals") %>% which()
+  # # what the fuck ? Needed to make rownames in bold
+  # tot_or_ref <- tabs[[fmt_cols[1]]] %>% get_reference(mode = "all_totals") %>% which()
+  refref <- purrr::map_dfr(tabs[fmt_cols] , ~ get_reference(., mode = "all_totals") )
+  refref <- refref |> dplyr::select(-where(all), -where(~ !any(.)))
+  tot_or_ref <- which(rowSums(refref) == ncol(refref))
+
 
 if (length(subtext) != 0) {
   out <- out %>% kableExtra::add_footnote(subtext, notation = "none", escape = FALSE)
@@ -663,7 +668,7 @@ out <- out %>%
     0, color = text_color, bold = TRUE,
     extra_css = "border-top: 0px solid ; border-bottom: 1px solid ;font-size: 90%;vertical-align: bottom;line-height: 0.9;padding: 3px;text-align: center;" #
   ) %>%
-  kableExtra::row_spec(refs2, bold = TRUE) %>%
+  kableExtra::row_spec(tot_or_ref, bold = TRUE) %>%
   kableExtra::row_spec(
     totrows, #bold = TRUE,
     extra_css = "border-top: 1px solid ; border-bottom: 1px solid ;"
@@ -672,7 +677,7 @@ out <- out %>%
   kableExtra::column_spec(fmt_cols, extra_css = "white-space: nowrap;") %>%
   kableExtra::column_spec(unique(c(new_col_var, ncol(tabs))), border_right = TRUE) %>%
   kableExtra::column_spec(other_cols, border_left = TRUE) %>%
-  kableExtra::column_spec(totcols, bold = TRUE, border_left = TRUE, width_min = 11) %>%
+  kableExtra::column_spec(totcols, border_left = TRUE, width_min = 11) %>% # bold = TRUE
   kableExtra::column_spec(row_var, width_min = 20) %>%
   kableExtra::row_spec(new_group, extra_css = "border-bottom: 1px solid;") %>%
   kableExtra::row_spec(nrow(tabs), extra_css = "border-bottom: 1px solid;") |>
@@ -707,7 +712,7 @@ out
 #' @param total_in_bold Should rows and cols with "Total" string be set in bold ?
 #' @param all_column_borders Put a vertical border around each column ?
 #' @param html_font A string for HTML css font. By default, it uses
-#'  `'"DejaVu Sans Condensed", "Arial", arial, helvetica, sans-serif'`. Set another
+#'  `'"DejaVu Sans", "Arial", arial, helvetica, sans-serif'`. Set another
 #'  default by setting `options("tabxplor.kable_html_font" = )`.
 #' @param caption The table caption. For formatting, you need to use a `css`
 #' with `caption{}`in rmarkdown.
@@ -961,7 +966,19 @@ tab_plot <- function(tabs,
   new_col_var[names(other_cols)] <- names(other_cols)
   new_col_var <- which(new_col_var != dplyr::lead(new_col_var, default = "._at_the_end"))
 
-  refs2 <- tabs[[fmt_cols[1]]] %>% get_reference(mode = "all_totals") %>% which()
+  # ????
+  refref <- purrr::map_dfr(tabs[fmt_cols] , ~ get_reference(., mode = "all_totals") )
+  refref2 <- refref |> dplyr::select(-where(all), -where(~ !any(.)))
+  refs2 <- which(rowSums(refref2) == ncol(refref2))
+  #refs2 <- tabs[[fmt_cols[1]]] %>% get_reference(mode = "all_totals") %>% which()
+  # refs2 <- which(rowSums(refref) == length(fmt_cols))
+
+  refref <- purrr::map_dfr(tabs[fmt_cols] , ~ get_reference(., mode = "all_totals") )
+
+
+
+  refs3 <- refref |> dplyr::select(dplyr::where(all)) |> names()
+
 
   text_color  <- dplyr::if_else(theme[1] == "light", "#000000", "#FFFFFF")
   grey_color  <- dplyr::if_else(theme[1] == "light", "#888888", "#BBBBBB")
@@ -1037,8 +1054,8 @@ tab_plot <- function(tabs,
       dplyr::everything(),
       ~ dplyr::if_else(
         !. %in% c(text_color, grey_color, grey_color2) |
-          dplyr::cur_column() %in% names(totcols) |
-          dplyr::row_number() %in% refs2,
+          #dplyr::cur_column() %in% names(totcols) |
+          dplyr::row_number() %in% refs2 | dplyr::cur_column() %in% refs3,
         true  = "bold",
         false = "plain")
     ))
@@ -1510,7 +1527,10 @@ tab_kable_print_tooltip <- function(x, popover = FALSE) {
 
   out_sd <- dplyr::if_else(
     condition = type == "mean" & !is.na(get_var(x)) & !get_display(x) == "var",
-    true      = paste0("sd: ", format(set_display(set_digits(set_var(x, sqrt(x$var)), x$digits + 1L), "var"))),
+    true      = dplyr::if_else(
+      x$var >= 0,
+      true  = paste0("sd: ", format(set_display(set_digits(set_var(x, sqrt(x$var)), x$digits + 1L), "var"))),
+      false = ""),
     false     = ""
   )
 

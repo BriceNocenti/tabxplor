@@ -33,7 +33,7 @@ black table with white text.}
 \item{all_column_borders}{Put a vertical border around each column ?}
 
 \item{html_font}{A string for HTML css font. By default, it uses
-\code{'"DejaVu Sans Condensed", "Arial", arial, helvetica, sans-serif'}. Set another
+\code{'"DejaVu Sans", "Arial", arial, helvetica, sans-serif'}. Set another
 default by setting \code{options("tabxplor.kable_html_font" = )}.}
 
 \item{full_width}{A TRUE or FALSE variable controlling whether the HTML table

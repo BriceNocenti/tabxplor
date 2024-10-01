@@ -161,9 +161,11 @@ NULL
 #'    \item \code{"auto"}: \code{ci = "diff"} for means and row/col percentages,
 #'      \code{ci = "cell"} for frequencies ("all", "all_tabs").
 #'   }
-#'  By default, for percentages, with \code{ci = "cell"} Wilson's method is used,
+#'  By default, for percentages, with Wilson's method is used,
 #'  and with \code{ci = "diff"} Wald's method along Agresti and Caffo's adjustment.
-#'  Means use classic method. This can be changed in \code{\link{tab_ci}}.
+#'  Means use classic method. This can be changed in \code{\link{tab_many}}. By
+#'  default, with \code{ci = "cell"}, the result is printed in the `[inf;sup]` form.
+#'  Set `options("tabxplor.ci_print" = "moe")` to print `pct +- moe` instead.
 #' @param conf_level The confidence level, as a single numeric between 0 and 1.
 #' Default to 0.95 (95%).
 # @param ci_visible By default, confidence intervals are calculated and used to set
@@ -501,7 +503,10 @@ tab <- function(data, row_var, col_var, tab_vars, wt, sup_cols,
 #'   }
 #'  By default, for percentages, with \code{ci = "cell"} Wilson's method is used,
 #'  and with \code{ci = "diff"} Wald's method along Agresti and Caffo's adjustment.
-#'  Means use classic method. This can be changed in \code{\link{tab_ci}}.
+#'  Means use classic method. This can be changed with \code{method_cell}
+#'  and \code{method_diff}. By default, with \code{ci = "cell"}, the result is printed
+#'  in the `[inf;sup]` form. Set `options("tabxplor.ci_print" = "moe")` to print
+#'  `pct +- moe` instead.
 #' @param conf_level The confidence level, as a single numeric between 0 and 1.
 #' Default to 0.95 (95%).
 # @param ci_visible By default, confidence intervals are calculated and used to set
@@ -1030,7 +1035,7 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
                                             #subtext   = "",
                                             totaltab   = ..2,
                                             totaltab_name = totaltab_name,
-                                            tot        = c( "row", "col"), #totrow vectorised ? ----
+                                            tot        = c( "row", "col"), # vectorise totrow ?
                                             total_names= total_names)) %>%
                     purrr::set_names(col_vars[col_vars_text])
 
@@ -2515,13 +2520,13 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
 
           } else {
             tabs_or[, names(cols) := purrr::map(.SD, ~ NA_real_), .SDcols = names(cols)]
-            remove(refcols, refcols_vector) # test if exists after
+            # remove(refcols, refcols_vector) # test if exists after
           }
 
 
-        } else if (length(refcols) != 0 & !is.na(refcols)) {
-          remove(refcols, refcols_vector) # test if exists after
-        }
+        } #else if (length(refcols) != 0 & !is.na(refcols)) {
+          #remove(refcols, refcols_vector) # test if exists after
+        #}
 
 
 
@@ -2653,14 +2658,20 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
   no_col_vars_cols <- get_col_var(tabs) == "no_col_var" #& pct %in% c("row", "col", "all", "all_tabs")
   if (any(no_col_vars_cols) ) {
     tabs <- tabs |>
-      dplyr::mutate(n = set_display(.data$n, "n") |> set_type("n")) |>
+      dplyr::mutate(n = set_display(.data$n, "n") |> set_type("n") |> as_totcol(FALSE)) |>
       dplyr::relocate("n", .after = tidyselect::last_col())
 
-    tabs <- tabs |> dplyr::rename(tidyselect::any_of(c("pct" = total_names[2]))) # if (total_names[2] == "Total")
+    if (pct %in% c("row", "col", "all", "all_tabs")) {
+      tabs <- tabs |>
+        dplyr::rename(tidyselect::any_of(c("pct" = total_names[2]))) |> # if (total_names[2] == "Total")
+        dplyr::mutate(pct = as_totcol(pct, FALSE))
+         } else {
+      tabs <- tabs |> dplyr::select(-dplyr::where(is_totcol))
+    }
 
     if (length(wt) != 0) tabs <- tabs |>
-      dplyr::mutate(wn = set_display(.data$n, "wn") |> set_type("n")) |>
-      dplyr::relocate("wn", .after = tidyselect::last_col() )
+        dplyr::mutate(wn = set_display(.data$n, "wn") |> set_type("n")) |>
+        dplyr::relocate("wn", .after = tidyselect::last_col() )
   }
 
   # # with no row_var : not needed, it's not the simplest way to get a one var table
@@ -2810,9 +2821,6 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
 #'    \item \code{"auto"}: \code{ci = "diff"} for means and row/col percentages,
 #'      \code{ci = "cell"} for frequencies ("all", "all_tabs").
 #'   }
-#'  By default, for percentages, with \code{ci = "cell"} Wilson's method is used,
-#'  and with \code{ci = "diff"} Wald's method along Agresti and Caffo's adjustment.
-#'  Means use classic method. This can be changed in \code{\link{tab_ci}}.
 #' @param conf_level The confidence level for the confidence intervals,
 #'  as a single numeric between 0 and 1. Default to 0.95 (95%).
 #' @param num Set to \code{TRUE} to obtain a table with normal numeric vectors (not `fmt`).
@@ -3657,7 +3665,9 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
 
 
   tabs_var  <-
-    data.table::setnames(tabs[, stringr::str_detect(names(tabs), "_var$"), with = FALSE],
+    data.table::setnames(tabs[, stringr::str_detect(names(tabs), "_var$") &
+                                names(tabs) != "no_row_var",
+                              with = FALSE],
                          function(.x) stringr::str_remove(.x, "_var$" ))
 
 
@@ -4448,7 +4458,9 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
 #' between a cell and the relative total cell (or the reference cell,
 #'  when `ref` is not `"tot"` in \code{\link{tab_plain}} or \code{\link{tab_num}}).
 #'  By default, "diff" ci are calculated for means and row and col percentages,
-#'  "cell" ci for frequencies ("all", "all_tabs").
+#'  "cell" ci for frequencies ("all", "all_tabs"). By default, with \code{ci = "cell"},
+#'  the result is printed in the `[inf;sup]` form. Set
+#'  `options("tabxplor.ci_print" = "moe")` to print `pct +- moe` instead.
 #' @param comp Comparison level. When \code{tab_vars} are present, should the
 #' contributions to variance be calculated for each subtable/group (by default,
 #'  \code{comp = "tab"}) ? Should they be calculated for the whole table
@@ -4509,7 +4521,16 @@ tab_ci <- function(tabs,
   subtext <- get_subtext(tabs)
   chi2    <- get_chi2(tabs)
 
+  # no_col_var <- get_col_var(tabs) == "no_col_var"
+  # no_col_var <- no_col_var[no_col_var]
+  # tabs <- tabs |> mutate(across(
+  #   all_of(no_col_var),
+  #   as_totcol,
+  #   .names = "{.col}_Total"
+  # ))
+
   get_vars          <- tab_get_vars(tabs)
+
   col_vars_with_all <- rlang::syms(get_vars$col_vars)
   col_vars_no_all   <- col_vars_with_all %>% purrr::discard(. == "all_col_vars")
 
@@ -4775,10 +4796,10 @@ tab_ci <- function(tabs,
       dplyr::mutate(dplyr::across(where(is_fmt), ~ set_comp_all(., comp[1] == "all")))
 
     # Change types for columns where visible = TRUE
-    if (any(visible)) {
+    if (any(visible & ci != "no" )) {
       tabs <-
         dplyr::mutate(tabs, dplyr::across(
-          tidyselect::all_of(names(visible)[visible]),
+          tidyselect::all_of(names(visible)[visible & ci != "no" ]),
           ~ switch(
             ci[dplyr::cur_column()],
             "cell" = set_display(., ifelse(get_type(.) == "mean",
@@ -5446,8 +5467,23 @@ var_contrib <- function(x, tot, calc = c("ctr", "expected_freq", "spread",
 quo_miss_na_null_empty_no <- function(quo) {
   if (rlang::quo_is_missing(quo)) return (TRUE)
   if (rlang::quo_is_null(quo)) return(TRUE)
+  base_quo <- quo
   quo <- rlang::get_expr(quo) %>% as.character()
-  all(is.na(quo) | quo %in% c("", "no"))
+  # message(paste0(quo, collapse = ", "))
+
+  # if (quo[1] %in% c("all_of", "any_of") & exists(quo[2])) {
+  #   if (is.character(rlang::eval_tidy(rlang::sym(quo[2])))) {
+  #     if (all(rlang::eval_tidy(rlang::sym(quo[2])) %in% c("", "no",
+  #                                                         "no_row_var",
+  #                                                         "no_col_var"))) {
+  #       return(TRUE)
+  #     }
+  #   }
+  # }
+
+  all(is.na(quo) | quo %in% c("", "no")) |
+    (quo[1] %in% c("all_of", "any_of") &
+       !is.na(quo[2]) & quo[2] %in% c("", "no", "no_row_var", "no_col_var"))
 }
 
 

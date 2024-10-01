@@ -9,22 +9,29 @@ formats_SAS_to_R(
   name_in,
   name_out,
   open = TRUE,
-  remove_final_f = TRUE,
-  not_if_numeric = TRUE
+  remove_at_end_of_var = "f",
+  not_if_numeric = TRUE,
+  text_aposthophe = "'",
+  path_out
 )
 }
 \arguments{
-\item{path}{The path of the file to be created}
+\item{path}{The path of the file with the sas formats}
 
 \item{name_in}{The name of the unformatted database}
 
-\item{name_out}{The name of the database to be formatted.}
+\item{name_out}{The name of the database to be formatted, if not the same than \code{name_in}.}
 
 \item{open}{Should the file be opened, or just its path printed ?}
 
-\item{remove_final_f}{Remove the final f in variables names in the sas file ?}
+\item{remove_at_end_of_var}{Set to \code{f} or \code{F} the final f in variables names in the sas file.}
 
 \item{not_if_numeric}{Should the code prevent numeric variables to get recoded ?}
+
+\item{text_aposthophe}{How do apostrophes in labels appear ?}
+
+\item{path_out}{The path, name and extension of the output file. In temporary directory
+if not provide.}
 }
 \value{
 A file with R code.

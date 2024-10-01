@@ -24,7 +24,9 @@ intervals. Set to "diff" to calculate the confidence intervals of the difference
 between a cell and the relative total cell (or the reference cell,
 when \code{ref} is not \code{"tot"} in \code{\link{tab_plain}} or \code{\link{tab_num}}).
 By default, "diff" ci are calculated for means and row and col percentages,
-"cell" ci for frequencies ("all", "all_tabs").}
+"cell" ci for frequencies ("all", "all_tabs"). By default, with \code{ci = "cell"},
+the result is printed in the \verb{[inf;sup]} form. Set
+\code{options("tabxplor.ci_print" = "moe")} to print \code{pct +- moe} instead.}
 
 \item{comp}{Comparison level. When \code{tab_vars} are present, should the
 contributions to variance be calculated for each subtable/group (by default,

@@ -166,13 +166,14 @@ It it possible to print confidence intervals for each cell:
 
 ``` r
 tab(forcats::gss_cat, race, marital, pct = "row", ci = "cell")
-#> # A tabxplor tab: 4 × 8
-#>   race   `No answer` `Never married` Separated Divorced Widowed Married  Total
-#>   <fct>       <row%>          <row%>    <row%>   <row%>  <row%>  <row%> <row%>
-#> 1 Other       0%±0.3         32%±2.1    6%±1.1  11%±1.5  4%±0.9 48%±2.2   100%
-#> 2 Black       0%±0.2         42%±1.7    6%±0.9  16%±1.3  8%±1.0 28%±1.6   100%
-#> 3 White       0%±0.1         21%±0.6    3%±0.3  16%±0.6  9%±0.4 51%±0.8   100%
-#> 4 Total       0%             25%        3%      16%      8%     47%       100%
+#> # A tabxplor tab: 4 × 9
+#>   race   `No answer` `Never married` Separated Divorced Widowed  Married  Total
+#>   <fct>       <row%>          <row%>    <row%>   <row%>  <row%>   <row%> <row%>
+#> 1 Other           0%        [30;34]%    [5;7]%  [9;12]%  [3;4]% [45;50]%   100%
+#> 2 Black           0%        [40;43]%    [5;7]% [14;17]%  [7;9]% [26;29]%   100%
+#> 3 White           0%        [21;22]%    [2;3]% [16;17]%      9% [50;51]%   100%
+#> 4 Total           0%             25%        3%      16%      8%      47%   100%
+#> # ℹ 1 more variable: n <n>
 ```
 
 It is also possible to use confidence intervals to enhance colors
@@ -216,7 +217,8 @@ tab(forcats::gss_cat, race, marital, chi2 = TRUE)
 #> chi2 stats      marital
 #> df                   10
 #> variance         0.0464
-#> pvalue               0%
+#> chi2                997
+#> pvalue           <0.01%
 #> count            21 483
 #> 
 #> # A tabxplor tab: 4 × 8
@@ -372,13 +374,14 @@ The simple way to recover the underlying numbers as numeric vectors is
 ``` r
 tabs <- tab(forcats::gss_cat, race, marital, pct = "row")
 tabs |> dplyr::mutate(across(where(is_fmt), get_num))
-#> # A tabxplor tab: 4 × 8
+#> # A tabxplor tab: 4 × 9
 #>   race   `No answer` `Never married` Separated Divorced Widowed Married Total
 #>   <fct>        <dbl>           <dbl>     <dbl>    <dbl>   <dbl>   <dbl> <dbl>
 #> 1 Other     0.00102            0.323    0.0562    0.108  0.0357   0.476     1
 #> 2 Black     0.000639           0.417    0.0626    0.158  0.0837   0.278     1
 #> 3 White     0.000793           0.212    0.0267    0.163  0.0900   0.507     1
 #> 4 Total     0.000791           0.252    0.0346    0.157  0.0841   0.471     1
+#> # ℹ 1 more variable: n <dbl>
 ```
 
 To render character vectors (without colors), use `format`:
@@ -427,11 +430,11 @@ if not calculated) :
 
 ``` r
 vctrs::vec_data(tabs$Married)
-#>       n display digits wn       pct mean         diff ctr var ci rr or
-#> 1   932     pct      0 NA 0.4757529   NA  0.004822432  NA  NA NA NA NA
-#> 2   869     pct      0 NA 0.2777245   NA -0.193205991  NA  NA NA NA NA
-#> 3  8316     pct      0 NA 0.5072278   NA  0.036297310  NA  NA NA NA NA
-#> 4 10117     pct      0 NA 0.4709305   NA  0.000000000  NA  NA NA NA NA
+#>       n display digits wn       pct      mean         diff ctr var ci rr or
+#> 1   932     pct      0 NA 0.4757529 1.0102402  0.004822432  NA  NA NA NA NA
+#> 2   869     pct      0 NA 0.2777245 0.5897357 -0.193205991  NA  NA NA NA NA
+#> 3  8316     pct      0 NA 0.5072278 1.0770757  0.036297310  NA  NA NA NA NA
+#> 4 10117     pct      0 NA 0.4709305 1.0000000  0.000000000  NA  NA NA NA NA
 #>   in_totrow in_tottab in_refrow
 #> 1     FALSE     FALSE     FALSE
 #> 2     FALSE     FALSE     FALSE

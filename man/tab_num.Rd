@@ -90,10 +90,7 @@ contributions to variance be calculated for each subtable/group (by default,
 relative total cell (or relative first cell when \code{ref = "first"}).
 \item \code{"auto"}: \code{ci = "diff"} for means and row/col percentages,
 \code{ci = "cell"} for frequencies ("all", "all_tabs").
-}
-By default, for percentages, with \code{ci = "cell"} Wilson's method is used,
-and with \code{ci = "diff"} Wald's method along Agresti and Caffo's adjustment.
-Means use classic method. This can be changed in \code{\link{tab_ci}}.}
+}}
 
 \item{conf_level}{The confidence level for the confidence intervals,
 as a single numeric between 0 and 1. Default to 0.95 (95\%).}

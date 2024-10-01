@@ -69,7 +69,13 @@ fct_recode_helper <- function(.data, .cols = -where(is.numeric), .data_out_name,
   } else {
     path <- tempfile("", fileext = ".R")
     writeLines(recode$recode, path, useBytes = TRUE)
-    file.show(path)
+
+    if (requireNamespace("rstudioapi", quietly = TRUE)) {
+      rstudioapi::navigateToFile(path)
+    } else {
+      file.show(path)
+    }
+
   }
 
   invisible(recode)
@@ -92,7 +98,7 @@ fct_recode_helper <- function(.data, .cols = -where(is.numeric), .data_out_name,
   options("tabxplor.print" = "console") # options("tabxplor.print" = "kable")
 
   options("tabxplor.kable_html_font" =
-            '"DejaVu Sans Condensed", "Arial", arial, helvetica, sans-serif')
+            '"DejaVu Sans", "Arial", arial, helvetica, sans-serif') # Condensed ?
 
   options("tabxplor.output_kable" = FALSE)
 
@@ -102,7 +108,7 @@ fct_recode_helper <- function(.data, .cols = -where(is.numeric), .data_out_name,
 
   options("tabxplor.kable_popover" = FALSE)
 
-  options("tabxplor.ci_print" = "moe") # or "ci"
+  options("tabxplor.ci_print" = "ci") # or "moe"
 
   options("tabxplor.always_add_css_in_tab_kable" = TRUE)
 
@@ -118,13 +124,56 @@ fct_recode_helper <- function(.data, .cols = -where(is.numeric), .data_out_name,
 
 
 
-#Fonctions and options to work with factors and lists -------------
+#Functions and options to work with factors and lists -------------
 
 #' A regex pattern to clean the names of factors.
 #' @keywords internal
 # @export
 cleannames_condition <- function()
   "^[^- ]+-(?![[:lower:]])|^[^- ]+(?<![[:lower:]])-| *\\(.+\\)"
+
+
+
+
+
+#' Create a score variable from factors
+#'
+#' @param data A data.frame.
+#' @param name The name of the variable to create.
+#' @param vars_list The list of the factors to count
+#' (only the first level is counted, as 1) ; as a character vector.
+#'
+#' @return The data.frame, with a new variable.
+#' @export
+#'
+#' @examples
+#' data <- tibble::tibble(group = factor(c("G1", "G1", "G2", "G2", "G3", "G3")),
+#'                        a = factor(c("Oui", "Oui", "Oui", "Oui", "Non", "Oui")),
+#'                        b = factor(c("Oui", "Non", "Non", "Oui", "Non", "Oui")),
+#'                        c = factor(c("Oui", "Oui", "Non", "Non", "Oui", "Oui")))
+#' data |>
+#'   score_from_lv1("score", vars_list = c("a", "b", "c")) |>
+#'   tab(group, score, digits = 1)
+score_from_lv1 <- function (data, name, vars_list) {
+  name <- rlang::ensym(name)
+  data <- data |> dplyr::mutate(!!rlang::sym(name) := 0L)
+
+  purrr::reduce(
+    vars_list,
+    .init = dplyr::mutate(data, dplyr::across(
+      tidyselect::all_of(vars_list), ~ forcats::fct_na_value_to_level(., "NA"))),
+
+    .f = ~ dplyr::mutate(.x, !!name := dplyr::if_else(
+      condition = !!rlang::sym(.y) == levels(as.factor(!!rlang::sym(.y)))[1],
+      true  = !!name + 1L,
+      false = !!name
+    )
+    )
+  )
+}
+
+
+
 
 #Use fct_relabel instead of pers functions ! -----------------------------------
 #' Clean factor levels.
@@ -516,76 +565,171 @@ where <- function (fn)
   }
 }
 
+
+
+
+
 #' INSEE SAS formats to R : translate code
 #'
-#' @param path The path of the file to be created
+#' @param path The path of the file with the sas formats
 #' @param name_in The name of the unformatted database
-#' @param name_out The name of the database to be formatted.
+#' @param name_out The name of the database to be formatted, if not the same than `name_in`.
 #' @param open Should the file be opened, or just its path printed ?
-#' @param remove_final_f Remove the final f in variables names in the sas file ?
+#' @param remove_at_end_of_var Set to `f` or `F` the final f in variables names in the sas file.
 #' @param not_if_numeric Should the code prevent numeric variables to get recoded ?
+#' @param text_aposthophe How do apostrophes in labels appear ?
+#' @param path_out The path, name and extension of the output file. In temporary directory
+#' if not provide.
 #'
 #' @return A file with R code.
 #' @keywords internal
 #'
 # @examples
-formats_SAS_to_R <- function (path, name_in, name_out, open = TRUE, remove_final_f = TRUE,
-                              not_if_numeric = TRUE) {
+formats_SAS_to_R <- function (path, name_in, name_out, open = TRUE, remove_at_end_of_var = "f",
+                              not_if_numeric = TRUE, text_aposthophe = "'", path_out)  {
   f <- stringi::stri_read_raw(path)
   format <- stringi::stri_enc_detect(f)
   format <- format[[1]]$Encoding[1]
-
   con <- file(path, encoding = format)
-
   f <- readLines(con)
-  f <- f |> stringr::str_remove_all("\t") |> stringr::str_replace_all("'", stringi::stri_unescape_unicode("\\u2019")) |>
-    stringr::str_replace_all("\"", "'")
-  f <- f[stringr::str_detect(f, "value *\\$|=") & ! stringr::str_detect(f, "^proc")]
 
-  f[stringr::str_detect(f, "=")] <- f[stringr::str_detect(f, "=")] |> stringr::str_squish() |>
+  f <- f |>
+    stringr::str_remove_all("\t") |>
+    stringr::str_replace_all(text_aposthophe, stringi::stri_unescape_unicode("\\u2019")) |>
+    stringr::str_replace_all("\"", "'") |>
+    stringr::str_squish()
+
+  f <- f[stringr::str_detect(f, "^value|=") & !stringr::str_detect(f, "^proc")] # "^value *\\$|="
+  f[stringr::str_detect(f, "=")] <- f[stringr::str_detect(f, "=")] |>
+    stringr::str_replace("^([^ ]+) ", "'\\1' ") |>
+    stringr::str_replace("''", "'") |>
     stringr::str_replace("' += +'", "'='") |>
-    stringr::str_replace("'([^']+)'='([^']+)'", "'\\1-\\2' = '\\1',")
+    stringr::str_replace("'([^']+)'='([^']+)'", "'\\1-\\2' = '\\1',") |>
+    stringr::str_remove(";$")
+  f_var <- stringr::str_extract(f[stringr::str_detect(f, "^value")],  "[^ ]+$")
+  if (!is.null(remove_at_end_of_var)) f_var <- stringr::str_remove(f_var, paste0(remove_at_end_of_var, "$"))
 
-  f_var <-  f[stringr::str_detect(f, "value *\\$")] |> stringr::str_extract("[^ ]+$")
-  if (remove_final_f) f_var <- f_var |> stringr::str_remove("f$")
 
   if (not_if_numeric) {
-    f[stringr::str_detect(f, "value *\\$")] <-
-      paste0("if('", f_var, "' %in% names(", name_out,
-             ") & !is.numeric(", name_out, "$", f_var, ")) {\n",
-             name_out, "$", f_var, " <- forcats::fct_recode(", name_in, "$", f_var, ","
-      )
+    f[stringr::str_detect(f, "^value")] <-
+      paste0("if('",
+             f_var, "' %in% names(", name_out, ") & !is.numeric(",
+             name_out, "$", f_var, ")) {\n", name_out, "$", f_var,
+             " <- forcats::fct_recode(", name_in, "$", f_var,
+             ",")
   } else {
-    f[stringr::str_detect(f, "value *\\$")] <-
-      paste0("if('", f_var, "' %in% names(", name_out, ")) {\n",
-             name_out, "$", f_var, " <- forcats::fct_recode(as.factor(", name_in, "$", f_var, "),"
-      )
+    f[stringr::str_detect(f, "^value")] <-
+      paste0("if('",
+             f_var, "' %in% names(", name_out, ")) {\n", name_out,
+             "$", f_var, " <- forcats::fct_recode(as.factor(",
+             name_in, "$", f_var, "),")
   }
-  data <-
-    dplyr::tibble(f = f) |>
-    dplyr::mutate(group = stringr::str_detect(f, "^if\\(") |> as.integer() |> cumsum()) |>
+  data <- dplyr::tibble(f = f) |>  # ???
+    dplyr::mutate(group = cumsum(as.integer(stringr::str_detect(f, "^if\\(")))) |>
     dplyr::group_by(.data$group) |>
-    dplyr::mutate(f = dplyr::if_else(dplyr::row_number() == dplyr::n(), paste0(f, ")\n}\n"), f)) |>
+    dplyr::mutate(f = dplyr::if_else(dplyr::row_number() == dplyr::n(),
+                                     paste0(f, ")\n}\n"),
+                                     f
+    )
+    ) |>
     dplyr::ungroup()
 
-  if (stringr::str_detect(path, "\\\\|/")) {
-    path_out <- stringr::str_c(stringr::str_replace_all(path,
-                                                        "/", "\\\\") %>% stringr::str_remove("[^\\\\]+$"),
-                               "formats_R-", name_out, ".R")
-  } else {
-    path_out <- stringr::str_c("formats_R-", name_out, ".R")
+  data <- data |>
+    dplyr::mutate(var = dplyr::if_else(stringr::str_detect(f, "^if\\("),
+                         true  = stringr::str_extract(f, "^if\\('[^']+'") |>
+                           stringr::str_remove("if\\(") |> stringr::str_remove_all("'"),
+                         false = NA_character_                         )
+    ) |>
+    tidyr::fill(tidyselect::all_of(c("var")))
+
+  no_path_out <- missing(path_out)
+  if (no_path_out) {
+    path_out <- file.path(tempdir(), paste0("formats_R-", name_out, ".R"))
   }
+
+  # if (stringr::str_detect(path, "\\\\|/")) {
+  #
+  #
+  #   path_out <- stringr::str_c(stringr::str_replace_all(path, "/", "\\\\") |>
+  #                                stringr::str_remove("[^\\\\]+$"),
+  #                              "formats_R-", name_out, ".R")
+  # } else {
+  #   path_out <- stringr::str_c("formats_R-", name_out, ".R")
+  # }
 
   writeLines(data$f, path_out, useBytes = TRUE)
+  if (open) {
+    if (requireNamespace("rstudioapi", quietly = TRUE)) {
+      rstudioapi::navigateToFile(path_out)
+    } else {
+      file.show(path_out)
+    }
 
-  if(open) {
-    file.show(path_out)
-  } else {
+  } else if (no_path_out) {
     message(path_out)
   }
-
-  invisible(path_out)
+  invisible(data)
 }
+
+
+
+# formats_SAS_to_R <- function (path, name_in, name_out, open = TRUE, remove_final_f = TRUE,
+#                               not_if_numeric = TRUE) {
+#   f <- stringi::stri_read_raw(path)
+#   format <- stringi::stri_enc_detect(f)
+#   format <- format[[1]]$Encoding[1]
+#
+#   con <- file(path, encoding = format)
+#
+#   f <- readLines(con)
+#   f <- f |> stringr::str_remove_all("\t") |> stringr::str_replace_all("'", stringi::stri_unescape_unicode("\\u2019")) |>
+#     stringr::str_replace_all("\"", "'")
+#   f <- f[stringr::str_detect(f, "value *\\$|=") & ! stringr::str_detect(f, "^proc")]
+#
+#   f[stringr::str_detect(f, "=")] <- f[stringr::str_detect(f, "=")] |> stringr::str_squish() |>
+#     stringr::str_replace("' += +'", "'='") |>
+#     stringr::str_replace("'([^']+)'='([^']+)'", "'\\1-\\2' = '\\1',")
+#
+#   f_var <-  f[stringr::str_detect(f, "value *\\$")] |> stringr::str_extract("[^ ]+$")
+#   if (remove_final_f) f_var <- f_var |> stringr::str_remove("f$")
+#
+#   if (not_if_numeric) {
+#     f[stringr::str_detect(f, "value *\\$")] <-
+#       paste0("if('", f_var, "' %in% names(", name_out,
+#              ") & !is.numeric(", name_out, "$", f_var, ")) {\n",
+#              name_out, "$", f_var, " <- forcats::fct_recode(", name_in, "$", f_var, ","
+#       )
+#   } else {
+#     f[stringr::str_detect(f, "value *\\$")] <-
+#       paste0("if('", f_var, "' %in% names(", name_out, ")) {\n",
+#              name_out, "$", f_var, " <- forcats::fct_recode(as.factor(", name_in, "$", f_var, "),"
+#       )
+#   }
+#   data <-
+#     dplyr::tibble(f = f) |>
+#     dplyr::mutate(group = stringr::str_detect(f, "^if\\(") |> as.integer() |> cumsum()) |>
+#     dplyr::group_by(.data$group) |>
+#     dplyr::mutate(f = dplyr::if_else(dplyr::row_number() == dplyr::n(), paste0(f, ")\n}\n"), f)) |>
+#     dplyr::ungroup()
+#
+#   if (stringr::str_detect(path, "\\\\|/")) {
+#     path_out <- stringr::str_c(stringr::str_replace_all(path,
+#                                                         "/", "\\\\") %>% stringr::str_remove("[^\\\\]+$"),
+#                                "formats_R-", name_out, ".R")
+#   } else {
+#     path_out <- stringr::str_c("formats_R-", name_out, ".R")
+#   }
+#
+#   writeLines(data$f, path_out, useBytes = TRUE)
+#
+#   if(open) {
+#     file.show(path_out)
+#   } else {
+#     message(path_out)
+#   }
+#
+#   invisible(path_out)
+# }
 
 
 
@@ -652,9 +796,9 @@ prepare_fct_recode <- function(df_in, df_out, var,  mode = c("text", "numbers",
                                             .data$number,  "\",\n"))
   first_line <-
     tibble::tibble(number = "0",
-                   mod_line = stringr::str_c(df_out, "$", var,
+                   mod_line = stringr::str_c(df_out, "$", .data$var,
                                              " <- forcats::fct_recode(", df_in, "$",
-                                             var, ",\n") )
+                                             .data$var, ",\n") )
   last_line <- tibble::tibble(number = "0", mod_line = ")")
   res <- dplyr::bind_rows(first_line, lines, last_line) %>%
     dplyr::select("mod_line") %>% dplyr::pull()

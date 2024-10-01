@@ -110,7 +110,9 @@ testthat::test_that("fmt work with $", { #and [[
   testthat::expect_equal(fmt_vect$digits, c(0, 0))
   #testthat::expect_equal(fmt_vect[["n"]], c(1, 2))
   #testthat::expect_equal(fmt_vect[[2, "n"]], 2)
-})
+
+  testthat::expect_true(any(!is.na(fmt_vect$wn))) # gives n when wn not provided
+  })
 
 
 

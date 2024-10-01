@@ -23,7 +23,7 @@ jmvtab(
   comp = "tab",
   ci = "auto",
   conf_level = 0.95,
-  ci_print = "moe",
+  ci_print = "ci",
   totaltab = "line",
   wrap_rows = 35,
   wrap_cols = 15,
@@ -138,8 +138,8 @@ Means use classic method.}
 \item Default to 0.95 (95\\%).
 }}
 
-\item{ci_print}{By default confidence interval are printed with the pct+moe
-display. Set to "ci" to use the interval display instead.}
+\item{ci_print}{By default confidence interval are printed with the
+interval display. Set to "moe" to use pct +- moe instead.}
 
 \item{totaltab}{The total table, if there are subtables/groups   (i.e. when
 \code{tab_vars} is provided). Vectorised over \code{row_vars}.  \itemize{

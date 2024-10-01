@@ -23,7 +23,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             comp = "tab",
             ci = "auto",
             conf_level = 0.95,
-            ci_print = "moe",
+            ci_print = "ci",
             totaltab = "line",
             wrap_rows = 35,
             wrap_cols = 15,
@@ -168,9 +168,9 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 "ci_print",
                 ci_print,
                 options=list(
-                    "moe",
-                    "ci"),
-                default="moe")
+                    "ci",
+                    "moe"),
+                default="ci")
             private$..totaltab <- jmvcore::OptionList$new(
                 "totaltab",
                 totaltab,
@@ -223,7 +223,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 "digits",
                 digits,
                 min=0,
-                max=0,
+                max=10,
                 default=0)
 
             self$.addOption(private$..row_vars)
@@ -452,8 +452,8 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   Means use classic method.
 #' @param conf_level The confidence level, as a single numeric between 0 and
 #'   1. Default to 0.95 (95\%).
-#' @param ci_print By default confidence interval are printed with the pct+moe
-#'   display. Set to "ci" to use the interval display instead.
+#' @param ci_print By default confidence interval are printed with the
+#'   interval display. Set to "moe" to use pct +- moe instead.
 #' @param totaltab The total table, if there are subtables/groups   (i.e. when
 #'   \code{tab_vars} is provided). Vectorised over \code{row_vars}.  \itemize{
 #'   \item \code{"line"}: by default, add a general total line (necessary for
@@ -507,7 +507,7 @@ jmvtab <- function(
     comp = "tab",
     ci = "auto",
     conf_level = 0.95,
-    ci_print = "moe",
+    ci_print = "ci",
     totaltab = "line",
     wrap_rows = 35,
     wrap_cols = 15,

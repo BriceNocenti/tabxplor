@@ -57,7 +57,7 @@ You can then use a \code{css} chunk in rmarkdown to change popovers colors.}
 with \verb{caption\{\}}in rmarkdown.}
 
 \item{html_font}{A string for HTML css font. By default, it uses
-\code{'"DejaVu Sans Condensed", "Arial", arial, helvetica, sans-serif'}. Set another
+\code{'"DejaVu Sans", "Arial", arial, helvetica, sans-serif'}. Set another
 default by setting \code{options("tabxplor.kable_html_font" = )}.}
 
 \item{get_data}{Get the transformed data instead of the html table.}

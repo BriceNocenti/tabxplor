@@ -561,7 +561,11 @@ set_display.tabxplor_fmt <- function(x, value) {
 #' @export
 set_display.data.frame <- function(x, value) {
   x |>
-    dplyr::mutate(dplyr::across(dplyr::where(is_fmt), ~ set_display(., value)))
+    dplyr::mutate(dplyr::across(
+      dplyr::where(is_fmt) & -(tidyselect::any_of(c("n", "wn")) &
+                                 dplyr::where(~ get_type(.) == "n")),
+      ~ set_display(., value)
+    ))
 }
 
 
@@ -628,7 +632,9 @@ is_refrow.data.frame <- function(x, ..., partial = TRUE) {
     purrr::map_df(~ is_refrow(.))
 
   if (partial == TRUE) {
-    refrow_cells_test %>% dplyr::transmute(var = dplyr::if_any()) %>% tibble::deframe()
+    refrow_cells_test %>%
+      dplyr::transmute(var = dplyr::if_any(.cols = dplyr::everything() )) %>%
+      tibble::deframe()
   } else {
     test_result <- refrow_cells_test %>%
       dplyr::transmute(complete = dplyr::if_all(.cols = dplyr::everything() ),
@@ -1231,12 +1237,16 @@ detect_firstcol <- function(tabs) {
 #' @keywords internal
 detect_totcols <- function(tabs) {
   #detect totcols by col vars names, no position ? ----
-  tot <- which(is_totcol(tabs))
+  tot <- which(is_totcol(tabs) | get_col_var(tabs) == "no_col_var")
 
   purrr::map(1:ncol(tabs), function(.i)
     tidyr::replace_na(names(tot[tot >= .i])[1], "")) %>%
     rlang::syms() %>%
     purrr::set_names(names(tabs))
+
+
+
+
 }
 
 
@@ -1364,7 +1374,12 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   pct_ci  <- ok & display == "pct_ci"
   mean_ci <- ok & display == "mean_ci"
   diff_mean <- ok & display == "diff" & type == "mean"
-  plus_ci <- pct_ci | mean_ci
+
+  disp_ci   <- display == "ci" & ci_type == "diff" & !nas
+  plus_ci <- (pct_ci | mean_ci) # ci_pct_mean
+  plus_disp_ci <- (plus_ci | disp_ci)
+  # plus_ci <- (ci_pct_mean | disp_ci)# & !is.na(get_ci(x))
+
   #pct_or_pct_ci <- ok & display %in% c("pct", "pct_ci", "diff", "ctr")
   pct_no_ci     <- ok & display %in% c("pct", "diff", "ctr") & !(display == "diff" & type == "mean")
   diff_pct      <- ok & display == "diff" & type != "mean"
@@ -1378,53 +1393,103 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   digits[diff_mean] <- dplyr::if_else(digits[diff_mean] == 0, 1, digits[diff_mean])
 
 
-  if (any(plus_ci)) {
-    ci_print_trim <- function(x) {
-      x <- stringr::str_remove_all(x, paste0("^", pm, "0$|^", pm, "0.0+$|^", pm, "-0.0+$|^",
-                                             pm, "NA"))
-      stringr::str_pad(x, max(stringr::str_length(x)))
-    }
+  ci_print_moe <- getOption("tabxplor.ci_print") == "moe"
+  if (any(plus_ci | disp_ci)) {
+    if (any(plus_ci) & ci_print_moe) {
+      ci <- dplyr::if_else(condition = mean_ci[plus_ci],
+                           true  = get_ci(x)[plus_ci] ,
+                           false = get_ci(x)[plus_ci] * 100)
+
+      ci_print_trim <- function(x) {
+        x <- stringr::str_remove_all(x, paste0("^", pm, "0$|^", pm, "0.0+$|^", pm, "-0.0+$|^",
+                                               pm, "NA"))
+        stringr::str_pad(x, max(stringr::str_length(x)))
+      }
 
 
-    # ci_print_pad <- function(x) {
-    #   stringr::str_pad(x, max(stringr::str_length(x)))
-    # }
-    ci <- get_ci(x)[plus_ci]
+      # ci_print_pad <- function(x) {
+      #   stringr::str_pad(x, max(stringr::str_length(x)))
+      # }
 
-    if (getOption("tabxplor.ci_print") == "moe") {
       out_ci <-
         paste0(print_num(out[plus_ci], digits[plus_ci]),
                dplyr::if_else(pct_ci[plus_ci], "%", ""),
                ci_print_trim(paste0(pm, sprintf(
                  paste0("%-0.",
                         digits[plus_ci] + dplyr::if_else(pct_ci[plus_ci] & digits[plus_ci] == 0, 1L, 0L),
-                        "f"), dplyr::if_else(pct_ci[plus_ci], ci * 100, ci)
+                        "f"), ci
                )) ) %>% ci_html_subscript(html = html)
         )
-    } else {
-      lower <- dplyr::if_else(condition = mean_ci[plus_ci],
-                              true      = pmax(out[plus_ci] - ci, 0),
-                              false     = pmax(out[plus_ci] - ci * 100, 0) )
 
-      upper <- dplyr::if_else(condition = mean_ci[plus_ci],
-                              true      = out[plus_ci] + ci,
-                              false     = pmin(out[plus_ci] + ci, 100) )
+    } else if (any(plus_disp_ci) ) { # !ci_print_moe
+      ci <- dplyr::if_else(condition = plus_disp_ci & type == "mean", # mean_ci[plus_disp_ci],
+                           true  = get_ci(x)[plus_disp_ci] ,
+                           false = get_ci(x)[plus_disp_ci] * 100)
+
+      # # it the formula for mean wrong ?
+      # ci[disp_ci[plus_disp_ci & type == "mean"]] <-
+      #   ci[disp_ci[plus_disp_ci & type == "mean"]] *
+      #   get_ref_means(x)[disp_ci[plus_disp_ci & type == "mean"]]
+
+      # # color selection formulas for means :
+      # # diff_ci
+      # means & !neg    ~ diff > brk &
+      #   abs(1 - diff) * ref_means_pct - ci > 0,
+      #
+      # means & neg     ~ diff < brk &
+      #   abs(1 - diff) * ref_means_pct - ci > 0,
+      #
+      # # after_ci
+      # means & !neg
+      # ~ diff >= 1                                                         &
+      #   ref_means_pct + abs(1 - diff) * ref_means_pct  > (ref_means_pct + ci) * brk, #  &
+      #
+      # means & neg
+      # ~ diff < 1                                                           &
+      #   ref_means_pct + abs(1 - diff) * ref_means_pct  > (ref_means_pct + ci) * -brk, #   &
+
+
+
+      ref_for_ci <- dplyr::if_else(disp_ci[plus_disp_ci],
+                                   true  = dplyr::if_else(plus_disp_ci & type == "mean",
+                                                          true  =  get_diff(x)[plus_disp_ci],
+                                                          false =  get_diff(x)[plus_disp_ci] * 100 ),
+                                   false = out[plus_disp_ci])
+
+      lower <- ref_for_ci - ci
+      upper <- ref_for_ci + ci
+
+      lower <- dplyr::if_else(pct_ci[plus_disp_ci], pmax(lower,   0), lower)
+      upper <- dplyr::if_else(pct_ci[plus_disp_ci], pmin(upper, 100), upper)
+
+
+
       out_ci <- dplyr::if_else(
-        condition = is.na(lower) | is.na(upper) | round(lower, digits) == round(upper, digits),
-        true      = print_num(out[plus_ci], digits[plus_ci]),
-        false     = paste0(
-          sprintf(paste0("%-0.", digits[plus_ci], "f"), lower),
-          stringi::stri_unescape_unicode("\\u00b7"), # middle-point
-          sprintf(paste0("%-0.", digits[plus_ci], "f"), upper),
+        condition = is.na(lower) | is.na(upper) |
+          round(lower, digits[plus_disp_ci]) == round(upper, digits[plus_disp_ci]),
+        true      = print_num(ref_for_ci, digits[plus_disp_ci]),
+        false     = paste0("[",
+                           sprintf(paste0("%-0.", digits[plus_disp_ci], "f"), lower),
+                           ";", #", ",
+                           #stringi::stri_unescape_unicode("\\u00b7"), # middle-point
+                           sprintf(paste0("%-0.", digits[plus_disp_ci], "f"), upper),
+                           "]"
         )
       )
-      out_ci <- paste0("[", out_ci, "]", dplyr::if_else(pct_ci[plus_ci], "%", ""))
+      out_ci <- paste0(out_ci, dplyr::if_else(plus_disp_ci & type == "mean", "", "%")) # pct_ci[plus_disp_ci]
     }
   }
+  # }
 
   out[!na_out] <- print_num(out[!na_out], digits[!na_out])
   out[na_out] <- NA
-  if (any(plus_ci)) out[plus_ci] <- out_ci
+  if (any(plus_ci | disp_ci)) {
+    if (any(plus_ci) | ci_print_moe) {
+      out[plus_ci]  <- out_ci
+    } else if (any(plus_disp_ci)) {
+      out[plus_disp_ci] <- out_ci
+    }
+  }
   out[n_wn] <- out[n_wn] %>% prettyNum(big.mark = " ", preserve.width = "individual")
   out[pct_no_ci] <- paste0(out[pct_no_ci], "%") #pillar::style_subtle()
 
@@ -1449,21 +1514,23 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   out[diff_mean] <- paste0(mult_sign, out[diff_mean]) # multiply sign on mean diffs
 
 
-  out[type_ci] <- switch(
-    type,
-    "n"       = ,
-    "mean"    = paste0(pm, out[type_ci]),
-    "row"     = ,
-    "col"     = ,
-    "all"     = ,
-    "all_tabs"= paste0(pm, out[type_ci], "%")
-  )
+ if (ci_print_moe) {
+   out[type_ci] <- switch(
+     type,
+     "n"       = ,
+     "mean"    = paste0(pm, out[type_ci]),
+     "row"     = ,
+     "col"     = ,
+     "all"     = ,
+     "all_tabs"= paste0(pm, out[type_ci], "%") |> stringr::str_replace_all("%%", "%")
+   )
+ }
 
 
 
   if (special_formatting) {
     disp_diff   <- display == "diff" & !nas
-    disp_ci     <- display == "ci" & ci_type == "diff" & !nas
+    disp_moe    <- disp_ci & ci_print_moe # no if `ci_print = "ci"`
     disp_ctr    <- display == "ctr" & !nas
     disp_or     <- display %in% c("or", "OR") & !nas
     disp_or_pct <- display %in% c("or_pct", "OR_pct") & !nas
@@ -1477,7 +1544,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
       sd <- sd |>
         stringr::str_pad(width = max(stringr::str_length(sd)), side = "right")
 
-      out[disp_mean_sd] <- paste0(out[disp_mean_sd], unbrk, sigma_sign, sd)
+      out[disp_mean_sd] <- paste0(out[disp_mean_sd], unbrk, "(", sigma_sign, sd, ")")
     }
 
 
@@ -1491,14 +1558,14 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
                                        out[disp_diff])
     }
 
-    if (any(disp_ci)) {
-      ref     <- get_reference(x[disp_ci], mode = "cells")
-      reffmt  <- set_display(x[disp_ci],
+    if (any(disp_moe)) {
+      ref     <- get_reference(x[disp_moe], mode = "cells")
+      reffmt  <- set_display(x[disp_moe],
                              ifelse(type %in% c("n", "mean"), "mean", "pct")) %>%
         format()
-      out[disp_ci] <- dplyr::if_else(ref,
+      out[disp_moe] <- dplyr::if_else(ref,
                                      paste0("ref:x-", reffmt),
-                                     out[disp_ci])
+                                     out[disp_moe])
     }
 
     if (any(disp_ctr)) {
@@ -1759,7 +1826,13 @@ mutate.tabxplor_fmt <- function(.data, ...) {
 #' @return The relevant field of the tabxplor_fmt.
 #' @export
 `$.tabxplor_fmt` <- function(x, name) {
-  dplyr::pull(vctrs::vec_proxy(x), name)
+  if (name == "wn" & all(is.na( dplyr::pull(vctrs::vec_proxy(x), "wn")))) {
+    dplyr::pull(vctrs::vec_proxy(x), "n")
+
+  } else {
+    dplyr::pull(vctrs::vec_proxy(x), name)
+  }
+
 }
 
 # #Problem : dplyr::last doesn't work anymore with fmt, because it relies on `[[`
@@ -2342,8 +2415,24 @@ tab_color_legend <- function(x, colored = TRUE, mode = c("console", "html"),
                            ))
     )
 
-  # color_table |>
-  #   tidyr::unnest(c(breaks, sign))
+  # color_table %>%
+  #   dplyr::mutate(
+  #     styles = purrr::map2(.data$breaks, .data$color_type,
+  #                          ~ select_in_color_style(
+  #                            .x,
+  #                            pct_diff = .y %in% c("diff", "diff_ci", "after_ci")
+  #                          ))# ,
+  #     # styles = purrr::map(.data$styles, ~ get_color_style()[.]),
+  #     # breaks = purrr::map2(.data$styles, .data$breaks,
+  #     #                      ~ purrr::map2_chr(
+  #     #                        .x, .y,
+  #     #                        ~ rlang::exec(.x, rlang::sym(.y))
+  #     #                      ))
+  #   ) #|>
+
+  # breaks <- color_table |> tidyr::unnest(c(breaks, sign)) |>  dplyr::pull(breaks)
+  # pct_diff <- FALSE
+
 
   if (colored == TRUE & mode[1] == "html") {
     if (html_type == "text") {
@@ -2487,7 +2576,9 @@ get_color_type <- function(color, type) {
 #' @keywords internal
 select_in_color_style <- function(breaks, pct_diff) {
 
-  breaks <- breaks |> stringr::str_remove(paste0("\\+|\\*|", cross))
+  breaks <- breaks |>
+    stringr::str_remove(paste0("\\+|\\*|", cross)) |>
+    stringr::str_replace_all("/", "-")
   breaks <- dplyr::if_else(stringr::str_detect(breaks, "%$"),
                            true  = as.double(stringr::str_remove(breaks, "%$")) / 100,
                            false = as.double(stringr::str_remove(breaks, "%$")) )

@@ -1,7 +1,16 @@
-# tabxplor (development version)
+# tabxplor 1.2.1
 
 ## Added : 
+
+* in `tab()` and `tab_many()`, possibility to add unweighted counts (`add_n = TRUE`) ; and with row and column percentages a row or column with the other kind of percentage (`add_pct = TRUE`)
 * `kable_tabxplor_style()` : same html table style than `tab_kable()`, but for any data.frame.
+* enhanced printing of confidence intervals for differences
+* enhanced printing of pvalue (`<0.01%` style), Chi2 number added in Chi2 tables. 
+
+## Bug corrections :
+* reference columns were lost with `pct = "col"`
+* `tab_kable() `and `tab_plot()` : removed unwanted bold formatting
+
 
 
 # tabxplor 1.2.0

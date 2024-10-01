@@ -285,17 +285,17 @@ children:
                 name: ci_1
                 optionName: ci
                 optionPart: auto
-                enable: (pct:row || pct:col)
+                enable: (pct:row || pct:col || pct:all || pct:all_tabs)
               - type: RadioButton
                 name: ci_2
                 optionName: ci
                 optionPart: cell
-                enable: (pct:row || pct:col)
+                enable: (pct:row || pct:col || pct:all || pct:all_tabs)
               - type: RadioButton
                 name: ci_3
                 optionName: ci
                 optionPart: diff
-                enable: (pct:row || pct:col)
+                enable: (pct:row || pct:col || pct:all || pct:all_tabs)
       - type: LayoutBox
         margin: none
         cell:
@@ -309,13 +309,13 @@ children:
               - type: RadioButton
                 name: ci_print_1
                 optionName: ci_print
-                optionPart: moe
-                enable: ((pct:row || pct:col) && ci:cell)
+                optionPart: ci
+                enable: (pct:row || pct:col || pct:all || pct:all_tabs)
               - type: RadioButton
                 name: ci_print_2
                 optionName: ci_print
-                optionPart: ci
-                enable: ((pct:row || pct:col) && ci:cell)
+                optionPart: moe
+                enable: (pct:row || pct:col || pct:all || pct:all_tabs)
       - type: LayoutBox
         margin: none
         cell:

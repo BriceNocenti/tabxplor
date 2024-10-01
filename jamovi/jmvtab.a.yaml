@@ -348,15 +348,15 @@ options:
       title: "options('tabxplor.ci_print' = ...)"
       type: List
       options:
-        - title: "moe <i>(display: pct±margin of error)</i>"
-          name:  moe
         - title: "ci <i>(interval display: [inf;sup])</i>"
           name:  ci
-      default: moe
+        - title: "moe <i>(display: pct±margin of error)</i>"
+          name:  moe
+      default: ci
       description:
           R: >
-           By default confidence interval are printed with the pct+moe display.
-           Set to "ci" to use the interval display instead.
+           By default confidence interval are printed with the interval display.
+           Set to "moe" to use pct +- moe instead.
 
 # method_cell = "wilson",
 #  "wald", "wilson", "wilsoncc", "agresti-coull", "jeffreys", "modified wilson", "modified jeffreys", "clopper-pearson", "arcsine", "logit", "witting", "pratt", "midp", "lik", "blaker"
@@ -478,7 +478,7 @@ options:
       title: ""
       type: Number
       min: 0
-      max: 0
+      max: 10
       default: 0
       description:
           R: >

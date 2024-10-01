@@ -93,14 +93,14 @@ data <- data |> dplyr::mutate(year = as.factor(year))
 tab(data, year, marital, race, pct = "row", color = "diff", ref = "first", tot = "col",
 totaltab = "table")
 ```
-![](.readme_images/tabxplor3_first.jpg)
+![](.readme_images/tabxplor3_first.jpg) 
 
 When `ref` is a number, the nth row (or column) is used for comparison. 
 ```r
 tab(data, year, marital, race, pct = "row", color = "diff", ref = 3)
 ```
 
-Finally, when `ref` is a string, it it used as a regular expression, to match with the names of the rows (or columns). 
+Finally, when `ref` is a string, it it used as a regular expression, to match with the names of the rows (or columns).   
 ```r
 tab(data, year, marital, race, pct = "col", tot = "row", color = "diff", ref = "Married")
 ```
