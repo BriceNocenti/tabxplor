@@ -17,7 +17,7 @@
 \item{.data}{A tibble of class tabxplor_tab.}
 
 \item{...}{<\code{\link[rlang:args_data_masking]{data-masking}}> Variables, or
-functions of variables. Use \code{\link[=desc]{desc()}} to sort a variable in descending
+functions of variables. Use \code{desc()} to sort a variable in descending
 order.}
 
 \item{.by_group}{By default, will sort first by grouping variable.

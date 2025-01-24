@@ -2076,7 +2076,7 @@ group_by.tabxplor_tab <- function(.data,
 #' @importFrom dplyr arrange
 #' @param .data A tibble of class tabxplor_tab.
 #' @param ... <[`data-masking`][rlang::args_data_masking]> Variables, or
-#'   functions of variables. Use [desc()] to sort a variable in descending
+#'   functions of variables. Use `desc()` to sort a variable in descending
 #'   order.
 #' @param .by_group By default, will sort first by grouping variable.
 #'   Set to `FALSE` to avoid this behaviour.

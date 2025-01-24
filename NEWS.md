@@ -2,7 +2,7 @@
 
 ## Added : 
 * `tab_many()` : with several `row_vars`, adding `compact = TRUE` bind all tables
- in a single one (but only works if no `tab_vars` is provided). 
+ in a single one (but only works if no `tab_vars` are provided). 
  `tab_compact()` can be used to do the same on `tab_plain()`.
 * by default, chi2 pvalue is now added as a row in the tables (below total rows):
   there is no more chi2 table in attribute by default (but you can still add it 
