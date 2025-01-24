@@ -1,0 +1,397 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: tabxplor 1.1.3\n"
+"POT-Creation-Date: 2024-07-31 18:51+0200\n"
+"PO-Revision-Date: 2024-07-31 18:51+0200\n"
+"Last-Translator: Automatically generated\n"
+"Language-Team: none\n"
+"Language: fr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+#: fmt_class.R:420 fmt_class.R:522
+msgid "partial total rows (with some fmt cells not tagged 'totrow')"
+msgstr ""
+
+#: fmt_class.R:421 fmt_class.R:523 fmt_class.R:638
+msgid "were not taken into account"
+msgstr ""
+
+#: fmt_class.R:637
+msgid "partial total rows (with some fmt cells not tagged 'refrow')"
+msgstr ""
+
+#: fmt_class.R:1573
+msgid "cannot print color == 'contrib' with no total rows to store"
+msgstr ""
+
+#: fmt_class.R:1574
+msgid "information about mean contributions to variance"
+msgstr ""
+
+#: fmt_class.R:2720 fmt_class.R:2724 fmt_class.R:2727 fmt_class.R:2885
+msgid "operation"
+msgstr ""
+
+#: fmt_class.R:2721
+msgid "over columns with different pct types,"
+msgstr ""
+
+#: fmt_class.R:2722
+msgid "or mixing pct and means ("
+msgstr ""
+
+#: fmt_class.R:2723 fmt_class.R:2729
+msgid "/"
+msgstr ""
+
+#: fmt_class.R:2723 fmt_class.R:2729
+msgid ")"
+msgstr ""
+
+#: fmt_class.R:2725
+msgid "may mix calculations made on tabs and calculations"
+msgstr ""
+
+#: fmt_class.R:2726
+msgid "made on all tabs (different 'comp_all')"
+msgstr ""
+
+#: fmt_class.R:2728
+msgid "over columns belonging to different variables("
+msgstr ""
+
+#: fmt_class.R:2886
+msgid "within a variable mixing different types of percentages"
+msgstr ""
+
+#: jmvtab.h.R:407
+msgid "jmvtab requires jmvcore to be installed (restart may be required)"
+msgstr ""
+
+#: tab.R:583
+msgid "Total"
+msgstr ""
+
+#: tab.R:689
+msgid "some totcol indexes are superior to the"
+msgstr ""
+
+#: tab.R:690
+msgid "number of col_vars"
+msgstr ""
+
+#: tab.R:693
+msgid "totcol must be 'last', 'each', a vector of col_vars names,"
+msgstr ""
+
+#: tab.R:694
+msgid "a vector of 'col'/'no', or a vector of col_vars indexes"
+msgstr ""
+
+#: tab.R:724
+msgid ""
+"pct can't be recycled to the lengths of row_vars and col_vars (see "
+"documentation `?tab_many`)"
+msgstr ""
+
+#: tab.R:757
+msgid "total rows were added, since color == 'contrib' needs them"
+msgstr ""
+
+#: tab.R:758
+msgid "to store information about mean contributions to variance"
+msgstr ""
+
+#: tab.R:783
+msgid ""
+"since color = 'diff' for some tables, ref must be provided for those tables"
+msgstr ""
+
+#: tab.R:1762
+msgid "since color is TRUE/`diff`, ref can't be `no` and was set to `tot`"
+msgstr ""
+
+#: tab.R:1782
+msgid "since pct == 'row', a total column was added"
+msgstr ""
+
+#: tab.R:1786
+msgid ""
+"since color == TRUE and pct == 'col' and ref == 'tot', a total column was "
+"added"
+msgstr ""
+
+#: tab.R:1790
+msgid "since pct == 'all' or 'all_tabs', a total column was added"
+msgstr ""
+
+#: tab.R:1797
+msgid "since pct == 'row', total rows were added"
+msgstr ""
+
+#: tab.R:1801
+msgid ""
+"since color == TRUE and pct == 'row' and ref == 'tot', total rows were added"
+msgstr ""
+
+#: tab.R:1805
+msgid "since pct == 'all' or 'all_tabs', total rows were added"
+msgstr ""
+
+#: tab.R:1832 tab.R:2659
+msgid "since comp = 'all', a total table was added to compare with"
+msgstr ""
+
+#: tab.R:1837 tab.R:2664
+msgid "since comp = 'all', a full total table was added to compare with"
+msgstr ""
+
+#: tab.R:1886
+msgid "data is of length 0 (possibly after filter or na = 'drop_all')"
+msgstr ""
+
+#: tab.R:2186
+msgid "in ref2 = '"
+msgstr ""
+
+#: tab.R:2186 tab.R:2222
+msgid "' , no columns were found as reference for comparison ;"
+msgstr ""
+
+#: tab.R:2187 tab.R:2223 tab.R:3211 tab.R:3261 tab.R:5198 tab.R:5205 tab.R:5262
+msgid "to remove this warning, precise the value of ref"
+msgstr ""
+
+#: tab.R:2188 tab.R:2224
+msgid "until there is one column matched"
+msgstr ""
+
+#: tab.R:2222 tab.R:3260 tab.R:5261
+msgid "in ref = '"
+msgstr ""
+
+#: tab.R:2614
+msgid "since color = 'diff', ref must be provided and was set to 'tot'"
+msgstr ""
+
+#: tab.R:2630
+msgid "since ci = 'diff', a diff was added with ref = 'tot'"
+msgstr ""
+
+#: tab.R:2686
+msgid "data is of length 0 (possibly after filter or na = 'drop')"
+msgstr ""
+
+#: tab.R:3209 tab.R:5196 tab.R:5203
+msgid "with ref = '"
+msgstr ""
+
+#: tab.R:3209 tab.R:5196
+msgid "' , several rows were found as"
+msgstr ""
+
+#: tab.R:3210 tab.R:5197 tab.R:5204
+msgid "reference for comparison ; only the first was kept ;"
+msgstr ""
+
+#: tab.R:3212 tab.R:5199
+msgid "until there is only one row_var level matched"
+msgstr ""
+
+#: tab.R:3260 tab.R:5261
+msgid "' , no rows were found as reference for comparison ;"
+msgstr ""
+
+#: tab.R:3262 tab.R:5263
+msgid "until there is one row_var level matched"
+msgstr ""
+
+#: tab.R:3665
+msgid "can't add a total column without at least one non-mean col_var"
+msgstr ""
+
+#: tab.R:3912
+msgid "since percentages are 'all_tabs', a total table"
+msgstr ""
+
+#: tab.R:3913
+msgid "was added"
+msgstr ""
+
+#: tab.R:4900
+msgid "no total row(s) found. Some added based on actual grouping variables :"
+msgstr ""
+
+#: tab.R:4901 tab_xl.R:2091 tab_xl.R:2278 tab_xl.R:2402
+msgid ","
+msgstr ""
+
+#: tab.R:4908
+msgid "no groups nor total row(s) found. One added for the whole table"
+msgstr ""
+
+#: tab.R:4911
+msgid "no groups nor total row(s), but total table found."
+msgstr ""
+
+#: tab.R:4912
+msgid "Grouped upon tab_vars and total rows added"
+msgstr ""
+
+#: tab.R:4950
+msgid "grouping variable(s) not corresponding to total_rows,"
+msgstr ""
+
+#: tab.R:4951
+msgid "new groups calculated, based on actual total_rows"
+msgstr ""
+
+#: tab.R:4967
+msgid "no total column, one was added (from the last non-mean column)"
+msgstr ""
+
+#: tab.R:4984 tab.R:4991
+msgid "since at least one column already have an element calculated"
+msgstr ""
+
+#: tab.R:4985
+msgid "with comparison to the total row of the total table (pct or means"
+msgstr ""
+
+#: tab.R:4986 tab.R:4993
+msgid "diffs from total, chi2 variances or confidence intervals),"
+msgstr ""
+
+#: tab.R:4987
+msgid "comp were set to 'all'"
+msgstr ""
+
+#: tab.R:4992
+msgid "with comparison to the total row of each tab_var (pct or means"
+msgstr ""
+
+#: tab.R:4994
+msgid "comp were set to 'tab'"
+msgstr ""
+
+#: tab.R:5013
+msgid "since 'comp' is 'all', a total table with a"
+msgstr ""
+
+#: tab.R:5014
+msgid "total row was added"
+msgstr ""
+
+#: tab.R:5203
+msgid "' , several columns were found as"
+msgstr ""
+
+#: tab.R:5206
+msgid "until there is only one column matched"
+msgstr ""
+
+#: tab_classes.R:699
+msgid "Package \"ggpubr\" needed for this function to work."
+msgstr ""
+
+#: tab_classes.R:700
+msgid "You can install it with : install.packages('ggpubr')"
+msgstr ""
+
+#: tab_classes.R:704
+msgid "Package \"gtable\" needed for this function to work."
+msgstr ""
+
+#: tab_classes.R:705
+msgid "You can install it with : install.packages('gtable')"
+msgstr ""
+
+#: tab_classes.R:709
+msgid "Package \"ggplot2\" needed for this function to work."
+msgstr ""
+
+#: tab_classes.R:710
+msgid "You can install it with : install.packages('ggplot2')"
+msgstr ""
+
+#: tab_classes.R:2288
+msgid "custom_palette should be a character vector of length 10"
+msgstr ""
+
+#: tab_xl.R:67 tab_xl.R:1976
+msgid "Package \"openxlsx\" needed for this function to work."
+msgstr ""
+
+#: tab_xl.R:68 tab_xl.R:1977
+msgid "You can install it with : install.packages('openxlsx')"
+msgstr ""
+
+#: tab_xl.R:2088
+msgid "to permit to assess confidentiality, you must add"
+msgstr ""
+
+#: tab_xl.R:2089
+msgid "subtext = c('Source : description of the source.')"
+msgstr ""
+
+#: tab_xl.R:2090
+msgid "in tab(), for the following tables:"
+msgstr ""
+
+#: tab_xl.R:2091
+msgid "tab"
+msgstr ""
+
+#: tab_xl.R:2091 tab_xl.R:2223 tab_xl.R:2252
+msgid ";"
+msgstr ""
+
+#: tab_xl.R:2222
+msgid "some rows with counts were removed:"
+msgstr ""
+
+#: tab_xl.R:2251
+msgid "some columns with counts were removed:"
+msgstr ""
+
+#: tab_xl.R:2277
+msgid ""
+"recalculating a total column for each col_vars, for the following tables:"
+msgstr ""
+
+#: tab_xl.R:2279
+msgid ". To gain speed, use tab_many(..., totcol = 'each') before."
+msgstr ""
+
+#: tab_xl.R:2401
+msgid ""
+"you must describe the following variables with 'var_labels = c('variable' = "
+"'description', ...)' :"
+msgstr ""
+
+#: utils.R:181 utils.R:202 utils.R:226 utils.R:243 utils.R:281
+msgid "must be a vector, not a data.frame"
+msgstr ""
+
+#: utils.R:253
+msgid ""
+"two search patterns or more applies to the same level (only the first was "
+"kept) :"
+msgstr ""
+
+#: utils.R:359
+msgid "No variable was found."
+msgstr ""
+
+#: utils.R:688
+msgid "entry is not character vector or list of data.frames"
+msgstr ""
+
+#: utils.R:883
+msgid ""
+"tab should be an object from either ggpubr::ggtexttable() or gridExtra::"
+"tableGrob()."
+msgstr ""

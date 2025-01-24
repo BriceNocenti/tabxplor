@@ -1,0 +1,539 @@
+msgid ""
+msgstr ""
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"POT-Creation-Date: 2021-07-26 12:08:06+01000\n"
+"PO-Revision-Date: 2021-07-29 16:59:59+01000\n"
+"Language: fr\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: jmvtab/options/col_vars.title
+#: jmvtab/ui/variablesupplier[1].label
+msgid "<b>col_vars = <i>(column variables)</i></b>"
+msgstr "<b>col_vars = <i>(variables de colonne)</i></b>"
+
+#: jmvtab/ui[4].label
+msgid "<b>Confidence intervals</b>"
+msgstr "<b>Intervalles de confiance</b>"
+
+#: jmvtab/ui[2].label
+msgid "<b>Levels and missing values</b>"
+msgstr "<b>Valeurs manquantes et modalités</b>"
+
+#: jmvtab/ui[5].label
+msgid "<b>Other formatting</b>"
+msgstr "<b>Autres mises en forme</b>"
+
+#: jmvtab/ui[1].label
+msgid "<b>Percentages, colors and Chi2 test </b>"
+msgstr "<b>Pourcentages, couleurs et test du Chi2</b>"
+
+#: jmvtab/ui[3].label
+msgid "<b>References (points of comparison)</b>"
+msgstr "<b>Références (points de comparaison)</b>"
+
+#: jmvtab/options/row_vars.title
+#: jmvtab/ui/variablesupplier[0].label
+msgid "<b>row_vars = <i>(row variable)</i></b>"
+msgstr "<b>row_vars = <i>(variable de ligne)</i></b>"
+
+#: jmvtab/options/tab_vars.title
+#: jmvtab/ui/variablesupplier[2].label
+msgid "<b>tab_vars = <i>(subtables variables)</i></b>"
+msgstr "<b>tab_vars = <i>(variables de sous-tableaux)</i></b>"
+
+#: jmvtab/options/wt.title
+#: jmvtab/ui/variablesupplier[3].label
+msgid "<b>wt = <i>(weights)</i></b>"
+msgstr "<b>wt = <i>(poids)</i></b>"
+
+#: jmvtab/options/subtext.description.R
+msgid "A character vector to print rows of legend under the table."
+msgstr ""
+
+#: jmvtab/options/data.description.R
+msgid "A data.frame."
+msgstr ""
+
+#: jmvtab/options/ref2.description.R
+msgid "A second reference cell is needed to calculate odds ratios\n"
+" (or relative risks ratios). The first cell of the row or column is used by default.\n"
+" See `ref`  for the full list of possible values."
+msgstr ""
+
+#: jmvtab/options/wt.description.R
+msgid "A weight variable, of class numeric. Leave empty for unweighted results."
+msgstr ""
+
+#: jmvtab/ui[5][4][0].label
+msgid "add_n = <i>(see unweighted counts)</i>"
+msgstr "add_n = <i>(voir effectifs non pondérés)</i>"
+
+#: jmvtab/ui[5][5][0].label
+msgid "add_pct = <i>(see frequencies of 100% total)</i>"
+msgstr "add_pct = <i>(voir freq. des totaux à 100%)</i>"
+
+#: jmvtab/options/color/after_ci.title
+msgid "after_ci <i>(diff, after substracting margin of error)</i>"
+msgstr "after_ci <i>(diff, après soustraction marge d'erreur)</i>"
+
+#: jmvtab/options/pct/all.title
+#: jmvtab/options/lvs/all.title
+msgid "all"
+msgstr "all"
+
+#: jmvtab/options/comp/all.title
+msgid "all <i>(compare with the total subtable)</i>"
+msgstr "all <i>(comparer avec le total général)</i>"
+
+#: jmvtab/options/pct/all_tabs.title
+msgid "all_tabs"
+msgstr "all_tabs"
+
+#: jmvtab/options/lvs/auto.title
+#: jmvtab/options/ref.default
+#: jmvtab/options/ci/auto.title
+#: jmvtab/options/display/auto.title
+msgid "auto"
+msgstr "auto"
+
+#: jmvtab/options/ref.title
+msgid "auto/tot/<i>{row_number}</i>/<i>{row_name}</i>"
+msgstr "auto/tot/<i>{num_ligne}</i>/<i>{nom_ligne}</i>"
+
+#: jmvtab/options/ci_print.description.R
+msgid "By default confidence interval are printed with the pct+moe display. Set to \"ci\" to use the interval display instead."
+msgstr ""
+
+#: jmvtab/options/cleannames.description.R
+msgid "By default, clean levels names, by removing prefix numbers like \"1-\", and text in parenthesis. Set to `FALSE` to avoid this behaviour."
+msgstr ""
+
+#: jmvtab/options/wrap_cols.description.R
+msgid "By default, colnames are wrapped when larger than 12 characters."
+msgstr ""
+
+#: jmvtab/options/wrap_rows.description.R
+msgid "By default, rownames are wrapped when larger than 30 characters."
+msgstr ""
+
+#: jmvtab/options/ci/cell.title
+msgid "cell <i>(ci for each cell)</i>"
+msgstr "cell <i>(IC pour chaque case)</i>"
+
+#: jmvtab/ui[1][0][3][0].label
+msgid "chi2 = <i>(Chi2 test)</i>"
+msgstr "chi2 = <i>(test du Chi2)</i>"
+
+#: jmvtab/results/chi2_table.title
+msgid "Chi2 Test"
+msgstr "Test du Chi2"
+
+#: jmvtab/options/display/ci.title
+msgid "ci <i>(confidence intervals)</i>"
+msgstr "ci <i>(IC, intervalles de confiance)</i>"
+
+#: jmvtab/options/ci_print/ci.title
+msgid "ci <i>(interval display: [inf;sup])</i>"
+msgstr "ci <i>(format: [inf;sup])</i>"
+
+#: jmvtab/options/ci.title
+#: jmvtab/ui[4][0][0].label
+msgid "ci = <i>(confidence intervals)</i>"
+msgstr "ci = <i>(intervalles de confiance, IC)</i>"
+
+#: jmvtab/ui[2][2][1].label
+msgid "cleannames ="
+msgstr "cleannames = <i>(nettoyer noms)</i>"
+
+#: jmvtab/options/pct/col.title
+msgid "col (column)"
+msgstr "col (colonne)"
+
+#: jmvtab/options/color.title
+msgid "color = (Color)"
+msgstr "color = (Couleur)"
+
+#: jmvtab/ui[1][0][1][0].label
+msgid "color = <i>(what to use for color helpers)</i>"
+msgstr "color = <i>(aides à l'interprétation)</i>"
+
+#: jmvtab/options/comp.title
+msgid "comp"
+msgstr "comp"
+
+#: jmvtab/ui[3][1][0].label
+msgid "comp = <i>(reference table with tab_vars)</i>"
+msgstr "comp = <i>(tableau de référence, avec tab_vars)</i>"
+
+#: jmvtab/ui[4][2][0].label
+msgid "conf_level = <i>(confidence level)</i>"
+msgstr "conf_level = <i>(seuil de confiance)</i>"
+
+#: jmvtab/options/color/contrib.title
+msgid "contrib <i>(relative contribution to variance)</i>"
+msgstr "contrib <i>(contribution relative à la variance)</i>"
+
+#: package/analyses/jmvtab.title
+#: package/analyses/jmvtab.menuTitle
+#: jmvtab/options.title
+#: jmvtab/ui.title
+#: jmvtab/results.title
+msgid "Crosstables"
+msgstr "Tableaux croisés"
+
+#: jmvtab/options/display/ctr.title
+msgid "ctr <i>(relative contributions to variance)</i>"
+msgstr "ctr <i>(contribution relative à la variance)</i>"
+
+#: jmvtab/options/ci/diff.title
+msgid "diff <i>(ci on the difference with reference)</i>"
+msgstr "diff <i>(IC sur la différence avec la référence)</i>"
+
+#: jmvtab/options/color/diff.title
+#: jmvtab/options/display/diff.title
+msgid "diff <i>(differences from total, or reference cell)</i>"
+msgstr "diff <i>(différences par rapport au total/référence)</i>"
+
+#: jmvtab/options/color/diff_ci.title
+msgid "diff_ci <i>(differences, only if significant)</i>"
+msgstr "diff_ci <i>(différences, seulement si significatives)</i>"
+
+#: jmvtab/ui[5][7][0].label
+msgid "digits = <i>(number of digits)</i>"
+msgstr "digits = <i>(nombre de chiffres après la virgule)</i>"
+
+#: jmvtab/ui[5][3][0].label
+msgid "display = <i>(which information to display in the table ?)</i>"
+msgstr "display = <i>(quelle information afficher dans le tableau ?)</i>"
+
+#: jmvtab/options/na/drop.title
+msgid "drop <i>(for each col_var)</i>"
+msgstr "drop <i>(enlever, par col_var)</i>"
+
+#: jmvtab/options/na/drop_all.title
+msgid "drop_all <i>(for all col_vars)</i>"
+msgstr "drop_all <i>(pour toutes)</i>"
+
+#: jmvtab/options/lvs/first.title
+#: jmvtab/options/ref2.default
+msgid "first"
+msgstr "first"
+
+#: jmvtab/options/ref2.title
+msgid "first/tot/<i>{col_number}</i>"
+msgstr "first/tot/<i>{num_colonne}</i>"
+
+#: jmvtab/options/add_n.description.R
+msgid "For `pct = \"row\"` or `pct = \"col\"`, set to `FALSE` not to add another column or row with unweighted counts (`n`)."
+msgstr ""
+
+#: jmvtab/options/na/keep.title
+msgid "keep"
+msgstr "keep (conserver NAs)"
+
+#: jmvtab/options/lvs.title
+msgid "levels"
+msgstr "levels"
+
+#: jmvtab/ui[2][1][0].label
+msgid "levels = <i>(which lvs to keep)</i>"
+msgstr "levels = <i>(modalités)</i>"
+
+#: jmvtab/options/totaltab/line.title
+msgid "line"
+msgstr "line (seulement une ligne)"
+
+#: package.description
+msgid "Make it easy to deal with multiple cross-tables in data exploration, by creating them, manipulating them, and adding color helpers to highlight important informations (differences from totals, comparisons between lines or columns, contributions to variance, confidence intervals, odds ratios, etc.). All functions are pipe-friendly and render data frames which can be easily manipulated. In the same time, time-taking operations are done with 'data.table' to go faster with big dataframes. Tables can be exported to 'Excel', plot and html with formats and colors."
+msgstr "Tableaux croisés multiples faciles à manipuler en exploration de données, avec aides à l'interprétation pour colorer les informations importantes (différences par rapport au total, comparaison entre lignes, contributions à la variance, intervalles de confiance, rapports de chances, etc.) Toutes les fonctions sont adaptées au pipe (|> ou %>%) et retournent des data.frames aisément manipulables. Les opérations les plus lourdes sont réalisées en `data.table` pour gagner du temps avec les grandes bases de données. Les tableaux peuvent être exportés en format `Excel`, graphique ou html avec la mise en forme et les couleurs."
+
+#: jmvtab/options/display/mean.title
+msgid "mean <i>(mean, for numeric variables)</i>"
+msgstr "mean <i>(moyenne, pour les variables numériques)</i>"
+
+#: jmvtab/options/display/mean_ci.title
+msgid "mean_ci <i>(means with visible conf. intervals)</i>"
+msgstr "mean_ci <i>(moyennes avec IC visibles)</i>"
+
+#: jmvtab/options/ci_print/moe.title
+msgid "moe <i>(display: pct±margin of error)</i>"
+msgstr "moe <i>(format: pct±marge d'ereur)</i>"
+
+#: jmvtab/options/display/n.title
+msgid "n <i>(unweighted counts)</i>"
+msgstr "n <i>(effectifs non pondérés)</i>"
+
+#: jmvtab/options/na.title
+#: jmvtab/ui[2][0][0].label
+msgid "na = <i>(missing values)</i>"
+msgstr "na = <i>(valeurs manquantes)</i>"
+
+#: jmvtab/options/color/no.title
+#: jmvtab/options/OR/no.title
+#: jmvtab/options/totaltab/no.title
+msgid "no"
+msgstr "no"
+
+#: jmvtab/options/pct/no.title
+msgid "no (counts)"
+msgstr "no (effectifs)"
+
+#: jmvtab/options/col_vars.description.R
+msgid "One column is printed for each level of each column variable. For numeric variables means are calculated, in a single column."
+msgstr ""
+
+#: jmvtab/options/tab_vars.description.R
+msgid "One subtable is made for each combination of levels of the tab variables. All tab variables are converted to factor. Leave empty to make a simple table."
+msgstr ""
+
+#: jmvtab/options/ci_print.title
+#: jmvtab/ui[4][1][0].label
+msgid "options('tabxplor.ci_print' = ...)"
+msgstr "options('tabxplor.ci_print' = ...)"
+
+#: jmvtab/options/OR.title
+#: jmvtab/options/OR/OR.title
+msgid "OR"
+msgstr "OR"
+
+#: jmvtab/options/color/OR.title
+#: jmvtab/options/display/OR.title
+msgid "OR <i>(odds ratios or relative risks ratios)</i>"
+msgstr "OR <i>(odds ratios, rapports de chance)</i>"
+
+#: jmvtab/ui[1][0][2][0].label
+msgid "OR = <i>(Odds Ratio)</i>"
+msgstr "OR = <i>(Odds Ratio, rapports de chance)</i>"
+
+#: jmvtab/options/OR/OR_pct.title
+msgid "OR_pct"
+msgstr "OR_pct <i>(odds ratios, % visibles)</i>"
+
+#: jmvtab/options/display/OR_pct.title
+msgid "OR_pct <i>(odds ratios with visible percentages)</i>"
+msgstr "OR_pct  <i>(odds ratios avec pourcentages visibles)</i>"
+
+#: jmvtab/ui[2][2][0].label
+msgid "other_if_less_than ="
+msgstr "other_if_less_than = <br> <i>(regrouper modalités rares)</i>"
+
+#: jmvtab/options/display/pct.title
+msgid "pct <i>(percentages)</i>"
+msgstr "pct <i>(pourcentages)</i>"
+
+#: jmvtab/options/pct.title
+msgid "pct = (Percentages)"
+msgstr "pct = (Pourcentages)"
+
+#: jmvtab/ui[1][0][0][0].label
+msgid "pct = <i>(type of percentages)</i>"
+msgstr "pct = <i>(type de pourcentages)</i>"
+
+#: jmvtab/options/display/pct_ci.title
+msgid "pct_ci <i>(percentages with visible conf. intervals)</i>"
+msgstr "pct_ci <i>(pourcentages avec IC visibles)</i>"
+
+#: jmvtab/ui[3][0][0].label
+msgid "ref = <i>(reference row/col for diff/OR)</i>"
+msgstr "ref = <i>(ligne/col de référence pour diff/OR)</i>"
+
+#: jmvtab/ui[3][2][0].label
+msgid "ref2 = <i>(2nd reference col/row for OR)</i>"
+msgstr "ref2 = <i>(2e col/ligne de référence pour OR)</i>"
+
+#: jmvtab/options/pct/row.title
+msgid "row"
+msgstr "row (ligne)"
+
+#: jmvtab/results/chi2_table.columns.title
+msgid "row_var"
+msgstr "row_var"
+
+#: jmvtab/options/chi2.description.R
+msgid "Set to \code{TRUE} to make a Chi2 and add summary stats. Also useful to color cells based on their contribution to variance."
+msgstr ""
+
+#: jmvtab/options/add_pct.description.R
+msgid "Set to `TRUE` to add a column with the frequencies of the row variable (for `pct = \"row\"`) or a row with the frequencies of the column variable (for  `pct = \"col\"`)"
+msgstr ""
+
+#: jmvtab/ui[5][6][0].label
+msgid "subtext = <i>(text to print below the table)</i>"
+msgstr "subtext = <i>(texte en dessous du tableau)</i>"
+
+#: jmvtab/options/comp/tab.title
+msgid "tab <i>(compare in each subtable)</i>"
+msgstr "tab <i>(comparer par sous-tableaux)</i>"
+
+#: jmvtab/options/totaltab/table.title
+msgid "table"
+msgstr "table (sous-tableau complet)"
+
+#: jmvtab/results/html_table.title
+msgid "Table"
+msgstr "Tableau"
+
+#: package/analyses/jmvtab.menuGroup
+#: jmvtab/options.menuGroup
+msgid "tabxplor"
+msgstr "tabxplor"
+
+#: jmvtab/options/comp.description.R
+msgid "The comparison level : by subtables/groups, or for the whole table."
+msgstr ""
+
+#: jmvtab/options/conf_level.description.R
+msgid "The confidence level, as a single numeric between 0 and 1. Default to 0.95 (95%)."
+msgstr ""
+
+#: jmvtab/options/display.description.R
+msgid "The information to display in the table."
+msgstr ""
+
+#: jmvtab/options/lvs.description.R
+msgid "The levels of \code{col_vars} to keep.\n"
+" \itemize{\n"
+"   \item \code{\"all\"}: by default, all levels are kept.\n"
+"   \item \code{\"first\"}: only keep the first level of each \code{col_vars}\n"
+"   \item \code{\"auto\"}: keep the first level when `col_var` is only two levels,\n"
+"   keep all levels otherwise.\n"
+"   }"
+msgstr ""
+
+#: jmvtab/options/digits.description.R
+msgid "The number of digits to print, as a single integer, or an integer vector the same length as \code{col_vars}."
+msgstr ""
+
+#: jmvtab/options/na.description.R
+msgid "The policy to adopt with missing values. It must be a single string.\n"
+" \itemize{\n"
+"   \item \code{na = \"keep\"}: by default, prints \code{NA}'s as explicit \code{\"NA\"} level.\n"
+"   \item \code{na = \"drop\"}: removes \code{NA} levels before making each table\n"
+"   (tabs made with different column variables may have a different number of\n"
+"   observations, and won't exactly have the same total columns).\n"
+"   }"
+msgstr ""
+
+#: jmvtab/options/ref.description.R
+msgid "The reference cell to calculate differences and ratios\n"
+"  (used to print \code{colors}) :\n"
+"  \itemize{\n"
+"   \item \code{\"auto\"}: by default, cell difference from the corresponding total\n"
+"   (rows or cols depending on \code{pct = \"row\"} or \code{pct = \"col\"}) is\n"
+"   used for `diff` ; cell ratio from the first line (or col) is use for `OR`\n"
+"   (odds ratio/relative risks ratio).\n"
+"   \item \code{\"tot\"}: totals are always used.\n"
+"   \item \code{\"first\"}: calculate cell difference or ratio from the first cell\n"
+" of the row or column (useful to color temporal developments).\n"
+"   \item \code{n}: when `ref` is an integer, the nth row (or column) is used for comparison.\n"
+"   \item \code{\"regex\"}: when `ref` is a string, it it used as a regular expression,\n"
+"   to match with the names of the rows (or columns). Be precise enough to match only one\n"
+"   column or row, otherwise you get a warning message.\n"
+"   \item \code{\"no\"}: not use ref and not calculate diffs to gain calculation time.\n"
+" }"
+msgstr ""
+
+#: jmvtab/options/row_vars.description.R
+msgid "The row variable, which will be printed with one level per line. If numeric, it will be converted to factor."
+msgstr "La variable de ligne, affichée avec une modalité sur chaque ligne. Si numérique, elle sera convertie en variable catégorielle."
+
+#: jmvtab/options/totaltab.description.R
+msgid "The total table, if there are subtables/groups\n"
+"  (i.e. when \code{tab_vars} is provided). Vectorised over `row_vars`.\n"
+" \itemize{\n"
+"   \item \code{\"line\"}: by default, add a general total line (necessary for\n"
+"   calculations with \code{comp = \"all\"})\n"
+"   \item \code{\"table\"}: add a complete total table\n"
+"  (i.e. \code{row_var} by \code{col_vars} without \code{tab_vars}).\n"
+"   \item \code{\"no\"}: not to draw any total table.\n"
+"  }"
+msgstr ""
+
+#: jmvtab/options/color.description.R
+msgid "The type of colors to print, as a single string. Vectorised over `row_vars`.\n"
+" \itemize{\n"
+"   \item \code{\"no\"}: by default, no colors are printed.\n"
+"   \item \code{\"diff\"}: color percentages and means based on cells differences from\n"
+"   totals (or from first cells when \code{ref = \"first\"}).\n"
+"   \item \code{\"diff_ci\"}: color pct and means based on cells differences from totals\n"
+"   or first cells, removing coloring when the confidence interval of this difference\n"
+"   is higher than the difference itself.\n"
+"   \item \code{\"after_ci\"}: idem, but cut off the confidence interval from the\n"
+"   difference first.\n"
+"   \item \code{\"contrib\"}: color cells based on their contribution to variance\n"
+"   (except mean columns, from numeric variables).\n"
+"   \item \code{\"OR\"}: for `pct == \"col\"` or `pct == \"row\"`,\n"
+"   color based on odds ratios (or relative risks ratios)\n"
+" }"
+msgstr ""
+
+#: jmvtab/options/ci.description.R
+msgid "The type of confidence intervals to calculate, passed to \code{\link{tab_ci}}.\n"
+"    \itemize{\n"
+"     \item \code{\"cell\"}: absolute confidence intervals of cells percentages.\n"
+"     \item \code{\"diff\"}: confidence intervals of the difference between a cell and the\n"
+"     relative total cell (or relative first cell when \code{ref = \"first\"}).\n"
+"     \item \code{\"auto\"}: \code{ci = \"diff\"} for means and row/col percentages,\n"
+"     \code{ci = \"cell\"} for frequencies (\"all\", \"all_tabs\").\n"
+"    }\n"
+"By default, for percentages, with \code{ci = \"cell\"} Wilson's method is used, and with \code{ci = \"diff\"} Wald's method along Agresti and Caffo's adjustment. Means use classic method."
+msgstr ""
+
+#: jmvtab/options/pct.description.R
+msgid "The type of percentages to calculate :\n"
+" \itemize{\n"
+"   \item \code{\"row\"}: row percentages.\n"
+"   \item \code{\"col\"}: column percentages.\n"
+"   \item \code{\"all\"}: frequencies for each subtable/group, if there is \code{tab_vars}.\n"
+"   \item \code{\"all_tabs\"}: frequencies for the whole (set of) table(s).\n"
+" }"
+msgstr ""
+
+#: R\jmvtab.b.R
+msgid "Total"
+msgstr "Total"
+
+#: jmvtab/options/totaltab.title
+msgid "totaltab = <i>(add a total table)</i>"
+msgstr "totaltab = <i>(ajouter un tableau Total général)</i>"
+
+#: jmvtab/ui[5][0][0].label
+msgid "totaltab = <i>(with tab_vars, add a total table)</i>"
+msgstr "totaltab = <i>(avec tab_vars, ajouter un tableau Total général)</i>"
+
+#: package.title
+msgid "User-Friendly Tables with Color Helpers for Data Exploration"
+msgstr "Tableaux avec aides à l'interprétation pour l'exploration de données"
+
+#: jmvtab/options/display/var.title
+msgid "var <i>(variance)</i>"
+msgstr "var <i>(variance)</i>"
+
+#: jmvtab/options/other_if_less_than.description.R
+msgid "When set to a positive integer, levels with less count than that will be merged into an \"Others\" level."
+msgstr ""
+
+#: jmvtab/options/OR.description.R
+msgid "With `pct = \"row\"` or `pct = \"col\"`, calculate and print odds ratios\n"
+" (for binary variables) or relative risks ratios (for variables with 3 levels\n"
+" or more).\n"
+"\itemize{\n"
+" \item \code{\"no\"}: by default, no OR are calculated.\n"
+" \item \code{\"OR\"}: print OR (instead of percentages).\n"
+" \item \code{\"OR_pct\"}: print OR, with percentages in bracket.\n"
+"}"
+msgstr ""
+
+#: jmvtab/options/display/wn.title
+msgid "wn <i>(weighted counts)</i>"
+msgstr "wn <i>(effectifs pondérés)</i>"
+
+#: jmvtab/ui[5][2][0].label
+msgid "wrap_cols = <i>(nb chars for line break)</i>"
+msgstr "wrap_cols = <i>(nb lettres avant saut de ligne)</i>"
+
+#: jmvtab/ui[5][1][0].label
+msgid "wrap_rows = <i>(nb chars for line break)</i>"
+msgstr "wrap_rows = <i>(nb lettres avant saut de ligne)</i>"
