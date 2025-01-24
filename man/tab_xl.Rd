@@ -11,7 +11,7 @@ tab_xl(
   open = rlang::is_interactive(),
   colnames_rotation = 0,
   remove_tab_vars = TRUE,
-  colwidth = "auto",
+  colwidth = 10,
   print_color_legend = TRUE,
   sheets = "auto",
   n_min = 0,
@@ -44,7 +44,7 @@ software associated with .xlsx files).}
 Set to \code{FALSE} to keep them.}
 
 \item{colwidth}{The standard width for numeric columns, as a number.
-Default to \code{"auto"}.}
+Set to \code{"auto"} to let Excel choose.}
 
 \item{print_color_legend}{Should the color legends be printed with the subtexts ?}
 

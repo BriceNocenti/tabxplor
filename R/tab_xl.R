@@ -16,7 +16,7 @@
 #' @param remove_tab_vars By default, \code{tab_vars} columns are removed to gain space.
 #' Set to \code{FALSE} to keep them.
 #' @param colwidth The standard width for numeric columns, as a number.
-#' Default to \code{"auto"}.
+#' Set to \code{"auto"} to let Excel choose.
 # @param print_ci Set to \code{TRUE} to print confidence intervals in another table,
 # at the left of the base table.
 #' @param titles The titles of the different tables, as a character vector. When missing
@@ -57,7 +57,7 @@
 tab_xl <-
   function(tabs, path = NULL, replace = FALSE, open = rlang::is_interactive(),
            colnames_rotation = 0, remove_tab_vars = TRUE, # print_ci = FALSE,
-           colwidth = "auto", print_color_legend = TRUE,
+           colwidth = 10, print_color_legend = TRUE,
            sheets = "auto", n_min = 0, titles,
            font_text = "DejaVu Sans Condensed", font_num = "DejaVu Sans",
            text_size = 10, text_size_headers = 9, text_size_subtext = 9,
@@ -263,8 +263,8 @@ tab_xl <-
                    stringr::str_replace_all(" +", " ")
       )
     if (print_color_legend == TRUE) {
-      color_legend <- purrr::map(tabs, ~ tab_color_legend(., colored = FALSE,
-                                                          add_color_and_diff_types = TRUE))
+      color_legend <- purrr::map(tabs, ~ suppressWarnings(tab_color_legend(., colored = FALSE,
+                                                          add_color_and_diff_types = TRUE)))
       # color_legend <- color_legend %>%
       #   purrr::map_if(purrr::map_lgl(., ~ !is.null(.)),
       #                 ~ purrr::map_if(., 1:length(.) == 1,
@@ -559,14 +559,23 @@ tab_xl <-
     # all_cols_chi2_ci <- purrr::pmap(list(tabs, tabs_chi2, tabs_ci),
     #                                 ~ 1:(ncol(..1) + ncol(..2) + ncol(..3)) )
     txt_cols <- purrr::map(tabs, ~ which(purrr::map_lgl(., ~ !is_fmt(.))))
-    row_var_cols <- purrr::map(txt_cols, ~ .[length(.)])
+    last_text_col <- purrr::map(txt_cols, ~ .[length(.)])
+    row_var_col   <- purrr::pmap(list(txt_cols,
+                                      purrr::map(txt_cols, names),
+                                      row_vars),
+                                 ~ ..1[..2 %in% ..3])
+
     fmt_cols <- purrr::map(tabs, ~ which(purrr::map_lgl(., ~ is_fmt(.))))
     totcols  <- purrr::map(totcols, which)
 
     col_vars_names <- purrr::map(tabs, ~ get_col_var(.) )
-    end_col_var <-
+    # end_col_var <-
+    #   purrr::map(col_vars_names,
+    #              ~ which(. != "" & . != dplyr::lead(., default = NA_character_))
+    #   )
+    start_col_var <-
       purrr::map(col_vars_names,
-                 ~ which(. != "" & . != dplyr::lead(., default = NA_character_))
+                 ~ which(. != "" & . != dplyr::lag(., default = NA_character_))
       )
 
     display <- purrr::map2(tabs, fmt_cols, ~ purrr::map(.x[.y], get_display))
@@ -845,22 +854,6 @@ tab_xl <-
 
     # Borders and text formating ---------------------------------------------------------
     # Headers and total columns
-    headers <- if (colnames_rotation == 0) {
-      openxlsx::createStyle(halign = "center", valign = "bottom", wrapText = TRUE,
-                            textDecoration = "Bold", border = "TopBottom",
-                            fontSize = text_size_headers)
-    } else {
-      openxlsx::createStyle(
-        halign = "left", valign = "bottom", wrapText = TRUE,
-        textDecoration = "Bold", textRotation = colnames_rotation,
-        border = c("bottom", "top"), fontSize = text_size_headers # "left", "right",
-      )
-    }
-
-    tibble::tibble(sheet, rows = start + 1, cols = all_cols) %>%
-      purrr::pwalk(openxlsx::addStyle, wb = wb, gridExpand = TRUE, stack = T,
-                   style = headers)
-
     st_bottomline <-
       openxlsx::createStyle(border = "bottom", borderStyle = "thin")
 
@@ -890,14 +883,23 @@ tab_xl <-
       purrr::pwalk(openxlsx::addStyle, wb = wb, gridExpand = TRUE, stack = T,
                    style = st_refcols)
 
-    st_end_col_var <- openxlsx::createStyle(border = "Right")
+    # st_end_col_var <- openxlsx::createStyle(border = "Right")
+    #
+    # tibble::tibble(sheet,
+    #                rows = purrr::map2(rows_nb, start, ~ unique(c(.y + 1L, .x))),
+    #                cols = end_col_var) %>%
+    #   dplyr::filter(purrr::map_lgl(.data$cols, ~ length(.) != 0) ) %>%
+    #   purrr::pwalk(openxlsx::addStyle, wb = wb, gridExpand = TRUE, stack = T,
+    #                style = st_end_col_var)
+
+    st_start_col_var <- openxlsx::createStyle(border = "Left")
 
     tibble::tibble(sheet,
                    rows = purrr::map2(rows_nb, start, ~ unique(c(.y + 1L, .x))),
-                   cols = end_col_var) %>%
+                   cols = start_col_var) %>%
       dplyr::filter(purrr::map_lgl(.data$cols, ~ length(.) != 0) ) %>%
       purrr::pwalk(openxlsx::addStyle, wb = wb, gridExpand = TRUE, stack = T,
-                   style = st_end_col_var)
+                   style = st_start_col_var)
 
     st_last_col <- openxlsx::createStyle(border = "Right")
 
@@ -916,6 +918,22 @@ tab_xl <-
       dplyr::filter(purrr::map_lgl(.data$cols, ~ length(.) != 0) ) %>%
       purrr::pwalk(openxlsx::addStyle, wb = wb, gridExpand = TRUE, stack = T,
                    style = st_first_col)
+
+    headers <- if (colnames_rotation == 0) {
+      openxlsx::createStyle(halign = "center", valign = "bottom", wrapText = TRUE,
+                            textDecoration = "Bold", border = "TopBottom",
+                            fontSize = text_size_headers)
+    } else {
+      openxlsx::createStyle(
+        halign = "left", valign = "bottom", wrapText = TRUE,
+        textDecoration = "Bold", textRotation = colnames_rotation,
+        border = c("bottom", "top"), fontSize = text_size_headers # "left", "right",
+      )
+    }
+
+    tibble::tibble(sheet, rows = start + 1, cols = all_cols) %>%
+      purrr::pwalk(openxlsx::addStyle, wb = wb, gridExpand = TRUE, stack = T,
+                   style = headers)
 
     # # Sep between col_vars and groups (copy for ci tabs)
     # st_end_col_var <- openxlsx::createStyle(border = "right")
@@ -1001,8 +1019,8 @@ tab_xl <-
     if (n_min > 0) {
       st_insufficient_counts <- openxlsx::createStyle(fontColour = "#909090")
 
-      insuff_col_cols <-
-        purrr::map2(insuff_counts_col_var, row_var_cols, ~ 1:length(.x) + .y)
+      insuff_col_cols <- # what does it do ?
+        purrr::map2(insuff_counts_col_var, last_text_col, ~ 1:length(.x) + .y)
 
       insuff_col_map <-
         tibble::tibble(sheet, insuff_counts_col_var, insuff_col_cols, start) %>%
@@ -1316,8 +1334,13 @@ tab_xl <-
 
 
     #Colwidths and rowheights --------------------------------------------------
-    tibble::tibble(sheet, cols = txt_cols) %>%
+    tibble::tibble(sheet, cols = row_var_col) %>%
       purrr::pwalk(openxlsx::setColWidths, wb = wb, widths = 30)
+
+    # tibble::tibble(sheet, cols = txt_cols) %>%
+    #   purrr::pwalk(openxlsx::setColWidths, wb = wb, widths = 30)
+
+
 
     autocw <- purrr::map_lgl(colwidth, ~ . == "auto")
 
@@ -2640,7 +2663,7 @@ insufficient_counts <- function(tabs, n_min = 30) {
 #
 #     all_cols <- purrr::map(tabs, ~ 1:ncol(.))
 #     txt_cols <- purrr::map(tabs, ~ which(purrr::map_lgl(., ~ !is_fmt(.))))
-#     row_var_cols <- purrr::map(txt_cols, ~ .[length(.)])
+#     last_text_col <- purrr::map(txt_cols, ~ .[length(.)])
 #     fmt_cols <- purrr::map(tabs, ~ which(purrr::map_lgl(., ~ is_fmt(.))))
 #     totcols  <- purrr::map(totcols, which)
 #
@@ -3621,7 +3644,7 @@ insufficient_counts <- function(tabs, n_min = 30) {
 #
 #     all_cols <- purrr::map(tabs, ~ 1:ncol(.))
 #     txt_cols <- purrr::map(tabs, ~ which(purrr::map_lgl(., ~ !is_fmt(.))))
-#     row_var_cols <- purrr::map(txt_cols, ~ .[length(.)])
+#     last_text_col <- purrr::map(txt_cols, ~ .[length(.)])
 #     fmt_cols <- purrr::map(tabs, ~ which(purrr::map_lgl(., ~ is_fmt(.))))
 #     totcols  <- purrr::map(totcols, which)
 #

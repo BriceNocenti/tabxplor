@@ -355,7 +355,7 @@ tbl_sum.tabxplor_grouped_tab <- function(x, ...) {
 tbl_format_footer.tabxplor_tab <- function(x, setup, ...) {
   default_footer <- NextMethod()
 
-  print_colors <- tab_color_legend(x) # suppressWarnings()
+  print_colors <- suppressWarnings(tab_color_legend(x))
   subtext <- get_subtext(x) %>% purrr::discard(. == "")
   if (length(print_colors) != 0) print_colors <- paste0(
     pillar::style_subtle("# "), print_colors
@@ -647,14 +647,15 @@ tab_kable <- function(tabs,
   #       ))
 
   if (color_legend) {
-  if (length(color_cols) != 0) subtext <- c(tab_color_legend(tabs,
-                                                             mode = "html",
-                                                             html_type  = color_type[1],
-                                                             html_theme = theme[1],
-                                                             html_24_bit = html_24_bit[1],
-                                                             text_color = text_color,
-                                                             grey_color = grey_color),
-                                            subtext)
+    if (length(color_cols) != 0) subtext <- c(
+   suppressWarnings(tab_color_legend(tabs,
+                       mode = "html",
+                       html_type  = color_type[1],
+                       html_theme = theme[1],
+                       html_24_bit = html_24_bit[1],
+                       text_color = text_color,
+                       grey_color = grey_color)),
+      subtext)
   }
 
 
@@ -1539,13 +1540,13 @@ if (color_type == "text") {
 
 if (color_legend & length(color_cols) != 0) {
 
-  color_legend <- tab_color_legend(tabs,
+  color_legend <- suppressWarnings(tab_color_legend(tabs,
                                    mode = "html",
                                    html_type   = color_type[1],
                                    html_theme  = theme[1],
                                    html_24_bit = html_24_bit[1],
                                    text_color  = text_color,
-                                   grey_color  = grey_color) |>
+                                   grey_color  = grey_color)) |>
     stringr::str_split("</span>|<span style=\"") |>
     purrr::imap_dfr(
       ~ tibble::tibble(n = as.integer(.y), base = .x)

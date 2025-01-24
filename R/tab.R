@@ -713,6 +713,9 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
   digits      <- vctrs::vec_recycle(digits, ncolvars)
   if (totcol[1] %in% c("last", "all_col_vars")) {
     totcol <- col_vars_text[col_vars_text] %>% names() %>% dplyr::last()
+    if (all(lvs == "first") & all(pct == "row") & ncolvars > 1) {
+      totcol <- NULL
+    }
   } else if (totcol[1] == "each") {
     totcol <- col_vars[col_vars_text]
   } else if (all(totcol %in% col_vars)) {
@@ -731,7 +734,8 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
     identical(totcol, col_vars)                                ~ "each",
     identical(totcol, col_vars[ncolvars])                      ~ "all_col_vars",
     length(totcol) == 0 &
-      (any(chi2 != FALSE) | any(pct != "no") | any(ci != "no"))~ "no_delete",
+      (any(chi2 != FALSE) | any(pct != "no") | any(ci != "no") |
+         any(OR != "no") )                                     ~ "no_delete",
     length(totcol) == 0                                        ~ "no_no_create",
     TRUE                                                       ~ "some"
   )
