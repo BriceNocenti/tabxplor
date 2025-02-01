@@ -27,10 +27,10 @@ NULL
 .onLoad <- function(libname, pkgname) {
   # options "tabxplor.color_style_type" and "tabxplor.color_style_theme" :
 
-  # # CRAN OMP THREAD LIMIT
-  if (Sys.info()[['sysname']] == "Linux") {
-    Sys.setenv("OMP_THREAD_LIMIT" = 2)
-  }
+  # # # CRAN OMP THREAD LIMIT
+  # if (Sys.info()[['sysname']] == "Linux") {
+  #   Sys.setenv("OMP_THREAD_LIMIT" = 2)
+  # }
 
   # data.table::setDTthreads(threads = 2)
   # data.table::getDTthreads(verbose = getOption("datatable.verbose"))
