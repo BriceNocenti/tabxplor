@@ -16,9 +16,16 @@ knitr::opts_chunk$set(
 
 ```{r setup}
 library(tabxplor)
+
+# # CRAN OMP THREAD LIMIT
+# threads_option <- Sys.getenv("OMP_THREAD_LIMIT")
+# Sys.setenv("OMP_THREAD_LIMIT" = 2)
+
+
+
 set_color_style(type = "text", theme = "light")
 ```
- 
+
 ```{r, echo = FALSE, include = FALSE}
 options(crayon.enabled = TRUE)
 knitr::knit_hooks$set(output = function(x, options){
@@ -364,6 +371,10 @@ If you only need the simplest table, with only numeric counts (no `fmt`), or eve
 tab_plain(data, race, marital, num = TRUE) # counts as a numeric vector
 tab_plain(data, race, marital, df = TRUE)  # same, with unique class = "data.frame"
 ```
+
+<!-- ``` {r exit, echo = FALSE, message = FALSE, warning = FALSE, error = FALSE} -->
+<!-- Sys.setenv("OMP_THREAD_LIMIT" = threads_option) -->
+<!-- ``` -->
 
 
 

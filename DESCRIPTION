@@ -58,6 +58,6 @@ Imports:
     DescTools (>= 0.99.0),
     data.table
 Depends:
-    R (>= 4.0.1)
+    R (>= 4.1.0)
 VignetteBuilder: knitr
 Config/potools/style: explicit
