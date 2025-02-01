@@ -1,4 +1,4 @@
-## New version 1.3.0 : 4th submission
+## New version 1.3.0 : 5th submission
 
 I'm having difficulties to resolve some notes on CRAN Debian win-builder check 
 "CPU time > 2.5 times elapsed time"
