@@ -1859,7 +1859,7 @@ tab_kable_print_tooltip <- function(x, popover = FALSE) {
     condition = type == "mean" & !is.na(get_var(x)) & !get_display(x) == "var",
     true      = dplyr::if_else(
       x$var >= 0,
-      true  = paste0("sd: ", format(set_display(set_digits(set_var(x, sqrt(x$var)), x$digits + 1L), "var"))),
+      true  = paste0("sd: ", format(set_display(set_digits(set_var(x, suppressWarnings(sqrt(x$var))), x$digits + 1L), "var"))),
       false = ""),
     false     = ""
   )

@@ -362,7 +362,7 @@ tab <- function(data, row_var, col_var, tab_vars, wt, sup_cols,
            na = na, na_drop_all = tidyselect::all_of(na_drop_all),
            filter = if (!missing(filter)) !!rlang::enquo(filter),
            digits = digits,
-           cleannames = cleannames, # compact = TRUE, #pvalue_line = pvalue_line,
+           cleannames = cleannames, compact = FALSE, #pvalue_line = pvalue_line,
            other_if_less_than = other_if_less_than, other_level = other_level,
            totaltab = totaltab, totaltab_name = totaltab_name,
            totrow = "row" %in% tot,
@@ -554,7 +554,10 @@ tab <- function(data, row_var, col_var, tab_vars, wt, sup_cols,
 #' (for  `pct = "col"`).
 #' @param subtext A character vector to print rows of legend under the table.
 #' @param compact With several `row_vars`, set to `TRUE` to bind all tables
-#' in a single `tabxplor_tab`.
+#' in a single `tabxplor_tab`. If not provided, the value of
+#' `getOption("tabxplor.compact")` is taken (`FALSE` by default).
+#' Set `options(tabxplor.compact = TRUE)` to make this the default behaviour for
+#' all tables (but beware becauce it can break existing code).
 #' @param cleannames Set to \code{TRUE} to clean levels names, by removing
 #' prefix numbers like "1-", and text in parenthesis. All data formatting arguments are
 #' passed to \code{\link{tab_prepare}}.
@@ -1430,9 +1433,11 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
   }
 
   # Compact tables into one
-  if (compact | (getOption("tabxplor.output_kable") == TRUE & length(tab_vars) == 0)) {
+  if ((compact | (getOption("tabxplor.output_kable") == TRUE & length(tab_vars) == 0)) &
+      !(is.list(tabs) & !is.data.frame(tabs) & length(tabs) == 1 ) ) {
     tabs <- tabs |> tab_compact() # pvalue_lines = FALSE
   }
+
 
   if (is.data.frame(tabs)) {
     tabs <- tabs |> tab_pvalue_lines()

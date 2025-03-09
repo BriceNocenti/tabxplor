@@ -27,9 +27,9 @@ NULL
 .onLoad <- function(libname, pkgname) {
   # options "tabxplor.color_style_type" and "tabxplor.color_style_theme" :
 
-  # # # CRAN OMP THREAD LIMIT
+  # # CRAN OMP THREAD LIMIT
   # if (Sys.info()[['sysname']] == "Linux") {
-  #   Sys.setenv("OMP_THREAD_LIMIT" = 2)
+  #  Sys.setenv("OMP_THREAD_LIMIT" = 2)
   # }
 
   # data.table::setDTthreads(threads = 2)
@@ -61,7 +61,7 @@ NULL
 
   options("tabxplor.compact" = FALSE)
 
-  options("tabxplor.pvalue_lines" = FALSE)
+  # options("tabxplor.pvalue_lines" = FALSE)
 
   options("tabxplor.always_add_css_in_tab_kable" = TRUE)
 
@@ -135,6 +135,15 @@ score_from_lv1 <- function (data, name, vars_list) {
 }
 
 
+# data <- dplyr::select(forcats::gss_cat, -where(is.numeric))
+# name_in = "data"
+# name_out = "data"
+# style = "base"
+# reminder = TRUE
+# cat = TRUE
+
+
+
 
 #' fct_recode helper to recode multiple variables
 #'
@@ -153,6 +162,7 @@ score_from_lv1 <- function (data, name, vars_list) {
 #' @return When the number of variables is less than 5, a text in console as a side effect.
 #' With more than 5 variables, a temporary R file. A `tibble` with the recode text as a
 #' character variable is returned invisibly (or as main result if `cat = TRUE`).
+#' If the `labelled` package in installed, the variable label is used as title in a comment.
 #' @export
 fct_recode_helper <- function(data, .cols = -where(is.numeric), name_in, name_out,
                               style = c("mutate", "base"), reminder = TRUE, cat = TRUE) {
@@ -172,6 +182,15 @@ fct_recode_helper <- function(data, .cols = -where(is.numeric), name_in, name_ou
   data <- data[pos_cols]
   data <- data |> dplyr::mutate(dplyr::across(.cols = dplyr::everything(), .fns = as.factor))
 
+  with_variable_label_as_title <- requireNamespace("openxlsx", quietly = TRUE)
+  if (with_variable_label_as_title) {
+    var_labs <- labelled::get_variable_labels(data)
+    var_labs <- var_labs[purrr::map_lgl(var_labs, ~ !is.null(.))]
+    if (length(var_labs) == 0) with_variable_label_as_title <- FALSE
+
+    # var_labs <- purrr::imap(var_labs, ~ paste0(.y, " with a lot of text"))
+  }
+
   recode <- data |>
     purrr::map(~ paste0("\"",
                         #stringi::stri_escape_unicode(
@@ -185,25 +204,44 @@ fct_recode_helper <- function(data, .cols = -where(is.numeric), name_in, name_ou
                stringr::str_pad(., max(stringr::str_length(.)), "right"), collapse = ",\n")
     )
 
+
+  if (with_variable_label_as_title) {
+  titles <- purrr::map(
+    names(recode),
+    ~ dplyr::if_else(. %in% names(var_labs),
+                     true  = paste0("# ", ., " : ", var_labs[[.]] , "\n"),
+                     false = ""
+    )
+  )
+
+  } else {
+    titles <- purrr::map(recode, ~ "")
+  }
+
+
   reminder <- if (reminder) {'   # "new" = "old" '} else {''}
 
   recode <-
     switch(
       style[1],
-      "base"   = purrr::imap(
-        recode, ~ paste0(name_out, "$", .y, " <- fct_recode(\n",
-                         name_in, "$", .y, ',', reminder, '\n',
-                         .x, "\n)\n\n"
+      "base"   = purrr::pmap(
+        list(recode, names(recode), titles),
+        ~ paste0(..3,
+                 name_out, "$", ..2, " <- fct_recode(\n",
+                 name_in, "$", ..2, ',', reminder, '\n',
+                 ..1, "\n)\n\n"
         )) |>
         purrr::flatten_chr(),
 
       "mutate" =
         c(
           paste0(name_in, " |>\n", "mutate(", "\n"), # reminder
-          purrr::imap(
-            recode, ~ paste0(.y, " = fct_recode(", reminder, "\n",
-                             .y, ',', '\n',
-                             .x, "\n),\n\n"
+          purrr::pmap(
+            list(recode, names(recode), titles),
+            ~ paste0(..3,
+                     ..2, " = fct_recode(", reminder, "\n",
+                     ..2, ',', '\n',
+                     ..1, "\n),\n\n"
             )) |> purrr::flatten_chr(),
           ")\n"
         )

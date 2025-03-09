@@ -37,6 +37,7 @@ false to get a data frame with a character variable instead.}
 When the number of variables is less than 5, a text in console as a side effect.
 With more than 5 variables, a temporary R file. A \code{tibble} with the recode text as a
 character variable is returned invisibly (or as main result if \code{cat = TRUE}).
+If the \code{labelled} package in installed, the variable label is used as title in a comment.
 }
 \description{
 fct_recode helper to recode multiple variables

@@ -158,7 +158,10 @@ prefix numbers like "1-", and text in parenthesis. All data formatting arguments
 passed to \code{\link{tab_prepare}}.}
 
 \item{compact}{With several \code{row_vars}, set to \code{TRUE} to bind all tables
-in a single \code{tabxplor_tab}.}
+in a single \code{tabxplor_tab}. If not provided, the value of
+\code{getOption("tabxplor.compact")} is taken (\code{FALSE} by default).
+Set \code{options(tabxplor.compact = TRUE)} to make this the default behaviour for
+all tables (but beware becauce it can break existing code).}
 
 \item{other_if_less_than}{When set to a positive integer, levels with less count
 than it will be merged into an "Others" level.}

@@ -30,13 +30,14 @@ Suggests:
     R6,
     ggpubr (>= 0.6.0),
     ggplot2 (>= 3.4.0),
-    cowplot (>= 1.1.1), 
-    gtable, 
+    cowplot (>= 1.1.1),
+    gtable,
     grDevices,
-    grid, 
+    grid,
     rmarkdown,
     rstudioapi (>= 0.1),
-    testthat (>= 3.0.0)
+    testthat (>= 3.0.0),
+    labelled (>= 2.0.0)
 Config/testthat/edition: 3
 Imports: 
     dplyr (>= 1.0.3),
