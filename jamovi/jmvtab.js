@@ -21,6 +21,7 @@
 module.exports = {
 
 exportExcel_clicked(ui, event) {
+  console.log("Action button clicked!");
   const current = ui.doExportExcel.value();
   ui.doExportExcel.setValue(!current);  // toggle to force analysis run
 
