@@ -1,0 +1,82 @@
+---
+name:  jmvtab
+title: Crosstables
+jrs:   '1.1'
+
+items:
+
+
+    - name: html_table
+      title: Table
+      type: Html
+
+    # - name:  chi2_table
+    #   title: Chi2 Test
+    #   type:  Table
+    #   rows:  0
+    #   columns:
+    #     # - name: tab_vars
+    #     #   type: text
+    #     #   combineBelow: true
+    #     - name: row_var
+    #       title: row_var
+    #       type: text
+    #       #content: ($key)
+    #       #combineBelow: true
+    #     # - name: "chi2 stats"
+    #     #   type: text
+    #     # - name: df
+    #     #   type: integer
+    #     # - name: p
+    #     #   type: number
+    #     #   format: zto,pvalue
+
+    # Empty plot needed to be able to set the value of the plotting zone
+    - name: plot
+      title: ""
+      type: Image
+      width:  1080
+      height: 0
+      renderFun: .plot
+
+    # - name: freqs
+    #   title: CrossTables
+    #   type: Table
+    #  # description: a table of proportions
+    #   columns: [ ]
+    #   clearWith:
+    #     - row_vars
+    #     - col_vars
+    #     - tab_vars
+    #     - pct
+    #     - wt
+    #     - na
+
+    # - name:  ttest
+    #   title: Independent Samples T-Test
+    #   type: Table
+    #   rows:  1
+    #   columns:
+    #     - name: var
+    #       title: ''
+    #       type: text
+    #     - name: t
+    #       type: number
+    #     - name: df
+    #       type: integer
+    #     - name: p
+    #       type: number
+    #       format: zto,pvalue
+
+
+    # - name: plot
+    #   title: Table
+    #   type: Image
+    #   width:  720
+    #   height: 200
+    #   renderFun: .plot
+    #
+    # - name: plot_legend
+    #   title: ""
+    #   type: Html
+...
