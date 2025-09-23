@@ -22,16 +22,55 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
     # .exportMessage     = NULL,
 
     # .init = function() {
-    #     # Initialize xl_path to user documents if unset
-    #     if (is.null(self$options$xl_path) || self$options$xl_path == "") {
-    #       docs <- get_user_documents() # for all platforms and languages
-    #       default_path <- file.path(docs, "Excel_test.xlsx")
-    #       #default_path <- "D:/Documents/Excel_test.xlsx"
-    #       self$options$xl_path <- default_path
-    #       #self$options$xl_path$setValue(default_path)
-    #     }
+    #   # Initialize xl_path to user documents folder
+    #   if (is.null(self$options$xl_path) || self$options$xl_path == "") {
+    #     # Get user documents folder across platforms
+    #     docs_path <- tryCatch({
+    #       if (Sys.info()["sysname"] == "Windows") {
+    #         # Windows approach
+    #         shell_folders <- tryCatch({
+    #           utils::readRegistry("HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Shell Folders", "HCU")
+    #         }, error = function(e) {
+    #           return(NULL)
+    #         })
     #
+    #         if (!is.null(shell_folders) && !is.null(shell_folders[["Personal"]])) {
+    #           docs <- shell_folders[["Personal"]]
+    #         } else {
+    #           # Fallback if registry approach fails
+    #           docs <- file.path(Sys.getenv("USERPROFILE"), "Documents")
+    #         }
+    #       } else if (Sys.info()["sysname"] == "Darwin") {
+    #         # macOS approach
+    #         docs <- file.path(path.expand("~"), "Documents")
+    #       } else {
+    #         # Linux and others - use XDG standard if available
+    #         xdg_docs <- Sys.getenv("XDG_DOCUMENTS_DIR")
+    #         if (xdg_docs != "") {
+    #           docs <- xdg_docs
+    #         } else {
+    #           docs <- file.path(path.expand("~"), "Documents")
+    #         }
+    #       }
+    #       # Ensure path exists, otherwise use home directory
+    #       if (!dir.exists(docs)) {
+    #         docs <- path.expand("~")
+    #       }
+    #       docs
+    #     }, error = function(e) {
+    #       # Fallback to home directory if there's any error
+    #       path.expand("~")
+    #     })
+    #
+    #     # Create normalized path with forward slashes
+    #     xl_path <- file.path(docs_path)
+    #     xl_path <- gsub("\\\\", "/", xl_path)
+    #
+    #     # Directly set the option value - don't use setValue()
+    #     self$options$xl_path <- xl_path
+    #   }
     # },
+
 
 # get_user_documents() is not working in Jamovi
 # "D:/Documents/Excel_test.xlsx"
@@ -46,9 +85,6 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
       #     private$.showExportMessage = FALSE
       #   }
       # }
-
-
-
 
       data <- self$data
 
@@ -175,9 +211,10 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
         # # Handle Excel export
         if (!is.null(self$options$exportExcel)) {
           if (self$options$exportExcel) {
-            # Get the full file path from the two textboxes
-            file_path <-
-              file.path(self$options$xl_path, self$options$xl_filename)
+
+            file_path <- file.path(options$xl_path, self$options$xl_filename)
+
+
 
             # Check if a file was selected
             if (!is.null(file_path) && file_path != "") {
@@ -191,7 +228,7 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
                      sheets = "unique", open = FALSE, replace = TRUE)
             } else {
               # Show error message if no file selected
-              jmvcore::reject("Please select a file location for the Excel export",
+              jmvcore::reject("Please select a valid file location for the Excel export",
                               code="no_file_selected")
             }
 
@@ -636,7 +673,8 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
       # plot <- tab_plot(plotData, wrap_rows = Inf, wrap_cols = Inf, color_legend = FALSE)
       # print(plot)
       TRUE
-    }
+    } #,
+
   )
 )
 

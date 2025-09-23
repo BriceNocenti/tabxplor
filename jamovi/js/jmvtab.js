@@ -5,17 +5,6 @@
 // htmltools::includeScript(# bootstrap jv
 //   system.file("rmd/h/bootstrap/shim/html5shiv.min.js", package = "rmarkdown"),
 // )
-// htmltools::includeScript(# bootstrap jv
-//   system.file("rmd/h/bootstrap/shim/respond.min.js", package = "rmarkdown"),
-// )
-//
-// htmltools::includeScript(# html_dependency_kePrint (popover)
-//   system.file("kePrint-0.0.1/kePrint.js", package = "kableExtra")
-// )
-//
-// htmltools::includeScript( # jquery
-//   system.file("lib/3.6.0/jquery-3.6.0.min.js", package = "jquerylib")
-// )
 
 
 module.exports = {
@@ -31,71 +20,6 @@ module.exports = {
             }, 2000);
         }
     }
-
-//   exportExcel_changed: function(ui) {
-//       // Force analysis to run by doing nothing
-//       // Action buttons automatically reset themselves when the analysis completes
-//       console.log("Excel export initiated");
-//   }
-
-//    // Event handler for when the export button is clicked
-//    exportExcel_changed: function(ui, event) {
-//        // The button was clicked, perform any UI updates
-//        if (ui.exportExcel.value()) {
-//            // Button is now "pressed"
-//            // You can update other UI elements or show feedback
-//            console.log("Export button clicked");
-//
-//            // Note: The actual reset happens automatically after the R code runs
-//        }
-//    },
-//
-//    // View updated event - called after analysis runs
-//    view_updated: function(ui, event) {
-//        // This is called after the .b.R code completes
-//        // The button will already be reset by Jamovi automatically
-//    }
-
-// exportExcel_changed(ui, event) {
-//   console.log("exportExcel button clicked");
-//   //const current = ui.doExportExcel.value();
-//   // ui.doExportExcel.setValue(!current);  // toggle to force analysis run
-// }
-
-
-
-//  tab_vars_changed(ui) { // (ui, event)
-//    // let tab_vars = ui.tab_vars.value(); // let : block-scoped local variables
-//    // let size = Object.keys(tab_vars).length;
-//
-//    let tab_vars = utils.clone(ui.tab_vars.value(), []);
-//    let size = tab_vars.length
-//
-//     // alert(size.toString());
-//
-//    if (size == 0) {
-//       // // jamovi/client/analysisui/optioncontrol.js
-//       // this.setEnabled(true);
-//       // this.setPropertyValue('enable', true);
-//
-//
-//        ui.comp.tab.setAttribute("disabled", true);
-//        ui.comp.tab.setAttribute("enabled", false);
-//        ui.comp.tab.setEnabled(false)
-//        //ui.comp.tab.setPropertyValue('enable', false);
-//
-//        // ui.comp.all.setAttribute("disabled", true);
-//        // ui.comp.setValue(0.707)
-//
-//    } else { // size > 0
-//        ui.comp.tab.removeAttribute("disabled");
-//        ui.comp.tab.setAttribute("enabled", true);
-//        ui.comp.tab.setEnabled(true)
-//        //ui.comp.tab.setPropertyValue('enable', true);
-//        // ui.comp.all.removeAttribute("disabled");
-//    }
-//
-//  } //,
 
 };
 

@@ -504,7 +504,7 @@ options:
     - name: xl_path
       type: String
       title: ""
-      default: "D:/Documents" #, "C:/Downloads" # Not set in .init() # "D:/Documents/Excel_test.xlsx"
+      default: ""
       description:
           R: >
            "Folder in which to save exported Excel file"
