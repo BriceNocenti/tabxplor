@@ -17,9 +17,9 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
   # ),
   private = list(
 
-    # Existing private fields...
-    .showExportMessage = FALSE,
-    .exportMessage     = NULL,
+
+    # .showExportMessage = FALSE,
+    # .exportMessage     = NULL,
 
     # .init = function() {
     #     # Initialize xl_path to user documents if unset
@@ -40,11 +40,12 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
 
     .run = function() {
 
-      # Clear any previous export message unless we're doing a new export
-      if (!is.null(self$options$exportExcel) && !self$options$exportExcel) {
-        private$.showExportMessage = FALSE
-      }
-
+      # # Clear export message flag if not exporting
+      # if (!is.null(self$options$exportExcel)) {
+      #   if (!self$options$exportExcel) {
+      #     private$.showExportMessage = FALSE
+      #   }
+      # }
 
 
 
@@ -173,7 +174,7 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
         # Handle Excel export
         if (!is.null(self$options$exportExcel) && self$options$exportExcel) {
           tryCatch({
-            # Create full export path including filename
+            # Create full path with filename and extension
             export_path <- file.path(self$options$xl_path, paste0(self$options$xl_filename, ".xlsx"))
 
             # Perform the export
@@ -183,26 +184,26 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
                    open = FALSE,
                    replace = TRUE)
 
-            # Create success message
-            private$.exportMessage <- paste0(
-              "<div style='padding: 10px; margin-bottom: 15px; background-color: #dff0d8; ",
-              "border: 1px solid #d6e9c6; border-radius: 4px; color: #3c763d;'>",
-              "Excel file successfully exported to: <br>",
-              export_path,
-              "</div>"
-            )
-            private$.showExportMessage = TRUE
+            # # Create success message
+            # private$.exportMessage <- paste0(
+            #   "<div style='padding: 10px; margin: 15px 0; background-color: #dff0d8; ",
+            #   "border: 1px solid #d6e9c6; border-radius: 4px; color: #3c763d;'>",
+            #   "Excel file successfully exported to: <br>",
+            #   export_path,
+            #   "</div>"
+            # )
+            # private$.showExportMessage = TRUE
 
           }, error = function(e) {
-            # Create error message
-            private$.exportMessage <- paste0(
-              "<div style='padding: 10px; margin-bottom: 15px; background-color: #f2dede; ",
-              "border: 1px solid #ebccd1; border-radius: 4px; color: #a94442;'>",
-              "Error exporting Excel file: <br>",
-              e$message,
-              "</div>"
-            )
-            private$.showExportMessage = TRUE
+            # # Create error message
+            # private$.exportMessage <- paste0(
+            #   "<div style='padding: 10px; margin: 15px 0; background-color: #f2dede; ",
+            #   "border: 1px solid #ebccd1; border-radius: 4px; color: #a94442;'>",
+            #   "Error exporting Excel file: <br>",
+            #   e$message,
+            #   "</div>"
+            # )
+            # private$.showExportMessage = TRUE
           })
 
           # Reset button state
@@ -399,30 +400,17 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
         # }
 
 
-        # Add the export message AFTER the table content if needed
-        if (private$.showExportMessage && !is.null(private$.exportMessage)) {
-          # Extract the table content
-          table_content <- as.character(tabs_html)
-
-          # Find the closing </table> tag to insert the message after it
-          closing_table_pos <- regexpr("</table>", table_content) + 8
-
-          # Insert the message after the table
-          if (closing_table_pos > 8) {
-            table_content <- paste0(
-              substr(table_content, 1, closing_table_pos),
-              private$.exportMessage,
-              substr(table_content, closing_table_pos + 1, nchar(table_content))
-            )
-
-            # Restore the HTML object
-            tabs_html <- table_content |> vctrs::vec_restore(tabs_html)
-          } else {
-            # Fallback if we can't find the closing table tag
-            tabs_html <- paste0(as.character(tabs_html), private$.exportMessage) |>
-              vctrs::vec_restore(tabs_html)
-          }
-        }
+        # # After you've created tabs_html, append the message AFTER the entire HTML content:
+        # if (private$.showExportMessage && !is.null(private$.exportMessage)) {
+        #   # Make sure we're working with the character representation of the HTML
+        #   html_content <- as.character(tabs_html)
+        #
+        #   # Simply append the message at the end (after everything)
+        #   html_content <- paste0(html_content, private$.exportMessage)
+        #
+        #   # Restore the HTML object properties
+        #   tabs_html <- html_content |> vctrs::vec_restore(tabs_html)
+        # }
 
         # Set the content
         self$results$html_table$setContent(tabs_html)
