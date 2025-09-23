@@ -33,7 +33,8 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             subtext = "",
             digits = 0,
             exportExcel = NULL,
-            xl_path = "", ...) {
+            xl_path = "C:/Downloads",
+            xl_filename = "Table1", ...) {
 
             super$initialize(
                 package="tabxplor",
@@ -233,7 +234,11 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             private$..xl_path <- jmvcore::OptionString$new(
                 "xl_path",
                 xl_path,
-                default="")
+                default="C:/Downloads")
+            private$..xl_filename <- jmvcore::OptionString$new(
+                "xl_filename",
+                xl_filename,
+                default="Table1")
 
             self$.addOption(private$..row_vars)
             self$.addOption(private$..col_vars)
@@ -263,6 +268,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$.addOption(private$..digits)
             self$.addOption(private$..exportExcel)
             self$.addOption(private$..xl_path)
+            self$.addOption(private$..xl_filename)
         }),
     active = list(
         row_vars = function() private$..row_vars$value,
@@ -292,7 +298,8 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         subtext = function() private$..subtext$value,
         digits = function() private$..digits$value,
         exportExcel = function() private$..exportExcel$value,
-        xl_path = function() private$..xl_path$value),
+        xl_path = function() private$..xl_path$value,
+        xl_filename = function() private$..xl_filename$value),
     private = list(
         ..row_vars = NA,
         ..col_vars = NA,
@@ -321,7 +328,8 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         ..subtext = NA,
         ..digits = NA,
         ..exportExcel = NA,
-        ..xl_path = NA)
+        ..xl_path = NA,
+        ..xl_filename = NA)
 )
 
 jmvtabResults <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
@@ -480,7 +488,8 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #' @param digits The number of digits to print, as a single integer, or an
 #'   integer vector the same length as \code{col_vars}.
 #' @param exportExcel Press to export the table to Excel.
-#' @param xl_path "Select where to save the exported Excel file"
+#' @param xl_path "Folder in which to save exported Excel file"
+#' @param xl_filename "Name of exported Excel file"
 #' @return A results object containing:
 #' \tabular{llllll}{
 #'   \code{results$html_table} \tab \tab \tab \tab \tab a html \cr
@@ -517,7 +526,8 @@ jmvtab <- function(
     subtext = "",
     digits = 0,
     exportExcel,
-    xl_path = "") {
+    xl_path = "C:/Downloads",
+    xl_filename = "Table1") {
 
     if ( ! requireNamespace("jmvcore", quietly=TRUE))
         stop("jmvtab requires jmvcore to be installed (restart may be required)")
@@ -564,7 +574,8 @@ jmvtab <- function(
         subtext = subtext,
         digits = digits,
         exportExcel = exportExcel,
-        xl_path = xl_path)
+        xl_path = xl_path,
+        xl_filename = xl_filename)
 
     analysis <- jmvtabClass$new(
         options = options,

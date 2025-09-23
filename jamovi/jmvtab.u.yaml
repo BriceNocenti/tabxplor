@@ -443,55 +443,43 @@ children:
                 name: subtext
                 format: string
                 width: largest
-  - type: CollapseBox
-    label: <b>Export to Excel</b>
-    stretchFactor: 1
-    collapsed: false
+  - type: LayoutBox
+    style: inline         # put both controls on the same horizontal line
     children:
-      - type: LayoutBox
-        margin: large
-        cell:
-          column: 0
-          row: 0
+      - type: ActionButton
+        name: exportExcel
+        label: "Export to Excel"
+        events:
+          change: './jmvtab::exportExcel_changed'
+        stretchFactor: 0  # keep button at natural size
+      - type: TextBox
+        name: xl_path
+        format: string
+        width: largest
         stretchFactor: 1
-        children:
-          - type: LayoutBox
-            style: inline
-            stretchFactor: 1
-            children:
-              - type: Label
-                label: <i>(Export to Excel)</i>
-                children:
-                  # - type: CheckBox
-                  #   name: xl
-                  - type: ActionButton
-                    name: exportExcel
-                    label: "Export table to Excel"
-                    events:
-                      change: './jmvtab::exportExcel_clicked'
-      - type: LayoutBox
-        margin: none
-        cell:
-          column: 1
-          row: 0
-        stretchFactor: 3
-        children:
-          - type: Label
-            label: <i>(Path of the Excel file)</i>
-            children:
-              # - type: TextBox
-              #   name: xl_path
-              #   format: string
-              #   width: largest
-              - type: FilePicker
-                name: xl_path
-                label: "Path of the Excel file"
-                action: "save"
-                filters:
-                  - name: "Excel files"
-                    extensions: ["xlsx"]
-
-
-
-
+    # - type: FilePicker
+    #   name: xl_path
+    #   label: "Path of the Excel file"
+    #   action: save
+    #   filters:
+    #     - name: "Excel files"
+    #       extensions: ["xlsx"]
+      - type: Label
+        label: " / "    # Static text, uneditable
+        stretchFactor: 0  # Label takes its natural width
+        # style:
+        #   paddingLeft: 8    # optional spacing to separate from TextBox
+        #   paddingRight: 8    # optional spacing to separate from TextBox
+        #   verticalAlign: middle
+      - type: TextBox
+        name: xl_filename
+        format: string
+        width: largest
+        stretchFactor: 1
+      - type: Label
+        label: ".xlsx"    # Static text, uneditable
+        stretchFactor: 0  # Label takes its natural width
+        # style:
+        #   paddingLeft: 8    # optional spacing to separate from TextBox
+        #   verticalAlign: middle
 

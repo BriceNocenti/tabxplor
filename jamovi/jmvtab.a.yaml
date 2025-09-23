@@ -493,19 +493,28 @@ options:
       description:
         R: "Press to export the table to Excel."
 
+    - name: xl_path
+      type: String # String File
+      title: ""
+      default: "C:/Downloads" # Not set in .init() # "D:/Documents/Excel_test.xlsx"
+      description:
+          R: >
+           "Folder in which to save exported Excel file"
+
+    - name: xl_filename
+      type: String
+      title: ""
+      default: "Table1" # Not set in .init() # "D:/Documents/Excel_test.xlsx"
+      description:
+          R: >
+           "Name of exported Excel file"
+
     # - name: doExportExcel
     #   type: Bool
     #   default: false
     #   hidden: true   # hide from normal UI
     #   description: "Trigger for Excel export"
 
-    - name: xl_path
-      title: ""
-      type: String # String File
-      default: "" # set in .init() # "D:/Documents/Excel_test.xlsx"
-      description:
-          R: >
-           "Select where to save the exported Excel file"
 ...
 
 

@@ -26,7 +26,6 @@ analyses:
     category: analyses
     usesNative: true
     minApp: 1.0.8
-    js: js/jmvtab.js
 usesNative: true
 minApp: 1.0.8
 

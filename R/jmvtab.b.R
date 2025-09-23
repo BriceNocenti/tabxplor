@@ -18,21 +18,35 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
   private = list(
 
 
-    .init = function() {
-        # Initialize xl_path to user documents if unset
-        if (is.null(self$options$xl_path) || self$options$xl_path == "") {
-          docs <- get_user_documents() # for all platforms and languages
-          self$options$xl_path$setValue(file.path(docs, "Excel_test.xlsx"))
-        }
+    # .init = function() {
+    #     # Initialize xl_path to user documents if unset
+    #     if (is.null(self$options$xl_path) || self$options$xl_path == "") {
+    #       docs <- get_user_documents() # for all platforms and languages
+    #       default_path <- file.path(docs, "Excel_test.xlsx")
+    #       #default_path <- "D:/Documents/Excel_test.xlsx"
+    #       self$options$xl_path <- default_path
+    #       #self$options$xl_path$setValue(default_path)
+    #     }
+    #
+    # },
 
-    },
-
-
+# get_user_documents() is not working in Jamovi
+# "D:/Documents/Excel_test.xlsx"
+# go to "C:/Rtools/home/builder/Excel.xlsx"
 
 
     .run = function() {
 
       data <- self$data
+
+      # if (is.null(self$options$xl_path) || self$options$xl_path == "") {
+      #   # docs <- get_user_documents() # for all platforms and languages
+      #   # default_path <- file.path(docs, "Excel_test.xlsx") |>
+      #   #   stringr::str_replace_all("\\\\", "/")
+      #   self$options$xl_path$setValue("D:/Documents/Excel_test.xlsx")
+      #   #self$options$xl_path <- default_path
+      #   #self$options$xl_path$setValue(default_path)
+      # }
 
       # Note : self$data only contains the selected variables,
       #  but not wt if it was given in Jamovi with Data >>> Weights) :
@@ -147,6 +161,7 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
             tab_xl(tabs, path = self$options$xl_path,
                    sheets = "unique", open = FALSE, replace = TRUE)
 
+            #self$options$exportExcel <- FALSE
             self$options$exportExcel$setValue(FALSE)
           }
         }
