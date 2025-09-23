@@ -493,6 +493,14 @@ options:
       description:
         R: "Press to export the table to Excel."
 
+    # - name: xl_file
+    #   type: String
+    #   title: ""
+    #   default: ""
+    #   description:
+    #       R: >
+    #        "Full path for the exported Excel file"
+
     - name: xl_path
       type: String # String File
       title: ""
@@ -509,11 +517,6 @@ options:
           R: >
            "Name of exported Excel file"
 
-    # - name: doExportExcel
-    #   type: Bool
-    #   default: false
-    #   hidden: true   # hide from normal UI
-    #   description: "Trigger for Excel export"
 
 ...
 

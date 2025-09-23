@@ -450,8 +450,15 @@ children:
         name: exportExcel
         label: "Export to Excel"
         events:
-          change: './jmvtab::exportExcel_changed'
-        stretchFactor: 0  # keep button at natural size
+          change: './js/jmvtab:exportExcel_changed'
+        stretchFactor: 0
+      # - type: FilePicker
+      #   name: xl_file
+      #   label: ""
+      #   action: save
+      #   extensions:
+      #     - xlsx
+      #   stretchFactor: 1
       - type: TextBox
         name: xl_path
         format: string

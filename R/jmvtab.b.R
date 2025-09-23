@@ -169,46 +169,70 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
           options('tabxplor.ci_print' = "ci")
         }
 
+        # # Handle Excel export
+        if (!is.null(self$options$exportExcel)) {
+          if (self$options$exportExcel) {
+            # Get the full file path from the FilePicker
+            file_path <- self$options$xl_file
 
+            # Check if a file was selected
+            if (!is.null(file_path) && file_path != "") {
+              # Ensure file has .xlsx extension
+              if (!grepl("\\.xlsx$", file_path, ignore.case = TRUE)) {
+                file_path <- paste0(file_path, ".xlsx")
+              }
 
-        # Handle Excel export
-        if (!is.null(self$options$exportExcel) && self$options$exportExcel) {
-          tryCatch({
-            # Create full path with filename and extension
-            export_path <- file.path(self$options$xl_path, paste0(self$options$xl_filename, ".xlsx"))
+              # Export the table
+              tab_xl(tabs, path = file_path,
+                     sheets = "unique", open = FALSE, replace = TRUE)
+            } else {
+              # Show error message if no file selected
+              jmvcore::reject("Please select a file location for the Excel export",
+                              code="no_file_selected")
+            }
 
-            # Perform the export
-            tab_xl(tabs,
-                   path = export_path,
-                   sheets = "unique",
-                   open = FALSE,
-                   replace = TRUE)
-
-            # # Create success message
-            # private$.exportMessage <- paste0(
-            #   "<div style='padding: 10px; margin: 15px 0; background-color: #dff0d8; ",
-            #   "border: 1px solid #d6e9c6; border-radius: 4px; color: #3c763d;'>",
-            #   "Excel file successfully exported to: <br>",
-            #   export_path,
-            #   "</div>"
-            # )
-            # private$.showExportMessage = TRUE
-
-          }, error = function(e) {
-            # # Create error message
-            # private$.exportMessage <- paste0(
-            #   "<div style='padding: 10px; margin: 15px 0; background-color: #f2dede; ",
-            #   "border: 1px solid #ebccd1; border-radius: 4px; color: #a94442;'>",
-            #   "Error exporting Excel file: <br>",
-            #   e$message,
-            #   "</div>"
-            # )
-            # private$.showExportMessage = TRUE
-          })
-
-          # Reset button state
-          self$options$exportExcel$setValue(FALSE)
+            # Reset the action button
+            self$options$exportExcel$setValue(FALSE)
+          }
         }
+
+        # if (!is.null(self$options$exportExcel) && self$options$exportExcel) {
+        #   tryCatch({
+        #     # Create full path with filename and extension
+        #     export_path <- file.path(self$options$xl_path, paste0(self$options$xl_filename, ".xlsx"))
+        #
+        #     # Perform the export
+        #     tab_xl(tabs,
+        #            path = export_path,
+        #            sheets = "unique",
+        #            open = FALSE,
+        #            replace = TRUE)
+        #
+        #     # # Create success message
+        #     # private$.exportMessage <- paste0(
+        #     #   "<div style='padding: 10px; margin: 15px 0; background-color: #dff0d8; ",
+        #     #   "border: 1px solid #d6e9c6; border-radius: 4px; color: #3c763d;'>",
+        #     #   "Excel file successfully exported to: <br>",
+        #     #   export_path,
+        #     #   "</div>"
+        #     # )
+        #     # private$.showExportMessage = TRUE
+        #
+        #   }, error = function(e) {
+        #     # # Create error message
+        #     # private$.exportMessage <- paste0(
+        #     #   "<div style='padding: 10px; margin: 15px 0; background-color: #f2dede; ",
+        #     #   "border: 1px solid #ebccd1; border-radius: 4px; color: #a94442;'>",
+        #     #   "Error exporting Excel file: <br>",
+        #     #   e$message,
+        #     #   "</div>"
+        #     # )
+        #     # private$.showExportMessage = TRUE
+        #   })
+        #
+        #   # Reset button state
+        #   self$options$exportExcel$setValue(FALSE)
+        # }
 
 
 
