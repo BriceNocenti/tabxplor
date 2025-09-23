@@ -20,22 +20,49 @@
 
 module.exports = {
 
-exportExcel_clicked(ui, event) {
-  console.log("exportExcel button clicked");
-  //const current = ui.doExportExcel.value();
-  // ui.doExportExcel.setValue(!current);  // toggle to force analysis run
-}
+      exportExcel_changed: function(ui) {
+        // Only trigger when the button is active and clicked
+        if (ui.exportExcel.value()) {
+            console.log("Excel export initiated");
 
-//  exportExcel_clicked(ui, event) {
-//    // Toggle Bool to force rerun of backend R
-//    const current = ui.doExportExcel.value();
-//    ui.doExportExcel.setValue(!current);
+            // Force reset the button after a short delay
+            // This ensures the button becomes clickable again
+            setTimeout(function() {
+                ui.exportExcel.setValue(false);
+            }, 500); // Half-second delay
+        }
+    }
+
+//   exportExcel_changed: function(ui) {
+//       // Force analysis to run by doing nothing
+//       // Action buttons automatically reset themselves when the analysis completes
+//       console.log("Excel export initiated");
+//   }
+
+//    // Event handler for when the export button is clicked
+//    exportExcel_changed: function(ui, event) {
+//        // The button was clicked, perform any UI updates
+//        if (ui.exportExcel.value()) {
+//            // Button is now "pressed"
+//            // You can update other UI elements or show feedback
+//            console.log("Export button clicked");
 //
-//    // Reset Action button so it can be clicked again
-//    setTimeout(() => {
-//      ui.exportExcel.setValue(false);
-//    }, 100);
-//  }
+//            // Note: The actual reset happens automatically after the R code runs
+//        }
+//    },
+//
+//    // View updated event - called after analysis runs
+//    view_updated: function(ui, event) {
+//        // This is called after the .b.R code completes
+//        // The button will already be reset by Jamovi automatically
+//    }
+
+// exportExcel_changed(ui, event) {
+//   console.log("exportExcel button clicked");
+//   //const current = ui.doExportExcel.value();
+//   // ui.doExportExcel.setValue(!current);  // toggle to force analysis run
+// }
+
 
 
 //  tab_vars_changed(ui) { // (ui, event)

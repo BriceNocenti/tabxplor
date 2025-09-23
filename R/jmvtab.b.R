@@ -17,6 +17,9 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
   # ),
   private = list(
 
+    # Existing private fields...
+    .showExportMessage = FALSE,
+    .exportMessage     = NULL,
 
     # .init = function() {
     #     # Initialize xl_path to user documents if unset
@@ -36,6 +39,11 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
 
 
     .run = function() {
+
+      # Clear any previous export message unless we're doing a new export
+      if (!is.null(self$options$exportExcel) && !self$options$exportExcel) {
+        private$.showExportMessage = FALSE
+      }
 
       data <- self$data
 
@@ -156,15 +164,6 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
           options('tabxplor.ci_print' = "ci")
         }
 
-        if (!is.null(self$options$exportExcel)) {
-          if (self$options$exportExcel) {
-            tab_xl(tabs, path = self$options$xl_path,
-                   sheets = "unique", open = FALSE, replace = TRUE)
-
-            #self$options$exportExcel <- FALSE
-            self$options$exportExcel$setValue(FALSE)
-          }
-        }
 
 
         tabs_hmtl <- tab_kable(tabs,
@@ -350,8 +349,69 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
         #   private$.stale <- FALSE
         # }
 
+
+
+
+        # Export to Excel if button was clicked
+        if (!is.null(self$options$exportExcel) && self$options$exportExcel) {
+          # Perform the export
+          tryCatch({
+            export_path <- file.path(self$options$xl_path, paste0(self$options$xl_filename, ".xlsx"))
+            tab_xl(tabs,
+                   path = export_path,
+                   sheets = "unique",
+                   open = FALSE,
+                   replace = TRUE)
+
+            # Create success message
+            private$.exportMessage <- paste0(
+              "<div style='padding: 10px; margin-bottom: 15px; background-color: #dff0d8; border: 1px solid #d6e9c6; border-radius: 4px; color: #3c763d;'>",
+              "Excel file successfully exported to: <br>",
+              export_path,
+              "</div>"
+            )
+            private$.showExportMessage = TRUE
+
+          }, error = function(e) {
+            # Create error message
+            private$.exportMessage <- paste0(
+              "<div style='padding: 10px; margin-bottom: 15px; background-color: #f2dede; border: 1px solid #ebccd1; border-radius: 4px; color: #a94442;'>",
+              "Error exporting Excel file: <br>",
+              e$message,
+              "</div>"
+            )
+            private$.showExportMessage = TRUE
+          })
+
+          # Reset button state from R side as well
+          self$options$exportExcel$setValue(FALSE)
+        }
+
+        # Add the message if needed
+        if (private$.showExportMessage && !is.null(private$.exportMessage)) {
+          tabs_html <- paste0(private$.exportMessage, tabs_html)
+        }
+
+        # Set the content
         self$results$html_table$setContent(tabs_hmtl)
 
+
+
+        # if (!is.null(self$options$exportExcel)) {
+        #   if (self$options$exportExcel) {
+        #     full_path <-
+        #       file.path(self$options$xl_path,
+        #                 paste0(self$options$xl_filename, ".xlsx") |>
+        #                   stringr::str_replace(".xlsx.xlsx", ".xlsx")
+        #
+        #       )
+        #     tab_xl(tabs, path = full_path,
+        #            sheets = "unique", open = FALSE, replace = TRUE)
+        #
+        #     #self$options$exportExcel <- FALSE
+        #     self$options$exportExcel$setValue(FALSE)
+        #   }
+        # }
 
 
         # # Chi2 table
