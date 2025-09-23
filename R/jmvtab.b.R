@@ -169,11 +169,15 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
           options('tabxplor.ci_print' = "ci")
         }
 
+
+
+
         # # Handle Excel export
         if (!is.null(self$options$exportExcel)) {
           if (self$options$exportExcel) {
-            # Get the full file path from the FilePicker
-            file_path <- self$options$xl_file
+            # Get the full file path from the two textboxes
+            file_path <-
+              file.path(self$options$xl_path, self$options$xl_filename)
 
             # Check if a file was selected
             if (!is.null(file_path) && file_path != "") {

@@ -34,7 +34,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             digits = 0,
             exportExcel = NULL,
             xl_path = "D:/Documents",
-            xl_filename = "Table1", ...) {
+            xl_filename = "Table1.xlsx", ...) {
 
             super$initialize(
                 package="tabxplor",
@@ -238,7 +238,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             private$..xl_filename <- jmvcore::OptionString$new(
                 "xl_filename",
                 xl_filename,
-                default="Table1")
+                default="Table1.xlsx")
 
             self$.addOption(private$..row_vars)
             self$.addOption(private$..col_vars)
@@ -527,7 +527,7 @@ jmvtab <- function(
     digits = 0,
     exportExcel,
     xl_path = "D:/Documents",
-    xl_filename = "Table1") {
+    xl_filename = "Table1.xlsx") {
 
     if ( ! requireNamespace("jmvcore", quietly=TRUE))
         stop("jmvtab requires jmvcore to be installed (restart may be required)")

@@ -443,50 +443,186 @@ children:
                 name: subtext
                 format: string
                 width: largest
+  # - type: Separator  # This creates a horizontal line
+  #   stretchFactor: 1
   - type: LayoutBox
-    style: inline         # put both controls on the same horizontal line
+    margin: large  # Creates visual separation from elements above
+    stretchFactor: 1
     children:
-      - type: ActionButton
-        name: exportExcel
-        label: "Export to Excel"
-        events:
-          change: './js/jmvtab:exportExcel_changed'
+      - type: LayoutBox
+        cell:
+          column: 0
+          row: 1
         stretchFactor: 0
-      # - type: FilePicker
-      #   name: xl_file
-      #   label: ""
-      #   action: save
-      #   extensions:
-      #     - xlsx
-      #   stretchFactor: 1
-      - type: TextBox
-        name: xl_path
-        format: string
-        width: largest
+        children:
+          - type: ActionButton
+            name: exportExcel
+            label: "Export to Excel"
+            events:
+              change: './jmvtab::exportExcel_changed'
+            stretchFactor: 0
+      - type: LayoutBox
+        margin: none
+        cell:
+          column: 1
+          row: 0  # Label is in row 0
         stretchFactor: 1
-    # - type: FilePicker
-    #   name: xl_path
-    #   label: "Path of the Excel file"
-    #   action: save
-    #   filters:
-    #     - name: "Excel files"
-    #       extensions: ["xlsx"]
-      - type: Label
-        label: " / "    # Static text, uneditable
-        stretchFactor: 0  # Label takes its natural width
-        # style:
-        #   paddingLeft: 8    # optional spacing to separate from TextBox
-        #   paddingRight: 8    # optional spacing to separate from TextBox
-        #   verticalAlign: middle
-      - type: TextBox
-        name: xl_filename
-        format: string
-        width: largest
+        children:
+          - type: Label
+            label: "<b>Folder:</b>"
+            stretchFactor: 0
+      - type: LayoutBox
+        margin: none
+        cell:
+          column: 1
+          row: 1  # Text box is aligned with button in row 1
         stretchFactor: 1
-      - type: Label
-        label: ".xlsx"    # Static text, uneditable
-        stretchFactor: 0  # Label takes its natural width
-        # style:
-        #   paddingLeft: 8    # optional spacing to separate from TextBox
-        #   verticalAlign: middle
+        children:
+          - type: TextBox
+            name: xl_path
+            format: string
+            width: largest
+      - type: LayoutBox
+        margin: none
+        cell:
+          column: 2
+          row: 0  # Label is in row 0
+        stretchFactor: 1
+        children:
+          - type: Label
+            label: "<b>File name:</b>"
+            stretchFactor: 0
+      - type: LayoutBox
+        margin: none
+        cell:
+          column: 2
+          row: 1  # Text box is aligned with button in row 1
+        stretchFactor: 1
+        children:
+          - type: TextBox
+            name: xl_filename
+            format: string
+            width: largest
+      # - type: LayoutBox
+      #   margin: none
+      #   cell:
+      #     column: 3
+      #     row: 1  # This should be row 1 to align with the text boxes
+      #   stretchFactor: 0
+      #   children:
+      #     - type: Label
+      #       label: ".xlsx"
+      #       stretchFactor: 0
+
+
+  # - type: LayoutBox
+  #   stretchFactor: 1
+  #   children:
+  #     - type: LayoutBox
+  #       cell:
+  #         column: 0
+  #         row: 1
+  #       stretchFactor: 0
+  #       children:
+  #         - type: ActionButton
+  #           name: exportExcel
+  #           label: "Export to Excel"
+  #           events:
+  #             change: './js/jmvtab::exportExcel_changed'
+  #           stretchFactor: 0
+  #     - type: LayoutBox
+  #       margin: none
+  #       cell:
+  #         column: 1
+  #         row: 0
+  #       stretchFactor: 1
+  #       children:
+  #         - type: Label
+  #           label: "Folder:"    # Static text, uneditable
+  #           stretchFactor: 0  # Label takes its natural width
+  #     - type: LayoutBox
+  #       margin: none
+  #       cell:
+  #         column: 1
+  #         row: 1
+  #       stretchFactor: 1
+  #       children:
+  #         - type: TextBox
+  #           name: xl_path
+  #           format: string
+  #           width: largest
+  #           #stretchFactor: 1
+  #     - type: LayoutBox
+  #       margin: none
+  #       cell:
+  #         column: 2
+  #         row: 0
+  #       stretchFactor: 1
+  #       children:
+  #         - type: Label
+  #           label: "File name:"    # Static text, uneditable
+  #           stretchFactor: 0  # Label takes its natural width
+  #     - type: LayoutBox
+  #       margin: none
+  #       cell:
+  #         column: 2
+  #         row: 1
+  #       stretchFactor: 1
+  #       children:
+  #         - type: TextBox
+  #           name: xl_filename
+  #           format: string
+  #           width: largest
+  #           #stretchFactor: 1
+  #     - type: LayoutBox
+  #       margin: none
+  #       cell:
+  #         column: 3
+  #         row: 0
+  #       stretchFactor: 1
+  #       children:
+  #         - type: Label
+  #           label: ".xlsx"    # Static text, uneditable
+  #           stretchFactor: 0  # Label takes its natural width
+
+
+  # - type: LayoutBox
+  #   style: inline         # put both controls on the same horizontal line
+  #   children:
+  #     - type: ActionButton
+  #       name: exportExcel
+  #       label: "Export to Excel"
+  #       events:
+  #         change: './js/jmvtab:exportExcel_changed'
+  #       stretchFactor: 0
+  #     - type: TextBox
+  #       name: xl_path
+  #       format: string
+  #       width: largest
+  #       stretchFactor: 1
+  #   # - type: FilePicker
+  #   #   name: xl_path
+  #   #   label: "Path of the Excel file"
+  #   #   action: save
+  #   #   filters:
+  #   #     - name: "Excel files"
+  #   #       extensions: ["xlsx"]
+  #     - type: Label
+  #       label: " / "    # Static text, uneditable
+  #       stretchFactor: 0  # Label takes its natural width
+  #       # style:
+  #       #   paddingLeft: 8    # optional spacing to separate from TextBox
+  #       #   paddingRight: 8    # optional spacing to separate from TextBox
+  #       #   verticalAlign: middle
+  #     - type: TextBox
+  #       name: xl_filename
+  #       format: string
+  #       width: largest
+  #       stretchFactor: 1
+  #     - type: Label
+  #       label: ".xlsx"    # Static text, uneditable
+  #       stretchFactor: 0  # Label takes its natural width
+  #       # style:
+  #       #   paddingLeft: 8    # optional spacing to separate from TextBox
+  #       #   verticalAlign: middle
 

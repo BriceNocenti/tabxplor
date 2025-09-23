@@ -502,7 +502,7 @@ options:
     #        "Full path for the exported Excel file"
 
     - name: xl_path
-      type: String # String File
+      type: String
       title: ""
       default: "D:/Documents" #, "C:/Downloads" # Not set in .init() # "D:/Documents/Excel_test.xlsx"
       description:
@@ -512,7 +512,7 @@ options:
     - name: xl_filename
       type: String
       title: ""
-      default: "Table1" # Not set in .init() # "D:/Documents/Excel_test.xlsx"
+      default: "Table1.xlsx" # Not set in .init() # "D:/Documents/Excel_test.xlsx"
       description:
           R: >
            "Name of exported Excel file"
