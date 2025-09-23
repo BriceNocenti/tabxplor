@@ -45,6 +45,10 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
         private$.showExportMessage = FALSE
       }
 
+
+
+
+
       data <- self$data
 
       # if (is.null(self$options$xl_path) || self$options$xl_path == "") {
@@ -166,16 +170,61 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
 
 
 
-        tabs_hmtl <- tab_kable(tabs,
+        # Handle Excel export
+        if (!is.null(self$options$exportExcel) && self$options$exportExcel) {
+          tryCatch({
+            # Create full export path including filename
+            export_path <- file.path(self$options$xl_path, paste0(self$options$xl_filename, ".xlsx"))
+
+            # Perform the export
+            tab_xl(tabs,
+                   path = export_path,
+                   sheets = "unique",
+                   open = FALSE,
+                   replace = TRUE)
+
+            # Create success message
+            private$.exportMessage <- paste0(
+              "<div style='padding: 10px; margin-bottom: 15px; background-color: #dff0d8; ",
+              "border: 1px solid #d6e9c6; border-radius: 4px; color: #3c763d;'>",
+              "Excel file successfully exported to: <br>",
+              export_path,
+              "</div>"
+            )
+            private$.showExportMessage = TRUE
+
+          }, error = function(e) {
+            # Create error message
+            private$.exportMessage <- paste0(
+              "<div style='padding: 10px; margin-bottom: 15px; background-color: #f2dede; ",
+              "border: 1px solid #ebccd1; border-radius: 4px; color: #a94442;'>",
+              "Error exporting Excel file: <br>",
+              e$message,
+              "</div>"
+            )
+            private$.showExportMessage = TRUE
+          })
+
+          # Reset button state
+          self$options$exportExcel$setValue(FALSE)
+        }
+
+
+
+
+        # Create HTML table
+        tabs_html <- tab_kable(tabs,
                                wrap_rows = self$options$wrap_rows,
                                wrap_cols = self$options$wrap_cols)
-        #
 
+
+        # Adjust class for proper rendering
         # Formatting not working with kableExtra : we remove "kableExtra" class
         #   and add lightable css and custom css manually
-        class(tabs_hmtl) <-  "knitr_kable"
+        class(tabs_html) <-  "knitr_kable"
 
-        tabs_hmtl <-
+        # Include required CSS
+        tabs_html <-
           paste0(
             # Add css manually
             htmltools::includeCSS(# lightable css
@@ -263,19 +312,19 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
             #"<script type=\"text/x-mathjax-config\">MathJax.Hub.Config({tex2jax: {inlineMath: [[\"$\",\"$\"]]}})</script>",
             #"<script async src=\"https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML\"></script>",
 
-            as.character(tabs_hmtl)
+            as.character(tabs_html)
           ) |>
-          vctrs::vec_restore(tabs_hmtl)
-        # tabs_hmtl |> htmltools::HTML() |> htmltools::browsable()
+          vctrs::vec_restore(tabs_html)
+        # tabs_html |> htmltools::HTML() |> htmltools::browsable()
 
-        # what is still missing ? tabs_hmtl |> attr("kable_meta") ?
-
-
+        # what is still missing ? tabs_html |> attr("kable_meta") ?
 
 
 
 
-        # tabs_hmtl <- tabs |>
+
+
+        # tabs_html <- tabs |>
         #   knitr::kable(format = "html") |>
         #   kableExtra::kable_classic(lightable_options = "hover") |> # bootstrap_options = c("striped", "responsive")
         #   kableExtra::add_footnote("This should be a very small footnote (font-size: 30%).",
@@ -301,18 +350,18 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
         #             )
         #
         # )
-        # tabs_hmtl <- htmltools::browsable(
+        # tabs_html <- htmltools::browsable(
         #   htmltools::HTML(
-        #     as.character(tabs_hmtl),
+        #     as.character(tabs_html),
         #     "<script type=\"text/x-mathjax-config\">MathJax.Hub.Config({tex2jax: {inlineMath: [[\"$\",\"$\"]]}})</script>
         #     <script async src=\"https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML\"></script>"
         #   )
         # )
         #
-        # htmltools::htmlDependencies(tabs_hmtl) <- dep
-        # #htmltools::attachDependencies(tabs_hmtl, dep)
+        # htmltools::htmlDependencies(tabs_html) <- dep
+        # #htmltools::attachDependencies(tabs_html, dep)
 
-        # if (interactive()) tabs_hmtl <- htmltools::browsable(tabs_hmtl)
+        # if (interactive()) tabs_html <- htmltools::browsable(tabs_html)
 
         # # Error in the jmvcore::analysis$results$html_table$setContent function,
         # #  trying to overwrite it.
@@ -350,50 +399,33 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
         # }
 
 
-
-
-        # Export to Excel if button was clicked
-        if (!is.null(self$options$exportExcel) && self$options$exportExcel) {
-          # Perform the export
-          tryCatch({
-            export_path <- file.path(self$options$xl_path, paste0(self$options$xl_filename, ".xlsx"))
-            tab_xl(tabs,
-                   path = export_path,
-                   sheets = "unique",
-                   open = FALSE,
-                   replace = TRUE)
-
-            # Create success message
-            private$.exportMessage <- paste0(
-              "<div style='padding: 10px; margin-bottom: 15px; background-color: #dff0d8; border: 1px solid #d6e9c6; border-radius: 4px; color: #3c763d;'>",
-              "Excel file successfully exported to: <br>",
-              export_path,
-              "</div>"
-            )
-            private$.showExportMessage = TRUE
-
-          }, error = function(e) {
-            # Create error message
-            private$.exportMessage <- paste0(
-              "<div style='padding: 10px; margin-bottom: 15px; background-color: #f2dede; border: 1px solid #ebccd1; border-radius: 4px; color: #a94442;'>",
-              "Error exporting Excel file: <br>",
-              e$message,
-              "</div>"
-            )
-            private$.showExportMessage = TRUE
-          })
-
-          # Reset button state from R side as well
-          self$options$exportExcel$setValue(FALSE)
-        }
-
-        # Add the message if needed
+        # Add the export message AFTER the table content if needed
         if (private$.showExportMessage && !is.null(private$.exportMessage)) {
-          tabs_html <- paste0(private$.exportMessage, tabs_html)
+          # Extract the table content
+          table_content <- as.character(tabs_html)
+
+          # Find the closing </table> tag to insert the message after it
+          closing_table_pos <- regexpr("</table>", table_content) + 8
+
+          # Insert the message after the table
+          if (closing_table_pos > 8) {
+            table_content <- paste0(
+              substr(table_content, 1, closing_table_pos),
+              private$.exportMessage,
+              substr(table_content, closing_table_pos + 1, nchar(table_content))
+            )
+
+            # Restore the HTML object
+            tabs_html <- table_content |> vctrs::vec_restore(tabs_html)
+          } else {
+            # Fallback if we can't find the closing table tag
+            tabs_html <- paste0(as.character(tabs_html), private$.exportMessage) |>
+              vctrs::vec_restore(tabs_html)
+          }
         }
 
         # Set the content
-        self$results$html_table$setContent(tabs_hmtl)
+        self$results$html_table$setContent(tabs_html)
 
 
 

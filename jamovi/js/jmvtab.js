@@ -20,16 +20,15 @@
 
 module.exports = {
 
-      exportExcel_changed: function(ui) {
+    exportExcel_changed: function(ui) {
         // Only trigger when the button is active and clicked
         if (ui.exportExcel.value()) {
             console.log("Excel export initiated");
 
             // Force reset the button after a short delay
-            // This ensures the button becomes clickable again
             setTimeout(function() {
                 ui.exportExcel.setValue(false);
-            }, 500); // Half-second delay
+            }, 2000);
         }
     }
 
