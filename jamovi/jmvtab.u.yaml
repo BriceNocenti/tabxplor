@@ -1,0 +1,497 @@
+title: Crosstables
+name: jmvtab
+jus: '3.0'
+stage: 0
+compilerMode: tame
+children:
+  - type: VariableSupplier
+    name: variablesupplier
+    persistentItems: false
+    stretchFactor: 1
+    children:
+      - type: TargetLayoutBox
+        label: <b>row_vars = <i>(row variables)</i></b>
+        children:
+          - type: VariablesListBox
+            name: row_vars
+            isTarget: true
+      - type: TargetLayoutBox
+        label: <b>col_vars = <i>(column variables)</i></b>
+        children:
+          - type: VariablesListBox
+            name: col_vars
+            isTarget: true
+      - type: TargetLayoutBox
+        label: <b>tab_vars = <i>(subtables variables)</i></b>
+        children:
+          - type: VariablesListBox
+            name: tab_vars
+            isTarget: true
+      - type: TargetLayoutBox
+        label: <b>wt = <i>(weights)</i></b>
+        children:
+          - type: VariablesListBox
+            name: wt
+            maxItemCount: 1
+            isTarget: true
+  - type: CollapseBox
+    label: <b>Percentages, colors and Chi2 test </b>
+    stretchFactor: 1
+    collapsed: false
+    children:
+      - type: LayoutBox
+        margin: large
+        children:
+          - type: LayoutBox
+            cell:
+              column: 0
+              row: 0
+            stretchFactor: 2
+            children:
+              - type: Label
+                label: pct = <i>(type of percentages)</i>
+                fitToGrid: true
+                children:
+                  - type: RadioButton
+                    name: pct_1
+                    optionName: pct
+                    optionPart: 'no'
+                  - type: RadioButton
+                    name: pct_2
+                    optionName: pct
+                    optionPart: row
+                  - type: RadioButton
+                    name: pct_3
+                    optionName: pct
+                    optionPart: col
+                  - type: RadioButton
+                    name: pct_4
+                    optionName: pct
+                    optionPart: all
+                  - type: RadioButton
+                    name: pct_5
+                    optionName: pct
+                    optionPart: all_tabs
+          - type: LayoutBox
+            cell:
+              column: 1
+              row: 0
+            stretchFactor: 3
+            children:
+              - type: Label
+                label: color = <i>(what to use for color helpers)</i>
+                fitToGrid: true
+                children:
+                  - type: RadioButton
+                    name: color_1
+                    optionName: color
+                    optionPart: 'no'
+                  - type: RadioButton
+                    name: color_2
+                    optionName: color
+                    optionPart: diff
+                    enable: (pct:row || pct:col)
+                  - type: RadioButton
+                    name: color_3
+                    optionName: color
+                    optionPart: diff_ci
+                    enable: (pct:row || pct:col)
+                  - type: RadioButton
+                    name: color_4
+                    optionName: color
+                    optionPart: after_ci
+                    enable: (pct:row || pct:col)
+                  - type: RadioButton
+                    name: color_5
+                    optionName: color
+                    optionPart: contrib
+                  - type: RadioButton
+                    name: color_6
+                    optionName: color
+                    optionPart: OR
+                    enable: (pct:row || pct:col)
+          - type: LayoutBox
+            cell:
+              column: 0
+              row: 1
+            stretchFactor: 2
+            children:
+              - type: Label
+                label: OR = <i>(Odds Ratio)</i>
+                children:
+                  - type: RadioButton
+                    name: OR_1
+                    optionName: OR
+                    optionPart: 'no'
+                    enable: (pct:row || pct:col)
+                  - type: RadioButton
+                    name: OR_2
+                    optionName: OR
+                    optionPart: OR
+                    enable: (pct:row || pct:col)
+                  - type: RadioButton
+                    name: OR_3
+                    optionName: OR
+                    optionPart: OR_pct
+                    enable: (pct:row || pct:col)
+          - type: LayoutBox
+            cell:
+              column: 1
+              row: 1
+            style: inline
+            stretchFactor: 3
+            children:
+              - type: Label
+                label: chi2 = <i>(Chi2 test)</i>
+                children:
+                  - type: CheckBox
+                    name: chi2
+  - type: CollapseBox
+    label: <b>Levels and missing values</b>
+    stretchFactor: 1
+    collapsed: true
+    children:
+      - type: LayoutBox
+        margin: small
+        cell:
+          column: 0
+          row: 0
+        stretchFactor: 1
+        children:
+          - type: Label
+            label: 'na = <i>(missing values)</i> '
+            children:
+              - type: RadioButton
+                name: na_1
+                optionName: na
+                optionPart: keep
+              - type: RadioButton
+                name: na_2
+                optionName: na
+                optionPart: drop
+              - type: RadioButton
+                name: na_3
+                optionName: na
+                optionPart: drop_all
+      - type: LayoutBox
+        margin: small
+        cell:
+          column: 1
+          row: 0
+        stretchFactor: 1
+        children:
+          - type: Label
+            label: levels = <i>(which lvs to keep)</i>
+            children:
+              - type: RadioButton
+                name: lvs_1
+                optionName: lvs
+                optionPart: all
+              - type: RadioButton
+                name: lvs_2
+                optionName: lvs
+                optionPart: first
+              - type: RadioButton
+                name: lvs_3
+                optionName: lvs
+                optionPart: auto
+      - type: LayoutBox
+        margin: none
+        cell:
+          column: 2
+          row: 0
+        stretchFactor: 1
+        children:
+          - type: Label
+            label: other_if_less_than =
+            children:
+              - type: TextBox
+                name: other_if_less_than
+                format: number
+          - type: Label
+            label: cleannames =
+            children:
+              - type: CheckBox
+                name: cleannames
+  - type: CollapseBox
+    label: <b>References (points of comparison)</b>
+    stretchFactor: 1
+    collapsed: true
+    children:
+      - type: LayoutBox
+        margin: none
+        cell:
+          column: 0
+          row: 0
+        stretchFactor: 1
+        children:
+          - type: Label
+            label: ref = <i>(reference row/col for diff/OR)</i>
+            children:
+              - type: TextBox
+                name: ref
+                format: string
+      - type: LayoutBox
+        margin: none
+        cell:
+          column: 1
+          row: 0
+        stretchFactor: 1
+        children:
+          - type: Label
+            label: comp = <i>(reference table with tab_vars)</i>
+            children:
+              - type: RadioButton
+                name: comp_1
+                optionName: comp
+                optionPart: tab
+              - type: RadioButton
+                name: comp_2
+                optionName: comp
+                optionPart: all
+      - type: LayoutBox
+        margin: none
+        cell:
+          column: 0
+          row: 1
+        stretchFactor: 0
+        children:
+          - type: Label
+            label: ref2 = <i>(2nd reference col/row for OR)</i>
+            children:
+              - type: TextBox
+                name: ref2
+                format: string
+                enable: (OR == 'OR' || OR == 'OR_pct')
+  - type: CollapseBox
+    label: <b>Confidence intervals</b>
+    stretchFactor: 1
+    collapsed: true
+    children:
+      - type: LayoutBox
+        margin: none
+        cell:
+          column: 0
+          row: 0
+        stretchFactor: 1
+        children:
+          - type: Label
+            label: ci = <i>(confidence intervals)</i>
+            children:
+              - type: RadioButton
+                name: ci_1
+                optionName: ci
+                optionPart: auto
+                enable: (pct:row || pct:col || pct:all || pct:all_tabs)
+              - type: RadioButton
+                name: ci_2
+                optionName: ci
+                optionPart: cell
+                enable: (pct:row || pct:col || pct:all || pct:all_tabs)
+              - type: RadioButton
+                name: ci_3
+                optionName: ci
+                optionPart: diff
+                enable: (pct:row || pct:col || pct:all || pct:all_tabs)
+      - type: LayoutBox
+        margin: none
+        cell:
+          column: 1
+          row: 0
+        stretchFactor: 1
+        children:
+          - type: Label
+            label: options('tabxplor.ci_print' = ...)
+            children:
+              - type: RadioButton
+                name: ci_print_1
+                optionName: ci_print
+                optionPart: ci
+                enable: (pct:row || pct:col || pct:all || pct:all_tabs)
+              - type: RadioButton
+                name: ci_print_2
+                optionName: ci_print
+                optionPart: moe
+                enable: (pct:row || pct:col || pct:all || pct:all_tabs)
+      - type: LayoutBox
+        margin: none
+        cell:
+          column: 0
+          row: 1
+        stretchFactor: 0
+        children:
+          - type: Label
+            label: conf_level = <i>(confidence level)</i>
+            children:
+              - type: TextBox
+                name: conf_level
+                format: number
+                enable: (pct:row || pct:col)
+  - type: CollapseBox
+    label: <b>Other formatting</b>
+    stretchFactor: 1
+    collapsed: true
+    children:
+      - type: LayoutBox
+        cell:
+          column: 0
+          row: 0
+        stretchFactor: 0
+        children:
+          - type: Label
+            label: totaltab = <i>(with tab_vars, add a total table)</i>
+            fitToGrid: true
+            children:
+              - type: RadioButton
+                name: totaltab_1
+                optionName: totaltab
+                optionPart: line
+              - type: RadioButton
+                name: totaltab_2
+                optionName: totaltab
+                optionPart: table
+              - type: RadioButton
+                name: totaltab_3
+                optionName: totaltab
+                optionPart: 'no'
+      - type: LayoutBox
+        margin: none
+        cell:
+          column: 0
+          row: 1
+        stretchFactor: 1
+        children:
+          - type: Label
+            label: wrap_rows = <i>(nb chars for line break)</i>
+            children:
+              - type: TextBox
+                name: wrap_rows
+                format: number
+      - type: LayoutBox
+        margin: none
+        cell:
+          column: 1
+          row: 1
+        stretchFactor: 1
+        children:
+          - type: Label
+            label: wrap_cols = <i>(nb chars for line break)</i>
+            children:
+              - type: TextBox
+                name: wrap_cols
+                format: number
+      - type: LayoutBox
+        margin: none
+        cell:
+          column: 0
+          row: 2
+        stretchFactor: 0
+        children:
+          - type: Label
+            label: display = <i>(which information to display in the table ?)</i>
+            children:
+              - type: ComboBox
+                name: display
+      - type: LayoutBox
+        margin: none
+        cell:
+          column: 0
+          row: 3
+        stretchFactor: 1
+        children:
+          - type: Label
+            label: add_n = <i>(see unweighted counts)</i>
+            children:
+              - type: CheckBox
+                name: add_n
+      - type: LayoutBox
+        margin: none
+        cell:
+          column: 1
+          row: 3
+        stretchFactor: 1
+        children:
+          - type: Label
+            label: add_pct = <i>(see frequencies of 100% total)</i>
+            children:
+              - type: CheckBox
+                name: add_pct
+      - type: LayoutBox
+        margin: none
+        cell:
+          column: 0
+          row: 4
+        stretchFactor: 1
+        children:
+          - type: Label
+            label: digits = <i>(number of digits)</i>
+            children:
+              - type: TextBox
+                name: digits
+                format: number
+      - type: LayoutBox
+        margin: none
+        cell:
+          column: 0
+          row: 5
+        stretchFactor: 2
+        children:
+          - type: Label
+            label: subtext = <i>(text to print below the table)</i>
+            children:
+              - type: TextBox
+                name: subtext
+                format: string
+                width: largest
+  - type: CollapseBox
+    label: <b>Export to Excel</b>
+    stretchFactor: 1
+    collapsed: false
+    children:
+      - type: LayoutBox
+        margin: large
+        cell:
+          column: 0
+          row: 0
+        stretchFactor: 1
+        children:
+          - type: LayoutBox
+            style: inline
+            stretchFactor: 1
+            children:
+              - type: Label
+                label: <i>(Export to Excel)</i>
+                children:
+                  # - type: CheckBox
+                  #   name: xl
+                  - type: ActionButton
+                    name: exportExcel
+                    label: "Export table to Excel"
+                    events:
+                      change: './jmvtab::exportExcel_clicked'
+      - type: LayoutBox
+        margin: none
+        cell:
+          column: 1
+          row: 0
+        stretchFactor: 3
+        children:
+          - type: Label
+            label: <i>(Path of the Excel file)</i>
+            children:
+              # - type: TextBox
+              #   name: xl_path
+              #   format: string
+              #   width: largest
+              - type: FilePicker
+                name: xl_path
+                label: "Path of the Excel file"
+                action: "save"
+                filters:
+                  - name: "Excel files"
+                    extensions: ["xlsx"]
+
+
+
+
+

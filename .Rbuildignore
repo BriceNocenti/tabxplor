@@ -1,0 +1,15 @@
+^tabxplor\.Rproj$
+^\.Rproj\.user$
+^LICENSE\.md$
+^README\.Rmd$
+^\.readme_images$
+^cran-comments\.md$
+^\.travis\.yml$
+^CRAN-RELEASE$
+^\.github$
+^CRAN-SUBMISSION$
+[.]jmo$
+^build/js/
+^build/R
+^jamovi/
+
