@@ -21,56 +21,6 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
     # .showExportMessage = FALSE,
     # .exportMessage     = NULL,
 
-    # .init = function() {
-    #   # Initialize xl_path to user documents folder
-    #   if (is.null(self$options$xl_path) || self$options$xl_path == "") {
-    #     # Get user documents folder across platforms
-    #     docs_path <- tryCatch({
-    #       if (Sys.info()["sysname"] == "Windows") {
-    #         # Windows approach
-    #         shell_folders <- tryCatch({
-    #           utils::readRegistry("HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Shell Folders", "HCU")
-    #         }, error = function(e) {
-    #           return(NULL)
-    #         })
-    #
-    #         if (!is.null(shell_folders) && !is.null(shell_folders[["Personal"]])) {
-    #           docs <- shell_folders[["Personal"]]
-    #         } else {
-    #           # Fallback if registry approach fails
-    #           docs <- file.path(Sys.getenv("USERPROFILE"), "Documents")
-    #         }
-    #       } else if (Sys.info()["sysname"] == "Darwin") {
-    #         # macOS approach
-    #         docs <- file.path(path.expand("~"), "Documents")
-    #       } else {
-    #         # Linux and others - use XDG standard if available
-    #         xdg_docs <- Sys.getenv("XDG_DOCUMENTS_DIR")
-    #         if (xdg_docs != "") {
-    #           docs <- xdg_docs
-    #         } else {
-    #           docs <- file.path(path.expand("~"), "Documents")
-    #         }
-    #       }
-    #       # Ensure path exists, otherwise use home directory
-    #       if (!dir.exists(docs)) {
-    #         docs <- path.expand("~")
-    #       }
-    #       docs
-    #     }, error = function(e) {
-    #       # Fallback to home directory if there's any error
-    #       path.expand("~")
-    #     })
-    #
-    #     # Create normalized path with forward slashes
-    #     xl_path <- file.path(docs_path)
-    #     xl_path <- gsub("\\\\", "/", xl_path)
-    #
-    #     # Directly set the option value - don't use setValue()
-    #     self$options$xl_path <- xl_path
-    #   }
-    # },
-
 
 # get_user_documents() is not working in Jamovi
 # "D:/Documents/Excel_test.xlsx"
@@ -78,6 +28,7 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
 
 
     .run = function() {
+
 
       # # Clear export message flag if not exporting
       # if (!is.null(self$options$exportExcel)) {
@@ -87,6 +38,7 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
       # }
 
       data <- self$data
+
 
       # if (is.null(self$options$xl_path) || self$options$xl_path == "") {
       #   # docs <- get_user_documents() # for all platforms and languages
@@ -212,8 +164,8 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
         if (!is.null(self$options$exportExcel)) {
           if (self$options$exportExcel) {
 
-            file_path <- file.path(options$xl_path, self$options$xl_filename)
-
+            folder_path <- path.expand(options$xl_path)
+            file_path <- file.path(folder_path, self$options$xl_filename)
 
 
             # Check if a file was selected

@@ -33,7 +33,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             subtext = "",
             digits = 0,
             exportExcel = NULL,
-            xl_path = "",
+            xl_path = "S:/Documents",
             xl_filename = "Table1.xlsx", ...) {
 
             super$initialize(
@@ -234,7 +234,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             private$..xl_path <- jmvcore::OptionString$new(
                 "xl_path",
                 xl_path,
-                default="")
+                default="S:/Documents")
             private$..xl_filename <- jmvcore::OptionString$new(
                 "xl_filename",
                 xl_filename,
@@ -526,7 +526,7 @@ jmvtab <- function(
     subtext = "",
     digits = 0,
     exportExcel,
-    xl_path = "",
+    xl_path = "S:/Documents",
     xl_filename = "Table1.xlsx") {
 
     if ( ! requireNamespace("jmvcore", quietly=TRUE))

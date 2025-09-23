@@ -9,6 +9,31 @@
 
 module.exports = {
 
+//  view_loaded(ui) {
+//    // Check if the path field is empty
+//    if (!ui.xl_path.value() || ui.xl_path.value() === "") {
+//      // Set a platform-specific default path
+//      let defaultPath = "";
+//
+//      // Detect OS using navigator.platform
+//      if (navigator.platform.toLowerCase().includes('win')) {
+//        // Windows default - use Documents folder in user's home directory
+//        defaultPath = "~/Documents";
+//      } else if (navigator.platform.toLowerCase().includes('mac')) {
+//        // macOS default
+//        defaultPath = "~/Documents";
+//      } else {
+//        // Linux default
+//        defaultPath = "~/Documents";
+//      }
+//
+//      // Set the path in the UI
+//      ui.xl_path.setValue(defaultPath);
+//    }
+//  },
+
+
+
     exportExcel_changed: function(ui) {
         // Only trigger when the button is active and clicked
         if (ui.exportExcel.value()) {
