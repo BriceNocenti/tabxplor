@@ -164,8 +164,8 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
         if (!is.null(self$options$exportExcel)) {
           if (self$options$exportExcel) {
 
-            folder_path <- path.expand(options$xl_path)
-            file_path <- file.path(folder_path, self$options$xl_filename)
+            folder_path <- path.expand(self$options$xl_path)
+            file_path   <- file.path(folder_path, self$options$xl_filename)
 
 
             # Check if a file was selected
@@ -184,8 +184,8 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
                               code="no_file_selected")
             }
 
-            # Reset the action button
-            self$options$exportExcel$setValue(FALSE)
+             # Reset the action button (not working ?)
+             self$options$exportExcel$setValue(FALSE)
           }
         }
 

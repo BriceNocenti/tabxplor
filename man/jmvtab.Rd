@@ -33,7 +33,8 @@ jmvtab(
   subtext = "",
   digits = 0,
   exportExcel,
-  xl_path = ""
+  xl_path = "S:/Documents",
+  xl_filename = "Table1.xlsx"
 )
 }
 \arguments{
@@ -174,7 +175,9 @@ integer vector the same length as \code{col_vars}.}
 
 \item{exportExcel}{Press to export the table to Excel.}
 
-\item{xl_path}{Path of the Excel file to create.}
+\item{xl_path}{"Folder in which to save exported Excel file"}
+
+\item{xl_filename}{"Name of exported Excel file"}
 }
 \value{
 A results object containing:

@@ -1,3 +1,10 @@
+# tabxplor 1.3.1
+
+* `jmvtab()` : added "Export to Excel" button to use `tab_xl()` in Jamovi UI.
+
+* Small bug corrections.
+
+
 # tabxplor 1.3.0
 
 ## Added : 
