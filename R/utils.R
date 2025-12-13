@@ -155,6 +155,9 @@ score_from_lv1 <- function (data, name, vars_list) {
 #' @param style Default is to use `dplyr::mutate()`. Set to `base` to use `data$var <-` style.
 #' @param reminder By default, a reminder of the syntax (`"new" = "old"`) is printed.
 #'  Set to `FALSE` to remove it.
+#' @param freq Set to `TRUE` to print frequency and count of each level as comment.
+#' Set to `FALSE` to avoid this behavior. By default, frequencies and counts are 
+#' only calculated when less than 6 variables are provided.
 #' @param cat By default the result is written in the console if there are less than
 #' 6 variables, written in a temporary file and opened otherwise. Set to
 #' false to get a data frame with a character variable instead.
@@ -165,6 +168,7 @@ score_from_lv1 <- function (data, name, vars_list) {
 #' If the `labelled` package in installed, the variable label is used as title in a comment.
 #' @export
 fct_recode_helper <- function(data, .cols = -where(is.numeric), name_in, name_out,
+                              freq = NULL, 
                               style = c("mutate", "base"), reminder = TRUE, cat = TRUE) {
   no_name_in <- missing(name_in)
   if (no_name_in) {
@@ -191,19 +195,64 @@ fct_recode_helper <- function(data, .cols = -where(is.numeric), name_in, name_ou
   }
 
   data <- data |> dplyr::mutate(dplyr::across(.cols = dplyr::everything(), .fns = as.factor))
+  
+  # By default, if not chosen by user, only calculate frequencies for less that 10 vars
+  if (is.null(freq)) {
+    freq <- ncol(data) <= 5
+  }
+  
+  if (freq) { # With frequencies and counts helpers 
+    frequencies <- names(data) |> 
+      purrr::map(
+        ~ tab_plain(data, !!rlang::sym(.x), pct = "col", na = "drop") |> 
+          filter(!is_totrow(pct)) |> 
+          rename_with(~ "lvs", .cols = 1) |> 
+          mutate(lvs = paste0("\"",
+                              #stringi::stri_escape_unicode(
+                              stringr::str_replace_all(
+                                lvs, "\"", "'"
+                                #)
+                              ),
+                              "\""), 
+                 pct = format(pct), 
+                 n   = format(n), 
+                 txt = paste0(str_pad(pct, max(str_length(pct)) ), 
+                              " ", 
+                              str_pad(n, max(str_length(n)) )
+                 )
+          ) |> 
+          select(lvs, txt)
+      ) |> 
+      set_names(names(data)) 
+    
+    recode <- frequencies |>
+      purrr::map(
+        ~ paste0(stringr::str_pad(.x$lvs, max(stringr::str_length(.x$lvs)), "right"), " = ",
+                 stringr::str_pad(.x$lvs, max(stringr::str_length(.x$lvs)), "right"), 
+                 ", # ", 
+                 .x$txt
+        )
+      ) |>
+      purrr::map(~ paste0(., collapse = "\n"))
+    
+  } else { # Without frequencies and counts helpers
+    recode <- data |>
+      purrr::map(~ paste0("\"",
+                          #stringi::stri_escape_unicode(
+                          stringr::str_replace_all(
+                            levels(.), "\"", "'"
+                            #)
+                          ),
+                          "\"")) |>
+      purrr::map(
+        ~ paste0(stringr::str_pad(., max(stringr::str_length(.)), "right"), " = ",
+                 stringr::str_pad(., max(stringr::str_length(.)), "right"), collapse = ",\n")
+      )
+    
+  }
 
-  recode <- data |>
-    purrr::map(~ paste0("\"",
-                        #stringi::stri_escape_unicode(
-                        stringr::str_replace_all(
-                          levels(.), "\"", "'"
-                          #)
-                        ),
-                        "\"")) |>
-    purrr::map(
-      ~ paste0(stringr::str_pad(., max(stringr::str_length(.)), "right"), " = ",
-               stringr::str_pad(., max(stringr::str_length(.)), "right"), collapse = ",\n")
-    )
+ 
+  
 
 
   if (with_variable_label_as_title) {

@@ -214,20 +214,14 @@ from the independent hypothesis (the two variables may be independent).
 
 ``` r
 tab(forcats::gss_cat, race, marital, chi2 = TRUE)
-#> chi2 stats      marital
-#> df                   10
-#> variance         0.0464
-#> chi2                997
-#> pvalue           <0.01%
-#> count            21 483
-#> 
-#> # A tabxplor tab: 4 × 8
+#> # A tabxplor tab: 5 × 8
 #>   race   `No answer` `Never married` Separated Divorced Widowed Married  Total
-#>   <fct>          <n>             <n>       <n>      <n>     <n>     <n>    <n>
+#>   <char>   <n-mixed>             <n>       <n>      <n>     <n>     <n>    <n>
 #> 1 Other            2             633       110      212      70     932  1 959
 #> 2 Black            2           1 305       196      495     262     869  3 129
 #> 3 White           13           3 478       437    2 676   1 475   8 316 16 395
 #> 4 Total           17           5 416       743    3 383   1 807  10 117 21 483
+#> 5 pvalue      <0.01%
 ```
 
 Chi2 stats can also be used to color cells based on their contributions
