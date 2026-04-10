@@ -223,7 +223,7 @@ fct_recode_helper <- function(data, .cols = -where(is.numeric), name_in, name_ou
           ) |> 
           select(lvs, txt)
       ) |> 
-      set_names(names(data)) 
+      purrr::set_names(names(data)) 
     
     recode <- frequencies |>
       purrr::map(
@@ -1280,6 +1280,27 @@ po_to_dt <- function(file) {
 }
 
 
+# Other functions ----
 
 
+#' @keywords internal
+# From fs:: package : thank to Gábor Csárdi
+path_sanitize <- function (filename, replacement = "") {
+    illegal <- "[/\\?<>\\:*|\":]"
+    control <- "[[:cntrl:]]"
+    reserved <- "^[.]+$"
+    windows_reserved <- "^(con|prn|aux|nul|com[0-9]|lpt[0-9])([.].*)?$"
+    windows_trailing <- "[. ]+$"
+    filename <- gsub(illegal, replacement, filename)
+    filename <- gsub(control, replacement, filename)
+    filename <- gsub(reserved, replacement, filename)
+    filename <- gsub(windows_reserved, replacement, filename, 
+        ignore.case = TRUE)
+    filename <- gsub(windows_trailing, replacement, filename)
+    filename <- substr(filename, 1, 255)
+    if (replacement == "") {
+        return(filename)
+    }
+    path_sanitize(filename, "")
+}
 

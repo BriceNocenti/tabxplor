@@ -12,7 +12,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             wt = NULL,
             pct = "no",
             color = "no",
-            chi2 = TRUE,
+            chi2 = FALSE,
             OR = "no",
             na = "keep",
             lvs = "all",
@@ -34,7 +34,8 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             digits = 0,
             exportExcel = NULL,
             xl_path = "S:/Documents",
-            xl_filename = "Table1.xlsx", ...) {
+            xl_filename = "Table.xlsx",
+            xl_replace = FALSE, ...) {
 
             super$initialize(
                 package="tabxplor",
@@ -104,7 +105,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             private$..chi2 <- jmvcore::OptionBool$new(
                 "chi2",
                 chi2,
-                default=TRUE)
+                default=FALSE)
             private$..OR <- jmvcore::OptionList$new(
                 "OR",
                 OR,
@@ -238,7 +239,11 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             private$..xl_filename <- jmvcore::OptionString$new(
                 "xl_filename",
                 xl_filename,
-                default="Table1.xlsx")
+                default="Table.xlsx")
+            private$..xl_replace <- jmvcore::OptionBool$new(
+                "xl_replace",
+                xl_replace,
+                default=FALSE)
 
             self$.addOption(private$..row_vars)
             self$.addOption(private$..col_vars)
@@ -269,6 +274,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$.addOption(private$..exportExcel)
             self$.addOption(private$..xl_path)
             self$.addOption(private$..xl_filename)
+            self$.addOption(private$..xl_replace)
         }),
     active = list(
         row_vars = function() private$..row_vars$value,
@@ -299,7 +305,8 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         digits = function() private$..digits$value,
         exportExcel = function() private$..exportExcel$value,
         xl_path = function() private$..xl_path$value,
-        xl_filename = function() private$..xl_filename$value),
+        xl_filename = function() private$..xl_filename$value,
+        xl_replace = function() private$..xl_replace$value),
     private = list(
         ..row_vars = NA,
         ..col_vars = NA,
@@ -329,7 +336,8 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         ..digits = NA,
         ..exportExcel = NA,
         ..xl_path = NA,
-        ..xl_filename = NA)
+        ..xl_filename = NA,
+        ..xl_replace = NA)
 )
 
 jmvtabResults <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
@@ -337,6 +345,7 @@ jmvtabResults <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
     inherit = jmvcore::Group,
     active = list(
         html_table = function() private$.items[["html_table"]],
+        export_status = function() private$.items[["export_status"]],
         plot = function() private$.items[["plot"]]),
     private = list(),
     public=list(
@@ -349,6 +358,10 @@ jmvtabResults <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 options=options,
                 name="html_table",
                 title="Table"))
+            self$add(jmvcore::Html$new(
+                options=options,
+                name="export_status",
+                title=""))
             self$add(jmvcore::Image$new(
                 options=options,
                 name="plot",
@@ -490,9 +503,11 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #' @param exportExcel Press to export the table to Excel.
 #' @param xl_path "Folder in which to save exported Excel file"
 #' @param xl_filename "Name of exported Excel file"
+#' @param xl_replace "Set to \code{TRUE} to overwrite existing Excel file."
 #' @return A results object containing:
 #' \tabular{llllll}{
 #'   \code{results$html_table} \tab \tab \tab \tab \tab a html \cr
+#'   \code{results$export_status} \tab \tab \tab \tab \tab a html \cr
 #'   \code{results$plot} \tab \tab \tab \tab \tab an image \cr
 #' }
 #'
@@ -505,7 +520,7 @@ jmvtab <- function(
     wt = NULL,
     pct = "no",
     color = "no",
-    chi2 = TRUE,
+    chi2 = FALSE,
     OR = "no",
     na = "keep",
     lvs = "all",
@@ -527,7 +542,8 @@ jmvtab <- function(
     digits = 0,
     exportExcel,
     xl_path = "S:/Documents",
-    xl_filename = "Table1.xlsx") {
+    xl_filename = "Table.xlsx",
+    xl_replace = FALSE) {
 
     if ( ! requireNamespace("jmvcore", quietly=TRUE))
         stop("jmvtab requires jmvcore to be installed (restart may be required)")
@@ -575,7 +591,8 @@ jmvtab <- function(
         digits = digits,
         exportExcel = exportExcel,
         xl_path = xl_path,
-        xl_filename = xl_filename)
+        xl_filename = xl_filename,
+        xl_replace = xl_replace)
 
     analysis <- jmvtabClass$new(
         options = options,

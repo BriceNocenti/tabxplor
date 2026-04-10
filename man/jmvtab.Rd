@@ -12,7 +12,7 @@ jmvtab(
   wt = NULL,
   pct = "no",
   color = "no",
-  chi2 = TRUE,
+  chi2 = FALSE,
   OR = "no",
   na = "keep",
   lvs = "all",
@@ -34,7 +34,8 @@ jmvtab(
   digits = 0,
   exportExcel,
   xl_path = "S:/Documents",
-  xl_filename = "Table1.xlsx"
+  xl_filename = "Table.xlsx",
+  xl_replace = FALSE
 )
 }
 \arguments{
@@ -178,11 +179,14 @@ integer vector the same length as \code{col_vars}.}
 \item{xl_path}{"Folder in which to save exported Excel file"}
 
 \item{xl_filename}{"Name of exported Excel file"}
+
+\item{xl_replace}{"Set to \code{TRUE} to overwrite existing Excel file."}
 }
 \value{
 A results object containing:
 \tabular{llllll}{
 \code{results$html_table} \tab \tab \tab \tab \tab a html \cr
+\code{results$export_status} \tab \tab \tab \tab \tab a html \cr
 \code{results$plot} \tab \tab \tab \tab \tab an image \cr
 }
 }

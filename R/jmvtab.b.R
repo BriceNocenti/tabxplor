@@ -40,6 +40,35 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
       data <- self$data
 
 
+      # Test Excel folder path before calculing the table !
+      if (!is.null(self$options$exportExcel)) {
+        if (self$options$exportExcel) {
+          folder_path <- path.expand(stringr::str_remove_all(self$options$xl_path, "\"|'"))
+          # folder_not_null <- !is.null(folder_path) && folder_path != ""
+          folder_exists <- dir.exists(folder_path)
+          
+          if (!folder_exists) {
+            export_status <- paste0(
+              "<div style=\"background-color:#fee2e2;",
+              "border:1px solid #fecaca;",
+              "color:#7f1d1d;",
+              "padding:10px 12px;",
+              "border-radius:4px;",
+              "font-size:0.95em;\">",
+              "✗ Error: The specified folder does not exist: <strong>",
+              folder_path,
+              "</strong></div>"
+            )
+            self$results$export_status$setContent(export_status)
+            return(NULL)
+          }
+        }
+      } 
+
+
+      
+
+
       # if (is.null(self$options$xl_path) || self$options$xl_path == "") {
       #   # docs <- get_user_documents() # for all platforms and languages
       #   # default_path <- file.path(docs, "Excel_test.xlsx") |>
@@ -104,9 +133,9 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
 
         tabs <- tab_many(
           data               = data,
-          row_vars           = all_of(row_vars),
-          col_vars           = all_of(col_vars),
-          tab_vars           = all_of(tab_vars),
+          row_vars           = tidyselect::all_of(row_vars),
+          col_vars           = tidyselect::all_of(col_vars),
+          tab_vars           = tidyselect::all_of(tab_vars),
           wt                 = !!wt,
           pct                = self$options$pct,
           OR                 = self$options$OR,
@@ -135,13 +164,28 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
           other_level        = gettext("Others", domain = "R-tabxplor")
         )
 
+        # Remove total column if only keeping first level
+        if (self$options$lvs %in% c("first", "auto")) { # length(col_vars) > 1
+          
+          # S’il y a une seule variable de colonne qui n’a pas au moins deux colonnes
+          # (ou alors mettre : si la dernière col_var n’a pas au moins deux colonnes ?)
+          col_var_with_only_one_col <- 
+            !(get_col_var(dplyr::select(tabs, -dplyr::where(is_totcol), -tidyselect::any_of("n"))) %>%
+            purrr::discard(. == "") |> 
+            duplicated() |> 
+            all() )
+          
+          if (col_var_with_only_one_col) tabs <- tabs |> dplyr::select(-dplyr::where(is_totcol))
+        }
+
+
         if (self$options$display != "auto") {
           tabs <- tabs |>
-            mutate(across(where(is_fmt), ~ set_display(., self$options$display)))
+            dplyr::mutate(dplyr::across(dplyr::where(is_fmt), ~ set_display(., self$options$display)))
         }
         if (self$options$ci == "cell" & self$options$pct %in% c("row", "col")) {
           tabs <- tabs |>
-            dplyr::mutate(across(
+            dplyr::mutate(dplyr::across(
               dplyr::where(is_fmt) & -(tidyselect::any_of(c("n", "wn")) &
                                   dplyr::where(~ get_type(.) == "n")),
               ~ set_display(., "pct_ci")
@@ -158,37 +202,104 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
         }
 
 
-
-
         # # Handle Excel export
         if (!is.null(self$options$exportExcel)) {
           if (self$options$exportExcel) {
+            excel_message_count <- 0L
 
-            folder_path <- path.expand(self$options$xl_path)
-            file_path   <- file.path(folder_path, self$options$xl_filename)
+            # # folder_exists created before calculating the table
+            # folder_path <- path.expand(stringr::str_remove_all(self$options$xl_path, "\"|'"))
+            # # folder_not_null <- !is.null(folder_path) && folder_path != ""
+            # folder_exists <- dir.exists(folder_path)
 
-
-            # Check if a file was selected
-            if (!is.null(file_path) && file_path != "") {
+            file_path <- path_sanitize(self$options$xl_filename) 
+            filename_null <- is.null(file_path) || file_path == ""
+            if (filename_null) file_path <- "Table.xlsx"
+            file_path <- file.path(folder_path, file_path)
+            
+            # if (folder_exists) { # done before calculating the table
               # Ensure file has .xlsx extension
               if (!grepl("\\.xlsx$", file_path, ignore.case = TRUE)) {
                 file_path <- paste0(file_path, ".xlsx")
               }
 
               # Export the table
-              tab_xl(tabs, path = file_path,
-                     sheets = "unique", open = FALSE, replace = TRUE)
-            } else {
-              # Show error message if no file selected
-              jmvcore::reject("Please select a valid file location for the Excel export",
-                              code="no_file_selected")
+              tryCatch({
+              xl_result_path <-
+                tab_xl(tabs, path = file_path, 
+                  sheets = "unique", open = FALSE, replace = self$options$xl_replace) |>
+                capture.output() |>
+                stringr::str_remove("^\\[1\\] ") |>
+                stringr::str_remove_all("\"") |>
+                stringr::str_remove("^\\[1\\] ") |>
+                normalizePath(winslash = "\\")
+               
+                  # test table : 
+                    # tab(forcats::gss_cat, race,) |> tab_xl(replace = TRUE, open = FALSE) |> 
+                    #   capture.output()  |>
+                    #   stringr::str_remove("^\\[1\\] ") |>
+                    #   stringr::str_remove_all("\"") |>
+                    #  normalizePath(winslash = "/")
+              
+                # # Create success notice
+              
+                # # Not working
+                # export_notice <- jmvcore::Notice$new(
+                #     self$options,
+                #     name = "export_notice",
+                #     type = jmvcore::NoticeType$INFO,
+                #     content = paste0("Successfully exported to Excel: ", xl_result_path)
+                # )
+                # self$results$insert(1, export_notice) # Insert at the top
+                       
+                export_status <- paste0(
+                  "<div style=\"background-color:#ecfdf5;",
+                  "border:1px solid #a7f3d0;",
+                  "color:#065f46;",
+                  "padding:10px 12px;",
+                  "border-radius:4px;",
+                  "font-size:0.95em;\">",
+                  "✓ Successfully exported to Excel: <strong>",
+                  xl_result_path,
+                  "</strong></div>"
+              )              
+              self$results$export_status$setContent(export_status)
+            },
+            error = function(err) {
+                # ERROR - Create error message
+                export_status <- paste0(
+                    "<div style=\"background-color:#fee2e2;",
+                    "border:1px solid #fecaca;",
+                    "color:#7f1d1d;",
+                    "padding:10px 12px;",
+                    "border-radius:4px;",
+                    "font-size:0.95em;\">",
+                    "✗ Excel export failed: <strong>",
+                    err$message,
+                    "</strong></div>"
+                )
+                self$results$export_status$setContent(export_status)
             }
+        )
+     
+            #  # Reset the action button (not working : error message in Jamovi ?)
+            #  self$options$exportExcel$setValue(FALSE)
 
-             # Reset the action button (not working ?)
-             self$options$exportExcel$setValue(FALSE)
-          }
+        } else {
+            # # NOT WORKING : R SESSION reset at each run !!!! 
+            # # # Clear previous export status message, but only if the analysis was really redone manually
+            # # if (exists("excel_message_count") ) {
+            # #       excel_message_count <- excel_message_count + 1L
+
+            # #       if (excel_message_count > 1) {
+            # #       self$results$export_status$setContent(paste0("")) # "<div></div>" 
+            # #       }
+            # # }
+            # self$results$export_status$setContent(paste0(exists("excel_message_count"))) 
+            # # Sys.sleep(5)
+          } 
+
         }
-
         # if (!is.null(self$options$exportExcel) && self$options$exportExcel) {
         #   tryCatch({
         #     # Create full path with filename and extension
@@ -233,8 +344,33 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
         # Create HTML table
         tabs_html <- tab_kable(tabs,
                                wrap_rows = self$options$wrap_rows,
-                               wrap_cols = self$options$wrap_cols)
-
+                               wrap_cols = self$options$wrap_cols, 
+                               fixed_thead = FALSE, # not working in Jamovi ? 
+                               position = "left"
+                               # full_width = TRUE,
+                              ) |>
+        kableExtra::scroll_box(width = "1080px",
+                              # height = "100%" #, "100vh" #,  # Full viewport height
+                              fixed_thead = FALSE, # not working in Jamovi ? 
+                              box_css = "border: none; padding: 0; overflow-x: auto !important; display: block; table-layout: auto;",
+                              extra_css = "margin-left: 0; width: 100%;" # 
+                            )
+       
+        # # Create the container with horizontal scroll and max width
+        # container_html <- paste0(
+        #   '<div style="
+        #     max-width: 1080px;
+        #     width: 100%;
+        #     height: 100vh;
+        #     overflow-y: auto;
+        #     overflow-x: auto;
+        #     margin: 0 auto;
+        #   ">',
+        #   tabs_html,
+        #   '</div>'
+        # )
+        
+        
 
         # Adjust class for proper rendering
         # Formatting not working with kableExtra : we remove "kableExtra" class
@@ -584,7 +720,7 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
                     #1 # color legend length
         )*20) |> # 20
           round() |> as.integer()
-        }
+      }
 
         # # Plot size
         # # https://forum.jamovi.org/viewtopic.php?t=472

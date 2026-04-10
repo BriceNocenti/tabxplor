@@ -137,7 +137,7 @@ options:
     - name: chi2
       title: "" #"chi2 = <i>(Chi2 test)</i>"
       type: Bool
-      default: true
+      default: false
       description:
           R: >
            Set to \code{TRUE} to make a Chi2 and add summary stats.
@@ -504,7 +504,7 @@ options:
     - name: xl_path
       type: String
       title: ""
-      default: "S:/Documents"
+      default: "S:/Documents" # "%USERPROFILE%/Documents" not working
       description:
           R: >
            "Folder in which to save exported Excel file"
@@ -512,10 +512,18 @@ options:
     - name: xl_filename
       type: String
       title: ""
-      default: "Table1.xlsx" # Not set in .init() # "D:/Documents/Excel_test.xlsx"
+      default: "Table.xlsx" # Not set in .init() # "D:/Documents/Excel_test.xlsx"
       description:
           R: >
            "Name of exported Excel file"
+
+    - name: xl_replace
+      title: "" #
+      type: Bool
+      default: false
+      description:
+          R: >
+           "Set to `TRUE` to overwrite existing Excel file."
 
 
 ...

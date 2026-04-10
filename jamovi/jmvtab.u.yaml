@@ -503,6 +503,27 @@ children:
             name: xl_filename
             format: string
             width: largest
+      - type: LayoutBox
+        margin: none
+        cell:
+          column: 0
+          row: 2
+        stretchFactor: 0
+        children:
+          - type: Label
+            label: "Replace file ?"  
+      - type: LayoutBox
+        margin: none
+        cell:
+          column: 1
+          row: 2
+        stretchFactor: 0
+        children:
+          - type: CheckBox
+            name: xl_replace
+
+
+
       # - type: LayoutBox
       #   margin: none
       #   cell:

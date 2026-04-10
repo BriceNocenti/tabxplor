@@ -5,9 +5,12 @@ jrs:   '1.1'
 
 items:
 
-
     - name: html_table
       title: Table
+      type: Html
+
+    - name: export_status
+      title: ""
       type: Html
 
     # - name:  chi2_table
@@ -31,11 +34,12 @@ items:
     #     #   type: number
     #     #   format: zto,pvalue
 
+
     # Empty plot needed to be able to set the value of the plotting zone
     - name: plot
       title: ""
       type: Image
-      width:  1080
+      width: 1080 # 2060 ? 
       height: 0
       renderFun: .plot
 

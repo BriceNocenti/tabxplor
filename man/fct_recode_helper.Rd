@@ -9,6 +9,7 @@ fct_recode_helper(
   .cols = -where(is.numeric),
   name_in,
   name_out,
+  freq = NULL,
   style = c("mutate", "base"),
   reminder = TRUE,
   cat = TRUE
@@ -23,6 +24,10 @@ fct_recode_helper(
 
 \item{name_out}{The name of the output data frame, if different from the
 input data frame.}
+
+\item{freq}{Set to \code{TRUE} to print frequency and count of each level as comment.
+Set to \code{FALSE} to avoid this behavior. By default, frequencies and counts are
+only calculated when less than 6 variables are provided.}
 
 \item{style}{Default is to use \code{dplyr::mutate()}. Set to \code{base} to use \verb{data$var <-} style.}
 
