@@ -1,3 +1,9 @@
+# PURPOSE: Export tabxplor tables to Excel with formatting and colors via openxlsx.
+# ROLE: Primary export format for sharing tables with non-R users.
+# KEY CONSTRAINTS:
+#   - openxlsx is in Suggests — all calls must be guarded.
+#   - Color codes come from get_color_style(mode = "color_code"), not crayon functions.
+#   - Shares color selection logic with fmt_class.R (fmt_color_selection, color_formula).
 
 #' Excel output for tabxplor tables, with formatting and colors
 #' @description To modify the colors used into the Excel table, you can change the

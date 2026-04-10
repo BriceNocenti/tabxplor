@@ -1,3 +1,13 @@
+# PURPOSE: Define tabxplor_fmt, a vctrs record class for formatted cross-table cells.
+# ROLE: Foundation of the entire package. Every numeric column in a tabxplor_tab is fmt.
+# KEY CONSTRAINTS:
+#   - Adding a new field requires updating: new_fmt(), fmt(), format.tabxplor_fmt(),
+#     pillar_shaft.tabxplor_fmt(), vec_arith methods, and possibly tab_pct/tab_ci/tab_chi2.
+#   - Fields are per-cell (vctrs::field), attributes are per-column (attr). Do not confuse.
+#   - pct is stored as 0-1 internally; multiplied by 100 only in format().
+#   - For type="mean", the diff field stores a RATIO (cell/ref), not a difference.
+# See: CLAUDE.md § Design Decisions > Type System.
+
 # Create formated numbers class
 #Import vctrs in NAMESPACE :
 #' Internal vctrs methods
@@ -945,6 +955,10 @@ fmt_get_color_code <- function(x, type = "text", theme = "light", html_24_bit = 
 # INTERNAL FUNCTIONS #####################################################################
 
 
+# DESIGN: new_fmt() is the internal constructor. Attributes (type, color, ci_type, etc.)
+#   are SCALAR per-column, not per-cell. Fields (n, pct, diff, etc.) are per-cell vectors.
+#   This distinction is fundamental: attributes describe column semantics,
+#   fields carry individual cell data. See vctrs::new_rcrd().
 # @describeIn
 #' fmt a constructor for class fmt.
 #' @param class Subclasses to assign to the new object, default: none.
@@ -1341,6 +1355,12 @@ ci_html_subscript <- function(x, html = FALSE) {
 #The first method for every class should almost always be a format() method.
 #This should return a character vector the same length as x.
 
+# DESIGN: Central display method. Handles 20+ display modes (n, wn, pct, diff, ctr, ci,
+#   pct_ci, mean_ci, var, pvalue, or, OR, etc.). Key transformations:
+#   - pct stored as 0-1 is multiplied by 100 here for display
+#   - Two CI display modes controlled by option tabxplor.ci_print: "moe" (±margin) or "ci" ([lo;hi])
+#   - diff for means shows with "*" symbol; diff for pct shows with +/- sign
+#   - special_formatting=TRUE adds "ref:" prefix and "mean:" labels (used in pillar)
 #' Print method for class tabxplor_fmt
 #'
 #' @param x A fmt object.
@@ -1865,6 +1885,11 @@ mutate.tabxplor_fmt <- function(.data, ...) {
 
 
 
+# DESIGN: Three-step color selection pipeline:
+#   1. Extract breaks from options (or force_breaks), mirror negatives
+#   2. For each break level, call color_formula() to get boolean mask of matching cells
+#   3. keep_last_break() resolves ties: each cell gets the strongest matching threshold
+#   Returns a named list of boolean vectors (one per color level: pos1-5, neg1-5, ratio).
 #' @keywords internal
 fmt_color_selection <- function(x, force_color, force_breaks) {
   type    <- get_type (x)
@@ -2130,6 +2155,12 @@ keep_last_break <- function(color_selection) {
 
 
 
+# DESIGN: Boolean formula per color mode. Key asymmetries:
+#   - "diff": uses ratio (pct_ratio flag) when break > 1 (the "*2 rule");
+#     for means, diff is already a ratio so threshold comparison is direct.
+#   - "diff_ci"/"after_ci": subtracts CI from difference before comparison.
+#   - "contrib": compares cell contribution to mean contribution (mean_ctr on totrow).
+#   - "or"/"OR": odds ratio comparison, neg uses 1/break for under-represented.
 #' @keywords internal
 color_formula <- function(type, color, neg,
                           diff, diff_sup, pct_ratio, ratio,
@@ -3088,6 +3119,8 @@ vec_arith.tabxplor_fmt.default <- function(op, x, y, ...) {
 # positive_double <- function(n) n * sign(n)
 # positive_integer <- function(n) as.integer(n * sign(n))
 
+# DESIGN: fmt + fmt arithmetic operates on n, wn, pct fields. For means, recalculates
+#   weighted mean. Resets diff/ci/ctr to NA (must be recomputed via tab_pct/tab_ci/tab_chi2).
 #' @describeIn vec_arith.tabxplor_fmt vec_arith method for fmt + fmt
 #' @return A fmt vector
 #' @method vec_arith.tabxplor_fmt tabxplor_fmt

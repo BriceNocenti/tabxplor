@@ -1,3 +1,9 @@
+# PURPOSE: Package initialization (.onLoad), pipe re-export, factor/list utilities.
+# ROLE: Sets all tabxplor.* options defaults. Entry point for package configuration.
+# KEY CONSTRAINTS:
+#   - .onLoad() is the single source of truth for all option defaults.
+#   - Changing a default here affects every user on package load.
+#   - set_color_style() and set_color_breaks() are defined in tab_classes.R but called here.
 
 #' Pipe operator
 #'

@@ -1,3 +1,14 @@
+# PURPOSE: S3 class definitions for tabxplor_tab/grouped_tab, dplyr method dispatch,
+#   print methods, tab_kable(), tab_plot(), tab_compact(), color palettes and breaks.
+# ROLE: Ensures tabxplor tables survive dplyr operations and print with colors.
+# KEY CONSTRAINTS:
+#   - Every dplyr verb needs an S3 method for tabxplor_grouped_tab. Missing one = silent
+#     class downgrade to plain tbl_df (attributes lost, printing breaks).
+#   - The dplyr_row_slice/dplyr_col_modify/dplyr_reconstruct trio is the core mechanism.
+#     Each calls lv1_group_vars() to decide: downgrade to tabxplor_tab or keep grouped.
+#   - Color palettes (6 sets) and break logic live here, shared with fmt_class.R and tab_xl.R.
+# See: CLAUDE.md § Design Decisions > dplyr Integration.
+
 # Special tibble class needed for printing, even if the most meaningful attributes
 #  where passed to fmt class variables (only chi2 and subtext remains at tab level) :
 #  the implementation relies on "grouped_df" class structure, and to manage it, it is
@@ -2381,6 +2392,10 @@ lv1_group_vars <- function(tabs) {
 }
 
 
+# DESIGN: dplyr_row_slice + dplyr_col_modify + dplyr_reconstruct form the core trio.
+#   Each: (1) calls NextMethod() for the actual operation, (2) checks lv1_group_vars()
+#   to decide if result has enough groups to stay grouped_tab or must downgrade to tab,
+#   (3) re-attaches subtext and chi2 attributes from the original data.
 #' dplyr_row_slice method for class tabxplor_grouped_tab
 #' @importFrom dplyr dplyr_row_slice
 #' @method dplyr_row_slice tabxplor_grouped_tab
@@ -2888,6 +2903,10 @@ vec_cast.data.frame.tabxplor_grouped_tab <- function(x, to, ...) {
 #
 # }
 
+# DESIGN: 6 color palettes, each with 11 named hex codes: pos1-pos5 (over-represented),
+#   neg1-neg5 (under-represented), ratio (for *2 rule comparison). Palettes:
+#   text_dark, text_light (8-bit), text_light_24_blue_red, text_light_24_green_red (24-bit),
+#   bg_light, bg_dark. Selected via set_color_style(type, theme, html_24_bit).
 #' @keywords internal
 color_style_text_dark <-
   c(pos1 = "#CCCC33", # rgb(4, 4, 1, maxColorValue = 5),
@@ -3208,6 +3227,10 @@ get_color_style <- function(mode = c("crayon", "color_code"),
 #'   contrib_breaks = c(1, 2, 5)
 #' )
 set_color_breaks <- function(pct_breaks, mean_breaks, contrib_breaks) {
+  # DESIGN: Takes positive-only thresholds; negatives are auto-mirrored internally.
+  #   pct_breaks: any value > 1 activates the "*2 rule" (ratio comparison, shown in purple).
+  #   Only ONE value > 1 is allowed. Max 5 breaks = 5 color intensities per direction.
+  #   mean_breaks are ALWAYS ratios (1.15 = "+15% above reference").
   # Defaults are set at the first use of print.tabxplor_tab method :
   #   pct_breaks = c(0.05, 0.1, 0.2, 0.3),
   #   mean_breaks = c(1.15, 1.5, 2, 4),

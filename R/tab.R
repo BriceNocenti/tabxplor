@@ -1,3 +1,13 @@
+# PURPOSE: Main user-facing API for cross-tabulation.
+# ROLE: Contains tab(), tab_many(), tab_plain(), tab_num(), and all pipeline functions
+#   (tab_pct, tab_ci, tab_chi2, tab_tot, tab_totaltab, tab_spread, tab_prepare).
+# KEY CONSTRAINTS:
+#   - tab_plain()/tab_num() use data.table internally for aggregation speed.
+#     Column names are temporarily renamed to avoid DT conflicts, then restored.
+#   - tab() is a thin wrapper around tab_many(); keep their arg signatures in sync.
+#   - All public function signatures are part of CRAN API — deprecate before changing.
+# See: CLAUDE.md § Global Architecture for the full pipeline diagram.
+
 #Import data.table in NAMESPACE :
 #' Internal data.table methods
 #' @import data.table
@@ -383,6 +393,11 @@ tab <- function(data, row_var, col_var, tab_vars, wt, sup_cols,
 
 
 
+# DESIGN: tab_many() is the engine. Vectorisation philosophy:
+#   - col_vars all share the same pct/color settings (one table)
+#   - row_vars can differ in color/ref/OR/chi2 (separate tables, then compacted)
+#   - Arguments vectorised over row_vars: totaltab, totrow, ref, ref2, OR, comp, color, ci, chi2
+#   - Arguments vectorised over col_vars: levels, digits, totcol, pct
 #' Many cross-tables as one, with color helpers
 #' @description A full-featured function to create, manipulate and format many cross-tables
 #' as one, using colors to make the printed tab more easily readable (in R terminal or
@@ -1839,6 +1854,11 @@ tab_prepare <-
 
 
 
+# DESIGN: tab_plain() is the core aggregation function. Internal sequence:
+#   1. data.table dcast (row_var ~ col_var, fun = sum of weights) for speed
+#   2. Wrap counts into fmt vectors via new_fmt()
+#   3. Add total rows/cols, then chain to tab_pct/tab_ci/tab_chi2 as requested
+#   Column names are temporarily prefixed to avoid DT reserved name conflicts.
 #' Plain single cross-table
 # @description
 #' @param data A data frame.
@@ -4182,6 +4202,9 @@ tab_tot <- function(tabs, tot = c("row", "col"), name = "Total",
 }
 
 
+# WARNING: For type="mean" columns, diff stores a RATIO (cell_mean/ref_mean), not a
+#   difference. This is intentional — mean breaks (1.15, 1.5, 2, 4) are ratio thresholds.
+#   For pct columns, diff stores an additive difference (cell_pct - ref_pct).
 #' Add percentages and diffs to a \code{\link[tabxplor]{tab}}
 #'
 #' @param tabs A \code{tibble} of class \code{tab} made with \code{\link{tab_plain}} or
@@ -4497,6 +4520,11 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
 # }
 
 
+# DESIGN: CI is stored as a half-width (margin of error), not a full interval.
+#   The ci field = z * sqrt(variance). For pct, stored as 0-1 (multiplied by 100 in format).
+#   method_cell controls the proportion CI formula (wilson default); method_diff controls
+#   the difference CI formula (agresti-caffo default). Negative CI values indicate
+#   non-significant differences (used by color_formula for diff_ci/after_ci modes).
 #Ci spread (negative numbers mean no significant difference)
 #' Add confidence intervals to a \code{\link[tabxplor]{tab}}
 #'

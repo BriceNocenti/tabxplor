@@ -1,0 +1,416 @@
+---
+title: "tabxplor — Technical Architecture Guide"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{tabxplor — Technical Architecture Guide}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+This document is the **internal technical reference** for the tabxplor package. It is intended for developers and AI assistants modifying the codebase. For user-facing documentation, see `vignette("tabxplor")`.
+
+**Note:** Some details may become out of date as the code evolves. Always verify against the current source. When in doubt, the code is the source of truth.
+
+## Purpose and Design Philosophy
+
+tabxplor creates, manipulates, and formats color-coded cross-tabulation tables for exploratory data analysis. Two core design principles underpin the entire package:
+
+1. **Every cell carries all statistical data.** Each numeric cell is a `vctrs` record (`tabxplor_fmt`) storing count, weighted count, percentage, mean, difference, contribution to variance, confidence interval, odds ratio, and display/formatting metadata. This enables **lossless display switching**: users can change what is displayed (e.g., from percentages to differences to CI) without recalculating or losing data.
+
+2. **Tables are tibbles with full dplyr compatibility.** Results inherit from `tibble` (via `tabxplor_tab` and `tabxplor_grouped_tab` S3 classes), so all dplyr verbs (`filter`, `mutate`, `select`, `arrange`, etc.) work out of the box while preserving table metadata and formatting.
+
+**Performance strategy:** Aggregation is done with `data.table` internally for speed on large data frames. The user-facing API returns tibbles with `fmt` columns. Users never interact with `data.table` directly.
+
+**CRAN stability:** This is a public CRAN package with external users. All public function signatures (argument names, defaults, return types) are part of the stable API. Internals (helper functions, class fields, color logic) can be changed freely, but public-facing arguments must not be removed or renamed without proper deprecation.
+
+## Type System
+
+### tabxplor_fmt — The Formatted Number Record
+
+`tabxplor_fmt` is a `vctrs::new_rcrd()` record class defined in `R/fmt_class.R`. It is the **foundation of the entire package** — every numeric column in a tabxplor table is an `fmt` vector.
+
+**Fields (per-cell, accessed via `vctrs::field()`):**
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `n` | integer | Unweighted count |
+| `display` | character | Which field to show: "n", "wn", "pct", "mean", "diff", "ctr", "ci", "pct_ci", "mean_ci", "var", "pvalue", "or", "or_pct", "OR", "OR_pct", "rr" |
+| `digits` | integer | Decimal places for display |
+| `wn` | double | Weighted count |
+| `pct` | double | Percentage (stored as 0–1, multiplied by 100 only in `format()`) |
+| `mean` | double | Cell mean (for numeric column variables) |
+| `diff` | double | Difference from reference. **For type="mean": stores a RATIO, not a difference** |
+| `ctr` | double | Contribution to chi-squared variance |
+| `var` | double | Variance (used for CI calculation) |
+| `ci` | double | Confidence interval half-width (margin of error), not full interval |
+| `rr` | double | Relative risk |
+| `or` | double | Odds ratio or relative risk ratio |
+| `in_totrow` | logical | Cell belongs to a total row |
+| `in_tottab` | logical | Cell belongs to the total table |
+| `in_refrow` | logical | Cell belongs to the reference row |
+
+**Attributes (per-column, accessed via `attr()`):**
+
+| Attribute | Type | Description |
+| --------- | ---- | ----------- |
+| `type` | character | Column type: "n", "mean", "row", "col", "all", "all_tabs" |
+| `comp_all` | logical | Compare against total table (TRUE) or subtable (FALSE) |
+| `ref` | character | Reference type: "tot" or "first" |
+| `ci_type` | character | CI type: "", "no", "cell", "diff", "auto" |
+| `col_var` | character | Name of the column variable this belongs to |
+| `totcol` | logical | This column is a total column |
+| `refcol` | logical | This column is a reference column |
+| `color` | character | Color scheme: "no", "diff", "diff_ci", "after_ci", "contrib", "or", "OR" |
+
+**Critical distinction:** Fields are per-cell vectors (every cell can have a different `n`, `pct`, etc.). Attributes are scalar values describing the entire column (all cells in the column share the same `type`, `color`, etc.). Do not confuse the two when modifying the class.
+
+**Constructor chain:** `fmt()` (public, validates and coerces arguments) → `new_fmt()` (internal, calls `vctrs::new_rcrd()`).
+
+**Adding a new field** requires updating: `new_fmt()`, `fmt()`, `format.tabxplor_fmt()`, `pillar_shaft.tabxplor_fmt()`, the relevant `vec_arith` methods, and possibly `tab_pct()`/`tab_ci()`/`tab_chi2()`. Expect ~8 functions across 3 files.
+
+### tabxplor_tab — The Table Tibble
+
+`tabxplor_tab` is a tibble subclass created via `tibble::new_tibble()` in `R/tab_classes.R`. It adds two attributes beyond what a regular tibble carries:
+
+- `subtext` (character vector): Legend lines printed below the table.
+- `chi2` (tibble): Chi-squared test results with columns: `tables`, `pvalue`, `df`, `cells`, `variance`, `count`.
+
+Constructor: `new_tab(tabs, subtext, chi2)`.
+
+### tabxplor_grouped_tab — Subtabled Results
+
+When `tab_vars` are provided, the result is a `tabxplor_grouped_tab` — a `grouped_df` subclass. It carries the same `subtext` and `chi2` attributes, plus `groups` data from dplyr.
+
+Constructor: `new_grouped_tab(tabs, groups, subtext, chi2)`.
+
+This class requires a separate S3 method for **every dplyr verb** to preserve class and attributes through operations. See the dplyr Integration section below.
+
+## Calculation Pipeline
+
+The main pipeline flows through these functions in `R/tab.R`:
+
+```
+tab(data, row_var, col_var, ...)
+  └── tab_many(data, row_vars, col_vars, ...)
+        └── per row_var:
+              tab_prepare()  ──►  Cleans data, drops NA, collapses rare levels
+              tab_plain()    ──►  data.table aggregation (dcast), wraps in fmt, adds totals
+                 or tab_num()     (for numeric col_vars: calculates means/variances)
+              tab_pct()      ──►  Calculates percentages and differences from reference
+              tab_ci()       ──►  Calculates confidence intervals (Wilson/Wald/AC methods)
+              tab_chi2()     ──►  Chi-squared test, cell contributions to variance
+              tab_totaltab() ──►  Adds total table (overall cross-tab when subtables exist)
+              tab_spread()   ──►  Pivots wider (spread_vars from rows to columns)
+              tab_compact()  ──►  Binds multiple row_var tables into one
+```
+
+### tab() vs tab_many()
+
+`tab()` is a simplified wrapper around `tab_many()`. Key differences:
+
+- `tab()` takes a single `row_var` and `col_var`; `tab_many()` takes multiple `row_vars` and `col_vars`.
+- `tab()` has a `sup_cols` argument (supplementary columns showing only the first level with row percentages); `tab_many()` achieves this via `levels = "first"`.
+- `tab()` translates its simpler argument interface into `tab_many()` arguments.
+
+### tab_many() Vectorisation Philosophy
+
+`tab_many()` processes multiple variables with a key asymmetry:
+
+- **col_vars** all share the same percentage type and color settings (they form one table).
+- **row_vars** can have different color, ref, OR, chi2, and CI settings (separate tables that are optionally compacted together).
+
+Arguments vectorised over row_vars: `totaltab`, `totrow`, `ref`, `ref2`, `OR`, `comp`, `color`, `ci`, `chi2`.
+Arguments vectorised over col_vars: `levels`, `digits`, `totcol`, `pct`.
+
+### tab_plain() — The Aggregation Core
+
+`tab_plain()` is where raw cross-tabulation happens:
+
+1. **data.table dcast**: `data.table::dcast(DT, row_var ~ col_var, fun.aggregate = sum)` for weighted counts. Column names are temporarily prefixed to avoid data.table reserved name conflicts.
+2. **Wrap in fmt**: Raw counts are wrapped into `fmt` vectors via `new_fmt()`.
+3. **Add totals**: Total rows and/or columns are added based on `tot` argument.
+4. **Pipeline**: Chains to `tab_pct()`, `tab_ci()`, `tab_chi2()` if requested.
+5. **Restore names**: Internal prefixes are removed; original column names restored.
+
+### tab_num() — Numeric Column Variables
+
+When a `col_var` is numeric (not a factor), `tab_num()` is used instead of `tab_plain()`. It calculates means and variances per group using `data.table` aggregation. The resulting `fmt` vectors have `type = "mean"` and `display = "mean"`.
+
+### The Reference System
+
+The `ref` argument controls which row serves as the comparison baseline for differences and colors:
+
+- `"auto"`: defaults to `"first"` when OR requested, `"tot"` otherwise
+- `"tot"`: the total row is the reference (differences = cell - total)
+- `"first"`: the first non-total row is the reference
+- integer: specific row index
+- regex string: matched against row labels (must match exactly one row)
+- `"no"`: skip difference calculation entirely
+
+The `comp` argument adds another dimension:
+
+- `comp = "tab"` (default): compare within each subtable's own total
+- `comp = "all"`: compare against the total table's total (across all subtables)
+
+### Mean-Diff Asymmetry
+
+**Critical non-obvious design choice:** For `type = "mean"` columns, the `diff` field stores a **ratio** (`cell_mean / ref_mean`), not an additive difference. This means:
+
+- Mean breaks (`c(1.15, 1.5, 2, 4)`) are ratio thresholds: 1.15 = "+15% above reference".
+- Color formula comparisons use `diff >= break` directly (no subtraction).
+- For percentage columns, `diff` is an additive difference (`cell_pct - ref_pct`), and breaks like `0.05` mean "+5 percentage points".
+
+This asymmetry propagates through `tab_pct()`, `color_formula()`, and `format.tabxplor_fmt()`.
+
+### Confidence Intervals
+
+`tab_ci()` stores the CI as a **half-width** (margin of error), not a full interval:
+
+- `ci = z * sqrt(variance)`
+- For percentages: stored as 0–1 (multiplied by 100 only in `format()`)
+- Two CI methods: `method_cell` for absolute proportions (default: Wilson), `method_diff` for differences (default: Agresti-Caffo)
+- **Negative CI values** indicate non-significant differences (used by `color_formula()` for `diff_ci`/`after_ci` modes)
+
+Two display modes controlled by `options("tabxplor.ci_print")`:
+
+- `"moe"`: show as `value ± margin` (e.g., `45% ±3`)
+- `"ci"`: show as `[lower; upper]` (e.g., `[42%; 48%]`)
+
+## Color System
+
+The color system has three layers, all working together to determine which cells get which colors at which intensity.
+
+### Layer 1 — Palettes
+
+Six predefined color palettes are defined as named character vectors in `R/tab_classes.R` (around line 2892). Each palette has 11 hex color codes:
+
+- `pos1` through `pos5`: Increasing intensity for over-represented values (green/blue spectrum)
+- `neg1` through `neg5`: Increasing intensity for under-represented values (yellow/orange/red spectrum)
+- `ratio`: Special color for the "*2 rule" ratio comparison (purple/blue)
+
+The palettes are:
+
+| Palette | Use case |
+| ------- | -------- |
+| `color_style_text_dark` | Console text on dark background |
+| `color_style_text_light` | Console text on light background |
+| `color_style_text_light_24_blue_red` | HTML 24-bit (green→blue→red) |
+| `color_style_text_light_24_green_red` | HTML 24-bit (green→red, traditional) |
+| `color_style_bg_light` | Cell background on light theme |
+| `color_style_bg_dark` | Cell background on dark theme |
+
+Selection is done by `set_color_style(type, theme, html_24_bit)`, which sets `options("tabxplor.color_style")`. `get_color_style()` returns either crayon functions (for console) or hex codes (for HTML/Excel), depending on the `mode` parameter.
+
+### Layer 2 — Breaks
+
+Breaks are thresholds stored in `options("tabxplor.color_breaks")`, set by `set_color_breaks()`:
+
+- **pct_breaks** (default `c(0.05, 0.1, 0.2, 2, 0.3)`): For percentage differences.
+  - `0.05` = "+5 percentage points above reference" → `pos1` color
+  - `0.1` = "+10 pp" → `pos2`
+  - `0.2` = "+20 pp" → `pos3`
+  - `2` = "twice the reference percentage" → `ratio` color (the "*2 rule")
+  - `0.3` = "+30 pp" → `pos5`
+  - Negative breaks are **auto-mirrored**: `-0.05` → `neg1`, etc.
+- **mean_breaks** (default `c(1.15, 1.5, 2, 4)`): Always ratios for mean comparisons.
+- **contrib_breaks** (default `c(1, 2, 5, 10)`): Multiples of mean contribution to variance.
+
+**The "*2 rule":** Any `pct_breaks` value > 1 switches from additive difference comparison to multiplicative ratio comparison. Only one such value is allowed. When a cell's percentage is ≥ 2× the reference, it gets the `ratio` color (typically purple).
+
+### Layer 3 — Color Selection
+
+`fmt_color_selection()` in `R/fmt_class.R` (line ~1869) orchestrates the selection:
+
+1. Extract breaks from options (or `force_breaks` parameter).
+2. For each break level, call `color_formula()` to get a boolean mask of cells exceeding that threshold.
+3. `keep_last_break()` resolves ties: each cell gets the strongest (highest) matching threshold.
+4. Return a named list of boolean vectors (one per color level: `pos1`–`pos5`, `neg1`–`neg5`, `ratio`).
+
+`color_formula()` (line ~2134) applies different boolean logic per color mode:
+
+| Color mode | Formula |
+| ---------- | ------- |
+| `"diff"` | `diff >= break` (additive) or `ratio >= break` (when break > 1) |
+| `"diff_ci"` | Difference must exceed CI to be significant |
+| `"after_ci"` | Subtracts CI from difference before comparing to break |
+| `"contrib"` | `ctr >= break * mean_ctr` (cell contribution vs. mean contribution) |
+| `"or"` / `"OR"` | Odds ratio comparison; negative uses `1/break` for under-represented |
+
+The `pillar_shaft.tabxplor_fmt()` method then applies the selected colors using `crayon::make_style()` functions for console display, or hex codes for HTML/Excel.
+
+## Export System
+
+Four export formats, all in separate files:
+
+### tab_xl() — Excel Export (`R/tab_xl.R`)
+
+Exports to `.xlsx` via `openxlsx` (Suggests-only dependency). Features:
+
+- Full color formatting matching console output
+- Column width auto-sizing, font control, rotated headers
+- Sheet management: one sheet per table, or all on one sheet
+- Color legend printed as subtext
+- Chi-squared statistics displayed
+- `hide_near_zero`: cells displaying as 0 are grayed out
+- `n_min`: columns/rows with too few observations are grayed out
+
+### tab_kable() — HTML/LaTeX Export (`R/tab_classes.R`)
+
+Uses `kableExtra` for HTML table output. Supports:
+
+- Color formatting via inline CSS
+- HTML tooltips (popover) for confidence intervals
+- Custom CSS injection via `inst/tab.css`
+
+### tab_md() — Markdown Export (`R/tab_md.R`)
+
+Lightweight standalone export (new in v1.3.1):
+
+- Monospace-precise column alignment with pipe tables
+- Bold formatting for total/reference rows
+- Handles multi-table lists and compact tables
+- Can copy to clipboard or write to file
+
+### tab_plot() — ggplot Visualization (`R/tab_classes.R`)
+
+Creates ggplot2 bar charts from tabxplor tables:
+
+- Uses `ggpubr` and `cowplot` for layout
+- Supports grouped/faceted plots by tab_vars
+- Auto-maps colors to the table's color scheme
+
+## dplyr Integration
+
+tabxplor provides 30+ S3 methods to ensure tables survive dplyr operations. This is the most maintenance-intensive part of the package.
+
+### The Core Trio
+
+Three methods form the backbone of class preservation for `tabxplor_grouped_tab`:
+
+1. **`dplyr_row_slice()`**: Called when rows are filtered/sliced. Calls `NextMethod()`, then re-wraps with `new_tab()` or `new_grouped_tab()`.
+2. **`dplyr_col_modify()`**: Called when columns are added/modified. Same re-wrapping logic.
+3. **`dplyr_reconstruct()`**: Called to reconstruct the object after operations. Same pattern.
+
+Each checks `lv1_group_vars()`: if only one grouping level remains, downgrades to plain `tabxplor_tab` (no longer grouped). Otherwise, preserves `tabxplor_grouped_tab`.
+
+### Method List
+
+Every dplyr verb that a user might call needs an S3 method:
+
+- **Grouping:** `group_by`, `ungroup`, `rowwise`
+- **Selection:** `select`, `relocate`, `rename`, `rename_with`
+- **Filtering:** `arrange` (note: for `tabxplor_tab`, not grouped)
+- **Mutation:** `mutate`, `summarise`
+- **Internal:** `dplyr_row_slice`, `dplyr_col_modify`, `dplyr_reconstruct`
+
+**If a method is missing**, the operation silently drops the `tabxplor_*` class, reverting to a plain `tbl_df`. This causes loss of `subtext`, `chi2` attributes and breaks colored printing. Always check `NAMESPACE` for the current method list.
+
+### The mutate.tabxplor_fmt Method
+
+A special `mutate()` method exists for the `fmt` class itself (not the table). This allows users to modify individual fields within `fmt` vectors using dplyr syntax:
+
+```r
+tab |> mutate(across(where(is_fmt), ~mutate(., pct = pct * 2)))
+```
+
+## Options System
+
+All options are set in `.onLoad()` in `R/utils.R`. Users can override via `options()`.
+
+| Option | Default | Description |
+| ------ | ------- | ----------- |
+| `tabxplor.color_style_type` | `"text"` | Color type: "text" or "bg" |
+| `tabxplor.color_style_theme` | auto-detect | "light" or "dark" (detects RStudio theme) |
+| `tabxplor.color_html_24_bit` | `"no"` | "green_red", "blue_red", or "no" |
+| `tabxplor.color_breaks` | (see Layer 2) | List of break vectors |
+| `tabxplor.print` | `"console"` | "console" or "kable" |
+| `tabxplor.ci_print` | `"ci"` | "ci" (brackets) or "moe" (±margin) |
+| `tabxplor.compact` | `FALSE` | Compact table output by default |
+| `tabxplor.cleannames` | `FALSE` | Clean factor names by default |
+| `tabxplor.export_dir` | `NULL` | Default directory for tab_xl() export |
+| `tabxplor.output_kable` | `FALSE` | Auto-output as kable |
+| `tabxplor.kable_html_font` | DejaVu Sans | Font for HTML kable output |
+| `tabxplor.kable_popover` | `FALSE` | Show CI as HTML tooltip |
+| `tabxplor.always_add_css_in_tab_kable` | `TRUE` | Inject custom CSS in kable |
+
+## File-by-File Guide
+
+### R/fmt_class.R (3341 lines)
+
+The foundation file. Contains:
+
+- **Lines 1–940**: Public API for `fmt`: constructor `fmt()`, getters (`get_num`, `get_type`, `get_color`, `is_totrow`, `is_refrow`, etc.), setters (`set_num`, `set_type`, `set_display`, `as_totrow`, etc.).
+- **Lines 941–1040**: Internal constructor `new_fmt()` and helper `fmt0()`.
+- **Lines 1040–1340**: Internal field accessors via `fmt_field_factory()`, reference detection (`get_reference()`).
+- **Lines 1340–1630**: `format.tabxplor_fmt()` — the central display method handling 20+ display modes.
+- **Lines 1630–1870**: `pillar_shaft.tabxplor_fmt()` — console color rendering, `mutate.tabxplor_fmt()`.
+- **Lines 1870–2130**: `fmt_color_selection()` — the color selection pipeline.
+- **Lines 2130–2670**: `color_formula()`, `keep_last_break()`, helper functions.
+- **Lines 2670–2900**: `get_reference()` — identifies reference cells (totals, first row, or regex match).
+- **Lines 2900–3341**: vctrs arithmetic (`vec_arith`), casting (`vec_cast`), type compatibility (`vec_ptype2`), comparison/equality proxies.
+
+### R/tab.R (5809 lines)
+
+The main API file. Contains:
+
+- **Lines 1–280**: `tab()` roxygen documentation.
+- **Lines 280–390**: `tab()` function body — argument processing, delegation to `tab_many()`.
+- **Lines 390–1520**: `tab_many()` — the full-featured engine with vectorisation, per-row_var loop, pipeline chaining.
+- **Lines 1520–1770**: `tab_spread()`, `tab_get_vars()`, `tab_get_wrapped_dimensions()`.
+- **Lines 1770–1860**: `tab_prepare()` — data cleaning, NA handling, rare level collapsing.
+- **Lines 1860–2890**: `tab_plain()` — data.table aggregation core, total rows/cols, fmt wrapping.
+- **Lines 2890–4200**: `tab_num()` — numeric variable means/variances, similar structure to tab_plain.
+- **Lines 4200–4560**: `tab_pct()` — percentage calculation, difference computation.
+- **Lines 4560–4910**: `tab_ci()` — confidence interval calculation (Wilson/Wald/AC methods).
+- **Lines 4910–5200**: `tab_chi2()` — chi-squared test, contributions to variance.
+- **Lines 5200–5809**: `tab_tot()`, `tab_totaltab()`, internal helpers (`diff_index`, `quo_miss_na_null_empty_no`, etc.).
+
+### R/tab_classes.R (3554 lines)
+
+Classes, dplyr methods, and colors. Contains:
+
+- **Lines 1–200**: `new_tab()`, `new_grouped_tab()` constructors, `is_tab()`, validators.
+- **Lines 200–900**: Print methods (`print.tabxplor_tab`, `tbl_sum`, `tbl_format_body`, `tbl_format_footer`), `tab_kable()`.
+- **Lines 900–1200**: `tab_compact()` — merges multiple row_var tables.
+- **Lines 1200–1500**: `tab_plot()` — ggplot visualization.
+- **Lines 1500–2400**: Dplyr S3 methods (30+ methods for group_by, select, mutate, filter, arrange, rename, relocate, rowwise, summarise, ungroup, dplyr_row_slice, dplyr_col_modify, dplyr_reconstruct). Also `lv1_group_vars()` helper.
+- **Lines 2400–2890**: Tab/grouped_tab vctrs casting methods (`vec_ptype2`, `vec_cast`).
+- **Lines 2890–3100**: Color palette constants (6 palettes).
+- **Lines 3100–3210**: `set_color_style()`, `get_color_style()`.
+- **Lines 3210–3554**: `set_color_breaks()`, `get_color_breaks()`, color legend generation.
+
+### R/tab_xl.R (4132 lines)
+
+Excel export. Main function `tab_xl()` handles:
+
+- Workbook creation, sheet management, column width calculation
+- Cell-by-cell color application using `fmt_color_selection()` with `mode = "color_code"`
+- Font, border, and number format styling
+- Chi-squared statistics and color legend printing
+
+### R/tab_md.R (366 lines)
+
+Markdown export. Standalone file (does not modify existing code). Handles:
+
+- Monospace padding for column alignment
+- Bold formatting for total/reference rows
+- Sub-table separators for grouped tables
+- Clipboard and file output options
+
+### R/utils.R (1306 lines)
+
+Utilities and initialization:
+
+- Pipe re-export (`%>%` from magrittr)
+- `.onLoad()` — sets all default options
+- `quo_miss_na_null_empty_no()` — helper to check for missing/empty quosures
+- Factor manipulation utilities (`fct_recode_helper`, etc.)
+- `score_from_lv1()` — scoring helper for survey data
+
+### R/tab_logit.R and R/tab_logit_2.R (WIP)
+
+Entirely commented out. Future logistic regression integration using parsnip/tidymodels. Contains draft code for `multi_logit()`, `readable_OR()`, `or_plot()`. Do not try to use or integrate these — they are a work in progress.
+
+### R/jmvtab.b.R and R/jmvtab.h.R
+
+Jamovi module integration. `jmvtab.h.R` is auto-generated by Jamovi (do not edit). `jmvtab.b.R` is the R6 backend class that bridges Jamovi's UI to tabxplor's `tab()` function.
