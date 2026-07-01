@@ -634,6 +634,7 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
                      totrow = TRUE, totcol = "last", total_names = "Total",
                      add_n = TRUE, add_pct = FALSE,
                      digits = 0, subtext = "",
+                     .by_table = FALSE,
 
                      filter #, listed = FALSE,
                      #spread_vars = NULL, names_prefix, names_sort = FALSE
@@ -1054,6 +1055,39 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
 
 
 
+  # DESIGN: fused aggregation. Build ONE shared finest-grain data.table aggregate keyed on all
+  # (tab_vars, row_vars, factor col_vars), so every factor table is rolled up from it in tab_plain
+  # (`.fine`) instead of re-scanning N rows per (row_var x col_var) pair. Guard: only when
+  # prod(nlevels) <= N (measured crossover, see CLAUDE.md "Perf findings"), no col/row var overlap,
+  # and not forced off via `.by_table`. Otherwise `.fine` stays NULL -> table-by-table (current).
+  .fine <- NULL
+  if (!.by_table && sum(col_vars_text) != 0) {
+    fct_col_vars <- as.character(col_vars[col_vars_text])
+    col_in_row   <- any(fct_col_vars %in% as.character(c(row_vars, tab_vars)))
+    if (!col_in_row) {
+      fine_keys <- unique(as.character(c(tab_vars, row_vars, fct_col_vars)))
+      key_card  <- function(x) if (is.factor(x)) nlevels(x) + as.integer(anyNA(x)) else
+        data.table::uniqueN(x)
+      prod_nlev <- prod(vapply(fine_keys, function(k) key_card(data[[k]]), numeric(1)))
+      # OPT-IN (off by default): the win is modest (~1.05-1.30x at 15M) because per-table downstream
+      # (dcast/%/totals/chi2/fmt) dominates once aggregation is fused; it only clearly pays past ~10M
+      # dense / lower for sparse data, and grows at 30M+. Default floor Inf -> never fuses unless the
+      # user sets `options(tabxplor.fuse_min_rows = <n>)` (e.g. 1e7). Kept as reusable infrastructure
+      # (see CLAUDE.md "Perf findings" and workstream 7 Jamovi caching). Guard also needs
+      # prod(nlevels) <= N (real collapse) and >= 2 tables.
+      n_tables <- length(row_vars) * sum(col_vars_text)
+      if (is.finite(prod_nlev) && prod_nlev <= nrow(data) &&
+          nrow(data) >= getOption("tabxplor.fuse_min_rows", Inf) && n_tables >= 2) {
+        dt___ <- data.table::as.data.table(data[unique(c(fine_keys, as.character(wt)))])
+        .fine <- if (length(wt) != 0) {
+          dt___[, list(n = .N, wn = sum(as.numeric(eval(wt)), na.rm = TRUE)), keyby = fine_keys]
+        } else {
+          dt___[, list(n = .N), keyby = fine_keys]
+        }
+      }
+    }
+  }
+
   if (sum(col_vars_text) != 0) {
     tabs_text <-     # By column first
       purrr::pmap(list(row_vars, totaltab, totrow, pct_vect, ref, ref2, comp, OR, na_text, color_diff_OR),
@@ -1077,7 +1111,9 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
                                             totaltab   = ..2,
                                             totaltab_name = totaltab_name,
                                             tot        = c( "row", "col"), # vectorise totrow ?
-                                            total_names= total_names)) %>%
+                                            total_names= total_names,
+                                            .fine      = .fine,
+                                            .by_table  = .by_table)) %>%
                     purrr::set_names(col_vars[col_vars_text])
 
       ) %>%
@@ -1977,7 +2013,8 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
                       totaltab = "line", totaltab_name = "Ensemble",
                       tot = NULL, total_names = "Total",
                       subtext = "", digits = 0,
-                      num = FALSE, df = FALSE
+                      num = FALSE, df = FALSE,
+                      .fine = NULL, .by_table = FALSE
 ) {
 
   row_var_quo <- rlang::enquo(row_var)
@@ -2129,11 +2166,19 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
 
 
 
-  data <- data %>%
-    dplyr::select(!!!tab_vars, !!row_var, !!col_var, !!wt) %>%
-    dplyr::mutate(dplyr::across(!!wt & !where(is.numeric), as.numeric)) %>%
-    relabel_levels_in_varnames(as.character(col_var))
-  #Vars are not changed to factors here, but after data.table
+  # DESIGN: fused aggregation. When tab_many supplies a shared finest-grain aggregate (`.fine`),
+  # skip the per-table raw-data prep + scan and roll `.fine` up instead (see the aggregation branch
+  # below). `use_raw` keeps the table-by-table path fully intact; forced on by `.by_table`, and
+  # always for the df/num paths (which are never fused).
+  use_raw <- .by_table || is.null(.fine) || df || num
+
+  if (use_raw) {
+    data <- data %>%
+      dplyr::select(!!!tab_vars, !!row_var, !!col_var, !!wt) %>%
+      dplyr::mutate(dplyr::across(!!wt & !where(is.numeric), as.numeric)) %>%
+      relabel_levels_in_varnames(as.character(col_var))
+    #Vars are not changed to factors here, but after data.table
+  }
 
 
 
@@ -2169,10 +2214,14 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
 
 
   #Make all calculations with data.table to gain time
-  data.table::setDT(data)
-  data.table::setnames(data, as.character(col_var), "col_var", skip_absent = TRUE)
+  if (use_raw) {
+    data.table::setDT(data)
+    data.table::setnames(data, as.character(col_var), "col_var", skip_absent = TRUE)
 
-  if (nrow(data) == 0) stop("data is of length 0 (possibly after filter or na = 'drop_all')")
+    if (nrow(data) == 0) stop("data is of length 0 (possibly after filter or na = 'drop_all')")
+  } else if (nrow(.fine) == 0) {
+    stop("data is of length 0 (possibly after filter or na = 'drop_all')")
+  }
 
   # row_var_type <- ifelse(is.numeric(dplyr::pull(data, !!row_var) ),
   #                        "numeric", "factor")
@@ -2215,11 +2264,28 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
       )
 
   } else {
+    # DESIGN: aggregation source for the default (factor x factor) path. `use_raw` -> table-by-table
+    # (one raw scan per row_var x col_var, current behaviour, kept verbatim). Otherwise roll up the
+    # shared finest-grain aggregate `.fine` (built once in tab_many) for this pair. Both feed the
+    # SAME dcast below, so everything downstream is byte-identical. Fused runs only when col_var is a
+    # factor and there is no col_var/row_var overlap (both guaranteed by tab_many).
+    if (use_raw) {
+      long <- data[, list(n  = .N,
+                          wn = if(length(wt) != 0) { sum(eval(wt), na.rm = TRUE) } else {double()}),
+                   keyby = eval(c(tab_row_names2, "col_var"))]
+    } else {
+      ocv  <- as.character(col_var)
+      long <- if (length(wt) != 0) {
+        .fine[, list(n = as.integer(sum(n)), wn = sum(wn)), keyby = eval(c(tab_row_names, ocv))]
+      } else {
+        .fine[, list(n = as.integer(sum(n))),              keyby = eval(c(tab_row_names, ocv))]
+      }
+      if (ocv != "col_var") data.table::setnames(long, ocv, "col_var")
+    }
+
     tabs <-
       data.table::dcast(
-        data[, list(n  = .N,
-                    wn = if(length(wt) != 0) { sum(eval(wt), na.rm = TRUE) } else {double()}),
-             keyby = eval(c(tab_row_names2, "col_var"))],
+        long,
         formula = ... ~ col_var,
         value.var = if (length(wt) != 0) {c("n", "wn")} else {"n"},
         fill = 0

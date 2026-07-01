@@ -8,6 +8,10 @@
   output, and format-vs-Excel export-parity tests.
 * Added an informational (never-failing) small-benchmark test that prints `tab()` pipeline
   timings, plus a standalone 8M-row performance harness (`benchmarks/run_bench.R`).
+* Experimental opt-in fast path for `tab_many()` on very large data: one shared finest-grain
+  aggregate reused across all factor tables instead of one scan per `row_var` × `col_var`. Off by
+  default (byte-identical output); enable with `options(tabxplor.fuse_min_rows = <n_rows>)`. Modest
+  gain (~1.05–1.30× at 15M rows, more at larger N / sparser data).
 
 ## Bug corrections
 * Big weighted tables were dozens of times slower than unweighted ones: the internal

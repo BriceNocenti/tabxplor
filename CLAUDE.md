@@ -234,14 +234,33 @@ Implementing tabxplor 1.4.0 (2.0.0 only if breaking changes land). **Update the 
 ### Discovered bugs
 
 - `fmt()` public constructor (`fmt_class.R` ~L274): `refcol <- vec_recycle(vec_cast(totcol, ...))` casts `totcol` instead of `refcol` — the `refcol` argument is silently ignored (refcol always mirrors totcol). Low impact (refcol is normally set internally), but fix during workstream 5.
+- `tab_num(..., <tab_vars>, ci="cell")` errors at `setorderv` (`tab.R` ~L3454): `ci="cell"` forces `color=""` → `tot="no"` → the grand-total-only grouping-set path builds a `tabs_tot` the `na="keep"` reorder can't find its tab_var column in. Both `comp` modes. Fix in WS5.
 - FIXED (workstream 5): `relabel_levels_in_varnames()` (`tab.R` ~L5592) made big weighted tables ~60× slower. Its `across(where(...))` predicate ran on **every** column with vectorised `&`/`|`, so the character branch `any(. %in% names(data))` coerced whole 8M-row numeric/factor columns to strings (~15s × 2 calls). Rewrote it to examine **only the `col_vars` targets** with short-circuit `&&`/`||` (numeric targets cost ~0); output byte-identical. 8M `tab(wt=)`: ~30s → ~0.2s; unweighted tables also faster + ~90% less memory.
 
-### Perf findings (tab_many scan-fusion — investigated 2026-07, no code change yet)
+### Perf findings (tab_many scan-fusion — IMPLEMENTED opt-in, 2026-07)
+
+**Full profile: `benchmarks/tab_many_performance_profile.md` (2026-07).** #1 cost is `tab_chi2` (84% of a small 9-tab call, 41% of a 15M 15-tab call, N-independent — scales with *cells*); per-table fixed fmt/vctrs overhead (~0.19 s/table) dominates, NOT the scan → slimming `tab_chi2` + `new_fmt` beats scan fusion for the common multi-table case. `tab_num` double-scans N (totals re-scan raw data, ~60% of it); weighted `tab_num` allocates ~7.8 GB (`weighted.var` recomputes the mean). Rprof under-samples the fmt/dplyr layer, so its scan share is over-stated.
+
+**Status: shipped OFF by default.** `tab_many()`/`tab_plain()` gained internal args `.fine`
+(shared aggregate) and `.by_table` (force current path). When `nrow ≥ getOption("tabxplor.fuse_min_rows", Inf)`
+AND `prod(nlevels) ≤ N` AND ≥2 tables AND no col/row var overlap, `tab_many` builds ONE finest-grain
+data.table aggregate (keyed on all tab/row/col vars) and each `tab_plain` rolls up its pair from it
+(`tab.R` ~L1057 build; ~L2206 branch). Default floor `Inf` → never fuses unless the user opts in
+(`options(tabxplor.fuse_min_rows = 1e7)`). Byte-identical to table-by-table (guarded by
+`test-fuse-parity.R` on gss_cat with fusion forced via `fuse_min_rows = 0`; also the whole golden
+suite stays green because default = off). **Measured gain is modest: ~1.05× (dense, full-Cartesian
+15M) to ~1.30× (sparse, real 15M)** — in the full pipeline the per-table downstream (dcast/%/totals/
+chi2/fmt) dominates once aggregation is fused, so this only clearly pays past ~10M dense / at 30M+ /
+for sparse data. Manual arbiter: `benchmarks/run_fused_vs_bytable.R`. Kept as reusable infrastructure
+for WS7 (Jamovi caching, where the aggregate is reused across interactions). Scope: factor×factor
+(`tab_plain`) only; numeric/mean (`tab_num`) still table-by-table.
+
+Original investigation notes (why fusion, not GForce):
 
 - **Prep is already unified**: `tab_prepare()` runs ONCE (`tab.R:913`) before the per-table loop (recoding, `other_if_less_than` lumping, cleannames, and the `na="drop_all"` global `na.omit`). Nothing redundant to remove there.
 - **na modes**: `drop_all` = one global `na.omit` in `tab_prepare`; `drop`/`keep` are per-table. For factor tables (`tab_plain`) that is cheap (NA is an aggregation group, NA cells dropped post-agg); `tab_num` `na="drop"` does a per-table `na.omit` over N rows (`tab.R:3055`).
 - **Remaining N-dependent cost = the per-table aggregation scan** (one dcast per row×col over all N rows). On 27.7M rows / 15 tables: `tab_many` ≈9s, of which ≈6.9s scales with N (≈½ aggregation `forderv`+`sum`, ≈½ factor/`table`/coercion). GForce is NOT the lever (group-finding dominates the sum; cardinality is low).
-- **WS7 option — shared finest-grain aggregate**: replace the N per-table scans with ONE data.table agg keyed on the join of all row+col vars (NA kept), then roll up each 2-way table applying its own na rule. Verified arithmetically identical and na-mode-correct; weighted means/vars also roll up (Σwx, Σw, Σwx² additive). **Caveat**: finest-grain cardinality can approach N with many high-cardinality vars → memory/time blowup; the ~2.5× measured partly reflects the replicated fixture's ~5020 distinct combos. Guard on distinct-combo count, or use `groupingsets()` for just the needed margins (~1.1× here). Pays off most when the aggregate is **cached and reused across interactions** (Jamovi).
+- **WS7 option — shared finest-grain aggregate**: replace the N per-table scans with ONE data.table agg keyed on the join of all row+col vars (NA kept), then roll up each 2-way table applying its own na rule. Verified arithmetically identical and na-mode-correct; weighted means/vars also roll up (Σwx, Σw, Σwx² additive). **Cardinality is bounded by `∏ nlevels` (independent of N), not by the row count** — computable up front in µs. For the pc18 example (8 vars) that ceiling is only 151k (≤207k with NA levels; just 5,020 observed), so the fusion is safe even on real 27M-distinct data. It only blows up when `∏ nlevels` is large (many vars / high-cardinality / many binary MRQ items — e.g. 5 row × 10 binary col ≈ 3.2M). **Guard: switch on `∏ nlevels` vs N — use finest-grain agg when `∏ nlevels ≤ N`, else `groupingsets()`/table-by-table**. Measured crossover (worst case = independent uniform factors, N=10M, 15 tables): break-even at `∏ nlevels ≈ 0.7·N`; guaranteed ≥4× win at `≤ N/10`; overshoot penalty bounded ~1.6× (G_obs, hence aggregate size, saturates at N — no memory blow-up). Real correlated/sparse data collapses far below `∏ nlevels` (pc18: 3.3% of it), so `≤ N` is conservative. Optional: estimate true G_obs from a 1% sample to push the threshold higher. Pays off most when the aggregate is **cached and reused across interactions** (Jamovi).
 - **Cheap wins (WS5, independent)**: drop the duplicate `relabel_levels_in_varnames()` in `tab_plain` (`tab.R:2135`, already run at `:875`); share one `setDT` across tables instead of per-table copies; check `tab_chi2` isn't calling base `table()` over N rows.
 
 
