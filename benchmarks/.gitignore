@@ -1,0 +1,3 @@
+# Large cached fixture and per-run outputs are not committed; baseline.csv IS.
+big_df.rds
+results_*.csv

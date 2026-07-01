@@ -13,3 +13,9 @@
 ^build/R
 ^jamovi/
 ^CLAUDE\.md$
+^vignettes/claude_code_setup\.md$
+^air\.toml$
+^\.vscode$
+^\.claude$
+^dev$
+^benchmarks$

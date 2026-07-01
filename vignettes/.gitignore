@@ -1,2 +1,5 @@
 *.html
 *.R
+
+# Internal Claude Code setup note (not a vignette)
+claude_code_setup.md

@@ -116,3 +116,39 @@ testthat::test_that("[<- and [[<- preserves class tabxplor_grouped_tab", {
   testthat::expect_s3_class(grouped_tabs, "tabxplor_grouped_tab")
 })
 
+
+# --- Data-driven verb-coverage registry ----------------------------------------------------
+# Extensible guardrail for the 1.4.0 refactors (esp. the tab()/tab_many() merge): each verb is
+# checked to preserve BOTH tab classes. A failure names the exact verb whose class-preserving
+# S3 method is missing/broken. To add a new verb, append one closure here (works identically
+# for a flat and a grouped tab) -- see the `/dplyr-method` skill. Complements the explicit
+# per-verb tests above.
+verb_coverage <- list(
+  mutate      = function(x) dplyr::mutate(x, Married = sum(Married)),
+  filter      = function(x) dplyr::filter(x, is_totrow(Married)),
+  slice       = function(x) dplyr::slice(x, 1:2),
+  arrange     = function(x) dplyr::arrange(x, Married),
+  distinct    = function(x) dplyr::distinct(x),
+  select      = function(x) dplyr::select(x, dplyr::everything()),
+  relocate    = function(x) dplyr::relocate(x, Divorced, .after = Married),
+  rename_with = function(x) dplyr::rename_with(x, toupper),
+  rowwise     = function(x) dplyr::rowwise(x)
+)
+
+cov_flat    <- tab(forcats::gss_cat, race, marital)
+cov_grouped <- forcats::gss_cat %>%
+  dplyr::filter(year %in% c(2000, 2014)) %>%
+  tab(race, marital, year)
+
+for (vname in names(verb_coverage)) {
+  local({
+    v <- vname
+    testthat::test_that(paste0("verb-coverage keeps tabxplor_tab: ", v), {
+      testthat::expect_s3_class(verb_coverage[[v]](cov_flat), "tabxplor_tab")
+    })
+    testthat::test_that(paste0("verb-coverage keeps tabxplor_grouped_tab: ", v), {
+      testthat::expect_s3_class(verb_coverage[[v]](cov_grouped), "tabxplor_grouped_tab")
+    })
+  })
+}
+

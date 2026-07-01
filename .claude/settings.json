@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "deny": [
+      "Edit(NAMESPACE)",
+      "Write(NAMESPACE)",
+      "Edit(man/**)",
+      "Write(man/**)"
+    ]
+  }
+}
