@@ -10,6 +10,10 @@
   timings, plus a standalone 8M-row performance harness (`benchmarks/run_bench.R`).
 
 ## Bug corrections
+* Big weighted tables were dozens of times slower than unweighted ones: the internal
+  label-collision guard scanned whole data columns instead of just factor levels, coercing an
+  8M-row weight column to strings. Fixed — weighted `tab()` on 8M rows drops from ~30s to ~0.2s,
+  and unweighted tables (and their memory use) also improve. Output is unchanged.
 
 ## Deprecations
 

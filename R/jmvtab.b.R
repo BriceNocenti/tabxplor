@@ -55,7 +55,7 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
               "padding:10px 12px;",
               "border-radius:4px;",
               "font-size:0.95em;\">",
-              "✗ Error: The specified folder does not exist: <strong>",
+              "Error: The specified folder does not exist: <strong>",
               folder_path,
               "</strong></div>"
             )
@@ -167,8 +167,8 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
         # Remove total column if only keeping first level
         if (self$options$lvs %in% c("first", "auto")) { # length(col_vars) > 1
           
-          # S’il y a une seule variable de colonne qui n’a pas au moins deux colonnes
-          # (ou alors mettre : si la dernière col_var n’a pas au moins deux colonnes ?)
+          # S il y a une seule variable de colonne qui n a pas au moins deux colonnes
+          # (ou alors mettre : si la derniere col_var n a pas au moins deux colonnes ?)
           col_var_with_only_one_col <- 
             !(get_col_var(dplyr::select(tabs, -dplyr::where(is_totcol), -tidyselect::any_of("n"))) %>%
             purrr::discard(. == "") |> 
@@ -259,7 +259,7 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
                   "padding:10px 12px;",
                   "border-radius:4px;",
                   "font-size:0.95em;\">",
-                  "✓ Successfully exported to Excel: <strong>",
+                  "Successfully exported to Excel: <strong>",
                   xl_result_path,
                   "</strong></div>"
               )              
@@ -274,7 +274,7 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
                     "padding:10px 12px;",
                     "border-radius:4px;",
                     "font-size:0.95em;\">",
-                    "✗ Excel export failed: <strong>",
+                    "Excel export failed: <strong>",
                     err$message,
                     "</strong></div>"
                 )
@@ -345,13 +345,13 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
         tabs_html <- tab_kable(tabs,
                                wrap_rows = self$options$wrap_rows,
                                wrap_cols = self$options$wrap_cols, 
-                               fixed_thead = FALSE, # not working in Jamovi ? 
+                               fixed_thead = FALSE, # not working in Jamovi?
                                position = "left"
                                # full_width = TRUE,
                               ) |>
         kableExtra::scroll_box(width = "1080px",
-                              # height = "100%" #, "100vh" #,  # Full viewport height
-                              fixed_thead = FALSE, # not working in Jamovi ? 
+                              # height = "100%" #, "100vh" #,  # Full viewport height
+                              fixed_thead = FALSE, # not working in Jamovi?
                               box_css = "border: none; padding: 0; overflow-x: auto !important; display: block; table-layout: auto;",
                               extra_css = "margin-left: 0; width: 100%;" # 
                             )

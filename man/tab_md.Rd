@@ -48,7 +48,7 @@ Export a tabxplor table to a markdown table
 tab(forcats::gss_cat, race, marital, pct = "row") |> tab_md()
 tab(forcats::gss_cat, race, marital, pct = "row", color = "diff") |> tab_md()
 tab(forcats::gss_cat, race, marital, pct = "row", color = "diff") |>
-  mutate(across(where(is_fmt), ~set_display(., "diff"))) |> 
+  dplyr::mutate(dplyr::across(dplyr::where(is_fmt), ~set_display(., "diff"))) |> 
   tab_md()
 }
 }

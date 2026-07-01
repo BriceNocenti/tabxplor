@@ -5589,13 +5589,25 @@ as_df_merge_rownames <- function(tabs, row_var) {
 }
 
 #' @keywords internal
+# Guard against a factor level / character value equal to a column name (which would collide with
+# data.table internals) by relabelling it to "<value>_lv". Examine ONLY the col_vars targets, never
+# the other columns: a `where()` predicate over all columns coerced a numeric `wt` column's whole
+# 8M-row vector to strings (~15s x2 calls) -> the weighted-table 60x slowdown. Short-circuit &&/||
+# so a numeric target costs nothing; selection set and transform are unchanged (byte-identical out).
 relabel_levels_in_varnames <- function(data, col_vars) {
+  nms      <- names(data)
+  col_vars <- intersect(col_vars, nms)
+  needs <- purrr::map_lgl(col_vars, function(v) {
+    col <- data[[v]]
+    (is.factor(col)    && any(levels(col) %in% nms)) ||
+      (is.character(col) && any(unique(col) %in% nms))
+  })
+  targets <- col_vars[needs]
+  if (length(targets) == 0) return(data)
   data |>
     dplyr::mutate(dplyr::across(
-      tidyselect::all_of(col_vars) &
-        where(~ (is.factor(.) & any(levels(.) %in% names(data))) |
-                (is.character(.) & any(. %in% names(data)) )       ) ,
-      ~ forcats::fct_relabel(., ~ dplyr::if_else(. %in% names(data), paste0(., "_lv"), .))
+      tidyselect::all_of(targets),
+      ~ forcats::fct_relabel(., ~ dplyr::if_else(. %in% nms, paste0(., "_lv"), .))
     ))
 }
 
