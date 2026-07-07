@@ -24,7 +24,9 @@ tab_plain(
   subtext = "",
   digits = 0,
   num = FALSE,
-  df = FALSE
+  df = FALSE,
+  .fine = NULL,
+  .by_table = FALSE
 )
 }
 \arguments{

@@ -63,6 +63,8 @@ tab() [user-friendly wrapper]
 Export:  tab_xl()  |  tab_kable()  |  tab_md()  |  tab_plot()
 ```
 
+**Ordering invariant** (in `tab_many()`, `tab.R` ~L1146): `tab_chi2()` and `tab_ci()` are independent (either order), but non-first levels (`levels="first"`) must be dropped **after both**, so chi2/ci are computed on the full set of levels. Do not move the level-drop above chi2/ci.
+
 ### Key Constraints
 
 | Constraint               | Detail                                                                                                                                                                                                                                   |
@@ -86,6 +88,7 @@ Export:  tab_xl()  |  tab_kable()  |  tab_md()  |  tab_plot()
 ### Type System
 
 - **`tabxplor_fmt`**: vctrs record (`new_rcrd()`) with 15 per-cell fields and 8 per-column attributes. The critical distinction: fields vary per cell (accessed via `vctrs::field()`), attributes are scalar describing the whole column (accessed via `attr()`). Constructor chain: `fmt()` (public, validates + coerces) -> `new_fmt()` (internal, calls `vctrs::new_rcrd()`).
+- **`mean` field overload** (cross-cutting): for **pct-type** columns the `mean` field carries the cell/reference **ratio** for the "*2 rule" (not an actual mean). Written by `tab_pct()`, read by `fmt_color_selection()`. Pragmatic reuse — to be split into a dedicated field in the WS2 color diff/ratio work.
 - **`tabxplor_tab`**: tibble subclass via `tibble::new_tibble()` with `subtext` (legend text) and `chi2` (test results tibble) attributes.
 - **`tabxplor_grouped_tab`**: extends `grouped_df` for subtabled results (when `tab_vars` are present). Requires separate S3 method for every dplyr verb.
 
@@ -111,7 +114,7 @@ The `ref` argument controls which row serves as the comparison baseline for diff
 
 ### Color System (3-layer)
 
-1. **Palettes** (`tab_classes.R` ~L2892): 6 named color vectors (dark/light text, 24-bit blue-red/green-red, dark/light background), each with 11 hex codes: `pos1`-`pos5` (over-represented), `neg1`-`neg5` (under-represented), `ratio`.
+1. **Palettes** (`tab_classes.R` ~L2892): 6 named color vectors (dark/light text, 24-bit blue-red/green-red, dark/light background), each with 11 hex codes: `pos1`-`pos5` (over-represented), `neg1`-`neg5` (under-represented), `ratio`. Hues are hand-tuned so intensity levels are eye-distinguishable on real tables; 8-bit variants target non-truecolor terminals; the 24-bit blue-red variant is more colorblind-friendly than green-red (fuller colorblind support is a future goal).
 2. **Breaks** (`set_color_breaks()` in `tab_classes.R`): stored in `options("tabxplor.color_breaks")`. Default pct: `c(0.05, 0.1, 0.2, 2, 0.3)` — the `2` means "twice the reference" (ratio mode). Mirrored for negative. Mean breaks: `c(1.15, 1.5, 2, 4)` — always ratios.
 3. **Selection** (`fmt_color_selection()` in `fmt_class.R`): iterates breaks, applies `color_formula()` per break level, `keep_last_break()` picks the strongest matching threshold per cell. Different boolean formulas for each color mode (`diff`, `diff_ci`, `after_ci`, `contrib`, `OR`).
 
@@ -126,8 +129,8 @@ The `dplyr_row_slice()` / `dplyr_col_modify()` / `dplyr_reconstruct()` trio in `
 - Some user code rely on `tabxplor_fmt` vctrs fields extracted with `$` or calculated with `mutate()` method for `tabxplor_fmt` (see readme), so **the vctrs fields should not break**.
 
 #### For internal code and internal functions
-- Do not hesitate to propose radical redesign of internal code and internal workflows for quality, simplicity, structure, performance and future-proofing, specially when they are too convoluted or have grown organically.
-- Always try to simplify, integrate and create smart shared subfunctions instead of adding a new layer of confusion and ad-hoc solutions inside the code: your main aim is to simplify, to remove traces of old implementations altogether when they have become useless, to clarify, to help me make relevant architectural choices instead of piling up ad-hoc solutions, to integrate the new features in the current code seamlessly.
+- **Do not hesitate to propose radical redesign of internal code and internal workflows** for quality, simplicity, structure, performance and future-proofing, specially when they are too convoluted or have grown organically.
+- **Always try to simplify, integrate and create smart shared subfunctions** instead of adding a new layer of confusion and ad-hoc solutions inside the code: your main aim is to simplify, to remove traces of old implementations altogether when they have become useless, to clarify, to help me make relevant architectural choices instead of piling up ad-hoc solutions, to integrate the new features in the current code seamlessly.
 
 ---
 
@@ -145,18 +148,11 @@ Before working on the `tabxplor_fmt` type system, arithmetic, or display, fetch 
 
 ## Testing
 
-Run tests in a **separate cold `Rscript` process**: it uses `devtools::load_all()` under the hood, so it tests the **live, uninstalled source**, and it never touches or blocks the user's interactive Positron session. Put the call in a temp `.R` file (in the scratchpad, NOT under `tests/` — see the rule below), then `Rscript` that file (not `Rscript -e`, per the Windows note below).
-
 ```r
 # In a temp .R file (outside tests/), then run:  Rscript that_file.R   (isolated; tests live source)
 devtools::test("d:/Statistiques/github/tabxplor")                  # whole suite (~46s)
 devtools::test("d:/Statistiques/github/tabxplor", filter = "tab")  # one/few files: regex on test-<name>.R
-
-# Release gate (the user runs this manually, ~3 min): full CRAN check, which also runs the tests
-devtools::check()
 ```
-
-Do **NOT** use `source("tests/testthat.R")` for dev, since it tests the **installed** build and ignore live edits (exists only for `R CMD check`).
 
 **Test files:**
 
@@ -168,22 +164,16 @@ Do **NOT** use `source("tests/testthat.R")` for dev, since it tests the **instal
 | `test-tab_xl.R`      | Basic Excel export                                                  |
 | `test-tab_logit.R`   | Inactive (commented out, mirrors WIP code)                          |
 
-All .R scripts in @tests/ or @tests/testthat all use in `devtools::check()` for tests : do **NOT** write any .R file here if it’s not intended to be an automated test.
-
 ---
 
-## Common R Package Development Issues
+## Common tabxplor package Development Issues
 
-| Issue                                               | Solution                                                                              |
-|-----------------------------------------------------|---------------------------------------------------------------------------------------|
-| `Rscript -e` segfaults on Windows with large source | Write a temp `.R` file, then `Rscript path/to/script.R`                               |
-| Encoding errors in tests                            | Always `source(..., encoding = "UTF-8")`                                              |
-| NAMESPACE out of sync after adding `@export`        | Run `devtools::document()`                                                            |
-| R CMD check NOTE about global variables             | Add to `globalVariables()` call in `fmt_class.R` (for data.table's `:=`, `.SD`, `.N`) |
-| magrittr `%>%` vs base R pipe                       | Prefer base R pipe for new code, examples, etc. Package re-exports `%>%` for users.   |
-| New vctrs type combination doesn't work             | Need both `vec_ptype2.*` and `vec_cast.*` S3 methods for every type pair              |
-| dplyr verb silently drops class                     | Missing S3 method for `tabxplor_grouped_tab` — add one in `tab_classes.R`             |
-| Unicode escapes in backtick-quoted names            | Use double-quoted names instead of `\uXXXX` inside backticks                          |
+| Issue                                   | Solution                                                                              |
+|-----------------------------------------|---------------------------------------------------------------------------------------|
+| R CMD check NOTE about global variables | Add to `globalVariables()` call in `fmt_class.R` (for data.table's `:=`, `.SD`, `.N`) |
+| magrittr `%>%` vs base R pipe           | Prefer base R pipe for new code, examples, etc. Package re-exports `%>%` for users.   |
+| New vctrs type combination doesn't work | Need both `vec_ptype2.*` and `vec_cast.*` S3 methods for every type pair              |
+| dplyr verb silently drops class         | Missing S3 method for `tabxplor_grouped_tab` — add one in `tab_classes.R`             |
 
 ---
 
@@ -200,26 +190,23 @@ For the full detailed technical reference, see `vignettes/tabxplor_architecture.
 
 ---
 
-## CLAUDE.md Update Instruction
 
-When you modify the package structure (add modules, rename functions, change config fields), suggest the relevant CLAUDE.md update lines in your response : it should be minimalistic, concice, no bullshit, with nothing useless that would clutter the prompt. When there is nothing to change, skip it.
-
-## The current goal : tabxplor version 1.4.0 roadmap
+## tabxplor version 1.4.0 roadmap : the current goal
 
 Implementing tabxplor 1.4.0 (2.0.0 only if breaking changes land). **Update the status column and the log below at the end of every work session** (per the CLAUDE.md Update Instruction above). Each workstream gets its own plan file under `~/.claude/plans/` when it starts.
 
 ### Workstreams
 
-| # | Workstream                                                                 | Status      | Notes                                                                                                                                                              |
-|---|----------------------------------------------------------------------------|-------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 0 | **Preparation foundation** (tests / benchmarks / tracking / skills)        | in progress | This cycle. See "Foundation" below.                                                                                                                                |
-| 1 | `ref_n` (+ maybe `ref_wn`) fmt field for exact reference counts            | not started | Removes the "last `col_var` total column" approximation when `col_var`s have different NA totals. Use `/vctrs-field`.                                              |
-| 2 | Color diff/ratio split                                                     | not started | Factors keep `color="diff"` behaviour; numerics: `"diff"`=difference, `"ratio"`=old behaviour, maybe `"diff_ratio"`=text+background. Use `/color-mode`.            |
-| 3 | Merge `tab()` into `tab_many()`; soft-deprecate `tab_many` alias           | not started | `tab_many()` becomes the base; `tab()` behaviour via an argument. `lifecycle::deprecate_soft("1.4.0", "tab_many()")`. Use `/dplyr-method` if class methods change. |
-| 4 | Unified prep function for `tab_xl()`/`tab_kable()`/`tab_plot()`/`tab_md()` | not started | Keep exporter-parity (see Design Decisions > Export Parity).                                                                                                       |
-| 5 | Bug corrections & small features                                           | ongoing     | See "Discovered bugs" log.                                                                                                                                         |
-| 6 | `tab_logit` (maybe a `regxplor` subpackage)                                | not started | Split out only if it pushes tabxplor's dependency count too high.                                                                                                  |
-| 7 | Jamovi rewrite using state logic + caching                                 | not started | Stop calling `tab_many()` directly; mirror its behaviour via subfunctions with Jamovi states; maybe a faster flat-HTML `tab_kable()`. **Option: shared finest-grain aggregate to fuse the per-table scans — see "Perf findings" below.**                              |
+| # | Workstream                                                                 | Status      | Notes                                                                                                                                                                                                                                    |
+|---|----------------------------------------------------------------------------|-------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 0 | **Preparation foundation** (tests / benchmarks / tracking / skills)        | in progress | This cycle. See "Foundation" below.                                                                                                                                                                                                      |
+| 1 | `ref_n` (+ maybe `ref_wn`) fmt field for exact reference counts            | not started | Removes the "last `col_var` total column" approximation when `col_var`s have different NA totals. Use `/vctrs-field`.                                                                                                                    |
+| 2 | Color diff/ratio split                                                     | not started | Factors keep `color="diff"` behaviour; numerics: `"diff"`=difference, `"ratio"`=old behaviour, maybe `"diff_ratio"`=text+background. Use `/color-mode`.                                                                                  |
+| 3 | Merge `tab()` into `tab_many()`; soft-deprecate `tab_many` alias           | not started | `tab_many()` becomes the base; `tab()` behaviour via an argument. `lifecycle::deprecate_soft("1.4.0", "tab_many()")`. Use `/dplyr-method` if class methods change.                                                                       |
+| 4 | Unified prep function for `tab_xl()`/`tab_kable()`/`tab_plot()`/`tab_md()` | not started | Keep exporter-parity (see Design Decisions > Export Parity).                                                                                                                                                                             |
+| 5 | Bug corrections & small features                                           | ongoing     | See "Discovered bugs" log.                                                                                                                                                                                                               |
+| 6 | `tab_logit` (maybe a `regxplor` subpackage)                                | not started | Split out only if it pushes tabxplor's dependency count too high.                                                                                                                                                                        |
+| 7 | Jamovi rewrite using state logic + caching                                 | not started | Stop calling `tab_many()` directly; mirror its behaviour via subfunctions with Jamovi states; maybe a faster flat-HTML `tab_kable()`. **Option: shared finest-grain aggregate to fuse the per-table scans — see "Perf findings" below.** |
 
 ### Foundation (workstream 0)
 
@@ -233,8 +220,12 @@ Implementing tabxplor 1.4.0 (2.0.0 only if breaking changes land). **Update the 
 
 ### Discovered bugs
 
+In-code these are tagged for grep: `# KNOWN-BUG:` (bugs below), `# FIXME:` / `# FIXME(clarify):` / `# FIXME(future):` (suspect logic or future work, several tied to WS2), `# OBSOLETE:` (dead-code banners, e.g. the stale `tab_xl` duplicate).
+
 - `fmt()` public constructor (`fmt_class.R` ~L274): `refcol <- vec_recycle(vec_cast(totcol, ...))` casts `totcol` instead of `refcol` — the `refcol` argument is silently ignored (refcol always mirrors totcol). Low impact (refcol is normally set internally), but fix during workstream 5.
 - `tab_num(..., <tab_vars>, ci="cell")` errors at `setorderv` (`tab.R` ~L3454): `ci="cell"` forces `color=""` → `tot="no"` → the grand-total-only grouping-set path builds a `tabs_tot` the `na="keep"` reorder can't find its tab_var column in. Both `comp` modes. Fix in WS5.
+- `set_color_style(custom_palette=)` (`tab_classes.R` ~L3120): length check requires 10 but the message says 11 and 11 names (`pos1..neg5, ratio`) are applied — the `ratio` slot ends up valueless, so custom palettes are broken for the ratio color. Fix by accepting length 11.
+- FIXED (this session): `set_num()` wrote `display=="diff"` via `set_pct()` (should be `set_diff()`), so setting the displayed value of a diff cell went to the wrong field. Now uses `set_diff()`.
 - FIXED (workstream 5): `relabel_levels_in_varnames()` (`tab.R` ~L5592) made big weighted tables ~60× slower. Its `across(where(...))` predicate ran on **every** column with vectorised `&`/`|`, so the character branch `any(. %in% names(data))` coerced whole 8M-row numeric/factor columns to strings (~15s × 2 calls). Rewrote it to examine **only the `col_vars` targets** with short-circuit `&&`/`||` (numeric targets cost ~0); output byte-identical. 8M `tab(wt=)`: ~30s → ~0.2s; unweighted tables also faster + ~90% less memory.
 
 ### Perf findings (tab_many scan-fusion — IMPLEMENTED opt-in, 2026-07)
@@ -264,4 +255,10 @@ Original investigation notes (why fusion, not GForce):
 - **Cheap wins (WS5, independent)**: drop the duplicate `relabel_levels_in_varnames()` in `tab_plain` (`tab.R:2135`, already run at `:875`); share one `setDT` across tables instead of per-table copies; check `tab_chi2` isn't calling base `table()` over N rows.
 
 
+
+## CLAUDE.md Update Instruction
+
+When you modify the package structure (add modules, rename functions, change config fields), suggest the relevant CLAUDE.md update lines in your response : it should be minimalistic, concice, no bullshit, with nothing useless that would clutter the prompt. When there is nothing to change, skip it.
+
+Keep the tabxplor version 1.4.0 roadmap above up-to-date as you build it and implement it.
 

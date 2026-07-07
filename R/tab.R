@@ -376,7 +376,9 @@ tab <- function(data, row_var, col_var, tab_vars, wt, sup_cols,
            other_if_less_than = other_if_less_than, other_level = other_level,
            totaltab = totaltab, totaltab_name = totaltab_name,
            totrow = "row" %in% tot,
-           totcol = if ("col" %in% tot) { col_var } else { "no" }, # ?
+           # tab_many()'s totcol accepts a col_var NAME: passing col_var here means
+           # "add a total column for that variable" (tab() has a single col_var).
+           totcol = if ("col" %in% tot) { col_var } else { "no" },
            total_names = total_names,
            pct  = c(pct , rep("row", length(sup_cols))),
            ref = ref, ref2 = ref2, #c(ref, rep(ref , length(sup_cols))),
@@ -749,6 +751,13 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
     stop("totcol must be 'last', 'each', a vector of col_vars names, ",
          "a vector of 'col'/'no', or a vector of col_vars indexes")
   }
+  # tot_cols_type summarises what to do with total columns downstream (consumed at ~L1366):
+  #   "each"         = one total col per col_var (totcol == all col_vars)
+  #   "all_col_vars" = a single total col spanning all col_vars (the last one)
+  #   "some"         = total cols for a named subset of col_vars
+  #   "no_delete"    = none requested, but one is needed internally (pct/ci/chi2/OR need a
+  #                    reference total) -> build it, drop only at the very end
+  #   "no_no_create" = no total col at all
   tot_cols_type <- dplyr::case_when(
     identical(totcol, col_vars)                                ~ "each",
     identical(totcol, col_vars[ncolvars])                      ~ "all_col_vars",
@@ -796,6 +805,10 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
   # Tests to be done before tab_plain / tab_num
   # OR[OR == "no" & color %in% c("OR", "or")] <- "OR"
 
+  # DESIGN: color="auto" resolves from the pct/OR/ci settings: OR-type -> "OR";
+  # row/col pct + ci="diff" -> "after_ci"; row/col pct -> "diff"; counts/all -> "contrib".
+  # WARNING: some colors then silently switch other features ON (below): "contrib" forces
+  # totrow (needs the mean-contribution store) and chi2; "diff_ci"/"after_ci" force ci="diff".
   color_auto_text <- color == "auto" & ! sum(col_vars_text) == 0
   if (any(color_auto_text)) color <- dplyr::case_when(
     purrr::map2_lgl(
@@ -1143,6 +1156,10 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
       by = c(as.character(tab_vars), .y)
     ))
 
+    # DESIGN: ordering invariant — tab_chi2() and tab_ci() are INDEPENDENT (either order
+    # works), but BOTH must run BEFORE non-first levels are dropped (L~1173), so they are
+    # computed on the full set of levels. Do not move the level-drop above chi2/ci.
+    # See CLAUDE.md § Global Architecture.
     if (any(chi2)) {
       tabs_text[chi2] <-
         purrr::pmap(list(tabs_text[chi2], comp[chi2], color_ctr[chi2]),
@@ -1854,7 +1871,10 @@ tab_prepare <-
     #     as.factor
     #   ))
 
-    #remove class ordered
+    # Strip the `ordered` class from factors. Pragmatic: ordered factors once triggered an
+    # error downstream (likely in MCA / an external step), and dropping the class was the
+    # simplest fix. FIXME(future): keep `ordered` instead, to support ordinal-specific
+    # behaviours/options — remove this once the downstream error is pinned down.
     data <- data %>%
       dplyr::mutate(dplyr::across(
         where(is.ordered),
@@ -2176,6 +2196,9 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
     data <- data %>%
       dplyr::select(!!!tab_vars, !!row_var, !!col_var, !!wt) %>%
       dplyr::mutate(dplyr::across(!!wt & !where(is.numeric), as.numeric)) %>%
+      # PERF/FIXME: redundant — relabel_levels_in_varnames() already runs once in tab_many
+      # (~L889). Kept for the step-by-step entry straight into tab_plain. Cheap now (post the
+      # short-circuit fix, see CLAUDE.md § Discovered bugs) but a removal candidate.
       relabel_levels_in_varnames(as.character(col_var))
     #Vars are not changed to factors here, but after data.table
   }
@@ -2187,6 +2210,12 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
 
   tab_row_names  <- as.character(c(tab_vars, row_var))
 
+  # DESIGN: data.table name round-trip (how user column names survive dcast). We (1) rename
+  # the col_var to the fixed internal name "col_var" (~L2239) so the dcast formula is stable,
+  # and (2) when a col_var ALSO appears among row/tab vars (self cross-tab), duplicate it as
+  # "<var>_colvarbis" so one column can be both an aggregation key and the spread variable.
+  # The internal names ("col_var", "_colvarbis", and dcast's "n_"/"wn_" value prefixes) are
+  # all stripped later (~L2317 setnames, ~L2437 prefix removal) to restore the user's names.
   #If variables are in double in cols and rows, duplicate them and manage data.table
   col_var_in_row_var <- tab_row_names %in% as.character(col_var)
   if (any(col_var_in_row_var)) {
@@ -2454,6 +2483,9 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
 
 
   #Percentages
+  # DESIGN: copy() before each in-place := derivation below (tabs_pct/diff/mean/rr/or). The
+  # aggregated table is shared by reference; without copy() a := would mutate the source and
+  # every other derived table too (data.table reference semantics).
   if (pct != "no") {
     if (length(wt) == 0) {
       tabs_pct <- data.table::copy(tabs_n)
@@ -3237,6 +3269,11 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
              keyby = c(tab_row_names)][, paste0(wt, c("_n", "_wn", "_mean", "_var")) := NULL]
     }
 
+    # DESIGN: tab_num re-scans N for the main aggregate, then again for totals / total-table
+    # (a "double scan"). groupingsets() could compute table + totals + total-table in one
+    # pass, but it does NOT save time here AND its grand-total rows come back named NA,
+    # colliding with genuine NA categories — so the separate scans are kept. (Dead attempt
+    # below.) See CLAUDE.md § Perf findings.
     # # groupingsets() could be used to calculate table, totals and total table at once
     # #   but it does not gain times (problem : Total are named NA and mixed with true NAs...)
     # if ("row" %in% tot | totaltab %in% c("line", "table")) {
@@ -3450,6 +3487,10 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
                .SDcols = names(not_fct)[not_fct]]
     }
 
+    # KNOWN-BUG: tab_num(..., <tab_vars>, ci="cell") crashes here. ci="cell" forces
+    # color="" -> tot="no", and the grand-total-only grouping path can build a tabs_tot
+    # missing the tab_var column, so this reorder fails ("column not found"). Both comp
+    # modes. See CLAUDE.md § Discovered bugs (fix in WS5).
     if (na == "keep" & length(tab_vars) != 0) {
       data.table::setorderv(
         tabs_tot, as.character(tab_vars), na.last = TRUE
@@ -3795,6 +3836,10 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
     data.table::as.data.table()
 
 
+  # WARNING: tab_num reshapes by column-name SUFFIX (_n/_wn/_mean/_var/_diff/_ci) — fragile.
+  # "no_row_var" ends in "_var" and would be mis-detected as a variance column, hence the
+  # explicit exclusion. A numeric col_var whose name ends in one of these suffixes would
+  # likewise be mis-parsed.
   tabs_var  <-
     data.table::setnames(tabs[, stringr::str_detect(names(tabs), "_var$") &
                                 names(tabs) != "no_row_var",
@@ -5206,6 +5251,10 @@ tab_chi2 <- function(tabs, calc = c("ctr", "p", "var", "counts"),
   }
 
 
+  # DESIGN: chi2 runs on the already-AGGREGATED cell counts (get_n over the fmt cells,
+  # group_split -> chisq.test on the small per-(sub)table matrix), NOT base table() over the
+  # raw N rows — so its cost scales with cells, not observations. Do not "optimize" it into a
+  # raw-data rescan. See CLAUDE.md § Perf findings.
   #Calculate pvalue : variance was calculated with weights, and here we want unwtd counts
   if ("p" %in% calc) {
 
@@ -5493,6 +5542,11 @@ tab_match_comp_and_tottab <- function(tabs, comp) {
 
 #' @keywords internal
 weighted.var <- function(x, wt, na.rm = FALSE) {
+  # round(., 10) only trims spurious trailing float digits (cosmetic; NOT for equality).
+  # FIXME(future): (1) this is the ML (population) variance — a representative-sample
+  # variance uses a different (n-1)-style correction; decide which tabxplor should report.
+  # (2) likely a performance bottleneck (weighted.mean is recomputed here on every call);
+  # see CLAUDE.md § Perf findings.
   #Nwt_non_zero <- length((wt)[wt != 0])
   round(
     sum(wt * (x - stats::weighted.mean(x, wt, na.rm = na.rm))^2,  na.rm = na.rm) /

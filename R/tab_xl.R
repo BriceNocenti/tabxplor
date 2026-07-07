@@ -4,6 +4,9 @@
 #   - openxlsx is in Suggests — all calls must be guarded.
 #   - Color codes come from get_color_style(mode = "color_code"), not crayon functions.
 #   - Shares color selection logic with fmt_class.R (fmt_color_selection, color_formula).
+#   - Export-Parity: BYPASSES format.tabxplor_fmt() — writes get_num() and rebuilds the
+#     display via numfmt() (~L1076). Mirror any fmt display/digits change here. See CLAUDE.md.
+#   - Everything after insufficient_counts() (~L1660) is OBSOLETE dead code (see its banner).
 
 #' Excel output for tabxplor tables, with formatting and colors
 #' @description To modify the colors used into the Excel table, you can change the
@@ -535,6 +538,9 @@ tab_xl <-
 
 
     #Not working for ci = "cell"
+    # WARNING: Export-Parity — tab_xl writes RAW numerics (get_num), NOT format()'s strings,
+    # then rebuilds the display via numfmt() (Excel number formats). Any change to a display
+    # field or formatting rule in fmt_class.R must be mirrored here. See CLAUDE.md § Export Parity.
     tabs_num <-
       purrr::map(tabs, ~ dplyr::mutate(., dplyr::across(where(is_fmt), get_num)) %>%
                    tibble::as_tibble())
@@ -1073,6 +1079,14 @@ tab_xl <-
     }
 
     #Digits ----------------------------------------------------------------
+    # DESIGN: builds an Excel number-format code from (n = digit count, type, display).
+    # n < 0 encodes rounding to a POWER OF TEN (tens/hundreds/thousands): the modulo-3
+    # arithmetic assembles Excel's "#,##0" thousands mask at the right magnitude. n == 0 ->
+    # integer; pct/ctr/pvalue -> "0.00%"; "ci" prepends "±"; base_plus_ci (pct_ci/mean_ci)
+    # is written as TEXT (the value+CI string is pre-formatted).
+    # WARNING: Export-Parity — this is where tab_xl BYPASSES format.tabxplor_fmt(): it reads
+    # get_display()/get_digits() and hands number formatting to Excel. Mirror any display or
+    # digits change from fmt_class.R here. See CLAUDE.md § Export Parity.
     numfmt <- function(n, type, display) {
       display <- vctrs::vec_recycle(display, length(n))
 
@@ -1300,6 +1314,10 @@ tab_xl <-
 
 
     if (any(near0_auto)) {
+      # DESIGN: the near-zero test runs on the RAW value written to Excel (get_num). pct/diff/
+      # ctr/ci are stored 0-1 but displayed x100, so +2 digits realigns the threshold to the
+      # raw scale. 0.49 * 10^-digits = just under half a rounding unit -> catches exactly the
+      # cells that display as 0 at that precision.
       near_zero_map <- digits_map %>%
         dplyr::ungroup() %>%
         dplyr::filter(.data$tab_nb %in% (1:length(tabs))[near0_auto]) %>%
@@ -1493,6 +1511,9 @@ xl_index <- function(cols = "", rows = "", start_row = 0L, offset = 1L,
 
 #' @keywords internal
 insufficient_counts <- function(tabs, n_min = 30) {
+  # Flags rows/cols whose relevant total count is < n_min (greyed out in Excel for
+  # statistical confidentiality). Two-tier: use each col_var's own total column when present,
+  # else fall back to the global "all_col_vars" total. Keyed off is_totrow/is_totcol.
   #if (n_min =)
 
   get_vars        <- purrr::map(tabs, tab_get_vars)
@@ -1643,6 +1664,15 @@ insufficient_counts <- function(tabs, n_min = 30) {
        insuff_counts_col_var = insuff_counts_col_var)
 }
 
+
+# =======================================================================================
+# OBSOLETE: everything below (to end of file) is dead/abandoned code, kept for reference:
+#   - an old conditional-formatting-formula reimplementation of tab_xl,
+#   - French dev notes + CASD confidentiality-rule notes,
+#   - a full STALE DUPLICATE of tab_xl (with its own numfmt/colorToStyle/near-zero logic).
+# GREP HAZARD: editing numfmt/colorToStyle/get_display here has no effect — the live copy is
+# above (numfmt ~L1076). Candidate for deletion in a future cleanup.
+# =======================================================================================
 
 # tab_xl using conditional formatting formulas (on contiguous rows and cols)
 #

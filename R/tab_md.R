@@ -44,6 +44,8 @@ tab_md <- function(tabs,
 
   # --- Step 1: Handle list input + compact ---
   if (is.list(tabs) & !is.data.frame(tabs)) {
+    # NOTE: this "longest col_vars set = canonical" selection is duplicated in tab_compact()
+    # (and tab_xl); candidate for the WS4 unified export-prep. See CLAUDE.md roadmap.
     same_col_vars <- purrr::map(tabs, ~ tab_get_vars(.)$col_vars)
     same_col_vars <- same_col_vars |>
       purrr::map(~ .[!. %in% c("all_col_vars", "", "no") & !is.na(.)])
@@ -111,7 +113,9 @@ tab_md <- function(tabs,
   if (bold_references && length(fmt_cols) > 0) {
     refref <- purrr::map_dfr(tabs[fmt_cols],
                              \(x) get_reference(x, mode = "all_totals"))
-    # Keep only columns with mixed TRUE/FALSE
+    # Keep only discriminating columns (mixed TRUE/FALSE): an all-reference or all-non-ref
+    # column says nothing about which ROWS are references. A row is then bold iff it is a
+    # reference/total in EVERY discriminating column (rowSums == ncol, below).
     keep <- purrr::map_lgl(refref, \(x) any(x) & !all(x))
     if (any(keep)) {
       refref <- refref[, keep, drop = FALSE]

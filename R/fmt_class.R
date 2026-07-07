@@ -6,6 +6,7 @@
 #   - Fields are per-cell (vctrs::field), attributes are per-column (attr). Do not confuse.
 #   - pct is stored as 0-1 internally; multiplied by 100 only in format().
 #   - For type="mean", the diff field stores a RATIO (cell/ref), not a difference.
+#   - Display glyph constants (mult_sign, cross, unbrk, sigma_sign) are defined in utils.R.
 # See: CLAUDE.md § Design Decisions > Type System.
 
 # Create formated numbers class
@@ -33,9 +34,10 @@ globalVariables(c(":=", ".SD", ".N"))
 #' calculate percentages, Chi2 metadata or confidence intervals, but also to format and
 #' color the table to help the user read it. You can access this data with
 #' \code{\link[vctrs:field]{vctrs::field}}, or change it with
-#' \code{\link[vctrs:field]{vctrs:field<-}}. A \code{fmt} vector have 13 fields :
+#' \code{\link[vctrs:field]{vctrs:field<-}}. A \code{fmt} vector have 15 fields :
 #' \code{n}, \code{digits}, \code{display}, \code{wn}, \code{pct}, \code{mean},
-#' \code{diff}, \code{ctr}, \code{var}, \code{ci}, \code{in_totrow},  \code{in_tottab},
+#' \code{diff}, \code{ctr}, \code{var}, \code{ci}, \code{rr}, \code{or},
+#' \code{in_totrow},  \code{in_tottab},
 #' \code{in_refrow}. Other arguments are attributes, attached not to each value, but to
 #' the whole vector, like \code{type}, \code{totcol} or \code{color}. You can get them
 #' with \code{\link[base:attr]{attr}} and modify them with
@@ -245,6 +247,9 @@ fmt <- function(n         = integer(),
                 refcol    = FALSE,
                 color     = ""    ) {
 
+  # DESIGN: these 8 fields set the recycling reference length. display, diff, rr, or and
+  # the in_* flags are recycled TO it below, so they must not be passed longer than these
+  # (vec_recycle would error, not extend).
   max_size <- list(n, wn, pct, digits, ctr, mean, var, ci) %>% #display
     purrr::map_int(length) %>% max()
 
@@ -271,6 +276,9 @@ fmt <- function(n         = integer(),
   ci_type   <- vctrs::vec_recycle(vctrs::vec_cast(ci_type  , character()), size = 1)
   col_var   <- vctrs::vec_recycle(vctrs::vec_cast(col_var  , character()), size = 1)
   totcol    <- vctrs::vec_recycle(vctrs::vec_cast(totcol   , logical()  ), size = 1)
+  # KNOWN-BUG: casts `totcol` instead of `refcol`, so the public refcol= argument is
+  # silently ignored (refcol always mirrors totcol). Low impact: refcol is normally set
+  # internally, not via fmt(). See CLAUDE.md § Discovered bugs (fix in workstream 5).
   refcol    <- vctrs::vec_recycle(vctrs::vec_cast(totcol   , logical()  ), size = 1)
   color     <- vctrs::vec_recycle(vctrs::vec_cast(color    , character()), size = 1)
 
@@ -315,6 +323,12 @@ is_fmt <- function(x) {
 #' @return A double vector.
 #' @export
 get_num <- function(x) {
+  # DESIGN: get_num() is the authoritative `display` -> underlying-field map. Allowed
+  # display values and the field each reads: n/(default)->n, wn->wn,
+  # pct/pct_ci/pvalue->pct, diff->diff, ctr->ctr, mean/mean_ci->mean, var->var, ci->ci,
+  # rr->rr, or/OR/or_pct->or. format.tabxplor_fmt() renders these plus the CI/label
+  # variants (pct_ci, mean_ci, or_pct, OR_pct). When adding a display value, keep this
+  # map, set_num() and format() in sync (see the /vctrs-field skill).
   out     <- get_n(x)
   display <- get_display(x)
   nas     <- is.na(display)
@@ -347,7 +361,7 @@ set_num <- function(x, value) {
   out[!nas & display == "n"   ] <- set_n   (x[!nas & display == "n"   ], value[!nas & display == "n"   ])
   out[!nas & display == "wn"  ] <- set_wn  (x[!nas & display == "wn"  ], value[!nas & display == "wn"  ])
   out[!nas & display == "pct" ] <- set_pct (x[!nas & display == "pct" ], value[!nas & display == "pct" ])
-  out[!nas & display == "diff"] <- set_pct (x[!nas & display == "diff"], value[!nas & display == "diff"])
+  out[!nas & display == "diff"] <- set_diff(x[!nas & display == "diff"], value[!nas & display == "diff"])
   out[!nas & display == "ctr" ] <- set_ctr (x[!nas & display == "ctr" ], value[!nas & display == "ctr" ])
   out[!nas & display == "mean"] <- set_mean(x[!nas & display == "mean"], value[!nas & display == "mean"])
   out[!nas & display == "var" ] <- set_var (x[!nas & display == "var" ], value[!nas & display == "var" ])
@@ -1255,7 +1269,9 @@ detect_firstcol <- function(tabs) {
 #For each column, detect which total column it depends on
 #' @keywords internal
 detect_totcols <- function(tabs) {
-  #detect totcols by col vars names, no position ? ----
+  # Total columns are identified by the `totcol` attribute (is_totcol) / the "no_col_var"
+  # col_var — robust, not by hard-coded position. Each column is then mapped to the first
+  # such total column at or after its own position.
   tot <- which(is_totcol(tabs) | get_col_var(tabs) == "no_col_var")
 
   purrr::map(1:ncol(tabs), function(.i)
@@ -1339,7 +1355,9 @@ print_num <- function(num, digits) {
     stringr::str_replace("^100.0+$", "100")
 }
 
-# WORKING ON CONSOLE AND RMARKDOWN BUT NOT IN JAMOVI
+# WARNING: currently a no-op passthrough. Rendering CIs as HTML/LaTeX subscripts (the
+# commented `$_{...}$` / <sub> variants below) worked in console and RMarkdown but broke in
+# Jamovi, so subscript formatting is disabled until a Jamovi-safe encoding is found.
 ci_html_subscript <- function(x, html = FALSE) {
   if (html) x <- dplyr::if_else(
     condition = stringr::str_detect(x,"^ *$" ),
@@ -1451,27 +1469,12 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
                            true  = get_ci(x)[plus_disp_ci] ,
                            false = get_ci(x)[plus_disp_ci] * 100)
 
-      # # it the formula for mean wrong ?
-      # ci[disp_ci[plus_disp_ci & type == "mean"]] <-
-      #   ci[disp_ci[plus_disp_ci & type == "mean"]] *
-      #   get_ref_means(x)[disp_ci[plus_disp_ci & type == "mean"]]
-
-      # # color selection formulas for means :
-      # # diff_ci
-      # means & !neg    ~ diff > brk &
-      #   abs(1 - diff) * ref_means_pct - ci > 0,
-      #
-      # means & neg     ~ diff < brk &
-      #   abs(1 - diff) * ref_means_pct - ci > 0,
-      #
-      # # after_ci
-      # means & !neg
-      # ~ diff >= 1                                                         &
-      #   ref_means_pct + abs(1 - diff) * ref_means_pct  > (ref_means_pct + ci) * brk, #  &
-      #
-      # means & neg
-      # ~ diff < 1                                                           &
-      #   ref_means_pct + abs(1 - diff) * ref_means_pct  > (ref_means_pct + ci) * -brk, #   &
+      # FIXME (WS2, color diff/ratio split): the mean-CI bracket may be wrong. For means,
+      # `diff` is a ratio and `ci` a half-width; rendering the interval as get_diff() ± ci
+      # (below) might need scaling by the reference mean, i.e.
+      #   ci[... & type=="mean"] <- ci[...] * get_ref_means(x)[...]
+      # Left unscaled for now. Cross-check against color_formula()'s mean diff_ci/after_ci
+      # branches, which DO multiply abs(1 - diff) by ref_means_pct.
 
 
 
@@ -1748,6 +1751,8 @@ pillar_shaft.tabxplor_fmt <- function(x, ...) {
 
 
 
+  # DESIGN: color="contrib" needs total rows because the per-(sub)table MEAN contribution
+  # to variance is stored ON the total row (see get_mean_contrib), not in each cell.
   if (color == "contrib" & !any(totrows)) warning(
     "cannot print color == 'contrib' with no total rows to store ",
     "information about mean contributions to variance"
@@ -1775,13 +1780,16 @@ pillar_shaft.tabxplor_fmt <- function(x, ...) {
                      ~ dplyr::if_else(..2, rlang::exec(..3, ..1), ..1) )
     totals <- get_reference(x, mode = "all_totals") #c("cells", "lines")
 
+    # Cells matching no break are greyed (style_subtle) so colored cells stand out;
+    # reference/total cells are exempt, staying full-strength as reading anchors.
     out[ok & unselected & !totals] <-  #fmtgrey3
       pillar::style_subtle(out[ok & unselected & !totals])
 
     #Columns with no color
   } else {
-    # - problem with bold in console : it offsets all column unaesthetically
-
+    # DESIGN: uncolored columns only grey out zeros here. Styling totals with bold /
+    # underline / borders was tried (commented below) but rejected: bold offsets column
+    # widths in the console unaesthetically. The underline+"|" was the border-imitation try.
     # - use underline and | to make the imitate the borders of a table
     # if (any(totrows)) out <- dplyr::if_else(totrows & ! totcol,
     #                                         crayon::underline(out), out)
@@ -1820,6 +1828,8 @@ pillar_shaft.tab_chi2_fmt <- function(x, ...) {
   pvalues <- out[!nas & display == "pvalue"]
   p_values <- get_num(x)[!nas & display == "pvalue"]
 
+  # Non-significant p-values (>= 5%) print red (neg5), significant ones green (pos5):
+  # red warns the reader the (sub)table may not differ from the independence hypothesis.
   out[!nas & display == "pvalue"] <-
     dplyr::if_else(condition = p_values >= 0.05,
                    true      = color_style$neg5(pvalues),
@@ -1859,6 +1869,8 @@ mutate.tabxplor_fmt <- function(.data, ...) {
 #' @return The relevant field of the tabxplor_fmt.
 #' @export
 `$.tabxplor_fmt` <- function(x, name) {
+  # DESIGN: $wn falls back to the raw count n when there are no weighted counts (same
+  # fallback as get_wn() — keep the two in sync).
   if (name == "wn" & all(is.na( dplyr::pull(vctrs::vec_proxy(x), "wn")))) {
     dplyr::pull(vctrs::vec_proxy(x), "n")
 
@@ -1868,7 +1880,8 @@ mutate.tabxplor_fmt <- function(.data, ...) {
 
 }
 
-# #Problem : dplyr::last doesn't work anymore with fmt, because it relies on `[[`
+# WARNING: do NOT add a `[[.tabxplor_fmt` method. It was tried (commented below) but broke
+# dplyr::last() on fmt vectors, which relies on the default `[[`.
 # #' Extract method for class tabxplor_fmt
 # #' @param x A tabxplor_fmt object.
 # #' @param i,j,... Indices of names of the field to extract.
@@ -1934,6 +1947,10 @@ fmt_color_selection <- function(x, force_color, force_breaks) {
     switch(color,
            "diff"     = ,
            "diff_ci"  = if (type == "mean") mean_breaks    else pct_breaks   ,
+           # DESIGN: color="ci" is a binary significant/not split, so it needs only ONE
+           # positive + one (mirrored) negative threshold, not the graded ladder. ci_breaks
+           # is mirrored [neg | pos]; c(1, len/2 + 1) picks one break from each half.
+           # ("after_ci" below uses the full graded vector instead.)
            "ci"       = if (type == "mean"){
              mean_ci_breaks[c(1, length(mean_ci_breaks)/2 + 1)]
            } else {
@@ -1949,6 +1966,10 @@ fmt_color_selection <- function(x, force_color, force_breaks) {
   negative_breaks <- (type != "mean" & !color %in% c("or", "OR") & brk_no_zero < 0) |
     ( (type == "mean" | color %in% c("or", "OR") ) & brk_no_zero < 1)
 
+  # FIXME(clarify): purpose of the .direction="up" fill is unclear. It propagates the
+  # "negative" flag upward across the break vector, so an NA break (from na_if of a 0
+  # break) inherits the sign of the break below it. Confirm this is the intended handling
+  # of a 0/NA break before relying on it.
   negative_breaks <- tibble::tibble(negative_breaks) |>
     tidyr::fill("negative_breaks", .direction = "up") |>
     dplyr::pull("negative_breaks")
@@ -1977,7 +1998,10 @@ fmt_color_selection <- function(x, force_color, force_breaks) {
     rep(NA_real_, length(x))  #vctrs::vec_recycle(NA_real_, length(x))
   }
 
-  #     *2 rule for pct
+  # WARNING: field overload (WS2 will split this out). For pct-type columns tab_pct()
+  # stores the cell/reference RATIO in the `mean` field, so get_mean() here supplies the
+  # ratio driving the "*2 rule" (cell >= 2x reference). `mean` therefore means two
+  # different things by column type: an actual mean for type="mean", a pct ratio otherwise.
   ratio <- if (color %in% c("diff", "diff_ci", "after_ci") & type != "mean" ) { # pct
     get_mean(x)
   } else {
@@ -1990,6 +2014,8 @@ fmt_color_selection <- function(x, force_color, force_breaks) {
     NA_real_
   }
 
+  # ref_means_pct: reference value on the ratio scale — the reference mean for
+  # type="mean", the reference pct for the pct "*2 rule" (see WARNING above).
   ref_means_pct <- if (color %in% c("diff_ci", "after_ci", "ci") & type == "mean") {
     get_ref_means(x)
   } else  if (color %in% c("diff", "diff_ci", "after_ci") & any(pct_ratio)) {
@@ -2202,8 +2228,11 @@ color_formula <- function(type, color, neg,
         means & neg     ~ diff < brk & # brk <  1          # diff > brksup &
           abs(1 - diff) * ref_means_pct - ci > 0,
 
-        !means & !neg  ~ (if (pct_ratio) {ratio} else {diff}) > brk & abs(diff) - ci > 0, # brk >= 0           # & diff_sub < brksup
-        !means & neg   ~ diff < brk & abs(diff) - ci > 0 ), # brk <  0            #  & diff > brksup
+        # FIXME (WS2): the pct-ratio (*2 rule) path is unverified — when pct_ratio it
+        # compares the cell/ref ratio to `brk` but keeps the additive `abs(diff) - ci > 0`
+        # CI test. Revisit with the color diff/ratio split.
+        !means & !neg  ~ (if (pct_ratio) {ratio} else {diff}) > brk & abs(diff) - ci > 0,
+        !means & neg   ~ diff < brk & abs(diff) - ci > 0 ),
 
       "ci"       = dplyr::case_when(
         means & !neg # (brk == 1)
@@ -2212,10 +2241,13 @@ color_formula <- function(type, color, neg,
         means & neg # (brk == -1)
         ~ diff  < 1  &  abs(1 - diff) * ref_means_pct > ci,
 
-        !means & !neg # brk == 0 # & brksup > 0 # NOT wORKING ?
+        # FIXME (WS2): the pct (!means) color="ci" branches are suspect (were flagged
+        # "NOT wORKING?"). `diff >= 0 & abs(diff) > ci` may not correctly express
+        # "cell significantly different from its reference" for percentages.
+        !means & !neg
         ~ diff >= 0  &  abs(diff) > ci,
 
-        !means & neg # brk == 0 # & brksup < 0 # # NOT wORKING ?
+        !means & neg
         ~ diff  < 0  &  abs(diff) > ci
       ),
 
@@ -2232,7 +2264,9 @@ color_formula <- function(type, color, neg,
           ref_means_pct + abs(1 - diff) * ref_means_pct  > (ref_means_pct + ci) * -brk, #   &
         #ref_means_pct + abs(1 - diff) * ref_means_pct  < (ref_means_pct + ci) * -brksup ,
 
-        # pct ratio *2 rule : did same than with means, MAY BE TOTAL BULLSHIT
+        # FIXME (WS2): pct-ratio (*2 rule) after_ci branch is unverified — it mirrors the
+        # mean formula by analogy (was flagged "MAY BE TOTAL BULLSHIT"), and the negative
+        # counterpart (below) was never written.
         !means & !neg & pct_ratio
         ~ diff >= 0  &
           ref_means_pct + abs(1 - ratio) * ref_means_pct  > (ref_means_pct + ci) * brk,
@@ -2619,6 +2653,12 @@ get_color_type <- function(color, type) {
 
 #' @keywords internal
 select_in_color_style <- function(breaks, pct_diff) {
+  # DESIGN: maps the NUMBER of active breaks -> which of the 10 palette slots (pos1-5/neg1-5)
+  # to use, so that with few breaks the chosen intensities stay visually spread out. The *2
+  # ratio color is injected at slot 11 ("ratio") where the >1 break sits. The palette family
+  # is detected by sniffing pos1's hex to pick between two index sets.
+  # FIXME(clarify): the specific slot-index vectors and the "#CCFFCC|#000033e" hex sniff are
+  # hand-tuned magic — document the intended mapping before reworking colors in WS2.
 
   breaks <- breaks |>
     stringr::str_remove(paste0("\\+|\\*|", cross)) |>
@@ -2772,6 +2812,14 @@ get_reference <- function(x, mode = c("cells", "lines", "all_totals")) {
            )
     )
   } else {
+    # DESIGN: the three modes pick different cell sets relative to the baseline:
+    #   "cells"      = the individual reference CELLS each cell compares to, EXCLUDING the
+    #                  totals themselves (drives diffs and "ref:" labels).
+    #   "lines"      = the whole reference ROWS/COLS (refrows incl. totcol / the refcol).
+    #   "all_totals" = union of ALL total AND reference cells — the reading anchors kept
+    #                  full-strength (exempt from greying) in pillar_shaft.
+    # comp_all switches the row/mean reference from the subtable total (refrows) to the
+    # total-table reference (tottab_ref).
     switch(mode[1],
            "cells"      = dplyr::case_when(
              type %in% c("row", "mean") & !comp_all ~ refrows & !totcol     ,
@@ -2887,6 +2935,10 @@ vec_ptype_full.tabxplor_fmt <- function(x, ...) {
 #' @return A fmt vector
 #' @export
 vec_ptype2.tabxplor_fmt.tabxplor_fmt    <- function(x, y, ...) {
+  # DESIGN: common ptype of two fmt columns (drives c() / vec_c()). Any per-column
+  # attribute that differs collapses to a neutral value: type->"mixed", col_var->
+  # "several_vars", comp_all/totcol/refcol->FALSE, ref/ci_type/color->"". So binding
+  # unlike fmt columns is allowed but loses the mismatched metadata (by design).
   type_x       <- get_type(x)
   same_type    <- type_x == get_type(y)
   comp_x       <- get_comp_all(x, replace_na = FALSE)
@@ -3001,6 +3053,12 @@ vec_cast.tabxplor_fmt.tabxplor_fmt  <- function(x, to, ...)
 
   )
 
+# DESIGN: numeric <-> fmt cast contract (matters for arithmetic, sorting and export):
+#   double  -> fmt : a WEIGHTED-COUNT cell (display="wn", wn=x, n=NA)
+#   integer -> fmt : a COUNT cell (n=x)
+#   fmt -> double/integer/character : returns the CURRENTLY DISPLAYED field (get_num /
+#     format), NOT pct or n. So ==, sorting and numeric coercion all act on whatever
+#     `display` currently shows (see also vec_proxy_equal / vec_proxy_compare below).
 #' Convert double into fmt
 #' @param x A double vector
 #' @param to A fmt vector
@@ -3173,7 +3231,9 @@ vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
       rr      = rep_NA_real,
       or      = rep_NA_real,
 
-      in_totrow = is_totrow(x) & is_totrow(y), # Just x ?
+      # FIXME: is the AND right? A cell stays "total" only if BOTH operands are total —
+      # arguably it should follow x alone (x - a non-total y should probably stay total).
+      in_totrow = is_totrow(x) & is_totrow(y),
       in_refrow = is_refrow(x) & is_refrow(y),
       in_tottab = is_tottab(x) & is_tottab(y),
 
@@ -3204,7 +3264,10 @@ vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
       display   = get_display(x),
       n      = get_n(x)   ,
       wn     = get_wn(x)  ,
-      pct    = vctrs::vec_arith_base(op, get_pct(x), get_pct(y)), #Remove multiplication ?
+      # FIXME: suspect. Unlike +/- (which recomputes a weighted mean), */ operates pct_x
+      # against pct_y directly and drops mean to NA. Multiplying/dividing two percentage
+      # fields is rarely meaningful; revisit what * and / on fmt should actually mean.
+      pct    = vctrs::vec_arith_base(op, get_pct(x), get_pct(y)),
       diff   = rep_NA_real,
       digits = pmax(get_digits(x), get_digits(y)),
       ctr    = rep_NA_real,

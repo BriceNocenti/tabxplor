@@ -43,6 +43,7 @@ tab_many(
   add_pct = FALSE,
   digits = 0,
   subtext = "",
+  .by_table = FALSE,
   filter
 )
 

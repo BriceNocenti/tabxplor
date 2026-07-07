@@ -33,6 +33,10 @@ NULL
 .onLoad <- function(libname, pkgname) {
   # options "tabxplor.color_style_type" and "tabxplor.color_style_theme" :
 
+  # HISTORY: these OMP / data.table thread caps are commented out on purpose. data.table's
+  # multithreading once triggered a CRAN thread-count flag that blocked tabxplor's acceptance,
+  # until it was shown to originate in data.table itself. Left disabled; re-enable only if
+  # CRAN flags threads again.
   # # CRAN OMP THREAD LIMIT
   # if (Sys.info()[['sysname']] == "Linux") {
   #  Sys.setenv("OMP_THREAD_LIMIT" = 2)
@@ -708,6 +712,8 @@ compare_levels <-
 #'
 # @examples
 pmap_if <- function(.l, .p, .f, ..., .else = NULL) {
+  # Why this exists: purrr has no conditional pmap; apply .f only to elements matching .p
+  # (via the vendored probe()), leaving the rest unchanged. map2_if is the 2-arg analogue.
   .x <- .l[[1]]
   sel <- probe(.x, .p)
 
@@ -1085,6 +1091,9 @@ prepare_fct_recode <- function(df_in, df_out, var,  mode = c("text", "numbers",
 #' @keywords internal
 # @examples
 bind_datas_for_tab <- function(data, vars) {
+  # Why this exists: before row-binding several data sources, unify each factor's levels
+  # across ALL of them (lvls_union + fct_expand + fct_relevel(sort)). Otherwise a factor
+  # missing a level in one source would drop that category from the pooled aggregation.
   if ("character" %in% class(data)) {
     data <- data
     vars <- as.character(vars)

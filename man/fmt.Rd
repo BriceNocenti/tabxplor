@@ -284,9 +284,10 @@ As a \code{\link[vctrs:new_rcrd]{record}}, they stores all data necessary to
 calculate percentages, Chi2 metadata or confidence intervals, but also to format and
 color the table to help the user read it. You can access this data with
 \code{\link[vctrs:field]{vctrs::field}}, or change it with
-\code{\link[vctrs:field]{vctrs:field<-}}. A \code{fmt} vector have 13 fields :
+\code{\link[vctrs:field]{vctrs:field<-}}. A \code{fmt} vector have 15 fields :
 \code{n}, \code{digits}, \code{display}, \code{wn}, \code{pct}, \code{mean},
-\code{diff}, \code{ctr}, \code{var}, \code{ci}, \code{in_totrow},  \code{in_tottab},
+\code{diff}, \code{ctr}, \code{var}, \code{ci}, \code{rr}, \code{or},
+\code{in_totrow},  \code{in_tottab},
 \code{in_refrow}. Other arguments are attributes, attached not to each value, but to
 the whole vector, like \code{type}, \code{totcol} or \code{color}. You can get them
 with \code{\link[base:attr]{attr}} and modify them with

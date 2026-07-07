@@ -192,7 +192,10 @@ print.tabxplor_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = N
   out <- format(out, width = width, ..., n = n, max_extra_cols = max_extra_cols,
                 max_footer_lines = max_footer_lines)
 
-  # very bad workaround to retransform the <char> type into <fct>
+  # DESIGN: pillar::char(min_chars=) above is used only to force a minimum width on the
+  # row_var column, but it makes pillar print that column's type as <char>. Rewrite it back
+  # to <fct> in the header line so the displayed type stays correct. out[3] is the type-tag
+  # line for tabxplor_tab (out[4] in the grouped method, which has one extra header line).
   if (length(n_row_var) != 0) {
     regular_ex <-
       paste0("^(", paste0(rep("[^<]+<", n_row_var), collapse = ""), ")<char>") %>%
@@ -251,7 +254,8 @@ print.tabxplor_grouped_tab <- function(x, width = NULL, ..., n = 100,
   out <- format(out, width = width, ..., n = n, max_extra_cols = max_extra_cols,
                 max_footer_lines = max_footer_lines)
 
-  # very bad workaround to retransform the <char> type into <fct>
+  # Same <char>-back-to-<fct> workaround as print.tabxplor_tab; the type-tag line is out[4]
+  # here (a grouped_tab prints one extra header line).
   if (length(n_row_var) != 0) {
     regular_ex <-
       paste0("^(", paste0(rep("[^<]+<", n_row_var), collapse = ""), ")<char>") %>%
@@ -295,6 +299,8 @@ print_chi2 <- function(x, width = NULL) {
     chi2 <- chi2 %>% dplyr::filter(!row_all_na)
   }
 
+  # DESIGN: temporarily tag the fmt stat columns with class "tab_chi2_fmt" so they print via
+  # pillar_shaft.tab_chi2_fmt (which colors the p-value green/red) instead of the normal shaft.
   chi2 <- chi2 %>%
     dplyr::mutate(dplyr::across(where(is_fmt),
                                 ~ `class<-`(., c("tab_chi2_fmt", class(.)))  ))
@@ -995,6 +1001,8 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
 
 
 
+  # DESIGN: when a merged sub-table has no explicit reference row, promote its total row to
+  # reference (as_refrow) so each stacked sub-table colors its cells against its OWN total.
   tabs <- tabs |> purrr::imap_dfr(
     ~ dplyr::rename_with(.x, ~"levels", .cols =  1) |>
       dplyr::mutate(row_var = as.factor(.y), .before = 1) |>
@@ -2383,6 +2391,8 @@ ungroup.tabxplor_grouped_tab <- function (x, ...)
 
 #' @keywords internal
 lv1_group_vars <- function(tabs) {
+  # TRUE when at most one group remains -> caller downgrades grouped_tab to plain tab. Uses
+  # n_groups()<=1 (simple); the commented alternative counted single-level group vars.
   dplyr::n_groups(tabs) <= 1
 
   #groupvars <- dplyr::group_vars(tabs)
@@ -2396,6 +2406,10 @@ lv1_group_vars <- function(tabs) {
 #   Each: (1) calls NextMethod() for the actual operation, (2) checks lv1_group_vars()
 #   to decide if result has enough groups to stay grouped_tab or must downgrade to tab,
 #   (3) re-attaches subtext and chi2 attributes from the original data.
+# WARNING: every dplyr verb a user might call needs its own S3 method following this same
+#   pattern (see the group_by/select/rename/relocate/summarise/[/[<- clones below and in
+#   NAMESPACE). A missing method silently downgrades the table to a plain tbl_df, losing the
+#   class, subtext, chi2 and colored printing. See CLAUDE.md § dplyr Integration.
 #' dplyr_row_slice method for class tabxplor_grouped_tab
 #' @importFrom dplyr dplyr_row_slice
 #' @method dplyr_row_slice tabxplor_grouped_tab
@@ -2907,6 +2921,10 @@ vec_cast.data.frame.tabxplor_grouped_tab <- function(x, to, ...) {
 #   neg1-neg5 (under-represented), ratio (for *2 rule comparison). Palettes:
 #   text_dark, text_light (8-bit), text_light_24_blue_red, text_light_24_green_red (24-bit),
 #   bg_light, bg_dark. Selected via set_color_style(type, theme, html_24_bit).
+#   Hues are hand-tuned so the eye tells the intensity levels apart immediately on real
+#   tables. 8-bit variants target terminals without truecolor; the 24-bit blue-red variant
+#   is a more colorblind-friendly alternative to the traditional green-red.
+#   TODO(future): proper colorblind-safe palettes — a strong feature for a color-heavy pkg.
 #' @keywords internal
 color_style_text_dark <-
   c(pos1 = "#CCCC33", # rgb(4, 4, 1, maxColorValue = 5),
@@ -3103,6 +3121,9 @@ set_color_style <- function(type = c("text", "bg"),
   }
 
   if (length(custom_palette) != 0) {
+    # KNOWN-BUG: the check requires length 10 but the message says 11 and 11 names are
+    # applied below (pos1..neg5 + ratio) -> the `ratio` slot ends up without a value.
+    # custom_palette is effectively broken for the ratio color; fix by accepting length 11.
     if (length(custom_palette) != 10 | !is.character(custom_palette)) stop(
       "custom_palette should be a character vector of length 11"
     )
@@ -3230,9 +3251,14 @@ set_color_breaks <- function(pct_breaks, mean_breaks, contrib_breaks) {
   # DESIGN: Takes positive-only thresholds; negatives are auto-mirrored internally.
   #   pct_breaks: any value > 1 activates the "*2 rule" (ratio comparison, shown in purple).
   #   Only ONE value > 1 is allowed. Max 5 breaks = 5 color intensities per direction.
+  #   Rationale for the *2 rule: it flags meaningful differences in SMALL-COUNT columns
+  #   (with row% ; the reverse for col%), which an additive pp difference would miss.
+  #   PROVISIONAL (WS2): the positional >1 encoding (vs a separate ratio-breaks arg — the
+  #   dead code below) may change. v1.4.0 aims to let users pick a difference rule vs a ratio
+  #   rule for both pct AND means, mixable (e.g. diff = text colors + ratio = background).
   #   mean_breaks are ALWAYS ratios (1.15 = "+15% above reference").
   # Defaults are set at the first use of print.tabxplor_tab method :
-  #   pct_breaks = c(0.05, 0.1, 0.2, 0.3),
+  #   pct_breaks = c(0.05, 0.1, 0.2, 2, 0.3),
   #   mean_breaks = c(1.15, 1.5, 2, 4),
   #   contrib_breaks = c(1, 2, 5, 10)
 
