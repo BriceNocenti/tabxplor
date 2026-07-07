@@ -5,7 +5,7 @@ Detailed rationale behind the phase bullets in `CLAUDE.md` (§ 1.4.0 roadmap). C
 session can implement without re-deriving it. Written 2026-07; all decision questions resolved 2026-07-07.
 
 **How to read.** *Aim* (the governing rule) → *Status & open items* (what is settled, what is still open)
-→ the numbered decisions **§1–§13** (each self-contained, with its own grounding) → *How the decisions cohere* (the
+→ the numbered decisions **§1–§18** (each self-contained, with its own grounding) → *How the decisions cohere* (the
 closing synthesis). The **§N numbers are stable cross-reference anchors** —
 CLAUDE.md and this file both cite "§9", "§12", … — so **do not renumber them**; append new decisions as §14+.
 
@@ -45,6 +45,26 @@ below is one such simplification; none exists to add flexibility.
   attribute; per-**cell** significance = the `pvalue` field. Display: a p-value *row* for now; a future
   `!`-per-cell "weak-test" warning mode documented. → new **§16**.
 
+**Resolved** (2026-07-07, review session 3) — closures from the consistency review:
+
+- **Q9 — numeric diff-color scale** → **sd-standardized**: `color="diff"` on numeric columns colors
+  Glass's Δ `(cell_mean − ref_mean)/sd_ref` against effect-size breaks (default `c(0.2, 0.5, 0.8, 1.2)`,
+  new `mean_diff_breaks`); derived at color time from the stored `diff` + the reference `var` — no new
+  field. → new **§18**.
+- **Q10 — old serialized tabs** → **non-issue by usage** (tabs are exported — Excel/HTML/md — or
+  re-created from their R code, never saved as `.rds`; maintainer-confirmed); no upgrade shim,
+  documented unsupported. → §17.
+- **Q11 — whole-table test slot** → **hard rename** of the `chi2` table attribute → **`test`**
+  (constructor arg follows); `attr(x, "chi2")` → NULL is an accepted break. → §16, §17.
+- **Q12 — stars vs explicit method** → the §15 AC→Newcombe switch is **default-sensitive**: it applies
+  only when `method_diff` was left at its default; an explicit method is respected + one-time duality
+  message. → §15.
+- **G2 — chi2/F parity** → **closed**: the vectorised chi2 must match `chisq.test()` defaults
+  **exactly, incl. Yates continuity correction on 2×2** — today's path calls it with defaults
+  ([tab.R:5290](../R/tab.R#L5290)), so golden locks that behaviour; the planned "p equals `chisq.test`"
+  parity test (CLAUDE.md Phase 3) enforces it. A `correct=` passthrough is a possible future knob, not
+  1.4.0. → removed from *Still open*.
+
 **Still open** — the only unsettled points; each names the phase that must close it.
 
 ### G1 (confirm in Phase 2) — the aggregate carries sufficient statistics, not counts
@@ -67,7 +87,9 @@ on it).
 
 The `get_tot_wn()` accessor (§11) can't recover the weighted base of an empty cell (`pct==0`); the sibling
 fallback is robust within a non-empty row but fails for a fully-empty row/group. Default lean: keep the
-sibling fallback (stay at 18 fields); store `tot_wn` only if it bites in practice.
+sibling fallback (stay at 18 fields); store `tot_wn` only if it bites in practice. Recovery is likewise
+undefined on **count-only tables** (`pct="no"` never writes `pct`): there `get_tot_wn()` falls back to the
+total row/col — guaranteed present once `totrow` is deprecated-on (§6).
 
 ### U4 (Phase 6) — the col%-reference (`refcol`) side
 
@@ -84,6 +106,17 @@ step-chain means throwaway glue. Prefer **1a** (contract: field defs + accessors
 then **1b** (writers), folding 1b into Phases 2/3 where the core actually computes the fields. 1a keeps the
 new fields **NA-defaulted** (not printed → golden unchanged); regenerate golden only after 1b writes them.
 
+Two 1a refinements (review session 3): **(a)** dropping `ci` cannot wait for 1b — the untouched step-chain
+writers/readers (`tab_ci`'s `set_ci`; display [fmt_class.R:1443](../R/fmt_class.R#L1443); color
+[fmt_class.R:2012](../R/fmt_class.R#L2012)) still run until Phase 3, so 1a ships a **bounds-shim**:
+`set_ci(x, v)` writes symmetric bounds `est ∓ v` / `est ± v` and `get_ci()` returns the upper arm —
+today's output is reproduced byte-for-byte until Phase 3 writes real asymmetric bounds. **(b)** "golden
+unchanged" in 1a means the **`_snaps/` display snapshots**: the RDS half of `test-golden.R` compares
+structures, so adding NA-defaulted fields breaks object identity with nothing printed — regenerate the RDS
+fixtures once at 1a (review: structure-only diff) and hold `_snaps/` byte-identical. The true 1a invariant
+is *display byte-identity*, not zero fixture churn. `test-fmt-contract.R` gets its one deliberate 15→18
+rewrite here too.
+
 ### D2 (Phase 2 vs Phase 6) — split §5 into *internal* globalisation and *argument-surface* deprecation
 
 Phase 2's aggregate-core is described (CLAUDE.md Phase 2) as already relying on "the globalised row_var
@@ -93,13 +126,6 @@ row_var axis — `OR/pct/color/comp/ci/chi2/ref2`) lands **with the Phase 2 core
 change (deprecation warnings, `tab()`/`tab_many()` merge, the named-vector `ref`) lands **Phase 6**.
 Between the two, `tab_many()`'s per-row_var arg surface still exists but the core silently uses the first /
 shared value (no divergent-per-row_var math) — document the interim.
-
-### G2 (Phase 3) — omnibus/chi2 parity must match `chisq.test` exactly
-
-The vectorised closed-form chi2 (and the new mean-table F) must reproduce `chisq.test()`'s defaults to keep
-`test-golden.R` green — chiefly the **Yates continuity correction on 2×2 tables** (`correct=TRUE` by
-default). Decide per test: match Yates on 2×2, or document a deliberate divergence. The planned
-"p equals `chisq.test`" parity test (CLAUDE.md Phase 3) locks it.
 
 ### S3 (Phase 6) — `tab()`'s NA / population-consistency semantics must migrate into the core
 
@@ -124,7 +150,8 @@ Decide: `tab_compact()` becomes the internal merge invoked by `output_list=FALSE
 - **References & axes**: §4 (`ref` as a per-row_var named vector), §5 (row_var-axis globalisation),
   §6 (`totrow`/`totcol` + singular-arg deprecations).
 - **Display, output & export**: §7 (col% + several row_vars → transpose at export), §8 (exporter
-  base+list methods; Excel engine → Phase 9), §10 (total-column base range), §13 (output-shape table).
+  base+list methods; Excel engine → Phase 9), §10 (total-column base range), §13 (output-shape table),
+  §18 (numeric diff-color scale — sd-standardized).
 - **Inference policy** (review session 2): §14 (weighted estimate + unweighted `n`), §15 (CI/stars
   duality — score test ⇄ Newcombe), §16 (test-result data-model placement + display future).
 - **Retro-compat**: §17 (the consolidated accepted-breaks inventory).
@@ -304,6 +331,10 @@ base on **every** cell, `totcol` is now **purely cosmetic**: it only chooses whi
 still hides it (and `tab_plain()` remains the clean no-total path). With multiple col_vars of different N
 (NA), the single displayed total ≠ each per-cell base, by design (the §10 range display). All-in-one
 tables (the dominant use) already show one total → unaffected. Move/drop the column via dplyr as before.
+
+Interim (Phases 2→6): the aggregate-core computes **one canonical base set**; while `totcol="each"` is
+still live (and after, behind `deprecate_soft`), per-col_var total columns are produced by **cosmetic
+replication at output assembly** — never as separate calculation bases.
 
 Also drop the `tabxplor.compact` option (superseded by `output_list`, default `FALSE`).
 Deprecate singular `row_var`/`col_var` args (keep working, soft) → only `row_vars`/`col_vars` remain.
@@ -654,6 +685,10 @@ AC ≈ n ≥ 30/group, Newcombe ≈ n ≥ 40/group; both fine for typical crosst
 - The maximally-coherent end state (always Newcombe/Wilson, drop AC) is deferred: it would change default
   numeric output (golden) with no benefit when stars are off. Revisit only if AC's lack of a dual ever
   surprises a user.
+- **Explicit-method conflict (Q12, review session 3)**: the AC→Newcombe switch is **default-sensitive** —
+  it applies only when `method_diff` was left at its default. An explicitly passed `method_diff` is always
+  respected (standard R argument etiquette); a one-time message then warns that the bracket and the stars
+  are no longer exact duals (the stars stay score-test-based).
 
 Caveat (`ref="tot"`): when the reference row *contains* the cell, both the score test **and** the Newcombe
 difference interval inherit the non-independence bias (§12) — apply the same complement correction (cell
@@ -672,8 +707,11 @@ Newcombe (1998) eleven-methods comparison <https://pubmed.ncbi.nlm.nih.gov/95956
 Three scopes, three homes — no overload:
 
 - **Whole-table test** (Pearson chi2 for factor tables; ANOVA/Welch F for mean tables, Q4) → a **table
-  attribute** (the existing `chi2` attribute, generalised — rename to a neutral `test` slot, or add an `f`
-  sibling — so it also holds the F result; "properly remove chi2 attribute leftovers", CLAUDE.md Phase 3).
+  attribute**: the existing `chi2` attribute is **hard-renamed `test`** (Q11, review session 3) — one
+  tibble holding every whole-table test with a discriminator column (`"chi2"`, `"F"`); the
+  `new_tab()`/`new_grouped_tab()` constructor arg follows the rename (threaded through ~15 call sites);
+  `attr(x, "chi2")` → NULL is an accepted break (§17). Lands in Phase 3 together with "properly remove
+  chi2 attribute leftovers" (CLAUDE.md Phase 3).
 - **Whole-column / whole-variable test** (a per-column omnibus, when meaningful) → a **column attribute**
   on that `tabxplor_fmt` column.
 - **Per-cell significance** (cell vs its reference cell) → the **`pvalue` field** (§12) → the stars.
@@ -707,7 +745,10 @@ accepted. Listed here so each is signed off consciously (not discovered post-rel
 | `$mean` on **pct** columns changes (overload removed, §3) | code reading `$mean` of a pct column | Was an internal "×2-rule" ratio overload; the ratio now lives in `$ratio`; `$mean` on pct columns → `NA` (an honest value). |
 | Low-level `vctrs::field(x,"ci")` and **setting** `ci` stop working (§1, §9) | code poking the raw `ci` field | Rare/internal. `$ci` / `get_ci()` still work (recomputed from the bounds); the `fmt(ci=)` constructor arg is kept. |
 | `tab_many()` `compact` arg **deprecated**; `tabxplor.compact` **option dropped** (§6) | `tab_many(compact=)` / option users | Soft-deprecated arg still maps onto `output_list`; the option is replaced by the `output_list` arg. |
-| Changing the **CI confidence level on a built table** now needs a re-run (§1) | post-hoc `conf_level` tweakers | Bounds are stored at one level (can't rescale a stored asymmetric bound). Stars *are* re-thresholdable without re-run (the `pvalue` is level-free). Re-run `tab()` for a different CI level. |
+| Changing the **CI confidence level on a built table** now needs a re-run (§1) | post-hoc `conf_level` tweakers | Bounds are stored at one level (can't rescale a stored asymmetric bound). Stars *are* re-thresholdable without re-run (the `pvalue` is level-free). Re-run `tab()` for a different CI level. Same for toggling Kish `n_eff` (§14) — it changes bounds *and* `pvalue`. |
+| `attr(x, "chi2")` **renamed `test`** (§16, Q11) | code reading the table attribute | Rare usage; one attribute, one name — no dual-mirror divergence risk under dplyr verbs; NEWS line. Whole-table tests (chi2 + new ANOVA/F) live under `test` with a discriminator column. |
+| Numeric `color="diff"` **changes meaning** (§3, §18, Q9) | calls passing `color="diff"` on mean columns | Was ratio-coloring (`mean_breaks`); now colors the sd-standardized difference (Glass's Δ, `mean_diff_breaks`). The old behaviour is exactly `color="ratio"`. Pct-column coloring unchanged. |
+| Old **serialized** tabs (`.rds` from ≤1.3.1) unreadable by 1.4.0 accessors (§9, Q10) | nobody in practice — tabs are exported (Excel/HTML/md) or re-created from their R code, never saved as `.rds` (maintainer-confirmed) | No upgrade shim (permanent complexity for a non-use-case); NEWS line says "rebuild with `tab()`". |
 
 **Explicitly NOT broken (guardrails held):** `tab_many()`'s **list return type** for `≥2 row_vars` (Q7,
 §13) — preserved; pct `$diff`, `$pct`, `$n`, `$wn` and the other user-read fields — unchanged; every
@@ -717,6 +758,38 @@ public function/argument — kept (soft-deprecated at most).
 so a large table runs many tests — tabxplor applies **no** correction (standard for exploratory crosstabs).
 State this once in the CI/stars documentation so it is a conscious choice, not an omission; a
 Bonferroni/BH option is a possible future `to think about`, not 1.4.0.
+
+---
+
+## 18. Numeric diff-coloring — sd-standardized (Glass's Δ) (Q9, review session 3)
+
+§3 flips numeric `diff` to a real difference and adds the `"diff"`/`"ratio"`/`"diff_ratio"` color modes
+(Phase 5). What §3 left open: **which breaks color a raw mean difference?** Raw differences are
+unit-dependent (+5 is huge on a 0–10 satisfaction score, noise on an income in euros), so the
+ratio-shaped `mean_breaks` that color means today (`type=="mean"` routes to `mean_breaks`,
+[fmt_class.R:1949](../R/fmt_class.R#L1949)) cannot apply, and **no universal absolute default exists**.
+
+**Decision (Q9)**: the numeric `"diff"` color mode reads the **sd-standardized difference**
+`(cell_mean − ref_mean) / sd_ref` — **Glass's Δ**, the reference-group-sd effect size: the natural
+standardizer when many cells compare to one reference, and under `ref="tot"` it reads as "how many
+whole-population sds above the mean". Default breaks **`c(0.2, 0.5, 0.8, 1.2)`** (Cohen's
+small/medium/large conventions + one extra intensity level), a new **`mean_diff_breaks`** element in
+`set_color_breaks()` / `options("tabxplor.color_breaks")`, mirrored for negatives like the other breaks.
+
+- **No new field.** The standardization is computed inside `fmt_color_selection()`/`color_formula()`
+  from stored quantities: `diff` (§3) and the reference cell's `var` (located via `in_refrow` — the same
+  lookup `diff` itself needs). `$diff` stays the raw difference (§17 unchanged); the sd scale is a
+  color-layer quantity only.
+- **Dispersion is weighted** (`var` is the weighted variance, §14). `sd_ref == 0` or `NA` → no color.
+- **Scope**: only the pure `"diff"` mode needs the scale. `"ratio"` keeps ratio `mean_breaks`;
+  `diff_ci`/`after_ci` compare `diff` against its own CI — same units, already scale-free.
+- **Display/legend**: the subtext legend states the scale ("colored by (mean − ref)/sd(ref)"); all
+  exporters inherit it via the shared `fmt_color_selection()` (color parity is structural).
+- **Retro-compat**: `color="diff"` on numeric columns changes meaning (was ratio-coloring) — inventoried
+  in §17; the old behaviour is exactly `color="ratio"`.
+
+Source: Glass's Δ / standardized mean difference and Cohen's 0.2/0.5/0.8 conventions —
+<https://en.wikipedia.org/wiki/Effect_size>.
 
 ---
 
@@ -735,6 +808,9 @@ cell itself, so the table becomes self-describing and the step-by-step pipeline 
 aggregate-core. The review-session-2 additions (§14–§17) do not alter that move — they **pin the inference
 policy** the self-sufficient cells carry (weighted estimate + unweighted `n`, §14; interval ⇄ stars
 duality, §15; where the test results live, §16) and **inventory the small accepted breaks** (§17).
+Review session 3 closed the last color-scale gap (§18 — sd-standardized numeric diff-coloring), the
+`test`-attribute rename (§16), the stars-vs-explicit-method rule (§15), chi2 parity (G2 — match
+`chisq.test()` incl. Yates), and the serialization question (a non-issue, §17).
 
 - **Self-sufficient cells.** `tot_n` (§2) + the recovered `tot_wn` (§11) give each cell its own base; the
   `ci_inf`/`ci_sup` bounds (§1) and `pvalue` (§12) give it its own interval and significance; `diff` vs
@@ -753,8 +829,9 @@ duality, §15; where the test results live, §16) and **inventory the small acce
 The **one combined field pass** (§9 — 15 → 18 fields) is the keystone that unlocks all of this, which is
 why it comes first — and why the still-open points must be settled as their phase lands (see *Status &
 open items*): **G1** (the sufficient-statistics aggregate, now also carrying `Σw²` for §14) and **C2** (the
-`tot_wn` edge) at the core; **D2** (the §5 internal-vs-arg-surface split), **G2** (chi2/F parity), **S3**
-(tab()'s NA semantics) and **S4** (`tab_spread`/`tab_compact` fate) as the later phases reach them. The
+`tot_wn` edge) at the core; **D2** (the §5 internal-vs-arg-surface split), **U4** (the col%-reference
+side), **S3** (tab()'s NA semantics) and **S4** (`tab_spread`/`tab_compact` fate) as the later phases
+reach them. The
 public API
 (user-facing functions, their arguments, the `tabxplor_fmt` fields) stays retro-compatible throughout;
 only the internals are re-cut. That is the whole of 1.4.0.

@@ -90,7 +90,7 @@ Export:  tab_xl()  |  tab_kable()  |  tab_md()  |  tab_plot()
 
 - **`tabxplor_fmt`**: vctrs record (`new_rcrd()`) with 15 per-cell fields and 8 per-column attributes. The critical distinction: fields vary per cell (accessed via `vctrs::field()`), attributes are scalar describing the whole column (accessed via `attr()`). Constructor chain: `fmt()` (public, validates + coerces) -> `new_fmt()` (internal, calls `vctrs::new_rcrd()`). *(1.4.0 reshapes this to **18 fields** in one combined pass — decisions doc §9.)*
 - **`mean` field overload** (cross-cutting): for **pct-type** columns the `mean` field carries the cell/reference **ratio** for the "*2 rule" (not an actual mean). Written by `tab_pct()`, read by `fmt_color_selection()`. Pragmatic reuse — **moved to the `ratio` field in Phase 1** (the never-used `rr` field renamed; decisions doc §3), removing this overload.
-- **`tabxplor_tab`**: tibble subclass via `tibble::new_tibble()` with `subtext` (legend text) and `chi2` (test results tibble) attributes.
+- **`tabxplor_tab`**: tibble subclass via `tibble::new_tibble()` with `subtext` (legend text) and `chi2` (test results tibble) attributes. *(1.4.0 §16: the `chi2` attribute is hard-renamed `test`, also carrying the new ANOVA/Welch F — lands Phase 3.)*
 - **`tabxplor_grouped_tab`**: extends `grouped_df` for subtabled results (when `tab_vars` are present). Requires separate S3 method for every dplyr verb.
 
 ### Export Parity
@@ -118,7 +118,7 @@ Note: `ref` is **reinterpreted by `pct`** — a reference **row** under `pct="ro
 ### Color System (3-layer)
 
 1. **Palettes** (`tab_classes.R` ~L2892): 6 named color vectors (dark/light text, 24-bit blue-red/green-red, dark/light background), each with 11 hex codes: `pos1`-`pos5` (over-represented), `neg1`-`neg5` (under-represented), `ratio`. Hues are hand-tuned so intensity levels are eye-distinguishable on real tables; 8-bit variants target non-truecolor terminals; the 24-bit blue-red variant is more colorblind-friendly than green-red (fuller colorblind support is a future goal).
-2. **Breaks** (`set_color_breaks()` in `tab_classes.R`): stored in `options("tabxplor.color_breaks")`. Default pct: `c(0.05, 0.1, 0.2, 2, 0.3)` — the `2` means "twice the reference" (ratio mode). Mirrored for negative. Mean breaks: `c(1.15, 1.5, 2, 4)` — always ratios.
+2. **Breaks** (`set_color_breaks()` in `tab_classes.R`): stored in `options("tabxplor.color_breaks")`. Default pct: `c(0.05, 0.1, 0.2, 2, 0.3)` — the `2` means "twice the reference" (ratio mode). Mirrored for negative. Mean breaks: `c(1.15, 1.5, 2, 4)` — always ratios. *(1.4.0 §18 adds `mean_diff_breaks` `c(0.2, 0.5, 0.8, 1.2)` — sd-standardized differences for the numeric diff mode, Phase 5.)*
 3. **Selection** (`fmt_color_selection()` in `fmt_class.R`): iterates breaks, applies `color_formula()` per break level, `keep_last_break()` picks the strongest matching threshold per cell. Different boolean formulas for each color mode: `diff`, `diff_ci`, `ci`, `after_ci`, `contrib`, `OR` (+ the 1.4.0 additions `ratio`/`diff_ratio`, Phase 5).
 
 ### dplyr Integration
@@ -269,6 +269,13 @@ Grounding (code refs + statistics + caveats) in `dev/tabxplor_1.4.0_decisions.md
 12. **`tab_many()` return type (Q7, §13)** — **preserve the list-default** for the soft-deprecated `tab_many` alias; only the unified `tab()` merges by default. No silent return-type break.
 13. **Test-result placement (Q8, §16)** — whole-**table** test → table attribute (generalise `chi2`→`test` to also hold ANOVA/F); whole-**column** test → column attribute; per-**cell** significance → the `pvalue` field. Display: a p-value *row* for now; a future `!`-per-cell "weak-test" warning documented.
 
+**Review session 3 (2026-07-07)** — closures from the consistency review (detail: `dev/tabxplor_1.4.0_decisions.md` §15-18 + *Status*):
+
+14. **Numeric diff-color scale (Q9, §18)** — `color="diff"` on numeric columns colors the **sd-standardized** difference (Glass's Δ = `diff/sd_ref`, derived at color time from `diff` + the reference `var` — no new field); default breaks `c(0.2, 0.5, 0.8, 1.2)` as new `mean_diff_breaks`. `$diff` stays raw; `ratio` mode keeps `mean_breaks`; `diff_ci`/`after_ci` unaffected (diff vs its own CI is already unit-free).
+15. **Whole-table test slot (Q11, §16-17)** — **hard rename** of the `chi2` table attribute → `test` (constructor arg follows; one tibble holding chi2 + ANOVA/F with a discriminator column); `attr(x, "chi2")` → NULL is an accepted §17 break. Lands in Phase 3 with the chi2-leftovers cleanup.
+16. **Stars vs explicit method (Q12, §15)** — the AC→Newcombe switch is **default-sensitive**: only when `method_diff` was left default; an explicit method is respected + one-time message that bracket ⇄ stars are no longer exact duals.
+17. **G2 closed + serialization non-issue (§ *Status*, §17)** — vectorised chi2 must match `chisq.test()` defaults **exactly, incl. Yates on 2×2** (today's path calls it with defaults, `tab.R` ~L5290; golden locks it). Old serialized tabs are a non-issue (tabs are exported or re-created from code, never saved as `.rds`) — documented unsupported, no upgrade shim.
+
 #### Verification (every phase)
 
 - **Byte-identity**: `devtools::test("d:/Statistiques/github/tabxplor")` after each phase; `test-golden.R` + `test-export-parity.R` + `test-fmt-contract.R` + `test-fuse-parity.R` stay green. Intentional output changes → rerun `dev/make_golden.R`, review the `_golden/`/`_snaps/` diff consciously, `testthat::snapshot_accept()`.
@@ -292,7 +299,7 @@ Retro-compat tests + benchmarks BEFORE any refactor. Nothing below is safe witho
 
 ### Phase 1 — Combined fmt field-contract pass
 
-One vctrs-record surgery, BEFORE the core rewrite → **18 fields**: add `pvalue`, `tot_n`, `ci_inf`, `ci_sup`; **rename the unused `rr`→`ratio`** (placed after `diff`); **drop `ci`** (recomputed from the bounds on `$`/`get_ci()`; `fmt(ci=)` arg kept); numeric `diff` = difference; `mean`-overload removed. Fold the logit field/display prep below into it. Detail + caveats + touch-list: `dev/tabxplor_1.4.0_decisions.md` §1-3, §9, §12. Skill: `/vctrs-field`.
+One vctrs-record surgery, BEFORE the core rewrite → **18 fields**: add `pvalue`, `tot_n`, `ci_inf`, `ci_sup`; **rename the unused `rr`→`ratio`** (placed after `diff`); **drop `ci`** (recomputed from the bounds on `$`/`get_ci()`; `fmt(ci=)` arg kept); numeric `diff` = difference; `mean`-overload removed. Fold the logit field/display prep below into it. Split **1a** (contract: field defs + accessors + the `set_ci`/`get_ci` **bounds-shim** keeping display byte-identical; regenerate RDS golden fixtures once, `_snaps/` untouched; `test-fmt-contract.R` rewritten 15→18) / **1b** (writers, folded into Phases 2-3) — decisions doc § *Status* (Phasing). Detail + caveats + touch-list: `dev/tabxplor_1.4.0_decisions.md` §1-3, §9, §12. Skill: `/vctrs-field`.
 
 #### To implement
 
@@ -318,7 +325,7 @@ Extract the canonical count-aggregate; one implementation each of pct/diff/OR/to
 
 ### Phase 3 — CI + chi2 onto the aggregate (headline perf)
 
-Vectorize proportion-CI and chi2 onto the aggregate (drop the `dplyr::across` + per-cell `DescTools`/`chisq.test` + `group_split` path), following the `tab_num` mean-CI template. Store CI as asymmetric `ci_inf`/`ci_sup` bounds (fixes the Wilson/AC symmetric-bracket bug); **per-cell significance is a stored `pvalue`** (§12), not the bounds; compact `± moe` shows the larger arm. **Weighted estimate + unweighted `n`** for every CI/test (§14 — Kish `n_eff` opt-in). **CI ⇄ stars duality** (§15): when stars are on, `pvalue` = score test and the diff interval switches AC→Newcombe. **Add the mean-table omnibus = ANOVA/Welch F** (the true chi2 mirror, Q4) alongside chi2; test results land as attributes rendered as a row for now (§16). Chi2/F must match `chisq.test` (Yates on 2×2 — open item **G2**). `tab_chi2` is the #1 cost — benchmark before/after. Requires the sufficient-statistics aggregate (moment-sums + `Σw²` for numerics — open item G1). Detail: `dev/tabxplor_1.4.0_decisions.md` §1, §12, §14-16.
+Vectorize proportion-CI and chi2 onto the aggregate (drop the `dplyr::across` + per-cell `DescTools`/`chisq.test` + `group_split` path), following the `tab_num` mean-CI template. Store CI as asymmetric `ci_inf`/`ci_sup` bounds (fixes the Wilson/AC symmetric-bracket bug); **per-cell significance is a stored `pvalue`** (§12), not the bounds; compact `± moe` shows the larger arm. **Weighted estimate + unweighted `n`** for every CI/test (§14 — Kish `n_eff` opt-in). **CI ⇄ stars duality** (§15): when stars are on, `pvalue` = score test and the diff interval switches AC→Newcombe. **Add the mean-table omnibus = ANOVA/Welch F** (the true chi2 mirror, Q4) alongside chi2; test results land as attributes rendered as a row for now (§16 — the `chi2` attribute **hard-renamed `test`**, Q11). Chi2/F must match `chisq.test()` defaults **exactly, incl. Yates on 2×2** (**G2 resolved**, § *Status*). `tab_chi2` is the #1 cost — benchmark before/after. Requires the sufficient-statistics aggregate (moment-sums + `Σw²` for numerics — open item G1). Detail: `dev/tabxplor_1.4.0_decisions.md` §1, §12, §14-16.
 
 #### To verify
 
@@ -335,7 +342,7 @@ Vectorize proportion-CI and chi2 onto the aggregate (drop the `dplyr::across` + 
 - tab_chi2() is a performance bottleneck, specially with weights. Rationale : .
 - If it does not already exists, add a testthat test, on simple tables, to ensure the resulting pvalue is always the same than with the plain `chisq.test()` function used on a  plain table.
 - pvalue lines : need it's own color, red when p<5% ?
-- properly remove chi2 attribute old implementation leftovers everywhere. Would there be caveats ?
+- properly remove chi2 attribute old implementation leftovers everywhere. Would there be caveats ? **Resolved (Q11, §16): the attribute is hard-renamed `chi2`→`test`** (constructor arg follows); `attr(,"chi2")` → NULL is an accepted break (§17).
 - tab_num() / tableaux de moyennes : ajouter un T-Test / Test de Student (est-ce le bon test statistique pour savoir si les moyennes de différentes sous-populations sont significativement différentes ?) comme mirroir du test du Chi2 pour les tableux croisés normaux, et ajouter sa pvalue de la même manière en dessous des tableaux. **Resolved (Q4, §12): the whole-table mirror of chi2 is ANOVA / Welch F (the table line under mean tables); the per-cell cell-vs-reference test is the Welch two-sample t → the `pvalue` stars. Both coexist — omnibus vs pairwise, different questions.**
 
 #### To think about
@@ -359,7 +366,7 @@ Vectorize proportion-CI and chi2 onto the aggregate (drop the `dplyr::across` + 
 
 ### Phase 5 — Color diff/ratio split
 
-Now the `ratio` field exists (Phase 1): implement `"diff"`/`"ratio"`/`"diff_ratio"` modes + legend text, **keeping the existing modes coherent in the same overhaul** (`diff_ci`, `ci`, `after_ci`, `contrib`, `OR` — do not drop the `ci` mode). Skill: `/color-mode`. Also fix the pre-existing **col% + means** row/col reference mismatch (means referenced by row, factors by column — `dev/tabxplor_1.4.0_decisions.md` §7).
+Now the `ratio` field exists (Phase 1): implement `"diff"`/`"ratio"`/`"diff_ratio"` modes + legend text, **keeping the existing modes coherent in the same overhaul** (`diff_ci`, `ci`, `after_ci`, `contrib`, `OR` — do not drop the `ci` mode). **Numeric `"diff"` mode is sd-standardized (Q9, §18)**: color Glass's Δ = `diff/sd_ref` against new effect-size `mean_diff_breaks` (default `c(0.2, 0.5, 0.8, 1.2)`); derived from `diff` + the reference `var` at color time — no new field, `$diff` stays raw. Skill: `/color-mode`. Also fix the pre-existing **col% + means** row/col reference mismatch (means referenced by row, factors by column — `dev/tabxplor_1.4.0_decisions.md` §7).
 
 #### To verify
 
