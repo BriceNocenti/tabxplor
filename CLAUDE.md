@@ -193,22 +193,138 @@ For the full detailed technical reference, see `vignettes/tabxplor_architecture.
 
 ## tabxplor version 1.4.0 roadmap : the current goal
 
-Implementing tabxplor 1.4.0 (2.0.0 only if breaking changes land). **Update the status column and the log below at the end of every work session** (per the CLAUDE.md Update Instruction above). Each workstream gets its own plan file under `~/.claude/plans/` when it starts.
+Currently implementing tabxplor 1.4.0 (2.0.0 only if breaking changes land). **Update the status column and the log below at the end of every work session**. Each workstream gets its own plan file under `~/.claude/plans/` when it starts.
 
-### Workstreams
+### Chosen features to implement + things yet to think about
 
-| # | Workstream                                                                 | Status      | Notes                                                                                                                                                                                                                                    |
-|---|----------------------------------------------------------------------------|-------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 0 | **Preparation foundation** (tests / benchmarks / tracking / skills)        | in progress | This cycle. See "Foundation" below.                                                                                                                                                                                                      |
-| 1 | `ref_n` (+ maybe `ref_wn`) fmt field for exact reference counts            | not started | Removes the "last `col_var` total column" approximation when `col_var`s have different NA totals. Use `/vctrs-field`.                                                                                                                    |
-| 2 | Color diff/ratio split                                                     | not started | Factors keep `color="diff"` behaviour; numerics: `"diff"`=difference, `"ratio"`=old behaviour, maybe `"diff_ratio"`=text+background. Use `/color-mode`.                                                                                  |
-| 3 | Merge `tab()` into `tab_many()`; soft-deprecate `tab_many` alias           | not started | `tab_many()` becomes the base; `tab()` behaviour via an argument. `lifecycle::deprecate_soft("1.4.0", "tab_many()")`. Use `/dplyr-method` if class methods change.                                                                       |
-| 4 | Unified prep function for `tab_xl()`/`tab_kable()`/`tab_plot()`/`tab_md()` | not started | Keep exporter-parity (see Design Decisions > Export Parity).                                                                                                                                                                             |
-| 5 | Bug corrections & small features                                           | ongoing     | See "Discovered bugs" log.                                                                                                                                                                                                               |
-| 6 | `tab_logit` (maybe a `regxplor` subpackage)                                | not started | Split out only if it pushes tabxplor's dependency count too high.                                                                                                                                                                        |
-| 7 | Jamovi rewrite using state logic + caching                                 | not started | Stop calling `tab_many()` directly; mirror its behaviour via subfunctions with Jamovi states; maybe a faster flat-HTML `tab_kable()`. **Option: shared finest-grain aggregate to fuse the per-table scans — see "Perf findings" below.** |
+#### tab() and tab_many()
 
-### Foundation (workstream 0)
+##### To verify
+- with mean, is diff_ci/after_ci formula wrong (in color calculation ok ? In printing wrong ?)
+- `tab_chi2()` not working with `add_n = TRUE` ?
+- `tab_many()` : are there still error with levels = "auto", when `col_vars` are numeric ?
+- verify seriously that pct ×2 rule calculations for "after_ci" are good
+
+##### To implement
+1. Some careful modifications of vctrs fields for class `tabxplor_fmt`, along with changes in tables code to work with them. The main change would be to add a new field with the reference total count `ref_n`, for each fmt value, to do all relevant calculations with this data (instead of relying on, and introduces approximation when different columns variables do not have the same exact same total count due to missing values, as the default behaviour is to use only the total column of the last `col_var`). Would `ref_wn` be necessary too ? Then, all the use of totals should be fully rewritten and rethougth.
+
+2. Some careful modifications of the color helpers. The core will be to differenciate differences (`diff`) and ratios (`ratio`) for both : factors should keep the same behaviour than currently with `color = "diff"` ; but numeric variables with `color = "diff"` color differences, and return to the former behaviour with `color = "ratio"`. Maybe adding a `color = "diff_ratio"` possibility to use both, one using text color and the other background color (if will select background colors to ensure readability and ease of understanding when both are used for the same number) ? Question is : how to do a complete overall, integration and simplification of the current colors functions ecosystem to make it word and increase it’s user-friendliness ?
+- Where to store the values ? In one hand vctrs fields should be clear and. In the other hand,. With pct, would it be meaningful/clear to store ratios in relative risks ? Is that the same calculation that is a step to get odds ratios, or not at all ? With means/numeric variables ?
+
+2. Merge between `tab()` and `tab_many()`
+- That would make current `tab_many()` the base function (with argument to get the same behaviour as `tab()`) but soft deprecate the `tab_many` alias to directly use `tab` alias from now on. The original rationale for separating the two was : `tab_plain` is the core worker but lacks many advanced option ; `tab_many` is the most flexible for big tables, with many options ; `tab` was centered around the necessity to keep the whole population (who is in `n` ?) and NA handling consistent with having a single row variable and a single column variable. Since most of the time (with row percentages), only one total column was kept, the `n` count could be different for every col var : it won’t be the case anymore if `ref_n` reference total is stored in a vctrs fields for each cell.
+
+3. Confidence intervals
+- `tab_ci()` : redo carefully, in a simplified version giving the same results and using the same calculations, using the new `ref_n` vctrs- field (use it to really simplify and accelerate it). The current version is a bit of a white elephant, supposed to handle every situation, but this flexibility is useless because these situation never happens : it would be way simpler, way faster and more reliable if the calculation was done in a data.table step in `tab_plain` or `tab_num`.
+- avec `ci = "diff"` and other relevant ones, afficher la significativité de la différence par rapport à la référence avec des étoiles. Default to `*` for 90%, `**` for 95%, `***` for 99%,- customisable in options(). Should also work with odds ratio (empirical odds ratio not coming from a logistic regression that is) : how to do it ? It should then print everywhere (unless it’s opted out) : in console, in Excel, in tab_kable, etc.
+- with `ci = "cell"`, also calculate ci for total or reference, since it’s meaningful
+
+4. Test du Chi2 et nouveau T-Test
+- tab_chi2() is a performance bottleneck, specially with weights. Rationale : .
+- If it does not already exists, add a testthat test, on simple tables, to ensure the resulting pvalue is always the same than with the plain `chisq.test()` function used on a  plain table.
+- pvalue lines : need it's own color, red when p<5% ?
+- properly remove chi2 attribute old implementation leftovers everywhere. Would there be caveats ?
+- tab_num() / tableaux de moyennes : ajouter un T-Test / Test de Student (est-ce le bon test statistique pour savoir si les moyennes de différentes sous-populations sont significativement différentes ?) comme mirroir du test du Chi2 pour les tableux croisés normaux, et ajouter sa pvalue de la même manière en dessous des tableaux.
+
+5. Small changes :
+- Option to use wt as n : somethingh like wt_as_counts, or better name if you find it (with a warning when all lines are weighted 1 ?) :- meaningful to input not a dataframe with one line per individual, but a table of counts (already cross-tabulated counts), and do all other- calculations on it (pct, ci, etc.). Use case is real, and should be added in documentation, examples, and vignette/readme. Identify this case- automatically when n=1 for all combinations at the data.table output step (how to do it without clutter and performance drop in in data- table ? Better to keep it as user opt-in ? ) ?
+
+##### To think about
+- option no sd with means / print two different columns (in excel exports, tab_kable, etc.) ?
+- deprecate option(tabxplor_ci_print), mettre en argument ?
+- with each color argument, use a different color palette. Too complicated, or worthwhile for clarity to the user ?
+- au lieu d’une ligne pvalue dans première colonne de chaque variable (avec pct = "row"), plutôt des `!!!!` quand p > 5% (soit l'inverse des étoiles des `ci`) ?
+- `compact = TRUE` or the related `options()` : do not throw error with tab_vars, just don't do it ?
+- chi2 pvalue lines etc. : just in print(), not in actual table ? What would be the benifits and the caveats of both solutions ?
+
+---
+
+#### format.fmt
+
+##### To implement
+- Display of tabxplor_tab on console is quite long : what are the performance bottlenecks and how to make it faster / remove useless stuffs and white elephants here ?
+
+Prepare tab_logit() integration into tabxplor_fmt class and `tab()` calculations and display :
+- OR : column ref default to 2, or last (otherwise it's done for the "no" column, which is not user-friendly !) ?
+- OR : when OR < 1, print 1/OR everywhere at display level for the user to be able to compare OR between 0 and 1 to OR > 1 meaningfully since it’s by construction symetric that way. For example, if `OR = 0.25`, we should calculate the inverse `1/0.25 = 4`, and print `1/4` (console + exports ; would a Excel cell format permits it ?)
+- OR : print signif stars *** ** * (cf. above)
+- OR : with 2 levels, no ref2 and all OR calculated (positive/negative levels) ; with 3 levels, ref2 needed
+- rr : relative risks, with pct types (how to do it ? merge with mean, don't call a ratio a "diff", cf. above ?).
+- how to intelligently print : OR + ME ; mod_OR + emp_OR ; OR + PCT ?
+
+##### To think about
+- Passing a vector in display to display several fields ? (Won't work in Excel.) Would it be possible to find a reliable syntax to command exactly the wanted fields and seps in a display ? Like `pct (n)` or `pct ± ci` ? Would it really be useful for data analysis users, or a white elephant with theoretical useless flexibility again ?
+
+---
+
+#### tab_logit()
+
+##### To implement
+- Full implementation of `tab_logit` (currently commented out) and integration into the package, maybe as a `regxplor` subpackage (if name available) relying on tabxplor (always loading with tabxplor ?) if it makes tabxplor dependencies count too high.
+
+##### To think about
+- chose reference for each var with a vector (possibly named for simplicity) ! (permit to take ref in the middle while keeping order of ordinal vars) ?
+- Do things with contrasts ?
+
+---
+
+#### export and display functions
+
+##### To implement
+- Make a common preparation function for tab_xl(), tab_kable(), tab_md(), tab_plot(). Make it fast (no useless calculations made in the cases they are not used afterwards, depending on the type of export and options chosen).
+- Fully redesign exports to unify the different kind of exports in a common framework (when a feature is export-type specific, like Excel only, it should be justified).
+- Use variables `label` attribute more thoroughly in exports when it exists (in survey data formatting, I have the habit of putting the original questionnaire question in it, which can me meaningful information for the user) ? Where to print it, for useful additional information without clutter (not erasing variable names, which are real useful) ?
+- tab_plot have a bad display and display is hard to handle : turn it internal for now, keep it for future improvements
+
+##### tab_xl()
+
+###### To implement
+- Make it work with every data.frame, even not made with tabxplor, with default settings (event without factors, etc.). Implement small fixture tests.
+- Use `openxlsx2` instead of `openxlsx`. Rule number 1 : read openxlsx2 documentation thoroughly + create common styles to make it faster.
+- To make it work with a "common preparation function" that would be the same than tab_kable() etc., Make the function for a single tab (sometime big with `compact=TRUE` ? ), then parallelize for list of tab ?
+- Integrate numfmt() in format(type = "xl")
+- avec tab_logit (references), on perd les bordures des groupes aussi ? Vérifier.
+- Add the end it must work with tab_logit() and *** : significance stars used as formatting.
+
+
+###### To think about
+- After `openxlsx2` conversion, add an option to use conditionnal formatting instead of hard text colors. I was doing it in the past but the code was awful to make and it was very very slow. Would it be less horrible / faster with `openxlsx2`
+
+##### tab_md()
+
+###### To implement
+- Colors with very shorts pandoc bracketed spans (examples for diffs : `.+5`, `.+10`, `.+20`, `.+30`, `.-5`, `.-10`, `.-20`, `.-30` etc. ; examples for ratios : `.x1.2`, `.x1.5`, `.x2`, `.x4`, `./1.2`, `./1.5`, `./2`, `./4`, etc. ; would these names be valid css classes / pandoc bracketed spans ?).
+
+##### tab_kable()
+
+###### To implement
+- Comment accélerer cette fonction ? Faire une version plus light par défaut, sans les interactive tooltips etc. ?
+- Enlever l'affichage des NA plus proprement qu'en les enlevant à la fin dans le html, pour qu’ils soient enlevés dans tous les cas de figure (knitr, etc.)
+
+---
+
+#### Jamovi main function : fully rewritten with a modular design
+
+##### To implement
+- Jamovi UI improvement for user-friendliness and performance. The main improvement would be not to rely on `tab_many()` like now, but instead to write new code, with near the exact same behaviour as `tab_many()` (ensured by subfunctions), but fully using Jamovi states logic to avoid redoing all calculations at each change of button when it’s not necessary, and maybe adding temp caching for some base calculations (like : keep former variables calculations when a new variable is added).
+- UI pour changer l'ordre des lignes, des colonnes et des sous-tableaux, en s’inspirant des modules Jamovi qui implémentent déjà cette fonction.
+- Argument `n_min` : supprimer ligne/colonne si n est trop petit
+
+##### To think about
+- Maybe improve tab_kable() for performance, or simplify/remove all tooltips/etc. (just a faster flat html table), or even make it format with markdown tables with css classes (would it be possible ?) ?
+- tab_logit analysis in Jamovi ?
+
+---
+
+#### global
+
+##### To implement
+- Create a full `pkgdown` for tabxplor documentation. On github pages ? Elsewhere if tidyverse ecosystem provided servers ?
+- Bug corrections.
+
+---
+
+### Foundation
 
 - Retro-compat safety net BEFORE the refactors. New tests: `test-fmt-contract.R` (locks the 15 fields + 8 attributes), `test-golden.R` (characterization matrix), `test-export-parity.R` (format vs `tab_xl` display parity), extended dplyr-verb coverage in `test-tab_classes.R`.
 - Perf: small `gss_cat` benchmark runs in-suite as `test-benchmark.R` — informational, NEVER fails; prints a comparison (median_s/base_s/diff_s + mem) against committed `tests/testthat/benchmark_baseline.csv` (ships with tests; regenerate via `dev/make_benchmark_baseline.R`). Visible under `devtools::check()`; `skip_on_cran`. Shared ops in `helper-benchmark.R`. The heavy 8M-row run is `benchmarks/run_bench.R` (`.Rbuildignore`'d; `source("benchmarks/run_bench.R")`), which builds the fixture via `gen_big_df.R` and writes/compares its own `benchmarks/baseline.csv`. `bench` is Suggests-only (falls back to `system.time`).
@@ -254,11 +370,11 @@ Original investigation notes (why fusion, not GForce):
 - **WS7 option — shared finest-grain aggregate**: replace the N per-table scans with ONE data.table agg keyed on the join of all row+col vars (NA kept), then roll up each 2-way table applying its own na rule. Verified arithmetically identical and na-mode-correct; weighted means/vars also roll up (Σwx, Σw, Σwx² additive). **Cardinality is bounded by `∏ nlevels` (independent of N), not by the row count** — computable up front in µs. For the pc18 example (8 vars) that ceiling is only 151k (≤207k with NA levels; just 5,020 observed), so the fusion is safe even on real 27M-distinct data. It only blows up when `∏ nlevels` is large (many vars / high-cardinality / many binary MRQ items — e.g. 5 row × 10 binary col ≈ 3.2M). **Guard: switch on `∏ nlevels` vs N — use finest-grain agg when `∏ nlevels ≤ N`, else `groupingsets()`/table-by-table**. Measured crossover (worst case = independent uniform factors, N=10M, 15 tables): break-even at `∏ nlevels ≈ 0.7·N`; guaranteed ≥4× win at `≤ N/10`; overshoot penalty bounded ~1.6× (G_obs, hence aggregate size, saturates at N — no memory blow-up). Real correlated/sparse data collapses far below `∏ nlevels` (pc18: 3.3% of it), so `≤ N` is conservative. Optional: estimate true G_obs from a 1% sample to push the threshold higher. Pays off most when the aggregate is **cached and reused across interactions** (Jamovi).
 - **Cheap wins (WS5, independent)**: drop the duplicate `relabel_levels_in_varnames()` in `tab_plain` (`tab.R:2135`, already run at `:875`); share one `setDT` across tables instead of per-table copies; check `tab_chi2` isn't calling base `table()` over N rows.
 
+---
 
-
-## CLAUDE.md Update Instruction
+## CLAUDE.md / 1.4.0 roadmap Update Instruction
 
 When you modify the package structure (add modules, rename functions, change config fields), suggest the relevant CLAUDE.md update lines in your response : it should be minimalistic, concice, no bullshit, with nothing useless that would clutter the prompt. When there is nothing to change, skip it.
 
-Keep the tabxplor version 1.4.0 roadmap above up-to-date as you build it and implement it.
+Keep the tabxplor version 1.4.0 roadmap above up-to-date as you build it or implement it.
 
