@@ -23,7 +23,7 @@ below is one such simplification; none exists to add flexibility.
 
 ## Status & open items
 
-**Resolved** (2026-07-07) — the five decisions that fixed the Phase 1 field set:
+**Resolved** (2026-07-07) — the four decisions that fixed the Phase 1 field set:
 
 - **Q1 — deprecation posture** → soft-deprecate, **stay 1.4.0**; the one accepted break is numeric `$diff`
   ratio→difference (§3, §6).
@@ -31,16 +31,37 @@ below is one such simplification; none exists to add flexibility.
 - **Q3 — ratio field** → **rename the unused `rr` → `ratio`** (§3, §9).
 - **Q4 — mean-table tests** → **ANOVA/Welch F** omnibus + per-cell **Welch t** (§12).
 
+**Resolved** (2026-07-07, review session 2) — four consistency decisions from the roadmap review:
+
+- **Q5 — weighted inference** → **weighted estimate + unweighted `n`** for every CI/test (one rule for
+  proportions *and* means; for a 0/1 variable weighted-var + unweighted-n ≡ weighted-% + unweighted-n).
+  Kish `n_eff` is a cheap opt-in. Fixes the §12 self-contradiction. → new **§14**.
+- **Q6 — CI/stars duality** → the visible interval and the stars must be duals: **two-proportion score
+  test ⇄ Newcombe (score) interval** when stars are on; AC stays the default when stars are off. → new
+  **§15**, §1.
+- **Q7 — `tab_many()` return type** → **preserve the list-default** for the soft-deprecated `tab_many`
+  alias (only the unified `tab()` merges by default) — no silent break. → §6, §13.
+- **Q8 — test-result placement** → whole-**table** test = table attribute; whole-**column** test = column
+  attribute; per-**cell** significance = the `pvalue` field. Display: a p-value *row* for now; a future
+  `!`-per-cell "weak-test" warning mode documented. → new **§16**.
+
 **Still open** — the only unsettled points; each names the phase that must close it.
 
 ### G1 (confirm in Phase 2) — the aggregate carries sufficient statistics, not counts
 
 A **count-only** aggregate (`n`, `wn`) cannot yield a mean/variance/CI/t — the verified `weighted.var`
 double-scan ([tab.R:5571](../R/tab.R#L5571)) is the symptom. The core must be a **sufficient-statistics
-aggregate** carrying, per `tab_vars × row_var × numeric-col_var` group: `n`, `Σwt`, `Σ(wt·x)`, `Σ(wt·x²)`
-(plus unweighted `Σx`, `Σx²` for the unweighted t), so mean `= Σwx/Σw` and variance come in **one pass**.
-Factor col_vars keep the count branch (`n`, `wn`). Confirm the exact schema when Phase 2 builds the core —
-near-certain (correctness + the headline perf win both depend on it).
+aggregate**, and it is **heterogeneous** — two branches, so every core transform (pct/diff/OR/CI/chi2/tests)
+dispatches on branch (the "one vectorised impl each" is really one factor path + one numeric path each):
+- **numeric col_var**, per `tab_vars × row_var × col_var` group: `n`, `Σwt`, `Σwt²`, `Σ(wt·x)`, `Σ(wt·x²)`
+  (+ unweighted `Σx`, `Σx²` for the unweighted-`n` variant), so mean `= Σwx/Σw` and variance come in
+  **one pass**.
+- **factor col_var**, per `… × col_var-cell`: `n`, `wn` (= `Σwt`), and `Σwt²`.
+
+`Σwt²` is the **one extra sum** (additive, rolls up to the base like `wn`, cheap) that unlocks Kish
+`n_eff = (Σwt)²/Σwt²` for the weighted-inference rule (§14) and design-effect reporting. Confirm the exact
+schema when Phase 2 builds the core — near-certain (correctness + the headline perf win + §14 all depend
+on it).
 
 ### C2 (Phase 1/3) — `tot_wn = wn/pct` recovery on empty cells
 
@@ -60,7 +81,39 @@ the `refcol` attribute / `diff_index(…, pct="col")` ([tab.R:2644](../R/tab.R#L
 
 The field pass (§9) precedes the Phase 2/3 core rewrite, so populating the new fields from the *old*
 step-chain means throwaway glue. Prefer **1a** (contract: field defs + accessors + arithmetic/cast/format),
-then **1b** (writers), folding 1b into Phases 2/3 where the core actually computes the fields.
+then **1b** (writers), folding 1b into Phases 2/3 where the core actually computes the fields. 1a keeps the
+new fields **NA-defaulted** (not printed → golden unchanged); regenerate golden only after 1b writes them.
+
+### D2 (Phase 2 vs Phase 6) — split §5 into *internal* globalisation and *argument-surface* deprecation
+
+Phase 2's aggregate-core is described (CLAUDE.md Phase 2) as already relying on "the globalised row_var
+axis (§5)", but the row_var-axis globalisation is scheduled for **Phase 6**. Resolve the forward
+dependency by splitting §5 in two: the **internal** collapse (the core assumes one shared setting per
+row_var axis — `OR/pct/color/comp/ci/chi2/ref2`) lands **with the Phase 2 core**; the **argument-surface**
+change (deprecation warnings, `tab()`/`tab_many()` merge, the named-vector `ref`) lands **Phase 6**.
+Between the two, `tab_many()`'s per-row_var arg surface still exists but the core silently uses the first /
+shared value (no divergent-per-row_var math) — document the interim.
+
+### G2 (Phase 3) — omnibus/chi2 parity must match `chisq.test` exactly
+
+The vectorised closed-form chi2 (and the new mean-table F) must reproduce `chisq.test()`'s defaults to keep
+`test-golden.R` green — chiefly the **Yates continuity correction on 2×2 tables** (`correct=TRUE` by
+default). Decide per test: match Yates on 2×2, or document a deliberate divergence. The planned
+"p equals `chisq.test`" parity test (CLAUDE.md Phase 3) locks it.
+
+### S3 (Phase 6) — `tab()`'s NA / population-consistency semantics must migrate into the core
+
+`tab()`'s historical raison d'être (its CLAUDE.md Global-Architecture note) was *consistent `n` / NA
+handling for a single row_var × col_var* — "who is in `n`?". Phase 6 turns `tab()` into a thin shim, so
+that normalisation logic must be re-expressed as core/`as_tab_counts()` boundary rules (which rows count
+toward each base under each `na` mode), not silently dropped. Spell it out when Phase 6 merges the two.
+
+### S4 (Phase 6/7) — fate of `tab_spread()` / `tab_compact()` under `output_list`
+
+`compact` (arg) is deprecated and `tabxplor.compact` (option) dropped (§6), but the underlying
+`tab_compact()` (the merge engine, `tab_classes.R`) and `tab_spread()` (`tab.R`) functions are unaddressed.
+Decide: `tab_compact()` becomes the internal merge invoked by `output_list=FALSE` (kept, maybe unexported);
+`tab_spread()` — keep / soft-deprecate / retire. Name their fate in Phase 6 (merge) or Phase 7 (export).
 
 ---
 
@@ -72,6 +125,9 @@ then **1b** (writers), folding 1b into Phases 2/3 where the core actually comput
   §6 (`totrow`/`totcol` + singular-arg deprecations).
 - **Display, output & export**: §7 (col% + several row_vars → transpose at export), §8 (exporter
   base+list methods; Excel engine → Phase 9), §10 (total-column base range), §13 (output-shape table).
+- **Inference policy** (review session 2): §14 (weighted estimate + unweighted `n`), §15 (CI/stars
+  duality — score test ⇄ Newcombe), §16 (test-result data-model placement + display future).
+- **Retro-compat**: §17 (the consolidated accepted-breaks inventory).
 
 ---
 
@@ -124,6 +180,11 @@ but that shortcut is moot once we store two bounds for proportions anyway.
   `[inf;sup]` display still reads `ci_inf`/`ci_sup`; a "CI excludes 0" check (`ci_inf > 0 | ci_sup < 0`)
   remains a valid *visual* cue at the CI's own level, but the stars are driven by `pvalue`. Land both in
   Phase 3 with the CI/chi2 aggregate migration.
+- **Interval *method* when stars are on** (§15): to keep the visible `[inf;sup]` bracket and the stars
+  *coherent* (bracket-excludes-0 ⇔ starred), the stored **diff** interval switches from Agresti-Caffo to
+  the **Newcombe** score interval — the near-exact dual of the two-proportion score test that fills
+  `pvalue`. Wilson (`ci="cell"`) is already the score dual; means/OR intervals are already the dual of
+  their Welch-t / log-OR tests. AC stays the default only when stars are off. Detail + grounding: §15.
 
 Sources (asymmetry): Wikipedia *Binomial proportion confidence interval* (Wilson/Agresti-Coull);
 Wikipedia *Odds ratio* + BU SPH PH717 Module 8 (log-scale CI, `exp` asymmetry). See the CI section of
@@ -453,9 +514,15 @@ test matching the cell's estimator, so "CI excludes 0 ⇔ starred" stays coheren
 come from a single stored number (impossible from one stored CI level, and ill-defined for asymmetric
 Wilson/AC/OR intervals — the reason Q2 chose a stored p over stored bounds-only).
 
-**All per-cell tests use the UNWEIGHTED base `tot_n`** (as chi2 already does, [tab.R:5285](../R/tab.R#L5285))
-— significance is a statement about the real sample, not the reweighted one. The weighted estimate still
-drives the displayed number and color; the p-value uses unweighted counts.
+**The rule (Q5 → §14): weighted estimate + unweighted `n`.** Every per-cell CI/test uses the **weighted
+point estimate** (weighted `pct` / weighted mean — what the cell shows and colors) together with the
+**unweighted sample size `tot_n`** (as chi2 already does, [tab.R:5285](../R/tab.R#L5285)). Weighting
+represents structure; it does not manufacture independent individuals, so the *amount of information* is
+the real unweighted `n`. For a 0/1 variable this is exactly "weighted % + unweighted n" (its weighted
+variance is `p_w(1−p_w)`), so proportions and means obey **one** rule. Caveat: this sets the design effect
+to 1 → **anti-conservative when weights vary a lot** (CIs too narrow, stars too generous); the cheap,
+non-survey-design mitigation is Kish `n_eff = (Σw)²/Σw²` (opt-in, needs `Σw²` — G1). Full grounding, scope
+limits (no clusters/strata) and the non-integer-count caveat: **§14**.
 
 **Cross-cutting caveat — reference dependency.** When the comparison reference *contains* the cell
 (`ref="tot"`, cell ⊆ total), the two groups are not independent, so an independent two-sample test is
@@ -466,23 +533,23 @@ document the small, conservative-leaning approximation for `ref="tot"`.
 
 | Use case | Estimator (what is compared) | Test → `pvalue` | Base | Notes |
 |---|---|---|---|---|
-| **Factor col_var, `ci="diff"`** | cell proportion vs reference-row proportion | two-sided **two-proportion score test** (`prop.test()` / manual score `z`); the Wilson-score dual of the Newcombe difference CI, agrees closely with the AC interval tabxplor defaults to | `tot_n` of cell & of the `in_refrow` cell | Matches `method_diff="ac"`. `ref="tot"` → test vs complement (caveat). |
-| **Factor col_var, `OR=TRUE`** (empirical OR, no logit) | 2×2 odds ratio: (cell level vs `ref2` level) × (row vs `ref` row) | **Wald test on log(OR)**, Woolf `SE=√(1/a+1/b+1/c+1/d)`, `z=log(OR)/SE`; consistent with the log-scale OR CI (`exp(logOR ± z·SE)`) | the four 2×2 counts (unweighted) | Haldane–Anscombe +0.5 when any of a,b,c,d = 0. Empirical only — distinct from logit. |
-| **Numeric col_var, `ci="diff"`** | cell mean vs reference-row mean | **Welch two-sample t-test** (unequal variance): `t=(x̄c−x̄r)/√(s²c/nc+s²r/nr)`, Welch–Satterthwaite df | `tot_n`/`n` + `var` field (both cells) | Confirms the maintainer's intuition: t-test p<5% ⇒ significant cell-vs-ref mean difference. Weighted: use the design/weighted `var` + effective n. `ref="tot"` caveat applies. |
+| **Factor col_var, `ci="diff"`** | cell proportion vs reference-row proportion | two-sided **two-proportion score test** (`prop.test()` / manual score `z`); dual of the **Newcombe** difference CI | weighted `pct`, unweighted `tot_n` of cell & of the `in_refrow` cell (§14) | When stars are on, the stored diff CI switches AC→Newcombe so bracket ⇄ stars agree (§15). `ref="tot"` → test vs complement (caveat). |
+| **Factor col_var, `OR=TRUE`** (empirical OR, no logit) | 2×2 odds ratio: (cell level vs `ref2` level) × (row vs `ref` row) | **Wald test on log(OR)**, Woolf `SE=√(1/a+1/b+1/c+1/d)`, `z=log(OR)/SE`; dual of the log-scale OR CI (`exp(logOR ± z·SE)`) | weighted OR point estimate; **unweighted** 2×2 counts for the SE (§14) | Haldane–Anscombe +0.5 when any of a,b,c,d = 0. Empirical only — distinct from logit. |
+| **Numeric col_var, `ci="diff"`** | cell mean vs reference-row mean | **Welch two-sample t-test** (unequal variance): `t=(x̄c−x̄r)/√(s²c/nc+s²r/nr)`, Welch–Satterthwaite df | weighted mean + weighted `var`, unweighted `n` (§14) | Confirms the maintainer's intuition: t-test p<5% ⇒ significant cell-vs-ref mean difference. Weighted var + **unweighted n** (Kish `n_eff` opt-in), *not* full survey design. `ref="tot"` caveat applies. |
 | **`tab_logit()`** | logistic-regression coefficient | model **Wald z** p-value, straight from `broom::tidy(…)$p.value` | model n | Obvious case; also fills OR `ci_inf`/`ci_sup` from `conf.int=TRUE`. |
 | **`color="contrib"`** (chi2 cell contribution) | cell count vs its chi2 expected | **standardized Pearson residual** → normal p (`abs(resid) > 1.96 ⇒ p<0.05`) | full margins (already computed for chi2) | Optional: per-cell significance for the contribution mode; residual sign gives direction. |
-| **Ratio / relative-risk display** (if starred) | cell vs reference proportion ratio (`ratio` field) | **Wald on log(RR)**, `SE=√((1−p1)/(n1·p1)+(1−p2)/(n2·p2))` | `tot_n` of both | Only if RR significance is surfaced; analogous to the OR row. |
+| **Ratio / relative-risk display** (if starred) | cell vs reference proportion ratio (`ratio` field) | **Wald on log(RR)**, `SE=√((1−p1)/(n1·p1)+(1−p2)/(n2·p2))` | weighted RR estimate; unweighted `tot_n` of both (§14) | Only if RR significance is surfaced; analogous to the OR row. |
 | **`ci="cell"`** (interval around the cell itself, no reference) | — | **`pvalue = NA`** (H0: p=0 / μ=0 is not meaningful) | — | No per-cell star; the interval is purely descriptive. |
 
-**Whole-table omnibus tests are NOT the per-cell `pvalue`** — they stay column/table-level (the `chi2`
-attribute / a test sidecar), one number under each table:
+**Whole-table omnibus tests are NOT the per-cell `pvalue`** — they live at table/column level (§16), one
+number under each table:
 
-- **Factor tables**: Pearson chi2 p (existing; unweighted counts).
+- **Factor tables**: Pearson chi2 p (existing; unweighted counts — §14).
 - **Mean tables (Q4)**: **ANOVA / Welch's F** across the row_var groups — the true mirror of chi2 ("are
-  the group means different at all"). Store it exactly as chi2 is stored (extend the `chi2` attribute / a
-  `test` sidecar to carry the F result for numeric columns). The per-cell Welch-t above is the
-  *cell-vs-reference* companion (stars), **not** the omnibus — the two coexist and answer different
-  questions (Q4 confirmed both: ANOVA for the table line, t for the cell).
+  the group means different at all"). Stored the same way chi2 is (§16 — a table-level attribute; a
+  per-column test on a column attribute), carrying the F result for numeric columns. The per-cell Welch-t
+  above is the *cell-vs-reference* companion (stars), **not** the omnibus — the two coexist and answer
+  different questions (Q4 confirmed both: ANOVA for the table line, t for the cell).
 
 Where the field is written: fill `pvalue` in the same aggregate-core transform that fills `ci_inf`/`ci_sup`
 (Phase 3), so the closed-form test statistics are computed once, **vectorised, from the
@@ -507,9 +574,149 @@ The exact return type by `row_vars` × `tab_vars` × `output_list`:
 
 Grounded: today's unwrap collapses a length-1 list to a bare tab ([tab.R:1540](../R/tab.R#L1540)); the
 per-element class is `new_grouped_tab` when grouping vars exist, else `new_tab`
-([tab.R:1498-1505](../R/tab.R#L1498)). 1.4.0 keeps that machinery. The one behaviour change vs today:
-`≥2 row_vars, no tab_vars, output_list=FALSE` now **merges by default** (was a list; `compact` merged).
-Exporters consume all shapes via the base method (single tab) + list method (§8).
+([tab.R:1498-1505](../R/tab.R#L1498)). 1.4.0 keeps that machinery. The table above is the **new unified
+`tab()`** behaviour; `≥2 row_vars, no tab_vars, output_list=FALSE` **merges by default** (was a list;
+`compact` merged). Exporters consume all shapes via the base method (single tab) + list method (§8).
+
+**`tab_many()` alias exception (Q7).** `tab_many()` today defaults `compact=NULL → getOption("tabxplor.compact")`
+= `FALSE`, so `tab_many(df, c(a,b), c)` **returns a list** ([tab.R:648-649](../R/tab.R#L648), option default
+`FALSE` [tab.R:575](../R/tab.R#L575)). To avoid a silent return-type break for direct callers of the (now
+soft-deprecated) alias, **`tab_many()` keeps the list-default** (behaves as `output_list=TRUE` for
+`≥2 row_vars`); only the unified `tab()` merges by default. The shim maps `tab_many`'s `compact=` arg
+(deprecated) onto `output_list` for back-compat.
+
+---
+
+## 14. Weighted inference — weighted estimate + unweighted `n` (Q5, 2026-07-07)
+
+Resolves the §12 self-contradiction ("ALL tests use unweighted `tot_n`" vs the mean row's "weighted var +
+effective n"). **One rule for every CI and every per-cell/omnibus test:**
+
+- **Point estimate = weighted** (weighted `pct`, weighted mean, weighted OR/RR) — the number the cell
+  displays and colors.
+- **Dispersion = weighted** (weighted variance; for a 0/1 variable that is `p_w(1−p_w)`, so a proportion is
+  just the 0/1-mean case — proportions and means obey the *same* rule).
+- **Sample size `n` = the real UNWEIGHTED count** (`tot_n`). Rationale (the maintainer's): weighting makes
+  the sample's *structure* resemble the population; it does **not** create independent individuals, so a
+  margin of error must count real respondents. Formula-wise, score / Wald / Wilson / Newcombe / Welch-t all
+  need only `(estimate, n)`, so weighted `p̂`/`x̄` + unweighted `n` drops straight in.
+
+**Caveats (grounded — tell the user honestly):**
+1. **Anti-conservative under variable weights.** Setting `n_eff = n` ignores the variance inflation from
+   unequal weights (design effect `deff ≥ 1`): CIs come out **too narrow**, stars **too generous**, the
+   more the weights vary. This is the one real statistical cost.
+2. **Cheap mitigation, still not survey design.** Kish `n_eff = (Σw)² / Σw²` corrects *exactly* the
+   unequal-weight inflation (and nothing else). It needs one extra sufficient statistic, `Σw²` (G1) — no
+   strata/clusters, no full `survey`-package machinery. Ship unweighted `n` as the pragmatic **default**;
+   expose Kish `n_eff` as an **opt-in** (`options()`/arg). CI expressions then replace `n` by `n_eff`,
+   estimate unrounded (Korn–Graubard / Dean–Pagano convention).
+3. **Scope limit.** Kish `deff` assumes a stratified SRS; it is *not* valid for clustered/multistage
+   designs, and can mislead when subgroups are sampled at very different rates. Document that tabxplor's
+   inference is a **single-stage unequal-weight approximation**, not a design-based analysis — a user who
+   needs the latter should use `survey`/`srvyr`.
+4. **Non-integer effective counts.** The weighted "count" `x_w = p_w · n` is generally non-integer; the
+   score/Wald/Wilson/Newcombe formulas don't care (they take `p̂`, `n`). Only routines needing integer
+   counts do — the OR Haldane–Anscombe `+0.5` zero-cell fix uses the **unweighted** integer 2×2 counts;
+   Fisher-exact is not offered.
+
+This rule is implemented once, in the aggregate-core transform that fills `ci_inf`/`ci_sup`/`pvalue`
+(Phase 3), vectorised from the sufficient-statistics aggregate (G1) — never per-cell `prop.test`/`t.test`.
+
+Sources: Kish effective sample size & design effect — <https://en.wikipedia.org/wiki/Design_effect> ;
+CI with `n_eff` (estimate unrounded) — Korn & Graubard, Dean & Pagano, summarised in
+<https://cran.r-project.org/web/packages/PracTools/vignettes/Design-effects.html>.
+
+---
+
+## 15. CI ⇄ stars must be duals — score test + Newcombe interval (Q6, 2026-07-07)
+
+The stored interval and the printed stars must never contradict (a bracket that excludes 0 while the cell
+is un-starred, or vice-versa, reads as a bug). They agree **only if the interval is the dual of the test**.
+
+**Grounded — AC vs Newcombe for the difference of two proportions.** Both Agresti-Caffo (add 1 success + 1
+failure per group, then Wald on the adjusted difference) and Newcombe's method 10 (combine the two single-
+sample **Wilson score** intervals, MOVER "square-and-add") have **near-nominal coverage** and **converge as
+n grows**; they differ materially only at small n / proportions near 0–1. Newcombe (and the equivalent
+Miettinen–Nurminen score interval) is typically **slightly narrower** than AC and, being score-derived, is
+the **near-exact dual of the two-proportion score test**. AC is a *Wald-on-adjusted-counts* interval and
+has **no clean dual test** — its only exact dual would be a Wald test on the `+1/+1` padded counts, which
+is nonstandard and inherits the Wald test's poor small-sample size (the very defect AC/score were built to
+avoid). Aligning stars to a plain Wald test is therefore a **bad idea**. Coverage acceptability:
+AC ≈ n ≥ 30/group, Newcombe ≈ n ≥ 40/group; both fine for typical crosstab n.
+
+**Decision.** Significance stars for `ci="diff"` are **opt-in** (§ Phase 3). So:
+- **Stars off** → keep the current default `method_diff="ac"` (fine coverage; no golden churn).
+- **Stars on** → the `pvalue` comes from the **two-proportion score test**, and the stored **diff interval
+  switches to Newcombe** (the score dual) so `[inf;sup]` and the stars are coherent by construction.
+  `ci="cell"` already uses **Wilson** = the score dual (no change). Means use the **Welch-t** interval/test
+  pair (exact duals); empirical OR uses the **log-OR Wald** interval/test pair (exact duals on the log
+  scale). So only the *proportion-difference* method needs the AC→Newcombe swap-under-stars.
+- The maximally-coherent end state (always Newcombe/Wilson, drop AC) is deferred: it would change default
+  numeric output (golden) with no benefit when stars are off. Revisit only if AC's lack of a dual ever
+  surprises a user.
+
+Caveat (`ref="tot"`): when the reference row *contains* the cell, both the score test **and** the Newcombe
+difference interval inherit the non-independence bias (§12) — apply the same complement correction (cell
+vs total−cell) to both, so they stay duals.
+
+Sources: Fagerland, Lydersen & Laake (2011) *Recommended CIs for two independent binomial proportions*
+<https://www.ms.uky.edu/~mai/sta635/FagerlandLydersenLaake2011---RecommendedCIsForTwoIndependent....pdf> ;
+Newcombe (1998) eleven-methods comparison <https://pubmed.ncbi.nlm.nih.gov/9595617/> ;
+`DescTools::BinomDiffCI` (methods `ac`, `score`/`mn`, Newcombe)
+<https://search.r-project.org/CRAN/refmans/DescTools/html/BinomDiffCI.html>.
+
+---
+
+## 16. Where test results live in the data model (Q8, 2026-07-07)
+
+Three scopes, three homes — no overload:
+
+- **Whole-table test** (Pearson chi2 for factor tables; ANOVA/Welch F for mean tables, Q4) → a **table
+  attribute** (the existing `chi2` attribute, generalised — rename to a neutral `test` slot, or add an `f`
+  sibling — so it also holds the F result; "properly remove chi2 attribute leftovers", CLAUDE.md Phase 3).
+- **Whole-column / whole-variable test** (a per-column omnibus, when meaningful) → a **column attribute**
+  on that `tabxplor_fmt` column.
+- **Per-cell significance** (cell vs its reference cell) → the **`pvalue` field** (§12) → the stars.
+
+**Display, now vs future (document both):**
+- **Now**: the whole-table p-value renders as a **cell in its own row** under the table (as chi2 already
+  does); the mean-table ANOVA/F renders the same way for numeric variables — one uniform mechanism.
+- **Future (documented, not built)**: drop the dedicated row and instead flag **each cell** of a table/
+  column whose omnibus test is *non-significant* with a `!` warning glyph (the mirror image of the
+  significance stars — `!` = "the whole table/column shows no significant association, read these cells with
+  caution"). This keeps the warning where the user looks (the cells) and reclaims the row. Purely a display
+  layer over the same stored attributes → switchable later without touching the data model.
+
+This decides the earlier roadmap "to think about" ("pvalue lines: just in print(), not in the actual
+table?") in favour of **stored-as-attribute, rendered-as-row-for-now**: the number lives in an attribute
+(clean under dplyr/vctrs — no phantom row for verbs to trip on), and only the *rendering* is a row, so the
+future `!`-glyph mode is a display swap, not a schema change.
+
+---
+
+## 17. Accepted retro-compatibility breaks — the consolidated inventory
+
+The Aim says the public API stays retro-compatible; a handful of **small, deliberate** breaks are
+accepted. Listed here so each is signed off consciously (not discovered post-release). Each ships with a
+`NEWS.md` line; user-facing functions/args are soft-deprecated, never hard-removed.
+
+| Break | Who it affects | Why accepted / mitigation |
+|---|---|---|
+| Numeric `$diff` flips **ratio → difference** (§3) | code reading `$diff` on *numeric/mean* columns | The one substantive break; numerics are rarely `$`-extracted, pct `$diff` (the real surface) is unchanged, and the ratio survives in `$ratio`. |
+| `$rr` **disappears** (renamed `ratio`, §3, §9) | code reading `$rr` | The `rr` field was **never** used by any code or by the maintainer. `$ratio` replaces it. |
+| `$mean` on **pct** columns changes (overload removed, §3) | code reading `$mean` of a pct column | Was an internal "×2-rule" ratio overload; the ratio now lives in `$ratio`; `$mean` on pct columns → `NA` (an honest value). |
+| Low-level `vctrs::field(x,"ci")` and **setting** `ci` stop working (§1, §9) | code poking the raw `ci` field | Rare/internal. `$ci` / `get_ci()` still work (recomputed from the bounds); the `fmt(ci=)` constructor arg is kept. |
+| `tab_many()` `compact` arg **deprecated**; `tabxplor.compact` **option dropped** (§6) | `tab_many(compact=)` / option users | Soft-deprecated arg still maps onto `output_list`; the option is replaced by the `output_list` arg. |
+| Changing the **CI confidence level on a built table** now needs a re-run (§1) | post-hoc `conf_level` tweakers | Bounds are stored at one level (can't rescale a stored asymmetric bound). Stars *are* re-thresholdable without re-run (the `pvalue` is level-free). Re-run `tab()` for a different CI level. |
+
+**Explicitly NOT broken (guardrails held):** `tab_many()`'s **list return type** for `≥2 row_vars` (Q7,
+§13) — preserved; pct `$diff`, `$pct`, `$n`, `$wn` and the other user-read fields — unchanged; every
+public function/argument — kept (soft-deprecated at most).
+
+**Explicitly out of scope (document, don't "fix"):** **multiple comparisons.** Stars decorate every cell,
+so a large table runs many tests — tabxplor applies **no** correction (standard for exploratory crosstabs).
+State this once in the CI/stars documentation so it is a conscious choice, not an omission; a
+Bonferroni/BH option is a possible future `to think about`, not 1.4.0.
 
 ---
 
@@ -523,9 +730,11 @@ Exporters consume all shapes via the base method (single tab) + list method (§8
 
 ## How the decisions cohere
 
-The thirteen decisions are **one move made in several places**: push every quantity a cell needs onto the
+The decisions are **one move made in several places**: push every quantity a cell needs onto the
 cell itself, so the table becomes self-describing and the step-by-step pipeline collapses onto a single
-aggregate-core.
+aggregate-core. The review-session-2 additions (§14–§17) do not alter that move — they **pin the inference
+policy** the self-sufficient cells carry (weighted estimate + unweighted `n`, §14; interval ⇄ stars
+duality, §15; where the test results live, §16) and **inventory the small accepted breaks** (§17).
 
 - **Self-sufficient cells.** `tot_n` (§2) + the recovered `tot_wn` (§11) give each cell its own base; the
   `ci_inf`/`ci_sup` bounds (§1) and `pvalue` (§12) give it its own interval and significance; `diff` vs
@@ -542,8 +751,11 @@ aggregate-core.
   behind an unchanged contract.
 
 The **one combined field pass** (§9 — 15 → 18 fields) is the keystone that unlocks all of this, which is
-why it comes first — and why the two still-open points, **G1** (the sufficient-statistics aggregate) and
-**C2** (the `tot_wn` edge), must be settled as it lands (see *Status & open items*). The public API
+why it comes first — and why the still-open points must be settled as their phase lands (see *Status &
+open items*): **G1** (the sufficient-statistics aggregate, now also carrying `Σw²` for §14) and **C2** (the
+`tot_wn` edge) at the core; **D2** (the §5 internal-vs-arg-surface split), **G2** (chi2/F parity), **S3**
+(tab()'s NA semantics) and **S4** (`tab_spread`/`tab_compact` fate) as the later phases reach them. The
+public API
 (user-facing functions, their arguments, the `tabxplor_fmt` fields) stays retro-compatible throughout;
 only the internals are re-cut. That is the whole of 1.4.0.
 

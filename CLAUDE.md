@@ -227,7 +227,7 @@ This roadmap is the **plan of plans**: the phased implementation order plus ever
 
 #### Keystone — the aggregate-core
 
-One internal canonical representation — a keyed count-aggregate (`n`, `wn` per `tab_vars × row_var × col_var-cell`, NA kept; **for numeric col_vars this must be a sufficient-statistics aggregate carrying moment-sums `Σwt·x`, `Σwt·x²` (+ unweighted `Σx`, `Σx²`), NOT counts — else means/var/CI/t can't be recovered and the `weighted.var` double-scan survives; open item G1**) — and one pure core turning `(aggregate, settings)` → fmt columns. Both entry points converge on it:
+One internal canonical representation — a keyed count-aggregate (`n`, `wn` per `tab_vars × row_var × col_var-cell`, NA kept; **for numeric col_vars this must be a sufficient-statistics aggregate carrying moment-sums `Σwt·x`, `Σwt·x²` (+ unweighted `Σx`, `Σx²`), NOT counts — else means/var/CI/t can't be recovered and the `weighted.var` double-scan survives; plus `Σwt²` on both branches for Kish `n_eff` (§14 weighted inference); open item G1**) — and one pure core turning `(aggregate, settings)` → fmt columns. Both entry points converge on it:
 
 ```
 microdata ─ tab_prepare ─┐
@@ -261,6 +261,13 @@ Grounding (code refs + statistics + caveats) in `dev/tabxplor_1.4.0_decisions.md
 7. **Exporters** (Phase 7, §8) — every exporter gets a base method (single tab) **and** a list method (several tabs rendered one-after-another, not merged), plus one shared prep helper preserving export parity. Phase 7 stays on **openxlsx v1**; the **openxlsx2** engine swap is isolated to **Phase 9** (decisions §8).
 8. **Deprecations** (Phase 6) — soft-deprecate singular `row_var`/`col_var` (only `row_vars`/`col_vars` remain); drop the `tabxplor.compact` option.
 9. **Class model** — keep the `tabxplor_tab`/`tabxplor_grouped_tab` split; `output_list = TRUE` container is a plain list for now. `/dplyr-method` if verbs change.
+
+**Review session 2 (2026-07-07)** — four consistency decisions from the roadmap review (detail: `dev/tabxplor_1.4.0_decisions.md` §14-17):
+
+10. **Weighted inference (Q5, §14)** — one rule for every CI/test: **weighted estimate + unweighted `n`** (for a 0/1 var, weighted-var + unweighted-n ≡ weighted-% + unweighted-n → proportions and means unified). Fixes the §12 self-contradiction. Caveat: anti-conservative under variable weights (`deff→1`); Kish `n_eff=(Σw)²/Σw²` a cheap opt-in (needs `Σw²`, G1). NOT full survey design.
+11. **CI ⇄ stars duality (Q6, §15)** — the bracket and the stars must be duals. Significance stars are opt-in; **when on**, `pvalue` = two-proportion **score test** and the stored diff interval switches **AC→Newcombe** (its score dual); `ci="cell"` already Wilson, means Welch-t, OR log-Wald (all duals). AC stays the no-stars default (less golden churn).
+12. **`tab_many()` return type (Q7, §13)** — **preserve the list-default** for the soft-deprecated `tab_many` alias; only the unified `tab()` merges by default. No silent return-type break.
+13. **Test-result placement (Q8, §16)** — whole-**table** test → table attribute (generalise `chi2`→`test` to also hold ANOVA/F); whole-**column** test → column attribute; per-**cell** significance → the `pvalue` field. Display: a p-value *row* for now; a future `!`-per-cell "weak-test" warning documented.
 
 #### Verification (every phase)
 
@@ -311,7 +318,7 @@ Extract the canonical count-aggregate; one implementation each of pct/diff/OR/to
 
 ### Phase 3 — CI + chi2 onto the aggregate (headline perf)
 
-Vectorize proportion-CI and chi2 onto the aggregate (drop the `dplyr::across` + per-cell `DescTools`/`chisq.test` + `group_split` path), following the `tab_num` mean-CI template. Store CI as asymmetric `ci_inf`/`ci_sup` bounds (fixes the Wilson/AC symmetric-bracket bug); **per-cell significance is a stored `pvalue`** (§12), not the bounds; compact `± moe` shows the larger arm. **Add the mean-table omnibus = ANOVA/Welch F** (the true chi2 mirror, Q4) alongside chi2. `tab_chi2` is the #1 cost — benchmark before/after. Requires the sufficient-statistics aggregate (moment-sums for numerics — open item G1). Detail: `dev/tabxplor_1.4.0_decisions.md` §1, §12.
+Vectorize proportion-CI and chi2 onto the aggregate (drop the `dplyr::across` + per-cell `DescTools`/`chisq.test` + `group_split` path), following the `tab_num` mean-CI template. Store CI as asymmetric `ci_inf`/`ci_sup` bounds (fixes the Wilson/AC symmetric-bracket bug); **per-cell significance is a stored `pvalue`** (§12), not the bounds; compact `± moe` shows the larger arm. **Weighted estimate + unweighted `n`** for every CI/test (§14 — Kish `n_eff` opt-in). **CI ⇄ stars duality** (§15): when stars are on, `pvalue` = score test and the diff interval switches AC→Newcombe. **Add the mean-table omnibus = ANOVA/Welch F** (the true chi2 mirror, Q4) alongside chi2; test results land as attributes rendered as a row for now (§16). Chi2/F must match `chisq.test` (Yates on 2×2 — open item **G2**). `tab_chi2` is the #1 cost — benchmark before/after. Requires the sufficient-statistics aggregate (moment-sums + `Σw²` for numerics — open item G1). Detail: `dev/tabxplor_1.4.0_decisions.md` §1, §12, §14-16.
 
 #### To verify
 
@@ -321,7 +328,7 @@ Vectorize proportion-CI and chi2 onto the aggregate (drop the `dplyr::across` + 
 
 3. Confidence intervals
 - `tab_ci()` : redo carefully, in a simplified version giving the same results and using the same calculations, using the new `ref_n` vctrs- field (use it to really simplify and accelerate it). The current version is a bit of a white elephant, supposed to handle every situation, but this flexibility is useless because these situation never happens : it would be way simpler, way faster and more reliable if the calculation was done in a data.table step in `tab_plain` or `tab_num`.
-- avec `ci = "diff"` and other relevant ones, afficher la significativité de la différence par rapport à la référence avec des étoiles. Default to `*` for 90%, `**` for 95%, `***` for 99%,- customisable in options(). Should also work with odds ratio (empirical odds ratio not coming from a logistic regression that is) : how to do it ? It should then print everywhere (unless it’s opted out) : in console, in Excel, in tab_kable, etc. **Resolved (Q2, §12): the stars read a stored per-cell `pvalue`** — factor `ci="diff"` = two-proportion score test, numeric `ci="diff"` = Welch t, empirical OR = log-OR Wald, logit = model p; unweighted `tot_n` base; one field → prints everywhere.
+- avec `ci = "diff"` and other relevant ones, afficher la significativité de la différence par rapport à la référence avec des étoiles. Default to `*` for 90%, `**` for 95%, `***` for 99%,- customisable in options(). Should also work with odds ratio (empirical odds ratio not coming from a logistic regression that is) : how to do it ? It should then print everywhere (unless it’s opted out) : in console, in Excel, in tab_kable, etc. **Resolved (Q2/Q5/Q6, §12, §14-15): the stars read a stored per-cell `pvalue`** — factor `ci="diff"` = two-proportion score test, numeric `ci="diff"` = Welch t, empirical OR = log-OR Wald, logit = model p; **weighted estimate + unweighted `n`** base (§14); stars opt-in, and when on the diff interval switches AC→Newcombe so bracket ⇄ stars agree (§15); one field → prints everywhere.
 - with `ci = "cell"`, also calculate ci for total or reference, since it’s meaningful
 
 4. Test du Chi2 et nouveau T-Test
@@ -337,9 +344,9 @@ Vectorize proportion-CI and chi2 onto the aggregate (drop the `dplyr::across` + 
 
 - deprecate option(tabxplor_ci_print), mettre en argument ?
 
-- au lieu d’une ligne pvalue dans première colonne de chaque variable (avec pct = "row"), plutôt des `!!!!` quand p > 5% (soit l'inverse des étoiles des `ci`) ?
+- au lieu d’une ligne pvalue dans première colonne de chaque variable (avec pct = "row"), plutôt des `!` quand p > 5% (soit l'inverse des étoiles des `ci`) ? **Resolved as a documented future mode (Q8, §16)** — the `!`-per-cell "weak-test" warning is the display swap that would replace the pvalue row later.
 
-- chi2 pvalue lines etc. : just in print(), not in actual table ? What would be the benifits and the caveats of both solutions ?
+- chi2 pvalue lines etc. : just in print(), not in actual table ? **Resolved (Q8, §16)**: stored as a **table/column attribute** (clean under dplyr/vctrs), **rendered as a row for now**; the future `!`-glyph mode is then a pure display swap, not a schema change.
 
 ### Phase 4 — From-the-middle counts constructor
 
@@ -371,7 +378,7 @@ Now the `ratio` field exists (Phase 1): implement `"diff"`/`"ratio"`/`"diff_rati
 
 ### Phase 6 — tab() → tab_many() merge + output_list
 
-`tab_many()` becomes the base; `tab()` a thin normalization shim. Add `output_list` (default `FALSE`), deprecate the `compact` argument, remove the `tabxplor.compact` option, keep multi-table when `tab_vars` present (compact-with-tab_vars deferred to Phase 7). `lifecycle::deprecate_soft("1.4.0", "tab_many()")`. **Also here (§4-6):** globalise the row_var axis (`OR/pct/color/comp/ci/chi2`, `ref2` no longer per-row_var; keep per-row_var `totaltab` + `ref` as a named vector, row%/means only); keep col_var axis flexible (`pct/levels/digits` per col_var); deprecate `totrow` (always a total row) and **soft-deprecate `totcol`** (default one total column; old values kept, cosmetic-only); soft-deprecate singular `row_var`/`col_var`. Detail: `dev/tabxplor_1.4.0_decisions.md`.
+`tab_many()` becomes the base; `tab()` a thin normalization shim. Add `output_list` (default `FALSE`), deprecate the `compact` argument, remove the `tabxplor.compact` option, keep multi-table when `tab_vars` present (compact-with-tab_vars deferred to Phase 7). `lifecycle::deprecate_soft("1.4.0", "tab_many()")`. **`tab_many()` keeps its list-default** for ≥2 row_vars (Q7, §13) — only `tab()` merges by default; no silent return-type break. **Also here (§4-6):** globalise the row_var axis (`OR/pct/color/comp/ci/chi2`, `ref2` no longer per-row_var — but note **D2**: the *internal* collapse lands with the Phase 2 core, only the *arg-surface* deprecation lands here; keep per-row_var `totaltab` + `ref` as a named vector, row%/means only); keep col_var axis flexible (`pct/levels/digits` per col_var); deprecate `totrow` (always a total row) and **soft-deprecate `totcol`** (default one total column; old values kept, cosmetic-only); soft-deprecate singular `row_var`/`col_var`. **Migrate `tab()`'s NA/population-consistency semantics into the core** (open item **S3**) and **decide `tab_spread`/`tab_compact` fate** (open item **S4**). Detail: `dev/tabxplor_1.4.0_decisions.md`.
 
 #### To implement
 
