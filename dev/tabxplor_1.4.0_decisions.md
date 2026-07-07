@@ -1,8 +1,13 @@
 # tabxplor 1.4.0 — settled design decisions (grounded)
 
 Detailed rationale behind the phase bullets in `CLAUDE.md` (§ 1.4.0 roadmap). CLAUDE.md holds the
-concise decisions; this file holds the grounding (code file:line + statistics) so a fresh session can
-implement without re-deriving it. Written 2026-07 after the "other decisions to settle now" analysis.
+**concise** decisions; **this file holds the grounding** (code `file:line` + statistics) so a fresh
+session can implement without re-deriving it. Written 2026-07; all decision questions resolved 2026-07-07.
+
+**How to read.** *Aim* (the governing rule) → *Status & open items* (what is settled, what is still open)
+→ the numbered decisions **§1–§13** (each self-contained, with its own grounding) → *How the decisions cohere* (the
+closing synthesis). The **§N numbers are stable cross-reference anchors** —
+CLAUDE.md and this file both cite "§9", "§12", … — so **do not renumber them**; append new decisions as §14+.
 
 ## Aim (this governs every decision below)
 
@@ -13,6 +18,60 @@ combined pass) to fit the simpler, faster model. Hard rule: the **public API sta
 but the **internals may — and should — be radically redesigned** for consistency and performance —
 remove legacy/dead paths, fuse them, and route everything through the one aggregate-core. Every section
 below is one such simplification; none exists to add flexibility.
+
+---
+
+## Status & open items
+
+**Resolved** (2026-07-07) — the five decisions that fixed the Phase 1 field set:
+
+- **Q1 — deprecation posture** → soft-deprecate, **stay 1.4.0**; the one accepted break is numeric `$diff`
+  ratio→difference (§3, §6).
+- **Q2 — per-cell significance** → store a **`pvalue`** field (§1, §12).
+- **Q3 — ratio field** → **rename the unused `rr` → `ratio`** (§3, §9).
+- **Q4 — mean-table tests** → **ANOVA/Welch F** omnibus + per-cell **Welch t** (§12).
+
+**Still open** — the only unsettled points; each names the phase that must close it.
+
+### G1 (confirm in Phase 2) — the aggregate carries sufficient statistics, not counts
+
+A **count-only** aggregate (`n`, `wn`) cannot yield a mean/variance/CI/t — the verified `weighted.var`
+double-scan ([tab.R:5571](../R/tab.R#L5571)) is the symptom. The core must be a **sufficient-statistics
+aggregate** carrying, per `tab_vars × row_var × numeric-col_var` group: `n`, `Σwt`, `Σ(wt·x)`, `Σ(wt·x²)`
+(plus unweighted `Σx`, `Σx²` for the unweighted t), so mean `= Σwx/Σw` and variance come in **one pass**.
+Factor col_vars keep the count branch (`n`, `wn`). Confirm the exact schema when Phase 2 builds the core —
+near-certain (correctness + the headline perf win both depend on it).
+
+### C2 (Phase 1/3) — `tot_wn = wn/pct` recovery on empty cells
+
+The `get_tot_wn()` accessor (§11) can't recover the weighted base of an empty cell (`pct==0`); the sibling
+fallback is robust within a non-empty row but fails for a fully-empty row/group. Default lean: keep the
+sibling fallback (stay at 18 fields); store `tot_wn` only if it bites in practice.
+
+### U4 (Phase 6) — the col%-reference (`refcol`) side
+
+§4 fixes the **row** `ref` as a per-row_var named vector but leaves the col% side implicit. Spell out how
+the `refcol` attribute / `diff_index(…, pct="col")` ([tab.R:2644](../R/tab.R#L2644),
+[5774](../R/tab.R#L5774)) interacts with the globalised axis, and fix the `fmt()` `refcol`-cast bug (casts
+`totcol` instead of `refcol`, [fmt_class.R:274](../R/fmt_class.R#L274)) in the same pass — already on the
+§9 touch-list.
+
+### Phasing — split the Phase 1 field pass into 1a / 1b
+
+The field pass (§9) precedes the Phase 2/3 core rewrite, so populating the new fields from the *old*
+step-chain means throwaway glue. Prefer **1a** (contract: field defs + accessors + arithmetic/cast/format),
+then **1b** (writers), folding 1b into Phases 2/3 where the core actually computes the fields.
+
+---
+
+## Decision map
+
+- **Type system & fields**: §1 (CI as bounds), §2 (`tot_n` base), §3 (diff vs ratio; `rr`→`ratio`),
+  §9 (the 18-field list + `/vctrs-field` touch-list), §11 (is `tot_n`/`tot_wn` enough?), §12 (`pvalue`).
+- **References & axes**: §4 (`ref` as a per-row_var named vector), §5 (row_var-axis globalisation),
+  §6 (`totrow`/`totcol` + singular-arg deprecations).
+- **Display, output & export**: §7 (col% + several row_vars → transpose at export), §8 (exporter
+  base+list methods; Excel engine → Phase 9), §10 (total-column base range), §13 (output-shape table).
 
 ---
 
@@ -427,11 +486,11 @@ attribute / a test sidecar), one number under each table:
 
 Where the field is written: fill `pvalue` in the same aggregate-core transform that fills `ci_inf`/`ci_sup`
 (Phase 3), so the closed-form test statistics are computed once, **vectorised, from the
-sufficient-statistics aggregate** (review gap G1) — never per-cell `prop.test`/`t.test` calls in a loop.
+sufficient-statistics aggregate** (open item G1, *Status & open items*) — never per-cell `prop.test`/`t.test` calls in a loop.
 
 ---
 
-## 13. Output shape — return-type truth table (review U1, 2026-07-07)
+## 13. Output shape — return-type truth table (2026-07-07)
 
 `output_list` (default `FALSE`) replaces `compact`; the `tabxplor.compact` option is dropped (§6, Phase 6).
 The exact return type by `row_vars` × `tab_vars` × `output_list`:
@@ -462,103 +521,29 @@ Exporters consume all shapes via the base method (single tab) + list method (§8
 
 ---
 
-# Architecture review — consistency & soundness audit (2026-07-07)
+## How the decisions cohere
 
-Grounded second-pass review of this document + the CLAUDE.md 1.4.0 roadmap, verifying every load-bearing claim against the source (four parallel code sweeps of `fmt_class.R`, `tab.R`, `tab_classes.R`, `tab_xl.R`, `tab_md.R`). Ranked: **blocking gaps** (must be settled before the Phase 1 field set is frozen, or a second field surgery becomes necessary — the one thing the plan explicitly forbids), then **consistency issues**, then **under-specified / doc corrections**, then the **coherence & phasing** verdict.
+The thirteen decisions are **one move made in several places**: push every quantity a cell needs onto the
+cell itself, so the table becomes self-describing and the step-by-step pipeline collapses onto a single
+aggregate-core.
 
-> **Status (2026-07-07): all decision questions resolved** — Q1 deprecation posture → soft-deprecate, stay 1.4.0 (C1); Q2 → per-cell `pvalue` field (G2, §12); Q3 → `rr`→`ratio` rename (G3, §3); Q4 → ANOVA-F omnibus + per-cell Welch-t (G4, §12). Under-specified items **U1/U2/U3/U5/U6 actioned** (U3 → new Phase 9; U6 → `"ci"` in the mode list; U1 → §13 truth table). **Still open: G1** (sufficient-statistics aggregate schema — confirm in Phase 2) and **C2** (`tot_wn` recovery on fully-empty rows). The per-finding **Resolved / Status / → Actioned** lines below are the source of truth; the sections above (§1-§13) already reflect every resolution — this review is now a historical audit trail.
+- **Self-sufficient cells.** `tot_n` (§2) + the recovered `tot_wn` (§11) give each cell its own base; the
+  `ci_inf`/`ci_sup` bounds (§1) and `pvalue` (§12) give it its own interval and significance; `diff` vs
+  `ratio` (§3) give it both comparison shapes. Together these **retire `detect_totcols`** and let the
+  single total column (§6) be a pure **display anchor** — a range at display when col_var bases differ
+  (§10) — never a calculation input.
+- **One computation, fewer knobs.** Globalising the row_var axis (§5), the named-vector `ref` (§4), and
+  the always-one-total-column rule (§6) drop the divergent-per-row_var flexibility real analysis never
+  used. That is precisely what lets `tab()`/`tab_many()` fuse onto one core, and what lets the
+  from-the-middle counts entry and the Jamovi cache **reuse that same core** rather than fork the math.
+- **One display contract, many surfaces.** The bounds / `ratio` / `pvalue` fields, the output-shape rule
+  (§13), and the exporter base+list methods (§8) all read the same per-cell fields, so console, kable, md
+  and Excel stay in parity — which is why the Excel *engine* swap (Phase 9) is just a backend change
+  behind an unchanged contract.
 
-## Verdict
-
-The direction is **sound**. The keystone (one aggregate-core), per-cell `tot_n`, CI-as-bounds, the diff/ratio split, the `tab()`/`tab_many()` merge, and the exporter-prep unification each target a **real, code-verified** problem (duplicated pct/total math, post-hoc `detect_totcols` approximation, the symmetric-bracket CI bug, the `mean`/`diff` overloads, three hand-rolled exporter preambles). The phasing is logical and the retro-compat guardrails are the right ones. Green-light — but four field-set-shaping questions and one version/deprecation-posture question must be answered first, because they change what the Phase 1 vctrs surgery must contain.
-
-## Grounding — what checks out (evidence)
-
-| Decisions-doc claim | Status | Evidence |
-|---|---|---|
-| 15 per-cell fields incl. `rr`, `or` | Confirmed | `new_rcrd()` list `fmt_class.R:1051-1056` |
-| `ci` = single symmetric upper half-width; asym. bounds already lost | Confirmed | `tab_ci` `tab.R:4941` (`ci = upr.ci - est`); symmetric rebuild `fmt_class.R:1488-1489` |
-| Significance = single `abs(diff) > ci` at one level (no p, no multi-level) | Confirmed | `color_formula` `fmt_class.R:2237-2252`; one `conf_level` `tab.R:4931` |
-| `mean` field overloaded = pct ratio | Confirmed | written `tab.R:2580-2590`; read `fmt_class.R:2005-2009`; WARNING `fmt_class.R:2001` |
-| numeric `diff` = ratio not difference | Confirmed | `diff_formula` `tab.R:5639-5652`; DESIGN note `fmt_class.R:2186` |
-| pct base weighted (`wn`), CI/chi2 base unweighted (`n`) | Confirmed | `tab.R:2516-2522`; local `x_n`/`ref_n` `tab.R:2864-4877`, `4905` |
-| mean path double-scans; `weighted.var` recomputes the mean | Confirmed | `tab.R:3283-3296`, `weighted.var` `tab.R:5571-5583` (has FIXME) |
-| chi2 p on unweighted counts; contrib on weighted; both need full margins | Confirmed | p `tab.R:5286-5325`; `var_contrib` `tab.R:5657-5685` |
-| No shared exporter prep (kable≈md duplicated, xl own, plot none) | Confirmed | `tab_classes.R:486-504` ≈ `tab_md.R:46-64`; `tab_xl.R:127-146` |
-| `tab_xl` bypasses `format()`, uses **openxlsx v1** | Confirmed | `tab_xl.R:544-546,593-594`; `DESCRIPTION:30` (`openxlsx`, no openxlsx2) |
-| mean/factor color-reference mismatch under col% | Confirmed & systematic | `fmt_class.R:2824-2828`, repeats at `:2830-2835`, `:2836-2841` |
-| Output unwrap: bare tab if 1 row_var or compact | Confirmed | `tab.R:1540`, `1508-1511` |
-| `OR/pct/color/comp/ci/chi2/ref2` per-row_var; `totaltab/ref` per-row_var; `levels/digits` per-col_var | Confirmed | recycling `tab.R:716-802` (`pct` per **both** axes, `:780-796`) |
-
-Two **corrections** to the doc's own wording (facts, not judgment):
-
-- **§2 mischaracterises `detect_totcols`.** It is purely **position-based** — each column maps to the first total column at/after its own index (`fmt_class.R:1271-1285`). There is **no** "different-NA-totals fallback" branch. The "shared last col_var total" is only the *implicit* outcome when a single trailing total exists. So the approximation the roadmap fears bites the **post-hoc / standalone recompute** path, **not** the primary calc (which already uses each col_var's own base via `tot_cols[[col]]`). This matches §11's honest conclusion — align §2's opening and Phase-1-bullet-#1's "introduces approximation in the default behaviour" wording with §11 (the benefit is *self-sufficiency for standalone stats*, not fixing the main path).
-- The local base transmute the doc cites "as `tot_n` at `tab.R:4878-4900`" is actually named **`x_n`** (`tab.R:2864-4877`) with the reference base **`ref_n`** at `tab.R:4905`. Update the code-refs; the concept is unchanged.
-
-## Blocking gaps — settle before freezing the Phase 1 field set
-
-### G1. The aggregate must carry sufficient statistics, not counts — means break a count-only core
-
-The keystone diagram says "count-aggregate (`n`, `wn` per cell)". That is **insufficient for numeric (mean) col_vars**: a mean/variance/CI/t-test cannot be recovered from counts. The verified `weighted.var` double-scan (`tab.R:5571`) is the symptom. The aggregate-core must be a **sufficient-statistics aggregate** carrying, per `tab_vars × row_var × numeric-col_var` group: `n`, `Σwt`, `Σ(wt·x)`, `Σ(wt·x²)` (and unweighted `Σx`, `Σx²` for the unweighted t-test), from which mean `= Σwx/Σw` and variance come in **one pass** — killing the 7.8 GB re-scan. Factor col_vars keep the count branch (`n`, `wn`). Decision needed: rename the keystone to a **"cell-aggregate (counts for factors, moment-sums for numerics)"** and specify the schema in Phase 2. This is near-certain (correctness + the headline perf win depend on it) — flagged for confirmation, not open debate.
-
-**Status: OPEN** (near-certain) — now reflected inline in the Keystone (CLAUDE.md) and Phase 3 as "review gap G1"; the exact aggregate schema is to be fixed in Phase 2.
-
-### G2. Per-cell significance stars conflict with CI-bounds-at-one-level
-
-Phase 3 wants stars at 90/95/99% everywhere; Phase 1 stores only `ci_inf`/`ci_sup` at a **single** `conf_level` and explicitly bans `se`/`z`/`pvalue` fields. Verified: today's significance is exactly one `|diff| > ci` test at one level (`fmt_class.R:2237`). You **cannot** get three star thresholds from one interval — and for the **default** asymmetric Wilson/AC proportion diffs you cannot cleanly back a p-value out of the stored bounds at all (the SE→z shortcut only holds for symmetric means/Wald). So per-cell significance needs its **own** stored quantity (a p-value, or a test statistic/SE), decided **now** or Phase 3 forces the second field surgery the plan forbids. The doc's "stars/p stay sidecar" refers to the whole-table chi2 p; it does **not** answer where **per-cell diff/OR** significance lives.
-
-**Resolved (Q2): store a per-cell `pvalue` field** — the honest single source for all star levels; the per-use-case tests are specified in §12; the field set is updated in §9.
-
-### G3. The new `ratio` field overlaps the existing `rr` (and `or`) fields
-
-§9 adds `ratio` as if net-new, but `rr` (relative risk) and `or` already exist (`fmt_class.R:1051-1056`). For pct columns the color-"ratio" is `cell_pct / ref_pct` — **that is a relative risk**. §3's own parenthetical ("would it be meaningful to store ratios in relative risks? is that the same calc as a step to odds ratios?") is exactly this unresolved question. Left unanswered, 1.4.0 ships three near-synonymous ratio fields (`ratio`, `rr`, `or`) with fuzzy boundaries. Decide whether color-ratio **reuses `rr`** (net fields 15→17, not 18) or is a **distinct `ratio`** (18) with `rr` reserved for logit/explicit RR.
-
-**Resolved (Q3): rename the never-used `rr` → `ratio`** (placed after `diff`), used as the single ratio home — relative risk (pct), mean-ratio (numeric), and the RR step of OR calculation. A rename, not a new field, so the total stays 18 (the +1 there is `pvalue`). See §3, §9.
-
-### G4. The means "T-test mirror of chi2" conflates two different tests
-
-chi2 is a **whole-table omnibus** test (its p-value is the line under the factor table). Its true mirror for a mean table (numeric broken by a factor) is **ANOVA / Welch's F** ("are the group means different at all"), **not** a t-test. A **pairwise (Welch) t-test** answers a different question — one cell vs the reference — and is the correct engine for the **per-cell stars** (G2). The maintainer's own "est-ce le bon test statistique?" is answered: you need **both**, and they are different objects. Decide which land in 1.4.0 (recommend both: F-line + per-cell Welch-t).
-
-**Resolved (Q4): both** — ANOVA / Welch F as the whole-table mirror (the table line under mean tables), and the Welch two-sample t per cell (cell vs reference) feeding the `pvalue` stars. See §12.
-
-## Consistency issues vs the non-negotiable rule
-
-### C1. Several planned changes are hard breaks against "soft-deprecate, never hard-break"
-
-The governing rule (CLAUDE.md, decisions §Aim) forbids hard-breaking public API. Yet:
-
-- **§6 removes the `totcol` argument entirely** — `totcol` is a **documented, exported** `tab_many()` arg accepting `"last"/"each"/"no"/"col"`/names/indexes (`tab.R:636,735-753`), and `tab()` translates `tot="col"`→`totcol` internally (`tab.R:378-381`). Removal is a hard break — and it is treated **inconsistently** with `totrow` (same status, only *deprecated*).
-- **§3 flips numeric `$diff` from ratio to difference** — a **silent field-contract change** for any user doing `mutate(fmt, … diff …)` on a mean table; the field contract is explicitly "must not break".
-- **Phase 7 turns exported `tab_plot()` internal** — removes it from NAMESPACE (`NAMESPACE:168`), a hard break.
-- **Dropping the `ci` field** breaks `vctrs::field(x,"ci")` and `set`; `$ci` is recoverable (real overridable method `fmt_class.R:1871`) but internal `get_ci()` is raw `vctrs::field` (`fmt_class.R:1144`) and must be rewritten.
-
-This forces a single decision: **stay 1.4.0 and soften all of these to soft-deprecation**, or **accept the breaks and release as 2.0.0**. The current doc is internally inconsistent (mixes "remove entirely" with a rule that forbids it).
-
-**Resolved (Q1 — "Mixed"): stay 1.4.0.** `totcol` is soft-deprecated, not removed (§6 — now cosmetic-only, old values kept behind `deprecate_soft`); `tab_plot` stays exported-but-deprecated; dropping the `ci` field keeps `$ci`/`fmt(ci=)` working (§1, §9). **One exception accepted:** the numeric `$diff` ratio→difference flip lands as a documented change (numerics are rarely used and the ratio remains available in `$ratio`).
-
-### C2. `tot_wn = wn/pct` recovery is fragile for empty cells
-
-§11 drops `tot_wn` and recovers it as `wn/pct`. This fails on **empty cells** (`pct==0`). The fallback "read a sibling/total cell" is robust **within a non-empty row** (all siblings share the base) but fails for a **fully-empty row/group**, and the "total cell" fallback assumes the total row still exists — which the user may have dropped (`totrow` deprecated-on then `filter(!is_totrow)`). Low frequency, but decide explicitly: accept the sibling-fallback (document the fully-empty-row edge), or store `tot_wn` (→ one more field) for robustness.
-
-**Status: OPEN** — default lean is the sibling-fallback recovery (keep 18 fields); revisit and store `tot_wn` only if fully-empty rows/groups prove to bite in practice.
-
-## Under-specified — fill in (low risk)
-
-- **U1. Output-shape truth table.** Define the exact return type for every combination of {1 vs ≥2 row_vars} × {tab_vars present?} × {`output_list` T/F}. Verified today: length-1 list unwraps to a bare `tab`/`grouped_tab` (`tab.R:1540`); with tab_vars you get a `grouped_tab` or a **list of grouped_tabs**. `output_list=FALSE` replaces `compact` as the single-table default. **→ Actioned:** tabulated as **§13**.
-- **U2. Jamovi (Phase 8) must reuse the core, not reimplement it.** The current wording ("write new code with near the exact same behaviour as `tab_many()`, ensured by subfunctions") risks re-creating the **exact duplication 1.4.0 exists to remove**. Constraint to add: Jamovi calls the **same** aggregate-core + per-transform functions at cache-appropriate granularity; it never forks the math. **→ Actioned:** the reuse-the-core / never-fork constraint is folded into CLAUDE.md Phase 8.
-- **U3. openxlsx → openxlsx2 scope.** Verified there is **no** openxlsx2 anywhere today (`DESCRIPTION:30`). A full API swap bundled into the same phase that *also* unifies exporter prep, adds list-methods, and integrates `tab_transpose()` is a large, parity-risking sub-project. **→ Actioned (approved):** the openxlsx2 migration is **split into its own Phase 9**; Phase 7 stays on openxlsx v1 (§8, CLAUDE.md Phase 9).
-- **U4. col%-reference (`refcol`) side.** §4 makes the **row** `ref` a per-row_var named vector but only mentions the col% collapse in passing. The col% reference lives in the `refcol` attribute / `diff_index(…, pct="col")` (`tab.R:2644`, `5774`); spell out its interaction with the globalised axis, and fold in the known `fmt()` `refcol`-cast bug (casts `totcol` instead of `refcol`, `fmt_class.R:274`) so it is fixed in the same pass. **(Open — address in Phase 6/§4; the `refcol`-cast bug is already listed for the Phase 1 pass in §9.)**
-- **U5. `tab_transpose()` is already exported** (`NAMESPACE`; `@export` at `tab.R:1773`) as an **undocumented, single-total-row/col-only stub** using unqualified verbs. It is therefore *already* a broken public function today — Phase 7 must finish + document it (or it should be un-exported in the interim). **→ Actioned:** flagged in the Phase 7 header (CLAUDE.md) and §7.
-- **U6. `"ci"` color mode.** The roadmap's mode list (`diff, diff_ci, after_ci, contrib, OR`) omits the **`"ci"`** mode that the code implements (`fmt_class.R:2237`). **→ Actioned:** `"ci"` added to the Color System list and the Phase 5 scope (CLAUDE.md).
-- **Doc drift:** the `/vctrs-field` skill body still says "13 fields" in one place (real count 15) — fix when the field pass lands.
-
-## Coherence & synergy
-
-**Positive, reinforcing:** `tot_n` + globalised row_var axis + "always exactly one total column" are genuinely synergetic — each cell self-computes its pct/diff/CI, which is what lets the single total column become a pure display anchor and retires `detect_totcols`. CI-as-bounds + significance-from-bounds + logit-OR-into-bounds share one representation. Exporter base+list methods + shared prep + `tab_transpose` cohere into one export story. The "different tables → `list()` → export sequentially" escape hatch (§5/§8) is consistent end to end.
-
-**Tensions to manage:** (a) Phase 1 does field surgery on the **old** step-chain *before* the Phase 2/3 core rewrite — so the old `tab_pct`/`tab_ci` must be fitted with **throwaway glue** to populate `ci_inf`/`ci_sup`/`tot_n`/`ratio` just to keep golden green, then rewritten weeks later. Acceptable for small verifiable PRs, but consider splitting Phase 1 into **1a: field definitions + accessors + arithmetic/cast/format (contract)** and **1b: writers**, and folding 1b into Phases 2/3 where the core actually computes those fields. (b) The field set **cannot be frozen** until G1–G4 are answered — that is the real gate on starting Phase 1.
-
-## Roadmap / phasing
-
-Broadly the right path. Order is sound (safety-net → fields → core → CI/chi2 → counts → color → merge → exporters → Jamovi → Excel-engine). Adjustments **now applied**: G1–G4 resolved via Q1–Q4 so the field list is frozen (§9); **U3 openxlsx2 pulled out into a new Phase 9**; **U1 output-shape table added as §13**; the `"ci"` mode kept in Phase 5 (U6). Still **recommended**: split the Phase 1 field pass into **1a (contract: field defs + accessors + arithmetic/cast/format)** and **1b (writers)**, folding 1b into Phases 2/3 where the core computes those fields (avoids throwaway glue). Still **open**: **G1** aggregate schema (confirm in Phase 2) and **C2** (`tot_wn` recovery).
+The **one combined field pass** (§9 — 15 → 18 fields) is the keystone that unlocks all of this, which is
+why it comes first — and why the two still-open points, **G1** (the sufficient-statistics aggregate) and
+**C2** (the `tot_wn` edge), must be settled as it lands (see *Status & open items*). The public API
+(user-facing functions, their arguments, the `tabxplor_fmt` fields) stays retro-compatible throughout;
+only the internals are re-cut. That is the whole of 1.4.0.
 

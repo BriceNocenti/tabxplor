@@ -227,7 +227,7 @@ This roadmap is the **plan of plans**: the phased implementation order plus ever
 
 #### Keystone — the aggregate-core
 
-One internal canonical representation — a keyed count-aggregate (`n`, `wn` per `tab_vars × row_var × col_var-cell`, NA kept; **for numeric col_vars this must be a sufficient-statistics aggregate carrying moment-sums `Σwt·x`, `Σwt·x²` (+ unweighted `Σx`, `Σx²`), NOT counts — else means/var/CI/t can't be recovered and the `weighted.var` double-scan survives; review gap G1**) — and one pure core turning `(aggregate, settings)` → fmt columns. Both entry points converge on it:
+One internal canonical representation — a keyed count-aggregate (`n`, `wn` per `tab_vars × row_var × col_var-cell`, NA kept; **for numeric col_vars this must be a sufficient-statistics aggregate carrying moment-sums `Σwt·x`, `Σwt·x²` (+ unweighted `Σx`, `Σx²`), NOT counts — else means/var/CI/t can't be recovered and the `weighted.var` double-scan survives; open item G1**) — and one pure core turning `(aggregate, settings)` → fmt columns. Both entry points converge on it:
 
 ```
 microdata ─ tab_prepare ─┐
@@ -258,7 +258,7 @@ Grounding (code refs + statistics + caveats) in `dev/tabxplor_1.4.0_decisions.md
 4. **Row_var-axis globalised** (Phase 6, §5) — `OR/pct/color/comp/ci/chi2` and `ref2` are no longer vectorised over row_vars (mirror tables share them). Still per-row_var: `totaltab` and `ref` (named vector = one reference row per row_var; row%/means only, collapses under col% + message). col_var axis stays flexible (`pct/levels/digits` per col_var). Different tables → `list()` → export sequentially.
 5. **Totals** (Phase 6, §6) — deprecate `totrow` (always a total row) and **soft-deprecate `totcol`** (Q1: default = exactly one total column, after factor / before numeric cols; old values `each`/`no`/names kept behind `deprecate_soft`, now purely cosmetic — never a calc base); `tab_plain()` = the no-total escape hatch; move/drop via dplyr. The total column shows each row's base as a **display-time `[min;max]` range** across col_vars (scalar when equal; no field overload — §10).
 6. **col% + several row_vars** (Phase 7, §7) — manual invert (row_vars↔col_vars, row%) + **opt-in transpose at export** (`tab_kable`/`tab_md`/`tab_xl`); console never transposes; warn on `pct="col"` with several row_vars. `tab_transpose()` integrated/exported here.
-7. **Exporters** (Phase 7, §8) — every exporter gets a base method (single tab) **and** a list method (several tabs rendered one-after-another, not merged), plus one shared prep helper preserving export parity. Phase 7 stays on **openxlsx v1**; the **openxlsx2** engine swap is isolated to **Phase 9** (§8, review U3).
+7. **Exporters** (Phase 7, §8) — every exporter gets a base method (single tab) **and** a list method (several tabs rendered one-after-another, not merged), plus one shared prep helper preserving export parity. Phase 7 stays on **openxlsx v1**; the **openxlsx2** engine swap is isolated to **Phase 9** (decisions §8).
 8. **Deprecations** (Phase 6) — soft-deprecate singular `row_var`/`col_var` (only `row_vars`/`col_vars` remain); drop the `tabxplor.compact` option.
 9. **Class model** — keep the `tabxplor_tab`/`tabxplor_grouped_tab` split; `output_list = TRUE` container is a plain list for now. `/dplyr-method` if verbs change.
 
@@ -311,7 +311,7 @@ Extract the canonical count-aggregate; one implementation each of pct/diff/OR/to
 
 ### Phase 3 — CI + chi2 onto the aggregate (headline perf)
 
-Vectorize proportion-CI and chi2 onto the aggregate (drop the `dplyr::across` + per-cell `DescTools`/`chisq.test` + `group_split` path), following the `tab_num` mean-CI template. Store CI as asymmetric `ci_inf`/`ci_sup` bounds (fixes the Wilson/AC symmetric-bracket bug); **per-cell significance is a stored `pvalue`** (§12), not the bounds; compact `± moe` shows the larger arm. **Add the mean-table omnibus = ANOVA/Welch F** (the true chi2 mirror, Q4) alongside chi2. `tab_chi2` is the #1 cost — benchmark before/after. Requires the sufficient-statistics aggregate (moment-sums for numerics — review gap G1). Detail: `dev/tabxplor_1.4.0_decisions.md` §1, §12.
+Vectorize proportion-CI and chi2 onto the aggregate (drop the `dplyr::across` + per-cell `DescTools`/`chisq.test` + `group_split` path), following the `tab_num` mean-CI template. Store CI as asymmetric `ci_inf`/`ci_sup` bounds (fixes the Wilson/AC symmetric-bracket bug); **per-cell significance is a stored `pvalue`** (§12), not the bounds; compact `± moe` shows the larger arm. **Add the mean-table omnibus = ANOVA/Welch F** (the true chi2 mirror, Q4) alongside chi2. `tab_chi2` is the #1 cost — benchmark before/after. Requires the sufficient-statistics aggregate (moment-sums for numerics — open item G1). Detail: `dev/tabxplor_1.4.0_decisions.md` §1, §12.
 
 #### To verify
 
@@ -422,7 +422,7 @@ Cache the prepared data / aggregate / per-transform results keyed by which input
 
 #### To implement
 
-- Jamovi UI improvement for user-friendliness and performance. The main improvement would be not to rely on `tab_many()` like now, but to drive the **same aggregate-core + per-transform subfunctions** (Phase 2) at cache-appropriate granularity — **reuse the core, never fork the math** (review U2): near-identical behaviour is *guaranteed* by sharing subfunctions, not re-implemented in parallel (which would recreate the very duplication 1.4.0 removes). Use Jamovi states logic to avoid redoing calculations on each button change, with temp caching for base calculations (e.g. keep former variables' calculations when a new variable is added).
+- Jamovi UI improvement for user-friendliness and performance. The main improvement would be not to rely on `tab_many()` like now, but to drive the **same aggregate-core + per-transform subfunctions** (Phase 2) at cache-appropriate granularity — **reuse the core, never fork the math**: near-identical behaviour is *guaranteed* by sharing subfunctions, not re-implemented in parallel (which would recreate the very duplication 1.4.0 removes). Use Jamovi states logic to avoid redoing calculations on each button change, with temp caching for base calculations (e.g. keep former variables' calculations when a new variable is added).
 - UI pour changer l'ordre des lignes, des colonnes et des sous-tableaux, en s’inspirant des modules Jamovi qui implémentent déjà cette fonction.
 - Argument `n_min` : supprimer ligne/colonne si n est trop petit
 
@@ -433,7 +433,7 @@ Cache the prepared data / aggregate / per-transform results keyed by which input
 
 ### Phase 9 — Excel engine migration (openxlsx → openxlsx2)
 
-Isolated on purpose (review U3): a full dependency swap should not be entangled with the Phase 7 exporter-prep unification and its export-parity churn. Runs **after** Phase 7 (needs the unified single-tab + list `tab_xl` methods in place). May slip to a **1.4.x follow-up release** — it does not block the rest of 1.4.0. Precondition: `test-export-parity.R` green on openxlsx v1 first, so the swap is verified byte-for-byte against a known-good baseline.
+Isolated on purpose: a full dependency swap should not be entangled with the Phase 7 exporter-prep unification and its export-parity churn. Runs **after** Phase 7 (needs the unified single-tab + list `tab_xl` methods in place). May slip to a **1.4.x follow-up release** — it does not block the rest of 1.4.0. Precondition: `test-export-parity.R` green on openxlsx v1 first, so the swap is verified byte-for-byte against a known-good baseline.
 
 #### To implement
 
