@@ -1167,7 +1167,8 @@ tab_pvalue_lines <- function(tabs) {
       dplyr::where(is_fmt),
       ~ set_display(., "pvalue") |>
         dplyr::mutate(n = NA_integer_,
-                      ci = 0,
+                      ci_sup = 0,
+                      ci_inf = 0,
                       ctr = 0,
                       diff = dplyr::if_else(.$pct > 0.05, -0.5, 0),
                       #in_totrow = TRUE,
@@ -1835,7 +1836,7 @@ tab_kable_print_tooltip <- function(x, popover = FALSE) {
   type    <- get_type(x)
 
   diff     <- get_diff(x)
-  rr       <- get_rr(x)
+  ratio    <- get_ratio(x)
   or       <- get_or(x)
   digits   <- get_digits(x)
 
@@ -1890,7 +1891,7 @@ tab_kable_print_tooltip <- function(x, popover = FALSE) {
   )
 
   out_rr <- dplyr::if_else(
-    condition = type %in% c("col", "row") & !is.na(get_rr(x)) & !get_display(x) == "rr",
+    condition = type %in% c("col", "row") & !is.na(get_ratio(x)) & !get_display(x) == "rr",
     true      = paste0("rr: ", format(set_display(x, "or")) ),
     false     = ""
   )

@@ -34,9 +34,10 @@ globalVariables(c(":=", ".SD", ".N"))
 #' calculate percentages, Chi2 metadata or confidence intervals, but also to format and
 #' color the table to help the user read it. You can access this data with
 #' \code{\link[vctrs:field]{vctrs::field}}, or change it with
-#' \code{\link[vctrs:field]{vctrs:field<-}}. A \code{fmt} vector have 15 fields :
+#' \code{\link[vctrs:field]{vctrs:field<-}}. A \code{fmt} vector have 18 fields :
 #' \code{n}, \code{digits}, \code{display}, \code{wn}, \code{pct}, \code{mean},
-#' \code{diff}, \code{ctr}, \code{var}, \code{ci}, \code{rr}, \code{or},
+#' \code{diff}, \code{ratio}, \code{ctr}, \code{var}, \code{ci_inf}, \code{ci_sup},
+#' \code{pvalue}, \code{or}, \code{tot_n},
 #' \code{in_totrow},  \code{in_tottab},
 #' \code{in_refrow}. Other arguments are attributes, attached not to each value, but to
 #' the whole vector, like \code{type}, \code{totcol} or \code{color}. You can get them
@@ -74,6 +75,9 @@ globalVariables(c(":=", ".SD", ".N"))
 #' @param diff The differences (from totals or first cells),
 #' as a double vector the length of \code{n}. Used to set colors for means and
 #' row or col percentages. Calculate with \code{\link{tab_pct}}.
+#' @param ratio The ratio to the reference (relative risk for percentages, mean ratio for
+#' means), as a double vector the length of \code{n}. Renamed from the former \code{rr}
+#' field.
 #' @param ctr The contributions of cells to (sub)tables variances,
 #' as a double vector the length of \code{n}. Used to print colors when
 #' \code{color = "contrib"}. The mean contribution of each (sub)table is written on
@@ -82,11 +86,17 @@ globalVariables(c(":=", ".SD", ".N"))
 #' @param var The cells variances, as a double vector the length of \code{n}.
 #' Used with \code{type = "mean"} to calculate confidence intervals.
 #' Calculate with \code{tab_plain}.
-#' @param ci The confidence intervals, as a double vector the length of \code{n}.
-#' Used to print colors (\code{"diff_ci"}, \code{"after_ci"}).
+#' @param ci The confidence interval half-width (margin of error), as a double vector the
+#' length of \code{n}. Kept for backward compatibility: it is stored as the symmetric
+#' bounds \code{ci_inf}/\code{ci_sup} and read back by \code{get_ci()}.
 #' Calculate with \code{tab_ci}.
-#' @param rr The relative risk, as a double vector the length of \code{n}.
+#' @param ci_inf,ci_sup The lower and upper bounds of the confidence interval, as double
+#' vectors the length of \code{n}. Calculate with \code{tab_ci}.
+#' @param pvalue The per-cell significance p-value, as a double vector the length of
+#' \code{n}.
 #' @param or The odds ratio or relative risk ratio, as a double vector the length of \code{n}.
+#' @param tot_n The cell's own (unweighted) percentage base, as a double vector the length
+#' of \code{n}.
 #' @param in_totrow \code{TRUE} when the cell is part of a total row
 #' @param in_tottab \code{TRUE} when the cell is part of a total table
 #' @param in_refrow \code{TRUE} when the cell is part of a reference row
@@ -228,11 +238,15 @@ fmt <- function(n         = integer(),
                 pct       = rep(NA_real_, length(n)),
                 mean      = rep(NA_real_, length(n)),
                 diff      = rep(NA_real_, length(n)),
+                ratio     = rep(NA_real_, length(n)),
                 ctr       = rep(NA_real_, length(n)),
                 var       = rep(NA_real_, length(n)),
                 ci        = rep(NA_real_, length(n)),
-                rr        = rep(NA_real_, length(n)),
+                ci_inf    = rep(NA_real_, length(n)),
+                ci_sup    = rep(NA_real_, length(n)),
+                pvalue    = rep(NA_real_, length(n)),
                 or        = rep(NA_real_, length(n)),
+                tot_n     = rep(NA_real_, length(n)),
 
                 in_totrow = rep(FALSE, length(n)),
                 in_tottab = rep(FALSE, length(n)),
@@ -247,9 +261,9 @@ fmt <- function(n         = integer(),
                 refcol    = FALSE,
                 color     = ""    ) {
 
-  # DESIGN: these 8 fields set the recycling reference length. display, diff, rr, or and
-  # the in_* flags are recycled TO it below, so they must not be passed longer than these
-  # (vec_recycle would error, not extend).
+  # DESIGN: these 8 fields set the recycling reference length. display, diff, ratio, or,
+  # the ci bounds, pvalue, tot_n and the in_* flags are recycled TO it below, so they must
+  # not be passed longer than these (vec_recycle would error, not extend).
   max_size <- list(n, wn, pct, digits, ctr, mean, var, ci) %>% #display
     purrr::map_int(length) %>% max()
 
@@ -258,13 +272,24 @@ fmt <- function(n         = integer(),
   wn      <- vctrs::vec_recycle(vctrs::vec_cast(wn     , double())   , size = max_size) #anything coercible as a double
   pct     <- vctrs::vec_recycle(vctrs::vec_cast(pct    , double())   , size = max_size)
   diff    <- vctrs::vec_recycle(vctrs::vec_cast(diff   , double())   , size = max_size)
+  ratio   <- vctrs::vec_recycle(vctrs::vec_cast(ratio  , double())   , size = max_size)
   digits  <- vctrs::vec_recycle(vctrs::vec_cast(digits , integer())  , size = max_size)
   ctr     <- vctrs::vec_recycle(vctrs::vec_cast(ctr    , double())   , size = max_size)
   mean    <- vctrs::vec_recycle(vctrs::vec_cast(mean   , double())   , size = max_size)
   var     <- vctrs::vec_recycle(vctrs::vec_cast(var    , double())   , size = max_size)
   ci      <- vctrs::vec_recycle(vctrs::vec_cast(ci     , double())   , size = max_size)
-  rr      <- vctrs::vec_recycle(vctrs::vec_cast(rr     , double())   , size = max_size)
+  ci_inf  <- vctrs::vec_recycle(vctrs::vec_cast(ci_inf , double())   , size = max_size)
+  ci_sup  <- vctrs::vec_recycle(vctrs::vec_cast(ci_sup , double())   , size = max_size)
+  pvalue  <- vctrs::vec_recycle(vctrs::vec_cast(pvalue , double())   , size = max_size)
   or      <- vctrs::vec_recycle(vctrs::vec_cast(or     , double())   , size = max_size)
+  tot_n   <- vctrs::vec_recycle(vctrs::vec_cast(tot_n  , double())   , size = max_size)
+
+  # Phase 1a bounds-shim: the public `ci` arg is a symmetric half-width. Map it onto the
+  # stored ci_inf/ci_sup bounds (explicit bounds win). get_ci() reads ci_sup back, so the
+  # display stays byte-identical until Phase 3 stores real asymmetric bounds. See
+  # dev/tabxplor_1.4.0_decisions.md §1.
+  ci_sup  <- dplyr::coalesce(ci_sup,  ci)
+  ci_inf  <- dplyr::coalesce(ci_inf, -ci)
 
   in_totrow <- vctrs::vec_recycle(vctrs::vec_cast(in_totrow, logical()), size = max_size)
   in_tottab <- vctrs::vec_recycle(vctrs::vec_cast(in_tottab, logical()), size = max_size)
@@ -276,15 +301,13 @@ fmt <- function(n         = integer(),
   ci_type   <- vctrs::vec_recycle(vctrs::vec_cast(ci_type  , character()), size = 1)
   col_var   <- vctrs::vec_recycle(vctrs::vec_cast(col_var  , character()), size = 1)
   totcol    <- vctrs::vec_recycle(vctrs::vec_cast(totcol   , logical()  ), size = 1)
-  # KNOWN-BUG: casts `totcol` instead of `refcol`, so the public refcol= argument is
-  # silently ignored (refcol always mirrors totcol). Low impact: refcol is normally set
-  # internally, not via fmt(). See CLAUDE.md § Discovered bugs (fix in workstream 5).
-  refcol    <- vctrs::vec_recycle(vctrs::vec_cast(totcol   , logical()  ), size = 1)
+  refcol    <- vctrs::vec_recycle(vctrs::vec_cast(refcol   , logical()  ), size = 1)
   color     <- vctrs::vec_recycle(vctrs::vec_cast(color    , character()), size = 1)
 
   new_fmt(n = n, display = display, digits = digits,
           wn = wn, pct = pct,  mean = mean,
-          diff = diff, ctr = ctr,var = var, ci = ci, rr = rr, or = or,
+          diff = diff, ratio = ratio, ctr = ctr, var = var,
+          ci_inf = ci_inf, ci_sup = ci_sup, pvalue = pvalue, or = or, tot_n = tot_n,
           in_totrow = in_totrow, in_tottab = in_tottab, in_refrow = in_refrow,
           type = type, comp_all = comp_all,  ref = ref,
           ci_type = ci_type, col_var = col_var, totcol = totcol, refcol = refcol,
@@ -325,10 +348,12 @@ is_fmt <- function(x) {
 get_num <- function(x) {
   # DESIGN: get_num() is the authoritative `display` -> underlying-field map. Allowed
   # display values and the field each reads: n/(default)->n, wn->wn,
-  # pct/pct_ci/pvalue->pct, diff->diff, ctr->ctr, mean/mean_ci->mean, var->var, ci->ci,
-  # rr->rr, or/OR/or_pct->or. format.tabxplor_fmt() renders these plus the CI/label
-  # variants (pct_ci, mean_ci, or_pct, OR_pct). When adding a display value, keep this
-  # map, set_num() and format() in sync (see the /vctrs-field skill).
+  # pct/pct_ci/pvalue->pct, diff->diff, ctr->ctr, mean/mean_ci->mean, var->var,
+  # ci->get_ci() (the CI half-width, read from the ci_sup bound via the Phase 1a shim),
+  # rr->ratio (the "rr" display token maps to the renamed `ratio` field), or/OR/or_pct->or.
+  # format.tabxplor_fmt() renders these plus the CI/label variants (pct_ci, mean_ci,
+  # or_pct, OR_pct). When adding a display value, keep this map, set_num() and format() in
+  # sync (see the /vctrs-field skill).
   out     <- get_n(x)
   display <- get_display(x)
   nas     <- is.na(display)
@@ -341,8 +366,8 @@ get_num <- function(x) {
   out[!nas & display == "mean"   ] <- get_mean(x)[!nas & display == "mean"   ]
   out[!nas & display == "mean_ci"] <- get_mean(x)[!nas & display == "mean_ci"]
   out[!nas & display == "var"    ] <- get_var (x)[!nas & display == "var"    ]
-  out[!nas & display == "ci"     ] <- get_ci  (x)[!nas & display == "ci"     ]
-  out[!nas & display == "rr"     ] <- get_rr  (x)[!nas & display == "rr"     ]
+  out[!nas & display == "ci"     ] <- get_ci   (x)[!nas & display == "ci"     ]
+  out[!nas & display == "rr"     ] <- get_ratio(x)[!nas & display == "rr"     ]
   out[!nas & display %in% c("or", "OR")] <- get_or(x)[!nas & display %in% c("or", "OR")     ]
   out[!nas & display == "or_pct" ] <- get_or  (x)[!nas & display == "or_pct" ]
   out
@@ -365,8 +390,8 @@ set_num <- function(x, value) {
   out[!nas & display == "ctr" ] <- set_ctr (x[!nas & display == "ctr" ], value[!nas & display == "ctr" ])
   out[!nas & display == "mean"] <- set_mean(x[!nas & display == "mean"], value[!nas & display == "mean"])
   out[!nas & display == "var" ] <- set_var (x[!nas & display == "var" ], value[!nas & display == "var" ])
-  out[!nas & display == "ci"  ] <- set_ci  (x[!nas & display == "ci"  ], value[!nas & display == "ci"  ])
-  out[!nas & display == "rr"  ] <- set_rr  (x[!nas & display == "rr"  ], value[!nas & display == "rr"  ])
+  out[!nas & display == "ci"  ] <- set_ci   (x[!nas & display == "ci"  ], value[!nas & display == "ci"  ])
+  out[!nas & display == "rr"  ] <- set_ratio(x[!nas & display == "rr"  ], value[!nas & display == "rr"  ])
   out[!nas & display %in% c("or", "OR")] <- set_or(x[!nas & display %in% c("or", "OR")  ], value[!nas & display == "or"  ])
   out
 }
@@ -991,11 +1016,14 @@ new_fmt <- function(n         = integer(),
                     pct       = rep(NA_real_, length(n)),
                     mean      = rep(NA_real_, length(n)),
                     diff      = rep(NA_real_, length(n)),
+                    ratio     = rep(NA_real_, length(n)),
                     ctr       = rep(NA_real_, length(n)),
                     var       = rep(NA_real_, length(n)),
-                    ci        = rep(NA_real_, length(n)),
-                    rr        = rep(NA_real_, length(n)),
+                    ci_inf    = rep(NA_real_, length(n)),
+                    ci_sup    = rep(NA_real_, length(n)),
+                    pvalue    = rep(NA_real_, length(n)),
                     or        = rep(NA_real_, length(n)),
+                    tot_n     = rep(NA_real_, length(n)),
 
                     in_totrow = rep(FALSE   , length(n)),
                     in_tottab = rep(FALSE   , length(n)),
@@ -1051,7 +1079,9 @@ new_fmt <- function(n         = integer(),
   vctrs::new_rcrd(
     list(n = n, display = display, digits = digits,
          wn = wn, pct = pct, mean = mean,
-         diff = diff, ctr = ctr, var = var, ci = ci, rr = rr, or = or,
+         diff = diff, ratio = ratio, ctr = ctr, var = var,
+         ci_inf = ci_inf, ci_sup = ci_sup, pvalue = pvalue, or = or,
+         tot_n = tot_n,
          in_totrow = in_totrow, in_tottab = in_tottab,
          in_refrow = in_refrow),
     type = type, comp_all = comp_all, ref = ref,
@@ -1134,22 +1164,42 @@ get_ctr    <- fmt_field_factory("ctr")
 #' @keywords internal
 # @export
 get_mean   <- fmt_field_factory("mean")
+# @describeIn fmt get the "ratio" field (ratio to the reference; formerly "rr")
+#' @keywords internal
+# @export
+get_ratio  <- fmt_field_factory("ratio")
 # @describeIn fmt get the "var" field (cell variances of means)
 #' @keywords internal
 # @export
 get_var    <- fmt_field_factory("var")
-# @describeIn fmt get the "ci" field (confidence intervals)
+# @describeIn fmt get the "ci_inf" field (lower confidence-interval bound)
 #' @keywords internal
 # @export
-get_ci     <- fmt_field_factory("ci")
-# @describeIn fmt get the "rr" field (relative risk)
+get_ci_inf <- fmt_field_factory("ci_inf")
+# @describeIn fmt get the "ci_sup" field (upper confidence-interval bound)
 #' @keywords internal
 # @export
-get_rr     <- fmt_field_factory("rr")
+get_ci_sup <- fmt_field_factory("ci_sup")
+# Phase 1a bounds-shim: get_ci() returns the CI half-width (margin of error), read back
+# from the stored upper bound. Byte-identical to the former raw `ci` field until Phase 3
+# stores real asymmetric bounds and rewrites this to `ci_sup - ci_center(x)`. See
+# dev/tabxplor_1.4.0_decisions.md §1.
+# @describeIn fmt get the confidence-interval half-width (from the stored bounds)
+#' @keywords internal
+# @export
+get_ci     <- function(x) vctrs::field(x, "ci_sup")
+# @describeIn fmt get the "pvalue" field (per-cell significance)
+#' @keywords internal
+# @export
+get_pvalue <- fmt_field_factory("pvalue")
 # @describeIn fmt get the "or" field (odds ratio or relative risk ratio)
 #' @keywords internal
 # @export
 get_or     <- fmt_field_factory("or")
+# @describeIn fmt get the "tot_n" field (the cell's own unweighted percentage base)
+#' @keywords internal
+# @export
+get_tot_n  <- fmt_field_factory("tot_n")
 
 #' @keywords internal
 get_mean_contrib <- function(x) {
@@ -1311,6 +1361,10 @@ set_pct     <- fmt_set_field_factory("pct"    , cast = double()   )
 #' @keywords internal
 # @export
 set_diff    <- fmt_set_field_factory("diff"   , cast = double()   )
+# @describeIn fmt set the "ratio" field (ratio to the reference; formerly "rr")
+#' @keywords internal
+# @export
+set_ratio   <- fmt_set_field_factory("ratio"  , cast = double()   )
 #' @describeIn fmt set the "digits" field
 # @keywords internal
 #' @export
@@ -1327,18 +1381,40 @@ set_mean    <- fmt_set_field_factory("mean"   , cast = double()   )
 #' @keywords internal
 # @export
 set_var     <- fmt_set_field_factory("var"    , cast = double()   )
-# @describeIn fmt set the "ci" field (confidence intervals)
+# @describeIn fmt set the "ci_inf" field (lower confidence-interval bound)
 #' @keywords internal
 # @export
-set_ci      <- fmt_set_field_factory("ci"     , cast = double()   )
-# @describeIn fmt set the "rr" field (relative risk)
+set_ci_inf  <- fmt_set_field_factory("ci_inf" , cast = double()   )
+# @describeIn fmt set the "ci_sup" field (upper confidence-interval bound)
 #' @keywords internal
 # @export
-set_rr      <- fmt_set_field_factory("rr"     , cast = double()   )
+set_ci_sup  <- fmt_set_field_factory("ci_sup" , cast = double()   )
+# Phase 1a bounds-shim: set_ci() takes a symmetric half-width (margin of error) and stores
+# it as the bounds `ci_sup = value`, `ci_inf = -value`. get_ci() reads `ci_sup` back, so the
+# round-trip and the display stay byte-identical. `ci_inf` is an interim placeholder here;
+# Phase 3 rewrites the writer to store real asymmetric absolute bounds. See
+# dev/tabxplor_1.4.0_decisions.md §1.
+# @describeIn fmt set the confidence-interval half-width (stored as symmetric bounds)
+#' @keywords internal
+# @export
+set_ci      <- function(x, value) {
+  value <- vctrs::vec_cast(value, double()) %>% vctrs::vec_recycle(size = length(x))
+  x <- set_ci_sup(x,  value)
+  x <- set_ci_inf(x, -value)
+  x
+}
+# @describeIn fmt set the "pvalue" field (per-cell significance)
+#' @keywords internal
+# @export
+set_pvalue  <- fmt_set_field_factory("pvalue" , cast = double()   )
 # @describeIn fmt set the "or" field (odds ratio or relative risk ratio)
 #' @keywords internal
 # @export
 set_or      <- fmt_set_field_factory("or"     , cast = double()   )
+# @describeIn fmt set the "tot_n" field (the cell's own unweighted percentage base)
+#' @keywords internal
+# @export
+set_tot_n   <- fmt_set_field_factory("tot_n"  , cast = double()   )
 
 
 
@@ -1870,9 +1946,15 @@ mutate.tabxplor_fmt <- function(.data, ...) {
 #' @export
 `$.tabxplor_fmt` <- function(x, name) {
   # DESIGN: $wn falls back to the raw count n when there are no weighted counts (same
-  # fallback as get_wn() — keep the two in sync).
+  # fallback as get_wn() — keep the two in sync). $ci is no longer a stored field (Phase 1a
+  # dropped it): it is recomputed from the ci_inf/ci_sup bounds by get_ci(), so user code
+  # reading $ci keeps working. ($ratio, $ci_inf, $ci_sup, $pvalue, $tot_n are real fields
+  # and resolve via the proxy; $rr is gone — renamed $ratio.)
   if (name == "wn" & all(is.na( dplyr::pull(vctrs::vec_proxy(x), "wn")))) {
     dplyr::pull(vctrs::vec_proxy(x), "n")
+
+  } else if (name == "ci") {
+    get_ci(x)
 
   } else {
     dplyr::pull(vctrs::vec_proxy(x), name)
@@ -3030,13 +3112,16 @@ vec_cast.tabxplor_fmt.tabxplor_fmt  <- function(x, to, ...)
           wn        = get_wn      (x),
           pct       = get_pct     (x),
           diff      = get_diff    (x),
+          ratio     = get_ratio   (x),
           digits    = get_digits  (x),
           ctr       = get_ctr     (x),
           mean      = get_mean    (x),
           var       = get_var     (x),
-          ci        = get_ci      (x),
-          rr        = get_rr      (x),
+          ci_inf    = get_ci_inf  (x),
+          ci_sup    = get_ci_sup  (x),
+          pvalue    = get_pvalue  (x),
           or        = get_or      (x),
+          tot_n     = get_tot_n   (x),
 
           in_totrow = is_totrow   (x),
           in_refrow = is_refrow   (x),
@@ -3222,14 +3307,17 @@ vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
         rep_NA_real
       },
       diff    = rep_NA_real,
+      ratio   = rep_NA_real,
       digits  = pmax(get_digits(x), get_digits(y)),
       ctr     = rep_NA_real, # ???
       mean    = vctrs::vec_arith_base(op, get_mean(x) * get_wn(x), get_mean(y) * get_wn(y)) /
         vctrs::vec_arith_base("+", get_wn(x) , get_wn(y) ),# weighted mean
       var     = rep_NA_real,
-      ci      = rep_NA_real,
-      rr      = rep_NA_real,
+      ci_inf  = rep_NA_real,
+      ci_sup  = rep_NA_real,
+      pvalue  = rep_NA_real,
       or      = rep_NA_real,
+      tot_n   = rep_NA_real,
 
       # FIXME: is the AND right? A cell stays "total" only if BOTH operands are total —
       # arguably it should follow x alone (x - a non-total y should probably stay total).
@@ -3269,13 +3357,16 @@ vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
       # fields is rarely meaningful; revisit what * and / on fmt should actually mean.
       pct    = vctrs::vec_arith_base(op, get_pct(x), get_pct(y)),
       diff   = rep_NA_real,
+      ratio  = rep_NA_real,
       digits = pmax(get_digits(x), get_digits(y)),
       ctr    = rep_NA_real,
       mean   = rep_NA_real,
       var    = rep_NA_real,
-      ci     = rep_NA_real,
-      rr     = rep_NA_real,
+      ci_inf = rep_NA_real,
+      ci_sup = rep_NA_real,
+      pvalue = rep_NA_real,
       or     = rep_NA_real,
+      tot_n  = rep_NA_real,
 
       in_totrow = is_totrow(x),
       in_refrow = is_refrow(x),
@@ -3382,13 +3473,16 @@ vec_math.tabxplor_fmt <- function(.fn, .x, ...) {
                                          no  = NA_real_) %>%
                            tidyr::replace_na(NA_real_),
                          diff   = NA_real_,
+                         ratio  = NA_real_,
                          ctr    = NA_real_,
                          mean   = vctrs::vec_math_base("sum", get_mean(.x) * get_wn(.x), ...) /
                            vctrs:: vec_math_base("sum", get_wn(.x), ...),
                          var    = NA_real_,
-                         ci     = NA_real_,
-                         rr     = NA_real_,
+                         ci_inf = NA_real_,
+                         ci_sup = NA_real_,
+                         pvalue = NA_real_,
                          or     = NA_real_,
+                         tot_n  = NA_real_,
 
                          in_totrow = all(is_totrow(.x)),
                          in_refrow = all(is_refrow(.x)),
@@ -3410,13 +3504,16 @@ vec_math.tabxplor_fmt <- function(.fn, .x, ...) {
                           pct     = vctrs::vec_math_base("sum", get_pct(.x) * get_wn(.x), ...) /
                             vctrs::vec_math_base("sum", get_wn(.x), ...),
                           diff    = NA_real_,
+                          ratio   = NA_real_,
                           ctr     = NA_real_,
                           mean    = vctrs::vec_math_base("sum", get_mean(.x) * get_wn(.x), ...) /
                             vctrs::vec_math_base("sum", get_wn(.x), ...),
                           var     = NA_real_,
-                          ci      = NA_real_,
-                          rr      = NA_real_,
+                          ci_inf  = NA_real_,
+                          ci_sup  = NA_real_,
+                          pvalue  = NA_real_,
                           or      = NA_real_,
+                          tot_n   = NA_real_,
 
                           in_totrow = FALSE,
                           in_refrow = FALSE,

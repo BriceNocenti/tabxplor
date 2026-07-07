@@ -3,6 +3,13 @@
 ## New features
 
 ## Internal
+* Reshaped the internal `tabxplor_fmt` record from 15 to 18 per-cell fields (preparation for the
+  1.4.0 aggregate-core): added `ci_inf`, `ci_sup`, `pvalue`, `tot_n`; renamed the never-used `rr`
+  field to `ratio`; the confidence interval is now stored as bounds instead of a dedicated `ci`
+  field. Table output is unchanged. Retro-compatibility for user code that reads fmt fields: `$ci`
+  and `get_ci()` still return the CI half-width (recomputed from the bounds) and the `fmt(ci=)`
+  argument still works; `$rr` is renamed `$ratio`; the low-level `vctrs::field(x, "ci")` (reading or
+  setting the raw `ci` field) no longer works.
 * Added a retro-compatibility test safety net before internal refactors: a `tabxplor_fmt`
   field/attribute contract test, a golden characterization harness for `tab()`/`tab_many()`
   output, and format-vs-Excel export-parity tests.

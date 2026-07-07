@@ -7,8 +7,11 @@ allowed-tools: Read, Grep, Edit
 
 tabxplor_fmt is a vctrs::new_rcrd() with two kinds of members:
 
-- FIELDS: per-cell, length = length(x), accessed via vctrs::field(). Currently 15:
-  n, display, digits, wn, pct, mean, diff, ctr, var, ci, rr, or, in_totrow, in_tottab, in_refrow.
+- FIELDS: per-cell, length = length(x), accessed via vctrs::field(). Currently 18:
+  n, display, digits, wn, pct, mean, diff, ratio, ctr, var, ci_inf, ci_sup, pvalue, or,
+  tot_n, in_totrow, in_tottab, in_refrow.
+  NOTE: `ci` is NOT a field — it is derived from ci_inf/ci_sup by get_ci() (a bounds-shim,
+  Phase 1a); the public fmt(ci=) arg and $ci/get_ci() still work. `rr` was renamed `ratio`.
 - ATTRIBUTES: scalar per-column, accessed via attr(). Currently 8:
   type, comp_all, ref, ci_type, col_var, totcol, refcol, color.
 
@@ -37,7 +40,7 @@ Re-grep exact line numbers before editing; the anchors below are approximate.
    - tab_ci(): CI block (~L4828-4854).
    - tab_chi2(): var/ctr block (~L4990-5082).
 9. Docs — roxygen in fmt() (~L36-123): add `@param X` and keep the field-count in sync (the roxygen text
-   currently says "13 fields" but the real count is 15 — fix to the true count when you touch it).
+   says "18 fields" — update the count and the field list when you add/remove/rename one).
 10. EXPORT PARITY (critical): format.tabxplor_fmt() is the single source of truth for markdown (tab_md.R:130),
     knitr/HTML (tab_kable in tab_classes.R:615,639), and console (pillar_shaft). But tab_xl() BYPASSES it: it
     reads get_num()/get_display()/get_digits() directly (tab_xl.R:539, 587-588) and delegates numeric

@@ -42,11 +42,15 @@ fmt(
   pct = rep(NA_real_, length(n)),
   mean = rep(NA_real_, length(n)),
   diff = rep(NA_real_, length(n)),
+  ratio = rep(NA_real_, length(n)),
   ctr = rep(NA_real_, length(n)),
   var = rep(NA_real_, length(n)),
   ci = rep(NA_real_, length(n)),
-  rr = rep(NA_real_, length(n)),
+  ci_inf = rep(NA_real_, length(n)),
+  ci_sup = rep(NA_real_, length(n)),
+  pvalue = rep(NA_real_, length(n)),
   or = rep(NA_real_, length(n)),
+  tot_n = rep(NA_real_, length(n)),
   in_totrow = rep(FALSE, length(n)),
   in_tottab = rep(FALSE, length(n)),
   in_refrow = rep(FALSE, length(n)),
@@ -152,6 +156,10 @@ Calculate with \code{\link{tab_pct}}.}
 as a double vector the length of \code{n}. Used to set colors for means and
 row or col percentages. Calculate with \code{\link{tab_pct}}.}
 
+\item{ratio}{The ratio to the reference (relative risk for percentages, mean ratio for
+means), as a double vector the length of \code{n}. Renamed from the former \code{rr}
+field.}
+
 \item{ctr}{The contributions of cells to (sub)tables variances,
 as a double vector the length of \code{n}. Used to print colors when
 \code{color = "contrib"}. The mean contribution of each (sub)table is written on
@@ -162,13 +170,21 @@ Calculate with \code{\link{tab_chi2}}.}
 Used with \code{type = "mean"} to calculate confidence intervals.
 Calculate with \code{tab_plain}.}
 
-\item{ci}{The confidence intervals, as a double vector the length of \code{n}.
-Used to print colors (\code{"diff_ci"}, \code{"after_ci"}).
+\item{ci}{The confidence interval half-width (margin of error), as a double vector the
+length of \code{n}. Kept for backward compatibility: it is stored as the symmetric
+bounds \code{ci_inf}/\code{ci_sup} and read back by \code{get_ci()}.
 Calculate with \code{tab_ci}.}
 
-\item{rr}{The relative risk, as a double vector the length of \code{n}.}
+\item{ci_inf, ci_sup}{The lower and upper bounds of the confidence interval, as double
+vectors the length of \code{n}. Calculate with \code{tab_ci}.}
+
+\item{pvalue}{The per-cell significance p-value, as a double vector the length of
+\code{n}.}
 
 \item{or}{The odds ratio or relative risk ratio, as a double vector the length of \code{n}.}
+
+\item{tot_n}{The cell's own (unweighted) percentage base, as a double vector the length
+of \code{n}.}
 
 \item{in_totrow}{\code{TRUE} when the cell is part of a total row}
 
@@ -284,9 +300,10 @@ As a \code{\link[vctrs:new_rcrd]{record}}, they stores all data necessary to
 calculate percentages, Chi2 metadata or confidence intervals, but also to format and
 color the table to help the user read it. You can access this data with
 \code{\link[vctrs:field]{vctrs::field}}, or change it with
-\code{\link[vctrs:field]{vctrs:field<-}}. A \code{fmt} vector have 15 fields :
+\code{\link[vctrs:field]{vctrs:field<-}}. A \code{fmt} vector have 18 fields :
 \code{n}, \code{digits}, \code{display}, \code{wn}, \code{pct}, \code{mean},
-\code{diff}, \code{ctr}, \code{var}, \code{ci}, \code{rr}, \code{or},
+\code{diff}, \code{ratio}, \code{ctr}, \code{var}, \code{ci_inf}, \code{ci_sup},
+\code{pvalue}, \code{or}, \code{tot_n},
 \code{in_totrow},  \code{in_tottab},
 \code{in_refrow}. Other arguments are attributes, attached not to each value, but to
 the whole vector, like \code{type}, \code{totcol} or \code{color}. You can get them

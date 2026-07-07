@@ -1,26 +1,27 @@
 # PURPOSE: Lock the tabxplor_fmt vctrs record contract (fields + attributes) and its
 #          serialization stability, so any change to the record shape fails loudly.
-# ROLE: Retro-compatibility guardrail for the 1.4.0 internal refactors (esp. the Phase 1a
-#       15 -> 18 field pass: +pvalue +tot_n +ci_inf +ci_sup, rr->ratio, drop ci).
+# ROLE: Retro-compatibility guardrail for the 1.4.0 internal refactors. Locks the Phase 1a
+#       18-field baseline (was 15: +pvalue +tot_n +ci_inf +ci_sup, rr->ratio, dropped ci).
 # KEY CONSTRAINTS:
 #   - This test is DELIBERATELY BRITTLE. Update it ONLY when intentionally adding, removing,
 #     or renaming a field/attribute of tabxplor_fmt -- follow the `/vctrs-field` skill.
-#   - The hardcoded vectors below ARE the contract (currently the 15-field baseline). Phase 1a
-#     flips them to 18: add `pvalue`, `tot_n`, `ci_inf`, `ci_sup`; rename `rr`->`ratio`; drop `ci`.
+#   - The hardcoded vectors below ARE the contract (the 18-field 1.4.0 baseline). `ci` is no
+#     longer a stored field: it is derived from the `ci_inf`/`ci_sup` bounds by get_ci()
+#     (bounds-shim), and the public `fmt(ci=)` arg maps a symmetric half-width onto them.
 # See: CLAUDE.md > 1.4.0 roadmap (Phase 1) and Design Decisions > Type System.
 
-# The 15 per-cell fields, in construction order (new_fmt() -> vctrs::new_rcrd()).
+# The 18 per-cell fields, in construction order (new_fmt() -> vctrs::new_rcrd()).
 fmt_contract_fields <- c(
-  "n", "display", "digits", "wn", "pct", "mean", "diff", "ctr", "var", "ci",
-  "rr", "or", "in_totrow", "in_tottab", "in_refrow"
+  "n", "display", "digits", "wn", "pct", "mean", "diff", "ratio", "ctr", "var",
+  "ci_inf", "ci_sup", "pvalue", "or", "tot_n", "in_totrow", "in_tottab", "in_refrow"
 )
 
 # Storage type of each field (typeof), as guaranteed by the vec_cast lines in fmt().
 fmt_contract_field_types <- c(
   n = "integer", display = "character", digits = "integer", wn = "double",
-  pct = "double", mean = "double", diff = "double", ctr = "double",
-  var = "double", ci = "double", rr = "double", or = "double",
-  in_totrow = "logical", in_tottab = "logical", in_refrow = "logical"
+  pct = "double", mean = "double", diff = "double", ratio = "double", ctr = "double",
+  var = "double", ci_inf = "double", ci_sup = "double", pvalue = "double", or = "double",
+  tot_n = "double", in_totrow = "logical", in_tottab = "logical", in_refrow = "logical"
 )
 
 # The 8 per-column attributes and their constructor defaults.
@@ -32,7 +33,7 @@ fmt_contract_attr_defaults <- list(
 testthat::test_that("fmt has exactly the contracted fields, in order", {
   x <- fmt(1)
   testthat::expect_identical(vctrs::fields(x), fmt_contract_fields)
-  testthat::expect_length(vctrs::fields(x), 15L)
+  testthat::expect_length(vctrs::fields(x), 18L)
 })
 
 testthat::test_that("each fmt field has the contracted storage type", {
@@ -85,6 +86,17 @@ testthat::test_that("fmt survives saveRDS/readRDS round-trip with all fields and
     testthat::expect_identical(attr(y, a, exact = TRUE), attr(x, a, exact = TRUE),
                                info = paste0("attribute '", a, "'"))
   }
+})
+
+# The `ci` bounds-shim: the public fmt(ci=) half-width is stored as symmetric ci_inf/ci_sup
+# bounds, and get_ci() / $ci read the half-width back unchanged (byte-identical to the old
+# `ci` field until Phase 3 stores real asymmetric bounds).
+testthat::test_that("fmt(ci=) round-trips through the ci_inf/ci_sup bounds-shim", {
+  x <- fmt(n = c(10L, 20L), type = "row", pct = c(0.4, 0.5), ci = c(NA, 0.02))
+  testthat::expect_identical(vctrs::field(x, "ci_sup"), c(NA_real_,  0.02))
+  testthat::expect_identical(vctrs::field(x, "ci_inf"), c(NA_real_, -0.02))
+  testthat::expect_identical(get_ci(x), c(NA_real_, 0.02))   # half-width read back
+  testthat::expect_identical(x$ci,       get_ci(x))          # $ci still works
 })
 
 # Human-readable second signal. Skipped on CRAN by default. Regenerate consciously with

@@ -29,12 +29,15 @@ tabxplor creates, manipulates, and formats color-coded cross-tabulation tables f
 | `wn` | double | Weighted count |
 | `pct` | double | Percentage (stored as 0–1, multiplied by 100 only in `format()`) |
 | `mean` | double | Cell mean (for numeric column variables) |
-| `diff` | double | Difference from reference. **For type="mean": stores a RATIO, not a difference** |
+| `diff` | double | Difference from reference. **For type="mean": stores a RATIO, not a difference** (flips to a real difference in Phase 2) |
+| `ratio` | double | Ratio to reference (relative risk for pct, mean ratio for means). Renamed from `rr` (Phase 1a); real values written in Phase 5 |
 | `ctr` | double | Contribution to chi-squared variance |
 | `var` | double | Variance (used for CI calculation) |
-| `ci` | double | Confidence interval half-width (margin of error), not full interval |
-| `rr` | double | Relative risk |
+| `ci_inf` | double | Lower confidence-interval bound (Phase 1a; real asymmetric bounds written in Phase 3) |
+| `ci_sup` | double | Upper confidence-interval bound. `get_ci()` reads the half-width back from here (bounds-shim) |
+| `pvalue` | double | Per-cell significance p-value (Phase 1a placeholder; written in Phase 3) |
 | `or` | double | Odds ratio or relative risk ratio |
+| `tot_n` | double | The cell's own (unweighted) percentage base (Phase 1a placeholder; written in Phase 2) |
 | `in_totrow` | logical | Cell belongs to a total row |
 | `in_tottab` | logical | Cell belongs to the total table |
 | `in_refrow` | logical | Cell belongs to the reference row |
@@ -182,7 +185,12 @@ This asymmetry propagates through `tab_pct()`, `color_formula()`, and `format.ta
 
 ### Confidence Intervals
 
-`tab_ci()` stores the CI as a **half-width** (margin of error), not a full interval:
+Since Phase 1a the CI lives in the **`ci_inf`/`ci_sup` bound fields**, not a dedicated `ci`
+field. During 1a a **bounds-shim** keeps behaviour byte-identical: `set_ci()` stores a symmetric
+half-width as `ci_sup = v`, `ci_inf = -v`, and `get_ci()` / `$ci` read the half-width back from
+`ci_sup`. The public `fmt(ci=)` argument still accepts a half-width (mapped to the bounds).
+Phase 3 will store real asymmetric bounds (Wilson/AC/OR) and switch the display to read them
+directly. So conceptually `tab_ci()` still stores a **half-width** (margin of error) today:
 
 - `ci = z * sqrt(variance)`
 - For percentages: stored as 0–1 (multiplied by 100 only in `format()`)
