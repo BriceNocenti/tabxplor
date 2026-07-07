@@ -1,7 +1,5 @@
 
-This document is the **internal technical reference** for the tabxplor package. It is intended for developers and AI assistants modifying the codebase. For user-facing documentation, see `vignette("tabxplor")`.
-
-**Note:** Some details may become out of date as the code evolves. Always verify against the current source. When in doubt, the code is the source of truth.
+This document is the **internal technical reference** for the tabxplor package. It describes its **current state**, but when in doubt that it’s up-to-date the code is the source of truth. It is intended for developers and AI assistants modifying the codebase. For user-facing documentation, see `vignette("tabxplor")`.
 
 ## Purpose and Design Philosophy
 
@@ -79,7 +77,7 @@ This class requires a separate S3 method for **every dplyr verb** to preserve cl
 
 ## Calculation Pipeline
 
-The old pipeline flowed through these functions in `R/tab.R`. But some should become internals. 
+The old pipeline flowed through these functions in `R/tab.R`. But some should become internals.
 
 ```
 tab(data, row_var, col_var, ...)
@@ -226,12 +224,12 @@ Selection is done by `set_color_style(type, theme, html_24_bit)`, which sets `op
 Breaks are thresholds stored in `options("tabxplor.color_breaks")`, set by `set_color_breaks()`:
 
 - **pct_breaks** (default `c(0.05, 0.1, 0.2, 2, 0.3)`): For percentage differences.
-  - `0.05` = "+5 percentage points above reference" → `pos1` color
-  - `0.1` = "+10 pp" → `pos2`
-  - `0.2` = "+20 pp" → `pos3`
-  - `2` = "twice the reference percentage" → `ratio` color (the "*2 rule")
-  - `0.3` = "+30 pp" → `pos5`
-  - Negative breaks are **auto-mirrored**: `-0.05` → `neg1`, etc.
+  + `0.05` = "+5 percentage points above reference" → `pos1` color
+  + `0.1` = "+10 pp" → `pos2`
+  + `0.2` = "+20 pp" → `pos3`
+  + `2` = "twice the reference percentage" → `ratio` color (the "*2 rule")
+  + `0.3` = "+30 pp" → `pos5`
+  + Negative breaks are **auto-mirrored**: `-0.05` → `neg1`, etc.
 - **mean_breaks** (default `c(1.15, 1.5, 2, 4)`): Always ratios for mean comparisons.
 - **contrib_breaks** (default `c(1, 2, 5, 10)`): Multiples of mean contribution to variance.
 

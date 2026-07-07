@@ -1,11 +1,13 @@
 # PURPOSE: Lock the tabxplor_fmt vctrs record contract (fields + attributes) and its
 #          serialization stability, so any change to the record shape fails loudly.
-# ROLE: Retro-compatibility guardrail for the 1.4.0 internal refactors (esp. adding `ref_n`).
+# ROLE: Retro-compatibility guardrail for the 1.4.0 internal refactors (esp. the Phase 1a
+#       15 -> 18 field pass: +pvalue +tot_n +ci_inf +ci_sup, rr->ratio, drop ci).
 # KEY CONSTRAINTS:
 #   - This test is DELIBERATELY BRITTLE. Update it ONLY when intentionally adding, removing,
 #     or renaming a field/attribute of tabxplor_fmt -- follow the `/vctrs-field` skill.
-#   - The hardcoded vectors below ARE the contract. `ref_n` is the first thing to add here.
-# See: CLAUDE.md > 1.4.0 roadmap (workstream 1) and Design Decisions > Type System.
+#   - The hardcoded vectors below ARE the contract (currently the 15-field baseline). Phase 1a
+#     flips them to 18: add `pvalue`, `tot_n`, `ci_inf`, `ci_sup`; rename `rr`->`ratio`; drop `ci`.
+# See: CLAUDE.md > 1.4.0 roadmap (Phase 1) and Design Decisions > Type System.
 
 # The 15 per-cell fields, in construction order (new_fmt() -> vctrs::new_rcrd()).
 fmt_contract_fields <- c(

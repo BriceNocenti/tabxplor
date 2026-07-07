@@ -290,15 +290,17 @@ Grounding (code refs + statistics + caveats) in `dev/tabxplor_1.4.0_decisions.md
 - **From-the-middle**: feed the same data as microdata / long counts / wide / freq+N → identical fmt tables where `n` is real; CI/chi2 warn+skip on freq-only.
 - **Release gate**: `devtools::check()` (~3 min, run manually) before CRAN.
 
-### Phase 0 — Safety net (in progress)
+### Phase 0 — Safety net (done — 2026-07-07)
 
-Retro-compat tests + benchmarks BEFORE any refactor. Nothing below is safe without this.
+Retro-compat tests + benchmarks BEFORE any refactor. Nothing below is safe without this. The net is GREEN on the current 15-field baseline; it deliberately locks *current* behavior so every 1.4.0 change is a conscious regeneration (never a silent drift). No safety-net assertion should fail on the current source — the "what must change later" is the tripwire ledger, not a red test.
 
-#### To implement
+#### Done
 
-- Retro-compat safety net BEFORE the refactors. New tests: `test-fmt-contract.R` (locks the 15 fields + 8 attributes), `test-golden.R` (characterization matrix), `test-export-parity.R` (format vs `tab_xl` display parity), extended dplyr-verb coverage in `test-tab_classes.R`.
+- Retro-compat safety net: `test-fmt-contract.R` (locks the 15 fields + 8 attributes), `test-golden.R` (characterization matrix + `_golden/*.rds` + `_snaps/`), `test-export-parity.R` (format vs `tab_xl` display parity), `test-fuse-parity.R` (fused vs `.by_table`).
+- **dplyr-verb coverage** in `test-tab_classes.R` (44→93 tests): class preservation for ~10 verbs on both tab classes, PLUS table-attribute (`subtext`/`chi2`) survival across every verb, the `group_by` flat→grouped upgrade, the `lv1_group_vars()` auto-downgrade, and `group_split`. Fixtures use `tab_plain()|>tab_chi2()` (the real chi2-attr populator — `tab(chi2=TRUE)` does NOT fill it) + a sentinel `subtext`.
 - Perf: small `gss_cat` benchmark runs in-suite as `test-benchmark.R` — informational, NEVER fails; prints a comparison (median_s/base_s/diff_s + mem) against committed `tests/testthat/benchmark_baseline.csv` (ships with tests; regenerate via `dev/make_benchmark_baseline.R`). Visible under `devtools::check()`; `skip_on_cran`. Shared ops in `helper-benchmark.R`. The heavy 8M-row run is `dev/benchmarks/run_bench.R` (`.Rbuildignore`'d; `source("dev/benchmarks/run_bench.R")`), which builds the fixture via `gen_big_df.R` and writes/compares its own `dev/benchmarks/baseline.csv`. `bench` is Suggests-only (falls back to `system.time`).
-- New skills: `/color-mode`, `/dplyr-method` (alongside `/vctrs-field`).
+- **"Before" tripwire cases** for decided-but-unbuilt changes (generated from current code so the later diff is conscious): `f_ci_diff` (Phase 3 Newcombe + stars), `f_or` (empirical OR), `n_mean_ci` (Phase 3 mean-CI bounds), `f_totcol_each` (Phase 6 one-total-col). `ref_n`→`tot_n` terminology reconciled; `refn_*` fixtures renamed `totn_*`. A per-fixture **tripwire ledger** (which phase regenerates which fixture, and why) heads `test-golden.R`.
+- Skills `/color-mode`, `/dplyr-method`, `/vctrs-field` — all live.
 
 **Golden regeneration protocol.**
 

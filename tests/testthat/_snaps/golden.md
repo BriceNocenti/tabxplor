@@ -28,6 +28,21 @@
       | Married       |  [9;10]%  |   [8;9]%  | [81;83]%  |  100%  |  10 117  |
       |**Total**      |     **9%**|    **15%**|    **76%**|**100%**|**21 483**|
 
+# golden display (tab_md) unchanged: f_ci_diff
+
+    Code
+      cat(tab_md(cases[[name]](), print = FALSE))
+    Output
+      | marital       |Other  |Black  |White  | Total  |       n  |
+      |:--------------|------:|------:|------:|-------:|---------:|
+      | No answer     |  12%  |  12%  |  76%  |  100%  |      17  |
+      | Never married |  12%  |  24%  |  64%  |  100%  |   5 416  |
+      | Separated     |  15%  |  26%  |  59%  |  100%  |     743  |
+      | Divorced      |   6%  |  15%  |  79%  |  100%  |   3 383  |
+      | Widowed       |   4%  |  14%  |  82%  |  100%  |   1 807  |
+      | Married       |   9%  |   9%  |  82%  |  100%  |  10 117  |
+      |**Total**      | **9%**|**15%**|**76%**|**100%**|**21 483**|
+
 # golden display (tab_md) unchanged: f_color_diff
 
     Code
@@ -83,7 +98,19 @@
       | ------------- | ------------------- | -------------- | | ------------ |
       |**Ensemble**   |**Total Ensemble**   |**47.2 (σ17.3)**| |**3.0 (σ2.6)**|
 
-# golden display (tab_md) unchanged: refn_drop
+# golden display (tab_md) unchanged: n_mean_ci
+
+    Code
+      cat(tab_md(cases[[name]](), print = FALSE))
+    Output
+      |       |     age      | |  tvhours   |
+      | race  |         age  | |   tvhours  |
+      |:------|-------------:| |-----------:|
+      | Other | [38.8;40.1]  | | [2.6;2.9]  |
+      | Black | [43.3;44.5]  | | [4.0;4.3]  |
+      | White | [48.5;49.0]  | | [2.7;2.8]  |
+
+# golden display (tab_md) unchanged: totn_drop
 
     Code
       cat(tab_md(cases[[name]](), print = FALSE))
