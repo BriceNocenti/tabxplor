@@ -236,7 +236,7 @@ Scripts used (in the session scratchpad; not committed):
   allocation, and the `ci = "cell"` bug repro.
 - `analyze_steps.R` — buckets `summaryRprof(..., lines = "show")$by.line` into the step ranges of
   `tab_plain` / `tab_num` listed above.
-- The committed `benchmarks/run_fused_vs_bytable.R` is the fused-vs-by_table arbiter and remains the
+- The committed `dev/benchmarks/run_fused_vs_bytable.R` is the fused-vs-by_table arbiter and remains the
   reference for that comparison.
 
 To regenerate the intra-function step tables, the only non-obvious point is that

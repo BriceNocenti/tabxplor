@@ -1,7 +1,7 @@
 # PURPOSE: Shared small-benchmark ops + timing helper.
 # ROLE: Single definition used by BOTH the informational in-suite test (test-benchmark.R)
-#        and the standalone big-data harness (benchmarks/run_bench.R). Lives here (not in
-#        benchmarks/) because benchmarks/ is .Rbuildignore'd and cannot be sourced from the
+#        and the standalone big-data harness (dev/benchmarks/run_bench.R). Lives here (not in
+#        dev/benchmarks/) because dev/benchmarks/ is .Rbuildignore'd and cannot be sourced from the
 #        built/installed package, whereas test helpers ship with the tests.
 # KEY CONSTRAINTS:
 #   - `bench` is Suggests-only: benchmark_measure() degrades to system.time() without it.

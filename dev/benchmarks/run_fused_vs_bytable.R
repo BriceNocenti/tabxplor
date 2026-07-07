@@ -4,8 +4,8 @@
 #          fakes the pc18 example (5 socio-demo row_vars x 3 practice col_vars, weighted, row %) and
 #          asserts byte-identical output. The fixture uses ALL level combinations (full Cartesian),
 #          so G_obs = prod(nlevels) -- DENSER, i.e. more pessimistic, than real sparse survey data.
-# ROLE: Standalone; benchmarks/ is .Rbuildignore'd -> never run by the test suite or R CMD check.
-# USAGE (from package root): source("benchmarks/run_fused_vs_bytable.R", encoding = "UTF-8")
+# ROLE: Standalone; dev/benchmarks/ is .Rbuildignore'd -> never run by the test suite or R CMD check.
+# USAGE (from package root): source("dev/benchmarks/run_fused_vs_bytable.R", encoding = "UTF-8")
 
 pkg <- normalizePath(".", winslash = "/")
 suppressMessages(devtools::load_all(pkg, quiet = TRUE))
@@ -14,7 +14,7 @@ suppressMessages(library(data.table))
 
 # --- fixture: full Cartesian of pc18-like factor levels (NA included on DIPLOM/CRITREVENU) ---
 gen_pc18_full <- function(n = 15e6L,
-                          cache = file.path(pkg, "benchmarks", "big_pc18_full_15M.rds"),
+                          cache = file.path(pkg, "dev", "benchmarks", "big_pc18_full_15M.rds"),
                           seed = 20260701L) {
   if (!is.null(cache) && file.exists(cache)) {
     message("gen_pc18_full: loading cached fixture (", cache, ")")

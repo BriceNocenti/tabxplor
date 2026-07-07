@@ -2,25 +2,25 @@
 # PURPOSE: Deliberate performance harness for the large 8M-row fixture. Times the tab() pipeline
 #          and prints a current-vs-baseline comparison in the SAME format as the in-suite small
 #          benchmark (test-benchmark.R), via the shared benchmark_print() helper.
-# ROLE: Standalone; NOT part of the test suite and NEVER run by R CMD check (benchmarks/ is
+# ROLE: Standalone; NOT part of the test suite and NEVER run by R CMD check (dev/benchmarks/ is
 #        .Rbuildignore'd). The small fixture is covered in-suite by test-benchmark.R; THIS script
 #        is only for the heavy 8M-row run.
 #
 # USAGE (from package root, e.g. in a dev R session):
-#   source("benchmarks/run_bench.R", encoding = "UTF-8")
-#   # or: Rscript benchmarks/run_bench.R
+#   source("dev/benchmarks/run_bench.R", encoding = "UTF-8")
+#   # or: Rscript dev/benchmarks/run_bench.R
 #
 # Uses bench::mark() if installed (adds memory), else falls back to system.time().
-# Baseline is benchmarks/baseline.csv (big_8M rows). To reset it after a deliberate perf change,
+# Baseline is dev/benchmarks/baseline.csv (big_8M rows). To reset it after a deliberate perf change,
 # delete that file (or its big_8M rows) and re-run.
 
 pkg <- normalizePath(".", winslash = "/")
 suppressMessages(devtools::load_all(pkg, quiet = TRUE))
 # Shared ops/timing/printing helpers (same ones the in-suite benchmark uses).
 source(file.path(pkg, "tests", "testthat", "helper-benchmark.R"))
-source(file.path(pkg, "benchmarks", "gen_big_df.R"))
+source(file.path(pkg, "dev", "benchmarks", "gen_big_df.R"))
 
-big <- gen_big_df(cache = file.path(pkg, "benchmarks", "big_df.rds"))
+big <- gen_big_df(cache = file.path(pkg, "dev", "benchmarks", "big_df.rds"))
 big_ops <- list(
   tab_row_pct    = function() tab(big, region, response, pct = "row"),
   tab_ci         = function() tab(big, region, response, pct = "row", ci = "cell"),
@@ -31,7 +31,7 @@ big_ops <- list(
 )
 big_res <- benchmark_run("big_8M", 8e6L, big_ops, iterations = 3L)
 
-out_dir  <- file.path(pkg, "benchmarks")
+out_dir  <- file.path(pkg, "dev", "benchmarks")
 baseline <- file.path(out_dir, "baseline.csv")
 
 # Read the big_8M rows of the baseline, if any.
@@ -45,7 +45,7 @@ if (file.exists(baseline)) {
 benchmark_print(
   big_res, base_big,
   header = "big tab() benchmark (8,000,000 rows)",
-  regen  = "delete benchmarks/baseline.csv, then re-run"
+  regen  = "delete dev/benchmarks/baseline.csv, then re-run"
 )
 
 # Record this run (git-ignored) and seed the baseline on first big run.

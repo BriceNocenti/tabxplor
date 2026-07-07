@@ -1,16 +1,16 @@
 # PURPOSE: Deterministically generate (and cache) a large data frame for tabxplor benchmarks.
-# ROLE: Big-data fixture for benchmarks/run_bench.R. NEVER shipped (benchmarks/ is .Rbuildignore'd)
+# ROLE: Big-data fixture for dev/benchmarks/run_bench.R. NEVER shipped (dev/benchmarks/ is .Rbuildignore'd)
 #        and NEVER touched by the test suite or R CMD check.
 # KEY CONSTRAINTS:
 #   - Deterministic (fixed seed) so timings are comparable run to run.
-#   - Built ONCE, then cached to benchmarks/big_df.rds (git-ignored) and reloaded on every later
+#   - Built ONCE, then cached to dev/benchmarks/big_df.rds (git-ignored) and reloaded on every later
 #     run -- the build (rgamma/runif/sample over 8M rows) is the slow part and must not repeat.
 #   - Cache is stored UNCOMPRESSED (compress = FALSE): larger on disk (~a few hundred MB) but much
 #     faster to write and, crucially, to reload. Delete the .rds to force a rebuild.
 
 # Realistic mix: several factor col cardinalities + a weight + numeric cols + injected NAs.
 gen_big_df <- function(n = 8e6L,
-                       cache = file.path("benchmarks", "big_df.rds"),
+                       cache = file.path("dev", "benchmarks", "big_df.rds"),
                        seed = 20260701L) {
   if (!is.null(cache) && file.exists(cache)) {
     message("gen_big_df: loading cached fixture (", cache, ")")

@@ -1,8 +1,8 @@
 #!/usr/bin/env Rscript
 # PURPOSE: (Re)generate the committed small-benchmark baseline that test-benchmark.R compares
 #          against in-suite (tests/testthat/benchmark_baseline.csv). Ships with the tests, so it
-#          is available under devtools::test() AND devtools::check() (unlike benchmarks/, which is
-#          .Rbuildignore'd). Separate from benchmarks/baseline.csv used by benchmarks/run_bench.R.
+#          is available under devtools::test() AND devtools::check() (unlike dev/benchmarks/, which is
+#          .Rbuildignore'd). Separate from dev/benchmarks/baseline.csv used by dev/benchmarks/run_bench.R.
 # USAGE (from package root):  Rscript dev/make_benchmark_baseline.R
 #
 # CONSCIOUS ACT: run on your reference machine to reset the perf baseline. The in-suite comparison

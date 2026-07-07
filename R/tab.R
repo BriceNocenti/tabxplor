@@ -1769,6 +1769,33 @@ tab_spread <- function(tabs, spread_vars, names_prefix, names_sort = FALSE,
 }
 
 
+# NEW FUNCTION TO FINISH, DOCUMENT and integrate into the package ?
+#' @export
+#'
+# @examples
+tab_transpose <- function(tabs, name = "variables") {
+  row_var <- tab_get_vars(tabs, "row_var")$row_var
+  totrow_names <- filter(tabs, is_totrow(tabs)) |> pull(1) |> as.character()
+  if (length(totrow_names) >= 2) stop("not working for now with many total rows")
+  totcol_name <- is_totcol(tabs) ; totcol_name <- names(totcol_name[totcol_name])
+  if (length(totcol_name) >= 2) stop("not working for now with many total columns")
+  
+  tabs |>
+    pivot_longer(cols = -1, names_to = name, values_to = "value") |> 
+    pivot_wider(names_from = all_of(row_var), values_from = value, names_sort = TRUE) |> 
+    mutate(across(where(is.character), as_factor)) |>
+    mutate(across(where(is_fmt), ~ set_type(., "col"))) |> 
+    mutate(across(where(is_fmt), ~ as_totcol(., FALSE))) |> 
+    mutate(across(any_of(totrow_names), ~ as_totrow(as_totcol(.), FALSE))) |>
+    mutate(across(where(is_fmt), ~ if_else(!!sym(name) == totcol_name, 
+                                           as_totrow(.), 
+                                           as_totrow(., FALSE)))) |> 
+    new_tab()
+}
+
+
+
+
 
 #' @describeIn tab_many Get the variables names of a \pkg{tabxplor} \code{tab}
 #' @param tabs A \code{tibble} of class \code{tab}, made with \code{\link{tab}},

@@ -7,7 +7,7 @@
   field/attribute contract test, a golden characterization harness for `tab()`/`tab_many()`
   output, and format-vs-Excel export-parity tests.
 * Added an informational (never-failing) small-benchmark test that prints `tab()` pipeline
-  timings, plus a standalone 8M-row performance harness (`benchmarks/run_bench.R`).
+  timings, plus a standalone 8M-row performance harness (`dev/benchmarks/run_bench.R`).
 * Experimental opt-in fast path for `tab_many()` on very large data: one shared finest-grain
   aggregate reused across all factor tables instead of one scan per `row_var` × `col_var`. Off by
   default (byte-identical output); enable with `options(tabxplor.fuse_min_rows = <n_rows>)`. Modest

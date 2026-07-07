@@ -3,9 +3,9 @@
 #          regression is *visible* during normal test runs and `devtools::check()`. A signal to
 #          read, not an assertion.
 # ROLE: Lightweight, always-green perf lens. The heavy 8M-row benchmark lives in
-#        benchmarks/run_bench.R (run deliberately via source()).
+#        dev/benchmarks/run_bench.R (run deliberately via source()).
 # KEY CONSTRAINTS:
-#   - Baseline is tests/testthat/benchmark_baseline.csv (ships with the tests, unlike benchmarks/).
+#   - Baseline is tests/testthat/benchmark_baseline.csv (ships with the tests, unlike dev/benchmarks/).
 #     Regenerate it with dev/make_benchmark_baseline.R.
 # See: helper-benchmark.R, dev/make_benchmark_baseline.R, CLAUDE.md > 1.4.0 roadmap.
 
