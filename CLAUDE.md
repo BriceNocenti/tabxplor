@@ -212,7 +212,7 @@ This roadmap is the **plan of plans**: the phased implementation order plus ever
 4. **Top of this CLAUDE.md** — Repository Map, Global Architecture, Key Constraints, Design Decisions.
 
 **Other long-form 1.4.0 docs live in `dev/` (all `.Rbuildignore`'d), never inline here — read the matching ones before you start:**
-- `dev/benchmarks/` — performance harness + saved results (documented under *Reference > Benchmarks*). Read/run when a phase touches perf (Phases 2, 3, 8).
+- `dev/benchmarks/` — performance harness + saved results (documented under *Reference > Benchmarks*). Read/run when a phase touches perf (Phases 2, 3, 6, 8).
 - `dev/benchmarks/tab_many_performance_profile.md` — the full 2026-07 profile. Read before optimizing `tab_many` / `tab_chi2` / `tab_num`.
 
 ### Settled architecture decisions (2026-07 planning session)
@@ -227,7 +227,7 @@ This roadmap is the **plan of plans**: the phased implementation order plus ever
 
 #### Keystone — the aggregate-core
 
-One internal canonical representation — a keyed count-aggregate (`n`, `wn` per `tab_vars × row_var × col_var-cell`, NA kept; **for numeric col_vars this must be a sufficient-statistics aggregate carrying moment-sums `Σwt·x`, `Σwt·x²` (+ unweighted `Σx`, `Σx²`), NOT counts — else means/var/CI/t can't be recovered and the `weighted.var` double-scan survives; plus `Σwt²` on both branches for Kish `n_eff` (§14 weighted inference); open item G1**) — and one pure core turning `(aggregate, settings)` → fmt columns. Both entry points converge on it:
+One internal canonical representation — a keyed count-aggregate (`n`, `wn` per `tab_vars × row_var × col_var-cell`, NA kept; **for numeric col_vars this must be a sufficient-statistics aggregate carrying moment-sums `Σwt·x`, `Σwt·x²`, NOT counts — else means/var/CI/t can't be recovered and the `weighted.var` double-scan survives; plus `Σwt²` on both branches for Kish `n_eff` (§14 weighted inference); unweighted moment-sums dropped (review 4 — §14 uses weighted dispersion only); open item G1**) — and one pure core turning `(aggregate, settings)` → fmt columns. Both entry points converge on it:
 
 ```
 microdata ─ tab_prepare ─┐
@@ -267,7 +267,7 @@ Grounding (code refs + statistics + caveats) in `dev/tabxplor_1.4.0_decisions.md
 10. **Weighted inference (Q5, §14)** — one rule for every CI/test: **weighted estimate + unweighted `n`** (for a 0/1 var, weighted-var + unweighted-n ≡ weighted-% + unweighted-n → proportions and means unified). Fixes the §12 self-contradiction. Caveat: anti-conservative under variable weights (`deff→1`); Kish `n_eff=(Σw)²/Σw²` a cheap opt-in (needs `Σw²`, G1). NOT full survey design.
 11. **CI ⇄ stars duality (Q6, §15)** — the bracket and the stars must be duals. Significance stars are opt-in; **when on**, `pvalue` = two-proportion **score test** and the stored diff interval switches **AC→Newcombe** (its score dual); `ci="cell"` already Wilson, means Welch-t, OR log-Wald (all duals). AC stays the no-stars default (less golden churn).
 12. **`tab_many()` return type (Q7, §13)** — **preserve the list-default** for the soft-deprecated `tab_many` alias; only the unified `tab()` merges by default. No silent return-type break.
-13. **Test-result placement (Q8, §16)** — whole-**table** test → table attribute (generalise `chi2`→`test` to also hold ANOVA/F); whole-**column** test → column attribute; per-**cell** significance → the `pvalue` field. Display: a p-value *row* for now; a future `!`-per-cell "weak-test" warning documented.
+13. **Test-result placement (Q8, §16)** — whole-**table** test → table attribute (generalise `chi2`→`test` to also hold ANOVA/F); whole-**column** test → rows of the same `test` tibble keyed by col_var (Q15, review 4 — was: column attribute); per-**cell** significance → the `pvalue` field. Display: a p-value *row* for now; a future `!`-per-cell "weak-test" warning documented.
 
 **Review session 3 (2026-07-07)** — closures from the consistency review (detail: `dev/tabxplor_1.4.0_decisions.md` §15-18 + *Status*):
 
@@ -275,6 +275,13 @@ Grounding (code refs + statistics + caveats) in `dev/tabxplor_1.4.0_decisions.md
 15. **Whole-table test slot (Q11, §16-17)** — **hard rename** of the `chi2` table attribute → `test` (constructor arg follows; one tibble holding chi2 + ANOVA/F with a discriminator column); `attr(x, "chi2")` → NULL is an accepted §17 break. Lands in Phase 3 with the chi2-leftovers cleanup.
 16. **Stars vs explicit method (Q12, §15)** — the AC→Newcombe switch is **default-sensitive**: only when `method_diff` was left default; an explicit method is respected + one-time message that bracket ⇄ stars are no longer exact duals.
 17. **G2 closed + serialization non-issue (§ *Status*, §17)** — vectorised chi2 must match `chisq.test()` defaults **exactly, incl. Yates on 2×2** (today's path calls it with defaults, `tab.R` ~L5290; golden locks it). Old serialized tabs are a non-issue (tabs are exported or re-created from code, never saved as `.rds`) — documented unsupported, no upgrade shim.
+
+**Review session 4 (2026-07-07)** — inference pins + precision closures from the deep review (detail: `dev/tabxplor_1.4.0_decisions.md` §14-16, §19 + *Status*):
+
+18. **Omnibus F weighting (Q13, §14)** — the mean-table Welch F follows the §14 rule (weighted means/variances + unweighted `n`), testing the numbers the table displays; **chi2 stays fully unweighted** (G2 parity) — a documented asymmetry on weighted tables.
+19. **Mean CI quantile (Q14, §15)** — a second swap-under-stars pair: mean intervals keep today's `z` (`qnorm`, verified `tab.R` ~L5591) when stars are off, switch to **Welch-t** when stars are on — the dual of the Welch-t `pvalue`.
+20. **Per-column tests (Q15, §16)** — per-col_var chi2/F results are **rows of the table-level `test` tibble** (today's chi2 mechanism), NOT a new fmt column attribute — the 8-attribute contract holds.
+21. **Empirical-OR reference (Q16, §19)** — keep `ref2="first"` (the maintainer's data puts the positive level first); glm-convention alignment decided at tab_logit integration. Precision closures: the score test is **uncorrected** (Newcombe-10 dual — never `prop.test()`'s Yates default, §15); G1 drops the unweighted moment-sums; **D3** interim — Phase 2 flips numeric `diff` field+display but numeric *color* keeps reading `ratio` until Phase 5; the §10 `[min;max]` range is a **table-level display pre-pass** (`format()` is per-column; Excel may fall back to `min`); `totrow=FALSE` stays cosmetic during deprecation (§6).
 
 #### Verification (every phase)
 
@@ -303,12 +310,12 @@ One vctrs-record surgery, BEFORE the core rewrite → **18 fields**: add `pvalue
 
 #### To implement
 
-1. Some careful modifications of vctrs fields for class `tabxplor_fmt`, along with changes in tables code to work with them. The main change would be to add a new field with the reference total count `ref_n`, for each fmt value, to do all relevant calculations with this data (instead of relying on, and introduces approximation when different columns variables do not have the same exact same total count due to missing values, as the default behaviour is to use only the total column of the last `col_var`). Would `ref_wn` be necessary too ? Then, all the use of totals should be fully rewritten and rethougth.
+1. Some careful modifications of vctrs fields for class `tabxplor_fmt`, along with changes in tables code to work with them. The main change would be to add a new field with the reference total count `ref_n`, for each fmt value, to do all relevant calculations with this data (instead of relying on, and introduces approximation when different columns variables do not have the same exact same total count due to missing values, as the default behaviour is to use only the total column of the last `col_var`). Would `ref_wn` be necessary too ? Then, all the use of totals should be fully rewritten and rethougth. **Resolved (§2, §11): the stored field is `tot_n`** (each cell's own unweighted base; `ref_n` renamed); `ref_wn`/`tot_wn` is NOT stored — recovered as `wn/pct` via `get_tot_wn()`; the full totals rewrite is Phase 2's aggregate-core.
 
 **Logit field/display prep** (fold the *field* needs into this pass; the *display* items — 1/OR, stars — land in Phases 3/7):
 
 Prepare tab_logit() integration into tabxplor_fmt class and `tab()` calculations and display :
-- OR : column ref default to 2, or last (otherwise it's done for the "no" column, which is not user-friendly !) ?
+- OR : column ref default to 2, or last (otherwise it's done for the "no" column, which is not user-friendly !) ? **Resolved (Q16, §19): keep `ref2="first"`** — the maintainer's data convention puts the positive level first ("Oui" first); glm-convention alignment decided at tab_logit integration.
 - OR : when OR < 1, print 1/OR everywhere at display level for the user to be able to compare OR between 0 and 1 to OR > 1 meaningfully since it’s by construction symetric that way. For example, if `OR = 0.25`, we should calculate the inverse `1/0.25 = 4`, and print `1/4` (console + exports ; would a Excel cell format permits it ?)
 - OR : print signif stars *** ** * (cf. above)
 - OR : with 2 levels, no ref2 and all OR calculated (positive/negative levels) ; with 3 levels, ref2 needed
@@ -317,7 +324,7 @@ Prepare tab_logit() integration into tabxplor_fmt class and `tab()` calculations
 
 ### Phase 2 — Aggregate core + math unification
 
-Extract the canonical count-aggregate; one implementation each of pct/diff/OR/totals over it; route `tab_plain`/`tab_num` through it; re-make `tab_pct`/`tab_tot`/`tab_totaltab` as superseded thin wrappers. Per-cell `tot_n` (§2; the weighted base recovered as `wn/pct`) + the globalised row_var axis (§5) let each cell compute its pct/diff/CI/test from its own fields — retiring `detect_totcols` and building exactly one total column. Byte-verify via golden; benchmark before/after.
+Extract the canonical count-aggregate; one implementation each of pct/diff/OR/totals over it; route `tab_plain`/`tab_num` through it; re-make `tab_pct`/`tab_tot`/`tab_totaltab` as superseded thin wrappers. Per-cell `tot_n` (§2; the weighted base recovered as `wn/pct`) + the globalised row_var axis (§5) let each cell compute its pct/diff/CI/test from its own fields — retiring `detect_totcols` and building exactly one total column. Preserve the ordering invariant inside the core (non-first levels dropped only after chi2/ci). **D3 interim** (decisions § *Phasing*): Phase 2 flips numeric `diff` to a real difference (field + display — conscious golden change), but numeric *coloring* keeps reading `ratio` (old behaviour, `mean_breaks`) until Phase 5 lands the mode split. Byte-verify via golden; benchmark before/after.
 
 #### To verify
 
@@ -325,7 +332,7 @@ Extract the canonical count-aggregate; one implementation each of pct/diff/OR/to
 
 ### Phase 3 — CI + chi2 onto the aggregate (headline perf)
 
-Vectorize proportion-CI and chi2 onto the aggregate (drop the `dplyr::across` + per-cell `DescTools`/`chisq.test` + `group_split` path), following the `tab_num` mean-CI template. Store CI as asymmetric `ci_inf`/`ci_sup` bounds (fixes the Wilson/AC symmetric-bracket bug); **per-cell significance is a stored `pvalue`** (§12), not the bounds; compact `± moe` shows the larger arm. **Weighted estimate + unweighted `n`** for every CI/test (§14 — Kish `n_eff` opt-in). **CI ⇄ stars duality** (§15): when stars are on, `pvalue` = score test and the diff interval switches AC→Newcombe. **Add the mean-table omnibus = ANOVA/Welch F** (the true chi2 mirror, Q4) alongside chi2; test results land as attributes rendered as a row for now (§16 — the `chi2` attribute **hard-renamed `test`**, Q11). Chi2/F must match `chisq.test()` defaults **exactly, incl. Yates on 2×2** (**G2 resolved**, § *Status*). `tab_chi2` is the #1 cost — benchmark before/after. Requires the sufficient-statistics aggregate (moment-sums + `Σw²` for numerics — open item G1). Detail: `dev/tabxplor_1.4.0_decisions.md` §1, §12, §14-16.
+Vectorize proportion-CI and chi2 onto the aggregate (drop the `dplyr::across` + per-cell `DescTools`/`chisq.test` + `group_split` path), following the `tab_num` mean-CI template. Store CI as asymmetric `ci_inf`/`ci_sup` bounds (fixes the Wilson/AC symmetric-bracket bug); **per-cell significance is a stored `pvalue`** (§12), not the bounds; compact `± moe` shows the larger arm. **Weighted estimate + unweighted `n`** for every CI/test (§14 — Kish `n_eff` opt-in). **CI ⇄ stars duality** (§15): when stars are on, `pvalue` = **uncorrected** score test, the diff interval switches AC→Newcombe (uncorrected pair) and mean intervals switch z→**Welch-t** (Q14). **Add the mean-table omnibus = ANOVA/Welch F** (the true chi2 mirror, Q4; weighted estimates + unweighted `n` per §14, Q13) alongside chi2 (kept fully unweighted, G2); test results land as attributes rendered as a row for now (§16 — the `chi2` attribute **hard-renamed `test`**, Q11; per-column results = rows of the same tibble, Q15). Chi2 must match `chisq.test()` defaults **exactly, incl. Yates on 2×2** (**G2 resolved**, § *Status*). `tab_chi2` is the #1 cost — benchmark before/after. Requires the sufficient-statistics aggregate (moment-sums + `Σw²` for numerics — open item G1). Detail: `dev/tabxplor_1.4.0_decisions.md` §1, §12, §14-16.
 
 #### To verify
 
@@ -334,12 +341,12 @@ Vectorize proportion-CI and chi2 onto the aggregate (drop the `dplyr::across` + 
 #### To implement
 
 3. Confidence intervals
-- `tab_ci()` : redo carefully, in a simplified version giving the same results and using the same calculations, using the new `ref_n` vctrs- field (use it to really simplify and accelerate it). The current version is a bit of a white elephant, supposed to handle every situation, but this flexibility is useless because these situation never happens : it would be way simpler, way faster and more reliable if the calculation was done in a data.table step in `tab_plain` or `tab_num`.
+- `tab_ci()` : redo carefully, in a simplified version giving the same results and using the same calculations, using the new `tot_n` vctrs field (§2 — renamed from `ref_n`; use it to really simplify and accelerate it). The current version is a bit of a white elephant, supposed to handle every situation, but this flexibility is useless because these situation never happens : it would be way simpler, way faster and more reliable if the calculation was done in a data.table step in `tab_plain` or `tab_num`.
 - avec `ci = "diff"` and other relevant ones, afficher la significativité de la différence par rapport à la référence avec des étoiles. Default to `*` for 90%, `**` for 95%, `***` for 99%,- customisable in options(). Should also work with odds ratio (empirical odds ratio not coming from a logistic regression that is) : how to do it ? It should then print everywhere (unless it’s opted out) : in console, in Excel, in tab_kable, etc. **Resolved (Q2/Q5/Q6, §12, §14-15): the stars read a stored per-cell `pvalue`** — factor `ci="diff"` = two-proportion score test, numeric `ci="diff"` = Welch t, empirical OR = log-OR Wald, logit = model p; **weighted estimate + unweighted `n`** base (§14); stars opt-in, and when on the diff interval switches AC→Newcombe so bracket ⇄ stars agree (§15); one field → prints everywhere.
 - with `ci = "cell"`, also calculate ci for total or reference, since it’s meaningful
 
 4. Test du Chi2 et nouveau T-Test
-- tab_chi2() is a performance bottleneck, specially with weights. Rationale : .
+- tab_chi2() is a performance bottleneck, specially with weights. Rationale: 84% of a small 9-tab call, N-independent, scales with cells — see `dev/benchmarks/tab_many_performance_profile.md`.
 - If it does not already exists, add a testthat test, on simple tables, to ensure the resulting pvalue is always the same than with the plain `chisq.test()` function used on a  plain table.
 - pvalue lines : need it's own color, red when p<5% ?
 - properly remove chi2 attribute old implementation leftovers everywhere. Would there be caveats ? **Resolved (Q11, §16): the attribute is hard-renamed `chi2`→`test`** (constructor arg follows); `attr(,"chi2")` → NULL is an accepted break (§17).
@@ -390,7 +397,7 @@ Now the `ratio` field exists (Phase 1): implement `"diff"`/`"ratio"`/`"diff_rati
 #### To implement
 
 2. Merge between `tab()` and `tab_many()`
-- That would make current `tab_many()` the base function (with argument to get the same behaviour as `tab()`) but soft deprecate the `tab_many` alias to directly use `tab` alias from now on. The original rationale for separating the two was : `tab_plain` is the core worker but lacks many advanced option ; `tab_many` is the most flexible for big tables, with many options ; `tab` was centered around the necessity to keep the whole population (who is in `n` ?) and NA handling consistent with having a single row variable and a single column variable. Since most of the time (with row percentages), only one total column was kept, the `n` count could be different for every col var : it won’t be the case anymore if `ref_n` reference total is stored in a vctrs fields for each cell.
+- That would make current `tab_many()` the base function (with argument to get the same behaviour as `tab()`) but soft deprecate the `tab_many` alias to directly use `tab` alias from now on. The original rationale for separating the two was : `tab_plain` is the core worker but lacks many advanced option ; `tab_many` is the most flexible for big tables, with many options ; `tab` was centered around the necessity to keep the whole population (who is in `n` ?) and NA handling consistent with having a single row variable and a single column variable. Since most of the time (with row percentages), only one total column was kept, the `n` count could be different for every col var : it won’t be the case anymore if the `tot_n` base total (§2 — renamed from `ref_n`) is stored in a vctrs field for each cell.
 
 #### To think about
 
