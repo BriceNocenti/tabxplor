@@ -179,21 +179,24 @@ devtools::test("d:/Statistiques/github/tabxplor", filter = "tab")  # one/few fil
 
 ## Architecture Technical Guide
 
-For the full detailed technical reference, see `vignettes/tabxplor_architecture.Rmd`. That vignette documents every subsystem in depth. Note: some details may be out of date if recent changes were not reflected — always verify against the current code.
+For the full detailed technical reference, see `dev/tabxplor_architecture.md`, which documents every subsystem in depth. Keep it up-to-date.
+
 
 ---
-
-## Update NEWS.md at real user-facing changes, README.Rmd before release to CRAN only
-
-- `NEWS.md`: user-facing and CRAN-facing, tracking new functions, new arguments and arguments changes, deprecations, and important bugs fixes. Keep it minimalistic and no bullshit. Do not edit it when it’s not necessary.
-- `README.Rmd` : user manual. Only update before release of new version to CRAN, remind user if needed.
-
----
-
 
 ## tabxplor version 1.4.0 roadmap : the current goal
 
-Currently implementing tabxplor 1.4.0 (2.0.0 only if breaking changes land). **Update the status column and the log below at the end of every work session**. Each workstream gets its own plan file under `~/.claude/plans/` when it starts.
+Currently implementing tabxplor 1.4.0 (2.0.0 only if breaking changes land). **Update the sections below at the end of every work session**. Everything implying global package architectural decisions, common and cross features, etc. comes in `dev/tabxplor_architecture.md` or project CLAUDE.md. Each workstream gets its own plan file under `~/.claude/plans/`.
+
+### Settled architecture decisions (2026-07 planning session)
+
+Full analysis + phased order: plan file `~/.claude/plans/taking-into-account-all-structured-sloth.md`.
+
+- **Keystone = aggregate-core**: one canonical count-aggregate (`n`/`wn` per `tab_vars × row_var × col_var-cell`, NA kept) + one pure computation core (pct/diff/OR/CI/chi2/totals). Both entry points (microdata *and* from-counts) feed it. Kills the duplicated `tab_plain`-inline vs `tab_pct`-dplyr math; lets CI/chi2 join the fast path; gives `ref_n` for free; defines Jamovi cache boundaries. `tab_pct`/`tab_tot`/`tab_ci`/`tab_chi2` stay exported but become superseded thin wrappers over the core. Physical `.fine` scan-fusion stays opt-in/large-N/Jamovi only — do not conflate with the conceptual core.
+- **Output shape**: `output_list` (default `FALSE`) replaces `compact`; `compact` deprecated (arg), `tabxplor.compact` option removed. Compact-loss analysis persisted in `dev/tabxplor_architecture.md` ("Compaction: what is lost when tables are bound"). Verdict: single-table default only gives up per-row_var flexibility real analysis never uses (divergent color/ref/ci-type on the *same column*); each-variable-vs-own-total is preserved. When `tab_vars` present, compaction can't merge → keep multi-table regardless.
+- **Field surgery = one combined pass** (before the core rewrite): `ref_n` [+ maybe `ref_wn`] + dedicated diff/ratio field + resolve `mean`-overload + a **CI `ci_low`/`ci_up` pair** (kept alongside the `ci` half-width; the single half-width can't express asymmetric OR CIs — this covers proportion-CI, mean-diff CI, and tab_logit OR-CIs). Do NOT pre-add se/z/coef/pvalue fields (tab_logit WIP never displays them; keep stars/p sidecar). After this pass tab_logit needs no further field surgery.
+- **From-the-middle constructor** (`as_tab_counts()`): support long tidy counts, wide count matrix, frequencies+base N. Validate once at the boundary → same core. Require real unweighted `n`; warn/disable CI/chi2 on frequency-only input.
+- **Order**: 0 finish safety net → 1 combined field pass → 2 aggregate core + math unification → 3 CI/chi2 onto aggregate (headline perf) → 4 counts constructor → 5 color diff/ratio split → 6 tab()→tab_many() merge + output_list → 7 unified exporter prep → 8 Jamovi caching. Each phase: golden/parity green + **save before/after benchmarks** (`benchmarks/results_1.4.0/`).
 
 ### Chosen features to implement + things yet to think about
 
@@ -372,9 +375,18 @@ Original investigation notes (why fusion, not GForce):
 
 ---
 
-## CLAUDE.md / 1.4.0 roadmap Update Instruction
+## The last step of every implementation : Update Instructions
 
-When you modify the package structure (add modules, rename functions, change config fields), suggest the relevant CLAUDE.md update lines in your response : it should be minimalistic, concice, no bullshit, with nothing useless that would clutter the prompt. When there is nothing to change, skip it.
+After verification passes always, from the most detailed to the most concise :
 
-Keep the tabxplor version 1.4.0 roadmap above up-to-date as you build it or implement it.
+1. Ensure the file-header docstring/comment of any modified module is still accurate. Update or add `# DESIGN:` / `# WARNING:` tags next to changed logic.
+2. Keep the tabxplor version 1.4.0 roadmap in CLAUDE.md up-to-date as you build it or implement it.
+3. Update `dev/tabxplor_architecture.md` whenever you modify the package structure (add modules, rename functions, change config fields). Do not add clutter and useless details. When there is nothing to change, skip it. Update other `dev/*md` file when relevant.
+4. For package structure and architecture, also add the relevant CLAUDE.md update lines in your response : it should be minimalistic, concice, no bullshit, with nothing useless that would clutter the prompt, since the details are already in `dev/tabxplor_architecture.md`. When there is nothing to change, skip it.
+
+###  Update NEWS.md at real user-facing changes, README.Rmd before release to CRAN only
+
+- `NEWS.md`: user-facing and CRAN-facing, tracking new functions, new arguments and arguments changes, deprecations, and important bugs fixes. Keep it minimalistic and no bullshit. Do not edit it when it’s not necessary.
+- `README.Rmd` : user manual. Only update before release of new version to CRAN, remind user if needed.
+
 

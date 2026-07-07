@@ -1,11 +1,3 @@
----
-title: "tabxplor — Technical Architecture Guide"
-output: rmarkdown::html_vignette
-vignette: >
-  %\VignetteIndexEntry{tabxplor — Technical Architecture Guide}
-  %\VignetteEngine{knitr::rmarkdown}
-  %\VignetteEncoding{UTF-8}
----
 
 This document is the **internal technical reference** for the tabxplor package. It is intended for developers and AI assistants modifying the codebase. For user-facing documentation, see `vignette("tabxplor")`.
 
@@ -70,7 +62,7 @@ tabxplor creates, manipulates, and formats color-coded cross-tabulation tables f
 
 ### tabxplor_tab — The Table Tibble
 
-`tabxplor_tab` is a tibble subclass created via `tibble::new_tibble()` in `R/tab_classes.R`. It adds two attributes beyond what a regular tibble carries:
+`tabxplor_tab` is a tibble subclass created via `tibble::new_tibble()` in `R/tab_classes.R` : it’s strenght is to work with normal `dplyr` workflows. It adds two attributes beyond what a regular tibble carries:
 
 - `subtext` (character vector): Legend lines printed below the table.
 - `chi2` (tibble): Chi-squared test results with columns: `tables`, `pvalue`, `df`, `cells`, `variance`, `count`.
@@ -87,7 +79,7 @@ This class requires a separate S3 method for **every dplyr verb** to preserve cl
 
 ## Calculation Pipeline
 
-The main pipeline flows through these functions in `R/tab.R`:
+The old pipeline flowed through these functions in `R/tab.R`. But some should become internals. 
 
 ```
 tab(data, row_var, col_var, ...)
@@ -121,6 +113,34 @@ tab(data, row_var, col_var, ...)
 
 Arguments vectorised over row_vars: `totaltab`, `totrow`, `ref`, `ref2`, `OR`, `comp`, `color`, `ci`, `chi2`.
 Arguments vectorised over col_vars: `levels`, `digits`, `totcol`, `pct`.
+
+### Compaction: what is lost when tables are bound (the `output_list` decision)
+
+By default `tab_many()` returns one table: the per-row_var results are bound vertically with `tab_compact()` (`R/tab_classes.R`), which stacks each variable's levels as rows (a `row_var` factor column marks the source) sharing the **same** `col_var` columns. A list of separate tables is available on demand (from 1.4.0, `output_list = TRUE`; the old `compact` argument is deprecated). This section documents exactly what compaction costs, so the single-table default is a conscious trade-off rather than a hidden one.
+
+The `fmt` record splits into per-cell **fields** and per-column **attributes** (see the Type System section). When blocks are row-bound, the two behave differently:
+
+- **Per-cell fields** (`n`, `wn`, `pct`, `mean`, `diff`, `ctr`, `var`, `ci`, `rr`, `or`, `in_*`) are simply stacked as rows and are **fully preserved**.
+- **Per-column attributes** (`type`, `comp_all`, `ref`, `ci_type`, `col_var`, `totcol`, `refcol`, `color`) are scalar — one value per column — so if two variables were computed with different settings for the *same* column, the merged column keeps only **one** value.
+
+Concretely, for each argument vectorised over row_vars:
+
+| row-vectorised arg | backed by | effect of compaction | genuinely needed? |
+|---|---|---|---|
+| `color` | `color` attribute | color **mode** collapses to one; the underlying `diff`/`or`/`rr` **values** stay (fields) | no — analysts use one colour scheme per table |
+| `ref` / `ref2` | `ref` attribute + baked diffs | each block's diffs are already computed against its **own** total (compaction promotes each block's total to its reference row before binding), so the **displayed** result is preserved; only re-computability against a different ref collapses | displayed result preserved; divergent-ref recompute is not needed |
+| `comp` | `comp_all` attribute | moot: compaction requires **no** `tab_vars`, and `comp` only matters with `tab_vars` | not applicable |
+| `OR` | `or`/`rr` fields + color mode | values kept; only the colour-mode/`totcol` side collapses | no |
+| `ci` | `ci_type` attribute + `ci` field | CI **values** kept; the CI **type** (cell / diff_row / diff_col) collapses to one | rarely differs per variable |
+| `chi2` | table-level `chi2` tibble | **concatenated** across blocks, not lost | preserved |
+| `totrow` / `totaltab` | rows + fields | total rows **stack as rows**; each block's total becomes its reference row | preserved |
+
+Two structural limits of `tab_compact()`:
+
+- It **errors** if the bound tables have different `col_vars`. In practice `tab_many()` gives every row_var the same `col_vars`, so this is not a real loss.
+- It **refuses** tables that carry `tab_vars` (returns them unchanged). So when `tab_vars` are present, a multi-row_var call cannot be compacted and the multi-table structure is kept regardless of `output_list`.
+
+**Bottom line.** What the single-table default gives up is per-row_var flexibility that real data analysis does not use — a *different* colour mode, reference, or CI type for the *same column* across variables. The one case analysts genuinely rely on — each variable coloured against its own total — survives, because it lives in the cell fields and each block's reference is baked in before binding. Everything else is opt-in recoverable with `output_list = TRUE`, which is also the entry point for manual per-table editing.
 
 ### tab_plain() — The Aggregation Core
 
