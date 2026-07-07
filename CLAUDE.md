@@ -78,7 +78,7 @@ Export:  tab_xl()  |  tab_kable()  |  tab_md()  |  tab_plot()
 | Options as config        | All defaults set in `.onLoad()` in `utils.R`. Users override via `options()`. Functions read with `getOption()`.                                                                                                                         |
 | Suggests-only guards     | `openxlsx`, `ggplot2`, `jmvcore`, `ggpubr`, `cowplot` are in Suggests. Every call must be guarded with `requireNamespace()` or equivalent.                                                                                               |
 | Color break mirroring    | `set_color_breaks()` takes positive-only thresholds. Negative breaks are auto-mirrored internally. Any `pct_breaks` value > 1 triggers ratio comparison instead of difference (the "*2 rule").                                           |
-| Mean-diff asymmetry      | For `type="mean"` columns, the `diff` field stores a **ratio** (cell_mean / ref_mean), NOT a difference. Thresholds like 1.15 mean "+15% above reference". This asymmetry propagates into `color_formula()` and `format.tabxplor_fmt()`. **(1.4.0 §3: numeric `diff` becomes a real difference; the ratio moves to a dedicated `ratio` field.)** |
+| Mean-diff asymmetry      | For `type="mean"` columns, the `diff` field stores a **ratio** (cell_mean / ref_mean), NOT a difference. Thresholds like 1.15 mean "+15% above reference". This asymmetry propagates into `color_formula()` and `format.tabxplor_fmt()`. **(1.4.0 §3: numeric `diff` becomes a real difference; the ratio moves to the `ratio` field — the never-used `rr` field renamed, placed after `diff`.)** |
 | tab_logit                | Entirely commented out (WIP). Do not try to use or integrate. Will be developed in the future.                                                                                                                                           |
 
 
@@ -89,7 +89,7 @@ Export:  tab_xl()  |  tab_kable()  |  tab_md()  |  tab_plot()
 ### Type System
 
 - **`tabxplor_fmt`**: vctrs record (`new_rcrd()`) with 15 per-cell fields and 8 per-column attributes. The critical distinction: fields vary per cell (accessed via `vctrs::field()`), attributes are scalar describing the whole column (accessed via `attr()`). Constructor chain: `fmt()` (public, validates + coerces) -> `new_fmt()` (internal, calls `vctrs::new_rcrd()`). *(1.4.0 reshapes this to **18 fields** in one combined pass — decisions doc §9.)*
-- **`mean` field overload** (cross-cutting): for **pct-type** columns the `mean` field carries the cell/reference **ratio** for the "*2 rule" (not an actual mean). Written by `tab_pct()`, read by `fmt_color_selection()`. Pragmatic reuse — **split into a dedicated `ratio` field in Phase 1/5** (decisions doc §3), removing this overload.
+- **`mean` field overload** (cross-cutting): for **pct-type** columns the `mean` field carries the cell/reference **ratio** for the "*2 rule" (not an actual mean). Written by `tab_pct()`, read by `fmt_color_selection()`. Pragmatic reuse — **moved to the `ratio` field in Phase 1** (the never-used `rr` field renamed; decisions doc §3), removing this overload.
 - **`tabxplor_tab`**: tibble subclass via `tibble::new_tibble()` with `subtext` (legend text) and `chi2` (test results tibble) attributes.
 - **`tabxplor_grouped_tab`**: extends `grouped_df` for subtabled results (when `tab_vars` are present). Requires separate S3 method for every dplyr verb.
 
@@ -119,7 +119,7 @@ Note: `ref` is **reinterpreted by `pct`** — a reference **row** under `pct="ro
 
 1. **Palettes** (`tab_classes.R` ~L2892): 6 named color vectors (dark/light text, 24-bit blue-red/green-red, dark/light background), each with 11 hex codes: `pos1`-`pos5` (over-represented), `neg1`-`neg5` (under-represented), `ratio`. Hues are hand-tuned so intensity levels are eye-distinguishable on real tables; 8-bit variants target non-truecolor terminals; the 24-bit blue-red variant is more colorblind-friendly than green-red (fuller colorblind support is a future goal).
 2. **Breaks** (`set_color_breaks()` in `tab_classes.R`): stored in `options("tabxplor.color_breaks")`. Default pct: `c(0.05, 0.1, 0.2, 2, 0.3)` — the `2` means "twice the reference" (ratio mode). Mirrored for negative. Mean breaks: `c(1.15, 1.5, 2, 4)` — always ratios.
-3. **Selection** (`fmt_color_selection()` in `fmt_class.R`): iterates breaks, applies `color_formula()` per break level, `keep_last_break()` picks the strongest matching threshold per cell. Different boolean formulas for each color mode (`diff`, `diff_ci`, `after_ci`, `contrib`, `OR`).
+3. **Selection** (`fmt_color_selection()` in `fmt_class.R`): iterates breaks, applies `color_formula()` per break level, `keep_last_break()` picks the strongest matching threshold per cell. Different boolean formulas for each color mode: `diff`, `diff_ci`, `ci`, `after_ci`, `contrib`, `OR` (+ the 1.4.0 additions `ratio`/`diff_ratio`, Phase 5).
 
 ### dplyr Integration
 
@@ -227,7 +227,7 @@ This roadmap is the **plan of plans**: the phased implementation order plus ever
 
 #### Keystone — the aggregate-core
 
-One internal canonical representation — a keyed count-aggregate (`n`, `wn` per `tab_vars × row_var × col_var-cell`, NA kept) — and one pure core turning `(aggregate, settings)` → fmt columns. Both entry points converge on it:
+One internal canonical representation — a keyed count-aggregate (`n`, `wn` per `tab_vars × row_var × col_var-cell`, NA kept; **for numeric col_vars this must be a sufficient-statistics aggregate carrying moment-sums `Σwt·x`, `Σwt·x²` (+ unweighted `Σx`, `Σx²`), NOT counts — else means/var/CI/t can't be recovered and the `weighted.var` double-scan survives; review gap G1**) — and one pure core turning `(aggregate, settings)` → fmt columns. Both entry points converge on it:
 
 ```
 microdata ─ tab_prepare ─┐
@@ -244,21 +244,21 @@ Why it is the keystone — it simultaneously (a) kills the duplicated pct/total 
 #### The decisions
 
 - **Output shape**: `output_list` (default `FALSE`) replaces `compact`; `compact` deprecated (arg), `tabxplor.compact` option removed. Compact-loss analysis persisted in `dev/tabxplor_architecture.md` ("Compaction: what is lost when tables are bound"). Verdict: single-table default only gives up per-row_var flexibility real analysis never uses (divergent color/ref/ci-type on the *same column*); each-variable-vs-own-total is preserved. When `tab_vars` present, compaction can't merge → keep multi-table regardless.
-- **Field surgery = one combined pass** (before the core rewrite) → **18 fields**: add `ratio`, `tot_n`, `ci_inf`, `ci_sup`; **drop `ci`** (recomputed on `$`/`get_ci()` from the bounds; `fmt(ci=)` arg kept); numeric `diff` becomes a difference; `mean`-overload removed. CI is stored as asymmetric **bounds** — the current single upper-half-width + symmetric bracket is wrong for Wilson/AC proportions (means exact); OR CIs move off their sidecar into the fields. Do NOT pre-add se/z/coef/pvalue (tab_logit never displays them; stars/p stay sidecar). After this pass tab_logit needs no further field surgery. Detail: `dev/tabxplor_1.4.0_decisions.md` §1-3.
+- **Field surgery = one combined pass** (before the core rewrite) → **18 fields**: add `pvalue`, `tot_n`, `ci_inf`, `ci_sup`; **rename the unused `rr`→`ratio`** (placed after `diff`); **drop `ci`** (recomputed on `$`/`get_ci()` from the bounds; `fmt(ci=)` arg kept); numeric `diff` becomes a difference; `mean`-overload removed. CI is stored as asymmetric **bounds** (the single upper-half-width + symmetric bracket is wrong for Wilson/AC proportions; means exact); OR CIs move off their sidecar into the fields. **Per-cell significance is a stored `pvalue`** (Q2 — three star levels can't come from one CI level, and are undefined from bounds for asymmetric proportions/OR; decisions §12): factor `ci="diff"` = two-proportion score test, numeric `ci="diff"` = Welch t, empirical `OR` = log-OR Wald, logit = model p. Do NOT pre-add se/z/coef (tab_logit never displays them). After this pass tab_logit needs no further field surgery. Detail: `dev/tabxplor_1.4.0_decisions.md` §1-3, §12.
 - **From-the-middle constructor** (`as_tab_counts()`): support long tidy counts, wide count matrix, frequencies+base N. Validate once at the boundary → same core. Require real unweighted `n`; warn/disable CI/chi2 on frequency-only input.
-- **Order**: 0 finish safety net → 1 combined field pass → 2 aggregate core + math unification → 3 CI/chi2 onto aggregate (headline perf) → 4 counts constructor → 5 color diff/ratio split → 6 tab()→tab_many() merge + output_list → 7 unified exporter prep → 8 Jamovi caching. Each phase: golden/parity green + **save before/after benchmarks** (`dev/benchmarks/results_1.4.0/`).
+- **Order**: 0 finish safety net → 1 combined field pass → 2 aggregate core + math unification → 3 CI/chi2 onto aggregate (headline perf) → 4 counts constructor → 5 color diff/ratio split → 6 tab()→tab_many() merge + output_list → 7 unified exporter prep (on openxlsx v1) → 8 Jamovi caching → 9 Excel engine swap openxlsx→openxlsx2 (isolated; may slip to a 1.4.x follow-up). Each phase: golden/parity green + **save before/after benchmarks** (`dev/benchmarks/results_1.4.0/`).
 
 #### Resolved architecture decisions (2026-07)
 
 Grounding (code refs + statistics + caveats) in `dev/tabxplor_1.4.0_decisions.md`. Summary:
 
-1. **fmt fields** (Phase 1, §1-3) — one combined pass → **18 fields**: add `ratio`, `tot_n`, `ci_inf`, `ci_sup`; drop `ci` (recomputed from bounds on `$`/`get_ci()`; `fmt(ci=)` arg kept); numeric `diff` = difference; `mean`-overload removed.
-2. **CI = bounds** (Phase 3, §1) — store asymmetric `ci_inf`/`ci_sup`; the current upper-half-width + symmetric bracket mis-draws Wilson/AC proportion CIs (means exact). Significance reads the bounds; compact `± moe` shows the larger arm; tab_logit OR-CIs move into the fields (sidecar retired).
+1. **fmt fields** (Phase 1, §1-3, §12) — one combined pass → **18 fields**: add `pvalue`, `tot_n`, `ci_inf`, `ci_sup`; rename unused `rr`→`ratio` (after `diff`); drop `ci` (recomputed from bounds on `$`/`get_ci()`; `fmt(ci=)` arg kept); numeric `diff` = difference; `mean`-overload removed.
+2. **CI = bounds + `pvalue`** (Phase 3, §1, §12) — store asymmetric `ci_inf`/`ci_sup`; the current upper-half-width + symmetric bracket mis-draws Wilson/AC proportion CIs (means exact). **Per-cell significance reads the stored `pvalue`** (three star levels need a real p, undefined from one CI level for asymmetric proportions), not the bounds; compact `± moe` shows the larger arm; tab_logit OR-CIs move into the fields (sidecar retired).
 3. **`tot_n`** (Phase 1-2, §2 — renamed from the roadmap's `ref_n`) — each cell's OWN unweighted % base (its row/col total, *not* the diff-reference's n). Stored; the weighted base `tot_wn` is recovered as `wn/pct` (not a field). Retires `detect_totcols` on built tables. Only load-bearing for standalone `tab_ci`/`tab_pct` + post-processing (not the aggregate-core / Jamovi, which hold the aggregate); `tot_n` is a stable cache quantity (changes only with the base), vs the reference base which is re-read on `ref` change.
 4. **Row_var-axis globalised** (Phase 6, §5) — `OR/pct/color/comp/ci/chi2` and `ref2` are no longer vectorised over row_vars (mirror tables share them). Still per-row_var: `totaltab` and `ref` (named vector = one reference row per row_var; row%/means only, collapses under col% + message). col_var axis stays flexible (`pct/levels/digits` per col_var). Different tables → `list()` → export sequentially.
-5. **Totals** (Phase 6, §6) — deprecate `totrow` (always a total row) and **remove `totcol`** (always exactly one total column, after factor / before numeric cols); `tab_plain()` = the no-total escape hatch; move/drop via dplyr. The total column shows each row's base as a **display-time `[min;max]` range** across col_vars (scalar when equal; no field overload — §10).
+5. **Totals** (Phase 6, §6) — deprecate `totrow` (always a total row) and **soft-deprecate `totcol`** (Q1: default = exactly one total column, after factor / before numeric cols; old values `each`/`no`/names kept behind `deprecate_soft`, now purely cosmetic — never a calc base); `tab_plain()` = the no-total escape hatch; move/drop via dplyr. The total column shows each row's base as a **display-time `[min;max]` range** across col_vars (scalar when equal; no field overload — §10).
 6. **col% + several row_vars** (Phase 7, §7) — manual invert (row_vars↔col_vars, row%) + **opt-in transpose at export** (`tab_kable`/`tab_md`/`tab_xl`); console never transposes; warn on `pct="col"` with several row_vars. `tab_transpose()` integrated/exported here.
-7. **Exporters** (Phase 7, §8) — every exporter gets a base method (single tab) **and** a list method (several tabs rendered one-after-another, not merged), plus one shared prep helper preserving export parity.
+7. **Exporters** (Phase 7, §8) — every exporter gets a base method (single tab) **and** a list method (several tabs rendered one-after-another, not merged), plus one shared prep helper preserving export parity. Phase 7 stays on **openxlsx v1**; the **openxlsx2** engine swap is isolated to **Phase 9** (§8, review U3).
 8. **Deprecations** (Phase 6) — soft-deprecate singular `row_var`/`col_var` (only `row_vars`/`col_vars` remain); drop the `tabxplor.compact` option.
 9. **Class model** — keep the `tabxplor_tab`/`tabxplor_grouped_tab` split; `output_list = TRUE` container is a plain list for now. `/dplyr-method` if verbs change.
 
@@ -285,7 +285,7 @@ Retro-compat tests + benchmarks BEFORE any refactor. Nothing below is safe witho
 
 ### Phase 1 — Combined fmt field-contract pass
 
-One vctrs-record surgery, BEFORE the core rewrite → **18 fields**: add `ratio`, `tot_n`, `ci_inf`, `ci_sup`; **drop `ci`** (recomputed from the bounds on `$`/`get_ci()`; `fmt(ci=)` arg kept); numeric `diff` = difference; `mean`-overload removed. Fold the logit field/display prep below into it. Detail + caveats + touch-list: `dev/tabxplor_1.4.0_decisions.md` §1-3, §9. Skill: `/vctrs-field`.
+One vctrs-record surgery, BEFORE the core rewrite → **18 fields**: add `pvalue`, `tot_n`, `ci_inf`, `ci_sup`; **rename the unused `rr`→`ratio`** (placed after `diff`); **drop `ci`** (recomputed from the bounds on `$`/`get_ci()`; `fmt(ci=)` arg kept); numeric `diff` = difference; `mean`-overload removed. Fold the logit field/display prep below into it. Detail + caveats + touch-list: `dev/tabxplor_1.4.0_decisions.md` §1-3, §9, §12. Skill: `/vctrs-field`.
 
 #### To implement
 
@@ -298,7 +298,7 @@ Prepare tab_logit() integration into tabxplor_fmt class and `tab()` calculations
 - OR : when OR < 1, print 1/OR everywhere at display level for the user to be able to compare OR between 0 and 1 to OR > 1 meaningfully since it’s by construction symetric that way. For example, if `OR = 0.25`, we should calculate the inverse `1/0.25 = 4`, and print `1/4` (console + exports ; would a Excel cell format permits it ?)
 - OR : print signif stars *** ** * (cf. above)
 - OR : with 2 levels, no ref2 and all OR calculated (positive/negative levels) ; with 3 levels, ref2 needed
-- rr : relative risks, with pct types (how to do it ? merge with mean, don't call a ratio a "diff", cf. above ?).
+- rr / relative risks : **resolved (Q3)** — the renamed `ratio` field holds the relative risk `cell_pct/ref_pct` for pct columns (and `cell_mean/ref_mean` for numerics); it is the RR step feeding empirical OR. No `mean`/`diff` overload (§3, §12).
 - how to intelligently print : OR + ME ; mod_OR + emp_OR ; OR + PCT ?
 
 ### Phase 2 — Aggregate core + math unification
@@ -311,7 +311,7 @@ Extract the canonical count-aggregate; one implementation each of pct/diff/OR/to
 
 ### Phase 3 — CI + chi2 onto the aggregate (headline perf)
 
-Vectorize proportion-CI and chi2 onto the aggregate (drop the `dplyr::across` + per-cell `DescTools`/`chisq.test` + `group_split` path), following the `tab_num` mean-CI template. Store CI as asymmetric `ci_inf`/`ci_sup` bounds (fixes the Wilson/AC symmetric-bracket bug); significance tests read the bounds; compact `± moe` shows the larger arm. `tab_chi2` is the #1 cost — benchmark before/after. Detail: `dev/tabxplor_1.4.0_decisions.md` §1.
+Vectorize proportion-CI and chi2 onto the aggregate (drop the `dplyr::across` + per-cell `DescTools`/`chisq.test` + `group_split` path), following the `tab_num` mean-CI template. Store CI as asymmetric `ci_inf`/`ci_sup` bounds (fixes the Wilson/AC symmetric-bracket bug); **per-cell significance is a stored `pvalue`** (§12), not the bounds; compact `± moe` shows the larger arm. **Add the mean-table omnibus = ANOVA/Welch F** (the true chi2 mirror, Q4) alongside chi2. `tab_chi2` is the #1 cost — benchmark before/after. Requires the sufficient-statistics aggregate (moment-sums for numerics — review gap G1). Detail: `dev/tabxplor_1.4.0_decisions.md` §1, §12.
 
 #### To verify
 
@@ -321,7 +321,7 @@ Vectorize proportion-CI and chi2 onto the aggregate (drop the `dplyr::across` + 
 
 3. Confidence intervals
 - `tab_ci()` : redo carefully, in a simplified version giving the same results and using the same calculations, using the new `ref_n` vctrs- field (use it to really simplify and accelerate it). The current version is a bit of a white elephant, supposed to handle every situation, but this flexibility is useless because these situation never happens : it would be way simpler, way faster and more reliable if the calculation was done in a data.table step in `tab_plain` or `tab_num`.
-- avec `ci = "diff"` and other relevant ones, afficher la significativité de la différence par rapport à la référence avec des étoiles. Default to `*` for 90%, `**` for 95%, `***` for 99%,- customisable in options(). Should also work with odds ratio (empirical odds ratio not coming from a logistic regression that is) : how to do it ? It should then print everywhere (unless it’s opted out) : in console, in Excel, in tab_kable, etc.
+- avec `ci = "diff"` and other relevant ones, afficher la significativité de la différence par rapport à la référence avec des étoiles. Default to `*` for 90%, `**` for 95%, `***` for 99%,- customisable in options(). Should also work with odds ratio (empirical odds ratio not coming from a logistic regression that is) : how to do it ? It should then print everywhere (unless it’s opted out) : in console, in Excel, in tab_kable, etc. **Resolved (Q2, §12): the stars read a stored per-cell `pvalue`** — factor `ci="diff"` = two-proportion score test, numeric `ci="diff"` = Welch t, empirical OR = log-OR Wald, logit = model p; unweighted `tot_n` base; one field → prints everywhere.
 - with `ci = "cell"`, also calculate ci for total or reference, since it’s meaningful
 
 4. Test du Chi2 et nouveau T-Test
@@ -329,7 +329,7 @@ Vectorize proportion-CI and chi2 onto the aggregate (drop the `dplyr::across` + 
 - If it does not already exists, add a testthat test, on simple tables, to ensure the resulting pvalue is always the same than with the plain `chisq.test()` function used on a  plain table.
 - pvalue lines : need it's own color, red when p<5% ?
 - properly remove chi2 attribute old implementation leftovers everywhere. Would there be caveats ?
-- tab_num() / tableaux de moyennes : ajouter un T-Test / Test de Student (est-ce le bon test statistique pour savoir si les moyennes de différentes sous-populations sont significativement différentes ?) comme mirroir du test du Chi2 pour les tableux croisés normaux, et ajouter sa pvalue de la même manière en dessous des tableaux.
+- tab_num() / tableaux de moyennes : ajouter un T-Test / Test de Student (est-ce le bon test statistique pour savoir si les moyennes de différentes sous-populations sont significativement différentes ?) comme mirroir du test du Chi2 pour les tableux croisés normaux, et ajouter sa pvalue de la même manière en dessous des tableaux. **Resolved (Q4, §12): the whole-table mirror of chi2 is ANOVA / Welch F (the table line under mean tables); the per-cell cell-vs-reference test is the Welch two-sample t → the `pvalue` stars. Both coexist — omnibus vs pairwise, different questions.**
 
 #### To think about
 
@@ -352,7 +352,7 @@ Vectorize proportion-CI and chi2 onto the aggregate (drop the `dplyr::across` + 
 
 ### Phase 5 — Color diff/ratio split
 
-Now the ratio field exists (Phase 1): implement `"diff"`/`"ratio"`/`"diff_ratio"` modes + legend text. Skill: `/color-mode`. Also fix the pre-existing **col% + means** row/col reference mismatch (means referenced by row, factors by column — `dev/tabxplor_1.4.0_decisions.md` §7).
+Now the `ratio` field exists (Phase 1): implement `"diff"`/`"ratio"`/`"diff_ratio"` modes + legend text, **keeping the existing modes coherent in the same overhaul** (`diff_ci`, `ci`, `after_ci`, `contrib`, `OR` — do not drop the `ci` mode). Skill: `/color-mode`. Also fix the pre-existing **col% + means** row/col reference mismatch (means referenced by row, factors by column — `dev/tabxplor_1.4.0_decisions.md` §7).
 
 #### To verify
 
@@ -363,7 +363,7 @@ Now the ratio field exists (Phase 1): implement `"diff"`/`"ratio"`/`"diff_ratio"
 #### To implement
 
 2. Some careful modifications of the color helpers. The core will be to differenciate differences (`diff`) and ratios (`ratio`) for both : factors should keep the same behaviour than currently with `color = "diff"` ; but numeric variables with `color = "diff"` color differences, and return to the former behaviour with `color = "ratio"`. Maybe adding a `color = "diff_ratio"` possibility to use both, one using text color and the other background color (if will select background colors to ensure readability and ease of understanding when both are used for the same number) ? Question is : how to do a complete overall, integration and simplification of the current colors functions ecosystem to make it word and increase it’s user-friendliness ?
-- Where to store the values ? In one hand vctrs fields should be clear and. In the other hand,. With pct, would it be meaningful/clear to store ratios in relative risks ? Is that the same calculation that is a step to get odds ratios, or not at all ? With means/numeric variables ?
+- Where to store the values ? **Resolved (Q3):** in the renamed `ratio` field (was the unused `rr`) — for pct it IS the relative risk (`cell_pct/ref_pct`, the step toward empirical OR); for numerics it is `cell_mean/ref_mean`. `diff` stays a pure difference; `mean` holds only actual means. See §3, §12.
 
 #### To think about
 
@@ -371,7 +371,7 @@ Now the ratio field exists (Phase 1): implement `"diff"`/`"ratio"`/`"diff_ratio"
 
 ### Phase 6 — tab() → tab_many() merge + output_list
 
-`tab_many()` becomes the base; `tab()` a thin normalization shim. Add `output_list` (default `FALSE`), deprecate the `compact` argument, remove the `tabxplor.compact` option, keep multi-table when `tab_vars` present (compact-with-tab_vars deferred to Phase 7). `lifecycle::deprecate_soft("1.4.0", "tab_many()")`. **Also here (§4-6):** globalise the row_var axis (`OR/pct/color/comp/ci/chi2`, `ref2` no longer per-row_var; keep per-row_var `totaltab` + `ref` as a named vector, row%/means only); keep col_var axis flexible (`pct/levels/digits` per col_var); deprecate `totrow` (always a total row) and **remove `totcol`** (always one total column); soft-deprecate singular `row_var`/`col_var`. Detail: `dev/tabxplor_1.4.0_decisions.md`.
+`tab_many()` becomes the base; `tab()` a thin normalization shim. Add `output_list` (default `FALSE`), deprecate the `compact` argument, remove the `tabxplor.compact` option, keep multi-table when `tab_vars` present (compact-with-tab_vars deferred to Phase 7). `lifecycle::deprecate_soft("1.4.0", "tab_many()")`. **Also here (§4-6):** globalise the row_var axis (`OR/pct/color/comp/ci/chi2`, `ref2` no longer per-row_var; keep per-row_var `totaltab` + `ref` as a named vector, row%/means only); keep col_var axis flexible (`pct/levels/digits` per col_var); deprecate `totrow` (always a total row) and **soft-deprecate `totcol`** (default one total column; old values kept, cosmetic-only); soft-deprecate singular `row_var`/`col_var`. Detail: `dev/tabxplor_1.4.0_decisions.md`.
 
 #### To implement
 
@@ -384,29 +384,24 @@ Now the ratio field exists (Phase 1): implement `"diff"`/`"ratio"`/`"diff_ratio"
 
 ### Phase 7 — Unified exporter prep & display
 
-One shared exporter-prep helper for `tab_xl`/`tab_kable`/`tab_md`/`tab_plot`; keep export parity (`format.tabxplor_fmt` vs the `tab_xl` bypass). **Each exporter gets a base method (single tab) AND a list method** (several tabs rendered one-after-another, not merged — e.g. an HTML container for kable). **Integrate/export/document `tab_transpose()`** and the **opt-in transpose-at-export** for col% + several row_vars (console never transposes; warn on `pct="col"` with several row_vars). Revisit **compact-with-tab_vars** here (needs two-level nested rendering). Detail: `dev/tabxplor_1.4.0_decisions.md` §7-8.
+One shared exporter-prep helper for `tab_xl`/`tab_kable`/`tab_md`/`tab_plot`; keep export parity (`format.tabxplor_fmt` vs the `tab_xl` bypass). **Each exporter gets a base method (single tab) AND a list method** (several tabs rendered one-after-another, not merged — e.g. an HTML container for kable). **Integrate/export/document `tab_transpose()`** (already exported but an undocumented single-total stub — finish it) and the **opt-in transpose-at-export** for col% + several row_vars (console never transposes; warn on `pct="col"` with several row_vars). Revisit **compact-with-tab_vars** here (needs two-level nested rendering). **Stays on openxlsx v1** — the openxlsx2 engine swap is Phase 9. Detail: `dev/tabxplor_1.4.0_decisions.md` §7-8.
 
 #### To implement
 
 - Make a common preparation function for tab_xl(), tab_kable(), tab_md(), tab_plot(). Make it fast (no useless calculations made in the cases they are not used afterwards, depending on the type of export and options chosen).
 - Fully redesign exports to unify the different kind of exports in a common framework (when a feature is export-type specific, like Excel only, it should be justified).
 - Use variables `label` attribute more thoroughly in exports when it exists (in survey data formatting, I have the habit of putting the original questionnaire question in it, which can me meaningful information for the user) ? Where to print it, for useful additional information without clutter (not erasing variable names, which are real useful) ?
-- tab_plot have a bad display and display is hard to handle : turn it internal for now, keep it for future improvements
+- tab_plot has a bad display and is hard to handle : **soft-deprecate** it (Q1 — keep exported, mark `lifecycle` experimental/superseded; do NOT hard-remove from NAMESPACE), keep it for future improvements
 
 - Display of tabxplor_tab on console is quite long : what are the performance bottlenecks and how to make it faster / remove useless stuffs and white elephants here ?
 
-##### tab_xl()
+##### tab_xl() — Phase 7 (still openxlsx v1; engine swap is Phase 9)
 
 - Make it work with every data.frame, even not made with tabxplor, with default settings (event without factors, etc.). Implement small fixture tests.
-- Use `openxlsx2` instead of `openxlsx`. Rule number 1 : read openxlsx2 documentation thoroughly + create common styles to make it faster.
 - To make it work with a "common preparation function" that would be the same than tab_kable() etc., Make the function for a single tab (sometime big with `compact=TRUE` ? ), then parallelize for list of tab ?
 - Integrate numfmt() in format(type = "xl")
 - avec tab_logit (references), on perd les bordures des groupes aussi ? Vérifier.
 - Add the end it must work with tab_logit() and *** : significance stars used as formatting.
-
-###### To think about
-
-- After `openxlsx2` conversion, add an option to use conditionnal formatting instead of hard text colors. I was doing it in the past but the code was awful to make and it was very very slow. Would it be less horrible / faster with `openxlsx2`
 
 ##### tab_md()
 
@@ -427,7 +422,7 @@ Cache the prepared data / aggregate / per-transform results keyed by which input
 
 #### To implement
 
-- Jamovi UI improvement for user-friendliness and performance. The main improvement would be not to rely on `tab_many()` like now, but instead to write new code, with near the exact same behaviour as `tab_many()` (ensured by subfunctions), but fully using Jamovi states logic to avoid redoing all calculations at each change of button when it’s not necessary, and maybe adding temp caching for some base calculations (like : keep former variables calculations when a new variable is added).
+- Jamovi UI improvement for user-friendliness and performance. The main improvement would be not to rely on `tab_many()` like now, but to drive the **same aggregate-core + per-transform subfunctions** (Phase 2) at cache-appropriate granularity — **reuse the core, never fork the math** (review U2): near-identical behaviour is *guaranteed* by sharing subfunctions, not re-implemented in parallel (which would recreate the very duplication 1.4.0 removes). Use Jamovi states logic to avoid redoing calculations on each button change, with temp caching for base calculations (e.g. keep former variables' calculations when a new variable is added).
 - UI pour changer l'ordre des lignes, des colonnes et des sous-tableaux, en s’inspirant des modules Jamovi qui implémentent déjà cette fonction.
 - Argument `n_min` : supprimer ligne/colonne si n est trop petit
 
@@ -435,6 +430,20 @@ Cache the prepared data / aggregate / per-transform results keyed by which input
 
 - Maybe improve tab_kable() for performance, or simplify/remove all tooltips/etc. (just a faster flat html table), or even make it format with markdown tables with css classes (would it be possible ?) ?
 - tab_logit analysis in Jamovi ?
+
+### Phase 9 — Excel engine migration (openxlsx → openxlsx2)
+
+Isolated on purpose (review U3): a full dependency swap should not be entangled with the Phase 7 exporter-prep unification and its export-parity churn. Runs **after** Phase 7 (needs the unified single-tab + list `tab_xl` methods in place). May slip to a **1.4.x follow-up release** — it does not block the rest of 1.4.0. Precondition: `test-export-parity.R` green on openxlsx v1 first, so the swap is verified byte-for-byte against a known-good baseline.
+
+#### To implement
+
+- Swap `tab_xl()` from `openxlsx` to `openxlsx2` (Suggests). Rule number 1: read openxlsx2 documentation thoroughly, then build a small set of **shared/common styles** created once and reused (the main openxlsx2 speed lever).
+- Keep the Phase 7 shared exporter-prep helper untouched — only the write/style backend changes. Re-verify export parity (`format.tabxplor_fmt` vs the `tab_xl` numeric bypass) after the swap.
+- Update `DESCRIPTION` Suggests (`openxlsx` → `openxlsx2`) and every `requireNamespace()`/`openxlsx::` call site.
+
+#### To think about
+
+- Add an option to use **conditional formatting** instead of hard text colors. This was awful and very slow with openxlsx v1 — check whether openxlsx2 makes it less horrible / faster.
 
 ### Later — tab_logit & global
 

@@ -4,6 +4,8 @@
 .httr-oauth
 .DS_Store
 inst/doc
+dev/benchmarks/big_df.rds
+dev/benchmarks/results_*.csv
 
 # jamovi options js
 jamovi/ui/*.options.js
