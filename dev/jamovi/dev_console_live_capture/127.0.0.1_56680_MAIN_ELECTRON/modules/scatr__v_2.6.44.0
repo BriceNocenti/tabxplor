@@ -1,0 +1,188 @@
+---
+title: scatr
+name: scatr
+version: 2.6.44.0
+jms: '1.0'
+authors:
+  - Ravi Selker
+maintainer: Ravi Selker <selker.ravi@gmail.com>
+date: '2019-11-07'
+type: R
+description: >-
+  Allows you to produce several types of explorative plots such as scatter plots
+  and pareto charts. You can find it under the 'Exploration' menu.
+analyses:
+  - title: Scatterplot
+    name: scat
+    ns: scatr
+    menuGroup: Exploration
+    menuTitle: Scatterplot
+    menuSubgroup: scatr
+    description: >-
+      Function for making clean, good looking scatter plots with the option to
+      add marginal denisty or box plots.
+    options:
+      - name: data
+        type: Data
+        description:
+          R: the data as a data frame
+      - name: x
+        title: X-Axis
+        type: Variable
+        suggested:
+          - continuous
+        permitted:
+          - numeric
+        description:
+          R: >
+            a string naming the variable from `data` that contains the  x
+            coordinates of the points in the plot, variable must be numeric  
+      - name: 'y'
+        title: Y-Axis
+        type: Variable
+        suggested:
+          - continuous
+        permitted:
+          - numeric
+        description:
+          R: >
+            a string naming the variable from `data` that contains the  y
+            coordinates of the points in the plot, variable must be numeric  
+      - name: group
+        title: Group
+        type: Variable
+        suggested:
+          - nominal
+        permitted:
+          - factor
+        default: null
+        description:
+          R: >
+            a string naming the variable from `data` that represents the 
+            grouping variable
+      - name: marg
+        title: Marginals
+        type: List
+        options:
+          - title: None
+            name: none
+          - title: Densities
+            name: dens
+          - title: Boxplots
+            name: box
+        default: none
+        description:
+          R: >
+            `none` (default), `dens`, or `box`, provide respectively no plots,
+            density plots, or box plots on the axes
+      - name: line
+        title: Regression Line
+        type: List
+        options:
+          - title: None
+            name: none
+          - title: Linear
+            name: linear
+          - title: Smooth
+            name: smooth
+        default: none
+        description:
+          R: >
+            `none` (default), `linear`, or `smooth`, provide respectively no
+            regression line,  a linear regression line, or a smoothed regression
+            line
+      - name: se
+        title: Standard error
+        type: Bool
+        default: false
+        description:
+          R: >
+            `TRUE` or `FALSE` (default), show the standard error for the
+            regression line
+    uijs: "(function(f){if(typeof exports===\"object\"&&typeof module!==\"undefined\"){module.exports=f()}else if(typeof define===\"function\"&&define.amd){define([],f)}else{var g;if(typeof window!==\"undefined\"){g=window}else if(typeof global!==\"undefined\"){g=global}else if(typeof self!==\"undefined\"){g=self}else{g=this}g.module = f()}})(function(){var define,module,exports;return (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c=\"function\"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error(\"Cannot find module '\"+i+\"'\");throw a.code=\"MODULE_NOT_FOUND\",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u=\"function\"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){\n\r\n// This file is an automatically generated and should not be edited\r\n\r\n'use strict';\r\n\r\nconst options = [{\"name\":\"data\",\"type\":\"Data\",\"description\":{\"R\":\"the data as a data frame\"}},{\"name\":\"x\",\"title\":\"X-Axis\",\"type\":\"Variable\",\"suggested\":[\"continuous\"],\"permitted\":[\"numeric\"],\"description\":{\"R\":\"a string naming the variable from `data` that contains the  x coordinates of the points in the plot, variable must be numeric  \\n\"}},{\"name\":\"y\",\"title\":\"Y-Axis\",\"type\":\"Variable\",\"suggested\":[\"continuous\"],\"permitted\":[\"numeric\"],\"description\":{\"R\":\"a string naming the variable from `data` that contains the  y coordinates of the points in the plot, variable must be numeric  \\n\"}},{\"name\":\"group\",\"title\":\"Group\",\"type\":\"Variable\",\"suggested\":[\"nominal\"],\"permitted\":[\"factor\"],\"default\":null,\"description\":{\"R\":\"a string naming the variable from `data` that represents the  grouping variable\\n\"}},{\"name\":\"marg\",\"title\":\"Marginals\",\"type\":\"List\",\"options\":[{\"title\":\"None\",\"name\":\"none\"},{\"title\":\"Densities\",\"name\":\"dens\"},{\"title\":\"Boxplots\",\"name\":\"box\"}],\"default\":\"none\",\"description\":{\"R\":\"`none` (default), `dens`, or `box`, provide respectively no plots, density plots, or box plots on the axes\\n\"}},{\"name\":\"line\",\"title\":\"Regression Line\",\"type\":\"List\",\"options\":[{\"title\":\"None\",\"name\":\"none\"},{\"title\":\"Linear\",\"name\":\"linear\"},{\"title\":\"Smooth\",\"name\":\"smooth\"}],\"default\":\"none\",\"description\":{\"R\":\"`none` (default), `linear`, or `smooth`, provide respectively no regression line,  a linear regression line, or a smoothed regression line\\n\"}},{\"name\":\"se\",\"title\":\"Standard error\",\"type\":\"Bool\",\"default\":false,\"description\":{\"R\":\"`TRUE` or `FALSE` (default), show the standard error for the regression line\\n\"}}];\r\n\r\nconst view = function() {\r\n    \r\n    \r\n\r\n    View.extend({\r\n        jus: \"2.0\",\r\n\r\n        events: [\n\n\t]\r\n\r\n    }).call(this);\r\n}\r\n\r\nview.layout = ui.extend({\r\n\r\n    label: \"Scatterplot\",\r\n    jus: \"2.0\",\r\n    type: \"root\",\r\n    stage: 0, //0 - release, 1 - development, 2 - proposed\r\n    controls: [\n\t\t{\n\t\t\ttype: DefaultControls.VariableSupplier,\n\t\t\ttypeName: 'VariableSupplier',\n\t\t\tpersistentItems: false,\n\t\t\tstretchFactor: 1,\n\t\t\tcontrols: [\n\t\t\t\t{\n\t\t\t\t\ttype: DefaultControls.TargetLayoutBox,\n\t\t\t\t\ttypeName: 'TargetLayoutBox',\n\t\t\t\t\tlabel: \"X-Axis\",\n\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\ttype: DefaultControls.VariablesListBox,\n\t\t\t\t\t\t\ttypeName: 'VariablesListBox',\n\t\t\t\t\t\t\tname: \"x\",\n\t\t\t\t\t\t\tmaxItemCount: 1,\n\t\t\t\t\t\t\tisTarget: true\n\t\t\t\t\t\t}\n\t\t\t\t\t]\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\ttype: DefaultControls.TargetLayoutBox,\n\t\t\t\t\ttypeName: 'TargetLayoutBox',\n\t\t\t\t\tlabel: \"Y-Axis\",\n\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\ttype: DefaultControls.VariablesListBox,\n\t\t\t\t\t\t\ttypeName: 'VariablesListBox',\n\t\t\t\t\t\t\tname: \"y\",\n\t\t\t\t\t\t\tmaxItemCount: 1,\n\t\t\t\t\t\t\tisTarget: true\n\t\t\t\t\t\t}\n\t\t\t\t\t]\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\ttype: DefaultControls.TargetLayoutBox,\n\t\t\t\t\ttypeName: 'TargetLayoutBox',\n\t\t\t\t\tlabel: \"Group\",\n\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\ttype: DefaultControls.VariablesListBox,\n\t\t\t\t\t\t\ttypeName: 'VariablesListBox',\n\t\t\t\t\t\t\tname: \"group\",\n\t\t\t\t\t\t\tmaxItemCount: 1,\n\t\t\t\t\t\t\tisTarget: true\n\t\t\t\t\t\t}\n\t\t\t\t\t]\n\t\t\t\t}\n\t\t\t]\n\t\t},\n\t\t{\n\t\t\ttype: DefaultControls.LayoutBox,\n\t\t\ttypeName: 'LayoutBox',\n\t\t\tmargin: \"large\",\n\t\t\tstretchFactor: 1,\n\t\t\tcontrols: [\n\t\t\t\t{\n\t\t\t\t\ttype: DefaultControls.LayoutBox,\n\t\t\t\t\ttypeName: 'LayoutBox',\n\t\t\t\t\tmargin: \"large\",\n\t\t\t\t\tcell: {\"column\":0,\"row\":0},\n\t\t\t\t\tstretchFactor: 1,\n\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\ttype: DefaultControls.Label,\n\t\t\t\t\t\t\ttypeName: 'Label',\n\t\t\t\t\t\t\tlabel: \"Regression Line\",\n\t\t\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\ttype: DefaultControls.RadioButton,\n\t\t\t\t\t\t\t\t\ttypeName: 'RadioButton',\n\t\t\t\t\t\t\t\t\tname: \"line_none\",\n\t\t\t\t\t\t\t\t\toptionName: \"line\",\n\t\t\t\t\t\t\t\t\toptionPart: \"none\"\n\t\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\ttype: DefaultControls.RadioButton,\n\t\t\t\t\t\t\t\t\ttypeName: 'RadioButton',\n\t\t\t\t\t\t\t\t\tname: \"line_linear\",\n\t\t\t\t\t\t\t\t\toptionName: \"line\",\n\t\t\t\t\t\t\t\t\toptionPart: \"linear\"\n\t\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\ttype: DefaultControls.RadioButton,\n\t\t\t\t\t\t\t\t\ttypeName: 'RadioButton',\n\t\t\t\t\t\t\t\t\tname: \"line_smooth\",\n\t\t\t\t\t\t\t\t\toptionName: \"line\",\n\t\t\t\t\t\t\t\t\toptionPart: \"smooth\"\n\t\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\ttype: DefaultControls.CheckBox,\n\t\t\t\t\t\t\t\t\ttypeName: 'CheckBox',\n\t\t\t\t\t\t\t\t\tname: \"se\",\n\t\t\t\t\t\t\t\t\tenable: \"(!line_none)\"\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t]\n\t\t\t\t\t\t}\n\t\t\t\t\t]\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\ttype: DefaultControls.LayoutBox,\n\t\t\t\t\ttypeName: 'LayoutBox',\n\t\t\t\t\tmargin: \"large\",\n\t\t\t\t\tcell: {\"column\":1,\"row\":0},\n\t\t\t\t\tstretchFactor: 1,\n\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\ttype: DefaultControls.Label,\n\t\t\t\t\t\t\ttypeName: 'Label',\n\t\t\t\t\t\t\tlabel: \"Marginals\",\n\t\t\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\ttype: DefaultControls.RadioButton,\n\t\t\t\t\t\t\t\t\ttypeName: 'RadioButton',\n\t\t\t\t\t\t\t\t\tname: \"marg_none\",\n\t\t\t\t\t\t\t\t\toptionName: \"marg\",\n\t\t\t\t\t\t\t\t\toptionPart: \"none\"\n\t\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\ttype: DefaultControls.RadioButton,\n\t\t\t\t\t\t\t\t\ttypeName: 'RadioButton',\n\t\t\t\t\t\t\t\t\tname: \"marg_dens\",\n\t\t\t\t\t\t\t\t\toptionName: \"marg\",\n\t\t\t\t\t\t\t\t\toptionPart: \"dens\"\n\t\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\ttype: DefaultControls.RadioButton,\n\t\t\t\t\t\t\t\t\ttypeName: 'RadioButton',\n\t\t\t\t\t\t\t\t\tname: \"marg_box\",\n\t\t\t\t\t\t\t\t\toptionName: \"marg\",\n\t\t\t\t\t\t\t\t\toptionPart: \"box\"\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t]\n\t\t\t\t\t\t}\n\t\t\t\t\t]\n\t\t\t\t}\n\t\t\t]\n\t\t}\n\t]\r\n});\r\n\r\nmodule.exports = { view : view, options: options };\r\n\n},{}]},{},[1])(1)\n});\n"
+  - title: Pareto Chart
+    name: pareto
+    ns: scatr
+    menuGroup: Exploration
+    menuTitle: Pareto Chart
+    menuSubgroup: scatr
+    description: Function for making pareto charts.
+    options:
+      - name: data
+        type: Data
+        description:
+          R: the data as a data frame
+      - name: x
+        title: X-Axis
+        type: Variable
+        suggested:
+          - nominal
+        permitted:
+          - factor
+        description:
+          R: >
+            a string naming the variable from `data` that contains the  values
+            used for the chart
+      - name: counts
+        title: Counts (optional)
+        type: Variable
+        default: null
+        suggested:
+          - continuous
+        permitted:
+          - numeric
+        description:
+          R: >
+            a string naming the variable from `data` that contains the  counts
+            for the values (optional)
+      - name: angle
+        title: Angle of x-axis labels
+        type: Number
+        min: 0
+        max: 45
+        default: 0
+        description:
+          R: >
+            a number from 0 to 45 defining the angle of the x-axis labels, 
+            where 0 degrees represents completely horizontal labels.
+    uijs: "(function(f){if(typeof exports===\"object\"&&typeof module!==\"undefined\"){module.exports=f()}else if(typeof define===\"function\"&&define.amd){define([],f)}else{var g;if(typeof window!==\"undefined\"){g=window}else if(typeof global!==\"undefined\"){g=global}else if(typeof self!==\"undefined\"){g=self}else{g=this}g.module = f()}})(function(){var define,module,exports;return (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c=\"function\"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error(\"Cannot find module '\"+i+\"'\");throw a.code=\"MODULE_NOT_FOUND\",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u=\"function\"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){\n\r\n// This file is an automatically generated and should not be edited\r\n\r\n'use strict';\r\n\r\nconst options = [{\"name\":\"data\",\"type\":\"Data\",\"description\":{\"R\":\"the data as a data frame\"}},{\"name\":\"x\",\"title\":\"X-Axis\",\"type\":\"Variable\",\"suggested\":[\"nominal\"],\"permitted\":[\"factor\"],\"description\":{\"R\":\"a string naming the variable from `data` that contains the  values used for the chart\\n\"}},{\"name\":\"counts\",\"title\":\"Counts (optional)\",\"type\":\"Variable\",\"default\":null,\"suggested\":[\"continuous\"],\"permitted\":[\"numeric\"],\"description\":{\"R\":\"a string naming the variable from `data` that contains the  counts for the values (optional)\\n\"}},{\"name\":\"angle\",\"title\":\"Angle of x-axis labels\",\"type\":\"Number\",\"min\":0,\"max\":45,\"default\":0,\"description\":{\"R\":\"a number from 0 to 45 defining the angle of the x-axis labels,  where 0 degrees represents completely horizontal labels.\\n\"}}];\r\n\r\nconst view = function() {\r\n    \r\n    \r\n\r\n    View.extend({\r\n        jus: \"2.0\",\r\n\r\n        events: [\n\n\t]\r\n\r\n    }).call(this);\r\n}\r\n\r\nview.layout = ui.extend({\r\n\r\n    label: \"Pareto Chart\",\r\n    jus: \"2.0\",\r\n    type: \"root\",\r\n    stage: 0, //0 - release, 1 - development, 2 - proposed\r\n    controls: [\n\t\t{\n\t\t\ttype: DefaultControls.VariableSupplier,\n\t\t\ttypeName: 'VariableSupplier',\n\t\t\tpersistentItems: false,\n\t\t\tstretchFactor: 1,\n\t\t\tcontrols: [\n\t\t\t\t{\n\t\t\t\t\ttype: DefaultControls.TargetLayoutBox,\n\t\t\t\t\ttypeName: 'TargetLayoutBox',\n\t\t\t\t\tlabel: \"X-Axis\",\n\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\ttype: DefaultControls.VariablesListBox,\n\t\t\t\t\t\t\ttypeName: 'VariablesListBox',\n\t\t\t\t\t\t\tname: \"x\",\n\t\t\t\t\t\t\tmaxItemCount: 1,\n\t\t\t\t\t\t\tisTarget: true\n\t\t\t\t\t\t}\n\t\t\t\t\t]\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\ttype: DefaultControls.TargetLayoutBox,\n\t\t\t\t\ttypeName: 'TargetLayoutBox',\n\t\t\t\t\tlabel: \"Counts (optional)\",\n\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\ttype: DefaultControls.VariablesListBox,\n\t\t\t\t\t\t\ttypeName: 'VariablesListBox',\n\t\t\t\t\t\t\tname: \"counts\",\n\t\t\t\t\t\t\tmaxItemCount: 1,\n\t\t\t\t\t\t\tisTarget: true\n\t\t\t\t\t\t}\n\t\t\t\t\t]\n\t\t\t\t}\n\t\t\t]\n\t\t},\n\t\t{\n\t\t\ttype: DefaultControls.LayoutBox,\n\t\t\ttypeName: 'LayoutBox',\n\t\t\tmargin: \"large\",\n\t\t\tcontrols: [\n\t\t\t\t{\n\t\t\t\t\ttype: DefaultControls.TextBox,\n\t\t\t\t\ttypeName: 'TextBox',\n\t\t\t\t\tname: \"angle\",\n\t\t\t\t\tformat: FormatDef.number,\n\t\t\t\t\tsuggestedValues: [{\"value\":0},{\"value\":45}]\n\t\t\t\t}\n\t\t\t]\n\t\t}\n\t]\r\n});\r\n\r\nmodule.exports = { view : view, options: options };\r\n\n},{}]},{},[1])(1)\n});\n"
+usesNative: true
+minApp: 1.0.8
+index: 1
+languages:
+  - ar
+  - ca
+  - cs
+  - da
+  - de
+  - el
+  - en
+  - es
+  - fa
+  - fr
+  - he
+  - hr
+  - hu
+  - id
+  - it
+  - ja
+  - kk
+  - ko
+  - ml
+  - nl
+  - nn
+  - 'no'
+  - pl
+  - pt
+  - ro
+  - ru
+  - sl
+  - sv
+  - ta
+  - tr
+  - uk
+  - zh-cn
+  - zh-tw
+rVersion: 4.4.1-x64
+
+...

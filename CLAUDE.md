@@ -174,6 +174,29 @@ devtools::test("d:/Statistiques/github/tabxplor", filter = "tab")  # one/few fil
 
 ---
 
+## Jamovi module development
+
+tabxplor currently use jamovi `2.6.44.0` (solid). Version 1.4.0 will also be tested on jamovi current "solid" version `2.7.37` afterwards.
+
+After you modify jamovi functions and configuration files, install it for the maintainer to see and review the result in it’s current Jamovi window :
+
+```r
+options(jamovi_home='C:/Program Files/jamovi 2.6.44.0')
+devtools::load_all() ; jmvtools::install() ; devtools::load_all()
+```
+
+To know the real structure of the final .html and .js, check at this live capture done from dev console (for a basic table) :
+- `dev/jamovi/dev_console_live_capture/Jamovi_tabxplor_1_3_1_basic_table.html` : the live html from tabxplor 1.3.1 jamovi module
+- `dev/jamovi/dev_console_live_capture/127.0.0.1_56680_MAIN_ELECTRON/` : the exported main election scripts
+- `dev/jamovi/dev_console_live_capture/127.0.0.1_56683_tabxplor_jmvtab_analysis_UI/` : the exported tabxplor jmvtab analysis UI scripts
+- `dev/jamovi/dev_console_live_capture/127.0.0.1_56684_results/` : the exported jamovi "results" panel scripts (where the actual table appears)
+
+To **capture new html** in the dev console, **ask the maintainer whenever you need**.
+
+Look at `D:/Statistiques/github/tabxplor/dev/tabxplor_1.4.0_jamovi_dev.md` and `@dev/jamovi/` for detailed informations.
+
+---
+
 ## Common tabxplor package Development Issues
 
 | Issue                                   | Solution                                                                              |
@@ -188,7 +211,6 @@ devtools::test("d:/Statistiques/github/tabxplor", filter = "tab")  # one/few fil
 ## Architecture Technical Guide
 
 For the full detailed technical reference, see `dev/tabxplor_architecture.md`, which documents every subsystem in depth. Read it whenever needed and keep it up-to-date.
-
 
 
 

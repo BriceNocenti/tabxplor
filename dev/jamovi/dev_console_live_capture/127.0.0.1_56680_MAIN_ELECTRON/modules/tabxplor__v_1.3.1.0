@@ -1,0 +1,467 @@
+---
+title: User-Friendly Tables with Color Helpers for Data Exploration
+name: tabxplor
+version: 1.3.1
+jms: '1.0'
+authors:
+  - Brice Nocenti
+maintainer: Brice Nocenti
+date: '2025-09-19'
+type: R
+description: >-
+  Make it easy to deal with multiple cross-tables in data exploration, by
+  creating them, manipulating them, and adding color helpers to highlight
+  important informations (differences from totals, comparisons between lines or
+  columns, contributions to variance, confidence intervals, odds ratios, etc.).
+  All functions are pipe-friendly and render data frames which can be easily
+  manipulated. In the same time, time-taking operations are done with
+  'data.table' to go faster with big dataframes. Tables can be exported to
+  'Excel', plot and html with formats and colors.
+analyses:
+  - title: Crosstables
+    name: jmvtab
+    ns: tabxplor
+    menuGroup: tabxplor
+    menuTitle: Crosstables
+    category: analyses
+    usesNative: true
+    minApp: 1.0.8
+    options:
+      - name: data
+        type: Data
+        description:
+          R: |
+            A data.frame.
+      - name: row_vars
+        title: <b>row_vars = <i>(row variables)</i></b>
+        type: Variables
+        permitted:
+          - numeric
+          - factor
+        default: null
+        suggested:
+          - nominal
+          - ordinal
+        description:
+          R: >
+            The row variable, which will be printed with one level per line. If
+            numeric, it will be converted to factor. If several row variables
+            are provided, it's not possible to add any tab_vars.
+      - name: col_vars
+        title: <b>col_vars = <i>(column variables)</i></b>
+        type: Variables
+        suggested:
+          - nominal
+          - ordinal
+          - continuous
+        permitted:
+          - numeric
+          - factor
+        default: null
+        description:
+          R: >
+            One column is printed for each level of each column variable. For
+            numeric variables means are calculated, in a single column.
+      - name: tab_vars
+        title: <b>tab_vars = <i>(subtables variables)</i></b>
+        type: Variables
+        suggested:
+          - nominal
+          - ordinal
+        permitted:
+          - factor
+        default: null
+        description:
+          R: >
+            One subtable is made for each combination of levels of the tab
+            variables. All tab variables are converted to factor. Leave empty to
+            make a simple table. Not used when there are several row_vars.
+      - name: wt
+        title: <b>wt = <i>(weights)</i></b>
+        type: Variable
+        suggested:
+          - continuous
+        permitted:
+          - numeric
+        default: null
+        description:
+          R: >
+            A weight variable, of class numeric. Leave empty for unweighted
+            results.
+      - name: pct
+        title: pct = (Percentages)
+        type: List
+        options:
+          - title: no (counts)
+            name: 'no'
+          - title: row
+            name: row
+          - title: col (column)
+            name: col
+          - title: all
+            name: all
+          - title: all_tabs
+            name: all_tabs
+        default: 'no'
+        description:
+          R: |
+            The type of percentages to calculate :
+             \itemize{
+               \item \code{"row"}: row percentages.
+               \item \code{"col"}: column percentages.
+               \item \code{"all"}: frequencies for each subtable/group, if there is \code{tab_vars}.
+               \item \code{"all_tabs"}: frequencies for the whole (set of) table(s).
+             }
+      - name: color
+        title: color = (Color)
+        type: List
+        options:
+          - title: 'no'
+            name: 'no'
+          - title: diff <i>(differences from total, or reference cell)</i>
+            name: diff
+          - title: diff_ci <i>(differences, only if significant)</i>
+            name: diff_ci
+          - title: after_ci <i>(diff, after substracting margin of error)</i>
+            name: after_ci
+          - title: contrib <i>(relative contribution to variance)</i>
+            name: contrib
+          - title: OR <i>(odds ratios or relative risks ratios)</i>
+            name: OR
+        default: 'no'
+        description:
+          R: >
+            The type of colors to print, as a single string. Vectorised over
+            `row_vars`.
+             \itemize{
+               \item \code{"no"}: by default, no colors are printed.
+               \item \code{"diff"}: color percentages and means based on cells differences from
+               totals (or from first cells when \code{ref = "first"}).
+               \item \code{"diff_ci"}: color pct and means based on cells differences from totals
+               or first cells, removing coloring when the confidence interval of this difference
+               is higher than the difference itself.
+               \item \code{"after_ci"}: idem, but cut off the confidence interval from the
+               difference first.
+               \item \code{"contrib"}: color cells based on their contribution to variance
+               (except mean columns, from numeric variables).
+               \item \code{"OR"}: for `pct == "col"` or `pct == "row"`,
+               color based on odds ratios (or relative risks ratios)
+             }
+      - name: chi2
+        title: ''
+        type: Bool
+        default: false
+        description:
+          R: >
+            Set to \code{TRUE} to make a Chi2 and add summary stats. Also useful
+            to color cells based on their contribution to variance.
+      - name: OR
+        title: OR
+        type: List
+        options:
+          - title: 'no'
+            name: 'no'
+          - title: OR
+            name: OR
+          - title: OR_pct
+            name: OR_pct
+        default: 'no'
+        description:
+          R: |
+            With `pct = "row"` or `pct = "col"`, calculate and print odds ratios
+             (for binary variables) or relative risks ratios (for variables with 3 levels
+             or more).
+            \itemize{
+             \item \code{"no"}: by default, no OR are calculated.
+             \item \code{"OR"}: print OR (instead of percentages).
+             \item \code{"OR_pct"}: print OR, with percentages in bracket.
+            }
+      - name: na
+        title: na = <i>(missing values)</i>
+        type: List
+        options:
+          - title: keep
+            name: keep
+          - title: drop <i>(for each col_var)</i>
+            name: drop
+          - title: drop_all <i>(for all col_vars)</i>
+            name: drop_all
+        default: keep
+        description:
+          R: |
+            The policy to adopt with missing values. It must be a single string.
+             \itemize{
+               \item \code{na = "keep"}: by default, prints \code{NA}'s as explicit \code{"NA"} level.
+               \item \code{na = "drop"}: removes \code{NA} levels before making each table
+               (tabs made with different column variables may have a different number of
+               observations, and won't exactly have the same total columns).
+               }
+      - name: lvs
+        title: levels
+        type: List
+        options:
+          - title: all
+            name: all
+          - title: first
+            name: first
+          - title: auto
+            name: auto
+        default: all
+        description:
+          R: |
+            The levels of \code{col_vars} to keep.
+             \itemize{
+               \item \code{"all"}: by default, all levels are kept.
+               \item \code{"first"}: only keep the first level of each \code{col_vars}
+               \item \code{"auto"}: keep the first level when `col_var` is only two levels,
+               keep all levels otherwise.
+               }
+      - name: other_if_less_than
+        title: ''
+        type: Number
+        min: 0
+        default: 0
+        description:
+          R: >
+            When set to a positive integer, levels with less count than that
+            will be merged into an "Others" level.
+      - name: cleannames
+        title: ''
+        type: Bool
+        default: true
+        description:
+          R: >
+            By default, clean levels names, by removing prefix numbers like
+            "1-", and text in parenthesis. Set to `FALSE` to avoid this
+            behaviour.
+      - name: ref
+        title: auto/tot/<i>{row_number}</i>/<i>{row_name}</i>
+        type: String
+        default: auto
+        description:
+          R: |
+            The reference cell to calculate differences and ratios
+              (used to print \code{colors}) :
+              \itemize{
+               \item \code{"auto"}: by default, cell difference from the corresponding total
+               (rows or cols depending on \code{pct = "row"} or \code{pct = "col"}) is
+               used for `diff` ; cell ratio from the first line (or col) is use for `OR`
+               (odds ratio/relative risks ratio).
+               \item \code{"tot"}: totals are always used.
+               \item \code{"first"}: calculate cell difference or ratio from the first cell
+             of the row or column (useful to color temporal developments).
+               \item \code{n}: when `ref` is an integer, the nth row (or column) is used for comparison.
+               \item \code{"regex"}: when `ref` is a string, it it used as a regular expression,
+               to match with the names of the rows (or columns). Be precise enough to match only one
+               column or row, otherwise you get a warning message.
+               \item \code{"no"}: not use ref and not calculate diffs to gain calculation time.
+             }
+      - name: ref2
+        title: first/tot/<i>{col_number}</i>
+        type: String
+        default: first
+        description:
+          R: |
+            A second reference cell is needed to calculate odds ratios
+             (or relative risks ratios). The first cell of the row or column is used by default.
+             See `ref`  for the full list of possible values.
+      - name: comp
+        title: comp
+        type: List
+        options:
+          - title: tab <i>(compare in each subtable)</i>
+            name: tab
+          - title: all <i>(compare with the total subtable)</i>
+            name: all
+        default: tab
+        description:
+          R: |
+            The comparison level : by subtables/groups, or for the whole table.
+      - name: ci
+        title: ci = <i>(confidence intervals)</i>
+        type: List
+        options:
+          - title: auto
+            name: auto
+          - title: cell <i>(ci for each cell)</i>
+            name: cell
+          - title: diff <i>(ci on the difference with reference)</i>
+            name: diff
+        default: auto
+        description:
+          R: >
+            The type of confidence intervals to calculate, passed to
+            \code{\link{tab_ci}}.
+                \itemize{
+                 \item \code{"cell"}: absolute confidence intervals of cells percentages.
+                 \item \code{"diff"}: confidence intervals of the difference between a cell and the
+                 relative total cell (or relative first cell when \code{ref = "first"}).
+                 \item \code{"auto"}: \code{ci = "diff"} for means and row/col percentages,
+                 \code{ci = "cell"} for frequencies ("all", "all_tabs").
+                }
+            By default, for percentages, with \code{ci = "cell"} Wilson's method
+            is used, and with \code{ci = "diff"} Wald's method along Agresti and
+            Caffo's adjustment. Means use classic method.
+      - name: conf_level
+        title: ''
+        type: Number
+        min: 0
+        max: 1
+        default: 0.95
+        description:
+          R: >
+            The confidence level, as a single numeric between 0 and 1. Default
+            to 0.95 (95%).
+      - name: ci_print
+        title: options('tabxplor.ci_print' = ...)
+        type: List
+        options:
+          - title: 'ci <i>(interval display: [inf;sup])</i>'
+            name: ci
+          - title: 'moe <i>(display: pct±margin of error)</i>'
+            name: moe
+        default: ci
+        description:
+          R: >
+            By default confidence interval are printed with the interval
+            display. Set to "moe" to use pct +- moe instead.
+      - name: totaltab
+        title: totaltab = <i>(add a total table)</i>
+        type: List
+        options:
+          - title: line
+            name: line
+          - title: table
+            name: table
+          - title: 'no'
+            name: 'no'
+        default: line
+        description:
+          R: |
+            The total table, if there are subtables/groups
+              (i.e. when \code{tab_vars} is provided). Vectorised over `row_vars`.
+             \itemize{
+               \item \code{"line"}: by default, add a general total line (necessary for
+               calculations with \code{comp = "all"})
+               \item \code{"table"}: add a complete total table
+              (i.e. \code{row_var} by \code{col_vars} without \code{tab_vars}).
+               \item \code{"no"}: not to draw any total table.
+              }
+      - name: wrap_rows
+        title: ''
+        type: Number
+        min: 0
+        default: 35
+        description:
+          R: |
+            By default, rownames are wrapped when larger than 30 characters.
+      - name: wrap_cols
+        title: ''
+        type: Number
+        min: 0
+        default: 15
+        description:
+          R: |
+            By default, colnames are wrapped when larger than 12 characters.
+      - name: display
+        title: ''
+        type: List
+        options:
+          - title: auto
+            name: auto
+          - title: n <i>(unweighted counts)</i>
+            name: 'n'
+          - title: wn <i>(weighted counts)</i>
+            name: wn
+          - title: pct <i>(percentages)</i>
+            name: pct
+          - title: diff <i>(differences from total, or reference cell)</i>
+            name: diff
+          - title: ctr <i>(relative contributions to variance)</i>
+            name: ctr
+          - title: mean <i>(mean, for numeric variables)</i>
+            name: mean
+          - title: var <i>(variance)</i>
+            name: var
+          - title: ci <i>(confidence intervals)</i>
+            name: ci
+          - title: pct_ci <i>(percentages with visible conf. intervals)</i>
+            name: pct_ci
+          - title: mean_ci <i>(means with visible conf. intervals)</i>
+            name: mean_ci
+          - title: OR <i>(odds ratios or relative risks ratios)</i>
+            name: OR
+          - title: OR_pct <i>(odds ratios with visible percentages)</i>
+            name: OR_pct
+        default: auto
+        description:
+          R: |
+            The information to display in the table.
+      - name: add_n
+        title: ''
+        type: Bool
+        default: true
+        description:
+          R: >
+            For `pct = "row"` or `pct = "col"`, set to `FALSE` not to add
+            another column or row with unweighted counts (`n`).
+      - name: add_pct
+        title: ''
+        type: Bool
+        default: false
+        description:
+          R: >
+            Set to `TRUE` to add a column with the frequencies of the row
+            variable (for `pct = "row"`) or a row with the frequencies of the
+            column variable (for  `pct = "col"`)
+      - name: subtext
+        title: ''
+        type: String
+        default: ''
+        description:
+          R: |
+            A character vector to print rows of legend under the table.
+      - name: digits
+        title: ''
+        type: Number
+        min: 0
+        max: 10
+        default: 0
+        description:
+          R: >
+            The number of digits to print, as a single integer, or an integer
+            vector the same length as \code{col_vars}.
+      - name: exportExcel
+        title: Export Table to Excel
+        type: Action
+        description:
+          R: Press to export the table to Excel.
+      - name: xl_path
+        type: String
+        title: ''
+        default: S:/Documents
+        description:
+          R: |
+            "Folder in which to save exported Excel file"
+      - name: xl_filename
+        type: String
+        title: ''
+        default: Table.xlsx
+        description:
+          R: |
+            "Name of exported Excel file"
+      - name: xl_replace
+        title: ''
+        type: Bool
+        default: false
+        description:
+          R: |
+            "Set to `TRUE` to overwrite existing Excel file."
+    uijs: "(function(f){if(typeof exports===\"object\"&&typeof module!==\"undefined\"){module.exports=f()}else if(typeof define===\"function\"&&define.amd){define([],f)}else{var g;if(typeof window!==\"undefined\"){g=window}else if(typeof global!==\"undefined\"){g=global}else if(typeof self!==\"undefined\"){g=self}else{g=this}g.module = f()}})(function(){var define,module,exports;return (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c=\"function\"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error(\"Cannot find module '\"+i+\"'\");throw a.code=\"MODULE_NOT_FOUND\",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u=\"function\"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){\n//\n// htmltools::includeScript(# bootstrap jv\n//   system.file(\"rmd/h/bootstrap/js/bootstrap.min.js\", package = \"rmarkdown\"),\n// )\n// htmltools::includeScript(# bootstrap jv\n//   system.file(\"rmd/h/bootstrap/shim/html5shiv.min.js\", package = \"rmarkdown\"),\n// )\n\n\nmodule.exports = {\n\n//  view_loaded(ui) {\n//    // Check if the path field is empty\n//    if (!ui.xl_path.value() || ui.xl_path.value() === \"\") {\n//      // Set a platform-specific default path\n//      let defaultPath = \"\";\n//\n//      // Detect OS using navigator.platform\n//      if (navigator.platform.toLowerCase().includes('win')) {\n//        // Windows default - use Documents folder in user's home directory\n//        defaultPath = \"~/Documents\";\n//      } else if (navigator.platform.toLowerCase().includes('mac')) {\n//        // macOS default\n//        defaultPath = \"~/Documents\";\n//      } else {\n//        // Linux default\n//        defaultPath = \"~/Documents\";\n//      }\n//\n//      // Set the path in the UI\n//      ui.xl_path.setValue(defaultPath);\n//    }\n//  },\n\n\n\n    exportExcel_changed: function(ui) {\n        // Only trigger when the button is active and clicked\n        if (ui.exportExcel.value()) {\n            console.log(\"Excel export initiated\");\n\n            // Force reset the button after a short delay\n            setTimeout(function() {\n                ui.exportExcel.setValue(false);\n            }, 2000);\n        }\n    }\n\n\n// END of module.exports\n};\n\n\n\n\n\n\n\n\n\n\n// // Exemples\n//\n// if (false) {\n//   // jamovi/js/anova.js\n//   'use strict';\n//\n// module.exports = {\n//\n//     view_updated: function(ui) {\n//         this.calcModelTerms(ui);\n//         this.filterModelTerms(ui);\n//         this.updateModelLabels(ui.emMeans, _('Term {0}'));\n//     },\n//\n//     factors_changed: function(ui) {\n//         this.calcModelTerms(ui);\n//     },\n//\n//     modelTerms_changed: function(ui) {\n//         this.filterModelTerms(ui);\n//     },\n//\n//     emMeansSupplier_updated: function(ui) {\n//         this.calcMarginalMeansSupplier(ui);\n//     },\n//\n//     modelSupplier_updated: function(ui) {\n//         let variableList = utils.clone(ui.factors.value(), []);\n//         ui.modelSupplier.setValue(utils.valuesToItems(variableList, FormatDef.variable));\n//     },\n//\n//     postHocSupplier_updated: function(ui) {\n//         let termsList = utils.clone(ui.modelTerms.value(), []);\n//         ui.postHocSupplier.setValue(utils.valuesToItems(termsList, FormatDef.term));\n//     },\n//\n//     emMeansSupplier_changed: function(ui) {\n//         let values = utils.itemsToValues(ui.emMeansSupplier.value());\n//         utils.checkValue(ui.emMeans, 2, values, FormatDef.variable);\n//     },\n//\n//     postHocSupplier_changed: function(ui) {\n//         let values = utils.itemsToValues(ui.postHocSupplier.value());\n//         utils.checkValue(ui.postHoc, true, values, FormatDef.term);\n//     },\n//\n//     emMeans_listItemsChanged: function(ui) {\n//         this.updateModelLabels(ui.emMeans, _('Term {0}'));\n//     },\n//\n//     filterModelTerms: function(ui) {\n//         var termsList = utils.clone(ui.modelTerms.value(), []);\n//\n//         //Remove common terms\n//         var termsDiff = this.findChanges(\"currentList\", termsList, true, FormatDef.term);\n//         var changed = false;\n//         if (termsDiff.removed.length > 0 && termsList !== null) {\n//             var itemsRemoved = false;\n//             for (var i = 0; i < termsDiff.removed.length; i++) {\n//                 var item = termsDiff.removed[i];\n//                 for (var j = 0; j < termsList.length; j++) {\n//                     if (FormatDef.term.contains(termsList[j], item)) {\n//                         termsList.splice(j, 1);\n//                         j -= 1;\n//                         itemsRemoved = true;\n//                     }\n//                 }\n//             }\n//\n//             if (itemsRemoved)\n//                 changed = true;\n//         }\n//         /////////////////////\n//\n//         //Sort terms\n//         if (utils.sortArraysByLength(termsList))\n//             changed = true;\n//         ////////////\n//\n//         if (changed)\n//             ui.modelTerms.setValue(termsList);\n//\n//         ui.postHocSupplier.setValue(utils.valuesToItems(termsList, FormatDef.term));\n//     },\n//\n//     calcMarginalMeansSupplier: function(ui) {\n//\n//         let b1 = utils.clone(ui.factors.value(), []);\n//         b1 = utils.valuesToItems(b1, FormatDef.variable);\n//\n//         if (ui.emMeansSupplier)\n//             ui.emMeansSupplier.setValue(b1);\n//     },\n//\n//     updateModelLabels: function(list, blockName) {\n//         list.applyToItems(0, (item, index) => {\n//             item.controls[0].setPropertyValue(\"label\", blockName.replace('{0}', (index + 1) ));\n//         });\n//     },\n//\n//     calcModelTerms: function(ui) {\n//         var variableList = utils.clone(ui.factors.value(), []);\n//\n//         ui.modelSupplier.setValue(utils.valuesToItems(variableList, FormatDef.variable));\n//\n//         this.calcMarginalMeansSupplier(ui);\n//\n//         var varsDiff = this.findChanges(\"variableList\", variableList, true, FormatDef.variable);\n//         var termsList = utils.clone(ui.modelTerms.value(), []);\n//\n//         var termsChanged = false;\n//         for (var i = 0; i < varsDiff.removed.length; i++) {\n//             for (var j = 0; j < termsList.length; j++) {\n//                 if (FormatDef.term.contains(termsList[j], varsDiff.removed[i])) {\n//                     termsList.splice(j, 1);\n//                     termsChanged = true;\n//                     j -= 1;\n//                 }\n//             }\n//         }\n//\n//         termsList = utils.getCombinations(varsDiff.added, termsList);\n//         termsChanged = termsChanged || varsDiff.added.length > 0;\n//\n//         if (termsChanged)\n//             ui.modelTerms.setValue(termsList);\n//\n//         this.updateContrasts(ui, variableList);\n//     },\n//\n//     updateContrasts: function(ui, variableList) {\n//         let value = ui.contrasts.value();\n//         var currentList = utils.clone(value, []);\n//\n//         var list3 = [];\n//         for (let i = 0; i < variableList.length; i++) {\n//             let found = null;\n//             for (let j = 0; j < currentList.length; j++) {\n//                 if (currentList[j].var === variableList[i]) {\n//                     found = currentList[j];\n//                     break;\n//                 }\n//             }\n//             if (found === null)\n//                 list3.push({ var: variableList[i], type: \"none\" });\n//             else\n//                 list3.push(found);\n//         }\n//\n//         let oldLength = value === null ? 0 : value.length;\n//\n//         let changed = oldLength !== list3.length || JSON.stringify(value) !== JSON.stringify(list3);\n//\n//         if (changed)\n//             ui.contrasts.setValue(list3);\n//     }\n//\n// };\n//\n//\n//\n//\n// // jamovi/js/cfa.events.js\n// const events = {\n//\n//     update: function(ui) {\n//         updateModelLabels(ui, this);\n//         calcModelTerms(ui, this);\n//     },\n//\n//     onEvent_test_listItemsAdded: function(ui, data) {\n//         updateModelLabels(ui, this);\n//         calcModelTerms(ui, this);\n//         setTimeout(() => {\n//             data.item.controls[0].$input.focus();\n//         }, 0);\n//     },\n//\n//     onEvent_test_listItemsChanged: function(ui) {\n//         updateModelLabels(ui, this);\n//         calcModelTerms(ui, this);\n//     },\n//\n//     onChange_resCovSupplier: function(ui) {\n//         let values = this.itemsToValues(ui.resCovSupplier.value());\n//         this.checkPairsValue(ui.resCov, values);\n//     },\n//\n//     onUpdate_resCovSupplier: function(ui) {\n//         calcModelTerms(ui, this);\n//     },\n//\n//     onEvent_factorNameChange : function(ui) {\n//         updateModelLabels(ui, this);\n//     }\n// };\n//\n// const updateModelLabels = function(ui, context) {\n//     let list = ui.factors.applyToItems(0, (item, index) => {\n//         let value = item.controls[0].value();\n//         if ( ! value || value.trim() === '')\n//             item.controls[0].setValue(_('Factor {0}').replace('{0}', (index + 1)) );\n//     });\n// };\n//\n// const calcModelTerms = function(ui, context) {\n//\n//     let factorList = context.clone(ui.factors.value(), []);\n//\n//     let variables = [];\n//     for (let i = 0 ; i < factorList.length; i++) {\n//         let vars = factorList[i].vars;\n//         if (vars) {\n//             for (let y = 0; y < vars.length; y++) {\n//                 let variable = vars[y];\n//                 if (variable) {\n//                     let found = false;\n//                     for (let j = 0; j < variables.length; j++) {\n//                         if (variables[j] === variable) {\n//                             found = true;\n//                             break;\n//                         }\n//                     }\n//                     if (found == false)\n//                         variables.push(variable);\n//                 }\n//             }\n//         }\n//     }\n//\n//     ui.resCovSupplier.setValue(context.valuesToItems(variables, FormatDef.variable));\n// };\n//\n// module.exports = events;\n//\n//\n//\n// }\n\n\n\n\n//    module.exports = {\n//\n//        // event handlers and functions are defined here\n//\n//        // this is an example of an event handler\n//        view_loaded: function(ui, event) {\n//            // do something\n//        },\n//\n//        // this is another example of an event handler\n//        ttestType_changed: function(ui, event) {\n//            let value = this.calculateValue();\n//            // do something\n//        },\n//\n//        // this is an example of an auxiliary function\n//        calculateValue: function() {\n//            // do something\n//        }\n//\n//       ui.view.model.options.beginEdit();\n//       ui.figWidth.setValue(400);\n//       ui.figHeight.setValue(300);\n//       ui.view.model.options.endEdit();\n//\n//    };\n\n},{}],2:[function(require,module,exports){\n\n// This file is an automatically generated and should not be edited\n\n'use strict';\n\nconst options = [{\"name\":\"data\",\"type\":\"Data\",\"description\":{\"R\":\"A data.frame.\\n\"}},{\"name\":\"row_vars\",\"title\":\"<b>row_vars = <i>(row variables)</i></b>\",\"type\":\"Variables\",\"permitted\":[\"numeric\",\"factor\"],\"default\":null,\"suggested\":[\"nominal\",\"ordinal\"],\"description\":{\"R\":\"The row variable, which will be printed with one level per line. If numeric, it will be converted to factor. If several row variables are provided, it's not possible to add any tab_vars.\\n\"}},{\"name\":\"col_vars\",\"title\":\"<b>col_vars = <i>(column variables)</i></b>\",\"type\":\"Variables\",\"suggested\":[\"nominal\",\"ordinal\",\"continuous\"],\"permitted\":[\"numeric\",\"factor\"],\"default\":null,\"description\":{\"R\":\"One column is printed for each level of each column variable. For numeric variables means are calculated, in a single column.\\n\"}},{\"name\":\"tab_vars\",\"title\":\"<b>tab_vars = <i>(subtables variables)</i></b>\",\"type\":\"Variables\",\"suggested\":[\"nominal\",\"ordinal\"],\"permitted\":[\"factor\"],\"default\":null,\"description\":{\"R\":\"One subtable is made for each combination of levels of the tab variables. All tab variables are converted to factor. Leave empty to make a simple table. Not used when there are several row_vars.\\n\"}},{\"name\":\"wt\",\"title\":\"<b>wt = <i>(weights)</i></b>\",\"type\":\"Variable\",\"suggested\":[\"continuous\"],\"permitted\":[\"numeric\"],\"default\":null,\"description\":{\"R\":\"A weight variable, of class numeric. Leave empty for unweighted results.\\n\"}},{\"name\":\"pct\",\"title\":\"pct = (Percentages)\",\"type\":\"List\",\"options\":[{\"title\":\"no (counts)\",\"name\":\"no\"},{\"title\":\"row\",\"name\":\"row\"},{\"title\":\"col (column)\",\"name\":\"col\"},{\"title\":\"all\",\"name\":\"all\"},{\"title\":\"all_tabs\",\"name\":\"all_tabs\"}],\"default\":\"no\",\"description\":{\"R\":\"The type of percentages to calculate :\\n \\\\itemize{\\n   \\\\item \\\\code{\\\"row\\\"}: row percentages.\\n   \\\\item \\\\code{\\\"col\\\"}: column percentages.\\n   \\\\item \\\\code{\\\"all\\\"}: frequencies for each subtable/group, if there is \\\\code{tab_vars}.\\n   \\\\item \\\\code{\\\"all_tabs\\\"}: frequencies for the whole (set of) table(s).\\n }\\n\"}},{\"name\":\"color\",\"title\":\"color = (Color)\",\"type\":\"List\",\"options\":[{\"title\":\"no\",\"name\":\"no\"},{\"title\":\"diff <i>(differences from total, or reference cell)</i>\",\"name\":\"diff\"},{\"title\":\"diff_ci <i>(differences, only if significant)</i>\",\"name\":\"diff_ci\"},{\"title\":\"after_ci <i>(diff, after substracting margin of error)</i>\",\"name\":\"after_ci\"},{\"title\":\"contrib <i>(relative contribution to variance)</i>\",\"name\":\"contrib\"},{\"title\":\"OR <i>(odds ratios or relative risks ratios)</i>\",\"name\":\"OR\"}],\"default\":\"no\",\"description\":{\"R\":\"The type of colors to print, as a single string. Vectorised over `row_vars`.\\n \\\\itemize{\\n   \\\\item \\\\code{\\\"no\\\"}: by default, no colors are printed.\\n   \\\\item \\\\code{\\\"diff\\\"}: color percentages and means based on cells differences from\\n   totals (or from first cells when \\\\code{ref = \\\"first\\\"}).\\n   \\\\item \\\\code{\\\"diff_ci\\\"}: color pct and means based on cells differences from totals\\n   or first cells, removing coloring when the confidence interval of this difference\\n   is higher than the difference itself.\\n   \\\\item \\\\code{\\\"after_ci\\\"}: idem, but cut off the confidence interval from the\\n   difference first.\\n   \\\\item \\\\code{\\\"contrib\\\"}: color cells based on their contribution to variance\\n   (except mean columns, from numeric variables).\\n   \\\\item \\\\code{\\\"OR\\\"}: for `pct == \\\"col\\\"` or `pct == \\\"row\\\"`,\\n   color based on odds ratios (or relative risks ratios)\\n }\\n\"}},{\"name\":\"chi2\",\"title\":\"\",\"type\":\"Bool\",\"default\":false,\"description\":{\"R\":\"Set to \\\\code{TRUE} to make a Chi2 and add summary stats. Also useful to color cells based on their contribution to variance.\\n\"}},{\"name\":\"OR\",\"title\":\"OR\",\"type\":\"List\",\"options\":[{\"title\":\"no\",\"name\":\"no\"},{\"title\":\"OR\",\"name\":\"OR\"},{\"title\":\"OR_pct\",\"name\":\"OR_pct\"}],\"default\":\"no\",\"description\":{\"R\":\"With `pct = \\\"row\\\"` or `pct = \\\"col\\\"`, calculate and print odds ratios\\n (for binary variables) or relative risks ratios (for variables with 3 levels\\n or more).\\n\\\\itemize{\\n \\\\item \\\\code{\\\"no\\\"}: by default, no OR are calculated.\\n \\\\item \\\\code{\\\"OR\\\"}: print OR (instead of percentages).\\n \\\\item \\\\code{\\\"OR_pct\\\"}: print OR, with percentages in bracket.\\n}\\n\"}},{\"name\":\"na\",\"title\":\"na = <i>(missing values)</i>\",\"type\":\"List\",\"options\":[{\"title\":\"keep\",\"name\":\"keep\"},{\"title\":\"drop <i>(for each col_var)</i>\",\"name\":\"drop\"},{\"title\":\"drop_all <i>(for all col_vars)</i>\",\"name\":\"drop_all\"}],\"default\":\"keep\",\"description\":{\"R\":\"The policy to adopt with missing values. It must be a single string.\\n \\\\itemize{\\n   \\\\item \\\\code{na = \\\"keep\\\"}: by default, prints \\\\code{NA}'s as explicit \\\\code{\\\"NA\\\"} level.\\n   \\\\item \\\\code{na = \\\"drop\\\"}: removes \\\\code{NA} levels before making each table\\n   (tabs made with different column variables may have a different number of\\n   observations, and won't exactly have the same total columns).\\n   }\\n\"}},{\"name\":\"lvs\",\"title\":\"levels\",\"type\":\"List\",\"options\":[{\"title\":\"all\",\"name\":\"all\"},{\"title\":\"first\",\"name\":\"first\"},{\"title\":\"auto\",\"name\":\"auto\"}],\"default\":\"all\",\"description\":{\"R\":\"The levels of \\\\code{col_vars} to keep.\\n \\\\itemize{\\n   \\\\item \\\\code{\\\"all\\\"}: by default, all levels are kept.\\n   \\\\item \\\\code{\\\"first\\\"}: only keep the first level of each \\\\code{col_vars}\\n   \\\\item \\\\code{\\\"auto\\\"}: keep the first level when `col_var` is only two levels,\\n   keep all levels otherwise.\\n   }\\n\"}},{\"name\":\"other_if_less_than\",\"title\":\"\",\"type\":\"Number\",\"min\":0,\"default\":0,\"description\":{\"R\":\"When set to a positive integer, levels with less count than that will be merged into an \\\"Others\\\" level.\\n\"}},{\"name\":\"cleannames\",\"title\":\"\",\"type\":\"Bool\",\"default\":true,\"description\":{\"R\":\"By default, clean levels names, by removing prefix numbers like \\\"1-\\\", and text in parenthesis. Set to `FALSE` to avoid this behaviour.\\n\"}},{\"name\":\"ref\",\"title\":\"auto/tot/<i>{row_number}</i>/<i>{row_name}</i>\",\"type\":\"String\",\"default\":\"auto\",\"description\":{\"R\":\"The reference cell to calculate differences and ratios\\n  (used to print \\\\code{colors}) :\\n  \\\\itemize{\\n   \\\\item \\\\code{\\\"auto\\\"}: by default, cell difference from the corresponding total\\n   (rows or cols depending on \\\\code{pct = \\\"row\\\"} or \\\\code{pct = \\\"col\\\"}) is\\n   used for `diff` ; cell ratio from the first line (or col) is use for `OR`\\n   (odds ratio/relative risks ratio).\\n   \\\\item \\\\code{\\\"tot\\\"}: totals are always used.\\n   \\\\item \\\\code{\\\"first\\\"}: calculate cell difference or ratio from the first cell\\n of the row or column (useful to color temporal developments).\\n   \\\\item \\\\code{n}: when `ref` is an integer, the nth row (or column) is used for comparison.\\n   \\\\item \\\\code{\\\"regex\\\"}: when `ref` is a string, it it used as a regular expression,\\n   to match with the names of the rows (or columns). Be precise enough to match only one\\n   column or row, otherwise you get a warning message.\\n   \\\\item \\\\code{\\\"no\\\"}: not use ref and not calculate diffs to gain calculation time.\\n }\\n\"}},{\"name\":\"ref2\",\"title\":\"first/tot/<i>{col_number}</i>\",\"type\":\"String\",\"default\":\"first\",\"description\":{\"R\":\"A second reference cell is needed to calculate odds ratios\\n (or relative risks ratios). The first cell of the row or column is used by default.\\n See `ref`  for the full list of possible values.\\n\"}},{\"name\":\"comp\",\"title\":\"comp\",\"type\":\"List\",\"options\":[{\"title\":\"tab <i>(compare in each subtable)</i>\",\"name\":\"tab\"},{\"title\":\"all <i>(compare with the total subtable)</i>\",\"name\":\"all\"}],\"default\":\"tab\",\"description\":{\"R\":\"The comparison level : by subtables/groups, or for the whole table.\\n\"}},{\"name\":\"ci\",\"title\":\"ci = <i>(confidence intervals)</i>\",\"type\":\"List\",\"options\":[{\"title\":\"auto\",\"name\":\"auto\"},{\"title\":\"cell <i>(ci for each cell)</i>\",\"name\":\"cell\"},{\"title\":\"diff <i>(ci on the difference with reference)</i>\",\"name\":\"diff\"}],\"default\":\"auto\",\"description\":{\"R\":\"The type of confidence intervals to calculate, passed to \\\\code{\\\\link{tab_ci}}.\\n    \\\\itemize{\\n     \\\\item \\\\code{\\\"cell\\\"}: absolute confidence intervals of cells percentages.\\n     \\\\item \\\\code{\\\"diff\\\"}: confidence intervals of the difference between a cell and the\\n     relative total cell (or relative first cell when \\\\code{ref = \\\"first\\\"}).\\n     \\\\item \\\\code{\\\"auto\\\"}: \\\\code{ci = \\\"diff\\\"} for means and row/col percentages,\\n     \\\\code{ci = \\\"cell\\\"} for frequencies (\\\"all\\\", \\\"all_tabs\\\").\\n    }\\nBy default, for percentages, with \\\\code{ci = \\\"cell\\\"} Wilson's method is used, and with \\\\code{ci = \\\"diff\\\"} Wald's method along Agresti and Caffo's adjustment. Means use classic method.\\n\"}},{\"name\":\"conf_level\",\"title\":\"\",\"type\":\"Number\",\"min\":0,\"max\":1,\"default\":0.95,\"description\":{\"R\":\"The confidence level, as a single numeric between 0 and 1. Default to 0.95 (95%).\\n\"}},{\"name\":\"ci_print\",\"title\":\"options('tabxplor.ci_print' = ...)\",\"type\":\"List\",\"options\":[{\"title\":\"ci <i>(interval display: [inf;sup])</i>\",\"name\":\"ci\"},{\"title\":\"moe <i>(display: pct±margin of error)</i>\",\"name\":\"moe\"}],\"default\":\"ci\",\"description\":{\"R\":\"By default confidence interval are printed with the interval display. Set to \\\"moe\\\" to use pct +- moe instead.\\n\"}},{\"name\":\"totaltab\",\"title\":\"totaltab = <i>(add a total table)</i>\",\"type\":\"List\",\"options\":[{\"title\":\"line\",\"name\":\"line\"},{\"title\":\"table\",\"name\":\"table\"},{\"title\":\"no\",\"name\":\"no\"}],\"default\":\"line\",\"description\":{\"R\":\"The total table, if there are subtables/groups\\n  (i.e. when \\\\code{tab_vars} is provided). Vectorised over `row_vars`.\\n \\\\itemize{\\n   \\\\item \\\\code{\\\"line\\\"}: by default, add a general total line (necessary for\\n   calculations with \\\\code{comp = \\\"all\\\"})\\n   \\\\item \\\\code{\\\"table\\\"}: add a complete total table\\n  (i.e. \\\\code{row_var} by \\\\code{col_vars} without \\\\code{tab_vars}).\\n   \\\\item \\\\code{\\\"no\\\"}: not to draw any total table.\\n  }\\n\"}},{\"name\":\"wrap_rows\",\"title\":\"\",\"type\":\"Number\",\"min\":0,\"default\":35,\"description\":{\"R\":\"By default, rownames are wrapped when larger than 30 characters.\\n\"}},{\"name\":\"wrap_cols\",\"title\":\"\",\"type\":\"Number\",\"min\":0,\"default\":15,\"description\":{\"R\":\"By default, colnames are wrapped when larger than 12 characters.\\n\"}},{\"name\":\"display\",\"title\":\"\",\"type\":\"List\",\"options\":[{\"title\":\"auto\",\"name\":\"auto\"},{\"title\":\"n <i>(unweighted counts)</i>\",\"name\":\"n\"},{\"title\":\"wn <i>(weighted counts)</i>\",\"name\":\"wn\"},{\"title\":\"pct <i>(percentages)</i>\",\"name\":\"pct\"},{\"title\":\"diff <i>(differences from total, or reference cell)</i>\",\"name\":\"diff\"},{\"title\":\"ctr <i>(relative contributions to variance)</i>\",\"name\":\"ctr\"},{\"title\":\"mean <i>(mean, for numeric variables)</i>\",\"name\":\"mean\"},{\"title\":\"var <i>(variance)</i>\",\"name\":\"var\"},{\"title\":\"ci <i>(confidence intervals)</i>\",\"name\":\"ci\"},{\"title\":\"pct_ci <i>(percentages with visible conf. intervals)</i>\",\"name\":\"pct_ci\"},{\"title\":\"mean_ci <i>(means with visible conf. intervals)</i>\",\"name\":\"mean_ci\"},{\"title\":\"OR <i>(odds ratios or relative risks ratios)</i>\",\"name\":\"OR\"},{\"title\":\"OR_pct <i>(odds ratios with visible percentages)</i>\",\"name\":\"OR_pct\"}],\"default\":\"auto\",\"description\":{\"R\":\"The information to display in the table.\\n\"}},{\"name\":\"add_n\",\"title\":\"\",\"type\":\"Bool\",\"default\":true,\"description\":{\"R\":\"For `pct = \\\"row\\\"` or `pct = \\\"col\\\"`, set to `FALSE` not to add another column or row with unweighted counts (`n`).\\n\"}},{\"name\":\"add_pct\",\"title\":\"\",\"type\":\"Bool\",\"default\":false,\"description\":{\"R\":\"Set to `TRUE` to add a column with the frequencies of the row variable (for `pct = \\\"row\\\"`) or a row with the frequencies of the column variable (for  `pct = \\\"col\\\"`)\\n\"}},{\"name\":\"subtext\",\"title\":\"\",\"type\":\"String\",\"default\":\"\",\"description\":{\"R\":\"A character vector to print rows of legend under the table.\\n\"}},{\"name\":\"digits\",\"title\":\"\",\"type\":\"Number\",\"min\":0,\"max\":10,\"default\":0,\"description\":{\"R\":\"The number of digits to print, as a single integer, or an integer vector the same length as \\\\code{col_vars}.\\n\"}},{\"name\":\"exportExcel\",\"title\":\"Export Table to Excel\",\"type\":\"Action\",\"description\":{\"R\":\"Press to export the table to Excel.\"}},{\"name\":\"xl_path\",\"type\":\"String\",\"title\":\"\",\"default\":\"S:/Documents\",\"description\":{\"R\":\"\\\"Folder in which to save exported Excel file\\\"\\n\"}},{\"name\":\"xl_filename\",\"type\":\"String\",\"title\":\"\",\"default\":\"Table.xlsx\",\"description\":{\"R\":\"\\\"Name of exported Excel file\\\"\\n\"}},{\"name\":\"xl_replace\",\"title\":\"\",\"type\":\"Bool\",\"default\":false,\"description\":{\"R\":\"\\\"Set to `TRUE` to overwrite existing Excel file.\\\"\\n\"}}];\n\nconst view = function() {\n    \n    this.handlers = require('./jmvtab')\n\n    View.extend({\n        jus: \"3.0\",\n\n        events: [\n\n\t]\n\n    }).call(this);\n}\n\nview.layout = ui.extend({\n\n    label: \"Crosstables\",\n    jus: \"3.0\",\n    type: \"root\",\n    stage: 0, //0 - release, 1 - development, 2 - proposed\n    controls: [\n\t\t{\n\t\t\ttype: DefaultControls.VariableSupplier,\n\t\t\ttypeName: 'VariableSupplier',\n\t\t\tname: \"variablesupplier\",\n\t\t\tpersistentItems: false,\n\t\t\tstretchFactor: 1,\n\t\t\tcontrols: [\n\t\t\t\t{\n\t\t\t\t\ttype: DefaultControls.TargetLayoutBox,\n\t\t\t\t\ttypeName: 'TargetLayoutBox',\n\t\t\t\t\tlabel: \"<b>row_vars = <i>(row variables)</i></b>\",\n\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\ttype: DefaultControls.VariablesListBox,\n\t\t\t\t\t\t\ttypeName: 'VariablesListBox',\n\t\t\t\t\t\t\tname: \"row_vars\",\n\t\t\t\t\t\t\tisTarget: true\n\t\t\t\t\t\t}\n\t\t\t\t\t]\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\ttype: DefaultControls.TargetLayoutBox,\n\t\t\t\t\ttypeName: 'TargetLayoutBox',\n\t\t\t\t\tlabel: \"<b>col_vars = <i>(column variables)</i></b>\",\n\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\ttype: DefaultControls.VariablesListBox,\n\t\t\t\t\t\t\ttypeName: 'VariablesListBox',\n\t\t\t\t\t\t\tname: \"col_vars\",\n\t\t\t\t\t\t\tisTarget: true\n\t\t\t\t\t\t}\n\t\t\t\t\t]\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\ttype: DefaultControls.TargetLayoutBox,\n\t\t\t\t\ttypeName: 'TargetLayoutBox',\n\t\t\t\t\tlabel: \"<b>tab_vars = <i>(subtables variables)</i></b>\",\n\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\ttype: DefaultControls.VariablesListBox,\n\t\t\t\t\t\t\ttypeName: 'VariablesListBox',\n\t\t\t\t\t\t\tname: \"tab_vars\",\n\t\t\t\t\t\t\tisTarget: true\n\t\t\t\t\t\t}\n\t\t\t\t\t]\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\ttype: DefaultControls.TargetLayoutBox,\n\t\t\t\t\ttypeName: 'TargetLayoutBox',\n\t\t\t\t\tlabel: \"<b>wt = <i>(weights)</i></b>\",\n\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\ttype: DefaultControls.VariablesListBox,\n\t\t\t\t\t\t\ttypeName: 'VariablesListBox',\n\t\t\t\t\t\t\tname: \"wt\",\n\t\t\t\t\t\t\tmaxItemCount: 1,\n\t\t\t\t\t\t\tisTarget: true\n\t\t\t\t\t\t}\n\t\t\t\t\t]\n\t\t\t\t}\n\t\t\t]\n\t\t},\n\t\t{\n\t\t\ttype: DefaultControls.CollapseBox,\n\t\t\ttypeName: 'CollapseBox',\n\t\t\tlabel: \"<b>Percentages, colors and Chi2 test </b>\",\n\t\t\tstretchFactor: 1,\n\t\t\tcollapsed: false,\n\t\t\tcontrols: [\n\t\t\t\t{\n\t\t\t\t\ttype: DefaultControls.LayoutBox,\n\t\t\t\t\ttypeName: 'LayoutBox',\n\t\t\t\t\tmargin: \"large\",\n\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\ttype: DefaultControls.LayoutBox,\n\t\t\t\t\t\t\ttypeName: 'LayoutBox',\n\t\t\t\t\t\t\tcell: {\"column\":0,\"row\":0},\n\t\t\t\t\t\t\tstretchFactor: 2,\n\t\t\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\ttype: DefaultControls.Label,\n\t\t\t\t\t\t\t\t\ttypeName: 'Label',\n\t\t\t\t\t\t\t\t\tlabel: \"pct = <i>(type of percentages)</i>\",\n\t\t\t\t\t\t\t\t\tfitToGrid: true,\n\t\t\t\t\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\t\ttype: DefaultControls.RadioButton,\n\t\t\t\t\t\t\t\t\t\t\ttypeName: 'RadioButton',\n\t\t\t\t\t\t\t\t\t\t\tname: \"pct_1\",\n\t\t\t\t\t\t\t\t\t\t\toptionName: \"pct\",\n\t\t\t\t\t\t\t\t\t\t\toptionPart: \"no\"\n\t\t\t\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\t\ttype: DefaultControls.RadioButton,\n\t\t\t\t\t\t\t\t\t\t\ttypeName: 'RadioButton',\n\t\t\t\t\t\t\t\t\t\t\tname: \"pct_2\",\n\t\t\t\t\t\t\t\t\t\t\toptionName: \"pct\",\n\t\t\t\t\t\t\t\t\t\t\toptionPart: \"row\"\n\t\t\t\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\t\ttype: DefaultControls.RadioButton,\n\t\t\t\t\t\t\t\t\t\t\ttypeName: 'RadioButton',\n\t\t\t\t\t\t\t\t\t\t\tname: \"pct_3\",\n\t\t\t\t\t\t\t\t\t\t\toptionName: \"pct\",\n\t\t\t\t\t\t\t\t\t\t\toptionPart: \"col\"\n\t\t\t\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\t\ttype: DefaultControls.RadioButton,\n\t\t\t\t\t\t\t\t\t\t\ttypeName: 'RadioButton',\n\t\t\t\t\t\t\t\t\t\t\tname: \"pct_4\",\n\t\t\t\t\t\t\t\t\t\t\toptionName: \"pct\",\n\t\t\t\t\t\t\t\t\t\t\toptionPart: \"all\"\n\t\t\t\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\t\ttype: DefaultControls.RadioButton,\n\t\t\t\t\t\t\t\t\t\t\ttypeName: 'RadioButton',\n\t\t\t\t\t\t\t\t\t\t\tname: \"pct_5\",\n\t\t\t\t\t\t\t\t\t\t\toptionName: \"pct\",\n\t\t\t\t\t\t\t\t\t\t\toptionPart: \"all_tabs\"\n\t\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t\t]\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t]\n\t\t\t\t\t\t},\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\ttype: DefaultControls.LayoutBox,\n\t\t\t\t\t\t\ttypeName: 'LayoutBox',\n\t\t\t\t\t\t\tcell: {\"column\":1,\"row\":0},\n\t\t\t\t\t\t\tstretchFactor: 3,\n\t\t\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\ttype: DefaultControls.Label,\n\t\t\t\t\t\t\t\t\ttypeName: 'Label',\n\t\t\t\t\t\t\t\t\tlabel: \"color = <i>(what to use for color helpers)</i>\",\n\t\t\t\t\t\t\t\t\tfitToGrid: true,\n\t\t\t\t\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\t\ttype: DefaultControls.RadioButton,\n\t\t\t\t\t\t\t\t\t\t\ttypeName: 'RadioButton',\n\t\t\t\t\t\t\t\t\t\t\tname: \"color_1\",\n\t\t\t\t\t\t\t\t\t\t\toptionName: \"color\",\n\t\t\t\t\t\t\t\t\t\t\toptionPart: \"no\"\n\t\t\t\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\t\ttype: DefaultControls.RadioButton,\n\t\t\t\t\t\t\t\t\t\t\ttypeName: 'RadioButton',\n\t\t\t\t\t\t\t\t\t\t\tname: \"color_2\",\n\t\t\t\t\t\t\t\t\t\t\toptionName: \"color\",\n\t\t\t\t\t\t\t\t\t\t\toptionPart: \"diff\",\n\t\t\t\t\t\t\t\t\t\t\tenable: \"(pct:row || pct:col)\"\n\t\t\t\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\t\ttype: DefaultControls.RadioButton,\n\t\t\t\t\t\t\t\t\t\t\ttypeName: 'RadioButton',\n\t\t\t\t\t\t\t\t\t\t\tname: \"color_3\",\n\t\t\t\t\t\t\t\t\t\t\toptionName: \"color\",\n\t\t\t\t\t\t\t\t\t\t\toptionPart: \"diff_ci\",\n\t\t\t\t\t\t\t\t\t\t\tenable: \"(pct:row || pct:col)\"\n\t\t\t\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\t\ttype: DefaultControls.RadioButton,\n\t\t\t\t\t\t\t\t\t\t\ttypeName: 'RadioButton',\n\t\t\t\t\t\t\t\t\t\t\tname: \"color_4\",\n\t\t\t\t\t\t\t\t\t\t\toptionName: \"color\",\n\t\t\t\t\t\t\t\t\t\t\toptionPart: \"after_ci\",\n\t\t\t\t\t\t\t\t\t\t\tenable: \"(pct:row || pct:col)\"\n\t\t\t\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\t\ttype: DefaultControls.RadioButton,\n\t\t\t\t\t\t\t\t\t\t\ttypeName: 'RadioButton',\n\t\t\t\t\t\t\t\t\t\t\tname: \"color_5\",\n\t\t\t\t\t\t\t\t\t\t\toptionName: \"color\",\n\t\t\t\t\t\t\t\t\t\t\toptionPart: \"contrib\"\n\t\t\t\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\t\ttype: DefaultControls.RadioButton,\n\t\t\t\t\t\t\t\t\t\t\ttypeName: 'RadioButton',\n\t\t\t\t\t\t\t\t\t\t\tname: \"color_6\",\n\t\t\t\t\t\t\t\t\t\t\toptionName: \"color\",\n\t\t\t\t\t\t\t\t\t\t\toptionPart: \"OR\",\n\t\t\t\t\t\t\t\t\t\t\tenable: \"(pct:row || pct:col)\"\n\t\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t\t]\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t]\n\t\t\t\t\t\t},\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\ttype: DefaultControls.LayoutBox,\n\t\t\t\t\t\t\ttypeName: 'LayoutBox',\n\t\t\t\t\t\t\tcell: {\"column\":0,\"row\":1},\n\t\t\t\t\t\t\tstretchFactor: 2,\n\t\t\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\ttype: DefaultControls.Label,\n\t\t\t\t\t\t\t\t\ttypeName: 'Label',\n\t\t\t\t\t\t\t\t\tlabel: \"OR = <i>(Odds Ratio)</i>\",\n\t\t\t\t\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\t\ttype: DefaultControls.RadioButton,\n\t\t\t\t\t\t\t\t\t\t\ttypeName: 'RadioButton',\n\t\t\t\t\t\t\t\t\t\t\tname: \"OR_1\",\n\t\t\t\t\t\t\t\t\t\t\toptionName: \"OR\",\n\t\t\t\t\t\t\t\t\t\t\toptionPart: \"no\",\n\t\t\t\t\t\t\t\t\t\t\tenable: \"(pct:row || pct:col)\"\n\t\t\t\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\t\ttype: DefaultControls.RadioButton,\n\t\t\t\t\t\t\t\t\t\t\ttypeName: 'RadioButton',\n\t\t\t\t\t\t\t\t\t\t\tname: \"OR_2\",\n\t\t\t\t\t\t\t\t\t\t\toptionName: \"OR\",\n\t\t\t\t\t\t\t\t\t\t\toptionPart: \"OR\",\n\t\t\t\t\t\t\t\t\t\t\tenable: \"(pct:row || pct:col)\"\n\t\t\t\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\t\ttype: DefaultControls.RadioButton,\n\t\t\t\t\t\t\t\t\t\t\ttypeName: 'RadioButton',\n\t\t\t\t\t\t\t\t\t\t\tname: \"OR_3\",\n\t\t\t\t\t\t\t\t\t\t\toptionName: \"OR\",\n\t\t\t\t\t\t\t\t\t\t\toptionPart: \"OR_pct\",\n\t\t\t\t\t\t\t\t\t\t\tenable: \"(pct:row || pct:col)\"\n\t\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t\t]\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t]\n\t\t\t\t\t\t},\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\ttype: DefaultControls.LayoutBox,\n\t\t\t\t\t\t\ttypeName: 'LayoutBox',\n\t\t\t\t\t\t\tcell: {\"column\":1,\"row\":1},\n\t\t\t\t\t\t\tstyle: \"inline\",\n\t\t\t\t\t\t\tstretchFactor: 3,\n\t\t\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\ttype: DefaultControls.Label,\n\t\t\t\t\t\t\t\t\ttypeName: 'Label',\n\t\t\t\t\t\t\t\t\tlabel: \"chi2 = <i>(Chi2 test)</i>\",\n\t\t\t\t\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\t\t\ttype: DefaultControls.CheckBox,\n\t\t\t\t\t\t\t\t\t\t\ttypeName: 'CheckBox',\n\t\t\t\t\t\t\t\t\t\t\tname: \"chi2\"\n\t\t\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t\t\t]\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t]\n\t\t\t\t\t\t}\n\t\t\t\t\t]\n\t\t\t\t}\n\t\t\t]\n\t\t},\n\t\t{\n\t\t\ttype: DefaultControls.CollapseBox,\n\t\t\ttypeName: 'CollapseBox',\n\t\t\tlabel: \"<b>Levels and missing values</b>\",\n\t\t\tstretchFactor: 1,\n\t\t\tcollapsed: true,\n\t\t\tcontrols: [\n\t\t\t\t{\n\t\t\t\t\ttype: DefaultControls.LayoutBox,\n\t\t\t\t\ttypeName: 'LayoutBox',\n\t\t\t\t\tmargin: \"small\",\n\t\t\t\t\tcell: {\"column\":0,\"row\":0},\n\t\t\t\t\tstretchFactor: 1,\n\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\ttype: DefaultControls.Label,\n\t\t\t\t\t\t\ttypeName: 'Label',\n\t\t\t\t\t\t\tlabel: \"na = <i>(missing values)</i> \",\n\t\t\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\ttype: DefaultControls.RadioButton,\n\t\t\t\t\t\t\t\t\ttypeName: 'RadioButton',\n\t\t\t\t\t\t\t\t\tname: \"na_1\",\n\t\t\t\t\t\t\t\t\toptionName: \"na\",\n\t\t\t\t\t\t\t\t\toptionPart: \"keep\"\n\t\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\ttype: DefaultControls.RadioButton,\n\t\t\t\t\t\t\t\t\ttypeName: 'RadioButton',\n\t\t\t\t\t\t\t\t\tname: \"na_2\",\n\t\t\t\t\t\t\t\t\toptionName: \"na\",\n\t\t\t\t\t\t\t\t\toptionPart: \"drop\"\n\t\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\ttype: DefaultControls.RadioButton,\n\t\t\t\t\t\t\t\t\ttypeName: 'RadioButton',\n\t\t\t\t\t\t\t\t\tname: \"na_3\",\n\t\t\t\t\t\t\t\t\toptionName: \"na\",\n\t\t\t\t\t\t\t\t\toptionPart: \"drop_all\"\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t]\n\t\t\t\t\t\t}\n\t\t\t\t\t]\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\ttype: DefaultControls.LayoutBox,\n\t\t\t\t\ttypeName: 'LayoutBox',\n\t\t\t\t\tmargin: \"small\",\n\t\t\t\t\tcell: {\"column\":1,\"row\":0},\n\t\t\t\t\tstretchFactor: 1,\n\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\ttype: DefaultControls.Label,\n\t\t\t\t\t\t\ttypeName: 'Label',\n\t\t\t\t\t\t\tlabel: \"levels = <i>(which lvs to keep)</i>\",\n\t\t\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\ttype: DefaultControls.RadioButton,\n\t\t\t\t\t\t\t\t\ttypeName: 'RadioButton',\n\t\t\t\t\t\t\t\t\tname: \"lvs_1\",\n\t\t\t\t\t\t\t\t\toptionName: \"lvs\",\n\t\t\t\t\t\t\t\t\toptionPart: \"all\"\n\t\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\ttype: DefaultControls.RadioButton,\n\t\t\t\t\t\t\t\t\ttypeName: 'RadioButton',\n\t\t\t\t\t\t\t\t\tname: \"lvs_2\",\n\t\t\t\t\t\t\t\t\toptionName: \"lvs\",\n\t\t\t\t\t\t\t\t\toptionPart: \"first\"\n\t\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\ttype: DefaultControls.RadioButton,\n\t\t\t\t\t\t\t\t\ttypeName: 'RadioButton',\n\t\t\t\t\t\t\t\t\tname: \"lvs_3\",\n\t\t\t\t\t\t\t\t\toptionName: \"lvs\",\n\t\t\t\t\t\t\t\t\toptionPart: \"auto\"\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t]\n\t\t\t\t\t\t}\n\t\t\t\t\t]\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\ttype: DefaultControls.LayoutBox,\n\t\t\t\t\ttypeName: 'LayoutBox',\n\t\t\t\t\tmargin: \"none\",\n\t\t\t\t\tcell: {\"column\":2,\"row\":0},\n\t\t\t\t\tstretchFactor: 1,\n\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\ttype: DefaultControls.Label,\n\t\t\t\t\t\t\ttypeName: 'Label',\n\t\t\t\t\t\t\tlabel: \"other_if_less_than =\",\n\t\t\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\ttype: DefaultControls.TextBox,\n\t\t\t\t\t\t\t\t\ttypeName: 'TextBox',\n\t\t\t\t\t\t\t\t\tname: \"other_if_less_than\",\n\t\t\t\t\t\t\t\t\tformat: FormatDef.number\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t]\n\t\t\t\t\t\t},\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\ttype: DefaultControls.Label,\n\t\t\t\t\t\t\ttypeName: 'Label',\n\t\t\t\t\t\t\tlabel: \"cleannames =\",\n\t\t\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\ttype: DefaultControls.CheckBox,\n\t\t\t\t\t\t\t\t\ttypeName: 'CheckBox',\n\t\t\t\t\t\t\t\t\tname: \"cleannames\"\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t]\n\t\t\t\t\t\t}\n\t\t\t\t\t]\n\t\t\t\t}\n\t\t\t]\n\t\t},\n\t\t{\n\t\t\ttype: DefaultControls.CollapseBox,\n\t\t\ttypeName: 'CollapseBox',\n\t\t\tlabel: \"<b>References (points of comparison)</b>\",\n\t\t\tstretchFactor: 1,\n\t\t\tcollapsed: true,\n\t\t\tcontrols: [\n\t\t\t\t{\n\t\t\t\t\ttype: DefaultControls.LayoutBox,\n\t\t\t\t\ttypeName: 'LayoutBox',\n\t\t\t\t\tmargin: \"none\",\n\t\t\t\t\tcell: {\"column\":0,\"row\":0},\n\t\t\t\t\tstretchFactor: 1,\n\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\ttype: DefaultControls.Label,\n\t\t\t\t\t\t\ttypeName: 'Label',\n\t\t\t\t\t\t\tlabel: \"ref = <i>(reference row/col for diff/OR)</i>\",\n\t\t\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\ttype: DefaultControls.TextBox,\n\t\t\t\t\t\t\t\t\ttypeName: 'TextBox',\n\t\t\t\t\t\t\t\t\tname: \"ref\",\n\t\t\t\t\t\t\t\t\tformat: FormatDef.string\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t]\n\t\t\t\t\t\t}\n\t\t\t\t\t]\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\ttype: DefaultControls.LayoutBox,\n\t\t\t\t\ttypeName: 'LayoutBox',\n\t\t\t\t\tmargin: \"none\",\n\t\t\t\t\tcell: {\"column\":1,\"row\":0},\n\t\t\t\t\tstretchFactor: 1,\n\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\ttype: DefaultControls.Label,\n\t\t\t\t\t\t\ttypeName: 'Label',\n\t\t\t\t\t\t\tlabel: \"comp = <i>(reference table with tab_vars)</i>\",\n\t\t\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\ttype: DefaultControls.RadioButton,\n\t\t\t\t\t\t\t\t\ttypeName: 'RadioButton',\n\t\t\t\t\t\t\t\t\tname: \"comp_1\",\n\t\t\t\t\t\t\t\t\toptionName: \"comp\",\n\t\t\t\t\t\t\t\t\toptionPart: \"tab\"\n\t\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\ttype: DefaultControls.RadioButton,\n\t\t\t\t\t\t\t\t\ttypeName: 'RadioButton',\n\t\t\t\t\t\t\t\t\tname: \"comp_2\",\n\t\t\t\t\t\t\t\t\toptionName: \"comp\",\n\t\t\t\t\t\t\t\t\toptionPart: \"all\"\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t]\n\t\t\t\t\t\t}\n\t\t\t\t\t]\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\ttype: DefaultControls.LayoutBox,\n\t\t\t\t\ttypeName: 'LayoutBox',\n\t\t\t\t\tmargin: \"none\",\n\t\t\t\t\tcell: {\"column\":0,\"row\":1},\n\t\t\t\t\tstretchFactor: 0,\n\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\ttype: DefaultControls.Label,\n\t\t\t\t\t\t\ttypeName: 'Label',\n\t\t\t\t\t\t\tlabel: \"ref2 = <i>(2nd reference col/row for OR)</i>\",\n\t\t\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\ttype: DefaultControls.TextBox,\n\t\t\t\t\t\t\t\t\ttypeName: 'TextBox',\n\t\t\t\t\t\t\t\t\tname: \"ref2\",\n\t\t\t\t\t\t\t\t\tformat: FormatDef.string,\n\t\t\t\t\t\t\t\t\tenable: \"(OR == 'OR' || OR == 'OR_pct')\"\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t]\n\t\t\t\t\t\t}\n\t\t\t\t\t]\n\t\t\t\t}\n\t\t\t]\n\t\t},\n\t\t{\n\t\t\ttype: DefaultControls.CollapseBox,\n\t\t\ttypeName: 'CollapseBox',\n\t\t\tlabel: \"<b>Confidence intervals</b>\",\n\t\t\tstretchFactor: 1,\n\t\t\tcollapsed: true,\n\t\t\tcontrols: [\n\t\t\t\t{\n\t\t\t\t\ttype: DefaultControls.LayoutBox,\n\t\t\t\t\ttypeName: 'LayoutBox',\n\t\t\t\t\tmargin: \"none\",\n\t\t\t\t\tcell: {\"column\":0,\"row\":0},\n\t\t\t\t\tstretchFactor: 1,\n\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\ttype: DefaultControls.Label,\n\t\t\t\t\t\t\ttypeName: 'Label',\n\t\t\t\t\t\t\tlabel: \"ci = <i>(confidence intervals)</i>\",\n\t\t\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\ttype: DefaultControls.RadioButton,\n\t\t\t\t\t\t\t\t\ttypeName: 'RadioButton',\n\t\t\t\t\t\t\t\t\tname: \"ci_1\",\n\t\t\t\t\t\t\t\t\toptionName: \"ci\",\n\t\t\t\t\t\t\t\t\toptionPart: \"auto\",\n\t\t\t\t\t\t\t\t\tenable: \"(pct:row || pct:col || pct:all || pct:all_tabs)\"\n\t\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\ttype: DefaultControls.RadioButton,\n\t\t\t\t\t\t\t\t\ttypeName: 'RadioButton',\n\t\t\t\t\t\t\t\t\tname: \"ci_2\",\n\t\t\t\t\t\t\t\t\toptionName: \"ci\",\n\t\t\t\t\t\t\t\t\toptionPart: \"cell\",\n\t\t\t\t\t\t\t\t\tenable: \"(pct:row || pct:col || pct:all || pct:all_tabs)\"\n\t\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\ttype: DefaultControls.RadioButton,\n\t\t\t\t\t\t\t\t\ttypeName: 'RadioButton',\n\t\t\t\t\t\t\t\t\tname: \"ci_3\",\n\t\t\t\t\t\t\t\t\toptionName: \"ci\",\n\t\t\t\t\t\t\t\t\toptionPart: \"diff\",\n\t\t\t\t\t\t\t\t\tenable: \"(pct:row || pct:col || pct:all || pct:all_tabs)\"\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t]\n\t\t\t\t\t\t}\n\t\t\t\t\t]\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\ttype: DefaultControls.LayoutBox,\n\t\t\t\t\ttypeName: 'LayoutBox',\n\t\t\t\t\tmargin: \"none\",\n\t\t\t\t\tcell: {\"column\":1,\"row\":0},\n\t\t\t\t\tstretchFactor: 1,\n\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\ttype: DefaultControls.Label,\n\t\t\t\t\t\t\ttypeName: 'Label',\n\t\t\t\t\t\t\tlabel: \"options('tabxplor.ci_print' = ...)\",\n\t\t\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\ttype: DefaultControls.RadioButton,\n\t\t\t\t\t\t\t\t\ttypeName: 'RadioButton',\n\t\t\t\t\t\t\t\t\tname: \"ci_print_1\",\n\t\t\t\t\t\t\t\t\toptionName: \"ci_print\",\n\t\t\t\t\t\t\t\t\toptionPart: \"ci\",\n\t\t\t\t\t\t\t\t\tenable: \"(pct:row || pct:col || pct:all || pct:all_tabs)\"\n\t\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\ttype: DefaultControls.RadioButton,\n\t\t\t\t\t\t\t\t\ttypeName: 'RadioButton',\n\t\t\t\t\t\t\t\t\tname: \"ci_print_2\",\n\t\t\t\t\t\t\t\t\toptionName: \"ci_print\",\n\t\t\t\t\t\t\t\t\toptionPart: \"moe\",\n\t\t\t\t\t\t\t\t\tenable: \"(pct:row || pct:col || pct:all || pct:all_tabs)\"\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t]\n\t\t\t\t\t\t}\n\t\t\t\t\t]\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\ttype: DefaultControls.LayoutBox,\n\t\t\t\t\ttypeName: 'LayoutBox',\n\t\t\t\t\tmargin: \"none\",\n\t\t\t\t\tcell: {\"column\":0,\"row\":1},\n\t\t\t\t\tstretchFactor: 0,\n\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\ttype: DefaultControls.Label,\n\t\t\t\t\t\t\ttypeName: 'Label',\n\t\t\t\t\t\t\tlabel: \"conf_level = <i>(confidence level)</i>\",\n\t\t\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\ttype: DefaultControls.TextBox,\n\t\t\t\t\t\t\t\t\ttypeName: 'TextBox',\n\t\t\t\t\t\t\t\t\tname: \"conf_level\",\n\t\t\t\t\t\t\t\t\tformat: FormatDef.number,\n\t\t\t\t\t\t\t\t\tenable: \"(pct:row || pct:col)\"\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t]\n\t\t\t\t\t\t}\n\t\t\t\t\t]\n\t\t\t\t}\n\t\t\t]\n\t\t},\n\t\t{\n\t\t\ttype: DefaultControls.CollapseBox,\n\t\t\ttypeName: 'CollapseBox',\n\t\t\tlabel: \"<b>Other formatting</b>\",\n\t\t\tstretchFactor: 1,\n\t\t\tcollapsed: true,\n\t\t\tcontrols: [\n\t\t\t\t{\n\t\t\t\t\ttype: DefaultControls.LayoutBox,\n\t\t\t\t\ttypeName: 'LayoutBox',\n\t\t\t\t\tcell: {\"column\":0,\"row\":0},\n\t\t\t\t\tstretchFactor: 0,\n\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\ttype: DefaultControls.Label,\n\t\t\t\t\t\t\ttypeName: 'Label',\n\t\t\t\t\t\t\tlabel: \"totaltab = <i>(with tab_vars, add a total table)</i>\",\n\t\t\t\t\t\t\tfitToGrid: true,\n\t\t\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\ttype: DefaultControls.RadioButton,\n\t\t\t\t\t\t\t\t\ttypeName: 'RadioButton',\n\t\t\t\t\t\t\t\t\tname: \"totaltab_1\",\n\t\t\t\t\t\t\t\t\toptionName: \"totaltab\",\n\t\t\t\t\t\t\t\t\toptionPart: \"line\"\n\t\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\ttype: DefaultControls.RadioButton,\n\t\t\t\t\t\t\t\t\ttypeName: 'RadioButton',\n\t\t\t\t\t\t\t\t\tname: \"totaltab_2\",\n\t\t\t\t\t\t\t\t\toptionName: \"totaltab\",\n\t\t\t\t\t\t\t\t\toptionPart: \"table\"\n\t\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\ttype: DefaultControls.RadioButton,\n\t\t\t\t\t\t\t\t\ttypeName: 'RadioButton',\n\t\t\t\t\t\t\t\t\tname: \"totaltab_3\",\n\t\t\t\t\t\t\t\t\toptionName: \"totaltab\",\n\t\t\t\t\t\t\t\t\toptionPart: \"no\"\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t]\n\t\t\t\t\t\t}\n\t\t\t\t\t]\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\ttype: DefaultControls.LayoutBox,\n\t\t\t\t\ttypeName: 'LayoutBox',\n\t\t\t\t\tmargin: \"none\",\n\t\t\t\t\tcell: {\"column\":0,\"row\":1},\n\t\t\t\t\tstretchFactor: 1,\n\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\ttype: DefaultControls.Label,\n\t\t\t\t\t\t\ttypeName: 'Label',\n\t\t\t\t\t\t\tlabel: \"wrap_rows = <i>(nb chars for line break)</i>\",\n\t\t\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\ttype: DefaultControls.TextBox,\n\t\t\t\t\t\t\t\t\ttypeName: 'TextBox',\n\t\t\t\t\t\t\t\t\tname: \"wrap_rows\",\n\t\t\t\t\t\t\t\t\tformat: FormatDef.number\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t]\n\t\t\t\t\t\t}\n\t\t\t\t\t]\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\ttype: DefaultControls.LayoutBox,\n\t\t\t\t\ttypeName: 'LayoutBox',\n\t\t\t\t\tmargin: \"none\",\n\t\t\t\t\tcell: {\"column\":1,\"row\":1},\n\t\t\t\t\tstretchFactor: 1,\n\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\ttype: DefaultControls.Label,\n\t\t\t\t\t\t\ttypeName: 'Label',\n\t\t\t\t\t\t\tlabel: \"wrap_cols = <i>(nb chars for line break)</i>\",\n\t\t\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\ttype: DefaultControls.TextBox,\n\t\t\t\t\t\t\t\t\ttypeName: 'TextBox',\n\t\t\t\t\t\t\t\t\tname: \"wrap_cols\",\n\t\t\t\t\t\t\t\t\tformat: FormatDef.number\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t]\n\t\t\t\t\t\t}\n\t\t\t\t\t]\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\ttype: DefaultControls.LayoutBox,\n\t\t\t\t\ttypeName: 'LayoutBox',\n\t\t\t\t\tmargin: \"none\",\n\t\t\t\t\tcell: {\"column\":0,\"row\":2},\n\t\t\t\t\tstretchFactor: 0,\n\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\ttype: DefaultControls.Label,\n\t\t\t\t\t\t\ttypeName: 'Label',\n\t\t\t\t\t\t\tlabel: \"display = <i>(which information to display in the table ?)</i>\",\n\t\t\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\ttype: DefaultControls.ComboBox,\n\t\t\t\t\t\t\t\t\ttypeName: 'ComboBox',\n\t\t\t\t\t\t\t\t\tname: \"display\"\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t]\n\t\t\t\t\t\t}\n\t\t\t\t\t]\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\ttype: DefaultControls.LayoutBox,\n\t\t\t\t\ttypeName: 'LayoutBox',\n\t\t\t\t\tmargin: \"none\",\n\t\t\t\t\tcell: {\"column\":0,\"row\":3},\n\t\t\t\t\tstretchFactor: 1,\n\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\ttype: DefaultControls.Label,\n\t\t\t\t\t\t\ttypeName: 'Label',\n\t\t\t\t\t\t\tlabel: \"add_n = <i>(see unweighted counts)</i>\",\n\t\t\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\ttype: DefaultControls.CheckBox,\n\t\t\t\t\t\t\t\t\ttypeName: 'CheckBox',\n\t\t\t\t\t\t\t\t\tname: \"add_n\"\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t]\n\t\t\t\t\t\t}\n\t\t\t\t\t]\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\ttype: DefaultControls.LayoutBox,\n\t\t\t\t\ttypeName: 'LayoutBox',\n\t\t\t\t\tmargin: \"none\",\n\t\t\t\t\tcell: {\"column\":1,\"row\":3},\n\t\t\t\t\tstretchFactor: 1,\n\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\ttype: DefaultControls.Label,\n\t\t\t\t\t\t\ttypeName: 'Label',\n\t\t\t\t\t\t\tlabel: \"add_pct = <i>(see frequencies of 100% total)</i>\",\n\t\t\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\ttype: DefaultControls.CheckBox,\n\t\t\t\t\t\t\t\t\ttypeName: 'CheckBox',\n\t\t\t\t\t\t\t\t\tname: \"add_pct\"\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t]\n\t\t\t\t\t\t}\n\t\t\t\t\t]\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\ttype: DefaultControls.LayoutBox,\n\t\t\t\t\ttypeName: 'LayoutBox',\n\t\t\t\t\tmargin: \"none\",\n\t\t\t\t\tcell: {\"column\":0,\"row\":4},\n\t\t\t\t\tstretchFactor: 1,\n\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\ttype: DefaultControls.Label,\n\t\t\t\t\t\t\ttypeName: 'Label',\n\t\t\t\t\t\t\tlabel: \"digits = <i>(number of digits)</i>\",\n\t\t\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\ttype: DefaultControls.TextBox,\n\t\t\t\t\t\t\t\t\ttypeName: 'TextBox',\n\t\t\t\t\t\t\t\t\tname: \"digits\",\n\t\t\t\t\t\t\t\t\tformat: FormatDef.number\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t]\n\t\t\t\t\t\t}\n\t\t\t\t\t]\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\ttype: DefaultControls.LayoutBox,\n\t\t\t\t\ttypeName: 'LayoutBox',\n\t\t\t\t\tmargin: \"none\",\n\t\t\t\t\tcell: {\"column\":0,\"row\":5},\n\t\t\t\t\tstretchFactor: 2,\n\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\ttype: DefaultControls.Label,\n\t\t\t\t\t\t\ttypeName: 'Label',\n\t\t\t\t\t\t\tlabel: \"subtext = <i>(text to print below the table)</i>\",\n\t\t\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\t\ttype: DefaultControls.TextBox,\n\t\t\t\t\t\t\t\t\ttypeName: 'TextBox',\n\t\t\t\t\t\t\t\t\tname: \"subtext\",\n\t\t\t\t\t\t\t\t\tformat: FormatDef.string,\n\t\t\t\t\t\t\t\t\twidth: \"largest\"\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t]\n\t\t\t\t\t\t}\n\t\t\t\t\t]\n\t\t\t\t}\n\t\t\t]\n\t\t},\n\t\t{\n\t\t\ttype: DefaultControls.LayoutBox,\n\t\t\ttypeName: 'LayoutBox',\n\t\t\tmargin: \"large\",\n\t\t\tstretchFactor: 1,\n\t\t\tcontrols: [\n\t\t\t\t{\n\t\t\t\t\ttype: DefaultControls.LayoutBox,\n\t\t\t\t\ttypeName: 'LayoutBox',\n\t\t\t\t\tcell: {\"column\":0,\"row\":1},\n\t\t\t\t\tstretchFactor: 0,\n\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\ttype: DefaultControls.ActionButton,\n\t\t\t\t\t\t\ttypeName: 'ActionButton',\n\t\t\t\t\t\t\tname: \"exportExcel\",\n\t\t\t\t\t\t\tlabel: \"Export to Excel\",\n\t\t\t\t\t\t\tevents: [\n\t\t\t\t\t\t\t\t{ execute: require('./jmvtab').exportExcel_changed }\n\t\t\t\t\t\t\t],\n\t\t\t\t\t\t\tstretchFactor: 0\n\t\t\t\t\t\t}\n\t\t\t\t\t]\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\ttype: DefaultControls.LayoutBox,\n\t\t\t\t\ttypeName: 'LayoutBox',\n\t\t\t\t\tmargin: \"none\",\n\t\t\t\t\tcell: {\"column\":1,\"row\":0},\n\t\t\t\t\tstretchFactor: 1,\n\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\ttype: DefaultControls.Label,\n\t\t\t\t\t\t\ttypeName: 'Label',\n\t\t\t\t\t\t\tlabel: \"<b>Folder:</b>\",\n\t\t\t\t\t\t\tstretchFactor: 0\n\t\t\t\t\t\t}\n\t\t\t\t\t]\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\ttype: DefaultControls.LayoutBox,\n\t\t\t\t\ttypeName: 'LayoutBox',\n\t\t\t\t\tmargin: \"none\",\n\t\t\t\t\tcell: {\"column\":1,\"row\":1},\n\t\t\t\t\tstretchFactor: 1,\n\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\ttype: DefaultControls.TextBox,\n\t\t\t\t\t\t\ttypeName: 'TextBox',\n\t\t\t\t\t\t\tname: \"xl_path\",\n\t\t\t\t\t\t\tformat: FormatDef.string,\n\t\t\t\t\t\t\twidth: \"largest\"\n\t\t\t\t\t\t}\n\t\t\t\t\t]\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\ttype: DefaultControls.LayoutBox,\n\t\t\t\t\ttypeName: 'LayoutBox',\n\t\t\t\t\tmargin: \"none\",\n\t\t\t\t\tcell: {\"column\":2,\"row\":0},\n\t\t\t\t\tstretchFactor: 1,\n\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\ttype: DefaultControls.Label,\n\t\t\t\t\t\t\ttypeName: 'Label',\n\t\t\t\t\t\t\tlabel: \"<b>File name:</b>\",\n\t\t\t\t\t\t\tstretchFactor: 0\n\t\t\t\t\t\t}\n\t\t\t\t\t]\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\ttype: DefaultControls.LayoutBox,\n\t\t\t\t\ttypeName: 'LayoutBox',\n\t\t\t\t\tmargin: \"none\",\n\t\t\t\t\tcell: {\"column\":2,\"row\":1},\n\t\t\t\t\tstretchFactor: 1,\n\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\ttype: DefaultControls.TextBox,\n\t\t\t\t\t\t\ttypeName: 'TextBox',\n\t\t\t\t\t\t\tname: \"xl_filename\",\n\t\t\t\t\t\t\tformat: FormatDef.string,\n\t\t\t\t\t\t\twidth: \"largest\"\n\t\t\t\t\t\t}\n\t\t\t\t\t]\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\ttype: DefaultControls.LayoutBox,\n\t\t\t\t\ttypeName: 'LayoutBox',\n\t\t\t\t\tmargin: \"none\",\n\t\t\t\t\tcell: {\"column\":0,\"row\":2},\n\t\t\t\t\tstretchFactor: 0,\n\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\ttype: DefaultControls.Label,\n\t\t\t\t\t\t\ttypeName: 'Label',\n\t\t\t\t\t\t\tlabel: \"<span style='font-weight: normal;'>  Replace file ?</span>\"\n\t\t\t\t\t\t}\n\t\t\t\t\t]\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\ttype: DefaultControls.LayoutBox,\n\t\t\t\t\ttypeName: 'LayoutBox',\n\t\t\t\t\tmargin: \"none\",\n\t\t\t\t\tcell: {\"column\":1,\"row\":2},\n\t\t\t\t\tstretchFactor: 0,\n\t\t\t\t\tcontrols: [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\ttype: DefaultControls.CheckBox,\n\t\t\t\t\t\t\ttypeName: 'CheckBox',\n\t\t\t\t\t\t\tname: \"xl_replace\"\n\t\t\t\t\t\t}\n\t\t\t\t\t]\n\t\t\t\t}\n\t\t\t]\n\t\t}\n\t]\n});\n\nmodule.exports = { view : view, options: options };\n\n},{\"./jmvtab\":1}]},{},[2])(2)\n});\n"
+usesNative: true
+minApp: 1.0.8
+languages:
+  - fr
+rVersion: 4.4.1-x64
+
+...

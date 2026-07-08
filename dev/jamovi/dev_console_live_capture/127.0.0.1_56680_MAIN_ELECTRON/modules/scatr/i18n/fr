@@ -1,0 +1,121 @@
+{
+    "domain": "messages",
+    "locale_data": {
+        "messages": {
+            "": {
+                "domain": "messages",
+                "plural_forms": "nplurals=2; plural=n > 1;",
+                "lang": "fr"
+            },
+            "`none` (default), `dens`, or `box`, provide respectively no plots, density plots, or box plots on the axes": [
+                "`none` (par défaut), `dens`, ou `box`, ne fournissent respectivement aucun graphique, graphique de densité, ou boites à moustaches sur les axes"
+            ],
+            "`none` (default), `linear`, or `smooth`, provide respectively no regression line,  a linear regression line, or a smoothed regression line": [
+                "`none` (par défaut), `linear`, ou `smooth`, fournissent respectivement aucune ligne de régression, une ligne de régression linéaire, ou une ligne de régression lissée"
+            ],
+            "`TRUE` or `FALSE` (default), show the standard error for the regression line": [
+                "`TRUE` ou `FALSE` (par défaut), montre l'erreur standard pour la ligne de régression"
+            ],
+            "a number from 0 to 45 defining the angle of the x-axis labels,  where 0 degrees represents completely horizontal labels.": [
+                "un nombre de 0 à 45 définissant l'angle des étiquettes de l'axe des x, où 0 degré représente des étiquettes complètement horizontales."
+            ],
+            "a Pareto chart": [
+                "un diagramme de Pareto"
+            ],
+            "a scatter plot": [
+                "un nuage de points"
+            ],
+            "a string naming the variable from `data` that contains the  counts for the values (optional)": [
+                "une chaîne nommant la variable à partir de `data` qui contient le décompte des valeurs (facultatif)"
+            ],
+            "a string naming the variable from `data` that contains the  values used for the chart": [
+                "une chaîne de caractères nommant la variable de `data` qui contient les valeurs utilisées pour le graphique"
+            ],
+            "a string naming the variable from `data` that contains the  x coordinates of the points in the plot, variable must be numeric": [
+                "une chaîne de caractères nommant la variable de `data` qui contient les coordonnées x des points du graphique, la variable doit être numérique"
+            ],
+            "a string naming the variable from `data` that contains the  y coordinates of the points in the plot, variable must be numeric": [
+                "une chaîne de caractères nommant la variable de `data` qui contient les coordonnées y des points dans le graphique, la variable doit être numérique"
+            ],
+            "a string naming the variable from `data` that represents the  grouping variable": [
+                "une chaîne nommant la variable de `data` qui représente la variable de groupage"
+            ],
+            "Allows you to produce several types of explorative plots such as scatter plots and pareto charts. You can find it under the 'Exploration' menu.": [
+                "Permet de produire plusieurs types de graphiques exploratoires tels que des diagrammes de dispersion et des diagrammes de Pareto. Vous pouvez le trouver dans le menu 'Exploration'."
+            ],
+            "Angle of x-axis labels": [
+                "Angle des étiquettes de l'axe des x"
+            ],
+            "Boxplots": [
+                "Boîtes à moustaches"
+            ],
+            "Counts": [
+                "Fréquences"
+            ],
+            "Counts (optional)": [
+                "Quantités (optionnel)"
+            ],
+            "Cumulative Percentage": [
+                "Pourcentages cumulés"
+            ],
+            "Densities": [
+                "Densités"
+            ],
+            "Exploration": [
+                "Exploration"
+            ],
+            "Function for making clean, good looking scatter plots with the option to add marginal denisty or box plots.": [
+                "Fonction permettant de créer des diagrammes de dispersion propres et de bonne qualité, avec la possibilité d'ajouter des diagrammes marginaux ou des diagrammes en boîte."
+            ],
+            "Function for making pareto charts.": [
+                "Fonction permettant de réaliser des diagrammes de Pareto."
+            ],
+            "Group": [
+                "Groupe"
+            ],
+            "Linear": [
+                "Linéaire"
+            ],
+            "Marginals": [
+                "Marges"
+            ],
+            "None": [
+                "Aucune"
+            ],
+            "Pareto Chart": [
+                "Diagramme de Pareto"
+            ],
+            "Regression Line": [
+                "Courbe de régression"
+            ],
+            "scatr": [
+                "scatr"
+            ],
+            "Scatterplot": [
+                "Nuage de points"
+            ],
+            "set.seed(1337)\n\nX <- rnorm(100)\nY <- 0.5*X + rnorm(100)\ndat <- data.frame(X = X, Y = Y)\n\nscat(dat, x = 'X', y = 'Y', line = 'linear', se = TRUE, marg = 'dens')": [
+                "set.seed(1337)\n\nX <- rnorm(100)\nY <- 0.5*X + rnorm(100)\ndat <- data.frame(X = X, Y = Y)\n\nscat(dat, x = 'X' ;, y = 'Y' ;, line = 'linear' ;, se = TRUE, marg = 'dens' ;)"
+            ],
+            "set.seed(1337)\n\nX <- sample(c('A','B','C','D','E','F'), 100, replace=TRUE)\ndat <- data.frame(X = X)\n\npareto(dat, x = 'X')": [
+                "set.seed(1337)\n\nX <- sample(c('A','B','C','D','E','F'), 100, replace=TRUE)\ndat <- data.frame(X = X)\n\npareto(dat, x = 'X')"
+            ],
+            "Smooth": [
+                "Lissée"
+            ],
+            "Standard error": [
+                "Erreur standard"
+            ],
+            "the data as a data frame": [
+                "les données sous forme de data frame"
+            ],
+            "X-Axis": [
+                "Axe x"
+            ],
+            "Y-Axis": [
+                "Axe y"
+            ]
+        }
+    },
+    "code": "fr"
+}
