@@ -110,6 +110,11 @@ tab(data, row_var, col_var, ...)
 - `tab()` has a `sup_cols` argument (supplementary columns showing only the first level with row percentages); `tab_many()` achieves this via `levels = "first"`.
 - `tab()` translates its simpler argument interface into `tab_many()` arguments.
 
+**`tab_counts()` (Phase 4) is the from-the-middle sibling of `tab()`**: same output, but the input is
+already-aggregated counts (long / wide / `table` / freq+N). It does not scan microdata — it feeds a
+count-aggregate into `tab_plain()`'s `.fine` entry, then runs the same finalize. See the `R/tab-counts.R`
+file guide below.
+
 ### tab_many() Vectorisation Philosophy
 
 `tab_many()` processes multiple variables with a key asymmetry:
@@ -402,6 +407,24 @@ The main API file. Contains:
 - `tab_chi2()` — chi-squared (factors) + ANOVA F (means) via the vectorised engine
   `agg_chi2()` / `agg_anova()` in `R/tab-agg.R`; contributions to variance for `color="contrib"`.
 - **Lines 5200–5809**: `tab_tot()`, `tab_totaltab()`, internal helpers (`diff_index`, `quo_miss_na_null_empty_no`, etc.).
+- `tab_add_n_pct(tabs_text, add_n, add_pct)` — the `add_n`/`add_pct` block, factored out of `tab_many()`'s
+  finalize so `tab_many()` and `tab_counts()` share one implementation.
+
+### R/tab-counts.R (~360 lines) — from-the-middle constructor (Phase 4)
+
+`tab_counts()` (exported) builds a `tabxplor_tab` from already-aggregated counts, byte-identical to the
+microdata `tab()`. It does **not** re-implement the pipeline: it normalises the input and reuses
+`tab_plain()`'s `.fine` pre-aggregate entry + the shared finalize.
+
+- `tab_counts_reshape()` — dispatch on input shape → canonical long tidy counts. `table`/`xtabs`/`matrix`
+  (melt via `as.data.frame.table`; bare matrix coerced with `as.table`); wide `data.frame` (`pivot_longer(cols)`);
+  frequencies + base N (`input="pct"`: `largest_remainder(freq × base)` per row); long tidy (as-is).
+- `tab_counts_normalize()` — aggregate to the keyed `.fine` shape `[tab_vars…, row_var, col_var, n, (wn)]`;
+  **drop `n==0` cells** so the aggregate is structurally identical to microdata's `.N`-per-observed-key
+  (empty cells are recreated by `dcast(fill=0)`). Sets `weighted` and `has_real_n` (integrality of the counts).
+- `tab_counts()` — validation + color resolution (mirrors `tab_many()`), then `tab_plain(…, .fine = fine)` →
+  `tab_chi2` → `tab_ci` → `tab_add_n_pct` → rewrap (`test` attribute) → `tab_pvalue_lines`. Base-less input
+  (non-integer counts) disables CI/chi2 with a message. Weighted = real unweighted `n` + weighted `wn` (§14).
 
 ### R/tab_classes.R (3554 lines)
 

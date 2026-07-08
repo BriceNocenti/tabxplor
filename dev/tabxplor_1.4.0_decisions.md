@@ -1237,6 +1237,68 @@ the `stats::oneway.test` formulation. See also the Sources list below.
 
 ---
 
+## 25. Phase 4 IMPLEMENTED — `tab_counts()` via the `.fine` seam (supersedes the factor-path extraction)
+
+Implemented 2026-07-08. The from-the-middle constructor `tab_counts()` (`R/tab-counts.R`, exported) builds a
+`tabxplor_tab` from already-aggregated counts, **byte-identical** to the microdata `tab()` (locked in
+`test-counts-parity.R`: long / wide / table / xtabs / matrix / freq+N × pct × chi2 × ci × weighted ×
+tab_vars, plus a `tidyr::uncount()` oracle).
+
+### The mechanism decision — reuse the existing `.fine` entry, do NOT extract the factor path
+
+The roadmap's Phase 4 planned a ~600-line "factor-path reorg" (extract `tab_plain()`'s post-dcast pipeline
+into shared `wide_*`/`fmt_assemble_factor` helpers) with `as_tab_counts()` as its second consumer. During
+implementation the maintainer chose a lower-risk, less-code path (empirically proven byte-identical before
+building): **`tab_plain()` already has a from-the-middle seam — its `.fine` pre-aggregate parameter** (the
+opt-in scan-fusion path, `tab.R:2371-2379`, locked by `test-fuse-parity.R`). So `tab_counts()`:
+
+1. `tab_counts_reshape()` — normalises any input SHAPE to canonical long tidy counts (all shape detection
+   here): `table`/`xtabs`/`matrix` melt via `as.data.frame.table` (bare matrix → `as.table` first); wide
+   `data.frame` via `pivot_longer(cols)`; freq+N via largest-remainder reconstruction; long tidy as-is.
+2. `tab_counts_normalize()` — aggregates to the keyed `.fine` shape `[tab_vars…, row_var, col_var, n, (wn)]`
+   (integer `n`, double `wn`), **drops `n==0` cells** so the aggregate is structurally identical to
+   microdata's `.N`-per-observed-key (empty cells are recreated by `dcast(fill = 0)`; this is what drops
+   `gss_cat`'s unused "Not applicable" race level and empty tab_var×row_var combos that `table()`/
+   `pivot_wider()` surface but microdata never does). Sets `weighted` and `has_real_n`.
+3. Routes through `tab_plain(data = <skeleton>, …, wt = <flag>, .fine = fine)` (the skeleton only serves the
+   tidy-select of `tab_vars`; `wt` is a weighted/unweighted flag, never evaluated as a column on the `.fine`
+   path), then the SAME finalize `tab_many()` applies: `tab_chi2` → `tab_ci` → `tab_add_n_pct` → rewrap with
+   the `test` attribute → `tab_pvalue_lines`. **No math is forked** — the keystone's "reuse the core, don't
+   fork" is met by `.fine` routing, not by the extraction.
+
+The **only** extraction done: `tab_add_n_pct(tabs_text, add_n, add_pct)` — the `add_n`/`add_pct` block moved
+verbatim out of `tab_many()` (`tab.R` ~L1239-1413) into a shared internal helper so `tab_counts()` and
+`tab_many()` share one implementation (add_n's `add_n=TRUE` default was the only finalize gap).
+
+### Inference at the boundary (§14 + the freq sharpening)
+
+- **Weighted (§14):** the user gives the real unweighted count in `counts` and the weighted count in
+  `wt_counts`. `.fine`'s `n` (unweighted) drives `tot_n`/CI/chi2; `wn` drives pct/estimates → weighted
+  estimate + unweighted n, no special-casing (the same fields `tab_ci`/`tab_chi2` already read).
+- **Base-less input** (counts not whole numbers — a `has_real_n = FALSE` test on integrality): frequency-only
+  or weighted-only. pct/diff/colors still render; CI/chi2 disabled with a `cli::cli_warn`.
+- **freq + real unweighted base N** (`input="pct"`, `base=`): CI is **exact** (proportion CI needs only
+  `(p, n)`, fed as `(freq, N)`); chi2 uses the largest-remainder integer counts (exact when the frequencies
+  are precise — verified: 2-decimal `gss_cat` reconstructs the exact table). **No warning.** This sharpens
+  the roadmap's "warn/disable on frequency-only input": only *base-less* input disables inference; freq **with
+  a real base** is a first-class, fully-valid input. Documented assumption (not a warning): `N` must be the
+  real unweighted sample size, not a weighted/population figure.
+
+### CI-placement fold — moot / deferred to Phase 6
+
+Because `tab_counts()` reuses `tab_ci()` directly, there is no third CI call site to fold; the CI *math* is
+already unified in `R/tab-agg.R` (Phase 3a). The clean "one CI transform in the shared core" end state lands
+with the Phase 6 `tab()`→`tab_many()` merge, exactly as §20 splits the fold across Phase 4 and Phase 6.
+
+### Not done (out of scope / deferred)
+
+Non-integer-count auto-detection *inside* `tab()` (rejected — `tab()` stays microdata-only, user's choice);
+the vignette/README `tab_counts()` example (before-release doc pass); empirical-OR on counts (rides the
+tab_logit phase). Two pre-existing latent `tab_plain()` warnings cleaned up in passing (guarded
+`tabs[, "wn"/"n" := NULL]` on a missing column — output-invariant, golden green).
+
+---
+
 ## Sources (statistics)
 
 - Binomial proportion CI (Wald / Wilson / Agresti-Coull asymmetry): <https://en.wikipedia.org/wiki/Binomial_proportion_confidence_interval>

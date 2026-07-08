@@ -1,0 +1,846 @@
+name: tblSummary
+title: Summary Table
+menuGroup: Summary Tables
+version: "1.0.0"
+jas: "1.2"
+
+options:
+  - name: data
+    type: Data
+
+  - name: varsCont
+    title: Continuous Variables
+    type: Variables
+    suggested:
+      - continuous
+    permitted:
+      - numeric
+
+  - name: varsCat
+    title: Categorical Variables
+    type: Variables
+    suggested:
+      - nominal
+      - ordinal
+    permitted:
+      - factor
+
+  - name: groupVar
+    title: Grouping Variable
+    type: Variable
+    suggested:
+      - nominal
+      - ordinal
+    permitted:
+      - factor
+
+  - name: varOrder
+    title: Variable Order
+    type: Array
+    hidden: true
+    default: []
+    template:
+      type: Variable
+
+  - name: manualRun
+    title: Run manually
+    type: Bool
+    default: false
+
+  - name: run
+    title: Run
+    type: Action
+
+  - name: addN
+    title: N column
+    type: Bool
+    default: false
+
+  - name: addNLast
+    title: Place last
+    type: Bool
+    default: false
+
+  - name: addNFootnote
+    title: Footnote
+    type: Bool
+    default: true
+
+  - name: addOverall
+    title: Overall column (requires Grouping Variable)
+    type: Bool
+    default: false
+
+  - name: addOverallLast
+    title: Place last
+    type: Bool
+    default: false
+
+  - name: missing
+    title: Visibility
+    type: List
+    options:
+      - title: Show if present
+        name: ifany
+      - title: Hide
+        name: no
+      - title: Always show
+        name: always
+    default: ifany
+
+  - name: missingText
+    title: Label
+    type: String
+    default: Unknown
+
+  - name: missingStat
+    title: Statistic
+    type: List
+    options:
+      - title: Count
+        name: n
+      - title: Count (%)
+        name: nPercent
+      - title: "%"
+        name: percent
+    default: n
+
+  - name: journal
+    title: Theme
+    type: List
+    options:
+      - title: Default
+        name: default
+      - title: JAMA
+        name: jama
+      - title: The Lancet
+        name: lancet
+      - title: The New England Journal of Medicine
+        name: nejm
+      - title: The Quarterly Journal of Economics
+        name: qjecon
+    default: default
+
+  - name: compact
+    title: Compact
+    type: Bool
+    default: false
+
+  - name: language
+    title: Language
+    type: List
+    options:
+      - title: Chinese (Simplified)
+        name: zh-cn
+      - title: Chinese (Traditional)
+        name: zh-tw
+      - title: Dutch
+        name: nl
+      - title: English
+        name: en
+      - title: French
+        name: fr
+      - title: German
+        name: de
+      - title: Gujarati
+        name: gu
+      - title: Hindi
+        name: hi
+      - title: Icelandic
+        name: is
+      - title: Japanese
+        name: ja
+      - title: Korean
+        name: kr
+      - title: Marathi
+        name: mr
+      - title: Norwegian
+        name: no
+      - title: Portuguese
+        name: pt
+      - title: Spanish
+        name: es
+      - title: Swedish
+        name: se
+    default: en
+
+  - name: boldLabels
+    title: Bold labels
+    type: Bool
+    default: false
+
+  - name: boldLevels
+    title: Bold levels
+    type: Bool
+    default: false
+
+  - name: italicizeLabels
+    title: Italicize labels
+    type: Bool
+    default: false
+
+  - name: italicizeLevels
+    title: Italicize levels
+    type: Bool
+    default: false
+
+  - name: sortCatDefault
+    title: Default level order
+    type: List
+    options:
+      - title: As defined
+        name: default
+      - title: Frequency
+        name: frequency
+    default: default
+
+  - name: sortCatSpecific
+    title: Specific level order
+    type: Array
+    template:
+      type: Group
+      elements:
+        - name: var
+          type: Variable
+        - name: sort
+          title: Level order
+          type: List
+          options:
+            - title: Same as default
+              name: useDefault
+            - title: As defined
+              name: default
+            - title: Frequency
+              name: frequency
+          default: useDefault
+
+  - name: statContDefault
+    title: Default statistic
+    type: List
+    options:
+      - title: Mean (SD)
+        name: meanSd
+      - title: Median (IQR)
+        name: medianIqr
+      - title: Median (Range)
+        name: medianRange
+      - title: Mean
+        name: mean
+      - title: Median
+        name: median
+      - title: All
+        name: eda
+    default: meanSd
+
+  - name: statContSpecific
+    title: Specific statistics
+    type: Array
+    template:
+      type: Group
+      elements:
+        - name: var
+          type: Variable
+        - name: stat
+          title: Statistic
+          type: List
+          options:
+            - title: Same as default
+              name: useDefault
+            - title: Mean (SD)
+              name: meanSd
+            - title: Median (IQR)
+              name: medianIqr
+            - title: Median (Range)
+              name: medianRange
+            - title: Mean
+              name: mean
+            - title: Median
+              name: median
+            - title: All
+              name: eda
+          default: useDefault
+
+  - name: digitsCont
+    title: Decimal places
+    type: List
+    options:
+      - title: Auto
+        name: auto
+      - title: "0"
+        name: "0"
+      - title: "1"
+        name: "1"
+      - title: "2"
+        name: "2"
+      - title: "3"
+        name: "3"
+      - title: "4"
+        name: "4"
+      - title: "5"
+        name: "5"
+      - title: "16"
+        name: "16"
+    default: auto
+
+  - name: statCatDefault
+    title: Default statistic
+    type: List
+    options:
+      - title: Count (%)
+        name: nPercent
+      - title: Count
+        name: n
+      - title: "%"
+        name: percent
+    default: nPercent
+
+  - name: statCatSpecific
+    title: Specific statistics
+    type: Array
+    template:
+      type: Group
+      elements:
+        - name: var
+          type: Variable
+        - name: stat
+          title: Statistic
+          type: List
+          options:
+            - title: Same as default
+              name: useDefault
+            - title: Count (%)
+              name: nPercent
+            - title: Count
+              name: n
+            - title: "%"
+              name: percent
+          default: useDefault
+
+  - name: digitsCatPct
+    title: Decimal places (percentage)
+    type: List
+    options:
+      - title: Auto
+        name: auto
+      - title: "0"
+        name: "0"
+      - title: "1"
+        name: "1"
+      - title: "2"
+        name: "2"
+      - title: "3"
+        name: "3"
+      - title: "4"
+        name: "4"
+      - title: "5"
+        name: "5"
+      - title: "16"
+        name: "16"
+    default: auto
+
+  - name: percent
+    title: Percentage type (requires Grouping Variable)
+    type: List
+    options:
+      - title: Column %
+        name: column
+      - title: Row %
+        name: row
+      - title: Total %
+        name: cell
+    default: column
+
+  - name: addDifference
+    title: Difference (requires Grouping Variable with exactly 2 levels)
+    type: Bool
+    default: false
+
+  - name: diffConfLevel
+    title: Confidence level
+    type: Number
+    min: 50
+    max: 99.9
+    default: 95
+
+  - name: diffCiMerge
+    title: Merge CI with difference column
+    type: Bool
+    default: false
+
+  - name: diffDigitsPvalue
+    title: Decimal places (large p-values)
+    type: List
+    options:
+      - title: Auto
+        name: auto
+      - title: "1"
+        name: "1"
+      - title: "2"
+        name: "2"
+      - title: "3"
+        name: "3"
+    default: auto
+
+  - name: boldDiffPvalue
+    title: Bold significant p-values
+    type: Bool
+    default: false
+
+  - name: boldDiffPvalueThreshold
+    title: Significance threshold
+    type: Number
+    min: 0
+    max: 1
+    default: 0.05
+
+  - name: separateDiffPFootnotes
+    title: Separate p-value footnotes
+    type: Bool
+    default: false
+
+  - name: diffContDefault
+    title: Default method
+    type: List
+    options:
+      - title: t-test
+        name: t.test
+      - title: t-test (equal variance)
+        name: t.test.equalVar
+      - title: Wilcoxon rank-sum
+        name: wilcox.test
+      - title: "Cohen's D"
+        name: cohens_d
+      - title: "Hedge's G"
+        name: hedges_g
+      - title: SMD
+        name: smd
+    default: t.test
+
+  - name: diffContSpecific
+    title: Specific methods
+    type: Array
+    template:
+      type: Group
+      elements:
+        - name: var
+          type: Variable
+        - name: method
+          type: List
+          options:
+            - title: Same as default
+              name: useDefault
+            - title: t-test
+              name: t.test
+            - title: t-test (equal variance)
+              name: t.test.equalVar
+            - title: Wilcoxon rank-sum
+              name: wilcox.test
+            - title: "Cohen's D"
+              name: cohens_d
+            - title: "Hedge's G"
+              name: hedges_g
+            - title: SMD
+              name: smd
+          default: useDefault
+
+  - name: diffDigitsCont
+    title: Decimal places (difference & CI)
+    type: List
+    options:
+      - title: Auto
+        name: auto
+      - title: "0"
+        name: "0"
+      - title: "1"
+        name: "1"
+      - title: "2"
+        name: "2"
+      - title: "3"
+        name: "3"
+      - title: "4"
+        name: "4"
+      - title: "5"
+        name: "5"
+      - title: "16"
+        name: "16"
+    default: auto
+
+  - name: diffDichotDefault
+    title: Default method
+    type: List
+    options:
+      - title: Z test (proportions)
+        name: prop.test
+      - title: SMD
+        name: smd
+    default: prop.test
+
+  - name: diffDichotSpecific
+    title: Specific methods
+    type: Array
+    template:
+      type: Group
+      elements:
+        - name: var
+          type: Variable
+        - name: method
+          type: List
+          options:
+            - title: Same as default
+              name: useDefault
+            - title: Z test (proportions)
+              name: prop.test
+            - title: SMD
+              name: smd
+          default: useDefault
+
+  - name: diffDigitsDichot
+    title: Decimal places (difference & CI)
+    type: List
+    options:
+      - title: Auto
+        name: auto
+      - title: "0"
+        name: "0"
+      - title: "1"
+        name: "1"
+      - title: "2"
+        name: "2"
+      - title: "3"
+        name: "3"
+      - title: "4"
+        name: "4"
+      - title: "5"
+        name: "5"
+      - title: "16"
+        name: "16"
+    default: auto
+
+  - name: diffDigitsCat
+    title: Decimal places (difference & CI)
+    type: List
+    options:
+      - title: Auto
+        name: auto
+      - title: "0"
+        name: "0"
+      - title: "1"
+        name: "1"
+      - title: "2"
+        name: "2"
+      - title: "3"
+        name: "3"
+      - title: "4"
+        name: "4"
+      - title: "5"
+        name: "5"
+      - title: "16"
+        name: "16"
+    default: auto
+
+  - name: addPvalue
+    title: P-value (requires Grouping Variable)
+    type: Bool
+    default: false
+
+  - name: digitsPvalue
+    title: Decimal places (large p-values)
+    type: List
+    options:
+      - title: Auto
+        name: auto
+      - title: "1"
+        name: "1"
+      - title: "2"
+        name: "2"
+      - title: "3"
+        name: "3"
+    default: auto
+
+  - name: boldPvalue
+    title: Bold significant p-values
+    type: Bool
+    default: false
+
+  - name: boldPvalueThreshold
+    title: Significance threshold
+    type: Number
+    min: 0
+    max: 1
+    default: 0.05
+
+  - name: separatePvalueFootnotes
+    title: Separate p-value footnotes
+    type: Bool
+    default: false
+
+  - name: testContDefault
+    title: Default test
+    type: List
+    options:
+      - title: Parametric (t-test / ANOVA)
+        name: parametric
+      - title: Non-parametric (Wilcoxon rank-sum / Kruskal-Wallis)
+        name: nonparametric
+      - title: t-test
+        name: t.test
+      - title: t-test (equal variance)
+        name: t.test.equalVar
+      - title: ANOVA
+        name: oneway.test
+      - title: ANOVA (equal variance)
+        name: oneway.test.equalVar
+      - title: Wilcoxon rank-sum
+        name: wilcox.test
+      - title: Kruskal-Wallis
+        name: kruskal.test
+    default: parametric
+
+  - name: testContSpecific
+    title: Specific tests
+    type: Array
+    template:
+      type: Group
+      elements:
+        - name: var
+          type: Variable
+        - name: test
+          type: List
+          options:
+            - title: Same as default
+              name: useDefault
+            - title: t-test
+              name: t.test
+            - title: t-test (equal variance)
+              name: t.test.equalVar
+            - title: ANOVA
+              name: oneway.test
+            - title: ANOVA (equal variance)
+              name: oneway.test.equalVar
+            - title: Wilcoxon rank-sum
+              name: wilcox.test
+            - title: Kruskal-Wallis
+              name: kruskal.test
+          default: useDefault
+
+  - name: testCatDefault
+    title: Default test
+    type: List
+    options:
+      - title: Auto (Chi-square / Fisher's exact test)
+        name: auto
+      - title: Chi-square
+        name: chisq.test.no.correct
+      - title: Chi-square (continuity correction)
+        name: chisq.test
+      - title: Fisher's exact test
+        name: fisher.test
+    default: auto
+
+  - name: testCatSpecific
+    title: Specific tests
+    type: Array
+    template:
+      type: Group
+      elements:
+        - name: var
+          type: Variable
+        - name: test
+          type: List
+          options:
+            - title: Same as default
+              name: useDefault
+            - title: Chi-square
+              name: chisq.test.no.correct
+            - title: Chi-square (continuity correction)
+              name: chisq.test
+            - title: Fisher's exact test
+              name: fisher.test
+          default: useDefault
+
+  - name: addQ
+    title: Q-value (requires p-value)
+    type: Bool
+    default: false
+
+  - name: qMethod
+    title: Method
+    type: List
+    options:
+      - title: Benjamini-Hochberg
+        name: BH
+      - title: Benjamini-Yekutieli
+        name: BY
+      - title: Bonferroni
+        name: bonferroni
+      - title: Holm
+        name: holm
+      - title: Hochberg
+        name: hochberg
+      - title: Hommel
+        name: hommel
+      - title: None
+        name: none
+    default: BH
+
+  - name: boldQ
+    title: Bold significant q-values
+    type: Bool
+    default: false
+
+  - name: boldQThreshold
+    title: Significance threshold
+    type: Number
+    min: 0
+    max: 1
+    default: 0.05
+
+  - name: addCi
+    title: Confidence interval
+    type: Bool
+    default: false
+
+  - name: confLevel
+    title: Confidence level
+    type: Number
+    min: 50
+    max: 99.9
+    default: 95
+
+  - name: ciMerge
+    title: Merge CI with statistic column
+    type: Bool
+    default: false
+
+  - name: ciContDefault
+    title: Default method
+    type: List
+    options:
+      - title: t-test (mean)
+        name: t.test
+      - title: Wilcoxon signed-rank (pseudomedian)
+        name: wilcox.test
+    default: t.test
+
+  - name: ciContSpecific
+    title: Specific methods
+    type: Array
+    template:
+      type: Group
+      elements:
+        - name: var
+          type: Variable
+        - name: method
+          title: Method
+          type: List
+          options:
+            - title: Same as default
+              name: useDefault
+            - title: t-test (mean)
+              name: t.test
+            - title: Wilcoxon signed-rank (pseudomedian)
+              name: wilcox.test
+          default: useDefault
+
+  - name: ciDigitsCont
+    title: Decimal places
+    type: List
+    options:
+      - title: Auto
+        name: auto
+      - title: "0"
+        name: "0"
+      - title: "1"
+        name: "1"
+      - title: "2"
+        name: "2"
+      - title: "3"
+        name: "3"
+      - title: "4"
+        name: "4"
+      - title: "5"
+        name: "5"
+      - title: "16"
+        name: "16"
+    default: auto
+
+  - name: ciCatDefault
+    title: Default method
+    type: List
+    options:
+      - title: Wilson (continuity correction)
+        name: wilson
+      - title: Wilson
+        name: wilson.no.correct
+      - title: Exact (Clopper-Pearson)
+        name: exact
+      - title: Wald (continuity correction)
+        name: wald
+      - title: Wald
+        name: wald.no.correct
+      - title: Agresti-Coull
+        name: agresti.coull
+      - title: Jeffreys
+        name: jeffreys
+    default: wilson
+
+  - name: ciCatSpecific
+    title: Specific methods
+    type: Array
+    template:
+      type: Group
+      elements:
+        - name: var
+          type: Variable
+        - name: method
+          title: Method
+          type: List
+          options:
+            - title: Same as default
+              name: useDefault
+            - title: Wilson (continuity correction)
+              name: wilson
+            - title: Wilson
+              name: wilson.no.correct
+            - title: Exact (Clopper-Pearson)
+              name: exact
+            - title: Wald (continuity correction)
+              name: wald
+            - title: Wald
+              name: wald.no.correct
+            - title: Agresti-Coull
+              name: agresti.coull
+            - title: Jeffreys
+              name: jeffreys
+          default: useDefault
+
+  - name: ciDigitsCat
+    title: Decimal places
+    type: List
+    options:
+      - title: Auto
+        name: auto
+      - title: "0"
+        name: "0"
+      - title: "1"
+        name: "1"
+      - title: "2"
+        name: "2"
+      - title: "3"
+        name: "3"
+      - title: "4"
+        name: "4"
+      - title: "5"
+        name: "5"
+      - title: "16"
+        name: "16"
+    default: auto
+
+  - name: path
+    title: Path
+    type: String
+    default: ~/Desktop/Summary Table.docx
+
+  - name: export
+    title: Save
+    type: Action

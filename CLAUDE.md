@@ -13,9 +13,14 @@ R/
 ├── fmt_class.R     (3341 L)  Core type: tabxplor_fmt vctrs record, getters/setters,
 │                              format/pillar methods, vctrs arithmetic/casting,
 │                              color selection logic (fmt_color_selection, color_formula)
-├── tab.R           (5809 L)  Main API: tab(), tab_many(), tab_plain(), tab_num(),
+├── tab.R           (~6000 L) Main API: tab(), tab_many(), tab_plain(), tab_num(),
 │                              tab_prepare(), tab_pct(), tab_ci(), tab_chi2(),
-│                              tab_tot(), tab_totaltab(), tab_spread(), tab_get_vars()
+│                              tab_tot(), tab_totaltab(), tab_spread(), tab_get_vars(),
+│                              tab_add_n_pct() (shared add_n/add_pct, used by tab_many + tab_counts)
+├── tab-agg.R        (318 L)  Aggregate-core (Phase 2-3): num_derive_stats/num_rollup,
+│                              CI engine (ci_pivot/ci_wilson/ci_newcombe/…), agg_chi2/agg_anova
+├── tab-counts.R     (~360 L) tab_counts() from-the-middle constructor (Phase 4): reshape any
+│                              input shape → count-aggregate → tab_plain(.fine) + shared finalize
 ├── tab_classes.R   (3554 L)  tabxplor_tab/grouped_tab classes, 30+ dplyr S3 methods,
 │                              print methods, tab_kable(), tab_plot(), tab_compact(),
 │                              color palettes, set_color_style(), set_color_breaks()
@@ -377,16 +382,17 @@ Display: `tab_pvalue_lines()` bakes the p-value row from the tidy attribute (now
 - "reuse chi2 intermediates for unweighted contrib" micro-opt — deferred; contrib is now off the common path entirely (the real cost), the rare pass stays byte-identical.
 - Future: `!`-per-cell weak-test glyph (Q8/§16, pure display swap over `test`); φ² variance column populated in contrib mode; no-sd means option; `option(tabxplor.ci_print)` → argument.
 
-### Phase 4 — From-the-middle counts constructor
+### Phase 4 — From-the-middle counts constructor (DONE — 2026-07-08)
 
-`as_tab_counts()` accepting long tidy counts / wide count matrix / frequencies+base N; validate once at the boundary → same core. Require real unweighted `n`; warn/skip CI/chi2 on frequency-only input.
+**`tab_counts()` (`R/tab-counts.R`, exported)** builds a full `tabxplor_tab` from already-aggregated counts, byte-identical to the `tab()` a user would build from the underlying microdata. Shapes (all validated against microdata parity in `test-counts-parity.R`): **long tidy counts** (`counts=`, + `wt_counts=` for the §14 weighted case), **wide data.frame** (`cols=`/`col_name=`), **`table`/`xtabs`/`matrix`** object (auto-melt via `as.data.frame.table`; a bare matrix is coerced with `as.table`), **frequencies + base N** (`input="pct"`, `base=`; counts rebuilt with **largest-remainder** rounding so each row sums to N). `tab()` stays microdata-only (no auto-detection — user's choice).
 
-Also here (with the factor-path reorg): **finish the CI *placement* unification** left from Phase 3a. The CI *math* is already unified (one `R/tab-agg.R` engine), but it is called from two sites — inline in `tab_num` (means) vs the post-aggregation `tab_ci` step (proportions; `tab_plain` computes none). Fold the proportion-CI step into the shared aggregate-core here (the keystone `aggregate → [pct|diff|CI|...] → fmt`), so both types run one CI transform. No perf gain (CI is post-aggregation); kept a separate step in 3a only because `tab_ci` must stay field-based for the standalone path. Detail: decisions §20 (placement).
+**Mechanism — reuse, no fork, no big extraction (maintainer's choice over the roadmap's factor-path reorg).** `tab_counts_reshape()` normalises any shape → canonical long tidy counts; `tab_counts_normalize()` aggregates to the keyed `.fine` shape `[tab_vars…, row_var, col_var, n, (wn)]` (drops `n==0` cells so the aggregate is structurally identical to microdata's `.N`-per-observed-key). It then routes through **`tab_plain()`'s existing `.fine` pre-aggregate entry** (the scan-fusion path, locked by `test-fuse-parity.R`) + the shared finalize (`tab_chi2` → `tab_ci` → `tab_add_n_pct` → rewrap → `tab_pvalue_lines`) — the *same* calls `tab_many()` makes. **This deprecated the planned 600-line `tab_plain` factor-path extraction** (`.fine` already provides the from-the-middle seam byte-identically; empirically proven before building). The only extraction done: `tab_add_n_pct()` (the `add_n`/`add_pct` block, moved verbatim out of `tab_many()` into a shared helper so both callers share one implementation).
 
-#### To implement
+**§14 weighting**: weighted input carries real unweighted `n` (`counts=`) + weighted `wn` (`wt_counts=`) → pct/estimates weighted, `tot_n`/CI/chi2 use the unweighted `n`. **Base-less input** (non-integer counts: frequency-only / weighted-only) → pct/diff/colors still render, CI/chi2 disabled with a `cli::cli_warn`. **freq+N with a real unweighted base** → CI exact (`(p,n)` direct), chi2 exact when frequencies precise (largest-remainder) — no warning (sharpens the roadmap's "frequency-only" rule: only *base-less* input disables inference).
 
-5. Small changes :
-- Option to use wt as n : somethingh like wt_as_counts, or better name if you find it (with a warning when all lines are weighted 1 ?) :- meaningful to input not a dataframe with one line per individual, but a table of counts (already cross-tabulated counts), and do all other- calculations on it (pct, ci, etc.). Use case is real, and should be added in documentation, examples, and vignette/readme. Identify this case- automatically when n=1 for all combinations at the data.table output step (how to do it without clutter and performance drop in in data- table ? Better to keep it as user opt-in ? ) ?
+**CI-placement fold (was also Phase 4): now moot / deferred to Phase 6.** `tab_counts()` reuses `tab_ci()` directly, so there is no third CI call site to fold; the CI *math* is already unified in `R/tab-agg.R`. The "one CI transform in the shared core" is a Phase 6 (`tab`/`tab_many` merge) concern, exactly as §20 splits it.
+
+Two pre-existing latent `tab_plain()` warnings cleaned up in passing (output-invariant, golden green): guarded `tabs[, "wn"/"n" := NULL]` against a missing column.
 
 ### Phase 5 — Color diff/ratio split
 
@@ -409,16 +415,17 @@ Now the `ratio` field exists (Phase 1): implement `"diff"`/`"ratio"`/`"diff_rati
 
 ### Phase 6 — tab() → tab_many() merge + output_list
 
-`tab_many()` becomes the base; `tab()` a thin normalization shim. Add `output_list` (default `FALSE`), deprecate the `compact` argument, remove the `tabxplor.compact` option, keep multi-table when `tab_vars` present (compact-with-tab_vars deferred to Phase 7). `lifecycle::deprecate_soft("1.4.0", "tab_many()")`. **`tab_many()` keeps its list-default** for ≥2 row_vars (Q7, §13) — only `tab()` merges by default; no silent return-type break. **Also here (§4-6):** globalise the row_var axis (`OR/pct/color/comp/ci/chi2`, `ref2` no longer per-row_var — but note **D2**: the *internal* collapse lands with the Phase 2 core, only the *arg-surface* deprecation lands here; keep per-row_var `totaltab` + `ref` as a named vector, row%/means only); keep col_var axis flexible (`pct/levels/digits` per col_var); deprecate `totrow` (always a total row) and **soft-deprecate `totcol`** (default one total column; old values kept, cosmetic-only); soft-deprecate singular `row_var`/`col_var`. **Migrate `tab()`'s NA/population-consistency semantics into the core** (open item **S3**) and **decide `tab_spread`/`tab_compact` fate** (open item **S4**). Detail: `dev/tabxplor_1.4.0_decisions.md`.
+Merge between `tab()` and `tab_many()`. Soft deprecate the `tab_many` alias to directly use `tab` alias from now on.
 
-#### To implement
+`tab_many()` becomes the base; `tab()` a thin normalization shim. Add `output_list` (default `FALSE`), deprecate the `compact` argument, remove the `tabxplor.compact` option, keep multi-table when `tab_vars` present (compact-with-tab_vars deferred to Phase 7). `lifecycle::deprecate_soft("1.4.0", "tab_many()")`. **`tab_many()` soft deprecated function keeps its list-default** for ≥2 row_vars (Q7, §13) — only `tab()` merges by default; no silent return-type break. **Also here (§4-6):** globalise the row_var axis (`OR/pct/color/comp/ci/chi2`, `ref2` no longer per-row_var — but note **D2**: the *internal* collapse lands with the Phase 2 core, only the *arg-surface* deprecation lands here; keep per-row_var `totaltab` + `ref` as a named vector, row%/means only); keep col_var axis flexible (`pct/levels/digits` per col_var); soft-deprecate `totrow` (always a total row) and soft-deprecate `totcol` (default one total column; old values kept, cosmetic-only); soft-deprecate singular `row_var`/`col_var` arguments. **Decide `tab_spread`/`tab_compact` fate** (open item **S4**). Detail: `dev/tabxplor_1.4.0_decisions.md`.
 
-2. Merge between `tab()` and `tab_many()`
-- That would make current `tab_many()` the base function (with argument to get the same behaviour as `tab()`) but soft deprecate the `tab_many` alias to directly use `tab` alias from now on. The original rationale for separating the two was : `tab_plain` is the core worker but lacks many advanced option ; `tab_many` is the most flexible for big tables, with many options ; `tab` was centered around the necessity to keep the whole population (who is in `n` ?) and NA handling consistent with having a single row variable and a single column variable. Since most of the time (with row percentages), only one total column was kept, the `n` count could be different for every col var : it won’t be the case anymore if the `tot_n` base total (§2 — renamed from `ref_n`) is stored in a vctrs field for each cell.
+The original rationale for separating the two was : `tab_plain` is the core worker but lacks many advanced option ; `tab_many` is the most flexible for big tables, with many options ; `tab` was centered around the necessity to keep the whole population (who is in `n` ?) and NA handling consistent with having a single row variable and a single column variable. Since most of the time (with row percentages), only one total column was kept, the `n` count could be different for every col var : it won’t be the case anymore if the `tot_n` base total (§2 — renamed from `ref_n`) is stored in a vctrs field for each cell.
+- In the new `tab()` function, I would want **an argument to get the same behaviour as the old tab `tab()`**. What would it be ? Would something like `na = "base_table"` (find a better name, more user-friendly and easily understandable) work : removing, for all col_vars, the missing value of the the row_var and the first col_vars (with several row vars : each by-row_vars subtable remove the individuals with missing value either in the carrent row variables or in the first column variable) ?
 
 #### To think about
 
 - `compact = TRUE` or the related `options()` : do not throw error with tab_vars, just don't do it ?
+
 
 ### Phase 7 — Unified exporter prep & display
 
@@ -443,7 +450,7 @@ One shared exporter-prep helper for `tab_xl`/`tab_kable`/`tab_md`/`tab_plot`; ke
 
 ##### tab_md()
 
-- Colors with very shorts pandoc bracketed spans (examples for diffs : `.+5`, `.+10`, `.+20`, `.+30`, `.-5`, `.-10`, `.-20`, `.-30` etc. ; examples for ratios : `.x1.2`, `.x1.5`, `.x2`, `.x4`, `./1.2`, `./1.5`, `./2`, `./4`, etc. ; would these names be valid css classes / pandoc bracketed spans ?).
+- Colors with very shorts pandoc bracketed spans (examples for diffs : `.+5`, `.+10`, `.+20`, `.+30`, `.-5`, `.-10`, `.-20`, `.-30` etc. ; examples for ratios : `.x1.2`, `.x1.5`, `.x2`, `.x4`, `./1.2`, `./1.5`, `./2`, `./4`, etc. ; would these names be valid css classes / pandoc bracketed spans ?). Is there a possibility to make them work inside jamovi, for exemple in a html rectangle (natively, or by adding html/js new dependencies ; if so, would it be possible do load them when the tabxplor function and menu load ?) ?
 
 ##### tab_kable()
 
@@ -454,21 +461,8 @@ One shared exporter-prep helper for `tab_xl`/`tab_kable`/`tab_md`/`tab_plot`; ke
 
 - Passing a vector in display to display several fields ? (Won't work in Excel.) Would it be possible to find a reliable syntax to command exactly the wanted fields and seps in a display ? Like `pct (n)` or `pct ± ci` ? Would it really be useful for data analysis users, or a white elephant with theoretical useless flexibility again ?
 
-### Phase 8 — Jamovi caching
 
-Cache the prepared data / aggregate / per-transform results keyed by which input changed; pure-display toggles reuse cached numbers; reuse the `.fine` aggregate across interactions.
-
-#### To implement
-
-- Jamovi UI improvement for user-friendliness and performance. The main improvement would be not to rely on `tab_many()` like now, but to drive the **same aggregate-core + per-transform subfunctions** (Phase 2) at cache-appropriate granularity — **reuse the core, never fork the math**: near-identical behaviour is *guaranteed* by sharing subfunctions, not re-implemented in parallel (which would recreate the very duplication 1.4.0 removes). Use Jamovi states logic to avoid redoing calculations on each button change, with temp caching for base calculations (e.g. keep former variables' calculations when a new variable is added).
-- UI pour changer l'ordre des lignes, des colonnes et des sous-tableaux, en s’inspirant des modules Jamovi qui implémentent déjà cette fonction.
-- Argument `n_min` : supprimer ligne/colonne si n est trop petit
-
-#### To think about
-
-- Maybe improve tab_kable() for performance, or simplify/remove all tooltips/etc. (just a faster flat html table), or even make it format with markdown tables with css classes (would it be possible ?) ?
-
-### Phase 9 — Excel engine migration (openxlsx → openxlsx2)
+### Phase 8 — Excel engine migration (openxlsx → openxlsx2)
 
 Isolated on purpose: a full dependency swap should not be entangled with the Phase 7 exporter-prep unification and its export-parity churn. Runs **after** Phase 7 (needs the unified single-tab + list `tab_xl` methods in place). May slip to a **1.4.x follow-up release** — it does not block the rest of 1.4.0. Precondition: `test-export-parity.R` green on openxlsx v1 first, so the swap is verified byte-for-byte against a known-good baseline.
 
@@ -482,7 +476,7 @@ Isolated on purpose: a full dependency swap should not be entangled with the Pha
 
 - Add an option to use **conditional formatting** instead of hard text colors. This was awful and very slow with openxlsx v1 — check whether openxlsx2 makes it less horrible / faster.
 
-### Phase 10 — tab_logit
+### Phase 9 — tab_logit
 
 `tab_logit` lands after the Phase 1 field set is locked (so no second field surgery).
 
@@ -495,6 +489,23 @@ Isolated on purpose: a full dependency swap should not be entangled with the Pha
 - chose reference for each var with a vector (possibly named for simplicity) ! (permit to take ref in the middle while keeping order of ordinal vars) ?
 - Do things with contrasts ?
 - tab_logit analysis in Jamovi ?
+
+
+### Phase 10 — Jamovi caching
+
+Cache the prepared data / aggregate / per-transform results keyed by which input changed; pure-display toggles reuse cached numbers; reuse the `.fine` aggregate across interactions.
+
+#### To implement
+
+- Jamovi UI improvement for user-friendliness and performance. The main improvement would be not to rely on `tab_many()` like now, but to drive the **same aggregate-core + per-transform subfunctions** (Phase 2) at cache-appropriate granularity — **reuse the core, never fork the math**: near-identical behaviour is *guaranteed* by sharing subfunctions, not re-implemented in parallel (which would recreate the very duplication 1.4.0 removes). Use Jamovi states logic to avoid redoing calculations on each button change, with temp caching for base calculations (e.g. keep former variables' calculations when a new variable is added).
+- UI pour changer l'ordre des lignes, des colonnes et des sous-tableaux, en s’inspirant des modules Jamovi qui implémentent déjà cette fonction.
+- Argument `n_min` : supprimer ligne/colonne si n est trop petit
+
+#### To think about
+
+- Maybe improve tab_kable() for performance, or simplify/remove all tooltips/etc. (just a faster flat html table), or even make it format with markdown tables with css classes (would it be possible ?) ?
+
+
 
 ### Phase 11 — pkgdown
 

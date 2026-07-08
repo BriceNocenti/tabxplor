@@ -1,6 +1,16 @@
 # tabxplor 1.4.0 (in development)
 
 ## New features
+* New `tab_counts()` --- build a full color-coded cross-table from **already-aggregated counts**
+  instead of microdata. It accepts long tidy counts (e.g. a `dplyr::count()` result), a wide
+  `data.frame` of counts (with `cols` / `col_name`), a `table` / `xtabs` / `matrix` object, and
+  frequencies + base N (`input = "pct"`, `base`). All the usual calculations (percentages,
+  differences, confidence intervals, chi-squared, colors, totals) are done on the counts, and the
+  result is identical to the table `tab()` would build from the underlying microdata. For weighted
+  data, give the real unweighted count in `counts` and the weighted count in `wt_counts` (estimates
+  are weighted, inference uses the real unweighted sample size). Input whose counts are not whole
+  numbers (frequency-only / weighted-only) still shows percentages and colors, but confidence
+  intervals and chi-squared are disabled with a message.
 * Significance stars for `ci = "diff"`. Each cell now shows `*` / `**` / `***` (p < 0.10 / 0.05 /
   0.01, customisable via `options("tabxplor.signif_levels")` / `"tabxplor.signif_labels")`) for the
   difference from its reference, in the console, `tab_md()` and `tab_kable()`. Significance is read

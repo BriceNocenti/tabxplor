@@ -1236,181 +1236,7 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
 
 
     # Add column or row with n counts, or column or row with the other kind or percentages.
-    if (add_n | add_pct) {
-
-      # cols, with pct = "row"
-      last_totcols_pct_rows <- tabs_text |>
-        purrr::imap_chr(
-          ~ dplyr::last(names(.x)[is_totcol(.x) & get_type(.x) == "row" &
-                                    get_col_var(.x) != "no_col_var" &
-                                    tab_get_vars(.)$row_var != "no_row_var"]) |>
-            purrr::set_names(.y)
-        )
-
-      # last_totcols_pct_rows <- tabs_text |>
-      #   purrr::map(~ dplyr::mutate(., across(where(is_fmt), ~ set_type(., "col")))) |>
-      #   purrr::imap_chr(~ dplyr::last(names(.x)[is_totcol(.x) & get_type(.x) == "row"]) |>
-      #                 purrr::set_names(.y)
-      #
-      #   )
-      last_totcols_pct_rows <- last_totcols_pct_rows[!is.na(last_totcols_pct_rows)]
-
-      if (length(last_totcols_pct_rows) > 0) {
-        if (add_pct) {
-          tabs_text <- tabs_text |>
-            purrr::map2(
-              last_totcols_pct_rows,
-              ~ dplyr::mutate(
-                .x,
-                col_pct := dplyr::mutate(
-                  !!rlang::sym(.y),
-                  pct = get_wn(!!rlang::sym(.y)) /
-                    dplyr::last(get_wn(!!rlang::sym(.y)),
-                                #which(get_reference(!!rlang::sym(.y), "lines"))
-                    )
-                ) |>
-                  set_type("col") |> as_totcol(FALSE) |> set_color("no") |>
-                  set_col_var("all_col_vars") |>
-                  set_diff(NA_real_) |> set_ci(NA_real_) |> set_mean(NA_real_) |>
-                  set_ctr(NA_real_) |> set_var(NA_real_)
-              )
-            )
-        }
-
-        if (add_n) {
-          tabs_text <- tabs_text |>
-            purrr::map2(
-              last_totcols_pct_rows, ~ dplyr::mutate(
-                .x, # !!rlang::sym(paste0(names(.y), "_n"))
-                n = set_display(!!rlang::sym(.y), "n") |>
-                  set_type("n") |> as_totcol(FALSE) |> set_color("no") |>
-                  set_col_var("all_col_vars") |>
-                  set_diff(NA_real_) |> set_ci(NA_real_) |> set_mean(NA_real_) |>
-                  set_pct(NA_real_) |> set_ctr(NA_real_) |> set_var(NA_real_)
-              )
-            )
-        }
-
-      }
-
-
-      # rows, with pct = "col"
-      last_totrow <- tabs_text |>
-        purrr::map_int(
-          ~ dplyr::last(which(is_totrow(.) & tab_get_vars(.)$row_var != "no_row_var"),
-                        default = NA_integer_)
-        )
-      last_totrow <- last_totrow[!is.na(last_totrow)]
-      if (length(last_totrow) > 0) {
-
-
-        last_totrow_pct_cols <- tabs_text |>
-          purrr::map(~ names(.)[get_type(.) == "col" & get_col_var(.) != "no_col_var" &
-                                   names(.) != "col_pct"] )
-        last_totrow_pct_cols_no_empty <- purrr::map_lgl(last_totrow_pct_cols, ~ length(.) > 0)
-        # last_totrow_pct_cols <- last_totrow_pct_cols[last_totrow_pct_cols_no_empty]
-
-
-        if (any(last_totrow_pct_cols_no_empty)) {
-
-          if (add_pct) {
-            tabs_text <-
-              purrr::pmap(
-                list(tabs_text, last_totrow_pct_cols_no_empty, last_totrow, last_totrow_pct_cols),
-                ~ {
-                  totcols_ref <- purrr::map_chr(detect_totcols(..1), as.character)
-                  if (..2) {
-                    dplyr::bind_rows(
-                      ..1,
-                      dplyr::slice(..1, ..3) |>
-                        dplyr::mutate(
-                          dplyr::across(
-                            where(is_fmt),
-                            ~ dplyr::mutate(
-                              .,
-                              pct = get_wn(.) /
-                                get_wn(rlang::eval_tidy(
-                                  rlang::sym(totcols_ref[[dplyr::cur_column()]])
-                                ))
-                            )
-                          ),
-                          dplyr::across(where(is_fmt), ~ as_totrow(., FALSE) |>
-                                          set_diff(NA_real_) |> set_ci(NA_real_) |>
-                                          set_mean(NA_real_) |>
-                                          set_ctr(NA_real_) |> set_var(NA_real_)
-                                          ),
-                          dplyr::across(
-                            where(is_fmt) & -tidyselect::all_of(..4),
-                            ~ set_num(., value = NA_real_)
-                          ),
-                          dplyr::across(
-                            all_of(tab_get_vars(..1)$row_var),
-                            ~ factor("row_pct")
-                          )
-                        )
-
-                    )
-                  } else {
-                    ..1
-                  }
-                }
-              )
-          }
-
-          if (add_n) {
-            tabs_text <-
-              purrr::pmap(list(tabs_text, last_totrow_pct_cols_no_empty, last_totrow, last_totrow_pct_cols),
-                          ~ if (..2) {
-                            dplyr::bind_rows(
-                              ..1,
-                              dplyr::slice(..1, ..3) |> set_display("n") |>
-                                dplyr::mutate(
-                                  dplyr::across(where(is_fmt), ~ as_totrow(., FALSE)  |>
-                                                  set_diff(NA_real_) |> set_ci(NA_real_) |>
-                                                  set_mean(NA_real_) |> set_pct(NA_real_) |>
-                                                  set_ctr(NA_real_) |> set_var(NA_real_)
-                                                ),
-                                  dplyr::across(
-                                    where(is_fmt) & -tidyselect::all_of(..4),
-                                    ~ set_num(., value = NA_real_)
-                                  ),
-                                  dplyr::across(
-                                    all_of(tab_get_vars(..1)$row_var),
-                                    ~ factor("n")
-                                  )
-                                )
-
-                            )
-                          } else {
-                            ..1
-                          }
-              )
-          }
-
-        }
-
-      }
-
-
-      # tabs_text |>
-      #   purrr::map(
-      #     ~ dplyr::mutate(., dplyr::across(
-      #       dplyr::where(is_totcol),
-      #       ~ set_display(., "n") |> set_type("n") |>
-      #         as_totcol(FALSE) |> set_color("no"),
-      #       .names = "{.col}_.nnnnnn" # paste0(, "_n")
-      #     )
-      #     ) %>%
-      #       dplyr::rename(all_of(
-      #         purrr::set_names(
-      #           names(.)[stringr::str_detect(names(.), "_.nnnnnn$")],
-      #           paste0(get_col_var(.)[stringr::str_detect(names(.), "_.nnnnnn$")], "_n")
-      #         )
-      #       ))
-      #   )
-
-
-    }
+    tabs_text <- tab_add_n_pct(tabs_text, add_n, add_pct)
 
 
 
@@ -2501,9 +2327,9 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
 
   if (df | num) {
     if (length(wt) == 0) {
-      tabs[, "wn" := NULL]
+      if ("wn" %in% names(tabs)) tabs[, "wn" := NULL]
     } else {
-      tabs[, "n" := NULL]
+      if ("n" %in% names(tabs)) tabs[, "n" := NULL]
     }
 
     if (df) return(as_df_merge_rownames(tabs, rlang::as_name(row_var)))
@@ -2512,7 +2338,7 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
 
   } else {
     if (length(wt) == 0) {
-      tabs[, "wn" := NULL]
+      if ("wn" %in% names(tabs)) tabs[, "wn" := NULL]
 
       text_vars <- !purrr::map_lgl(tabs, is.numeric)
       text_vars <- text_vars[text_vars]
@@ -5983,3 +5809,187 @@ calculate_refrows <- function(tabs, ref, comp, tab_row_names, tab_vars,
 # result <- calculations %>% purrr::map_df(~ dplyr::pull(., res))
 #
 # tabs[ci_yes] <- purrr::map2_df(tabs[ci_yes], result, ~ set_ci(.x, .y) )
+
+# tab_add_n_pct() -- append the base-n column (add_n) and/or the col%/row% companion
+# (add_pct) to each built factor table. Extracted verbatim from tab_many()'s finalize so
+# BOTH tab_many() and tab_counts() share ONE implementation (no divergence). Operates on the
+# tabs_text LIST (one entry per row_var); returns it modified. See CLAUDE.md Phase 4.
+tab_add_n_pct <- function(tabs_text, add_n, add_pct) {
+  if (!add_n && !add_pct) return(tabs_text)
+
+    # cols, with pct = "row"
+    last_totcols_pct_rows <- tabs_text |>
+      purrr::imap_chr(
+        ~ dplyr::last(names(.x)[is_totcol(.x) & get_type(.x) == "row" &
+                                  get_col_var(.x) != "no_col_var" &
+                                  tab_get_vars(.)$row_var != "no_row_var"]) |>
+          purrr::set_names(.y)
+      )
+
+    # last_totcols_pct_rows <- tabs_text |>
+    #   purrr::map(~ dplyr::mutate(., across(where(is_fmt), ~ set_type(., "col")))) |>
+    #   purrr::imap_chr(~ dplyr::last(names(.x)[is_totcol(.x) & get_type(.x) == "row"]) |>
+    #                 purrr::set_names(.y)
+    #
+    #   )
+    last_totcols_pct_rows <- last_totcols_pct_rows[!is.na(last_totcols_pct_rows)]
+
+    if (length(last_totcols_pct_rows) > 0) {
+      if (add_pct) {
+        tabs_text <- tabs_text |>
+          purrr::map2(
+            last_totcols_pct_rows,
+            ~ dplyr::mutate(
+              .x,
+              col_pct := dplyr::mutate(
+                !!rlang::sym(.y),
+                pct = get_wn(!!rlang::sym(.y)) /
+                  dplyr::last(get_wn(!!rlang::sym(.y)),
+                              #which(get_reference(!!rlang::sym(.y), "lines"))
+                  )
+              ) |>
+                set_type("col") |> as_totcol(FALSE) |> set_color("no") |>
+                set_col_var("all_col_vars") |>
+                set_diff(NA_real_) |> set_ci(NA_real_) |> set_mean(NA_real_) |>
+                set_ctr(NA_real_) |> set_var(NA_real_)
+            )
+          )
+      }
+
+      if (add_n) {
+        tabs_text <- tabs_text |>
+          purrr::map2(
+            last_totcols_pct_rows, ~ dplyr::mutate(
+              .x, # !!rlang::sym(paste0(names(.y), "_n"))
+              n = set_display(!!rlang::sym(.y), "n") |>
+                set_type("n") |> as_totcol(FALSE) |> set_color("no") |>
+                set_col_var("all_col_vars") |>
+                set_diff(NA_real_) |> set_ci(NA_real_) |> set_mean(NA_real_) |>
+                set_pct(NA_real_) |> set_ctr(NA_real_) |> set_var(NA_real_)
+            )
+          )
+      }
+
+    }
+
+
+    # rows, with pct = "col"
+    last_totrow <- tabs_text |>
+      purrr::map_int(
+        ~ dplyr::last(which(is_totrow(.) & tab_get_vars(.)$row_var != "no_row_var"),
+                      default = NA_integer_)
+      )
+    last_totrow <- last_totrow[!is.na(last_totrow)]
+    if (length(last_totrow) > 0) {
+
+
+      last_totrow_pct_cols <- tabs_text |>
+        purrr::map(~ names(.)[get_type(.) == "col" & get_col_var(.) != "no_col_var" &
+                                 names(.) != "col_pct"] )
+      last_totrow_pct_cols_no_empty <- purrr::map_lgl(last_totrow_pct_cols, ~ length(.) > 0)
+      # last_totrow_pct_cols <- last_totrow_pct_cols[last_totrow_pct_cols_no_empty]
+
+
+      if (any(last_totrow_pct_cols_no_empty)) {
+
+        if (add_pct) {
+          tabs_text <-
+            purrr::pmap(
+              list(tabs_text, last_totrow_pct_cols_no_empty, last_totrow, last_totrow_pct_cols),
+              ~ {
+                totcols_ref <- purrr::map_chr(detect_totcols(..1), as.character)
+                if (..2) {
+                  dplyr::bind_rows(
+                    ..1,
+                    dplyr::slice(..1, ..3) |>
+                      dplyr::mutate(
+                        dplyr::across(
+                          where(is_fmt),
+                          ~ dplyr::mutate(
+                            .,
+                            pct = get_wn(.) /
+                              get_wn(rlang::eval_tidy(
+                                rlang::sym(totcols_ref[[dplyr::cur_column()]])
+                              ))
+                          )
+                        ),
+                        dplyr::across(where(is_fmt), ~ as_totrow(., FALSE) |>
+                                        set_diff(NA_real_) |> set_ci(NA_real_) |>
+                                        set_mean(NA_real_) |>
+                                        set_ctr(NA_real_) |> set_var(NA_real_)
+                                        ),
+                        dplyr::across(
+                          where(is_fmt) & -tidyselect::all_of(..4),
+                          ~ set_num(., value = NA_real_)
+                        ),
+                        dplyr::across(
+                          all_of(tab_get_vars(..1)$row_var),
+                          ~ factor("row_pct")
+                        )
+                      )
+
+                  )
+                } else {
+                  ..1
+                }
+              }
+            )
+        }
+
+        if (add_n) {
+          tabs_text <-
+            purrr::pmap(list(tabs_text, last_totrow_pct_cols_no_empty, last_totrow, last_totrow_pct_cols),
+                        ~ if (..2) {
+                          dplyr::bind_rows(
+                            ..1,
+                            dplyr::slice(..1, ..3) |> set_display("n") |>
+                              dplyr::mutate(
+                                dplyr::across(where(is_fmt), ~ as_totrow(., FALSE)  |>
+                                                set_diff(NA_real_) |> set_ci(NA_real_) |>
+                                                set_mean(NA_real_) |> set_pct(NA_real_) |>
+                                                set_ctr(NA_real_) |> set_var(NA_real_)
+                                              ),
+                                dplyr::across(
+                                  where(is_fmt) & -tidyselect::all_of(..4),
+                                  ~ set_num(., value = NA_real_)
+                                ),
+                                dplyr::across(
+                                  all_of(tab_get_vars(..1)$row_var),
+                                  ~ factor("n")
+                                )
+                              )
+
+                          )
+                        } else {
+                          ..1
+                        }
+            )
+        }
+
+      }
+
+    }
+
+
+    # tabs_text |>
+    #   purrr::map(
+    #     ~ dplyr::mutate(., dplyr::across(
+    #       dplyr::where(is_totcol),
+    #       ~ set_display(., "n") |> set_type("n") |>
+    #         as_totcol(FALSE) |> set_color("no"),
+    #       .names = "{.col}_.nnnnnn" # paste0(, "_n")
+    #     )
+    #     ) %>%
+    #       dplyr::rename(all_of(
+    #         purrr::set_names(
+    #           names(.)[stringr::str_detect(names(.), "_.nnnnnn$")],
+    #           paste0(get_col_var(.)[stringr::str_detect(names(.), "_.nnnnnn$")], "_n")
+    #         )
+    #       ))
+    #   )
+
+
+  tabs_text
+}
+
+
