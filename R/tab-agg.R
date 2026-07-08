@@ -70,3 +70,27 @@ num_derive_stats <- function(tabs, col_vars, weighted) {
   }
   tabs
 }
+
+# num_rollup() -- build a totals block (a set of total rows, or the total table) by SUMMING the
+# moment-sum columns of the main numeric aggregate `agg`, grouped by `by`, then labeling the
+# collapsed keys "Total". Because the moment sums (n, wn, s1, s2) are ADDITIVE, this reproduces
+# exactly what re-scanning the microdata grouped by `by` would give -- WITHOUT re-scanning N rows.
+# This is the Phase 2 rollup that replaces tab_num()'s two extra total-row / total-table N-scans.
+#
+#   agg          the main moment-sum aggregate (keyed by tab_row_names, carrying moment cols)
+#   by           the surviving key columns (character(0) for the grand total)
+#   drop_keys    the tab_row_names collapsed to the "Total" label (tab_vars not in `by`, + row_var)
+#   moment_cols  the additive columns to sum (all non-key columns of `agg`)
+#   tab_vars_chr the tab_var column names, re-factored after the "Total" relabel (mirrors the old
+#                re-scan's `[, tab_vars := as.factor(.)]`; row_var is left for the caller's
+#                not-factor pass, exactly as before)
+num_rollup <- function(agg, by, drop_keys, moment_cols, tab_vars_chr) {
+  roll <- if (length(by) == 0) {
+    agg[, lapply(.SD, sum, na.rm = TRUE), .SDcols = moment_cols]
+  } else {
+    agg[, lapply(.SD, sum, na.rm = TRUE), .SDcols = moment_cols, keyby = by]
+  }
+  if (length(drop_keys) > 0)    roll[, (drop_keys) := "Total"]
+  if (length(tab_vars_chr) > 0) roll[, (tab_vars_chr) := lapply(.SD, as.factor), .SDcols = tab_vars_chr]
+  roll
+}

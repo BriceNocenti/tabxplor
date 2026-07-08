@@ -66,6 +66,7 @@ golden_cases <- function() {
     n_mean_ci        = function() tab_num(gss, race, c(age, tvhours), comp = "all", ci = "cell", digits = 1L),  # z-based mean CI; Phase 3 -> bounds / Welch-t
     n_mean_w         = function() tab_num(syn, g, v, wt = w, comp = "all"),   # weighted ML-variance branch lock (Phase 2a)
     n_mean_sparse    = function() tab_num(sparse, grp, v, comp = "all"),      # n<=1 / all-NA variance edge, NaN->NA (Phase 2a)
+    n_mean_tottab    = function() tab_num(gss, race, c(age, tvhours), marital, comp = "all", totaltab = "table", digits = 1L),  # total-table rollup lock (Phase 2)
 
     # --- tab_many() multi col_var + weighting + tot_n motivating cases ---
     m_multi          = function() tab_many(syn, g, c(h, k), pct = "row"),
@@ -81,7 +82,8 @@ golden_cases <- function() {
 golden_display_cases <- c("f_row_pct", "f_ci_cell", "f_ci_diff", "f_color_diff",
                           "n_mean", "n_mean_ci", "totn_drop",
                           "f_selfcross", "n_mean_w", "n_mean_sparse", "totn_row_drop",
-                          "n_mean_color")  # locks the D3-interim numeric coloring (-> Phase 5)
+                          "n_mean_color",     # locks the D3-interim numeric coloring (-> Phase 5)
+                          "n_mean_tottab")    # locks the total-table rollup (Phase 2)
 
 # Directory holding the structural .rds fixtures (relative to tests/testthat/).
 golden_dir <- function() testthat::test_path("_golden")

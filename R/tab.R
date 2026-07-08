@@ -3423,6 +3423,12 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
 
 
   #Calculate means and variances for all totals and subtotals
+  # Phase 2 rollup: the total rows and the total table below are subtotals of the main aggregate.
+  # Its moment sums (n [, wn], s1, s2) are ADDITIVE, so both are computed as ROLLUPS of a captured
+  # copy of the main aggregate via num_rollup() (R/tab-agg.R) instead of two extra N-row re-scans.
+  moment_cols <- setdiff(names(tabs), tab_row_names)
+  main_agg    <- if (!(df | num)) data.table::copy(tabs) else NULL
+
   if ("row" %in% tot | totaltab %in% c("line", "table")) {
     if (length(tab_vars) != 0) {
       group_vars <- c(as.character(tab_vars)) |> purrr::accumulate(~ c(.x, .y))
@@ -3468,73 +3474,19 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
       }
 
     } else {
-      if (length(wt) == 0) {
-        suppressWarnings(
-          tabs_tot <-  #9.75 sec
-            purrr::map_dfr(
-              group_vars,
-              ~ data[,
-                     c(purrr::set_names(rep("Total", length(c(tab_vars[!tab_vars %in% .], row_var))),
-                                        as.character(c(tab_vars[!tab_vars %in% .], row_var)) ),
-
-                       #list(n  = .N),
-
-                       purrr::set_names(purrr::map(.SD,  ~ sum(!is.na(.))),
-                                        paste0(as.character(col_vars), "_n")),
-
-                       purrr::set_names(purrr::map(.SD,  ~ sum(as.double(.), na.rm = TRUE)),
-                                        paste0(as.character(col_vars), "_s1")),
-
-                       purrr::set_names(purrr::map(.SD, ~ sum(as.double(.) * as.double(.), na.rm = TRUE)),
-                                        paste0(as.character(col_vars), "_s2"))
-                     ),
-                     .SDcols = as.character(col_vars),
-                     keyby = eval(.)][ , as.character(tab_vars) := purrr::map(.SD, as.factor),
-                                       .SDcols = as.character(tab_vars)]
-            )
+      # Phase 2 rollup: the total rows are subtotals of the main aggregate (moment sums are
+      # additive), so sum them by each group_vars subset instead of re-scanning N rows. One path
+      # for weighted and unweighted -- moment_cols carries _wn only when weighted.
+      tabs_tot <- purrr::map_dfr(
+        group_vars,
+        ~ num_rollup(
+          main_agg,
+          by           = .,
+          drop_keys    = as.character(c(tab_vars[!tab_vars %in% .], row_var)),
+          moment_cols  = moment_cols,
+          tab_vars_chr = as.character(tab_vars)
         )
-      } else {
-        suppressWarnings(
-          tabs_tot <-  #31.83 sec
-            purrr::map_dfr(
-              group_vars,
-              ~ data[,
-                     c(purrr::set_names(rep("Total", length(c(tab_vars[!tab_vars %in% .], row_var))),
-                                        as.character(c(tab_vars[!tab_vars %in% .], row_var)) ),
-                       #list(n  = .N,
-                       #     wn = sum(eval(wt), na.rm = TRUE)),
-
-                       purrr::set_names(purrr::map_if(.SD,
-                                                      names(.SD) != as.character(wt),
-                                                      ~ sum(!is.na(.)),
-                                                      .else = ~ NA_real_),
-                                        paste0(as.character(c(col_vars, wt)), "_n")),
-
-                       purrr::set_names(purrr::map_if(.SD,
-                                                      names(.SD) != as.character(wt),
-                                                      ~ sum(as.integer(!is.na(.)) * eval(wt), na.rm = TRUE),
-                                                      .else = ~ NA_real_),
-                                        paste0(as.character(c(col_vars, wt)), "_wn")),
-
-                       purrr::set_names(purrr::map_if(.SD,
-                                                      names(.SD) != as.character(wt),
-                                                      ~ sum(eval(wt) * ., na.rm = TRUE),
-                                                      .else = ~ NA_real_),
-                                        paste0(as.character(c(col_vars, wt)), "_s1")),
-
-                       purrr::set_names(purrr::map_if(.SD,
-                                                      names(.SD) != as.character(wt),
-                                                      ~ sum(eval(wt) * . * ., na.rm = TRUE),
-                                                      .else = ~ NA_real_),
-                                        paste0(as.character(c(col_vars, wt)), "_s2"))
-                     ),
-                     .SDcols = as.character(c(col_vars, wt)),
-                     keyby = eval(.)][, paste0(wt, c("_n", "_wn", "_s1", "_s2")) := NULL
-                     ][ , as.character(tab_vars) := purrr::map(.SD, as.factor),
-                        .SDcols = as.character(tab_vars)]
-            )
-        )
-      }
+      )
     }
 
     not_fct <- !purrr::map_lgl(dplyr::select(tabs_tot, tidyselect::any_of(tab_row_names)), is.factor)
@@ -3619,60 +3571,15 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
       }
 
     } else {
-      if (length(wt) == 0) {
-        tabs_totaltab <-
-          data[,
-               c(purrr::set_names(rep("Total", length(tab_vars)), as.character(tab_vars)),
-
-                 #list(n  = .N),
-
-                 purrr::set_names(purrr::map(.SD, ~ sum(!is.na(.))),
-                                  paste0(as.character(col_vars), "_n")),
-
-                 purrr::set_names(purrr::map(.SD, ~ sum(as.double(.), na.rm = TRUE)),
-                                  paste0(as.character(col_vars), "_s1")),
-
-                 purrr::set_names(purrr::map(.SD, ~ sum(as.double(.) * as.double(.), na.rm = TRUE)),
-                                  paste0(as.character(col_vars), "_s2"))
-               ),
-               .SDcols = as.character(col_vars),
-               keyby = eval(as.character(row_var))]
-
-      } else {
-        tabs_totaltab <-
-          data[,
-               c(purrr::set_names(rep("Total", length(tab_vars)), as.character(tab_vars)),
-
-                 #list(n  = .N,
-                 #     wn = sum(eval(wt), na.rm = TRUE)),
-
-                 purrr::set_names(purrr::map_if(.SD,
-                                                names(.SD) != as.character(wt),
-                                                ~ sum(!is.na(.)),
-                                                .else = ~ NA_real_),
-                                  paste0(as.character(c(col_vars, wt)), "_n")),
-
-                 purrr::set_names(purrr::map_if(.SD,
-                                                names(.SD) != as.character(wt),
-                                                ~ sum(as.integer(!is.na(.)) * eval(wt), na.rm = TRUE),
-                                                .else = ~ NA_real_),
-                                  paste0(as.character(c(col_vars, wt)), "_wn")),
-
-                 purrr::set_names(purrr::map_if(.SD,
-                                                names(.SD) != as.character(wt),
-                                                ~ sum(eval(wt) * ., na.rm = TRUE),
-                                                .else = ~ NA_real_),
-                                  paste0(as.character(c(col_vars, wt)), "_s1")),
-
-                 purrr::set_names(purrr::map_if(.SD,
-                                                names(.SD) != as.character(wt),
-                                                ~ sum(eval(wt) * . * ., na.rm = TRUE),
-                                                .else = ~ NA_real_),
-                                  paste0(as.character(c(col_vars, wt)), "_s2"))
-               ),
-               .SDcols = as.character(c(col_vars, wt)),
-               keyby = eval(as.character(row_var))][, paste0(wt, c("_n", "_wn", "_s1", "_s2")) := NULL]
-      }
+      # Phase 2 rollup: the total table is the main aggregate summed by row_var (its tab_vars
+      # collapsed to "Total"), reusing the additive moment sums instead of a third N-row re-scan.
+      tabs_totaltab <- num_rollup(
+        main_agg,
+        by           = as.character(row_var),
+        drop_keys    = as.character(tab_vars),
+        moment_cols  = moment_cols,
+        tab_vars_chr = as.character(tab_vars)
+      )
     }
 
     not_fct <- !purrr::map_lgl(dplyr::select(tabs_totaltab, tidyselect::any_of(tab_row_names)), is.factor)
