@@ -418,6 +418,24 @@ Two pre-existing latent `tab_plain()` warnings cleaned up in passing (output-inv
 
 ### Phase 5 — Color diff/ratio split
 
+> **READ FIRST: `dev/new_colors_UI.md`** — the SINGLE, self-contained implementation brief for this
+> phase (why + final framework + full API + statistics + engine + computation matrices + phasing +
+> open flags W1-W10). It governs the Phase 5 implementation and supersedes the bullets below (kept as
+> historical intent). Layered decision history: companion `dev/design_new_colors_UI_decision_process.md`.
+>
+> Settled framework (2026-07-08): three orthogonal axes — **measure × channel × significance-policy**.
+> `color` = which measure(s) (`diff`/`ratio`/`contrib`/`or`, auto-dispatched by column type) on which
+> channel (scalar→text; `c("diff","ratio")`→text+background; named `c(text=,background=)`). `color=TRUE`
+> = per-type default sugar. Separate **`color_signif`** arg = `"ignore"`/`"grey_non_signif"`/
+> `"color_all_signif"` (old diff/diff_ci/after_ci; old `ci` = color_all_signif + single-0 break). Breaks
+> = a named `list(pct_diff, pct_ratio, mean_diff, mean_ratio, contrib)`, **hybrid global + per-table
+> `tab(color_breaks=)` override**; length = number of color steps; empty per-type scale drops that
+> measure for that type; `mean_diff` NULL→standardized(SD), unit breaks→absolute. Palette: global
+> render-time, measure-group diverging ramps (additive vs multiplicative), text+background,
+> colorblind-safe. Engine rewritten around `findInterval` (kills the `keep_last_break` bottleneck);
+> significance = `ci_inf>0`/`ci_sup<0` from Phase 3a bounds; add a `color_bg` per-column vctrs
+> attribute. col%+means reference fix DEFERRED to Phase 7 — Phase 5 only warns.
+
 Now the `ratio` field exists (Phase 1): implement `"diff"`/`"ratio"`/`"diff_ratio"` modes + legend text, **keeping the existing modes coherent in the same overhaul** (`diff_ci`, `ci`, `after_ci`, `contrib`, `OR` — do not drop the `ci` mode). **Numeric `"diff"` mode is sd-standardized (Q9, §18)**: color Glass's Δ = `diff/sd_ref` against new effect-size `mean_diff_breaks` (default `c(0.2, 0.5, 0.8, 1.2)`); derived from `diff` + the reference `var` at color time — no new field, `$diff` stays raw. Skill: `/color-mode`. Also fix the pre-existing **col% + means** row/col reference mismatch (means referenced by row, factors by column — `dev/tabxplor_1.4.0_decisions.md` §7).
 
 #### To verify
