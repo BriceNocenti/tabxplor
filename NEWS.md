@@ -18,8 +18,24 @@
 * Optional Kish effective sample size for weighted numeric (mean) confidence intervals /
   significance, via `options("tabxplor.kish_neff" = TRUE)`. Off by default (weighted estimate with
   the unweighted count, as before).
+* **Mean (numeric) columns now get a whole-table significance test** — a one-way ANOVA, the
+  counterpart of the Chi-squared test for factor columns. Both **Welch's F** (default, robust to
+  unequal group variances) and the classic pooled F are computed; `options("tabxplor.anova")`
+  (`"welch"` / `"classic"`) chooses which p-value is shown. A p-value row now appears under mean
+  columns as it already did under factor columns.
 
 ## Internal
+* Rewrote the Chi-squared / ANOVA computation onto a fast, vectorised engine (`R/tab-agg.R`:
+  `agg_chi2()`, `agg_anova()`): every (sub)table is tested in a single grouped `data.table` pass
+  instead of a per-table `stats::chisq.test()` loop, making `tab_chi2()` about 2.5× faster (it was
+  the single biggest cost of `tab()`/`tab_many()`). Chi-squared results match `chisq.test()` exactly
+  (including the Yates correction on 2×2 tables); Welch's / classic F match `stats::oneway.test()`.
+  Also fixes `tab_chi2()` on a table that already carries `add_n` columns/rows.
+* The table-level test results moved from the `chi2` attribute to a tidy **`test`** attribute (one row
+  per sub-table × column × test, holding Chi2 and ANOVA F together). This is an internal contract:
+  `attr(x, "chi2")` is renamed, but the `get_chi2()` accessor still works (it reads the new `test`
+  attribute), and the low-level `new_tab(chi2 = )` argument still works too (both are soft-deprecated
+  aliases). Rebuild any table saved from an older version rather than relying on the raw attribute.
 * Rewrote confidence-interval computation onto a fast, vectorised, closed-form engine
   (`R/tab-agg.R`), replacing the per-cell `DescTools` calls in `tab_ci()`. `DescTools` moved from
   Imports to Suggests (used only for test parity). `tab_ci()` and `tab_num()` now share the engine.

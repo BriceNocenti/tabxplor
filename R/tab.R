@@ -1084,6 +1084,20 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
       purrr::set_names(row_vars)
   }
 
+  # Phase 3b: whole-table test for NUMERIC col_vars = one-way ANOVA (Welch + classic F), computed
+  # per row_var by running the (rewritten) tab_chi2() test step on the numeric table -- it detects
+  # the mean col_vars and calls agg_anova(). Only the tidy `test` tibble is kept; the merged table
+  # itself is assembled from the untouched tabs_num below. Combined with the factor chi2 attribute
+  # (per row_var) just before the tabs are re-wrapped (see the `chi2`/`chi2_num` merge lower down).
+  chi2_num <- NULL
+  if (sum(col_vars_num) != 0 && any(chi2)) {
+    chi2_num <- purrr::pmap(
+      list(tabs_num, comp, chi2),
+      ~ if (isTRUE(..3)) get_test(tab_chi2(tabs = ..1, calc = "p", comp = ..2))
+        else new_test_tibble()
+    )
+  }
+
 
 
   # DESIGN: fused aggregation. Build ONE shared finest-grain data.table aggregate keyed on all
@@ -1179,13 +1193,16 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
     # computed on the full set of levels. Do not move the level-drop above chi2/ci.
     # See CLAUDE.md § Global Architecture.
     if (any(chi2)) {
+      # Phase 3b: only compute per-cell contributions ("ctr") when contrib coloring is actually
+      # requested (color_ctr != "no") -- the common path pays for the p-value/chi2 only.
       tabs_text[chi2] <-
         purrr::pmap(list(tabs_text[chi2], comp[chi2], color_ctr[chi2]),
-                    ~ tab_chi2(tabs = ..1, calc = c("ctr", "p"),
+                    ~ tab_chi2(tabs = ..1,
+                               calc = if (..3 != "no") c("ctr", "p") else "p",
                                comp = ..2, color = ..3))
     }
-    chi2 <- purrr::map(tabs_text, get_chi2)
-    chi2 <- purrr::map_if(chi2, purrr::map_lgl(chi2, is.null), ~ attr(new_tab(), "chi2"))
+    chi2 <- purrr::map(tabs_text, get_test)
+    chi2 <- purrr::map_if(chi2, purrr::map_lgl(chi2, is.null), ~ new_test_tibble())
 
 
 
@@ -1512,15 +1529,18 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
       )
   }
 
-  if (is.logical(chi2)) { chi2 <- list(attr(new_tab(), "chi2")) }
+  # Combine the factor (chi2) and numeric (ANOVA F) whole-table test attributes, per row_var.
+  # For numeric-only tables `chi2` is still the boolean flag here (the factor branch was skipped).
+  if (is.logical(chi2)) { chi2 <- rep(list(new_test_tibble()), length(tabs)) }
+  if (!is.null(chi2_num)) { chi2 <- purrr::map2(chi2, chi2_num, dplyr::bind_rows) }
 
   if (!any(purrr::map_lgl(tabs, lv1_group_vars)) ) {
     tabs <- tabs %>% purrr::map(~ dplyr::group_by(., !!!tab_vars))
     groups <- purrr::map(tabs, dplyr::group_data)
     tabs <- purrr::pmap(list(tabs, groups, chi2),
-                        ~ new_grouped_tab(..1, groups = ..2, subtext = subtext, chi2 = ..3))
+                        ~ new_grouped_tab(..1, groups = ..2, subtext = subtext, test = ..3))
   } else {
-    tabs <- purrr::map2(tabs, chi2, ~ new_tab(.x, subtext = subtext, chi2 = .y))
+    tabs <- purrr::map2(tabs, chi2, ~ new_tab(.x, subtext = subtext, test = .y))
   }
 
   # Compact tables into one
@@ -5148,9 +5168,10 @@ tab_chi2 <- function(tabs, calc = c("ctr", "p", "var", "counts"),
                    ~ purrr::map_lgl(dplyr::select(dplyr::ungroup(tabs), !!!.),
                                     ~ get_type(.) == "mean") %>% any()
     )
-  if (all(is_a_mean)) {
-    calc <- "counts"
-  } else {
+  # Phase 3b: mean col_vars now get an ANOVA F (the chi2 mirror), so an all-means table is no
+  # longer skipped -- only the factor total-row/total-col scaffolding (which is factor-oriented)
+  # is skipped for it. The ANOVA runs on the data rows (row_var-level groups) via agg_anova().
+  if (!all(is_a_mean)) {
     tabs <- tabs %>% tab_match_groups_and_totrows() %>% tab_add_totcol_if_no()
   }
 
@@ -5310,162 +5331,120 @@ tab_chi2 <- function(tabs, calc = c("ctr", "p", "var", "counts"),
     tabs[!is_totrow(tabs),]
   }
 
+  # Drop any add_n / add_pct display rows (reserved row_var labels "n" / "row_pct") so a table that
+  # already carries them is tested cleanly -- fixes tab_chi2() on an add_n'd table (the pipeline
+  # runs the test before add_n, so this only matters for a manual chi2 on a built table).
+  if (as.character(row_var) %in% names(tabs2)) {
+    tabs2 <- tabs2[!as.character(tabs2[[as.character(row_var)]]) %in% c("n", "row_pct"), ]
+  }
 
-  #Calculate unweighted counts
-  if ("counts" %in% calc) {
-    counts <-  purrr::map(
-      col_vars_levels[!all_col_tot],
-      ~ dplyr::select(tabs2, !!!groups, !!!.) %>%
-        dplyr::select(where(~ !is_totcol(.))) %>%
-        dplyr::group_split() %>%
-        purrr::map( ~ dplyr::select(., where(is_fmt)) ) %>%
-        purrr::map_int(~ dplyr::mutate(.,dplyr::across(.cols = dplyr::everything(), .fns = get_n)) %>%
-                         rowSums() %>% sum() %>% as.integer()
+
+  # === Whole-table tests via the vectorised engine (R/tab-agg.R, Phase 3b) ============
+  # DESIGN: chi2/ANOVA run on the already-AGGREGATED cell statistics (get_n / get_mean+get_var
+  # over the fmt cells), never a raw N-scan -- cost scales with cells, not observations. Every
+  # (subtable x col_var) is one "table_id"; ALL tables are stacked and tested in ONE agg_chi2 /
+  # agg_anova pass (see the engine header). This replaces the pre-1.4.0 per-(sub)table
+  # group_split() + stats::chisq.test() loop. Chi2 stays fully unweighted (chisq.test parity,
+  # G2); ANOVA F follows §14 (weighted group mean/var + unweighted n).
+  subtab_idx   <- dplyr::group_indices(tabs2)
+  subtab_keys  <- dplyr::group_keys(tabs2)
+  tab_vars_chr <- names(subtab_keys)
+  n_rows2      <- nrow(tabs2)
+
+  factor_cvs <- names(col_vars_levels)[!is_a_mean & !all_col_tot]
+  mean_cvs   <- names(col_vars_levels)[ is_a_mean & !all_col_tot]
+
+  # --- Chi2 for factor col_vars (UNWEIGHTED counts) ---
+  chi2_rows <- NULL
+  if (length(factor_cvs) > 0 && n_rows2 > 0) {
+    long <- dplyr::bind_rows(purrr::imap(
+      col_vars_levels_no_tot[factor_cvs],
+      function(levels, cv) {
+        lv_cols <- purrr::map_chr(levels, rlang::as_name)
+        if (length(lv_cols) == 0) return(NULL)
+        M  <- vapply(lv_cols, function(cc) as.double(get_n(tabs2[[cc]])), double(n_rows2))
+        ncM <- ncol(M)
+        tibble::tibble(
+          col_var  = cv,
+          subtab   = rep(subtab_idx, times = ncM),
+          table_id = paste(cv, rep(subtab_idx, times = ncM), sep = "\r"),
+          row_id   = rep(seq_len(n_rows2), times = ncM),
+          col_id   = rep(seq_len(ncM), each = n_rows2),
+          o        = as.vector(M)
         )
-    )
-  }
-
-
-  # DESIGN: chi2 runs on the already-AGGREGATED cell counts (get_n over the fmt cells,
-  # group_split -> chisq.test on the small per-(sub)table matrix), NOT base table() over the
-  # raw N rows — so its cost scales with cells, not observations. Do not "optimize" it into a
-  # raw-data rescan. See CLAUDE.md § Perf findings.
-  #Calculate pvalue : variance was calculated with weights, and here we want unwtd counts
-  if ("p" %in% calc) {
-
-    quiet_chisq_test <- function(tab) {
-      quiet_chisq <-
-        purrr::possibly(purrr::quietly(~ stats::chisq.test(.)),
-                        tibble::tibble(warnings = "", result = tibble::tibble(p.value = NA_real_)) )
-      result <- quiet_chisq(tab)
-
-      pvalue_warning <- if (length(result$warnings) != 0) {result$warnings} else {""}
-      pvalue         <- result$result$p.value
-      df             <- result$result$parameter
-      statistic      <- result$result$statistic
-      tibble::tibble(pvalue = pvalue, warnings = pvalue_warning, df = df, statistic = statistic )
+      }
+    ))
+    if (nrow(long) > 0) {
+      res <- agg_chi2(long$table_id, long$row_id, long$col_id, long$o, correct = TRUE)
+      map <- dplyr::distinct(long, .data$table_id, .data$col_var, .data$subtab)
+      chi2_rows <- dplyr::left_join(map, tibble::as_tibble(res$tables), by = "table_id") %>%
+        dplyr::transmute(
+          .data$subtab, .data$col_var, test = "chi2",
+          statistic = .data$statistic, df1 = as.double(.data$df), df2 = NA_real_,
+          pvalue = .data$pvalue, n = as.double(.data$n),
+          variance = NA_real_, min_e = .data$min_e)
     }
-
-    pvalues <-
-      purrr::map_if(col_vars_levels[!all_col_tot], !is_a_mean[!all_col_tot],
-                    ~ dplyr::select(tabs2, !!!groups, !!!.) %>%
-                      dplyr::select(where(~ !is_totcol(.))) %>% # ?????
-                      dplyr::group_split() %>%
-                      purrr::map( ~ dplyr::select(., where(is_fmt)) ) %>%
-                      purrr::map(
-                        ~ dplyr::mutate(., dplyr::across(.cols = dplyr::everything(), .fns = get_n)) %>%
-                          dplyr::select(-where(~ sum(., na.rm = TRUE) == 0)) %>%
-                          dplyr::rowwise() %>%
-                          dplyr::filter(! sum(dplyr::c_across(cols = dplyr::everything()),
-                                              na.rm = TRUE) == 0 ) %>%
-                          dplyr::ungroup()
-                      ) %>%
-                      purrr::map_if(purrr::map_lgl(., ~ nrow(.) > 0 & ncol(.) > 0),
-                                    .f = quiet_chisq_test,
-                                    .else = ~ tibble::tibble(pvalue = NA_real_,
-                                                             warnings = "",
-                                                             df = NA_integer_,
-                                                             statistic = NA_real_)
-                      ) %>% dplyr::bind_rows(),
-
-                    .else = ~ tibble::tibble(pvalue = NA_real_, warnings = "",
-                                             df = NA_integer_, statistic = NA_real_)
-      )
-    pvalue_p     <- purrr::map(pvalues, ~ dplyr::pull(., .data$pvalue))
-    #pvalue_w     <- purrr::map(pvalues, ~ dplyr::pull(., .data$warnings))
-    pvalue_statistic <- purrr::map(pvalues, ~ dplyr::pull(., .data$statistic))
-    pvalue_df    <- purrr::map(pvalues, ~ dplyr::pull(., .data$df) %>% as.integer())
   }
 
-
-  #Assemble everything and put it into the metadata of the tab
-  #if (length(groups) != 0) {
-  tables <- tabs[!is_totrow(tabs),] %>% dplyr::select(!where(is_totcol)) %>%
-    dplyr::summarise(row_var = factor(row_var), .groups = "drop") #%>%
-  #dplyr::mutate(dplyr::across(.cols = dplyr::everything(), .fns = ~ stringr::str_remove_all(., "/") ))
-
-
-  # if (length(groups) != 0) tables <- tables %>%
-  #   dplyr::transmute(tables = stringr::str_c(!!!groups, sep = "/"))
-  #
-  # tables <- tables %>%
-  #   dplyr::mutate(tables = dplyr::if_else(
-  #     condition = stringr::str_extract(.data$tables, "^.*(?=/)") ==
-  #       stringr::str_extract(.data$tables, "(?<=/).*$"),
-  #     true      = stringr::str_extract(.data$tables, "^.*(?=/)"),
-  #     false     = .data$tables
-  #   ))
-
-  if (!"p"      %in% calc) {
-    pvalue_p  <- NA_real_
-    #pvalue_w  <- NA_character_
-    pvalue_statistic <- NA_real_
-    pvalue_df <- NA_integer_
+  # --- ANOVA for mean col_vars (Welch + classic F, from per-group summary stats) ---
+  anova_rows <- NULL
+  if (length(mean_cvs) > 0 && n_rows2 > 0) {
+    longA <- dplyr::bind_rows(purrr::imap(
+      col_vars_levels[mean_cvs],
+      function(levels, cv) {
+        cols <- purrr::map_chr(levels, rlang::as_name)
+        keep <- purrr::map_lgl(cols, ~ get_type(tabs2[[.x]]) == "mean" &&
+                                 !any(is_totcol(tabs2[[.x]])))
+        col  <- cols[keep][1]
+        if (is.na(col)) return(NULL)
+        tibble::tibble(
+          col_var  = cv,
+          subtab   = subtab_idx,
+          table_id = paste(cv, subtab_idx, sep = "\r"),
+          group_id = seq_len(n_rows2),
+          n        = as.double(get_n(tabs2[[col]])),
+          mean     = get_mean(tabs2[[col]]),
+          var      = get_var(tabs2[[col]]))
+      }
+    ))
+    if (nrow(longA) > 0) {
+      resA  <- tibble::as_tibble(agg_anova(longA$table_id, longA$group_id,
+                                           longA$n, longA$mean, longA$var))
+      mapA  <- dplyr::distinct(longA, .data$table_id, .data$col_var, .data$subtab)
+      baseA <- dplyr::left_join(mapA, resA, by = "table_id")
+      welch <- dplyr::transmute(
+        baseA, .data$subtab, .data$col_var, test = "F_welch",
+        statistic = .data$statistic, df1 = .data$df1, df2 = .data$df2,
+        pvalue = .data$pvalue, n = as.double(.data$n), variance = NA_real_, min_e = NA_real_)
+      classic <- dplyr::transmute(
+        baseA, .data$subtab, .data$col_var, test = "F_classic",
+        statistic = .data$statistic_classic, df1 = .data$df1_classic, df2 = .data$df2_classic,
+        pvalue = .data$pvalue_classic, n = as.double(.data$n), variance = NA_real_, min_e = NA_real_)
+      anova_rows <- dplyr::bind_rows(welch, classic)
+    }
   }
-  if (!"var"    %in% calc) {
-    cells_by_group     <- NA_integer_
-    variances_by_group <- NA_real_
+
+  # --- Assemble the tidy `test` attribute (one row per subtable x col_var x test-type) ---
+  test_tbl <- dplyr::bind_rows(chi2_rows, anova_rows)
+  if (nrow(test_tbl) == 0) {
+    test_tbl <- new_test_tibble()
+  } else {
+    subtab_keys2 <- dplyr::mutate(subtab_keys, subtab = dplyr::row_number())
+    test_tbl <- test_tbl %>%
+      dplyr::arrange(.data$subtab, .data$col_var, .data$test) %>%
+      dplyr::left_join(subtab_keys2, by = "subtab") %>%
+      dplyr::mutate(row_var = !!row_var) %>%
+      dplyr::select(-"subtab") %>%
+      dplyr::relocate(tidyselect::any_of(tab_vars_chr), "row_var", "col_var")
   }
-  if (!"counts" %in% calc) counts <- NA_integer_
-
-  # purrr::map(counts            , length)
-  # purrr::map(pvalue_p          , length)
-  # purrr::map(variances_by_group, length)
-  # purrr::map(cells_by_group    , length)
-  # purrr::map(pvalue_df         , length)
-
-  chi2 <-
-    purrr::pmap(list(counts, pvalue_p, #pvalue_w,
-                     variances_by_group, cells_by_group, pvalue_df, pvalue_statistic),
-                ~ dplyr::bind_cols(tables,
-                                   tibble::tibble(count    = ..1,
-                                                  chi2     = ..6,
-                                                  pvalue   = ..2,
-                                                  #warnings = ..3,
-                                                  variance = ..3,
-                                                  cells    = ..4,
-                                                  df       = ..5,
-                                   ))
-    ) %>%
-    purrr::set_names(names(col_vars_levels[!all_col_tot]))
-  #%>%
-  # purrr::map(~ dplyr::mutate(., warnings = dplyr::if_else(
-  #   stringr::str_detect(.data$warnings, "incorrect"), "!", ""))
-  # )
-
-  chi2 <- chi2 %>% purrr::imap(
-    ~ dplyr::mutate(.x, dplyr::across(
-      tidyselect::any_of(c("count", "chi2", "pvalue",
-                           "variance", "cells", "df")),
-      as.double)) %>%
-      tidyr::pivot_longer(cols = c("cells","df", "variance",
-                                   "chi2", "pvalue", "count"),
-                          names_to = "chi2 stats",
-                          values_to = .y) %>%
-      dplyr::mutate(dplyr::across(
-        where(is.double),
-        ~ fmt(display = "var", type = "n", n =  0L, var  = .,
-              col_var = "chi2_cols")
-      ))
-  ) %>% purrr::map_if(append(FALSE, rep(TRUE, length(.) - 1)),
-                      ~ dplyr::select(., where(is_fmt))
-  ) %>% dplyr::bind_cols() %>%
-    dplyr::mutate(dplyr::across(where(is_fmt), ~ dplyr::case_when(
-      `chi2 stats` == "variance" ~ set_digits(., 4L),
-      `chi2 stats` == "chi2"     ~ set_digits(., 0L),
-      `chi2 stats` == "pvalue"   ~ set_display(., "pvalue") %>%
-        set_pct(get_var(.)), #  %>% set_digits(2L)
-      `chi2 stats` == "count"    ~ as_totrow(.),
-      TRUE                       ~ .
-    ))) %>% new_tab()
 
   tabs <- tabs %>% dplyr::select(-tidyselect::any_of("tottabs"))
 
   if (lv1_group_vars(tabs)) {
-    new_tab(tabs, subtext = subtext, chi2 = chi2)
+    new_tab(tabs, subtext = subtext, test = test_tbl)
   } else {
     new_grouped_tab(tabs, groups = dplyr::group_data(tabs), subtext = subtext,
-                    chi2 = chi2)
+                    test = test_tbl)
   }
 }
 

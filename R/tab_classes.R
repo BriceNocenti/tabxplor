@@ -62,8 +62,9 @@
 #' It is generally made with \code{\link{tab}}, \code{\link{tab_many}}
 #' or \code{\link{tab_plain}}.
 #' @param subtext A character vector to print legend lines under the table.
-#' @param chi2 A tibble storing information about pvalues and variances, to fill with
-#' \code{\link{tab_chi2}}.
+#' @param test A tidy tibble storing whole-table test results (Chi2 for factor columns,
+#' ANOVA F for mean columns), filled by \code{\link{tab_chi2}}. Renamed from \code{chi2}
+#' in tabxplor 1.4.0.
 #' @param ... Needed to implement subclasses.
 #' @param class Needed to implement subclasses.
 #'
@@ -72,17 +73,15 @@
 #  @examples
 new_tab <-
   function(tabs = tibble::tibble(), subtext = "",
-           chi2 = tibble::tibble(tables   = character(),
-                                 pvalue   = double()   ,
-                                 df       = integer()  ,
-                                 cells    = integer()  ,
-                                 variance = double()   ,
-                                 count    = integer()   ),
+           test = new_test_tibble(), chi2 = NULL,
            ..., class = character()) {
     stopifnot(is.data.frame(tabs))
     #vec_assert(subtext    , character())
 
-    tibble::new_tibble(tabs, subtext = subtext, chi2 = chi2, ...,
+    # Soft-deprecated `chi2` arg (renamed `test` in 1.4.0): if supplied, it feeds `test`.
+    if (!is.null(chi2)) test <- chi2
+
+    tibble::new_tibble(tabs, subtext = subtext, test = test, ...,
                        nrow = nrow(tabs), class = c(class, "tabxplor_tab"))
   }
 
@@ -93,18 +92,16 @@ new_tab <-
 new_grouped_tab <-
   function(tabs = tibble::tibble(), groups,
            subtext = "",
-           chi2 = tibble::tibble(tables   = character(),
-                                 pvalue   = double()   ,
-                                 df       = integer()  ,
-                                 cells    = integer()  ,
-                                 variance = double()   ,
-                                 count    = integer()   ),
+           test = new_test_tibble(), chi2 = NULL,
            ..., class = character()) {
     if (missing(groups)) groups <- attr(tabs, "groups")
     class <- c(class, c("tabxplor_grouped_tab", "grouped_df"))
 
+    # Soft-deprecated `chi2` arg (renamed `test` in 1.4.0): if supplied, it feeds `test`.
+    if (!is.null(chi2)) test <- chi2
+
     new_tab(tabs, groups = groups,
-            subtext = subtext, chi2 = chi2,
+            subtext = subtext, test = test,
             ...,
             class = class)
   }
@@ -123,7 +120,42 @@ is_tab <- function(x) {
 }
 
 get_subtext <- purrr::attr_getter("subtext")
-get_chi2    <- purrr::attr_getter("chi2")
+
+# Phase 3b: the whole-table test results (Chi2 for factor col_vars, ANOVA F for mean col_vars,
+# future tests) live in the `test` table attribute -- a TIDY tibble, one row per
+# (subtable x col_var x test-type). Renamed from the pre-1.4.0 `chi2` attribute (§16/§17).
+# get_test() reads `test`, FALLING BACK to the old `chi2` attribute name (older objects /
+# robustness); get_chi2() is kept as a working back-compat alias so pre-1.4.0 user code runs.
+get_test <- function(x) {
+  out <- attr(x, "test", exact = TRUE)
+  if (is.null(out)) out <- attr(x, "chi2", exact = TRUE)
+  out
+}
+get_chi2 <- function(x) get_test(x)
+
+# The empty-placeholder `test` tibble (used before any test has run). Tidy schema: adding a new
+# test type = adding rows (never a schema change); tab_var columns are added when populated.
+new_test_tibble <- function() {
+  tibble::tibble(row_var   = character(), col_var   = character(), test = character(),
+                 statistic = double()   , df1       = double()   ,
+                 df2       = double()   , pvalue    = double()   ,
+                 n         = double()   , variance  = double()   , min_e = double())
+}
+
+# Pick the DISPLAYED test row per (subtable x col_var): chi2 for factor col_vars, and for mean
+# col_vars the option-selected ANOVA F (Welch by default). Both F rows are stored; this chooses one.
+test_display_rows <- function(test_tbl, anova = getOption("tabxplor.anova", "welch")) {
+  keep_f <- paste0("F_", anova)
+  dplyr::filter(test_tbl, .data$test == "chi2" | .data$test == keep_f)
+}
+
+# Build the fmt "pvalue" cells for a p-value display row, reproducing the pre-1.4.0 cell fields
+# (display "pvalue"; pct = p; diff drives the >=5% flag; n cleared). Vectorised over p.
+pvalue_line_fmt <- function(p) {
+  fmt(display = "pvalue", type = "n", n = NA_integer_,
+      var = p, pct = p, ci_inf = 0, ci_sup = 0, ctr = 0,
+      diff = dplyr::if_else(p > 0.05, -0.5, 0), digits = 2L, col_var = "chi2_cols")
+}
 
 # # In doc exemple they do :
 #  df_colour <- function(x) {
@@ -276,62 +308,36 @@ print.tabxplor_grouped_tab <- function(x, width = NULL, ..., n = 100,
   }
 
 #' @keywords internal
+# Phase 3b: render the tidy `test` attribute (Chi2 + ANOVA F) as a readable, colored block above
+# the table. In the normal tab() flow the p-values are materialised as body rows by
+# tab_pvalue_lines() (which drops the attribute), so this block mainly shows for tables that keep
+# the attribute (e.g. a manual tab_plain() |> tab_chi2()). One line per (subtable x col_var).
 print_chi2 <- function(x, width = NULL) {
-  chi2 <- get_chi2(x)
-  if (is.null(chi2)) return(NULL)
-  if (nrow(chi2) == 0) return(NULL)
-  # if (is.na(chi2)) return(NULL)
+  test_tbl <- get_test(x)
+  if (is.null(test_tbl) || nrow(test_tbl) == 0) return(NULL)
+  disp <- test_display_rows(test_tbl)
+  disp <- dplyr::filter(disp, !is.na(.data$pvalue))
+  if (nrow(disp) == 0) return(NULL)
 
-  chi2 <- chi2 %>% # dplyr::select(-"row_var") %>%
-    dplyr::filter(!.data$`chi2 stats` %in% c("cells"))
+  cs  <- get_color_style()
+  tvs <- purrr::map_chr(tab_get_vars(x)$tab_vars, rlang::as_name)
+  tvs <- intersect(tvs, names(disp))
 
-  fmt_cols <- purrr::map_lgl(chi2, is_fmt) %>% purrr::keep(. == TRUE) %>%
-    names() #%>% rlang::syms()
-  if (length(fmt_cols) != 0) {
-    row_all_na <- chi2 %>%
-      dplyr::select(where(is_fmt)) %>%
-      purrr::map_df(is.na)
-    row_all_na <- row_all_na %>%
-      dplyr::rowwise() %>%
-      dplyr::mutate(empty = all(dplyr::c_across(cols = dplyr::everything()))) %>%
-      dplyr::pull(.data$empty)
+  lines <- purrr::pmap_chr(disp, function(...) {
+    r <- list(...)
+    stat_lbl <- if (r$test == "chi2") "Chi2" else "F"
+    df_txt   <- if (r$test == "chi2") paste0("df=", r$df1)
+                else                  paste0("df=", r$df1, ",", round(r$df2, 1))
+    prefix   <- if (length(tvs) > 0) {
+      paste0(paste(purrr::map_chr(tvs, ~ as.character(r[[.x]])), collapse = " / "), " - ")
+    } else ""
+    p_txt <- paste0(formatC(r$pvalue * 100, format = "g", digits = 3), "%")
+    p_txt <- if (isTRUE(r$pvalue >= 0.05)) cs$neg5(p_txt) else cs$pos5(p_txt)
+    paste0("# ", prefix, r$col_var, ": ", stat_lbl, "=",
+           formatC(r$statistic, format = "g", digits = 3), " (", df_txt, ") p=", p_txt)
+  })
 
-    chi2 <- chi2 %>% dplyr::filter(!row_all_na)
-  }
-
-  # DESIGN: temporarily tag the fmt stat columns with class "tab_chi2_fmt" so they print via
-  # pillar_shaft.tab_chi2_fmt (which colors the p-value green/red) instead of the normal shaft.
-  chi2 <- chi2 %>%
-    dplyr::mutate(dplyr::across(where(is_fmt),
-                                ~ `class<-`(., c("tab_chi2_fmt", class(.)))  ))
-
-  nrow_chi2 <- nrow(chi2)
-  if (nrow_chi2 == 0) return(NULL)
-
-  ind <- chi2 %>% dplyr::group_by(dplyr::across(where(is.factor))) %>%
-    dplyr::group_indices()
-  ind   <- c(TRUE, ind != dplyr::lead(ind, default = max(ind) + 1) )
-
-  chi2 <- chi2 %>%
-    dplyr::mutate(dplyr::across(
-      where(is.factor),
-      ~ dplyr::if_else(. == dplyr::lag(as.character(.), default = paste0(as.character(dplyr::first(.)), "a")),
-                       #. == dplyr::lag(., default = paste0(as.character(.[1]), "a")),
-                       true = stringi::stri_unescape_unicode("\\u00a0"),
-                       false = as.character(.))
-      %>% as.factor()
-    ))
-
-  # setup <- pillar::tbl_format_setup(chi2, width = NULL)
-  setup <- pillar::tbl_format_setup(chi2, width = width, n = Inf)
-  body_no_type <- tbl_format_body(chi2, setup)[-2]
-  body_no_type <- body_no_type %>%
-    stringr::str_replace("`chi2 stats`", "chi2 stats  ") %>%
-    crayon::col_substr(stringr::str_length(nrow_chi2) + 2L, crayon::col_nchar(.))
-  body_no_type[ind] <- crayon::underline(body_no_type[ind] )
-  body_no_type <- body_no_type %>% `class<-`("pillar_vertical")
-
-  cli::cat_line(body_no_type)
+  cli::cat_line(lines)
   cli::cat_line()
 }
 
@@ -989,7 +995,7 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
 
   subtext <- get_subtext(tabs[[1]])
 
-  tabs_chi2 <- purrr::map_df(tabs, ~get_chi2(.) )
+  tabs_chi2 <- purrr::map_df(tabs, ~get_test(.) )
 
   # var_type <- tabs |> map(get_type) |> first()
   # var_type <- first(unique(type[!type %in% c("", "n")]))
@@ -1028,7 +1034,7 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
       dplyr::rename_with(~ "Total", .cols = tidyselect::starts_with("Total_"))
   }
 
-  tabs <- new_tab(tabs, subtext = subtext, chi2 = tabs_chi2) |>
+  tabs <- new_tab(tabs, subtext = subtext, test = tabs_chi2) |>
     dplyr::group_by(!!rlang::sym("row_var"))
 
   # if (pvalue_lines) {
@@ -1139,61 +1145,32 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
 #   tab_pvalue_lines()
 # }
 tab_pvalue_lines <- function(tabs) {
-  subtext   <- get_subtext(tabs)
-  tabs_chi2 <- get_chi2(tabs)
-  are_chi2 <- nrow(tabs_chi2) > 0
-
-  if(!are_chi2) return(tabs)
+  subtext  <- get_subtext(tabs)
+  test_tbl <- get_test(tabs)
+  if (is.null(test_tbl) || nrow(test_tbl) == 0) return(tabs)
 
   groups   <- dplyr::groups(tabs)
-  row_var  <- tab_get_vars(tabs)$row_var
-  col_vars <- tab_get_vars(tabs)$col_vars_levels |> purrr::map_chr(first)
-  col_vars <- purrr::set_names(names(col_vars), col_vars)
-  col_vars <- col_vars[get_type(tabs[names(col_vars)]) != "mean"]
-  tab_vars <- tab_get_vars(tabs)$tab_vars
+  gv       <- tab_get_vars(tabs)
+  row_var  <- gv$row_var
+  tab_vars <- purrr::map_chr(gv$tab_vars, rlang::as_name)
+  tab_vars <- intersect(tab_vars, names(test_tbl))
 
+  # first-level column of each col_var (where the p-value cell is placed): col_var -> column name
+  first_lv  <- gv$col_vars_levels |> purrr::map_chr(~ rlang::as_name(dplyr::first(.)))
+  cv_to_col <- purrr::set_names(unname(first_lv), names(first_lv))
 
-  # are_chi2 <- all(purrr::map_int(tabs, ~nrow(get_chi2(.)))) > 0
+  # one displayed test per (subtable x col_var): chi2 (factors) / chosen F (means)
+  disp <- test_display_rows(test_tbl)
+  disp <- dplyr::filter(disp, .data$col_var %in% names(cv_to_col), !is.na(.data$pvalue))
+  if (nrow(disp) == 0) return(tabs)
 
-  if (!"row_var" %in% names(tabs)) {
-    tabs_chi2 <- tabs_chi2 |> dplyr::select(-"row_var")
-  }
-
-  tabs_pvalue_lines <- tabs_chi2 |>
-    dplyr::filter(.data$`chi2 stats` == "pvalue") |>
-    dplyr::rename(tidyselect::all_of(purrr::set_names("chi2 stats", row_var))) |>
-    dplyr::mutate(!!rlang::sym(row_var) := forcats::as_factor(!!rlang::sym(row_var))) |>
-    dplyr::mutate(dplyr::across(
-      dplyr::where(is_fmt),
-      ~ set_display(., "pvalue") |>
-        dplyr::mutate(n = NA_integer_,
-                      ci_sup = 0,
-                      ci_inf = 0,
-                      ctr = 0,
-                      diff = dplyr::if_else(.$pct > 0.05, -0.5, 0),
-                      #in_totrow = TRUE,
-                      digits = 2L)
-    )) |>
-    dplyr::rename(tidyselect::any_of(col_vars))
-
-  # tabs_pvalue_lines <- tabs_pvalue_lines |>
-  #   purrr::map_df(
-  #     ~get_chi2(.) |>
-  #       dplyr::filter(`chi2 stats` == "pvalue") |>
-  #       dplyr::rename(levels = `chi2 stats`) |>
-  #       dplyr::mutate(levels = forcats::as_factor(levels)) |>
-  #       dplyr::mutate(dplyr::across(
-  #         dplyr::where(is_fmt),
-  #         ~ set_display(., "pvalue") |>
-  #           dplyr::mutate(n = NA_integer_,
-  #                         ci = 0,
-  #                         ctr = 0,
-  #                         diff = dplyr::if_else(.$pct > 0.05, -0.5, 0),
-  #                         digits = 2L)
-  #       ))
-  #   )
-
-  # tabs_pvalue_lines <- tabs_pvalue_lines |> dplyr::rename(tidyselect::any_of(col_vars))
+  # one p-value row per subtable, the p-value fmt cell placed under each col_var's first-level col
+  tabs_pvalue_lines <- disp |>
+    dplyr::mutate(.col  = unname(cv_to_col[.data$col_var]),
+                  .cell = pvalue_line_fmt(.data$pvalue)) |>
+    dplyr::select(tidyselect::any_of(tab_vars), ".col", ".cell") |>
+    tidyr::pivot_wider(names_from = ".col", values_from = ".cell") |>
+    dplyr::mutate(!!rlang::sym(row_var) := forcats::as_factor("pvalue"))
 
   tabs <- # keep all attributes
     purrr::map2_df(
@@ -2093,7 +2070,7 @@ group_by.tabxplor_tab <- function(.data,
   out <- NextMethod()
   groups <- dplyr::group_data(out)
   new_grouped_tab(out, groups,
-                  subtext = get_subtext(.data), chi2 = get_chi2(.data))
+                  subtext = get_subtext(.data), test = get_test(.data))
 }
 
 
@@ -2203,11 +2180,11 @@ group_by.tabxplor_tab <- function(.data,
     if (length(groups) > 0) out <- out |> dplyr::group_by(!!!groups)
 
     if (lv1_group_vars(out)) {
-      new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+      new_tab(out, subtext = get_subtext(.data), test = get_test(.data))
 
     } else {
       groups <- dplyr::group_data(out)
-      new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+      new_grouped_tab(out, groups, subtext = get_subtext(.data), test = get_test(.data))
     }
 
 }
@@ -2235,7 +2212,7 @@ rowwise.tabxplor_tab <- function(data, ...) {
   out <- NextMethod()
   groups <- dplyr::group_data(out)
   out <- new_grouped_tab(out, groups,
-                         subtext = get_subtext(data), chi2 = get_chi2(data))
+                         subtext = get_subtext(data), test = get_test(data))
 
   `class<-`(out, stringr::str_replace(class(out), "grouped_df", "rowwise_df"))
 }
@@ -2269,9 +2246,9 @@ tab_cast <- function(x, to, ..., x_arg = "", to_arg = "") {
 
   subtext     <- vctrs::vec_c(get_subtext(x), get_subtext(to)) %>% unique()
   if (length(subtext) > 1) subtext <- subtext[subtext != ""]
-  chi2        <- vctrs::vec_rbind(get_chi2(x), get_chi2(to))
+  test        <- vctrs::vec_rbind(get_test(x), get_test(to))
 
-  new_tab(out, subtext = subtext, chi2 = chi2)
+  new_tab(out, subtext = subtext, test = test)
 }
 
 #' @rdname tab_cast
@@ -2282,11 +2259,11 @@ tab_ptype2 <- function(x, y, ..., x_arg = "", y_arg = "") {
   out <- vctrs::tib_ptype2(x, y, ..., x_arg = x_arg, y_arg = y_arg)
   #colour <- df_colour(x) %||% df_colour(y)
 
-  chi2        <- vctrs::vec_rbind(get_chi2(x), get_chi2(y))
+  test        <- vctrs::vec_rbind(get_test(x), get_test(y))
   subtext     <- vctrs::vec_c(get_subtext(x), get_subtext(y)) %>% unique()
   if (length(subtext) > 1) subtext <- subtext[subtext != ""]
 
-  new_tab(out, subtext = subtext, chi2 = chi2)
+  new_tab(out, subtext = subtext, test = test)
 }
 
 
@@ -2380,7 +2357,7 @@ vec_cast.data.frame.tabxplor_tab <- function(x, to, ...) {
 ungroup.tabxplor_grouped_tab <- function (x, ...)
 {
   if (missing(...)) {
-    new_tab(x, subtext = get_subtext(x), chi2 = get_chi2(x))
+    new_tab(x, subtext = get_subtext(x), test = get_test(x))
   }
   else {
     old_groups <- dplyr::group_vars(x)
@@ -2422,10 +2399,10 @@ lv1_group_vars <- function(tabs) {
 dplyr_row_slice.tabxplor_grouped_tab <- function(data, i, ...) {
   out <- NextMethod()
   if (lv1_group_vars(out)) {
-    new_tab(out, subtext = get_subtext(data), chi2 = get_chi2(data))
+    new_tab(out, subtext = get_subtext(data), test = get_test(data))
   } else {
     groups <- dplyr::group_data(out)
-    new_grouped_tab(out, groups, subtext = get_subtext(data), chi2 = get_chi2(data))
+    new_grouped_tab(out, groups, subtext = get_subtext(data), test = get_test(data))
   }
 }
 # dplyr:::dplyr_row_slice.grouped_df
@@ -2441,10 +2418,10 @@ dplyr_row_slice.tabxplor_grouped_tab <- function(data, i, ...) {
 dplyr_col_modify.tabxplor_grouped_tab <- function(data, cols) {
   out <- NextMethod()
   if (lv1_group_vars(out)) {
-    new_tab(out, subtext = get_subtext(data), chi2 = get_chi2(data))
+    new_tab(out, subtext = get_subtext(data), test = get_test(data))
   } else {
     groups <- dplyr::group_data(out)
-    new_grouped_tab(out, groups, subtext = get_subtext(data), chi2 = get_chi2(data))
+    new_grouped_tab(out, groups, subtext = get_subtext(data), test = get_test(data))
   }
 }
 # dplyr:::dplyr_col_modify.grouped_df
@@ -2459,10 +2436,10 @@ dplyr_col_modify.tabxplor_grouped_tab <- function(data, cols) {
 dplyr_reconstruct.tabxplor_grouped_tab <- function(data, template) {
   out <- NextMethod()
   if (lv1_group_vars(out)) {
-    new_tab(out, subtext = get_subtext(data), chi2 = get_chi2(data))
+    new_tab(out, subtext = get_subtext(data), test = get_test(data))
   } else {
     groups <- dplyr::group_data(out)
-    new_grouped_tab(out, groups, subtext = get_subtext(data), chi2 = get_chi2(data))
+    new_grouped_tab(out, groups, subtext = get_subtext(data), test = get_test(data))
   }
 }
 # dplyr:::dplyr_reconstruct.grouped_df
@@ -2480,10 +2457,10 @@ dplyr_reconstruct.tabxplor_grouped_tab <- function(data, template) {
 `[.tabxplor_grouped_tab` <- function(x, i, j, drop = FALSE) {
   out <- NextMethod()
   if (lv1_group_vars(out)) {
-    new_tab(out, subtext = get_subtext(x), chi2 = get_chi2(x))
+    new_tab(out, subtext = get_subtext(x), test = get_test(x))
   } else {
     groups <- dplyr::group_data(out)
-    new_grouped_tab(out, groups, subtext = get_subtext(x), chi2 = get_chi2(x))
+    new_grouped_tab(out, groups, subtext = get_subtext(x), test = get_test(x))
   }
 }
 # dplyr:::`[.grouped_df`
@@ -2503,10 +2480,10 @@ dplyr_reconstruct.tabxplor_grouped_tab <- function(data, template) {
 `[<-.tabxplor_grouped_tab` <- function(x, i, j, ..., value) {
   out <- NextMethod()
   if (lv1_group_vars(out)) {
-    new_tab(out, subtext = get_subtext(x), chi2 = get_chi2(x))
+    new_tab(out, subtext = get_subtext(x), test = get_test(x))
   } else {
     groups <- dplyr::group_data(out)
-    new_grouped_tab(out, groups, subtext = get_subtext(x), chi2 = get_chi2(x))
+    new_grouped_tab(out, groups, subtext = get_subtext(x), test = get_test(x))
   }
 }
 # dplyr:::`[<-.grouped_df`
@@ -2525,10 +2502,10 @@ dplyr_reconstruct.tabxplor_grouped_tab <- function(data, template) {
 `[[<-.tabxplor_grouped_tab` <- function(x, ..., value) {
   out <- NextMethod()
   if (lv1_group_vars(out)) {
-    new_tab(out, subtext = get_subtext(x), chi2 = get_chi2(x))
+    new_tab(out, subtext = get_subtext(x), test = get_test(x))
   } else {
     groups <- dplyr::group_data(out)
-    new_grouped_tab(out, groups, subtext = get_subtext(x), chi2 = get_chi2(x))
+    new_grouped_tab(out, groups, subtext = get_subtext(x), test = get_test(x))
   }
 }
 # dplyr:::`[[<-.grouped_df`
@@ -2549,7 +2526,7 @@ rowwise.tabxplor_grouped_tab <- function(data, ...) {
   out <- NextMethod()
   groups <- dplyr::group_data(out)
 
-  out <- new_grouped_tab(out, groups, subtext = get_subtext(data), chi2 = get_chi2(data))
+  out <- new_grouped_tab(out, groups, subtext = get_subtext(data), test = get_test(data))
   `class<-`(out, stringr::str_replace(class(out), "grouped_df", "rowwise_df"))
 }
 
@@ -2559,9 +2536,9 @@ rowwise.tabxplor_grouped_tab <- function(data, ...) {
 #   out <- NextMethod()
 #   groups <- dplyr::group_data(out)
 #   if (lv1_group_vars(out)) {
-#     new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+#     new_tab(out, subtext = get_subtext(.data), test = get_test(.data))
 #   } else {
-#     new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+#     new_grouped_tab(out, groups, subtext = get_subtext(.data), test = get_test(.data))
 #   }
 # }
 # # dplyr:::rbind.grouped_df
@@ -2572,9 +2549,9 @@ rowwise.tabxplor_grouped_tab <- function(data, ...) {
 #   out <- NextMethod()
 #   groups <- dplyr::group_data(out)
 #   if (lv1_group_vars(out)) {
-#     new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+#     new_tab(out, subtext = get_subtext(.data), test = get_test(.data))
 #   } else {
-#     new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+#     new_grouped_tab(out, groups, subtext = get_subtext(.data), test = get_test(.data))
 #   }
 # }
 # # dplyr:::cbind.grouped_df
@@ -2592,9 +2569,9 @@ summarise.tabxplor_grouped_tab <- function(.data, ..., .groups = NULL) {
   out <- NextMethod()
   groups <- dplyr::group_data(out)
   if (lv1_group_vars(out)) {
-    new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+    new_tab(out, subtext = get_subtext(.data), test = get_test(.data))
   } else {
-    new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+    new_grouped_tab(out, groups, subtext = get_subtext(.data), test = get_test(.data))
   }
 }
 
@@ -2612,9 +2589,9 @@ select.tabxplor_grouped_tab <- function(.data, ...) {
   out <- NextMethod()
   groups <- dplyr::group_data(out)
   if (lv1_group_vars(out)) {
-    new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+    new_tab(out, subtext = get_subtext(.data), test = get_test(.data))
   } else {
-    new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+    new_grouped_tab(out, groups, subtext = get_subtext(.data), test = get_test(.data))
   }
 }
 
@@ -2629,9 +2606,9 @@ rename.tabxplor_grouped_tab <- function(.data, ...) {
   out <- NextMethod()
   groups <- dplyr::group_data(out)
   if (lv1_group_vars(out)) {
-    new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+    new_tab(out, subtext = get_subtext(.data), test = get_test(.data))
   } else {
-    new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+    new_grouped_tab(out, groups, subtext = get_subtext(.data), test = get_test(.data))
   }
 }
 
@@ -2649,9 +2626,9 @@ rename_with.tabxplor_grouped_tab <- function(.data, .fn, .cols = dplyr::everythi
   out <- NextMethod()
   groups <- dplyr::group_data(out)
   if (lv1_group_vars(out)) {
-    new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+    new_tab(out, subtext = get_subtext(.data), test = get_test(.data))
   } else {
-    new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+    new_grouped_tab(out, groups, subtext = get_subtext(.data), test = get_test(.data))
   }
 }
 
@@ -2669,9 +2646,9 @@ relocate.tabxplor_grouped_tab <- function(.data, ...) { #.before = NULL, .after 
   out <- NextMethod()
   groups <- dplyr::group_data(out)
   if (lv1_group_vars(out)) {
-    new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+    new_tab(out, subtext = get_subtext(.data), test = get_test(.data))
   } else {
-    new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+    new_grouped_tab(out, groups, subtext = get_subtext(.data), test = get_test(.data))
   }
 } # dplyr:::relocate.grouped_df
 
@@ -2685,9 +2662,9 @@ relocate.tabxplor_grouped_tab <- function(.data, ...) { #.before = NULL, .after 
 #   out <- NextMethod()
 #   groups <- dplyr::group_data(out)
 #   if (lv1_group_vars(out)) {
-#     new_tab(out, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+#     new_tab(out, subtext = get_subtext(.data), test = get_test(.data))
 #   } else {
-#     new_grouped_tab(out, groups, subtext = get_subtext(.data), chi2 = get_chi2(.data))
+#     new_grouped_tab(out, groups, subtext = get_subtext(.data), test = get_test(.data))
 #   }
 # }
 # # dplyr:::distinct_.grouped_df
@@ -2715,7 +2692,7 @@ gtab_cast <- function(x, to, ..., x_arg = "", to_arg = "") {
   gdf <- dplyr::grouped_df(df, vars, drop = drop)
 
   groups <- dplyr::group_data(gdf)
-  new_grouped_tab(gdf, groups, subtext = get_subtext(to), chi2 = get_chi2(to))
+  new_grouped_tab(gdf, groups, subtext = get_subtext(to), test = get_test(to))
 }
 
 #' @rdname tab_cast
@@ -2731,7 +2708,7 @@ gtab_ptype2 <- function(x, y, ..., x_arg = "", y_arg = "") {
   gdf <-  dplyr::grouped_df(common, vars, drop = drop)
 
   groups <- dplyr::group_data(gdf)
-  new_grouped_tab(gdf, groups, subtext = get_subtext(x), chi2 = get_chi2(x))
+  new_grouped_tab(gdf, groups, subtext = get_subtext(x), test = get_test(x))
 }
 
 #Self-self

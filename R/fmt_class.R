@@ -22,6 +22,10 @@ NULL
 # binding for global variables not found by R CMD check
 . = NULL
 globalVariables(c(":=", ".SD", ".N"))
+# Phase 3b test engine (R/tab-agg.R) data.table NSE column symbols:
+globalVariables(c("table_id", "row_id", "col_id", "o", "rowtot", "coltot", "ok",
+                  "grandtot", "nr", "nc", "e", "contrib", "signed_contrib",
+                  "statistic", "df", "min_e", "w", "group_id"))
 
 
 # EXPORTED FUNCTIONS TO WORK WITH CLASS FMT ##############################################

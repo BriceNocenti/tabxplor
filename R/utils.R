@@ -79,6 +79,11 @@ NULL
   # for the numeric (mean) CIs/tests. Factor-side Kish is deferred (open item).
   options("tabxplor.kish_neff"     = FALSE)
 
+  # Phase 3b: which one-way ANOVA F is DISPLAYED for mean columns ("welch" = robust default,
+  # matching oneway.test(var.equal=FALSE); "classic" = pooled-variance F). Both are always
+  # stored in the `test` attribute; this only picks the p-value shown in the p-value row/stars.
+  options("tabxplor.anova"         = "welch")
+
   options("tabxplor.compact" = FALSE)
 
   # options("tabxplor.pvalue_lines" = FALSE)

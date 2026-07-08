@@ -624,33 +624,83 @@ testthat::test_that("mean diff CI (stars on) matches Welch t.test", {
 # === SECTION: Chi-squared test ================================================
 
 testthat::test_that("chi2 statistic and p-value match stats::chisq.test", {
-  # DESIGN: tab(chi2=TRUE) via tab_many doesn't populate chi2 attr for simple tables.
-  # Use the pipe approach: tab_plain() |> tab_chi2() which works correctly.
-  tabs <- tab_plain(gss, race, marital, pct = "row") |> tab_chi2()
-  chi2_info <- get_chi2(tabs)
+  # Phase 3b: the `test` attribute is a TIDY tibble (one row per subtable x col_var x test-type);
+  # the chi2 stats live in the row where `test == "chi2"`. tab_plain() |> tab_chi2() keeps it.
+  tabs      <- tab_plain(gss, race, marital, pct = "row") |> tab_chi2()
+  chi2_row  <- get_test(tabs) |> dplyr::filter(.data$test == "chi2")
 
-  ct <- table(gss$race, gss$marital)
-  ref_chi2 <- suppressWarnings(stats::chisq.test(ct))
+  ct  <- table(gss$race, gss$marital)
+  ct  <- ct[rowSums(ct) > 0, colSums(ct) > 0, drop = FALSE]   # engine drops empty margins
+  ref <- suppressWarnings(stats::chisq.test(ct))
 
-  # chi2_info has columns: row_var, "chi2 stats", and one fmt col per col_var
-  # Filter using backtick-quoted column name
-  chi2_row <- chi2_info[chi2_info[["chi2 stats"]] == "chi2", ]
-  pval_row <- chi2_info[chi2_info[["chi2 stats"]] == "pvalue", ]
-  df_row   <- chi2_info[chi2_info[["chi2 stats"]] == "df", ]
-
-  fmt_cols <- names(chi2_info)[purrr::map_lgl(chi2_info, is_fmt)]
-  first_col <- fmt_cols[1]
-
-  tab_statistic <- get_var(chi2_row[[first_col]])
-  tab_pvalue    <- get_var(pval_row[[first_col]])
-  tab_df        <- get_var(df_row[[first_col]])
-
-  testthat::expect_equal(tab_statistic, unname(ref_chi2$statistic),
-                         tolerance = 1e-6, label = "chi2 statistic")
-  testthat::expect_equal(tab_pvalue, ref_chi2$p.value,
+  testthat::expect_equal(chi2_row$statistic, unname(ref$statistic),
+                         tolerance = 1e-9, label = "chi2 statistic")
+  testthat::expect_equal(chi2_row$pvalue, ref$p.value,
                          tolerance = 1e-10, label = "chi2 p-value")
-  testthat::expect_equal(tab_df, unname(as.double(ref_chi2$parameter)),
+  testthat::expect_equal(chi2_row$df1, unname(as.double(ref$parameter)),
                          tolerance = 1e-10, label = "chi2 df")
+})
+
+testthat::test_that("vectorised chi2 applies the Yates correction on 2x2 like chisq.test", {
+  d <- gss |>
+    dplyr::filter(marital %in% c("Married", "Divorced"), race %in% c("Black", "White")) |>
+    dplyr::mutate(marital = forcats::fct_drop(marital), race = forcats::fct_drop(race))
+  tabs     <- tab_plain(d, race, marital, pct = "row") |> tab_chi2()
+  chi2_row <- get_test(tabs) |> dplyr::filter(.data$test == "chi2")
+  ref      <- suppressWarnings(stats::chisq.test(table(d$race, d$marital)))  # Yates on 2x2 (default)
+
+  testthat::expect_equal(chi2_row$df1, 1)
+  testthat::expect_equal(chi2_row$statistic, unname(ref$statistic), tolerance = 1e-9)
+  testthat::expect_equal(chi2_row$pvalue,    ref$p.value,           tolerance = 1e-10)
+})
+
+testthat::test_that("chi2 is unaffected by add_n columns and rows", {
+  ref_tab  <- tab_plain(gss, race, marital, pct = "row") |> tab_chi2()
+  ref_row  <- get_test(ref_tab) |> dplyr::filter(.data$test == "chi2")
+  # a built table already carrying add_n column + row, then chi2 on it (the historical bug case)
+  addn_tab <- tab(gss, race, marital, pct = "row", add_n = TRUE) |> tab_chi2()
+  addn_row <- get_test(addn_tab) |> dplyr::filter(.data$test == "chi2")
+
+  testthat::expect_equal(addn_row$statistic, ref_row$statistic, tolerance = 1e-6)
+  testthat::expect_equal(addn_row$pvalue,    ref_row$pvalue,    tolerance = 1e-9)
+})
+
+# === SECTION: ANOVA / one-way F (Phase 3b) ====================================
+
+testthat::test_that("ANOVA Welch F matches stats::oneway.test(var.equal = FALSE)", {
+  d    <- gss |> dplyr::filter(!is.na(tvhours))
+  tabs <- tab(d, marital, tvhours, pct = "row") |> tab_chi2()   # chi2 default FALSE -> clean attr
+  w    <- get_test(tabs) |> dplyr::filter(.data$test == "F_welch")
+  ow   <- stats::oneway.test(tvhours ~ marital, data = d, var.equal = FALSE)
+
+  testthat::expect_equal(w$statistic, unname(ow$statistic),            tolerance = 1e-8, label = "Welch F")
+  testthat::expect_equal(w$df1,       unname(ow$parameter[["num df"]]),   tolerance = 1e-8, label = "Welch df1")
+  testthat::expect_equal(w$df2,       unname(ow$parameter[["denom df"]]), tolerance = 1e-8, label = "Welch df2")
+  testthat::expect_equal(w$pvalue,    ow$p.value,                      tolerance = 1e-8, label = "Welch p")
+})
+
+testthat::test_that("ANOVA classic F matches stats::oneway.test(var.equal = TRUE)", {
+  d    <- gss |> dplyr::filter(!is.na(tvhours))
+  tabs <- tab(d, marital, tvhours, pct = "row") |> tab_chi2()
+  cl   <- get_test(tabs) |> dplyr::filter(.data$test == "F_classic")
+  oc   <- stats::oneway.test(tvhours ~ marital, data = d, var.equal = TRUE)
+
+  testthat::expect_equal(cl$statistic, unname(oc$statistic),            tolerance = 1e-8)
+  testthat::expect_equal(cl$df1,       unname(oc$parameter[["num df"]]),   tolerance = 1e-8)
+  testthat::expect_equal(cl$df2,       unname(oc$parameter[["denom df"]]), tolerance = 1e-8)
+  testthat::expect_equal(cl$pvalue,    oc$p.value,                      tolerance = 1e-8)
+})
+
+testthat::test_that("ANOVA Welch F matches oneway.test on another variable (3 groups)", {
+  d    <- gss |> dplyr::filter(!is.na(tvhours), race != "Not applicable") |>
+    dplyr::mutate(race = forcats::fct_drop(race))
+  tabs <- tab(d, race, tvhours, pct = "row") |> tab_chi2()
+  w    <- get_test(tabs) |> dplyr::filter(.data$test == "F_welch")
+  ow   <- stats::oneway.test(tvhours ~ race, data = d, var.equal = FALSE)
+
+  testthat::expect_equal(w$statistic, unname(ow$statistic), tolerance = 1e-8)
+  testthat::expect_equal(w$df2,       unname(ow$parameter[["denom df"]]), tolerance = 1e-8)
+  testthat::expect_equal(w$pvalue,    ow$p.value,           tolerance = 1e-8)
 })
 
 # === SECTION: Variance contributions (chi2 contributions) =====================

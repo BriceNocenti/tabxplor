@@ -66,15 +66,20 @@ tabxplor creates, manipulates, and formats color-coded cross-tabulation tables f
 `tabxplor_tab` is a tibble subclass created via `tibble::new_tibble()` in `R/tab_classes.R` : it’s strenght is to work with normal `dplyr` workflows. It adds two attributes beyond what a regular tibble carries:
 
 - `subtext` (character vector): Legend lines printed below the table.
-- `chi2` (tibble): Chi-squared test results with columns: `tables`, `pvalue`, `df`, `cells`, `variance`, `count`.
+- `test` (tidy tibble, 1.4.0 — renamed from `chi2`): whole-table test results, one row per
+  (sub-table × col_var × test-type). Columns: `[tab_vars…]`, `row_var`, `col_var`, `test`
+  (`"chi2"` / `"F_welch"` / `"F_classic"`), `statistic`, `df1`, `df2`, `pvalue`, `n`, `variance`,
+  `min_e`. Chi-squared is filled for factor columns, ANOVA F for mean columns (both computed by the
+  vectorised engine in `R/tab-agg.R` — `agg_chi2()` / `agg_anova()` — via `tab_chi2()`). Read it with
+  `get_test()` (which also falls back to the old `chi2` attribute); `get_chi2()` is a kept alias.
 
-Constructor: `new_tab(tabs, subtext, chi2)`.
+Constructor: `new_tab(tabs, subtext, test)` (the old `chi2 =` argument still works, mapped to `test`).
 
 ### tabxplor_grouped_tab — Subtabled Results
 
-When `tab_vars` are provided, the result is a `tabxplor_grouped_tab` — a `grouped_df` subclass. It carries the same `subtext` and `chi2` attributes, plus `groups` data from dplyr.
+When `tab_vars` are provided, the result is a `tabxplor_grouped_tab` — a `grouped_df` subclass. It carries the same `subtext` and `test` attributes, plus `groups` data from dplyr.
 
-Constructor: `new_grouped_tab(tabs, groups, subtext, chi2)`.
+Constructor: `new_grouped_tab(tabs, groups, subtext, test)`.
 
 This class requires a separate S3 method for **every dplyr verb** to preserve class and attributes through operations. See the dplyr Integration section below.
 
@@ -91,7 +96,7 @@ tab(data, row_var, col_var, ...)
                  or tab_num()     (for numeric col_vars: calculates means/variances)
               tab_pct()      ──►  Calculates percentages and differences from reference
               tab_ci()       ──►  Calculates confidence intervals (Wilson/Wald/AC methods)
-              tab_chi2()     ──►  Chi-squared test, cell contributions to variance
+              tab_chi2()     ──►  Chi-squared (factors) / ANOVA F (means) + cell contributions
               tab_totaltab() ──►  Adds total table (overall cross-tab when subtables exist)
               tab_spread()   ──►  Pivots wider (spread_vars from rows to columns)
               tab_compact()  ──►  Binds multiple row_var tables into one
@@ -133,7 +138,7 @@ Concretely, for each argument vectorised over row_vars:
 | `comp` | `comp_all` attribute | moot: compaction requires **no** `tab_vars`, and `comp` only matters with `tab_vars` | not applicable |
 | `OR` | `or`/`rr` fields + color mode | values kept; only the colour-mode/`totcol` side collapses | no |
 | `ci` | `ci_type` attribute + `ci` field | CI **values** kept; the CI **type** (cell / diff_row / diff_col) collapses to one | rarely differs per variable |
-| `chi2` | table-level `chi2` tibble | **concatenated** across blocks, not lost | preserved |
+| `test` | table-level `test` tibble (Chi2 + ANOVA F) | **concatenated** across blocks, not lost | preserved |
 | `totrow` / `totaltab` | rows + fields | total rows **stack as rows**; each block's total becomes its reference row | preserved |
 
 Two structural limits of `tab_compact()`:
@@ -335,7 +340,7 @@ Every dplyr verb that a user might call needs an S3 method:
 - **Mutation:** `mutate`, `summarise`
 - **Internal:** `dplyr_row_slice`, `dplyr_col_modify`, `dplyr_reconstruct`
 
-**If a method is missing**, the operation silently drops the `tabxplor_*` class, reverting to a plain `tbl_df`. This causes loss of `subtext`, `chi2` attributes and breaks colored printing. Always check `NAMESPACE` for the current method list.
+**If a method is missing**, the operation silently drops the `tabxplor_*` class, reverting to a plain `tbl_df`. This causes loss of `subtext`, `test` attributes and breaks colored printing. Always check `NAMESPACE` for the current method list.
 
 ### The mutate.tabxplor_fmt Method
 
@@ -394,7 +399,8 @@ The main API file. Contains:
 - **Lines 2890–4200**: `tab_num()` — numeric variable means/variances, similar structure to tab_plain.
 - **Lines 4200–4560**: `tab_pct()` — percentage calculation, difference computation.
 - **Lines 4560–4910**: `tab_ci()` — confidence interval calculation (Wilson/Wald/AC methods).
-- **Lines 4910–5200**: `tab_chi2()` — chi-squared test, contributions to variance.
+- `tab_chi2()` — chi-squared (factors) + ANOVA F (means) via the vectorised engine
+  `agg_chi2()` / `agg_anova()` in `R/tab-agg.R`; contributions to variance for `color="contrib"`.
 - **Lines 5200–5809**: `tab_tot()`, `tab_totaltab()`, internal helpers (`diff_index`, `quo_miss_na_null_empty_no`, etc.).
 
 ### R/tab_classes.R (3554 lines)

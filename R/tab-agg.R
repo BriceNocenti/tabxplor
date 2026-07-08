@@ -210,3 +210,108 @@ ci_mean_diff2 <- function(m1, v1, n1, m2, v2, n2, conf_level = 0.95, want_p = TR
   df <- if (want_p) se^4 / ((v1 / n1)^2 / (n1 - 1) + (v2 / n2)^2 / (n2 - 1)) else Inf
   ci_pivot(m1 - m2, se, df = df, conf_level = conf_level, want_p = want_p)
 }
+
+
+# === SECTION: whole-table tests (Chi2 + ANOVA), vectorised over all tables ============
+#
+# The Phase 3b test engine. Whole-table omnibus tests computed for EVERY (sub)table in ONE
+# vectorised pass, from the already-aggregated cell statistics (never a raw N-scan). Each
+# distinct table is tagged by `table_id` (a (tab_var-group x col_var) key); all tables are
+# stacked into one long data.table and the test math is a handful of grouped ops, so the cost
+# is O(total cells / groups) and independent of the NUMBER of tables -- the framework for the
+# "many tests of the same kind on different tables" case (several row_vars x col_vars, tab_vars
+# with comp="tab"). This replaces tab_chi2()'s per-(sub)table group_split() + stats::chisq.test()
+# loop (its #1-cost, N-independent, dplyr-overhead-bound path -- see the perf profile).
+#
+# KEY CONSTRAINTS:
+#   - Chi2 must match stats::chisq.test() DEFAULTS EXACTLY, including the Yates continuity
+#     correction on 2x2 (G2 parity; test-calculations.R locks it). Chi2 is FULLY UNWEIGHTED
+#     (counts and n) -- the one documented exception to the §14 weighted rule.
+#   - Welch's F must match stats::oneway.test(var.equal = FALSE); classic F must match
+#     oneway.test(var.equal = TRUE). The F follows §14 (weighted group means/variances +
+#     unweighted n) -- on unweighted data it reduces to oneway.test, which the parity test pins.
+# See: CLAUDE.md > 1.4.0 roadmap > Phase 3b; dev/tabxplor_1.4.0_decisions.md §24, §16, §14.
+
+# agg_chi2() -- Pearson chi2 decomposition for every table at once. Inputs are equal-length
+# vectors describing one cell each: `table_id` (which table), `row_id`/`col_id` (the cell's
+# row_var level / col_var level within that table) and `o` (the observed count -- UNWEIGHTED n
+# for the p-value, or weighted wn for the contribution/variance pass). Returns:
+#   $tables : one row per table_id -- statistic (X2), df, n (grand total), min_e (smallest
+#             expected count, a cheap "low expected" flag), pvalue.
+#   $cells  : the input cells in INPUT ORDER, augmented with e (expected), contrib
+#             (Pearson term, 0 for cells in an all-empty row/col), signed_contrib
+#             (sign(o-e)*contrib) -- consumed by the color="contrib" write-back.
+# Parity with chisq.test(): empty rows/cols are dropped before df / Yates (matching the
+# historical pre-chisq drop); df = (r-1)(c-1) on the reduced matrix; Yates uses the per-cell
+# pmin(0.5, |o-e|), which on a genuine 2x2 (all |o-e| equal) equals chisq.test()'s scalar
+# min(0.5, abs(x-E)); a degenerate reduced table (df < 1) yields pvalue = NA (chisq.test errors
+# there, the old path returned NA via possibly()).
+agg_chi2 <- function(table_id, row_id, col_id, o, correct = TRUE) {
+  DT <- data.table::data.table(table_id = table_id, row_id = row_id,
+                               col_id = col_id, o = as.double(o))
+  DT[, rowtot := sum(o), by = list(table_id, row_id)]
+  DT[, coltot := sum(o), by = list(table_id, col_id)]
+  DT[, ok := rowtot > 0 & coltot > 0]
+  DT[, grandtot := sum(o[ok]), by = table_id]
+  DT[, nr := data.table::uniqueN(row_id[rowtot > 0]), by = table_id]
+  DT[, nc := data.table::uniqueN(col_id[coltot > 0]), by = table_id]
+  DT[, e := rowtot * coltot / grandtot]
+  yates <- if (correct) data.table::fifelse(DT$ok & DT$nr == 2L & DT$nc == 2L,
+                                            pmin(0.5, abs(DT$o - DT$e)), 0) else 0
+  DT[, contrib := data.table::fifelse(ok, (abs(o - e) - yates)^2 / e, 0)]
+  DT[, signed_contrib := sign(o - e) * contrib]
+
+  tables <- DT[ok == TRUE, {
+    nr_ <- data.table::uniqueN(row_id)
+    nc_ <- data.table::uniqueN(col_id)
+    df_ <- (nr_ - 1L) * (nc_ - 1L)
+    st_ <- sum(contrib)
+    list(statistic = st_, df = df_, n = grandtot[1], min_e = min(e),
+         pvalue = if (df_ >= 1L) stats::pchisq(st_, df_, lower.tail = FALSE) else NA_real_)
+  }, by = table_id]
+
+  list(tables = tables,
+       cells  = DT[, list(table_id, row_id, col_id, e, contrib, signed_contrib)])
+}
+
+# agg_anova() -- one-way ANOVA (Welch + classic F) for every mean table at once, from per-group
+# summary statistics: `table_id`, `group_id` (row_var level), `n` (UNWEIGHTED count), `mean`
+# and `var` (WEIGHTED group mean/variance, §14; on unweighted data these are the sample mean and
+# n-1 variance, so the tests reduce to stats::oneway.test). Groups with n < 2, non-finite mean/var
+# or var <= 0 are dropped (outside the F domain); a table left with k < 2 groups yields NA.
+# Returns one row per table_id with both tests. Welch matches oneway.test(var.equal = FALSE);
+# classic (pooled) matches oneway.test(var.equal = TRUE) / aov.
+agg_anova <- function(table_id, group_id, n, mean, var) {
+  DT <- data.table::data.table(table_id = table_id, n = as.double(n),
+                               mean = as.double(mean), var = as.double(var))
+  DT <- DT[is.finite(mean) & is.finite(var) & var > 0 & n >= 2]
+  DT[, w := n / var]
+  DT[, {
+    k <- .N
+    if (k < 2L) {
+      list(k = k, statistic = NA_real_, df1 = NA_real_, df2 = NA_real_, pvalue = NA_real_,
+           statistic_classic = NA_real_, df1_classic = NA_real_, df2_classic = NA_real_,
+           pvalue_classic = NA_real_, n = sum(n))
+    } else {
+      sw    <- sum(w)
+      xbarw <- sum(w * mean) / sw
+      A     <- sum(w * (mean - xbarw)^2) / (k - 1)
+      tmp   <- sum((1 - w / sw)^2 / (n - 1))
+      Fw    <- A / (1 + 2 * (k - 2) / (k^2 - 1) * tmp)
+      df1w  <- k - 1
+      df2w  <- (k^2 - 1) / (3 * tmp)
+      pw    <- stats::pf(Fw, df1w, df2w, lower.tail = FALSE)
+      N     <- sum(n)
+      grand <- sum(n * mean) / N
+      ssb   <- sum(n * (mean - grand)^2)
+      ssw   <- sum((n - 1) * var)
+      df1c  <- k - 1
+      df2c  <- N - k
+      Fc    <- (ssb / df1c) / (ssw / df2c)
+      pc    <- stats::pf(Fc, df1c, df2c, lower.tail = FALSE)
+      list(k = k, statistic = Fw, df1 = df1w, df2 = df2w, pvalue = pw,
+           statistic_classic = Fc, df1_classic = df1c, df2_classic = df2c,
+           pvalue_classic = pc, n = N)
+    }
+  }, by = table_id]
+}

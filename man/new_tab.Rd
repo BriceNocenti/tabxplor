@@ -8,8 +8,8 @@
 new_tab(
   tabs = tibble::tibble(),
   subtext = "",
-  chi2 = tibble::tibble(tables = character(), pvalue = double(), df = integer(), cells =
-    integer(), variance = double(), count = integer()),
+  test = new_test_tibble(),
+  chi2 = NULL,
   ...,
   class = character()
 )
@@ -18,8 +18,8 @@ new_grouped_tab(
   tabs = tibble::tibble(),
   groups,
   subtext = "",
-  chi2 = tibble::tibble(tables = character(), pvalue = double(), df = integer(), cells =
-    integer(), variance = double(), count = integer()),
+  test = new_test_tibble(),
+  chi2 = NULL,
   ...,
   class = character()
 )
@@ -31,8 +31,9 @@ or \code{\link{tab_plain}}.}
 
 \item{subtext}{A character vector to print legend lines under the table.}
 
-\item{chi2}{A tibble storing information about pvalues and variances, to fill with
-\code{\link{tab_chi2}}.}
+\item{test}{A tidy tibble storing whole-table test results (Chi2 for factor columns,
+ANOVA F for mean columns), filled by \code{\link{tab_chi2}}. Renamed from \code{chi2}
+in tabxplor 1.4.0.}
 
 \item{...}{Needed to implement subclasses.}
 

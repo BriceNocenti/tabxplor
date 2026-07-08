@@ -184,7 +184,9 @@ Decide: `tab_compact()` becomes the internal merge invoked by `output_list=FALSE
   §6 (`totrow`/`totcol` + singular-arg deprecations), §19 (empirical-OR level reference).
 - **Display, output & export**: §7 (col% + several row_vars → transpose at export), §8 (exporter
   base+list methods; Excel engine → Phase 9), §10 (total-column base range), §13 (output-shape table),
-  §18 (numeric diff-color scale — sd-standardized).
+  §18 (numeric diff-color scale — sd-standardized), §21 (exporter phasing 7 vs 9 + the backend seam),
+  §22 (exporter feature parity — what to unify / extend / keep exporter-specific), §23 (tab_kable
+  performance profile — empirical).
 - **Inference policy** (review sessions 2–4): §14 (weighted estimate + unweighted `n`; omnibus F
   included, Q13), §15 (CI/stars duality — score ⇄ Newcombe, uncorrected pair; mean z ⇄ Welch-t, Q14),
   §16 (test-result placement — `test` tibble rows incl. per-column, Q15 + display future).
@@ -300,10 +302,10 @@ by any code or by the maintainer. **Decision (Q3)**: **rename `rr` → `ratio`**
 field.
 
 - `diff` is ALWAYS a difference; `ratio` is ALWAYS a ratio. By column type:
-  - **pct columns**: `ratio` = relative risk `cell_pct / ref_pct` (this is exactly what drove the old
+  + **pct columns**: `ratio` = relative risk `cell_pct / ref_pct` (this is exactly what drove the old
     `mean`-overload "×2 rule", and it is also the RR step inside odds-ratio calculation — so reusing the
     RR field is semantically correct). `diff` = `cell_pct − ref_pct` (unchanged, safe).
-  - **numeric/mean columns**: `ratio` = `cell_mean / ref_mean` (the OLD numeric-`diff` behaviour);
+  + **numeric/mean columns**: `ratio` = `cell_mean / ref_mean` (the OLD numeric-`diff` behaviour);
     `diff` = `cell_mean − ref_mean` (the flip).
 - `color="diff"` colors `diff`; `color="ratio"` colors `ratio`; `color="diff_ratio"` uses both (text vs
   background — pick a background ramp so both stay readable).
@@ -611,15 +613,15 @@ mildly anti-conservative. Where the reference is detectably the total, test the 
 specific level) the two-sample test is exact. Implement the complement correction if cheap; otherwise
 document the small, conservative-leaning approximation for `ref="tot"`.
 
-| Use case | Estimator (what is compared) | Test → `pvalue` | Base | Notes |
-|---|---|---|---|---|
-| **Factor col_var, `ci="diff"`** | cell proportion vs reference-row proportion | two-sided **two-proportion score test**, **uncorrected** (manual score `z` ≡ `prop.test(correct=FALSE)` — never the Yates-corrected `prop.test()` default, §15); dual of the **Newcombe** difference CI | weighted `pct`, unweighted `tot_n` of cell & of the `in_refrow` cell (§14) | When stars are on, the stored diff CI switches AC→Newcombe so bracket ⇄ stars agree (§15). `ref="tot"` → test vs complement (caveat). |
-| **Factor col_var, `OR=TRUE`** (empirical OR, no logit) | 2×2 odds ratio: (cell level vs `ref2` level) × (row vs `ref` row) | **Wald test on log(OR)**, Woolf `SE=√(1/a+1/b+1/c+1/d)`, `z=log(OR)/SE`; dual of the log-scale OR CI (`exp(logOR ± z·SE)`) | weighted OR point estimate; **unweighted** 2×2 counts for the SE (§14) | Haldane–Anscombe +0.5 when any of a,b,c,d = 0. Empirical only — distinct from logit. |
-| **Numeric col_var, `ci="diff"`** | cell mean vs reference-row mean | **Welch two-sample t-test** (unequal variance): `t=(x̄c−x̄r)/√(s²c/nc+s²r/nr)`, Welch–Satterthwaite df | weighted mean + weighted `var`, unweighted `n` (§14) | Confirms the maintainer's intuition: t-test p<5% ⇒ significant cell-vs-ref mean difference. Weighted var + **unweighted n** (Kish `n_eff` opt-in), *not* full survey design. Interval quantile: `z` stars-off / Welch-t stars-on (Q14, §15). `ref="tot"` caveat applies. |
-| **`tab_logit()`** | logistic-regression coefficient | model **Wald z** p-value, straight from `broom::tidy(…)$p.value` | model n | Obvious case; also fills OR `ci_inf`/`ci_sup` from `conf.int=TRUE`. |
-| **`color="contrib"`** (chi2 cell contribution) | cell count vs its chi2 expected | **standardized Pearson residual** → normal p (`abs(resid) > 1.96 ⇒ p<0.05`) | full margins (already computed for chi2) | Optional: per-cell significance for the contribution mode; residual sign gives direction. |
-| **Ratio / relative-risk display** (if starred) | cell vs reference proportion ratio (`ratio` field) | **Wald on log(RR)**, `SE=√((1−p1)/(n1·p1)+(1−p2)/(n2·p2))` | weighted RR estimate; unweighted `tot_n` of both (§14) | Only if RR significance is surfaced; analogous to the OR row. |
-| **`ci="cell"`** (interval around the cell itself, no reference) | — | **`pvalue = NA`** (H0: p=0 / μ=0 is not meaningful) | — | No per-cell star; the interval is purely descriptive. |
+| Use case                                                        | Estimator (what is compared)                                      | Test → `pvalue`                                                                                                                                                                                         | Base                                                                       | Notes                                                                                                                                                                                                                                                                    |
+|-----------------------------------------------------------------|-------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Factor col_var, `ci="diff"`**                                 | cell proportion vs reference-row proportion                       | two-sided **two-proportion score test**, **uncorrected** (manual score `z` ≡ `prop.test(correct=FALSE)` — never the Yates-corrected `prop.test()` default, §15); dual of the **Newcombe** difference CI | weighted `pct`, unweighted `tot_n` of cell & of the `in_refrow` cell (§14) | When stars are on, the stored diff CI switches AC→Newcombe so bracket ⇄ stars agree (§15). `ref="tot"` → test vs complement (caveat).                                                                                                                                    |
+| **Factor col_var, `OR=TRUE`** (empirical OR, no logit)          | 2×2 odds ratio: (cell level vs `ref2` level) × (row vs `ref` row) | **Wald test on log(OR)**, Woolf `SE=√(1/a+1/b+1/c+1/d)`, `z=log(OR)/SE`; dual of the log-scale OR CI (`exp(logOR ± z·SE)`)                                                                              | weighted OR point estimate; **unweighted** 2×2 counts for the SE (§14)     | Haldane–Anscombe +0.5 when any of a,b,c,d = 0. Empirical only — distinct from logit.                                                                                                                                                                                     |
+| **Numeric col_var, `ci="diff"`**                                | cell mean vs reference-row mean                                   | **Welch two-sample t-test** (unequal variance): `t=(x̄c−x̄r)/√(s²c/nc+s²r/nr)`, Welch–Satterthwaite df                                                                                                  | weighted mean + weighted `var`, unweighted `n` (§14)                       | Confirms the maintainer's intuition: t-test p<5% ⇒ significant cell-vs-ref mean difference. Weighted var + **unweighted n** (Kish `n_eff` opt-in), *not* full survey design. Interval quantile: `z` stars-off / Welch-t stars-on (Q14, §15). `ref="tot"` caveat applies. |
+| **`tab_logit()`**                                               | logistic-regression coefficient                                   | model **Wald z** p-value, straight from `broom::tidy(…)$p.value`                                                                                                                                        | model n                                                                    | Obvious case; also fills OR `ci_inf`/`ci_sup` from `conf.int=TRUE`.                                                                                                                                                                                                      |
+| **`color="contrib"`** (chi2 cell contribution)                  | cell count vs its chi2 expected                                   | **standardized Pearson residual** → normal p (`abs(resid) > 1.96 ⇒ p<0.05`)                                                                                                                             | full margins (already computed for chi2)                                   | Optional: per-cell significance for the contribution mode; residual sign gives direction.                                                                                                                                                                                |
+| **Ratio / relative-risk display** (if starred)                  | cell vs reference proportion ratio (`ratio` field)                | **Wald on log(RR)**, `SE=√((1−p1)/(n1·p1)+(1−p2)/(n2·p2))`                                                                                                                                              | weighted RR estimate; unweighted `tot_n` of both (§14)                     | Only if RR significance is surfaced; analogous to the OR row.                                                                                                                                                                                                            |
+| **`ci="cell"`** (interval around the cell itself, no reference) | —                                                                 | **`pvalue = NA`** (H0: p=0 / μ=0 is not meaningful)                                                                                                                                                     | —                                                                          | No per-cell star; the interval is purely descriptive.                                                                                                                                                                                                                    |
 
 **Whole-table omnibus tests are NOT the per-cell `pvalue`** — they live at table/column level (§16), one
 number under each table:
@@ -644,15 +646,15 @@ sufficient-statistics aggregate** (open item G1, *Status & open items*) — neve
 `output_list` (default `FALSE`) replaces `compact`; the `tabxplor.compact` option is dropped (§6, Phase 6).
 The exact return type by `row_vars` × `tab_vars` × `output_list`:
 
-| row_vars | tab_vars | output_list | Returns |
-|---|---|---|---|
-| 1 | none | FALSE (default) | a single `tabxplor_tab` |
-| 1 | none | TRUE | a length-1 `list(tabxplor_tab)` |
-| ≥2 | none | FALSE (default) | one **merged** `tabxplor_tab` (row_vars stacked — the old `compact=TRUE` shape, now the default) |
-| ≥2 | none | TRUE | a `list` of one `tabxplor_tab` per row_var |
-| 1 | present | FALSE | a single `tabxplor_grouped_tab` |
-| 1 | present | TRUE | a length-1 `list(tabxplor_grouped_tab)` |
-| ≥2 | present | any | a `list` of `tabxplor_grouped_tab` — merging across row_vars **with** tab_vars is deferred (§7), so these return a list even at `output_list=FALSE` |
+| row_vars | tab_vars | output_list     | Returns                                                                                                                                             |
+|----------|----------|-----------------|-----------------------------------------------------------------------------------------------------------------------------------------------------|
+| 1        | none     | FALSE (default) | a single `tabxplor_tab`                                                                                                                             |
+| 1        | none     | TRUE            | a length-1 `list(tabxplor_tab)`                                                                                                                     |
+| ≥2       | none     | FALSE (default) | one **merged** `tabxplor_tab` (row_vars stacked — the old `compact=TRUE` shape, now the default)                                                    |
+| ≥2       | none     | TRUE            | a `list` of one `tabxplor_tab` per row_var                                                                                                          |
+| 1        | present  | FALSE           | a single `tabxplor_grouped_tab`                                                                                                                     |
+| 1        | present  | TRUE            | a length-1 `list(tabxplor_grouped_tab)`                                                                                                             |
+| ≥2       | present  | any             | a `list` of `tabxplor_grouped_tab` — merging across row_vars **with** tab_vars is deferred (§7), so these return a list even at `output_list=FALSE` |
 
 Grounded: today's unwrap collapses a length-1 list to a bare tab ([tab.R:1540](../R/tab.R#L1540)); the
 per-element class is `new_grouped_tab` when grouping vars exist, else `new_tab`
@@ -809,17 +811,17 @@ The Aim says the public API stays retro-compatible; a handful of **small, delibe
 accepted. Listed here so each is signed off consciously (not discovered post-release). Each ships with a
 `NEWS.md` line; user-facing functions/args are soft-deprecated, never hard-removed.
 
-| Break | Who it affects | Why accepted / mitigation |
-|---|---|---|
-| Numeric `$diff` flips **ratio → difference** (§3) | code reading `$diff` on *numeric/mean* columns | The one substantive break; numerics are rarely `$`-extracted, pct `$diff` (the real surface) is unchanged, and the ratio survives in `$ratio`. |
-| `$rr` **disappears** (renamed `ratio`, §3, §9) | code reading `$rr` | The `rr` field was **never** used by any code or by the maintainer. `$ratio` replaces it. |
-| `$mean` on **pct** columns changes (overload removed, §3) | code reading `$mean` of a pct column | Was an internal "×2-rule" ratio overload; the ratio now lives in `$ratio`; `$mean` on pct columns → `NA` (an honest value). |
-| Low-level `vctrs::field(x,"ci")` and **setting** `ci` stop working (§1, §9) | code poking the raw `ci` field | Rare/internal. `$ci` / `get_ci()` still work (recomputed from the bounds); the `fmt(ci=)` constructor arg is kept. |
-| `tab_many()` `compact` arg **deprecated**; `tabxplor.compact` **option dropped** (§6) | `tab_many(compact=)` / option users | Soft-deprecated arg still maps onto `output_list`; the option is replaced by the `output_list` arg. |
-| Changing the **CI confidence level on a built table** now needs a re-run (§1) | post-hoc `conf_level` tweakers | Bounds are stored at one level (can't rescale a stored asymmetric bound). Stars *are* re-thresholdable without re-run (the `pvalue` is level-free). Re-run `tab()` for a different CI level. Same for toggling Kish `n_eff` (§14) — it changes bounds *and* `pvalue`. |
-| `attr(x, "chi2")` **renamed `test`** (§16, Q11) | code reading the table attribute | Rare usage; one attribute, one name — no dual-mirror divergence risk under dplyr verbs; NEWS line. Whole-table tests (chi2 + new ANOVA/F) live under `test` with a discriminator column. |
-| Numeric `color="diff"` **changes meaning** (§3, §18, Q9) | calls passing `color="diff"` on mean columns | Was ratio-coloring (`mean_breaks`); now colors the sd-standardized difference (Glass's Δ, `mean_diff_breaks`). The old behaviour is exactly `color="ratio"`. Pct-column coloring unchanged. |
-| Old **serialized** tabs (`.rds` from ≤1.3.1) unreadable by 1.4.0 accessors (§9, Q10) | nobody in practice — tabs are exported (Excel/HTML/md) or re-created from their R code, never saved as `.rds` (maintainer-confirmed) | No upgrade shim (permanent complexity for a non-use-case); NEWS line says "rebuild with `tab()`". |
+| Break                                                                                 | Who it affects                                                                                                                       | Why accepted / mitigation                                                                                                                                                                                                                                             |
+|---------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Numeric `$diff` flips **ratio → difference** (§3)                                     | code reading `$diff` on *numeric/mean* columns                                                                                       | The one substantive break; numerics are rarely `$`-extracted, pct `$diff` (the real surface) is unchanged, and the ratio survives in `$ratio`.                                                                                                                        |
+| `$rr` **disappears** (renamed `ratio`, §3, §9)                                        | code reading `$rr`                                                                                                                   | The `rr` field was **never** used by any code or by the maintainer. `$ratio` replaces it.                                                                                                                                                                             |
+| `$mean` on **pct** columns changes (overload removed, §3)                             | code reading `$mean` of a pct column                                                                                                 | Was an internal "×2-rule" ratio overload; the ratio now lives in `$ratio`; `$mean` on pct columns → `NA` (an honest value).                                                                                                                                           |
+| Low-level `vctrs::field(x,"ci")` and **setting** `ci` stop working (§1, §9)           | code poking the raw `ci` field                                                                                                       | Rare/internal. `$ci` / `get_ci()` still work (recomputed from the bounds); the `fmt(ci=)` constructor arg is kept.                                                                                                                                                    |
+| `tab_many()` `compact` arg **deprecated**; `tabxplor.compact` **option dropped** (§6) | `tab_many(compact=)` / option users                                                                                                  | Soft-deprecated arg still maps onto `output_list`; the option is replaced by the `output_list` arg.                                                                                                                                                                   |
+| Changing the **CI confidence level on a built table** now needs a re-run (§1)         | post-hoc `conf_level` tweakers                                                                                                       | Bounds are stored at one level (can't rescale a stored asymmetric bound). Stars *are* re-thresholdable without re-run (the `pvalue` is level-free). Re-run `tab()` for a different CI level. Same for toggling Kish `n_eff` (§14) — it changes bounds *and* `pvalue`. |
+| `attr(x, "chi2")` **renamed `test`** (§16, Q11)                                       | code reading the table attribute                                                                                                     | Rare usage; one attribute, one name — no dual-mirror divergence risk under dplyr verbs; NEWS line. Whole-table tests (chi2 + new ANOVA/F) live under `test` with a discriminator column.                                                                              |
+| Numeric `color="diff"` **changes meaning** (§3, §18, Q9)                              | calls passing `color="diff"` on mean columns                                                                                         | Was ratio-coloring (`mean_breaks`); now colors the sd-standardized difference (Glass's Δ, `mean_diff_breaks`). The old behaviour is exactly `color="ratio"`. Pct-column coloring unchanged.                                                                           |
+| Old **serialized** tabs (`.rds` from ≤1.3.1) unreadable by 1.4.0 accessors (§9, Q10)  | nobody in practice — tabs are exported (Excel/HTML/md) or re-created from their R code, never saved as `.rds` (maintainer-confirmed) | No upgrade shim (permanent complexity for a non-use-case); NEWS line says "rebuild with `tab()`".                                                                                                                                                                     |
 
 **Explicitly NOT broken (guardrails held):** `tab_many()`'s **list return type** for `≥2 row_vars` (Q7,
 §13) — preserved; pct `$diff`, `$pct`, `$n`, `$wn` and the other user-read fields — unchanged; every
@@ -947,6 +949,291 @@ boundary cases only), so nothing is lost by not computing a separate score test.
 Golden regenerated (conscious): `f_ci_cell`, `f_ci_diff` (display + struct), `f_color_afterci`,
 `n_mean_ci` (struct). CI parity tests updated (`test-calculations.R`): AC/Welch pinned to
 `stars=FALSE`, new Newcombe/`score`, Welch-t, Wilson-both-arms, and inclusion⇔stars tests.
+
+---
+
+## 21. Exporter phasing — Phase 7 (openxlsx v1 prep) vs Phase 9 (openxlsx2): keep split, add a backend seam
+
+The maintainer's question (2026-07-08): the Phase 7 `tab_xl()` rewrite is *already* a big restructure (today's
+`tab_xl` is **list-first — a bare df is wrapped to a one-element list at [tab_xl.R:91](../R/tab_xl.R#L91) and
+the entire body is `purrr::map`/`pwalk`; there is no single-tab path**), so should the openxlsx→openxlsx2
+engine swap ride along with it (§8 puts it in a separate Phase 9), or stay split?
+
+### Decision — keep §8's split (Phase 7 on openxlsx v1, Phase 9 = openxlsx2), but factor a **backend seam** in Phase 7
+
+Two *different* risk surfaces, and combining them forfeits the one thing that makes the swap safe — a
+byte-verified v1 baseline:
+
+- **Phase 7 risk = parity of the display bypass.** `tab_xl` does **not** go through `format.tabxplor_fmt()`
+  (Export-Parity WARNING [tab_xl.R:541](../R/tab_xl.R#L541), [1087](../R/tab_xl.R#L1087)): it writes raw
+  `get_num()` numbers and rebuilds display via `numfmt()` → Excel number-format codes. Adding stars (§16),
+  the label attribute, and the base+list split (§8) all perturb *this* bypass. The regression oracle is
+  `test-export-parity.R` (`format` vs the `tab_xl` bypass).
+- **Phase 9 risk = engine semantics.** openxlsx2 has a different style model (shared styles created once —
+  the real speed lever), a long-reshape write path, and its own conditional-formatting API. The oracle here
+  must be **"byte-identical to the Phase-7 openxlsx-v1 output"** — which only exists once Phase 7 is green.
+
+Entangling them means a broken cell can't be attributed to the restructure *or* the engine. So the split
+stands. **Refinement:** structure Phase 7's rewrite around a **narrow write/style backend interface** —
+`{new_workbook, add_sheet, write_data(numbers), apply_style(cells, fill|font|border|numfmt), freeze_panes,
+set_widths/heights, conditional_format, save}` — implemented on openxlsx v1. Then **Phase 9 reimplements
+only that ~12-call backend** against openxlsx2, leaving the shared prep, the color→style selection
+(`fmt_color_selection` + `select_in_color_style`, already shared with the console) and the sheet/offset
+orchestration untouched. This kills the "double-touch every `openxlsx::` call site" objection (the
+orchestration is restructured **once**; only the leaf backend is re-pointed) **without** merging the two
+parity risks. The live `openxlsx::` surface is small and already enumerated — 13 functions: `createStyle`,
+`createWorkbook`, `addWorksheet`, `writeData`, `modifyBaseFont`, `showGridLines`, `freezePane`, `addStyle`,
+`conditionalFormatting`, `setColWidths`, `setRowHeights`, `saveWorkbook`, `openXL` — so the seam is cheap to
+draw.
+
+### The perf premise for openxlsx2 is weaker than assumed — treat the swap as maintenance-driven, benchmark before committing
+
+The roadmap frames Phase 9 partly as a speed win (shared styles). Grounded caveat: openxlsx2 is **not
+reliably faster for styled writes**. Its maintainer's own position is *"if you need speed, go `writexl`"*
+(discussion #1281), and a documented case wrote ~10K rows to a **preformatted** workbook in **2.5–3 min**
+vs near-instant in openxlsx (issue #356) — openxlsx2 reshapes input to a long frame and per-cell style /
+conditional-format application is the slow part, exactly `tab_xl`'s pattern (one `addStyle` per colored
+cell, [tab_xl.R:1253](../R/tab_xl.R#L1253)). So: openxlsx2's genuine wins are **maintenance** (openxlsx v1
+is lightly maintained), the **shared-styles-created-once** model (a real lever *if* `tab_xl` is rewritten to
+build the ~11 palette styles + the `st_digits*` set **once** and reuse — which the v1 code already half-does,
+[tab_xl.R:238](../R/tab_xl.R#L238)), and **less-awful conditional formatting** (the v1 conditional-format
+path was slow enough that the diff/ratio colors are hard cell styles, not CF — [tab_xl.R:150-267](../R/tab_xl.R#L150)
+is the commented-out CF attempt). Pin a small styled-write benchmark (a big `compact=TRUE` table, colors on)
+on **both** engines before committing Phase 9; if openxlsx2 loses, Phase 9 legitimately slips to a 1.4.x
+follow-up (or is dropped) — it does not block 1.4.0. This matches §8's "may ship in a 1.4.x follow-up".
+
+Sources: openxlsx2 styled-write slowness — JanMarvin/openxlsx2 issue #356
+<https://github.com/JanMarvin/openxlsx2/issues/356> ; "if you need speed go writexl" — discussion #1281
+<https://github.com/JanMarvin/openxlsx2/discussions/1281>.
+
+---
+
+## 22. Exporter feature parity — what to unify, what to extend, what stays exporter-specific
+
+Grounded inventory of `tab_xl` ([tab_xl.R](../R/tab_xl.R)) vs `tab_kable`
+([tab_classes.R:461](../R/tab_classes.R#L461)) vs `tab_md` ([tab_md.R](../R/tab_md.R)). Legend ✓ has / ✗
+lacks / ~ partial.
+
+| Capability                                                      | xl                  | kable                  | md               | Extend to the others?                                |
+|-----------------------------------------------------------------|---------------------|------------------------|------------------|------------------------------------------------------|
+| Cell **colors** (`fmt_color_selection`)                         | ✓ hard cell style   | ✓ inline span          | ✗                | md → short pandoc spans (Phase 7 md item)            |
+| text vs background color mode                                   | ✓                   | ✓                      | ✗                | —                                                    |
+| **Significance stars**                                          | ✗ bypasses format() | ✓ via `format()`       | ✓ via `format()` | **→ xl (Phase 7, §16)** — mirror into `numfmt`/style |
+| **Tooltips / hover extra stats**                                | ✗                   | ✓ (`title=` / popover) | ✗                | keep kable-only (see below)                          |
+| **col_var spanning header**                                     | ~ (layout)          | ✗ (borders only)       | ✓ [tab_md.R:227  | **→ kable** via `add_header_above` (readability)     |
+| **`n_min` greying** (hide small-n rows/cols)                    | ✓ tab_xl.R:1030     | ✗                      | ✗                | **→ kable & md** (data-quality signal)               |
+| **`hide_near_zero` greying**                                    | ✓ tab_xl.R:1311     | ✗                      | ✗                | **→ kable** (grey text); md ~ (marker only)          |
+| **`label` attribute** (question text)                           | ✗                   | ✗                      | ✗                | **→ all** (Phase 7 item — header/legend)             |
+| clean **NA hiding**                                             | ✓                   | ~ fragile HTML surgery | ✓ (`na=""`)      | **fix kable** in shared prep                         |
+| row/col-name **wrapping**                                       | ~                   | ✓ `tab_wrap_text`      | ~ truncate only  | md → wrap not truncate                               |
+| freeze / col widths / num-format / sheets / `colnames_rotation` | ✓                   | ✗                      | ✗                | **Excel-only — no meaning** for kable/md             |
+| interactivity (popover/JS)                                      | ✗                   | ✓                      | ✗                | **no meaning** for md; xl ~ (cell comment = clutter) |
+| clipboard / plain-text file                                     | ✗                   | ✗                      | ✓                | md/console-shaped — **no meaning** for xl            |
+| caption / title                                                 | ✓ `titles`          | ✓ `caption`            | ✗                | md → optional title line                             |
+
+### Decisions
+
+- **Unify (shared prep + shared display path).** The "canonical col_vars → validate → compact" preamble is
+  **duplicated four times** (tab_md self-flags it [tab_md.R:47](../R/tab_md.R#L47); also `tab_kable`
+  [tab_classes.R:486](../R/tab_classes.R#L486), `tab_compact`, and `tab_xl`'s inline non-compacting variant)
+  → one prep helper (Phase 7, §8). **Stars, the `label` attribute, and NA-hiding must live in the shared
+  path** so the `tab_xl` bypass stops silently diverging from `format.tabxplor_fmt()`.
+- **Extend cross-exporter (meaningful):** stars → `tab_xl` (§16); `n_min`/`hide_near_zero` greying →
+  `tab_kable` (grey text) and, as a marker, `tab_md`; the col_var **spanning header** → `tab_kable`
+  (`add_header_above`, which it curiously never uses); the `label` attribute → all three.
+- **Keep exporter-specific (no cross-meaning):** the Excel-engine features (freeze panes, widths, Excel
+  number formats, multi-sheet, `colnames_rotation`) are meaningless for HTML/md; **tooltips/popovers** are
+  meaningless for static md and add clutter as Excel cell comments, so they stay `tab_kable`-only (and see
+  §23 — they are also a real cost); clipboard/plain-text-file is md/console-shaped, not Excel.
+
+---
+
+## 23. `tab_kable()` performance profile — empirical (2026-07-08)
+
+Motivation: `tab_kable` is the Jamovi module's main display, re-rendered on every option change, and is a
+standing roadmap perf concern ("Comment accélérer cette fonction? Faire une version plus light…"). This
+section is the measured breakdown — **what is fast, what is slow** — for the Phase 7 light-mode and Phase 8
+Jamovi-cache work.
+
+### Method / caveats
+
+Installed **tabxplor 1.3.1** (the exporters are untouched by phases 0–3a, so 1.3.1 `tab_kable` is
+structurally representative; the live source could **not** be profiled — a parallel chi2 refactor had
+`get_chi2` non-loadable), R 4.5.1, Ryzen 5800X, `forcats::gss_cat` (21 483 rows). Cold `Rscript`, medians of
+3–4 warm reps; run-to-run noise ≈ ±0.3 s, so micro-costs below are **indicative, not strictly additive**.
+Scripts are in the session scratchpad (not committed). Fixtures span **cell-count** (wide) vs **row-count**
+(tall) so the two scaling axes separate.
+
+### Wall time by table shape (`tab_kable`, seconds, median)
+
+| Fixture | rows | cols | fmt cells | colored cols | default     | no tooltip | `get_data` (pre-kable) |
+|---------|------|------|-----------|--------------|-------------|------------|------------------------|
+| small   | 16   | 9    | 128       | 7            | 0.55        | 0.44       | 0.42                   |
+| medium  | 16   | 22   | 336       | 20           | 1.39        | 1.15       | 1.16                   |
+| large   | 31   | 53   | 1612      | 51           | **5.3–5.6** | 4.6–4.8    | 4.4                    |
+| tall    | 69   | 13   | 759       | 11           | 2.18        | 1.96       | 1.72                   |
+
+**Scaling is driven by (colored) COLUMNS, not rows.** The 53-column `large` (31 rows) costs **5.3 s**; the
+69-row / 13-column `tall` — nearly as many cells — costs **2.2 s**. Cause: the dominant cost has a fixed
+per-column overhead (below), so wide tables hurt far more than tall ones.
+
+### Where the time goes (large table, ~5.3 s default)
+
+`get_data=TRUE` returns immediately after the per-cell `cell_spec` mutate
+([tab_classes.R:656](../R/tab_classes.R#L656)), i.e. **before** `knitr::kable` + the styling chain, so it
+splits the run cleanly:
+
+| Stage                      | s    | share    | note                                                                      |
+|----------------------------|------|----------|---------------------------------------------------------------------------|
+| **Pre-kable** (`get_data`) | ~4.4 | **~80%** | color selection + format + cell_spec + tooltips                           |
+| Post-kable styling chain   | ~1.1 | ~20%     | `knitr::kable` + `kable_classic` + ~9 `row_spec` + ~5 `column_spec` + CSS |
+
+Isolated micro-costs (large; over all fmt columns unless noted):
+
+| Component                                                                     | s         | verdict                                    |
+|-------------------------------------------------------------------------------|-----------|--------------------------------------------|
+| **`fmt_color_selection` × 51 colored cols**                                   | **~4.3**  | **SLOW — the single dominant cost**        |
+| `tab_kable_print_tooltip` × cols (~13 `format()`/`set_display()` passes each) | ~0.55–0.8 | SLOW-ish — removable (~15%)                |
+| `format.tabxplor_fmt` × cols (cell value)                                     | ~0.06     | fast                                       |
+| `kableExtra::cell_spec` × cols (the `<span>` build)                           | ~0.02     | fast                                       |
+| `knitr::kable(format="html")`                                                 | ~0.05     | fast                                       |
+| `kableExtra::kable_classic`                                                   | ~0.04     | fast                                       |
+| one `row_spec` / `column_spec` call                                           | ~0.03     | each re-parses the whole HTML via **xml2** |
+| `row_spec(1:nrow, …)` (one full-table pass)                                   | ~0.20     | scales with rows × #passes                 |
+| `color_legend`, `get_reference`, NA-hiding `str_replace`                      | ≈0        | fast                                       |
+
+**The headline is counter-intuitive: it is NOT `cell_spec`, NOT `format`, NOT `knitr::kable`, and only
+secondarily the kableExtra styling passes. It is the color computation.** `fmt_color_selection` (+ its
+style-mapping tail `select_in_color_style`/`get_color_style`/`html_color`→`is_r_color`→`grDevices::colors()`)
+is ~4 s of the ~4.4 s pre-kable, ~75% of the whole render. `Rprof` under-labels it because its body is
+`purrr::map` over vctrs/dplyr primitives (`vec_case_when`, `if_else`, `DataMask$new`), so the self-time
+scatters onto `.Call`/`.External2`/`vec_case_when` rather than onto the frame name — the **direct isolation**
+(one `lapply(cols, fmt_color_selection)` = 4.3 s) is the honest figure. Its cost is **per (colored column ×
+break level)** fixed overhead, which is why it tracks column count.
+
+Note: color is **shared with `tab_xl`** (same `fmt_color_selection`), so this optimization pays off in the
+Excel path too — and it is exactly the recompute a Jamovi display-only toggle should **not** trigger.
+
+### Browser-load / DOM weight (the Jamovi surface)
+
+Actual browser paint time was not measured (no headless browser in this pass); the honest proxies are DOM
+byte-size, per-cell node/attribute count, and attached-dependency weight — all of which drive parse/layout.
+
+| Output                | raw kable HTML | self-contained (deps inlined) |
+|-----------------------|----------------|-------------------------------|
+| default (tooltips on) | 476 KB         | 1112 KB                       |
+| tooltips off          | 331 KB         | 967 KB                        |
+
+- **Tooltips are heavy on the DOM too**: they add a `title=` + `data-toggle` to **every** cell (1612 of them
+  here) and inflate the raw HTML **+44 %** (331→476 KB). Off is both faster to build (~15 %) and lighter to
+  render.
+- **Dependency weight ≈ 630–640 KB** (bootstrap + jQuery + lightable CSS, the self-contained delta). In
+  **Jamovi this framework is already loaded** — the module strips the kableExtra class and inlines lightable
+  + bootstrap `cosmo.min.css` itself ([jmvtab.b.R:384](../R/jmvtab.b.R#L384)) — so the **marginal** browser
+  cost per render is the **table DOM** (331–476 KB) + the per-cell tooltip attributes, not the framework.
+- Tooltip **mechanism** matters: `popover=FALSE` uses the browser-native `title=` attribute (free to
+  render); `popover=TRUE` needs bootstrap JS to initialise a widget on **every** cell (O(cells) event
+  wiring) — the expensive interactive mode. Do **not** default popovers on at Jamovi scale.
+
+### Optimization levers (ranked; for Phase 7 light-mode + Phase 8 cache)
+
+1. **Cut / cache the color computation (biggest win).** `fmt_color_selection` is ~75 % of the render and is
+   pure per-column overhead. (a) **Vectorise/batch** the per-column break loop (compute the break→style map
+   once, apply across columns) and hoist `grDevices::colors()`/`is_r_color` out of the per-cell path.
+   (b) In **Jamovi (Phase 8)**, colors change only when the aggregate / `color` / breaks change → cache the
+   selection keyed on those; a pure display toggle (theme, tooltips, wrap) must **not** recompute it. This is
+   the concrete payoff of the §11 "`tot_n` = cached quantity vs re-read on display change" cache split.
+2. **`tooltips = FALSE` as the Jamovi/light default.** Saves ~15 % build time, ~44 % DOM bytes, and the ~13
+   redundant `format()` passes/column in `tab_kable_print_tooltip`. Offer a "detailed" opt-in for the
+   interactive desktop.
+3. **Collapse the kableExtra styling chain.** ~14 `row_spec`/`column_spec` calls each re-parse+re-serialise
+   the entire table HTML via **xml2** (~1.1 s). Batch them (fewer calls covering more rows/cols), or — the
+   roadmap's "faster flat html / markdown-table-with-css-classes" idea — **emit the styled HTML directly**
+   (inline styles on `<td>` while building, skipping kableExtra's xml round-trips entirely). A direct-HTML
+   "light" renderer would drop both this 20 % and kableExtra's dependency footprint, which suits Jamovi
+   (which already supplies bootstrap). Weigh against losing kableExtra's border/theme conveniences.
+4. **Fix NA-hiding in the shared prep** (§22) so it is not a whole-string `str_replace` gated on
+   `interactive()` ([tab_classes.R:763-772](../R/tab_classes.R#L763)) — cheap, and removes a correctness
+   footgun under knitr.
+
+These levers are **display-layer** (Phase 7/8) and independent of the aggregate-core work; they do not touch
+the `tabxplor_fmt` contract.
+
+---
+
+## 24. Phase 3b IMPLEMENTED — Chi2/ANOVA on the vectorised engine + the tidy `test` attribute (2026-07-08)
+
+Implemented 2026-07-08. The mean-table omnibus (the chi2 mirror, Q4/§12) and the chi2 vectorisation land
+together; the `chi2` table attribute becomes the tidy **`test`** attribute (§16). Engine in `R/tab-agg.R`
+(`agg_chi2()`, `agg_anova()`): every `(subtable × col_var)` is one `table_id`, ALL tables are stacked into
+one long `data.table` and tested in ONE grouped pass — O(total cells/groups), independent of the number of
+tables (the "many tests of the same kind on different tables" framework). This replaces `tab_chi2()`'s
+per-(sub)table `group_split()` + `stats::chisq.test()` loop.
+
+**Chi2 (factor col_vars).** Fully unweighted counts (chi2 stays the §14 exception, Q13/G2). Matches
+`stats::chisq.test()` **exactly, incl. the Yates correction on 2×2** — in a 2×2 all four `|O−E|` are equal,
+so the per-cell `pmin(0.5, |O−E|)` equals `chisq.test`'s scalar `min(0.5, abs(x−E))`. Empty rows/cols are
+dropped before df / Yates (matching the old pre-chisq drop); df on the reduced matrix; a degenerate reduced
+table (`df < 1`) yields `pvalue = NA` (the old path returned NA via `possibly()`). `min_e` (smallest expected
+count) is stored as a cheap "low expected" flag for the future §16 `!`-glyph mode.
+
+**ANOVA (mean col_vars) — Welch's F (default) + classic F.** Computed **only from per-group summary
+statistics** `(n_i, x̄_i, s²_i)` — no microdata scan — so it rolls off the built fmt cells / the moment-sum
+aggregate, vectorised over every mean (sub)table. Per §14/Q13: `x̄_i` and `s²_i` are the **weighted** group
+estimates (what the cell shows), `n_i` the **unweighted** count. On unweighted data both F's reduce to
+`stats::oneway.test()`; on weighted data it is the single-stage §14 approximation (documented, no external
+reference). Both F's are cheap from the same summaries → both stored (rows `"F_welch"` / `"F_classic"`);
+`options("tabxplor.anova")` (`"welch"` default | `"classic"`) picks the p-value shown.
+
+- **Welch** (`oneway.test(var.equal = FALSE)`): `w_i = n_i/s²_i`, `x̄_w = Σ w_i x̄_i / Σ w_i`,
+  `F = [Σ w_i(x̄_i−x̄_w)²/(k−1)] / [1 + (2(k−2)/(k²−1))·Σ(1−w_i/Σw)²/(n_i−1)]`, `df1 = k−1`,
+  `df2 = (k²−1)/(3·Σ(1−w_i/Σw)²/(n_i−1))` (Welch–Satterthwaite), `p = 1 − F_{df1,df2}(F)`.
+- **Classic** (`oneway.test(var.equal = TRUE)` / `aov`): `SSB = Σ n_i(x̄_i−x̄)²`, `SSW = Σ(n_i−1)s²_i`,
+  `x̄ = Σ n_i x̄_i / N`, `N = Σ n_i`, `F = (SSB/(k−1))/(SSW/(N−k))`, `df1 = k−1`, `df2 = N−k`.
+- Domain: groups with `n_i < 2`, non-finite `s²_i`, or `s²_i = 0` are dropped (the `oneway.test` domain);
+  `k < 2` → `NA`. Numeric col_vars now get a whole-table test (previously skipped for all-means tables).
+
+**Documented asymmetry (Q13).** chi2 is fully unweighted (counts *and* n — `chisq.test` parity, G2), the F
+follows §14 (weighted estimates + unweighted n). On weighted tables the chi2 can disagree with the visible
+weighted percentages while the F tests the numbers displayed — the price of exact chi2 legacy parity.
+
+**The `test` attribute (§16, tidy).** One row per `(subtable × col_var × test-type)`, columns
+`[tab_vars…] row_var col_var test statistic df1 df2 pvalue n variance min_e`. Adding a future test = adding
+rows, never a schema change. Read with `get_test()`, which **falls back to the old `chi2` attribute** for
+older objects; `get_chi2()` is a kept working alias; the low-level `new_tab(chi2 = )` argument is
+soft-deprecated → maps to `test`; `new_test_tibble()` is the empty placeholder. This **softens the §17
+accepted break**: `attr(x, "chi2")` returns NULL, but the accessor path keeps working.
+
+**Contrib only when needed.** The per-cell contribution write (`ctr`/`var`, the kept `var_contrib`
+machinery) now runs **only when `color == "contrib"`** (`calc = "p"` on the common path) — the old code
+computed it on every call. Non-contrib factor tables' `var`/`ctr` become `NA` (conscious golden change; the
+contrib path is byte-identical — `f_color_contrib` unchanged). This was the real cost the user flagged; the
+"reuse the unweighted chi2 intermediates for the weighted contrib" micro-opt is deferred (contrib is now off
+the common path entirely).
+
+**`add_n = TRUE` fixed.** The test drops reserved add_n/add_pct rows (`row_var` "n" / "row_pct") and
+`all_col_vars` columns, so `tab_chi2()` on a table already carrying them is not corrupted (the pipeline runs
+the test before add_n, so this only mattered for a manual chi2 on a built table).
+
+**Display.** `tab_pvalue_lines()` bakes the p-value row from the tidy attribute — **now for means too**
+(F p-value); factor rows byte-identical (`_snaps` unchanged). `print_chi2()` renders the tidy attribute
+(chi2 + F) as a readable colored block (mainly for tables that keep the attribute; the pipeline still bakes
+rows and drops it, per the "rendered-as-row-for-now" §16 choice — the maintainer opted to keep body rows for
+now, recovering the attribute-rendered block later).
+
+Verified against `stats::chisq.test()` (incl. Yates) and `stats::oneway.test(var.equal = FALSE/TRUE)` in
+`tests/testthat/test-calculations.R` (statistic, both dfs, and p to floating-point). Golden regenerated
+(attr rename + var/ctr on non-contrib). **Suite green (950).** **Perf: chi2 ~2.5× faster** (gss_cat 9-tab
+2.60 → 1.03 s chi2 share; whole call 3.07 → 1.48 s — `dev/benchmarks/results_1.4.0/phase3b_chi2_anova.txt`);
+the tidy rewrite also fixed a pre-existing `tab_pvalue_lines` crash when a col_var name overlapped a row_var
+name.
+
+**Deferred:** the `tab_ci()` field-based simplification → Phase 4 (§20 placement); the
+`tab_num(..., <tab_vars>, ci="cell")` grouping-set crash → Phase 6 totals rewrite; the φ² table-variance
+column populated in contrib mode; the `!`-per-cell weak-test glyph mode (§16).
+
+Sources: Welch's ANOVA from group means/variances/sizes + the Satterthwaite denominator df — Welch (1951);
+the `stats::oneway.test` formulation. See also the Sources list below.
 
 ---
 
