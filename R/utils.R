@@ -48,11 +48,16 @@ NULL
 
   set_color_style()
 
-  # option "tabxplor.color_breaks" :
-  set_color_breaks(pct_breaks       = c(0.05, 0.1, 0.2, 2, 0.3),
-                   #pct_ratio_breaks = 2,
-                   mean_breaks      = c(1.15, 1.5, 2, 4),
-                   contrib_breaks   = c(1, 2, 5, 10)  )
+  # option "tabxplor.color_breaks" : canonical Phase-5 scales (see set_color_breaks()).
+  # Equivalent to the former pct_breaks = c(0.05, 0.1, 0.2, 2, 0.3), mean_breaks =
+  # c(1.15, 1.5, 2, 4), contrib_breaks = c(1, 2, 5, 10); the x2 rule is now the pct_ratio scale.
+  set_color_breaks(list(
+    pct_diff   = c(0.05, 0.1, 0.2, 0.3),
+    pct_ratio  = c(2),
+    mean_diff  = NULL,
+    mean_ratio = c(1.15, 1.5, 2, 4),
+    contrib    = c(1, 2, 5, 10)
+  ))
 
   options("tabxplor.print" = "console") # options("tabxplor.print" = "kable")
 

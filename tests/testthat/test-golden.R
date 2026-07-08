@@ -19,6 +19,14 @@
 #   _snaps are held byte-identical via the set_ci/get_ci bounds-shim + NA-defaulted new fields.
 #   Rows below name the SEMANTIC/display change layered on top of that structural 1a regen.
 #
+# Phase 5 (ratio-field repoint, §3): for pct/factor columns the `ratio` field now holds the
+#   REFERENCE-RELATIVE ratio cell_pct/ref_pct (= the old `mean` x2 overload) instead of the
+#   cross-direction tabs_rr it carried before. So EVERY pct fixture's `ratio` field changes
+#   (was NA for non-OR tables, tabs_rr for OR tables) -> ALL pct *.rds regenerated once. `mean`
+#   still carries the same value during the transition (Step 6 sets it NA for pct); the DISPLAY
+#   is byte-identical (no cell displays the ratio field), so the _snaps are untouched. Coloring
+#   is byte-identical (the x2 reads the same value from `ratio` now instead of `mean`).
+#
 #   f_row_pct/f_col_pct/f_all_pct/f_counts/f_ref_first/m_multi/totn_keep/w_weighted -> 1a only
 #   f_color_diff    -> 1a only (FACTOR diff-color MUST stay byte-identical: the tripwire that
 #                      Phase 5 does NOT disturb factor coloring)

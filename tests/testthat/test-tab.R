@@ -433,9 +433,8 @@ testthat::test_that("printing colors works", {
   tab(data, sex, hair_color, pct = "row", color = "diff"    ) %>% print() %>%
     testthat::expect_output()
   set_color_style(type = "text", theme = "dark")
-  set_color_breaks(pct_breaks = c(0.05, 0.15, 0.3),
-                   mean_breaks = c(1.15,  2, 4),
-                   contrib_breaks = c(1, 2, 5)     )
+  set_color_breaks(list(pct_diff = c(0.05, 0.15, 0.3), pct_ratio = c(2),
+                        mean_ratio = c(1.15, 2, 4), contrib = c(1, 2, 5)))
   tab(data, sex, hair_color, pct = "row", color = "diff_ci" ) %>% print() %>%
     testthat::expect_output()
   set_color_style(type = "bg", theme = "light")
@@ -443,9 +442,8 @@ testthat::test_that("printing colors works", {
     testthat::expect_output()
 
   set_color_style(type = "text")
-  set_color_breaks(pct_breaks = c(0.05, 0.1, 0.2, 0.3),
-                   mean_breaks = c(1.15, 1.5, 2, 4),
-                   contrib_breaks = c(1, 2, 5, 10)     )
+  set_color_breaks(list(pct_diff = c(0.05, 0.1, 0.2, 0.3), pct_ratio = c(2),
+                        mean_ratio = c(1.15, 1.5, 2, 4), contrib = c(1, 2, 5, 10)))
   tab(data, sex, hair_color, pct = "row", color = "contrib" ) %>% print() %>%
     testthat::expect_output()
   set_color_style(type = "text", theme = "dark")

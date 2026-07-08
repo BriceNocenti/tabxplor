@@ -1,0 +1,105 @@
+# PURPOSE: Validation coverage for the Phase 5 color CONFIG layer (breaks list + palette).
+#          Written spec-first (brief dev/new_colors_UI.md §13.1) so the new config is coded
+#          against a spec, not "looks right". Filled in during Step 1 (breaks) / Step 2 (palette).
+# ROLE: First-class tests for how breaks/palettes are WRITTEN and VALIDATED (there were none
+#        before Phase 5). Complements the byte-identity net in test-color-golden.R.
+#
+# SPEC TO COVER (fill as the pieces land):
+#   set_color_breaks(list(...)) / tab(color_breaks=):
+#     - accepts the 5 named scales (pct_diff, pct_ratio, mean_diff, mean_ratio, contrib);
+#     - clear cli error on: non-numeric, negative/zero/NA breaks, non-monotone breaks,
+#       too many breaks (> palette steps), unknown list names, ratio breaks <= 1;
+#     - per-table color_breaks= overrides the global; unsupplied scales fall back to global;
+#     - an empty/NULL scale drops that measure for that column type (§7.4);
+#     - old-arg shim: pct_breaks splits into pct_diff (<=1) + pct_ratio (>1); mean_breaks ->
+#       mean_ratio; contrib_breaks -> contrib; each emits deprecate_soft once.
+#   set_color_style():
+#     - a custom palette of the wrong length/format errors (length-11 accepted, the old bug);
+#   color / color_signif arg parsing:
+#     - unknown color / color_signif value errors; a color vector longer than 2 errors;
+#     - contrib / or on the background channel errors.
+
+# Restore the default scales after each test that mutates the global option.
+reset_breaks <- function() options("tabxplor.color_breaks" = default_color_scales())
+
+testthat::test_that("set_color_breaks(list()) sets the named scales, keeps the others", {
+  withr::defer(reset_breaks())
+  reset_breaks()
+  set_color_breaks(list(pct_diff = c(0.05, 0.15, 0.3), pct_ratio = c(3)))
+  cur <- getOption("tabxplor.color_breaks")
+  testthat::expect_equal(cur$pct_diff$pos, c(0.05, 0.15, 0.3))
+  testthat::expect_equal(cur$pct_ratio$pos, 3)
+  # untouched scales keep their default
+  testthat::expect_equal(cur$mean_ratio$pos, c(1.15, 1.5, 2, 4))
+  testthat::expect_equal(cur$contrib$pos, c(1, 2, 5, 10))
+})
+
+testthat::test_that("mk_color_scale metadata: center / strict / std per scale", {
+  testthat::expect_equal(mk_color_scale("pct_diff",  c(0.1))$center, 0)
+  testthat::expect_true (mk_color_scale("pct_diff",  c(0.1))$strict)
+  testthat::expect_equal(mk_color_scale("pct_ratio", c(2))$center, 1)
+  testthat::expect_false(mk_color_scale("contrib",   c(1))$strict)      # inclusive
+  testthat::expect_true (mk_color_scale("mean_diff", NULL)$std)          # NULL -> standardized
+  testthat::expect_equal(mk_color_scale("mean_diff", NULL)$pos, c(0.2, 0.5, 0.8))
+  testthat::expect_false(mk_color_scale("mean_diff", c(200, 500))$std)   # units -> absolute
+})
+
+testthat::test_that("an empty/NULL scale drops the measure for its column type (except mean_diff)", {
+  testthat::expect_length(mk_color_scale("pct_ratio", numeric())$pos, 0L)
+  testthat::expect_length(mk_color_scale("mean_ratio", NULL)$pos, 0L)
+  # mean_diff NULL is the ONE exception: restores the standardized default (not "off")
+  testthat::expect_length(mk_color_scale("mean_diff", NULL)$pos, 3L)
+})
+
+testthat::test_that("set_color_breaks validates its input with clear errors", {
+  withr::defer(reset_breaks())
+  testthat::expect_error(set_color_breaks(list(pct_ratio = c(0.5))), "must all be > 1")
+  testthat::expect_error(set_color_breaks(list(pct_diff  = c(-0.1))), "must all be > 0")
+  testthat::expect_error(set_color_breaks(list(pct_diff  = c(0.2, 0.1))), "strictly increasing")
+  testthat::expect_error(set_color_breaks(list(nonsense  = c(1))), "Unknown color-break scale")
+  testthat::expect_error(set_color_breaks(list(pct_diff  = "a")), "must be numeric")
+  testthat::expect_error(set_color_breaks(list(pct_diff  = c(0.01, 0.02, 0.03, 0.04, 0.05, 0.06))),
+                         "at most 5")
+  testthat::expect_error(set_color_breaks(list(1, 2)), "fully named list")   # unnamed
+})
+
+testthat::test_that("legacy_color_breaks reproduces the old flat vectors from canonical scales", {
+  lg <- legacy_color_breaks(default_color_scales())
+  # the old default: pct_breaks = c(0.05, 0.1, 0.2, 2, 0.3) mirrored (x2 not mirrored)
+  testthat::expect_equal(lg$pct_breaks, c(0.05, 0.1, 0.2, 2, 0.3, -0.05, -0.1, -0.2, -0.3))
+  testthat::expect_equal(lg$mean_breaks, c(1.15, 1.5, 2, 4, 1/1.15, 1/1.5, 1/2, 1/4))
+  testthat::expect_equal(lg$contrib_breaks, c(1, 2, 5, 10, -1, -2, -5, -10))
+})
+
+testthat::test_that("old positional args are soft-deprecated and mapped onto the new scales", {
+  withr::defer(reset_breaks())
+  reset_breaks()
+  # split pct_breaks into pct_diff (<=1) + pct_ratio (>1); deprecate_soft signalled once
+  lifecycle::expect_deprecated(
+    set_color_breaks(pct_breaks = c(0.05, 0.1, 0.2, 2, 0.3))
+  )
+  cur <- getOption("tabxplor.color_breaks")
+  testthat::expect_equal(cur$pct_diff$pos, c(0.05, 0.1, 0.2, 0.3))
+  testthat::expect_equal(cur$pct_ratio$pos, 2)
+})
+
+testthat::test_that("get_color_breaks stays back-compatible (legacy flat shape)", {
+  reset_breaks()
+  gb <- get_color_breaks()
+  testthat::expect_named(gb, c("pct_breaks", "mean_breaks", "contrib_breaks",
+                               "pct_ci_breaks", "mean_ci_breaks"))
+  testthat::expect_equal(get_color_breaks("pct", type = "positive"), c(0.05, 0.1, 0.2, 2))
+})
+
+testthat::test_that("set_color_style(custom_palette=) accepts 11 slots (the ratio slot fixed)", {
+  withr::defer({ options("tabxplor.color_style" = NULL); set_color_style(type = "text", theme = "light") })
+  pal11 <- sprintf("#%06X", seq_len(11) * 1000L)
+  set_color_style(custom_palette = pal11)
+  cur <- getOption("tabxplor.color_style")
+  testthat::expect_length(cur, 11L)
+  testthat::expect_named(cur, c("pos1","pos2","pos3","pos4","pos5",
+                                "neg1","neg2","neg3","neg4","neg5", "ratio"))
+  testthat::expect_equal(unname(cur[["ratio"]]), pal11[11])   # the ratio slot is now populated
+  # wrong length still errors, clearly
+  testthat::expect_error(set_color_style(custom_palette = pal11[1:10]), "length 11")
+})

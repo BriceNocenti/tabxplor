@@ -974,25 +974,22 @@ fmt_get_color_code <- function(x, type = "text", theme = "light", html_24_bit = 
   html_24_bit <- if (is.null(html_24_bit)) {getOption("tabxplor.color_html_24_bit")} else {html_24_bit}
 
   color <- get_color(x)
-  if (color %in% c("no", "") | is.na(color)) return(rep(NA_character_, length(x)))
+  if (length(color) == 0L || is.na(color[1]) || color[1] %in% c("no", "")) {
+    return(rep(NA_character_, length(x)))
+  }
 
-  column_type  <- get_type(x)
-  pct_diff <- color %in% c("diff", "diff_ci", "after_ci") & !column_type %in% c("n", "mean")
+  # `type` selects BOTH the slot table channel (text/bg families spread intensities differently)
+  # and the palette variant, so the rendered hex matches the palette.
+  channel <- if (type == "bg") "bg" else "text"
+  slot    <- fmt_color_slots(x, fmt_color_plan(x, channel = channel))
+  styles  <- get_color_style("color_code", type = type, theme = theme, html_24_bit = html_24_bit)
 
-  color_selection <- fmt_color_selection(x) %>% purrr::map(which)
-
-  color_styles <- select_in_color_style(names(color_selection), pct_diff = pct_diff)
-  color_styles <- get_color_style("color_code", type = type, theme = theme,
-                                  html_24_bit = html_24_bit)[color_styles]
-
-  color_positions <- color_selection %>%
-    purrr::map2(color_styles, ~ purrr::set_names(.x, stringr::str_to_upper(.y))) %>%
-    purrr::flatten_int()
-
-  no_color <- 1:length(x)
-  no_color <- purrr::set_names(no_color[!no_color %in% color_positions], NA_character_)
-
-  names(sort(c(color_positions, no_color)))
+  out     <- rep(NA_character_, length(x))
+  colored <- slot > 0L
+  # historical output is upper-case hex (the old path str_to_upper'd); the 24-bit palettes carry
+  # lower-case codes, so upper-case here to keep the rendered code identical.
+  out[colored] <- toupper(unname(styles[slot[colored]]))
+  out
 }
 
 
@@ -1322,6 +1319,32 @@ get_ref_pct <- function(x) {
       dplyr::with_groups("gr", ~ dplyr::mutate(., nb = dplyr::last(.data$nb))) %>%
       dplyr::mutate(ref_pcts = .data$pct[.data$nb]) %>%
       dplyr::pull(.data$ref_pcts)
+  }
+}
+
+# Phase 5: the reference cell's VARIANCE, broadcast to every cell of its group (mirror of
+# get_ref_means/get_ref_pct reading the `var` field). Used for Glass's delta = diff / sqrt(var_ref),
+# the sd-standardized numeric diff-color scale (§18). NA/0 var_ref -> no color at the call site.
+#' @keywords internal
+get_ref_var <- function(x) {
+  comp <- get_comp_all(x)
+  ref  <- get_ref_type(x)
+
+  refrows <- if (ref == "tot") { is_totrow(x) } else { is_refrow(x) }
+  tottabs <- is_tottab(x)
+  var     <- get_var(x)
+
+  if (comp) {
+    refs <- refrows & tottabs
+    if (!any(refs)) {rep(NA_real_, length(x))} else {rep(var[refs], length(x))}
+  } else {
+    tibble::tibble(
+      var = var,
+      gr = cumsum(as.integer(refrows)) - as.integer(refrows) ) %>%
+      dplyr::mutate(nb = dplyr::row_number()) %>%
+      dplyr::with_groups("gr", ~ dplyr::mutate(., nb = dplyr::last(.data$nb))) %>%
+      dplyr::mutate(ref_vars = .data$var[.data$nb]) %>%
+      dplyr::pull(.data$ref_vars)
   }
 }
 
@@ -1900,25 +1923,21 @@ pillar_shaft.tabxplor_fmt <- function(x, ...) {
 
 
   if (!is.na(color) & ! color %in% c("no", "") & !(color == "contrib" & !any(totrows))) {
-    color_selection <- fmt_color_selection(x)
+    # Phase 5 engine: one integer slot per cell (0 = uncolored). The slot table channel matches
+    # the console palette variant (text/bg) so intensities spread as the palette expects.
+    channel <- if (identical(getOption("tabxplor.color_style_type"), "bg")) "bg" else "text"
+    slot    <- fmt_color_slots(x, fmt_color_plan(x, channel = channel))
+    crayons <- get_color_style()                       # 11 crayon fns for the current options
 
-    pct_diff <- color %in% c("diff", "diff_ci", "after_ci") & !type %in% c("n", "mean")
-
-    color_styles <- select_in_color_style(names(color_selection), pct_diff = pct_diff)
-
-    color_styles <- get_color_style()[color_styles]
-
-    unselected <- purrr::transpose(color_selection) %>%
-      purrr::map_lgl(~ ! any(purrr::flatten_lgl(.)))
-
-    out[ok] <-
-      purrr::reduce2(.init = out[ok], .x = purrr::map(color_selection, ~ .[ok]),
-                     .y = color_styles,
-                     ~ dplyr::if_else(..2, rlang::exec(..3, ..1), ..1) )
+    for (s in sort(unique(slot[slot > 0L & ok]))) {
+      cells <- ok & slot == s
+      out[cells] <- crayons[[s]](out[cells])
+    }
     totals <- get_reference(x, mode = "all_totals") #c("cells", "lines")
 
     # Cells matching no break are greyed (style_subtle) so colored cells stand out;
     # reference/total cells are exempt, staying full-strength as reading anchors.
+    unselected <- slot == 0L
     out[ok & unselected & !totals] <-  #fmtgrey3
       pillar::style_subtle(out[ok & unselected & !totals])
 
@@ -2044,11 +2063,183 @@ mutate.tabxplor_fmt <- function(.data, ...) {
 
 
 
+# ============================================================================================
+# Phase 5 findInterval color ENGINE (Step 3) -- replaces fmt_color_selection / keep_last_break /
+# select_in_color_style. Per column, per channel:
+#   fmt_color_plan(x, channel)  -> the measure, per-cell score, significance gate, positive
+#                                  breaks and the level->slot maps (per direction).
+#   fmt_color_slots(x, plan)    -> fold the score to a magnitude that grows away from its neutral
+#                                  center, findInterval() against the positive breaks, split by
+#                                  direction into palette slots (0 = uncolored). C-level, no
+#                                  per-cell reduce (the old keep_last_break hotspot is gone).
+#   fmt_color_channels(x)       -> list(text_slot, bg_slot): the only artifact consumers map to
+#                                  crayon/hex. (bg wired at Step 4.)
+# Significance gates read the Phase-3a ci_inf/ci_sup bounds. See dev/new_colors_UI.md §8-9.
+# Byte-identity gate: factor "diff" (incl. the x2), "contrib", "OR", and the mean CI-gated modes
+# are reproduced exactly; numeric "diff" (Glass's delta) and the pct CI-gated modes change
+# consciously (asymmetric-interval fix). Locked by test-color-golden.R.
+# ============================================================================================
+
+# The canonical break scales for a column (per-table override folded in at Step 4).
+#' @keywords internal
+color_scales <- function(x) {
+  sc <- getOption("tabxplor.color_breaks")
+  if (is.null(sc) || is.null(sc$pct_diff)) sc <- default_color_scales()
+  sc
+}
+
+# Map the legacy scalar `color` attribute + column type to (measure, policy). Step 4 replaces
+# this with the per-channel color / color_signif attributes; kept here so Step 3 can reroute the
+# console + fmt_get_color_code byte-identically for the locked modes.
+#' @keywords internal
+color_measure_policy <- function(color, type) {
+  measure <- dplyr::case_when(
+    color %in% c("diff", "diff_ci", "after_ci", "ci") ~ "diff",
+    color %in% c("OR", "or")                          ~ "or",
+    color == "contrib"                                ~ "contrib",
+    color == "ratio"                                  ~ "ratio",
+    TRUE                                              ~ ""
+  )
+  policy <- dplyr::case_when(
+    color == "diff_ci"             ~ "grey_non_signif",
+    color %in% c("after_ci", "ci") ~ "color_all_signif",
+    TRUE                           ~ "ignore"
+  )
+  list(measure = measure, policy = policy, single0 = color == "ci")
+}
+
+#' @keywords internal
+fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = NULL) {
+  channel <- match.arg(channel)
+  n    <- length(x)
+  type <- get_type(x)
+  if (is.null(color)) color <- get_color(x)
+  if (length(color) == 0L || is.na(color[1]) || color[1] %in% c("", "no")) return(NULL)
+
+  mp      <- color_measure_policy(color[1], type)
+  measure <- mp$measure
+  policy  <- if (is.null(signif)) mp$policy else signif
+  if (measure == "") return(NULL)
+
+  is_mean <- type %in% c("mean", "n")
+  sc      <- color_scales(x)
+  scale   <- switch(measure,
+                    "diff"    = if (is_mean) sc$mean_diff  else sc$pct_diff,
+                    "ratio"   = if (is_mean) sc$mean_ratio else sc$pct_ratio,
+                    "or"      = sc$mean_ratio,
+                    "contrib" = sc$contrib)
+  center <- scale$center
+  strict <- scale$strict
+
+  # observed per-cell quantity
+  raw <- switch(measure,
+                "diff"    = get_diff(x),
+                "ratio"   = get_ratio(x),
+                "or"      = get_or(x),
+                "contrib" = dplyr::if_else(is_totrow(x), NA_real_,
+                                           get_ctr(x) / get_mean_contrib(x)))
+
+  # numeric diff is standardized (Glass's delta) unless absolute unit breaks were supplied
+  sd_ref <- NULL
+  if (measure == "diff" && is_mean && isTRUE(scale$std)) {
+    sd_ref      <- sqrt(get_ref_var(x))
+    raw         <- raw / sd_ref
+    raw[!is.finite(raw)] <- NA_real_        # sd_ref 0/NA -> undefined -> uncolored
+  }
+
+  # significance from the Phase-3a bounds (only a diff-type interval is meaningful here)
+  has_diff_ci <- get_ci_type(x) %in% c("diff", "diff_row", "diff_col")
+  sig_pos <- has_diff_ci & get_ci_inf(x) > 0
+  sig_neg <- has_diff_ci & get_ci_sup(x) < 0
+  sig_pos[is.na(sig_pos)] <- FALSE
+  sig_neg[is.na(sig_neg)] <- FALSE
+
+  if (policy == "color_all_signif") {
+    floor_q <- dplyr::case_when(sig_pos ~ get_ci_inf(x),
+                                sig_neg ~ get_ci_sup(x),
+                                TRUE    ~ NA_real_)
+    if (measure == "diff" && is_mean && isTRUE(scale$std)) floor_q <- floor_q / sd_ref
+    score <- floor_q
+    gate  <- !is.na(floor_q)
+  } else if (policy == "grey_non_signif") {
+    score <- raw
+    dir0  <- if (center == 1) dplyr::case_when(raw > 1 ~ 1L, raw < 1 ~ -1L, TRUE ~ 0L)
+             else sign(raw)
+    gate  <- (dir0 > 0L & sig_pos) | (dir0 < 0L & sig_neg)
+    gate[is.na(gate)] <- FALSE
+  } else {                                   # ignore
+    score <- raw
+    gate  <- !is.na(raw)
+    if (measure == "contrib") gate <- gate & !is_totrow(x)
+  }
+
+  pos_breaks <- if (isTRUE(mp$single0)) c(0) else scale$pos
+  slots      <- build_slots(length(pos_breaks), channel)
+
+  # Legacy in-text x2 (byte-identity for the scalar color="diff" on factors): the x2 ratio
+  # currently colors slot 11 wherever the diff is not already at its strongest break. It rides
+  # BOTH the text and bg palettes today (select_in_color_style injected it regardless), so it is
+  # channel-independent here. Step 4 moves it to the dedicated background channel.
+  x2 <- NULL
+  if (measure == "diff" && !is_mean && policy == "ignore" && length(sc$pct_ratio$pos) == 1L) {
+    x2 <- list(v = sc$pct_ratio$pos[1], slot = 11L,
+               rr = get_ratio(x),       # §3: the reference-relative ratio (repointed off `mean`)
+               top = slots$pos_slots[length(pos_breaks) + 1L])
+  }
+
+  list(measure = measure, policy = policy, score = score, center = center, strict = strict,
+       pos_breaks = pos_breaks, pos_slots = slots$pos_slots, neg_slots = slots$neg_slots,
+       gate = gate, x2 = x2)
+}
+
+#' @keywords internal
+fmt_color_slots <- function(x, plan) {
+  n <- length(x)
+  if (is.null(plan)) return(integer(n))
+  score <- plan$score
+
+  if (plan$center == 1) {                    # multiplicative: fold around 1
+    mag <- dplyr::if_else(score >= 1, score, 1 / score)
+    dir <- dplyr::case_when(score > 1 ~ 1L, score < 1 ~ -1L, TRUE ~ 0L)
+  } else {                                    # additive: fold around 0
+    mag <- abs(score)
+    dir <- dplyr::case_when(score > 0 ~ 1L, score < 0 ~ -1L, TRUE ~ 0L)
+  }
+  mag[!is.finite(mag)] <- NA_real_
+  dir[is.na(dir)]      <- 0L
+  level <- findInterval(mag, plan$pos_breaks, left.open = plan$strict)
+  level[is.na(level)]  <- 0L
+
+  slot <- integer(n)
+  posi <- dir > 0L
+  negi <- dir < 0L
+  slot[posi] <- plan$pos_slots[level[posi] + 1L]
+  slot[negi] <- plan$neg_slots[level[negi] + 1L]
+
+  if (!is.null(plan$x2)) {
+    rr <- plan$x2$rr
+    ov <- posi & slot != plan$x2$top & !is.na(rr) & rr > plan$x2$v
+    ov[is.na(ov)] <- FALSE
+    slot[ov] <- plan$x2$slot
+  }
+
+  slot[!plan$gate] <- 0L
+  slot
+}
+
+#' @keywords internal
+fmt_color_channels <- function(x) {
+  list(text_slot = fmt_color_slots(x, fmt_color_plan(x, "text")),
+       bg_slot   = integer(length(x)))       # Step 4 wires the background channel
+}
+
 # DESIGN: Three-step color selection pipeline:
 #   1. Extract breaks from options (or force_breaks), mirror negatives
 #   2. For each break level, call color_formula() to get boolean mask of matching cells
 #   3. keep_last_break() resolves ties: each cell gets the strongest matching threshold
 #   Returns a named list of boolean vectors (one per color level: pos1-5, neg1-5, ratio).
+#   (Phase 5 Step 3: superseded by fmt_color_plan()/fmt_color_slots() above; kept for tab_kable/
+#   tab_plot/tab_xl and expect_color() until Step 5/6.)
 #' @keywords internal
 fmt_color_selection <- function(x, force_color, force_breaks) {
   type    <- get_type (x)
@@ -2071,7 +2262,10 @@ fmt_color_selection <- function(x, force_color, force_breaks) {
     # pct_ratio_breaks<- force_breaks$pct_ratio_breaks
     # pct_ratio_brksup<- force_breaks$pct_ratio_brksup
   } else {
-    tabxplor_color_breaks <- getOption("tabxplor.color_breaks")
+    # Phase 5: the option now stores canonical scales; legacy_color_breaks() derives the flat
+    # vectors this (pre-Step-3) selection path still consumes, byte-identically. Removed with
+    # the findInterval engine rewrite (Step 3).
+    tabxplor_color_breaks <- legacy_color_breaks(getOption("tabxplor.color_breaks"))
 
     mean_breaks    <- tabxplor_color_breaks$mean_breaks
     pct_breaks     <- tabxplor_color_breaks$pct_breaks
@@ -2751,7 +2945,8 @@ tab_color_legend <- function(x, colored = TRUE, mode = c("console", "html"),
 
 #' @keywords internal
 brk_from_color <- function(color_type) {
-  tabxplor_color_breaks <- getOption("tabxplor.color_breaks")
+  # Phase 5: derive the legacy flat break vectors from the canonical scales (Step 3 removes it).
+  tabxplor_color_breaks <- legacy_color_breaks(getOption("tabxplor.color_breaks"))
 
   purrr::map(color_type, ~
                switch(.x,
@@ -2801,6 +2996,54 @@ get_color_type <- function(color, type) {
   ) %>% purrr::set_names(names(.x)))
 }
 
+# Phase 5 (Step 2): the level -> palette-slot rule, replacing select_in_color_style's hand-tuned
+# lookup + fragile hex-sniff. `channel` ("text"/"bg") picks the palette family EXPLICITLY (the
+# sniff guessed it from pos1's hex, and its "#000033e" typo made bg_dark fall through to the
+# text table -- a bug this rule fixes, so bg_dark coloring changes consciously at Step 3).
+# `L` = 2*K = the number of signed break levels (K positive). Returns the slot index for each
+# of the L levels, so that with few breaks the chosen intensities stay visually spread out.
+# Byte-identical to select_in_color_style for the text family (locked by test-color-engine.R).
+#' @keywords internal
+color_slot_table <- function(L, channel = c("text", "bg")) {
+  channel <- match.arg(channel)
+  key <- as.character(L)
+  if (channel == "bg") {
+    switch(key,
+           "0"  = integer(0),
+           "1"  = 3L,
+           "2"  = c(3L, 8L),
+           "4"  = c(1L, 3L, 6L, 8L),
+           "6"  = c(1L, 3L, 5L, 6L, 8L, 10L),
+           "8"  = c(1L, 2L, 3L, 4L, 6L, 7L, 8L, 10L),
+           "10" = 1:10,
+           cli::cli_abort("Unsupported color break count L = {L} (max 5 breaks per side).")
+    )
+  } else {
+    switch(key,
+           "0"  = integer(0),
+           "1"  = 3L,
+           "2"  = c(3L, 8L),
+           "4"  = c(3L, 5L, 8L, 10L),
+           "6"  = c(3L, 4L, 5L, 8L, 9L, 10L),
+           "8"  = c(2L, 3L, 4L, 5L, 7L, 8L, 9L, 10L),
+           "10" = 1:10,
+           cli::cli_abort("Unsupported color break count L = {L} (max 5 breaks per side).")
+    )
+  }
+}
+
+# Per-direction level->slot maps for K positive breaks: pos_slots[level+1] / neg_slots[level+1],
+# with a leading 0 for the neutral (uncolored) level 0. The x2 ratio (slot 11) is injected
+# separately by the engine's x2 override, not here.
+#' @keywords internal
+build_slots <- function(K, channel = c("text", "bg")) {
+  channel <- match.arg(channel)
+  if (K == 0L) return(list(pos_slots = 0L, neg_slots = 0L))
+  base     <- color_slot_table(2L * K, channel)
+  list(pos_slots = c(0L, base[seq_len(K)]),
+       neg_slots = c(0L, base[K + seq_len(K)]))
+}
+
 #' @keywords internal
 select_in_color_style <- function(breaks, pct_diff) {
   # DESIGN: maps the NUMBER of active breaks -> which of the 10 palette slots (pos1-5/neg1-5)
@@ -2809,6 +3052,7 @@ select_in_color_style <- function(breaks, pct_diff) {
   # is detected by sniffing pos1's hex to pick between two index sets.
   # FIXME(clarify): the specific slot-index vectors and the "#CCFFCC|#000033e" hex sniff are
   # hand-tuned magic — document the intended mapping before reworking colors in WS2.
+  # (Phase 5 Step 3 replaces this with color_slot_table()/build_slots() above.)
 
   breaks <- breaks |>
     stringr::str_remove(paste0("\\+|\\*|", cross)) |>

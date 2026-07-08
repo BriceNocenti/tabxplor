@@ -2664,8 +2664,13 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
       wn        = ..2,
       pct       = ..3,
       diff      = ..4,
+      # Phase 5 (§3): the `ratio` field is the REFERENCE-RELATIVE ratio (cell / reference per the
+      # pct direction = tabs_mean = ..5), the home of the "x2 rule" and the color ratio measure.
+      # `mean` keeps ..5 during the transition so the pre-Phase-5 selection path (exporters, until
+      # Step 5/6) still finds the x2; Step 6 sets mean = NA for pct. The cross-direction RR (..6 =
+      # tabs_rr) feeds tabs_or internally and is no longer stored (nothing displays it).
       mean      = ..5,
-      ratio     = ..6,
+      ratio     = ..5,
       or        = ..7,
       #ci        = ,
       in_totrow = totrow_vector,

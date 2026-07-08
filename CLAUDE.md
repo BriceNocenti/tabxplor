@@ -433,8 +433,48 @@ Two pre-existing latent `tab_plain()` warnings cleaned up in passing (output-inv
 > measure for that type; `mean_diff` NULL→standardized(SD), unit breaks→absolute. Palette: global
 > render-time, measure-group diverging ramps (additive vs multiplicative), text+background,
 > colorblind-safe. Engine rewritten around `findInterval` (kills the `keep_last_break` bottleneck);
-> significance = `ci_inf>0`/`ci_sup<0` from Phase 3a bounds; add a `color_bg` per-column vctrs
-> attribute. col%+means reference fix DEFERRED to Phase 7 — Phase 5 only warns.
+> significance = `ci_inf>0`/`ci_sup<0` from Phase 3a bounds; the two channels live in the EXISTING
+> `color` per-column attribute WIDENED to length ≤ 2 (brief §9.1 — NOT a new `color_bg` attribute).
+> col%+means reference fix DEFERRED to Phase 7 — Phase 5 only warns.
+
+#### Done so far (Steps 0-4a, 2026-07-09) — Batch A "core"
+
+- **Step 0 — color safety net.** `test-color-golden.R` + `dev/make_color_golden.R` +
+  `helper-color-golden.R` capture per-cell hex (`fmt_get_color_code`, the signal every exporter +
+  console share) across {measure × factor/mean × text/bg × theme × 24-bit}, incl. a synthetic
+  factor-`diff` column sitting EXACTLY on every break + the x2 (the tie lock for the fold+findInterval
+  byte-identity). `test-color-config.R` / `test-color-engine.R` added.
+- **Step 1 — breaks list model.** `set_color_breaks(list(pct_diff, pct_ratio, mean_diff, mean_ratio,
+  contrib))` (canonical scales `list(pos, center, strict, std)` in `options("tabxplor.color_breaks")`);
+  `mk_color_scale()` validators; old `pct_breaks/mean_breaks/contrib_breaks` args soft-deprecated
+  (`lifecycle`, now an Import) → mapped onto the scales; `.onLoad` reseeded. `legacy_color_breaks()`
+  derives the old flat vectors for the pre-Phase-5 selection path (byte-identical) until Step 6.
+- **Step 2 — palette/slots.** `set_color_style(custom_palette=)` length bug fixed (accepts 11).
+  `color_slot_table(L, channel)` / `build_slots(K, channel)` replace `select_in_color_style`'s
+  hex-sniff with an explicit channel arg (fixes the `bg_dark` `#000033e` typo); byte-identical to
+  the old lookup for the text family.
+- **Step 3 — findInterval engine.** `fmt_color_plan()` / `fmt_color_slots()` / `fmt_color_channels()`
+  (in `R/fmt_class.R`) fold each measure's score to a magnitude that grows away from its neutral
+  center, `findInterval(mag, pos_breaks, left.open=strict)`, split by direction into palette slots
+  (0=uncolored); the legacy in-text x2 is a slot-11 override. Significance from the Phase-3a
+  `ci_inf`/`ci_sup` bounds. `get_ref_var()` added for Glass's Δ. `pillar_shaft` + `fmt_get_color_code`
+  rerouted (the console + golden). **Factor `diff` byte-identical (text)**; numeric `diff` now Glass's
+  Δ (`mean_diff` breaks); pct CI-gated modes fixed (asymmetric-interval upper-arm bug + the `ci`-mode
+  crash); a contrib 0/0 p-value-row miscolor fixed. **48–1290× faster** than `keep_last_break`
+  (`dev/benchmarks/results_1.4.0/phase5_engine_micro.csv`). Old `fmt_color_selection`/`keep_last_break`/
+  `select_in_color_style` kept ONLY for the exporters + `expect_color()` until Steps 5/6.
+- **Step 4a — ratio field repoint (§3).** pct/factor `ratio` field now holds the reference-relative
+  RR `cell_pct/ref_pct` (the x2 driver, off the `mean` overload); `mean` keeps the value during the
+  transition (Step 6 → NA for pct). Coloring + display byte-identical; structural golden regenerated
+  (the `ratio` field). suite green (1053).
+- **STILL OPEN in Batch A (Step 4b-e):** widen the `color` attribute to two values + `get_color_bg`
+  + `set_color` parsing (scalar / `c(text,bg)` / named) + the vctrs raw-attr reconciliation fix; the
+  new per-column `color_signif` attribute (8→9 attrs — a conscious `test-fmt-contract.R` change)
+  threaded through all vctrs methods; the new `color`/`color_signif`/`color=TRUE` arg parsing in
+  `tab()`/`tab_many()`/`tab_num()` + deprecation wiring for the old `color=` strings; wiring the
+  background channel through the engine + console. Then Batch B (Step 5 exporters+legend, Step 6
+  dead-code deletion + docs). Micro-choice flagged: numeric `color="diff"` now = Glass's Δ (does NOT
+  auto-remap to `"ratio"`; a one-time message points there for the old behaviour).
 
 Now the `ratio` field exists (Phase 1): implement `"diff"`/`"ratio"`/`"diff_ratio"` modes + legend text, **keeping the existing modes coherent in the same overhaul** (`diff_ci`, `ci`, `after_ci`, `contrib`, `OR` — do not drop the `ci` mode). **Numeric `"diff"` mode is sd-standardized (Q9, §18)**: color Glass's Δ = `diff/sd_ref` against new effect-size `mean_diff_breaks` (default `c(0.2, 0.5, 0.8, 1.2)`); derived from `diff` + the reference `var` at color time — no new field, `$diff` stays raw. Skill: `/color-mode`. Also fix the pre-existing **col% + means** row/col reference mismatch (means referenced by row, factors by column — `dev/tabxplor_1.4.0_decisions.md` §7).
 

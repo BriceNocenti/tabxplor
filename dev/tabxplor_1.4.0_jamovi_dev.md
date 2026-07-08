@@ -1,25 +1,34 @@
-# tabxplor 1.4.0 — Jamovi module development guide
+# tabxplor 1.4.0 — Jamovi module development technical guide
 
-Written 2026-07-08. This is the reference for redesigning tabxplor's Jamovi module UI in
-1.4.0 (Phase 8) and integrating `tab_logit` (Phase 10). It exists because Jamovi module
-development is a multi-layer stack with sparse, recently-reorganised official docs, and
-past attempts (manual and AI-assisted) failed for lack of a mental model. This file gives
-that model, the toolchain, the debugging workflow, and — most importantly — **verbatim,
-locally-vendored working examples** for the three features we want:
+Written 2026-07-08. The reference for redesigning tabxplor's Jamovi module (1.4.0 Phase 8)
+and integrating `tab_logit` (Phase 10). Jamovi module development is a multi-layer stack in
+two languages with sparse, recently-reorganised docs; past attempts (manual and AI-assisted)
+failed for lack of a mental model and a way to see what the code actually produces at
+runtime. This guide fixes both.
 
-1. a per-variable **reference-level** picker (choose the reference of each `row_var` under
-   `pct="row"`, of one `col_var` under `pct="col"`);
-2. a **level-reordering** UI for row/col factor variables;
-3. a module-level **Excel export** with a user-friendly path/folder selector.
+It is built on three evidence bases, in increasing order of authority:
 
-Companion material lives in `dev/jamovi/reference/` (real source files from `jmv`, `gamlj`,
-`SummaryTables`, and the jamovi Electron client) — see `dev/jamovi/reference/README.md`.
-Every recipe below points at the exact vendored file it was distilled from.
+1. **Official docs + forum** (`dev.jamovi.org`, `docs.jamovi.org`, `forum.jamovi.org`).
+2. **Vendored real-module source** in `dev/jamovi/reference/` (byte-exact `jmv`, `gamlj`,
+   `SummaryTables`, jamovi-client files — see that folder's `README.md`).
+3. **A live dev-console capture of a running Jamovi with tabxplor 1.3.1 loaded**, in
+   `dev/jamovi/dev_console_live_capture/` — the served/compiled module, the minified
+   framework bundles (analysis-UI, results-view, main shell), and the rendered app HTML.
+   This is the ground truth: it shows the actual runtime architecture, the compiled form of
+   our own `.u.yaml`/`.js`, and exactly how our table lands in the DOM. **Sections 5–7 are
+   derived from it and supersede the docs where they disagree.** See §17 for the file index.
 
-> How to use this file: read §1–§4 once (the mental model + toolchain + debugging), then
-> jump to the feature you are building (§9 keystone, §10 ref-levels, §11 reorder, §12
-> export). §14 is the Claude-Code working method. §5–§8 are the API reference tables to
-> grep when writing YAML/JS.
+The three target features:
+
+1. a per-variable **reference-level** picker (the reference of each `row_var` under
+   `pct="row"`, of one `col_var` under `pct="col"`) — §12;
+2. a **level-reordering** UI for row/col factors — §13;
+3. a module-level **Excel export** with a user-friendly path selector — §14.
+
+> How to use this file. First time: read §1–§4 (mental model, toolchain, debugging) then
+> §5–§7 (the runtime — what actually happens in the app). Building a feature: §11 (the
+> keystone pattern) then §12/§13/§14. Writing YAML/JS: §8/§9/§6 are the reference tables.
+> §15 covers sandboxing + Phase-8 caching; §16 is the Claude-Code working method.
 
 ---
 
@@ -27,409 +36,577 @@ Every recipe below points at the exact vendored file it was distilled from.
 
 A Jamovi module **is a normal R package** with an extra `jamovi/` folder. Jamovi itself is
 an Electron desktop app embedding a Python server + an R "engine" process. One analysis is
-spread across **six files** in two languages plus one generated file:
+spread across six files in two languages plus one generated file:
 
-| File                                    | Language   | Role                                                     | Edit?       |
-|-----------------------------------------|------------|----------------------------------------------------------|-------------|
-| `jamovi/<name>.a.yaml`                  | YAML       | **Analysis definition** — the options (data model)       | ✓           |
-| `jamovi/<name>.r.yaml`                  | YAML       | **Results definition** — tables/plots/html/output slots  | ✓           |
-| `jamovi/<name>.u.yaml`                  | YAML       | **UI definition** — the options-panel layout (view)      | ✓           |
-| `jamovi/js/<name>.js` (or `.events.js`) | JavaScript | **Custom UI events** — interactive behaviour             | ✓           |
-| `R/<name>.b.R`                          | R (R6)     | **Backend** — `.init()`/`.run()`/`.plot()` analysis body | ✓           |
-| `R/<name>.h.R`                          | R (R6)     | **Generated header** — options + base class              | ✗ generated |
-| `jamovi/0000.yaml`                      | YAML       | Module **manifest** (analyses list, version, min app)    | ✓           |
+| File | Lang | Role | Edit? |
+|------|------|------|-------|
+| `jamovi/<name>.a.yaml` | YAML | **Analysis definition** — the options (data model) | yes |
+| `jamovi/<name>.r.yaml` | YAML | **Results definition** — tables/plots/html/output slots | yes |
+| `jamovi/<name>.u.yaml` | YAML | **UI definition** — the options-panel layout (view) | yes |
+| `jamovi/js/<name>.js` | JS | **Custom UI events** — interactive behaviour (controller) | yes |
+| `R/<name>.b.R` | R (R6) | **Backend** — `.init()`/`.run()`/`.plot()` analysis body | yes |
+| `R/<name>.h.R` | R (R6) | **Generated header** — options + base class | NO (generated) |
+| `jamovi/0000.yaml` | YAML | Module **manifest** (analyses, version, min app) | yes |
 
-The Model–View–Controller split is the key idea:
+Model–View–Controller:
 
-- `.a.yaml` = **Model** (the options; compiles to `R/<name>.h.R`).
-- `.u.yaml` = **View** (the layout; property values like labels are pulled from `.a.yaml`).
+- `.a.yaml` = **Model** (options; compiles to `R/<name>.h.R`).
+- `.u.yaml` = **View** (layout; labels pulled from `.a.yaml`).
 - `.js` = **Controller** (reacts to user actions, rewrites option values live).
-- `.b.R` = the R analysis that reads `self$options$*` and writes `self$results$*`.
-
-Two compilers cooperate (see §3):
+- `.b.R` = the R analysis: reads `self$options$*`, writes `self$results$*`.
 
 ```
-you ──▶ jmvtools (R)  ──▶  jamovi-compiler / jmc (Node)  ──▶  R/<name>.h.R  +  compiled JS bundle
-                                                          ──▶  build .jmo  ──▶  install into jamovi app
+you ─▶ jmvtools (R) ─▶ jamovi-compiler / jmc (Node) ─▶ R/<name>.h.R + compiled "uijs" blob
+                                                     ─▶ build .jmo ─▶ install into jamovi app
 ```
 
-The reason past edits failed: changing `.u.yaml`/`.js` does nothing until recompiled and
-reinstalled; `.h.R` must be regenerated from `.a.yaml` (never hand-edited); and the custom
-JS layer (`ui.<control>.value()`/`setValue()`, `applyToItems`, `setPropertyValue`) is
-undocumented enough that you must copy a working module. This guide removes both problems.
+Why past edits failed: `.u.yaml`/`.js` changes do nothing until recompiled and reinstalled;
+`.h.R` must be regenerated from `.a.yaml` (never hand-edited); and the custom-JS layer is
+undocumented enough that you must copy a working module and inspect the running DOM. This
+guide supplies both the working examples (§11–§14) and the runtime map (§5–§7).
 
-tabxplor's module is `usesNative: true` and embedded in the R package (`R/jmvtab.b.R` +
+tabxplor's module is `usesNative: true`, embedded in the R package (`R/jmvtab.b.R` +
 `R/jmvtab.h.R` + `jamovi/jmvtab.*`), so it already follows this architecture.
 
 ---
 
 ## 2. The tabxplor module today (inventory + pain points)
 
-Current files (all present, working, on CRAN as part of tabxplor 1.3.1):
+On CRAN as part of tabxplor 1.3.1:
 
-| File                   | Notes                                                                                                                                                                                                                                                          |
-|------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `jamovi/0000.yaml`     | Manifest: one analysis `jmvtab`, `menuGroup: tabxplor`, `minApp: 1.0.8`.                                                                                                                                                                                       |
-| `jamovi/jmvtab.a.yaml` | ~30 options: row/col/tab vars, wt, pct, color, OR, chi2, na, lvs, ref, ref2, comp, ci, conf_level, ci_print, totaltab, wrap_*, display, add_n/pct, digits, subtext, and the Excel-export block (`exportExcel` Action + `xl_path`/`xl_filename`/`xl_replace`).  |
-| `jamovi/jmvtab.r.yaml` | Results: `html_table` (Html), `export_status` (Html), an empty `plot` Image.                                                                                                                                                                                   |
-| `jamovi/jmvtab.u.yaml` | `jus: '3.0'`, `compilerMode: tame`. VariableSupplier + several CollapseBoxes of RadioButton/CheckBox/TextBox; the Excel export laid out as an `ActionButton` + folder/filename `TextBox`es + a "Replace" CheckBox.                                             |
-| `jamovi/js/jmvtab.js`  | Almost empty — one `exportExcel_changed` handler that resets the button after 2 s; the rest is commented-out ANOVA-example code.                                                                                                                               |
-| `R/jmvtab.b.R`         | R6 `.run()`: builds `tab_many(..., compact=TRUE)`, renders via `tab_kable()` into `html_table`, handles Excel export via `tab_xl()` with a hand-rolled folder-existence check and success/error HTML in `export_status`. `.plot()` is a stub returning `TRUE`. |
-| `R/jmvtab.h.R`         | Generated `jmvtabOptions` (R6, inherits `jmvcore::Options`) + `jmvtabBase`. Never edit.                                                                                                                                                                        |
+| File | Notes |
+|------|-------|
+| `jamovi/0000.yaml` | Manifest: analysis `jmvtab`, `menuGroup: tabxplor`, `minApp: 1.0.8`. |
+| `jamovi/jmvtab.a.yaml` | ~30 options incl. the Excel block (`exportExcel` Action + `xl_path`/`xl_filename`/`xl_replace`). |
+| `jamovi/jmvtab.r.yaml` | `html_table` (Html), `export_status` (Html), stub `plot` Image. |
+| `jamovi/jmvtab.u.yaml` | `jus:'3.0'`, `compilerMode: tame`; VariableSupplier + CollapseBoxes; export ActionButton + path/filename TextBoxes. |
+| `jamovi/js/jmvtab.js` | Almost empty: one `exportExcel_changed` (resets the button after 2s); rest is commented-out ANOVA example. |
+| `R/jmvtab.b.R` | R6 `.run()`: `tab_many(...,compact=TRUE)` → `tab_kable()` into `html_table`; Excel via `tab_xl()` + hand-rolled folder check. |
+| `R/jmvtab.h.R` | Generated `jmvtabOptions` + `jmvtabBase`. Never edit. |
 
-Pain points visible in the code (all solved by patterns in this guide):
+Pain points (all addressed below):
 
-- **`ref`/`ref2` are free-text `TextBox`es** (the `List` version is commented out). There
-  is no per-variable reference chooser → feature 1 (§10).
-- **No level reordering** anywhere → feature 2 (§11).
-- **Excel export is fragile**: an `ActionButton` whose JS resets it after 2 s, a plain
-  `TextBox` for the folder (default `"S:/Documents"`), a hand-rolled `dir.exists()` guard,
-  and repeated failed attempts in comments (`FilePicker`, `get_user_documents()`,
-  `%USERPROFILE%`, `navigator.platform` defaults). This is exactly the problem
-  `SummaryTables::resolveExportPath()` already solved → feature 3 (§12).
-- **The R session appears to reset each run** (a comment notes `excel_message_count`
-  resets), meaning cross-run state must live in Jamovi `state`/options, not R globals (§13,
-  Phase 8 caching).
+- **`ref`/`ref2` are free-text `TextBox`es** — no per-variable chooser → §12.
+- **No level reordering** → §13.
+- **Excel export is fragile** — ActionButton + JS reset + hand-rolled `dir.exists()` +
+  default `"S:/Documents"` + failed `FilePicker`/`%USERPROFILE%` experiments in comments →
+  §14 (solved by `SummaryTables::resolveExportPath()`).
+- **Two confirmed footguns from the live capture** (§5.2): the module runs in Jamovi's
+  bundled R (4.4.1), not your R 4.5.1 — the root of the `~`/path quirks; and the compiler
+  ships JS comments verbatim, so the 295 commented lines in `jmvtab.js` are downloaded by
+  every user. Clean `jmvtab.js` before release.
 
 ---
 
 ## 3. Toolchain and the dev loop
 
-### 3.1 What to install (Windows 11)
+### 3.1 Install (Windows 11)
 
-1. **The Jamovi desktop app** (from `jamovi.org`). Mandatory: it is the install target and
-   provides the bundled R engine that runs the module. Build against the same Jamovi series
-   you will run (a `.jmo` is tied to OS + arch + Jamovi series).
-2. **R 4.5.1** (yours) + **Rtools** matching it (needed to build the package into a `.jmo`).
-3. **`jmvtools`** and the **`node`** R package, both from the Jamovi repo:
+1. **Jamovi desktop app** (from `jamovi.org`) — the install target and the R engine host.
+   Build against the same Jamovi series you run (a `.jmo` is tied to OS + arch + series).
+2. **R** + **Rtools** matching it (to build the `.jmo`).
+3. **`node`** and **`jmvtools`** from the Jamovi repo:
 
    ```r
-   install.packages('node',
-                     repos = 'https://repo.jamovi.org')
+   install.packages('node', repos = 'https://repo.jamovi.org')
    install.packages('jmvtools',
-                     repos = c('https://repo.jamovi.org', 'https://cran.r-project.org'))
+                    repos = c('https://repo.jamovi.org', 'https://cran.r-project.org'))
    ```
 
-   `jmvtools` vendors the Node `jamovi-compiler` (`jmc`) internally; the `node` package
-   supplies the runtime. You do **not** need a separate system Node install for the normal
-   path.
+   `jmvtools` vendors the Node `jamovi-compiler` (`jmc`); `node` supplies the runtime.
 
-### 3.2 `jmvtools` — the developer entry point ("devtools for Jamovi")
+### 3.2 `jmvtools` functions
 
-Repo: `github.com/jamovi/jmvtools`. Exported functions:
+`create('Name')` scaffold · `addAnalysis(name=,title=)` add an analysis (5 files) ·
+`prepare()` compile only (regenerate `.h.R` + UI blob) · `install()` build + install the
+`.jmo` · `check()` verify Jamovi is found · `i18nCreate()/i18nUpdate()` catalogs ·
+`version()`.
 
-| Function                         | Does                                                                                |
-|----------------------------------|-------------------------------------------------------------------------------------|
-| `create('Name')`                 | Scaffold a new module (`DESCRIPTION`, `NAMESPACE`, `R/`, `jamovi/0000.yaml`).       |
-| `addAnalysis(name=, title=)`     | Add one analysis: creates `.a/.r/.u.yaml` + `R/<name>.h.R` + `R/<name>.b.R`.        |
-| `prepare()`                      | **Compile only.** Regenerate `.h.R` + the JS UI bundle from YAML. Fast; no install. |
-| `install()`                      | **Full build + install** the `.jmo` into Jamovi. The main dev-loop command.         |
-| `check()`                        | Verify jmvtools can find Jamovi (prints the path/version). Run this first.          |
-| `i18nCreate('catalog'|'<lang>')` | Create translation `.pot` / `.po` under `jamovi/i18n/`.                             |
-| `i18nUpdate()`                   | Refresh catalogs after adding translatable strings.                                 |
-| `version()`                      | Report the jmvtools/compiler version.                                               |
+### 3.3 Windows: point jmvtools at Jamovi
 
-### 3.3 The Windows gotcha: pointing jmvtools at Jamovi
-
-On Windows, jmvtools **cannot auto-find** the Jamovi install. Set the home path (pick one):
+Auto-detect fails on Windows — set the home path:
 
 ```r
 options(jamovi_home = 'C:/Program Files/jamovi/bin')   # adjust to your install
-# or per call:
-jmvtools::check(home = 'C:/Program Files/jamovi/bin')
-jmvtools::install(home = 'C:/Program Files/jamovi/bin')
-# or persistently: set the JAMOVI_HOME environment variable.
+jmvtools::check()                                       # must print a version
 ```
 
-`jmvtools::check()` succeeding (prints a version) means you are wired up. If it errors, fix
-`home` before anything else. (Note: on macOS notarized builds don't work with jmvtools; not
-relevant on Windows.)
+Or pass `home=` per call, or set `JAMOVI_HOME`.
 
-### 3.4 The dev cycle
+### 3.4 The cycle
 
 ```
-edit jamovi/*.yaml + jamovi/js/*.js + R/*.b.R
-      │
-      ├─ jmvtools::prepare()   # regenerate R/<name>.h.R + JS bundle (fast, no install)
-      │
-      └─ jmvtools::install()   # compile → build .jmo → install into Jamovi
-                               # then RELOAD the analysis in Jamovi to see changes
+edit yaml/js/b.R ─▶ jmvtools::prepare()  (fast, regenerate .h.R + UI blob)
+                 ─▶ jmvtools::install()   (build .jmo, install) ─▶ reload analysis in Jamovi
 ```
 
-Community-hardened variant for complex modules (ClinicoPath guide): run
-`jmvtools::prepare()` then `devtools::document()` **twice** (cross-references sometimes need
-a second pass), then `jmvtools::install()`. If the UI won't update: close Jamovi fully,
-clear its cache, reinstall (file locks on `.jmo` are common on Windows — close the analysis
-first).
+For complex modules: `prepare()` then `devtools::document()` twice, then `install()`. UI not
+updating → close Jamovi fully, reinstall (Windows `.jmo` file locks).
 
-### 3.5 `jamovi-compiler` (`jmc`) — the code generator underneath
+### 3.5 `jamovi-compiler` (`jmc`)
 
-Repo: `github.com/jamovi/jamovi-compiler` (Node; `bin` = `jmc`). jmvtools shells out to it.
-It reads the YAML and emits `R/<name>.h.R` + a browserified JS bundle (from `.u.yaml` +
-`jamovi/js/<name>.js`), then on install zips everything into a `.jmo`. You rarely call it
-directly, but its flags map 1:1 to jmvtools and are useful for debugging a bad build:
-
-| `jmc` flag                                  | Meaning                                   |
-|---------------------------------------------|-------------------------------------------|
-| `-p, --prepare <dir>`                       | regenerate headers/UI (= `prepare()`)     |
-| `-i, --install <dir>`                       | build + install (= `install()`)           |
-| `-c, --check`                               | validate the Jamovi install (= `check()`) |
-| `--home <dir>`                              | Jamovi directory (= `home=`)              |
-| `--debug` / `--verbose`                     | detailed compiler stack traces / logging  |
-| `--i18n <dir> --create <lang>` / `--update` | catalog management                        |
-
-`uicompiler.js` (vendored at `dev/jamovi/reference/jamovi-compiler/uicompiler.js`) is the
-authoritative list of which properties each `.u.yaml` control accepts — grep it when docs
-are vague.
+Shelled out to by jmvtools; flags mirror it (`-p/--prepare`, `-i/--install`, `-c/--check`,
+`--home`, `--debug`, `--verbose`, `--i18n --create/--update`). `uicompiler.js` (vendored) is
+the authoritative `.u.yaml` property list. **The compiler does not strip JS comments** (§5.2)
+and does not minify the module's own `.js` — keep `jamovi/js/*.js` clean.
 
 ### 3.6 Distribution
 
-- **Sideload** a built `.jmo`: in Jamovi, library **+** (top-right) → **Side-load** tab →
-  pick the `.jmo`. Appears in the ribbon like any module.
-- **Public release**: email a GitHub link to `contact@jamovi.org`; the Jamovi team
-  cross-compiles all OS/arch/series variants for the Jamovi library. Needs an OSI license.
+Sideload a `.jmo`: library **+** → **Side-load** → pick the file. Public release: email a
+GitHub link to `contact@jamovi.org` (needs an OSI licence).
 
 ---
 
-## 4. Debugging: the dev console and how to inspect the REAL HTML
+## 4. Debugging: the dev console + inspecting the real runtime
 
-This is the capability the previous attempts were missing.
+The capability the previous attempts lacked.
 
-- **Open Chrome DevTools inside Jamovi: press `F10`.** You get the full Elements/DOM
-  inspector, Console, Sources, Network — the *actual* rendered HTML of both the analysis
-  options panel and the results. Jamovi's UI is **nested iframes**, so if `F10` doesn't
-  register, **click the blue bar along the top first** (to move focus to the top window),
-  then `F10`.
-- **Inspect the options-panel DOM**: in Elements, drill into the iframe that renders the
-  options panel to see exactly what your `.u.yaml` + custom JS produced. `ui.view.el` is the
-  root DOM node (`ui.view.$el` the jQuery wrapper); `ui.<control>.el` is a control's node.
-  To capture the real HTML to a file, right-click the panel's root node → **Copy → Copy
-  outerHTML**, or in the Console run `copy(ui.view.el.outerHTML)` and paste into a file.
-- **`console.log` from custom JS** appears in that DevTools Console (a normal Chromium
-  console); you can also drive the UI from the console as a REPL, e.g.
-  `ui.pct.value()`, `ui.ref.setValue('tot')`.
-- **R errors / stack traces**: Jamovi's **dev mode** shows a full stack trace when an
-  analysis errors (launch Jamovi from a terminal / debug entry so the engine console is
-  visible). In `.b.R` you can also drop `browser()` into `.run()` to pause, and surface
-  progress with `jmvcore::Notice` (see §12) or `message()` to the engine console.
-- **Compiler errors**: `jmc --debug --verbose` (or reading `jmvtools::install()` output)
-  gives the detailed generation error when a build fails.
+- **F10 = Chrome DevTools** inside Jamovi (Elements/DOM, Console, Sources, Network). Confirmed
+  in the shell: `addKeyboardListener("F10", ()=>toggleDevTools())`. Jamovi's UI is **nested
+  iframes** (§5.1); if F10 doesn't register, click the top blue bar first, then F10.
+- **F9 = restart engines** (confirmed) — clears a wedged R engine.
+- **Ribbon toggles**: **Syntax mode** (`id="syntaxMode"`) shows the generated R call for the
+  analysis — invaluable for seeing exactly what options produced; **Dev mode**
+  (`id="devMode"`) surfaces R stack traces on error.
+- **Inspect the real DOM**: the options panel and each result are separate iframes (§5.1).
+  In DevTools, drill into the target iframe. To dump the real rendered HTML, select the root
+  node → Copy → Copy outerHTML, or in the Console run `copy(ui.view.el.outerHTML)` (options
+  panel) / `copy($0.outerHTML)` (results). This is exactly how the
+  `dev/jamovi/dev_console_live_capture/` files were produced — the repeatable method.
+- **`console.log` from custom JS** appears in that iframe's DevTools Console; you can drive
+  the panel as a REPL: `ui.pct.value()`, `ui.ref.setValue('tot')`.
+- **R errors**: launch Jamovi from a terminal (engine console visible), enable Dev mode, or
+  drop `browser()` into `.run()`; surface progress with `jmvcore::Notice` (§7.6).
+- **Compiler errors**: `jmc --debug --verbose`, or read `jmvtools::install()` output.
 
-Practical loop: edit → `jmvtools::install(home=)` → reload analysis in Jamovi → `F10` →
-inspect DOM + Console → iterate.
+Loop: edit → `jmvtools::install(home=)` → reload analysis → F10 → inspect DOM/Console → iterate.
 
 ---
 
-## 5. `.a.yaml` option types (the data model)
+## 5. Runtime architecture (verified from the live capture)
 
-Each `type:` compiles to an R6 class in `jmvcore` (`dev/jamovi/reference/jmvcore/options.R`
-is the authoritative source; the `dev.jamovi.org/api/*` pages are thin summaries). Common
-keys on every option: `name` (required; the R accessor `self$options$<name>`), `title` (UI
-label; defaults to `name`), `type`, `default`, and a docs-only `description:` block.
+This is what actually happens when Jamovi runs the module. Evidence: the captured app HTML,
+the served module file, and the minified framework bundles.
 
-| `type:`     | Backs (UI)                | Key type-specific keys                                                                                               | Value in R              |
-|-------------|---------------------------|----------------------------------------------------------------------------------------------------------------------|-------------------------|
-| `Data`      | (dataset)                 | —                                                                                                                    | data frame              |
-| `Bool`      | CheckBox                  | `default`                                                                                                            | logical                 |
-| `Integer`   | TextBox `format:number`   | `min`, `max`, `default`                                                                                              | integer                 |
-| `Number`    | TextBox `format:number`   | `min`, `max`, `default`                                                                                              | numeric                 |
-| `String`    | TextBox                   | `default`                                                                                                            | character               |
-| `List`      | ComboBox / RadioButton    | `options:` (each `name`+`title`), `default`                                                                          | one `name`              |
-| `NMXList`   | set of CheckBoxes         | `options:`, `default` (vector)                                                                                       | character vector        |
-| `Variable`  | one VariablesListBox slot | `suggested`, `permitted`, `required`, `rejectInf`(F), `rejectMissing`, `rejectUnusedLevels`, `takeFromDataIfMissing` | column name             |
-| `Variables` | multi VariablesListBox    | as `Variable` (`rejectInf` default **T**)                                                                            | character vector        |
-| `Level`     | LevelSelector / ComboBox  | (variable pairing done in UI/JS)                                                                                     | one level string        |
-| `Terms`     | Supplier (model terms)    | `default`                                                                                                            | list of terms           |
-| `Pairs`     | two-column ListBox        | `suggested`, `permitted`                                                                                             | list of `{i1,i2}`       |
-| `Sort`      | (Group)                   | fixed `sortBy`/`sortDesc`                                                                                            | `{sortBy,sortDesc}`     |
-| `Group`     | fixed bundle              | **`elements:`** (fixed sub-options)                                                                                  | named list              |
-| `Array`     | **templated ListBox**     | **`template:`** (usually a `Group`), `default`                                                                       | list of clones          |
-| `Action`    | ActionButton              | `action` (default `'open'`)                                                                                          | logical (TRUE on click) |
-| `Output`    | Output (Save section)     | a.yaml: minimal; r.yaml carries `varTitle`/`measureType`/`clearWith`/`initInRun`                                     | logical                 |
+### 5.1 The iframe / origin / postMessage model
 
-Not `.a.yaml` option types (common confusions): `Ncrementer` is a `.u.yaml` control backed
-by an `Integer`/`Number` option; `clearWith` is a **results** (`.r.yaml`) key, not an option
-key; there is no `Value` option type.
+The Jamovi window is one Electron page hosting **sandboxed iframes on localhost ports**
+(per-session origins). From the captured `config.js`:
+`window.config = {"client":{"roots":["127.0.0.1:56680","127.0.0.1:56683","127.0.0.1:56684"]}}`
+— the main instance + two engine/view ports.
 
-`suggested`/`permitted` values are measure types: `continuous`, `ordinal`, `nominal`,
-`nominaltext`, `id`, `numeric`, `factor`. `suggested` = soft highlight; `permitted` = hard
-filter.
+- **Options panel** = one iframe:
+  `<iframe id="tabxplor-jmvtab" sandbox="allow-scripts allow-same-origin"
+   src="http://127.0.0.1:56683/<instanceId>/" class="silky-options-control">`. Rendered by
+  the **analysis-UI framework** (`analysisui-*.js`, §6) from the module's compiled `uijs`.
+- **Results panel** `#results` holds one `.jmv-results-container[data-analysis-name=...]`
+  **per analysis**, each its own iframe:
+  `<iframe data-id="2" src="http://127.0.0.1:56684/<instanceId>/2/" class="analysis"
+   sandbox="allow-scripts allow-same-origin" scrolling="no">` (jmvtab was `data-id=2`).
+  Rendered by the **results-view framework** (`resultsview-*.js`, §7).
+- **Addressing**: `http://<origin>/<instanceId>/<analysisId>/` for a result iframe; image
+  resources at `<instanceId>/<analysisId>/<revision>/res/<NN name>/resources/<hash>.png`
+  (the captured `.../2/res/02 jmvtab/resources/*.png` were the plot placeholders).
+- **Sandbox**: both panels are `allow-scripts allow-same-origin`. Scripts CAN run, but each
+  iframe is isolated; the only channels are `postMessage` to the host (§5.3) and `openUrl`.
+- **Sizing**: parent sets container width/height; iframe `scrolling="no"`; the iframe reports
+  its content size back (`postMessage {type:"sizeChanged", data:{width: w+40, height}}`) and
+  the panel resizes to it — which is why a wide table pushes the whole panel wide (§7.3).
 
----
+Implication: feature UIs (§12/§13) live in the **options** iframe (analysis-UI framework);
+the table (§7/§14) lives in the **results** iframe. They cannot touch each other's DOM; they
+coordinate only through option values via the coms protocol (§5.3).
 
-## 6. `.u.yaml` control catalog (the view)
+### 5.2 The served/compiled module format
 
-Root keys: `title`, `name`, `jus` (**must be `'3.0'`** for JS events), `stage`,
-`compilerMode` (`aggressive` overwrites layout on `.a.yaml` change; **`tame` preserves your
-hand-edits** — tabxplor uses `tame`), then a `children:` tree.
+A module served to the client is **one file** fetched from `../modules/<ns>` — YAML text
+parsed by js-yaml, yielding `{options, uijs, i18n, languages}`. In the captured
+`modules/tabxplor__v_1.3.1.0` (70 KB):
 
-Properties available on most controls (`BaseControl`): `type`, `name`, `label`, `enable`
-(boolean DSL, see below), `events` (map event→handler), `margin` (`none|small|normal|large`),
-`cell` (`{row, column}` grid position), `stretchFactor`, `style` (`list|inline`),
-`horizontalAlignment`, `verticalAlignment`, `min/maxWidth`, `min/maxHeight`, `stage`,
-`fitToGrid`, `children`.
-
-| Control (`type:`)             | Purpose                                       | Key properties                                                                                                                                                                                   |
-|-------------------------------|-----------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `VariableSupplier`            | left variable pool                            | `suggested`, `permitted`, `populate` (`auto|manual`),`persistentItems`,`stretchFactor`                                                                                                           |
-| `Supplier`                    | term/model pool (non-var)                     | `format: term`, `higherOrders`, `persistentItems`, `label`                                                                                                                                       |
-| `TargetLayoutBox`             | wraps a drop target                           | `label`, `transferAction`                                                                                                                                                                        |
-| `VariablesListBox`            | variable drop target                          | `isTarget`, `maxItemCount`, `minItemCount`, `ghostText`, `valueFilter`, `height`, `columns`, `template`                                                                                          |
-| `ListBox` ★                   | templated list (1 row per Array element)      | `template` **or** `columns`, `showColumnHeaders`, `fullRowSelect`, `selectable`, `isTarget`, `maxItemCount`, `valueFilter`, `itemDropBehaviour`, `addButton`, `templateName`, `height`, `events` |
-| `LevelSelector`               | pick one level of a variable                  | `name`, `label`, `enable` (bound to a `Level` option; dynamic)                                                                                                                                   |
-| `ComboBox`                    | dropdown (List)                               | `name`, `label`, `format`, `enable`                                                                                                                                                              |
-| `RadioButton`                 | one List value                                | `optionName`, `optionPart`, `children`                                                                                                                                                           |
-| `CheckBox`                    | Bool / one NMXList part                       | `optionName`, `optionPart`, `children`, `enable`                                                                                                                                                 |
-| `TextBox`                     | String / Integer / Number                     | `format` (`string|number`),`suffix`,`inputPattern`,`width`,`ghostText`                                                                                                                           |
-| `Label`                       | text / group header                           | `label`, `format` (`bool|number`),`style`,`children`                                                                                                                                             |
-| `VariableLabel` / `TermLabel` | read-only item renderer (in a `columns` cell) | (display only)                                                                                                                                                                                   |
-| `LayoutBox`                   | grid/stack container                          | `margin`, `cell`, `stretchFactor`, `style`, `fitToGrid`                                                                                                                                          |
-| `CollapseBox`                 | collapsible section                           | `label`, `collapsed`, `enable`                                                                                                                                                                   |
-| `ActionButton`                | button                                        | `name`, `events`, `enable`                                                                                                                                                                       |
-| `Output`                      | write a column back to data                   | `name`                                                                                                                                                                                           |
-| `RMAnovaFactorsBox`           | RM factors+levels editor (compiled)           | `name`, `label`                                                                                                                                                                                  |
-| `CustomControl`               | JS-built DOM (escape hatch)                   | `creating`/`updated` events                                                                                                                                                                      |
-| `Separator`                   | visual divider                                | —                                                                                                                                                                                                |
-
-`enable:` DSL examples (colon = "list option has part"):
-
-```yaml
-enable: (pct:row || pct:col)          # tabxplor already uses this
-enable: (OR == 'OR' || OR == 'OR_pct')
-enable: (!(missing:no))
-enable: ({return !!ui['groupVar'].value();})   # JS arrow form also allowed
-```
-
-`template:` vs `columns:` (the crux — §9):
-
-- **`template:`** — one control instantiated per row (item is a scalar): e.g. a
-  `VariableLabel` per selected variable, a `TermLabel` per model term.
-- **`columns:`** — a list of column definitions, each with its own `template:`; use when a
-  row is a *record* with several fields. Each column: `name` (maps to the array item's
-  sub-field / Group `elements[].name`), `label`, `selectable` (false = display-only),
-  `stretchFactor`, `maxWidth`, `template`. This is how you get a `ComboBox`/`LevelSelector`
-  **per selected variable**.
-
----
-
-## 7. The custom-JS events API (the controller)
-
-File: `jamovi/js/<name>.js` (older split style used `<name>.events.js` referenced as
-`./<name>.events::handler`; a plain `<name>.js` works too). It exports an object of
-handlers. Requires `jus: '3.0'`.
-
-### 7.1 Handler naming and events
-
-`module.exports = { <handlerName>: function(ui, event) { ... }, ... }`
-
-- **View events**: `view_creating` (before DOM), `view_loaded` (after DOM), `view_updated`
-  (analysis reselected). Some modules use a bare `update:` handler for the same purpose.
-- **Control events**: `<control>_changing` (before), `<control>_changed` / `<control>_change`
-  (after). Some modules name them `onChange_<control>`.
-- **ListBox item events**: `<listbox>_listItemAdded`, `<listbox>_listItemRemoved` (or a
-  `listItemsChanged` custom event).
-- Handlers always receive `(ui, event)`.
-
-Wiring from `.u.yaml`: either the naming convention above, or an explicit `events:` block on
-a control:
-
-```yaml
-events:
-  change: './logregbin.events::onChange_refLevels'   # explicit module-path form
-# or
-events:
-  listItemAdded: emMeans_listItemsChanged            # short handler-name form
-```
-
-### 7.2 The `ui` object and context helpers (verified against jmv `logregbin.events.js`)
-
-- `ui.<name>.value()` / `ui.<name>.setValue(v)` — read/write an option value.
-- `ui.<name>.applyToItems(startCol, (item, index, column) => {...})` — iterate rendered rows
-  of a templated ListBox.
-- `item.setPropertyValue('prop', v)` / `item.getPropertyValue('prop')` — set a per-row
-  control property at runtime (e.g. bind a `LevelSelector` to a variable).
-- `item.controls[i]` / `item.controls.<name>` — the row's child controls.
-- `ui.<listbox>.getSelectedRowIndices()` — selected rows.
-- `ui.view.el` / `ui.view.$el` — root DOM (raw / jQuery); `ui.<name>.$el[0].style.display`
-  — direct DOM manipulation (gamlj hides a dependent ListBox this way).
-- **Batching (avoid re-running the analysis on every set):**
+- Lines 1–459: the manifest — `title/name/version/jms:'1.0'/authors/description`, the
+  `analyses:` list with each analysis's **full option definitions** (the `.a.yaml`), then
+  `usesNative: true`, `minApp: 1.0.8`, `languages: [fr]`, **`rVersion: 4.4.1-x64`**.
+- A key **`uijs:`** whose value is the entire compiled UI as a **browserified UMD JS string**
+  (one ~53 KB line): the `.u.yaml` layout compiled to a JS control tree **plus** the events
+  `.js`. Layout nodes look like:
 
   ```js
-  ui.view.model.options.beginEdit();
-  ui.refLevels.setValue(list);
-  ui.someOther.setValue(x);
-  ui.view.model.options.endEdit();
+  { type: DefaultControls.RadioButton, typeName: 'RadioButton',
+    name: "pct_1", optionName: "pct", optionPart: "no" }
+  // enable compiles to a string:  enable: "(pct:row || pct:col)"
+  // an ActionButton event compiles to:
+  //   events: [ { execute: require('./jmvtab').exportExcel_changed } ]
   ```
 
-- **Context helpers on `this`** (pass `this` as `context` to sub-functions):
-  `context.clone(value, default)`, `context.valuesToItems(list, FormatDef.variable)`,
-  `context.itemsToValues(items)`, `context.findChanges(key, list, unique, format)` (returns
-  `{added, removed}`), `context.findDifferences(prev, cur, format)`,
-  `context.checkValue(control, n, values, format)`, `context.sortArraysByLength(list)`,
-  `context.getCombinations(added, terms)`, `context.workspace[...]` (persistent scratch),
-  and the format descriptors `FormatDef.variable` / `FormatDef.term`.
+Two load-bearing facts:
 
-- **Limitation**: dataset metadata (e.g. number of rows) is **not** plumbed through to UI
-  events — you cannot read row counts in `.js`. Level lists *are* available to
-  `LevelSelector` (it requests them itself).
+- **The module runs in Jamovi's BUNDLED R (`rVersion: 4.4.1-x64`), not your system R 4.5.1.**
+  This is the root cause of `path.expand("~")` → Documents, and of package-version drift.
+  Always test inside Jamovi, and use `Sys.getenv("USERPROFILE")` for paths (§14).
+- **The compiler embeds `.js` comments verbatim** — the whole commented-out ANOVA example +
+  failed export experiments (**295 `//` lines**) ship inside the served `uijs` blob to every
+  user. Delete dead/commented code from `jamovi/js/jmvtab.js` before release.
+
+### 5.3 The coms protocol + option round-trip + recompute model
+
+Client ↔ engine is a WebSocket at `ws://127.0.0.1:<port>/<instanceId>/coms` carrying
+protobuf `ComsMessage` envelopes. The full `.proto` is embedded in the shell bundle
+(the authoritative field map). Key messages:
+
+- **`AnalysisRequest`**: `sessionId, instanceId, analysisId, name, ns, Perform perform,
+  AnalysisOptions options, repeated string changed, int32 revision, restartEngines,
+  clearState, addons, index, path, part, format, i18n, ...`.
+  `Perform` enum: `INIT=0, RUN=1, RENDER=4, SAVE=5, DELETE=6, DUPLICATE=7`.
+- **`AnalysisResponse`**: `options, ResultsElement results, status, error, final, revision,
+  references, title, ...`.
+- **`AnalysisOptions`**: options are a `oneof {i, d, s, o(FALSE/TRUE/NONE), c(nested)}` with a
+  parallel `names[]` — lossless round-trip of R option values.
+
+The round-trip (client side):
+
+1. A control edit → `analysis.setOptions(values)`. **Change detection gates everything**: an
+   edit that doesn't actually change a value bumps nothing and sends nothing (built-in dedup).
+2. A real change → `revision++`, then an `AnalysisRequest` with **`perform = INIT (0)`** and
+   **`changed: [optionNames]`** is sent. The client does NOT distinguish re-run vs cached —
+   **the R engine (jmvcore) decides** what to recompute from the `changed` list.
+3. Responses are applied only if `response.revision === current revision` (stale-reply guard).
+
+**Consequence for Phase 8 caching (§15): there is no client-side "display-only, skip the
+engine" path.** Every option change — including pure display toggles — does a full INIT
+round-trip to R. Any "reuse the numbers, just re-render" optimisation must live in the R
+backend, keyed on the `changed` set. The results view also re-renders the whole result tree
+on each update (§7), so keeping the emitted content byte-stable when only display options
+changed is what avoids visible churn.
+
+Module discovery: sideload `.jmo` via a file picker → a `ModuleRR` command; a
+`moduleInstalled` broadcast hot-reloads the module's analyses without an app restart.
 
 ---
 
-## 8. `.r.yaml` results + `clearWith` (caching backbone)
+## 6. The analysis-UI framework (options panel) — authoritative API
+
+From `analysisui-49b1a9ac.js`. This is the real contract behind `.u.yaml` + `jamovi/js/*.js`,
+more authoritative than the docs. (Offsets/quotes are in the agent notes; the facts are below.)
+
+### 6.1 The control registry (`DefaultControls`)
+
+A type-name → constructor map. Confirmed control types (what `.u.yaml` `type:` accepts):
+`VariableSupplier`, `Supplier`, `TargetLayoutBox`, `VariablesListBox`, `ListBox`, `ComboBox`,
+`RadioButton`, `CheckBox`, `TextBox`, `Label`, `VariableLabel`, `TermLabel`, `LevelSelector`,
+`LayoutBox`, `CollapseBox`, `ActionButton`, `Output`, `OutputSupplier`, `ModeSelector`,
+`CustomControl`, `RMAnovaFactorsBox`.
+
+- **`GridActionButton` is NOT a `.u.yaml` type** (correction to earlier guidance) — row/inline
+  buttons use `ActionButton` (grid-based internally) or a `CustomControl`.
+- **`TargetListBox` / `VariableTargetListBox` are deprecated** (their constructors just return
+  "no longer used").
+- A nested **`ListItem`** sub-registry lists the control types commonly used as a per-row
+  template: `TextBox`, `ComboBox`, `TermLabel`, `VariableLabel`, `Label`. In practice column
+  templates also resolve `LevelSelector` (jmv `logregbin` uses it) and `VariableLabel`.
+
+### 6.2 The control + option-wrapper API
+
+`ui.<controlName>` returns a control object:
+
+- `getPropertyValue(name)` / `setPropertyValue(name, value)` — get/set a property (cannot set
+  `name` or `type`). Setting fires a property-changed event.
+- `setValue(value, key?, opts?)` — set the bound option value.
+- `setEnabled(bool)` — sugar for `setPropertyValue("enable", bool)` (there is no
+  `isDisabled`; enabled state is the `enable` property).
+- `$el` (jQuery-like element) / `el` (raw DOM node); `getOption()` (the bound Option).
+
+The per-option **wrapper** (value-facing façade) exposes: `getValue(keys)`, `setValue(value,
+keys, opts)`, `getLength(keys)`, `insertValueAt(value, keys, opts)`, `removeAt(keys, opts)`,
+`setProperty(...)`, `getName()`, `isValidKey(k)`, and **`beginEdit()`/`endEdit()`** (batching
+lives on the Option/wrapper, not the control — controls call
+`this.getOption().beginEdit()` around drag/value edits). Values are addressed by **keys**
+(nested paths), so array/group options are read/written positionally.
+
+### 6.3 Events: names, inheritance, handler signature
+
+Valid event names by capability:
+
+- `OptionControl` (most controls): `changed`, `changing`.
+- `OptionListControl` (ListBox, VariablesListBox): `listItemAdded`, `listItemRemoved`
+  (+ `preprocess`).
+- `CustomControl`: `creating`, `updated`.
+- `Supplier`/`VariableSupplier`: `changed`, `updated`.
+- root/view (`ui.view`): `loaded`, `updated`, `remoteDataChanged`, `creating`.
+
+`convertEventName`: `changed → change`, `updated → update`. A control's `.u.yaml` `events:`
+entries and the module's `.js` handler names are resolved at compile time; at runtime the
+framework carries resolved `{onEvent, execute}` arrays and `"<control>.<event>"` listener
+strings. A bare `onEvent` without a dot is prefixed with the control name.
+
+**Handler signature (authoritative): `function(ui, ...eventArgs)` with `this` = the events
+context.** `ui` is the resources object — every control by `name`, plus `ui.view`. So the
+`.js` idioms `view_loaded(ui)`, `factors_changed(ui)`, `onChange_refLevels(ui)` all receive
+`ui` first and run with a rich `this` (§6.7). Both naming styles seen in real modules
+(`<control>_<event>` and the explicit `events: { change: './name.events::handler' }`) are
+compiler conventions that resolve to the same runtime binding.
+
+### 6.4 `LevelSelector` internals (the reference-level widget)
+
+Registers option properties **`variable`** and **`allowNone`**, plus `defaultLevelIndex`. On
+update it calls `requestData("column", {columnName: <variable>, properties: ["measureType",
+"levels"]})`, then renders one `<option>` per level. Confirmed facts:
+
+- Setting the `variable` property (via `setPropertyValue('variable', name)`) re-fetches and
+  repopulates — this is exactly how a per-row picker binds each row to its variable (§12).
+- The stored value is a **level label string** (or `null` with `allowNone` → "- None -").
+- **Levels are taken verbatim from the column and are NOT reorderable/filterable** by the
+  selector; `allowNone` only prepends the none option. It is disabled for `continuous`
+  columns. (This is why feature 2 — reordering — cannot be done by a LevelSelector; §13.)
+
+### 6.5 Templated `ListBox`: columns, `applyToItems`, drop behaviour
+
+`ListBox` (`GridOptionListControl`) properties: `columns`, `maxItemCount`,
+`showColumnHeaders`, `removeAction` (`deleterow`|`clearcell`), `height`, `addButton`,
+`ghostText`, `isTarget`, `stripedRows`, `valueFilter` (`none`|`unique`|`uniquePerRow`|
+`uniquePerColumn`). A lone `template:` is sugar auto-wrapped into a single `columns` entry.
+
+Iterating per-row template controls — **corrected signature**:
+
+```js
+// applyToItems(startRowIndex[, count], callback(item, rowIndex, columnIndex))
+ui.refLevels.applyToItems(0, (item, rowIndex, columnIndex) => {
+    if (columnIndex === 1)                       // the 2nd column's template control
+        item.setPropertyValue('variable', dlist[rowIndex].var);
+});
+```
+
+The first arg is a **row index**, not a column (earlier guidance said column — wrong). The
+callback's `item` is the per-cell template control (full `get/setPropertyValue`).
+`getSelectedRowIndices()` (no args) returns the selection.
+
+Drop behaviour (`isTarget: true`): `itemDropBehaviour` = `insert` (default; **enables
+positional drag-reorder**), `emptyspace` (append-only, reorder OFF), `overwrite` (forced when
+`maxItemCount` reached). This is the free, no-JS reorder route (§13).
+
+### 6.6 `CustomControl` — the DOM escape hatch (new for feature 2)
+
+`ui.<name>.$el` is a jQuery-wrapped `<div class="silky-custom-control ...">`; `$el[0]` is the
+raw node. A **`creating`** handler builds sub-DOM into `$el`; a `MutationObserver` auto-fires
+`contentchanged` when `$el` mutates; `updated` fires on data/option change. It inherits
+`RequestDataSupport`, so the handler can call
+`ui.<name>.requestData("column", {columnName, properties: ["levels"]})` — the same level
+fetch `LevelSelector` uses. This is enough to build a **fully custom, drag-sortable /
+arrow-button level reorderer** and write the order back to an Array option (§13).
+
+### 6.7 Helper utilities available to `.js`
+
+- Global **`window.utils`**: `checkValue`, `clone`, `sortArraysByLength`, `getCombinations`,
+  `getItemCombinations`, `valuesToItems(values, format)`, `itemsToValues(items)`,
+  `findDifferences`, `listContains`, `flattenList`.
+- The events **context** (`this` in a handler): `workspace` (scratch object, reset on data
+  change), `requestData(request, params)`, **`requestAction(action, params)`**,
+  **`setCustomVariables`/`setCustomVariable`/`removeCustomVariable`/`clearCustomVariables`**
+  (create/modify dataset columns from the UI), `findChanges(name, list, ...)` (diffs vs
+  `workspace[name]`), `isReady`, `getContext`.
+- **`FormatDef`**: `.variable`, `.string`, `.bool`, `.number`, `.term`, `.infer(x)` — value
+  format descriptors used with `valuesToItems`/`checkValue`.
+
+Option sync under the hood: `setOptionValue`/`setPropertyValue` (keys-addressed);
+`optionPart` splits one option across several controls (RadioButton/CheckBox
+`checkedValue = optionPart`); the iframe→host bridge posts
+`onOptionsChanged {properties:{name, key, value}}` (this feeds the coms round-trip in §5.3).
+
+---
+
+## 7. How Jamovi renders RESULTS (the results iframe) — critical for exporters
+
+From `resultsview-60a5863d.js` + `resultsview-88266f06.css`. This governs how tabxplor's
+`tab_kable()` HTML actually appears, and constrains Phase 7 (exporters) and Phase 8.
+
+The results view runs inside the per-analysis iframe (§5.1) and receives the whole results
+definition from the host via `postMessage {type:"results"}`; on each update it **re-renders
+the entire result tree** (no incremental diffing at this layer). It auto-sizes to its content
+(`sizeChanged` = content width + 40 px).
+
+### 7.1 HTML result injection
+
+An `Html` result element carries `content` (HTML string), `stylesheets` (filenames), and
+`scripts` (filenames). Rendering:
+
+- **`stylesheets`** → fetched from `module/<file>` and appended to the iframe `<head>` as
+  `<style class="module-asset">` — apply reliably.
+- **`scripts`** → appended to `<head>` as `<script src="module/<file>">` — load and execute
+  reliably. **This is the only reliable JS channel.**
+- **`content`** → injected via the DOM lib's `.html()` into `.jmv-results-html .content`.
+  **No iframe/srcdoc and no shadow DOM** wrap a result.
+
+### 7.2 What runs and what does not (decisive for tab_kable)
+
+- **Inline `<style>` inside `content` WORKS** — tabxplor's inlined CSS renders.
+- **Inline `<script>` inside `content` almost certainly does NOT execute** — the DOM lib is
+  jQuery-like but lacks jQuery's script-eval internals, and no Bootstrap/jQuery is present in
+  the iframe. So **kableExtra JS tooltips are inert**, and **kableExtra Bootstrap classes
+  silently no-op** (Bootstrap CSS isn't loaded). Only tabxplor's own inline rules bite.
+- **No style isolation**: styles go into the shared iframe `<head>`. An over-broad selector
+  (bare `table {}`) can restyle Jamovi's own DOM in that iframe — **scope every rule under a
+  unique wrapper** (e.g. `#tabxplor-tbl table {}`).
+- **`<a href>` links are hijacked** → routed to the host `openUrl` (opens the OS browser).
+  Anchor-based in-page interactivity will not work.
+
+Actionable: emit **CSS-only, self-contained, wrapper-scoped** styling; drop JS-dependent
+tooltips (or convert to `title=`/`:hover`); if interactivity is essential, ship it as a module
+`scripts` asset on the Html element, not inline.
+
+### 7.3 Width and scrolling (the biggest real problem)
+
+`.jmv-results-html { width: 500px }` is a **fixed 500 px** container, and `.content` has **no
+`overflow`**. A wide table overflows and, because the iframe auto-sizes to content, widens the
+whole analysis iframe → the results panel scrolls horizontally.
+
+- tabxplor currently uses `kableExtra::scroll_box(width = "1080px")` — this forces the iframe
+  ~1080 px wide and triggers panel-level horizontal scroll (ugly).
+- Fix: wrap the table in tabxplor's **own `overflow-x: auto` container** sized to fit
+  (`width: 100%` → resolves to the 500 px box, or an explicit `max-width`), so the table
+  scrolls **inside its box** and the iframe reports a bounded width. Do not rely on the host
+  to clip — `.content` doesn't.
+
+### 7.4 Images / plots
+
+An `Image` result is a `<div>` with `background-image: url('res/<path>')` and explicit px
+`width`/`height` from the element (no `<img>`). `path` resolves relative to the iframe base
+`<instanceId>/<analysisId>/<revision>/` (new revision → fresh URL). **No client-side HiDPI
+scaling** — the R side decides pixel size via `renderFun`/`setSize`; emit at 2× if you want
+crisp retina plots.
+
+### 7.5 Export / copy of results (host-driven)
+
+Per-element context menu: `Copy`, `Export...`, `Add Note` (groups add `Duplicate`).
+Selections `postMessage` to the host; the actual copy/export is done by the client + engine —
+**there is no module-callable export hook, no `toDataURL`/`saveAs`/clipboard in the results
+bundle**, and the native context menu is disabled. App-level export formats (from the shell):
+**results → PDF / PNG / HTML / LaTeX-zip only** (NOT xlsx); **the dataset** can export to xlsx
+etc., but that is app-chrome-driven. "Copy" grabs the rendered DOM as-is → keep the emitted
+HTML self-contained and paste-clean.
+
+### 7.6 Notices (`jmvcore::Notice`)
+
+Numeric `type` → class: **1 = warning-1, 2 = warning-2, 3 = info, 4 = error**. `content` gets
+a light markdown-bold transform (`**x**` → `<strong>x</strong>`) then `.html()`; links are
+rebound to the host. Use a Notice for the export success/error message (cleaner than the
+current hand-built `export_status` HTML div).
+
+---
+
+## 8. `.a.yaml` option types (the data model)
+
+Each `type:` compiles to a `jmvcore` R6 class (`dev/jamovi/reference/jmvcore/options.R` is the
+source of truth). Common keys: `name` (→ `self$options$<name>`), `title`, `type`, `default`,
+docs-only `description:`.
+
+| `type:` | UI | Key type-specific keys | Value in R |
+|---------|----|------------------------|-----------|
+| `Data` | (dataset) | — | data frame |
+| `Bool` | CheckBox | `default` | logical |
+| `Integer`/`Number` | TextBox `format:number` | `min`, `max`, `default` | int/numeric |
+| `String` | TextBox | `default` | character |
+| `List` | ComboBox/RadioButton | `options:` (`name`+`title`), `default` | one `name` |
+| `NMXList` | CheckBox set | `options:`, `default` | character vector |
+| `Variable` | VariablesListBox slot | `suggested`, `permitted`, `required`, `rejectInf`(F) | column name |
+| `Variables` | VariablesListBox | as `Variable` (`rejectInf` T) | character vector |
+| `Level` | LevelSelector/ComboBox | (variable pairing via UI/JS) | one level string |
+| `Terms` | Supplier | `default` | list of terms |
+| `Pairs` | 2-col ListBox | `suggested`, `permitted` | list of `{i1,i2}` |
+| `Group` | fixed bundle | `elements:` | named list |
+| `Array` | templated ListBox | `template:` (usually a Group), `default` | list of clones |
+| `Action` | ActionButton | `action` (default `open`) | logical (TRUE on click) |
+| `Output` | Output (Save) | a.yaml minimal; r.yaml `varTitle`/`measureType`/`clearWith`/`initInRun` | logical |
+
+Not option types: `Ncrementer` (a UI control backed by Integer/Number); `clearWith` (a
+`.r.yaml` key); there is no `Value` type. `suggested`/`permitted` measure types:
+`continuous`, `ordinal`, `nominal`, `nominaltext`, `id`, `numeric`, `factor`.
+
+---
+
+## 9. `.u.yaml` control catalog (the view)
+
+Root keys: `title`, `name`, `jus` (**`'3.0'`** for JS events), `stage`, `compilerMode`
+(`aggressive` regenerates layout on `.a.yaml` change; **`tame` preserves hand-edits** —
+tabxplor uses `tame`), then `children:`. §6 is the authoritative runtime behaviour; this is
+the authoring surface.
+
+Common `BaseControl` properties: `type`, `name`, `label`, `enable` (boolean DSL), `events`,
+`margin`, `cell` (`{row,column}`), `stretchFactor`, `style` (`list`|`inline`), alignments,
+`min/maxWidth`, `min/maxHeight`, `children`.
+
+| Control | Purpose | Key properties |
+|---------|---------|----------------|
+| `VariableSupplier` | variable pool | `suggested`, `permitted`, `populate`, `persistentItems` |
+| `Supplier` | term/model pool | `format: term`, `higherOrders`, `persistentItems` |
+| `TargetLayoutBox` | wraps a drop target | `label`, `transferAction` |
+| `VariablesListBox` | variable drop target | `isTarget`, `maxItemCount`, `ghostText`, `valueFilter`, `height` |
+| `ListBox` | templated list | `columns`/`template`, `showColumnHeaders`, `isTarget`, `itemDropBehaviour`, `addButton`, `valueFilter`, `maxItemCount`, `events` |
+| `LevelSelector` | pick a level | bound to a `Level` option; dynamic (§6.4) |
+| `ComboBox` | dropdown (List) | `name`, `enable` |
+| `RadioButton` | one List value | `optionName`, `optionPart`, `children` |
+| `CheckBox` | Bool / NMXList part | `optionName`, `optionPart`, `children` |
+| `TextBox` | String/Integer/Number | `format`, `suffix`, `inputPattern`, `width`, `ghostText` |
+| `Label` | text / group header | `label`, `format`, `style`, `children` |
+| `LayoutBox` | grid/stack container | `margin`, `cell`, `stretchFactor`, `style` |
+| `CollapseBox` | collapsible section | `label`, `collapsed`, `enable` |
+| `ActionButton` | button (incl. row buttons) | `name`, `events`, `enable` |
+| `Output` | write a column back | `name` |
+| `CustomControl` | JS-built DOM (§6.6) | `creating`/`updated` events |
+| `RMAnovaFactorsBox` | RM factors editor (compiled) | `name`, `label` |
+
+`enable:` DSL: `(pct:row || pct:col)`, `(OR == 'OR' || OR == 'OR_pct')`, `(!(missing:no))`,
+or a JS arrow `({return !!ui['x'].value();})`.
+
+`template:` (one control per row) vs `columns:` (a record per row — each column has `name`
+mapping to the array item / Group `elements[].name`, `label`, `selectable`, `stretchFactor`,
+`maxWidth`, `template`). See §11.
+
+---
+
+## 10. `.r.yaml` results + `clearWith`
 
 Result element types: `Table`, `Image`, `Group`, `Array`, `Preformatted`, `Html`, `Notice`,
 `Output`. tabxplor uses `Html` (`html_table`, `export_status`) + a stub `Image`.
 
-`clearWith:` (on a results element) lists **option names**; when any changes, Jamovi marks
-that result stale and recomputes it, reusing results whose inputs are untouched. This is the
-built-in invalidation mechanism and the natural hook for Phase 8 caching — declare each
-result's true dependencies so pure-display toggles don't recompute the aggregate.
-
-`Output` results element keys (write a column back to the spreadsheet): `varTitle`,
-`varDescription`, `measureType`, `clearWith`, `initInRun`; R side:
-`self$results$<name>$setValues()`, `setRowNums()`, `isFilled()`, `isNotFilled()`, `setKeys()`.
+`clearWith:` (per results element) lists **option names**; when any changes, Jamovi marks that
+result stale. This is the declarative invalidation hook for Phase 8 — but note (§5.3) the
+engine still gets a full INIT on every change, so `clearWith` controls *result reuse*, not
+whether R runs. `Output` element keys: `varTitle`, `varDescription`, `measureType`,
+`clearWith`, `initInRun`; R side: `setValues()`, `setRowNums()`, `isFilled()`, `setKeys()`.
 
 ---
 
-## 9. The keystone pattern: Array-of-Group + templated ListBox + JS row-sync
+## 11. The keystone pattern: Array-of-Group + templated ListBox + JS row-sync
 
-Features 1 and 2 are both instances of one pattern. Learn it once:
+Features 1 and 2 are instances of one pattern:
 
-1. **`.a.yaml`**: an `Array` option whose `template:` is a `Group` of `elements:` — one
-   element identifying the variable (`type: Variable`), one holding the per-variable choice
-   (`type: Level` for a real level, or `type: List` for a fixed enum).
-2. **`.u.yaml`**: a `ListBox` bound to that Array via `name:`, with `columns:` mapping to the
-   Group's `elements` — a `VariableLabel` column (display) + a `LevelSelector`/`ComboBox`
-   column (the picker) — plus an `events: { change: ... }` hook.
-3. **`.js`**: a handler that (a) **reconciles rows** — one row per currently-selected
-   variable, preserving prior choices (`updateContrasts` idiom); and (b) **binds each row's
-   picker** to its variable (`updateLevelControls` idiom, only needed for the dynamic
-   `LevelSelector`). Run both from `update`/`view_loaded` AND from the relevant
-   `onChange_<vars>` so rows and levels never go stale.
+1. **`.a.yaml`**: an `Array` whose `template:` is a `Group` of `elements:` — a variable
+   (`type: Variable`) + a per-variable choice (`type: Level` for a real level, or `type: List`
+   for a fixed enum).
+2. **`.u.yaml`**: a `ListBox` bound by `name:`, with `columns:` mapping to the Group's
+   `elements` — a `VariableLabel` column + a `LevelSelector`/`ComboBox` column — plus
+   `events: { change: ... }`.
+3. **`.js`**: (a) **reconcile rows** — one row per selected variable, preserving prior choices
+   (`updateContrasts`); (b) **bind each row's picker** to its variable
+   (`updateLevelControls`, only for the dynamic `LevelSelector`). Run both from
+   `view`/`update` AND from the relevant `onChange_<vars>`.
 
-> Critical modern-Jamovi fact: the old declarative row-sync keys **`items: (factors)`** (on
-> the Array) and **`content: $key`** (on the `var` element) are **legacy no-ops** — they no
-> longer bind anything. Row population is done entirely in the `.js` (the `updateContrasts`
-> loop). GAMLj still carries them cosmetically; do not rely on them.
+> Modern-Jamovi fact: the old declarative row-sync keys `items:(factors)` and `content:$key`
+> are **legacy no-ops** — row population is entirely JS-driven. GAMLj still carries them
+> cosmetically; don't rely on them.
 
-The two live examples of this pattern are vendored:
-
-- **Level picker** (feature 1): `dev/jamovi/reference/jmv-logregbin/` — `Level` + `LevelSelector`.
-- **Static enum picker** (contrast type): `dev/jamovi/reference/jmv-anova/` — `List` + `ComboBox`.
+Vendored live examples: `dev/jamovi/reference/jmv-logregbin/` (Level + LevelSelector) and
+`dev/jamovi/reference/jmv-anova/` (List + ComboBox).
 
 ---
 
-## 10. Feature 1 — per-variable reference-level picker
+## 12. Feature 1 — per-variable reference-level picker
 
-**Goal**: under `pct="row"`, let the user choose the reference row (level) of *each*
-`row_var`; under `pct="col"`, the reference column of the chosen `col_var`. This maps onto
-the 1.4.0 decision (§2/§4 of the decisions doc) that `ref` becomes a per-row_var named
-vector. The Jamovi widget for exactly this is `jmv`'s binomial-logistic `refLevels`.
+Goal: under `pct="row"`/means, choose the reference row (level) of each `row_var`; under
+`pct="col"`, the reference column of the chosen `col_var`. Maps onto the 1.4.0 decision that
+`ref` becomes a per-row_var named vector. The widget is jmv's binomial-logistic `refLevels`
+(vendored: `dev/jamovi/reference/jmv-logregbin/`).
 
-Source (vendored, byte-exact): `dev/jamovi/reference/jmv-logregbin/{logregbin.a.yaml,
-logregbin.u.yaml, logregbin.events.js, logregbin.b.R}`.
-
-### 10.1 `.a.yaml` — the Array/Group/Level option
+### 12.1 `.a.yaml`
 
 ```yaml
 - name: refLevels
@@ -445,10 +622,9 @@ logregbin.u.yaml, logregbin.events.js, logregbin.b.R}`.
             type: Level
 ```
 
-Read in R as `self$options$refLevels` →
-`list(list(var="gender", ref="female"), list(var="group", ref="control"), ...)`.
+`self$options$refLevels` → `list(list(var="gender", ref="female"), ...)`.
 
-### 10.2 `.u.yaml` — the ListBox with a `LevelSelector` column
+### 12.2 `.u.yaml`
 
 ```yaml
 - type: CollapseBox
@@ -470,384 +646,343 @@ Read in R as `self$options$refLevels` →
           selectable: false
           stretchFactor: 1
           maxWidth: 300
-          template:
-            type: VariableLabel
+          template: { type: VariableLabel }
         - name: ref
           label: Reference Level
           selectable: false
           stretchFactor: 0.5
-          template:
-            type: LevelSelector
-            label: ''
+          template: { type: LevelSelector, label: '' }
 ```
 
-`LevelSelector` is **dynamic**: once its `variable` property is set, it fetches that
-variable's own levels and renders them **in data order** (it never reorders — relevant to
-feature 2). A static `ComboBox` (as in anova contrasts) cannot show a variable's real
-levels — use `LevelSelector`.
+`LevelSelector` fetches its variable's levels via `requestData` and stores the chosen **level
+label string** — which fits tabxplor's `ref` (a level name / regex) semantics directly (§6.4).
 
-### 10.3 `.js` — row reconciliation + per-row level binding (verbatim from logregbin)
+### 12.3 `.js` (verbatim from `logregbin.events.js`, with the corrected `applyToItems`)
 
 ```js
 const events = {
-    update: function(ui) {
-        calcModelTerms(ui, this);      // rebuild rows from the selected variables
-        updateLevelControls(ui, this); // bind each row's LevelSelector to its variable
-    },
-    onChange_row_vars: function(ui) { calcModelTerms(ui, this); },
-    onChange_col_vars: function(ui) { calcModelTerms(ui, this); },
-    onChange_refLevels: function(ui) { updateLevelControls(ui, this); },
+    update:               function(ui) { calcModelTerms(ui, this); updateLevelControls(ui, this); },
+    onChange_row_vars:    function(ui) { calcModelTerms(ui, this); },
+    onChange_col_vars:    function(ui) { calcModelTerms(ui, this); },
+    onChange_refLevels:   function(ui) { updateLevelControls(ui, this); },
 };
-
-// one {var, ref} row per selected variable, preserving prior choices
 var calcModelTerms = function(ui, context) {
-    var variableList = context.clone(ui.row_vars.value(), []);   // + col_vars as needed
+    var variableList = context.clone(ui.row_vars.value(), []);   // + col_vars when pct="col"
     updateContrasts(ui, variableList, context);
 };
-
-var updateContrasts = function(ui, variableList, context) {
+var updateContrasts = function(ui, variableList, context) {      // one {var,ref} row per variable
     var currentList = context.clone(ui.refLevels.value(), []);
     var list3 = [];
     for (let i = 0; i < variableList.length; i++) {
         let found = null;
-        for (let j = 0; j < currentList.length; j++) {
+        for (let j = 0; j < currentList.length; j++)
             if (currentList[j].var === variableList[i]) { found = currentList[j]; break; }
-        }
-        if (found === null) list3.push({ var: variableList[i], ref: null });
-        else                list3.push(found);
+        list3.push(found !== null ? found : { var: variableList[i], ref: null });
     }
     ui.refLevels.setValue(list3);
 };
-
-// tell each row's LevelSelector (column index 1) which variable's levels to show
-var updateLevelControls = function(ui, context) {
+var updateLevelControls = function(ui, context) {                // bind each row's LevelSelector
     let dlist = ui.refLevels.value();
-    ui.refLevels.applyToItems(0, (item, index, column) => {
-        if (column === 1)
-            item.setPropertyValue('variable', dlist[index].var);
+    ui.refLevels.applyToItems(0, (item, rowIndex, columnIndex) => {   // NB: (startRow, cb(item,row,col))
+        if (columnIndex === 1) item.setPropertyValue('variable', dlist[rowIndex].var);
     });
 };
-
 module.exports = events;
 ```
 
-### 10.4 Reading it in `.b.R`
+### 12.4 `.b.R`
 
 ```r
-# self$options$refLevels -> list(list(var=, ref=), ...)
 ref_named <- purrr::map_chr(self$options$refLevels, "ref") |>
   rlang::set_names(purrr::map_chr(self$options$refLevels, "var"))
-# pass ref_named into tab_many(ref = ...) as the per-row_var named vector (decisions §4)
+# feed ref_named into tab_many(ref = ...) as the per-row_var named vector (decisions §4)
 ```
 
-### 10.5 Adapting to tabxplor's semantics
-
-- Under `pct="row"`/means, `ref` is a reference **row** per `row_var` → the `refLevels`
-  ListBox is populated from `row_vars`.
-- Under `pct="col"`, `ref` is a reference **column** of one `col_var` → populate from
-  `col_vars` (and message that only one applies, per decisions §4).
-- Keep the existing free-text `ref`/`ref2` `TextBox`es as a fallback/expert path
-  (`"auto"`/`"tot"`/`"first"`/regex still valid); the ListBox writes the common case.
-- The empirical-OR `ref2` (a second reference for odds ratios) can reuse the same widget on
-  `col_vars` (Phase 10, `tab_logit`).
+Keep the free-text `ref` TextBox as an expert fallback (`"auto"`/`"tot"`/`"first"`/regex).
+Under `pct="col"`, populate from `col_vars` and message that only one applies. `ref2` (empirical
+OR, Phase 10) can reuse the same widget.
 
 ---
 
-## 11. Feature 2 — level reordering
+## 13. Feature 2 — level reordering
 
-**Reality check (important):** Jamovi has **no ready-made "drag-sortable list of factor
-levels with up/down arrows"** control at module level. Confirmed against the compiler and
-the app client. What actually exists:
+**Reality check (confirmed against the framework):** there is **no ready-made drag-sortable
+factor-level control** at module level, and `LevelSelector` takes levels verbatim (§6.4). The
+achievable routes, in preference order:
 
-| Capability                                                  | At module level?       | How                                                                      |
-|-------------------------------------------------------------|------------------------|--------------------------------------------------------------------------|
-| Drag-reorder chosen **variables/items** in a target ListBox | ✓ native, no JS        | `ListBox isTarget: true` with default `itemDropBehaviour: insert`        |
-| Up/down **arrow buttons** on an ordered list                | ⚠ build it             | ordered `Array` + `GridActionButton` column + JS splice                  |
-| Drag-reorder factor **levels** inside an analysis           | ✗                      | closest is compiled `RMAnovaFactorsBox` (rename/add/remove, not reorder) |
-| Reorder factor **levels** with arrows                       | ✗ (core Data-tab only) | `datavarwidget.ts` `_moveUp/_moveDown` — not reachable from a module     |
+### 13.1 Free drag-reorder of the chosen variables (no JS)
 
-### 11.1 Free drag-reorder (no JS)
+A `ListBox`/`VariablesListBox` with `isTarget: true` and the default `itemDropBehaviour:
+insert` already supports positional drag-reorder (§6.5). tabxplor's `row_vars`/`col_vars`/
+`tab_vars` suppliers already reorder by drag — the order the user drags IS the order. Nothing
+to build.
 
-A `ListBox` with `isTarget: true` and the **default** `itemDropBehaviour: insert` already
-supports positional drag-reorder: dropping a row onto an existing position removes it from
-its old index and re-inserts at the drop index (one undoable edit). Setting
-`itemDropBehaviour: emptyspace` turns this **off** (append-only — used by model-term boxes
-where order is immaterial). So: for a sortable list, use `isTarget: true` and **don't** set
-`emptyspace`. (Mechanism: `dev/jamovi/reference/jamovi-client/gridtargetcontrol.ts`.)
+### 13.2 A per-level ordered list — `CustomControl` (recommended, the "real custom JS" route)
 
-An **ordered list of levels is modeled as** `type: Array` with `template: {type: String}` —
-array element order *is* the level order (see `dev/jamovi/reference/jmv-anovarm/anovarm.a.yaml`,
-the `rm` factors' `levels`).
+This is the genuinely custom-JS route (§6.6) and the best fit for "reorder the levels of a
+factor". Build a sortable list in the control's `$el`:
 
-### 11.2 Explicit up/down arrows (needs JS)
+```yaml
+# .a.yaml : ordered levels per variable
+- name: levelOrder
+  type: Array
+  default:
+  template:
+    type: Group
+    elements:
+      - { name: var,    type: Variable }
+      - { name: levels, type: Array, template: { type: String } }   # element order = display order
+```
 
-Add a `GridActionButton` column (`dev/jamovi/reference/jamovi-client/gridactionbutton.ts`)
-to fire custom events, and splice in the handler using the exact Data-tab idiom
-(`dev/jamovi/reference/jamovi-client/datavarwidget.ts`):
+```yaml
+# .u.yaml
+- type: CustomControl
+  name: levelOrderCtrl
+  events:
+    creating: './jmvtab.events::levelOrderCtrl_creating'
+    updated:  './jmvtab.events::levelOrderCtrl_updated'
+```
+
+```js
+// .js : build a drag/arrow list in $el; requestData for levels; write order back to the option
+levelOrderCtrl_creating: function(ui, event) {
+    this._build = () => {
+        let $el = ui.levelOrderCtrl.$el;
+        let vars = ui.row_vars.value() || [];
+        $el.empty();
+        vars.forEach(v => {
+            ui.levelOrderCtrl.requestData('column', { columnName: v, properties: ['levels'] })
+              .then(col => {
+                  // render col.levels as a reorderable <ul> (drag handles or ▲▼ buttons);
+                  // on reorder, write back: splice + ui.levelOrder.setValue(updatedArray)
+              });
+        });
+    };
+    this._build();
+},
+levelOrderCtrl_updated: function(ui) { /* re-read row_vars, rebuild if changed */ },
+```
+
+The `MutationObserver` on `$el` auto-emits `contentchanged`; write the reordered array via the
+option wrapper (`ui.levelOrder.setValue(...)` or `insertValueAt`/`removeAt` with keys, §6.2).
+Row/column button clicks are just DOM handlers you attach in `_build` — full control over
+"the behaviour of the buttons", which is what earlier attempts could not achieve.
+
+### 13.3 Arrow buttons via `ActionButton` (not `GridActionButton`)
+
+If you prefer declared controls over `CustomControl`, a paired ordered `ListBox` + up/down
+`ActionButton`s (NOT `GridActionButton` — that's not a `.u.yaml` type, §6.1) with a JS splice
+handler works:
 
 ```js
 onChange_moveUp: function(ui) {
-    let levels = this.clone(ui.levelOrder.value(), []);
-    let i = ui.levelOrder.getSelectedRowIndices();
-    if (i.length === 0 || i[0] === 0) return;
-    let idx = i[0];
-    let item = levels.splice(idx, 1)[0];
-    levels.splice(idx - 1, 0, item);     // move down: splice(idx + 1, 0, item)
-    ui.levelOrder.setValue(levels);
+    let arr = this.clone(ui.levelOrder.value(), []);
+    let sel = ui.levelOrder.getSelectedRowIndices();
+    if (!sel.length || sel[0] === 0) return;
+    let i = sel[0], item = arr.splice(i, 1)[0];
+    arr.splice(i - 1, 0, item);                // down: splice(i + 1, 0, item)
+    ui.levelOrder.setValue(arr);
 }
 ```
 
-Read `ui.<opt>.value()` → splice → `ui.<opt>.setValue(clone)` — the same `value()`/
-`setValue()` surface used everywhere.
+### 13.4 `.b.R`
 
-### 11.3 Recommendation for tabxplor
-
-Reordering **rows / columns / subtables** is really reordering the chosen variables and the
-retained levels:
-
-1. For **which variables** and their order: the native drag-reorder target ListBox is free
-   and idiomatic — the current `row_vars`/`col_vars`/`tab_vars` VariablesListBoxes already
-   reorder by drag.
-2. For **level order within a factor**: model an ordered `Array{String}` per variable
-   (populate its rows from the variable's levels in JS, like feature 1), rendered as a
-   drag-`insert` ListBox; optionally add up/down `GridActionButton`s. Then in `.b.R`, apply
-   the order via `forcats::fct_relevel()` before `tab_many()`.
-3. Do **not** promise a Jamovi-native drag-sortable levels control — it doesn't exist; build
-   the Array+ListBox(+arrows) yourself.
-
-The RM-ANOVA factors editor (`RMAnovaFactorsBox`) is a compiled control you can only invoke
-as-is (text inputs + delete buttons, order = typing order); you cannot re-skin it.
+Apply the order with `forcats::fct_relevel()` per variable before `tab_many()`. Recommendation:
+ship §13.1 (free) now; add §13.2 (`CustomControl`) when per-level control is actually needed.
 
 ---
 
-## 12. Feature 3 — Excel export with a user-friendly path selector
+## 14. Feature 3 — Excel export with a user-friendly path selector
 
-**Reality check:** Jamovi has **no file/folder-picker control** exposed to an analysis
-options panel (no `FilePicker`, no `action: save`, no `filters:`). The app's own
-Import/Export dialogs are application-level. A module has two working export routes:
+**Confirmed against the shell + results bundles:** there is **no file/folder-picker control**
+for a module, **no module-callable Save-As dialog**, and (in the captured Jamovi 2.6.44) **no
+`Action`-option `perform`/open-dataset mechanism**. App-level export does xlsx for the
+*dataset* only; results export is PDF/PNG/HTML/LaTeX. So a module `.xlsx` must be written by
+the R engine to a path the user provides as a string. The best implementation is
+`SummaryTables` (vendored: `dev/jamovi/reference/SummaryTables/`).
 
-- **A. Typed path + direct write** — a `String` option shown as a `TextBox` (the user
-  types/pastes a folder or full path) + an `Action` `ActionButton`; the R backend writes the
-  file. This is the real, working pattern and what tabxplor already does (minus the
-  robustness). **Windows `~` expansion is the main footgun** — solved below.
-- **B. Action `open` handoff** — `option$perform(function(action) list(data=df, title=...))`
-  opens a data.frame as a new Jamovi dataset/window; the user saves via the app's own
-  File ▸ Export. Portable to cloud/server (where arbitrary-path writes are sandboxed).
-  Requires Jamovi ≥ 2.7.12; guard with `is.null(option$perform)`.
-
-For tabxplor's `tab_xl()` (writes a formatted `.xlsx`), **route A is correct**, and the
-best-in-class implementation is `SummaryTables`. Source (vendored):
-`dev/jamovi/reference/SummaryTables/{tblsummary.a.yaml, tblsummary.u.yaml, tblsummary.b.R,
-export.R}`.
-
-### 12.1 `.a.yaml`
+### 14.1 `.a.yaml` / `.u.yaml`
 
 ```yaml
-- name: path
-  title: Path
-  type: String
-  default: ~/Desktop/Table.xlsx
-
-- name: export
-  title: Save
-  type: Action           # no `action: open` -> read as a boolean click in R
+# .a.yaml
+- { name: path,   title: Path, type: String, default: ~/Desktop/Table.xlsx }
+- { name: export, title: Save, type: Action }        # read as a boolean click in R
 ```
 
-### 12.2 `.u.yaml`
-
 ```yaml
+# .u.yaml
 - type: CollapseBox
   label: Export to Excel
   collapsed: true
-  stretchFactor: 1
   children:
-    - type: TextBox
-      name: path
-      format: string
-      stretchFactor: 1
-    - type: ActionButton
-      name: export
+    - { type: TextBox, name: path, format: string, stretchFactor: 1 }
+    - { type: ActionButton, name: export }
 ```
 
-No `FilePicker` — the `TextBox` bound to the `path` String **is** the picker.
+The `TextBox` bound to `path` IS the picker. No JS reset needed (the click is a boolean read
+in R; §5.3 change-detection handles re-fire).
 
-### 12.3 `.b.R` — detect the click in R, no JS needed
+### 14.2 `.b.R` — detect the click, write, report via Notice
 
 ```r
 if (self$options$export) {
-    path <- resolveExportPath(self$options$path)   # see 12.4
-    tab_xl(tabs, path = path, sheets = "unique", open = FALSE,
-           replace = self$options$xl_replace)
-    notice <- jmvcore::Notice$new(options = self$options, name = "exportSuccess",
-                                  type = jmvcore::NoticeType$INFO)
-    notice$setContent(paste0("Saved to: ", path))
-    self$results$insert(1, notice)
+    p <- resolveExportPath(self$options$path)            # §14.3
+    tab_xl(tabs, path = p, sheets = "unique", open = FALSE, replace = self$options$xl_replace)
+    n <- jmvcore::Notice$new(options = self$options, name = "exportOK",
+                             type = jmvcore::NoticeType$INFO)   # type 3 = info (§7.6)
+    n$setContent(paste0("Saved to: ", p))
+    self$results$insert(1, n)
 }
 ```
 
-The current tabxplor code resets the button via JS (`exportExcel_changed`) and rolls its own
-folder check — the `SummaryTables` approach (detect the boolean in R + `jmvcore::Notice`) is
-simpler and more robust. The JS `setValue(false)` reset is **optional** (only needed to make
-the button re-clickable without another option change); real export modules skip it.
+This replaces the current ActionButton-JS-reset + hand-rolled folder check + `export_status`
+HTML div.
 
-### 12.4 `resolveExportPath()` — copy this verbatim (the Windows fixes)
+### 14.3 `resolveExportPath()` — copy verbatim (the Windows fixes)
 
-The single most valuable snippet for tabxplor. It solves every problem in tabxplor's
-export-path comments (`~` → Documents inside Jamovi's engine, "Copy as path" quotes,
-`sub()` backslash backreference bug, bare filenames). Full source:
-`dev/jamovi/reference/SummaryTables/export.R`. Core (adapt `.docx` → `.xlsx`):
+Full source: `dev/jamovi/reference/SummaryTables/export.R`. Core (adapt `.docx` → `.xlsx`):
 
 ```r
 resolveExportPath <- function(path) {
   path <- trimws(path)
   path <- gsub("^[\"']|[\"']$", "", path)                # strip Windows "Copy as path" quotes
   if (nchar(path) == 0 || path %in% c("~", "~/")) path <- "~/Desktop/Table.xlsx"
-  getHome <- function() {
-    home <- Sys.getenv("USERPROFILE")                     # Windows: real profile, NOT Documents
-    if (home == "") home <- Sys.getenv("HOME")            # Mac/Linux
-    home
-  }
-  # expand leading ~ WITHOUT sub() (USERPROFILE backslashes = backreferences)
-  if (grepl("^~", path)) path <- paste0(getHome(), substring(path, 2))
-  if (!grepl("[/\\\\]", path)) path <- file.path(getHome(), "Desktop", path)  # bare name -> Desktop
+  getHome <- function() { h <- Sys.getenv("USERPROFILE"); if (h == "") h <- Sys.getenv("HOME"); h }
+  if (grepl("^~", path)) path <- paste0(getHome(), substring(path, 2))   # NOT sub() (backref bug)
+  if (!grepl("[/\\\\]", path)) path <- file.path(getHome(), "Desktop", path)
   if (!grepl("\\.xlsx$", path, ignore.case = TRUE)) path <- paste0(path, ".xlsx")
   normalizePath(path, mustWork = FALSE)
 }
 ```
 
-Why it matters: inside Jamovi's bundled R engine on Windows, `path.expand("~")` resolves to
-*Documents*, not the user profile — the root cause of tabxplor's `xl_path` hacks
-(`%USERPROFILE%` "not working", the `"S:/Documents"` default). `Sys.getenv("USERPROFILE")`
-is the fix.
+Why `USERPROFILE` and not `~`: the module runs in Jamovi's bundled R (§5.2), where
+`path.expand("~")` resolves to Documents — the root cause of tabxplor's `xl_path` hacks.
 
-### 12.5 Optional route B (cloud-portable "open as dataset")
+### 14.4 The zero-code user route, and what NOT to attempt
 
-If you also want a picker-free, sandbox-safe export, add an Action that opens the compacted
-table as a new dataset (`dev/jamovi/reference/gamlj/Saver.R` shows the version-gated form):
-
-```r
-option <- self$options$option("export")
-if (is.null(option$perform)) {                      # < 2.7.12
-    jmvReadWrite:::jmvOpn(dtaFrm = as.data.frame(tabs), dtaTtl = "tabxplor table")
-} else {                                            # >= 2.7.12
-    option$perform(function(action) list(data = as.data.frame(tabs), title = "tabxplor table"))
-}
-```
-
-The user then exports from Jamovi's own File menu (where the real save dialog lives).
+- **Zero-code**: the user can already get tabxplor tables out via Jamovi's **File ▸ Export →
+  HTML** (whole results to HTML) or right-click a result → **Export...** (PDF/PNG/HTML). Worth
+  documenting; keep the emitted HTML self-contained so "Copy" and HTML-export are clean (§7.2).
+- **Do NOT** try to raise a native save dialog from the analysis (no hook exists), rely on
+  `Action` `open`/`option$perform` (that is a newer Jamovi ≥ 2.7.12 feature — absent in the
+  captured 2.6.44; gate with `is.null(option$perform)` if ever used), or serve the file via
+  `openUrl` (backend-fragile). The typed-path + engine-write is the only robust route.
 
 ---
 
-## 13. File I/O, sandboxing, and state — constraints to respect
+## 15. Sandboxing, recompute, and Phase 8 caching
 
-- **No native picker** in module options (§12); type-a-path is the only in-panel route.
-- **Sandboxing**: on Jamovi cloud/server/Docker, file access is restricted to a mapped
-  folder (Documents by default); arbitrary-path writes only work on Desktop. Route B (open
-  as dataset) is the portable option. Validate `path` before writing (restrict dirs,
-  controlled extension) if this ever ships publicly.
-- **UI events can't see the dataset** (no row counts, no cell values in `.js`) — anything
-  needing data must happen in `.b.R`.
-- **R engine state resets between runs** (tabxplor's own comments confirm it): do not rely on
-  R global variables to carry state across runs. Cross-interaction caching (Phase 8) must
-  use Jamovi's mechanisms: results `clearWith:` for invalidation, `image$setState()`/
-  `image$state` for plot data, and the analysis `state` (tutorial `tuts0203-state`). Drive
-  the **same aggregate-core + per-transform subfunctions** (1.4.0 Phase 2) at
-  cache-appropriate granularity instead of re-running `tab_many()` wholesale.
+Constraints to design around, now grounded in the protocol (§5.3) and results model (§7):
 
----
-
-## 14. How to set up Claude Code to work with Jamovi effectively
-
-The recurring failure mode is editing YAML/JS blind, without a working example or a way to
-see the rendered result. The fix is a small, repeatable working method:
-
-1. **Keep `dev/jamovi/reference/` as ground truth.** It holds real, byte-exact `jmv`/`gamlj`/
-   `SummaryTables`/client files (see its README). When building a control or handler, open
-   the matching vendored file and mirror it — never invent YAML/JS from memory (the docs are
-   too thin and the JS API is undocumented). Re-fetch/extend the folder as needed (branches:
-   `jmv`/`jamovi` = `main`, `gamlj`/`jamovi-compiler` = `master`).
-
-2. **Grep the two authoritative sources** before trusting a property name: `.u.yaml`
-   properties → `dev/jamovi/reference/jamovi-compiler/uicompiler.js`; `.a.yaml` option keys →
-   `dev/jamovi/reference/jmvcore/options.R`. These are the compiler/runtime, not prose.
-
-3. **Close the edit→see loop with `F10`.** After `jmvtools::install(home=)` + reloading the
-   analysis, open DevTools (F10, blue-bar-focus trick), inspect the options-panel DOM, and
-   run `copy(ui.view.el.outerHTML)` to dump the *real* rendered HTML into a file for review.
-   This is how you (or Claude Code) verify what a `.u.yaml`/`.js` change actually produced —
-   the missing feedback in past attempts. Paste that HTML back into the session when asking
-   Claude to reason about layout.
-
-4. **Prefer R over JS where possible.** Detect button clicks in `.b.R` (`if
-   (self$options$export)`), not JS resets; compute in R. Reserve `.js` for the two things
-   only it can do: (a) reconciling Array rows to selected variables, (b) binding per-row
-   `LevelSelector`s. Both are copied from `logregbin.events.js`.
-
-5. **Don't fight the toolchain.** `R/jmvtab.h.R` is generated — change `jamovi/jmvtab.a.yaml`
-   and run `jmvtools::prepare()`; never hand-edit `.h.R`. `compilerMode: tame` (already set)
-   preserves your `.u.yaml` hand-edits across `.a.yaml` changes — keep it.
-
-6. **A dedicated skill is worth adding** (like the existing `/vctrs-field`, `/color-mode`):
-   a `/jamovi-control` skill encoding "to add a per-variable picker: edit `.a.yaml` (Array/
-   Group/Level) → `.u.yaml` (ListBox/columns/LevelSelector) → `.js` (updateContrasts/
-   updateLevelControls) → `.b.R` (read `self$options$...`) → `prepare()` → `install(home=)` →
-   F10-verify", with pointers into `dev/jamovi/reference/`. This encodes the ~5-file
-   checklist the same way `/vctrs-field` encodes the record-field checklist. (Proposed, not
-   yet created.)
-
-7. **Cloning whole repos** is optional given the vendored subset, but if deeper study is
-   needed, clone (ranked): `jamovi/jmv` (the canonical large reference, esp. `jamovi/js/`),
-   `jamovi/walrus` (a small complete module), `sbalci/ClinicoPathJamoviModule` (best
-   real-world dev guide + troubleshooting), `jamovi/jmvcore` (R6 API contract),
-   `jamovi/jamovi-compiler` (compile internals). Prefer grepping the vendored files first.
+- **No native picker; no module save dialog; results export ≠ xlsx** (§14).
+- **Sandbox**: options/results iframes are `allow-scripts allow-same-origin`; the only exits
+  are `postMessage` to the host and `openUrl`. A **results element can post `setOption` back**
+  to change an analysis option (a real callback channel) — but tabxplor's HTML table can't
+  easily use it (inline JS is inert, §7.2), so keep interactivity in the options panel.
+- **The module runs in bundled R** (§5.2); **R engine state resets between runs** — never rely
+  on R globals for cross-run state.
+- **Every option change is a full `perform=INIT` round-trip** carrying `changed:[names]` +
+  `revision` (§5.3). There is **no client-side display-only shortcut.** Therefore Phase 8
+  caching must be **R-side**:
+  - In `.b.R`, branch on *what changed*. jmvcore exposes changed options
+    (`self$options$changed` / the `changed` list); when only display options changed
+    (`display`, `digits`, `wrap_*`, `ci_print`, colours), **reuse a cached aggregate** and only
+    re-render — drive the 1.4.0 aggregate-core + per-transform subfunctions at
+    cache-appropriate granularity (never fork the math).
+  - Persist the cache in Jamovi `state` (`image$setState()`/`$state`, analysis `state`), keyed
+    on the aggregate-defining options, not R globals.
+  - Declare true dependencies with `clearWith:` in `.r.yaml` so untouched results are reused.
+  - Because the results view re-renders the whole tree per update (§7), keep the emitted HTML
+    byte-stable when inputs are unchanged to avoid visible flping/reflow.
+- **Table HTML**: emit CSS-only, wrapper-scoped, with an own `overflow-x:auto` box sized to
+  fit (not `scroll_box(1080px)`); assume no Bootstrap/jQuery; drop JS tooltips (§7.2–§7.3).
 
 ---
 
-## 15. Vendored reference files index
+## 16. How to set up Claude Code to work with Jamovi
 
-All under `dev/jamovi/reference/` (`.Rbuildignore`'d via `^dev$`; full annotations in that
-folder's `README.md`):
+The failure mode is editing YAML/JS blind. The working method:
 
-| Folder                          | What it demonstrates                                                                           |
-|---------------------------------|------------------------------------------------------------------------------------------------|
-| `jmv-logregbin/`                | **Feature 1** — Array/Group/Level + ListBox/LevelSelector + JS row-sync.                       |
-| `jmv-anova/`                    | Variant B (ComboBox per var) + rich per-row templates (`emMeans`, `addButton`) + Output/Save.  |
-| `jmv-anovarm/`                  | **Feature 2** — ordered-levels Array + `RMAnovaFactorsBox` + templated cells grid.             |
-| `jmv-conttables/`               | Contingency tables — closest built-in analog to tabxplor's crosstabs.                          |
-| `gamlj/`                        | Variant B in the wild + conditional reveal (`$el.style.display`) + Action-`open` export.       |
-| `SummaryTables/`                | **Feature 3** — typed-path Excel/file export + `resolveExportPath()` Windows fixes.            |
-| `jamovi-client/`                | Compiled TS: `LevelSelector`, drag-reorder (`gridtargetcontrol`), arrows, `_moveUp/_moveDown`. |
-| `jamovi-compiler/uicompiler.js` | Authoritative `.u.yaml` control-property list.                                                 |
-| `jmvcore/options.R`             | Authoritative `.a.yaml` option-type R6 contracts.                                              |
-
----
-
-## 16. Open questions / decisions for tabxplor Phase 8 & 10
-
-- **Where the per-variable `ref` picker lives**: a new "References" ListBox (feature 1)
-  populated from `row_vars` (row%/means) or `col_vars` (col%). Keep the free-text `ref`
-  TextBox as expert fallback. Decide whether to auto-switch the populate source on `pct`.
-- **Level reordering scope**: ship the free drag-reorder of variables first (zero cost);
-  defer per-level Array+arrows until there's demand (it's real work with no native control).
-- **Export**: replace the current ActionButton/JS-reset/hand-rolled folder check with the
-  `SummaryTables` pattern (`resolveExportPath` + `jmvcore::Notice`); optionally add route B.
-- **Caching (Phase 8)**: drive the aggregate-core + per-transform subfunctions at
-  cache-appropriate granularity via `clearWith:` + analysis `state`, not `tab_many()` end to
-  end; reuse the `.fine` aggregate across interactions. Never fork the math from the R API.
-- **Do NOT** move off `usesNative`/embedded-in-package layout; it works and matches the CRAN
-  build.
+1. **Ground truth is local.** `dev/jamovi/reference/` holds byte-exact real-module source;
+   `dev/jamovi/dev_console_live_capture/` holds the live runtime (compiled module, framework
+   bundles, rendered HTML). Mirror these; never invent YAML/JS from memory.
+2. **The framework bundles are searchable, not readable.** They are minified (one ~50–325 k
+   char line each). Grep for **string literals** (control names, method names, event names,
+   CSS classes, protocol keys) with small context; never `cat` them. §5–§7 already distilled
+   the load-bearing facts; re-grep only to confirm a new detail.
+3. **Close the loop with F10 + capture.** After `jmvtools::install(home=)` + reload, open
+   DevTools (F10), inspect the target iframe, and `copy($0.outerHTML)` / `copy(ui.view.el
+   .outerHTML)` to dump the real DOM into a file — the exact method that produced the capture
+   folder. Re-capture after a UI change to verify what compiled.
+4. **Prefer R over JS.** Detect clicks in `.b.R`; compute in R. Reserve `.js` for what only it
+   can do: row-reconcile Array options to selected variables, bind per-row `LevelSelector`s,
+   and `CustomControl` DOM (§6.6). All copied from `logregbin.events.js`.
+5. **Respect the toolchain.** `.h.R` is generated (edit `.a.yaml` → `prepare()`); `compilerMode:
+   tame` preserves `.u.yaml` hand-edits; delete commented `.js` (it ships, §5.2).
+6. **A `/jamovi-control` skill** (like `/vctrs-field`) would encode the per-feature checklist:
+   `.a.yaml` (Array/Group/Level) → `.u.yaml` (ListBox/columns/LevelSelector or CustomControl) →
+   `.js` (updateContrasts/updateLevelControls or a $el builder) → `.b.R` (read `self$options`)
+   → `prepare()` → `install(home=)` → F10-verify, with pointers into both `dev/jamovi/`
+   folders. Proposed, not yet created.
 
 ---
 
-## 17. Sources
+## 17. Reference material index
 
-Official: `dev.jamovi.org` (Developer Hub — `/tutorial/tuts01xx`, `/api/*`, `/ui/*`;
-`/ui/advanced-customisation` for JS events, `/api/option-action`); legacy mirror
-`docs.jamovi.org/_pages/*`. Repos: `github.com/jamovi/{jmvtools, jamovi-compiler, jmvcore,
-jmv, jamovi, walrus}`, `github.com/gamlj/gamlj`, `github.com/NourEdinDarwish/SummaryTables`,
-`github.com/sbalci/ClinicoPathJamoviModule` (its `articles/module-development-jamovi.html`
-and `vignettes/jamovi_*_guide.md`). Forum: `forum.jamovi.org` threads — Array options &
-reference levels (`t=4129`), file I/O / no native picker (`p=13515`, `t=132`), sandboxing
-(`t=3679`), debugging/F10 (`t=15`), runtime control setting (`t=440`). CRAN: `jmvcore`
-(2.6.3), `jmv`. All verbatim code above is mirrored under `dev/jamovi/reference/` and was
-fetched 2026-07-08.
+### `dev/jamovi/reference/` — vendored real-module source (annotated in its README)
+
+`jmv-logregbin/` (feature 1: Array/Group/Level + ListBox/LevelSelector + row-sync JS) ·
+`jmv-anova/` (ComboBox-per-var + rich templates) · `jmv-anovarm/` (ordered-levels Array +
+RMAnovaFactorsBox) · `jmv-conttables/` (crosstab analog) · `gamlj/` (contrasts + conditional
+reveal + Action-open) · `SummaryTables/` (feature 3 export + `resolveExportPath`) ·
+`jamovi-client/` (compiled TS controls) · `jamovi-compiler/uicompiler.js` (.u.yaml properties)
+· `jmvcore/options.R` (.a.yaml option contracts).
+
+### `dev/jamovi/dev_console_live_capture/` — the live runtime capture
+
+| Path | What it is | Used in |
+|------|------------|---------|
+| `Jamovi_tabxplor_1_3_1_basic_table.html` | The rendered app window (outer DOM: iframes, ports, sandbox, sizing, ribbon toggles) | §5.1, §4 |
+| `127.0.0.1_56680_MAIN_ELECTRON/assets/main-fd7ff1c3.js` | The app shell: coms protocol, module load, action system, save dialogs, F10/F9 | §5.3, §14, §4 |
+| `127.0.0.1_56680_MAIN_ELECTRON/modules/tabxplor__v_1.3.1.0` | **The served/compiled tabxplor module** (manifest + `uijs` blob) | §5.2 |
+| `.../modules/jmv__v_2.6.44.0`, others | Other served modules (compare) | — |
+| `127.0.0.1_56683_..._analysis_UI/assets/analysisui-49b1a9ac.js` (+ `.css`) | The options-panel control framework | §6 |
+| `127.0.0.1_56684_results/assets/resultsview-60a5863d.js` (+ `.css`) | The results renderer | §7 |
+| `127.0.0.1_56684_results/aa145378.../2/res/02 jmvtab/resources/*.png` | tabxplor's plot resources (addressing example) | §5.1, §7.4 |
+
+Method to refresh the capture: run Jamovi with tabxplor, add a crosstab, F10 → DevTools →
+Sources/Network → save the analysis-UI, results, and main-electron origins; save the page
+HTML. (The `.zip`s in the folder are the raw exports.)
+
+---
+
+## 18. Open questions / decisions for Phase 8 & 10
+
+- **Ref picker (§12)**: a "References" ListBox populated from `row_vars` (row%/means) or
+  `col_vars` (col%); keep the free-text `ref` as expert fallback; decide whether to auto-switch
+  the source on `pct`.
+- **Reordering (§13)**: ship free drag-reorder of variables first; add a `CustomControl`
+  per-level reorderer only when demanded.
+- **Export (§14)**: adopt the `SummaryTables` typed-path + `resolveExportPath` + `Notice`
+  pattern; drop the JS reset and hand-rolled folder check.
+- **Table HTML (§7)**: rework the `tab_kable` output for Jamovi — CSS-only, wrapper-scoped, own
+  `overflow-x:auto`, no `scroll_box(1080px)`, no JS tooltips, no Bootstrap dependence. This is
+  a Phase 7 exporter item, informed here.
+- **Caching (§15)**: R-side reuse keyed on `changed`; `state` for the aggregate; `clearWith:`
+  for dependencies. Never fork the math from the aggregate-core.
+- **Cleanup**: strip the 295 commented lines from `jamovi/js/jmvtab.js` (they ship, §5.2).
+- **Do NOT** move off `usesNative`/embedded layout; it works and matches the CRAN build.
+
+---
+
+## 19. Sources
+
+Official: `dev.jamovi.org` (`/tutorial/tuts01xx`, `/api/*`, `/ui/*`,
+`/ui/advanced-customisation`, `/api/option-action`); legacy `docs.jamovi.org/_pages/*`. Repos:
+`github.com/jamovi/{jmvtools, jamovi-compiler, jmvcore, jmv, jamovi, walrus}`,
+`github.com/gamlj/gamlj`, `github.com/NourEdinDarwish/SummaryTables`,
+`github.com/sbalci/ClinicoPathJamoviModule`. Forum: Array options/reference levels (`t=4129`),
+file I/O / no picker (`p=13515`, `t=132`), sandboxing (`t=3679`), debugging/F10 (`t=15`),
+runtime control setting (`t=440`). **Live capture: `dev/jamovi/dev_console_live_capture/`
+(Jamovi 2.6.44.0, tabxplor 1.3.1, bundled R 4.4.1-x64), analysed 2026-07-08** — the authority
+for §5–§7. Vendored verbatim source: `dev/jamovi/reference/`.

@@ -3099,12 +3099,13 @@ set_color_style <- function(type = c("text", "bg"),
   }
 
   if (length(custom_palette) != 0) {
-    # KNOWN-BUG: the check requires length 10 but the message says 11 and 11 names are
-    # applied below (pos1..neg5 + ratio) -> the `ratio` slot ends up without a value.
-    # custom_palette is effectively broken for the ratio color; fix by accepting length 11.
-    if (length(custom_palette) != 10 | !is.character(custom_palette)) stop(
-      "custom_palette should be a character vector of length 11"
-    )
+    # 11 slots: pos1..pos5 (over-represented), neg1..neg5 (under-represented), ratio (the x2).
+    if (length(custom_palette) != 11 || !is.character(custom_palette)) {
+      cli::cli_abort(c(
+        "{.arg custom_palette} must be a character vector of length 11.",
+        "i" = "Order: {.val pos1}..{.val pos5}, {.val neg1}..{.val neg5}, {.val ratio}."
+      ))
+    }
     options("tabxplor.color_style" = purrr::set_names(
       custom_palette,
       c("pos1","pos2","pos3","pos4","pos5", "neg1","neg2","neg3","neg4","neg5", "ratio")
@@ -3191,177 +3192,185 @@ get_color_style <- function(mode = c("crayon", "color_code"),
 
 #Color breaks for printing fmt in tabs ------------------------------------------------
 
+# PURPOSE: the canonical color-break representation (Phase 5) and its accessors.
+# The stored option "tabxplor.color_breaks" is a named list of the five measure scales
+#   pct_diff, pct_ratio, mean_diff, mean_ratio, contrib
+# each a list(pos = <positive breaks, sorted>, center, strict, std):
+#   - pos    : positive-only thresholds; the engine mirrors them (additive c(x,-x),
+#              multiplicative c(x,1/x)) at render time.
+#   - center : 0 for additive scales (pct_diff, mean_diff, contrib), 1 for multiplicative
+#              (pct_ratio, mean_ratio) -- the neutral value each break is measured from.
+#   - strict : TRUE reproduces a strict `>`/`<` comparison, FALSE an inclusive `>=`/`<=`
+#              (contrib). On-break cells fall in the lower band when strict.
+#   - std    : mean_diff only -- TRUE colors the sd-standardized difference (Glass's delta),
+#              FALSE colors the raw difference in data units.
+# The Phase-5 findInterval engine reads this shape directly. Until it lands (Step 3), the
+# current selection path is fed legacy flat vectors via legacy_color_breaks() (byte-identical).
+# See: dev/new_colors_UI.md §7 ; CLAUDE.md > 1.4.0 roadmap > Phase 5.
+
+#' @keywords internal
+default_color_scales <- function() {
+  list(
+    pct_diff   = list(pos = c(0.05, 0.1, 0.2, 0.3), center = 0, strict = TRUE,  std = FALSE),
+    pct_ratio  = list(pos = c(2),                   center = 1, strict = TRUE,  std = FALSE),
+    mean_diff  = list(pos = c(0.2, 0.5, 0.8),       center = 0, strict = TRUE,  std = TRUE ),
+    mean_ratio = list(pos = c(1.15, 1.5, 2, 4),     center = 1, strict = TRUE,  std = FALSE),
+    contrib    = list(pos = c(1, 2, 5, 10),         center = 0, strict = FALSE, std = FALSE)
+  )
+}
+
+# Validate one user scale and wrap it into the canonical list(pos, center, strict, std).
+# `values` NULL/empty drops the measure for that column type (§7.4) -- except mean_diff = NULL,
+# which restores the standardized default. Multiplicative scales (pct_ratio/mean_ratio) require
+# all breaks > 1 (mirrored to 1/x); additive scales require all > 0 (mirrored to -x).
+#' @keywords internal
+mk_color_scale <- function(name, values) {
+  valid <- c("pct_diff", "pct_ratio", "mean_diff", "mean_ratio", "contrib")
+  if (!name %in% valid) {
+    cli::cli_abort(c("Unknown color-break scale {.val {name}}.",
+                     "i" = "Valid scales: {.val {valid}}."))
+  }
+  center <- if (name %in% c("pct_ratio", "mean_ratio")) 1 else 0
+  strict <- name != "contrib"
+
+  if (is.null(values) || length(values) == 0) {
+    if (name == "mean_diff") {
+      return(list(pos = c(0.2, 0.5, 0.8), center = 0, strict = TRUE, std = TRUE))
+    }
+    return(list(pos = numeric(), center = center, strict = strict, std = FALSE))
+  }
+
+  if (!is.numeric(values)) {
+    cli::cli_abort("Color breaks {.arg {name}} must be numeric, not {.cls {class(values)}}.")
+  }
+  if (anyNA(values)) cli::cli_abort("Color breaks {.arg {name}} must not contain missing values.")
+  if (length(values) > 5) {
+    cli::cli_abort(c("Color breaks {.arg {name}} accept at most 5 values (color steps).",
+                     "x" = "{length(values)} were given."))
+  }
+  if (length(values) > 1 && is.unsorted(values, strictly = TRUE)) {
+    cli::cli_abort("Color breaks {.arg {name}} must be strictly increasing.")
+  }
+  if (center == 1) {
+    if (any(values <= 1)) {
+      cli::cli_abort(c("Ratio breaks {.arg {name}} must all be > 1.",
+                       "i" = "They are mirrored to 1/x for the under-represented side."))
+    }
+  } else if (any(values <= 0)) {
+    cli::cli_abort(c("Breaks {.arg {name}} must all be > 0.",
+                     "i" = "They are mirrored to -x for the under-represented side."))
+  }
+  # mean_diff supplied in data units -> absolute coloring (std = FALSE); NULL handled above.
+  list(pos = as.double(values), center = center, strict = strict, std = FALSE)
+}
+
+# Derive the LEGACY flat 5-vector representation the pre-Phase-5 selection path consumes, from
+# the canonical scales. Reproduces exactly what the old set_color_breaks() stored, so coloring
+# stays byte-identical while the option shape modernizes. Removed at Step 3 (engine rewrite).
+#' @keywords internal
+legacy_color_breaks <- function(scales) {
+  if (is.null(scales) || is.null(scales$pct_diff)) scales <- default_color_scales()
+
+  pd <- scales$pct_diff$pos
+  pr <- scales$pct_ratio$pos
+  # Interleave the (single, current-engine) x2 ratio just BEFORE the top diff break, so the
+  # "a top diff break beats the x2" quirk (keep_last_break list order) is reproduced.
+  pct_lit <- if (length(pr) >= 1 && length(pd) >= 1) {
+    c(utils::head(pd, -1L), pr[1], utils::tail(pd, 1L))
+  } else if (length(pd) >= 1) {
+    pd
+  } else {
+    pr[1]
+  }
+  pct_breaks    <- c(pct_lit, -pct_lit[pct_lit <= 1 | is.infinite(pct_lit)])
+  pct_ci        <- pct_lit - dplyr::if_else(pct_lit > 1, 0, pct_lit[1])
+  pct_ci_breaks <- c(pct_ci, -pct_ci[pct_ci <= 1 | is.infinite(pct_ci)])
+
+  mr             <- scales$mean_ratio$pos
+  mean_breaks    <- c(mr, 1 / mr)
+  mean_ci        <- mr / mr[1]
+  mean_ci_breaks <- c(mean_ci, -mean_ci)
+
+  contrib_breaks <- c(scales$contrib$pos, -scales$contrib$pos)
+
+  list(pct_breaks     = pct_breaks,
+       pct_ci_breaks  = pct_ci_breaks,
+       mean_breaks    = mean_breaks,
+       mean_ci_breaks = mean_ci_breaks,
+       contrib_breaks = contrib_breaks)
+}
+
 #' Set the breaks used to print colors
-#' @describeIn tab_many set the breaks used to print colors
-#' @description Only breaks for attractions/over-representations (in green) should be
-#' given, as a vector of positive doubles, with length between 1 and 5.
-#' Breaks for aversions/under-representations (in orange/red) will simply be the opposite.
-#' @param pct_breaks If they are to be changed, the breaks used for percentages.
-#' Default to \code{c(0.05, 0.1, 0.2, 2, 0.3)} : first color used when the pct of a cell
-#' is +5% superior to the pct of the related total ; second color used when
-#' it is +10% superior ; third +20% superior ; fourth *2 superior ;
-#' fifth +30% superior. When > 1, it does not take differences but ratio.
-#' The opposite for cells inferior to the total (without the *2 rule).
-#' With \code{color = "after_ci"}, the first break is subtracted from all breaks
-#' (default becomes \code{c(0, 0.05, 0.15, 2, 0.25)} : +0%, +5%, +15%, *2, +25%).
-#' @param mean_breaks If they are to be changed, the breaks used for means.
-#' Default to \code{c(1.15, 1.5, 2, 4)} : first color used when the mean of a cell
-#' is superior to 1.15 times the mean of the related total row ; second color
-#' used when it is superior to 1.5 times ; etc.
-#' The opposite for cells inferior to the total.
-#' With \code{color = "after_ci"}, the first break is divided from all breaks
-#' (default becomes \code{c(1, 1.3, 1.7, 3.5)}).
-#' @param contrib_breaks If they are to be changed, the breaks used for contributions to
-#' variance. Default to \code{c(1, 2, 5, 10)} : first color used when the contribution of
-#' a cell is superior to the mean contribution ; second color used when it is superior to
-#' 2 times the mean contribution ; etc. The global color (for example green or
-#' red/orange) is given by the sign of the spread.
+#' @describeIn tab_many set the breaks used to print colors.
+#' @description Color breaks are a named list of the five measure scales \code{pct_diff},
+#' \code{pct_ratio}, \code{mean_diff}, \code{mean_ratio} and \code{contrib}. Each is a vector
+#' of positive-only thresholds (the under-represented side is mirrored automatically), 1 to 5
+#' values, one per color step: \code{pct_diff} colors percentage-point differences,
+#' \code{pct_ratio} the relative risk (the "x2 rule"), \code{mean_diff} the standardized mean
+#' difference (Glass's delta) by default (supply data-unit values for absolute coloring),
+#' \code{mean_ratio} the mean ratio, \code{contrib} the chi2 contribution. An empty/\code{NULL}
+#' scale drops that measure for its column type.
+#' @param breaks A named list of scales to set, e.g.
+#' \code{list(pct_diff = c(0.05, 0.1, 0.2, 0.3), pct_ratio = c(2))}. Unset scales keep their
+#' current value.
+#' @param pct_breaks,mean_breaks,contrib_breaks `r lifecycle::badge("deprecated")` The old
+#' positional arguments. \code{pct_breaks} is split into \code{pct_diff} (values \eqn{\le} 1)
+#' and \code{pct_ratio} (values > 1); \code{mean_breaks} maps to \code{mean_ratio};
+#' \code{contrib_breaks} to \code{contrib}.
 #'
-#' @return Set the global option "tabxplor.color_breaks" as a list different double
-#' vectors, and also returns it invisibly.
+#' @return Sets the global option "tabxplor.color_breaks" (a named list of scales) and returns
+#' it invisibly.
 #' @export
-#' @examples set_color_breaks(
-#'   pct_breaks = c(0.05, 0.15, 0.3),
-#'   mean_breaks = c(1.15, 2, 4),
-#'   contrib_breaks = c(1, 2, 5)
-#' )
-set_color_breaks <- function(pct_breaks, mean_breaks, contrib_breaks) {
-  # DESIGN: Takes positive-only thresholds; negatives are auto-mirrored internally.
-  #   pct_breaks: any value > 1 activates the "*2 rule" (ratio comparison, shown in purple).
-  #   Only ONE value > 1 is allowed. Max 5 breaks = 5 color intensities per direction.
-  #   Rationale for the *2 rule: it flags meaningful differences in SMALL-COUNT columns
-  #   (with row% ; the reverse for col%), which an additive pp difference would miss.
-  #   PROVISIONAL (WS2): the positional >1 encoding (vs a separate ratio-breaks arg — the
-  #   dead code below) may change. v1.4.0 aims to let users pick a difference rule vs a ratio
-  #   rule for both pct AND means, mixable (e.g. diff = text colors + ratio = background).
-  #   mean_breaks are ALWAYS ratios (1.15 = "+15% above reference").
-  # Defaults are set at the first use of print.tabxplor_tab method :
-  #   pct_breaks = c(0.05, 0.1, 0.2, 2, 0.3),
-  #   mean_breaks = c(1.15, 1.5, 2, 4),
-  #   contrib_breaks = c(1, 2, 5, 10)
+#' @examples set_color_breaks(list(
+#'   pct_diff   = c(0.05, 0.15, 0.3),
+#'   pct_ratio  = c(2),
+#'   mean_ratio = c(1.15, 2, 4),
+#'   contrib    = c(1, 2, 5)
+#' ))
+set_color_breaks <- function(breaks = NULL, ...,
+                             pct_breaks, mean_breaks, contrib_breaks) {
+  cur <- getOption("tabxplor.color_breaks")
+  if (is.null(cur) || is.null(cur$pct_diff)) cur <- default_color_scales()
 
-  if (missing(pct_breaks) | missing(mean_breaks) | missing(contrib_breaks)   ) {
-    former_breaks <- getOption("tabxplor.color_breaks")
+  # NEW form: a fully named list of measure scales, merged over the current setting.
+  if (!is.null(breaks)) {
+    if (!is.list(breaks) || is.null(names(breaks)) || any(names(breaks) == "")) {
+      cli::cli_abort(c("{.arg breaks} must be a fully named list of color scales.",
+                       "i" = "e.g. {.code list(pct_diff = c(0.05, 0.1, 0.2, 0.3))}."))
+    }
+    for (nm in names(breaks)) cur[[nm]] <- mk_color_scale(nm, breaks[[nm]])
   }
 
+  # OLD positional args (soft-deprecated): map onto the new scales.
   if (!missing(pct_breaks)) {
-    stopifnot(is.numeric(pct_breaks)     ,
-              length(pct_breaks)     <= 5,
-              sum(pct_breaks > 1)    <= 1,         # not several *2 rule
-              all(pct_breaks         >= 0))
-
-    pct_ratio_breaks <- pct_breaks[pct_breaks > 1] # *2 rule
-    # if (length(pct_ratio_breaks) > 0) {
-    #   pct_ratio_breaks <- c(
-    #     dplyr::if_else(which(pct_breaks > 1) == 1, 0, pct_breaks[which(pct_breaks > 1) -1 ] ),
-    #     pct_breaks[pct_breaks > 1]
-    #   )
-    #
-    #   pct_ratio_brksup <- c(
-    #     pct_breaks[pct_breaks > 1],
-    #     dplyr::if_else(which(pct_breaks > 1) == length(pct_breaks),
-    #                    true  = Inf,
-    #                    false = pct_breaks[which(pct_breaks > 1) + 1 ] )
-    #   )
-    #
-    #   pct_breaks       <- pct_breaks[pct_breaks <= 1]
-    #
-    # } else {
-    #   pct_ratio_breaks <- NA_real_
-    #   pct_ratio_brksup <- NA_real_
-    # }
-
-    pct_ci_breaks   <- pct_breaks - dplyr::if_else(pct_breaks > 1,
-                                                   true  = 0,
-                                                   false = pct_breaks[1])
-    #pct_brksup      <- c(pct_breaks[2:length(pct_breaks)    ], Inf)
-    #pct_brksup      <- pct_brksup     %>% c(., -.[. <= 1 | . == Inf])
-    pct_breaks      <- pct_breaks     %>% c(., -.[. <= 1 | . == Inf])
-
-    #pct_ci_brksup   <- c(pct_ci_breaks[2:length(pct_ci_breaks) ], Inf)
-    #pct_ci_brksup   <- pct_ci_brksup  %>% c(., -.[. <= 1 | . == Inf])
-    pct_ci_breaks   <- pct_ci_breaks  %>% c(., -.[. <= 1 | . == Inf])
-
-
-  } else {
-    pct_breaks      <- former_breaks$pct_breaks
-    pct_brksup      <- former_breaks$pct_brksup
-    pct_ci_breaks   <- former_breaks$pct_ci_breaks
-    pct_ci_brksup   <- former_breaks$pct_ci_brksup
-    # pct_ratio_breaks<- former_breaks$pct_ratio_breaks
-    # pct_ratio_brksup<- former_breaks$pct_ratio_brksup
+    lifecycle::deprecate_soft(
+      "1.4.0", "set_color_breaks(pct_breaks)",
+      details = 'Use `set_color_breaks(list(pct_diff = ., pct_ratio = .))`.'
+    )
+    if (!is.numeric(pct_breaks) || sum(pct_breaks > 1) > 1) {
+      cli::cli_abort("`pct_breaks` must be numeric with at most one value > 1 (the x2 rule).")
+    }
+    cur$pct_diff  <- mk_color_scale("pct_diff",  sort(pct_breaks[pct_breaks <= 1]))
+    rr <- pct_breaks[pct_breaks > 1]
+    cur$pct_ratio <- mk_color_scale("pct_ratio", if (length(rr)) rr else numeric())
   }
-
-  # if (!missing(pct_ratio_breaks)) {
-  #   stopifnot(is.numeric(pct_ratio_breaks)     ,
-  #             length(pct_ratio_breaks)     <= 1,
-  #             all(pct_ratio_breaks         >= 0))
-  #   pct_ratio_brksup      <- c(pct_ratio_breaks, Inf)
-  #   pct_ratio_breaks      <- c(0, pct_ratio_breaks)
-  #
-  #   # pct_ratio_ci_brksup   <- c(pct_ratio_ci_breaks[2:length(pct_ratio_ci_breaks) ], Inf)
-  #   # pct_ratio_ci_brksup   <- pct_ratio_ci_brksup  %>% c(., -.)
-  #   # pct_ratio_ci_breaks   <- pct_ratio_ci_breaks  %>% c(., -.)
-  #
-  # } else {
-  #   pct_ratio_breaks      <- former_breaks$pct_ratio_breaks
-  #   pct_ratio_brksup      <- former_breaks$pct_ratio_brksup
-  #   # pct_ratio_ci_breaks   <- former_breaks$pct_ratio_ci_breaks
-  #   # pct_ratio_ci_brksup   <- former_breaks$pct_ratio_ci_brksup
-  # }
-
   if (!missing(mean_breaks)) {
-    stopifnot(is.numeric(mean_breaks)    ,
-              length(mean_breaks)    <= 5,
-              all(mean_breaks        >= 0))
-    mean_ci_breaks  <- mean_breaks / mean_breaks[1]
-    #mean_brksup     <- c(mean_breaks   [2:length(mean_breaks)   ], Inf)
-    #mean_brksup     <- mean_brksup    %>% c(., 1/.)
-    mean_breaks     <- mean_breaks    %>% c(., 1/.)
-
-    #mean_ci_brksup  <- c(mean_ci_breaks[2:length(mean_ci_breaks)], Inf)
-    #mean_ci_brksup  <- mean_ci_brksup %>% c(., -.) #then - again
-    mean_ci_breaks  <- mean_ci_breaks %>% c(., -.) #then - again
-
-  } else {
-    mean_breaks     <- former_breaks$mean_breaks
-    #mean_brksup     <- former_breaks$mean_brksup
-    mean_ci_breaks  <- former_breaks$mean_ci_breaks
-    #mean_ci_brksup  <- former_breaks$mean_ci_brksup
+    lifecycle::deprecate_soft(
+      "1.4.0", "set_color_breaks(mean_breaks)",
+      details = 'Use `set_color_breaks(list(mean_ratio = .))`.'
+    )
+    cur$mean_ratio <- mk_color_scale("mean_ratio", sort(mean_breaks))
   }
-
   if (!missing(contrib_breaks)) {
-    stopifnot(is.numeric(contrib_breaks) ,
-              length(contrib_breaks) <= 5,
-              all(contrib_breaks     >= 0))
-    #contrib_brksup  <- c(contrib_breaks[2:length(contrib_breaks)], Inf)
-    #contrib_brksup  <- contrib_brksup %>% c(., -.)
-    contrib_breaks  <- contrib_breaks %>% c(., -.)
-
-  } else {
-    contrib_breaks  <- former_breaks$contrib_breaks
-    #contrib_brksup  <- former_breaks$contrib_brksup
+    lifecycle::deprecate_soft(
+      "1.4.0", "set_color_breaks(contrib_breaks)",
+      details = 'Use `set_color_breaks(list(contrib = .))`.'
+    )
+    cur$contrib <- mk_color_scale("contrib", sort(contrib_breaks))
   }
 
-  tabxplor_color_breaks <- list(pct_breaks       = pct_breaks      ,
-                                #pct_brksup       = pct_brksup      ,
-                                pct_ci_breaks    = pct_ci_breaks   ,
-                                #pct_ci_brksup    = pct_ci_brksup   ,
-                                # pct_ratio_breaks = pct_ratio_breaks,
-                                # pct_ratio_brksup = pct_ratio_brksup,
-                                mean_breaks      = mean_breaks     ,
-                                #mean_brksup      = mean_brksup     ,
-                                mean_ci_breaks   = mean_ci_breaks  ,
-                                #mean_ci_brksup   = mean_ci_brksup  ,
-                                contrib_breaks   = contrib_breaks  #,
-                                # contrib_brksup   = contrib_brksup
-                                )
-
-  options("tabxplor.color_breaks" = tabxplor_color_breaks)
-
-  # assign("tabxplor_color_breaks", tabxplor_color_breaks, pos = rlang::global_env() )
-
-  invisible(tabxplor_color_breaks)
+  options("tabxplor.color_breaks" = cur)
+  invisible(cur)
 }
 
 
@@ -3407,7 +3416,7 @@ set_color_breaks <- function(pct_breaks, mean_breaks, contrib_breaks) {
 #' @return The color breaks as a double vector, or list of double vectors.
 #' @export
 get_color_breaks <- function(brk, type = c("positive", "all")) {
-  tabxplor_color_breaks <- getOption("tabxplor.color_breaks")
+  tabxplor_color_breaks <- legacy_color_breaks(getOption("tabxplor.color_breaks"))
 
   breaks <-
     if (missing(brk)) {
