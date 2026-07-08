@@ -32,8 +32,9 @@ tab_many(
   comp = "tab",
   ci = "no",
   conf_level = 0.95,
+  stars = NULL,
   method_cell = "wilson",
-  method_diff = "ac",
+  method_diff = "newcombe",
   totaltab = "line",
   totaltab_name = "Ensemble",
   totrow = TRUE,
@@ -210,28 +211,30 @@ relative total cell (or relative first cell when \code{ref = "first"}).
 \item \code{"auto"}: \code{ci = "diff"} for means and row/col percentages,
 \code{ci = "cell"} for frequencies ("all", "all_tabs").
 }
-By default, for percentages, with \code{ci = "cell"} Wilson's method is used,
-and with \code{ci = "diff"} Wald's method along Agresti and Caffo's adjustment.
-Means use classic method. This can be changed with \code{method_cell}
-and \code{method_diff}. By default, with \code{ci = "cell"}, the result is printed
-in the \verb{[inf;sup]} form. Set \code{options("tabxplor.ci_print" = "moe")} to print
-\code{pct +- moe} instead.}
+Confidence intervals use fast closed-form methods. For percentages, \code{ci = "cell"}
+uses the Wilson score interval and \code{ci = "diff"} the Newcombe method-10 hybrid-score
+interval (its dual, so the bracket and the significance stars always agree); means use the
+Welch t interval. These can be changed with \code{method_cell} / \code{method_diff}. By
+default the interval is printed in the \verb{[inf;sup]} form; set
+\code{options("tabxplor.ci_print" = "moe")} to print \code{pct +- moe} instead.}
 
 \item{conf_level}{The confidence level, as a single numeric between 0 and 1.
 Default to 0.95 (95\%).}
 
-\item{method_cell}{Character string specifying which method to use with percentages
-for \code{ci = "cell"}. This can be one out of:
-"wald", "wilson", "wilsoncc", "agresti-coull", "jeffreys", "modified wilson",
-"modified jeffreys", "clopper-pearson", "arcsine", "logit", "witting", "pratt",
-"midp", "lik" and "blaker". Defaults to "wilson".
-See \code{\link[DescTools:BinomCI]{BinomCI}}.}
+\item{stars}{Logical. When \code{TRUE} (the default) and \code{ci = "diff"}, each cell shows
+significance stars for the difference from its reference (\code{*} p<0.10, \code{**} p<0.05,
+\code{***} p<0.01, customisable via \code{options("tabxplor.signif_levels")} /
+\code{"tabxplor.signif_labels"}). Significance is read from the same interval that is displayed
+(universal CI-inclusion), so stars and bracket never disagree. \code{FALSE} skips the
+significance computation entirely. \code{NULL} uses \code{options("tabxplor.stars")}.}
 
-\item{method_diff}{Character string specifying which method to use with percentages
-for \code{ci = "diff"}. This can be one out of: "wald", "waldcc", "ac", "score",
-"scorecc", "mn", "mee", "blj", "ha", "hal", "jp". Defaults to "ac", Wald interval with
-the adjustment according to Agresti, Caffo for difference in proportions and
-independent samples. See \code{\link[DescTools:BinomDiffCI]{BinomDiffCI}}.}
+\item{method_cell}{Character string, the proportion confidence-interval method for
+\code{ci = "cell"}. Currently \code{"wilson"} (the score interval, default).}
+
+\item{method_diff}{Character string, the proportion confidence-interval method for
+\code{ci = "diff"}. One of \code{"newcombe"} (default, the hybrid-score interval, dual of the
+two-proportion score test), \code{"ac"} (Agresti-Caffo) or \code{"wald"}. Whatever method is
+chosen, the stars come from that same interval, so they always agree with the bracket.}
 
 \item{totaltab}{The total table, if there are subtables/groups
 (i.e. when \code{tab_vars} is provided). Vectorised over \code{row_vars}.
@@ -384,6 +387,35 @@ Breaks for aversions/under-representations (in orange/red) will simply be the op
 \item \code{get_color_breaks()}: get the breaks currently used to print colors
 
 }}
+\section{Significance stars}{
+
+With \code{ci = "diff"} and \code{stars = TRUE}, each cell shows how sure we can be that its
+difference from the reference is real and not just sampling noise: \code{*} means significant at
+the 10\\% level (p < 0.10), \code{**} at 5\\% (p < 0.05), \code{***} at 1\\% (p < 0.01). The exact
+p-value is stored per cell in the \code{pvalue} field of the \code{fmt} vectors, readable with
+\code{$pvalue} or \code{get_pvalue()}.
+
+There is no separate statistical test run behind the scenes: the significance is read straight
+from the confidence interval that is displayed. A cell is significant at a given level exactly
+when its interval at that confidence level no longer contains zero, so the stars and the printed
+\code{[inf; sup]} bracket can never contradict each other. Which test this amounts to depends on
+the interval:
+\itemize{
+\item \strong{percentage difference} (default, \code{method_diff = "newcombe"}): inverting the
+Newcombe hybrid-score interval. This is, to a very close approximation, the classical
+two-sample test of proportions (the score / "N-1" chi-squared test).
+\item \strong{percentage difference} with \code{method_diff = "ac"} or \code{"wald"}: inverting
+the Agresti-Caffo (adjusted Wald) or the Wald interval -- an (adjusted) two-proportion z-test.
+\item \strong{mean difference}: the \strong{Welch two-sample t-test} (for groups with unequal
+variances); inverting the Welch t interval is exactly this well-known test.
+\item \code{ci = "cell"} (an absolute cell interval, not a difference) is purely descriptive,
+so it carries no stars and its \code{pvalue} is \code{NA}.
+}
+On weighted data the estimate is weighted but the sample size used is the real (unweighted)
+number of cases, unless you opt in to Kish's effective sample size with
+\code{options("tabxplor.kish_neff" = TRUE)}.
+}
+
 \examples{
 # Make a summary table with many col_vars, showing only one specific level :
 \donttest{

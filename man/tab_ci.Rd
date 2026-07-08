@@ -11,8 +11,9 @@ tab_ci(
   conf_level = 0.95,
   color = "no",
   visible = FALSE,
+  stars = NULL,
   method_cell = "wilson",
-  method_diff = "ac"
+  method_diff = "newcombe"
 )
 }
 \arguments{
@@ -51,18 +52,17 @@ difference
 \item{visible}{By default confidence intervals are calculated and used to set colors,
 but not printed. Set to \code{TRUE} to print them in the result.}
 
-\item{method_cell}{Character string specifying which method to use with percentages
-for \code{ci = "cell"}. This can be one out of:
-"wald", "wilson", "wilsoncc", "agresti-coull", "jeffreys", "modified wilson",
-"modified jeffreys", "clopper-pearson", "arcsine", "logit", "witting", "pratt",
-"midp", "lik" and "blaker". Defaults to "wilson".
-See \code{\link[DescTools:BinomCI]{BinomCI}}.}
+\item{stars}{Logical (default \code{TRUE}, or \code{options("tabxplor.stars")} when \code{NULL}).
+With \code{ci = "diff"}, store and print per-cell significance stars for the difference from
+the reference, read from the same interval that is displayed (universal CI-inclusion), so the
+stars and the bracket never disagree. \code{FALSE} skips the significance computation.}
 
-\item{method_diff}{Character string specifying which method to use with percentages
-for \code{ci = "diff"}. This can be one out of: "wald", "waldcc", "ac", "score",
-"scorecc", "mn", "mee", "blj", "ha", "hal", "jp". Defaults to "ac", Wald interval with
-the adjustment according to Agresti, Caffo for difference in proportions and
-independent samples. See \code{\link[DescTools:BinomDiffCI]{BinomDiffCI}}.}
+\item{method_cell}{Character string, the proportion CI method for \code{ci = "cell"}.
+Currently \code{"wilson"} (the score interval, default).}
+
+\item{method_diff}{Character string, the proportion CI method for \code{ci = "diff"}: one of
+\code{"newcombe"} (default, hybrid-score, dual of the two-proportion score test), \code{"ac"}
+(Agresti-Caffo) or \code{"wald"}. Whatever the method, the stars come from that interval.}
 }
 \value{
 A \code{tibble} of class \code{tab}, colored based on differences (from
@@ -71,6 +71,35 @@ totals/first cells) and confidence intervals.
 \description{
 Add confidence intervals to a \code{\link[tabxplor]{tab}}
 }
+\section{Significance stars}{
+
+With \code{ci = "diff"} and \code{stars = TRUE}, each cell shows how sure we can be that its
+difference from the reference is real and not just sampling noise: \code{*} means significant at
+the 10\\% level (p < 0.10), \code{**} at 5\\% (p < 0.05), \code{***} at 1\\% (p < 0.01). The exact
+p-value is stored per cell in the \code{pvalue} field of the \code{fmt} vectors, readable with
+\code{$pvalue} or \code{get_pvalue()}.
+
+There is no separate statistical test run behind the scenes: the significance is read straight
+from the confidence interval that is displayed. A cell is significant at a given level exactly
+when its interval at that confidence level no longer contains zero, so the stars and the printed
+\code{[inf; sup]} bracket can never contradict each other. Which test this amounts to depends on
+the interval:
+\itemize{
+\item \strong{percentage difference} (default, \code{method_diff = "newcombe"}): inverting the
+Newcombe hybrid-score interval. This is, to a very close approximation, the classical
+two-sample test of proportions (the score / "N-1" chi-squared test).
+\item \strong{percentage difference} with \code{method_diff = "ac"} or \code{"wald"}: inverting
+the Agresti-Caffo (adjusted Wald) or the Wald interval -- an (adjusted) two-proportion z-test.
+\item \strong{mean difference}: the \strong{Welch two-sample t-test} (for groups with unequal
+variances); inverting the Welch t interval is exactly this well-known test.
+\item \code{ci = "cell"} (an absolute cell interval, not a difference) is purely descriptive,
+so it carries no stars and its \code{pvalue} is \code{NA}.
+}
+On weighted data the estimate is weighted but the sample size used is the real (unweighted)
+number of cases, unless you opt in to Kish's effective sample size with
+\code{options("tabxplor.kish_neff" = TRUE)}.
+}
+
 \examples{
 # A typical workflow with tabxplor step-by-step functions :
 \donttest{

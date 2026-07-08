@@ -145,7 +145,7 @@ Before working on the `tabxplor_fmt` type system, arithmetic, or display, fetch 
 - `vctrs::vec_arith`, `vctrs::vec_cast`, `vctrs::vec_ptype2` — arithmetic and casting S3 contracts
 - `pillar::pillar_shaft` — console display method
 - `data.table` reference semantics (`:=`, `.SD`, `.N`) — internal aggregation
-- `DescTools::BinomCI`, `DescTools::BinomDiffCI` — confidence intervals in `tab_ci()`
+- `DescTools::BinomCI`, `DescTools::BinomDiffCI` — **now Suggests-only** (test parity only). Since Phase 3a the CI math is the closed-form engine in `R/tab-agg.R` (`ci_pivot`/`ci_wilson`/`ci_newcombe`); read it, not DescTools, before touching CI.
 
 ---
 
@@ -356,9 +356,17 @@ Sub-phased (numeric first, per the review). Landed so far:
 
 ### Phase 3 — CI + chi2 onto the aggregate (headline perf)
 
-Vectorize proportion-CI and chi2 onto the aggregate (drop the `dplyr::across` + per-cell `DescTools`/`chisq.test` + `group_split` path), following the `tab_num` mean-CI template. Store CI as asymmetric `ci_inf`/`ci_sup` bounds (fixes the Wilson/AC symmetric-bracket bug); **per-cell significance is a stored `pvalue`** (§12), not the bounds; compact `± moe` shows the larger arm. **Weighted estimate + unweighted `n`** for every CI/test (§14 — Kish `n_eff` opt-in). **CI ⇄ stars duality** (§15): when stars are on, `pvalue` = **uncorrected** score test, the diff interval switches AC→Newcombe (uncorrected pair) and mean intervals switch z→**Welch-t** (Q14). **Add the mean-table omnibus = ANOVA/Welch F** (the true chi2 mirror, Q4; weighted estimates + unweighted `n` per §14, Q13) alongside chi2 (kept fully unweighted, G2); test results land as attributes rendered as a row for now (§16 — the `chi2` attribute **hard-renamed `test`**, Q11; per-column results = rows of the same tibble, Q15). Chi2 must match `chisq.test()` defaults **exactly, incl. Yates on 2×2** (**G2 resolved**, § *Status*). `tab_chi2` is the #1 cost — benchmark before/after. Requires the sufficient-statistics aggregate (moment-sums + `Σw²` for numerics — open item G1). Detail: `dev/tabxplor_1.4.0_decisions.md` §1, §12, §14-16.
+Split into **3a (CI, DONE)** and **3b (chi2, remaining)**.
 
-#### To verify
+#### Done (Phase 3a — CI onto the aggregate, 2026-07-08)
+
+Proportion-CI vectorised onto a **closed-form engine** (`R/tab-agg.R`: `ci_pivot`/`ci_wilson`/`ci_newcombe`/`ci_prop_diff`/`ci_mean_diff2` + `newcombe_pvalue`) — the per-cell `DescTools` loop is gone (`DescTools` Imports→Suggests). `tab_ci()` (props) and `tab_num()` (means) both route through it. **Real asymmetric `ci_inf`/`ci_sup` bounds** (fixes the Wilson/AC symmetric-bracket bug); `format()` reads them directly; `get_ci()` = upper arm, `get_ci_moe()` = larger arm for `± moe`. **Significance = universal CI-inclusion** (the maintainer's refinement, **supersedes §12 score-test + §15 AC-swap** — see decisions §20): the stored per-cell `pvalue` is the inversion p of the *displayed* interval, so `get_stars()` never disagrees with the bracket, for any method. **Defaults: Wilson (cell), Newcombe method-10 (diff, new default), z/Welch-t (means)**; `stars` arg default `TRUE` (`ci="cell"`→NA); expert `method_cell`/`method_diff`. **Weighted = weighted estimate + unweighted n (§14)**; **Kish n_eff opt-in** for numeric CIs via `options("tabxplor.kish_neff")` (G1 `Σw²` accumulator added to the numeric scan only when opted in; factor-side Kish deferred). Empirical **OR deferred to the tab_logit phase** (not 3b). Golden regenerated: `f_ci_cell`/`f_ci_diff`/`f_color_afterci`/`n_mean_ci`. Full suite green (800); `tab_ci` no perf regression (`dev/benchmarks/results_1.4.0/phase3a_after.txt`). Empirical validation: `dev/verify_ci_inclusion.R`. **tab_xl stars deferred to Phase 7** (exporter unification).
+
+#### 3b — remaining (chi2 + omnibus)
+
+Vectorize chi2 onto the aggregate (drop `group_split` + per-column `chisq.test`), matching `chisq.test()` defaults **exactly, incl. Yates on 2×2** (**G2 resolved**). **Add the mean-table omnibus = ANOVA/Welch F** (the true chi2 mirror, Q4; weighted estimates + unweighted `n`, Q13) alongside chi2 (kept fully unweighted, G2). Test results land as attributes rendered as a row for now (§16 — the `chi2` attribute **hard-renamed `test`**, Q11; per-column results = rows of the same tibble, Q15). `tab_chi2` is the #1 cost — benchmark before/after. Detail: `dev/tabxplor_1.4.0_decisions.md` §16, §20.
+
+#### To verify (3b)
 
 - `tab_chi2()` not working with `add_n = TRUE` ?
 
@@ -389,6 +397,8 @@ Vectorize proportion-CI and chi2 onto the aggregate (drop the `dplyr::across` + 
 ### Phase 4 — From-the-middle counts constructor
 
 `as_tab_counts()` accepting long tidy counts / wide count matrix / frequencies+base N; validate once at the boundary → same core. Require real unweighted `n`; warn/skip CI/chi2 on frequency-only input.
+
+Also here (with the factor-path reorg): **finish the CI *placement* unification** left from Phase 3a. The CI *math* is already unified (one `R/tab-agg.R` engine), but it is called from two sites — inline in `tab_num` (means) vs the post-aggregation `tab_ci` step (proportions; `tab_plain` computes none). Fold the proportion-CI step into the shared aggregate-core here (the keystone `aggregate → [pct|diff|CI|...] → fmt`), so both types run one CI transform. No perf gain (CI is post-aggregation); kept a separate step in 3a only because `tab_ci` must stay field-based for the standalone path. Detail: decisions §20 (placement).
 
 #### To implement
 
@@ -518,7 +528,7 @@ Isolated on purpose: a full dependency swap should not be entangled with the Pha
 In-code these are tagged for grep: `# KNOWN-BUG:` (bugs below), `# FIXME:` / `# FIXME(clarify):` / `# FIXME(future):` (suspect logic or future work, several tied to the Phase 5 color work), `# OBSOLETE:` (dead-code banners, e.g. the stale `tab_xl` duplicate). Fix each bug inside the phase that rewrites the relevant code, not as a separate pass.
 
 - FIXED (Phase 1a): `fmt()` public constructor cast `totcol` into `refcol` (the `refcol` argument was silently ignored). Now casts `refcol`. Low impact (refcol is normally set internally).
-- `tab_num(..., <tab_vars>, ci="cell")` errors at `setorderv` (`tab.R` ~L3454): `ci="cell"` forces `color=""` → `tot="no"` → the grand-total-only grouping-set path builds a `tabs_tot` the `na="keep"` reorder can't find its tab_var column in. Both `comp` modes. Fix in Phase 3 (CI-onto-aggregate rewrites `tab_num` CI).
+- STILL OPEN after Phase 3a: `tab_num(..., <tab_vars>, ci="cell")` errors ("some columns don't belong to the data.table: [tab_var]") in the `tot="no"` grand-total-only grouping-set / `na="keep"` reorder path (`tab.R` ~L3454). Phase 3a rewrote the CI *math* (asymmetric bounds + stars), which is a DIFFERENT code path, so this is untouched. Root cause: `ci="cell"` forces `color=""` → `tot="no"`. Fix belongs with the Phase 6 totals rewrite (or a targeted fix in the grouping-set reorder). Both `comp` modes.
 - `set_color_style(custom_palette=)` (`tab_classes.R` ~L3120): length check requires 10 but the message says 11 and 11 names (`pos1..neg5, ratio`) are applied — the `ratio` slot ends up valueless, so custom palettes are broken for the ratio color. Fix by accepting length 11.
 - FIXED (this session): `set_num()` wrote `display=="diff"` via `set_pct()` (should be `set_diff()`), so setting the displayed value of a diff cell went to the wrong field. Now uses `set_diff()`.
 - FIXED (workstream 5): `relabel_levels_in_varnames()` (`tab.R` ~L5592) made big weighted tables ~60× slower. Its `across(where(...))` predicate ran on **every** column with vectorised `&`/`|`, so the character branch `any(. %in% names(data))` coerced whole 8M-row numeric/factor columns to strings (~15s × 2 calls). Rewrote it to examine **only the `col_vars` targets** with short-circuit `&&`/`||` (numeric targets cost ~0); output byte-identical. 8M `tab(wt=)`: ~30s → ~0.2s; unweighted tables also faster + ~90% less memory.

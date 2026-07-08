@@ -24,6 +24,9 @@ tab(
   comp = "tab",
   ci = "no",
   conf_level = 0.95,
+  stars = NULL,
+  method_cell = "wilson",
+  method_diff = "newcombe",
   totaltab = "line",
   totaltab_name = "Ensemble",
   tot = c("row", "col"),
@@ -163,6 +166,14 @@ Set \code{options("tabxplor.ci_print" = "moe")} to print \code{pct +- moe} inste
 \item{conf_level}{The confidence level, as a single numeric between 0 and 1.
 Default to 0.95 (95\%).}
 
+\item{stars}{Logical (default \code{TRUE}). With \code{ci = "diff"}, print significance stars
+for each cell's difference from its reference, read from the displayed interval itself
+(universal CI-inclusion). \code{NULL} uses \code{options("tabxplor.stars")}. See \code{\link{tab_many}}.}
+
+\item{method_cell, method_diff}{Character strings choosing the confidence-interval method for
+\code{ci = "cell"} / \code{ci = "diff"}. Defaults \code{"wilson"} / \code{"newcombe"}. See
+\code{\link{tab_many}}.}
+
 \item{totaltab}{The total table, if there are subtables/groups
 (i.e. when \code{tab_vars} is provided) :
 \itemize{
@@ -225,6 +236,35 @@ like \code{\link[dplyr:arrange]{arrange}}, \code{\link[dplyr:filter]{filter}}
 or \code{\link[dplyr:mutate]{mutate}}.
 Wrapper around the more powerful \code{\link{tab_many}}.
 }
+\section{Significance stars}{
+
+With \code{ci = "diff"} and \code{stars = TRUE}, each cell shows how sure we can be that its
+difference from the reference is real and not just sampling noise: \code{*} means significant at
+the 10\\% level (p < 0.10), \code{**} at 5\\% (p < 0.05), \code{***} at 1\\% (p < 0.01). The exact
+p-value is stored per cell in the \code{pvalue} field of the \code{fmt} vectors, readable with
+\code{$pvalue} or \code{get_pvalue()}.
+
+There is no separate statistical test run behind the scenes: the significance is read straight
+from the confidence interval that is displayed. A cell is significant at a given level exactly
+when its interval at that confidence level no longer contains zero, so the stars and the printed
+\code{[inf; sup]} bracket can never contradict each other. Which test this amounts to depends on
+the interval:
+\itemize{
+\item \strong{percentage difference} (default, \code{method_diff = "newcombe"}): inverting the
+Newcombe hybrid-score interval. This is, to a very close approximation, the classical
+two-sample test of proportions (the score / "N-1" chi-squared test).
+\item \strong{percentage difference} with \code{method_diff = "ac"} or \code{"wald"}: inverting
+the Agresti-Caffo (adjusted Wald) or the Wald interval -- an (adjusted) two-proportion z-test.
+\item \strong{mean difference}: the \strong{Welch two-sample t-test} (for groups with unequal
+variances); inverting the Welch t interval is exactly this well-known test.
+\item \code{ci = "cell"} (an absolute cell interval, not a difference) is purely descriptive,
+so it carries no stars and its \code{pvalue} is \code{NA}.
+}
+On weighted data the estimate is weighted but the sample size used is the real (unweighted)
+number of cases, unless you opt in to Kish's effective sample size with
+\code{options("tabxplor.kish_neff" = TRUE)}.
+}
+
 \examples{
 # A simple cross-table:
 tab(forcats::gss_cat, marital, race)

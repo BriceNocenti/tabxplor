@@ -16,6 +16,7 @@ tab_num(
   comp = c("tab", "all"),
   ci = NULL,
   conf_level = 0.95,
+  stars = NULL,
   totaltab = "line",
   totaltab_name = "Ensemble",
   tot = NULL,
@@ -94,6 +95,10 @@ relative total cell (or relative first cell when \code{ref = "first"}).
 
 \item{conf_level}{The confidence level for the confidence intervals,
 as a single numeric between 0 and 1. Default to 0.95 (95\%).}
+
+\item{stars}{Logical (default \code{TRUE}, or \code{options("tabxplor.stars")} when \code{NULL}).
+With \code{ci = "diff"}, print per-cell Welch t significance stars for the difference from the
+reference row; the mean-diff interval then uses the Welch t quantile (z when \code{FALSE}).}
 
 \item{totaltab}{The total table,
 if there are subtables/groups (i.e. when \code{tab_vars} is provided) :

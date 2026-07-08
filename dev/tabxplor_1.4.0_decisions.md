@@ -883,6 +883,73 @@ architecture.
 
 ---
 
+## 20. Phase 3a IMPLEMENTED — universal CI-inclusion (supersedes §12 score-test / §15 AC-swap)
+
+Implemented 2026-07-08. During implementation the maintainer refined the CI/test framework; the
+result **supersedes parts of §12 and §15**. The governing idea: **significance is read from the
+same interval that is displayed** ("universal CI-inclusion") — the stored per-cell `pvalue` is the
+CI-inversion p of the method drawing the bracket, so stars (`cut(pvalue)`) and the bracket can
+**never disagree, for any method**. This dissolves §15's "AC has no clean dual test" problem: every
+method (default or expert) gets self-consistent stars, with no doc caveat about which methods star.
+
+Empirically validated (`dev/verify_ci_inclusion.R`, run against DescTools/prop.test/t.test):
+Wilson == `BinomCI(wilson)` (2e-16); Newcombe-10 == `BinomDiffCI(method="score")` (0); AC ==
+`BinomDiffCI(ac)` (0); Welch-t == `t.test(var.equal=FALSE)` on both bounds and p; and
+Newcombe-inclusion agrees with the pooled score test **99.5 %** of 12,996 configs (rare 1-bin
+boundary cases only), so nothing is lost by not computing a separate score test.
+
+**Decisions as built:**
+- **One knob `ci = "cell"|"diff"|"no"`.** Defaults per estimator: **Wilson** (cell prop), **Newcombe
+  method 10** (prop diff — *new default, was AC*), **z / Welch-t** (mean cell / diff). Experts set
+  `method_cell` (`"wilson"`) / `method_diff` (`"newcombe"|"ac"|"wald"`); stars follow that interval.
+- **Stars = universal CI-inclusion**, `stars` arg default `TRUE` (`options("tabxplor.stars")`),
+  thresholds `tabxplor.signif_levels` = `c(.10,.05,.01)`, labels `tabxplor.signif_labels`. `ci="cell"`
+  never stars (pvalue = NA — H0 p=0/μ=0 not meaningful). `stars = FALSE` skips significance → one
+  interval eval, `pvalue = NA`. **No pooled two-proportion score test is coded** (§12's factor-diff
+  test); the Newcombe inversion-p is found by a vectorised bisection on z (`newcombe_pvalue()`).
+- **§15's default-sensitive AC→Newcombe swap + "not exact duals" warning is retired.** The interval
+  method is now independent of stars (Newcombe is the diff default whether or not stars show).
+- **Bounds are real & asymmetric.** `ci_inf`/`ci_sup` store absolute bounds; `get_ci()` = upper arm
+  (`ci_sup − ci_center`, retro-compatible with the old `upr.ci − est` for `color_formula`);
+  `get_ci_moe()` = the conservative larger arm for the `± moe` display; `fmt(ci=)` now stores
+  absolute symmetric bounds around the estimate (the Phase-1a relative-half-width shim is gone).
+  `format()` reads the bounds directly (WS2 mean-scaling FIXME dissolved). Cell CIs are now also
+  drawn on the total/reference column (per §1) — a visible change on the golden `f_ci_cell`.
+- **Weighted (§14):** weighted estimate + **unweighted n** (get_n of the relevant 100 % total) is the
+  default. **Kish n_eff opt-in** via `options("tabxplor.kish_neff" = TRUE)` for the **numeric** CIs:
+  G1's `Σw²` accumulator is added to the weighted numeric scan **only when opted in** (byte-identical
+  + zero-cost default), rolled up additively, and `n_eff = wn²/w2` replaces n in the mean CI.
+  **Factor-side Kish is deferred** (no per-cell `Σw²` on the count path — open item).
+- **Scope:** proportions + means only. **Empirical OR** (bounds, log-OR Wald p, 1/OR display) is
+  **deferred to the tab_logit phase** (Q3 refined: not 3b). Whole-table **chi2** vectorisation + the
+  `chi2`→`test` attribute rename + ANOVA/F stay **Phase 3b**.
+- **Engine** (`R/tab-agg.R`, pure/vectorised/dependency-free): two shapes — `ci_pivot()` (symmetric:
+  AC/Wald/mean-z/Welch-t, closed-form inversion p) and the score shape `ci_wilson()`/`ci_newcombe()`
+  (+ `ci_prop_diff()` / `ci_mean_diff2()` dispatchers). `tab_ci()` (props) and `tab_num()` (means)
+  both route through it; **DescTools is removed from the runtime** (Imports → Suggests, kept for the
+  parity tests). Dead scalar helpers `ci_mean`/`ci_mean_diff` + the DescTools closures deleted.
+- **tab_xl stars deferred to Phase 7** (the exporter-unification phase, then openxlsx2 in Phase 9) —
+  the console/`tab_md`/`tab_kable` stars flow from the single `format()` source of truth.
+- **CI *math* is unified now; CI *placement* is deferred to Phase 4/6.** All formulas live once in
+  the `R/tab-agg.R` engine, called from exactly two sites — inline in `tab_num()` (means) and in the
+  post-aggregation step `tab_ci()` (proportions; `tab_plain()` computes no CI). This asymmetry is
+  deliberate, not a perf compromise: the CI runs on the small aggregate (not the N rows), so fusing
+  proportion-CI into `tab_plain()` gains nothing, and `tab_ci()` must keep a **field-based** engine
+  regardless (it has to work standalone on a built table that carries only `fmt` fields, no counts
+  data.table) — computing it *also* in `tab_plain()`'s counts domain would duplicate the Wilson/
+  Newcombe math held to byte-parity, the very thing 1.4.0 removes. The clean end state (keystone:
+  `aggregate → [pct | diff | CI | chi2 | totals] → fmt`) has ONE CI transform for both types; it
+  arrives when `tab_plain`/`tab_num` are refactored into shared aggregate-core subfunctions — i.e.
+  the **Phase 4 factor-path reorg** (driven/validated by `as_tab_counts()`, per §Phasing) and the
+  **Phase 6** `tab()`→`tab_many()` merge. Fold the proportion-CI step into that shared core then;
+  do NOT force it earlier (a risky ~800-line `tab_plain` refactor for no gain).
+
+Golden regenerated (conscious): `f_ci_cell`, `f_ci_diff` (display + struct), `f_color_afterci`,
+`n_mean_ci` (struct). CI parity tests updated (`test-calculations.R`): AC/Welch pinned to
+`stars=FALSE`, new Newcombe/`score`, Welch-t, Wilson-both-arms, and inclusion⇔stars tests.
+
+---
+
 ## Sources (statistics)
 
 - Binomial proportion CI (Wald / Wilson / Agresti-Coull asymmetry): <https://en.wikipedia.org/wiki/Binomial_proportion_confidence_interval>

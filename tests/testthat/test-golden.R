@@ -22,16 +22,19 @@
 #   f_row_pct/f_col_pct/f_all_pct/f_counts/f_ref_first/m_multi/totn_keep/w_weighted -> 1a only
 #   f_color_diff    -> 1a only (FACTOR diff-color MUST stay byte-identical: the tripwire that
 #                      Phase 5 does NOT disturb factor coloring)
-#   f_ci_cell       -> Phase 3 (ci half-width -> asymmetric ci_inf/ci_sup Wilson bounds) [display]
-#   f_ci_diff       -> Phase 3 (AC -> Newcombe interval + two-proportion score-test stars) [display]
-#   f_or            -> Phase 1/3 (rr->ratio; empirical log-OR Wald pvalue; 1/OR display)
-#   f_chi2/f_subtab -> Phase 3 (table attribute chi2 -> test; pvalue field populated)
-#   f_color_afterci -> Phase 3 (+5) (after_ci reads the CI bounds; color overhaul keeps coherent)
+#   f_ci_cell       -> DONE Phase 3a (ci half-width -> asymmetric Wilson ci_inf/ci_sup; cell CI
+#                      also drawn on the total column, per decisions §1) [display]
+#   f_ci_diff       -> DONE Phase 3a (AC -> Newcombe default interval + universal-inclusion stars) [display]
+#   f_or            -> Phase 10/tab_logit (rr->ratio done in 1a; empirical log-OR Wald pvalue + 1/OR
+#                      display deferred to the tab_logit phase, NOT 3b)
+#   f_chi2/f_subtab -> Phase 3b (table attribute chi2 -> test; chi2 pvalue field populated)
+#   f_color_afterci -> DONE Phase 3a (after_ci reads the real CI bounds via get_ci upper arm) [struct]
 #   f_color_contrib -> Phase 5 (contrib mode reworked in the diff/ratio color overhaul)
 #   n_mean          -> Phase 2 (numeric diff flips ratio -> difference: field + display)
 #   n_mean_color    -> Phase 2 then 5 (Phase 2 flips diff field; Phase 5 numeric color="diff"
 #                      becomes sd-standardized Glass's delta with mean_diff_breaks)
-#   n_mean_ci       -> Phase 3 (mean CI z -> bounds; z -> Welch-t under stars) [display]
+#   n_mean_ci       -> DONE Phase 3a (mean CI z-half-width -> absolute bounds; z stays for cell,
+#                      z -> Welch-t under stars for diff) [display: mean bracket byte-identical]
 #   totn_drop       -> Phase 2 (THE motivating case: col_vars with differing non-NA totals;
 #                      tot_n makes each cell's % base exact; [min;max] total-col range) [display]
 #   f_totcol_each   -> Phase 6 (default becomes ONE total column; totcol="each" -> cosmetic)

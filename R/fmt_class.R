@@ -284,12 +284,17 @@ fmt <- function(n         = integer(),
   or      <- vctrs::vec_recycle(vctrs::vec_cast(or     , double())   , size = max_size)
   tot_n   <- vctrs::vec_recycle(vctrs::vec_cast(tot_n  , double())   , size = max_size)
 
-  # Phase 1a bounds-shim: the public `ci` arg is a symmetric half-width. Map it onto the
-  # stored ci_inf/ci_sup bounds (explicit bounds win). get_ci() reads ci_sup back, so the
-  # display stays byte-identical until Phase 3 stores real asymmetric bounds. See
-  # dev/tabxplor_1.4.0_decisions.md §1.
-  ci_sup  <- dplyr::coalesce(ci_sup,  ci)
-  ci_inf  <- dplyr::coalesce(ci_inf, -ci)
+  # Phase 3a: the public `ci` arg is a symmetric half-width; store it as ABSOLUTE bounds
+  # around the estimate the interval is centred on (the difference for diff-type CIs, the mean
+  # for cell means, the proportion otherwise), matching how tab_ci()/tab_num() now store real
+  # asymmetric bounds. Explicit ci_inf/ci_sup win; get_ci() reads the half-width back as
+  # ci_sup - centre. See dev/tabxplor_1.4.0_decisions.md §1, §20.
+  est_center <- dplyr::coalesce(
+    if (ci_type %in% c("diff", "diff_row", "diff_col")) diff else
+      if (type == "mean") mean else pct,
+    0)
+  ci_sup  <- dplyr::coalesce(ci_sup, est_center + ci)
+  ci_inf  <- dplyr::coalesce(ci_inf, est_center - ci)
 
   in_totrow <- vctrs::vec_recycle(vctrs::vec_cast(in_totrow, logical()), size = max_size)
   in_tottab <- vctrs::vec_recycle(vctrs::vec_cast(in_tottab, logical()), size = max_size)
@@ -1180,14 +1185,39 @@ get_ci_inf <- fmt_field_factory("ci_inf")
 #' @keywords internal
 # @export
 get_ci_sup <- fmt_field_factory("ci_sup")
-# Phase 1a bounds-shim: get_ci() returns the CI half-width (margin of error), read back
-# from the stored upper bound. Byte-identical to the former raw `ci` field until Phase 3
-# stores real asymmetric bounds and rewrites this to `ci_sup - ci_center(x)`. See
-# dev/tabxplor_1.4.0_decisions.md §1.
-# @describeIn fmt get the confidence-interval half-width (from the stored bounds)
+# ci_center(): the estimate a stored CI is centred on -- the difference for diff-type CIs, the
+# mean for cell means, the proportion otherwise. get_ci() reads the (upper-arm) half-width back
+# as ci_sup - centre, retro-compatible with the former `upr.ci - est`; get_ci_moe() returns the
+# conservative larger arm for the +/- moe display (Wilson/Newcombe bounds are asymmetric).
+# Phase 3a: ci_inf/ci_sup now hold real asymmetric ABSOLUTE bounds. See §1, §20.
+#' @keywords internal
+ci_center  <- function(x) {
+  if (get_ci_type(x) %in% c("diff", "diff_row", "diff_col")) get_diff(x)
+  else if (get_type(x) == "mean")                            get_mean(x)
+  else                                                       get_pct(x)
+}
+# @describeIn fmt get the confidence-interval half-width (upper arm, from the stored bounds)
 #' @keywords internal
 # @export
-get_ci     <- function(x) vctrs::field(x, "ci_sup")
+get_ci     <- function(x) get_ci_sup(x) - ci_center(x)
+# @describeIn fmt get the CI margin of error (conservative larger arm, for the +/- moe display)
+#' @keywords internal
+get_ci_moe <- function(x) {
+  ctr <- ci_center(x)
+  pmax(ctr - get_ci_inf(x), get_ci_sup(x) - ctr)
+}
+# get_stars(): per-cell significance glyphs from the stored `pvalue` (universal CI-inclusion,
+# so they always agree with the interval bracket). Thresholds/labels are options; "" where the
+# pvalue is NA (cell CIs, non-diff cells, or stars opted out). See §20.
+#' @keywords internal
+get_stars  <- function(x, p = get_pvalue(x)) {
+  brk <- sort(getOption("tabxplor.signif_levels", c(0.10, 0.05, 0.01)), decreasing = TRUE)
+  lab <- getOption("tabxplor.signif_labels", c("*", "**", "***"))
+  nb  <- rowSums(outer(p, brk, `<`), na.rm = TRUE)
+  out <- c("", lab)[nb + 1L]
+  out[is.na(p)] <- ""
+  out
+}
 # @describeIn fmt get the "pvalue" field (per-cell significance)
 #' @keywords internal
 # @export
@@ -1409,18 +1439,19 @@ set_ci_inf  <- fmt_set_field_factory("ci_inf" , cast = double()   )
 #' @keywords internal
 # @export
 set_ci_sup  <- fmt_set_field_factory("ci_sup" , cast = double()   )
-# Phase 1a bounds-shim: set_ci() takes a symmetric half-width (margin of error) and stores
-# it as the bounds `ci_sup = value`, `ci_inf = -value`. get_ci() reads `ci_sup` back, so the
-# round-trip and the display stay byte-identical. `ci_inf` is an interim placeholder here;
-# Phase 3 rewrites the writer to store real asymmetric absolute bounds. See
-# dev/tabxplor_1.4.0_decisions.md §1.
-# @describeIn fmt set the confidence-interval half-width (stored as symmetric bounds)
+# set_ci() (legacy): takes a symmetric half-width and stores it as ABSOLUTE bounds around the
+# estimate the interval is centred on (ci_center()), so get_ci() reads the half-width back. The
+# Phase 3a writers (tab_ci()/tab_num()) store real asymmetric bounds directly via set_ci_inf/
+# set_ci_sup and do NOT use this; it is kept for back-compatible external callers. Its centring
+# is best-effort (needs ci_type/type already set). See dev/tabxplor_1.4.0_decisions.md §1, §20.
+# @describeIn fmt set the confidence-interval half-width (stored as symmetric absolute bounds)
 #' @keywords internal
 # @export
 set_ci      <- function(x, value) {
   value <- vctrs::vec_cast(value, double()) %>% vctrs::vec_recycle(size = length(x))
-  x <- set_ci_sup(x,  value)
-  x <- set_ci_inf(x, -value)
+  ctr   <- dplyr::coalesce(ci_center(x), 0)
+  x <- set_ci_sup(x, ctr + value)
+  x <- set_ci_inf(x, ctr - value)
   x
 }
 # @describeIn fmt set the "pvalue" field (per-cell significance)
@@ -1535,9 +1566,10 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   ci_print_moe <- getOption("tabxplor.ci_print") == "moe"
   if (any(plus_ci | disp_ci)) {
     if (any(plus_ci) & ci_print_moe) {
+      # Phase 3a: the +/- moe shows the conservative LARGER arm (Wilson bounds are asymmetric).
       ci <- dplyr::if_else(condition = mean_ci[plus_ci],
-                           true  = get_ci(x)[plus_ci] ,
-                           false = get_ci(x)[plus_ci] * 100)
+                           true  = get_ci_moe(x)[plus_ci] ,
+                           false = get_ci_moe(x)[plus_ci] * 100)
 
       ci_print_trim <- function(x) {
         x <- stringr::str_remove_all(x, paste0("^", pm, "0$|^", pm, "0.0+$|^", pm, "-0.0+$|^",
@@ -1561,28 +1593,23 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
         )
 
     } else if (any(plus_disp_ci) ) { # !ci_print_moe
-      ci <- dplyr::if_else(condition = plus_disp_ci[plus_disp_ci] & type == "mean", # mean_ci[plus_disp_ci],
-                           true  = get_ci(x)[plus_disp_ci] ,
-                           false = get_ci(x)[plus_disp_ci] * 100)
+      # Phase 3a: read the real asymmetric bounds ci_inf/ci_sup directly (Wilson/Newcombe/AC/
+      # Welch-t) instead of reconstructing a symmetric bracket from the half-width. This also
+      # resolves the former WS2 mean-scaling FIXME -- the stored mean-diff bounds are absolute.
+      lower <- dplyr::if_else(plus_disp_ci[plus_disp_ci] & type == "mean",
+                              get_ci_inf(x)[plus_disp_ci],
+                              get_ci_inf(x)[plus_disp_ci] * 100)
+      upper <- dplyr::if_else(plus_disp_ci[plus_disp_ci] & type == "mean",
+                              get_ci_sup(x)[plus_disp_ci],
+                              get_ci_sup(x)[plus_disp_ci] * 100)
 
-      # FIXME (WS2, color diff/ratio split): the mean-CI bracket may be wrong. For means,
-      # `diff` is a ratio and `ci` a half-width; rendering the interval as get_diff() ± ci
-      # (below) might need scaling by the reference mean, i.e.
-      #   ci[... & type=="mean"] <- ci[...] * get_ref_means(x)[...]
-      # Left unscaled for now. Cross-check against color_formula()'s mean diff_ci/after_ci
-      # branches, which DO multiply abs(1 - diff) by ref_means_pct.
-
-
-
+      # The estimate the bracket is centred on -- shown when the rounded bounds coincide.
       ref_for_ci <- dplyr::if_else(
         disp_ci[plus_disp_ci],
         true  = dplyr::if_else(plus_disp_ci[plus_disp_ci] & type == "mean",
                                true  =  get_diff(x)[plus_disp_ci],
                                false =  get_diff(x)[plus_disp_ci] * 100 ),
         false = out[plus_disp_ci])
-
-      lower <- ref_for_ci - ci
-      upper <- ref_for_ci + ci
 
       lower <- dplyr::if_else(pct_ci[plus_disp_ci], pmax(lower,   0), lower)
       upper <- dplyr::if_else(pct_ci[plus_disp_ci], pmin(upper, 100), upper)
@@ -1740,6 +1767,16 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
       reffmt  <- set_display(x[disp_or_pct], "pct") |> set_digits(0L) |> format()
       out[disp_or_pct] <- paste0(out[disp_or_pct], " (", reffmt, ")")
     }
+  }
+
+  # Phase 3a: append significance stars (universal CI-inclusion) after the cell value, wherever
+  # a per-cell pvalue was stored (diff-type CIs). Single source of truth -> flows to console,
+  # tab_md() and tab_kable(). get_stars() is "" for NA pvalue; gated by the option so a table
+  # built with stars can still be printed without them. See dev/tabxplor_1.4.0_decisions.md §20.
+  if (isTRUE(getOption("tabxplor.stars", TRUE))) {
+    st  <- get_stars(x)
+    add <- !is.na(out) & nzchar(st)
+    out[add] <- paste0(out[add], st[add])
   }
 
   #out <- stringr::str_pad(out, max(stringr::str_length(out), na.rm = TRUE))

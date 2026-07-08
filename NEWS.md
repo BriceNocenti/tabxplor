@@ -1,8 +1,28 @@
 # tabxplor 1.4.0 (in development)
 
 ## New features
+* Significance stars for `ci = "diff"`. Each cell now shows `*` / `**` / `***` (p < 0.10 / 0.05 /
+  0.01, customisable via `options("tabxplor.signif_levels")` / `"tabxplor.signif_labels")`) for the
+  difference from its reference, in the console, `tab_md()` and `tab_kable()`. Significance is read
+  from the same confidence interval that is displayed, so the stars and the `[inf; sup]` bracket can
+  never disagree. Controlled by the new `stars` argument (default `TRUE`; `NULL` uses
+  `options("tabxplor.stars")`). `ci = "cell"` intervals are descriptive and carry no stars.
+* Confidence intervals are now correct **asymmetric** intervals. Percentage cell intervals use the
+  Wilson score interval and percentage-difference intervals now default to the **Newcombe** method
+  (was Agresti-Caffo); mean-difference intervals use the Welch t interval when stars are on. The
+  printed `[inf; sup]` bracket reads the real lower and upper bounds (previously a symmetric bracket
+  reconstructed from a single half-width, which mis-drew Wilson/Newcombe intervals). `ci = "cell"`
+  also draws an interval on the total column now.
+* New `method_cell` / `method_diff` arguments on `tab()` (already on `tab_many()`/`tab_ci()`):
+  `method_diff` accepts `"newcombe"` (default), `"ac"` or `"wald"`.
+* Optional Kish effective sample size for weighted numeric (mean) confidence intervals /
+  significance, via `options("tabxplor.kish_neff" = TRUE)`. Off by default (weighted estimate with
+  the unweighted count, as before).
 
 ## Internal
+* Rewrote confidence-interval computation onto a fast, vectorised, closed-form engine
+  (`R/tab-agg.R`), replacing the per-cell `DescTools` calls in `tab_ci()`. `DescTools` moved from
+  Imports to Suggests (used only for test parity). `tab_ci()` and `tab_num()` now share the engine.
 * Started the 1.4.0 aggregate-core (Phase 2). `tab_num()` now computes mean tables from **moment
   sums** (`n`, weighted `n`, `Sigma wx`, `Sigma wx^2`) in a single grouped pass, deriving the mean
   and variance afterwards (`R/tab-agg.R`), instead of the old per-group `weighted.var()` helper that

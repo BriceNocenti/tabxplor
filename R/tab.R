@@ -178,6 +178,12 @@ NULL
 #'  Set `options("tabxplor.ci_print" = "moe")` to print `pct +- moe` instead.
 #' @param conf_level The confidence level, as a single numeric between 0 and 1.
 #' Default to 0.95 (95%).
+#' @param stars Logical (default \code{TRUE}). With \code{ci = "diff"}, print significance stars
+#' for each cell's difference from its reference, read from the displayed interval itself
+#' (universal CI-inclusion). \code{NULL} uses `options("tabxplor.stars")`. See \code{\link{tab_many}}.
+#' @param method_cell,method_diff Character strings choosing the confidence-interval method for
+#' \code{ci = "cell"} / \code{ci = "diff"}. Defaults \code{"wilson"} / \code{"newcombe"}. See
+#' \code{\link{tab_many}}.
 # @param ci_visible By default, confidence intervals are calculated and used to set
 # colors, but not printed. Set to \code{TRUE} to print them in the result.
 #' @param color The type of colors to print, as a single string :
@@ -217,6 +223,8 @@ NULL
 #' to use different filters for similar tables or simply make the field of observation
 #' more visible into the code.
 # @param ... Arguments to pass to \code{\link{tab_ci}} and \code{\link{tab_chi2}}.
+#'
+#' @inheritSection tab_ci Significance stars
 #'
 #' @return A \code{tibble} of class \code{tab}, possibly with colored reading helpers.
 #' All non-text columns are of class \code{\link{fmt}}, storing all
@@ -296,7 +304,8 @@ tab <- function(data, row_var, col_var, tab_vars, wt, sup_cols,
                 cleannames = NULL, #compact = NULL, # pvalue_line = NULL,
                 other_if_less_than = 0, other_level = "Others",
                 ref = "auto", ref2 = "first", comp = "tab",
-                ci = "no", conf_level = 0.95,
+                ci = "no", conf_level = 0.95, stars = NULL,
+                method_cell = "wilson", method_diff = "newcombe",
                 totaltab = "line", totaltab_name = "Ensemble",
                 tot = c("row", "col"), total_names = "Total",
                 add_n = TRUE, add_pct = FALSE,
@@ -386,6 +395,8 @@ tab <- function(data, row_var, col_var, tab_vars, wt, sup_cols,
            chi2 = chi2,
            ci = ci,
            conf_level = conf_level,
+           stars = stars,
+           method_cell = method_cell, method_diff = method_diff,
            OR = OR,
            color = color,
            add_n = add_n, add_pct = add_pct,
@@ -524,27 +535,28 @@ tab <- function(data, row_var, col_var, tab_vars, wt, sup_cols,
 #'    \item \code{"auto"}: \code{ci = "diff"} for means and row/col percentages,
 #'    \code{ci = "cell"} for frequencies ("all", "all_tabs").
 #'   }
-#'  By default, for percentages, with \code{ci = "cell"} Wilson's method is used,
-#'  and with \code{ci = "diff"} Wald's method along Agresti and Caffo's adjustment.
-#'  Means use classic method. This can be changed with \code{method_cell}
-#'  and \code{method_diff}. By default, with \code{ci = "cell"}, the result is printed
-#'  in the `[inf;sup]` form. Set `options("tabxplor.ci_print" = "moe")` to print
-#'  `pct +- moe` instead.
+#'  Confidence intervals use fast closed-form methods. For percentages, \code{ci = "cell"}
+#'  uses the Wilson score interval and \code{ci = "diff"} the Newcombe method-10 hybrid-score
+#'  interval (its dual, so the bracket and the significance stars always agree); means use the
+#'  Welch t interval. These can be changed with \code{method_cell} / \code{method_diff}. By
+#'  default the interval is printed in the `[inf;sup]` form; set
+#'  `options("tabxplor.ci_print" = "moe")` to print `pct +- moe` instead.
 #' @param conf_level The confidence level, as a single numeric between 0 and 1.
 #' Default to 0.95 (95%).
+#' @param stars Logical. When \code{TRUE} (the default) and \code{ci = "diff"}, each cell shows
+#' significance stars for the difference from its reference (\code{*} p<0.10, \code{**} p<0.05,
+#' \code{***} p<0.01, customisable via `options("tabxplor.signif_levels")` /
+#' `"tabxplor.signif_labels"`). Significance is read from the same interval that is displayed
+#' (universal CI-inclusion), so stars and bracket never disagree. \code{FALSE} skips the
+#' significance computation entirely. \code{NULL} uses `options("tabxplor.stars")`.
 # @param ci_visible By default, confidence intervals are calculated and used to set
 # colors, but not printed. Set to \code{TRUE} to print them in the result.
-#' @param method_cell Character string specifying which method to use with percentages
-#'  for \code{ci = "cell"}. This can be one out of:
-#' "wald", "wilson", "wilsoncc", "agresti-coull", "jeffreys", "modified wilson",
-#' "modified jeffreys", "clopper-pearson", "arcsine", "logit", "witting", "pratt",
-#' "midp", "lik" and "blaker". Defaults to "wilson".
-#' See \code{\link[DescTools:BinomCI]{BinomCI}}.
-#' @param method_diff Character string specifying which method to use with percentages
-#' for \code{ci = "diff"}. This can be one out of: "wald", "waldcc", "ac", "score",
-#' "scorecc", "mn", "mee", "blj", "ha", "hal", "jp". Defaults to "ac", Wald interval with
-#' the adjustment according to Agresti, Caffo for difference in proportions and
-#' independent samples. See \code{\link[DescTools:BinomDiffCI]{BinomDiffCI}}.
+#' @param method_cell Character string, the proportion confidence-interval method for
+#' \code{ci = "cell"}. Currently \code{"wilson"} (the score interval, default).
+#' @param method_diff Character string, the proportion confidence-interval method for
+#' \code{ci = "diff"}. One of \code{"newcombe"} (default, the hybrid-score interval, dual of the
+#' two-proportion score test), \code{"ac"} (Agresti-Caffo) or \code{"wald"}. Whatever method is
+#' chosen, the stars come from that same interval, so they always agree with the bracket.
 #' @param color The type of colors to print, as a single string. Vectorised over `row_vars`.
 #' \itemize{
 #'   \item \code{"no"}: by default, no colors are printed.
@@ -588,6 +600,8 @@ tab <- function(data, row_var, col_var, tab_vars, wt, sup_cols,
 #' more visible into the code.
 # @param ... Arguments to pass to \code{\link{tab_ci}} and \code{\link{tab_chi2}}.
 #'
+#' @inheritSection tab_ci Significance stars
+#'
 #' @return A \code{tibble} of class \code{tab}, possibly with colored reading helpers.
 #' When there are two `row_vars` or more, a list of \code{tibble} of class \code{tab}.
 #' All non-text columns are of class \code{\link{fmt}}, storing all
@@ -630,8 +644,8 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
                      cleannames = NULL, compact = NULL, #pvalue_line = NULL,
                      other_if_less_than = 0, other_level = "Others",
                      ref = "auto", ref2 = "first", comp = "tab",
-                     ci = "no", conf_level = 0.95, #ci_visible = FALSE,
-                     method_cell = "wilson", method_diff = "ac",
+                     ci = "no", conf_level = 0.95, stars = NULL, #ci_visible = FALSE,
+                     method_cell = "wilson", method_diff = "newcombe",
                      totaltab = "line", totaltab_name = "Ensemble",
                      totrow = TRUE, totcol = "last", total_names = "Total",
                      add_n = TRUE, add_pct = FALSE,
@@ -647,6 +661,9 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
 
   compact <-
     if (is.null(compact)) { getOption("tabxplor.compact") } else {compact}
+
+  # Phase 3a: significance stars default (universal CI-inclusion). NULL -> option default.
+  stars <- if (is.null(stars)) getOption("tabxplor.stars", TRUE) else stars
 
   # pvalue_line <-
   #   if (is.null(pvalue_line)) { getOption("tabxplor.pvalue_lines") } else {pvalue_line}
@@ -1055,6 +1072,7 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
                                       ref        = ..4,
                                       ci         = ..7,
                                       conf_level = conf_level,
+                                      stars      = stars,
                                       comp       = ..5,
                                       color      = ..6,
                                       totaltab   = ..2,
@@ -1177,7 +1195,8 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
           list(tabs_text[ci != "no"], ci[ci != "no"], comp[ci != "no"],
                color_ci[ci != "no"], visible = ci[ci != "no"] == "cell"),
           ~ tab_ci(tabs = ..1, ci = ..2, comp = ..3, conf_level = conf_level, color = ..4,
-                   visible = ..5, method_cell = method_cell, method_diff = method_diff)
+                   visible = ..5, stars = stars,
+                   method_cell = method_cell, method_diff = method_diff)
         )
 
       # if (any(ci == "cell")) tabs_text[ci == "cell"] <- tabs_text[ci == "cell"] |>
@@ -3036,6 +3055,9 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
 #'   }
 #' @param conf_level The confidence level for the confidence intervals,
 #'  as a single numeric between 0 and 1. Default to 0.95 (95%).
+#' @param stars Logical (default \code{TRUE}, or `options("tabxplor.stars")` when \code{NULL}).
+#' With \code{ci = "diff"}, print per-cell Welch t significance stars for the difference from the
+#' reference row; the mean-diff interval then uses the Welch t quantile (z when \code{FALSE}).
 #' @param num Set to \code{TRUE} to obtain a table with normal numeric vectors (not `fmt`).
 #' @param df  Set to \code{TRUE} to obtain a plain data.frame (not a `tibble`),
 #' with normal numeric vectors (not `fmt`). Useful, for example, to pass the table to
@@ -3059,7 +3081,7 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
                     color = c("auto", "diff", "diff_ci", "after_ci"),
                     na = c("keep", "drop", "drop_fct", "drop_num"),
                     ref = "tot", comp = c("tab", "all"),
-                    ci = NULL, conf_level = 0.95, #ci_visible = FALSE,
+                    ci = NULL, conf_level = 0.95, stars = NULL, #ci_visible = FALSE,
                     totaltab = "line", totaltab_name = "Ensemble",
                     tot = NULL, total_names = "Total",
                     subtext = "", digits = 0, num = FALSE, df = FALSE
@@ -3315,10 +3337,22 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
                                               names(.SD) != as.character(wt),
                                               ~ sum(eval(wt) * . * ., na.rm = TRUE),
                                               .else = ~ NA_real_),
-                                paste0(as.character(c(col_vars, wt)), "_s2"))
+                                paste0(as.character(c(col_vars, wt)), "_s2")),
+
+               # G1 (Phase 3a): Sigma w^2, the one extra sufficient statistic for Kish effective
+               # n (n_eff = wn^2 / w2). Accumulated ONLY when opted in, so the default weighted
+               # path is byte-identical and pays nothing. See dev/tabxplor_1.4.0_decisions.md §14.
+               if (isTRUE(getOption("tabxplor.kish_neff", FALSE)))
+                 purrr::set_names(purrr::map_if(.SD,
+                                                names(.SD) != as.character(wt),
+                                                ~ sum(eval(wt)^2 * as.integer(!is.na(.)), na.rm = TRUE),
+                                                .else = ~ NA_real_),
+                                  paste0(as.character(c(col_vars, wt)), "_w2"))
              ),
              #.SDcols = as.character(c(col_vars, wt)),
-             keyby = c(tab_row_names)][, paste0(wt, c("_n", "_wn", "_s1", "_s2")) := NULL]
+             keyby = c(tab_row_names)][
+               , paste0(wt, c("_n", "_wn", "_s1", "_s2",
+                              if (isTRUE(getOption("tabxplor.kish_neff", FALSE))) "_w2")) := NULL]
     }
 
     # DESIGN: since 1.4.0 (Phase 2) each of these scans computes SUFFICIENT MOMENT SUMS
@@ -3743,38 +3777,81 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
 
 
 
-    #Confidence intervals
-    if (ci == "cell") {
+    # Confidence intervals (Phase 3a): store real bounds (<v>_ci_inf / <v>_ci_sup) + the
+    # per-cell significance <v>_pvalue, via the ci_pivot() engine (R/tab-agg.R). Means use the
+    # z pivot for cell CIs and the Welch-t pivot for diff CIs when stars are on; the pvalue is
+    # the Welch-t inversion p (universal CI-inclusion) -- NA for cell CIs and when stars are
+    # opted out (one interval eval). See dev/tabxplor_1.4.0_decisions.md §20.
+    if (ci %in% c("cell", "diff")) {
+      stars_on <- if (is.null(stars)) getOption("tabxplor.stars", TRUE) else stars
+      want_p   <- isTRUE(stars_on) && ci == "diff"
+      cvs      <- as.character(col_vars)
 
-      tabs[, paste0(col_vars, "_ci") := purrr::map(
-        col_vars,
-        ~ ci_mean(xvar = eval(rlang::sym(paste0(., "_var"))),
-                  xn   = eval(rlang::sym(paste0(., "_n"))),
-                  conf_level = conf_level)
-      )]
+      # Effective sample size per cell for the CI/test (§14): Kish n_eff = wn^2 / Sigma(w^2)
+      # when opted in, else the unweighted count. The DISPLAYED `n` field stays the real count;
+      # only the inference uses this. (Factor-side Kish is deferred -- open item.)
+      kish <- isTRUE(getOption("tabxplor.kish_neff", FALSE))
+      for (v in cvs) {
+        data.table::set(
+          tabs, j = paste0(v, "_en"),
+          value = if (kish && paste0(v, "_w2") %in% names(tabs)) {
+            tabs[[paste0(v, "_wn")]]^2 / tabs[[paste0(v, "_w2")]]
+          } else {
+            as.double(tabs[[paste0(v, "_n")]])
+          })
+      }
 
-    } else if (ci == "diff") {
-      tabs[, paste0(col_vars, "_ci") := purrr::map(
-        col_vars,
-        ~ ci_mean_diff(xvar = eval(rlang::sym(paste0(., "_var"))),
-                       xn   = eval(rlang::sym(paste0(., "_n"))),
-                       yvar = dplyr::nth(eval(rlang::sym(paste0(., "_var"))),
-                                         tidyr::replace_na(which(eval(rlang::sym("ref_rows___")))[1], 0) ), #diff_index_mean(ref, eval(row_var))
-                       yn   = dplyr::nth(eval(rlang::sym(paste0(., "_n"))),
-                                         tidyr::replace_na(which(eval(rlang::sym("ref_rows___")))[1], 0) ), #diff_index_mean(ref, eval(row_var))
-                       conf_level = conf_level)
-      ),
-      by = eval(comp_group)]
+      if (ci == "diff") {
+        # Broadcast the reference row's mean / var / effective-n within each comparison group
+        # (the same `nth(., ref index within group)` idiom the diff/ratio block above uses).
+        tabs[, paste0(cvs, "_refm") := purrr::map(
+          rlang::syms(paste0(cvs, "_mean")),
+          ~ dplyr::nth(eval(.), tidyr::replace_na(which(eval(rlang::sym("ref_rows___")))[1], 0))
+        ), by = eval(comp_group)]
+        tabs[, paste0(cvs, "_refv") := purrr::map(
+          rlang::syms(paste0(cvs, "_var")),
+          ~ dplyr::nth(eval(.), tidyr::replace_na(which(eval(rlang::sym("ref_rows___")))[1], 0))
+        ), by = eval(comp_group)]
+        tabs[, paste0(cvs, "_refn") := purrr::map(
+          rlang::syms(paste0(cvs, "_en")),
+          ~ dplyr::nth(eval(.), tidyr::replace_na(which(eval(rlang::sym("ref_rows___")))[1], 0))
+        ), by = eval(comp_group)]
+      }
 
-      tabs[, paste0(col_vars, "_ci") :=
-             purrr::map(.SD, ~ dplyr::if_else(1:.N %in% which(refrows),
-                                              true  = NA_real_,
-                                              false = .)),
-           .SDcols = paste0(col_vars, "_ci") ]
+      for (v in cvs) {
+        m  <- tabs[[paste0(v, "_mean")]]
+        vv <- tabs[[paste0(v, "_var")]]
+        nn <- tabs[[paste0(v, "_en")]]
+        if (ci == "cell") {
+          res <- ci_pivot(m, sqrt(vv / nn), df = Inf, conf_level = conf_level, want_p = FALSE)
+        } else {
+          mr <- tabs[[paste0(v, "_refm")]]
+          vr <- tabs[[paste0(v, "_refv")]]
+          nr <- tabs[[paste0(v, "_refn")]]
+          res <- ci_mean_diff2(m, vv, nn, mr, vr, nr, conf_level = conf_level, want_p = want_p)
+          # A reference row has no CI/test against itself.
+          res$inf[refrows] <- NA_real_
+          res$sup[refrows] <- NA_real_
+          res$pvalue[refrows] <- NA_real_
+        }
+        data.table::set(tabs, j = paste0(v, "_ci_inf"), value = res$inf)
+        data.table::set(tabs, j = paste0(v, "_ci_sup"), value = res$sup)
+        data.table::set(tabs, j = paste0(v, "_pvalue"), value = res$pvalue)
+      }
+
+      data.table::set(tabs, j = paste0(cvs, "_en"), value = NULL)
+      if (ci == "diff")
+        data.table::set(tabs, j = paste0(rep(cvs, each = 3L),
+                                         c("_refm", "_refv", "_refn")), value = NULL)
     }
 
     tabs[, "ref_rows___" := NULL]
   }
+
+  # G1: drop the Kish Sigma(w^2) scratch (accumulated only when opted in) before the reshape,
+  # so it never leaks into the fmt columns.
+  w2_cols <- names(tabs)[stringr::str_detect(names(tabs), "_w2$")]
+  if (length(w2_cols) > 0) data.table::set(tabs, j = w2_cols, value = NULL)
 
 
 
@@ -3843,14 +3920,19 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
       list(NA_reals)
     }
 
-  are_ci <- stringr::str_detect(names(tabs), "_ci$")
-  tabs_ci  <-
-    if (any(are_ci)) {
-      data.table::setnames(tabs[, are_ci, with = FALSE] ,
-                           function(.x) stringr::str_remove(.x, "_ci$" ))
+  # Phase 3a: reshape the real CI bounds + per-cell pvalue (were a single symmetric half-width).
+  reshape_suffix <- function(sfx) {
+    hit <- stringr::str_detect(names(tabs), paste0(sfx, "$"))
+    if (any(hit)) {
+      data.table::setnames(tabs[, hit, with = FALSE],
+                           function(.x) stringr::str_remove(.x, paste0(sfx, "$")))
     } else {
       list(NA_reals)
     }
+  }
+  tabs_ci_inf <- reshape_suffix("_ci_inf")
+  tabs_ci_sup <- reshape_suffix("_ci_sup")
+  tabs_pvalue <- reshape_suffix("_pvalue")
 
   tabs_text <- tabs[, text_vars, with = FALSE]
 
@@ -3858,7 +3940,8 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
 
 
   tabs <-
-    list(tabs_n, tabs_wn, tabs_mean, tabs_var, tabs_diff, tabs_ci, as.character(col_vars), digits, tabs_ratio) |>
+    list(tabs_n, tabs_wn, tabs_mean, tabs_var, tabs_diff, tabs_ci_sup, as.character(col_vars),
+         digits, tabs_ratio, tabs_ci_inf, tabs_pvalue) |>
     purrr::pmap_dfc(~ new_fmt(
       display   = if (ci_visible) { "mean_ci" } else { "mean" },
       digits    = dplyr::case_when(
@@ -3872,10 +3955,11 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
       var       = ..4,
       diff      = ..5,
       ratio     = ..9,
-      # Phase 1a bounds-shim: ..6 is the mean-CI half-width; store it as symmetric bounds
-      # so get_ci() reads it back unchanged (ci field dropped). See fmt_class.R set_ci().
+      # Phase 3a: real asymmetric CI bounds + per-cell significance (mean CIs are symmetric
+      # around the estimate, but stored as absolute bounds like the proportion path).
       ci_sup    = ..6,
-      ci_inf    = -..6,
+      ci_inf    = ..10,
+      pvalue    = ..11,
       in_totrow = totrow_vector,
       in_tottab = tottab_vector,
       in_refrow = refrows,
@@ -4648,17 +4732,15 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
 #'  \code{\link{tab_num}} or \code{\link{tab_chi2}} with rows, or \code{\link{tab_ci}}.
 #' @param conf_level The confidence level, as a single numeric between 0 and 1.
 #' Default to 0.95 (95%).
-#' @param method_cell Character string specifying which method to use with percentages
-#'  for \code{ci = "cell"}. This can be one out of:
-#' "wald", "wilson", "wilsoncc", "agresti-coull", "jeffreys", "modified wilson",
-#' "modified jeffreys", "clopper-pearson", "arcsine", "logit", "witting", "pratt",
-#' "midp", "lik" and "blaker". Defaults to "wilson".
-#' See \code{\link[DescTools:BinomCI]{BinomCI}}.
-#' @param method_diff Character string specifying which method to use with percentages
-#' for \code{ci = "diff"}. This can be one out of: "wald", "waldcc", "ac", "score",
-#' "scorecc", "mn", "mee", "blj", "ha", "hal", "jp". Defaults to "ac", Wald interval with
-#' the adjustment according to Agresti, Caffo for difference in proportions and
-#' independent samples. See \code{\link[DescTools:BinomDiffCI]{BinomDiffCI}}.
+#' @param stars Logical (default \code{TRUE}, or `options("tabxplor.stars")` when \code{NULL}).
+#' With \code{ci = "diff"}, store and print per-cell significance stars for the difference from
+#' the reference, read from the same interval that is displayed (universal CI-inclusion), so the
+#' stars and the bracket never disagree. \code{FALSE} skips the significance computation.
+#' @param method_cell Character string, the proportion CI method for \code{ci = "cell"}.
+#' Currently \code{"wilson"} (the score interval, default).
+#' @param method_diff Character string, the proportion CI method for \code{ci = "diff"}: one of
+#' \code{"newcombe"} (default, hybrid-score, dual of the two-proportion score test), \code{"ac"}
+#' (Agresti-Caffo) or \code{"wald"}. Whatever the method, the stars come from that interval.
 #' @param color The type of colors to print, as a single string.
 #' \itemize{
 #'   \item \code{"no"}: by default, no colors are printed
@@ -4670,6 +4752,33 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
 #' }
 #' @param visible By default confidence intervals are calculated and used to set colors,
 #' but not printed. Set to \code{TRUE} to print them in the result.
+#'
+#' @section Significance stars:
+#' With \code{ci = "diff"} and \code{stars = TRUE}, each cell shows how sure we can be that its
+#' difference from the reference is real and not just sampling noise: \code{*} means significant at
+#' the 10\% level (p < 0.10), \code{**} at 5\% (p < 0.05), \code{***} at 1\% (p < 0.01). The exact
+#' p-value is stored per cell in the \code{pvalue} field of the \code{fmt} vectors, readable with
+#' \code{$pvalue} or \code{get_pvalue()}.
+#'
+#' There is no separate statistical test run behind the scenes: the significance is read straight
+#' from the confidence interval that is displayed. A cell is significant at a given level exactly
+#' when its interval at that confidence level no longer contains zero, so the stars and the printed
+#' \code{[inf; sup]} bracket can never contradict each other. Which test this amounts to depends on
+#' the interval:
+#' \itemize{
+#'   \item \strong{percentage difference} (default, \code{method_diff = "newcombe"}): inverting the
+#'     Newcombe hybrid-score interval. This is, to a very close approximation, the classical
+#'     two-sample test of proportions (the score / "N-1" chi-squared test).
+#'   \item \strong{percentage difference} with \code{method_diff = "ac"} or \code{"wald"}: inverting
+#'     the Agresti-Caffo (adjusted Wald) or the Wald interval -- an (adjusted) two-proportion z-test.
+#'   \item \strong{mean difference}: the \strong{Welch two-sample t-test} (for groups with unequal
+#'     variances); inverting the Welch t interval is exactly this well-known test.
+#'   \item \code{ci = "cell"} (an absolute cell interval, not a difference) is purely descriptive,
+#'     so it carries no stars and its \code{pvalue} is \code{NA}.
+#' }
+#' On weighted data the estimate is weighted but the sample size used is the real (unweighted)
+#' number of cases, unless you opt in to Kish's effective sample size with
+#' \code{options("tabxplor.kish_neff" = TRUE)}.
 #'
 #' @return A \code{tibble} of class \code{tab}, colored based on differences (from
 #' totals/first cells) and confidence intervals.
@@ -4692,10 +4801,15 @@ tab_ci <- function(tabs,
                    conf_level = 0.95,
                    color = "no",
                    visible = FALSE,
-                   method_cell = "wilson", method_diff = "ac") {
+                   stars = NULL,
+                   method_cell = "wilson", method_diff = "newcombe") {
   stopifnot(all(ci %in% c("auto", "cell", "diff", "no")), #"r_to_r", "c_to_c", "tab_to_tab",
-            all(comp %in%  c("tab", "all"))
+            all(comp %in%  c("tab", "all")),
+            all(method_cell %in% c("wilson")),
+            all(method_diff %in% c("newcombe", "ac", "wald"))
   )
+  # Phase 3a: significance stars default (universal CI-inclusion). NULL -> option default.
+  stars <- if (is.null(stars)) getOption("tabxplor.stars", TRUE) else stars
 
   subtext <- get_subtext(tabs)
   chi2    <- get_chi2(tabs)
@@ -4890,70 +5004,40 @@ tab_ci <- function(tabs,
         )
       ))
 
-    #Formulas :
-
-    zs <- zscore_formula(conf_level)
-
-    ci_mean      <- function(xvar, xn) {
-      zs * sqrt( xvar / xn )
-    }
-
-    ci_mean_diff <- function(xvar, xn, yvar, yn) {
-      zs * sqrt( xvar/xn + yvar/yn )
-    }
-
-    ci_base <- function(xpct, xn, method_cell) {
-      #zs * sqrt(xpct*(1 - xpct)/xn)
-
-      DescTools::BinomCI(xpct * xn, xn,
-                         conf.level = conf_level, method = method_cell) %>%
-        as.data.frame() %>% dplyr::mutate(ci = .data$upr.ci - .data$est ) %>%
-        dplyr::pull(.data$ci)
-    }
-
-    ci_diff <-  function(xpct, xn, ypct, yn, method_diff) {
-      #zs * sqrt( xpct*(1 - xpct)/xn   +   ypct*(1 - ypct)/yn )
-
-      DescTools::BinomDiffCI(x1 = xpct * xn, n1 = xn,
-                             x2 = ypct * yn, n2 = yn,
-                             conf.level = conf_level, method = method_diff)  %>%
-        as.data.frame() %>% dplyr::mutate(ci = .data$upr.ci - .data$est ) %>%
-        dplyr::pull(.data$ci)
-    }
-
-    #Calculate the confidence intervals
+    # Confidence intervals & per-cell significance (Phase 3a): the closed-form engine
+    # (R/tab-agg.R) stores real asymmetric bounds ci_inf/ci_sup + the universal-inclusion
+    # pvalue -- no per-cell DescTools. Weighted rule (§14): weighted proportion get_pct() /
+    # weighted mean get_mean(), with the UNWEIGHTED base x_n (get_n of the relevant 100%
+    # total). Cell CIs carry no pvalue; diff CIs star only when `stars` is on. A reference
+    # cell has x_n = NA (ref_to_na) -> NA bounds, so it is never self-compared.
     tabs <- tabs %>%
       dplyr::with_groups(
         NULL,
         ~ dplyr::mutate(., dplyr::across(
           !!ci_select,
-          ~ set_ci(., switch(
-            ci[[dplyr::cur_column()]],
-            "cell"        = switch(
-              get_type(.),
-              "mean" = ci_mean(xvar = get_var(.),
-                               xn   = x_n[[dplyr::cur_column()]]),
-
-              ci_base(xpct        = get_pct(.),
-                      xn          = x_n[[dplyr::cur_column()]],
-                      method_cell = method_cell)
-            ),
-
-            "diff_col"   = ,
-            "diff_row"   = switch(
-              get_type(.),
-              "mean" = ci_mean_diff(xvar = get_var(.),
-                                    xn   = x_n[[dplyr::cur_column()]],
-                                    yvar = ref_var[[dplyr::cur_column()]],
-                                    yn   = ref_n[[dplyr::cur_column()]]),
-
-              ci_diff(xpct        = get_pct(.),
-                      xn          = x_n[[dplyr::cur_column()]],
-                      ypct        = ref[[dplyr::cur_column()]],
-                      yn          = ref_n[[dplyr::cur_column()]],
-                      method_diff = method_diff)
+          ~ {
+            col    <- dplyr::cur_column()
+            want_p <- isTRUE(stars) && ci[[col]] %in% c("diff_row", "diff_col")
+            res <- switch(
+              ci[[col]],
+              "cell" = switch(
+                get_type(.),
+                "mean" = ci_pivot(get_mean(.), sqrt(get_var(.) / x_n[[col]]),
+                                  df = Inf, conf_level = conf_level, want_p = FALSE),
+                ci_wilson(get_pct(.), x_n[[col]], conf_level = conf_level)
+              ),
+              "diff_col" = ,
+              "diff_row" = switch(
+                get_type(.),
+                "mean" = ci_mean_diff2(get_mean(.), get_var(.), x_n[[col]],
+                                       ref[[col]], ref_var[[col]], ref_n[[col]],
+                                       conf_level = conf_level, want_p = want_p),
+                ci_prop_diff(get_pct(.), x_n[[col]], ref[[col]], ref_n[[col]],
+                             conf_level = conf_level, method = method_diff, want_p = want_p)
+              )
             )
-          ))
+            set_pvalue(set_ci_sup(set_ci_inf(., res$inf), res$sup), res$pvalue)
+          }
         )))
     #tabs %>% dplyr::mutate(dplyr::across(where(is_fmt), get_ci))
 
@@ -5545,37 +5629,10 @@ zscore_formula <- function(conf_level) {
 }
 
 
-#' @keywords internal
-ci_mean      <- function(xvar, xn, conf_level) {
-  zscore_formula(conf_level) * sqrt( xvar / xn )
-}
-
-#' @keywords internal
-ci_mean_diff <- function(xvar, xn, yvar, yn, conf_level) {
-  zscore_formula(conf_level) * sqrt( xvar/xn + yvar/yn )
-}
-
-# #' @keywords internal
-# ci_base <- function(xpct, xn, conf_level) {
-#   #zs * sqrt(xpct*(1 - xpct)/xn)
-#
-#   DescTools::BinomCI(xpct * xn, xn,
-#                      conf.level = conf_level, method = method_cell) %>%
-#     as.data.frame() %>% dplyr::mutate(ci = .data$upr.ci - .data$est ) %>%
-#     dplyr::pull(.data$ci)
-# }
-#
-# #' @keywords internal
-# ci_diff <-  function(xpct, xn, ypct, yn, conf_level) {
-#   #zs * sqrt( xpct*(1 - xpct)/xn   +   ypct*(1 - ypct)/yn )
-#
-#   DescTools::BinomDiffCI(x1 = xpct * xn, n1 = xn,
-#                          x2 = ypct * yn, n2 = yn,
-#                          conf.level = conf_level, method = method_diff)  %>%
-#     as.data.frame() %>% dplyr::mutate(ci = .data$upr.ci - .data$est ) %>%
-#     dplyr::pull(.data$ci)
-# }
-
+# Phase 3a: the scalar mean-CI helpers ci_mean()/ci_mean_diff() and the DescTools proportion-CI
+# closures ci_base()/ci_diff() were removed. All CI math now lives in the vectorised closed-form
+# engine (ci_pivot/ci_wilson/ci_newcombe/ci_prop_diff/ci_mean_diff2, R/tab-agg.R). zscore_formula()
+# above is kept -- the engine uses it for the normal quantile.
 
 
 #' @keywords internal

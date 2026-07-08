@@ -69,6 +69,16 @@ NULL
 
   options("tabxplor.ci_print" = "ci") # or "moe"
 
+  # Phase 3a significance stars (universal CI-inclusion). `stars` default, and the star
+  # thresholds/labels read by get_stars(). Thresholds are nested p-value cutoffs.
+  options("tabxplor.stars"         = TRUE)
+  options("tabxplor.signif_levels" = c(0.10, 0.05, 0.01))
+  options("tabxplor.signif_labels" = c("*", "**", "***"))
+
+  # Weighted inference (§14): unweighted n by default; opt in to Kish n_eff = (Sum w)^2/Sum w^2
+  # for the numeric (mean) CIs/tests. Factor-side Kish is deferred (open item).
+  options("tabxplor.kish_neff"     = FALSE)
+
   options("tabxplor.compact" = FALSE)
 
   # options("tabxplor.pvalue_lines" = FALSE)

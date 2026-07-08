@@ -473,8 +473,10 @@ testthat::test_that("mean CI matches z * sqrt(var/n) using stats::var()", {
   }
 })
 
-testthat::test_that("mean diff CI matches z * sqrt(var1/n1 + var2/n2)", {
-  tabs <- tab_num(sw, sex, height, na = "drop", ci = "diff", conf_level = 0.95)
+testthat::test_that("mean diff CI (stars off) matches z * sqrt(var1/n1 + var2/n2)", {
+  # Phase 3a: with stars OFF the mean-diff interval keeps the z quantile (stars ON -> Welch-t,
+  # tested separately below).
+  tabs <- tab_num(sw, sex, height, na = "drop", ci = "diff", conf_level = 0.95, stars = FALSE)
   z <- stats::qnorm(0.025, lower.tail = FALSE)
 
   # Reference: total row stats
@@ -528,12 +530,22 @@ testthat::test_that("cell CI for proportions matches DescTools::BinomCI wilson",
 
     testthat::expect_equal(tab_ci, unname(expected_ci), tolerance = 1e-6,
                            label = paste0("prop CI [", r, ", ", m, "]"))
+
+    # Phase 3a: the real asymmetric lower bound is now stored (was discarded pre-3a).
+    col <- tabs |> dplyr::filter(race == r) |> dplyr::pull(!!m)
+    testthat::expect_equal(get_ci_inf(col), unname(bci[, "lwr.ci"]), tolerance = 1e-6,
+                           label = paste0("prop CI inf [", r, ", ", m, "]"))
+    testthat::expect_equal(get_ci_sup(col), unname(bci[, "upr.ci"]), tolerance = 1e-6,
+                           label = paste0("prop CI sup [", r, ", ", m, "]"))
   }
 })
 
-testthat::test_that("diff CI for proportions matches DescTools::BinomDiffCI ac", {
+testthat::test_that("diff CI for proportions (method='ac') matches DescTools::BinomDiffCI ac", {
   testthat::skip_if_not_installed("DescTools")
-  tabs <- tab(gss, race, marital, pct = "row", ci = "diff", conf_level = 0.95)
+  # Phase 3a: AC is now the expert opt-in (default is Newcombe, tested below). get_ci() is the
+  # upper arm (ci_sup - diff), matching DescTools' upr.ci - est.
+  tabs <- tab(gss, race, marital, pct = "row", ci = "diff", conf_level = 0.95,
+              method_diff = "ac", stars = FALSE)
   ct <- table(gss$race, gss$marital)
 
   test_cells <- list(
@@ -561,6 +573,51 @@ testthat::test_that("diff CI for proportions matches DescTools::BinomDiffCI ac",
 
     testthat::expect_equal(tab_ci, unname(expected_ci), tolerance = 1e-4,
                            label = paste0("prop diff CI [", r, ", ", m, "]"))
+  }
+})
+
+# Phase 3a new-default parity: the proportion-diff interval is Newcombe method 10, matching
+# DescTools::BinomDiffCI(method = "score") on BOTH bounds; and the per-cell pvalue (universal
+# CI-inclusion) agrees with the bracket's own 0-exclusion at each star level.
+testthat::test_that("diff CI for proportions (default) matches DescTools BinomDiffCI score", {
+  testthat::skip_if_not_installed("DescTools")
+  tabs <- tab(gss, race, marital, pct = "row", ci = "diff", conf_level = 0.95)
+  ct <- table(gss$race, gss$marital)
+  for (cell in list(c("White", "Married"), c("Black", "Never married"), c("Other", "Divorced"))) {
+    r <- cell[1]; m <- cell[2]
+    col <- tabs |> dplyr::filter(race == r) |> dplyr::pull(!!m)
+    if (is.na(get_ci_sup(col))) next
+    x1 <- ct[r, m]; n1 <- sum(ct[r, ]); x2 <- sum(ct[, m]); n2 <- sum(ct)
+    bd <- DescTools::BinomDiffCI(x1, n1, x2, n2, conf.level = 0.95, method = "score")
+    testthat::expect_equal(get_ci_inf(col), unname(bd[, "lwr.ci"]), tolerance = 1e-6,
+                           label = paste0("Newcombe inf [", r, ", ", m, "]"))
+    testthat::expect_equal(get_ci_sup(col), unname(bd[, "upr.ci"]), tolerance = 1e-6,
+                           label = paste0("Newcombe sup [", r, ", ", m, "]"))
+  }
+})
+
+testthat::test_that("stars agree with the CI bracket's own 0-exclusion (universal inclusion)", {
+  cn <- tab(gss, race, marital, pct = "row", ci = "diff") |>
+    dplyr::filter(race == "White") |> dplyr::pull("Married")
+  p <- get_pvalue(cn); ok <- !is.na(p)
+  excl95 <- get_ci_inf(cn) > 0 | get_ci_sup(cn) < 0
+  testthat::expect_equal((p < 0.05)[ok], excl95[ok])
+})
+
+testthat::test_that("mean diff CI (stars on) matches Welch t.test", {
+  d <- sw |> dplyr::filter(!is.na(height) & !is.na(sex))
+  tabs <- tab_num(d, sex, height, na = "drop", ci = "diff", conf_level = 0.95, stars = TRUE)
+  ref <- d |> dplyr::pull(height)                 # total row = reference (ref = "tot")
+  for (s in levels(d$sex)) {
+    col <- tabs |> dplyr::filter(sex == s) |> dplyr::pull(height)
+    if (length(col) == 0) next
+    grp <- d |> dplyr::filter(sex == s) |> dplyr::pull(height)
+    if (length(grp) <= 1 || is.na(get_ci_sup(col))) next
+    tt <- stats::t.test(grp, ref, var.equal = FALSE)  # cell vs total
+    hw <- as.numeric(diff(tt$conf.int) / 2)
+    testthat::expect_equal(get_ci(col), hw, tolerance = 1e-4, label = paste0("Welch hw [", s, "]"))
+    testthat::expect_equal(get_pvalue(col), tt$p.value, tolerance = 1e-4,
+                           label = paste0("Welch p [", s, "]"))
   }
 })
 

@@ -34,8 +34,8 @@ tabxplor creates, manipulates, and formats color-coded cross-tabulation tables f
 | `ctr` | double | Contribution to chi-squared variance |
 | `var` | double | Variance (used for CI calculation) |
 | `ci_inf` | double | Lower confidence-interval bound (Phase 1a; real asymmetric bounds written in Phase 3) |
-| `ci_sup` | double | Upper confidence-interval bound. `get_ci()` reads the half-width back from here (bounds-shim) |
-| `pvalue` | double | Per-cell significance p-value (Phase 1a placeholder; written in Phase 3) |
+| `ci_sup` | double | Upper (absolute) confidence-interval bound. `get_ci()` = `ci_sup − ci_center` (upper arm) |
+| `pvalue` | double | Per-cell significance p-value (Phase 3a: CI-inversion p; drives `get_stars()`) |
 | `or` | double | Odds ratio or relative risk ratio |
 | `tot_n` | double | The cell's own (unweighted) percentage base — its row/column/grand total per `pct` (written by `tab_plain()` in Phase 2; `NA` for count tables and mean cells). The weighted base is recovered on demand by `get_tot_wn()` = `wn/pct` (not a stored field) |
 | `in_totrow` | logical | Cell belongs to a total row |
@@ -179,24 +179,34 @@ For `type = "mean"` columns the `diff` field is now a real **difference** (`cell
 
 Note the remaining pct-column overload: for percentage columns the "×2 rule" ratio still rides the `mean` field (removed in Phase 5). So `mean` currently means an actual mean for `type = "mean"` and a pct ratio otherwise.
 
-### Confidence Intervals
+### Confidence Intervals & significance stars (Phase 3a)
 
-Since Phase 1a the CI lives in the **`ci_inf`/`ci_sup` bound fields**, not a dedicated `ci`
-field. During 1a a **bounds-shim** keeps behaviour byte-identical: `set_ci()` stores a symmetric
-half-width as `ci_sup = v`, `ci_inf = -v`, and `get_ci()` / `$ci` read the half-width back from
-`ci_sup`. The public `fmt(ci=)` argument still accepts a half-width (mapped to the bounds).
-Phase 3 will store real asymmetric bounds (Wilson/AC/OR) and switch the display to read them
-directly. So conceptually `tab_ci()` still stores a **half-width** (margin of error) today:
+Since Phase 3a the CI is **real asymmetric bounds** in `ci_inf`/`ci_sup`, plus a per-cell
+significance `pvalue`, all computed by the **closed-form vectorised engine in `R/tab-agg.R`** (no
+`DescTools` at runtime). Two interval *shapes*:
 
-- `ci = z * sqrt(variance)`
-- For percentages: stored as 0–1 (multiplied by 100 only in `format()`)
-- Two CI methods: `method_cell` for absolute proportions (default: Wilson), `method_diff` for differences (default: Agresti-Caffo)
-- **Negative CI values** indicate non-significant differences (used by `color_formula()` for `diff_ci`/`after_ci` modes)
+- **pivot** — `estimate ± q·se` with a continuous inversion p (`ci_pivot()`): serves Agresti-Caffo
+  & Wald (proportion diff) and z / Welch-t (means).
+- **score** — asymmetric Wilson (`ci_wilson()`, cell proportion) and its hybrid Newcombe-10
+  (`ci_newcombe()`, proportion diff), the latter's inversion p found by a vectorised bisection.
 
-Two display modes controlled by `options("tabxplor.ci_print")`:
+Defaults: **Wilson** (`ci="cell"`), **Newcombe** (`ci="diff"`, `method_diff="newcombe"`; also `"ac"`,
+`"wald"`), Welch-t (means). `tab_ci()` (proportions) and `tab_num()` (means) both route through the
+engine; the reference (`x_n`, `ref`, `ref_n`) is the **weighted estimate + unweighted n** of §14.
 
-- `"moe"`: show as `value ± margin` (e.g., `45% ±3`)
-- `"ci"`: show as `[lower; upper]` (e.g., `[42%; 48%]`)
+**Significance = universal CI-inclusion**: the stored `pvalue` is the inversion p of the *same*
+interval that draws the bracket, so `get_stars()` (`*`/`**`/`***` from `options("tabxplor.signif_levels")`)
+can never disagree with the bracket. `stars` arg (default `TRUE`, `ci="diff"` only; `ci="cell"` →
+`pvalue = NA`). Kish `n_eff` opt-in for numeric CIs via `options("tabxplor.kish_neff")` (needs the
+`Σw²` accumulator, added to the numeric scan only when opted in).
+
+Accessors: `get_ci()` = upper arm (`ci_sup − ci_center`, retro-compatible with `color_formula`);
+`get_ci_moe()` = larger arm for the `± moe` display; `fmt(ci=)` stores absolute symmetric bounds
+around the estimate. `format()` reads `ci_inf`/`ci_sup` directly (× 100 for proportions, clamped to
+`[0,100]`), then appends `get_stars()`. Two display modes via `options("tabxplor.ci_print")`:
+
+- `"moe"`: `value ± margin` (e.g., `45% ±3`, the conservative larger arm)
+- `"ci"`: `[lower; upper]` (e.g., `[42%; 48%]`) — the default
 
 ## Color System
 

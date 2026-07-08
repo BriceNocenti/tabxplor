@@ -88,15 +88,15 @@ testthat::test_that("fmt survives saveRDS/readRDS round-trip with all fields and
   }
 })
 
-# The `ci` bounds-shim: the public fmt(ci=) half-width is stored as symmetric ci_inf/ci_sup
-# bounds, and get_ci() / $ci read the half-width back unchanged (byte-identical to the old
-# `ci` field until Phase 3 stores real asymmetric bounds).
-testthat::test_that("fmt(ci=) round-trips through the ci_inf/ci_sup bounds-shim", {
+# The `ci` bounds-shim (Phase 3a): the public fmt(ci=) half-width is stored as ABSOLUTE
+# ci_inf/ci_sup bounds around the estimate the interval is centred on (here the proportion
+# pct), and get_ci() / $ci read the half-width back as ci_sup - centre.
+testthat::test_that("fmt(ci=) stores absolute bounds and get_ci() reads the half-width back", {
   x <- fmt(n = c(10L, 20L), type = "row", pct = c(0.4, 0.5), ci = c(NA, 0.02))
-  testthat::expect_identical(vctrs::field(x, "ci_sup"), c(NA_real_,  0.02))
-  testthat::expect_identical(vctrs::field(x, "ci_inf"), c(NA_real_, -0.02))
-  testthat::expect_identical(get_ci(x), c(NA_real_, 0.02))   # half-width read back
-  testthat::expect_identical(x$ci,       get_ci(x))          # $ci still works
+  testthat::expect_identical(vctrs::field(x, "ci_sup"), c(NA_real_, 0.52))  # pct + ci
+  testthat::expect_identical(vctrs::field(x, "ci_inf"), c(NA_real_, 0.48))  # pct - ci
+  testthat::expect_equal(get_ci(x), c(NA_real_, 0.02))       # half-width read back
+  testthat::expect_identical(x$ci,   get_ci(x))              # $ci still works
 })
 
 # Human-readable second signal. Skipped on CRAN by default. Regenerate consciously with

@@ -23,6 +23,7 @@ Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
 Suggests:
     bench (>= 1.1.0),
+    DescTools (>= 0.99.0),
     fansi (>= 0.5.0),
     htmltools (>= 0.5.0),
     jmvcore (>= 2.4.0),
@@ -65,7 +66,6 @@ Imports:
     pillar (>= 1.6.0),
     stats (>= 4.0.0),
     kableExtra (>= 1.3.0),
-    DescTools (>= 0.99.0),
     data.table,
 Depends:
     R (>= 4.1.0)
