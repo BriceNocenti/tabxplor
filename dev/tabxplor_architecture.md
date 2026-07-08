@@ -29,15 +29,15 @@ tabxplor creates, manipulates, and formats color-coded cross-tabulation tables f
 | `wn` | double | Weighted count |
 | `pct` | double | Percentage (stored as 0–1, multiplied by 100 only in `format()`) |
 | `mean` | double | Cell mean (for numeric column variables) |
-| `diff` | double | Difference from reference. **For type="mean": stores a RATIO, not a difference** (flips to a real difference in Phase 2) |
-| `ratio` | double | Ratio to reference (relative risk for pct, mean ratio for means). Renamed from `rr` (Phase 1a); real values written in Phase 5 |
+| `diff` | double | Difference from reference. For type="mean" this is now a real difference too (Phase 2 flip); the mean/ref ratio moved to `ratio`. For pct columns: additive difference `cell_pct − ref_pct` |
+| `ratio` | double | Ratio to reference. **Written for numeric (mean) columns since Phase 2** (`cell_mean / ref_mean`); the pct-column ratio (the "×2 rule") still rides the `mean` overload until Phase 5. Renamed from `rr` (Phase 1a) |
 | `ctr` | double | Contribution to chi-squared variance |
 | `var` | double | Variance (used for CI calculation) |
 | `ci_inf` | double | Lower confidence-interval bound (Phase 1a; real asymmetric bounds written in Phase 3) |
 | `ci_sup` | double | Upper confidence-interval bound. `get_ci()` reads the half-width back from here (bounds-shim) |
 | `pvalue` | double | Per-cell significance p-value (Phase 1a placeholder; written in Phase 3) |
 | `or` | double | Odds ratio or relative risk ratio |
-| `tot_n` | double | The cell's own (unweighted) percentage base (Phase 1a placeholder; written in Phase 2) |
+| `tot_n` | double | The cell's own (unweighted) percentage base — its row/column/grand total per `pct` (written by `tab_plain()` in Phase 2; `NA` for count tables and mean cells). The weighted base is recovered on demand by `get_tot_wn()` = `wn/pct` (not a stored field) |
 | `in_totrow` | logical | Cell belongs to a total row |
 | `in_tottab` | logical | Cell belongs to the total table |
 | `in_refrow` | logical | Cell belongs to the reference row |
@@ -155,7 +155,7 @@ Two structural limits of `tab_compact()`:
 
 ### tab_num() — Numeric Column Variables
 
-When a `col_var` is numeric (not a factor), `tab_num()` is used instead of `tab_plain()`. It calculates means and variances per group using `data.table` aggregation. The resulting `fmt` vectors have `type = "mean"` and `display = "mean"`.
+When a `col_var` is numeric (not a factor), `tab_num()` is used instead of `tab_plain()`. Since Phase 2 (1.4.0) each grouped `data.table` scan computes **sufficient moment sums** (`n`, weighted `n`, `Σ[w]x`, `Σ[w]x²`) in one pass; `num_derive_stats()` (`R/tab-agg.R`) then derives the mean and variance, reproducing the unweighted sample (n-1) vs weighted ML (÷Σw) definitions exactly. This removed the old `weighted.var()` double scan (~3× faster / ~3.6× less memory on weighted numerics). The resulting `fmt` vectors have `type = "mean"` and `display = "mean"`. (The total-row / total-table scans still re-scan N; converting them to rollups of the additive moment-sum aggregate is a deferred Phase 2 follow-on.)
 
 ### The Reference System
 
@@ -173,15 +173,11 @@ The `comp` argument adds another dimension:
 - `comp = "tab"` (default): compare within each subtable's own total
 - `comp = "all"`: compare against the total table's total (across all subtables)
 
-### Mean-Diff Asymmetry
+### Mean diff vs ratio (Phase 2 flip)
 
-**Critical non-obvious design choice:** For `type = "mean"` columns, the `diff` field stores a **ratio** (`cell_mean / ref_mean`), not an additive difference. This means:
+For `type = "mean"` columns the `diff` field is now a real **difference** (`cell_mean − ref_mean`), like pct columns; the mean/reference **ratio** lives in the `ratio` field (`cell_mean / ref_mean`). During the D3 interim (until Phase 5) the color layer still colors that **ratio** against the mean breaks (`c(1.15, 1.5, 2, 4)`, ratio thresholds where 1.15 = "+15% above reference"), so `color_formula()` reads `ratio` for mean columns while reading `diff` for pct columns (where breaks like `0.05` mean "+5 percentage points"). Phase 5 will switch mean coloring to the sd-standardized difference.
 
-- Mean breaks (`c(1.15, 1.5, 2, 4)`) are ratio thresholds: 1.15 = "+15% above reference".
-- Color formula comparisons use `diff >= break` directly (no subtraction).
-- For percentage columns, `diff` is an additive difference (`cell_pct - ref_pct`), and breaks like `0.05` mean "+5 percentage points".
-
-This asymmetry propagates through `tab_pct()`, `color_formula()`, and `format.tabxplor_fmt()`.
+Note the remaining pct-column overload: for percentage columns the "×2 rule" ratio still rides the `mean` field (removed in Phase 5). So `mean` currently means an actual mean for `type = "mean"` and a pct ratio otherwise.
 
 ### Confidence Intervals
 

@@ -35,6 +35,14 @@
 #   totn_drop       -> Phase 2 (THE motivating case: col_vars with differing non-NA totals;
 #                      tot_n makes each cell's % base exact; [min;max] total-col range) [display]
 #   f_totcol_each   -> Phase 6 (default becomes ONE total column; totcol="each" -> cosmetic)
+#   f_selfcross     -> Phase 2c (tot_n field populated); display byte-identical -- locks the
+#                      _colvarbis self-crosstab through the factor aggregate-core reorg
+#   totn_row_drop   -> Phase 2c (tot_n populated; each col_var already divides by its OWN Total
+#                      in the per-(row_var x col_var) forward pass, so DISPLAY stays identical)
+#   n_mean_w        -> Phase 2a (weighted ML var rebuilt from moment-sums, within waldo tolerance)
+#                      then 2c (numeric diff flips ratio -> difference); display (mean) identical
+#   n_mean_sparse   -> Phase 2a (n<=1 / all-NA: the 0/0 moment-sum form must map to the same NA
+#                      that stats::var/mean give) then 2c (numeric diff flip); display identical
 #   fmt-contract snapshot (test-fmt-contract.R) -> Phase 1a (15 -> 18 field-vector rewrite; the
 #                      8 COLUMN attrs are unaffected -- chi2->test is a TABLE attribute, not here)
 # ===========================================================================================

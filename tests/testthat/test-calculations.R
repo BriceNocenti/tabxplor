@@ -291,8 +291,9 @@ testthat::test_that("tab_num means match base R mean()", {
 })
 
 testthat::test_that("tab_num variance matches stats::var() (sample, n-1 denominator)", {
-  # DESIGN: Unweighted tab_num uses stats::var() internally (Bessel-corrected, n-1).
-  # Weighted tab_num uses custom weighted.var() (population, n denominator).
+  # DESIGN: Unweighted tab_num reports the sample (Bessel-corrected, n-1) variance; weighted
+  # tab_num reports the ML (population, Sigma-w denominator) variance. Since 1.4.0 both are
+  # derived from moment sums by num_derive_stats() (was: stats::var() / weighted.var()).
   tabs <- tab_num(sw, sex, height, na = "drop")
   sex_levels <- levels(sw$sex)
 
@@ -311,7 +312,9 @@ testthat::test_that("tab_num variance matches stats::var() (sample, n-1 denomina
   }
 })
 
-testthat::test_that("mean diff is a ratio (mean/ref_mean), not a difference", {
+# Since 1.4.0 (Phase 2) the numeric `diff` field is a real DIFFERENCE (mean - ref_mean) and the
+# cell/reference RATIO moved to the new `ratio` field (was the old numeric-`diff` overload).
+testthat::test_that("mean diff is a difference and mean ratio is a ratio (Phase 2 flip)", {
   tabs <- tab_num(sw, sex, height, na = "drop")
 
   tot_mean <- tabs |>
@@ -324,35 +327,106 @@ testthat::test_that("mean diff is a ratio (mean/ref_mean), not a difference", {
   for (s in sex_levels) {
     tab_row <- tabs |> dplyr::filter(sex == s)
     if (nrow(tab_row) == 0) next
-    tab_diff <- tab_row |> dplyr::pull(height) |> get_diff()
-    tab_mean <- tab_row |> dplyr::pull(height) |> get_mean()
+    cell      <- tab_row |> dplyr::pull(height)
+    tab_diff  <- get_diff(cell)
+    tab_ratio <- get_ratio(cell)
+    tab_mean  <- get_mean(cell)
 
     if (is.na(tab_mean) || is.na(tot_mean) || tot_mean == 0) next
 
-    expected_ratio <- tab_mean / tot_mean
-    testthat::expect_equal(tab_diff, expected_ratio, tolerance = 1e-8,
-                           label = paste0("mean diff ratio [", s, "]"))
+    testthat::expect_equal(tab_diff,  tab_mean - tot_mean, tolerance = 1e-8,
+                           label = paste0("mean diff [", s, "]"))
+    testthat::expect_equal(tab_ratio, tab_mean / tot_mean, tolerance = 1e-8,
+                           label = paste0("mean ratio [", s, "]"))
   }
 })
 
 # === SECTION: Weighted variance ===============================================
 
-testthat::test_that("weighted.var matches population weighted variance formula", {
+# Since 1.4.0 (Phase 2) the weighted variance is derived from moment sums by
+# num_derive_stats() (R/tab-agg.R), which replaced the old weighted.var() helper (and its
+# weighted.mean double-scan). These tests pin the SAME definitions on the new implementation:
+# weighted = ML (population, Sigma-w denominator); unweighted = sample (n-1) like stats::var().
+
+# one-row moment-sum aggregate for a single numeric col_var "v" from raw x [, wt]
+make_moment_agg <- function(x, wt = NULL) {
+  ok <- !is.na(x)
+  if (is.null(wt)) {
+    data.table::data.table(
+      v_n  = sum(ok),
+      v_s1 = sum(as.double(x), na.rm = TRUE),
+      v_s2 = sum(as.double(x) * as.double(x), na.rm = TRUE)
+    )
+  } else {
+    data.table::data.table(
+      v_n  = sum(ok),
+      v_wn = sum(as.integer(ok) * wt, na.rm = TRUE),
+      v_s1 = sum(wt * x, na.rm = TRUE),
+      v_s2 = sum(wt * x * x, na.rm = TRUE)
+    )
+  }
+}
+
+testthat::test_that("num_derive_stats weighted variance matches the population (ML) formula", {
   x  <- c(10, 20, 30, 40, 50)
   wt <- c(1, 2, 3, 4, 5)
   wmean <- stats::weighted.mean(x, wt)
-  expected <- sum(wt * (x - wmean)^2) / sum(wt)
-
-  result <- tabxplor:::weighted.var(x, wt)
-  testthat::expect_equal(result, expected, tolerance = 1e-10)
+  out <- tabxplor:::num_derive_stats(make_moment_agg(x, wt), "v", weighted = TRUE)
+  testthat::expect_equal(out$v_mean, round(wmean, 10),                          tolerance = 1e-10)
+  testthat::expect_equal(out$v_var,  round(sum(wt * (x - wmean)^2) / sum(wt), 10), tolerance = 1e-10)
 })
 
-testthat::test_that("weighted.var with equal weights equals population variance", {
+testthat::test_that("num_derive_stats weighted variance with equal weights equals population variance", {
   x  <- c(10, 20, 30, 40, 50)
   wt <- rep(1, 5)
-  result <- tabxplor:::weighted.var(x, wt)
-  expected <- sum((x - mean(x))^2) / length(x)
-  testthat::expect_equal(result, expected, tolerance = 1e-10)
+  out <- tabxplor:::num_derive_stats(make_moment_agg(x, wt), "v", weighted = TRUE)
+  testthat::expect_equal(out$v_var, round(sum((x - mean(x))^2) / length(x), 10), tolerance = 1e-10)
+})
+
+testthat::test_that("num_derive_stats unweighted variance matches stats::var (sample n-1)", {
+  x   <- c(10, 20, 30, 40, 50)
+  out <- tabxplor:::num_derive_stats(make_moment_agg(x), "v", weighted = FALSE)
+  testthat::expect_equal(out$v_mean, mean(x),       tolerance = 1e-10)
+  testthat::expect_equal(out$v_var,  stats::var(x), tolerance = 1e-10)
+})
+
+testthat::test_that("num_derive_stats reproduces the degenerate NA edges", {
+  # unweighted: n = 1 and all-NA both give NA, like stats::var()/mean()
+  out1 <- tabxplor:::num_derive_stats(make_moment_agg(c(5, NA, NA)), "v", weighted = FALSE)
+  testthat::expect_true(is.na(out1$v_var))
+  out2 <- tabxplor:::num_derive_stats(make_moment_agg(c(NA_real_, NA_real_)), "v", weighted = FALSE)
+  testthat::expect_true(is.na(out2$v_mean) && is.na(out2$v_var))
+  # weighted: a single observation gives var 0 (like weighted.var), never NA
+  out3 <- tabxplor:::num_derive_stats(make_moment_agg(c(5, NA), wt = c(2, 3)), "v", weighted = TRUE)
+  testthat::expect_equal(out3$v_var, 0)
+})
+
+# === SECTION: tot_n / tot_wn base =============================================
+
+testthat::test_that("tot_n stores each cell's own unweighted base; tot_wn recovers wn/pct", {
+  df <- tibble::tibble(
+    grp = factor(rep(c("A", "B", "C"), length.out = 90)),
+    q   = factor(rep(c("yes", "no"),   length.out = 90)),
+    wt  = rep(c(1, 2, 3), length.out = 90)
+  )
+
+  # col%: each cell's base is its column total (unweighted n and weighted wn of the total row).
+  tc <- tab(df, grp, q, wt = wt, pct = "col")
+  cell <- tc[["yes"]]
+  base_n  <- get_n(cell)[is_totrow(cell)][1]
+  base_wn <- get_wn(cell)[is_totrow(cell)][1]
+  testthat::expect_equal(unique(get_tot_n(cell)),  base_n)                      # stored field
+  testthat::expect_equal(unique(get_tot_wn(cell)[is.finite(get_tot_wn(cell))]),
+                         base_wn, tolerance = 1e-9)                             # recovered wn/pct
+  testthat::expect_equal(cell$tot_wn, get_tot_wn(cell))                          # $ accessor
+
+  # counts (pct = "no"): no base -> tot_n is NA.
+  tn <- tab(df, grp, q, pct = "no")
+  testthat::expect_true(all(is.na(get_tot_n(tn[["yes"]]))))
+
+  # unweighted: the weighted base equals the unweighted base.
+  tu <- tab(df, grp, q, pct = "col")
+  testthat::expect_equal(get_tot_wn(tu[["yes"]]), get_tot_n(tu[["yes"]]))
 })
 
 # === SECTION: Z-score formula =================================================

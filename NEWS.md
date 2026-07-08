@@ -3,6 +3,17 @@
 ## New features
 
 ## Internal
+* Started the 1.4.0 aggregate-core (Phase 2). `tab_num()` now computes mean tables from **moment
+  sums** (`n`, weighted `n`, `Sigma wx`, `Sigma wx^2`) in a single grouped pass, deriving the mean
+  and variance afterwards (`R/tab-agg.R`), instead of the old per-group `weighted.var()` helper that
+  recomputed the weighted mean on every call (a double scan). Output is unchanged (variances match
+  to floating-point tolerance). The unweighted (sample, n-1) vs weighted (ML) variance definitions
+  are preserved for now; unifying them is a later step.
+* Each percentage cell now stores its own base: the `tot_n` field holds the cell's unweighted
+  percentage base (its row / column / grand total, depending on `pct`; `NA` for count tables and
+  mean cells), and a new `get_tot_wn()` accessor (also `$tot_wn`) recovers the weighted base as
+  `wn / pct`. This makes a built table self-sufficient for computing exact statistics without
+  re-scanning it for a total column. Table output is unchanged.
 * Reshaped the internal `tabxplor_fmt` record from 15 to 18 per-cell fields (preparation for the
   1.4.0 aggregate-core): added `ci_inf`, `ci_sup`, `pvalue`, `tot_n`; renamed the never-used `rr`
   field to `ratio`; the confidence interval is now stored as bounds instead of a dedicated `ci`
@@ -20,7 +31,17 @@
   default (byte-identical output); enable with `options(tabxplor.fuse_min_rows = <n_rows>)`. Modest
   gain (~1.05–1.30× at 15M rows, more at larger N / sparser data).
 
+## Changes that may affect existing code
+* For **numeric (mean) columns**, the `diff` field is now a real **difference** (`cell_mean -
+  ref_mean`); the cell/reference **ratio** (the old numeric-`diff` value) moved to the `ratio`
+  field. Code reading `$diff` on mean columns now gets a difference — use `$ratio` for the ratio.
+  Percentage-column `diff` is unchanged. Cell coloring is unchanged (`color = "diff"` on mean
+  columns still colors the ratio for now).
+
 ## Bug corrections
+* Mean tables (`tab_num()`) are now much faster and lighter: killing the weighted-variance double
+  scan makes an 8M-row weighted mean table ~2.9× faster and use ~3.6× less memory (~2×/2× for the
+  unweighted case). Output is unchanged.
 * Big weighted tables were dozens of times slower than unweighted ones: the internal
   label-collision guard scanned whole data columns instead of just factor levels, coercing an
   8M-row weight column to strings. Fixed — weighted `tab()` on 8M rows drops from ~30s to ~0.2s,

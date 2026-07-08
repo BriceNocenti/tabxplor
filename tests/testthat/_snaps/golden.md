@@ -124,3 +124,68 @@
       |**Total**|**100%**|**100%**| |**100%**|**100%**|**100%**|**100%**|
       | n       |   244  |   270  | |   183  |   169  |   193  |   545  |
 
+# golden display (tab_md) unchanged: f_selfcross
+
+    Code
+      cat(tab_md(cases[[name]](), print = FALSE))
+    Output
+      | marital       |No.answer  |Never.married  |Separated  |Divorced  |Widowed  |Married  | Total  |       n  |
+      |:--------------|----------:|--------------:|----------:|---------:|--------:|--------:|-------:|---------:|
+      | No answer     |     100%  |           0%  |       0%  |      0%  |     0%  |     0%  |  100%  |      17  |
+      | Never married |       0%  |         100%  |       0%  |      0%  |     0%  |     0%  |  100%  |   5 416  |
+      | Separated     |       0%  |           0%  |     100%  |      0%  |     0%  |     0%  |  100%  |     743  |
+      | Divorced      |       0%  |           0%  |       0%  |    100%  |     0%  |     0%  |  100%  |   3 383  |
+      | Widowed       |       0%  |           0%  |       0%  |      0%  |   100%  |     0%  |  100%  |   1 807  |
+      | Married       |       0%  |           0%  |       0%  |      0%  |     0%  |   100%  |  100%  |  10 117  |
+      |**Total**      |     **0%**|        **25%**|     **3%**|   **16%**|   **8%**|  **47%**|**100%**|**21 483**|
+
+# golden display (tab_md) unchanged: n_mean_w
+
+    Code
+      cat(tab_md(cases[[name]](), print = FALSE))
+    Output
+      | g       |        v  |
+      |:--------|----------:|
+      | A       |  10 (σ3)  |
+      | B       |  10 (σ3)  |
+      | C       |  10 (σ3)  |
+      |**Total**|**10 (σ3)**|
+
+# golden display (tab_md) unchanged: n_mean_sparse
+
+    Code
+      cat(tab_md(cases[[name]](), print = FALSE))
+    Output
+      | grp     |           v  |
+      |:--------|-------------:|
+      | A       |  2.5 (σ1.3)  |
+      | B       |         5.0  |
+      | C       |              |
+      |**Total**|**3.0 (σ1.6)**|
+
+# golden display (tab_md) unchanged: totn_row_drop
+
+    Code
+      cat(tab_md(cases[[name]](), print = FALSE))
+    Output
+      |         |       h       | |               k                |       |
+      | g       |    x  |    y  | |    p  |    q  |    r  | Total  |    n  |
+      |:--------|------:|------:| |------:|------:|------:|-------:|------:|
+      | A       |  52%  |  48%  | |  29%  |  34%  |  37%  |  100%  |  187  |
+      | B       |  46%  |  54%  | |  34%  |  32%  |  34%  |  100%  |  195  |
+      | C       |  44%  |  56%  | |  39%  |  27%  |  34%  |  100%  |  163  |
+      |**Total**|**47%**|**53%**| |**34%**|**31%**|**35%**|**100%**|**545**|
+
+# golden display (tab_md) unchanged: n_mean_color
+
+    Code
+      cat(tab_md(cases[[name]](), print = FALSE))
+    Output
+      |         |      age       | |   tvhours    |
+      | race    |           age  | |     tvhours  |
+      |:--------|---------------:| |-------------:|
+      | Other   |  39.5 (σ14.4)  | |  2.8 (σ2.4)  |
+      | Black   |  43.9 (σ16.1)  | |  4.2 (σ3.5)  |
+      | White   |  48.7 (σ17.5)  | |  2.8 (σ2.3)  |
+      |**Total**|**47.2 (σ17.3)**| |**3.0 (σ2.6)**|
+

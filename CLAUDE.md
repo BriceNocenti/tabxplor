@@ -332,6 +332,19 @@ Prepare tab_logit() integration into tabxplor_fmt class and `tab()` calculations
 
 Extract the canonical count-aggregate; one implementation each of pct/diff/OR/totals over it; route `tab_plain`/`tab_num` through it; re-make `tab_pct`/`tab_tot`/`tab_totaltab` as superseded thin wrappers. Per-cell `tot_n` (§2; the weighted base recovered as `wn/pct`) + the globalised row_var axis (§5) let each cell compute its pct/diff/CI/test from its own fields — retiring `detect_totcols` and building exactly one total column. Preserve the ordering invariant inside the core (non-first levels dropped only after chi2/ci). **D3 interim** (decisions § *Phasing*): Phase 2 flips numeric `diff` to a real difference (field + display — conscious golden change), but numeric *coloring* keeps reading `ratio` (old behaviour, `mean_breaks`) until Phase 5 lands the mode split. Byte-verify via golden; benchmark before/after.
 
+#### Done (2026-07-08 — numeric moment-sum core + numeric diff/ratio flip)
+
+Sub-phased (numeric first, per the review). Landed so far:
+
+- **Numeric moment-sum aggregate** (`R/tab-agg.R`, new): `tab_num()`'s three N-scans (main + total rows + total table) now compute **sufficient moment sums** (`n`, `wn`, `s1 = Σ[w]x`, `s2 = Σ[w]x²`, double-coerced to avoid integer overflow) instead of per-group `mean`/`stats::var`/`weighted.mean`/`weighted.var` closures; `num_derive_stats()` derives mean/var in one pass afterwards, reproducing the **unweighted sample (n-1)** vs **weighted ML (÷Σw)** split exactly (incl. the degenerate n≤1 / all-NA NaN→NA edges). `weighted.var()` deleted (its double scan is gone). Output byte-identical (golden within waldo tolerance; `_snaps/` unchanged). **8M bench: `tab_num` unweighted 1.09→0.53 s / 1752→864 MB; weighted 2.94→1.01 s / 7790→2169 MB.**
+- **Numeric `diff` → real difference** (§3, D3): the numeric `diff` field is now `cell_mean − ref_mean`; the ratio moved to the new `ratio` field; the color layer repoints numeric `"diff"`/`diff_ci`/`after_ci`/`ci` to read `ratio` (byte-identical coloring against `mean_breaks`). pct columns untouched. Numeric `diff` **display** (the rare `display="diff"`/diff-interval-on-means) deferred with the mean diff_ci display to Phase 5 (no golden exercises it). Golden regenerated consciously (only the numeric `.rds`).
+- **`tot_n` written (factor path)** + **`get_tot_wn()` accessor** (§2, §11): `tab_plain()` now stores each cell's OWN unweighted percentage base in the `tot_n` field (row / column / grand total per `pct`, `NA` for `pct="no"` counts and for mean cells), built from the unweighted `tabs_n` and broadcast (same denominators as the pct). Because `tab_plain()` runs per col_var, each col_var's `tot_n` is its own base (cross-col_var exactness is automatic). The weighted base is recovered on demand by `get_tot_wn()` = `wn/pct` (with a same-column total-cell fallback for empty cells; `$tot_wn` works). Built tables are now self-sufficient for their base — Phase 3 will retire `detect_totcols()` in `tab_ci`/`tab_chi2` in favour of these. Conscious golden regen: every factor pct `.rds` gains `tot_n` (only that field changed; `f_counts` unchanged; display `_snaps/` byte-identical).
+- **Safety net grown**: golden fixtures `f_selfcross` (`_colvarbis`), `totn_row_drop`, `n_mean_w` (weighted ML variance), `n_mean_sparse` (n≤1/all-NA edge), plus `n_mean_color` display snapshot (D3→Phase 5 tripwire); `num_derive_stats` + `tot_n`/`tot_wn` unit tests (the former replacing the deleted `weighted.var` tests). Full suite green (774). Benchmarks in `dev/benchmarks/results_1.4.0/`.
+
+**Deferred within Phase 2** (documented in-code): the total-row/total-table scans could become **rollups** of the (additive) moment-sum aggregate — the moment sums are in place, but reproducing the exact total-row structure + `na` handling via rollup is a separable byte-identity risk, deferred so the double-scan win (already captured) is not entangled with it.
+
+**Still to do in Phase 2**: the **factor path** (`tab_plain`) reorg through shared `tab_agg_factor`/`wide_*` helpers (output-invariant); writing **`tot_n`** (factor path) + the `get_tot_wn()` accessor; superseded lifecycle badges on `tab_pct`/`tab_tot`/`tab_totaltab`; final architecture/doc pass.
+
 #### To verify
 
 - `tab_many()` : are there still error with levels = "auto", when `col_vars` are numeric ?
@@ -456,7 +469,6 @@ Cache the prepared data / aggregate / per-transform results keyed by which input
 #### To think about
 
 - Maybe improve tab_kable() for performance, or simplify/remove all tooltips/etc. (just a faster flat html table), or even make it format with markdown tables with css classes (would it be possible ?) ?
-- tab_logit analysis in Jamovi ?
 
 ### Phase 9 — Excel engine migration (openxlsx → openxlsx2)
 
@@ -472,7 +484,7 @@ Isolated on purpose: a full dependency swap should not be entangled with the Pha
 
 - Add an option to use **conditional formatting** instead of hard text colors. This was awful and very slow with openxlsx v1 — check whether openxlsx2 makes it less horrible / faster.
 
-### Later — tab_logit & global
+### Phase 10 — tab_logit
 
 `tab_logit` lands after the Phase 1 field set is locked (so no second field surgery).
 
@@ -484,6 +496,9 @@ Isolated on purpose: a full dependency swap should not be entangled with the Pha
 
 - chose reference for each var with a vector (possibly named for simplicity) ! (permit to take ref in the middle while keeping order of ordinal vars) ?
 - Do things with contrasts ?
+- tab_logit analysis in Jamovi ?
+
+### Phase 11 — pkgdown
 
 #### global — To implement
 

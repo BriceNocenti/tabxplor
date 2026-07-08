@@ -1769,29 +1769,29 @@ tab_spread <- function(tabs, spread_vars, names_prefix, names_sort = FALSE,
 }
 
 
-# NEW FUNCTION TO FINISH, DOCUMENT and integrate into the package ?
-#' @export
-#'
-# @examples
-tab_transpose <- function(tabs, name = "variables") {
-  row_var <- tab_get_vars(tabs, "row_var")$row_var
-  totrow_names <- filter(tabs, is_totrow(tabs)) |> pull(1) |> as.character()
-  if (length(totrow_names) >= 2) stop("not working for now with many total rows")
-  totcol_name <- is_totcol(tabs) ; totcol_name <- names(totcol_name[totcol_name])
-  if (length(totcol_name) >= 2) stop("not working for now with many total columns")
+# # NEW FUNCTION TO FINISH, DOCUMENT and integrate into the package ?
+# #' @export
+# #'
+# # @examples
+# tab_transpose <- function(tabs, name = "variables") {
+#   row_var <- tab_get_vars(tabs, "row_var")$row_var
+#   totrow_names <- filter(tabs, is_totrow(tabs)) |> pull(1) |> as.character()
+#   if (length(totrow_names) >= 2) stop("not working for now with many total rows")
+#   totcol_name <- is_totcol(tabs) ; totcol_name <- names(totcol_name[totcol_name])
+#   if (length(totcol_name) >= 2) stop("not working for now with many total columns")
   
-  tabs |>
-    pivot_longer(cols = -1, names_to = name, values_to = "value") |> 
-    pivot_wider(names_from = all_of(row_var), values_from = value, names_sort = TRUE) |> 
-    mutate(across(where(is.character), as_factor)) |>
-    mutate(across(where(is_fmt), ~ set_type(., "col"))) |> 
-    mutate(across(where(is_fmt), ~ as_totcol(., FALSE))) |> 
-    mutate(across(any_of(totrow_names), ~ as_totrow(as_totcol(.), FALSE))) |>
-    mutate(across(where(is_fmt), ~ if_else(!!sym(name) == totcol_name, 
-                                           as_totrow(.), 
-                                           as_totrow(., FALSE)))) |> 
-    new_tab()
-}
+#   tabs |>
+#     pivot_longer(cols = -1, names_to = name, values_to = "value") |> 
+#     pivot_wider(names_from = all_of(row_var), values_from = value, names_sort = TRUE) |> 
+#     mutate(across(where(is.character), as_factor)) |>
+#     mutate(across(where(is_fmt), ~ set_type(., "col"))) |> 
+#     mutate(across(where(is_fmt), ~ as_totcol(., FALSE))) |> 
+#     mutate(across(any_of(totrow_names), ~ as_totrow(as_totcol(.), FALSE))) |>
+#     mutate(across(where(is_fmt), ~ if_else(!!sym(name) == totcol_name, 
+#                                            as_totrow(.), 
+#                                            as_totrow(., FALSE)))) |> 
+#     new_tab()
+# }
 
 
 
@@ -2541,6 +2541,26 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
     tabs_pct[, names(cols) := purrr::map(.SD, ~ tidyr::replace_na(., 0)),
              .SDcols = names(cols)]
 
+    # Phase 2 (1.4.0): each cell's OWN unweighted percentage base (row / column / grand total,
+    # per `pct`), stored in the `tot_n` field so a built table is self-sufficient for exact
+    # statistics -- this retires detect_totcols() on built tables (decisions §2, §11). Built from
+    # the UNWEIGHTED tabs_n and BROADCAST (not divided) with the same denominator logic as the
+    # percentages above. tab_plain() runs per col_var, so each col_var's tot_n is its own base
+    # (cross-col_var exactness when col_vars have different NA totals is automatic).
+    tabs_totn <- data.table::copy(tabs_n)
+    tabs_totn[, names(cols) := purrr::map(.SD, as.double), .SDcols = names(cols)]
+    switch(
+      pct,
+      "row"      = tabs_totn[, names(cols) := purrr::map(.SD, ~ as.double(eval(rlang::sym("Total")))),
+                             .SDcols = names(cols)],
+      "col"      = tabs_totn[, names(cols) := purrr::map(.SD, ~ rep(dplyr::last(.), length(.))),
+                             by = eval(as.character(tab_vars)), .SDcols = names(cols)],
+      "all"      = tabs_totn[, names(cols) := purrr::map(.SD, ~ rep(dplyr::last(eval(rlang::sym("Total"))), length(.))),
+                             by = eval(as.character(tab_vars)), .SDcols = names(cols)],
+      "all_tabs" = tabs_totn[, names(cols) := purrr::map(.SD, ~ rep(dplyr::last(eval(rlang::sym("Total"))), length(.))),
+                             .SDcols = names(cols)]
+    )
+
 
     #Differences and odds ratio
     if (ref != "no" & pct %in% c("row", "col")) {
@@ -2738,6 +2758,7 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
   if (exists("tabs_mean", rlang::current_env(), inherits = F)) tabs_mean[, names(text_vars) := NULL]
   if (exists("tabs_rr"  , rlang::current_env(), inherits = F)) tabs_rr  [, names(text_vars) := NULL]
   if (exists("tabs_or"  , rlang::current_env(), inherits = F)) tabs_or  [, names(text_vars) := NULL]
+  if (exists("tabs_totn", rlang::current_env(), inherits = F)) tabs_totn[, names(text_vars) := NULL]
   #if (exists("tabs_ci"  , rlang::current_env(), inherits = F)) tabs_ci  [, names(text_vars) := NULL]
 
   totcol_vector <- names(tabs_n) == "Total"
@@ -2762,7 +2783,8 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
 
          totcol_vector,
          if (exists("refcols_vector", rlang::current_env(), inherits = F)) { refcols_vector } else {
-           rep(FALSE, length(cols)) }
+           rep(FALSE, length(cols)) },
+         if (exists("tabs_totn", rlang::current_env(), inherits = F)) { tabs_totn } else { list(NA_reals) }
     ) |>
     purrr::pmap_dfc(~ new_fmt(
       display   = dplyr::case_when(
@@ -2786,6 +2808,7 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
       in_refrow = refrows,
       totcol    = ..8,
       refcol    = ..9,
+      tot_n     = ..10,
       color     = dplyr::case_when(
         color %in% c("", "no")                            ~ "",
         row_var == "no_row_var" | col_var == "no_col_var" ~ "",
@@ -3248,25 +3271,27 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
 
   } else {
     # with data.table
+    # Phase 2 (1.4.0): compute sufficient moment sums (n [, wn], s1 = Sigma[w]x,
+    # s2 = Sigma[w]x^2) in ONE grouped pass, then derive mean/var via num_derive_stats()
+    # after all totals are bound. This replaces the old per-group weighted.mean + weighted.var
+    # closures (weighted.var re-scanned each group to recompute the mean -> a double scan).
     if (length(wt) == 0) {
-      tabs <- #4.1 sec
+      tabs <-
         data[,
              c(purrr::set_names(purrr::map(.SD,  ~ sum(!is.na(.))),
                                 paste0(as.character(col_vars), "_n")),
 
-               #list(n = .N),
+               purrr::set_names(purrr::map(.SD,  ~ sum(as.double(.), na.rm = TRUE)),
+                                paste0(as.character(col_vars), "_s1")),
 
-               purrr::set_names(purrr::map(.SD,  ~ mean(., na.rm = TRUE)),
-                                paste0(as.character(col_vars), "_mean")),
-
-               purrr::set_names(purrr::map(.SD, ~ stats::var(., na.rm = TRUE)),
-                                paste0(as.character(col_vars), "_var"))
+               purrr::set_names(purrr::map(.SD, ~ sum(as.double(.) * as.double(.), na.rm = TRUE)),
+                                paste0(as.character(col_vars), "_s2"))
              ),
              .SDcols = as.character(col_vars),
              keyby = c(tab_row_names)]
 
     } else {
-      tabs <- #11.01 sec without key ; 13.75 sec with n and wn for each vars
+      tabs <-
         data[,
              c(purrr::set_names(purrr::map_if(.SD,
                                               names(.SD) != as.character(wt),
@@ -3282,25 +3307,30 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
 
                purrr::set_names(purrr::map_if(.SD,
                                               names(.SD) != as.character(wt),
-                                              ~ round(stats::weighted.mean(., eval(wt), na.rm = TRUE), 10),
+                                              ~ sum(eval(wt) * ., na.rm = TRUE),
                                               .else = ~ NA_real_),
-                                paste0(as.character(c(col_vars, wt)), "_mean")),
+                                paste0(as.character(c(col_vars, wt)), "_s1")),
 
                purrr::set_names(purrr::map_if(.SD,
                                               names(.SD) != as.character(wt),
-                                              ~ weighted.var(., eval(wt), na.rm = TRUE),
+                                              ~ sum(eval(wt) * . * ., na.rm = TRUE),
                                               .else = ~ NA_real_),
-                                paste0(as.character(c(col_vars, wt)), "_var"))
+                                paste0(as.character(c(col_vars, wt)), "_s2"))
              ),
              #.SDcols = as.character(c(col_vars, wt)),
-             keyby = c(tab_row_names)][, paste0(wt, c("_n", "_wn", "_mean", "_var")) := NULL]
+             keyby = c(tab_row_names)][, paste0(wt, c("_n", "_wn", "_s1", "_s2")) := NULL]
     }
 
-    # DESIGN: tab_num re-scans N for the main aggregate, then again for totals / total-table
-    # (a "double scan"). groupingsets() could compute table + totals + total-table in one
-    # pass, but it does NOT save time here AND its grand-total rows come back named NA,
-    # colliding with genuine NA categories — so the separate scans are kept. (Dead attempt
-    # below.) See CLAUDE.md § Perf findings.
+    # DESIGN: since 1.4.0 (Phase 2) each of these scans computes SUFFICIENT MOMENT SUMS
+    # (n [, wn], s1 = Sigma[w]x, s2 = Sigma[w]x^2) in one grouped pass; mean/var are derived
+    # afterwards by num_derive_stats() (R/tab-agg.R). This removed the old weighted.var double
+    # scan (~3x faster / ~3.6x less memory on weighted numerics). Still open (Phase 2 follow-on):
+    # the moment sums are ADDITIVE, so the total-row and total-table scans below could become
+    # rollups of the main aggregate (agg[, lapply(.SD, sum), by = <coarser key>]) instead of
+    # re-scanning N -- deferred because reproducing the exact total-row structure + na handling
+    # via rollup is a separate byte-identity risk. groupingsets() was rejected earlier (its
+    # grand-total rows come back named NA, colliding with genuine NA categories; dead attempt
+    # below). See CLAUDE.md § Perf findings.
     # # groupingsets() could be used to calculate table, totals and total table at once
     # #   but it does not gain times (problem : Total are named NA and mixed with true NAs...)
     # if ("row" %in% tot | totaltab %in% c("line", "table")) {
@@ -3452,11 +3482,11 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
                        purrr::set_names(purrr::map(.SD,  ~ sum(!is.na(.))),
                                         paste0(as.character(col_vars), "_n")),
 
-                       purrr::set_names(purrr::map(.SD,  ~mean(., na.rm = TRUE)),
-                                        paste0(as.character(col_vars), "_mean")),
+                       purrr::set_names(purrr::map(.SD,  ~ sum(as.double(.), na.rm = TRUE)),
+                                        paste0(as.character(col_vars), "_s1")),
 
-                       purrr::set_names(purrr::map(.SD, ~ stats::var(., na.rm = TRUE)),
-                                        paste0(as.character(col_vars), "_var"))
+                       purrr::set_names(purrr::map(.SD, ~ sum(as.double(.) * as.double(.), na.rm = TRUE)),
+                                        paste0(as.character(col_vars), "_s2"))
                      ),
                      .SDcols = as.character(col_vars),
                      keyby = eval(.)][ , as.character(tab_vars) := purrr::map(.SD, as.factor),
@@ -3488,18 +3518,18 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
 
                        purrr::set_names(purrr::map_if(.SD,
                                                       names(.SD) != as.character(wt),
-                                                      ~ round(stats::weighted.mean(., eval(wt), na.rm = TRUE), 10),
+                                                      ~ sum(eval(wt) * ., na.rm = TRUE),
                                                       .else = ~ NA_real_),
-                                        paste0(as.character(c(col_vars, wt)), "_mean")),
+                                        paste0(as.character(c(col_vars, wt)), "_s1")),
 
                        purrr::set_names(purrr::map_if(.SD,
                                                       names(.SD) != as.character(wt),
-                                                      ~ weighted.var(., eval(wt), na.rm = TRUE),
+                                                      ~ sum(eval(wt) * . * ., na.rm = TRUE),
                                                       .else = ~ NA_real_),
-                                        paste0(as.character(c(col_vars, wt)), "_var"))
+                                        paste0(as.character(c(col_vars, wt)), "_s2"))
                      ),
                      .SDcols = as.character(c(col_vars, wt)),
-                     keyby = eval(.)][, paste0(wt, c("_n", "_wn", "_mean", "_var")) := NULL
+                     keyby = eval(.)][, paste0(wt, c("_n", "_wn", "_s1", "_s2")) := NULL
                      ][ , as.character(tab_vars) := purrr::map(.SD, as.factor),
                         .SDcols = as.character(tab_vars)]
             )
@@ -3599,11 +3629,11 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
                  purrr::set_names(purrr::map(.SD, ~ sum(!is.na(.))),
                                   paste0(as.character(col_vars), "_n")),
 
-                 purrr::set_names(purrr::map(.SD, ~ mean(., na.rm = TRUE)),
-                                  paste0(as.character(col_vars), "_mean")),
+                 purrr::set_names(purrr::map(.SD, ~ sum(as.double(.), na.rm = TRUE)),
+                                  paste0(as.character(col_vars), "_s1")),
 
-                 purrr::set_names(purrr::map(.SD, ~ stats::var(., na.rm = TRUE)),
-                                  paste0(as.character(col_vars), "_var"))
+                 purrr::set_names(purrr::map(.SD, ~ sum(as.double(.) * as.double(.), na.rm = TRUE)),
+                                  paste0(as.character(col_vars), "_s2"))
                ),
                .SDcols = as.character(col_vars),
                keyby = eval(as.character(row_var))]
@@ -3630,18 +3660,18 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
 
                  purrr::set_names(purrr::map_if(.SD,
                                                 names(.SD) != as.character(wt),
-                                                ~ round(stats::weighted.mean(., eval(wt), na.rm = TRUE), 10),
+                                                ~ sum(eval(wt) * ., na.rm = TRUE),
                                                 .else = ~ NA_real_),
-                                  paste0(as.character(c(col_vars, wt)), "_mean")),
+                                  paste0(as.character(c(col_vars, wt)), "_s1")),
 
                  purrr::set_names(purrr::map_if(.SD,
                                                 names(.SD) != as.character(wt),
-                                                ~ weighted.var(., eval(wt), na.rm = TRUE),
+                                                ~ sum(eval(wt) * . * ., na.rm = TRUE),
                                                 .else = ~ NA_real_),
-                                  paste0(as.character(c(col_vars, wt)), "_var"))
+                                  paste0(as.character(c(col_vars, wt)), "_s2"))
                ),
                .SDcols = as.character(c(col_vars, wt)),
-               keyby = eval(as.character(row_var))][, paste0(wt, c("_n", "_wn", "_mean", "_var")) := NULL]
+               keyby = eval(as.character(row_var))][, paste0(wt, c("_n", "_wn", "_s1", "_s2")) := NULL]
       }
     }
 
@@ -3689,6 +3719,12 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
     return(dplyr::group_by(new_tab(tibble::as_tibble(tabs)),
                            !!!tab_vars))
   }
+
+  # Phase 2 (1.4.0): derive per-col_var mean and variance from the moment sums (<v>_n [, _wn],
+  # _s1, _s2) the aggregate + totals scans produced, in ONE pass over the small bound table.
+  # Reproduces the pre-1.4.0 stats::var (unweighted) / weighted.var (weighted) definitions
+  # exactly and removes the old weighted.var double scan. See R/tab-agg.R.
+  tabs <- num_derive_stats(tabs, col_vars, weighted = length(wt) != 0)
 
 
 
@@ -3780,11 +3816,19 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
 
     tabs[, "ref_rows___" := refrows]
 
-    #Differences
+    #Differences and ratios
+    # Phase 2 (1.4.0): the numeric `diff` field is now a real DIFFERENCE (cell_mean - ref_mean);
+    # the cell/ref RATIO (the old `diff` value) moves to the `ratio` field. Numeric coloring keeps
+    # reading `ratio` against mean_breaks until Phase 5 (D3 interim). See decisions doc §3, §Phasing.
     if (!ref %in% c("no", "") ) {
       tabs[, paste0(col_vars, "_diff") := purrr::map(
         rlang::syms(paste0(col_vars, "_mean")),
-        ~ eval(.) / dplyr::nth(eval(.), tidyr::replace_na(which(eval(rlang::sym("ref_rows___")))[1], 0) ) #diff_index_mean(diff, eval(row_var))
+        ~ eval(.) - dplyr::nth(eval(.), tidyr::replace_na(which(eval(rlang::sym("ref_rows___")))[1], 0) )
+      ),
+      by = eval(comp_group)]
+      tabs[, paste0(col_vars, "_ratio") := purrr::map(
+        rlang::syms(paste0(col_vars, "_mean")),
+        ~ eval(.) / dplyr::nth(eval(.), tidyr::replace_na(which(eval(rlang::sym("ref_rows___")))[1], 0) )
       ),
       by = eval(comp_group)]
     }
@@ -3883,6 +3927,15 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
       list(NA_reals)
     }
 
+  are_ratio <- stringr::str_detect(names(tabs), "_ratio$")
+  tabs_ratio  <-
+    if (any(are_ratio)) {
+      data.table::setnames(tabs[, are_ratio, with = FALSE] ,
+                           function(.x) stringr::str_remove(.x, "_ratio$" ))
+    } else {
+      list(NA_reals)
+    }
+
   are_ci <- stringr::str_detect(names(tabs), "_ci$")
   tabs_ci  <-
     if (any(are_ci)) {
@@ -3898,7 +3951,7 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
 
 
   tabs <-
-    list(tabs_n, tabs_wn, tabs_mean, tabs_var, tabs_diff, tabs_ci, as.character(col_vars), digits) |>
+    list(tabs_n, tabs_wn, tabs_mean, tabs_var, tabs_diff, tabs_ci, as.character(col_vars), digits, tabs_ratio) |>
     purrr::pmap_dfc(~ new_fmt(
       display   = if (ci_visible) { "mean_ci" } else { "mean" },
       digits    = dplyr::case_when(
@@ -3911,6 +3964,7 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
       mean      = ..3,
       var       = ..4,
       diff      = ..5,
+      ratio     = ..9,
       # Phase 1a bounds-shim: ..6 is the mean-CI half-width; store it as symmetric bounds
       # so get_ci() reads it back unchanged (ci field dropped). See fmt_class.R set_ci().
       ci_sup    = ..6,
@@ -5570,21 +5624,10 @@ tab_match_comp_and_tottab <- function(tabs, comp) {
 
 
 
-#' @keywords internal
-weighted.var <- function(x, wt, na.rm = FALSE) {
-  # round(., 10) only trims spurious trailing float digits (cosmetic; NOT for equality).
-  # FIXME(future): (1) this is the ML (population) variance — a representative-sample
-  # variance uses a different (n-1)-style correction; decide which tabxplor should report.
-  # (2) likely a performance bottleneck (weighted.mean is recomputed here on every call);
-  # see CLAUDE.md § Perf findings.
-  #Nwt_non_zero <- length((wt)[wt != 0])
-  round(
-    sum(wt * (x - stats::weighted.mean(x, wt, na.rm = na.rm))^2,  na.rm = na.rm) /
-      ( sum(wt, na.rm = na.rm) ),
-    10)
-  #((Nwt_non_zero - 1) / Nwt_non_zero) *
-} #Same results as sqrt(Hmisc::wtd.var(!!num_var, !!wt, na.rm = TRUE, method = "ML")
-
+# weighted.var() was removed in 1.4.0 (Phase 2): tab_num() now derives the weighted (ML) variance
+# from moment sums in a single pass via num_derive_stats() (R/tab-agg.R), instead of a per-group
+# helper that recomputed weighted.mean() on every call (the old double scan). The ML-vs-sample
+# variance question it flagged is tracked for Phase 3 (dev/tabxplor_1.4.0_decisions.md §14).
 
 #' @keywords internal
 zscore_formula <- function(conf_level) {

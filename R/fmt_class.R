@@ -1201,6 +1201,26 @@ get_or     <- fmt_field_factory("or")
 # @export
 get_tot_n  <- fmt_field_factory("tot_n")
 
+# get_tot_wn(): the cell's OWN WEIGHTED percentage base. This is NOT a stored field -- it is
+# recovered as wn / pct (pct is stored at full precision; only display is rounded), mirroring the
+# way get_ci() recovers the half-width from the stored bounds. For an empty cell (pct == 0) the
+# ratio is undefined, so fall back to a same-column total (100%) cell's weighted count when one is
+# present (covers col% and grand-total modes); a row%-empty cell whose base lives in another column
+# is not recoverable here and returns NA (documented -- decisions doc §11, open item C2). Unweighted
+# tables return get_wn() == get_n() so the base is still exact. Consumed from Phase 3 on.
+#' @keywords internal
+get_tot_wn <- function(x) {
+  wn  <- get_wn(x)
+  pct <- get_pct(x)
+  tw  <- wn / pct
+  bad <- !is.finite(tw)
+  if (any(bad)) {
+    base_cell <- which(is_totrow(x) & is.finite(pct) & abs(pct - 1) < 1e-9)
+    tw[bad] <- if (length(base_cell) > 0) wn[base_cell[length(base_cell)]] else NA_real_
+  }
+  tw
+}
+
 #' @keywords internal
 get_mean_contrib <- function(x) {
   comp    <- get_comp_all(x)
@@ -1956,6 +1976,9 @@ mutate.tabxplor_fmt <- function(.data, ...) {
   } else if (name == "ci") {
     get_ci(x)
 
+  } else if (name == "tot_wn") {
+    get_tot_wn(x)
+
   } else {
     dplyr::pull(vctrs::vec_proxy(x), name)
   }
@@ -2074,8 +2097,12 @@ fmt_color_selection <- function(x, force_color, force_breaks) {
   #   )
 
 
+  # Phase 2 D3 interim: numeric (mean) columns color the cell/reference RATIO, which since the
+  # Phase 2 field flip lives in the `ratio` field (was the old `diff` overload). Reading it here
+  # keeps mean coloring byte-identical against mean_breaks after `diff` became a real difference;
+  # Phase 5 will swap means to the sd-standardized difference. Factor columns still read `diff`.
   diff <- if (color %in% c("diff", "diff_ci", "after_ci", "ci") ) {
-    get_diff(x)
+    if (type == "mean") get_ratio(x) else get_diff(x)
   } else {
     rep(NA_real_, length(x))  #vctrs::vec_recycle(NA_real_, length(x))
   }
