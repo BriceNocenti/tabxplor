@@ -6,6 +6,9 @@
 > describes, and the Jamovi `.js` mirrors the *argument-overwrite cascade* documented here.
 >
 > Companion docs (read the matching one before touching a subsystem):
+> - `dev/tabxplor_jmvtab_cache_design.md` — the Phase 7c hierarchical multi-cache design, built on
+>   §3/§7 below. It **supersedes §7** of this file (the "cache classification seed" is now the concrete
+>   5-tier cache); read it for the jmvtab live-UI cache.
 > - `dev/new_colors_UI.md` — the colour/breaks framework (measure × channel × significance). §6 of
 >   THIS file audits that its §8/§12 computation matrices match the code.
 > - `dev/tabxplor_1.4.0_decisions.md` — the settled 1.4.0 architecture decisions (§2 `tot_n`, §5

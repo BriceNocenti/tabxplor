@@ -640,6 +640,26 @@ Exemples of the wanted behaviours :
 - The factor x factor and factor x numeric roads may be very different : some operations with means may need to recalculate the sd, etc.
 - Etc. : please think carefully about all other arguments and all other situations that may arise, and what would be the most user-friendly way to handle them in each case.
 
+##### Done (2026-07-09)
+
+Design settled and written to **`dev/tabxplor_jmvtab_cache_design.md`** (the deliverable). A
+**content-addressed 5-tier cache** (jamovi has no "which option changed" signal; `.run()` always re-runs
+full), hosted in the **native result-element `$state`** (gzip-RDS to disk, survives the engine reset —
+NOT hand-rolled temp `.rds`). **Persist only tiers 1-2** (per-pair count/moment aggregates as a
+byte-bounded LRU of atomic-vector lists, not live `data.table`s; + chi2/ANOVA keyed on a hash of the
+*shaped* aggregate + `comp`); **recompute tiers 3-4** (pct/diff/ratio/or/CI → fmt → colour → kable) every
+run because fmt is **O(cells), not O(N)**. Aggregate built at **raw levels + NA kept**, so `na`(keep/drop)
++ `levels` are cheap post-aggregate collapses; `cleannames` is **display-tier** (jmvtab carries full names
+through, cleans only before `tab_kable()` — cosmetic, not a cache key; documented no-collision-summing
+divergence from `tab()`); `other_if_less_than`/`wt`/`filter`/`na`(drop_all/common_base) stay
+aggregate-invalidating (the drop_all/common_base population modes can't do per-pair reuse — documented
+limitation). Per-pair entries stored at finest tab-grain and rolled up (dropping a tab_var = rollup).
+Maintainer-confirmed choices (this session): aggregate+tests-only scope; per-pair bounded LRU;
+na+levels+cleannames demotion. The doc closes with the **Phase 7d seams** it requires
+(`tab_aggregate → tab_transform → tab_assemble`, `tab_num` split, cleannames→display, extend
+`tab_resolve_settings()` to emit tier keys) and the byte-identity parity tests 7d must add. No product code
+changed in 7c.
+
 
 #### Phase 7d — Improve or redesign compute functions and table building workflows to work both with `tab()` and the new jamovi multi-level cache system
 
