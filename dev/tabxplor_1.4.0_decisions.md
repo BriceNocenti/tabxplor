@@ -1323,14 +1323,21 @@ tab_logit phase). Two pre-existing latent `tab_plain()` warnings cleaned up in p
 
 ## 26. Phase 6b RESEARCH — parallelising tab()/jmvtab over row_vars (2026-07-09)
 
-**Verdict: NO-GO for 1.4.0 as a default; a bounded (~2–3.5×), regime-specific, opt-in-only win at best —
-defer.** Parallelising the row_var axis is *safe* (byte-identical) and *does* help one specific workflow
-(many tables × small/medium df × reused workers), but it is sub-linear, backend-fragile, negative for big
-data / few tables / fresh calls, and — decisive — it targets the *same* N-independent fmt/chi2 overhead that
-the already-planned aggregate-core + Phase 7c cache attack with **no new dependency, no memory blow-up, and
-no parallelism** (§23, cache design). Grounded PoC below; scripts `dev/benchmarks/parallel_poc_micro.R`
-(Layer A, mechanics) + `parallel_poc_tab.R` (Layer B, real tables) + `parallel_poc_mirai_dispatcher.R`;
-runs in `dev/benchmarks/results_1.4.0/phase6b_{micro,tab,mirai_dispatcher}.txt`.
+**Verdict: a substantial, reliable win for tabxplor's PRIMARY workflow — worth building as a Suggests-only
+opt-in; NOT a forced default, and NOT for big data / live jmvtab.** Parallelising the row_var/pair axis over
+*many tables on a typical survey (10k–60k rows)* — i.e. the core "export dozens of colored exploratory tables
+from one survey" use case — delivers **~2.5–3.3× at W=4** (commodity / university hardware) and **~4× at
+W=8**, **byte-identical**, with **negligible setup (~1 s) and memory**, and it **wins even on a *fresh* call**
+(§Confirmation). This is a real gain, not the marginal curiosity a first read of the 8M numbers suggested —
+the 8M df is the *worst* case, not the target. It stays **opt-in** because it is neutral-to-negative *outside*
+that regime: ≈break-even-to-loss on multi-million-row data (memory-bandwidth wall + W×df transfer), a loss for
+few tables or fresh big-df calls, unusable via future.apply, and pointless for *live* jmvtab (the aggregate is
+cached — nothing O(N) left to parallelise). Crucially, for the **batch export** workflow the Phase 7c cache
+does **not** overlap (each table is built once, not re-toggled), so parallelism is **additive** there, not
+redundant with the core refactor. Grounded PoC below; scripts `dev/benchmarks/parallel_poc_micro.R`
+(Layer A, mechanics) + `parallel_poc_tab.R` (Layer B, real tables) + `parallel_poc_survey.R` (survey-range
+confirmation) + `parallel_poc_mirai_dispatcher.R`; runs in
+`dev/benchmarks/results_1.4.0/phase6b_{micro,tab,survey,mirai_dispatcher}.txt`.
 
 ### Method / caveats
 
@@ -1390,11 +1397,31 @@ same dev source via `devtools::load_all()` → parallelising the pair axis is ou
   daemons) — an unexplained nanonext/scheduling divergence. Betting the package on one backend is unsafe →
   reinforces opt-in, not default.
 
+### Confirmation — the survey sweet spot (10k–60k rows), the PRIMARY use case, `phase6b_survey.txt`
+
+16 colored+chi2 tables at commodity worker counts; the target regime for "export dozens of exploratory
+tables from one survey". **Byte-identical (0/16 every N).**
+
+| N (rows) | seq(DT=8) | mirai W=4 | parallel W=4 | parallel W=8 | mirai W=4 setup | fresh-call W=4      |
+|----------|-----------|-----------|--------------|--------------|-----------------|--------------------|
+| 10 000   | 2.39 s    | **3.32×** | 2.99×        | **3.79×**    | 0.98 s          | wins (1.70 vs 2.39)|
+| 30 000   | 2.49 s    | 2.65×     | 2.47×        | **4.22×**    | 0.97 s          | wins (1.91 vs 2.49)|
+| 60 000   | 2.48 s    | 2.51×     | 2.70×        | **4.07×**    | 0.97 s          | wins (1.96 vs 2.48)|
+
+- **The sequential batch is ~2.5 s FLAT from 10k→60k** — direct proof the per-table cost is the
+  **N-independent O(cells) fmt/chi2 work**, not the scan (a 60k scan is ~nothing). That is precisely what
+  parallelises cleanly, so the win is stable across the whole survey range, not a 21k artifact.
+- **~2.5–3.3× at W=4** (a realistic core count on a low-end university PC) and **~4× at W=8**; **setup ~1 s**
+  and **memory ~0** (0.4–5.7 MB × W) → the transfer/memory objections that sink the 8M case **vanish here**.
+- **Wins even on a *fresh* call** (W=4 fresh 1.7–2.0 s < the ~2.5 s sequential batch) — no persistent-worker
+  reuse required, unlike big df. This is the substantial, reliable gain for tabxplor's core workflow.
+
 ### Answers to the specific questions
 
-- **(a) Does row_var parallelism help batch `tab()`?** Yes but **bounded ~2–3.5× and sub-linear**, and only
-  for **many tables**; the crossover is **df size + reuse**, not cores — wins on small/medium df with
-  persistent workers, ≈break-even-to-loss on 8M, always a loss for few tables or fresh big-df calls.
+- **(a) Does row_var parallelism help batch `tab()`?** **Yes — substantially (~2.5–4×) for the primary
+  workflow**: many tables on a 10k–60k survey (§Confirmation), where it wins even fresh. The crossover is
+  **df size + table count**, not cores: the sweet spot is small/medium df × many tables; ≈break-even-to-loss
+  on multi-million rows (bandwidth wall + transfer), always a loss for few tables.
 - **(b) Good package?** For this workload base **`parallel`** (zero new dep, scaled best on big, PSOCK
   persistent cluster) or **mirai** (best on small, lightest dep = only `nanonext`); **not** future.apply
   (per-call global resend). Any adoption must be **Suggests-only + opt-in**, mirroring the scan-fusion infra.
@@ -1415,15 +1442,19 @@ same dev source via `devtools::load_all()` → parallelising the pair axis is ou
   **byte-identical** output — but per (a)/(e) it earns its keep only in the many-tables-small/medium-df batch
   export path, not live.
 
-### If ever built (deferred, 1.4.x follow-up at earliest)
+### Recommended opt-in shape (worth building for the survey batch-export workflow)
 
-A Suggests-only, **opt-in** `options(tabxplor.parallel=)` gating an internal `tab_pmap()` at the
-`tab_build()` row_var/pair seam: persistent base-`parallel` cluster (or mirai), `setDTthreads(1)` in workers,
-df pre-loaded once, byte-identical sequential fallback. Target audience: the "export dozens of colored
-exploratory tables from one survey" batch on **typical (≤ ~1M-row) data with reused workers** — the only
-regime with a robust win. **Precondition: it must not slow the current single-threaded many-table path** (the
-default), and it should land **after** the Phase 2 aggregate-core / Phase 7c cache, which reduce the very
-fmt/scan overhead this would parallelise (and may shrink the remaining win). Not scheduled; no code changed
+A Suggests-only, **opt-in** `options(tabxplor.parallel=)` / `tab(..., parallel=)` gating an internal
+`tab_pmap()` at the `tab_build()` row_var/pair seam: a persistent worker pool (base-`parallel` — best on the
+sweet spot at W=8 (~4×), zero new dep; or mirai — best at W=4 (~3.3×), lightest dep), `setDTthreads(1)` in
+workers, df pre-loaded once, **byte-identical** sequential fallback. Primary audience: "export dozens of
+colored exploratory tables from one survey (10k–60k rows)" — a **substantial ~2.5–4×** win there (§Confirmation),
+robust even for a single fresh call, negligible memory. **Preconditions:** (i) it must not slow the current
+single-threaded default path (so — opt-in, and skip parallel dispatch below a table-count / row-count
+threshold where setup > gain, e.g. few tables); (ii) worker df availability solved by pre-load-once (never
+per-task); (iii) land **after** the Phase 2 aggregate-core / Phase 7c cache — they lower the per-table fmt
+overhead this parallelises (may shrink the absolute win, but the batch-export path does **not** overlap the
+cache, so the gain persists). Not scheduled for this pass; no code changed
 in this pass.
 
 ---

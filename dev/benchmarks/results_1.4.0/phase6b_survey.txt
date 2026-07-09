@@ -1,0 +1,26 @@
+=== Phase 6b confirmation — survey-size range (10k-60k), many tables, W=4/8 ===
+R: R version 4.5.1 (2025-06-13 ucrt) | logical cores: 16 
+
+
+--- N = 10 000 rows | 0.4 MB | seq(DT=8) 2.390 s (0.149 s/table) ---
+  mirai    W=4  setup 0.98 s | batch 0.720 s | speedup 3.32x | fresh 1.70 s | ident 0/16
+  parallel W=4  setup 1.64 s | batch 0.800 s | speedup 2.99x | fresh 2.44 s
+  parallel W=8  setup 2.19 s | batch 0.630 s | speedup 3.79x | fresh 2.82 s
+
+--- N = 30 000 rows | 2.9 MB | seq(DT=8) 2.490 s (0.156 s/table) ---
+  mirai    W=4  setup 0.97 s | batch 0.940 s | speedup 2.65x | fresh 1.91 s | ident 0/16
+  parallel W=4  setup 2.00 s | batch 1.010 s | speedup 2.47x | fresh 3.01 s
+  parallel W=8  setup 2.19 s | batch 0.590 s | speedup 4.22x | fresh 2.78 s
+
+--- N = 60 000 rows | 5.7 MB | seq(DT=8) 2.480 s (0.155 s/table) ---
+  mirai    W=4  setup 0.97 s | batch 0.990 s | speedup 2.51x | fresh 1.96 s | ident 0/16
+  parallel W=4  setup 1.80 s | batch 0.920 s | speedup 2.70x | fresh 2.72 s
+  parallel W=8  setup 2.25 s | batch 0.610 s | speedup 4.07x | fresh 2.86 s
+
+=== survey-range summary (batch speedup vs sequential DT=8) ===
+     N seq_s mirai_W4 par_W4 par_W8 mirai_W4_setup
+ 10000  2.39     3.32   2.99   3.79           0.98
+ 30000  2.49     2.65   2.47   4.22           0.97
+ 60000  2.48     2.51   2.70   4.07           0.97
+
+DONE
