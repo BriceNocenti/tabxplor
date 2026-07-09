@@ -5,9 +5,9 @@ Detailed rationale behind the phase bullets in `CLAUDE.md` (§ 1.4.0 roadmap). C
 session can implement without re-deriving it. Written 2026-07; all decision questions resolved 2026-07-07.
 
 **How to read.** *Aim* (the governing rule) → *Status & open items* (what is settled, what is still open)
-→ the numbered decisions **§1–§19** (each self-contained, with its own grounding) → *How the decisions cohere* (the
+→ the numbered decisions **§1–§26** (each self-contained, with its own grounding) → *How the decisions cohere* (the
 closing synthesis). The **§N numbers are stable cross-reference anchors** —
-CLAUDE.md and this file both cite "§9", "§12", … — so **do not renumber them**; append new decisions as §14+.
+CLAUDE.md and this file both cite "§9", "§12", … — so **do not renumber them**; append new decisions as §27+.
 
 ## Aim (this governs every decision below)
 
@@ -1318,6 +1318,113 @@ Non-integer-count auto-detection *inside* `tab()` (rejected — `tab()` stays mi
 the vignette/README `tab_counts()` example (before-release doc pass); empirical-OR on counts (rides the
 tab_logit phase). Two pre-existing latent `tab_plain()` warnings cleaned up in passing (guarded
 `tabs[, "wn"/"n" := NULL]` on a missing column — output-invariant, golden green).
+
+---
+
+## 26. Phase 6b RESEARCH — parallelising tab()/jmvtab over row_vars (2026-07-09)
+
+**Verdict: NO-GO for 1.4.0 as a default; a bounded (~2–3.5×), regime-specific, opt-in-only win at best —
+defer.** Parallelising the row_var axis is *safe* (byte-identical) and *does* help one specific workflow
+(many tables × small/medium df × reused workers), but it is sub-linear, backend-fragile, negative for big
+data / few tables / fresh calls, and — decisive — it targets the *same* N-independent fmt/chi2 overhead that
+the already-planned aggregate-core + Phase 7c cache attack with **no new dependency, no memory blow-up, and
+no parallelism** (§23, cache design). Grounded PoC below; scripts `dev/benchmarks/parallel_poc_micro.R`
+(Layer A, mechanics) + `parallel_poc_tab.R` (Layer B, real tables) + `parallel_poc_mirai_dispatcher.R`;
+runs in `dev/benchmarks/results_1.4.0/phase6b_{micro,tab,mirai_dispatcher}.txt`.
+
+### Method / caveats
+
+Ryzen 5800X (**8 physical / 16 logical**; `data.table` default = **8 threads**), Windows 11 (**no `fork()`**
+→ every worker is a separate process; the df must be serialized to it), R 4.5.1. Backends: **mirai 2.7.1**,
+base **parallel** (PSOCK), **future.apply 1.20**, vs sequential `purrr::pmap`. Datasets: `big_df.rds`
+(**8M rows, 336 MB in-memory**) and `forcats::gss_cat` (**21 k rows, 1 MB**). Workers `setDTthreads(1)`; df
+pre-loaded once into persistent workers; `setup_s` (worker spawn + transfer + `load_all`) reported SEPARATELY
+from `batch_s`, because the verdict differs for a fresh call vs reused workers. 2–3 reps (noisy at the small
+end). *Env note:* mirai needs `nanonext ≥ 1.9.0`; the machine's main-lib `nanonext` (1.8.0) is DLL-locked by
+a running btw/MCP session, so the PoC installed `nanonext 1.10.0 + mirai` into a temp lib and prepended it
+via `R_LIBS_USER` (inherited by daemons). The seam parallelised: `tab_build()`'s outer
+`purrr::pmap(list(row_vars, …))` — [tab.R:1304](../R/tab.R#L1304) / [:1379](../R/tab.R#L1379) /
+[:1440](../R/tab.R#L1440); the PoC parallelises at (row_var × col_var) **pair** grain (one `tab()` per pair)
+to get ≥12 independent units.
+
+### Layer A — mechanics (pure grouped scan, 8M, batch of 16), `phase6b_micro.txt`
+
+- **data.table's own threading barely scales the scan** — it is **memory-bandwidth-bound**: 1 thread 0.16 s
+  → 2t **1.14×**, 4t **1.45×**, 8t **1.45×**, 12t **1.60×**. So "rely on data.table" gives ~1.5× on the
+  scan *no matter the core count*, and there is little headroom left for either more threads or more
+  processes.
+- **Process-parallel batch (16 scans) peaks at ~1.7×** then *degrades* (same memory wall): mirai
+  0.92/1.72/1.72/1.45× at W=2/4/8/12; parallel 0.88/1.45/1.78/1.66×. **future.apply loses** (0.69→0.34×) —
+  it re-sends the 336 MB df as a global on *every* call.
+- **Transfer (setup) is the killer**: 6.8 s (mirai W=8) → 17 s (parallel W=12) to ship the df — **4–10× the
+  entire 1.74 s sequential batch**. **Oversubscription** (A5): W=8×DT=1 0.88 s vs W=8×DT=8 (64 logical)
+  0.94 s — `setDTthreads(1)` in workers is the correct, mildly-better rule (muted only because the scan is
+  already bandwidth-capped). **Memory** (A6): W×df resident — W=8 ≈ 3.0 GB, W=12 ≈ 4.3 GB for this df.
+
+### Layer B — real colored + chi2 tables (`pct="row", color="diff", chi2=TRUE`), `phase6b_tab.txt`
+
+**Byte-identity: 0 / 34 tables differ** from sequential (big 16 + fewtab 2 + small 16), workers running the
+same dev source via `devtools::load_all()` → parallelising the pair axis is output-safe.
+
+| dataset (seq batch)        | backend  | best speedup | at W | setup    | note                                   |
+|----------------------------|----------|--------------|------|----------|----------------------------------------|
+| big_8M, 16 tab (3.33 s)    | parallel | **2.49×**    | 8    | 11.2 s   | scales W2→8 (1.05→2.49×), dips at 12    |
+| big_8M, 16 tab             | mirai    | 1.51×        | 12   | 8.9 s    | oddly **flat ~1.2×** across W           |
+| big_8M, 16 tab             | future   | —            | —    | —        | **errors**: globals > 500 MB, resent    |
+| big_8M, **2** tab (0.41 s) | both     | **0.5–0.6×** | 8    | 6–11 s   | **loss** even batch-only; setup 15–27×  |
+| small_gss, 16 tab (2.55 s) | mirai    | **3.49×**    | 4    | **1.0 s**| net win even *fresh-call* (1.70 s)      |
+| small_gss, 16 tab          | parallel | 2.56×        | 8    | 2.2 s    | scales cleanly                          |
+
+- **The small df is the *sweet spot*, the 8M df the *worst case*** — the inverse of the naïve prior. Reason:
+  per-table cost = a bandwidth-bound O(N) scan **+ an N-independent O(cells) fmt/chi2/vctrs overhead**
+  (~0.16–0.19 s, the §23 finding). On 21 k rows the scan is ~0 so that CPU-bound overhead *is* the whole
+  cost → it parallelises near-linearly and transfer is trivial (1 MB). On 8M rows the scan is large and
+  bandwidth-capped (caps speedup) and the 336 MB × W transfer makes a *fresh* call a net loss. Confirmed by
+  DT-threading on the full build: 1.19× (big) vs ~1.0× (small) — the scan is **not** tab()'s bottleneck.
+- **`setup ≫ batch` on big df** (transfer 6–16 s vs a 3.3 s batch) → a fresh parallel call is a **3–4× net
+  loss**; only **persistent workers reused across many builds** amortise it (break-even ~6 batches at W=8).
+  On small df setup is ~1 s → wins immediately.
+- **No universal backend.** mirai best on small, flat on big; parallel best on big, good on small; future
+  unusable. mirai's big-df plateau is **not** the dispatcher (`dispatcher=FALSE` → same ~1.2×,
+  `phase6b_mirai_dispatcher.txt`) and **not** thread-oversubscription (`getDTthreads()==1` verified in
+  daemons) — an unexplained nanonext/scheduling divergence. Betting the package on one backend is unsafe →
+  reinforces opt-in, not default.
+
+### Answers to the specific questions
+
+- **(a) Does row_var parallelism help batch `tab()`?** Yes but **bounded ~2–3.5× and sub-linear**, and only
+  for **many tables**; the crossover is **df size + reuse**, not cores — wins on small/medium df with
+  persistent workers, ≈break-even-to-loss on 8M, always a loss for few tables or fresh big-df calls.
+- **(b) Good package?** For this workload base **`parallel`** (zero new dep, scaled best on big, PSOCK
+  persistent cluster) or **mirai** (best on small, lightest dep = only `nanonext`); **not** future.apply
+  (per-call global resend). Any adoption must be **Suggests-only + opt-in**, mirroring the scan-fusion infra.
+- **(c) Does it fight data.table's threading?** They compete for the same memory bandwidth; the rule is **one
+  level** — `setDTthreads(1)` in workers (nesting = 64 logical threads, slightly worse). "Making DT threads
+  bear fruit across many tables" does **not** work: DT threads help *within* one scan (~1.5×, bandwidth-capped),
+  never *across* independent tables — that needs process-level parallelism, which then wants DT threads off.
+- **(d) Memory / "good level without many df copies"?** Each process holds a **full df copy** (W×df: 3–4 GB
+  at W=8–12 for the 336 MB df) — real cost on big data. The only cheap level is **pre-load once into
+  persistent workers**; per-task df sends (future's model) are fatal.
+- **(e) jmvtab live?** **No.** Per interaction the aggregate is cached (Phase 7c tiers 1–2) → nothing O(N) to
+  parallelise; residual cost is the O(colored-columns) display paint (already vectorised, Phase 5). The only
+  parallelisable jmvtab moment is the *first, uncached, many-var* build — i.e. the batch case above — and a
+  live UI building one table per keystroke is the **few-tables loss** regime. Caching, not parallelism, is
+  the live lever.
+- **(f) Both at once, same results, shared functions?** Yes structurally: a single internal `tab_pmap()`
+  dispatching the three `pmap(row_vars,…)` sites would serve both `tab()` batch and jmvtab first-build with
+  **byte-identical** output — but per (a)/(e) it earns its keep only in the many-tables-small/medium-df batch
+  export path, not live.
+
+### If ever built (deferred, 1.4.x follow-up at earliest)
+
+A Suggests-only, **opt-in** `options(tabxplor.parallel=)` gating an internal `tab_pmap()` at the
+`tab_build()` row_var/pair seam: persistent base-`parallel` cluster (or mirai), `setDTthreads(1)` in workers,
+df pre-loaded once, byte-identical sequential fallback. Target audience: the "export dozens of colored
+exploratory tables from one survey" batch on **typical (≤ ~1M-row) data with reused workers** — the only
+regime with a robust win. **Precondition: it must not slow the current single-threaded many-table path** (the
+default), and it should land **after** the Phase 2 aggregate-core / Phase 7c cache, which reduce the very
+fmt/scan overhead this would parallelise (and may shrink the remaining win). Not scheduled; no code changed
+in this pass.
 
 ---
 

@@ -1,0 +1,63 @@
+=== Phase 6b Layer B — realistic tab() parallelism PoC ===
+R: R version 4.5.1 (2025-06-13 ucrt) | logical cores: 16 | DT default threads: 8 
+
+
+########## dataset: big_8M | 8 000 000 rows x 8 cols | 336 MB | K=16 tables ##########
+sequential DT=8 : 3.330 s | DT=1 : 3.970 s  (0.21s/table)
+[mirai] byte-identity: 0/16 tables differ from sequential  OK
+[mirai]    W= 2  setup 2.08 s | batch 2.560 s | batch-speedup 1.30x | fresh-call(setup+batch) 4.64 s
+[mirai]    W= 4  setup 3.45 s | batch 2.725 s | batch-speedup 1.22x | fresh-call(setup+batch) 6.18 s
+[mirai]    W= 8  setup 6.05 s | batch 2.685 s | batch-speedup 1.24x | fresh-call(setup+batch) 8.73 s
+[mirai]    W=12  setup 8.91 s | batch 2.205 s | batch-speedup 1.51x | fresh-call(setup+batch) 11.11 s
+[parallel] W= 2  setup 4.41 s | batch 3.165 s | batch-speedup 1.05x | fresh-call 7.58 s
+[parallel] W= 4  setup 7.08 s | batch 2.130 s | batch-speedup 1.56x | fresh-call 9.21 s
+[parallel] W= 8  setup 11.22 s | batch 1.340 s | batch-speedup 2.49x | fresh-call 12.56 s
+[parallel] W=12  setup 15.69 s | batch 1.715 s | batch-speedup 1.94x | fresh-call 17.40 s
+Timing stopped at: 0.04 0 0.02
+[future] W= 2 ERROR: The total size of the 2 globals exported for future expression ('FUN()') is 671.78 MiB. This exceeds the maximum allowed size 500.00 MiB per by R option "future.globals.maxSize". This limit is set to protect against transfering too large objects to parallel workers by mistake, which may not be intended and could be costly. See help("future.globals.maxSize", package = "future") for further explainations and how to adjust or remove this threshold There are two globals: 'FUN' (336.09 MiB of class 'function') and 'DT' (335.69 MiB of class 'list') 
+Timing stopped at: 0.02 0 0.01
+[future] W= 4 ERROR: The total size of the 2 globals exported for future expression ('FUN()') is 671.78 MiB. This exceeds the maximum allowed size 500.00 MiB per by R option "future.globals.maxSize". This limit is set to protect against transfering too large objects to parallel workers by mistake, which may not be intended and could be costly. See help("future.globals.maxSize", package = "future") for further explainations and how to adjust or remove this threshold There are two globals: 'FUN' (336.09 MiB of class 'function') and 'DT' (335.69 MiB of class 'list') 
+Timing stopped at: 0.02 0 0.02
+[future] W= 8 ERROR: The total size of the 2 globals exported for future expression ('FUN()') is 671.78 MiB. This exceeds the maximum allowed size 500.00 MiB per by R option "future.globals.maxSize". This limit is set to protect against transfering too large objects to parallel workers by mistake, which may not be intended and could be costly. See help("future.globals.maxSize", package = "future") for further explainations and how to adjust or remove this threshold There are two globals: 'FUN' (336.09 MiB of class 'function') and 'DT' (335.69 MiB of class 'list') 
+Timing stopped at: 0 0 0.02
+[future] W= 12 ERROR: The total size of the 2 globals exported for future expression ('FUN()') is 671.78 MiB. This exceeds the maximum allowed size 500.00 MiB per by R option "future.globals.maxSize". This limit is set to protect against transfering too large objects to parallel workers by mistake, which may not be intended and could be costly. See help("future.globals.maxSize", package = "future") for further explainations and how to adjust or remove this threshold There are two globals: 'FUN' (336.09 MiB of class 'function') and 'DT' (335.69 MiB of class 'list') 
+[memory] 336 MB/df -> W=8 persistent workers ~3.0 GB resident (parent + 8 x df copy)
+
+########## dataset: big_8M_fewtab | 8 000 000 rows x 8 cols | 336 MB | K=2 tables ##########
+sequential DT=8 : 0.405 s | DT=1 : 0.500 s  (0.20s/table)
+[mirai] byte-identity: 0/2 tables differ from sequential  OK
+[mirai]    W= 8  setup 6.22 s | batch 0.815 s | batch-speedup 0.50x | fresh-call(setup+batch) 7.04 s
+[parallel] W= 8  setup 11.07 s | batch 0.690 s | batch-speedup 0.59x | fresh-call 11.76 s
+[memory] 336 MB/df -> W=8 persistent workers ~3.0 GB resident (parent + 8 x df copy)
+
+########## dataset: small_gss | 21 483 rows x 9 cols | 1 MB | K=16 tables ##########
+sequential DT=8 : 2.550 s | DT=1 : 2.455 s  (0.16s/table)
+[mirai] byte-identity: 0/16 tables differ from sequential  OK
+[mirai]    W= 4  setup 0.97 s | batch 0.730 s | batch-speedup 3.49x | fresh-call(setup+batch) 1.70 s
+[mirai]    W= 8  setup 0.73 s | batch 1.635 s | batch-speedup 1.56x | fresh-call(setup+batch) 2.36 s
+[parallel] W= 4  setup 1.86 s | batch 1.270 s | batch-speedup 2.01x | fresh-call 3.13 s
+[parallel] W= 8  setup 2.18 s | batch 0.995 s | batch-speedup 2.56x | fresh-call 3.17 s
+[memory] 1 MB/df -> W=8 persistent workers ~0.0 GB resident (parent + 8 x df copy)
+
+
+=== Layer B summary (batch_s = median of 2 runs; speedup = seq8 / batch_s) ===
+       dataset    backend workers setup_s batch_s speedup
+        big_8M sequential       1    0.00   3.330    1.00
+        big_8M      mirai       2    2.08   2.560    1.30
+        big_8M      mirai       4    3.45   2.725    1.22
+        big_8M      mirai       8    6.05   2.685    1.24
+        big_8M      mirai      12    8.91   2.205    1.51
+        big_8M   parallel       2    4.41   3.165    1.05
+        big_8M   parallel       4    7.08   2.130    1.56
+        big_8M   parallel       8   11.22   1.340    2.49
+        big_8M   parallel      12   15.69   1.715    1.94
+ big_8M_fewtab sequential       1    0.00   0.405    1.00
+ big_8M_fewtab      mirai       8    6.22   0.815    0.50
+ big_8M_fewtab   parallel       8   11.07   0.690    0.59
+     small_gss sequential       1    0.00   2.550    1.00
+     small_gss      mirai       4    0.97   0.730    3.49
+     small_gss      mirai       8    0.73   1.635    1.56
+     small_gss   parallel       4    1.86   1.270    2.01
+     small_gss   parallel       8    2.18   0.995    2.56
+
+DONE

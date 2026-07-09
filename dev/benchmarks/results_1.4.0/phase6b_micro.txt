@@ -1,0 +1,67 @@
+=== Phase 6b Layer A — synthetic parallelism micro-PoC ===
+R: R version 4.5.1 (2025-06-13 ucrt) | logical cores: 16 | DT default threads: 8 
+
+fixture: 8 000 000 rows x 8 cols; object.size: 335.7 MB
+serialized size (per-worker transfer): 335.7 MB
+
+--- A1. data.table thread-scaling (single scan: education x age_grp, 48 groups) ---
+ dt_threads median_s speedup_vs_1
+          1     0.16         1.00
+          2     0.14         1.14
+          4     0.11         1.45
+          8     0.11         1.45
+         12     0.10         1.60
+
+--- A2. batch of K = 16 scans: sequential vs process-parallel ---
+sequential DT=8 threads : 1.740 s
+sequential DT=1 thread  : 2.640 s
+
+[mirai] persistent daemons, df pre-loaded once, setDTthreads(1) per daemon
+  W= 2  setup(transfer) 1.78 s | batch 1.890 s | speedup vs seq8 0.92x
+  W= 4  setup(transfer) 3.25 s | batch 1.010 s | speedup vs seq8 1.72x
+  W= 8  setup(transfer) 6.76 s | batch 1.010 s | speedup vs seq8 1.72x
+  W=12  setup(transfer) 9.55 s | batch 1.200 s | speedup vs seq8 1.45x
+
+[parallel] PSOCK cluster, df exported once, setDTthreads(1) per worker
+  W= 2  setup(transfer) 2.91 s | batch 1.980 s | speedup vs seq8 0.88x
+  W= 4  setup(transfer) 5.43 s | batch 1.200 s | speedup vs seq8 1.45x
+  W= 8  setup(transfer) 11.45 s | batch 0.980 s | speedup vs seq8 1.78x
+  W=12  setup(transfer) 17.17 s | batch 1.050 s | speedup vs seq8 1.66x
+
+[future.apply] multisession; NB globals re-sent per future_lapply call (not amortised)
+  W= 2  setup(plan) 1.42 s | batch 2.520 s | speedup vs seq8 0.69x
+  W= 4  setup(plan) 0.67 s | batch 2.530 s | speedup vs seq8 0.69x
+  W= 8  setup(plan) 0.95 s | batch 3.700 s | speedup vs seq8 0.47x
+  W=12  setup(plan) 1.28 s | batch 5.160 s | speedup vs seq8 0.34x
+
+--- A5. oversubscription (W=8 daemons; DT threads 1 vs 8 per daemon) ---
+  W=8 x DT=1 threads (=8 logical) : batch 0.880 s
+  W=8 x DT=8 threads (=64 logical) : batch 0.940 s
+
+--- A6. memory: per-worker df copy footprint ---
+df in-memory: 336 MB; serialized: 336 MB
+  W= 2 persistent workers each holding a copy -> ~1.0 GB resident (parent + 2 x df)
+  W= 4 persistent workers each holding a copy -> ~1.6 GB resident (parent + 4 x df)
+  W= 8 persistent workers each holding a copy -> ~3.0 GB resident (parent + 8 x df)
+  W=12 persistent workers each holding a copy -> ~4.3 GB resident (parent + 12 x df)
+
+=== A2 summary (batch of 16 scans) ===
+      backend workers dt_threads setup_s batch_s speedup_vs_seq8
+   sequential       1          8    0.00    1.74            1.00
+   sequential       1          1    0.00    2.64            0.66
+        mirai       2          1    1.78    1.89            0.92
+        mirai       4          1    3.25    1.01            1.72
+        mirai       8          1    6.76    1.01            1.72
+        mirai      12          1    9.55    1.20            1.45
+     parallel       2          1    2.91    1.98            0.88
+     parallel       4          1    5.43    1.20            1.45
+     parallel       8          1   11.45    0.98            1.78
+     parallel      12          1   17.17    1.05            1.66
+ future.apply       2          1    1.42    2.52            0.69
+ future.apply       4          1    0.67    2.53            0.69
+ future.apply       8          1    0.95    3.70            0.47
+ future.apply      12          1    1.28    5.16            0.34
+
+(setup_s = one-time worker creation + df transfer; batch_s = median of 3 runs of K scans; speedup vs the sequential DT=8 baseline)
+
+DONE
