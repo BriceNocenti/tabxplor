@@ -24,10 +24,13 @@ fmt_contract_field_types <- c(
   tot_n = "double", in_totrow = "logical", in_tottab = "logical", in_refrow = "logical"
 )
 
-# The 8 per-column attributes and their constructor defaults.
+# The 9 per-column attributes and their constructor defaults. Phase 5 added `color_signif`
+# (the significance policy: "ignore" / "grey_non_signif" / "color_all_signif") -- it cannot fold
+# into `color` (which is measure x channel) and pillar_shaft renders columns standalone, so the
+# policy must live on the column. The `color` attribute is now length 1 (text) or 2 (text, bg).
 fmt_contract_attr_defaults <- list(
   type = "n", comp_all = NA, ref = "", ci_type = "",
-  col_var = "", totcol = FALSE, refcol = FALSE, color = ""
+  col_var = "", totcol = FALSE, refcol = FALSE, color = "", color_signif = "ignore"
 )
 
 testthat::test_that("fmt has exactly the contracted fields, in order", {

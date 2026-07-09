@@ -27,6 +27,10 @@
 #   is byte-identical (no cell displays the ratio field), so the _snaps are untouched. Coloring
 #   is byte-identical (the x2 reads the same value from `ratio` now instead of `mean`).
 #
+# Phase 5 (color_signif attribute, §9.1): EVERY fixture gains a 9th per-column attribute
+#   `color_signif` (default "ignore") -> ALL *.rds regenerated once + the fmt-contract snapshot.
+#   Display + coloring byte-identical (the default policy reproduces today's behaviour).
+#
 #   f_row_pct/f_col_pct/f_all_pct/f_counts/f_ref_first/m_multi/totn_keep/w_weighted -> 1a only
 #   f_color_diff    -> 1a only (FACTOR diff-color MUST stay byte-identical: the tripwire that
 #                      Phase 5 does NOT disturb factor coloring)

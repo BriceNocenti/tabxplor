@@ -263,7 +263,8 @@ fmt <- function(n         = integer(),
                 col_var   = ""   ,
                 totcol    = FALSE,
                 refcol    = FALSE,
-                color     = ""    ) {
+                color     = ""    ,
+                color_signif = "ignore") {
 
   # DESIGN: these 8 fields set the recycling reference length. display, diff, ratio, or,
   # the ci bounds, pvalue, tot_n and the in_* flags are recycled TO it below, so they must
@@ -311,7 +312,10 @@ fmt <- function(n         = integer(),
   col_var   <- vctrs::vec_recycle(vctrs::vec_cast(col_var  , character()), size = 1)
   totcol    <- vctrs::vec_recycle(vctrs::vec_cast(totcol   , logical()  ), size = 1)
   refcol    <- vctrs::vec_recycle(vctrs::vec_cast(refcol   , logical()  ), size = 1)
-  color     <- vctrs::vec_recycle(vctrs::vec_cast(color    , character()), size = 1)
+  # `color` is a per-column attribute of length 1 (text channel) or 2 (text, background) -- NOT
+  # recycled to 1 (Phase 5 §9.1). color_signif is the scalar significance policy.
+  color        <- vctrs::vec_cast(color, character())
+  color_signif <- vctrs::vec_recycle(vctrs::vec_cast(color_signif, character()), size = 1)
 
   new_fmt(n = n, display = display, digits = digits,
           wn = wn, pct = pct,  mean = mean,
@@ -320,7 +324,7 @@ fmt <- function(n         = integer(),
           in_totrow = in_totrow, in_tottab = in_tottab, in_refrow = in_refrow,
           type = type, comp_all = comp_all,  ref = ref,
           ci_type = ci_type, col_var = col_var, totcol = totcol, refcol = refcol,
-          color = color)
+          color = color, color_signif = color_signif)
 }
 
 #' @describeIn fmt a test function for class fmt.
@@ -902,6 +906,13 @@ as_refcol     <- function(x, refcol = TRUE) {
 }
 
 
+# Phase 5 (§9.1): the `color` attribute holds ONE or TWO measures -- the text channel and an
+# optional background channel. fmt_color_attr() returns the FULL vector (the vctrs reconcilers
+# read this so the bg channel is not silently dropped on c()/cast/group). get_color() returns the
+# TEXT channel [1] -- the unchanged scalar contract every existing consumer relies on.
+#' @keywords internal
+fmt_color_attr <- function(x) attr(x, "color", exact = TRUE)
+
 #' @describeIn fmt get color (at \code{fmt} level or \code{tab} level)
 #' @return A logical vector with the fmt vectors color attributes
 #' @export
@@ -912,16 +923,15 @@ get_color <- function(x, ...) UseMethod("get_color")
 #' @return A single character with the color attribute.
 #' @export
 get_color.default     <- function(x, ...) {
-  ifelse(! is.null(purrr::attr_getter("color")(x)),
-         yes = purrr::attr_getter("color")(x),
-         no  = "") #NA_character_
+  a <- purrr::attr_getter("color")(x)
+  if (is.null(a)) "" else a[1]
 }
 #' Get color
 #' @method get_color tabxplor_fmt
 #' @inheritParams fmt
-#' @return A single character with the color attribute.
+#' @return A single character with the color attribute (the text channel).
 #' @export
-get_color.tabxplor_fmt <- function(x, ...) attr(x, "color", exact = TRUE)
+get_color.tabxplor_fmt <- function(x, ...) attr(x, "color", exact = TRUE)[1]
 #' Get color
 #' @method get_color data.frame
 #' @inheritParams fmt
@@ -931,6 +941,52 @@ get_color.data.frame <- function(x, ...) {
   purrr::map_chr(x, ~ get_color(.))
 }
 
+#' @describeIn fmt get the background-channel color measure (\code{NA} when there is none)
+#' @return A single character with the background color measure, or \code{NA}.
+#' @export
+get_color_bg <- function(x, ...) {
+  if (is.data.frame(x)) return(purrr::map_chr(x, ~ get_color_bg(.)))
+  a <- fmt_color_attr(x)
+  if (length(a) >= 2L) a[2] else NA_character_
+}
+
+#' @describeIn fmt get the significance policy (\code{"ignore"} / \code{"grey_non_signif"} / \code{"color_all_signif"})
+#' @export
+get_color_signif <- function(x, ...) {
+  if (is.data.frame(x)) return(purrr::map_chr(x, ~ get_color_signif(.)))
+  a <- attr(x, "color_signif", exact = TRUE)
+  if (is.null(a)) "ignore" else a[1]
+}
+
+# Normalize a color argument (scalar / unnamed c(text, bg) / named c(text=, background=)) into a
+# positional length-1-or-2 character vector [text, background]. Accepts the new measures
+# (diff/ratio/contrib/or) and, transitionally, the old catalogue strings (diff_ci/after_ci/ci),
+# until Step 4d decodes those into (measure, color_signif) at the argument boundary.
+#' @keywords internal
+resolve_color_channels <- function(color) {
+  if (length(color) == 0L) return("")
+  nms <- names(color)
+  if (!is.null(nms) && any(nzchar(nms))) {
+    text <- if ("text" %in% nms) unname(color[["text"]]) else ""
+    bg   <- if ("background" %in% nms) unname(color[["background"]]) else
+            if ("bg" %in% nms) unname(color[["bg"]]) else NA_character_
+    color <- if (is.na(bg)) text else c(text, bg)
+  }
+  color <- unname(vapply(color, function(m)
+    if (is.na(m) || identical(m, "no")) "" else if (identical(m, "or")) "OR" else m,
+    character(1)))
+  if (length(color) > 2L) cli::cli_abort("{.arg color} accepts at most two values (text, background).")
+  ok <- c("diff", "ratio", "contrib", "OR", "diff_ci", "after_ci", "ci", "")
+  if (!all(color %in% ok)) {
+    cli::cli_abort(c("Unknown color measure {.val {setdiff(color, ok)}}.",
+                     "i" = "Valid measures: {.val {c('diff','ratio','contrib','or')}}."))
+  }
+  if (length(color) == 2L && color[2] %in% c("contrib", "OR", "diff_ci", "after_ci", "ci")) {
+    cli::cli_abort("{.val {color[2]}} is a whole-cell measure; it cannot go on the background channel.")
+  }
+  if (length(color) == 2L && color[2] == "") color <- color[1]   # trim an empty bg
+  color
+}
 
 #' @describeIn fmt set the "color" attribute of a \code{fmt} vector
 # @param color The type of color to print in tibbles, as a single string.
@@ -940,11 +996,20 @@ get_color.data.frame <- function(x, ...) {
 # @keywords internal
 #' @export
 set_color     <- function(x, color) {
-  if (color %in% c("no", NA_character_)) color <- "" #NA_character_
-  if (color == "or") color <- "OR"
-  stopifnot(color %in% c("diff", "diff_ci", "after_ci", "contrib", "ci", "OR",
-                         "", NA_character_))
-  `attr<-`(x ,"color", color)
+  `attr<-`(x, "color", resolve_color_channels(color))
+}
+
+#' @describeIn fmt set the significance policy attribute of a \code{fmt} vector
+#' @export
+set_color_signif <- function(x, color_signif) {
+  color_signif <- color_signif[1]
+  if (is.na(color_signif) || color_signif %in% c("", "no")) color_signif <- "ignore"
+  ok <- c("ignore", "grey_non_signif", "color_all_signif")
+  if (!color_signif %in% ok) {
+    cli::cli_abort(c("Unknown {.arg color_signif} value {.val {color_signif}}.",
+                     "i" = "Valid: {.val {ok}}."))
+  }
+  `attr<-`(x, "color_signif", color_signif)
 }
 
 
@@ -1042,6 +1107,7 @@ new_fmt <- function(n         = integer(),
                     totcol    = FALSE,
                     refcol    = FALSE,
                     color     = ""   ,
+                    color_signif = "ignore",
                     ..., class = character()
 ) {
   # stopifnot(
@@ -1092,7 +1158,7 @@ new_fmt <- function(n         = integer(),
          in_refrow = in_refrow),
     type = type, comp_all = comp_all, ref = ref,
     ci_type = ci_type, col_var = col_var, totcol = totcol, refcol = refcol,
-    color = color,  class = c(class, "tabxplor_fmt"))
+    color = color, color_signif = color_signif[1], class = c(class, "tabxplor_fmt"))
   #access with fields() n_fields() vctrs::field() vctrs::`field<-`() ;
   #vec_data() return the tibble with all fields
 }
@@ -1831,6 +1897,7 @@ pillar_shaft.tabxplor_fmt <- function(x, ...) {
   display <- get_display(x)
   nas     <- is.na(display)
   color   <- get_color(x)
+  color_bg <- get_color_bg(x)                        # Phase 5: the background channel measure
   type    <- get_type(x)
   #totcol  <- is_totcol(x)
   totrows <- is_totrow(x)
@@ -1922,22 +1989,29 @@ pillar_shaft.tabxplor_fmt <- function(x, ...) {
   ok      <- !na_out & !nas
 
 
-  if (!is.na(color) & ! color %in% c("no", "") & !(color == "contrib" & !any(totrows))) {
-    # Phase 5 engine: one integer slot per cell (0 = uncolored). The slot table channel matches
-    # the console palette variant (text/bg) so intensities spread as the palette expects.
-    channel <- if (identical(getOption("tabxplor.color_style_type"), "bg")) "bg" else "text"
-    slot    <- fmt_color_slots(x, fmt_color_plan(x, channel = channel))
-    crayons <- get_color_style()                       # 11 crayon fns for the current options
+  has_text  <- !is.na(color)    && ! color    %in% c("no", "")
+  has_bg    <- !is.na(color_bg) && ! color_bg %in% c("no", "")
+  if ((has_text || has_bg) & !(has_text && color == "contrib" & !any(totrows))) {
+    # Phase 5 engine: two integer slot vectors (text + background channel; 0 = uncolored). The
+    # text channel uses the current-option palette (back-compat with color_style_type); the
+    # background channel always uses the pale bg palette, stacked on top (a cell can carry both).
+    channels     <- fmt_color_channels(x)
+    text_crayons <- get_color_style()                  # current type/theme/24-bit options
+    bg_crayons   <- get_color_style(type = "bg")
 
-    for (s in sort(unique(slot[slot > 0L & ok]))) {
-      cells <- ok & slot == s
-      out[cells] <- crayons[[s]](out[cells])
+    for (s in sort(unique(channels$text_slot[channels$text_slot > 0L & ok]))) {
+      cells <- ok & channels$text_slot == s
+      out[cells] <- text_crayons[[s]](out[cells])
+    }
+    for (s in sort(unique(channels$bg_slot[channels$bg_slot > 0L & ok]))) {
+      cells <- ok & channels$bg_slot == s
+      out[cells] <- bg_crayons[[s]](out[cells])
     }
     totals <- get_reference(x, mode = "all_totals") #c("cells", "lines")
 
-    # Cells matching no break are greyed (style_subtle) so colored cells stand out;
-    # reference/total cells are exempt, staying full-strength as reading anchors.
-    unselected <- slot == 0L
+    # Cells matching no break on EITHER channel are greyed (style_subtle) so colored cells stand
+    # out; reference/total cells are exempt, staying full-strength as reading anchors.
+    unselected <- channels$text_slot == 0L & channels$bg_slot == 0L
     out[ok & unselected & !totals] <-  #fmtgrey3
       pillar::style_subtle(out[ok & unselected & !totals])
 
@@ -2113,13 +2187,22 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
   channel <- match.arg(channel)
   n    <- length(x)
   type <- get_type(x)
+  # `channel` selects the SLOT TABLE / palette family (text vs bg spread intensities differently).
+  # The MEASURE is the `color` arg when given, else the text-channel measure -- so
+  # fmt_get_color_code(type="bg") still renders the text selection in the bg palette (golden), and
+  # fmt_color_channels() passes get_color_bg() explicitly for the background channel.
   if (is.null(color)) color <- get_color(x)
   if (length(color) == 0L || is.na(color[1]) || color[1] %in% c("", "no")) return(NULL)
 
   mp      <- color_measure_policy(color[1], type)
   measure <- mp$measure
-  policy  <- if (is.null(signif)) mp$policy else signif
   if (measure == "") return(NULL)
+  # policy: an explicit `signif` arg wins; else the old combined strings (diff_ci/after_ci/ci)
+  # carry their implied policy (transition, until Step 4d decodes them at the arg boundary); else
+  # the stored per-column color_signif attribute.
+  policy  <- if (!is.null(signif)) signif
+             else if (color[1] %in% c("diff_ci", "after_ci", "ci")) mp$policy
+             else get_color_signif(x)
 
   is_mean <- type %in% c("mean", "n")
   sc      <- color_scales(x)
@@ -2229,8 +2312,10 @@ fmt_color_slots <- function(x, plan) {
 
 #' @keywords internal
 fmt_color_channels <- function(x) {
-  list(text_slot = fmt_color_slots(x, fmt_color_plan(x, "text")),
-       bg_slot   = integer(length(x)))       # Step 4 wires the background channel
+  # text channel = the primary measure on the text slot table; background channel = the second
+  # measure (get_color_bg, NA when absent) on the bg slot table. Each is an integer slot vector.
+  list(text_slot = fmt_color_slots(x, fmt_color_plan(x, "text", color = get_color(x))),
+       bg_slot   = fmt_color_slots(x, fmt_color_plan(x, "bg",   color = get_color_bg(x))))
 }
 
 # DESIGN: Three-step color selection pipeline:
@@ -3348,8 +3433,14 @@ vec_ptype2.tabxplor_fmt.tabxplor_fmt    <- function(x, y, ...) {
   same_totcol  <- totcol_x == is_totcol(y)
   refcol_x     <- is_refcol(x)
   same_refcol  <- refcol_x == is_refcol(y)
-  color_x      <- get_color(x)
-  same_color   <- color_x == get_color(y)
+  # Phase 5 (§9.1): read the FULL color attribute (length <= 2) -- reading get_color()=[1] here
+  # would silently drop the background channel on every c()/bind/group. `==` recycles the shorter
+  # (1 divides 2), so the reconciled result is length <= 2. color_signif reconciles like the other
+  # scalar attributes.
+  color_x      <- fmt_color_attr(x)
+  same_color   <- color_x == fmt_color_attr(y)
+  signif_x     <- get_color_signif(x)
+  same_signif  <- signif_x == get_color_signif(y)
   #l            <- length(x)
 
   new_fmt(
@@ -3360,7 +3451,8 @@ vec_ptype2.tabxplor_fmt.tabxplor_fmt    <- function(x, y, ...) {
     col_var  = dplyr::if_else(same_col_var, col_var_x, "several_vars"),
     totcol   = dplyr::if_else(same_totcol , totcol_x , FALSE         ),
     refcol   = dplyr::if_else(same_refcol , refcol_x , FALSE         ),
-    color    = dplyr::if_else(same_color  , color_x  , ""            )
+    color    = dplyr::if_else(same_color  , color_x  , ""            ),
+    color_signif = dplyr::if_else(same_signif, signif_x, "ignore")
   )
   # new_fmt(
   #   type     = dplyr::if_else(same_type, true  = type_x,
@@ -3446,7 +3538,8 @@ vec_cast.tabxplor_fmt.tabxplor_fmt  <- function(x, to, ...)
           col_var   = get_col_var (to),
           totcol    = is_totcol   (to),
           refcol    = is_refcol   (to),
-          color     = get_color   (to)
+          color     = fmt_color_attr(to),          # full attribute (both channels)
+          color_signif = get_color_signif(to)
 
   )
 
@@ -3472,7 +3565,8 @@ vec_cast.tabxplor_fmt.double   <- function(x, to, ...)
       col_var   = get_col_var (to),
       totcol    = is_totcol   (to),
       refcol    = is_refcol   (to),
-      color     = get_color   (to),
+      color     = fmt_color_attr(to),
+      color_signif = get_color_signif(to),
 
   )
 #' Convert fmt into double
@@ -3499,7 +3593,8 @@ vec_cast.tabxplor_fmt.integer <- function(x, to, ...)
       col_var  = get_col_var (to),
       totcol   = is_totcol   (to),
       refcol    = is_refcol   (to),
-      color    = get_color   (to)
+      color    = fmt_color_attr(to),
+      color_signif = get_color_signif(to)
 
   ) #new_fmt(pct = as.double(x))
 #' Convert fmt into integer
@@ -3644,7 +3739,8 @@ vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
       col_var  = dplyr::if_else(same_col_var, col_var_x, "several_vars"),
       totcol   = FALSE                                                  ,
       refcol   = FALSE                                                  ,
-      color    = get_color(x)
+      color    = fmt_color_attr(x),
+      color_signif = get_color_signif(x)
 
       # type     = dplyr::if_else(same_type,
       #                           true  = type_x,
@@ -3691,7 +3787,8 @@ vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
       col_var  = dplyr::if_else(same_col_var, col_var_x, "several_vars"),
       totcol   = FALSE                                                  ,
       refcol   = FALSE                                                  ,
-      color    = get_color(x)
+      color    = fmt_color_attr(x),
+      color_signif = get_color_signif(x)
 
       # type     = dplyr::if_else(same_type,
       #                           true  = type_x,

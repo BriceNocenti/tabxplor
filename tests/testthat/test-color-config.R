@@ -91,6 +91,47 @@ testthat::test_that("get_color_breaks stays back-compatible (legacy flat shape)"
   testthat::expect_equal(get_color_breaks("pct", type = "positive"), c(0.05, 0.1, 0.2, 2))
 })
 
+# --- Step 4d: the tab() color / color_signif argument forms ---
+testthat::test_that("tab() color argument forms set the right channels + policy", {
+  d <- forcats::gss_cat
+  col1 <- function(t) t[[names(t)[purrr::map_lgl(t, is_fmt)][1]]]
+
+  s <- col1(tab(d, marital, race, pct = "row", color = "diff"))          # scalar -> text only
+  testthat::expect_equal(get_color(s), "diff")
+  testthat::expect_true(is.na(get_color_bg(s)))
+
+  tt <- col1(tab(d, marital, race, pct = "row", color = TRUE))           # per-type: factor -> diff + ratio
+  testthat::expect_equal(get_color(tt), "diff")
+  testthat::expect_equal(get_color_bg(tt), "ratio")
+
+  v <- col1(tab(d, marital, race, pct = "row", color = c("diff", "ratio")))
+  testthat::expect_equal(c(get_color(v), get_color_bg(v)), c("diff", "ratio"))
+
+  nm <- col1(tab(d, marital, race, pct = "row", color = c(text = "diff", background = "ratio")))
+  testthat::expect_equal(c(get_color(nm), get_color_bg(nm)), c("diff", "ratio"))
+
+  bgo <- col1(tab(d, marital, race, pct = "row", color = c(background = "ratio")))  # bg only
+  testthat::expect_equal(get_color(bgo), "")
+  testthat::expect_equal(get_color_bg(bgo), "ratio")
+
+  g <- col1(tab(d, marital, race, pct = "row", color = "diff", color_signif = "grey_non_signif"))
+  testthat::expect_equal(get_color_signif(g), "grey_non_signif")
+
+  off <- col1(tab(d, marital, race, pct = "row", color = FALSE))
+  testthat::expect_equal(get_color(off), "")
+
+  cnt <- col1(tab(d, marital, race, pct = "no", color = TRUE))           # counts -> contrib
+  testthat::expect_equal(get_color(cnt), "contrib")
+})
+
+testthat::test_that("tab() color argument errors are clear", {
+  d <- forcats::gss_cat
+  testthat::expect_error(tab(d, marital, race, pct = "row", color = "diff", color_signif = "nope"),
+                         "Unknown")
+  testthat::expect_error(tab(d, marital, race, pct = "row", color = c("diff", "contrib")),
+                         "background channel")
+})
+
 testthat::test_that("set_color_style(custom_palette=) accepts 11 slots (the ratio slot fixed)", {
   withr::defer({ options("tabxplor.color_style" = NULL); set_color_style(type = "text", theme = "light") })
   pal11 <- sprintf("#%06X", seq_len(11) * 1000L)

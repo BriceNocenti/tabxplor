@@ -11,6 +11,18 @@
   are weighted, inference uses the real unweighted sample size). Input whose counts are not whole
   numbers (frequency-only / weighted-only) still shows percentages and colors, but confidence
   intervals and chi-squared are disabled with a message.
+* Redesigned, faster colors. The `color` argument now separates **what** is measured from **how**
+  significance is shown. `color` accepts `TRUE` (a smart per-column-type default: percentage-point
+  difference on the text + a "×2" relative-risk highlight on the background for factors, mean ratio
+  for numerics), a single measure (`"diff"`, `"ratio"`, `"contrib"`, `"or"`), or a two-channel
+  `c("diff", "ratio")` / `c(text = "diff", background = "ratio")`. A separate `color_signif`
+  argument (`"ignore"` / `"grey_non_signif"` / `"color_all_signif"`) replaces the old
+  `"diff_ci"` / `"after_ci"` modes (which still work). Numeric `color = "diff"` now colors the
+  standardized (SD-scaled) difference; the old ratio colouring is `color = "ratio"`. Color breaks
+  are set with a named list `set_color_breaks(list(pct_diff =, pct_ratio =, mean_diff =,
+  mean_ratio =, contrib =))` (the old `pct_breaks` / `mean_breaks` / `contrib_breaks` arguments are
+  soft-deprecated). The colour engine was rewritten around `findInterval`, making console printing
+  and `tab_kable()` dramatically faster on tall tables (the old per-cell resolver was O(n²)).
 * Significance stars for `ci = "diff"`. Each cell now shows `*` / `**` / `***` (p < 0.10 / 0.05 /
   0.01, customisable via `options("tabxplor.signif_levels")` / `"tabxplor.signif_labels")`) for the
   difference from its reference, in the console, `tab_md()` and `tab_kable()`. Significance is read

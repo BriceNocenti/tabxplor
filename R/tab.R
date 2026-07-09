@@ -293,13 +293,105 @@ NULL
 #'   dplyr::arrange(is_totrow(.), desc(category))
 #'}
 #'
+# Phase 5: parse the tab() `color` / `color_signif` arguments into a spec. `color` accepts FALSE,
+# TRUE (per-type default scheme), a scalar measure/old-string, an unnamed c(text, background), or
+# a named c(text=, background=). Returns list(legacy, per_type, bg, text, signif): `legacy` is the
+# scalar string fed to the (text-channel) tab_many pipeline so its ci/chi2 side effects still fire;
+# `text`/`bg`/`signif`/`per_type` drive finalize_color_spec() on the built table.
+#' @keywords internal
+normalize_color_spec <- function(color, color_signif = "ignore") {
+  signif <- if (length(color_signif) == 0L) "ignore" else color_signif[1]
+  if (is.na(signif) || signif %in% c("", "no")) signif <- "ignore"
+  ok_signif <- c("ignore", "grey_non_signif", "color_all_signif")
+  if (!signif %in% ok_signif) {
+    cli::cli_abort(c("Unknown {.arg color_signif} value {.val {signif}}.",
+                     "i" = "Valid: {.val {ok_signif}}."))
+  }
+
+  if (is.logical(color)) {
+    if (isTRUE(color)) {
+      return(list(legacy = "auto", per_type = TRUE, bg = NA_character_, text = "auto", signif = signif))
+    }
+    return(list(legacy = "no", per_type = FALSE, bg = NA_character_, text = "", signif = "ignore"))
+  }
+
+  nms   <- names(color)                       # capture BEFORE as.character() (which drops names)
+  color <- as.character(color)
+  names(color) <- nms
+  if (!is.null(nms) && any(nzchar(nms))) {
+    text <- if ("text" %in% nms) unname(color[["text"]]) else ""
+    bg   <- if ("background" %in% nms) unname(color[["background"]]) else
+            if ("bg" %in% nms) unname(color[["bg"]]) else NA_character_
+  } else if (length(color) >= 2L) {
+    text <- color[1]; bg <- color[2]
+  } else {
+    text <- color[1]; bg <- NA_character_
+  }
+  norm <- function(m) if (is.na(m) || identical(m, "no")) "" else if (identical(m, "or")) "OR" else m
+  text <- norm(text); bg <- if (is.na(bg)) NA_character_ else norm(bg)
+  if (!is.na(bg) && bg == "") bg <- NA_character_
+  if (!is.na(bg) && !bg %in% c("diff", "ratio")) {
+    cli::cli_abort("{.val {bg}} cannot go on the background channel (only {.val diff} / {.val ratio}).")
+  }
+
+  ok_text <- c("diff", "ratio", "contrib", "OR", "auto", "diff_ci", "after_ci", "ci", "")
+  if (!text %in% ok_text) cli::cli_abort("Unknown text color measure {.val {text}}.")
+
+  legacy <- if (text %in% c("", "no")) {
+    if (!is.na(bg)) "diff" else "no"                       # bg-only still needs ref/pct -> "diff"
+  } else if (text %in% c("diff", "ratio")) {
+    switch(signif, "grey_non_signif" = "diff_ci", "color_all_signif" = "after_ci", "diff")
+  } else {
+    text                                                    # contrib / OR / auto / old strings
+  }
+
+  list(legacy = legacy, per_type = FALSE, bg = bg, text = text, signif = signif)
+}
+
+# Apply the color spec to a built table (or a list of tables), rewriting the color / color_signif
+# attributes to the clean (measure, policy) model ONLY when a new capability is used (color = TRUE,
+# a background channel, an explicit color_signif, or the `ratio` measure). Plain old scalar colors
+# pass through untouched (no golden churn; the engine decodes them). color = TRUE resolves per
+# column type here (factor -> diff text + ratio bg; numeric -> ratio text; OR cols -> or).
+#' @keywords internal
+finalize_color_spec <- function(x, spec) {
+  if (is.list(x) && !is.data.frame(x)) return(purrr::map(x, ~ finalize_color_spec(., spec)))
+  rewrite <- spec$per_type || !is.na(spec$bg) || spec$signif != "ignore" || identical(spec$text, "ratio")
+  if (!rewrite) return(x)
+  dplyr::mutate(x, dplyr::across(dplyr::where(is_fmt), ~ finalize_one_col(.x, spec)))
+}
+
+#' @keywords internal
+finalize_one_col <- function(col, spec) {
+  built <- get_color(col)
+  type  <- get_type(col)
+  if (built %in% c("", "no")) return(col)                  # the pipeline did not color this column
+  if (spec$per_type) {
+    # color = TRUE default scheme, resolved per column type (only where the pipeline already colored)
+    if (built == "OR")      return(set_color(col, "OR"))                        # odds-ratio columns
+    if (built == "contrib") return(col)                                        # counts/all -> contrib
+    if (type == "mean")     return(set_color_signif(set_color(col, "ratio"), spec$signif))  # numeric
+    if (type %in% c("row", "col", "all", "all_tabs")) {                        # factor % -> diff + ratio bg
+      return(set_color_signif(set_color(col, c("diff", "ratio")), spec$signif))
+    }
+    return(col)
+  }
+  # text measure: "auto" -> the measure the pipeline built; "" -> empty (a background-only cell);
+  # else the explicit measure.
+  text <- if (identical(spec$text, "auto")) color_measure_policy(built, type)$measure else spec$text
+  if (text == "" && is.na(spec$bg)) return(col)            # nothing to set
+  col <- if (is.na(spec$bg)) set_color(col, text) else set_color(col, c(text, spec$bg))
+  set_color_signif(col, spec$signif)
+}
+
 #'\donttest{
 #' # With `dplyr::arrange`, don't forget to keep the order of tab variables and total rows:
 #' tab(data, race, marital, year, pct = "row") %>%
 #'   dplyr::arrange(year, is_totrow(.), desc(Married))
 #'   }
 tab <- function(data, row_var, col_var, tab_vars, wt, sup_cols,
-                pct = "no", color = "no", OR = "no", chi2 = FALSE,
+                pct = "no", color = "no", color_signif = "ignore",
+                OR = "no", chi2 = FALSE,
                 na = "keep",
                 cleannames = NULL, #compact = NULL, # pvalue_line = NULL,
                 other_if_less_than = 0, other_level = "Others",
@@ -357,7 +449,11 @@ tab <- function(data, row_var, col_var, tab_vars, wt, sup_cols,
   }
 
   vctrs::vec_assert(comp, size = 1)
-  vctrs::vec_assert(color, size = 1)
+  # Phase 5: `color` accepts FALSE / TRUE / a scalar / c(text, background) / c(text=, background=),
+  # so it is NOT size-1-asserted. It is parsed to a spec here; the pipeline runs on the text-channel
+  # legacy string, then finalize_color_spec() sets the final color / color_signif attributes.
+  color_spec <- normalize_color_spec(color, color_signif)
+  color <- color_spec$legacy
   vctrs::vec_assert(pct  , size = 1)
   vctrs::vec_assert(ref , size = 1)
   vctrs::vec_assert(ref2, size = 1)
@@ -373,7 +469,7 @@ tab <- function(data, row_var, col_var, tab_vars, wt, sup_cols,
   if (tot[1] == "both") tot <- c("row", "col")
 
 
-  tab_many(data = data, row_vars = !!row_var,
+  result <- tab_many(data = data, row_vars = !!row_var,
            col_vars = tidyselect::all_of(c(col_var, sup_cols)),
            tab_vars = tidyselect::all_of(tab_vars),
            wt = !!wt,
@@ -401,6 +497,10 @@ tab <- function(data, row_var, col_var, tab_vars, wt, sup_cols,
            color = color,
            add_n = add_n, add_pct = add_pct,
            subtext = subtext)
+
+  # Phase 5: set the final two-channel color + significance-policy attributes (per column type
+  # for color = TRUE). Plain scalar colors pass through untouched.
+  finalize_color_spec(result, color_spec)
 }
 
 
