@@ -1136,71 +1136,26 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
   na          <- vctrs::vec_recycle(na , 1)
 
 
-  # Tests to be done before tab_plain / tab_num
-  # OR[OR == "no" & color %in% c("OR", "or")] <- "OR"
-
-  # DESIGN: color="auto" resolves from the pct/OR/ci settings: OR-type -> "OR";
-  # row/col pct + ci="diff" -> "after_ci"; row/col pct -> "diff"; counts/all -> "contrib".
-  # WARNING: some colors then silently switch other features ON (below): "contrib" forces
-  # totrow (needs the mean-contribution store) and chi2; "diff_ci"/"after_ci" force ci="diff".
-  color_auto_text <- color == "auto" & ! sum(col_vars_text) == 0
-  if (any(color_auto_text)) color <- dplyr::case_when(
-    purrr::map2_lgl(
-      pct_vect, OR,
-      ~ all(.x[col_vars_text] %in% c("row", "col") &
-              .y[col_vars_text] %in% c("OR", "OR_pct", "or", "or_pct")
-      )
-    )
-    ~ "OR",
-
-    purrr::map_lgl(pct_vect, ~ all(.[col_vars_text] %in% c("row", "col"))) & ci == "diff" ~ "after_ci",
-    purrr::map_lgl(pct_vect, ~ all(.[col_vars_text] %in% c("row", "col")))                ~ "diff"    ,
-    purrr::map_lgl(pct_vect, ~ all(.[col_vars_text] %in% c("", "no", "all", "all_tabs"))) ~ "contrib" ,
-    TRUE                                                                                  ~ "no" ,
-  )
-  if (length(row_vars) == 1) color <- color[1]
-
-
-  ctr_no_row <- color == "contrib" & totrow == FALSE
-  if (any(ctr_no_row)) {
-    warning("total rows were added, since color == 'contrib' needs them ",
-            "to store information about mean contributions to variance")
-    totrow[ctr_no_row] <- TRUE
-  }
-
-  ctr_no_chi2 <- color == "contrib" & chi2 == FALSE
-  if (any(ctr_no_chi2)) {
-    #warning("since color == 'contrib' need chi2 data, chi2 was set to `TRUE` for the relevant row_vars")
-    chi2[ctr_no_chi2] <- TRUE
-  }
-  # if (!is.null(chi2)) if (color == "contrib" & chi2 == FALSE)
-  #   warning("since color = 'contrib', contributions of cells to the variance of tables
-  #             must be calculated : chi2 was set to TRUE")
-  # if (color == "contrib"){ chi2 <- TRUE } else { if (is.null(chi2)) chi2 <- FALSE }
-
-  #Where ? In tab_plain ?
-  # color_wrong_pct <- color %in% c("diff", "diff_ci", "after_ci") &
-  #   all(pct %in% c("no", "all", "all_tabs")) & sum(col_vars_text) != 0
-  # if (any(color_wrong_pct)) {
-  #   stop(paste0("color = '", color, "' can't be calculated with pct = 'all' or with ",
-  #               "counts (for those categories, only color = 'contrib' is possible)"))
-  # }
-
-  color_wrong_diff <- color %in% c("diff", "diff_ci", "after_ci") &
-    ( ref %in% c("no", "") | is.na(ref) )
-  if(any(color_wrong_diff)) {
-    stop("since color = 'diff' for some tables, ref must be provided for those tables")
-  }
-
-  color_wrong_ci <- color %in% c("diff_ci", "after_ci") & ci != "diff"
-  if (any(color_wrong_ci)) {
-    # rlang::warn(
-    #   paste0("since color = '", color, "' for some tables, the confidence intervals " ,
-    #          "of cells differences from totals (or reference cells) must be calculated ",
-    #          "ci was set to 'diff' for those tables")
-    # )
-    ci[color_wrong_ci] <- "diff"
-  }
+  # Tests to be done before tab_plain / tab_num.
+  # Phase 7b: the whole colour cascade -- color = "auto" resolution, the contrib -> totrow/chi2
+  # and diff-family -> ci forcing, and the split of `color` into the per-step sub-passes
+  # (color_diff_OR / color_ctr / color_ci / color_num) -- now lives in ONE pure resolver,
+  # tab_resolve_settings() (R/tab-resolve.R), shared with tab_counts(). It is a data-free
+  # function of the arguments + column classes: the exact boundary the Jamovi `.js` mirrors and
+  # the Phase 7c cache keys on. Data-dependent resolution (ref = "auto"/regex, levels = "auto",
+  # the leaf tot/totaltab forcing) deliberately stays in the leaf builders below.
+  # See dev/tabxplor_argument_computation_map.md.
+  .settings     <- tab_resolve_settings(color = color, OR = OR, ci = ci, chi2 = chi2,
+                                         ref = ref, pct_vect = pct_vect,
+                                         col_vars_text = col_vars_text, totrow = totrow)
+  color         <- .settings$color
+  chi2          <- .settings$chi2
+  ci            <- .settings$ci
+  totrow        <- .settings$totrow
+  color_diff_OR <- .settings$color_diff_OR
+  color_ctr     <- .settings$color_ctr
+  color_ci      <- .settings$color_ci
+  color_num     <- .settings$color_num
 
 
 
@@ -1341,39 +1296,8 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
   #dat_group3 <- data %>% dplyr::group_by(!!!tab_vars, .add = TRUE, .drop = FALSE)
 
 
-  color_diff_OR <- dplyr::case_when(
-    color %in% c("OR", "or")     ~ "OR",
-    color %in% c("diff", "auto") ~ "diff",
-    TRUE                         ~ "no"
-  )
-  # color %in% c("diff", "OR") | (color == "auto" & any(ci != "diff"))
-
-
-
-  color_ctr  <- dplyr::recode(color,
-                              "no"       = "no"  ,
-                              "auto"     = "auto",
-                              "diff"     = "no"  ,
-                              "diff_ci"  = "no"  ,
-                              "after_ci" = "no"  ,
-                              "contrib"  = "all" ,
-                              "OR"       = "no"   )
-  color_ci   <- dplyr::recode(color,
-                              "no"       = "no"      ,
-                              "auto"     = dplyr::if_else(any(ci == "diff"), "after_ci", "no"),
-                              "diff"     = "no"      ,
-                              "diff_ci"  = "diff_ci" ,
-                              "after_ci" = "after_ci",
-                              "contrib"  = "no"      ,
-                              "OR"       = "no"
-  )
-
-  color_num <- dplyr::recode(color,
-                             "contrib"  = "no" ,
-                             "OR"       = "no" ,
-                             .default = color   )
-
-
+  # (color_diff_OR / color_ctr / color_ci / color_num were split from `color` above by
+  #  tab_resolve_settings() -- Phase 7b.)
 
   #Calculate all numeric variables in one time (for each row_var)
   if (sum(col_vars_num) != 0) {
@@ -2369,6 +2293,10 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
   if (comp == "all" & length(tab_vars) == 0) comp <- "tab"
 
   #ref
+  # LEAF resolution (Phase 7b): ref = "auto" is type-specific and intentionally stays here, NOT
+  # in tab_resolve_settings() -- for a mixed table it must differ between this factor leaf and the
+  # numeric leaf (tab_num). OR / empirical-OR colour compare to the first level -> "first";
+  # otherwise the total row -> "tot". See the map doc, § static-vs-data line.
   if (ref == "auto") {
     ref <- if (OR != "no" | color %in% c("or", "OR")) {"first"} else {"tot"}
   }
@@ -3313,16 +3241,11 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
   color      <- color_spec$legacy
   stopifnot(color %in% c("auto", "diff", "diff_ci", "after_ci", "no", ""))
 
-  ci_diff <- if (!is.null(ci)) { ci == "diff" } else { FALSE }
-  ci_cell <- if (!is.null(ci)) { ci == "cell" } else { FALSE }
-
-  color <- dplyr::case_when(
-    row_var == "no_row_var" | "no_col_var" %in% col_vars     ~ "",
-    color == "auto" & !ref %in% c("no", "") & ci_diff        ~ "after_ci",
-    color == "auto" & !ref %in% c("no", "") & !ci_cell       ~ "diff",
-    color == "auto"                                          ~ "",
-    TRUE                                                     ~ color
-  )
+  # Phase 7b: the numeric color = "auto" resolution is the means arm of the shared cascade,
+  # in resolve_color_auto_num() (R/tab-resolve.R). A mean has no contrib/OR notion, so it keys
+  # only on whether a real difference is possible (a `ref`, and ci != "cell"). Under tab_build()
+  # this receives color_num (never "OR"/"contrib"); direct tab_num() callers also land here.
+  color <- resolve_color_auto_num(color, ref, ci, row_var, col_vars)
 
   if (row_var == "no_row_var" | "no_col_var" %in% col_vars) color <- ""
 
@@ -3363,6 +3286,10 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
     }
   }
 
+  # LEAF resolution (Phase 7b): ref = "auto" is type-specific and intentionally stays here, NOT
+  # in tab_resolve_settings(). A mean's reference is always its total row ("tot"); tab_num() has
+  # no OR mode, so the factor rule's "first" branch (tab_plain, below) can never fire for means.
+  # This is the documented (byte-identical) counterpart of tab_plain()'s ref = "auto" rule.
   if (ref == "auto") {
     ref <- "tot"  # ref <- if (OR != "no") {"first"} else {"tot"}
   }

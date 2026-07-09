@@ -273,24 +273,22 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
     ci <- "no"; chi2 <- FALSE
   }
 
-  # -- resolve color (mirrors tab_many(): auto-resolution, coercion cascades, and the split into
-  #    the diff/OR color passed to tab_plain, the contrib color to tab_chi2, the ci color to tab_ci) --
-  if (color == "auto") {
-    color <- if (pct %in% c("row", "col") && OR %in% c("OR", "OR_pct", "or", "or_pct")) "OR"
-      else if (pct %in% c("row", "col") && ci == "diff")                                "after_ci"
-      else if (pct %in% c("row", "col"))                                                "diff"
-      else if (pct %in% c("", "no", "all", "all_tabs"))                                 "contrib"
-      else                                                                              "no"
-  }
-  if (color == "contrib" && isFALSE(chi2)) chi2 <- TRUE
-  if (color %in% c("diff", "diff_ci", "after_ci") && (ref %in% c("no", "") || is.na(ref)))
-    cli::cli_abort("With {.code color = {.val {color}}}, {.arg ref} must be provided.")
-  if (color %in% c("diff_ci", "after_ci") && ci != "diff") ci <- "diff"
-
-  color_diff_OR <- if (color %in% c("OR", "or")) "OR" else if (color %in% c("diff", "auto")) "diff" else "no"
-  color_ctr     <- if (color == "contrib") "all" else if (color == "auto") "auto" else "no"
-  color_ci      <- if (color == "diff_ci") "diff_ci" else if (color == "after_ci") "after_ci"
-                   else if (color == "auto") { if (ci == "diff") "after_ci" else "no" } else "no"
+  # -- resolve colour: Phase 7b routes tab_counts() through the SAME pure resolver as tab_build()
+  #    (tab_resolve_settings(), R/tab-resolve.R) -- auto-resolution, the contrib/diff-family
+  #    forcing, and the split into the diff/OR colour (-> tab_plain), the contrib colour
+  #    (-> tab_chi2) and the ci colour (-> tab_ci). This is a single row_var x single factor
+  #    col_var, so the row-axis inputs are length 1, pct_vect is list(pct) and col_vars_text is
+  #    TRUE. totrow = NULL: this constructor drives total rows through its own `tot`, so the
+  #    contrib -> totrow forcing is skipped (unchanged from before). --
+  .settings     <- tab_resolve_settings(color = color, OR = OR, ci = ci, chi2 = chi2,
+                                         ref = ref, pct_vect = list(pct),
+                                         col_vars_text = TRUE, totrow = NULL)
+  color         <- .settings$color
+  chi2          <- .settings$chi2
+  ci            <- .settings$ci
+  color_diff_OR <- .settings$color_diff_OR
+  color_ctr     <- .settings$color_ctr
+  color_ci      <- .settings$color_ci
 
   # -- base table via tab_plain()'s pre-aggregate (`.fine`) entry. `data_skel` only serves the
   #    tidy-select of tab_vars; the aggregation reads `.fine`. `wt` is a weighted/unweighted flag

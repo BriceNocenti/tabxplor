@@ -21,6 +21,9 @@ R/
 │                              CI engine (ci_pivot/ci_wilson/ci_newcombe/…), agg_chi2/agg_anova
 ├── tab-counts.R     (~360 L) tab_counts() from-the-middle constructor (Phase 4): reshape any
 │                              input shape → count-aggregate → tab_plain(.fine) + shared finalize
+├── tab-resolve.R    (~180 L) tab_resolve_settings() (Phase 7b): the ONE pure arg-overwrite
+│                              cascade (color="auto"/forcing/split) shared by tab_build+tab_counts;
+│                              resolve_color_auto_num() (numeric arm). The jmvtab .js / cache boundary.
 ├── tab_classes.R   (3554 L)  tabxplor_tab/grouped_tab classes, 30+ dplyr S3 methods,
 │                              print methods, tab_kable(), tab_plot(), tab_compact(),
 │                              color palettes, set_color_style(), set_color_breaks()
@@ -612,8 +615,16 @@ Before designing implementation, I want you to create a **reliable and up-to-dat
 - After maintainer’s confirmation, rewrite and improve `tab()` arguments overwrite for the more consistent and user-friendly result possible : we’ll then use the same logic in jamovi UI in .js (or near the same, since live button changes with cache and .js implementation may need a specific way to handle it).
 
 
-#### Phase 7c — Design a hierarchical multi-cache system for jmvtab
+##### Done (2026-07-09)
 
+- **The map**: `dev/tabxplor_argument_computation_map.md` (NEW) — argument catalogue (tab()+jmvtab, with axes G/RV/CV/DISP/AGG), the three computation layers, the arg→field dependency chain, the audited colour/`color_signif` matrix, and a **pure-display vs per-transform vs aggregate recompute** classification that seeds the Phase 7c cache. Governs 7c→7e.
+- **Cascade consolidation (byte-identical, full suite green 1101/0)**: the argument-overwrite cascade — scattered across `tab_build`/`tab_plain`/`tab_num`/`tab_counts` with the `ci="diff"` forcing duplicated **4×** and `color="auto"` resolved twice — is now ONE pure resolver **`tab_resolve_settings()`** (`R/tab-resolve.R`), shared by `tab_build()` and `tab_counts()`; the numeric `color="auto"` arm is `resolve_color_auto_num()` (called by `tab_num()`). It is a data-free function of (args, column classes) → the boundary the jmvtab `.js` mirrors + the 7c cache keys on. **Data-dependent resolution stays at the leaf** (`ref="auto"`/regex, `levels="auto"`, `na`-drop, leaf tot/totaltab) — marked `# LEAF resolution (Phase 7b)`.
+- **Judgment**: all cascade rules are sound → kept + consolidated, none discarded. **Inconsistencies found**: `ref="auto"` differs by column type (factor `first`-under-OR vs numeric always-`tot`) — INTENTIONAL, stays per-leaf (a mixed table needs both; non-observable today since `tab_num` has no OR). `tab_counts()` lacks `contrib→totrow` (tab_build has it) — preserved as-is, flagged.
+- **Audit vs `new_colors_UI.md` §12**: code is AHEAD of the doc — `get_ref_var()` already exists; the pct `ratio` field is already repointed (`mean=NA` for pct). Both stale lines fixed in `new_colors_UI.md`.
+- **col%+means reference asymmetry**: confirmed INTENDED (a mean's reference is a row, a factor's under `pct="col"` a column; no clean fix without white-elephant UI). Documented (map §8), warn-only, unchanged.
+
+#### Phase 7c — Design a hierarchical multi-cache system for jmvtab
+dev\tabxplor_argument_computation_map.md
 The cache system should be carefully designed in a tree or hierarchical logic, with different steps and smart levels of caching, to only redo what’s really necessary at each step in a consistent systemic way. Taking all the arguments of `tab()` and `jmvtab()`, **I want you to design such a multi levels cache system for jmvtab, and write your result in a new file in `dev/`.**
 - Do not rely on current implementation, do not try to stick too much to the current UI or code : first ask yourself, what would be the best solution. If big code refactors are needed in the aggregate code or anymore, we’ll do it.
 - If cached objects are really big (no often the case with tables that are already summary ?), it may be a bad idea to keep them all in memory : only if it’s necessary, we can think about saving uncompressed .rds as temp files.

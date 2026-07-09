@@ -15,9 +15,12 @@
 > engine, five-scale breaks list, two-channel `color`/`color_signif` args, significance from the
 > stored bounds, exporters + legend on the two channels, old-string soft-deprecation, and the docs
 > all landed (full suite green). **Still open:** W4 (per-measure palette hues — only text/bg channels,
-> not distinct hue ramps), W5 (coloured `tab_md`), the `col% + means` reference fix (Phase 7), and
-> wiring the new args into `tab_many()` (Phase 6). The `color_type` export arg is now vestigial
-> (selects the text-channel palette family only). See CLAUDE.md > Phase 5 for the done-record.
+> not distinct hue ramps), W5 (coloured `tab_md`), and wiring the new args into `tab_many()` (Phase 6).
+> The `col% + means` reference "fix" is RESOLVED as **intended behaviour** (Phase 7b): a mean's
+> reference is meaningfully a row, a factor's under `pct="col"` a column — no clean fix without
+> white-elephant UI, so it is documented (map doc §8), warn-only, not changed. The `color_type` export
+> arg is now vestigial (selects the text-channel palette family only). See CLAUDE.md > Phase 5 for the
+> done-record.
 
 ---
 
@@ -486,11 +489,14 @@ cell-vs-ref CI; `contrib` needs the χ² decomposition and no reference; standar
 needs `sd_ref`.
 
 The `tabxplor_fmt` fields already exist (Phase 1a-3a): `diff`, `ratio`, `mean`, `var`, `ci_inf`,
-`ci_sup`, `pvalue`, `ctr`, `or`, `tot_n`, `in_totrow`/`in_tottab`/`in_refrow`. New helper needed:
-`get_ref_var()` (mirror of `get_ref_means`, `R/fmt_class.R:1280`) for `sd_ref`. Repoint the pct `ratio`
-field to the reference-relative ratio the colour engine uses (today it holds the leftover
-column-referenced `tabs_rr`; the ×2 ratio currently lives in the overloaded `mean` field — see
-`dev/design_new_colors_UI_decision_process.md` §2.3).
+`ci_sup`, `pvalue`, `ctr`, `or`, `tot_n`, `in_totrow`/`in_tottab`/`in_refrow`. Two items this
+section once listed as TODO are now DONE (audited Phase 7b — the code was ahead of this doc):
+
+- `get_ref_var()` **exists** (`R/fmt_class.R`, mirror of `get_ref_means`) and is used for
+  `sd_ref = sqrt(get_ref_var(x))` (Glass's Δ).
+- the pct `ratio` field is **already repointed** to the reference-relative RR `p_cell/p_ref` (the ×2
+  driver) and `mean = NA` for pct columns — the `mean`-overload is gone (Phase 5 Batch A/B). It no
+  longer holds the leftover column-referenced `tabs_rr`.
 
 ---
 

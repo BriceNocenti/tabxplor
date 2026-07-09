@@ -31,6 +31,15 @@
 #   `color_signif` (default "ignore") -> ALL *.rds regenerated once + the fmt-contract snapshot.
 #   Display + coloring byte-identical (the default policy reproduces today's behaviour).
 #
+# Phase 7b (argument-cascade consolidation): the color-cascade (color="auto"/contrib-forcing/
+#   diff-family->ci/color split) moved verbatim into the pure resolver tab_resolve_settings()
+#   (R/tab-resolve.R), shared by tab_build()+tab_counts(); numeric color="auto" -> the sibling
+#   resolve_color_auto_num(), called by tab_num(). NO fixture regenerated -- the extraction only
+#   relocates where arg values are decided. Note: `ref="auto"` stays at the leaf and differs by
+#   type (factor "first"-under-OR vs numeric always-"tot"); this is byte-identical TODAY only
+#   because tab_num has no OR mode -- a future "OR for numerics" (Phase 10) would flip the
+#   numeric ref="auto" to "first" and regenerate the n_* fixtures.
+#
 #   f_row_pct/f_col_pct/f_all_pct/f_counts/f_ref_first/m_multi/totn_keep/w_weighted -> 1a only
 #   f_color_diff    -> 1a only (FACTOR diff-color MUST stay byte-identical: the tripwire that
 #                      Phase 5 does NOT disturb factor coloring)

@@ -95,6 +95,9 @@ tab(data, row_vars, col_vars, ..., output_list=FALSE)   tab_many(..., compact=) 
   └────────────────────────┬───────────────────────────────────────┘
                            ▼
               tab_build(data, ..., output)
+                ├─ RESOLVE (pure, data-free): tab_resolve_settings()  — the arg-overwrite cascade
+                │    (color="auto" → measure; contrib → chi2/totrow; diff-family → ci="diff"; the
+                │    color split). ONE source, shared with tab_counts(); the jmvtab .js / cache boundary
                 ├─ PREP-ONCE (whole DB):   tab_prepare()  — select, filter, cleannames, lump rare
                 │                            levels, zero/NA-weight removal, na population fix
                 ├─ per row_var:
@@ -109,6 +112,11 @@ tab(data, row_vars, col_vars, ..., output_list=FALSE)   tab_many(..., compact=) 
 
 `tab_apply_tests()` is the ONE place both `tab_build()` and `tab_counts()` build the chi2/ci calls
 (Phase 6a). `tab_compact()` (`R/tab_classes.R`) is the internal merge invoked when `output = "single"`.
+`tab_resolve_settings()` (`R/tab-resolve.R`, Phase 7b) is the ONE place the argument-overwrite cascade
+lives — a pure function of (args, column classes) that draws the boundary between static arg resolution
+(here) and data-dependent resolution kept at the leaf (`ref="auto"`/regex, `levels="auto"`, `na`-drop).
+It is what the Jamovi `.js` mirrors and the Phase 7c cache keys on. Full arg↔computation map:
+`dev/tabxplor_argument_computation_map.md`.
 
 ### tab() vs tab_many() (both wrap tab_build)
 
@@ -428,9 +436,23 @@ microdata `tab()`. It does **not** re-implement the pipeline: it normalises the 
 - `tab_counts_normalize()` — aggregate to the keyed `.fine` shape `[tab_vars…, row_var, col_var, n, (wn)]`;
   **drop `n==0` cells** so the aggregate is structurally identical to microdata's `.N`-per-observed-key
   (empty cells are recreated by `dcast(fill=0)`). Sets `weighted` and `has_real_n` (integrality of the counts).
-- `tab_counts()` — validation + color resolution (mirrors `tab_many()`), then `tab_plain(…, .fine = fine)` →
-  `tab_chi2` → `tab_ci` → `tab_add_n_pct` → rewrap (`test` attribute) → `tab_pvalue_lines`. Base-less input
-  (non-integer counts) disables CI/chi2 with a message. Weighted = real unweighted `n` + weighted `wn` (§14).
+- `tab_counts()` — validation + colour resolution (the SHARED `tab_resolve_settings()`, Phase 7b), then
+  `tab_plain(…, .fine = fine)` → `tab_chi2` → `tab_ci` → `tab_add_n_pct` → rewrap (`test` attribute) →
+  `tab_pvalue_lines`. Base-less input (non-integer counts) disables CI/chi2 with a message. Weighted =
+  real unweighted `n` + weighted `wn` (§14). It passes `totrow = NULL` so the `contrib → totrow` forcing
+  is skipped (totals are driven through its own `tot`).
+
+### R/tab-resolve.R (~180 lines) — the argument-overwrite cascade (Phase 7b)
+
+`tab_resolve_settings()` is the ONE pure, data-free resolver of the colour cascade shared by
+`tab_build()` and `tab_counts()`: `color = "auto"` → a concrete measure (factor arm); `contrib` →
+`chi2`/`totrow`; diff-family colour requires `ref` and forces `ci = "diff"`; and the split of the one
+`color` argument into `color_diff_OR` (→ `tab_plain`), `color_ctr` (→ `tab_chi2`), `color_ci` (→
+`tab_ci`) and `color_num` (→ `tab_num`). `resolve_color_auto_num()` is the numeric (means) arm, invoked
+by `tab_num()`. The function reads only argument values + column CLASS metadata (never column values) —
+that is the boundary the Jamovi `.js` mirrors and the Phase 7c cache keys on. Data-dependent resolution
+(`ref = "auto"`/regex, `levels = "auto"`, `na`-drop, the leaf tot/totaltab forcing) deliberately stays
+in the leaf builders. See `dev/tabxplor_argument_computation_map.md`.
 
 ### R/tab_classes.R (3554 lines)
 

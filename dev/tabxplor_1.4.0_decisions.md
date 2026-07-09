@@ -85,6 +85,20 @@ below is one such simplification; none exists to add flexibility.
   §10 `[min;max]` range is a **table-level display pre-pass** (`format()` is per-column) → §10;
   `totrow=FALSE` stays **cosmetic** during deprecation, mirroring `totcol` → §6.
 
+**Resolved** (2026-07-09, Phase 7b) — argument↔computation map + cascade consolidation:
+
+- **Argument-overwrite cascade → ONE pure resolver** `tab_resolve_settings()` (`R/tab-resolve.R`),
+  shared by `tab_build()` + `tab_counts()`; the numeric `color="auto"` arm is `resolve_color_auto_num()`.
+  Byte-identical (full suite green, no golden regen). It is a data-free function of (args, column
+  classes) — the boundary the Jamovi `.js` mirrors and the Phase 7c cache keys on. Data-dependent
+  resolution (`ref="auto"`/regex, `levels="auto"`, `na`-drop, leaf tot/totaltab) stays at the leaf.
+  All cascade rules kept + consolidated, none discarded. → new `dev/tabxplor_argument_computation_map.md`.
+- **col%+means reference mismatch** → confirmed **INTENDED behaviour**, not a bug: a mean's reference is
+  a row, a factor's under `pct="col"` a column; no clean fix without white-elephant UI. Warn-only,
+  documented. → §7 (Phase 7b clarification).
+- **Audit vs `new_colors_UI.md` §12** → code is ahead of the doc: `get_ref_var()` already exists and the
+  pct `ratio` field is already repointed (`mean=NA` for pct). Both stale doc lines corrected.
+
 **Still open** — the only unsettled points; each names the phase that must close it.
 
 ### G1 (confirm in Phase 2) — the aggregate carries sufficient statistics, not counts
@@ -393,6 +407,15 @@ coloring reads a reference **column** and never a row ([fmt_class.R:2825-2827](.
 So col% + several merged row_vars loses the per-block coloring story (pure col% factor tables stay
 coherent via the shared Total column; **col% + means** additionally suffers a pre-existing row/col
 reference mismatch — means referenced by row, factors by column).
+
+**Phase 7b clarification (2026-07-09): the col%+means reference mismatch is INTENDED behaviour, not a
+bug to fix.** A numeric (mean) variable only ever appears as a column, and a mean's reference is
+meaningfully one of its *rows* (compare the mean across groups) — a mean has no column-percentage to be
+referenced against a column by. So on a mixed `pct="col"` table the two column types legitimately use
+different reference axes. There is no clean fix without white-elephant arguments/UI (the only real
+difficulty is a UI setting both consistently). It is therefore kept, warn-only, and documented in
+`dev/tabxplor_argument_computation_map.md` §8. This is separate from the multi-row_var transpose
+workflow decided below.
 
 **Decision** (Phase 8): keep `pct="col"` **single-row_var** as-is. The col%-multi-row_var path is a
 **manual, opt-in** workflow, not automatic magic:
