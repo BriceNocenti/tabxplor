@@ -547,18 +547,91 @@ Now the `ratio` field exists (Phase 1): implement `"diff"`/`"ratio"`/`"diff_rati
 
 ### Phase 6 — tab() → tab_many() merge and full refactor
 
+#### Done (2026-07-09)
+
+Sub-phases 6a–6i, each golden byte-identical (conscious NEW fixtures only; no committed fixture changed). Full suite green.
+
+- **6a** `tab_apply_tests()` — shared chi2→capture-`test`→ci block (used by `tab_build` + `tab_counts`); `tab_many`'s two-batch chi2/ci passes became one per-table pass.
+- **6b** internal engine **`tab_build(..., output)`** (no option reads); `tab()`/`tab_many()` are thin wrappers. **`output_list`** on `tab()`; **`tabxplor.compact` option dropped**; `tab_compact()` = internal merge for `output="single"`. §13 shapes honoured; `tab_many()` keeps its list-default. `tab()` gained plural `row_var`/`col_var` (tidyselect). `tab_prepare()` still runs ONCE on the whole DB (prep→aggregate→transform→assemble seam for Phase 10 Jamovi).
+- **6c** globalise row axis (`tab()` asserts `OR/ci/chi2` scalar); ONE color parse (`normalize_color_spec`/`finalize_color_spec` in `tab()` + the `tab_many` wrapper — Phase-5 leftover closed). `tab_build` still recycles internally (harmless broadcast; D2 gradual collapse).
+- **6d** named per-row_var `ref` vector (`resolve_ref_vector()`; collapses under col% + message).
+- **6e** fixed the `tab_num(<tab_vars>, ci="cell")` KNOWN-BUG (`dplyr::last(group_vars)` → `group_vars[length(...)]`); `totrow`/`totcol` soft-deprecated (cosmetic); `tab()` default = one total column (`totcol="last"`).
+- **6f** singular `row_var`/`col_var` → soft-deprecated aliases (bare args + `quo_is_missing`, NOT `is_present` which force-evaluates tidy-select); `tab_many()` soft-deprecated (silent for jmvtab); `tab_pct`/`tab_tot`/`tab_totaltab` badged superseded.
+- **6g** `na = "common_base"` = global drop `{row_vars, FIRST col_var, tab_vars}` + effective `na="keep"`; equals `na="drop"` for one col_var (S3 acceptance); microdata-only (`tab_counts()` rejects).
+- **6h** `tab_ci()` base recovery reads stored `get_tot_n()` (exact per-col_var) instead of `detect_totcols()`; `detect_totcols` retained for STRUCTURAL roles (total-col ID, chi2 margins, `tab_add_n_pct`, superseded `tab_pct`).
+- **6i** `tab_spread()` kept active: new `spread_vars`/`names_prefix`/`names_sort` on `tab()`.
+
+Caveats: internal per-row_var recycling kept (arg surface globalised); `detect_totcols` not fully retired (structural); ≥2 row_vars + `tab_vars` still returns a list (§7); `tab_num()` keeps its own color parse; U4 satisfied via scalar-pct regime. Decisions doc: closed D2/S3/S4/U4.
+
+#### Original plan (historical intent)
+
 Merge between `tab()` and `tab_many()`. Soft deprecate the `tab_many` alias to directly use `tab` alias from now on.
 
-`tab_many()` becomes the base; `tab()` a thin normalization shim. Add `output_list` (default `FALSE`), deprecate the `compact` argument, remove the `tabxplor.compact` option, keep multi-table when `tab_vars` present (compact-with-tab_vars deferred to Phase 7). `lifecycle::deprecate_soft("1.4.0", "tab_many()")`. **`tab_many()` soft deprecated function keeps its list-default** for ≥2 row_vars (Q7, §13) — only `tab()` merges by default; no silent return-type break. **Also here (§4-6):** globalise the row_var axis (`OR/pct/color/comp/ci/chi2`, `ref2` no longer per-row_var — but note **D2**: the *internal* collapse lands with the Phase 2 core, only the *arg-surface* deprecation lands here; keep per-row_var `totaltab` + `ref` as a named vector, row%/means only); keep col_var axis flexible (`pct/levels/digits` per col_var); soft-deprecate `totrow` (always a total row) and soft-deprecate `totcol` (default one total column; old values kept, cosmetic-only); soft-deprecate singular `row_var`/`col_var` arguments. **Decide `tab_spread`/`tab_compact` fate** (open item **S4**). Detail: `dev/tabxplor_1.4.0_decisions.md`.
+`tab_many()` code becomes the base; `tab()` the new alias for it. Add `output_list` (default `FALSE`), deprecate the `compact` argument, remove the `tabxplor.compact` option, keep multi-table when `tab_vars` present (compact-with-tab_vars deferred to Phase 7). `lifecycle::deprecate_soft("1.4.0", "tab_many()")`. **`tab_many()` soft deprecated function keeps its list-default** for ≥2 row_vars (Q7, §13) — only `tab()` merges by default; no silent return-type break. **Also here (§4-6):** globalise the row_var axis (`OR/pct/color/comp/ci/chi2`, `ref2` no longer per-row_var — but note **D2**: the *internal* collapse lands with the Phase 2 core, only the *arg-surface* deprecation lands here; keep per-row_var `totaltab` + `ref` as a named vector, row%/means only); keep col_var axis flexible (`pct/levels/digits` per col_var); soft-deprecate `totrow` (always a total row) and soft-deprecate `totcol` (default one total column; old values kept, cosmetic-only); soft-deprecate singular `row_var`/`col_var` arguments. **Decide `tab_spread`/`tab_compact` fate** (open item **S4**). Detail: `dev/tabxplor_1.4.0_decisions.md`.
 
 - **Phase 5 leftover — wire the new `color`/`color_signif` forms into `tab_many()`** (done for `tab()`/`tab_num()` in Phase 5 via `normalize_color_spec`/`finalize_color_spec`). Deferred here because the new two-channel `color = c("diff","ratio")` collides with `tab_many()`'s per-row_var `color` vector (`tab.R` ~L841); the color-axis globalisation above resolves it. If a legacy per-row_var path is ever kept, the clean discriminator is that `"ratio"` was never a valid old color value. Move the parsing into the merged base so all three entry points share ONE parse site.
 
 The original rationale for separating the two was : `tab_plain` is the core worker but lacks many advanced option ; `tab_many` is the most flexible for big tables, with many options ; `tab` was centered around the necessity to keep the whole population (who is in `n` ?) and NA handling consistent with having a single row variable and a single column variable. Since most of the time (with row percentages), only one total column was kept, the `n` count could be different for every col var : it won’t be the case anymore if the `tot_n` base total (§2 — renamed from `ref_n`) is stored in a vctrs field for each cell.
 - In the new `tab()` function, I would want **an argument to get the same behaviour as the old tab `tab()`**. What would it be ? Would something like `na = "base_table"` (find a better name, more user-friendly and easily understandable) work : removing, for all col_vars, the missing value of the the row_var and the first col_vars (with several row vars : each by-row_vars subtable remove the individuals with missing value either in the carrent row variables or in the first column variable) ?
 
-### Phase 7 — Unified exporter prep & display
+
+### Phase 7 — Jamovi module overhaul
+
+The current jmvtab Jamovi module never embrassed the internal logic of Jamovi : it was just a R function with a choose all arguments first then run, where Jamovi is a live interactive statistical application where each button change rerun the analysis. Instead of simply wiring the whole `tab()` (or even `tab_plain()`) function into Jamovi, I want to use their internal steps, shared functions and aggregate core to **write an efficient, cached and modular version of the whole table construction pipeline, that would fully embrace Jamovi’s states and caching framework**. The main improvement would be not to rely on `tab()` like now, but to drive the **same aggregate-core + per-transform subfunctions** (Phase 2) at cache-appropriate granularity — **reuse the core, never fork the math**: near-identical behaviour is *guaranteed* by sharing subfunctions, not re-implemented in parallel (which would recreate the very duplication 1.4.0 removes). Cache the prepared data / aggregate / per-transform results keyed by which input changed; pure-display toggles reuse cached numbers; reuse the `.fine` aggregate across interactions.
+
+Look at `dev/tabxplor_1.4.0_jamovi_dev.md` for detailed insights about jamovi module development.
+
+#### Phase 7a — Wire new colors UI and new tab() version into jmvtab for baseline
+
+The new color helpers UI in `dev\new_colors_UI.md` rely on a reworked `color` argument and a new `color_signif` argument. I first want to wire it and the whole rewritten `tab()` function into the current jmvtab UI to establish a baseline before the full rewrite.
+
+#### Phase 7b — Jamovi module full internal code rewrite with caching
+
+Use Jamovi states logic to avoid redoing calculations on each button change, with temp caching for base calculations (e.g. keep former variables' calculations when a new variable is added). **The standard basic usage of tab() and jmvtab(), for non-advanced users, is color-driven** : user choose variables, percentages, then color arguments, and depending on the color and color_signif all the needed calculations are computed. The expert user can tweak.
+
+For a detailed description of the required computations for each of the new `color` and `color_signif` modes, see `dev\new_colors_UI.md`.
+
+
+
+#### Phase 7c — Jamovi UI new features
+
+Implement new user-friendly features :
+
+1. A per-variable **reference-level** picker (the `ref` reference point of comparison for the calculation of color helpers, of each `row_var` under  `pct="row"`, of one `col_var` under `pct="col"`).
+
+2. A simple, comptact, clear and user-friendly **level-reordering** UI for row/col/tab factors.
+- Use one already existing in another common jamovi module if it’s possible. Build it from scratch in .js otherwise.
+
+3. A module-level **Excel export** with a user-friendly path selector.
+- Best would be a true normal menu to search for folders and enter file name for normal people : maybe a hack could permits it.
+- If not possible, it should at least have a user-friendly text bar for path : point to the specific `<USER>/<DOCUMENTS>` of the user by default, on Windows/Linux/Mac, not by adding a "~" incomprehensible by most user inside the text bar, but by fully writing the **real path** into the text bar (with an additional button to reset this text to it’s default `<USER>/<DOCUMENTS>` if needed).
+- It’s difficult because Jamovi R session is locked inside Electron and can’t access many basic things.
+
+4. Un argument `n_min` : supprimer la ligne/colonne si son `n` est trop petit. It’s not as easy as it sounds to handle.
+- Pragmatic solution : and `add_n` prints the right unweighted counts row or col for the users see, and it can be filter/select on (with the same `n` as the totrow or totcol that bears it).
+- But this `add_n` column or row, that is really a duplicate of the total column or row with a different display, is chosen a bit randomly : with `pct = "row"`, it’s the last factor `col_var`. In reality, when there are several col_vars in the same table, each can have a `tot_n` a bit different depending on how missing values where handled. **What would be the more statistically consistent and clear for the user way to do that ?** With several `col_vars` and, for example, `pct = "row"`, there are several possibilities : show the minimun `tot_n` of the whole row in the total column ? Show a range [min;max] for clarity (and in that case : live calculations at display ? Or storing of min in `n` field and max in `tot_n` field) ? In that context, how to remove lines with `tot_n` < `n_min` ? Taking the minimum `tot_n` in the row may remove meaningful values > `n_min` ; taking the maximum would keep values below it. A rule could be : remove the whole line if the maximum `tot_n` in the whole row is below `n_min` ; then clear the cells with that, themselves, have `tot_n` < `n_min` (display "" instead of it’s normal value) ? Are ther caveats I’m not seeing ? We should think about it and design it arefully to really get the user-friendly and clear-for-the-user solution.
+- The way I handled this in R in the past was just : `|> filter(Total >= 30)`, but with all these subtleties, maybe the `n_min` argument should be built in `tab()` and `jmvtab()`, with a shared function (public if it can be of some use for expert users ?) ?
+
+
+
+
+#### Phase 7d — Jamovi UI js consistency and user-friendliness
+
+jmvtab jamovi UI needs a **full .js customisation** of it’s buttons and other inputs behaviours for maximum user-friendliness.
+- Buttons should auto-change depending on other buttons choices to matchwhat really happens internally, but in a consistent, predictable and user-friendly way, it should feel natural and not frustrate the user. For example, if the user coose `color_signif = "grey_non_signif"`, it should toggles `ci = "diff"` because it’s what `tab()` do internally, this computation is needed for the chosen color helpers.
+- What is the current user-friendly standard / good practice for the behaviour of buttons in a UI ? Let’s say I choose `color_signif = "grey_non_signif"`, and it toggles `ci = "diff"` without the user chosen it deliberately. If the user then go back to default `color_signif = "ignore"`, should js  go back to `ci = "no"` automatically, or keep `ci = "diff"` ?
+
+
+
+
+
+
+
+### Phase 8 — Unified exporter prep & display
 
 One shared exporter-prep helper for `tab_xl`/`tab_kable`/`tab_md`/`tab_plot`; keep export parity (`format.tabxplor_fmt` vs the `tab_xl` bypass). **Each exporter gets a base method (single tab) AND a list method** (several tabs rendered one-after-another, not merged — e.g. an HTML container for kable). **Integrate/export/document `tab_transpose()`** (already exported but an undocumented single-total stub — finish it) and the **opt-in transpose-at-export** for col% + several row_vars (console never transposes; warn on `pct="col"` with several row_vars). Revisit **compact-with-tab_vars** here (needs two-level nested rendering). **Stays on openxlsx v1** — the openxlsx2 engine swap is Phase 9. Detail: `dev/tabxplor_1.4.0_decisions.md` §7-8.
+
+ We must **make a grounded choice for jamovi jmvtab module base display of tables** : improve tab_kable() for performance and simplify/remove all tooltips/etc. (just a faster flat html table) ? Make it format with markdown tables with css classes (would it be possible to print .md inside html, with custom .css classes, in Jamovi ?) ?
 
 #### To implement
 
@@ -569,7 +642,8 @@ One shared exporter-prep helper for `tab_xl`/`tab_kable`/`tab_md`/`tab_plot`; ke
 
 - Display of tabxplor_tab on console is quite long : what are the performance bottlenecks and how to make it faster / remove useless stuffs and white elephants here ?
 
-##### tab_xl() — Phase 7 (still openxlsx v1; engine swap is Phase 9)
+
+##### tab_xl() — Phase 8 (still openxlsx v1; engine swap is Phase 9)
 
 - Make it work with every data.frame, even not made with tabxplor, with default settings (event without factors, etc.). Implement small fixture tests.
 - To make it work with a "common preparation function" that would be the same than tab_kable() etc., Make the function for a single tab (sometime big with `compact=TRUE` ? ), then parallelize for list of tab ?
@@ -591,7 +665,7 @@ One shared exporter-prep helper for `tab_xl`/`tab_kable`/`tab_md`/`tab_plot`; ke
 - Passing a vector in display to display several fields ? (Won't work in Excel.) Would it be possible to find a reliable syntax to command exactly the wanted fields and seps in a display ? Like `pct (n)` or `pct ± ci` ? Would it really be useful for data analysis users, or a white elephant with theoretical useless flexibility again ?
 
 
-### Phase 8 — Excel engine migration (openxlsx → openxlsx2)
+### Phase 9 — Excel engine migration (openxlsx → openxlsx2)
 
 Isolated on purpose: a full dependency swap should not be entangled with the Phase 7 exporter-prep unification and its export-parity churn. Runs **after** Phase 7 (needs the unified single-tab + list `tab_xl` methods in place). May slip to a **1.4.x follow-up release** — it does not block the rest of 1.4.0. Precondition: `test-export-parity.R` green on openxlsx v1 first, so the swap is verified byte-for-byte against a known-good baseline.
 
@@ -605,7 +679,7 @@ Isolated on purpose: a full dependency swap should not be entangled with the Pha
 
 - Add an option to use **conditional formatting** instead of hard text colors. This was awful and very slow with openxlsx v1 — check whether openxlsx2 makes it less horrible / faster.
 
-### Phase 9 — tab_logit
+### Phase 10 — tab_logit
 
 `tab_logit` lands after the Phase 1 field set is locked (so no second field surgery).
 
@@ -618,22 +692,6 @@ Isolated on purpose: a full dependency swap should not be entangled with the Pha
 - chose reference for each var with a vector (possibly named for simplicity) ! (permit to take ref in the middle while keeping order of ordinal vars) ?
 - Do things with contrasts ?
 - tab_logit analysis in Jamovi ?
-
-
-### Phase 10 — Jamovi caching
-
-Cache the prepared data / aggregate / per-transform results keyed by which input changed; pure-display toggles reuse cached numbers; reuse the `.fine` aggregate across interactions.
-
-#### To implement
-
-- Jamovi UI improvement for user-friendliness and performance. The main improvement would be not to rely on `tab_many()` like now, but to drive the **same aggregate-core + per-transform subfunctions** (Phase 2) at cache-appropriate granularity — **reuse the core, never fork the math**: near-identical behaviour is *guaranteed* by sharing subfunctions, not re-implemented in parallel (which would recreate the very duplication 1.4.0 removes). Use Jamovi states logic to avoid redoing calculations on each button change, with temp caching for base calculations (e.g. keep former variables' calculations when a new variable is added).
-- UI pour changer l'ordre des lignes, des colonnes et des sous-tableaux, en s’inspirant des modules Jamovi qui implémentent déjà cette fonction.
-- Argument `n_min` : supprimer ligne/colonne si n est trop petit
-
-#### To think about
-
-- Maybe improve tab_kable() for performance, or simplify/remove all tooltips/etc. (just a faster flat html table), or even make it format with markdown tables with css classes (would it be possible ?) ?
-
 
 
 ### Phase 11 — pkgdown

@@ -31,7 +31,10 @@ A \code{tibble} of class \code{tab}. Rows belonging to the total table can then
 be detected using \code{\link{is_tottab}}.
 }
 \description{
-Add total table to a \code{\link[tabxplor]{tab}}
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#superseded}{\figure{lifecycle-superseded.svg}{options: alt='[Superseded]'}}}{\strong{[Superseded]}}
+
+Superseded (1.4.0): the total table is built directly by the \code{totaltab} argument of
+\code{\link[=tab]{tab()}} / \code{\link[=tab_plain]{tab_plain()}} / \code{\link[=tab_num]{tab_num()}}. \code{tab_totaltab()} still works on an existing tab.
 }
 \examples{
 \donttest{ data <- dplyr::starwars \%>\%

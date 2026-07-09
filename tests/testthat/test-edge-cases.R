@@ -286,6 +286,9 @@ testthat::test_that("tab with no col_var works", {
 })
 
 testthat::test_that("tab with no row_var works", {
-  result <- tab(gss, col_var = marital)
+  result <- tab(gss, col_vars = marital)
   testthat::expect_s3_class(result, "tabxplor_tab")
+  # singular col_var still works as a soft-deprecated alias (Phase 6f)
+  lifecycle::expect_deprecated(res2 <- tab(gss, col_var = marital))
+  testthat::expect_s3_class(res2, "tabxplor_tab")
 })

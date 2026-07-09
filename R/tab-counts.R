@@ -233,6 +233,14 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
   input <- rlang::arg_match(input)
   vctrs::vec_assert(pct, size = 1); vctrs::vec_assert(color, size = 1)
   vctrs::vec_assert(ref, size = 1); vctrs::vec_assert(na, size = 1)
+  # Phase 6g (S3): na = "common_base" is microdata-only -- it fixes the population from who is
+  # NA on the row_var/first col_var, which pre-aggregated counts cannot reconstruct.
+  if (identical(na, "common_base")) {
+    cli::cli_abort(c(
+      "{.code na = \"common_base\"} is only available in {.fn tab} (from microdata).",
+      "i" = "Pre-aggregated counts cannot reconstruct who was missing; use {.val keep} or {.val drop}."
+    ))
+  }
   stopifnot(na %in% c("keep", "drop"))
   stopifnot(all(tot %in% c("row", "col", "both", "no", "")))
   if (tot[1] == "both") tot <- c("row", "col")
@@ -310,18 +318,14 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
 
   # -- finalize: the SAME steps tab_many() applies after tab_plain (chi2 -> ci -> add_n ->
   #    rewrap with the test attribute -> p-value lines). Single row_var x col_var, so no
-  #    multi-table join / level-drop / totcol-cleanup is needed. --
-  if (!isFALSE(chi2))
-    tabs <- tab_chi2(tabs, calc = if (color_ctr != "no") c("ctr", "p") else "p",
-                     comp = comp, color = color_ctr)
-
-  test <- get_test(tabs)
-  if (is.null(test)) test <- new_test_tibble()
-
-  if (ci != "no")
-    tabs <- tab_ci(tabs, ci = ci, comp = comp, conf_level = conf_level, color = color_ci,
-                   visible = ci == "cell", stars = stars,
-                   method_cell = method_cell, method_diff = method_diff)
+  #    multi-table join / level-drop / totcol-cleanup is needed. The chi2 -> capture test ->
+  #    ci block is the shared tab_apply_tests() helper (Phase 6a). --
+  applied <- tab_apply_tests(tabs, do_chi2 = !isFALSE(chi2), ci = ci, comp = comp,
+                             color_ctr = color_ctr, color_ci = color_ci,
+                             conf_level = conf_level, stars = stars,
+                             method_cell = method_cell, method_diff = method_diff)
+  tabs <- applied$tab
+  test <- applied$test
 
   tabs <- tab_add_n_pct(list(tabs), add_n, add_pct)[[1]]
 

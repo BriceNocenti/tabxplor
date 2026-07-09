@@ -44,6 +44,7 @@ tab_many(
   add_pct = FALSE,
   digits = 0,
   subtext = "",
+  color_signif = "ignore",
   .by_table = FALSE,
   filter
 )
@@ -100,25 +101,11 @@ The argument is vectorised over both \code{row_vars} and \code{col_vars}. You ca
 the following :
 \code{pct = list(row_var1 = list("row", "col", "col"), row_var2 = list("col", "row", "row"))}}
 
-\item{color}{The type of colors to print, as a single string. Vectorised over \code{row_vars}.
-\itemize{
-\item \code{"no"}: by default, no colors are printed.
-\item \code{"diff"}: color percentages and means based on cells differences from
-totals (or from first cells when \code{ref = "first"}).
-\item \code{"diff_ci"}: color pct and means based on cells differences from totals
-or first cells, removing coloring when the confidence interval of this difference
-is higher than the difference itself.
-\item \code{"after_ci"}: idem, but cut off the confidence interval from the
-difference first.
-\item \code{"contrib"}: color cells based on their contribution to variance
-(except mean columns, from numeric variables).
-\item \code{"OR"}: for \code{pct == "col"} or \code{pct == "row"},
-color based on odds ratios (or relative risks ratios)
-\item \code{"auto"}: frequencies (\code{pct = "all"}, \code{pct = "all_tabs"})
-and counts are colored with \code{"contrib"}.
-When \code{ci = "diff"}, row and col percentages are colored with "after_ci" ;
-otherwise they are colored with "diff".
-}}
+\item{color}{Which measure(s) to color, on which visual channel -- see \code{\link{tab}}
+for the full description (\code{FALSE}/\code{TRUE}, a measure such as \code{"diff"}, or a
+two-channel \code{c(text, background)} / \code{c(text = , background = )}). The old combined
+strings \code{"diff_ci"}/\code{"after_ci"}/\code{"ci"} still work (superseded by
+\code{color} + \code{color_signif}). Applies to all \code{row_vars}.}
 
 \item{OR}{With \code{pct = "row"} or \code{pct = "col"}, calculate and print odds ratios
 (for binary variables) or relative risks ratios (for variables with 3 levels
@@ -160,10 +147,9 @@ prefix numbers like "1-", and text in parenthesis. All data formatting arguments
 passed to \code{\link{tab_prepare}}.}
 
 \item{compact}{With several \code{row_vars}, set to \code{TRUE} to bind all tables
-in a single \code{tabxplor_tab}. If not provided, the value of
-\code{getOption("tabxplor.compact")} is taken (\code{FALSE} by default).
-Set \code{options(tabxplor.compact = TRUE)} to make this the default behaviour for
-all tables (but beware becauce it can break existing code).}
+in a single \code{tabxplor_tab} (\code{FALSE} by default). The \code{tabxplor.compact} option has been
+removed; use the \code{output_list} argument of \code{\link[=tab]{tab()}} instead (the unified entry point, which
+merges by default).}
 
 \item{other_if_less_than}{When set to a positive integer, levels with less count
 than it will be merged into an "Others" level.}
@@ -276,6 +262,9 @@ the same length as \code{col_vars}. The argument is vectorisez over \code{col_va
 
 \item{subtext}{A character vector to print rows of legend under the table.}
 
+\item{color_signif}{How significance gates the color -- see \code{\link{tab}}
+(\code{"ignore"} / \code{"grey_non_signif"} / \code{"color_all_signif"}).}
+
 \item{filter}{A \code{\link[dplyr:filter]{dplyr::filter}} to apply to the data frame
 first, as a single string (which will be converted to code, i.e. to a call).
 Useful when printing multiples tabs with \code{\link[tibble:tribble]{tibble::tribble}},
@@ -349,6 +338,12 @@ it invisibly.
 The color breaks as a double vector, or a named list of double vectors.
 }
 \description{
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#superseded}{\figure{lifecycle-superseded.svg}{options: alt='[Superseded]'}}}{\strong{[Superseded]}}
+
+Superseded (1.4.0) by \code{\link[=tab]{tab()}}, the unified entry point (it accepts several row_vars /
+col_vars). \code{tab_many()} keeps working and keeps its historical list return for >=2 row_vars
+(tab() merges them by default; pass \code{output_list = TRUE} for a list).
+
 A full-featured function to create, manipulate and format many cross-tables
 as one, using colors to make the printed tab more easily readable (in R terminal or
 exported to Excel with \code{\link{tab_xl}}).

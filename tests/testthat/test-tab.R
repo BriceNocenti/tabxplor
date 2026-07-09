@@ -169,6 +169,38 @@ testthat::test_that("vectorisation of pct in tab_many works", {
     length() |> testthat::expect_equal(2)
 })
 
+testthat::test_that("Phase 6: output_list / merge / deprecations / KNOWN-BUG fix", {
+  gss <- forcats::gss_cat
+  # §13 output shape via tab()
+  tab(gss, marital, race, pct = "row")                     |> testthat::expect_s3_class("tabxplor_tab")
+  tab(gss, marital, race, pct = "row", output_list = TRUE) |> testthat::expect_type("list")
+  merged <- tab(gss, c(marital, relig), race, pct = "row")
+  testthat::expect_true(is.data.frame(merged) && "row_var" %in% names(merged))
+  tab(gss, c(marital, relig), race, pct = "row", output_list = TRUE) |> length() |> testthat::expect_equal(2)
+
+  # row_var axis globalised on tab(): OR/ci/chi2 must be scalar
+  testthat::expect_error(tab(gss, c(marital, relig), race, pct = "col", OR = c("OR", "no")))
+
+  # totrow / totcol soft-deprecated on tab_many (Phase 6e)
+  lifecycle::expect_deprecated(tab_many(gss, marital, race, totrow = FALSE))
+  lifecycle::expect_deprecated(tab_many(gss, marital, race, totcol = "no"))
+
+  # KNOWN-BUG fixed: tab_num(<tab_vars>, ci="cell") no longer crashes (both comp modes)
+  testthat::expect_no_error(tab_num(gss, race, age, marital, ci = "cell"))
+  testthat::expect_no_error(tab_num(gss, race, age, marital, ci = "cell", comp = "all"))
+
+  # na = "common_base" (Phase 6g): for a single col_var it equals the old-tab() na = "drop"
+  cb <- tab(gss, marital, race, pct = "row", na = "common_base")
+  dr <- tab(gss, marital, race, pct = "row", na = "drop")
+  testthat::expect_equal(vctrs::vec_data(cb), vctrs::vec_data(dr))
+
+  # spread_vars (Phase 6i): pivot a tab_var into columns; must be among tab_vars
+  sp <- tab(gss, marital, race, relig, pct = "row", spread_vars = relig)
+  testthat::expect_s3_class(sp, "tabxplor_tab")
+  testthat::expect_gt(ncol(sp), ncol(tab(gss, marital, race, relig, pct = "row")))
+  testthat::expect_error(tab(gss, marital, race, relig, spread_vars = marital))
+})
+
 testthat::test_that("tab_many works with levels = 'first'", {
   tabs1 <- tab_many(data, sex, c(hair_color, eye_color), pct = "row", levels = "first")
   testthat::expect_false("brown_hair_color" %in% names(tabs1))

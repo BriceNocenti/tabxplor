@@ -6,8 +6,8 @@
 \usage{
 tab(
   data,
-  row_var,
-  col_var,
+  row_vars,
+  col_vars,
   tab_vars,
   wt,
   sup_cols,
@@ -36,15 +36,23 @@ tab(
   add_pct = FALSE,
   subtext = "",
   digits = 0,
+  output_list = FALSE,
+  spread_vars,
+  names_prefix = NULL,
+  names_sort = FALSE,
+  row_var,
+  col_var,
   filter
 )
 }
 \arguments{
 \item{data}{A data frame.}
 
-\item{row_var, col_var}{The row variable, which will be printed with one level per line,
-and the column variable, which will be printed with one level per column.
-For numeric variables means are calculated, in a single column.}
+\item{row_vars, col_vars}{<\link[tidyr:tidyr_tidy_select]{tidy-select}> The row variable(s),
+printed with one level per line, and the column variable(s), printed with one level per
+column. For numeric variables means are calculated, in a single column. Each accepts one
+variable or several (e.g. \code{c(var1, var2)}); with several \code{row_vars} the mirror
+tables are merged into one by default (see \code{output_list}).}
 
 \item{tab_vars}{<\link[tidyr:tidyr_tidy_select]{tidy-select}> Tab variables :
 a subtable is made for each combination of levels of the selected variables.
@@ -112,9 +120,14 @@ Useful to print metadata, and to color cells based on their contribution to vari
 \itemize{
 \item \code{"keep"}: by default, \code{NA}'s of row, col and tab variables
 are printed as an explicit \code{"NA"} level.
-\item \code{"drop"}: remove \code{NA}'s in row, col and tab variables before calculations
-are done. Supplementary columns are then calculated for observations with no \code{NA} in
-any of the row, col and tab variables.
+\item \code{"drop"}: remove \code{NA}'s in each row, col and tab variable before calculations,
+so each column is computed on its own non-missing observations (bases can then differ
+between col_vars).
+\item \code{"common_base"}: fix a single population -- observations non-missing on the
+\code{row_vars} and the \strong{first} \code{col_vars} (and \code{tab_vars}) -- shared by
+every column, while secondary \code{col_vars} keep their own \code{NA}'s as a level within it.
+This reproduces the historical \code{tab()} behaviour. Microdata only (not
+\code{\link{tab_counts}}).
 }}
 
 \item{cleannames}{Set to \code{TRUE} to clean levels names, by removing
@@ -220,6 +233,19 @@ variable (for \code{pct = "row"}) or a row with the frequencies of the column va
 \item{digits}{The number of digits to print, as a single integer. To print a different
 number of digits for each \code{sup_cols}, an integer vector of length
 1 + \code{sup_cols} (the first being the number of digits for the base table).}
+
+\item{output_list}{Logical (default \code{FALSE}). With several \code{row_var}, \code{FALSE}
+merges the mirror tables into a single \code{tabxplor_tab}; \code{TRUE} returns a list with
+one table per \code{row_var}. With \code{tab_vars}, tables stay a list regardless.}
+
+\item{spread_vars}{<\link[tidyr:tidyr_tidy_select]{tidy-select}> A subset of \code{tab_vars}
+to pivot from subtables into columns, via \code{\link{tab_spread}} (applied at the end).}
+
+\item{names_prefix, names_sort}{Passed to \code{\link{tab_spread}} when \code{spread_vars} is
+given: a string prefixed to each new column name, and whether to sort the new columns.}
+
+\item{row_var, col_var}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Singular aliases of
+\code{row_vars}/\code{col_vars} (which now accept several variables). Kept working.}
 
 \item{filter}{A \code{\link[dplyr:filter]{dplyr::filter}} to apply to the data frame
 first, as a single string (which will be converted to code, i.e. to a call).

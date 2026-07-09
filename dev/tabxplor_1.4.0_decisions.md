@@ -115,13 +115,13 @@ session 4): `tot_wn`/`get_tot_wn()` is a *proportion-cell* concept — a `pct="n
 so the fallback only matters for post-hoc `tab_pct()` on a built count table; with the (soft-deprecated,
 cosmetic) `totcol="no"` that path already fails today — document it, don't engineer for it.
 
-### U4 (Phase 6) — the col%-reference (`refcol`) side
+### U4 (Phase 6) — the col%-reference (`refcol`) side — CLOSED (6d/6h, 2026-07-09)
 
-§4 fixes the **row** `ref` as a per-row_var named vector but leaves the col% side implicit. Spell out how
-the `refcol` attribute / `diff_index(…, pct="col")` ([tab.R:2644](../R/tab.R#L2644),
-[5774](../R/tab.R#L5774)) interacts with the globalised axis, and fix the `fmt()` `refcol`-cast bug (casts
-`totcol` instead of `refcol`, [fmt_class.R:274](../R/fmt_class.R#L274)) in the same pass — already on the
-§9 touch-list.
+§4 fixed the **row** `ref` as a per-row_var named vector. On the col% side: because the row_var axis is
+globalised and `tab()`'s `pct` is a single scalar, the col% regime is table-wide, so `refcol` /
+`diff_index(…, pct="col")` read one scalar `pct` (no per-row_var divergence to reconcile). A multi-element
+`ref` under col% collapses to the single column reference with a one-time message (6d). The `fmt()`
+`refcol`-cast bug was already fixed in Phase 1a. No further refcol change was needed.
 
 ### Phasing — split the Phase 1 field pass into 1a / 1b
 
@@ -150,29 +150,29 @@ against ratio-shaped breaks. Phase 5 then swaps the color source with the mode s
 become dimensionally *correct*; the suspected mean-diff_ci wrongness in the Phase 5 "to verify" list is the
 old ratio-in-`diff` overload at work.
 
-### D2 (Phase 2 vs Phase 6) — split §5 into *internal* globalisation and *argument-surface* deprecation
+### D2 (Phase 2 vs Phase 6) — split §5 into *internal* globalisation and *argument-surface* deprecation — CLOSED (6c, 2026-07-09)
 
-Phase 2's aggregate-core is described (CLAUDE.md Phase 2) as already relying on "the globalised row_var
-axis (§5)", but the row_var-axis globalisation is scheduled for **Phase 6**. Resolve the forward
-dependency by splitting §5 in two: the **internal** collapse (the core assumes one shared setting per
-row_var axis — `OR/pct/color/comp/ci/chi2/ref2`) lands **with the Phase 2 core**; the **argument-surface**
-change (deprecation warnings, `tab()`/`tab_many()` merge, the named-vector `ref`) lands **Phase 6**.
-Between the two, `tab_many()`'s per-row_var arg surface still exists but the core silently uses the first /
-shared value (no divergent-per-row_var math) — document the interim.
+Resolution: the arg-surface change landed in Phase 6c — `tab()` asserts `OR/ci/chi2` (and already
+`comp/pct/ref2/na`) scalar, so the row_var axis is globalised at the user surface. The **internal**
+collapse was deliberately NOT forced: the engine `tab_build()` still recycles the row axis (a harmless
+broadcast of one shared value), which also keeps `tab_many()`'s legacy per-row_var vectors working. Since
+scalar input already produces uniform per-row_var behaviour, this is byte-identical; the physical removal
+of the per-row_var threading is a future cosmetic cleanup, not a correctness item.
 
-### S3 (Phase 6) — `tab()`'s NA / population-consistency semantics must migrate into the core
+### S3 (Phase 6) — `tab()`'s NA / population-consistency semantics must migrate into the core — CLOSED (6g, 2026-07-09)
 
-`tab()`'s historical raison d'être (its CLAUDE.md Global-Architecture note) was *consistent `n` / NA
-handling for a single row_var × col_var* — "who is in `n`?". Phase 6 turns `tab()` into a thin shim, so
-that normalisation logic must be re-expressed as core/`as_tab_counts()` boundary rules (which rows count
-toward each base under each `na` mode), not silently dropped. Spell it out when Phase 6 merges the two.
+Resolution: expressed as the `na = "common_base"` boundary rule (§4 above / CLAUDE.md Phase 6g). `tab()`
+maps it to a global drop of `{row_vars, first col_var, tab_vars}` + effective `na = "keep"` (so secondary
+col_vars keep their NA level within the fixed population). Equals `na = "drop"` for one col_var (the old
+`tab()` behaviour — S3 acceptance test). Microdata-only: `tab_counts()` rejects it (pre-aggregated counts
+cannot reconstruct who was missing).
 
-### S4 (Phase 6/7) — fate of `tab_spread()` / `tab_compact()` under `output_list`
+### S4 (Phase 6/7) — fate of `tab_spread()` / `tab_compact()` under `output_list` — CLOSED (6b/6f/6i, 2026-07-09)
 
-`compact` (arg) is deprecated and `tabxplor.compact` (option) dropped (§6), but the underlying
-`tab_compact()` (the merge engine, `tab_classes.R`) and `tab_spread()` (`tab.R`) functions are unaddressed.
-Decide: `tab_compact()` becomes the internal merge invoked by `output_list=FALSE` (kept, maybe unexported);
-`tab_spread()` — keep / soft-deprecate / retire. Name their fate in Phase 6 (merge) or Phase 7 (export).
+Resolution: `tab_compact()` is kept (stays exported) as the **internal merge** invoked by
+`output = "single"`; its `tabxplor.compact` option read was removed. `tab_spread()` is **kept active**
+(maintainer's choice) and re-wired: `tab()` gains a `spread_vars` (+ `names_prefix` / `names_sort`)
+argument that applies `tab_spread()` at the end.
 
 ---
 
@@ -394,7 +394,7 @@ So col% + several merged row_vars loses the per-block coloring story (pure col% 
 coherent via the shared Total column; **col% + means** additionally suffers a pre-existing row/col
 reference mismatch — means referenced by row, factors by column).
 
-**Decision** (Phase 7): keep `pct="col"` **single-row_var** as-is. The col%-multi-row_var path is a
+**Decision** (Phase 8): keep `pct="col"` **single-row_var** as-is. The col%-multi-row_var path is a
 **manual, opt-in** workflow, not automatic magic:
 - The user inverts it themselves — swap row_vars↔col_vars and use `pct="row"` — so compaction/coloring/
   references all work on the built table.
@@ -413,24 +413,24 @@ mechanism (below).
 **`tab_transpose()`** (a stub the maintainer added to `R/tab.R` — **already `@export`ed** at
 [tab.R:1773](../R/tab.R#L1773) but undocumented, single-total-row/col only, unqualified verbs; so it is a
 *broken public function today*) is to be **finished, documented, and possibly generalised** (tab_vars?) at
-Phase 7 — it is the mechanism for the above. Do not wire it in before Phase 7.
+Phase 8 — it is the mechanism for the above. Do not wire it in before Phase 8.
 
 **compact + tab_vars**: deferred. Merging tables that carry tab_vars needs compound
 `group_by(tab_vars, row_var)`, interleaving row_vars within each tab_var block, per-(tab_var × row_var)
 reference re-scoping, chi2 alignment, and two-level print/kable rendering
-([tab_classes.R:969-975](../R/tab_classes.R#L969)) — revisit during Phase 7. Until then, tables with
+([tab_classes.R:969-975](../R/tab_classes.R#L969)) — revisit during Phase 8. Until then, tables with
 tab_vars stay a list/grouped structure regardless of `output_list`.
 
 ---
 
 ## 8. Exporters — base method + list method
 
-**Decision** (Phase 7): every exporter (`tab_xl`, `tab_kable`, `tab_md`, `tab_plot`) has (a) a base
+**Decision** (Phase 8): every exporter (`tab_xl`, `tab_kable`, `tab_md`, `tab_plot`) has (a) a base
 method for a single `tabxplor_tab`, and (b) a method for a **list of tables** that renders them
 **one-after-another, not merged** (kable: an HTML container holding several tables; xl: sheets/blocks;
 md: sequential). This is the export side of the "different tables → list() → export" escape hatch in § 5.
 
-**Excel engine (openxlsx → openxlsx2) — isolated to Phase 9 (follow-up decision, 2026-07-07).** Phase 7 builds the shared
+**Excel engine (openxlsx → openxlsx2) — isolated to Phase 9 (follow-up decision, 2026-07-07).** Phase 8 builds the shared
 exporter-prep helper and the base+list `tab_xl` methods on the **current openxlsx v1** engine. The engine
 swap to **openxlsx2** (common styles created once; optional conditional formatting) is a full dependency
 migration with its own parity risk, so it is **pulled out into its own Phase 9** (may ship in a 1.4.x
@@ -509,15 +509,15 @@ number(s) to show in each total-column cell?
 **Decided: A** — compute the range at display: render `[min;max]` (default) / `min` (global option) /
 scalar when equal, from each col_var's per-cell base (`tot_n`, and the weighted base recovered `wn/pct`).
 No overload, no new fields (18). C stays the fallback if the display logic proves heavy in an exporter.
-(Phase 3 for the fmt/print side; the exporters mirror it in Phase 7.)
+(Phase 3 for the fmt/print side; the exporters mirror it in Phase 8.)
 
 Implementation caveat (review session 4): the range is **cross-column** information —
 `format.tabxplor_fmt()` formats one column at a time and cannot see sibling columns — so the `[min;max]`
-must be computed by a **table-level display pre-pass** (print prep / the Phase 7 shared exporter-prep
+must be computed by a **table-level display pre-pass** (print prep / the Phase 8 shared exporter-prep
 helper) and injected into the total column's rendering, never inside the per-column format method.
 `tab_xl` corollary: a `[min;max]` cell is text, not a number — either write it as a text cell in the
 total column or fall back to Option C (`min` + subtext note) for Excel; decide with the exporter-prep
-helper at Phase 7.
+helper at Phase 8.
 
 ---
 
@@ -560,7 +560,7 @@ Honest look at *where* a stored `tot_n` helps, given the aggregate-core:
   so it computes every base by rollup; writing `tot_n` into cells is ~free (base already computed) but
   not *needed* to compute anything.
 - **CI display** — **no benefit.** The interval is stored (`ci_inf`/`ci_sup`).
-- **Jamovi (Phase 8)** — **no benefit.** Recompute (e.g. new `conf_level`) runs off the **cached
+- **Jamovi (Phase 7)** — **no benefit.** Recompute (e.g. new `conf_level`) runs off the **cached
   aggregate**, not off final-cell fields; display-only toggles don't recompute.
 - **Statistics on a STANDALONE built table (no aggregate around)** — **this is the one real benefit.**
   `tab_ci`/`tab_pct` as retained (soft-deprecated) wrappers, and user post-processing, read the base
@@ -930,7 +930,7 @@ boundary cases only), so nothing is lost by not computing a separate score test.
   (+ `ci_prop_diff()` / `ci_mean_diff2()` dispatchers). `tab_ci()` (props) and `tab_num()` (means)
   both route through it; **DescTools is removed from the runtime** (Imports → Suggests, kept for the
   parity tests). Dead scalar helpers `ci_mean`/`ci_mean_diff` + the DescTools closures deleted.
-- **tab_xl stars deferred to Phase 7** (the exporter-unification phase, then openxlsx2 in Phase 9) —
+- **tab_xl stars deferred to Phase 8** (the exporter-unification phase, then openxlsx2 in Phase 9) —
   the console/`tab_md`/`tab_kable` stars flow from the single `format()` source of truth.
 - **CI *math* is unified now; CI *placement* is deferred to Phase 4/6.** All formulas live once in
   the `R/tab-agg.R` engine, called from exactly two sites — inline in `tab_num()` (means) and in the
@@ -952,29 +952,29 @@ Golden regenerated (conscious): `f_ci_cell`, `f_ci_diff` (display + struct), `f_
 
 ---
 
-## 21. Exporter phasing — Phase 7 (openxlsx v1 prep) vs Phase 9 (openxlsx2): keep split, add a backend seam
+## 21. Exporter phasing — Phase 8 (openxlsx v1 prep) vs Phase 9 (openxlsx2): keep split, add a backend seam
 
-The maintainer's question (2026-07-08): the Phase 7 `tab_xl()` rewrite is *already* a big restructure (today's
+The maintainer's question (2026-07-08): the Phase 8 `tab_xl()` rewrite is *already* a big restructure (today's
 `tab_xl` is **list-first — a bare df is wrapped to a one-element list at [tab_xl.R:91](../R/tab_xl.R#L91) and
 the entire body is `purrr::map`/`pwalk`; there is no single-tab path**), so should the openxlsx→openxlsx2
 engine swap ride along with it (§8 puts it in a separate Phase 9), or stay split?
 
-### Decision — keep §8's split (Phase 7 on openxlsx v1, Phase 9 = openxlsx2), but factor a **backend seam** in Phase 7
+### Decision — keep §8's split (Phase 8 on openxlsx v1, Phase 9 = openxlsx2), but factor a **backend seam** in Phase 8
 
 Two *different* risk surfaces, and combining them forfeits the one thing that makes the swap safe — a
 byte-verified v1 baseline:
 
-- **Phase 7 risk = parity of the display bypass.** `tab_xl` does **not** go through `format.tabxplor_fmt()`
+- **Phase 8 risk = parity of the display bypass.** `tab_xl` does **not** go through `format.tabxplor_fmt()`
   (Export-Parity WARNING [tab_xl.R:541](../R/tab_xl.R#L541), [1087](../R/tab_xl.R#L1087)): it writes raw
   `get_num()` numbers and rebuilds display via `numfmt()` → Excel number-format codes. Adding stars (§16),
   the label attribute, and the base+list split (§8) all perturb *this* bypass. The regression oracle is
   `test-export-parity.R` (`format` vs the `tab_xl` bypass).
 - **Phase 9 risk = engine semantics.** openxlsx2 has a different style model (shared styles created once —
   the real speed lever), a long-reshape write path, and its own conditional-formatting API. The oracle here
-  must be **"byte-identical to the Phase-7 openxlsx-v1 output"** — which only exists once Phase 7 is green.
+  must be **"byte-identical to the Phase-7 openxlsx-v1 output"** — which only exists once Phase 8 is green.
 
 Entangling them means a broken cell can't be attributed to the restructure *or* the engine. So the split
-stands. **Refinement:** structure Phase 7's rewrite around a **narrow write/style backend interface** —
+stands. **Refinement:** structure Phase 8's rewrite around a **narrow write/style backend interface** —
 `{new_workbook, add_sheet, write_data(numbers), apply_style(cells, fill|font|border|numfmt), freeze_panes,
 set_widths/heights, conditional_format, save}` — implemented on openxlsx v1. Then **Phase 9 reimplements
 only that ~12-call backend** against openxlsx2, leaving the shared prep, the color→style selection
@@ -1016,14 +1016,14 @@ lacks / ~ partial.
 
 | Capability                                                      | xl                  | kable                  | md               | Extend to the others?                                |
 |-----------------------------------------------------------------|---------------------|------------------------|------------------|------------------------------------------------------|
-| Cell **colors** (`fmt_color_selection`)                         | ✓ hard cell style   | ✓ inline span          | ✗                | md → short pandoc spans (Phase 7 md item)            |
+| Cell **colors** (`fmt_color_selection`)                         | ✓ hard cell style   | ✓ inline span          | ✗                | md → short pandoc spans (Phase 8 md item)            |
 | text vs background color mode                                   | ✓                   | ✓                      | ✗                | —                                                    |
-| **Significance stars**                                          | ✗ bypasses format() | ✓ via `format()`       | ✓ via `format()` | **→ xl (Phase 7, §16)** — mirror into `numfmt`/style |
+| **Significance stars**                                          | ✗ bypasses format() | ✓ via `format()`       | ✓ via `format()` | **→ xl (Phase 8, §16)** — mirror into `numfmt`/style |
 | **Tooltips / hover extra stats**                                | ✗                   | ✓ (`title=` / popover) | ✗                | keep kable-only (see below)                          |
 | **col_var spanning header**                                     | ~ (layout)          | ✗ (borders only)       | ✓ [tab_md.R:227  | **→ kable** via `add_header_above` (readability)     |
 | **`n_min` greying** (hide small-n rows/cols)                    | ✓ tab_xl.R:1030     | ✗                      | ✗                | **→ kable & md** (data-quality signal)               |
 | **`hide_near_zero` greying**                                    | ✓ tab_xl.R:1311     | ✗                      | ✗                | **→ kable** (grey text); md ~ (marker only)          |
-| **`label` attribute** (question text)                           | ✗                   | ✗                      | ✗                | **→ all** (Phase 7 item — header/legend)             |
+| **`label` attribute** (question text)                           | ✗                   | ✗                      | ✗                | **→ all** (Phase 8 item — header/legend)             |
 | clean **NA hiding**                                             | ✓                   | ~ fragile HTML surgery | ✓ (`na=""`)      | **fix kable** in shared prep                         |
 | row/col-name **wrapping**                                       | ~                   | ✓ `tab_wrap_text`      | ~ truncate only  | md → wrap not truncate                               |
 | freeze / col widths / num-format / sheets / `colnames_rotation` | ✓                   | ✗                      | ✗                | **Excel-only — no meaning** for kable/md             |
@@ -1036,7 +1036,7 @@ lacks / ~ partial.
 - **Unify (shared prep + shared display path).** The "canonical col_vars → validate → compact" preamble is
   **duplicated four times** (tab_md self-flags it [tab_md.R:47](../R/tab_md.R#L47); also `tab_kable`
   [tab_classes.R:486](../R/tab_classes.R#L486), `tab_compact`, and `tab_xl`'s inline non-compacting variant)
-  → one prep helper (Phase 7, §8). **Stars, the `label` attribute, and NA-hiding must live in the shared
+  → one prep helper (Phase 8, §8). **Stars, the `label` attribute, and NA-hiding must live in the shared
   path** so the `tab_xl` bypass stops silently diverging from `format.tabxplor_fmt()`.
 - **Extend cross-exporter (meaningful):** stars → `tab_xl` (§16); `n_min`/`hide_near_zero` greying →
   `tab_kable` (grey text) and, as a marker, `tab_md`; the col_var **spanning header** → `tab_kable`
@@ -1052,8 +1052,7 @@ lacks / ~ partial.
 
 Motivation: `tab_kable` is the Jamovi module's main display, re-rendered on every option change, and is a
 standing roadmap perf concern ("Comment accélérer cette fonction? Faire une version plus light…"). This
-section is the measured breakdown — **what is fast, what is slow** — for the Phase 7 light-mode and Phase 8
-Jamovi-cache work.
+section is the measured breakdown — **what is fast, what is slow** — for the light-mode Phase and Jamovi-cache work Phase.
 
 ### Method / caveats
 
@@ -1135,12 +1134,12 @@ byte-size, per-cell node/attribute count, and attached-dependency weight — all
   render); `popover=TRUE` needs bootstrap JS to initialise a widget on **every** cell (O(cells) event
   wiring) — the expensive interactive mode. Do **not** default popovers on at Jamovi scale.
 
-### Optimization levers (ranked; for Phase 7 light-mode + Phase 8 cache)
+### Optimization levers (ranked; for Phase 8 light-mode + Phase 7 cache)
 
 1. **Cut / cache the color computation (biggest win).** `fmt_color_selection` is ~75 % of the render and is
    pure per-column overhead. (a) **Vectorise/batch** the per-column break loop (compute the break→style map
    once, apply across columns) and hoist `grDevices::colors()`/`is_r_color` out of the per-cell path.
-   (b) In **Jamovi (Phase 8)**, colors change only when the aggregate / `color` / breaks change → cache the
+   (b) In **Jamovi (Phase 7)**, colors change only when the aggregate / `color` / breaks change → cache the
    selection keyed on those; a pure display toggle (theme, tooltips, wrap) must **not** recompute it. This is
    the concrete payoff of the §11 "`tot_n` = cached quantity vs re-read on display change" cache split.
 2. **`tooltips = FALSE` as the Jamovi/light default.** Saves ~15 % build time, ~44 % DOM bytes, and the ~13

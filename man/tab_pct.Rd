@@ -65,5 +65,9 @@ A \code{tibble} of class \code{tab}, with percentages displayed, possibly
 colored based on differences from totals or first cell.
 }
 \description{
-Add percentages and diffs to a \code{\link[tabxplor]{tab}}
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#superseded}{\figure{lifecycle-superseded.svg}{options: alt='[Superseded]'}}}{\strong{[Superseded]}}
+
+Superseded (1.4.0): percentages, differences and ratios are computed directly by
+\code{\link[=tab]{tab()}} / \code{\link[=tab_plain]{tab_plain()}} via the \code{pct} / \code{ref} arguments. \code{tab_pct()} still works on an
+existing tab.
 }

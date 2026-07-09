@@ -89,7 +89,9 @@ NULL
   # stored in the `test` attribute; this only picks the p-value shown in the p-value row/stars.
   options("tabxplor.anova"         = "welch")
 
-  options("tabxplor.compact" = FALSE)
+  # Phase 6: the `tabxplor.compact` option is dropped, superseded by the `output_list`
+  # argument of tab() (default FALSE = merge; TRUE = list). tab_many()'s deprecated `compact`
+  # argument still works (mapped onto the output shape).
 
   # options("tabxplor.pvalue_lines" = FALSE)
 

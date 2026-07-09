@@ -85,35 +85,48 @@ This class requires a separate S3 method for **every dplyr verb** to preserve cl
 
 ## Calculation Pipeline
 
-The old pipeline flowed through these functions in `R/tab.R`. But some should become internals.
+Since Phase 6 (1.4.0) both public entry points are thin wrappers over the internal engine
+`tab_build()` (`R/tab.R`). `tab()` and `tab_many()` differ only in the default output shape they pass
+(`tab()` merges >=2 row_vars; `tab_many()` keeps a list). `tab_build()` runs the shared prep once on
+the whole data, then the per-row_var pipeline:
 
 ```
-tab(data, row_var, col_var, ...)
-  └── tab_many(data, row_vars, col_vars, ...)
-        └── per row_var:
-              tab_prepare()  ──►  Cleans data, drops NA, collapses rare levels
-              tab_plain()    ──►  data.table aggregation (dcast), wraps in fmt, adds totals
-                 or tab_num()     (for numeric col_vars: calculates means/variances)
-              tab_pct()      ──►  Calculates percentages and differences from reference
-              tab_ci()       ──►  Calculates confidence intervals (Wilson/Wald/AC methods)
-              tab_chi2()     ──►  Chi-squared (factors) / ANOVA F (means) + cell contributions
-              tab_totaltab() ──►  Adds total table (overall cross-tab when subtables exist)
-              tab_spread()   ──►  Pivots wider (spread_vars from rows to columns)
-              tab_compact()  ──►  Binds multiple row_var tables into one
+tab(data, row_vars, col_vars, ..., output_list=FALSE)   tab_many(..., compact=)  [soft-deprecated]
+  └────────────────────────┬───────────────────────────────────────┘
+                           ▼
+              tab_build(data, ..., output)
+                ├─ PREP-ONCE (whole DB):   tab_prepare()  — select, filter, cleannames, lump rare
+                │                            levels, zero/NA-weight removal, na population fix
+                ├─ per row_var:
+                │    tab_plain()  ──►  data.table aggregation (dcast), wraps in fmt, adds totals,
+                │       or tab_num()   writes tot_n     (numeric: moment-sum aggregate → means/var)
+                │    tab_apply_tests() ─►  tab_chi2() (chi2 / ANOVA F, +ctr) → capture `test` →
+                │                          tab_ci() (Wilson / Newcombe / Welch-t; base from tot_n)
+                │    level-drop, tab_add_n_pct()
+                └─ ASSEMBLE:  merge num+factor, totrow/totcol cosmetic filter, rewrap (new_tab /
+                     new_grouped_tab), output shape (§13), tab_pvalue_lines(), tab_spread()
 ```
 
-### tab() vs tab_many()
+`tab_apply_tests()` is the ONE place both `tab_build()` and `tab_counts()` build the chi2/ci calls
+(Phase 6a). `tab_compact()` (`R/tab_classes.R`) is the internal merge invoked when `output = "single"`.
 
-`tab()` is a simplified wrapper around `tab_many()`. Key differences:
+### tab() vs tab_many() (both wrap tab_build)
 
-- `tab()` takes a single `row_var` and `col_var`; `tab_many()` takes multiple `row_vars` and `col_vars`.
-- `tab()` has a `sup_cols` argument (supplementary columns showing only the first level with row percentages); `tab_many()` achieves this via `levels = "first"`.
-- `tab()` translates its simpler argument interface into `tab_many()` arguments.
+- `tab()` is the unified entry point: `row_vars`/`col_vars` accept one variable OR several (tidy-select);
+  with several `row_vars` it **merges** by default (`output_list = TRUE` → a list). Singular
+  `row_var`/`col_var` are soft-deprecated aliases.
+- The row_var axis is **globalised** on `tab()`: `OR/pct/color/comp/ci/chi2/ref2` are scalar (one value
+  for all row_vars). Still per-row_var: `totaltab` and `ref` (a named/ordered vector, one reference row
+  per row_var). The col_var axis stays flexible (`pct/levels/digits` per col_var, `sup_cols`).
+- `tab_many()` is a **soft-deprecated** alias keeping its historical list return; it maps the deprecated
+  `compact` argument onto the output shape and still accepts per-row_var vectors (the engine recycles).
+- `na = "common_base"` (microdata only) reproduces the historical `tab()` population: drop NAs of
+  `{row_vars, first col_var, tab_vars}` globally, keep secondary col_vars' NAs as levels.
 
 **`tab_counts()` (Phase 4) is the from-the-middle sibling of `tab()`**: same output, but the input is
 already-aggregated counts (long / wide / `table` / freq+N). It does not scan microdata — it feeds a
-count-aggregate into `tab_plain()`'s `.fine` entry, then runs the same finalize. See the `R/tab-counts.R`
-file guide below.
+count-aggregate into `tab_plain()`'s `.fine` entry, then runs the same finalize (`tab_apply_tests()` +
+tail). See the `R/tab-counts.R` file guide below.
 
 ### tab_many() Vectorisation Philosophy
 

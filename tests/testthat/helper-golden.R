@@ -59,6 +59,10 @@ golden_cases <- function() {
     f_color_contrib  = function() tab(gss, marital, race, pct = "row", color = "contrib"),
     f_subtab         = function() tab(gss, marital, race, relig, pct = "row"),  # grouped_tab
     f_selfcross      = function() tab(gss, marital, marital, pct = "row"),  # _colvarbis self-crosstab lock (Phase 2)
+    f_merge2         = function() tab(gss, c(marital, relig), race, pct = "row"),  # Phase 6 (§13): tab() merges >=2 row_vars by default
+    f_ref_named      = function() tab(gss, c(marital, relig), race, pct = "row",   # Phase 6 (§4): named per-row_var ref vector
+                                      ref = c(marital = "tot", relig = "first"), color = "diff"),
+    f_common_base    = function() tab(syn, g, c(h, k), pct = "row", na = "common_base"),  # Phase 6g (§4, S3): old-tab() population rule
 
     # --- numeric (means) via tab_num() ---
     n_mean           = function() tab_num(gss, race, c(age, tvhours), marital, comp = "all", digits = 1L),
@@ -67,6 +71,8 @@ golden_cases <- function() {
     n_mean_w         = function() tab_num(syn, g, v, wt = w, comp = "all"),   # weighted ML-variance branch lock (Phase 2a)
     n_mean_sparse    = function() tab_num(sparse, grp, v, comp = "all"),      # n<=1 / all-NA variance edge, NaN->NA (Phase 2a)
     n_mean_tottab    = function() tab_num(gss, race, c(age, tvhours), marital, comp = "all", totaltab = "table", digits = 1L),  # total-table rollup lock (Phase 2)
+    n_ci_tabvars     = function() tab_num(gss, race, c(age, tvhours), marital, ci = "cell", digits = 1L),              # Phase 6e: previously-crashing ci="cell" + tab_vars (comp="tab")
+    n_ci_tabvars_all = function() tab_num(gss, race, c(age, tvhours), marital, ci = "cell", comp = "all", digits = 1L), # Phase 6e: ... (comp="all")
 
     # --- tab_many() multi col_var + weighting + tot_n motivating cases ---
     m_multi          = function() tab_many(syn, g, c(h, k), pct = "row"),

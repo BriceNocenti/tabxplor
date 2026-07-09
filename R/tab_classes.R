@@ -945,9 +945,8 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
   if (is.data.frame(tabs)) {tabs <- list(tabs) |> purrr::set_names(names(tabs)[1]) }
 
   if (any(purrr::map_lgl(tabs, ~ length(tab_get_vars(.)$tab_vars) > 0 )) ) {
-    if (!getOption("tabxplor.compact")) {
-      message("since some tab_vars were provided, tab_compact() was not used")
-    }
+    # Merging across row_vars WITH tab_vars is deferred (§7): keep the multi-table structure.
+    message("since some tab_vars were provided, tab_compact() was not used")
     return(tabs_base)
     #stop("tab_compact() can't be used with tab_vars")
   }

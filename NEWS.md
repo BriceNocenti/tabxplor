@@ -49,6 +49,18 @@
   unequal group variances) and the classic pooled F are computed; `options("tabxplor.anova")`
   (`"welch"` / `"classic"`) chooses which p-value is shown. A p-value row now appears under mean
   columns as it already did under factor columns.
+* **`tab()` is now the unified entry point** and accepts **several** `row_vars` and `col_vars`
+  (e.g. `tab(data, c(race, relig), marital)`). With several `row_vars` the mirror tables are
+  **merged into one** by default; the new `output_list = TRUE` returns a list of one table per
+  `row_var` instead. `tab_many()` still works and keeps its historical list return (it is now a
+  soft-deprecated alias of `tab()`).
+* **`na = "common_base"`** in `tab()` --- fixes a single population (observations non-missing on
+  the `row_vars` and the *first* `col_vars`, plus `tab_vars`) shared by every column, while
+  secondary `col_vars` keep their own `NA`'s as a level within it. This reproduces the historical
+  `tab()` behaviour. `na = "drop"` now drops each column's own `NA` (so bases can differ between
+  columns). Available from microdata only.
+* **`spread_vars`** in `tab()` --- pivot a subset of `tab_vars` into columns (via
+  `tab_spread()`), with optional `names_prefix` / `names_sort`.
 
 ## Internal
 * Rewrote the Chi-squared / ANOVA computation onto a fast, vectorised engine (`R/tab-agg.R`:
@@ -120,6 +132,24 @@
   (`pct_diff`, `pct_ratio`, `mean_diff`, `mean_ratio`, `contrib`) --- the same shape
   `set_color_breaks()` accepts, so it round-trips. Pass `type = "all"` for the mirrored
   (signed) thresholds. This changes its return shape from the previous flat vectors.
+* `tab_many()` is **soft-deprecated** in favour of `tab()` (which now takes several `row_vars` /
+  `col_vars`). It keeps working and keeps its historical list return for several `row_vars`
+  (`tab()` merges them by default; use `output_list = TRUE` for a list).
+* Singular `row_var` / `col_var` in `tab()` are **soft-deprecated** aliases of the plural
+  `row_vars` / `col_vars` (which now accept several variables). They still work.
+* `tab_many(totrow =)` and `tab_many(totcol =)` are **soft-deprecated**: a total row is always
+  computed and exactly one total column is shown by default; drop/move them afterwards with dplyr
+  (`dplyr::filter(!is_totrow(.))`). Old `totcol` values (`"each"`, `"no"`, names) still work.
+* The `tabxplor.compact` **option is removed**, superseded by the `output_list` argument of
+  `tab()`. `tab_many(compact =)` still works.
+* `tab_pct()`, `tab_tot()` and `tab_totaltab()` are **superseded**: percentages, differences and
+  totals are computed directly by `tab()` / `tab_plain()` / `tab_num()`. They still work on an
+  existing table.
+
+## Bug corrections (Phase 6)
+* Fixed a crash in `tab_num(<tab_vars>, ci = "cell")` (and thus in `tab()` / the Jamovi module
+  with numeric columns, confidence intervals and subtables): the grand-total-only path built an
+  empty total block and failed reordering by the tab variable.
 
 # tabxplor 1.3.1
 
