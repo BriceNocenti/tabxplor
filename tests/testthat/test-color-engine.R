@@ -24,18 +24,11 @@
 #     - color = c(background="ratio") -> text_slot all 0, bg_slot from ratio;
 #     - diff + ratio share ONE cell-vs-ref significance boolean.
 
-# --- Step 2: the channel-explicit slot table reproduces select_in_color_style (text family) ---
-testthat::test_that("color_slot_table / build_slots reproduce select_in_color_style (text)", {
+# --- Step 2: the channel-explicit level -> palette-slot rule (documented expected vectors) ---
+testthat::test_that("color_slot_table / build_slots follow the documented slot rule", {
   withr::defer(set_color_style(type = "text", theme = "light"))
   options("tabxplor.color_style" = NULL)
   set_color_style(type = "text", theme = "light")   # default palette -> text (ELSE) branch
-
-  for (K in 1:5) {
-    pos <- (1:K) / 100
-    nms <- as.character(round(c(pos, -pos), 2))
-    expected <- as.integer(select_in_color_style(nms, pct_diff = FALSE))
-    testthat::expect_equal(color_slot_table(2L * K, "text"), expected, info = paste("K =", K))
-  }
 
   # the documented rule (explicit expected vectors)
   testthat::expect_equal(color_slot_table(8L, "text"), c(2L, 3L, 4L, 5L, 7L, 8L, 9L, 10L))

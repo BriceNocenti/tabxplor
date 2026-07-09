@@ -486,55 +486,47 @@ Two pre-existing latent `tab_plain()` warnings cleaned up in passing (output-inv
   crayon (bg palette); `fmt_color_channels()` returns both slot vectors. Verified end-to-end.
 - **Batch A COMPLETE** (1068 tests green): findInterval engine + config + significance + ratio repoint
   + two-channel storage/args/rendering, factor-`diff` byte-identical, 48-1290× faster.
-- **Batch B remaining:** Step 5 (exporters `tab_kable`/`tab_plot`/`tab_xl` + legend `tab_color_legend`
-  to two channels + the numeric-diff Glass-Δ legend fix; export parity), Step 6 (delete
-  `keep_last_break`/`color_formula`/`select_in_color_style`/`*_brksup` + old-string deprecation +
-  `mean`=NA-for-pct cleanup + docs/NEWS + `/color-mode` skill). Micro-choice flagged: numeric
-  `color="diff"` now = Glass's Δ (does NOT auto-remap to `"ratio"`).
 
-#### Batch B pointers (start here in the fresh session; re-grep line numbers, `fmt_class.R` shifted)
+#### Done (Batch B — Steps 5-6, 2026-07-09)
 
-**The engine contract exporters consume (do NOT touch the engine — it is done + golden-locked):**
-- `fmt_color_channels(x)` → `list(text_slot, bg_slot)`, each an `integer(length(x))` where `0` =
-  uncolored and `1..11` index the palette (`pos1..pos5`=1-5, `neg1..neg5`=6-10, `ratio`=11).
-- Map a slot to a code: `get_color_style("color_code", type=, theme=, html_24_bit=)[slot]` (hex) or
-  `get_color_style()[[slot]]` (crayon fn). **text_slot → the text palette, bg_slot → `type="bg"`.**
-- Per-column reads: `get_color(x)`=text measure `[1]`, `get_color_bg(x)`=bg measure `[2]` (NA if none),
-  `get_color_signif(x)`=policy. `pillar_shaft` (`fmt_class.R` ~2001) is the reference two-channel
-  consumer (text crayon then bg crayon, stacked) — copy its shape.
+Phase 5 is **COMPLETE**. Full suite green (**1085 tests, 0 failures**).
 
-**Step 5 — rewrite these OLD-engine call-sites onto `fmt_color_channels` (a cell can now carry BOTH a
-text and a background colour → stack them):**
-- `tab_kable`: `R/tab_classes.R:585` (`fmt_color_selection`) + `:587-620` (`select_in_color_style` →
-  `kableExtra::cell_spec(color=, background=)`). Emit text via `color=`, bg via `background=`.
-- `tab_plot`: `R/tab_classes.R:1333` (same pattern).
-- `tab_xl`: `R/tab_xl.R:1216-1260` (`colorToStyle` 226-250 + the conditional-fmt map). Stack a
-  `fontColour` (text) style AND an `fgFill` (bg) style via `openxlsx::addStyle(stack = TRUE)`.
-- Legend `tab_color_legend` (`R/fmt_class.R` ~2450-2748, `brk_from_color`, `get_color_type`): rebuild
-  for the new measures/policies/scales. **FIX the numeric-diff legend** — it still prints the ratio
-  scale (`×1.15…`) while cells now show Glass's Δ (`mean_diff` breaks). One shared exporter-prep helper
-  (per the Phase-5 brief §9 + the roadmap Phase 7 note) is welcome but not required for Step 5.
-- Verify: `test-color-golden.R` (per-cell hex, byte-identity) + `test-export-parity.R` stay green;
-  extend `test-exports.R` for a two-channel cell (both text + bg) and `color=c(background="ratio")`.
+- **Step 5 — exporters + legend on the two-channel engine.** New shared `fmt_channel_codes()` helper
+  (`R/fmt_class.R`, next to `fmt_color_channels`) = the single slot→hex mapping (text hex in the
+  `color_type` palette, bg hex in the `"bg"` palette; NA where uncolored). `tab_kable()` /
+  `tab_plot()` / `tab_xl()` rewritten onto it: text channel → font colour (`cell_spec(color=)` /
+  `table_cell_font` / a `fontColour` style set), bg channel → fill (`background=` / `table_cell_bg` /
+  an `fgFill` style set, stacked via `addStyle(stack=TRUE)`). The old string-splitting hacks are gone.
+  `tab_color_legend()` fully **rewritten** to be driven by the SAME per-channel `fmt_color_plan` +
+  canonical scales the cells use (so legend ⇔ cells can't disagree) — this fixes the numeric-`diff`
+  legend (now shows the SD/Glass-Δ thresholds, not `×ratio`) and describes both channels + the
+  significance policy. `brk_from_color`/`get_color_type` deleted.
+- **Step 6 — deletions, cleanup, wiring, docs.** Deleted the old engine
+  (`fmt_color_selection`/`keep_last_break`/`color_formula`/`select_in_color_style` + dead `*_brksup`).
+  `mean = NA` for pct columns (the mean-overload is gone; `ratio` carries the RR — conscious golden
+  regen, only the `mean` field changed). `get_color_breaks()` now returns the **canonical
+  positive-scale list** (round-trips with `set_color_breaks`; `type="all"` mirrors); `legacy_color_breaks()`
+  deleted. Old strings `"diff_ci"/"after_ci"/"ci"` **soft-deprecated** in `normalize_color_spec()`
+  (`lifecycle::deprecate_soft` with `user_env` = the real caller; they still render byte-identically —
+  warn-only, NOT decoded, to avoid attribute/golden churn). **`tab_num()` wired** to the new
+  `color`/`color_signif` args (via `normalize_color_spec`/`finalize_color_spec`; no-op for plain
+  strings, so `tab_many→tab_num` is unaffected). Tests: `expect_color()` → `fmt_color_channels`; the
+  `select_in_color_style` oracle test dropped; `test-color-config.R` gained deprecation + two-channel
+  render tests. Docs: `@param color`/`color_signif` on `tab()`/`tab_num()`, `/color-mode` skill +
+  `dev/tabxplor_architecture.md` Color System rewritten, NEWS + Deprecations.
+- **`tab_many()` new-arg wiring deferred to Phase 6** (per-row_var `color` axis collides with the
+  two-channel spec; Phase 6 globalises the axis + consolidates parsing). Direct `tab_many()` callers
+  keep old scalar strings (functional via the engine decode).
 
-**Step 6 — delete + finish:**
-- Delete `keep_last_break` / `color_formula` / `select_in_color_style` / the dead `*_brksup` code
-  (`R/fmt_class.R`), and `legacy_color_breaks()` once nothing reads the flat vectors. Keep a thin
-  `fmt_color_selection` shim only until `expect_color()` (`test-tab.R:415`) migrates to
-  `fmt_color_slots`.
-- Add the `lifecycle::deprecate_soft` message for the old colour strings — the natural spot is
-  `normalize_color_spec()` (`R/tab.R`, where `"diff_ci"/"after_ci"/"ci"` are recognised) — plus decode
-  them to the clean `(measure, color_signif)` model there so storage is uniform (then regen the
-  colour goldens consciously; hex stays identical).
-- `mean = NA` for pct columns: `R/tab.R` field build (`mean = ..5` in the `pmap_dfc(~ new_fmt(...))`;
-  the `ratio` field already carries the value) — a §3 cleanup once the old engine is gone.
-- `tab_num()` new-arg parsing (`color`/`color_signif`) — deferred from Step 4d.
-- Docs: `/color-mode` skill, `dev/tabxplor_architecture.md`, `dev/new_colors_UI.md` (mark W-flags
-  implemented), NEWS already stubbed.
-
-**Test/verify workflow (unchanged):** temp `.R` file → `Rscript`; `devtools::test("d:/Statistiques/
-github/tabxplor")`; the full-suite runner + `dev/make_color_golden.R` / `dev/make_golden.R` regen
-protocol. Batch A baseline: **1068 tests green**.
+**Batch B deferred / flagged (see also W-flags in `dev/new_colors_UI.md`):**
+- **W4 — measure-group palette hues** NOT built: diff/ratio distinguished by channel (text vs bg),
+  not hue. The `color=TRUE` factor default (diff text + ×2 ratio bg) looks muted vs the eventual
+  orange↔purple ratio ramp. Own perceptual-design + colorblind pass.
+- **`color_type="bg"` global toggle is now vestigial**: it selects the TEXT channel's palette family
+  only; the channel (not `color_type`) decides font-vs-fill. Consider deprecating it. Degenerate for
+  `color_type="bg"` + two channels (both want the background) — flagged, default `"text"` unaffected.
+- **W5 — coloured `tab_md`** (pandoc spans) still out of scope; `tab_md` stays monochrome.
+- Numeric `color="diff"` = Glass's Δ (does NOT auto-remap to `"ratio"`).
 
 Now the `ratio` field exists (Phase 1): implement `"diff"`/`"ratio"`/`"diff_ratio"` modes + legend text, **keeping the existing modes coherent in the same overhaul** (`diff_ci`, `ci`, `after_ci`, `contrib`, `OR` — do not drop the `ci` mode). **Numeric `"diff"` mode is sd-standardized (Q9, §18)**: color Glass's Δ = `diff/sd_ref` against new effect-size `mean_diff_breaks` (default `c(0.2, 0.5, 0.8, 1.2)`); derived from `diff` + the reference `var` at color time — no new field, `$diff` stays raw. Skill: `/color-mode`. Also fix the pre-existing **col% + means** row/col reference mismatch (means referenced by row, factors by column — `dev/tabxplor_1.4.0_decisions.md` §7).
 
@@ -553,19 +545,16 @@ Now the `ratio` field exists (Phase 1): implement `"diff"`/`"ratio"`/`"diff_rati
 
 - with each color argument, use a different color palette. Too complicated, or worthwhile for clarity to the user ?
 
-### Phase 6 — tab() → tab_many() merge + output_list
+### Phase 6 — tab() → tab_many() merge and full refactor
 
 Merge between `tab()` and `tab_many()`. Soft deprecate the `tab_many` alias to directly use `tab` alias from now on.
 
 `tab_many()` becomes the base; `tab()` a thin normalization shim. Add `output_list` (default `FALSE`), deprecate the `compact` argument, remove the `tabxplor.compact` option, keep multi-table when `tab_vars` present (compact-with-tab_vars deferred to Phase 7). `lifecycle::deprecate_soft("1.4.0", "tab_many()")`. **`tab_many()` soft deprecated function keeps its list-default** for ≥2 row_vars (Q7, §13) — only `tab()` merges by default; no silent return-type break. **Also here (§4-6):** globalise the row_var axis (`OR/pct/color/comp/ci/chi2`, `ref2` no longer per-row_var — but note **D2**: the *internal* collapse lands with the Phase 2 core, only the *arg-surface* deprecation lands here; keep per-row_var `totaltab` + `ref` as a named vector, row%/means only); keep col_var axis flexible (`pct/levels/digits` per col_var); soft-deprecate `totrow` (always a total row) and soft-deprecate `totcol` (default one total column; old values kept, cosmetic-only); soft-deprecate singular `row_var`/`col_var` arguments. **Decide `tab_spread`/`tab_compact` fate** (open item **S4**). Detail: `dev/tabxplor_1.4.0_decisions.md`.
 
+- **Phase 5 leftover — wire the new `color`/`color_signif` forms into `tab_many()`** (done for `tab()`/`tab_num()` in Phase 5 via `normalize_color_spec`/`finalize_color_spec`). Deferred here because the new two-channel `color = c("diff","ratio")` collides with `tab_many()`'s per-row_var `color` vector (`tab.R` ~L841); the color-axis globalisation above resolves it. If a legacy per-row_var path is ever kept, the clean discriminator is that `"ratio"` was never a valid old color value. Move the parsing into the merged base so all three entry points share ONE parse site.
+
 The original rationale for separating the two was : `tab_plain` is the core worker but lacks many advanced option ; `tab_many` is the most flexible for big tables, with many options ; `tab` was centered around the necessity to keep the whole population (who is in `n` ?) and NA handling consistent with having a single row variable and a single column variable. Since most of the time (with row percentages), only one total column was kept, the `n` count could be different for every col var : it won’t be the case anymore if the `tot_n` base total (§2 — renamed from `ref_n`) is stored in a vctrs field for each cell.
 - In the new `tab()` function, I would want **an argument to get the same behaviour as the old tab `tab()`**. What would it be ? Would something like `na = "base_table"` (find a better name, more user-friendly and easily understandable) work : removing, for all col_vars, the missing value of the the row_var and the first col_vars (with several row vars : each by-row_vars subtable remove the individuals with missing value either in the carrent row variables or in the first column variable) ?
-
-#### To think about
-
-- `compact = TRUE` or the related `options()` : do not throw error with tab_vars, just don't do it ?
-
 
 ### Phase 7 — Unified exporter prep & display
 

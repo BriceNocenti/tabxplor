@@ -1,10 +1,16 @@
 {
   "permissions": {
+    "allow": [
+      "Bash(cd 'd:/Statistiques/github/tabxplor' && Rscript *)"
+    ], 
     "deny": [
       "Edit(NAMESPACE)",
       "Write(NAMESPACE)",
       "Edit(man/**)",
       "Write(man/**)"
+    ],
+    "additionalDirectories": [
+      "d:/Statistiques/github/tabxplor"
     ]
   }
 }

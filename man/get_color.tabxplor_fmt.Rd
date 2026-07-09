@@ -12,7 +12,7 @@
 \item{...}{Used in methods to add arguments in the future.}
 }
 \value{
-A single character with the color attribute.
+A single character with the color attribute (the text channel).
 }
 \description{
 Get color

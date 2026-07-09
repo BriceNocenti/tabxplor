@@ -13,6 +13,7 @@ tab(
   sup_cols,
   pct = "no",
   color = "no",
+  color_signif = "ignore",
   OR = "no",
   chi2 = FALSE,
   na = "keep",
@@ -66,24 +67,32 @@ use \code{\link{tab_many}} instead.}
 \item \code{"all_tabs"}: frequencies for the whole (set of) table(s).
 }}
 
-\item{color}{The type of colors to print, as a single string :
+\item{color}{Which measure(s) to color, on which visual channel. \code{FALSE} (default)
+prints no color; \code{TRUE} uses the smart per-column-type scheme (factors: \code{diff} on
+the text + \code{ratio} on the background; numerics: \code{ratio}; counts: \code{contrib};
+odds-ratio columns: \code{or}). Otherwise a measure name, on the \strong{text} channel:
 \itemize{
-\item \code{"no"}: by default, no colors are printed.
-\item \code{"diff"}: color percentages and means based on cells differences from
-totals (or from first cells when \code{ref = "first"}).
-\item \code{"diff_ci"}: color pct and means based on cells differences from totals
-or first cells, removing coloring when the confidence interval of this difference
-is higher than the difference itself.
-\item \code{"after_ci"}: idem, but cut off the confidence interval from the
-difference first.
-\item \code{"contrib"}: color cells based on their contribution to variance
-(except mean columns, from numeric variables).
-\item \code{"OR"}: for \code{pct == "col"} or \code{pct == "row"},
-color based on odds ratios (or relative risks ratios)
-\item \code{"auto"}: frequencies (\code{pct = "all"}, \code{pct = "all_tabs"})
-and counts are colored with \code{"contrib"}.
-When \code{ci = "diff"}, row and col percentages are colored with "after_ci" ;
-otherwise they are colored with "diff".
+\item \code{"diff"}: cell difference from the reference (percentage points for factors;
+the standardized difference Glass's \eqn{\Delta} for numeric means).
+\item \code{"ratio"}: relative risk (factors) or mean ratio (numerics) vs the reference.
+\item \code{"contrib"}: signed contribution to the chi-squared (reference-free).
+\item \code{"OR"}: empirical odds ratio (for \code{pct = "row"}/\code{"col"}).
+}
+To color two measures at once, pass a length-2 vector: unnamed \code{c("diff", "ratio")}
+puts the first on the text channel and the second on the background; named
+\code{c(text = "diff", background = "ratio")} is explicit; \code{c(background = "ratio")}
+colors only the background. Only \code{diff} / \code{ratio} may go on the background.
+Thresholds come from \code{\link{set_color_breaks}}. (The old combined strings
+\code{"diff_ci"}, \code{"after_ci"} and \code{"ci"} still work but are soft-deprecated in
+favor of \code{color_signif}.)}
+
+\item{color_signif}{How significance gates the color, as a single string:
+\itemize{
+\item \code{"ignore"} (default): color every deviation by its observed size.
+\item \code{"grey_non_signif"}: color by the observed size, but grey out cells whose
+deviation is not significant at \code{conf_level}.
+\item \code{"color_all_signif"}: color by the guaranteed (confidence-bound) effect --
+only cells whose interval clears the threshold, with dimmer, conservative colors.
 }}
 
 \item{OR}{With \code{pct = "row"} or \code{pct = "col"}, calculate and print odds ratios

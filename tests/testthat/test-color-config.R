@@ -63,12 +63,14 @@ testthat::test_that("set_color_breaks validates its input with clear errors", {
   testthat::expect_error(set_color_breaks(list(1, 2)), "fully named list")   # unnamed
 })
 
-testthat::test_that("legacy_color_breaks reproduces the old flat vectors from canonical scales", {
-  lg <- legacy_color_breaks(default_color_scales())
-  # the old default: pct_breaks = c(0.05, 0.1, 0.2, 2, 0.3) mirrored (x2 not mirrored)
-  testthat::expect_equal(lg$pct_breaks, c(0.05, 0.1, 0.2, 2, 0.3, -0.05, -0.1, -0.2, -0.3))
-  testthat::expect_equal(lg$mean_breaks, c(1.15, 1.5, 2, 4, 1/1.15, 1/1.5, 1/2, 1/4))
-  testthat::expect_equal(lg$contrib_breaks, c(1, 2, 5, 10, -1, -2, -5, -10))
+testthat::test_that("get_color_breaks(type = 'all') mirrors additive vs multiplicative scales", {
+  reset_breaks()
+  # additive scales mirror c(x, -x); multiplicative scales mirror c(x, 1/x)
+  testthat::expect_equal(get_color_breaks("pct_diff", "all"),
+                         c(0.05, 0.1, 0.2, 0.3, -0.05, -0.1, -0.2, -0.3))
+  testthat::expect_equal(get_color_breaks("mean_ratio", "all"),
+                         c(1.15, 1.5, 2, 4, 1/1.15, 1/1.5, 1/2, 1/4))
+  testthat::expect_equal(get_color_breaks("contrib", "all"), c(1, 2, 5, 10, -1, -2, -5, -10))
 })
 
 testthat::test_that("old positional args are soft-deprecated and mapped onto the new scales", {
@@ -83,12 +85,19 @@ testthat::test_that("old positional args are soft-deprecated and mapped onto the
   testthat::expect_equal(cur$pct_ratio$pos, 2)
 })
 
-testthat::test_that("get_color_breaks stays back-compatible (legacy flat shape)", {
+testthat::test_that("get_color_breaks returns the canonical positive-only scales and round-trips", {
+  withr::defer(reset_breaks())
   reset_breaks()
   gb <- get_color_breaks()
-  testthat::expect_named(gb, c("pct_breaks", "mean_breaks", "contrib_breaks",
-                               "pct_ci_breaks", "mean_ci_breaks"))
-  testthat::expect_equal(get_color_breaks("pct", type = "positive"), c(0.05, 0.1, 0.2, 2))
+  testthat::expect_named(gb, c("pct_diff", "pct_ratio", "mean_diff", "mean_ratio", "contrib"))
+  testthat::expect_equal(gb$pct_diff, c(0.05, 0.1, 0.2, 0.3))
+  testthat::expect_equal(gb$pct_ratio, 2)
+  testthat::expect_equal(get_color_breaks("pct_diff"), c(0.05, 0.1, 0.2, 0.3))
+  testthat::expect_equal(get_color_breaks("pct"), c(0.05, 0.1, 0.2, 0.3))   # old alias -> pct_diff
+  testthat::expect_equal(get_color_breaks("mean"), c(1.15, 1.5, 2, 4))      # old alias -> mean_ratio
+  # round-trips through set_color_breaks()
+  set_color_breaks(get_color_breaks())
+  testthat::expect_equal(get_color_breaks()$pct_diff, c(0.05, 0.1, 0.2, 0.3))
 })
 
 # --- Step 4d: the tab() color / color_signif argument forms ---
@@ -130,6 +139,45 @@ testthat::test_that("tab() color argument errors are clear", {
                          "Unknown")
   testthat::expect_error(tab(d, marital, race, pct = "row", color = c("diff", "contrib")),
                          "background channel")
+})
+
+testthat::test_that("old combined colour strings are soft-deprecated but still colour", {
+  d <- forcats::gss_cat
+  for (m in c("diff_ci", "after_ci", "ci")) {
+    lifecycle::expect_deprecated(tab(d, marital, race, pct = "row", ci = "cell", color = m))
+  }
+  # they still produce coloured cells (the engine decodes them)
+  withr::local_options(lifecycle_verbosity = "quiet")
+  t  <- tab(d, marital, race, pct = "row", color = "diff_ci")
+  fc <- t[[which(purrr::map_lgl(t, is_fmt))[2]]]
+  testthat::expect_true(any(fmt_color_channels(fc)$text_slot != 0L))
+  # the new API does NOT emit the deprecation
+  testthat::expect_no_condition(
+    tab(d, marital, race, pct = "row", color = "diff", color_signif = "grey_non_signif"),
+    class = "lifecycle_warning_deprecated"
+  )
+})
+
+testthat::test_that("two-channel colour: background channel renders independently of text", {
+  withr::local_options(lifecycle_verbosity = "quiet")
+  d <- forcats::gss_cat
+  col2 <- function(t) t[[which(purrr::map_lgl(t, is_fmt))[2]]]
+
+  # color = TRUE (diff text + ratio bg): the text channel colours (diffs always exceed 5%).
+  tt <- col2(tab(d, marital, race, pct = "row", color = TRUE))
+  testthat::expect_true(any(!is.na(fmt_channel_codes(tt, "text", "light", "no")$text)))
+
+  # background = diff guarantees coloured fills (|diff| > 5%); the text channel stays empty.
+  bgo    <- col2(tab(d, marital, race, pct = "row", color = c(background = "diff")))
+  codesb <- fmt_channel_codes(bgo, "text", "light", "no")
+  testthat::expect_true(all(is.na(codesb$text)))     # no text colour
+  testthat::expect_true(any(!is.na(codesb$bg)))       # background coloured
+
+  # both channels present -> both coloured, independently
+  both <- col2(tab(d, marital, race, pct = "row", color = c(text = "diff", background = "diff")))
+  cb   <- fmt_channel_codes(both, "text", "light", "no")
+  testthat::expect_true(any(!is.na(cb$text)))
+  testthat::expect_true(any(!is.na(cb$bg)))
 })
 
 testthat::test_that("set_color_style(custom_palette=) accepts 11 slots (the ratio slot fixed)", {

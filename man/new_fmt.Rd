@@ -32,6 +32,7 @@ new_fmt(
   totcol = FALSE,
   refcol = FALSE,
   color = "",
+  color_signif = "ignore",
   ...,
   class = character()
 )

@@ -10,7 +10,8 @@ tab_num(
   col_vars,
   tab_vars,
   wt,
-  color = c("auto", "diff", "diff_ci", "after_ci"),
+  color = "auto",
+  color_signif = "ignore",
   na = c("keep", "drop", "drop_fct", "drop_num"),
   ref = "tot",
   comp = c("tab", "all"),
@@ -43,8 +44,14 @@ are converted to factor.}
 
 \item{wt}{A weight variable, of class numeric. Leave empty for unweighted results.}
 
-\item{color}{\code{TRUE} print the color percentages and means based on cells differences from
-totals or reference cell, as provided by \code{ref}. Default to \code{FALSE}, no colors.}
+\item{color}{Which measure(s) to color, on which channel -- see \code{\link{tab}} for the full
+syntax (\code{FALSE}/\code{TRUE}, a measure name, or a two-channel \code{c(text, background)}
+vector). For numeric means the useful measures are \code{"diff"} (standardized, Glass's
+\eqn{\Delta}) and \code{"ratio"} (mean ratio); \code{TRUE} uses \code{"ratio"}. Default
+\code{"auto"} keeps the historical behavior.}
+
+\item{color_signif}{How significance gates the color (\code{"ignore"} / \code{"grey_non_signif"}
+/ \code{"color_all_signif"}) -- see \code{\link{tab}}.}
 
 \item{na}{The policy to adopt for missing values in row and tab variables (factors),
 as a single string.

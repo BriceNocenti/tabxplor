@@ -223,31 +223,15 @@ tab_xl <-
     # pct_ci_brksup  <- pct_ci_brksup    %>% c(., -.)
     # mean_ci_brksup <- mean_ci_brksup   %>% c(., -.) #then - again
 
-    colorToStyle <- function(x) {
-      if (color_type == "text") {
-        openxlsx::createStyle(fontColour = x, textDecoration = "bold")
-      } else {
-        openxlsx::createStyle(fgFill = x)
-      }
-    }
-
-    #tabxplor_color_breaks <- getOption("tabxplor.color_breaks")
-
-    styles <- get_color_style("color_code", theme = "light", type = color_type)
-
-    pos1 <- colorToStyle(styles["pos1"])
-    pos2 <- colorToStyle(styles["pos2"])
-    pos3 <- colorToStyle(styles["pos3"])
-    pos4 <- colorToStyle(styles["pos4"])
-    pos5 <- colorToStyle(styles["pos5"])
-    neg1 <- colorToStyle(styles["neg1"])
-    neg2 <- colorToStyle(styles["neg2"])
-    neg3 <- colorToStyle(styles["neg3"])
-    neg4 <- colorToStyle(styles["neg4"])
-    neg5 <- colorToStyle(styles["neg5"])
-    ratio <- colorToStyle(styles["ratio"])
-
-    styles <- names(styles) #[select_in_color_style(length(tabxplor_color_breaks[[1]]))]
+    # Phase 5: two style sets built once. TEXT channel -> font colour (in the `color_type` palette
+    # family, default "text"); BACKGROUND channel -> cell fill (bg palette). Each is an 11-element
+    # list indexed by slot integer (1..5 = pos1..pos5, 6..10 = neg1..neg5, 11 = ratio); the two are
+    # stacked per cell downstream (openxlsx addStyle(stack = TRUE)).
+    text_pal    <- get_color_style("color_code", theme = "light", type = color_type)
+    bg_pal      <- get_color_style("color_code", theme = "light", type = "bg")
+    font_styles <- purrr::map(text_pal, ~ openxlsx::createStyle(fontColour = .,
+                                                                textDecoration = "bold"))
+    fill_styles <- purrr::map(bg_pal,   ~ openxlsx::createStyle(fgFill = .))
 
     #sign  <- c(rep(">", length(styles)/2L), rep("<", length(styles)/2L))
 
@@ -594,13 +578,15 @@ tab_xl <-
     digits  <- purrr::map2(tabs, fmt_cols, ~ purrr::map(.x[.y], get_digits ))
 
     type  <- purrr::map(tabs, get_type)
-    color <- purrr::map(tabs, get_color)
 
-    color_type <- get_color_type(color, type)
-
-    color_cols <- purrr::map(color_type, ~which(!is.na(.)))
-    color_type <- color_type %>% purrr::map2(color_cols, ~ .x[.y])
-    # plain_type_for_color <- type %>% purrr::map2(color_cols, ~ .x[.y])
+    # Phase 5: a column is coloured if it carries a text OR a background colour channel (so
+    # background-only columns are picked up too). fmt_color_channels() reads both directly.
+    color_cols <- purrr::map(tabs, ~ which(purrr::map_lgl(., function(.col) {
+      if (!is_fmt(.col)) return(FALSE)
+      ct <- get_color(.col); cb <- get_color_bg(.col)
+      (length(ct) != 0L && !is.na(ct) && !ct %in% c("", "no")) ||
+        (length(cb) != 0L && !is.na(cb) && !cb %in% c("", "no"))
+    })))
 
     type       <- type  %>% purrr::map2(fmt_cols, ~ .x[.y])
 
@@ -1213,51 +1199,38 @@ tab_xl <-
     #       purrr::map(which)
     #   ) )
 
-    color_selections <-
-      purrr::map2(tabs, color_cols, ~ purrr::map(
-        .x[.y],
-        ~ fmt_color_selection(.) %>% purrr::map(which)
-      ) )
-
-    conditional_fmt_map <-
-      tibble::tibble(sheet, cols = color_cols, rows = color_selections,
-                     color_type = color_type,
-                     start, offset) %>%
-      tidyr::unnest(tidyselect::all_of(c("cols", "rows", "color_type"))) %>%
-      dplyr::mutate(
-        style = purrr::map2(
-          .data$rows,
-          .data$color_type,
-          ~ select_in_color_style(
-            names(.x),
-            pct_diff = .y %in% c("diff", "diff_ci", "after_ci")
+    # Phase 5: two-channel conditional formatting from the vectorised engine. For every colored
+    # column of every sheet, fmt_color_channels() gives per-cell text_slot (font) and bg_slot
+    # (fill); rows are grouped by (sheet, channel, slot) so addStyle is called once per group and
+    # both channels are stacked on the cell.
+    color_style_map <- purrr::pmap_dfr(
+      list(tabs, color_cols, sheet, start),
+      function(.tab, .cc, .sheet, .start) {
+        if (length(.cc) == 0L) return(tibble::tibble())
+        purrr::map_dfr(.cc, function(.ci) {
+          ch   <- fmt_color_channels(.tab[[.ci]])
+          rows <- seq_along(ch$text_slot) + .start + 1L
+          dplyr::bind_rows(
+            tibble::tibble(sheet = .sheet, col = .ci, row = rows,
+                           slot = ch$text_slot, channel = "text"),
+            tibble::tibble(sheet = .sheet, col = .ci, row = rows,
+                           slot = ch$bg_slot,   channel = "bg")
           )
-        ),
-        style = purrr::map(.data$style, ~ styles[.])
-      ) %>%
-      dplyr::select(-"color_type") |>
-      # tibble::add_column(style = list(style)) %>%
-      tidyr::unnest(tidyselect::all_of(c("rows", "style"))) %>%
-      #tidyr::unnest(.data$rows) %>%
-      dplyr::filter(purrr::map_lgl(.data$rows, ~ length(.) != 0)) %>%
-      dplyr::mutate(cols  = purrr::map2(.data$cols, .data$rows,
-                                        ~ rep(.x, length(.y))),
-                    rows  = purrr::map2(.data$rows, .data$start, ~ .x + .y + 1L)) %>%
-      dplyr::group_by(.data$sheet, .data$style) %>%
-      dplyr::summarise(cols = list(.data$cols), rows = list(.data$rows),
-                       offset = .data$offset[1],
-                       .groups = "drop") %>%
-      dplyr::mutate(dplyr::across(tidyselect::all_of(c("cols", "rows")),
-                                  ~ purrr::map(., purrr::flatten_int)))
+        })
+      }
+    )
 
-    conditional_fmt_map %>%
-      dplyr::select(tidyselect::all_of(c("sheet", "rows", "cols", "style"))) %>%
-      purrr::pwalk(function(sheet, cols, rows, style)
-        openxlsx::addStyle(
-          wb = wb, stack = TRUE,
-          sheet = sheet, cols = cols, rows = rows,
-          style = rlang::eval_tidy(rlang::sym(style))
-        ))
+    if (nrow(color_style_map) != 0L) {
+      color_style_map %>%
+        dplyr::filter(.data$slot > 0L) %>%
+        dplyr::group_by(.data$sheet, .data$channel, .data$slot) %>%
+        dplyr::summarise(cols = list(.data$col), rows = list(.data$row), .groups = "drop") %>%
+        purrr::pwalk(function(sheet, channel, slot, cols, rows) {
+          style <- if (channel == "text") font_styles[[slot]] else fill_styles[[slot]]
+          openxlsx::addStyle(wb = wb, stack = TRUE, sheet = sheet,
+                             cols = cols, rows = rows, style = style)
+        })
+    }
 
     # if (any(!no_ci)) {
     #   color_selections_ci <-

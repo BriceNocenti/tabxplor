@@ -2318,410 +2318,35 @@ fmt_color_channels <- function(x) {
        bg_slot   = fmt_color_slots(x, fmt_color_plan(x, "bg",   color = get_color_bg(x))))
 }
 
-# DESIGN: Three-step color selection pipeline:
-#   1. Extract breaks from options (or force_breaks), mirror negatives
-#   2. For each break level, call color_formula() to get boolean mask of matching cells
-#   3. keep_last_break() resolves ties: each cell gets the strongest matching threshold
-#   Returns a named list of boolean vectors (one per color level: pos1-5, neg1-5, ratio).
-#   (Phase 5 Step 3: superseded by fmt_color_plan()/fmt_color_slots() above; kept for tab_kable/
-#   tab_plot/tab_xl and expect_color() until Step 5/6.)
+# The single slot -> hex mapping shared by the exporters (tab_kable / tab_plot / tab_xl). Returns the
+# per-cell colour code of BOTH channels (NA where uncoloured on that channel), plus the raw slot
+# vectors (for bold / gate decisions). The text channel is rendered in the `color_type` palette
+# family (the exporter's global text-vs-bg toggle, default "text"); the background channel always
+# uses the "bg" palette. This mirrors pillar_shaft.tabxplor_fmt's two-channel logic, so console and
+# exports render identical colours. (fmt_get_color_code stays single-channel for the golden.)
 #' @keywords internal
-fmt_color_selection <- function(x, force_color, force_breaks) {
-  type    <- get_type (x)
-  type_ci <- get_ci_type(x)
-  color   <- if (missing(force_color)) get_color(x) else force_color
-  # color <- get_color(x)
+fmt_channel_codes <- function(x, color_type = "text", theme = "light", html_24_bit = NULL) {
+  html_24_bit <-
+    if (is.null(html_24_bit)) {getOption("tabxplor.color_html_24_bit")} else {html_24_bit}
+  n  <- length(x)
+  ch <- fmt_color_channels(x)
 
-  if (!missing(force_breaks)) {
-    mean_breaks    <- force_breaks$mean_breaks
-    pct_breaks     <- force_breaks$pct_breaks
-    mean_ci_breaks <- force_breaks$mean_ci_breaks
-    pct_ci_breaks  <- force_breaks$pct_ci_breaks
-    contrib_breaks <- force_breaks$contrib_breaks
-    # mean_brksup    <- force_breaks$mean_brksup
-    # pct_brksup     <- force_breaks$pct_brksup
-    # mean_ci_brksup <- force_breaks$mean_ci_brksup
-    # pct_ci_brksup  <- force_breaks$pct_ci_brksup
-    # contrib_brksup <- force_breaks$contrib_brksup
+  text_styles <- get_color_style("color_code", type = color_type, theme = theme,
+                                 html_24_bit = html_24_bit)
+  bg_styles   <- get_color_style("color_code", type = "bg", theme = theme,
+                                 html_24_bit = html_24_bit)
 
-    # pct_ratio_breaks<- force_breaks$pct_ratio_breaks
-    # pct_ratio_brksup<- force_breaks$pct_ratio_brksup
-  } else {
-    # Phase 5: the option now stores canonical scales; legacy_color_breaks() derives the flat
-    # vectors this (pre-Step-3) selection path still consumes, byte-identically. Removed with
-    # the findInterval engine rewrite (Step 3).
-    tabxplor_color_breaks <- legacy_color_breaks(getOption("tabxplor.color_breaks"))
+  text <- rep(NA_character_, n)
+  bg   <- rep(NA_character_, n)
+  tsel <- ch$text_slot > 0L
+  bsel <- ch$bg_slot   > 0L
+  # historical output is upper-case hex (cf. fmt_get_color_code).
+  text[tsel] <- toupper(unname(text_styles[ch$text_slot[tsel]]))
+  bg[bsel]   <- toupper(unname(bg_styles[ch$bg_slot[bsel]]))
 
-    mean_breaks    <- tabxplor_color_breaks$mean_breaks
-    pct_breaks     <- tabxplor_color_breaks$pct_breaks
-    mean_ci_breaks <- tabxplor_color_breaks$mean_ci_breaks
-    pct_ci_breaks  <- tabxplor_color_breaks$pct_ci_breaks
-    contrib_breaks <- tabxplor_color_breaks$contrib_breaks
-    # mean_brksup    <- tabxplor_color_breaks$mean_brksup
-    # pct_brksup     <- tabxplor_color_breaks$pct_brksup
-    # mean_ci_brksup <- tabxplor_color_breaks$mean_ci_brksup
-    # pct_ci_brksup  <- tabxplor_color_breaks$pct_ci_brksup
-    # contrib_brksup <- tabxplor_color_breaks$contrib_brksup
-
-    # pct_ratio_breaks<- tabxplor_color_breaks$pct_ratio_breaks
-    # pct_ratio_brksup<- tabxplor_color_breaks$pct_ratio_brksup
-  }
-
-
-  brk <-
-    switch(color,
-           "diff"     = ,
-           "diff_ci"  = if (type == "mean") mean_breaks    else pct_breaks   ,
-           # DESIGN: color="ci" is a binary significant/not split, so it needs only ONE
-           # positive + one (mirrored) negative threshold, not the graded ladder. ci_breaks
-           # is mirrored [neg | pos]; c(1, len/2 + 1) picks one break from each half.
-           # ("after_ci" below uses the full graded vector instead.)
-           "ci"       = if (type == "mean"){
-             mean_ci_breaks[c(1, length(mean_ci_breaks)/2 + 1)]
-           } else {
-             pct_ci_breaks[c(1, length(pct_ci_breaks)/2 + 1)]
-           } ,
-           "after_ci" = if (type == "mean") mean_ci_breaks else pct_ci_breaks,
-           "contrib"  = contrib_breaks,
-           "or"       = ,
-           "OR"       = mean_breaks,
-    )
-
-  brk_no_zero <- dplyr::na_if(brk, 0) # otherwise 0 rule is considered as positive...
-  negative_breaks <- (type != "mean" & !color %in% c("or", "OR") & brk_no_zero < 0) |
-    ( (type == "mean" | color %in% c("or", "OR") ) & brk_no_zero < 1)
-
-  # FIXME(clarify): purpose of the .direction="up" fill is unclear. It propagates the
-  # "negative" flag upward across the break vector, so an NA break (from na_if of a 0
-  # break) inherits the sign of the break below it. Confirm this is the intended handling
-  # of a 0/NA break before relying on it.
-  negative_breaks <- tibble::tibble(negative_breaks) |>
-    tidyr::fill("negative_breaks", .direction = "up") |>
-    dplyr::pull("negative_breaks")
-
-  pct_ratio <- !type %in% c("mean", "n") & brk > 1 # !color %in% c("or", "OR") &
-
-  # brksup <-
-  #   switch(color,
-  #          "diff"     = ,
-  #          "diff_ci"  = if (type == "mean") mean_brksup    else pct_brksup   ,
-  #          "ci"       = if (type == "mean") {
-  #            mean_ci_brksup[c(length(mean_ci_brksup)/2, length(mean_ci_brksup))]
-  #          }  else {
-  #            pct_ci_brksup[c(length(pct_ci_brksup)/2, length(pct_ci_brksup))]
-  #          },
-  #          "after_ci" = if (type == "mean") mean_ci_brksup else pct_ci_brksup,
-  #          "contrib"  = contrib_brksup,
-  #          "or"       = ,
-  #          "OR"       = mean_brksup
-  #   )
-
-
-  # Phase 2 D3 interim: numeric (mean) columns color the cell/reference RATIO, which since the
-  # Phase 2 field flip lives in the `ratio` field (was the old `diff` overload). Reading it here
-  # keeps mean coloring byte-identical against mean_breaks after `diff` became a real difference;
-  # Phase 5 will swap means to the sd-standardized difference. Factor columns still read `diff`.
-  diff <- if (color %in% c("diff", "diff_ci", "after_ci", "ci") ) {
-    if (type == "mean") get_ratio(x) else get_diff(x)
-  } else {
-    rep(NA_real_, length(x))  #vctrs::vec_recycle(NA_real_, length(x))
-  }
-
-  # WARNING: field overload (WS2 will split this out). For pct-type columns tab_pct()
-  # stores the cell/reference RATIO in the `mean` field, so get_mean() here supplies the
-  # ratio driving the "*2 rule" (cell >= 2x reference). `mean` therefore means two
-  # different things by column type: an actual mean for type="mean", a pct ratio otherwise.
-  ratio <- if (color %in% c("diff", "diff_ci", "after_ci") & type != "mean" ) { # pct
-    get_mean(x)
-  } else {
-    rep(NA_real_, length(x))  #vctrs::vec_recycle(NA_real_, length(x))
-  }
-
-  ci <- if (color %in% c("diff_ci", "after_ci", "ci") & type_ci == "diff" ) {
-    get_ci(x)
-  } else {
-    NA_real_
-  }
-
-  # ref_means_pct: reference value on the ratio scale — the reference mean for
-  # type="mean", the reference pct for the pct "*2 rule" (see WARNING above).
-  ref_means_pct <- if (color %in% c("diff_ci", "after_ci", "ci") & type == "mean") {
-    get_ref_means(x)
-  } else  if (color %in% c("diff", "diff_ci", "after_ci") & any(pct_ratio)) {
-    get_ref_pct(x)
-   } else {
-    NA_real_
-  }
-
-  ctr <- if (color == "contrib") {
-    dplyr::if_else(is_totrow(x),
-                   true  = NA_real_,
-                   false =  get_ctr(x))
-  } else {
-    NA_real_
-  }
-
-  mean_ctr <- if (color == "contrib") {
-    get_mean_contrib(x)
-  } else {
-    NA_real_
-  }
-
-  # rr <- if (color %in% c("OR") ) {
-  #   get_rr(x)
-  # } else {
-  #   NA_real_
-  # }
-
-  or <- if (color %in% c("OR", "or") ) {
-    get_or(x)
-  } else {
-    NA_real_
-  }
-
-  # pct <- if (color %in% c("OR") ) {
-  #   get_pct(x)
-  # } else {
-  #   NA_real_
-  # }
-
-
-
-
-  selection <-
-    purrr::pmap(list(brk, negative_breaks, pct_ratio), # brksup , # brk_ratio_condition
-                ~ color_formula(type = type, color = color,
-                                diff = diff,
-                                neg  = ..2,
-                                #brksup_ratio = if(..3) {ratio} else {rep(0, length(ratio))},
-                                pct_ratio = ..3,
-                                ratio = ratio, # *2 pct rule
-                                # diff_sup = if(.x > 1 & !type %in% c("mean", "n") ) {
-                                #   ratio # *2 pct rule
-                                # } else {
-                                #   diff
-                                # },
-                                # diff_sub = if(..2 > 1 & !type %in% c("mean", "n") ) {
-                                #   ratio # *2 pct rule
-                                # } else {
-                                #   diff
-                                # },
-                                ci = ci, ref_means_pct = ref_means_pct,
-                                # ratio = ratio,
-                                ctr = ctr, mean_ctr = mean_ctr,
-                                or = or, # rr = rr, pct = pct,
-                                brk = ..1) # brksup = ..2
-    ) %>% purrr::set_names(as.character(round(brk, 2)))
-
-  #     when many rules are TRUE, take the last one (positive and negative)
-  c(keep_last_break(selection[!negative_breaks]),
-    keep_last_break(selection[negative_breaks]) )
+  list(text = text, bg = bg, text_slot = ch$text_slot, bg_slot = ch$bg_slot)
 }
 
-
-
-# !means & brk >= 0 & brksup > 0
-# ~ diff >= 0  &  abs(diff) - ci > brk   &  abs(diff) - ci < brksup,
-#
-# !means & brk <=  0 & brksup < 0
-# ~ diff  < 0  &  abs(diff) - ci > -brk  &  abs(diff) - ci < -brksup),
-
-
-# diff >= 1                                              &
-#   (1 + abs(1 - diff) ) * ref_means_pct  >  (ref_means_pct + ci) * brk[1]   &
-#   abs(1 - diff) * ref_means_pct  <  (ref_means_pct + ci) * brksup[1]
-#
-#
-# ref_means_pct + abs(1 - diff) * ref_means_pct  > (ref_means_pct + ci) * brk[1]
-# ref_means_pct + abs(1 - diff) * ref_means_pct  > ref_means_pct * brk[1] + ci * brk[1]
-# abs(1 - diff) * ref_means_pct > ref_means_pct * brk[1] - ref_means_pct + ci * brk[1]
-# abs(1 - diff) * ref_means_pct > ref_means_pct * (brk[1] - 1) + ci * brk[1]
-#
-# (ref + ci) * brk -ref
-#
-# abs(1 - diff) > brk[1] - 1 + ci/ref_means_pct * brk[1]
-# abs(1 - diff) + 1 > brk[1] * (ci/ref_means_pct + 1)
-#
-# (1 + abs(1 - diff)) * ref_means_pct   > ref_means_pct * brk[1] + ci * brk[1]
-#
-
-# ctr >= brk[1] * mean_ctr & ctr < brksup[1] * mean_ctr
-# ctr >= brk[2] * mean_ctr & ctr < brksup[2] * mean_ctr
-
-#' @keywords internal
-keep_last_break <- function(color_selection) {
-  rownames <- names(color_selection)
-
-  color_tibble <-
-  purrr::reduce(1:length(color_selection[[1]]),
-                .init = tibble::tibble(color_selection),
-                ~ dplyr::mutate(.x, !!rlang::sym(paste0("V", .y)) := purrr::map_lgl(
-                  color_selection,
-                  function(.var) .var[.y]
-                )
-                )
-  ) |>
-    dplyr::select(-color_selection)
-
-  color_tibble <- color_tibble |>
-    dplyr::arrange(-dplyr::row_number()) |>
-    dplyr::mutate(dplyr::across(
-      tidyselect::everything(),
-      ~ dplyr::row_number() == purrr::detect_index(., isTRUE)
-    )) |>
-    dplyr::arrange(-dplyr::row_number())
-
-
-  color_tibble |>
-    as.matrix() |>
-    t() |>
-    as.data.frame() |>
-    as.list() |>
-    purrr::set_names(rownames)
-
-  # color_selection |>
-  #   dplyr::bind_rows() |>
-  #   as.matrix() |>
-  #   t() |>
-  #   as.data.frame() |>
-  #   tibble::rownames_to_column() |>
-  #   tibble::as_tibble() |>
-  #   dplyr::mutate(rowname = forcats::as_factor(rowname)) |>
-  #   dplyr::arrange(dplyr::desc(rowname)) |>
-  #   dplyr::mutate(dplyr::across(
-  #     dplyr::where(is.logical),
-  #     ~ dplyr::row_number() == purrr::detect_index(., isTRUE)
-  #   )) |>
-  #   dplyr::arrange(rowname) |>
-  #   tibble::column_to_rownames("rowname") |>
-  #   as.matrix() |>
-  #   t() |>
-  #   as.data.frame() |>
-  #   as.list()
-}
-
-
-# brk <- brk[[4]] ; brksup <- brksup[[4]]
-# brk <- brk[[3]] ; brksup <- brksup[[3]]
-
-# brk <- brk[[4]]
-# neg <- negative_breaks[[4]]
-# pct_ratio <- pct_ratio[[4]]
-
-
-
-# DESIGN: Boolean formula per color mode. Key asymmetries:
-#   - "diff": uses ratio (pct_ratio flag) when break > 1 (the "*2 rule");
-#     for means, diff is already a ratio so threshold comparison is direct.
-#   - "diff_ci"/"after_ci": subtracts CI from difference before comparison.
-#   - "contrib": compares cell contribution to mean contribution (mean_ctr on totrow).
-#   - "or"/"OR": odds ratio comparison, neg uses 1/break for under-represented.
-#' @keywords internal
-color_formula <- function(type, color, neg,
-                          diff, diff_sup, pct_ratio, ratio,
-                          ci, ref_means_pct,
-                          ctr, mean_ctr, or, brk) { # brksup
-  means <- type %in% c("mean", "n")
-
-
-  # !means & brksup > 1
-
-
-  res <-
-    switch(
-      color,
-      "diff"     =
-        if (!neg) { # if( (!means & brk >= 0) | (means & brk >= 1) ) {
-
-          (if (pct_ratio) {ratio} else {diff}) > brk #& diff_sub < brksup # & brksup_ratio < brksup
-          # sup <- if (!means & brk > 1) { ratio > brk } else { diff > brk} # ratio = *2 pct rule
-          # sub <- if (!means & brksup > 1) { ratio < brksup } else { diff < brksup}
-          # sup & sub
-
-        } else {
-          diff < brk #& diff > brksup
-        },
-
-      "or"     = ,
-
-      "OR"     = if (!neg) { # if(brk >= 1) {
-        or > brk # & or < brksup
-      } else {
-        or < brk # & or > brksup
-      },
-
-      "diff_ci"  = dplyr::case_when(
-        means & !neg    ~ diff > brk & # brk >= 1     # diff < brksup &
-          abs(1 - diff) * ref_means_pct - ci > 0,
-
-        means & neg     ~ diff < brk & # brk <  1          # diff > brksup &
-          abs(1 - diff) * ref_means_pct - ci > 0,
-
-        # FIXME (WS2): the pct-ratio (*2 rule) path is unverified — when pct_ratio it
-        # compares the cell/ref ratio to `brk` but keeps the additive `abs(diff) - ci > 0`
-        # CI test. Revisit with the color diff/ratio split.
-        !means & !neg  ~ (if (pct_ratio) {ratio} else {diff}) > brk & abs(diff) - ci > 0,
-        !means & neg   ~ diff < brk & abs(diff) - ci > 0 ),
-
-      "ci"       = dplyr::case_when(
-        means & !neg # (brk == 1)
-        ~ diff >= 1  &  abs(1 - diff) * ref_means_pct > ci,
-
-        means & neg # (brk == -1)
-        ~ diff  < 1  &  abs(1 - diff) * ref_means_pct > ci,
-
-        # FIXME (WS2): the pct (!means) color="ci" branches are suspect (were flagged
-        # "NOT wORKING?"). `diff >= 0 & abs(diff) > ci` may not correctly express
-        # "cell significantly different from its reference" for percentages.
-        !means & !neg
-        ~ diff >= 0  &  abs(diff) > ci,
-
-        !means & neg
-        ~ diff  < 0  &  abs(diff) > ci
-      ),
-
-      "after_ci" = dplyr::case_when(
-        means & !neg #brk > 0
-        ~ diff >= 1                                                         &
-          ref_means_pct + abs(1 - diff) * ref_means_pct  > (ref_means_pct + ci) * brk, #  &
-        #ref_means_pct + abs(1 - diff) * ref_means_pct  < (ref_means_pct + ci) * brksup ,
-        #wrong : abs(1 - diff) > ci * brk
-        #wrong : abs(1 - diff) * ref_means_pct  >  (ref_means_pct + ci) * brk
-
-        means & neg #brk < 0
-        ~ diff < 1                                                           &
-          ref_means_pct + abs(1 - diff) * ref_means_pct  > (ref_means_pct + ci) * -brk, #   &
-        #ref_means_pct + abs(1 - diff) * ref_means_pct  < (ref_means_pct + ci) * -brksup ,
-
-        # FIXME (WS2): pct-ratio (*2 rule) after_ci branch is unverified — it mirrors the
-        # mean formula by analogy (was flagged "MAY BE TOTAL BULLSHIT"), and the negative
-        # counterpart (below) was never written.
-        !means & !neg & pct_ratio
-        ~ diff >= 0  &
-          ref_means_pct + abs(1 - ratio) * ref_means_pct  > (ref_means_pct + ci) * brk,
-
-        # !means & neg & pct_ratio
-        # ~ diff  < 0  &
-        #   ref_means_pct + abs(1 - ratio) * ref_means_pct  > (ref_means_pct + ci) * -brk,
-
-        !means & !neg # brk >= 0 #& brk <= 1 # & brksup > 0 & brksup <= 1
-        ~ diff >= 0  &  abs(diff) - ci > brk,   # &  abs(diff) - ci < brksup,
-
-        !means & neg # brk <= 0 # & brksup < 0
-        ~ diff  < 0  &  abs(diff) - ci > -brk, #  &  abs(diff) - ci < -brksup
-      ),
-
-      "contrib"     = if (!neg) { #if (brk >= 0) {
-        ctr >= brk * mean_ctr #& ctr < brksup * mean_ctr
-      } else {
-        ctr <= brk * mean_ctr #& ctr > brksup * mean_ctr
-      },
-
-      rep(FALSE, length(diff))
-    )
-
-  tidyr::replace_na(res, FALSE)
-}
 
 
 
@@ -2730,356 +2355,176 @@ tab_color_legend <- function(x, colored = TRUE, mode = c("console", "html"),
                              html_theme = NULL, html_type = NULL, html_24_bit,
                              text_color = NULL, grey_color = NULL,
                              add_color_and_diff_types = FALSE, all_variables_names = FALSE) {
-  color     <- get_color(x)
+  # PURPOSE: build the human-readable colour legend, driven by the SAME per-channel plan
+  # (fmt_color_plan) and slot->palette path the cells use, so legend and cells can never disagree.
+  # Two channels are described independently (text measure + background measure); each measure's
+  # thresholds are read from the canonical scales and coloured by their palette slots. Numeric
+  # `diff` shows the standardized (Glass's delta, SD) thresholds; ratios show x/1 operators.
+  mode        <- mode[1]
+  if (missing(html_24_bit)) html_24_bit <- getOption("tabxplor.color_html_24_bit")
+  html_theme  <- if (is.null(html_theme)) getOption("tabxplor.color_style_theme") else html_theme
 
-  x <- x[!is.na(color) & !color %in% c("no", "")]
+  # keep only coloured fmt columns (text OR background channel)
+  is_f  <- purrr::map_lgl(x, is_fmt)
+  ct    <- get_color(x)
+  cbg   <- get_color_bg(x)
+  keep  <- is_f & ((!is.na(ct)  & !ct  %in% c("no", "")) |
+                   (!is.na(cbg) & !cbg %in% c("no", "")))
+  if (!any(keep)) return(NULL)
 
-  color <- get_color(x)
-
-  type      <- get_type(x)
-  ref <- get_ref_type(x)
+  # group columns by col_var (colour is uniform within a col_var); keep the first coloured column
+  # of each col_var as its representative.
   col_vars_levels <- tab_get_vars(x)$col_vars_levels %>%
     purrr::discard(names(.) == "all_col_vars")
+  kept_names <- names(x)[keep]
+  reps <- col_vars_levels %>%                                # map_chr keeps the col_var names
+    purrr::map_chr(~ {
+      cols <- .x[.x %in% kept_names]
+      if (length(cols) == 0) NA_character_ else cols[1]
+    })
+  reps <- reps[!is.na(reps)]
+  if (length(reps) == 0) return(NULL)
 
-  color_type <- col_vars_levels %>%
-    purrr::map(~ get_color_type(color[.], type[.]) %>%
-                 purrr::flatten_chr()) %>%
-    purrr::map_chr(~ dplyr::if_else(
-      condition = length(unique(.x)) == 1,
-      true      = .x[1],
-      false     = "mixed"                 )
-    )
+  # ---- formatting helpers --------------------------------------------------------------------
+  format_g <- function(v) trimws(formatC(v, format = "fg", digits = 3, drop0trailing = TRUE))
 
-  ref <- col_vars_levels %>%
-    purrr::map(~ ref[.]) %>%
-    purrr::map_chr(~ dplyr::if_else(
-      condition = length(unique(.x)) == 1,
-      true      = .x[1],
-      false     = "mixed"                 )
-    )
-
-  if (all(is.na(color_type) | color_type %in% c("", "no"))) return(NULL)
-
-  breaks_with_op <- function(breaks, color_type) {
-
-    num_breaks <- breaks |> stringr::str_remove("\\+|\\*")
-    num_breaks <- dplyr::if_else(stringr::str_detect(num_breaks, "%$"),
-                                 true  = as.double(stringr::str_remove(num_breaks, "%$")) / 100,
-                                 false = as.double(stringr::str_remove(num_breaks, "%$")) )
-
-    purrr::map2_chr(
-      breaks,
-      num_breaks,
-      ~ switch(
-        color_type,
-        "diff_mean"     = ,
-        "diff_ci_mean"  = dplyr::if_else(
-          condition = stringr::str_detect(.x, "^-"),
-          true      = paste0("/", stringr::str_remove(.x, "^-")),
-          false     = paste0(cross, .x) # sign * in cross
-        ),
-        "diff"          = ,
-        "diff_ci"       = ,
-        "after_ci"      = dplyr::if_else(
-          condition = stringr::str_detect(.x, "^-"),
-          true      = .x,
-          false     = dplyr::if_else(.y > 1, paste0(cross, .y), paste0("+", .x))
-        ),
-        "after_ci_mean" = paste0(cross, stringr::str_remove(.x, "^-")),
-        "contrib"       = paste0(cross, stringr::str_remove(.x, "^-")),
-        #"ci_mean"       = ,
-        "ci"            = "",      #just 1 ?
-        "or"            = ,
-        "OR"            = dplyr::if_else(
-          condition = stringr::str_detect(.x, "^-"),
-          true      = paste0("1/", stringr::str_remove(.x, "^-")),
-          false     = .x
-        ),
-        .x
-      ) )
+  ref_label <- function(r) {
+    if (length(r) == 0 || is.na(r)) return("")
+    ri <- suppressWarnings(as.integer(r))
+    if (!is.na(ri)) return(paste0("row", ri))
+    switch(r, "first" = "1st", "tot" = "tot", r)
   }
 
-  color_formula_chr <- function(color_type, ref, sign, breaks, mode = "console") {
+  measure_word <- function(measure, is_mean, std) {
+    switch(measure,
+           "diff"    = if (is_mean && std) "diff/sd" else "diff",
+           "ratio"   = "ratio",
+           "or"      = "OR",
+           "contrib" = "contrib",
+           measure)
+  }
+
+  brk_label <- function(measure, v, dir, is_mean, std) {
+    if (v == 0) return("signif")                             # single-0 break = the old "ci" look
+    if (measure == "diff" && !is_mean) {
+      lab <- paste0(sprintf("%1.0f", abs(v) * 100), "%")
+      if (dir > 0) paste0("+", lab) else paste0("-", lab)
+    } else if (measure == "diff" && is_mean && std) {
+      if (dir > 0) paste0("+", format_g(v), "sd") else paste0("-", format_g(v), "sd")
+    } else if (measure == "diff" && is_mean) {
+      if (dir > 0) paste0("+", format_g(v)) else paste0("-", format_g(v))
+    } else if (measure %in% c("ratio", "or")) {
+      if (dir > 0) paste0(cross, format_g(v)) else paste0("/", format_g(v))
+    } else if (measure == "contrib") {
+      paste0(cross, format_g(v))
+    } else {
+      as.character(v)
+    }
+  }
+
+  # colour one label with a palette slot, for the current mode / channel
+  paint <- function(label, slot, palette_type) {
+    if (!isTRUE(colored) || is.na(slot) || slot == 0L) return(label)
     if (mode == "console") {
-      purrr::map2_chr(breaks, sign, function(.breaks, .sign)
-        switch(
-          color_type,
-          "diff_mean"     = , # 1/mean and sign /
-          "diff"          = paste0("x", .sign, ref, " ", .breaks),
-          "diff_ci_mean"  = ,
-          "diff_ci"       = paste0("|x-", ref, "|>ci & x", .sign,
-                                   ref, " ", .breaks),
-          #"ci_mean"       = ,
-          "ci"            = paste0("|x-", ref, "| > ci"),      #just 1 ?
-          "after_ci_mean" = paste0(ref, " + |x-", ref, "| > (", ref, " + ci) ", .breaks),
-          "after_ci"      = paste0("|x-", ref, "| > ci ", .breaks), #+ -
-          "contrib"       = paste0("contrib > mean_ctr "     , .breaks),
-          "or"            = ,
-          "OR"            = paste0("OR", .sign, .breaks),
-          character()
-        ))
-
-    } else { # mode == "html"
-      purrr::map2_chr(breaks, sign, function(.breaks, .sign)
-        switch(
-          color_type,
-          "diff_mean"     = , # 1/mean and sign /
-          "diff"          = paste0("x", .sign, ref, " ", "<b>", .breaks, "</b>"),
-          "diff_ci_mean"  = ,
-          "diff_ci"       = paste0("|x-", ref, "|>ci & x", .sign,
-                                   ref, " ","<b>", .breaks, "</b>"),
-          #"ci_mean"       = ,
-          "ci"            = paste0("|x-", ref, "| > ci"),      #just 1 ?
-          "after_ci_mean" = paste0(ref, " + |x-", ref, "| > (", ref, " + ci) ", "<b>",
-                                   .breaks, "</b>"),
-          "after_ci"      = paste0("|x-", ref, "| > ci ", "<b>", .breaks, "</b>"), #+ -
-          "contrib"       = paste0("contrib > mean_ctr ", "<b>", .breaks, "</b>"),
-          "or"            = ,
-          "OR"            = paste0("OR", .sign, "<b>", .breaks, "</b>"),
-          character()
-        ))
-    }
-
-  }
-
-  color_table <-
-    tibble::tibble(color_type, ref, names = names(color_type)) %>%
-    dplyr::filter(!is.na(.data$color_type) & !.data$color_type %in% c("no", "")) %>%
-    dplyr::group_by(.data$color_type)
-
-  if (all_variables_names == FALSE) {
-    color_table <- color_table |>
-      dplyr::mutate(etc = dplyr::if_else(dplyr::row_number() >= 3, ",...", "") ) %>%
-      dplyr::slice(1:3)
-  } else {
-    color_table <- color_table |> dplyr::mutate(etc =  "")
-  }
-
-  color_table <- color_table |>
-    dplyr::summarise(names = paste0(.data$names, collapse = ", "),
-                     etc = dplyr::first(.data$etc),
-                     ref = dplyr::first(.data$ref),
-                     .groups = "drop") %>%
-    dplyr::mutate(names = paste0(.data$names, .data$etc))
-
-  if (add_color_and_diff_types) {
-    color_table <- color_table |>
-      dplyr::mutate(names = paste0(
-        "[color:", .data$color_type, "] ",
-        dplyr::if_else(color_type %in% c("diff_mean", "diff", "OR", "or", "diff_ci_mean",
-                                         "diff_ci", "after_ci_mean", "after_ci"),
-          true  = paste0("[diff:", .data$ref, "] "),
-          false = ""),
-        .data$names
-      ))
-  }
-
-  if (colored == TRUE) color_table <- color_table %>%
-    dplyr::mutate(names = stringr::str_pad(.data$names,
-                                           max(stringr::str_length(.data$names)),
-                                           side = "right"))
-
-  color_table <- color_table %>%
-    dplyr::mutate(
-      breaks = brk_from_color(.data$color_type),
-      breaks = dplyr::if_else(.data$color_type %in% c("diff_mean", "diff_ci_mean", "OR", "or"),
-                              true  = purrr::map(.data$breaks,
-                                                 ~ .[1:(length(.)/2)] %>%
-                                                   c(., purrr::map(., `-`))
-                              ),
-                              false = .data$breaks),
-      breaks = dplyr::if_else(
-        condition = .data$color_type %in% c("diff", "diff_ci", "after_ci"),
-        true      = purrr::map(.data$breaks,
-                               ~ paste0(sprintf("%1.0f",
-                                                purrr::map_dbl(., ~ .[1]) * 100),
-                                        "%") ),
-        false     = purrr::map(.data$breaks,
-                               ~ sprintf("%1.3g", purrr::map_dbl(., ~ .[1]))),
-      ) %>%
-        purrr::map2(.data$color_type, ~ breaks_with_op(.x, .y)),
-      ref  = purrr::map_chr(.data$ref, ~ if (is.na(suppressWarnings(as.integer(.)))) {
-        switch(., "first" = "x1", "tot" = "tot", .) # error : . replaced .data$ref (error length 3 but need 1)
-      } else {paste0("x", as.integer(.))} ),
-      sign = purrr::map(.data$breaks, ~ 1:length(.)) %>%
-        purrr::map(~ dplyr::if_else(condition = . >= max(.)/2 +1,
-                                    true      = " < ",
-                                    false     = " > ")),
-    )
-
-  if (colored == TRUE & mode[1] == "console") color_table <- color_table %>%
-    dplyr::mutate(
-      styles = purrr::map2(.data$breaks, .data$color_type,
-                           ~ suppressWarnings(select_in_color_style(
-                             .x,
-                             pct_diff = .y %in% c("diff", "diff_ci", "after_ci")
-                           ))),
-      styles = purrr::map(.data$styles, ~ get_color_style()[.]),
-      breaks = purrr::map2(.data$styles, .data$breaks,
-                           ~ purrr::map2_chr(
-                             .x, .y,
-                             ~ rlang::exec(.x, rlang::sym(.y))
-                           ))
-    )
-
-  # color_table %>%
-  #   dplyr::mutate(
-  #     styles = purrr::map2(.data$breaks, .data$color_type,
-  #                          ~ select_in_color_style(
-  #                            .x,
-  #                            pct_diff = .y %in% c("diff", "diff_ci", "after_ci")
-  #                          ))# ,
-  #     # styles = purrr::map(.data$styles, ~ get_color_style()[.]),
-  #     # breaks = purrr::map2(.data$styles, .data$breaks,
-  #     #                      ~ purrr::map2_chr(
-  #     #                        .x, .y,
-  #     #                        ~ rlang::exec(.x, rlang::sym(.y))
-  #     #                      ))
-  #   ) #|>
-
-  # breaks <- color_table |> tidyr::unnest(c(breaks, sign)) |>  dplyr::pull(breaks)
-  # pct_diff <- FALSE
-
-
-  if (colored == TRUE & mode[1] == "html") {
-    if (html_type == "text") {
-      color_table <- color_table %>%
-        dplyr::mutate(
-          styles = purrr::map2(.data$breaks, .data$color_type,
-                               ~ select_in_color_style(
-                                 .x,
-                                 pct_diff = .y %in% c("diff", "diff_ci", "after_ci")
-                               )),
-          styles = purrr::map(.data$styles, ~ get_color_style(mode  = "color_code",
-                                                              theme = html_theme,
-                                                              type  = html_type,
-                                                              html_24_bit = html_24_bit)[.]),
-          breaks = purrr::map2(.data$styles, .data$breaks,
-                               ~ purrr::map2_chr(
-                                 .x, .y,
-                                 ~ kableExtra::text_spec(.y, color = .x)
-                               ))
-        )
+      get_color_style("crayon", type = palette_type)[[slot]](label)
     } else {
-      color_table <- color_table %>%
-        dplyr::mutate(
-          styles = purrr::map2(.data$breaks, .data$color_type,
-                               ~ select_in_color_style(
-                                 .x,
-                                 pct_diff = .y %in% c("diff", "diff_ci", "after_ci")
-                               )),
-          styles = purrr::map(.data$styles, ~ get_color_style(mode  = "color_code",
-                                                              theme = html_theme,
-                                                              type  = html_type)[.]),
-          breaks = purrr::map2(.data$styles, .data$breaks,
-                               ~ purrr::map2_chr(
-                                 .x, .y,
-                                 ~ kableExtra::text_spec(.y, background = .x)
-                               ))
-        )
+      hex <- get_color_style("color_code", type = palette_type, theme = html_theme,
+                             html_24_bit = if (palette_type == "text") html_24_bit else NULL)[[slot]]
+      if (palette_type == "text") kableExtra::text_spec(label, color = hex)
+      else                        kableExtra::text_spec(label, background = hex)
     }
   }
 
+  # one channel's coloured threshold string, from its plan (NULL -> no channel)
+  channel_scale <- function(plan, is_mean, std, palette_type) {
+    if (is.null(plan)) return(NA_character_)
+    measure <- plan$measure
+    K       <- length(plan$pos_breaks)
+    neg <- purrr::map_chr(seq_len(K), ~ paint(
+      brk_label(measure, plan$pos_breaks[.x], -1L, is_mean, std),
+      plan$neg_slots[.x + 1L], palette_type))
+    pos <- purrr::map_chr(seq_len(K), ~ paint(
+      brk_label(measure, plan$pos_breaks[.x], +1L, is_mean, std),
+      plan$pos_slots[.x + 1L], palette_type))
+    x2 <- character(0)
+    if (!is.null(plan$x2)) x2 <- paint(paste0(cross, format_g(plan$x2$v)), plan$x2$slot, "text")
+    labs <- c(rev(neg), pos, x2)
+    labs <- labs[nzchar(labs)]
+    paste(labs, collapse = " ")
+  }
 
-  color_table <- color_table %>%
-    dplyr::mutate(
-      color_scale = list(.data$color_type, .data$ref, .data$sign, .data$breaks,
-                         purrr::map(.data$breaks, ~ 1:length(.))) %>%
-        purrr::pmap(~ dplyr::if_else(
-          condition = ..5 %in% c(1, max(..5)/2 + 1),
-          true      = color_formula_chr(color_type = ..1, ref = ..2,
-                                        sign = ..3, breaks = ..4, mode = mode[1]),
-          false     = if (mode[1] == "console") { ..4 } else { paste0("<b>", ..4, "</b>")}
-        ))
+  policy_note <- function(policy) {
+    switch(policy,
+           "grey_non_signif"  = " [signif. only]",
+           "color_all_signif" = " [signif., CI-floor]",
+           "")
+  }
+
+  # ---- per-representative-column legend spec (imap: cn = column name, cv = col_var name) ------
+  specs <- purrr::imap(reps, function(cn, cv) {
+    col      <- x[[cn]]
+    is_mean  <- get_type(col) %in% c("mean", "n")
+    plan_txt <- fmt_color_plan(col, "text", color = get_color(col))
+    plan_bg  <- fmt_color_plan(col, "bg",   color = get_color_bg(col))
+    if (is.null(plan_txt) && is.null(plan_bg)) return(NULL)
+    scales   <- color_scales(col)
+    std      <- isTRUE(scales$mean_diff$std)
+    policy   <- if (!is.null(plan_txt)) plan_txt$policy else "ignore"
+    m_txt    <- if (!is.null(plan_txt)) plan_txt$measure else NA_character_
+    m_bg     <- if (!is.null(plan_bg))  plan_bg$measure  else NA_character_
+    reference <- ref_label(get_ref_type(col)[1])
+    list(
+      col_var = cv,
+      sig     = paste(m_txt, m_bg, policy, reference, is_mean, std, sep = "\r"),
+      is_mean = is_mean, std = std, policy = policy, ref = reference,
+      m_txt = m_txt, m_bg = m_bg,
+      txt = if (!is.null(plan_txt)) channel_scale(plan_txt, is_mean, std, "text") else NA_character_,
+      bg  = if (!is.null(plan_bg))  channel_scale(plan_bg,  is_mean, std, "bg")   else NA_character_
     )
+  }) %>% purrr::compact()
+  if (length(specs) == 0) return(NULL)
 
-  if (colored == TRUE) {
-    if (mode[1] == "console") {
-      color_table <- color_table %>%
-        dplyr::mutate(
-          color_scale = purrr::map_chr(.data$color_scale, ~ paste0(
-            .,
-            collapse = pillar::style_subtle("; ")          )
-          ),
-          names = pillar::style_subtle(paste0(.data$names, ": "))
-        )
+  # ---- group col_vars sharing a signature, assemble one legend line each ---------------------
+  grp   <- split(specs, purrr::map_chr(specs, "sig"))
+  lines <- purrr::map_chr(grp, function(g) {
+    s      <- g[[1]]
+    vnames <- unique(purrr::map_chr(g, "col_var"))
+    etc    <- if (!all_variables_names && length(vnames) > 3) ",..." else ""
+    if (!all_variables_names) vnames <- utils::head(vnames, 3)
+    names_txt <- paste0(paste(vnames, collapse = ", "), etc)
 
-    } else {
-      color_table <- color_table %>%
-        dplyr::mutate(
-          color_scale = purrr::map_chr(.data$color_scale, ~ paste0(., collapse = "; ")
-          ), #%>% stringr::str_replace_all(";", kableExtra::text_spec(";", color = grey_color)),
-          names = paste0(.data$names, ": ") %>% kableExtra::text_spec(color = grey_color)
-        )
+    if (add_color_and_diff_types) {
+      cty <- paste0("[color:", s$m_txt,
+                    if (!is.na(s$m_bg)) paste0("+", s$m_bg) else "", "]")
+      dty <- if (!is.na(s$m_txt) && s$m_txt %in% c("diff", "ratio", "or"))
+        paste0(" [ref:", s$ref, "]") else ""
+      names_txt <- paste0(cty, dty, " ", names_txt)
     }
 
-  } else {
-    color_table <- color_table %>%
-      dplyr::mutate(
-        color_scale = purrr::map_chr(.data$color_scale, ~ paste0(., collapse = "; " )),
-        names = paste0(.data$names, ": ")
-      )
-  }
+    ref_part <- if (!is.na(s$m_txt) && s$m_txt %in% c("diff", "ratio", "or") && nzchar(s$ref)) {
+      paste0("/", s$ref)
+    } else if (identical(s$m_txt, "contrib")) "/indep." else ""
+    body <- character(0)
+    if (!is.na(s$txt))
+      body <- c(body, paste0(measure_word(s$m_txt, s$is_mean, s$std), ref_part, ": ", s$txt))
+    if (!is.na(s$bg))
+      body <- c(body, paste0("bg ", measure_word(s$m_bg, s$is_mean, s$std), ": ", s$bg))
+    body <- paste0(paste(body, collapse = "; "), policy_note(s$policy))
 
-  paste0(color_table$names, color_table$color_scale)
-  # %>% cli::cat_line()
-  # stringr::str_remove("\\+0.0+")
+    if (isTRUE(colored) && mode == "console") {
+      names_txt <- pillar::style_subtle(paste0(names_txt, ": "))
+    } else if (mode != "console" && !is.null(grey_color)) {
+      names_txt <- kableExtra::text_spec(paste0(names_txt, ": "), color = grey_color)
+    } else {
+      names_txt <- paste0(names_txt, ": ")
+    }
+    paste0(names_txt, body)
+  })
+
+  unname(lines)
 }
 # tab_color_legend(tabs[[7]]) %>% cli::cat_line()
 # tab_color_legend(tabs[[7]], colored = FALSE)
-
-#' @keywords internal
-brk_from_color <- function(color_type) {
-  # Phase 5: derive the legacy flat break vectors from the canonical scales (Step 3 removes it).
-  tabxplor_color_breaks <- legacy_color_breaks(getOption("tabxplor.color_breaks"))
-
-  purrr::map(color_type, ~
-               switch(.x,
-                      "or"            = ,
-                      "OR"            = ,
-                      "diff_mean"     = ,
-                      "diff_ci_mean"  = list(tabxplor_color_breaks$mean_breaks #,
-                                             #tabxplor_color_breaks$mean_brksup
-                                             ),
-                      "after_ci_mean" = list(tabxplor_color_breaks$mean_ci_breaks #,
-                                             #tabxplor_color_breaks$mean_ci_brksup
-                                             ),
-                      "diff"          = ,
-                      "diff_ci"       = list(tabxplor_color_breaks$pct_breaks #,
-                                             #tabxplor_color_breaks$pct_brksup
-                                             ),
-                      "after_ci"      = list(tabxplor_color_breaks$pct_ci_breaks #,
-                                             #tabxplor_color_breaks$pct_ci_brksup
-                                             ),
-                      "contrib"       = list(tabxplor_color_breaks$contrib_breaks #,
-                                             #tabxplor_color_breaks$contrib_brksup
-                                             ),
-                      "ci"            = ,
-                      "ci_mean"       = list(0 # , Inf
-                                             ), #list(c(0, 0), c(Inf, -Inf)),
-                      list()
-               ) %>%
-               purrr::transpose() %>%
-               purrr::map(purrr::flatten_dbl)
-  )
-}
-
-#' @keywords internal
-get_color_type <- function(color, type) {
-  purrr::map2(color, type, ~ dplyr::case_when(
-    .x == "contrib" ~ "contrib",
-    .x == "ci"      ~ "ci"     ,
-    .x %in% c("OR", "or")  ~ "OR"     ,
-
-    .x %in% c("diff", "diff_ci", "after_ci") & .y == "mean"
-    ~ paste0(.x, "_mean"),
-
-    .x %in% c("diff", "diff_ci", "after_ci") &
-      .y %in% c("row", "col", "all", "all_tabs")
-    ~ .x
-
-  ) %>% purrr::set_names(names(.x)))
-}
 
 # Phase 5 (Step 2): the level -> palette-slot rule, replacing select_in_color_style's hand-tuned
 # lookup + fragile hex-sniff. `channel` ("text"/"bg") picks the palette family EXPLICITLY (the
@@ -3129,90 +2574,6 @@ build_slots <- function(K, channel = c("text", "bg")) {
        neg_slots = c(0L, base[K + seq_len(K)]))
 }
 
-#' @keywords internal
-select_in_color_style <- function(breaks, pct_diff) {
-  # DESIGN: maps the NUMBER of active breaks -> which of the 10 palette slots (pos1-5/neg1-5)
-  # to use, so that with few breaks the chosen intensities stay visually spread out. The *2
-  # ratio color is injected at slot 11 ("ratio") where the >1 break sits. The palette family
-  # is detected by sniffing pos1's hex to pick between two index sets.
-  # FIXME(clarify): the specific slot-index vectors and the "#CCFFCC|#000033e" hex sniff are
-  # hand-tuned magic — document the intended mapping before reworking colors in WS2.
-  # (Phase 5 Step 3 replaces this with color_slot_table()/build_slots() above.)
-
-  breaks <- breaks |>
-    stringr::str_remove(paste0("\\+|\\*|", cross)) |>
-    stringr::str_replace_all("/", "-")
-  breaks <- dplyr::if_else(stringr::str_detect(breaks, "%$"),
-                           true  = as.double(stringr::str_remove(breaks, "%$")) / 100,
-                           false = as.double(stringr::str_remove(breaks, "%$")) )
-  pct_x2 <- (pct_diff & breaks > 1) |> which()
-
-  if (length(pct_x2) >= 2) stop("cannot have more than one pct_breaks > 1 rule (like *2)")
-
-  length <- dplyr::if_else(
-    length(pct_x2) > 0,
-    true  = length(breaks[-pct_x2]),
-    false = length(breaks)
-  )
-
-
-  color_code_pos1 <- get_color_style()$pos1 |> attr("_styles") |> names()
-
-  # ratio  <- if (length(pct_x2) > 0) {6} else {double()}
-  #length <- if (length(pct_x2) > 0) {length - 1L} else {length}
-
-  res <- if (stringr::str_detect(color_code_pos1, "#CCFFCC|#000033e")) {
-    switch(as.character(length),
-           "1"  = c(3)              ,
-           "2"  = c(3, 8)           ,
-           "4"  = c(1, 3, 6, 8)     ,
-           "6"  = c(1, 3, 5, 6, 8, 10),
-           "8"  = c(1:3, 4, 6:8, 10),
-           "10" = 1:10               )
-  } else {
-    switch(as.character(length),
-           "1"  = c(3)              ,
-           "2"  = c(3, 8)           ,
-           "4"  = c(3, 5, 8, 10)    ,
-           "6"  = c(3:5, 8:10)      ,
-           "8"  = c(2:5, 7:10)      ,
-           "10" = 1:10               )
-  }
-
-  if (length(pct_x2) > 0) {
-    res <- c(res[1:(pct_x2 - 1)],
-             11, # get_color_style()["ratio"] : in 11th place
-             res[pct_x2:length(res)]
-    )
-  }
-
-  return(res)
-}
-
-
-# brk_from_color <- function(color, type) {
-#   means <- type == "mean"
-#   purrr::map2(color, means,
-#               ~ switch(
-#                 .x,
-#                 "diff"          = ,
-#                 "diff_ci"       = if (.y) {
-#                   list(mean_breaks, mean_brksup)
-#                 } else {
-#                   list(pct_breaks, pct_brksup)
-#                 },
-#                 "after_ci"      = if (.y) {
-#                   list(mean_ci_breaks, mean_ci_brksup)
-#                 } else {
-#                   list(pct_ci_breaks, pct_ci_brksup)
-#                 },
-#                 "contrib"       = list(contrib_breaks, contrib_brksup),
-#                 list()
-#               ) %>%
-#                 purrr::transpose() %>%
-#                 purrr::map(purrr::flatten_chr)
-#   )
-# }
 
 #' @keywords internal
 get_reference <- function(x, mode = c("cells", "lines", "all_totals")) {

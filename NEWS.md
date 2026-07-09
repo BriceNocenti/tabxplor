@@ -22,7 +22,11 @@
   are set with a named list `set_color_breaks(list(pct_diff =, pct_ratio =, mean_diff =,
   mean_ratio =, contrib =))` (the old `pct_breaks` / `mean_breaks` / `contrib_breaks` arguments are
   soft-deprecated). The colour engine was rewritten around `findInterval`, making console printing
-  and `tab_kable()` dramatically faster on tall tables (the old per-cell resolver was O(n²)).
+  and `tab_kable()` dramatically faster on tall tables (the old per-cell resolver was O(n²)). All
+  exporters (`tab_kable()`, `tab_plot()`, `tab_xl()`) now render both colour channels at once (text
+  colour + background fill), and the colour legend was reworked to read the canonical break scales
+  directly, so numeric `diff` legends show the SD-based thresholds actually used (they previously
+  showed a ratio scale).
 * Significance stars for `ci = "diff"`. Each cell now shows `*` / `**` / `***` (p < 0.10 / 0.05 /
   0.01, customisable via `options("tabxplor.signif_levels")` / `"tabxplor.signif_labels")`) for the
   difference from its reference, in the console, `tab_md()` and `tab_kable()`. Significance is read
@@ -109,8 +113,13 @@
   and unweighted tables (and their memory use) also improve. Output is unchanged.
 
 ## Deprecations
-
-
+* The combined `color` strings `"diff_ci"`, `"after_ci"` and `"ci"` are soft-deprecated: use
+  `color = "diff"` with the new `color_signif` argument (`"grey_non_signif"` for `"diff_ci"`,
+  `"color_all_signif"` for `"after_ci"`/`"ci"`). They still work unchanged.
+* `get_color_breaks()` now returns the canonical named list of positive-only scales
+  (`pct_diff`, `pct_ratio`, `mean_diff`, `mean_ratio`, `contrib`) --- the same shape
+  `set_color_breaks()` accepts, so it round-trips. Pass `type = "all"` for the mirrored
+  (signed) thresholds. This changes its return shape from the previous flat vectors.
 
 # tabxplor 1.3.1
 

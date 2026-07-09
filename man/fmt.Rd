@@ -27,7 +27,10 @@
 \alias{is_refcol}
 \alias{as_refcol}
 \alias{get_color}
+\alias{get_color_bg}
+\alias{get_color_signif}
 \alias{set_color}
+\alias{set_color_signif}
 \alias{get_digits}
 \alias{set_digits}
 \title{Create a vector of class formatted numbers}
@@ -60,7 +63,8 @@ fmt(
   col_var = "",
   totcol = FALSE,
   refcol = FALSE,
-  color = ""
+  color = "",
+  color_signif = "ignore"
 )
 
 is_fmt(x)
@@ -113,7 +117,13 @@ as_refcol(x, refcol = TRUE)
 
 get_color(x, ...)
 
+get_color_bg(x, ...)
+
+get_color_signif(x, ...)
+
 set_color(x, color)
+
+set_color_signif(x, color_signif)
 
 get_digits(x)
 
@@ -291,6 +301,8 @@ A modified fmt vector.
 
 A logical vector with the fmt vectors color attributes
 
+A single character with the background color measure, or \code{NA}.
+
 A modified fmt vector.
 }
 \description{
@@ -370,7 +382,13 @@ all of them in the whole tibble.
 
 \item \code{get_color()}: get color (at \code{fmt} level or \code{tab} level)
 
+\item \code{get_color_bg()}: get the background-channel color measure (\code{NA} when there is none)
+
+\item \code{get_color_signif()}: get the significance policy (\code{"ignore"} / \code{"grey_non_signif"} / \code{"color_all_signif"})
+
 \item \code{set_color()}: set the "color" attribute of a \code{fmt} vector
+
+\item \code{set_color_signif()}: set the significance policy attribute of a \code{fmt} vector
 
 \item \code{get_digits()}: get the "digits" field
 

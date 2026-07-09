@@ -185,7 +185,7 @@ The `comp` argument adds another dimension:
 
 ### Mean diff vs ratio (Phase 2 flip)
 
-For `type = "mean"` columns the `diff` field is now a real **difference** (`cell_mean − ref_mean`), like pct columns; the mean/reference **ratio** lives in the `ratio` field (`cell_mean / ref_mean`). During the D3 interim (until Phase 5) the color layer still colors that **ratio** against the mean breaks (`c(1.15, 1.5, 2, 4)`, ratio thresholds where 1.15 = "+15% above reference"), so `color_formula()` reads `ratio` for mean columns while reading `diff` for pct columns (where breaks like `0.05` mean "+5 percentage points"). Phase 5 will switch mean coloring to the sd-standardized difference.
+For `type = "mean"` columns the `diff` field is a real **difference** (`cell_mean − ref_mean`), like pct columns; the mean/reference **ratio** lives in the `ratio` field (`cell_mean / ref_mean`). Since Phase 5, `color = "diff"` on numeric means colors the **sd-standardized** difference (Glass's Δ = `diff / sqrt(ref var)`) against the `mean_diff` scale (`c(0.2, 0.5, 0.8)`), while `color = "ratio"` colors the `ratio` field against `mean_ratio` (`c(1.15, 1.5, 2, 4)`). For **pct** columns the `mean` field is now `NA` (the old mean/×2 overload is gone; the `ratio` field carries the relative risk that drives the ×2 rule).
 
 Note the remaining pct-column overload: for percentage columns the "×2 rule" ratio still rides the `mean` field (removed in Phase 5). So `mean` currently means an actual mean for `type = "mean"` and a pct ratio otherwise.
 
@@ -210,7 +210,7 @@ can never disagree with the bracket. `stars` arg (default `TRUE`, `ci="diff"` on
 `pvalue = NA`). Kish `n_eff` opt-in for numeric CIs via `options("tabxplor.kish_neff")` (needs the
 `Σw²` accumulator, added to the numeric scan only when opted in).
 
-Accessors: `get_ci()` = upper arm (`ci_sup − ci_center`, retro-compatible with `color_formula`);
+Accessors: `get_ci()` = upper arm (`ci_sup − ci_center`, retro-compatible with the `$ci` field extraction);
 `get_ci_moe()` = larger arm for the `± moe` display; `fmt(ci=)` stores absolute symmetric bounds
 around the estimate. `format()` reads `ci_inf`/`ci_sup` directly (× 100 for proportions, clamped to
 `[0,100]`), then appends `get_stars()`. Two display modes via `options("tabxplor.ci_print")`:
@@ -243,42 +243,31 @@ The palettes are:
 
 Selection is done by `set_color_style(type, theme, html_24_bit)`, which sets `options("tabxplor.color_style")`. `get_color_style()` returns either crayon functions (for console) or hex codes (for HTML/Excel), depending on the `mode` parameter.
 
-### Layer 2 — Breaks
+### Layer 2 — Breaks (Phase 5 canonical scales)
 
-Breaks are thresholds stored in `options("tabxplor.color_breaks")`, set by `set_color_breaks()`:
+Breaks live in `options("tabxplor.color_breaks")` as a **named list of five positive-only scales**, set by `set_color_breaks(list(...))`. Each scale is `list(pos, center, strict, std)`:
 
-- **pct_breaks** (default `c(0.05, 0.1, 0.2, 2, 0.3)`): For percentage differences.
-  + `0.05` = "+5 percentage points above reference" → `pos1` color
-  + `0.1` = "+10 pp" → `pos2`
-  + `0.2` = "+20 pp" → `pos3`
-  + `2` = "twice the reference percentage" → `ratio` color (the "*2 rule")
-  + `0.3` = "+30 pp" → `pos5`
-  + Negative breaks are **auto-mirrored**: `-0.05` → `neg1`, etc.
-- **mean_breaks** (default `c(1.15, 1.5, 2, 4)`): Always ratios for mean comparisons.
-- **contrib_breaks** (default `c(1, 2, 5, 10)`): Multiples of mean contribution to variance.
+| Scale | Applies to | Default `pos` | `center` | notes |
+| ----- | ---------- | ------------- | -------- | ----- |
+| `pct_diff` | factor difference (pp) | `c(0.05, 0.1, 0.2, 0.3)` | 0 | additive, mirror `c(x, -x)` |
+| `pct_ratio` | factor relative risk | `c(2)` | 1 | multiplicative, mirror `c(x, 1/x)` — the "×2 rule" |
+| `mean_diff` | numeric difference | `NULL` → `c(0.2, 0.5, 0.8)`, `std = TRUE` | 0 | sd-standardized (Glass's Δ) by default; data-unit values → absolute |
+| `mean_ratio` | numeric ratio / OR | `c(1.15, 1.5, 2, 4)` | 1 | multiplicative |
+| `contrib` | χ² contribution | `c(1, 2, 5, 10)` | 0 | inclusive (`strict = FALSE`) |
 
-**The "*2 rule":** Any `pct_breaks` value > 1 switches from additive difference comparison to multiplicative ratio comparison. Only one such value is allowed. When a cell's percentage is ≥ 2× the reference, it gets the `ratio` color (typically purple).
+`center` is the neutral value each break is measured from; `strict` picks `>`/`<` vs `>=`/`<=`; `std` (mean_diff only) toggles standardized vs raw. Mirroring is applied by the engine. The old flat args `pct_breaks`/`mean_breaks`/`contrib_breaks` are soft-deprecated and mapped onto these. `get_color_breaks()` returns the positive scales (round-trips with `set_color_breaks()`); `type = "all"` mirrors.
 
-### Layer 3 — Color Selection
+### Layer 3 — The vectorised `findInterval` engine (three axes)
 
-`fmt_color_selection()` in `R/fmt_class.R` (line ~1869) orchestrates the selection:
+Coloring is decomposed into three orthogonal per-column choices: **measure** (`diff`/`ratio`/`contrib`/`or`, in the `color` attribute `[1]` = text, `[2]` = background), **channel** (text vs background), and **significance policy** (the `color_signif` attribute: `ignore`/`grey_non_signif`/`color_all_signif`). All feed one engine in `R/fmt_class.R`:
 
-1. Extract breaks from options (or `force_breaks` parameter).
-2. For each break level, call `color_formula()` to get a boolean mask of cells exceeding that threshold.
-3. `keep_last_break()` resolves ties: each cell gets the strongest (highest) matching threshold.
-4. Return a named list of boolean vectors (one per color level: `pos1`–`pos5`, `neg1`–`neg5`, `ratio`).
+1. `fmt_color_plan(x, channel, color, signif)` builds a plan: it decodes the measure+policy (`color_measure_policy()`), picks the scale for the measure×column-type, computes the per-cell `score` (e.g. `get_diff`; standardized `get_diff / sqrt(get_ref_var)` for numeric diff; `get_ratio`; `get_ctr / get_mean_contrib`), the significance `gate` (from the stored `get_ci_inf`/`get_ci_sup` bounds), and the `pos_slots`/`neg_slots` maps (`build_slots()`/`color_slot_table()`).
+2. `fmt_color_slots(x, plan)` folds `score` to a magnitude around `center`, then `findInterval(mag, pos_breaks)` → level → palette slot (0 = uncolored, 1..10 = grid, 11 = the legacy ×2 override), zeroing ungated cells. This C-level path replaced the old per-cell `keep_last_break` reduce (48–1290× faster).
+3. `fmt_color_channels(x)` → `list(text_slot, bg_slot)`.
 
-`color_formula()` (line ~2134) applies different boolean logic per color mode:
+Every consumer maps `(text_slot, bg_slot)` to colour the same way: `pillar_shaft.tabxplor_fmt()` (console, the reference two-channel consumer), `fmt_get_color_code()` (single-channel, the golden), the shared `fmt_channel_codes()` helper (text + bg hex, used by `tab_kable`/`tab_plot`/`tab_xl`), and `tab_color_legend()` (which reads the same scales, so legend and cells never disagree). The old combined strings (`"diff_ci"`/`"after_ci"`/`"ci"`) are decoded to (measure, policy) by `color_measure_policy()`.
 
-| Color mode | Formula |
-| ---------- | ------- |
-| `"diff"` | `diff >= break` (additive) or `ratio >= break` (when break > 1) |
-| `"diff_ci"` | Difference must exceed CI to be significant |
-| `"after_ci"` | Subtracts CI from difference before comparing to break |
-| `"contrib"` | `ctr >= break * mean_ctr` (cell contribution vs. mean contribution) |
-| `"or"` / `"OR"` | Odds ratio comparison; negative uses `1/break` for under-represented |
-
-The `pillar_shaft.tabxplor_fmt()` method then applies the selected colors using `crayon::make_style()` functions for console display, or hex codes for HTML/Excel.
+The `color`/`color_signif` **arguments** are parsed by `normalize_color_spec()` + `finalize_color_spec()` (`R/tab.R`), called by `tab()` and `tab_num()` (not yet `tab_many()` — Phase 6).
 
 ## Export System
 
@@ -386,8 +375,8 @@ The foundation file. Contains:
 - **Lines 1040–1340**: Internal field accessors via `fmt_field_factory()`, reference detection (`get_reference()`).
 - **Lines 1340–1630**: `format.tabxplor_fmt()` — the central display method handling 20+ display modes.
 - **Lines 1630–1870**: `pillar_shaft.tabxplor_fmt()` — console color rendering, `mutate.tabxplor_fmt()`.
-- **Lines 1870–2130**: `fmt_color_selection()` — the color selection pipeline.
-- **Lines 2130–2670**: `color_formula()`, `keep_last_break()`, helper functions.
+- **`fmt_color_plan()` / `fmt_color_slots()` / `fmt_color_channels()` / `fmt_channel_codes()`** — the vectorised `findInterval` color engine + the shared exporter slot→hex helper (Layer 3 above); `color_measure_policy()` decodes the legacy strings; `color_slot_table()` / `build_slots()` map levels to palette slots.
+- **`tab_color_legend()`** — the color legend, driven by the same per-channel plan + canonical scales as the cells.
 - **Lines 2670–2900**: `get_reference()` — identifies reference cells (totals, first row, or regex match).
 - **Lines 2900–3341**: vctrs arithmetic (`vec_arith`), casting (`vec_cast`), type compatibility (`vec_ptype2`), comparison/equality proxies.
 
@@ -445,7 +434,7 @@ Classes, dplyr methods, and colors. Contains:
 Excel export. Main function `tab_xl()` handles:
 
 - Workbook creation, sheet management, column width calculation
-- Cell-by-cell color application using `fmt_color_selection()` with `mode = "color_code"`
+- Two-channel color: font-colour styles (text channel) + fill styles (bg channel) driven by `fmt_color_channels()`, stacked with `openxlsx::addStyle(stack = TRUE)`
 - Font, border, and number format styling
 - Chi-squared statistics and color legend printing
 

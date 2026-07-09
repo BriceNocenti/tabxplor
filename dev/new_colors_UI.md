@@ -10,6 +10,14 @@
 > Governing statistics already implemented in Phase 3a: `dev/tabxplor_1.4.0_decisions.md` §12/§14/§20.
 > Skills to use while implementing: `/color-mode` (the colour pipeline) and `/vctrs-field` (widening
 > the existing `color` attribute to hold up to two values — text, background).
+>
+> **STATUS (2026-07-09): IMPLEMENTED (Batch A + Batch B), Phase 5 complete.** The findInterval
+> engine, five-scale breaks list, two-channel `color`/`color_signif` args, significance from the
+> stored bounds, exporters + legend on the two channels, old-string soft-deprecation, and the docs
+> all landed (full suite green). **Still open:** W4 (per-measure palette hues — only text/bg channels,
+> not distinct hue ramps), W5 (coloured `tab_md`), the `col% + means` reference fix (Phase 7), and
+> wiring the new args into `tab_many()` (Phase 6). The `color_type` export arg is now vestigial
+> (selects the text-channel palette family only). See CLAUDE.md > Phase 5 for the done-record.
 
 ---
 

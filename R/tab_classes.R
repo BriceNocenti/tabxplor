@@ -549,14 +549,9 @@ tab_kable <- function(tabs,
 
   row_var <- which(names(tabs) == tab_get_vars(tabs)$row_var)
 
-  color_cols     <- get_color(tabs)
-  fmt_no_colors  <- purrr::map_lgl(tabs, is_fmt) &
-    (color_cols %in% c("", "no") | is.na(color_cols))
-  fmt_no_colors  <- names(fmt_no_colors)[fmt_no_colors]
-  color_cols     <- which(!color_cols %in% c("", "no") & !is.na(color_cols))
-  type_cols      <- which(!color_cols %in% c("", "no") & !is.na(color_cols))
-  fmt_cols <- which(purrr::map_lgl(tabs, is_fmt))
-  color_cols_fmt <- names(color_cols)[names(color_cols) %in% names(fmt_cols)]
+  color_cols <- get_color(tabs)
+  color_cols <- which(!color_cols %in% c("", "no") & !is.na(color_cols))
+  fmt_cols   <- which(purrr::map_lgl(tabs, is_fmt))
 
   other_cols <- which(purrr::map_lgl(tabs, ~ !is_fmt(.)))
 
@@ -572,87 +567,64 @@ tab_kable <- function(tabs,
   grey_color  <- dplyr::if_else(theme[1] == "light", "#888888", "#BBBBBB")
   grey_color2 <- dplyr::if_else(theme[1] == "light", "#111111", "#EEEEEE")
 
-  references <- tabs[fmt_cols] %>%
-    purrr::map(~ get_reference(., mode = "all_totals") %>%
-                 dplyr::if_else(true      = text_color,
-                                false     = "no_color") %>%
-                 list() %>% purrr::set_names(text_color)
-    )
+  # Phase 5: per-fmt-column two-channel colour codes from the vectorised engine (fmt_channel_codes).
+  #   TEXT channel -> font colour (cell_spec color=); BACKGROUND channel -> fill (cell_spec background=).
+  #   font precedence: measure text hex (coloured) > reference/total cell (text_color) > grey.
+  #   coloured fmt columns grey out with grey_color; plain fmt columns with grey_color2.
+  #   `color_type` selects the TEXT channel's palette family (default "text"); the bg channel always
+  #   uses the "bg" palette. (The old single-channel color_type="bg" render-as-background is superseded
+  #   by the explicit background channel; see NEWS.)
+  any_bg <- any(purrr::map_lgl(tabs[fmt_cols], ~ {
+    b <- get_color_bg(.); length(b) != 0L && !is.na(b) && !b %in% c("", "no")
+  }))
 
-  color_selection <- references
+  color_font <- vector("list", length(fmt_cols)) |> stats::setNames(names(fmt_cols))
+  color_back <- color_font
+  color_bold <- color_font
+  for (cn in names(fmt_cols)) {
+    col     <- tabs[[cn]]
+    is_ref  <- get_reference(col, mode = "all_totals")
+    ct      <- get_color(col)   ; has_col <- length(ct) != 0L && !is.na(ct) && !ct %in% c("", "no")
+    cb      <- get_color_bg(col); has_bgc <- length(cb) != 0L && !is.na(cb) && !cb %in% c("", "no")
+    grey_this <- if (has_col || has_bgc) grey_color else grey_color2
 
-  if (length(color_cols_fmt) != 0) {
-    color_selection[color_cols_fmt] <- purrr::map(tabs[color_cols], fmt_color_selection)
-
-    color_styles <- purrr::pmap(list(color_selection[color_cols_fmt],
-                                     get_color(tabs)[color_cols_fmt],
-                                     get_type(tabs)[color_cols_fmt]
-    ),
-    ~ select_in_color_style(
-      names(..1),
-      pct_diff =  ..2 %in% c("diff", "diff_ci", "after_ci") &
-        !..3 %in% c("n", "mean")
-    ))
-
-    color_styles <- purrr::map(color_styles,
-                               ~ get_color_style(mode = "color_code",
-                                                 type = color_type[1],
-                                                 theme = theme[1],
-                                                 html_24_bit = html_24_bit[1])[.])
-
-    color_selection[color_cols_fmt] <- color_selection[color_cols_fmt] %>%
-      purrr::map2(color_styles, ~ purrr::set_names(.x, .y)) %>%
-      purrr::map(~ purrr::imap(., ~ dplyr::if_else(condition = .x,
-                                                   true      = .y,
-                                                   false     = "no_color")) ) %>%
-      purrr::map2(references[color_cols_fmt], ~ c(.x, .y) %>%
-                    purrr::reduce(~ dplyr::if_else(.x == "no_color", .y, .x)) %>%
-                    stringr::str_replace(., "no_color", grey_color) %>%
-                    tidyr::replace_na(grey_color)
-      )
+    if (has_col || has_bgc) {
+      codes    <- fmt_channel_codes(col, color_type[1], theme[1], html_24_bit[1])
+      text_hex <- codes$text
+      bg_hex   <- codes$bg
+    } else {
+      text_hex <- rep(NA_character_, length(col))
+      bg_hex   <- rep(NA_character_, length(col))
+    }
+    color_font[[cn]] <- dplyr::case_when(!is.na(text_hex) ~ text_hex,
+                                         is_ref           ~ text_color,
+                                         TRUE             ~ grey_this)
+    color_back[[cn]] <- dplyr::if_else(is.na(bg_hex), "none", bg_hex)
+    color_bold[[cn]] <- !is.na(text_hex) | is_ref
   }
 
-  if (length(fmt_no_colors) != 0) {
-    color_selection[fmt_no_colors] <- color_selection[fmt_no_colors] %>%
-      purrr::map(~ purrr::flatten_chr(.) %>%
-                   stringr::str_replace(., "no_color", grey_color2) %>%
-                   tidyr::replace_na(grey_color2)
-      )
-  }
-
-  if (color_type == "text") {
+  if (any_bg) {
     out <- tabs %>%
       dplyr::mutate(dplyr::across(
         where(is_fmt),
         ~ format(., html = TRUE, special_formatting = TRUE, na = "") %>%
           kableExtra::cell_spec(
-            bold  = !color_selection[[dplyr::cur_column()]] %in% c(grey_color, grey_color2), #text_color
-            color =  color_selection[[dplyr::cur_column()]],
+            bold       = color_bold[[dplyr::cur_column()]],
+            color      = color_font[[dplyr::cur_column()]],
+            background = color_back[[dplyr::cur_column()]],
             tooltip = if (!popover & tooltips) {tab_kable_print_tooltip(.)} else {NULL},
             popover = if (popover & tooltips) {tab_kable_print_tooltip(., popover = TRUE)} else {NULL}
           )
       ))
 
   } else {
-    bg_color_selection  <- color_selection %>%
-      purrr::map(~ stringr::str_replace_all(., text_color, "none") %>%
-                   stringr::str_replace_all(grey_color, "none")        )
-
-    txt_color_selection <- color_selection %>%
-      purrr::map(~ dplyr::if_else(stringr::str_detect(., text_color) |
-                                    stringr::str_detect(., grey_color) |
-                                    stringr::str_detect(., grey_color2),
-                                  true  = .,
-                                  false = text_color)               )
-
     out <- tabs %>%
       dplyr::mutate(dplyr::across(
         where(is_fmt),
-        ~ format(., special_formatting = TRUE) %>%
+        ~ format(., html = TRUE, special_formatting = TRUE, na = "") %>%
           kableExtra::cell_spec(
-            bold  = color_selection[[dplyr::cur_column()]] %in% c(text_color), #text_color
-            color      = txt_color_selection[[dplyr::cur_column()]],
-            background = bg_color_selection[[dplyr::cur_column()]],
+            bold  = color_bold[[dplyr::cur_column()]],
+            color = color_font[[dplyr::cur_column()]],
             tooltip = if (!popover & tooltips) {tab_kable_print_tooltip(.)} else {NULL},
             popover = if (popover & tooltips) {tab_kable_print_tooltip(., popover = TRUE)} else {NULL}
           )
@@ -1281,13 +1253,9 @@ tab_plot <- function(tabs,
                   whitespace_only = whitespace_only, unbreakable_spaces = FALSE)
 
 
-  color_cols     <- get_color(tabs)
-  fmt_no_colors  <- purrr::map_lgl(tabs, is_fmt) &
-    (color_cols %in% c("", "no") | is.na(color_cols))
-  fmt_no_colors  <- names(fmt_no_colors)[fmt_no_colors]
-  color_cols     <- which(!color_cols %in% c("", "no") & !is.na(color_cols))
-  fmt_cols <- which(purrr::map_lgl(tabs, is_fmt))
-  color_cols_fmt <- names(color_cols)[names(color_cols) %in% names(fmt_cols)]
+  color_cols <- get_color(tabs)
+  color_cols <- which(!color_cols %in% c("", "no") & !is.na(color_cols))
+  fmt_cols   <- which(purrr::map_lgl(tabs, is_fmt))
 
   other_cols <- which(purrr::map_lgl(tabs, ~ !is_fmt(.)))
 
@@ -1317,69 +1285,45 @@ tab_plot <- function(tabs,
   grey_color  <- dplyr::if_else(theme[1] == "light", "#888888", "#BBBBBB")
   grey_color2 <- dplyr::if_else(theme[1] == "light", "#111111", "#EEEEEE")
 
-  references <- tabs[fmt_cols] %>%
-    purrr::map(~ get_reference(., mode = "all_totals") %>%
-                 dplyr::if_else(true      = text_color,
-                                false     = "no_color") %>%
-                 list() %>% purrr::set_names(text_color)
-    )
+  # Phase 5: per-fmt-column two-channel colour codes (fmt_channel_codes).
+  #   font colour: measure text hex (coloured) > reference/total (text_color) > grey.
+  #   bg fill: the background channel hex, "none" when absent. `color_type` selects the text
+  #   channel palette family (default "text"); the bg channel always uses the "bg" palette.
+  any_bg <- any(purrr::map_lgl(tabs[fmt_cols], ~ {
+    b <- get_color_bg(.); length(b) != 0L && !is.na(b) && !b %in% c("", "no")
+  }))
 
-  color_selection <- references
-
-
-
-
-  if (length(color_cols_fmt) != 0) {
-    color_selection[color_cols_fmt] <- purrr::map(tabs[color_cols], fmt_color_selection)
-
-    color_styles <- purrr::pmap(list(color_selection[color_cols_fmt],
-                                     get_color(tabs)[color_cols_fmt],
-                                     get_type(tabs)[color_cols_fmt]
-    ),
-    ~ select_in_color_style(
-      names(..1),
-      pct_diff =  ..2 %in% c("diff", "diff_ci", "after_ci") &
-        !..3 %in% c("n", "mean")
-    ))
-
-    color_styles <- purrr::map(color_styles,
-                               ~ get_color_style(mode = "color_code",
-                                                 type = color_type[1],
-                                                 theme = theme[1],
-                                                 html_24_bit = html_24_bit[1])[.])
-
-    color_selection[color_cols_fmt] <- color_selection[color_cols_fmt] %>%
-      purrr::map2(color_styles, ~ purrr::set_names(.x, .y)) %>%
-      purrr::map(~ purrr::imap(., ~ dplyr::if_else(condition = .x,
-                                                   true      = .y,
-                                                   false     = "no_color")) ) %>%
-      purrr::map2(references[color_cols_fmt], ~ c(.x, .y) %>%
-                    purrr::reduce(~ dplyr::if_else(.x == "no_color", .y, .x)) %>%
-                    stringr::str_replace(., "no_color", grey_color) %>%
-                    tidyr::replace_na(grey_color)
-      )
+  build_plot_colors <- function(col) {
+    is_ref <- get_reference(col, mode = "all_totals")
+    ct <- get_color(col)   ; has_col <- length(ct) != 0L && !is.na(ct) && !ct %in% c("", "no")
+    cb <- get_color_bg(col); has_bgc <- length(cb) != 0L && !is.na(cb) && !cb %in% c("", "no")
+    grey_this <- if (has_col || has_bgc) grey_color else grey_color2
+    if (has_col || has_bgc) {
+      codes <- fmt_channel_codes(col, color_type[1], theme[1], html_24_bit[1])
+      text_hex <- codes$text; bg_hex <- codes$bg
+    } else {
+      text_hex <- rep(NA_character_, length(col)); bg_hex <- rep(NA_character_, length(col))
+    }
+    list(font = dplyr::case_when(!is.na(text_hex) ~ text_hex,
+                                 is_ref           ~ text_color,
+                                 TRUE             ~ grey_this),
+         back = dplyr::if_else(is.na(bg_hex), "none", bg_hex))
   }
 
-  if (length(fmt_no_colors) != 0) {
-    color_selection[fmt_no_colors] <- color_selection[fmt_no_colors] %>%
-      purrr::map(~ purrr::flatten_chr(.) %>%
-                   stringr::str_replace(., "no_color", grey_color2) %>%
-                   tidyr::replace_na(grey_color2)
-      )
-  }
-
+  plot_colors     <- purrr::map(tabs[fmt_cols], build_plot_colors)
+  color_selection <- purrr::map(plot_colors, "font")
+  bg_selection    <- purrr::map(plot_colors, "back")
 
   if (length(other_cols) != 0) {
-    color_selection <-
-     dplyr::bind_cols(as.list(
-      dplyr::mutate(tabs[other_cols], dplyr::across(tidyselect::everything(),
-                                                    ~ text_color)),
-    ),
-    color_selection
-    )
-
+    other_font <- as.list(dplyr::mutate(tabs[other_cols],
+                                        dplyr::across(tidyselect::everything(), ~ text_color)))
+    other_none <- as.list(dplyr::mutate(tabs[other_cols],
+                                        dplyr::across(tidyselect::everything(), ~ "none")))
+    color_selection <- dplyr::bind_cols(other_font, color_selection)
+    bg_selection    <- dplyr::bind_cols(other_none, bg_selection)
   } else {
     color_selection <- color_selection |> dplyr::bind_cols()
+    bg_selection    <- bg_selection    |> dplyr::bind_cols()
   }
 
   face_selection <- color_selection |>
@@ -1453,57 +1397,25 @@ tab_plot <- function(tabs,
 
 
 
-if (color_type == "text") {
-
-    for(j in 1:ncol(tabs)) {
-      for(i in 1:nrow(tabs)) {
-        tabs_gg <- tabs_gg |> ggpubr::table_cell_font(
-          row    = i + 1,
-          column = j,
-          color  = color_selection[[j]][[i]],
-          face   = face_selection[[j]][[i]]
-        )
+  # Phase 5: unified per-cell rendering. Text channel -> font colour; background channel -> cell
+  # fill (only applied where a bg-channel colour exists; other cells keep the ggtexttable default).
+  for(j in 1:ncol(tabs)) {
+    for(i in 1:nrow(tabs)) {
+      tabs_gg <- tabs_gg |> ggpubr::table_cell_font(
+        row    = i + 1,
+        column = j,
+        color  = color_selection[[j]][[i]],
+        face   = face_selection[[j]][[i]]
+      )
+      if (any_bg) {
+        fillv <- bg_selection[[j]][[i]]
+        if (!is.na(fillv) && fillv != "none") {
+          tabs_gg <- tabs_gg |> ggpubr::table_cell_bg(
+            row = i + 1, column = j, fill = fillv, linewidth = 0
+          )
+        }
       }
     }
-
-  } else {
-    bg_color_selection  <- color_selection %>%
-      purrr::map_dfc(~ stringr::str_replace_all(., text_color, "none") %>%
-                       stringr::str_replace_all(grey_color, "none")        )
-
-    txt_color_selection <- color_selection %>%
-      purrr::map_dfc(~ dplyr::if_else(stringr::str_detect(., text_color) |
-                                        stringr::str_detect(., grey_color) |
-                                        stringr::str_detect(., grey_color2),
-                                      true  = .,
-                                      false = text_color)               )
-
-    for(j in 1:ncol(tabs)) {
-      for(i in 1:nrow(tabs)) {
-        tabs_gg <- tabs_gg |>
-          ggpubr::table_cell_font(
-            row    = i + 1,
-            column = j,
-            color  = txt_color_selection[[j]][[i]],
-            face   = face_selection[[j]][[i]]
-          ) |>
-          ggpubr::table_cell_bg(
-            row    = i + 1,
-            column = j,
-            fill   = ifelse(bg_color_selection[[j]][[i]] != "none",
-                            bg_color_selection[[j]][[i]],
-                            dplyr::if_else(theme[1] == "light", "white", "black")
-
-
-            ),
-            linewidth  = 0
-
-            )
-
-      }
-    }
-    # tabs_gg
-
   }
 # tabs_gg
 
@@ -3204,8 +3116,7 @@ get_color_style <- function(mode = c("crayon", "color_code"),
 #              (contrib). On-break cells fall in the lower band when strict.
 #   - std    : mean_diff only -- TRUE colors the sd-standardized difference (Glass's delta),
 #              FALSE colors the raw difference in data units.
-# The Phase-5 findInterval engine reads this shape directly. Until it lands (Step 3), the
-# current selection path is fed legacy flat vectors via legacy_color_breaks() (byte-identical).
+# The Phase-5 findInterval engine (fmt_color_plan/fmt_color_slots) reads this shape directly.
 # See: dev/new_colors_UI.md §7 ; CLAUDE.md > 1.4.0 roadmap > Phase 5.
 
 #' @keywords internal
@@ -3264,41 +3175,6 @@ mk_color_scale <- function(name, values) {
   list(pos = as.double(values), center = center, strict = strict, std = FALSE)
 }
 
-# Derive the LEGACY flat 5-vector representation the pre-Phase-5 selection path consumes, from
-# the canonical scales. Reproduces exactly what the old set_color_breaks() stored, so coloring
-# stays byte-identical while the option shape modernizes. Removed at Step 3 (engine rewrite).
-#' @keywords internal
-legacy_color_breaks <- function(scales) {
-  if (is.null(scales) || is.null(scales$pct_diff)) scales <- default_color_scales()
-
-  pd <- scales$pct_diff$pos
-  pr <- scales$pct_ratio$pos
-  # Interleave the (single, current-engine) x2 ratio just BEFORE the top diff break, so the
-  # "a top diff break beats the x2" quirk (keep_last_break list order) is reproduced.
-  pct_lit <- if (length(pr) >= 1 && length(pd) >= 1) {
-    c(utils::head(pd, -1L), pr[1], utils::tail(pd, 1L))
-  } else if (length(pd) >= 1) {
-    pd
-  } else {
-    pr[1]
-  }
-  pct_breaks    <- c(pct_lit, -pct_lit[pct_lit <= 1 | is.infinite(pct_lit)])
-  pct_ci        <- pct_lit - dplyr::if_else(pct_lit > 1, 0, pct_lit[1])
-  pct_ci_breaks <- c(pct_ci, -pct_ci[pct_ci <= 1 | is.infinite(pct_ci)])
-
-  mr             <- scales$mean_ratio$pos
-  mean_breaks    <- c(mr, 1 / mr)
-  mean_ci        <- mr / mr[1]
-  mean_ci_breaks <- c(mean_ci, -mean_ci)
-
-  contrib_breaks <- c(scales$contrib$pos, -scales$contrib$pos)
-
-  list(pct_breaks     = pct_breaks,
-       pct_ci_breaks  = pct_ci_breaks,
-       mean_breaks    = mean_breaks,
-       mean_ci_breaks = mean_ci_breaks,
-       contrib_breaks = contrib_breaks)
-}
 
 #' Set the breaks used to print colors
 #' @describeIn tab_many set the breaks used to print colors.
@@ -3406,39 +3282,38 @@ set_color_breaks <- function(breaks = NULL, ...,
 
 
 #' Get the breaks currently used to print colors
-#' @describeIn tab_many get the breaks currently used to print colors
-#' @param brk When missing, return all color breaks. Specify to return a given color
-#' break, among \code{"pct"}, \code{"mean"}, \code{"contrib"}, \code{"pct_ci"} and
-#' \code{"mean_ci"}.
-#' @param type Default to \code{"positive"}, which just print breaks for positive spreads.
-#' Set to \code{all} to get breaks for negative spreads as well.
+#' @describeIn tab_many get the color breaks currently in use, in the canonical Phase-5 shape.
+#' @param brk When missing, return the full named list of positive-only break scales
+#' (\code{pct_diff}, \code{pct_ratio}, \code{mean_diff}, \code{mean_ratio}, \code{contrib}) --
+#' the same shape \code{\link{set_color_breaks}} accepts, so it round-trips. Specify one scale
+#' name to return only its breaks. The old aliases \code{"pct"} (-> \code{pct_diff}) and
+#' \code{"mean"} (-> \code{mean_ratio}) are still accepted.
+#' @param type Default \code{"positive"} returns the positive-only thresholds. Set to
+#' \code{"all"} to get the mirrored (signed) thresholds the engine compares against
+#' (\code{c(x, -x)} for additive scales, \code{c(x, 1/x)} for multiplicative ones).
 #'
-#' @return The color breaks as a double vector, or list of double vectors.
+#' @return The color breaks as a double vector, or a named list of double vectors.
 #' @export
 get_color_breaks <- function(brk, type = c("positive", "all")) {
-  tabxplor_color_breaks <- legacy_color_breaks(getOption("tabxplor.color_breaks"))
+  scales <- getOption("tabxplor.color_breaks")
+  if (is.null(scales) || is.null(scales$pct_diff)) scales <- default_color_scales()
 
-  breaks <-
-    if (missing(brk)) {
-      return(
-        list(pct_breaks     = tabxplor_color_breaks$pct_breaks,
-             mean_breaks    = tabxplor_color_breaks$mean_breaks,
-             contrib_breaks = tabxplor_color_breaks$contrib_breaks,
-             pct_ci_breaks  = tabxplor_color_breaks$pct_ci_breaks,
-             mean_ci_breaks = tabxplor_color_breaks$mean_ci_breaks)
-      )
+  mirror <- function(sc) {
+    if (identical(type[1], "all")) {
+      if (isTRUE(sc$center == 1)) c(sc$pos, 1 / sc$pos) else c(sc$pos, -sc$pos)
     } else {
-      switch (brk,
-              "pct"     = tabxplor_color_breaks$pct_breaks    ,
-              "mean"    = tabxplor_color_breaks$mean_breaks   ,
-              "contrib" = tabxplor_color_breaks$contrib_breaks,
-              "pct_ci"  = tabxplor_color_breaks$pct_ci_breaks ,
-              "mean_ci" = tabxplor_color_breaks$mean_ci_breaks  )
+      sc$pos
     }
+  }
 
-  if (type[1] == "positive") breaks <- breaks[1:((length(breaks) - 1) / 2)]
+  if (missing(brk)) return(purrr::map(scales, mirror))
 
-  breaks
+  brk <- switch(brk, "pct" = "pct_diff", "mean" = "mean_ratio", brk)
+  if (!brk %in% names(scales)) {
+    cli::cli_abort(c("Unknown color break {.val {brk}}.",
+                     "i" = "Valid scales: {.val {names(scales)}} (aliases {.val pct}, {.val mean})."))
+  }
+  mirror(scales[[brk]])
 }
 
 # get_color_breaks()

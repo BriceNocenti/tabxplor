@@ -417,8 +417,9 @@ expect_color <- function(object) {
   # 1. Capture object and label
   act <- testthat::quasi_label(rlang::enquo(object), arg = "object")
 
-  # 2. Call expect()
-  act$color <- fmt_color_selection(act$val) %>% purrr::flatten_lgl()
+  # 2. Call expect() -- a cell is coloured if either channel returns a non-zero palette slot
+  ch <- fmt_color_channels(act$val)
+  act$color <- ch$text_slot != 0L | ch$bg_slot != 0L
   testthat::expect(
     any(act$color),
     sprintf("%s doesn't return any colored cell.", act$lab)

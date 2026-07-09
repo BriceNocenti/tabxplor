@@ -66,7 +66,7 @@ get_color_style(
   html_24_bit = NULL
 )
 
-set_color_breaks(pct_breaks, mean_breaks, contrib_breaks)
+set_color_breaks(breaks = NULL, ..., pct_breaks, mean_breaks, contrib_breaks)
 
 get_color_breaks(brk, type = c("positive", "all"))
 }
@@ -290,8 +290,9 @@ more visible into the code.}
 
 \item{x}{A object to test with \code{\link{is_tab}}.}
 
-\item{type}{Default to \code{"positive"}, which just print breaks for positive spreads.
-Set to \code{all} to get breaks for negative spreads as well.}
+\item{type}{Default \code{"positive"} returns the positive-only thresholds. Set to
+\code{"all"} to get the mirrored (signed) thresholds the engine compares against
+(\code{c(x, -x)} for additive scales, \code{c(x, 1/x)} for multiplicative ones).}
 
 \item{theme}{For \code{set_color_style} and \code{get_color_style}, is your console
 or html table background \code{"light"} or \code{"dark"} ? Default to RStudio theme.}
@@ -309,32 +310,20 @@ the five last for under-represented ones). The result is saved to
 \item{mode}{By default, \code{get_color_style} returns a list of \pkg{crayon} coloring
 functions. Set to \code{"color_code"} to return html color codes.}
 
-\item{pct_breaks}{If they are to be changed, the breaks used for percentages.
-Default to \code{c(0.05, 0.1, 0.2, 2, 0.3)} : first color used when the pct of a cell
-is +5\% superior to the pct of the related total ; second color used when
-it is +10\% superior ; third +20\% superior ; fourth *2 superior ;
-fifth +30\% superior. When > 1, it does not take differences but ratio.
-The opposite for cells inferior to the total (without the *2 rule).
-With \code{color = "after_ci"}, the first break is subtracted from all breaks
-(default becomes \code{c(0, 0.05, 0.15, 2, 0.25)} : +0\%, +5\%, +15\%, *2, +25\%).}
+\item{breaks}{A named list of scales to set, e.g.
+\code{list(pct_diff = c(0.05, 0.1, 0.2, 0.3), pct_ratio = c(2))}. Unset scales keep their
+current value.}
 
-\item{mean_breaks}{If they are to be changed, the breaks used for means.
-Default to \code{c(1.15, 1.5, 2, 4)} : first color used when the mean of a cell
-is superior to 1.15 times the mean of the related total row ; second color
-used when it is superior to 1.5 times ; etc.
-The opposite for cells inferior to the total.
-With \code{color = "after_ci"}, the first break is divided from all breaks
-(default becomes \code{c(1, 1.3, 1.7, 3.5)}).}
+\item{pct_breaks, mean_breaks, contrib_breaks}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} The old
+positional arguments. \code{pct_breaks} is split into \code{pct_diff} (values \eqn{\le} 1)
+and \code{pct_ratio} (values > 1); \code{mean_breaks} maps to \code{mean_ratio};
+\code{contrib_breaks} to \code{contrib}.}
 
-\item{contrib_breaks}{If they are to be changed, the breaks used for contributions to
-variance. Default to \code{c(1, 2, 5, 10)} : first color used when the contribution of
-a cell is superior to the mean contribution ; second color used when it is superior to
-2 times the mean contribution ; etc. The global color (for example green or
-red/orange) is given by the sign of the spread.}
-
-\item{brk}{When missing, return all color breaks. Specify to return a given color
-break, among \code{"pct"}, \code{"mean"}, \code{"contrib"}, \code{"pct_ci"} and
-\code{"mean_ci"}.}
+\item{brk}{When missing, return the full named list of positive-only break scales
+(\code{pct_diff}, \code{pct_ratio}, \code{mean_diff}, \code{mean_ratio}, \code{contrib}) --
+the same shape \code{\link{set_color_breaks}} accepts, so it round-trips. Specify one scale
+name to return only its breaks. The old aliases \code{"pct"} (-> \code{pct_diff}) and
+\code{"mean"} (-> \code{mean_ratio}) are still accepted.}
 }
 \value{
 A \code{tibble} of class \code{tab}, possibly with colored reading helpers.
@@ -354,10 +343,10 @@ Set global options \code{"tabxplor.color_style_type"} and
 
 A vector of crayon color functions, or a vector of color html codes.
 
-Set the global option "tabxplor.color_breaks" as a list different double
-vectors, and also returns it invisibly.
+Sets the global option "tabxplor.color_breaks" (a named list of scales) and returns
+it invisibly.
 
-The color breaks as a double vector, or list of double vectors.
+The color breaks as a double vector, or a named list of double vectors.
 }
 \description{
 A full-featured function to create, manipulate and format many cross-tables
@@ -368,9 +357,14 @@ Since objects of class \code{tabxplor_tab} are also of class \code{tibble}, you 
 \code{\link[dplyr:arrange]{arrange}}, \code{\link[dplyr:filter]{filter}}
 or \code{\link[dplyr:mutate]{mutate}}.
 
-Only breaks for attractions/over-representations (in green) should be
-given, as a vector of positive doubles, with length between 1 and 5.
-Breaks for aversions/under-representations (in orange/red) will simply be the opposite.
+Color breaks are a named list of the five measure scales \code{pct_diff},
+\code{pct_ratio}, \code{mean_diff}, \code{mean_ratio} and \code{contrib}. Each is a vector
+of positive-only thresholds (the under-represented side is mirrored automatically), 1 to 5
+values, one per color step: \code{pct_diff} colors percentage-point differences,
+\code{pct_ratio} the relative risk (the "x2 rule"), \code{mean_diff} the standardized mean
+difference (Glass's delta) by default (supply data-unit values for absolute coloring),
+\code{mean_ratio} the mean ratio, \code{contrib} the chi2 contribution. An empty/\code{NULL}
+scale drops that measure for its column type.
 }
 \section{Functions}{
 \itemize{
@@ -382,9 +376,9 @@ Breaks for aversions/under-representations (in orange/red) will simply be the op
 
 \item \code{get_color_style()}: get color styles as \pkg{crayon} functions or html codes.
 
-\item \code{set_color_breaks()}: set the breaks used to print colors
+\item \code{set_color_breaks()}: set the breaks used to print colors.
 
-\item \code{get_color_breaks()}: get the breaks currently used to print colors
+\item \code{get_color_breaks()}: get the color breaks currently in use, in the canonical Phase-5 shape.
 
 }}
 \section{Significance stars}{
@@ -445,9 +439,10 @@ pmap(
   data = forcats::gss_cat, color = "auto", chi2 = TRUE)
 }
 set_color_style(type = "bg")
-set_color_breaks(
-  pct_breaks = c(0.05, 0.15, 0.3),
-  mean_breaks = c(1.15, 2, 4),
-  contrib_breaks = c(1, 2, 5)
-)
+set_color_breaks(list(
+  pct_diff   = c(0.05, 0.15, 0.3),
+  pct_ratio  = c(2),
+  mean_ratio = c(1.15, 2, 4),
+  contrib    = c(1, 2, 5)
+))
 }
