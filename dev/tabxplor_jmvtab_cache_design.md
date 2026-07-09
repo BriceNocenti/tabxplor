@@ -294,7 +294,7 @@ opt-in behind `options(tabxplor.fuse_min_rows=)`.
   golden `.rds` + `_snaps/` before it ships: post-aggregate `na`-shape and `levels` collapse; the numeric
   moment plumbing; and, for the jmvtab path specifically, the cleannames-at-display divergence (a *new*
   parity fixture, since it is intentionally not byte-identical to `tab()`'s cleannames).
-- **`tab_num(..., <tab_vars>, ci = "cell")` KNOWN-BUG** — the grouping-set reorder crash (map §9) is
-  independent of the cache but sits in `tab_num`, which 7d rewrites; fix it there.
+- **`tab_num(..., <tab_vars>, ci = "cell")`** — was fixed in Phase 6e (golden-locked); Phase 7d-i
+  preserved the fix across the `.fine` split + added `expect_no_error` regression coverage.
 - **Store schema versioning** — tag the persisted store with a small integer version; on a version
   mismatch (module upgraded between sessions) discard and recompute rather than deserialize a stale shape.

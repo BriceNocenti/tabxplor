@@ -206,12 +206,11 @@ Ordered by expected payoff for the *common* case (many modest tables), which is 
 
 ## Other findings relevant to 1.4.0
 
-- **Bug (WS5): `tab_num(..., <tab_vars>, ci = "cell")` errors.** Reproduced on `gss_cat` for both
-  `comp = "all"` and `comp = "tab"`: `certaines colonnes n'appartiennent pas à la data.table:
-  [<tab_var>]` from `setorderv(tabs_tot, ...)` (`R/tab.R:3454`). Root cause: `ci = "cell"` forces
-  `color = ""`, hence `tot = "no"`, so the totals block runs the grand-total-only grouping-set path
-  (`group_vars = list(character())`), which builds a `tabs_tot` the na="keep" reorder then can't
-  find its tab_var column in. Worth fixing when `tab_num` is touched.
+- **Bug (WS5): `tab_num(..., <tab_vars>, ci = "cell")` — FIXED (Phase 6e, golden-locked).** Was
+  reproduced on `gss_cat` for both `comp` modes (`setorderv(tabs_tot, ...)` couldn't find the tab_var
+  column when `ci = "cell"` forced `tot = "no"` → grand-total-only grouping-set). Fix: the grand total
+  is now a length-1 list and `num_rollup()` keeps every tab_var present; locked by golden
+  `n_ci_tabvars` / `n_ci_tabvars_all` and Phase 7d-i's `test-num-fuse-parity.R` `expect_no_error`.
 - **WS1 (`ref_n`) cost sanity check.** `new_fmt` is already the #2 hot spot; a new per-cell field
   adds an allocation and a `vctrs::field` slot to every cell of every table. Pair it with the
   `new_fmt` slimming above so the net effect is neutral-to-positive.

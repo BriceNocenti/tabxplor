@@ -1251,8 +1251,8 @@ the tidy rewrite also fixed a pre-existing `tab_pvalue_lines` crash when a col_v
 name.
 
 **Deferred:** the `tab_ci()` field-based simplification → Phase 4 (§20 placement); the
-`tab_num(..., <tab_vars>, ci="cell")` grouping-set crash → Phase 6 totals rewrite; the φ² table-variance
-column populated in contrib mode; the `!`-per-cell weak-test glyph mode (§16).
+`tab_num(..., <tab_vars>, ci="cell")` grouping-set crash → FIXED Phase 6e (golden-locked; hardened 7d-i);
+the φ² table-variance column populated in contrib mode; the `!`-per-cell weak-test glyph mode (§16).
 
 Sources: Welch's ANOVA from group means/variances/sizes + the Satterthwaite denominator df — Welch (1951);
 the `stats::oneway.test` formulation. See also the Sources list below.

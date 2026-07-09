@@ -17,7 +17,8 @@ R/
 │                              tab_prepare(), tab_pct(), tab_ci(), tab_chi2(),
 │                              tab_tot(), tab_totaltab(), tab_spread(), tab_get_vars(),
 │                              tab_add_n_pct() (shared add_n/add_pct, used by tab_many + tab_counts)
-├── tab-agg.R        (318 L)  Aggregate-core (Phase 2-3): num_derive_stats/num_rollup,
+├── tab-agg.R        (~470 L) Aggregate-core (Phase 2-3): num_derive_stats/num_rollup, num_moment_scan
+│                              + tab_aggregate_num (numeric tier-1 producer, Phase 7d-i),
 │                              CI engine (ci_pivot/ci_wilson/ci_newcombe/…), agg_chi2/agg_anova
 ├── tab-counts.R     (~360 L) tab_counts() from-the-middle constructor (Phase 4): reshape any
 │                              input shape → count-aggregate → tab_plain(.fine) + shared finalize
@@ -404,7 +405,7 @@ Display: `tab_pvalue_lines()` bakes the p-value row from the tidy attribute (now
 #### 3b — deferred (not blocking)
 
 - `tab_ci()` field-based simplification (item 3) — CI *math* already unified (3a engine); folding proportion-CI *placement* into the shared core is **Phase 4**, per §20.
-- `tab_num(..., <tab_vars>, ci="cell")` grouping-set crash — **Phase 6** totals rewrite (KNOWN-BUG ledger).
+- `tab_num(..., <tab_vars>, ci="cell")` grouping-set crash — FIXED Phase 6e (golden-locked; hardened 7d-i).
 - "reuse chi2 intermediates for unweighted contrib" micro-opt — deferred; contrib is now off the common path entirely (the real cost), the rare pass stays byte-identical.
 - Future: `!`-per-cell weak-test glyph (Q8/§16, pure display swap over `test`); φ² variance column populated in contrib mode; no-sd means option; `option(tabxplor.ci_print)` → argument.
 
@@ -670,6 +671,34 @@ changed in 7c.
 Study if the multi-level cache system designed in Phase 7c calls for a modification of the compute functions, of the table building workflow, etc. then implement these changes : it can be small improvements and adaptations but, if needed, I may be total refactors and architectural changes.
 - Use `dev/benchmarks` or create new ones if needed. It should not reduce the performance of `tab()` with many variables in a significative way (one of `tab()` main use is a "create many exploratory tables with a tons of variables at once and export them for manual review with color helpers" workflow).
 
+**Sub-phased (plan approved 2026-07-09): 7d-i numeric aggregate seam, then 7d-ii the three-stage carve.**
+
+##### Done (7d-i — 2026-07-10): numeric aggregate-injection seam
+
+The numeric leaf gained the same aggregate-injection seam factors already have via `tab_plain(.fine=)`.
+The single O(N) moment-sum scan is now a shared `num_moment_scan()` (`R/tab-agg.R`, the aggregate MATH,
+kept once — no fork) called by BOTH `tab_num()`'s raw path and the new **`tab_aggregate_num()`**
+(`R/tab-agg.R`, the tier-1 producer: prepped microdata → finest-grain moment aggregate keyed by
+`c(tab_vars, row_var)`, NA kept, raw levels). `tab_num()` gained `.fine`/`.by_table` (mirrors
+`tab_plain`): `use_raw <- .by_table || is.null(.fine) || df || num`; when `.fine` is supplied it
+`data.table::copy()`s it and skips the scan, everything from `num_derive_stats()` down unchanged.
+`tab_build()` builds `fine_num` **per row_var** (never fused across row_vars — H1) and passes it to
+`tab_num(.fine=)`; `.by_table = TRUE` forces the raw path. **Perf-neutral** (the scan is relocated, not
+doubled — default==`.by_table` at ratio 1.00 on 515k rows,
+`dev/benchmarks/results_1.4.0/phase7d_i_numeric_seam.txt`). **Byte-identical**: full suite green
+(1116 pass, 0 fail), NO golden regeneration; new `test-num-fuse-parity.R` locks adopt-fine == inline
+scan across unweighted/weighted, na keep/drop, comp all, ci cell/diff, mixed factor+numeric, several
+row_vars, Kish `_w2` round-trip, and `.fine`-not-mutated. The `tab_num(<tab_vars>, ci="cell")`
+KNOWN-BUG (already fixed 6e, golden-locked) was preserved + hardened (`intersect(tab_vars,
+names(tabs_tot))` guard) + `expect_no_error` regression; stale markers de-staled.
+
+##### To implement (7d-ii): the three-stage carve
+
+`tab_aggregate()` / `tab_transform()` / `tab_assemble()` extracted from `tab_build`, `tab_prepare`
+demoted (cleannames/other_if_less_than moved out — jmvtab defers cleannames to display; `tab()` keeps
+its order), `tab_resolve_settings()` extended to emit per-tier cache keys, `tab_counts()` re-expressed
+on the shared skeleton, + parity tests (see the approved plan / `dev/tabxplor_jmvtab_cache_design.md` §8).
+
 
 #### Phase 7e — Jamovi module full internal code rewrite with designed caching
 
@@ -792,7 +821,7 @@ Isolated on purpose: a full dependency swap should not be entangled with the Pha
 In-code these are tagged for grep: `# KNOWN-BUG:` (bugs below), `# FIXME:` / `# FIXME(clarify):` / `# FIXME(future):` (suspect logic or future work, several tied to the Phase 5 color work), `# OBSOLETE:` (dead-code banners, e.g. the stale `tab_xl` duplicate). Fix each bug inside the phase that rewrites the relevant code, not as a separate pass.
 
 - FIXED (Phase 1a): `fmt()` public constructor cast `totcol` into `refcol` (the `refcol` argument was silently ignored). Now casts `refcol`. Low impact (refcol is normally set internally).
-- STILL OPEN after Phase 3a: `tab_num(..., <tab_vars>, ci="cell")` errors ("some columns don't belong to the data.table: [tab_var]") in the `tot="no"` grand-total-only grouping-set / `na="keep"` reorder path (`tab.R` ~L3454). Phase 3a rewrote the CI *math* (asymmetric bounds + stars), which is a DIFFERENT code path, so this is untouched. Root cause: `ci="cell"` forces `color=""` → `tot="no"`. Fix belongs with the Phase 6 totals rewrite (or a targeted fix in the grouping-set reorder). Both `comp` modes.
+- FIXED (Phase 6e, golden-locked; hardened Phase 7d-i): `tab_num(..., <tab_vars>, ci="cell")` used to error ("some columns don't belong to the data.table: [tab_var]") in the `tot="no"` grand-total-only grouping-set / `na="keep"` reorder path. 6e made the grand total a length-1 list so `num_rollup()` keeps every tab_var present; 7d-i added a defensive `intersect(tab_vars, names(tabs_tot))` guard at the reorder + an `expect_no_error` regression in `test-num-fuse-parity.R`. Locked by golden `n_ci_tabvars` / `n_ci_tabvars_all`, both `comp` modes.
 - `set_color_style(custom_palette=)` (`tab_classes.R` ~L3120): length check requires 10 but the message says 11 and 11 names (`pos1..neg5, ratio`) are applied — the `ratio` slot ends up valueless, so custom palettes are broken for the ratio color. Fix by accepting length 11.
 - `tab()` errors on a `data.table` **input** (works on tibble/data.frame). `tab(as.data.table(gss), marital, race)` → `tab_num()` "Selections can't have missing values" from `tidyselect::eval_select(col_vars, data)` (`tab.R` ~L3203) — under a data.table input the numeric-col_var index path (`as.character(col_vars)[col_vars_num]`, `tab.R` ~L1304) yields an NA selection. Low impact (users pass tibbles/data.frames; `tab()` does its own `setDT` on a narrowed copy internally). Discovered in the Phase 6b PoC (§26). Fix belongs with the Phase 2/6 aggregate-core / col_var-classification code, not a separate pass.
 - FIXED (this session): `set_num()` wrote `display=="diff"` via `set_pct()` (should be `set_diff()`), so setting the displayed value of a diff cell went to the wrong field. Now uses `set_diff()`.

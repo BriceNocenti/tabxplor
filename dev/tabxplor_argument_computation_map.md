@@ -364,8 +364,9 @@ finest-grain aggregate (`tab_build()` fused path, off by default) is the reusabl
 
 - **`tab_counts()` lacks `contrib → totrow`** (§5.4). A contrib-coloured `tab_counts()` table may not
   get the total row `tab_build()` would force. Pre-existing; assess when Phase 7 touches contrib.
-- **KNOWN-BUG**: `tab_num(..., <tab_vars>, ci = "cell")` still errors in the grouping-set reorder path
-  (independent of the cascade; fix belongs with the Phase 6/totals rewrite).
+- **FIXED (Phase 6e, golden-locked)**: `tab_num(..., <tab_vars>, ci = "cell")` no longer errors — the
+  grand-total grouping-set is a length-1 list and `num_rollup()` keeps every tab_var present; locked by
+  golden `n_ci_tabvars` / `n_ci_tabvars_all` + the Phase 7d `test-num-fuse-parity.R` `expect_no_error`.
 - **Jamovi surface gaps** (Phase 7f): no exposure of the two-channel `color`, `color_breaks`, palette,
   or the per-type empty-scale on/off. The `.u.yaml` enable-gates diverge slightly from
   `new_colors_UI.md` (e.g. it gates `contrib`/`ratio` on `pct:row||pct:col`, but the brief allows

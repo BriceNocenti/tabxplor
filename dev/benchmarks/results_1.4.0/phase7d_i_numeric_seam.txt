@@ -1,0 +1,18 @@
+Phase 7d-i -- numeric aggregate seam (tab_aggregate_num / num_moment_scan / tab_num(.fine=))
+Perf-neutrality check (2026-07-10, Ryzen 7 5800X).
+
+The single O(N) moment-sum scan is RELOCATED out of tab_num into tab_aggregate_num (default path),
+not duplicated: tab_build builds one per-row_var moment aggregate and tab_num adopts it (copy, no
+re-scan). `.by_table = TRUE` reproduces the pre-7d-i behaviour (tab_num scans inline). So the
+default-vs-.by_table comparison IS the before/after: it must be ~1.0x (same single scan).
+
+Fixture: forcats::gss_cat replicated x24 = 515,592 rows; median of 5 runs; tab_build(output="single").
+
+  config       default (fine adopt)   .by_table (raw scan)   ratio
+  unweighted   0.060 s                0.060 s                1.00
+  weighted     0.100 s                0.100 s                1.00
+
+=> Perf-neutral (relocation, no double-scan). Byte-identity: full suite green (1116 pass, 0 fail),
+   NO golden regeneration; test-num-fuse-parity.R locks adopt-fine == inline scan across
+   unweighted/weighted, na keep/drop, comp all, ci cell/diff, mixed factor+numeric, several row_vars,
+   Kish _w2 round-trip, and the .fine-not-mutated (H9) invariant.

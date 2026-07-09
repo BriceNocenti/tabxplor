@@ -25,7 +25,9 @@ tab_num(
   subtext = "",
   digits = 0,
   num = FALSE,
-  df = FALSE
+  df = FALSE,
+  .fine = NULL,
+  .by_table = FALSE
 )
 }
 \arguments{
@@ -141,6 +143,10 @@ rows and cols.}
 \item{df}{Set to \code{TRUE} to obtain a plain data.frame (not a \code{tibble}),
 with normal numeric vectors (not \code{fmt}). Useful, for example, to pass the table to
 correspondence analysis with \pkg{FactoMineR}.}
+
+\item{.fine, .by_table}{Internal. \code{.fine} is a pre-computed moment-sum aggregate (from
+\code{tab_aggregate_num()}) to adopt instead of scanning the raw data; \code{.by_table} forces
+the table-by-table path (a fresh scan). Both default to the fresh-scan behaviour.}
 }
 \value{
 A \code{tibble} of class \code{tabxplor_tab}. If \code{...} (\code{tab_vars})

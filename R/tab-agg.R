@@ -3,6 +3,9 @@
 #          that both tab_plain() (factors) and tab_num() (numerics) route through, replacing
 #          the historical duplicated inline data.table math.
 # ROLE: Called from R/tab.R (tab_plain/tab_num). Kept in its own file so the core is legible.
+#       Phase 7d added the numeric aggregate seam here: num_moment_scan() (the shared O(N) scan)
+#       and tab_aggregate_num() (the tier-1 producer tab_num(.fine=) adopts), the numeric analogue
+#       of tab_plain()'s `.fine` factor path.
 # KEY CONSTRAINTS:
 #   - data.table non-standard evaluation: keep aggregations GForce-friendly (bare per-column
 #     sums), never re-scan N rows for a quantity the aggregate already carries.
@@ -93,6 +96,139 @@ num_rollup <- function(agg, by, drop_keys, moment_cols, tab_vars_chr) {
   if (length(drop_keys) > 0)    roll[, (drop_keys) := "Total"]
   if (length(tab_vars_chr) > 0) roll[, (tab_vars_chr) := lapply(.SD, as.factor), .SDcols = tab_vars_chr]
   roll
+}
+
+# num_moment_scan() -- the single O(N) moment-sum scan (the numeric aggregate MATH). Kept in ONE
+# place (1.4.0 keystone: no duplicated aggregate math) and shared verbatim by tab_num()'s
+# table-by-table path and by tab_aggregate_num() (the Phase 7d producer). Given a prepped
+# data.table `data` (columns = `tab_row_names` keys + numeric `col_vars` [+ `wt`]; integer/factor
+# col_vars already coerced to numeric) it returns, per numeric col_var `v`, the sufficient moment
+# sums keyed by `tab_row_names`:
+#   v_n  = sum(!is.na(x))                          v_s1 = sum([w *] x)      v_s2 = sum([w *] x^2)
+#   v_wn = sum([w *] !is.na(x))  (weighted only)   v_w2 = sum(w^2 * !is.na(x))  (Kish opt-in only)
+# `wt` is the weight SYMBOL (character(0) when unweighted); `eval(wt)` looks the column up inside j.
+# WARNING: byte-identity-critical -- the as.double() coercions (32-bit overflow guard on Sigma x^2),
+# the eval(wt) weight lookup, the (no) .SDcols on the weighted branch, and the column construction
+# order (all _n, then _wn, _s1, _s2, _w2) must match num_derive_stats()'s expectations EXACTLY.
+num_moment_scan <- function(data, tab_row_names, col_vars, wt) {
+  col_vars <- as.character(col_vars)
+  kish <- isTRUE(getOption("tabxplor.kish_neff", FALSE))
+  if (length(wt) == 0) {
+    data[,
+         c(purrr::set_names(purrr::map(.SD,  ~ sum(!is.na(.))),
+                            paste0(col_vars, "_n")),
+
+           purrr::set_names(purrr::map(.SD,  ~ sum(as.double(.), na.rm = TRUE)),
+                            paste0(col_vars, "_s1")),
+
+           purrr::set_names(purrr::map(.SD, ~ sum(as.double(.) * as.double(.), na.rm = TRUE)),
+                            paste0(col_vars, "_s2"))
+         ),
+         .SDcols = col_vars,
+         keyby = c(tab_row_names)]
+
+  } else {
+    data[,
+         c(purrr::set_names(purrr::map_if(.SD,
+                                          names(.SD) != as.character(wt),
+                                          ~ sum(!is.na(.)),
+                                          .else = ~ NA_real_),
+                            paste0(as.character(c(col_vars, wt)), "_n")),
+
+           purrr::set_names(purrr::map_if(.SD,
+                                          names(.SD) != as.character(wt),
+                                          ~ sum(as.integer(!is.na(.)) * eval(wt), na.rm = TRUE),
+                                          .else = ~ NA_real_),
+                            paste0(as.character(c(col_vars, wt)), "_wn")),
+
+           purrr::set_names(purrr::map_if(.SD,
+                                          names(.SD) != as.character(wt),
+                                          ~ sum(eval(wt) * ., na.rm = TRUE),
+                                          .else = ~ NA_real_),
+                            paste0(as.character(c(col_vars, wt)), "_s1")),
+
+           purrr::set_names(purrr::map_if(.SD,
+                                          names(.SD) != as.character(wt),
+                                          ~ sum(eval(wt) * . * ., na.rm = TRUE),
+                                          .else = ~ NA_real_),
+                            paste0(as.character(c(col_vars, wt)), "_s2")),
+
+           # G1 (Phase 3a): Sigma w^2, the one extra sufficient statistic for Kish effective n
+           # (n_eff = wn^2 / w2). Accumulated ONLY when opted in, so the default weighted path is
+           # byte-identical and pays nothing. See dev/tabxplor_1.4.0_decisions.md §14.
+           if (kish)
+             purrr::set_names(purrr::map_if(.SD,
+                                            names(.SD) != as.character(wt),
+                                            ~ sum(eval(wt)^2 * as.integer(!is.na(.)), na.rm = TRUE),
+                                            .else = ~ NA_real_),
+                              paste0(as.character(c(col_vars, wt)), "_w2"))
+         ),
+         keyby = c(tab_row_names)][
+           , paste0(wt, c("_n", "_wn", "_s1", "_s2", if (kish) "_w2")) := NULL]
+  }
+}
+
+# tab_aggregate_num() -- the numeric TIER-1 producer (Phase 7d). Prepped microdata -> the
+# finest-grain moment-sum aggregate keyed by c(tab_vars, row_var), carrying, per numeric col_var,
+# the sufficient statistics num_derive_stats() / num_rollup() consume. It is the numeric analogue of
+# the count `.fine` tab_build() builds for factors (tab.R ~L1349), and the aggregate that
+# tab_num(.fine=) adopts instead of re-scanning. Byte-identical to tab_num()'s own scan: BOTH route
+# through num_moment_scan() (the shared math) -- only the quosure + data-prep plumbing is mirrored.
+#
+# NA is KEPT here (na = "keep") so the jmvtab cache can collapse NA post-aggregate; na = "drop"
+# listwise-removes the row_var/tab_var NAs pre-scan, exactly as tab_num() does. The producer returns
+# the RAW scan (the factor-key coercion + na-order normalisation that follow in tab_num() stay in
+# the transform, applied unconditionally on both the adopt-.fine and raw paths -> the adopted
+# aggregate normalises identically).
+tab_aggregate_num <- function(data, row_var, col_vars, tab_vars, wt,
+                              na = c("keep", "drop")) {
+  row_var_quo <- rlang::enquo(row_var)
+  if (quo_miss_na_null_empty_no(row_var_quo)) {
+    data <- data %>% dplyr::mutate(no_row_var = factor("no_row_var"))
+    row_var <- rlang::sym("no_row_var")
+  } else {
+    row_var <- rlang::ensym(row_var)
+  }
+
+  col_vars <- rlang::enquo(col_vars)
+  if (quo_miss_na_null_empty_no(col_vars)) {
+    data     <- data %>% dplyr::mutate(no_col_var = factor("n"))
+    col_vars <- rlang::syms("no_col_var")
+  } else {
+    pos_col_vars <- tidyselect::eval_select(col_vars, data)
+    col_vars     <- rlang::syms(names(pos_col_vars))
+  }
+
+  tab_vars <- rlang::enquo(tab_vars)
+  if (quo_miss_na_null_empty_no(tab_vars)) {
+    tab_vars <- character()
+  } else {
+    pos_tab_vars <- tidyselect::eval_select(tab_vars, data)
+    tab_vars     <- rlang::syms(names(pos_tab_vars))
+  }
+
+  wt_quo <- rlang::enquo(wt)
+  if (quo_miss_na_null_empty_no(wt_quo)) {
+    wt <- character()
+  } else {
+    wt <- rlang::ensym(wt)
+  }
+
+  tab_row_names <- purrr::map_chr(c(tab_vars, row_var), rlang::as_name)
+  na <- na[1]
+  stopifnot(na %in% c("keep", "drop"))
+
+  data <- data %>%
+    dplyr::select(!!!tab_vars, !!row_var, !!!col_vars, !!wt) %>%
+    dplyr::mutate(dplyr::across((!!wt | tidyselect::all_of(as.character(col_vars))) &
+                                  !where(is.numeric), as.numeric)
+    )
+
+  data.table::setDT(data)
+  if (na == "drop") data <- stats::na.omit(data, tab_row_names)
+  if (nrow(data) == 0) stop("data is of length 0 (possibly after filter or na = 'drop')")
+
+  num_moment_scan(data, tab_row_names, col_vars, wt)
 }
 
 

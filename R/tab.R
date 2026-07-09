@@ -1300,10 +1300,22 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
   #  tab_resolve_settings() -- Phase 7b.)
 
   #Calculate all numeric variables in one time (for each row_var)
+  # Phase 7d: build the per-row_var moment-sum aggregate (`fine_num`) via tab_aggregate_num(), then
+  # feed it to tab_num(.fine=). This relocates the single O(N) scan out of tab_num (perf-neutral: one
+  # scan either way) and makes the numeric tier-1 aggregate a first-class object the jmvtab cache can
+  # hold. PER row_var (never fused across row_vars): a shared scan can't reproduce per-row_var
+  # `na.omit(<row_var>)` and would change float summation order. `.by_table` forces the raw path.
   if (sum(col_vars_num) != 0) {
     tabs_num <- purrr::pmap(list(row_vars, totaltab, totrow   ,
                                  ref    , comp    , color_num,  ci, na_num),
-                            ~ tab_num(data,
+                            ~ {
+                              fine_num <- if (.by_table) NULL else tab_aggregate_num(
+                                data, !!..1,
+                                as.character(col_vars)[col_vars_num],
+                                as.character(tab_vars),
+                                wt = !!wt, na = ..8
+                              )
+                              tab_num(data,
                                       !!..1,
                                       as.character(col_vars)[col_vars_num],
                                       as.character(tab_vars),
@@ -1319,8 +1331,11 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
                                       totaltab   = ..2,
                                       totaltab_name = totaltab_name,
                                       tot        = dplyr::if_else(..3, "row", "no"),
-                                      total_names= total_names
-                            )
+                                      total_names= total_names,
+                                      .fine      = fine_num,
+                                      .by_table  = .by_table
+                              )
+                            }
     ) %>%
       purrr::set_names(row_vars)
   }
@@ -3161,6 +3176,9 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
 #' @param df  Set to \code{TRUE} to obtain a plain data.frame (not a `tibble`),
 #' with normal numeric vectors (not `fmt`). Useful, for example, to pass the table to
 #' correspondence analysis with \pkg{FactoMineR}.
+#' @param .fine,.by_table Internal. `.fine` is a pre-computed moment-sum aggregate (from
+#' \code{tab_aggregate_num()}) to adopt instead of scanning the raw data; `.by_table` forces
+#' the table-by-table path (a fresh scan). Both default to the fresh-scan behaviour.
 #'
 #' @return A \code{tibble} of class \code{tabxplor_tab}. If \code{...} (\code{tab_vars})
 #'  are provided, a \code{tab} of class \code{tabxplor_grouped_tab}.
@@ -3183,7 +3201,8 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
                     ci = NULL, conf_level = 0.95, stars = NULL, #ci_visible = FALSE,
                     totaltab = "line", totaltab_name = "Ensemble",
                     tot = NULL, total_names = "Total",
-                    subtext = "", digits = 0, num = FALSE, df = FALSE
+                    subtext = "", digits = 0, num = FALSE, df = FALSE,
+                    .fine = NULL, .by_table = FALSE
 ) {
 
   row_var_quo <- rlang::enquo(row_var)
@@ -3311,22 +3330,30 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
 
 
 
-  data <- data %>%
-    dplyr::select(!!!tab_vars, !!row_var, !!!col_vars, !!wt) %>%
-    dplyr::mutate(dplyr::across((!!wt | tidyselect::all_of(as.character(col_vars))) &
-                                  !where(is.numeric), as.numeric)
-    )
+  # Phase 7d: aggregate-injection seam (mirrors tab_plain's `.fine`). When tab_build() supplies a
+  # prebuilt moment-sum aggregate (`.fine`, from tab_aggregate_num()), skip the raw-data prep + scan
+  # and adopt it. `use_raw` keeps the table-by-table path intact; forced on by `.by_table` and always
+  # for the df/num mean-direct paths (never fused). The moment MATH lives once in num_moment_scan()
+  # (R/tab-agg.R), shared with the producer.
+  use_raw <- .by_table || is.null(.fine) || df || num
 
+  if (use_raw) {
+    data <- data %>%
+      dplyr::select(!!!tab_vars, !!row_var, !!!col_vars, !!wt) %>%
+      dplyr::mutate(dplyr::across((!!wt | tidyselect::all_of(as.character(col_vars))) &
+                                    !where(is.numeric), as.numeric)
+      )
 
-  #Faster with data.table
-  data.table::setDT(data)
-  #data.table::setkeyv(data, tab_row_names) #slower with key, even with simple "by"
+    #Faster with data.table
+    data.table::setDT(data)
 
-  # Remove NA's in factors here, otherwise they are kept in totals after
-  if (na == "drop") data <- stats::na.omit(data, tab_row_names) # 0.5 sec
+    # Remove NA's in factors here, otherwise they are kept in totals after
+    if (na == "drop") data <- stats::na.omit(data, tab_row_names) # 0.5 sec
 
-
-  if (nrow(data) == 0) stop("data is of length 0 (possibly after filter or na = 'drop')")
+    if (nrow(data) == 0) stop("data is of length 0 (possibly after filter or na = 'drop')")
+  } else if (nrow(.fine) == 0) {
+    stop("data is of length 0 (possibly after filter or na = 'drop')")
+  }
 
   # row_var_type <- ifelse(is.numeric(dplyr::pull(data, !!row_var) ),
   #                        "numeric", "factor")
@@ -3376,7 +3403,12 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
   # } else {
 
 
-  if (df | num) {
+  if (!use_raw) {
+    # Adopt the prebuilt moment aggregate. copy(): the factor-key coercion + na-order relabel just
+    # below mutate `tabs` by reference, so a reused/cached `.fine` must not be corrupted.
+    tabs <- data.table::copy(.fine)
+
+  } else if (df | num) {
     tabs <-
       if (length(wt) == 0) {
         data[, purrr::map(.SD,  ~mean(., na.rm = TRUE)),
@@ -3393,114 +3425,12 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
       }
 
   } else {
-    # with data.table
-    # Phase 2 (1.4.0): compute sufficient moment sums (n [, wn], s1 = Sigma[w]x,
-    # s2 = Sigma[w]x^2) in ONE grouped pass, then derive mean/var via num_derive_stats()
-    # after all totals are bound. This replaces the old per-group weighted.mean + weighted.var
-    # closures (weighted.var re-scanned each group to recompute the mean -> a double scan).
-    if (length(wt) == 0) {
-      tabs <-
-        data[,
-             c(purrr::set_names(purrr::map(.SD,  ~ sum(!is.na(.))),
-                                paste0(as.character(col_vars), "_n")),
-
-               purrr::set_names(purrr::map(.SD,  ~ sum(as.double(.), na.rm = TRUE)),
-                                paste0(as.character(col_vars), "_s1")),
-
-               purrr::set_names(purrr::map(.SD, ~ sum(as.double(.) * as.double(.), na.rm = TRUE)),
-                                paste0(as.character(col_vars), "_s2"))
-             ),
-             .SDcols = as.character(col_vars),
-             keyby = c(tab_row_names)]
-
-    } else {
-      tabs <-
-        data[,
-             c(purrr::set_names(purrr::map_if(.SD,
-                                              names(.SD) != as.character(wt),
-                                              ~ sum(!is.na(.)),
-                                              .else = ~ NA_real_),
-                                paste0(as.character(c(col_vars, wt)), "_n")),
-
-               purrr::set_names(purrr::map_if(.SD,
-                                              names(.SD) != as.character(wt),
-                                              ~ sum(as.integer(!is.na(.)) * eval(wt), na.rm = TRUE),
-                                              .else = ~ NA_real_),
-                                paste0(as.character(c(col_vars, wt)), "_wn")),
-
-               purrr::set_names(purrr::map_if(.SD,
-                                              names(.SD) != as.character(wt),
-                                              ~ sum(eval(wt) * ., na.rm = TRUE),
-                                              .else = ~ NA_real_),
-                                paste0(as.character(c(col_vars, wt)), "_s1")),
-
-               purrr::set_names(purrr::map_if(.SD,
-                                              names(.SD) != as.character(wt),
-                                              ~ sum(eval(wt) * . * ., na.rm = TRUE),
-                                              .else = ~ NA_real_),
-                                paste0(as.character(c(col_vars, wt)), "_s2")),
-
-               # G1 (Phase 3a): Sigma w^2, the one extra sufficient statistic for Kish effective
-               # n (n_eff = wn^2 / w2). Accumulated ONLY when opted in, so the default weighted
-               # path is byte-identical and pays nothing. See dev/tabxplor_1.4.0_decisions.md §14.
-               if (isTRUE(getOption("tabxplor.kish_neff", FALSE)))
-                 purrr::set_names(purrr::map_if(.SD,
-                                                names(.SD) != as.character(wt),
-                                                ~ sum(eval(wt)^2 * as.integer(!is.na(.)), na.rm = TRUE),
-                                                .else = ~ NA_real_),
-                                  paste0(as.character(c(col_vars, wt)), "_w2"))
-             ),
-             #.SDcols = as.character(c(col_vars, wt)),
-             keyby = c(tab_row_names)][
-               , paste0(wt, c("_n", "_wn", "_s1", "_s2",
-                              if (isTRUE(getOption("tabxplor.kish_neff", FALSE))) "_w2")) := NULL]
-    }
-
-    # DESIGN: since 1.4.0 (Phase 2) each of these scans computes SUFFICIENT MOMENT SUMS
-    # (n [, wn], s1 = Sigma[w]x, s2 = Sigma[w]x^2) in one grouped pass; mean/var are derived
-    # afterwards by num_derive_stats() (R/tab-agg.R). This removed the old weighted.var double
-    # scan (~3x faster / ~3.6x less memory on weighted numerics). Still open (Phase 2 follow-on):
-    # the moment sums are ADDITIVE, so the total-row and total-table scans below could become
-    # rollups of the main aggregate (agg[, lapply(.SD, sum), by = <coarser key>]) instead of
-    # re-scanning N -- deferred because reproducing the exact total-row structure + na handling
-    # via rollup is a separate byte-identity risk. groupingsets() was rejected earlier (its
-    # grand-total rows come back named NA, colliding with genuine NA categories; dead attempt
-    # below). See CLAUDE.md § Perf findings.
-    # # groupingsets() could be used to calculate table, totals and total table at once
-    # #   but it does not gain times (problem : Total are named NA and mixed with true NAs...)
-    # if ("row" %in% tot | totaltab %in% c("line", "table")) {
-    #   group_sets <- tab_row_names |> purrr::accumulate(~ c(.x, .y))
-    #   group_sets <- rev(group_sets)
-    #   if (!"row" %in% tot) group_sets <- dplyr::last(group_sets)
-    #   if(totaltab == "table") group_sets <- c(group_sets, as.character(row_var))
-    #   group_sets <- c(group_sets, list(character()))
-    #
-    # tictoc::tic()
-    # tabs <- #56.7 sec with totals and total table
-    #   data.table::groupingsets(data,
-    #        c(list(n  = .N,
-    #               wn = sum(eval(wt), na.rm = TRUE)),
-    #
-    #          purrr::set_names(purrr::map_if(.SD,
-    #                                         names(.SD) != as.character(wt),
-    #                                         ~ round(stats::weighted.mean(., eval(wt), na.rm = TRUE), 10),
-    #                                         .else = ~ NA_real_),
-    #                           paste0(as.character(c(col_vars, wt)), "_mean")),
-    #
-    #          purrr::set_names(purrr::map_if(.SD,
-    #                                         names(.SD) != as.character(wt),
-    #                                         ~ weighted.var(., eval(wt), na.rm = TRUE),
-    #                                         .else = ~ NA_real_),
-    #                           paste0(as.character(c(col_vars, wt)), "_var"))
-    #        ),
-    #        .SDcols = as.character(c(col_vars, wt)),
-    #        by = c(tab_row_names),
-    #        sets = group_sets,
-    #        )[, paste0(wt, c("_mean", "_var")) := NULL]
-    # tictoc::toc()
-    #
-    # data.table::setorderv(tabs, tab_row_names)
-    # }
+    # Phase 2/7d: sufficient moment sums (n [, wn], s1 = Sigma[w]x, s2 = Sigma[w]x^2) in ONE grouped
+    # pass; mean/var are derived afterwards by num_derive_stats() (R/tab-agg.R), replacing the old
+    # weighted.var double scan. The scan itself lives in num_moment_scan() (R/tab-agg.R) so tab_num()
+    # and tab_aggregate_num() share it verbatim. (The moment sums are ADDITIVE, so the total-row and
+    # total-table blocks below are num_rollup()s of this aggregate, not extra N-scans.)
+    tabs <- num_moment_scan(data, tab_row_names, col_vars, wt)
   }
 
   not_fct <- !purrr::map_lgl(dplyr::select(tabs, tidyselect::any_of(tab_row_names)), is.factor)
@@ -3636,15 +3566,19 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
                .SDcols = names(not_fct)[not_fct]]
     }
 
-    # KNOWN-BUG: tab_num(..., <tab_vars>, ci="cell") crashes here. ci="cell" forces
-    # color="" -> tot="no", and the grand-total-only grouping path can build a tabs_tot
-    # missing the tab_var column, so this reorder fails ("column not found"). Both comp
-    # modes. See CLAUDE.md § Discovered bugs (fix in WS5).
+    # Fixed in Phase 6e (the grand-total grouping-set is now a length-1 LIST, see above) and
+    # golden-locked by n_ci_tabvars / n_ci_tabvars_all; num_rollup() guarantees every tab_var is
+    # present in tabs_tot. Phase 7d belt-and-suspenders: restrict the reorder/relabel to the
+    # tab_vars actually present, so it is byte-identical in every real case (intersect == the full
+    # set) and can only differ on the genuinely-absent-column path that used to crash.
     if (na == "keep" & length(tab_vars) != 0) {
-      data.table::setorderv(
-        tabs_tot, as.character(tab_vars), na.last = TRUE
-      )[, as.character(tab_vars) := lapply(.SD, forcats::fct_na_value_to_level, level = "NA"),
-        .SDcols = as.character(tab_vars)]
+      tv <- intersect(as.character(tab_vars), names(tabs_tot))
+      if (length(tv) != 0) {
+        data.table::setorderv(
+          tabs_tot, tv, na.last = TRUE
+        )[, (tv) := lapply(.SD, forcats::fct_na_value_to_level, level = "NA"),
+          .SDcols = tv]
+      }
     }
 
     tabs <- rbind(tabs, tabs_tot)

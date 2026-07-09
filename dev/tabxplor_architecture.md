@@ -192,6 +192,8 @@ Two structural limits of `tab_compact()`:
 
 When a `col_var` is numeric (not a factor), `tab_num()` is used instead of `tab_plain()`. Since Phase 2 (1.4.0) each grouped `data.table` scan computes **sufficient moment sums** (`n`, weighted `n`, `Σ[w]x`, `Σ[w]x²`) in one pass; `num_derive_stats()` (`R/tab-agg.R`) then derives the mean and variance, reproducing the unweighted sample (n-1) vs weighted ML (÷Σw) definitions exactly. This removed the old `weighted.var()` double scan, and the total rows / total table are built as **roll-ups** of the additive moment-sum aggregate (`num_rollup()`) instead of two extra full-data scans. Net on 8M rows: `tab_num` ~5.6×/8.3× faster and ~6×/11× less memory (unweighted/weighted). The resulting `fmt` vectors have `type = "mean"` and `display = "mean"`.
 
+Since Phase 7d-i, the moment scan itself lives in a shared `num_moment_scan()` (`R/tab-agg.R`) and `tab_num()` has the same aggregate-injection seam as `tab_plain()`: a `.fine` parameter (built by the tier-1 producer **`tab_aggregate_num()`**, `R/tab-agg.R`) plus `.by_table`. `tab_build()` builds one moment aggregate **per row_var** and hands it to `tab_num(.fine=)`, which `data.table::copy()`s it and skips the scan; `.by_table = TRUE` forces the table-by-table scan. This relocates the single O(N) scan out of `tab_num` (perf-neutral — no fork, no double scan) and makes the numeric tier-1 aggregate a first-class object the jmvtab cache (Phase 7e) will hold, mirroring the factor `.fine`.
+
 ### The Reference System
 
 The `ref` argument controls which row serves as the comparison baseline for differences and colors:
