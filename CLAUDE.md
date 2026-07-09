@@ -561,7 +561,11 @@ Sub-phases 6a–6i, each golden byte-identical (conscious NEW fixtures only; no 
 - **6h** `tab_ci()` base recovery reads stored `get_tot_n()` (exact per-col_var) instead of `detect_totcols()`; `detect_totcols` retained for STRUCTURAL roles (total-col ID, chi2 margins, `tab_add_n_pct`, superseded `tab_pct`).
 - **6i** `tab_spread()` kept active: new `spread_vars`/`names_prefix`/`names_sort` on `tab()`.
 
-Caveats: internal per-row_var recycling kept (arg surface globalised); `detect_totcols` not fully retired (structural); ≥2 row_vars + `tab_vars` still returns a list (§7); `tab_num()` keeps its own color parse; U4 satisfied via scalar-pct regime. Decisions doc: closed D2/S3/S4/U4.
+**Caveats remaining**:
+- internal per-row_var recycling kept (arg surface globalised);
+- `detect_totcols` not fully retired (structural); 
+- ≥2 row_vars + `tab_vars` still returns a list (§7); 
+- `tab_num()` keeps its own color parse; U4 satisfied via scalar-pct regime.
 
 #### Original plan (historical intent)
 
@@ -575,29 +579,65 @@ The original rationale for separating the two was : `tab_plain` is the core work
 - In the new `tab()` function, I would want **an argument to get the same behaviour as the old tab `tab()`**. What would it be ? Would something like `na = "base_table"` (find a better name, more user-friendly and easily understandable) work : removing, for all col_vars, the missing value of the the row_var and the first col_vars (with several row vars : each by-row_vars subtable remove the individuals with missing value either in the carrent row variables or in the first column variable) ?
 
 
-### Phase 7 — Jamovi module overhaul
+### Phase 7 — Jamovi jmvtab module total overhaul
 
-The current jmvtab Jamovi module never embrassed the internal logic of Jamovi : it was just a R function with a choose all arguments first then run, where Jamovi is a live interactive statistical application where each button change rerun the analysis. Instead of simply wiring the whole `tab()` (or even `tab_plain()`) function into Jamovi, I want to use their internal steps, shared functions and aggregate core to **write an efficient, cached and modular version of the whole table construction pipeline, that would fully embrace Jamovi’s states and caching framework**. The main improvement would be not to rely on `tab()` like now, but to drive the **same aggregate-core + per-transform subfunctions** (Phase 2) at cache-appropriate granularity — **reuse the core, never fork the math**: near-identical behaviour is *guaranteed* by sharing subfunctions, not re-implemented in parallel (which would recreate the very duplication 1.4.0 removes). Cache the prepared data / aggregate / per-transform results keyed by which input changed; pure-display toggles reuse cached numbers; reuse the `.fine` aggregate across interactions.
+The current jmvtab Jamovi module never embrassed the internal logic of Jamovi : it was just a R function with a choose all arguments first then run, where Jamovi is a live interactive statistical application where each button change rerun the analysis. Instead of simply wiring the whole `tab()` (or even `tab_plain()`) function into Jamovi, I want to use their internal steps, shared functions and aggregate core to **write an efficient, cached and modular version of the whole table construction pipeline, that would fully embrace Jamovi’s states and caching framework**.
+- Input changes should work live for the user with **near instant results display** on normal sized survey df : **if a big amount of refactor** of the aggregate core, tab_plain internals and shared functions, etc., **are needed, this is the path I want to take** (without reducing the efficiency of the current `tab()` function on big tasks with at lot of tables and variables at the same time).
 
-Look at `dev/tabxplor_1.4.0_jamovi_dev.md` for detailed insights about jamovi module development.
+Use Jamovi states logic to avoid redoing calculations on each button change, with temp caching for base calculations (e.g. keep former variables' calculations when a new variable is added). **The standard basic usage of tab() and jmvtab(), for non-advanced users, is color-driven** : user choose variables, percentages, then color arguments, and depending on the color and color_signif all the needed calculations are computed. The expert user can tweak it and have access to more advanced options (like confidence level, type of confidence interval, etc.).
+
+**No back-compatibility needed at all on jmvtab and jamovi UI** : the aim is no create a fully new user-friendly fast UI.
+
+Look carefully at `dev/tabxplor_1.4.0_jamovi_dev.md` for detailed insights about jamovi module development.
 
 #### Phase 7a — Wire new colors UI and new tab() version into jmvtab for baseline
 
-The new color helpers UI in `dev\new_colors_UI.md` rely on a reworked `color` argument and a new `color_signif` argument. I first want to wire it and the whole rewritten `tab()` function into the current jmvtab UI to establish a baseline before the full rewrite.
+The new color helpers UI in `dev/new_colors_UI.md`, already implemented, rely on a reworked `color` argument and a new `color_signif` argument. I first want to wire it, and the whole rewritten `tab()` function, into the current jmvtab UI, to establish a baseline before the full rewrite.
 
-#### Phase 7b — Jamovi module full internal code rewrite with caching
+#### Phase 7b — Draw a detailed map of required computations and interdependence between arguments
 
-Use Jamovi states logic to avoid redoing calculations on each button change, with temp caching for base calculations (e.g. keep former variables' calculations when a new variable is added). **The standard basic usage of tab() and jmvtab(), for non-advanced users, is color-driven** : user choose variables, percentages, then color arguments, and depending on the color and color_signif all the needed calculations are computed. The expert user can tweak.
+Before designing implementation, I want you to create a **reliable and up-to-date map** of the interdependence between arguments and the required computations to make each option work, then improve it and implement the improvement in `tab()`. Write down this map in a new very structured and very detailed .md file in `dev/`.
+- In `tab()`, **carefully review the arguments overwrite logic** at the start : study it carefully, try to understand and write down the reason in comments, ask yourself if it’s sound and justified, and ask yourself if it must be kept or discarded.
+- Read `dev/new_colors_UI.md` for a detailed description of the required computations for each of the new `color` and `color_signif` modes, confirming the actual code does it. Then, ask yourself how `tab()` code and functions used internally should be modified to really achieve it.
+- After maintainer’s confirmation, rewrite and improve `tab()` arguments overwrite for the more consistent and user-friendly result possible : we’ll then use the same logic in jamovi UI in .js (or near the same, since live button changes with cache and .js implementation may need a specific way to handle it).
 
-For a detailed description of the required computations for each of the new `color` and `color_signif` modes, see `dev\new_colors_UI.md`.
+
+#### Phase 7c — Design a hierarchical multi-cache system for jmvtab
+
+The cache system should be carefully designed in a tree or hierarchical logic, with different steps and smart levels of caching, to only redo what’s really necessary at each step in a consistent systemic way. Taking all the arguments of `tab()` and `jmvtab()`, **I want you to design such a multi levels cache system for jmvtab, and write your result in a new file in `dev/`.**
+- Do not rely on current implementation, do not try to stick too much to the current UI or code : first ask yourself, what would be the best solution. If big code refactors are needed in the aggregate code or anymore, we’ll do it.
+- If cached objects are really big (no often the case with tables that are already summary ?), it may be a bad idea to keep them all in memory : only if it’s necessary, we can think about saving uncompressed .rds as temp files. 
+
+Exemples of the wanted behaviours :
+- If the user just adds a new row or col variable, the former ones are not recalculated but cached and reused. Since counts and weighted counts are the bottleneck computation, a count that have already been calculated in the session shall stay cached a long time, and already be here if the user revert back to the same configuration afterwards.
+- Changing the type of percentages do not require to recalculate the counts.
+- If the user just **change the reference level**, for example with `pct = "row"`, if the user goes from `ref = "tot"` (total row) to `ref = 1` (first row), with `color = "diff"` only `diff` need to be recalculated, plus `ci` with `color_signif` not left at `"ignore"`. **I want this one to be particularly fast** :  user should really be able to change the reference level live and have the result instantly in feeling.
+- If the user change the display, no fields need to be recalculated.
+- (With new features below, if the user reorder the levels of a variable, it’s just a basic fct_relevel + arrange on the reordorer factors few millisecs operation.)
+- Missing values are one of the most difficult thing to handle well in this caching system : we must think about it thoroughly and design a smart and balanced solution. For example, should we always keep missing values at the counts step, to then be able to remove them from counts, and just recalculate `pct` and everything after ? 
+- Please flag other arguments that would also be difficult to handle than missing values, since they rely on counts.
+- The factor x factor and factor x numeric roads may be very different : some operations with means may need to recalculate the sd, etc.
+- Etc. : please think carefully about all other arguments and all other situations that may arise, and what would be the most user-friendly way to handle them in each case.
 
 
+#### Phase 7d — Improve or redesign compute functions and table building workflows to work both with `tab()` and the new jamovi multi-level cache system
 
-#### Phase 7c — Jamovi UI new features
+Study if the multi-level cache system designed in Phase 7c calls for a modification of the compute functions, of the table building workflow, etc. then implement these changes : it can be small improvements and adaptations but, if needed, I may be total refactors and architectural changes.
+- Use `dev/benchmarks` or create new ones. It should not reduce the performance of `tab()` with many variables in a significative way (one of `tab()` main use is a "create many exploratory tables with a tons of variables at once and export them for manual review with color helpers" workflow).
+
+
+#### Phase 7e — Jamovi module full internal code rewrite with designed caching
+
+Totally rewrite `jmvtab()` jamovi module code to implement the multi-level cache system designed in Phase 7c, using the modified functions implemented in Phase 7d if it was done. Use all the documentation create above carefully to design the most performant, reliable and user-friendly jamovi UI for live use.
+
+The main improvement would be not to rely on `tab()` like now, but to drive the **same aggregate-core + per-transform subfunctions** (Phase 2) at cache-appropriate granularity — **reuse the core, never fork the math**: near-identical behaviour is *guaranteed* by sharing subfunctions, not re-implemented in parallel (which would recreate the very duplication 1.4.0 removes). Cache the prepared data / aggregate / per-transform results keyed by which input changed; pure-display toggles reuse cached numbers; reuse the `.fine` aggregate across interactions.
+
+
+#### Phase 7f — Jamovi UI new features
 
 Implement new user-friendly features :
 
-1. A per-variable **reference-level** picker (the `ref` reference point of comparison for the calculation of color helpers, of each `row_var` under  `pct="row"`, of one `col_var` under `pct="col"`).
+1. A per-variable **reference-level** picker (the `ref` reference point of comparison for the calculation of color helpers, of each `row_var` under  `pct="row"`, of each `col_var` under `pct="col"`).
 
 2. A simple, comptact, clear and user-friendly **level-reordering** UI for row/col/tab factors.
 - Use one already existing in another common jamovi module if it’s possible. Build it from scratch in .js otherwise.
@@ -613,9 +653,7 @@ Implement new user-friendly features :
 - The way I handled this in R in the past was just : `|> filter(Total >= 30)`, but with all these subtleties, maybe the `n_min` argument should be built in `tab()` and `jmvtab()`, with a shared function (public if it can be of some use for expert users ?) ?
 
 
-
-
-#### Phase 7d — Jamovi UI js consistency and user-friendliness
+#### Phase 7g — Jamovi UI js consistency and user-friendliness
 
 jmvtab jamovi UI needs a **full .js customisation** of it’s buttons and other inputs behaviours for maximum user-friendliness.
 - Buttons should auto-change depending on other buttons choices to matchwhat really happens internally, but in a consistent, predictable and user-friendly way, it should feel natural and not frustrate the user. For example, if the user coose `color_signif = "grey_non_signif"`, it should toggles `ci = "diff"` because it’s what `tab()` do internally, this computation is needed for the chosen color helpers.

@@ -22,6 +22,8 @@ NULL
 # binding for global variables not found by R CMD check
 . = NULL
 globalVariables(c(":=", ".SD", ".N"))
+# data.table NSE column symbols used in tab_plain()'s aggregation j-expressions:
+globalVariables(c("n", "wn"))
 # Phase 3b test engine (R/tab-agg.R) data.table NSE column symbols:
 globalVariables(c("table_id", "row_id", "col_id", "o", "rowtot", "coltot", "ok",
                   "grandtot", "nr", "nc", "e", "contrib", "signed_contrib",
@@ -137,6 +139,8 @@ globalVariables(c("table_id", "row_id", "col_id", "o", "rowtot", "coltot", "ok",
 #'   \item \code{"contrib"}: color cells based on their contribution to variance
 #'   (except mean columns, from numeric variables).
 #' }
+#' @param color_signif How significance gates the color, as a single string
+#' (\code{"ignore"} / \code{"grey_non_signif"} / \code{"color_all_signif"}). See \code{\link{tab}}.
 #' @return A vector of class \code{tabxplor_fmt}.
 #' @export
 #'

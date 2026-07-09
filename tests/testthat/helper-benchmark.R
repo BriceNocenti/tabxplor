@@ -15,7 +15,7 @@ benchmark_small_ops <- function() {
     tab_ci         = function() tab(gss, marital, race, pct = "row", ci = "cell"),
     tab_chi2       = function() tab(gss, marital, race, pct = "row", chi2 = TRUE),
     tab_num_mean   = function() tab_num(gss, race, c(age, tvhours), marital, comp = "all"),
-    tab_many_multi = function() tab_many(gss, marital, c(race, relig), pct = "row"),
+    tab_many_multi = function() tab(gss, marital, c(race, relig), pct = "row"),  # op label kept for baseline continuity
     tab_kable      = function() tab_kable(tab(gss, marital, race, pct = "row"))
   )
 }

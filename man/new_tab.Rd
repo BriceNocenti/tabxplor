@@ -35,6 +35,8 @@ or \code{\link{tab_plain}}.}
 ANOVA F for mean columns), filled by \code{\link{tab_chi2}}. Renamed from \code{chi2}
 in tabxplor 1.4.0.}
 
+\item{chi2}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Soft-deprecated alias of \code{test}.}
+
 \item{...}{Needed to implement subclasses.}
 
 \item{class}{Needed to implement subclasses.}

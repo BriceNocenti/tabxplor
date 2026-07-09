@@ -1,8 +1,10 @@
-# PURPOSE: The shared finest-grain aggregate ("fused") path in tab_many()/tab_plain() must produce
+# PURPOSE: The shared finest-grain aggregate ("fused") path in tab_build()/tab_plain() must produce
 #          byte-identical tables to the table-by-table path. Fusion is forced on via
 #          `tabxplor.fuse_min_rows = 0` so it engages on the small gss_cat fixture (correctness is
 #          N-independent; the row floor is only a performance guard).
-# See: tab_many()/tab_plain() `.fine`/`.by_table`; CLAUDE.md "Perf findings".
+# NOTE: this is an ENGINE-internal parity test -- it drives the internal tab_build() directly
+#       (not the soft-deprecated tab_many() wrapper), the only entry point exposing `.by_table`.
+# See: tab_build()/tab_plain() `.fine`/`.by_table`; CLAUDE.md "Perf findings".
 
 # Real tidyverse factor-rich fixture (NOT pc18) + a deterministic weight and deterministic NAs.
 make_gss <- function() {
@@ -18,33 +20,33 @@ testthat::test_that("fused == table-by-table across weighted/na/pct/multi/tab_va
   gss <- make_gss()
 
   testthat::expect_equal(
-    tab_many(gss, marital, race, pct = "row", na = "drop"),
-    tab_many(gss, marital, race, pct = "row", na = "drop", .by_table = TRUE))
+    tabxplor:::tab_build(gss, marital, race, pct = "row", na = "drop"),
+    tabxplor:::tab_build(gss, marital, race, pct = "row", na = "drop", .by_table = TRUE))
 
   testthat::expect_equal(
-    tab_many(gss, marital, race, wt = w, pct = "col", na = "drop"),
-    tab_many(gss, marital, race, wt = w, pct = "col", na = "drop", .by_table = TRUE))
+    tabxplor:::tab_build(gss, marital, race, wt = w, pct = "col", na = "drop"),
+    tabxplor:::tab_build(gss, marital, race, wt = w, pct = "col", na = "drop", .by_table = TRUE))
 
   testthat::expect_equal(
-    tab_many(gss, marital, race, wt = w, pct = "row", na = "keep"),
-    tab_many(gss, marital, race, wt = w, pct = "row", na = "keep", .by_table = TRUE))
+    tabxplor:::tab_build(gss, marital, race, wt = w, pct = "row", na = "keep"),
+    tabxplor:::tab_build(gss, marital, race, wt = w, pct = "row", na = "keep", .by_table = TRUE))
 
   testthat::expect_equal(
-    tab_many(gss, marital, c(race, partyid), wt = w, pct = "row", na = "drop", chi2 = TRUE),
-    tab_many(gss, marital, c(race, partyid), wt = w, pct = "row", na = "drop", chi2 = TRUE,
+    tabxplor:::tab_build(gss, marital, c(race, partyid), wt = w, pct = "row", na = "drop", chi2 = TRUE),
+    tabxplor:::tab_build(gss, marital, c(race, partyid), wt = w, pct = "row", na = "drop", chi2 = TRUE,
              .by_table = TRUE))
 
   testthat::expect_equal(
-    tab_many(gss, c(marital, relig), race, wt = w, pct = "row", na = "drop"),
-    tab_many(gss, c(marital, relig), race, wt = w, pct = "row", na = "drop", .by_table = TRUE))
+    tabxplor:::tab_build(gss, c(marital, relig), race, wt = w, pct = "row", na = "drop"),
+    tabxplor:::tab_build(gss, c(marital, relig), race, wt = w, pct = "row", na = "drop", .by_table = TRUE))
 
   testthat::expect_equal(
-    tab_many(gss, marital, race, year, wt = w, pct = "row", na = "drop"),   # tab_vars = year
-    tab_many(gss, marital, race, year, wt = w, pct = "row", na = "drop", .by_table = TRUE))
+    tabxplor:::tab_build(gss, marital, race, year, wt = w, pct = "row", na = "drop"),   # tab_vars = year
+    tabxplor:::tab_build(gss, marital, race, year, wt = w, pct = "row", na = "drop", .by_table = TRUE))
 
   testthat::expect_equal(
-    tab_many(gss, marital, race, wt = w, pct = "row", na = "drop", ci = "cell"),
-    tab_many(gss, marital, race, wt = w, pct = "row", na = "drop", ci = "cell", .by_table = TRUE))
+    tabxplor:::tab_build(gss, marital, race, wt = w, pct = "row", na = "drop", ci = "cell"),
+    tabxplor:::tab_build(gss, marital, race, wt = w, pct = "row", na = "drop", ci = "cell", .by_table = TRUE))
 })
 
 testthat::test_that("auto-fallback when prod(nlevels) > N still matches table-by-table", {
@@ -53,7 +55,7 @@ testthat::test_that("auto-fallback when prod(nlevels) > N still matches table-by
   # denom(30) x relig(16) x partyid(10) x marital(6) -> prod(nlevels) >> N(21483): fusion declines,
   # so the default call must fall back to table-by-table and stay identical to it.
   testthat::expect_equal(
-    tab_many(gss, c(denom, relig), c(partyid, marital), wt = w, pct = "row", na = "drop"),
-    tab_many(gss, c(denom, relig), c(partyid, marital), wt = w, pct = "row", na = "drop",
+    tabxplor:::tab_build(gss, c(denom, relig), c(partyid, marital), wt = w, pct = "row", na = "drop"),
+    tabxplor:::tab_build(gss, c(denom, relig), c(partyid, marital), wt = w, pct = "row", na = "drop",
              .by_table = TRUE))
 })

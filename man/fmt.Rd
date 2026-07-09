@@ -239,6 +239,9 @@ difference first.
 (except mean columns, from numeric variables).
 }}
 
+\item{color_signif}{How significance gates the color, as a single string
+(\code{"ignore"} / \code{"grey_non_signif"} / \code{"color_all_signif"}). See \code{\link{tab}}.}
+
 \item{x}{The object to test, to get a field in, or to modify.}
 
 \item{value}{The value you want to inject in some \code{fmt} vector's vctrs::field

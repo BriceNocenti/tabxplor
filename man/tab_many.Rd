@@ -262,8 +262,9 @@ the same length as \code{col_vars}. The argument is vectorisez over \code{col_va
 
 \item{subtext}{A character vector to print rows of legend under the table.}
 
-\item{color_signif}{How significance gates the color -- see \code{\link{tab}}
-(\code{"ignore"} / \code{"grey_non_signif"} / \code{"color_all_signif"}).}
+\item{color_signif}{How significance gates the color -- see \code{\link{tab}}.}
+
+\item{.by_table}{Internal: force the table-by-table path (disable scan-fusion).}
 
 \item{filter}{A \code{\link[dplyr:filter]{dplyr::filter}} to apply to the data frame
 first, as a single string (which will be converted to code, i.e. to a call).
@@ -302,6 +303,8 @@ functions. Set to \code{"color_code"} to return html color codes.}
 \item{breaks}{A named list of scales to set, e.g.
 \code{list(pct_diff = c(0.05, 0.1, 0.2, 0.3), pct_ratio = c(2))}. Unset scales keep their
 current value.}
+
+\item{...}{Unused; forces the following arguments to be named.}
 
 \item{pct_breaks, mean_breaks, contrib_breaks}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} The old
 positional arguments. \code{pct_breaks} is split into \code{pct_diff} (values \eqn{\le} 1)

@@ -790,6 +790,8 @@ finalize_one_col <- function(col, spec) {
 #' to use different filters for similar tables or simply make the field of observation
 #' more visible into the code.
 # @param ... Arguments to pass to \code{\link{tab_ci}} and \code{\link{tab_chi2}}.
+#' @param color_signif How significance gates the color -- see \code{\link{tab}}.
+#' @param .by_table Internal: force the table-by-table path (disable scan-fusion).
 #'
 #' @inheritSection tab_ci Significance stars
 #'
@@ -2185,6 +2187,9 @@ tab_prepare <-
 #' @param df  Set to \code{TRUE} to obtain a plain data.frame (not a tibble),
 #' with normal numeric vectors (not fmt). Useful, for example, to pass the table to
 #' correspondence analysis with \pkg{FactoMineR}.
+#' @param .fine,.by_table Internal. `.fine` is a pre-computed count-aggregate to roll up from
+#' instead of scanning the raw data (used by \code{\link{tab_counts}} and the scan-fusion path);
+#' `.by_table` forces the table-by-table path.
 #'
 #' @return A \code{tibble} of class \code{tabxplor_tab}. If \code{...} (\code{tab_vars})
 #'  are provided, a \code{tab} of class \code{tabxplor_grouped_tab}.

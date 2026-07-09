@@ -274,10 +274,13 @@ testthat::test_that("tab with all options combined does not error", {
   )
 })
 
-testthat::test_that("tab_many with multiple row_vars produces valid output", {
-  result <- tab_many(gss, c(race, relig), marital, pct = "row")
-  # tab_many with multiple row_vars returns a list of tables
-  testthat::expect_true(is.list(result) || inherits(result, "tabxplor_grouped_tab"))
+testthat::test_that("tab with multiple row_vars produces valid output", {
+  # tab() merges several row_vars into one grouped table by default...
+  merged <- tab(gss, c(race, relig), marital, pct = "row")
+  testthat::expect_s3_class(merged, "tabxplor_grouped_tab")
+  # ...or returns a list of one table per row_var with output_list = TRUE.
+  listed <- tab(gss, c(race, relig), marital, pct = "row", output_list = TRUE)
+  testthat::expect_true(is.list(listed) && !is.data.frame(listed) && length(listed) == 2)
 })
 
 testthat::test_that("tab with no col_var works", {

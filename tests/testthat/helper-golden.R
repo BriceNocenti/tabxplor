@@ -55,7 +55,7 @@ golden_cases <- function() {
     f_ref_first      = function() tab(gss, marital, race, pct = "row", ref = "first"),
     f_or             = function() tab(gss, marital, race, pct = "col", OR = "OR"),     # empirical OR; Phase 1 (rr->ratio) / Phase 3 (Wald p, 1/OR)
     f_color_diff     = function() tab(gss, marital, race, pct = "row", color = "diff"),
-    f_color_afterci  = function() tab(gss, marital, race, pct = "row", ci = "cell", color = "after_ci"),
+    f_color_afterci  = function() suppressWarnings(tab(gss, marital, race, pct = "row", ci = "cell", color = "after_ci")),  # deprecated color string
     f_color_contrib  = function() tab(gss, marital, race, pct = "row", color = "contrib"),
     f_subtab         = function() tab(gss, marital, race, relig, pct = "row"),  # grouped_tab
     f_selfcross      = function() tab(gss, marital, marital, pct = "row"),  # _colvarbis self-crosstab lock (Phase 2)
@@ -74,13 +74,17 @@ golden_cases <- function() {
     n_ci_tabvars     = function() tab_num(gss, race, c(age, tvhours), marital, ci = "cell", digits = 1L),              # Phase 6e: previously-crashing ci="cell" + tab_vars (comp="tab")
     n_ci_tabvars_all = function() tab_num(gss, race, c(age, tvhours), marital, ci = "cell", comp = "all", digits = 1L), # Phase 6e: ... (comp="all")
 
-    # --- tab_many() multi col_var + weighting + tot_n motivating cases ---
-    m_multi          = function() tab_many(syn, g, c(h, k), pct = "row"),
-    totn_keep        = function() tab_many(syn, g, c(h, k), pct = "col", na = "keep"),
-    totn_drop        = function() tab_many(syn, g, c(h, k), pct = "col", na = "drop"),
-    totn_row_drop    = function() tab_many(syn, g, c(h, k), pct = "row", na = "drop"),  # cross-col_var tot_n exactness lock (Phase 2c)
-    f_totcol_each    = function() tab_many(gss, marital, c(race, relig), pct = "row", totcol = "each"),  # per-col_var totals; Phase 6 -> one total col
-    w_weighted       = function() tab_many(syn, g, h, wt = w, pct = "col")
+    # --- multi col_var + weighting + tot_n motivating cases ---
+    # tab()-equivalent cases (single row_var, na="keep"/none) go through the public tab();
+    # the genuinely tab_many-only behaviours (per-col_var na="drop" giving distinct per-column
+    # bases; totcol="each") drive the internal engine tab_build() directly -- byte-identical to
+    # the tab_many() they used to call, but without the soft-deprecation nudge.
+    m_multi          = function() tab(syn, g, c(h, k), pct = "row"),
+    totn_keep        = function() tab(syn, g, c(h, k), pct = "col", na = "keep"),
+    totn_drop        = function() tabxplor:::tab_build(syn, g, c(h, k), pct = "col", na = "drop", output = "single"),
+    totn_row_drop    = function() tabxplor:::tab_build(syn, g, c(h, k), pct = "row", na = "drop", output = "single"),  # cross-col_var tot_n exactness lock (Phase 2c)
+    f_totcol_each    = function() tabxplor:::tab_build(gss, marital, c(race, relig), pct = "row", totcol = "each", output = "single"),  # per-col_var totals; Phase 6 -> one total col
+    w_weighted       = function() tab(syn, g, h, wt = w, pct = "col")
   )
 }
 

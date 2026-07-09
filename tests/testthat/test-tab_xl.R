@@ -23,6 +23,7 @@ testthat::test_that("tab_xl creates an Excel file", {
 })
 
 testthat::test_that("tab_xl work with  after_ci", {
+  withr::local_options(lifecycle_verbosity = "quiet")
   tabs <-tab(forcats::gss_cat, race, marital, pct = "row", color = "after_ci")
 
   test_path <- file.path(tempdir(), "tab_xl_test.xlsx")

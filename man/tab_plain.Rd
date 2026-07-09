@@ -138,6 +138,10 @@ rows and cols.}
 \item{df}{Set to \code{TRUE} to obtain a plain data.frame (not a tibble),
 with normal numeric vectors (not fmt). Useful, for example, to pass the table to
 correspondence analysis with \pkg{FactoMineR}.}
+
+\item{.fine, .by_table}{Internal. \code{.fine} is a pre-computed count-aggregate to roll up from
+instead of scanning the raw data (used by \code{\link{tab_counts}} and the scan-fusion path);
+\code{.by_table} forces the table-by-table path.}
 }
 \value{
 A \code{tibble} of class \code{tabxplor_tab}. If \code{...} (\code{tab_vars})

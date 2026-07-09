@@ -101,12 +101,14 @@ color_golden_cases <- function() {
     # --- factor / % modes on real data ---
     c_diff           = function() color_golden_capture_tab(
       tab(gss, marital, race, pct = "row", color = "diff")),
-    c_diff_ci        = function() color_golden_capture_tab(
-      tab(gss, marital, race, pct = "row", ci = "diff", color = "diff_ci")),
-    c_after_ci       = function() color_golden_capture_tab(
-      tab(gss, marital, race, pct = "row", ci = "diff", color = "after_ci")),
-    c_ci             = function() color_golden_capture_tab(
-      tab(gss, marital, race, pct = "row", ci = "diff", color = "ci")),
+    # c_diff_ci / c_after_ci / c_ci lock the soft-deprecated combined color strings; wrap the
+    # build in suppressWarnings() so the deprecation nudge stays out of the captured output.
+    c_diff_ci        = function() color_golden_capture_tab(suppressWarnings(
+      tab(gss, marital, race, pct = "row", ci = "diff", color = "diff_ci"))),
+    c_after_ci       = function() color_golden_capture_tab(suppressWarnings(
+      tab(gss, marital, race, pct = "row", ci = "diff", color = "after_ci"))),
+    c_ci             = function() color_golden_capture_tab(suppressWarnings(
+      tab(gss, marital, race, pct = "row", ci = "diff", color = "ci"))),
     c_contrib        = function() color_golden_capture_tab(
       tab(gss, marital, race, pct = "row", color = "contrib")),
     c_or             = function() color_golden_capture_tab(
@@ -115,12 +117,12 @@ color_golden_cases <- function() {
     # --- numeric / mean modes (CONSCIOUSLY REGENERATED at Step 3: diff -> Glass's delta) ---
     c_mean_diff      = function() color_golden_capture_tab(
       tab_num(gss, race, c(age, tvhours), comp = "all", color = "diff", digits = 1L)),
-    c_mean_diff_ci   = function() color_golden_capture_tab(
+    c_mean_diff_ci   = function() color_golden_capture_tab(suppressWarnings(
       tab_num(gss, race, c(age, tvhours), comp = "all", ci = "cell",
-              color = "diff_ci", digits = 1L)),
-    c_mean_after_ci  = function() color_golden_capture_tab(
+              color = "diff_ci", digits = 1L))),
+    c_mean_after_ci  = function() color_golden_capture_tab(suppressWarnings(
       tab_num(gss, race, c(age, tvhours), comp = "all", ci = "cell",
-              color = "after_ci", digits = 1L))
+              color = "after_ci", digits = 1L)))
   )
 }
 

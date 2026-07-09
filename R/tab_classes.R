@@ -65,6 +65,7 @@
 #' @param test A tidy tibble storing whole-table test results (Chi2 for factor columns,
 #' ANOVA F for mean columns), filled by \code{\link{tab_chi2}}. Renamed from \code{chi2}
 #' in tabxplor 1.4.0.
+#' @param chi2 `r lifecycle::badge("deprecated")` Soft-deprecated alias of \code{test}.
 #' @param ... Needed to implement subclasses.
 #' @param class Needed to implement subclasses.
 #'
@@ -3188,6 +3189,7 @@ mk_color_scale <- function(name, values) {
 #' @param breaks A named list of scales to set, e.g.
 #' \code{list(pct_diff = c(0.05, 0.1, 0.2, 0.3), pct_ratio = c(2))}. Unset scales keep their
 #' current value.
+#' @param ... Unused; forces the following arguments to be named.
 #' @param pct_breaks,mean_breaks,contrib_breaks `r lifecycle::badge("deprecated")` The old
 #' positional arguments. \code{pct_breaks} is split into \code{pct_diff} (values \eqn{\le} 1)
 #' and \code{pct_ratio} (values > 1); \code{mean_breaks} maps to \code{mean_ratio};

@@ -103,6 +103,7 @@ testthat::test_that("tab_num works with missing, NULL, NA, etc.", {
 
 
 testthat::test_that("tab_num works with diff and ci", {
+  withr::local_options(lifecycle_verbosity = "quiet")
   tab_num(data, sex, c(height, birth_year), na = "drop", ref = "no")        %>% testthat::expect_s3_class("tabxplor_tab")
   tab_num(data, sex, c(height, birth_year), na = "drop")
 
@@ -143,30 +144,38 @@ testthat::test_that("tab et tab_many works with missing, NULL, NA, etc., in vari
   #tab(data, "gender", "sex", "")           %>% testthat::expect_s3_class("tabxplor_tab")
   #tab(data, "gender", "sex", "no")         %>% testthat::expect_s3_class("tabxplor_tab")
 
-  tab_many(data, "gender")                                                     %>% testthat::expect_s3_class("tabxplor_tab")
-  tab_many(data, "gender", wt = mass)                                          %>% testthat::expect_s3_class("tabxplor_tab")
-  tab_many(data, "gender", col_vars = NULL         , tab_vars = NULL)          %>% testthat::expect_s3_class("tabxplor_tab")
-  tab_many(data, "gender", col_vars = NA_character_, tab_vars = NA_character_) %>% testthat::expect_s3_class("tabxplor_tab")
-  tab_many(data, "gender", col_vars = ""           , tab_vars = "")            %>% testthat::expect_s3_class("tabxplor_tab")
-  tab_many(data, "gender", col_vars = "no"         , tab_vars = "no")          %>% testthat::expect_s3_class("tabxplor_tab")
-  tab_many(data, gender, col_vars = hair_color , tab_vars = sex)               %>% testthat::expect_s3_class("tabxplor_tab")
+  tab(data, "gender")                                                     %>% testthat::expect_s3_class("tabxplor_tab")
+  tab(data, "gender", wt = mass)                                          %>% testthat::expect_s3_class("tabxplor_tab")
+  tab(data, "gender", col_vars = NULL         , tab_vars = NULL)          %>% testthat::expect_s3_class("tabxplor_tab")
+  tab(data, "gender", col_vars = NA_character_, tab_vars = NA_character_) %>% testthat::expect_s3_class("tabxplor_tab")
+  tab(data, "gender", col_vars = ""           , tab_vars = "")            %>% testthat::expect_s3_class("tabxplor_tab")
+  tab(data, "gender", col_vars = "no"         , tab_vars = "no")          %>% testthat::expect_s3_class("tabxplor_tab")
+  tab(data, gender, col_vars = hair_color , tab_vars = sex)               %>% testthat::expect_s3_class("tabxplor_tab")
 })
 
 
-testthat::test_that("tab_many works with numeric variables", {
-  tab_many(data, sex, mass)         |> testthat::expect_s3_class("tabxplor_tab")
-  tab_many(data, sex, mass, gender) |> testthat::expect_s3_class("tabxplor_tab")
+testthat::test_that("tab works with numeric variables", {
+  tab(data, sex, mass)         |> testthat::expect_s3_class("tabxplor_tab")
+  tab(data, sex, mass, gender) |> testthat::expect_s3_class("tabxplor_grouped_tab")
 })
 
-testthat::test_that("vectorisation of pct in tab_many works", {
-  tab_many(data, sex, c(hair_color, eye_color), pct = "row")
-  tab_many(data, sex, c(hair_color, mass, gender), pct = "row")                 |> testthat::expect_s3_class("tabxplor_tab")
-  tab_many(data, sex, c(hair_color, mass, gender), pct = c("row", NA, "col"))   |> testthat::expect_s3_class("tabxplor_tab")
-  tab_many(data, c(sex, gender), hair_color, pct = c("row", "col")) |> length() |> testthat::expect_equal(2)
-  tab_many(data, c(sex, eye_color), c(hair_color, mass, gender),
-           pct = list(sex = list("row", "col", "col"), eye_color = list("col", "row", "row"))
-  ) |>
-    length() |> testthat::expect_equal(2)
+testthat::test_that("tab works with several col_vars", {
+  tab(data, sex, c(hair_color, eye_color), pct = "row")            |> testthat::expect_s3_class("tabxplor_tab")
+  tab(data, sex, c(hair_color, mass, gender), pct = "row")         |> testthat::expect_s3_class("tabxplor_tab")
+})
+
+# Coverage of the soft-deprecated tab_many() alias's own features that tab() intentionally does
+# NOT expose (per-col_var pct vector, per-row_var pct list, list return). suppressWarnings() keeps
+# the deprecation nudge out (see also the dedicated deprecation test below).
+testthat::test_that("tab_many() (deprecated alias) per-variable pct vectorisation still works", {
+  suppressWarnings({
+    tab_many(data, sex, c(hair_color, mass, gender), pct = c("row", NA, "col"))   |> testthat::expect_s3_class("tabxplor_tab")
+    tab_many(data, c(sex, gender), hair_color, pct = c("row", "col")) |> length() |> testthat::expect_equal(2)
+    tab_many(data, c(sex, eye_color), c(hair_color, mass, gender),
+             pct = list(sex = list("row", "col", "col"), eye_color = list("col", "row", "row"))
+    ) |>
+      length() |> testthat::expect_equal(2)
+  })
 })
 
 testthat::test_that("Phase 6: output_list / merge / deprecations / KNOWN-BUG fix", {
@@ -201,26 +210,35 @@ testthat::test_that("Phase 6: output_list / merge / deprecations / KNOWN-BUG fix
   testthat::expect_error(tab(gss, marital, race, relig, spread_vars = marital))
 })
 
-testthat::test_that("tab_many works with levels = 'first'", {
-  tabs1 <- tab_many(data, sex, c(hair_color, eye_color), pct = "row", levels = "first")
-  testthat::expect_false("brown_hair_color" %in% names(tabs1))
-
-  tabs2 <- tab_many(data, sex, c(hair_color, eye_color), pct = "row", levels = c("first", "all"))
-  testthat::expect_false("brown_hair_color" %in% names(tabs2))
-  testthat::expect_true("orange" %in% names(tabs2))
+testthat::test_that("tab drops NA consistently with na = 'drop'", {
+  tabs1 <- tab(data, gender, hair_color, sex, na = "drop")
+  testthat::expect_true(all(!stringr::str_detect(dplyr::pull(tabs1, sex), "^NA")))
 })
 
-testthat::test_that("tab_many na arguments work the right way", {
-  tabs1 <- tab_many(data, gender, hair_color, sex, na = "drop_all")
-  testthat::expect_true(all(!stringr::str_detect(dplyr::pull(tabs1,  sex), "^NA")))
+# Coverage of tab_many()-only controls that tab() intentionally does not expose: `levels`
+# (per-col_var level selection), `na = "drop_all"`, and `na_drop_all =`. suppressWarnings()
+# keeps the soft-deprecation nudge out of these dedicated alias tests.
+testthat::test_that("tab_many() (deprecated alias) levels / na_drop_all features still work", {
+  suppressWarnings({
+    tabs1 <- tab_many(data, sex, c(hair_color, eye_color), pct = "row", levels = "first")
+    testthat::expect_false("brown_hair_color" %in% names(tabs1))
 
-  tabs2 <- tab_many(data, gender, hair_color, sex, na_drop_all = gender)
-  testthat::expect_true(all(!stringr::str_detect(dplyr::pull(tabs2,  sex), "^NA")))
-  testthat::expect_true(any(stringr::str_detect(names(tabs2), "^NA")))
+    tabs2 <- tab_many(data, sex, c(hair_color, eye_color), pct = "row", levels = c("first", "all"))
+    testthat::expect_false("brown_hair_color" %in% names(tabs2))
+    testthat::expect_true("orange" %in% names(tabs2))
+
+    tabs3 <- tab_many(data, gender, hair_color, sex, na = "drop_all")
+    testthat::expect_true(all(!stringr::str_detect(dplyr::pull(tabs3, sex), "^NA")))
+
+    tabs4 <- tab_many(data, gender, hair_color, sex, na_drop_all = gender)
+    testthat::expect_true(all(!stringr::str_detect(dplyr::pull(tabs4, sex), "^NA")))
+    testthat::expect_true(any(stringr::str_detect(names(tabs4), "^NA")))
+  })
 })
 
 
 testthat::test_that("all tab functions works with no tab_vars", {
+  withr::local_options(lifecycle_verbosity = "quiet")
   data %>% #with no tab_vars
     tab_plain(sex, hair_color, wt = mass, pct = "row") %>%
     #tab_totaltab() %>%
@@ -232,6 +250,7 @@ testthat::test_that("all tab functions works with no tab_vars", {
 })
 
 testthat::test_that("all tab functions works with no col_var", {
+  withr::local_options(lifecycle_verbosity = "quiet")
   data %>%
     tab_plain(sex, pct = "col") %>%
     #tab_totaltab() %>%
@@ -254,6 +273,7 @@ testthat::test_that("all tab functions works with no row_var", {
 })
 
 testthat::test_that("all tab functions works with totaltab = 'line'", {
+  withr::local_options(lifecycle_verbosity = "quiet")
   data %>%
     tab_plain(sex, hair_color, gender, pct = "row") %>%
     #tab_totaltab("line") %>%
@@ -265,6 +285,7 @@ testthat::test_that("all tab functions works with totaltab = 'line'", {
 })
 
 testthat::test_that("tab_num works (with color)", {
+  withr::local_options(lifecycle_verbosity = "quiet")
   testthat::expect_true(
     !is.na(tab_prepare(data, sex, mass) %>%
              tab_num(sex, mass, tot = "row", ref = "tot", color = "after_ci") %>%
@@ -462,6 +483,7 @@ expect_color <- function(object) {
 }
 
 testthat::test_that("printing colors works", {
+  withr::local_options(lifecycle_verbosity = "quiet")
   set_color_style(type = "bg", theme = "dark")
   tab(data, sex, hair_color, pct = "row", color = "diff"    ) %>% print() %>%
     testthat::expect_output()
@@ -484,6 +506,7 @@ testthat::test_that("printing colors works", {
 
 
 testthat::test_that("tab colors are calculated with counts and pct", {
+  withr::local_options(lifecycle_verbosity = "quiet")
   tab(data, sex, hair_color, pct = "row") # must not have colors
   tab(data, sex, hair_color, pct = "row", color = "diff"    )  %>% dplyr::pull(brown) %>% expect_color()
   tab(data, sex, hair_color, pct = "row", color = "diff_ci" )  %>% dplyr::pull(`NA`)  %>% expect_color()
@@ -503,12 +526,14 @@ testthat::test_that("tab colors are calculated with counts and pct", {
  })
 
 testthat::test_that("tab colors are calculated with text supplementary columns", {
+  withr::local_options(lifecycle_verbosity = "quiet")
   tab(data, sex, hair_color, pct = "row", sup_cols = eye_color, color = "diff"    ) %>% dplyr::pull(black_eye_color) %>% expect_color()
   tab(data, sex, hair_color, pct = "row", sup_cols = eye_color, color = "diff_ci" ) %>% dplyr::pull(`NA`) %>% expect_color()
   tab(data, sex, hair_color, pct = "row", sup_cols = eye_color, color = "auto"    ) %>% dplyr::pull(black_eye_color) %>% expect_color()
 })
 
 testthat::test_that("tab colors are calculated with mean supplementary columns", {
+  withr::local_options(lifecycle_verbosity = "quiet")
   tab(dplyr::storms, category, wind, color = "auto")                         %>% dplyr::pull(wind) %>% expect_color()
   tab(dplyr::storms, category, status, sup_cols =  wind, color = "diff"    ) %>% dplyr::pull(wind) %>% expect_color()
   tab(dplyr::storms, category, status, sup_cols =  wind, color = "diff_ci" ) %>% dplyr::pull(wind) %>% expect_color()
@@ -518,13 +543,13 @@ testthat::test_that("tab colors are calculated with mean supplementary columns",
   tab(dplyr::storms, category, status, sup_cols = c("pressure", "wind")) |> testthat::expect_s3_class("tabxplor_tab")
 })
 
-testthat::test_that("tab_many works with and without add_n and add_pct", {
-  tab_many(data, "sex", "hair_color", pct = "row", color = "diff", add_n   = FALSE)                 |> testthat::expect_s3_class("tabxplor_tab")
-  tab_many(data, "sex", "hair_color", pct = "row", color = "diff", add_n   = FALSE, add_pct = TRUE) |> testthat::expect_s3_class("tabxplor_tab")
-  tab_many(data, "sex", "hair_color", pct = "row", color = "diff", add_pct = TRUE)                  |> testthat::expect_s3_class("tabxplor_tab")
-  tab_many(data, "sex", "hair_color", pct = "col", color = "diff", add_n   = FALSE)                 |> testthat::expect_s3_class("tabxplor_tab")
-  tab_many(data, "sex", "hair_color", pct = "col", color = "diff", add_n   = FALSE, add_pct = TRUE) |> testthat::expect_s3_class("tabxplor_tab")
-  tab_many(data, "sex", "hair_color", pct = "col", color = "diff", add_pct = TRUE)                  |> testthat::expect_s3_class("tabxplor_tab")
+testthat::test_that("tab works with and without add_n and add_pct", {
+  tab(data, "sex", "hair_color", pct = "row", color = "diff", add_n   = FALSE)                 |> testthat::expect_s3_class("tabxplor_tab")
+  tab(data, "sex", "hair_color", pct = "row", color = "diff", add_n   = FALSE, add_pct = TRUE) |> testthat::expect_s3_class("tabxplor_tab")
+  tab(data, "sex", "hair_color", pct = "row", color = "diff", add_pct = TRUE)                  |> testthat::expect_s3_class("tabxplor_tab")
+  tab(data, "sex", "hair_color", pct = "col", color = "diff", add_n   = FALSE)                 |> testthat::expect_s3_class("tabxplor_tab")
+  tab(data, "sex", "hair_color", pct = "col", color = "diff", add_n   = FALSE, add_pct = TRUE) |> testthat::expect_s3_class("tabxplor_tab")
+  tab(data, "sex", "hair_color", pct = "col", color = "diff", add_pct = TRUE)                  |> testthat::expect_s3_class("tabxplor_tab")
 })
 
 
