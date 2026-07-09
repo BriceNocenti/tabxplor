@@ -16,7 +16,10 @@ R/
 ├── tab.R           (~6000 L) Main API: tab(), tab_many(), tab_plain(), tab_num(),
 │                              tab_prepare(), tab_pct(), tab_ci(), tab_chi2(),
 │                              tab_tot(), tab_totaltab(), tab_spread(), tab_get_vars(),
-│                              tab_add_n_pct() (shared add_n/add_pct, used by tab_many + tab_counts)
+│                              tab_add_n_pct() (shared add_n/add_pct, used by tab_many + tab_counts).
+│                              tab_build() = 5-stage pipeline (Phase 7d-ii): tab_setup / tab_prepare_pop
+│                              / tab_aggregate / tab_transform / tab_assemble (ctx-threaded, cache tiers);
+│                              tab_lump_others/tab_cleannames_relabel (extracted from tab_prepare)
 ├── tab-agg.R        (~470 L) Aggregate-core (Phase 2-3): num_derive_stats/num_rollup, num_moment_scan
 │                              + tab_aggregate_num (numeric tier-1 producer, Phase 7d-i),
 │                              CI engine (ci_pivot/ci_wilson/ci_newcombe/…), agg_chi2/agg_anova
@@ -692,12 +695,27 @@ row_vars, Kish `_w2` round-trip, and `.fine`-not-mutated. The `tab_num(<tab_vars
 KNOWN-BUG (already fixed 6e, golden-locked) was preserved + hardened (`intersect(tab_vars,
 names(tabs_tot))` guard) + `expect_no_error` regression; stale markers de-staled.
 
-##### To implement (7d-ii): the three-stage carve
+##### Done (7d-ii — 2026-07-10): the three-stage carve
 
-`tab_aggregate()` / `tab_transform()` / `tab_assemble()` extracted from `tab_build`, `tab_prepare`
-demoted (cleannames/other_if_less_than moved out — jmvtab defers cleannames to display; `tab()` keeps
-its order), `tab_resolve_settings()` extended to emit per-tier cache keys, `tab_counts()` re-expressed
-on the shared skeleton, + parity tests (see the approved plan / `dev/tabxplor_jmvtab_cache_design.md` §8).
+`tab_build()` is now the **five-stage pipeline** `ctx |> tab_setup |> tab_prepare_pop |> tab_aggregate
+|> tab_transform |> tab_assemble` (each individually callable, threading a `ctx` list). **Orchestration
+carve** (maintainer's choice): the leaves `tab_plain()`/`tab_num()` are UNCHANGED — the existing `.fine=`
+seam already gives the O(N)→O(cells) split, and tier-3 recomputes wholesale (cache-design §3.4), so no
+split of the two ~900-line leaves. `tab_setup` produces tier-0/1/2 cache keys via `tab_resolve_settings()$cache_keys`
+(new `tab_cache_keys()` helper — symbolic/data-free; 7e adds the data hashes). `ctx` renames the locals
+tab_build threaded, with one clarity win: the overloaded `chi2` split into `chi2_flags` (logical) +
+`tests` (test tibbles). `ctx_update()` repacks NULL-safely (single-bracket `[<-`). `cleannames`/`other_if_less_than`
+extracted to `tab_lump_others()`/`tab_cleannames_relabel()` (public `tab_prepare()` still composes them,
+byte-identical; jmvtab defers cleannames to display in 7e). **`tab_counts()` re-expressed on the SAME
+stages**: single-pair ctx → `tab_setup()` (incl. tab()'s `tot`→totrow/totcol translation) → `tab_transform`
+→ `tab_assemble`, injecting its counts as the fused tier-1 — deleted the hand-inlined finalize; now
+byte-identical to `tab()` for EVERY `tot` (contrib now forces a total row like tab() — a documented
+convergence). **Byte-identical, perf-neutral** (48.3 vs 47.95 ms/call,
+`dev/benchmarks/results_1.4.0/phase7d_ii_carve.txt`): full suite green (1150 pass, 0 fail), NO golden
+regeneration. New `test-carve-parity.R` (stage composition == tab_build + the 7e seam contract) +
+`test-cache-keys.R` (the `$cache_keys` shape) + non-default `tot` cases in `test-counts-parity.R`.
+Pre-existing (NOT a carve regression): multi-row_var × multi-col_var + scalar `pct` errors "pct can't be
+recycled" identically on the pre-carve code.
 
 
 #### Phase 7e — Jamovi module full internal code rewrite with designed caching
@@ -823,6 +841,7 @@ In-code these are tagged for grep: `# KNOWN-BUG:` (bugs below), `# FIXME:` / `# 
 - FIXED (Phase 1a): `fmt()` public constructor cast `totcol` into `refcol` (the `refcol` argument was silently ignored). Now casts `refcol`. Low impact (refcol is normally set internally).
 - FIXED (Phase 6e, golden-locked; hardened Phase 7d-i): `tab_num(..., <tab_vars>, ci="cell")` used to error ("some columns don't belong to the data.table: [tab_var]") in the `tot="no"` grand-total-only grouping-set / `na="keep"` reorder path. 6e made the grand total a length-1 list so `num_rollup()` keeps every tab_var present; 7d-i added a defensive `intersect(tab_vars, names(tabs_tot))` guard at the reorder + an `expect_no_error` regression in `test-num-fuse-parity.R`. Locked by golden `n_ci_tabvars` / `n_ci_tabvars_all`, both `comp` modes.
 - `set_color_style(custom_palette=)` (`tab_classes.R` ~L3120): length check requires 10 but the message says 11 and 11 names (`pos1..neg5, ratio`) are applied — the `ratio` slot ends up valueless, so custom palettes are broken for the ratio color. Fix by accepting length 11.
+- `# KNOWN-BUG:` (`tab.R`, `pct_vect` in `tab_setup()`): `tab(data, >=2 row_vars, >=2 col_vars)` errors "pct can't be recycled" for ANY `pct`. `tab()` recycles `pct` to a per-col_var vector (`pct = c(rep(pct, length(col_var)), ...)`), but `pct_vect` only broadcasts a per-col_var vector when there is exactly ONE row_var (branch B); with ≥2 row_vars it falls to the `else` stop. Fix: add a branch `is.character(pct) & length(pct) == length(col_vars)` → `rep(list(pct), length(row_vars))`. Pre-existing (reproduces pre-7d-ii on `git stash`); low impact (multi×multi + output_list); fix with the recycling code.
 - `tab()` errors on a `data.table` **input** (works on tibble/data.frame). `tab(as.data.table(gss), marital, race)` → `tab_num()` "Selections can't have missing values" from `tidyselect::eval_select(col_vars, data)` (`tab.R` ~L3203) — under a data.table input the numeric-col_var index path (`as.character(col_vars)[col_vars_num]`, `tab.R` ~L1304) yields an NA selection. Low impact (users pass tibbles/data.frames; `tab()` does its own `setDT` on a narrowed copy internally). Discovered in the Phase 6b PoC (§26). Fix belongs with the Phase 2/6 aggregate-core / col_var-classification code, not a separate pass.
 - FIXED (this session): `set_num()` wrote `display=="diff"` via `set_pct()` (should be `set_diff()`), so setting the displayed value of a diff cell went to the wrong field. Now uses `set_diff()`.
 - FIXED (workstream 5): `relabel_levels_in_varnames()` (`tab.R` ~L5592) made big weighted tables ~60× slower. Its `across(where(...))` predicate ran on **every** column with vectorised `&`/`|`, so the character branch `any(. %in% names(data))` coerced whole 8M-row numeric/factor columns to strings (~15s × 2 calls). Rewrote it to examine **only the `col_vars` targets** with short-circuit `&&`/`||` (numeric targets cost ~0); output byte-identical. 8M `tab(wt=)`: ~30s → ~0.2s; unweighted tables also faster + ~90% less memory.

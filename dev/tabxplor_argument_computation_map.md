@@ -380,11 +380,23 @@ finest-grain aggregate (`tab_build()` fused path, off by default) is the reusabl
 
 ## 10. Where to change what (quick index)
 
+Phase 7d-ii carved `tab_build()` into five stages matching the cache tiers (§7 / cache-design §3):
+
+| stage (`R/tab.R`, internal) | cache tier | responsibility |
+|-----------------------------|------------|----------------|
+| `tab_setup(ctx)` | — | resolve + recycle args; masks; `tot_cols_type`; `pct_vect`; `tab_resolve_settings()` + `$cache_keys` |
+| `tab_prepare_pop(ctx)` | 0 | prep the population once (select/filter/na/`tab_prepare()`/lump/levels-auto/lv1 pre-merge) |
+| `tab_aggregate(ctx)` | 1 | numeric moment sums (`tab_aggregate_num()`) + fused factor `.fine` |
+| `tab_transform(ctx)` | 3 (+2 test) | UNCHANGED `tab_num(.fine=)`/`tab_plain(.fine=)` + join + `tab_apply_tests()` |
+| `tab_assemble(ctx)` | 4 | level-drop, add_n/pct, total removal, join, wrap, output shape, render |
+
 | you want to change… | edit |
 |---------------------|------|
 | an argument-forcing rule (colour cascade) | `tab_resolve_settings()` — `R/tab-resolve.R` |
+| a cache-key component (tiers 0-2) | `tab_cache_keys()` — `R/tab-resolve.R` |
 | the numeric `color="auto"` rule | `resolve_color_auto_num()` — `R/tab-resolve.R` |
 | a leaf ref/tot/totaltab resolution | `tab_plain()` / `tab_num()` — `R/tab.R` |
+| a pipeline STAGE (which tier does what) | `tab_setup`/`tab_prepare_pop`/`tab_aggregate`/`tab_transform`/`tab_assemble` — `R/tab.R` |
 | a per-transform computation | `tab-agg.R` (stats core) + the writer in `tab_plain`/`tab_num`/`tab_ci`/`tab_chi2` |
 | a colour measure/channel/policy | the findInterval engine — `R/fmt_class.R`; use the `/color-mode` skill |
 | the Jamovi option → tab() mapping | `R/jmvtab.b.R` + `jamovi/jmvtab.a.yaml`/`.u.yaml` |

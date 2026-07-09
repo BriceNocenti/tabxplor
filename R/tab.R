@@ -929,6 +929,18 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
 }
 
 
+# Phase 7d-ii: update `ctx` with the fields a stage produced. Uses single-bracket `[<-` so that
+# (a) NULL values are PRESERVED as list elements (unlike `ctx$x <- NULL`, which deletes -- which
+# would break the downstream list2env() unpack), and (b) data-frame elements are replaced wholesale
+# (unlike modifyList(), which recurses and tries to merge tibbles column-by-column).
+#' @keywords internal
+#' @noRd
+ctx_update <- function(ctx, updates) {
+  ctx[names(updates)] <- updates
+  ctx
+}
+
+
 # tab_build() -- the shared table-building engine behind tab() and tab_many().
 # Stages: prep-once (whole DB) -> aggregate -> transform -> assemble. Both public entry points
 # are thin wrappers differing only in the default `output` shape they pass. Kept internal (not
@@ -959,6 +971,60 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
 
                       filter #, listed = FALSE,
 ) {
+  # Phase 7d-ii: tab_build is the ARGUMENT SURFACE + the five-stage pipeline. It defuses the NSE
+  # args here (where their promises live) and applies `filter` here too -- the string form (for
+  # tribble) and the pre-existing bare-expression behaviour must stay in this frame. Each stage
+  # takes and returns `ctx`; tab_assemble() returns the final tab/list. The stage split matches the
+  # jmvtab cache tiers (dev/tabxplor_jmvtab_cache_design.md §8): setup (-) -> prepare_pop (tier 0)
+  # -> aggregate (tier 1) -> transform (tier 3 + the tier-2 test) -> assemble (tier 4).
+
+  # Allow to type expression as string in filter (to work with tibble::tribble)
+  with_filter <- FALSE
+  if (!missing(filter)) if (! is.null(filter)) {
+    filter <- rlang::enquo(filter)
+    if (is.character(rlang::get_expr(filter))) filter <- filter %>%
+        rlang::get_expr(.) %>% str2lang()
+
+    data <- data %>% dplyr::mutate(.filter = !!filter)
+    with_filter <- TRUE
+  }
+
+  ctx <- list(
+    data = data, with_filter = with_filter,
+    row_vars_quo = rlang::enquo(row_vars), col_vars_quo = rlang::enquo(col_vars),
+    tab_vars_quo = rlang::enquo(tab_vars), wt_quo = rlang::enquo(wt),
+    na_drop_all_quo = rlang::enquo(na_drop_all),
+    pct = pct, color = color, OR = OR, chi2 = chi2, na = na, levels = levels,
+    cleannames = cleannames, output = output,
+    other_if_less_than = other_if_less_than, other_level = other_level,
+    ref = ref, ref2 = ref2, comp = comp, ci = ci, conf_level = conf_level, stars = stars,
+    method_cell = method_cell, method_diff = method_diff,
+    totaltab = totaltab, totaltab_name = totaltab_name, totrow = totrow, totcol = totcol,
+    total_names = total_names, add_n = add_n, add_pct = add_pct, digits = digits,
+    subtext = subtext, by_table = .by_table,
+    spread_vars = spread_vars, names_prefix = names_prefix, names_sort = names_sort
+  )
+
+  ctx <- tab_setup(ctx)
+  ctx <- tab_prepare_pop(ctx)
+  ctx <- tab_aggregate(ctx)
+  ctx <- tab_transform(ctx)
+  tab_assemble(ctx)
+}
+
+
+# === STAGE 1/5: tab_setup() -- resolve & recycle arguments (no cache tier) ===================
+# Pure argument resolution shared by all downstream stages: tidy-select the four var roles, the
+# factor/numeric masks, the per-row_var and per-col_var arg recycling, totcol -> tot_cols_type,
+# pct_vect, and the colour cascade + cache keys via tab_resolve_settings(). Reads only argument
+# VALUES + column classes -- the data-free boundary the jamovi .js mirrors (Phase 7c).
+#' @keywords internal
+#' @noRd
+tab_setup <- function(ctx) {
+  # Bring every ctx field into scope as a local so the (verbatim) resolution blocks read as before;
+  # the NSE args arrive as *_quo quosures (defused in tab_build), aliased to their plain names below.
+  list2env(ctx, environment())
+
   stopifnot(output %in% c("single", "list", "legacy"))
 
   cleannames <-
@@ -974,7 +1040,7 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
   stopifnot(levels %in% c("first", "all", "auto"))
   lvs <- levels
 
-  row_vars <- rlang::enquo(row_vars)
+  row_vars <- row_vars_quo
   if (quo_miss_na_null_empty_no(row_vars)) {
     data     <- data %>% dplyr::mutate(no_row_var = factor("no_row_var")) # "n"
     row_vars <- rlang::syms("no_row_var")
@@ -987,7 +1053,7 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
   # row_vars_text <- purrr::map_lgl(data[pos_row_vars],
   #                                 ~ is.factor(.) | is.character(.))
 
-  col_vars <- rlang::enquo(col_vars)
+  col_vars <- col_vars_quo
   if (quo_miss_na_null_empty_no(col_vars)) {
     data     <- data %>% dplyr::mutate(no_col_var = factor("n"))
     col_vars <- rlang::syms("no_col_var")
@@ -1000,7 +1066,7 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
   col_vars_text <- purrr::map_lgl(data[pos_col_vars],
                                   ~ is.factor(.) | is.character(.))
 
-  tab_vars <- rlang::enquo(tab_vars)
+  tab_vars <- tab_vars_quo
   if (quo_miss_na_null_empty_no(tab_vars)) {
     #data     <- data %>% dplyr::mutate(no_tab_vars = factor(" "))
     tab_vars <- character() #rlang::syms("no_tab_vars")
@@ -1009,18 +1075,17 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
     tab_vars     <- rlang::syms(names(pos_tab_vars))
   }
 
-  wt_quo <- rlang::enquo(wt)
+  # wt_quo arrives from ctx (defused in tab_build); resolve to a bare symbol or character().
   if (quo_miss_na_null_empty_no(wt_quo)) {
     #data <- data %>% dplyr::mutate(no_weight = factor("n"))
     wt <- character() #rlang::sym("no_weight")
   } else {
-    wt <- rlang::ensym(wt)
+    wt <- rlang::sym(rlang::as_name(wt_quo))
   }
   # print(tab_vars) ; print(row_var) ; print(wt) ; print(col_vars)
 
-  # na_drop_all is captured as a quosure so the tab_many() wrapper can forward it (or NULL when
-  # absent) via tidy-eval; a missing/NULL selection means "drop nothing globally".
-  na_drop_all_quo <- rlang::enquo(na_drop_all)
+  # na_drop_all_quo arrives from ctx (defused in tab_build); a missing/NULL selection means
+  # "drop nothing globally".
   if (rlang::quo_is_missing(na_drop_all_quo) || rlang::quo_is_null(na_drop_all_quo)) {
     na_drop_all <- character()
   } else {
@@ -1126,6 +1191,13 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
                all(purrr::map_int(pct, length) == length(col_vars))) {
       pct
     } else {
+      # KNOWN-BUG: a per-col_var pct VECTOR (length == length(col_vars)) with >= 2 row_vars falls
+      # through here and errors. tab() always recycles pct to length(col_var) (see the tab() ->
+      # tab_build call, `pct = c(rep(pct, length(col_var)), ...)`), so `tab(data, >=2 row_vars,
+      # >=2 col_vars)` errors for ANY pct. Branch B only broadcasts a per-col_var vector when there
+      # is exactly ONE row_var. FIX: add `is.character(pct) & length(pct) == length(col_vars)` ->
+      # `rep(list(pct), length(row_vars))`. Pre-carve bug (reproduces on 1.4.0 pre-7d-ii); fix in the
+      # phase that touches this recycling, not as a separate pass.
       stop("pct can't be recycled to the lengths of row_vars and col_vars (see documentation `?tab_many`)")
     }
 
@@ -1147,7 +1219,13 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
   # See dev/tabxplor_argument_computation_map.md.
   .settings     <- tab_resolve_settings(color = color, OR = OR, ci = ci, chi2 = chi2,
                                          ref = ref, pct_vect = pct_vect,
-                                         col_vars_text = col_vars_text, totrow = totrow)
+                                         col_vars_text = col_vars_text, totrow = totrow,
+                                         na = na, wt_name = as.character(wt),
+                                         other_if_less_than = other_if_less_than, comp = comp,
+                                         tab_vars = as.character(tab_vars),
+                                         row_vars = as.character(row_vars),
+                                         col_vars = as.character(col_vars),
+                                         filter_expr = NA_character_)
   color         <- .settings$color
   chi2          <- .settings$chi2
   ci            <- .settings$ci
@@ -1156,21 +1234,37 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
   color_ctr     <- .settings$color_ctr
   color_ci      <- .settings$color_ci
   color_num     <- .settings$color_num
+  cache_keys    <- .settings$cache_keys
+
+  # --- repack: setup produces the resolved/recycled settings every downstream stage reads.
+  # ctx_update() preserves a field resolved to NULL (e.g. totcol) as a NULL element -- `ctx$x <-
+  # NULL` would delete it, breaking the downstream list2env() unpack. ---
+  ctx_update(ctx, list(
+    data = data,
+    row_vars = row_vars, col_vars = col_vars, tab_vars = tab_vars, wt = wt,
+    col_vars_num = col_vars_num, col_vars_text = col_vars_text,
+    tab_row_names = tab_row_names, na_drop_all = na_drop_all,
+    cleannames = cleannames, stars = stars, lvs = lvs,
+    totaltab = totaltab, totrow = totrow, ref = ref, ref2 = ref2,
+    OR = OR, comp = comp, color = color, ci = ci, chi2 = chi2,
+    digits = digits, total_names = total_names, conf_level = conf_level, na = na,
+    totcol = totcol, tot_cols_type = tot_cols_type, pct_vect = pct_vect,
+    color_diff_OR = color_diff_OR, color_ctr = color_ctr,
+    color_ci = color_ci, color_num = color_num, cache_keys = cache_keys
+  ))
+}
 
 
-
-
-  # Allow to type expression as string in filter (to work with tibble::tribble)
-  with_filter <- FALSE
-  if (!missing(filter)) if (! is.null(filter)) {
-    filter <- rlang::enquo(filter)
-    if (is.character(rlang::get_expr(filter))) filter <- filter %>%
-        rlang::get_expr(.) %>% str2lang()
-
-    data <- data %>% dplyr::mutate(.filter = !!filter)
-    with_filter <- TRUE
-  }
-
+# === STAGE 2/5: tab_prepare_pop() -- prepare the population ONCE (cache tier 0) ==============
+# Row-level preparation of the whole DB, shared by every table: select + relabel, apply the
+# `filter` column (mutated in tab_build), na_text/na_num policy, tab_prepare() (ordered-strip +
+# listwise removal + lump + cleannames), the tab_vars other_if_less_than re-lump, zero-weight
+# removal, levels = "auto" resolution, and the lv1 non-first-level pre-merge. Everything here
+# removes ROWS (a population change), never a per-pair reuse.
+#' @keywords internal
+#' @noRd
+tab_prepare_pop <- function(ctx) {
+  list2env(ctx, environment())
 
   #Prepare the data
   data <- data %>% dplyr::select(!!!tab_vars, !!!row_vars, !!wt, !!!col_vars,
@@ -1193,11 +1287,10 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
     na_num  <- "keep"
 
   } else {
-    if (missing(na_drop_all)) {
-      na_drop_all <- character()
-    } else{
-      na_drop_all <- names(tidyselect::eval_select(rlang::enquo(na_drop_all), data))
-    }
+    # na_drop_all was resolved to column names in tab_setup (Block B); re-resolve it against the
+    # now-selected data. Byte-identical: the former `if (missing(na_drop_all))` branch was
+    # unreachable once Block B assigned it (missing() is FALSE after assignment).
+    na_drop_all <- names(tidyselect::eval_select(rlang::enquo(na_drop_all), data))
 
     na_text <-
       purrr::map(as.character(row_vars),
@@ -1293,29 +1386,106 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
 
 
   #Make a table for each column variable and store them in a list
-  #dat_group3 <- data %>% dplyr::group_by(!!!tab_vars, .add = TRUE, .drop = FALSE)
+
+  # --- repack: prepare_pop produces the prepared population + level metadata (tier 0) ---
+  ctx_update(ctx, list(
+    data = data,
+    na_text = na_text, na_num = na_num,
+    lvs = lvs, lv1 = lv1,
+    remove_levels = if (any(lv1)) remove_levels else NULL
+  ))
+}
 
 
-  # (color_diff_OR / color_ctr / color_ci / color_num were split from `color` above by
-  #  tab_resolve_settings() -- Phase 7b.)
+# === STAGE 3/5: tab_aggregate() -- the tier-1 count / moment-sum aggregates ==================
+# Prepped population -> the persisted cache tier: per-row_var numeric moment aggregates (via the
+# shared tab_aggregate_num()) and the fused factor count aggregate `.fine` (the opt-in scan-fusion
+# path, guarded). Both are NULL under `.by_table` (the table-by-table raw-scan path). tab_plain() /
+# tab_num() are NOT split -- they adopt these via `.fine=` and remain the tier-3 transform.
+#' @keywords internal
+#' @noRd
+tab_aggregate <- function(ctx) {
+  list2env(ctx, environment())
+  .by_table <- by_table
 
-  #Calculate all numeric variables in one time (for each row_var)
-  # Phase 7d: build the per-row_var moment-sum aggregate (`fine_num`) via tab_aggregate_num(), then
-  # feed it to tab_num(.fine=). This relocates the single O(N) scan out of tab_num (perf-neutral: one
-  # scan either way) and makes the numeric tier-1 aggregate a first-class object the jmvtab cache can
-  # hold. PER row_var (never fused across row_vars): a shared scan can't reproduce per-row_var
-  # `na.omit(<row_var>)` and would change float summation order. `.by_table` forces the raw path.
+  # Numeric tier-1: per-row_var moment-sum aggregate via tab_aggregate_num() (Phase 7d-i seam, now
+  # HOISTED out of tab_num()'s pmap so the numeric aggregate is a first-class cache object). NEVER
+  # fused across row_vars -- a shared scan can't reproduce per-row_var na.omit(<row_var>) and would
+  # change float summation order. `.by_table` -> NULL -> tab_num() re-scans. Byte-identical to the
+  # former in-pmap build (tab_aggregate_num() is pure and order-independent).
+  fine_num <- NULL
   if (sum(col_vars_num) != 0) {
-    tabs_num <- purrr::pmap(list(row_vars, totaltab, totrow   ,
-                                 ref    , comp    , color_num,  ci, na_num),
-                            ~ {
-                              fine_num <- if (.by_table) NULL else tab_aggregate_num(
-                                data, !!..1,
-                                as.character(col_vars)[col_vars_num],
-                                as.character(tab_vars),
-                                wt = !!wt, na = ..8
-                              )
-                              tab_num(data,
+    fine_num <- if (.by_table) {
+      rep(list(NULL), length(row_vars))
+    } else {
+      purrr::map2(row_vars, na_num, ~ tab_aggregate_num(
+        data, !!.x,
+        as.character(col_vars)[col_vars_num],
+        as.character(tab_vars),
+        wt = !!wt, na = .y
+      ))
+    }
+    fine_num <- purrr::set_names(fine_num, as.character(row_vars))
+  }
+
+  # Factor tier-1: ONE shared finest-grain data.table aggregate keyed on all (tab_vars, row_vars,
+  # factor col_vars), rolled up per (row_var x col_var) in tab_plain(`.fine`) instead of re-scanning
+  # N rows per pair. OPT-IN (fuse_min_rows default Inf -> off): the win is modest once per-table
+  # downstream dominates; kept as reusable infra (jmvtab caching). Guard: prod(nlevels) <= N, no
+  # col/row var overlap, >= 2 tables, not `.by_table`. Keep the `keyby` sort order (rollup identity).
+  .fine <- NULL
+  if (!.by_table && sum(col_vars_text) != 0) {
+    fct_col_vars <- as.character(col_vars[col_vars_text])
+    col_in_row   <- any(fct_col_vars %in% as.character(c(row_vars, tab_vars)))
+    if (!col_in_row) {
+      fine_keys <- unique(as.character(c(tab_vars, row_vars, fct_col_vars)))
+      key_card  <- function(x) if (is.factor(x)) nlevels(x) + as.integer(anyNA(x)) else
+        data.table::uniqueN(x)
+      prod_nlev <- prod(vapply(fine_keys, function(k) key_card(data[[k]]), numeric(1)))
+      n_tables <- length(row_vars) * sum(col_vars_text)
+      if (is.finite(prod_nlev) && prod_nlev <= nrow(data) &&
+          nrow(data) >= getOption("tabxplor.fuse_min_rows", Inf) && n_tables >= 2) {
+        dt___ <- data.table::as.data.table(data[unique(c(fine_keys, as.character(wt)))])
+        .fine <- if (length(wt) != 0) {
+          dt___[, list(n = .N, wn = sum(as.numeric(eval(wt)), na.rm = TRUE)), keyby = fine_keys]
+        } else {
+          dt___[, list(n = .N), keyby = fine_keys]
+        }
+      }
+    }
+  }
+
+  # Both aggregates are NULL on the raw / .by_table path -- ctx_update() preserves them as NULL
+  # elements so tab_transform()'s list2env() finds them (`ctx$x <- NULL` would delete them).
+  ctx_update(ctx, list(fine_num = fine_num, fine_fused = .fine))
+}
+
+
+# === STAGE 4/5: tab_transform() -- pct/diff/ratio/or/CI + fmt + the tier-2 test =============
+# Aggregate -> the per-cell fmt fields and the whole-table test, via the UNCHANGED tab_num(.fine=) /
+# tab_plain(.fine=) leaves (tier 3, O(cells), recomputed each run) + the post-join tab_apply_tests()
+# (the tier-2 chi2/ANOVA test). Preserves the ordering invariant: tests run on the FULL levels,
+# BEFORE the non-first-level drop (which lives in tab_assemble).
+#' @keywords internal
+#' @noRd
+tab_transform <- function(ctx) {
+  list2env(ctx, environment())
+  .by_table <- by_table
+  .fine     <- fine_fused
+  # `chi2` stays the per-row_var logical flag (do_chi2). `tests` is the whole-table test output:
+  # it starts as that logical (so a numeric-only table hits assemble's is.logical() fallback) and
+  # is overwritten with the captured test tibbles when factor tables are built. NULL-init the two
+  # table lists so the repack + assemble join are safe on the numeric-only / factor-only branches.
+  tabs_text <- NULL
+  tabs_num  <- NULL
+  tests     <- chi2
+
+  # Numeric transform: adopt the tier-1 moment aggregate `fine_num` (`.fine = ..9`), one tab_num()
+  # per row_var; `.by_table` -> ..9 is NULL -> re-scan. Everything downstream is O(cells).
+  if (sum(col_vars_num) != 0) {
+    tabs_num <- purrr::pmap(list(row_vars, totaltab, totrow, ref, comp, color_num, ci, na_num,
+                                 fine_num),
+                            ~ tab_num(data,
                                       !!..1,
                                       as.character(col_vars)[col_vars_num],
                                       as.character(tab_vars),
@@ -1332,19 +1502,16 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
                                       totaltab_name = totaltab_name,
                                       tot        = dplyr::if_else(..3, "row", "no"),
                                       total_names= total_names,
-                                      .fine      = fine_num,
+                                      .fine      = ..9,
                                       .by_table  = .by_table
-                              )
-                            }
+                            )
     ) %>%
       purrr::set_names(row_vars)
   }
 
   # Phase 3b: whole-table test for NUMERIC col_vars = one-way ANOVA (Welch + classic F), computed
-  # per row_var by running the (rewritten) tab_chi2() test step on the numeric table -- it detects
-  # the mean col_vars and calls agg_anova(). Only the tidy `test` tibble is kept; the merged table
-  # itself is assembled from the untouched tabs_num below. Combined with the factor chi2 attribute
-  # (per row_var) just before the tabs are re-wrapped (see the `chi2`/`chi2_num` merge lower down).
+  # per row_var by running tab_chi2()'s test step on the numeric table (it detects mean col_vars and
+  # calls agg_anova()). Only the tidy `test` tibble is kept; merged with the factor `chi2` at assemble.
   chi2_num <- NULL
   if (sum(col_vars_num) != 0 && any(chi2)) {
     chi2_num <- purrr::pmap(
@@ -1352,41 +1519,6 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
       ~ if (isTRUE(..3)) get_test(tab_chi2(tabs = ..1, calc = "p", comp = ..2))
         else new_test_tibble()
     )
-  }
-
-
-
-  # DESIGN: fused aggregation. Build ONE shared finest-grain data.table aggregate keyed on all
-  # (tab_vars, row_vars, factor col_vars), so every factor table is rolled up from it in tab_plain
-  # (`.fine`) instead of re-scanning N rows per (row_var x col_var) pair. Guard: only when
-  # prod(nlevels) <= N (measured crossover, see CLAUDE.md "Perf findings"), no col/row var overlap,
-  # and not forced off via `.by_table`. Otherwise `.fine` stays NULL -> table-by-table (current).
-  .fine <- NULL
-  if (!.by_table && sum(col_vars_text) != 0) {
-    fct_col_vars <- as.character(col_vars[col_vars_text])
-    col_in_row   <- any(fct_col_vars %in% as.character(c(row_vars, tab_vars)))
-    if (!col_in_row) {
-      fine_keys <- unique(as.character(c(tab_vars, row_vars, fct_col_vars)))
-      key_card  <- function(x) if (is.factor(x)) nlevels(x) + as.integer(anyNA(x)) else
-        data.table::uniqueN(x)
-      prod_nlev <- prod(vapply(fine_keys, function(k) key_card(data[[k]]), numeric(1)))
-      # OPT-IN (off by default): the win is modest (~1.05-1.30x at 15M) because per-table downstream
-      # (dcast/%/totals/chi2/fmt) dominates once aggregation is fused; it only clearly pays past ~10M
-      # dense / lower for sparse data, and grows at 30M+. Default floor Inf -> never fuses unless the
-      # user sets `options(tabxplor.fuse_min_rows = <n>)` (e.g. 1e7). Kept as reusable infrastructure
-      # (see CLAUDE.md "Perf findings" and workstream 7 Jamovi caching). Guard also needs
-      # prod(nlevels) <= N (real collapse) and >= 2 tables.
-      n_tables <- length(row_vars) * sum(col_vars_text)
-      if (is.finite(prod_nlev) && prod_nlev <= nrow(data) &&
-          nrow(data) >= getOption("tabxplor.fuse_min_rows", Inf) && n_tables >= 2) {
-        dt___ <- data.table::as.data.table(data[unique(c(fine_keys, as.character(wt)))])
-        .fine <- if (length(wt) != 0) {
-          dt___[, list(n = .N, wn = sum(as.numeric(eval(wt)), na.rm = TRUE)), keyby = fine_keys]
-        } else {
-          dt___[, list(n = .N), keyby = fine_keys]
-        }
-      }
-    }
   }
 
   if (sum(col_vars_text) != 0) {
@@ -1461,9 +1593,28 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
                         method_cell = method_cell, method_diff = method_diff)
     )
     tabs_text <- purrr::map(applied, "tab")
-    chi2      <- purrr::map(applied, "test")
+    tests     <- purrr::map(applied, "test")
+  }
+
+  # --- repack: transform produces the built+tested tables + the tier-2 test.
+  # tabs_text/tabs_num/chi2_num are NULL on the factor-only / numeric-only / no-test branches --
+  # ctx_update() preserves them so tab_assemble()'s list2env() finds them. ---
+  ctx_update(ctx, list(
+    tabs_text = tabs_text, tabs_num = tabs_num, tests = tests, chi2_num = chi2_num
+  ))
+}
 
 
+# === STAGE 5/5: tab_assemble() -- join, totals, wrap, output shape, render prep (tier 4) ====
+# Built tables -> the final tabxplor_tab / list: non-first-level drop, add_n/add_pct, total col/row
+# removal, the numeric+factor join, the whole-table test merge + class wrap, output-shape compaction,
+# p-value lines, tab_spread, unwrap, and the optional tab_kable. Pure O(cells) display assembly.
+#' @keywords internal
+#' @noRd
+tab_assemble <- function(ctx) {
+  list2env(ctx, environment())
+
+  if (sum(col_vars_text) != 0) {
 
     #Remove unwanted levels (keep only the first when levels = "first")
     if (any(lv1)) {
@@ -1598,18 +1749,20 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
       )
   }
 
-  # Combine the factor (chi2) and numeric (ANOVA F) whole-table test attributes, per row_var.
-  # For numeric-only tables `chi2` is still the boolean flag here (the factor branch was skipped).
-  if (is.logical(chi2)) { chi2 <- rep(list(new_test_tibble()), length(tabs)) }
-  if (!is.null(chi2_num)) { chi2 <- purrr::map2(chi2, chi2_num, dplyr::bind_rows) }
+  # Combine the factor (chi2) and numeric (ANOVA F) whole-table test tibbles, per row_var. For a
+  # numeric-only table `tests` is still the boolean `chi2` flag here (the factor branch was skipped),
+  # so is.logical() converts it to empty test tibbles. (Phase 7d-ii: `tests` replaces the former
+  # `chi2` name overload -- `chi2` stays the per-row_var logical flag; `tests` the test tibbles.)
+  if (is.logical(tests)) { tests <- rep(list(new_test_tibble()), length(tabs)) }
+  if (!is.null(chi2_num)) { tests <- purrr::map2(tests, chi2_num, dplyr::bind_rows) }
 
   if (!any(purrr::map_lgl(tabs, lv1_group_vars)) ) {
     tabs <- tabs %>% purrr::map(~ dplyr::group_by(., !!!tab_vars))
     groups <- purrr::map(tabs, dplyr::group_data)
-    tabs <- purrr::pmap(list(tabs, groups, chi2),
+    tabs <- purrr::pmap(list(tabs, groups, tests),
                         ~ new_grouped_tab(..1, groups = ..2, subtext = subtext, test = ..3))
   } else {
-    tabs <- purrr::map2(tabs, chi2, ~ new_tab(.x, subtext = subtext, test = .y))
+    tabs <- purrr::map2(tabs, tests, ~ new_tab(.x, subtext = subtext, test = .y))
   }
 
   # === STAGE: assemble output shape (§13 truth table) ===
@@ -1957,6 +2110,35 @@ tab_get_vars <- function(tabs, vars = c("row_var", "col_vars", "tab_vars")) {
 
 # STEP-BY-STEP FUNCTIONS -----------------------------------------------------------------
 
+# Lump factor levels whose (unweighted) count is below `other_if_less_than` into `other_level`.
+# Phase 7d-ii: extracted verbatim from tab_prepare() so the internal pipeline and the jmvtab cache
+# can run this as a standalone, keyable pre-aggregate step; tab_prepare() still composes it.
+# `across(all_of(character()))` is a no-op, so the length guard only short-circuits the common case.
+tab_lump_others <- function(data, vars_not_numeric, other_if_less_than = 0,
+                            other_level = "Others") {
+  if (other_if_less_than > 0 && length(vars_not_numeric) != 0) {
+    data <- data %>%
+      dplyr::mutate(dplyr::across(
+        tidyselect::all_of(vars_not_numeric),
+        ~ forcats::fct_lump_min(., other_if_less_than, other_level = other_level)
+      ))
+  }
+  data
+}
+
+# Strip the cleannames regex (prefix numbers like "1-", parenthesised text) from factor labels.
+# Phase 7d-ii: extracted verbatim from tab_prepare(). The tab()/tab_build path runs it PRE-aggregate
+# (kept, cache-design §5 — summing cleannames); jmvtab (Phase 7e) will call it at DISPLAY instead.
+# The caller decides whether cleannames is on; this helper only performs the relabel.
+tab_cleannames_relabel <- function(data, vars_not_numeric) {
+  if (length(vars_not_numeric) != 0) data <- data %>%
+    dplyr::mutate(dplyr::across(
+      tidyselect::all_of(vars_not_numeric),
+      ~ forcats::fct_relabel(., ~ stringr::str_remove_all(., cleannames_condition()))
+    ))
+  data
+}
+
 #' Prepare data for \code{\link{tab_plain}}.
 #'
 #' @param data A dataframe.
@@ -2024,25 +2206,15 @@ tab_prepare <-
         ~ magrittr::set_class(., class(.)[class(.) != "ordered"])
       ))
 
-    if(other_if_less_than > 0) {
-      data <- data %>%
-        dplyr::mutate(dplyr::across(tidyselect::all_of(vars_not_numeric),
-                                    ~ forcats::fct_lump_min(.,
-                                                            other_if_less_than,
-                                                            other_level = other_level))
-        )
-    }
-
     # Remove unused levels : time taker
     # data <- data %>%  #Remove unused levels anyway
     #   dplyr::mutate(dplyr::across(tidyselect::all_of(vars_not_numeric),
     #                               forcats::fct_drop))
 
-    if (cleannames == TRUE)  data <- data %>%
-      dplyr::mutate(dplyr::across(
-        tidyselect::all_of(vars_not_numeric),
-        ~forcats::fct_relabel(., ~stringr::str_remove_all(., cleannames_condition() ))
-      ))
+    # Phase 7d-ii: rare-level lump + cleannames relabel are now standalone helpers (callable by the
+    # jmvtab cache); tab_prepare composes them here in the same lump-then-clean order (byte-identical).
+    data <- data %>% tab_lump_others(vars_not_numeric, other_if_less_than, other_level)
+    if (cleannames == TRUE) data <- data %>% tab_cleannames_relabel(vars_not_numeric)
 
     data
   }

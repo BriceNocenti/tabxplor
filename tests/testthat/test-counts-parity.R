@@ -37,6 +37,27 @@ testthat::test_that("long counts == microdata with color = 'diff'", {
     tab(gss, marital, race, pct = "row", color = "diff", ci = "cell", chi2 = TRUE))
 })
 
+# Phase 7d-ii: tab_counts() now routes through the SAME tab_setup()/tab_transform()/tab_assemble()
+# stages as tab(), translating `tot` -> (totrow, totcol) exactly as tab()'s wrapper does. Lock the
+# non-default `tot` values (previously only the default c("row","col") was covered).
+testthat::test_that("non-default tot == microdata (routed tot -> totrow/totcol translation)", {
+  gss <- counts_gss()
+  cu  <- dplyr::count(gss, marital, race)
+  for (t in list("both", "row", "col", "no")) {
+    tt <- if (identical(t, "both")) c("row", "col") else t
+    testthat::expect_equal(
+      tab_counts(cu, marital, race, counts = n, pct = "row", tot = tt),
+      tab(gss, marital, race, pct = "row", tot = tt),
+      info = sprintf("tot=%s", paste(tt, collapse = ","))
+    )
+  }
+  # tot with tab_vars + col% too
+  cuw <- dplyr::count(gss, marital, race, year)
+  testthat::expect_equal(
+    tab_counts(cuw, marital, race, year, counts = n, pct = "col", tot = "col"),
+    tab(gss, marital, race, year, pct = "col", tot = "col"))
+})
+
 testthat::test_that("weighted counts (real n + weighted wn) == weighted microdata (weighted est + unweighted n)", {
   gss <- counts_gss()
   cw  <- gss |>

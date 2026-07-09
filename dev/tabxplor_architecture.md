@@ -87,31 +87,43 @@ This class requires a separate S3 method for **every dplyr verb** to preserve cl
 
 Since Phase 6 (1.4.0) both public entry points are thin wrappers over the internal engine
 `tab_build()` (`R/tab.R`). `tab()` and `tab_many()` differ only in the default output shape they pass
-(`tab()` merges >=2 row_vars; `tab_many()` keeps a list). `tab_build()` runs the shared prep once on
-the whole data, then the per-row_var pipeline:
+(`tab()` merges >=2 row_vars; `tab_many()` keeps a list). `tab_build()` is a thin **five-stage
+pipeline** threading a `ctx` list (Phase 7d-ii); the stages match the jmvtab cache tiers so Phase 7e
+can drive them at cache granularity — the SAME functions, no math fork:
 
 ```
 tab(data, row_vars, col_vars, ..., output_list=FALSE)   tab_many(..., compact=)  [soft-deprecated]
   └────────────────────────┬───────────────────────────────────────┘
                            ▼
-              tab_build(data, ..., output)
-                ├─ RESOLVE (pure, data-free): tab_resolve_settings()  — the arg-overwrite cascade
-                │    (color="auto" → measure; contrib → chi2/totrow; diff-family → ci="diff"; the
-                │    color split). ONE source, shared with tab_counts(); the jmvtab .js / cache boundary
-                ├─ PREP-ONCE (whole DB):   tab_prepare()  — select, filter, cleannames, lump rare
-                │                            levels, zero/NA-weight removal, na population fix
-                ├─ per row_var:
-                │    tab_plain()  ──►  data.table aggregation (dcast), wraps in fmt, adds totals,
-                │       or tab_num()   writes tot_n     (numeric: moment-sum aggregate → means/var)
-                │    tab_apply_tests() ─►  tab_chi2() (chi2 / ANOVA F, +ctr) → capture `test` →
-                │                          tab_ci() (Wilson / Newcombe / Welch-t; base from tot_n)
-                │    level-drop, tab_add_n_pct()
-                └─ ASSEMBLE:  merge num+factor, totrow/totcol cosmetic filter, rewrap (new_tab /
-                     new_grouped_tab), output shape (§13), tab_pvalue_lines(), tab_spread()
+       tab_build(...)  = argument surface: defuse NSE args + apply `filter`, build ctx, run:
+        ctx |> tab_setup |> tab_prepare_pop |> tab_aggregate |> tab_transform |> tab_assemble
+         │
+         ├─ tab_setup(ctx)        (no tier)  RESOLVE + recycle: tidy-select var roles, factor/numeric
+         │      masks, per-row_var/per-col_var arg recycling, totcol→tot_cols_type, pct_vect, and the
+         │      arg-overwrite cascade + cache keys via tab_resolve_settings() (pure, data-free)
+         ├─ tab_prepare_pop(ctx)  (tier 0)   PREP the population ONCE: select+relabel, apply filter,
+         │      na_text/na_num, tab_prepare() (ordered-strip + listwise removal + lump + cleannames),
+         │      zero/NA-weight removal, levels="auto", lv1 non-first-level pre-merge
+         ├─ tab_aggregate(ctx)    (tier 1)   the count/moment aggregates: per-row_var numeric moment
+         │      sums via tab_aggregate_num() + the fused factor count `.fine` (both NULL under .by_table)
+         ├─ tab_transform(ctx)    (tier 3 + the tier-2 test)  the UNCHANGED tab_num(.fine=)/tab_plain(.fine=)
+         │      leaves (pct/diff/ratio/or/CI + fmt, O(cells)) + factor join + tab_apply_tests()
+         │      (chi2/ANOVA → capture `test` → tab_ci; runs BEFORE the level-drop — the ordering invariant)
+         └─ tab_assemble(ctx)     (tier 4)   level-drop, tab_add_n_pct(), total col/row removal, num+factor
+                join, test-merge + rewrap (new_tab/new_grouped_tab), output shape (§13),
+                tab_pvalue_lines(), tab_spread(), unwrap, optional tab_kable()
 ```
 
+The `ctx` list renames the locals tab_build already threaded, with one clarity win: the overloaded
+`chi2` is split into `chi2_flags` (the per-row_var logical) and `tests` (the captured test tibbles).
+`ctx_update()` repacks NULL-safely (single-bracket `[<-`, not `$<-` which deletes on NULL).
 `tab_apply_tests()` is the ONE place both `tab_build()` and `tab_counts()` build the chi2/ci calls
-(Phase 6a). `tab_compact()` (`R/tab_classes.R`) is the internal merge invoked when `output = "single"`.
+(Phase 6a). `tab_counts()` reuses the SAME stages: it holds its aggregate, so it builds a single-pair
+ctx, runs `tab_setup()` (incl. the `tot`→totrow/totcol translation tab() uses) then `tab_transform()`
++ `tab_assemble()`, injecting its counts as the fused tier-1. `tab_lump_others()` / `tab_cleannames_relabel()`
+are the two factor-relabel steps extracted from `tab_prepare()` (which still composes them for its
+public callers); jmvtab (Phase 7e) will run cleannames at display instead. `tab_compact()`
+(`R/tab_classes.R`) is the internal merge invoked when `output = "single"`.
 `tab_resolve_settings()` (`R/tab-resolve.R`, Phase 7b) is the ONE place the argument-overwrite cascade
 lives — a pure function of (args, column classes) that draws the boundary between static arg resolution
 (here) and data-dependent resolution kept at the leaf (`ref="auto"`/regex, `levels="auto"`, `na`-drop).

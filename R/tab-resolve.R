@@ -33,11 +33,23 @@
 # @param totrow        Logical vector (recycled over row_vars) OR NULL. When NULL (the
 #   tab_counts caller, which drives total rows through its own `tot`), the contrib->totrow
 #   forcing is skipped -- preserving that caller's existing behaviour.
-# @return list(color, chi2, ci, totrow, color_diff_OR, color_ctr, color_ci, color_num).
+# @param na,wt_name,other_if_less_than,comp,tab_vars,row_vars,col_vars,filter_expr
+#   Phase 7d-ii cache-key inputs (DATA-FREE argument values / variable NAMES, never column
+#   values). Defaulted so pre-7d-ii callers and the colour-cascade tests are unaffected; used
+#   only to build `$cache_keys`. `wt_name`/`tab_vars`/`row_vars`/`col_vars` are character names;
+#   `filter_expr` a symbolic string (or NA).
+# @return list(color, chi2, ci, totrow, color_diff_OR, color_ctr, color_ci, color_num,
+#   cache_keys). `cache_keys` = the symbolic key material for the persisted jmvtab cache tiers
+#   0-2 (dev/tabxplor_jmvtab_cache_design.md §3); the tier-2 shaped-aggregate hash + population
+#   hashes are added by the module (Phase 7e).
 # @keywords internal
 # @noRd
 tab_resolve_settings <- function(color, OR, ci, chi2, ref, pct_vect, col_vars_text,
-                                 totrow = NULL) {
+                                 totrow = NULL,
+                                 na = "keep", wt_name = character(),
+                                 other_if_less_than = 0, comp = "tab",
+                                 tab_vars = character(), row_vars = character(),
+                                 col_vars = character(), filter_expr = NA_character_) {
 
   # DESIGN: color = "auto" resolves from the pct/OR/ci settings of the FACTOR col_vars ONLY:
   # OR-type -> "OR"; row/col pct + ci = "diff" -> "after_ci"; row/col pct -> "diff";
@@ -113,9 +125,55 @@ tab_resolve_settings <- function(color, OR, ci, chi2, ref, pct_vect, col_vars_te
                              "OR"       = "no" ,
                              .default = color   )
 
+  # Phase 7d-ii: DATA-FREE cache-key material for the persisted jmvtab cache tiers 0-2
+  # (dev/tabxplor_jmvtab_cache_design.md §3). Symbolic only: the module (Phase 7e) turns the
+  # `population` descriptor into a hash and appends the tier-2 shaped-aggregate hash.
+  # `population` = "full" for na in {keep, drop}; a {mode, vars} descriptor for the population
+  # modes drop_all (listwise on all selected vars) / common_base (row_var + first col_var +
+  # tab_vars) -- §3.1. `grain` = the sorted tab_vars (the tab-var rollup axis).
+  cache_keys <- tab_cache_keys(na = na, wt_name = wt_name,
+                               other_if_less_than = other_if_less_than, comp = comp,
+                               tab_vars = tab_vars, row_vars = row_vars, col_vars = col_vars,
+                               filter_expr = filter_expr)
+
   list(color = color, chi2 = chi2, ci = ci, totrow = totrow,
        color_diff_OR = color_diff_OR, color_ctr = color_ctr,
-       color_ci = color_ci, color_num = color_num)
+       color_ci = color_ci, color_num = color_num,
+       cache_keys = cache_keys)
+}
+
+# Build the symbolic (data-free) cache-key material for the persisted jmvtab cache tiers 0-2.
+# Split out of tab_resolve_settings() only for readability; it is the same "one place computes
+# the cache-key material the .js mirrors" boundary (dev/tabxplor_jmvtab_cache_design.md §8).
+# @keywords internal
+# @noRd
+tab_cache_keys <- function(na = "keep", wt_name = character(), other_if_less_than = 0,
+                           comp = "tab", tab_vars = character(), row_vars = character(),
+                           col_vars = character(), filter_expr = NA_character_) {
+  row_vars <- as.character(row_vars)
+  col_vars <- as.character(col_vars)
+  tab_vars <- as.character(tab_vars)
+  wt_key   <- if (length(wt_name) == 0) "" else as.character(wt_name)[1]
+  grain    <- sort(tab_vars)
+
+  population <- if (na %in% c("keep", "drop")) {
+    "full"
+  } else if (na == "drop_all") {
+    list(mode = "drop_all",
+         vars = sort(unique(c(row_vars, col_vars, tab_vars))))
+  } else if (na == "common_base") {
+    list(mode = "common_base",
+         vars = c(row_vars, if (length(col_vars) != 0) col_vars[1] else NULL, tab_vars))
+  } else {
+    "full"
+  }
+
+  list(
+    tier0 = list(na = na, wt = wt_key, filter = filter_expr, population = population),
+    tier1_common = list(grain = grain, wt = wt_key,
+                        other_if_less_than = other_if_less_than, population = population),
+    tier2 = list(comp = comp)
+  )
 }
 
 

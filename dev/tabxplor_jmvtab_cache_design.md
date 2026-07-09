@@ -253,6 +253,17 @@ cleannames (with summing) for retro-compatibility — a deliberate divergence be
 
 ## 8. Compute-function seams Phase 7d must build
 
+> STATUS (2026-07-10, Phase 7d-ii): **BUILT.** `tab_build()` is now the five-stage pipeline
+> `ctx |> tab_setup |> tab_prepare_pop |> tab_aggregate |> tab_transform |> tab_assemble` (R/tab.R),
+> each stage individually callable and threading a `ctx` list — the orchestration carve (the leaves
+> `tab_plain()`/`tab_num()` are NOT split: the existing `.fine=` seam already gives the O(N)→O(cells)
+> split, and tier 3 recomputes wholesale, per §3.4). `cleannames`/`other_if_less_than` extracted to
+> `tab_lump_others()`/`tab_cleannames_relabel()` (tab_prepare() still composes them; §5 divergence
+> is a 7e display step). `tab_resolve_settings()$cache_keys` emits the tier 0-2 symbolic key material.
+> `tab_counts()` re-expressed on the same stages (single-pair ctx). Byte-identical (golden/fuse/counts
+> parity green, no regen); new `test-carve-parity.R` locks the composition + the seam contract, and
+> the mapping stage↔tier is in the map §10. 7e (the module) adds the store + the data hashes.
+
 The tiers are only callable if `tab_build` is carved into three composable steps — the **same functions
 `tab()` uses, no math fork** (Phase 7e drives them at cache granularity; reuse guarantees near-identical
 behaviour). Grounded in the current pipeline order (map §2).

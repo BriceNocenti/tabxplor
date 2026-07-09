@@ -273,79 +273,48 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
     ci <- "no"; chi2 <- FALSE
   }
 
-  # -- resolve colour: Phase 7b routes tab_counts() through the SAME pure resolver as tab_build()
-  #    (tab_resolve_settings(), R/tab-resolve.R) -- auto-resolution, the contrib/diff-family
-  #    forcing, and the split into the diff/OR colour (-> tab_plain), the contrib colour
-  #    (-> tab_chi2) and the ci colour (-> tab_ci). This is a single row_var x single factor
-  #    col_var, so the row-axis inputs are length 1, pct_vect is list(pct) and col_vars_text is
-  #    TRUE. totrow = NULL: this constructor drives total rows through its own `tot`, so the
-  #    contrib -> totrow forcing is skipped (unchanged from before). --
-  .settings     <- tab_resolve_settings(color = color, OR = OR, ci = ci, chi2 = chi2,
-                                         ref = ref, pct_vect = list(pct),
-                                         col_vars_text = TRUE, totrow = NULL)
-  color         <- .settings$color
-  chi2          <- .settings$chi2
-  ci            <- .settings$ci
-  color_diff_OR <- .settings$color_diff_OR
-  color_ctr     <- .settings$color_ctr
-  color_ci      <- .settings$color_ci
-
-  # -- base table via tab_plain()'s pre-aggregate (`.fine`) entry. `data_skel` only serves the
-  #    tidy-select of tab_vars; the aggregation reads `.fine`. `wt` is a weighted/unweighted flag
-  #    (never evaluated as a column on the `.fine` path). --
+  # -- Phase 7d-ii: route the single (row_var x col_var) FACTOR pair through the SAME engine stages
+  #    tab() uses. tab_counts() already holds its tier-1 aggregate (`fine`), so it BYPASSES
+  #    tab_prepare_pop() (no microdata to prep) and tab_aggregate() (nothing to scan): it builds the
+  #    ctx, runs tab_setup() (arg resolution -- incl. the SAME `tot` -> totrow/totcol translation +
+  #    tot_cols_type + colour cascade tab() uses), injects `fine` as the fused factor aggregate, then
+  #    runs tab_transform() -> tab_assemble(). This guarantees byte-identity with tab() for every
+  #    `tot`, and deletes the hand-inlined finalize copy. NOTE: contrib colouring now forces a total
+  #    row (as tab() does) -- a deliberate convergence (was skipped when totrow was driven by `tot`). --
   data_skel <- as.data.frame(fine)
-  wt_pass   <- if (weighted) rlang::sym("wn") else character()
 
-  tabs <- tab_plain(
-    data_skel, !!row_var, !!col_var, tidyselect::all_of(tab_vars),
-    wt            = !!wt_pass,
-    na            = na,
-    digits        = digits,
-    pct           = pct,
-    ref           = ref,
-    ref2          = ref2,
-    comp          = comp,
-    OR            = OR,
-    color         = color_diff_OR,
-    totaltab      = totaltab,
-    totaltab_name = totaltab_name,
-    tot           = tot,
-    total_names   = total_names,
-    .fine         = fine
+  # tot -> (totrow, totcol), exactly as tab()'s wrapper translates it.
+  totrow <- "row" %in% tot
+  totcol <- if ("col" %in% tot) "last" else "no"
+
+  ctx <- list(
+    data = data_skel, with_filter = FALSE,
+    row_vars_quo = rlang::quo(!!row_var), col_vars_quo = rlang::quo(!!col_var),
+    tab_vars_quo = if (length(tab_vars) == 0) rlang::quo(NULL)
+                   else rlang::quo(c(!!!rlang::syms(tab_vars))),
+    wt_quo = if (weighted) rlang::quo(wn) else rlang::quo(NULL),
+    na_drop_all_quo = rlang::quo(NULL),
+    pct = pct, color = color, OR = OR, chi2 = chi2, na = na, levels = "all",
+    cleannames = FALSE, output = "single",
+    other_if_less_than = 0, other_level = "Others",
+    ref = ref, ref2 = ref2, comp = comp, ci = ci, conf_level = conf_level, stars = stars,
+    method_cell = method_cell, method_diff = method_diff,
+    totaltab = totaltab, totaltab_name = totaltab_name, totrow = totrow, totcol = totcol,
+    total_names = total_names, add_n = add_n, add_pct = add_pct, digits = digits,
+    subtext = subtext, by_table = FALSE,
+    spread_vars = character(), names_prefix = NULL, names_sort = FALSE
   )
 
-  # -- finalize: the SAME steps tab_many() applies after tab_plain (chi2 -> ci -> add_n ->
-  #    rewrap with the test attribute -> p-value lines). Single row_var x col_var, so no
-  #    multi-table join / level-drop / totcol-cleanup is needed. The chi2 -> capture test ->
-  #    ci block is the shared tab_apply_tests() helper (Phase 6a). --
-  applied <- tab_apply_tests(tabs, do_chi2 = !isFALSE(chi2), ci = ci, comp = comp,
-                             color_ctr = color_ctr, color_ci = color_ci,
-                             conf_level = conf_level, stars = stars,
-                             method_cell = method_cell, method_diff = method_diff)
-  tabs <- applied$tab
-  test <- applied$test
+  ctx <- tab_setup(ctx)
 
-  tabs <- tab_add_n_pct(list(tabs), add_n, add_pct)[[1]]
+  # Set the single-pair population/level metadata (no `levels` arg -> keep all; no NA-drop beyond
+  # the `na` policy) and inject the count aggregate as the fused tier-1 (tab_plain(.fine=) adopts it).
+  ctx <- ctx_update(ctx, list(
+    na_text = list(ctx$na), na_num = list(ctx$na),
+    lv1 = FALSE, remove_levels = NULL,
+    fine_num = NULL, fine_fused = fine
+  ))
 
-  # Remove unwanted total rows (keep the total-table line if present) when tot excludes "row".
-  if (!"row" %in% tot) {
-    totrows     <- is_totrow(tabs)
-    tottab_rows <- is_tottab(tabs)
-    tottab_line <- length(tottab_rows[tottab_rows]) == 1 & tottab_rows
-    tabs <- tabs |>
-      tibble::add_column(.totrows = totrows, .tottab_line = tottab_line) |>
-      dplyr::filter(!.data$.totrows | .data$.tottab_line) |>
-      dplyr::select(-".totrows", -".tottab_line")
-  }
-
-  # Rewrap so the whole-table `test` attribute survives, choosing plain vs grouped like tab_many().
-  if (!lv1_group_vars(tabs)) {
-    tabs   <- tabs |> dplyr::group_by(!!!rlang::syms(tab_vars))
-    groups <- dplyr::group_data(tabs)
-    tabs   <- new_grouped_tab(tabs, groups = groups, subtext = subtext, test = test)
-  } else {
-    tabs <- new_tab(tabs, subtext = subtext, test = test)
-  }
-
-  tab_pvalue_lines(tabs)
+  ctx <- tab_transform(ctx)
+  tab_assemble(ctx)
 }
