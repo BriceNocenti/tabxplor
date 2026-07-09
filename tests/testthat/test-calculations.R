@@ -816,7 +816,8 @@ testthat::test_that("grouped table counts match filtered table() for each group"
 # === SECTION: Supplementary numeric columns ===================================
 
 testthat::test_that("supplementary numeric column means match base R", {
-  tabs <- tab(gss, race, marital, pct = "row", sup_cols = tvhours)
+  # sup_cols is soft-deprecated (Phase 7a) but must keep computing correct means.
+  tabs <- suppressWarnings(tab(gss, race, marital, pct = "row", sup_cols = tvhours))
 
   # sup_cols mean: tvhours mean for each row_var level (race), across all marital
   tab_mean <- tabs |>

@@ -89,12 +89,9 @@ NULL
 #' a subtable is made for each combination of levels of the selected variables.
 #' Leave empty to make a simple cross-table. All \code{tab_vars} are converted to factor.
 #' @param wt A weight variable, of class numeric. Leave empty for unweighted results.
-#' @param sup_cols <\link[tidyr:tidyr_tidy_select]{tidy-select}>
-#' Supplementary columns variables, with only the first level printed, and row percentages
-#' (for numeric variables, a mean will be calculated for each \code{row_var}).
-#' To pass many variables you may use syntax \code{sup_cols = c(sup_col1, sup_col2, ...)}.
-#' To keep all levels of other \code{col_vars}, or other types of percentages,
-#' use \code{\link{tab_many}} instead.
+#' @param sup_cols `r lifecycle::badge("deprecated")` Supplementary columns variables, with
+#' only the first level printed. Deprecated in 1.4.0: pass these columns in \code{col_vars} and
+#' set \code{levels = "first"} instead (\code{col_vars} already accepts several variables).
 #' @param na The policy to adopt for missing values, as a single string :
 #'  \itemize{
 #'   \item \code{"keep"}: by default, \code{NA}'s of row, col and tab variables
@@ -102,15 +99,25 @@ NULL
 #'   \item \code{"drop"}: remove `NA`'s in each row, col and tab variable before calculations,
 #'   so each column is computed on its own non-missing observations (bases can then differ
 #'   between col_vars).
+#'   \item \code{"drop_all"}: remove every observation missing on the \code{row_vars}, \strong{any}
+#'   \code{col_vars} or a \code{tab_vars}, so all columns share the same base (no `NA` anywhere).
 #'   \item \code{"common_base"}: fix a single population -- observations non-missing on the
 #'   \code{row_vars} and the \strong{first} \code{col_vars} (and \code{tab_vars}) -- shared by
 #'   every column, while secondary \code{col_vars} keep their own `NA`'s as a level within it.
 #'   This reproduces the historical \code{tab()} behaviour. Microdata only (not
 #'   \code{\link{tab_counts}}).
 #'   }
-#' @param digits The number of digits to print, as a single integer. To print a different
-#' number of digits for each \code{sup_cols}, an integer vector of length
-#' 1 + \code{sup_cols} (the first being the number of digits for the base table).
+#' @param levels The levels of \code{col_vars} to keep, as a single string or a vector the same
+#' length as \code{col_vars} (for finer selections use \code{\link[dplyr:select]{dplyr::select}}) :
+#'  \itemize{
+#'   \item \code{"all"}: by default, all levels are kept.
+#'   \item \code{"first"}: only keep the first level of each \code{col_vars} (handy for compact
+#'   summary tables with many indicators).
+#'   \item \code{"auto"}: keep the first level when a \code{col_vars} has only two levels, keep all
+#'   levels otherwise.
+#'   }
+#' @param digits The number of digits to print, as a single integer, or an integer vector the
+#' same length as \code{col_vars}.
 #' @param totaltab The total table, if there are subtables/groups
 #' (i.e. when \code{tab_vars} is provided) :
 #'  \itemize{
@@ -275,9 +282,10 @@ NULL
 #' tab(forcats::gss_cat, marital, tab_vars = c(year, race))
 #'}
 #'
-#' # You can also add supplementary columns, text or numeric:
+#' # You can add several col_vars, mixing factors and numeric (means) ; `levels = "first"`
+#' # keeps only the first level of each factor col_var for compact summary tables:
 #' \donttest{
-#' tab(dplyr::storms, category, status, sup_cols = c("pressure", "wind"))
+#' tab(dplyr::storms, category, c(status, pressure, wind))
 #'}
 #'
 #' # Colors to help the user read the table:
@@ -317,7 +325,7 @@ NULL
 #' # Since the result is a tibble, you can use all dplyr verbs to modify it :
 #' \donttest{
 #' library(dplyr)
-#' tab(dplyr::storms, category, status, sup_cols = c("pressure", "wind")) %>%
+#' tab(dplyr::storms, category, c(status, pressure, wind)) %>%
 #'   dplyr::filter(category != "-1") %>%
 #'   dplyr::select(-`tropical depression`) %>%
 #'   dplyr::arrange(is_totrow(.), desc(category))
@@ -331,7 +339,7 @@ NULL
 tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
                 pct = "no", color = "no", color_signif = "ignore",
                 OR = "no", chi2 = FALSE,
-                na = "keep",
+                na = "keep", levels = "all",
                 cleannames = NULL, #compact = NULL, # pvalue_line = NULL,
                 other_if_less_than = 0, other_level = "Others",
                 ref = "auto", ref2 = "first", comp = "tab",
@@ -391,11 +399,18 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
     tab_vars <- names(tidyselect::eval_select(tab_vars, data))
   }
 
-  sup_cols <- rlang::enquo(sup_cols)
-  if (quo_miss_na_null_empty_no(sup_cols)) {
+  # Phase 7a: `sup_cols` is soft-deprecated. `col_vars` already accepts several variables, so
+  # supplementary columns go there with `levels = "first"`. Kept working during deprecation by
+  # folding them into col_vars at levels = "first" (below).
+  sup_cols_quo <- rlang::enquo(sup_cols)
+  if (quo_miss_na_null_empty_no(sup_cols_quo)) {
     sup_cols <- character()
   } else {
-    sup_cols <- names(tidyselect::eval_select(sup_cols, data))
+    lifecycle::deprecate_soft(
+      "1.4.0", "tab(sup_cols = )",
+      details = "Pass these columns in `col_vars` and set `levels = \"first\"`."
+    )
+    sup_cols <- names(tidyselect::eval_select(sup_cols_quo, data))
   }
 
   # Phase 6i: spread_vars (a subset of tab_vars) are pivoted to columns at the end via
@@ -429,7 +444,9 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
   # size-1-asserted. tab_build() matches names to row_vars (else by order); scalar applies to all.
   vctrs::vec_assert(ref2, size = 1)
   vctrs::vec_assert(na, size = 1)
-  stopifnot(na %in% c("keep", "drop", "common_base"))
+  stopifnot(na %in% c("keep", "drop", "drop_all", "common_base"))
+  # Phase 7a: `levels` (per col_var) is honoured for the main col_vars (see the tab_build call).
+  stopifnot(all(levels %in% c("all", "first", "auto")))
 
   # Phase 6 (§5): the row_var axis is globalised -- OR/ci/chi2 (like comp/pct/ref/ref2) apply to
   # ALL row_vars. For genuinely different settings per variable, build separate tab()s and list
@@ -438,15 +455,21 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
   vctrs::vec_assert(ci  , size = 1)
   vctrs::vec_assert(chi2, size = 1)
 
-  # Phase 6g (§4, S3): `na` population policy. "common_base" (the old-tab() behaviour) fixes a
-  # SINGLE population -- individuals non-NA on the row_var(s) AND the primary (first) col_var (and
-  # tab_vars) -- shared by every column, while secondary col_vars keep their own NAs as levels.
-  # Mechanically that is a global drop of {row_var(s), first col_var, tab_vars} + na = "keep" (so
-  # secondary NAs show). For a single col_var it equals na = "drop". "drop" instead drops each
-  # column's own NA (bases can then differ across col_vars).
+  # Phase 6g (§4, S3) + Phase 7a: `na` population policy.
+  # - "keep": NAs shown as an explicit level.
+  # - "drop": each col_var drops its OWN missing values (bases can then differ across col_vars).
+  #   Forwarded straight to tab_build (per-table drop in tab_plain/tab_num).
+  # - "drop_all": drop every observation missing on the row_var(s), ANY col_var, or a tab_var, so
+  #   all columns share one base (no NA anywhere). tab_build resolves na = "drop_all" natively
+  #   (it sets na_drop_all = {row_vars, col_vars, tab_vars} internally), so nothing to translate.
+  # - "common_base" (the old-tab() behaviour): a SINGLE population -- non-NA on the row_var(s), the
+  #   PRIMARY (first) col_var and tab_vars -- shared by every column, while secondary col_vars keep
+  #   their own NAs. Mechanically a global drop of {row_var(s), first col_var, tab_vars} + na="keep".
+  #   For a single col_var it equals na = "drop".
   na_drop_all <- switch(na,
                         "keep"        = character(),
-                        "drop"        = c(row_var, col_var, tab_vars),
+                        "drop"        = character(),
+                        "drop_all"    = character(),
                         "common_base" = c(row_var, col_var[1], tab_vars))
   na_effective <- if (na == "common_base") "keep" else na
 
@@ -459,8 +482,9 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
            col_vars = tidyselect::all_of(c(col_var, sup_cols)),
            tab_vars = tidyselect::all_of(tab_vars),
            wt = !!wt,
-           # main col_vars keep all levels; sup_cols show only their first level.
-           levels = c(rep("all", length(col_var)), rep("first", length(sup_cols))),
+           # Phase 7a: `levels` (per col_var) drives the main col_vars; sup_cols (soft-deprecated)
+           # always show their first level. `levels` recycles to length(col_var).
+           levels = c(rep(levels, length.out = length(col_var)), rep("first", length(sup_cols))),
            na = na_effective, na_drop_all = tidyselect::all_of(na_drop_all),
            filter = if (missing(filter)) NULL else {{ filter }},
            digits = digits,

@@ -56,11 +56,16 @@
   **merged into one** by default; the new `output_list = TRUE` returns a list of one table per
   `row_var` instead. `tab_many()` still works and keeps its historical list return (it is now a
   soft-deprecated alias of `tab()`).
-* **`na = "common_base"`** in `tab()` --- fixes a single population (observations non-missing on
-  the `row_vars` and the *first* `col_vars`, plus `tab_vars`) shared by every column, while
-  secondary `col_vars` keep their own `NA`'s as a level within it. This reproduces the historical
-  `tab()` behaviour. `na = "drop"` now drops each column's own `NA` (so bases can differ between
-  columns). Available from microdata only.
+* **`levels`** in `tab()` (`"all"` / `"first"` / `"auto"`, per `col_var`) --- controls which levels
+  of each column variable are kept, restoring the compact "keep only the first level of each column
+  variable" summary tables. Replaces the (now soft-deprecated) `sup_cols` argument.
+* **`na` gains `"common_base"` and `"drop_all"`** in `tab()`. `"common_base"` fixes a single
+  population (observations non-missing on the `row_vars` and the *first* `col_vars`, plus
+  `tab_vars`) shared by every column, while secondary `col_vars` keep their own `NA`'s as a level
+  within it --- reproducing the historical `tab()` behaviour. `"drop_all"` drops every observation
+  missing on the `row_vars`, *any* `col_vars` or a `tab_vars` (all columns then share one base).
+  `na = "drop"` now correctly drops each column's own `NA` (so bases can differ between columns).
+  Available from microdata only.
 * **`spread_vars`** in `tab()` --- pivot a subset of `tab_vars` into columns (via
   `tab_spread()`), with optional `names_prefix` / `names_sort`.
 
@@ -109,6 +114,10 @@
   gain (~1.05–1.30× at 15M rows, more at larger N / sparser data).
 
 ## Changes that may affect existing code
+* `tab(na = "drop")` with **several `col_vars`** now drops each column variable's own missing
+  values (bases can differ between columns), matching its documentation and `tab_many()`. It
+  previously dropped every observation missing on *any* column variable, giving one shared base ---
+  that behaviour is now the explicit `na = "drop_all"`. Single-`col_var` tables are unaffected.
 * For **numeric (mean) columns**, the `diff` field is now a real **difference** (`cell_mean -
   ref_mean`); the cell/reference **ratio** (the old numeric-`diff` value) moved to the `ratio`
   field. Code reading `$diff` on mean columns now gets a difference — use `$ratio` for the ratio.
@@ -139,6 +148,8 @@
   (`tab()` merges them by default; use `output_list = TRUE` for a list).
 * Singular `row_var` / `col_var` in `tab()` are **soft-deprecated** aliases of the plural
   `row_vars` / `col_vars` (which now accept several variables). They still work.
+* `tab(sup_cols =)` is **soft-deprecated**: pass those columns in `col_vars` and set
+  `levels = "first"` (`col_vars` already accepts several variables). It still works.
 * `tab_many(totrow =)` and `tab_many(totcol =)` are **soft-deprecated**: a total row is always
   computed and exactly one total column is shown by default; drop/move them afterwards with dplyr
   (`dplyr::filter(!is_totrow(.))`). Old `totcol` values (`"each"`, `"no"`, names) still work.

@@ -17,6 +17,7 @@ tab(
   OR = "no",
   chi2 = FALSE,
   na = "keep",
+  levels = "all",
   cleannames = NULL,
   other_if_less_than = 0,
   other_level = "Others",
@@ -60,12 +61,9 @@ Leave empty to make a simple cross-table. All \code{tab_vars} are converted to f
 
 \item{wt}{A weight variable, of class numeric. Leave empty for unweighted results.}
 
-\item{sup_cols}{<\link[tidyr:tidyr_tidy_select]{tidy-select}>
-Supplementary columns variables, with only the first level printed, and row percentages
-(for numeric variables, a mean will be calculated for each \code{row_var}).
-To pass many variables you may use syntax \code{sup_cols = c(sup_col1, sup_col2, ...)}.
-To keep all levels of other \code{col_vars}, or other types of percentages,
-use \code{\link{tab_many}} instead.}
+\item{sup_cols}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Supplementary columns variables, with
+only the first level printed. Deprecated in 1.4.0: pass these columns in \code{col_vars} and
+set \code{levels = "first"} instead (\code{col_vars} already accepts several variables).}
 
 \item{pct}{The type of percentages to calculate :
 \itemize{
@@ -123,11 +121,23 @@ are printed as an explicit \code{"NA"} level.
 \item \code{"drop"}: remove \code{NA}'s in each row, col and tab variable before calculations,
 so each column is computed on its own non-missing observations (bases can then differ
 between col_vars).
+\item \code{"drop_all"}: remove every observation missing on the \code{row_vars}, \strong{any}
+\code{col_vars} or a \code{tab_vars}, so all columns share the same base (no \code{NA} anywhere).
 \item \code{"common_base"}: fix a single population -- observations non-missing on the
 \code{row_vars} and the \strong{first} \code{col_vars} (and \code{tab_vars}) -- shared by
 every column, while secondary \code{col_vars} keep their own \code{NA}'s as a level within it.
 This reproduces the historical \code{tab()} behaviour. Microdata only (not
 \code{\link{tab_counts}}).
+}}
+
+\item{levels}{The levels of \code{col_vars} to keep, as a single string or a vector the same
+length as \code{col_vars} (for finer selections use \code{\link[dplyr:select]{dplyr::select}}) :
+\itemize{
+\item \code{"all"}: by default, all levels are kept.
+\item \code{"first"}: only keep the first level of each \code{col_vars} (handy for compact
+summary tables with many indicators).
+\item \code{"auto"}: keep the first level when a \code{col_vars} has only two levels, keep all
+levels otherwise.
 }}
 
 \item{cleannames}{Set to \code{TRUE} to clean levels names, by removing
@@ -230,9 +240,8 @@ variable (for \code{pct = "row"}) or a row with the frequencies of the column va
 
 \item{subtext}{A character vector to print rows of legend under the table.}
 
-\item{digits}{The number of digits to print, as a single integer. To print a different
-number of digits for each \code{sup_cols}, an integer vector of length
-1 + \code{sup_cols} (the first being the number of digits for the base table).}
+\item{digits}{The number of digits to print, as a single integer, or an integer vector the
+same length as \code{col_vars}.}
 
 \item{output_list}{Logical (default \code{FALSE}). With several \code{row_var}, \code{FALSE}
 merges the mirror tables into a single \code{tabxplor_tab}; \code{TRUE} returns a list with
@@ -310,9 +319,10 @@ tab(forcats::gss_cat, marital, race)
 tab(forcats::gss_cat, marital, tab_vars = c(year, race))
 }
 
-# You can also add supplementary columns, text or numeric:
+# You can add several col_vars, mixing factors and numeric (means) ; `levels = "first"`
+# keeps only the first level of each factor col_var for compact summary tables:
 \donttest{
-tab(dplyr::storms, category, status, sup_cols = c("pressure", "wind"))
+tab(dplyr::storms, category, c(status, pressure, wind))
 }
 
 # Colors to help the user read the table:
@@ -352,7 +362,7 @@ tab(forcats::gss_cat, race, marital, subtext = gss, color = "contrib")
 # Since the result is a tibble, you can use all dplyr verbs to modify it :
 \donttest{
 library(dplyr)
-tab(dplyr::storms, category, status, sup_cols = c("pressure", "wind")) \%>\%
+tab(dplyr::storms, category, c(status, pressure, wind)) \%>\%
   dplyr::filter(category != "-1") \%>\%
   dplyr::select(-`tropical depression`) \%>\%
   dplyr::arrange(is_totrow(.), desc(category))

@@ -75,10 +75,10 @@ golden_cases <- function() {
     n_ci_tabvars_all = function() tab_num(gss, race, c(age, tvhours), marital, ci = "cell", comp = "all", digits = 1L), # Phase 6e: ... (comp="all")
 
     # --- multi col_var + weighting + tot_n motivating cases ---
-    # tab()-equivalent cases (single row_var, na="keep"/none) go through the public tab();
-    # the genuinely tab_many-only behaviours (per-col_var na="drop" giving distinct per-column
-    # bases; totcol="each") drive the internal engine tab_build() directly -- byte-identical to
-    # the tab_many() they used to call, but without the soft-deprecation nudge.
+    # tab()-equivalent cases (single row_var, na="keep"/none) go through the public tab().
+    # Per-col_var na="drop" (distinct per-column bases) is now also a tab() behaviour (Phase 7a
+    # fixed tab()'s "drop"); these fixtures keep driving the internal engine tab_build() directly
+    # (byte-identical), as does the engine-only totcol="each".
     m_multi          = function() tab(syn, g, c(h, k), pct = "row"),
     totn_keep        = function() tab(syn, g, c(h, k), pct = "col", na = "keep"),
     totn_drop        = function() tabxplor:::tab_build(syn, g, c(h, k), pct = "col", na = "drop", output = "single"),

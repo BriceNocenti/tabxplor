@@ -1,86 +1,38 @@
-
+# PURPOSE: Jamovi module backend for the `jmvtab` analysis (Crosstables).
+# ROLE: R6 `.run()` reads the options defined in jamovi/jmvtab.a.yaml, builds a colored
+#       cross-table with the unified tab() (1.4.0), and renders it as HTML via tab_kable().
+# KEY CONSTRAINTS:
+#   - jmvtab.h.R is GENERATED from jmvtab.a.yaml (jmvtools::prepare()); never hand-edit it.
+#   - The module runs in Jamovi's bundled R -- keep dependencies to what the package Imports/Suggests.
+#   - Excel export is the historical typed-path implementation (redesign is roadmap Phase 7f).
+# See: dev/tabxplor_1.4.0_jamovi_dev.md ; CLAUDE.md > 1.4.0 roadmap > Phase 7.
 
 # @rdname jamovi
-jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
+jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
   "jmvtabClass",
   inherit = jmvtabBase,
-  # ### Active bindings ----
-  # active = list(
-  #   wt = function() {
-  #     if (!is.null(self$options$wt)) {
-  #       return(self$options$wt)
-  #     } else if ( ! is.null(attr(self$data, "jmv-weights-name"))) {
-  #       return (attr(self$data, "jmv-weights-name"))
-  #     }
-  #     NULL
-  #   }
-  # ),
   private = list(
-
-
-    # .showExportMessage = FALSE,
-    # .exportMessage     = NULL,
-
-
-# get_user_documents() is not working in Jamovi
-# "D:/Documents/Excel_test.xlsx"
-# go to "C:/Rtools/home/builder/Excel.xlsx"
-
 
     .run = function() {
 
-
-      # # Clear export message flag if not exporting
-      # if (!is.null(self$options$exportExcel)) {
-      #   if (!self$options$exportExcel) {
-      #     private$.showExportMessage = FALSE
-      #   }
-      # }
-
       data <- self$data
 
-
-      # Test Excel folder path before calculing the table !
-      if (!is.null(self$options$exportExcel)) {
-        if (self$options$exportExcel) {
-          folder_path <- path.expand(stringr::str_remove_all(self$options$xl_path, "\"|'"))
-          # folder_not_null <- !is.null(folder_path) && folder_path != ""
-          folder_exists <- dir.exists(folder_path)
-          
-          if (!folder_exists) {
-            export_status <- paste0(
-              "<div style=\"background-color:#fee2e2;",
-              "border:1px solid #fecaca;",
-              "color:#7f1d1d;",
-              "padding:10px 12px;",
-              "border-radius:4px;",
-              "font-size:0.95em;\">",
-              "Error: The specified folder does not exist: <strong>",
-              folder_path,
-              "</strong></div>"
-            )
-            self$results$export_status$setContent(export_status)
-            return(NULL)
-          }
+      # --- Excel folder pre-check (before building the table, to fail fast) ------------------
+      folder_path <- NULL
+      if (isTRUE(self$options$exportExcel)) {
+        folder_path <- path.expand(stringr::str_remove_all(self$options$xl_path, "\"|'"))
+        if (!dir.exists(folder_path)) {
+          self$results$export_status$setContent(private$.status_box(
+            paste0("Error: the specified folder does not exist: <strong>", folder_path, "</strong>"),
+            ok = FALSE
+          ))
+          return(invisible(NULL))
         }
-      } 
+      }
 
-
-      
-
-
-      # if (is.null(self$options$xl_path) || self$options$xl_path == "") {
-      #   # docs <- get_user_documents() # for all platforms and languages
-      #   # default_path <- file.path(docs, "Excel_test.xlsx") |>
-      #   #   stringr::str_replace_all("\\\\", "/")
-      #   self$options$xl_path$setValue("D:/Documents/Excel_test.xlsx")
-      #   #self$options$xl_path <- default_path
-      #   #self$options$xl_path$setValue(default_path)
-      # }
-
-      # Note : self$data only contains the selected variables,
-      #  but not wt if it was given in Jamovi with Data >>> Weights) :
-      #  it needs to be added manually
+      # --- Weights ---------------------------------------------------------------------------
+      # self$data only holds the selected variables; a Data-level weight (Data >>> Weights) is
+      # carried as an attribute and must be added back by hand.
       if (!is.null(self$options$wt)) {
         wt <- rlang::sym(self$options$wt)
       } else if (!is.null(attr(data, "jmv-weights"))) {
@@ -90,685 +42,164 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE) ) R6::R6Class(
         wt <- character()
       }
 
-      # weightsNotice <- jmvcore::Notice$new(
-      #   self$options,
-      #   name='.wt',
-      #   #type=type,
-      #   content = paste0(purrr::map(attributes(self$data), ~ as.character(.[1:10])) |> purrr::flatten_chr(),
-      #                    collapse = "<br><br>" )
-      #   #   paste0(
-      #   #   #"names = " , names(self$data), collapse = ", "
-      #   #   #"weight variable is ", self$wt, "", class(self$wt) #,
-      #   #                  #"jmv-weights:", attr(self$data, "jmv-weights-name"),
-      #   #                  #class(attr(self$data, "jmv-weights-name"))
-      #   # )
-      #     )
-      # self$results$insert(1, weightsNotice)
+      # --- Variables (inject a dummy when a slot is empty, so a bare table still renders) -----
+      row_vars <- if (is.null(self$options$row_vars)) {
+        data <- data |> dplyr::mutate(no_row_var = factor("no_row_var"))
+        "no_row_var"
+      } else self$options$row_vars
 
-      # row_var  <- self$options$row_vars[1]
-      # col_vars <- self$options$col_vars
-
-      row_vars  <- if(is.null(self$options$row_vars)) {
-        data <- data |> dplyr::mutate(no_row_var = factor("no_row_var")) # "n"
-        row_vars <- "no_row_var"
-      } else {
-        self$options$row_vars #[1]
-      }
-
-      col_vars <- if(is.null(self$options$col_vars)) {
+      col_vars <- if (is.null(self$options$col_vars)) {
         data <- data |> dplyr::mutate(no_col_var = factor("n"))
-        col_vars <- "no_col_var"
-      } else {
-        self$options$col_vars
-      }
-      tab_vars <- self$options$tab_vars # tab_vars <- tab_get_vars(tabs)$tab_vars
+        "no_col_var"
+      } else self$options$col_vars
 
+      tab_vars <- self$options$tab_vars
 
-      # for now, error without at least row_var and col_vars
-      if (length(row_vars) > 0 | length(col_vars) > 0) {
+      # --- Colors: map the two UI controls onto tab()'s color / color_signif arguments --------
+      # "no" -> FALSE (no colors) ; "auto" -> TRUE (smart per-column-type default) ; otherwise the
+      # measure string ("diff"/"ratio"/"contrib"/"OR") on the text channel.
+      color        <- switch(self$options$color, "no" = FALSE, "auto" = TRUE, self$options$color)
+      color_signif <- self$options$color_signif
 
-        if(length(row_vars) >= 2 & length(tab_vars) >= 1) {
-          stop(gettext("Not possible to use tab_vars when several row_vars are provided.", domain = "R-tabxplor"))
-        }
+      # A significance policy needs a difference confidence interval. An explicit color = "diff"/
+      # "ratio" forces it inside tab(), but color = TRUE (auto) does not -- so ensure ci = "diff"
+      # when a policy is set and the user left ci on "auto".
+      ci <- self$options$ci
+      if (!isFALSE(color) && color_signif != "ignore" && ci == "auto") ci <- "diff"
 
-        tabs <- tab_many(
-          data               = data,
-          row_vars           = tidyselect::all_of(row_vars),
-          col_vars           = tidyselect::all_of(col_vars),
-          tab_vars           = tidyselect::all_of(tab_vars),
-          wt                 = !!wt,
-          pct                = self$options$pct,
-          OR                 = self$options$OR,
-          color              = self$options$color,
-          na                 = self$options$na,
-          ref                = self$options$ref,
-          ref2               = self$options$ref2,
-          comp               = self$options$comp,
-          ci                 = self$options$ci,
-          conf_level         = self$options$conf_level,
-          chi2               = self$options$chi2,
-          cleannames         = self$options$cleannames,
-          levels             = self$options$lvs,
-          totaltab           = self$options$totaltab,
+      # --- Build the table -------------------------------------------------------------------
+      tabs <- tab(
+        data,
+        row_vars     = tidyselect::all_of(row_vars),
+        col_vars     = tidyselect::all_of(col_vars),
+        tab_vars     = tidyselect::all_of(tab_vars),
+        wt           = !!wt,
+        pct          = self$options$pct,
+        color        = color,
+        color_signif = color_signif,
+        OR           = self$options$OR,
+        chi2         = self$options$chi2,
+        na           = self$options$na,
+        levels       = self$options$lvs,  # option named `lvs` (jmvcore::Options has a levels() method)
+        ref          = self$options$ref,
+        ref2         = self$options$ref2,
+        comp         = self$options$comp,
+        ci           = ci,
+        conf_level   = self$options$conf_level,
+        stars        = self$options$stars,
+        method_cell  = self$options$method_cell,
+        method_diff  = self$options$method_diff,
+        cleannames   = self$options$cleannames,
+        totaltab           = self$options$totaltab,
+        digits             = self$options$digits,
+        other_if_less_than = self$options$other_if_less_than,
+        add_n              = self$options$add_n,
+        add_pct            = self$options$add_pct,
+        subtext            = self$options$subtext,
+        totaltab_name      = gettext("Ensemble", domain = "R-tabxplor"),
+        total_names        = gettext("Total",    domain = "R-tabxplor"),
+        other_level        = gettext("Others",   domain = "R-tabxplor")
+      )
 
-          compact            = TRUE,
+      # --- Display overrides (work on a single tab or a list of tabs) -------------------------
+      tabs <- private$.apply_display(tabs)
 
-          digits             = self$options$digits,
-          other_if_less_than = self$options$other_if_less_than,
-          add_n              = self$options$add_n,
-          add_pct            = self$options$add_pct,
-          subtext            = self$options$subtext,
+      # ci_print controls the [inf;sup] vs pct +- moe display; it is a global option read at
+      # format time, so set it around the render and restore it afterwards.
+      ci_print_option <- getOption("tabxplor.ci_print")
+      options("tabxplor.ci_print" = if (self$options$ci_print == "moe") "moe" else "ci")
+      on.exit(options("tabxplor.ci_print" = ci_print_option), add = TRUE)
 
-          totaltab_name      = gettext("Ensemble", domain = "R-tabxplor"),
-          total_names        = gettext("Total", domain = "R-tabxplor"),
-          other_level        = gettext("Others", domain = "R-tabxplor")
-        )
+      # --- Excel export (historical typed-path implementation; redesign is Phase 7f) ----------
+      if (isTRUE(self$options$exportExcel)) {
+        file_path <- path_sanitize(self$options$xl_filename)
+        if (is.null(file_path) || file_path == "") file_path <- "Table.xlsx"
+        file_path <- file.path(folder_path, file_path)
+        if (!grepl("\\.xlsx$", file_path, ignore.case = TRUE)) file_path <- paste0(file_path, ".xlsx")
 
-        # Remove total column if only keeping first level
-        if (self$options$lvs %in% c("first", "auto")) { # length(col_vars) > 1
-          
-          # S il y a une seule variable de colonne qui n a pas au moins deux colonnes
-          # (ou alors mettre : si la derniere col_var n a pas au moins deux colonnes ?)
-          col_var_with_only_one_col <- 
-            !(get_col_var(dplyr::select(tabs, -dplyr::where(is_totcol), -tidyselect::any_of("n"))) %>%
-            purrr::discard(. == "") |> 
-            duplicated() |> 
-            all() )
-          
-          if (col_var_with_only_one_col) tabs <- tabs |> dplyr::select(-dplyr::where(is_totcol))
-        }
-
-
-        if (self$options$display != "auto") {
-          tabs <- tabs |>
-            dplyr::mutate(dplyr::across(dplyr::where(is_fmt), ~ set_display(., self$options$display)))
-        }
-        if (self$options$ci == "cell" & self$options$pct %in% c("row", "col")) {
-          tabs <- tabs |>
-            dplyr::mutate(dplyr::across(
-              dplyr::where(is_fmt) & -(tidyselect::any_of(c("n", "wn")) &
-                                  dplyr::where(~ get_type(.) == "n")),
-              ~ set_display(., "pct_ci")
-            ))
-        }
-
-
-        ci_print_option <- getOption('tabxplor.ci_print')
-
-        if (self$options$ci_print == "moe") {
-          options('tabxplor.ci_print' = "moe")
-        } else{ # if (self$options$ci_print == "ci")x
-          options('tabxplor.ci_print' = "ci")
-        }
-
-
-        # # Handle Excel export
-        if (!is.null(self$options$exportExcel)) {
-          if (self$options$exportExcel) {
-            excel_message_count <- 0L
-
-            # # folder_exists created before calculating the table
-            # folder_path <- path.expand(stringr::str_remove_all(self$options$xl_path, "\"|'"))
-            # # folder_not_null <- !is.null(folder_path) && folder_path != ""
-            # folder_exists <- dir.exists(folder_path)
-
-            file_path <- path_sanitize(self$options$xl_filename) 
-            filename_null <- is.null(file_path) || file_path == ""
-            if (filename_null) file_path <- "Table.xlsx"
-            file_path <- file.path(folder_path, file_path)
-            
-            # if (folder_exists) { # done before calculating the table
-              # Ensure file has .xlsx extension
-              if (!grepl("\\.xlsx$", file_path, ignore.case = TRUE)) {
-                file_path <- paste0(file_path, ".xlsx")
-              }
-
-              # Export the table
-              tryCatch({
-              xl_result_path <-
-                tab_xl(tabs, path = file_path, 
-                  sheets = "unique", open = FALSE, replace = self$options$xl_replace) |>
-                capture.output() |>
-                stringr::str_remove("^\\[1\\] ") |>
-                stringr::str_remove_all("\"") |>
-                stringr::str_remove("^\\[1\\] ") |>
-                normalizePath(winslash = "\\")
-               
-                  # test table : 
-                    # tab(forcats::gss_cat, race,) |> tab_xl(replace = TRUE, open = FALSE) |> 
-                    #   capture.output()  |>
-                    #   stringr::str_remove("^\\[1\\] ") |>
-                    #   stringr::str_remove_all("\"") |>
-                    #  normalizePath(winslash = "/")
-              
-                # # Create success notice
-              
-                # # Not working
-                # export_notice <- jmvcore::Notice$new(
-                #     self$options,
-                #     name = "export_notice",
-                #     type = jmvcore::NoticeType$INFO,
-                #     content = paste0("Successfully exported to Excel: ", xl_result_path)
-                # )
-                # self$results$insert(1, export_notice) # Insert at the top
-                       
-                export_status <- paste0(
-                  "<div style=\"background-color:#ecfdf5;",
-                  "border:1px solid #a7f3d0;",
-                  "color:#065f46;",
-                  "padding:10px 12px;",
-                  "border-radius:4px;",
-                  "font-size:0.95em;\">",
-                  "Successfully exported to Excel: <strong>",
-                  xl_result_path,
-                  "</strong></div>"
-              )              
-              self$results$export_status$setContent(export_status)
-            },
-            error = function(err) {
-                # ERROR - Create error message
-                export_status <- paste0(
-                    "<div style=\"background-color:#fee2e2;",
-                    "border:1px solid #fecaca;",
-                    "color:#7f1d1d;",
-                    "padding:10px 12px;",
-                    "border-radius:4px;",
-                    "font-size:0.95em;\">",
-                    "Excel export failed: <strong>",
-                    err$message,
-                    "</strong></div>"
-                )
-                self$results$export_status$setContent(export_status)
-            }
-        )
-     
-            #  # Reset the action button (not working : error message in Jamovi ?)
-            #  self$options$exportExcel$setValue(FALSE)
-
-        } else {
-            # # NOT WORKING : R SESSION reset at each run !!!! 
-            # # # Clear previous export status message, but only if the analysis was really redone manually
-            # # if (exists("excel_message_count") ) {
-            # #       excel_message_count <- excel_message_count + 1L
-
-            # #       if (excel_message_count > 1) {
-            # #       self$results$export_status$setContent(paste0("")) # "<div></div>" 
-            # #       }
-            # # }
-            # self$results$export_status$setContent(paste0(exists("excel_message_count"))) 
-            # # Sys.sleep(5)
-          } 
-
-        }
-        # if (!is.null(self$options$exportExcel) && self$options$exportExcel) {
-        #   tryCatch({
-        #     # Create full path with filename and extension
-        #     export_path <- file.path(self$options$xl_path, paste0(self$options$xl_filename, ".xlsx"))
-        #
-        #     # Perform the export
-        #     tab_xl(tabs,
-        #            path = export_path,
-        #            sheets = "unique",
-        #            open = FALSE,
-        #            replace = TRUE)
-        #
-        #     # # Create success message
-        #     # private$.exportMessage <- paste0(
-        #     #   "<div style='padding: 10px; margin: 15px 0; background-color: #dff0d8; ",
-        #     #   "border: 1px solid #d6e9c6; border-radius: 4px; color: #3c763d;'>",
-        #     #   "Excel file successfully exported to: <br>",
-        #     #   export_path,
-        #     #   "</div>"
-        #     # )
-        #     # private$.showExportMessage = TRUE
-        #
-        #   }, error = function(e) {
-        #     # # Create error message
-        #     # private$.exportMessage <- paste0(
-        #     #   "<div style='padding: 10px; margin: 15px 0; background-color: #f2dede; ",
-        #     #   "border: 1px solid #ebccd1; border-radius: 4px; color: #a94442;'>",
-        #     #   "Error exporting Excel file: <br>",
-        #     #   e$message,
-        #     #   "</div>"
-        #     # )
-        #     # private$.showExportMessage = TRUE
-        #   })
-        #
-        #   # Reset button state
-        #   self$options$exportExcel$setValue(FALSE)
-        # }
-
-
-
-
-        # Create HTML table
-        tabs_html <- tab_kable(tabs,
-                               wrap_rows = self$options$wrap_rows,
-                               wrap_cols = self$options$wrap_cols, 
-                               fixed_thead = FALSE, # not working in Jamovi?
-                               position = "left"
-                               # full_width = TRUE,
-                              ) |>
-        kableExtra::scroll_box(width = "1080px",
-                              # height = "100%" #, "100vh" #,  # Full viewport height
-                              fixed_thead = FALSE, # not working in Jamovi?
-                              box_css = "border: none; padding: 0; overflow-x: auto !important; display: block; table-layout: auto;",
-                              extra_css = "margin-left: 0; width: 100%;" # 
-                            )
-       
-        # # Create the container with horizontal scroll and max width
-        # container_html <- paste0(
-        #   '<div style="
-        #     max-width: 1080px;
-        #     width: 100%;
-        #     height: 100vh;
-        #     overflow-y: auto;
-        #     overflow-x: auto;
-        #     margin: 0 auto;
-        #   ">',
-        #   tabs_html,
-        #   '</div>'
-        # )
-        
-        
-
-        # Adjust class for proper rendering
-        # Formatting not working with kableExtra : we remove "kableExtra" class
-        #   and add lightable css and custom css manually
-        class(tabs_html) <-  "knitr_kable"
-
-        # Include required CSS
-        tabs_html <-
-          paste0(
-            # Add css manually
-            htmltools::includeCSS(# lightable css
-              system.file("lightable-0.0.1/lightable.css", package = "kableExtra")
-            ),
-
-            htmltools::includeCSS(# bootstrap css
-              system.file("rmd/h/bootstrap/css/cosmo.min.css", package = "rmarkdown")
-            ),
-
-            # # already done in tab_kable()
-            # htmltools::includeCSS(# custom css
-            #   system.file("tab.css", package = "tabxplor")
-            # ),
-
-
-            # "<style>\n",
-            # paste0(readLines( # lightable css
-            #   file.path(kableExtra::html_dependency_lightable()$src$file,
-            #             kableExtra::html_dependency_lightable()$stylesheet)
-            # ),
-            # collapse = "\n"),
-            #
-            # paste0(readLines( # bootstrap css      # ADD bslib::bs_theme() ?
-            #   system.file("rmd/h/bootstrap/css/cosmo.min.css", package = "rmarkdown"),
-            #   # file.path(rmarkdown::html_dependency_bootstrap(theme = "cosmo")$src$file,
-            #   #           rmarkdown::html_dependency_bootstrap(theme = "cosmo")$stylesheet)
-            #   ),
-            #   collapse = "\n"
-            # ),
-            #
-            # paste0( # custom css
-            #   readLines(system.file("tab.css", package = "tabxplor")),
-            #   collapse = "\n"),
-            #
-            # "</style>\n\n",
-
-
-            # # Add javascripts manually (no need, all are already in Jamovi)
-            #
-            # # htmltools::includeScript( # jquery # no seem to need it, already in Jamovi
-            # #   system.file("lib/3.6.0/jquery-3.6.0.min.js", package = "jquerylib")
-            # # ),
-            #
-            # htmltools::includeScript(# bootstrap jv
-            #   system.file("rmd/h/bootstrap/js/bootstrap.min.js", package = "rmarkdown"),
-            # ),
-            # # htmltools::includeScript(# bootstrap jv ; only IE 8
-            # #   system.file("rmd/h/bootstrap/shim/html5shiv.min.js", package = "rmarkdown"),
-            # # ),
-            # # htmltools::includeScript(# bootstrap jv ; only IE 8
-            # #   system.file("rmd/h/bootstrap/shim/respond.min.js", package = "rmarkdown"),
-            # # ),
-            #
-            # htmltools::includeScript(# html_dependency_kePrint (popover)
-            #   system.file("kePrint-0.0.1/kePrint.js", package = "kableExtra")
-            # ),
-
-            # "<script>\n",
-            # paste0(
-            #   file.path( # bootstrap jv
-            #     rmarkdown::html_dependency_bootstrap(theme = "cosmo")$src$file,
-            #     rmarkdown::html_dependency_bootstrap(theme = "cosmo")$script
-            #   ) |>
-            #     purrr::map_chr(~ paste0(readLines(., warn = FALSE), collapse = "\n")),
-            #   collapse = "\n"
-            # ),
-            #
-            # paste0(readLines(
-            #   file.path( kableExtra::html_dependency_kePrint()$src$file,
-            #              kableExtra::html_dependency_kePrint()$script  )
-            # ),
-            # collapse = "\n"),
-            #
-            # paste0(readLines( # jquery
-            #   file.path(
-            #     rmarkdown::html_dependency_jquery()$src$file,
-            #             rmarkdown::html_dependency_jquery()$script)
-            #   ),
-            #   collapse = "\n"),
-            #
-            # "</script>\n\n",
-
-            ## Jamovi does not launch Mathjax scripts, for security reasons
-            #"<script type=\"text/x-mathjax-config\">MathJax.Hub.Config({tex2jax: {inlineMath: [[\"$\",\"$\"]]}})</script>",
-            #"<script async src=\"https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML\"></script>",
-
-            as.character(tabs_html)
+        tryCatch({
+          xl_result_path <- tab_xl(
+            tabs, path = file_path, sheets = "unique",
+            open = FALSE, replace = self$options$xl_replace
           ) |>
-          vctrs::vec_restore(tabs_html)
-        # tabs_html |> htmltools::HTML() |> htmltools::browsable()
-
-        # what is still missing ? tabs_html |> attr("kable_meta") ?
-
-
-
-
-
-
-        # tabs_html <- tabs |>
-        #   knitr::kable(format = "html") |>
-        #   kableExtra::kable_classic(lightable_options = "hover") |> # bootstrap_options = c("striped", "responsive")
-        #   kableExtra::add_footnote("This should be a very small footnote (font-size: 30%).",
-        #                            notation = "none", escape = FALSE)
-        #
-        #
-        # dep <- list(rmarkdown::html_dependency_jquery(),
-        #             rmarkdown::html_dependency_bootstrap(theme = "cosmo"),
-        #             kableExtra::html_dependency_kePrint(),
-        #             kableExtra::html_dependency_lightable(),
-        #
-        #             htmltools::htmlDependency(
-        #               name = "tab_css",
-        #               version = "1.00",
-        #               src = "inst",
-        #               meta = NULL,
-        #               script = NULL,
-        #               stylesheet = "tab.css",
-        #               head = NULL,
-        #               attachment = NULL,
-        #               package = "tabxplor",
-        #               all_files = FALSE
-        #             )
-        #
-        # )
-        # tabs_html <- htmltools::browsable(
-        #   htmltools::HTML(
-        #     as.character(tabs_html),
-        #     "<script type=\"text/x-mathjax-config\">MathJax.Hub.Config({tex2jax: {inlineMath: [[\"$\",\"$\"]]}})</script>
-        #     <script async src=\"https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML\"></script>"
-        #   )
-        # )
-        #
-        # htmltools::htmlDependencies(tabs_html) <- dep
-        # #htmltools::attachDependencies(tabs_html, dep)
-
-        # if (interactive()) tabs_html <- htmltools::browsable(tabs_html)
-
-        # # Error in the jmvcore::analysis$results$html_table$setContent function,
-        # #  trying to overwrite it.
-        # # ERROR : "cannot change value of locked binding"
-        # self$results$html_table$setContent <- function(value) {
-        #
-        #     knitted <- knitr::knit(text=value)
-        #
-        #     knitMeta <- attr(value, 'html_dependencies') # value, no knitted, got attributes
-        #     if ( ! is.null(knitMeta)) {
-        #       knitMeta <- knitMeta[[1]]
-        #
-        #       package  <- self$analysis$package
-        #
-        #       srcPath  <- normalizePath(knitMeta$src$file)
-        #       rootPath <- normalizePath(system.file(package=package))
-        #       relPath  <- substring(srcPath, nchar(rootPath)+1)
-        #
-        #       joinPaths <- function(path) {
-        #         if (identical(relPath, ''))
-        #           return(path)
-        #         file.path(relPath, path)
-        #       }
-        #
-        #       scripts <- sapply(knitMeta$script,     joinPaths, USE.NAMES=FALSE)
-        #       sss     <- sapply(knitMeta$stylesheet, joinPaths, USE.NAMES=FALSE)
-        #
-        #       private$.scripts <- scripts
-        #       private$.stylesheets <- sss
-        #     }
-        #
-        #   attributes(knitMeta) <- NULL
-        #   private$.content <- knitted
-        #   private$.stale <- FALSE
-        # }
-
-
-        # # After you've created tabs_html, append the message AFTER the entire HTML content:
-        # if (private$.showExportMessage && !is.null(private$.exportMessage)) {
-        #   # Make sure we're working with the character representation of the HTML
-        #   html_content <- as.character(tabs_html)
-        #
-        #   # Simply append the message at the end (after everything)
-        #   html_content <- paste0(html_content, private$.exportMessage)
-        #
-        #   # Restore the HTML object properties
-        #   tabs_html <- html_content |> vctrs::vec_restore(tabs_html)
-        # }
-
-        # Set the content
-        self$results$html_table$setContent(tabs_html)
-
-
-
-        # if (!is.null(self$options$exportExcel)) {
-        #   if (self$options$exportExcel) {
-        #     full_path <-
-        #       file.path(self$options$xl_path,
-        #                 paste0(self$options$xl_filename, ".xlsx") |>
-        #                   stringr::str_replace(".xlsx.xlsx", ".xlsx")
-        #
-        #       )
-        #     tab_xl(tabs, path = full_path,
-        #            sheets = "unique", open = FALSE, replace = TRUE)
-        #
-        #     #self$options$exportExcel <- FALSE
-        #     self$options$exportExcel$setValue(FALSE)
-        #   }
-        # }
-
-
-        # # Chi2 table
-        # chi2_tab <- tabs |> get_chi2()
-        # fmtnm <- purrr::map_lgl(tabs, ~ is_fmt(.) & get_type(.) != "mean")
-        # col_vars_text  <- get_col_var(tabs[fmtnm]) %>% purrr::discard(is.na(.))
-        #
-        # if (!is.null(chi2_tab) & !length(col_vars_text) == 0) {
-        #   if (nrow(chi2_tab) > 0) {
-        #
-        #     chi2_tab <- chi2_tab |>
-        #       dplyr::mutate(
-        #         dplyr::across(dplyr::where(is_fmt), format),
-        #         dplyr::across(dplyr::where(is.factor), as.character),
-        #         dplyr::across(
-        #           all_of(col_vars_text),
-        #           ~ dplyr::if_else(
-        #             `chi2 stats` == "pvalue",
-        #             true  = dplyr::if_else(
-        #               . >= 0.05,
-        #               true  = paste0('<b><p style = "color:red;margin:0;padding:0;">',
-        #                              format(.),
-        #                              '</p></b>'),
-        #               false = paste0('<b><p style = "color:green;margin:0;padding:0">',
-        #                              format(.),
-        #                              '</p></b>')
-        #             ),
-        #             false = .
-        #           )
-        #         )
-        #       )
-        #
-        #     # for (i in (1:ncol(chi2))[names(chi2) != "row_var"] ) {
-        #     #   self$results$chi2_table$addColumn(
-        #     #     name = names(chi2)[i],
-        #     #     index = dplyr::if_else(tidyr::replace_na(names(chi2)[i] %in% tab_vars, FALSE),
-        #     #                            true  = i,
-        #     #                            false = Inf),
-        #     #     combineBelow = tidyr::replace_na(names(chi2)[i] %in% tab_vars, FALSE),
-        #     #     type = "text"
-        #     #   )
-        #     # }
-        #
-        #     if (length(tab_vars) > 0) {
-        #       if(self$options$comp == "tab") {
-        #         for (i in 1:length(tab_vars)) {
-        #           self$results$chi2_table$addColumn(name = tab_vars[i],
-        #                                             index = i,
-        #                                             combineBelow = TRUE,
-        #                                             type = "text")
-        #         }
-        #
-        #       } else { # If comp == "all"
-        #         cross <- paste0(" ", stringi::stri_unescape_unicode("\\u00d7"), " ") # * as cross
-        #         chi2_tab <- chi2_tab |>
-        #           dplyr::mutate(row_var = paste0(dplyr::first(.data$row_var),
-        #                                          cross,
-        #                                          paste0(tab_vars, collapse = cross)
-        #           )
-        #           )
-        #       }
-        #     }
-        #
-        #     # self$results$chi2_table$addColumn(name = "row_var",
-        #     #                                   type = "text",
-        #     #                                   content = row_var)
-        #
-        #     self$results$chi2_table$addColumn(name = "chi2 stats")
-        #
-        #     if (length(col_vars_text) > 0) {
-        #       for (i in 1:length(col_vars_text)) {
-        #         self$results$chi2_table$addColumn(name = col_vars_text[i],
-        #                                           type = "text")
-        #
-        #       }
-        #     }
-        #
-        #     # if (self$options$pcRow) {
-        #     #   freqs$addColumn(
-        #     #     name='.total[pcRow]',
-        #     #     title=.('Total'),
-        #     #     type='number',
-        #     #     format='pc')
-        #     # }
-        #
-        #     # if (length(tab_vars) == 0 | self$options$comp == "tab") {
-        #     #   chi2_new_group <- chi2 |>
-        #     #     dplyr::group_by(!!!rlang::syms(tab_vars)) |>
-        #     #     dplyr::group_indices()
-        #     #   chi2_new_group <-
-        #     #     which(chi2_new_group != dplyr::lead(chi2_new_group,
-        #     #                                         default = max(chi2_new_group) + 1))
-        #     #
-        #     # } else { # If length(tab_vars) > 0 & self$options$comp == "all"
-        #     #   chi2_new_group <-  rep(1, nrow(chi2))
-        #     #   chi2_new_group <-
-        #     #     which(chi2_new_group != dplyr::lead(chi2_new_group,
-        #     #                                         default = max(chi2_new_group) + 1))
-        #     # }
-        #
-        #
-        #
-        #     for (i in 1:nrow(chi2_tab)) {
-        #       self$results$chi2_table$addRow(rowKey = i, values = as.list(chi2_tab[i, ]) )
-        #
-        #       # # formats not working, why ? rowNo = i or i-1 ?
-        #       # if (i %in% chi2_new_group + 1L) {
-        #       #   self$results$chi2_table$addFormat(rowNo = i, col = 1, format = "Cell.BEGIN_GROUP")
-        #       # }
-        #       # # "Cell.BEGIN_GROUP" "Cell.END_GROUP" "Cell.BEGIN_END_GROUP" "Cell.NEGATIVE"
-        #
-        #     }
-        #
-        #
-        #   }
-        #   #NULL
-        # } #else {
-        # #  NULL
-        # #}
-
-
-
-
-
-
-        # Calculate size of the plotting zone
-        wrapped_dims <- tab_get_wrapped_dimensions(tabs, no_tab_vars = TRUE, width_pad = 4L)
-
-        width <- round(wrapped_dims[1]*7) |> as.integer()
-
-        height <- ((wrapped_dims[2] #+
-                    #length(get_subtext(tabs)) +
-                    #1 # color legend length
-        )*20) |> # 20
-          round() |> as.integer()
+            capture.output() |>
+            stringr::str_remove("^\\[1\\] ") |>
+            stringr::str_remove_all("\"") |>
+            normalizePath(winslash = "\\")
+          self$results$export_status$setContent(private$.status_box(
+            paste0("Successfully exported to Excel: <strong>", xl_result_path, "</strong>"), ok = TRUE
+          ))
+        }, error = function(err) {
+          self$results$export_status$setContent(private$.status_box(
+            paste0("Excel export failed: <strong>", err$message, "</strong>"), ok = FALSE
+          ))
+        })
       }
 
-        # # Plot size
-        # # https://forum.jamovi.org/viewtopic.php?t=472
-        # self$results$plot$setSize(width, height)
-
-        # if (width > 1080) {
-        #   self$results$plot$setSize(width, 0) # empty plot
-        # }
-
-
-
-        # # Plot legend
-
-        # tab_legend <- tab_color_legend(tabs,
-        #                                mode = "html",
-        #                                html_type  = getOption("tabxplor.color_style_type"),
-        #                                html_theme = "light",
-        #                                html_24_bit = getOption("tabxplor.color_html_24_bit"),
-        #                                text_color = "#000000",
-        #                  grey_color = "#888888"
-        # ) #|>
-        #   #stringr::str_replace_all("<span", "<p") |>
-        #   #stringr::str_replace_all("</span", "</p")
-        #
-        # #get_subtext(tabs)
-        #
-        #
-        # self$results$plot_legend$setContent(tab_legend)
-
-        # Plot
-        #image <- self$results$plot
-        #image$setState(tabs)
-
-        options('tabxplor.ci_print' = ci_print_option)
+      # --- HTML table ------------------------------------------------------------------------
+      self$results$html_table$setContent(private$.render_html(tabs))
     },
-    .plot = function(image, ...) {
-      # plotData <- image$state
-      # plot <- tab_plot(plotData, wrap_rows = Inf, wrap_cols = Inf, color_legend = FALSE)
-      # print(plot)
-      TRUE
-    } #,
 
+    # Display-field overrides shared by single tabs and lists of tabs.
+    .apply_display = function(tabs) {
+      one <- function(tb) {
+        if (self$options$display != "auto") {
+          tb <- tb |> dplyr::mutate(dplyr::across(
+            dplyr::where(is_fmt), ~ set_display(., self$options$display)
+          ))
+        }
+        if (self$options$ci == "cell" && self$options$pct %in% c("row", "col")) {
+          tb <- tb |> dplyr::mutate(dplyr::across(
+            dplyr::where(is_fmt) &
+              -(tidyselect::any_of(c("n", "wn")) & dplyr::where(~ get_type(.) == "n")),
+            ~ set_display(., "pct_ci")
+          ))
+        }
+        tb
+      }
+      if (is.list(tabs) && !is.data.frame(tabs)) purrr::map(tabs, one) else one(tabs)
+    },
+
+    # Render a tab (or list of tabs) to standalone HTML for the Jamovi results iframe.
+    # Formatting does not survive kableExtra's classes in Jamovi, so the lightable + bootstrap
+    # CSS is injected manually and the "kableExtra" class dropped.
+    .render_html = function(tabs) {
+      tabs_html <- tab_kable(
+        tabs,
+        wrap_rows = self$options$wrap_rows,
+        wrap_cols = self$options$wrap_cols,
+        fixed_thead = FALSE,  # not working in Jamovi
+        position = "left"
+      ) |>
+        kableExtra::scroll_box(
+          width = "1080px",
+          fixed_thead = FALSE,
+          box_css = "border: none; padding: 0; overflow-x: auto !important; display: block; table-layout: auto;",
+          extra_css = "margin-left: 0; width: 100%;"
+        )
+
+      class(tabs_html) <- "knitr_kable"
+      paste0(
+        htmltools::includeCSS(system.file("lightable-0.0.1/lightable.css", package = "kableExtra")),
+        htmltools::includeCSS(system.file("rmd/h/bootstrap/css/cosmo.min.css", package = "rmarkdown")),
+        as.character(tabs_html)
+      ) |>
+        vctrs::vec_restore(tabs_html)
+    },
+
+    # Small colored status box for the Excel-export message.
+    .status_box = function(html, ok = TRUE) {
+      col <- if (ok) c(bg = "#ecfdf5", border = "#a7f3d0", fg = "#065f46")
+             else    c(bg = "#fee2e2", border = "#fecaca", fg = "#7f1d1d")
+      paste0(
+        "<div style=\"background-color:", col[["bg"]], ";border:1px solid ", col[["border"]],
+        ";color:", col[["fg"]], ";padding:10px 12px;border-radius:4px;font-size:0.95em;\">",
+        html, "</div>"
+      )
+    },
+
+    .plot = function(image, ...) {
+      TRUE
+    }
   )
 )
-
-
-
-
-
-
-

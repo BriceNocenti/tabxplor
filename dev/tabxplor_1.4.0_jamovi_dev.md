@@ -38,15 +38,15 @@ A Jamovi module **is a normal R package** with an extra `jamovi/` folder. Jamovi
 an Electron desktop app embedding a Python server + an R "engine" process. One analysis is
 spread across six files in two languages plus one generated file:
 
-| File | Lang | Role | Edit? |
-|------|------|------|-------|
-| `jamovi/<name>.a.yaml` | YAML | **Analysis definition** — the options (data model) | yes |
-| `jamovi/<name>.r.yaml` | YAML | **Results definition** — tables/plots/html/output slots | yes |
-| `jamovi/<name>.u.yaml` | YAML | **UI definition** — the options-panel layout (view) | yes |
-| `jamovi/js/<name>.js` | JS | **Custom UI events** — interactive behaviour (controller) | yes |
-| `R/<name>.b.R` | R (R6) | **Backend** — `.init()`/`.run()`/`.plot()` analysis body | yes |
-| `R/<name>.h.R` | R (R6) | **Generated header** — options + base class | NO (generated) |
-| `jamovi/0000.yaml` | YAML | Module **manifest** (analyses, version, min app) | yes |
+| File                   | Lang   | Role                                                      | Edit?          |
+|------------------------|--------|-----------------------------------------------------------|----------------|
+| `jamovi/<name>.a.yaml` | YAML   | **Analysis definition** — the options (data model)        | yes            |
+| `jamovi/<name>.r.yaml` | YAML   | **Results definition** — tables/plots/html/output slots   | yes            |
+| `jamovi/<name>.u.yaml` | YAML   | **UI definition** — the options-panel layout (view)       | yes            |
+| `jamovi/js/<name>.js`  | JS     | **Custom UI events** — interactive behaviour (controller) | yes            |
+| `R/<name>.b.R`         | R (R6) | **Backend** — `.init()`/`.run()`/`.plot()` analysis body  | yes            |
+| `R/<name>.h.R`         | R (R6) | **Generated header** — options + base class               | NO (generated) |
+| `jamovi/0000.yaml`     | YAML   | Module **manifest** (analyses, version, min app)          | yes            |
 
 Model–View–Controller:
 
@@ -74,15 +74,15 @@ tabxplor's module is `usesNative: true`, embedded in the R package (`R/jmvtab.b.
 
 On CRAN as part of tabxplor 1.3.1:
 
-| File | Notes |
-|------|-------|
-| `jamovi/0000.yaml` | Manifest: analysis `jmvtab`, `menuGroup: tabxplor`, `minApp: 1.0.8`. |
-| `jamovi/jmvtab.a.yaml` | ~30 options incl. the Excel block (`exportExcel` Action + `xl_path`/`xl_filename`/`xl_replace`). |
-| `jamovi/jmvtab.r.yaml` | `html_table` (Html), `export_status` (Html), stub `plot` Image. |
-| `jamovi/jmvtab.u.yaml` | `jus:'3.0'`, `compilerMode: tame`; VariableSupplier + CollapseBoxes; export ActionButton + path/filename TextBoxes. |
-| `jamovi/js/jmvtab.js` | Almost empty: one `exportExcel_changed` (resets the button after 2s); rest is commented-out ANOVA example. |
-| `R/jmvtab.b.R` | R6 `.run()`: `tab_many(...,compact=TRUE)` → `tab_kable()` into `html_table`; Excel via `tab_xl()` + hand-rolled folder check. |
-| `R/jmvtab.h.R` | Generated `jmvtabOptions` + `jmvtabBase`. Never edit. |
+| File                   | Notes                                                                                                                         |
+|------------------------|-------------------------------------------------------------------------------------------------------------------------------|
+| `jamovi/0000.yaml`     | Manifest: analysis `jmvtab`, `menuGroup: tabxplor`, `minApp: 1.0.8`.                                                          |
+| `jamovi/jmvtab.a.yaml` | ~30 options incl. the Excel block (`exportExcel` Action + `xl_path`/`xl_filename`/`xl_replace`).                              |
+| `jamovi/jmvtab.r.yaml` | `html_table` (Html), `export_status` (Html), stub `plot` Image.                                                               |
+| `jamovi/jmvtab.u.yaml` | `jus:'3.0'`, `compilerMode: tame`; VariableSupplier + CollapseBoxes; export ActionButton + path/filename TextBoxes.           |
+| `jamovi/js/jmvtab.js`  | Almost empty: one `exportExcel_changed` (resets the button after 2s); rest is commented-out ANOVA example.                    |
+| `R/jmvtab.b.R`         | R6 `.run()`: `tab_many(...,compact=TRUE)` → `tab_kable()` into `html_table`; Excel via `tab_xl()` + hand-rolled folder check. |
+| `R/jmvtab.h.R`         | Generated `jmvtabOptions` + `jmvtabBase`. Never edit.                                                                         |
 
 Pain points (all addressed below):
 
@@ -154,6 +154,17 @@ and does not minify the module's own `.js` — keep `jamovi/js/*.js` clean.
 
 Sideload a `.jmo`: library **+** → **Side-load** → pick the file. Public release: email a
 GitHub link to `contact@jamovi.org` (needs an OSI licence).
+
+
+### 3.7 option names
+
+**Option names must not collide with `jmvcore::Options` members.** The generated options
+  class makes one active binding per option name; a name that shadows an inherited member
+  (notably `levels`, but also `values`/`check`/`read`/`names`/`options`/`option`/`get`/`has`/
+  `analysis`/`theme`/`palette`) fails at analysis creation with "symbol already has a regular
+  binding". Use a safe internal name (e.g. `lvs`) and map it to the `tab()` argument in `.b.R`.
+
+
 
 ---
 
@@ -498,23 +509,23 @@ Each `type:` compiles to a `jmvcore` R6 class (`dev/jamovi/reference/jmvcore/opt
 source of truth). Common keys: `name` (→ `self$options$<name>`), `title`, `type`, `default`,
 docs-only `description:`.
 
-| `type:` | UI | Key type-specific keys | Value in R |
-|---------|----|------------------------|-----------|
-| `Data` | (dataset) | — | data frame |
-| `Bool` | CheckBox | `default` | logical |
-| `Integer`/`Number` | TextBox `format:number` | `min`, `max`, `default` | int/numeric |
-| `String` | TextBox | `default` | character |
-| `List` | ComboBox/RadioButton | `options:` (`name`+`title`), `default` | one `name` |
-| `NMXList` | CheckBox set | `options:`, `default` | character vector |
-| `Variable` | VariablesListBox slot | `suggested`, `permitted`, `required`, `rejectInf`(F) | column name |
-| `Variables` | VariablesListBox | as `Variable` (`rejectInf` T) | character vector |
-| `Level` | LevelSelector/ComboBox | (variable pairing via UI/JS) | one level string |
-| `Terms` | Supplier | `default` | list of terms |
-| `Pairs` | 2-col ListBox | `suggested`, `permitted` | list of `{i1,i2}` |
-| `Group` | fixed bundle | `elements:` | named list |
-| `Array` | templated ListBox | `template:` (usually a Group), `default` | list of clones |
-| `Action` | ActionButton | `action` (default `open`) | logical (TRUE on click) |
-| `Output` | Output (Save) | a.yaml minimal; r.yaml `varTitle`/`measureType`/`clearWith`/`initInRun` | logical |
+| `type:`            | UI                      | Key type-specific keys                                                  | Value in R              |
+|--------------------|-------------------------|-------------------------------------------------------------------------|-------------------------|
+| `Data`             | (dataset)               | —                                                                       | data frame              |
+| `Bool`             | CheckBox                | `default`                                                               | logical                 |
+| `Integer`/`Number` | TextBox `format:number` | `min`, `max`, `default`                                                 | int/numeric             |
+| `String`           | TextBox                 | `default`                                                               | character               |
+| `List`             | ComboBox/RadioButton    | `options:` (`name`+`title`), `default`                                  | one `name`              |
+| `NMXList`          | CheckBox set            | `options:`, `default`                                                   | character vector        |
+| `Variable`         | VariablesListBox slot   | `suggested`, `permitted`, `required`, `rejectInf`(F)                    | column name             |
+| `Variables`        | VariablesListBox        | as `Variable` (`rejectInf` T)                                           | character vector        |
+| `Level`            | LevelSelector/ComboBox  | (variable pairing via UI/JS)                                            | one level string        |
+| `Terms`            | Supplier                | `default`                                                               | list of terms           |
+| `Pairs`            | 2-col ListBox           | `suggested`, `permitted`                                                | list of `{i1,i2}`       |
+| `Group`            | fixed bundle            | `elements:`                                                             | named list              |
+| `Array`            | templated ListBox       | `template:` (usually a Group), `default`                                | list of clones          |
+| `Action`           | ActionButton            | `action` (default `open`)                                               | logical (TRUE on click) |
+| `Output`           | Output (Save)           | a.yaml minimal; r.yaml `varTitle`/`measureType`/`clearWith`/`initInRun` | logical                 |
 
 Not option types: `Ncrementer` (a UI control backed by Integer/Number); `clearWith` (a
 `.r.yaml` key); there is no `Value` type. `suggested`/`permitted` measure types:
@@ -533,25 +544,25 @@ Common `BaseControl` properties: `type`, `name`, `label`, `enable` (boolean DSL)
 `margin`, `cell` (`{row,column}`), `stretchFactor`, `style` (`list`|`inline`), alignments,
 `min/maxWidth`, `min/maxHeight`, `children`.
 
-| Control | Purpose | Key properties |
-|---------|---------|----------------|
-| `VariableSupplier` | variable pool | `suggested`, `permitted`, `populate`, `persistentItems` |
-| `Supplier` | term/model pool | `format: term`, `higherOrders`, `persistentItems` |
-| `TargetLayoutBox` | wraps a drop target | `label`, `transferAction` |
-| `VariablesListBox` | variable drop target | `isTarget`, `maxItemCount`, `ghostText`, `valueFilter`, `height` |
-| `ListBox` | templated list | `columns`/`template`, `showColumnHeaders`, `isTarget`, `itemDropBehaviour`, `addButton`, `valueFilter`, `maxItemCount`, `events` |
-| `LevelSelector` | pick a level | bound to a `Level` option; dynamic (§6.4) |
-| `ComboBox` | dropdown (List) | `name`, `enable` |
-| `RadioButton` | one List value | `optionName`, `optionPart`, `children` |
-| `CheckBox` | Bool / NMXList part | `optionName`, `optionPart`, `children` |
-| `TextBox` | String/Integer/Number | `format`, `suffix`, `inputPattern`, `width`, `ghostText` |
-| `Label` | text / group header | `label`, `format`, `style`, `children` |
-| `LayoutBox` | grid/stack container | `margin`, `cell`, `stretchFactor`, `style` |
-| `CollapseBox` | collapsible section | `label`, `collapsed`, `enable` |
-| `ActionButton` | button (incl. row buttons) | `name`, `events`, `enable` |
-| `Output` | write a column back | `name` |
-| `CustomControl` | JS-built DOM (§6.6) | `creating`/`updated` events |
-| `RMAnovaFactorsBox` | RM factors editor (compiled) | `name`, `label` |
+| Control             | Purpose                      | Key properties                                                                                                                   |
+|---------------------|------------------------------|----------------------------------------------------------------------------------------------------------------------------------|
+| `VariableSupplier`  | variable pool                | `suggested`, `permitted`, `populate`, `persistentItems`                                                                          |
+| `Supplier`          | term/model pool              | `format: term`, `higherOrders`, `persistentItems`                                                                                |
+| `TargetLayoutBox`   | wraps a drop target          | `label`, `transferAction`                                                                                                        |
+| `VariablesListBox`  | variable drop target         | `isTarget`, `maxItemCount`, `ghostText`, `valueFilter`, `height`                                                                 |
+| `ListBox`           | templated list               | `columns`/`template`, `showColumnHeaders`, `isTarget`, `itemDropBehaviour`, `addButton`, `valueFilter`, `maxItemCount`, `events` |
+| `LevelSelector`     | pick a level                 | bound to a `Level` option; dynamic (§6.4)                                                                                        |
+| `ComboBox`          | dropdown (List)              | `name`, `enable`                                                                                                                 |
+| `RadioButton`       | one List value               | `optionName`, `optionPart`, `children`                                                                                           |
+| `CheckBox`          | Bool / NMXList part          | `optionName`, `optionPart`, `children`                                                                                           |
+| `TextBox`           | String/Integer/Number        | `format`, `suffix`, `inputPattern`, `width`, `ghostText`                                                                         |
+| `Label`             | text / group header          | `label`, `format`, `style`, `children`                                                                                           |
+| `LayoutBox`         | grid/stack container         | `margin`, `cell`, `stretchFactor`, `style`                                                                                       |
+| `CollapseBox`       | collapsible section          | `label`, `collapsed`, `enable`                                                                                                   |
+| `ActionButton`      | button (incl. row buttons)   | `name`, `events`, `enable`                                                                                                       |
+| `Output`            | write a column back          | `name`                                                                                                                           |
+| `CustomControl`     | JS-built DOM (§6.6)          | `creating`/`updated` events                                                                                                      |
+| `RMAnovaFactorsBox` | RM factors editor (compiled) | `name`, `label`                                                                                                                  |
 
 `enable:` DSL: `(pct:row || pct:col)`, `(OR == 'OR' || OR == 'OR_pct')`, `(!(missing:no))`,
 or a JS arrow `({return !!ui['x'].value();})`.
@@ -884,15 +895,15 @@ Constraints to design around, now grounded in the protocol (§5.3) and results m
 - **Every option change is a full `perform=INIT` round-trip** carrying `changed:[names]` +
   `revision` (§5.3). There is **no client-side display-only shortcut.** Therefore Phase 8
   caching must be **R-side**:
-  - In `.b.R`, branch on *what changed*. jmvcore exposes changed options
+  + In `.b.R`, branch on *what changed*. jmvcore exposes changed options
     (`self$options$changed` / the `changed` list); when only display options changed
     (`display`, `digits`, `wrap_*`, `ci_print`, colours), **reuse a cached aggregate** and only
     re-render — drive the 1.4.0 aggregate-core + per-transform subfunctions at
     cache-appropriate granularity (never fork the math).
-  - Persist the cache in Jamovi `state` (`image$setState()`/`$state`, analysis `state`), keyed
+  + Persist the cache in Jamovi `state` (`image$setState()`/`$state`, analysis `state`), keyed
     on the aggregate-defining options, not R globals.
-  - Declare true dependencies with `clearWith:` in `.r.yaml` so untouched results are reused.
-  - Because the results view re-renders the whole tree per update (§7), keep the emitted HTML
+  + Declare true dependencies with `clearWith:` in `.r.yaml` so untouched results are reused.
+  + Because the results view re-renders the whole tree per update (§7), keep the emitted HTML
     byte-stable when inputs are unchanged to avoid visible flping/reflow.
 - **Table HTML**: emit CSS-only, wrapper-scoped, with an own `overflow-x:auto` box sized to
   fit (not `scroll_box(1080px)`); assume no Bootstrap/jQuery; drop JS tooltips (§7.2–§7.3).
@@ -922,7 +933,7 @@ The failure mode is editing YAML/JS blind. The working method:
 6. **A `/jamovi-control` skill** (like `/vctrs-field`) would encode the per-feature checklist:
    `.a.yaml` (Array/Group/Level) → `.u.yaml` (ListBox/columns/LevelSelector or CustomControl) →
    `.js` (updateContrasts/updateLevelControls or a $el builder) → `.b.R` (read `self$options`)
-   → `prepare()` → `install(home=)` → F10-verify, with pointers into both `dev/jamovi/`
+   →`prepare()` → `install(home=)` → F10-verify, with pointers into both `dev/jamovi/`
    folders. Proposed, not yet created.
 
 ---
@@ -940,15 +951,15 @@ reveal + Action-open) · `SummaryTables/` (feature 3 export + `resolveExportPath
 
 ### `dev/jamovi/dev_console_live_capture/` — the live runtime capture
 
-| Path | What it is | Used in |
-|------|------------|---------|
-| `Jamovi_tabxplor_1_3_1_basic_table.html` | The rendered app window (outer DOM: iframes, ports, sandbox, sizing, ribbon toggles) | §5.1, §4 |
-| `127.0.0.1_56680_MAIN_ELECTRON/assets/main-fd7ff1c3.js` | The app shell: coms protocol, module load, action system, save dialogs, F10/F9 | §5.3, §14, §4 |
-| `127.0.0.1_56680_MAIN_ELECTRON/modules/tabxplor__v_1.3.1.0` | **The served/compiled tabxplor module** (manifest + `uijs` blob) | §5.2 |
-| `.../modules/jmv__v_2.6.44.0`, others | Other served modules (compare) | — |
-| `127.0.0.1_56683_..._analysis_UI/assets/analysisui-49b1a9ac.js` (+ `.css`) | The options-panel control framework | §6 |
-| `127.0.0.1_56684_results/assets/resultsview-60a5863d.js` (+ `.css`) | The results renderer | §7 |
-| `127.0.0.1_56684_results/aa145378.../2/res/02 jmvtab/resources/*.png` | tabxplor's plot resources (addressing example) | §5.1, §7.4 |
+| Path                                                                       | What it is                                                                           | Used in       |
+|----------------------------------------------------------------------------|--------------------------------------------------------------------------------------|---------------|
+| `Jamovi_tabxplor_1_3_1_basic_table.html`                                   | The rendered app window (outer DOM: iframes, ports, sandbox, sizing, ribbon toggles) | §5.1, §4      |
+| `127.0.0.1_56680_MAIN_ELECTRON/assets/main-fd7ff1c3.js`                    | The app shell: coms protocol, module load, action system, save dialogs, F10/F9       | §5.3, §14, §4 |
+| `127.0.0.1_56680_MAIN_ELECTRON/modules/tabxplor__v_1.3.1.0`                | **The served/compiled tabxplor module** (manifest + `uijs` blob)                     | §5.2          |
+| `.../modules/jmv__v_2.6.44.0`, others                                      | Other served modules (compare)                                                       | —             |
+| `127.0.0.1_56683_..._analysis_UI/assets/analysisui-49b1a9ac.js` (+ `.css`) | The options-panel control framework                                                  | §6            |
+| `127.0.0.1_56684_results/assets/resultsview-60a5863d.js` (+ `.css`)        | The results renderer                                                                 | §7            |
+| `127.0.0.1_56684_results/aa145378.../2/res/02 jmvtab/resources/*.png`      | tabxplor's plot resources (addressing example)                                       | §5.1, §7.4    |
 
 Method to refresh the capture: run Jamovi with tabxplor, add a crosstab, F10 → DevTools →
 Sources/Network → save the analysis-UI, results, and main-electron origins; save the page

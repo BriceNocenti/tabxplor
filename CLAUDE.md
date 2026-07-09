@@ -178,7 +178,7 @@ devtools::test("d:/Statistiques/github/tabxplor", filter = "tab")  # one/few fil
 
 tabxplor currently use jamovi `2.6.44.0` (solid). Version 1.4.0 will also be tested on jamovi current "solid" version `2.7.37` afterwards.
 
-After you modify jamovi functions and configuration files, install it for the maintainer to see and review the result in it’s current Jamovi window :
+After you modify jamovi functions and configuration files, regeneration of `.h.R` file is interactive step only. Ask the maintainer to install it using this code, but do not do it yourself :
 
 ```r
 options(jamovi_home='C:/Program Files/jamovi 2.6.44.0')
@@ -194,6 +194,7 @@ To know the real structure of the final .html and .js, check at this live captur
 To **capture new html** in the dev console, **ask the maintainer whenever you need**.
 
 Look at `D:/Statistiques/github/tabxplor/dev/tabxplor_1.4.0_jamovi_dev.md` and `@dev/jamovi/` for detailed informations.
+
 
 ---
 
@@ -563,8 +564,8 @@ Sub-phases 6a–6i, each golden byte-identical (conscious NEW fixtures only; no 
 
 **Caveats remaining**:
 - internal per-row_var recycling kept (arg surface globalised);
-- `detect_totcols` not fully retired (structural); 
-- ≥2 row_vars + `tab_vars` still returns a list (§7); 
+- `detect_totcols` not fully retired (structural);
+- ≥2 row_vars + `tab_vars` still returns a list (§7);
 - `tab_num()` keeps its own color parse; U4 satisfied via scalar-pct regime.
 
 #### Original plan (historical intent)
@@ -594,6 +595,15 @@ Look carefully at `dev/tabxplor_1.4.0_jamovi_dev.md` for detailed insights about
 
 The new color helpers UI in `dev/new_colors_UI.md`, already implemented, rely on a reworked `color` argument and a new `color_signif` argument. I first want to wire it, and the whole rewritten `tab()` function, into the current jmvtab UI, to establish a baseline before the full rewrite.
 
+##### Done (2026-07-09)
+
+Prerequisite fix — **`tab()` completed as the true `tab_many()` replacement**: added the **`levels`** argument (`"all"`/`"first"`/`"auto"`, per col_var — it was dropped from `tab()` by a Phase 6 oversight, contra decisions §6 "col_var axis keeps `pct`/`levels`/`digits`"); added **`na = "drop_all"`** (drop obs missing on row_var(s) / any col_var / tab_var — resolved natively by `tab_build`); **fixed the latent `na = "drop"` bug** (it globally dropped like `drop_all`, contradicting its docs — now per-col_var, distinct bases; no golden churn — golden multi-col_var `drop` cases already drove `tab_build` directly, and all `tab()`+`drop` tests are single-col_var); **soft-deprecated `sup_cols`** (fold into `col_vars` + `levels = "first"`). `stars`/`method_cell`/`method_diff` were already on `tab()`. `tab_build` stays the internal DRY engine; both `tab()` and `tab_many()` wrap it (not a jmvtab hook). Suite green (1101).
+
+jmvtab baseline wired to **`tab()`** (not `tab_many(compact=TRUE)`): `.a.yaml`/`.u.yaml` replace the old `color` list with **`color`** (no/auto/diff/ratio/contrib/OR) + a new **`color_signif`** list (ignore/grey_non_signif/color_all_signif); `na` gains drop_all/common_base; `lvs`→`levels`; expert **`stars`/`method_cell`/`method_diff`** added in the collapsed CI box. `.b.R` fully rewritten (dead code stripped): maps `color` "no"→`FALSE` / "auto"→`TRUE` / else the measure string, forces `ci="diff"` when a `color_signif` policy is set with `ci="auto"`, and keeps the historical Excel export (redesign is 7f). `.js` stripped to the one live handler. Backend `tab()` wiring validated on 12 option combos (colors, levels, na, contrib/OR, methods).
+
+**OPEN — maintainer step**: `jmvtab.h.R` (generated from `.a.yaml`) could NOT be regenerated headlessly (`jmvtools::prepare()` → "jamovi could not be accessed"; needs the running jamovi app). Regenerate + review in the running jamovi with:
+`options(jamovi_home='C:/Program Files/jamovi 2.6.44.0'); devtools::load_all(); jmvtools::install(); devtools::load_all()`.
+
 #### Phase 7b — Draw a detailed map of required computations and interdependence between arguments
 
 Before designing implementation, I want you to create a **reliable and up-to-date map** of the interdependence between arguments and the required computations to make each option work, then improve it and implement the improvement in `tab()`. Write down this map in a new very structured and very detailed .md file in `dev/`.
@@ -606,7 +616,7 @@ Before designing implementation, I want you to create a **reliable and up-to-dat
 
 The cache system should be carefully designed in a tree or hierarchical logic, with different steps and smart levels of caching, to only redo what’s really necessary at each step in a consistent systemic way. Taking all the arguments of `tab()` and `jmvtab()`, **I want you to design such a multi levels cache system for jmvtab, and write your result in a new file in `dev/`.**
 - Do not rely on current implementation, do not try to stick too much to the current UI or code : first ask yourself, what would be the best solution. If big code refactors are needed in the aggregate code or anymore, we’ll do it.
-- If cached objects are really big (no often the case with tables that are already summary ?), it may be a bad idea to keep them all in memory : only if it’s necessary, we can think about saving uncompressed .rds as temp files. 
+- If cached objects are really big (no often the case with tables that are already summary ?), it may be a bad idea to keep them all in memory : only if it’s necessary, we can think about saving uncompressed .rds as temp files.
 
 Exemples of the wanted behaviours :
 - If the user just adds a new row or col variable, the former ones are not recalculated but cached and reused. Since counts and weighted counts are the bottleneck computation, a count that have already been calculated in the session shall stay cached a long time, and already be here if the user revert back to the same configuration afterwards.
@@ -614,7 +624,7 @@ Exemples of the wanted behaviours :
 - If the user just **change the reference level**, for example with `pct = "row"`, if the user goes from `ref = "tot"` (total row) to `ref = 1` (first row), with `color = "diff"` only `diff` need to be recalculated, plus `ci` with `color_signif` not left at `"ignore"`. **I want this one to be particularly fast** :  user should really be able to change the reference level live and have the result instantly in feeling.
 - If the user change the display, no fields need to be recalculated.
 - (With new features below, if the user reorder the levels of a variable, it’s just a basic fct_relevel + arrange on the reordorer factors few millisecs operation.)
-- Missing values are one of the most difficult thing to handle well in this caching system : we must think about it thoroughly and design a smart and balanced solution. For example, should we always keep missing values at the counts step, to then be able to remove them from counts, and just recalculate `pct` and everything after ? 
+- Missing values are one of the most difficult thing to handle well in this caching system : we must think about it thoroughly and design a smart and balanced solution. For example, should we always keep missing values at the counts step, to then be able to remove them from counts, and just recalculate `pct` and everything after ?
 - Please flag other arguments that would also be difficult to handle than missing values, since they rely on counts.
 - The factor x factor and factor x numeric roads may be very different : some operations with means may need to recalculate the sd, etc.
 - Etc. : please think carefully about all other arguments and all other situations that may arise, and what would be the most user-friendly way to handle them in each case.

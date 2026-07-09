@@ -79,7 +79,7 @@ children:
             stretchFactor: 3
             children:
               - type: Label
-                label: color = <i>(what to use for color helpers)</i>
+                label: color = <i>(what to measure for colors)</i>
                 fitToGrid: true
                 children:
                   - type: RadioButton
@@ -89,17 +89,16 @@ children:
                   - type: RadioButton
                     name: color_2
                     optionName: color
-                    optionPart: diff
-                    enable: (pct:row || pct:col)
+                    optionPart: auto
                   - type: RadioButton
                     name: color_3
                     optionName: color
-                    optionPart: diff_ci
+                    optionPart: diff
                     enable: (pct:row || pct:col)
                   - type: RadioButton
                     name: color_4
                     optionName: color
-                    optionPart: after_ci
+                    optionPart: ratio
                     enable: (pct:row || pct:col)
                   - type: RadioButton
                     name: color_5
@@ -109,6 +108,24 @@ children:
                     name: color_6
                     optionName: color
                     optionPart: OR
+                    enable: (pct:row || pct:col)
+              - type: Label
+                label: color_signif = <i>(significance policy)</i>
+                fitToGrid: true
+                children:
+                  - type: RadioButton
+                    name: color_signif_1
+                    optionName: color_signif
+                    optionPart: ignore
+                  - type: RadioButton
+                    name: color_signif_2
+                    optionName: color_signif
+                    optionPart: grey_non_signif
+                    enable: (pct:row || pct:col)
+                  - type: RadioButton
+                    name: color_signif_3
+                    optionName: color_signif
+                    optionPart: color_all_signif
                     enable: (pct:row || pct:col)
           - type: LayoutBox
             cell:
@@ -173,6 +190,10 @@ children:
                 name: na_3
                 optionName: na
                 optionPart: drop_all
+              - type: RadioButton
+                name: na_4
+                optionName: na
+                optionPart: common_base
       - type: LayoutBox
         margin: small
         cell:
@@ -181,7 +202,7 @@ children:
         stretchFactor: 1
         children:
           - type: Label
-            label: levels = <i>(which lvs to keep)</i>
+            label: levels = <i>(which col_var levels to keep)</i>
             children:
               - type: RadioButton
                 name: lvs_1
@@ -327,6 +348,44 @@ children:
                 name: conf_level
                 format: number
                 enable: (pct:row || pct:col)
+      - type: LayoutBox
+        margin: none
+        cell:
+          column: 1
+          row: 1
+        stretchFactor: 0
+        children:
+          - type: Label
+            label: stars = <i>(significance stars)</i>
+            children:
+              - type: CheckBox
+                name: stars
+      - type: LayoutBox
+        margin: none
+        cell:
+          column: 0
+          row: 2
+        stretchFactor: 1
+        children:
+          - type: Label
+            label: method_cell = <i>(cell CI method)</i>
+            children:
+              - type: ComboBox
+                name: method_cell
+                enable: (ci:cell || ci:auto)
+      - type: LayoutBox
+        margin: none
+        cell:
+          column: 1
+          row: 2
+        stretchFactor: 1
+        children:
+          - type: Label
+            label: method_diff = <i>(difference CI method)</i>
+            children:
+              - type: ComboBox
+                name: method_diff
+                enable: (ci:diff || ci:auto)
   - type: CollapseBox
     label: <b>Other formatting</b>
     stretchFactor: 1

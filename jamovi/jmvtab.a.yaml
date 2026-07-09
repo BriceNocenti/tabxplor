@@ -98,40 +98,61 @@ options:
             }
 
     - name: color
-      title: color = (Color)
+      title: color = (what to measure for colors)
       type: List
       options:
-        - title: no # "" ?
+        - title: "no <i>(no colors)</i>"
           name:  no
-        - title: "diff <i>(differences from total, or reference cell)</i>"
+        - title: "auto <i>(smart default: difference + ratio)</i>"
+          name:  auto
+        - title: "diff <i>(difference from total, or reference cell)</i>"
           name:  diff
-        - title: "diff_ci <i>(differences, only if significant)</i>"
-          name:  diff_ci
-        - title: "after_ci <i>(diff, after substracting margin of error)</i>"
-          name:  after_ci
-        - title: "contrib <i>(relative contribution to variance)</i>"
+        - title: "ratio <i>(relative risk, or mean ratio)</i>"
+          name:  ratio
+        - title: "contrib <i>(contribution to variance)</i>"
           name:  contrib
-        - title: "OR <i>(odds ratios or relative risks ratios)</i>"
+        - title: "OR <i>(odds ratios)</i>"
           name:  OR
-        # - title: auto
-        #   name:  auto
       default: no
       description:
           R: >
-           The type of colors to print, as a single string. Vectorised over `row_vars`.
+           Which measure to use for color helpers, as a single string.
             \itemize{
               \item \code{"no"}: by default, no colors are printed.
-              \item \code{"diff"}: color percentages and means based on cells differences from
-              totals (or from first cells when \code{ref = "first"}).
-              \item \code{"diff_ci"}: color pct and means based on cells differences from totals
-              or first cells, removing coloring when the confidence interval of this difference
-              is higher than the difference itself.
-              \item \code{"after_ci"}: idem, but cut off the confidence interval from the
-              difference first.
+              \item \code{"auto"}: a smart per-column-type default (percentage-point difference on
+              the text plus a relative-risk highlight on the background for factors, mean ratio for
+              numeric columns).
+              \item \code{"diff"}: color the difference of each cell from its total (or reference
+              cell). For factors this is a percentage-point difference; for numeric columns the
+              standardized (SD-scaled) mean difference.
+              \item \code{"ratio"}: color the relative risk (factors) or mean ratio (numeric).
               \item \code{"contrib"}: color cells based on their contribution to variance
-              (except mean columns, from numeric variables).
-              \item \code{"OR"}: for `pct == "col"` or `pct == "row"`,
-              color based on odds ratios (or relative risks ratios)
+              (factor columns only).
+              \item \code{"OR"}: for `pct == "col"` or `pct == "row"`, color based on odds ratios.
+            }
+           How significance gates these colors is set separately by \code{color_signif}.
+
+    - name: color_signif
+      title: color_signif = (significance policy)
+      type: List
+      options:
+        - title: "ignore <i>(color every deviation)</i>"
+          name:  ignore
+        - title: "grey_non_signif <i>(grey out non-significant cells)</i>"
+          name:  grey_non_signif
+        - title: "color_all_signif <i>(only the CI-guaranteed effect)</i>"
+          name:  color_all_signif
+      default: ignore
+      description:
+          R: >
+           How statistical significance gates the colors, as a single string.
+            \itemize{
+              \item \code{"ignore"}: by default, color every deviation by its observed size.
+              \item \code{"grey_non_signif"}: color by observed size, but grey out cells whose
+              deviation is not significant (at \code{conf_level}). A confidence interval on the
+              difference is computed automatically.
+              \item \code{"color_all_signif"}: color by the guaranteed (confidence-bound) effect --
+              only cells whose interval clears the threshold show, with dimmer colors.
             }
 
     - name: chi2
@@ -170,32 +191,41 @@ options:
       title: "na = <i>(missing values)</i>"
       type: List
       options:
-        - title: keep
+        - title: "keep <i>(NA as a level)</i>"
           name:  keep
-        - title: "drop <i>(for each col_var)</i>"
+        - title: "drop <i>(each col_var drops its own NA)</i>"
           name:  drop
-        - title: "drop_all <i>(for all col_vars)</i>"
+        - title: "drop_all <i>(drop NA in row_var and all col_vars)</i>"
           name:  drop_all
+        - title: "common_base <i>(single population, historical tab())</i>"
+          name:  common_base
       default: keep
       description:
           R: >
            The policy to adopt with missing values. It must be a single string.
             \itemize{
               \item \code{na = "keep"}: by default, prints \code{NA}'s as explicit \code{"NA"} level.
-              \item \code{na = "drop"}: removes \code{NA} levels before making each table
-              (tabs made with different column variables may have a different number of
-              observations, and won't exactly have the same total columns).
+              \item \code{na = "drop"}: each column variable drops its own \code{NA}'s, so tables
+              made with different column variables may have a different number of observations.
+              \item \code{na = "drop_all"}: drops every observation missing on the row variable,
+              any column variable or a tab variable (all columns then share one base).
+              \item \code{na = "common_base"}: fixes a single population (non-missing on the row
+              variable and the first column variable), while secondary column variables keep their
+              own \code{NA}'s. Reproduces the historical \code{tab()} behaviour.
               }
 
+    # NB: the option is named `lvs`, NOT `levels`: `jmvcore::Options` already has a `levels()`
+    # method, so a `levels` option collides ("symbol already has a regular binding"). The UI
+    # label still reads "levels"; .b.R maps `lvs` onto tab()'s `levels` argument.
     - name: lvs
-      title: levels
+      title: "levels = <i>(which col_var levels to keep)</i>"
       type: List
       options:
         - title: all
           name:  all
-        - title: first
+        - title: "first <i>(first level of each col_var)</i>"
           name:  first
-        - title: auto
+        - title: "auto <i>(first level if binary)</i>"
           name:  auto
       default: all
       description:
@@ -360,13 +390,44 @@ options:
            By default confidence interval are printed with the interval display.
            Set to "moe" to use pct +- moe instead.
 
-# method_cell = "wilson",
-#  "wald", "wilson", "wilsoncc", "agresti-coull", "jeffreys", "modified wilson", "modified jeffreys", "clopper-pearson", "arcsine", "logit", "witting", "pratt", "midp", "lik", "blaker"
+    - name: stars
+      title: "stars = <i>(significance stars)</i>"
+      type: Bool
+      default: true
+      description:
+          R: >
+           With \code{ci = "diff"}, print significance stars (\code{*} \code{**} \code{***}) for
+           the difference of each cell from its reference. Read from the same confidence interval
+           that is displayed, so stars and bracket always agree.
 
-# method_diff = "ac",
-#  "wald", "waldcc", "ac", "score", "scorecc", "mn", "mee", "blj", "ha", "hal", "jp"
+    - name: method_cell
+      title: "method_cell = <i>(cell CI method)</i>"
+      type: List
+      options:
+        - title: wilson
+          name:  wilson
+      default: wilson
+      description:
+          R: >
+           The proportion confidence-interval method for \code{ci = "cell"}. Currently
+           \code{"wilson"} (the score interval).
 
-
+    - name: method_diff
+      title: "method_diff = <i>(difference CI method)</i>"
+      type: List
+      options:
+        - title: "newcombe <i>(hybrid score, default)</i>"
+          name:  newcombe
+        - title: "ac <i>(Agresti-Caffo)</i>"
+          name:  ac
+        - title: wald
+          name:  wald
+      default: newcombe
+      description:
+          R: >
+           The proportion confidence-interval method for \code{ci = "diff"}. \code{"newcombe"}
+           (default) is the dual of the two-proportion score test, so the interval and the
+           significance stars always agree.
 
 
 
