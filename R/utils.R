@@ -97,7 +97,21 @@ NULL
 
   options("tabxplor.always_add_css_in_tab_kable" = TRUE)
 
+  # Phase 8: opt-in parallel build of many tables in ONE tab() call (Suggests-only {mirai}).
+  # FALSE = off (default); TRUE = auto workers; an integer = that many daemons. `parallel_min` is
+  # the smallest row_var count worth dispatching (fewer -> serial: setup would outweigh the gain).
+  # See R/tab-parallel.R + dev/tabxplor_1.4.0_decisions.md 26.
+  options("tabxplor.parallel"     = FALSE)
+  options("tabxplor.parallel_min" = 2L)
+
   invisible()
+}
+
+# Phase 8: release the persistent mirai daemon pool when tabxplor is unloaded (a CRAN cleanliness
+# backstop; tab_parallel_stop() lets users do it earlier). No pool is ever warmed at load.
+#' @keywords internal
+.onUnload <- function(libpath) {
+  tab_parallel_stop()
 }
 
 # getOption("tabxplor.color_breaks")

@@ -46,6 +46,7 @@ tab_many(
   subtext = "",
   n_min = 0,
   color_signif = "ignore",
+  parallel = NULL,
   .by_table = FALSE,
   filter
 )
@@ -269,6 +270,10 @@ the same length as \code{col_vars}. The argument is vectorisez over \code{col_va
 row; own base below \code{n_min} blanks the cell) without recomputing anything.}
 
 \item{color_signif}{How significance gates the color -- see \code{\link{tab}}.}
+
+\item{parallel}{Opt-in parallel build of the per-\code{row_var} tables (Suggests-only
+\pkg{mirai}); see \code{\link{tab}}. \code{NULL} (default) reads the
+\code{tabxplor.parallel} option.}
 
 \item{.by_table}{Internal: force the table-by-table path (disable scan-fusion).}
 

@@ -1495,6 +1495,56 @@ and roughly doubled the render time: 570 → 250 ms on the small table).
 
 ---
 
+## 28. Phase 8 IMPLEMENTED — opt-in parallel dispatch, FULL per-row_var granularity (2026-07-10)
+
+`tab(..., parallel=)` / `tab_many(..., parallel=)`, engine **mirai** (Suggests-only; §26 chose it), NAMED
+`"tabxplor"` compute profile. Infra in `R/tab-parallel.R`. Verification: full suite green (no golden regen),
+`test-parallel-parity.R` (byte-exact), benchmark `dev/benchmarks/run_parallel.R` → `phase8_survey.txt` +
+`phase8_profile.txt`.
+
+### The granularity decision (measured, not assumed)
+
+The first cut (as the §26/roadmap sketch proposed) dispatched only the **fmt BUILD** (`tab_plain`/`tab_num`)
+and kept tests + assemble + aggregate serial on main — byte-identical by construction. But on the REAL API
+(one `tab()`, many row_vars, few col_vars) it measured only **~1.15x**: the fmt build is ~25-30% of the
+work; tests (~31%), assemble (~35%), aggregate (~10%) dominate and stayed serial (`phase8_profile.txt`,
+Amdahl). The §26 PoC's 3.3x came from dispatching WHOLE independent per-table builds. So the granularity was
+promoted to the **full per-row_var pipeline**.
+
+### Byte-identity ceiling and the total-col fix
+
+An independently-built single-row_var `tab()` was NOT byte-identical to its slice of the integrated
+multi-row_var build: the lone total column read `Total_<lastcv>` (multi) vs `Total` (single) — a
+cross-row_var coupling in `tab_assemble`'s lone-total rename-back (`length(totnames)==1` counted
+OCCURRENCES, so N identical `Total_denom` copies skipped the rename-back). **Fix: `totnames |> unique()`**
+(test the DISTINCT name). This is a small **cosmetic golden change** (multi-row_var mixed-col_var total →
+`Total`, arguably the correct name) that touched NO existing golden (none covered it; now locked in
+`test-tab.R`). It makes per-row_var == integrated-slice for **every na mode** (proto verified 4/4) — the
+precondition that makes the dispatch byte-identical.
+
+### Architecture
+
+`tab_build()`: `tab_setup` + `tab_prepare_pop` run ONCE on main — the global `na="drop_all"/"common_base"`
+population drop lives there and CANNOT move to a worker. Then, when `parallel` is on and ≥ `parallel_min`
+row_vars: ship the prepared `data` once (`everywhere()`), `ctx_slice()` the ctx per row_var (subset the 19
+row_var-indexed fields; scalars like `na_num`-under-`drop_all` are recycled, not sliced; `tab_row_names`
+recomputed), dispatch `tab_build_one` = `tab_aggregate |> tab_transform |> tab_assemble_tables` per row_var,
+then `tab_assemble_output` (merge/pvalue/unwrap) on main. Enabled by splitting `tab_assemble()` →
+`tab_assemble_tables()` (per-row_var) + `tab_assemble_output()` (cross-row_var). jmvtab (cache_env) and the
+default (parallel off) path take the unchanged serial full-ctx branch; the build-only `tab_pmap` seam inside
+`tab_transform` remains but now runs serial (single row_var per worker).
+
+### Result
+
+W=8, 30k rows × 12 row_vars: **~2.15x merged / ~2.44x list**, byte-identical. Below the §26 PoC 3.3x: the
+gap is the main-side merge (~0.3x) + returning finished tables (serialization) — overheads the PoC's
+ship-once / independent-tables / no-merge measurement excluded. Future lever (deferred): a cross-call
+data-ship hash-guard for repeated same-data calls (the primary one-big-call workflow already ships once).
+Options `tabxplor.parallel` (FALSE), `tabxplor.parallel_min` (2L); `.onUnload` stops the pool;
+`_R_CHECK_LIMIT_CORES_` cap 2.
+
+---
+
 ## Sources (statistics)
 
 - Binomial proportion CI (Wald / Wilson / Agresti-Coull asymmetry): <https://en.wikipedia.org/wiki/Binomial_proportion_confidence_interval>

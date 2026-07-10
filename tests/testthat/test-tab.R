@@ -164,6 +164,16 @@ testthat::test_that("tab works with several col_vars", {
   tab(data, sex, c(hair_color, mass, gender), pct = "row")         |> testthat::expect_s3_class("tabxplor_tab")
 })
 
+# Phase 8 total-col decoupling (tab_assemble ~L1770): with several row_vars + several factor col_vars,
+# the lone kept total column must read "Total", not the internal "Total_<lastcv>" that leaked before the
+# dedup fix. This makes a multi-row_var per-row_var table identical to a standalone single-row_var build
+# -- the precondition for the per-row_var parallel dispatch (test-parallel-parity.R).
+testthat::test_that("Phase 8: multi-row_var total column is 'Total' (not 'Total_<col_var>')", {
+  multi  <- tab(data, c(sex, gender), c(hair_color, eye_color), pct = "row")
+  testthat::expect_true("Total" %in% names(multi))
+  testthat::expect_false(any(grepl("^Total_", names(multi))))
+})
+
 # Coverage of the soft-deprecated tab_many() alias's own features that tab() intentionally does
 # NOT expose (per-col_var pct vector, per-row_var pct list, list return). suppressWarnings() keeps
 # the deprecation nudge out (see also the dedicated deprecation test below).

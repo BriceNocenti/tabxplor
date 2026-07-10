@@ -212,88 +212,98 @@ children:
     collapsed: true
     children:
       - type: LayoutBox
-        margin: small
         cell:
           column: 0
           row: 0
         stretchFactor: 1
         children:
-          - type: Label
-            label: 'na = <i>(missing values)</i> '
+          - type: LayoutBox
+            margin: small
+            cell:
+              column: 0
+              row: 0
+            stretchFactor: 1
             children:
-              - type: RadioButton
-                name: na_1
-                optionName: na
-                optionPart: keep
-              - type: RadioButton
-                name: na_2
-                optionName: na
-                optionPart: drop
-              - type: RadioButton
-                name: na_3
-                optionName: na
-                optionPart: drop_all
-              - type: RadioButton
-                name: na_4
-                optionName: na
-                optionPart: common_base
+              - type: Label
+                label: 'na = <i>(missing values)</i> '
+                children:
+                  - type: RadioButton
+                    name: na_1
+                    optionName: na
+                    optionPart: keep
+                  - type: RadioButton
+                    name: na_2
+                    optionName: na
+                    optionPart: drop
+                  - type: RadioButton
+                    name: na_3
+                    optionName: na
+                    optionPart: drop_all
+                  - type: RadioButton
+                    name: na_4
+                    optionName: na
+                    optionPart: common_base
+          - type: LayoutBox
+            margin: small
+            cell:
+              column: 1
+              row: 0
+            stretchFactor: 1
+            children:
+              - type: Label
+                label: levels = <i>(which col_var levels to keep)</i>
+                children:
+                  - type: RadioButton
+                    name: lvs_1
+                    optionName: lvs
+                    optionPart: all
+                  - type: RadioButton
+                    name: lvs_2
+                    optionName: lvs
+                    optionPart: first
+                  - type: RadioButton
+                    name: lvs_3
+                    optionName: lvs
+                    optionPart: auto
+          - type: LayoutBox
+            margin: none
+            cell:
+              column: 2
+              row: 0
+            stretchFactor: 1
+            children:
+              - type: Label
+                label: other_if_less_than =
+                children:
+                  - type: TextBox
+                    name: other_if_less_than
+                    format: number
+              - type: Label
+                label: cleannames =
+                children:
+                  - type: CheckBox
+                    name: cleannames
+              - type: Label
+                label: n_min = <i>(hide rows/cols with a small base)</i>
+                children:
+                  - type: TextBox
+                    name: n_min
+                    format: number
       - type: LayoutBox
-        margin: small
         cell:
-          column: 1
-          row: 0
+          column: 0
+          row: 1
         stretchFactor: 1
         children:
           - type: Label
-            label: levels = <i>(which col_var levels to keep)</i>
+            label: <b>Reorder levels</b> <i>(select a level, then move it up/down)</i>
             children:
-              - type: RadioButton
-                name: lvs_1
-                optionName: lvs
-                optionPart: all
-              - type: RadioButton
-                name: lvs_2
-                optionName: lvs
-                optionPart: first
-              - type: RadioButton
-                name: lvs_3
-                optionName: lvs
-                optionPart: auto
-      - type: LayoutBox
-        margin: none
-        cell:
-          column: 2
-          row: 0
-        stretchFactor: 1
-        children:
-          - type: Label
-            label: other_if_less_than =
-            children:
-              - type: TextBox
-                name: other_if_less_than
-                format: number
-          - type: Label
-            label: cleannames =
-            children:
-              - type: CheckBox
-                name: cleannames
-          - type: Label
-            label: n_min = <i>(hide rows/cols with a small base)</i>
-            children:
-              - type: TextBox
-                name: n_min
-                format: number
-  - type: CollapseBox
-    label: <b>Reorder levels</b>
-    stretchFactor: 1
-    collapsed: true
-    children:
-      - type: CustomControl
-        name: levelOrderCtrl
-        stretchFactor: 1
-        events:
-          creating: ./jmvtab::levelOrderCtrl_creating
-          updated: ./jmvtab::levelOrderCtrl_updated
+              - type: CustomControl
+                name: levelOrderCtrl
+                stretchFactor: 1
+                events:
+                  creating: ./jmvtab::levelOrderCtrl_creating
+                  updated: ./jmvtab::levelOrderCtrl_updated
   - type: CollapseBox
     label: <b>References (points of comparison)</b>
     stretchFactor: 1

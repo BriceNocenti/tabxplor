@@ -111,9 +111,10 @@ tab(data, row_vars, col_vars, ..., output_list=FALSE)   tab_many(..., compact=) 
          │      leaves (pct/diff/ratio/or/CI + fmt, O(cells)); `.fine` may be a per-pair list (fine_for_pair)
          │      + factor join + tab_apply_tests()
          │      (chi2/ANOVA → capture `test` → tab_ci; runs BEFORE the level-drop — the ordering invariant)
-         └─ tab_assemble(ctx)     (tier 4)   level-drop, tab_add_n_pct(), total col/row removal, num+factor
-                join, test-merge + rewrap (new_tab/new_grouped_tab), output shape (§13),
-                tab_pvalue_lines(), tab_spread(), unwrap, optional tab_kable()
+         └─ tab_assemble(ctx)     (tier 4)   = tab_assemble_tables() [per-row_var: level-drop,
+                tab_add_n_pct(), total col/row removal, num+factor join, test-merge + rewrap
+                (new_tab/new_grouped_tab)] + tab_assemble_output() [cross-row_var: output shape (§13),
+                tab_compact() merge, tab_pvalue_lines(), tab_spread(), unwrap, optional tab_kable()]
 ```
 
 The `ctx` list renames the locals tab_build already threaded, with one clarity win: the overloaded
@@ -126,6 +127,18 @@ ctx, runs `tab_setup()` (incl. the `tot`→totrow/totcol translation tab() uses)
 are the two factor-relabel steps extracted from `tab_prepare()` (which still composes them for its
 public callers); jmvtab (Phase 7e) runs cleannames at display instead (`jmvtab_cleannames_display()`).
 `tab_compact()` (`R/tab_classes.R`) is the internal merge invoked when `output = "single"`.
+
+**Phase 8 — opt-in parallel dispatch (`R/tab-parallel.R`, Suggests-only mirai).** With `parallel` on and
+≥ `tabxplor.parallel_min` row_vars, `tab_build()` runs `tab_setup` + `tab_prepare_pop` ONCE on main (the
+global `na="drop_all"/"common_base"` population drop lives there and cannot move), ships the prepared `data`
+once (`everywhere()`), then dispatches `tab_build_one()` = `tab_aggregate |> tab_transform |>
+tab_assemble_tables` per row_var to a NAMED `"tabxplor"` daemon pool via `tab_pmap()`, and runs
+`tab_assemble_output()` on main over the gathered list. This is byte-identical because a single-row_var
+build equals its slice of the integrated build — guaranteed by the `tab_assemble` total-col decoupling
+(`totnames |> unique()`, so the lone-total rename-back tests the distinct name, not its occurrence count).
+`ctx_slice()` narrows the ctx per row_var (the 19 row_var-indexed fields; scalars recycle). Off by default,
+jmvtab (cache_env), and the serial full-ctx path are unchanged. The build-only `tab_pmap` seam inside
+`tab_transform` remains but is always serial now (one row_var per worker).
 
 **jmvtab live cache (Phase 7e, `R/jmvtab-cache.R`).** The jamovi module reuses this exact pipeline
 via `jmvtab_build()`, which calls `tab()` with a content-addressed multi-tier store injected through a

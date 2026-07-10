@@ -249,6 +249,13 @@ NULL
 #' @param output_list Logical (default \code{FALSE}). With several \code{row_var}, \code{FALSE}
 #'  merges the mirror tables into a single \code{tabxplor_tab}; \code{TRUE} returns a list with
 #'  one table per \code{row_var}. With \code{tab_vars}, tables stay a list regardless.
+#' @param parallel Opt-in parallel build of the per-\code{row_var} tables, using the (Suggests-only)
+#'  \pkg{mirai} package. \code{NULL} (default) reads \code{getOption("tabxplor.parallel")} (off);
+#'  \code{FALSE} forces serial; \code{TRUE} uses an auto worker count; an integer sets the number of
+#'  worker processes. Byte-identical to the serial result. It pays off for the survey workflow --
+#'  \emph{many} \code{row_vars} against a small/medium data frame (roughly 10k-60k rows) in ONE
+#'  \code{tab()} call -- and is a loss for few tables or multi-million-row data (so it stays opt-in).
+#'  The worker pool persists for the session; release it with \code{\link{tab_parallel_stop}}.
 #' @param spread_vars <\link[tidyr:tidyr_tidy_select]{tidy-select}> A subset of \code{tab_vars}
 #'  to pivot from subtables into columns, via \code{\link{tab_spread}} (applied at the end).
 #' @param names_prefix,names_sort Passed to \code{\link{tab_spread}} when \code{spread_vars} is
@@ -360,7 +367,7 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
                 tot = c("row", "col"), total_names = "Total",
                 add_n = TRUE, add_pct = FALSE,
                 subtext = "", digits = 0, n_min = 0,
-                output_list = FALSE,
+                output_list = FALSE, parallel = NULL,
                 spread_vars, names_prefix = NULL, names_sort = FALSE,
                 row_var, col_var,
                 .cache = NULL, .defer_level_merge = FALSE, .return_armed = FALSE,
@@ -523,7 +530,7 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
            OR = OR,
            color = color,
            add_n = add_n, add_pct = add_pct,
-           subtext = subtext, n_min = n_min,
+           subtext = subtext, n_min = n_min, parallel = parallel,
            spread_vars = spread_vars, names_prefix = names_prefix, names_sort = names_sort,
            # Phase 7e: pass the jmvtab live-cache seam straight through (NULL/FALSE for normal tab()).
            # Phase 7g-ii: `.levels_order` (a per-variable named list of ordered levels) is jmvtab-only
@@ -820,6 +827,9 @@ finalize_one_col <- function(col, spec) {
 #' \code{color} + \code{color_signif}). Applies to all \code{row_vars}.
 #' @param color_signif How significance gates the color -- see \code{\link{tab}}
 #' (\code{"ignore"} / \code{"grey_non_signif"} / \code{"color_all_signif"}).
+#' @param parallel Opt-in parallel build of the per-\code{row_var} tables (Suggests-only
+#' \pkg{mirai}); see \code{\link{tab}}. \code{NULL} (default) reads the
+#' \code{tabxplor.parallel} option.
 #' @param add_n For `pct = "row"` or `pct = "col"`, set to `FALSE` not to add another
 #' column or row with unweighted counts (`n`).
 #' @param add_pct Set to `TRUE` to add a column with the frequencies of the row
@@ -895,6 +905,7 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
                      totrow = TRUE, totcol = "last", total_names = "Total",
                      add_n = TRUE, add_pct = FALSE,
                      digits = 0, subtext = "", n_min = 0, color_signif = "ignore",
+                     parallel = NULL,
                      .by_table = FALSE,
 
                      filter #, listed = FALSE,
@@ -949,6 +960,7 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
     method_diff = method_diff, totaltab = totaltab, totaltab_name = totaltab_name,
     totrow = totrow, totcol = totcol, total_names = total_names,
     add_n = add_n, add_pct = add_pct, digits = digits, subtext = subtext, n_min = n_min,
+    parallel = parallel,
     .by_table = .by_table,
     filter = if (missing(filter)) NULL else {{ filter }},
     output = if (isTRUE(compact)) "single" else "legacy"
@@ -994,6 +1006,7 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
                       totrow = TRUE, totcol = "last", total_names = "Total",
                       add_n = TRUE, add_pct = FALSE,
                       digits = 0, subtext = "", n_min = 0,
+                      parallel = NULL,
                       .by_table = FALSE,
                       spread_vars = character(), names_prefix = NULL, names_sort = FALSE,
                       .cache = NULL, .defer_level_merge = FALSE,
@@ -1032,6 +1045,9 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
     totaltab = totaltab, totaltab_name = totaltab_name, totrow = totrow, totcol = totcol,
     total_names = total_names, add_n = add_n, add_pct = add_pct, digits = digits,
     subtext = subtext, n_min = n_min, by_table = .by_table,
+    # Phase 8: `parallel` gates the tab_pmap() dispatch in tab_transform() (NULL -> option default
+    # -> serial). Read only there; every other stage ignores it. See R/tab-parallel.R.
+    parallel = parallel,
     spread_vars = spread_vars, names_prefix = names_prefix, names_sort = names_sort,
     # Phase 7e jmvtab cache seam: `cache_env` is a mutable environment holding $store / $hits (NULL
     # for tab()/tab_many() -> the hooks below are inert). `defer_level_merge` keeps full levels for
@@ -1044,6 +1060,24 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
 
   ctx <- tab_setup(ctx)
   ctx <- tab_prepare_pop(ctx)
+
+  # Phase 8: opt-in FULL per-row_var parallel dispatch. The population is now prepared (once, on main --
+  # incl. the global na="drop_all"/"common_base" drop), so each row_var's aggregate|transform|
+  # assemble_tables is independent and byte-identical to its slice of the serial build. Ship the
+  # prepared `data` once, run one worker per row_var, then assemble the output shape on main. OFF by
+  # default / jmvtab (cache_env) / < parallel_min row_vars -> the unchanged serial full-ctx path below.
+  workers <- tab_parallel_workers(ctx$parallel, ctx$cache_env)
+  if (workers > 1L && length(ctx$row_vars) >= getOption("tabxplor.parallel_min", 2L)) {
+    slices <- lapply(seq_along(ctx$row_vars), function(i) ctx_slice(ctx, i))
+    tabs <- tab_pmap(list(ctx_i = slices), "tab_build_one",
+                     .ship = list(data = ctx$data), workers = workers)
+    # Name the gathered list by row_var (mirai_map returns it index-named): tab_assemble_output()'s
+    # merge derives the `row_var` factor labels from names(tabs) -- the serial `tabs` is set_names()'d
+    # by row_vars in tab_transform, so match it or the merged row_var levels become "1","2",...
+    tabs <- purrr::set_names(tabs, as.character(ctx$row_vars))
+    return(tab_assemble_output(ctx_update(ctx, list(tabs = tabs))))
+  }
+
   ctx <- tab_aggregate(ctx)      # jmvtab: replaced by the cached per-pair build (hook at its top)
   ctx <- tab_transform(ctx)
   # Phase 7e: persist freshly-computed tier-2 tests (cache misses) before display assembly.
@@ -1581,34 +1615,35 @@ tab_transform <- function(ctx) {
   # to the scalar-ref broadcast if a ctx reached transform without it (byte-identical).
   if (!exists("ref_vect", inherits = FALSE)) ref_vect <- purrr::map(ref, ~ rep(.x, length(col_vars)))
 
-  # Numeric transform: adopt the tier-1 moment aggregate `fine_num` (`.fine = ..9`), one tab_num()
-  # per row_var; `.by_table` -> ..9 is NULL -> re-scan. Everything downstream is O(cells).
-  if (sum(col_vars_num) != 0) {
-    tabs_num <- purrr::pmap(list(row_vars, totaltab, totrow, ref, comp, color_num, ci, na_num,
-                                 fine_num),
-                            ~ tab_num(data,
-                                      !!..1,
-                                      as.character(col_vars)[col_vars_num],
-                                      as.character(tab_vars),
-                                      wt         = !!wt,
-                                      na         = ..8,
-                                      digits     = digits[col_vars_num],
-                                      ref        = ..4,
-                                      ci         = ..7,
-                                      conf_level = conf_level,
-                                      stars      = stars,
-                                      comp       = ..5,
-                                      color      = ..6,
-                                      totaltab   = ..2,
-                                      totaltab_name = totaltab_name,
-                                      tot        = dplyr::if_else(..3, "row", "no"),
-                                      total_names= total_names,
-                                      .fine      = ..9,
-                                      .by_table  = .by_table
-                            )
-    ) %>%
-      purrr::set_names(row_vars)
-  }
+  # Phase 8: build EVERY row_var's numeric + factor tables through the ONE tab_pmap() seam. Serial
+  # by default -- tab_pmap() IS purrr::pmap, byte-identical, zero overhead -- or dispatched to a
+  # persistent mirai daemon pool when `parallel` is set (never for jmvtab: cache_env forces serial).
+  # Each unit returns list(num = <tab_num | NULL>, text = <named list of col_var tabs | NULL>). The
+  # cross-cutting steps below (chi2_num, duplicated_levels rename, the full_join, tab_apply_tests)
+  # STAY on the main process, so the parallel result is byte-identical to sequential BY CONSTRUCTION.
+  # See R/tab-parallel.R.
+  # `parallel` / `cache_env` gate the tab_pmap() dispatch. tab()/tab_build() carry both in ctx;
+  # tab_counts() and the direct stage-composition tests build a leaner ctx -> default them here
+  # (both -> serial), mirroring the cached_tests / ref_vect defaults above.
+  if (!exists("parallel", inherits = FALSE)) parallel <- NULL
+  if (!exists("cache_env", inherits = FALSE)) cache_env <- NULL
+  fine_num_l <- if (is.null(fine_num)) rep(list(NULL), length(row_vars)) else fine_num
+  .units <- tab_pmap(
+    .l = list(row_var = as.character(row_vars), totaltab_i = totaltab, totrow_i = totrow,
+              ref_i = ref, comp_i = comp, color_num_i = color_num, ci_i = ci, na_num_i = na_num,
+              fine_num_i = fine_num_l, pct_i = pct_vect, ref2_i = ref2, OR_i = OR,
+              na_text_i = na_text, color_diff_OR_i = color_diff_OR, ref_vect_i = ref_vect),
+    .f_name = "tab_build_rowvar",
+    .const  = list(tab_vars = as.character(tab_vars), wt = as.character(wt), col_vars = col_vars,
+                   col_vars_num = col_vars_num, col_vars_text = col_vars_text, digits = digits,
+                   conf_level = conf_level, stars = stars, totaltab_name = totaltab_name,
+                   total_names = total_names, by_table = .by_table),
+    .ship   = list(data = data, fine_fused = .fine),
+    workers = tab_parallel_workers(parallel, cache_env)
+  )
+  # Keep the NULL-vs-list distinction the numeric-only / factor-only branches rely on downstream.
+  if (sum(col_vars_num)  != 0) tabs_num  <- purrr::set_names(purrr::map(.units, "num"),  row_vars)
+  if (sum(col_vars_text) != 0) tabs_text <- purrr::set_names(purrr::map(.units, "text"), row_vars)
 
   # Phase 3b: whole-table test for NUMERIC col_vars = one-way ANOVA (Welch + classic F), computed
   # per row_var by running tab_chi2()'s test step on the numeric table (it detects mean col_vars and
@@ -1623,44 +1658,10 @@ tab_transform <- function(ctx) {
   }
 
   if (sum(col_vars_text) != 0) {
-    tabs_text <-     # By column first
-      # Phase 7g-iii: ..11 = ref_vect (per row_var, per col_var); `..11[col_vars_text]` feeds the
-      # inner pmap a per-factor-col_var reference `.ref`, so each col_var can have its own reference
-      # column under pct="col". Default ref_vect broadcasts the per-row_var scalar -> byte-identical.
-      # (..5 = the per-row_var scalar `ref` is kept in the list for index stability; tab_plain now
-      # takes `.ref` instead.)
-      purrr::pmap(list(row_vars, totaltab, totrow, pct_vect, ref, ref2, comp, OR, na_text, color_diff_OR,
-                       ref_vect),
-
-                  ~ purrr::pmap(list(col_vars[col_vars_text], digits[col_vars_text], ..9,
-                                     ..4[col_vars_text], ..11[col_vars_text]),
-                                function(.col_vars, .digits, .na, .pct, .ref)
-                                  tab_plain(data,
-                                            !!..1,
-                                            !!.col_vars,
-                                            as.character(tab_vars),
-                                            wt = !!wt,
-                                            na         = .na,
-                                            digits     = .digits,
-                                            pct        = .pct,
-                                            ref        = .ref,
-                                            ref2       = ..6,
-                                            comp       = ..7,
-                                            OR         = ..8,
-                                            color      = ..10,
-                                            #subtext   = "",
-                                            totaltab   = ..2,
-                                            totaltab_name = totaltab_name,
-                                            tot        = c( "row", "col"), # vectorise totrow ?
-                                            total_names= total_names,
-                                            .fine      = fine_for_pair(.fine, ..1, .col_vars),
-                                            .by_table  = .by_table)) %>%
-                    purrr::set_names(col_vars[col_vars_text])
-
-      ) %>%
-      purrr::set_names(row_vars)
-    #tot_cols_type != "no_no_create" | totrow == TRUE
-
+    # Phase 8: tabs_text (per row_var, a named list of per-col_var factor tables) was built above by
+    # tab_pmap() via tab_build_rowvar(). The former nested purrr::pmap(row_vars, ...) build lived
+    # here; its body now IS tab_build_rowvar()'s factor branch (byte-identical). What follows -- the
+    # duplicated_levels rename, the join and tab_apply_tests -- stays on the main process.
 
     #Join the list of tabs into a single table,
     # managing duplicated levels
@@ -1722,9 +1723,21 @@ tab_transform <- function(ctx) {
 # Built tables -> the final tabxplor_tab / list: non-first-level drop, add_n/add_pct, total col/row
 # removal, the numeric+factor join, the whole-table test merge + class wrap, output-shape compaction,
 # p-value lines, tab_spread, unwrap, and the optional tab_kable. Pure O(cells) display assembly.
+# Phase 8: split into tab_assemble_tables() (per-row_var finishing -> the list of finished tabs,
+# tests baked into their attributes -- byte-identical whether run on all row_vars at once or one at a
+# time, the precondition for the per-row_var parallel dispatch) and tab_assemble_output() (the
+# cross-row_var output shape: merge/compact, p-value lines, n_min, spread, unwrap, kable). The serial
+# path composes them (byte-identical); the parallel path runs tab_assemble_tables() on each worker and
+# tab_assemble_output() once on main over the gathered list. See R/tab-parallel.R.
 #' @keywords internal
 #' @noRd
 tab_assemble <- function(ctx) {
+  tab_assemble_output(tab_assemble_tables(ctx))
+}
+
+#' @keywords internal
+#' @noRd
+tab_assemble_tables <- function(ctx) {
   list2env(ctx, environment())
 
   if (sum(col_vars_text) != 0) {
@@ -1778,12 +1791,20 @@ tab_assemble <- function(ctx) {
 
 
 
-    # Lone total column to "Total" with no col_var name
+    # Lone total column to "Total" with no col_var name.
+    # Phase 8: dedup with unique() so the "lone total" test is on the DISTINCT total-column name, not
+    # its occurrence count. With several row_vars sharing col_vars each table carries the same
+    # "Total_<lastcv>" column, so the old `length(totnames) == 1` saw N copies and skipped the
+    # rename-back -> the internal "Total_denom" suffix leaked into multi-row_var tables (single-row_var
+    # tables were already renamed). Dedup makes multi-row_var per-row_var tables identical to a
+    # standalone single-row_var build, which DECOUPLES tab_assemble across row_vars (the precondition
+    # for the per-row_var parallel dispatch). A genuinely multi-total table (>1 distinct total name,
+    # e.g. deprecated totcol="all") still keeps the qualified names.
     totnames <-
       purrr::map(tabs_text,
                  ~names(.)[stringr::str_detect(names(.),
                                                paste0("^", total_names[2], "_"))]) |>
-      purrr::flatten_chr()
+      purrr::flatten_chr() |> unique()
 
     if ( length(totnames) == 1 ) tabs_text <- purrr::map(tabs_text, ~ dplyr::rename(
       ., tidyselect::any_of(purrr::set_names(totnames,
@@ -1877,6 +1898,18 @@ tab_assemble <- function(ctx) {
   } else {
     tabs <- purrr::map2(tabs, tests, ~ new_tab(.x, subtext = subtext, test = .y))
   }
+
+  # Per-row_var finishing done: `tabs` is the list of finished tabxplor_tab/grouped_tab (tests baked
+  # into their `test` attribute). Hand off to tab_assemble_output() for the cross-row_var output shape.
+  ctx_update(ctx, list(tabs = tabs))
+}
+
+# tab_assemble_output() -- the cross-row_var output shape (Phase 8 split from tab_assemble()).
+# Takes ctx$tabs (the list of finished per-row_var tabs) and merges/unwraps into the final result.
+#' @keywords internal
+#' @noRd
+tab_assemble_output <- function(ctx) {
+  list2env(ctx, environment())
 
   # === STAGE: assemble output shape (§13 truth table) ===
   # Merge the per-row_var tables into one only in "single" mode (tab() default) and only when

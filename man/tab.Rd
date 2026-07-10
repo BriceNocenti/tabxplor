@@ -39,6 +39,7 @@ tab(
   digits = 0,
   n_min = 0,
   output_list = FALSE,
+  parallel = NULL,
   spread_vars,
   names_prefix = NULL,
   names_sort = FALSE,
@@ -47,6 +48,7 @@ tab(
   .cache = NULL,
   .defer_level_merge = FALSE,
   .return_armed = FALSE,
+  .levels_order = NULL,
   filter
 )
 }
@@ -256,6 +258,14 @@ columns. Total rows/columns, the added-\code{n} row/column and the p-value line 
 \item{output_list}{Logical (default \code{FALSE}). With several \code{row_var}, \code{FALSE}
 merges the mirror tables into a single \code{tabxplor_tab}; \code{TRUE} returns a list with
 one table per \code{row_var}. With \code{tab_vars}, tables stay a list regardless.}
+
+\item{parallel}{Opt-in parallel build of the per-\code{row_var} tables, using the (Suggests-only)
+\pkg{mirai} package. \code{NULL} (default) reads \code{getOption("tabxplor.parallel")} (off);
+\code{FALSE} forces serial; \code{TRUE} uses an auto worker count; an integer sets the number of
+worker processes. Byte-identical to the serial result. It pays off for the survey workflow --
+\emph{many} \code{row_vars} against a small/medium data frame (roughly 10k-60k rows) in ONE
+\code{tab()} call -- and is a loss for few tables or multi-million-row data (so it stays opt-in).
+The worker pool persists for the session; release it with \code{\link{tab_parallel_stop}}.}
 
 \item{spread_vars}{<\link[tidyr:tidyr_tidy_select]{tidy-select}> A subset of \code{tab_vars}
 to pivot from subtables into columns, via \code{\link{tab_spread}} (applied at the end).}

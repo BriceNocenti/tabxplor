@@ -18,8 +18,9 @@ R/
 │                              tab_prepare(), tab_pct(), tab_ci(), tab_chi2(),
 │                              tab_tot(), tab_totaltab(), tab_spread(), tab_get_vars(),
 │                              tab_add_n_pct() (shared add_n/add_pct, used by tab_many + tab_counts).
-│                              tab_build() = 5-stage pipeline (Phase 7d-ii): tab_setup / tab_prepare_pop
-│                              / tab_aggregate / tab_transform / tab_assemble (ctx-threaded, cache tiers);
+│                              tab_build() = staged pipeline (Phase 7d-ii): tab_setup / tab_prepare_pop
+│                              / tab_aggregate / tab_transform / tab_assemble = tab_assemble_tables (per-
+│                              row_var finish) + tab_assemble_output (merge/pvalue/unwrap, Phase 8 split);
 │                              tab_lump_others/tab_cleannames_relabel (extracted from tab_prepare)
 ├── tab-agg.R        (~470 L) Aggregate-core (Phase 2-3): num_derive_stats/num_rollup, num_moment_scan
 │                              + tab_aggregate_num (numeric tier-1 producer, Phase 7d-i),
@@ -29,6 +30,9 @@ R/
 ├── tab-resolve.R    (~180 L) tab_resolve_settings() (Phase 7b): the ONE pure arg-overwrite
 │                              cascade (color="auto"/forcing/split) shared by tab_build+tab_counts;
 │                              resolve_color_auto_num() (numeric arm). The jmvtab .js / cache boundary.
+├── tab-parallel.R   (~285 L) Phase 8 opt-in parallel dispatch (Suggests-only mirai): tab_pmap()
+│                              + trampoline, named "tabxplor" pool (tab_pool_ensure/tab_parallel_workers/
+│                              tab_parallel_stop), ctx_slice() + tab_build_one() (per-row_var worker).
 ├── tab_classes.R   (3554 L)  tabxplor_tab/grouped_tab classes, 30+ dplyr S3 methods,
 │                              print methods, tab_kable(), tab_plot(), tab_compact(),
 │                              color palettes, set_color_style(), set_color_breaks()
@@ -880,6 +884,8 @@ jmvtab jamovi UI needs a **full .js customisation** of it’s buttons and other 
 
 **Input fixes.** `digits` Number→List `"0".."6"` (TextBox→ComboBox; `.b.R` `as.integer(self$options$digits)`); `subtext` + export `path` fill their row via a `.js` DOM stretch (`stretchTextBox` in `onUpdate`) — jamovi 2.6.44's TextBox `width:` enum has **no `auto`** (the compiler rejects it), so `width: largest`=200px stays as the graceful fallback. Test menu label already clear (7g-i) — unchanged.
 
+**Layout.** The standalone "Reorder levels" CollapseBox was folded into the bottom of "Levels and missing values" (its own full-width row below the na/levels/other grid; the `levelOrderCtrl` two-column reorder tree unchanged). jamovi grid cells don't span columns, so the ctrl sits in a single-column row wrapper to render full-width.
+
 **Accepted limitations** (documented): `color="diff"`/`"ratio"` stay pct-greyed on a pure-numeric (means-only) table — benign, `color="auto"` already colours means; type-aware selectability would need imperative `.js` reading `measureType` (follow-up). `anova` enabled on `chi2` regardless of a numeric col_var (harmless no-op).
 
 Suite green (375 blocks, 0 fail), no golden regen (UI-only + behaviour-preserving digits cast). **OPEN — maintainer step**: regenerate `jmvtab.h.R` from the new `digits` List in the running jamovi app (`jmvtools::install()` can't run headless), then live-verify each greying rule + the digits dropdown + subtext width.
@@ -887,7 +893,7 @@ Suite green (375 blocks, 0 fail), no golden regen (UI-only + behaviour-preservin
 
 #### Phase 7i — test compatibility with Jamovi last solid version 2.7.37
 
-Maintainer will do it, then report if it works.
+jmvtab works well on jamovi 2.7.37
 
 
 ### Phase 8 – Parallelisation opt-in for the "many tables at once" survey workflow
@@ -896,6 +902,38 @@ Phase 6b — 2026-07-09 researched whether parallelising `tab()`/`jmvtab()` over
 - We should first choose only one parallelisation engine / package : either `mirai` or `parallel`. What would be the best choice for both performance and future-proofing ? Anyway the package should be in Suggest.
 - If workers setup step is needed, it should be done the first time parallelisation is used and reused afterwards.
 - It should work on Windows / Linux / MAC, but for performance the main focus is Windows.
+
+#### Done (2026-07-10)
+
+New public `tab(..., parallel = )` (also `tab_many()`; `NULL`→`options("tabxplor.parallel")` off / `FALSE`
+serial / `TRUE` auto workers / integer N). **Engine = `mirai`** (Suggests-only; R-core's official cluster
+backend). All infra in **`R/tab-parallel.R`** (new): `tab_pmap()`/`tab_pmap_trampoline()` (serial branch IS
+`purrr::map`, byte-identical, zero overhead; parallel ships `data` once via `everywhere()` +
+`mirai_map()[.stop]`), a NAMED `"tabxplor"` compute profile (never clobbers a user's own `daemons()`),
+`tab_parallel_workers()` (jmvtab→0, `_R_CHECK_LIMIT_CORES_` cap 2), `tab_pool_ensure()` (lazy warm/reuse),
+exported **`tab_parallel_stop()`**, `ctx_slice()` + `tab_build_one()` (the per-row_var worker).
+
+**Granularity = FULL per-row_var pipeline** (chosen over the build-only first cut, which measured only
+~1.15x — profile `phase8_profile.txt`): `tab_build()` runs `tab_setup`+`tab_prepare_pop` ONCE on main (the
+global `na="drop_all"/"common_base"` population drop lives here, so it cannot move), ships the prepared
+`data`, then dispatches `tab_aggregate |> tab_transform |> tab_assemble_tables` per row_var to the pool;
+main runs the cross-row_var `tab_assemble_output` (merge/pvalue/unwrap). Enabled by two changes: (1)
+**`tab_assemble()` split** into `tab_assemble_tables()` (per-row_var finishing) + `tab_assemble_output()`
+(output shape); (2) a **total-col decoupling fix** (`tab_assemble` ~L1770: `totnames |> unique()` so the
+lone-total rename-back tests the DISTINCT name, not its count) — the leaked `Total_<lastcv>` suffix in
+multi-row_var mixed-col_var tables becomes `Total`, making a per-row_var build byte-identical to a
+standalone single-row_var one (the dispatch precondition; proven 4/4 across all na modes). This is a
+conscious output change but touched NO existing golden (none covered the case; locked by a new
+test-tab.R assertion). **jmvtab is always serial** (`cache_env`→0 workers; keeps its cache hooks); the
+default (parallel off) path is unchanged.
+
+**Byte-identical + measured**: full suite green (1336→1349 with new tests), NO golden regen;
+`test-parallel-parity.R` (9 tests: weight/level-collision/NA, na drop/drop_all, option-override, threshold,
+profile isolation, cleanup). **W=8, 30k rows × 12 row_vars: ~2.15x merged / ~2.44x list** (`run_parallel.R`
+→ `phase8_survey.txt`); the gap to the §26 PoC 3.3x is the main-side merge + returning finished tables
+(overheads the PoC's ship-once/independent-tables measurement excluded). Options `tabxplor.parallel`
+(FALSE) + `tabxplor.parallel_min` (2L) in `.onLoad`; `.onUnload` stops the pool. `mirai (>= 2.5.0)` in
+Suggests. Decisions §28.
 
 
 ### Phase 9 – final tab_plain() / tab_num() / tab_build() / tab() / tab_many simplification ?

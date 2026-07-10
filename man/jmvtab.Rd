@@ -14,11 +14,14 @@ jmvtab(
   color = "no",
   color_signif = "ignore",
   chi2 = FALSE,
+  anova = "welch",
   OR = "no",
   na = "keep",
   lvs = "all",
   other_if_less_than = 0,
   cleannames = TRUE,
+  refLevels = NULL,
+  levelOrder = NULL,
   ref = "auto",
   ref2 = "first",
   comp = "tab",
@@ -35,10 +38,11 @@ jmvtab(
   add_n = TRUE,
   add_pct = FALSE,
   subtext = "",
-  digits = 0,
+  digits = "0",
+  n_min = 0,
+  export_format = "excel",
   exportExcel,
-  xl_path = "S:/Documents",
-  xl_filename = "Table.xlsx",
+  path = "~/Documents/Table",
   xl_replace = FALSE
 )
 }
@@ -88,8 +92,14 @@ automatically.    \item \code{"color_all_signif"}: color by the guaranteed
 (confidence-bound) effect --    only cells whose interval clears the
 threshold show, with dimmer colors.  }}
 
-\item{chi2}{Set to \code{TRUE} to make a Chi2 and add summary stats. Also
-useful to color cells based on their contribution to variance.}
+\item{chi2}{Set to \code{TRUE} to add a test p-value row: a Chi-square test
+for categorical column variables and an ANOVA F-test for numeric ones
+(chosen automatically per column type). Also enables colouring cells by
+their contribution to variance.}
+
+\item{anova}{Which F statistic to display for numeric column variables when
+the test is on: Welch's F (default, does not assume equal variances) or the
+classic pooled F.}
 
 \item{OR}{With \code{pct = "row"} or \code{pct = "col"}, calculate and
 print odds ratios  (for binary variables) or relative risks ratios (for
@@ -122,6 +132,10 @@ count than that will be merged into an "Others" level.}
 \item{cleannames}{By default, clean levels names, by removing prefix
 numbers like "1-", and text in parenthesis. Set to \code{FALSE} to avoid
 this behaviour.}
+
+\item{refLevels}{.}
+
+\item{levelOrder}{.}
 
 \item{ref}{The reference cell to calculate differences and ratios   (used
 to print \code{colors}) :   \itemize{    \item \code{"auto"}: by default,
@@ -170,7 +184,8 @@ Read from the same confidence interval that is displayed, so stars and
 bracket always agree.}
 
 \item{method_cell}{The proportion confidence-interval method for \code{ci =
-"cell"}. Currently \code{"wilson"} (the score interval).}
+  "cell"}: \code{"wilson"} (the score interval, default) or \code{"wald"}
+(the normal approximation).}
 
 \item{method_diff}{The proportion confidence-interval method for \code{ci =
   "diff"}. \code{"newcombe"} (default) is the dual of the two-proportion
@@ -201,22 +216,31 @@ the column variable (for  \code{pct = "col"})}
 
 \item{subtext}{A character vector to print rows of legend under the table.}
 
-\item{digits}{The number of digits to print, as a single integer, or an
-integer vector the same length as \code{col_vars}.}
+\item{digits}{The number of digits to print, as a single integer (0-6). In
+R, \code{tab()} also accepts an integer vector the same length as
+\code{col_vars}.}
 
-\item{exportExcel}{Press to export the table to Excel.}
+\item{n_min}{A pure display filter (0 = off). A row is dropped only when
+its largest base across the column variables is below \code{n_min};
+surviving cells whose own base is below \code{n_min} are blanked. Under
+\code{pct = "col"} weak columns are dropped instead. Totals, the added-n
+row/column and the p-value line are always kept. Recomputes nothing.}
 
-\item{xl_path}{"Folder in which to save exported Excel file"}
+\item{export_format}{The export file format: Excel (\code{.xlsx}), HTML
+(\code{.html}) or Markdown (\code{.md}).}
 
-\item{xl_filename}{"Name of exported Excel file"}
+\item{exportExcel}{Press to export the table to the chosen format.}
 
-\item{xl_replace}{"Set to \code{TRUE} to overwrite existing Excel file."}
+\item{path}{Where to save the file. A full path, or a bare name (saved in
+your Documents folder). The extension is added automatically from the
+chosen format. \code{~} expands to your home folder.}
+
+\item{xl_replace}{"Set to \code{TRUE} to overwrite an existing file."}
 }
 \value{
 A results object containing:
 \tabular{llllll}{
 \code{results$html_table} \tab \tab \tab \tab \tab a html \cr
-\code{results$export_status} \tab \tab \tab \tab \tab a html \cr
 \code{results$plot} \tab \tab \tab \tab \tab an image \cr
 \code{results$cache_state} \tab \tab \tab \tab \tab an image \cr
 }

@@ -13,6 +13,13 @@
   are weighted, inference uses the real unweighted sample size). Input whose counts are not whole
   numbers (frequency-only / weighted-only) still shows percentages and colors, but confidence
   intervals and chi-squared are disabled with a message.
+* New `parallel` argument in `tab()` / `tab_many()` for the "build many tables at once" workflow.
+  With several `row_vars`, `parallel = TRUE` (or an integer worker count) builds the per-`row_var`
+  tables on a persistent pool of background R processes, byte-identical to the sequential result.
+  It is off by default and opt-in (set a session default with `options(tabxplor.parallel =)`); it
+  pays off for many tables on a small-to-medium survey (roughly 10k--60k rows) and is a loss for a
+  handful of tables or multi-million-row data. It needs the suggested **mirai** package; release the
+  worker pool with the new `tab_parallel_stop()`.
 * Redesigned, faster colors. The `color` argument now separates **what** is measured from **how**
   significance is shown. `color` accepts `TRUE` (a smart per-column-type default: percentage-point
   difference on the text + a "×2" relative-risk highlight on the background for factors, mean ratio
