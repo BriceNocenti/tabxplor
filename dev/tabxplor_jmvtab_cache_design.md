@@ -286,6 +286,25 @@ cleannames (with summing) for retro-compatibility — a deliberate divergence be
 > OPEN (maintainer step): regenerate `jmvtab.h.R` from the updated `jmvtab.r.yaml` (adds `cache_state`)
 > in the running jamovi app, then live-verify -- `jmvtools::prepare()` cannot run headlessly.
 
+> STATUS (2026-07-10, Phase 7f): **tiers 3-4 NOW CACHED for display/colour** -- the design's "fmt is
+> too cheap to cache" call (§3.4/§3.5) is revised. A new store tier **`tab3`** (schema 1->2; 2 MB
+> per-entry cap; store budget 12 MB) caches the **pre-`finalize` ARMED table** keyed by a data-
+> dependent **base-key** {aggregate identity + pct + na + levels + structural opts} plus a stored
+> **transform-tuple** {ref/ref2/comp/OR/ci/arming}. `tab()` gained an internal `.return_armed` seam so
+> `jmvtab_build()` owns `normalize_color_spec` -> cached `tab_build` -> `finalize_color_spec` applied
+> FRESH each run. On an exact-tuple hit the O(cells) build is SKIPPED and only the tier-4 layer runs
+> (`finalize_color_spec` colour + `jmv_reapply_digits` + `jmv_apply_display` + cleannames), so display /
+> colour toggles are effectively instant (small build 0.23->0.005 s, big 9-table 0.96->0.039 s; colour
+> 1.12->0.19 s). The "which fields exist" caveat (§4d) resolved elegantly: **`color_signif` is a pure
+> re-paint** (for a diff/ratio colour `ci="auto"` already computes the CI grey/color_all only GATE, so
+> the armed table is built canonically with `color_signif="ignore"` and the policy is excluded from the
+> tuple) -- no per-field tracking needed; the one exception (numeric means, where `ci="auto"` computes
+> no mean CI) nudges `ci="diff"` into the tuple only when a numeric col_var is present. **Deferred:** the
+> field-level **ref / expert-CI re-ref** (`jmv_tab3_reref`/`jmv_tab3_rerefable` stubs, OFF -> ref changes
+> rebuild); its foundation `tab_apply_reference()` (the reference block carved VERBATIM out of `tab_plain`,
+> byte-identical) is PROVEN to reproduce diff/ratio from a cached table's ref-independent `pct` base -- the
+> remaining wiring lands with the Phase 7g reference-picker UI. Locked by `test-jmvtab-cache.R` (83 tests).
+
 The tiers are only callable if `tab_build` is carved into three composable steps — the **same functions
 `tab()` uses, no math fork** (Phase 7e drives them at cache granularity; reuse guarantees near-identical
 behaviour). Grounded in the current pipeline order (map §2).

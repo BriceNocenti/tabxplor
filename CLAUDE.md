@@ -13,7 +13,8 @@ R/
 ├── fmt_class.R     (3341 L)  Core type: tabxplor_fmt vctrs record, getters/setters,
 │                              format/pillar methods, vctrs arithmetic/casting,
 │                              color selection logic (fmt_color_selection, color_formula)
-├── tab.R           (~6000 L) Main API: tab(), tab_many(), tab_plain(), tab_num(),
+├── tab.R           (~6200 L) Main API: tab(), tab_many(), tab_plain(), tab_num(),
+│                              tab_apply_reference() (Phase 7f: shared diff/ratio/or ref step),
 │                              tab_prepare(), tab_pct(), tab_ci(), tab_chi2(),
 │                              tab_tot(), tab_totaltab(), tab_spread(), tab_get_vars(),
 │                              tab_add_n_pct() (shared add_n/add_pct, used by tab_many + tab_counts).
@@ -36,9 +37,10 @@ R/
 ├── utils.R         (1306 L)  Pipe re-export, .onLoad() options setup, factor utilities
 ├── tab_logit.R     (1009 L)  WIP — entirely commented out (future logistic regression)
 ├── tab_logit_2.R    (706 L)  WIP — entirely commented out (logit diagnostics/plots)
-├── jmvtab-cache.R  (~470 L)  Phase 7e jmvtab live multi-tier cache: content-addressed store +
-│                             hashing + jmv_cache_aggregate (tab_aggregate hook) + jmvtab_build
-│                             (engine-free core; reuses tab() with the cache injected)
+├── jmvtab-cache.R  (~700 L)  jmvtab live multi-tier cache: content-addressed store + hashing +
+│                             jmv_cache_aggregate (tier 1-2, tab_aggregate hook) + the Phase 7f
+│                             tier-3 built-table cache (jmv_tab3_base_key/tuple, jmv_reapply_digits,
+│                             re-paint) + jmvtab_build (engine-free core; reuses tab() via .cache)
 ├── jmvtab.b.R       (~200 L)  Jamovi module backend (R6): thin orchestrator over jmvtab_build + $state
 └── jmvtab.h.R       (605 L)  Jamovi module UI (auto-generated, do not edit)
 ```
@@ -590,9 +592,6 @@ The original rationale for separating the two was : `tab_plain` is the core work
 - In the new `tab()` function, I would want **an argument to get the same behaviour as the old tab `tab()`**. What would it be ? Would something like `na = "base_table"` (find a better name, more user-friendly and easily understandable) work : removing, for all col_vars, the missing value of the the row_var and the first col_vars (with several row vars : each by-row_vars subtable remove the individuals with missing value either in the carrent row variables or in the first column variable) ?
 
 
-### Phase 6b — Parallelisation research (done — 2026-07-09, opt-in GO for the survey workflow)
-
-Researched whether parallelising `tab()`/`jmvtab()` over `row_vars` is a real perf win. **Verdict: a substantial, reliable win for the PRIMARY workflow — worth a Suggests-only opt-in; NOT a forced default, NOT for big data / live jmvtab.** Grounded PoC (mirai / base `parallel` / future.apply, W∈{1,2,4,8,12}). Parallelising the row_var/pair axis is **byte-identical** (0/82 tables checked). The key result **inverts the naïve prior**: the *small/typical survey* df is the sweet spot, the 8M df the worst case. On **10k–60k-row surveys × many tables** (tabxplor's core "export dozens of colored tables" use case): **~2.5–3.3× at W=4** (commodity/university PC), **~4× at W=8**, ~1 s setup, ~0 memory, **wins even on a fresh call** — because per-table cost is N-independent O(cells) fmt/chi2 work (seq batch flat ~2.5 s from 10k→60k). On 8M it ≈break-even-to-loss (memory-bandwidth wall + 336 MB×W transfer); few tables always lose; future.apply unusable (per-call df resend); data.table's own threading barely helps (~1.2×). jmvtab *live* = no (cached aggregate → nothing O(N) to parallelise). Recommended opt-in: `options(tabxplor.parallel=)` gating an internal `tab_pmap()` at the `tab_build()` seam, persistent pool + `setDTthreads(1)` + df pre-loaded once + byte-identical fallback, skip below a table-count threshold, **after** Phase 2/7c (the batch-export path does NOT overlap the cache, so the gain persists). Full findings + tables: `dev/tabxplor_1.4.0_decisions.md` **§26**; scripts `dev/benchmarks/parallel_poc_{micro,tab,survey,mirai_dispatcher}.R`, results in `results_1.4.0/phase6b_*.txt`.
 
 ### Phase 7 — Jamovi jmvtab module total overhaul
 
@@ -747,7 +746,18 @@ New **`R/jmvtab-cache.R`**: the content-addressed multi-tier live cache. The mod
 1. **Faster `fmt` assembly** — profile where the ~0.95 s goes (likely the per-cell `vctrs::new_rcrd` construction across thousands of cells) and cut the constant; this speeds up *every* `tab()`/`tab_num()` call, not just jamovi.
 2. **Cache tier-3/4 for display-only toggles** — revisit the design's "don't cache fmt" call: a `digits`/`display`/`color`/`color_signif` change (when the needed fields already exist) should reuse the built `fmt` cells and only re-render, not rebuild. Needs the "which fields exist" tracking the cache design already anticipates.
 
-The render lever (CSS-only rewrite killing the ~0.6 s kableExtra cost) is **Phase 8**; Phase 7h is the fmt-build lever. Already applied in 7e: `tooltips = FALSE` on the Jamovi render (570 → 250 ms small table). The two committed baselines track both levers.
+The render lever (CSS-only rewrite killing the ~0.6 s kableExtra cost) is **Phase 8**. Already applied in 7e: `tooltips = FALSE` on the Jamovi render (570 → 250 ms small table). The two committed baselines track both levers.
+
+##### Done (2026-07-10)
+
+Both levers landed byte-identical (full suite green, 1235 pass / 0 fail; golden + all parity suites unchanged — no regeneration).
+
+- **7f-1 — faster fmt assembly (universal).** The two `pmap_dfc(~ new_fmt(...))` closures (`tab_plain` `tab.R` ~L3140, `tab_num` ~L4231) hoisted their column-INVARIANT `display`/`colour`/`type`/`ref`/`comp`/`col_var` `case_when`/`if_else`/`switch` + the digits recycle OUT of the per-column loop (computed once; `tab_num`'s per-column digit case_when → base `if/else`); one shared `NA_reals` reused for the all-NA fields. Byte-identical; ~5-6 % on the big jmvtab table, more on normal-size tables (fmt/vctrs layer dominates).
+- **7f-2/3 — tier-3 live cache (display / colour instant).** New store tier `tab3` in `R/jmvtab-cache.R` (schema 1→2; per-entry cap `JMVTAB_TAB3_MAX_ENTRY_BYTES` 2 MB; store budget → 12 MB) caches the **pre-`finalize` ARMED table** keyed by a data-dependent **base-key** {aggregate identity + pct + na + levels + structural opts} with a **transform-tuple** {ref/ref2/comp/OR/ci/arming/…}. `tab()` gained an internal `.return_armed` seam so `jmvtab_build` owns `normalize_color_spec` → cached `tab_build` → **`finalize_color_spec` applied FRESH** every interaction. On an exact-tuple hit the whole build is skipped and only the tier-4 layer runs: `finalize_color_spec` (colour measure/channel) + `jmv_reapply_digits` (digits; skips the fixed p-value line via `is.na(get_n())`; class-transparent via attribute capture/restore so the degenerate 0-group `tabxplor_grouped_tab` survives) + `jmv_apply_display` + cleannames. **Wins vs the 7e baseline: small build/digits 49×/47× (0.23→0.005 s), colour 28× (0.24→0.008 s); big 9-table build/digits 25× (0.96→0.039 s), colour 6× (1.12→0.19 s).** `pct`/`na`/`levels`/`ref` changes rebuild (base-key/tuple change) — fast via cached tiers 1-2 + 7f-1.
+- **7f-4 — `tab_apply_reference()` carve (the "core carve", byte-identical).** The reference block (diff / ratio / rr / or + ref-col/row markers) extracted VERBATIM from `tab_plain` into the shared `tab_apply_reference()` (`R/tab.R`, after `tab_plain`), called by the fresh build and READY for the tier-3 re-ref (proven byte-identical: rebuilding the pct data.table from a cached table's ref-independent `pct` field + `tab_apply_reference` reproduces diff/ratio exactly). Realises the Phase-2/4-deferred factor-path reorg.
+- **KEY finding — `color_signif` is a re-paint, not a reref.** For a diff/ratio colour `ci = "auto"` already computes the CI that grey / color_all merely GATE, so ignore↔grey↔color_all differ ONLY in the colour attribute `finalize_color_spec` overrides. The armed table is built canonically with `color_signif = "ignore"` (legacy colour = the base measure finalize refines to any policy) and `color_signif` is excluded from the tuple → the frequent color-driven significance toggle is **instant** with no fork/carve. Exception: NUMERIC means (`ci = "auto"` does NOT compute a mean CI) → nudge `ci = "diff"` (and split the tuple) only when a numeric col_var is present, so numeric ignore↔grey correctly rebuilds.
+
+**Deferred to Phase 7g (the reference-picker UI that exercises it):** the field-level **ref / expert-CI re-ref** on the assembled table (`jmv_tab3_reref` / `jmv_tab3_rerefable` stubs, currently OFF → ref changes rebuild). The `tab_apply_reference` foundation is proven byte-identical; the remaining wiring (in_refrow / `ref`-attribute setters, the `tab_ci` re-run total-row edge, pct="col" splitting) lands with 7g so it can be golden-locked against a real UI. `jmvtab.h.R` / `.r.yaml` unchanged by 7f (no new UI element) → no regeneration needed.
 
 
 
@@ -776,6 +786,7 @@ Implement new user-friendly features :
 - `chi2` menu : change it to a proper tests menus ? chi2 button + anova button (make it clear in the very concise description which one is for which kind of variable) ?
 
 
+
 #### Phase 7h — Jamovi UI js consistency and user-friendliness
 
 jmvtab jamovi UI needs a **full .js customisation** of it’s buttons and other inputs behaviours for maximum user-friendliness. Look at `dev/tabxplor_argument_computation_map.md` for interdependency between arguments.
@@ -795,26 +806,47 @@ jmvtab jamovi UI needs a **full .js customisation** of it’s buttons and other 
 
 ### Phase 8 — Unified exporter prep & display
 
-Fully redesign exports to unify the different kind of exports in a common framework. One shared exporter-prep helper for `tab_xl`/`tab_kable`/`tab_md`/`tab_plot`; keep export parity (`format.tabxplor_fmt` vs the `tab_xl` bypass). **Stays on openxlsx v1** — the openxlsx2 engine swap is Phase 9. Detail: `dev/tabxplor_1.4.0_decisions.md` §7-8.
-- Make it fast (no useless computations if the result is not used afterwards, depending on the type of export and options chosen).
-- When a feature is export-type specific, like for example Excel only, it should be justified.
-- **Each exporter gets a base method (single tab) AND a list method** (several tabs rendered one-after-another, not merged — e.g. an HTML container for kable).
+Fully redesign exports to unify the different kind of exports in a common fast framework. One shared exporter-prep helper for `tab_xl`/`tab_kable`/`tab_md`/`tab_plot`; keep export parity (`format.tabxplor_fmt` vs the `tab_xl` bypass). Detail: `dev/tabxplor_1.4.0_decisions.md` §7-8.
+- Make it very fast (no useless computations if the result is not used afterwards, depending on the type of export and options chosen). If some features hurts speed, add an option to opt-out (for example in jamovi live UI where speed matters most).
+- **Each exporter gets a base method (single tab) AND a list method** (several tabs rendered one-after-another, not merged — e.g. an HTML container is needed for kable).
 - `tab_plot()` has a bad display and is hard to handle : **soft-deprecate** it (Q1 — keep exported, mark `lifecycle` experimental/superseded; do NOT hard-remove from NAMESPACE), keep it for future improvements
 
-Console display
-- Display of `tabxplor_tab` on console is quite long : what are the performance bottlenecks and how to make it faster / remove useless stuffs and white elephants here ?
-- The `tabxplor_tab` class and the grouped one currently have a kind of bug that forbids them to work with every data.frame (like : with no `tabxplor_fmt` ; with no factors ; with factors after fmt columns and not before ; etc.) : it may come from the way `row_vars` and `tab_vars` are detected and from `tab_get_vars` etc. Obviously, these detections are absolutely needed to print colors etc., but currently, the failing mode is display error or export error. I would want a more user-friendly failing mode, still printing the df without the specialt tabxplor formattings and colors. Add testthat tests to be sure there cases do not throw error. Use messages if needed to explain to the user why it fails.
-
-New features
+New common features for all kind of exports
 - Use variables `label` attribute more thoroughly in exports when it exists (in survey data formatting, I have the habit of putting the original questionnaire question in it, which can me meaningful information for the user) ? Where to print it, for useful additional information without clutter (not erasing variable names, which are real useful) ?
 - **Integrate/export/document `tab_transpose()`** (already exported but an undocumented single-total stub — finish it) and the **opt-in transpose-at-export** for col% + several row_vars (console never transposes; warn on `pct="col"` with several row_vars).
 - Revisit **compact-with-tab_vars** here (needs two-level nested rendering).
 
-Jamovi jmvtab display
-- We must **make a grounded choice for jamovi jmvtab module base display of tables** : improve tab_kable() performance even without tooltips ? Fix tooltips calculation for them to be fast, since it gives a modern interactive look to the whole table ? Just make a faster flat html table ? Make it format with markdown tables with css classes ? : would it be possible to print .md inside html, with custom .css classes, in Jamovi, with a modern and professional look ? ; if a markdown js module is needed for it to be modern and professional-looking, can it (like, loaded when jmvtab UI loads ?) Otherwise, would there be a more modern option than kable for html tables in R (for example, js html tables with buttons in it to change number of digits, or even order of lines and cols, etc. ? ) ?
+#### Phase 8a — design efficient Jamovi jmvtab display for live usage
+
+We must **make a grounded choice for jamovi jmvtab module base display of tables** : improve tab_kable() performance even without tooltips ? Fix tooltips calculation for them to be fast, since it gives a modern interactive look to the whole table ? Just make a faster flat html table ? Make it format with markdown tables with css classes ? : would it be possible to print .md inside html, with custom .css classes, in Jamovi, with a modern and professional look ? ; if a markdown js module is needed for it to be modern and professional-looking, can it (like, loaded when jmvtab UI loads ?) Jamovi own built-in table thing was unusable and without colors, formatting, etc. in the past, I wonder if it’s still the case. Otherwise, would there be a more modern option than kable for html tables in R (for example, js html tables with buttons in it to change number of digits, or even order of lines and cols, etc. ? ) ? What about the new types of tables Quarto tends to use nowadays ? Make web searches when needed, then write your detailed findings in `dev\tabxplor_1.4.0_decisions.md` (respecting it’s internal style and logic).
+
+#### Phase 8b — rework format() for console display and exports that uses it
+Display of `tabxplor_tab` on console is quite long, and kable and fmt export uses it two, even in Jamovi display which must be the fastest possible : what are the performance bottlenecks and how to make it faster / remove useless stuffs and white elephants here ?
+
+The `tabxplor_tab` class and the grouped one currently have a kind of bug that forbids them to work with every data.frame (like : with no `tabxplor_fmt` ; with no factors ; with factors after fmt columns and not before ; etc.) : it may come from the way `row_vars` and `tab_vars` are detected and from `tab_get_vars` etc. **I think this bug may only or essentilly happen for grouped tabs**. Obviously, these detections are absolutely needed to print colors etc., but currently, the failing mode is display error or export error.
+- I would want a more user-friendly failing mode, still printing the df without the specialt tabxplor formattings and colors. Add testthat tests to be sure there cases do not throw error. Use messages if needed to explain to the user why it fails. Implement testthat tests with edge cases.
+- More generally, I wonder if there’s a more reliable way to handle detection of row, col, tab vars, and the other informations needed for fmt and colors to compute, with smart fallbacks (no colors, no fmt formatting, etc.).
+
+Passing a vector in display to display several fields, as an opt-in option ? (Won't work in Excel, but anyway Excel export do not use `format()` ?) Would it be possible to find a reliable syntax to command exactly the wanted fields and seps in a display ? Like `pct (n)` or `pct ± ci` ? Would it really be useful for data analysis users, or a white elephant with theoretical useless flexibility again ?
 
 
-##### tab_xl() — Phase 8 (still openxlsx v1; engine swap is Phase 9)
+#### Phase 8c — common prep function
+
+Design and implement the common prep function, looking carefully at all the changes and new features that will come next to ensure the shared prep function is ready for them.
+- When a feature is export-type specific, like for example Excel only, it should be justified.
+
+#### Phase 8d — rework tab_kable()
+
+Comment accélerer cette fonction ? Faire une version plus light par défaut, sans les interactive tooltips etc. ?
+Enlever l'affichage des NA plus proprement qu'en les enlevant à la fin dans le html, pour qu’ils soient enlevés dans tous les cas de figure (knitr, .Rmd, etc.)
+
+
+#### Phase 8e — tab_md()
+
+Colors with very shorts pandoc bracketed spans (examples for diffs : `.+5`, `.+10`, `.+20`, `.+30`, `.-5`, `.-10`, `.-20`, `.-30` etc. ; examples for ratios : `.x1.2`, `.x1.5`, `.x2`, `.x4`, `./1.2`, `./1.5`, `./2`, `./4`, etc. ; would these names be valid css classes / pandoc bracketed spans ?). Is there a possibility to make them work inside jamovi, for exemple in a html rectangle (natively, or by adding html/js new dependencies ; if so, would it be possible do load them when the tabxplor function and menu load ?) ?
+
+
+#### Phase 8f – rework tab_xl() (still openxlsx v1; engine swap is Phase 9)
 
 - Make it work with every data.frame, even not made with tabxplor, with default settings (event without factors, etc.). Implement small fixture tests.
 - To make it work with a "common preparation function" that would be the same than tab_kable() etc., Make the function for a single tab (sometime big with `compact=TRUE` ? ), then parallelize for list of tab ?
@@ -822,39 +854,24 @@ Jamovi jmvtab display
 - avec tab_logit (references), on perd les bordures des groupes aussi ? Vérifier.
 - Add the end it must work with tab_logit() and *** : significance stars used as formatting.
 
-##### tab_md()
-
-- Colors with very shorts pandoc bracketed spans (examples for diffs : `.+5`, `.+10`, `.+20`, `.+30`, `.-5`, `.-10`, `.-20`, `.-30` etc. ; examples for ratios : `.x1.2`, `.x1.5`, `.x2`, `.x4`, `./1.2`, `./1.5`, `./2`, `./4`, etc. ; would these names be valid css classes / pandoc bracketed spans ?). Is there a possibility to make them work inside jamovi, for exemple in a html rectangle (natively, or by adding html/js new dependencies ; if so, would it be possible do load them when the tabxplor function and menu load ?) ?
-
-##### tab_kable()
-
-- Comment accélerer cette fonction ? Faire une version plus light par défaut, sans les interactive tooltips etc. ?
-- Enlever l'affichage des NA plus proprement qu'en les enlevant à la fin dans le html, pour qu’ils soient enlevés dans tous les cas de figure (knitr, etc.)
-
-#### To think about
-
-- Passing a vector in display to display several fields ? (Won't work in Excel.) Would it be possible to find a reliable syntax to command exactly the wanted fields and seps in a display ? Like `pct (n)` or `pct ± ci` ? Would it really be useful for data analysis users, or a white elephant with theoretical useless flexibility again ?
-
+**Stays on openxlsx v1** — the openxlsx2 engine swap is Phase 9.
 
 ### Phase 9 — Excel engine migration (openxlsx → openxlsx2)
 
-Isolated on purpose: a full dependency swap should not be entangled with the Phase 7 exporter-prep unification and its export-parity churn. Runs **after** Phase 7 (needs the unified single-tab + list `tab_xl` methods in place). May slip to a **1.4.x follow-up release** — it does not block the rest of 1.4.0. Precondition: `test-export-parity.R` green on openxlsx v1 first, so the swap is verified byte-for-byte against a known-good baseline.
-
-#### To implement
-
+Isolated on purpose: a full dependency swap should not be entangled with the Phase 7 exporter-prep unification and its export-parity churn. Runs **after** Phase 7 (needs the unified single-tab + list `tab_xl` methods in place). May slip to a **1.4.x follow-up release** — it does not block the rest of 1.4.0.
+- Precondition: `test-export-parity.R` green on openxlsx v1 first, so the swap is verified byte-for-byte against a known-good baseline.
 - Swap `tab_xl()` from `openxlsx` to `openxlsx2` (Suggests). Rule number 1: read openxlsx2 documentation thoroughly, then build a small set of **shared/common styles** created once and reused (the main openxlsx2 speed lever).
-- Keep the Phase 7 shared exporter-prep helper untouched — only the write/style backend changes. Re-verify export parity (`format.tabxplor_fmt` vs the `tab_xl` numeric bypass) after the swap.
+- Use Phase 8 shared exporter-prep helper : tell me if it’s need further modifications.
+- Re-verify export parity (`format.tabxplor_fmt` vs the `tab_xl` numeric bypass) after the swap.
 - Update `DESCRIPTION` Suggests (`openxlsx` → `openxlsx2`) and every `requireNamespace()`/`openxlsx::` call site.
 
-#### To think about
-
-- Add an option to use **conditional formatting** instead of hard text colors. This was awful and very slow with openxlsx v1 — check whether openxlsx2 makes it less horrible / faster.
+Add an option to use **conditional formatting** instead of hard text colors. This was awful and very slow with openxlsx v1 — check whether openxlsx2 makes it less horrible / faster.
 
 
 
 ### Phase 10 — tab_logit
 
-Full implementation of `tab_logit` (currently commented out) and integration into the package. Then full rework and rewrite of `tab_logit`, and maybe extension to all `lm` + `glm` regression models inside the same framework.
+Full implementation of `tab_logit.R` (currently commented out) and integration into the package. Then full rework and rewrite of `tab_logit` and, if needed, `multi_logit`, and maybe extension to all `lm` + `glm` regression models inside the same unified framework.
 - `tab_logit` lands after the Phase 1 field set is locked (so no second field surgery).
 
 #### Phase 10a – integrate current version in tabxplor framework cleanly
@@ -867,9 +884,7 @@ The current `tab_logit` code, made outside of the package, was a way to use tabx
 - Integrate confidence intervals with the new `ci_inf` / `ci_sup` vctrs fields (check its in fact `exp()` bounds), and also with the new `color_signif` framework (with logistic regression, sensible default may be "grey_non_signif").
 - All exports (kable, md, Excel) should work natively with the resulting tabxplor_tab (or grouped one, etc.).
 
-
 #### Phase 10b – design questions and statistical framework
-
 
 Statistical soundness 1 : how to handle dependent var factors with 3+ levels ?
 - The function currently binarise all levels against the reference level chosen, and gives one column per non-reference level, instead of using multinomial logistic regression : I known it’s expert way it’s done, but at the same time I find multinomial logistic regressions very difficult to read, since relative risk ratios with their double reference are farther from experience and intuition and car be thoroughly misinterpreted with not enough knowledge of reference rows and cols (it’s also very difficult to teach to sociology students, and to put in a meaningful sentence it a scientific papers : contrary to odds ratio, that can be put in sentence quite cleanly still understanding what you compare with what). Please, make detailed web searches, and tell me what the statistical consensus is about that, what are the different possibilities and rationales make by and social scientists both (particularly in quantitative sociology).
@@ -879,29 +894,57 @@ Statistical soundness 2 : how to handle survey weights ?
 
 - Extend it to numeric variables as predictors ?
 
+- Extend the function to ensure it also works for integer dependent variables as poisson regression
+
+- Generalise to most common `lm` + `glm` regressions models, like multiple linear regressions for doubles (with the possibility to chose the type of regression per dependent var, since the R class of the dependent var, double or integer, do not clearly states if the underlying distribution is gaussian or poisson if its counts or binomial if it’s percentages, etc.) ? In this case, function should be renamed.
+
 I know I was a bit
 
 #### Phase 10b – tab_logit rewrite
 
-
-#### tab_logit — To think about
-
-- chose reference for each var with a vector (possibly named for simplicity) ! (permit to take ref in the middle while keeping order of ordinal vars) ?
-- Extend the function to ensure it also works for integer dependent variables as poisson regression ?
-- Generalise to most common `lm` + `glm` regressions models, like multiple linear regressions for doubles (with the possibility to chose the type of regression per dependent var, since the R class of the dependent var, double or integer, do not clearly states if the underlying distribution is gaussian or poisson if its counts or binomial if it’s percentages, etc.) ? In this case, function should be renamed.
+Implement the design make in the former phase.
+- Chose reference for each var with a vector (possibly named for simplicity) ? (permit to take ref in the middle while keeping order of ordinal vars, or useless white elephant ?) ?
 - Implement things with contrasts ?
-- Add a tab_logit analysis in Jamovi ?
+
+#### Phase 10c – tab_logit jamovi UI
+
+Add a full tab_logit analysis in Jamovi to give it a user-friendly UI.
+Are there some user-friendly pieces that we could reuse from other well known models/regressions Jamovi modules ?
+
+
+### Phase 11 – Parallelisation opt-in for the "many tables at once" survey workflow
+
+Phase 6b — 2026-07-09 researched whether parallelising `tab()`/`jmvtab()` over `row_vars` is a real perf win. **Verdict: a substantial, reliable win for the PRIMARY workflow — worth a Suggests-only opt-in; NOT a forced default, NOT for big data / live jmvtab.** Grounded PoC (mirai / base `parallel` / future.apply, W∈{1,2,4,8,12}). Parallelising the row_var/pair axis is **byte-identical** (0/82 tables checked). The key result **inverts the naïve prior**: the *small/typical survey* df is the sweet spot, the 8M df the worst case. On **10k–60k-row surveys × many tables** (tabxplor's core "export dozens of colored tables" use case): **~2.5–3.3× at W=4** (commodity/university PC), **~4× at W=8**, ~1 s setup, ~0 memory, **wins even on a fresh call** — because per-table cost is N-independent O(cells) fmt/chi2 work (seq batch flat ~2.5 s from 10k→60k). On 8M it ≈break-even-to-loss (memory-bandwidth wall + 336 MB×W transfer); few tables always lose; future.apply unusable (per-call df resend); data.table's own threading barely helps (~1.2×). jmvtab *live* = no (cached aggregate → nothing O(N) to parallelise). Recommended opt-in: `options(tabxplor.parallel=)` gating an internal `tab_pmap()` at the `tab_build()` seam, persistent pool + `setDTthreads(1)` + df pre-loaded once + byte-identical fallback, skip below a table-count threshold, **after** Phase 2/7c (the batch-export path does NOT overlap the cache, so the gain persists). Full findings + tables: `dev/tabxplor_1.4.0_decisions.md` **§26**; scripts `dev/benchmarks/parallel_poc_{micro,tab,survey,mirai_dispatcher}.R`, results in `results_1.4.0/phase6b_*.txt`.
+- We should first choose only one parallelisation engine / package : either `mirai` or `parallel`. What would be the best choice for both performance and future-proofing ? Anyway the package should be in Suggest.
+- If workers setup step is needed, it should be done the first time parallelisation is used and reused afterwards.
+- It should work on Windows / Linux / MAC, but for performance the main focus is Windows.
+
+
+### Phase 12 – final tab_plain() / tab_num() / tab_build() / tab() / tab_many simplification ?
+
+1. The `tab()` functions have become a kind of jungle of their own, with many internal paths + many API functions.
+`tab_build()` was supposed to be a simplification, but since it kept the fully vectorised arguments of the old tab_many() for retro-compatibility, it dit not really simplified anything. So I would want to know : if `tab_many()` was to be kept on the current `tab_build()` path for backward-compat (merged in only `tab_many()` alias), but `tab()` was rewritten in a much simpler way from shared functions, would there be room left for simplification and performance gains ? Give me a grounded and honest answer. Since the package architecture have changed at lot, do not hesitate to do and analyse new performance profiles.
+
+2. Now that we are near the end, and some functions and workflows have grown organically, can you see final simplifications of the table building workflow ?
+
+
+### Phase 13 – finalise color UI, redesign color palettes with manual fine-tuning for clarity
+
+Color UI finalisation
+- Would it be possible / consistent to add this possibility:
+`color = c(pct="diff", mean="ratio")`, to have diff for factors and ratio for means, passing internally the c("diff", "ratio") color while passing empty breaks for the not wanted ones ?
+- How are breaks passed in tab()/tab_many() handled, are they written as a per-column attribute, or was there another solution ? I can feel this part of the design was a bit shaky.
+
+Redesign color palettes with manual fine-tuning
 
 
 
+### Last Phase — package user-friendly documentation
+
+#### Last Phase a – Bug corrections
 
 
-### Phase 11 — package user-friendly documentation
-
-#### Phase 11a – Bug corrections
-
-
-#### Phase 11b – Create several vignettes
+#### Last Phase b – Create several vignettes
 
 The current vignette should be the basis for non-expert users, while also permitting expert users to understand what this package is really interesting for.
 
@@ -910,7 +953,7 @@ All the part about "programming with tabxplor" and its vctrs fields should come 
 If tab_logit() is implemented it should come with it’s own vignette
 
 
-#### Phase 11c – full `pkgdown` documentation
+#### Last Phase c – full `pkgdown` documentation
 
 Implement a full pkgdown documentation.
 - Where ? On github pages ? Elsewhere with tidyverse ecosystem provided servers ?

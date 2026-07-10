@@ -202,3 +202,81 @@ test_that("defer_level_merge: levels = 'first' tests FULL levels", {
   expect_true("Other" %in% fmt_cols)
   expect_false("White" %in% fmt_cols)
 })
+
+
+# --- Phase 7f: tier-3 built-table cache (display / colour re-paint) ------------------------
+# A change that touches only display / colour reuses the cached ARMED table (pre-finalize fmt cells)
+# and re-paints -- hits$tab3 == TRUE, no O(cells) rebuild -- while staying byte-identical to a fresh
+# tab(). A base change (pct / na / levels) or a reference change rebuilds (hits$tab3 == FALSE).
+test_that("Phase 7f: display / colour toggles re-use the armed table (warm == cold, tier-3 hit)", {
+  # warm (re-paint from a base-warmed store) must equal a cold full-pipeline build; a tier-3 hit
+  # means no O(cells) rebuild. (display / cleannames are modelled by the full jmvtab pipeline, not by
+  # jmv_oracle = tab(), so they are locked warm==cold; the fresh-tab() lock is the next test.)
+  o0   <- function(...) jmv_opts(row_vars = "marital", col_vars = "race", pct = "row",
+                                 color = "diff", chi2 = TRUE, ...)
+  st   <- jmvtab_build(gss, o0(), NULL)$store
+  toggles <- list(
+    "same"       = o0(),
+    "digits"     = o0(digits = 2),
+    "display"    = o0(display = "n"),
+    "ratio"      = o0(color = "ratio"),
+    "auto"       = o0(color = "auto"),
+    "grey"       = o0(color_signif = "grey_non_signif"),
+    "color_all"  = o0(color_signif = "color_all_signif"),
+    "cleannames" = o0(cleannames = TRUE)
+  )
+  for (nm in names(toggles)) {
+    r    <- suppressMessages(jmvtab_build(gss, toggles[[nm]], st))
+    cold <- suppressMessages(jmvtab_build(gss, toggles[[nm]], NULL)$tabs)
+    expect_true(isTRUE(r$hits$tab3), info = paste("tier-3 reuse:", nm))
+    expect_equal(r$tabs, cold, info = paste("warm == cold:", nm))
+  }
+})
+
+test_that("Phase 7f: colour / digits toggles are byte-identical to a fresh tab()", {
+  o0 <- function(...) jmv_opts(row_vars = "marital", col_vars = "race", pct = "row",
+                               color = "diff", chi2 = TRUE, ...)
+  for (o in list(o0(digits = 2), o0(color = "ratio"), o0(color = "auto"),
+                 o0(color_signif = "grey_non_signif"), o0(color_signif = "color_all_signif"))) {
+    expect_equal(jmvtab_build(gss, o, NULL)$tabs, jmv_oracle(o, gss))
+  }
+  # numeric means: digits + significance policy
+  on <- function(...) jmv_opts(row_vars = "marital", col_vars = "tvhours", color = "ratio", ...)
+  for (o in list(on(digits = 2), on(color_signif = "grey_non_signif"))) {
+    expect_equal(jmvtab_build(gss, o, NULL)$tabs, jmv_oracle(o, gss))
+  }
+})
+
+test_that("Phase 7f: base / reference change rebuilds (tier-3 miss) but stays byte-identical", {
+  base <- jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", color = "diff")
+  st   <- jmvtab_build(gss, base, NULL)$store
+  for (o in list(
+    jmv_opts(row_vars = "marital", col_vars = "race", pct = "col", color = "diff"),                # pct
+    jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", color = "diff", na = "drop"),   # na
+    jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", color = "diff", ref = "1")       # ref (Phase 7g reref)
+  )) {
+    r <- jmvtab_build(gss, o, st)
+    expect_false(isTRUE(r$hits$tab3))
+    expect_equal(r$tabs, jmv_oracle(o, gss))
+  }
+})
+
+test_that("Phase 7f: tier-3 armed table survives the $state round-trip and is size-bounded", {
+  st   <- jmvtab_build(gss, jmv_opts(row_vars = "marital", col_vars = "race", pct = "row",
+                                     color = "diff", chi2 = TRUE), NULL)$store
+  expect_length(st$tab3, 1L)
+  expect_lt(st$tab3[[1]]$bytes, JMVTAB_TAB3_MAX_ENTRY_BYTES)      # a real survey table fits the ceiling
+  back <- unserialize(serialize(st, connection = NULL))          # jamovi $state gzip-RDS round-trip
+  r <- jmvtab_build(gss, jmv_opts(row_vars = "marital", col_vars = "race", pct = "row",
+                                  color = "ratio", chi2 = TRUE), back)
+  expect_true(isTRUE(r$hits$tab3))                               # re-paint from the RESTORED armed table
+  expect_equal(r$tabs, jmv_oracle(jmv_opts(row_vars = "marital", col_vars = "race", pct = "row",
+                                           color = "ratio", chi2 = TRUE), gss))
+})
+
+test_that("Phase 7f: adding a col_var is a base change (new tier-3 entry, other pairs' aggregate reused)", {
+  st <- jmvtab_build(gss, jmv_opts(row_vars = "marital", col_vars = "race", pct = "row"), NULL)$store
+  r  <- jmvtab_build(gss, jmv_opts(row_vars = "marital", col_vars = c("race", "partyid"), pct = "row"), st)
+  expect_false(isTRUE(r$hits$tab3))                 # different col_var set -> different base-key -> rebuild
+  expect_true(r$hits$agg[["marital\rrace"]])        # but the race count aggregate (tier 1) is reused
+})

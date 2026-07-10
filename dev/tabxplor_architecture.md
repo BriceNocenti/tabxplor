@@ -131,8 +131,16 @@ public callers); jmvtab (Phase 7e) runs cleannames at display instead (`jmvtab_c
 via `jmvtab_build()`, which calls `tab()` with a content-addressed multi-tier store injected through a
 mutable `cache_env` (the `.cache` arg on `tab()`/`tab_build()`). Only the two expensive costs are
 persisted (in a hidden Image result element's `$state`): tier-1 aggregates (per-(row_var × col_var)
-counts / per-row_var moment sums) and tier-2 omnibus tests (chi2/ANOVA) — fmt is O(cells) and
-recomputed each run. `tab_aggregate()`'s hook builds/looks-up the per-pair aggregates
+counts / per-row_var moment sums) and tier-2 omnibus tests (chi2/ANOVA). **Phase 7f adds a tier-3
+`tab3` cache** of the pre-`finalize` ARMED table, keyed by a base-key {aggregate identity + pct +
+na + levels + structural opts} with a stored transform-tuple {ref/ref2/comp/OR/ci/arming}: `tab()`
+gained a `.return_armed` seam so `jmvtab_build()` applies `finalize_color_spec` + `jmv_reapply_digits`
++ `jmv_apply_display` FRESH each run, and on an exact-tuple hit the whole O(cells) build is skipped —
+so display / colour toggles (digits, measure `diff`/`ratio`, `color_signif`) are instant. The
+`color_signif` policy is a pure re-paint (the armed table is built canonically with
+`color_signif="ignore"`); the field-level ref / expert-CI re-ref is deferred to Phase 7g (its
+byte-identical foundation is the shared `tab_apply_reference()` carved out of `tab_plain`).
+`tab_aggregate()`'s hook builds/looks-up the per-pair aggregates
 (`jmv_cache_aggregate()`, byte-identical to `tab(cleannames = FALSE)`); `tab_transform()` adopts them
 per pair (`fine_for_pair()`) and reuses a cached test via the `cached_test` hook on
 `tab_apply_tests()`; `defer_level_merge` keeps full levels so `levels` is a display-time drop. Keys use

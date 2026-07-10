@@ -19,9 +19,11 @@
 
 
 # === Constants =============================================================================
-JMVTAB_CACHE_SCHEMA    <- 1L                  # bump on any store-shape change -> discard stale stores
-JMVTAB_MAX_ENTRY_BYTES <- 512L * 1024L        # per-entry ceiling: skip persisting above this
-JMVTAB_MAX_STORE_BYTES <- 4L * 1024L * 1024L  # whole-store budget (serialized every run -> keep small)
+JMVTAB_CACHE_SCHEMA         <- 2L                  # bump on any store-shape change -> discard stale stores
+                                                   #   (2 = Phase 7f: added the tier-3 `tab3` built-table tier)
+JMVTAB_MAX_ENTRY_BYTES      <- 512L * 1024L        # per-entry ceiling for tiers 1-2 (aggregates / tests)
+JMVTAB_TAB3_MAX_ENTRY_BYTES <- 2L * 1024L * 1024L  # tier-3 built armed tables are bigger (fmt cells) -> looser
+JMVTAB_MAX_STORE_BYTES      <- 12L * 1024L * 1024L  # whole-store budget (serialized every run -> keep bounded)
 
 
 # === Store lifecycle =======================================================================
@@ -31,7 +33,10 @@ JMVTAB_MAX_STORE_BYTES <- 4L * 1024L * 1024L  # whole-store budget (serialized e
 #' @keywords internal
 #' @noRd
 jmv_cache_new <- function() {
-  list(schema = JMVTAB_CACHE_SCHEMA, clock = 0L, agg = list(), test = list())
+  # tab3 (Phase 7f): per base-config (aggregate x pct x na x levels x structural) built ARMED tables
+  # (pre-finalize). Reused for display / colour re-paint (exact-tuple hit) and reference re-ref
+  # (rerefable tuple), so display/colour/reference toggles skip the O(cells) rebuild.
+  list(schema = JMVTAB_CACHE_SCHEMA, clock = 0L, agg = list(), test = list(), tab3 = list())
 }
 
 # Restore-or-reset: a NULL state (first run) or a schema mismatch (module upgraded between sessions)
@@ -63,27 +68,24 @@ jmv_cache_fetch <- function(store, tier, key) {
 }
 
 # Insert/replace an entry unless it exceeds the per-entry byte ceiling (recomputing one scan next run
-# beats persisting a large blob forever).
+# beats persisting a large blob forever). `max_bytes` is looser for the tier-3 built tables.
 #' @keywords internal
 #' @noRd
-jmv_cache_put <- function(store, tier, key, payload) {
+jmv_cache_put <- function(store, tier, key, payload, max_bytes = JMVTAB_MAX_ENTRY_BYTES) {
   store$clock <- store$clock + 1L
   b <- length(serialize(payload, connection = NULL))
-  if (b > JMVTAB_MAX_ENTRY_BYTES) return(store)
+  if (b > max_bytes) return(store)
   store[[tier]][[key]] <- list(payload = payload, bytes = b, seq = store$clock)
   store
 }
 
-# Evict least-recently-used entries across BOTH tiers until the total serialized size is under budget.
+# Evict least-recently-used entries across ALL tiers until the total serialized size is under budget.
 #' @keywords internal
 #' @noRd
 jmv_cache_evict <- function(store) {
-  ent <- c(
-    lapply(names(store$agg),  function(k) list(tier = "agg",  key = k,
-                                               seq = store$agg[[k]]$seq,  bytes = store$agg[[k]]$bytes)),
-    lapply(names(store$test), function(k) list(tier = "test", key = k,
-                                               seq = store$test[[k]]$seq, bytes = store$test[[k]]$bytes))
-  )
+  tier_ent <- function(tier) lapply(names(store[[tier]]), function(k)
+    list(tier = tier, key = k, seq = store[[tier]][[k]]$seq, bytes = store[[tier]][[k]]$bytes))
+  ent <- c(tier_ent("agg"), tier_ent("test"), tier_ent("tab3"))
   if (length(ent) == 0L) return(store)
   total <- sum(vapply(ent, function(e) e$bytes, numeric(1)))
   if (total <= JMVTAB_MAX_STORE_BYTES) return(store)
@@ -395,38 +397,103 @@ jmv_coerce_numeric_cols <- function(data, col_vars) {
 }
 
 
-# === The pure build core (engine-free, testable without a live jamovi session) ============
+# === Tier 3: built-table cache (display / colour / reference re-use) =======================
 
-# Build the jmvtab table(s) from a plain option list + a cache store, reusing tab() end to end (its
-# color spec, na translation, totals, recycling) with the cache injected through a mutable env. Runs
-# with cleannames = FALSE + defer_level_merge = TRUE (cleannames applied at display below). Returns
-# the built tab(s), the updated store (persist to $state), and per-pair/per-test hit flags.
+# The persisted population descriptor for the tier-3 base key. Mirrors tab_cache_keys() (R/tab-resolve.R)
+# so the base fields the cached armed table holds are content-addressed exactly like the tier-1
+# aggregate they derive from. na keep/drop -> "full"; drop_all / common_base carry their vars.
 #' @keywords internal
 #' @noRd
-jmvtab_build <- function(data, opts, store) {
-  row_vars <- opts$row_vars
-  col_vars <- opts$col_vars
-  tab_vars <- opts$tab_vars
-  if (length(row_vars) == 0L) { data$no_row_var <- factor("no_row_var"); row_vars <- "no_row_var" }
-  if (length(col_vars) == 0L) { data$no_col_var <- factor("n");          col_vars <- "no_col_var" }
-  data   <- jmv_coerce_numeric_cols(data, col_vars)   # integer/numeric col_var -> mean (match R)
-  wt     <- opts$wt
-  wt_sym <- if (length(wt)) rlang::sym(wt) else NULL
+jmv_population_descriptor <- function(na, row_vars, col_vars, tab_vars) {
+  if (na %in% c("keep", "drop")) return("full")
+  if (na == "drop_all")
+    return(list(mode = "drop_all", vars = sort(unique(c(row_vars, col_vars, tab_vars)))))
+  if (na == "common_base")
+    return(list(mode = "common_base",
+                vars = c(row_vars, if (length(col_vars) != 0L) col_vars[1] else NULL, tab_vars)))
+  "full"
+}
 
-  # Color: "no" -> FALSE, "auto" -> TRUE, else the measure string. A significance policy needs a diff
-  # CI; color = TRUE (auto) does not force it, so nudge ci = "diff" when a policy is set and ci = auto.
-  color        <- switch(opts$color, "no" = FALSE, "auto" = TRUE, opts$color)
-  color_signif <- opts$color_signif
-  ci           <- opts$ci
-  if (!isFALSE(color) && color_signif != "ignore" && ci == "auto") ci <- "diff"
+# The tier-3 BASE key: identifies the ref-INDEPENDENT base fields {n, wn, pct, tot_n, mean, var}. It
+# hashes the aggregate identity (population tag + per-variable fingerprint + grain + wt + other) plus
+# every remaining opt EXCEPT the ones re-applied post-cache (the tier-4 paint: digits/display/
+# cleannames/color/color_signif) and the transform-tuple items (ref/ref2/comp/OR/ci-params) -- so pct,
+# na, levels, add_n, totaltab, subtext ... any structural/display-baked arg invalidates the entry.
+#' @keywords internal
+#' @noRd
+jmv_tab3_base_key <- function(opts, ce, row_vars, col_vars, tab_vars, wt_chr) {
+  fp   <- ce$fp_map
+  used <- sort(unique(c(row_vars, col_vars, tab_vars, if (nzchar(wt_chr)) wt_chr)))
+  pop  <- jmv_population_descriptor(opts$na, row_vars, col_vars, tab_vars)
+  agg_id <- list(
+    pop   = jmv_pop_tag(pop, fp, ce$nrow),
+    vars  = lapply(used, function(v) list(v, fp[[v]])),
+    wt    = wt_chr,
+    grain = sort(tab_vars),
+    other = opts$other_if_less_than
+  )
+  reapplied  <- c("digits", "display", "cleannames", "color", "color_signif",
+                  "ref", "ref2", "comp", "OR", "ci", "conf_level",
+                  "method_cell", "method_diff", "stars")
+  structural <- opts[setdiff(names(opts), reapplied)]
+  jmv_hash(list("tab3", agg_id, structural))
+}
 
-  ce <- new.env(parent = emptyenv())
-  ce$store  <- jmv_cache_migrate(store)
-  ce$hits   <- list(agg = logical(0), test = logical(0))
-  ce$nrow   <- nrow(data)
-  ce$fp_map <- jmv_fp_map(data, c(row_vars, col_vars, tab_vars, if (length(wt)) wt))
+# The colour "arming class" -> which measure fields the armed table populates. diff/ratio/auto share
+# the "diff" class (tab_plain computes diff AND ratio together), so a diff<->ratio toggle is a pure
+# re-paint (same tuple). or / contrib populate their own fields; "off" colours nothing.
+#' @keywords internal
+#' @noRd
+jmv_tab3_arming <- function(color) {
+  if (isFALSE(color)) return("off")
+  if (isTRUE(color))  return("diff")
+  m <- as.character(color)[1]
+  if (m %in% c("or", "OR"))    "or"
+  else if (m == "contrib")     "contrib"
+  else if (m %in% c("no", "")) "off"
+  else                         "diff"
+}
 
-  tabs <- rlang::inject(tab(
+# The tier-3 TRANSFORM tuple: everything that changes field VALUES or POPULATION beyond the base. An
+# exact match with the cached entry's tuple -> re-paint only; a difference -> re-ref (7f-4) or rebuild.
+# `ci` is the RESOLVED ci (after the color_signif cascade), so grey<->color_all (same ci) re-paint
+# while ignore<->grey (ci no<->diff) re-ref.
+#' @keywords internal
+#' @noRd
+jmv_tab3_tuple <- function(opts, ci_resolved, arming) {
+  list(arming = arming, or = opts$OR, ref = opts$ref, ref2 = opts$ref2, comp = opts$comp,
+       ci = ci_resolved, conf_level = opts$conf_level,
+       method_cell = opts$method_cell, method_diff = opts$method_diff, stars = opts$stars)
+}
+
+# Whether a cached armed table can be RE-REFERENCED (transform fields recomputed from its base fields)
+# for the new tuple, instead of a full rebuild. Currently OFF -> a tuple change (reference / expert CI
+# / OR) rebuilds (fast: the tier-1 aggregate + tier-2 tests are cache hits, only the O(cells) fmt is
+# redone). The shared, byte-identical reference recompute is READY (tab_apply_reference(), R/tab.R,
+# proven to reproduce diff/ratio exactly from a cached table's ref-independent pct base); wiring it
+# into the assembled table -- ref markers, the CI re-run, pct="col" splitting -- lands with the
+# Phase 7g reference-level picker UI that exercises + golden-locks it. NOTE the frequent color-driven
+# `color_signif` toggle is NOT a reref: it is a pure re-paint (finalize_color_spec), already instant.
+#' @keywords internal
+#' @noRd
+jmv_tab3_rerefable <- function(old_tuple, new_tuple) FALSE
+
+# Re-reference a cached armed table: recompute the ref/ci-dependent fields from the ref-INDEPENDENT
+# base fields (diff/ratio/or via the shared tab_apply_reference(); ci via tab_ci) for the new tuple.
+# Unreachable while jmv_tab3_rerefable() is FALSE; the wiring lands with the Phase 7g reference picker.
+#' @keywords internal
+#' @noRd
+jmv_tab3_reref <- function(armed, opts, ci_resolved, tuple) {
+  stop("jmv_tab3_reref(): reference re-ref wiring lands with the Phase 7g reference picker.")  # nocov
+}
+
+# Build the ARMED table (pre-finalize) for a tier-3 miss/rebuild: reuse tab() end to end with the
+# live cache injected and `.return_armed` so finalize_color_spec() is applied later (as a re-paint).
+#' @keywords internal
+#' @noRd
+jmv_tab3_build_armed <- function(data, opts, color, color_signif, ci, wt_sym,
+                                 row_vars, col_vars, tab_vars, ce) {
+  rlang::inject(tab(
     data,
     row_vars     = tidyselect::all_of(row_vars),
     col_vars     = tidyselect::all_of(col_vars),
@@ -447,7 +514,7 @@ jmvtab_build <- function(data, opts, store) {
     stars        = opts$stars,
     method_cell  = opts$method_cell,
     method_diff  = opts$method_diff,
-    cleannames   = FALSE,                        # cleannames applied at display (below)
+    cleannames   = FALSE,                        # cleannames applied at display (jmvtab_build)
     totaltab     = opts$totaltab,
     digits       = opts$digits,
     other_if_less_than = opts$other_if_less_than,
@@ -458,10 +525,123 @@ jmvtab_build <- function(data, opts, store) {
     total_names   = opts$total_names,
     other_level   = opts$other_level,
     output_list   = isTRUE(opts$output_list),
-    .cache = ce, .defer_level_merge = TRUE
+    .cache = ce, .defer_level_merge = TRUE, .return_armed = TRUE
   ))
+}
 
-  tabs <- jmv_apply_display(tabs, opts)
+# Re-apply the jamovi `digits` option to a built table (tier-4, pure display). Proportion / count
+# columns take as.integer(digits) (matching tab_plain()); MEAN columns reproduce tab_num()'s magnitude
+# floor (max(digits, 2/1/0) by max cell mean). Cells with n = NA -- the p-value LINE (added by
+# tab_pvalue_lines with a fixed digits, independent of the `digits` arg) -- keep the armed's digits;
+# a normal empty cell has n = 0, so this discriminates cleanly. Byte-identical to a fresh build: on a
+# rebuild the armed cells already hold these values (idempotent); on a re-paint hit only `digits`
+# changed, and the fixed p-value line keeps its value. Columns are replaced with `[[<-` (not
+# dplyr::mutate) so the grouped-tab grouping survives -- a mutate would trip lv1_group_vars() and
+# downgrade a 1-level grouped_tab that a fresh tab() (no post-build verb) keeps grouped. (A mean total
+# row is a bounded average of the cell means, so max(get_mean(cached)) equals the build-time max
+# regardless of total-row removal.)
+#' @keywords internal
+#' @noRd
+jmv_reapply_digits <- function(tabs, digits) {
+  one <- function(tb) {
+    fcols <- names(tb)[vapply(tb, is_fmt, logical(1))]
+    if (length(fcols) == 0L) return(tb)
+    # Only the digits FIELD changes (same rows / grouping / names / table attributes), so capture the
+    # table's attributes and restore them afterwards -- a bare `[[<-` (or dplyr::mutate) would trip
+    # dplyr's grouped_df reconstruct and downgrade the (degenerate 0-group) tabxplor_grouped_tab that a
+    # fresh tab() -- which runs no post-build verb -- keeps. Restoring is byte-exact: only values moved.
+    at <- attributes(tb)
+    for (cn in fcols) {
+      col    <- tb[[cn]]
+      base_d <- if (get_type(col) == "mean") {
+        m <- suppressWarnings(max(get_mean(col), na.rm = TRUE))
+        if (m <= 1) max(digits, 2L) else if (m <= 10) max(digits, 1L) else digits
+      } else as.integer(digits)
+      new_d <- get_digits(col)
+      keep  <- is.na(get_n(col))          # p-value line (n = NA) keeps its fixed digits
+      new_d[!keep] <- base_d
+      tb[[cn]] <- set_digits(col, new_d)
+    }
+    attributes(tb) <- at
+    tb
+  }
+  if (is.list(tabs) && !is.data.frame(tabs)) purrr::map(tabs, one) else one(tabs)
+}
+
+
+# === The pure build core (engine-free, testable without a live jamovi session) ============
+
+# Build the jmvtab table(s) from a plain option list + a cache store. Phase 7f: a change that touches
+# only DISPLAY / COLOUR / REFERENCE reuses a cached ARMED table (pre-finalize fmt cells) and skips the
+# O(cells) rebuild -- an exact tuple match re-paints (colour / digits / display), a rerefable tuple
+# re-refs (reference / ci), and only a base change (variables / pct / na / levels / structural) rebuilds
+# via tab() end to end. The colour spec + digits + display + cleannames are applied FRESH every time.
+# Returns the built tab(s), the updated store (persist to $state), and hit flags.
+#' @keywords internal
+#' @noRd
+jmvtab_build <- function(data, opts, store) {
+  row_vars <- opts$row_vars
+  col_vars <- opts$col_vars
+  tab_vars <- opts$tab_vars
+  if (length(row_vars) == 0L) { data$no_row_var <- factor("no_row_var"); row_vars <- "no_row_var" }
+  if (length(col_vars) == 0L) { data$no_col_var <- factor("n");          col_vars <- "no_col_var" }
+  data   <- jmv_coerce_numeric_cols(data, col_vars)   # integer/numeric col_var -> mean (match R)
+  wt     <- opts$wt
+  wt_sym <- if (length(wt)) rlang::sym(wt) else NULL
+  wt_chr <- if (length(wt)) as.character(wt) else ""
+
+  # Color: "no" -> FALSE, "auto" -> TRUE, else the measure string. For FACTOR columns `color_signif`
+  # (the significance policy) is a pure RE-PAINT: it changes only the colour attribute
+  # finalize_color_spec() sets, never the fmt FIELDS, because ci = "auto" already computes the diff CI
+  # (tab_ci resolves auto -> diff) that grey / color_all merely GATE. So the ARMED table is built
+  # canonically with color_signif = "ignore" (legacy colour = the base measure finalize refines to any
+  # policy), and ignore <-> grey <-> color_all re-paint instantly. NUMERIC means are the exception:
+  # ci = "auto" does NOT compute a mean CI, so a policy there truly ADDS the CI field -- nudge ci =
+  # "diff" (and put it in the tuple) ONLY when a numeric col_var is present, so numeric ignore <-> grey
+  # correctly rebuilds while factor tables stay instant.
+  color        <- switch(opts$color, "no" = FALSE, "auto" = TRUE, opts$color)
+  color_signif <- opts$color_signif
+  ci           <- opts$ci
+  has_num_col  <- any(vapply(col_vars, function(cv) is.numeric(data[[cv]]), logical(1)))
+  if (has_num_col && !isFALSE(color) && color_signif != "ignore" && ci == "auto") ci <- "diff"
+
+  ce <- new.env(parent = emptyenv())
+  ce$store  <- jmv_cache_migrate(store)
+  ce$hits   <- list(agg = logical(0), test = logical(0))
+  ce$nrow   <- nrow(data)
+  ce$fp_map <- jmv_fp_map(data, c(row_vars, col_vars, tab_vars, if (length(wt)) wt))
+
+  # Phase 5 colour spec -- applied FRESH on every interaction (re-paint of the cached fmt cells).
+  spec <- normalize_color_spec(color, color_signif)
+
+  # --- Tier 3: reuse the built ARMED table when only display / colour / reference changed ---------
+  base_key <- jmv_tab3_base_key(opts, ce, row_vars, col_vars, tab_vars, wt_chr)
+  arming   <- jmv_tab3_arming(color)
+  tuple    <- jmv_tab3_tuple(opts, ci, arming)
+  got      <- jmv_cache_fetch(ce$store, "tab3", base_key)
+  ce$store <- got$store
+
+  if (got$hit && identical(got$value$tuple, tuple)) {
+    armed  <- got$value$tabs                                             # exact: display / colour re-paint
+    reused <- TRUE
+  } else if (got$hit && jmv_tab3_rerefable(got$value$tuple, tuple)) {
+    armed  <- jmv_tab3_reref(got$value$tabs, opts, ci, tuple)           # reference / ci re-ref (Phase 7g)
+    reused <- TRUE
+    ce$store <- jmv_cache_put(ce$store, "tab3", base_key,
+                              list(tabs = armed, tuple = tuple), JMVTAB_TAB3_MAX_ENTRY_BYTES)
+  } else {
+    armed  <- jmv_tab3_build_armed(data, opts, color, "ignore", ci, wt_sym,
+                                   row_vars, col_vars, tab_vars, ce)     # canonical armed (see above)
+    reused <- FALSE
+    ce$store <- jmv_cache_put(ce$store, "tab3", base_key,
+                              list(tabs = armed, tuple = tuple), JMVTAB_TAB3_MAX_ENTRY_BYTES)
+  }
+  ce$store <- jmv_cache_evict(ce$store)
+  ce$hits$tab3 <- reused          # TRUE = armed table reused (re-paint / re-ref) -> no O(cells) rebuild
+
+  tabs <- finalize_color_spec(armed, spec)          # colour / policy (measure diff<->ratio, grey<->all)
+  tabs <- jmv_reapply_digits(tabs, opts$digits)     # digits (proportion + mean magnitude floor)
+  tabs <- jmv_apply_display(tabs, opts)             # display combobox + ci="cell" pct_ci
   if (isTRUE(opts$cleannames)) tabs <- jmvtab_cleannames_display(tabs)
 
   list(tabs = tabs, store = ce$store, hits = ce$hits)

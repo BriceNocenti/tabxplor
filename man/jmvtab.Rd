@@ -218,6 +218,7 @@ A results object containing:
 \code{results$html_table} \tab \tab \tab \tab \tab a html \cr
 \code{results$export_status} \tab \tab \tab \tab \tab a html \cr
 \code{results$plot} \tab \tab \tab \tab \tab an image \cr
+\code{results$cache_state} \tab \tab \tab \tab \tab an image \cr
 }
 }
 \description{

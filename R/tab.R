@@ -259,10 +259,12 @@ NULL
 #' Useful when printing multiples tabs with \code{\link[tibble:tribble]{tibble::tribble}},
 #' to use different filters for similar tables or simply make the field of observation
 #' more visible into the code.
-#' @param .cache,.defer_level_merge Internal, for the jamovi \code{jmvtab} live cache only (Phase
-#' 7e): \code{.cache} is a mutable environment the content-addressed multi-tier store is threaded
-#' through; \code{.defer_level_merge} keeps full factor levels through the aggregate and test so
-#' \code{levels} becomes a display-time drop. Both default off; not for direct use.
+#' @param .cache,.defer_level_merge,.return_armed Internal, for the jamovi \code{jmvtab} live cache
+#' only: \code{.cache} is a mutable environment the content-addressed multi-tier store is threaded
+#' through (Phase 7e); \code{.defer_level_merge} keeps full factor levels through the aggregate and
+#' test so \code{levels} becomes a display-time drop; \code{.return_armed} (Phase 7f) returns the
+#' pre-\code{finalize_color_spec} table so the tier-3 cache can re-paint colours without a rebuild.
+#' All default off; not for direct use.
 # @param ... Arguments to pass to \code{\link{tab_ci}} and \code{\link{tab_chi2}}.
 #'
 #' @inheritSection tab_ci Significance stars
@@ -356,7 +358,7 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
                 output_list = FALSE,
                 spread_vars, names_prefix = NULL, names_sort = FALSE,
                 row_var, col_var,
-                .cache = NULL, .defer_level_merge = FALSE,
+                .cache = NULL, .defer_level_merge = FALSE, .return_armed = FALSE,
                 filter) {
 
   # Phase 6f (§6): singular row_var/col_var are soft-deprecated aliases of the plural
@@ -519,6 +521,12 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
            spread_vars = spread_vars, names_prefix = names_prefix, names_sort = names_sort,
            # Phase 7e: pass the jmvtab live-cache seam straight through (NULL/FALSE for normal tab()).
            .cache = .cache, .defer_level_merge = .defer_level_merge)
+
+  # Phase 7f: the jmvtab tier-3 cache stores the PRE-finalize armed table (field values + the
+  # `legacy` colour), then applies finalize_color_spec() itself on every interaction, so a colour /
+  # colour-policy toggle is a cheap re-paint of cached fmt cells rather than a rebuild. `.return_armed`
+  # returns `result` before the paint; jmvtab_build() owns the same normalize/finalize pair.
+  if (isTRUE(.return_armed)) return(result)
 
   # Phase 5: set the final two-channel color + significance-policy attributes (per column type
   # for color = TRUE). Plain scalar colors pass through untouched.
@@ -2916,186 +2924,21 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
 
     #Differences and odds ratio
     if (ref != "no" & pct %in% c("row", "col")) {
-      tabs_diff <- data.table::copy(tabs_pct)
-      tabs_mean <- data.table::copy(tabs_pct)
-
-      if (pct == "row") {
-
-        refrows <- tabs |>
-          calculate_refrows(ref           = ref,
-                            comp          = comp,
-                            tab_row_names = tab_row_names,
-                            tab_vars      = tab_vars,
-                            row_var       = row_var,
-                            tottab_vector = tottab_vector,
-                            totrow_vector = totrow_vector,
-                            #pct           = pct,
-                            num_names     = names(cols)
-          )
-
-        comp_group <- if (comp == "tab") { as.character(tab_vars) } else { character() }
-
-        tabs_diff[, "ref_rows___" := refrows]
-
-        tabs_diff[,
-                  c(names(cols), "ref_rows___") := purrr::map_if(
-                    .SD,
-                    purrr::map_lgl(.SD, is.numeric),
-                    ~ . - dplyr::nth(., tidyr::replace_na(which(eval(rlang::sym("ref_rows___")))[1], 0) )
-                  ),
-                  by = eval(comp_group),
-                  .SDcols = c(names(cols), "ref_rows___")]
-
-        tabs_diff[, "ref_rows___" := NULL] #keep it for ci ?
-
-
-        # with pct, tabs_mean are for the *2 rule : ratio is used instead of difference
-        tabs_mean[, "ref_rows___" := refrows]
-
-        tabs_mean[,
-                  c(names(cols), "ref_rows___") := purrr::map_if(
-                    .SD,
-                    purrr::map_lgl(.SD, is.numeric),
-                    ~ . / dplyr::nth(., tidyr::replace_na(which(eval(rlang::sym("ref_rows___")))[1], 0) )
-                  ),
-                  by = eval(comp_group),
-                  .SDcols = c(names(cols), "ref_rows___")]
-
-        tabs_mean[, "ref_rows___" := NULL]
-
-
-
-        # Odds ratio (when pct = "row")
-        if (OR %in% c("OR", "OR_pct", "or", "or_pct") | color %in% c("or", "OR")) {
-
-          # Relative risks
-          tabs_rr <- data.table::copy(tabs_pct)
-
-          refcols <- dplyr::nth(names(cols),
-                                diff_index(ref2,
-                                           row_var   = dplyr::pull(tabs_rr, !!row_var),
-                                           num_names = names(cols),
-                                           pct       = "col"))
-          refcols_vector <- names(cols) == refcols
-
-
-          if (length(refcols) != 0 & !is.na(refcols)) {
-            tabs_rr[, names(cols) := purrr::map(.SD,~ ./eval(rlang::sym(refcols)) ),
-                    .SDcols = names(cols)]
-
-          } else {
-            remove(refcols, refcols_vector) # test if exists after
-            warning(paste0(
-              "in ref2 = '", ref2, "' , no columns were found as reference for comparison ; ",
-              "to remove this warning, precise the value of ref ",
-              "until there is one column matched"
-            ))
-            tabs_rr[, names(cols) := purrr::map(.SD, ~ NA_real_), .SDcols = names(cols)]
-          }
-
-          # Odds ratio (binary) or relative risk ratios
-          tabs_or <- data.table::copy(tabs_rr)
-          tabs_or[, "ref_rows___" := refrows]
-
-          tabs_or[,
-                  c(names(cols), "ref_rows___") := purrr::map_if(
-                    .SD,
-                    purrr::map_lgl(.SD, is.numeric),
-                    ~ ./dplyr::nth(., tidyr::replace_na(which(eval(rlang::sym("ref_rows___")))[1], 0) )
-                  ),
-                  by = eval(comp_group),
-                  .SDcols = c(names(cols), "ref_rows___")]
-
-          tabs_or[, "ref_rows___" := NULL]
-        }
-
-      }
-
-
-      if (pct == "col") {
-        refcols <- dplyr::nth(names(cols), diff_index(ref,
-                                                      num_names = names(cols),
-                                                      pct       = pct))
-        refcols_vector <- names(cols) == refcols
-
-        if (length(refcols) != 0 & !is.na(refcols)) {
-          tabs_diff[, names(cols) := purrr::map(.SD,~ . - eval(rlang::sym(refcols)) ),
-                    .SDcols = names(cols)]
-
-          #   with pct, tabs_mean are for the *2 rule : ratio is used instead of difference
-          tabs_mean[, names(cols) := purrr::map(.SD,~ . / eval(rlang::sym(refcols)) ),
-                    .SDcols = names(cols)]
-        } else {
-          warning(paste0(
-            "in ref = '", ref, "' , no columns were found as reference for comparison ; ",
-            "to remove this warning, precise the value of ref ",
-            "until there is one column matched"
-          ))
-          tabs_diff[, names(cols) := purrr::map(.SD, ~ NA_real_), .SDcols = names(cols)]
-          tabs_mean[, names(cols) := purrr::map(.SD, ~ NA_real_), .SDcols = names(cols)]
-        }
-
-
-
-
-
-        # Odds ratio (when pct = "col")
-        if (OR %in% c("OR", "OR_pct", "or", "or_pct") | color %in% c("or", "OR")) {
-
-          # Relative risks
-          tabs_rr <- data.table::copy(tabs_pct)
-
-          refrows <- tabs |>
-            calculate_refrows(ref           = ref2,
-                              comp          = comp,
-                              tab_row_names = tab_row_names,
-                              tab_vars      = tab_vars,
-                              row_var       = row_var,
-                              tottab_vector = tottab_vector,
-                              totrow_vector = totrow_vector,
-                              #pct           = pct,
-                              num_names     = names(cols)
-            )
-
-          comp_group <- if (comp == "tab") { as.character(tab_vars) } else { character() }
-
-          tabs_rr[, "ref_rows___" := refrows]
-
-          tabs_rr[,
-                  c(names(cols), "ref_rows___") := purrr::map_if(
-                    .SD,
-                    purrr::map_lgl(.SD, is.numeric),
-                    ~ ./dplyr::nth(., tidyr::replace_na(which(eval(rlang::sym("ref_rows___")))[1], 0) )
-                  ),
-                  by = eval(comp_group),
-                  .SDcols = c(names(cols), "ref_rows___")]
-
-          tabs_rr[, "ref_rows___" := NULL]
-
-
-          # Odds ratio (binary) or relative risk ratios
-          tabs_or <- data.table::copy(tabs_rr)
-
-          if (length(refcols) != 0 & !is.na(refcols)) {
-            tabs_or[, names(cols) := purrr::map(.SD,~ ./eval(rlang::sym(refcols)) ),
-                    .SDcols = names(cols)]
-
-          } else {
-            tabs_or[, names(cols) := purrr::map(.SD, ~ NA_real_), .SDcols = names(cols)]
-            # remove(refcols, refcols_vector) # test if exists after
-          }
-
-
-        } #else if (length(refcols) != 0 & !is.na(refcols)) {
-          #remove(refcols, refcols_vector) # test if exists after
-        #}
-
-
-
-      }
-
-
-
+      # Phase 7f: the reference step is the shared tab_apply_reference() (used verbatim here and by the
+      # jmvtab tier-3 re-ref). It returns diff / ratio(=tabs_mean) and, when OR/color needs them, rr /
+      # or + the ref-col vector; refrows is the ref-row marker. Assign each only when produced so the
+      # downstream exists() guards behave exactly as with the former inline locals.
+      ref_res <- tab_apply_reference(
+        tabs = tabs, tabs_pct = tabs_pct, ref = ref, ref2 = ref2, comp = comp, OR = OR,
+        color = color, pct = pct, tab_row_names = tab_row_names, tab_vars = tab_vars,
+        row_var = row_var, tottab_vector = tottab_vector, totrow_vector = totrow_vector, cols = cols
+      )
+      tabs_diff <- ref_res$diff
+      tabs_mean <- ref_res$ratio
+      if (!is.null(ref_res$rr))             tabs_rr        <- ref_res$rr
+      if (!is.null(ref_res$or))             tabs_or        <- ref_res$or
+      if (!is.null(ref_res$refcols_vector)) refcols_vector <- ref_res$refcols_vector
+      if (!is.null(ref_res$refrows))        refrows        <- ref_res$refrows
     }
   }
 
@@ -3124,6 +2967,38 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
     rep(FALSE, nrow(tabs_n))
   }
 
+  # Phase 7f-1: display / colour / type / ref / comp / col_var and the digits recycle are
+  # column-INVARIANT here (they read only tab_plain-scope scalars/symbols -- pct/OR/wt/color/ref/
+  # ref2/row_var/col_var/comp/digits -- never the per-column pmap args ..N), yet the old code
+  # recomputed each once per output column inside the closure. Compute them ONCE. new_fmt()
+  # recycles the scalar `display` to length(n) (fmt_class.R), so this is byte-identical to the
+  # former per-column case_when/if_else/switch. NA_reals (built above at length nrow(tabs_n)) is
+  # reused for every all-NA field (identical values, one allocation instead of ~6 per column).
+  display_1 <- dplyr::case_when(
+    pct %in% c("row", "col") & OR %in% c("OR", "or") ~ "or",
+    pct != "no" & OR %in% c("OR_pct", "or_pct")      ~ "or_pct",
+    pct != "no"                                      ~ "pct",
+    length(wt) != 0                                  ~ "wn" ,
+    TRUE                                             ~ "n"
+  )
+  color_1 <- dplyr::case_when(
+    color %in% c("", "no")                            ~ "",
+    row_var == "no_row_var" | col_var == "no_col_var" ~ "",
+
+    color %in% c("OR", "or") & pct %in% c("row", "col") &
+      # OR %in% c("OR", "or", "OR_pct", "or_pct") &
+      ref != "no" & ref2 != "no"
+    ~ "OR",
+
+    pct %in% c("row", "col") & ref != "no"            ~ "diff",
+    TRUE                                              ~ ""
+  )
+  type_1   <- dplyr::if_else(pct != "no", pct, "n")
+  ref_1    <- switch(as.character(ref), "no" = "", "tot" = "tot", as.character(ref))
+  comp_1   <- dplyr::if_else(pct != "no" & ref != "no", comp == "all", NA)
+  colvar_1 <- rlang::as_name(col_var)
+  digits_v <- vctrs::vec_recycle(as.integer(digits), nrow(tabs_n))
+
   tabs <-
     list(tabs_n,
          if (exists("tabs_wn"  , rlang::current_env(), inherits = F)) { tabs_wn   } else { list(NA_reals) },
@@ -3139,14 +3014,8 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
          if (exists("tabs_totn", rlang::current_env(), inherits = F)) { tabs_totn } else { list(NA_reals) }
     ) |>
     purrr::pmap_dfc(~ new_fmt(
-      display   = dplyr::case_when(
-        pct %in% c("row", "col") & OR %in% c("OR", "or") ~ "or",
-        pct != "no" & OR %in% c("OR_pct", "or_pct") ~ "or_pct",
-        pct != "no"                                 ~ "pct",
-        length(wt) != 0                             ~ "wn" ,
-        TRUE                                        ~ "n"
-      ),
-      digits    = vec_recycle(as.integer(digits), length(..1)),
+      display   = display_1,
+      digits    = digits_v,
       n         = as.integer(..1),
       wn        = ..2,
       pct       = ..3,
@@ -3156,9 +3025,14 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
       # The `mean` field holds ONLY actual means now (NA for pct columns) -- the old mean-overload
       # is gone; the colour engine reads `ratio` (get_ratio). The cross-direction RR (..6 =
       # tabs_rr) feeds tabs_or internally and is no longer stored (nothing displays it).
-      mean      = rep(NA_real_, length(..1)),
+      mean      = NA_reals,
       ratio     = ..5,
       or        = ..7,
+      ctr       = NA_reals,
+      var       = NA_reals,
+      ci_inf    = NA_reals,
+      ci_sup    = NA_reals,
+      pvalue    = NA_reals,
       #ci        = ,
       in_totrow = totrow_vector,
       in_tottab = tottab_vector,
@@ -3166,23 +3040,12 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
       totcol    = ..8,
       refcol    = ..9,
       tot_n     = ..10,
-      color     = dplyr::case_when(
-        color %in% c("", "no")                            ~ "",
-        row_var == "no_row_var" | col_var == "no_col_var" ~ "",
-
-        color %in% c("OR", "or") & pct %in% c("row", "col") &
-          # OR %in% c("OR", "or", "OR_pct", "or_pct") &
-          ref != "no" & ref2 != "no"
-        ~ "OR",
-
-        pct %in% c("row", "col") & ref != "no"            ~ "diff",
-        TRUE                                              ~ ""
-      ),
-      type      = dplyr::if_else(pct != "no", pct, "n"),
-      ref = switch(as.character(ref), "no" = "", "tot" = "tot", as.character(ref)),
+      color     = color_1,
+      type      = type_1,
+      ref       = ref_1,
       #ci_type   = ,
-      comp      = dplyr::if_else(pct != "no" & ref != "no", comp == "all", NA),
-      col_var   = rlang::as_name(col_var)
+      comp      = comp_1,
+      col_var   = colvar_1
     ))
 
   tabs <- dplyr::bind_cols(tibble::as_tibble(tabs_text), tabs)
@@ -3303,6 +3166,198 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
     tabs <- tabs %>% dplyr::group_by(!!!tab_vars)
     new_grouped_tab(tabs, dplyr::group_data(tabs), subtext = subtext)
   }
+}
+
+
+# tab_apply_reference() -- the reference step (Phase 7f carve): from the pct data.table + a reference
+# selector, derive the reference-relative fields diff (cell - ref), ratio (cell / ref, the "x2 rule")
+# and, when OR/color needs it, rr / or; plus the ref-row / ref-col markers. Extracted VERBATIM from
+# tab_plain()'s inline block so the FRESH build stays byte-identical AND the jmvtab tier-3 re-ref
+# (jmv_tab3_reref) can recompute exactly these ref-dependent fields from a cached table's ref-
+# INDEPENDENT pct base, without a new_fmt() rebuild -- one implementation, no forked math.
+# Returns a list; elements not computed for the given (pct, OR/color) are NULL, so the caller's
+# `exists()`/`is.null()` guards behave identically to the former inline locals.
+#' @keywords internal
+#' @noRd
+tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, OR, color, pct,
+                                tab_row_names, tab_vars, row_var, tottab_vector, totrow_vector, cols) {
+  tabs_diff <- data.table::copy(tabs_pct)
+  tabs_mean <- data.table::copy(tabs_pct)
+  refrows   <- NULL
+
+  if (pct == "row") {
+
+    refrows <- tabs |>
+      calculate_refrows(ref           = ref,
+                        comp          = comp,
+                        tab_row_names = tab_row_names,
+                        tab_vars      = tab_vars,
+                        row_var       = row_var,
+                        tottab_vector = tottab_vector,
+                        totrow_vector = totrow_vector,
+                        #pct           = pct,
+                        num_names     = names(cols)
+      )
+
+    comp_group <- if (comp == "tab") { as.character(tab_vars) } else { character() }
+
+    tabs_diff[, "ref_rows___" := refrows]
+
+    tabs_diff[,
+              c(names(cols), "ref_rows___") := purrr::map_if(
+                .SD,
+                purrr::map_lgl(.SD, is.numeric),
+                ~ . - dplyr::nth(., tidyr::replace_na(which(eval(rlang::sym("ref_rows___")))[1], 0) )
+              ),
+              by = eval(comp_group),
+              .SDcols = c(names(cols), "ref_rows___")]
+
+    tabs_diff[, "ref_rows___" := NULL] #keep it for ci ?
+
+
+    # with pct, tabs_mean are for the *2 rule : ratio is used instead of difference
+    tabs_mean[, "ref_rows___" := refrows]
+
+    tabs_mean[,
+              c(names(cols), "ref_rows___") := purrr::map_if(
+                .SD,
+                purrr::map_lgl(.SD, is.numeric),
+                ~ . / dplyr::nth(., tidyr::replace_na(which(eval(rlang::sym("ref_rows___")))[1], 0) )
+              ),
+              by = eval(comp_group),
+              .SDcols = c(names(cols), "ref_rows___")]
+
+    tabs_mean[, "ref_rows___" := NULL]
+
+
+
+    # Odds ratio (when pct = "row")
+    if (OR %in% c("OR", "OR_pct", "or", "or_pct") | color %in% c("or", "OR")) {
+
+      # Relative risks
+      tabs_rr <- data.table::copy(tabs_pct)
+
+      refcols <- dplyr::nth(names(cols),
+                            diff_index(ref2,
+                                       row_var   = dplyr::pull(tabs_rr, !!row_var),
+                                       num_names = names(cols),
+                                       pct       = "col"))
+      refcols_vector <- names(cols) == refcols
+
+
+      if (length(refcols) != 0 & !is.na(refcols)) {
+        tabs_rr[, names(cols) := purrr::map(.SD,~ ./eval(rlang::sym(refcols)) ),
+                .SDcols = names(cols)]
+
+      } else {
+        remove(refcols, refcols_vector) # test if exists after
+        warning(paste0(
+          "in ref2 = '", ref2, "' , no columns were found as reference for comparison ; ",
+          "to remove this warning, precise the value of ref ",
+          "until there is one column matched"
+        ))
+        tabs_rr[, names(cols) := purrr::map(.SD, ~ NA_real_), .SDcols = names(cols)]
+      }
+
+      # Odds ratio (binary) or relative risk ratios
+      tabs_or <- data.table::copy(tabs_rr)
+      tabs_or[, "ref_rows___" := refrows]
+
+      tabs_or[,
+              c(names(cols), "ref_rows___") := purrr::map_if(
+                .SD,
+                purrr::map_lgl(.SD, is.numeric),
+                ~ ./dplyr::nth(., tidyr::replace_na(which(eval(rlang::sym("ref_rows___")))[1], 0) )
+              ),
+              by = eval(comp_group),
+              .SDcols = c(names(cols), "ref_rows___")]
+
+      tabs_or[, "ref_rows___" := NULL]
+    }
+
+  }
+
+
+  if (pct == "col") {
+    refcols <- dplyr::nth(names(cols), diff_index(ref,
+                                                  num_names = names(cols),
+                                                  pct       = pct))
+    refcols_vector <- names(cols) == refcols
+
+    if (length(refcols) != 0 & !is.na(refcols)) {
+      tabs_diff[, names(cols) := purrr::map(.SD,~ . - eval(rlang::sym(refcols)) ),
+                .SDcols = names(cols)]
+
+      #   with pct, tabs_mean are for the *2 rule : ratio is used instead of difference
+      tabs_mean[, names(cols) := purrr::map(.SD,~ . / eval(rlang::sym(refcols)) ),
+                .SDcols = names(cols)]
+    } else {
+      warning(paste0(
+        "in ref = '", ref, "' , no columns were found as reference for comparison ; ",
+        "to remove this warning, precise the value of ref ",
+        "until there is one column matched"
+      ))
+      tabs_diff[, names(cols) := purrr::map(.SD, ~ NA_real_), .SDcols = names(cols)]
+      tabs_mean[, names(cols) := purrr::map(.SD, ~ NA_real_), .SDcols = names(cols)]
+    }
+
+
+    # Odds ratio (when pct = "col")
+    if (OR %in% c("OR", "OR_pct", "or", "or_pct") | color %in% c("or", "OR")) {
+
+      # Relative risks
+      tabs_rr <- data.table::copy(tabs_pct)
+
+      refrows <- tabs |>
+        calculate_refrows(ref           = ref2,
+                          comp          = comp,
+                          tab_row_names = tab_row_names,
+                          tab_vars      = tab_vars,
+                          row_var       = row_var,
+                          tottab_vector = tottab_vector,
+                          totrow_vector = totrow_vector,
+                          #pct           = pct,
+                          num_names     = names(cols)
+        )
+
+      comp_group <- if (comp == "tab") { as.character(tab_vars) } else { character() }
+
+      tabs_rr[, "ref_rows___" := refrows]
+
+      tabs_rr[,
+              c(names(cols), "ref_rows___") := purrr::map_if(
+                .SD,
+                purrr::map_lgl(.SD, is.numeric),
+                ~ ./dplyr::nth(., tidyr::replace_na(which(eval(rlang::sym("ref_rows___")))[1], 0) )
+              ),
+              by = eval(comp_group),
+              .SDcols = c(names(cols), "ref_rows___")]
+
+      tabs_rr[, "ref_rows___" := NULL]
+
+
+      # Odds ratio (binary) or relative risk ratios
+      tabs_or <- data.table::copy(tabs_rr)
+
+      if (length(refcols) != 0 & !is.na(refcols)) {
+        tabs_or[, names(cols) := purrr::map(.SD,~ ./eval(rlang::sym(refcols)) ),
+                .SDcols = names(cols)]
+
+      } else {
+        tabs_or[, names(cols) := purrr::map(.SD, ~ NA_real_), .SDcols = names(cols)]
+        # remove(refcols, refcols_vector) # test if exists after
+      }
+    }
+  }
+
+  list(
+    diff           = tabs_diff,
+    ratio          = tabs_mean,
+    rr             = if (exists("tabs_rr",        inherits = FALSE)) tabs_rr        else NULL,
+    or             = if (exists("tabs_or",        inherits = FALSE)) tabs_or        else NULL,
+    refcols_vector = if (exists("refcols_vector", inherits = FALSE)) refcols_vector else NULL,
+    refrows        = refrows
+  )
 }
 
 
@@ -4208,22 +4263,36 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
   if (ref %in% c("tot", "no", "")) refrows <- rep(FALSE, nrow(tabs))
 
 
+  # Phase 7f-1: display / ref / comp are column-invariant (scalars for this tab_num call) -- compute
+  # once. `digits` and `col_var` stay per-column (digits reads the per-column mean magnitude ..3);
+  # the per-column case_when becomes a base if/else (scalar conditions, only one branch evaluated) --
+  # byte-identical. NA_reals is reused for the always-NA fields (pct/ctr/tot_n/or) new_fmt defaults.
+  display_1 <- if (ci_visible) { "mean_ci" } else { "mean" }
+  ref_1     <- switch(as.character(ref), "no" = "", "tot" = "tot", as.character(ref))
+  comp_1    <- dplyr::if_else(ref != "no" | ci != "no", comp == "all", NA)
+  NA_reals  <- rep(NA_real_, nrow(tabs_n))
+
   tabs <-
     list(tabs_n, tabs_wn, tabs_mean, tabs_var, tabs_diff, tabs_ci_sup, as.character(col_vars),
          digits, tabs_ratio, tabs_ci_inf, tabs_pvalue) |>
     purrr::pmap_dfc(~ new_fmt(
-      display   = if (ci_visible) { "mean_ci" } else { "mean" },
-      digits    = dplyr::case_when(
-        max(..3, na.rm = TRUE) <= 1   ~ vec_recycle(max(..8, 2L), length(..1)),
-        max(..3, na.rm = TRUE) <= 10  ~ vec_recycle(max(..8, 1L), length(..1)),
-        TRUE                          ~ vec_recycle(..8, length(..1)),
-      ),
+      display   = display_1,
+      digits    = {
+        m <- max(..3, na.rm = TRUE)
+        if      (m <= 1 ) vec_recycle(max(..8, 2L), length(..1))
+        else if (m <= 10) vec_recycle(max(..8, 1L), length(..1))
+        else              vec_recycle(..8,          length(..1))
+      },
       n         = ..1,
       wn        = ..2,
       mean      = ..3,
       var       = ..4,
       diff      = ..5,
       ratio     = ..9,
+      pct       = NA_reals,
+      ctr       = NA_reals,
+      or        = NA_reals,
+      tot_n     = NA_reals,
       # Phase 3a: real asymmetric CI bounds + per-cell significance (mean CIs are symmetric
       # around the estimate, but stored as absolute bounds like the proportion path).
       ci_sup    = ..6,
@@ -4234,9 +4303,9 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
       in_refrow = refrows,
       color     = color,
       type      = "mean",
-      ref = switch(as.character(ref), "no" = "", "tot" = "tot", as.character(ref)),
+      ref       = ref_1,
       ci_type   = ci, #dplyr::if_else(ci == "diff", "diff", ci),
-      comp      = dplyr::if_else(ref != "no" | ci != "no", comp == "all", NA),
+      comp      = comp_1,
       col_var   = ..7
     ))
 
