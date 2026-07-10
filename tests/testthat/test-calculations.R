@@ -540,6 +540,41 @@ testthat::test_that("cell CI for proportions matches DescTools::BinomCI wilson",
   }
 })
 
+testthat::test_that("cell CI method_cell='wald' matches p +- z*sqrt(p(1-p)/n) (Phase 7g)", {
+  tabs <- tab(gss, race, marital, pct = "row", ci = "cell", conf_level = 0.95,
+              method_cell = "wald")
+  ct   <- table(gss$race, gss$marital)
+  z    <- stats::qnorm(0.975)
+
+  for (cell in list(c("White", "Married"), c("Black", "Never married"), c("Other", "Divorced"))) {
+    r <- cell[1]; m <- cell[2]
+    col <- tabs |> dplyr::filter(race == r) |> dplyr::pull(!!m)
+
+    p    <- ct[r, m] / sum(ct[r, ])
+    n    <- sum(ct[r, ])
+    half <- z * sqrt(p * (1 - p) / n)
+
+    testthat::expect_equal(get_ci_inf(col), p - half, tolerance = 1e-9,
+                           label = paste0("wald CI inf [", r, ", ", m, "]"))
+    testthat::expect_equal(get_ci_sup(col), p + half, tolerance = 1e-9,
+                           label = paste0("wald CI sup [", r, ", ", m, "]"))
+  }
+
+  # Cell CIs carry no p-value, so stars stay NA regardless of the method.
+  cn <- tabs |> dplyr::filter(race == "White") |> dplyr::pull("Married")
+  testthat::expect_true(all(is.na(get_pvalue(cn))))
+})
+
+testthat::test_that("wald and wilson cell CIs differ but both centre near the estimate (Phase 7g)", {
+  wilson <- tab(gss, race, marital, pct = "row", ci = "cell", method_cell = "wilson")
+  wald   <- tab(gss, race, marital, pct = "row", ci = "cell", method_cell = "wald")
+  col_wi <- wilson |> dplyr::filter(race == "Black") |> dplyr::pull("Divorced")
+  col_wa <- wald   |> dplyr::filter(race == "Black") |> dplyr::pull("Divorced")
+  # Different intervals (wald symmetric about p, wilson shifted) but same point estimate.
+  testthat::expect_false(isTRUE(all.equal(get_ci_inf(col_wi), get_ci_inf(col_wa))))
+  testthat::expect_equal(get_pct(col_wi), get_pct(col_wa))
+})
+
 testthat::test_that("diff CI for proportions (method='ac') matches DescTools::BinomDiffCI ac", {
   testthat::skip_if_not_installed("DescTools")
   # Phase 3a: AC is now the expert opt-in (default is Newcombe, tested below). get_ci() is the
@@ -701,6 +736,19 @@ testthat::test_that("ANOVA Welch F matches oneway.test on another variable (3 gr
   testthat::expect_equal(w$statistic, unname(ow$statistic), tolerance = 1e-8)
   testthat::expect_equal(w$df2,       unname(ow$parameter[["denom df"]]), tolerance = 1e-8)
   testthat::expect_equal(w$pvalue,    ow$p.value,           tolerance = 1e-8)
+})
+
+testthat::test_that("the tabxplor.anova option selects the displayed F (welch vs classic) (Phase 7g)", {
+  d    <- gss |> dplyr::filter(!is.na(tvhours), race != "Not applicable") |>
+    dplyr::mutate(race = forcats::fct_drop(race))
+  tt   <- get_test(tab(d, race, tvhours, pct = "row") |> tab_chi2())
+
+  welch   <- test_display_rows(tt, anova = "welch")
+  classic <- test_display_rows(tt, anova = "classic")
+  testthat::expect_true(all(welch$test   %in% c("chi2", "F_welch")))
+  testthat::expect_true(all(classic$test %in% c("chi2", "F_classic")))
+  # the two F variants have different statistics/p-values on unequal-variance groups
+  testthat::expect_false(isTRUE(all.equal(welch$statistic, classic$statistic)))
 })
 
 # === SECTION: Variance contributions (chi2 contributions) =====================

@@ -3,6 +3,8 @@ name: jmvtab
 jus: '3.0'
 stage: 0
 compilerMode: tame
+events:
+  update: ./jmvtab::update
 children:
   - type: VariableSupplier
     name: variablesupplier
@@ -15,6 +17,8 @@ children:
           - type: VariablesListBox
             name: row_vars
             isTarget: true
+            events:
+              change: ./jmvtab::onChange_row_vars
       - type: TargetLayoutBox
         label: <b>col_vars = <i>(column variables)</i></b>
         children:
@@ -159,10 +163,14 @@ children:
             stretchFactor: 3
             children:
               - type: Label
-                label: chi2 = <i>(Chi2 test)</i>
+                label: Statistical test <i>(Chi-square / ANOVA F)</i>
                 children:
                   - type: CheckBox
                     name: chi2
+                  - type: ComboBox
+                    name: anova
+                    label: ANOVA F
+                    enable: (chi2)
   - type: CollapseBox
     label: <b>Levels and missing values</b>
     stretchFactor: 1
@@ -239,51 +247,83 @@ children:
     stretchFactor: 1
     collapsed: true
     children:
+      # Picker in its own (cell-less) container; the ref/comp/ref2 grid in a second one -- a
+      # jamovi LayoutBox cannot mix celled and cell-less children ("Cell already exists").
       - type: LayoutBox
         margin: none
-        cell:
-          column: 0
-          row: 0
-        stretchFactor: 1
         children:
-          - type: Label
-            label: ref = <i>(reference row/col for diff/OR)</i>
-            children:
-              - type: TextBox
-                name: ref
-                format: string
+          - type: ListBox
+            name: refLevels
+            label: Reference level per row variable
+            showColumnHeaders: true
+            fullRowSelect: true
+            stretchFactor: 1
+            height: normal
+            events:
+              change: ./jmvtab::onChange_refLevels
+            columns:
+              - name: var
+                label: Row variable
+                selectable: false
+                stretchFactor: 1
+                maxWidth: 300
+                template:
+                  type: VariableLabel
+              - name: ref
+                label: Reference level
+                selectable: false
+                stretchFactor: 0.5
+                template:
+                  type: LevelSelector
+                  label: ''
       - type: LayoutBox
         margin: none
-        cell:
-          column: 1
-          row: 0
-        stretchFactor: 1
         children:
-          - type: Label
-            label: comp = <i>(reference table with tab_vars)</i>
+          - type: LayoutBox
+            margin: none
+            cell:
+              column: 0
+              row: 0
+            stretchFactor: 1
             children:
-              - type: RadioButton
-                name: comp_1
-                optionName: comp
-                optionPart: tab
-              - type: RadioButton
-                name: comp_2
-                optionName: comp
-                optionPart: all
-      - type: LayoutBox
-        margin: none
-        cell:
-          column: 0
-          row: 1
-        stretchFactor: 0
-        children:
-          - type: Label
-            label: ref2 = <i>(2nd reference col/row for OR)</i>
+              - type: Label
+                label: ref = <i>(expert fallback&#58; tot / first / regex / n)</i>
+                children:
+                  - type: TextBox
+                    name: ref
+                    format: string
+          - type: LayoutBox
+            margin: none
+            cell:
+              column: 1
+              row: 0
+            stretchFactor: 1
             children:
-              - type: TextBox
-                name: ref2
-                format: string
-                enable: (OR == 'OR' || OR == 'OR_pct')
+              - type: Label
+                label: comp = <i>(reference table with tab_vars)</i>
+                children:
+                  - type: RadioButton
+                    name: comp_1
+                    optionName: comp
+                    optionPart: tab
+                  - type: RadioButton
+                    name: comp_2
+                    optionName: comp
+                    optionPart: all
+          - type: LayoutBox
+            margin: none
+            cell:
+              column: 0
+              row: 1
+            stretchFactor: 0
+            children:
+              - type: Label
+                label: ref2 = <i>(2nd reference col/row for OR)</i>
+                children:
+                  - type: TextBox
+                    name: ref2
+                    format: string
+                    enable: (OR == 'OR' || OR == 'OR_pct')
   - type: CollapseBox
     label: <b>Confidence intervals</b>
     stretchFactor: 1
@@ -502,12 +542,35 @@ children:
                 name: subtext
                 format: string
                 width: largest
-  # - type: Separator  # This creates a horizontal line
-  #   stretchFactor: 1
   - type: LayoutBox
-    margin: large  # Creates visual separation from elements above
+    margin: large
     stretchFactor: 1
     children:
+      - type: LayoutBox
+        cell:
+          column: 0
+          row: 0
+        stretchFactor: 0
+        children:
+          - type: Label
+            label: <b>Export format:</b>
+          - type: ComboBox
+            name: export_format
+            events:
+              change: ./jmvtab::export_format_changed
+      - type: LayoutBox
+        margin: none
+        cell:
+          column: 1
+          row: 0
+        stretchFactor: 1
+        children:
+          - type: Label
+            label: <b>Save to (path or file name):</b>
+          - type: TextBox
+            name: path
+            format: string
+            width: largest
       - type: LayoutBox
         cell:
           column: 0
@@ -516,193 +579,22 @@ children:
         children:
           - type: ActionButton
             name: exportExcel
-            label: "Export to Excel"
+            label: Export to Excel
             events:
-              change: './jmvtab::exportExcel_changed'
-            stretchFactor: 0
+              change: ./jmvtab::exportExcel_changed
       - type: LayoutBox
         margin: none
         cell:
           column: 1
-          row: 0  # Label is in row 0
-        stretchFactor: 1
-        children:
-          - type: Label
-            label: "<b>Folder:</b>"
-            stretchFactor: 0
-      - type: LayoutBox
-        margin: none
-        cell:
-          column: 1
-          row: 1  # Text box is aligned with button in row 1
-        stretchFactor: 1
-        children:
-          - type: TextBox
-            name: xl_path
-            format: string
-            width: largest
-      - type: LayoutBox
-        margin: none
-        cell:
-          column: 2
-          row: 0  # Label is in row 0
-        stretchFactor: 1
-        children:
-          - type: Label
-            label: "<b>File name:</b>"
-            stretchFactor: 0
-      - type: LayoutBox
-        margin: none
-        cell:
-          column: 2
-          row: 1  # Text box is aligned with button in row 1
-        stretchFactor: 1
-        children:
-          - type: TextBox
-            name: xl_filename
-            format: string
-            width: largest
-      - type: LayoutBox
-        margin: none
-        cell:
-          column: 0
-          row: 2
-        stretchFactor: 0
-        children:
-          - type: Label
-            label: "Replace file ?"  
-      - type: LayoutBox
-        margin: none
-        cell:
-          column: 1
-          row: 2
+          row: 1
         stretchFactor: 0
         children:
           - type: CheckBox
             name: xl_replace
-
-
-
-      # - type: LayoutBox
-      #   margin: none
-      #   cell:
-      #     column: 3
-      #     row: 1  # This should be row 1 to align with the text boxes
-      #   stretchFactor: 0
-      #   children:
-      #     - type: Label
-      #       label: ".xlsx"
-      #       stretchFactor: 0
-
-
-  # - type: LayoutBox
-  #   stretchFactor: 1
-  #   children:
-  #     - type: LayoutBox
-  #       cell:
-  #         column: 0
-  #         row: 1
-  #       stretchFactor: 0
-  #       children:
-  #         - type: ActionButton
-  #           name: exportExcel
-  #           label: "Export to Excel"
-  #           events:
-  #             change: './js/jmvtab::exportExcel_changed'
-  #           stretchFactor: 0
-  #     - type: LayoutBox
-  #       margin: none
-  #       cell:
-  #         column: 1
-  #         row: 0
-  #       stretchFactor: 1
-  #       children:
-  #         - type: Label
-  #           label: "Folder:"    # Static text, uneditable
-  #           stretchFactor: 0  # Label takes its natural width
-  #     - type: LayoutBox
-  #       margin: none
-  #       cell:
-  #         column: 1
-  #         row: 1
-  #       stretchFactor: 1
-  #       children:
-  #         - type: TextBox
-  #           name: xl_path
-  #           format: string
-  #           width: largest
-  #           #stretchFactor: 1
-  #     - type: LayoutBox
-  #       margin: none
-  #       cell:
-  #         column: 2
-  #         row: 0
-  #       stretchFactor: 1
-  #       children:
-  #         - type: Label
-  #           label: "File name:"    # Static text, uneditable
-  #           stretchFactor: 0  # Label takes its natural width
-  #     - type: LayoutBox
-  #       margin: none
-  #       cell:
-  #         column: 2
-  #         row: 1
-  #       stretchFactor: 1
-  #       children:
-  #         - type: TextBox
-  #           name: xl_filename
-  #           format: string
-  #           width: largest
-  #           #stretchFactor: 1
-  #     - type: LayoutBox
-  #       margin: none
-  #       cell:
-  #         column: 3
-  #         row: 0
-  #       stretchFactor: 1
-  #       children:
-  #         - type: Label
-  #           label: ".xlsx"    # Static text, uneditable
-  #           stretchFactor: 0  # Label takes its natural width
-
-
-  # - type: LayoutBox
-  #   style: inline         # put both controls on the same horizontal line
-  #   children:
-  #     - type: ActionButton
-  #       name: exportExcel
-  #       label: "Export to Excel"
-  #       events:
-  #         change: './js/jmvtab:exportExcel_changed'
-  #       stretchFactor: 0
-  #     - type: TextBox
-  #       name: xl_path
-  #       format: string
-  #       width: largest
-  #       stretchFactor: 1
-  #   # - type: FilePicker
-  #   #   name: xl_path
-  #   #   label: "Path of the Excel file"
-  #   #   action: save
-  #   #   filters:
-  #   #     - name: "Excel files"
-  #   #       extensions: ["xlsx"]
-  #     - type: Label
-  #       label: " / "    # Static text, uneditable
-  #       stretchFactor: 0  # Label takes its natural width
-  #       # style:
-  #       #   paddingLeft: 8    # optional spacing to separate from TextBox
-  #       #   paddingRight: 8    # optional spacing to separate from TextBox
-  #       #   verticalAlign: middle
-  #     - type: TextBox
-  #       name: xl_filename
-  #       format: string
-  #       width: largest
-  #       stretchFactor: 1
-  #     - type: Label
-  #       label: ".xlsx"    # Static text, uneditable
-  #       stretchFactor: 0  # Label takes its natural width
-  #       # style:
-  #       #   paddingLeft: 8    # optional spacing to separate from TextBox
-  #       #   verticalAlign: middle
-
+            label: Replace existing file
+  - type: LayoutBox
+    margin: large
+    children:
+      - type: TextBox
+        name: n_min
+        format: number

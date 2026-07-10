@@ -83,11 +83,12 @@ and what the `.js` exposes:
 | `ci` | `"no"` | G | confidence intervals: `no`/`cell`/`diff`. |
 | `conf_level` | `0.95` | G | THE significance threshold (CI level = star level, decisions §20). |
 | `stars` | `NULL` | G | significance stars (opt-in); gates whether `pvalue` is stored. |
-| `method_cell` / `method_diff` | `wilson` / `newcombe` | G | CI primitives (cell proportion / difference). |
+| `method_cell` / `method_diff` | `wilson` / `newcombe` | G | CI primitives. `method_cell` ∈ `wilson`/`wald` (7g); `method_diff` ∈ `newcombe`/`ac`/`wald`. |
 | `totaltab` | `"line"` | RV | total-table mode: `line`/`table`/`no`. |
 | `tot` → `totrow`/`totcol` | `c("row","col")` | RV/CV | total row / one total column (Phase 6 §6 soft-deprecated the fine control). |
 | `add_n` / `add_pct` | `TRUE` / `FALSE` | DISP | append an unweighted-n / pct row-or-column (reuses existing fields). |
 | `digits` | `0` | CV / DISP | rounding (stored per fmt; display-only). |
+| `n_min` | `0` | DISP | Phase 7g small-base filter (drop weak rows/cols, blank weak cells via the `"blank"` display token). Pure display — recomputes nothing; applied last in `tab_assemble`. jmvtab: tier-4 `reapplied`. |
 | `subtext` / `total_names` / `totaltab_name` / `other_level` | — | DISP | labels. |
 | `output_list` | `FALSE` | — (shape) | one merged tab vs a list of tabs. |
 | `spread_vars` / `names_prefix` / `names_sort` | — | DISP-ish | reshape to wide via `tab_spread()`. |
@@ -106,8 +107,13 @@ Baseline wired by Phase 7a. One-to-one with `tab()` except:
 - `lvs` → `levels` (renamed to avoid `jmvcore::Options$levels()`).
 - `display` / `ci_print` / `wrap_rows` / `wrap_cols` are **render-time** (applied post-build /
   `tab_kable()`), not `tab()` args.
-- Excel export (`exportExcel`/`xl_path`/`xl_filename`/`xl_replace`) is the historical path (Phase 7f
-  redesign).
+- **`refLevels`** (Phase 7g Array picker) → `.b.R` folds it into a named `ref` vector via
+  `jmvtab_ref_vector()`; the free-text `ref` box is the expert fallback.
+- **`anova`** (Phase 7g, welch/classic) → sets `options(tabxplor.anova=)` around the build (baked into
+  the p-value line), and is in `.opts()` so it sits in the tier-3 base-key (a toggle rebuilds).
+- **`n_min`** (Phase 7g) → `tab(n_min=)`, applied tier-4 (see §2.1 / §7.1).
+- **Export** (`export_format` + typed `path` + the `exportExcel` Action; Phase 7g) writes Excel/HTML/MD
+  via `jmvtab_export()` (`R/jmvtab-export.R`) and reports a `jmvcore::Notice`.
 
 The `.u.yaml` `enable:` conditions already encode interdependence (e.g. `diff`/`ratio`/`OR` colour
 radios and `color_signif` policies are gated on `pct:row || pct:col`; `method_cell` on

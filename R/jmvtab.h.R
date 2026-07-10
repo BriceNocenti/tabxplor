@@ -14,11 +14,13 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             color = "no",
             color_signif = "ignore",
             chi2 = FALSE,
+            anova = "welch",
             OR = "no",
             na = "keep",
             lvs = "all",
             other_if_less_than = 0,
             cleannames = TRUE,
+            refLevels = NULL,
             ref = "auto",
             ref2 = "first",
             comp = "tab",
@@ -36,9 +38,10 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             add_pct = FALSE,
             subtext = "",
             digits = 0,
+            n_min = 0,
+            export_format = "excel",
             exportExcel = NULL,
-            xl_path = "S:/Documents",
-            xl_filename = "Table.xlsx",
+            path = "~/Documents/Table",
             xl_replace = FALSE, ...) {
 
             super$initialize(
@@ -118,6 +121,13 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 "chi2",
                 chi2,
                 default=FALSE)
+            private$..anova <- jmvcore::OptionList$new(
+                "anova",
+                anova,
+                options=list(
+                    "welch",
+                    "classic"),
+                default="welch")
             private$..OR <- jmvcore::OptionList$new(
                 "OR",
                 OR,
@@ -152,6 +162,20 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 "cleannames",
                 cleannames,
                 default=TRUE)
+            private$..refLevels <- jmvcore::OptionArray$new(
+                "refLevels",
+                refLevels,
+                default=NULL,
+                template=jmvcore::OptionGroup$new(
+                    "refLevels",
+                    NULL,
+                    elements=list(
+                        jmvcore::OptionVariable$new(
+                            "var",
+                            NULL),
+                        jmvcore::OptionLevel$new(
+                            "ref",
+                            NULL))))
             private$..ref <- jmvcore::OptionString$new(
                 "ref",
                 ref,
@@ -196,7 +220,8 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 "method_cell",
                 method_cell,
                 options=list(
-                    "wilson"),
+                    "wilson",
+                    "wald"),
                 default="wilson")
             private$..method_diff <- jmvcore::OptionList$new(
                 "method_diff",
@@ -260,17 +285,26 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 min=0,
                 max=10,
                 default=0)
+            private$..n_min <- jmvcore::OptionInteger$new(
+                "n_min",
+                n_min,
+                min=0,
+                default=0)
+            private$..export_format <- jmvcore::OptionList$new(
+                "export_format",
+                export_format,
+                options=list(
+                    "excel",
+                    "html",
+                    "md"),
+                default="excel")
             private$..exportExcel <- jmvcore::OptionAction$new(
                 "exportExcel",
                 exportExcel)
-            private$..xl_path <- jmvcore::OptionString$new(
-                "xl_path",
-                xl_path,
-                default="S:/Documents")
-            private$..xl_filename <- jmvcore::OptionString$new(
-                "xl_filename",
-                xl_filename,
-                default="Table.xlsx")
+            private$..path <- jmvcore::OptionString$new(
+                "path",
+                path,
+                default="~/Documents/Table")
             private$..xl_replace <- jmvcore::OptionBool$new(
                 "xl_replace",
                 xl_replace,
@@ -284,11 +318,13 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$.addOption(private$..color)
             self$.addOption(private$..color_signif)
             self$.addOption(private$..chi2)
+            self$.addOption(private$..anova)
             self$.addOption(private$..OR)
             self$.addOption(private$..na)
             self$.addOption(private$..lvs)
             self$.addOption(private$..other_if_less_than)
             self$.addOption(private$..cleannames)
+            self$.addOption(private$..refLevels)
             self$.addOption(private$..ref)
             self$.addOption(private$..ref2)
             self$.addOption(private$..comp)
@@ -306,9 +342,10 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$.addOption(private$..add_pct)
             self$.addOption(private$..subtext)
             self$.addOption(private$..digits)
+            self$.addOption(private$..n_min)
+            self$.addOption(private$..export_format)
             self$.addOption(private$..exportExcel)
-            self$.addOption(private$..xl_path)
-            self$.addOption(private$..xl_filename)
+            self$.addOption(private$..path)
             self$.addOption(private$..xl_replace)
         }),
     active = list(
@@ -320,11 +357,13 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         color = function() private$..color$value,
         color_signif = function() private$..color_signif$value,
         chi2 = function() private$..chi2$value,
+        anova = function() private$..anova$value,
         OR = function() private$..OR$value,
         na = function() private$..na$value,
         lvs = function() private$..lvs$value,
         other_if_less_than = function() private$..other_if_less_than$value,
         cleannames = function() private$..cleannames$value,
+        refLevels = function() private$..refLevels$value,
         ref = function() private$..ref$value,
         ref2 = function() private$..ref2$value,
         comp = function() private$..comp$value,
@@ -342,9 +381,10 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         add_pct = function() private$..add_pct$value,
         subtext = function() private$..subtext$value,
         digits = function() private$..digits$value,
+        n_min = function() private$..n_min$value,
+        export_format = function() private$..export_format$value,
         exportExcel = function() private$..exportExcel$value,
-        xl_path = function() private$..xl_path$value,
-        xl_filename = function() private$..xl_filename$value,
+        path = function() private$..path$value,
         xl_replace = function() private$..xl_replace$value),
     private = list(
         ..row_vars = NA,
@@ -355,11 +395,13 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         ..color = NA,
         ..color_signif = NA,
         ..chi2 = NA,
+        ..anova = NA,
         ..OR = NA,
         ..na = NA,
         ..lvs = NA,
         ..other_if_less_than = NA,
         ..cleannames = NA,
+        ..refLevels = NA,
         ..ref = NA,
         ..ref2 = NA,
         ..comp = NA,
@@ -377,9 +419,10 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         ..add_pct = NA,
         ..subtext = NA,
         ..digits = NA,
+        ..n_min = NA,
+        ..export_format = NA,
         ..exportExcel = NA,
-        ..xl_path = NA,
-        ..xl_filename = NA,
+        ..path = NA,
         ..xl_replace = NA)
 )
 
@@ -388,7 +431,6 @@ jmvtabResults <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
     inherit = jmvcore::Group,
     active = list(
         html_table = function() private$.items[["html_table"]],
-        export_status = function() private$.items[["export_status"]],
         plot = function() private$.items[["plot"]],
         cache_state = function() private$.items[["cache_state"]]),
     private = list(),
@@ -402,10 +444,6 @@ jmvtabResults <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 options=options,
                 name="html_table",
                 title="Table"))
-            self$add(jmvcore::Html$new(
-                options=options,
-                name="export_status",
-                title=""))
             self$add(jmvcore::Image$new(
                 options=options,
                 name="plot",
@@ -482,8 +520,13 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   automatically.    \item \code{"color_all_signif"}: color by the guaranteed
 #'   (confidence-bound) effect --    only cells whose interval clears the
 #'   threshold show, with dimmer colors.  }
-#' @param chi2 Set to \code{TRUE} to make a Chi2 and add summary stats. Also
-#'   useful to color cells based on their contribution to variance.
+#' @param chi2 Set to \code{TRUE} to add a test p-value row: a Chi-square test
+#'   for categorical column variables and an ANOVA F-test for numeric ones
+#'   (chosen automatically per column type). Also enables colouring cells by
+#'   their contribution to variance.
+#' @param anova Which F statistic to display for numeric column variables when
+#'   the test is on: Welch's F (default, does not assume equal variances) or the
+#'   classic pooled F.
 #' @param OR With \code{pct = "row"} or \code{pct = "col"}, calculate and
 #'   print odds ratios  (for binary variables) or relative risks ratios (for
 #'   variables with 3 levels  or more). \itemize{  \item \code{"no"}: by
@@ -511,6 +554,7 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #' @param cleannames By default, clean levels names, by removing prefix
 #'   numbers like "1-", and text in parenthesis. Set to \code{FALSE} to avoid
 #'   this behaviour.
+#' @param refLevels .
 #' @param ref The reference cell to calculate differences and ratios   (used
 #'   to print \code{colors}) :   \itemize{    \item \code{"auto"}: by default,
 #'   cell difference from the corresponding total    (rows or cols depending on
@@ -549,7 +593,8 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   Read from the same confidence interval that is displayed, so stars and
 #'   bracket always agree.
 #' @param method_cell The proportion confidence-interval method for \code{ci =
-#'   "cell"}. Currently \code{"wilson"} (the score interval).
+#'   "cell"}: \code{"wilson"} (the score interval, default) or \code{"wald"}
+#'   (the normal approximation).
 #' @param method_diff The proportion confidence-interval method for \code{ci =
 #'   "diff"}. \code{"newcombe"} (default) is the dual of the two-proportion
 #'   score test, so the interval and the significance stars always agree.
@@ -573,14 +618,21 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #' @param subtext A character vector to print rows of legend under the table.
 #' @param digits The number of digits to print, as a single integer, or an
 #'   integer vector the same length as \code{col_vars}.
-#' @param exportExcel Press to export the table to Excel.
-#' @param xl_path "Folder in which to save exported Excel file"
-#' @param xl_filename "Name of exported Excel file"
-#' @param xl_replace "Set to \code{TRUE} to overwrite existing Excel file."
+#' @param n_min A pure display filter (0 = off). A row is dropped only when
+#'   its largest base across the column variables is below \code{n_min};
+#'   surviving cells whose own base is below \code{n_min} are blanked. Under
+#'   \code{pct = "col"} weak columns are dropped instead. Totals, the added-n
+#'   row/column and the p-value line are always kept. Recomputes nothing.
+#' @param export_format The export file format: Excel (\code{.xlsx}), HTML
+#'   (\code{.html}) or Markdown (\code{.md}).
+#' @param exportExcel Press to export the table to the chosen format.
+#' @param path Where to save the file. A full path, or a bare name (saved in
+#'   your Documents folder). The extension is added automatically from the
+#'   chosen format. \code{~} expands to your home folder.
+#' @param xl_replace "Set to \code{TRUE} to overwrite an existing file."
 #' @return A results object containing:
 #' \tabular{llllll}{
 #'   \code{results$html_table} \tab \tab \tab \tab \tab a html \cr
-#'   \code{results$export_status} \tab \tab \tab \tab \tab a html \cr
 #'   \code{results$plot} \tab \tab \tab \tab \tab an image \cr
 #'   \code{results$cache_state} \tab \tab \tab \tab \tab an image \cr
 #' }
@@ -596,11 +648,13 @@ jmvtab <- function(
     color = "no",
     color_signif = "ignore",
     chi2 = FALSE,
+    anova = "welch",
     OR = "no",
     na = "keep",
     lvs = "all",
     other_if_less_than = 0,
     cleannames = TRUE,
+    refLevels = NULL,
     ref = "auto",
     ref2 = "first",
     comp = "tab",
@@ -618,9 +672,10 @@ jmvtab <- function(
     add_pct = FALSE,
     subtext = "",
     digits = 0,
+    n_min = 0,
+    export_format = "excel",
     exportExcel,
-    xl_path = "S:/Documents",
-    xl_filename = "Table.xlsx",
+    path = "~/Documents/Table",
     xl_replace = FALSE) {
 
     if ( ! requireNamespace("jmvcore", quietly=TRUE))
@@ -649,11 +704,13 @@ jmvtab <- function(
         color = color,
         color_signif = color_signif,
         chi2 = chi2,
+        anova = anova,
         OR = OR,
         na = na,
         lvs = lvs,
         other_if_less_than = other_if_less_than,
         cleannames = cleannames,
+        refLevels = refLevels,
         ref = ref,
         ref2 = ref2,
         comp = comp,
@@ -671,9 +728,10 @@ jmvtab <- function(
         add_pct = add_pct,
         subtext = subtext,
         digits = digits,
+        n_min = n_min,
+        export_format = export_format,
         exportExcel = exportExcel,
-        xl_path = xl_path,
-        xl_filename = xl_filename,
+        path = path,
         xl_replace = xl_replace)
 
     analysis <- jmvtabClass$new(

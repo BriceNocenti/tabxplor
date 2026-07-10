@@ -197,7 +197,7 @@ argument that applies `tab_spread()` at the end.
 - **References & axes**: §4 (`ref` as a per-row_var named vector), §5 (row_var-axis globalisation),
   §6 (`totrow`/`totcol` + singular-arg deprecations), §19 (empirical-OR level reference).
 - **Display, output & export**: §7 (col% + several row_vars → transpose at export), §8 (exporter
-  base+list methods; Excel engine → Phase 9), §10 (total-column base range), §13 (output-shape table),
+  base+list methods; Excel engine → Phase 11), §10 (total-column base range), §13 (output-shape table),
   §18 (numeric diff-color scale — sd-standardized), §21 (exporter phasing 7 vs 9 + the backend seam),
   §22 (exporter feature parity — what to unify / extend / keep exporter-specific), §23 (tab_kable
   performance profile — empirical).
@@ -417,7 +417,7 @@ difficulty is a UI setting both consistently). It is therefore kept, warn-only, 
 `dev/tabxplor_argument_computation_map.md` §8. This is separate from the multi-row_var transpose
 workflow decided below.
 
-**Decision** (Phase 8): keep `pct="col"` **single-row_var** as-is. The col%-multi-row_var path is a
+**Decision** (Phase 10): keep `pct="col"` **single-row_var** as-is. The col%-multi-row_var path is a
 **manual, opt-in** workflow, not automatic magic:
 - The user inverts it themselves — swap row_vars↔col_vars and use `pct="row"` — so compaction/coloring/
   references all work on the built table.
@@ -436,29 +436,29 @@ mechanism (below).
 **`tab_transpose()`** (a stub the maintainer added to `R/tab.R` — **already `@export`ed** at
 [tab.R:1773](../R/tab.R#L1773) but undocumented, single-total-row/col only, unqualified verbs; so it is a
 *broken public function today*) is to be **finished, documented, and possibly generalised** (tab_vars?) at
-Phase 8 — it is the mechanism for the above. Do not wire it in before Phase 8.
+Phase 10 — it is the mechanism for the above. Do not wire it in before Phase 10.
 
 **compact + tab_vars**: deferred. Merging tables that carry tab_vars needs compound
 `group_by(tab_vars, row_var)`, interleaving row_vars within each tab_var block, per-(tab_var × row_var)
 reference re-scoping, chi2 alignment, and two-level print/kable rendering
-([tab_classes.R:969-975](../R/tab_classes.R#L969)) — revisit during Phase 8. Until then, tables with
+([tab_classes.R:969-975](../R/tab_classes.R#L969)) — revisit during Phase 10. Until then, tables with
 tab_vars stay a list/grouped structure regardless of `output_list`.
 
 ---
 
 ## 8. Exporters — base method + list method
 
-**Decision** (Phase 8): every exporter (`tab_xl`, `tab_kable`, `tab_md`, `tab_plot`) has (a) a base
+**Decision** (Phase 10): every exporter (`tab_xl`, `tab_kable`, `tab_md`, `tab_plot`) has (a) a base
 method for a single `tabxplor_tab`, and (b) a method for a **list of tables** that renders them
 **one-after-another, not merged** (kable: an HTML container holding several tables; xl: sheets/blocks;
 md: sequential). This is the export side of the "different tables → list() → export" escape hatch in § 5.
 
-**Excel engine (openxlsx → openxlsx2) — isolated to Phase 9 (follow-up decision, 2026-07-07).** Phase 8 builds the shared
+**Excel engine (openxlsx → openxlsx2) — isolated to Phase 11 (follow-up decision, 2026-07-07).** Phase 10 builds the shared
 exporter-prep helper and the base+list `tab_xl` methods on the **current openxlsx v1** engine. The engine
 swap to **openxlsx2** (common styles created once; optional conditional formatting) is a full dependency
-migration with its own parity risk, so it is **pulled out into its own Phase 9** (may ship in a 1.4.x
+migration with its own parity risk, so it is **pulled out into its own Phase 11** (may ship in a 1.4.x
 follow-up) — the exporter-prep unification must not be entangled with it. Precondition: `test-export-parity.R`
-green on openxlsx v1, so Phase 9 verifies byte-for-byte against a known-good baseline. See CLAUDE.md Phase 9.
+green on openxlsx v1, so Phase 11 verifies byte-for-byte against a known-good baseline. See CLAUDE.md Phase 11.
 
 ---
 
@@ -532,15 +532,15 @@ number(s) to show in each total-column cell?
 **Decided: A** — compute the range at display: render `[min;max]` (default) / `min` (global option) /
 scalar when equal, from each col_var's per-cell base (`tot_n`, and the weighted base recovered `wn/pct`).
 No overload, no new fields (18). C stays the fallback if the display logic proves heavy in an exporter.
-(Phase 3 for the fmt/print side; the exporters mirror it in Phase 8.)
+(Phase 3 for the fmt/print side; the exporters mirror it in Phase 10.)
 
 Implementation caveat (review session 4): the range is **cross-column** information —
 `format.tabxplor_fmt()` formats one column at a time and cannot see sibling columns — so the `[min;max]`
-must be computed by a **table-level display pre-pass** (print prep / the Phase 8 shared exporter-prep
+must be computed by a **table-level display pre-pass** (print prep / the Phase 10 shared exporter-prep
 helper) and injected into the total column's rendering, never inside the per-column format method.
 `tab_xl` corollary: a `[min;max]` cell is text, not a number — either write it as a text cell in the
 total column or fall back to Option C (`min` + subtext note) for Excel; decide with the exporter-prep
-helper at Phase 8.
+helper at Phase 10.
 
 ---
 
@@ -953,7 +953,7 @@ boundary cases only), so nothing is lost by not computing a separate score test.
   (+ `ci_prop_diff()` / `ci_mean_diff2()` dispatchers). `tab_ci()` (props) and `tab_num()` (means)
   both route through it; **DescTools is removed from the runtime** (Imports → Suggests, kept for the
   parity tests). Dead scalar helpers `ci_mean`/`ci_mean_diff` + the DescTools closures deleted.
-- **tab_xl stars deferred to Phase 8** (the exporter-unification phase, then openxlsx2 in Phase 9) —
+- **tab_xl stars deferred to Phase 10** (the exporter-unification phase, then openxlsx2 in Phase 11) —
   the console/`tab_md`/`tab_kable` stars flow from the single `format()` source of truth.
 - **CI *math* is unified now; CI *placement* is deferred to Phase 4/6.** All formulas live once in
   the `R/tab-agg.R` engine, called from exactly two sites — inline in `tab_num()` (means) and in the
@@ -975,31 +975,31 @@ Golden regenerated (conscious): `f_ci_cell`, `f_ci_diff` (display + struct), `f_
 
 ---
 
-## 21. Exporter phasing — Phase 8 (openxlsx v1 prep) vs Phase 9 (openxlsx2): keep split, add a backend seam
+## 21. Exporter phasing — Phase 10 (openxlsx v1 prep) vs Phase 11 (openxlsx2): keep split, add a backend seam
 
-The maintainer's question (2026-07-08): the Phase 8 `tab_xl()` rewrite is *already* a big restructure (today's
+The maintainer's question (2026-07-08): the Phase 10 `tab_xl()` rewrite is *already* a big restructure (today's
 `tab_xl` is **list-first — a bare df is wrapped to a one-element list at [tab_xl.R:91](../R/tab_xl.R#L91) and
 the entire body is `purrr::map`/`pwalk`; there is no single-tab path**), so should the openxlsx→openxlsx2
-engine swap ride along with it (§8 puts it in a separate Phase 9), or stay split?
+engine swap ride along with it (§8 puts it in a separate Phase 11), or stay split?
 
-### Decision — keep §8's split (Phase 8 on openxlsx v1, Phase 9 = openxlsx2), but factor a **backend seam** in Phase 8
+### Decision — keep §8's split (Phase 10 on openxlsx v1, Phase 11 = openxlsx2), but factor a **backend seam** in Phase 10
 
 Two *different* risk surfaces, and combining them forfeits the one thing that makes the swap safe — a
 byte-verified v1 baseline:
 
-- **Phase 8 risk = parity of the display bypass.** `tab_xl` does **not** go through `format.tabxplor_fmt()`
+- **Phase 10 risk = parity of the display bypass.** `tab_xl` does **not** go through `format.tabxplor_fmt()`
   (Export-Parity WARNING [tab_xl.R:541](../R/tab_xl.R#L541), [1087](../R/tab_xl.R#L1087)): it writes raw
   `get_num()` numbers and rebuilds display via `numfmt()` → Excel number-format codes. Adding stars (§16),
   the label attribute, and the base+list split (§8) all perturb *this* bypass. The regression oracle is
   `test-export-parity.R` (`format` vs the `tab_xl` bypass).
-- **Phase 9 risk = engine semantics.** openxlsx2 has a different style model (shared styles created once —
+- **Phase 11 risk = engine semantics.** openxlsx2 has a different style model (shared styles created once —
   the real speed lever), a long-reshape write path, and its own conditional-formatting API. The oracle here
-  must be **"byte-identical to the Phase-7 openxlsx-v1 output"** — which only exists once Phase 8 is green.
+  must be **"byte-identical to the Phase-7 openxlsx-v1 output"** — which only exists once Phase 10 is green.
 
 Entangling them means a broken cell can't be attributed to the restructure *or* the engine. So the split
-stands. **Refinement:** structure Phase 8's rewrite around a **narrow write/style backend interface** —
+stands. **Refinement:** structure Phase 10's rewrite around a **narrow write/style backend interface** —
 `{new_workbook, add_sheet, write_data(numbers), apply_style(cells, fill|font|border|numfmt), freeze_panes,
-set_widths/heights, conditional_format, save}` — implemented on openxlsx v1. Then **Phase 9 reimplements
+set_widths/heights, conditional_format, save}` — implemented on openxlsx v1. Then **Phase 11 reimplements
 only that ~12-call backend** against openxlsx2, leaving the shared prep, the color→style selection
 (`fmt_color_selection` + `select_in_color_style`, already shared with the console) and the sheet/offset
 orchestration untouched. This kills the "double-touch every `openxlsx::` call site" objection (the
@@ -1011,7 +1011,7 @@ draw.
 
 ### The perf premise for openxlsx2 is weaker than assumed — treat the swap as maintenance-driven, benchmark before committing
 
-The roadmap frames Phase 9 partly as a speed win (shared styles). Grounded caveat: openxlsx2 is **not
+The roadmap frames Phase 11 partly as a speed win (shared styles). Grounded caveat: openxlsx2 is **not
 reliably faster for styled writes**. Its maintainer's own position is *"if you need speed, go `writexl`"*
 (discussion #1281), and a documented case wrote ~10K rows to a **preformatted** workbook in **2.5–3 min**
 vs near-instant in openxlsx (issue #356) — openxlsx2 reshapes input to a long frame and per-cell style /
@@ -1022,7 +1022,7 @@ build the ~11 palette styles + the `st_digits*` set **once** and reuse — which
 [tab_xl.R:238](../R/tab_xl.R#L238)), and **less-awful conditional formatting** (the v1 conditional-format
 path was slow enough that the diff/ratio colors are hard cell styles, not CF — [tab_xl.R:150-267](../R/tab_xl.R#L150)
 is the commented-out CF attempt). Pin a small styled-write benchmark (a big `compact=TRUE` table, colors on)
-on **both** engines before committing Phase 9; if openxlsx2 loses, Phase 9 legitimately slips to a 1.4.x
+on **both** engines before committing Phase 11; if openxlsx2 loses, Phase 11 legitimately slips to a 1.4.x
 follow-up (or is dropped) — it does not block 1.4.0. This matches §8's "may ship in a 1.4.x follow-up".
 
 Sources: openxlsx2 styled-write slowness — JanMarvin/openxlsx2 issue #356
@@ -1037,29 +1037,29 @@ Grounded inventory of `tab_xl` ([tab_xl.R](../R/tab_xl.R)) vs `tab_kable`
 ([tab_classes.R:461](../R/tab_classes.R#L461)) vs `tab_md` ([tab_md.R](../R/tab_md.R)). Legend ✓ has / ✗
 lacks / ~ partial.
 
-| Capability                                                      | xl                  | kable                  | md               | Extend to the others?                                |
-|-----------------------------------------------------------------|---------------------|------------------------|------------------|------------------------------------------------------|
-| Cell **colors** (`fmt_color_selection`)                         | ✓ hard cell style   | ✓ inline span          | ✗                | md → short pandoc spans (Phase 8 md item)            |
-| text vs background color mode                                   | ✓                   | ✓                      | ✗                | —                                                    |
-| **Significance stars**                                          | ✗ bypasses format() | ✓ via `format()`       | ✓ via `format()` | **→ xl (Phase 8, §16)** — mirror into `numfmt`/style |
-| **Tooltips / hover extra stats**                                | ✗                   | ✓ (`title=` / popover) | ✗                | keep kable-only (see below)                          |
-| **col_var spanning header**                                     | ~ (layout)          | ✗ (borders only)       | ✓ [tab_md.R:227  | **→ kable** via `add_header_above` (readability)     |
-| **`n_min` greying** (hide small-n rows/cols)                    | ✓ tab_xl.R:1030     | ✗                      | ✗                | **→ kable & md** (data-quality signal)               |
-| **`hide_near_zero` greying**                                    | ✓ tab_xl.R:1311     | ✗                      | ✗                | **→ kable** (grey text); md ~ (marker only)          |
-| **`label` attribute** (question text)                           | ✗                   | ✗                      | ✗                | **→ all** (Phase 8 item — header/legend)             |
-| clean **NA hiding**                                             | ✓                   | ~ fragile HTML surgery | ✓ (`na=""`)      | **fix kable** in shared prep                         |
-| row/col-name **wrapping**                                       | ~                   | ✓ `tab_wrap_text`      | ~ truncate only  | md → wrap not truncate                               |
-| freeze / col widths / num-format / sheets / `colnames_rotation` | ✓                   | ✗                      | ✗                | **Excel-only — no meaning** for kable/md             |
-| interactivity (popover/JS)                                      | ✗                   | ✓                      | ✗                | **no meaning** for md; xl ~ (cell comment = clutter) |
-| clipboard / plain-text file                                     | ✗                   | ✗                      | ✓                | md/console-shaped — **no meaning** for xl            |
-| caption / title                                                 | ✓ `titles`          | ✓ `caption`            | ✗                | md → optional title line                             |
+| Capability                                                      | xl                  | kable                  | md               | Extend to the others?                                 |
+|-----------------------------------------------------------------|---------------------|------------------------|------------------|-------------------------------------------------------|
+| Cell **colors** (`fmt_color_selection`)                         | ✓ hard cell style   | ✓ inline span          | ✗                | md → short pandoc spans (Phase 10 md item)            |
+| text vs background color mode                                   | ✓                   | ✓                      | ✗                | —                                                     |
+| **Significance stars**                                          | ✗ bypasses format() | ✓ via `format()`       | ✓ via `format()` | **→ xl (Phase 10, §16)** — mirror into `numfmt`/style |
+| **Tooltips / hover extra stats**                                | ✗                   | ✓ (`title=` / popover) | ✗                | keep kable-only (see below)                           |
+| **col_var spanning header**                                     | ~ (layout)          | ✗ (borders only)       | ✓ [tab_md.R:227  | **→ kable** via `add_header_above` (readability)      |
+| **`n_min` greying** (hide small-n rows/cols)                    | ✓ tab_xl.R:1030     | ✗                      | ✗                | **→ kable & md** (data-quality signal)                |
+| **`hide_near_zero` greying**                                    | ✓ tab_xl.R:1311     | ✗                      | ✗                | **→ kable** (grey text); md ~ (marker only)           |
+| **`label` attribute** (question text)                           | ✗                   | ✗                      | ✗                | **→ all** (Phase 10 item — header/legend)             |
+| clean **NA hiding**                                             | ✓                   | ~ fragile HTML surgery | ✓ (`na=""`)      | **fix kable** in shared prep                          |
+| row/col-name **wrapping**                                       | ~                   | ✓ `tab_wrap_text`      | ~ truncate only  | md → wrap not truncate                                |
+| freeze / col widths / num-format / sheets / `colnames_rotation` | ✓                   | ✗                      | ✗                | **Excel-only — no meaning** for kable/md              |
+| interactivity (popover/JS)                                      | ✗                   | ✓                      | ✗                | **no meaning** for md; xl ~ (cell comment = clutter)  |
+| clipboard / plain-text file                                     | ✗                   | ✗                      | ✓                | md/console-shaped — **no meaning** for xl             |
+| caption / title                                                 | ✓ `titles`          | ✓ `caption`            | ✗                | md → optional title line                              |
 
 ### Decisions
 
 - **Unify (shared prep + shared display path).** The "canonical col_vars → validate → compact" preamble is
   **duplicated four times** (tab_md self-flags it [tab_md.R:47](../R/tab_md.R#L47); also `tab_kable`
   [tab_classes.R:486](../R/tab_classes.R#L486), `tab_compact`, and `tab_xl`'s inline non-compacting variant)
-  → one prep helper (Phase 8, §8). **Stars, the `label` attribute, and NA-hiding must live in the shared
+  → one prep helper (Phase 10, §8). **Stars, the `label` attribute, and NA-hiding must live in the shared
   path** so the `tab_xl` bypass stops silently diverging from `format.tabxplor_fmt()`.
 - **Extend cross-exporter (meaningful):** stars → `tab_xl` (§16); `n_min`/`hide_near_zero` greying →
   `tab_kable` (grey text) and, as a marker, `tab_md`; the col_var **spanning header** → `tab_kable`
@@ -1157,7 +1157,7 @@ byte-size, per-cell node/attribute count, and attached-dependency weight — all
   render); `popover=TRUE` needs bootstrap JS to initialise a widget on **every** cell (O(cells) event
   wiring) — the expensive interactive mode. Do **not** default popovers on at Jamovi scale.
 
-### Optimization levers (ranked; for Phase 8 light-mode + Phase 7 cache)
+### Optimization levers (ranked; for Phase 10 light-mode + Phase 7 cache)
 
 1. **Cut / cache the color computation (biggest win).** `fmt_color_selection` is ~75 % of the render and is
    pure per-column overhead. (a) **Vectorise/batch** the per-column break loop (compute the break→style map
@@ -1373,14 +1373,14 @@ to get ≥12 independent units.
 **Byte-identity: 0 / 34 tables differ** from sequential (big 16 + fewtab 2 + small 16), workers running the
 same dev source via `devtools::load_all()` → parallelising the pair axis is output-safe.
 
-| dataset (seq batch)        | backend  | best speedup | at W | setup    | note                                   |
-|----------------------------|----------|--------------|------|----------|----------------------------------------|
-| big_8M, 16 tab (3.33 s)    | parallel | **2.49×**    | 8    | 11.2 s   | scales W2→8 (1.05→2.49×), dips at 12    |
-| big_8M, 16 tab             | mirai    | 1.51×        | 12   | 8.9 s    | oddly **flat ~1.2×** across W           |
-| big_8M, 16 tab             | future   | —            | —    | —        | **errors**: globals > 500 MB, resent    |
-| big_8M, **2** tab (0.41 s) | both     | **0.5–0.6×** | 8    | 6–11 s   | **loss** even batch-only; setup 15–27×  |
-| small_gss, 16 tab (2.55 s) | mirai    | **3.49×**    | 4    | **1.0 s**| net win even *fresh-call* (1.70 s)      |
-| small_gss, 16 tab          | parallel | 2.56×        | 8    | 2.2 s    | scales cleanly                          |
+| dataset (seq batch)        | backend  | best speedup | at W | setup     | note                                   |
+|----------------------------|----------|--------------|------|-----------|----------------------------------------|
+| big_8M, 16 tab (3.33 s)    | parallel | **2.49×**    | 8    | 11.2 s    | scales W2→8 (1.05→2.49×), dips at 12   |
+| big_8M, 16 tab             | mirai    | 1.51×        | 12   | 8.9 s     | oddly **flat ~1.2×** across W          |
+| big_8M, 16 tab             | future   | —            | —    | —         | **errors**: globals > 500 MB, resent   |
+| big_8M, **2** tab (0.41 s) | both     | **0.5–0.6×** | 8    | 6–11 s    | **loss** even batch-only; setup 15–27× |
+| small_gss, 16 tab (2.55 s) | mirai    | **3.49×**    | 4    | **1.0 s** | net win even *fresh-call* (1.70 s)     |
+| small_gss, 16 tab          | parallel | 2.56×        | 8    | 2.2 s     | scales cleanly                         |
 
 - **The small df is the *sweet spot*, the 8M df the *worst case*** — the inverse of the naïve prior. Reason:
   per-table cost = a bandwidth-bound O(N) scan **+ an N-independent O(cells) fmt/chi2/vctrs overhead**
@@ -1403,10 +1403,10 @@ same dev source via `devtools::load_all()` → parallelising the pair axis is ou
 tables from one survey". **Byte-identical (0/16 every N).**
 
 | N (rows) | seq(DT=8) | mirai W=4 | parallel W=4 | parallel W=8 | mirai W=4 setup | fresh-call W=4      |
-|----------|-----------|-----------|--------------|--------------|-----------------|--------------------|
-| 10 000   | 2.39 s    | **3.32×** | 2.99×        | **3.79×**    | 0.98 s          | wins (1.70 vs 2.39)|
-| 30 000   | 2.49 s    | 2.65×     | 2.47×        | **4.22×**    | 0.97 s          | wins (1.91 vs 2.49)|
-| 60 000   | 2.48 s    | 2.51×     | 2.70×        | **4.07×**    | 0.97 s          | wins (1.96 vs 2.48)|
+|----------|-----------|-----------|--------------|--------------|-----------------|---------------------|
+| 10 000   | 2.39 s    | **3.32×** | 2.99×        | **3.79×**    | 0.98 s          | wins (1.70 vs 2.39) |
+| 30 000   | 2.49 s    | 2.65×     | 2.47×        | **4.22×**    | 0.97 s          | wins (1.91 vs 2.49) |
+| 60 000   | 2.48 s    | 2.51×     | 2.70×        | **4.07×**    | 0.97 s          | wins (1.96 vs 2.48) |
 
 - **The sequential batch is ~2.5 s FLAT from 10k→60k** — direct proof the per-table cost is the
   **N-independent O(cells) fmt/chi2 work**, not the scan (a 60k scan is ~nothing). That is precisely what
@@ -1469,12 +1469,12 @@ chi2/ANOVA are reused, so the remaining floor is the **O(cells) tier-3/4 work** 
 the `fmt`-record assembly + colour — which the design **recomputes every run** (§ cache design: "fmt is
 sub-ms, not worth caching"). At real-world scale that assumption breaks.
 
-| interaction (warm) | small (1 row_var × 3 col_vars) | **big (3 row_vars × 3 col_vars)** |
-|--------------------|-------------------------------|-----------------------------------|
-| build (jmvtab_build) | ~0.23 s | **~0.95–1.15 s** |
-| render (tab_kable, tooltips off) | ~0.28 s | ~0.60 s |
-| → dominant cost | **render** | **build (the fmt assembly)** |
-| total (R) | ~0.5 s | ~1.5 s (≈ 2 s in the Jamovi UI) |
+| interaction (warm)               | small (1 row_var × 3 col_vars) | **big (3 row_vars × 3 col_vars)** |
+|----------------------------------|--------------------------------|-----------------------------------|
+| build (jmvtab_build)             | ~0.23 s                        | **~0.95–1.15 s**                  |
+| render (tab_kable, tooltips off) | ~0.28 s                        | ~0.60 s                           |
+| → dominant cost                  | **render**                     | **build (the fmt assembly)**      |
+| total (R)                        | ~0.5 s                         | ~1.5 s (≈ 2 s in the Jamovi UI)   |
 
 - **The bottleneck FLIPS with table size.** On a single-row_var table the ~0.28 s render dominates; on a
   real-world table-of-tables (≈ 9 pair-tables × thousands of cells) the ~0.95 s **build** dominates.
@@ -1482,7 +1482,7 @@ sub-ms, not worth caching"). At real-world scale that assumption breaks.
   ~0.94 s on the big table because `jmvtab_build` re-runs the entire tier-3/4 pipeline — nothing below
   the aggregate is cached. Tier-1/tier-2 caching alone cannot make the big table instant.
 
-**Two levers to reach "instant" on real tables (Phase 8 + the new Phase 7h):**
+**Two levers to reach "instant" on real tables (Phase 10 + the new Phase 7h):**
 1. **Render rewrite** (CSS-only `<table>` builder, no kableExtra) → the ~0.6 s render. `format()` +
    colour-codes are only ~30 ms, so the render itself could drop to tens of ms.
 2. **fmt-build optimisation (Phase 7h)** → the ~0.95 s build: either a faster `vctrs::new_rcrd`
@@ -1529,7 +1529,7 @@ swap-under-stars pair (Q14), per-column tests are `test`-tibble rows rather than
   from-the-middle counts entry and the Jamovi cache **reuse that same core** rather than fork the math.
 - **One display contract, many surfaces.** The bounds / `ratio` / `pvalue` fields, the output-shape rule
   (§13), and the exporter base+list methods (§8) all read the same per-cell fields, so console, kable, md
-  and Excel stay in parity — which is why the Excel *engine* swap (Phase 9) is just a backend change
+  and Excel stay in parity — which is why the Excel *engine* swap (Phase 11) is just a backend change
   behind an unchanged contract.
 
 The **one combined field pass** (§9 — 15 → 18 fields) is the keystone that unlocks all of this, which is

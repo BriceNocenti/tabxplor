@@ -387,6 +387,10 @@ get_num <- function(x) {
   out[!nas & display == "rr"     ] <- get_ratio(x)[!nas & display == "rr"     ]
   out[!nas & display %in% c("or", "OR")] <- get_or(x)[!nas & display %in% c("or", "OR")     ]
   out[!nas & display == "or_pct" ] <- get_or  (x)[!nas & display == "or_pct" ]
+  # Phase 7g: "blank" is a display-only mask (the n_min helper sets it on small-base cells);
+  # it carries NO number (format() emits ""), while the underlying n/pct/tot_n stay intact so
+  # the mask is fully reversible by resetting `display`.
+  out[!nas & display == "blank"  ] <- NA_real_
   out
 }
 
@@ -1876,6 +1880,10 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
     out[add] <- paste0(out[add], st[add])
   }
 
+  # Phase 7g: a "blank" cell (n_min mask) renders as a true empty string in every consumer
+  # (console/pillar, tab_kable, tab_md), distinct from a genuine NA cell (which keeps `na`).
+  out[!nas & display == "blank"] <- ""
+
   #out <- stringr::str_pad(out, max(stringr::str_length(out), na.rm = TRUE))
   out
 }
@@ -2311,6 +2319,9 @@ fmt_color_slots <- function(x, plan) {
   }
 
   slot[!plan$gate] <- 0L
+  # Phase 7g: a "blank" cell (n_min mask) shows no value, so it must show no colour either --
+  # in both channels and in fmt_get_color_code (which all route through here).
+  slot[get_display(x) == "blank"] <- 0L
   slot
 }
 

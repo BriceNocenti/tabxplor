@@ -280,6 +280,16 @@ ci_wilson <- function(p, n, conf_level = 0.95) {
   list(inf = b$inf, sup = b$sup, pvalue = vctrs::vec_recycle(NA_real_, length(p)))
 }
 
+# PIVOT counterpart for a single proportion: the WALD normal-approximation interval
+# p +/- z*sqrt(p(1-p)/n) (Phase 7g -- an opt-in `method_cell`, commonly taught). It is the
+# degenerate one-group version of the Wald arm already in ci_prop_diff(). Cell CI -> pvalue NA.
+# WARNING: at p in {0, 1} se = 0 -> a degenerate zero-width interval (Wilson never degenerates);
+# bounds can also fall outside [0, 1] (the pct_ci display clamps to [0, 100], same as method_diff
+# = "wald"). Kept for teaching parity; wilson stays the default.
+ci_wald <- function(p, n, conf_level = 0.95) {
+  ci_pivot(p, sqrt(p * (1 - p) / n), df = Inf, conf_level = conf_level, want_p = FALSE)
+}
+
 # SCORE shape, proportion difference: Newcombe method 10 (hybrid score, built from the two
 # groups' Wilson intervals). Its exact dual test has no closed form, so the inversion p is
 # found by a vectorised bisection on z (monotone). want_p = FALSE skips it (one interval eval).

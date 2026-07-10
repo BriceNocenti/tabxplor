@@ -7,7 +7,8 @@
 #   - jmvtab.h.R is GENERATED from jmvtab.a.yaml (jmvtools::prepare()); never hand-edit it.
 #   - The module runs in Jamovi's bundled R -- keep dependencies to what the package Imports/Suggests.
 #   - The cache lives ONLY in $state (survives the engine reset); never rely on R globals (§5.2).
-#   - Excel export is the historical typed-path implementation (redesign is roadmap Phase 7f).
+#   - Export (Excel / HTML / Markdown; Phase 7g) resolves a typed path (Documents default) and
+#     reports via a jmvcore::Notice -- the export dispatch lives in R/jmvtab-export.R.
 # See: dev/tabxplor_jmvtab_cache_design.md ; CLAUDE.md > 1.4.0 roadmap > Phase 7e.
 
 # @rdname jamovi
@@ -19,19 +20,6 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
     .run = function() {
 
       data <- self$data
-
-      # --- Excel folder pre-check (before building the table, to fail fast) ------------------
-      folder_path <- NULL
-      if (isTRUE(self$options$exportExcel)) {
-        folder_path <- path.expand(stringr::str_remove_all(self$options$xl_path, "\"|'"))
-        if (!dir.exists(folder_path)) {
-          self$results$export_status$setContent(private$.status_box(
-            paste0("Error: the specified folder does not exist: <strong>", folder_path, "</strong>"),
-            ok = FALSE
-          ))
-          return(invisible(NULL))
-        }
-      }
 
       # --- Weights ---------------------------------------------------------------------------
       # self$data only holds the selected variables; a Data-level weight (Data >>> Weights) is
@@ -47,6 +35,13 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
 
       # --- Build the table through the cached pipeline ---------------------------------------
       opts  <- private$.opts(wt)
+
+      # Phase 7g: the ANOVA F displayed for numeric col_vars (Welch vs classic) is a global option
+      # read while BUILDING the p-value line, so set it before the build and restore it afterwards.
+      anova_option <- getOption("tabxplor.anova")
+      options("tabxplor.anova" = if (identical(self$options$anova, "classic")) "classic" else "welch")
+      on.exit(options("tabxplor.anova" = anova_option), add = TRUE)
+
       store <- self$results$cache_state$state          # NULL on the first run
       built <- jmvtab_build(data, opts, store)
       self$results$cache_state$setState(built$store)   # persist tiers 1-2 for the next interaction
@@ -58,29 +53,19 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
       options("tabxplor.ci_print" = if (self$options$ci_print == "moe") "moe" else "ci")
       on.exit(options("tabxplor.ci_print" = ci_print_option), add = TRUE)
 
-      # --- Excel export (historical typed-path implementation; redesign is Phase 7f) ----------
+      # --- Export (Excel / HTML / Markdown; Phase 7g) ----------------------------------------
+      # The `exportExcel` Action is a boolean click (§5.3). The format chooses the extension; the
+      # user-typed `path` is resolved (Documents default, ~ -> USERPROFILE) and the result reported
+      # via a jmvcore::Notice (info / error). See R/jmvtab-export.R.
       if (isTRUE(self$options$exportExcel)) {
-        file_path <- path_sanitize(self$options$xl_filename)
-        if (is.null(file_path) || file_path == "") file_path <- "Table.xlsx"
-        file_path <- file.path(folder_path, file_path)
-        if (!grepl("\\.xlsx$", file_path, ignore.case = TRUE)) file_path <- paste0(file_path, ".xlsx")
-
+        fmt <- self$options$export_format
+        ext <- switch(fmt, "excel" = "xlsx", "html" = "html", "md" = "md", "xlsx")
+        p   <- resolveExportPath(self$options$path, ext)
         tryCatch({
-          xl_result_path <- tab_xl(
-            tabs, path = file_path, sheets = "unique",
-            open = FALSE, replace = self$options$xl_replace
-          ) |>
-            capture.output() |>
-            stringr::str_remove("^\\[1\\] ") |>
-            stringr::str_remove_all("\"") |>
-            normalizePath(winslash = "\\")
-          self$results$export_status$setContent(private$.status_box(
-            paste0("Successfully exported to Excel: <strong>", xl_result_path, "</strong>"), ok = TRUE
-          ))
+          jmvtab_export(tabs, format = fmt, path = p, replace = self$options$xl_replace)
+          private$.notice(paste0("Saved to: ", p), ok = TRUE)
         }, error = function(err) {
-          self$results$export_status$setContent(private$.status_box(
-            paste0("Excel export failed: <strong>", err$message, "</strong>"), ok = FALSE
-          ))
+          private$.notice(paste0("Export failed: ", err$message), ok = FALSE)
         })
       }
 
@@ -103,9 +88,15 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         color_signif = self$options$color_signif,
         OR           = self$options$OR,
         chi2         = self$options$chi2,
+        # Phase 7g: `anova` selects the displayed F (welch/classic). It is baked into the p-value
+        # line at build time, so it must sit in the tier-3 base-key (not `reapplied`) -> a toggle
+        # rebuilds. The global option is set from it around the build in .run().
+        anova        = self$options$anova,
         na           = self$options$na,
         levels       = self$options$lvs,             # option named `lvs` (jmvcore has a levels() method)
-        ref          = self$options$ref,
+        # Phase 7g: the reference-level picker (refLevels) drives `ref` when the user picked a level;
+        # otherwise the expert free-text `ref` box is used (jmvtab_ref_vector()).
+        ref          = jmvtab_ref_vector(self$options$refLevels, self$options$ref),
         ref2         = self$options$ref2,
         comp         = self$options$comp,
         ci           = self$options$ci,
@@ -120,6 +111,7 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         add_n        = self$options$add_n,
         add_pct      = self$options$add_pct,
         subtext      = self$options$subtext,
+        n_min        = self$options$n_min,           # Phase 7g: small-base display filter (tier 4)
         display      = self$options$display,
         output_list  = FALSE,
         totaltab_name = gettext("Ensemble", domain = "R-tabxplor"),
@@ -159,15 +151,15 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         vctrs::vec_restore(tabs_html)
     },
 
-    # Small colored status box for the Excel-export message.
-    .status_box = function(html, ok = TRUE) {
-      col <- if (ok) c(bg = "#ecfdf5", border = "#a7f3d0", fg = "#065f46")
-             else    c(bg = "#fee2e2", border = "#fecaca", fg = "#7f1d1d")
-      paste0(
-        "<div style=\"background-color:", col[["bg"]], ";border:1px solid ", col[["border"]],
-        ";color:", col[["fg"]], ";padding:10px 12px;border-radius:4px;font-size:0.95em;\">",
-        html, "</div>"
+    # Report an export result via a native jmvcore::Notice (info / error), inserted at the top of
+    # the results (dev guide §7.6 / §14). Replaces the old hand-built HTML status box.
+    .notice = function(text, ok = TRUE) {
+      notice <- jmvcore::Notice$new(
+        options = self$options, name = "exportNotice",
+        type = if (ok) jmvcore::NoticeType$INFO else jmvcore::NoticeType$ERROR
       )
+      notice$setContent(text)
+      self$results$insert(1, notice)
     },
 
     .plot = function(image, ...) {

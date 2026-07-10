@@ -280,3 +280,35 @@ test_that("Phase 7f: adding a col_var is a base change (new tier-3 entry, other 
   expect_false(isTRUE(r$hits$tab3))                 # different col_var set -> different base-key -> rebuild
   expect_true(r$hits$agg[["marital\rrace"]])        # but the race count aggregate (tier 1) is reused
 })
+
+test_that("Phase 7g: n_min is a tier-4 re-derive that never corrupts the cached armed table", {
+  o0   <- jmv_opts(row_vars = "marital", col_vars = "race", pct = "row")
+  full <- jmvtab_build(gss, o0, NULL)
+
+  # apply n_min on the SAME store: fewer rows, and == applying the helper to the full built table
+  oN    <- utils::modifyList(o0, list(n_min = 5000))
+  small <- jmvtab_build(gss, oN, full$store)
+  expect_lt(nrow(small$tabs), nrow(full$tabs))
+  expect_equal(small$tabs, tab_apply_n_min(full$tabs, 5000))
+
+  # re-deriving with n_min = 0 gives the full table back -> the cached armed table was NOT filtered
+  back <- jmvtab_build(gss, o0, small$store)
+  expect_equal(back$tabs, full$tabs)
+})
+
+test_that("Phase 7g: anova sits in the tier-3 base-key (welch <-> classic rebuilds)", {
+  base <- jmv_opts(row_vars = "marital", col_vars = "tvhours", chi2 = TRUE)
+  s <- jmvtab_build(gss, utils::modifyList(base, list(anova = "welch")), NULL)$store
+  r <- jmvtab_build(gss, utils::modifyList(base, list(anova = "classic")), s)
+  expect_false(isTRUE(r$hits$tab3))    # anova changed -> different base-key -> rebuild
+})
+
+test_that("Phase 7g: the reference-level picker vector drives the cache like any ref change", {
+  base <- jmv_opts(row_vars = "marital", col_vars = "race", pct = "row")
+  full <- jmvtab_build(gss, base, NULL)
+  ref  <- jmvtab_ref_vector(list(list(var = "marital", ref = "Divorced")), "auto")
+  r    <- jmvtab_build(gss, utils::modifyList(base, list(ref = ref)), full$store)
+  # a named ref differs from "auto" -> tier-3 tuple change -> rebuild, but tier-1 aggregate reused
+  expect_false(isTRUE(r$hits$tab3))
+  expect_true(r$hits$agg[["marital\rrace"]])
+})

@@ -396,6 +396,26 @@ jmv_coerce_numeric_cols <- function(data, col_vars) {
   data
 }
 
+# Build tab()'s `ref` argument from the Phase 7g reference-level picker. `refLevels` is the jamovi
+# Array option = a list of {var, ref} (one per selected row_var; ref = a chosen level label, or NULL /
+# "" when the user left it on the default). If the user picked AT LEAST ONE explicit level, return a
+# named character vector keyed by var (unset entries -> "auto"), which resolve_ref_vector() reads as a
+# per-row_var reference. Otherwise fall back to the expert free-text `ref` (auto/tot/first/regex/int).
+#' @keywords internal
+#' @noRd
+jmvtab_ref_vector <- function(refLevels, free_text_ref = "auto") {
+  if (length(refLevels) == 0) return(free_text_ref)
+  get1 <- function(e, k) { v <- e[[k]]; if (is.null(v)) NA_character_ else as.character(v) }
+  vars <- vapply(refLevels, get1, character(1), k = "var")
+  refs <- vapply(refLevels, get1, character(1), k = "ref")
+  keep <- !is.na(vars) & nzchar(vars)
+  vars <- vars[keep]; refs <- refs[keep]
+  if (length(vars) == 0) return(free_text_ref)
+  if (!any(!is.na(refs) & nzchar(refs))) return(free_text_ref)   # no explicit level -> free-text
+  refs[is.na(refs) | !nzchar(refs)] <- "auto"
+  stats::setNames(refs, vars)
+}
+
 
 # === Tier 3: built-table cache (display / colour / reference re-use) =======================
 
@@ -434,7 +454,7 @@ jmv_tab3_base_key <- function(opts, ce, row_vars, col_vars, tab_vars, wt_chr) {
   )
   reapplied  <- c("digits", "display", "cleannames", "color", "color_signif",
                   "ref", "ref2", "comp", "OR", "ci", "conf_level",
-                  "method_cell", "method_diff", "stars")
+                  "method_cell", "method_diff", "stars", "n_min")
   structural <- opts[setdiff(names(opts), reapplied)]
   jmv_hash(list("tab3", agg_id, structural))
 }
@@ -643,6 +663,12 @@ jmvtab_build <- function(data, opts, store) {
   tabs <- jmv_reapply_digits(tabs, opts$digits)     # digits (proportion + mean magnitude floor)
   tabs <- jmv_apply_display(tabs, opts)             # display combobox + ci="cell" pct_ci
   if (isTRUE(opts$cleannames)) tabs <- jmvtab_cleannames_display(tabs)
+  # Phase 7g: n_min small-base filter -- tier 4, applied to the RETURNED copy only (never the
+  # cached `armed` table), so toggling n_min is a cheap re-derive from the full armed table.
+  if (length(opts$n_min) > 0 && any(opts$n_min > 0, na.rm = TRUE)) {
+    tabs <- if (is.data.frame(tabs)) tab_apply_n_min(tabs, opts$n_min)
+            else purrr::map(tabs, tab_apply_n_min, n_min = opts$n_min)
+  }
 
   list(tabs = tabs, store = ce$store, hits = ce$hits)
 }

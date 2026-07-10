@@ -9,10 +9,6 @@ items:
       title: Table
       type: Html
 
-    - name: export_status
-      title: ""
-      type: Html
-
     # - name:  chi2_table
     #   title: Chi2 Test
     #   type:  Table

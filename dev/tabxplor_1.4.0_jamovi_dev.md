@@ -670,6 +670,23 @@ label string** — which fits tabxplor's `ref` (a level name / regex) semantics 
 
 ### 12.3 `.js` (verbatim from `logregbin.events.js`, with the corrected `applyToItems`)
 
+> **jus 3.0 PITFALL (2026-07-10, confirmed live).** `logregbin` is `jus: '2.0'`, where the events
+> `this`/`context` carries `.clone`. tabxplor is **`jus: '3.0'`**, where it does NOT — use the
+> **global `utils.clone(...)`** instead (verified against `jmv-anova`, also jus 3.0, which uses
+> `utils.clone` and `view_updated`). Copying `context.clone` from the jus-2.0 snippet below makes the
+> root `update` handler **throw on panel load → the options panel hangs on an infinite spinner with
+> no error**. Also bind the root view update as both `update` (explicit `events: update:`) and
+> `view_updated` (the jus-3.0 naming-convention alias) so initial sync fires regardless. See
+> `jamovi/js/jmvtab.js` for the fixed, jus-3.0 version.
+>
+> **LAYOUT PITFALL (same session).** A jamovi `LayoutBox`/`CollapseBox` must NOT mix children that
+> set `cell: {column, row}` with children that don't — a cell-less child is auto-placed onto an
+> already-claimed cell → **`Uncaught (in promise) Cell already exists`** (another silent infinite
+> spinner). Dropping the `refLevels` `ListBox` (cell-less) beside the celled `ref`/`comp`/`ref2`
+> boxes triggered it. Fix: put the cell-less control and the celled grid in **separate** wrapper
+> LayoutBoxes. A quick validator (walk the compiled `.u.yaml`, flag any parent whose children mix
+> celled/cell-less or reuse a `{column,row}`) catches this before install.
+
 ```js
 const events = {
     update:               function(ui) { calcModelTerms(ui, this); updateLevelControls(ui, this); },

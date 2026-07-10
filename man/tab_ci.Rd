@@ -57,8 +57,8 @@ With \code{ci = "diff"}, store and print per-cell significance stars for the dif
 the reference, read from the same interval that is displayed (universal CI-inclusion), so the
 stars and the bracket never disagree. \code{FALSE} skips the significance computation.}
 
-\item{method_cell}{Character string, the proportion CI method for \code{ci = "cell"}.
-Currently \code{"wilson"} (the score interval, default).}
+\item{method_cell}{Character string, the proportion CI method for \code{ci = "cell"}: either
+\code{"wilson"} (the score interval, default) or \code{"wald"} (the normal approximation).}
 
 \item{method_diff}{Character string, the proportion CI method for \code{ci = "diff"}: one of
 \code{"newcombe"} (default, hybrid-score, dual of the two-proportion score test), \code{"ac"}

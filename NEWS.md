@@ -42,7 +42,13 @@
   reconstructed from a single half-width, which mis-drew Wilson/Newcombe intervals). `ci = "cell"`
   also draws an interval on the total column now.
 * New `method_cell` / `method_diff` arguments on `tab()` (already on `tab_many()`/`tab_ci()`):
+  `method_cell` accepts `"wilson"` (default) or `"wald"` (the normal approximation, commonly taught);
   `method_diff` accepts `"newcombe"` (default), `"ac"` or `"wald"`.
+* New `n_min` argument on `tab()` --- hide small-base rows/columns to read a table without the noise
+  of unreliable cells. A row is dropped only when its **largest** base across the column variables is
+  below `n_min`; surviving cells whose own base is below `n_min` are blanked; under `pct = "col"` weak
+  columns are dropped. It is a pure display filter: totals, the added-`n` row/column and the p-value
+  line are always kept, and nothing (percentages, tests, intervals) is recomputed.
 * Optional Kish effective sample size for weighted numeric (mean) confidence intervals /
   significance, via `options("tabxplor.kish_neff" = TRUE)`. Off by default (weighted estimate with
   the unweighted count, as before).
@@ -70,6 +76,7 @@
   `tab_spread()`), with optional `names_prefix` / `names_sort`.
 
 ## Internal
+* The jamovi module (`jmvtab`) gained several user-facing features: a **per-row-variable reference-level picker** (choose the comparison level of each row variable from a list, instead of typing it); **export to Excel, HTML or Markdown** (pick a format, the button label follows, and the file is written to a typed path defaulting to your Documents folder, with a confirmation notice); an **`n_min`** control to hide small-base rows/columns; a **Wald** option for the cell confidence interval; and a clearer **statistical-test** toggle (Chi-square for categorical columns, ANOVA F for numeric ones) with a Welch-vs-classic ANOVA choice.
 * The jamovi module (`jmvtab`) now uses a live multi-tier cache: after the first table, changing an option (percentages, reference, colors, display, adding a variable) reuses the cached counts and chi-squared/ANOVA instead of recomputing everything, so results update near-instantly on normal survey data. The Jamovi HTML render also drops the per-cell hover tooltips (inert in Jamovi and roughly half the render time). The module drives the same `tab()` pipeline with the cache injected (no separate code path), so its tables stay identical to `tab()`. Beyond the counts/tests, changing only the **display or colours** (number of digits, the displayed value, the colour measure `"diff"`/`"ratio"`, or the `color_signif` significance policy) now reuses the already-built table and only re-paints it, skipping the whole cell rebuild — these toggles are effectively instant even on a big table-of-tables (e.g. a colour change on a 9-table grid dropped from ~1.1 s to ~0.04–0.19 s). Building `tab()` / `tab_num()` tables is also a little faster overall (the per-cell format assembly hoists its constant work out of the inner loop).
 * Rewrote the Chi-squared / ANOVA computation onto a fast, vectorised engine (`R/tab-agg.R`:
   `agg_chi2()`, `agg_anova()`): every (sub)table is tested in a single grouped `data.table` pass

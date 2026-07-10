@@ -44,6 +44,7 @@ tab_many(
   add_pct = FALSE,
   digits = 0,
   subtext = "",
+  n_min = 0,
   color_signif = "ignore",
   .by_table = FALSE,
   filter
@@ -215,7 +216,8 @@ significance stars for the difference from its reference (\code{*} p<0.10, \code
 significance computation entirely. \code{NULL} uses \code{options("tabxplor.stars")}.}
 
 \item{method_cell}{Character string, the proportion confidence-interval method for
-\code{ci = "cell"}. Currently \code{"wilson"} (the score interval, default).}
+\code{ci = "cell"}. Either \code{"wilson"} (the score interval, default) or \code{"wald"}
+(the normal approximation, commonly taught -- degenerate at cell proportions of 0 or 1).}
 
 \item{method_diff}{Character string, the proportion confidence-interval method for
 \code{ci = "diff"}. One of \code{"newcombe"} (default, the hybrid-score interval, dual of the
@@ -261,6 +263,10 @@ variable (for \code{pct = "row"}) or a row with the frequencies of the column va
 the same length as \code{col_vars}. The argument is vectorisez over \code{col_vars}.}
 
 \item{subtext}{A character vector to print rows of legend under the table.}
+
+\item{n_min}{A single positive integer (default \code{0}, off). A pure display filter -- see
+\code{\link{tab}} -- that hides small-base rows/cells (largest base below \code{n_min} drops the
+row; own base below \code{n_min} blanks the cell) without recomputing anything.}
 
 \item{color_signif}{How significance gates the color -- see \code{\link{tab}}.}
 

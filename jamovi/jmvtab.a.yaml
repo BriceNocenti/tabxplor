@@ -156,13 +156,28 @@ options:
             }
 
     - name: chi2
-      title: "" #"chi2 = <i>(Chi2 test)</i>"
+      title: "Statistical test <i>(Chi-square for categorical, ANOVA F for numeric columns)</i>"
       type: Bool
       default: false
       description:
           R: >
-           Set to \code{TRUE} to make a Chi2 and add summary stats.
-           Also useful to color cells based on their contribution to variance.
+           Set to \code{TRUE} to add a test p-value row: a Chi-square test for categorical column
+           variables and an ANOVA F-test for numeric ones (chosen automatically per column type).
+           Also enables colouring cells by their contribution to variance.
+
+    - name: anova
+      title: "ANOVA F"
+      type: List
+      options:
+        - title: "Welch <i>(unequal variances, default)</i>"
+          name:  welch
+        - title: "classic <i>(equal variances)</i>"
+          name:  classic
+      default: welch
+      description:
+          R: >
+           Which F statistic to display for numeric column variables when the test is on:
+           Welch's F (default, does not assume equal variances) or the classic pooled F.
 
     - name: OR
       title: OR
@@ -282,6 +297,21 @@ options:
     #     # - title: no # "" ?
     #     #   name:  no
     #   default: auto
+
+    # Phase 7g: per-row_var reference-level picker. One {var, ref} row per selected row variable;
+    # `ref` is the chosen reference level. Read into a named `ref` vector by jmvtab_ref_vector();
+    # the free-text `ref` below stays as the expert fallback (tot/first/regex/integer, and pct="col").
+    - name: refLevels
+      title: "Reference levels (per row variable)"
+      type: Array
+      default:
+      template:
+          type: Group
+          elements:
+              - name: var
+                type: Variable
+              - name: ref
+                type: Level
 
     - name: ref
       title: "auto/tot/<i>{row_number}</i>/<i>{row_name}</i>"
@@ -404,13 +434,15 @@ options:
       title: "method_cell = <i>(cell CI method)</i>"
       type: List
       options:
-        - title: wilson
+        - title: "wilson <i>(score, default)</i>"
           name:  wilson
+        - title: "wald <i>(normal approximation)</i>"
+          name:  wald
       default: wilson
       description:
           R: >
-           The proportion confidence-interval method for \code{ci = "cell"}. Currently
-           \code{"wilson"} (the score interval).
+           The proportion confidence-interval method for \code{ci = "cell"}: \code{"wilson"}
+           (the score interval, default) or \code{"wald"} (the normal approximation).
 
     - name: method_diff
       title: "method_diff = <i>(difference CI method)</i>"
@@ -548,35 +580,48 @@ options:
            The number of digits to print, as a single integer, or an integer vector
            the same length as \code{col_vars}.
 
+    - name: n_min
+      title: "n_min = <i>(hide small-base rows)</i>"
+      type: Integer
+      min: 0
+      default: 0
+      description:
+          R: >
+           A pure display filter (0 = off). A row is dropped only when its largest base across the
+           column variables is below \code{n_min}; surviving cells whose own base is below
+           \code{n_min} are blanked. Under \code{pct = "col"} weak columns are dropped instead.
+           Totals, the added-n row/column and the p-value line are always kept. Recomputes nothing.
+
+    - name: export_format
+      title: "Format"
+      type: List
+      options:
+        - title: Excel
+          name:  excel
+        - title: HTML
+          name:  html
+        - title: Markdown
+          name:  md
+      default: excel
+      description:
+          R: >
+           The export file format: Excel (`.xlsx`), HTML (`.html`) or Markdown (`.md`).
+
     - name: exportExcel
-      title: "Export Table to Excel"
+      title: "Export to Excel"
       type: Action
       description:
-        R: "Press to export the table to Excel."
+        R: "Press to export the table to the chosen format."
 
-    # - name: xl_file
-    #   type: String
-    #   title: ""
-    #   default: ""
-    #   description:
-    #       R: >
-    #        "Full path for the exported Excel file"
-
-    - name: xl_path
+    - name: path
       type: String
       title: ""
-      default: "S:/Documents" # "%USERPROFILE%/Documents" not working
+      default: "~/Documents/Table"
       description:
           R: >
-           "Folder in which to save exported Excel file"
-
-    - name: xl_filename
-      type: String
-      title: ""
-      default: "Table.xlsx" # Not set in .init() # "D:/Documents/Excel_test.xlsx"
-      description:
-          R: >
-           "Name of exported Excel file"
+           Where to save the file. A full path, or a bare name (saved in your Documents folder).
+           The extension is added automatically from the chosen format. `~` expands to your home
+           folder.
 
     - name: xl_replace
       title: "" #
@@ -584,7 +629,7 @@ options:
       default: false
       description:
           R: >
-           "Set to `TRUE` to overwrite existing Excel file."
+           "Set to `TRUE` to overwrite an existing file."
 
 
 ...

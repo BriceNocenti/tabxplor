@@ -37,6 +37,7 @@ tab(
   add_pct = FALSE,
   subtext = "",
   digits = 0,
+  n_min = 0,
   output_list = FALSE,
   spread_vars,
   names_prefix = NULL,
@@ -206,8 +207,8 @@ for each cell's difference from its reference, read from the displayed interval 
 (universal CI-inclusion). \code{NULL} uses \code{options("tabxplor.stars")}. See \code{\link{tab_many}}.}
 
 \item{method_cell, method_diff}{Character strings choosing the confidence-interval method for
-\code{ci = "cell"} / \code{ci = "diff"}. Defaults \code{"wilson"} / \code{"newcombe"}. See
-\code{\link{tab_many}}.}
+\code{ci = "cell"} (\code{"wilson"} default, or \code{"wald"}) / \code{ci = "diff"}
+(\code{"newcombe"} default, \code{"ac"} or \code{"wald"}). See \code{\link{tab_many}}.}
 
 \item{totaltab}{The total table, if there are subtables/groups
 (i.e. when \code{tab_vars} is provided) :
@@ -245,6 +246,12 @@ variable (for \code{pct = "row"}) or a row with the frequencies of the column va
 
 \item{digits}{The number of digits to print, as a single integer, or an integer vector the
 same length as \code{col_vars}.}
+
+\item{n_min}{A single positive integer (default \code{0}, off). A pure display filter applied
+last: it hides small-base cells without recomputing anything. A row is dropped only when its
+\emph{largest} base across the column variables is below \code{n_min}; surviving cells whose own
+base is below \code{n_min} are blanked. Under \code{pct = "col"} the same rule drops weak
+columns. Total rows/columns, the added-\code{n} row/column and the p-value line are always kept.}
 
 \item{output_list}{Logical (default \code{FALSE}). With several \code{row_var}, \code{FALSE}
 merges the mirror tables into a single \code{tabxplor_tab}; \code{TRUE} returns a list with

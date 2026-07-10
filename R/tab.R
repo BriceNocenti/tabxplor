@@ -118,6 +118,11 @@ NULL
 #'   }
 #' @param digits The number of digits to print, as a single integer, or an integer vector the
 #' same length as \code{col_vars}.
+#' @param n_min A single positive integer (default \code{0}, off). A pure display filter applied
+#' last: it hides small-base cells without recomputing anything. A row is dropped only when its
+#' \emph{largest} base across the column variables is below \code{n_min}; surviving cells whose own
+#' base is below \code{n_min} are blanked. Under \code{pct = "col"} the same rule drops weak
+#' columns. Total rows/columns, the added-\code{n} row/column and the p-value line are always kept.
 #' @param totaltab The total table, if there are subtables/groups
 #' (i.e. when \code{tab_vars} is provided) :
 #'  \itemize{
@@ -205,8 +210,8 @@ NULL
 #' for each cell's difference from its reference, read from the displayed interval itself
 #' (universal CI-inclusion). \code{NULL} uses `options("tabxplor.stars")`. See \code{\link{tab_many}}.
 #' @param method_cell,method_diff Character strings choosing the confidence-interval method for
-#' \code{ci = "cell"} / \code{ci = "diff"}. Defaults \code{"wilson"} / \code{"newcombe"}. See
-#' \code{\link{tab_many}}.
+#' \code{ci = "cell"} (\code{"wilson"} default, or \code{"wald"}) / \code{ci = "diff"}
+#' (\code{"newcombe"} default, \code{"ac"} or \code{"wald"}). See \code{\link{tab_many}}.
 # @param ci_visible By default, confidence intervals are calculated and used to set
 # colors, but not printed. Set to \code{TRUE} to print them in the result.
 #' @param color Which measure(s) to color, on which visual channel. \code{FALSE} (default)
@@ -354,7 +359,7 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
                 totaltab = "line", totaltab_name = "Ensemble",
                 tot = c("row", "col"), total_names = "Total",
                 add_n = TRUE, add_pct = FALSE,
-                subtext = "", digits = 0,
+                subtext = "", digits = 0, n_min = 0,
                 output_list = FALSE,
                 spread_vars, names_prefix = NULL, names_sort = FALSE,
                 row_var, col_var,
@@ -517,7 +522,7 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
            OR = OR,
            color = color,
            add_n = add_n, add_pct = add_pct,
-           subtext = subtext,
+           subtext = subtext, n_min = n_min,
            spread_vars = spread_vars, names_prefix = names_prefix, names_sort = names_sort,
            # Phase 7e: pass the jmvtab live-cache seam straight through (NULL/FALSE for normal tab()).
            .cache = .cache, .defer_level_merge = .defer_level_merge)
@@ -696,6 +701,9 @@ finalize_one_col <- function(col, spec) {
 #' (tabs for each column variable will have the same number of observations).
 #' @param digits The number of digits to print, as a single integer, or an integer vector
 #' the same length as \code{col_vars}. The argument is vectorisez over `col_vars`.
+#' @param n_min A single positive integer (default \code{0}, off). A pure display filter -- see
+#' \code{\link{tab}} -- that hides small-base rows/cells (largest base below \code{n_min} drops the
+#' row; own base below \code{n_min} blanks the cell) without recomputing anything.
 #' @param totaltab The total table, if there are subtables/groups
 #'  (i.e. when \code{tab_vars} is provided). Vectorised over `row_vars`.
 #' \itemize{
@@ -795,7 +803,8 @@ finalize_one_col <- function(col, spec) {
 # @param ci_visible By default, confidence intervals are calculated and used to set
 # colors, but not printed. Set to \code{TRUE} to print them in the result.
 #' @param method_cell Character string, the proportion confidence-interval method for
-#' \code{ci = "cell"}. Currently \code{"wilson"} (the score interval, default).
+#' \code{ci = "cell"}. Either \code{"wilson"} (the score interval, default) or \code{"wald"}
+#' (the normal approximation, commonly taught -- degenerate at cell proportions of 0 or 1).
 #' @param method_diff Character string, the proportion confidence-interval method for
 #' \code{ci = "diff"}. One of \code{"newcombe"} (default, the hybrid-score interval, dual of the
 #' two-proportion score test), \code{"ac"} (Agresti-Caffo) or \code{"wald"}. Whatever method is
@@ -881,7 +890,7 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
                      totaltab = "line", totaltab_name = "Ensemble",
                      totrow = TRUE, totcol = "last", total_names = "Total",
                      add_n = TRUE, add_pct = FALSE,
-                     digits = 0, subtext = "", color_signif = "ignore",
+                     digits = 0, subtext = "", n_min = 0, color_signif = "ignore",
                      .by_table = FALSE,
 
                      filter #, listed = FALSE,
@@ -935,7 +944,7 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
     conf_level = conf_level, stars = stars, method_cell = method_cell,
     method_diff = method_diff, totaltab = totaltab, totaltab_name = totaltab_name,
     totrow = totrow, totcol = totcol, total_names = total_names,
-    add_n = add_n, add_pct = add_pct, digits = digits, subtext = subtext,
+    add_n = add_n, add_pct = add_pct, digits = digits, subtext = subtext, n_min = n_min,
     .by_table = .by_table,
     filter = if (missing(filter)) NULL else {{ filter }},
     output = if (isTRUE(compact)) "single" else "legacy"
@@ -980,7 +989,7 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
                       totaltab = "line", totaltab_name = "Ensemble",
                       totrow = TRUE, totcol = "last", total_names = "Total",
                       add_n = TRUE, add_pct = FALSE,
-                      digits = 0, subtext = "",
+                      digits = 0, subtext = "", n_min = 0,
                       .by_table = FALSE,
                       spread_vars = character(), names_prefix = NULL, names_sort = FALSE,
                       .cache = NULL, .defer_level_merge = FALSE,
@@ -1017,7 +1026,7 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
     method_cell = method_cell, method_diff = method_diff,
     totaltab = totaltab, totaltab_name = totaltab_name, totrow = totrow, totcol = totcol,
     total_names = total_names, add_n = add_n, add_pct = add_pct, digits = digits,
-    subtext = subtext, by_table = .by_table,
+    subtext = subtext, n_min = n_min, by_table = .by_table,
     spread_vars = spread_vars, names_prefix = names_prefix, names_sort = names_sort,
     # Phase 7e jmvtab cache seam: `cache_env` is a mutable environment holding $store / $hits (NULL
     # for tab()/tab_many() -> the hooks below are inert). `defer_level_merge` keeps full levels for
@@ -1848,6 +1857,15 @@ tab_assemble <- function(ctx) {
 
   } else {
     tabs <- purrr::map(tabs, tab_pvalue_lines)
+  }
+
+  # Phase 7g: n_min small-base DISPLAY filter -- the last, pure-display step (drops rows/cols
+  # whose base < n_min and blanks weak cells; recomputes nothing). See tab_apply_n_min().
+  # Defaults to 0 (off) for stage callers that don't thread it (e.g. tab_counts()).
+  n_min <- if (exists("n_min", inherits = FALSE)) n_min else 0
+  if (length(n_min) > 0 && any(n_min > 0, na.rm = TRUE)) {
+    tabs <- if (is.data.frame(tabs)) tab_apply_n_min(tabs, n_min)
+            else purrr::map(tabs, tab_apply_n_min, n_min = n_min)
   }
 
 
@@ -5098,8 +5116,8 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
 #' With \code{ci = "diff"}, store and print per-cell significance stars for the difference from
 #' the reference, read from the same interval that is displayed (universal CI-inclusion), so the
 #' stars and the bracket never disagree. \code{FALSE} skips the significance computation.
-#' @param method_cell Character string, the proportion CI method for \code{ci = "cell"}.
-#' Currently \code{"wilson"} (the score interval, default).
+#' @param method_cell Character string, the proportion CI method for \code{ci = "cell"}: either
+#' \code{"wilson"} (the score interval, default) or \code{"wald"} (the normal approximation).
 #' @param method_diff Character string, the proportion CI method for \code{ci = "diff"}: one of
 #' \code{"newcombe"} (default, hybrid-score, dual of the two-proportion score test), \code{"ac"}
 #' (Agresti-Caffo) or \code{"wald"}. Whatever the method, the stars come from that interval.
@@ -5167,7 +5185,7 @@ tab_ci <- function(tabs,
                    method_cell = "wilson", method_diff = "newcombe") {
   stopifnot(all(ci %in% c("auto", "cell", "diff", "no")), #"r_to_r", "c_to_c", "tab_to_tab",
             all(comp %in%  c("tab", "all")),
-            all(method_cell %in% c("wilson")),
+            all(method_cell %in% c("wilson", "wald")),
             all(method_diff %in% c("newcombe", "ac", "wald"))
   )
   # Phase 3a: significance stars default (universal CI-inclusion). NULL -> option default.
@@ -5391,7 +5409,10 @@ tab_ci <- function(tabs,
                 get_type(.),
                 "mean" = ci_pivot(get_mean(.), sqrt(get_var(.) / x_n[[col]]),
                                   df = Inf, conf_level = conf_level, want_p = FALSE),
-                ci_wilson(get_pct(.), x_n[[col]], conf_level = conf_level)
+                # Phase 7g: the proportion cell CI honours method_cell (default wilson; wald opt-in).
+                switch(method_cell,
+                       "wilson" = ci_wilson(get_pct(.), x_n[[col]], conf_level = conf_level),
+                       "wald"   = ci_wald(  get_pct(.), x_n[[col]], conf_level = conf_level))
               ),
               "diff_col" = ,
               "diff_row" = switch(
@@ -6575,6 +6596,88 @@ tab_add_n_pct <- function(tabs_text, add_n, add_pct) {
 
 
   tabs_text
+}
+
+
+# tab_apply_n_min() -- the small-base display filter (Phase 7g). A PURE end-of-pipeline DISPLAY
+# helper: it recomputes NOTHING (no fields, no chi2/ANOVA, no CI). The user has already seen the
+# whole table; n_min just strips the noise of unreliable small-base cells so it reads cleanly.
+# Rule: for row-oriented columns (type row/all/mean) drop a row only if its LARGEST base across
+# those columns is < n_min, then blank (display "") each surviving cell whose OWN base < n_min;
+# for col-oriented columns (type "col", the pct="col" case) drop the whole column when its base
+# is < n_min. Orientation is read from each fmt column's stored `type`, so no `pct` argument is
+# needed and mixed tables Just Work. Base = get_tot_n() for proportions, get_n() for means; an NA
+# base is never weak. NEVER drops: total rows/tables, the total column, add_n/add_pct helper rows
+# (row_var "n"/"row_pct") or columns (col_var "all_col_vars"), or the p-value line (all n NA).
+# Class + attributes (subtext/test/grouping) survive via the tabxplor dplyr S3 methods.
+tab_apply_n_min <- function(tab, n_min) {
+  if (length(n_min) == 0 || is.na(n_min[1]) || n_min[1] <= 0) return(tab)
+  n_min <- n_min[1]
+  if (!is.data.frame(tab)) return(tab)
+
+  fmt_names <- names(tab)[purrr::map_lgl(tab, is_fmt)]
+  if (length(fmt_names) == 0) return(tab)
+
+  type   <- purrr::map_chr(tab[fmt_names], get_type)
+  helper <- purrr::map_lgl(tab[fmt_names], ~ get_col_var(.) == "all_col_vars")
+  totcol <- purrr::map_lgl(tab[fmt_names], is_totcol)
+
+  cell_base <- function(col) if (get_type(col) == "mean") get_n(col) else get_tot_n(col)
+
+  # --- protected rows (never dropped) --------------------------------------------------------
+  fmt_all <- tab[fmt_names]
+  totrow  <- purrr::reduce(purrr::map(fmt_all, is_totrow), `|`)
+  tottab  <- purrr::reduce(purrr::map(fmt_all, is_tottab), `|`)
+  pline   <- purrr::reduce(purrr::map(fmt_all, ~ is.na(get_n(.))), `&`)   # the p-value line
+  rvars   <- tab_get_vars(tab)$row_var
+  rvars   <- rvars[rvars %in% names(tab)]
+  helprow <- if (length(rvars)) {
+    purrr::reduce(purrr::map(tab[rvars], ~ as.character(.) %in% c("n", "row_pct")), `|`)
+  } else rep(FALSE, nrow(tab))
+  protect <- totrow | tottab | pline | helprow
+
+  # --- row-drop + cell-blank on row-oriented columns -----------------------------------------
+  row_cols <- fmt_names[type %in% c("row", "all", "mean") & !helper]  # totcol INCLUDED in the max
+  if (length(row_cols) > 0) {
+    bases    <- purrr::map(tab[row_cols], ~ { b <- cell_base(.); b[is.na(b)] <- Inf; b })
+    row_base <- purrr::reduce(bases, pmax)
+    keep     <- protect | !(row_base < n_min)
+    if (!all(keep)) {
+      # Filter globally: a grouped_tab would split the length-n `keep` per group, so ungroup,
+      # filter, then restore the grouping (the tabxplor S3 methods carry subtext/test through).
+      gv  <- dplyr::group_vars(tab)
+      tab <- dplyr::ungroup(tab)
+      tab <- dplyr::filter(tab, keep)
+      if (length(gv) > 0) tab <- dplyr::group_by(tab, dplyr::across(tidyselect::all_of(gv)))
+    }
+  }
+  # blank surviving weak cells (row-oriented, non-total, non-helper stat columns)
+  blank_cols <- fmt_names[type %in% c("row", "all", "mean") & !helper & !totcol]
+  blank_cols <- intersect(blank_cols, names(tab))
+  if (length(blank_cols) > 0) {
+    tab <- dplyr::mutate(tab, dplyr::across(
+      tidyselect::all_of(blank_cols),
+      ~ {
+        b <- cell_base(.)
+        w <- !is.na(b) & b < n_min
+        if (any(w)) .[w] <- set_display(.[w], "blank")
+        .
+      }
+    ))
+  }
+
+  # --- column-drop on col-oriented columns (pct = "col") -------------------------------------
+  drop_cols <- fmt_names[type == "col" & !helper & !totcol]
+  drop_cols <- intersect(drop_cols, names(tab))
+  if (length(drop_cols) > 0) {
+    weak <- purrr::map_lgl(tab[drop_cols], ~ {
+      mb <- suppressWarnings(max(get_tot_n(.), na.rm = TRUE))
+      is.finite(mb) && mb < n_min
+    })
+    if (any(weak)) tab <- dplyr::select(tab, -tidyselect::all_of(drop_cols[weak]))
+  }
+
+  tab
 }
 
 
