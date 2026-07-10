@@ -42,6 +42,8 @@ R/
 │                             tier-3 built-table cache (jmv_tab3_base_key/tuple, jmv_reapply_digits,
 │                             re-paint) + jmvtab_build (engine-free core; reuses tab() via .cache)
 │                             + jmvtab_ref_vector (Phase 7g ref-picker → named ref)
+│                             + jmvtab_levels_order/jmv_relevel_cols (7g-ii level-reorder,
+│                             post-aggregate; .levels_order arg on tab())
 ├── jmvtab-export.R  (~120 L)  jmvtab export helpers (Phase 7g): resolveExportPath (typed path →
 │                             Documents/USERPROFILE), tab_html_string (self-contained HTML),
 │                             jmvtab_export (Excel/HTML/MD dispatch)
@@ -797,6 +799,53 @@ Shipped four features (maintainer scoping); every feature's LOGIC lives in plain
 A simple, comptact, clear and user-friendly **level-reordering** UI for row/col/tab factors.
 - Use one already existing in another common jamovi module if it’s possible. Build it from scratch in .js otherwise.
 
+###### Done (2026-07-10)
+
+No ready-made drag-sortable level control exists in jamovi (confirmed; `dev/…jamovi_dev.md` §13) — built
+one as a **`CustomControl`** (`levelOrderCtrl`) with the maintainer's chosen UX: **▲▼ arrow buttons** (not
+drag), **all selected factors stacked and grouped by axis** ("Row / Column / Table variables"; numeric
+col_vars show a "no levels" note), in its **own collapsed CollapseBox before "References"**. `.js` reads
+each column's levels via `requestData('column', {properties:['measureType','levels']})` (as `LevelSelector`
+does), renders per-factor lists into a **detached fragment swapped in atomically** (no flicker), and writes
+the order back to a new **`levelOrder`** Array option (one `{var, levels}` per reordered var); `.u.yaml`
+adds `change` events on all three var boxes (shared `onChange_vars`). **R seam = internal only** (user
+decision — R users keep `forcats::fct_relevel()` before `tab()`): new internal `tab(.levels_order=)` arg
+(threaded through `tab_build`→`ctx`, `NULL` no-op for normal calls); `jmvtab_levels_order()` folds the
+picker → named list; **`jmv_cache_aggregate()` relevels the shaped aggregate POST-fetch** (`jmv_relevel_cols`,
+stored blob stays raw) + recomputes `remove_levels` for `levels="first"` — so a reorder is a **tier-3 input
+(design §4e): tiers 1-2 reused, only the fmt rebuilds**, byte-identical to `tab()` on pre-releveled microdata
+(new parity + cache-reuse tests in `test-jmvtab-cache.R`; full suite green, no golden regen). **OPEN —
+maintainer step**: regenerate `jmvtab.h.R` from `.a.yaml` in the running app, then live-verify.
+
+###### Iteration 2 (2026-07-10) — UX fixes from live test
+
+- **Fixed a duplicate broken UI**: a `CustomControl` never claims its backing option (uicompiler
+  `CustomControl.isOptionControl()===false`), so the compiler auto-generated a second (broken,
+  `isSingleItem` crash) default control for `levelOrder`. Fix: **`hidden: true` on the `levelOrder` option**
+  (uicompiler `insertMissingControls` skips hidden options) — the CustomControl is now the sole UI; the
+  option stays accessible via `ui.levelOrder`.
+- **Redesigned the control** (`js/jmvtab.js`): a **2-level collapsible `<details>` tree** — axis (open,
+  left-indented) > `"<var> : N levels - reorder"` (collapsed; ONE click opens the list) — each tier a
+  Material grey tint + border + ▸/▾ caret. The list is a **jamovi-style selectable list** (white bordered
+  box, `color:#000`): click a level to SELECT it (first selected by default, highlighted in jamovi's own
+  `#b5caef`), then an **Up/Down button pair BELOW the list** (or the **Up/Down arrow keys** when the list is
+  focused) moves the selected level, which stays selected so it walks (fixes the "click all the way up"
+  clunkiness). A **variable-signature gate** makes the frequent `updated` event a no-op unless the variable
+  set changed, so reorder moves keep selection + open sections; collapse/selection state persists per var.
+- **Re-regenerate `jmvtab.h.R` + recompile** (`jmvtools::install()`) after the `.a.yaml`/`.js` changes for
+  the duplicate to disappear and the redesign to take effect.
+
+###### Iteration 3 (2026-07-10) — stale-swap bug fix + polish
+
+- **Fixed "2nd click does nothing, edits appear later"**: the async `requestData`+deferred-swap rebuild
+  raced in-place edits (a snapshot read before the edit swapped in over it). Rewrote to a **synchronous
+  `renderTree`** backed by a per-var `levelsCache` (placeholder + one-shot fetch → cache → re-render), so
+  no async swap can clobber an edit; the `updated` handler now re-renders only on a variable-set change or
+  a jamovi `$el` re-render (detected via a `data-tabx-tree` root marker), never on a plain move. Also fixed
+  a `setValue`-by-reference **aliasing** bug (`writeOrder` now stores `lv.slice()`). Variable names **bold**.
+- **General jamovi-UI technical findings** written to `dev/tabxplor_1.4.0_jamovi_dev.md` **§6.8**
+  (CustomControl/option/`hidden`/`updated`/async-swap/`requestData`/colors/keyboard) for future UI work.
+
 
 ##### Phase 7g-iii — user-friendly .js reference-level picker
 
@@ -813,7 +862,7 @@ jmvtab jamovi UI needs a **full .js customisation** of it’s buttons and other 
 - The "grey out input when it makes no sense giving other inputs" logic should be improved : for example, the `totaltab` menu button should be greyed out when no tab_vars have been passed. What
 - `digits` as text input is bad : better use a selectable list, the user click on it to display the list and choose the number of digit it wants ?
 - `subtext` text input only takes about one third of the horizontal space in its row : it should take all the available space in its row in the menu. It can’t manage to set it’s size with .yaml only.
-- What else, in jamovi UI, could be controled with .js for the benefits of the user ?
+- What else, in jamovi UI, could be controlled with .js for the benefits of the user ?
 
 
 #### Phase 7i — test compatibility with Jamovi last solid version 2.7.37
@@ -832,7 +881,7 @@ Phase 6b — 2026-07-09 researched whether parallelising `tab()`/`jmvtab()` over
 ### Phase 9 – final tab_plain() / tab_num() / tab_build() / tab() / tab_many simplification ?
 
 1. The `tab()` functions have become a kind of jungle of their own, with many internal paths + many API functions.
-`tab_build()` was supposed to be a simplification, but since it kept the fully vectorised arguments of the old tab_many() for retro-compatibility, it dit not really simplified anything. So I would want to know : if `tab_many()` was to be kept on the current `tab_build()` path for backward-compat (merged in only `tab_many()` alias), but `tab()` was rewritten in a much simpler way from shared functions, would there be room left for simplification and performance gains ? Give me a grounded and honest answer. Since the package architecture have changed at lot, do not hesitate to do and analyse new performance profiles.
+`tab_build()` was supposed to be a simplification, but since it kept the fully vectorised arguments of the old tab_many() for retro-compatibility, it dit not really simplified anything. So I would want to know : if `tab_many()` was to be kept on the current `tab_build()` path for backward-compat (merged in only `tab_many()` alias), but `tab()` was rewritten in a much simpler way from shared functions, would there be room left for simplification and performance gains ? Should we keep internal functions, but different one, just to be able to have internal arguments not passed in the public API ? Give me a grounded and honest answer. Since the package architecture have changed at lot, do not hesitate to do and analyse new performance profiles.
 
 2. Now that we are near the end, and some functions and workflows have grown organically, can you see final simplifications of the table building workflow ?
 
@@ -879,7 +928,7 @@ Enlever l'affichage des vrais `NA` en `""` dans kable plus proprement qu'en les 
 
 `tab_md()` current version was made for a specific use case and never totally integrated into tabxplor : the aim is to fully integrate it.
 - color helpers must be handled with very shorts pandoc bracketed spans, everything padded and align to preserve human readability assuming monospace font (even out of preview mode). Examples for diffs : `.+5`, `.+10`, `.+20`, `.+30`, `.-5`, `.-10`, `.-20`, `.-30` etc. ; examples for ratios : `.x1.2`, `.x1.5`, `.x2`, `.x4`, `./1.2`, `./1.5`, `./2`, `./4`, etc. : ould these names be valid css classes / pandoc bracketed spans ?. Is there a possibility to make them these css classes work inside jamovi, for exemple in a html rectangle, with a light yet modern markdown preview working with tables (natively, or by adding html/js new dependencies ? ; load these possible dependencies when the tabxplor function and menu load ? What about the css styles, should we load them at tabxplor UI startup or at table creation ?) ?
--
+- 
 
 #### Phase 10f – rework tab_xl() (still openxlsx v1; engine swap is Phase 9)
 
@@ -890,6 +939,7 @@ Enlever l'affichage des vrais `NA` en `""` dans kable plus proprement qu'en les 
 - Add the end it must work with tab_logit() and *** : significance stars used as formatting.
 
 **Stays on openxlsx v1** — the openxlsx2 engine swap is Phase 9.
+
 
 ### Phase 11 — Excel engine migration (openxlsx → openxlsx2)
 
@@ -935,7 +985,7 @@ The current `tab_logit` code, made outside of the package, was a way to use tabx
 - Integrate confidence intervals with the new `ci_inf` / `ci_sup` vctrs fields (check its in fact `exp()` bounds), and also with the new `color_signif` framework (with logistic regression, sensible default may be "grey_non_signif").
 - All exports (kable, md, Excel) should work natively with the resulting tabxplor_tab (or grouped one, etc.).
 
-#### Phase 13b – design questions and statistical framework
+#### Phase 13b – design choices and statistical framework
 
 Statistical soundness 1 : how to handle dependent var factors with 3+ levels ?
 - The function currently binarise all levels against the reference level chosen, and gives one column per non-reference level, instead of using multinomial logistic regression : I known it’s expert way it’s done, but at the same time I find multinomial logistic regressions very difficult to read, since relative risk ratios with their double reference are farther from experience and intuition and car be thoroughly misinterpreted with not enough knowledge of reference rows and cols (it’s also very difficult to teach to sociology students, and to put in a meaningful sentence it a scientific papers : contrary to odds ratio, that can be put in sentence quite cleanly still understanding what you compare with what). Please, make detailed web searches, and tell me what the statistical consensus is about that, what are the different possibilities and rationales make by and social scientists both (particularly in quantitative sociology).
@@ -943,13 +993,12 @@ Statistical soundness 1 : how to handle dependent var factors with 3+ levels ?
 Statistical soundness 2 : how to handle survey weights ?
 - Most of my real world data are French national surveys, which always come with weights. The first version of `tab_logit` was made to handle this : on one hand, no weights is common practice, but if the percentages used by logistic regression do not match the percentages the user really have in it’s base empirical crosstables, there’s a bizarre discrepency ; 2. since weights are most of the time not normalised, using weighted counts that are many times higher than the real number of people in the sample destroys significativity tests and confidence intervals since they always pass (total weighted n gives the overall population measured in the national census).
 
-- Extend it to numeric variables as predictors ?
+What extension ? Full `lm`/`glm` set + keep current multinomial logistic reg ?
+- Extend the function to numeric variables as predictors ? Extend it to ensure it also works for integer dependent variables as poisson regression ? Generalise the framework most common `lm` + `glm` regressions models, like multiple linear regressions for doubles (with the possibility to chose the type of regression per dependent var, since the R class of the dependent var, double or integer, do not clearly states if the underlying distribution is gaussian or poisson if its counts or binomial if it’s percentages, etc.) ? What would be caveats ? In this case, function should be renamed `tab_reg`. Many things should be reworked to keep both logistic models specificities, plus be closer to standard practices in term of `lm` + `glm` display.
 
-- Extend the function to ensure it also works for integer dependent variables as poisson regression
+Summary statistics ? 
+- What whole analysis/model level test and pvalue should be added, for example on a pvalue_line like chi2 test for crosstables and ANOVA for factor x numeric ? What other model level summary statistics should absolutely be added to keep with standard practices with `lm`/`glm` models ?
 
-- Generalise to most common `lm` + `glm` regressions models, like multiple linear regressions for doubles (with the possibility to chose the type of regression per dependent var, since the R class of the dependent var, double or integer, do not clearly states if the underlying distribution is gaussian or poisson if its counts or binomial if it’s percentages, etc.) ? In this case, function should be renamed.
-
-I know I was a bit
 
 #### Phase 13c – tab_logit rewrite
 
@@ -962,8 +1011,8 @@ Implement the design make in the former phase.
 Add a full tab_logit analysis in Jamovi to give it a user-friendly UI : name it `jmvtab_logit`
 Are there some user-friendly pieces that we could reuse from other well known models/regressions Jamovi modules ?
 
-What about `multi_logit`, who handles passing of multiple models in ?
-- Add
+What about `multi_logit`, who handles passing of multiple models (like different subsets of the same variables) for comparison ?
+- Would it be possible to add it’s own jamovi analysis and UI, or would it be too complicated / useless ? Just one jamovi UI for logits, with possibility to choose predictors variables, then click on "+" button to add a subset of them, with the possibility to add any new set with "+" ?
 
 
 

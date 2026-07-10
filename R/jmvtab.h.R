@@ -21,6 +21,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             other_if_less_than = 0,
             cleannames = TRUE,
             refLevels = NULL,
+            levelOrder = NULL,
             ref = "auto",
             ref2 = "first",
             comp = "tab",
@@ -176,6 +177,24 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                         jmvcore::OptionLevel$new(
                             "ref",
                             NULL))))
+            private$..levelOrder <- jmvcore::OptionArray$new(
+                "levelOrder",
+                levelOrder,
+                hidden=TRUE,
+                default=NULL,
+                template=jmvcore::OptionGroup$new(
+                    "levelOrder",
+                    NULL,
+                    elements=list(
+                        jmvcore::OptionVariable$new(
+                            "var",
+                            NULL),
+                        jmvcore::OptionArray$new(
+                            "levels",
+                            NULL,
+                            template=jmvcore::OptionString$new(
+                                "levels",
+                                NULL)))))
             private$..ref <- jmvcore::OptionString$new(
                 "ref",
                 ref,
@@ -325,6 +344,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$.addOption(private$..other_if_less_than)
             self$.addOption(private$..cleannames)
             self$.addOption(private$..refLevels)
+            self$.addOption(private$..levelOrder)
             self$.addOption(private$..ref)
             self$.addOption(private$..ref2)
             self$.addOption(private$..comp)
@@ -364,6 +384,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         other_if_less_than = function() private$..other_if_less_than$value,
         cleannames = function() private$..cleannames$value,
         refLevels = function() private$..refLevels$value,
+        levelOrder = function() private$..levelOrder$value,
         ref = function() private$..ref$value,
         ref2 = function() private$..ref2$value,
         comp = function() private$..comp$value,
@@ -402,6 +423,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         ..other_if_less_than = NA,
         ..cleannames = NA,
         ..refLevels = NA,
+        ..levelOrder = NA,
         ..ref = NA,
         ..ref2 = NA,
         ..comp = NA,
@@ -555,6 +577,7 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   numbers like "1-", and text in parenthesis. Set to \code{FALSE} to avoid
 #'   this behaviour.
 #' @param refLevels .
+#' @param levelOrder .
 #' @param ref The reference cell to calculate differences and ratios   (used
 #'   to print \code{colors}) :   \itemize{    \item \code{"auto"}: by default,
 #'   cell difference from the corresponding total    (rows or cols depending on
@@ -655,6 +678,7 @@ jmvtab <- function(
     other_if_less_than = 0,
     cleannames = TRUE,
     refLevels = NULL,
+    levelOrder = NULL,
     ref = "auto",
     ref2 = "first",
     comp = "tab",
@@ -711,6 +735,7 @@ jmvtab <- function(
         other_if_less_than = other_if_less_than,
         cleannames = cleannames,
         refLevels = refLevels,
+        levelOrder = levelOrder,
         ref = ref,
         ref2 = ref2,
         comp = comp,

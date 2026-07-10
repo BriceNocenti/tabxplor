@@ -18,19 +18,23 @@ children:
             name: row_vars
             isTarget: true
             events:
-              change: ./jmvtab::onChange_row_vars
+              change: ./jmvtab::onChange_vars
       - type: TargetLayoutBox
         label: <b>col_vars = <i>(column variables)</i></b>
         children:
           - type: VariablesListBox
             name: col_vars
             isTarget: true
+            events:
+              change: ./jmvtab::onChange_vars
       - type: TargetLayoutBox
         label: <b>tab_vars = <i>(subtables variables)</i></b>
         children:
           - type: VariablesListBox
             name: tab_vars
             isTarget: true
+            events:
+              change: ./jmvtab::onChange_vars
       - type: TargetLayoutBox
         label: <b>wt = <i>(weights)</i></b>
         children:
@@ -243,12 +247,21 @@ children:
               - type: CheckBox
                 name: cleannames
   - type: CollapseBox
+    label: <b>Reorder levels</b>
+    stretchFactor: 1
+    collapsed: true
+    children:
+      - type: CustomControl
+        name: levelOrderCtrl
+        stretchFactor: 1
+        events:
+          creating: ./jmvtab::levelOrderCtrl_creating
+          updated: ./jmvtab::levelOrderCtrl_updated
+  - type: CollapseBox
     label: <b>References (points of comparison)</b>
     stretchFactor: 1
     collapsed: true
     children:
-      # Picker in its own (cell-less) container; the ref/comp/ref2 grid in a second one -- a
-      # jamovi LayoutBox cannot mix celled and cell-less children ("Cell already exists").
       - type: LayoutBox
         margin: none
         children:

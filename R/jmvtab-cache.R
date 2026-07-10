@@ -12,6 +12,9 @@
 #     with data.table::setDT() on read; preserve factor level order.
 #   - Aggregate keyed on FULL names (cleannames is display-tier), NA-kept, raw/full levels
 #     (defer_level_merge). na keep/drop SHARE the factor aggregate; numeric na is in the key.
+#   - Level reordering (Phase 7g-ii): the STORED aggregate blob stays at RAW level order; a reorder
+#     relevels only the in-memory aggregate + ctx$data POST-fetch (jmv_relevel_cols), so it is a
+#     tier-3 input (tiers 1-2 reused). Never bake a reorder into the persisted blob.
 #   - Byte-identical to tab(cleannames = FALSE, levels via defer_level_merge) -- locked by
 #     test-jmvtab-cache.R. First cut: exact-grain keying (grain-superset rollup deferred), simple
 #     byte-bounded LRU (byte-precise accounting deferred).
@@ -280,13 +283,55 @@ jmv_cache_aggregate <- function(ctx) {
     if (got$hit) cached_tests[[rv]] <- got$value
   }
 
+  # --- Phase 7g-ii: post-aggregate level reordering (tier-3 input; the STORED blob stays raw) ----
+  # A jamovi level reorder relevels the shaped aggregate's factor keys IN MEMORY, after it was built /
+  # fetched + stored at raw order (above). Because the stored blob and the tier-1/2 keys (raw
+  # fingerprints) never change, a reorder reuses tiers 1-2 and only rebuilds the O(cells) fmt (design
+  # 4e). fct_relevel is absolute, so re-releveling a stale-order cache hit to the new order is correct.
+  spec <- ctx$levels_order
+  new_remove <- NULL
+  if (!is.null(spec)) {
+    if (!is.null(fine_fused)) {
+      for (nm in names(fine_fused)) {
+        rvcv <- strsplit(nm, "\r", fixed = TRUE)[[1]]        # name = paste(rv, cv, sep = "\r")
+        fine_fused[[nm]] <- jmv_relevel_cols(fine_fused[[nm]], spec,
+                                             c(tab_vars, rvcv[[1L]], rvcv[[2L]]))
+      }
+    }
+    if (!is.null(fine_num)) {
+      for (i in seq_along(fine_num)) {
+        if (is.null(fine_num[[i]])) next
+        fine_num[[i]] <- jmv_relevel_cols(fine_num[[i]], spec, c(tab_vars, row_vars[[i]]))
+      }
+    }
+    # ctx$data feeds the raw-scan leaves (self-crosstab factor pairs skipped from fine_fused; the
+    # numeric leaf) -> relevel it too so those axes reorder identically.
+    data <- jmv_relevel_cols(data, spec, unique(c(row_vars, col_vars, tab_vars)))
+    # levels = "first" + reorder: the column KEPT must be the reordered-first. Recompute remove_levels
+    # for lv1 col_vars in spec (defer_level_merge appends the explicit "NA" column). Others untouched.
+    lv1 <- ctx$lv1
+    rl  <- ctx$remove_levels
+    if (!is.null(lv1) && any(lv1) && !is.null(rl)) {
+      for (cv in intersect(col_vars[lv1], names(spec))) {
+        f <- data[[cv]]
+        if (is.factor(f)) rl[[cv]] <- c(levels(f)[-1], "NA")
+      }
+      new_remove <- rl
+    }
+  }
+
   ce$store <- store
   ce$hits  <- list(agg = agg_hits, test = test_hits)
 
-  ctx_update(ctx, list(
+  updates <- list(
     fine_num = fine_num, fine_fused = fine_fused,
     cached_tests = cached_tests, tier2_keys = tier2_keys
-  ))
+  )
+  if (!is.null(spec)) {
+    updates$data <- data
+    if (!is.null(new_remove)) updates$remove_levels <- new_remove
+  }
+  ctx_update(ctx, updates)
 }
 
 
@@ -416,6 +461,53 @@ jmvtab_ref_vector <- function(refLevels, free_text_ref = "auto") {
   stats::setNames(refs, vars)
 }
 
+# Build tab()'s internal `.levels_order` from the Phase 7g-ii level-reordering picker. `levelOrder` is
+# the jamovi Array option = a list of {var, levels} (one per REORDERED variable; levels = the ordered
+# level labels). Return a named list var -> ordered character vector, dropping entries with an empty
+# var or no levels; NULL when nothing was reordered (-> tab() runs unchanged). Consumed post-aggregate
+# by jmv_cache_aggregate() (design 4e: a reorder is a tier-3 input, tiers 1-2 reused).
+#' @keywords internal
+#' @noRd
+jmvtab_levels_order <- function(levelOrder) {
+  if (length(levelOrder) == 0) return(NULL)
+  out <- list()
+  for (e in levelOrder) {
+    v <- e[["var"]]
+    if (is.null(v) || !nzchar(as.character(v))) next
+    lv <- e[["levels"]]
+    if (is.null(lv) || length(lv) == 0) next
+    lv <- as.character(unlist(lv, use.names = FALSE))
+    lv <- lv[!is.na(lv) & nzchar(lv)]
+    if (length(lv) == 0) next
+    out[[as.character(v)]] <- lv
+  }
+  if (length(out) == 0) NULL else out
+}
+
+# Reorder the factor level order of `cols` in `x` to match `spec` (a named list var -> ordered levels).
+# forcats::fct_relevel is ABSOLUTE (it sets the given levels first, in order; unlisted levels trail in
+# their existing order) -> safe on a possibly stale-order cache hit and on partial specs (level drift).
+# For a data.table the key columns are re-set afterwards so row order matches a fresh keyby(). Works on
+# both a data.table aggregate (in place via set()) and ctx$data (a tibble). Non-factor / unlisted cols
+# are left untouched.
+#' @keywords internal
+#' @noRd
+jmv_relevel_cols <- function(x, spec, cols) {
+  is_dt <- data.table::is.data.table(x)
+  for (col in cols) {
+    ord <- spec[[col]]
+    if (is.null(ord) || !col %in% names(x)) next
+    f <- x[[col]]
+    if (!is.factor(f)) next
+    ord <- ord[ord %in% levels(f)]
+    if (length(ord) == 0) next
+    f2 <- forcats::fct_relevel(f, ord)
+    if (is_dt) data.table::set(x, j = col, value = f2) else x[[col]] <- f2
+  }
+  if (is_dt) data.table::setkeyv(x, intersect(cols, names(x)))
+  x
+}
+
 
 # === Tier 3: built-table cache (display / colour / reference re-use) =======================
 
@@ -455,6 +547,10 @@ jmv_tab3_base_key <- function(opts, ce, row_vars, col_vars, tab_vars, wt_chr) {
   reapplied  <- c("digits", "display", "cleannames", "color", "color_signif",
                   "ref", "ref2", "comp", "OR", "ci", "conf_level",
                   "method_cell", "method_diff", "stars", "n_min")
+  # Phase 7g-ii: `levels_order` is intentionally NOT in `reapplied` -> it lands in `structural`, so a
+  # reorder forces a tier-3 rebuild (fmt/colour) while agg_id (raw fingerprints) is unchanged -> tiers
+  # 1-2 hit (design 4e). The rebuild also recomputes the reorder-driven ref shift (ref="first" /
+  # common_base first-col), so no tier-3 tuple entry is needed.
   structural <- opts[setdiff(names(opts), reapplied)]
   jmv_hash(list("tab3", agg_id, structural))
 }
@@ -545,7 +641,8 @@ jmv_tab3_build_armed <- function(data, opts, color, color_signif, ci, wt_sym,
     total_names   = opts$total_names,
     other_level   = opts$other_level,
     output_list   = isTRUE(opts$output_list),
-    .cache = ce, .defer_level_merge = TRUE, .return_armed = TRUE
+    .cache = ce, .defer_level_merge = TRUE, .return_armed = TRUE,
+    .levels_order = opts$levels_order          # Phase 7g-ii: post-aggregate reorder (jmv_cache_aggregate)
   ))
 }
 

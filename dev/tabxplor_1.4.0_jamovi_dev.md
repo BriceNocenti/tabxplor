@@ -422,6 +422,61 @@ Option sync under the hood: `setOptionValue`/`setPropertyValue` (keys-addressed)
 `checkedValue = optionPart`); the iframe→host bridge posts
 `onOptionsChanged {properties:{name, key, value}}` (this feeds the coms round-trip in §5.3).
 
+### 6.8 Field-tested gotchas (building a `CustomControl` widget)
+
+Concrete, reusable facts learned building the level-reorder `CustomControl` (verified against the
+vendored `jamovi-compiler/uicompiler.js` + `analysisui` CSS + live console). Read these BEFORE building
+any custom-JS widget that edits an option.
+
+- **A `CustomControl` NEVER "claims" its backing option.** In the compiler,
+  `uiOptionControl.CustomControl.isOptionControl()` returns `false`. `insertMissingControls()` then
+  AUTO-GENERATES a default control for every option not claimed by some control — for a nested
+  `Array`/`Group` option that default is a `VariableSupplier`+`ListBox` that frequently crashes
+  (`GridTargetContainer.getSupplierItems … reading 'isSingleItem'`). Result: your custom UI *and* a
+  second broken auto-UI both appear.
+- **Suppress the auto-control with `hidden: true` on the OPTION** (`.a.yaml`), not on the control.
+  Compiler: `insertMissingControls` does `if (option.hidden) continue;`. `compilerMode: tame` does
+  NOT prevent auto-generation (it only changes how the added controls are reported) — `hidden` is the
+  reliable lever. The option stays fully functional (present in `.h.R`, readable in R).
+- **A hidden, control-less option is still reachable in JS as `ui.<optionName>`** — the per-option
+  wrapper (`.value()` / `.setValue()`). So the pattern is: `hidden: true` option + a `CustomControl`
+  whose JS reads/writes `ui.<optionName>` and uses `ui.<controlName>.$el` / `.requestData(...)` for DOM
+  + data. (`$el` is jQuery-wrapped; `$el[0]` is the raw node.)
+- **A control CLAIMS an option when `ctrl.name === option.name` OR `ctrl.optionName === option.name`**
+  (only for control types whose `isOptionControl()` is true). Naming a normal control after its option
+  is what suppresses its auto-generation.
+- **The `updated` event fires on ANY option change in the analysis — including the control's OWN
+  `setValue`.** If you rebuild inside `updated`, every edit (and every unrelated toggle) triggers a
+  rebuild. Gate it: skip unless the thing you care about (e.g. the selected-variable signature) changed
+  AND your DOM subtree is still present (tag your root with a `data-*` marker; if it's gone, jamovi
+  re-rendered `$el` and you must re-render).
+- **Async `requestData` + a deferred swap RACES user input.** Building a fragment in
+  `Promise.all(requestData…).then(swap into $el)` and swapping it in later will clobber a synchronous
+  in-place edit the user made in between (the swapped-in snapshot was read before the edit). Symptom:
+  "the 1st click shows, the 2nd does nothing, then all edits appear at once later." Fix: **cache the
+  fetched column data** so re-renders are SYNCHRONOUS (placeholder + one-shot fetch that caches then
+  re-renders), and do fine-grained edits in place without a full async rebuild.
+- **`setValue` may store the array BY REFERENCE.** Pass a copy (`arr.slice()`), never your live working
+  array — otherwise a later in-place mutation aliases the stored option value and `setValue` can miss
+  the change (no `onOptionsChanged`).
+- **Read a column's factor levels** with
+  `ui.<ctrl>.requestData('column', {columnName, properties:['measureType','levels']})` (exactly what
+  `LevelSelector` does). Returns `{measureType, levels}`; each level has `.label`; `measureType ===
+  'continuous'` marks a numeric column (no levels).
+- **`<details>`/`<summary>` work in the Electron/Chromium option panel** as native collapsibles. Set
+  `summary { display:block; list-style:none }` to drop the native triangle and supply your own caret;
+  they RESET to their default open state on every rebuild, so persist open/closed in a keyed map updated
+  from the `toggle` event.
+- **Match jamovi's own colors**: the list-selection blue is `#b5caef` (`.selected` in analysisui css);
+  tab-selection tint `#3e6da92b`; hover/drop `#0000001a`; list header text `#555`. Reuse these so a
+  custom selectable list reads as native.
+- **Keyboard**: give rows/lists `tabindex=0`, handle `keydown` and `preventDefault()` on
+  `ArrowUp`/`ArrowDown` (else the panel scrolls); set inner `<button>`s `tabindex=-1` so TAB focus stays
+  on the row. A "select one item, then Up/Down moves the selection (it follows)" model beats per-row
+  buttons for reordering long lists.
+- **`GridActionButton` is not a valid `.u.yaml` `type:`** — use `ActionButton`, or DOM buttons inside a
+  `CustomControl`.
+
 ---
 
 ## 7. How Jamovi renders RESULTS (the results iframe) — critical for exporters
@@ -733,6 +788,26 @@ OR, Phase 10) can reuse the same widget.
 ---
 
 ## 13. Feature 2 — level reordering
+
+**BUILT (Phase 7g-ii, 2026-07-10) — route §13.2 (`CustomControl`) + §13.4 (`fct_relevel`).** `levelOrderCtrl`
+(js/jmvtab.js) is a **2-level collapsible `<details>` tree** — axis (open, left-indented) >
+`"<var> : N levels - reorder"` (collapsed; one click opens the list) — Material grey tints + borders + ▸/▾
+carets, in its own collapsed CollapseBox before "References". The list is a **jamovi-style selectable list**
+(white box, selection = jamovi's `#b5caef`): click a level to select it (first selected by default), then an
+**Up/Down button pair below the list** or the **Up/Down arrow keys** (list focused) move the selected level
+(it stays selected so repeated moves walk it). It reads levels via
+`requestData('column', {properties:['measureType','levels']})`, builds into a **detached fragment swapped in
+atomically**, and writes the order to the `levelOrder` Array option (`{var, levels}` per reordered var). A
+**variable-signature gate** makes the frequent `updated` event a no-op unless the variable set changed (keeps
+focus + open sections; collapse state persists). **Two gotchas learned the hard way** (both from live test):
+(1) a `CustomControl` never *claims* its option, so the compiler auto-generates a second broken default control
+— set **`hidden: true`** on the `levelOrder` option (uicompiler skips hidden options) so this control is the
+sole UI; (2) the option is still reachable as `ui.levelOrder` (the per-option wrapper, §6.2) even when hidden.
+R side is **internal-only** (no public `tab()` arg): `jmvtab_levels_order()` → the internal
+`tab(.levels_order=)` arg → **`jmv_cache_aggregate()` relevels the shaped aggregate POST-fetch** (`jmv_relevel_cols`;
+stored blob stays raw) + recomputes `remove_levels` for `levels="first"`, so a reorder is a **tier-3 input**
+(tiers 1-2 reused), byte-identical to `tab()` on pre-releveled microdata. The routes below are the original
+design analysis (kept for context).
 
 **Reality check (confirmed against the framework):** there is **no ready-made drag-sortable
 factor-level control** at module level, and `LevelSelector` takes levels verbatim (§6.4). The

@@ -161,9 +161,14 @@ Each maps to which tiers are reused vs recomputed. This is the acceptance spec f
   field the colour needs already exists, only tier 4 re-renders. **Caveat:** switching `color_signif` from
   `"ignore"` to a significance policy needs the CI (a tier-3 recompute), even though the paint itself is
   tier 4 — the cache must therefore know **which fields exist**, not just which colour was last shown.
-- **(e) Reorder factor levels (Phase 7f feature).** A post-aggregate `fct_relevel` + arrange on the shaped
-  aggregate — tiers 1-2 reused, tiers 3-4 recompute (fast). Note it shifts `ref = "first"` and the
-  `common_base` first-col reference, so treat a reorder as a tier-3 input, not pure display.
+- **(e) Reorder factor levels — BUILT (Phase 7g-ii).** A post-aggregate `fct_relevel` + re-`setkey` on the
+  shaped aggregate (`jmv_relevel_cols`, called at the end of `jmv_cache_aggregate()`; the **stored blob stays
+  raw** so the reorder never invalidates tiers 1-2) — tiers 1-2 reused, tiers 3-4 recompute (fast). It shifts
+  `ref = "first"` and the `common_base` first-col reference, so it is a **tier-3 input** (the per-var
+  `levels_order` sits in the tier-3 base-key's `structural`, forcing a rebuild that recomputes the ref shift).
+  Driven by the internal `tab(.levels_order=)` arg (jmvtab-only; `jmvtab_levels_order()` folds the UI Array);
+  `levels="first"` recomputes `remove_levels` against the reordered first. Byte-identical to `tab()` on
+  pre-releveled microdata (`test-jmvtab-cache.R`).
 
 ---
 
@@ -304,6 +309,13 @@ cleannames (with summing) for retro-compatibility — a deliberate divergence be
 > rebuild); its foundation `tab_apply_reference()` (the reference block carved VERBATIM out of `tab_plain`,
 > byte-identical) is PROVEN to reproduce diff/ratio from a cached table's ref-independent `pct` base -- the
 > remaining wiring lands with the Phase 7g reference-picker UI. Locked by `test-jmvtab-cache.R` (83 tests).
+
+> STATUS (2026-07-10, Phase 7g-ii): **level reordering BUILT** as the first live use of §4(e). The jamovi
+> `levelOrder` picker → internal `tab(.levels_order=)` → `jmv_cache_aggregate()` relevels the shaped
+> aggregate + `ctx$data` post-fetch (`jmv_relevel_cols`), recomputes `remove_levels` for `levels="first"`,
+> and lands `levels_order` in the tier-3 base-key `structural` → a reorder rebuilds tier-3 only (tiers 1-2
+> hit). Byte-identical to `tab()` on pre-releveled microdata; new parity + cache-reuse tests. This is NOT the
+> field-level re-ref (still stubbed OFF) — a reorder does a full (fast) tier-3 rebuild, not a re-paint.
 
 The tiers are only callable if `tab_build` is carved into three composable steps — the **same functions
 `tab()` uses, no math fork** (Phase 7e drives them at cache granularity; reuse guarantees near-identical

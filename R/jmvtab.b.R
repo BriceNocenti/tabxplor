@@ -98,6 +98,9 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         # otherwise the expert free-text `ref` box is used (jmvtab_ref_vector()).
         ref          = jmvtab_ref_vector(self$options$refLevels, self$options$ref),
         ref2         = self$options$ref2,
+        # Phase 7g-ii: per-variable level reordering (levelOrder picker) -> a named list of ordered
+        # levels; applied post-aggregate in jmv_cache_aggregate() (tier-3 rebuild, tiers 1-2 reused).
+        levels_order = jmvtab_levels_order(self$options$levelOrder),
         comp         = self$options$comp,
         ci           = self$options$ci,
         conf_level   = self$options$conf_level,

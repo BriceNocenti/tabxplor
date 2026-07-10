@@ -312,3 +312,71 @@ test_that("Phase 7g: the reference-level picker vector drives the cache like any
   expect_false(isTRUE(r$hits$tab3))
   expect_true(r$hits$agg[["marital\rrace"]])
 })
+
+
+# --- Phase 7g-ii: level reordering (post-aggregate, tier-3 input) -------------------------
+# The oracle is a plain tab() on PRE-RELEVELED microdata: the jmvtab reorder relevels the shaped
+# aggregate in memory (stored blob stays raw), which must be byte-identical to having fct_relevel'd
+# the data before tab(). A reorder reuses tiers 1-2 (aggregate + test) and only rebuilds the fmt.
+mar_ord  <- c("Married", "Divorced", "Widowed", "Separated", "Never married", "No answer")
+race_ord <- c("White", "Black", "Other", "Not applicable")   # raw first = "Other"
+re_relevel <- function(d, spec) {
+  for (v in names(spec)) d[[v]] <- forcats::fct_relevel(d[[v]], spec[[v]])
+  d
+}
+
+test_that("jmvtab_levels_order(): picker Array -> named ordered list, empties dropped", {
+  lo <- list(
+    list(var = "marital", levels = list("Divorced", "Married")),
+    list(var = "",        levels = list("x")),           # empty var -> dropped
+    list(var = "race",    levels = list()),              # empty levels -> dropped
+    list(var = "relig",   levels = list("None", ""))     # blank level filtered
+  )
+  spec <- jmvtab_levels_order(lo)
+  expect_identical(names(spec), c("marital", "relig"))
+  expect_identical(spec$marital, c("Divorced", "Married"))
+  expect_identical(spec$relig, "None")
+  expect_null(jmvtab_levels_order(list()))
+  expect_null(jmvtab_levels_order(list(list(var = "race", levels = list()))))
+})
+
+test_that("reorder is byte-identical to tab() on pre-releveled microdata", {
+  cases <- list(
+    list(o = jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", chi2 = TRUE),
+         spec = list(marital = mar_ord, race = race_ord)),
+    list(o = jmv_opts(row_vars = "marital", col_vars = "tvhours"),                 # factor x numeric
+         spec = list(marital = mar_ord)),
+    list(o = jmv_opts(row_vars = "relig", col_vars = "race", tab_vars = "marital", pct = "row"),
+         spec = list(marital = mar_ord, race = race_ord)),                         # subtable reorder
+    list(o = jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", na = "drop"),
+         spec = list(marital = mar_ord, race = race_ord)),
+    list(o = jmv_opts(row_vars = "marital", col_vars = "race", pct = "col"),
+         spec = list(marital = mar_ord, race = race_ord))
+  )
+  for (cs in cases) {
+    built <- jmvtab_build(gss, utils::modifyList(cs$o, list(levels_order = cs$spec)), NULL)
+    expect_equal(built$tabs, jmv_oracle(cs$o, re_relevel(gss, cs$spec)))
+  }
+})
+
+test_that("reorder + levels = 'first' keeps the reordered-first level", {
+  o <- jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", levels = "first")
+  built <- jmvtab_build(gss, utils::modifyList(o, list(levels_order = list(race = race_ord))), NULL)
+  expect_true("White" %in% names(built$tabs))     # reordered first
+  expect_false("Other" %in% names(built$tabs))    # raw first, dropped
+  expect_equal(built$tabs, jmv_oracle(o, re_relevel(gss, list(race = race_ord))))
+})
+
+test_that("a reorder reuses tiers 1-2 (only the tier-3 armed table rebuilds)", {
+  o <- jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", chi2 = TRUE)
+  s <- jmvtab_build(gss, o, NULL)$store
+  r <- jmvtab_build(gss, utils::modifyList(o, list(levels_order = list(marital = mar_ord))), s)
+  expect_true(r$hits$agg[["marital\rrace"]])       # aggregate reused (raw fingerprint unchanged)
+  expect_false(isTRUE(r$hits$tab3))                # armed table rebuilt (base-key changed)
+})
+
+test_that("levels_order = NULL leaves the build byte-identical (no-op)", {
+  o <- jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", chi2 = TRUE)
+  expect_equal(jmvtab_build(gss, utils::modifyList(o, list(levels_order = NULL)), NULL)$tabs,
+               jmvtab_build(gss, o, NULL)$tabs)
+})

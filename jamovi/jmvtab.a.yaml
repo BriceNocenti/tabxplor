@@ -313,6 +313,28 @@ options:
               - name: ref
                 type: Level
 
+    # Phase 7g-ii: per-variable level-reordering picker. One {var, levels} entry per REORDERED
+    # factor (row/col/tab); `levels` is the ordered level labels (element order = display order).
+    # Un-reordered variables get no entry. Read into tab()'s internal `.levels_order` by
+    # jmvtab_levels_order(); applied post-aggregate (tier-3) in jmv_cache_aggregate().
+    # `hidden: true` -> the .u.yaml compiler does NOT auto-generate a default control for this option
+    # (uicompiler insertMissingControls skips hidden options); the `levelOrderCtrl` CustomControl in
+    # .u.yaml is the sole UI and edits this option via ui.levelOrder in js/jmvtab.js.
+    - name: levelOrder
+      title: "Level order (per variable)"
+      type: Array
+      hidden: true
+      default:
+      template:
+          type: Group
+          elements:
+              - name: var
+                type: Variable
+              - name: levels
+                type: Array
+                template:
+                    type: String
+
     - name: ref
       title: "auto/tot/<i>{row_number}</i>/<i>{row_name}</i>"
       type: String

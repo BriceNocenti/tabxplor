@@ -364,6 +364,7 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
                 spread_vars, names_prefix = NULL, names_sort = FALSE,
                 row_var, col_var,
                 .cache = NULL, .defer_level_merge = FALSE, .return_armed = FALSE,
+                .levels_order = NULL,
                 filter) {
 
   # Phase 6f (§6): singular row_var/col_var are soft-deprecated aliases of the plural
@@ -525,7 +526,10 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
            subtext = subtext, n_min = n_min,
            spread_vars = spread_vars, names_prefix = names_prefix, names_sort = names_sort,
            # Phase 7e: pass the jmvtab live-cache seam straight through (NULL/FALSE for normal tab()).
-           .cache = .cache, .defer_level_merge = .defer_level_merge)
+           # Phase 7g-ii: `.levels_order` (a per-variable named list of ordered levels) is jmvtab-only
+           # (NULL for normal tab()); consumed post-aggregate in jmv_cache_aggregate() (design 4e).
+           .cache = .cache, .defer_level_merge = .defer_level_merge,
+           .levels_order = .levels_order)
 
   # Phase 7f: the jmvtab tier-3 cache stores the PRE-finalize armed table (field values + the
   # `legacy` colour), then applies finalize_color_spec() itself on every interaction, so a colour /
@@ -993,6 +997,7 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
                       .by_table = FALSE,
                       spread_vars = character(), names_prefix = NULL, names_sort = FALSE,
                       .cache = NULL, .defer_level_merge = FALSE,
+                      .levels_order = NULL,
 
                       filter #, listed = FALSE,
 ) {
@@ -1031,7 +1036,10 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
     # Phase 7e jmvtab cache seam: `cache_env` is a mutable environment holding $store / $hits (NULL
     # for tab()/tab_many() -> the hooks below are inert). `defer_level_merge` keeps full levels for
     # a cacheable aggregate + test (see tab_prepare_pop / the design doc). Both are strictly additive.
-    cache_env = .cache, defer_level_merge = .defer_level_merge
+    cache_env = .cache, defer_level_merge = .defer_level_merge,
+    # Phase 7g-ii: jmvtab-only per-variable level reordering (named list var -> ordered levels).
+    # NULL for tab()/tab_many() -> no-op. Applied post-aggregate (tier-3) in jmv_cache_aggregate().
+    levels_order = .levels_order
   )
 
   ctx <- tab_setup(ctx)
