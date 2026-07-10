@@ -1,0 +1,204 @@
+# Phase 7e: the jmvtab live-UI multi-tier cache. Tests drive the engine-free jmvtab_build() core
+# (no live jamovi session needed) and lock: byte-identity to tab(cleannames = FALSE), tier-1/tier-2
+# reuse (add-a-variable, pct/ref toggles), the store round-trip, and the two documented divergences
+# (cleannames-at-display collisions, defer_level_merge full-level tests). See
+# dev/tabxplor_jmvtab_cache_design.md.
+
+# --- helpers ------------------------------------------------------------------------------
+jmv_opts <- function(...) {
+  o <- list(row_vars = character(), col_vars = character(), tab_vars = character(), wt = character(),
+            pct = "no", color = "no", color_signif = "ignore", OR = "no", chi2 = FALSE,
+            na = "keep", levels = "all", ref = "auto", ref2 = "first", comp = "tab", ci = "auto",
+            conf_level = 0.95, stars = TRUE, method_cell = "wilson", method_diff = "newcombe",
+            totaltab = "line", digits = 0, other_if_less_than = 0, add_n = TRUE, add_pct = FALSE,
+            subtext = "", totaltab_name = "Ensemble", total_names = "Total", other_level = "Others",
+            output_list = FALSE, cleannames = FALSE, display = "auto")
+  utils::modifyList(o, list(...))
+}
+
+# The no-cache oracle: tab() with jmvtab_build()'s exact arg mapping (dummy vars, color, ci forcing).
+jmv_oracle <- function(opts, data) {
+  if (length(opts$row_vars) == 0L) { data$no_row_var <- factor("no_row_var"); opts$row_vars <- "no_row_var" }
+  if (length(opts$col_vars) == 0L) { data$no_col_var <- factor("n");          opts$col_vars <- "no_col_var" }
+  color <- switch(opts$color, "no" = FALSE, "auto" = TRUE, opts$color)
+  ci <- opts$ci
+  if (!isFALSE(color) && opts$color_signif != "ignore" && ci == "auto") ci <- "diff"
+  wt_sym <- if (length(opts$wt)) rlang::sym(opts$wt) else NULL
+  rlang::inject(tab(
+    data, row_vars = tidyselect::all_of(opts$row_vars), col_vars = tidyselect::all_of(opts$col_vars),
+    tab_vars = tidyselect::all_of(opts$tab_vars), wt = !!wt_sym, pct = opts$pct, color = color,
+    color_signif = opts$color_signif, OR = opts$OR, chi2 = opts$chi2, na = opts$na,
+    levels = opts$levels, ref = opts$ref, ref2 = opts$ref2, comp = opts$comp, ci = ci,
+    conf_level = opts$conf_level, stars = opts$stars, method_cell = opts$method_cell,
+    method_diff = opts$method_diff, cleannames = FALSE, totaltab = opts$totaltab, digits = opts$digits,
+    other_if_less_than = opts$other_if_less_than, add_n = opts$add_n, add_pct = opts$add_pct,
+    subtext = opts$subtext, totaltab_name = opts$totaltab_name, total_names = opts$total_names,
+    other_level = opts$other_level, output_list = isTRUE(opts$output_list)
+  ))
+}
+
+gss <- forcats::gss_cat
+gssw <- dplyr::mutate(gss, w = as.numeric(1 + (as.integer(marital) %% 3)))
+
+
+# --- store primitives ---------------------------------------------------------------------
+test_that("store lifecycle: new / migrate / schema mismatch / round-trip", {
+  s <- jmv_cache_new()
+  expect_identical(s$schema, JMVTAB_CACHE_SCHEMA)
+  expect_length(s$agg, 0L)
+  expect_identical(jmv_cache_migrate(NULL)$schema, JMVTAB_CACHE_SCHEMA)  # NULL -> fresh
+  bad <- s; bad$schema <- 999L
+  expect_length(jmv_cache_migrate(bad)$agg, 0L)                          # mismatch -> discarded
+
+  s <- jmv_cache_put(s, "agg", "k1", list(cols = list(n = 1:3), keys = "g"))
+  got <- jmv_cache_fetch(s, "agg", "k1")
+  expect_true(got$hit)
+  expect_identical(got$value$cols$n, 1:3)
+  expect_false(jmv_cache_fetch(s, "agg", "nope")$hit)
+  # gzip-RDS round-trip preserves the store
+  back <- unserialize(serialize(got$store, connection = NULL))
+  expect_true(jmv_cache_fetch(back, "agg", "k1")$hit)
+})
+
+test_that("store: per-entry byte ceiling skips oversized entries", {
+  s <- jmv_cache_new()
+  # A genuinely large blob (the ceiling measures SERIALIZED bytes -- an ALTREP compact sequence would
+  # serialize tiny regardless of length, which is correct: only the real persisted cost counts).
+  big <- list(cols = list(x = strrep("z", JMVTAB_MAX_ENTRY_BYTES + 1e5)), keys = "x")
+  expect_gt(length(serialize(big, connection = NULL)), JMVTAB_MAX_ENTRY_BYTES)
+  s <- jmv_cache_put(s, "agg", "big", big)
+  expect_length(s$agg, 0L)  # not persisted (over the ceiling)
+})
+
+
+# --- byte-identity to tab() ---------------------------------------------------------------
+test_that("cold build == tab(cleannames = FALSE); warm == cold", {
+  cases <- list(
+    jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", chi2 = TRUE),
+    jmv_opts(row_vars = "marital", col_vars = "tvhours", chi2 = TRUE),
+    jmv_opts(row_vars = "marital", col_vars = c("race", "tvhours"), pct = "row", chi2 = TRUE),
+    jmv_opts(row_vars = "relig", col_vars = "race", tab_vars = "marital", pct = "row"),
+    jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", na = "drop"),
+    jmv_opts()  # bare table
+  )
+  for (o in cases) {
+    cold <- jmvtab_build(gss, o, NULL)
+    warm <- jmvtab_build(gss, o, cold$store)
+    expect_equal(cold$tabs, jmv_oracle(o, gss))
+    expect_equal(warm$tabs, cold$tabs)
+  }
+})
+
+test_that("weighted build is byte-identical (tolerant on wn)", {
+  o <- jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", wt = "w",
+                color = "auto", color_signif = "grey_non_signif")
+  cold <- jmvtab_build(gssw, o, NULL)
+  expect_equal(cold$tabs, jmv_oracle(o, gssw))
+  expect_equal(jmvtab_build(gssw, o, cold$store)$tabs, cold$tabs)
+})
+
+
+# --- tier-1 reuse -------------------------------------------------------------------------
+test_that("goal (a): adding a col_var reuses the prior pair (na = keep)", {
+  s  <- jmvtab_build(gss, jmv_opts(row_vars = "marital", col_vars = "race", pct = "row"), NULL)$store
+  r2 <- jmvtab_build(gss, jmv_opts(row_vars = "marital", col_vars = c("race", "partyid"), pct = "row"), s)
+  expect_true(r2$hits$agg[["marital\rrace"]])       # reused
+  expect_false(r2$hits$agg[["marital\rpartyid"]])   # fresh
+})
+
+test_that("factor keep <-> drop SHARE the aggregate; numeric keep <-> drop DO NOT", {
+  # factor: keep then drop -> tier-1 hit (NA-kept aggregate, post-aggregate cell delete)
+  s  <- jmvtab_build(gss, jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", na = "keep"), NULL)$store
+  rf <- jmvtab_build(gss, jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", na = "drop"), s)
+  expect_true(rf$hits$agg[["marital\rrace"]])
+  # numeric: keep then drop -> tier-1 MISS (pre-scan na.omit -> different population)
+  sn <- jmvtab_build(gss, jmv_opts(row_vars = "marital", col_vars = "tvhours", na = "keep"), NULL)$store
+  rn <- jmvtab_build(gss, jmv_opts(row_vars = "marital", col_vars = "tvhours", na = "drop"), sn)
+  expect_false(rn$hits$agg[["marital\r<num>"]])
+})
+
+
+# --- tier-2 reuse -------------------------------------------------------------------------
+test_that("tier-2 test is reused across pct/ref toggles and matches a fresh chi2", {
+  r1 <- jmvtab_build(gss, jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", chi2 = TRUE), NULL)
+  expect_equal(sum(r1$hits$test), 0)                       # cold: computed
+  # stored test is populated (real chi2, not an empty placeholder)
+  expect_equal(nrow(r1$store$test[[1]]$payload), 1L)
+  expect_identical(r1$store$test[[1]]$payload$test, "chi2")
+
+  r2 <- jmvtab_build(gss, jmv_opts(row_vars = "marital", col_vars = "race", pct = "col", chi2 = TRUE), r1$store)
+  expect_equal(sum(r2$hits$test), 1)                       # pct change reuses the test
+  r3 <- jmvtab_build(gss, jmv_opts(row_vars = "marital", col_vars = "race", pct = "row",
+                                   ref = "1", chi2 = TRUE), r2$store)
+  expect_equal(sum(r3$hits$test), 1)                       # ref change reuses the test
+  # a cached-test run is byte-identical to a fresh chi2 run
+  expect_equal(r3$tabs, tab(gss, marital, race, pct = "row", ref = "1", chi2 = TRUE, ci = "auto",
+                            cleannames = FALSE))
+})
+
+test_that("contrib coloring does NOT use the tier-2 cache (recomputes per-cell fields)", {
+  o <- jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", chi2 = TRUE, color = "contrib")
+  r1 <- jmvtab_build(gss, o, NULL)
+  r2 <- jmvtab_build(gss, o, r1$store)
+  expect_equal(sum(r2$hits$test), 0)                       # never a test hit under contrib
+  expect_equal(r2$tabs, jmv_oracle(o, gss))
+})
+
+
+# --- documented divergences ---------------------------------------------------------------
+test_that("cleannames at display: colliding levels stay separate (vs tab() summing)", {
+  df <- data.frame(
+    g = factor(rep(c("A-Foo", "B-Foo (x)", "C-Bar"), each = 20)),
+    y = factor(rep(c("yes", "no"), 30))
+  )
+  jr <- jmvtab_build(df, jmv_opts(row_vars = "g", col_vars = "y", pct = "row", cleannames = TRUE), NULL)
+  ot <- tab(df, g, y, pct = "row", cleannames = TRUE)
+  expect_equal(sum(as.character(jr$tabs[["g"]]) == "Foo"), 2)  # jmvtab: two same-labelled rows
+  expect_equal(sum(as.character(ot[["g"]])      == "Foo"), 1)  # tab(): one summed row
+})
+
+test_that("numeric-valued col_vars become mean columns (match R; jamovi factors integers)", {
+  # jamovi hands a nominal/ordinal integer to the module ALREADY factored, so tvhours would wrongly
+  # become one column per value. jmv_coerce_numeric_cols() restores the numeric type -> a mean column.
+  d <- gss
+  d$tvhours_f <- factor(d$tvhours)                         # simulate jamovi's factor delivery
+  r <- jmvtab_build(d, jmv_opts(row_vars = "marital", col_vars = "tvhours_f"), NULL)
+  fmt <- setdiff(names(r$tabs)[purrr::map_lgl(r$tabs, is_fmt)], "n")
+  expect_identical(fmt, "tvhours_f")                       # ONE mean column, not one per value
+  expect_true(get_type(r$tabs[["tvhours_f"]])[1] == "mean")
+  # a genuine categorical (non-numeric levels) is untouched -> columns
+  r2 <- jmvtab_build(d, jmv_opts(row_vars = "marital", col_vars = "race", pct = "row"), NULL)
+  expect_gt(length(names(r2$tabs)[purrr::map_lgl(r2$tabs, is_fmt)]), 2)
+})
+
+test_that("cleannames at display preserves the tab class on grouped/compacted tables", {
+  # Multi-row_var (compacted -> grouped by the `row_var` indicator) and tab_vars tables are grouped;
+  # cleannames must clean labels WITHOUT downgrading the tabxplor class (regression: across() can't
+  # select grouping columns, and base [[<-/names<- drop the class).
+  cases <- list(
+    list(lbl = "2 row_vars",  o = jmv_opts(row_vars = c("marital", "relig"), col_vars = "race",
+                                            pct = "row", cleannames = TRUE)),
+    list(lbl = "tab_vars",    o = jmv_opts(row_vars = "marital", col_vars = "race",
+                                           tab_vars = "relig", pct = "row", cleannames = TRUE))
+  )
+  for (case in cases) {
+    off <- case$o; off$cleannames <- FALSE
+    want <- class(suppressMessages(jmvtab_build(gss, off, NULL))$tabs)
+    got  <- class(suppressMessages(jmvtab_build(gss, case$o, NULL))$tabs)
+    expect_identical(got, want, info = case$lbl)
+    expect_no_error(tab_kable(suppressMessages(jmvtab_build(gss, case$o, NULL))$tabs))
+  }
+})
+
+test_that("defer_level_merge: levels = 'first' tests FULL levels", {
+  d <- dplyr::filter(gss, !is.na(marital), !is.na(race))
+  jf <- jmvtab_build(d, jmv_opts(row_vars = "marital", col_vars = "race", pct = "row",
+                                 levels = "first", chi2 = TRUE), NULL)
+  # race has 3 levels -> full-level df = (nlevels(marital)-1)*(3-1) = 10. tab(levels="first") would
+  # give (nlevels(marital)-1)*(2-1) = 5. The cached test carries the FULL-level df.
+  expect_equal(jf$store$test[[1]]$payload$df1, 10)   # full 3-level race x 6-level marital
+  # displayed table keeps only the first race level
+  fmt_cols <- setdiff(names(jf$tabs)[purrr::map_lgl(jf$tabs, is_fmt)], c("n", "wn"))
+  expect_true("Other" %in% fmt_cols)
+  expect_false("White" %in% fmt_cols)
+})

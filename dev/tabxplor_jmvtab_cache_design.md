@@ -263,6 +263,28 @@ cleannames (with summing) for retro-compatibility — a deliberate divergence be
 > `tab_counts()` re-expressed on the same stages (single-pair ctx). Byte-identical (golden/fuse/counts
 > parity green, no regen); new `test-carve-parity.R` locks the composition + the seam contract, and
 > the mapping stage↔tier is in the map §10. 7e (the module) adds the store + the data hashes.
+>
+> STATUS (2026-07-10, Phase 7e): **BUILT.** `R/jmvtab-cache.R` holds the content-addressed store
+> (tiers 1-2 only; schema-versioned, per-entry byte ceiling, byte-bounded LRU on a store-local clock;
+> atomic-vector lists rebuilt with `setDT()`), the hashing, `jmv_cache_aggregate()` (the
+> cache-injected replacement for `tab_aggregate()`), `jmv_cache_store_tests()`, the display-tier
+> `jmvtab_cleannames_display()`, and the engine-free `jmvtab_build()` core. The module **reuses
+> `tab()` end to end** with the cache injected through a mutable `cache_env` (new `.cache` /
+> `.defer_level_merge` args on `tab()`/`tab_build()`; the aggregate stage delegates to
+> `jmv_cache_aggregate()`, byte-identical to `tab(cleannames = FALSE)` -- no math fork). `tab_transform()`
+> was generalised so `.fine` can be a per-pair named list (`fine_for_pair()`), plus a `cached_test`
+> hook on `tab_apply_tests()`. `jmvtab.b.R` is now a thin orchestrator; the store lives on a hidden
+> 0-size **Image** result element's `$state` (`cache_state` -- only Images persist `$state`). Locked by
+> `test-jmvtab-cache.R` (41 tests). **Refinements vs this doc:** (a) the tier-2 key is a *key-of-keys*
+> -- `hash(comp, na, the tier-1 pair/measure keys + population)` -- equivalent to hashing the shaped
+> aggregate but cheaper (no big-data hash); (b) contrib coloring never uses the tier-2 cache (it writes
+> per-cell `ctr`/`var` fields absent from the test tibble); (c) first cut uses **exact-grain keying**
+> (the grain-superset rollup and per-measure-incremental numeric caching are deferred refinements);
+> (d) data identity is a **per-column** fingerprint (class/levels/NA-count), so adding a variable does
+> not invalidate other pairs; opt-in full-value hash via `options(tabxplor.jmv_full_hash = TRUE)`.
+>
+> OPEN (maintainer step): regenerate `jmvtab.h.R` from the updated `jmvtab.r.yaml` (adds `cache_state`)
+> in the running jamovi app, then live-verify -- `jmvtools::prepare()` cannot run headlessly.
 
 The tiers are only callable if `tab_build` is carved into three composable steps — the **same functions
 `tab()` uses, no math fork** (Phase 7e drives them at cache granularity; reuse guarantees near-identical

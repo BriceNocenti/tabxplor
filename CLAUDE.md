@@ -36,7 +36,10 @@ R/
 ├── utils.R         (1306 L)  Pipe re-export, .onLoad() options setup, factor utilities
 ├── tab_logit.R     (1009 L)  WIP — entirely commented out (future logistic regression)
 ├── tab_logit_2.R    (706 L)  WIP — entirely commented out (logit diagnostics/plots)
-├── jmvtab.b.R       (774 L)  Jamovi module backend (R6 class)
+├── jmvtab-cache.R  (~470 L)  Phase 7e jmvtab live multi-tier cache: content-addressed store +
+│                             hashing + jmv_cache_aggregate (tab_aggregate hook) + jmvtab_build
+│                             (engine-free core; reuses tab() with the cache injected)
+├── jmvtab.b.R       (~200 L)  Jamovi module backend (R6): thin orchestrator over jmvtab_build + $state
 └── jmvtab.h.R       (605 L)  Jamovi module UI (auto-generated, do not edit)
 ```
 
@@ -657,7 +660,7 @@ NOT hand-rolled temp `.rds`). **Persist only tiers 1-2** (per-pair count/moment 
 byte-bounded LRU of atomic-vector lists, not live `data.table`s; + chi2/ANOVA keyed on a hash of the
 *shaped* aggregate + `comp`); **recompute tiers 3-4** (pct/diff/ratio/or/CI → fmt → colour → kable) every
 run because fmt is **O(cells), not O(N)**. Aggregate built at **raw levels + NA kept**, so `na`(keep/drop)
-+ `levels` are cheap post-aggregate collapses; `cleannames` is **display-tier** (jmvtab carries full names
+- `levels` are cheap post-aggregate collapses; `cleannames` is **display-tier** (jmvtab carries full names
 through, cleans only before `tab_kable()` — cosmetic, not a cache key; documented no-collision-summing
 divergence from `tab()`); `other_if_less_than`/`wt`/`filter`/`na`(drop_all/common_base) stay
 aggregate-invalidating (the drop_all/common_base population modes can't do per-pair reuse — documented
@@ -725,31 +728,64 @@ Totally rewrite `jmvtab()` jamovi module code to implement the multi-level cache
 The main improvement would be not to rely on `tab()` like now, but to drive the **same aggregate-core + per-transform subfunctions** (Phase 2) at cache-appropriate granularity — **reuse the core, never fork the math**: near-identical behaviour is *guaranteed* by sharing subfunctions, not re-implemented in parallel (which would recreate the very duplication 1.4.0 removes). Cache the prepared data / aggregate / per-transform results keyed by which input changed; pure-display toggles reuse cached numbers; reuse the `.fine` aggregate across interactions.
 
 
-#### Phase 7f — Jamovi UI new features
+##### Done (2026-07-10)
+
+New **`R/jmvtab-cache.R`**: the content-addressed multi-tier live cache. The module **reuses `tab()` end to end** (its color spec, `na` translation, totals, recycling) with the cache injected through a mutable `cache_env` — two new internal args `.cache` / `.defer_level_merge` on `tab()`/`tab_build()`; `tab_aggregate()`'s one-line hook delegates to `jmv_cache_aggregate()` (cache-injected tier-1 build + tier-2 keys), `tab_build()` calls `jmv_cache_store_tests()` after transform. **No math fork** — `jmv_cache_aggregate()` is byte-identical to `tab(cleannames = FALSE)`. Enablers: `tab_transform()` generalised so `.fine` is a per-pair named list (`fine_for_pair()`, dispatches on `is.data.table` → batch path unchanged) + a `cached_test` hook on `tab_apply_tests()` (`set_test()` added); `tab_prepare_pop()` `defer_level_merge` (full levels for a cacheable aggregate + test; the level-drop moves to `tab_assemble`). Store: tiers 1 (per-pair counts / per-row_var moment sums) + 2 (chi2/ANOVA) only — fmt is O(cells), recomputed; atomic-vector lists (never a live `data.table`), schema-versioned, per-entry byte ceiling + byte-bounded LRU; hosted on a hidden 0-size **Image** result element's `$state` (only Images persist `$state`). Data identity = **per-column** fingerprint (adding a variable reuses other pairs; opt-in `options(tabxplor.jmv_full_hash=)`). `jmvtab.b.R` is now a thin orchestrator over the engine-free `jmvtab_build()`. **Fixed the pre-existing `pct`-recycling BLOCKER** (multi×multi tables). Two documented divergences from `tab()`: cleannames-at-display (colliding levels stay separate) + `levels="first"` tests full levels. Locked by `test-jmvtab-cache.R` (41 tests); full suite green (1191). **Refinements vs the design doc**: tier-2 key-of-keys; contrib never uses the test cache; exact-grain keying (grain rollup + per-measure numeric caching deferred). Detail: `dev/tabxplor_jmvtab_cache_design.md` §8 STATUS.
+
+**OPEN — maintainer step**: regenerate `jmvtab.h.R` from the updated `jmvtab.r.yaml` (adds the hidden `cache_state` Image) in the running jamovi app (`jmvtools::prepare()` can't run headlessly), then live-verify.
+
+
+#### Phase 7f — Optimizing the O(cells) fmt build
+
+**Why (grounded, Phase 7e profiling — `dev/tabxplor_1.4.0_decisions.md` §27).** The Phase 7c cache persists tiers 1-2 (counts/moment scans + chi2/ANOVA) on the premise that everything below — the tier-3/4 **`fmt`-record assembly** (`pct`/`diff`/CI + `vctrs::new_rcrd` cells + colour) — is O(cells) and "too cheap to cache". The committed jmvtab benchmarks (`benchmark_jmvtab_ops()` small, `benchmark_jmvtab_big_ops()` big; baselines `tests/testthat/jmvtab_benchmark_baseline.csv` + `jmvtab_big_benchmark_baseline.csv`) disprove that **at real-world scale**:
+
+- Small table (1 row_var × 3 col_vars): warm build ~0.23 s, render ~0.28 s → **render dominates**.
+- Big table-of-tables (3 row_vars × 3 col_vars ≈ 9 pair-tables): warm build **~0.95–1.15 s**, render ~0.60 s → **the fmt BUILD dominates** (~1.5 s R, ~2 s in the Jamovi UI). The bottleneck flips with size.
+- A pure-display toggle (`digits`) still costs ~0.94 s on the big table, because `jmvtab_build` re-runs the whole tier-3/4 pipeline — nothing below the aggregate is cached. Tier-1/2 caching alone can't make big tables instant.
+
+**What (two levers to "instant" on real tables, with Phase 8).**
+1. **Faster `fmt` assembly** — profile where the ~0.95 s goes (likely the per-cell `vctrs::new_rcrd` construction across thousands of cells) and cut the constant; this speeds up *every* `tab()`/`tab_num()` call, not just jamovi.
+2. **Cache tier-3/4 for display-only toggles** — revisit the design's "don't cache fmt" call: a `digits`/`display`/`color`/`color_signif` change (when the needed fields already exist) should reuse the built `fmt` cells and only re-render, not rebuild. Needs the "which fields exist" tracking the cache design already anticipates.
+
+The render lever (CSS-only rewrite killing the ~0.6 s kableExtra cost) is **Phase 8**; Phase 7h is the fmt-build lever. Already applied in 7e: `tooltips = FALSE` on the Jamovi render (570 → 250 ms small table). The two committed baselines track both levers.
+
+
+
+#### Phase 7g — Jamovi UI new features
 
 Implement new user-friendly features :
 
-1. A per-variable **reference-level** picker (the `ref` reference point of comparison for the calculation of color helpers, of each `row_var` under  `pct="row"`, of each `col_var` under `pct="col"`).
+1. A per-variable **reference-level** picker (the `ref` reference point of comparison for the calculation of color helpers, of each `row_var` under  `pct="row"`, of each `col_var` under `pct="col"`). Since the next feature is level-reordering and
 
 2. A simple, comptact, clear and user-friendly **level-reordering** UI for row/col/tab factors.
 - Use one already existing in another common jamovi module if it’s possible. Build it from scratch in .js otherwise.
 
-3. A module-level **Excel export** with a user-friendly path selector.
+3. A module-level **Export function** (not only Excel) with a user-friendly path selector.
 - Best would be a true normal menu to search for folders and enter file name for normal people : maybe a hack could permits it.
 - If not possible, it should at least have a user-friendly text bar for path : point to the specific `<USER>/<DOCUMENTS>` of the user by default, on Windows/Linux/Mac, not by adding a "~" incomprehensible by most user inside the text bar, but by fully writing the **real path** into the text bar (with an additional button to reset this text to it’s default `<USER>/<DOCUMENTS>` if needed).
 - It’s difficult because Jamovi R session is locked inside Electron and can’t access many basic things.
+- Default export should be Excel. But a new input list should permit to choose html (kable) or md instead. Changing the type should change the button’s text in something like the current "Export to Excel" of so, so it’s immediately meaningful for non-expert students (and Excel stay the very visible base workflow).
 
 4. Un argument `n_min` : supprimer la ligne/colonne si son `n` est trop petit. It’s not as easy as it sounds to handle.
 - Pragmatic solution : and `add_n` prints the right unweighted counts row or col for the users see, and it can be filter/select on (with the same `n` as the totrow or totcol that bears it).
 - But this `add_n` column or row, that is really a duplicate of the total column or row with a different display, is chosen a bit randomly : with `pct = "row"`, it’s the last factor `col_var`. In reality, when there are several col_vars in the same table, each can have a `tot_n` a bit different depending on how missing values where handled. **What would be the more statistically consistent and clear for the user way to do that ?** With several `col_vars` and, for example, `pct = "row"`, there are several possibilities : show the minimun `tot_n` of the whole row in the total column ? Show a range [min;max] for clarity (and in that case : live calculations at display ? Or storing of min in `n` field and max in `tot_n` field) ? In that context, how to remove lines with `tot_n` < `n_min` ? Taking the minimum `tot_n` in the row may remove meaningful values > `n_min` ; taking the maximum would keep values below it. A rule could be : remove the whole line if the maximum `tot_n` in the whole row is below `n_min` ; then clear the cells with that, themselves, have `tot_n` < `n_min` (display "" instead of it’s normal value) ? Are ther caveats I’m not seeing ? We should think about it and design it arefully to really get the user-friendly and clear-for-the-user solution.
 - The way I handled this in R in the past was just : `|> filter(Total >= 30)`, but with all these subtleties, maybe the `n_min` argument should be built in `tab()` and `jmvtab()`, with a shared function (public if it can be of some use for expert users ?) ?
 
+5. Small UI changes :
+- `method_cell` only have wilson : wald should be available too as an opt-in option (commonly used in teaching). Same in `tab()`, not onjy `jmvtab()`.
+- `chi2` menu : change it to a proper tests menus ? chi2 button + anova button (make it clear in the very concise description which one is for which kind of variable) ?
 
-#### Phase 7g — Jamovi UI js consistency and user-friendliness
 
-jmvtab jamovi UI needs a **full .js customisation** of it’s buttons and other inputs behaviours for maximum user-friendliness.
-- Buttons should auto-change depending on other buttons choices to matchwhat really happens internally, but in a consistent, predictable and user-friendly way, it should feel natural and not frustrate the user. For example, if the user coose `color_signif = "grey_non_signif"`, it should toggles `ci = "diff"` because it’s what `tab()` do internally, this computation is needed for the chosen color helpers.
-- What is the current user-friendly standard / good practice for the behaviour of buttons in a UI ? Let’s say I choose `color_signif = "grey_non_signif"`, and it toggles `ci = "diff"` without the user chosen it deliberately. If the user then go back to default `color_signif = "ignore"`, should js  go back to `ci = "no"` automatically, or keep `ci = "diff"` ?
+#### Phase 7h — Jamovi UI js consistency and user-friendliness
+
+jmvtab jamovi UI needs a **full .js customisation** of it’s buttons and other inputs behaviours for maximum user-friendliness. Look at `dev/tabxplor_argument_computation_map.md` for interdependency between arguments.
+- Buttons should auto-change depending on other buttons choices to matchwhat really happens internally, but in a consistent, predictable and user-friendly way, it should feel natural, standard and not frustrate the user. For example, if the user coose `color_signif = "grey_non_signif"`, it should toggles `ci = "diff"` because it’s what `tab()` do internally, this computation is needed for the chosen color helpers.
+- What is the current user-friendly standard / good practice for the behaviour of buttons in a UI ? Please make detailed web searches.
+- Let’s say I choose `color_signif = "grey_non_signif"`, and it toggles `ci = "diff"` without the user chosen it deliberately. If the user then go back to default `color_signif = "ignore"`, should js  go back to `ci = "no"` automatically, or keep `ci = "diff"` ?
+- The "grey out input when it makes no sense giving other inputs" logic should be improved : for example, the `totaltab` menu button should be greyed out when no tab_vars have been passed. What
+- `digits` as text input is bad : better use a selectable list, the user click on it to display the list and choose the number of digit it wants ?
+- `subtext` text input only takes about one third of the horizontal space in its row : it should take all the available space in its row in the menu. It can’t manage to set it’s size with .yaml only.
+- What else, in jamovi UI, could be controled with .js for the benefits of the user ?
 
 
 
@@ -759,18 +795,23 @@ jmvtab jamovi UI needs a **full .js customisation** of it’s buttons and other 
 
 ### Phase 8 — Unified exporter prep & display
 
-One shared exporter-prep helper for `tab_xl`/`tab_kable`/`tab_md`/`tab_plot`; keep export parity (`format.tabxplor_fmt` vs the `tab_xl` bypass). **Each exporter gets a base method (single tab) AND a list method** (several tabs rendered one-after-another, not merged — e.g. an HTML container for kable). **Integrate/export/document `tab_transpose()`** (already exported but an undocumented single-total stub — finish it) and the **opt-in transpose-at-export** for col% + several row_vars (console never transposes; warn on `pct="col"` with several row_vars). Revisit **compact-with-tab_vars** here (needs two-level nested rendering). **Stays on openxlsx v1** — the openxlsx2 engine swap is Phase 9. Detail: `dev/tabxplor_1.4.0_decisions.md` §7-8.
+Fully redesign exports to unify the different kind of exports in a common framework. One shared exporter-prep helper for `tab_xl`/`tab_kable`/`tab_md`/`tab_plot`; keep export parity (`format.tabxplor_fmt` vs the `tab_xl` bypass). **Stays on openxlsx v1** — the openxlsx2 engine swap is Phase 9. Detail: `dev/tabxplor_1.4.0_decisions.md` §7-8.
+- Make it fast (no useless computations if the result is not used afterwards, depending on the type of export and options chosen).
+- When a feature is export-type specific, like for example Excel only, it should be justified.
+- **Each exporter gets a base method (single tab) AND a list method** (several tabs rendered one-after-another, not merged — e.g. an HTML container for kable).
+- `tab_plot()` has a bad display and is hard to handle : **soft-deprecate** it (Q1 — keep exported, mark `lifecycle` experimental/superseded; do NOT hard-remove from NAMESPACE), keep it for future improvements
 
- We must **make a grounded choice for jamovi jmvtab module base display of tables** : improve tab_kable() for performance and simplify/remove all tooltips/etc. (just a faster flat html table) ? Make it format with markdown tables with css classes (would it be possible to print .md inside html, with custom .css classes, in Jamovi ?) ?
+Console display
+- Display of `tabxplor_tab` on console is quite long : what are the performance bottlenecks and how to make it faster / remove useless stuffs and white elephants here ?
+- The `tabxplor_tab` class and the grouped one currently have a kind of bug that forbids them to work with every data.frame (like : with no `tabxplor_fmt` ; with no factors ; with factors after fmt columns and not before ; etc.) : it may come from the way `row_vars` and `tab_vars` are detected and from `tab_get_vars` etc. Obviously, these detections are absolutely needed to print colors etc., but currently, the failing mode is display error or export error. I would want a more user-friendly failing mode, still printing the df without the specialt tabxplor formattings and colors. Add testthat tests to be sure there cases do not throw error. Use messages if needed to explain to the user why it fails.
 
-#### To implement
-
-- Make a common preparation function for tab_xl(), tab_kable(), tab_md(), tab_plot(). Make it fast (no useless calculations made in the cases they are not used afterwards, depending on the type of export and options chosen).
-- Fully redesign exports to unify the different kind of exports in a common framework (when a feature is export-type specific, like Excel only, it should be justified).
+New features
 - Use variables `label` attribute more thoroughly in exports when it exists (in survey data formatting, I have the habit of putting the original questionnaire question in it, which can me meaningful information for the user) ? Where to print it, for useful additional information without clutter (not erasing variable names, which are real useful) ?
-- tab_plot has a bad display and is hard to handle : **soft-deprecate** it (Q1 — keep exported, mark `lifecycle` experimental/superseded; do NOT hard-remove from NAMESPACE), keep it for future improvements
+- **Integrate/export/document `tab_transpose()`** (already exported but an undocumented single-total stub — finish it) and the **opt-in transpose-at-export** for col% + several row_vars (console never transposes; warn on `pct="col"` with several row_vars).
+- Revisit **compact-with-tab_vars** here (needs two-level nested rendering).
 
-- Display of tabxplor_tab on console is quite long : what are the performance bottlenecks and how to make it faster / remove useless stuffs and white elephants here ?
+Jamovi jmvtab display
+- We must **make a grounded choice for jamovi jmvtab module base display of tables** : improve tab_kable() performance even without tooltips ? Fix tooltips calculation for them to be fast, since it gives a modern interactive look to the whole table ? Just make a faster flat html table ? Make it format with markdown tables with css classes ? : would it be possible to print .md inside html, with custom .css classes, in Jamovi, with a modern and professional look ? ; if a markdown js module is needed for it to be modern and professional-looking, can it (like, loaded when jmvtab UI loads ?) Otherwise, would there be a more modern option than kable for html tables in R (for example, js html tables with buttons in it to change number of digits, or even order of lines and cols, etc. ? ) ?
 
 
 ##### tab_xl() — Phase 8 (still openxlsx v1; engine swap is Phase 9)
@@ -809,28 +850,73 @@ Isolated on purpose: a full dependency swap should not be entangled with the Pha
 
 - Add an option to use **conditional formatting** instead of hard text colors. This was awful and very slow with openxlsx v1 — check whether openxlsx2 makes it less horrible / faster.
 
+
+
 ### Phase 10 — tab_logit
 
-`tab_logit` lands after the Phase 1 field set is locked (so no second field surgery).
+Full implementation of `tab_logit` (currently commented out) and integration into the package. Then full rework and rewrite of `tab_logit`, and maybe extension to all `lm` + `glm` regression models inside the same framework.
+- `tab_logit` lands after the Phase 1 field set is locked (so no second field surgery).
 
-#### tab_logit — To implement
+#### Phase 10a – integrate current version in tabxplor framework cleanly
 
-- Full implementation of `tab_logit` (currently commented out) and integration into the package, maybe as a `regxplor` subpackage (if name available) relying on tabxplor (always loading with tabxplor ?) if it makes tabxplor dependencies count too high.
+An important design question : should I keep `tab_logit` inside tabxplor package, even if it makes the count of tabxplor dependencies very high (CRAN current policies on that matter ?) ? Or should I create a `regxplor` subpackage (name is `available::available()`) relying on tabxplor (with more frictions during dev, both human dev and Claude Code assisted dev, or not necessarily and there are reliable way to avoid them ?), and in this case, as a package always loading with tabxplor, or as a package just importing tabxplor ? Make detailed web searches about modern good practices and tidyverse good practices, then write your analysis in `dev\tabxplor_1.4.0_decisions.md` (respecting it’s internal style and logic).
+
+The current `tab_logit` code, made outside of the package, was a way to use tabxplor vctrs fields former implementation to store the logit data, but the way to do it may have been pragmatic/messy/ad hoc : first, before modifying tab_logit() behaviour, I want to integrate it with the rest of the package.
+- Do not hesitate to redesign it thoroughly for consistency with tabxplor package architecture. Fix ad hoc stuffs to make it fits perfectly inside tabxplor framework.
+- Do not hesitate to break it into subfunctions when needed, convenient or future-proofing.
+- Integrate confidence intervals with the new `ci_inf` / `ci_sup` vctrs fields (check its in fact `exp()` bounds), and also with the new `color_signif` framework (with logistic regression, sensible default may be "grey_non_signif").
+- All exports (kable, md, Excel) should work natively with the resulting tabxplor_tab (or grouped one, etc.).
+
+
+#### Phase 10b – design questions and statistical framework
+
+
+Statistical soundness 1 : how to handle dependent var factors with 3+ levels ?
+- The function currently binarise all levels against the reference level chosen, and gives one column per non-reference level, instead of using multinomial logistic regression : I known it’s expert way it’s done, but at the same time I find multinomial logistic regressions very difficult to read, since relative risk ratios with their double reference are farther from experience and intuition and car be thoroughly misinterpreted with not enough knowledge of reference rows and cols (it’s also very difficult to teach to sociology students, and to put in a meaningful sentence it a scientific papers : contrary to odds ratio, that can be put in sentence quite cleanly still understanding what you compare with what). Please, make detailed web searches, and tell me what the statistical consensus is about that, what are the different possibilities and rationales make by and social scientists both (particularly in quantitative sociology).
+
+Statistical soundness 2 : how to handle survey weights ?
+- Most of my real world data are French national surveys, which always come with weights. The first version of `tab_logit` was made to handle this : on one hand, no weights is common practice, but if the percentages used by logistic regression do not match the percentages the user really have in it’s base empirical crosstables, there’s a bizarre discrepency ; 2. since weights are most of the time not normalised, using weighted counts that are many times higher than the real number of people in the sample destroys significativity tests and confidence intervals since they always pass (total weighted n gives the overall population measured in the national census).
+
+- Extend it to numeric variables as predictors ?
+
+I know I was a bit
+
+#### Phase 10b – tab_logit rewrite
+
 
 #### tab_logit — To think about
 
 - chose reference for each var with a vector (possibly named for simplicity) ! (permit to take ref in the middle while keeping order of ordinal vars) ?
-- Do things with contrasts ?
-- tab_logit analysis in Jamovi ?
+- Extend the function to ensure it also works for integer dependent variables as poisson regression ?
+- Generalise to most common `lm` + `glm` regressions models, like multiple linear regressions for doubles (with the possibility to chose the type of regression per dependent var, since the R class of the dependent var, double or integer, do not clearly states if the underlying distribution is gaussian or poisson if its counts or binomial if it’s percentages, etc.) ? In this case, function should be renamed.
+- Implement things with contrasts ?
+- Add a tab_logit analysis in Jamovi ?
 
 
-### Phase 11 — pkgdown
 
-#### global — To implement
 
-- Create a full `pkgdown` for tabxplor documentation. On github pages ? Elsewhere if tidyverse ecosystem provided servers ?
 
-- Bug corrections.
+### Phase 11 — package user-friendly documentation
+
+#### Phase 11a – Bug corrections
+
+
+#### Phase 11b – Create several vignettes
+
+The current vignette should be the basis for non-expert users, while also permitting expert users to understand what this package is really interesting for.
+
+All the part about "programming with tabxplor" and its vctrs fields should come in their own vignette, and it must be uptaded and extended.
+
+If tab_logit() is implemented it should come with it’s own vignette
+
+
+#### Phase 11c – full `pkgdown` documentation
+
+Implement a full pkgdown documentation.
+- Where ? On github pages ? Elsewhere with tidyverse ecosystem provided servers ?
+
+
+
 
 ### Reference — bugs, benchmarks, perf
 
@@ -841,7 +927,7 @@ In-code these are tagged for grep: `# KNOWN-BUG:` (bugs below), `# FIXME:` / `# 
 - FIXED (Phase 1a): `fmt()` public constructor cast `totcol` into `refcol` (the `refcol` argument was silently ignored). Now casts `refcol`. Low impact (refcol is normally set internally).
 - FIXED (Phase 6e, golden-locked; hardened Phase 7d-i): `tab_num(..., <tab_vars>, ci="cell")` used to error ("some columns don't belong to the data.table: [tab_var]") in the `tot="no"` grand-total-only grouping-set / `na="keep"` reorder path. 6e made the grand total a length-1 list so `num_rollup()` keeps every tab_var present; 7d-i added a defensive `intersect(tab_vars, names(tabs_tot))` guard at the reorder + an `expect_no_error` regression in `test-num-fuse-parity.R`. Locked by golden `n_ci_tabvars` / `n_ci_tabvars_all`, both `comp` modes.
 - `set_color_style(custom_palette=)` (`tab_classes.R` ~L3120): length check requires 10 but the message says 11 and 11 names (`pos1..neg5, ratio`) are applied — the `ratio` slot ends up valueless, so custom palettes are broken for the ratio color. Fix by accepting length 11.
-- `# KNOWN-BUG:` (`tab.R`, `pct_vect` in `tab_setup()`): `tab(data, >=2 row_vars, >=2 col_vars)` errors "pct can't be recycled" for ANY `pct`. `tab()` recycles `pct` to a per-col_var vector (`pct = c(rep(pct, length(col_var)), ...)`), but `pct_vect` only broadcasts a per-col_var vector when there is exactly ONE row_var (branch B); with ≥2 row_vars it falls to the `else` stop. Fix: add a branch `is.character(pct) & length(pct) == length(col_vars)` → `rep(list(pct), length(row_vars))`. Pre-existing (reproduces pre-7d-ii on `git stash`); low impact (multi×multi + output_list); fix with the recycling code.
+- **FIXED (Phase 7e)**: `tab(data, >=2 row_vars, >=2 col_vars)` used to error "pct can't be recycled" for ANY `pct` (the multi×multi tables jmvtab drives). `tab()` recycles `pct` to a per-col_var vector (`pct = c(rep(pct, length(col_var)), ...)`), but `pct_vect` only broadcasts a per-col_var vector when there is exactly ONE row_var (branch B); with ≥2 row_vars it falls to the `else` stop. Fix: add a branch `is.character(pct) & length(pct) == length(col_vars)` → `rep(list(pct), length(row_vars))`. Pre-existing (reproduces pre-7d-ii on `git stash`); low impact (multi×multi + output_list); fix with the recycling code.
 - `tab()` errors on a `data.table` **input** (works on tibble/data.frame). `tab(as.data.table(gss), marital, race)` → `tab_num()` "Selections can't have missing values" from `tidyselect::eval_select(col_vars, data)` (`tab.R` ~L3203) — under a data.table input the numeric-col_var index path (`as.character(col_vars)[col_vars_num]`, `tab.R` ~L1304) yields an NA selection. Low impact (users pass tibbles/data.frames; `tab()` does its own `setDT` on a narrowed copy internally). Discovered in the Phase 6b PoC (§26). Fix belongs with the Phase 2/6 aggregate-core / col_var-classification code, not a separate pass.
 - FIXED (this session): `set_num()` wrote `display=="diff"` via `set_pct()` (should be `set_diff()`), so setting the displayed value of a diff cell went to the wrong field. Now uses `set_diff()`.
 - FIXED (workstream 5): `relabel_levels_in_varnames()` (`tab.R` ~L5592) made big weighted tables ~60× slower. Its `across(where(...))` predicate ran on **every** column with vectorised `&`/`|`, so the character branch `any(. %in% names(data))` coerced whole 8M-row numeric/factor columns to strings (~15s × 2 calls). Rewrote it to examine **only the `col_vars` targets** with short-circuit `&&`/`||` (numeric targets cost ~0); output byte-identical. 8M `tab(wt=)`: ~30s → ~0.2s; unweighted tables also faster + ~90% less memory.

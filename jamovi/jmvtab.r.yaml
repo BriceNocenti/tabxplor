@@ -39,7 +39,17 @@ items:
     - name: plot
       title: ""
       type: Image
-      width: 1080 # 2060 ? 
+      width: 1080 # 2060 ?
+      height: 0
+      renderFun: .plot
+
+    # Phase 7e: hidden state carrier for the multi-tier live cache. Only Image elements persist a
+    # `$state` across the engine reset, so this 0-size Image hosts the (gzip-RDS'd) store. It renders
+    # nothing (.plot returns TRUE); `.run()` reads/writes self$results$cache_state$state.
+    - name: cache_state
+      title: ""
+      type: Image
+      width: 1080
       height: 0
       renderFun: .plot
 

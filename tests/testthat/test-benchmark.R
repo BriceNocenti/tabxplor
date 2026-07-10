@@ -28,3 +28,45 @@ testthat::test_that("small tab() pipeline timings (informational, never fails)",
 
   testthat::succeed("printed small benchmark timings")
 })
+
+testthat::test_that("jmvtab live-cache timings (informational, never fails)", {
+  # The live-UI cost the user feels when changing one option with the cache WARM (Phase 7e). Baseline
+  # partyid x (race, marital, relig), pct = "row", color = "diff" on full gss_cat. Currently dominated
+  # by the tab_kable render (jmv_render_kable) -- this benchmark tracks that as it is optimised.
+  testthat::skip_on_cran()
+
+  n   <- nrow(forcats::gss_cat)
+  cur <- benchmark_run("jmvtab_gss_cat", n, benchmark_jmvtab_ops(), iterations = 3L)
+
+  base_path <- testthat::test_path("jmvtab_benchmark_baseline.csv")
+  base <- if (file.exists(base_path)) utils::read.csv(base_path, stringsAsFactors = FALSE) else NULL
+
+  benchmark_print(
+    cur, base,
+    header = paste0("jmvtab live-cache benchmark (forcats::gss_cat, ", n, " rows; warm cache)"),
+    regen  = "dev/make_benchmark_baseline.R"
+  )
+
+  testthat::succeed("printed jmvtab benchmark timings")
+})
+
+testthat::test_that("jmvtab BIG table-of-tables timings (informational, never fails)", {
+  # Real-world exploratory size: 3 row_vars (partyid + rincome + year) x (race, marital, relig),
+  # pct = "row", color = "diff". Warm change ~2s in the Jamovi UI today (improvable). Its own frozen
+  # baseline (jmvtab_big_benchmark_baseline.csv) so the small benchmark stays a stable reference.
+  testthat::skip_on_cran()
+
+  n   <- nrow(forcats::gss_cat)
+  cur <- benchmark_run("jmvtab_big_gss_cat", n, benchmark_jmvtab_big_ops(), iterations = 3L)
+
+  base_path <- testthat::test_path("jmvtab_big_benchmark_baseline.csv")
+  base <- if (file.exists(base_path)) utils::read.csv(base_path, stringsAsFactors = FALSE) else NULL
+
+  benchmark_print(
+    cur, base,
+    header = paste0("jmvtab BIG benchmark (3 row_vars x 3 col_vars, forcats::gss_cat, ", n, " rows; warm cache)"),
+    regen  = "dev/make_benchmark_baseline.R"
+  )
+
+  testthat::succeed("printed jmvtab big-table benchmark timings")
+})

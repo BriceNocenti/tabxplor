@@ -134,6 +134,13 @@ get_test <- function(x) {
 }
 get_chi2 <- function(x) get_test(x)
 
+# set_test() -- write the whole-table `test` tibble attribute on a built table. Used by the
+# jmvtab tier-2 cache (Phase 7e) to inject a cached chi2/ANOVA result instead of recomputing it.
+set_test <- function(x, test) {
+  attr(x, "test") <- test
+  x
+}
+
 # The empty-placeholder `test` tibble (used before any test has run). Tidy schema: adding a new
 # test type = adding rows (never a schema change); tab_var columns are added when populated.
 new_test_tibble <- function() {

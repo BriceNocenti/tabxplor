@@ -389,7 +389,8 @@ jmvtabResults <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
     active = list(
         html_table = function() private$.items[["html_table"]],
         export_status = function() private$.items[["export_status"]],
-        plot = function() private$.items[["plot"]]),
+        plot = function() private$.items[["plot"]],
+        cache_state = function() private$.items[["cache_state"]]),
     private = list(),
     public=list(
         initialize=function(options) {
@@ -408,6 +409,13 @@ jmvtabResults <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$add(jmvcore::Image$new(
                 options=options,
                 name="plot",
+                title="",
+                width=1080,
+                height=0,
+                renderFun=".plot"))
+            self$add(jmvcore::Image$new(
+                options=options,
+                name="cache_state",
                 title="",
                 width=1080,
                 height=0,
@@ -574,6 +582,7 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   \code{results$html_table} \tab \tab \tab \tab \tab a html \cr
 #'   \code{results$export_status} \tab \tab \tab \tab \tab a html \cr
 #'   \code{results$plot} \tab \tab \tab \tab \tab an image \cr
+#'   \code{results$cache_state} \tab \tab \tab \tab \tab an image \cr
 #' }
 #'
 #' @export

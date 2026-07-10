@@ -259,6 +259,10 @@ NULL
 #' Useful when printing multiples tabs with \code{\link[tibble:tribble]{tibble::tribble}},
 #' to use different filters for similar tables or simply make the field of observation
 #' more visible into the code.
+#' @param .cache,.defer_level_merge Internal, for the jamovi \code{jmvtab} live cache only (Phase
+#' 7e): \code{.cache} is a mutable environment the content-addressed multi-tier store is threaded
+#' through; \code{.defer_level_merge} keeps full factor levels through the aggregate and test so
+#' \code{levels} becomes a display-time drop. Both default off; not for direct use.
 # @param ... Arguments to pass to \code{\link{tab_ci}} and \code{\link{tab_chi2}}.
 #'
 #' @inheritSection tab_ci Significance stars
@@ -352,6 +356,7 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
                 output_list = FALSE,
                 spread_vars, names_prefix = NULL, names_sort = FALSE,
                 row_var, col_var,
+                .cache = NULL, .defer_level_merge = FALSE,
                 filter) {
 
   # Phase 6f (§6): singular row_var/col_var are soft-deprecated aliases of the plural
@@ -511,7 +516,9 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
            color = color,
            add_n = add_n, add_pct = add_pct,
            subtext = subtext,
-           spread_vars = spread_vars, names_prefix = names_prefix, names_sort = names_sort)
+           spread_vars = spread_vars, names_prefix = names_prefix, names_sort = names_sort,
+           # Phase 7e: pass the jmvtab live-cache seam straight through (NULL/FALSE for normal tab()).
+           .cache = .cache, .defer_level_merge = .defer_level_merge)
 
   # Phase 5: set the final two-channel color + significance-policy attributes (per column type
   # for color = TRUE). Plain scalar colors pass through untouched.
@@ -968,6 +975,7 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
                       digits = 0, subtext = "",
                       .by_table = FALSE,
                       spread_vars = character(), names_prefix = NULL, names_sort = FALSE,
+                      .cache = NULL, .defer_level_merge = FALSE,
 
                       filter #, listed = FALSE,
 ) {
@@ -1002,13 +1010,19 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
     totaltab = totaltab, totaltab_name = totaltab_name, totrow = totrow, totcol = totcol,
     total_names = total_names, add_n = add_n, add_pct = add_pct, digits = digits,
     subtext = subtext, by_table = .by_table,
-    spread_vars = spread_vars, names_prefix = names_prefix, names_sort = names_sort
+    spread_vars = spread_vars, names_prefix = names_prefix, names_sort = names_sort,
+    # Phase 7e jmvtab cache seam: `cache_env` is a mutable environment holding $store / $hits (NULL
+    # for tab()/tab_many() -> the hooks below are inert). `defer_level_merge` keeps full levels for
+    # a cacheable aggregate + test (see tab_prepare_pop / the design doc). Both are strictly additive.
+    cache_env = .cache, defer_level_merge = .defer_level_merge
   )
 
   ctx <- tab_setup(ctx)
   ctx <- tab_prepare_pop(ctx)
-  ctx <- tab_aggregate(ctx)
+  ctx <- tab_aggregate(ctx)      # jmvtab: replaced by the cached per-pair build (hook at its top)
   ctx <- tab_transform(ctx)
+  # Phase 7e: persist freshly-computed tier-2 tests (cache misses) before display assembly.
+  if (!is.null(ctx$cache_env)) jmv_cache_store_tests(ctx)
   tab_assemble(ctx)
 }
 
@@ -1187,17 +1201,18 @@ tab_setup <- function(ctx) {
       list(vctrs::vec_recycle(pct, length(col_vars)))
     } else if (is.character(pct) & length(col_vars) == 1) {
       as.list(vctrs::vec_recycle(pct, length(row_vars)))
+    } else if (is.character(pct) & length(pct) == length(col_vars)) {
+      # Phase 7e FIX (was KNOWN-BUG): a per-col_var pct VECTOR with >= 2 row_vars used to fall
+      # through to the stop(). tab() recycles pct to length(col_var) (`pct = c(rep(pct,
+      # length(col_var)), ...)`), so `tab(data, >=2 row_vars, >=2 col_vars)` errored for ANY pct
+      # (jmvtab drives exactly these multi x multi tables). Broadcast the per-col_var vector across
+      # every row_var. Reached only after the length-1 / single-row_var / single-col_var branches,
+      # so here length(row_vars) >= 2 and length(col_vars) >= 2.
+      rep(list(pct), length(row_vars))
     } else if (is.list(pct) & length(pct) == length(row_vars) &
                all(purrr::map_int(pct, length) == length(col_vars))) {
       pct
     } else {
-      # KNOWN-BUG: a per-col_var pct VECTOR (length == length(col_vars)) with >= 2 row_vars falls
-      # through here and errors. tab() always recycles pct to length(col_var) (see the tab() ->
-      # tab_build call, `pct = c(rep(pct, length(col_var)), ...)`), so `tab(data, >=2 row_vars,
-      # >=2 col_vars)` errors for ANY pct. Branch B only broadcasts a per-col_var vector when there
-      # is exactly ONE row_var. FIX: add `is.character(pct) & length(pct) == length(col_vars)` ->
-      # `rep(list(pct), length(row_vars))`. Pre-carve bug (reproduces on 1.4.0 pre-7d-ii); fix in the
-      # phase that touches this recycling, not as a separate pass.
       stop("pct can't be recycled to the lengths of row_vars and col_vars (see documentation `?tab_many`)")
     }
 
@@ -1265,6 +1280,12 @@ tab_setup <- function(ctx) {
 #' @noRd
 tab_prepare_pop <- function(ctx) {
   list2env(ctx, environment())
+  # Phase 7e: jmvtab sets ctx$defer_level_merge = TRUE so `levels = "first"` does NOT collapse
+  # non-first levels PRE-aggregate -- the aggregate + chi2/ANOVA see FULL levels (cacheable; the
+  # level-drop is a display step in tab_assemble). tab()/tab_counts() leave it absent -> FALSE ->
+  # today's pre-merge (byte-identical). The jmvtab full-level test therefore intentionally diverges
+  # from tab(levels = "first"). See dev/tabxplor_jmvtab_cache_design.md 3.3/4e/5.
+  if (!exists("defer_level_merge", inherits = FALSE)) defer_level_merge <- FALSE
 
   #Prepare the data
   data <- data %>% dplyr::select(!!!tab_vars, !!!row_vars, !!wt, !!!col_vars,
@@ -1361,27 +1382,34 @@ tab_prepare_pop <- function(ctx) {
 
   }
 
-  # Where only first levels are kept, merge others to minimise useless calculations
+  # Where only first levels are kept, merge others to minimise useless calculations.
+  # Phase 7e: skip the PRE-aggregate merge when defer_level_merge (jmvtab) -- keep full levels so the
+  # aggregate + test are cacheable; the drop happens in tab_assemble. remove_levels then lists every
+  # non-first level (+ the explicit "NA" column made by the leaves under na = "keep"; any_of ignores
+  # it when absent), so the final table still shows only the first level.
   lv1 <- lvs == "first" & col_vars_text
   if (any(lv1)) {
-    col_vars_3levels <-
-      purrr::map_lgl(dplyr::select(data, !!!col_vars),
-                     ~ is.factor(.) & nlevels(.) >= 3) & lv1
+    if (!isTRUE(defer_level_merge)) {
+      col_vars_3levels <-
+        purrr::map_lgl(dplyr::select(data, !!!col_vars),
+                       ~ is.factor(.) & nlevels(.) >= 3) & lv1
 
-    if (any(col_vars_3levels)) {
+      if (any(col_vars_3levels)) {
 
-      rm_levels_by_col_vars <- dplyr::select(data, !!!col_vars[col_vars_3levels]) |>
-        purrr::map(~ purrr::set_names(c(levels(.)[-1], "NA"), "remove_levels"))
+        rm_levels_by_col_vars <- dplyr::select(data, !!!col_vars[col_vars_3levels]) |>
+          purrr::map(~ purrr::set_names(c(levels(.)[-1], "NA"), "remove_levels"))
 
-      data <- data %>%
-        dplyr::mutate(dplyr::across(
-          tidyselect::all_of(as.character(col_vars[col_vars_3levels])),
-          ~ suppressWarnings(forcats::fct_na_value_to_level(., level = "NA") |>
-                               forcats::fct_recode(rlang::splice(rm_levels_by_col_vars[[dplyr::cur_column()]] )))
-        ))
+        data <- data %>%
+          dplyr::mutate(dplyr::across(
+            tidyselect::all_of(as.character(col_vars[col_vars_3levels])),
+            ~ suppressWarnings(forcats::fct_na_value_to_level(., level = "NA") |>
+                                 forcats::fct_recode(rlang::splice(rm_levels_by_col_vars[[dplyr::cur_column()]] )))
+          ))
+      }
     }
 
     remove_levels <- purrr::map(dplyr::select(data, !!!col_vars[lv1]), ~ levels(.)[-1])
+    if (isTRUE(defer_level_merge)) remove_levels <- purrr::map(remove_levels, ~ c(.x, "NA"))
   }
 
 
@@ -1405,6 +1433,12 @@ tab_prepare_pop <- function(ctx) {
 #' @keywords internal
 #' @noRd
 tab_aggregate <- function(ctx) {
+  # Phase 7e: the jmvtab live cache replaces the fused batch aggregate with a content-addressed
+  # per-(row_var x col_var) build + tier-1 lookup (+ tier-2 test keys), mutating ctx$cache_env$store.
+  # Inert for tab()/tab_many() (cache_env NULL). Same downstream contract: sets fine_fused (here a
+  # per-pair named list -> fine_for_pair()) + fine_num (+ cached_tests / tier2_keys).
+  if (!is.null(ctx$cache_env)) return(jmv_cache_aggregate(ctx))
+
   list2env(ctx, environment())
   .by_table <- by_table
 
@@ -1461,6 +1495,21 @@ tab_aggregate <- function(ctx) {
 }
 
 
+# fine_for_pair() -- pick the factor tier-1 aggregate for one (row_var x col_var) pair.
+# DESIGN (Phase 7e): tab_transform() feeds tab_plain(.fine=) either the ONE fused joint DT (batch
+# tab()/tab_counts() -- the is.data.table branch returns it UNCHANGED, byte-for-byte the pre-7e
+# code, so golden/fuse/counts parity cannot move) OR a per-pair named list keyed "row_var\rcol_var"
+# (the jmvtab cache: the reuse unit is per pair -- see dev/tabxplor_jmvtab_cache_design.md 3.2/6).
+# A missing pair -> NULL -> tab_plain()'s `use_raw` raw scan. tab_plain always MARGINALISES .fine to
+# its own pair, so a per-pair margin is idempotent there (locked by test-fuse-parity.R).
+#' @keywords internal
+#' @noRd
+fine_for_pair <- function(fine, row_var, col_var) {
+  if (is.null(fine) || data.table::is.data.table(fine)) return(fine)
+  fine[[paste(as.character(row_var), as.character(col_var), sep = "\r")]]
+}
+
+
 # === STAGE 4/5: tab_transform() -- pct/diff/ratio/or/CI + fmt + the tier-2 test =============
 # Aggregate -> the per-cell fmt fields and the whole-table test, via the UNCHANGED tab_num(.fine=) /
 # tab_plain(.fine=) leaves (tier 3, O(cells), recomputed each run) + the post-join tab_apply_tests()
@@ -1479,6 +1528,9 @@ tab_transform <- function(ctx) {
   tabs_text <- NULL
   tabs_num  <- NULL
   tests     <- chi2
+  # Phase 7e tier-2 hook: jmvtab sets ctx$cached_tests; the tab()/tab_counts() ctx does not carry it,
+  # so default it to NULL (list2env() only brings in fields present in ctx).
+  if (!exists("cached_tests", inherits = FALSE)) cached_tests <- NULL
 
   # Numeric transform: adopt the tier-1 moment aggregate `fine_num` (`.fine = ..9`), one tab_num()
   # per row_var; `.by_table` -> ..9 is NULL -> re-scan. Everything downstream is O(cells).
@@ -1545,7 +1597,7 @@ tab_transform <- function(ctx) {
                                             totaltab_name = totaltab_name,
                                             tot        = c( "row", "col"), # vectorise totrow ?
                                             total_names= total_names,
-                                            .fine      = .fine,
+                                            .fine      = fine_for_pair(.fine, ..1, .col_vars),
                                             .by_table  = .by_table)) %>%
                     purrr::set_names(col_vars[col_vars_text])
 
@@ -1584,13 +1636,18 @@ tab_transform <- function(ctx) {
     # capture test -> ci). Byte-identical to the former two-batch passes: the tables are
     # independent for these steps, and `test` is still captured before ci. Phase 3b: contrib
     # ("ctr") is computed only when contrib coloring is requested (color_ctr != "no").
+    # Phase 7e: cached_tests (per-row_var list) is the jmvtab tier-2 hook; NULL/absent on the tab()
+    # path -> a per-table list of NULLs -> tab_apply_tests() recomputes as before.
+    ct_aligned <- if (is.null(cached_tests)) rep(list(NULL), length(tabs_text))
+                  else cached_tests[names(tabs_text)]
     applied <- purrr::pmap(
-      list(tabs_text, chi2, ci, comp, color_ctr, color_ci),
-      function(.tab, .chi2, .ci, .comp, .cctr, .cci)
+      list(tabs_text, chi2, ci, comp, color_ctr, color_ci, ct_aligned),
+      function(.tab, .chi2, .ci, .comp, .cctr, .cci, .ct)
         tab_apply_tests(.tab, do_chi2 = .chi2, ci = .ci, comp = .comp,
                         color_ctr = .cctr, color_ci = .cci,
                         conf_level = conf_level, stars = stars,
-                        method_cell = method_cell, method_diff = method_diff)
+                        method_cell = method_cell, method_diff = method_diff,
+                        cached_test = .ct)
     )
     tabs_text <- purrr::map(applied, "tab")
     tests     <- purrr::map(applied, "test")
@@ -6238,11 +6295,22 @@ resolve_ref_vector <- function(ref, row_vars_chr) {
 # the historical order (chi2 -> get_test -> ci). `do_chi2` is the per-table chi2 flag; `ci ==
 # "no"` skips the CI step. WARNING: keep byte-identical to the pre-6a two-batch passes.
 tab_apply_tests <- function(tab, do_chi2, ci, comp, color_ctr, color_ci,
-                            conf_level, stars, method_cell, method_diff) {
+                            conf_level, stars, method_cell, method_diff,
+                            cached_test = NULL) {
   if (isTRUE(do_chi2)) {
-    tab <- tab_chi2(tabs = tab,
-                    calc = if (color_ctr != "no") c("ctr", "p") else "p",
-                    comp = comp, color = color_ctr)
+    # Phase 7e tier-2 cache: on a hit (cached_test supplied) and the common non-contrib path,
+    # inject the cached omnibus test instead of re-running the vectorised engine. Restricted to
+    # color_ctr == "no": contrib coloring (calc = c("ctr","p")) also writes the per-cell ctr/var
+    # FIELDS, which are not in the test tibble, so it must recompute. tab_chi2(calc = "p",
+    # color = "no") is structurally identity on transform tables (totrow+totcol already present),
+    # so skipping it changes only the `test` attribute (locked by test-jmvtab-cache.R).
+    if (!is.null(cached_test) && color_ctr == "no") {
+      tab <- set_test(tab, cached_test)
+    } else {
+      tab <- tab_chi2(tabs = tab,
+                      calc = if (color_ctr != "no") c("ctr", "p") else "p",
+                      comp = comp, color = color_ctr)
+    }
   }
 
   test <- get_test(tab)

@@ -1459,6 +1459,42 @@ in this pass.
 
 ---
 
+## 27. Phase 7e PROFILING — the O(cells) fmt build dominates at real-world scale (2026-07-10)
+
+Grounded in the committed jmvtab benchmarks (`benchmark_jmvtab_ops()` / `benchmark_jmvtab_big_ops()` in
+`tests/testthat/helper-benchmark.R`; baselines `jmvtab_benchmark_baseline.csv` +
+`jmvtab_big_benchmark_baseline.csv`). Full `gss_cat` (21 483 rows), **warm cache**, `pct = "row"`,
+`color = "diff"`, tooltips off. The tier-1/tier-2 cache works: the O(N) count/moment scan and the
+chi2/ANOVA are reused, so the remaining floor is the **O(cells) tier-3/4 work** — `pct`/`diff`/CI +
+the `fmt`-record assembly + colour — which the design **recomputes every run** (§ cache design: "fmt is
+sub-ms, not worth caching"). At real-world scale that assumption breaks.
+
+| interaction (warm) | small (1 row_var × 3 col_vars) | **big (3 row_vars × 3 col_vars)** |
+|--------------------|-------------------------------|-----------------------------------|
+| build (jmvtab_build) | ~0.23 s | **~0.95–1.15 s** |
+| render (tab_kable, tooltips off) | ~0.28 s | ~0.60 s |
+| → dominant cost | **render** | **build (the fmt assembly)** |
+| total (R) | ~0.5 s | ~1.5 s (≈ 2 s in the Jamovi UI) |
+
+- **The bottleneck FLIPS with table size.** On a single-row_var table the ~0.28 s render dominates; on a
+  real-world table-of-tables (≈ 9 pair-tables × thousands of cells) the ~0.95 s **build** dominates.
+- **Pure-display toggles are not free.** A `digits` change (tier-4 only, conceptually) still costs
+  ~0.94 s on the big table because `jmvtab_build` re-runs the entire tier-3/4 pipeline — nothing below
+  the aggregate is cached. Tier-1/tier-2 caching alone cannot make the big table instant.
+
+**Two levers to reach "instant" on real tables (Phase 8 + the new Phase 7h):**
+1. **Render rewrite** (CSS-only `<table>` builder, no kableExtra) → the ~0.6 s render. `format()` +
+   colour-codes are only ~30 ms, so the render itself could drop to tens of ms.
+2. **fmt-build optimisation (Phase 7h)** → the ~0.95 s build: either a faster `vctrs::new_rcrd`
+   assembly of the `fmt` cells (the likely hot spot at thousands of cells), or **caching tier-3/4 for
+   display-only toggles** (the design deferred this as "too cheap to cache"; this benchmark disproves it
+   at scale). The two committed baselines track both levers precisely.
+
+**Already applied (Phase 7e):** `tooltips = FALSE` on the Jamovi render (the hover JS is inert in Jamovi
+and roughly doubled the render time: 570 → 250 ms on the small table).
+
+---
+
 ## Sources (statistics)
 
 - Binomial proportion CI (Wald / Wilson / Agresti-Coull asymmetry): <https://en.wikipedia.org/wiki/Binomial_proportion_confidence_interval>

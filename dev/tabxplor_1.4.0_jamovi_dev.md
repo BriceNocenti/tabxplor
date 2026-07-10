@@ -969,6 +969,18 @@ HTML. (The `.zip`s in the folder are the raw exports.)
 
 ## 18. Open questions / decisions for Phase 8 & 10
 
+- **Integer col_vars become factors (Phase 7e, RESOLVED in the module).** jamovi delivers a
+  variable to `self$data` per its **measureType**: `Continuous` -> numeric, `Nominal`/`Ordinal`
+  -> factor. An integer column (e.g. `tvhours`) usually imports as Nominal/Ordinal, so it arrives
+  ALREADY factored (levels `"0".."24"`) and `tab()` would make one column per value instead of a
+  mean -- diverging from plain R, where an integer/double col_var is a mean. `jmvtab_build()` fixes
+  this with `jmv_coerce_numeric_cols()`: a col_var that is numeric, or a factor whose levels ALL
+  parse as numbers, is coerced back to numeric -> a mean column (row/tab vars untouched). CAVEAT: a
+  genuinely categorical numeric CODE (e.g. `region` 1-5) also becomes a mean -- relabel such levels
+  to non-numeric text, or set the variable Continuous, to control it. The root cause is jamovi's
+  measureType (it does not preserve R integer type across `.rds` import); a cleaner long-term fix
+  would read the original `dataType` attribute if jmvcore exposes it per column.
+
 - **Ref picker (§12)**: a "References" ListBox populated from `row_vars` (row%/means) or
   `col_vars` (col%); keep the free-text `ref` as expert fallback; decide whether to auto-switch
   the source on `pct`.

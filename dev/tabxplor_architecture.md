@@ -105,9 +105,11 @@ tab(data, row_vars, col_vars, ..., output_list=FALSE)   tab_many(..., compact=) 
          │      na_text/na_num, tab_prepare() (ordered-strip + listwise removal + lump + cleannames),
          │      zero/NA-weight removal, levels="auto", lv1 non-first-level pre-merge
          ├─ tab_aggregate(ctx)    (tier 1)   the count/moment aggregates: per-row_var numeric moment
-         │      sums via tab_aggregate_num() + the fused factor count `.fine` (both NULL under .by_table)
+         │      sums via tab_aggregate_num() + the fused factor count `.fine` (both NULL under .by_table).
+         │      Phase 7e: when a jmvtab cache_env is present this stage delegates to jmv_cache_aggregate()
          ├─ tab_transform(ctx)    (tier 3 + the tier-2 test)  the UNCHANGED tab_num(.fine=)/tab_plain(.fine=)
-         │      leaves (pct/diff/ratio/or/CI + fmt, O(cells)) + factor join + tab_apply_tests()
+         │      leaves (pct/diff/ratio/or/CI + fmt, O(cells)); `.fine` may be a per-pair list (fine_for_pair)
+         │      + factor join + tab_apply_tests()
          │      (chi2/ANOVA → capture `test` → tab_ci; runs BEFORE the level-drop — the ordering invariant)
          └─ tab_assemble(ctx)     (tier 4)   level-drop, tab_add_n_pct(), total col/row removal, num+factor
                 join, test-merge + rewrap (new_tab/new_grouped_tab), output shape (§13),
@@ -122,8 +124,19 @@ The `ctx` list renames the locals tab_build already threaded, with one clarity w
 ctx, runs `tab_setup()` (incl. the `tot`→totrow/totcol translation tab() uses) then `tab_transform()`
 + `tab_assemble()`, injecting its counts as the fused tier-1. `tab_lump_others()` / `tab_cleannames_relabel()`
 are the two factor-relabel steps extracted from `tab_prepare()` (which still composes them for its
-public callers); jmvtab (Phase 7e) will run cleannames at display instead. `tab_compact()`
-(`R/tab_classes.R`) is the internal merge invoked when `output = "single"`.
+public callers); jmvtab (Phase 7e) runs cleannames at display instead (`jmvtab_cleannames_display()`).
+`tab_compact()` (`R/tab_classes.R`) is the internal merge invoked when `output = "single"`.
+
+**jmvtab live cache (Phase 7e, `R/jmvtab-cache.R`).** The jamovi module reuses this exact pipeline
+via `jmvtab_build()`, which calls `tab()` with a content-addressed multi-tier store injected through a
+mutable `cache_env` (the `.cache` arg on `tab()`/`tab_build()`). Only the two expensive costs are
+persisted (in a hidden Image result element's `$state`): tier-1 aggregates (per-(row_var × col_var)
+counts / per-row_var moment sums) and tier-2 omnibus tests (chi2/ANOVA) — fmt is O(cells) and
+recomputed each run. `tab_aggregate()`'s hook builds/looks-up the per-pair aggregates
+(`jmv_cache_aggregate()`, byte-identical to `tab(cleannames = FALSE)`); `tab_transform()` adopts them
+per pair (`fine_for_pair()`) and reuses a cached test via the `cached_test` hook on
+`tab_apply_tests()`; `defer_level_merge` keeps full levels so `levels` is a display-time drop. Keys use
+per-column fingerprints so adding a variable reuses the other pairs.
 `tab_resolve_settings()` (`R/tab-resolve.R`, Phase 7b) is the ONE place the argument-overwrite cascade
 lives — a pure function of (args, column classes) that draws the boundary between static arg resolution
 (here) and data-dependent resolution kept at the leaf (`ref="auto"`/regex, `levels="auto"`, `na`-drop).

@@ -70,6 +70,7 @@
   `tab_spread()`), with optional `names_prefix` / `names_sort`.
 
 ## Internal
+* The jamovi module (`jmvtab`) now uses a live multi-tier cache: after the first table, changing an option (percentages, reference, colors, display, adding a variable) reuses the cached counts and chi-squared/ANOVA instead of recomputing everything, so results update near-instantly on normal survey data. The Jamovi HTML render also drops the per-cell hover tooltips (inert in Jamovi and roughly half the render time). The module drives the same `tab()` pipeline with the cache injected (no separate code path), so its tables stay identical to `tab()`.
 * Rewrote the Chi-squared / ANOVA computation onto a fast, vectorised engine (`R/tab-agg.R`:
   `agg_chi2()`, `agg_anova()`): every (sub)table is tested in a single grouped `data.table` pass
   instead of a per-table `stats::chisq.test()` loop, making `tab_chi2()` about 2.5× faster (it was
@@ -125,6 +126,7 @@
   columns still colors the ratio for now).
 
 ## Bug corrections
+* `tab()` with two or more row variables AND two or more column variables no longer errors ("pct can't be recycled"); percentages are recycled correctly across the table.
 * Mean tables (`tab_num()`) are now dramatically faster and lighter: computing sufficient moment
   sums in a single grouped pass (no more weighted-variance double scan) and building the totals /
   total table as roll-ups of that aggregate (instead of two extra full-data scans) makes an 8M-row

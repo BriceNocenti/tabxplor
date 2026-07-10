@@ -43,6 +43,8 @@ tab(
   names_sort = FALSE,
   row_var,
   col_var,
+  .cache = NULL,
+  .defer_level_merge = FALSE,
   filter
 )
 }
@@ -255,6 +257,11 @@ given: a string prefixed to each new column name, and whether to sort the new co
 
 \item{row_var, col_var}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Singular aliases of
 \code{row_vars}/\code{col_vars} (which now accept several variables). Kept working.}
+
+\item{.cache, .defer_level_merge}{Internal, for the jamovi \code{jmvtab} live cache only (Phase
+7e): \code{.cache} is a mutable environment the content-addressed multi-tier store is threaded
+through; \code{.defer_level_merge} keeps full factor levels through the aggregate and test so
+\code{levels} becomes a display-time drop. Both default off; not for direct use.}
 
 \item{filter}{A \code{\link[dplyr:filter]{dplyr::filter}} to apply to the data frame
 first, as a single string (which will be converted to code, i.e. to a call).

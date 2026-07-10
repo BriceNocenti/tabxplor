@@ -1,7 +1,7 @@
 "operation","median_s","mem_mb"
-"tab_row_pct",0.0482,11.1
-"tab_ci",0.0803,3.5
-"tab_chi2",0.1836,5.2
-"tab_num_mean",0.0389,6.4
-"tab_many_multi",0.0904,5.3
-"tab_kable",0.1537,7.6
+"tab_row_pct",0.0472,10.3
+"tab_ci",0.0792,2.1
+"tab_chi2",0.1311,4.5
+"tab_num_mean",0.0419,2.9
+"tab_many_multi",0.0871,3.2
+"tab_kable",0.1622,6.7

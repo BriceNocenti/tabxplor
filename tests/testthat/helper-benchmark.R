@@ -20,6 +20,49 @@ benchmark_small_ops <- function() {
   )
 }
 
+# Default jmvtab option list (jamovi UI defaults) with overrides -- shared by the benchmark ops.
+benchmark_jmvtab_opts <- function(...) {
+  o <- list(row_vars = character(), col_vars = character(), tab_vars = character(), wt = character(),
+            pct = "no", color = "no", color_signif = "ignore", OR = "no", chi2 = FALSE,
+            na = "keep", levels = "all", ref = "auto", ref2 = "first", comp = "tab", ci = "auto",
+            conf_level = 0.95, stars = TRUE, method_cell = "wilson", method_diff = "newcombe",
+            totaltab = "line", digits = 0, other_if_less_than = 0, add_n = TRUE, add_pct = FALSE,
+            subtext = "", totaltab_name = "Ensemble", total_names = "Total", other_level = "Others",
+            output_list = FALSE, cleannames = TRUE, display = "auto")
+  utils::modifyList(o, list(...))
+}
+
+# jmvtab LIVE-UI ops: the cost the user feels when changing one option with the cache WARM. Baseline
+# = partyid x (race, marital, relig), pct = "row", color = "diff" (Phase 7e). Each op is a warm
+# jmvtab_build() for a single-argument change, plus the tab_kable() render (currently the dominant
+# cost). Tracks the effect of future render / pipeline optimisations. Deterministic (gss_cat + fixed
+# opts). The heavy tab_kable render is the reason a warm change is not yet "instant".
+benchmark_jmvtab_ops <- function(row_vars = "partyid") {
+  d      <- forcats::gss_cat
+  base   <- benchmark_jmvtab_opts(row_vars = row_vars, col_vars = c("race", "marital", "relig"),
+                                  pct = "row", color = "diff")
+  quiet  <- function(x) suppressWarnings(suppressMessages(x))       # perf timing, not a correctness check
+  store  <- quiet(jmvtab_build(d, base, NULL))$store                # warm the cache once
+  r_base <- quiet(jmvtab_build(d, base, store))$tabs                # a built table for the render op
+  vary   <- function(...) { o <- utils::modifyList(base, list(...))
+                            function() quiet(jmvtab_build(d, o, store)) }
+  list(
+    jmv_build_baseline = vary(),
+    jmv_change_pct     = vary(pct = "col"),
+    jmv_change_color   = vary(color = "ratio"),
+    jmv_change_ref     = vary(ref = "1"),
+    jmv_change_digits  = vary(digits = 1),
+    # Match jmvtab .render_html: tooltips off (the interactive JS is inert in Jamovi and doubles the
+    # render time). Still the dominant per-interaction cost; the CSS-only rewrite is Phase 8.
+    jmv_render_kable   = function() tab_kable(r_base, position = "left", tooltips = FALSE)
+  )
+}
+
+# The BIG exploratory table-of-tables (real-world size): 3 row_vars (partyid + rincome + year) x the
+# same 3 col_vars. Same interactions; its own frozen baseline so the small one stays a stable
+# reference. In Jamovi UI a warm change on this table is currently ~2s (improvable, Phase 8 render).
+benchmark_jmvtab_big_ops <- function() benchmark_jmvtab_ops(c("partyid", "rincome", "year"))
+
 # Median wall-clock seconds (+ MB allocated when 'bench' is available) over `iterations` runs.
 benchmark_measure <- function(f, iterations = 5L) {
   if (requireNamespace("bench", quietly = TRUE)) {
