@@ -872,6 +872,18 @@ jmvtab jamovi UI needs a **full .js customisation** of it’s buttons and other 
 - `subtext` text input only takes about one third of the horizontal space in its row : it should take all the available space in its row in the menu. It can’t manage to set it’s size with .yaml only.
 - What else, in jamovi UI, could be controlled with .js for the benefits of the user ?
 
+##### Done (2026-07-10)
+
+**Decisions** (maintainer-confirmed, grounded in a UX web-search — muted/disabled beats hiding; silently changing/reverting a user's field is an antipattern): (1) **CI coupling = re-paint, no toggle** — the `.js` never sets `ci` from `color_signif`; the backend already forces the needed CI (`ci="auto"` computes the diff CI the policy gates for factors; `jmvtab_build` nudges numeric means itself, `R/jmvtab-cache.R` ~L714-727), so an auto-toggle would be redundant and could overwrite a deliberate `ci="cell"`. The expert `stars`/`method_diff` reflect the effective state via their own `ci`-value enables. (2) **Inapplicable controls = grey only, keep value** (never reset — the backend forces the neutral behaviour internally, so the kept value returns intact). (3) **Full consistency pass**, no box restructuring.
+
+**Greying matrix.** Value-based greying stays DECLARATIVE `enable:` in `.u.yaml` (jamovi auto-re-evaluates): `color_signif` policies `(!(color:no))` (was pct-gated); `stars` `(ci:diff||ci:auto)` (new, matches `method_diff`); `conf_level` widened to the CIOK pct-gate; `add_n`/`add_pct` `(pct:row||pct:col)` (new). tab_vars-presence greying (the DSL can't express emptiness of a Variables array) is IMPERATIVE: `applyVarEnables(ui)` in `js/jmvtab.js` `setEnabled`s `totaltab_1/2/3` + `comp_1/2` on `tab_vars.length>0`, called from `onUpdate` + `onChange_vars` (both fire on every var change). No control mixes declarative + imperative.
+
+**Input fixes.** `digits` Number→List `"0".."6"` (TextBox→ComboBox; `.b.R` `as.integer(self$options$digits)`); `subtext` + export `path` fill their row via a `.js` DOM stretch (`stretchTextBox` in `onUpdate`) — jamovi 2.6.44's TextBox `width:` enum has **no `auto`** (the compiler rejects it), so `width: largest`=200px stays as the graceful fallback. Test menu label already clear (7g-i) — unchanged.
+
+**Accepted limitations** (documented): `color="diff"`/`"ratio"` stay pct-greyed on a pure-numeric (means-only) table — benign, `color="auto"` already colours means; type-aware selectability would need imperative `.js` reading `measureType` (follow-up). `anova` enabled on `chi2` regardless of a numeric col_var (harmless no-op).
+
+Suite green (375 blocks, 0 fail), no golden regen (UI-only + behaviour-preserving digits cast). **OPEN — maintainer step**: regenerate `jmvtab.h.R` from the new `digits` List in the running jamovi app (`jmvtools::install()` can't run headless), then live-verify each greying rule + the digits dropdown + subtext width.
+
 
 #### Phase 7i — test compatibility with Jamovi last solid version 2.7.37
 

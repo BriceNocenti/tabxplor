@@ -374,9 +374,14 @@ finest-grain aggregate (`tab_build()` fused path, off by default) is the reusabl
   grand-total grouping-set is a length-1 list and `num_rollup()` keeps every tab_var present; locked by
   golden `n_ci_tabvars` / `n_ci_tabvars_all` + the Phase 7d `test-num-fuse-parity.R` `expect_no_error`.
 - **Jamovi surface gaps** (Phase 7f): no exposure of the two-channel `color`, `color_breaks`, palette,
-  or the per-type empty-scale on/off. The `.u.yaml` enable-gates diverge slightly from
-  `new_colors_UI.md` (e.g. it gates `contrib`/`ratio` on `pct:row||pct:col`, but the brief allows
-  `contrib` on counts and `ratio` on means) — Phase 7g reconciles them against the resolver.
+  or the per-type empty-scale on/off.
+- **`.u.yaml` enable-gates vs the resolver — reconciled/accepted in Phase 7h.** `contrib` is in fact
+  always enabled (never pct-gated), so the counts case works. `ratio`/`diff` stay pct-gated → greyed on
+  a pure-means table; **accepted** (documented) — `color="auto"` already colours means, so no user is
+  blocked, and making them type-aware would need imperative `.js` reading `measureType`. `color_signif`
+  policies re-gated `pct:row||pct:col` → `(!(color:no))`; `stars`/`conf_level`/`add_n`/`add_pct` gates
+  added; `totaltab`/`comp` greyed on empty `tab_vars` (imperative). CI is a re-paint, not an auto-toggle
+  (see CLAUDE.md Phase 7h + `dev/tabxplor_1.4.0_jamovi_dev.md` §6.9).
 - **W2** (`new_colors_UI.md`): `color = TRUE` resolves numerics to `ratio` on the TEXT channel (diff
   off) — confirm this is what Jamovi `auto` should compute.
 - **W5**: colouring the Jamovi HTML render (pandoc spans / kableExtra) is still open; the current

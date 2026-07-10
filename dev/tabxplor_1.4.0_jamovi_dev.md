@@ -484,6 +484,46 @@ any custom-JS widget that edits an option.
 - **`GridActionButton` is not a valid `.u.yaml` `type:`** — use `ActionButton`, or DOM buttons inside a
   `CustomControl`.
 
+### 6.9 Greying controls: declarative `enable:` vs imperative `setEnabled` (Phase 7h)
+
+The Phase 7h consistency pass greys out every control that is a no-op given the other options,
+mirroring the resolver (`tab_resolve_settings()` + the leaves). Two mechanisms, one rule of thumb:
+
+- **Value-based greying → DECLARATIVE `enable:` in `.u.yaml`.** jamovi re-evaluates the expression on
+  every option change automatically (no `.js`, no wiring). Forms: `(pct:row || pct:col)`, `(chi2)`,
+  the negation `(!(color:no))`, compound `&&`/`||`, and the JS-arrow `({return ...;})`. Shipped in
+  jmvtab: `color_signif` policies `(!(color:no))`, `stars` `(ci:diff || ci:auto)`, `add_n`/`add_pct`
+  `(pct:row || pct:col)`.
+- **What the DSL can't see → IMPERATIVE `ui.<ctrl>.setEnabled(bool)`.** The `enable:` grammar keys off
+  option VALUES, not the LENGTH of a `Variables` array (an empty array is truthy) nor a column's
+  `measureType`. To grey `totaltab`/`comp` when `tab_vars` is empty, `applyVarEnables(ui)` in
+  `js/jmvtab.js` `setEnabled`s them on `tab_vars.value().length > 0`, re-run from the root `update`
+  AND from `onChange_vars` (both fire on every variable change). `setEnabled` is sugar for
+  `setPropertyValue("enable", …)`; there is no separate hide.
+- **Never put BOTH on the same control** — a declarative `enable:` is re-evaluated by jamovi and would
+  override an imperative `setEnabled`. Pick one per control (jmvtab: declarative for value-based,
+  imperative-only for the tab_vars-length ones).
+- **Disabling keeps the value** (grey ≠ unset): jamovi still sends a disabled control's value to R, and
+  it returns intact when the control re-enables. So do NOT also `setValue` a neutral default — rely on
+  the backend forcing the neutral behaviour internally (e.g. `tab()` forces `totaltab="no"` with no
+  tab_vars). Silently changing/reverting a user's field is a UX antipattern.
+- **CI coupling is a re-paint, NOT a toggle** (Phase 7h decision): `color_signif` does NOT set `ci` from
+  `.js`. The backend already computes the CI the policy gates (`ci="auto"` → diff CI for factors;
+  `jmvtab_build` nudges numeric means, `R/jmvtab-cache.R` ~L714-727). Reflecting it in `stars`/
+  `method_diff` enables is enough; auto-toggling `ci` would be redundant and could overwrite a
+  deliberate `ci="cell"`.
+- **Column-type-aware greying is deliberately NOT done** (would need async `requestData`/`measureType`
+  in the enable path). Consequence: `color="diff"`/`"ratio"` stay pct-greyed on a pure-means table;
+  `color="auto"` (always enabled) covers colouring means, so no user is blocked. A follow-up could move
+  those enables to imperative `.js` reading the cached `measureType`.
+- **TextBox `width:` has no `auto` in the 2.6.44 COMPILER.** The uicompiler schema enum is only
+  `small | normal | large | largest` (the runtime bundle lists `auto`/`smallest`, but they fail
+  `jmvtools::prepare()`/`install()` with `<opt>.width is not one of enum values`). `largest` caps at
+  200px. To make a text box fill its (stretchFactor) cell, clear the fixed-width `silky-option-<size>-text`
+  cap in `.js`: widen the control root + wrappers down to the `input` to `width:100%` (helper
+  `stretchTextBox(ui, name)`, re-applied in `onUpdate` because jamovi re-renders may drop inline styles).
+  `ui.<textbox>.$input[0]` is the raw input; `.$el[0]` the control root.
+
 ---
 
 ## 7. How Jamovi renders RESULTS (the results iframe) — critical for exporters

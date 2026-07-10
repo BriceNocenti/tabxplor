@@ -38,7 +38,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             add_n = TRUE,
             add_pct = FALSE,
             subtext = "",
-            digits = 0,
+            digits = "0",
             n_min = 0,
             export_format = "excel",
             exportExcel = NULL,
@@ -301,12 +301,18 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 "subtext",
                 subtext,
                 default="")
-            private$..digits <- jmvcore::OptionNumber$new(
+            private$..digits <- jmvcore::OptionList$new(
                 "digits",
                 digits,
-                min=0,
-                max=10,
-                default=0)
+                options=list(
+                    "0",
+                    "1",
+                    "2",
+                    "3",
+                    "4",
+                    "5",
+                    "6"),
+                default="0")
             private$..n_min <- jmvcore::OptionInteger$new(
                 "n_min",
                 n_min,
@@ -642,8 +648,9 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   the row variable (for \code{pct = "row"}) or a row with the frequencies of
 #'   the column variable (for  \code{pct = "col"})
 #' @param subtext A character vector to print rows of legend under the table.
-#' @param digits The number of digits to print, as a single integer, or an
-#'   integer vector the same length as \code{col_vars}.
+#' @param digits The number of digits to print, as a single integer (0-6). In
+#'   R, \code{tab()} also accepts an integer vector the same length as
+#'   \code{col_vars}.
 #' @param n_min A pure display filter (0 = off). A row is dropped only when
 #'   its largest base across the column variables is below \code{n_min};
 #'   surviving cells whose own base is below \code{n_min} are blanked. Under
@@ -698,7 +705,7 @@ jmvtab <- function(
     add_n = TRUE,
     add_pct = FALSE,
     subtext = "",
-    digits = 0,
+    digits = "0",
     n_min = 0,
     export_format = "excel",
     exportExcel,

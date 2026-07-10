@@ -603,14 +603,27 @@ options:
 
     - name: digits
       title: ""
-      type: Number
-      min: 0
-      max: 10
-      default: 0
+      type: List
+      options:
+        - title: "0"
+          name:  "0"
+        - title: "1"
+          name:  "1"
+        - title: "2"
+          name:  "2"
+        - title: "3"
+          name:  "3"
+        - title: "4"
+          name:  "4"
+        - title: "5"
+          name:  "5"
+        - title: "6"
+          name:  "6"
+      default: "0"
       description:
           R: >
-           The number of digits to print, as a single integer, or an integer vector
-           the same length as \code{col_vars}.
+           The number of digits to print, as a single integer (0-6). In R, \code{tab()} also accepts
+           an integer vector the same length as \code{col_vars}.
 
     - name: n_min
       title: "n_min = <i>(hide small-base rows)</i>"

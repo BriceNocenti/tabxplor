@@ -11,8 +11,43 @@ var setExportLabel = function(ui) {
     ui.exportExcel.setPropertyValue("label", "Export to " + (exportLabels[fmt] || "Excel"));
 };
 
+// Grey the controls that are meaningless without tab_vars (subtables): the total-table type and the
+// comp reference-table choice. tab_vars is a Variables array, so its emptiness cannot be expressed in
+// the declarative `enable:` DSL -> imperative setEnabled, re-run from onUpdate + onChange_vars (both
+// fire on every variable change). The value is preserved (the backend forces totaltab="no"/comp="tab"
+// with no tab_vars anyway), so a control returns to its stored value when tab_vars is re-added.
+var applyVarEnables = function(ui) {
+    var tv = ui.tab_vars ? ui.tab_vars.value() : null;
+    var hasTab = !!(tv && tv.length > 0);
+    ["totaltab_1", "totaltab_2", "totaltab_3", "comp_1", "comp_2"].forEach(function(nm) {
+        if (ui[nm]) ui[nm].setEnabled(hasTab);
+    });
+};
+
+// jamovi 2.6.44's TextBox `width:` enum caps at `largest` (200px) -- there is NO `auto` (the compiler
+// rejects it). To let `subtext` and the export `path` fill their (stretchFactor) cell, clear the
+// fixed-width `silky-option-<size>-text` cap in .js: widen the control root + every wrapper down to the
+// input to width:100%. Re-applied on each onUpdate (jamovi may re-render the control and drop inline
+// styles). Purely cosmetic.
+var stretchTextBox = function(ui, name) {
+    var c = ui[name];
+    if (!c || !c.$el || !c.$el[0]) return;
+    var root = c.$el[0];
+    root.style.width = "100%"; root.style.maxWidth = "none";
+    var inp = (c.$input && c.$input[0]) || root.querySelector("input");
+    var node = inp, guard = 0;
+    while (node && node !== root && guard++ < 6) {
+        node.style.width = "100%"; node.style.maxWidth = "none";
+        node = node.parentElement;
+    }
+    if (inp) inp.style.width = "100%";
+};
+
 var onUpdate = function(ui) {
     setExportLabel(ui);
+    applyVarEnables(ui);
+    stretchTextBox(ui, "subtext");
+    stretchTextBox(ui, "path");
     renderRefPicker(ui);   // defined below (call-time resolution)
 };
 
@@ -470,6 +505,7 @@ module.exports = {
     // A variable box (row/col/tab) changed: re-render the reference picker AND the level-reorder
     // control. Shared by all three VariablesListBoxes (see .u.yaml `change` events).
     onChange_vars: function(ui) {
+        applyVarEnables(ui);
         renderRefPicker(ui);
         renderTree(ui);
     },
