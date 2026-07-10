@@ -1467,6 +1467,27 @@ detect_firstcol <- function(tabs) {
   res
 }
 
+# For each column, detect the REFERENCE column of its col_var group -- the one marked by the `refcol`
+# attribute (is_refcol). Falls back to detect_firstcol()'s first-column-of-group when no reference is
+# marked, so it is byte-identical to detect_firstcol() whenever the reference IS the first level (or is
+# unmarked). Phase 7g-iii: tab_ci() uses it so the diff-CI reference column matches the diff/colour
+# reference column, once a per-col_var reference can be neither the first level nor the total.
+#' @keywords internal
+detect_refcol <- function(tabs) {
+  col_vars  <- get_col_var(tabs)
+  refcol    <- is_refcol(tabs)
+  nms       <- names(tabs)
+  firstcols <- detect_firstcol(tabs)   # per-column sym of each group's first column (fallback + "" edges)
+  res <- purrr::map(seq_len(ncol(tabs)), function(.i) {
+    in_grp <- which(col_vars == col_vars[.i] & refcol)
+    if (length(in_grp) >= 1L) rlang::sym(nms[in_grp[1]]) else firstcols[[.i]]
+  }) %>%
+    purrr::set_names(nms)
+  # mirror detect_firstcol: no reference column for the all_col_vars total group
+  if (any(col_vars == "all_col_vars")) res[col_vars == "all_col_vars"] <- rlang::syms("")
+  res
+}
+
 #For each column, detect which total column it depends on
 #' @keywords internal
 detect_totcols <- function(tabs) {

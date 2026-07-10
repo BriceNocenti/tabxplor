@@ -11,39 +11,9 @@ var setExportLabel = function(ui) {
     ui.exportExcel.setPropertyValue("label", "Export to " + (exportLabels[fmt] || "Excel"));
 };
 
-// Reconcile the refLevels list to one {var, ref} row per selected row variable, preserving any
-// level the user already chose for a variable still present.
-var updateContrasts = function(ui, variableList) {
-    var currentList = utils.clone(ui.refLevels.value(), []);
-    var list3 = [];
-    for (var i = 0; i < variableList.length; i++) {
-        var found = null;
-        for (var j = 0; j < currentList.length; j++) {
-            if (currentList[j].var === variableList[i]) { found = currentList[j]; break; }
-        }
-        list3.push(found !== null ? found : { var: variableList[i], ref: null });
-    }
-    ui.refLevels.setValue(list3);
-};
-
-// Bind each row's LevelSelector to its variable, so it lists that variable's levels.
-var updateLevelControls = function(ui) {
-    var dlist = utils.clone(ui.refLevels.value(), []);
-    ui.refLevels.applyToItems(0, function(item, rowIndex, columnIndex) {
-        if (columnIndex === 1 && dlist[rowIndex])
-            item.setPropertyValue("variable", dlist[rowIndex].var);
-    });
-};
-
-var calcRefLevels = function(ui) {
-    if (!ui.row_vars || !ui.refLevels) return;
-    updateContrasts(ui, utils.clone(ui.row_vars.value(), []));
-    updateLevelControls(ui);
-};
-
 var onUpdate = function(ui) {
     setExportLabel(ui);
-    calcRefLevels(ui);
+    renderRefPicker(ui);   // defined below (call-time resolution)
 };
 
 // ---- Phase 7g-ii: level-reordering CustomControl (levelOrderCtrl) ------------------------
@@ -70,7 +40,15 @@ var TABX = {
     bar:     "display:flex;gap:6px;",
     btn:     "width:30px;height:22px;line-height:1;padding:0;cursor:pointer;",
     note:    "padding:4px 8px;opacity:0.65;font-style:italic;",
-    hint:    "padding:8px;opacity:0.65;font-style:italic;"
+    hint:    "padding:8px;opacity:0.65;font-style:italic;",
+    // ref picker: one Material line per variable = a FIXED-width bold name column + a <select>
+    // drop-down (current ref). Fixed name column -> all drop-downs align and share ONE width; the
+    // whole row is ~2/3 wide so the drop-down has room (name width no longer drives it).
+    refRow:  "display:grid;grid-template-columns:120px 1fr;align-items:center;gap:8px;width:66%;min-width:300px;box-sizing:border-box;padding:5px 8px;margin:4px 6px;border:1px solid rgba(0,0,0,0.12);border-radius:4px;background:rgba(0,0,0,0.03);",
+    refName: "font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;",
+    refSel:  "width:100%;min-width:0;box-sizing:border-box;padding:2px 4px;border:1px solid rgba(0,0,0,0.28);border-radius:3px;background:#fff;color:#000;cursor:pointer;",
+    refNote: "opacity:0.6;font-style:italic;",
+    refHint: "padding:6px 8px 2px 8px;opacity:0.7;font-style:italic;"
 };
 
 // State persisting across rebuilds. levelsCache makes renderTree() SYNCHRONOUS after the first fetch --
@@ -80,7 +58,16 @@ var TABX = {
 var openState = {};       // "<axis|var>:<key>" -> open bool
 var levelsCache = {};     // var -> [labels] natural order | null (numeric/no-levels) | FETCHING sentinel
 var FETCHING = {};
-var lastVarSig = null;
+var lastVarSig = null;    // reorder-tree variable signature
+var lastRefSig = null;    // ref-picker signature (vars + pct + color + OR + levelOrder)
+
+// A shared level-fetch completed (either control): re-render BOTH the reorder tree and the ref
+// picker, since they share `levelsCache` -- so a var whose levels one control fetched is not left
+// on a "..." placeholder in the other. Both renders are idempotent given the cache.
+var afterFetch = function(ui) {
+    if (ui.levelOrderCtrl && ui.levelOrderCtrl.$el) renderTree(ui);
+    if (ui.refPickerCtrl  && ui.refPickerCtrl.$el)  renderRefPicker(ui);
+};
 
 var makeDetails = function(key, defOpen, boxStyle, sumStyle, summaryText) {
     var d = document.createElement("details");
@@ -250,11 +237,17 @@ var renderTree = function(ui) {
 
     var frag = document.createElement("div");
     frag.setAttribute("data-tabx-tree", "1");
-    var axes = [["Row variables", rowV], ["Column variables", colV], ["Table variables", tabV]];
+    // Two-column grid: Row variables (col 1) | Column variables (col 2); Table variables below the
+    // Row column (col 1, row 2) at the same width, the col-2 cell of that row left empty.
+    frag.style.cssText = "display:grid;grid-template-columns:1fr 1fr;align-items:start;";
+    var axes = [["Row variables", rowV, 1, 1], ["Column variables", colV, 2, 1],
+                ["Table variables", tabV, 1, 2]];
     axes.forEach(function(ax) {
         var label = ax[0], vars = ax[1];
         if (vars.length === 0) return;
         var axD = makeDetails("axis:" + label, true, TABX.axis, TABX.axisSum, label);
+        axD.style.gridColumn = String(ax[2]);
+        axD.style.gridRow    = String(ax[3]);
         frag.appendChild(axD);
         vars.forEach(function(v) {
             var cached = (v in levelsCache) ? levelsCache[v] : undefined;
@@ -266,9 +259,9 @@ var renderTree = function(ui) {
                     .then(function(col) {
                         levelsCache[v] = (!col || col.measureType === "continuous")
                             ? null : col.levels.map(function(l) { return l.label; });
-                        renderTree(ui);
+                        afterFetch(ui);
                     })
-                    .catch(function() { levelsCache[v] = null; renderTree(ui); });
+                    .catch(function() { levelsCache[v] = null; afterFetch(ui); });
             }
         });
     });
@@ -282,6 +275,190 @@ var renderTree = function(ui) {
     root.innerHTML = ""; root.appendChild(frag);
 };
 
+// ---- Phase 7g-iii: reference-level picker CustomControl (refPickerCtrl) --------------------
+// One Material card per axis variable (row_vars under pct="row"/means, col_vars under pct="col"),
+// each a SINGLE-SELECT list "[Total, ...levels in the reordered order...]" (radio dots; the selected
+// one highlighted #b5caef). Stored by LABEL in the `refLevels` option, so a level reorder keeps the
+// reference and just re-orders the list. A ref2 section (the odds-ratio 2nd reference) is shown only
+// when OR is active. Distinct from the reorder tree: flat cards + radio dots, no Up/Down buttons, no
+// collapsible tree. Shares levelsCache / requestData / storedOrder with the reorder tree.
+
+// Signature that triggers a rebuild (vars + pct + color + OR + levelOrder). NOT refLevels / ref2 -- a
+// pick is an in-place repaint, so the user's own click never rebuilds (mirrors the reorder tree).
+var refSig = function(ui) {
+    var rowV = utils.clone(ui.row_vars.value(), []);
+    var colV = ui.col_vars ? utils.clone(ui.col_vars.value(), []) : [];
+    var tabV = ui.tab_vars ? utils.clone(ui.tab_vars.value(), []) : [];
+    var pct    = ui.pct   ? ui.pct.value()   : "no";
+    var colorV = ui.color ? ui.color.value() : "no";
+    var ORv    = ui.OR    ? ui.OR.value()    : "no";
+    var lo     = ui.levelOrder ? utils.clone(ui.levelOrder.value(), []) : [];
+    return JSON.stringify([rowV, colV, tabV, pct, colorV, ORv, lo]);
+};
+
+var orIsActive = function(ui) {
+    var colorV = ui.color ? ui.color.value() : "no";
+    var ORv    = ui.OR    ? ui.OR.value()    : "no";
+    return colorV === "OR" || ORv === "OR" || ORv === "OR_pct";
+};
+
+// The stored reference for variable `v` in refLevels ("" if the user has not picked one).
+var refSelected = function(ui, v) {
+    var arr = utils.clone(ui.refLevels.value(), []);
+    for (var i = 0; i < arr.length; i++)
+        if (arr[i].var === v) return (arr[i].ref == null ? "" : String(arr[i].ref));
+    return "";
+};
+
+// Set/replace variable `v`'s reference entry in refLevels.
+var writeRef = function(ui, v, refval) {
+    var arr = utils.clone(ui.refLevels.value(), []);
+    var found = false;
+    for (var k = 0; k < arr.length; k++)
+        if (arr[k].var === v) { arr[k] = { var: v, ref: refval }; found = true; break; }
+    if (!found) arr.push({ var: v, ref: refval });
+    ui.refLevels.setValue(arr);
+};
+
+// Drop refLevels entries whose var is not in the active axis (guarded setValue -> no loop): clears
+// stale entries after a pct row<->col switch or a removed variable.
+var reconcileRefLevels = function(ui, activeVars) {
+    var cur = utils.clone(ui.refLevels.value(), []);
+    var kept = [];
+    for (var i = 0; i < cur.length; i++)
+        if (activeVars.indexOf(cur[i].var) >= 0) kept.push(cur[i]);
+    if (kept.length !== cur.length) ui.refLevels.setValue(kept);
+};
+
+var choicesHasRef = function(choices, ref) {
+    return !!ref && choices.some(function(c) { return c.ref === ref; });
+};
+
+// A compact single line: a BOLD variable/label name + a native <select> drop-down showing the current
+// reference level (click it to pick another from the list). choices = [{ref, label}]; selectedRef is
+// the value the drop-down opens on; onPick(ref) writes the chosen reference.
+var refLineControl = function(nameText, choices, selectedRef, onPick) {
+    var row = document.createElement("div"); row.style.cssText = TABX.refRow;
+    var lab = document.createElement("b"); lab.style.cssText = TABX.refName; lab.textContent = nameText;
+    row.appendChild(lab);
+    var sel = document.createElement("select"); sel.style.cssText = TABX.refSel;
+    choices.forEach(function(c) {
+        var o = document.createElement("option");
+        o.value = c.ref; o.textContent = c.label;
+        if (c.ref === selectedRef) o.selected = true;
+        sel.appendChild(o);
+    });
+    sel.addEventListener("change", function() { onPick(sel.value); });
+    row.appendChild(sel);
+    return row;
+};
+
+// Render one axis variable as a single line "<var> [ current ref level v ]" (fetching its levels if
+// needed, like renderTree).
+var renderRefVarCard = function(ui, frag, v, orActive) {
+    var cached = (v in levelsCache) ? levelsCache[v] : undefined;
+    if (cached === FETCHING) cached = undefined;
+    if (cached === undefined) {
+        var ph = document.createElement("div"); ph.style.cssText = TABX.refRow;
+        var b0 = document.createElement("b"); b0.style.cssText = TABX.refName; b0.textContent = v;
+        var d0 = document.createElement("span"); d0.style.cssText = TABX.refNote; d0.textContent = "…";
+        ph.appendChild(b0); ph.appendChild(d0);
+        frag.appendChild(ph);
+        if (!(v in levelsCache)) {
+            levelsCache[v] = FETCHING;
+            ui.refPickerCtrl.requestData("column",
+                { columnName: v, properties: ["measureType", "levels"] })
+                .then(function(col) {
+                    levelsCache[v] = (!col || col.measureType === "continuous")
+                        ? null : col.levels.map(function(l) { return l.label; });
+                    afterFetch(ui);
+                })
+                .catch(function() { levelsCache[v] = null; afterFetch(ui); });
+        }
+        return;
+    }
+    if (cached === null) {   // numeric col_var: reference is its own total, no drop-down
+        var row = document.createElement("div"); row.style.cssText = TABX.refRow;
+        var b1 = document.createElement("b"); b1.style.cssText = TABX.refName; b1.textContent = v;
+        var nt = document.createElement("span"); nt.style.cssText = TABX.refNote;
+        nt.textContent = "numeric — compared with its total";
+        row.appendChild(b1); row.appendChild(nt);
+        frag.appendChild(row);
+        return;
+    }
+    var levels = storedOrder(ui, v, cached);
+    var choices = [{ ref: "tot", label: "Total" }].concat(
+        levels.map(function(l) { return { ref: l, label: l }; }));
+    var effDefault = orActive ? levels[0] : "tot";   // ref="auto" -> "first" under OR, else "tot"
+    var stored = refSelected(ui, v);
+    var selRef = choicesHasRef(choices, stored) ? stored : effDefault;
+    frag.appendChild(refLineControl(v, choices, selRef, function(r) { writeRef(ui, v, r); }));
+};
+
+// Render the ref2 (odds-ratio 2nd reference) section: one GLOBAL drop-down over the OTHER axis's
+// levels + First/Total, with a one-line explanation. Shown only when OR is active.
+var renderRef2Section = function(ui, frag, pct, ref2var) {
+    var levels = (ref2var && (ref2var in levelsCache)) ? levelsCache[ref2var] : undefined;
+    if (levels === FETCHING) levels = undefined;
+    if (ref2var && !(ref2var in levelsCache)) {
+        levelsCache[ref2var] = FETCHING;
+        ui.refPickerCtrl.requestData("column",
+            { columnName: ref2var, properties: ["measureType", "levels"] })
+            .then(function(col) {
+                levelsCache[ref2var] = (!col || col.measureType === "continuous")
+                    ? null : col.levels.map(function(l) { return l.label; });
+                afterFetch(ui);
+            })
+            .catch(function() { levelsCache[ref2var] = null; afterFetch(ui); });
+    }
+    var lvlChoices = (levels && levels.length)
+        ? storedOrder(ui, ref2var, levels).map(function(l) { return { ref: l, label: l }; })
+        : [];
+    var choices = [{ ref: "first", label: "First" }, { ref: "tot", label: "Total" }].concat(lvlChoices);
+    var where = (pct === "col") ? "row" : "column";
+    var note = document.createElement("div"); note.style.cssText = TABX.refHint;
+    note.textContent = "Odds ratios — 2nd reference (the " + where + " each odds ratio is compared to):";
+    frag.appendChild(note);
+    var selRef = ui.ref2 ? ui.ref2.value() : "first";
+    if (!choicesHasRef(choices, selRef)) selRef = "first";
+    frag.appendChild(refLineControl("reference " + where, choices, selRef,
+        function(r) { if (ui.ref2) ui.ref2.setValue(r); }));
+};
+
+// Render the whole ref picker SYNCHRONOUSLY into $el (mirrors renderTree). refLevels/ref2 picks are
+// in-place repaints and never come through here.
+var renderRefPicker = function(ui) {
+    if (!ui.refPickerCtrl || !ui.refLevels || !ui.row_vars) return;
+    lastRefSig = refSig(ui);
+    var pct  = ui.pct ? ui.pct.value() : "no";
+    var rowV = utils.clone(ui.row_vars.value(), []);
+    var colV = ui.col_vars ? utils.clone(ui.col_vars.value(), []) : [];
+    var orActive = orIsActive(ui);
+    var axisVars = (pct === "col") ? colV : rowV;
+    reconcileRefLevels(ui, axisVars);
+
+    var frag = document.createElement("div");
+    frag.setAttribute("data-tabx-refpick", "1");
+
+    if (axisVars.length === 0) {
+        var hint = document.createElement("div"); hint.style.cssText = TABX.hint;
+        hint.textContent = (pct === "col")
+            ? "Select column variables to choose their reference column."
+            : "Select row variables to choose their reference row.";
+        frag.appendChild(hint);
+    } else {
+        axisVars.forEach(function(v) { renderRefVarCard(ui, frag, v, orActive); });
+    }
+
+    if (orActive) {
+        var ref2axis = (pct === "col") ? rowV : colV;   // OR's 2nd reference is on the OTHER axis
+        renderRef2Section(ui, frag, pct, ref2axis[0]);
+    }
+
+    var root = ui.refPickerCtrl.$el[0];
+    root.innerHTML = ""; root.appendChild(frag);
+};
+
 module.exports = {
 
     // Root view update. Bound explicitly via `events: update:` in .u.yaml; `view_updated` is the
@@ -290,15 +467,18 @@ module.exports = {
     update:       onUpdate,
     view_updated: onUpdate,
 
-    // A variable box (row/col/tab) changed: re-sync the refLevels picker (row_vars only) AND the
-    // level-reorder control. Shared by all three VariablesListBoxes (see .u.yaml `change` events).
+    // A variable box (row/col/tab) changed: re-render the reference picker AND the level-reorder
+    // control. Shared by all three VariablesListBoxes (see .u.yaml `change` events).
     onChange_vars: function(ui) {
-        calcRefLevels(ui);
+        renderRefPicker(ui);
         renderTree(ui);
     },
 
-    onChange_refLevels: function(ui) {
-        updateLevelControls(ui);
+    // pct / OR / color changed: re-render the reference picker so its axis (row vs col), effective
+    // default and the ref2 (odds-ratio) section follow immediately. A bare CustomControl does not get
+    // a reliable `updated` for OTHER options' changes, so these radios are wired explicitly (.u.yaml).
+    onChange_refopts: function(ui) {
+        renderRefPicker(ui);
     },
 
     // levelOrderCtrl: build on create. On `updated`, re-render ONLY when the variable set changed OR
@@ -317,6 +497,22 @@ module.exports = {
                          root.firstChild.getAttribute("data-tabx-tree") === "1");
         if (sig === lastVarSig && present) return;
         renderTree(ui);
+    },
+
+    // refPickerCtrl: build on create. On `updated`, re-render ONLY when the signature (vars / pct /
+    // color / OR / levelOrder) changed OR jamovi replaced our $el subtree (marker gone). A reference
+    // PICK writes refLevels/ref2 -- not in the signature -- so it is SKIPPED and the in-place repaint
+    // stands; a level reorder IS in the signature, so the lists re-order while the by-label selection
+    // is preserved.
+    refPickerCtrl_creating: function(ui) { renderRefPicker(ui); },
+    refPickerCtrl_updated:  function(ui) {
+        if (!ui.refPickerCtrl || !ui.row_vars) return;
+        var sig = refSig(ui);
+        var root = ui.refPickerCtrl.$el[0];
+        var present = !!(root && root.firstChild && root.firstChild.getAttribute &&
+                         root.firstChild.getAttribute("data-tabx-refpick") === "1");
+        if (sig === lastRefSig && present) return;
+        renderRefPicker(ui);
     },
 
     // Keep the export button label in sync with the chosen format (Excel / HTML / Markdown).

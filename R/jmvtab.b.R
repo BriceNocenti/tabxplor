@@ -78,6 +78,14 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
     .opts = function(wt) {
       # NULL (an empty variable slot) flows through: jmvtab_build() treats length-0 as "inject a
       # placeholder", so NULL and character() are equivalent here (avoids base-R-4.4-only `%||%`).
+      # Phase 7g-iii: filter the reference picker to the active axis (see `ref` below).
+      active_vars <- as.character(
+        if (identical(self$options$pct, "col")) self$options$col_vars else self$options$row_vars
+      )
+      refLevels_active <- Filter(
+        function(e) { v <- e[["var"]]; !is.null(v) && as.character(v) %in% active_vars },
+        self$options$refLevels
+      )
       list(
         row_vars = self$options$row_vars,
         col_vars = self$options$col_vars,
@@ -94,9 +102,12 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         anova        = self$options$anova,
         na           = self$options$na,
         levels       = self$options$lvs,             # option named `lvs` (jmvcore has a levels() method)
-        # Phase 7g: the reference-level picker (refLevels) drives `ref` when the user picked a level;
-        # otherwise the expert free-text `ref` box is used (jmvtab_ref_vector()).
-        ref          = jmvtab_ref_vector(self$options$refLevels, self$options$ref),
+        # Phase 7g-iii: the reference-level picker (refLevels) drives `ref`, keyed by the ACTIVE axis
+        # (col_vars under pct="col", else row_vars -- filtered above so a stale cross-axis entry can't
+        # leak). tab_setup() dispatches by pct: a row reference (row%/means) vs a per-col_var column
+        # reference (col%). A chosen level label is matched by exact equality in diff_index(). Falls
+        # back to the (hidden) expert free-text `ref`. ref2 = the OR 2nd reference (a level / first / tot).
+        ref          = jmvtab_ref_vector(refLevels_active, self$options$ref),
         ref2         = self$options$ref2,
         # Phase 7g-ii: per-variable level reordering (levelOrder picker) -> a named list of ordered
         # levels; applied post-aggregate in jmv_cache_aggregate() (tier-3 rebuild, tiers 1-2 reused).

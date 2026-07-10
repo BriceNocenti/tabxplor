@@ -441,11 +441,15 @@ jmv_coerce_numeric_cols <- function(data, col_vars) {
   data
 }
 
-# Build tab()'s `ref` argument from the Phase 7g reference-level picker. `refLevels` is the jamovi
-# Array option = a list of {var, ref} (one per selected row_var; ref = a chosen level label, or NULL /
-# "" when the user left it on the default). If the user picked AT LEAST ONE explicit level, return a
-# named character vector keyed by var (unset entries -> "auto"), which resolve_ref_vector() reads as a
-# per-row_var reference. Otherwise fall back to the expert free-text `ref` (auto/tot/first/regex/int).
+# Build tab()'s `ref` argument from the Phase 7g-iii reference-level picker. `refLevels` is the jamovi
+# Array option = a list of {var, ref} (one per selected axis variable; ref = a chosen level label, or
+# "tot" for the total, or NULL / "" when left on the default). If the user picked AT LEAST ONE explicit
+# reference, return a named character vector keyed by var (unset entries -> "auto"), read by
+# resolve_ref_vector() as a per-variable reference. The keys are row_var names under pct="row"/means and
+# col_var names under pct="col" (the caller passes the entries already filtered to the active axis);
+# tab_setup() disambiguates by pct. A chosen level LABEL is passed verbatim -- diff_index() matches it
+# by EXACT equality first (Phase 7g-iii), so metacharacter labels like "$25000 or more" work and the
+# stored `ref` attribute stays human-readable. Otherwise fall back to the expert free-text `ref`.
 #' @keywords internal
 #' @noRd
 jmvtab_ref_vector <- function(refLevels, free_text_ref = "auto") {

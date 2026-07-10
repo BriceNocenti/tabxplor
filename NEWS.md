@@ -74,9 +74,14 @@
   Available from microdata only.
 * **`spread_vars`** in `tab()` --- pivot a subset of `tab_vars` into columns (via
   `tab_spread()`), with optional `names_prefix` / `names_sort`.
+* **Per-column-variable reference under `pct = "col"`.** A `ref` vector *named by column variable*
+  (e.g. `tab(data, x, c(race, relig), pct = "col", ref = c(race = "Black", relig = "None"))`) now
+  gives each column variable its own reference column, instead of a single reference shared by all.
+  A chosen level is matched by exact equality, so labels containing regular-expression characters
+  (e.g. `"$25000 or more"`) work as references.
 
 ## Internal
-* The jamovi module (`jmvtab`) gained several user-facing features: a **per-row-variable reference-level picker** (choose the comparison level of each row variable from a list, instead of typing it); **export to Excel, HTML or Markdown** (pick a format, the button label follows, and the file is written to a typed path defaulting to your Documents folder, with a confirmation notice); an **`n_min`** control to hide small-base rows/columns; a **Wald** option for the cell confidence interval; and a clearer **statistical-test** toggle (Chi-square for categorical columns, ANOVA F for numeric ones) with a Welch-vs-classic ANOVA choice.
+* The jamovi module (`jmvtab`) gained several user-facing features: a **reference-level picker** (choose the comparison level of each variable from a compact Material list, with "Total" as the visible default; it covers the row variables under row percentages and the column variables under column percentages, follows the level-reordering panel, and shows a second-reference section only when odds ratios are requested); **export to Excel, HTML or Markdown** (pick a format, the button label follows, and the file is written to a typed path defaulting to your Documents folder, with a confirmation notice); an **`n_min`** control to hide small-base rows/columns; a **Wald** option for the cell confidence interval; and a clearer **statistical-test** toggle (Chi-square for categorical columns, ANOVA F for numeric ones) with a Welch-vs-classic ANOVA choice.
 * The jamovi module (`jmvtab`) now uses a live multi-tier cache: after the first table, changing an option (percentages, reference, colors, display, adding a variable) reuses the cached counts and chi-squared/ANOVA instead of recomputing everything, so results update near-instantly on normal survey data. The Jamovi HTML render also drops the per-cell hover tooltips (inert in Jamovi and roughly half the render time). The module drives the same `tab()` pipeline with the cache injected (no separate code path), so its tables stay identical to `tab()`. Beyond the counts/tests, changing only the **display or colours** (number of digits, the displayed value, the colour measure `"diff"`/`"ratio"`, or the `color_signif` significance policy) now reuses the already-built table and only re-paints it, skipping the whole cell rebuild — these toggles are effectively instant even on a big table-of-tables (e.g. a colour change on a 9-table grid dropped from ~1.1 s to ~0.04–0.19 s). Building `tab()` / `tab_num()` tables is also a little faster overall (the per-cell format assembly hoists its constant work out of the inner loop).
 * Rewrote the Chi-squared / ANOVA computation onto a fast, vectorised engine (`R/tab-agg.R`:
   `agg_chi2()`, `agg_anova()`): every (sub)table is tested in a single grouped `data.table` pass
@@ -134,6 +139,11 @@
 
 ## Bug corrections
 * `tab()` with two or more row variables AND two or more column variables no longer errors ("pct can't be recycled"); percentages are recycled correctly across the table.
+* A reference level whose label contains regular-expression characters (e.g. `"$25000 or more"`) is
+  now matched exactly, so it correctly selects its row/column (it was silently ignored before). A
+  reference vector named for a single variable (e.g. `c(race = "Black")`) no longer leaks that level
+  to the other variables. Confidence intervals for a difference now use the same reference column as
+  the difference itself.
 * Mean tables (`tab_num()`) are now dramatically faster and lighter: computing sufficient moment
   sums in a single grouped pass (no more weighted-variance double scan) and building the totals /
   total table as roll-ups of that aggregate (instead of two extra full-data scans) makes an 8M-row

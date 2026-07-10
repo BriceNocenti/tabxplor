@@ -84,7 +84,17 @@ golden_cases <- function() {
     totn_drop        = function() tabxplor:::tab_build(syn, g, c(h, k), pct = "col", na = "drop", output = "single"),
     totn_row_drop    = function() tabxplor:::tab_build(syn, g, c(h, k), pct = "row", na = "drop", output = "single"),  # cross-col_var tot_n exactness lock (Phase 2c)
     f_totcol_each    = function() tabxplor:::tab_build(gss, marital, c(race, relig), pct = "row", totcol = "each", output = "single"),  # per-col_var totals; Phase 6 -> one total col
-    w_weighted       = function() tab(syn, g, h, wt = w, pct = "col")
+    w_weighted       = function() tab(syn, g, h, wt = w, pct = "col"),
+
+    # --- per-col_var col% references (Phase 7g-iii) ---
+    # Under pct="col", a ref NAMED BY COL_VAR gives each col_var its OWN reference column (impossible
+    # under the old single-ref collapse). Scalar/unset col% ref stays byte-identical (see f_col_pct).
+    f_col_ref_lvl     = function() tab(gss, marital, race, pct = "col", ref = c(race = "Black"), color = "diff"),
+    f_col_ref_multi   = function() tab(gss, marital, c(race, relig), pct = "col",
+                                       ref = c(race = "Black", relig = "None"), color = "diff"),
+    f_col_ref_partial = function() tab(gss, marital, c(race, relig), pct = "col", ref = c(race = "Black")),   # unset relig -> auto (tot)
+    f_col_ref_ci      = function() tab(gss, marital, race, pct = "col", ref = c(race = "Black"), ci = "diff"), # detect_refcol CI lock
+    f_col_ref_or      = function() tab(gss, marital, race, pct = "col", ref = c(race = "Black"), OR = "OR")    # per-col_var ref feeds the OR ref column; ref2 global
   )
 }
 
@@ -93,7 +103,8 @@ golden_display_cases <- c("f_row_pct", "f_ci_cell", "f_ci_diff", "f_color_diff",
                           "n_mean", "n_mean_ci", "totn_drop",
                           "f_selfcross", "n_mean_w", "n_mean_sparse", "totn_row_drop",
                           "n_mean_color",     # locks the D3-interim numeric coloring (-> Phase 5)
-                          "n_mean_tottab")    # locks the total-table rollup (Phase 2)
+                          "n_mean_tottab",    # locks the total-table rollup (Phase 2)
+                          "f_col_ref_lvl", "f_col_ref_multi", "f_col_ref_ci")  # per-col_var col% ref (Phase 7g-iii)
 
 # Directory holding the structural .rds fixtures (relative to tests/testthat/).
 golden_dir <- function() testthat::test_path("_golden")

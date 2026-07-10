@@ -166,6 +166,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             private$..refLevels <- jmvcore::OptionArray$new(
                 "refLevels",
                 refLevels,
+                hidden=TRUE,
                 default=NULL,
                 template=jmvcore::OptionGroup$new(
                     "refLevels",
@@ -174,7 +175,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                         jmvcore::OptionVariable$new(
                             "var",
                             NULL),
-                        jmvcore::OptionLevel$new(
+                        jmvcore::OptionString$new(
                             "ref",
                             NULL))))
             private$..levelOrder <- jmvcore::OptionArray$new(
@@ -198,11 +199,13 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             private$..ref <- jmvcore::OptionString$new(
                 "ref",
                 ref,
-                default="auto")
+                default="auto",
+                hidden=TRUE)
             private$..ref2 <- jmvcore::OptionString$new(
                 "ref2",
                 ref2,
-                default="first")
+                default="first",
+                hidden=TRUE)
             private$..comp <- jmvcore::OptionList$new(
                 "comp",
                 comp,

@@ -43,7 +43,7 @@ children:
             maxItemCount: 1
             isTarget: true
   - type: CollapseBox
-    label: <b>Percentages, colors and Chi2 test </b>
+    label: <b>Percentages, colors and tests</b>
     stretchFactor: 1
     collapsed: false
     children:
@@ -64,22 +64,32 @@ children:
                     name: pct_1
                     optionName: pct
                     optionPart: 'no'
+                    events:
+                      change: ./jmvtab::onChange_refopts
                   - type: RadioButton
                     name: pct_2
                     optionName: pct
                     optionPart: row
+                    events:
+                      change: ./jmvtab::onChange_refopts
                   - type: RadioButton
                     name: pct_3
                     optionName: pct
                     optionPart: col
+                    events:
+                      change: ./jmvtab::onChange_refopts
                   - type: RadioButton
                     name: pct_4
                     optionName: pct
                     optionPart: all
+                    events:
+                      change: ./jmvtab::onChange_refopts
                   - type: RadioButton
                     name: pct_5
                     optionName: pct
                     optionPart: all_tabs
+                    events:
+                      change: ./jmvtab::onChange_refopts
           - type: LayoutBox
             cell:
               column: 1
@@ -94,29 +104,77 @@ children:
                     name: color_1
                     optionName: color
                     optionPart: 'no'
+                    events:
+                      change: ./jmvtab::onChange_refopts
                   - type: RadioButton
                     name: color_2
                     optionName: color
                     optionPart: auto
+                    events:
+                      change: ./jmvtab::onChange_refopts
                   - type: RadioButton
                     name: color_3
                     optionName: color
                     optionPart: diff
                     enable: (pct:row || pct:col)
+                    events:
+                      change: ./jmvtab::onChange_refopts
                   - type: RadioButton
                     name: color_4
                     optionName: color
                     optionPart: ratio
                     enable: (pct:row || pct:col)
+                    events:
+                      change: ./jmvtab::onChange_refopts
                   - type: RadioButton
                     name: color_5
                     optionName: color
                     optionPart: contrib
+                    events:
+                      change: ./jmvtab::onChange_refopts
                   - type: RadioButton
                     name: color_6
                     optionName: color
                     optionPart: OR
                     enable: (pct:row || pct:col)
+                    events:
+                      change: ./jmvtab::onChange_refopts
+          - type: LayoutBox
+            cell:
+              column: 0
+              row: 1
+            stretchFactor: 2
+            children:
+              - type: Label
+                label: OR = <i>(Odds Ratio)</i>
+                children:
+                  - type: RadioButton
+                    name: OR_1
+                    optionName: OR
+                    optionPart: 'no'
+                    enable: (pct:row || pct:col)
+                    events:
+                      change: ./jmvtab::onChange_refopts
+                  - type: RadioButton
+                    name: OR_2
+                    optionName: OR
+                    optionPart: OR
+                    enable: (pct:row || pct:col)
+                    events:
+                      change: ./jmvtab::onChange_refopts
+                  - type: RadioButton
+                    name: OR_3
+                    optionName: OR
+                    optionPart: OR_pct
+                    enable: (pct:row || pct:col)
+                    events:
+                      change: ./jmvtab::onChange_refopts
+          - type: LayoutBox
+            cell:
+              column: 1
+              row: 1
+            stretchFactor: 3
+            children:
               - type: Label
                 label: color_signif = <i>(significance policy)</i>
                 fitToGrid: true
@@ -135,46 +193,19 @@ children:
                     optionName: color_signif
                     optionPart: color_all_signif
                     enable: (pct:row || pct:col)
-          - type: LayoutBox
-            cell:
-              column: 0
-              row: 1
-            stretchFactor: 2
+      - type: LayoutBox
+        margin: large
+        style: inline
+        children:
+          - type: Label
+            label: Statistical test <i>(Chi-square for categorical columns, ANOVA F for numeric columns)</i>
             children:
-              - type: Label
-                label: OR = <i>(Odds Ratio)</i>
-                children:
-                  - type: RadioButton
-                    name: OR_1
-                    optionName: OR
-                    optionPart: 'no'
-                    enable: (pct:row || pct:col)
-                  - type: RadioButton
-                    name: OR_2
-                    optionName: OR
-                    optionPart: OR
-                    enable: (pct:row || pct:col)
-                  - type: RadioButton
-                    name: OR_3
-                    optionName: OR
-                    optionPart: OR_pct
-                    enable: (pct:row || pct:col)
-          - type: LayoutBox
-            cell:
-              column: 1
-              row: 1
-            style: inline
-            stretchFactor: 3
-            children:
-              - type: Label
-                label: Statistical test <i>(Chi-square / ANOVA F)</i>
-                children:
-                  - type: CheckBox
-                    name: chi2
-                  - type: ComboBox
-                    name: anova
-                    label: ANOVA F
-                    enable: (chi2)
+              - type: CheckBox
+                name: chi2
+              - type: ComboBox
+                name: anova
+                label: ANOVA F
+                enable: (chi2)
   - type: CollapseBox
     label: <b>Levels and missing values</b>
     stretchFactor: 1
@@ -246,6 +277,12 @@ children:
             children:
               - type: CheckBox
                 name: cleannames
+          - type: Label
+            label: n_min = <i>(hide rows/cols with a small base)</i>
+            children:
+              - type: TextBox
+                name: n_min
+                format: number
   - type: CollapseBox
     label: <b>Reorder levels</b>
     stretchFactor: 1
@@ -262,81 +299,63 @@ children:
     stretchFactor: 1
     collapsed: true
     children:
+      # Phase 7g-iii: the reference picker is a Material CustomControl (refPickerCtrl) -- a
+      # single-select level list per variable (Total + levels, in the reordered order), plus a
+      # ref2 section shown only when OR is active. It edits the hidden `refLevels` + `ref2`
+      # options via js/jmvtab.js. Kept in its own margin:none LayoutBox (never mix celled and
+      # cell-less children in one box -> "Cell already exists" panel hang).
       - type: LayoutBox
         margin: none
         children:
-          - type: ListBox
-            name: refLevels
-            label: Reference level per row variable
-            showColumnHeaders: true
-            fullRowSelect: true
+          - type: CustomControl
+            name: refPickerCtrl
             stretchFactor: 1
-            height: normal
             events:
-              change: ./jmvtab::onChange_refLevels
-            columns:
-              - name: var
-                label: Row variable
-                selectable: false
-                stretchFactor: 1
-                maxWidth: 300
-                template:
-                  type: VariableLabel
-              - name: ref
-                label: Reference level
-                selectable: false
-                stretchFactor: 0.5
-                template:
-                  type: LevelSelector
-                  label: ''
+              creating: ./jmvtab::refPickerCtrl_creating
+              updated: ./jmvtab::refPickerCtrl_updated
       - type: LayoutBox
         margin: none
         children:
-          - type: LayoutBox
-            margin: none
-            cell:
-              column: 0
-              row: 0
-            stretchFactor: 1
+          - type: Label
+            label: comp = <i>(reference table with tab_vars)</i>
             children:
-              - type: Label
-                label: ref = <i>(expert fallback&#58; tot / first / regex / n)</i>
-                children:
-                  - type: TextBox
-                    name: ref
-                    format: string
-          - type: LayoutBox
-            margin: none
-            cell:
-              column: 1
-              row: 0
-            stretchFactor: 1
-            children:
-              - type: Label
-                label: comp = <i>(reference table with tab_vars)</i>
-                children:
-                  - type: RadioButton
-                    name: comp_1
-                    optionName: comp
-                    optionPart: tab
-                  - type: RadioButton
-                    name: comp_2
-                    optionName: comp
-                    optionPart: all
-          - type: LayoutBox
-            margin: none
-            cell:
-              column: 0
-              row: 1
-            stretchFactor: 0
-            children:
-              - type: Label
-                label: ref2 = <i>(2nd reference col/row for OR)</i>
-                children:
-                  - type: TextBox
-                    name: ref2
-                    format: string
-                    enable: (OR == 'OR' || OR == 'OR_pct')
+              - type: RadioButton
+                name: comp_1
+                optionName: comp
+                optionPart: tab
+              - type: RadioButton
+                name: comp_2
+                optionName: comp
+                optionPart: all
+      # --- Phase 7g-iii: the old free-text `ref` / `ref2` boxes are REPLACED by refPickerCtrl
+      # --- above. Kept here (commented) for rollback -- to restore, uncomment and remove
+      # --- `hidden: true` from the `ref` / `ref2` options in .a.yaml.
+      # - type: LayoutBox
+      #   margin: none
+      #   children:
+      #     - type: LayoutBox
+      #       margin: none
+      #       cell: { column: 0, row: 0 }
+      #       stretchFactor: 1
+      #       children:
+      #         - type: Label
+      #           label: ref = <i>(expert fallback&#58; tot / first / regex / n)</i>
+      #           children:
+      #             - type: TextBox
+      #               name: ref
+      #               format: string
+      #     - type: LayoutBox
+      #       margin: none
+      #       cell: { column: 0, row: 1 }
+      #       stretchFactor: 0
+      #       children:
+      #         - type: Label
+      #           label: ref2 = <i>(2nd reference col/row for OR)</i>
+      #           children:
+      #             - type: TextBox
+      #               name: ref2
+      #               format: string
+      #               enable: (OR == 'OR' || OR == 'OR_pct')
   - type: CollapseBox
     label: <b>Confidence intervals</b>
     stretchFactor: 1
@@ -605,9 +624,3 @@ children:
           - type: CheckBox
             name: xl_replace
             label: Replace existing file
-  - type: LayoutBox
-    margin: large
-    children:
-      - type: TextBox
-        name: n_min
-        format: number

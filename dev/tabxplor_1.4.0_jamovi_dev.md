@@ -450,6 +450,13 @@ any custom-JS widget that edits an option.
   rebuild. Gate it: skip unless the thing you care about (e.g. the selected-variable signature) changed
   AND your DOM subtree is still present (tag your root with a `data-*` marker; if it's gone, jamovi
   re-rendered `$el` and you must re-render).
+- **BUT `updated` is NOT reliable for reacting to OTHER options** (Phase 7g-iii): a bare CustomControl
+  (one that does not claim an option) did not re-render when a *different* option (`OR`) changed, so a
+  section keyed on that option (the ref2 picker) never appeared. The robust pattern is to wire an
+  explicit `events: { change: ./mod::handler }` on the controls whose value your widget reads (each
+  `RadioButton` of the `pct`/`OR`/`color` groups here) → the handler re-renders the widget. `change`
+  fires immediately with the fresh value; treat `updated` only as the self-`setValue` skip-gate. The
+  variable boxes already work this way (`change: onChange_vars`).
 - **Async `requestData` + a deferred swap RACES user input.** Building a fragment in
   `Promise.all(requestData…).then(swap into $el)` and swapping it in later will clobber a synchronous
   in-place edit the user made in between (the swapped-in snapshot was read before the edit). Symptom:
@@ -671,6 +678,36 @@ Goal: under `pct="row"`/means, choose the reference row (level) of each `row_var
 `pct="col"`, the reference column of the chosen `col_var`. Maps onto the 1.4.0 decision that
 `ref` becomes a per-row_var named vector. The widget is jmv's binomial-logistic `refLevels`
 (vendored: `dev/jamovi/reference/jmv-logregbin/`).
+
+> **REBUILT (Phase 7g-iii, 2026-07-10) — §12.1–12.3 below are the superseded first design.** The
+> built-in `ListBox` + `LevelSelector` had no "Total" choice, showed jamovi's natural level order
+> (ignoring the reorder panel), synced only `row_vars`, and read whitish (not Material). It is
+> replaced by a **`CustomControl` `refPickerCtrl`** (sibling of `levelOrderCtrl`, sharing its
+> `levelsCache`/`requestData`/`storedOrder`/`TABX` styles — `jamovi/js/jmvtab.js`):
+> - **One compact Material LINE per active-axis** variable (row_vars under pct row/means, col_vars
+>   under pct="col"): a **bold variable name + a native `<select>` drop-down** showing the current
+>   reference level (`[Total, …levels in the reordered order…]`). Iteration 1 used a radio list; the
+>   drop-down (Iteration 2) is far more compact and the name/level distinction is clearer. Numeric
+>   col_vars show "numeric — vs its total" (no drop-down).
+> - Stored **by label** in `refLevels` (`ref` element retyped `Level → String`, so it also holds
+>   `"tot"`; `refLevels`/`ref`/`ref2` are `hidden: true`, the CustomControl is the sole UI). The
+>   effective auto-default (Total, or the first level under OR) is highlighted when unset.
+> - A **ref2 section** (the OR 2nd reference, over the OTHER axis + First/Total) renders only when
+>   OR is active. `.b.R` filters `refLevels` to the active axis, then `jmvtab_ref_vector()` keys it
+>   by that axis and `tab_setup()` dispatches (row ref vs per-col_var col ref).
+> - Re-renders on **explicit `change` events** wired on the `pct`/`OR`/`color` radios
+>   (`onChange_refopts`) and the variable boxes (`onChange_vars`) — a bare CustomControl does NOT get
+>   a reliable `updated` for other options' changes (this is why the ref2 section first failed to
+>   appear on `OR`; see §6.8). `refPickerCtrl_updated` is only the self-`setValue` skip-gate (a
+>   reference pick is an in-place drop-down change; a level reorder re-orders the lists while the
+>   by-label selection is preserved).
+> - **Two jamovi-UI gotchas re-confirmed** (see §6.8): a `CustomControl` needs `hidden: true` on
+>   its backing option (else a broken default control is auto-generated); and never mix celled and
+>   cell-less children in one `LayoutBox`. The reference **label is matched by exact equality** in
+>   `diff_index()` (not regex) so metacharacter labels work AND the stored `ref` attribute stays
+>   human-readable in the colour legend (no `^…$` token). **Backend:** per-col_var col% references
+>   via a `ref_vect` threaded into the factor leaf; `detect_refcol()` keeps the diff-CI reference
+>   column consistent. `.h.R` regen + live-verify is the maintainer's closing step.
 
 ### 12.1 `.a.yaml`
 

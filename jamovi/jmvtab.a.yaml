@@ -298,12 +298,16 @@ options:
     #     #   name:  no
     #   default: auto
 
-    # Phase 7g: per-row_var reference-level picker. One {var, ref} row per selected row variable;
-    # `ref` is the chosen reference level. Read into a named `ref` vector by jmvtab_ref_vector();
-    # the free-text `ref` below stays as the expert fallback (tot/first/regex/integer, and pct="col").
+    # Phase 7g-iii: per-variable reference picker, driven by the `refPickerCtrl` CustomControl in
+    # .u.yaml (a Material list). One {var, ref} entry per picked variable -- keyed by row_var under
+    # pct="row"/means, by col_var under pct="col" (the .b.R filters to the active axis). `ref` is a
+    # String (a chosen level label, "tot" for the total, or "" for the auto default), read into a
+    # named `ref` vector by jmvtab_ref_vector(). `hidden: true` -> the compiler generates no default
+    # control (the CustomControl is the sole UI; edits the option via ui.refLevels in js/jmvtab.js).
     - name: refLevels
-      title: "Reference levels (per row variable)"
+      title: "Reference levels (per variable)"
       type: Array
+      hidden: true
       default:
       template:
           type: Group
@@ -311,7 +315,7 @@ options:
               - name: var
                 type: Variable
               - name: ref
-                type: Level
+                type: String
 
     # Phase 7g-ii: per-variable level-reordering picker. One {var, levels} entry per REORDERED
     # factor (row/col/tab); `levels` is the ordered level labels (element order = display order).
@@ -335,10 +339,13 @@ options:
                 template:
                     type: String
 
+    # Phase 7g-iii: the reference picker (refPickerCtrl) replaced the visible `ref` text box; this
+    # option is kept `hidden` as the expert free-text fallback / read target of jmvtab_ref_vector().
     - name: ref
       title: "auto/tot/<i>{row_number}</i>/<i>{row_name}</i>"
       type: String
       default: auto
+      hidden: true
       description:
           R: >
            The reference cell to calculate differences and ratios
@@ -368,10 +375,13 @@ options:
 #       name:  tot
 #   default: first
 
+    # Phase 7g-iii: `ref2` (the OR 2nd reference) is now driven by the refPickerCtrl ref2 section
+    # (shown only when OR is active); `hidden` so the compiler generates no default text box.
     - name: ref2
       title: "first/tot/<i>{col_number}</i>"
       type: String
       default: first
+      hidden: true
       description:
           R: >
            A second reference cell is needed to calculate odds ratios

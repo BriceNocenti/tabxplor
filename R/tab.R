@@ -1144,17 +1144,26 @@ tab_setup <- function(ctx) {
   totaltab    <- vctrs::vec_recycle(totaltab, nrowvars)
   totrow      <- vctrs::vec_recycle(totrow  , nrowvars)
   # Phase 6d (§4): `ref` = one reference row per row_var (named -> matched by name, else by
-  # order; scalar -> same for all). Under a col% regime a per-row_var *row* reference is
-  # meaningless, so a multi-element ref collapses to a single column reference (+ message).
+  # order; scalar -> same for all).
+  # Phase 7g-iii (§4): under a col% regime a per-COL_VAR reference (a vector NAMED by col_var)
+  # instead selects a reference COLUMN for each col_var -> routed into `ref_vect` (per col_var),
+  # the scalar `ref` becoming unset. Detect it BEFORE resolve_ref_vector(row_vars) (which would
+  # warn on the col_var names). A per-ROW_VAR *row* reference stays meaningless under col%, so a
+  # (row_var-named) multi-element ref still collapses to a single column reference (+ message).
+  pct_flat      <- unlist(pct)
+  col_regime    <- any(pct_flat == "col") && !any(pct_flat == "row")
+  ref_by_colvar <- NULL
+  if (col_regime && !is.null(names(ref)) && any(nzchar(names(ref))) &&
+      any(names(ref) %in% as.character(col_vars))) {
+    ref_by_colvar <- resolve_ref_vector(ref, as.character(col_vars), what = "col_var")
+    ref <- "auto"   # scalar unset: tab_num / settings / the row% path behave as no per-row ref
+  }
   ref_is_vector <- length(ref) > 1
   ref         <- resolve_ref_vector(ref, as.character(row_vars))
-  if (ref_is_vector) {
-    pct_flat <- unlist(pct)
-    if (any(pct_flat == "col") && !any(pct_flat == "row")) {
-      cli::cli_inform(c("i" = paste0("With {.code pct = \"col\"}, {.arg ref} is a single column ",
-                                     "reference: the per-row_var reference is collapsed to its first value.")))
-      ref <- vctrs::vec_recycle(ref[1], nrowvars)
-    }
+  if (ref_is_vector && col_regime) {
+    cli::cli_inform(c("i" = paste0("With {.code pct = \"col\"}, {.arg ref} is a single column ",
+                                   "reference: the per-row_var reference is collapsed to its first value.")))
+    ref <- vctrs::vec_recycle(ref[1], nrowvars)
   }
   ref2        <- vctrs::vec_recycle(ref2    , nrowvars)
   OR          <- vctrs::vec_recycle(OR      , nrowvars)
@@ -1241,6 +1250,18 @@ tab_setup <- function(ctx) {
       stop("pct can't be recycled to the lengths of row_vars and col_vars (see documentation `?tab_many`)")
     }
 
+  # Phase 7g-iii: ref_vect -- per row_var, a per-col_var reference vector (aligned to col_vars),
+  # the reference analogue of pct_vect. Default: broadcast the per-row_var scalar `ref` across
+  # col_vars (byte-identical .ref per col_var). The col%-per-col_var picker overrides EVERY row_var
+  # with ref_by_colvar (one reference column per col_var). Threaded into the factor leaf (tab_plain)
+  # only; tab_num keeps the scalar per-row_var `ref`.
+  ref_vect <-
+    if (!is.null(ref_by_colvar)) {
+      rep(list(ref_by_colvar), length(row_vars))
+    } else {
+      purrr::map(ref, ~ rep(.x, length(col_vars)))
+    }
+
 
   #Unique arguments :
   total_names <- vctrs::vec_recycle(total_names, 2)
@@ -1285,7 +1306,7 @@ tab_setup <- function(ctx) {
     col_vars_num = col_vars_num, col_vars_text = col_vars_text,
     tab_row_names = tab_row_names, na_drop_all = na_drop_all,
     cleannames = cleannames, stars = stars, lvs = lvs,
-    totaltab = totaltab, totrow = totrow, ref = ref, ref2 = ref2,
+    totaltab = totaltab, totrow = totrow, ref = ref, ref2 = ref2, ref_vect = ref_vect,
     OR = OR, comp = comp, color = color, ci = ci, chi2 = chi2,
     digits = digits, total_names = total_names, conf_level = conf_level, na = na,
     totcol = totcol, tot_cols_type = tot_cols_type, pct_vect = pct_vect,
@@ -1556,6 +1577,9 @@ tab_transform <- function(ctx) {
   # Phase 7e tier-2 hook: jmvtab sets ctx$cached_tests; the tab()/tab_counts() ctx does not carry it,
   # so default it to NULL (list2env() only brings in fields present in ctx).
   if (!exists("cached_tests", inherits = FALSE)) cached_tests <- NULL
+  # Phase 7g-iii: ref_vect (per row_var x per col_var reference) is built in tab_setup(); default it
+  # to the scalar-ref broadcast if a ctx reached transform without it (byte-identical).
+  if (!exists("ref_vect", inherits = FALSE)) ref_vect <- purrr::map(ref, ~ rep(.x, length(col_vars)))
 
   # Numeric transform: adopt the tier-1 moment aggregate `fine_num` (`.fine = ..9`), one tab_num()
   # per row_var; `.by_table` -> ..9 is NULL -> re-scan. Everything downstream is O(cells).
@@ -1600,10 +1624,17 @@ tab_transform <- function(ctx) {
 
   if (sum(col_vars_text) != 0) {
     tabs_text <-     # By column first
-      purrr::pmap(list(row_vars, totaltab, totrow, pct_vect, ref, ref2, comp, OR, na_text, color_diff_OR),
+      # Phase 7g-iii: ..11 = ref_vect (per row_var, per col_var); `..11[col_vars_text]` feeds the
+      # inner pmap a per-factor-col_var reference `.ref`, so each col_var can have its own reference
+      # column under pct="col". Default ref_vect broadcasts the per-row_var scalar -> byte-identical.
+      # (..5 = the per-row_var scalar `ref` is kept in the list for index stability; tab_plain now
+      # takes `.ref` instead.)
+      purrr::pmap(list(row_vars, totaltab, totrow, pct_vect, ref, ref2, comp, OR, na_text, color_diff_OR,
+                       ref_vect),
 
-                  ~ purrr::pmap(list(col_vars[col_vars_text], digits[col_vars_text], ..9, ..4[col_vars_text]),
-                                function(.col_vars, .digits, .na, .pct)
+                  ~ purrr::pmap(list(col_vars[col_vars_text], digits[col_vars_text], ..9,
+                                     ..4[col_vars_text], ..11[col_vars_text]),
+                                function(.col_vars, .digits, .na, .pct, .ref)
                                   tab_plain(data,
                                             !!..1,
                                             !!.col_vars,
@@ -1612,7 +1643,7 @@ tab_transform <- function(ctx) {
                                             na         = .na,
                                             digits     = .digits,
                                             pct        = .pct,
-                                            ref        = ..5,
+                                            ref        = .ref,
                                             ref2       = ..6,
                                             comp       = ..7,
                                             OR         = ..8,
@@ -5239,7 +5270,10 @@ tab_ci <- function(tabs,
     purrr::discard(. == "")
 
   ref <- get_ref_type(tabs)
-  ref_cols  <- detect_firstcol(tabs)
+  # Phase 7g-iii: the diff-CI reference column must match the diff/colour reference column
+  # (detect_refcol = the marked refcol, falling back to the first level -> byte-identical for
+  # ref = "first"; ref = "tot" uses tot_cols below, so detect_refcol is not consulted there).
+  ref_cols  <- detect_refcol(tabs)
   ref_cols[is.na(ci)] <- list(rlang::sym(""))
 
   ref_cols <- dplyr::if_else(ref == "tot",
@@ -6132,12 +6166,14 @@ diff_index <-  function(ref, row_var, num_names, pct) {
     return(as.integer(ref[1]))
   }
 
-  index <-
-    switch(pct,
-           "row" = which(stringr::str_detect(row_var, ref)),
-
-           "col" = which(stringr::str_detect(num_names, ref))
-    )
+  targets <- switch(pct, "row" = row_var, "col" = num_names)
+  # Phase 7g-iii: try an EXACT match first, so a chosen level label (which may contain regex
+  # metacharacters -- e.g. "$25000 or more" -- or be a substring of another level) selects exactly
+  # its own row/column. This is what fixes the jmvtab reference picker: a raw level label is matched
+  # literally, not as a broken/ambiguous regex. Fall back to REGEX matching (the documented `ref`
+  # behaviour) only when no target is exactly equal to `ref`.
+  exact <- which(targets == ref)
+  index <- if (length(exact) >= 1L) exact else which(stringr::str_detect(targets, ref))
   if (length(index) >= 2) {
     switch(pct,
            "row" = warning(paste0(
@@ -6360,19 +6396,23 @@ calculate_refrows <- function(tabs, ref, comp, tab_row_names, tab_vars,
 #
 # tabs[ci_yes] <- purrr::map2_df(tabs[ci_yes], result, ~ set_ci(.x, .y) )
 
-# resolve_ref_vector() -- Phase 6d (§4): `ref` is one reference row per row_var (row%/means).
-# A scalar applies to every row_var (recycled -- byte-identical to the old behaviour). A NAMED
-# character vector matches row_vars by name (unmatched row_vars fall back to "auto"; names
-# matching no row_var warn). An unnamed length>1 vector matches by order (must recycle to the
-# number of row_vars). Returns an unnamed vector of length = number of row_vars.
-resolve_ref_vector <- function(ref, row_vars_chr) {
+# resolve_ref_vector() -- Phase 6d (§4): resolve a `ref` spec against a set of variable keys.
+# A scalar applies to every key (recycled -- byte-identical to the old behaviour). A NAMED
+# character vector matches keys by name (unmatched keys fall back to "auto"; names matching no
+# key warn). An unnamed length>1 vector matches by order (must recycle to the number of keys).
+# Returns an unnamed vector of length = length(row_vars_chr). Used for the per-row_var reference
+# (row%/means) and, Phase 7g-iii, the per-col_var reference (col%) -- `what` only names the axis
+# in the "no match" warning.
+resolve_ref_vector <- function(ref, row_vars_chr, what = "row_var") {
   n <- length(row_vars_chr)
-  if (length(ref) == 1L) return(vctrs::vec_recycle(ref, n))
+  # An UNNAMED length-1 ref is a scalar applied to every key; a NAMED length-1 ref must still be
+  # matched by name (else a single-name vector like c(race = "Black") would recycle to ALL keys).
+  if (length(ref) == 1L && is.null(names(ref))) return(vctrs::vec_recycle(ref, n))
   nms <- names(ref)
   if (!is.null(nms) && any(nzchar(nms))) {
     unknown <- setdiff(nms[nzchar(nms)], row_vars_chr)
     if (length(unknown)) {
-      cli::cli_warn("{.arg ref} name{?s} {.val {unknown}} match no row_var and {?is/are} ignored.")
+      cli::cli_warn("{.arg ref} name{?s} {.val {unknown}} match no {what} and {?is/are} ignored.")
     }
     out  <- rlang::set_names(rep("auto", n), row_vars_chr)
     keep <- intersect(nms, row_vars_chr)

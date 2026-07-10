@@ -235,8 +235,19 @@ The `ref` argument controls which row serves as the comparison baseline for diff
 - `"tot"`: the total row is the reference (differences = cell - total)
 - `"first"`: the first non-total row is the reference
 - integer: specific row index
-- regex string: matched against row labels (must match exactly one row)
+- string: `diff_index()` tries an **EXACT** match against the row/column labels first, then falls
+  back to a **regex** (Phase 7g-iii) — so a chosen level label with regex metacharacters (e.g.
+  `"$25000 or more"`) or that is a substring of another level selects exactly its own row/column
 - `"no"`: skip difference calculation entirely
+
+`ref` is resolved **per axis variable** by `resolve_ref_vector()`: a scalar applies to all; a
+**named** vector matches by name (unmatched → `"auto"`), including a named length-1 vector like
+`c(race = "Black")`. Under `pct = "col"` a ref **named by col_var** gives each col_var its own
+reference column (Phase 7g-iii): `tab_setup()` builds `ref_vect` (per row_var × per col_var, the
+reference analogue of `pct_vect`) and threads it into the factor leaf `tab_plain()` — the col%
+math is unchanged (one col_var per leaf, so the leaf *is* the per-col_var group). `tab_ci()` reads
+the marked reference column via `detect_refcol()` (fmt_class.R) so the diff-CI reference matches
+the diff/colour reference.
 
 The `comp` argument adds another dimension:
 
