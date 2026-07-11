@@ -1,12 +1,15 @@
-# PURPOSE: Opt-in FULL per-row_var parallelisation of tab_build() (Phase 8, ~3x on the survey workflow).
-# ROLE: tab_build() prepares the population ONCE on main (tab_setup + tab_prepare_pop -- this is where
-#   the global na="drop_all"/"common_base" drop lives, so it CANNOT move to a worker), then dispatches
-#   the whole per-row_var pipeline -- tab_aggregate |> tab_transform |> tab_assemble_tables (the O(N)
-#   scan + the O(cells) fmt build + chi2/ci) -- to a persistent mirai daemon pool via tab_pmap(). Main
-#   gathers the finished per-row_var tabs and runs the cross-row_var output shape (tab_assemble_output:
-#   merge/compact, p-value lines, unwrap). This is byte-identical to the serial build because a
-#   single-row_var build now equals its slice of the integrated build (the tab_assemble total-col
-#   decoupling fix, tab.R ~L1770), verified for every na mode -- so per-row_var == all-at-once.
+# PURPOSE: The row axis of tab_build() as ONE outer map, serial OR opt-in parallel (Phase 8: ~3x on the
+#   survey workflow; Phase 9a: made the SOLE dispatch, serial included).
+# ROLE: tab_build() prepares the population + tier-1 aggregates ONCE on main (tab_setup +
+#   tab_prepare_pop -- where the global na="drop_all"/"common_base" drop lives, so it CANNOT move to a
+#   worker -- then tab_aggregate: the numeric moment aggregates + the shared factor fine_fused). It then
+#   hands off to tab_build_tables() (R/tab.R), which resolves one lean ctx per row_var (tab_rowvar_ctxs)
+#   and maps the whole-per-row_var worker tab_build_one() -- transform |> assemble_tables -- over it via
+#   tab_pmap(). tab_pmap() IS purrr::map when serial (byte-identical, zero overhead) or a persistent
+#   mirai daemon pool when `parallel` is set. Main gathers the finished per-row_var tabs and runs the
+#   cross-row_var output shape (tab_assemble_output: merge/compact, p-value lines, unwrap). Byte-identical
+#   because a single-row_var build equals its slice of the integrated build (the tab_assemble total-col
+#   decoupling fix), verified for every na mode -- so per-row_var == all-at-once.
 # KEY CONSTRAINTS:
 #   - mirai is Suggests-only: every use is guarded by requireNamespace(); absent -> serial fallback.
 #   - Uses a NAMED compute profile ("tabxplor") so it never clobbers a user's own daemons() pool.
@@ -14,9 +17,9 @@
 #     run the same source -- automatic once installed (R CMD check installs first). In dev (load_all)
 #     the parity test pre-warms the pool with pkgload::load_all() (test-only, see test-parallel-parity.R).
 #   - jmvtab (live cache) is ALWAYS serial: tab_parallel_workers() returns 0 when ctx$cache_env is set
-#     -> the serial full-ctx path (its cache hooks: jmv_cache_aggregate + jmv_cache_store_tests) is kept.
-#   - The default (parallel off) path is UNCHANGED: tab_build() takes the serial full-ctx branch.
-# See: CLAUDE.md 1.4.0 roadmap Phase 8 + dev/tabxplor_1.4.0_decisions.md 26.
+#     -> the serial map keeps its cache hooks (jmv_cache_aggregate in tab_aggregate; jmv_cache_store_tests
+#     in tab_build_tables).
+# See: CLAUDE.md 1.4.0 roadmap Phase 8/9a + dev/tabxplor_1.4.0_decisions.md 26, 29.
 
 # The mirai compute profile name -- isolates tabxplor's daemons from the user's default pool.
 tabxplor_compute <- "tabxplor"
@@ -161,132 +164,26 @@ tab_pmap <- function(.l, .f_name, .const = list(), .ship = list(),
 }
 
 
-# tab_build_rowvar() -- build ONE row_var's tables: the numeric tab_num() + the per-col_var factor
-# tab_plain()s (UNJOINED). Returns list(num = <tab_num | NULL>, text = <named list of col_var tabs |
-# NULL>). This is the fused body of tab_transform()'s two per-row_var pmap sites (numeric + factor),
-# extracted VERBATIM so it runs identically in-process or in a daemon. The join, duplicated_levels
-# rename and tab_apply_tests() deliberately stay on the caller (main) -- see the file header.
-# Args split: per-unit (row_var .. ref_vect_i) then shared (tab_vars .. fine_fused). row_var / wt /
-# col_vars arrive as character / symbol (no environment) and are injected with `!!`.
+# tab_build_one() -- the per-row_var worker (Phase 9a): run the whole transform -> assemble_tables
+# pipeline for ONE lean ctx (from tab_rowvar_ctxs()) and return its single finished tab + whole-table
+# test. `data` and the shared aggregate `fine_fused` are the big objects shipped once by tab_pmap();
+# reattach them here (a bare do.call() arg cannot carry them into the lean unit). The per-row_var
+# numeric moment aggregate rides in ctx_i$fine_num; the tier-1 build (tab_aggregate) already ran once
+# on main. Top-level (namespaced) so mirai serializes it by reference, carrying no user data. The
+# cross-row_var output shape (merge/pvalue/unwrap) runs on main in tab_assemble_output().
 #' @keywords internal
 #' @noRd
-tab_build_rowvar <- function(row_var, totaltab_i, totrow_i, ref_i, comp_i, color_num_i, ci_i,
-                             na_num_i, fine_num_i, pct_i, ref2_i, OR_i, na_text_i, color_diff_OR_i,
-                             ref_vect_i,
-                             tab_vars, wt, col_vars, col_vars_num, col_vars_text, digits, conf_level,
-                             stars, totaltab_name, total_names, by_table, data, fine_fused) {
-  rv <- rlang::sym(row_var)
-  # `wt` arrives as a character name (or character(0) for no weight) -- do.call() embeds a BARE
-  # symbol as an unevaluated expression, so forcing it in the worker would look up a phantom
-  # variable. Rebuild the symbol here; `wt = !!wt` below then matches tab_transform's former call
-  # (a symbol when weighted, character(0) otherwise).
-  wt <- if (length(wt) == 0L) wt else rlang::sym(wt)
-
-  # --- numeric col_vars: one tab_num() (adopts the per-row_var moment aggregate fine_num_i) ---
-  num <- NULL
-  if (sum(col_vars_num) != 0) {
-    num <- tab_num(data,
-                   !!rv,
-                   as.character(col_vars)[col_vars_num],
-                   as.character(tab_vars),
-                   wt         = !!wt,
-                   na         = na_num_i,
-                   digits     = digits[col_vars_num],
-                   ref        = ref_i,
-                   ci         = ci_i,
-                   conf_level = conf_level,
-                   stars      = stars,
-                   comp       = comp_i,
-                   color      = color_num_i,
-                   totaltab   = totaltab_i,
-                   totaltab_name = totaltab_name,
-                   tot        = dplyr::if_else(totrow_i, "row", "no"),
-                   total_names= total_names,
-                   .fine      = fine_num_i,
-                   .by_table  = by_table)
-  }
-
-  # --- factor col_vars: one tab_plain() per col_var (by column first), UNJOINED ---
-  text <- NULL
-  if (sum(col_vars_text) != 0) {
-    text <- purrr::pmap(
-      list(col_vars[col_vars_text], digits[col_vars_text], na_text_i,
-           pct_i[col_vars_text], ref_vect_i[col_vars_text]),
-      function(.col_vars, .digits, .na, .pct, .ref)
-        tab_plain(data,
-                  !!rv,
-                  !!.col_vars,
-                  as.character(tab_vars),
-                  wt         = !!wt,
-                  na         = .na,
-                  digits     = .digits,
-                  pct        = .pct,
-                  ref        = .ref,
-                  ref2       = ref2_i,
-                  comp       = comp_i,
-                  OR         = OR_i,
-                  color      = color_diff_OR_i,
-                  totaltab   = totaltab_i,
-                  totaltab_name = totaltab_name,
-                  tot        = c("row", "col"),
-                  total_names= total_names,
-                  .fine      = fine_for_pair(fine_fused, row_var, .col_vars),
-                  .by_table  = by_table)
-    ) %>%
-      purrr::set_names(col_vars[col_vars_text])
-  }
-
-  list(num = num, text = text)
-}
-
-
-# tabxplor_rowvar_fields -- the ctx fields indexed per row_var (length == n_row_vars), enumerated from
-# a live ctx captured right before tab_aggregate() (dev/inspect via trace). ctx_slice() subsets these
-# to a single row_var; every other field (col_var-indexed, or scalar) is shared and kept verbatim.
-# WARNING: if tab_setup()/tab_prepare_pop() ever add a new per-row_var ctx field, add it here too --
-# a missing field would silently broadcast row_var 1's value to every worker. test-parallel-parity.R
-# is byte-exact and catches it.
-tabxplor_rowvar_fields <- c(
-  "row_vars", "color", "OR", "chi2", "ref", "ref2", "comp", "ci",
-  "totaltab", "totrow", "color_diff_OR", "color_ctr", "color_ci", "color_num",
-  "ref_vect", "pct_vect", "na_text", "na_num"
-)
-
-# ctx_slice() -- narrow a post-prepare ctx to ONE row_var, ready to ship to a worker.
-# Drops `data` (shipped once via tab_pmap's .ship) and the setup-only NSE quosures (they carry heavy
-# enclosing environments that would drag user data into every task). Recomputes tab_row_names (it
-# mixes tab_vars + row_vars, so a plain [i] would be wrong when tab_vars are present). Forces serial
-# so the worker never spawns nested daemons.
-#' @keywords internal
-#' @noRd
-ctx_slice <- function(ctx, i) {
-  n_rv <- length(ctx$row_vars)
-  s <- ctx[!grepl("_quo$", names(ctx))]
-  s$data <- NULL
-  # Slice ONLY fields actually of row_var length. Some (na_num / na_text under na="drop_all") collapse
-  # to a SCALAR "keep" that the serial path recycles via map2() -- keep those as-is so the single-row_var
-  # ctx recycles them the same way (slicing a length-1 "keep" at i>1 would yield NA -> tab_aggregate_num
-  # assertion failure).
-  for (nm in tabxplor_rowvar_fields) {
-    x <- s[[nm]]
-    if (!is.null(x) && length(x) == n_rv) s[[nm]] <- x[i]
-  }
-  s$tab_row_names <- as.character(c(ctx$tab_vars, ctx$row_vars[i]))
-  s$parallel  <- FALSE
-  s$cache_env <- NULL
-  s
-}
-
-# tab_build_one() -- the per-row_var worker: run the whole aggregate->transform->assemble_tables
-# pipeline for a single sliced ctx and return its ONE finished tab (the whole-table test is already
-# baked into the tab's `test` attribute). `data` is the prepared population shipped once; reattach it
-# here. Top-level (namespaced) so mirai serializes it by reference, carrying no user data.
-#' @keywords internal
-#' @noRd
-tab_build_one <- function(ctx_i, data) {
-  ctx_i$data <- data
-  ctx_i <- tab_aggregate(ctx_i)
+tab_build_one <- function(ctx_i, data, fine_fused) {
+  # ctx_update() (single-bracket [<-) so fine_fused = NULL (the default, fuse off) is PRESERVED as a
+  # list element -- `ctx_i$fine_fused <- NULL` would DELETE the key and tab_transform's list2env() then
+  # can't find `fine_fused`.
+  ctx_i <- ctx_update(ctx_i, list(data = data, fine_fused = fine_fused))
   ctx_i <- tab_transform(ctx_i)
+  # Capture the PRE-merge test (the factor chi2 tibble, or the chi2 logical on a numeric-only table)
+  # for the jmvtab tier-2 store: assemble then bind_rows the numeric ANOVA into it, so returning the
+  # post-assemble test would double-merge the ANOVA on a later cache hit (the store feeds tab_apply_tests
+  # -> set_test, then assemble merges chi2_num again). jmv_cache_store_tests only keeps data.frames.
+  test  <- ctx_i$tests
   ctx_i <- tab_assemble_tables(ctx_i)
-  ctx_i$tabs[[1]]
+  list(tab = ctx_i$tabs, test = test)
 }

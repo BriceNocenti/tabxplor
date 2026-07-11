@@ -335,10 +335,11 @@ jmv_cache_aggregate <- function(ctx) {
 }
 
 
-# Persist freshly-computed tier-2 tests (cache misses) after tab_transform(). Idempotent: only stores
-# a key not already present, so hits are not re-serialized. Called from tab_build() when cache_env is
-# set. ctx$tests is the per-row_var list of test tibbles (factor branch); a logical on numeric-only
-# tables (skipped).
+# Persist freshly-computed tier-2 tests (cache misses) after the per-row_var builds. Idempotent: only
+# stores a key not already present, so hits are not re-serialized. Called from tab_build_tables() when
+# cache_env is set. ctx$tests is the per-row_var list of PRE-merge tests (the factor chi2 tibble; a
+# logical on a numeric-only table -> skipped by the !is.data.frame guard, matching the pre-9a behaviour
+# where a numeric-only ctx$tests was a bare logical and !is.list() short-circuited the whole store).
 #' @keywords internal
 #' @noRd
 jmv_cache_store_tests <- function(ctx) {
@@ -351,7 +352,7 @@ jmv_cache_store_tests <- function(ctx) {
     tkey <- keys[[rv]]
     if (is.null(tkey) || !is.null(store$test[[tkey]])) next
     tb <- tests[[rv]]
-    if (is.null(tb)) next
+    if (is.null(tb) || !is.data.frame(tb)) next
     store <- jmv_cache_put(store, "test", tkey, tb)
   }
   ce$store <- jmv_cache_evict(store)

@@ -33,12 +33,14 @@ carve_ctx <- function(data, row_vars, col_vars, tab_vars = rlang::quo(NULL),
   utils::modifyList(base, overrides)
 }
 
+# Phase 9a: the row axis is an OUTER map. tab_transform()/tab_assemble_tables() are now scalar over ONE
+# row_var (driven by tab_build_tables()'s per-row_var units), so the whole-ctx composition ends at
+# tab_build_tables() rather than threading tab_transform -> tab_assemble on a multi-row_var ctx.
 run_stages <- function(ctx) {
   ctx <- tabxplor:::tab_setup(ctx)
   ctx <- tabxplor:::tab_prepare_pop(ctx)
   ctx <- tabxplor:::tab_aggregate(ctx)
-  ctx <- tabxplor:::tab_transform(ctx)
-  tabxplor:::tab_assemble(ctx)
+  tabxplor:::tab_build_tables(ctx)
 }
 
 testthat::test_that("the five stages compose == tab_build() (factor, numeric, mixed+tab_vars)", {
@@ -80,10 +82,18 @@ testthat::test_that("each stage adds its cache-tier ctx fields (the 7e seam cont
   ctx <- tabxplor:::tab_aggregate(ctx)
   testthat::expect_true(all(c("fine_num", "fine_fused") %in% names(ctx)))  # tier 1 (NULL when off)
 
-  ctx <- tabxplor:::tab_transform(ctx)
-  testthat::expect_true(all(c("tabs_text", "tabs_num", "tests", "chi2_num") %in% names(ctx)))
+  # Phase 9a: tab_transform()/tab_assemble_tables() are scalar over ONE row_var -- run them on a
+  # per-row_var unit built by tab_rowvar_ctxs() (the outer-map slice), not on the multi-row_var ctx.
+  # ctx_update() (single-bracket) so a NULL fine_fused (fuse off) survives as a list element -- a
+  # `unit$fine_fused <- NULL` would delete the key and tab_transform's list2env() couldn't find it.
+  unit <- tabxplor:::tab_rowvar_ctxs(ctx)[[1]]
+  unit <- tabxplor:::ctx_update(unit, list(data = ctx$data, fine_fused = ctx$fine_fused))
+  unit <- tabxplor:::tab_transform(unit)
+  testthat::expect_true(all(c("tabs_text", "tabs_num", "tests", "chi2_num") %in% names(unit)))
+  unit <- tabxplor:::tab_assemble_tables(unit)
+  testthat::expect_s3_class(unit$tabs, "tabxplor_tab")
 
-  out <- tabxplor:::tab_assemble(ctx)
+  out <- tabxplor:::tab_build_tables(ctx)
   testthat::expect_s3_class(out, "tabxplor_tab")
 })
 

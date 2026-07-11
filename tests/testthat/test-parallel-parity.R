@@ -9,9 +9,10 @@ skip_if_not_installed("pkgload")
 
 withr::defer(tab_parallel_stop())  # release the "tabxplor" pool at end of file
 
-# The daemons bind the *installed* tabxplor namespace. Under devtools::load_all that predates Phase 8
-# (no tab_build_rowvar), so the pool must be pre-warmed with the dev source; an installed/checked
-# package needs no load_all. Detect dev by the presence of the SOURCE file (installed pkgs drop R/).
+# The daemons bind the *installed* tabxplor namespace. Under devtools::load_all that predates the
+# current source (no tab_build_one / tab_rowvar_ctxs), so the pool must be pre-warmed with the dev
+# source; an installed/checked package needs no load_all. Detect dev by the SOURCE file (installed
+# pkgs drop R/).
 dev_pkg_path <- function() {
   p <- tryCatch(pkgload::pkg_path(), error = function(e) NULL)
   if (is.null(p) || !file.exists(file.path(p, "R", "tab-parallel.R"))) return(NULL)
@@ -34,7 +35,7 @@ warm_pool <- function(n = 2L) {
   invisible()
 }
 
-# Fixture: >=4 row_vars, 2 factor + 1 numeric col_var (exercises tab_build_rowvar's BOTH branches), a
+# Fixture: >=4 row_vars, 2 factor + 1 numeric col_var (exercises tab_transform's numeric + factor branches), a
 # weight, a deliberate cross-col_var level collision ("No answer" in partyid AND denom -> the global
 # duplicated_levels rename), and NAs (tvhours). Warnings from the arg cascade are pre-existing and fire
 # identically in both paths, so parity is unaffected.

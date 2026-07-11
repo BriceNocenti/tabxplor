@@ -273,14 +273,16 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
     ci <- "no"; chi2 <- FALSE
   }
 
-  # -- Phase 7d-ii: route the single (row_var x col_var) FACTOR pair through the SAME engine stages
+  # -- Phase 7d-ii / 9a: route the single (row_var x col_var) FACTOR pair through the SAME engine stages
   #    tab() uses. tab_counts() already holds its tier-1 aggregate (`fine`), so it BYPASSES
   #    tab_prepare_pop() (no microdata to prep) and tab_aggregate() (nothing to scan): it builds the
   #    ctx, runs tab_setup() (arg resolution -- incl. the SAME `tot` -> totrow/totcol translation +
-  #    tot_cols_type + colour cascade tab() uses), injects `fine` as the fused factor aggregate, then
-  #    runs tab_transform() -> tab_assemble(). This guarantees byte-identity with tab() for every
-  #    `tot`, and deletes the hand-inlined finalize copy. NOTE: contrib colouring now forces a total
-  #    row (as tab() does) -- a deliberate convergence (was skipped when totrow was driven by `tot`). --
+  #    tot_cols_type + colour cascade tab() uses), injects `fine` as the fused factor aggregate + the
+  #    single-pair pop/level metadata, then runs the shared tab_build_tables() (the outer map +
+  #    output shape -- one row_var here -> one serial unit). This guarantees byte-identity with tab()
+  #    for every `tot`, and deletes the hand-inlined finalize copy. NOTE: contrib colouring now forces a
+  #    total row (as tab() does) -- a deliberate convergence (was skipped when totrow was driven by
+  #    `tot`). --
   data_skel <- as.data.frame(fine)
 
   # tot -> (totrow, totcol), exactly as tab()'s wrapper translates it.
@@ -315,6 +317,5 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
     fine_num = NULL, fine_fused = fine
   ))
 
-  ctx <- tab_transform(ctx)
-  tab_assemble(ctx)
+  tab_build_tables(ctx)
 }

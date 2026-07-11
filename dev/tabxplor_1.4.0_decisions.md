@@ -205,6 +205,9 @@ argument that applies `tab_spread()` at the end.
   included, Q13), §15 (CI/stars duality — score ⇄ Newcombe, uncorrected pair; mean z ⇄ Welch-t, Q14),
   §16 (test-result placement — `test` tibble rows incl. per-column, Q15 + display future).
 - **Retro-compat**: §17 (the consolidated accepted-breaks inventory).
+- **Internal architecture & performance**: §23 (`tab_kable` profile), §26 (parallel research),
+  §27 (O(cells) fmt-build profiling), §28 (parallel dispatch implemented), §29 (Phase 9 — the
+  tab()/tab_build simplification: outer-map row axis + leaf public-wrapper/core split; clarity not speed).
 
 ---
 
@@ -1542,6 +1545,217 @@ ship-once / independent-tables / no-merge measurement excluded. Future lever (de
 data-ship hash-guard for repeated same-data calls (the primary one-big-call workflow already ships once).
 Options `tabxplor.parallel` (FALSE), `tabxplor.parallel_min` (2L); `.onUnload` stops the pool;
 `_R_CHECK_LIMIT_CORES_` cap 2.
+
+---
+
+## 29. Phase 9 ANALYSIS — the tab()/tab_build() simplification: it buys clarity, not speed (2026-07-11)
+
+Creative-review pass, no code changed. The roadmap's Phase 9 asks two honest questions: (1) if
+`tab_many()` stayed on the vectorised `tab_build()` but `tab()` were rewritten "much simpler from
+shared functions", is there room for simplification *and* speed? (2) any final workflow
+simplifications? Grounded answer below, with a fresh profile because the architecture has changed a
+lot since the 2026-07 profile (§23/§27 predate the carve + Phase 8).
+
+### The fresh profile — where tab()'s time actually goes (2026-07-11)
+
+`tab(gss_cat, 5 row_vars × 3 col_vars, pct = "row", color = "diff", chi2 = TRUE)`, `forcats::gss_cat`
+(21 483 rows), median wall time, `devtools::load_all` source. Two grounded decompositions:
+
+**Stage split** (trace accumulators on the five `tab_build()` stages):
+
+| stage | s/call | share | what it is |
+|-------|--------|-------|------------|
+| `tab_setup` | **0.005** | **0.2 %** | ALL the arg resolution + the row/col-axis recycling (`pct_vect`, `ref_vect`, `vec_recycle` × nrowvars) + `tab_resolve_settings()` |
+| `tab_prepare_pop` | 0.008 | 0.4 % | select / na / lump / levels, once on the whole DB |
+| `tab_aggregate` | 0.001 | — | scan-fusion OFF by default → the raw scans happen inside `tab_transform` |
+| `tab_transform` | ~0.7 | ~33 % | `tab_plain`/`tab_num` (scan + **fmt-record build**) + chi2 + ci |
+| `tab_assemble_tables` | 0.05 | 2 % | level-drop, add_n, totals, join, wrap |
+| `tab_assemble_output` | merge ~0.72 | ~34 % | `tab_compact()` (merge 5 tables → 1) + p-value lines |
+
+**Full-call diffs** (authoritative — no trace overhead):
+
+| call | median s |
+|------|----------|
+| 1 row_var × 1 col_var (colored+chi2) | 0.12 |
+| 1 row_var × 5 col_vars | 0.46 |
+| 5 row_vars × 3 col_vars, `output_list = TRUE` (**no merge**) | **1.37** |
+| 5 row_vars × 3 col_vars, default (**merge**) | **2.09** |
+| ⇒ the merge (`tab_compact`) alone | **0.72 (34 %)** |
+| `tab_pvalue_lines` (list or merged) | ≈ 0 |
+| `format()` on the merged table (print/kable/md only, not build) | 0.10 |
+
+**Rprof self/total** on the full call: `vec_case_when` **40 % total** (72 % of `tab_compact`); the
+remainder is `tabxplor_fmt` record reconstruction — `structure` / `new_data_frame` / `list_unchop` /
+`vec_restore_dispatch` / `df_list` / `vctrs::field`. `dplyr::case_when`/`if_else` over `fmt` vectors
+(modern `if_else` is built on `vec_case_when`) each trigger a full vctrs record ptype2/cast round-trip;
+`tab_compact`'s per-column `if_else(is_totrow & !any(is_refrow), as_refrow, .)` ([tab_classes.R:991](../R/tab_classes.R#L991))
+pays that ~125 times (5 tables × ~25 fmt columns).
+
+**The one-line reading: argument resolution + the entire row/col-axis vectorisation cost 0.2 %. The
+O(cells) `tabxplor_fmt` machinery — the fmt build and the merge — is ~99 %, and it is bound by
+`dplyr::case_when`/`if_else` + vctrs record reconstruction, not by control flow.**
+
+### Finding 1 — the row-vectorisation is free at runtime but a real complexity tax
+
+`tab_build()` is vectorised over BOTH axes: col_vars (genuinely used — per-col_var `pct`/`levels`/`digits`)
+AND row_vars. But Phase 6 §5 **globalised the row axis at `tab()`'s surface** (OR/pct/color/comp/ci/chi2/ref2
+are scalar there); only `ref` (named vector), `totaltab`, `totrow` stay per-row_var, and D2 kept the
+*internal* per-row_var threading as "a harmless broadcast". The profile confirms it is harmless for
+**speed** (0.2 %). It is not harmless for **complexity**: it forces `pct_vect` (a list-over-row_vars of
+vectors-over-col_vars), the twin `ref_vect`, `vec_recycle(·, nrowvars)` on ~10 args
+([tab.R:1176-1298](../R/tab.R#L1176)), and a `purrr::map`/`pmap`-over-row_vars inside *every* stage
+(`tab_aggregate`, `tab_transform`, `tab_assemble_tables`). It also breeds latent axis-mismatch bugs — a
+**live one**: [tab.R:1252](../R/tab.R#L1252) `all(pct == "row" & OR %in% …)` `&`-combines a **col_var-indexed**
+`pct` with a **row_var-indexed** `OR`, throwing "longer object length is not a multiple of shorter" on any
+multi-axis call (harmless today only because `OR = "no"` and `all()` collapses it).
+
+### Finding 2 — do NOT fork a second `tab()` core; collapse the shared one to an OUTER MAP (Phase 8 already proved it safe)
+
+The roadmap's phrasing ("keep `tab_many` on `tab_build`, rewrite `tab` simpler") invites forking a second,
+simpler core for `tab()`. **Reject that** — it re-creates exactly the duplicated math 1.4.0 exists to
+delete (the keystone: one core, reuse don't fork). The right move achieves the same simplicity without a
+fork: **make the row_var axis a genuine outer `map`, not internal vectorisation.** Resolve the per-row_var
+arg-sets ONCE at the top, then map a **scalar-over-row_vars** core over them:
+
+```
+tab_build:  prep_once(data)                                   # tab_prepare_pop, once (na/lump/levels)
+            args_per_rv <- resolve(...)                       # list of scalar-per-row_var arg-sets
+            tabs <- map/pmap(args_per_rv, build_one_table)    # serial map OR mirai — one code path
+            assemble_output(tabs)                             # merge / pvalue / unwrap
+```
+
+This is **not speculative — Phase 8 already built and golden-locked it.** `tab_build_one()` +
+`ctx_slice()` ([tab-parallel.R:262-292](../R/tab-parallel.R#L262)) already run the whole
+`aggregate → transform → assemble_tables` pipeline on a **single-row_var** sliced ctx, and
+`test-parallel-parity.R` proves per-row_var == integrated-slice **byte-exact** (the §28 total-col
+decoupling fix was precisely what closed that gap). So the hard part — proving the row axis is a clean
+outer product — is done and locked. Phase 9 only makes that proven structure the SOLE path:
+
+- Pull the `map(row_vars, …)` out of `tab_aggregate` / `tab_transform` / `tab_assemble_tables` into ONE
+  outer map in `tab_build`; the stages become scalar-over-row_vars (still vector-over-col_vars).
+- Serial and parallel become the SAME dispatch (`purrr::map` vs `mirai_map`) — the current serial-branch /
+  parallel-branch split ([tab.R:1069-1085](../R/tab.R#L1069)) collapses.
+- `ctx_slice()` + `tabxplor_rowvar_fields` ([tab-parallel.R:249](../R/tab-parallel.R#L249)) DISAPPEAR: you
+  build each per-row_var ctx directly instead of slicing a vectorised one (and the "add a new per-row_var
+  field here too or it silently broadcasts" footgun goes with them).
+- `pct_vect`/`ref_vect` lose a nesting level (per-col_var only); the length-mismatch class of bug
+  ([tab.R:1252](../R/tab.R#L1252)) is designed out because the two axes never `&`-combine.
+- `tab_many`'s per-row_var vectors (`pct = list(rv1 = …, rv2 = …)`, vectorised `ci`/`chi2`/`comp`) keep
+  working with **more** flexibility, not less: they are just how `resolve()` fills `args_per_rv`. `tab()`
+  fills it by broadcasting one scalar. Both feed the identical core — no fork.
+
+**Cost/benefit, honest:** runtime ≈ unchanged (removes 0.2 %); the payoff is ~one nesting level and three
+in-stage row-loops deleted, `ctx_slice` retired, one live latent bug designed out, and serial≡parallel by
+construction. It is a **maintainability + correctness** refactor, medium risk (touches the hot path) but
+**de-risked by Phase 8's existing byte-exact parity net**. Do not sell it as a speed win.
+
+### Finding 3 — split each leaf into a public wrapper + a resolved-args internal core (this is the "different internal functions?" the roadmap asks about)
+
+`tab_plain()` (~770 L) and `tab_num()` (~940 L) are exported AND on the `tab_build` hot path, so they carry
+a **double life**: full NSE quosure handling + validation + `ref="auto"`/`tot`/`comp` re-resolution for
+direct callers ([tab.R:2638](../R/tab.R#L2638), [tab.R:3682](../R/tab.R#L3682)) — all of which `tab_setup`
+*already did* when called from `tab_build`. They also carry internal-only args (`.fine`, `.by_table`) on
+the public surface, and a redundant second `relabel_levels_in_varnames()` ([tab.R:2676](../R/tab.R#L2676)).
+The clean answer to the roadmap's "should we keep internal functions but different ones?" is **yes**: give
+each leaf a thin public wrapper (parse + validate + resolve, for direct users) over an internal core
+(`plain_core()` / `num_core()`) that assumes **already-resolved scalar settings** and does only the
+data.table + fmt work. `tab_build`'s outer map calls the core; the internal args and the double resolution
+leave the public surface. Runtime gain is small (the re-resolution is scalar, buried in the 0.2 %); the win
+is a single documented internal contract for the core — which is also what makes the Phase 7 jmvtab
+cache-injection seam and the Phase 8 worker call clean rather than "call the big exported function with
+internal flags".
+
+### Finding 4 — the ONLY real speed lever is the O(cells) fmt machinery, and it is orthogonal to the restructure
+
+Because resolution is 0.2 %, **no restructuring of tab()/tab_many/tab_build moves the needle.** The ~99 %
+lives in two O(cells) places, both `vec_case_when`/vctrs-bound:
+
+1. **fmt-record build** (`tab_plain`/`tab_num`, the `pmap_dfc(~ new_fmt(...))` at
+   [tab.R:3092](../R/tab.R#L3092) / ~L4231). Phase 7f-1 already hoisted the column-invariants; the residue
+   is per-column `new_rcrd` construction over thousands of cells. This is the §27 finding, still true.
+2. **the merge** `tab_compact()` — 0.72 s / 34 % of the default call, dominated by the per-column
+   `if_else`-over-fmt ([tab_classes.R:991](../R/tab_classes.R#L991)) whose modern-dplyr `vec_case_when`
+   detonates a full record ptype2/cast per column. Candidates: replace the `if_else`-over-fmt with a
+   base-R masked assignment on the underlying fields (no per-column vctrs round-trip), and bind via one
+   `vctrs::vec_rbind` of the already-aligned columns rather than `imap_dfr`.
+
+These are **Phase 7f / Phase 10** territory (fmt build + exporter/display), NOT Phase 9's restructure —
+but the profile pins them as the real budget, and the Finding-2 outer-map makes them easier to attack
+(one scalar core to optimize, one merge site). A broader lever, if ever the fmt display/merge cost must
+drop by an order of magnitude: audit the ~19 `dplyr::case_when` sites in `fmt_class.R` on hot display
+paths and replace with base `switch`/vectorised indexing — `case_when` over `fmt` is the single most
+expensive idiom in the package by this profile.
+
+### Cleanup surfaced (fold into whichever Phase 9 work touches the file)
+
+- **Dead code**: `tab.R` is 6 764 L, ~2 445 comment lines — a large fraction is commented-out legacy
+  blocks (the `#By rows first` reduce, the whole `no_row_var` handling ~L3200-3234, the numeric
+  pivot_wider stub, `tabs_bind` in `tab_classes.R`). Phase 9 is the moment to delete them.
+- **`exists(…, inherits = FALSE)` guards** for the maybe-derived tables (`tabs_wn`/`tabs_diff`/`tabs_mean`/
+  `tabs_rr`/`tabs_or`/`tabs_totn`, [tab.R:3040-3104](../R/tab.R#L3040)) are a fragile organic pattern;
+  NULL-init + `is.null()` is the standard replacement (do it inside the `plain_core` split).
+- The redundant second `relabel_levels_in_varnames()` ([tab.R:2676](../R/tab.R#L2676)) drops out once the
+  core assumes a prepared population.
+- The soft-deprecated standalone steps `tab_pct`/`tab_tot`/`tab_totaltab` are already OFF the `tab()` path
+  (the math is inline in `tab_plain`); confirm and leave them as the exported superseded API.
+
+### What you'd have to give up (the roadmap's two explicit questions)
+
+- **"What to give up for meaningful simplification — even at the price of backward-compat?"** — Almost
+  nothing user-facing. The only thing that goes is the **internal** per-row_var threading (Finding 2), and
+  Phase 8's parity net shows that is byte-identical, so it costs zero backward-compat. Keep the col_var
+  flexibility (per-col_var `pct`/`levels`/`digits` is genuinely used); keep `tab_many`'s per-row_var vectors
+  (they become the `resolve()` input). The "jungle" is real but it is *internal* path duplication, not an
+  API you must break — so the honest answer is: you do **not** need to sacrifice retro-compat to get the
+  simplification; you need to make the row axis an outer map and split the leaves.
+- **"What to give up for next-level performance?"** — The lever is the `tabxplor_fmt` **per-column vctrs
+  round-trips**, not the field *contract* (that is user-facing — keep it). To go an order of magnitude
+  faster on build+merge you would operate on the underlying fields as plain atomic vectors and reconstruct
+  the `tabxplor_fmt` record **once** at the end, instead of paying a `vec_case_when`/ptype2/cast round-trip
+  per column in `new_fmt` assembly and per column in `tab_compact`'s `if_else`-over-fmt. That is a display/
+  build-layer rework (Phase 7f/10), independent of the Phase 9 restructure, and it gives up *using* vctrs
+  generics on hot paths — never the fields users read with `$`/`mutate()`.
+
+### Verdict & recommended Phase 9 scope (ranked)
+
+1. **Do the outer-map row-axis collapse (Finding 2)** — the headline simplification, safe because Phase 8
+   already locked its byte-identity net. Delete `ctx_slice`; unify serial/parallel dispatch; kill the
+   [tab.R:1252](../R/tab.R#L1252) latent bug.
+2. **Split the leaves into public-wrapper + resolved-core (Finding 3)** — removes the double resolution and
+   clears `.fine`/`.by_table` off the public surface; gives the outer map + jmvtab cache + parallel worker
+   one clean internal contract.
+3. **Delete the dead code / `exists()` guards** while both files are open (Finding cleanup).
+4. **Leave speed to Phase 7f/10 (Finding 4)** — but with the profile numbers now pinned, so those phases
+   target the merge + fmt build + `case_when`-over-fmt, not the restructure.
+
+**What NOT to do:** do not fork a second `tab()` core (re-duplicates the math — anti-keystone); do not
+expect the restructure to speed anything up (0.2 %); do not touch the vctrs field contract or the public
+args (retro-compat). The whole of Phase 9 is an internal re-cut of the *shared* engine so it reads like
+"prep once → map a scalar core over row_vars → merge", which is what everyone already believes it does.
+
+### Status — Phase 9a implemented (2026-07-11)
+
+**Finding 2 (outer-map row-axis collapse): DONE, byte-identical** (full suite 1364 pass / 0 fail, no
+golden regen). `tab_build()` = `tab_setup → tab_prepare_pop → tab_aggregate → tab_build_tables()`;
+`tab_build_tables()` (shared by `tab_build` + `tab_counts`) resolves per-row_var ctxs via
+`tab_rowvar_ctxs()` (replaced `ctx_slice()`/`tabxplor_rowvar_fields`) and maps the ONE whole-per-row_var
+worker `tab_build_one()` (`transform → assemble_tables`) — serial `purrr::map` OR mirai, the sole
+dispatch. `tab_transform`/`tab_assemble_tables` are scalar over one row_var; `tab_aggregate` stays a
+whole-ctx pre-map step so `fine_fused` + the jmvtab `jmv_cache_aggregate` hook still fire once
+(`jmv_cache_store_tests` moved to `tab_build_tables`, reading the gathered **pre-merge** tests — a
+`!is.data.frame` guard preserves the old numeric-only skip + avoids a mixed-table ANOVA double-merge).
+The [tab.R ex-L1252] `pct`-&-`OR` latent bug is designed out. Deleted `tab_build_rowvar`, `tabs_bind`,
+the `#By rows first` block, and 223 commented dead lines in the leaves.
+
+**Finding 3 (leaf wrapper/core split) + the `exists()`→NULL-init: DEFERRED** (maintainer decision).
+Byte-identity pins all three moving parts in place: leaf-local resolution must stay in the core (§29-#2
+drift risk; `ref="auto"` is type-specific per leaf), the relabel can't move (it renames level-collisions
+vs `names(data)`, which differs before vs after the per-table `select`), and `.fine`/`.by_table` can't
+leave the public surface (`test-num-fuse-parity.R` tests `tab_num(<NSE>, .fine=)` as a seam). With all
+three pinned, the split collapses to a cosmetic NSE-boundary extraction (a thin wrapper forwarding every
+arg to an unchanged ~800/940-line core) — poor risk/reward on the two most byte-sensitive functions.
+`tab_plain`/`tab_num` kept whole; the `exists(…, inherits=FALSE)` guards are functional and left as-is.
+Real speed remains Phase 7f/9b/10 territory (fmt build + merge + `case_when`-over-fmt), untouched here.
 
 ---
 

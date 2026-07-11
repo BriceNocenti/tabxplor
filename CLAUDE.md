@@ -18,9 +18,10 @@ R/
 │                              tab_prepare(), tab_pct(), tab_ci(), tab_chi2(),
 │                              tab_tot(), tab_totaltab(), tab_spread(), tab_get_vars(),
 │                              tab_add_n_pct() (shared add_n/add_pct, used by tab_many + tab_counts).
-│                              tab_build() = staged pipeline (Phase 7d-ii): tab_setup / tab_prepare_pop
-│                              / tab_aggregate / tab_transform / tab_assemble = tab_assemble_tables (per-
-│                              row_var finish) + tab_assemble_output (merge/pvalue/unwrap, Phase 8 split);
+│                              tab_build() = staged pipeline: tab_setup / tab_prepare_pop / tab_aggregate
+│                              / tab_build_tables (Phase 9a: the OUTER row_var map -> tab_build_one, +
+│                              tab_rowvar_ctxs) ; tab_transform / tab_assemble_tables are SCALAR over one
+│                              row_var ; tab_assemble_output (merge/pvalue/unwrap);
 │                              tab_lump_others/tab_cleannames_relabel (extracted from tab_prepare)
 ├── tab-agg.R        (~470 L) Aggregate-core (Phase 2-3): num_derive_stats/num_rollup, num_moment_scan
 │                              + tab_aggregate_num (numeric tier-1 producer, Phase 7d-i),
@@ -30,9 +31,9 @@ R/
 ├── tab-resolve.R    (~180 L) tab_resolve_settings() (Phase 7b): the ONE pure arg-overwrite
 │                              cascade (color="auto"/forcing/split) shared by tab_build+tab_counts;
 │                              resolve_color_auto_num() (numeric arm). The jmvtab .js / cache boundary.
-├── tab-parallel.R   (~285 L) Phase 8 opt-in parallel dispatch (Suggests-only mirai): tab_pmap()
-│                              + trampoline, named "tabxplor" pool (tab_pool_ensure/tab_parallel_workers/
-│                              tab_parallel_stop), ctx_slice() + tab_build_one() (per-row_var worker).
+├── tab-parallel.R   (~200 L) Phase 8/9a row-axis dispatch (Suggests-only mirai): tab_pmap() + trampoline,
+│                              named "tabxplor" pool (tab_pool_ensure/tab_parallel_workers/
+│                              tab_parallel_stop), tab_build_one() (the per-row_var worker, serial OR mirai).
 ├── tab_classes.R   (3554 L)  tabxplor_tab/grouped_tab classes, 30+ dplyr S3 methods,
 │                              print methods, tab_kable(), tab_plot(), tab_compact(),
 │                              color palettes, set_color_style(), set_color_breaks()
@@ -891,9 +892,9 @@ jmvtab jamovi UI needs a **full .js customisation** of it’s buttons and other 
 Suite green (375 blocks, 0 fail), no golden regen (UI-only + behaviour-preserving digits cast). **OPEN — maintainer step**: regenerate `jmvtab.h.R` from the new `digits` List in the running jamovi app (`jmvtools::install()` can't run headless), then live-verify each greying rule + the digits dropdown + subtext width.
 
 
-#### Phase 7i — test compatibility with Jamovi last solid version 2.7.37
+#### Phase 7i — test compatibility with Jamovi last solid version 2.7.37 (done)
 
-jmvtab works well on jamovi 2.7.37
+Confirmation : jmvtab works well on jamovi 2.7.37
 
 
 ### Phase 8 – Parallelisation opt-in for the "many tables at once" survey workflow
@@ -936,12 +937,79 @@ profile isolation, cleanup). **W=8, 30k rows × 12 row_vars: ~2.15x merged / ~2.
 Suggests. Decisions §28.
 
 
-### Phase 9 – final tab_plain() / tab_num() / tab_build() / tab() / tab_many simplification ?
+### Phase 9 – possible simplifications and performance bottlenecks ?
 
-1. The `tab()` functions have become a kind of jungle of their own, with many internal paths + many API functions.
-`tab_build()` was supposed to be a simplification, but since it kept the fully vectorised arguments of the old tab_many() for retro-compatibility, it dit not really simplified anything. So I would want to know : if `tab_many()` was to be kept on the current `tab_build()` path for backward-compat (merged in only `tab_many()` alias), but `tab()` was rewritten in a much simpler way from shared functions, would there be room left for simplification and performance gains ? Should we keep internal functions, but different one, just to be able to have internal arguments not passed in the public API ? Give me a grounded and honest answer. Since the package architecture have changed at lot, do not hesitate to do and analyse new performance profiles.
+The package have grown somewhat organically and I want you to review it for possible simplifications.
+- The `tab()` functions have become a kind of jungle of their own, with many internal paths + many API functions.
+`tab_build()` was supposed to be a simplification, but since it kept the fully vectorised arguments of the old tab_many() for retro-compatibility, it did not really simplified anything. So I would want to know : if `tab_many()` was to be kept on the current `tab_build()` path for backward-compat (merged in only `tab_many()` alias), but `tab()` was rewritten in a much simpler way from shared functions, would there be room left for simplification and performance gains ? Should we at the contrary keep internal functions, but a different one each time, just to be able to have internal arguments not passed in the public API ?
+- Now that we are near the end, and some functions and workflows have grown organically, can you see final simplifications of the table building workflow ? What would we need to give up to really make meaningful simplifications ? What would we need to give up to really improve performance to the next level ?
 
-2. Now that we are near the end, and some functions and workflows have grown organically, can you see final simplifications of the table building workflow ?
+##### Analysed (2026-07-11) — grounded verdict in `dev/tabxplor_1.4.0_decisions.md` §29
+
+Fresh profile (`tab(5 row_vars × 3 col_vars, pct="row", color="diff", chi2=TRUE)`, gss_cat):
+**arg resolution + the whole row/col-axis vectorisation = 0.2 %**; the O(cells) `tabxplor_fmt`
+machinery = ~99 % (fmt build ~33 % + the `tab_compact` merge 0.72 s / 34 %), all `vec_case_when`/vctrs
+record-reconstruction bound. Verdict: (1) **do NOT fork a second `tab()` core** (re-duplicates the math);
+instead **collapse the shared engine's row axis to an OUTER `map`** — Phase 8 already built (`tab_build_one`/
+`ctx_slice`) and byte-locked (`test-parallel-parity.R`) per-row_var == integrated-slice, so this is a
+low-risk clarity/correctness refactor (kills the [tab.R:1252](R/tab.R#L1252) axis-mismatch latent bug,
+retires `ctx_slice`, unifies serial/parallel), **not** a speed win. (2) **Split each leaf into a public
+wrapper + a resolved-args internal core** (`plain_core`/`num_core`) — the roadmap's "different internal
+functions" — removing the double `ref="auto"`/`tot` resolution and clearing `.fine`/`.by_table` off the
+public surface. (3) Real speed is Phase 7f/10 territory (the merge + fmt build + `case_when`-over-fmt),
+orthogonal to the restructure. **Implemented 2026-07-11: (1) done byte-identically (see Phase 9a Done);
+(2) DEFERRED — byte-identity pins resolution + relabel + `.fine` in place, collapsing the split to a
+cosmetic NSE-boundary extraction (poor risk/reward), so only the dead-code cleanup was done.**
+
+
+#### Phase 9a — Internal clarify & simplification
+
+##### Done (2026-07-11)
+
+**Outer-map row-axis collapse landed byte-identical (full suite 1364 pass / 0 fail, NO golden regen).**
+`tab_build()` is now `tab_setup → tab_prepare_pop → tab_aggregate → **tab_build_tables()**`. The new
+`tab_build_tables()` (R/tab.R, shared by `tab_build` AND `tab_counts`) resolves one lean ctx per row_var
+(`tab_rowvar_ctxs()`, replacing `ctx_slice()` + the `tabxplor_rowvar_fields` footgun) and maps the ONE
+whole-per-row_var worker `tab_build_one()` (R/tab-parallel.R: transform → assemble_tables → one finished
+tab + its pre-merge test) over it — serial `purrr::map` OR mirai, the **single dispatch** (the old
+serial/parallel branch in `tab_build` is gone; the always-serial internal `tab_pmap` in `tab_transform`
+is gone). `tab_transform()` + `tab_assemble_tables()` are now **scalar over ONE row_var** (the row loops
+removed). `tab_aggregate` stays a whole-ctx pre-map step so the shared `fine_fused` + the jmvtab
+`jmv_cache_aggregate` hook (wholesale `ce$hits` + shared-data relevel) still fire once; `jmv_cache_store_tests`
+moved into `tab_build_tables` (reads the gathered pre-merge `tests` — a `!is.data.frame` guard skips the
+numeric-only logical, matching the old `!is.list` short-circuit and avoiding a mixed-table ANOVA
+double-merge). The latent [tab.R:1252] `pct`-&-`OR` axis-mismatch bug is designed out (`any(pct=="col")`,
+scalar). `tab_counts()` now routes through `tab_build_tables` (dedup). Seam tests updated
+(`test-carve-parity.R`); jmvtab-cache / counts / fuse / parallel-parity all green. **Deleted:** `ctx_slice`,
+`tabxplor_rowvar_fields`, `tab_build_rowvar`, the old `tab_build_one`, `tabs_bind` (tab_classes.R), the
+`#By rows first` block, and 223 commented dead lines inside `tab_plain`/`tab_num` (type stubs, `no_row_var`,
+numeric `pivot_wider`, old `summarise`/`tabs_tot`/`tabs_totaltab`).
+
+**Deferred (maintainer decision 2026-07-11): the leaf wrapper/core split + `exists()`→NULL-init.**
+Implementing it revealed byte-identity pins all three moving parts in place: resolution stays in the core
+(decision §29-#2, no drift), the relabel can't move (it renames level-collisions vs `names(data)`, which
+differs before vs after the per-table `select`), and `.fine`/`.by_table` can't leave the public surface
+(`test-num-fuse-parity.R` tests `tab_num(<NSE>, .fine=)` as a seam). With all three pinned the split
+collapses to a cosmetic NSE-boundary extraction (thin wrapper forwarding every arg to an unchanged
+~800/940-line core) — poor risk/reward on the two most byte-sensitive functions. Kept `tab_plain`/`tab_num`
+whole; did the dead-code cleanup only. The `exists(…, inherits=FALSE)` guards are functional and left as-is.
+
+Byte-identical internal re-cut — re-shape the shared engine so it reads *prep once → map a scalar core over row_vars → merge*. **No public API / vctrs-field change** (§29: this needs no backward-compat sacrifice). Full detail + code anchors + the fresh profile: `dev/tabxplor_1.4.0_decisions.md` §29.
+
+1. **Outer-map the row axis (Finding 2).** Pull the `purrr::map`/`pmap`-over-row_vars OUT of `tab_aggregate`/`tab_transform`/`tab_assemble_tables` into ONE outer map in `tab_build()`: resolve a list of per-row_var *scalar* arg-sets in `tab_setup`, then `map`/`pmap(build_one_table)`. Serial and parallel become one dispatch (`purrr::map` vs `mirai_map`) — collapse the branch split ([tab.R ~L1069-1085](R/tab.R#L1069)). **Retire `ctx_slice()` + `tabxplor_rowvar_fields`** (build each per-row_var ctx directly, not by slicing a vectorised one). `pct_vect`/`ref_vect` lose a nesting level (per-col_var only). **Fix the live latent bug** at [tab.R:1252](R/tab.R#L1252) (col-indexed `pct` `&` row-indexed `OR` → length-mismatch warning). `tab_many`'s per-row_var vectors keep working — they are how the resolver fills the arg-list (more flexibility, not less).
+- **Constraint:** preserve the jmvtab cache seam (the `jmv_cache_aggregate` hook in `tab_aggregate`, `jmv_cache_store_tests` after transform) and `tab_counts()`'s ctx-injection — both must still fire under the new structure (jmvtab is always serial; its per-pair cache is unaffected by a per-row_var outer loop). Re-validate `test-jmvtab-cache.R` + `test-counts-parity.R` + `test-carve-parity.R`.
+2. **Split each leaf into public wrapper + resolved-args core (Finding 3).** `tab_plain()`/`tab_num()` → thin public wrapper (NSE parse + validate + `ref="auto"`/`tot`/`comp` resolution, for direct callers) over an internal `plain_core()`/`num_core()` that assumes **resolved scalar settings** and does only the data.table + fmt work. The outer map, the jmvtab cache and the parallel worker call the core. Removes the double resolution ([tab.R:2638](R/tab.R#L2638)/[:3682](R/tab.R#L3682)) and the redundant second `relabel_levels_in_varnames()` ([tab.R:2676](R/tab.R#L2676)); moves `.fine`/`.by_table` off the public surface into the core.
+3. **Cleanup.** Delete the large commented-out legacy blocks in `tab.R`/`tab_classes.R` (dead `#By rows first` reduce, the `no_row_var` block ~L3200-3234, the numeric pivot_wider stub, `tabs_bind`); replace the `exists(…, inherits = FALSE)` guards ([tab.R ~L3040-3104](R/tab.R#L3040)) with NULL-init + `is.null()` (fold into the `plain_core` split).
+
+
+#### Phase 9b — Performance: `tabxplor_fmt` as display-only, built at the end ?
+
+To gain performance, should we use the ftm class and vctrs fields as user-facing and display only, to be built at the end of the workflow, but not used internally ? Would there be caveats ? The §29 profile pins ~99 % of `tab()` in the O(cells) `tabxplor_fmt` machinery — the `pmap_dfc(new_fmt)` build and the `tab_compact` merge, both bound by `vec_case_when`/`if_else`-over-fmt + vctrs record round-trips. **Write the feasibility analysis to a new `dev/` doc before implementing**.
+- **The idea to test (the design doc's core question).** Carry the build **internally as plain atomic field-vectors** (the fmt's `vec_data()` — n/wn/pct/diff/ratio/ci_inf/ci_sup/pvalue/… as plain numeric columns + the scalar per-column attributes), do ALL math/CI/chi2/merge/totals/level-drop/add_n on plain vectors/data.tables, and **materialize the `tabxplor_fmt` records ONCE at the very end** (for display, export, and user `$`/`mutate` access). The vctrs record becomes a **display / user-facing wrapper**, never an internal working type. **Hard constraint:** the final object is still a `tabxplor_tab` with real `tabxplor_fmt` columns — the vctrs **field contract users read with `$`/`mutate()` is unchanged** (§29: give up *using* vctrs generics on hot paths, never the fields).
+- **Feasibility questions for the design doc:** the internal representation (a keyed data.table of raw fields + an attributes sidecar? per-column field-lists close to `new_rcrd`'s storage?); how `tab_ci`/`tab_chi2` (today `set_ci`/`set_pvalue` on fmt) rewrite as plain-field writers; how the merge (`tab_compact`) aligns columns by col_var/color/ref and promotes totrow→refrow on the raw rep; **where** the single `new_fmt` materialization happens (per output column at the end of the core, or once after merge — mind the tests/ci that today read fmt fields); interaction with the jmvtab **tier-3 cache** (which caches the armed fmt table — does it cache raw fields + one paint, or the materialized fmt?) and the exporters (`tab_xl` already bypasses `format`, reading `get_num`/`get_display` directly).
+- **Concrete wins to implement (each gated by a before/after benchmark):** `tab_compact`'s per-column `if_else(is_totrow & !any(is_refrow), as_refrow, .)` ([tab_classes.R:991](R/tab_classes.R#L991)) → base-R masked field assignment + one `vctrs::vec_rbind` of aligned columns; the `new_fmt` assembly built once from plain vectors; audit the ~19 `dplyr::case_when` in `fmt_class.R` on hot display paths → base `switch`/vectorised indexing (`case_when`-over-fmt is the single most expensive idiom by the §29 profile).
+- **Is there room to accelerate `new_fmt` assembly itself ?** Improving the constructor ? Bypassing it to find a more efficient way ? What would we need to give up for that ?
+
 
 
 
@@ -978,15 +1046,14 @@ Design and implement the common prep function, looking carefully at all the chan
 
 #### Phase 10d — rework tab_kable()
 
-Comment accélerer cette fonction ? Faire une version plus light par défaut, sans les interactive tooltips etc. ? Accélerer les tooltips ? Voir choix de design from Phase 10a.
-Enlever l'affichage des vrais `NA` en `""` dans kable plus proprement qu'en les enlevant à la fin dans le html, pour qu’ils soient enlevés dans tous les cas de figure possible (knitr, .Rmd, etc. ; in the past I had some tables left with ugly NA formattings) ? How to really do it realiably ?
+Comment accélerer cette fonction ? Faire une version plus light par défaut, sans les interactive tooltips etc. ? Accélerer les tooltips ? See design choices from Phase 10a.
+Enlever l'affichage des vrais `NA` en `""` dans kable plus proprement qu'en les enlevant à la fin dans le html, pour qu’ils soient enlevés dans tous les cas de figure possible (knitr, .Rmd, etc. ; in the past I had some tables left with ugly NA formattings) ? How to really do it reliably ?
 
 
 #### Phase 10e — tab_md()
 
 `tab_md()` current version was made for a specific use case and never totally integrated into tabxplor : the aim is to fully integrate it.
 - color helpers must be handled with very shorts pandoc bracketed spans, everything padded and align to preserve human readability assuming monospace font (even out of preview mode). Examples for diffs : `.+5`, `.+10`, `.+20`, `.+30`, `.-5`, `.-10`, `.-20`, `.-30` etc. ; examples for ratios : `.x1.2`, `.x1.5`, `.x2`, `.x4`, `./1.2`, `./1.5`, `./2`, `./4`, etc. : ould these names be valid css classes / pandoc bracketed spans ?. Is there a possibility to make them these css classes work inside jamovi, for exemple in a html rectangle, with a light yet modern markdown preview working with tables (natively, or by adding html/js new dependencies ? ; load these possible dependencies when the tabxplor function and menu load ? What about the css styles, should we load them at tabxplor UI startup or at table creation ?) ?
-- 
 
 #### Phase 10f – rework tab_xl() (still openxlsx v1; engine swap is Phase 9)
 
@@ -1054,7 +1121,7 @@ Statistical soundness 2 : how to handle survey weights ?
 What extension ? Full `lm`/`glm` set + keep current multinomial logistic reg ?
 - Extend the function to numeric variables as predictors ? Extend it to ensure it also works for integer dependent variables as poisson regression ? Generalise the framework most common `lm` + `glm` regressions models, like multiple linear regressions for doubles (with the possibility to chose the type of regression per dependent var, since the R class of the dependent var, double or integer, do not clearly states if the underlying distribution is gaussian or poisson if its counts or binomial if it’s percentages, etc.) ? What would be caveats ? In this case, function should be renamed `tab_reg`. Many things should be reworked to keep both logistic models specificities, plus be closer to standard practices in term of `lm` + `glm` display.
 
-Summary statistics ? 
+Summary statistics ?
 - What whole analysis/model level test and pvalue should be added, for example on a pvalue_line like chi2 test for crosstables and ANOVA for factor x numeric ? What other model level summary statistics should absolutely be added to keep with standard practices with `lm`/`glm` models ?
 
 

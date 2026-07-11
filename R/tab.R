@@ -1058,31 +1058,74 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
     levels_order = .levels_order
   )
 
-  ctx <- tab_setup(ctx)
-  ctx <- tab_prepare_pop(ctx)
+  ctx <- tab_setup(ctx)          # resolve per-row_var + per-col_var arg vectors + colour cascade + keys
+  ctx <- tab_prepare_pop(ctx)    # prepare the whole DB once (na/lump/levels; the global drop_all drop)
+  ctx <- tab_aggregate(ctx)      # tier-1 aggregates (fine_num per-rv + shared fine_fused); jmvtab hook
+  tab_build_tables(ctx)          # the OUTER map over row_vars + the cross-row_var output shape
+}
 
-  # Phase 8: opt-in FULL per-row_var parallel dispatch. The population is now prepared (once, on main --
-  # incl. the global na="drop_all"/"common_base" drop), so each row_var's aggregate|transform|
-  # assemble_tables is independent and byte-identical to its slice of the serial build. Ship the
-  # prepared `data` once, run one worker per row_var, then assemble the output shape on main. OFF by
-  # default / jmvtab (cache_env) / < parallel_min row_vars -> the unchanged serial full-ctx path below.
+
+# tab_build_tables() -- the row axis as ONE outer map + the output shape (Phase 9a). Shared by
+# tab_build() (microdata) and tab_counts() (from-the-middle): both reach here with the aggregates in
+# ctx (fine_num per-row_var + fine_fused shared/per-pair). It resolves a per-row_var ctx list
+# (tab_rowvar_ctxs), maps the whole-per-row_var worker tab_build_one() over it -- serial (purrr::map)
+# OR a mirai daemon pool, the SINGLE dispatch (R/tab-parallel.R) -- then runs the cross-row_var output
+# shape once on main. Byte-identical to the pre-9a serial build (which already produced a per-row_var
+# list of finished tabs and merged them); the parallel path is byte-identical by the Phase 8 parity net.
+# jmvtab (cache_env) forces serial and keeps its tier-2 store hook.
+#' @keywords internal
+#' @noRd
+tab_build_tables <- function(ctx) {
   workers <- tab_parallel_workers(ctx$parallel, ctx$cache_env)
-  if (workers > 1L && length(ctx$row_vars) >= getOption("tabxplor.parallel_min", 2L)) {
-    slices <- lapply(seq_along(ctx$row_vars), function(i) ctx_slice(ctx, i))
-    tabs <- tab_pmap(list(ctx_i = slices), "tab_build_one",
-                     .ship = list(data = ctx$data), workers = workers)
-    # Name the gathered list by row_var (mirai_map returns it index-named): tab_assemble_output()'s
-    # merge derives the `row_var` factor labels from names(tabs) -- the serial `tabs` is set_names()'d
-    # by row_vars in tab_transform, so match it or the merged row_var levels become "1","2",...
-    tabs <- purrr::set_names(tabs, as.character(ctx$row_vars))
-    return(tab_assemble_output(ctx_update(ctx, list(tabs = tabs))))
-  }
+  units   <- tab_rowvar_ctxs(ctx)
+  built   <- tab_pmap(list(ctx_i = units), "tab_build_one",
+                      .ship = list(data = ctx$data, fine_fused = ctx$fine_fused),
+                      workers = workers)
+  rv_names <- as.character(ctx$row_vars)
+  # Name by row_var: tab_assemble_output()'s merge derives the merged `row_var` factor labels from
+  # names(tabs), and jmv_cache_store_tests keys `tests` by row_var name.
+  tabs  <- purrr::set_names(purrr::map(built, "tab"),  rv_names)
+  tests <- purrr::set_names(purrr::map(built, "test"), rv_names)
+  ctx   <- ctx_update(ctx, list(tabs = tabs, tests = tests))
 
-  ctx <- tab_aggregate(ctx)      # jmvtab: replaced by the cached per-pair build (hook at its top)
-  ctx <- tab_transform(ctx)
-  # Phase 7e: persist freshly-computed tier-2 tests (cache misses) before display assembly.
+  # Phase 7e: persist freshly-computed tier-2 tests (jmvtab cache misses) before display assembly.
   if (!is.null(ctx$cache_env)) jmv_cache_store_tests(ctx)
-  tab_assemble(ctx)
+
+  tab_assemble_output(ctx)
+}
+
+
+# tab_rowvar_ctxs() -- split the post-aggregate ctx into one lean ctx per row_var, ready to map/ship
+# (Phase 9a; replaces ctx_slice() + the tabxplor_rowvar_fields constant). Every field that VARIES per
+# row_var is listed ONCE here (the single source of truth); each unit takes its element (`[[i]]`, so a
+# per-row_var LIST field like fine_num yields its element, an atomic vector its scalar). A field that
+# stays scalar under na = "drop_all" (na_text / na_num collapse to a single "keep") is left as-is.
+# Everything else -- per-col_var (pct_vect is nested, but the per-row_var slice is a col_var vector),
+# scalar, or the shared jmvtab cached_tests list (kept whole; the transform picks its row_var entry) --
+# rides in the shared skeleton. `data` / `fine_fused` are dropped (shipped once by tab_pmap); the heavy
+# NSE quosures are dropped (they would drag user data into every mirai task).
+#' @keywords internal
+#' @noRd
+tab_rowvar_ctxs <- function(ctx) {
+  n <- length(ctx$row_vars)
+  per_rv <- c("row_vars", "color", "OR", "chi2", "ref", "ref2", "comp", "ci",
+              "totaltab", "totrow", "color_diff_OR", "color_ctr", "color_ci", "color_num",
+              "ref_vect", "pct_vect", "na_text", "na_num", "fine_num")
+  shared <- ctx[setdiff(names(ctx), c(per_rv, "data", "fine_fused"))]
+  shared <- shared[!grepl("_quo$", names(shared))]
+  shared$parallel  <- FALSE     # the worker never spawns nested daemons
+  shared$cache_env <- NULL
+
+  lapply(seq_len(n), function(i) {
+    u <- lapply(per_rv, function(nm) {
+      x <- ctx[[nm]]
+      if (!is.null(x) && length(x) == n) x[[i]] else x
+    })
+    names(u) <- per_rv
+    u$row_vars      <- ctx$row_vars[i]                              # keep as a length-1 sym list
+    u$tab_row_names <- as.character(c(ctx$tab_vars, ctx$row_vars[i]))
+    c(shared, u)
+  })
 }
 
 
@@ -1595,124 +1638,91 @@ fine_for_pair <- function(fine, row_var, col_var) {
 # tab_plain(.fine=) leaves (tier 3, O(cells), recomputed each run) + the post-join tab_apply_tests()
 # (the tier-2 chi2/ANOVA test). Preserves the ordering invariant: tests run on the FULL levels,
 # BEFORE the non-first-level drop (which lives in tab_assemble).
+# Phase 9a: SCALAR over ONE row_var. The row axis is now an OUTER map in tab_build_tables(); this ctx
+# describes a single row_var (its per-row_var settings are scalars, its fine_num is one aggregate).
+# The former internal tab_pmap() row-dispatch is gone (it was always serial once the whole-pipeline
+# tab_build_one() worker took over the parallel dispatch). The col axis stays vectorised (pmap over
+# factor col_vars). tabs_text / tabs_num / tests / chi2_num are now SINGLE objects (or NULL).
 #' @keywords internal
 #' @noRd
 tab_transform <- function(ctx) {
   list2env(ctx, environment())
   .by_table <- by_table
   .fine     <- fine_fused
-  # `chi2` stays the per-row_var logical flag (do_chi2). `tests` is the whole-table test output:
-  # it starts as that logical (so a numeric-only table hits assemble's is.logical() fallback) and
-  # is overwritten with the captured test tibbles when factor tables are built. NULL-init the two
-  # table lists so the repack + assemble join are safe on the numeric-only / factor-only branches.
-  tabs_text <- NULL
-  tabs_num  <- NULL
-  tests     <- chi2
-  # Phase 7e tier-2 hook: jmvtab sets ctx$cached_tests; the tab()/tab_counts() ctx does not carry it,
-  # so default it to NULL (list2env() only brings in fields present in ctx).
+  row_var   <- as.character(row_vars)                 # this ctx describes exactly ONE row_var
+  rv        <- rlang::sym(row_var)
+  # `wt` arrives as a character name (or character(0) for no weight); rebuild the bare symbol for `!!`.
+  wt_sym    <- if (length(wt) == 0L) wt else rlang::sym(as.character(wt))
+
+  # Defaults for leaner ctxs (tab_counts / direct stage tests / a ctx built without the jmvtab hook).
+  # cached_tests is the jmvtab tier-2 hook: the FULL per-row_var list keyed by row_var name (from
+  # jmv_cache_aggregate) -- kept whole in the shared ctx, this row_var's entry picked below. NULL/absent
+  # on the tab()/tab_counts() path -> recompute in tab_apply_tests(). ref_vect defaults to the scalar-ref
+  # broadcast over col_vars when a leaner ctx reached transform without it.
   if (!exists("cached_tests", inherits = FALSE)) cached_tests <- NULL
-  # Phase 7g-iii: ref_vect (per row_var x per col_var reference) is built in tab_setup(); default it
-  # to the scalar-ref broadcast if a ctx reached transform without it (byte-identical).
-  if (!exists("ref_vect", inherits = FALSE)) ref_vect <- purrr::map(ref, ~ rep(.x, length(col_vars)))
+  if (!exists("ref_vect",     inherits = FALSE)) ref_vect     <- rep(ref, length(col_vars))
+  cached_test <- if (is.null(cached_tests)) NULL else cached_tests[[row_var]]
 
-  # Phase 8: build EVERY row_var's numeric + factor tables through the ONE tab_pmap() seam. Serial
-  # by default -- tab_pmap() IS purrr::pmap, byte-identical, zero overhead -- or dispatched to a
-  # persistent mirai daemon pool when `parallel` is set (never for jmvtab: cache_env forces serial).
-  # Each unit returns list(num = <tab_num | NULL>, text = <named list of col_var tabs | NULL>). The
-  # cross-cutting steps below (chi2_num, duplicated_levels rename, the full_join, tab_apply_tests)
-  # STAY on the main process, so the parallel result is byte-identical to sequential BY CONSTRUCTION.
-  # See R/tab-parallel.R.
-  # `parallel` / `cache_env` gate the tab_pmap() dispatch. tab()/tab_build() carry both in ctx;
-  # tab_counts() and the direct stage-composition tests build a leaner ctx -> default them here
-  # (both -> serial), mirroring the cached_tests / ref_vect defaults above.
-  if (!exists("parallel", inherits = FALSE)) parallel <- NULL
-  if (!exists("cache_env", inherits = FALSE)) cache_env <- NULL
-  fine_num_l <- if (is.null(fine_num)) rep(list(NULL), length(row_vars)) else fine_num
-  .units <- tab_pmap(
-    .l = list(row_var = as.character(row_vars), totaltab_i = totaltab, totrow_i = totrow,
-              ref_i = ref, comp_i = comp, color_num_i = color_num, ci_i = ci, na_num_i = na_num,
-              fine_num_i = fine_num_l, pct_i = pct_vect, ref2_i = ref2, OR_i = OR,
-              na_text_i = na_text, color_diff_OR_i = color_diff_OR, ref_vect_i = ref_vect),
-    .f_name = "tab_build_rowvar",
-    .const  = list(tab_vars = as.character(tab_vars), wt = as.character(wt), col_vars = col_vars,
-                   col_vars_num = col_vars_num, col_vars_text = col_vars_text, digits = digits,
-                   conf_level = conf_level, stars = stars, totaltab_name = totaltab_name,
-                   total_names = total_names, by_table = .by_table),
-    .ship   = list(data = data, fine_fused = .fine),
-    workers = tab_parallel_workers(parallel, cache_env)
-  )
-  # Keep the NULL-vs-list distinction the numeric-only / factor-only branches rely on downstream.
-  if (sum(col_vars_num)  != 0) tabs_num  <- purrr::set_names(purrr::map(.units, "num"),  row_vars)
-  if (sum(col_vars_text) != 0) tabs_text <- purrr::set_names(purrr::map(.units, "text"), row_vars)
-
-  # Phase 3b: whole-table test for NUMERIC col_vars = one-way ANOVA (Welch + classic F), computed
-  # per row_var by running tab_chi2()'s test step on the numeric table (it detects mean col_vars and
-  # calls agg_anova()). Only the tidy `test` tibble is kept; merged with the factor `chi2` at assemble.
+  # --- numeric col_vars: one tab_num() (adopts the per-row_var moment aggregate fine_num) ---
+  tabs_num <- NULL
   chi2_num <- NULL
-  if (sum(col_vars_num) != 0 && any(chi2)) {
-    chi2_num <- purrr::pmap(
-      list(tabs_num, comp, chi2),
-      ~ if (isTRUE(..3)) get_test(tab_chi2(tabs = ..1, calc = "p", comp = ..2))
-        else new_test_tibble()
-    )
+  if (sum(col_vars_num) != 0) {
+    tabs_num <- tab_num(data, !!rv, as.character(col_vars)[col_vars_num], as.character(tab_vars),
+                        wt = !!wt_sym, na = na_num, digits = digits[col_vars_num],
+                        ref = ref, ci = ci, conf_level = conf_level, stars = stars, comp = comp,
+                        color = color_num, totaltab = totaltab, totaltab_name = totaltab_name,
+                        tot = dplyr::if_else(totrow, "row", "no"), total_names = total_names,
+                        .fine = fine_num, .by_table = .by_table)
+    # Phase 3b: whole-table test for NUMERIC col_vars = one-way ANOVA (Welch + classic F), via
+    # tab_chi2()'s test step (it detects mean col_vars and calls agg_anova()). Only the tidy `test`
+    # tibble is kept (merged with the factor test at assemble); NULL when chi2 is off for this row_var.
+    if (isTRUE(chi2)) chi2_num <- get_test(tab_chi2(tabs = tabs_num, calc = "p", comp = comp))
   }
 
+  # --- factor col_vars: one tab_plain() per col_var, joined into ONE table ---
+  tabs_text <- NULL
+  tests     <- chi2   # logical placeholder; assemble's is.logical() fallback handles a numeric-only tab
   if (sum(col_vars_text) != 0) {
-    # Phase 8: tabs_text (per row_var, a named list of per-col_var factor tables) was built above by
-    # tab_pmap() via tab_build_rowvar(). The former nested purrr::pmap(row_vars, ...) build lived
-    # here; its body now IS tab_build_rowvar()'s factor branch (byte-identical). What follows -- the
-    # duplicated_levels rename, the join and tab_apply_tests -- stays on the main process.
+    text <- purrr::pmap(
+      list(col_vars[col_vars_text], digits[col_vars_text], na_text,
+           pct_vect[col_vars_text], ref_vect[col_vars_text]),
+      function(.col_var, .digits, .na, .pct, .ref)
+        tab_plain(data, !!rv, !!.col_var, as.character(tab_vars), wt = !!wt_sym, na = .na,
+                  digits = .digits, pct = .pct, ref = .ref, ref2 = ref2, comp = comp, OR = OR,
+                  color = color_diff_OR, totaltab = totaltab, totaltab_name = totaltab_name,
+                  tot = c("row", "col"), total_names = total_names,
+                  .fine = fine_for_pair(.fine, row_var, .col_var), .by_table = .by_table)
+    ) |> purrr::set_names(as.character(col_vars[col_vars_text]))
 
-    #Join the list of tabs into a single table,
-    # managing duplicated levels
-    duplicated_levels <- tabs_text %>%
-      purrr::map(~ purrr::map(., ~ purrr::discard(names(.),
-                                                  names(.) %in% c(row_vars, tab_vars))) %>%
-                   purrr::flatten_chr() #%>% .[duplicated(.)] %>% unique())
-      ) |>
-      purrr::map(~ .[duplicated(.)] %>% unique()) |> purrr::flatten_chr() |> unique()
-
+    # Rename level names duplicated across col_vars (suffix with the col_var name) before the join.
+    # Computed per-row_var: the level names are col_var-determined (identical across row_vars), so this
+    # is byte-identical to the former global set -- locked by test-parallel-parity.R's collision case.
+    lvl_names <- text |>
+      purrr::map(~ purrr::discard(names(.), names(.) %in% c(row_var, as.character(tab_vars)))) |>
+      purrr::flatten_chr()
+    duplicated_levels <- unique(lvl_names[duplicated(lvl_names)])
     if (length(duplicated_levels) != 0) {
-      tabs_text <- tabs_text %>%
-        purrr::map(~ purrr::imap(., ~ dplyr::rename_with(.x, function(.names)
-          dplyr::if_else(.names %in% duplicated_levels, paste0(.names, "_", .y), .names)))
-        )
+      text <- purrr::imap(text, ~ dplyr::rename_with(.x, function(.names)
+        dplyr::if_else(.names %in% duplicated_levels, paste0(.names, "_", .y), .names)))
     }
 
-    tabs_text <- purrr::map2(tabs_text, as.character(row_vars), ~ purrr::reduce(
-      .x,
-      dplyr::full_join,
-      by = c(as.character(tab_vars), .y)
-    ))
+    tabs_text <- purrr::reduce(text, dplyr::full_join, by = c(as.character(tab_vars), row_var))
 
-    # DESIGN: ordering invariant — tab_chi2() and tab_ci() are INDEPENDENT (either order
-    # works), but BOTH must run BEFORE non-first levels are dropped (L~1173), so they are
-    # computed on the full set of levels. Do not move the level-drop above chi2/ci.
-    # See CLAUDE.md § Global Architecture.
-    # Phase 6a: one per-table pass through the shared tab_apply_tests() helper (chi2 ->
-    # capture test -> ci). Byte-identical to the former two-batch passes: the tables are
-    # independent for these steps, and `test` is still captured before ci. Phase 3b: contrib
-    # ("ctr") is computed only when contrib coloring is requested (color_ctr != "no").
-    # Phase 7e: cached_tests (per-row_var list) is the jmvtab tier-2 hook; NULL/absent on the tab()
-    # path -> a per-table list of NULLs -> tab_apply_tests() recomputes as before.
-    ct_aligned <- if (is.null(cached_tests)) rep(list(NULL), length(tabs_text))
-                  else cached_tests[names(tabs_text)]
-    applied <- purrr::pmap(
-      list(tabs_text, chi2, ci, comp, color_ctr, color_ci, ct_aligned),
-      function(.tab, .chi2, .ci, .comp, .cctr, .cci, .ct)
-        tab_apply_tests(.tab, do_chi2 = .chi2, ci = .ci, comp = .comp,
-                        color_ctr = .cctr, color_ci = .cci,
-                        conf_level = conf_level, stars = stars,
-                        method_cell = method_cell, method_diff = method_diff,
-                        cached_test = .ct)
-    )
-    tabs_text <- purrr::map(applied, "tab")
-    tests     <- purrr::map(applied, "test")
+    # DESIGN: ordering invariant — tab_chi2() and tab_ci() are INDEPENDENT (either order works), but
+    # BOTH must run BEFORE non-first levels are dropped (in tab_assemble), so they are computed on the
+    # full set of levels. See CLAUDE.md § Global Architecture. Phase 6a: one pass through the shared
+    # tab_apply_tests() (chi2 -> capture test -> ci). Phase 3b: contrib ("ctr") only when color_ctr !=
+    # "no". Phase 7e: cached_test is this row_var's tier-2 hit (NULL -> recompute as before).
+    applied   <- tab_apply_tests(tabs_text, do_chi2 = chi2, ci = ci, comp = comp,
+                                 color_ctr = color_ctr, color_ci = color_ci,
+                                 conf_level = conf_level, stars = stars,
+                                 method_cell = method_cell, method_diff = method_diff,
+                                 cached_test = cached_test)
+    tabs_text <- applied$tab
+    tests     <- applied$test
   }
 
-  # --- repack: transform produces the built+tested tables + the tier-2 test.
-  # tabs_text/tabs_num/chi2_num are NULL on the factor-only / numeric-only / no-test branches --
-  # ctx_update() preserves them so tab_assemble()'s list2env() finds them. ---
+  # --- repack: transform produces this row_var's built+tested table(s) + the tier-2 test. ---
   ctx_update(ctx, list(
     tabs_text = tabs_text, tabs_num = tabs_num, tests = tests, chi2_num = chi2_num
   ))
@@ -1723,185 +1733,125 @@ tab_transform <- function(ctx) {
 # Built tables -> the final tabxplor_tab / list: non-first-level drop, add_n/add_pct, total col/row
 # removal, the numeric+factor join, the whole-table test merge + class wrap, output-shape compaction,
 # p-value lines, tab_spread, unwrap, and the optional tab_kable. Pure O(cells) display assembly.
-# Phase 8: split into tab_assemble_tables() (per-row_var finishing -> the list of finished tabs,
-# tests baked into their attributes -- byte-identical whether run on all row_vars at once or one at a
-# time, the precondition for the per-row_var parallel dispatch) and tab_assemble_output() (the
-# cross-row_var output shape: merge/compact, p-value lines, n_min, spread, unwrap, kable). The serial
-# path composes them (byte-identical); the parallel path runs tab_assemble_tables() on each worker and
-# tab_assemble_output() once on main over the gathered list. See R/tab-parallel.R.
+# Phase 8/9a: split into tab_assemble_tables() (finish ONE row_var's table -- level-drop, add_n/pct,
+# total col/row removal, numeric+factor join, whole-table test merge + class wrap) and
+# tab_assemble_output() (the cross-row_var output shape: merge/compact, p-value lines, n_min, spread,
+# unwrap, kable). tab_assemble_tables() is SCALAR over one row_var (the outer map in tab_build_tables()
+# drives the row axis); it is byte-identical whether the row_var is built alone or as a slice of an
+# integrated build (the total-col decoupling, Phase 8). See R/tab-parallel.R.
 #' @keywords internal
 #' @noRd
 tab_assemble <- function(ctx) {
   tab_assemble_output(tab_assemble_tables(ctx))
 }
 
+# SCALAR over ONE row_var. tabs_text / tabs_num are the single built factor / numeric table (or NULL);
+# tests / chi2_num the single test tibbles. Produces ctx$tabs = the single finished tabxplor_tab (its
+# whole-table test baked into the `test` attribute) + ctx$tests (kept for the jmvtab tier-2 store).
 #' @keywords internal
 #' @noRd
 tab_assemble_tables <- function(ctx) {
   list2env(ctx, environment())
+  row_var <- as.character(row_vars)
 
   if (sum(col_vars_text) != 0) {
 
     #Remove unwanted levels (keep only the first when levels = "first")
     if (any(lv1)) {
-      remove_levels <-
-        purrr::imap(remove_levels, ~ c(.x, paste0(.x, "_", .y))) %>%
-        purrr::flatten_chr()
-
-      tabs_text <- tabs_text %>% purrr::map(~ dplyr::select(., -tidyselect::any_of(remove_levels)))
+      rm_levels <- purrr::imap(remove_levels, ~ c(.x, paste0(.x, "_", .y))) |> purrr::flatten_chr()
+      tabs_text <- dplyr::select(tabs_text, -tidyselect::any_of(rm_levels))
     }
 
-
-    # return(tabs_text)
-
-
-    # Add column or row with n counts, or column or row with the other kind or percentages.
-    tabs_text <- tab_add_n_pct(tabs_text, add_n, add_pct)
-
-
-
+    # Add column or row with n counts, or column or row with the other kind of percentages.
+    # tab_add_n_pct() operates on the tabs_text LIST (shared with the historical batch path); wrap this
+    # single table for it (the list NAME is cosmetic there, only the totcol/totrow VALUES matter).
+    tabs_text <- tab_add_n_pct(purrr::set_names(list(tabs_text), row_var), add_n, add_pct)[[1]]
 
     #Remove unwanted total columns
     if (!tot_cols_type %in% c("each", "no_no_create")) {
-      if (tot_cols_type == "no_delete") tabs_text <- tabs_text %>%
-          purrr::map(~dplyr::select(., -where(is_totcol)))
-      if (tot_cols_type == "some") tabs_text <- tabs_text %>%
-          purrr::map(~dplyr::select(., -(where(~ is_totcol(.) & !get_col_var(.) %in% totcol) ))
-          )
+      if (tot_cols_type == "no_delete")
+        tabs_text <- dplyr::select(tabs_text, -where(is_totcol))
+      if (tot_cols_type == "some")
+        tabs_text <- dplyr::select(tabs_text, -(where(~ is_totcol(.) & !get_col_var(.) %in% totcol)))
 
       if (tot_cols_type == "all_col_vars") {
-        no_last_tot <- tabs_text %>%
-          purrr::map(is_totcol) %>%
-          purrr::map(~ names(.[.])) %>%
-          purrr::flatten_chr() %>% unique()
-        last_tot <- dplyr::last(no_last_tot)
-        no_last_tot <- no_last_tot[no_last_tot != last_tot & !is.na(no_last_tot)]
+        totcols_present <- unique(names(tabs_text)[is_totcol(tabs_text)])
+        last_tot <- dplyr::last(totcols_present)
+        drop_tot <- totcols_present[totcols_present != last_tot & !is.na(totcols_present)]
 
-        tabs_text <- tabs_text %>%
-          purrr::map(~dplyr::select(., -tidyselect::any_of(no_last_tot)) %>%
-                       dplyr::relocate(where(is_totcol), .after = tidyselect::last_col()) %>%
-                       dplyr::rename_with(~ total_names[2], .cols = tidyselect::all_of(last_tot)) %>%
-                       dplyr::mutate(dplyr::across(tidyselect::last_col(),
-                                                   ~ set_col_var(., "all_col_vars")))
-          )
+        tabs_text <- tabs_text |>
+          dplyr::select(-tidyselect::any_of(drop_tot)) |>
+          dplyr::relocate(where(is_totcol), .after = tidyselect::last_col()) |>
+          dplyr::rename_with(~ total_names[2], .cols = tidyselect::all_of(last_tot)) |>
+          dplyr::mutate(dplyr::across(tidyselect::last_col(), ~ set_col_var(., "all_col_vars")))
       }
     }
 
-
-
-
-
-    # Lone total column to "Total" with no col_var name.
-    # Phase 8: dedup with unique() so the "lone total" test is on the DISTINCT total-column name, not
-    # its occurrence count. With several row_vars sharing col_vars each table carries the same
-    # "Total_<lastcv>" column, so the old `length(totnames) == 1` saw N copies and skipped the
-    # rename-back -> the internal "Total_denom" suffix leaked into multi-row_var tables (single-row_var
-    # tables were already renamed). Dedup makes multi-row_var per-row_var tables identical to a
-    # standalone single-row_var build, which DECOUPLES tab_assemble across row_vars (the precondition
-    # for the per-row_var parallel dispatch). A genuinely multi-total table (>1 distinct total name,
-    # e.g. deprecated totcol="all") still keeps the qualified names.
-    totnames <-
-      purrr::map(tabs_text,
-                 ~names(.)[stringr::str_detect(names(.),
-                                               paste0("^", total_names[2], "_"))]) |>
-      purrr::flatten_chr() |> unique()
-
-    if ( length(totnames) == 1 ) tabs_text <- purrr::map(tabs_text, ~ dplyr::rename(
-      ., tidyselect::any_of(purrr::set_names(totnames,
-                                             rep(total_names[2], length(totnames))) )
-    ) )
-
-
-    # #By rows first
-    # tabs_text <-
-    #   purrr::pmap(list(col_vars[col_vars_text], digits[col_vars_text]),
-    #               function(.col_vars, .digits)
-    #
-    #                 purrr::map_dfr(row_vars, function(.row_vars)
-    #
-    #                   tab_plain(data, !!.row_vars, !!.col_vars, !!!tab_vars, wt = !!wt,
-    #                             na = na, digits = .digits,
-    #                             totrow = totrow, totcol = totcol, totaltab = totaltab) |>
-    #                     #                     dplyr::ungroup() |>
-    #                     dplyr::mutate(variable = factor(rlang::as_name(.row_vars)), .before = 1) |>
-    #                     dplyr::rename(tidyselect::all_of(
-    #                       purrr::set_names(rlang::as_name(.row_vars), "row_var")
-    #                     ))
-    #                 )
-    #
-    #   ) %>%
-    #   purrr::set_names(col_vars[col_vars_text])
+    # Lone total column -> "Total" with no col_var name. Phase 8: dedup with unique() so the "lone
+    # total" test is on the DISTINCT total-column name (the "Total_<lastcv>" internal suffix leaked into
+    # multi-row_var tables otherwise). A genuinely multi-total table (>1 distinct name) keeps the
+    # qualified names. This is what DECOUPLES the per-row_var build from the integrated one.
+    totnames <- unique(names(tabs_text)[stringr::str_detect(names(tabs_text),
+                                                            paste0("^", total_names[2], "_"))])
+    if (length(totnames) == 1)
+      tabs_text <- dplyr::rename(
+        tabs_text,
+        tidyselect::any_of(purrr::set_names(totnames, rep(total_names[2], length(totnames)))))
   }
 
-
-
-
+  # Join numeric + factor (or take whichever exists).
   if (sum(col_vars_num) != 0 & sum(col_vars_text) != 0) {
-    tabs <- purrr::pmap(list(tabs_text, tabs_num, as.character(row_vars)),
-                        ~ dplyr::full_join(..1, ..2,
-                                           by = c(as.character(tab_vars), ..3)) #[tab_vars != "no_tab_vars"]
-    )
+    tab <- dplyr::full_join(tabs_text, tabs_num, by = c(as.character(tab_vars), row_var))
 
-    col_vars_order <- tabs |>
-      purrr::map(~ purrr::map(.,
-                              ~ purrr::map(get_col_var(.),
-                                           ~ which(as.character(col_vars) == .)  ) ) |>
-                   purrr::flatten()
-      ) |>
-      purrr::map(~ purrr::map_if(., names(.) %in% tab_row_names, ~ 0L) |>
-                   purrr::map_int(~ if (length(.) == 0) {length(col_vars) + 1L} else {.}) |>
-                   sort() |> names()
-      )
+    col_vars_order <- tab |>
+      purrr::map(~ purrr::map(get_col_var(.), ~ which(as.character(col_vars) == .))) |>
+      purrr::flatten()
+    col_vars_order <- col_vars_order |>
+      purrr::map_if(names(col_vars_order) %in% tab_row_names, ~ 0L) |>
+      purrr::map_int(~ if (length(.) == 0) length(col_vars) + 1L else .) |>
+      sort() |> names()
 
-    tabs <- tabs |> purrr::map2(col_vars_order, ~ dplyr::select(.x, tidyselect::any_of(.y)))
+    tab <- dplyr::select(tab, tidyselect::any_of(col_vars_order))
 
   } else if (sum(col_vars_num) != 0) {
-    tabs <- tabs_num
-    remove(tabs_num)
-
+    tab <- tabs_num
   } else {
-    tabs <- tabs_text
-    remove(tabs_text)
+    tab <- tabs_text
   }
 
-
-
-  #Remove unwanted total rows
-  no_totrow <- (totrow == FALSE |
-                  (pct == "col" &  OR %in% c("OR", "or", "OR_pct", "or_pct")) &
-                  tot_cols_type != "no_no_create")
-  if (any(no_totrow)) {
-    totrows     <- purrr::map(tabs[no_totrow], ~ is_totrow(.))
-    tottab_rows <- purrr::map(tabs[no_totrow], ~ is_tottab(.))
-    tottab_line <- purrr::map(tottab_rows[no_totrow], ~ length(.[.]) == 1 & .)
-
-    tabs[no_totrow] <-
-      purrr::pmap( list(tabs[no_totrow],totrows, tottab_line),
-                   ~ tibble::add_column(..1, totrows = ..2, tottab_line = ..3) %>%
-                     dplyr::filter(!.data$totrows | .data$tottab_line) %>%
-                     dplyr::select(-"totrows", -"tottab_line")
-      )
+  #Remove the unwanted total row. Phase 9a: scalar; `any(pct == "col")` designs out a pct/OR
+  # length-mismatch (the numeric-only per-col_var-pct latent bug, analogous to tab.R's ex-L1252).
+  no_totrow <- (totrow == FALSE) ||
+    ((any(pct == "col") && OR %in% c("OR", "or", "OR_pct", "or_pct")) &&
+       tot_cols_type != "no_no_create")
+  if (no_totrow) {
+    totrows     <- is_totrow(tab)
+    tottab_rows <- is_tottab(tab)
+    tottab_line <- length(tottab_rows[tottab_rows]) == 1 & tottab_rows
+    tab <- tab |>
+      tibble::add_column(totrows = totrows, tottab_line = tottab_line) |>
+      dplyr::filter(!.data$totrows | .data$tottab_line) |>
+      dplyr::select(-"totrows", -"tottab_line")
   }
 
-  # Combine the factor (chi2) and numeric (ANOVA F) whole-table test tibbles, per row_var. For a
-  # numeric-only table `tests` is still the boolean `chi2` flag here (the factor branch was skipped),
-  # so is.logical() converts it to empty test tibbles. (Phase 7d-ii: `tests` replaces the former
-  # `chi2` name overload -- `chi2` stays the per-row_var logical flag; `tests` the test tibbles.)
-  if (is.logical(tests)) { tests <- rep(list(new_test_tibble()), length(tabs)) }
-  if (!is.null(chi2_num)) { tests <- purrr::map2(tests, chi2_num, dplyr::bind_rows) }
+  # Combine the factor (chi2) and numeric (ANOVA F) whole-table test tibbles. For a numeric-only table
+  # `tests` is still the boolean `chi2` flag (the factor branch was skipped), so is.logical() converts
+  # it to an empty test tibble.
+  if (is.logical(tests)) tests <- new_test_tibble()
+  if (!is.null(chi2_num)) tests <- dplyr::bind_rows(tests, chi2_num)
 
-  if (!any(purrr::map_lgl(tabs, lv1_group_vars)) ) {
-    tabs <- tabs %>% purrr::map(~ dplyr::group_by(., !!!tab_vars))
-    groups <- purrr::map(tabs, dplyr::group_data)
-    tabs <- purrr::pmap(list(tabs, groups, tests),
-                        ~ new_grouped_tab(..1, groups = ..2, subtext = subtext, test = ..3))
+  if (!lv1_group_vars(tab)) {
+    tab    <- dplyr::group_by(tab, !!!tab_vars)
+    groups <- dplyr::group_data(tab)
+    tab    <- new_grouped_tab(tab, groups = groups, subtext = subtext, test = tests)
   } else {
-    tabs <- purrr::map2(tabs, tests, ~ new_tab(.x, subtext = subtext, test = .y))
+    tab <- new_tab(tab, subtext = subtext, test = tests)
   }
 
-  # Per-row_var finishing done: `tabs` is the list of finished tabxplor_tab/grouped_tab (tests baked
-  # into their `test` attribute). Hand off to tab_assemble_output() for the cross-row_var output shape.
-  ctx_update(ctx, list(tabs = tabs))
+  # Row_var finishing done: ctx$tabs is the single finished tabxplor_tab/grouped_tab (the whole-table
+  # test baked into its `test` attribute). tab_build_tables() gathers these into a list. ctx$tests is
+  # kept for the jmvtab tier-2 store (jmv_cache_store_tests).
+  ctx_update(ctx, list(tabs = tab, tests = tests))
 }
 
 # tab_assemble_output() -- the cross-row_var output shape (Phase 8 split from tab_assemble()).
@@ -2729,35 +2679,6 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
     stop("data is of length 0 (possibly after filter or na = 'drop_all')")
   }
 
-  # row_var_type <- ifelse(is.numeric(dplyr::pull(data, !!row_var) ),
-  #                        "numeric", "factor")
-  # col_var_type <- ifelse(is.numeric(dplyr::pull(data, !!col_var) ),
-  #                        "numeric", "factor")
-  # if (row_var_type == "numeric" & col_var_type == "numeric") {
-  #   stop("row_var and col_var are both numeric : only one of them can be")
-  # }
-  # type <- ifelse(row_var_type == "numeric" | col_var_type == "numeric",
-  #                "numeric", "factor")
-  #
-  # if (type == "numeric") {
-  #   num_var <- switch(row_var_type, "numeric" = row_var, "factor" = col_var)
-  #   fct_var <- switch(row_var_type, "numeric" = col_var, "factor" = row_var)
-  # }
-
-  # if (!is_grouped) {
-  #   data <- switch(type,
-  #                  "factor"   = dplyr::group_by(data, !!!tab_vars, !!row_var, !!col_var),
-  #                  "numeric"  = dplyr::group_by(data, !!!tab_vars, !!fct_var     ) )
-  # }
-  #
-  # if (type == "numeric") {
-  #   if (rlang::as_name(num_var) %in% dplyr::group_vars(data)) {
-  #     data <- dplyr::ungroup(data, !!num_var)
-  #   }
-  # }
-
-  # nlvs <- nlevels(dplyr::pull(data, !!col_var))
-
   if (df | num) {
     tabs <-
       data.table::dcast(
@@ -3196,55 +3117,6 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
         dplyr::mutate(wn = set_display(.data$n, "wn") |> set_type("n")) |>
         dplyr::relocate("wn", .after = tidyselect::last_col() )
   }
-
-  # # with no row_var : not needed, it's not the simplest way to get a one var table
-  # no_row_vars_cols <- any(names(tabs) == "no_row_var") #& pct %in% c("row", "col", "all", "all_tabs")
-  # if (no_row_vars_cols) {
-  #   tabs <- tabs |>
-  #     dplyr::mutate(
-  #       dplyr::across(
-  #       where(is_fmt),
-  #       ~ dplyr::if_else(!is_totrow(.), set_display(., "n"), .)
-  #     ),
-  #
-  #
-  #     dplyr::across(all_of(names(tabs)[which(names(tabs) == "no_row_var") + 1L]), is_tottab, .names = "tottab"),
-  #
-  #     cond = stringr::str_detect(no_row_var, total_names[1]) & !tottab,
-  #
-  #     no_row_var = dplyr::if_else(cond,
-  #                                 true  = forcats::fct_relabel(
-  #                                   no_row_var,
-  #                                   ~ stringr::str_replace(., total_names[1], "pct"),
-  #                                 ),
-  #                                 false = no_row_var
-  #     ) |>
-  #       forcats::fct_relevel("n", after = Inf),
-  #
-  #    ) |>
-  #     dplyr::select(-tottab, - cond)
-  #
-  #   if (length(wt) != 0) tabs <- tabs |>
-  #       dplyr::bind_rows(
-  #         dplyr::filter(tabs, no_row_var == "n") |> set_display("wn") |>
-  #           dplyr::mutate(no_row_var = factor("wn"))
-  #       )
-  #
-  #   tabs <- tabs |> dplyr::arrange(!!!tab_vars, no_row_var)
-  # }
-
-
-  # if (row_var_type == "numeric") {
-  #   tabs <- tabs %>%
-  #   tidyr::pivot_wider(names_from = !!fct_var, values_from = !!num_var,
-  #                      names_glue = "{.value}_{.name}",
-  #                      values_fill = fmt0("mean", digits, type = "mean"))
-  #   if (as.character(tab_vars) == "no_tab_vars") {
-  #     tabs <- tabs %>% dplyr::mutate(no_row_var = factor("no_row_var")) %>%
-  #       dplyr::relocate(no_row_var, .before = 1)
-  #   }
-  # }
-
 
   tab_var_1lv <- all(purrr::map_lgl(dplyr::select(tabs, !!!tab_vars),
                                     ~ length(unique(.)) == 1))
@@ -3729,54 +3601,6 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
     stop("data is of length 0 (possibly after filter or na = 'drop')")
   }
 
-  # row_var_type <- ifelse(is.numeric(dplyr::pull(data, !!row_var) ),
-  #                        "numeric", "factor")
-  # col_var_type <- ifelse(is.numeric(dplyr::pull(data, !!col_var) ),
-  #                        "numeric", "factor")
-  # if (row_var_type == "numeric" & col_var_type == "numeric") {
-  #   stop("row_var and col_var are both numeric : only one of them can be")
-  # }
-  # type <- ifelse(row_var_type == "numeric" | col_var_type == "numeric",
-  #                "numeric", "factor")
-  #
-  # if (type == "numeric") {
-  #   num_var <- switch(row_var_type, "numeric" = row_var, "factor" = col_var)
-  #   fct_var <- switch(row_var_type, "numeric" = col_var, "factor" = row_var)
-  # }
-
-  # if (!is_grouped) {
-  #   data <- switch(type,
-  #                  "factor"   = dplyr::group_by(data, !!!tab_vars, !!row_var, !!col_var),
-  #                  "numeric"  = dplyr::group_by(data, !!!tab_vars, !!fct_var     ) )
-  # }
-  #
-  # if (type == "numeric") {
-  #   if (rlang::as_name(num_var) %in% dplyr::group_vars(data)) {
-  #     data <- dplyr::ungroup(data, !!num_var)
-  #   }
-  # }
-
-  # nlvs <- nlevels(dplyr::pull(data, !!col_var))
-
-  #        "numeric" = data %>%
-  #          dplyr::summarise(!!num_var := stats::weighted.mean(!!num_var, !!wt, na.rm = TRUE),
-  #                           .groups = "drop")
-  # ) %>%
-
-
-  #data <- data |> dplyr::group_by(!!!tab_vars, !!row_var)
-
-  # if (df | num) {
-  #  tabs <- data |>
-  #     dplyr::summarise(across(tidyselect::all_of(as.character(col_vars)), list(
-  #       mean = ~ stats::weighted.mean(., !!wt, na.rm = TRUE)
-  #     )),
-  #     .groups = "drop"
-  #     )
-  #
-  # } else {
-
-
   if (!use_raw) {
     # Adopt the prebuilt moment aggregate. copy(): the factor-key coercion + na-order relabel just
     # below mutate `tabs` by reference, so a reused/cached `.fine` must not be corrupted.
@@ -3825,40 +3649,6 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
 
 
 
-  # tabs <- data |>
-  #   dplyr::summarise(dplyr::across(tidyselect::all_of(as.character(col_vars)), ~ new_fmt(
-  #     display = "mean",
-  #     digits  = as.integer(digits),
-  #     n       = dplyr::n(),
-  #     wn      = if (wt != "no_weight") {sum(!!wt, na.rm = TRUE)} else {NA_real_},
-  #     mean    = stats::weighted.mean(., !!wt, na.rm = TRUE),
-  #     var     = weighted.var(., !!wt, na.rm = TRUE),
-  #     type    = "mean",
-  #     col_var = dplyr::cur_column()
-  #   )),
-  #   .groups = "drop")
-  # #}
-  #
-  # na_rows <- tabs %>%
-  #   dplyr::select(!!!tab_vars, !!row_var) %>%
-  #   dplyr::mutate(na_rows = dplyr::if_any(.cols = dplyr::everything(), .fns = is.na)) |>
-  #   dplyr::pull(.data$na_rows)
-  #
-  # if (any(na_rows)) {
-  #   if (na == "drop") {
-  #     tabs <- tabs[-which(na_rows), ]
-  #   } else {
-  #     tabs <- tabs %>%
-  #       dplyr::mutate(dplyr::across(tidyselect::all_of(tab_row_names),
-  #                                   ~ forcats::fct_na_value_to_level(., level = "NA"))) %>%
-  #       dplyr::arrange(!!!tab_vars, !!row_var)
-  #
-  #     #data.table::setorderv(
-  #     #  tabs, tab_row_names, na.last = TRUE
-  #     #)[, paste0(tab_row_names) := lapply(.SD, forcats::fct_na_value_to_level, level = "NA"),
-  #     #  .SDcols = tab_row_names]
-  #   }
-  # }
 
 
   #Calculate means and variances for all totals and subtotals
@@ -3959,41 +3749,6 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
     data.table::setorderv(tabs, tab_row_names)
 
 
-    # tabs_tot <-
-    #   purrr::map_dfr(ungroup_vars,
-    #                  ~ dplyr::ungroup(data, !!!.x) |> #win nearly no time compared to group_by(!!!tab_vars)
-    #                    dplyr::summarise(
-    #                      dplyr::across(tidyselect::all_of(purrr::map_chr(.x, rlang::as_name)), ~ factor("Total")),
-    #                      dplyr::across(tidyselect::all_of(as.character(col_vars)), function(.var) new_fmt(
-    #                        display   = "mean",
-    #                        digits    = as.integer(digits),
-    #                        n         = dplyr::n(),
-    #                        wn        = if (wt != "no_weight") {sum(!!wt, na.rm = TRUE)} else {NA_real_},
-    #                        mean      = stats::weighted.mean(.var, !!wt, na.rm = TRUE),
-    #                        var       = weighted.var(.var, !!wt, na.rm = TRUE),
-    #                        type      = "mean",
-    #                        col_var   = dplyr::cur_column(),
-    #                        in_totrow = TRUE,
-    #                        in_tottab = length(.x) == length(tab_vars) + 1L,
-    #                      )),
-    #                      .groups = "drop")
-    #   )
-    #
-    # na_rows <- tabs_tot %>%
-    #   dplyr::select(!!!tab_vars) %>%
-    #   dplyr::transmute(na_rows = dplyr::if_any(.cols = dplyr::everything(), .fns = is.na)) |> tibble::deframe()
-    #
-    # if (any(na_rows)) {
-    #   if (na == "drop") {
-    #     tabs_tot <- tabs_tot[-which(na_rows), ]
-    #   } else {
-    #     tabs_tot <- tabs_tot %>%
-    #       dplyr::mutate(dplyr::across(tidyselect::all_of(as.character(tab_vars)),
-    #                                   ~ forcats::fct_na_value_to_level(., level = "NA"))) %>%
-    #       dplyr::arrange(!!!tab_vars, !!row_var)
-    #
-    #   }
-    # }
   }
 
   #Calculate means and variances for total table
@@ -4049,23 +3804,6 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
     data.table::setorderv(tabs, tab_row_names)
 
 
-    # tabs_totaltab <- dplyr::group_by(data, !!row_var) |>
-    #   dplyr::summarise(
-    #     dplyr::across(tidyselect::all_of(purrr::map_chr(tab_vars, rlang::as_name)),
-    #                   ~ factor("Total")),
-    #     dplyr::across(tidyselect::all_of(as.character(col_vars)), function(.var) new_fmt(
-    #       display   = "mean",
-    #       digits    = as.integer(digits),
-    #       n         = dplyr::n(),
-    #       wn        = if (wt != "no_weight") {sum(!!wt, na.rm = TRUE)} else {NA_real_},
-    #       mean      = stats::weighted.mean(.var, !!wt, na.rm = TRUE),
-    #       var       = weighted.var(.var, !!wt, na.rm = TRUE),
-    #       type      = "mean",
-    #       col_var   = dplyr::cur_column(),
-    #       in_totrow = TRUE,
-    #       in_tottab = TRUE
-    #     )),
-    #     .groups = "drop")
   }
 
   if (df | num) {
@@ -4442,17 +4180,6 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
 
 
 
-  # Add argument to transpose the table ?
-  # if (row_var_type == "numeric") {
-  #   tabs <- tabs %>%
-  #   tidyr::pivot_wider(names_from = !!fct_var, values_from = !!num_var,
-  #                      names_glue = "{.value}_{.name}",
-  #                      values_fill = fmt0("mean", digits, type = "mean"))
-  #   if (as.character(tab_vars) == "no_tab_vars") {
-  #     tabs <- tabs %>% dplyr::mutate(no_row_var = factor("no_row_var")) %>%
-  #       dplyr::relocate(no_row_var, .before = 1)
-  #   }
-  # }
 
 
   tab_var_1lv <- all(purrr::map_lgl(dplyr::select(tabs, !!!tab_vars),
