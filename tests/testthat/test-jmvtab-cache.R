@@ -247,18 +247,114 @@ test_that("Phase 7f: colour / digits toggles are byte-identical to a fresh tab()
   }
 })
 
-test_that("Phase 7f: base / reference change rebuilds (tier-3 miss) but stays byte-identical", {
+test_that("Phase 7f: a base change rebuilds (tier-3 miss) but stays byte-identical", {
   base <- jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", color = "diff")
   st   <- jmvtab_build(gss, base, NULL)$store
   for (o in list(
-    jmv_opts(row_vars = "marital", col_vars = "race", pct = "col", color = "diff"),                # pct
-    jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", color = "diff", na = "drop"),   # na
-    jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", color = "diff", ref = "1")       # ref (Phase 7g reref)
+    jmv_opts(row_vars = "marital", col_vars = "race", pct = "col", color = "diff"),               # pct
+    jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", color = "diff", na = "drop")   # na
   )) {
     r <- jmvtab_build(gss, o, st)
     expect_false(isTRUE(r$hits$tab3))
     expect_equal(r$tabs, jmv_oracle(o, gss))
   }
+  # Phase 9b-7: a REFERENCE change is now a tier-3 RE-REF (hit), not a rebuild -- still byte-identical.
+  r <- jmvtab_build(gss, jmv_opts(row_vars = "marital", col_vars = "race", pct = "row",
+                                  color = "diff", ref = "1"), st)
+  expect_true(isTRUE(r$hits$tab3))
+  expect_equal(r$tabs, jmv_oracle(jmv_opts(row_vars = "marital", col_vars = "race", pct = "row",
+                                           color = "diff", ref = "1"), gss))
+})
+
+# --- Phase 9b-7: instant reference re-ref (jmv_tab3_reref on the raw carrier) --------------
+# A ref/ref2-only change recomputes diff/ratio/CI from the cached carrier's ref-independent base
+# (no O(cells) rebuild) -- hits$tab3 == TRUE, byte-identical to the REBUILD it replaces. The gate is
+# `warm A -> B == a fresh jmvtab_build(B)` (both share the tier-4 tail, so it is valid for every case
+# incl. ci = "cell" where jmv_apply_display diverges from a plain tab()). warm A -> B.
+test_that("Phase 9b-7: a reference change re-refs (tier-3 hit) and equals the rebuild", {
+  o0 <- function(...) jmv_opts(row_vars = "marital", col_vars = "race", pct = "row",
+                               color = "diff", chi2 = TRUE, ...)
+  cases <- list(
+    list(d = "gss",  a = o0(),                b = o0(ref = "1")),                  # tot -> first
+    list(d = "gss",  a = o0(ref = "1"),       b = o0(ref = "3")),                  # index -> index
+    list(d = "gss",  a = o0(),                b = o0(ref = "Divorced")),           # tot -> label
+    list(d = "gss",  a = o0(color = "ratio"), b = o0(color = "ratio", ref = "2")), # ratio colour
+    list(d = "gss",  a = o0(color = "auto"),  b = o0(color = "auto", ref = "1")),  # auto colour
+    list(d = "gss",  a = o0(color_signif = "grey_non_signif"),
+                     b = o0(color_signif = "grey_non_signif", ref = "1")),         # significance policy
+    list(d = "gss",  a = o0(ci = "cell"),     b = o0(ci = "cell", ref = "1")),     # cell CI
+    list(d = "gss",  a = o0(ci = "no"),       b = o0(ci = "no", ref = "1")),       # no CI
+    list(d = "gss",  a = o0(stars = FALSE),   b = o0(stars = FALSE, ref = "1")),   # stars off
+    list(d = "gss",  a = o0(tab_vars = "year"),
+                     b = o0(tab_vars = "year", ref = "1")),                        # grouped (tab_vars)
+    list(d = "gssw", a = o0(wt = "w"),        b = o0(wt = "w", ref = "1")),        # weighted
+    list(d = "gss",  a = o0(col_vars = c("race", "partyid")),
+                     b = o0(col_vars = c("race", "partyid"), ref = "1"))           # multi col_var
+  )
+  for (cs in cases) {
+    dat <- get(cs$d)
+    st  <- suppressMessages(jmvtab_build(dat, cs$a, NULL))$store
+    r   <- suppressMessages(jmvtab_build(dat, cs$b, st))                          # warm A -> B (reref)
+    rebuild <- suppressMessages(jmvtab_build(dat, cs$b, NULL))$tabs              # fresh B (rebuild)
+    expect_true(isTRUE(r$hits$tab3), info = paste("reref hit:", cs$b$ref, cs$b$color))
+    expect_equal(r$tabs, rebuild, info = paste("reref == rebuild:", cs$b$ref, cs$b$color))
+  }
+})
+
+test_that("Phase 9b-7: a re-ref'd table equals a plain tab() (independent anchor)", {
+  # jmv_oracle = a plain tab(); valid where jmvtab_build == tab() (display = auto, ci = auto).
+  o0 <- function(...) jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", chi2 = TRUE, ...)
+  for (cs in list(list(a = o0(color = "diff"),  b = o0(color = "diff",  ref = "1")),
+                  list(a = o0(color = "ratio"), b = o0(color = "ratio", ref = "2")),
+                  list(a = o0(color = "diff", tab_vars = "year"),
+                       b = o0(color = "diff", tab_vars = "year", ref = "1")))) {
+    st <- suppressMessages(jmvtab_build(gss, cs$a, NULL))$store
+    r  <- suppressMessages(jmvtab_build(gss, cs$b, st))
+    expect_true(isTRUE(r$hits$tab3))
+    expect_equal(r$tabs, jmv_oracle(cs$b, gss))
+  }
+})
+
+test_that("Phase 9b-7: a second identical reference is an exact re-paint hit", {
+  oA <- jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", color = "diff", chi2 = TRUE)
+  oB <- utils::modifyList(oA, list(ref = "1"))
+  s  <- suppressMessages(jmvtab_build(gss, oA, NULL))$store
+  r1 <- suppressMessages(jmvtab_build(gss, oB, s))          # reref, stored under the new tuple
+  r2 <- suppressMessages(jmvtab_build(gss, oB, r1$store))   # same ref again -> exact-tuple re-paint
+  expect_true(isTRUE(r2$hits$tab3))
+  expect_equal(r2$tabs, jmv_oracle(oB, gss))
+})
+
+test_that("Phase 9b-7: non-rerefable ref changes rebuild but stay byte-identical", {
+  mk <- function(...) jmv_opts(row_vars = "marital", col_vars = "race", ...)
+  cases <- list(
+    list(a = mk(pct = "col", color = "diff"),                      b = mk(pct = "col", color = "diff", ref = "Black")),
+    list(a = jmv_opts(row_vars = "marital", col_vars = "tvhours", pct = "row", color = "auto"),
+         b = jmv_opts(row_vars = "marital", col_vars = "tvhours", pct = "row", color = "auto", ref = "1")),  # numeric
+    list(a = mk(pct = "row", color = "diff", levels = "first"),    b = mk(pct = "row", color = "diff", levels = "first", ref = "1")),
+    list(a = mk(pct = "row", color = "diff", add_pct = TRUE),      b = mk(pct = "row", color = "diff", add_pct = TRUE, ref = "1")),
+    list(a = mk(pct = "row", color = "auto", ci = "diff", chi2 = TRUE),
+         b = mk(pct = "row", color = "auto", ci = "diff", chi2 = TRUE, ref = "1")),                          # auto + ci=diff
+    list(a = mk(pct = "row", OR = "OR", color = "OR"),             b = mk(pct = "row", OR = "OR", color = "OR", ref = "1")),
+    list(a = jmv_opts(row_vars = "marital", col_vars = "race", tab_vars = "year", pct = "row", color = "diff", chi2 = TRUE, comp = "all"),
+         b = jmv_opts(row_vars = "marital", col_vars = "race", tab_vars = "year", pct = "row", color = "diff", chi2 = TRUE, comp = "all", ref = "1"))
+  )
+  for (cs in cases) {
+    st <- suppressMessages(jmvtab_build(gss, cs$a, NULL))$store
+    r  <- suppressMessages(jmvtab_build(gss, cs$b, st))
+    expect_false(isTRUE(r$hits$tab3), info = paste("rebuild (not reref):", cs$b$pct, cs$b$color))
+    expect_equal(r$tabs, jmv_oracle(cs$b, gss))
+  }
+})
+
+test_that("Phase 9b-7: re-ref works off a $state-restored carrier", {
+  oA <- jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", color = "diff", chi2 = TRUE)
+  oB <- utils::modifyList(oA, list(ref = "1"))
+  st   <- suppressMessages(jmvtab_build(gss, oA, NULL))$store
+  back <- unserialize(serialize(st, connection = NULL))       # jamovi $state gzip-RDS round-trip
+  r    <- suppressMessages(jmvtab_build(gss, oB, back))
+  expect_true(isTRUE(r$hits$tab3))
+  expect_equal(r$tabs, jmv_oracle(oB, gss))
 })
 
 test_that("Phase 7f: tier-3 armed table survives the $state round-trip and is size-bounded", {

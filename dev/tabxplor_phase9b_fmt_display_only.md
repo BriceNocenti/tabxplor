@@ -530,3 +530,50 @@ Each phase's gate: `devtools::test()` FAIL 0 + NO golden regen (`test-golden`/`t
 `test-color-golden`/`test-calculations`/`test-fuse-parity`/`test-num-fuse-parity`/`test-carve-parity`/
 `test-jmvtab-cache`/`test-parallel-parity`), plus a before/after benchmark into
 `dev/benchmarks/results_1.4.0/`.
+
+##### 8. Phase 9b-7 — jmvtab tier-3 carrier + instant reference re-ref (2026-07-11: DONE, byte-identical)
+
+The jmvtab tier-3 carrier work, scoped up (maintainer, this session) from the literal "carrier +
+re-paint" (which barely moves the render-bound live UI) to **carrier + the deferred instant reference
+re-ref** — the "change the reference level live → recompute only diff/ratio/CI, no rebuild" win
+(cache-design §4c). All in `R/jmvtab-cache.R`; the reference-picker UI already exists (Phase 7g-iii), so
+NO jamovi `.h.R` regeneration. Full suite green (1433/0), NO golden regen.
+
+**Increment 1 — tier-3 stores the CARRIER (byte-identical).** The tier-3 payload became
+`list(carrier = jmv_carrier_unwrap(armed), tuple)` (plain field-frames via `fmt_unwrap`) instead of a
+live materialized `tabxplor_tab` — the one tier that broke the tiers-1-2 "plain atomic-vector lists"
+discipline. New list-aware `jmv_carrier_unwrap`/`jmv_carrier_wrap`; schema bumped 2→3. `jmv_reapply_digits`
+rewritten to write `frame$digits` on the carrier (the attribute snapshot/restore trick gone — grouping
+rides in `carrier$attrs`, restored by `fmt_wrap`); the unified tail is `jmv_reapply_digits(carrier) →
+jmv_carrier_wrap → finalize_color_spec → jmv_apply_display → cleannames → n_min`. Moving the
+always-running digits pass onto the carrier means the single `fmt_wrap` **replaces** its record
+reconstruction (no common-path regression). **Byte-identity landmine caught by the A/B: `set_digits`
+casts to integer (`fmt_set_field_factory(cast = integer())`) but `fmt_wrap`'s `new_fmt` does NOT** — a
+double `digits` arg (`base_d = max(0, 1L)` is double) leaked a double `digits` field on mean columns;
+fixed with `vctrs::vec_cast(new_d, integer())`. 14-shape git-stash A/B (new vs old jmvtab_build) identical.
+
+**Increment 2 — `jmv_tab3_reref()` on the carrier (the win, byte-identical).** On a ref/ref2-only change
+the cached carrier is re-ref'd instead of rebuilt: reconstruct the wide `tabs_pct` + `tabs` context from
+the carrier's ref-independent `pct`/`in_totrow`/`in_tottab` fields (data rows only) → `tab_apply_reference()`
+for new diff/ratio + refrows → write diff/ratio (pct cols) + `in_refrow`/`ref` (all cols) into the frames
+→ re-run the diff CI via `tab_ci()` on the DATA ROWS → copy `ci_inf`/`ci_sup`/`pvalue` back. The p-value
+rows + all table attrs (`test`/`groups`/`subtext`) stay verbatim from the cache (ref-invariant). Reuses
+the SAME shared math (no fork). `jmv_tab3_rerefable` (only ref/ref2 differ, diff-armed, no OR) +
+`jmv_reref_shape_ok` (pct="row", one factor row_var, `!has_num_col`, levels="all", `!add_pct`,
+comp="tab", not auto+ci=diff) gate it; everything else falls through to the always-correct rebuild.
+
+Three byte-identity findings the A/B (reref ON vs a fresh rebuild) surfaced:
+- **Grouped tab_ci must NOT see the p-value lines.** The fresh build runs `tab_ci` BEFORE
+  `tab_pvalue_lines`; run on the assembled table its grouped total-row matching DROPS one row per
+  subtable (61→55). Fix: slice to the data rows (`dplyr::slice(dplyr::ungroup(full), which(data_mask))`,
+  re-group by the tab_vars) before `tab_ci`, then copy the CI back to the data positions.
+- **`comp = "all"` is NOT rerefable** — genuine `tab()` behaviour: the assembled shape is ref-DEPENDENT
+  (row count 55 for ref="tot" vs 61 for ref="1"/"3"; `comp="tab"` is ref-invariant at 62). Excluded → rebuild.
+- **`color = "auto" + ci = "diff"`** resolves to `after_ci` (a ref-dependent CI colour `color="no"`
+  would not reproduce) — excluded → rebuild. `color="diff"/"ratio"` always give `color_ci="no"` (safe).
+
+**Result** (`dev/benchmarks/results_1.4.0/phase9b7_reref.txt`): a ref change reref is **~4.5x** (small
+table, 20 vs 90 ms) / **~3.0x** (grouped 3-col_var, 120 vs 365 ms) faster than the rebuild; the
+exact-hit re-paint is unregressed. Locked by `test-jmvtab-cache.R` (12 eligible reref shapes == rebuild
++ a plain-tab() anchor + second-ref exact hit + 7 fallback shapes rebuild + $state round-trip). Still
+render-bound end to end (Phase 10), but the R-side ref-change cost is cut 3-4.5x.

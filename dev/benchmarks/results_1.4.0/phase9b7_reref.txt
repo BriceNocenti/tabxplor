@@ -1,0 +1,27 @@
+Phase 9b-7 -- jmvtab tier-3 cache on the raw carrier + instant reference re-ref
+================================================================================
+Harness: dev/benchmarks (throwaway) ; forcats::gss_cat (21483 rows) ; median of
+N system.time() runs (Windows resolution ~5-10 ms, so figures are approximate).
+
+A REFERENCE change (ref/ref2) on a warmed tier-3 store:
+  - RE-REF  = jmv_tab3_reref(): recompute diff/ratio + in_refrow + the diff CI on the
+              cached carrier's ref-independent base fields (pct/n/wn/tot_n). No O(cells) rebuild.
+  - REBUILD = the pre-9b-7 behaviour: a full tab() rebuild (tiers 1-2 still cache-hit).
+
+small table (marital x race, pct=row, color=diff, chi2)
+  reref (ref change)   :   20.0 ms
+  rebuild (ref change) :   90.0 ms      -> reref 4.5x faster
+  exact-hit re-paint   :   ~0   ms      (increment 1: colour/digits/display toggle, unregressed)
+
+bigger grouped table (marital x {race,partyid,relig} x tab_vars=year, pct=row, color=diff, chi2)
+  reref (ref change)   :  120.0 ms
+  rebuild (ref change) :  365.0 ms      -> reref 3.0x faster
+
+Notes
+-----
+- Still render-bound end to end (tab_kable ~0.6 s on a big table is Phase 10); the reref shaves
+  the R-side ref-change cost 3-4.5x, the headline "change the reference level live" responsiveness.
+- Byte-identical to the rebuild it replaces (reref A/B: 14 eligible shapes identical + hits$tab3
+  TRUE; 7 non-rerefable shapes rebuild + identical). Full suite green (1433/0), NO golden regen.
+- Rerefable = pct="row", single factor row_var, diff/ratio/auto colour, no OR, comp="tab",
+  levels="all", no add_pct, ref/ref2-only change. Everything else falls back to the (fast) rebuild.

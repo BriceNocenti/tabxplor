@@ -42,11 +42,12 @@ R/
 ├── utils.R         (1306 L)  Pipe re-export, .onLoad() options setup, factor utilities
 ├── tab_logit.R     (1009 L)  WIP — entirely commented out (future logistic regression)
 ├── tab_logit_2.R    (706 L)  WIP — entirely commented out (logit diagnostics/plots)
-├── jmvtab-cache.R  (~700 L)  jmvtab live multi-tier cache: content-addressed store + hashing +
+├── jmvtab-cache.R  (~800 L)  jmvtab live multi-tier cache: content-addressed store + hashing +
 │                             jmv_cache_aggregate (tier 1-2, tab_aggregate hook) + the Phase 7f
-│                             tier-3 built-table cache (jmv_tab3_base_key/tuple, jmv_reapply_digits,
-│                             re-paint) + jmvtab_build (engine-free core; reuses tab() via .cache)
-│                             + jmvtab_ref_vector (Phase 7g ref-picker → named ref)
+│                             tier-3 CARRIER cache (Phase 9b-7: jmv_carrier_unwrap/wrap store, not a
+│                             live tab; jmv_tab3_base_key/tuple, jmv_reapply_digits re-paint +
+│                             jmv_tab3_reref/rerefable instant reference re-ref) + jmvtab_build
+│                             (engine-free core; reuses tab() via .cache) + jmvtab_ref_vector (ref-picker)
 │                             + jmvtab_levels_order/jmv_relevel_cols (7g-ii level-reorder,
 │                             post-aggregate; .levels_order arg on tab())
 ├── jmvtab-export.R  (~120 L)  jmvtab export helpers (Phase 7g): resolveExportPath (typed path →
@@ -855,7 +856,7 @@ maintainer step**: regenerate `jmvtab.h.R` from `.a.yaml` in the running app, th
 ##### Phase 7g-iii — user-friendly .js reference-level picker
 
 A per-variable **reference-level** picker (the `ref` reference point of comparison for the calculation of color helpers, of each `row_var` under  `pct="row"`, of each `col_var` under `pct="col"`).
-- The field-level **ref / expert-CI re-ref** on the assembled table (`jmv_tab3_reref` / `jmv_tab3_rerefable` stubs, currently OFF → ref changes rebuild). The `tab_apply_reference` foundation is proven byte-identical; the remaining wiring (in_refrow / `ref`-attribute setters, the `tab_ci` re-run total-row edge, pct="col" splitting) lands with 7g so it can be golden-locked against a real UI.
+- The field-level **ref re-ref** on the assembled table — **BUILT in Phase 9b-7** (`jmv_tab3_reref` / `jmv_tab3_rerefable` now live: a ref/ref2 change on the cached carrier recomputes diff/ratio/CI, no rebuild, ~3–4.5× faster; gated to pct="row" / one factor row_var / diff colour / comp="tab", else rebuild). `pct="col"` per-col_var re-ref remains a rebuild (not yet in the reref shape gate).
 
 ###### Done (2026-07-10)
 
@@ -863,7 +864,7 @@ The picker was **rebuilt as a Material `CustomControl` `refPickerCtrl`** (siblin
 
 **Backend (per-col_var col% references + fixes):** `tab()` now supports **one reference column per col_var under `pct="col"`** — a `ref` NAMED BY COL_VAR (impossible under the old single-ref collapse). Mechanism: `ref_vect` (per row_var × per col_var, the reference analogue of `pct_vect`) threaded into the factor leaf `tab_plain()` only; the col% math (`tab_apply_reference`) is unchanged (one col_var per leaf, so the leaf IS the per-col_var group). `resolve_ref_vector()` gained a `what=` arg (col_var warnings) and now name-matches a NAMED length-1 ref (fixed a latent recycle bug). `diff_index()` **exact-match-first** (then regex) — a chosen level label is matched literally, fixing metacharacter labels (e.g. `"$25000 or more"` — the reported "2nd row_var does nothing" bug) and substring collisions, while the stored `ref` attribute stays human-readable. `detect_refcol()` (fmt_class.R) makes `tab_ci()`'s diff-CI reference column follow the marked `refcol` (byte-identical for first/tot). Golden-locked: `f_col_ref_lvl/multi/partial/ci/or`; full suite green (1327), all existing goldens byte-identical.
 
-**OPEN — maintainer step**: regenerate `jmvtab.h.R` from `.a.yaml` in the running jamovi app (`jmvtools::install()` can't run headlessly), then live-verify the picker. The field-level instant re-ref (`jmv_tab3_reref`) stays OFF (a ref change rebuilds — fast via the cache).
+**OPEN — maintainer step**: regenerate `jmvtab.h.R` from `.a.yaml` in the running jamovi app (`jmvtools::install()` can't run headlessly), then live-verify the picker. The field-level instant re-ref (`jmv_tab3_reref`) is now **ON** (Phase 9b-7): a ref change re-refs the cached carrier instead of rebuilding (~3–4.5× faster, byte-identical).
 
 
 #### Phase 7h — Jamovi UI js consistency and user-friendliness
@@ -1054,20 +1055,31 @@ Combined: the two WRITE-heavy paths (contrib −44 %, ci −20 % vs pre-9b-5) re
 
 **Re-scoped (maintainer, this session) from "step D / Boundary A" → "Boundary B via local unwrap".** Grounded finding: 9b-6-as-designed (carrier through `tab_assemble_tables`, materialize at `tab_build_one` end) buys **~0 % on the common path** (after 9b-5 everything inside `tab_build_one` is cheap: leaves materialize once; `tab_apply_tests` no longer reconstructs; `tab_assemble_tables` ~2 %; add_n on `pct="row"` adds one col; the join is 0.9 %). The real ~15-25 % was **Boundary B** — `tab_compact`'s `vec_rbind` + `tab_pvalue_lines`' `bind_rows` in `tab_assemble_output`. Both were rewritten to row-bind on **plain field-frames via a LOCAL `fmt_unwrap`→wrap** (the 9b-5 pattern), so `tab_build_one` keeps returning **records** (no `test-parallel-parity` re-lock) and **9b-6+9b-7 collapse into this one deliverable** (Boundary A skipped). New primitive `fmt_stack_frames()` (`R/tab.R`). Increment 1 = `tab_compact` (`tab_stack_tables()`: `vec_ptype_common` reconcile = **L3**, promote_totrow folded onto the field frame = **L4**; ~neutral perf, byte-identical, scales with #row_vars). Increment 2 = `tab_pvalue_lines` (**the win**: fmt-free skeleton for row order + per-column field append, subsuming the pass-3 masked fill). Byte-identity key: the old `vec_cast` materialised `wn` (NA→n; `get_wn` is the only getter with a fallback) — reproduced via `fr$wn <- get_wn(col)`. **Bench (gss_cat 5×3): merge_s −28..−30 %, list_s −8..−14 %, mem 51→45 MB; numeric ~flat** (`dev/benchmarks/results_1.4.0/phase9b6_boundaryB.txt`). Full suite FAIL 0, NO golden regen; 12-shape git-stash `identical()` A/B green (incl. per-row_var-ref L3, tab_vars-grouped pvalue, numeric ANOVA, list path). `fmt_unwrap`/`fmt_wrap` now load-bearing.
 
-##### Phase 9b-7 — jmvtab tier-3 cache on the raw carrier
+##### Phase 9b-7 — jmvtab tier-3 carrier + instant reference re-ref (DONE — 2026-07-11)
 
-The tier-3 armed cache stores **plain field-frames** instead of the materialized fmt table and re-paints (`finalize_color_spec`/`reapply_digits`/`apply_display`) on the raw fields — a faster jmvtab live path.
+Scoped up (maintainer) from the literal "carrier + re-paint" (which barely moves the render-bound live UI) to **carrier + the deferred instant reference re-ref** — "change the reference level live → recompute only diff/ratio/CI, no rebuild" (cache-design §4c). All in `R/jmvtab-cache.R`; the reference-picker UI already exists (7g-iii) → NO `.h.R` regen. Byte-identical, full suite green (1433/0), NO golden regen.
+
+- **Increment 1 — tier-3 stores the CARRIER** (`list(carrier = jmv_carrier_unwrap(armed), tuple)` = plain field-frames via `fmt_unwrap`, not a live tab — aligns tier-3 with the tiers-1-2 discipline; schema 2→3). `jmv_reapply_digits` rewritten onto the carrier (drops the snapshot/restore trick; the single `fmt_wrap` absorbs its reconstruction). A/B caught L1: `set_digits` casts to integer but `new_fmt` does not → `vec_cast(new_d, integer())`.
+- **Increment 2 — `jmv_tab3_reref()`**: reconstruct `tabs_pct`+context from the carrier's ref-independent fields (data rows only) → `tab_apply_reference()` for diff/ratio → re-run the diff CI via `tab_ci()` on the DATA ROWS (p-value lines removed first — they'd drop one row/subtable) → copy CI back; p-value rows + table attrs (`test`/`groups`) verbatim. Gated by `jmv_tab3_rerefable` (only ref/ref2 differ, diff-armed, no OR) + `jmv_reref_shape_ok` (pct="row", one factor row_var, `!has_num_col`, levels="all", `!add_pct`, **comp="tab"** — comp="all" has a ref-DEPENDENT shape —, not auto+ci=diff); else the (fast, cached) rebuild.
+- **Result** (`dev/benchmarks/results_1.4.0/phase9b7_reref.txt`): a ref change is **~3–4.5× faster** (reref vs rebuild). Locked by `test-jmvtab-cache.R` (reref == rebuild across 12 shapes + tab() anchor + fallbacks + $state). Detail + landmines: `dev/tabxplor_phase9b_fmt_display_only.md` §8.
 
 
+##### Phase 9c — further simplifications ?
 
+Now that `tabxplor_fmt` is  display-only, and a carrier is used until the end of the pipeline for performance reasons, adding some complexity, I wonder if there would be further ways to improve the build table workflow performance and simplicity.
+- Are there remaining levers for performance ?
+- Are there features that we should give up in order to reduce complexity and use a more straightforward approach, at the price of back-compatiblity or forking ?
+- Would it be possible and reliable to transform the carrier into pure data.table to avoid to copy objects in memory at each operation and modify them directly in memory (the big data.table performance improvement) ?
 
 
 ### Phase 10 — Unified exporter prep & display
 
 Fully redesign exports to unify the different kind of exports in a common fast framework. One shared exporter-prep helper for `tab_xl`/`tab_kable`/`tab_md`/`tab_plot`; keep export parity (`format.tabxplor_fmt` vs the `tab_xl` bypass). Detail: `dev/tabxplor_1.4.0_decisions.md` §7-8.
-- Make it very fast (no useless computations if the result is not used afterwards, depending on the type of export and options chosen). If some features hurts speed, add an option to opt-out (for example in jamovi live UI where speed matters most).
+- Make it the faster possible (no useless computations if the result is not used afterwards, depending on the type of export and options chosen). If some features hurts speed, add an option to opt-out (for example in jamovi live UI where speed matters most).
 - **Each exporter gets a base method (single tab) AND a list method** (several tabs rendered one-after-another, not merged — e.g. an HTML container is needed for kable).
 - `tab_plot()` has a bad display and is hard to handle : **soft-deprecate** it (Q1 — keep exported, mark `lifecycle` experimental/superseded; do NOT hard-remove from NAMESPACE), keep it for future improvements
+
+All export functions have a **only a light backward-compatibility contract** : past arguments should not trigger errors but can, if needed, be soft-deprecated and "wired to nothing". For this reason, whenever needed, their UI can be totally redesigned for user-friendliness, simplicity, performance and integration within the common prep framework.
 
 New common features for all kind of exports
 - Use variables `label` attribute more thoroughly in exports when it exists (in survey data formatting, I have the habit of putting the original questionnaire question in it, which can me meaningful information for the user) ? Where to print it, for useful additional information without clutter (not erasing variable names, which are real useful) ?

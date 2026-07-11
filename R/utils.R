@@ -1340,15 +1340,15 @@ po_to_dt <- function(file) {
 #   preview_colour_grid()    - every text x background combination of two vectors
 #   preview_luminance_grid() - luminance shades of one text/background pair
 #
-# Each cell shows the sample text plus its APCA lightness-contrast value (Lc) of
-# text-on-background, so you can eyeball legibility at a glance. Typography
-# (font stack + thin bottom borders + centred bold caption) mirrors the defaults
-# of tabxplor::tab_kable() (lightable-classic style, the '"DejaVu Sans", ...'
-# font set via option "tabxplor.kable_html_font").
+# Both render exactly like tab_kable(): a knitr::kable() + kableExtra::kable_classic()
+# table whose cells are kableExtra::cell_spec() tiles (rounded background via
+# background_as_tile, the same background "shape" tab_kable() draws). Each cell
+# shows the sample text plus its APCA lightness-contrast value (Lc) of
+# text-on-background, so you can eyeball legibility at a glance.
 #
-# Dependency: farver (oklch + rgb maths), which ships with your tidyverse +
-# tabxplor stack. Viewer routing uses base R (getOption("viewer") with a
-# browser fallback).
+# Dependencies: farver (oklch + rgb maths) + knitr + kableExtra (the tab_kable
+# engine). Viewer routing reuses print.kableExtra (getOption("viewer") hook),
+# the same route tab_kable() output takes - no pandoc needed.
 # ---------------------------------------------------------------------------
 
 # tab_kable() default HTML font stack.
@@ -1356,11 +1356,18 @@ po_to_dt <- function(file) {
 
 # --- internal: dependency guard --------------------------------------------
 
-#' Stop early with a clear message if farver is missing.
+#' Stop early with a clear message if a rendering dependency is missing.
 #' @noRd
 .cg_require <- function() {
   if (!requireNamespace("farver", quietly = TRUE)) {
     stop("Package 'farver' is required for oklch handling.", call. = FALSE)
+  }
+  # The grids now render as tab_kable()-style tables (same engine + display).
+  for (pkg in c("knitr", "kableExtra")) {
+    if (!requireNamespace(pkg, quietly = TRUE)) {
+      stop(sprintf("Package '%s' is required to render the colour grid.", pkg),
+           call. = FALSE)
+    }
   }
 }
 
@@ -1470,50 +1477,36 @@ po_to_dt <- function(file) {
   gsub(">", "&gt;", x, fixed = TRUE)
 }
 
-#' Assemble the swatch <table> as an HTML string.
+#' Build the swatch grid as a tab_kable()-style table and open the Viewer.
 #'
-#' Column headers are tinted with the background colour (a live preview of the
-#' backdrop); row headers show a bordered square of the text colour (always
-#' visible, even for near-white text colours). Each cell shows the sample text
-#' and, when show_contrast is TRUE, the APCA Lc value on the same line.
+#' Renders exactly like [tabxplor::tab_kable()]: each body cell is a
+#' `kableExtra::cell_spec()` tile (rounded background via `background_as_tile`,
+#' the same background "shape" tab_kable() draws), coloured `text` on `bg`, laid
+#' out by `knitr::kable()` + `kableExtra::kable_classic()` with the tab_kable
+#' DejaVu font stack. Column headers are tinted with the backdrop colour (a live
+#' preview); row headers carry a small square of the text colour. `caption`
+#' becomes the table caption, `subtitle` a footnote. Opening in the Viewer reuses
+#' the `print.kableExtra` path (same dependencies + `getOption("viewer")` hook
+#' tab_kable() uses), so no pandoc is needed.
 #'
 #' @param text_hex,bg_hex Character matrices [n_row x n_col] of cell colours.
-#' @param row_swatch,col_swatch Hex used to tint the row squares / column cells.
+#' @param row_swatch,col_swatch Hex used to tint the row squares / column headers.
 #' @noRd
-.cg_table <- function(text_hex, bg_hex, row_labels, col_labels,
-                      row_swatch, col_swatch, corner, sample_text,
-                      show_contrast, swatch_padding) {
-  sample_html <- .cg_escape(sample_text)
+.cg_kable_grid <- function(text_hex, bg_hex, row_labels, col_labels,
+                           row_swatch, col_swatch, corner, sample_text,
+                           show_contrast, swatch_padding, caption, subtitle,
+                           font_size, full_width = FALSE, browse = TRUE) {
   n_row <- nrow(text_hex)
   n_col <- ncol(text_hex)
+  sample_html <- .cg_escape(sample_text)
+  tile_css <- paste0("display:inline-block;padding:", swatch_padding, ";")
 
-  # header row: corner cell + one tinted cell per background
-  th <- vapply(seq_len(n_col), function(j) {
-    bg <- col_swatch[j]
-    sprintf(
-      '<th style="background-color:%s;color:%s;padding:6px 10px;">%s</th>',
-      bg, .cg_readable_on(bg), col_labels[j]
-    )
-  }, character(1))
-  head_html <- sprintf(
-    '<tr><th style="padding:6px 10px;text-align:right;">%s</th>%s</tr>',
-    corner, paste(th, collapse = "")
-  )
-
-  # body rows: row header (square + label) + one swatch cell per background
-  rows <- vapply(seq_len(n_row), function(i) {
-    rlab <- sprintf(
-      paste0('<th style="padding:6px 10px;text-align:right;white-space:nowrap;">',
-             '<span style="display:inline-block;width:12px;height:12px;',
-             'border:1px solid #999;background-color:%s;vertical-align:middle;',
-             'margin-right:6px;"></span>%s</th>'),
-      row_swatch[i], row_labels[i]
-    )
-    cells <- vapply(seq_len(n_col), function(j) {
-      txt <- text_hex[i, j]
-      bg  <- bg_hex[i, j]
+  # body: one kableExtra tile per cell (the same engine + rounded-tile shape as
+  # tab_kable()'s coloured-background branch, cell_spec(background = )).
+  body <- vapply(seq_len(n_col), function(j) {
+    vapply(seq_len(n_row), function(i) {
       lc_txt <- if (isTRUE(show_contrast)) {
-        lc <- .cg_apca(txt, bg)
+        lc <- .cg_apca(text_hex[i, j], bg_hex[i, j])
         sprintf(
           ' <span style="font-weight:400;opacity:.75;font-size:90%%;">Lc\u00a0%d</span>',
           as.integer(round(abs(lc)))
@@ -1521,50 +1514,58 @@ po_to_dt <- function(file) {
       } else {
         ""
       }
-      sprintf(
-        paste0('<td style="background-color:%s;color:%s;padding:%s;',
-               'text-align:center;border-bottom:1px solid #d9d9d9;">',
-               '<div style="font-weight:600;">%s%s</div></td>'),
-        bg, txt, swatch_padding, sample_html, lc_txt
+      kableExtra::cell_spec(
+        paste0(sample_html, lc_txt), format = "html", escape = FALSE,
+        bold = TRUE, color = text_hex[i, j], background = bg_hex[i, j],
+        extra_css = tile_css
       )
     }, character(1))
-    sprintf("<tr>%s%s</tr>", rlab, paste(cells, collapse = ""))
-  }, character(1))
+  }, character(n_row))
+  body <- matrix(body, nrow = n_row, ncol = n_col)
 
-  sprintf("<table><thead>%s</thead><tbody>%s</tbody></table>",
-          head_html, paste(rows, collapse = ""))
-}
+  # row header: small text-colour square + label (always visible, even near-white)
+  rlab <- vapply(seq_len(n_row), function(i) sprintf(
+    paste0('<span style="display:inline-block;width:12px;height:12px;',
+           'border:1px solid #999;background-color:%s;vertical-align:middle;',
+           'margin-right:6px;"></span>%s'),
+    row_swatch[i], row_labels[i]
+  ), character(1))
 
-#' Wrap the table in a standalone tab_kable-style HTML page and open the Viewer.
-#'
-#' Routes through getOption("viewer") (set by Positron / RStudio, the same hook
-#' tab_kable() uses) and falls back to the default browser outside those IDEs.
-#' @noRd
-.cg_render <- function(table_html, caption, subtitle, font_size, browse) {
-  css <- sprintf(
-    paste0(
-      "body{margin:0;background:#fff;}",
-      ".cg-wrap{font-family:%s;font-size:%s;color:#222;padding:16px;}",
-      ".cg-wrap table{border-collapse:collapse;margin:0 auto;}",
-      ".cg-wrap th{border-bottom:1px solid #d9d9d9;border-top:none;}",
-      ".cg-title{text-align:center;font-weight:bold;font-size:120%%;}",
-      ".cg-sub{text-align:center;font-size:85%%;opacity:.8;margin:2px 0 12px;}"
-    ),
-    .cg_font, font_size
-  )
-  page <- sprintf(
-    paste0('<!DOCTYPE html><html><head><meta charset="utf-8"><style>%s</style>',
-           '</head><body><div class="cg-wrap"><div class="cg-title">%s</div>',
-           '<div class="cg-sub">%s</div>%s</div></body></html>'),
-    css, caption, subtitle, table_html
-  )
-  if (isTRUE(browse)) {
-    f <- tempfile(pattern = "cg_", fileext = ".html")
-    writeLines(enc2utf8(page), f, useBytes = TRUE)  # keep unicode glyphs intact
-    viewer <- getOption("viewer")
-    if (is.function(viewer)) viewer(f) else utils::browseURL(f)
+  # column headers tinted with the backdrop colour (a live preview of the fill)
+  col_head <- vapply(seq_len(n_col), function(j) kableExtra::cell_spec(
+    col_labels[j], format = "html", escape = FALSE, bold = TRUE,
+    color = .cg_readable_on(col_swatch[j]), background = col_swatch[j]
+  ), character(1))
+
+  df <- data.frame(rlab, body, check.names = FALSE, stringsAsFactors = FALSE)
+
+  # font_size arrives as a CSS length ("16px"); kable_styling wants a bare number.
+  fs <- suppressWarnings(as.numeric(gsub("[^0-9.]", "", as.character(font_size))))
+  if (length(fs) != 1L || is.na(fs)) fs <- NULL
+
+  out <- knitr::kable(
+    df, format = "html", escape = FALSE,
+    align = c("l", rep("c", n_col)),
+    col.names = c(corner, col_head), caption = caption
+  ) |>
+    kableExtra::kable_classic(
+      lightable_options = "hover", full_width = full_width,
+      html_font = .cg_font, font_size = fs
+    ) |>
+    kableExtra::row_spec(
+      0, bold = TRUE,
+      extra_css = "border-bottom:1px solid;vertical-align:bottom;text-align:center;"
+    ) |>
+    kableExtra::column_spec(1, extra_css = "white-space:nowrap;")
+
+  if (!is.null(subtitle) && any(nzchar(subtitle))) {
+    out <- kableExtra::add_footnote(out, subtitle, notation = "none", escape = FALSE)
   }
-  invisible(page)
+
+  # Reuse print.kableExtra: opens in the Viewer in interactive sessions (the same
+  # route tab_kable() output takes), cat()s the HTML otherwise.
+  if (isTRUE(browse)) print(out)
+  invisible(out)
 }
 
 # max in-gamut oklch chroma for a given L + hue.
@@ -1619,9 +1620,10 @@ set_chroma <- function(cols, c = 0.1) {
 
 #' Preview every text x background colour combination in the Viewer
 #'
-#' Builds an HTML grid with one row per text colour and one column per
-#' background colour, then opens it in the Positron Viewer pane. Typography
-#' matches the defaults of [tabxplor::tab_kable()].
+#' Builds a [tabxplor::tab_kable()]-style table with one row per text colour and
+#' one column per background colour (cells are `kableExtra::cell_spec()` tiles,
+#' the same rounded-background shape tab_kable() draws), then opens it in the
+#' Positron Viewer pane.
 #'
 #' @param text_colors A (named) character vector of hex text colours. Names
 #'   become row labels; the hex value is used when unnamed.
@@ -1666,17 +1668,14 @@ preview_colour_grid <- function(text_colors,
   text_hex <- matrix(rep(unname(text_colors), times = n_col), nrow = n_row)
   bg_hex   <- matrix(rep(unname(background_colors), each = n_row), nrow = n_row)
 
-  table_html <- .cg_table(
+  .cg_kable_grid(
     text_hex, bg_hex,
     row_labels = row_labels, col_labels = col_labels,
     row_swatch = unname(text_colors),
     col_swatch = unname(background_colors),
     corner = "text \u2193 / bg \u2192",
     sample_text = sample_text, show_contrast = show_contrast,
-    swatch_padding = swatch_padding
-  )
-  .cg_render(
-    table_html,
+    swatch_padding = swatch_padding,
     caption  = "Text \u00d7 background colour grid",
     subtitle = sprintf("%d text colours \u00d7 %d backgrounds \u2014 cells show APCA Lc",
                        n_row, n_col),
@@ -1692,7 +1691,8 @@ preview_colour_grid <- function(text_colors,
 #' shades: rows vary the text colour's lightness, columns vary the background's
 #' lightness. Every shade keeps its source oklch hue; chroma is either held at
 #' the source value (capped to gamut) or pushed to the maximum available at that
-#' lightness/hue. Opens in the Positron Viewer.
+#' lightness/hue. Rendered as a [tabxplor::tab_kable()]-style table (rounded
+#' `cell_spec()` background tiles) and opened in the Positron Viewer.
 #'
 #' @param text_color Single hex string for the text colour.
 #' @param background_color Single hex string for the background colour.
@@ -1737,16 +1737,13 @@ preview_luminance_grid <- function(text_color,
   bg_hex   <- matrix(rep(bg_shades,  each  = n), nrow = n)  # constant per col
 
   lab <- sprintf("L=%.2f", l_values)
-  table_html <- .cg_table(
+  .cg_kable_grid(
     text_hex, bg_hex,
     row_labels = lab, col_labels = lab,
     row_swatch = txt_shades, col_swatch = bg_shades,
     corner = "text \u2193 / bg \u2192",
     sample_text = sample_text, show_contrast = show_contrast,
-    swatch_padding = swatch_padding
-  )
-  .cg_render(
-    table_html,
+    swatch_padding = swatch_padding,
     caption  = sprintf("Luminance shades \u2014 chroma: %s (cells show APCA Lc)", chroma),
     subtitle = sprintf(
       "text %s (hue %.0f\u00b0) \u00d7 background %s (hue %.0f\u00b0)",

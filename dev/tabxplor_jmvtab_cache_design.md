@@ -317,6 +317,16 @@ cleannames (with summing) for retro-compatibility — a deliberate divergence be
 > hit). Byte-identical to `tab()` on pre-releveled microdata; new parity + cache-reuse tests. This is NOT the
 > field-level re-ref (still stubbed OFF) — a reorder does a full (fast) tier-3 rebuild, not a re-paint.
 
+> STATUS (2026-07-11, Phase 9b-7): **the instant reference re-ref (§4c) is now BUILT**, and tier-3 stores
+> the CARRIER (plain field-frames, not a live materialized tab -- aligns tier-3 with the tiers-1-2 discipline).
+> `jmv_tab3_reref()` recomputes the ref-dependent fields (diff/ratio + in_refrow + the diff CI) from the
+> cached carrier's ref-independent base (pct/n/wn/tot_n) via the SAME shared math (`tab_apply_reference()`
+> + `tab_ci()`), no O(cells) rebuild -- **~3-4.5x faster than the rebuild on a ref change**. `jmv_tab3_rerefable`
+> + `jmv_reref_shape_ok` gate it to the byte-identical case (pct="row", one factor row_var, diff/ratio/auto
+> colour, no OR, **comp="tab"** -- comp="all" has a ref-DEPENDENT assembled shape, excluded --, levels="all",
+> no add_pct); everything else falls through to the (fast, cached) rebuild. Byte-identical (reref == rebuild
+> A/B + `test-jmvtab-cache.R`), full suite green, NO golden regen. Detail + landmines: `dev/tabxplor_phase9b_fmt_display_only.md` §8.
+
 The tiers are only callable if `tab_build` is carved into three composable steps — the **same functions
 `tab()` uses, no math fork** (Phase 7e drives them at cache granularity; reuse guarantees near-identical
 behaviour). Grounded in the current pipeline order (map §2).
