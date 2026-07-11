@@ -1708,6 +1708,12 @@ tab_transform <- function(ctx) {
 
     tabs_text <- purrr::reduce(text, dplyr::full_join, by = c(as.character(tab_vars), row_var))
 
+    # Phase 9b-4: carry the joined factor table to the tests boundary as a plain-field CARRIER. Here
+    # this is a byte-identical no-op round-trip (unwrap -> materialize) that establishes + validates
+    # the carrier at the tab_apply_tests() seam in the real pipeline; Phase 9b-5 folds it into
+    # carrier-based chi2/ci writers so the fmt record is no longer reconstructed through the tests.
+    tabs_text <- fmt_wrap(fmt_unwrap(tabs_text))
+
     # DESIGN: ordering invariant — tab_chi2() and tab_ci() are INDEPENDENT (either order works), but
     # BOTH must run BEFORE non-first levels are dropped (in tab_assemble), so they are computed on the
     # full set of levels. See CLAUDE.md § Global Architecture. Phase 6a: one pass through the shared
@@ -2355,6 +2361,45 @@ fmt_col_attrs    <- c("type", "comp_all", "ref", "ci_type", "col_var",
 # which PARTIAL-MATCHES the `comp_all` formal (verified) -- `comp_all = x` is the identical result.
 # fmt_materialize_col() -- the ONE new_fmt() call. do.call by exact names => no partial-match drift.
 fmt_materialize_col <- function(frame, meta) do.call(new_fmt, c(frame, meta))
+
+# fmt_unwrap() / fmt_wrap() -- the carrier ROUND-TRIP (Phase 9b-4). This is the tests-boundary seam:
+# a built table is DECOMPOSED to plain field-vectors so tab_apply_tests() (chi2/ci) can eventually
+# read/write them directly (Phase 9b-5) instead of reconstructing the tabxplor_fmt record at every
+# step. In 9b-4 the two are composed as a byte-identical no-op (fmt_wrap(fmt_unwrap(x))) that carries
+# the table to the seam and validates the round-trip in the real pipeline.
+#
+# fmt_unwrap(tab) -> a carrier list:
+#   is_fmt  : logical over the data columns (rebuild order + fmt/factor split).
+#   factors : the non-fmt columns, passed through WHOLE (length-nrow, own attrs kept).
+#   fmt     : named list, one entry per fmt column = list(frame, meta) -- frame = as.list(vec_data())
+#             (the 18 raw fields, exact types), meta = the 9 fmt_col_attrs read by exact name.
+#   attrs   : attributes(tab) VERBATIM (class / names / row.names / subtext / test / groups).
+# fmt_wrap(carrier) is the exact inverse: materialize each fmt column via the single
+# fmt_materialize_col() seam, pass the factor columns through, restore `attrs` wholesale.
+#
+# Byte-identity: new_fmt() does NO casting (L1) so vec_data() -> new_fmt() preserves every field's
+# storage type; the 9 attrs are read/written by exact name; restoring attributes() reproduces the
+# grouped/ungrouped class, subtext and test attribute. Provably identical() to the input (locked by
+# test-carrier-parity.R).
+fmt_unwrap <- function(tab) {
+  cols <- unclass(tab)                                     # the data columns (fmt + factor), by name
+  is_f <- vapply(cols, is_fmt, logical(1))
+  fmt  <- lapply(cols[is_f], function(col) list(
+    frame = as.list(vctrs::vec_data(col)),
+    meta  = purrr::set_names(lapply(fmt_col_attrs, function(a) attr(col, a, exact = TRUE)),
+                             fmt_col_attrs)
+  ))
+  list(is_fmt = is_f, factors = cols[!is_f], fmt = fmt, attrs = attributes(tab))
+}
+
+fmt_wrap <- function(carrier) {
+  cols <- vector("list", length(carrier$is_fmt))
+  names(cols) <- names(carrier$is_fmt)
+  cols[!carrier$is_fmt] <- carrier$factors
+  cols[ carrier$is_fmt] <- lapply(carrier$fmt, function(cc) fmt_materialize_col(cc$frame, cc$meta))
+  attributes(cols) <- carrier$attrs                       # class/names/row.names/subtext/test/groups
+  cols
+}
 
 # DESIGN: tab_plain() is the core aggregation function. Internal sequence:
 #   1. data.table dcast (row_var ~ col_var, fun = sum of weights) for speed

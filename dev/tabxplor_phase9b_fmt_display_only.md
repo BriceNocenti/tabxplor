@@ -138,6 +138,10 @@ reads, trivially portable to the col-meta sidecar.
 
 ###### 3.4 Phasing sketch (each byte-identical, golden-gated, benchmarked)
 
+*(Original design sketch — its `9b-2/9b-3/9b-4` labels predate the pass-based renumbering and are
+**superseded by §7**: the carrier is now Phases 9b-4→9b-7, jmvtab tier-3 is 9b-8. Kept for the design
+history; read §7 for the authoritative numbering.)*
+
 + **9b-2** — **RE-SCOPED to a measurement (done 2026-07-11; see §5).** The originally-planned
   "plain-field writers, leaf still materializes" is a no-op on the common `color="diff"` path
   (`tab_ci` never runs; `tab_chi2` writes nothing) — so it cannot gate 9b-3. Replaced by a
@@ -173,7 +177,7 @@ effort. If the 9b-2 spike shows <25 % recoverable, stop and keep only 9b-1.
   (plain field frames — smaller, no record overhead) and materialize + paint once on read; the
   re-paint would run on plain columns, faster. It does **not** need the "which fields exist"
   tracking the design sidestepped (§7c) — the carrier still carries the canonical superset of
-  fields (diff builds diff+ratio+CI), so `color_signif` stays a pure re-paint. This is 9b-4,
+  fields (diff builds diff+ratio+CI), so `color_signif` stays a pure re-paint. This is Phase 9b-8,
   optional and independent.
 + **Exporters**: `tab_xl()` is already field-native (reads `get_num`/`get_display`/`get_digits`/
   `get_type`/`get_color`, bypasses `format`) — it needs no materialized `format()` output and could
@@ -218,7 +222,7 @@ Verdict:
 + **Numeric-only tables gain ~nothing** (cost = the data.table scan; `tab_num` already materializes
   once) — the win is factor-path-specific, i.e. the common exploratory workflow.
 + **Do NOT do a separate committable 9b-2** (local plain `tab_ci`/`tab_chi2` writers): the writer
-  round-trips are a subset of the 9b-3 carrier win (9b-3 flows plain fields *through* ci/chi2) and a
+  round-trips are a subset of the carrier win (the carrier flows plain fields *through* ci/chi2) and a
   local unwrap→rewrap would be partly reworked by it. **Fold the plain writers into 9b-3.** L1-L7 of
   §3.3 remain the byte-identity ledger for that work.
 
@@ -289,7 +293,7 @@ STATELESS, so it's memoized (built once, the cached copy shared — R copy-on-mo
 produced); full suite green (1364/0), no golden regen. Modest (`common` per-table 0.174→0.164) — the
 remaining tab_pvalue_lines cost (`bind_rows`+`map2_df(vec_restore)` adding the p-value row, ~9% total)
 is the vctrs **record combine** (ptype2/cast per column), which is inherent to the fmt type and only
-removed by the deferred-materialization carrier (the gated 9b-3 core), not an in-place tweak.
+removed by the deferred-materialization carrier (the carrier core, Phases 9b-4→9b-7), not an in-place tweak.
 `dev/benchmarks/results_1.4.0/phase9b3_pass4.txt`.
 
 **NOTE (2026-07-11):** the pass-3 commit `7d08a77` carried a concurrently-committed **broken color
@@ -297,7 +301,8 @@ palette** (`c()` arg 11 empty → `load_all` fails). Restored `R/tab_classes.R` 
 (`93eda62`) + re-applied the pass-3 `tab_pvalue_lines` change; the maintainer keeps the new palettes
 externally (Phase 12). The uncommitted `tab_classes.R` = pass-3 + pass-4 changes + original palette.
 
-**Revised staging for the remaining core** (supersedes §3.4's join-first order):
+**Revised staging for the remaining core** (supersedes §3.4's join-first order; itself refined into the
+A-E phasing of **§7** — read that as the authoritative forward plan):
 
 1. **`tab_apply_tests` / `tab_chi2` on plain fields (the 20%, #1 value).** Compute the row masks
    (`is_totrow`/`is_tottab`) and col masks (`detect_totcols`/`get_col_var`) ONCE; extract the count /
@@ -318,3 +323,119 @@ Landmine ledger §3.3 still holds MINUS L2 (join not reimplemented). L1 (field t
 (materialize boundary + derived display/digits) + L6 (`tab_ci`/`tab_chi2` plain read/write) + L7
 (`tab_add_n_pct`) remain. The public `tab_ci()`/`tab_chi2()` stay exported as unwrap→shared-engine→
 rewrap wrappers (maintainer, mid-turn 2026-07-11).
+
+
+##### 7. Phases 9b-4 → 9b-7 — the carrier core, phased (2026-07-11): the authoritative forward plan
+
+Passes 2-4 harvested the **in-place** wins (~26% merged / ~34% per-table build, all byte-identical):
+the redundant scans (`is_totrow` fold, §6 pass 2), the O(all-cells)-to-fill-one-row waste
+(`tab_pvalue_lines` masked-fill, pass 3), the `tibble()` overhead (`new_test_tibble` memoization,
+pass 4). What is left of the ~99% O(cells) cost is the **irreducible-in-place** part: the
+`tabxplor_fmt` record being *reconstructed* (vctrs ptype2/cast/restore per column) at every
+`dplyr`/`vctrs` step. The only way to remove it is to **stop materializing the record until the end**
+— the carrier (§3.1: per-column **field-frames** = `vec_data(fmt)` + **col-meta** = the 9 attrs +
+**row-meta** = the factor cols; the single `fmt_wrap` = `new_fmt` per column, extending the
+`fmt_materialize_col` seam from increment 1).
+
+###### 7.1 The boundary (Q1 — settle first)
+
+*Where* is "the very end"? The pipeline is `tab_build_one` (per row_var: leaves → join →
+`tab_apply_tests` → `tab_assemble_tables`) **→** `tab_assemble_output` (cross-row_var: `tab_compact`
+→ `tab_pvalue_lines` → `n_min`). Two candidate materialization boundaries:
+
+| | **Boundary A** — end of `tab_build_one` (before compact) | **Boundary B** — the true end (after `tab_pvalue_lines`) |
+|---|---|---|
+| materializations | one **per row_var** | one **per whole table** |
+| recovers | leaf-tail + join + ci/chi2 + assemble reconstruction | + `tab_compact` `vec_rbind` + **`tab_pvalue_lines` bind_rows (~15% of the build!)** |
+| landmines | L1, L5, L6, L7 (L2 optional) | + **L3** (cross-subtable attr reconcile) + **L4** (grouped `as_refrow`) on the carrier + p-value row on the carrier |
+| Phase 8 | clean — workers return finished tabs | workers return carriers; re-lock `test-parallel-parity` |
+| est. recoverable | ~20-25% of the build | ~35-45% |
+
+The profiling input that reopened this: `tab_pvalue_lines` is ~15% of the build and sits *after*
+Boundary A, so A leaves it (and compact's `vec_rbind`) record-based. **Recommendation: build toward A
+first (the bulk, lower risk) via Phases 9b-4 → 9b-6, decide B after** (9b-7 = the B-only extension) —
+B is the literal reading of "records ONCE at the very end" but costs the two subtlest landmines + the
+parallel re-lock.
+
+###### 7.2 Phases (each byte-identical, golden-gated, one committable step)
+
+Session grouping: **steps A+B = Phase 9b-4** (one session — the foundation), **C = 9b-5**, **D = 9b-6**,
+**E = 9b-7** (each its own session — one landmine's worth of byte-identity work apiece).
+
+**Phase 9b-4 — DONE, 2026-07-11 (byte-identical, full suite green, NO golden regen).** Implemented as
+the **lean post-join round-trip** (maintainer decision): the carrier reaches the tests boundary via a
+post-join `vec_data`-unwrap, NOT via the leaves emitting a carrier. Two internal helpers next to
+`fmt_materialize_col` (`R/tab.R`): **`fmt_unwrap(tab)`** decomposes a built table to a carrier
+`list(is_fmt, factors, fmt = per-col list(frame = as.list(vec_data(col)), meta = the 9 attrs), attrs =
+attributes(tab))`; **`fmt_wrap(carrier)`** is its exact inverse (materialize each fmt column via the
+single `fmt_materialize_col()` seam, pass the factor columns through, restore `attrs` wholesale). A
+byte-identical **no-op** `fmt_wrap(fmt_unwrap(tabs_text))` is inserted in `tab_transform()` right before
+`tab_apply_tests()` — establishing + validating the carrier at the tests seam in the real pipeline.
+`tabs_num` is untouched (it does not cross the tests boundary). New `test-carrier-parity.R` locks
+`identical()` across factor/numeric/mixed/weighted/col%/add_pct/ci shapes + grouped + subtext/test attrs
+(15 tests). **L1** held (the fmt-contract `typeof` lock is green — `new_fmt` does no cast, so
+`vec_data → new_fmt` preserves storage types); **L5** N/A here (the derived-display/digits are already
+in the fields being round-tripped, not recomputed). Bench (gss_cat 5×3, merged): the no-op adds +0.08 s
+(+6.9%) — the temporary second materialization of each row_var's factor table, recovered by 9b-5
+(`dev/benchmarks/results_1.4.0/phase9b4_carrier.txt`).
+
+*Why step A was dropped (leaf emits carrier + tail port).* Under **Q2 = keep the record `full_join`**
+(the recommended lean below), each leaf materializes for the join regardless, so having the leaf *return*
+a carrier and porting its post-`new_fmt` tail (`no_col_var` `set_display`/`set_type`/`as_totcol`,
+total-renames, `finalize_color_spec`, the grouped/ungrouped decision) is delicate byte-identity work
+that **never becomes load-bearing under Boundary A** (the leaf tail is pre-join; the carrier only lives
+post-join, `tests → assemble → single wrap`). The lean round-trip reaches the exact same milestone (a
+faithful carrier at the tests boundary) with ~1/5 the surface. If Boundary B / a carrier-side join is
+ever chosen, the leaf-tail port returns as a scoped task then.
+
+The original step-A/step-B design (kept for history):
+
++ **9b-4 (step A) — carrier infra + leaf emits carrier.** Build the carrier struct + `fmt_wrap()`.
+  `tab_plain`/`tab_num` return a carrier; their post-`new_fmt` tail (totals-rename, no-col-var, wrap)
+  runs on the carrier; `tab_transform` calls `fmt_wrap` immediately so **downstream is unchanged** —
+  this validates the round-trip + the tail port with zero behaviour change. **L1** (the fmt-contract
+  `typeof` lock catches any field-type drift), **L5**. Low payoff alone (the leaf tail is cheap on the
+  common path, §6) — it is the foundation for B-D.
++ **9b-4 (step B) — carrier through the col_var join; materialize before `tab_apply_tests`.** Sub-decision
+  **Q2**: reimplement the join on the carrier (**L2** row/col reorder) *vs* — since the join is
+  **cheap (0.9%)** — keep the record `full_join` and cheaply `vec_data`-unwrap back to a carrier after
+  it (2 cheap materializations, **no L2**). Lean the latter; the join is not worth the reorder
+  landmine.
++ **9b-5 (step C) — `tab_ci`/`tab_chi2` shared carrier engine (the payoff, ~14%).** The CI/chi2 **math
+  already runs on plain vectors** (`R/tab-agg.R` `ci_*`/`agg_chi2`/`agg_anova`); only the
+  *orchestration* is `dplyr`-over-fmt (grouped reference-row selection = `last(which(is_totrow))` w/
+  `is_refrow` fallback, `detect_totcols`/`detect_refcol`, `tab_match_*`, the `tabs[!is_totrow,]`
+  slice). Extract it into ONE engine over the carrier: masks computed once, writes plain
+  `ci_inf`/`ci_sup`/`pvalue`/`var`/`ctr` field columns + `ci_type`/`color`/`comp_all` col-meta. Public
+  `tab_ci()`/`tab_chi2()` stay exported as **unwrap → engine → rewrap** wrappers (maintainer). **L6** —
+  the hardest (grouped reference logic; chi2 byte-identity vs `chisq.test` incl. Yates, golden-locked
+  by `test-calculations.R`), highest value.
++ **9b-6 (step D) — `tab_assemble_tables` + `tab_add_n_pct` on the carrier; `fmt_wrap` once at the end of
+  `tab_build_one`.** Level-drop / total-removal / totaltab-removal → field-frame/row-meta ops;
+  `tab_add_n_pct`'s add-n/pct columns + pct="col" base rows → plain field appends (the exact NA
+  flavors + `detect_totcols` base-column selection of §3.3 L7). **L7**. Completes **Boundary A** →
+  a shippable, lower-risk carrier. `tab_compact`/`pvalue`/`n_min` stay record-based, byte-identical by
+  construction.
++ **9b-7 (step E, only if Boundary B) — carry past compact + pvalue.** `tab_compact` on the carrier
+  (reproduce **L3**'s per-attribute `if_else(same, x, neutral)` reconcile across the stacked sub-tables
+  + **L4**'s grouped `as_refrow` — both already isolated in 9b-1's `promote_totrow_to_refrow`) + add
+  the p-value row *on the carrier* before the single `fmt_wrap`. Recovers the last ~15-25% (the pvalue
+  `bind_rows` + the compact `vec_rbind`). Re-lock `test-parallel-parity` (workers now return carriers).
+
+###### 7.3 Open questions to settle before committing code
+
++ **Q1 — Boundary A vs B** (§7.1): recovers ~20-25% vs ~35-45%, at a real L3/L4 + parallel-contract
+  cost. The one that changes the whole shape.
++ **Q2 — carrier-join (L2) vs materialize-around-the-cheap-join** (9b-4 step B): lean the latter (join
+  is 0.9%).
++ **Q3 — is the carrier worth it now?** It is the **largest byte-identity surface in 1.4.0** for
+  another ~20-45%, and the value is **back-loaded** (9b-4 = low-payoff infrastructure; **9b-5 is the
+  win**). Weigh vs pausing 9b at passes 2-4 (already banked ~26% cheaply) and landing the carrier with
+  Phase 10.
++ **Q4 — sequence 9b-5 (the `tab_ci`/`tab_chi2` engine) with Phase 10 exporter-prep**: both touch the
+  same fmt read paths (the engine and the exporter `get_*` reads) — possible consolidation.
+
+Each phase's gate: `devtools::test()` FAIL 0 + NO golden regen (`test-golden`/`test-fmt-contract`/
+`test-color-golden`/`test-calculations`/`test-fuse-parity`/`test-num-fuse-parity`/`test-carve-parity`/
+`test-jmvtab-cache`/`test-parallel-parity`), plus a before/after benchmark into
+`dev/benchmarks/results_1.4.0/`.
