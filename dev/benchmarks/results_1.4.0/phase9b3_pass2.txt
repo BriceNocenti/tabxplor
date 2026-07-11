@@ -1,0 +1,11 @@
+
+#### Phase 9b-3 before/after -- label: pass2 | R 4.5.1 
+
+ fixture merge_s list_s per_tab_s merge_mb
+  common  1.5097 1.1710    0.2342     57.1
+      ci  1.9735 1.5618    0.3124     46.1
+ contrib  2.2357 1.8985    0.3797     43.8
+ numeric  0.1724 0.1405    0.0281     16.6
+
+  merge_s = default tab() (runs tab_compact) ; list_s = output_list (no merge)
+  per_tab_s = list_s / 5 (the per-row_var build = 9b-3 target)

@@ -252,6 +252,20 @@ was wrong. Real-pipeline Rprof of the common build:
   `tab_match_groups_and_totrows` 19.2 / `tab_match_comp_and_tottab` 17.2, `agg_chi2` 17.0 (the
   vectorised math). The `tabs[!is_totrow,]` slice alone = 4.0 ms.
 
+**Pass 2 (2026-07-11) — the scan-primitive fold (byte-identical, ~11-15% factor-path).** Landing
+from the `is_totrow.data.frame` 34.6% finding: `is_totrow`/`is_tottab`/`is_refrow` `.data.frame`
+methods each built a full nrow×ncols logical tibble (`select(where(is_fmt)) |> map_df |>
+if_all/if_any`) — replaced by one shared `fmt_row_flag()` (`R/fmt_class.R`) that reads the field per
+fmt column and `reduce()`s (`&`=if_all / `|`=if_any). The old `partial` warning branch was **dead
+code** (`if_all(-"complete") & !complete` ≡ FALSE) → not reproduced. **`is_totrow.data.frame` 28×
+faster** (11.67→0.41 s / 3000× on a grouped table); per-table build **common 0.264→0.234 s (−11%),
+ci 0.354→0.312 (−12%), contrib 0.445→0.380 (−15%)**, numeric neutral (few total rows). Full suite
+green (1364/0), NO golden regen; verified byte-identical vs the old methods across grouped/ungrouped/
+mixed/chi2 tables + both `partial` modes. A `vapply`-for-`map` swap on the other per-column scans
+(`is_totcol`/`get_type`/`get_col_var`) was tried and **reverted** — no measurable gain (their cost is
+S3 dispatch / call-count, which the carrier addresses, not the `purrr` wrapper).
+`dev/benchmarks/results_1.4.0/phase9b3_pass2.txt`.
+
 **Revised staging for the remaining core** (supersedes §3.4's join-first order):
 
 1. **`tab_apply_tests` / `tab_chi2` on plain fields (the 20%, #1 value).** Compute the row masks

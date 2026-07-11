@@ -2831,7 +2831,7 @@ color_style_text_light <-
 
 #' @keywords internal
 color_style_text_light_24_blue_red <-
-  c(pos1 = "#93ED75",  #                       #  c(pos1 = "#e4e65e",
+  c(pos1 = "#93ED75",  #  OKLCH                #  c(pos1 = "#e4e65e",
     pos2 = "#1AE6D6",  #  L83 C14.35 H185      #    pos2 = "#cddc39", "#4EE6B9"
     pos3 = "#00bcd4",  #  L72 C12.65 H210      #    pos3 = "#8bc34a",
     pos4 = "#1e88e5",  #  L62 C16.68 H250      #    pos4 = "#589E38",
@@ -2848,6 +2848,12 @@ color_style_text_light_24_blue_red <-
     # "#673AB7", "#5E35B1", "#512DA8", "#4527A0"
 
   )  #    neg5 = "#cb0000" )
+
+  # OKLCH Chroma Peaks
+  # - Blue              H265 / L45 
+  # - to Red (orange/rose)  H28 / L62
+  # - Green             H142 / L86
+  # - to Violet         H325 / L70
 
 # pct_ratio_color_style <- c(ratio = "#6A1B9A")
 
