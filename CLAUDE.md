@@ -1004,7 +1004,19 @@ Byte-identical internal re-cut — re-shape the shared engine so it reads *prep 
 
 #### Phase 9b — Performance: `tabxplor_fmt` as display-only, built at the end ?
 
-To gain performance, should we use the ftm class and vctrs fields as user-facing and display only, to be built at the end of the workflow, but not used internally ? Would there be caveats ? The §29 profile pins ~99 % of `tab()` in the O(cells) `tabxplor_fmt` machinery — the `pmap_dfc(new_fmt)` build and the `tab_compact` merge, both bound by `vec_case_when`/`if_else`-over-fmt + vctrs record round-trips. **Write the feasibility analysis to a new `dev/` doc before implementing**.
+To gain performance, should we use the ftm class and vctrs fields as user-facing and display only, to be built at the end of the workflow, but not used internally ? The §29 profile pins ~99 % of `tab()` in the O(cells) `tabxplor_fmt` machinery — the `pmap_dfc(new_fmt)` build and the `tab_compact` merge, both bound by `vec_case_when`/`if_else`-over-fmt + vctrs record round-trips. Feasibility analysis written to `dev/tabxplor_phase9b_fmt_display_only.md` (the plan-of-record; §-structured, landmine ledger, go/no-go). Decisions this session: **tiered** (bank the safe merge win first, gate the big rewrite); carrier = **unwrapped-fmt-columns** (a per-column raw field-frame = today's `vec_data(fmt)` + a col-meta attribute sidecar).
+
+##### Phase 9b-1 — surgical `tab_compact` merge fix (done — 2026-07-11)
+
+**9b-1 — surgical `tab_compact` merge fix (byte-identical).** The merge promoted totrow→refrow with `if_else(is_totrow & !any(is_refrow), as_refrow(.), .)` over each fmt column — a `vec_case_when` record round-trip (72 % of `tab_compact` per §29). Replaced by a direct `in_refrow` field write (new internal `promote_totrow_to_refrow()` in `R/tab_classes.R`, kept inside the per-sub-table `imap` so `any(in_refrow)` stays grouped per row_var). `as_refrow` only flips that field → byte-identical. **`tab_compact` 0.390→0.160 s (2.44×)** on the gss_cat 5×3 fixture; full merged call 1.78→1.55 s; `output_list` (no-merge) unchanged. Full suite green (FAIL 0 | PASS 1339), no golden regen. Record: `dev/benchmarks/results_1.4.0/phase9b1_tab_compact.txt`.
+
+##### Phase 9b-2 — 
+
+##### Phase 9b-2 — 
+
+##### Phase 9b-4 — 
+
+**9b-2/9b-3/9b-4 — DESIGNED, GATED** (dev doc §3): carry the build as plain field-frames + col-meta sidecar, materialize `new_fmt` ONCE after `tab_compact`; `tab_ci`/`tab_chi2` become plain-field writers; 7 named byte-identity landmines (L1 type-coercion, L2 join reorder, L3 cross-subtable attribute reconciliation, L4 grouped as_refrow, L5 boundary, L6/L7 field surgery). Verdict: GO, staged + golden-gated, only after a 9b-2 spike confirms the recoverable fraction; the 0.16 s `vec_rbind` remainder in `tab_compact` is 9b-3's first win.
 - **The idea to test (the design doc's core question).** Carry the build **internally as plain atomic field-vectors** (the fmt's `vec_data()` — n/wn/pct/diff/ratio/ci_inf/ci_sup/pvalue/… as plain numeric columns + the scalar per-column attributes), do ALL math/CI/chi2/merge/totals/level-drop/add_n on plain vectors/data.tables, and **materialize the `tabxplor_fmt` records ONCE at the very end** (for display, export, and user `$`/`mutate` access). The vctrs record becomes a **display / user-facing wrapper**, never an internal working type. **Hard constraint:** the final object is still a `tabxplor_tab` with real `tabxplor_fmt` columns — the vctrs **field contract users read with `$`/`mutate()` is unchanged** (§29: give up *using* vctrs generics on hot paths, never the fields).
 - **Feasibility questions for the design doc:** the internal representation (a keyed data.table of raw fields + an attributes sidecar? per-column field-lists close to `new_rcrd`'s storage?); how `tab_ci`/`tab_chi2` (today `set_ci`/`set_pvalue` on fmt) rewrite as plain-field writers; how the merge (`tab_compact`) aligns columns by col_var/color/ref and promotes totrow→refrow on the raw rep; **where** the single `new_fmt` materialization happens (per output column at the end of the core, or once after merge — mind the tests/ci that today read fmt fields); interaction with the jmvtab **tier-3 cache** (which caches the armed fmt table — does it cache raw fields + one paint, or the materialized fmt?) and the exporters (`tab_xl` already bypasses `format`, reading `get_num`/`get_display` directly).
 - **Concrete wins to implement (each gated by a before/after benchmark):** `tab_compact`'s per-column `if_else(is_totrow & !any(is_refrow), as_refrow, .)` ([tab_classes.R:991](R/tab_classes.R#L991)) → base-R masked field assignment + one `vctrs::vec_rbind` of aligned columns; the `new_fmt` assembly built once from plain vectors; audit the ~19 `dplyr::case_when` in `fmt_class.R` on hot display paths → base `switch`/vectorised indexing (`case_when`-over-fmt is the single most expensive idiom by the §29 profile).
@@ -1031,10 +1043,12 @@ We must **make a grounded choice for jamovi jmvtab module base display of tables
 
 #### Phase 10b — rework format() for console display and exports that uses it
 Display of `tabxplor_tab` on console is quite long, and kable and fmt export uses it two, even in Jamovi display which must be the fastest possible : what are the performance bottlenecks and how to make it faster / remove useless stuffs and white elephants here ?
+- Particularly, `format()`/`get_reference` display `case_when` must be changed for performance.
 
 The `tabxplor_tab` class and the grouped one currently have a kind of bug that forbids them to work with every data.frame (like : with no `tabxplor_fmt` ; with no factors ; with factors after fmt columns and not before ; etc.) : it may come from the way `row_vars` and `tab_vars` are detected and from `tab_get_vars` etc. **I think this bug may only or essentilly happen for grouped tabs**. Obviously, these detections are absolutely needed to print colors etc., but currently, the failing mode is display error or export error.
 - I would want a more user-friendly failing mode, still printing the df without the specialt tabxplor formattings and colors. Add testthat tests to be sure there cases do not throw error. Use messages if needed to explain to the user why it fails. Implement testthat tests with edge cases.
 - More generally, I wonder if there’s a more reliable way to handle detection of row, col, tab vars, and the other informations needed for fmt and colors to compute, with smart fallbacks (no colors, no fmt formatting, etc.).
+
 
 Passing a vector in display to display several fields, as an opt-in option ? (Won't work in Excel, but anyway Excel export do not use `format()` ?) Would it be possible to find a reliable syntax to command exactly the wanted fields and seps in a display ? Like `pct (n)` or `pct ± ci` ? Would it really be useful for data analysis users, or a white elephant with theoretical useless flexibility again ?
 
@@ -1095,27 +1109,29 @@ Native dark mode/light mode management for exported tables, specially html table
 
 
 
-### Phase 13 — tab_logit
+### Phase 13 — tab_logit integration and full redesign
 
-Full implementation of `tab_logit.R` (currently commented out) and integration into the package. Then full rework and rewrite of `tab_logit` and, if needed, `multi_logit`, and maybe extension to all `lm` + `glm` regression models inside the same unified framework.
-- `tab_logit` lands after the Phase 1 field set is locked (so no second field surgery).
+Integration of `tab_logit.R` (currently commented out) into the package, then redesign and rewrite of `tab_logit` and `multi_logit`, and maybe extension to all `lm` + `glm` regression models inside the same unified framework.
+- logit and regression models functions will be introduced in tabxplor 1.4.0 : **no backward-compatibility needed**, but the public API and internal workflows both need to be carefully redesigned for user-friendliness, consistency, performance and future-proofing.
 
 #### Phase 13a – integrate current version in tabxplor framework cleanly
 
-An important design question : should I keep `tab_logit` inside tabxplor package, even if it makes the count of tabxplor dependencies very high (CRAN current policies on that matter ?) ? Or should I create a `regxplor` subpackage (name is `available::available()`) relying on tabxplor (with more frictions during dev, both human dev and Claude Code assisted dev, or not necessarily and there are reliable way to avoid them ?), and in this case, as a package always loading with tabxplor, or as a package just importing tabxplor ? Make detailed web searches about modern good practices and tidyverse good practices, then write your analysis in `dev\tabxplor_1.4.0_decisions.md` (respecting it’s internal style and logic).
+An important design question should be answered first : should I keep the content of `tab_logit.R` inside tabxplor package, even if it makes the count of tabxplor dependencies very high (CRAN current policies on that matter ?) ? Or should I create a `regxplor` subpackage (name is `available::available()`) relying on tabxplor (with more frictions during dev, both human dev and Claude Code assisted dev, or not necessarily and there are reliable way to avoid them ?), and in this case, as a package always loading with tabxplor, or as a package just importing tabxplor ? Make detailed web searches about modern good practices and tidyverse good practices, then write your analysis in `dev\tabxplor_1.4.0_decisions.md` (respecting it’s internal style and logic).
 
-The current `tab_logit` code, made outside of the package, was a way to use tabxplor vctrs fields former implementation to store the logit data, but the way to do it may have been pragmatic/messy/ad hoc : first, before modifying tab_logit() behaviour, I want to integrate it with the rest of the package.
+The current `tab_logit.R` code, made outside of the package, was a way to use tabxplor vctrs fields former implementation to store the logit data, but the way to do it may have been pragmatic/messy/ad hoc : first, before modifying tab_logit() behaviour, I want to integrate it with the rest of the package.
 - Do not hesitate to redesign it thoroughly for consistency with tabxplor package architecture. Fix ad hoc stuffs to make it fits perfectly inside tabxplor framework.
 - Do not hesitate to break it into subfunctions when needed, convenient or future-proofing.
+- Do ne hesitate to rethink the articulation between `tab_logit` and `multi_logit`, and the internal workflows in general.
 - Integrate confidence intervals with the new `ci_inf` / `ci_sup` vctrs fields (check its in fact `exp()` bounds), and also with the new `color_signif` framework (with logistic regression, sensible default may be "grey_non_signif").
 - All exports (kable, md, Excel) should work natively with the resulting tabxplor_tab (or grouped one, etc.).
 
+
 #### Phase 13b – design choices and statistical framework
 
-Statistical soundness 1 : how to handle dependent var factors with 3+ levels ?
+Statistical sanity 1 : how to handle dependent var factors with 3+ levels ?
 - The function currently binarise all levels against the reference level chosen, and gives one column per non-reference level, instead of using multinomial logistic regression : I known it’s expert way it’s done, but at the same time I find multinomial logistic regressions very difficult to read, since relative risk ratios with their double reference are farther from experience and intuition and car be thoroughly misinterpreted with not enough knowledge of reference rows and cols (it’s also very difficult to teach to sociology students, and to put in a meaningful sentence it a scientific papers : contrary to odds ratio, that can be put in sentence quite cleanly still understanding what you compare with what). Please, make detailed web searches, and tell me what the statistical consensus is about that, what are the different possibilities and rationales make by and social scientists both (particularly in quantitative sociology).
 
-Statistical soundness 2 : how to handle survey weights ?
+Statistical sanity 2 : how to handle survey weights ?
 - Most of my real world data are French national surveys, which always come with weights. The first version of `tab_logit` was made to handle this : on one hand, no weights is common practice, but if the percentages used by logistic regression do not match the percentages the user really have in it’s base empirical crosstables, there’s a bizarre discrepency ; 2. since weights are most of the time not normalised, using weighted counts that are many times higher than the real number of people in the sample destroys significativity tests and confidence intervals since they always pass (total weighted n gives the overall population measured in the national census).
 
 What extension ? Full `lm`/`glm` set + keep current multinomial logistic reg ?
@@ -1124,14 +1140,18 @@ What extension ? Full `lm`/`glm` set + keep current multinomial logistic reg ?
 Summary statistics ?
 - What whole analysis/model level test and pvalue should be added, for example on a pvalue_line like chi2 test for crosstables and ANOVA for factor x numeric ? What other model level summary statistics should absolutely be added to keep with standard practices with `lm`/`glm` models ?
 
+#### Phase 13c – implement testthat tests
 
-#### Phase 13c – tab_logit rewrite
+Implement testthat tests
+- They should include tests of statistical soundness, attesting the results matches base `glm` etc. results, unweighted +  survey weights design.
+
+#### Phase 13d – tab_logit rewrite
 
 Implement the design make in the former phase.
 - Chose reference for each var with a vector (possibly named for simplicity) ? (permit to take ref in the middle while keeping order of ordinal vars, or useless white elephant ?) ?
 - Implement things with contrasts ?
 
-#### Phase 13d – tab_logit jamovi UI
+#### Phase 13e – tab_logit jamovi UI
 
 Add a full tab_logit analysis in Jamovi to give it a user-friendly UI : name it `jmvtab_logit`
 Are there some user-friendly pieces that we could reuse from other well known models/regressions Jamovi modules ?

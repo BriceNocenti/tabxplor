@@ -933,6 +933,21 @@ kable_tabxplor_style <- function(tabs,
 
 
 
+# Why: tab_compact() promotes a merged sub-table's total row to its reference row when that
+# sub-table has no explicit reference (so each stacked sub-table colours against its OWN
+# total). Byte-identical to if_else(is_totrow & !any(is_refrow), as_refrow(.), .) but writes
+# the in_refrow field DIRECTLY, skipping the per-column vec_case_when ptype2/cast round-trip
+# that was tab_compact()'s single biggest cost (Phase 9b-1; decisions.md §29).
+promote_totrow_to_refrow <- function(col) {
+  in_refrow <- vctrs::field(col, "in_refrow")
+  if (any(in_refrow)) return(col)             # sub-table already has a reference row
+  totrow <- vctrs::field(col, "in_totrow")
+  if (!any(totrow)) return(col)
+  in_refrow[totrow] <- TRUE
+  vctrs::field(col, "in_refrow") <- in_refrow
+  col
+}
+
 #' Bind a list of tabs with the same col_vars (and no tab_vars) into a single tab
 #'
 #' @param tabs A `list` of `tabxplor_tab` (or a `tabxplor_tab`)
@@ -987,16 +1002,16 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
 
 
   # DESIGN: when a merged sub-table has no explicit reference row, promote its total row to
-  # reference (as_refrow) so each stacked sub-table colors its cells against its OWN total.
+  # reference so each stacked sub-table colors its cells against its OWN total. The promotion
+  # is a direct in_refrow field write (promote_totrow_to_refrow), NOT if_else-over-fmt --
+  # see that helper's note (Phase 9b-1). Runs inside imap (per sub-table) so `any(in_refrow)`
+  # stays grouped per row_var.
   tabs <- tabs |> purrr::imap_dfr(
     ~ dplyr::rename_with(.x, ~"levels", .cols =  1) |>
       dplyr::mutate(row_var = as.factor(.y), .before = 1) |>
       dplyr::mutate(dplyr::across(
         dplyr::where(is_fmt),
-        ~ dplyr::if_else(is_totrow(.) & !any(is_refrow(.)),
-                         true  = as_refrow(.),
-                         false = .
-        )
+        promote_totrow_to_refrow
       ))
   )
 

@@ -1,0 +1,30 @@
+Phase 9b-1 -- tab_compact() merge field-write fix
+=================================================
+
+Change: in tab_compact() the per-column
+  dplyr::across(where(is_fmt), ~ if_else(is_totrow(.) & !any(is_refrow(.)), as_refrow(.), .))
+is replaced by a direct in_refrow field write (helper promote_totrow_to_refrow), killing the
+per-column vec_case_when ptype2/cast round-trip. Byte-identical (as_refrow only flips in_refrow).
+
+Fixture (decisions.md §29): forcats::gss_cat
+  tab(c(marital, race, relig, rincome, partyid), c(race, marital, partyid),
+      pct = "row", color = "diff", chi2 = TRUE)
+Method: devtools::load_all live source; median elapsed, 7 reps (full calls) / 15 reps (isolated).
+
+                    merge_call   list_call   merge_delta   tab_compact_isolated
+  before               1.780s       1.250s       0.530s            0.390s
+  after                1.550s       1.240s       0.310s            0.160s
+  speedup              1.15x        ~1.00x       1.71x             2.44x
+
+Reading:
+- tab_compact() isolated: 0.390 -> 0.160 s (2.44x, -0.23 s). The removed 0.23 s is the
+  vec_case_when share (~72% of tab_compact per §29). MATCHES the profile.
+- list_call (output_list=TRUE, no merge) unchanged (1.24 s): the win is entirely in the merge;
+  the leaf fmt build + ci + chi2 (the ~1.24 s that dominates a single-table call) is untouched --
+  that is the gated full carrier rewrite's (9b-2/9b-3) territory.
+- Remainder in tab_compact (0.160 s): the imap_dfr/vec_rbind record reconstruction across
+  sub-tables (the L3 per-attribute reconciliation). NOT hand-rolled here (would re-introduce the
+  L3 landmine ad-hoc); it is the natural first win of the plain-carrier merge in 9b-3.
+
+Verification: devtools::test() -> FAIL 0 | PASS 1339 | SKIP 0. No golden regeneration
+(golden RDS + _snaps/ byte-identical).

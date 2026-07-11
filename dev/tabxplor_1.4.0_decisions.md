@@ -1686,6 +1686,14 @@ drop by an order of magnitude: audit the ~19 `dplyr::case_when` sites in `fmt_cl
 paths and replace with base `switch`/vectorised indexing — `case_when` over `fmt` is the single most
 expensive idiom in the package by this profile.
 
+**Phase 9b update (2026-07-11) — lever #2 (the merge) attacked.** 9b-1 replaced the `if_else`-over-fmt
+in `tab_compact` with a direct `in_refrow` field write (`promote_totrow_to_refrow`): **`tab_compact`
+0.390→0.160 s (2.44×)** on the gss_cat 5×3 fixture, byte-identical (FAIL 0 | PASS 1339, no golden regen).
+The removed 0.23 s is the `vec_case_when` share (~72 % of `tab_compact`) — the profile was exact. Lever #1
+(the leaf fmt build) + the `tab_compact` `vec_rbind` remainder (0.16 s) are the gated plain-carrier rewrite
+(9b-2/9b-3): carry the build as plain field-frames + col-meta, materialize `new_fmt` ONCE after the merge.
+Full design + landmine ledger + go/no-go: `dev/tabxplor_phase9b_fmt_display_only.md`.
+
 ### Cleanup surfaced (fold into whichever Phase 9 work touches the file)
 
 - **Dead code**: `tab.R` is 6 764 L, ~2 445 comment lines — a large fraction is commented-out legacy
