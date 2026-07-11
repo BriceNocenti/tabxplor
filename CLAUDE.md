@@ -14,7 +14,9 @@ R/
 │                              format/pillar methods, vctrs arithmetic/casting,
 │                              color selection logic (fmt_color_selection, color_formula)
 ├── tab.R           (~6200 L) Main API: tab(), tab_many(), tab_plain(), tab_num(),
-│                              tab_apply_reference() (Phase 7f: shared diff/ratio/or ref step),
+│                              tab_apply_reference() (Phase 7f carve; Phase 9d: matrix-sweep internals),
+│                              leaf_wide_pct() + build_total_rows()/finalize_total_rows() (Phase 9d:
+│                              base-R/matrix leaf math for tab_plain pct/tot_n + total rows),
 │                              tab_prepare(), tab_pct(), tab_ci(), tab_chi2(),
 │                              tab_tot(), tab_totaltab(), tab_spread(), tab_get_vars(),
 │                              tab_add_n_pct() (shared add_n/add_pct, used by tab_many + tab_counts).
@@ -1091,7 +1093,22 @@ Full analysis + fresh profile: `dev/tabxplor_1.4.0_decisions.md` §30. The three
   `tab_plain(.fine=)` directly (the factor analogue of `test-num-fuse-parity.R`); the carve fusion test
   repointed (default == `.by_table`, both raw now).
 
-##### Phase 9d — leaf math on base-R / matrix (FUTURE, optional)
+##### Phase 9d — leaf math on base-R / matrix (DONE — 2026-07-11)
+
+`tab_plain()`'s three chained-`[.data.table` leaf blocks now run on plain numeric matrices / base-R
+group-sums (the §30 lever 4, ~30 %). **Factor-only**; byte-identical (full suite FAIL 0 / PASS 1400, NO
+golden regen; PoC-gated first — `dev/benchmarks/phase9d_leaf_math_parity.R` proves every equivalence
+`identical()` across 648 shapes BEFORE the edit). Three new/rewritten pieces in `R/tab.R`:
+**`tab_apply_reference()`** internals → matrix sweep (`P − P[refrow,]` / `P / P[refrow,]` / `P/P[,refcol]`;
+signature + return shape UNCHANGED so `jmv_tab3_reref` is unaffected); **`leaf_wide_pct()`** (new) = pct +
+`tot_n` via `M / D`; **`build_total_rows()` / `finalize_total_rows()`** (new) = total-table/row group
+sums. **DECISIVE trap**: B/C sum with base `sum()` per `split()` group, NOT `rowsum()`/gforce (plain-double
+accumulator drifts 1 ULP from the old `map(.SD, sum)` long-double → breaks `identical()`); `check.names =
+FALSE` for `$`/space value-cell names. Region D (the `rowSums` Total column) kept. **Perf**: no-tab_vars
+common −11 % / ci −7.4 % per-row_var build (E+F); git-stash A/B with tab_vars (B/C `map2` multiplier) 1
+tab_var −20 %, 2 tab_vars × 2 col_vars −51 %. Detail: `dev/tabxplor_1.4.0_decisions.md` §31.
+
+##### Phase 9d — original plan (historical intent)
 
 The §30 profile pins the single largest remaining chunk of `tab()` at **~30 %**: the fixed per-op
 overhead of ~150 `[.data.table` calls across the 15 tiny leaf tables (dcast + pct/diff/total math), NOT

@@ -2832,27 +2832,20 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
   num_cols <- tabs %>% purrr::map_lgl(is.numeric)
   num_cols <- names(num_cols)[num_cols]
 
+  # Region B (Phase 9d): total-TABLE row(s) via base-R group-sum. "table" = one total row per row_var
+  # level (tab_vars set to "Total"); "line" = one grand total row (all tab_row_names "Total").
   if (totaltab %in% c("table", "line")) {
-    tabs_totaltab <- switch(
-      totaltab[1],
-      "table" = tabs[, c(purrr::set_names(rep("Total", length(tab_vars)),
-                                          as.character(tab_vars)),
-                         purrr::map(.SD, sum, na.rm = TRUE)),
-                     .SDcols = num_cols,
-                     keyby = eval(as.character(row_var))],
-
-      "line" = tabs[, c(purrr::set_names(rep("Total", length(tab_row_names)),
-                                         tab_row_names),
-                        purrr::map(.SD, sum, na.rm = TRUE)),
-                    .SDcols = num_cols]
-    )
-
-    tabs <- rbind(tabs, tabs_totaltab)
-    data.table::setorderv(tabs, tab_row_names)
+    if (totaltab[1] == "table") { bt_keys <- as.character(row_var); bt_totvars <- as.character(tab_vars) }
+    else                        { bt_keys <- character();           bt_totvars <- tab_row_names }
+    tabs_totaltab <- build_total_rows(tabs, bt_keys, bt_totvars, tab_row_names, num_cols)
+    tabs <- finalize_total_rows(tabs, tabs_totaltab, bt_totvars, tab_row_names)
   }
 
 
 
+  # Region C (Phase 9d): total ROWS via base-R group-sum, one build_total_rows() per tab_vars
+  # accumulation level (subtable totals + grand total), deduped (identical duplicate rows collapse,
+  # order-independent -> the final setorderv dominates), then the totaltab=="line" grand-line drop.
   if ("row" %in% tot) {
     if (length(tab_vars) != 0) {
       group_vars <- rev(purrr::accumulate(as.character(tab_vars) , ~ c(.x, .y)))
@@ -2861,30 +2854,21 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
                                    as.character(row_var)))
     } else {
       group_vars <- list(character())
-      total_vars <- as.character(row_var)
+      total_vars <- list(as.character(row_var))
     }
 
-
-    tabs_tot <-
-      purrr::map2_dfr(group_vars, total_vars,
-                      ~ tabs[, c(purrr::set_names(rep("Total", length(.y)), eval(.y)),
-                                 purrr::map(.SD, sum, na.rm = TRUE)),
-                             .SDcols = num_cols,
-                             keyby = eval(.x)]
-      )
-
-    tabs_tot <-data.table::setorderv(tabs_tot, tab_row_names) |> unique()
+    parts    <- purrr::map2(group_vars, total_vars,
+                            ~ build_total_rows(tabs, .x, .y, tab_row_names, num_cols))
+    tabs_tot <- do.call(rbind, parts)
+    tabs_tot <- tabs_tot[do.call(order, tabs_tot[tab_row_names]), , drop = FALSE]
+    tabs_tot <- tabs_tot[!duplicated(tabs_tot), , drop = FALSE]
 
     if (totaltab == "line") {
-      no_totaltab_line <- dplyr::select(tabs_tot, tidyselect::all_of(tab_row_names)) %>%
-        dplyr::transmute(total_line = dplyr::if_any(tidyselect::everything(), ~ . != "Total")) %>%
-        tibble::deframe() %>% which()
-
-      tabs_tot <-  tabs_tot[no_totaltab_line, ]
+      keep     <- Reduce(`|`, lapply(tab_row_names, function(v) as.character(tabs_tot[[v]]) != "Total"))
+      tabs_tot <- tabs_tot[keep, , drop = FALSE]
     }
 
-    tabs <- rbind(tabs, tabs_tot)
-    data.table::setorderv(tabs, tab_row_names)
+    tabs <- finalize_total_rows(tabs, tabs_tot, unique(unlist(total_vars)), tab_row_names)
   }
 
   totrow_vector <- dplyr::pull(tabs, !!row_var) == "Total"
@@ -2956,52 +2940,16 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
   # aggregated table is shared by reference; without copy() a := would mutate the source and
   # every other derived table too (data.table reference semantics).
   if (pct != "no") {
-    if (length(wt) == 0) {
-      tabs_pct <- data.table::copy(tabs_n)
-      tabs_pct[, names(cols) := purrr::map(.SD, as.double), .SDcols = names(cols) ]
-    } else {
-      tabs_pct <- data.table::copy(tabs_wn)
-    }
-
-    switch(
-      pct,
-      "row"      = tabs_pct[, names(cols) := purrr::map(.SD, ~ . / eval(rlang::sym("Total"))),
-                            .SDcols = names(cols)],
-
-      "col"      = tabs_pct[, names(cols) := purrr::map(.SD, ~ . / dplyr::last(.)),
-                            by = eval(as.character(tab_vars)),
-                            .SDcols = names(cols)],
-
-      "all"      = tabs_pct[, names(cols) := purrr::map(.SD, ~ . / dplyr::last(eval(rlang::sym("Total")))),
-                            by = eval(as.character(tab_vars)),
-                            .SDcols = names(cols)],
-
-      "all_tabs" = tabs_pct[, names(cols) := purrr::map(.SD, ~ . / dplyr::last(eval(rlang::sym("Total")))),
-                            .SDcols = names(cols)]
-    )
-
-    tabs_pct[, names(cols) := purrr::map(.SD, ~ tidyr::replace_na(., 0)),
-             .SDcols = names(cols)]
-
-    # Phase 2 (1.4.0): each cell's OWN unweighted percentage base (row / column / grand total,
-    # per `pct`), stored in the `tot_n` field so a built table is self-sufficient for exact
-    # statistics -- this retires detect_totcols() on built tables (decisions §2, §11). Built from
-    # the UNWEIGHTED tabs_n and BROADCAST (not divided) with the same denominator logic as the
-    # percentages above. tab_plain() runs per col_var, so each col_var's tot_n is its own base
-    # (cross-col_var exactness when col_vars have different NA totals is automatic).
-    tabs_totn <- data.table::copy(tabs_n)
-    tabs_totn[, names(cols) := purrr::map(.SD, as.double), .SDcols = names(cols)]
-    switch(
-      pct,
-      "row"      = tabs_totn[, names(cols) := purrr::map(.SD, ~ as.double(eval(rlang::sym("Total")))),
-                             .SDcols = names(cols)],
-      "col"      = tabs_totn[, names(cols) := purrr::map(.SD, ~ rep(dplyr::last(.), length(.))),
-                             by = eval(as.character(tab_vars)), .SDcols = names(cols)],
-      "all"      = tabs_totn[, names(cols) := purrr::map(.SD, ~ rep(dplyr::last(eval(rlang::sym("Total"))), length(.))),
-                             by = eval(as.character(tab_vars)), .SDcols = names(cols)],
-      "all_tabs" = tabs_totn[, names(cols) := purrr::map(.SD, ~ rep(dplyr::last(eval(rlang::sym("Total"))), length(.))),
-                             .SDcols = names(cols)]
-    )
+    # Phase 9d: percentages + the tot_n base on a numeric matrix (base-R) via leaf_wide_pct(),
+    # replacing the copy() + switch(pct) + purrr::map(.SD, ~ ./eval(sym("Total"))) per column.
+    # `tot_n` (Phase 2, 1.4.0) = each cell's OWN unweighted percentage base (row / column / grand
+    # total, per `pct`), BROADCAST from the UNWEIGHTED tabs_n so the built table is self-sufficient
+    # for exact statistics (retires detect_totcols() on built tables, decisions §2, §11). Byte-
+    # identical to the former per-cell path (dev/benchmarks/phase9d_leaf_math_parity.R).
+    res_e     <- leaf_wide_pct(tabs_n, if (length(wt) == 0) NULL else tabs_wn,
+                               pct, as.character(tab_vars), cols)
+    tabs_pct  <- res_e$pct
+    tabs_totn <- res_e$tot_n
 
 
     #Differences and odds ratio
@@ -3187,6 +3135,89 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
 }
 
 
+# leaf_wide_pct() -- Phase 9d: tab_plain()'s Region E (percentages + the tot_n base) on a numeric
+# matrix (base-R) instead of copy() + switch(pct) + purrr::map(.SD, ~ ./eval(rlang::sym("Total")))
+# per column. `pct` = the value matrix / denominator matrix `D` (row -> the row's Total; col -> the
+# tab_vars-group's last (= total) row; all/all_tabs -> that row's / the grand Total), then NA/NaN ->
+# 0 (== tidyr::replace_na). `tot_n` = D built on the UNWEIGHTED tabs_n, broadcast (not divided).
+# `grp_last <- ave(seq_len(n), grp, max)` reproduces dplyr::last(.) = the group's total row exactly.
+# Byte-identical to the former per-cell path (dev/benchmarks/phase9d_leaf_math_parity.R).
+#' @keywords internal
+#' @noRd
+leaf_wide_pct <- function(tabs_n, tabs_wn, pct, tab_vars, cols) {
+  nm <- names(cols); n <- nrow(tabs_n); k <- length(nm)
+  grp <- if (length(tab_vars) == 0) rep(1L, n) else {
+    key <- do.call(paste, c(lapply(tab_vars, function(v) as.character(tabs_n[[v]])), sep = "\r"))
+    match(key, unique(key))
+  }
+  grp_last <- stats::ave(seq_len(n), grp, FUN = max)
+  M_pct  <- if (!is.null(tabs_wn)) as.matrix(tabs_wn[, nm, with = FALSE]) else
+                                   as.matrix(tabs_n[,  nm, with = FALSE]) * 1.0
+  M_totn <- as.matrix(tabs_n[, nm, with = FALSE]) * 1.0
+  Dmat <- function(M) switch(pct,
+    "row"      = matrix(M[, "Total"],         n, k),
+    "col"      = M[grp_last, , drop = FALSE],
+    "all"      = matrix(M[grp_last, "Total"], n, k),
+    "all_tabs" = matrix(M[n,        "Total"], n, k))
+  P <- M_pct / Dmat(M_pct); P[is.na(P)] <- 0
+  Tn <- Dmat(M_totn)
+  wb <- function(src, M2) {
+    dt <- data.table::copy(src)
+    dt[, (nm) := lapply(seq_len(k), function(j) M2[, j])]
+    dt
+  }
+  list(pct   = wb(if (!is.null(tabs_wn)) tabs_wn else tabs_n, P),
+       tot_n = wb(tabs_n, Tn))
+}
+
+
+# build_total_rows() / finalize_total_rows() -- Phase 9d: tab_plain()'s total-TABLE (Region B) and
+# total-ROW (Region C) group-sums via base-R instead of data.table `keyby`. DECISIVE: sum with
+# base::sum() per split() group -- NOT rowsum()/data.table-gforce, whose plain-double accumulator
+# drifts 1 ULP from the `purrr::map(.SD, sum, na.rm=TRUE)` (long-double accumulator) the old code
+# used, breaking identical(). finalize_total_rows() appends the "Total" level to exactly the columns
+# that receive it (totvars) before rbind + setorderv, matching data.table's factor-union. Byte-
+# identical across 648 shapes (dev/benchmarks/phase9d_leaf_math_parity.R).
+#' @keywords internal
+#' @noRd
+build_total_rows <- function(tabs, keys, totvars, tab_row_names, num_cols) {
+  n <- nrow(tabs)
+  if (length(keys) == 0) { idx <- list(seq_len(n)); kf <- NULL } else {
+    key <- do.call(paste, c(lapply(keys, function(v) as.character(tabs[[v]])), sep = "\r"))
+    f   <- factor(key, levels = unique(key))
+    idx <- split(seq_len(n), f)
+    kf  <- as.data.frame(do.call(rbind, strsplit(levels(f), "\r", fixed = TRUE)),
+                         stringsAsFactors = FALSE)
+    names(kf) <- keys
+  }
+  summ <- lapply(num_cols, function(cc) {
+    col <- tabs[[cc]]; fv <- if (is.integer(col)) integer(1) else numeric(1)
+    vapply(idx, function(ii) sum(col[ii], na.rm = TRUE), fv)
+  })
+  names(summ) <- num_cols
+  lab <- lapply(tab_row_names, function(v)
+    if (!is.null(kf) && v %in% names(kf)) kf[[v]] else rep("Total", length(idx)))
+  names(lab) <- tab_row_names
+  # check.names = FALSE: value-cell / key names carry special chars (e.g. "$25000 or more") that the
+  # default as.data.frame() would mangle, breaking the c(tab_row_names, num_cols) reselect below.
+  out <- cbind(as.data.frame(lab,  stringsAsFactors = FALSE, check.names = FALSE),
+               as.data.frame(summ, stringsAsFactors = FALSE, check.names = FALSE))
+  out[, c(tab_row_names, num_cols), drop = FALSE]
+}
+
+#' @keywords internal
+#' @noRd
+finalize_total_rows <- function(tabs, extra, cols_get_total, tab_row_names) {
+  for (v in cols_get_total) if (v %in% names(tabs))
+    tabs[[v]] <- factor(tabs[[v]], levels = unique(c(levels(tabs[[v]]), "Total")))
+  for (v in tab_row_names)
+    extra[[v]] <- factor(extra[[v]], levels = levels(tabs[[v]]))
+  out <- rbind(tabs, data.table::as.data.table(extra))
+  data.table::setorderv(out, tab_row_names)
+  out[]
+}
+
+
 # tab_apply_reference() -- the reference step (Phase 7f carve): from the pct data.table + a reference
 # selector, derive the reference-relative fields diff (cell - ref), ratio (cell / ref, the "x2 rule")
 # and, when OR/color needs it, rr / or; plus the ref-row / ref-col markers. Extracted VERBATIM from
@@ -3199,9 +3230,39 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
 #' @noRd
 tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, OR, color, pct,
                                 tab_row_names, tab_vars, row_var, tottab_vector, totrow_vector, cols) {
+  # Phase 9d: the reference arithmetic (diff = cell - ref, ratio = cell / ref, rr / or) runs on a
+  # plain numeric matrix via base-R sweep instead of the former per-cell data.table `:=` +
+  # purrr::map_if -- byte-identical, ~100x faster on the isolated block (proven across 648 shapes:
+  # dev/benchmarks/phase9d_leaf_math_parity.R). Index/name resolution (calculate_refrows, diff_index)
+  # and the RETURN SHAPE (diff/ratio/rr/or frames indexable by col name + `refrows` logical) are
+  # unchanged, so tab_plain() and the jmvtab tier-3 re-ref (jmv_tab3_reref) are unaffected.
+  nm <- names(cols)
+  n  <- nrow(tabs_pct)
+  k  <- length(nm)
+  P  <- as.matrix(tabs_pct[, nm, with = FALSE]) * 1.0
+
   tabs_diff <- data.table::copy(tabs_pct)
   tabs_mean <- data.table::copy(tabs_pct)
   refrows   <- NULL
+
+  # write a derived matrix M2 (columns aligned to `nm`) into a data.table's value columns in place
+  set_cols <- function(dt, M2) dt[, (nm) := lapply(seq_len(k), function(j) M2[, j])]
+
+  # per-comp-group first reference-row absolute index (NA -> P[NA, ] is an all-NA row, reproducing
+  # `x - dplyr::nth(x, replace_na(which(ref_rows)[1], 0))` = x - NA). comp_group = tab_vars (comp
+  # "tab") or none (comp "all" / no tab_vars) -- the plain form of the former `by = eval(comp_group)`.
+  comp_group <- if (comp == "tab") as.character(tab_vars) else character()
+  grp_comp   <- if (length(comp_group) != 0) {
+    do.call(paste, c(lapply(comp_group, function(v) as.character(tabs[[v]])), sep = "\r"))
+  } else rep(1L, n)
+  ref_abs <- function(refr) {
+    out <- rep(NA_integer_, n)
+    for (rows in split(seq_len(n), grp_comp)) {
+      p <- which(refr[rows])[1]
+      if (!is.na(p)) out[rows] <- rows[p]
+    }
+    out
+  }
 
   if (pct == "row") {
 
@@ -3213,60 +3274,28 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, OR, color, pct,
                         row_var       = row_var,
                         tottab_vector = tottab_vector,
                         totrow_vector = totrow_vector,
-                        #pct           = pct,
                         num_names     = names(cols)
       )
 
-    comp_group <- if (comp == "tab") { as.character(tab_vars) } else { character() }
-
-    tabs_diff[, "ref_rows___" := refrows]
-
-    tabs_diff[,
-              c(names(cols), "ref_rows___") := purrr::map_if(
-                .SD,
-                purrr::map_lgl(.SD, is.numeric),
-                ~ . - dplyr::nth(., tidyr::replace_na(which(eval(rlang::sym("ref_rows___")))[1], 0) )
-              ),
-              by = eval(comp_group),
-              .SDcols = c(names(cols), "ref_rows___")]
-
-    tabs_diff[, "ref_rows___" := NULL] #keep it for ci ?
-
-
-    # with pct, tabs_mean are for the *2 rule : ratio is used instead of difference
-    tabs_mean[, "ref_rows___" := refrows]
-
-    tabs_mean[,
-              c(names(cols), "ref_rows___") := purrr::map_if(
-                .SD,
-                purrr::map_lgl(.SD, is.numeric),
-                ~ . / dplyr::nth(., tidyr::replace_na(which(eval(rlang::sym("ref_rows___")))[1], 0) )
-              ),
-              by = eval(comp_group),
-              .SDcols = c(names(cols), "ref_rows___")]
-
-    tabs_mean[, "ref_rows___" := NULL]
-
+    ra   <- ref_abs(refrows)
+    Pref <- P[ra, , drop = FALSE]
+    set_cols(tabs_diff, P - Pref)
+    set_cols(tabs_mean, P / Pref)   # with pct, tabs_mean is the *2 rule ratio, not a difference
 
 
     # Odds ratio (when pct = "row")
     if (OR %in% c("OR", "OR_pct", "or", "or_pct") | color %in% c("or", "OR")) {
 
-      # Relative risks
-      tabs_rr <- data.table::copy(tabs_pct)
-
+      # Relative risks : cell / reference COLUMN
       refcols <- dplyr::nth(names(cols),
                             diff_index(ref2,
-                                       row_var   = dplyr::pull(tabs_rr, !!row_var),
+                                       row_var   = dplyr::pull(tabs_pct, !!row_var),
                                        num_names = names(cols),
                                        pct       = "col"))
       refcols_vector <- names(cols) == refcols
 
-
       if (length(refcols) != 0 & !is.na(refcols)) {
-        tabs_rr[, names(cols) := purrr::map(.SD,~ ./eval(rlang::sym(refcols)) ),
-                .SDcols = names(cols)]
-
+        RR <- P / P[, refcols]
       } else {
         remove(refcols, refcols_vector) # test if exists after
         warning(paste0(
@@ -3274,23 +3303,14 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, OR, color, pct,
           "to remove this warning, precise the value of ref ",
           "until there is one column matched"
         ))
-        tabs_rr[, names(cols) := purrr::map(.SD, ~ NA_real_), .SDcols = names(cols)]
+        RR <- matrix(NA_real_, n, k)
       }
+      tabs_rr <- data.table::copy(tabs_pct)
+      set_cols(tabs_rr, RR)
 
-      # Odds ratio (binary) or relative risk ratios
-      tabs_or <- data.table::copy(tabs_rr)
-      tabs_or[, "ref_rows___" := refrows]
-
-      tabs_or[,
-              c(names(cols), "ref_rows___") := purrr::map_if(
-                .SD,
-                purrr::map_lgl(.SD, is.numeric),
-                ~ ./dplyr::nth(., tidyr::replace_na(which(eval(rlang::sym("ref_rows___")))[1], 0) )
-              ),
-              by = eval(comp_group),
-              .SDcols = c(names(cols), "ref_rows___")]
-
-      tabs_or[, "ref_rows___" := NULL]
+      # Odds ratio (binary) or relative risk ratios : rr / reference ROW
+      tabs_or <- data.table::copy(tabs_pct)
+      set_cols(tabs_or, RR / RR[ra, , drop = FALSE])
     }
 
   }
@@ -3303,29 +3323,23 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, OR, color, pct,
     refcols_vector <- names(cols) == refcols
 
     if (length(refcols) != 0 & !is.na(refcols)) {
-      tabs_diff[, names(cols) := purrr::map(.SD,~ . - eval(rlang::sym(refcols)) ),
-                .SDcols = names(cols)]
-
-      #   with pct, tabs_mean are for the *2 rule : ratio is used instead of difference
-      tabs_mean[, names(cols) := purrr::map(.SD,~ . / eval(rlang::sym(refcols)) ),
-                .SDcols = names(cols)]
+      set_cols(tabs_diff, P - P[, refcols])
+      set_cols(tabs_mean, P / P[, refcols])   # *2 rule ratio
     } else {
       warning(paste0(
         "in ref = '", ref, "' , no columns were found as reference for comparison ; ",
         "to remove this warning, precise the value of ref ",
         "until there is one column matched"
       ))
-      tabs_diff[, names(cols) := purrr::map(.SD, ~ NA_real_), .SDcols = names(cols)]
-      tabs_mean[, names(cols) := purrr::map(.SD, ~ NA_real_), .SDcols = names(cols)]
+      set_cols(tabs_diff, matrix(NA_real_, n, k))
+      set_cols(tabs_mean, matrix(NA_real_, n, k))
     }
 
 
     # Odds ratio (when pct = "col")
     if (OR %in% c("OR", "OR_pct", "or", "or_pct") | color %in% c("or", "OR")) {
 
-      # Relative risks
-      tabs_rr <- data.table::copy(tabs_pct)
-
+      # Relative risks : cell / reference ROW
       refrows <- tabs |>
         calculate_refrows(ref           = ref2,
                           comp          = comp,
@@ -3334,36 +3348,19 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, OR, color, pct,
                           row_var       = row_var,
                           tottab_vector = tottab_vector,
                           totrow_vector = totrow_vector,
-                          #pct           = pct,
                           num_names     = names(cols)
         )
+      ra <- ref_abs(refrows)
+      RR <- P / P[ra, , drop = FALSE]
+      tabs_rr <- data.table::copy(tabs_pct)
+      set_cols(tabs_rr, RR)
 
-      comp_group <- if (comp == "tab") { as.character(tab_vars) } else { character() }
-
-      tabs_rr[, "ref_rows___" := refrows]
-
-      tabs_rr[,
-              c(names(cols), "ref_rows___") := purrr::map_if(
-                .SD,
-                purrr::map_lgl(.SD, is.numeric),
-                ~ ./dplyr::nth(., tidyr::replace_na(which(eval(rlang::sym("ref_rows___")))[1], 0) )
-              ),
-              by = eval(comp_group),
-              .SDcols = c(names(cols), "ref_rows___")]
-
-      tabs_rr[, "ref_rows___" := NULL]
-
-
-      # Odds ratio (binary) or relative risk ratios
-      tabs_or <- data.table::copy(tabs_rr)
-
+      # Odds ratio (binary) or relative risk ratios : rr / reference COLUMN
+      tabs_or <- data.table::copy(tabs_pct)
       if (length(refcols) != 0 & !is.na(refcols)) {
-        tabs_or[, names(cols) := purrr::map(.SD,~ ./eval(rlang::sym(refcols)) ),
-                .SDcols = names(cols)]
-
+        set_cols(tabs_or, RR / RR[, refcols])
       } else {
-        tabs_or[, names(cols) := purrr::map(.SD, ~ NA_real_), .SDcols = names(cols)]
-        # remove(refcols, refcols_vector) # test if exists after
+        set_cols(tabs_or, matrix(NA_real_, n, k))
       }
     }
   }

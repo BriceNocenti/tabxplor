@@ -1,0 +1,19 @@
+
+#### Phase 9b-3 before/after -- label: phase9d_after | R 4.5.1 
+
+ fixture merge_s list_s per_tab_s merge_mb
+  common  0.6242 0.6294    0.1259     41.4
+      ci  0.8426 0.8488    0.1698     30.5
+ contrib  0.7567 0.8014    0.1603     20.3
+ numeric  0.1484 0.1276    0.0255     16.3
+
+  merge_s = default tab() (runs tab_compact) ; list_s = output_list (no merge)
+  per_tab_s = list_s / 5 (the per-row_var build = 9b-3 target)
+
+=== git-stash A/B: tables WITH tab_vars (B/C map2 multiplier) ===
+shape                     before    after    change
+1 tab_var (mar x race|relig)   0.1500   0.1200   -20%
+2 tab_vars x 2 col_vars        0.4050   0.2000   -51%
+
+GATE: arithmetic(E+F) -11%/-7.4% (no-tab_vars common/ci); totals(B/C) -20%/-51% (tab_vars).
+Both blocks clear >=5% + byte-identical (full suite FAIL 0, PoC 648/648, no golden regen).

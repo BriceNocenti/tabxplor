@@ -1878,6 +1878,43 @@ representation change.
 
 ---
 
+## 31. Phase 9d — leaf math on base-R / matrix (2026-07-11, DONE)
+
+The §30 lever 4 ("~30 % `[.data.table` per-op overhead"), landed. `tab_plain()`'s three chained-`[`
+blocks now run on plain numeric matrices / base-R group-sums instead of `copy()` +
+`purrr::map(.SD, ~ eval(rlang::sym()))` / `keyby`. **Factor-only** (numeric stats already delegate to
+base-R helpers; the profile is a factor fixture). **PoC-gated first**
+(`dev/benchmarks/phase9d_leaf_math_parity.R`): every equivalence proven **byte-identical across 648
+shapes** (`identical()`, the full pct × comp × OR × tab_vars × wt × na × ref × totaltab grid) BEFORE any
+`tab.R` edit.
+
+**The three blocks (each committed byte-identical, gate = ≥5 % end-to-end + `identical()`):**
+- **F — `tab_apply_reference()`** internals → matrix sweep: `diff = P − P[refrow,]`, `ratio = P / P[refrow,]`,
+  `rr = P / P[,refcol]`, `or = RR / RR[refrow,]`; per-comp-group reference index via
+  `split()` + `which(refrows[rows])[1]` (NA → all-NA row, reproducing `x − nth(x, 0)`). **Signature +
+  return shape unchanged** (`diff`/`ratio` col-indexable frames, `refrows` logical, `exists()` guards) →
+  `jmv_tab3_reref` (jmvtab tier-3 re-ref) unaffected. ~118× isolated.
+- **E — `leaf_wide_pct()`** (new helper): pct + `tot_n` as `M / D` where `D` = the row's Total (row) /
+  the tab_vars-group's last (= total) row (col) / the grand Total (all/all_tabs); `P[is.na(P)] <- 0` ==
+  `tidyr::replace_na`; `grp_last <- ave(seq_len(n), grp, max)` == `dplyr::last(.)`. ~1.5× isolated.
+- **B/C — `build_total_rows()` / `finalize_total_rows()`** (new helpers): total-table + total-row group
+  sums. **DECISIVE trap**: use **base `sum()` per `split()` group, NOT `rowsum()`/data.table-gforce** —
+  the old `map(.SD, sum)` uses a LONG-DOUBLE accumulator; rowsum/gforce use plain double → 1-ULP drift →
+  `identical()` FALSE. Conditional factor level-expansion (append `"Total"` only to columns in `totvars`),
+  `check.names = FALSE` (value-cell names carry `$`/spaces, e.g. `"$25000 or more"`). ~4.5× isolated.
+
+Region D (the `rowSums` Total column) stays as-is (already matrix, and must run first to put `"Total"`
+in the matrix). `calculate_refrows()` / `diff_index()` unchanged (they return indices/logicals).
+
+**Verified**: full suite **FAIL 0 / PASS 1400, NO golden regen**; the PoC 648/648 `identical()`.
+**End-to-end (`dev/benchmarks/results_1.4.0/phase9d_{before,after,poc}.txt`):** no-tab_vars fixtures
+common **−11 %** / ci **−7.4 %** per-row_var build (carried by E+F); **git-stash A/B with tab_vars**
+(where B/C's `map2` multiplier bites): 1 tab_var **−20 %**, 2 tab_vars × 2 col_vars **−51 %**. contrib
+(no ref, `pct="no"` → E/F skipped) and numeric (untouched) stay flat, as expected. Both gated blocks
+clear ≥5 %.
+
+---
+
 ## Sources (statistics)
 
 - Binomial proportion CI (Wald / Wilson / Agresti-Coull asymmetry): <https://en.wikipedia.org/wiki/Binomial_proportion_confidence_interval>
