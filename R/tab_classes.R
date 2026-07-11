@@ -1088,20 +1088,23 @@ tab_pvalue_lines <- function(tabs) {
       ~ if (is_fmt(.x)) {vctrs::vec_restore(.x, .y) } else {.x}
     )
 
+  # Phase 9b-3: fill ONLY the p-value row's empty cells (bind_rows left them NA-display) via a masked
+  # assignment, instead of an if_else over EVERY cell of EVERY column. The former per-cell if_else +
+  # `fmt0 |> mutate(n=NA)` + per-column vec_restore + the `.$display` vec_proxy pull was ~1/3 of the
+  # per-table build. Byte-identical: the replacement value (fmt0(first(display), type) with n = NA)
+  # and the preserved column attributes (col[mask]<- casts the value to the column's ptype, keeping
+  # its attrs -- like the former `if_else(...) |> vec_restore(.)`) match the old output exactly.
   tabs <- tabs |>
     dplyr::group_by(!!!rlang::syms(groups)) |>
     dplyr::arrange(.by_group = TRUE) |>
-    dplyr::mutate(dplyr::across(
-      dplyr::where(is_fmt),   #where(is_totcol) | any_of(c("n")),
-      ~ dplyr::if_else(
-        !is.na(.$display),
-        true  = .,
-        false = fmt0(first(.$display),
-                     type = get_type(.)) |>
-          dplyr::mutate(n = NA_integer_) #  in_totrow = TRUE
-      ) |>
-        vctrs::vec_restore(.)
-    ))
+    dplyr::mutate(dplyr::across(dplyr::where(is_fmt), function(col) {
+      na_mask <- is.na(get_display(col))
+      if (!any(na_mask)) return(col)
+      repl <- fmt0(dplyr::first(get_display(col)), type = get_type(col))
+      vctrs::field(repl, "n") <- NA_integer_
+      col[na_mask] <- repl
+      col
+    }))
   # filter(levels == "pvalue") |>
   # pull(Danser) |> vctrs::vec_data()
   # pull( `Total_ART_MONTAGES`) |> vctrs::vec_data()
@@ -2850,10 +2853,40 @@ color_style_text_light_24_blue_red <-
   )  #    neg5 = "#cb0000" )
 
   # OKLCH Chroma Peaks
-  # - Blue              H265 / L45 
-  # - to Red (orange/rose)  H28 / L62
-  # - Green             H142 / L86
-  # - to Violet         H325 / L70
+  # - Blue            H265 / L45  ; H180 to 265
+  # - to Orange Red   H28 / L62   ; H90 to 28   (avoid true red ?)
+  # 
+  # - Green           H142 / L86  ; H110 to H160, alternate to center ?
+  # - to Violet Red   H325 / L70  ; H285 to H25, but which direction ? red to violet ?
+  diff <-
+    c(pos1 = "#93ED75",  #  OKLCH          
+      pos2 = "#1AE6D6",  #  L83 C14.35 H185
+      pos3 = "#00bcd4",  #  L72 C12.65 H210
+      pos4 = "#1e88e5",  #  L62 C16.68 H250
+      pos5 = "#0019ff",  #  L46 C30.64 H264
+            
+      neg1 = "#fdd835",  #                 
+      neg2 = "#ffb300",  #  L81 C17.05  H78
+      neg3 = "#FF8138",  #  L74 C17.45  H47
+      neg4 = "#ff3d00",  #  L65 C23.47  H34
+      neg5 = "#cb0000",  #  L52 C21.70  H30
+    # ratio = "#673AB7"  #  L47 C18.62 H295
+    )
+
+  ratio <-
+    c(pos1 = "#93ED75",  #  OKLCH          
+      pos2 = "#1AE6D6",  #  L83 C14.35 H185
+      pos3 = "#00bcd4",  #  L72 C12.65 H210
+      pos4 = "#1e88e5",  #  L62 C16.68 H250
+      pos5 = "#0019ff",  #  L46 C30.64 H264
+            
+      neg1 = "#fdd835",  #                 
+      neg2 = "#ffb300",  #  L81 C17.05  H78
+      neg3 = "#FF8138",  #  L74 C17.45  H47
+      neg4 = "#ff3d00",  #  L65 C23.47  H34
+      neg5 = "#cb0000",  #  L52 C21.70  H30
+    # ratio = "#673AB7"  #  L47 C18.62 H295
+    )
 
 # pct_ratio_color_style <- c(ratio = "#6A1B9A")
 

@@ -266,6 +266,21 @@ mixed/chi2 tables + both `partial` modes. A `vapply`-for-`map` swap on the other
 S3 dispatch / call-count, which the carrier addresses, not the `purrr` wrapper).
 `dev/benchmarks/results_1.4.0/phase9b3_pass2.txt`.
 
+**Pass 3 (2026-07-11) — `tab_pvalue_lines` masked-fill (byte-identical, the big one: ~25-34%).** After
+pass 2 a fresh line-profile pinned **`tab_pvalue_lines` at ~34% of the per-table build** (`chi2=TRUE`
+adds a p-value row): the block filling the new row's empty cells ran an `if_else` over EVERY cell of
+EVERY fmt column — `!is.na(.$display)` (the `$.tabxplor_fmt` → `vec_proxy` pull), `fmt0(...) |>
+mutate(n=NA)` (the `mutate.tabxplor_fmt` `vec_proxy` round-trip), and a per-column `vec_restore` — i.e.
+the `vec_case_when` 20% (all from `dplyr::if_else`), the `mutate.tabxplor_fmt` 7%, and much of the
+`vec_restore` 33%, ALL to fill ~1 row. Replaced by a **masked assignment**: `col[is.na(get_display(col))]
+<- fmt0(first(get_display(col)), type)` (with `field(repl,"n") <- NA`), a no-op on columns with no empty
+cell. Byte-identical — `col[mask] <-` casts the value to the column's ptype, keeping its attrs, exactly
+like the former `if_else(...) |> vec_restore(.)` (attributes verified preserved; the old `.$display` ≡
+`get_display`). **Cumulative baseline→pass3: common merged 1.58→1.17 (−26%) / per-table 0.264→0.174
+(−34%); ci −25%; contrib −26%; numeric neutral (no p-value line).** Full suite green (1364/0), no golden
+regen; verified byte-identical vs the old block on grouped + ungrouped tables.
+`dev/benchmarks/results_1.4.0/phase9b3_pass3.txt`.
+
 **Revised staging for the remaining core** (supersedes §3.4's join-first order):
 
 1. **`tab_apply_tests` / `tab_chi2` on plain fields (the 20%, #1 value).** Compute the row masks
