@@ -2330,6 +2330,32 @@ tab_prepare <-
 
 
 
+# ============================================================================================
+# === Phase 9b-3: the plain carrier (unwrapped fmt columns) ==================================
+# ============================================================================================
+# The in-build table is carried as plain atomic field-vectors up to a SINGLE new_fmt() call at
+# the end of tab_build_one(), instead of materializing the tabxplor_fmt record inside each leaf
+# and reconstructing it through every downstream join / slice / rbind (the vctrs ptype2/cast/
+# restore round-trip §29 pins at ~99% of tab()). See dev/tabxplor_phase9b_fmt_display_only.md.
+#
+# A carrier COLUMN = list(frame, meta):
+#   frame : named list of the 18 per-cell FIELDS, each length nrow, correctly typed (landmine L1):
+#           n/digits integer, in_totrow/in_tottab/in_refrow logical, display character, the 12
+#           other numerics double. new_fmt() does NO casting, so the carrier owns the types.
+#   meta  : named list of the 9 per-column ATTRIBUTES (type, comp_all, ref, ci_type, col_var,
+#           totcol, refcol, color, color_signif). `color` is carried WHOLE (length 1 or 2).
+# The field / attribute name order is the new_fmt() contract (fmt_class.R); do NOT reorder.
+fmt_frame_fields <- c("n", "display", "digits", "wn", "pct", "mean", "diff", "ratio", "ctr",
+                      "var", "ci_inf", "ci_sup", "pvalue", "or", "tot_n",
+                      "in_totrow", "in_tottab", "in_refrow")
+fmt_col_attrs    <- c("type", "comp_all", "ref", "ci_type", "col_var",
+                      "totcol", "refcol", "color", "color_signif")
+
+# WARNING: pass `comp_all` by EXACT name (not `comp`). The leaves historically wrote `comp = x`,
+# which PARTIAL-MATCHES the `comp_all` formal (verified) -- `comp_all = x` is the identical result.
+# fmt_materialize_col() -- the ONE new_fmt() call. do.call by exact names => no partial-match drift.
+fmt_materialize_col <- function(frame, meta) do.call(new_fmt, c(frame, meta))
+
 # DESIGN: tab_plain() is the core aggregation function. Internal sequence:
 #   1. data.table dcast (row_var ~ col_var, fun = sum of weights) for speed
 #   2. Wrap counts into fmt vectors via new_fmt()
@@ -3024,40 +3050,25 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
            rep(FALSE, length(cols)) },
          if (exists("tabs_totn", rlang::current_env(), inherits = F)) { tabs_totn } else { list(NA_reals) }
     ) |>
-    purrr::pmap_dfc(~ new_fmt(
-      display   = display_1,
-      digits    = digits_v,
-      n         = as.integer(..1),
-      wn        = ..2,
-      pct       = ..3,
-      diff      = ..4,
-      # Phase 5 (§3): the `ratio` field is the REFERENCE-RELATIVE ratio (cell / reference per the
-      # pct direction = tabs_mean = ..5), the home of the "x2 rule" and the colour ratio measure.
-      # The `mean` field holds ONLY actual means now (NA for pct columns) -- the old mean-overload
-      # is gone; the colour engine reads `ratio` (get_ratio). The cross-direction RR (..6 =
-      # tabs_rr) feeds tabs_or internally and is no longer stored (nothing displays it).
-      mean      = NA_reals,
-      ratio     = ..5,
-      or        = ..7,
-      ctr       = NA_reals,
-      var       = NA_reals,
-      ci_inf    = NA_reals,
-      ci_sup    = NA_reals,
-      pvalue    = NA_reals,
-      #ci        = ,
-      in_totrow = totrow_vector,
-      in_tottab = tottab_vector,
-      in_refrow = refrows,
-      totcol    = ..8,
-      refcol    = ..9,
-      tot_n     = ..10,
-      color     = color_1,
-      type      = type_1,
-      ref       = ref_1,
-      #ci_type   = ,
-      comp      = comp_1,
-      col_var   = colvar_1
-    ))
+    # Phase 9b-3: build the plain carrier column (frame + meta) then materialize via the single
+    # fmt_materialize_col() (== the former inline new_fmt, byte-identical). pmap_dfc is KEPT so the
+    # output columns keep their exact col_var-cell names/order. `..6` (tabs_rr) is unused, as before.
+    # Phase 5 (§3): `ratio` (= tabs_mean = ..5) is the REFERENCE-RELATIVE ratio (the "x2 rule" / colour
+    # ratio measure); `mean` is NA for pct columns (the old mean-overload is gone; colour reads ratio).
+    purrr::pmap_dfc(function(...) {
+      a <- list(...)
+      fmt_materialize_col(
+        frame = list(
+          n         = as.integer(a[[1]]), display = display_1, digits = digits_v,
+          wn        = a[[2]], pct = a[[3]], mean = NA_reals, diff = a[[4]], ratio = a[[5]],
+          ctr       = NA_reals, var = NA_reals, ci_inf = NA_reals, ci_sup = NA_reals,
+          pvalue    = NA_reals, or = a[[7]], tot_n = a[[10]],
+          in_totrow = totrow_vector, in_tottab = tottab_vector, in_refrow = refrows),
+        meta  = list(
+          type      = type_1, comp_all = comp_1, ref = ref_1, ci_type = "", col_var = colvar_1,
+          totcol    = a[[8]], refcol = a[[9]], color = color_1, color_signif = "ignore")
+      )
+    })
 
   tabs <- dplyr::bind_cols(tibble::as_tibble(tabs_text), tabs)
 
@@ -4103,39 +4114,29 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
   tabs <-
     list(tabs_n, tabs_wn, tabs_mean, tabs_var, tabs_diff, tabs_ci_sup, as.character(col_vars),
          digits, tabs_ratio, tabs_ci_inf, tabs_pvalue) |>
-    purrr::pmap_dfc(~ new_fmt(
-      display   = display_1,
-      digits    = {
-        m <- max(..3, na.rm = TRUE)
-        if      (m <= 1 ) vec_recycle(max(..8, 2L), length(..1))
-        else if (m <= 10) vec_recycle(max(..8, 1L), length(..1))
-        else              vec_recycle(..8,          length(..1))
-      },
-      n         = ..1,
-      wn        = ..2,
-      mean      = ..3,
-      var       = ..4,
-      diff      = ..5,
-      ratio     = ..9,
-      pct       = NA_reals,
-      ctr       = NA_reals,
-      or        = NA_reals,
-      tot_n     = NA_reals,
-      # Phase 3a: real asymmetric CI bounds + per-cell significance (mean CIs are symmetric
-      # around the estimate, but stored as absolute bounds like the proportion path).
-      ci_sup    = ..6,
-      ci_inf    = ..10,
-      pvalue    = ..11,
-      in_totrow = totrow_vector,
-      in_tottab = tottab_vector,
-      in_refrow = refrows,
-      color     = color,
-      type      = "mean",
-      ref       = ref_1,
-      ci_type   = ci, #dplyr::if_else(ci == "diff", "diff", ci),
-      comp      = comp_1,
-      col_var   = ..7
-    ))
+    # Phase 9b-3: build the plain carrier column (frame + meta) then materialize via the single
+    # fmt_materialize_col() (== the former inline new_fmt, byte-identical). The digits mean-magnitude
+    # floor stays per-column (reads this column's means ..3). Phase 3a: real asymmetric CI bounds +
+    # per-cell significance (mean CIs symmetric around the estimate, stored as absolute bounds).
+    purrr::pmap_dfc(function(...) {
+      a <- list(...)
+      m <- max(a[[3]], na.rm = TRUE)
+      digits_col <-
+        if      (m <= 1 ) vec_recycle(max(a[[8]], 2L), length(a[[1]]))
+        else if (m <= 10) vec_recycle(max(a[[8]], 1L), length(a[[1]]))
+        else              vec_recycle(a[[8]],          length(a[[1]]))
+      fmt_materialize_col(
+        frame = list(
+          n         = a[[1]], display = display_1, digits = digits_col,
+          wn        = a[[2]], pct = NA_reals, mean = a[[3]], diff = a[[5]], ratio = a[[9]],
+          ctr       = NA_reals, var = a[[4]], ci_inf = a[[10]], ci_sup = a[[6]],
+          pvalue    = a[[11]], or = NA_reals, tot_n = NA_reals,
+          in_totrow = totrow_vector, in_tottab = tottab_vector, in_refrow = refrows),
+        meta  = list(
+          type      = "mean", comp_all = comp_1, ref = ref_1, ci_type = ci, col_var = a[[7]],
+          totcol    = FALSE, refcol = FALSE, color = color, color_signif = "ignore")
+      )
+    })
 
   tabs <- dplyr::bind_cols(tibble::as_tibble(tabs_text), tabs)
 

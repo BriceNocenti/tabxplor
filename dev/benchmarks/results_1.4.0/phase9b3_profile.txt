@@ -1,0 +1,54 @@
+Phase 9b-3 -- corrected cost model (profiling, 2026-07-11)
+==========================================================
+Fixture: tab(gss_cat, 5 row_vars, c(race,marital,partyid), pct="row", color="diff",
+         chi2=TRUE, output_list=TRUE)  -- the §29 / §5 common factor build (no merge).
+Method: Rprof by.total over a warm accumulation loop (interval 0.003), live load_all.
+
+WHY THIS PROFILE: §5 (phase9b2_decomposition) established the RECOVERABLE share (~30-48%) and the
+mechanism (record reconstruction 54.5x plain, materialize-once floor ~0.5%), but a synthetic
+6-round vec_c/vec_slice micro-model. This profile locates the reconstruction in the REAL pipeline
+so 9b-3 targets the right frames.
+
+TOP by.total (candidate frames), per-table build (output_list):
+  do.call                     56.6   (the load_all wrapper -- ignore)
+  tab_transform               52.8   (the whole per-row_var build)
+  dplyr::mutate / mutate_cols 41.3   (pervasive dplyr-over-fmt)
+  tab_plain (leaves)          30.7     (incl. [.data.table scan 14.2 + new_rcrd 12.6)
+  vctrs::vec_restore          29.1   <-- the reconstruction (matches §5's 29.7)
+  tab_apply_tests             20.3   <-- #1 recoverable chunk (tab_chi2 on chi2=TRUE)
+  vec_case_when               17.7
+  vctrs::new_rcrd             12.6     (MOSTLY reconstruction rebuilds, NOT materialize -- see §5)
+  vec_ptype2.tabxplor_fmt      8.6
+  vec_rbind                    5.1
+  tab_assemble_tables          3.5
+  bind_cols / new_tab          ~2 each
+
+KEY CORRECTIONS to the plan's cost model:
+1. The col_var full_join is CHEAP: reduce/full_join = 0.9%, vec_slice = 1.5% (§5 Part 2), and a
+   direct probe measured full_join at ~1.5 ms/join. bind_cols is 20x SLOWER (name-repair on the
+   duplicated "Total" columns). => The JOIN IS NOT THE TARGET (the plan's L2 focus was misplaced).
+2. The reconstruction is PERVASIVE dplyr-over-fmt (mutate/across/transmute/is_* each vec_restore
+   every fmt column), NOT localized to slice/join. new_rcrd 12.6% is mostly the REBUILDS, not the
+   one-time materialize (the materialize-once floor is 0.5%, §5 Part 3).
+3. The LEAF TAIL is cheap on the common path (default total_names make the renames no-ops; column
+   renames/reorders don't row-reconstruct) -- porting it banks little.
+4. tab_apply_tests / tab_chi2 (20%) is the SINGLE BIGGEST recoverable chunk. Isolated tab_chi2
+   profile (400x, 8x5 built table, 43.6 ms/call): is_totrow.data.frame 34.6% (called ~5x, each
+   O(cols)), dplyr::transmute 33.6 / select 26.0 / mutate 26.5 (dplyr-over-fmt), the helpers
+   tab_add_totcol_if_no 19.7 / tab_match_groups_and_totrows 19.2 / tab_match_comp_and_tottab 17.2,
+   agg_chi2 17.0 (the actual vectorised chi2 math). The tabs[!is_totrow,] slice alone = 4.0 ms.
+   => tab_chi2's cost is REPEATED is_totrow/is_totcol scans + dplyr-over-fmt group-matching, only
+   partly the record rebuild. The carrier (plain fields + precomputed row/col masks) removes both.
+
+IMPLICATION for the 9b-3 staging: the win requires the carrier to span the WHOLE within-row_var
+pipeline (leaf materialize deferred + tab_apply_tests + assemble on plain fields), dominated by
+making tab_chi2/tab_ci read plain fields with row/col masks computed ONCE. There is no cheap
+subset; the join is not worth reimplementing (keep the record full_join / materialize around it).
+
+STATUS: Increment 1 (the single fmt_materialize_col() seam) landed byte-identical + perf-neutral
+(common per_table 0.2648 vs baseline 0.2644 s). It establishes the one materialization point every
+later increment builds on. The carrier build/flow (leaf->tests->assemble) + the tab_chi2/tab_ci
+plain-field port remain -- the substantial, multi-increment core.
+
+Before benchmark (baseline): common per_table 0.2644 s / merge 1.58 s ; ci 0.354 ; contrib 0.445 ;
+numeric 0.030. (dev/benchmarks/results_1.4.0/phase9b3_before.txt)

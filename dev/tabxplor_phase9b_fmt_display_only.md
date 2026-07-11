@@ -221,3 +221,55 @@ Verdict:
   round-trips are a subset of the 9b-3 carrier win (9b-3 flows plain fields *through* ci/chi2) and a
   local unwrap→rewrap would be partly reworked by it. **Fold the plain writers into 9b-3.** L1-L7 of
   §3.3 remain the byte-identity ledger for that work.
+
+
+##### 6. Phase 9b-3 — implementation (2026-07-11): increment 1 landed + corrected cost model
+
+**Increment 1 (the single materialization seam) — DONE, byte-identical, perf-neutral.** Added
+`fmt_materialize_col()` (`R/tab.R`, the ONE `new_fmt()` call, via `do.call` by exact field/attr
+names so the historical `comp = x` partial-match to `comp_all` is reproduced exactly) + the
+`fmt_frame_fields` / `fmt_col_attrs` contract constants. Both leaves (`tab_plain`/`tab_num`) now
+build a per-column `frame`+`meta` and route through it at the SAME materialization point (the
+`pmap_dfc` binding is kept, so column names/order are identical). Full suite green (1364/0), NO
+golden regeneration; common per-table build 0.2648 vs baseline 0.2644 s (noise). This establishes
+the single materialization point every later increment defers.
+
+**Corrected cost model (profiling — `dev/benchmarks/results_1.4.0/phase9b3_profile.txt`).** The §5
+decomposition was right that ~30% is recoverable record reconstruction, but the plan's *localization*
+was wrong. Real-pipeline Rprof of the common build:
+
++ **The col_var full_join is NOT the target: 0.9%** (`vec_slice` 1.5%). A direct probe: `full_join`
+  ~1.5 ms/join; `bind_cols` is 20× SLOWER (name-repair on the duplicated `Total`). **Do not
+  reimplement the join (drop the L2 focus); keep the record `full_join` / materialize around it.**
++ **The reconstruction is PERVASIVE `dplyr`-over-fmt** (`mutate`/`across`/`transmute`/`is_*` each
+  `vec_restore` every fmt column), not localized to slice/join. `new_rcrd` 12.6% is mostly the
+  *rebuilds*, not the one-time materialize (floor 0.5%, §5 Part 3).
++ **The leaf tail is cheap on the common path** (default `total_names` make the renames no-ops;
+  column renames/reorders don't row-reconstruct) — porting it banks little.
++ **`tab_apply_tests` / `tab_chi2` is the #1 recoverable chunk: 20%.** Isolated `tab_chi2` profile
+  (43.6 ms/call, 8×5 table): `is_totrow.data.frame` 34.6% (called ~5×, each O(cols)), `transmute`
+  33.6 / `select` 26.0 / `mutate` 26.5 (`dplyr`-over-fmt), helpers `tab_add_totcol_if_no` 19.7 /
+  `tab_match_groups_and_totrows` 19.2 / `tab_match_comp_and_tottab` 17.2, `agg_chi2` 17.0 (the
+  vectorised math). The `tabs[!is_totrow,]` slice alone = 4.0 ms.
+
+**Revised staging for the remaining core** (supersedes §3.4's join-first order):
+
+1. **`tab_apply_tests` / `tab_chi2` on plain fields (the 20%, #1 value).** Compute the row masks
+   (`is_totrow`/`is_tottab`) and col masks (`detect_totcols`/`get_col_var`) ONCE; extract the count /
+   moment matrices once via `get_n`/`get_mean`/`get_var` (already cheap field reads); run
+   `agg_chi2`/`agg_anova` on those; attach the `test` tibble without the fmt slice/regroup/rewrap.
+   Golden-locked by `test-calculations.R` (chi2 vs `chisq.test` incl. Yates; Welch/classic F). This
+   is the L6 read-path and delivers the biggest win; it needs the carrier (or a plain-field view) to
+   exist at the tests boundary — i.e. the leaf→join must hand tests a plain-field carrier, not a
+   materialized tab.
+2. **Defer the leaf materialization** so the carrier reaches (1): leaf builds `frame`+`meta`, the
+   record `full_join` runs on materialized leaves (cheap) then the result is unwrapped to a carrier,
+   OR the leaves return a carrier and the join materializes around itself. Either keeps the tests +
+   assemble on plain fields.
+3. **`tab_assemble_tables` + `tab_add_n_pct`** (L7) on the carrier; `fmt_wrap` once at
+   `tab_build_one` end. `tab_compact`/`pvalue`/`n_min` stay record-based (L3/L4 avoided).
+
+Landmine ledger §3.3 still holds MINUS L2 (join not reimplemented). L1 (field types) + L5
+(materialize boundary + derived display/digits) + L6 (`tab_ci`/`tab_chi2` plain read/write) + L7
+(`tab_add_n_pct`) remain. The public `tab_ci()`/`tab_chi2()` stay exported as unwrap→shared-engine→
+rewrap wrappers (maintainer, mid-turn 2026-07-11).

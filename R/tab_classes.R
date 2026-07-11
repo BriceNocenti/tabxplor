@@ -2831,19 +2831,19 @@ color_style_text_light <-
 
 #' @keywords internal
 color_style_text_light_24_blue_red <-
-  c(pos1 = "#93ED75",   #  c(pos1 = "#e4e65e",
-    pos2 = "#1AE6D6",   #    pos2 = "#cddc39", "#4EE6B9"
-    pos3 = "#00bcd4",   #    pos3 = "#8bc34a",
-    pos4 = "#1e88e5",   #    pos4 = "#589E38",
-    pos5 = "#0019ff",   #    pos5 = "#1b6e20",
+  c(pos1 = "#93ED75",  #                       #  c(pos1 = "#e4e65e",
+    pos2 = "#1AE6D6",  #  L83 C14.35 H185      #    pos2 = "#cddc39", "#4EE6B9"
+    pos3 = "#00bcd4",  #  L72 C12.65 H210      #    pos3 = "#8bc34a",
+    pos4 = "#1e88e5",  #  L62 C16.68 H250      #    pos4 = "#589E38",
+    pos5 = "#0019ff",  #  L46 C30.64 H264      #    pos5 = "#1b6e20",
+          
+    neg1 = "#fdd835",  #                       #    neg1 = "#ffeb3b",
+    neg2 = "#ffb300",  #  L81 C17.05  H78      #    neg2 = "#ffc400",
+    neg3 = "#FF8138",  #  L74 C17.45  H47      #    neg3 = "#ff9100",
+    neg4 = "#ff3d00",  #  L65 C23.47  H34      #    neg4 = "#ff3d00",
+    neg5 = "#cb0000",  #  L52 C21.70  H30
 
-    neg1 = "#fdd835",   #    neg1 = "#ffeb3b",
-    neg2 = "#ffb300",   #    neg2 = "#ffc400",
-    neg3 = "#FF8138",   #    neg3 = "#ff9100",
-    neg4 = "#ff3d00",   #    neg4 = "#ff3d00",
-    neg5 = "#cb0000",
-
-    ratio = "#673AB7"
+    ratio = "#673AB7"  #  L47 C1862 H295
     #   "#8E24AA", "#7B1FA2" "#6A1B9A"
     # "#673AB7", "#5E35B1", "#512DA8", "#4527A0"
 
