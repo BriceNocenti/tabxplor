@@ -436,10 +436,11 @@ Caveats: transpose must stay at the display layer; numeric/mean col_vars don't i
 (factor-oriented path); exporters swap total-row↔total-column styling. `tab_transpose()` is the
 mechanism (below).
 
-**`tab_transpose()`** (a stub the maintainer added to `R/tab.R` — **already `@export`ed** at
-[tab.R:1773](../R/tab.R#L1773) but undocumented, single-total-row/col only, unqualified verbs; so it is a
-*broken public function today*) is to be **finished, documented, and possibly generalised** (tab_vars?) at
-Phase 10 — it is the mechanism for the above. Do not wire it in before Phase 10.
+**`tab_transpose()`** (a stub the maintainer added to `R/tab.R` — **fully commented-out and NOT exported**
+at [tab.R:2133-2155](../R/tab.R#L2133); single-total-row/col only, unqualified verbs; a *clean slate*, not
+a live broken function — the earlier "@export'ed at tab.R:1773" note was stale) is to be **finished,
+documented, and possibly generalised** (tab_vars?) at Phase 10 — it is the mechanism for the above. Do not
+wire it in before Phase 10. (Design: `dev/tabxplor_phase10_exporters.md` §8.)
 
 **compact + tab_vars**: deferred. Merging tables that carry tab_vars needs compound
 `group_by(tab_vars, row_var)`, interleaving row_vars within each tab_var block, per-(tab_var × row_var)
@@ -1066,7 +1067,9 @@ lacks / ~ partial.
   path** so the `tab_xl` bypass stops silently diverging from `format.tabxplor_fmt()`.
 - **Extend cross-exporter (meaningful):** stars → `tab_xl` (§16); `n_min`/`hide_near_zero` greying →
   `tab_kable` (grey text) and, as a marker, `tab_md`; the col_var **spanning header** → `tab_kable`
-  (`add_header_above`, which it curiously never uses); the `label` attribute → all three.
+  (`add_header_above`, which it curiously never uses); the `label` attribute → all three. **REFINED
+  (Phase 10a, §33): the `label` is a `tab_kable` header TOOLTIP only** — not md/xl/console (avoids clutter;
+  the maintainer's choice).
 - **Keep exporter-specific (no cross-meaning):** the Excel-engine features (freeze panes, widths, Excel
   number formats, multi-sheet, `colnames_rotation`) are meaningless for HTML/md; **tooltips/popovers** are
   meaningless for static md and add clutter as Excel cell comments, so they stay `tab_kable`-only (and see
@@ -1075,6 +1078,14 @@ lacks / ~ partial.
 ---
 
 ## 23. `tab_kable()` performance profile — empirical (2026-07-08)
+
+> **STALE ranking (flagged Phase 10a, §33) — re-profile before using the lever order below.** This profile
+> pinned ~75 % of the render in `fmt_color_selection`, but that function was **deleted in Phase 5** (the
+> engine is now the `findInterval`-based `fmt_color_channels`/`fmt_channel_codes`, 48–1290× faster). Lever 1
+> ("cut/cache the color computation") is therefore largely obsolete; the current dominant cost is unknown
+> until re-measured on the live engine. The structural remedy that survives is deriving each quantity once
+> in the shared prep (Phase 10, `dev/tabxplor_phase10_exporters.md` §1-2). Levers 2-4 (tooltips-off,
+> collapse the kableExtra styling chain, NA-hiding in prep) still apply.
 
 Motivation: `tab_kable` is the Jamovi module's main display, re-rendered on every option change, and is a
 standing roadmap perf concern ("Comment accélérer cette fonction? Faire une version plus light…"). This
@@ -1915,6 +1926,61 @@ clear ≥5 %.
 
 ---
 
+## 32. Cumulative 1.3.1 → 1.4.0 benchmark + base/parallel stacking (2026-07-11)
+
+Direct A/B of the CRAN release **tabxplor 1.3.1** (installed, `library()`) vs the **1.4.0-dev** source
+(`load_all`), same machine (Ryzen 7 5800X, 8/16 cores), R 4.5.1, `median(system.time())`. API bridge:
+1.3.1 merges via `tab_many(..., compact = TRUE)`, 1.4.0 via `tab(...)`; `tab_num()` identical in both.
+Raw file: `dev/benchmarks/results_1.4.0/cumulative_1.3.1_vs_1.4.0.txt`.
+
+### The four use cases
+
+| use case (fixture) | 1.3.1 | 1.4.0 | cumulative |
+|---|---|---|---|
+| **Many factor tables, merged** (gss_cat 21k, 5 rv × 3 cv = 15 tables, pct row, colour diff, chi2) | 1.78 s | 0.59 s | **3.0×** |
+| **Many factor tables, list** (same) | 1.27 s | 0.61 s | **2.1×** |
+| **Numeric means, large** (8M replicated survey, `tab_num(age, tvhours)`, weighted, many groups) | 0.65 s | 0.63 s | ~flat |
+| **Single big factor table** (2M rows, `tab(marital, race, wt, pct row)`) | 0.08 s | 0.06 s | ~1.3× |
+
+The cumulative win is concentrated in the **many-small-tables O(cells) path** (the package's core
+"export dozens of coloured exploratory tables" workflow): **~2–3× serial**. It comes from Phase 3
+(vectorised chi2/ANOVA), Phase 9b (the fmt-carrier: no more per-op record reconstruction), Phase 9c
+(base-R `vec_ptype2`), and Phase 9d (base-R/matrix leaf math) compounding.
+
+### Base improvements + parallelisation STACK — multiplicatively
+
+Same fixture (43k rows, **8 factor row_vars × 2 col_vars**, chi2, list output), three-way on one machine:
+
+| build | time | gain |
+|---|---|---|
+| 1.3.1 serial | 1.39 s | baseline |
+| 1.4.0 serial | 0.72 s | base **1.93×** |
+| 1.4.0 parallel W=8 (warm pool) | 0.27 s | parallel **2.67×** (over 1.4.0 serial) |
+| **total 1.3.1 → 1.4.0 parallel** | **1.39 → 0.27** | **5.15× = 1.93 × 2.67** |
+
+**They stack cleanly (the product is exact).** The two levers are **orthogonal**: base improvements
+shrink the per-table O(cells) work; `parallel=` runs the (now cheaper) per-`row_var` tables concurrently
+on the mirai pool. So the parallel multiplier applies on top of the base multiplier.
+
+**Caveat (Amdahl + fixed cost):** parallel carries a fixed overhead — cold pool warm ~1 s, ship the data
+once, serialise the finished tables back, and the main-side merge/pvalue/unwrap stays serial. So the
+2.67× is realised for **many tables + a warm/reused pool**; for a few tables or trivially cheap
+per-table work the multiplier shrinks toward 1 (the §26 verdict). The faster 1.4.0 serial makes the
+serial merge a relatively larger share, which is why the measured parallel efficiency here (2.67× at 8
+workers) does not reach a theoretical 8× — but it still stacks multiplicatively with the base gain.
+
+### Honest scoping — the numeric case
+
+On **typical** survey numerics (low-cardinality `age`/`tvhours` by categorical groups) the mean-table
+wall-time is **~unchanged** 1.3.1 → 1.4.0. The large documented numeric win (Phase 2: `tab_num` **5.6×**
+unweighted / **8.3×** weighted, **6–11×** less allocation — `before_phase2_8M.csv` vs `after_rollup_8M.csv`)
+was on a **heavier continuous-numeric** synthetic 8M fixture (`gen_big_df`) that stressed the old
+`weighted.var` double-scan. The moment-sum core's **allocation-churn** reduction holds regardless, but the
+wall-time headline does not generalise to light categorical-survey numerics. Big single factor count
+tables were already fast in 1.3.1 (the aggregation is GForce data.table) and are ~unchanged.
+
+---
+
 ## Sources (statistics)
 
 - Binomial proportion CI (Wald / Wilson / Agresti-Coull asymmetry): <https://en.wikipedia.org/wiki/Binomial_proportion_confidence_interval>
@@ -1961,4 +2027,57 @@ reach them. The
 public API
 (user-facing functions, their arguments, the `tabxplor_fmt` fields) stays retro-compatible throughout;
 only the internals are re-cut. That is the whole of 1.4.0.
+
+---
+
+## 33. Phase 10a + 10b DESIGN — unified exporter prep & display (2026-07-11)
+
+Full brief: **`dev/tabxplor_phase10_exporters.md`** (the single self-contained Phase 10 architecture doc).
+This section records only the decisions settled in the 10a/10b design session; the doc governs the
+10c→10g implementation.
+
+**10a — jamovi live-display engine: keep + optimize kableExtra first; home-built HTML table is Plan B.**
+Grounded (web + the existing code): jamovi's results panel **only honors inline CSS** (CSS via
+`htmlDependencies` never applies — [jamovi #1529](https://github.com/jamovi/jamovi/issues/1529)) and won't
+reliably run htmlwidget JS, so interactive tables (reactable/DT) are out, `gt` is heavy (global rule avoids
+it), and `tinytable`'s interactivity wouldn't fire live either. So keep kableExtra and make the win come
+from the shared prep (colours/refs derived **once**), NA-hiding moved into prep, `tooltips = FALSE` (already
+Phase 7e), and a "light" kableExtra path. **Only if that isn't enough** (re-profile on the current engine),
+fall back to a dependency-free home-built `<table>` renderer — kept cheap by isolating the final HTML
+generation behind a `render_kable_html()` seam (same idea as the tab_xl backend seam). Note: the §23
+profile's #1 lever (`fmt_color_selection`) is **stale** — that function was deleted in Phase 5, so re-profile
+before ranking levers.
+
+**10b — the architecture** (detail in the doc): (1) a normalized **`tabxplor_render` ephemeral sidecar**
+(NOT tab attributes — dplyr desyncs them) holding the derive-once quantities (reference/total masks, colour
+slots/hex, stars, blank mask, bold rows, `[min;max]`, labels), consumed identically by the `format()`-string
+backends and the `tab_xl` numeric bypass — number→glyph is the only backend-specific step, which is why the
+bypass stays. (2) One **`tab_export_prep()`** helper (new `R/tab-export-prep.R`) replacing the 4×-duplicated
+"canonical col_vars → validate → compact" preamble + the per-exporter role detection, with a base(single) vs
+list(several, rendered one-after-another) split. (3) **`format()`/`get_reference()` rework** — `case_when` →
+boolean algebra (byte-identical), a `.ref =` precompute arg so masks are derived once not 4×, and
+`format(syntax = "excel")` folding `numfmt()` in (kills the bypass drift). (4) **Robust var detection** —
+keep the col_var-attribute path; use `dplyr::group_vars()` (desync-resistant) validated against live factors
+for row_var/tab_vars; graceful `degrade` → plain tibble + `cli_inform` instead of the current crash
+([tab_classes.R:568/716](../R/tab_classes.R#L568)) + `test-edge-cases.R`. (5) **`[min;max]`** total-column
+range as a table-level pre-pass (§10; Excel = text cells where bases differ). (6) **tab_xl backend seam**
+(§21) on openxlsx v1, stars via the numfmt literal. (7) **`tab_transpose()`** finished (single-total,
+namespaced) + opt-in transpose-at-export. (8) **`tab_plot()`** soft-deprecated.
+
+**New this session (beyond §7/§8/§10/§21/§22):**
+
+- **Opt-in multi-field display** (`pct (n)`, `pct ± ci`, …): the maintainer wants the **full flexible
+  syntax**, but **opt-in with ZERO cost on the non-using path**. → a **new optional per-column attribute
+  `display_spec`** (`NA` default), parsed **only inside `format()`** when non-NA; the stored `display` stays
+  a single primary token (drives `get_num`/coloring/Excel unchanged). `/vctrs-field` change: **9 → 10
+  attributes** (conscious `test-fmt-contract.R` + structural-golden regen; display byte-identical when
+  unused). Excel falls back to the primary field.
+- **`label` attribute → `tab_kable` header tooltip only** (narrows §22's "→ all"; the maintainer's choice —
+  minimal clutter, keeps variable names).
+
+**Flagged / carried into implementation:** `test-export-parity.R` covers only `n`/`wn`/`pct`/`mean`
+([:28](../tests/testthat/test-export-parity.R#L28)) → **must be extended in 10g** to
+`diff`/`ci`/`or`/stars/label/`[min;max]` or it won't guard the new shared surface; §7's tab_transpose
+"@export'ed" note corrected (commented-out/unexported); §23 profile flagged stale; compact + tab_vars stays
+deferred.
 

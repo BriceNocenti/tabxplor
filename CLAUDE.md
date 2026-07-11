@@ -1123,23 +1123,29 @@ O(cells) display/build levers, independent of each other.
 
 ### Phase 10 — Unified exporter prep & display
 
-Fully redesign exports to unify the different kind of exports in a common fast framework. One shared exporter-prep helper for `tab_xl`/`tab_kable`/`tab_md`/`tab_plot`; keep export parity (`format.tabxplor_fmt` vs the `tab_xl` bypass). Detail: `dev/tabxplor_1.4.0_decisions.md` §7-8.
-- Make it the faster possible (no useless computations if the result is not used afterwards, depending on the type of export and options chosen). If some features hurts speed, add an option to opt-out (for example in jamovi live UI where speed matters most).
+Fully redesign exports to unify the different kind of exports in a common fast framework. One shared exporter-prep helper for `tab_xl`/`tab_kable`/`tab_md`/`tab_plot`; keep export parity (`format.tabxplor_fmt` vs the `tab_xl` bypass). **Full design brief: `dev/tabxplor_phase10_exporters.md`** (the single self-contained Phase 10 architecture doc — READ FIRST); decisions in `dev/tabxplor_1.4.0_decisions.md` §7-8, §10, §21-23, §33.
+- Make it the faster possible (no useless computations if the result is not used afterwards, depending on the type of export and options chosen). Study the other performance gains made in Phase 9 and see if they can be of some use here too. If some features hurts speed, add an option to opt-out : for example in jamovi live UI where speed matters most.
 - **Each exporter gets a base method (single tab) AND a list method** (several tabs rendered one-after-another, not merged — e.g. an HTML container is needed for kable).
 - `tab_plot()` has a bad display and is hard to handle : **soft-deprecate** it (Q1 — keep exported, mark `lifecycle` experimental/superseded; do NOT hard-remove from NAMESPACE), keep it for future improvements
 
-All export functions have a **only a light backward-compatibility contract** : past arguments should not trigger errors but can, if needed, be soft-deprecated and "wired to nothing". For this reason, whenever needed, their UI can be totally redesigned for user-friendliness, simplicity, performance and integration within the common prep framework.
+All export functions have **only a light backward-compatibility contract** : past arguments should not trigger errors but can, if really needed, be soft-deprecated and "wired to nothing". For this reason, whenever useful, their UI can be totally redesigned for user-friendliness, simplicity, performance and integration within the common prep framework.
 
 New common features for all kind of exports
 - Use variables `label` attribute more thoroughly in exports when it exists (in survey data formatting, I have the habit of putting the original questionnaire question in it, which can me meaningful information for the user) ? Where to print it, for useful additional information without clutter (not erasing variable names, which are real useful) ?
-- **Integrate/export/document `tab_transpose()`** (already exported but an undocumented single-total stub — finish it) and the **opt-in transpose-at-export** for col% + several row_vars (console never transposes; warn on `pct="col"` with several row_vars).
+- **Integrate/export/document `tab_transpose()`** (a **fully commented-out / unexported** single-total stub at [tab.R:2133-2155] — a clean slate to finish) and the **opt-in transpose-at-export** for col% + several row_vars (console never transposes; warn on `pct="col"` with several row_vars).
 - Revisit **compact-with-tab_vars** here (needs two-level nested rendering).
 
-#### Phase 10a — design efficient Jamovi jmvtab display for live usage
+#### Phase 10a — design efficient Jamovi jmvtab display for live usage (DONE)
+
+**DECIDED: keep + optimize kableExtra first; a dependency-free home-built `<table>` renderer is Plan B.** Grounded (web + code): jamovi's results panel only honors inline CSS (CSS via `htmlDependencies` never applies) and won't reliably run htmlwidget JS, so interactive tables (reactable/DT) are out, `gt` is heavy (global rule avoids it), `tinytable`'s interactivity wouldn't fire live. The win comes from the shared prep (colours/refs derived ONCE), NA-hiding in prep, `tooltips=FALSE` (already Phase 7e), a "light" kableExtra path; the eventual home-built swap is isolated behind a `render_kable_html()` seam. The §23 profile's #1 lever (`fmt_color_selection`) is stale (deleted in Phase 5) → re-profile before ranking levers. Recorded in `dev/tabxplor_1.4.0_decisions.md` §33; full rationale in `dev/tabxplor_phase10_exporters.md` §10.
 
 We must **make a grounded choice for jamovi jmvtab module base display of tables** : improve tab_kable() performance even without tooltips ? Fix tooltips calculation for them to be fast, since it gives a modern interactive look to the whole table ? Just make a faster flat html table ? Make it format with markdown tables with css classes ? : would it be possible to print .md inside html, with custom .css classes, in Jamovi, with a modern and professional look ? ; if a markdown js module is needed for it to be modern and professional-looking, can it (like, loaded when jmvtab UI loads ?) Jamovi own built-in table thing was unusable and without colors, formatting, etc. in the past, I wonder if it’s still the case. Otherwise, would there be a more modern option than kable for html tables in R (for example, js html tables with buttons in it to change number of digits, or even order of lines and cols, etc. ? ) ? What about the new types of tables Quarto tends to use nowadays ? Make web searches when needed, then write your detailed findings in `dev\tabxplor_1.4.0_decisions.md` (respecting it’s internal style and logic).
 
-#### Phase 10b — rework format() for console display and exports that uses it
+#### Phase 10b — study the right design and create a planned architecture document (DONE)
+
+Wrote **`dev/tabxplor_phase10_exporters.md`** — the single self-contained Phase 10 architecture doc governing 10c→10g. Core: (1) a normalized **`tabxplor_render` ephemeral sidecar** (NOT tab attributes — dplyr desyncs them) holding the derive-once quantities (reference/total masks, colour slots/hex, stars, blank mask, bold rows, `[min;max]`, labels), consumed identically by the `format()`-string backends and the `tab_xl` numeric bypass; (2) one **`tab_export_prep()`** helper (new `R/tab-export-prep.R`) replacing the 4×-duplicated preamble + per-exporter role detection, base(single)+list(several) split; (3) **`format()`/`get_reference()`** `case_when`→boolean rewrite + a `.ref=` precompute arg (masks once, not 4×) + `format(syntax="excel")` folding `numfmt()` in; (4) robust var detection via `dplyr::group_vars()` + graceful `degrade` (fixes the no-factor crash) + `test-edge-cases.R`; (5) `[min;max]` table-level pre-pass; (6) tab_xl backend seam (openxlsx v1, ready for Phase 11); (7) `tab_transpose()` finished + opt-in transpose-at-export; (8) `tab_plot()` soft-deprecated. **New decisions:** opt-in multi-field display (`pct (n)`/`pct ± ci`) via a new optional **`display_spec` attribute (9→10)** parsed only in `format()` (zero cost when unused); the `label` attribute → `tab_kable` header tooltip only. Sequencing + per-step golden/parity verification in the doc §12.
+
+#### Phase 10c — rework format() for console display and exports that uses it
 Display of `tabxplor_tab` on console is quite long, and kable and fmt export uses it two, even in Jamovi display which must be the fastest possible : what are the performance bottlenecks and how to make it faster / remove useless stuffs and white elephants here ?
 - Particularly, `format()`/`get_reference` display `case_when` must be changed for performance.
 
@@ -1147,27 +1153,26 @@ The `tabxplor_tab` class and the grouped one currently have a kind of bug that f
 - I would want a more user-friendly failing mode, still printing the df without the specialt tabxplor formattings and colors. Add testthat tests to be sure there cases do not throw error. Use messages if needed to explain to the user why it fails. Implement testthat tests with edge cases.
 - More generally, I wonder if there’s a more reliable way to handle detection of row, col, tab vars, and the other informations needed for fmt and colors to compute, with smart fallbacks (no colors, no fmt formatting, etc.).
 
-
 Passing a vector in display to display several fields, as an opt-in option ? (Won't work in Excel, but anyway Excel export do not use `format()` ?) Would it be possible to find a reliable syntax to command exactly the wanted fields and seps in a display ? Like `pct (n)` or `pct ± ci` ? Would it really be useful for data analysis users, or a white elephant with theoretical useless flexibility again ?
 
 
-#### Phase 10c — common prep function
+#### Phase 10d — common prep function
 
 Design and implement the common prep function, looking carefully at all the changes and new features that will come next to ensure the shared prep function is ready for them.
 - When a feature is export-type specific, like for example Excel only, it should be justified.
 
-#### Phase 10d — rework tab_kable()
+#### Phase 10e — rework tab_kable()
 
 Comment accélerer cette fonction ? Faire une version plus light par défaut, sans les interactive tooltips etc. ? Accélerer les tooltips ? See design choices from Phase 10a.
 Enlever l'affichage des vrais `NA` en `""` dans kable plus proprement qu'en les enlevant à la fin dans le html, pour qu’ils soient enlevés dans tous les cas de figure possible (knitr, .Rmd, etc. ; in the past I had some tables left with ugly NA formattings) ? How to really do it reliably ?
 
 
-#### Phase 10e — tab_md()
+#### Phase 10f — tab_md()
 
 `tab_md()` current version was made for a specific use case and never totally integrated into tabxplor : the aim is to fully integrate it.
 - color helpers must be handled with very shorts pandoc bracketed spans, everything padded and align to preserve human readability assuming monospace font (even out of preview mode). Examples for diffs : `.+5`, `.+10`, `.+20`, `.+30`, `.-5`, `.-10`, `.-20`, `.-30` etc. ; examples for ratios : `.x1.2`, `.x1.5`, `.x2`, `.x4`, `./1.2`, `./1.5`, `./2`, `./4`, etc. : ould these names be valid css classes / pandoc bracketed spans ?. Is there a possibility to make them these css classes work inside jamovi, for exemple in a html rectangle, with a light yet modern markdown preview working with tables (natively, or by adding html/js new dependencies ? ; load these possible dependencies when the tabxplor function and menu load ? What about the css styles, should we load them at tabxplor UI startup or at table creation ?) ?
 
-#### Phase 10f – rework tab_xl() (still openxlsx v1; engine swap is Phase 9)
+#### Phase 10g – rework tab_xl() (still openxlsx v1; engine swap is Phase 9)
 
 - Make it work with every data.frame, even not made with tabxplor, with default settings (event without factors, etc.). Implement small fixture tests.
 - To make it work with a "common preparation function" that would be the same than tab_kable() etc., Make the function for a single tab (sometime big with `compact=TRUE` ? ), then parallelize for list of tab ?
@@ -1176,6 +1181,8 @@ Enlever l'affichage des vrais `NA` en `""` dans kable plus proprement qu'en les 
 - Add the end it must work with tab_logit() and *** : significance stars used as formatting.
 
 **Stays on openxlsx v1** — the openxlsx2 engine swap is Phase 9.
+
+
 
 
 ### Phase 11 — Excel engine migration (openxlsx → openxlsx2)
