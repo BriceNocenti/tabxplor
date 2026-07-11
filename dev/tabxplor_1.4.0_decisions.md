@@ -1694,6 +1694,21 @@ The removed 0.23 s is the `vec_case_when` share (~72 % of `tab_compact`) — the
 (9b-2/9b-3): carry the build as plain field-frames + col-meta, materialize `new_fmt` ONCE after the merge.
 Full design + landmine ledger + go/no-go: `dev/tabxplor_phase9b_fmt_display_only.md`.
 
+**Phase 9b-2 update (2026-07-11) — MEASURED, GO for 9b-3.** 9b-2 was re-scoped from "plain-field
+CI/chi2 writers" to a throwaway decomposition (no `R/*.R` change): the writers are a **no-op on the
+common `color="diff"` path** (`tab_ci` never runs — `ci` default `"no"`, `color="diff"` doesn't force a
+CI, `R/tab-resolve.R:96`; `tab_chi2` writes nothing on `color_ctr="no"`), so they cannot gate 9b-3.
+Harness `dev/benchmarks/phase9b2_fmt_cost_decomp.R`, 4 shapes on gss_cat (`output_list` isolates the
+per-row_var build). Findings: on the common factor build (0.29 s/table) the fmt-record machinery is
+`vec_restore` **29.7 %** + `vec_case_when` **18.1 %** + `new_rcrd` **12.9 %** by.total vs `[.data.table`
+14.2 % (irreducible scan); the **materialize-once floor is ~0.5 %** (1.4 ms for 21 cols) and pushing
+records through 6 reconstruct rounds is **54.5× slower** than plain field-frames + one materialize — the
+fmt cost is almost entirely *redundant reconstruction*. Recoverable ~**30-48 %** on the common path (>25 %
+bar) → **GO**; larger for CI (+28 %)/contrib (+64 %) and at big-table/warm-jmvtab scale (§27); numeric-only
+tables gain ~nothing (cost = the data.table scan). Decision: **fold the plain writers into 9b-3**, not a
+separate committable rung (they are a subset of the carrier win). Record:
+`dev/benchmarks/results_1.4.0/phase9b2_decomposition.txt`; analysis `…phase9b_fmt_display_only.md` §5.
+
 ### Cleanup surfaced (fold into whichever Phase 9 work touches the file)
 
 - **Dead code**: `tab.R` is 6 764 L, ~2 445 comment lines — a large fraction is commented-out legacy
