@@ -379,6 +379,43 @@ in the fields being round-tripped, not recomputed). Bench (gss_cat 5×3, merged)
 (+6.9%) — the temporary second materialization of each row_var's factor table, recovered by 9b-5
 (`dev/benchmarks/results_1.4.0/phase9b4_carrier.txt`).
 
+**Phase 9b-5 — DONE, 2026-07-11 (byte-identical, full suite green FAIL 0 | PASS 1354, NO golden regen).**
+Landed as TWO changes to `tab_chi2()`, plus a **measurement that reframed the whole phase**:
+
+- **Increment 1 — the chi2 whole-table TEST on plain fields** (`chi2_compute_test()`, extracted from
+  `tab_chi2`) + the 9b-4 no-op removed. The `tabs2 <- tabs[!is_totrow,]` record-slice (which
+  reconstructed every fmt column just to read counts) is gone: the row mask + a **fmt-FREE** group
+  view (`select(tabs, !where(is_fmt))[mask2,]`) drive `group_indices`/`group_keys`, and the
+  `agg_chi2`/`agg_anova` marshalling reads `get_n(tabs[[cc]])[mask2]` (plain). Read-only → cell
+  byte-identity by construction. **VERDICT: NO measurable win** — a clean git-stash A/B on a 40×15
+  table was 0.1000 s == 0.1000 s. The §6 "tab_chi2 = 20%" was an ISOLATED `tab_chi2` with the DEFAULT
+  `calc = c("ctr","p","var","counts")` (i.e. the CONTRIB writes), NOT the pipeline's `calc = "p"`
+  test. On `color = "diff"` there are no contrib writes, so the test marshalling is cheap. Value =
+  clarity + no-op removal + scaling on very large tables, not a demonstrable speedup.
+- **The real lever = the WRITES** (maintainer chose to fold the chi2 half in now): contrib **+97 %** vs
+  a plain build; the ci write-back **+55 %** (deferred to increment 2). **`chi2_write_contrib()`**
+  moves the per-cell `var`/`ctr` + `comp_all`/contrib-`color` writes from the pre-9b-5 **~6 successive
+  `mutate(across(where(is_fmt), set_*))` passes** (each a full fmt reconstruction) to **ONE**
+  `mutate(across())` over **plain-precomputed vectors**. **Result: contrib per-table 0.2963 → 0.1747
+  (−41 %, 1.7×) and ~30 % less memory** (`dev/benchmarks/results_1.4.0/phase9b5_chi2.txt`);
+  common/ci/numeric flat.
+- **Approach note (deviation from "shared carrier engine over `fmt_unwrap`/`fmt_wrap`").** The write
+  path is NOT a carrier round-trip but a **precompute-then-single-write**: read the fields plainly
+  (`get_wn`/`get_var`/`is_totrow` — no reconstruction), run the group sums through the SAME dplyr on
+  **fmt-free** tibbles, then apply the **real setters** in one `mutate`. Fewer reconstructions than a
+  carrier (1 vs unwrap+wrap) AND no `set_color`/`set_*` reproduction risk. Two byte-identity landmines
+  handled: (a) `var_contrib` is **PER SUBTABLE** (the old writes were GROUPED mutates → each subtable
+  uses its own last/total row) — computed via `group_indices` + the write runs **ungrouped then
+  restores grouping** (the ctr divide + colour are row-wise); (b) the old `dplyr::if_else()` over fmt
+  columns **MATERIALISES the `wn` field** (NA → the `n` fallback) as a vctrs side effect — reproduced
+  explicitly with `set_wn(get_wn())` under `"ctr"` calc (matters for the `$wn` user contract on an
+  unweighted `tab_plain() |> tab_chi2()`). `variances_by_group`/`cells_by_group` of the old path were
+  **dead code** (computed, never used) and dropped. Locked by a 10-shape git-stash `identical()` A/B +
+  `test-calculations.R` (variance-contributions, chi2+Yates, Welch/classic F) + `test-color-golden.R`.
+- **Deferred to increment 2:** the `tab_ci` carrier write-back (the +55 % lever;
+  `ci_inf`/`ci_sup`/`pvalue` + `ci_type`/`color`/`comp_all`/`display`, the grouped reference-row
+  selection **L6**, the `detect_totcols`/`detect_refcol` name maps, the `tab_ci` L-IDX no-op-guard).
+
 *Why step A was dropped (leaf emits carrier + tail port).* Under **Q2 = keep the record `full_join`**
 (the recommended lean below), each leaf materializes for the join regardless, so having the leaf *return*
 a carrier and porting its post-`new_fmt` tail (`no_col_var` `set_display`/`set_type`/`as_totcol`,

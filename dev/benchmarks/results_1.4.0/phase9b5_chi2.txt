@@ -1,0 +1,38 @@
+Phase 9b-5 -- chi2 test + contrib carrier writes (2026-07-11)
+============================================================
+
+Two changes to tab_chi2(), both byte-identical (full suite FAIL 0 | PASS 1354, NO golden regen;
+A/B identical() across 10 contrib shapes -- basic/color_all/color_apct/var_only/weighted/tabvars/
+comp_all/multicol/mixed/ctr_pipe):
+
+(1) INCREMENT 1 -- whole-table TEST on plain fields (chi2_compute_test()) + the 9b-4 no-op removed.
+(2) CONTRIB carrier writes (chi2_write_contrib()): the per-cell var/ctr + comp_all/contrib-colour
+    writes, moved from ~6 successive mutate(across(where(is_fmt), set_*)) passes (each a full fmt
+    reconstruction) to ONE mutate over plain-precomputed vectors (var per subtable; the group sums
+    run through the SAME dplyr on fmt-FREE tibbles). One byte-identity quirk reproduced: the old
+    ctr writes used dplyr::if_else() over fmt columns, which MATERIALISES the `wn` field (NA -> n);
+    the plain path fills it explicitly (set_wn(get_wn())) under "ctr" calc.
+
+phase9b3_before_after.R (gss_cat, 5 row_vars x {common/ci/contrib/numeric}, median of 6):
+
+  fixture  per_tab_before  per_tab_after   delta        merge_mb (before->after)
+  common      0.1502          0.1506       flat         52.6 -> 51.4   (color=diff, no contrib)
+  ci          0.2333          0.2332       flat         41.7 -> 41.1   (ci write-back = increment 2)
+  contrib     0.2963          0.1747      -41% (1.7x)    39.5 -> 27.7  (-30% memory)   <<< THE WIN
+  numeric     0.0251          0.0267       flat (noise)  16.6 -> 16.6
+
+before = HEAD a25a4f3 (pre-9b-5). The contrib per-table build is ~1.7x faster and ~30% lighter.
+
+HONEST NOTES:
+- Increment 1 (the chi2 TEST) gave NO measurable win: a clean git-stash A/B on a 40x15 table was
+  0.1000 s == 0.1000 s (old == new). The dev/..._phase9b §6 "tab_chi2 = 20%" was an ISOLATED
+  tab_chi2 with the DEFAULT calc = c("ctr","p","var","counts") -- i.e. the CONTRIB writes, NOT the
+  calc = "p" test the pipeline runs. On color = "diff" there are no contrib writes, so the test
+  marshalling is cheap and carrier-izing it is invisible. Its value is code clarity + the no-op
+  removal + scaling on very large tables, not a demonstrable speedup here.
+- The REAL tests-boundary costs are the WRITES: contrib +97% vs a plain build (recovered here,
+  -41%), and the ci write-back +55% (NOT yet touched -- increment 2). The read/write staging holds:
+  the WRITES are where the O(cells) fmt reconstruction lives.
+- Approach: NOT a fmt_unwrap/fmt_wrap carrier round-trip but a precompute-then-single-write (real
+  setters, fewer reconstructions than a carrier, no set_* reproduction risk). var_contrib is PER
+  SUBTABLE (the old writes were grouped mutates); the write runs ungrouped then restores grouping.

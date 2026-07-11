@@ -1708,11 +1708,10 @@ tab_transform <- function(ctx) {
 
     tabs_text <- purrr::reduce(text, dplyr::full_join, by = c(as.character(tab_vars), row_var))
 
-    # Phase 9b-4: carry the joined factor table to the tests boundary as a plain-field CARRIER. Here
-    # this is a byte-identical no-op round-trip (unwrap -> materialize) that establishes + validates
-    # the carrier at the tab_apply_tests() seam in the real pipeline; Phase 9b-5 folds it into
-    # carrier-based chi2/ci writers so the fmt record is no longer reconstructed through the tests.
-    tabs_text <- fmt_wrap(fmt_unwrap(tabs_text))
+    # Phase 9b-5: the 9b-4 no-op carrier round-trip that used to sit here is gone -- tab_chi2()'s
+    # whole-table test now reads plain fields directly (chi2_compute_test(), no fmt reconstruction),
+    # so the tests boundary no longer needs a pre-established carrier. (tab_ci() is still record-based;
+    # its carrier write-back is Phase 9b-5 increment 2. fmt_unwrap/fmt_wrap stay for that + the tests.)
 
     # DESIGN: ordering invariant — tab_chi2() and tab_ci() are INDEPENDENT (either order works), but
     # BOTH must run BEFORE non-first levels are dropped (in tab_assemble), so they are computed on the
@@ -5365,8 +5364,6 @@ tab_chi2 <- function(tabs, calc = c("ctr", "p", "var", "counts"),
   row_var         <- get_vars$row_var
   #col_vars        <- rlang::sym(get_vars$col_vars)
   col_vars_levels <- purrr::map(get_vars$col_vars_levels, rlang::syms)
-  groups          <- rlang::syms(dplyr::group_vars(tabs))
-  #ngroups         <- dplyr::n_groups(tabs)
 
   stopifnot(all(calc %in% c("all", "ctr", "p", "var", "counts")))
   if ("all" %in% calc) calc <- c("ctr", "p", "var", "counts")
@@ -5405,167 +5402,66 @@ tab_chi2 <- function(tabs, calc = c("ctr", "p", "var", "counts"),
 
 
 
-  #Calculate absolute contributions to variance (with spread sign)
+  # Phase 9b-5: the per-cell contribution-to-variance WRITES (var, ctr) + the comp_all / contrib-color
+  # col-meta -- ported to ONE mutate(across()) over plain-precomputed vectors (chi2_write_contrib()),
+  # replacing the pre-9b-5 ~6 mutate(across(where(is_fmt), set_*)) passes (each a full fmt-record
+  # reconstruction). Byte-identical; the real cost of the contrib color path (+~97% vs a plain build).
   if ("ctr" %in% calc | "var" %in% calc) {
-    tabs <- tabs %>%
-      dplyr::mutate(dplyr::across(
-        where(~ is_fmt(.) & !get_type(.) == "mean" & !get_col_var(.) %in% c("no_col_var", "all_col_vars") ),
-        ~ set_var(., var_contrib(
-          .,
-          tot  = rlang::eval_tidy(tot_cols[[dplyr::cur_column()]]),
-          calc = "ctr_with_sign",
-          comp = comp
-        ) )
-      ))
-    # tabs %>% dplyr::mutate(dplyr::across( where(is_fmt), ~ get_var(.)   ))
-
-
-    #Calculate variances (per groups and per column variables)
-    variances_calc <-
-      purrr::map_if(col_vars_levels, !is_a_mean & !all_col_tot,
-                    .f    = ~ dplyr::select(tabs, !!!groups, !!!.) %>%
-                      dplyr::select(where(~ !is_totcol(.))) %>%
-                      dplyr::mutate(dplyr::across(where(is_fmt),
-                                                  ~ abs(get_var(.)))),
-                    .else = ~ NA_real_ #Weighted mean of variances ?
-      )
-
-    variances_by_row <-
-      purrr::map(variances_calc[!is_a_mean & !all_col_tot],
-                 ~ dplyr::mutate(., dplyr::across(where(is.double),
-                                                  ~ sum(., na.rm = TRUE))) %>%
-                   dplyr::ungroup() %>%
-                   dplyr::select(where(is.double)) %>% rowSums(na.rm = TRUE)
-      )
-
-    variances_by_group <-
-      purrr::map_if(variances_calc[!all_col_tot], !is_a_mean[!all_col_tot],
-                    .f    = ~ dplyr::group_split(.[!is_totrow(tabs),]) %>% #.keep = FALSE
-                      purrr::map(~ dplyr::select(., where(is.double))) %>%
-                      purrr::map_dbl(~ rowSums(., na.rm = TRUE) %>% sum(na.rm = TRUE)),
-                    .else = ~ NA_real_ #Weighted mean of variances ?
-      )
-
-
-    cells_calc <- cells_by_group <-
-      rlang::rep_along(variances_calc[!all_col_tot], NA_integer_)
-
-    cells_calc[!is_a_mean[!all_col_tot]] <-
-      variances_calc[!all_col_tot & !is_a_mean] %>%
-      purrr::map(~ tibble::add_column(.x,  totrows = is_totrow(tabs)) %>%
-                   dplyr::mutate(dplyr::across(
-                     where(is.double), ~ dplyr::if_else(.data$totrows, 0,
-                                                        dplyr::if_else(is.na(.), 0, 1))
-                   )) %>%
-                   dplyr::select(-"totrows")
-      )
-
-
-    cells_by_row <- cells_calc[!is_a_mean & !all_col_tot] %>%
-      purrr::map2(col_vars_levels_no_tot[!all_col_tot & !is_a_mean],
-                  ~ dplyr::mutate(.x, cells = sum(!!!.y), .groups = "drop") %>%
-                    dplyr::pull(.data$cells)
-      )
-
-    cells_by_group[!is_a_mean[!all_col_tot]] <-
-      cells_calc[!is_a_mean[!all_col_tot]] %>%
-      purrr::map2(col_vars_levels_no_tot[!all_col_tot & !is_a_mean],
-                  ~ dplyr::summarise(.x[!is_totrow(tabs),],
-                                     cells = sum(!!!.y), .groups = "drop") %>%
-                    dplyr::pull(.data$cells)
-      )
+    tabs <- chi2_write_contrib(tabs, calc, comp, color, col_vars_levels,
+                               col_vars_levels_no_tot, is_a_mean, all_col_tot, tot_cols)
   }
 
+  # Phase 9b-5: the whole-table chi2/ANOVA test is a READ-ONLY computation over the cell fields (it
+  # builds the tidy `test` tibble, never touches the cells) -- extracted so its plain-field
+  # marshalling is isolated from the record-based tab_chi2 orchestration. See chi2_compute_test().
+  test_tbl <- chi2_compute_test(tabs, comp, row_var, col_vars_levels,
+                                col_vars_levels_no_tot, is_a_mean, all_col_tot)
 
-  #Calculate relative contributions to variance
-  if ("ctr" %in% calc) {
-    tabs <-
-      purrr::reduce2(col_vars_levels[!is_a_mean & !all_col_tot],
-                     purrr::transpose(list(var = variances_by_row,
-                                           cell = cells_by_row)),
-                     .init = tabs, .f = function(.tab, .levels, .l)
-                       tibble::add_column(.tab,
-                                          .var  = .l[["var"]],
-                                          .cell = .l[["cell"]]) %>%
-                       dplyr::mutate(dplyr::across(
-                         tidyselect::all_of(purrr::map_chr(.levels, as.character)),
-                         ~ dplyr::if_else(condition = is_totrow(.),
-                                          true      = set_ctr(., 1/.data$.cell),
-                                          false     = set_ctr(., .data$.var   ) )
-                       )) %>%
-                       dplyr::select(-".var", -".cell")
-      )
+  tabs <- tabs %>% dplyr::select(-tidyselect::any_of("tottabs"))
 
-    tabs <- tabs %>%
-      dplyr::mutate(dplyr::across(
-        where(is_fmt),
-        ~ dplyr::if_else(condition = (comp == "tab" & is_totrow(.)) |
-                           (comp == "all" & is_totrow(.) & is_tottab(.)),
-                         true      = .,
-                         false     = set_ctr(., get_var(.) / get_ctr(.)) )
-      ))
-
-    tabs <- tabs %>%
-      dplyr::mutate(dplyr::across(where(is_fmt), ~ set_comp_all(., comp[1] == "all")))
-
-    if (color[1] != "no" & !is.na(color[1])) {
-      color_condition <-
-        switch(color[1],
-               "auto"    = c("n", "all", "all_tabs"),
-               "all"     = c("n", "row", "col", "all", "all_tabs"),
-               "all_pct" = c("all", "all_tabs")
-        )
-
-      tabs <- tabs %>% dplyr::mutate(dplyr::across(
-        where(~ get_type(.) %in% color_condition),
-        ~ set_color(., "contrib")
-      ))
-    }
-
-    # tabs %>% dplyr::mutate(dplyr::across(where(is_fmt), get_ctr))
-    # tabs %>% dplyr::mutate(dplyr::across(where(is_fmt), ~ set_display(., "ctr")))
-
-
-
-    # #Relative contributions of col_vars levels (on total rows)
-    # tabs <- tabs %>%
-    #   dplyr::mutate(dplyr::across(
-    #     where(is_fmt),
-    #     ~ dplyr::if_else(condition = dplyr::row_number() == dplyr::n(),
-    #                      true      = set_ctr(., sum(abs(get_ctr(.)))),
-    #                      false     = . )
-    #   ))
-    # #tabs %>%  dplyr::mutate(dplyr::across( where(is_fmt), ~ set_display(., "ctr")  ))
-
-
-    #mean_contrib <- contrib_no_sign %>% map(~ 1 / ( ncol(.) * nrow(.) ) )
-  }
-
-  tabs2 <- if (comp == "all") {
-    tabs[!is_totrow(tabs) & !is_tottab(tabs),]
+  if (lv1_group_vars(tabs)) {
+    new_tab(tabs, subtext = subtext, test = test_tbl)
   } else {
-    tabs[!is_totrow(tabs),]
+    new_grouped_tab(tabs, groups = dplyr::group_data(tabs), subtext = subtext,
+                    test = test_tbl)
   }
+}
 
-  # Drop any add_n / add_pct display rows (reserved row_var labels "n" / "row_pct") so a table that
-  # already carries them is tested cleanly -- fixes tab_chi2() on an add_n'd table (the pipeline
-  # runs the test before add_n, so this only matters for a manual chi2 on a built table).
-  if (as.character(row_var) %in% names(tabs2)) {
-    tabs2 <- tabs2[!as.character(tabs2[[as.character(row_var)]]) %in% c("n", "row_pct"), ]
+
+# chi2_compute_test() -- the whole-table chi2 (factor col_vars) + ANOVA (mean col_vars) tests for one
+# built factor table, returning the tidy `test` tibble (one row per subtable x col_var x test-type).
+# Phase 9b-5: extracted from tab_chi2() as a READ-ONLY marshalling step -- it reads the aggregated cell
+# statistics (get_n / get_mean / get_var) and the subtable grouping, feeds the plain-vector engines
+# agg_chi2()/agg_anova() (R/tab-agg.R), and NEVER modifies the cells (so cell byte-identity is a given;
+# only this plain tibble is recomputed). `tabs` is the prepped, post-tab_match_* record; the remaining
+# args are its already-computed metadata (from tab_chi2()'s head).
+# DESIGN: chi2/ANOVA run on the already-AGGREGATED cell statistics, never a raw N-scan -- cost scales
+# with cells, not observations. Every (subtable x col_var) is one "table_id"; ALL tables are stacked
+# and tested in ONE agg_chi2 / agg_anova pass (see the engine header). Chi2 stays fully unweighted
+# (chisq.test parity incl. Yates on 2x2, G2); ANOVA F follows §14 (weighted group mean/var + unweighted
+# n). WARNING: keep byte-identical to the pre-9b-5 inline block (locked by test-calculations.R: chi2 +
+# Yates, Welch/classic F, add_n parity; test-golden.R: the `test` attribute).
+chi2_compute_test <- function(tabs, comp, row_var, col_vars_levels,
+                              col_vars_levels_no_tot, is_a_mean, all_col_tot) {
+  # Phase 9b-5: the kept-rows MASK over `tabs` (replaces the tabs2 = tabs[!is_totrow,] record-slice,
+  # which reconstructed every fmt column just to read counts off it). Drops total rows (and total tabs
+  # under comp = "all") and any add_n/add_pct display rows (reserved row_var labels "n"/"row_pct", so a
+  # table already carrying them is tested cleanly). is_totrow/is_tottab are the pass-2 fmt_row_flag
+  # fast path (plain logical, no reconstruction).
+  mask2 <- if (comp == "all") !is_totrow(tabs) & !is_tottab(tabs) else !is_totrow(tabs)
+  if (as.character(row_var) %in% names(tabs)) {
+    mask2 <- mask2 & !(as.character(tabs[[as.character(row_var)]]) %in% c("n", "row_pct"))
   }
+  n_rows2 <- sum(mask2)
 
-
-  # === Whole-table tests via the vectorised engine (R/tab-agg.R, Phase 3b) ============
-  # DESIGN: chi2/ANOVA run on the already-AGGREGATED cell statistics (get_n / get_mean+get_var
-  # over the fmt cells), never a raw N-scan -- cost scales with cells, not observations. Every
-  # (subtable x col_var) is one "table_id"; ALL tables are stacked and tested in ONE agg_chi2 /
-  # agg_anova pass (see the engine header). This replaces the pre-1.4.0 per-(sub)table
-  # group_split() + stats::chisq.test() loop. Chi2 stays fully unweighted (chisq.test parity,
-  # G2); ANOVA F follows §14 (weighted group mean/var + unweighted n).
-  subtab_idx   <- dplyr::group_indices(tabs2)
-  subtab_keys  <- dplyr::group_keys(tabs2)
+  # Subtable grouping over the kept rows. Byte-identical to group_indices()/group_keys() of the
+  # totrow-dropped grouped_df -- computed on a fmt-FREE view (fmt columns dropped first) so the row
+  # slice reconstructs NO fmt records; the same dplyr grouping machinery (incl. `.drop` and the
+  # lv1_group_vars downgrade) runs, and grouping depends only on the untouched grouping columns.
+  tabs2_grp    <- dplyr::select(tabs, !where(is_fmt))[mask2, ]
+  subtab_idx   <- dplyr::group_indices(tabs2_grp)
+  subtab_keys  <- dplyr::group_keys(tabs2_grp)
   tab_vars_chr <- names(subtab_keys)
-  n_rows2      <- nrow(tabs2)
 
   factor_cvs <- names(col_vars_levels)[!is_a_mean & !all_col_tot]
   mean_cvs   <- names(col_vars_levels)[ is_a_mean & !all_col_tot]
@@ -5578,7 +5474,7 @@ tab_chi2 <- function(tabs, calc = c("ctr", "p", "var", "counts"),
       function(levels, cv) {
         lv_cols <- purrr::map_chr(levels, rlang::as_name)
         if (length(lv_cols) == 0) return(NULL)
-        M  <- vapply(lv_cols, function(cc) as.double(get_n(tabs2[[cc]])), double(n_rows2))
+        M  <- vapply(lv_cols, function(cc) as.double(get_n(tabs[[cc]])[mask2]), double(n_rows2))
         ncM <- ncol(M)
         tibble::tibble(
           col_var  = cv,
@@ -5609,8 +5505,8 @@ tab_chi2 <- function(tabs, calc = c("ctr", "p", "var", "counts"),
       col_vars_levels[mean_cvs],
       function(levels, cv) {
         cols <- purrr::map_chr(levels, rlang::as_name)
-        keep <- purrr::map_lgl(cols, ~ get_type(tabs2[[.x]]) == "mean" &&
-                                 !any(is_totcol(tabs2[[.x]])))
+        keep <- purrr::map_lgl(cols, ~ get_type(tabs[[.x]]) == "mean" &&
+                                 !any(is_totcol(tabs[[.x]])))
         col  <- cols[keep][1]
         if (is.na(col)) return(NULL)
         tibble::tibble(
@@ -5618,9 +5514,9 @@ tab_chi2 <- function(tabs, calc = c("ctr", "p", "var", "counts"),
           subtab   = subtab_idx,
           table_id = paste(cv, subtab_idx, sep = "\r"),
           group_id = seq_len(n_rows2),
-          n        = as.double(get_n(tabs2[[col]])),
-          mean     = get_mean(tabs2[[col]]),
-          var      = get_var(tabs2[[col]]))
+          n        = as.double(get_n(tabs[[col]])[mask2]),
+          mean     = get_mean(tabs[[col]])[mask2],
+          var      = get_var(tabs[[col]])[mask2])
       }
     ))
     if (nrow(longA) > 0) {
@@ -5654,14 +5550,144 @@ tab_chi2 <- function(tabs, calc = c("ctr", "p", "var", "counts"),
       dplyr::relocate(tidyselect::any_of(tab_vars_chr), "row_var", "col_var")
   }
 
-  tabs <- tabs %>% dplyr::select(-tidyselect::any_of("tottabs"))
+  test_tbl
+}
 
-  if (lv1_group_vars(tabs)) {
-    new_tab(tabs, subtext = subtext, test = test_tbl)
-  } else {
-    new_grouped_tab(tabs, groups = dplyr::group_data(tabs), subtext = subtext,
-                    test = test_tbl)
+
+# var_contrib_ctr_signed() -- the plain-vector form of var_contrib(x, tot, "ctr_with_sign", comp) used
+# by chi2_write_contrib(): the signed absolute contribution of each cell to the (weighted) chi2, from
+# the column's weighted counts `xwn` (get_wn) and its total column's `twn`, using the LAST element as
+# the grand total. comp = "all" first zeroes the intermediate total rows/tabs (all but the last).
+# Byte-identical to var_contrib()'s "ctr_with_sign" branch (R/tab.R), read plainly.
+var_contrib_ctr_signed <- function(xwn, twn, in_totrow, in_tottab, comp) {
+  n <- length(xwn)
+  if (comp == "all") {
+    idx <- seq_len(n - 1L)
+    tor <- in_totrow[idx] | in_tottab[idx]
+    xwn[idx] <- dplyr::if_else(tor, 0, xwn[idx])
+    twn[idx] <- dplyr::if_else(tor, 0, twn[idx])
   }
+  observed_freq <- xwn / twn[n]
+  expected_freq <- xwn[n] * twn / twn[n]^2
+  spread        <- observed_freq - expected_freq
+  sign(spread) * spread^2 / expected_freq
+}
+
+# chi2_write_contrib() -- Phase 9b-5: the per-cell contribution-to-variance WRITES (the `var` = signed
+# absolute contribution, and the `ctr` = relative contribution = |cell| / group-total) plus the
+# `comp_all` / contrib-`color` col-meta. The pre-9b-5 record path did this in ~6 successive
+# mutate(across(where(is_fmt), set_*)) passes -- EACH a full tabxplor_fmt reconstruction. Here every
+# value is PRECOMPUTED as a plain vector (plain field reads + the group sums run through the SAME dplyr
+# but on fmt-FREE tibbles, so no reconstruction), then applied in ONE mutate(across()) with the real
+# setters. `tabs` is the prepped, post-tab_match_* record; the remaining args are tab_chi2()'s already-
+# computed metadata (`tot_cols` = detect_totcols()'s per-column total-column syms). Returns the modified
+# `tabs`. `var` is written whenever calc has "var"/"ctr"; `ctr`/`comp_all`/`color` only under "ctr".
+# WARNING: byte-identical to the pre-9b-5 blocks (locked by test-calculations.R variance-contributions
+# + test-color-golden.R + test-golden.R). The dead `variances_by_group`/`cells_by_group` of the old
+# path (computed, never used) are dropped.
+chi2_write_contrib <- function(tabs, calc, comp, color, col_vars_levels,
+                               col_vars_levels_no_tot, is_a_mean, all_col_tot, tot_cols) {
+  do_ctr  <- "ctr" %in% calc
+  fmt_nms <- names(tabs)[purrr::map_lgl(tabs, is_fmt)]
+  # var_contrib / the ctr seed are PER SUBTABLE: the pre-9b-5 writes were GROUPED mutates, so each
+  # subtable's contributions use its own last (total) row. gid = the (post-prep) subtable of each row
+  # (all 1s when ungrouped, e.g. comp = "all"). The row-wise ctr divide + colour don't depend on it.
+  gid <- dplyr::group_indices(tabs)
+  gids <- unique(gid)
+
+  # --- 1a. absolute signed contribution -> `var` (eligible: non-mean cells of a real col_var) ---
+  var_after <- purrr::set_names(lapply(fmt_nms, function(nm) get_var(tabs[[nm]])), fmt_nms)
+  elig_col  <- purrr::keep(fmt_nms, function(nm) get_type(tabs[[nm]]) != "mean" &&
+                             !get_col_var(tabs[[nm]]) %in% c("no_col_var", "all_col_vars"))
+  for (nm in elig_col) {
+    tot_nm <- as.character(tot_cols[[nm]])
+    xwn <- get_wn(tabs[[nm]]); twn <- get_wn(tabs[[tot_nm]])
+    itr <- is_totrow(tabs[[nm]]); itt <- is_tottab(tabs[[nm]])
+    v   <- var_after[[nm]]
+    for (g in gids) {
+      r <- which(gid == g)
+      v[r] <- var_contrib_ctr_signed(xwn[r], twn[r], itr[r], itt[r], comp)
+    }
+    var_after[[nm]] <- v
+  }
+
+  ctr_final <- NULL; comp_all_val <- NULL; color_apply <- character(0)
+  if (do_ctr) {
+    gv           <- dplyr::group_vars(tabs)
+    grp_cols     <- purrr::set_names(lapply(gv, function(g) tabs[[g]]), gv)
+    table_totrow <- is_totrow(tabs)
+    elig_cv      <- names(col_vars_levels)[!is_a_mean & !all_col_tot]
+
+    # per eligible col_var: variances_by_row + cells_by_row -- plain grouped tibbles mirroring the old
+    # variances_calc / cells_calc, run through the EXACT original downstream dplyr (no fmt columns).
+    ctr_after <- purrr::set_names(lapply(fmt_nms, function(nm) get_ctr(tabs[[nm]])), fmt_nms)
+    for (cv in elig_cv) {
+      lev_nt <- purrr::map_chr(col_vars_levels_no_tot[[cv]], rlang::as_name)
+      vcalc  <- tibble::as_tibble(c(
+        grp_cols,
+        purrr::set_names(lapply(lev_nt, function(cc) abs(var_after[[cc]])), lev_nt)))
+      if (length(gv)) vcalc <- dplyr::group_by(vcalc, dplyr::across(dplyr::all_of(gv)))
+
+      vbr <- vcalc %>%
+        dplyr::mutate(dplyr::across(where(is.double), ~ sum(., na.rm = TRUE))) %>%
+        dplyr::ungroup() %>% dplyr::select(where(is.double)) %>% rowSums(na.rm = TRUE)
+
+      cbr <- vcalc %>% tibble::add_column(totrows = table_totrow) %>%
+        dplyr::mutate(dplyr::across(where(is.double),
+          ~ dplyr::if_else(.data$totrows, 0, dplyr::if_else(is.na(.), 0, 1)))) %>%
+        dplyr::select(-"totrows") %>%
+        dplyr::mutate(cells = sum(!!!col_vars_levels_no_tot[[cv]]), .groups = "drop") %>%
+        dplyr::pull(.data$cells)
+
+      # relative-contribution seed on ALL of cv's level columns (incl. its total column):
+      # total rows -> 1/cells, others -> the group total variance (broadcast).
+      for (L in purrr::map_chr(col_vars_levels[[cv]], rlang::as_name)) {
+        ctr_after[[L]] <- dplyr::if_else(is_totrow(tabs[[L]]), 1 / cbr, vbr)
+      }
+    }
+
+    # divide by the seed to get the relative contribution (|cell| / group-total), keeping the protected
+    # total rows untouched (comp = "tab": total rows; comp = "all": total rows of the total table).
+    ctr_final <- purrr::set_names(lapply(fmt_nms, function(nm) {
+      prot <- if (comp == "tab") is_totrow(tabs[[nm]]) else
+                (is_totrow(tabs[[nm]]) & is_tottab(tabs[[nm]]))
+      dplyr::if_else(prot, ctr_after[[nm]], var_after[[nm]] / ctr_after[[nm]])
+    }), fmt_nms)
+
+    comp_all_val <- comp[1] == "all"
+
+    if (!is.na(color[1]) && color[1] != "no") {
+      color_condition <- switch(color[1],
+        "auto"    = c("n", "all", "all_tabs"),
+        "all"     = c("n", "row", "col", "all", "all_tabs"),
+        "all_pct" = c("all", "all_tabs"))
+      color_apply <- purrr::keep(fmt_nms, function(nm) get_type(tabs[[nm]]) %in% color_condition)
+    }
+  }
+
+  # single write pass over the UNGROUPED table (so each `col` is the full column that the full-length
+  # precomputed vectors match), then restore the original grouping: `var` (always) + `ctr`/`comp_all`/
+  # `color` (only under "ctr" calc). The values are group-correct already (var per subtable above; the
+  # ctr divide + colour are row-wise), so ungroup/rewrite/regroup is byte-identical.
+  grp <- dplyr::group_vars(tabs)
+  drp <- dplyr::group_by_drop_default(tabs)
+  res <- dplyr::mutate(dplyr::ungroup(tabs), dplyr::across(where(is_fmt), function(col) {
+    nm  <- dplyr::cur_column()
+    col <- set_var(col, var_after[[nm]])
+    if (do_ctr) {
+      col <- set_ctr(col, ctr_final[[nm]])
+      # Reproduce a byte-identity quirk of the pre-9b-5 path: its ctr writes used dplyr::if_else() over
+      # fmt columns, and combining fmt vectors MATERIALISES the `wn` field (NA -> the n fallback). The
+      # plain set_ctr here does not, so fill wn from get_wn() (a no-op when wn is already set / weighted;
+      # matters only for an unweighted table built via tab_plain() |> tab_chi2(), where wn was NA).
+      col <- set_wn(col, get_wn(col))
+      col <- set_comp_all(col, comp_all_val)
+      if (nm %in% color_apply) col <- set_color(col, "contrib")
+    }
+    col
+  }))
+  if (length(grp)) res <- dplyr::group_by(res, dplyr::across(dplyr::all_of(grp)), .drop = drp)
+  res
 }
 
 
