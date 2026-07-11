@@ -281,6 +281,22 @@ like the former `if_else(...) |> vec_restore(.)` (attributes verified preserved;
 regen; verified byte-identical vs the old block on grouped + ungrouped tables.
 `dev/benchmarks/results_1.4.0/phase9b3_pass3.txt`.
 
+**Pass 4 (2026-07-11) — `new_test_tibble` memoization (byte-identical, ~3-6% common build).** A
+post-pass-3 line-profile: the empty-placeholder `test` tibble (`new_test_tibble()`, `R/tab_classes.R`)
+costs **~1.4 ms/call** (`tibble()` validation) and is built several times per table (~3% self). It is
+STATELESS, so it's memoized (built once, the cached copy shared — R copy-on-modify keeps callers'
+`bind_rows`/`mutate`/`attr<-` edits from touching the base). Byte-identical (same object `tibble()`
+produced); full suite green (1364/0), no golden regen. Modest (`common` per-table 0.174→0.164) — the
+remaining tab_pvalue_lines cost (`bind_rows`+`map2_df(vec_restore)` adding the p-value row, ~9% total)
+is the vctrs **record combine** (ptype2/cast per column), which is inherent to the fmt type and only
+removed by the deferred-materialization carrier (the gated 9b-3 core), not an in-place tweak.
+`dev/benchmarks/results_1.4.0/phase9b3_pass4.txt`.
+
+**NOTE (2026-07-11):** the pass-3 commit `7d08a77` carried a concurrently-committed **broken color
+palette** (`c()` arg 11 empty → `load_all` fails). Restored `R/tab_classes.R` to the pre-edit palette
+(`93eda62`) + re-applied the pass-3 `tab_pvalue_lines` change; the maintainer keeps the new palettes
+externally (Phase 12). The uncommitted `tab_classes.R` = pass-3 + pass-4 changes + original palette.
+
 **Revised staging for the remaining core** (supersedes §3.4's join-first order):
 
 1. **`tab_apply_tests` / `tab_chi2` on plain fields (the 20%, #1 value).** Compute the row masks
