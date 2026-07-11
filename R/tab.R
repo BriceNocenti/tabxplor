@@ -1585,46 +1585,28 @@ tab_aggregate <- function(ctx) {
     fine_num <- purrr::set_names(fine_num, as.character(row_vars))
   }
 
-  # Factor tier-1: ONE shared finest-grain data.table aggregate keyed on all (tab_vars, row_vars,
-  # factor col_vars), rolled up per (row_var x col_var) in tab_plain(`.fine`) instead of re-scanning
-  # N rows per pair. OPT-IN (fuse_min_rows default Inf -> off): the win is modest once per-table
-  # downstream dominates; kept as reusable infra (jmvtab caching). Guard: prod(nlevels) <= N, no
-  # col/row var overlap, >= 2 tables, not `.by_table`. Keep the `keyby` sort order (rollup identity).
-  .fine <- NULL
-  if (!.by_table && sum(col_vars_text) != 0) {
-    fct_col_vars <- as.character(col_vars[col_vars_text])
-    col_in_row   <- any(fct_col_vars %in% as.character(c(row_vars, tab_vars)))
-    if (!col_in_row) {
-      fine_keys <- unique(as.character(c(tab_vars, row_vars, fct_col_vars)))
-      key_card  <- function(x) if (is.factor(x)) nlevels(x) + as.integer(anyNA(x)) else
-        data.table::uniqueN(x)
-      prod_nlev <- prod(vapply(fine_keys, function(k) key_card(data[[k]]), numeric(1)))
-      n_tables <- length(row_vars) * sum(col_vars_text)
-      if (is.finite(prod_nlev) && prod_nlev <= nrow(data) &&
-          nrow(data) >= getOption("tabxplor.fuse_min_rows", Inf) && n_tables >= 2) {
-        dt___ <- data.table::as.data.table(data[unique(c(fine_keys, as.character(wt)))])
-        .fine <- if (length(wt) != 0) {
-          dt___[, list(n = .N, wn = sum(as.numeric(eval(wt)), na.rm = TRUE)), keyby = fine_keys]
-        } else {
-          dt___[, list(n = .N), keyby = fine_keys]
-        }
-      }
-    }
-  }
-
-  # Both aggregates are NULL on the raw / .by_table path -- ctx_update() preserves them as NULL
-  # elements so tab_transform()'s list2env() finds them (`ctx$x <- NULL` would delete them).
-  ctx_update(ctx, list(fine_num = fine_num, fine_fused = .fine))
+  # Factor tier-1: NONE on the tab()/tab_many() path. The former opt-in shared-scan "fusion"
+  # (`options(tabxplor.fuse_min_rows)`, off by default) was removed in Phase 9c: it was a NET NEGATIVE
+  # once the O(cells) per-table build dominates (the survey-scale build is N-independent -- fusing the
+  # O(N) scan buys nothing; +1-7% when forced on) -- see dev/tabxplor_1.4.0_decisions.md 30. The
+  # `.fine`/`fine_for_pair()`/`use_raw` seam in tab_plain() STAYS: it is now EXCLUSIVELY the jmvtab
+  # cache seam (jmv_cache_aggregate() injects a per-pair `fine_fused`; that path early-returns above),
+  # locked by test-fuse-parity.R (direct factor `.fine` == raw scan) + test-jmvtab-cache.R.
+  #
+  # fine_fused = NULL is kept as an explicit ctx element (ctx_update()'s single-bracket [<-) so
+  # tab_transform()'s list2env() finds it (`ctx$x <- NULL` would delete the key).
+  ctx_update(ctx, list(fine_num = fine_num, fine_fused = NULL))
 }
 
 
 # fine_for_pair() -- pick the factor tier-1 aggregate for one (row_var x col_var) pair.
-# DESIGN (Phase 7e): tab_transform() feeds tab_plain(.fine=) either the ONE fused joint DT (batch
-# tab()/tab_counts() -- the is.data.table branch returns it UNCHANGED, byte-for-byte the pre-7e
-# code, so golden/fuse/counts parity cannot move) OR a per-pair named list keyed "row_var\rcol_var"
-# (the jmvtab cache: the reuse unit is per pair -- see dev/tabxplor_jmvtab_cache_design.md 3.2/6).
-# A missing pair -> NULL -> tab_plain()'s `use_raw` raw scan. tab_plain always MARGINALISES .fine to
-# its own pair, so a per-pair margin is idempotent there (locked by test-fuse-parity.R).
+# DESIGN (Phase 7e): tab_transform() feeds tab_plain(.fine=) either ONE joint count DT (tab_counts()'s
+# injected aggregate -- the is.data.table branch returns it UNCHANGED, byte-for-byte, so counts parity
+# cannot move) OR a per-pair named list keyed "row_var\rcol_var" (the jmvtab cache: the reuse unit is
+# per pair -- see dev/tabxplor_jmvtab_cache_design.md 3.2/6). Plain tab()/tab_many() no longer supply a
+# `.fine` (Phase 9c removed the opt-in factor fusion) -> NULL here -> tab_plain()'s `use_raw` raw scan.
+# A missing pair also -> NULL. tab_plain always MARGINALISES .fine to its own pair, so a per-pair margin
+# is idempotent there (locked by test-fuse-parity.R + test-jmvtab-cache.R).
 #' @keywords internal
 #' @noRd
 fine_for_pair <- function(fine, row_var, col_var) {

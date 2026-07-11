@@ -2806,36 +2806,25 @@ vec_ptype2.tabxplor_fmt.tabxplor_fmt    <- function(x, y, ...) {
   same_signif  <- signif_x == get_color_signif(y)
   #l            <- length(x)
 
+  # Phase 9c: the reconcile is scalar-attribute picking; base-R if/else replaces the 9 dplyr::if_else
+  # (~3x faster per call, byte-identical). This method drives EVERY c()/vec_c()/bind/group over fmt
+  # columns -- the compact merge's per-column vec_ptype_common() reduce is the hottest caller (the
+  # entire tab() merge marginal, dev/tabxplor_1.4.0_decisions.md 30). WARNING: every same_* is a
+  # non-NA length-1 logical EXCEPT `same_comp` (comp_all is NA on count columns, so binding a count
+  # with a pct column gives same_comp = NA -> dplyr::if_else returned NA; a bare `if (NA)` would
+  # ERROR) -> it is checked with is.na() first. `color` is length <= 2 (§9.1) -> ifelse when 2.
   new_fmt(
-    type     = dplyr::if_else(same_type   , type_x   , "mixed"       ),
-    comp_all = dplyr::if_else(same_comp   , comp_x   , FALSE         ),
-    ref= dplyr::if_else(same_diff_type, diff_type_x, ""        ),
-    ci_type  = dplyr::if_else(same_ci_type, ci_type_x, ""            ),
-    col_var  = dplyr::if_else(same_col_var, col_var_x, "several_vars"),
-    totcol   = dplyr::if_else(same_totcol , totcol_x , FALSE         ),
-    refcol   = dplyr::if_else(same_refcol , refcol_x , FALSE         ),
-    color    = dplyr::if_else(same_color  , color_x  , ""            ),
-    color_signif = dplyr::if_else(same_signif, signif_x, "ignore")
+    type     = if (same_type)      type_x      else "mixed",
+    comp_all = if (is.na(same_comp)) NA else if (same_comp) comp_x else FALSE,
+    ref      = if (same_diff_type) diff_type_x else "",
+    ci_type  = if (same_ci_type)   ci_type_x   else "",
+    col_var  = if (same_col_var)   col_var_x   else "several_vars",
+    totcol   = if (same_totcol)    totcol_x    else FALSE,
+    refcol   = if (same_refcol)    refcol_x    else FALSE,
+    color    = if (length(same_color) == 1L) { if (same_color) color_x else "" }
+               else ifelse(same_color, color_x, ""),
+    color_signif = if (same_signif) signif_x else "ignore"
   )
-  # new_fmt(
-  #   type     = dplyr::if_else(same_type, true  = type_x,
-  #                             false = "mixed"),
-  #   comp_all = dplyr::if_else(same_comp,
-  #                             true  = comp_x,
-  #                             false = vctrs::vec_recycle(FALSE, l )),
-  #   ci_type  = dplyr::if_else(same_ci_type,
-  #                             true  = ci_type_x,
-  #                             false = vctrs::vec_recycle(NA_character_, l )),
-  #   col_var  = dplyr::if_else(same_col_var,
-  #                             true  = col_var_x,
-  #                             false = vctrs::vec_recycle("several_vars", l )),
-  #   totcol   = dplyr::if_else(same_totcol,
-  #                             true  = totcol_x,
-  #                             false = vctrs::vec_recycle(FALSE, l )),
-  #   color    = dplyr::if_else(same_color,
-  #                             true  = color_x,
-  #                             false = vctrs::vec_recycle(NA_character_, l))
-  # )
 }
 #' Find common ptype between fmt and double
 #' @param x A fmt vector

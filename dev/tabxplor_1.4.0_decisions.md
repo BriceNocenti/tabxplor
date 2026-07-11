@@ -1782,6 +1782,102 @@ Real speed remains Phase 7f/9b/10 territory (fmt build + merge + `case_when`-ove
 
 ---
 
+## 30. Phase 9c — where the time goes NOW, the pure-DT carrier verdict, and two clean wins (2026-07-11)
+
+Phase 9c re-asks §29's questions after the whole carrier core (9b-4→9b-7) landed. §29's profile is
+**stale**: it predates the carrier, so its headline "the merge is 34 %" no longer holds. A fresh
+profile changes the answers.
+
+### The fresh profile (post-9b-7)
+
+`tab(gss_cat, 5 row_vars × 3 col_vars, pct="row", color="diff", chi2=TRUE)`, merged 0.77 s median,
+`load_all` source. Two decompositions (Rprof self/total on the merged call, plus a list-path Rprof to
+isolate the merge marginal):
+
+| cost | share (merged) | nature |
+|------|----------------|--------|
+| `[.data.table` wide-math (leaf scans + dcast + pct/diff/total) | **~30 %** | fixed per-op overhead × ~150 `[.data.table` calls over 15 tiny leaf tables |
+| `tab_apply_tests` (chi2/ANOVA marshalling) | **~22 %** | dplyr-on-small-tibbles + count-matrix extraction; `agg_*` math itself is cheap |
+| compact **L3 reconcile** (`vec_ptype_common` → 9× `dplyr::if_else` per col) | **~7 %** | the ENTIRE merge marginal (drops to 1.8 % in the list path) |
+| redundant per-leaf `relabel_levels_in_varnames` + select/mutate narrowing | **~5 %** | each leaf re-narrows the 21 k-row data |
+| fmt materialize (`new_rcrd`, one per column) | **~3 %** | irreducible |
+
+**Two facts reframe everything.** (1) The build is **N-INDEPENDENT**: replicating gss_cat to 215 k
+rows leaves the merged call at ~0.81 s (≈ the 21 k-row 0.79 s). So the ~30 % `[.data.table` cost is
+**not** the O(N) scan and **not** large-object copying — it is the fixed per-call overhead of
+data.table's `[` invoked ~150× over *tiny* wide tables. (2) The §29 merge (34 %) is now ~7 % — the
+9b-6 pvalue rewrite + 9b-1 compact field-write already banked it; what is left of the merge is the L3
+attribute reconcile alone.
+
+### Q3 (the maintainer's question) — pure data.table carrier for in-place `:=`? **NO — dropped.**
+
+The premise ("modify in memory, the big data.table win") does not apply here, and the change would be
+*less* reliable, not more:
+
+1. data.table's `:=` avoids copying the **whole table** when writing a **column** — the benefit scales
+   with **row count**. tabxplor build tables are **tiny** (O(cells): ~6–60 rows × ~5–25 cols); copying
+   them is microseconds, and the build is **N-independent** (measured), so touching-large-data is not
+   where the time is.
+2. The pipeline's expensive operations are **row-CHANGING** (level-drop, total add/remove, the col_var
+   join, compact `rbind`, pvalue `rbind`) — these **copy under data.table regardless of `:=`**. Only
+   column-writes on a fixed row-set (ci/chi2) are `:=`-friendly, and 9b-5 already collapsed those to a
+   single precompute-then-write pass.
+3. The only genuine win from "carrier as one table" would be doing **fewer/bigger** operations
+   (unifying the 15 leaf-math builds into one long-format pass) — but that is the **aggregate-core
+   fork the keystone rejected** (re-duplicates the math), orthogonal to `:=`, and the largest
+   byte-identity surface imaginable (18-field record, factor levels, L1 types).
+4. **Reliability regression**: data.table reference semantics are a byte-identity footgun. The jmvtab
+   tier-3 cache *stores* carriers that must not mutate → `copy()` everywhere → negating the very
+   copy-avoidance that motivated it. The current **immutable field-frame carrier** (used only at the
+   boundaries where reconstruction was costly) is both faster *and* safer.
+
+**Decision: keep the field-frame carrier; do not pursue a mutable-data.table carrier.** Recorded so it
+is not re-opened.
+
+### Q1 — remaining levers, and what was implemented
+
+Ranked by value/risk. Only the first was implemented in 9c (maintainer scoping):
+
+1. **Compact L3 reconcile → base-R (IMPLEMENTED).** `vec_ptype2.tabxplor_fmt.tabxplor_fmt` picked each
+   reconciled attribute with `dplyr::if_else` ×9; replaced with base-R `if/else`. **3.1× per call**
+   (micro: 1039 → 335 µs), and since this method drives **every** `c()`/`vec_c()`/bind/group over fmt
+   columns, the win generalises. Clean A/B (`dev/benchmarks/results_1.4.0/phase9c_ptype2_and_fusion.txt`):
+   the default **merged call −7 % (0.760 → 0.705 s)** — the merge marginal 0.046 → ~0 — and a user
+   **`c()` of two fmt columns 1.8×** (1.60 → 0.88 ms). Byte-identical (full suite FAIL 0, no golden
+   regen). **Landmine**: `same_comp` CAN be NA (a count column's `comp_all` = NA bound with a pct
+   column) — `dplyr::if_else(NA,…)` returned NA but bare `if (NA)` errors → `is.na()` checked first;
+   `color` is length ≤ 2 → `ifelse` on the length-2 branch.
+2. **Redundant per-leaf `relabel_levels_in_varnames`** (~5 %) — NOT done (needs a leaf public/core
+   contract; the leaves are public, §29 Finding 3 deferred).
+3. **`tab_apply_tests` marshalling** (~22 %) — NOT done; mostly dplyr-on-small-tibbles overhead, the
+   `agg_*` math is already cheap; fiddly, golden-locked test parity.
+4. **Leaf math on base-R/matrix** (the ~30 %) — NOT done; deferred to **Phase 9d** (below). The only
+   lever big enough to move the ~30 %, but a real rewrite with float/NA byte-identity risk.
+
+### Q2 — what to give up for simplicity: the scan-fusion opt-in (REMOVED)
+
+The tab()-level opt-in scan-fusion — `options(tabxplor.fuse_min_rows)` (default `Inf` = off) + the
+fused-`.fine` block in `tab_aggregate()` — was **removed**. Grounding: forcing it on (`fuse_min_rows=0`)
+was **+1–7 %** on this fixture, and the build is N-independent, so fusing the O(N) scan buys nothing at
+survey scale (the cost is O(cells)). It was dead by default and pure complexity. **Kept**: the
+`.fine`/`fine_for_pair()`/`use_raw` seam in `tab_plain()` (now EXCLUSIVELY the jmvtab cache seam —
+`jmv_cache_aggregate()` injects a per-pair `.fine` — plus `tab_counts()`'s injected count aggregate and
+the numeric `fine_num`, all unaffected). `test-fuse-parity.R` was **rewritten** to drive
+`tab_plain(.fine=)` directly (build a valid `.fine`, compare to the raw scan) — the factor analogue of
+`test-num-fuse-parity.R`, so the seam stays locked with a focused test rather than only inside the
+jmvtab suite; the one carve-parity fusion test was repointed (default == `.by_table`, both raw now).
+
+### The honest ceiling
+
+After 9c the merged call is ~0.70 s, of which ~30 % is data.table per-op overhead, ~22 % is test
+marshalling, ~3 % is the irreducible fmt materialize, and the merge is free. **No further restructure
+of tab()/tab_build moves the needle** (§29 Finding 4 still holds — resolution is 0.2 %). The remaining
+real levers are all O(cells) display/build work: the leaf-math per-op overhead (Phase 9d), the test
+marshalling, and `format.tabxplor_fmt`'s `case_when` (Phase 10b) — none of which need the carrier or a
+representation change.
+
+---
+
 ## Sources (statistics)
 
 - Binomial proportion CI (Wald / Wilson / Agresti-Coull asymmetry): <https://en.wikipedia.org/wiki/Binomial_proportion_confidence_interval>

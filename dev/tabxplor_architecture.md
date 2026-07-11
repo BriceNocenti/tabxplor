@@ -105,7 +105,9 @@ tab(data, row_vars, col_vars, ..., output_list=FALSE)   tab_many(..., compact=) 
          │      na_text/na_num, tab_prepare() (ordered-strip + listwise removal + lump + cleannames),
          │      zero/NA-weight removal, levels="auto", lv1 non-first-level pre-merge
          ├─ tab_aggregate(ctx)    (tier 1)   the count/moment aggregates: per-row_var numeric moment
-         │      sums via tab_aggregate_num() + the fused factor count `.fine` (both NULL under .by_table).
+         │      sums via tab_aggregate_num() (NULL under .by_table). Factor `fine_fused` is NULL for plain
+         │      tab()/tab_many() (Phase 9c removed the opt-in factor scan-fusion, §30); the factor `.fine`
+         │      seam now feeds only from jmv_cache_aggregate() (jmvtab) + tab_counts()'s injected aggregate.
          │      Phase 7e: when a jmvtab cache_env is present this stage delegates to jmv_cache_aggregate()
          └─ tab_build_tables(ctx)  the OUTER row_var map + the output shape (Phase 9a). Resolves one lean
                 ctx per row_var (tab_rowvar_ctxs) and maps tab_build_one() over it — serial purrr::map OR

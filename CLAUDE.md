@@ -289,7 +289,7 @@ counts (long/wide/freq) ─┘   via as_tab_counts()   (one vectorised impl each
 
 Why it is the keystone — it simultaneously (a) kills the duplicated pct/total math; (b) makes from-the-middle reliable (validate once at the boundary, then the identical core runs); (c) lets CI/chi2 join the fast path (aggregate-based, `tab_num` mean-CI template); (d) gives `tot_n` (each cell's own % base) almost for free (a property of a proper aggregate, not "the last `col_var` total column"); (e) defines the clean Jamovi cache boundaries (aggregate | per-transform | display).
 
-**Conceptual vs physical**: the core is always aggregate-based (conceptual). The physical shared finest-grain `.fine` aggregate (fusing per-table scans) stays opt-in / large-N / Jamovi-reuse only — do not conflate. Unify the code path now; keep scan-fusion a switch.
+**Conceptual vs physical**: the core is always aggregate-based (conceptual). The physical shared finest-grain `.fine` aggregate (fusing per-table scans) is Jamovi-reuse + `tab_counts()`-injection only. *(Phase 9c: the tab()-level opt-in scan-fusion switch — `options(tabxplor.fuse_min_rows)` — was REMOVED as a net-negative (§30); the `.fine`/`fine_for_pair()`/`use_raw` seam in `tab_plain()`/`tab_num()` remains for jmvtab, `tab_counts()`, and the numeric `fine_num`.)*
 
 **Retro-compat guardrails**: `tabxplor_fmt` fields are the user contract (extracted via `$`/`mutate`) — must not break. Public args must not change without deprecation. `tab_pct`/`tab_tot`/`tab_ci`/`tab_chi2` stay exported but become superseded thin wrappers over the core (`lifecycle::signal_stage`), so old user code keeps working.
 
@@ -1064,12 +1064,44 @@ Scoped up (maintainer) from the literal "carrier + re-paint" (which barely moves
 - **Result** (`dev/benchmarks/results_1.4.0/phase9b7_reref.txt`): a ref change is **~3–4.5× faster** (reref vs rebuild). Locked by `test-jmvtab-cache.R` (reref == rebuild across 12 shapes + tab() anchor + fallbacks + $state). Detail + landmines: `dev/tabxplor_phase9b_fmt_display_only.md` §8.
 
 
-##### Phase 9c — further simplifications ?
+##### Phase 9c — further simplifications ? (DONE — 2026-07-11)
 
-Now that `tabxplor_fmt` is  display-only, and a carrier is used until the end of the pipeline for performance reasons, adding some complexity, I wonder if there would be further ways to improve the build table workflow performance and simplicity.
-- Are there remaining levers for performance ?
-- Are there features that we should give up in order to reduce complexity and use a more straightforward approach, at the price of back-compatiblity or forking ?
-- Would it be possible and reliable to transform the carrier into pure data.table to avoid to copy objects in memory at each operation and modify them directly in memory (the big data.table performance improvement) ?
+Full analysis + fresh profile: `dev/tabxplor_1.4.0_decisions.md` §30. The three questions, answered:
+
+- **Pure data.table carrier for in-place `:=`? — NO, dropped (maintainer-confirmed).** A fresh profile
+  (post-9b-7) shows the build is **N-INDEPENDENT** (215k rows ≈ 21k rows) and O(cells): the tables are
+  tiny, so copying is microseconds and `:=` copy-avoidance buys nothing; the expensive ops are
+  row-CHANGING (level-drop/total/join/rbind) which copy regardless of `:=`; and a mutable DT is a
+  byte-identity footgun (the jmvtab tier-3 cache stores carriers that must not mutate → `copy()`
+  everywhere). The immutable **field-frame carrier stays** — faster *and* safer. Recorded so it is not
+  re-opened.
+- **Remaining perf levers — one clean win IMPLEMENTED.** `vec_ptype2.tabxplor_fmt.tabxplor_fmt` picked
+  each reconciled attribute with `dplyr::if_else` ×9 → replaced with base-R `if/else` (**3.1× per
+  call**; landmine: `same_comp` can be NA → `is.na()` first; `color` length ≤ 2 → `ifelse`). This drives
+  every `c()`/bind/group over fmt AND is the compact merge's per-column reconcile: **merged call −7 %**
+  (the merge marginal 0.046 → ~0 s), user `c()` of two fmt cols **1.8×**. Byte-identical (suite green,
+  no golden regen). `dev/benchmarks/results_1.4.0/phase9c_ptype2_and_fusion.txt`. The other levers
+  (per-leaf relabel ~5 %, `tab_apply_tests` marshalling ~22 %) were left; the big one (leaf-math ~30 %)
+  is **Phase 9d** below.
+- **Feature given up for simplicity — the tab()-level scan-fusion, REMOVED.** `options(tabxplor.fuse_min_rows)`
+  + the fused-`.fine` block in `tab_aggregate()` were a NET NEGATIVE (+1–7 % when on) and dead by
+  default (fusing an O(N) scan buys nothing when the build is N-independent). Removed. **Kept**: the
+  `.fine`/`fine_for_pair()`/`use_raw` seam in `tab_plain()` (now EXCLUSIVELY the jmvtab cache seam +
+  `tab_counts()`'s injected aggregate + the numeric `fine_num`). `test-fuse-parity.R` rewritten to drive
+  `tab_plain(.fine=)` directly (the factor analogue of `test-num-fuse-parity.R`); the carve fusion test
+  repointed (default == `.by_table`, both raw now).
+
+##### Phase 9d — leaf math on base-R / matrix (FUTURE, optional)
+
+The §30 profile pins the single largest remaining chunk of `tab()` at **~30 %**: the fixed per-op
+overhead of ~150 `[.data.table` calls across the 15 tiny leaf tables (dcast + pct/diff/total math), NOT
+the O(N) scan (the build is N-independent) and NOT copying. The only lever big enough to move it: once
+the counts are dcasted to a tiny wide table, do the pct/diff/total arithmetic with **base-R / matrix ops**
+(`rowSums`/`sweep`/vectorised indexing) instead of chained `[.data.table` calls — eliminating most of the
+~150 per-op invocations. This is a real leaf-math rewrite with **float-order / NA byte-identity risk**
+(golden-locked), so it belongs in its own phase, not folded into 9c. Orthogonal to the carrier and to the
+row-axis restructure. Weigh against Phase 10b (`format.tabxplor_fmt` `case_when` → base) — both are
+O(cells) display/build levers, independent of each other.
 
 
 ### Phase 10 — Unified exporter prep & display
@@ -1254,7 +1286,7 @@ In-code these are tagged for grep: `# KNOWN-BUG:` (bugs below), `# FIXME:` / `# 
 The performance harness lives in `dev/benchmarks/` (`.Rbuildignore`'d). Per the scope decision, save every phase's before/after runs under `dev/benchmarks/results_1.4.0/`.
 
 - `run_bench.R` — heavy 8M-row `tab()` harness: `source("dev/benchmarks/run_bench.R")`. Compares to `dev/benchmarks/baseline.csv`; writes `results_<stamp>.csv` (git-ignored).
-- `run_fused_vs_bytable.R` — fused vs table-by-table arbiter on a 15M fixture (the `.by_table` flag).
+- `run_fused_vs_bytable.R` — fused vs table-by-table arbiter on a 15M fixture (the `.by_table` flag). *(OBSOLETE since Phase 9c removed the tab()-level factor fusion — `.fine` now only reaches `tab_plain` via jmvtab / `tab_counts()`.)*
 - `gen_big_df.R` — deterministic 8M fixture builder (cached to `big_df.rds`, git-ignored).
 - `baseline.csv` — committed 8M baseline; reset consciously after a deliberate perf change.
 - `tab_many_performance_profile.md` — the full 2026-07 profile (read before optimizing).
@@ -1264,7 +1296,7 @@ The performance harness lives in `dev/benchmarks/` (`.Rbuildignore`'d). Per the 
 
 - **`tab_chi2` is the #1 cost** (84% of a small 9-tab call; N-independent, scales with *cells*) → the reason CI/chi2 move onto the aggregate in Phase 3.
 - Per-table fixed fmt/vctrs overhead (~0.19 s/table) dominates over the scan; `tab_num` double-scans N and weighted `tab_num` allocates ~7.8 GB (`weighted.var` recomputes the mean) → Phases 1-3.
-- Scan-fusion (`.fine`/`.by_table`, `options(tabxplor.fuse_min_rows=)`) shipped OFF by default; modest gain (~1.05-1.30× at 15M), byte-identical (guarded by `test-fuse-parity.R`), kept as reusable infra for Phase 8 (Jamovi caching, where the aggregate is reused across interactions).
+- Scan-fusion — the tab()-level opt-in (`options(tabxplor.fuse_min_rows=)` + the fused block in `tab_aggregate`) was **removed in Phase 9c** (§30): a NET NEGATIVE (+1–7 %) once the build is O(cells) / N-independent, so fusing the O(N) scan buys nothing at survey scale. The `.fine`/`.by_table`/`fine_for_pair()`/`use_raw` seam **remains** as the jmvtab-cache aggregate-injection seam (+ `tab_counts()` + numeric `fine_num`); `test-fuse-parity.R` now drives `tab_plain(.fine=)` directly.
 
 ---
 

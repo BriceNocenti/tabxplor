@@ -1,0 +1,33 @@
+Phase 9c -- vec_ptype2.tabxplor_fmt base-R + tab()-level scan-fusion removal
+============================================================================
+forcats::gss_cat (21 483 rows), 5 row_vars x 3 col_vars, pct="row", color="diff", chi2=TRUE.
+8-iteration medians, R 4.5.1. Clean git-stash A/B (BEFORE = 9b-7 HEAD 63824ed). Full suite green
+(FAIL 0 | PASS 1400), NO golden regen.
+
+  fixture   merged    list      merge_cost   mb
+BEFORE (9b-7)
+  common    0.7595    0.7131    0.0464       45.4
+  ci        0.9657    0.9484    0.0173       34.1
+  user c() of 2 fmt cols:  0.00160 s
+
+AFTER (9c: base-R vec_ptype2)
+  common    0.7045    0.7071   -0.0025       44.7      (merged -7.2%; merge marginal 0.046 -> ~0)
+  ci        0.9086    0.9575   -0.0489       33.4      (merged -5.9%)
+  user c() of 2 fmt cols:  0.00088 s                  (1.8x faster)
+
+Reading:
+- The compact L3 reconcile (tab_stack_tables -> vctrs::vec_ptype_common -> vec_ptype2.tabxplor_fmt,
+  9 dplyr::if_else per column x ~100 pairwise reconciles) WAS the entire merge marginal. Replacing the
+  9 dplyr::if_else with base-R if/else (3.1x per-call micro-bench, 1039 -> 335 us) drops it to noise.
+- Because vec_ptype2 drives every c()/vec_c()/bind/group over fmt columns, the win generalises to user
+  code (c() of 2 fmt cols 1.8x). List path unchanged (compact only runs in the merged path).
+- Byte-identity landmine handled: same_comp CAN be NA (count column comp_all = NA bound with a pct
+  column) -> is.na() check first (a bare `if (NA)` would error; dplyr::if_else returned NA). `color`
+  is length <= 2 -> ifelse when length 2.
+
+Scan-fusion removal (no perf number -- it was a NET NEGATIVE, off by default):
+  Earlier Phase 9c measurement (phase9c_levers): forcing fusion ON via fuse_min_rows=0 was +1-7% and
+  the build is N-INDEPENDENT (215k rows ~= 21k rows), so fusing the O(N) scan buys nothing at survey
+  scale (the build is O(cells)). Removed the opt-in block from tab_aggregate() + the fuse_min_rows
+  option; the .fine seam stays for jmvtab (jmv_cache_aggregate injects per-pair) + tab_counts() +
+  the numeric fine_num. test-fuse-parity.R rewritten to drive tab_plain(.fine=) directly.

@@ -97,16 +97,15 @@ testthat::test_that("each stage adds its cache-tier ctx fields (the 7e seam cont
   testthat::expect_s3_class(out, "tabxplor_tab")
 })
 
-testthat::test_that("tab_aggregate() is a genuine seam: fused .fine == raw-scan path", {
-  # Byte-identity of adopting the fused factor aggregate vs the table-by-table raw scan is what
-  # lets tab_transform() recompute cheaply from a cached tier-1. (Complements test-fuse-parity.R,
-  # which drives tab_build() directly; here we exercise the CARVED aggregate/transform boundary.)
-  withr::local_options(tabxplor.fuse_min_rows = 0)   # force fusion on the small fixture
+testthat::test_that("carved stages: default factor path == .by_table raw scan", {
+  # Phase 9c: tab() no longer fuses the factor scan (the net-negative opt-in was removed), so the
+  # default and `.by_table` paths both raw-scan -- this pins them byte-identical through the CARVED
+  # aggregate/transform/assemble boundary (the direct tab_plain(.fine=) seam is test-fuse-parity.R).
   gss <- carve_gss()
-  fused <- run_stages(carve_ctx(gss, rlang::quo(c(marital, relig)), rlang::quo(race),
-                                overrides = list(pct = "row", chi2 = TRUE, output = "list")))
-  raw   <- run_stages(carve_ctx(gss, rlang::quo(c(marital, relig)), rlang::quo(race),
-                                overrides = list(pct = "row", chi2 = TRUE, output = "list",
-                                                 by_table = TRUE)))
-  testthat::expect_equal(fused, raw)
+  def <- run_stages(carve_ctx(gss, rlang::quo(c(marital, relig)), rlang::quo(race),
+                              overrides = list(pct = "row", chi2 = TRUE, output = "list")))
+  raw <- run_stages(carve_ctx(gss, rlang::quo(c(marital, relig)), rlang::quo(race),
+                              overrides = list(pct = "row", chi2 = TRUE, output = "list",
+                                               by_table = TRUE)))
+  testthat::expect_equal(def, raw)
 })
