@@ -427,6 +427,49 @@ Both increments landed: `tab_chi2()` (increment 1) + `tab_ci()` (increment 2 —
   (diff_row) / visible's own columns. Locked by the 21-shape A/B (incl. grouped-visible) +
   `test-golden`/`test-calculations`/`test-color-golden`.
 
+**Phase 9b-6 — DONE, 2026-07-11 (byte-identical, full suite FAIL 0 | PASS 1354, NO golden regen).**
+**Re-scoped by the maintainer (this session) from "step D / Boundary A" to "Boundary B via local
+unwrap".** A grounded finding drove it: 9b-6 as originally designed (carrier through
+`tab_assemble_tables`, materialize at `tab_build_one` end) buys **~0 % on the common path** — after
+9b-5 everything inside `tab_build_one` is already cheap (leaves materialize once; `tab_apply_tests`
+no longer reconstructs; `tab_assemble_tables` is column-ops ~2 %; `tab_add_n_pct` on `pct="row"`+`add_n`
+adds one column; the join is 0.9 %). **The real remaining ~15-25 % was Boundary B** — `tab_compact`'s
+`vec_rbind` + `tab_pvalue_lines`' `bind_rows` in `tab_assemble_output`. So instead of threading a
+global carrier (9b-6→9b-7), both row-binds were rewritten to run on **plain field-frames via a LOCAL
+`fmt_unwrap`→wrap** (the proven 9b-5 pattern). `tab_build_one` keeps returning **records** → **no
+`test-parallel-parity` re-lock**; 9b-6 + 9b-7 collapse into this one deliverable (Boundary A skipped as
+~0-value). `fmt_unwrap`/`fmt_wrap` (9b-4) are now **load-bearing** in these two functions.
+
+New primitive `fmt_stack_frames(frames, meta)` (`R/tab.R`, next to `fmt_unwrap`/`fmt_wrap`): concat a
+list of per-source field-frames field-by-field with `vctrs::vec_c` (type-stable, **L1**) + one
+`fmt_materialize_col()`. Two byte-identity keys: (a) the old `vec_rbind`/`bind_rows` cast each column
+via `vec_cast.tabxplor_fmt`, whose getters MATERIALISE `wn` (NA → the `n` field) — `get_wn()` is the
+ONLY getter with a fallback, so `fr$wn <- get_wn(col)` reproduces it (all other getters are raw); (b)
+the cross-source attribute reconcile.
+
+- **Increment 1 — `tab_compact` (`tab_stack_tables()`, `R/tab_classes.R`; **L3 + L4**).** The
+  `imap_dfr(rename+mutate+promote_totrow)` combine becomes: per-tab prep (rename col 1 → "levels", add
+  the `row_var` meta factor) + `tab_stack_tables()` — column-wise, non-fmt via `vec_c` (factor level
+  union), fmt via `vctrs::vec_ptype_common()` across the tables (reuses `vec_ptype2.tabxplor_fmt`'s
+  attr reconcile = **L3**, but O(#tables) not O(#rows)) → meta, + `fmt_stack_frames()`.
+  `promote_totrow_to_refrow` is folded onto each tab's field frame (**L4**, per subtable). Bench:
+  **~neutral on `merge_s`** (its `vec_rbind` was already modest after 9b-1's promote field-write; ~7 %
+  on `ci`, slightly less memory) — kept for byte-identity + clarity + scaling with #row_vars.
+- **Increment 2 — `tab_pvalue_lines` (the WIN; row-add, **no L3**).** `map2_df(bind_rows(tabs, pvalue),
+  tabs, vec_restore)` + the pass-3 masked fill (TWO full record reconstructions over the WHOLE table
+  just to add k = #row_var p-value rows) → a **fmt-free skeleton** run through the SAME
+  `bind_rows`+`group_by`+`arrange` for the row order + non-fmt columns, then a per-column field append
+  (origin cells ++ the pvalue_line_fmt cell where present / the fill `fmt0(first(display), type)` with
+  `n=NA` — subsuming the masked fill), sliced to the arranged order, materialized with **tabs' OWN meta**
+  (the old `vec_restore(., tabs)` discarded the added row's attrs → no reconcile). Runs in BOTH the
+  merged and per-table paths. **Bench (gss_cat 5×3): merge_s −28..−30 %, list_s −8..−14 %, memory
+  51→45 MB; numeric ~flat.** `dev/benchmarks/results_1.4.0/phase9b6_boundaryB.txt`.
+
+Locked: full suite FAIL 0 + NO golden regen; a **12-shape git-stash `identical()` A/B** (common /
+colpct / mixed / weighted / ci / per-row_var-ref [L3] / contrib / add_n / list-path / tab_vars-grouped /
+numeric-only-ANOVA / numeric-tab_vars). **Deferred/moot:** the global-carrier 9b-7 (Boundary B is now
+reached without it); jmvtab tier-3 on the raw carrier stays **9b-8** (independent).
+
 *Why step A was dropped (leaf emits carrier + tail port).* Under **Q2 = keep the record `full_join`**
 (the recommended lean below), each leaf materializes for the join regardless, so having the leaf *return*
 a carrier and porting its post-`new_fmt` tail (`no_col_var` `set_display`/`set_type`/`as_totcol`,

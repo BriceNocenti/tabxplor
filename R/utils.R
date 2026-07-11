@@ -1332,18 +1332,23 @@ po_to_dt <- function(file) {
 
 
 # Colors functions ---- 
+# ---------------------------------------------------------------------------
+# colour_grid_preview.R
+#
 # Visual review of colour combinations in the Positron Viewer pane.
 #
 #   preview_colour_grid()    - every text x background combination of two vectors
 #   preview_luminance_grid() - luminance shades of one text/background pair
 #
-# Typography (font stack + thin bottom borders + centred bold caption) mirrors
-# the defaults of tabxplor::tab_kable() (lightable-classic style, the
-# '"DejaVu Sans", "Arial", ...' font set via option "tabxplor.kable_html_font"),
-# so these swatch tables sit visually next to your tabxplor cross-tables.
+# Each cell shows the sample text plus its APCA lightness-contrast value (Lc) of
+# text-on-background, so you can eyeball legibility at a glance. Typography
+# (font stack + thin bottom borders + centred bold caption) mirrors the defaults
+# of tabxplor::tab_kable() (lightable-classic style, the '"DejaVu Sans", ...'
+# font set via option "tabxplor.kable_html_font").
 #
-# Dependency: farver (oklch maths), which ships with your tidyverse + tabxplor
-# stack. Viewer routing uses base R (getOption("viewer") with a browser fallback).
+# Dependency: farver (oklch + rgb maths), which ships with your tidyverse +
+# tabxplor stack. Viewer routing uses base R (getOption("viewer") with a
+# browser fallback).
 # ---------------------------------------------------------------------------
 
 # tab_kable() default HTML font stack.
@@ -1361,11 +1366,14 @@ po_to_dt <- function(file) {
 
 # --- internal: oklch / gamut maths -----------------------------------------
 
-#' Decode one colour to its oklch (l, c, h), position-indexed for safety.
+#' Decode one colour to its oklch (l, c, h) with clean, predictable names.
+#'
+#' farver may attach column names that get mangled by name-concatenation when
+#' extracting single elements, so we strip names and reassign them explicitly.
 #' @noRd
 .cg_oklch <- function(hex) {
   m <- farver::decode_colour(hex, to = "oklch")
-  c(l = m[1, 1], c = m[1, 2], h = m[1, 3])
+  stats::setNames(as.numeric(m[1, ]), c("l", "c", "h"))
 }
 
 #' Is oklch(l, c, h) inside the sRGB gamut?
@@ -1417,6 +1425,43 @@ po_to_dt <- function(file) {
   if (l >= 0.6) "#000000" else "#ffffff"
 }
 
+# --- internal: APCA contrast (APCA-W3 0.98G / 0.1.x constants) --------------
+
+#' sRGB (0-255 triplet) to APCA screen luminance Y.
+#' @noRd
+.cg_srgb_to_y <- function(rgb) {
+  lin <- (rgb / 255)^2.4                  # simple 2.4 TRC, per APCA-W3
+  0.2126729 * lin[1] + 0.7151522 * lin[2] + 0.0721750 * lin[3]
+}
+
+#' APCA lightness contrast (Lc) of text-on-background, signed float.
+#'
+#' Positive => dark text on light background; negative => the reverse. Verified
+#' against Myndex reference vectors (e.g. #888 on #fff -> ~63.06).
+#' @noRd
+.cg_apca <- function(text_hex, bg_hex) {
+  txt <- as.numeric(farver::decode_colour(text_hex, to = "rgb"))
+  bg  <- as.numeric(farver::decode_colour(bg_hex,  to = "rgb"))
+  txt_y <- .cg_srgb_to_y(txt)
+  bg_y  <- .cg_srgb_to_y(bg)
+
+  soft_clamp <- function(y) if (y > 0.022) y else y + (0.022 - y)^1.414
+  txt_y <- soft_clamp(txt_y)
+  bg_y  <- soft_clamp(bg_y)
+
+  if (abs(bg_y - txt_y) < 0.0005) return(0)
+
+  if (bg_y > txt_y) {                     # BoW: dark text on light background
+    sapc <- (bg_y^0.56 - txt_y^0.57) * 1.14
+    if (sapc < 0.1) 0 else (sapc - 0.027) * 100
+  } else {                                # WoB: light text on dark background
+    sapc <- (bg_y^0.65 - txt_y^0.62) * 1.14
+    if (sapc > -0.1) 0 else (sapc + 0.027) * 100
+  }
+}
+
+# --- internal: HTML assembly + Viewer routing ------------------------------
+
 #' Minimal HTML escaping for user-supplied sample text.
 #' @noRd
 .cg_escape <- function(x) {
@@ -1425,20 +1470,19 @@ po_to_dt <- function(file) {
   gsub(">", "&gt;", x, fixed = TRUE)
 }
 
-# --- internal: HTML assembly + Viewer routing ------------------------------
-
 #' Assemble the swatch <table> as an HTML string.
 #'
 #' Column headers are tinted with the background colour (a live preview of the
 #' backdrop); row headers show a bordered square of the text colour (always
-#' visible, even for near-white text colours).
+#' visible, even for near-white text colours). Each cell shows the sample text
+#' and, when show_contrast is TRUE, the APCA Lc value on the same line.
 #'
 #' @param text_hex,bg_hex Character matrices [n_row x n_col] of cell colours.
 #' @param row_swatch,col_swatch Hex used to tint the row squares / column cells.
 #' @noRd
 .cg_table <- function(text_hex, bg_hex, row_labels, col_labels,
                       row_swatch, col_swatch, corner, sample_text,
-                      show_hex, swatch_padding) {
+                      show_contrast, swatch_padding) {
   sample_html <- .cg_escape(sample_text)
   n_row <- nrow(text_hex)
   n_col <- ncol(text_hex)
@@ -1468,17 +1512,20 @@ po_to_dt <- function(file) {
     cells <- vapply(seq_len(n_col), function(j) {
       txt <- text_hex[i, j]
       bg  <- bg_hex[i, j]
-      hexline <- if (isTRUE(show_hex)) {
-        sprintf('<div style="font-size:11px;opacity:.85;">%s on %s</div>',
-                toupper(txt), toupper(bg))
+      lc_txt <- if (isTRUE(show_contrast)) {
+        lc <- .cg_apca(txt, bg)
+        sprintf(
+          ' <span style="font-weight:400;opacity:.75;font-size:90%%;">Lc\u00a0%d</span>',
+          as.integer(round(abs(lc)))
+        )
       } else {
         ""
       }
       sprintf(
         paste0('<td style="background-color:%s;color:%s;padding:%s;',
                'text-align:center;border-bottom:1px solid #d9d9d9;">',
-               '<div style="font-weight:600;">%s</div>%s</td>'),
-        bg, txt, swatch_padding, sample_html, hexline
+               '<div style="font-weight:600;">%s%s</div></td>'),
+        bg, txt, swatch_padding, sample_html, lc_txt
       )
     }, character(1))
     sprintf("<tr>%s%s</tr>", rlab, paste(cells, collapse = ""))
@@ -1520,7 +1567,55 @@ po_to_dt <- function(file) {
   invisible(page)
 }
 
-# --- exported: 1. all text x background combinations -----------------------
+# max in-gamut oklch chroma for a given L + hue.
+# farver clamps rgb to [0,255], so an out-of-gamut chroma shrinks on a
+# oklch -> rgb -> oklch round-trip; bisect on that.
+#' @noRd
+max_chroma <- function(l, h, hi = 0.4, iter = 28L) {
+  lo <- 0
+  for (i in seq_len(iter)) {
+    mid  <- (lo + hi) / 2
+    lch  <- matrix(c(l, mid, h), ncol = 3)
+    back <- farver::convert_colour(
+      farver::convert_colour(lch, "oklch", "rgb"), "rgb", "oklch"
+    )
+    if (abs(back[1, 2] - mid) <= 1e-3) lo <- mid else hi <- mid
+  }
+  lo
+}
+
+# set luminance (scalar or one-per-colour), keep hue, cap chroma to gamut
+#' @noRd
+set_luminance <- function(cols, l = 0.95) {
+  lch <- farver::decode_colour(cols, to = "oklch")   # cols: l, c, h
+  l   <- rep_len(l, nrow(lch))
+  h   <- lch[, 3]; h[is.na(h)] <- 0                  # achromatic -> hue 0
+  cc  <- vapply(seq_len(nrow(lch)), function(i) {
+    if (lch[i, 2] < 1e-4) 0                           # keep greys grey
+    else min(lch[i, 2], max_chroma(l[i], h[i]))       # keep chroma, cap to gamut
+  }, numeric(1))
+  farver::encode_colour(cbind(l, cc, h), from = "oklch") |>
+    setNames(names(cols))
+}
+
+# set chroma (scalar or one-per-colour), keep hue + luminance, cap to gamut
+#' @noRd
+set_chroma <- function(cols, c = 0.1) {
+  lch <- farver::decode_colour(cols, to = "oklch")   # cols: l, c, h
+  c   <- rep_len(c, nrow(lch))
+  l   <- lch[, 1]
+  h   <- lch[, 3]; h[is.na(h)] <- 0                  # grey has no hue -> 0
+  cc  <- vapply(seq_len(nrow(lch)), function(i)
+    min(c[i], max_chroma(l[i], h[i])),               # requested chroma, capped
+    numeric(1)
+  )
+  farver::encode_colour(cbind(l, cc, h), from = "oklch") |>
+    setNames(names(cols))
+}
+
+
+
+## --- all text x background combinations -----------------------
 
 #' Preview every text x background colour combination in the Viewer
 #'
@@ -1532,9 +1627,11 @@ po_to_dt <- function(file) {
 #'   become row labels; the hex value is used when unnamed.
 #' @param background_colors A (named) character vector of hex background
 #'   colours, used as columns.
-#' @param sample_text Text shown in each cell. Default "Aa Gg 123".
-#' @param show_hex Logical; print the "text on background" hex pair under the
-#'   sample. Default TRUE.
+#' @param sample_text Text shown in each cell. Default: a random whole-number
+#'   percentage (e.g. "27%"), one value per call.
+#' @param show_contrast Logical; append the APCA lightness-contrast value (Lc)
+#'   of text-on-background to each cell, on the same line as sample_text.
+#'   Default TRUE.
 #' @param font_size CSS font-size for the table. Default "16px" (tab_kable base).
 #' @param swatch_padding CSS padding for each swatch cell. Default "12px 16px".
 #' @param browse Logical; open the result in the Viewer. Default TRUE.
@@ -1549,8 +1646,8 @@ po_to_dt <- function(file) {
 #' @keywords internal
 preview_colour_grid <- function(text_colors,
                                 background_colors,
-                                sample_text = "Aa Gg 123",
-                                show_hex = TRUE,
+                                sample_text = paste0(sample(0:100, 1L), "%"),
+                                show_contrast = TRUE,
                                 font_size = "16px",
                                 swatch_padding = "12px 16px",
                                 browse = TRUE) {
@@ -1575,18 +1672,19 @@ preview_colour_grid <- function(text_colors,
     row_swatch = unname(text_colors),
     col_swatch = unname(background_colors),
     corner = "text \u2193 / bg \u2192",
-    sample_text = sample_text, show_hex = show_hex,
+    sample_text = sample_text, show_contrast = show_contrast,
     swatch_padding = swatch_padding
   )
   .cg_render(
     table_html,
     caption  = "Text \u00d7 background colour grid",
-    subtitle = sprintf("%d text colours \u00d7 %d backgrounds", n_row, n_col),
+    subtitle = sprintf("%d text colours \u00d7 %d backgrounds \u2014 cells show APCA Lc",
+                       n_row, n_col),
     font_size = font_size, browse = browse
   )
 }
 
-# --- exported: 2. luminance shades of one pair -----------------------------
+## luminance shades of one pair -----------------------------
 
 #' Preview luminance shades of one text/background pair in the Viewer
 #'
@@ -1602,7 +1700,7 @@ preview_colour_grid <- function(text_colors,
 #'   Default seq(0.35, 0.95, length.out = 7).
 #' @param chroma "fixed" (keep source chroma, capped to gamut) or "max"
 #'   (maximum in-gamut chroma per shade). Default "fixed".
-#' @param sample_text,show_hex,font_size,swatch_padding,browse See
+#' @param sample_text,show_contrast,font_size,swatch_padding,browse See
 #'   [preview_colour_grid()].
 #'
 #' @return (Invisibly) the generated HTML as a single string.
@@ -1616,8 +1714,8 @@ preview_luminance_grid <- function(text_color,
                                    background_color,
                                    l_values = seq(0.35, 0.95, length.out = 7),
                                    chroma = c("fixed", "max"),
-                                   sample_text = "Aa Gg 123",
-                                   show_hex = TRUE,
+                                   sample_text = paste0(sample(0:100, 1L), "%"),
+                                   show_contrast = TRUE,
                                    font_size = "16px",
                                    swatch_padding = "12px 16px",
                                    browse = TRUE) {
@@ -1644,12 +1742,12 @@ preview_luminance_grid <- function(text_color,
     row_labels = lab, col_labels = lab,
     row_swatch = txt_shades, col_swatch = bg_shades,
     corner = "text \u2193 / bg \u2192",
-    sample_text = sample_text, show_hex = show_hex,
+    sample_text = sample_text, show_contrast = show_contrast,
     swatch_padding = swatch_padding
   )
   .cg_render(
     table_html,
-    caption  = sprintf("Luminance shades \u2014 chroma: %s", chroma),
+    caption  = sprintf("Luminance shades \u2014 chroma: %s (cells show APCA Lc)", chroma),
     subtitle = sprintf(
       "text %s (hue %.0f\u00b0) \u00d7 background %s (hue %.0f\u00b0)",
       toupper(text_color), txt_lch[["h"]],
@@ -1658,6 +1756,10 @@ preview_luminance_grid <- function(text_color,
     font_size = font_size, browse = browse
   )
 }
+
+
+
+
 
 
 # Other functions ----

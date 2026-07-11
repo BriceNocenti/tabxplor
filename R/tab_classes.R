@@ -958,6 +958,44 @@ promote_totrow_to_refrow <- function(col) {
   col
 }
 
+# tab_stack_tables() -- Phase 9b-6 (Boundary B): row-bind a list of prepared per-row_var tables (same
+# columns, the tab_compact() same-col_vars contract) on PLAIN field-frames, byte-identical to
+# purrr::imap_dfr() / vec_rbind but without the per-row tabxplor_fmt reconstruction. Per column name:
+#   - non-fmt (the "levels" / "row_var" factors): vctrs::vec_c() -> factor level union, like bind_rows.
+#   - fmt: vctrs::vec_ptype_common() across the tables reconciles the 9 attrs via the SAME
+#     vec_ptype2.tabxplor_fmt reduce vec_rbind would use (L3: differing attr -> neutral) but is
+#     O(#tables x #attrs), not O(#rows) (a ptype is length-0). promote_totrow_to_refrow runs per table
+#     (L4, per subtable) before the field read.
+# Column order = tables[[1]]'s (all tables share columns after the same-col_vars check); row order =
+# tables stacked in list order.
+tab_stack_tables <- function(tables) {
+  nms  <- names(tables[[1]])
+  cols <- purrr::map(purrr::set_names(nms, nms), function(nm) {
+    # unname: the table (list) names would otherwise be taken by vec_c()/vec_ptype_common() as outer
+    # names and error on length > 1 vectors ("Can't merge the outer name ...").
+    pieces <- unname(purrr::map(tables, ~ .[[nm]]))
+    if (is_fmt(pieces[[1]])) {
+      frames <- purrr::map(pieces, function(col) {
+        col   <- promote_totrow_to_refrow(col)   # L4, per subtable (one in_refrow field write, cheap)
+        fr    <- as.list(vctrs::vec_data(col))
+        # The old imap_dfr / vec_rbind cast each column via vec_cast.tabxplor_fmt.tabxplor_fmt, which
+        # reads fields through the GETTERS. get_wn() is the only getter with a fallback (NA -> the n
+        # field), so it MATERIALISES wn -- reproduce it here (raw vec_data keeps NA). All other getters
+        # are raw field reads, so the rest of the frame already matches.
+        fr$wn <- get_wn(col)
+        fr
+      })
+      common <- do.call(vctrs::vec_ptype_common, pieces)   # L3 reconcile via ptype2, O(#tables)
+      meta   <- purrr::set_names(
+        lapply(fmt_col_attrs, function(a) attr(common, a, exact = TRUE)), fmt_col_attrs)
+      fmt_stack_frames(frames, meta)
+    } else {
+      do.call(vctrs::vec_c, pieces)                        # factor level union / plain concat
+    }
+  })
+  tibble::new_tibble(cols, nrow = sum(purrr::map_int(tables, nrow)))
+}
+
 #' Bind a list of tabs with the same col_vars (and no tab_vars) into a single tab
 #'
 #' @param tabs A `list` of `tabxplor_tab` (or a `tabxplor_tab`)
@@ -1012,18 +1050,18 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
 
 
   # DESIGN: when a merged sub-table has no explicit reference row, promote its total row to
-  # reference so each stacked sub-table colors its cells against its OWN total. The promotion
-  # is a direct in_refrow field write (promote_totrow_to_refrow), NOT if_else-over-fmt --
-  # see that helper's note (Phase 9b-1). Runs inside imap (per sub-table) so `any(in_refrow)`
-  # stays grouped per row_var.
-  tabs <- tabs |> purrr::imap_dfr(
+  # reference so each stacked sub-table colors its cells against its OWN total (Phase 9b-1's
+  # promote_totrow_to_refrow, a direct in_refrow field write). Phase 9b-6 (Boundary B): the
+  # per-row_var tables are row-bound on PLAIN field-frames via tab_stack_tables() instead of an
+  # imap_dfr / vec_rbind over the tabxplor_fmt records -- the promotion is folded onto each table's
+  # field frame there (still per sub-table, so `any(in_refrow)` stays grouped per row_var), and the
+  # cross-table attribute reconcile reuses vec_ptype_common (L3). The per-tab prep (rename col 1 ->
+  # "levels", add the row_var meta factor) is cheap (no row-reconstruction).
+  prepped <- tabs |> purrr::imap(
     ~ dplyr::rename_with(.x, ~"levels", .cols =  1) |>
-      dplyr::mutate(row_var = as.factor(.y), .before = 1) |>
-      dplyr::mutate(dplyr::across(
-        dplyr::where(is_fmt),
-        promote_totrow_to_refrow
-      ))
+      dplyr::mutate(row_var = as.factor(.y), .before = 1)
   )
+  tabs <- tab_stack_tables(prepped)
 
   # tabs$Danser |> vctrs::vec_data()
   # tabs |> tab_kable()
@@ -1091,33 +1129,61 @@ tab_pvalue_lines <- function(tabs) {
     tidyr::pivot_wider(names_from = ".col", values_from = ".cell") |>
     dplyr::mutate(!!rlang::sym(row_var) := forcats::as_factor("pvalue"))
 
-  tabs <- # keep all attributes
-    purrr::map2_df(
-      tabs |> dplyr::bind_rows(tabs_pvalue_lines),
-      tabs,
-      ~ if (is_fmt(.x)) {vctrs::vec_restore(.x, .y) } else {.x}
-    )
+  # Phase 9b-6 (Boundary B): append the p-value row(s) on PLAIN field-frames instead of
+  # map2_df(bind_rows(tabs, pvalue), tabs, vec_restore) + a masked fill -- BOTH were full tabxplor_fmt
+  # record reconstructions (the ~9% pass-4 residue). Row ORDER + the non-fmt columns come from the SAME
+  # bind_rows + group_by + arrange, run on a fmt-FREE skeleton; each fmt column is then rebuilt ONCE:
+  # origin cells ++ the appended cells (the pvalue_line_fmt cell where present, else the fill
+  # fmt0(first(display), type) with n = NA -- subsuming the pass-3 masked fill), sliced to the arranged
+  # order, materialized with tabs' OWN meta (the old vec_restore(., tabs) discarded the added row's
+  # attrs, so there is no L3 reconcile). The fill's first(display)/type are column-uniform, so tabs'
+  # global first == the old grouped mutate's per-group first (byte-identical, locked by test-golden).
+  n0      <- nrow(tabs)
+  k       <- nrow(tabs_pvalue_lines)
+  fmt_nms <- names(tabs)[purrr::map_lgl(tabs, is_fmt)]
+  skel_df <- function(x, nms, src) tibble::new_tibble(
+    c(purrr::set_names(lapply(nms, function(nm) x[[nm]]), nms), list(.src = src)),
+    nrow = length(src))
 
-  # Phase 9b-3: fill ONLY the p-value row's empty cells (bind_rows left them NA-display) via a masked
-  # assignment, instead of an if_else over EVERY cell of EVERY column. The former per-cell if_else +
-  # `fmt0 |> mutate(n=NA)` + per-column vec_restore + the `.$display` vec_proxy pull was ~1/3 of the
-  # per-table build. Byte-identical: the replacement value (fmt0(first(display), type) with n = NA)
-  # and the preserved column attributes (col[mask]<- casts the value to the column's ptype, keeping
-  # its attrs -- like the former `if_else(...) |> vec_restore(.)`) match the old output exactly.
-  tabs <- tabs |>
+  # 1. row order + the combined non-fmt columns: the IDENTICAL bind_rows + group_by + arrange, but on
+  # the fmt-free projection. `.src` tags each final row's source (positive -> origin row of `tabs`;
+  # negative -> p-value row of `tabs_pvalue_lines`).
+  skel <- dplyr::bind_rows(
+    skel_df(tabs,              setdiff(names(tabs),              fmt_nms),  seq_len(n0)),
+    skel_df(tabs_pvalue_lines, setdiff(names(tabs_pvalue_lines), fmt_nms), -seq_len(k))
+  ) |>
     dplyr::group_by(!!!rlang::syms(groups)) |>
     dplyr::arrange(.by_group = TRUE) |>
-    dplyr::mutate(dplyr::across(dplyr::where(is_fmt), function(col) {
-      na_mask <- is.na(get_display(col))
-      if (!any(na_mask)) return(col)
-      repl <- fmt0(dplyr::first(get_display(col)), type = get_type(col))
-      vctrs::field(repl, "n") <- NA_integer_
-      col[na_mask] <- repl
-      col
-    }))
-  # filter(levels == "pvalue") |>
-  # pull(Danser) |> vctrs::vec_data()
-  # pull( `Total_ART_MONTAGES`) |> vctrs::vec_data()
+    dplyr::ungroup()
+  src <- skel$.src
+  pos <- dplyr::if_else(src > 0, src, n0 - src)   # index into c(origin 1..n0, appended n0+1..n0+k)
+  skel <- dplyr::select(skel, -".src")
+
+  # 2. rebuild each fmt column once: origin fields ++ the k appended fields, sliced to `pos`.
+  build_col <- function(nm) {
+    of    <- as.list(vctrs::vec_data(tabs[[nm]]))
+    of$wn <- get_wn(tabs[[nm]])                    # the vec_cast wn fallback (as in tab_stack_tables)
+    fill  <- fmt0(dplyr::first(get_display(tabs[[nm]])), type = get_type(tabs[[nm]]))
+    vctrs::field(fill, "n") <- NA_integer_
+    af    <- lapply(as.list(vctrs::vec_data(fill)), function(v) rep(v, k))   # k fill rows
+    pv    <- tabs_pvalue_lines[[nm]]
+    if (!is.null(pv) && is_fmt(pv)) {
+      present <- !is.na(get_display(pv))           # subtables that got a displayed test in this col_var
+      if (any(present)) {
+        pvd <- as.list(vctrs::vec_data(pv))
+        for (f in names(af)) af[[f]][present] <- pvd[[f]][present]
+      }
+    }
+    frame <- purrr::set_names(
+      lapply(names(of), function(f) vctrs::vec_c(of[[f]], af[[f]])[pos]), names(of))
+    meta  <- purrr::set_names(
+      lapply(fmt_col_attrs, function(a) attr(tabs[[nm]], a, exact = TRUE)), fmt_col_attrs)
+    fmt_materialize_col(frame, meta)
+  }
+
+  out  <- purrr::set_names(lapply(names(tabs), function(nm)
+    if (nm %in% fmt_nms) build_col(nm) else skel[[nm]]), names(tabs))
+  tabs <- tibble::new_tibble(out, nrow = n0 + k)
 
   new_tab(tabs, subtext = subtext) |>
     dplyr::group_by(!!!rlang::syms(groups))

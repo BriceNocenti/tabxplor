@@ -2400,6 +2400,25 @@ fmt_wrap <- function(carrier) {
   cols
 }
 
+# fmt_stack_frames() -- Phase 9b-6 (Boundary B): ROW-BIND fmt columns on PLAIN field-frames. `frames`
+# is a list of per-source field-frames (each = as.list(vctrs::vec_data(col)), the 18 raw fields);
+# concat field-by-field with vctrs::vec_c (type-stable, so L1 holds: int+int -> int, NA_integer_ vs
+# NA_real_ preserved) and materialize ONCE via the fmt_materialize_col() seam with the supplied `meta`
+# (the 9 fmt_col_attrs). This replaces a vec_rbind over the tabxplor_fmt RECORDS (which casts +
+# restores every row of every column) in tab_compact() / tab_pvalue_lines(). The caller supplies `meta`
+# per its reconcile policy: tab_compact() = vctrs::vec_ptype_common() across the stacked tables (reuses
+# vec_ptype2's attribute reconcile = L3, byte-identical, O(#tables) not O(#rows)); tab_pvalue_lines() =
+# the source table's OWN per-column meta (matching the map2_df(vec_restore, tabs) that discarded the
+# added p-value row's attrs -- no reconcile).
+fmt_stack_frames <- function(frames, meta) {
+  frames   <- unname(frames)                     # else vec_c() takes the list names as outer names
+  fields   <- names(frames[[1]])
+  combined <- purrr::set_names(
+    lapply(fields, function(f) do.call(vctrs::vec_c, lapply(frames, `[[`, f))),
+    fields)
+  fmt_materialize_col(combined, meta)
+}
+
 # DESIGN: tab_plain() is the core aggregation function. Internal sequence:
 #   1. data.table dcast (row_var ~ col_var, fun = sum of weights) for speed
 #   2. Wrap counts into fmt vectors via new_fmt()

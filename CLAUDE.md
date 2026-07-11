@@ -1027,7 +1027,7 @@ Harness `dev/benchmarks/phase9b2_fmt_cost_decomp.R` decomposed the per-table bui
 
 ##### Phase 9b-3 — in-place fmt-reconstruction wins (DONE: passes 1-4)
 
-The four **byte-identical, in-place** optimizations toward the "materialize `tabxplor_fmt` records ONCE at the very end" goal — each a golden-gated committable step, no carrier yet. Cumulative **~26% off the common merged call / ~34% off the per-table build**. The deferred-materialization **carrier core** that finishes the job (records ONCE) is **Phases 9b-4 → 9b-7** below.
+The four **byte-identical, in-place** optimizations toward the "materialize `tabxplor_fmt` records ONCE at the very end" goal — each a golden-gated committable step, no carrier yet. Cumulative **~26% off the common merged call / ~34% off the per-table build**. The deferred-materialization **carrier core** that finishes the job followed in **Phases 9b-4 → 9b-6** below (9b-4 tests-boundary round-trip, 9b-5 ci/chi2 writes, **9b-6 the Boundary-B local unwrap of `tab_compact`/`tab_pvalue_lines`** — which subsumed 9b-7; another −28..−30% on the merged call).
 
 **Done (2026-07-11): pass 1 — the single materialization seam.** `fmt_materialize_col()` (`R/tab.R`, the ONE `new_fmt()` call via `do.call`; `fmt_frame_fields`/`fmt_col_attrs` contract constants); both leaves route through it (byte-identical, perf-neutral, full suite green, no golden regen).
 
@@ -1050,17 +1050,13 @@ Both increments landed byte-identical (full suite FAIL 0 | PASS 1354, NO golden 
 
 Combined: the two WRITE-heavy paths (contrib −44 %, ci −20 % vs pre-9b-5) recovered; the READ paths (chi2 test, common `color="diff"`) flat.
 
-##### Phase 9b-6 — assemble on the carrier + materialize at `tab_build_one` end (step D): completes Boundary A
+##### Phase 9b-6 — Boundary B via local unwrap (DONE — 2026-07-11)
 
-Level-drop / total-removal / totaltab-removal → field-frame/row-meta ops; `tab_add_n_pct`'s add-n/pct columns + pct="col" base rows → plain field appends (exact NA flavors + `detect_totcols` base selection). `fmt_wrap` **once** at the end of `tab_build_one`; `tab_compact`/`pvalue`/`n_min` stay record-based (byte-identical by construction). **L7**. → a shippable, lower-risk carrier (**Boundary A complete**).
+**Re-scoped (maintainer, this session) from "step D / Boundary A" → "Boundary B via local unwrap".** Grounded finding: 9b-6-as-designed (carrier through `tab_assemble_tables`, materialize at `tab_build_one` end) buys **~0 % on the common path** (after 9b-5 everything inside `tab_build_one` is cheap: leaves materialize once; `tab_apply_tests` no longer reconstructs; `tab_assemble_tables` ~2 %; add_n on `pct="row"` adds one col; the join is 0.9 %). The real ~15-25 % was **Boundary B** — `tab_compact`'s `vec_rbind` + `tab_pvalue_lines`' `bind_rows` in `tab_assemble_output`. Both were rewritten to row-bind on **plain field-frames via a LOCAL `fmt_unwrap`→wrap** (the 9b-5 pattern), so `tab_build_one` keeps returning **records** (no `test-parallel-parity` re-lock) and **9b-6+9b-7 collapse into this one deliverable** (Boundary A skipped). New primitive `fmt_stack_frames()` (`R/tab.R`). Increment 1 = `tab_compact` (`tab_stack_tables()`: `vec_ptype_common` reconcile = **L3**, promote_totrow folded onto the field frame = **L4**; ~neutral perf, byte-identical, scales with #row_vars). Increment 2 = `tab_pvalue_lines` (**the win**: fmt-free skeleton for row order + per-column field append, subsuming the pass-3 masked fill). Byte-identity key: the old `vec_cast` materialised `wn` (NA→n; `get_wn` is the only getter with a fallback) — reproduced via `fr$wn <- get_wn(col)`. **Bench (gss_cat 5×3): merge_s −28..−30 %, list_s −8..−14 %, mem 51→45 MB; numeric ~flat** (`dev/benchmarks/results_1.4.0/phase9b6_boundaryB.txt`). Full suite FAIL 0, NO golden regen; 12-shape git-stash `identical()` A/B green (incl. per-row_var-ref L3, tab_vars-grouped pvalue, numeric ANOVA, list path). `fmt_unwrap`/`fmt_wrap` now load-bearing.
 
-##### Phase 9b-7 — (Boundary B only) carry past compact + pvalue (step E)
+##### Phase 9b-7 — jmvtab tier-3 cache on the raw carrier
 
-Only if Q1 = Boundary B. `tab_compact` on the carrier (reproduce **L3** per-attribute reconcile + **L4** grouped `as_refrow` — both isolated in 9b-1's `promote_totrow_to_refrow`) + add the p-value row *on the carrier* before the single `fmt_wrap`; re-lock `test-parallel-parity` (workers now return carriers). Recovers the last ~15-25% (the pvalue `bind_rows` + the compact `vec_rbind`).
-
-##### Phase 9b-8 — jmvtab tier-3 cache on the raw carrier (optional)
-
-The tier-3 armed cache stores **plain field-frames** instead of the materialized fmt table and re-paints (`finalize_color_spec`/`reapply_digits`/`apply_display`) on the raw fields — a faster jmvtab live path. Independent of the carrier boundary; can be skipped without affecting 9b-4→9b-7.
+The tier-3 armed cache stores **plain field-frames** instead of the materialized fmt table and re-paints (`finalize_color_spec`/`reapply_digits`/`apply_display`) on the raw fields — a faster jmvtab live path.
 
 
 
