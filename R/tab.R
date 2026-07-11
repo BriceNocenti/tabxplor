@@ -123,6 +123,11 @@ NULL
 #' \emph{largest} base across the column variables is below \code{n_min}; surviving cells whose own
 #' base is below \code{n_min} are blanked. Under \code{pct = "col"} the same rule drops weak
 #' columns. Total rows/columns, the added-\code{n} row/column and the p-value line are always kept.
+#' @param display A single optional \strong{composite display recipe} to show two fields in each
+#'   value cell (text output only -- the console, \code{\link{tab_kable}} and \code{\link{tab_md}};
+#'   Excel falls back to the primary field). One of \code{"pct (n)"} (a percentage with its count) or
+#'   \code{"n (pct)"}. \code{NULL} (default) keeps the plain single-field display. It is a display
+#'   overlay only: colors, differences and the underlying fields are unchanged.
 #' @param totaltab The total table, if there are subtables/groups
 #' (i.e. when \code{tab_vars} is provided) :
 #'  \itemize{
@@ -366,7 +371,7 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
                 totaltab = "line", totaltab_name = "Ensemble",
                 tot = c("row", "col"), total_names = "Total",
                 add_n = TRUE, add_pct = FALSE,
-                subtext = "", digits = 0, n_min = 0,
+                subtext = "", digits = 0, n_min = 0, display = NULL,
                 output_list = FALSE, parallel = NULL,
                 spread_vars, names_prefix = NULL, names_sort = FALSE,
                 row_var, col_var,
@@ -546,7 +551,24 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
 
   # Phase 5: set the final two-channel color + significance-policy attributes (per column type
   # for color = TRUE). Plain scalar colors pass through untouched.
-  finalize_color_spec(result, color_spec)
+  result <- finalize_color_spec(result, color_spec)
+
+  # Phase 10c: opt-in composite display recipe (e.g. `display = "pct (n)"`) -- a pure display-tier
+  # attribute set on the built table; NULL (default) leaves the plain single-field display.
+  tab_apply_display_spec(result, display)
+}
+
+
+# Phase 10c: apply an opt-in COMPOSITE display recipe (e.g. "pct (n)") to a built table (single tab,
+# grouped tab, or a list of tabs) as a pure display attribute. It is a DISPLAY overlay only (text
+# backends via format()); get_num(), coloring and the Excel bypass keep using the primary field.
+# set_display_spec() validates `display` against the curated whitelist (clear error otherwise).
+#' @keywords internal
+tab_apply_display_spec <- function(tabs, display) {
+  if (is.null(display) || length(display) == 0L) return(tabs)
+  ds <- display[[1]]
+  if (is.na(ds) || ds %in% c("", "no")) return(tabs)
+  if (is.data.frame(tabs)) set_display_spec(tabs, ds) else purrr::map(tabs, ~ set_display_spec(., ds))
 }
 
 
@@ -2185,16 +2207,87 @@ tab_get_vars <- function(tabs, vars = c("row_var", "col_vars", "tab_vars")) {
 
   fct_cols <- purrr::map_lgl(tabs, is.factor)
 
-  if ("row_var" %in% vars) row_var <- names(utils::tail(fct_cols[fct_cols], 1L))
+  # Phase 10c guard: with no factor column `tail()` returns a NULL name -> keep it a 0-length
+  # character so downstream `which()/%in%` stay well-defined (the crash is caught upstream by
+  # tab_render_vars(), but tab_get_vars() must not itself emit a stray NULL). See tab_render_vars().
+  if ("row_var" %in% vars) {
+    row_var <- names(utils::tail(fct_cols[fct_cols], 1L))
+    if (is.null(row_var)) row_var <- character(0)
+  }
 
   if ("tab_vars" %in% vars) tab_vars <-
-    names(fct_cols[fct_cols & names(fct_cols) != row_var])
+    if (length(row_var) == 0) names(fct_cols[fct_cols])
+    else names(fct_cols[fct_cols & names(fct_cols) != row_var])
 
 
 
   ls(pattern = "^row_var$|^col_vars$|^col_vars_levels$|^tab_vars$") %>%
     purrr::set_names(.) %>%
     purrr::map(~ rlang::sym(.) %>% rlang::eval_tidy())
+}
+
+
+# Phase 10c: the ROBUST render-time variable detector, used by the print methods and the
+# exporters' graceful-degrade guard (and, from Phase 10d, by the shared export prep). Unlike
+# tab_get_vars() -- which derives row_var from the fragile "last factor column" heuristic and
+# lets consumers crash (dplyr::pull(tabs, integer(0))) when there is none -- this:
+#   - keeps the position-independent col_var-attribute path for col_vars;
+#   - places row_var / tab_vars from dplyr::group_vars() (which survives rename/select/relocate:
+#     tab_build() groups by tab_vars, tab_compact() by the literal "row_var" column) so a factor
+#     moved AFTER the fmt columns is no longer miswritten; row_var = the last factor NOT in the
+#     groups (= "levels" for a compacted tab, the real row var otherwise);
+#   - returns list(degrade = TRUE, reason = ...) when the object can't be read as a tabxplor
+#     table (not a data frame / no tabxplor_fmt columns / no factor row-or-tab variable).
+# BYTE-IDENTICAL to tab_get_vars() for every well-formed table (verified across the fixtures);
+# it only fixes the mis-positioned-factor case and the no-factor/no-fmt crashes.
+#' @keywords internal
+tab_render_vars <- function(tabs) {
+  if (!is.data.frame(tabs))
+    return(list(degrade = TRUE, reason = "the object is not a data frame"))
+
+  fmt_mask <- purrr::map_lgl(tabs, is_fmt)
+  if (!any(fmt_mask))
+    return(list(degrade = TRUE,
+                reason = "the table has no tabxplor_fmt columns (not a tabxplor table)"))
+
+  fct_names <- names(tabs)[purrr::map_lgl(tabs, is.factor)]
+  if (length(fct_names) == 0)
+    return(list(degrade = TRUE,
+                reason = "the table has no factor column to use as the row variable"))
+
+  # col_vars: robust, position-independent col_var-attribute path (as in tab_get_vars()).
+  col_vars <- get_col_var(tabs[fmt_mask]) %>% purrr::discard(~ is.na(.))
+  col_vars_names  <- unique(col_vars)
+  col_vars_levels <- purrr::map(col_vars_names, ~ names(col_vars[col_vars == .])) %>%
+    purrr::set_names(col_vars_names)
+
+  # row_var = last factor NOT in the grouping; tab_vars = every other factor (column order, so it
+  # matches tab_get_vars() exactly). An ungrouped table falls back to the last-factor heuristic.
+  groups    <- intersect(dplyr::group_vars(tabs), fct_names)
+  non_group <- setdiff(fct_names, groups)
+  row_var   <- if (length(groups) == 0 || length(non_group) == 0) {
+    utils::tail(fct_names, 1L)
+  } else {
+    utils::tail(non_group, 1L)
+  }
+  tab_vars <- setdiff(fct_names, row_var)
+
+  if (length(row_var) == 0 || is.na(row_var) || !row_var %in% fct_names)
+    return(list(degrade = TRUE, reason = "could not identify the row variable"))
+
+  list(degrade = FALSE, row_var = row_var, tab_vars = tab_vars,
+       col_vars = col_vars_names, col_vars_levels = col_vars_levels)
+}
+
+
+# Phase 10c: the shared "graceful degrade" notice for exporters/print when a table cannot be
+# read as a tabxplor table -- render the plain frame (per backend) instead of crashing.
+#' @keywords internal
+tab_degrade_inform <- function(reason) {
+  cli::cli_inform(c(
+    "!" = "tabxplor formatting and colors skipped: {reason}.",
+    "i" = "Rendering the plain table instead."
+  ))
 }
 
 

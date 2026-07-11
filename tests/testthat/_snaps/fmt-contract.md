@@ -34,6 +34,6 @@
     Code
       print(sort(setdiff(names(attributes(x)), c("names", "class", "row.names"))))
     Output
-      [1] "ci_type"      "col_var"      "color"        "color_signif" "comp_all"    
-      [6] "ref"          "refcol"       "totcol"       "type"        
+       [1] "ci_type"      "col_var"      "color"        "color_signif" "comp_all"    
+       [6] "display_spec" "ref"          "refcol"       "totcol"       "type"        
 

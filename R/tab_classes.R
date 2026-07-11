@@ -229,8 +229,10 @@ print.tabxplor_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = N
     return(invisible(x))
   }
 
-  # Use pillar::char() on row_var to control truncation
-  row_var   <- tab_get_vars(x)$row_var
+  # Use pillar::char() on row_var to control truncation. Phase 10c: robust, position-independent
+  # detection (degrade -> no min-width fixup, prints the plain tibble without crashing).
+  rv        <- tab_render_vars(x)
+  row_var   <- if (isTRUE(rv$degrade)) character(0) else rv$row_var
   n_row_var <- which(names(x) == row_var)
 
   out <- dplyr::mutate(x, dplyr::across(
@@ -291,8 +293,10 @@ print.tabxplor_grouped_tab <- function(x, width = NULL, ..., n = 100,
     return(invisible(x))
   }
 
-  # Use pillar::char() on row_var to control truncation
-  row_var   <- tab_get_vars(x)$row_var
+  # Use pillar::char() on row_var to control truncation. Phase 10c: robust, position-independent
+  # detection (degrade -> no min-width fixup, prints the plain tibble without crashing).
+  rv        <- tab_render_vars(x)
+  row_var   <- if (isTRUE(rv$degrade)) character(0) else rv$row_var
   n_row_var <- which(names(x) == row_var)
 
   out <- dplyr::mutate(x, dplyr::across(
@@ -525,6 +529,14 @@ tab_kable <- function(tabs,
     }
 
     tabs <- tab_compact(tabs) # pvalue_lines = TRUE
+  }
+
+  # Phase 10c: graceful degrade -- a table that can't be read as a tabxplor table (no fmt columns /
+  # no factor row variable / ambiguous layout) renders as a plain kable + a message, not a crash.
+  rv <- tab_render_vars(tabs)
+  if (isTRUE(rv$degrade)) {
+    tab_degrade_inform(rv$reason)
+    return(kableExtra::kbl(tibble::as_tibble(tabs)))
   }
 
 
@@ -1252,6 +1264,14 @@ tab_plot <- function(tabs,
 
   html_24_bit <-
     if (is.null(html_24_bit)) {getOption("tabxplor.color_html_24_bit")} else {html_24_bit}
+
+  # Phase 10c: graceful degrade (tab_plot is soft-deprecated) -- return the plain data + a message
+  # instead of crashing when the table can't be read as a tabxplor table.
+  rv <- tab_render_vars(tabs)
+  if (isTRUE(rv$degrade)) {
+    tab_degrade_inform(rv$reason)
+    return(invisible(tibble::as_tibble(tabs)))
+  }
 
   row_var  <- tab_get_vars(tabs)$row_var
   tab_vars <- tab_get_vars(tabs)$tab_vars

@@ -89,6 +89,20 @@ tab_xl <-
     #          length(contrib_breaks) >= 1 )
 
     tabs_base <- tabs
+    # Phase 10c: graceful degrade -- write the raw frame (+ a message) instead of crashing when a
+    # single input can't be read as a tabxplor table. Full plain-data.frame support lands in 10g.
+    rv <- if (is.data.frame(tabs)) tab_render_vars(tabs) else list(degrade = FALSE)
+    if (isTRUE(rv$degrade)) {
+      tab_degrade_inform(rv$reason)
+      p <- if (length(path)) path[[1]] else {
+        d <- getOption("tabxplor.export_dir", "")
+        if (nzchar(d)) file.path(d, "Tab") else file.path(tempdir(), "Tab")
+      }
+      if (!stringr::str_detect(p, "\\.xlsx$")) p <- paste0(p, ".xlsx")
+      openxlsx::write.xlsx(tibble::as_tibble(tabs), file = p, overwrite = TRUE)
+      if (isTRUE(open)) openxlsx::openXL(p)
+      return(invisible(tabs_base))
+    }
     if (is.data.frame(tabs)) tabs <- list(tabs)
 
     tabs <- purrr::map(tabs, tab_pvalue_lines) # chi2 pvalue to lines

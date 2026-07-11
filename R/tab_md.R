@@ -63,6 +63,18 @@ tab_md <- function(tabs,
     tabs <- tab_compact(tabs)
   }
 
+  # Phase 10c: graceful degrade -- a table that can't be read as a tabxplor table renders as a
+  # plain pipe table (+ a message), honouring file/clipboard/print, instead of crashing.
+  rv <- tab_render_vars(tabs)
+  if (isTRUE(rv$degrade)) {
+    tab_degrade_inform(rv$reason)
+    md_text <- paste(knitr::kable(tibble::as_tibble(tabs), format = "pipe"), collapse = "\n")
+    if (!is.null(file)) writeLines(md_text, file)
+    if (clipboard && requireNamespace("clipr", quietly = TRUE)) clipr::write_clip(md_text)
+    if (print) { cat(md_text, "\n"); return(invisible(md_text)) }
+    return(md_text)
+  }
+
   # --- Step 2: Extract metadata ---
   tab_vars <- tab_get_vars(tabs)$tab_vars
   subtext_text <- if (subtext) {

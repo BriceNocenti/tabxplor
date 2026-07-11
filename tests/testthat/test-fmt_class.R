@@ -114,6 +114,41 @@ testthat::test_that("fmt work with $", { #and [[
   testthat::expect_true(any(!is.na(fmt_vect$wn))) # gives n when wn not provided
   })
 
+# === SECTION: Phase 10c -- display_spec composite display =======================
+
+testthat::test_that("display_spec attribute round-trips and validates", {
+  x <- fmt(n = c(10L, 20L), type = "row", pct = c(0.4, 0.6))
+  testthat::expect_true(is.na(get_display_spec(x)))              # default NA
+  x2 <- set_display_spec(x, "pct (n)")
+  testthat::expect_identical(get_display_spec(x2), "pct (n)")
+  testthat::expect_true(is.na(get_display_spec(set_display_spec(x2, NA))))
+  testthat::expect_error(set_display_spec(x, "diff"), "composite")  # not a whitelisted recipe
+})
+
+testthat::test_that("composite display renders 'primary (secondary)' on value cells", {
+  x <- set_display_spec(fmt(n = c(10L, 20L), type = "row", pct = c(0.4, 0.6),
+                            display = "pct"), "pct (n)")
+  testthat::expect_identical(format(x), c("40% (10)", "60% (20)"))
+  y <- set_display_spec(x, "n (pct)")
+  testthat::expect_identical(format(y), c("10 (40%)", "20 (60%)"))
+})
+
+testthat::test_that("display_spec is byte-identical when unused, and Excel-bypass ignores it", {
+  x0 <- fmt(n = c(10L, 20L), type = "row", pct = c(0.4, 0.6), display = "pct")
+  xs <- set_display_spec(x0, "pct (n)")
+  testthat::expect_identical(format(x0), format(set_display_spec(x0, NA)))  # NA == default
+  # the Excel bypass reads get_num()/get_display(), which the attribute does NOT touch.
+  testthat::expect_identical(get_num(xs), get_num(x0))
+  testthat::expect_identical(get_display(xs), get_display(x0))
+})
+
+testthat::test_that("tab(display = ) sets the composite recipe", {
+  tb <- tab(forcats::gss_cat, marital, race, pct = "row", display = "pct (n)")
+  fmt_col <- tb[[which(purrr::map_lgl(tb, is_fmt))[1]]]
+  testthat::expect_identical(get_display_spec(fmt_col), "pct (n)")
+  testthat::expect_match(format(fmt_col)[1], "\\([0-9 ]+\\)$")   # "...(n)"
+})
+
 
 
 

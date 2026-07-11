@@ -20,6 +20,16 @@
   pays off for many tables on a small-to-medium survey (roughly 10k--60k rows) and is a loss for a
   handful of tables or multi-million-row data. It needs the suggested **mirai** package; release the
   worker pool with the new `tab_parallel_stop()`.
+* New `display` argument in `tab()` for an opt-in **composite display** showing two fields per cell:
+  `display = "pct (n)"` prints each percentage with its count (e.g. `76% (13)`), `display = "n (pct)"`
+  the reverse. It is a display overlay for text output (the console, `tab_kable()`, `tab_md()`) --
+  colors, differences and the underlying fields are unchanged, and Excel keeps the primary field. It
+  is also settable at the cell level with the new `set_display_spec()` / `get_display_spec()`.
+* The exporters (`tab_kable()`, `tab_md()`, `tab_plot()`, `tab_xl()`) and the print methods no longer
+  crash on a plain `data.frame` or a table with no factor / no formatted columns: they render the
+  plain table with a short message explaining that tabxplor formatting was skipped. Variable-role
+  detection for rendering is now position-independent (a factor moved after the value columns is no
+  longer mis-read).
 * Redesigned, faster colors. The `color` argument now separates **what** is measured from **how**
   significance is shown. `color` accepts `TRUE` (a smart per-column-type default: percentage-point
   difference on the text + a "×2" relative-risk highlight on the background for factors, mean ratio

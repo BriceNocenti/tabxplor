@@ -19,6 +19,8 @@ R/
 │                              base-R/matrix leaf math for tab_plain pct/tot_n + total rows),
 │                              tab_prepare(), tab_pct(), tab_ci(), tab_chi2(),
 │                              tab_tot(), tab_totaltab(), tab_spread(), tab_get_vars(),
+│                              tab_render_vars() (Phase 10c: robust group_vars-based role detection +
+│                              graceful degrade, used by print + exporters),
 │                              tab_add_n_pct() (shared add_n/add_pct, used by tab_many + tab_counts).
 │                              tab_build() = staged pipeline: tab_setup / tab_prepare_pop / tab_aggregate
 │                              / tab_build_tables (Phase 9a: the OUTER row_var map -> tab_build_one, +
@@ -1146,6 +1148,32 @@ We must **make a grounded choice for jamovi jmvtab module base display of tables
 Wrote **`dev/tabxplor_phase10_exporters.md`** — the single self-contained Phase 10 architecture doc governing 10c→10g. Core: (1) a normalized **`tabxplor_render` ephemeral sidecar** (NOT tab attributes — dplyr desyncs them) holding the derive-once quantities (reference/total masks, colour slots/hex, stars, blank mask, bold rows, `[min;max]`, labels), consumed identically by the `format()`-string backends and the `tab_xl` numeric bypass; (2) one **`tab_export_prep()`** helper (new `R/tab-export-prep.R`) replacing the 4×-duplicated preamble + per-exporter role detection, base(single)+list(several) split; (3) **`format()`/`get_reference()`** `case_when`→boolean rewrite + a `.ref=` precompute arg (masks once, not 4×) + `format(syntax="excel")` folding `numfmt()` in; (4) robust var detection via `dplyr::group_vars()` + graceful `degrade` (fixes the no-factor crash) + `test-edge-cases.R`; (5) `[min;max]` table-level pre-pass; (6) tab_xl backend seam (openxlsx v1, ready for Phase 11); (7) `tab_transpose()` finished + opt-in transpose-at-export; (8) `tab_plot()` soft-deprecated. **New decisions:** opt-in multi-field display (`pct (n)`/`pct ± ci`) via a new optional **`display_spec` attribute (9→10)** parsed only in `format()` (zero cost when unused); the `label` attribute → `tab_kable` header tooltip only. Sequencing + per-step golden/parity verification in the doc §12.
 
 #### Phase 10c — rework format() for console display and exports that uses it
+
+##### Done (2026-07-12)
+
+Byte-identical (full suite green; conscious structural golden regen only for the new `display_spec`
+attribute). Full record: `dev/tabxplor_phase10_exporters.md` (Status block) + `dev/tabxplor_1.4.0_decisions.md`
+§33; profile `dev/benchmarks/results_1.4.0/phase10c_profile.txt`. Scope confirmed with the maintainer:
+`display_spec` = a **curated** whitelist as its own isolated step (not the full parser); the prep-helpers
+`numfmt`→`format(syntax="excel")` / `tab_totcol_range()` / label-capture were **deferred to their consumer
+sub-phase** (10g / 10d / 10e) to avoid unwired / duplicate-source code.
+
+- **`get_reference()` (`fmt_class.R`) `case_when` → base boolean composition** (branch selectors are scalar
+  attributes; arms are per-cell boolean of the field masks). A/B-verified byte-identical + the
+  subset-equivalence `get_reference(x[m]) == get_reference(x)[m]` the `.ref` memoization relies on.
+- **`format()`/`pillar_shaft` (`fmt_class.R`)**: new `.ref = list(cells=, all_totals=)` precompute arg
+  (masks derived ONCE, memoized when NULL — the 10d prep passes them in); hot `dplyr::if_else`→base
+  `ifelse`, `str_detect("^-")`→`startsWith`; and the unconditional `x$var` (`$`→`dplyr::pull`, ~28 % of
+  `format()` self-time) → `get_var(x)`. `format()` ~2× faster on the exporter path.
+- **`tab_render_vars()` + `tab_degrade_inform()` (`tab.R`)**: robust, position-independent role detection
+  via `dplyr::group_vars()` (fixes the factor-after-fmt miswrite) with a `degrade` fallback. Print routes
+  `row_var` through it; `tab_kable`/`tab_md`/`tab_plot`/`tab_xl` gained a degrade guard rendering the plain
+  frame + a message (no more `pull(integer(0))` crash). `tab_get_vars()` hardened. New render/degrade
+  section in `test-edge-cases.R`. (Full exporter role-detection UNIFICATION stays in 10d.)
+- **`display_spec` (§6, 9→10 per-column attribute)**: opt-in composite display `tab(display = "pct (n)")`
+  / `set_display_spec()`, curated whitelist `c("pct (n)", "n (pct)")`, parsed only in `format()` (text
+  backends; Excel keeps the primary field). `test-fmt-contract.R` 9→10 + snapshot accepted.
+
 Display of `tabxplor_tab` on console is quite long, and kable and fmt export uses it two, even in Jamovi display which must be the fastest possible : what are the performance bottlenecks and how to make it faster / remove useless stuffs and white elephants here ?
 - Particularly, `format()`/`get_reference` display `case_when` must be changed for performance.
 

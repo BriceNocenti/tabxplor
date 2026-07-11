@@ -295,3 +295,96 @@ testthat::test_that("tab with no row_var works", {
   lifecycle::expect_deprecated(res2 <- tab(gss, col_var = marital))
   testthat::expect_s3_class(res2, "tabxplor_tab")
 })
+
+# === SECTION: Phase 10c -- render var detection + graceful degrade =============
+
+tb10c <- tab(gss, marital, race, pct = "row", color = "diff")
+
+testthat::test_that("tab_render_vars matches tab_get_vars on well-formed tables", {
+  fixtures <- list(
+    single   = tb10c,
+    col_pct  = tab(gss, marital, race, pct = "col"),
+    two_cv   = tab(gss, marital, c(race, relig), pct = "row", chi2 = TRUE),
+    means    = tab_num(gss, marital, c(age, tvhours), ci = "cell"),
+    compact2 = tab(gss, c(marital, relig), race, pct = "row"),
+    plain    = tab_plain(gss, marital, race)
+  )
+  for (f in fixtures) {
+    rv <- tab_render_vars(f)
+    testthat::expect_false(isTRUE(rv$degrade))
+    testthat::expect_identical(rv$row_var, tab_get_vars(f)$row_var)
+    testthat::expect_identical(sort(as.character(rv$tab_vars)),
+                               sort(as.character(tab_get_vars(f)$tab_vars)))
+  }
+})
+
+testthat::test_that("tab_render_vars is position-independent (factor moved after fmt cols)", {
+  ct    <- tab(gss, c(marital, relig), race, pct = "row")   # factors: 'row_var' (group), 'levels'
+  moved <- dplyr::relocate(ct, "row_var", .after = dplyr::last_col())
+  # tab_get_vars() miswrites to the relocated group column; tab_render_vars() stays on "levels".
+  testthat::expect_identical(tab_render_vars(moved)$row_var, "levels")
+})
+
+testthat::test_that("tab_render_vars degrades on malformed shapes with a reason", {
+  plain_df  <- tibble::tibble(a = factor(c("x", "y")), b = 1:2)
+  no_fmt    <- dplyr::mutate(tb10c, dplyr::across(dplyr::where(is_fmt), get_num))
+  no_factor <- dplyr::mutate(tb10c, dplyr::across(dplyr::where(is.factor), as.character))
+
+  testthat::expect_true(tab_render_vars(plain_df)$degrade)
+  testthat::expect_true(tab_render_vars(no_fmt)$degrade)
+  testthat::expect_true(tab_render_vars(no_factor)$degrade)
+  testthat::expect_true(tab_render_vars(42)$degrade)          # not a data frame
+  testthat::expect_match(tab_render_vars(no_factor)$reason, "factor")
+  testthat::expect_match(tab_render_vars(no_fmt)$reason, "tabxplor_fmt")
+})
+
+# Truly-malformed shapes that used to CRASH role detection (dplyr::pull(tabs, integer(0))).
+# (empty_tab is a VALID 0-row table -- it keeps fmt + factor columns, so it takes the normal path,
+#  not the degrade path; tested for no-error separately.)
+degrade_shapes <- list(
+  plain_df  = tibble::tibble(a = factor(c("x", "y")), b = c(1.5, 2.5)),
+  no_fmt    = dplyr::mutate(tb10c, dplyr::across(dplyr::where(is_fmt), get_num)),
+  no_factor = dplyr::mutate(tb10c, dplyr::across(dplyr::where(is.factor), as.character))
+)
+empty_tab <- dplyr::filter(tb10c, FALSE)
+
+testthat::test_that("tab_kable degrades gracefully (message, no error)", {
+  for (nm in names(degrade_shapes)) {
+    testthat::expect_message(out <- tab_kable(degrade_shapes[[nm]]), "skipped", info = nm)
+    testthat::expect_s3_class(out, "kableExtra")
+  }
+})
+
+testthat::test_that("tab_md degrades gracefully (message, no error)", {
+  for (nm in names(degrade_shapes)) {
+    testthat::expect_message(out <- tab_md(degrade_shapes[[nm]], print = FALSE),
+                             "skipped", info = nm)
+    testthat::expect_type(out, "character")
+  }
+})
+
+testthat::test_that("print methods never crash on malformed / empty tabxplor tables", {
+  testthat::expect_no_error(utils::capture.output(print(degrade_shapes$no_fmt)))
+  testthat::expect_no_error(utils::capture.output(print(degrade_shapes$no_factor)))
+  testthat::expect_no_error(utils::capture.output(print(empty_tab)))
+})
+
+testthat::test_that("tab_plot degrades gracefully (message, no error)", {
+  testthat::skip_if_not_installed("ggpubr")
+  testthat::skip_if_not_installed("gtable")
+  testthat::skip_if_not_installed("ggplot2")
+  testthat::skip_if_not_installed("cowplot")
+  for (nm in names(degrade_shapes)) {
+    testthat::expect_message(tab_plot(degrade_shapes[[nm]]), "skipped", info = nm)
+  }
+})
+
+testthat::test_that("tab_xl degrades gracefully (writes the raw frame, no error)", {
+  testthat::skip_if_not_installed("openxlsx")
+  for (nm in names(degrade_shapes)) {
+    p <- withr::local_tempfile(fileext = ".xlsx")
+    testthat::expect_message(tab_xl(degrade_shapes[[nm]], path = p, open = FALSE),
+                             "skipped", info = nm)
+    testthat::expect_true(file.exists(p))
+  }
+})

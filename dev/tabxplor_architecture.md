@@ -364,7 +364,37 @@ The `color`/`color_signif` **arguments** are parsed by `normalize_color_spec()` 
 
 ## Export System
 
-Four export formats, all in separate files:
+Four export formats, all in separate files.
+
+### Render-time variable detection + graceful degrade (Phase 10c)
+
+`tab_render_vars()` (`R/tab.R`) is the robust, position-independent role detector used by the print
+methods and every exporter (and, from Phase 10d, by the shared export prep). It keeps the
+`col_var`-attribute path for `col_vars` but places `row_var`/`tab_vars` from `dplyr::group_vars()`
+(which survives `rename`/`select`/`relocate` — `tab_build()` groups by `tab_vars`, `tab_compact()` by
+the literal `"row_var"` column), so a factor moved after the value columns is no longer miswritten.
+`row_var` = the last factor NOT in the groups. When the object can't be read as a tabxplor table (not
+a data frame / no `tabxplor_fmt` columns / no factor variable) it returns
+`list(degrade = TRUE, reason = ...)`; each exporter then renders the plain frame (`tab_degrade_inform()`
++ a plain kable / pipe table / raw sheet) instead of crashing in role detection. It is byte-identical
+to `tab_get_vars()` on every well-formed table. New `tests/testthat/test-edge-cases.R` locks this.
+
+### The `format.tabxplor_fmt()` display method (`R/fmt_class.R`)
+
+The single source of truth for the console (`pillar_shaft`), `tab_kable`, `tab_md`, `tab_plot`.
+Phase 10c reworked it for speed and flexibility (byte-identical, golden-locked):
+
+- `get_reference()` rewritten from `dplyr::case_when` (3 outer branches × `switch(mode)`) to direct
+  base-R boolean composition of the per-cell masks (the branch selectors are all scalar column
+  attributes) — no per-arm `rep(FALSE)`/`DataMask` allocation.
+- `format()` / `pillar_shaft` accept a precomputed `.ref = list(cells =, all_totals =)` so the
+  reference masks are derived ONCE (was up to 4× per column); when `NULL` they are memoized
+  internally. The exporter prep (Phase 10d) passes them straight in.
+- The unconditional `x$var` (`$.tabxplor_fmt` → `dplyr::pull`) accessor was replaced by `get_var(x)`
+  (the `vctrs::field` accessor) — it was ~28 % of `format()` self-time. Overall `format()` is ~2×
+  faster on the exporter path (`dev/benchmarks/results_1.4.0/phase10c_profile.txt`).
+- Opt-in composite display via the `display_spec` attribute (e.g. `"pct (n)"`), parsed only here,
+  only when set — one scalar `is.na()` gate keeps the common path byte-identical.
 
 ### tab_xl() — Excel Export (`R/tab_xl.R`)
 

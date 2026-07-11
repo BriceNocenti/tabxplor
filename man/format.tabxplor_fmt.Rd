@@ -4,7 +4,7 @@
 \alias{format.tabxplor_fmt}
 \title{Print method for class tabxplor_fmt}
 \usage{
-\method{format}{tabxplor_fmt}(x, ..., html = FALSE, na = NA, special_formatting = FALSE)
+\method{format}{tabxplor_fmt}(x, ..., html = FALSE, na = NA, special_formatting = FALSE, .ref = NULL)
 }
 \arguments{
 \item{x}{A fmt object.}

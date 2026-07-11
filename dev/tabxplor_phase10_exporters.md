@@ -12,9 +12,30 @@ KEY CONSTRAINTS:
 See: CLAUDE.md § "Phase 10", dev/tabxplor_1.4.0_decisions.md §33 (the decision record).
 -->
 
-Status: **DESIGN (Phase 10a + 10b) — 2026-07-11.** 10a decision settled (below); this document is the 10b
-deliverable. Implementation (10c→10g) has not started. Read this first, then the matching
-`dev/tabxplor_1.4.0_decisions.md` sections and `dev/tabxplor_architecture.md` "Export System".
+Status: **10c DONE (2026-07-12); 10d→10g not started.** 10a decision settled (below); this document is the
+10b deliverable and governs 10d→10g. Read this first, then the matching `dev/tabxplor_1.4.0_decisions.md`
+sections and `dev/tabxplor_architecture.md` "Export System".
+
+**Phase 10c done (2026-07-12), all byte-identical (golden/color/export-parity green; conscious
+structural regen only for the new `display_spec` attribute):**
+- **§3 `get_reference()` + `format()` rework.** `get_reference()` `case_when` → base boolean (the branch
+  selectors are scalar attributes; the arms are per-cell boolean of the field masks — A/B-verified across
+  153 col×mode + the subset-equivalence the `.ref` memoization relies on). `format()`/`pillar_shaft` gained
+  `.ref = list(cells =, all_totals =)` (masks derived ONCE, memoized when `NULL`) + the hot `dplyr::if_else`
+  → base `ifelse` + `str_detect("^-")` → `startsWith`. **Bonus lever (not in the plan):** the unconditional
+  `x$var` (`$.tabxplor_fmt` → `dplyr::pull`, ~28 % of `format()` self-time) → `get_var(x)`. Net `format()`
+  ~2× faster on the exporter path (`dev/benchmarks/results_1.4.0/phase10c_profile.txt`). **`numfmt()` →
+  `format(syntax="excel")` DEFERRED to 10g** (atomic removal, no duplicate-source-of-truth window).
+- **§4 robust detection + graceful degrade.** New `tab_render_vars()` (`R/tab.R`) + `tab_degrade_inform()`;
+  the print methods route `row_var` through it, and `tab_kable`/`tab_md`/`tab_plot`/`tab_xl` gained a
+  degrade guard rendering the plain frame + a message (no more `pull(integer(0))` crash). `tab_get_vars()`
+  hardened. New `test-edge-cases.R` section. The full role-detection UNIFICATION (replacing each exporter's
+  inline detection) stays in **10d** (via `tab_export_prep`).
+- **§6 `display_spec` (9→10 attribute).** Curated whitelist `c("pct (n)", "n (pct)")` (not the full parser),
+  set via `tab(display = )` / `set_display_spec()`, parsed only in `format()` (text backends; Excel falls
+  back to the primary field). `test-fmt-contract.R` 9→10 + snapshot accepted; structural RDS golden regen.
+- **DEFERRED to their consumer (maintainer decision):** `tab_totcol_range()` → 10d (with the prep that
+  wires it); label-capture-in-build → 10e (only `tab_kable` consumes it); `numfmt` fold → 10g.
 
 ---
 

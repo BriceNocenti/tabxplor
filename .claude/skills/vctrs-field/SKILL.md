@@ -12,8 +12,10 @@ tabxplor_fmt is a vctrs::new_rcrd() with two kinds of members:
   tot_n, in_totrow, in_tottab, in_refrow.
   NOTE: `ci` is NOT a field — it is derived from ci_inf/ci_sup by get_ci() (a bounds-shim,
   Phase 1a); the public fmt(ci=) arg and $ci/get_ci() still work. `rr` was renamed `ratio`.
-- ATTRIBUTES: scalar per-column, accessed via attr(). Currently 8:
-  type, comp_all, ref, ci_type, col_var, totcol, refcol, color.
+- ATTRIBUTES: scalar per-column, accessed via attr(). Currently 10:
+  type, comp_all, ref, ci_type, col_var, totcol, refcol, color, color_signif, display_spec.
+  (`color_signif` added Phase 5 = the significance policy; `display_spec` added Phase 10c = an
+  opt-in composite display recipe like "pct (n)", NA by default, parsed only in format().)
 
 Re-grep exact line numbers before editing; the anchors below are approximate.
 

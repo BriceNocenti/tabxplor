@@ -2081,3 +2081,19 @@ namespaced) + opt-in transpose-at-export. (8) **`tab_plot()`** soft-deprecated.
 "@export'ed" note corrected (commented-out/unexported); §23 profile flagged stale; compact + tab_vars stays
 deferred.
 
+**Phase 10c DONE (2026-07-12)** — the `format()`/detection rework, byte-identical (full suite green;
+conscious structural golden regen only for the new `display_spec` attribute). Detail in
+`dev/tabxplor_phase10_exporters.md` (Status block). Governing scope decisions this session (with the
+maintainer): (a) **`display_spec` = curated whitelist** `c("pct (n)", "n (pct)")` as its own isolated
+step, NOT the full `field literal field` parser (which §33's "maintainer wants full flexible" note now
+supersedes for 10c — the general grammar can come later if a concrete need appears). (b) **Defer the
+prep-helpers to their consumer:** `numfmt()` → `format(syntax="excel")` moves to **10g** (atomic removal,
+no duplicate-source-of-truth window); `tab_totcol_range()` → **10d** (built next to its wiring);
+label-capture-in-build → **10e** (only `tab_kable` consumes it). So 10c shipped: `get_reference()` boolean
+rewrite; `format()`/`pillar_shaft` `.ref` memoization + `if_else`→base + the **`x$var`→`get_var(x)`
+~28 % lever** (not in the plan — surfaced by the re-profile, `dev/benchmarks/results_1.4.0/phase10c_profile.txt`,
+`format()` ~2×); `tab_render_vars()` + graceful degrade guards + `tab_get_vars()` hardening +
+`test-edge-cases.R`; `display_spec` (§6, 9→10 attr, `tab(display=)` / `set_display_spec()`). The re-profile
+also confirmed the §23 stale ranking: `format()`'s residual cost is now all `stringr`/`stringi` (a future
+lever), not the deleted `fmt_color_selection`.
+

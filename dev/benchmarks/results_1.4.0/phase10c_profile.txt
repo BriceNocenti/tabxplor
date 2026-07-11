@@ -1,0 +1,69 @@
+Phase 10c Step 1 — re-profile format() / get_reference() / tab_kable on the CURRENT engine
+(post-Phase-5/9 findInterval color engine). The decisions §23 "fmt_color_selection = 75%" figure
+is STALE (that function was deleted in Phase 5). Script: dev/benchmarks/phase10c_profile.R
+(kept in scratchpad; reproducible). Fixtures: gss_cat.
+
+  tb_diff = tab(gss, marital, c(race, relig), pct="row", color="diff", stars=TRUE, chi2=TRUE)
+            8 x 21, 20 fmt cols   (factor x factor, diff cells + CI + chi2 p-value row)
+  tb_mean = tab_num(gss, marital, c(age, tvhours), ci="cell")   6 x 3, 2 fmt cols
+
+== wall-clock (loop median) ==
+  format() diff cols, special=TRUE          0.60 ms/call   (call = lapply over all 20 cols)
+  format() diff cols, special=FALSE         0.05 ms/call
+  format() mean cols, special=TRUE          ~0    ms/call
+  get_reference() cells, diff cols          0.05 ms/call
+  get_reference() all_totals, diff cols     ~0    ms/call
+  tab_kable(tb_diff, tooltips=FALSE)        5.00 ms/call
+
+== Rprof by.self — format(special=TRUE), diff cols (the exporter path) ==
+  Ranked recoverable cost:
+  1. `$.tabxplor_fmt`  -> dplyr::pull/tidyselect stack ~28% total
+       ($ 28.74% tot, dplyr::pull 28.13%, tidyselect::vars_pull 20.44%, .External2 36% tot,
+        enquo, names_as_error_names, vec_as_location2). SOURCE: the UNCONDITIONAL `x$var` at
+        format.tabxplor_fmt L1777 (`disp_mean_sd <- ... & !is.na(x$var)`) — evaluated for EVERY
+        column incl. factor ones (no short-circuit in `&`), though `type=="mean"` already makes
+        the mask FALSE. FIX: `x$var` -> `get_var(x)` (vctrs::field). Byte-identical, ~28% off.
+        NOT in the original plan — a bonus Step-3 lever (Phase 9 "$-accessor -> field factory").
+  2. vec_case_when 4.45% self / 16.57% total — the ~15 `dplyr::if_else` in format() + the
+       `dplyr::case_when` in get_reference(). FIX: Step 2 (get_reference boolean) + Step 3
+       (if_else -> base ifelse). ~16%.
+  3. stringr/stringi: stri_split_boundaries 8.17% self, stri_replace_first_regex 18.75% total
+       (str_pad / str_remove_all / str_detect / str_replace). Hot one: str_detect(out,"^-") at
+       L1749 (diff "+" sign) -> base startsWith(). Convert the hot ones only; byte-identity risk.
+  4. match.arg 1.47%, prettyNum 1.51% — minor, leave.
+
+  get_reference() in isolation is CHEAP (0.05 ms/batch); the boolean rewrite (Step 2) mainly
+  removes its share of the vec_case_when 16% + the rep(FALSE)/DataMask allocations.
+
+== Rprof by.self — tab_kable(tooltips=FALSE) ==
+  Dominated by kableExtra XML post-processing (read_xml.raw, xml_nodeset, nodeset_apply,
+  xml_attr, grepl 8.2%) — that is Phase 10e territory, NOT 10c. format()'s share shows as
+  vec_case_when 10.99% tot + grepl — so the 10c format() wins help kable too, but kable's
+  dominant cost is the kableExtra engine.
+
+== Step-3 lever ranking (this profile) ==
+  1. x$var -> get_var(x)              L1777    ~28%   trivial, byte-identical   [DO FIRST]
+  2. dplyr::if_else/case_when -> base  (many)  ~16%   golden-locked             [Steps 2+3]
+  3. hot stringr -> base (str_detect->startsWith @L1749, etc.)  moderate, careful
+
+================================================================================
+AFTER Steps 2+3 (get_reference boolean rewrite; format/pillar .ref memoization;
+x$var->get_var(x); the safe string if_else -> base ifelse; str_detect("^-")->startsWith).
+Golden/color/fmt/export suites GREEN, no golden regen. Same Rprof harness, same fixtures.
+
+  Rprof `format.tabxplor_fmt` total.time (4000 x lapply-over-20-cols):
+      BEFORE 16.659 s   ->   AFTER 8.334 s     ~= 2.0x faster (-50%).
+  Top-of-profile removed: `$`/dplyr::pull/tidyselect::vars_pull/enquo/names_as_error_names
+    (the x$var accessor, was ~28% self+children) AND vec_case_when (was 16.57% total, from
+    get_reference's case_when + the per-column if_else). GONE.
+  Remaining self-time is now ALL stringr/stringi: stri_split_boundaries 14%, stri_replace_
+    first_regex 34% total, prettyNum, str_split, check_lengths (from str_pad / prettyNum /
+    str_replace / str_remove). That is lever #3 (hot stringr -> base) -- DELICATE
+    (byte-identity risk) and NOT pursued in 10c per "convert conservatively; skip cold ones".
+    Candidate for a future pass if the exporters still profile hot after the 10d shared prep.
+
+  NOTE: the wall-clock loop (system.time over 200 iters of a sub-ms op) is too coarse to be
+  meaningful (~1 tick of noise); the Rprof total-time halving is the reliable measurement.
+
+  LEFT as dplyr::if_else on purpose (numerically delicate, cold for the common path, golden-
+  covered): the CI-bounds block (plus_disp_ci, pmax/pmin/round) at fmt_class.R ~L1687-1719.

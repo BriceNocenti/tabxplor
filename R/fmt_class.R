@@ -141,6 +141,10 @@ globalVariables(c("table_id", "row_id", "col_id", "o", "rowtot", "coltot", "ok",
 #' }
 #' @param color_signif How significance gates the color, as a single string
 #' (\code{"ignore"} / \code{"grey_non_signif"} / \code{"color_all_signif"}). See \code{\link{tab}}.
+#' @param display_spec An optional composite display recipe (a single string, e.g.
+#' \code{"pct (n)"} or \code{"n (pct)"}; \code{NA} = the plain single field). Parsed only by
+#' \code{format()} for text output; the primary \code{display} field, colors and the Excel bypass
+#' are unchanged. See \code{\link{tab}}'s \code{display} argument.
 #' @return A vector of class \code{tabxplor_fmt}.
 #' @export
 #'
@@ -268,7 +272,8 @@ fmt <- function(n         = integer(),
                 totcol    = FALSE,
                 refcol    = FALSE,
                 color     = ""    ,
-                color_signif = "ignore") {
+                color_signif = "ignore",
+                display_spec = NA_character_) {
 
   # DESIGN: these 8 fields set the recycling reference length. display, diff, ratio, or,
   # the ci bounds, pvalue, tot_n and the in_* flags are recycled TO it below, so they must
@@ -320,6 +325,8 @@ fmt <- function(n         = integer(),
   # recycled to 1 (Phase 5 §9.1). color_signif is the scalar significance policy.
   color        <- vctrs::vec_cast(color, character())
   color_signif <- vctrs::vec_recycle(vctrs::vec_cast(color_signif, character()), size = 1)
+  # Phase 10c: opt-in composite display recipe (e.g. "pct (n)"); NA = the plain single field.
+  display_spec <- vctrs::vec_recycle(vctrs::vec_cast(display_spec, character()), size = 1)
 
   new_fmt(n = n, display = display, digits = digits,
           wn = wn, pct = pct,  mean = mean,
@@ -328,7 +335,7 @@ fmt <- function(n         = integer(),
           in_totrow = in_totrow, in_tottab = in_tottab, in_refrow = in_refrow,
           type = type, comp_all = comp_all,  ref = ref,
           ci_type = ci_type, col_var = col_var, totcol = totcol, refcol = refcol,
-          color = color, color_signif = color_signif)
+          color = color, color_signif = color_signif, display_spec = display_spec)
 }
 
 #' @describeIn fmt a test function for class fmt.
@@ -986,6 +993,38 @@ set_color_signif <- function(x, color_signif) {
   `attr<-`(x, "color_signif", color_signif)
 }
 
+# Phase 10c: the curated whitelist of opt-in COMPOSITE display recipes recognised by
+# format.tabxplor_fmt() (text backends only -- Excel falls back to the primary field). Each shows a
+# value cell as "primary (secondary)", reusing the per-field getters so there is NO new field math;
+# NA (the default) = the plain single field. The primary `display` field, get_num(), coloring and
+# the Excel bypass are UNCHANGED when display_spec is unused (one scalar is.na() gate in format()).
+tabxplor_display_specs <- c("pct (n)", "n (pct)")
+
+#' @describeIn fmt get the composite display recipe attribute (\code{NA} = plain single field)
+#' @export
+get_display_spec <- function(x, ...) {
+  if (is.data.frame(x)) return(purrr::map_chr(x, ~ get_display_spec(.)))
+  a <- attr(x, "display_spec", exact = TRUE)
+  if (is.null(a)) NA_character_ else a[1]
+}
+
+#' @describeIn fmt set the composite display recipe attribute of a \code{fmt} vector
+#' @export
+set_display_spec <- function(x, display_spec) {
+  if (is.data.frame(x)) {
+    return(dplyr::mutate(x, dplyr::across(dplyr::where(is_fmt),
+                                          ~ set_display_spec(., display_spec))))
+  }
+  display_spec <- display_spec[1]
+  if (is.null(display_spec) || (!is.na(display_spec) && display_spec %in% c("", "no")))
+    display_spec <- NA_character_
+  if (!is.na(display_spec) && !display_spec %in% tabxplor_display_specs) {
+    cli::cli_abort(c("Unknown composite {.arg display} recipe {.val {display_spec}}.",
+                     "i" = "Available composites: {.val {tabxplor_display_specs}}."))
+  }
+  `attr<-`(x, "display_spec", display_spec)
+}
+
 
 
 # fmt_get_color_code() doen't work in mutate with groups.
@@ -1082,6 +1121,7 @@ new_fmt <- function(n         = integer(),
                     refcol    = FALSE,
                     color     = ""   ,
                     color_signif = "ignore",
+                    display_spec = NA_character_,
                     ..., class = character()
 ) {
   # stopifnot(
@@ -1132,7 +1172,8 @@ new_fmt <- function(n         = integer(),
          in_refrow = in_refrow),
     type = type, comp_all = comp_all, ref = ref,
     ci_type = ci_type, col_var = col_var, totcol = totcol, refcol = refcol,
-    color = color, color_signif = color_signif[1], class = c(class, "tabxplor_fmt"))
+    color = color, color_signif = color_signif[1], display_spec = display_spec[1],
+    class = c(class, "tabxplor_fmt"))
   #access with fields() n_fields() vctrs::field() vctrs::`field<-`() ;
   #vec_data() return the tibble with all fields
 }
@@ -1606,7 +1647,7 @@ ci_html_subscript <- function(x, html = FALSE) {
 #' @return The fmt printed in a character vector.
 #' @export
 format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
-                                special_formatting = FALSE) {
+                                special_formatting = FALSE, .ref = NULL) {
 
   out    <- get_num(x)
   na_out <- is.na(out)
@@ -1648,7 +1689,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   pvalue        <- ok & display == "pvalue"
 
   out[pct_or_ci] <- out[pct_or_ci] * 100
-  digits[diff_mean] <- dplyr::if_else(digits[diff_mean] == 0, 1, digits[diff_mean])
+  digits[diff_mean] <- ifelse(digits[diff_mean] == 0, 1, digits[diff_mean])
 
 
   ci_print_moe <- getOption("tabxplor.ci_print") == "moe"
@@ -1737,19 +1778,19 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
     p    <- get_pct(x[pvalue])
 
     out[pvalue]    <- paste0(
-      dplyr::if_else(
+      ifelse(
         p < 0.0001,
-        true  = "<0.01",
-        false = print_num(p * 100, digits = 2L)
+        "<0.01",
+        print_num(p * 100, digits = 2L)
       ),
       "%"
     )
   }
 
-  out[diff_pct] <- dplyr::if_else(                   # "+" sign on positive pct diffs
-    !stringr::str_detect(out[diff_pct], "^-"),  # !out[diff_pct] %in% c("0%", ) &
-    true  = paste0("+", out[diff_pct]),
-    false = out[diff_pct]
+  out[diff_pct] <- ifelse(                            # "+" sign on positive pct diffs
+    !startsWith(out[diff_pct], "-"),            # !out[diff_pct] %in% c("0%", ) &
+    paste0("+", out[diff_pct]),
+    out[diff_pct]
   )
   out[diff_mean] <- paste0(mult_sign, out[diff_mean]) # multiply sign on mean diffs
 
@@ -1769,19 +1810,29 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
 
 
   if (special_formatting) {
+    # Phase 10c: compute each reference mask ONCE for this column (was up to 3 get_reference()
+    # calls here + 1 in pillar_shaft). The exporter prep (10d) passes precomputed masks via `.ref`;
+    # otherwise they are memoized lazily below. Uses get_reference(x[mask], m) == get_reference(x,
+    # m)[mask] (subset-equivalence, byte-verified). NB: keep `.ref = NULL` on the nested reffmt
+    # format() calls (their columns are "pct"/"mean", so they take no reference branch anyway).
+    ref_cells  <- if (!is.null(.ref)) .ref$cells      else NULL
+    ref_alltot <- if (!is.null(.ref)) .ref$all_totals else NULL
+
     disp_diff   <- display == "diff" & !nas
     disp_moe    <- disp_ci & ci_print_moe # no if `ci_print = "ci"`
     disp_ctr    <- display == "ctr" & !nas
     disp_or     <- display %in% c("or", "OR") & !nas
     disp_or_pct <- display %in% c("or_pct", "OR_pct") & !nas
-    disp_mean_sd <- display == "mean" & type == "mean" & !nas & !is.na(x$var)
+    # get_var() (the vctrs::field accessor) not x$var (the dplyr::pull `$` method): x$var here ran
+    # unconditionally for EVERY column and was ~28% of format() self-time (Phase 10c profile).
+    disp_mean_sd <- display == "mean" & type == "mean" & !nas & !is.na(get_var(x))
 
 
     if (any (disp_mean_sd)) {
       sd <-
         print_num(get_num(set_display(set_var(x[disp_mean_sd],
                                               suppressWarnings(sqrt(get_var(x[disp_mean_sd]))) ), "var")),
-                  digits = x[disp_mean_sd]$digits) # + 1L
+                  digits = get_digits(x[disp_mean_sd])) # + 1L
       sd <- sd |>
         stringr::str_pad(width = max(stringr::str_length(sd)), side = "right")
 
@@ -1790,23 +1841,25 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
 
 
     if (any(disp_diff)) {
-      ref     <- get_reference(x[disp_diff], mode = "cells")
+      if (is.null(ref_cells)) ref_cells <- get_reference(x, "cells")
+      ref     <- ref_cells[disp_diff]
       reffmt  <- set_display(x[disp_diff],
                              ifelse(type %in% c("n", "mean"), "mean", "pct")) %>%
         format() #%>% stringr::str_trim()
-      out[disp_diff] <- dplyr::if_else(ref,
-                                       paste0("ref:", reffmt),
-                                       out[disp_diff])
+      out[disp_diff] <- ifelse(ref,
+                               paste0("ref:", reffmt),
+                               out[disp_diff])
     }
 
     if (any(disp_moe)) {
-      ref     <- get_reference(x[disp_moe], mode = "cells")
+      if (is.null(ref_cells)) ref_cells <- get_reference(x, "cells")
+      ref     <- ref_cells[disp_moe]
       reffmt  <- set_display(x[disp_moe],
                              ifelse(type %in% c("n", "mean"), "mean", "pct")) %>%
         format()
-      out[disp_moe] <- dplyr::if_else(ref,
-                                     paste0("ref:x-", reffmt),
-                                     out[disp_moe])
+      out[disp_moe] <- ifelse(ref,
+                              paste0("ref:x-", reffmt),
+                              out[disp_moe])
     }
 
     if (any(disp_ctr)) {
@@ -1826,7 +1879,8 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
 
     if (any(disp_or)) {
       # refcol  <- is_refcol(x)
-      refer   <- get_reference(x[disp_or], mode = "all_totals")
+      if (is.null(ref_alltot)) ref_alltot <- get_reference(x, "all_totals")
+      refer   <- ref_alltot[disp_or]
       reffmt  <- set_display(x[disp_or], "pct") |> # ifelse(refcol, "pct", "rr")
         set_digits(0L) |> format() #%>% stringr::str_trim()
       reffmt <- suppressWarnings(
@@ -1836,7 +1890,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
                          )
         )
       )
-      out[disp_or] <- dplyr::if_else(
+      out[disp_or] <- ifelse(
         refer & !is.na(reffmt),
         paste0(stringr::str_replace(out[disp_or], "1.0+", "1"),
                " (", reffmt, ")"),
@@ -1871,6 +1925,23 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   # (console/pillar, tab_kable, tab_md), distinct from a genuine NA cell (which keeps `na`).
   out[!nas & display == "blank"] <- ""
 
+  # Phase 10c: opt-in COMPOSITE display (e.g. "pct (n)"), parsed ONLY here, ONLY when the column
+  # carries a display_spec attribute -> one scalar is.na() gate, byte-identical when unused. Renders
+  # each constituent by RE-USING format() per field (no new math); the attribute is cleared on the
+  # inner calls to avoid recursion. Significance stars always ride the % part; only genuine value
+  # cells (not p-value / blank / ci rows) are composited; a cell missing either field is left plain.
+  spec <- get_display_spec(x)
+  if (!is.na(spec) && spec %in% c("pct (n)", "n (pct)")) {
+    x0      <- set_display_spec(x, NA_character_)
+    pct_str <- format(set_display(x0, "pct"), na = na, special_formatting = FALSE)
+    n_str   <- format(set_display(set_pvalue(x0, NA_real_), "n"), na = na,
+                      special_formatting = FALSE)
+    value_cell <- !nas & display %in% c("pct", "mean", "n", "wn")
+    both       <- value_cell & !is.na(pct_str) & !is.na(n_str)
+    parts <- if (spec == "pct (n)") list(pct_str, n_str) else list(n_str, pct_str)
+    out[both] <- paste0(parts[[1]][both], " (", parts[[2]][both], ")")
+  }
+
   #out <- stringr::str_pad(out, max(stringr::str_length(out), na.rm = TRUE))
   out
 }
@@ -1889,10 +1960,12 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
 #' @return A fmt printed in a pillar.
 #' @importFrom pillar pillar_shaft
 #' @export
-pillar_shaft.tabxplor_fmt <- function(x, ...) {
+pillar_shaft.tabxplor_fmt <- function(x, ..., .ref = NULL) {
   # print color type somewhere (and brk legend beneath ?) ----
 
-  out     <- format(x, special_formatting = TRUE)
+  # Phase 10c: `.ref` (precomputed reference masks) threads through to the internal format() and
+  # the greying `totals` mask below. NULL on the console path (each computed as before).
+  out     <- format(x, special_formatting = TRUE, .ref = .ref)
   display <- get_display(x)
   nas     <- is.na(display)
   color   <- get_color(x)
@@ -2006,7 +2079,7 @@ pillar_shaft.tabxplor_fmt <- function(x, ...) {
       cells <- ok & channels$bg_slot == s
       out[cells] <- bg_crayons[[s]](out[cells])
     }
-    totals <- get_reference(x, mode = "all_totals") #c("cells", "lines")
+    totals <- if (!is.null(.ref)) .ref$all_totals else get_reference(x, "all_totals") #c("cells","lines")
 
     # Cells matching no break on EITHER channel are greyed (style_subtle) so colored cells stand
     # out; reference/total cells are exempt, staying full-strength as reading anchors.
@@ -2592,67 +2665,55 @@ get_reference <- function(x, mode = c("cells", "lines", "all_totals")) {
 
   color       <- get_color(x)
 
+  n      <- length(x)
+  none   <- logical(n)                   # == rep(FALSE, length(x))
+  is_rm  <- type %in% c("row", "mean")   # scalar: row/mean share the reference logic
+  comp_t <- isTRUE(comp_all)             # NA-safe scalar branch selectors: comp_all may be NA,
+  comp_f <- isFALSE(comp_all)            #   then neither arm fires -> `none` (as the old case_when)
+  m      <- mode[1]
+
+  # DESIGN (Phase 10c): the former 3 x switch(mode) x dplyr::case_when collapsed to base boolean
+  # composition. Every branch selector (type/comp_all/ref/color/totcol/refcol) is a SCALAR column
+  # attribute, so each case_when really selected ONE arm; the arms are pure per-cell boolean of the
+  # subsettable field masks (totrows/refrows/tottab_*). Byte-identical to the case_when output (incl.
+  # the comp_all==NA "fall through to all-FALSE" and the mode/type default arms), with no per-arm
+  # rep(FALSE)/DataMask allocation. Equivalence relied on by format()'s .ref memoization:
+  # get_reference(x[mask], mode) == get_reference(x, mode)[mask].
   if (color %in% c("OR", "or")) {
-    switch(mode[1],
-           "cells"      = dplyr::case_when(
-             type %in% c("row", "mean") & !comp_all ~ refrows               ,
-             type %in% c("row", "mean") &  comp_all ~ tottab_ref            ,
-             type == "col"                          ~ rep(refcol, length(x)),
-             TRUE                                   ~ rep(FALSE, length(x)   )
-           ),
-           "lines"      = dplyr::case_when(
-             type %in% c("row", "mean") & !comp_all ~ refrows               ,
-             type %in% c("row", "mean") &  comp_all ~ tottab_ref            ,
-             type == "col"                          ~ rep(refcol, length(x)),
-             TRUE                                   ~ rep(FALSE, length(x)   )
-           ),
-           "all_totals" = dplyr::case_when(
-             type %in% c("row", "mean") & ref == "tot" & !comp_all
-             ~ totrows | refcol,
-
-             type %in% c("row", "mean") & ref == "tot" &  comp_all
-             ~ tottab_line | refcol,
-
-             type == "col" & ref == "tot"     ~ totrows | refcol,
-
-             type %in% c("row", "mean") & !comp_all ~ refrows | refcol      ,
-             type %in% c("row", "mean") &  comp_all ~ tottab_ref | refcol   ,
-             type == "col"                          ~ refrows | refcol      ,
-             TRUE                                   ~ rep(FALSE, length(x)   )
-           )
+    switch(m,
+           "cells" = ,                                      # cells and lines identical for OR
+           "lines" = if      (is_rm && comp_f) refrows
+                     else if (is_rm && comp_t) tottab_ref
+                     else if (type == "col")   rep(refcol, n)
+                     else                      none,
+           "all_totals" = if      (is_rm && ref == "tot" && comp_f) totrows | refcol
+                          else if (is_rm && ref == "tot" && comp_t) tottab_line | refcol
+                          else if (type == "col" && ref == "tot")   totrows | refcol
+                          else if (is_rm && comp_f)                 refrows | refcol
+                          else if (is_rm && comp_t)                 tottab_ref | refcol
+                          else if (type == "col")                   refrows | refcol
+                          else                                      none
     )
 
   } else if (ref == "tot") {
-    switch(mode[1],
-           "cells"      = dplyr::case_when(
-             type %in% c("row", "mean") & !comp_all ~ totrows & !totcol     ,
-             type %in% c("row", "mean") &  comp_all ~ tottab_line & !totcol ,
-             type == "col"                          ~ totcol & !totrows     ,
-             type == "all"                          ~ totrows & totcol      ,
-             type == "all_tabs"                     ~ tottab_line & totcol  ,
-             TRUE                                   ~ rep(FALSE, length(x)   )
-           ),
-           "lines"      = dplyr::case_when(
-             type %in% c("row", "mean") & !comp_all ~ totrows               ,
-             type %in% c("row", "mean") &  comp_all ~ tottab_line           ,
-             type == "col"                          ~ rep(totcol, length(x)),
-             type == "all"                          ~ totrows & totcol      ,
-             type == "all_tabs"                     ~ tottab_line & totcol  ,
-             TRUE                                   ~ rep(FALSE, length(x)   )
-           ),
-           "all_totals" = dplyr::case_when(
-             type %in% c("n", "col", "all") |
-               (type %in% c("row", "mean") & !comp_all)
-             ~ totrows | totcol,
-
-             type == "all_tabs" | (type %in% c("row", "mean") & comp_all)
-             ~ tottab_line | totcol,
-             # type == "col"                          ~ rep(totcol, length(x)),
-             # type == "all"                          ~ totrows & totcol      ,
-             # type == "all_tabs"                     ~ tottab_line & totcol  ,
-             TRUE                                   ~ rep(FALSE, length(x)   )
-           )
+    switch(m,
+           "cells" = if      (is_rm && comp_f)    totrows & !totcol
+                     else if (is_rm && comp_t)    tottab_line & !totcol
+                     else if (type == "col")      totcol & !totrows
+                     else if (type == "all")      totrows & totcol
+                     else if (type == "all_tabs") tottab_line & totcol
+                     else                         none,
+           "lines" = if      (is_rm && comp_f)    totrows
+                     else if (is_rm && comp_t)    tottab_line
+                     else if (type == "col")      rep(totcol, n)
+                     else if (type == "all")      totrows & totcol
+                     else if (type == "all_tabs") tottab_line & totcol
+                     else                         none,
+           "all_totals" = if (type %in% c("n", "col", "all") || (is_rm && comp_f)) totrows | totcol
+                          else if (type == "all_tabs" || (is_rm && comp_t))        tottab_line | totcol
+                          else                                                     none
     )
+
   } else {
     # DESIGN: the three modes pick different cell sets relative to the baseline:
     #   "cells"      = the individual reference CELLS each cell compares to, EXCLUDING the
@@ -2662,27 +2723,20 @@ get_reference <- function(x, mode = c("cells", "lines", "all_totals")) {
     #                  full-strength (exempt from greying) in pillar_shaft.
     # comp_all switches the row/mean reference from the subtable total (refrows) to the
     # total-table reference (tottab_ref).
-    switch(mode[1],
-           "cells"      = dplyr::case_when(
-             type %in% c("row", "mean") & !comp_all ~ refrows & !totcol     ,
-             type %in% c("row", "mean") &  comp_all ~ tottab_ref & !totcol  ,
-             type == "col"                          ~ refcol & !totrows     ,
-             TRUE                                   ~ rep(FALSE, length(x)   )
-           ),
-           "lines"      = dplyr::case_when(
-             type %in% c("row", "mean") & !comp_all ~ refrows               ,
-             type %in% c("row", "mean") &  comp_all ~ tottab_ref            ,
-             type == "col"                          ~ rep(refcol, length(x)),
-             TRUE                                   ~ rep(FALSE, length(x)   )
-           ),
-           "all_totals" = dplyr::case_when(
-             type %in% c("row", "mean") & !comp_all ~ refrows | totcol      ,
-             type %in% c("row", "mean") &  comp_all ~ tottab_ref | totcol   ,
-             type == "col"                          ~ totrows | refcol      ,
-             TRUE                                   ~ rep(FALSE, length(x)   )
-           )
+    switch(m,
+           "cells" = if      (is_rm && comp_f) refrows & !totcol
+                     else if (is_rm && comp_t) tottab_ref & !totcol
+                     else if (type == "col")   refcol & !totrows
+                     else                      none,
+           "lines" = if      (is_rm && comp_f) refrows
+                     else if (is_rm && comp_t) tottab_ref
+                     else if (type == "col")   rep(refcol, n)
+                     else                      none,
+           "all_totals" = if      (is_rm && comp_f) refrows | totcol
+                          else if (is_rm && comp_t) tottab_ref | totcol
+                          else if (type == "col")   totrows | refcol
+                          else                      none
     )
-
   }
 }
 
@@ -2804,6 +2858,8 @@ vec_ptype2.tabxplor_fmt.tabxplor_fmt    <- function(x, y, ...) {
   same_color   <- color_x == fmt_color_attr(y)
   signif_x     <- get_color_signif(x)
   same_signif  <- signif_x == get_color_signif(y)
+  dspec_x      <- get_display_spec(x)
+  same_dspec   <- identical(dspec_x, get_display_spec(y))   # NA-safe (both may be NA)
   #l            <- length(x)
 
   # Phase 9c: the reconcile is scalar-attribute picking; base-R if/else replaces the 9 dplyr::if_else
@@ -2823,7 +2879,8 @@ vec_ptype2.tabxplor_fmt.tabxplor_fmt    <- function(x, y, ...) {
     refcol   = if (same_refcol)    refcol_x    else FALSE,
     color    = if (length(same_color) == 1L) { if (same_color) color_x else "" }
                else ifelse(same_color, color_x, ""),
-    color_signif = if (same_signif) signif_x else "ignore"
+    color_signif = if (same_signif) signif_x else "ignore",
+    display_spec = if (same_dspec) dspec_x else NA_character_
   )
 }
 #' Find common ptype between fmt and double
@@ -2891,7 +2948,8 @@ vec_cast.tabxplor_fmt.tabxplor_fmt  <- function(x, to, ...)
           totcol    = is_totcol   (to),
           refcol    = is_refcol   (to),
           color     = fmt_color_attr(to),          # full attribute (both channels)
-          color_signif = get_color_signif(to)
+          color_signif = get_color_signif(to),
+          display_spec = get_display_spec(to)
 
   )
 
@@ -2919,6 +2977,7 @@ vec_cast.tabxplor_fmt.double   <- function(x, to, ...)
       refcol    = is_refcol   (to),
       color     = fmt_color_attr(to),
       color_signif = get_color_signif(to),
+      display_spec = get_display_spec(to),
 
   )
 #' Convert fmt into double
@@ -2946,7 +3005,8 @@ vec_cast.tabxplor_fmt.integer <- function(x, to, ...)
       totcol   = is_totcol   (to),
       refcol    = is_refcol   (to),
       color    = fmt_color_attr(to),
-      color_signif = get_color_signif(to)
+      color_signif = get_color_signif(to),
+      display_spec = get_display_spec(to)
 
   ) #new_fmt(pct = as.double(x))
 #' Convert fmt into integer
@@ -3092,7 +3152,8 @@ vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
       totcol   = FALSE                                                  ,
       refcol   = FALSE                                                  ,
       color    = fmt_color_attr(x),
-      color_signif = get_color_signif(x)
+      color_signif = get_color_signif(x),
+      display_spec = get_display_spec(x)
 
       # type     = dplyr::if_else(same_type,
       #                           true  = type_x,
@@ -3140,7 +3201,8 @@ vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
       totcol   = FALSE                                                  ,
       refcol   = FALSE                                                  ,
       color    = fmt_color_attr(x),
-      color_signif = get_color_signif(x)
+      color_signif = get_color_signif(x),
+      display_spec = get_display_spec(x)
 
       # type     = dplyr::if_else(same_type,
       #                           true  = type_x,

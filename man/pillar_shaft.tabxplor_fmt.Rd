@@ -4,7 +4,7 @@
 \alias{pillar_shaft.tabxplor_fmt}
 \title{Pillar_shaft method to print class fmt in a \code{\link[tibble:tibble]{tibble}} column}
 \usage{
-\method{pillar_shaft}{tabxplor_fmt}(x, ...)
+\method{pillar_shaft}{tabxplor_fmt}(x, ..., .ref = NULL)
 }
 \arguments{
 \item{x}{A fmt object.}
