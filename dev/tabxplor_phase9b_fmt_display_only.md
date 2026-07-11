@@ -380,7 +380,8 @@ in the fields being round-tripped, not recomputed). Bench (gss_cat 5×3, merged)
 (`dev/benchmarks/results_1.4.0/phase9b4_carrier.txt`).
 
 **Phase 9b-5 — DONE, 2026-07-11 (byte-identical, full suite green FAIL 0 | PASS 1354, NO golden regen).**
-Landed as TWO changes to `tab_chi2()`, plus a **measurement that reframed the whole phase**:
+Both increments landed: `tab_chi2()` (increment 1) + `tab_ci()` (increment 2 — bulleted last). A
+**measurement reframed the whole phase**: the tests-boundary cost is the WRITES, not the reads.
 
 - **Increment 1 — the chi2 whole-table TEST on plain fields** (`chi2_compute_test()`, extracted from
   `tab_chi2`) + the 9b-4 no-op removed. The `tabs2 <- tabs[!is_totrow,]` record-slice (which
@@ -412,9 +413,19 @@ Landed as TWO changes to `tab_chi2()`, plus a **measurement that reframed the wh
   unweighted `tab_plain() |> tab_chi2()`). `variances_by_group`/`cells_by_group` of the old path were
   **dead code** (computed, never used) and dropped. Locked by a 10-shape git-stash `identical()` A/B +
   `test-calculations.R` (variance-contributions, chi2+Yates, Welch/classic F) + `test-color-golden.R`.
-- **Deferred to increment 2:** the `tab_ci` carrier write-back (the +55 % lever;
-  `ci_inf`/`ci_sup`/`pvalue` + `ci_type`/`color`/`comp_all`/`display`, the grouped reference-row
-  selection **L6**, the `detect_totcols`/`detect_refcol` name maps, the `tab_ci` L-IDX no-op-guard).
+- **Increment 2 — `tab_ci` write-back DONE (2026-07-11, byte-identical; 21-shape A/B + full suite;
+  `phase9b5_ci.txt`; ci per-table −20 %, 1.25×; net −58 lines).** Same precompute-then-single-write.
+  (2a) The reference-row selection + reference stats (the grouped `ref_rows`/`ref_to_na` transmutes +
+  the `x_n`/`ref`/`ref_var`/`ref_n` transmutes) → a plain loop: **`group_last_pos(mask)`** = the
+  per-subtable last-reference-row absolute index (the plain form of `.[dplyr::last(which(<mask>))]`
+  under grouping), and the `ci_*` engine reads plain fields at those positions. Dead `tot_rows`
+  dropped. (2b) The CI write (`with_groups(NULL)` mutate) + `comp_all` + `visible` display → ONE
+  ungroup/mutate/regroup; **`ci_type`/`color` stays the positional `tabs[ci_yes_ref] <- map2_df`**
+  (byte-identical, so the **L-IDX** recycle quirk needs no guard/reproduction). `wn`-materialise here
+  is subtler than chi2's: the old `comp_all`/`visible` were **GROUPED mutates** whose per-group
+  RECOMBINE fills `wn`, so `set_wn(get_wn())` is applied only when grouped, for comp_all's all-fmt
+  (diff_row) / visible's own columns. Locked by the 21-shape A/B (incl. grouped-visible) +
+  `test-golden`/`test-calculations`/`test-color-golden`.
 
 *Why step A was dropped (leaf emits carrier + tail port).* Under **Q2 = keep the record `full_join`**
 (the recommended lean below), each leaf materializes for the join regardless, so having the leaf *return*

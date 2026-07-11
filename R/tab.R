@@ -5130,151 +5130,109 @@ tab_ci <- function(tabs,
                      "all" = tabs %>% dplyr::ungroup()               )
     }
 
-    ci_select <- rlang::expr(tidyselect::all_of(names(ci_yes)[ci_yes]))
-    diff_select <- rlang::expr(tidyselect::all_of(
-      names(ci_yes)[ci %in% c("diff_row", "diff_col")]
-    ))
-    mean_select <- rlang::expr(tidyselect::all_of(
-      names(ci_yes)[ci =="diff_row" & type == "mean"]
-    ))
-    row_select <- rlang::expr(tidyselect::all_of(
-      names(ci_yes)[ci =="diff_row"]
-    ))
+    # Phase 9b-5 increment 2: reference-row selection + reference stats on PLAIN fields, replacing the
+    # ref_rows/tot_rows/ref_to_na grouped transmutes and the x_n/ref/ref_var/ref_n transmutes (each a
+    # reconstruction over the fmt columns). Per SUBTABLE, group_last_pos(mask) = the ABSOLUTE index of
+    # the group's last masked row, broadcast to that group (NA if none) -- the plain form of
+    # `.[dplyr::last(which(<mask>))]` under grouping. The old `tot_rows` was DEAD (computed, never read).
+    ci_cols   <- names(ci_yes)[ci_yes]
+    diff_cols <- names(ci_yes)[ci %in% c("diff_row", "diff_col")]
+    mean_cols <- names(ci_yes)[ci == "diff_row" & type == "mean"]
 
-    ref_rows <- tabs %>% dplyr::transmute(dplyr::across(
-      !!row_select,
-      ~ .[dplyr::last(which(switch(get_ref_type(.),
-                                   "tot" = is_totrow(.),
-                                   is_refrow(.)         )))]
-    ))
+    gid  <- dplyr::group_indices(tabs)
+    gids <- unique(gid)
+    group_last_pos <- function(mask) {
+      pos <- rep(NA_integer_, length(mask))
+      for (g in gids) {
+        r <- which(gid == g); w <- which(mask[r])
+        if (length(w)) pos[r] <- r[[w[[length(w)]]]]
+      }
+      pos
+    }
+    # the reference row per cell = last total row (ref = "tot") else last is_refrow row.
+    ref_mask <- function(col) if (identical(get_ref_type(col), "tot")) is_totrow(col) else is_refrow(col)
 
-    tot_rows <- tabs %>% dplyr::transmute(dplyr::across(
-      !!ci_select & where(~ get_type(.) == "col"),
-      ~ .[dplyr::last(which(is_totrow(.)))]
-    ))
+    empty <- stats::setNames(vector("list", length(ci_cols)), ci_cols)
+    x_n <- ref <- ref_var <- ref_n <- ci_inf <- ci_sup <- pvalue <- empty
+    for (nm in ci_cols) {
+      col <- tabs[[nm]]
+      tp  <- get_type(col)
+      rp  <- group_last_pos(ref_mask(col))                     # per-row reference-row index (NA if none)
+      rtona <- !is.na(rp) & (seq_along(rp) == rp)              # ref_to_na: the cell's own reference row
+      # Phase 6h: each cell's OWN unweighted base (tot_n for proportions, n for means); NA on the
+      # reference cell so its own CI is not computed.
+      x_n[[nm]] <- dplyr::if_else(
+        rtona, NA_integer_,
+        switch(tp, "col" = get_tot_n(col), "row" = get_tot_n(col), "mean" = get_n(col)))
+      if (nm %in% diff_cols) {
+        if (ci[[nm]] == "diff_col") {
+          rcol        <- tabs[[as.character(ref_cols[[nm]])]]  # the reference COLUMN (its own base)
+          ref[[nm]]   <- get_pct(rcol)
+          ref_n[[nm]] <- get_tot_n(rcol)[group_last_pos(is_totrow(col))]
+        } else {                                               # diff_row: the reference ROW cell
+          ref[[nm]]   <- if (tp == "mean") get_mean(col)[rp] else get_pct(col)[rp]
+          ref_n[[nm]] <- if (tp == "mean") get_n(col)[rp]     else get_tot_n(col)[rp]
+        }
+        if (nm %in% mean_cols) ref_var[[nm]] <- get_var(col)[rp]
+      }
 
-    ref_to_na <- tabs %>% dplyr::transmute(dplyr::across(
-      !!ci_select,
-      ~ tidyr::replace_na(dplyr::row_number() ==
-                            dplyr::last(which(switch(get_ref_type(.),
-                                                     "tot" = is_totrow(.) ,
-                                                     is_refrow(.)))),
-                          FALSE)
-    ))
+      # Confidence interval + per-cell pvalue via the closed-form engine (R/tab-agg.R). Weighted rule
+      # (§14): weighted proportion get_pct() / weighted mean get_mean(), UNWEIGHTED base x_n. Cell CIs
+      # carry no pvalue; diff CIs star only when `stars` is on (want_p). The reference cell has
+      # x_n = NA (rtona) -> NA bounds, so it is never self-compared.
+      want_p <- isTRUE(stars) && ci[[nm]] %in% c("diff_row", "diff_col")
+      res <- switch(
+        ci[[nm]],
+        "cell" = switch(
+          tp,
+          "mean" = ci_pivot(get_mean(col), sqrt(get_var(col) / x_n[[nm]]),
+                            df = Inf, conf_level = conf_level, want_p = FALSE),
+          # Phase 7g: the proportion cell CI honours method_cell (default wilson; wald opt-in).
+          switch(method_cell,
+                 "wilson" = ci_wilson(get_pct(col), x_n[[nm]], conf_level = conf_level),
+                 "wald"   = ci_wald(  get_pct(col), x_n[[nm]], conf_level = conf_level))),
+        "diff_col" = ,
+        "diff_row" = switch(
+          tp,
+          "mean" = ci_mean_diff2(get_mean(col), get_var(col), x_n[[nm]],
+                                 ref[[nm]], ref_var[[nm]], ref_n[[nm]],
+                                 conf_level = conf_level, want_p = want_p),
+          ci_prop_diff(get_pct(col), x_n[[nm]], ref[[nm]], ref_n[[nm]],
+                       conf_level = conf_level, method = method_diff, want_p = want_p)))
+      ci_inf[[nm]] <- res$inf; ci_sup[[nm]] <- res$sup; pvalue[[nm]] <- res$pvalue
+    }
 
-    tabs_nogroup <- tabs %>% dplyr::ungroup()
-
-    #The n for each cell is the n of the relative 100% total
-    # set to NA for reference, because we don't want to calculate it's ci
-    x_n <- tabs_nogroup %>%
-      dplyr::transmute(dplyr::across(
-        !!ci_select,
-        ~ dplyr::if_else(
-          condition = ref_to_na[[dplyr::cur_column()]],
-          true      = NA_integer_,
-          false     = switch(
-            get_type(.),
-            # Phase 6h: each proportion cell carries its OWN unweighted base in the tot_n field
-            # (row/col total), so read it directly instead of looking up the total row/column via
-            # detect_totcols(). Byte-identical when all columns share one base; exact per-col_var
-            # otherwise. Means keep their own n.
-            "col" = get_tot_n(.),
-            "row" = get_tot_n(.),
-            "mean" = get_n(.)
-          )
-        )
-      ))
-    # tabs_ci %>% dplyr::mutate(dplyr::across(where(is_fmt), get_n))
-
-    ref <- tabs_nogroup %>%
-      dplyr::transmute(dplyr::across(
-        !!diff_select,
-        ~ switch(
-          ci[[dplyr::cur_column()]],
-          "diff_col" = get_pct(rlang::eval_tidy(ref_cols[[dplyr::cur_column()]])),
-          "diff_row" = switch(get_type(.),
-                              "mean" = get_mean(ref_rows[[dplyr::cur_column()]]),
-                              get_pct(ref_rows[[dplyr::cur_column()]])
-          )
-        )
-      ))
-    # tabs_ci %>% dplyr::mutate(dplyr::across(where(is_fmt), get_ci))
-
-    ref_var <- tabs_nogroup %>%
-      dplyr::transmute(dplyr::across(
-        !!mean_select,
-        ~ get_var(ref_rows[[dplyr::cur_column()]])
-      ))
-    # tabs_ci %>% dplyr::mutate(dplyr::across(where(is_fmt), get_ctr))
-
-    # The n for the comparison reference cells is the relative 100% total
-    # - for means it is the n of the reference cell
-    # - for row pct it is the n of the 100% cell of the reference row
-    # - for col pct it is the n of the 100% cell of the reference col
-    # Phase 6h: the reference base also comes from the tot_n field -- the reference column's own
-    # base for diff_col, the reference row's own base for diff_row -- instead of a detect_totcols
-    # total row/column lookup. Byte-identical when one base is shared; exact per-col_var otherwise.
-    ref_n <- tabs %>%
-      dplyr::transmute(dplyr::across(
-        !!diff_select,
-        ~ switch(ci[[dplyr::cur_column()]],
-                 "diff_col" = rlang::eval_tidy(
-                   ref_cols[[dplyr::cur_column()]]
-                 )[dplyr::last(which(is_totrow(.)))] %>% get_tot_n(),
-                 "diff_row" = switch(
-                   get_type(.),
-                   "mean" = .[dplyr::last(which(switch(get_ref_type(.),
-                                                       "tot" = is_totrow(.),
-                                                       is_refrow(.))))] %>%
-                     get_n(), # = n of ref_rows (copy error with groups)
-
-                   .[dplyr::last(which(switch(get_ref_type(.),
-                                             "tot" = is_totrow(.),
-                                             is_refrow(.))))] %>%
-                     get_tot_n()
-                 )
-        )
-      ))
-
-    # Confidence intervals & per-cell significance (Phase 3a): the closed-form engine
-    # (R/tab-agg.R) stores real asymmetric bounds ci_inf/ci_sup + the universal-inclusion
-    # pvalue -- no per-cell DescTools. Weighted rule (§14): weighted proportion get_pct() /
-    # weighted mean get_mean(), with the UNWEIGHTED base x_n (get_n of the relevant 100%
-    # total). Cell CIs carry no pvalue; diff CIs star only when `stars` is on. A reference
-    # cell has x_n = NA (ref_to_na) -> NA bounds, so it is never self-compared.
-    tabs <- tabs %>%
-      dplyr::with_groups(
-        NULL,
-        ~ dplyr::mutate(., dplyr::across(
-          !!ci_select,
-          ~ {
-            col    <- dplyr::cur_column()
-            want_p <- isTRUE(stars) && ci[[col]] %in% c("diff_row", "diff_col")
-            res <- switch(
-              ci[[col]],
-              "cell" = switch(
-                get_type(.),
-                "mean" = ci_pivot(get_mean(.), sqrt(get_var(.) / x_n[[col]]),
-                                  df = Inf, conf_level = conf_level, want_p = FALSE),
-                # Phase 7g: the proportion cell CI honours method_cell (default wilson; wald opt-in).
-                switch(method_cell,
-                       "wilson" = ci_wilson(get_pct(.), x_n[[col]], conf_level = conf_level),
-                       "wald"   = ci_wald(  get_pct(.), x_n[[col]], conf_level = conf_level))
-              ),
-              "diff_col" = ,
-              "diff_row" = switch(
-                get_type(.),
-                "mean" = ci_mean_diff2(get_mean(.), get_var(.), x_n[[col]],
-                                       ref[[col]], ref_var[[col]], ref_n[[col]],
-                                       conf_level = conf_level, want_p = want_p),
-                ci_prop_diff(get_pct(.), x_n[[col]], ref[[col]], ref_n[[col]],
-                             conf_level = conf_level, method = method_diff, want_p = want_p)
-              )
-            )
-            set_pvalue(set_ci_sup(set_ci_inf(., res$inf), res$sup), res$pvalue)
-          }
-        )))
-    #tabs %>% dplyr::mutate(dplyr::across(where(is_fmt), get_ci))
+    # Phase 9b-5 increment 2: apply the precomputed CI bounds/pvalue (loop above) + `comp_all` + the
+    # `visible` display in ONE mutate over plain vectors (was: a with_groups(NULL) CI mutate, then a
+    # mutate for comp_all, then one for display -- 3 fmt reconstructions). All three writes are
+    # ROW-WISE, so run ungrouped then restore grouping (matching the with_groups(NULL) the CI used).
+    diff_row_any <- any(ci == "diff_row")
+    comp_all_val <- comp[1] == "all"
+    vis_mask     <- visible & ci != "no"
+    visible_cols <- names(visible)[!is.na(vis_mask) & vis_mask]
+    display      <- stats::setNames(lapply(visible_cols, function(nm)
+      if (ci[[nm]] == "cell") ifelse(type[[nm]] == "mean", "mean_ci", "pct_ci") else "ci"), visible_cols)
+    # comp_all touches ALL fmt columns (if diff_row); otherwise only the CI + visible columns.
+    write_cols   <- if (diff_row_any) names(tabs)[purrr::map_lgl(tabs, is_fmt)]
+                    else union(ci_cols, visible_cols)
+    grp <- dplyr::group_vars(tabs); drp <- dplyr::group_by_drop_default(tabs)
+    tabs <- dplyr::mutate(dplyr::ungroup(tabs), dplyr::across(
+      tidyselect::all_of(write_cols),
+      function(col) {
+        nm <- dplyr::cur_column()
+        if (nm %in% ci_cols)
+          col <- set_pvalue(set_ci_sup(set_ci_inf(col, ci_inf[[nm]]), ci_sup[[nm]]), pvalue[[nm]])
+        if (diff_row_any)         col <- set_comp_all(col, comp_all_val)
+        if (nm %in% visible_cols) col <- set_display(col, display[[nm]])
+        # Byte-identity quirk (as in chi2_write_contrib): the pre-9b-5 comp_all / visible writes were
+        # GROUPED mutates, whose per-group recombine MATERIALISES the `wn` field (NA -> n). Reproduce
+        # it for exactly those columns (comp_all = all fmt on diff_row; visible = its own columns) when
+        # the table is grouped; a no-op when wn is already set / weighted, or the table is ungrouped.
+        if (length(grp) > 0L && (diff_row_any || nm %in% visible_cols))
+          col <- set_wn(col, get_wn(col))
+        col
+      }))
+    if (length(grp)) tabs <- dplyr::group_by(tabs, dplyr::across(dplyr::all_of(grp)), .drop = drp)
 
 
     #Change ci_type and color, even for totals with no ci result
@@ -5289,22 +5247,6 @@ tab_ci <- function(tabs,
                          ifelse(!is.null(color[1]) & ! color[1] %in% c("no", ""),
                                 color[1], get_color(.))
                        ))
-
-    if (any(ci == "diff_row")) tabs <- tabs %>%
-      dplyr::mutate(dplyr::across(where(is_fmt), ~ set_comp_all(., comp[1] == "all")))
-
-    # Change types for columns where visible = TRUE
-    if (any(visible & ci != "no" )) {
-      tabs <-
-        dplyr::mutate(tabs, dplyr::across(
-          tidyselect::all_of(names(visible)[visible & ci != "no" ]),
-          ~ switch(
-            ci[dplyr::cur_column()],
-            "cell" = set_display(., ifelse(get_type(.) == "mean",
-                                           "mean_ci", "pct_ci")),
-            set_display(., "ci")
-          ) ) )
-    }
   }
 
 

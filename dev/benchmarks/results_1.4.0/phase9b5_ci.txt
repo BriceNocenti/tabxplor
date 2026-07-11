@@ -1,0 +1,35 @@
+Phase 9b-5 increment 2 -- tab_ci carrier writes (2026-07-11)
+===========================================================
+
+tab_ci()'s per-cell CI write-back moved off the dplyr-over-fmt orchestration onto plain-precomputed
+vectors, byte-identical (full suite FAIL 0 | PASS 1354, NO golden regen; 21-shape git-stash
+identical() A/B: cell/diff, prop/mean, wilson/wald, newcombe/ac, stars on/off, weighted, tab_vars,
+col%, ref=first, auto, visible cell/diff, mixed, grouped-visible cell/diff, grouped cell).
+
+Two changes (staged 2a then 2b):
+(2a) The reference-row selection + reference stats (the ref_rows/tot_rows/ref_to_na grouped
+     transmutes + x_n/ref/ref_var/ref_n transmutes) -> a plain loop: group_last_pos(mask) = the
+     per-subtable last-reference-row index (the plain form of `.[dplyr::last(which(<mask>))]` under
+     grouping); the ci_* engine (R/tab-agg.R) reads plain fields at those positions. `tot_rows` was
+     DEAD (computed, never read) -- dropped.
+(2b) The CI write (with_groups(NULL) mutate) + comp_all mutate + visible-display mutate -> ONE
+     ungroup/mutate/regroup over plain vectors (ci_inf/ci_sup/pvalue precomputed in the loop). The
+     ci_type/color step stays the positional map2_df (byte-identical, avoids the L-IDX quirk). Net
+     tab_ci -58 lines.
+
+Byte-identity quirk reproduced (as in chi2_write_contrib): the old comp_all / visible writes were
+GROUPED mutates, whose per-group RECOMBINE materialises the `wn` field (NA -> n) -- reproduced with
+set_wn(get_wn()) for exactly those columns (comp_all = all fmt on diff_row; visible = its columns)
+when the table is grouped.
+
+phase9b3_before_after.R (gss_cat, 5 row_vars x {common/ci/contrib/numeric}, median of 6):
+
+  fixture  per_tab_before  per_tab_after   delta        merge_mb
+  common      0.1502          0.1480       flat          52.6 -> 51.4  (color=diff, no ci -- read path)
+  ci          0.2333          0.1872      -20% (1.25x)   41.7 -> 40.2  <<< THE INCREMENT-2 WIN
+  contrib     0.2963          0.1652      -44% (1.79x)   39.5 -> 27.7  (increment 1 + shared cleanup)
+  numeric     0.0251          0.0239       flat          16.6 -> 16.6
+
+before = HEAD a25a4f3 (pre-9b-5). Combined Phase 9b-5 (both increments): the two WRITE-heavy
+tests-boundary paths -- contrib -44% and ci -20% -- are recovered; the READ paths (chi2 test,
+common) stay flat, confirming the read/write reframing (the writes were the O(cells) fmt cost).

@@ -1331,6 +1331,335 @@ po_to_dt <- function(file) {
 }
 
 
+# Colors functions ---- 
+# Visual review of colour combinations in the Positron Viewer pane.
+#
+#   preview_colour_grid()    - every text x background combination of two vectors
+#   preview_luminance_grid() - luminance shades of one text/background pair
+#
+# Typography (font stack + thin bottom borders + centred bold caption) mirrors
+# the defaults of tabxplor::tab_kable() (lightable-classic style, the
+# '"DejaVu Sans", "Arial", ...' font set via option "tabxplor.kable_html_font"),
+# so these swatch tables sit visually next to your tabxplor cross-tables.
+#
+# Dependency: farver (oklch maths), which ships with your tidyverse + tabxplor
+# stack. Viewer routing uses base R (getOption("viewer") with a browser fallback).
+# ---------------------------------------------------------------------------
+
+# tab_kable() default HTML font stack.
+.cg_font <- '"DejaVu Sans", "Arial", arial, helvetica, sans-serif'
+
+# --- internal: dependency guard --------------------------------------------
+
+#' Stop early with a clear message if farver is missing.
+#' @noRd
+.cg_require <- function() {
+  if (!requireNamespace("farver", quietly = TRUE)) {
+    stop("Package 'farver' is required for oklch handling.", call. = FALSE)
+  }
+}
+
+# --- internal: oklch / gamut maths -----------------------------------------
+
+#' Decode one colour to its oklch (l, c, h), position-indexed for safety.
+#' @noRd
+.cg_oklch <- function(hex) {
+  m <- farver::decode_colour(hex, to = "oklch")
+  c(l = m[1, 1], c = m[1, 2], h = m[1, 3])
+}
+
+#' Is oklch(l, c, h) inside the sRGB gamut?
+#'
+#' farver caps RGB output to [0, 255], so an out-of-gamut colour never returns
+#' impossible RGB values - instead it loses chroma on a round-trip
+#' oklch -> rgb -> oklch. We detect that chroma drop.
+#' @noRd
+.cg_in_gamut <- function(l, c, h, tol = 1e-3) {
+  lch  <- matrix(c(l, c, h), ncol = 3)
+  rgb  <- farver::convert_colour(lch, from = "oklch", to = "rgb")
+  back <- farver::convert_colour(rgb, from = "rgb", to = "oklch")
+  abs(back[1, 2] - c) <= tol
+}
+
+#' Largest in-gamut chroma for a given lightness/hue.
+#'
+#' The in-gamut chroma range is a single interval [0, cmax], so a bisection on
+#' "is this chroma still in gamut?" converges on cmax.
+#' @noRd
+.cg_max_chroma <- function(l, h, hi = 0.4, iter = 28L) {
+  lo <- 0
+  for (i in seq_len(iter)) {
+    mid <- (lo + hi) / 2
+    if (.cg_in_gamut(l, mid, h)) lo <- mid else hi <- mid
+  }
+  lo
+}
+
+#' Build a hex colour at lightness `l`, keeping hue `h`; chroma set by `mode`.
+#'
+#' "fixed" keeps the source chroma but caps it to the gamut (so hue is never
+#' distorted by RGB clipping); "max" uses the most vivid in-gamut chroma.
+#' @noRd
+.cg_shade <- function(l, h, base_c, mode) {
+  if (base_c < 1e-4) {                    # achromatic source -> stay grey
+    cc <- 0
+  } else {
+    cmax <- .cg_max_chroma(l, h)
+    cc <- if (mode == "max") cmax else min(base_c, cmax)
+  }
+  farver::encode_colour(matrix(c(l, cc, h), ncol = 3), from = "oklch")
+}
+
+#' Pick black or white text for legibility over a background hex.
+#' @noRd
+.cg_readable_on <- function(bg_hex) {
+  l <- farver::decode_colour(bg_hex, to = "oklch")[1, 1]
+  if (l >= 0.6) "#000000" else "#ffffff"
+}
+
+#' Minimal HTML escaping for user-supplied sample text.
+#' @noRd
+.cg_escape <- function(x) {
+  x <- gsub("&", "&amp;", x, fixed = TRUE)
+  x <- gsub("<", "&lt;",  x, fixed = TRUE)
+  gsub(">", "&gt;", x, fixed = TRUE)
+}
+
+# --- internal: HTML assembly + Viewer routing ------------------------------
+
+#' Assemble the swatch <table> as an HTML string.
+#'
+#' Column headers are tinted with the background colour (a live preview of the
+#' backdrop); row headers show a bordered square of the text colour (always
+#' visible, even for near-white text colours).
+#'
+#' @param text_hex,bg_hex Character matrices [n_row x n_col] of cell colours.
+#' @param row_swatch,col_swatch Hex used to tint the row squares / column cells.
+#' @noRd
+.cg_table <- function(text_hex, bg_hex, row_labels, col_labels,
+                      row_swatch, col_swatch, corner, sample_text,
+                      show_hex, swatch_padding) {
+  sample_html <- .cg_escape(sample_text)
+  n_row <- nrow(text_hex)
+  n_col <- ncol(text_hex)
+
+  # header row: corner cell + one tinted cell per background
+  th <- vapply(seq_len(n_col), function(j) {
+    bg <- col_swatch[j]
+    sprintf(
+      '<th style="background-color:%s;color:%s;padding:6px 10px;">%s</th>',
+      bg, .cg_readable_on(bg), col_labels[j]
+    )
+  }, character(1))
+  head_html <- sprintf(
+    '<tr><th style="padding:6px 10px;text-align:right;">%s</th>%s</tr>',
+    corner, paste(th, collapse = "")
+  )
+
+  # body rows: row header (square + label) + one swatch cell per background
+  rows <- vapply(seq_len(n_row), function(i) {
+    rlab <- sprintf(
+      paste0('<th style="padding:6px 10px;text-align:right;white-space:nowrap;">',
+             '<span style="display:inline-block;width:12px;height:12px;',
+             'border:1px solid #999;background-color:%s;vertical-align:middle;',
+             'margin-right:6px;"></span>%s</th>'),
+      row_swatch[i], row_labels[i]
+    )
+    cells <- vapply(seq_len(n_col), function(j) {
+      txt <- text_hex[i, j]
+      bg  <- bg_hex[i, j]
+      hexline <- if (isTRUE(show_hex)) {
+        sprintf('<div style="font-size:11px;opacity:.85;">%s on %s</div>',
+                toupper(txt), toupper(bg))
+      } else {
+        ""
+      }
+      sprintf(
+        paste0('<td style="background-color:%s;color:%s;padding:%s;',
+               'text-align:center;border-bottom:1px solid #d9d9d9;">',
+               '<div style="font-weight:600;">%s</div>%s</td>'),
+        bg, txt, swatch_padding, sample_html, hexline
+      )
+    }, character(1))
+    sprintf("<tr>%s%s</tr>", rlab, paste(cells, collapse = ""))
+  }, character(1))
+
+  sprintf("<table><thead>%s</thead><tbody>%s</tbody></table>",
+          head_html, paste(rows, collapse = ""))
+}
+
+#' Wrap the table in a standalone tab_kable-style HTML page and open the Viewer.
+#'
+#' Routes through getOption("viewer") (set by Positron / RStudio, the same hook
+#' tab_kable() uses) and falls back to the default browser outside those IDEs.
+#' @noRd
+.cg_render <- function(table_html, caption, subtitle, font_size, browse) {
+  css <- sprintf(
+    paste0(
+      "body{margin:0;background:#fff;}",
+      ".cg-wrap{font-family:%s;font-size:%s;color:#222;padding:16px;}",
+      ".cg-wrap table{border-collapse:collapse;margin:0 auto;}",
+      ".cg-wrap th{border-bottom:1px solid #d9d9d9;border-top:none;}",
+      ".cg-title{text-align:center;font-weight:bold;font-size:120%%;}",
+      ".cg-sub{text-align:center;font-size:85%%;opacity:.8;margin:2px 0 12px;}"
+    ),
+    .cg_font, font_size
+  )
+  page <- sprintf(
+    paste0('<!DOCTYPE html><html><head><meta charset="utf-8"><style>%s</style>',
+           '</head><body><div class="cg-wrap"><div class="cg-title">%s</div>',
+           '<div class="cg-sub">%s</div>%s</div></body></html>'),
+    css, caption, subtitle, table_html
+  )
+  if (isTRUE(browse)) {
+    f <- tempfile(pattern = "cg_", fileext = ".html")
+    writeLines(enc2utf8(page), f, useBytes = TRUE)  # keep unicode glyphs intact
+    viewer <- getOption("viewer")
+    if (is.function(viewer)) viewer(f) else utils::browseURL(f)
+  }
+  invisible(page)
+}
+
+# --- exported: 1. all text x background combinations -----------------------
+
+#' Preview every text x background colour combination in the Viewer
+#'
+#' Builds an HTML grid with one row per text colour and one column per
+#' background colour, then opens it in the Positron Viewer pane. Typography
+#' matches the defaults of [tabxplor::tab_kable()].
+#'
+#' @param text_colors A (named) character vector of hex text colours. Names
+#'   become row labels; the hex value is used when unnamed.
+#' @param background_colors A (named) character vector of hex background
+#'   colours, used as columns.
+#' @param sample_text Text shown in each cell. Default "Aa Gg 123".
+#' @param show_hex Logical; print the "text on background" hex pair under the
+#'   sample. Default TRUE.
+#' @param font_size CSS font-size for the table. Default "16px" (tab_kable base).
+#' @param swatch_padding CSS padding for each swatch cell. Default "12px 16px".
+#' @param browse Logical; open the result in the Viewer. Default TRUE.
+#'
+#' @return (Invisibly) the generated HTML as a single string.
+#' @examples
+#' \dontrun{
+#' text_colors <- c(plain = "#888888", pos3 = "#0baedb", pos5 = "#265aff")
+#' background_colors <- c(plain = "#ffffff", pos3 = "#91b837", pos5 = "#05ae30")
+#' preview_colour_grid(text_colors, background_colors)
+#' }
+#' @keywords internal
+preview_colour_grid <- function(text_colors,
+                                background_colors,
+                                sample_text = "Aa Gg 123",
+                                show_hex = TRUE,
+                                font_size = "16px",
+                                swatch_padding = "12px 16px",
+                                browse = TRUE) {
+  .cg_require()
+  stopifnot(length(text_colors) >= 1, length(background_colors) >= 1)
+
+  row_labels <- names(text_colors)
+  if (is.null(row_labels)) row_labels <- unname(text_colors)
+  col_labels <- names(background_colors)
+  if (is.null(col_labels)) col_labels <- unname(background_colors)
+
+  n_row <- length(text_colors)
+  n_col <- length(background_colors)
+
+  # row = text colour (constant across a row); col = background (constant down a column)
+  text_hex <- matrix(rep(unname(text_colors), times = n_col), nrow = n_row)
+  bg_hex   <- matrix(rep(unname(background_colors), each = n_row), nrow = n_row)
+
+  table_html <- .cg_table(
+    text_hex, bg_hex,
+    row_labels = row_labels, col_labels = col_labels,
+    row_swatch = unname(text_colors),
+    col_swatch = unname(background_colors),
+    corner = "text \u2193 / bg \u2192",
+    sample_text = sample_text, show_hex = show_hex,
+    swatch_padding = swatch_padding
+  )
+  .cg_render(
+    table_html,
+    caption  = "Text \u00d7 background colour grid",
+    subtitle = sprintf("%d text colours \u00d7 %d backgrounds", n_row, n_col),
+    font_size = font_size, browse = browse
+  )
+}
+
+# --- exported: 2. luminance shades of one pair -----------------------------
+
+#' Preview luminance shades of one text/background pair in the Viewer
+#'
+#' For a single text colour and background colour, builds a grid of luminance
+#' shades: rows vary the text colour's lightness, columns vary the background's
+#' lightness. Every shade keeps its source oklch hue; chroma is either held at
+#' the source value (capped to gamut) or pushed to the maximum available at that
+#' lightness/hue. Opens in the Positron Viewer.
+#'
+#' @param text_color Single hex string for the text colour.
+#' @param background_color Single hex string for the background colour.
+#' @param l_values Numeric oklch lightness values (0-1) for the shades.
+#'   Default seq(0.35, 0.95, length.out = 7).
+#' @param chroma "fixed" (keep source chroma, capped to gamut) or "max"
+#'   (maximum in-gamut chroma per shade). Default "fixed".
+#' @param sample_text,show_hex,font_size,swatch_padding,browse See
+#'   [preview_colour_grid()].
+#'
+#' @return (Invisibly) the generated HTML as a single string.
+#' @examples
+#' \dontrun{
+#' preview_luminance_grid("#59c5bf", "#b9c653")                 # fixed chroma
+#' preview_luminance_grid("#59c5bf", "#b9c653", chroma = "max") # most vivid
+#' }
+#' @keywords internal
+preview_luminance_grid <- function(text_color,
+                                   background_color,
+                                   l_values = seq(0.35, 0.95, length.out = 7),
+                                   chroma = c("fixed", "max"),
+                                   sample_text = "Aa Gg 123",
+                                   show_hex = TRUE,
+                                   font_size = "16px",
+                                   swatch_padding = "12px 16px",
+                                   browse = TRUE) {
+  .cg_require()
+  chroma <- match.arg(chroma)
+  stopifnot(length(text_color) == 1, length(background_color) == 1)
+
+  txt_lch <- .cg_oklch(text_color)
+  bg_lch  <- .cg_oklch(background_color)
+
+  # shade ramps: row = text lightness, col = background lightness
+  txt_shades <- vapply(l_values, function(l)
+    .cg_shade(l, txt_lch[["h"]], txt_lch[["c"]], chroma), character(1))
+  bg_shades  <- vapply(l_values, function(l)
+    .cg_shade(l, bg_lch[["h"]],  bg_lch[["c"]],  chroma), character(1))
+
+  n <- length(l_values)
+  text_hex <- matrix(rep(txt_shades, times = n), nrow = n)  # constant per row
+  bg_hex   <- matrix(rep(bg_shades,  each  = n), nrow = n)  # constant per col
+
+  lab <- sprintf("L=%.2f", l_values)
+  table_html <- .cg_table(
+    text_hex, bg_hex,
+    row_labels = lab, col_labels = lab,
+    row_swatch = txt_shades, col_swatch = bg_shades,
+    corner = "text \u2193 / bg \u2192",
+    sample_text = sample_text, show_hex = show_hex,
+    swatch_padding = swatch_padding
+  )
+  .cg_render(
+    table_html,
+    caption  = sprintf("Luminance shades \u2014 chroma: %s", chroma),
+    subtitle = sprintf(
+      "text %s (hue %.0f\u00b0) \u00d7 background %s (hue %.0f\u00b0)",
+      toupper(text_color), txt_lch[["h"]],
+      toupper(background_color), bg_lch[["h"]]
+    ),
+    font_size = font_size, browse = browse
+  )
+}
+
+
 # Other functions ----
 
 
