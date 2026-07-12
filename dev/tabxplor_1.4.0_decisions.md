@@ -988,7 +988,13 @@ Golden regenerated (conscious): `f_ci_cell`, `f_ci_diff` (display + struct), `f_
 > `R/tab-xl-backend.R` (thin `xlb_*` wrappers + pure range coalescers), not an `xl_backend_openxlsx1/2`
 > pair. The perf-premise caveat below was borne out in spirit — the openxlsx2 win is the
 > **shared-style + largest-range** application (coalesced multi-area `dims`), not raw speed; hard cell
-> styles were kept (conditional formatting deferred as experimental). The byte-identity oracle here is
+> styles were kept (conditional formatting deferred as experimental). The **styles-manager write
+> optimization** then landed (2026-07-12): each cell's full style is PRECOMPOSED (create_font/fill/
+> border + create_cell_style) and applied by id with `set_cell_style` -- ~1.4-1.8x faster than the
+> per-aspect `wb_add_*` passes (single 0.34->0.24 s, 12 tables 5.5->3.0 s). `parallel=` was **dropped**
+> from `tab_xl` (only ~1.09x, write-bound/Amdahl-capped); a parallel-write-merge via
+> `wb_clone_worksheet(from=)` was studied (works via a save->load->clone border workaround, ~2.5-3x
+> batch-only) but dominated by the styles-manager win. The byte-identity oracle here is
 > relaxed to the value/code-path parity (`test-export-parity.R` + numFmt-code lock) + visual review,
 > per the 10g "white elephant" waiver. Full record: CLAUDE.md § Phase 10h + `dev/tabxplor_phase10_exporters.md` (Status).
 

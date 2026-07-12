@@ -425,16 +425,16 @@ Single-tab-first with a list method. Pipeline:
   (`sheets="auto"/"tabs"/"unique"`) + stacking offsets, then builds per-table **plans** (serial
   `purrr::pmap`) and assembles ONE workbook, writing each plan with `xl_write_table()`. (No `parallel=`:
   the openxlsx2 write dominates and is serial, so parallelising the plan build was measured not worth it.)
-- `tab_xl_plan_one()` — pure, parallel-safe per-table plan: the raw `get_num()` frame to write, the
-  per-cell Excel **numFmt codes** from `format(x, syntax="excel")` (stars folded into the literal
-  `0.0%"***"` when `getOption("tabxplor.stars")`), the two-channel colour **slots** from
-  `fmt_color_channels()`, a **unified font descriptor per cell** (numeric font + headers + refs +
-  title/subtext + text-channel colour, aggregated), and absolute geometry.
-- `xl_write_table()` — the per-sheet writer: issues the openxlsx2 calls through the `xlb_*` backend
-  wrappers, applying each shared style ONCE over the fewest **coalesced multi-area `dims`**
-  (`xl_rect_dims`/`xl_coalesce`). Fonts use `update=FALSE` (a complete replace per cell) to sidestep the
-  openxlsx2 range-`update` bug; borders use `update=TRUE` per rectangle; cross-aspect merge keeps
-  numFmt/fill/border/alignment coexisting.
+- `tab_xl_plan_one()` — pure per-table plan: the raw `get_num()` frame to write, the per-cell Excel
+  **numFmt codes** from `format(x, syntax="excel")` (stars folded into the literal `0.0%"***"` when
+  `getOption("tabxplor.stars")`), and a **precomposed per-cell style grid** via `xl_build_styles()` —
+  each cell's full style (font+fill+border+alignment; borders painted onto 4 side matrices, alignment
+  onto zone matrices), grouped into the fewest DISTINCT styles with a coalesced multi-area `dims`.
+- `xl_write_table()` — the per-sheet writer: writes the raw values, then `xl_apply_styles()` registers
+  each distinct style ONCE (deduped fonts/fills/borders + a composed cell xf) and applies it by id with
+  `set_cell_style` over its coalesced `dims` (`xl_coalesce`) — far fewer + cheaper openxlsx2 calls than
+  a `wb_add_*` per aspect (the "shared styles" fast path, ~1.4–1.8× faster). numFmt is the one exception,
+  a grouped `wb_add_numfmt` pass that merges onto the composed xf.
 
 **Export parity** (unchanged from 10g): the raw `get_num()` value is written and Excel formats it via the
 `format(syntax="excel")` code — the same display source of truth as every other backend (verified by

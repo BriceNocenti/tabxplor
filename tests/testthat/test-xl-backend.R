@@ -16,14 +16,6 @@ test_that("xl_runs compresses to contiguous runs", {
   expect_identical(xl_runs(integer(0)), list())
 })
 
-test_that("xl_rect_dims builds one range per row-run x col-run", {
-  expect_identical(xl_rect_dims(2:4, 1:2), "A2:B4")
-  expect_identical(xl_rect_dims(2L, c(1L, 3L)), "A2,C2")     # non-contiguous cols
-  expect_identical(xl_rect_dims(c(2L, 5L), 1L), "A2,A5")     # non-contiguous rows
-  expect_identical(xl_rect_dims(3L, 2L), "B3")               # single cell
-  expect_identical(xl_rect_dims(integer(0), 1L), NA_character_)
-})
-
 test_that("xl_coalesce merges same-row columns into blocks", {
   expect_identical(xl_coalesce(c(3L, 4L, 5L), c(2L, 2L, 2L)), "C2:E2")   # row-run shared -> block
   expect_identical(xl_coalesce(rep(2L, 3), 3:5), "B3:B5")                # a full column run

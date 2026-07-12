@@ -41,15 +41,17 @@ R/
 ├── tab_classes.R   (3554 L)  tabxplor_tab/grouped_tab classes, 30+ dplyr S3 methods,
 │                              print methods, tab_kable(), tab_plot(), tab_compact(),
 │                              color palettes, set_color_style(), set_color_breaks()
-├── tab_xl.R        (~470 L)  Excel export via openxlsx2 (Suggests-only; Phase 10h). Single-tab-first
+├── tab_xl.R        (~595 L)  Excel export via openxlsx2 (Suggests-only; Phase 10h). Single-tab-first
 │                              + list. tab_xl() orchestrator -> tab_xl_plan_one() (pure per-table plan:
-│                              raw values + numFmt codes w/ stars folded + colour slots + font plan +
-│                              geometry) -> xl_write_table() (per-sheet writer). Consumes tab-export-prep
-│                              (roles/refs/bold) + format(syntax="excel"); transpose arg;
-│                              conditional_format experimental; n_min/hide_near_zero inert
-├── tab-xl-backend.R (~155 L) Phase 10h openxlsx2 backend: ~14 xlb_* engine wrappers (in-place R6 $) +
-│                              pure range coalescers (xl_runs/xl_rect_dims/xl_coalesce -> fewest
-│                              multi-area dims, one shared style per range). openxlsx2 layering notes.
+│                              raw values + numFmt codes w/ stars + a precomposed per-cell STYLE grid
+│                              via xl_build_styles) -> xl_write_table() (writes values, then
+│                              xl_apply_styles = register deduped fonts/fills/borders + composed xf,
+│                              apply by id with set_cell_style, then the numFmt merging pass). Consumes
+│                              tab-export-prep (roles/refs/bold) + format(syntax="excel"); transpose
+│                              arg; conditional_format experimental; n_min/hide_near_zero inert
+├── tab-xl-backend.R (~110 L) Phase 10h openxlsx2 backend: plumbing xlb_* engine wrappers (in-place R6
+│                              $) + the pure range coalescer (xl_runs/xl_coalesce -> fewest multi-area
+│                              dims). Styling-model notes (precompose + set_cell_style fast path).
 ├── tab_md.R         (~560 L) Markdown export: plain padded pipe table + (Phase 10f) break-derived
 │                              pandoc colour spans [<num>]{.p20} (uniform, aligned) via tab_export_prep;
 │                              tab_md_css() per-table CSS generator; md_slot_class_map/md_break_class
@@ -1300,7 +1302,8 @@ aggressive simplification is welcome.
 - **`tab_xl.R` rewrite** (single-tab-first + list): orchestrator `tab_xl()` → pure per-table **`tab_xl_plan_one()`** (raw `get_num` values + numFmt codes + colour slots + a unified font plan + geometry — parallel-safe) → per-sheet writer **`xl_write_table()`** (issues the openxlsx2 calls). Sheet grouping (`sheets="auto"/"tabs"/"unique"` + start offsets) kept.
 - **Stars** folded into the numFmt literal (`0.0%"***"`, gated by `getOption("tabxplor.stars")`), cell stays a real number. **`transpose=`** (maps `tab_transpose()` before prep) wired. **`conditional_format=`** accepted but experimental (message + falls back to hard styles — deferred: CF can't reproduce field-derived colours without hidden helper columns, and the coalesced hard-style path is fast/exact/small). `n_min`/`hide_near_zero` stay accepted-but-inert. **NO `parallel=` on `tab_xl`** (a benchmark showed only ~1.09× — the openxlsx2 write is serial and dominates ~92%; Amdahl-capped, so removed; the plan builder is still pure and called serially via `purrr::pmap`). `dev/benchmarks/results_1.4.0/phase10h_openxlsx2.txt`.
 - **openxlsx2 style findings** (probe-verified, in the backend header): `wb_add_*` **merge across aspects** automatically (== v1 `addStyle(stack=TRUE)`); **within an aspect** the default replaces, so borders pass `update=TRUE` (only drawn sides). `wb_add_font(update=)` is **buggy over large ranges** when the sheet has scattered cells → all font needs are aggregated per cell into ONE complete descriptor applied with `update=FALSE`; cross-aspect merge preserves numFmt/fill/border/alignment. Borders reject multi-area `dims` (fills accept it) → `xlb_border` applies per rectangle. `wb_add_data(na=NULL, apply_cell_style=FALSE)` → blank NA cells, raw numbers.
-- **DEFERRED write optimization** (maintainer will commit this checkpoint first, then it lands in the same session): the ~40 separate `wb_add_*` style calls/table are openxlsx2's real cost (~0.45 s/table, linear); collapse them via the **styles-manager** — compute each cell's COMPLETE xf (font+fill+border+numfmt+alignment) once, apply by id with `set_cell_style(dims, style=id)` (~10–15 calls/table) → ~2–3× faster write (helps single + batch export). Correctness-sensitive (borders as `borderId`).
+- **Styles-manager write optimization (DONE, 2026-07-12)** — replaced the ~40 per-aspect `wb_add_*` passes with a **precompose**: `tab_xl_plan_one` builds a per-cell full-style grid (`xl_build_styles`: font+fill+border+alignment, borders painted onto 4 side matrices, alignment onto zone matrices), groups into the fewest DISTINCT styles; `xl_apply_styles` registers deduped fonts/fills/borders + a composed cell xf ONCE and applies by id with `set_cell_style` over each style's coalesced dims. numFmt stays a separate grouped `wb_add_numfmt` merging pass. **single 0.34→0.24 s (~1.4×), 12 tables 5.5→3.0 s (~1.8×)**; fidelity verified; suite green, no golden regen. The dropped per-aspect wrappers (`xlb_font/fill/border/align`) + `xl_rect_dims` were removed. Drove it: `set_cell_style` is 1.7× cheaper/call than `wb_add_font`; the profile pinned the cost in openxlsx2's per-call data.frame churn (`mapply`/`[.data.frame`/`read_xf`).
+- **Parallel-write-merge studied, NOT pursued** (maintainer chose styles-manager only): each worker builds its sheet in its own wb, main merges via `wb_clone_worksheet(from=)` — works only via a save→`wb_load`→clone workaround (clone fails on in-memory borders, the same openxlsx2 styles bug), ~2.5–3× for batches only, but dominated by the styles-manager win (which also helps single-table export) + adds mirai/temp-file/merge machinery. Detail: `dev/benchmarks/results_1.4.0/phase10h_openxlsx2.txt`.
 
 Original plan (historical intent) below.
 

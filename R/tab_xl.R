@@ -2,20 +2,21 @@
 # ROLE: Primary export format for sharing tables with non-R users. Phase 10h: single-tab-first with a
 #       list method; consumes the shared exporter prep (R/tab-export-prep.R) for role detection /
 #       references / bold rows, the two-channel colour engine (fmt_color_channels), and the openxlsx2
-#       backend wrappers (R/tab-xl-backend.R). tab_xl_plan_one() does the pure per-table CPU (raw
-#       values + numFmt codes + colour slots + geometry); xl_write_table() issues the openxlsx2 calls.
+#       backend (R/tab-xl-backend.R). tab_xl_plan_one() does the pure per-table CPU (raw values +
+#       numFmt codes + a precomposed per-cell STYLE grid via xl_build_styles); xl_write_table() writes
+#       the values, applies the styles by id (xl_apply_styles), then the numFmt merging pass.
 # KEY CONSTRAINTS:
 #   - openxlsx2 is Suggests-only -- the ONE requireNamespace() guard is in tab_xl(); every engine call
-#     goes through the unguarded xlb_* wrappers.
+#     goes through the unguarded xlb_* wrappers or xl_apply_styles' create_*/set_cell_style compose.
 #   - Export-Parity: tab_xl writes the RAW get_num() value; Excel formats it via the per-cell codes
 #     from format(x, syntax = "excel") (fmt_class.R excel_numfmt_code) -- the single display source of
 #     truth. Significance stars are folded into the numFmt code (0.0%"***"), gated by the SAME option
 #     as the text path (getOption("tabxplor.stars")), so the cell stays a real number.
-#   - Shared-style + range: colours/numFmt are applied per (style) group over the fewest coalesced
-#     multi-area dims (xl_coalesce / xl_rect_dims), never per cell.
-#   - Styling layers via openxlsx2's automatic cross-aspect merge + update= within borders/fonts
-#     (see R/tab-xl-backend.R). The plan builder is pure; the workbook is assembled serially (the
-#     openxlsx2 write dominates and is inherently serial -- parallelising it was measured not worth it).
+#   - Shared-style fast path: each cell's FULL style (font+fill+border+alignment) is precomposed and
+#     applied ONCE by id (set_cell_style) over the fewest coalesced multi-area dims (xl_coalesce) --
+#     far fewer + cheaper openxlsx2 calls than a wb_add_* per aspect. numFmt merges on afterwards.
+#   - The plan builder is pure; the workbook is assembled serially (the openxlsx2 write dominates and
+#     is inherently serial -- parallelising it was measured not worth it).
 
 #' Excel output for tabxplor tables, with formatting and colors
 #' @description To modify the colors used into the Excel table, you can change the
@@ -359,110 +360,197 @@ tab_xl_plan_one <- function(tab, roles, bold_rows, start, sheet, title, subtext,
         .groups = "drop")
   }
 
+  # Background-channel colour -> per-cell fill hex.
+  bg <- dplyr::filter(colour, .data$channel == "bg")
+  bg_fill <- if (nrow(bg)) tibble::tibble(row = bg$row, col = bg$col, fill = o$bg_pal[bg$slot])
+             else tibble::tibble(row = integer(), col = integer(), fill = character())
+
+  # Precompose the ENTIRE per-cell style (font + fill + border + alignment) into the fewest distinct
+  # styles, each with its coalesced dims -- the openxlsx2 "shared styles, applied by id" fast path.
+  styles <- xl_build_styles(
+    header_row = header_row, data_rows = data_rows, last_row = last_row, ncl = ncl,
+    fmt_cols = fmt_cols, txt_cols = txt_cols, totcols = totcols, start_col_var = start_col_var,
+    tot_rows      = roles$totrows         + start + 1L,
+    tot_rows_1    = roles$totblock_top    + start + 1L,
+    tot_rows_last = roles$totblock_bottom + start + 1L,
+    end_group     = utils::head(roles$new_group, -1L) + start + 1L,
+    fonts = fonts, bg_fill = bg_fill, title_row = start, subtext_rows = subtext_rows, o = o
+  )
+
   list(
-    sheet = sheet, ncol = ncl,
+    sheet = sheet,
     title = title, title_row = start,
     subtext = subtext_clean, subtext_row = n + start + 2L,
     data = dplyr::mutate(tab, dplyr::across(where(is_fmt), get_num)) |> tibble::as_tibble(),
-    header_row = header_row, data_rows = data_rows, last_row = last_row,
-    all_cols = seq_len(ncl),
-    fmt_cols = fmt_cols, txt_cols = txt_cols, row_var_col = row_var_col,
-    totcols = totcols, ref_cols = ref_cols, start_col_var = start_col_var,
-    tot_rows      = roles$totrows        + start + 1L,
-    tot_rows_1    = roles$totblock_top   + start + 1L,
-    tot_rows_last = roles$totblock_bottom + start + 1L,
-    ref_rows      = ref_rows,
-    end_group     = utils::head(roles$new_group, -1L) + start + 1L,
-    numfmt = numfmt, colour = colour, fonts = fonts, colwidth = colwidth
+    header_row = header_row,
+    fmt_cols = fmt_cols, row_var_col = row_var_col, colwidth = colwidth,
+    styles = styles, numfmt = numfmt
   )
 }
 
 
-# Per-sheet writer: issues the openxlsx2 calls for ONE table's region. Every style is applied ONCE
-# over the fewest coalesced multi-area dims (xl_rect_dims for rectangular passes, xl_coalesce for
-# per-cell numFmt/colour passes). Layering relies on openxlsx2's cross-aspect merge + update=.
+# Build the per-cell full style grid (font + fill + border + alignment) for one table, grouped into
+# the fewest DISTINCT styles, each with a coalesced multi-area dims. numFmt is NOT here (it is applied
+# by the writer as a separate merging pass). Borders are painted onto 4 side matrices (0 none / 1 thin
+# / 2 double), alignment onto zone matrices (base -> header -> total cols -> total rows, last wins).
+#' @keywords internal
+xl_build_styles <- function(header_row, data_rows, last_row, ncl, fmt_cols, txt_cols, totcols,
+                            start_col_var, tot_rows, tot_rows_1, tot_rows_last, end_group,
+                            fonts, bg_fill, title_row, subtext_rows, o) {
+  block_rows <- header_row:last_row
+  nb  <- length(block_rows)
+  idx <- function(r) match(intersect(r, block_rows), block_rows)          # abs row -> block index
+  ci  <- function(c) intersect(as.integer(c), seq_len(ncl))
+
+  # borders: 4 side matrices
+  bt <- bb <- bl <- br <- matrix(0L, nb, ncl)
+  prow <- function(M, rows, v) { i <- idx(rows); if (length(i)) M[i, ] <- v; M }
+  pcol <- function(M, cols, v) { c <- ci(cols); if (length(c)) M[, c] <- v; M }
+  bt <- prow(bt, c(header_row, tot_rows_1), 1L)                           # surround/header top + block top
+  bb <- prow(bb, c(header_row, last_row, tot_rows_last), 1L)             # header/surround/bottomline/block bottom
+  bl <- pcol(bl, c(1L, totcols, start_col_var), 1L)                       # first col / total cols / col_var starts
+  br <- pcol(br, c(ncl, totcols), 1L)                                     # last col / total cols
+  bb <- prow(bb, end_group, 2L)                                           # between-group double (wins)
+
+  # alignment: character/logical matrices, painted general -> specific (last wins)
+  ah <- matrix(NA_character_, nb, ncl); av <- matrix("", nb, ncl)
+  aw <- matrix(FALSE, nb, ncl);         ar <- matrix(0L, nb, ncl)
+  di <- idx(data_rows); if (length(di)) av[di, ] <- "top"                 # data base valign
+  hi <- idx(header_row)                                                   # header
+  if (o$colnames_rotation == 0) { ah[hi, ] <- "center" } else { ah[hi, ] <- "left"; ar[hi, ] <- o$colnames_rotation }
+  av[hi, ] <- "bottom"; aw[hi, ] <- TRUE
+  tc <- ci(totcols)                                                       # total cols (header + data): left/top
+  if (length(tc)) { ah[, tc] <- "left"; av[, tc] <- "top"; aw[, tc] <- FALSE; ar[, tc] <- 0L }
+  tri <- idx(tot_rows)                                                    # total rows
+  if (length(tri)) {
+    fc <- ci(fmt_cols); if (length(fc)) { ah[tri, fc] <- "right"; av[tri, fc] <- "top"; aw[tri, fc] <- FALSE }
+    xc <- ci(txt_cols); if (length(xc)) { ah[tri, xc] <- "left";  av[tri, xc] <- "top"; aw[tri, xc] <- TRUE }
+    if (length(tc))    { ah[tri, tc] <- "left";  av[tri, tc] <- "top"; aw[tri, tc] <- FALSE }
+  }
+
+  # assemble the per-cell grid
+  grid <- tidyr::expand_grid(bi = seq_len(nb), col = seq_len(ncl))
+  ix   <- cbind(grid$bi, grid$col)
+  cells <- tibble::tibble(
+    row = block_rows[grid$bi], col = grid$col,
+    bt = bt[ix], bb = bb[ix], bl = bl[ix], br = br[ix],
+    ah = ah[ix], av = av[ix], aw = aw[ix], ar = ar[ix])
+  # overlay per-cell font (name/size/bold/colour); default to base text font
+  bkey <- paste(cells$row, cells$col, sep = ":")
+  fm   <- if (nrow(fonts)) match(bkey, paste(fonts$row, fonts$col, sep = ":")) else rep(NA_integer_, nrow(cells))
+  cells$fname  <- dplyr::coalesce(fonts$name[fm],  o$font_text)
+  cells$fsize  <- dplyr::coalesce(fonts$size[fm],  as.double(o$text_size))
+  cells$fbold  <- !is.na(fm) & fonts$bold[fm]
+  cells$fcolor <- fonts$color[fm]
+  # overlay per-cell fill
+  lm <- if (nrow(bg_fill)) match(bkey, paste(bg_fill$row, bg_fill$col, sep = ":")) else rep(NA_integer_, nrow(cells))
+  cells$fill <- bg_fill$fill[lm]
+
+  # title + subtext cells (their own simple styles)
+  extra <- dplyr::bind_rows(
+    tibble::tibble(row = title_row, col = 1L, bt = 0L, bb = 0L, bl = 0L, br = 0L,
+                   ah = NA_character_, av = "", aw = FALSE, ar = 0L,
+                   fname = o$font_text, fsize = 12, fbold = TRUE, fcolor = NA_character_, fill = NA_character_),
+    if (length(subtext_rows)) tibble::tibble(row = subtext_rows, col = 1L, bt = 0L, bb = 0L, bl = 0L, br = 0L,
+                   ah = "left", av = "center", aw = FALSE, ar = 0L,
+                   fname = o$font_text, fsize = as.double(o$text_size_subtext), fbold = FALSE,
+                   fcolor = NA_character_, fill = NA_character_))
+  cells <- dplyr::bind_rows(cells, extra)
+
+  # group into distinct styles + coalesce each style's cells to the fewest multi-area dims
+  cells |>
+    dplyr::group_by(.data$fname, .data$fsize, .data$fbold, .data$fcolor, .data$fill,
+                    .data$bt, .data$bb, .data$bl, .data$br,
+                    .data$ah, .data$av, .data$aw, .data$ar) |>
+    dplyr::summarise(dims = xl_coalesce(.data$col, .data$row), .groups = "drop")
+}
+
+
+# Register each distinct style ONCE (deduped fonts/fills/borders + a composed cell xf) and apply it
+# by id with set_cell_style over its coalesced dims -- far fewer + cheaper openxlsx2 calls than a
+# separate wb_add_* per aspect. numFmt is applied separately by the writer (it merges cross-aspect).
+#' @keywords internal
+xl_apply_styles <- function(wb, s, styles) {
+  if (!nrow(styles)) return(invisible(wb))
+  sm  <- wb$styles_mgr
+  fc  <- new.env(parent = emptyenv()); lc <- new.env(parent = emptyenv())
+  bc  <- new.env(parent = emptyenv()); ctr <- 0L
+  uid <- function() { ctr <<- ctr + 1L; ctr }
+  font_id <- function(name, size, bold, color) {
+    key <- paste(name, size, bold, color, sep = "\r")
+    if (is.null(fc[[key]])) {
+      args <- list(name = name, sz = as.character(size))
+      if (isTRUE(bold))   args$b     <- "1"
+      if (!is.na(color))  args$color <- xl_color(color)
+      nm <- paste0("txf", uid()); sm$add(do.call(openxlsx2::create_font, args), nm)
+      fc[[key]] <- sm$get_font_id(nm)
+    }
+    fc[[key]]
+  }
+  fill_id <- function(color) {
+    if (is.na(color)) return("")
+    if (is.null(lc[[color]])) {
+      nm <- paste0("txl", uid())
+      sm$add(openxlsx2::create_fill(pattern_type = "solid", fg_color = xl_color(color)), nm)
+      lc[[color]] <- sm$get_fill_id(nm)
+    }
+    lc[[color]]
+  }
+  border_id <- function(bt, bb, bl, br) {
+    if (bt == 0L && bb == 0L && bl == 0L && br == 0L) return("")
+    key <- paste(bt, bb, bl, br, sep = "\r")
+    if (is.null(bc[[key]])) {
+      sty <- function(v) if (v == 2L) "double" else if (v == 1L) "thin" else NULL
+      blk <- xl_color("black"); nm <- paste0("txb", uid())
+      sm$add(openxlsx2::create_border(
+        top    = sty(bt), top_color    = if (bt > 0L) blk,
+        bottom = sty(bb), bottom_color = if (bb > 0L) blk,
+        left   = sty(bl), left_color   = if (bl > 0L) blk,
+        right  = sty(br), right_color  = if (br > 0L) blk), nm)
+      bc[[key]] <- sm$get_border_id(nm)
+    }
+    bc[[key]]
+  }
+  for (i in seq_len(nrow(styles))) {
+    r <- styles[i, ]
+    if (is.na(r$dims)) next
+    nm <- paste0("txx", uid())
+    sm$add(openxlsx2::create_cell_style(
+      font_id       = font_id(r$fname, r$fsize, r$fbold, r$fcolor),
+      fill_id       = fill_id(r$fill),
+      border_id     = border_id(r$bt, r$bb, r$bl, r$br),
+      horizontal    = if (!is.na(r$ah)) r$ah else "",
+      vertical      = if (nzchar(r$av)) r$av else "",
+      wrap_text     = if (isTRUE(r$aw)) "1" else "",
+      text_rotation = if (r$ar != 0L) as.character(r$ar) else ""), nm)
+    wb$set_cell_style(sheet = s, dims = r$dims, style = sm$get_xf_id(nm))
+  }
+  invisible(wb)
+}
+
+
+# Per-sheet writer: write the raw values, then apply the precomposed cell styles by id (font + fill +
+# border + alignment in ONE set_cell_style per distinct style), then the numFmt merging pass and the
+# column widths / row heights.
 #' @keywords internal
 xl_write_table <- function(wb, plan, o) {
-  s      <- plan$sheet
-  hdr    <- plan$header_row
-  drows  <- plan$data_rows
-  hdrows <- c(hdr, drows)                          # header + data rows (the styled block)
-  allc   <- plan$all_cols
+  s   <- plan$sheet
+  hdr <- plan$header_row
 
-  # values: raw numbers + header, title, subtext (fonts are applied together below)
+  # values: raw numbers + header, title, subtext (styles applied below)
   xlb_write_data(wb, s, plan$data, hdr, 1L)
   xlb_write_cell(wb, s, xl_cell(plan$title_row, 1L), plan$title)
-  if (length(plan$subtext)) {
-    sr <- plan$subtext_row
-    xlb_write_cell(wb, s, xl_cell(sr, 1L), plan$subtext)
-    xlb_align(wb, s, xl_rect_dims(sr:(sr + length(plan$subtext) - 1L), 1L),
-              h = "left", v = "center")
-  }
+  if (length(plan$subtext)) xlb_write_cell(wb, s, xl_cell(plan$subtext_row, 1L), plan$subtext)
 
-  draw_border <- function(rows, cols, sides, style = "thin") {
-    d <- xl_rect_dims(rows, cols)
-    if (!is.na(d)) xlb_border(wb, s, d, sides = sides, style = style)
-  }
-  align <- function(rows, cols, h = NULL, v = NULL, wrap = NULL, rotation = NULL) {
-    d <- xl_rect_dims(rows, cols)
-    if (!is.na(d)) xlb_align(wb, s, d, h = h, v = v, wrap = wrap, rotation = rotation)
-  }
+  # --- styles: one composed xf (font + fill + border + alignment) per distinct cell style ---
+  xl_apply_styles(wb, s, plan$styles)
 
-  # --- borders ---
-  draw_border(hdr:plan$last_row, allc, c("top", "bottom", "left", "right"))  # surrounding box
-  draw_border(plan$last_row, allc, "bottom")                                 # bottom line
-  draw_border(hdrows, plan$totcols, c("left", "right"))                      # total columns
-  draw_border(hdrows, plan$start_col_var, "left")                            # col_var starts
-  draw_border(hdrows, 1L, "left")                                            # first col
-  draw_border(hdrows, plan$ncol, "right")                                    # last col
-  draw_border(hdr, allc, c("top", "bottom"))                                 # header row
-  draw_border(plan$tot_rows_1, allc, "top")                                  # total block top
-  draw_border(plan$tot_rows_last, allc, "bottom")                            # total block bottom
-  draw_border(plan$end_group, allc, "bottom", style = "double")              # between-group double
-
-  # --- alignment ---
-  align(drows, allc, v = "top")                                              # base valign
-  if (o$colnames_rotation == 0) {
-    align(hdr, allc, h = "center", v = "bottom", wrap = TRUE)
-  } else {
-    align(hdr, allc, h = "left", v = "bottom", wrap = TRUE, rotation = o$colnames_rotation)
-  }
-  align(hdrows, plan$totcols, h = "left", v = "top")                         # total cols
-  align(plan$tot_rows, plan$fmt_cols, h = "right", v = "top")                # total rows (numbers)
-  align(plan$tot_rows, plan$txt_cols, h = "left",  v = "top", wrap = TRUE)   # total rows (text)
-  align(plan$tot_rows, plan$totcols,  h = "left",  v = "top")                # total rows (bottom-left)
-
-  # --- fonts: ONE complete descriptor per cell (numeric font + headers + refs + title/subtext +
-  #     text-channel colour, aggregated in the plan), applied as a full replace over the fewest
-  #     coalesced ranges. update = FALSE sidesteps the openxlsx2 range-update bug; cross-aspect merge
-  #     preserves the numFmt / fill / border / alignment already set. ---
-  if (nrow(plan$fonts)) {
-    plan$fonts |>
-      dplyr::mutate(name = dplyr::coalesce(.data$name, o$font_text),
-                    size = dplyr::coalesce(.data$size, as.double(o$text_size))) |>
-      dplyr::group_by(.data$name, .data$size, .data$bold, .data$color) |>
-      dplyr::summarise(dims = xl_coalesce(.data$col, .data$row), .groups = "drop") |>
-      purrr::pwalk(function(name, size, bold, color, dims)
-        xlb_font(wb, s, dims, name = name, size = size,
-                 bold  = if (isTRUE(bold)) TRUE else NULL,
-                 color = if (!is.na(color)) color else NULL))
-  }
-
-  # --- number formats: one shared code applied over the fewest coalesced ranges ---
+  # --- number formats: one shared code over the fewest coalesced ranges (merges onto the xf) ---
   if (nrow(plan$numfmt)) {
     plan$numfmt |>
       dplyr::group_by(.data$code) |>
       dplyr::summarise(dims = xl_coalesce(.data$col, .data$row), .groups = "drop") |>
       purrr::pwalk(function(code, dims) xlb_numfmt(wb, s, dims, code))
-  }
-
-  # --- colours: background channel -> cell fill (the text channel rides the font plan above) ---
-  if (nrow(plan$colour)) {
-    plan$colour |>
-      dplyr::filter(.data$channel == "bg") |>
-      dplyr::group_by(.data$slot) |>
-      dplyr::summarise(dims = xl_coalesce(.data$col, .data$row), .groups = "drop") |>
-      purrr::pwalk(function(slot, dims) xlb_fill(wb, s, dims, color = o$bg_pal[[slot]]))
   }
 
   # --- column widths / row heights ---

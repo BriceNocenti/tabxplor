@@ -30,9 +30,14 @@ into the numFmt literal (`0.0%"***"`, gated by `getOption("tabxplor.stars")`); *
 hidden helper columns and the coalesced hard path is fast/exact/small). `n_min`/`hide_near_zero` stay
 inert. **No `parallel=` on `tab_xl`** — a benchmark showed only ~1.09× (the openxlsx2 write is serial
 and dominates ~92%; Amdahl-capped), so it was dropped; the plan builder stays pure, called serially
-via `purrr::pmap`. The ~0.45 s/table cost is openxlsx2's per-style-call overhead (~40 `wb_add_*`
-calls/table); a deferred **styles-manager** rewrite (one complete xf per cell via `set_cell_style`,
-~10–15 calls/table) is the ~2–3× write win. **openxlsx2 findings**
+via `purrr::pmap`. **Styles-manager write optimization (DONE)** — the ~40 per-aspect `wb_add_*` passes
+were replaced by a precompose: `xl_build_styles` builds a per-cell full-style grid (font+fill+border+
+alignment; borders on 4 side matrices, alignment on zone matrices), groups into the fewest DISTINCT
+styles; `xl_apply_styles` registers deduped components + a composed xf ONCE and applies by id with
+`set_cell_style` over each style's coalesced dims; numFmt stays a grouped merging `wb_add_numfmt` pass.
+**single 0.34→0.24 s (~1.4×), 12 tables 5.5→3.0 s (~1.8×)**; fidelity verified; suite green. (A
+parallel-write-merge via `wb_clone_worksheet(from=)` was studied — works via a save→load→clone border
+workaround, ~2.5–3× batch-only — but dominated by the styles-manager win and not pursued.) **openxlsx2 findings**
 (probe-verified, backend header): `wb_add_*` merge across aspects (== v1 `stack=TRUE`); within an
 aspect the default replaces (borders → `update=TRUE`); `wb_add_font(update=)` is buggy over large
 ranges when the sheet has scattered cells → the font plan applies ONE complete descriptor per cell

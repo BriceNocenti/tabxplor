@@ -23,11 +23,22 @@ INTERPRETATION
   (unlike ~2.4x for tab() building, where the per-row_var work IS the cost). A gain would need a
   plan-CPU-bound export, which does not occur while the openxlsx2 write dominates.
 
-FUTURE OPTIMIZATION (not done; would speed up BOTH serial and the parallel ceiling)
-- The ~40 separate wb_add_font/fill/border/numfmt/cell_style calls per table could be collapsed via
-  the openxlsx2 styles-manager: compute each cell's COMPLETE xf (font+fill+border+numfmt+alignment)
-  once, register the distinct xfs, and apply via set_cell_style(dims, style=id) -- ONE call per
-  distinct full-cell-style group (~10-15/table instead of ~40). This is the "shared styles created
-  once" lever; a substantial, correctness-sensitive rewrite (borders are per-edge), so deferred.
-  Coalescing (this phase) already minimizes calls PER style group; the remaining cost is the NUMBER
-  of style aspects x groups.
+STYLES-MANAGER WRITE OPTIMIZATION (DONE 2026-07-12)
+- Replaced the ~40 separate wb_add_font/fill/border/align passes per table with a PRECOMPOSE: build
+  each cell's full style (font+fill+border+alignment) in one per-cell grid (xl_build_styles), group
+  into the fewest DISTINCT styles, register deduped fonts/fills/borders + a composed cell xf ONCE, and
+  apply by id with set_cell_style over each style's coalesced dims (xl_apply_styles). numFmt stays a
+  separate grouped wb_add_numfmt pass that merges cross-aspect.
+- Result (same fixtures): single table 0.34 -> 0.24 s (~1.4x) ; 12 tables 5.5 -> 3.0 s (~1.8x).
+  Fidelity verified (header bold+border+align, data font_num+numfmt+valign, diff palette font colours,
+  fill on bg-coloured cells). Full suite green, no golden regen.
+- Micro-benchmark that drove it: 40 set_cell_style (pre-registered) = 0.07 s vs 40 wb_add_font =
+  0.12 s (1.7x cheaper/call); register+apply 40 xfs = 0.12 s vs 40 separate wb_add_* = 0.23 s (1.9x).
+
+PARALLEL-WRITE-MERGE (studied 2026-07-12, NOT pursued -- maintainer chose styles-manager only)
+- Alternative: each worker builds its sheet in its OWN wb, main merges via wb_clone_worksheet(from=).
+  Works ONLY via a save->wb_load->clone workaround (clone_worksheet fails on in-memory borders, the
+  same openxlsx2 styles bug; loading normalizes it). All styles survive. ~2.5-3x for large batches.
+  BUT batch-only (no single-table gain), adds mirai + temp-file + merge machinery, and once the
+  styles-manager makes the write cheap the merge tax (~0.06/sheet) caps the extra gain. Dominated by
+  the styles-manager approach; not implemented.
