@@ -9,10 +9,12 @@ tab_kable(
   theme = c("light", "dark"),
   color_type = NULL,
   html_24_bit = NULL,
+  color = TRUE,
   tooltips = TRUE,
   popover = NULL,
   color_legend = TRUE,
   caption = knitr::opts_current$get("tab.cap"),
+  transpose = FALSE,
   html_font = NULL,
   get_data = FALSE,
   full_width = FALSE,
@@ -37,6 +39,8 @@ background. By default it takes \code{getOption("tabxplor.color_style_type")}.}
 or \code{"blue_red"}. Only with \code{mode = "color_code"} (not \code{mode = "crayon"}) and
 \verb{theme = "light}. Default to \code{getOption("tabxplor.color_html_24_bit")}.}
 
+\item{color}{Set to \code{FALSE} to render the table without colours (monochrome).}
+
 \item{tooltips}{By default, html tooltips are used to display additional informations
 at mouse hover. Set to \code{FALSE} to discard.}
 
@@ -57,6 +61,9 @@ You can then use a \code{css} chunk in rmarkdown to change popovers colors.}
 
 \item{caption}{The table caption. For formatting, you need to use a \code{css}
 with \verb{caption\{\}}in rmarkdown.}
+
+\item{transpose}{Set to \code{TRUE} to transpose the table before export (rows become columns) --
+the col-percentages-with-several-row-variables use case.}
 
 \item{html_font}{A string for HTML css font. By default, it uses
 \code{'"DejaVu Sans", "Arial", arial, helvetica, sans-serif'}. Set another

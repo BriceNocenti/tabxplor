@@ -568,8 +568,11 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #' });
 #' </script>
 #'}
+#' @param color Set to \code{FALSE} to render the table without colours (monochrome).
 #' @param color_legend Print colors legend below the table ?
 #' You can then use a `css` chunk in rmarkdown to change popovers colors.
+#' @param transpose Set to \code{TRUE} to transpose the table before export (rows become columns) --
+#' the col-percentages-with-several-row-variables use case.
 #' @param full_width A TRUE or FALSE variable controlling whether the HTML table
 #' should have the preferable format for full_width. If not specified, a HTML
 #' table will have full width by default but this option will be set to FALSE for
@@ -602,8 +605,9 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #' }
 tab_kable <- function(tabs,
                       theme = c("light", "dark"), color_type = NULL, html_24_bit = NULL,
-                      tooltips = TRUE, popover = NULL, color_legend = TRUE,
+                      color = TRUE, tooltips = TRUE, popover = NULL, color_legend = TRUE,
                       caption = knitr::opts_current$get("tab.cap"),
+                      transpose = FALSE,
                       html_font = NULL,
                       get_data = FALSE,
                       full_width = FALSE,
@@ -611,10 +615,12 @@ tab_kable <- function(tabs,
                       whitespace_only = TRUE,
                       engine = NULL,
                       ...) {
-  color_type <-
-    if (is.null(color_type)) { getOption("tabxplor.color_style_type") } else {color_type}
-  html_24_bit <-
-    if (is.null(html_24_bit)) {getOption("tabxplor.color_html_24_bit")} else {html_24_bit}
+  # Phase 10j: the theme/color_type/html_24_bit/color/color_legend preamble is the shared resolver.
+  o <- resolve_export_opts(theme, color_type, html_24_bit, color, color_legend, transpose)
+  theme <- o$theme; color_type <- o$color_type; html_24_bit <- o$html_24_bit
+  color_legend <- o$color_legend
+  compute <- c("refs", "bold", "range", "labels")
+  if (o$color) compute <- c(compute, "colors")
   html_font <-
     if (is.null(html_font)) {getOption("tabxplor.kable_html_font")} else {html_font}
   popover <- if (is.null(popover)) {getOption("tabxplor.kable_popover")} else {popover}
@@ -627,7 +633,7 @@ tab_kable <- function(tabs,
   # tab_export_prep(). `list_method = TRUE`: a non-mergeable list (several row_vars / tab_vars) is
   # rendered table-after-table instead of erroring (Phase 10e, like tab_md()).
   prep <- tab_export_prep(
-    tabs, backend = "kable", list_method = TRUE,
+    tabs, backend = "kable", list_method = TRUE, compute = compute, transpose = o$transpose,
     wrap = list(rows = wrap_rows, cols = wrap_cols, exdent = 2,
                 whitespace_only = whitespace_only, unbreakable_spaces = TRUE, brk = "<br>"),
     color_type = color_type, theme = theme, html_24_bit = html_24_bit,
@@ -1151,7 +1157,9 @@ tab_pvalue_lines <- function(tabs) {
 #' @param html_24_bit Use 24bits colors palettes for html tables : set to `"green_red"`
 #' or `"blue_red"`. Only with `mode = "color_code"` (not `mode = "crayon"`) and
 #' `theme = "light`. Default to \code{getOption("tabxplor.color_html_24_bit")}.
+#' @param color Set to \code{FALSE} to render the table without colours (monochrome).
 #' @param color_legend Print colors legend below the table ?
+#' @param transpose Set to \code{TRUE} to transpose the table before export (rows become columns).
 #' @param caption The table caption.
 #' @param wrap_rows By default, rownames are wrapped when larger than 30 characters.
 #' @param wrap_cols By default, colnames are wrapped when larger than 12 characters.
@@ -1169,7 +1177,7 @@ tab_pvalue_lines <- function(tabs) {
 #'
 tab_plot <- function(tabs,
                      theme = c("light", "dark"), color_type = NULL, html_24_bit = NULL,
-                     color_legend = TRUE, caption = NULL,
+                     color = TRUE, color_legend = TRUE, caption = NULL, transpose = FALSE,
                      wrap_rows = 35, wrap_cols = 14, # unbreakable_spaces = TRUE
                      whitespace_only = TRUE) {
   if (!requireNamespace("ggpubr", quietly = TRUE)) {
@@ -1192,19 +1200,19 @@ tab_plot <- function(tabs,
                 "You can install it with : install.packages('cowplot')"),
          call. = FALSE)
   }
-  #theme <- if (is.null(theme)) { getOption("tabxplor.color_style_theme") } else { theme }
-  color_type <-
-    if (is.null(color_type)) { getOption("tabxplor.color_style_type") } else {color_type}
-
-  html_24_bit <-
-    if (is.null(html_24_bit)) {getOption("tabxplor.color_html_24_bit")} else {html_24_bit}
+  # Phase 10j: shared option resolver (theme/color_type/html_24_bit/color/color_legend/transpose).
+  o <- resolve_export_opts(theme, color_type, html_24_bit, color, color_legend, transpose)
+  theme <- o$theme; color_type <- o$color_type; html_24_bit <- o$html_24_bit
+  color_legend <- o$color_legend
+  compute <- c("refs", "bold", "range", "labels")
+  if (o$color) compute <- c(compute, "colors")
 
   # --- Phase 10d: shared exporter prep (degrade, roles, two-channel colours, bold rows/cols). ---
   # tab_plot has no list->compact preamble; everything else (role detection, refs2/refs3, the colour
   # loop) is the ONE shared tab_export_prep(). Plot drops tab_vars, wraps with exdent = 1 /
   # unbreakable_spaces = FALSE (the "\n" break). Output is a ggplot -> no golden lock; A/B-verified.
   prep <- tab_export_prep(
-    tabs, backend = "plot",
+    tabs, backend = "plot", compute = compute, transpose = o$transpose,
     wrap = list(rows = wrap_rows, cols = wrap_cols, exdent = 1,
                 whitespace_only = whitespace_only, unbreakable_spaces = FALSE, brk = "\n"),
     color_type = color_type, theme = theme, html_24_bit = html_24_bit,

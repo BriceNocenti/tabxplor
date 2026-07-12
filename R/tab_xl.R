@@ -44,9 +44,16 @@
 #'   it emits a message and falls back to the (fast, exact) hard-style colouring.
 #' @param titles The titles of the different tables, as a character vector. When missing
 #'   titles are given based on the names of the variables.
+#' @param caption A single caption; a shortcut that fills \code{titles} (an explicit \code{titles}
+#'   still wins). Unified name across all exporters.
 #' @param font_text,font_num Font for text and for numbers.
 #' @param text_size,text_size_headers,text_size_subtext Font sizes of text elements.
-#' @param print_color_legend Should the color legends be printed with the subtexts ?
+#' @param theme By default (\code{"light"}) a white table with black text; set to \code{"dark"}
+#'   for a black table with white text (the colours follow the theme).
+#' @param html_24_bit Kept for a uniform exporter signature; inert for Excel (always 24-bit).
+#' @param color Set to \code{FALSE} to export without colours (monochrome).
+#' @param color_legend Should the color legends be printed with the subtexts ?
+#' @param print_color_legend `r lifecycle::badge("deprecated")` Renamed to \code{color_legend}.
 #' @param sheets The Excel sheets options :
 #' \itemize{
 #'   \item \code{"tabs"}: a new sheet is created for each table
@@ -75,12 +82,14 @@
 tab_xl <-
   function(tabs, path = NULL, replace = FALSE, open = rlang::is_interactive(),
            colnames_rotation = 0, remove_tab_vars = TRUE,
-           colwidth = 10, print_color_legend = TRUE,
-           sheets = "auto", n_min = 0, titles,
+           colwidth = 10, color_legend = TRUE,
+           sheets = "auto", n_min = 0, titles, caption = NULL,
            font_text = "DejaVu Sans Condensed", font_num = "DejaVu Sans",
            text_size = 10, text_size_headers = 9, text_size_subtext = 9,
-           hide_near_zero = Inf, color_type = "text",
-           transpose = FALSE, conditional_format = FALSE) {
+           hide_near_zero = Inf, theme = c("light", "dark"),
+           color_type = "text", html_24_bit = NULL, color = TRUE,
+           transpose = FALSE, conditional_format = FALSE,
+           print_color_legend = lifecycle::deprecated()) {
 
     if (!requireNamespace("openxlsx2", quietly = TRUE)) {
       stop(paste0("Package \"openxlsx2\" needed for this function to work. ",
@@ -106,6 +115,19 @@ tab_xl <-
                                      "implemented; using the (fast, exact) hard cell colours.")))
     }
 
+    # Phase 10j: `print_color_legend` renamed to `color_legend` (unified across exporters).
+    if (lifecycle::is_present(print_color_legend)) {
+      lifecycle::deprecate_soft("1.4.0", "tab_xl(print_color_legend)", "tab_xl(color_legend)")
+      color_legend <- print_color_legend
+    }
+    # Shared option resolver (theme/color_type/html_24_bit/color/color_legend/transpose). Phase 10j
+    # makes tab_xl theme-aware: the palettes below now honour `theme` (was hardcoded "light").
+    o <- resolve_export_opts(theme, color_type, html_24_bit, color, color_legend, transpose, caption)
+    theme <- o$theme; color_type <- o$color_type; html_24_bit <- o$html_24_bit
+    color_legend <- o$color_legend; color <- o$color
+    # `caption` (single) is the unified alias; an explicit `titles` (per-sheet) still wins.
+    if (!is.null(caption) && missing(titles)) titles <- caption
+
     tabs_base <- tabs
     # Graceful degrade (single input): write the raw frame (+ a message) instead of crashing when the
     # input can't be read as a tabxplor table.
@@ -118,12 +140,9 @@ tab_xl <-
     }
     if (is.data.frame(tabs)) tabs <- list(tabs)
 
-    # Phase 10i-B: materialise the display extras (p-value rows now; add_n `n` column + add_pct in
-    # Increment 2) BEFORE transpose, matching the historical order. backend = "xl" keeps a real `n`
-    # column. tab_export_prep()'s later re-materialise (L131) is then a no-op (attrs already consumed).
-    tabs <- purrr::map(tabs, tab_materialize_extras, backend = "xl", pvalue = TRUE)
-    if (isTRUE(transpose)) tabs <- purrr::map(tabs, tab_transpose)
-
+    # Phase 10j: display-extra materialise (backend "xl" keeps a real `n` column) + opt-in transpose are
+    # now centralised in tab_export_prep() (materialise -> transpose, the historical xl order); tab_xl
+    # just passes transpose = transpose below.
     colwidth <- vctrs::vec_recycle(colwidth, length(tabs))
 
     # === Shared exporter prep (Phase 10g/10j) ======================================
@@ -134,10 +153,13 @@ tab_xl <-
     # those (no more private fmt_color_channels() pass, which duplicated the shared engine). The slots
     # are theme-independent; xl still maps them to hex via its own light palette here (a `theme` arg +
     # ann-hex consumption lands in Phase 10j-A-ii, where xl becomes theme-aware).
+    compute <- c("refs", "bold")
+    if (color) compute <- c(compute, "colors")
     prep <- tab_export_prep(
       tabs, backend = "xl", compact = FALSE, drop_tab_vars = remove_tab_vars,
-      list_method = TRUE, compute = c("refs", "bold", "colors"),
-      color_type = color_type, color_legend = print_color_legend, what = "tab_xl()"
+      list_method = TRUE, compute = compute, transpose = transpose,
+      color_type = color_type, theme = theme, html_24_bit = html_24_bit,
+      color_legend = color_legend, what = "tab_xl()"
     )
     rd <- prep$tables
 
@@ -171,10 +193,10 @@ tab_xl <-
     # subtext (+ colour legend) computed once on the main process.
     subtext <- purrr::map(tabs, get_subtext) |>
       purrr::map(~ stringr::str_replace_all(., "\\\n", " ") |> stringr::str_replace_all(" +", " "))
-    if (isTRUE(print_color_legend)) {
-      color_legend <- purrr::map(tabs, ~ suppressWarnings(
+    if (isTRUE(color_legend)) {
+      legend <- purrr::map(tabs, ~ suppressWarnings(
         tab_color_legend(., colored = FALSE, add_color_and_diff_types = TRUE)))
-      subtext <- purrr::map2(subtext, color_legend, ~ c(.y, .x))
+      subtext <- purrr::map2(subtext, legend, ~ c(.y, .x))
     }
 
     if (missing(titles)) {
@@ -206,6 +228,7 @@ tab_xl <-
 
     # Colour palettes built ONCE (Phase 5): TEXT channel -> font colour (in the color_type family),
     # BACKGROUND channel -> cell fill (bg palette). 11 hex per palette, indexed by slot integer.
+    # Phase 10j: the palettes honour `theme` (default "light" == the old hardcoded value).
     opts <- list(
       font_num          = font_num,
       font_text         = font_text,
@@ -213,8 +236,8 @@ tab_xl <-
       colnames_rotation = colnames_rotation,
       text_size_headers = text_size_headers,
       text_size_subtext = text_size_subtext,
-      text_pal          = get_color_style("color_code", theme = "light", type = color_type),
-      bg_pal            = get_color_style("color_code", theme = "light", type = "bg"),
+      text_pal          = get_color_style("color_code", theme = theme, type = color_type),
+      bg_pal            = get_color_style("color_code", theme = theme, type = "bg"),
       stars_on          = isTRUE(getOption("tabxplor.stars", TRUE))
     )
 

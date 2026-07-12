@@ -246,8 +246,15 @@ testthat::test_that("coloured tables keep numbers aligned (equal pipe-line width
   testthat::expect_length(unique(pipes), 1L)
 })
 
-testthat::test_that("title renders a pandoc caption line", {
-  md <- tab_md(tabs_col, title = "My caption", print = FALSE)
+testthat::test_that("caption renders a pandoc caption line", {
+  md <- tab_md(tabs_col, caption = "My caption", print = FALSE)
+  testthat::expect_true(grepl("\n: My caption", md, fixed = TRUE))
+})
+
+testthat::test_that("the deprecated `title` arg still feeds `caption`", {
+  lifecycle::expect_deprecated(
+    md <- tab_md(tabs_col, title = "My caption", print = FALSE)
+  )
   testthat::expect_true(grepl("\n: My caption", md, fixed = TRUE))
 })
 

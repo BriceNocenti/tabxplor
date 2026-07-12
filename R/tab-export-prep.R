@@ -50,24 +50,21 @@ tab_check_same_col_vars <- function(tabs, what = "tab_export_prep()",
 # === SECTION: per-column derive-once sidecar (`ann`) =================================
 
 # The per-fmt-column quantities every colour backend re-derives today, computed ONCE. `theme_cols` is
-# the resolved list(text, grey, grey2). `want_colors = FALSE` (md) skips the colour channels and only
-# returns the reference masks (needed for bold rows + the format() `.ref` speed-up).
-# BYTE-IDENTICAL to the tab_kable colour loop (tab_classes.R) / tab_plot build_plot_colors.
+# the resolved list(text, grey, grey2). The FULL structure (font/back/bold/slots/refs) is ALWAYS
+# returned so every backend reads a consistent shape (Phase 10j); `want_colors = FALSE` (color = FALSE
+# export) only forces a MONOCHROME column -- no slots, no hex, the font/back/bold an uncoloured column
+# would take -- skipping the fmt_channel_codes() hex-mapping cost.
+# BYTE-IDENTICAL (want_colors = TRUE) to the tab_kable colour loop (tab_classes.R) / tab_plot colours.
 #' @keywords internal
 fmt_col_ann <- function(col, theme_cols, color_type = "text", html_24_bit = NULL,
                         want_colors = TRUE) {
   ref_alltot <- get_reference(col, mode = "all_totals")
   ref_cells  <- get_reference(col, mode = "cells")
 
-  if (!want_colors) {
-    return(list(ref_alltot = ref_alltot, ref_cells = ref_cells,
-                has_color = FALSE, has_bgc = FALSE))
-  }
-
   ct <- get_color(col)
-  has_col <- length(ct) != 0L && !is.na(ct) && !ct %in% c("", "no")
+  has_col <- want_colors && length(ct) != 0L && !is.na(ct) && !ct %in% c("", "no")
   cb <- get_color_bg(col)
-  has_bgc <- length(cb) != 0L && !is.na(cb) && !cb %in% c("", "no")
+  has_bgc <- want_colors && length(cb) != 0L && !is.na(cb) && !cb %in% c("", "no")
   grey_this <- if (has_col || has_bgc) theme_cols$grey else theme_cols$grey2
 
   if (has_col || has_bgc) {
@@ -336,9 +333,32 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
 }
 
 
+# === SECTION: shared option resolver (Phase 10j) ====================================
+
+# Resolve the canonical shared export options ONCE (theme / color_type / html_24_bit + the on/off
+# toggles), so every exporter AND the tab_export() facade share one set of names, defaults and option
+# fallbacks (killing the copy-pasted `match.arg(theme)` + `if (is.null(color_type)) getOption(...)`
+# preambles). `color = FALSE` renders monochrome AND disables the colour legend (which would otherwise
+# describe colours the cells no longer show). Returns a normalized scalar list.
+#' @keywords internal
+resolve_export_opts <- function(theme = c("light", "dark"),
+                                color_type = NULL, html_24_bit = NULL,
+                                color = TRUE, color_legend = TRUE,
+                                transpose = FALSE, caption = NULL) {
+  theme <- match.arg(theme)
+  if (is.null(color_type))  color_type  <- getOption("tabxplor.color_style_type")
+  if (is.null(html_24_bit)) html_24_bit <- getOption("tabxplor.color_html_24_bit")
+  color <- isTRUE(color)
+  list(theme = theme, color_type = color_type, html_24_bit = html_24_bit,
+       color = color, color_legend = isTRUE(color_legend) && color,
+       transpose = isTRUE(transpose), caption = caption)
+}
+
+
 # The single exporter-prep entry point. Returns a `tabxplor_render` (an ephemeral tagged list; see the
 # file header). `compute` gates the expensive derivations so a backend / jamovi live path opts out of
-# what it does not use.
+# what it does not use. `transpose = TRUE` (Phase 10j) transposes each table at export (col%-invert
+# use case), applied AFTER materialise so the order matches tab_xl's historical materialise->transpose.
 #' @keywords internal
 tab_export_prep <- function(tabs,
                             backend       = c("kable", "md", "plot", "xl"),
@@ -350,6 +370,7 @@ tab_export_prep <- function(tabs,
                             theme         = "light",
                             html_24_bit   = NULL,
                             color_legend  = TRUE,
+                            transpose     = FALSE,
                             list_method   = FALSE,
                             what          = NULL) {
   backend <- match.arg(backend)
@@ -374,12 +395,15 @@ tab_export_prep <- function(tabs,
                                  what = what)
 
   # Phase 10i-B: hydrate the "core" table into its rendered shape ONCE, on the still-grouped resolved
-  # tables (before prep_one_table ungroups), so p-value rows (+ add_n/add_pct in Increment 2) are real
-  # rows/cols the role detection then sees. Idempotent: tab_xl already materialised (backend "xl")
-  # before its transpose, so this re-materialise is a no-op there. "xl" keeps a real `n` column;
-  # every other backend folds add_n into the Total cell (backend "text").
+  # tables (before prep_one_table ungroups), so p-value rows + add_n/add_pct are real rows/cols the
+  # role detection then sees. "xl" keeps a real `n` column; every other backend folds add_n into the
+  # Total cell (backend "text").
   mat_backend <- if (identical(backend, "xl")) "xl" else "text"
   resolved <- purrr::map(resolved, tab_materialize_extras, backend = mat_backend, pvalue = TRUE)
+
+  # Phase 10j: opt-in transpose-at-export, applied AFTER materialise so the order matches tab_xl's
+  # historical materialise->transpose (all four exporters now share this seam; console never transposes).
+  if (isTRUE(transpose)) resolved <- purrr::map(resolved, tab_transpose)
 
   tables <- purrr::map(
     resolved,

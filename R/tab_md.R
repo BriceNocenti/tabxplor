@@ -31,8 +31,11 @@
 #' @param theme,color_type,html_24_bit Colour palette selectors (as in
 #'   \code{\link[=tab_kable]{tab_kable()}}); they only affect the CSS emitted by `css = TRUE` /
 #'   \code{\link{tab_md_css}}, since the span *class names* are palette-independent.
-#' @param title Optional table caption, rendered as a pandoc caption line `: title` (captions only the
-#'   first table of a list).
+#' @param caption Optional table caption, rendered as a pandoc caption line `: caption` (captions only
+#'   the first table of a list).
+#' @param transpose Set to `TRUE` to transpose each table before export (rows become columns) --
+#'   the col-percentages-with-several-row-variables use case.
+#' @param title `r lifecycle::badge("deprecated")` Renamed to `caption`.
 #' @param css When `TRUE`, prepend an inline `<style>` block (from \code{\link{tab_md_css}}) matching
 #'   this table's breaks and palette, so the coloured markdown is self-contained. Default `FALSE`
 #'   (bring the stylesheet via the document's `css:` instead).
@@ -62,14 +65,20 @@ tab_md <- function(tabs,
                    theme = c("light", "dark"),
                    color_type = NULL,
                    html_24_bit = NULL,
-                   title = NULL,
+                   caption = NULL,
+                   transpose = FALSE,
                    css = FALSE,
                    clipboard = FALSE,
                    file = NULL,
-                   print = TRUE) {
-  theme       <- match.arg(theme)
-  color_type  <- if (is.null(color_type )) getOption("tabxplor.color_style_type" ) else color_type
-  html_24_bit <- if (is.null(html_24_bit)) getOption("tabxplor.color_html_24_bit") else html_24_bit
+                   print = TRUE,
+                   title = lifecycle::deprecated()) {
+  # Phase 10j: `title` renamed to `caption` (unified across exporters); `transpose` added.
+  if (lifecycle::is_present(title)) {
+    lifecycle::deprecate_soft("1.4.0", "tab_md(title)", "tab_md(caption)")
+    caption <- title
+  }
+  o <- resolve_export_opts(theme, color_type, html_24_bit, color, transpose = transpose)
+  theme <- o$theme; color_type <- o$color_type; html_24_bit <- o$html_24_bit; color <- o$color
 
   # --- Phase 10d/10f: shared exporter prep + the base/list split. ---
   # A single tab (or a mergeable same-col_vars / no-tab_vars list) renders as ONE table; a NON-mergeable
@@ -79,15 +88,16 @@ tab_md <- function(tabs,
   # fills the per-cell slots fmt_col_ann() carries -> md_render_one() renders pandoc colour spans.
   compute <- "refs"
   if (bold_references) compute <- c(compute, "bold")
-  if (!isFALSE(color)) compute <- c(compute, "colors")
+  if (color) compute <- c(compute, "colors")
   prep <- tab_export_prep(tabs, backend = "md", drop_tab_vars = FALSE, wrap = NULL,
-                          compute = compute, color_type = color_type, theme = theme,
-                          html_24_bit = html_24_bit, list_method = TRUE, what = "tab_md()")
+                          compute = compute, transpose = o$transpose, color_type = color_type,
+                          theme = theme, html_24_bit = html_24_bit, list_method = TRUE,
+                          what = "tab_md()")
 
   parts   <- purrr::imap_chr(prep$tables, function(rd, i) {
     md_render_one(rd, special_formatting = special_formatting, wrap_rows = wrap_rows,
-                  subtext = subtext, color = !isFALSE(color),
-                  title = if (i == 1) title else NULL,
+                  subtext = subtext, color = color,
+                  title = if (i == 1) caption else NULL,
                   color_type = color_type, theme = theme, html_24_bit = html_24_bit)
   })
   md_text <- paste(parts, collapse = "\n\n")

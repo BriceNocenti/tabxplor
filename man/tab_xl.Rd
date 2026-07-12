@@ -12,19 +12,24 @@ tab_xl(
   colnames_rotation = 0,
   remove_tab_vars = TRUE,
   colwidth = 10,
-  print_color_legend = TRUE,
+  color_legend = TRUE,
   sheets = "auto",
   n_min = 0,
   titles,
+  caption = NULL,
   font_text = "DejaVu Sans Condensed",
   font_num = "DejaVu Sans",
   text_size = 10,
   text_size_headers = 9,
   text_size_subtext = 9,
   hide_near_zero = Inf,
+  theme = c("light", "dark"),
   color_type = "text",
+  html_24_bit = NULL,
+  color = TRUE,
   transpose = FALSE,
-  conditional_format = FALSE
+  conditional_format = FALSE,
+  print_color_legend = lifecycle::deprecated()
 )
 }
 \arguments{
@@ -48,7 +53,7 @@ Set to \code{FALSE} to keep them.}
 \item{colwidth}{The standard width for numeric columns, as a number.
 Set to \code{"auto"} to let Excel choose.}
 
-\item{print_color_legend}{Should the color legends be printed with the subtexts ?}
+\item{color_legend}{Should the color legends be printed with the subtexts ?}
 
 \item{sheets}{The Excel sheets options :
 \itemize{
@@ -65,6 +70,9 @@ blanks or drops small-n cells at display and flows into every export.}
 \item{titles}{The titles of the different tables, as a character vector. When missing
 titles are given based on the names of the variables.}
 
+\item{caption}{A single caption; a shortcut that fills \code{titles} (an explicit \code{titles}
+still wins). Unified name across all exporters.}
+
 \item{font_text, font_num}{Font for text and for numbers.}
 
 \item{text_size, text_size_headers, text_size_subtext}{Font sizes of text elements.}
@@ -72,8 +80,15 @@ titles are given based on the names of the variables.}
 \item{hide_near_zero}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Removed in 1.4.0 (a rarely used,
 slow feature): the argument is kept for back-compatibility but no longer does anything.}
 
+\item{theme}{By default (\code{"light"}) a white table with black text; set to \code{"dark"}
+for a black table with white text (the colours follow the theme).}
+
 \item{color_type}{By default, the text is colored. Set to \code{"bg"} to color
 the background instead.}
+
+\item{html_24_bit}{Kept for a uniform exporter signature; inert for Excel (always 24-bit).}
+
+\item{color}{Set to \code{FALSE} to export without colours (monochrome).}
 
 \item{transpose}{Set to \code{TRUE} to transpose each table before export (rows become
 columns). Useful for column percentages tables with several row variables.}
@@ -81,6 +96,8 @@ columns). Useful for column percentages tables with several row variables.}
 \item{conditional_format}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#experimental}{\figure{lifecycle-experimental.svg}{options: alt='[Experimental]'}}}{\strong{[Experimental]}} Reserved for a future opt-in
 to use Excel conditional formatting instead of hard cell colours. Not yet implemented: setting
 it emits a message and falls back to the (fast, exact) hard-style colouring.}
+
+\item{print_color_legend}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Renamed to \code{color_legend}.}
 }
 \value{
 The table(s) with formatting and colors in an Excel file, as a side effect.

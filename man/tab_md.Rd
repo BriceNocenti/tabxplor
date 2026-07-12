@@ -14,11 +14,13 @@ tab_md(
   theme = c("light", "dark"),
   color_type = NULL,
   html_24_bit = NULL,
-  title = NULL,
+  caption = NULL,
+  transpose = FALSE,
   css = FALSE,
   clipboard = FALSE,
   file = NULL,
-  print = TRUE
+  print = TRUE,
+  title = lifecycle::deprecated()
 )
 }
 \arguments{
@@ -49,8 +51,11 @@ markdown. Uncoloured tables never get spans.}
 \code{\link[=tab_kable]{tab_kable()}}); they only affect the CSS emitted by \code{css = TRUE} /
 \code{\link{tab_md_css}}, since the span \emph{class names} are palette-independent.}
 
-\item{title}{Optional table caption, rendered as a pandoc caption line \verb{: title} (captions only the
-first table of a list).}
+\item{caption}{Optional table caption, rendered as a pandoc caption line \verb{: caption} (captions only
+the first table of a list).}
+
+\item{transpose}{Set to \code{TRUE} to transpose each table before export (rows become columns) --
+the col-percentages-with-several-row-variables use case.}
 
 \item{css}{When \code{TRUE}, prepend an inline \verb{<style>} block (from \code{\link{tab_md_css}}) matching
 this table's breaks and palette, so the coloured markdown is self-contained. Default \code{FALSE}
@@ -63,6 +68,8 @@ Requires the \pkg{clipr} package.}
 
 \item{print}{If \code{TRUE}, print via \code{cat()} and return invisibly. If \code{FALSE},
 return the character string.}
+
+\item{title}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Renamed to \code{caption}.}
 }
 \value{
 A character string (visible or invisible depending on \code{print}).

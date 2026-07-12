@@ -9,8 +9,10 @@ tab_plot(
   theme = c("light", "dark"),
   color_type = NULL,
   html_24_bit = NULL,
+  color = TRUE,
   color_legend = TRUE,
   caption = NULL,
+  transpose = FALSE,
   wrap_rows = 35,
   wrap_cols = 14,
   whitespace_only = TRUE
@@ -29,9 +31,13 @@ background. By default it takes \code{getOption("tabxplor.color_style_type")}.}
 or \code{"blue_red"}. Only with \code{mode = "color_code"} (not \code{mode = "crayon"}) and
 \verb{theme = "light}. Default to \code{getOption("tabxplor.color_html_24_bit")}.}
 
+\item{color}{Set to \code{FALSE} to render the table without colours (monochrome).}
+
 \item{color_legend}{Print colors legend below the table ?}
 
 \item{caption}{The table caption.}
+
+\item{transpose}{Set to \code{TRUE} to transpose the table before export (rows become columns).}
 
 \item{wrap_rows}{By default, rownames are wrapped when larger than 30 characters.}
 

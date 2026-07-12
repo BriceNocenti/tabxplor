@@ -41,18 +41,24 @@ testthat::test_that("roles: fmt_cols / totcols / row_var_col match the built tab
 
 # === SECTION: ann + colours gated by compute =================================
 
-testthat::test_that("kable ann carries colour channels; md ann carries only ref masks", {
+testthat::test_that("ann shape is uniform; compute without 'colors' yields a monochrome column", {
+  # Phase 10j: fmt_col_ann() ALWAYS returns the full structure, so every backend reads a consistent
+  # shape. `want_colors = FALSE` (compute without "colors", i.e. a color = FALSE export) does not drop
+  # fields -- it forces a MONOCHROME column: no colour slots, no colour flag.
+  cols <- c("ref_alltot", "ref_cells", "font", "back", "bold", "text_slot", "bg_slot")
+
   rk <- tabxplor:::tab_export_prep(t_basic, backend = "kable", wrap = NULL)$tables[[1]]
   a1 <- rk$ann[[1]]
-  testthat::expect_true(all(c("ref_alltot", "ref_cells", "font", "back", "bold") %in% names(a1)))
+  testthat::expect_true(all(cols %in% names(a1)))
   testthat::expect_length(a1$font, nrow(rk$tab))
 
   rm <- tabxplor:::tab_export_prep(t_basic, backend = "md", drop_tab_vars = FALSE,
                                    wrap = NULL, compute = c("refs", "bold"))$tables[[1]]
   am <- rm$ann[[1]]
-  testthat::expect_true(all(c("ref_alltot", "ref_cells") %in% names(am)))
-  testthat::expect_false("font" %in% names(am))
+  testthat::expect_true(all(cols %in% names(am)))
   testthat::expect_false(am$has_color)
+  testthat::expect_true(all(am$text_slot == 0L))
+  testthat::expect_true(all(am$bg_slot == 0L))
 })
 
 testthat::test_that("bold_rows flags the reference/total row(s), reused by ann$ref_alltot", {
