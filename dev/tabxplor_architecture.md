@@ -415,17 +415,33 @@ Phase 10c reworked it for speed and flexibility (byte-identical, golden-locked):
 - Opt-in composite display via the `display_spec` attribute (e.g. `"pct (n)"`), parsed only here,
   only when set — one scalar `is.na()` gate keeps the common path byte-identical.
 
-### tab_xl() — Excel Export (`R/tab_xl.R`)
+### tab_xl() — Excel Export (`R/tab_xl.R` + `R/tab-xl-backend.R`, Phase 10h)
 
-Exports to `.xlsx` via `openxlsx` (Suggests-only dependency). Features:
+Exports to `.xlsx` via **openxlsx2** (Suggests-only; the ONE `requireNamespace()` guard is in `tab_xl()`).
+Single-tab-first with a list method. Pipeline:
 
-- Full color formatting matching console output
-- Column width auto-sizing, font control, rotated headers
-- Sheet management: one sheet per table, or all on one sheet
-- Color legend printed as subtext
-- Chi-squared statistics displayed
-- `hide_near_zero`: cells displaying as 0 are grayed out
-- `n_min`: columns/rows with too few observations are grayed out
+- `tab_xl()` (orchestrator) — deprecations, degrade, `tab_pvalue_lines`, optional `tab_transpose`,
+  `tab_export_prep(backend="xl", compact=FALSE, compute=c("refs","bold"))`, sheet assignment
+  (`sheets="auto"/"tabs"/"unique"`) + stacking offsets, then builds per-table **plans** (serial
+  `purrr::pmap`) and assembles ONE workbook, writing each plan with `xl_write_table()`. (No `parallel=`:
+  the openxlsx2 write dominates and is serial, so parallelising the plan build was measured not worth it.)
+- `tab_xl_plan_one()` — pure, parallel-safe per-table plan: the raw `get_num()` frame to write, the
+  per-cell Excel **numFmt codes** from `format(x, syntax="excel")` (stars folded into the literal
+  `0.0%"***"` when `getOption("tabxplor.stars")`), the two-channel colour **slots** from
+  `fmt_color_channels()`, a **unified font descriptor per cell** (numeric font + headers + refs +
+  title/subtext + text-channel colour, aggregated), and absolute geometry.
+- `xl_write_table()` — the per-sheet writer: issues the openxlsx2 calls through the `xlb_*` backend
+  wrappers, applying each shared style ONCE over the fewest **coalesced multi-area `dims`**
+  (`xl_rect_dims`/`xl_coalesce`). Fonts use `update=FALSE` (a complete replace per cell) to sidestep the
+  openxlsx2 range-`update` bug; borders use `update=TRUE` per rectangle; cross-aspect merge keeps
+  numFmt/fill/border/alignment coexisting.
+
+**Export parity** (unchanged from 10g): the raw `get_num()` value is written and Excel formats it via the
+`format(syntax="excel")` code — the same display source of truth as every other backend (verified by
+`test-export-parity.R` + the numFmt-code lock). NOT byte-identical to the old openxlsx workbook (waived).
+`conditional_format=` is accepted but experimental (message + hard-style fallback). `hide_near_zero` /
+`n_min` are accepted-but-inert (use `tab(n_min=)`). `R/tab-xl-backend.R` documents the openxlsx2 style
+model (merge across aspects; replace within; the font `update` bug; borders reject multi-area `dims`).
 
 ### tab_kable() — HTML Export (`R/tab_classes.R` + `R/tab-render-html.R`)
 
@@ -595,14 +611,18 @@ Classes, dplyr methods, and colors. Contains:
 - **Lines 3100–3210**: `set_color_style()`, `get_color_style()`.
 - **Lines 3210–3554**: `set_color_breaks()`, `get_color_breaks()`, color legend generation.
 
-### R/tab_xl.R (4132 lines)
+### R/tab_xl.R (~470 lines) + R/tab-xl-backend.R (~155 lines)
 
-Excel export. Main function `tab_xl()` handles:
+Excel export via **openxlsx2** (Phase 10h). `tab_xl()` orchestrates → `tab_xl_plan_one()` (pure
+per-table plan) → `xl_write_table()` (per-sheet writer through the `xlb_*` backend). See the Export
+System section above for the full pipeline. Key points:
 
-- Workbook creation, sheet management, column width calculation
-- Two-channel color: font-colour styles (text channel) + fill styles (bg channel) driven by `fmt_color_channels()`, stacked with `openxlsx::addStyle(stack = TRUE)`
-- Font, border, and number format styling
-- Chi-squared statistics and color legend printing
+- Two-channel colour from `fmt_color_channels()`: the text channel rides the unified font plan
+  (bold + colour), the background channel is a fill pass; both applied over coalesced multi-area `dims`.
+- numFmt codes from `format(syntax="excel")` (stars folded into the literal); font/border/alignment via
+  the `xlb_*` wrappers (fonts `update=FALSE` complete-replace; borders `update=TRUE` per rectangle).
+- `R/tab-xl-backend.R` holds the thin engine wrappers + the pure coalescers (`xl_runs`/`xl_rect_dims`/
+  `xl_coalesce`) and documents the openxlsx2 style model.
 
 ### R/tab_md.R (366 lines)
 

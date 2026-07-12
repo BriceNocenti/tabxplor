@@ -41,9 +41,15 @@ R/
 ├── tab_classes.R   (3554 L)  tabxplor_tab/grouped_tab classes, 30+ dplyr S3 methods,
 │                              print methods, tab_kable(), tab_plot(), tab_compact(),
 │                              color palettes, set_color_style(), set_color_breaks()
-├── tab_xl.R        (~810 L)  Excel export via openxlsx (Suggests-only). Phase 10g: consumes
-│                              tab-export-prep (roles/refs/bold) + format(syntax="excel") number codes
-│                              + fmt_color_channels; memoised styles; hide_near_zero/n_min dropped
+├── tab_xl.R        (~470 L)  Excel export via openxlsx2 (Suggests-only; Phase 10h). Single-tab-first
+│                              + list. tab_xl() orchestrator -> tab_xl_plan_one() (pure per-table plan:
+│                              raw values + numFmt codes w/ stars folded + colour slots + font plan +
+│                              geometry) -> xl_write_table() (per-sheet writer). Consumes tab-export-prep
+│                              (roles/refs/bold) + format(syntax="excel"); transpose arg;
+│                              conditional_format experimental; n_min/hide_near_zero inert
+├── tab-xl-backend.R (~155 L) Phase 10h openxlsx2 backend: ~14 xlb_* engine wrappers (in-place R6 $) +
+│                              pure range coalescers (xl_runs/xl_rect_dims/xl_coalesce -> fewest
+│                              multi-area dims, one shared style per range). openxlsx2 layering notes.
 ├── tab_md.R         (~560 L) Markdown export: plain padded pipe table + (Phase 10f) break-derived
 │                              pandoc colour spans [<num>]{.p20} (uniform, aligned) via tab_export_prep;
 │                              tab_md_css() per-table CSS generator; md_slot_class_map/md_break_class
@@ -117,7 +123,7 @@ Export:  tab_xl()  |  tab_kable()  |  tab_md()  |  tab_plot()
 | data.table internals     | `tab_plain()`/`tab_num()` rename `col_var` to internal names to avoid data.table conflicts. The user's column names are restored afterward.                                                                                                                                                                                                                                                       |
 | dplyr class preservation | 30+ S3 methods on `tabxplor_tab`/`tabxplor_grouped_tab` ensure class + attributes survive all dplyr verbs. Missing a method = silent class downgrade to `tbl_df`.                                                                                                                                                                                                                                 |
 | Options as config        | All defaults set in `.onLoad()` in `utils.R`. Users override via `options()`. Functions read with `getOption()`.                                                                                                                                                                                                                                                                                  |
-| Suggests-only guards     | `openxlsx`, `ggplot2`, `jmvcore`, `ggpubr`, `cowplot` are in Suggests. Every call must be guarded with `requireNamespace()` or equivalent.                                                                                                                                                                                                                                                        |
+| Suggests-only guards     | `openxlsx2`, `ggplot2`, `jmvcore`, `ggpubr`, `cowplot`, `mirai` are in Suggests. Every call must be guarded with `requireNamespace()` or equivalent (tab_xl's ONE guard is in `tab_xl()`; `R/tab-xl-backend.R` wrappers are unguarded).                                                                                                                                                                                                                                                        |
 | Color break mirroring    | `set_color_breaks()` takes positive-only thresholds. Negative breaks are auto-mirrored internally. Any `pct_breaks` value > 1 triggers ratio comparison instead of difference (the "*2 rule").                                                                                                                                                                                                    |
 | Mean-diff asymmetry      | For `type="mean"` columns, the `diff` field stores a **ratio** (cell_mean / ref_mean), NOT a difference. Thresholds like 1.15 mean "+15% above reference". This asymmetry propagates into `color_formula()` and `format.tabxplor_fmt()`. **(1.4.0 §3: numeric `diff` becomes a real difference; the ratio moves to the `ratio` field — the never-used `rr` field renamed, placed after `diff`.)** |
 | tab_logit                | Entirely commented out (WIP). Do not try to use or integrate. Will be developed in the future.                                                                                                                                                                                                                                                                                                    |
@@ -1286,6 +1292,18 @@ aggressive simplification is welcome.
 
 ### Phase 10h — Excel engine migration (openxlsx → openxlsx2)
 
+#### Done (2026-07-12)
+
+**Full clean migration** (maintainer decision, over the design doc's dual-backend seam): `tab_xl()` rewritten on **openxlsx2 only**; `openxlsx` dropped from Suggests, `openxlsx2` added; `jmvtab-export.R` guard swapped (it already routes through `tab_xl()`). Full suite green (**1748**, no golden regen); `test-export-parity.R` (value/code-path parity) + the numFmt-code lock unchanged and green.
+
+- **New `R/tab-xl-backend.R`**: ~14 thin `xlb_*` openxlsx2 wrappers (in-place R6 `$` methods) + **pure range coalescers** `xl_runs`/`xl_rect_dims`/`xl_coalesce` (base-R A1 math, unit-tested in `test-xl-backend.R`). The coalescers turn per-cell style targets into the fewest **multi-area `dims`** so each shared style is applied ONCE over the largest range (the perf lever the maintainer asked for; numFmt codes + colour slots each grouped + coalesced).
+- **`tab_xl.R` rewrite** (single-tab-first + list): orchestrator `tab_xl()` → pure per-table **`tab_xl_plan_one()`** (raw `get_num` values + numFmt codes + colour slots + a unified font plan + geometry — parallel-safe) → per-sheet writer **`xl_write_table()`** (issues the openxlsx2 calls). Sheet grouping (`sheets="auto"/"tabs"/"unique"` + start offsets) kept.
+- **Stars** folded into the numFmt literal (`0.0%"***"`, gated by `getOption("tabxplor.stars")`), cell stays a real number. **`transpose=`** (maps `tab_transpose()` before prep) wired. **`conditional_format=`** accepted but experimental (message + falls back to hard styles — deferred: CF can't reproduce field-derived colours without hidden helper columns, and the coalesced hard-style path is fast/exact/small). `n_min`/`hide_near_zero` stay accepted-but-inert. **NO `parallel=` on `tab_xl`** (a benchmark showed only ~1.09× — the openxlsx2 write is serial and dominates ~92%; Amdahl-capped, so removed; the plan builder is still pure and called serially via `purrr::pmap`). `dev/benchmarks/results_1.4.0/phase10h_openxlsx2.txt`.
+- **openxlsx2 style findings** (probe-verified, in the backend header): `wb_add_*` **merge across aspects** automatically (== v1 `addStyle(stack=TRUE)`); **within an aspect** the default replaces, so borders pass `update=TRUE` (only drawn sides). `wb_add_font(update=)` is **buggy over large ranges** when the sheet has scattered cells → all font needs are aggregated per cell into ONE complete descriptor applied with `update=FALSE`; cross-aspect merge preserves numFmt/fill/border/alignment. Borders reject multi-area `dims` (fills accept it) → `xlb_border` applies per rectangle. `wb_add_data(na=NULL, apply_cell_style=FALSE)` → blank NA cells, raw numbers.
+- **DEFERRED write optimization** (maintainer will commit this checkpoint first, then it lands in the same session): the ~40 separate `wb_add_*` style calls/table are openxlsx2's real cost (~0.45 s/table, linear); collapse them via the **styles-manager** — compute each cell's COMPLETE xf (font+fill+border+numfmt+alignment) once, apply by id with `set_cell_style(dims, style=id)` (~10–15 calls/table) → ~2–3× faster write (helps single + batch export). Correctness-sensitive (borders as `borderId`).
+
+Original plan (historical intent) below.
+
 Isolated on purpose: a full dependency swap should not be entangled with the Phase 10 exporter-prep unification and its export-parity churn. Runs **after** Phase 10g (needs the unified single-tab + list `tab_xl` methods in place).
 - The change of package is a good moment to refactor, simplify and clean the Excel export code.
 - If the export is long, parallelize with a `parallel` argument (see `tab()`) for list of `tabxplor_tab` (or grouped) ? Realise tests with many tables in a list to verify it’s a performance gain, and at what conditions.
@@ -1342,6 +1360,10 @@ Display problems and improvements :
 - lists not working with `options(tabxplor.print = "kable")` auto-display (print() method), since they are not there own class ! Implement a new vctrs class "list_tabxplor_tab" with vctrs (that should still behave like a list in any other way)
 - with `list(tab(...), tab(...), ...) |> tab_kable()`, the result appear in console by defaut, it should be auto-routed to Viewer via class like kableExtra output (reuse class used by kableExtra if more simple and still reliable ?)
 - in kable output, with `color = c("diff", "ratio")`, tooltips have an empty `rr` field (it should be called "ratio", and print the actual ratio ; `ratio` display printing should always have a `×` symbol when >=1 and a `÷` symbol with the inversed (`1/ratio`) when <1, for example 0.5 shall print `"÷2"` ; defaut 1 digit, removing trailing zeros (`3.333` go to  `3.3` but `2.0000` go to `2`), respecting padding for perfect aligment in monospace font for human readability ; same in color legends)
+- When there are confidence intervals significance stars, they should display, in some way or another, in all exports types. They should be completely padded right everywhere, so the stars always align in monospace font. In tab_md() it’s not 
+- Un exports AND in console display, with any significance star in the column, all numbers should be padded right to keep numbers alignment and readability.
+- Does transpose at export work perfecty (colors and all) with `pct = "col"` and with numeric variables ? If not, calculate colors, and anything else relevant (other column-level attributes not usable after the transposition), before transposition ?
+
 
 ### Phase 14 — tab_logit integration and full redesign
 
@@ -1394,6 +1416,8 @@ What about `multi_logit`, who handles passing of multiple models (like different
 - Would it be possible to add it’s own jamovi analysis and UI, or would it be too complicated / useless ? Just one jamovi UI for logits, with possibility to choose predictors variables, then click on "+" button to add a subset of them, with the possibility to add any new set with "+" ?
 
 
+### Phase 15 — Jamovi UI French translation
+
 
 
 
@@ -1417,16 +1441,20 @@ Known bugs to fix (found but out of scope when discovered):
   remain to be inherited." Harmless (man pages write correctly, NAMESPACE unchanged); tidy up `fmt()`'s
   `@inheritParams` if it bothers `devtools::check()`.
 
-#### Last Phase b – Create several vignettes
+#### Last Phase b – simplify main user-facing functions roxygen documentation
+
+Simplify tab() and other main functions documentation, to make it more easily understandable and more helpful to students that are not statistical experts and may have difficulties with programming.
+
+#### Last Phase c – Create several vignettes
 
 The current vignette should be the basis for non-expert users, while also permitting expert users to understand what this package is really interesting for.
 
 All the part about "programming with tabxplor" and its vctrs fields should come in their own vignette, and it must be uptaded and extended.
 
-If tab_logit() is implemented it should come with it’s own vignette
+tab_logit should come with it’s own vignette.
 
 
-#### Last Phase c – full `pkgdown` documentation
+#### Last Phase d – full `pkgdown` documentation
 
 Implement a full pkgdown documentation.
 - Where ? On github pages ? Elsewhere with tidyverse ecosystem provided servers ?

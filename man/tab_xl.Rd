@@ -22,7 +22,9 @@ tab_xl(
   text_size_headers = 9,
   text_size_subtext = 9,
   hide_near_zero = Inf,
-  color_type = "text"
+  color_type = "text",
+  transpose = FALSE,
+  conditional_format = FALSE
 )
 }
 \arguments{
@@ -72,6 +74,13 @@ slow feature): the argument is kept for back-compatibility but no longer does an
 
 \item{color_type}{By default, the text is colored. Set to \code{"bg"} to color
 the background instead.}
+
+\item{transpose}{Set to \code{TRUE} to transpose each table before export (rows become
+columns). Useful for column percentages tables with several row variables.}
+
+\item{conditional_format}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#experimental}{\figure{lifecycle-experimental.svg}{options: alt='[Experimental]'}}}{\strong{[Experimental]}} Reserved for a future opt-in
+to use Excel conditional formatting instead of hard cell colours. Not yet implemented: setting
+it emits a message and falls back to the (fast, exact) hard-style colouring.}
 }
 \value{
 The table(s) with formatting and colors in an Excel file, as a side effect.

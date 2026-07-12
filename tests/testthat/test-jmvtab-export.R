@@ -58,13 +58,13 @@ testthat::test_that("jmvtab_export writes self-contained HTML", {
 })
 
 testthat::test_that("jmvtab_export writes a valid Excel workbook", {
-  testthat::skip_if_not_installed("openxlsx")
+  testthat::skip_if_not_installed("openxlsx2")
   tmp <- withr::local_tempdir()
   p   <- file.path(tmp, "t.xlsx")
   jmvtab_export(tabs, "excel", p, replace = TRUE)
   testthat::expect_true(file.exists(p))
-  wb <- openxlsx::loadWorkbook(p)                     # opens without error
-  testthat::expect_true(length(openxlsx::sheets(wb)) >= 1)
+  wb <- openxlsx2::wb_load(p)                          # opens without error
+  testthat::expect_true(length(openxlsx2::wb_get_sheet_names(wb)) >= 1)
 })
 
 # --- Reference-level picker helpers (Phase 7g-iii) ----------------------------------------

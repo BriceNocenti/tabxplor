@@ -981,6 +981,17 @@ Golden regenerated (conscious): `f_ci_cell`, `f_ci_diff` (display + struct), `f_
 
 ## 21. Exporter phasing — Phase 10 (openxlsx v1 prep) vs Phase 11 (openxlsx2): keep split, add a backend seam
 
+> **SUPERSEDED / RESOLVED (Phase 10h, 2026-07-12).** The split held (10g stayed on openxlsx v1; the
+> swap ran as its own Phase 10h). But the maintainer chose a **full clean migration to openxlsx2**
+> over the dual-backend closure seam this section designed: `tab_xl()` was rewritten on openxlsx2
+> only, `openxlsx` was dropped from Suggests, and there is a **single-engine** backend module
+> `R/tab-xl-backend.R` (thin `xlb_*` wrappers + pure range coalescers), not an `xl_backend_openxlsx1/2`
+> pair. The perf-premise caveat below was borne out in spirit — the openxlsx2 win is the
+> **shared-style + largest-range** application (coalesced multi-area `dims`), not raw speed; hard cell
+> styles were kept (conditional formatting deferred as experimental). The byte-identity oracle here is
+> relaxed to the value/code-path parity (`test-export-parity.R` + numFmt-code lock) + visual review,
+> per the 10g "white elephant" waiver. Full record: CLAUDE.md § Phase 10h + `dev/tabxplor_phase10_exporters.md` (Status).
+
 The maintainer's question (2026-07-08): the Phase 10 `tab_xl()` rewrite is *already* a big restructure (today's
 `tab_xl` is **list-first — a bare df is wrapped to a one-element list at [tab_xl.R:91](../R/tab_xl.R#L91) and
 the entire body is `purrr::map`/`pwalk`; there is no single-tab path**), so should the openxlsx→openxlsx2

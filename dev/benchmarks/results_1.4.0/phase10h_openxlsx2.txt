@@ -1,0 +1,33 @@
+Phase 10h openxlsx2 tab_xl benchmark (min of 3, gss_cat n=21483; R 4.5.1, openxlsx2 1.27)
+
+single table (marital x race, colour + chi2): 0.34 s
+
+list of 12 tables (row_var x c(marital, race), colour + chi2):
+  sheets = "tabs"   : 5.83 s
+  sheets = "auto"   : 5.81 s
+  sheets = "unique" : 5.78 s          -> sheet layout is irrelevant
+
+scaling (sheets = "auto"): 4 -> 1.67 s (0.42/tab), 8 -> 3.59 s (0.45/tab), 12 -> 5.73 s (0.48/tab)
+  -> LINEAR in #tables, ~0.45 s/table. NOT quadratic-on-one-sheet.
+
+parallel (list of 12, 6 workers): 5.08 s vs 5.54 s serial -> 1.09x speedup.
+
+INTERPRETATION
+- The cost is openxlsx2's FIXED per-style-call overhead (~40 wb_add_* calls/table, ~11 ms each),
+  NOT per-cell work: tiny gss_cat tables already cost ~0.45 s each. This is the known openxlsx2
+  styled-write slowness (decisions doc 21).
+- The plan CPU (format codes + colour channels + font tuples + geometry) is only ~8% of the total;
+  the openxlsx2 WRITE (serial, on the main process, mutating one workbook) is ~92%.
+- Therefore parallel= is Amdahl-capped at ~1.09x for tab_xl (1/(0.92 + 0.08/6) ~= 1.07). It is
+  byte-identical to serial and harmless, but does NOT deliver a real speed-up for Excel export
+  (unlike ~2.4x for tab() building, where the per-row_var work IS the cost). A gain would need a
+  plan-CPU-bound export, which does not occur while the openxlsx2 write dominates.
+
+FUTURE OPTIMIZATION (not done; would speed up BOTH serial and the parallel ceiling)
+- The ~40 separate wb_add_font/fill/border/numfmt/cell_style calls per table could be collapsed via
+  the openxlsx2 styles-manager: compute each cell's COMPLETE xf (font+fill+border+numfmt+alignment)
+  once, register the distinct xfs, and apply via set_cell_style(dims, style=id) -- ONE call per
+  distinct full-cell-style group (~10-15/table instead of ~40). This is the "shared styles created
+  once" lever; a substantial, correctness-sensitive rewrite (borders are per-edge), so deferred.
+  Coalescing (this phase) already minimizes calls PER style group; the remaining cost is the NUMBER
+  of style aspects x groups.

@@ -125,7 +125,7 @@ testthat::test_that("tab_plot works with contrib color", {
 # === SECTION: tab_xl (extended tests) =========================================
 
 testthat::test_that("tab_xl creates a valid Excel file with multiple color types", {
-  testthat::skip_if_not_installed("openxlsx")
+  testthat::skip_if_not_installed("openxlsx2")
 
   tabs <- tab(gss, race, marital, pct = "row", chi2 = TRUE, color = "diff")
   tmp <- tempfile(fileext = ".xlsx")
@@ -137,7 +137,7 @@ testthat::test_that("tab_xl creates a valid Excel file with multiple color types
 })
 
 testthat::test_that("tab_xl works with contrib color type", {
-  testthat::skip_if_not_installed("openxlsx")
+  testthat::skip_if_not_installed("openxlsx2")
 
   tabs <- tab(gss, race, marital, pct = "row", chi2 = TRUE, color = "contrib")
   tmp <- tempfile(fileext = ".xlsx")
@@ -148,7 +148,7 @@ testthat::test_that("tab_xl works with contrib color type", {
 })
 
 testthat::test_that("tab_xl works with grouped tables", {
-  testthat::skip_if_not_installed("openxlsx")
+  testthat::skip_if_not_installed("openxlsx2")
 
   gss_sub <- gss |> dplyr::filter(year %in% c(2000, 2014))
   tabs <- tab(gss_sub, race, marital, year, pct = "row", color = "diff")
@@ -160,7 +160,7 @@ testthat::test_that("tab_xl works with grouped tables", {
 })
 
 testthat::test_that("tab_xl works with numeric tables", {
-  testthat::skip_if_not_installed("openxlsx")
+  testthat::skip_if_not_installed("openxlsx2")
 
   sw <- dplyr::starwars |>
     tab_prepare("sex", "hair_color", "eye_color", "mass", "gender",

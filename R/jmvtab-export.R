@@ -65,8 +65,8 @@ jmvtab_export <- function(tabs, format = c("excel", "html", "md"), path, replace
   switch(
     format,
     excel = {
-      if (!requireNamespace("openxlsx", quietly = TRUE)) {
-        stop("Package 'openxlsx' is required for Excel export.", call. = FALSE)
+      if (!requireNamespace("openxlsx2", quietly = TRUE)) {
+        stop("Package 'openxlsx2' is required for Excel export.", call. = FALSE)
       }
       tab_xl(tabs, path = path, sheets = "unique", open = FALSE, replace = replace)
     },

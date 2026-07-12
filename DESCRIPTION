@@ -29,7 +29,7 @@ Suggests:
     jmvcore (>= 2.4.0),
     knitr,
     mirai (>= 2.5.0),
-    openxlsx (>= 4.0.0),
+    openxlsx2 (>= 1.0.0),
     R6,
     ggpubr (>= 0.6.0),
     ggplot2 (>= 3.4.0),

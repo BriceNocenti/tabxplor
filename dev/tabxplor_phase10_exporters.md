@@ -12,9 +12,36 @@ KEY CONSTRAINTS:
 See: CLAUDE.md § "Phase 10", dev/tabxplor_1.4.0_decisions.md §33 (the decision record).
 -->
 
-Status: **10c DONE; 10d DONE; 10e DONE; 10f DONE; 10g DONE (2026-07-12).** 10a decision settled
-(below); this document is the 10b deliverable and governs 10d→10g. Read this first, then the matching
-`dev/tabxplor_1.4.0_decisions.md` sections and `dev/tabxplor_architecture.md` "Export System".
+Status: **10c DONE; 10d DONE; 10e DONE; 10f DONE; 10g DONE; 10h DONE (2026-07-12).** 10a decision
+settled (below); this document is the 10b deliverable and governs 10d→10h. Read this first, then the
+matching `dev/tabxplor_1.4.0_decisions.md` sections and `dev/tabxplor_architecture.md` "Export System".
+
+**10h — Excel engine migration (openxlsx → openxlsx2), DONE (2026-07-12).** Maintainer chose a
+**full clean migration** over §9's dual-backend seam: `tab_xl()` rewritten on **openxlsx2 only**;
+`openxlsx` dropped from Suggests, `openxlsx2` added; `jmvtab-export.R` guard swapped. New
+`R/tab-xl-backend.R` = ~14 thin `xlb_*` wrappers (in-place R6 `$` methods) + pure coalescers
+(`xl_runs`/`xl_rect_dims`/`xl_coalesce`) that emit the fewest **multi-area `dims`** so each shared
+style is applied once over the largest range (numFmt codes + colour slots grouped + coalesced — the
+maintainer's perf directive). `tab_xl.R` = single-tab-first + list: orchestrator → pure
+`tab_xl_plan_one()` (parallel-safe: raw values + numFmt codes w/ stars + colour slots + a unified
+font plan + geometry) → `xl_write_table()` (per-sheet writer); sheet grouping kept. **Stars** folded
+into the numFmt literal (`0.0%"***"`, gated by `getOption("tabxplor.stars")`); **`transpose=`** wired;
+**`conditional_format=`** accepted but experimental (message + hard-style fallback — faithful CF needs
+hidden helper columns and the coalesced hard path is fast/exact/small). `n_min`/`hide_near_zero` stay
+inert. **No `parallel=` on `tab_xl`** — a benchmark showed only ~1.09× (the openxlsx2 write is serial
+and dominates ~92%; Amdahl-capped), so it was dropped; the plan builder stays pure, called serially
+via `purrr::pmap`. The ~0.45 s/table cost is openxlsx2's per-style-call overhead (~40 `wb_add_*`
+calls/table); a deferred **styles-manager** rewrite (one complete xf per cell via `set_cell_style`,
+~10–15 calls/table) is the ~2–3× write win. **openxlsx2 findings**
+(probe-verified, backend header): `wb_add_*` merge across aspects (== v1 `stack=TRUE`); within an
+aspect the default replaces (borders → `update=TRUE`); `wb_add_font(update=)` is buggy over large
+ranges when the sheet has scattered cells → the font plan applies ONE complete descriptor per cell
+with `update=FALSE`; borders reject multi-area `dims` (fills accept it) → applied per rectangle;
+`na=NULL`+`apply_cell_style=FALSE` → blank NA cells, raw numbers. `test-export-parity.R` (value/code
+parity) + numFmt-code lock unchanged and green; full suite 1748, no golden regen. `tab-parallel.R`
+gained a **ship-free worker** path (`.ship=list()`) for tab_xl's self-contained plan builder. NOT
+byte-identical to the old openxlsx workbook (maintainer waived it — "white elephant"); parity is the
+value/code oracle + visual review. Backend seam (§9) is single-engine now (dual-backend obsolete).
 
 **Phase 10g done (2026-07-12) — `tab_xl()` reworked onto the shared prep + `numfmt` folded into
 `format(syntax="excel")`; 4132 → ~810 lines.** Governing steer (maintainer, this session): NO byte

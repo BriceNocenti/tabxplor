@@ -48,6 +48,13 @@
   layout for export. Percentages, differences, confidence intervals and colors ride along; the total
   row/column and reference row/column are swapped, and the whole-table test is re-keyed. It handles a
   single table (one row variable, one column variable, at most one total row/column).
+* `tab_xl()` Excel export was rewritten on the actively-maintained **openxlsx2** engine (replacing
+  openxlsx), and now takes a single table or a list. It gains `transpose = TRUE` (transpose each table
+  before export) and an experimental `conditional_format =` (reserved; currently a no-op with a
+  message). Significance stars now show in the exported cells (folded into the Excel number format, so
+  the cell stays a real number). Colors and number styles are applied over the fewest possible cell
+  ranges. The deprecated `n_min` / `hide_near_zero` arguments are still accepted but do nothing (use
+  `tab(n_min = )`).
 * New `display` argument in `tab()` for an opt-in **composite display** showing two fields per cell:
   `display = "pct (n)"` prints each percentage with its count (e.g. `76% (13)`), `display = "n (pct)"`
   the reverse. It is a display overlay for text output (the console, `tab_kable()`, `tab_md()`) --
@@ -193,6 +200,8 @@
   disagree with the console**: a difference shown on a percentage column now formats as a percentage,
   and p-value cells keep their percentage scaling. Number-of-decimals for count and odds-ratio columns
   also follow the console exactly now.
+* **Excel export now uses `openxlsx2` instead of `openxlsx`** (a Suggests-only dependency). If you
+  export to Excel, install `openxlsx2`. The produced workbooks look essentially the same.
 
 ## Bug corrections
 * `tab()` with two or more row variables AND two or more column variables no longer errors ("pct can't be recycled"); percentages are recycled correctly across the table.

@@ -380,7 +380,7 @@ testthat::test_that("tab_plot degrades gracefully (message, no error)", {
 })
 
 testthat::test_that("tab_xl degrades gracefully (writes the raw frame, no error)", {
-  testthat::skip_if_not_installed("openxlsx")
+  testthat::skip_if_not_installed("openxlsx2")
   for (nm in names(degrade_shapes)) {
     p <- withr::local_tempfile(fileext = ".xlsx")
     testthat::expect_message(tab_xl(degrade_shapes[[nm]], path = p, open = FALSE),
