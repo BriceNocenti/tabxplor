@@ -412,8 +412,13 @@ Phase 10c reworked it for speed and flexibility (byte-identical, golden-locked):
 - The unconditional `x$var` (`$.tabxplor_fmt` → `dplyr::pull`) accessor was replaced by `get_var(x)`
   (the `vctrs::field` accessor) — it was ~28 % of `format()` self-time. Overall `format()` is ~2×
   faster on the exporter path (`dev/benchmarks/results_1.4.0/phase10c_profile.txt`).
-- Opt-in composite display via the `display_spec` attribute (e.g. `"pct (n)"`), parsed only here,
-  only when set — one scalar `is.na()` gate keeps the common path byte-identical.
+- Opt-in COMPOSITE display via a per-cell `display`-FIELD `{}` template (e.g. `"{pct} (n={n})"`,
+  Phase 10i-A) — parsed only here, gated by one fixed `grepl` so the common path is byte-identical when
+  no cell is a composite. `get_num()`/`format()`/`vec_ptype_abbr`/tooltip resolve a composite cell to its
+  PRIMARY (first `{field}`) via the shared `display_primary()`; Excel exports the primary automatically.
+  `{}`-only (no curated sugar) via `validate_display_template()`; e.g. `tab(display = "{pct} (n={n})")`.
+  The internal `pct_ci`/`mean_ci`/`or_pct` tokens are pipeline-set integrated-rendering modes, not `{}`.
+  (Replaced the dropped Phase-10c `display_spec` attribute; 9 attributes.)
 
 ### tab_xl() — Excel Export (`R/tab_xl.R` + `R/tab-xl-backend.R`, Phase 10h)
 

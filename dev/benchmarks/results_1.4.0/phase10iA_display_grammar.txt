@@ -1,0 +1,31 @@
+Phase 10i-A -- display {} grammar: does the display_primary() gate slow the pipeline "for nothing"?
+======================================================================================================
+git-stash A/B, Rscript dev/benchmarks/phase10iA_display_grammar.R (system.time medians, ~0.01s resolution).
+BEFORE = pre-10i-A baseline (display_spec attribute); AFTER = 10i-A ({} grammar in the display field).
+Ryzen 7 5800X, R 4.5.1.
+
+operation                                        before_s   after_s     diff   note
+format()  200k-cell pct col (NO composite)          0.670     0.690    +0.02   ~1 extra fixed-grepl; within noise
+get_num() 200k-cell pct col (NO composite)          0.030     0.030     0.00   unchanged
+build tab() 1x3 col_vars                            0.080     0.080     0.00   unchanged
+print() plain tab                                   0.050     0.050     0.00   unchanged
+tab_md() plain tab                                  0.060     0.060     0.00   unchanged
+tab_kable() plain tab                               0.290     0.300    +0.01   noise
+tab_xl() plain tab                                  0.230     0.225     0.00   unchanged
+format() 200k-cell COMPOSITE col (info)             0.655     2.455        -   NOT comparable*
+
+Micro (in-suite test-display-grammar.R): display_primary() x20 on 1e6 no-composite cells = 0.22s
+  -> ~11 ns/cell for the gate (one fixed grepl + any()).
+
+* The COMPOSITE row is informational only: on the baseline a "{pct} (n={n})" hand-written into the
+  display field is NOT parsed (renders the primary), so 0.655s; AFTER it does the real 2-field render
+  (2 sub-format() calls + paste), so 2.455s. This cost is paid ONLY when a composite is actually used
+  (opt-in tab(display=)), never on a normal table.
+
+VERDICT -- Solution 2 confirmed (ship as-is; no Solution-3 dedicated fast tokens needed).
+  The {} template lives in the per-cell `display` FIELD, resolved by the gated display_primary().
+  On NO-composite tables (the vast majority) the whole display/export pipeline is UNCHANGED:
+  build/print/tab_md/tab_kable/tab_xl show no measurable difference. The only movement is a ~3%
+  (+0.02s over 20 reps) bump on an ISOLATED format() of a 200k-cell column -- within system.time
+  resolution and dwarfed by the render work in every real exporter. The gate is negligible "for
+  nothing"; the composite cost is opt-in. => keep the single {} code path.

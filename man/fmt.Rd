@@ -31,8 +31,6 @@
 \alias{get_color_signif}
 \alias{set_color}
 \alias{set_color_signif}
-\alias{get_display_spec}
-\alias{set_display_spec}
 \alias{get_digits}
 \alias{set_digits}
 \title{Create a vector of class formatted numbers}
@@ -66,8 +64,7 @@ fmt(
   totcol = FALSE,
   refcol = FALSE,
   color = "",
-  color_signif = "ignore",
-  display_spec = NA_character_
+  color_signif = "ignore"
 )
 
 is_fmt(x)
@@ -127,10 +124,6 @@ get_color_signif(x, ...)
 set_color(x, color)
 
 set_color_signif(x, color_signif)
-
-get_display_spec(x, ...)
-
-set_display_spec(x, display_spec)
 
 get_digits(x)
 
@@ -248,11 +241,6 @@ difference first.
 
 \item{color_signif}{How significance gates the color, as a single string
 (\code{"ignore"} / \code{"grey_non_signif"} / \code{"color_all_signif"}). See \code{\link{tab}}.}
-
-\item{display_spec}{An optional composite display recipe (a single string, e.g.
-\code{"pct (n)"} or \code{"n (pct)"}; \code{NA} = the plain single field). Parsed only by
-\code{format()} for text output; the primary \code{display} field, colors and the Excel bypass
-are unchanged. See \code{\link{tab}}'s \code{display} argument.}
 
 \item{x}{The object to test, to get a field in, or to modify.}
 
@@ -404,10 +392,6 @@ all of them in the whole tibble.
 \item \code{set_color()}: set the "color" attribute of a \code{fmt} vector
 
 \item \code{set_color_signif()}: set the significance policy attribute of a \code{fmt} vector
-
-\item \code{get_display_spec()}: get the composite display recipe attribute (\code{NA} = plain single field)
-
-\item \code{set_display_spec()}: set the composite display recipe attribute of a \code{fmt} vector
 
 \item \code{get_digits()}: get the "digits" field
 

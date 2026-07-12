@@ -55,11 +55,13 @@
   the cell stays a real number). Colors and number styles are applied over the fewest possible cell
   ranges. The deprecated `n_min` / `hide_near_zero` arguments are still accepted but do nothing (use
   `tab(n_min = )`).
-* New `display` argument in `tab()` for an opt-in **composite display** showing two fields per cell:
-  `display = "pct (n)"` prints each percentage with its count (e.g. `76% (13)`), `display = "n (pct)"`
-  the reverse. It is a display overlay for text output (the console, `tab_kable()`, `tab_md()`) --
-  colors, differences and the underlying fields are unchanged, and Excel keeps the primary field. It
-  is also settable at the cell level with the new `set_display_spec()` / `get_display_spec()`.
+* New `display` argument in `tab()` for an opt-in **composite display** showing several fields per cell,
+  written as a `{}` template listing the fields to combine: `display = "{pct} (n={n})"` prints each
+  percentage with its count (e.g. `76% (n=13)`), `"{n} ({pct})"` the reverse, `"{diff} [{ci}]"` a
+  difference with its interval. Valid fields: `pct`, `n`, `wn`, `mean`, `diff`, `ratio`, `ci`, `or`,
+  `ctr`, `var` (the first is the primary). It is a display overlay for text output (the console,
+  `tab_kable()`, `tab_md()`) -- colors, differences and the underlying fields are unchanged, and Excel
+  keeps the primary field.
 * The exporters (`tab_kable()`, `tab_md()`, `tab_plot()`, `tab_xl()`) and the print methods no longer
   crash on a plain `data.frame` or a table with no factor / no formatted columns: they render the
   plain table with a short message explaining that tabxplor formatting was skipped. Variable-role

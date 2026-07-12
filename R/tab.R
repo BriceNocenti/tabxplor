@@ -123,11 +123,15 @@ NULL
 #' \emph{largest} base across the column variables is below \code{n_min}; surviving cells whose own
 #' base is below \code{n_min} are blanked. Under \code{pct = "col"} the same rule drops weak
 #' columns. Total rows/columns, the added-\code{n} row/column and the p-value line are always kept.
-#' @param display A single optional \strong{composite display recipe} to show two fields in each
+#' @param display A single optional \strong{composite display template} to show several fields in each
 #'   value cell (text output only -- the console, \code{\link{tab_kable}} and \code{\link{tab_md}};
-#'   Excel falls back to the primary field). One of \code{"pct (n)"} (a percentage with its count) or
-#'   \code{"n (pct)"}. \code{NULL} (default) keeps the plain single-field display. It is a display
-#'   overlay only: colors, differences and the underlying fields are unchanged.
+#'   Excel falls back to the primary field). A \code{\{\}} template listing the fields to combine, e.g.
+#'   \code{"\{pct\} (n=\{n\})"} (a percentage with its count), \code{"\{n\} (\{pct\})"} or
+#'   \code{"\{diff\} [\{ci\}]"}. Valid fields: \code{pct}, \code{n}, \code{wn}, \code{mean},
+#'   \code{diff}, \code{ratio}, \code{ci}, \code{or}, \code{ctr}, \code{var}; the first field is the
+#'   \emph{primary}, shown alone by Excel and used for coloring. \code{NULL} (default) keeps the plain
+#'   single-field display. It is a display overlay only: colors, differences and the underlying fields
+#'   are unchanged.
 #' @param totaltab The total table, if there are subtables/groups
 #' (i.e. when \code{tab_vars} is provided) :
 #'  \itemize{
@@ -553,22 +557,39 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
   # for color = TRUE). Plain scalar colors pass through untouched.
   result <- finalize_color_spec(result, color_spec)
 
-  # Phase 10c: opt-in composite display recipe (e.g. `display = "pct (n)"`) -- a pure display-tier
-  # attribute set on the built table; NULL (default) leaves the plain single-field display.
-  tab_apply_display_spec(result, display)
+  # Phase 10i-A: opt-in composite display recipe (e.g. `display = "pct (n)"` or `"{pct} (n={n})"`)
+  # written into the display FIELD of value cells; NULL (default) leaves the plain single-field display.
+  tab_apply_display(result, display)
 }
 
 
-# Phase 10c: apply an opt-in COMPOSITE display recipe (e.g. "pct (n)") to a built table (single tab,
-# grouped tab, or a list of tabs) as a pure display attribute. It is a DISPLAY overlay only (text
-# backends via format()); get_num(), coloring and the Excel bypass keep using the primary field.
-# set_display_spec() validates `display` against the curated whitelist (clear error otherwise).
+# Phase 10i-A: apply an opt-in COMPOSITE display recipe (curated sugar "pct (n)"/"n (pct)"/"pct_n",
+# or a raw "{pct} (n={n})" template) to a built table (single tab, grouped tab, or a list of tabs).
+# It is a DISPLAY overlay only (text backends via format()); get_num(), coloring and the Excel bypass
+# keep showing the PRIMARY field. validate_display_template() checks the {} template (aborts on
+# bad input); the {} template is written into the `display` FIELD but ONLY on genuine value cells, so
+# the already-present p-value / blank / total-marker cells keep their own token (this write runs last
+# in tab(), after those rows exist).
 #' @keywords internal
-tab_apply_display_spec <- function(tabs, display) {
+tab_apply_display <- function(tabs, display) {
   if (is.null(display) || length(display) == 0L) return(tabs)
   ds <- display[[1]]
   if (is.na(ds) || ds %in% c("", "no")) return(tabs)
-  if (is.data.frame(tabs)) set_display_spec(tabs, ds) else purrr::map(tabs, ~ set_display_spec(., ds))
+  tmpl   <- validate_display_template(ds)
+  fields <- parse_display_template(tmpl)$fields
+  set_one <- function(tab) {
+    dplyr::mutate(tab, dplyr::across(dplyr::where(is_fmt), function(col) {
+      d <- get_display(col)
+      # Only genuine value cells, AND only where EVERY template field renders (non-NA) -- so a
+      # count-only column (pct NA, e.g. the added-n column) or an empty cell keeps its own token
+      # and renders normally (byte-identical to the Phase-10c `both` guard).
+      elig <- d %in% c("pct", "mean", "n", "wn")
+      for (f in fields) elig <- elig & !is.na(get_num(set_display(col, f)))
+      d[elig] <- tmpl
+      set_display(col, d)
+    }))
+  }
+  if (is.data.frame(tabs)) set_one(tabs) else purrr::map(tabs, set_one)
 }
 
 

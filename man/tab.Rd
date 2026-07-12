@@ -256,11 +256,15 @@ last: it hides small-base cells without recomputing anything. A row is dropped o
 base is below \code{n_min} are blanked. Under \code{pct = "col"} the same rule drops weak
 columns. Total rows/columns, the added-\code{n} row/column and the p-value line are always kept.}
 
-\item{display}{A single optional \strong{composite display recipe} to show two fields in each
+\item{display}{A single optional \strong{composite display template} to show several fields in each
 value cell (text output only -- the console, \code{\link{tab_kable}} and \code{\link{tab_md}};
-Excel falls back to the primary field). One of \code{"pct (n)"} (a percentage with its count) or
-\code{"n (pct)"}. \code{NULL} (default) keeps the plain single-field display. It is a display
-overlay only: colors, differences and the underlying fields are unchanged.}
+Excel falls back to the primary field). A \code{\{\}} template listing the fields to combine, e.g.
+\code{"\{pct\} (n=\{n\})"} (a percentage with its count), \code{"\{n\} (\{pct\})"} or
+\code{"\{diff\} [\{ci\}]"}. Valid fields: \code{pct}, \code{n}, \code{wn}, \code{mean},
+\code{diff}, \code{ratio}, \code{ci}, \code{or}, \code{ctr}, \code{var}; the first field is the
+\emph{primary}, shown alone by Excel and used for coloring. \code{NULL} (default) keeps the plain
+single-field display. It is a display overlay only: colors, differences and the underlying fields
+are unchanged.}
 
 \item{output_list}{Logical (default \code{FALSE}). With several \code{row_var}, \code{FALSE}
 merges the mirror tables into a single \code{tabxplor_tab}; \code{TRUE} returns a list with

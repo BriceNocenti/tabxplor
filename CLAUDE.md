@@ -137,7 +137,7 @@ Export:  tab_xl()  |  tab_kable()  |  tab_md()  |  tab_plot()
 
 ### Type System
 
-- **`tabxplor_fmt`**: vctrs record (`new_rcrd()`) with **18 per-cell fields** (was 15 before v1.4.0 Phase 1a) and 8 per-column attributes. The critical distinction: fields vary per cell (accessed via `vctrs::field()`), attributes are scalar describing the whole column (accessed via `attr()`). Constructor chain: `fmt()` (public, validates + coerces) -> `new_fmt()` (internal, calls `vctrs::new_rcrd()`). *(Phase 1a reshaped 15→18 in one combined pass — decisions doc §9; `ci` is now derived from the `ci_inf`/`ci_sup` bounds by `get_ci()`, a bounds-shim.)*
+- **`tabxplor_fmt`**: vctrs record (`new_rcrd()`) with **18 per-cell fields** (was 15 before v1.4.0 Phase 1a) and 9 per-column attributes (Phase 10i-A dropped `display_spec`). The critical distinction: fields vary per cell (accessed via `vctrs::field()`), attributes are scalar describing the whole column (accessed via `attr()`). Constructor chain: `fmt()` (public, validates + coerces) -> `new_fmt()` (internal, calls `vctrs::new_rcrd()`). *(Phase 1a reshaped 15→18 in one combined pass — decisions doc §9; `ci` is now derived from the `ci_inf`/`ci_sup` bounds by `get_ci()`, a bounds-shim.)*
 - **`mean` field overload** (cross-cutting): for **pct-type** columns the `mean` field carries the cell/reference **ratio** for the "*2 rule" (not an actual mean). Written by `tab_pct()`, read by `fmt_color_selection()`. The **`ratio` field** now exists (Phase 1a renamed the never-used `rr`→`ratio`; decisions doc §3); the overload removal + moving the ratio to `ratio` lands in **Phase 5** (color diff/ratio split), not yet done.
 - **`tabxplor_tab`**: tibble subclass via `tibble::new_tibble()` with `subtext` (legend text) and `chi2` (test results tibble) attributes. *(1.4.0 §16: the `chi2` attribute is hard-renamed `test`, also carrying the new ANOVA/Welch F — lands Phase 3.)*
 - **`tabxplor_grouped_tab`**: extends `grouped_df` for subtabled results (when `tab_vars` are present). Requires separate S3 method for every dplyr verb.
@@ -1309,9 +1309,9 @@ aggressive simplification is welcome.
 `add_n`, `add_pct` and pvalue_lines add complexity in the whole workflow. I want to **study the possibility to only add these additional rows or columns at display time**, using `tabxplor_tab` level attributes to know it must be done (or column-attributes, or global options, what would be best ?) ? This is a design task : just study if it would possible possible and reliable.
 - Distinguish between display modes that can use `display_spec` to print several informations in the same cell (console, kable, md ; for example print `add_n` as : `"100% (n= 114)"`), and display modes that needs to create new columns/rows (Excel ; for example print `add_n` by adding a new row or column efficiently, at the end ? Would it be a good idea to do it without redoing the whole fmt reconstruction, which is always a performance bottleneck ?).
   + The main caveat, if I understand it well, is that `display_spec` is a column attribute ? Would there be a reliable way to use the already existing display vctrs field at it’s place (removing `display_spec` as a column attribute totally), ensuring simple displays like `pct` or `diff` stay on a fast track for maximum performance, compared to more complex display like `pct (n)` (that of course themselves need to be the fastest possible). 
-  + Also, for reliability, keep simple displays as they are, but require complex display to add tags for fields they want displayed, for more reliability ? For example : `<{ct> ({n})`,  `{pct> (n={n})`, `{pct} ({ratio})`, etc. What would be the most standard and reliable tag for this, if `{}` is not a good standard ? Display of add_n in console should be, for the total column of row percentages, something like : `{pct> (n={n})` (with `100%` in pct, and with everything padded and aligned for human readability). Check if it can be done fast enough, without hindering performance.
+  + Also, for reliability, keep simple displays as they are, but require complex display to add tags for fields they want displayed, for more reliability ? For example : {`{pct} ({n})`,  `{pct> (n={n})`, `{pct} ({ratio})`, etc. What would be the most standard and reliable tag for this, if `{}` is not a good standard ? Display of `add_n` in console should be, for the total column of row percentages, something like : `{pct> (n={n})` (with `100%` in pct, and with everything padded and aligned for human readability). Check if it can be done fast enough, without hindering performance.
 - Print at display/export. Is the data necessary for this already available ?
-  + `add_n` must check all `tot_n` attributes, and display the smaller in a new `n` column or row (depending on pct type like now).
+  + `add_n` must check all `tot_n` attributes, and display the smaller in a new `n` column or row (depending on pct type like now), or the interval min and max. Default to minimum. Global option to set min max instead ? Or would it be a good idea to do everything in a display spec like `{pct} [n:{n_min}-{n_max}]` (or is it a new white elephant that will reduce performance at display for nothing, since n_min and n_max does not even exist on the cell fields ?) ? 
   + `add_pct` : does it have every data needed ?
   + pvalue_lines : we should store the global tests table as whole `tabxplor_tab`-level attribute, like in a former version of tabxplor (table is still there but removed at pvalue lines creation); the default behaviour should be "print pvalue as lines in the display/export if they were done and summary table is here". Ensure the test table display in console is fast (I think it may have been a display bottleneck in the past). global options should . pvalue_lines can’t really use the `<>` syntax, to instead of putting them in the display of another line or column, it’s better to actually create new lines or columns like now, but to do it at display/export efficiently.
 - Since `add_n`, `add_pct` and pvalue_lines as actual rows and columns in the data were exceptions that added complexity to the pipeline, their removal at all steps before display/export calls for a **huge code simplication**.
@@ -1322,9 +1322,24 @@ Verdict: worthwhile, not a white elephant. Decisions:
 2. the composite recipe moves to the per-cell **`display` field with a glue `{}` grammar** (`"{pct} (n={n})"`), **dropping the `display_spec` attribute** (10→9), with a short-circuited `get_num()` gate. 
 3. **add_pct = a real appended column/row** at display; only **add_n** goes in-cell (text) / an `n` column (Excel). 
 
-##### Phase 10i-A – consistent display `{}` grammar
+##### Phase 10i-A – consistent display `{}` grammar (DONE 2026-07-12)
 
-
+The composite display is now a per-cell **`display`-FIELD** `{}` template (`"{pct} (n={n})"`); the
+Phase-10c **`display_spec` attribute is DROPPED (10 → 9)** — forced per-cell because under `pct="col"`
+add_n/add_pct are ROWS, not columns. Three shared helpers next to `get_num()` (`R/fmt_class.R`):
+`display_primary()` (gated resolver — one fixed `grepl`, composite → first `{field}`, malformed →
+no-crash), `parse_display_template()`, `validate_display_template()` (**`{}`-only**, no curated sugar;
+fields ∈ `pct,n,wn,mean,diff,ratio,ci,or,ctr,var`, `ratio`→`rr`). `tab(display="{pct} (n={n})")`; the
+old `pct (n)`/`pct_n` strings now error. The internal `pct_ci`/`mean_ci`/`or_pct` tokens are KEPT
+(pipeline-set integrated rendering; `{}` can't express them, never user-typed). Every display-token
+consumer (`get_num`/`set_num`, `format()` masks, `vec_ptype_abbr`/`vec_ptype_full`,
+`tab_kable_print_tooltip`) resolves composites to the primary; Excel exports the primary automatically
+(no special-case). `tab(display=)` writes the template only on value cells where every field is non-NA →
+`"{pct} ({n})"` byte-identical to Phase 10c; count-only/pvalue/blank cells keep their token. Benchmark
+(`results_1.4.0/phase10iA_display_grammar.txt`): Solution 2 shipped, gate negligible (~11 ns/cell,
+pipeline unchanged; sugar vs `{}` = one-time ~0.2 ms validation, no per-cell cost). Tests:
+`test-display-grammar.R` + `test-fmt_class.R` + `test-fmt-contract.R` 10→9 (+ snapshot); goldens
+regenerated (attr drop only). Full suite green.
 
 ##### Phase 10i-B –  display-only migration
 

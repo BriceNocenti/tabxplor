@@ -141,10 +141,6 @@ globalVariables(c("table_id", "row_id", "col_id", "o", "rowtot", "coltot", "ok",
 #' }
 #' @param color_signif How significance gates the color, as a single string
 #' (\code{"ignore"} / \code{"grey_non_signif"} / \code{"color_all_signif"}). See \code{\link{tab}}.
-#' @param display_spec An optional composite display recipe (a single string, e.g.
-#' \code{"pct (n)"} or \code{"n (pct)"}; \code{NA} = the plain single field). Parsed only by
-#' \code{format()} for text output; the primary \code{display} field, colors and the Excel bypass
-#' are unchanged. See \code{\link{tab}}'s \code{display} argument.
 #' @return A vector of class \code{tabxplor_fmt}.
 #' @export
 #'
@@ -272,8 +268,7 @@ fmt <- function(n         = integer(),
                 totcol    = FALSE,
                 refcol    = FALSE,
                 color     = ""    ,
-                color_signif = "ignore",
-                display_spec = NA_character_) {
+                color_signif = "ignore") {
 
   # DESIGN: these 8 fields set the recycling reference length. display, diff, ratio, or,
   # the ci bounds, pvalue, tot_n and the in_* flags are recycled TO it below, so they must
@@ -325,8 +320,6 @@ fmt <- function(n         = integer(),
   # recycled to 1 (Phase 5 §9.1). color_signif is the scalar significance policy.
   color        <- vctrs::vec_cast(color, character())
   color_signif <- vctrs::vec_recycle(vctrs::vec_cast(color_signif, character()), size = 1)
-  # Phase 10c: opt-in composite display recipe (e.g. "pct (n)"); NA = the plain single field.
-  display_spec <- vctrs::vec_recycle(vctrs::vec_cast(display_spec, character()), size = 1)
 
   new_fmt(n = n, display = display, digits = digits,
           wn = wn, pct = pct,  mean = mean,
@@ -335,7 +328,7 @@ fmt <- function(n         = integer(),
           in_totrow = in_totrow, in_tottab = in_tottab, in_refrow = in_refrow,
           type = type, comp_all = comp_all,  ref = ref,
           ci_type = ci_type, col_var = col_var, totcol = totcol, refcol = refcol,
-          color = color, color_signif = color_signif, display_spec = display_spec)
+          color = color, color_signif = color_signif)
 }
 
 #' @describeIn fmt a test function for class fmt.
@@ -379,7 +372,9 @@ get_num <- function(x) {
   # or_pct, OR_pct). When adding a display value, keep this map, set_num() and format() in
   # sync (see the /vctrs-field skill).
   out     <- get_n(x)
-  display <- get_display(x)
+  # Phase 10i-A: resolve composite templates ("{pct} (n={n})") to their PRIMARY field before the
+  # dispatch masks -- byte-identical (and one fixed grepl) when the column carries no composite.
+  display <- display_primary(get_display(x))
   nas     <- is.na(display)
   out[!nas & display == "wn"     ] <- get_wn  (x)[!nas & display == "wn"     ]
   out[!nas & display == "pct"    ] <- get_pct (x)[!nas & display == "pct"    ]
@@ -409,7 +404,8 @@ get_num <- function(x) {
 set_num <- function(x, value) {
   value <- vctrs::vec_recycle(value, length(x))
   out     <- x
-  display <- get_display(x)
+  # Phase 10i-A: a composite cell writes back to its PRIMARY field (the first {token}).
+  display <- display_primary(get_display(x))
   nas     <- is.na(display)
   out[!nas & display == "n"   ] <- set_n   (x[!nas & display == "n"   ], value[!nas & display == "n"   ])
   out[!nas & display == "wn"  ] <- set_wn  (x[!nas & display == "wn"  ], value[!nas & display == "wn"  ])
@@ -993,36 +989,81 @@ set_color_signif <- function(x, color_signif) {
   `attr<-`(x, "color_signif", color_signif)
 }
 
-# Phase 10c: the curated whitelist of opt-in COMPOSITE display recipes recognised by
-# format.tabxplor_fmt() (text backends only -- Excel falls back to the primary field). Each shows a
-# value cell as "primary (secondary)", reusing the per-field getters so there is NO new field math;
-# NA (the default) = the plain single field. The primary `display` field, get_num(), coloring and
-# the Excel bypass are UNCHANGED when display_spec is unused (one scalar is.na() gate in format()).
-tabxplor_display_specs <- c("pct (n)", "n (pct)")
+# === SECTION: display {} grammar (Phase 10i-A) ======================================
+# The per-cell `display` field is EITHER a simple token ("pct"/"diff"/"n"/...) OR a glue-style
+# COMPOSITE template ("{pct} (n={n})") that renders several fields in ONE value cell (text backends
+# only -- get_num()/Excel fall back to the PRIMARY = the first {token}). These three shared helpers
+# are the single source of truth for the grammar: one gated resolver, one parser, one write-time
+# validator; every consumer that dispatches on the display token routes through display_primary().
+# WARNING: display_primary() is on the O(cells) hot path (get_num/set_num/format) -- keep the
+# no-composite fast path a single fixed grepl (Phase 10i-A benchmark). Replaced the Phase-10c
+# `display_spec` per-column attribute (§34: add_n/add_pct are ROWS under pct="col", so the composite
+# must be per-cell, not a column attribute).
 
-#' @describeIn fmt get the composite display recipe attribute (\code{NA} = plain single field)
-#' @export
-get_display_spec <- function(x, ...) {
-  if (is.data.frame(x)) return(purrr::map_chr(x, ~ get_display_spec(.)))
-  a <- attr(x, "display_spec", exact = TRUE)
-  if (is.null(a)) NA_character_ else a[1]
+# Field names accepted inside {}; mapped to the internal get_num() display token by the alias table.
+tabxplor_display_fields  <- c("pct", "n", "wn", "mean", "diff", "ratio", "ci", "or", "ctr", "var")
+# user-facing {name} -> internal display token (get_num()'s vocabulary). Only `ratio` differs (`rr`).
+tabxplor_display_aliases <- c(ratio = "rr")
+
+# Resolve a display-value vector to its PRIMARY simple token: a composite ("{field} ...") -> its
+# first {field} (alias-applied); a simple token / NA -> unchanged. Gated so a column carrying no
+# composite pays one fixed grepl and returns. A malformed token (no closing brace) is left as-is
+# and falls through to get_num()'s default `n` -- never errors (robust to hand-injected templates).
+display_primary <- function(display) {
+  comp <- !is.na(display) & grepl("{", display, fixed = TRUE)
+  if (!any(comp)) return(display)
+  tok <- sub("^[^{]*\\{\\s*([^{}]+?)\\s*\\}.*$", "\\1", display[comp])
+  hit <- tok %in% names(tabxplor_display_aliases)
+  tok[hit] <- unname(tabxplor_display_aliases[tok[hit]])
+  display[comp] <- tok
+  display
 }
 
-#' @describeIn fmt set the composite display recipe attribute of a \code{fmt} vector
-#' @export
-set_display_spec <- function(x, display_spec) {
-  if (is.data.frame(x)) {
-    return(dplyr::mutate(x, dplyr::across(dplyr::where(is_fmt),
-                                          ~ set_display_spec(., display_spec))))
+# Split ONE template into ordered segments (called once per unique template in a column, which are
+# ~uniform). Returns pieces (literals + {token}s in order), is_tok (which pieces are field tokens),
+# and fields (the alias-resolved internal tokens, in order). A degenerate template with no {field}
+# (e.g. malformed) yields is_tok all FALSE -> the format() branch leaves those cells plain.
+parse_display_template <- function(tmpl) {
+  pieces <- regmatches(tmpl, gregexpr("\\{[^{}]+\\}|[^{}]+", tmpl))[[1]]
+  is_tok <- startsWith(pieces, "{")
+  fields <- character(0)
+  if (any(is_tok)) {
+    raw <- trimws(gsub("[{}]", "", pieces[is_tok]))
+    hit <- raw %in% names(tabxplor_display_aliases)
+    raw[hit] <- unname(tabxplor_display_aliases[raw[hit]])
+    fields <- raw
   }
-  display_spec <- display_spec[1]
-  if (is.null(display_spec) || (!is.na(display_spec) && display_spec %in% c("", "no")))
-    display_spec <- NA_character_
-  if (!is.na(display_spec) && !display_spec %in% tabxplor_display_specs) {
-    cli::cli_abort(c("Unknown composite {.arg display} recipe {.val {display_spec}}.",
-                     "i" = "Available composites: {.val {tabxplor_display_specs}}."))
+  list(pieces = pieces, is_tok = is_tok, fields = fields)
+}
+
+# WRITE-time: VALIDATE a `display=` {} template and return it. Composites use the {} grammar ONLY
+# (no curated recipes -- one consistent syntax; the internal pct_ci/mean_ci/or_pct tokens are pipeline-
+# set rendering modes, never user-typed, so they are unaffected). Checks balanced non-empty braces and
+# known field names. The ONLY place a bad `display=` value aborts.
+#' @keywords internal
+validate_display_template <- function(recipe) {
+  recipe <- recipe[[1]]
+  if (!grepl("[{}]", recipe)) {
+    cli::cli_abort(c(
+      "Invalid {.arg display} value {.val {recipe}}.",
+      "i" = "Composite display uses a {{}} template listing the fields to combine,
+             e.g. {.code {{pct}} (n={{n}})} or {.code {{diff}} [{{ci}}]}."
+    ))
   }
-  `attr<-`(x, "display_spec", display_spec)
+  opens  <- stringr::str_count(recipe, "\\{")
+  closes <- stringr::str_count(recipe, "\\}")
+  toks   <- regmatches(recipe, gregexpr("\\{[^{}]+\\}", recipe))[[1]]
+  fields_used <- trimws(gsub("[{}]", "", toks))
+  if (opens != closes || length(toks) != opens || any(!nzchar(fields_used))) {
+    cli::cli_abort(c("Malformed {.arg display} template {.val {recipe}}.",
+                     "i" = "Use balanced, non-empty tokens, e.g. {.code {{pct}} (n={{n}})}."))
+  }
+  unknown <- setdiff(fields_used, c(tabxplor_display_fields, names(tabxplor_display_aliases)))
+  if (length(unknown)) {
+    cli::cli_abort(c("Unknown field{?s} {.val {unknown}} in {.arg display} template.",
+                     "i" = "Valid fields: {.val {tabxplor_display_fields}}."))
+  }
+  recipe
 }
 
 
@@ -1121,7 +1162,6 @@ new_fmt <- function(n         = integer(),
                     refcol    = FALSE,
                     color     = ""   ,
                     color_signif = "ignore",
-                    display_spec = NA_character_,
                     ..., class = character()
 ) {
   # stopifnot(
@@ -1172,7 +1212,7 @@ new_fmt <- function(n         = integer(),
          in_refrow = in_refrow),
     type = type, comp_all = comp_all, ref = ref,
     ci_type = ci_type, col_var = col_var, totcol = totcol, refcol = refcol,
-    color = color, color_signif = color_signif[1], display_spec = display_spec[1],
+    color = color, color_signif = color_signif[1],
     class = c(class, "tabxplor_fmt"))
   #access with fields() n_fields() vctrs::field() vctrs::`field<-`() ;
   #vec_data() return the tibble with all fields
@@ -1701,7 +1741,11 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   out    <- get_num(x)
   na_out <- is.na(out)
 
-  display <- get_display(x)
+  # Phase 10i-A: keep the RAW display field for the composite-template expansion at the end; the
+  # dispatch masks below run on the PRIMARY token (byte-identical, one fixed grepl, when no cell is
+  # a composite). get_num() above already resolved composites to their primary value.
+  raw_display <- get_display(x)
+  display <- display_primary(raw_display)
   nas  <- is.na(display)
   digits <- get_digits(x)
   digits[!nas & display == "n"] <- 0
@@ -1985,25 +2029,38 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   # (console/pillar, tab_kable, tab_md), distinct from a genuine NA cell (which keeps `na`).
   out[!nas & display == "blank"] <- ""
 
-  # Phase 10c: opt-in COMPOSITE display (e.g. "pct (n)"), parsed ONLY here, ONLY when the column
-  # carries a display_spec attribute -> one scalar is.na() gate, byte-identical when unused. Renders
-  # each constituent by RE-USING format() per field (no new math); the attribute is cleared on the
-  # inner calls to avoid recursion. Significance stars always ride the % part; only genuine value
-  # cells (not p-value / blank / ci rows) are composited; a cell missing either field is left plain.
-  spec <- get_display_spec(x)
-  if (!is.na(spec) && spec %in% c("pct (n)", "n (pct)")) {
-    x0      <- set_display_spec(x, NA_character_)
-    pct_str <- format(set_display(x0, "pct"), na = na, special_formatting = FALSE)
-    n_str   <- format(set_display(set_pvalue(x0, NA_real_), "n"), na = na,
-                      special_formatting = FALSE)
-    value_cell <- !nas & display %in% c("pct", "mean", "n", "wn")
-    both       <- value_cell & !is.na(pct_str) & !is.na(n_str)
-    parts <- if (spec == "pct (n)") list(pct_str, n_str) else list(n_str, pct_str)
-    out[both] <- paste0(parts[[1]][both], " (", parts[[2]][both], ")")
+  # Phase 10i-A: opt-in COMPOSITE display -- a per-cell `display` template like "{pct} (n={n})"
+  # renders several fields in one value cell. Parsed ONLY here, gated by one fixed grepl so the whole
+  # function is byte-identical when no cell is a composite (get_num/Excel already fell back to the
+  # PRIMARY = first token). Each {field} is rendered by RE-USING format() with a simple token (inner
+  # fast path, no recursion); STARS ride the primary (first token keeps its pvalue, the others get
+  # set_pvalue(NA)); the template is applied only where every token rendered (else the plain primary
+  # is kept). tab(display=) writes the template only onto value cells, so p-value/blank/total cells
+  # keep their own token and are never composited.
+  composite <- !nas & grepl("{", raw_display, fixed = TRUE)
+  if (any(composite)) {
+    for (tmpl in unique(raw_display[composite])) {
+      seg   <- parse_display_template(tmpl)
+      if (!any(seg$is_tok)) next
+      cells <- which(composite & raw_display == tmpl)
+      xc    <- x[cells]
+      toks  <- lapply(seq_along(seg$fields), function(i) {
+        xi <- if (i == 1L) xc else set_pvalue(xc, NA_real_)   # stars ride the primary token
+        format(set_display(xi, seg$fields[i]), na = na, special_formatting = FALSE)
+      })
+      strs <- vector("list", length(seg$pieces)); ti <- 0L
+      for (j in seq_along(seg$pieces)) {
+        if (seg$is_tok[j]) { ti <- ti + 1L; strs[[j]] <- toks[[ti]] }
+        else               { strs[[j]] <- rep(seg$pieces[j], length(cells)) }
+      }
+      ok  <- Reduce(`&`, lapply(toks, function(s) !is.na(s)))
+      asm <- do.call(paste0, strs)
+      out[cells[ok]] <- asm[ok]
+    }
   }
 
   # Phase 10e: honour the `na` argument on the main path. Historically NA cells were hard-coded to NA
-  # (`out[na_out] <- NA` above) and `na` was consumed only by the display_spec branch. Applied LAST so
+  # (`out[na_out] <- NA` above) and `na` was consumed only by the composite branch. Applied LAST so
   # it dominates every intermediate append. Default na=NA -> no-op (byte-identical for the console and
   # any caller not passing `na`); tab_kable()/tab_md() pass na="" -> NA cells render "" at source,
   # which retires tab_kable()'s post-hoc `>NA</span>` string surgery.
@@ -2835,7 +2892,9 @@ get_reference <- function(x, mode = c("cells", "lines", "all_totals")) {
 #' @return A single string with abbreviated fmt type.
 #' @export
 vec_ptype_abbr.tabxplor_fmt <- function(x, ...) {
-  display  <- get_display(x) %>% unique()
+  # Phase 10i-A: a composite column shows its PRIMARY type in the tibble header (e.g. "row%"), not
+  # the raw "{pct} (n={n})" template.
+  display  <- display_primary(get_display(x)) %>% unique()
   if (identical(sort(display), c("pct", "pvalue"))) display <- "pct"
   display  <- ifelse(length(display) > 1, "mixed", display)
   type     <- get_type(x)
@@ -2864,7 +2923,7 @@ vec_ptype_abbr.tabxplor_fmt <- function(x, ...) {
 #' @return A single string with full fmt type.
 #' @export
 vec_ptype_full.tabxplor_fmt <- function(x, ...) {
-  display  <- get_display(x) %>% unique()
+  display  <- display_primary(get_display(x)) %>% unique()
   display  <- ifelse(length(display) > 1, "mixed", display)
   type     <- get_type(x)
   row_mean <- type %in% c("row", "mean")
@@ -2925,8 +2984,6 @@ vec_ptype2.tabxplor_fmt.tabxplor_fmt    <- function(x, y, ...) {
   same_color   <- color_x == fmt_color_attr(y)
   signif_x     <- get_color_signif(x)
   same_signif  <- signif_x == get_color_signif(y)
-  dspec_x      <- get_display_spec(x)
-  same_dspec   <- identical(dspec_x, get_display_spec(y))   # NA-safe (both may be NA)
   #l            <- length(x)
 
   # Phase 9c: the reconcile is scalar-attribute picking; base-R if/else replaces the 9 dplyr::if_else
@@ -2946,8 +3003,7 @@ vec_ptype2.tabxplor_fmt.tabxplor_fmt    <- function(x, y, ...) {
     refcol   = if (same_refcol)    refcol_x    else FALSE,
     color    = if (length(same_color) == 1L) { if (same_color) color_x else "" }
                else ifelse(same_color, color_x, ""),
-    color_signif = if (same_signif) signif_x else "ignore",
-    display_spec = if (same_dspec) dspec_x else NA_character_
+    color_signif = if (same_signif) signif_x else "ignore"
   )
 }
 #' Find common ptype between fmt and double
@@ -3015,8 +3071,7 @@ vec_cast.tabxplor_fmt.tabxplor_fmt  <- function(x, to, ...)
           totcol    = is_totcol   (to),
           refcol    = is_refcol   (to),
           color     = fmt_color_attr(to),          # full attribute (both channels)
-          color_signif = get_color_signif(to),
-          display_spec = get_display_spec(to)
+          color_signif = get_color_signif(to)
 
   )
 
@@ -3044,7 +3099,6 @@ vec_cast.tabxplor_fmt.double   <- function(x, to, ...)
       refcol    = is_refcol   (to),
       color     = fmt_color_attr(to),
       color_signif = get_color_signif(to),
-      display_spec = get_display_spec(to),
 
   )
 #' Convert fmt into double
@@ -3072,8 +3126,7 @@ vec_cast.tabxplor_fmt.integer <- function(x, to, ...)
       totcol   = is_totcol   (to),
       refcol    = is_refcol   (to),
       color    = fmt_color_attr(to),
-      color_signif = get_color_signif(to),
-      display_spec = get_display_spec(to)
+      color_signif = get_color_signif(to)
 
   ) #new_fmt(pct = as.double(x))
 #' Convert fmt into integer
@@ -3219,8 +3272,7 @@ vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
       totcol   = FALSE                                                  ,
       refcol   = FALSE                                                  ,
       color    = fmt_color_attr(x),
-      color_signif = get_color_signif(x),
-      display_spec = get_display_spec(x)
+      color_signif = get_color_signif(x)
 
       # type     = dplyr::if_else(same_type,
       #                           true  = type_x,
@@ -3268,8 +3320,7 @@ vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
       totcol   = FALSE                                                  ,
       refcol   = FALSE                                                  ,
       color    = fmt_color_attr(x),
-      color_signif = get_color_signif(x),
-      display_spec = get_display_spec(x)
+      color_signif = get_color_signif(x)
 
       # type     = dplyr::if_else(same_type,
       #                           true  = type_x,

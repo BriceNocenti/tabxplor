@@ -33,7 +33,6 @@ new_fmt(
   refcol = FALSE,
   color = "",
   color_signif = "ignore",
-  display_spec = NA_character_,
   ...,
   class = character()
 )

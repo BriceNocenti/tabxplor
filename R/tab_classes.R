@@ -1501,6 +1501,9 @@ tab_kable_print_tooltip <- function(x, popover = FALSE, .ref = NULL) {
   tottabs <- is_tottab(x)
   type    <- get_type(x)
   digits  <- get_digits(x)
+  # Phase 10i-A: a composite cell ("{pct} (n={n})") suppresses the tooltip line for its PRIMARY
+  # field just like a plain "pct" cell would (the field-suppression guards below read `disp`).
+  disp    <- display_primary(get_display(x))
 
   ok_diff  <- !is.na(get_diff(x)) & !((totcol | totrows) & get_pct(x) == 1)
   out_diff <- if (any(ok_diff)) {
@@ -1533,17 +1536,17 @@ tab_kable_print_tooltip <- function(x, popover = FALSE, .ref = NULL) {
   out_ci   <- switch(ci_type, "cell" = out_ci, "")
 
   cond_pct <- type %in% c("col", "row", "all", "all_tabs") &
-    !is.na(get_pct(x)) & !get_display(x) %in% c("pct", "pct_ci")
+    !is.na(get_pct(x)) & !disp %in% c("pct", "pct_ci")
   out_pct <- if (any(cond_pct)) {
     dplyr::if_else(cond_pct, format(set_display(x, "pct")), "")
   } else blank
 
-  cond_mean <- type == "mean" & !is.na(get_mean(x)) & !get_display(x) %in% c("mean", "mean_ci")
+  cond_mean <- type == "mean" & !is.na(get_mean(x)) & !disp %in% c("mean", "mean_ci")
   out_mean <- if (any(cond_mean)) {
     dplyr::if_else(cond_mean, format(set_display(x, "mean")), "")
   } else blank
 
-  cond_sd <- type == "mean" & !is.na(get_var(x)) & !get_display(x) == "var"
+  cond_sd <- type == "mean" & !is.na(get_var(x)) & !disp == "var"
   out_sd <- if (any(cond_sd)) {
     dplyr::if_else(
       cond_sd,
@@ -1554,13 +1557,13 @@ tab_kable_print_tooltip <- function(x, popover = FALSE, .ref = NULL) {
       "")
   } else blank
 
-  cond_rr <- type %in% c("col", "row") & !is.na(get_ratio(x)) & !get_display(x) == "rr"
+  cond_rr <- type %in% c("col", "row") & !is.na(get_ratio(x)) & !disp == "rr"
   out_rr <- if (any(cond_rr)) {
     dplyr::if_else(cond_rr, paste0("rr: ", format(set_display(x, "or")) ), "")
   } else blank
 
   cond_or <- type %in% c("col", "row") & !is.na(get_or(x)) &
-    !get_display(x) %in% c("or", "OR", "or_pct", "OR_pct")
+    !disp %in% c("or", "OR", "or_pct", "OR_pct")
   out_or <- if (any(cond_or)) {
     dplyr::if_else(cond_or, paste0("OR: ", format(set_display(x, "or")) ), "")
   } else blank
@@ -1574,7 +1577,7 @@ tab_kable_print_tooltip <- function(x, popover = FALSE, .ref = NULL) {
                    "")
   } else blank
 
-  cond_n <- !is.na(get_n(x)) & !get_display(x) == "n"
+  cond_n <- !is.na(get_n(x)) & !disp == "n"
   out_n <- if (any(cond_n)) {
     dplyr::if_else(cond_n, paste0("n: ", format(set_display(x, "n")) ), "")
   } else blank

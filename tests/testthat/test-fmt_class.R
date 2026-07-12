@@ -114,39 +114,49 @@ testthat::test_that("fmt work with $", { #and [[
   testthat::expect_true(any(!is.na(fmt_vect$wn))) # gives n when wn not provided
   })
 
-# === SECTION: Phase 10c -- display_spec composite display =======================
+# === SECTION: Phase 10i-A -- display {} grammar composite display ===============
+# The composite display is a per-cell `display`-FIELD {} template; see test-display-grammar.R for the
+# shared helpers (display_primary / parse_display_template / validate_display_template) + edge cases.
 
-testthat::test_that("display_spec attribute round-trips and validates", {
-  x <- fmt(n = c(10L, 20L), type = "row", pct = c(0.4, 0.6))
-  testthat::expect_true(is.na(get_display_spec(x)))              # default NA
-  x2 <- set_display_spec(x, "pct (n)")
-  testthat::expect_identical(get_display_spec(x2), "pct (n)")
-  testthat::expect_true(is.na(get_display_spec(set_display_spec(x2, NA))))
-  testthat::expect_error(set_display_spec(x, "diff"), "composite")  # not a whitelisted recipe
-})
-
-testthat::test_that("composite display renders 'primary (secondary)' on value cells", {
-  x <- set_display_spec(fmt(n = c(10L, 20L), type = "row", pct = c(0.4, 0.6),
-                            display = "pct"), "pct (n)")
-  testthat::expect_identical(format(x), c("40% (10)", "60% (20)"))
-  y <- set_display_spec(x, "n (pct)")
+testthat::test_that("composite {} template renders 'primary (secondary)' on value cells", {
+  x <- set_display(fmt(n = c(10L, 20L), type = "row", pct = c(0.4, 0.6), display = "pct"),
+                   "{pct} ({n})")
+  testthat::expect_identical(format(x), c("40% (10)", "60% (20)"))   # byte-identical to Phase 10c
+  y <- set_display(x, "{n} ({pct})")
   testthat::expect_identical(format(y), c("10 (40%)", "20 (60%)"))
+  z <- set_display(x, "{pct} (n={n})")
+  testthat::expect_identical(format(z), c("40% (n=10)", "60% (n=20)"))
 })
 
-testthat::test_that("display_spec is byte-identical when unused, and Excel-bypass ignores it", {
+testthat::test_that("a composite cell resolves to its PRIMARY (get_num / Excel / tibble header)", {
   x0 <- fmt(n = c(10L, 20L), type = "row", pct = c(0.4, 0.6), display = "pct")
-  xs <- set_display_spec(x0, "pct (n)")
-  testthat::expect_identical(format(x0), format(set_display_spec(x0, NA)))  # NA == default
-  # the Excel bypass reads get_num()/get_display(), which the attribute does NOT touch.
+  xs <- set_display(x0, "{pct} ({n})")
+  # get_num() and the Excel bypass show the primary field -- byte-identical to the plain column.
   testthat::expect_identical(get_num(xs), get_num(x0))
-  testthat::expect_identical(get_display(xs), get_display(x0))
+  testthat::expect_identical(format(xs, syntax = "excel"), format(x0, syntax = "excel"))
+  # the tibble header abbreviates to the primary type, not the raw template.
+  testthat::expect_identical(vctrs::vec_ptype_abbr(xs), vctrs::vec_ptype_abbr(x0))
 })
 
-testthat::test_that("tab(display = ) sets the composite recipe", {
-  tb <- tab(forcats::gss_cat, marital, race, pct = "row", display = "pct (n)")
-  fmt_col <- tb[[which(purrr::map_lgl(tb, is_fmt))[1]]]
-  testthat::expect_identical(get_display_spec(fmt_col), "pct (n)")
-  testthat::expect_match(format(fmt_col)[1], "\\([0-9 ]+\\)$")   # "...(n)"
+testthat::test_that("format() is byte-identical when no cell is a composite", {
+  x0 <- fmt(n = c(10L, 20L), type = "row", pct = c(0.4, 0.6), display = "pct")
+  testthat::expect_identical(format(x0), c("40%", "60%"))
+})
+
+testthat::test_that("tab(display = ) writes the {} template into the display FIELD of value cells", {
+  t0 <- tab(forcats::gss_cat, marital, race, pct = "row")
+  t1 <- tab(forcats::gss_cat, marital, race, pct = "row", display = "{pct} ({n})")
+  t3 <- tab(forcats::gss_cat, marital, race, pct = "row", display = "{pct} (n={n})")
+  fcol <- function(t) t[[which(purrr::map_lgl(t, is_fmt))[1]]]
+  # value cells carry the {} template; the plain table's field is untouched.
+  testthat::expect_true(any(grepl("{", get_display(fcol(t1)), fixed = TRUE)))
+  testthat::expect_false(any(grepl("{", get_display(fcol(t0)), fixed = TRUE)))
+  testthat::expect_match(format(fcol(t1))[1], "\\([0-9 ]+\\)$")     # "{pct} ({n})" -> "...(n)"
+  testthat::expect_match(format(fcol(t3))[1], "\\(n=[0-9 ]+\\)$")   # "{pct} (n={n})" -> "...(n=..)"
+  testthat::expect_identical(get_num(fcol(t1)), get_num(fcol(t0)))  # primary == the plain numbers
+  # No curated sugar any more: the old recipe strings error, {} is required.
+  testthat::expect_error(tab(forcats::gss_cat, marital, race, display = "pct (n)"))
+  testthat::expect_error(tab(forcats::gss_cat, marital, race, display = "wibble"))
 })
 
 

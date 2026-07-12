@@ -2381,3 +2381,41 @@ emits the "core" table only.**
 - **Golden surface is large** (Phase-9b scale) — the built-tab RDS fixtures change structurally (fewer
   rows/cols); the target is that RENDERED output (`_snaps/`, export-parity) stays byte-identical EXCEPT
   the intended add_n in-cell change. Conscious regen per phase/increment.
+
+### Phase 10i-A DONE (2026-07-12) — the display `{}` grammar
+
+Shipped as designed (the per-cell field variant, forced by the maintainer's correction: under
+`pct="col"` add_n/add_pct are ROWS, so the composite can NOT be a per-column attribute). The composite
+display is now a per-cell **`display`-FIELD** glue template (`"{pct} (n={n})"`); the Phase-10c
+`display_spec` **attribute was DROPPED (10 → 9)**. Three performant SHARED helpers next to `get_num()`
+(`R/fmt_class.R`) are the single source of truth: **`display_primary()`** (gated resolver: one fixed
+`grepl`, composite → first `{field}` alias-resolved, malformed → best-effort no-crash),
+**`parse_display_template()`** (literal/token split, once per unique template), **`validate_display_template()`**
+(write-time: `{}`-only — a raw `{}` template validated and returned; the ONLY place a bad `display=`
+value aborts; fields ∈ `c(pct,n,wn,mean,diff,ratio,ci,or,ctr,var)`, `ratio`→`rr`).
+Every display-token DISPATCH consumer routes through `display_primary()`: `get_num`/`set_num`, the
+`format()` masks (raw display kept only for the template expansion), `vec_ptype_abbr`/`vec_ptype_full`
+(header shows the primary type), `tab_kable_print_tooltip`. **Excel needs no special-casing** — the
+`format(syntax="excel")` early-return runs on the primary, so a composite exports the plain primary
+number (§34 dec.3). `tab(display=)` writes the template into the FIELD only on genuine **value cells
+where every template field is non-NA** (the Phase-10c `both` guard), so count-only columns (added-n),
+p-value / blank / total-marker cells keep their own token and render normally — `"{pct} ({n})"`
+byte-identical to Phase 10c's `"pct (n)"`.
+
+- **Public surface — `{}`-only** (no curated sugar, decided 2026-07-12 for one consistent syntax now
+  that `{}` is proven free): `tab(display="{pct} (n={n})")` / `"{n} ({pct})"` / `"{diff} [{ci}]"`; the
+  first `{field}` is the primary (shown alone by Excel, used for colour). The old `pct (n)`/`n (pct)`/
+  `pct_n` recipe strings now error → `{}` required. The internal composed tokens `pct_ci`/`mean_ci`/
+  `or_pct` are KEPT as pipeline-set rendering modes: they use integrated CI/OR rendering (centered
+  bracket, shared/forced digits, `ref:` decorations) that `{}` cannot express, and are never
+  user-typed — so no user-facing inconsistency (empirically confirmed).
+- **Benchmark verdict — Solution 2, ship as-is** (`dev/benchmarks/results_1.4.0/phase10iA_display_grammar.txt`;
+  git-stash A/B). On no-composite tables the whole display/export pipeline is UNCHANGED
+  (build/print/tab_md/tab_kable/tab_xl no measurable diff); the gate is ~11 ns/cell (one fixed grepl).
+  Only an isolated `format()` of a 200k-cell column moved ~3% (within `system.time` noise). No
+  Solution-3 dedicated fast tokens needed. Composite rendering cost (2 sub-formats + paste) is opt-in.
+- **Tests**: new `test-display-grammar.R` (helpers + malformed `{pct`/`{}`/`{ pct }`/`{foo}`/`{pct}{`,
+  consumer no-crash on injected bad templates, stars-ride-primary, grouped/list/`pct="col"`, the gate
+  micro-benchmark); `test-fmt_class.R` Phase-10i-A section; `test-fmt-contract.R` 10 → 9 + snapshot.
+  Golden RDS regenerated (attribute drop ONLY — verified every waldo diff mentions `display_spec`;
+  `_snaps/golden.md` byte-identical). Full suite green (1793). NAMESPACE drops `get/set_display_spec`.
