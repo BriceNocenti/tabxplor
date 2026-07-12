@@ -1,8 +1,9 @@
 # PURPOSE: Export tabxplor tables to Excel with formatting and colors via openxlsx2.
 # ROLE: Primary export format for sharing tables with non-R users. Phase 10h: single-tab-first with a
 #       list method; consumes the shared exporter prep (R/tab-export-prep.R) for role detection /
-#       references / bold rows, the two-channel colour engine (fmt_color_channels), and the openxlsx2
-#       backend (R/tab-xl-backend.R). tab_xl_plan_one() does the pure per-table CPU (raw values +
+#       references / bold rows AND the two-channel colour slots (`ann`, Phase 10j -- the private
+#       fmt_color_channels() pass is gone), and the openxlsx2 backend (R/tab-xl-backend.R).
+#       tab_xl_plan_one() does the pure per-table CPU (raw values +
 #       numFmt codes + a precomposed per-cell STYLE grid via xl_build_styles); xl_write_table() writes
 #       the values, applies the styles by id (xl_apply_styles), then the numFmt merging pass.
 # KEY CONSTRAINTS:
@@ -125,15 +126,17 @@ tab_xl <-
 
     colwidth <- vctrs::vec_recycle(colwidth, length(tabs))
 
-    # === Shared exporter prep (Phase 10g) ==========================================
-    # Role detection (fmt / other / total columns, total-block borders, references, bold rows) is
-    # derived ONCE by the shared framework (R/tab-export-prep.R). compact = FALSE keeps one prep-table
-    # per input tab (each -> its own sheet region). Colours stay on tab_xl's own two-channel path
-    # (fmt_color_channels), which -- unlike the prep's text-only roles$color_cols -- also catches
-    # background-only columns.
+    # === Shared exporter prep (Phase 10g/10j) ======================================
+    # Role detection (fmt / other / total columns, total-block borders, references, bold rows) AND the
+    # two-channel colour slots are derived ONCE by the shared framework (R/tab-export-prep.R). compact =
+    # FALSE keeps one prep-table per input tab (each -> its own sheet region). Phase 10j: `compute`
+    # includes "colors" so the per-column `ann` carries the text/background slot vectors -- xl consumes
+    # those (no more private fmt_color_channels() pass, which duplicated the shared engine). The slots
+    # are theme-independent; xl still maps them to hex via its own light palette here (a `theme` arg +
+    # ann-hex consumption lands in Phase 10j-A-ii, where xl becomes theme-aware).
     prep <- tab_export_prep(
       tabs, backend = "xl", compact = FALSE, drop_tab_vars = remove_tab_vars,
-      list_method = TRUE, compute = c("refs", "bold"),
+      list_method = TRUE, compute = c("refs", "bold", "colors"),
       color_type = color_type, color_legend = print_color_legend, what = "tab_xl()"
     )
     rd <- prep$tables
@@ -220,7 +223,8 @@ tab_xl <-
     # from the plans below. (Parallelising the plan build was measured NOT worth it -- the openxlsx2
     # WRITE dominates the time and is inherently serial; see dev/benchmarks/results_1.4.0/phase10h_*.)
     plans <- purrr::pmap(
-      list(tab = tabs, roles = roles, bold_rows = purrr::map(rd, "bold_rows"),
+      list(tab = tabs, roles = roles, ann = purrr::map(rd, "ann"),
+           bold_rows = purrr::map(rd, "bold_rows"),
            start = start, sheet = sheet, title = titles, subtext = subtext, colwidth = colwidth),
       tab_xl_plan_one, o = opts
     )
@@ -272,7 +276,7 @@ tab_xl_resolve_path <- function(path, replace) {
 # Geometry (given `start`): title row = start; header row = start + 1; data rows = start + 2 ..
 # start + 1 + nrow; subtext below. Column role indices come from the shared prep `roles`.
 #' @keywords internal
-tab_xl_plan_one <- function(tab, roles, bold_rows, start, sheet, title, subtext, colwidth, o) {
+tab_xl_plan_one <- function(tab, roles, ann, bold_rows, start, sheet, title, subtext, colwidth, o) {
   n   <- nrow(tab)
   ncl <- ncol(tab)
   data_row0  <- start + 1L                      # data row i -> i + data_row0
@@ -285,15 +289,6 @@ tab_xl_plan_one <- function(tab, roles, bold_rows, start, sheet, title, subtext,
   row_var_col <- roles$row_var_col
   totcols     <- roles$totcols
   ref_cols    <- which(is_refcol(tab))
-
-  # a column is coloured if it carries a text OR a background colour channel (the prep's text-only
-  # roles$color_cols would miss background-only columns).
-  color_cols <- which(purrr::map_lgl(tab, function(col) {
-    if (!is_fmt(col)) return(FALSE)
-    ct <- get_color(col); cb <- get_color_bg(col)
-    (length(ct) != 0L && !is.na(ct) && !ct %in% c("", "no")) ||
-      (length(cb) != 0L && !is.na(cb) && !cb %in% c("", "no"))
-  }))
 
   cv_names      <- get_col_var(tab)
   start_col_var <- which(cv_names != "" & cv_names != dplyr::lag(cv_names, default = NA_character_))
@@ -314,14 +309,16 @@ tab_xl_plan_one <- function(tab, roles, bold_rows, start, sheet, title, subtext,
   }) else tibble::tibble(col = integer(), row = integer(), code = character())
   numfmt <- dplyr::filter(numfmt, !is.na(.data$code))
 
-  # Colour slots (two channels) from the vectorised engine. Text channel -> font (bold + colour,
-  # folded into the font plan below); background channel -> cell fill (applied by the writer).
-  colour <- if (length(color_cols)) purrr::map_dfr(color_cols, function(ci) {
-    ch   <- fmt_color_channels(tab[[ci]])
-    rows <- seq_along(ch$text_slot) + data_row0
+  # Colour slots (two channels) come from the shared prep `ann` (Phase 10j): text channel -> font
+  # (bold + colour, folded into the font plan below); background channel -> cell fill (applied by the
+  # writer). The slots are theme-independent; uncoloured columns contribute all-zero slots (filtered).
+  colour <- if (length(fmt_cols)) purrr::map_dfr(fmt_cols, function(ci) {
+    a <- ann[[names(tab)[ci]]]
+    if (is.null(a$text_slot)) return(NULL)
+    rows <- seq_along(a$text_slot) + data_row0
     dplyr::bind_rows(
-      tibble::tibble(col = as.integer(ci), row = rows, slot = ch$text_slot, channel = "text"),
-      tibble::tibble(col = as.integer(ci), row = rows, slot = ch$bg_slot,   channel = "bg"))
+      tibble::tibble(col = as.integer(ci), row = rows, slot = a$text_slot, channel = "text"),
+      tibble::tibble(col = as.integer(ci), row = rows, slot = a$bg_slot,   channel = "bg"))
   }) else tibble::tibble(col = integer(), row = integer(), slot = integer(), channel = character())
   colour <- dplyr::filter(colour, .data$slot > 0L)
 
