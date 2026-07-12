@@ -12,9 +12,28 @@ KEY CONSTRAINTS:
 See: CLAUDE.md § "Phase 10", dev/tabxplor_1.4.0_decisions.md §33 (the decision record).
 -->
 
-Status: **10c DONE; 10d DONE; 10e DONE; 10f DONE; 10g DONE; 10h DONE (2026-07-12).** 10a decision
-settled (below); this document is the 10b deliverable and governs 10d→10h. Read this first, then the
-matching `dev/tabxplor_1.4.0_decisions.md` sections and `dev/tabxplor_architecture.md` "Export System".
+Status: **10c DONE; 10d DONE; 10e DONE; 10f DONE; 10g DONE; 10h DONE; 10i DONE; 10j-A DONE
+(2026-07-12).** 10a decision settled (below); this document is the 10b deliverable and governs
+10d→10j. Read this first, then the matching `dev/tabxplor_1.4.0_decisions.md` sections and
+`dev/tabxplor_architecture.md` "Export System".
+
+**10j-A — Unified export framework, DONE (2026-07-12).** The Phase 10j integration pass (perf was
+found to be at floor — see decisions §35). Three byte-identical increments:
+- **A-i:** `tab_xl()` consumes the shared prep `ann` two-channel colour SLOTS (`compute += "colors"`),
+  deleting its private `fmt_color_channels()`/`color_cols` pass. Slots are theme-independent, so light
+  output is byte-identical; one colour derivation for all four exporters.
+- **A-ii:** new shared `resolve_export_opts()` (the theme/color_type/html_24_bit/color/color_legend/
+  transpose preamble, once); new exported **`tab_export(x, format=, path=, ...)`** facade dispatching
+  to the four exporters; **argument unification** — `color` (monochrome) + `transpose` on all four,
+  `transpose` centralised in `tab_export_prep()` (materialise→transpose, xl's historical order),
+  `tab_md(title→caption)` + `tab_xl(print_color_legend→color_legend)` soft-deprecated, `tab_xl` gains
+  `theme`/`html_24_bit`/`color`/`caption` and is now **theme-aware**. `fmt_col_ann()` now ALWAYS
+  returns the full monochrome-capable structure (fixed `color=FALSE` on the html engine / tab_plot /
+  xl; md already guarded). All defaults unchanged → no golden regen (`want_colors=TRUE` untouched).
+- **A-iii:** `tab_plot()` list-method parity (a non-mergeable list → a list of ggplots, via a
+  per-element recursion — no display investment on the superseded function); removed the dead
+  `fmt_frame_fields` constant. New `test-export.R`; suite 1827/0.
+- Perf lever (10j-B, `tab_apply_tests` base-R) is a separate later session.
 
 **10h — Excel engine migration (openxlsx → openxlsx2), DONE (2026-07-12).** Maintainer chose a
 **full clean migration** over §9's dual-backend seam: `tab_xl()` rewritten on **openxlsx2 only**;

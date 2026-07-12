@@ -1200,6 +1200,17 @@ tab_plot <- function(tabs,
                 "You can install it with : install.packages('cowplot')"),
          call. = FALSE)
   }
+  # Phase 10j: list-method parity. A non-mergeable list (several row_vars / tab_vars) renders each
+  # table as its OWN plot (matching tab_kable/tab_md/tab_xl, which render a list table-after-table),
+  # returning a list of ggplots. A single tab, or a mergeable same-col_vars/no-tab_vars list (compacted
+  # by the prep below), still returns one plot.
+  if (is.list(tabs) && !is.data.frame(tabs) && length(tabs) > 1L && !tab_list_mergeable(tabs)) {
+    return(purrr::map(tabs, tab_plot, theme = theme, color_type = color_type,
+                      html_24_bit = html_24_bit, color = color, color_legend = color_legend,
+                      caption = caption, transpose = transpose, wrap_rows = wrap_rows,
+                      wrap_cols = wrap_cols, whitespace_only = whitespace_only))
+  }
+
   # Phase 10j: shared option resolver (theme/color_type/html_24_bit/color/color_legend/transpose).
   o <- resolve_export_opts(theme, color_type, html_24_bit, color, color_legend, transpose)
   theme <- o$theme; color_type <- o$color_type; html_24_bit <- o$html_24_bit

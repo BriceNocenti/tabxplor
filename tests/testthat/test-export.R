@@ -47,3 +47,16 @@ testthat::test_that("deprecated tab_xl(print_color_legend) still feeds color_leg
     tab_xl(t_row, path = f, print_color_legend = FALSE, open = FALSE, replace = TRUE)
   )
 })
+
+testthat::test_that("tab_plot renders a non-mergeable list as a list of plots (list-method parity)", {
+  testthat::skip_if_not_installed("ggpubr")
+  testthat::skip_if_not_installed("cowplot")
+  testthat::skip_if_not_installed("gtable")
+  is_gg <- function(x) inherits(x, "ggplot")            # version-agnostic (is.ggplot() is deprecated)
+  t2 <- tab(forcats::gss_cat, race, relig, pct = "row", color = "diff")  # different col_vars
+  testthat::expect_true(is_gg(tab_plot(t_row)))                          # single -> one plot
+  lst <- tab_plot(list(t_row, t2))                                        # non-mergeable -> list
+  testthat::expect_true(is.list(lst) && !is_gg(lst))
+  testthat::expect_length(lst, 2L)
+  testthat::expect_true(all(vapply(lst, is_gg, logical(1))))
+})

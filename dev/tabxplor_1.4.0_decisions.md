@@ -2494,3 +2494,60 @@ cols + pct="col" rows removed, `render_extras` gained), `c_or` colour (its pct="
 stars / colours unchanged). Excel keeps a real `n` column. Tests updated: `test-n_min.R`
 (intent+`n`-absent), `test-calculations.R` (add_n-display-only chi2). Increment 3 (further pipeline
 simplification) is optional / open.
+
+
+## 35. Phase 10j — workflow integration & the performance floor (2026-07-12)
+
+### Grounding — the build is at its floor
+
+A fresh read of the code + `dev/benchmarks/results_1.4.0/` + §29-§31 confirms: `tab()` build arg/axis
+resolution is ~0.2 %; the field-frame carrier banked the big wins; the mutable-DT / core-fork /
+carrier-join routes are closed; ~99 % of build is O(cells) fmt work. Excel write is openxlsx2-bound
+(~92 %, parallel-immune, at floor after 10h). jmvtab live is render-bound (10c already 2×'d `format()`).
+**The only substantial build-perf lever left is the `tab_apply_tests`/`tab_chi2` marshalling (~22 %,
+§30 lever #3), which is mostly dplyr-on-small-tibbles, golden-locked, and PoC-risky.** The genuinely
+unfinished, clean, high-value work is EXPORT INTEGRATION.
+
+### Decisions (maintainer, this session)
+
+1. **Focus = export integration/simplification** (perf is a secondary, careful add-on). The build /
+   Excel-write floor is accepted, not fought.
+2. **Add a `tab_export(x, format=)` facade** (the four exporters stay as idiomatic wrappers).
+3. **Keep the two-channel colour model** through the unification (text = 1st measure, background =
+   2nd) — it is exactly what lets `tab_xl`'s duplicate colour pass be deleted.
+4. **Attempt the `tab_apply_tests` base-R rewrite (Phase 10j-B), PoC-gated** — byte-identical proof
+   before any source change (like 9d's 648-shape `identical()` proof), abandon if the recoverable share
+   is small or the structural `tab_match_*` record ops resist base-R. A SEPARATE later session, run only
+   after 10j-A is committed (different code area, higher risk).
+
+### Phase 10j-A IMPLEMENTED (2026-07-12) — byte-identical, suite 1827/0, no golden regen
+
+Three increments (maintainer commit between each):
+
+- **A-i:** `tab_xl()` requests `compute += "colors"` and consumes the shared prep `ann` two-channel
+  colour SLOTS (`text_slot`/`bg_slot`), deleting its private `fmt_color_channels()`/`color_cols` pass.
+  The slots are **theme-independent** (they come from `fmt_color_plan`/`fmt_color_slots` on the data,
+  not the palette), so xl keeping its own light-palette slot→hex map is byte-identical; equivalence
+  proven empirically across factor/two-channel/numeric/contrib/grey. One colour derivation for all four.
+- **A-ii:** shared **`resolve_export_opts()`** (theme/color_type/html_24_bit/color/color_legend/
+  transpose preamble, once); exported **`tab_export()`** facade (mirrors `jmvtab_export`); argument
+  unification — `color` (monochrome) + `transpose` on all four; `transpose` centralised in
+  `tab_export_prep()` **after** materialise (matching xl's historical materialise→transpose, so xl drops
+  its own pre-materialise+transpose and just passes `transpose=`); `tab_md(title→caption)` +
+  `tab_xl(print_color_legend→color_legend)` soft-deprecated; `tab_xl` gains `theme`/`html_24_bit`/
+  `color`/`caption` and becomes **theme-aware** (its palettes honour `theme`; default `"light"` == the
+  old hardcode). **`fmt_col_ann()` now ALWAYS returns the full structure** — `want_colors=FALSE` (the
+  new `color=FALSE`, no golden lock) yields a MONOCHROME column (zero slots, ref-based grey font,
+  `back="none"`) instead of a partial list; this fixed `color=FALSE` breaking the home-built html engine
+  / `tab_plot` / xl (md already guarded the NULL slots). `want_colors=TRUE` (every golden path) is
+  unchanged → no golden regen.
+- **A-iii:** `tab_plot()` list-method parity — a non-mergeable list is intercepted BEFORE the prep and
+  the function **recurses per element** (`purrr::map(tabs, tab_plot, ...)`), returning a list of
+  ggplots (no 250-line body extraction; respects "don't invest in the superseded tab_plot's display").
+  Removed the dead `fmt_frame_fields` constant (no code consumer; `fmt_col_attrs` kept). New
+  `test-export.R` (facade dispatch, monochrome, transpose, xl theme-awareness, deprecations, plot
+  list-method).
+
+Files: `R/tab-export.R` (new), `R/tab-export-prep.R`, `R/tab_classes.R`, `R/tab_md.R`, `R/tab_xl.R`,
+`R/tab.R` (dead-constant), regenerated `NAMESPACE` + 5 `man/*.Rd`. Full detail: `dev/
+tabxplor_phase10_exporters.md` (10j-A Status).

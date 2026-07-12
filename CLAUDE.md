@@ -1396,6 +1396,14 @@ extras.R` added. **User-visible:** the add_n base moves to an in-cell `100% (n=�
 
 Now that the carrier allow to only construct `tabxplor_fmt` vctrs fields at the end, that a common preparation function for exports is done, and that `add_n`, `add_pct` et pvaluelines are only added at display, can you think about new ways to simplify the build table pipeline and the export pipeline, integrate the package function’s ecosystem, and make additional performance gains for the main use cases (10-60k survey tables with many row_vars and col_vars, 1M+ big datasets, instant live tables in jamovi with cache) ? Can you identify some features whose removal would make the workflow faster, and that we can turn optional ? Can you think about some ways to integrate the different export function in the same framework, make their arguments, behaviours and styling match at maximum ?Can you think of some ways to make it faster and improve performance further ?
 
+##### Grounding + scope (2026-07-12)
+
+Fresh profile: build + Excel-write are at their FLOOR (§29-§31, §35); the clean high-value work is export INTEGRATION. Split into **Phase 10j-A (export framework, DONE)** + **Phase 10j-B (the one remaining build-perf lever — `tab_apply_tests`/`tab_chi2` base-R marshalling ~22 %, PoC-gated, a separate later session)**. Detail: `dev/tabxplor_phase10_exporters.md` (10j-A Status), decisions §35.
+
+##### Phase 10j-A — Unified export framework (DONE, 2026-07-12)
+
+Three byte-identical increments (no golden regen; suite 1827/0). New exported **`tab_export(x, format = c("kable","md","xl","plot"), path=, ...)`** facade (`R/tab-export.R`) + shared **`resolve_export_opts()`** (`R/tab-export-prep.R`). The four exporters unified: `color` (monochrome) + `transpose` on all (transpose centralised in `tab_export_prep()`, materialise→transpose); `tab_md(title→caption)` + `tab_xl(print_color_legend→color_legend)` soft-deprecated; `tab_xl` now consumes the prep's two-channel colour SLOTS (deleted its private `fmt_color_channels()` pass) and is **theme-aware**. `fmt_col_ann()` always returns the full monochrome-capable ann (fixed `color=FALSE` on html/plot/xl). `tab_plot()` gained list-method parity (non-mergeable list → list of ggplots). Removed the dead `fmt_frame_fields` constant. New `test-export.R`.
+
 
 
 

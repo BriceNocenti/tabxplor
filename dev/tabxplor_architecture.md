@@ -364,7 +364,16 @@ The `color`/`color_signif` **arguments** are parsed by `normalize_color_spec()` 
 
 ## Export System
 
-Four export formats, all in separate files.
+Four export formats, all in separate files, plus one facade.
+
+**Unified facade (`R/tab-export.R`, Phase 10j-A).** `tab_export(x, format = c("kable","md","xl","plot"),
+path=, ...)` dispatches to the four exporters (mirrors `jmvtab_export`); the four functions stay exported
+and idiomatic. A shared **`resolve_export_opts()`** (`R/tab-export-prep.R`) resolves the canonical display
+options ONCE (`theme`/`color_type`/`html_24_bit`/`color`/`color_legend`/`transpose`/`caption`), so every
+exporter shares one set of names and defaults: `color = FALSE` renders monochrome, `transpose = TRUE`
+transposes at export (centralised in `tab_export_prep()`, applied AFTER materialise — xl's historical
+order), `caption` is the single caption name (`tab_md(title)` / `tab_xl(print_color_legend)` are
+soft-deprecated aliases). `tab_xl` is now theme-aware.
 
 ### Shared exporter prep + render-model (`R/tab-export-prep.R`, Phase 10d)
 
@@ -375,8 +384,10 @@ derive-once quantities every text exporter used to re-derive per render, and ret
 factors: block A (list → `tab_check_same_col_vars()` + the existing `tab_compact()`), block B (degrade
 via `tab_render_vars()`), role detection (`fmt_cols`/`other_cols`/`totcols`/`totrows`/`col_var_map`/
 `new_group`/`row_var_col`/`align`), the per-column `ann` sidecar (reference masks via `get_reference`,
-two-channel colour codes via `fmt_col_ann()`→`fmt_channel_codes()`, gated by `compute`), and the
-bold-row set (`tab_bold_rows()`). The derive-once win — `get_reference` computed once and passed to
+two-channel colour slots+codes via `fmt_col_ann()`→`fmt_channel_codes()`; `compute` gates only the
+hex-mapping COST — Phase 10j: `fmt_col_ann()` ALWAYS returns the full structure, `want_colors=FALSE`
+[`color=FALSE`] yielding a monochrome column [zero slots, grey font] so every backend, incl. `tab_xl`,
+reads a consistent shape), and the bold-row set (`tab_bold_rows()`). The derive-once win — `get_reference` computed once and passed to
 `format(.ref=)` (not 4×/column), `fmt_channel_codes` once — lives in `ann`. Medium-specific quirks stay
 LOCAL to each exporter (md keeps+blanks tab_vars and uses `str_trunc` → `drop_tab_vars=FALSE`,
 `wrap=NULL`; kable's knitr `*`-escape + `row_spec`/`column_spec`; plot's ggpubr render; the divergent
@@ -425,10 +436,14 @@ Phase 10c reworked it for speed and flexibility (byte-identical, golden-locked):
 Exports to `.xlsx` via **openxlsx2** (Suggests-only; the ONE `requireNamespace()` guard is in `tab_xl()`).
 Single-tab-first with a list method. Pipeline:
 
-- `tab_xl()` (orchestrator) — deprecations, degrade, `tab_pvalue_lines`, optional `tab_transpose`,
-  `tab_export_prep(backend="xl", compact=FALSE, compute=c("refs","bold"))`, sheet assignment
+- `tab_xl()` (orchestrator) — deprecations (incl. `print_color_legend`→`color_legend`),
+  `resolve_export_opts()`, degrade, `tab_export_prep(backend="xl", compact=FALSE,
+  compute=c("refs","bold","colors"), transpose=)` (the prep now both materialises the display extras
+  AND transposes — Phase 10j — so `tab_xl` no longer front-runs them), sheet assignment
   (`sheets="auto"/"tabs"/"unique"`) + stacking offsets, then builds per-table **plans** (serial
-  `purrr::pmap`) and assembles ONE workbook, writing each plan with `xl_write_table()`. (No `parallel=`:
+  `purrr::pmap`) and assembles ONE workbook, writing each plan with `xl_write_table()`. Colours come
+  from the shared prep `ann` two-channel SLOTS (Phase 10j — the private `fmt_color_channels()` pass is
+  gone), mapped to hex via xl's own palettes, which now honour `theme` (theme-aware). (No `parallel=`:
   the openxlsx2 write dominates and is serial, so parallelising the plan build was measured not worth it.)
 - `tab_xl_plan_one()` — pure per-table plan: the raw `get_num()` frame to write, the per-cell Excel
   **numFmt codes** from `format(x, syntax="excel")` (stars folded into the literal `0.0%"***"` when
@@ -476,11 +491,13 @@ Lightweight standalone export (new in v1.3.1):
 
 ### tab_plot() — ggplot Visualization (`R/tab_classes.R`)
 
-Creates ggplot2 bar charts from tabxplor tables:
+Creates a `ggpubr::ggtexttable` from a tabxplor table (soft-deprecated / superseded — kept, not invested
+in). Consumes `tab_export_prep(backend="plot")` like the others.
 
-- Uses `ggpubr` and `cowplot` for layout
-- Supports grouped/faceted plots by tab_vars
-- Auto-maps colors to the table's color scheme
+- Uses `ggpubr` and `cowplot` for layout; two-channel colours from the prep `ann` (font + cell fill)
+- Phase 10j: a non-mergeable list renders as a **list of ggplots** (a per-element recursion at the top
+  of `tab_plot()`, before the prep) instead of erroring; a single tab / mergeable list → one plot
+- `color = FALSE` renders monochrome; `transpose = TRUE` transposes at export
 
 ## dplyr Integration
 

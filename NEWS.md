@@ -12,7 +12,7 @@
 * New `tab_md_css()` --- generate the CSS that styles those spans, matching the exact color breaks and
   palette of your table (with a `prefers-color-scheme: dark` block). Use `tab_md(css = TRUE)` to embed it
   inline, or include the stylesheet in your document.
-* `tab_md()` gains a `title` argument (rendered as a pandoc table caption) and, by default,
+* `tab_md()` gains a `caption` argument (rendered as a pandoc table caption) and, by default,
   `wrap_rows = NULL` no longer truncates long row labels (pass a number to cap them).
 * `tab_kable()` gains a faster, dependency-free HTML render engine. The new `engine` argument
   (`"kableExtra"`, the default, or `"html"`) selects it; `engine = "html"` produces a self-contained,
@@ -55,6 +55,14 @@
   the cell stays a real number). Colors and number styles are applied over the fewest possible cell
   ranges. The deprecated `n_min` / `hide_near_zero` arguments are still accepted but do nothing (use
   `tab(n_min = )`).
+* New `tab_export()` --- one entry point for every export format:
+  `tab_export(x, format = c("kable", "md", "xl", "plot"))` dispatches to `tab_kable()`, `tab_md()`,
+  `tab_xl()` or `tab_plot()` (pass a `path` to write the file). The four exporters now share the same
+  display arguments and defaults: `color` (set `FALSE` for a monochrome table), `color_legend`,
+  `transpose` (transpose the table at export) and `caption` / `theme` / `color_type` are available
+  consistently across all of them. `tab_xl()` is now **theme-aware** (`theme = "dark"`), and
+  `tab_plot()` renders a non-mergeable list as a **list of plots** (like the other exporters) instead
+  of stopping with an error.
 * New `display` argument in `tab()` for an opt-in **composite display** showing several fields per cell,
   written as a `{}` template listing the fields to combine: `display = "{pct} (n={n})"` prints each
   percentage with its count (e.g. `76% (n=13)`), `"{n} ({pct})"` the reverse, `"{diff} [{ci}]"` a
@@ -269,6 +277,10 @@
   longer grey out small-n / near-zero cells). For the small-n case use `tab(n_min = )`, which blanks
   or drops small-n cells at display and flows into the Excel export. Both arguments still accept their
   old values without error (a message is shown when a non-default value is passed).
+* `tab_md(title =)` is **soft-deprecated**, renamed to `tab_md(caption =)` (a single caption name
+  shared by every exporter). The old argument still works.
+* `tab_xl(print_color_legend =)` is **soft-deprecated**, renamed to `tab_xl(color_legend =)` (the name
+  the other exporters use). The old argument still works.
 
 ## Bug corrections (Phase 6)
 * Fixed a crash in `tab_num(<tab_vars>, ci = "cell")` (and thus in `tab()` / the Jamovi module

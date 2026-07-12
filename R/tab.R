@@ -2558,10 +2558,9 @@ tab_prepare <-
 #           other numerics double. new_fmt() does NO casting, so the carrier owns the types.
 #   meta  : named list of the 9 per-column ATTRIBUTES (type, comp_all, ref, ci_type, col_var,
 #           totcol, refcol, color, color_signif). `color` is carried WHOLE (length 1 or 2).
-# The field / attribute name order is the new_fmt() contract (fmt_class.R); do NOT reorder.
-fmt_frame_fields <- c("n", "display", "digits", "wn", "pct", "mean", "diff", "ratio", "ctr",
-                      "var", "ci_inf", "ci_sup", "pvalue", "or", "tot_n",
-                      "in_totrow", "in_tottab", "in_refrow")
+# The field / attribute name order is the new_fmt() contract (fmt_class.R); do NOT reorder. The 18
+# per-cell field NAMES are not kept as a constant -- the leaves build the frame inline; only the 9
+# per-column ATTRIBUTE names (below) are needed as a shared vector (fmt_unwrap / tab_stack_tables).
 fmt_col_attrs    <- c("type", "comp_all", "ref", "ci_type", "col_var",
                       "totcol", "refcol", "color", "color_signif")
 
