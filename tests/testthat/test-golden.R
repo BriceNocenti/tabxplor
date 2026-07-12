@@ -69,6 +69,13 @@
 #                      that stats::var/mean give) then 2c (numeric diff flip); display identical
 #   fmt-contract snapshot (test-fmt-contract.R) -> Phase 1a (15 -> 18 field-vector rewrite; the
 #                      8 COLUMN attrs are unaffected -- chi2->test is a TABLE attribute, not here)
+#   f_chi2/f_color_contrib -> DONE Phase 10i-B (p-value rows are now DISPLAY-only: the built tab
+#                      keeps the `test` attribute but no longer carries the "pvalue" body row, so
+#                      these chi2 fixtures LOSE that row. Also, on UNWEIGHTED chi2 tables the `wn`
+#                      field is now raw NA instead of the fallback `=n` that tab_pvalue_lines used
+#                      to bake onto every row -- benign (get_wn() still recovers it, exports
+#                      re-materialise it), and it makes chi2 tables consistent with non-chi2 ones.
+#                      DISPLAY (tab_md) byte-identical: the exporters materialise the p-value rows.
 # ===========================================================================================
 
 cases <- golden_cases()

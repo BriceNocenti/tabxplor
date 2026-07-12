@@ -221,13 +221,17 @@ untab <- function(tabs) {
 #' @method print tabxplor_tab
 print.tabxplor_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = NULL,
                                max_footer_lines = NULL, min_row_var = 30, get_text = FALSE) {
-  print_chi2(x, width = width)
-
   if (getOption("tabxplor.print") == "kable") {
     x <- tab_kable(x)
     print(x)
     return(invisible(x))
   }
+
+  # Phase 10i-B (decision 2): the console shows the compact chi2/F test block (print_chi2), NOT
+  # p-value body rows. It sits AFTER the kable branch so `print = "kable"` renders p-value ROWS (via
+  # tab_kable -> tab_export_prep materialize) rather than the block. print_chi2() now fires for a
+  # normal tab() too, because the `test` attribute is no longer dropped at build (Phase 10i-B).
+  print_chi2(x, width = width)
 
   # Use pillar::char() on row_var to control truncation. Phase 10c: robust, position-independent
   # detection (degrade -> no min-width fixup, prints the plain tibble without crashing).
@@ -285,13 +289,15 @@ print.tabxplor_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = N
 print.tabxplor_grouped_tab <- function(x, width = NULL, ..., n = 100,
                                        max_extra_cols = NULL,max_footer_lines = NULL,
                                        min_row_var = 30, get_text = FALSE) {
-  print_chi2(x, width = width)
-
   if (getOption("tabxplor.print") == "kable") {
     x <- tab_kable(x)
     print(x)
     return(invisible(x))
   }
+
+  # Phase 10i-B (decision 2): see print.tabxplor_tab -- the console shows the chi2/F block, not
+  # p-value rows; placed after the kable branch so `print = "kable"` renders p-value rows instead.
+  print_chi2(x, width = width)
 
   # Use pillar::char() on row_var to control truncation. Phase 10c: robust, position-independent
   # detection (degrade -> no min-width fixup, prints the plain tibble without crashing).
@@ -862,6 +868,33 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
   # }
 
   tabs
+}
+
+
+# tab_materialize_extras() -- the SINGLE display-time materializer for the synthetic table extras
+# (Phase 10i-B). The built tab() is the "core" table: no add_n / add_pct columns, no p-value rows. It
+# carries only the INTENT -- the `test` attribute (whole-table chi2/ANOVA) and, from Increment 2, a
+# `render_extras` attribute (the add_n/add_pct flags). This helper hydrates a core table into the
+# rendered shape and is the ONE place the extras are built, called by every DISPLAY path:
+# tab_export_prep() (kable/md/plot/xl), tab_xl() before tab_transpose(), and -- for add_n/add_pct
+# only, NOT p-value -- the console print methods (the console shows the print_chi2() block instead of
+# p-value body rows; Phase 10i-B decision 2).
+#
+# `backend`: "text" (console/kable/md) folds add_n into the Total cell (in-cell {pct} (n={n})); "xl"
+# emits a real `n` column (Increment 2). `pvalue`: when TRUE, bake the p-value rows from the kept
+# `test` attribute (reused via tab_pvalue_lines(), which drops the attribute after baking).
+#
+# IDEMPOTENT: tab_pvalue_lines() early-returns on an empty/absent `test` and drops it on success (and,
+# Increment 2, the add_n/add_pct arm clears `render_extras` after consuming), so a second call is a
+# no-op -- tab_xl can materialize before tab_transpose() while tab_export_prep()'s later re-materialize
+# stays inert.
+#' @keywords internal
+#' @noRd
+tab_materialize_extras <- function(tab, backend = c("text", "xl"), pvalue = TRUE) {
+  backend <- match.arg(backend)
+  # Increment 2 hooks here: add_pct column/row + add_n (in-cell / `n` column) from `render_extras`.
+  if (pvalue) tab <- tab_pvalue_lines(tab)
+  tab
 }
 
 

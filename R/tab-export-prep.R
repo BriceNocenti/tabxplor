@@ -373,6 +373,14 @@ tab_export_prep <- function(tabs,
   resolved <- tab_resolve_tables(tabs, compact = compact, list_method = list_method,
                                  what = what)
 
+  # Phase 10i-B: hydrate the "core" table into its rendered shape ONCE, on the still-grouped resolved
+  # tables (before prep_one_table ungroups), so p-value rows (+ add_n/add_pct in Increment 2) are real
+  # rows/cols the role detection then sees. Idempotent: tab_xl already materialised (backend "xl")
+  # before its transpose, so this re-materialise is a no-op there. "xl" keeps a real `n` column;
+  # every other backend folds add_n into the Total cell (backend "text").
+  mat_backend <- if (identical(backend, "xl")) "xl" else "text"
+  resolved <- purrr::map(resolved, tab_materialize_extras, backend = mat_backend, pvalue = TRUE)
+
   tables <- purrr::map(
     resolved,
     ~ prep_one_table(.x, backend = backend, drop_tab_vars = drop_tab_vars,

@@ -187,6 +187,13 @@
   gain (~1.05–1.30× at 15M rows, more at larger N / sparser data).
 
 ## Changes that may affect existing code
+* **Chi-squared / ANOVA p-values are now a display-time addition.** The table built by `tab()` keeps the
+  test results (its `test` attribute) but no longer contains the p-value *rows* themselves; they are
+  drawn when the table is displayed or exported. In the R **console** the p-values now appear as a
+  compact test line above the table (e.g. `# race: Chi2=997 (df=10) p=…`), while `tab_kable()`,
+  `tab_md()`, `tab_xl()` and jamovi still render them as p-value **rows** exactly as before. Code that
+  read the p-value rows out of the built object (they had an empty count) will no longer find them; use
+  the `test` attribute (`get_test()`), or `tab_pvalue_lines()` to materialize the rows on demand.
 * `tab(na = "drop")` with **several `col_vars`** now drops each column variable's own missing
   values (bases can differ between columns), matching its documentation and `tab_many()`. It
   previously dropped every observation missing on *any* column variable, giving one shared base ---

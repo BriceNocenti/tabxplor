@@ -637,14 +637,12 @@ jmv_reref_shape_ok <- function(opts, has_num_col) {
 # (pct / n / wn / tot_n, all present in the cached carrier), for a new ref -- WITHOUT the O(cells)
 # rebuild. Byte-identical to jmv_tab3_build_armed() with the new ref because it reuses the SAME shared
 # math: tab_apply_reference() for diff/ratio (proven), tab_ci() for the CI (the diff CI depends on the
-# reference). The armed carrier is FULLY ASSEMBLED (post-compact / p-value-lines / grouping), so the
-# recompute runs on that final shape. Precondition (jmv_reref_shape_ok + jmv_tab3_rerefable): pct="row",
-# one factor row_var, diff arming, no OR. `ci_resolved` is jmvtab_build's resolved ci (== opts$ci here).
-# Landmines (see dev/tabxplor_phase9b_fmt_display_only.md §8): p-value-line rows are excluded from BOTH
-# the pct base + reference selection AND the tab_ci re-run (reconstruct / re-CI on data rows only) --
-# they are added post-tab_ci in the fresh build, and left present they break tab_ci's grouped total-row
-# matching. The reref never touches those rows (their omnibus pvalue is ref-invariant) nor the table
-# attrs (test / groups / subtext, all ref-invariant), so both survive verbatim from the cache.
+# reference). Phase 10i-B: the armed carrier is the "core" table -- post-compact / grouping but WITHOUT
+# p-value rows (materialised at display), so the recompute runs on the whole carrier and the former
+# p-value-line exclusion (reconstruct + re-CI on data rows only) is gone. Precondition
+# (jmv_reref_shape_ok + jmv_tab3_rerefable): pct="row", one factor row_var, diff arming, no OR.
+# `ci_resolved` is jmvtab_build's resolved ci (== opts$ci here). The reref never touches the table attrs
+# (test / groups / subtext, all ref-invariant), so they survive verbatim from the cache.
 #' @keywords internal
 #' @noRd
 jmv_tab3_reref <- function(carrier, opts, ci_resolved, tuple) {
@@ -664,19 +662,18 @@ jmv_tab3_reref <- function(carrier, opts, ci_resolved, tuple) {
                                 function(nm) identical(carrier$fmt[[nm]]$meta$type, "row"),
                                 logical(1))]
   n_field   <- carrier$fmt[[fmt_names[[1]]]]$frame$n
-  data_mask <- !is.na(n_field)                                  # data rows (levels + total); p-value line = NA
-  pval_mask <- !data_mask
 
-  # --- reconstruct tab_apply_reference()'s inputs from the carrier (data rows only) --------------
+  # Phase 10i-B: the carrier is the "core" table -- no p-value rows (materialised at display), so ALL
+  # rows are data rows. The former data_mask / p-value-row exclusion (reconstruct + re-CI on data rows
+  # only) collapses: reconstruct tab_apply_reference()'s inputs from the WHOLE carrier.
   label_cols <- c(tab_vars, row_var)
-  labels     <- stats::setNames(lapply(label_cols, function(cn) carrier$factors[[cn]][data_mask]),
-                                label_cols)
+  labels     <- stats::setNames(lapply(label_cols, function(cn) carrier$factors[[cn]]), label_cols)
   tabs     <- data.table::as.data.table(labels)
   tabs_pct <- data.table::as.data.table(labels)
-  for (nm in pct_cols) tabs_pct[, (nm) := carrier$fmt[[nm]]$frame$pct[data_mask]]
+  for (nm in pct_cols) tabs_pct[, (nm) := carrier$fmt[[nm]]$frame$pct]
 
-  totrow_vector <- carrier$fmt[[fmt_names[[1]]]]$frame$in_totrow[data_mask]
-  tottab_vector <- carrier$fmt[[fmt_names[[1]]]]$frame$in_tottab[data_mask]
+  totrow_vector <- carrier$fmt[[fmt_names[[1]]]]$frame$in_totrow
+  tottab_vector <- carrier$fmt[[fmt_names[[1]]]]$frame$in_tottab
 
   ref_res <- tab_apply_reference(
     tabs = tabs, tabs_pct = tabs_pct, ref = ref_v, ref2 = opts$ref2, comp = comp,
@@ -688,37 +685,32 @@ jmv_tab3_reref <- function(carrier, opts, ci_resolved, tuple) {
   # --- write diff/ratio (pct cols) + in_refrow / ref attr (ALL cols) into the carrier ------------
   ref_1 <- switch(as.character(ref_v), "no" = "", "tot" = "tot", as.character(ref_v))
   inref <- logical(length(n_field))                             # ref = "tot" -> all FALSE (tab_plain L3062)
-  if (!identical(ref_v, "tot")) inref[data_mask] <- ref_res$refrows
+  if (!identical(ref_v, "tot")) inref[] <- ref_res$refrows
   for (nm in pct_cols) {
-    carrier$fmt[[nm]]$frame$diff[data_mask]  <- ref_res$diff[[nm]]
-    carrier$fmt[[nm]]$frame$ratio[data_mask] <- ref_res$ratio[[nm]]
+    carrier$fmt[[nm]]$frame$diff  <- ref_res$diff[[nm]]
+    carrier$fmt[[nm]]$frame$ratio <- ref_res$ratio[[nm]]
   }
   for (nm in fmt_names) {
     carrier$fmt[[nm]]$frame$in_refrow <- inref
     carrier$fmt[[nm]]$meta$ref        <- ref_1
   }
 
-  # --- re-run the diff CI (the interval depends on the reference) on the DATA ROWS via tab_ci() --
-  # tab_ci must see the table as the fresh build's tab_ci did: BEFORE tab_pvalue_lines added the
-  # p-value rows -- those rows break tab_ci's grouped reference/total-row matching (it drops one per
-  # subtable). So drop them (filter recomputes the grouping), run tab_ci, and copy ci_inf/ci_sup/pvalue
-  # back to the data positions. The p-value-line rows keep their cached (ref-invariant omnibus) values;
-  # colour is kept from the cache (color = "no") and re-applied by finalize_color_spec. The input
+  # --- re-run the diff CI (the interval depends on the reference) via tab_ci() -------------------
+  # The carrier has no p-value rows (Phase 10i-B), so tab_ci() sees the same grouped table the fresh
+  # build's tab_ci() saw -- no ungroup/slice/regroup dance. fmt_wrap restores the carrier's grouping;
+  # colour is kept from the cache (color = "no") and re-applied by finalize_color_spec; the input
   # `carrier` is otherwise returned untouched, so its attrs (test/groups/subtext) stay verbatim.
   if (!identical(ci_resolved, "no")) {
-    full <- fmt_wrap(carrier)
-    gv   <- dplyr::group_vars(full)                                    # the tab_vars grouping (if any)
-    rec  <- dplyr::slice(dplyr::ungroup(full), which(data_mask))       # absolute-index slice = drop p-value rows
-    if (length(gv)) rec <- dplyr::group_by(rec, dplyr::across(dplyr::all_of(gv)))
+    rec  <- fmt_wrap(carrier)
     rec  <- tab_ci(tabs = rec, ci = ci_resolved, comp = comp, conf_level = tuple$conf_level,
                    color = "no", visible = identical(ci_resolved, "cell"), stars = tuple$stars,
                    method_cell = tuple$method_cell, method_diff = tuple$method_diff)
     ci_d <- fmt_unwrap(rec)
     for (nm in names(carrier$fmt)) {
       cd <- ci_d$fmt[[nm]]$frame
-      carrier$fmt[[nm]]$frame$ci_inf[data_mask]  <- cd$ci_inf
-      carrier$fmt[[nm]]$frame$ci_sup[data_mask]  <- cd$ci_sup
-      carrier$fmt[[nm]]$frame$pvalue[data_mask]  <- cd$pvalue
+      carrier$fmt[[nm]]$frame$ci_inf  <- cd$ci_inf
+      carrier$fmt[[nm]]$frame$ci_sup  <- cd$ci_sup
+      carrier$fmt[[nm]]$frame$pvalue  <- cd$pvalue
     }
   }
   carrier
@@ -789,17 +781,16 @@ jmv_carrier_wrap <- function(carrier) {
 
 # Re-apply the jamovi `digits` option to the armed CARRIER (tier-4, pure display, always runs).
 # Proportion / count columns take as.integer(digits) (matching tab_plain()); MEAN columns reproduce
-# tab_num()'s magnitude floor (max(digits, 2/1/0) by max cell mean). Cells with n = NA -- the p-value
-# LINE (added by tab_pvalue_lines with a fixed digits, independent of the `digits` arg) -- keep the
-# armed's digits; a normal empty cell has n = 0, so this discriminates cleanly. Phase 9b-7: operates
-# on the carrier's plain `frame$digits` vector, so the single fmt_wrap() at the end of jmvtab_build
-# absorbs this pass's record construction (no separate set_digits() reconstruction, and the grouped-tab
-# attribute snapshot/restore trick is gone -- grouping rides in carrier$attrs, restored by fmt_wrap).
-# Byte-identical to the former set_digits() path: `new_d` is computed identically, then vec_cast to
-# integer to match set_digits() (fmt_set_field_factory casts to integer; fmt_wrap's new_fmt() does
-# NOT, so a double `digits` arg -- base_d becomes double via max(0, 1L) -- must be cast here). (A mean
-# total row is a bounded average of the cell means, so max(frame$mean) equals the build-time max
-# regardless of total-row removal.)
+# tab_num()'s magnitude floor (max(digits, 2/1/0) by max cell mean). Phase 10i-B: the carrier is the
+# "core" table with NO p-value line (materialised at display with its own fixed digits), so every row
+# takes the resolved digits -- the former n = NA skip is gone. Phase 9b-7: operates on the carrier's
+# plain `frame$digits` vector, so the single fmt_wrap() at the end of jmvtab_build absorbs this pass's
+# record construction (no separate set_digits() reconstruction, and the grouped-tab attribute
+# snapshot/restore trick is gone -- grouping rides in carrier$attrs, restored by fmt_wrap). vec_cast to
+# integer matches set_digits() (fmt_set_field_factory casts to integer; fmt_wrap's new_fmt() does NOT,
+# so a double `digits` arg -- base_d becomes double via max(0, 1L) -- must be cast here). (A mean total
+# row is a bounded average of the cell means, so max(frame$mean) equals the build-time max regardless
+# of total-row removal.)
 #' @keywords internal
 #' @noRd
 jmv_reapply_digits <- function(carrier, digits) {
@@ -810,9 +801,8 @@ jmv_reapply_digits <- function(carrier, digits) {
         m <- suppressWarnings(max(frame$mean, na.rm = TRUE))
         if (m <= 1) max(digits, 2L) else if (m <= 10) max(digits, 1L) else digits
       } else as.integer(digits)
-      new_d <- frame$digits
-      keep  <- is.na(frame$n)             # p-value line (n = NA) keeps its fixed digits
-      new_d[!keep] <- base_d
+      new_d    <- frame$digits
+      new_d[]  <- base_d
       cr$fmt[[nm]]$frame$digits <- vctrs::vec_cast(new_d, integer())
     }
     cr

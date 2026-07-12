@@ -117,7 +117,10 @@ tab_xl <-
     }
     if (is.data.frame(tabs)) tabs <- list(tabs)
 
-    tabs <- purrr::map(tabs, tab_pvalue_lines) # chi2 pvalue to lines
+    # Phase 10i-B: materialise the display extras (p-value rows now; add_n `n` column + add_pct in
+    # Increment 2) BEFORE transpose, matching the historical order. backend = "xl" keeps a real `n`
+    # column. tab_export_prep()'s later re-materialise (L131) is then a no-op (attrs already consumed).
+    tabs <- purrr::map(tabs, tab_materialize_extras, backend = "xl", pvalue = TRUE)
     if (isTRUE(transpose)) tabs <- purrr::map(tabs, tab_transpose)
 
     colwidth <- vctrs::vec_recycle(colwidth, length(tabs))

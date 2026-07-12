@@ -2419,3 +2419,30 @@ byte-identical to Phase 10c's `"pct (n)"`.
   micro-benchmark); `test-fmt_class.R` Phase-10i-A section; `test-fmt-contract.R` 10 → 9 + snapshot.
   Golden RDS regenerated (attribute drop ONLY — verified every waldo diff mentions `display_spec`;
   `_snaps/golden.md` byte-identical). Full suite green (1793). NAMESPACE drops `get/set_display_spec`.
+
+### Phase 10i-B Increment 1 DONE (2026-07-12) — p-value rows are display-only
+
+Two maintainer decisions this session refined the §34 design: **(1) add_n in-cell base defaults to the
+Total column's own `{n}`; a global `tabxplor.totcol_range` option (default `"off"`) will switch to the
+cross-col_var `[min;max]` base via `tab_totcol_range()` — Increment 2. (2) p-value = block in the R
+console, rows in exports** (not "rows everywhere"): the console keeps the compact `print_chi2()` block
+(now live because `test` is no longer dropped), exporters materialise p-value rows.
+
+Increment 1 (p-value) shipped: the built `tab()` keeps the `test` attribute and no longer carries the
+"pvalue" body row (`tab_assemble_output()` no longer calls `tab_pvalue_lines()`). The ONE display-time
+hydrator is **`tab_materialize_extras(tab, backend = c("text","xl"), pvalue = TRUE)`**
+([R/tab_classes.R](../R/tab_classes.R), next to `tab_pvalue_lines`), idempotent (reused by `tab_export_prep`
+after `tab_resolve_tables` before `prep_one_table`, and by `tab_xl` before `tab_transpose`); Increment-1
+body just wraps `tab_pvalue_lines`. `print_chi2()` moved below the `print == "kable"` branch (kable-mode →
+rows). `tab_apply_n_min()` dropped its now-dead `pline` protection. jmvtab simplified: the tier-3 carrier
+holds no p-value rows, so `jmv_tab3_reref()` lost the `data_mask`/`pval_mask` + slice-out dance and
+`jmv_reapply_digits()` lost the `n==NA` skip (byte-identical, `test-jmvtab-cache.R` green).
+
+**Verification:** full suite green (1804). Exports byte-identical (`_snaps/golden.md`, export-parity,
+color-golden all pass — exporters materialise the rows). ONLY 3 goldens regenerated (conscious):
+`f_chi2`, `f_color_contrib`, `c_contrib` — each loses its "pvalue" row; unweighted chi2 tables also now
+store raw `wn = NA` instead of the fallback `=n` that `tab_pvalue_lines`' `build_col` used to bake onto
+every row (benign — `get_wn()` recovers it, exports re-materialise it, and it makes chi2 tables
+consistent with non-chi2 ones). `test-n_min.R` updated (the p-value line is no longer a body row; it
+now asserts the `test` attribute survives n_min instead). Increment 2 (add_n/add_pct + the
+`render_extras` attribute + dead special-case removal + the perf gate) is next.

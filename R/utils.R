@@ -1350,6 +1350,12 @@ po_to_dt <- function(file) {
 # shows the sample text plus its APCA lightness-contrast value (Lc) of
 # text-on-background, so you can eyeball legibility at a glance.
 #
+# The table backdrop is configurable via `table_bg` (both preview functions).
+# When its oklch lightness drops below `dark_threshold`, the table auto-switches
+# to dark styling: white + slightly thicker borders, light text for all the
+# non-tile chrome (labels, caption, footnote), and a transparent table frame so
+# the dark page shows through behind the coloured tiles.
+#
 # Dependencies: farver (oklch + rgb maths) + knitr + kableExtra (the tab_kable
 # engine). Viewer routing reuses print.kableExtra (getOption("viewer") hook),
 # the same route tab_kable() output takes - no pandoc needed.
@@ -1436,6 +1442,57 @@ po_to_dt <- function(file) {
   if (l >= 0.6) "#000000" else "#ffffff"
 }
 
+# --- internal: theme (light / dark) ----------------------------------------
+
+#' Resolve a light/dark theme from the table backdrop colour.
+#'
+#' `dark` triggers when the backdrop's oklch lightness is below `threshold`.
+#' Dark mode uses white, slightly thicker borders and light "ink" for all the
+#' non-tile chrome; light mode keeps the current lightable-classic appearance.
+#' @noRd
+.cg_theme <- function(table_bg, threshold = 0.5) {
+  l    <- farver::decode_colour(table_bg, to = "oklch")[1, 1]
+  dark <- isTRUE(l < threshold)
+  list(
+    dark          = dark,
+    bg            = table_bg,
+    ink           = if (dark) "#e8e8e8" else "#222222",  # non-tile text
+    border        = if (dark) "#ffffff" else "#d9d9d9",  # frame + row rules
+    border_w      = if (dark) "2px"     else "1px",      # a bit more linewidth
+    square_border = if (dark) "#cfcfcf" else "#999999"   # row-label swatch square
+  )
+}
+
+#' CSS injected AFTER the kable (so it wins over lightable's inline <style> at
+#' equal specificity). Only border rules use !important; text-colour rules stay
+#' non-important so inline cell_spec() tile colours still win.
+#' @noRd
+.cg_theme_css <- function(t) {
+  css <- sprintf("body{background-color:%s;margin:0;padding:16px;}", t$bg)
+  if (isTRUE(t$dark)) {
+    css <- paste0(
+      css,
+      # let the dark page show through the frame; tiles keep their own fill
+      ".lightable-classic,.lightable-classic thead,.lightable-classic tbody,",
+      ".lightable-classic tr,.lightable-classic td,.lightable-classic th,",
+      ".lightable-classic caption,.lightable-classic tfoot{",
+      "background-color:transparent !important;}",
+      # light ink for labels / corner / caption / footnote (tiles override inline)
+      sprintf(".lightable-classic,.lightable-classic td,.lightable-classic th{color:%s;}",
+              t$ink),
+      sprintf(".lightable-classic caption{color:%s;}", t$ink),
+      sprintf(".lightable-classic tfoot{color:%s;}", t$ink),
+      # white, slightly thicker borders
+      sprintf(".lightable-classic td,.lightable-classic th{border-color:%s !important;}",
+              t$border),
+      sprintf(paste0(".lightable-classic>tbody>tr>td,.lightable-classic>thead>tr>th",
+                     "{border-bottom-width:%s !important;border-bottom-color:%s !important;}"),
+              t$border_w, t$border)
+    )
+  }
+  css
+}
+
 # --- internal: APCA contrast (APCA-W3 0.98G / 0.1.x constants) --------------
 
 #' sRGB (0-255 triplet) to APCA screen luminance Y.
@@ -1489,50 +1546,49 @@ po_to_dt <- function(file) {
 #' out by `knitr::kable()` + `kableExtra::kable_classic()` with the tab_kable
 #' DejaVu font stack. Column headers are tinted with the backdrop colour (a live
 #' preview); row headers carry a small square of the text colour. `caption`
-#' becomes the table caption, `subtitle` a footnote. Opening in the Viewer reuses
-#' the `print.kableExtra` path (same dependencies + `getOption("viewer")` hook
-#' tab_kable() uses), so no pandoc is needed.
+#' becomes the table caption, `subtitle` a footnote. The page/table backdrop is
+#' `table_bg`; below `dark_threshold` oklch lightness the table auto-switches to
+#' dark styling (white thicker borders + light chrome). Opening in the Viewer
+#' reuses the `print.kableExtra` path (same dependencies + `getOption("viewer")`
+#' hook tab_kable() uses), so no pandoc is needed.
 #'
 #' @param text_hex,bg_hex Character matrices [n_row x n_col] of cell colours.
 #' @param row_swatch,col_swatch Hex used to tint the row squares / column headers.
+#' @param table_bg Backdrop colour of the whole table/page.
+#' @param dark_threshold oklch lightness of `table_bg` below which dark styling kicks in.
 #' @noRd
 .cg_kable_grid <- function(text_hex, bg_hex, row_labels, col_labels,
                            row_swatch, col_swatch, corner, sample_text,
                            show_contrast, swatch_padding, caption, subtitle,
-                           font_size, full_width = FALSE, browse = TRUE) {
+                           font_size, table_bg = "#ffffff", dark_threshold = 0.5,
+                           full_width = FALSE, browse = TRUE) {
   n_row <- nrow(text_hex)
   n_col <- ncol(text_hex)
+  theme <- .cg_theme(table_bg, dark_threshold)
   sample_html <- .cg_escape(sample_text)
   tile_css <- paste0("display:inline-block;padding:", swatch_padding, ";")
 
   # body: one kableExtra tile per cell (the same engine + rounded-tile shape as
   # tab_kable()'s coloured-background branch, cell_spec(background = )).
-  body <- vapply(seq_len(n_col), function(j) {
-    vapply(seq_len(n_row), function(i) {
-      lc_txt <- if (isTRUE(show_contrast)) {
-        lc <- .cg_apca(text_hex[i, j], bg_hex[i, j])
-        sprintf(
-          ' <span style="font-weight:400;opacity:.75;font-size:90%%;">Lc\u00a0%d</span>',
-          as.integer(round(abs(lc)))
-        )
-      } else {
-        ""
-      }
-      kableExtra::cell_spec(
-        paste0(sample_html, lc_txt), format = "html", escape = FALSE,
-        bold = TRUE, color = text_hex[i, j], background = bg_hex[i, j],
-        extra_css = tile_css
-      )
-    }, character(1))
-  }, character(n_row))
-  body <- matrix(body, nrow = n_row, ncol = n_col)
+  body <- outer(seq_len(n_row), seq_len(n_col), Vectorize(function(i, j) {
+    lc_txt <- if (isTRUE(show_contrast)) {
+      lc <- .cg_apca(text_hex[i, j], bg_hex[i, j])
+      sprintf(' <span style="font-weight:400;opacity:.75;font-size:90%%;">Lc\u00a0%d</span>',
+              as.integer(round(abs(lc))))
+    } else ""
+    kableExtra::cell_spec(paste0(sample_html, lc_txt), format = "html", escape = FALSE,
+                          bold = TRUE, color = text_hex[i, j], background = bg_hex[i, j],
+                          extra_css = tile_css)
+  }))
+body <- matrix(unlist(body), nrow = n_row, ncol = n_col)
 
-  # row header: small text-colour square + label (always visible, even near-white)
+  # row header: small text-colour square + label (always visible, even near-white).
+  # Square border follows the theme so it stays visible on a dark backdrop too.
   rlab <- vapply(seq_len(n_row), function(i) sprintf(
     paste0('<span style="display:inline-block;width:12px;height:12px;',
-           'border:1px solid #999;background-color:%s;vertical-align:middle;',
+           'border:1px solid %s;background-color:%s;vertical-align:middle;',
            'margin-right:6px;"></span>%s'),
-    row_swatch[i], row_labels[i]
+    theme$square_border, row_swatch[i], row_labels[i]
   ), character(1))
 
   # column headers tinted with the backdrop colour (a live preview of the fill)
@@ -1547,6 +1603,13 @@ po_to_dt <- function(file) {
   fs <- suppressWarnings(as.numeric(gsub("[^0-9.]", "", as.character(font_size))))
   if (length(fs) != 1L || is.na(fs)) fs <- NULL
 
+  # header underline: theme-driven (white + thicker in dark mode, else as before)
+  header_rule <- if (theme$dark) {
+    sprintf("border-bottom:%s solid %s;", theme$border_w, theme$border)
+  } else {
+    "border-bottom:1px solid;"
+  }
+
   out <- knitr::kable(
     df, format = "html", escape = FALSE,
     align = c("l", rep("c", n_col)),
@@ -1558,13 +1621,19 @@ po_to_dt <- function(file) {
     ) |>
     kableExtra::row_spec(
       0, bold = TRUE,
-      extra_css = "border-bottom:1px solid;vertical-align:bottom;text-align:center;"
+      extra_css = paste0(header_rule, "vertical-align:bottom;text-align:center;")
     ) |>
     kableExtra::column_spec(1, extra_css = "white-space:nowrap;")
 
   if (!is.null(subtitle) && any(nzchar(subtitle))) {
     out <- kableExtra::add_footnote(out, subtitle, notation = "none", escape = FALSE)
   }
+
+  # Append the theme CSS AFTER lightable's inline <style> so it wins at equal
+  # specificity; restore the kableExtra attributes paste0() strips.
+  attrs <- attributes(out)
+  out <- paste0(out, "\n<style>", .cg_theme_css(theme), "</style>\n")
+  attributes(out) <- attrs
 
   # Reuse print.kableExtra: opens in the Viewer in interactive sessions (the same
   # route tab_kable() output takes), cat()s the HTML otherwise.
@@ -1638,6 +1707,11 @@ set_chroma <- function(cols, c = 0.1) {
 #' @param show_contrast Logical; append the APCA lightness-contrast value (Lc)
 #'   of text-on-background to each cell, on the same line as sample_text.
 #'   Default TRUE.
+#' @param table_bg Backdrop colour of the whole table/page, e.g. "#1a1a1a" to
+#'   preview dark mode. Default "#ffffff".
+#' @param dark_threshold oklch lightness (0-1) of `table_bg` below which the
+#'   table switches to dark styling (white + slightly thicker borders, light
+#'   text, transparent frame). Default 0.5.
 #' @param font_size CSS font-size for the table. Default "16px" (tab_kable base).
 #' @param swatch_padding CSS padding for each swatch cell. Default "12px 16px".
 #' @param browse Logical; open the result in the Viewer. Default TRUE.
@@ -1648,17 +1722,21 @@ set_chroma <- function(cols, c = 0.1) {
 #' text_colors <- c(plain = "#989898", pos3 = "#0baedb", pos5 = "#265aff")
 #' background_colors <- c(plain = "#ffffff", pos3 = "#91b837", pos5 = "#05ae30")
 #' preview_colour_grid(text_colors, background_colors)
+#' preview_colour_grid(text_colors, background_colors, table_bg = "#1a1a1a")  # dark
 #' }
 #' @keywords internal
 preview_colour_grid <- function(text_colors,
                                 background_colors,
                                 sample_text = paste0(sample(0:100, 1L), "%"),
                                 show_contrast = TRUE,
+                                table_bg = "#ffffff",
+                                dark_threshold = 0.5,
                                 font_size = "16px",
                                 swatch_padding = "12px 16px",
                                 browse = TRUE) {
   .cg_require()
-  stopifnot(length(text_colors) >= 1, length(background_colors) >= 1)
+  stopifnot(length(text_colors) >= 1, length(background_colors) >= 1,
+            length(table_bg) == 1)
 
   row_labels <- names(text_colors)
   if (is.null(row_labels)) row_labels <- unname(text_colors)
@@ -1683,7 +1761,8 @@ preview_colour_grid <- function(text_colors,
     caption  = "Text \u00d7 background colour grid",
     subtitle = sprintf("%d text colours \u00d7 %d backgrounds \u2014 cells show APCA Lc",
                        n_row, n_col),
-    font_size = font_size, browse = browse
+    font_size = font_size, table_bg = table_bg, dark_threshold = dark_threshold,
+    browse = browse
   )
 }
 
@@ -1704,6 +1783,10 @@ preview_colour_grid <- function(text_colors,
 #'   Default seq(0.35, 0.95, length.out = 7).
 #' @param chroma "fixed" (keep source chroma, capped to gamut) or "max"
 #'   (maximum in-gamut chroma per shade). Default "fixed".
+#' @param table_bg Backdrop colour of the whole table/page, e.g. "#1a1a1a" to
+#'   preview dark mode. Default "#ffffff".
+#' @param dark_threshold oklch lightness (0-1) of `table_bg` below which the
+#'   table switches to dark styling. Default 0.5.
 #' @param sample_text,show_contrast,font_size,swatch_padding,browse See
 #'   [preview_colour_grid()].
 #'
@@ -1712,6 +1795,7 @@ preview_colour_grid <- function(text_colors,
 #' \dontrun{
 #' preview_luminance_grid("#59c5bf", "#b9c653")                 # fixed chroma
 #' preview_luminance_grid("#59c5bf", "#b9c653", chroma = "max") # most vivid
+#' preview_luminance_grid("#59c5bf", "#b9c653", table_bg = "#1a1a1a")  # dark
 #' }
 #' @keywords internal
 preview_luminance_grid <- function(text_color,
@@ -1720,12 +1804,15 @@ preview_luminance_grid <- function(text_color,
                                    chroma = c("fixed", "max"),
                                    sample_text = paste0(sample(0:100, 1L), "%"),
                                    show_contrast = TRUE,
+                                   table_bg = "#ffffff",
+                                   dark_threshold = 0.5,
                                    font_size = "16px",
                                    swatch_padding = "12px 16px",
                                    browse = TRUE) {
   .cg_require()
   chroma <- match.arg(chroma)
-  stopifnot(length(text_color) == 1, length(background_color) == 1)
+  stopifnot(length(text_color) == 1, length(background_color) == 1,
+            length(table_bg) == 1)
 
   txt_lch <- .cg_oklch(text_color)
   bg_lch  <- .cg_oklch(background_color)
@@ -1754,12 +1841,10 @@ preview_luminance_grid <- function(text_color,
       toupper(text_color), txt_lch[["h"]],
       toupper(background_color), bg_lch[["h"]]
     ),
-    font_size = font_size, browse = browse
+    font_size = font_size, table_bg = table_bg, dark_threshold = dark_threshold,
+    browse = browse
   )
 }
-
-
-
 
 
 

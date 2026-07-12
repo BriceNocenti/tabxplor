@@ -1341,14 +1341,34 @@ pipeline unchanged; sugar vs `{}` = one-time ~0.2 ms validation, no per-cell cos
 `test-display-grammar.R` + `test-fmt_class.R` + `test-fmt-contract.R` 10→9 (+ snapshot); goldens
 regenerated (attr drop only). Full suite green.
 
-##### Phase 10i-B –  display-only migration
+##### Phase 10i-B – display-only migration
 
 Incremental implementation steps, maintainer commits between :
-- Increment 1: pvalue.
+- Increment 1: pvalue. **DONE (2026-07-12).**
 - Increment 2:  add_n/add_pct.
 - Add an Increment 3, global build table pipeline simplification, or not needed ?
 
 At the end, **`git stash` A/B perf gate** (build vs display/export measured separately, at least neutral).
+
+###### Increment 1 DONE (2026-07-12) — p-value rows are display-only
+
+The built `tab()` no longer bakes p-value rows: `tab_assemble_output()` stops calling `tab_pvalue_lines()`,
+so the whole-table `test` attribute is KEPT and the rows are materialised at DISPLAY. New maintainer
+decision (this session): **p-value = block in the R console, rows in exports** — the console shows the
+compact `# <col>: Chi2=… p=…` block (`print_chi2()`, which now fires for a normal `tab()` because `test`
+survives; moved *below* the `print == "kable"` branch so kable-mode still gets rows), while
+kable/md/Excel/jamovi materialise p-value ROWS. New shared idempotent materialiser
+**`tab_materialize_extras(tab, backend, pvalue)`** ([R/tab_classes.R](R/tab_classes.R), next to
+`tab_pvalue_lines`) is the ONE display-time hydrator, called by `tab_export_prep()` (after
+`tab_resolve_tables`, before `prep_one_table`) and by `tab_xl()` (before `tab_transpose`); Increment-1
+body = `tab_pvalue_lines`. `tab_apply_n_min()` dropped its dead `pline` protection. jmvtab simplified:
+the tier-3 carrier no longer holds p-value rows, so `jmv_tab3_reref()` lost its `data_mask`/`pval_mask`
++ "drop p-value rows before tab_ci" dance and `jmv_reapply_digits()` lost its `n==NA` skip.
+**Byte-identical exports** (`_snaps/`, export-parity green); the only golden changes are the 3
+chi2-driven fixtures (`f_chi2`, `f_color_contrib`, `c_contrib`) losing the "pvalue" row + a benign `wn`
+change (unweighted chi2 tables now store raw `wn=NA` instead of the fallback `tab_pvalue_lines` baked;
+`get_wn()` still recovers it). Suite green (1804). The `render_extras` attribute + add_n/add_pct
+migration is Increment 2.
 
 
 #### Phase 10j – exports workflow additional integration and performance improvement ?

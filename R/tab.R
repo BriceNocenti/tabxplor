@@ -1904,12 +1904,12 @@ tab_assemble_output <- function(ctx) {
   }
 
 
-  if (is.data.frame(tabs)) {
-    tabs <- tabs |> tab_pvalue_lines()
-
-  } else {
-    tabs <- purrr::map(tabs, tab_pvalue_lines)
-  }
+  # Phase 10i-B: p-value rows are NO LONGER baked at build. The whole-table `test` attribute is KEPT
+  # (tab_assemble_tables set it and nothing drops it now), and the p-value rows are materialised at
+  # DISPLAY -- as body rows by the exporters (tab_export_prep / tab_xl via tab_materialize_extras), and
+  # as the print_chi2() block in the console (decision 2). This lets every reserved-"pvalue"-row
+  # special-case downstream (n_min, jmvtab re-ref, ...) shrink, and keeps the built tab the "core"
+  # table (see dev/tabxplor_1.4.0_decisions.md §34).
 
   # Phase 7g: n_min small-base DISPLAY filter -- the last, pure-display step (drops rows/cols
   # whose base < n_min and blanks weak cells; recomputes nothing). See tab_apply_n_min().
@@ -6667,13 +6667,15 @@ tab_apply_n_min <- function(tab, n_min) {
   fmt_all <- tab[fmt_names]
   totrow  <- purrr::reduce(purrr::map(fmt_all, is_totrow), `|`)
   tottab  <- purrr::reduce(purrr::map(fmt_all, is_tottab), `|`)
-  pline   <- purrr::reduce(purrr::map(fmt_all, ~ is.na(get_n(.))), `&`)   # the p-value line
+  # Phase 10i-B: the p-value line is no longer in the core table when n_min runs (materialised at
+  # display), so its `pline` (all-n-NA) protection is dead -- dropped. The add_n/add_pct helper rows
+  # ("n"/"row_pct") are still baked here in Increment 1 (kept below); Increment 2 drops `helprow` too.
   rvars   <- tab_get_vars(tab)$row_var
   rvars   <- rvars[rvars %in% names(tab)]
   helprow <- if (length(rvars)) {
     purrr::reduce(purrr::map(tab[rvars], ~ as.character(.) %in% c("n", "row_pct")), `|`)
   } else rep(FALSE, nrow(tab))
-  protect <- totrow | tottab | pline | helprow
+  protect <- totrow | tottab | helprow
 
   # --- row-drop + cell-blank on row-oriented columns -----------------------------------------
   row_cols <- fmt_names[type %in% c("row", "all", "mean") & !helper]  # totcol INCLUDED in the max

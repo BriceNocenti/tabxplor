@@ -4,8 +4,12 @@
 # USAGE (from package root):  Rscript dev/make_color_golden.R
 #
 # CONSCIOUS ACT: only run when a change to the RENDERED colors is INTENTIONAL. Phase 5 ledger:
-#   LOCKED (do not regenerate lightly): c_syn_diff, c_diff, c_contrib, c_or, c_mean_diff_ci,
+#   LOCKED (do not regenerate lightly): c_syn_diff, c_diff, c_or, c_mean_diff_ci,
 #     c_mean_after_ci (mean CI-gated modes are byte-identical on symmetric intervals).
+#   Phase 10i-B: c_contrib REGENERATED (p-value rows are now display-only, so the built contrib
+#     table loses its "pvalue" body row -> its per-cell hex fixture drops that row's cells; every
+#     other cell's colour is byte-identical, contrib being computed at build before the row was ever
+#     added). The other data rows are unchanged.
 #   CONSCIOUSLY REGENERATED at Step 3: c_mean_diff (numeric diff -> Glass's delta), and the
 #     pct CI-gated modes c_diff_ci / c_after_ci / c_ci (asymmetric-interval upper-arm fix).
 # Afterwards: review `git diff tests/testthat/_color_golden/` and accept deliberately.

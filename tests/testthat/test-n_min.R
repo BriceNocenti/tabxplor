@@ -75,15 +75,18 @@ testthat::test_that("means use the n base (not tot_n) for the drop", {
   testthat::expect_true("Total" %in% as.character(out$sex))
 })
 
-testthat::test_that("n_min never drops the total row, add_n column, or the p-value line", {
+testthat::test_that("n_min never drops the total row or the add_n column, and keeps the test attr", {
   out <- tab(gss, race, marital, pct = "row", chi2 = TRUE, add_n = TRUE, n_min = 3000)
   # total row present
   testthat::expect_true(any(is_totrow(out$Total)))
   # add_n column present (the reserved unweighted-n column)
   testthat::expect_true("n" %in% names(out))
-  # the p-value line (row_var label empty / a dedicated pvalue row) survives -- there is at least
-  # one row whose Total cell has NA n (the p-value line marker).
-  testthat::expect_true(any(is.na(get_n(out$Total))))
+  # Phase 10i-B: the p-value line is NO LONGER a body row of the built table (materialised at
+  # display); n_min instead runs on the "core" table and must keep the `test` attribute so the
+  # p-value rows can still be materialised by the exporters. No body cell has an NA n now.
+  testthat::expect_false(any(is.na(get_n(out$Total))))
+  testthat::expect_false(is.null(get_test(out)))
+  testthat::expect_gt(nrow(get_test(out)), 0)
 })
 
 testthat::test_that("n_min preserves class and table attributes", {
