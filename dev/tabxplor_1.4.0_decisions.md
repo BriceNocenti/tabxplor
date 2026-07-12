@@ -2248,3 +2248,136 @@ roadmap).
 - **Pre-existing (NOT 10g):** `color="contrib"` + `comp="all"` errors in the shared colour engine
   (`fmt_color_plan` → `get_mean_contrib()` returns size 0) — `tab_kable` fails identically; a Phase 5
   issue to fix separately.
+
+## 34. Phase 10i DESIGN — add_n / add_pct / pvalue-lines as display-time materializations (2026-07-12)
+
+DESIGN-ONLY session (maintainer's choice, AskUserQuestion Q4): this section is the deliverable; no
+product code, no golden regen this session. It records the verdict, the four settled decisions, the
+grounded current-state, the target design, and the session/increment phasing for the follow-up work.
+
+### The four decisions (this session)
+
+1. **Display-only.** The built `tab()` object OMITS the `n` / `col_pct` columns and the p-value rows.
+   They are rendered only by `print()` / `tab_kable` / `tab_md` / `tab_xl`. The whole-tab `test`
+   attribute is **kept** (stop dropping it). `tab_pvalue_lines()` / `tab_add_n_pct()` stay exported as
+   on-demand materializers for a user who wants real rows/cols.
+2. **Composite recipe → the per-cell `display` field with a glue-style `{}` grammar** (`"{pct} (n={n})"`);
+   **drop the `display_spec` per-column attribute** (10 → 9 attributes; a `/vctrs-field` change). `get_num()`
+   gains a short-circuited gate so simple tokens (`"pct"`/`"diff"`/…) stay on the fast O(cells) path.
+3. **add_pct = a real appended column/row at display** (uniform text + Excel). Only **add_n** gets the
+   in-cell composite (text) / a real `n` column (Excel) — because add_n is a *re-display* of the total
+   column while add_pct carries *new numbers* (the col%/row% distribution) that don't fold cleanly into
+   one cell.
+4. **Design-doc, then stop** for maintainer approval before any code.
+
+### Why — current-state grounding (the complexity these three cause)
+
+- **`tab_add_n_pct()`** ([../R/tab.R:6441-6617](../R/tab.R#L6441)) materializes REAL extra columns/rows
+  at `tab_assemble_tables()` ([../R/tab.R:1777](../R/tab.R#L1777)) — per row_var, after the level-drop,
+  before total-col removal. add_n col (`pct="row"`) = the last total column **cloned** with
+  `set_display("n")` (a pure re-display of the base `get_n()`); add_pct col = `col_pct` = the total
+  column's col% (`get_wn/last(get_wn)`, genuinely NEW numbers); the `pct="col"` variants append rows with
+  reserved `row_var` `"n"`/`"row_pct"`. Reserved tags `col_var="all_col_vars"` + `row_var` `"n"`/`"row_pct"`.
+- **pvalue rows** — the `test` attribute is ALREADY a whole-tab attribute (created at
+  `tab_assemble_tables` via `new_tab/new_grouped_tab(test=)`). `tab_pvalue_lines()`
+  ([../R/tab_classes.R:882-968](../R/tab_classes.R#L882)) bakes one p-value row per subtable × col_var
+  and **DROPS the attribute** ([../R/tab_classes.R:966](../R/tab_classes.R#L966)). Runs at
+  `tab_assemble_output` ([../R/tab.R:1887](../R/tab.R#L1887)/[1890](../R/tab.R#L1890)); `tab_xl` bakes it
+  itself ([../R/tab_xl.R:120](../R/tab_xl.R#L120)). Row markers: `row_var="pvalue"` + all cells `n=NA`.
+- **The special-casing tax** these synthetic rows/cols impose: chi² kept-rows mask
+  ([../R/tab.R:5589](../R/tab.R#L5589)), contrib eligibility ([../R/tab.R:5738](../R/tab.R#L5738)),
+  `tab_apply_n_min()` protect-list ([../R/tab.R:6640](../R/tab.R#L6640),[6653](../R/tab.R#L6653)),
+  `tab_ci`'s `all_col_vars` vector append, `arrange` row-keep cases, the export-prep total-block
+  whitelist ([../R/tab-export-prep.R:277-285](../R/tab-export-prep.R#L277), an un-i18n English-label
+  match already flagged), and — crucially — the jmvtab tier-3 **re-ref** `jmv_tab3_reref()`
+  ([../R/jmvtab-cache.R:650-724](../R/jmvtab-cache.R#L650)), which reconstructs a `data_mask`/`pval_mask`
+  and drops the p-value rows before re-running `tab_ci()`, plus the `n=NA` skip in `jmv_reapply_digits`.
+- **The composite mechanism already exists** as `display_spec` (Phase 10c, the 10th attribute), a curated
+  whitelist `c("pct (n)","n (pct)")` parsed only in `format()` by re-entering `format()` per field
+  ([../R/fmt_class.R:1993-2003](../R/fmt_class.R#L1993)) — the working proof that an in-cell composite
+  needs NO extra rows/cols. `tab_totcol_range()` ([../R/tab-export-prep.R:144](../R/tab-export-prep.R#L144))
+  already computes the cross-col_var `[min;max]` base per row (INERT since 10d).
+
+### Verdict — worthwhile, NOT a white elephant
+
+The simplification is real and cross-cutting: with the extras gone from the built table, every
+reserved-row/col special-case above shrinks or disappears. **pvalue is the cleanest win** — the
+attribute already exists, so deferral is mostly *stop dropping it* + *move the bake from build to
+display*. **add_n unifies** with the deferred §10 `[min;max]` total-column range (already built).
+**Positive for jmvtab live**: the cached carrier stops holding p-value rows, so the re-ref
+`data_mask`/`pval_mask` dance and the `n=NA` digit-reapply skip vanish; materialization runs at the
+O(cells) render, matching the cache philosophy ("fmt is recomputed, not cached"). The one genuine
+cost is the visibility change (below), accepted as decision 1.
+
+### The target design — extras become display-time materializations
+
+**One model: three logical extras driven by table-level intent + the kept `test` attribute; the build
+emits the "core" table only.**
+
+- **Intent storage** — `add_n`/`add_pct` become a small table-level attribute (e.g.
+  `render_extras = list(add_n=, add_pct=)`) carried by the tabxplor dplyr S3 methods exactly like
+  `subtext`/`test` (`/dplyr-method`: extend `new_tab`/`new_grouped_tab` + `dplyr_reconstruct`). The build
+  stops calling `tab_add_n_pct()` and stops baking p-value rows; it sets the flags and KEEPS `test`.
+- **One shared display-time materializer** — called by `tab_export_prep()` (once, for every backend) AND
+  by the console print methods, on the core table: **pvalue** → reuse `tab_pvalue_lines()` at display;
+  **add_pct** → append a real `col_pct`/`row_pct` (text + xl), reusing the existing halves; **add_n** →
+  text: an in-cell composite on the Total column (`{pct} (n={n})`, cross-col_var n from
+  `tab_totcol_range()` → `min` or `[min;max]`); Excel: a real `n` column of numbers (only add_n differs
+  by backend). Order on the core: n_min (build) → materialize extras (display).
+- **The `{}` grammar** (replaces `display_spec`) — `display` field value = a simple token (fast path) OR a
+  glue template `"{pct} (n={n})"`. `get_num()`: `if (!any(grepl("{", display, fixed=TRUE)))` → the current
+  fast path; else primary = the first `{field}` (regex only on composite cells) → byte-identical when no
+  composite is present, and Excel is automatic (get_num returns the primary). `format()` generalizes the
+  10c composite branch into a `{field}` template parser (split literals + tokens; render each via
+  `format(set_display(x, field))`; paste; stars ride the primary). Curated forms `"pct (n)"`/`"n (pct)"`
+  stay as sugar mapped to `"{pct} ({n})"`. `tab(display=)` writes the FIELD; drop
+  `display_spec`/`get/set_display_spec`/the 10th attribute.
+- **Console print consolidation** — print calls the shared materializer then renders → ONE renderer path
+  for console+kable+md+xl. `print_chi2()`'s attribute-block becomes redundant (removable/optional).
+- **jmvtab re-ref simplification** — the tier-3 carrier no longer carries p-value rows / n / col_pct, so
+  `jmv_tab3_reref` drops the `data_mask`/`pval_mask` + "filter p-value rows before `tab_ci`" logic and
+  `jmv_reapply_digits` drops the `n=NA` skip. Verify `test` + the intent attribute survive
+  `fmt_unwrap`/`fmt_wrap`.
+- **Bonus cleanup** — the export-prep total-block whitelist (`c("n","pvalue","row_pct")`) is replaced by a
+  proper ROLE tag set when the prep itself creates the rows (fixes the flagged i18n miss).
+
+### Phasing (follow-up work; grouped by session, increments where a mid-commit helps)
+
+- **Phase 10i-A — the `{}` display grammar (ONE session, ONE commit).** Self-contained display-layer
+  refactor; a PREREQUISITE (add_n's in-cell uses it) so it lands first. `get_num()` gate + `format()`
+  template parser; `tab(display=)` writes the field; drop `display_spec` (10→9, `/vctrs-field`); curated
+  sugar. Verify: simple displays byte-identical; new composite `_snaps/`; `test-fmt-contract.R` 10→9
+  conscious regen; benchmark `get_num()` (the gate must be negligible per the Phase 9d O(cells) ethos).
+- **Phase 10i-B — display-only migration (ONE session, TWO increments, maintainer commit between).** Both
+  increments share the materializer + reserved-marker removal + jmvtab simplification.
+  - **Increment 1 — pvalue display-only** (+ its jmvtab coupling): stop dropping `test`; remove the
+    build-time bake; call the bake in `tab_export_prep` + console print; consolidate `print_chi2`; remove
+    the reserved-`"pvalue"`-row special-cases; simplify `jmv_tab3_reref` + `jmv_reapply_digits`. Golden RDS
+    regen (no p-value rows in the built tab); rendered `_snaps/` + exports byte-identical. → commit.
+  - **Increment 2 — add_n/add_pct display-only**: intent attribute + dplyr S3 carry; remove the build-time
+    `tab_add_n_pct`; materializer gains add_n (in-cell text via the Phase-A grammar + `tab_totcol_range`;
+    xl `n` column) + add_pct (appended col/row); remove the reserved-`"n"`/`"row_pct"`/`"all_col_vars"`
+    special-cases; role-tag the total block. Golden RDS regen + **conscious console/kable/md snapshot
+    regen** for add_n (base-n column → in-cell `(n=…)`, the headline visible change); Excel keeps a column.
+    → commit.
+- **End-of-Phase-B perf gate (mandatory)** — a **`git stash` A/B benchmark against the current version**
+  must confirm the impact is **at least neutral**, measuring **build-table vs display/export performance
+  SEPARATELY** (work MOVES from build to display: the build must get faster/neutral, the display must not
+  regress net; spot-check jmvtab live). Save to `dev/benchmarks/results_1.4.0/`.
+
+### Caveats (honest)
+
+- **Programmatic visibility change (accepted, decision 1)** — the built tab no longer has the
+  `n`/`col_pct` columns or p-value rows; `names()`/`$`/`as_tibble()`/dplyr see the core table. `print()`
+  still shows them (print = display). Back-compat is light (add_n opt-out is a recent default; p-value
+  ROWS only since 1.3.0 — NEWS.md:271-273); `get_n(tab$Total)` gives the count and the public
+  `tab_pvalue_lines()`/`tab_add_n_pct()` materialize real rows/cols on demand. Document in NEWS.
+- **Headline user-visible change** — with `add_n = TRUE` (default), the base-n moves from a separate
+  console/kable/md `n` column to an in-cell `100% (n=114)` (a wide, intended `_snaps/` regen); Excel keeps
+  the `n` column.
+- **`get_num()` hot-path gate** — one `grepl(fixed=TRUE)` short-circuit; must be benchmarked (Phase 9d
+  rewrote leaf math for ~30 %, so the O(cells) path is sacred). Fallback: test only the column's uniform
+  display, or cache a per-column `is_composite` flag.
+- **Golden surface is large** (Phase-9b scale) — the built-tab RDS fixtures change structurally (fewer
+  rows/cols); the target is that RENDERED output (`_snaps/`, export-parity) stays byte-identical EXCEPT
+  the intended add_n in-cell change. Conscious regen per phase/increment.

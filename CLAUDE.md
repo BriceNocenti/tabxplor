@@ -1266,7 +1266,7 @@ Coloured markdown export via **break-derived pandoc bracketed spans**. A COLOURE
 - Even if they do not work on jamovi, I want them to work in Positron IDE Viewer, be it with pandoc bracketed spans (prefered solution if workable) or another way
 - Even if pandock bracketed spans not working on tab_kable inside Viewer, I still want an option to export as very simple markdown with pandoc bracketed spans, to use in markdown editors with customisable css working with bracketed spans (just for information, I have Positron IDE custom syntax highlighting in normal editor with a personal VS code extension). It shall really remain simple human readable padded/aligned markdown.
 
-#### Phase 10g – rework tab_xl() (DONE 2026-07-12)
+#### Phase 10g – rework tab_xl() (DONE)
 
 `tab_xl()` reworked onto the shared prep + `format(syntax="excel")`, **4132 → ~810 lines**. Full suite
 green. Detail: `dev/tabxplor_phase10_exporters.md` (Status). Maintainer steer this session: NO byte
@@ -1292,12 +1292,9 @@ aggressive simplification is welcome.
   (`get_mean_contrib()` size 0), for `tab_kable` too — a Phase 5 issue, fix separately.
 
 
-### Phase 10h — Excel engine migration (openxlsx → openxlsx2)
-
-#### Done (2026-07-12)
+### Phase 10h — Excel engine migration (DONE)
 
 **Full clean migration** (maintainer decision, over the design doc's dual-backend seam): `tab_xl()` rewritten on **openxlsx2 only**; `openxlsx` dropped from Suggests, `openxlsx2` added; `jmvtab-export.R` guard swapped (it already routes through `tab_xl()`). Full suite green (**1748**, no golden regen); `test-export-parity.R` (value/code-path parity) + the numFmt-code lock unchanged and green.
-
 - **New `R/tab-xl-backend.R`**: ~14 thin `xlb_*` openxlsx2 wrappers (in-place R6 `$` methods) + **pure range coalescers** `xl_runs`/`xl_rect_dims`/`xl_coalesce` (base-R A1 math, unit-tested in `test-xl-backend.R`). The coalescers turn per-cell style targets into the fewest **multi-area `dims`** so each shared style is applied ONCE over the largest range (the perf lever the maintainer asked for; numFmt codes + colour slots each grouped + coalesced).
 - **`tab_xl.R` rewrite** (single-tab-first + list): orchestrator `tab_xl()` → pure per-table **`tab_xl_plan_one()`** (raw `get_num` values + numFmt codes + colour slots + a unified font plan + geometry — parallel-safe) → per-sheet writer **`xl_write_table()`** (issues the openxlsx2 calls). Sheet grouping (`sheets="auto"/"tabs"/"unique"` + start offsets) kept.
 - **Stars** folded into the numFmt literal (`0.0%"***"`, gated by `getOption("tabxplor.stars")`), cell stays a real number. **`transpose=`** (maps `tab_transpose()` before prep) wired. **`conditional_format=`** accepted but experimental (message + falls back to hard styles — deferred: CF can't reproduce field-derived colours without hidden helper columns, and the coalesced hard-style path is fast/exact/small). `n_min`/`hide_near_zero` stay accepted-but-inert. **NO `parallel=` on `tab_xl`** (a benchmark showed only ~1.09× — the openxlsx2 write is serial and dominates ~92%; Amdahl-capped, so removed; the plan builder is still pure and called serially via `purrr::pmap`). `dev/benchmarks/results_1.4.0/phase10h_openxlsx2.txt`.
@@ -1305,26 +1302,45 @@ aggressive simplification is welcome.
 - **Styles-manager write optimization (DONE, 2026-07-12)** — replaced the ~40 per-aspect `wb_add_*` passes with a **precompose**: `tab_xl_plan_one` builds a per-cell full-style grid (`xl_build_styles`: font+fill+border+alignment, borders painted onto 4 side matrices, alignment onto zone matrices), groups into the fewest DISTINCT styles; `xl_apply_styles` registers deduped fonts/fills/borders + a composed cell xf ONCE and applies by id with `set_cell_style` over each style's coalesced dims. numFmt stays a separate grouped `wb_add_numfmt` merging pass. **single 0.34→0.24 s (~1.4×), 12 tables 5.5→3.0 s (~1.8×)**; fidelity verified; suite green, no golden regen. The dropped per-aspect wrappers (`xlb_font/fill/border/align`) + `xl_rect_dims` were removed. Drove it: `set_cell_style` is 1.7× cheaper/call than `wb_add_font`; the profile pinned the cost in openxlsx2's per-call data.frame churn (`mapply`/`[.data.frame`/`read_xf`).
 - **Parallel-write-merge studied, NOT pursued** (maintainer chose styles-manager only): each worker builds its sheet in its own wb, main merges via `wb_clone_worksheet(from=)` — works only via a save→`wb_load`→clone workaround (clone fails on in-memory borders, the same openxlsx2 styles bug), ~2.5–3× for batches only, but dominated by the styles-manager win (which also helps single-table export) + adds mirai/temp-file/merge machinery. Detail: `dev/benchmarks/results_1.4.0/phase10h_openxlsx2.txt`.
 
-Original plan (historical intent) below.
-
-Isolated on purpose: a full dependency swap should not be entangled with the Phase 10 exporter-prep unification and its export-parity churn. Runs **after** Phase 10g (needs the unified single-tab + list `tab_xl` methods in place).
-- The change of package is a good moment to refactor, simplify and clean the Excel export code.
-- If the export is long, parallelize with a `parallel` argument (see `tab()`) for list of `tabxplor_tab` (or grouped) ? Realise tests with many tables in a list to verify it’s a performance gain, and at what conditions.
-- Precondition: `test-export-parity.R` green on openxlsx v1 first, so the swap is verified byte-for-byte against a known-good baseline.
-- Swap `tab_xl()` from `openxlsx` to `openxlsx2` (Suggests). Rule number 1: read openxlsx2 documentation thoroughly, then build a small set of **shared/common styles** created once and reused (the main openxlsx2 speed lever).
-- Use Phase 10 shared exporter-prep helper : if it needs further modifications, we shall implement them here.
-- Re-verify export parity (`format.tabxplor_fmt` vs the `tab_xl` numeric bypass).
-
-Add an option to use **conditional formatting** instead of hard text colors. This was awful and very slow with openxlsx v1 — check whether openxlsx2 makes it less horrible / faster.
 
 
+#### Phase 10i – additional rows/columns and pvalue lines simplification ?
 
-#### Phase 10i – additional columns and pvalue lines simplification (optional)
+`add_n`, `add_pct` and pvalue_lines add complexity in the whole workflow. I want to **study the possibility to only add these additional rows or columns at display time**, using `tabxplor_tab` level attributes to know it must be done (or column-attributes, or global options, what would be best ?) ? This is a design task : just study if it would possible possible and reliable.
+- Distinguish between display modes that can use `display_spec` to print several informations in the same cell (console, kable, md ; for example print `add_n` as : `"100% (n= 114)"`), and display modes that needs to create new columns/rows (Excel ; for example print `add_n` by adding a new row or column efficiently, at the end ? Would it be a good idea to do it without redoing the whole fmt reconstruction, which is always a performance bottleneck ?).
+  + The main caveat, if I understand it well, is that `display_spec` is a column attribute ? Would there be a reliable way to use the already existing display vctrs field at it’s place (removing `display_spec` as a column attribute totally), ensuring simple displays like `pct` or `diff` stay on a fast track for maximum performance, compared to more complex display like `pct (n)` (that of course themselves need to be the fastest possible). 
+  + Also, for reliability, keep simple displays as they are, but require complex display to add tags for fields they want displayed, for more reliability ? For example : `<{ct> ({n})`,  `{pct> (n={n})`, `{pct} ({ratio})`, etc. What would be the most standard and reliable tag for this, if `{}` is not a good standard ? Display of add_n in console should be, for the total column of row percentages, something like : `{pct> (n={n})` (with `100%` in pct, and with everything padded and aligned for human readability). Check if it can be done fast enough, without hindering performance.
+- Print at display/export. Is the data necessary for this already available ?
+  + `add_n` must check all `tot_n` attributes, and display the smaller in a new `n` column or row (depending on pct type like now).
+  + `add_pct` : does it have every data needed ?
+  + pvalue_lines : we should store the global tests table as whole `tabxplor_tab`-level attribute, like in a former version of tabxplor (table is still there but removed at pvalue lines creation); the default behaviour should be "print pvalue as lines in the display/export if they were done and summary table is here". Ensure the test table display in console is fast (I think it may have been a display bottleneck in the past). global options should . pvalue_lines can’t really use the `<>` syntax, to instead of putting them in the display of another line or column, it’s better to actually create new lines or columns like now, but to do it at display/export efficiently.
+- Since `add_n`, `add_pct` and pvalue_lines as actual rows and columns in the data were exceptions that added complexity to the pipeline, their removal at all steps before display/export calls for a **huge code simplication**.
 
-`add_n`, `add_pct`, pvalue_lines : only add these additional rows or columns at display ?
-- Distingish between display modes that can use `display_spec` to print several informations in the same cell (console, kable, md ; for example print `add_n` as : `"100% (n= 114)"`), and display modes that needs to create new columns/rows (Excel ; for example print `add_n` by adding an ).
-  + The main caveat, if I understand it well, is that `display_spec` is a column attribute ? Would there be a reliable way to use the already existing display vctrs field at it’s place (removing `display_spec` as a column attribute), ensuring simple displays like `pct` or `diff` stay on a fast track for maximum performance, compared to more complex display like `pct (n)` (that of course themselves need to be the fastest possible).
-- Since `add_n`, `add_pct` and `pvalue_lines` as actual rows and columns in the data were exceptions that added complexity to the code, their removal calls for a huge code simplication.
+**DESIGN SETTLED (2026-07-12) — see `dev/tabxplor_1.4.0_decisions.md` §34 (the full findings + phasing).**
+Verdict: worthwhile, not a white elephant. Decisions: 
+1. **display-only** — the built tab omits the `n`/`col_pct` columns and p-value rows (kept only via `print()`/exporters); the `test` attribute is KEPT (stop dropping it); `tab_pvalue_lines()`/`tab_add_n_pct()` stay as on-demand materializers.
+2. the composite recipe moves to the per-cell **`display` field with a glue `{}` grammar** (`"{pct} (n={n})"`), **dropping the `display_spec` attribute** (10→9), with a short-circuited `get_num()` gate. 
+3. **add_pct = a real appended column/row** at display; only **add_n** goes in-cell (text) / an `n` column (Excel). 
+
+##### Phase 10i-A – consistent display `{}` grammar
+
+
+
+##### Phase 10i-B –  display-only migration
+
+Incremental implementation steps, maintainer commits between :
+- Increment 1: pvalue.
+- Increment 2:  add_n/add_pct.
+- Add an Increment 3, global build table pipeline simplification, or not needed ?
+
+At the end, **`git stash` A/B perf gate** (build vs display/export measured separately, at least neutral).
+
+
+#### Phase 10j – exports workflow additional integration and performance improvement ?
+
+Now that the common prep function is done, can you think about new ways to make it faster ?
+Can you identify some features whose removal would make the workflow faster, and that we can turn optional ?
+Can you think about some ways to integrate the different export function in the same framework, make their arguments, behaviours and styling match at maximum ?
 
 
 
