@@ -187,6 +187,12 @@
   field. Code reading `$diff` on mean columns now gets a difference — use `$ratio` for the ratio.
   Percentage-column `diff` is unchanged. Cell coloring is unchanged (`color = "diff"` on mean
   columns still colors the ratio for now).
+* `tab_xl()` now derives its Excel number formats from `format()` (the same source of truth as the
+  console and the other exporters), instead of a separate internal routine. Practically identical for
+  the usual percentage / count / mean tables, but it **fixes two cases where the Excel display used to
+  disagree with the console**: a difference shown on a percentage column now formats as a percentage,
+  and p-value cells keep their percentage scaling. Number-of-decimals for count and odds-ratio columns
+  also follow the console exactly now.
 
 ## Bug corrections
 * `tab()` with two or more row variables AND two or more column variables no longer errors ("pct can't be recycled"); percentages are recycled correctly across the table.
@@ -230,6 +236,10 @@
   existing table.
 * `tab_plot()` is **superseded**: its ggplot rendering is limited and no longer actively developed.
   It keeps working; prefer `tab_kable()` (HTML), `tab_md()` (markdown) or `tab_xl()` (Excel).
+* `tab_xl(n_min =)` and `tab_xl(hide_near_zero =)` are **soft-deprecated** and now inert (they no
+  longer grey out small-n / near-zero cells). For the small-n case use `tab(n_min = )`, which blanks
+  or drops small-n cells at display and flows into the Excel export. Both arguments still accept their
+  old values without error (a message is shown when a non-default value is passed).
 
 ## Bug corrections (Phase 6)
 * Fixed a crash in `tab_num(<tab_vars>, ci = "cell")` (and thus in `tab()` / the Jamovi module

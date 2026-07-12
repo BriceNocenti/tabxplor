@@ -4,7 +4,15 @@
 \alias{format.tabxplor_fmt}
 \title{Print method for class tabxplor_fmt}
 \usage{
-\method{format}{tabxplor_fmt}(x, ..., html = FALSE, na = NA, special_formatting = FALSE, .ref = NULL)
+\method{format}{tabxplor_fmt}(
+  x,
+  ...,
+  html = FALSE,
+  na = NA,
+  special_formatting = FALSE,
+  syntax = c("text", "excel"),
+  .ref = NULL
+)
 }
 \arguments{
 \item{x}{A fmt object.}
@@ -17,6 +25,12 @@
 
 \item{special_formatting}{Set to \code{TRUE} to print more verbose results,
 like indicating which is the reference row or col for differences.}
+
+\item{syntax}{\code{"text"} (default) returns the rendered display strings; \code{"excel"} returns the
+per-cell Excel number-format codes used by \code{\link[=tab_xl]{tab_xl()}} (the raw value is written unchanged).}
+
+\item{.ref}{Internal: precomputed reference masks \code{list(cells=, all_totals=)} (derive-once
+speed-up passed by the exporter prep); computed internally when \code{NULL}.}
 }
 \value{
 The fmt printed in a character vector.

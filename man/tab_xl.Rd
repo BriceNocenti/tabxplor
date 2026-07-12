@@ -56,9 +56,9 @@ Set to \code{"auto"} to let Excel choose.}
 same sheets
 }}
 
-\item{n_min}{The total count under which a column or row is turned pale grey
-because there is not enough observation for it to be significant.
-Default to 0 (not used).}
+\item{n_min}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} The small-n greying is removed in 1.4.0. The
+argument is kept for back-compatibility but no longer does anything; use \code{tab(n_min = )}, which
+blanks or drops small-n cells at display and flows into every export.}
 
 \item{titles}{The titles of the different tables, as a character vector. When missing
 titles are given based on the names of the variables.}
@@ -67,10 +67,8 @@ titles are given based on the names of the variables.}
 
 \item{text_size, text_size_headers, text_size_subtext}{Font sizes of text elements.}
 
-\item{hide_near_zero}{By default all cells displayed as 0 (even rounded)
-turn pale grey, to make the distribution of empty cells (and other cells) more visible.
-Provide a number to turn grey every cell below it. Set to \code{Inf} not to use
-this feature.}
+\item{hide_near_zero}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Removed in 1.4.0 (a rarely used,
+slow feature): the argument is kept for back-compatibility but no longer does anything.}
 
 \item{color_type}{By default, the text is colored. Set to \code{"bg"} to color
 the background instead.}

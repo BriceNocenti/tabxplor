@@ -1629,12 +1629,55 @@ ci_html_subscript <- function(x, html = FALSE) {
 #The first method for every class should almost always be a format() method.
 #This should return a character vector the same length as x.
 
+# Excel number-format code per cell -- the tab_xl() bypass, folded here so format() is the ONE
+# display source of truth (Phase 10g). `format(x, syntax = "excel")` returns these codes instead
+# of rendered strings; tab_xl() writes the raw get_num() value and hands display to Excel's engine.
+# It is fed format()'s OWN masks (so it can never desync -- the whole point of the fold):
+#   digits = format()'s ADJUSTED digits (n->0, or->>=2, mean-diff->>=1);
+#   pct    = format()'s x100 mask `pct_or_ci` (a "%" code multiplies by 100 in Excel, matching the
+#            x100 format() applies) -- this is what a hand-maintained numfmt() kept getting wrong;
+#   ci     = a standalone "ci" display (prepend the plus-minus glyph, matching format());
+#   text   = base_plus_ci (pct_ci/mean_ci) -> written as TEXT (the value+CI string is pre-formatted).
+# WARNING: a negative digit count rounds to a power of ten (Excel thousands mask). A percentage
+# rounded to a power of ten yields no code -> Excel "General".
+excel_numfmt_code <- function(digits, pct, ci, text) {
+  out <- rep(NA_character_, length(digits))
+  ok  <- !is.na(digits)
+  if (!any(ok)) return(out)
+
+  n    <- digits[ok]
+  p    <- pct[ok]
+  isci <- ci[ok]
+  txt  <- text[ok]
+  n_inf <- n < 0
+  n_0   <- n == 0
+  rep0_n <- vapply(abs(n), function(k) paste0(rep("0", k), collapse = ""), character(1))
+
+  res <- dplyr::case_when(
+    txt          ~ "TEXT",
+    p & n_inf    ~ NA_character_,
+    p & n_0      ~ "0%",
+    p            ~ paste0("0.", rep0_n, "%"),
+    n_0          ~ "#,##0",
+    n_inf        ~ paste0(
+      "#,",
+      vapply(abs(n), function(k) paste0(rep("#", 2 - k %% 3), collapse = ""), character(1)),
+      vapply(abs(n), function(k) paste0(rep("0", 1 + k %% 3), collapse = ""), character(1)),
+      vapply(abs(n), function(k) paste0(rep(",",     k %/% 3), collapse = ""), character(1))),
+    TRUE         ~ paste0("#,##0.", rep0_n)
+  )
+  out[ok] <- dplyr::if_else(isci, paste0(stringi::stri_unescape_unicode("\\u00b1"), res), res)
+  out
+}
+
+
 # DESIGN: Central display method. Handles 20+ display modes (n, wn, pct, diff, ctr, ci,
 #   pct_ci, mean_ci, var, pvalue, or, OR, etc.). Key transformations:
 #   - pct stored as 0-1 is multiplied by 100 here for display
 #   - Two CI display modes controlled by option tabxplor.ci_print: "moe" (±margin) or "ci" ([lo;hi])
 #   - diff for means shows with "*" symbol; diff for pct shows with +/- sign
 #   - special_formatting=TRUE adds "ref:" prefix and "mean:" labels (used in pillar)
+#   - syntax="excel" returns Excel number-format codes (via excel_numfmt_code) instead of strings
 #' Print method for class tabxplor_fmt
 #'
 #' @param x A fmt object.
@@ -1643,11 +1686,17 @@ ci_html_subscript <- function(x, html = FALSE) {
 #' @param na How `NA`s should be printed. Default to `NA`.
 #' @param special_formatting Set to `TRUE` to print more verbose results,
 #' like indicating which is the reference row or col for differences.
+#' @param syntax `"text"` (default) returns the rendered display strings; `"excel"` returns the
+#' per-cell Excel number-format codes used by [tab_xl()] (the raw value is written unchanged).
+#' @param .ref Internal: precomputed reference masks `list(cells=, all_totals=)` (derive-once
+#' speed-up passed by the exporter prep); computed internally when `NULL`.
 #'
 #' @return The fmt printed in a character vector.
 #' @export
 format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
-                                special_formatting = FALSE, .ref = NULL) {
+                                special_formatting = FALSE,
+                                syntax = c("text", "excel"), .ref = NULL) {
+  syntax <- match.arg(syntax)
 
   out    <- get_num(x)
   na_out <- is.na(out)
@@ -1690,6 +1739,17 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
 
   out[pct_or_ci] <- out[pct_or_ci] * 100
   digits[diff_mean] <- ifelse(digits[diff_mean] == 0, 1, digits[diff_mean])
+
+  # Phase 10g: Excel number-format codes reuse format()'s OWN finalized masks (the x100 mask
+  # pct_or_ci, the standalone-ci marker, the base_plus_ci TEXT mask) + adjusted digits, so the
+  # tab_xl bypass can never drift from the console display. Return here, before any string building.
+  if (syntax == "excel") {
+    # pvalue is shown x100 with "%" by its own rendering path (not pct_or_ci), so add it to the
+    # Excel "%" mask; a p-value shown as a "<0.01%" threshold still stores its raw value.
+    excel_pct <- pct_or_ci | (!nas & display == "pvalue")
+    return(excel_numfmt_code(digits, pct = excel_pct,
+                             ci = !nas & display == "ci", text = plus_ci))
+  }
 
 
   ci_print_moe <- getOption("tabxplor.ci_print") == "moe"

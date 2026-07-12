@@ -12,9 +12,47 @@ KEY CONSTRAINTS:
 See: CLAUDE.md § "Phase 10", dev/tabxplor_1.4.0_decisions.md §33 (the decision record).
 -->
 
-Status: **10c DONE; 10d DONE; 10e DONE; 10f DONE (2026-07-12); 10g not started.** 10a decision settled
+Status: **10c DONE; 10d DONE; 10e DONE; 10f DONE; 10g DONE (2026-07-12).** 10a decision settled
 (below); this document is the 10b deliverable and governs 10d→10g. Read this first, then the matching
 `dev/tabxplor_1.4.0_decisions.md` sections and `dev/tabxplor_architecture.md` "Export System".
+
+**Phase 10g done (2026-07-12) — `tab_xl()` reworked onto the shared prep + `numfmt` folded into
+`format(syntax="excel")`; 4132 → ~810 lines.** Governing steer (maintainer, this session): NO byte
+parity with the old Excel is required — "around the same display and format" suffices; the old export
+was a "white elephant", so aggressive simplification is welcome.
+- **`format(x, syntax = "excel")`** (new; `fmt_class.R`): returns the per-cell Excel number-format
+  codes (via internal `excel_numfmt_code`) instead of rendered strings, folding the old inline
+  `numfmt()`. It is fed **format()'s OWN masks** (the x100 mask `pct_or_ci` + a `pvalue` add + the
+  standalone-`ci` marker + the `pct_ci`/`mean_ci` TEXT mask) and adjusted digits, so the tab_xl bypass
+  can no longer silently desync. This **fixed two latent old-`numfmt` desyncs**: a `diff` **pct**
+  display now gets a `%` code (was a plain number → showed `-0.0`), and `pvalue` cells keep their `%`
+  scaling — Excel now matches the console. `tab_xl` writes the RAW `get_num()` value; Excel formats it.
+- **`tab_xl()` consumes `tab_export_prep(backend="xl", compact=FALSE, drop_tab_vars=remove_tab_vars,
+  list_method=TRUE, compute=c("refs","bold"))`** — deleting the two former `tab_get_vars()` passes, the
+  duplicated preamble, and the copy-pasted bold/reference blocks. The per-table geometry (fmt/other/
+  total columns, `totblock_top/bottom` → total-block borders, `bold_rows` → ref rows, `new_group` →
+  group borders) is sourced from the prep `roles`/`bold_rows` (offset by the sheet `start`). Cell
+  **colours** stay on tab_xl's own two-channel `fmt_color_channels` path (the prep's text-only
+  `roles$color_cols` would miss background-only columns). Number styles are built **once per distinct
+  code** (memoised). Per-table **degrade** fallback added (a non-tabxplor member of a list → plain sheet
+  + message, no crash). The list-based styling loop was KEPT (not split into a per-table writer):
+  Phase 11 (openxlsx2, renamed **Phase 10h** in the roadmap) rewrites the whole write/style path, so a
+  per-table extraction now would be thrown away — **deferred**.
+- **Simplifications (maintainer-approved):** `hide_near_zero` (near-zero greying) and **`n_min`** (the
+  ~150-line `insufficient_counts` small-n greying) **dropped** — both soft-deprecated (`lifecycle`,
+  kept in the signature, inert, warn on a non-default value); `n_min` points to `tab(n_min = )`, which
+  blanks/drops small-n cells at display and already flows into every export. The ~2500-line dead tail
+  (stale `tab_xl` duplicate, `rule_*`, `tab_xl_confidential*`, `xl_to_tab_CASD`) + the interspersed dead
+  comment blocks were deleted.
+- **Tests**: `test-export-parity.R` extended (diff / ctr / or displays; the number = `get_num` scaled
+  by 100 iff the Excel code carries `%`, tying the code's scaling to `format()`'s) + a lock on
+  `format(syntax="excel")` codes; `test-tab_xl.R` gains a workbook read-back (values round-trip) + a
+  plain-df degrade test, and `skip_if_not_installed("openxlsx")` guards. Full suite green.
+- **DEFERRED to the openxlsx2 phase (10h/11):** the backend closure seam, significance **stars** in
+  Excel, the `[min;max]` total-column consumption (still INERT), the `transpose=` arg, and the
+  per-table-writer split. **Pre-existing (NOT 10g)**: `color="contrib"` + `comp="all"` errors in the
+  shared colour engine (`get_mean_contrib()` size 0) for `tab_kable` too — a Phase 5 issue to fix
+  separately.
 
 **Phase 10f done (2026-07-12) — `tab_md()` colour spans + `tab_md_css()` + per-table CSS.** A COLOURED
 table (any fmt column with an active colour measure, per `fmt_color_channels`) now renders every fmt cell
@@ -477,7 +515,7 @@ display; it is kept for future improvement.
 | **10d** shared prep | `tab_export_prep`, `tab_check_same_col_vars`, render-model + `ann`, base/list split, `tab_transpose`; refactor kable/md/plot to consume it | byte-identical: kable/md snapshots + jamovi `.render_html` unchanged; `test-benchmark.R` no regression |
 | **10e** kable **(DONE)** | `render_kable_html()` hybrid seam (kableExtra byte-identical + home-built html engine), cheap `any()`-gated tooltips, `format(na=)`→NA at source, list method, totblock roles, jamovi→`engine="html"`. **Deferred:** spanning header (redundant), `[min;max]` (unsettled), label tooltip (attr lost in build), `transpose=` (10f/10g) | `test-render-html.R` snapshots + cross-engine parity + DOM-size guard; kableExtra byte-identical (git-stash A/B); full suite 1601/0 |
 | **10f** md **(DONE)** | break-derived pandoc colour spans (uniform, aligned) + `tab_md_css()` per-table CSS + `title` caption + `wrap_rows=NULL` lossless + `color`/`theme`/`css` args; `fmt_col_ann` carries slots. **Deferred:** `transpose=` (10g) | `_snaps/golden.md` regen (8 coloured cases) + new `test-tab_md.R` colour/title/css tests; pandoc parity verified |
-| **10g** xl | base+list via seam, `format(syntax="excel")`, stars-in-numfmt, `[min;max]` text cells, plain-df support, tab_logit borders | **extend `test-export-parity.R`** (diff/ci/or/stars/label/range); `test-tab_xl.R` incl. a non-tabxplor df — the v1 baseline that gates Phase 11 |
+| **10g** xl **(DONE)** | consumes `tab_export_prep`, `format(syntax="excel")` folds `numfmt` (fixes diff-pct + pvalue desyncs), memoised styles, per-table degrade, `hide_near_zero`/`n_min` dropped, ~2500 dead lines cut (4132→~810). **Deferred to openxlsx2 (10h/11):** backend seam, stars, `[min;max]`, `transpose=`, per-table-writer split | `test-export-parity.R` extended (diff/ctr/or) + excel-code lock; `test-tab_xl.R` workbook read-back + plain-df degrade; full suite green |
 
 Cross-step landings: `[min;max]` helper (10c) → wired in prep (10d) → consumed text (10e/10f) / text-cell
 (10g). Label capture (10c/build) → rendered (10e only). Stars-in-xl (10g; text backends already have them).

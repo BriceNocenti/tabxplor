@@ -41,7 +41,9 @@ R/
 ├── tab_classes.R   (3554 L)  tabxplor_tab/grouped_tab classes, 30+ dplyr S3 methods,
 │                              print methods, tab_kable(), tab_plot(), tab_compact(),
 │                              color palettes, set_color_style(), set_color_breaks()
-├── tab_xl.R        (4132 L)  Excel export via openxlsx (Suggests-only)
+├── tab_xl.R        (~810 L)  Excel export via openxlsx (Suggests-only). Phase 10g: consumes
+│                              tab-export-prep (roles/refs/bold) + format(syntax="excel") number codes
+│                              + fmt_color_channels; memoised styles; hide_near_zero/n_min dropped
 ├── tab_md.R         (~560 L) Markdown export: plain padded pipe table + (Phase 10f) break-derived
 │                              pandoc colour spans [<num>]{.p20} (uniform, aligned) via tab_export_prep;
 │                              tab_md_css() per-table CSS generator; md_slot_class_map/md_break_class
@@ -137,7 +139,7 @@ Export:  tab_xl()  |  tab_kable()  |  tab_md()  |  tab_plot()
 Cell display values reach exporters by two **non-unified** paths — keep them in sync:
 
 - **`format.tabxplor_fmt()`** (`fmt_class.R`) is the single source of truth for markdown (`tab_md()`), knitr/HTML (`tab_kable()`), and the console (`pillar_shaft`).
-- **`tab_xl()`** (Excel) BYPASSES it: it reads `get_num()`/`get_display()`/`get_digits()` directly and delegates numeric formatting to Excel's engine. Any change to a display field or formatting rule must be mirrored in `tab_xl.R`.
+- **`tab_xl()`** (Excel) writes the raw `get_num()` value and delegates numeric formatting to Excel's engine, but it now sources the per-cell Excel number-format codes from `format(x, syntax = "excel")` (Phase 10g) — the SAME `format()` masks the text backends use — so a display/digits change no longer needs manual mirroring in `tab_xl.R` (the old `numfmt()` desync is gone). Colours come from `fmt_color_channels()`; roles/refs/bold from `tab_export_prep()`.
 - Color is safe: all exporters call the same `fmt_color_selection()`.
 
 When adding or changing a `tabxplor_fmt` field, follow the `/vctrs-field` skill — it encodes the full ~11-step checklist across `fmt_class.R`, `tab.R`, and the exporters.
@@ -1256,36 +1258,53 @@ Coloured markdown export via **break-derived pandoc bracketed spans**. A COLOURE
 - Even if they do not work on jamovi, I want them to work in Positron IDE Viewer, be it with pandoc bracketed spans (prefered solution if workable) or another way
 - Even if pandock bracketed spans not working on tab_kable inside Viewer, I still want an option to export as very simple markdown with pandoc bracketed spans, to use in markdown editors with customisable css working with bracketed spans (just for information, I have Positron IDE custom syntax highlighting in normal editor with a personal VS code extension). It shall really remain simple human readable padded/aligned markdown.
 
-#### Phase 10g – rework tab_xl() (still openxlsx v1; engine swap is Phase 9)
+#### Phase 10g – rework tab_xl() (DONE 2026-07-12)
 
-- Make it work with every data.frame, even not made with tabxplor, with default settings (event without factors, etc.). Implement small fixture tests.
-- To make it work with a "common preparation function" that would be the same than tab_kable() etc., Make the function for a single tab (sometime big with `compact=TRUE` ? ), then parallelize for list of tab ?
-- Integrate numfmt() in format(type = "xl")
-- avec tab_logit (references), on perd les bordures des groupes aussi ? Vérifier.
-- Add the end it must work with tab_logit() and *** : significance stars used as formatting.
-- Prep-helpers `numfmt`→`format(syntax="excel")`
+`tab_xl()` reworked onto the shared prep + `format(syntax="excel")`, **4132 → ~810 lines**. Full suite
+green. Detail: `dev/tabxplor_phase10_exporters.md` (Status). Maintainer steer this session: NO byte
+parity with the old Excel needed ("around the same" suffices); the old export was a "white elephant", so
+aggressive simplification is welcome.
 
-**Stays on openxlsx v1** — the openxlsx2 engine swap is Phase 9.
+- **`format(x, syntax="excel")`** (new, `fmt_class.R` `excel_numfmt_code`) folds the old inline
+  `numfmt()`, fed `format()`'s OWN x100/ci/TEXT masks + adjusted digits → the Excel bypass can't desync.
+  **Fixed two latent old-`numfmt` desyncs**: `diff` **pct** displays now get a `%` code (was showing
+  `-0.0`), and `pvalue` cells keep `%` scaling (Excel now matches the console).
+- **Consumes `tab_export_prep(backend="xl", compact=FALSE, drop_tab_vars=remove_tab_vars,
+  list_method=TRUE, compute=c("refs","bold"))`** — killed the two `tab_get_vars()` passes + the
+  duplicated preamble + copy-pasted bold/reference logic. Geometry from `roles`/`bold_rows` (offset by
+  sheet `start`); colours stay on tab_xl's two-channel `fmt_color_channels` (the prep's text-only
+  `color_cols` misses bg-only cols); number styles memoised per distinct code; per-table degrade added.
+- **Simplifications (maintainer-approved):** `hide_near_zero` + `n_min` greying (`insufficient_counts`)
+  **dropped** — soft-deprecated (kept, inert, warn; `n_min` → `tab(n_min=)`). ~2500-line dead tail +
+  interspersed dead comments deleted.
+- **Deferred to the openxlsx2 phase (Phase 11, renamed Phase 10h in this roadmap):** backend closure
+  seam, significance **stars** in Excel, `[min;max]` total-column (still INERT), `transpose=` arg, and
+  the per-table-writer split (Phase 11 rewrites the write/style path, so an extraction now is throwaway).
+- **Pre-existing (NOT 10g):** `color="contrib"` + `comp="all"` errors in the shared colour engine
+  (`get_mean_contrib()` size 0), for `tab_kable` too — a Phase 5 issue, fix separately.
 
 
-#### Phase 10h – additional columns and pvalue lines simplification (optional)
+### Phase 10h — Excel engine migration (openxlsx → openxlsx2)
 
-`add_n`, `add_pct`, pvalue_lines : only add these additional rows or columns at display ?
-- Distingish between display modes that can use `display_spec` to print several informations in the same cell (console, kable, md ; for example print `add_n` as : `"100% (n= 114)"`), and display modes that needs to create new columns/rows (Excel ; for example print `add_n` by adding an ).
-  + The main caveat, if I understand it well, is that `display_spec` is a column attribute ? Would there be a reliable way to use the already existing display vctrs field at it’s place (removing `display_spec` as a column attribute), ensuring simple displays like `pct` or `diff` stay on a fast track for maximum performance, compared to more complex display like `pct (n)` (that of course themselves need to be the fastest possible).
-- Since `add_n`, `add_pct` and `pvalue_lines` as actual rows and columns in the data were exceptions that added complexity to the code, their removal calls for a huge code simplication.
-
-
-
-### Phase 11 — Excel engine migration (openxlsx → openxlsx2)
-
-Isolated on purpose: a full dependency swap should not be entangled with the Phase 10 exporter-prep unification and its export-parity churn. Runs **after** Phase 10 (needs the unified single-tab + list `tab_xl` methods in place).
+Isolated on purpose: a full dependency swap should not be entangled with the Phase 10 exporter-prep unification and its export-parity churn. Runs **after** Phase 10g (needs the unified single-tab + list `tab_xl` methods in place).
+- The change of package is a good moment to refactor, simplify and clean the Excel export code.
+- If the export is long, parallelize with a `parallel` argument (see `tab()`) for list of `tabxplor_tab` (or grouped) ? Realise tests with many tables in a list to verify it’s a performance gain, and at what conditions.
 - Precondition: `test-export-parity.R` green on openxlsx v1 first, so the swap is verified byte-for-byte against a known-good baseline.
 - Swap `tab_xl()` from `openxlsx` to `openxlsx2` (Suggests). Rule number 1: read openxlsx2 documentation thoroughly, then build a small set of **shared/common styles** created once and reused (the main openxlsx2 speed lever).
 - Use Phase 10 shared exporter-prep helper : if it needs further modifications, we shall implement them here.
 - Re-verify export parity (`format.tabxplor_fmt` vs the `tab_xl` numeric bypass).
 
 Add an option to use **conditional formatting** instead of hard text colors. This was awful and very slow with openxlsx v1 — check whether openxlsx2 makes it less horrible / faster.
+
+
+
+#### Phase 10i – additional columns and pvalue lines simplification (optional)
+
+`add_n`, `add_pct`, pvalue_lines : only add these additional rows or columns at display ?
+- Distingish between display modes that can use `display_spec` to print several informations in the same cell (console, kable, md ; for example print `add_n` as : `"100% (n= 114)"`), and display modes that needs to create new columns/rows (Excel ; for example print `add_n` by adding an ).
+  + The main caveat, if I understand it well, is that `display_spec` is a column attribute ? Would there be a reliable way to use the already existing display vctrs field at it’s place (removing `display_spec` as a column attribute), ensuring simple displays like `pct` or `diff` stay on a fast track for maximum performance, compared to more complex display like `pct (n)` (that of course themselves need to be the fastest possible).
+- Since `add_n`, `add_pct` and `pvalue_lines` as actual rows and columns in the data were exceptions that added complexity to the code, their removal calls for a huge code simplication.
+
 
 
 
@@ -1382,6 +1401,21 @@ What about `multi_logit`, who handles passing of multiple models (like different
 
 #### Last Phase a – Bug corrections
 
+Known bugs to fix (found but out of scope when discovered):
+
+- **`color = "contrib"` + `comp = "all"` crashes the colour engine** (Phase 5 issue, found in Phase 10g).
+  `fmt_color_plan()` → `get_mean_contrib(x)` returns length 0 while the column has N cells, so
+  `dplyr::if_else(is_totrow(x), NA_real_, get_ctr(x) / get_mean_contrib(x))` ([R/fmt_class.R](R/fmt_class.R),
+  `fmt_color_plan`, the `"contrib"` `raw` branch) errors `false must have size N, not size 0`. Hits BOTH
+  `tab_kable()` and `tab_xl()` (any exporter that colours a `comp="all"` contrib table); `tab()` builds
+  the table fine — only colouring fails. Default `comp="tab"` contrib is unaffected. Root cause is the
+  empirical `get_mean_contrib()` on the total-table (`all_tabs`) structure; the colour golden does not
+  cover `contrib`+`comp="all"`, which is why it went unnoticed.
+  + Note : wanted behaviour for tab_vars with contribs is : if `comp="all"` chi2 test and contribs are calculated on the whole table (all combinations of row_vars and tab_vars levels) ; if `comp="tab"` a chi2 test is realise for each subtable, and the variance + contribs are calculated at this level. Please confirm it’s what the current code does.
+- **`document()` `@inheritParams` notice on topic `fmt`** (cosmetic, since Phase 10g added `@param syntax`
+  / `@param .ref` to `format.tabxplor_fmt`): roxygen warns "All parameters are already documented; none
+  remain to be inherited." Harmless (man pages write correctly, NAMESPACE unchanged); tidy up `fmt()`'s
+  `@inheritParams` if it bothers `devtools::check()`.
 
 #### Last Phase b – Create several vignettes
 

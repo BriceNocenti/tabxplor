@@ -2187,3 +2187,47 @@ kableExtra). Full suite 1601/0, no golden regen.
 - **`kable_tabxplor_style()`** — an `@export`ed near-duplicate of the tab_kable styling for plain
   tibbles, now unused internally (the degrade path uses `kableExtra::kbl`). Candidate for soft-deprecation
   (maintainer's call — it is public API).
+
+### 10g IMPLEMENTED (2026-07-12) — tab_xl onto the shared prep + format(syntax="excel"); 4132 → ~810 lines
+
+**Maintainer steer (this session):** NO byte parity with the old Excel is required — "around the same
+display and format" suffices; the old export was a "white elephant", so aggressive simplification is
+welcome. Two feature-drop decisions taken by AskUserQuestion: **drop** the tab_xl `n_min` greying and
+**defer** the per-table-writer split to the openxlsx2 phase (Phase 11, renamed **Phase 10h** in the
+roadmap).
+
+- **`format(x, syntax = "excel")`** (`fmt_class.R`, new internal `excel_numfmt_code`) folds the old
+  inline `numfmt()` closure → `format()` is the ONE display source of truth. Crucially it is fed
+  **format()'s OWN masks** — the x100 mask `pct_or_ci` (+ a `pvalue` add, whose `%` scaling comes from a
+  separate render path), the standalone-`ci` marker (± prefix), the `pct_ci`/`mean_ci` TEXT mask — plus
+  format()'s **adjusted** digits (n→0, or→≥2, mean-diff→≥1). Because the code's `%`-ness IS format()'s
+  x100 decision, the bypass **cannot desync by construction**. This **fixed two latent old-`numfmt`
+  bugs** the hand-maintained mask carried: a `diff` on a **pct** column now gets `0.0%` (was `#,##0.0`
+  → Excel showed `-0.0`), and `pvalue` cells keep `%` scaling. tab_xl still writes the RAW `get_num()`
+  value; Excel formats it.
+- **tab_xl consumes `tab_export_prep(backend="xl", compact=FALSE, drop_tab_vars=remove_tab_vars,
+  list_method=TRUE, compute=c("refs","bold"))`.** Deleted the two `tab_get_vars()` passes + the
+  duplicated canonical-col_vars preamble + the copy-pasted bold/reference block. Per-table geometry is
+  sourced from the prep `roles`/`bold_rows` (fmt/other/total cols; `totblock_top/bottom` → total-block
+  borders; `bold_rows` → ref rows; `head(new_group, -1)` → between-group double borders), offset by the
+  sheet `start`. **Colours stay on tab_xl's own two-channel `fmt_color_channels`** — the prep's
+  `roles$color_cols` only reads the TEXT channel and would miss background-only columns (a latent prep
+  narrowness, flagged; kable inherits it). Number styles built once per distinct code (memoised). The
+  list-based styling loop was KEPT (re-sourced from the prep), not split into a per-table writer.
+- **Per-table degrade**: a non-tabxplor member of a list is written as a plain sheet + message (no
+  crash), extending the single-df degrade to lists.
+- **Simplifications:** `hide_near_zero` (near-zero conditional formatting) + `n_min`
+  (`insufficient_counts`, ~150 lines + offset maps + greying) **dropped** — soft-deprecated
+  (`lifecycle`, kept inert, warn on non-default); `n_min` → `tab(n_min=)`. The ~2500-line dead tail
+  (stale `tab_xl` duplicate, `rule_*`, `tab_xl_confidential*`, `xl_to_tab_CASD`) + interspersed dead
+  comment blocks removed. `last_text_col` / `insufficient_counts` deleted.
+- **Tests**: `test-export-parity.R` extended (diff/ctr/or displays; the number = `get_num` × 100 iff the
+  Excel code carries `%` — tying the code's scaling to `format()`'s; threshold `<`/`>` cells skipped) +
+  a `format(syntax="excel")` code lock; `test-tab_xl.R` gains a workbook read-back (values round-trip) +
+  a plain-df degrade test + `skip_if_not_installed` guards. Full suite green (1725).
+- **Deferred to the openxlsx2 phase (10h/11):** the ~12-closure backend seam, significance **stars** in
+  Excel (numfmt literal), `[min;max]` total-column consumption (`tab_totcol_range` still INERT),
+  `transpose=` arg, the per-table-writer split.
+- **Pre-existing (NOT 10g):** `color="contrib"` + `comp="all"` errors in the shared colour engine
+  (`fmt_color_plan` → `get_mean_contrib()` returns size 0) — `tab_kable` fails identically; a Phase 5
+  issue to fix separately.
