@@ -2117,3 +2117,19 @@ additive follow-up. Flagged/handled: the doc's "md drops tab_vars" was wrong (md
 `dev/tabxplor_phase10_exporters.md` (Status block). **Part 2 (point E = `tab_transpose()`) follows after
 the maintainer commits Part 1.**
 
+**Phase 10d Part 2 DONE (2026-07-12)** — after Part 1 was committed. Two items:
+(1) **`tab_md()` list method** (maintainer request "tab_vars too in tab_md()"): a non-mergeable list
+(several row_vars and/or tab_vars → `tab()` returns a list; or differing col_vars) renders each table
+one-after-another (each keeping its tab_vars sub-tables) instead of erroring — gated by
+`tab_export_prep(list_method=)` (`tab_list_mergeable()` = same col_vars + no tab_vars); `tab_md` opts
+in, `tab_kable`/`tab_plot` keep the historical error (no list renderer yet); `tab_md` split into a thin
+wrapper + `md_render_one()`; single-table byte-identical.
+(2) **`tab_transpose()` finished + exported** (`lifecycle` experimental). `tidyr` pivot (grid transpose
+- per-cell fields ride along) + rebuild the flattened per-column attributes from a representative
+real-col_var column (the 9 `fmt_col_attrs`) + swap the axis flags (`type` row↔col; per-cell
+`in_totrow` field ↔ `totcol` attribute; `in_refrow` ↔ `refcol`) + re-key the `test` attribute
+(row_var↔col_var). Verified structurally AND render-identical to a native `pct="col"` table, and
+round-trips. Single row_var, ≤1 total row/col, no tab_vars (else `cli_abort`). The per-exporter
+`transpose=` arg wiring stays 10e/10f/10g (mechanism ready). `test-transpose.R` (53). Full suite PASS
+1566 / FAIL 0, no golden regen.
+

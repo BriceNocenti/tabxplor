@@ -101,6 +101,31 @@ testthat::test_that("a list with matching col_vars compacts to ONE render table"
   testthat::expect_false(p$tables[[1]]$vars$degrade)
 })
 
+testthat::test_that("tab_list_mergeable: same col_vars + no tab_vars only", {
+  same <- list(tab(gss, race, marital, pct = "row"), tab(gss, relig, marital, pct = "row"))
+  testthat::expect_true(tabxplor:::tab_list_mergeable(same))
+  diffcv <- list(tab(gss, race, marital, pct = "row"), tab(gss, race, relig, pct = "row"))
+  testthat::expect_false(tabxplor:::tab_list_mergeable(diffcv))
+  withtv <- list(tab(gss, race, marital, year, pct = "row"))
+  testthat::expect_false(tabxplor:::tab_list_mergeable(withtv))
+})
+
+testthat::test_that("list_method keeps a non-mergeable list as N tables; else it errors", {
+  tv_list <- list(tab(gss, race, marital, year, pct = "row", color = "diff"),
+                  tab(gss, relig, marital, year, pct = "row", color = "diff"))
+  # list_method = TRUE (tab_md) -> one render table per input, each not degraded
+  p <- tabxplor:::tab_export_prep(tv_list, backend = "md", drop_tab_vars = FALSE,
+                                  wrap = NULL, list_method = TRUE)
+  testthat::expect_length(p$tables, 2L)
+  testthat::expect_false(p$tables[[1]]$vars$degrade)
+  testthat::expect_false(p$tables[[2]]$vars$degrade)
+  # list_method = FALSE (tab_kable / tab_plot) -> historical error
+  testthat::expect_error(
+    tabxplor:::tab_export_prep(tv_list, backend = "kable", wrap = NULL, list_method = FALSE),
+    "no tab_vars"
+  )
+})
+
 # === SECTION: tab_bold_rows edge (md vs kable style) =========================
 
 testthat::test_that("tab_bold_rows: no discriminating column -> md integer(0), kable all rows", {

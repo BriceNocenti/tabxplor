@@ -12,10 +12,27 @@ KEY CONSTRAINTS:
 See: CLAUDE.md § "Phase 10", dev/tabxplor_1.4.0_decisions.md §33 (the decision record).
 -->
 
-Status: **10c DONE (2026-07-12); 10d Part 1 DONE (2026-07-12); 10d Part 2 (tab_transpose) + 10e→10g not
-started.** 10a decision settled (below); this document is the 10b deliverable and governs 10d→10g. Read
-this first, then the matching `dev/tabxplor_1.4.0_decisions.md` sections and
+Status: **10c DONE (2026-07-12); 10d DONE (Part 1 shared prep + Part 2 tab_transpose, 2026-07-12);
+10e→10g not started.** 10a decision settled (below); this document is the 10b deliverable and governs
+10d→10g. Read this first, then the matching `dev/tabxplor_1.4.0_decisions.md` sections and
 `dev/tabxplor_architecture.md` "Export System".
+
+**Phase 10d Part 2 done (2026-07-12):**
+- **`tab_md()` list method (maintainer request, "tab_vars too in tab_md()")**: a NON-mergeable list
+  (several row_vars and/or tab_vars → `tab()` returns a list; or differing col_vars) now renders each
+  table one-after-another (each keeping its own tab_vars sub-tables) instead of erroring. Gated by
+  `tab_export_prep(list_method=)` — `tab_md` opts in; `tab_kable`/`tab_plot` keep the historical error
+  (no list renderer yet). `tab_md` restructured into a thin wrapper + `md_render_one()` (per-table).
+  Single-table path byte-identical (md golden snapshots green).
+- **§8 `tab_transpose()` finished + exported** (`lifecycle` experimental). Mechanism: `tidyr` pivot
+  (grid transpose — per-cell fields ride along) + rebuild the flattened per-column attributes from a
+  representative real-col_var column (the 9 `fmt_col_attrs`) and swap the axis flags: `type` row↔col,
+  per-cell `in_totrow` field ↔ `totcol` attribute, `in_refrow` ↔ `refcol`; the `test` attribute
+  re-keyed (row_var↔col_var). Result is structurally AND render-identical to a native `pct="col"`
+  table (verified: same names/type/col_var/color/in_totrow/totcol/refcol; identical `tab_md`), and
+  round-trips (`transpose(transpose(x)) == x`). Single row_var, ≤1 total row/col, no tab_vars (clear
+  `cli_abort` otherwise). New `tests/testthat/test-transpose.R` (53). The per-exporter opt-in
+  `transpose=` argument stays 10e/10f/10g (the mechanism is ready). Full suite PASS 1566 / FAIL 0.
 
 **Phase 10d Part 1 done (2026-07-12), byte-identical (full suite green PASS 1501 / FAIL 0, NO golden
 regen; kable/md A/B-verified `identical()` across 10 fixtures × {kable, kable+tooltip, kable-dark,
@@ -35,9 +52,13 @@ get_data, md}):**
   golden regen is 10e/10f).
 - **§11 `tab_plot()` soft-deprecated** (`lifecycle::badge("superseded")` roxygen; refactored onto the
   prep so it doesn't rot). ggplot has no golden lock → structural + shared-derivation verification.
-- **Base+list split**: the prep returns a `tables` LIST; the exporters render `tables[[1]]` (single /
-  compacted) — the CURRENT list-compaction behaviour preserved exactly. The true N-table "list method"
-  (render tab_vars-lists one-after-another, currently an error) is an additive follow-up.
+- **Base+list split**: the prep returns a `tables` LIST. `tab_export_prep(list_method=)` gates the
+  behaviour of a NON-mergeable list (a `tab_list_mergeable()` check = same col_vars + no tab_vars):
+  `TRUE` returns N tables (**`tab_md` now renders them one-after-another**, each keeping its own
+  tab_vars sub-tables — the important common feature: `tab()` with several row_vars + a tab_vars, or a
+  list of differing-col_vars tabs, was a hard error before); `FALSE` (tab_kable / tab_plot, no list
+  renderer yet) errors with the historical message. A mergeable list still compacts to ONE. Byte-identical
+  single-table path (md golden snapshots green).
 - New `tests/testthat/test-export-prep.R` (39) locks the render-model shape, role/ann/bold derivations,
   degrade path, `tab_check_same_col_vars`, `tab_bold_rows` edge, and `tab_totcol_range`.
 - **DEFERRED as flagged**: `format(syntax="excel")` (10g, not present in source); the `[min;max]`

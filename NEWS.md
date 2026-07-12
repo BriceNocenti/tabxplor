@@ -20,6 +20,13 @@
   pays off for many tables on a small-to-medium survey (roughly 10k--60k rows) and is a loss for a
   handful of tables or multi-million-row data. It needs the suggested **mirai** package; release the
   worker pool with the new `tab_parallel_stop()`.
+* New `tab_transpose()` --- flip a table so its rows become columns and its columns become rows. The
+  main use is the **column-percentage inversion** workflow: to color a `pct = "col"` table with
+  several row variables (which the coloring machinery cannot do directly), build it the other way
+  (swap the variables and use `pct = "row"`), then `tab_transpose()` gives the column-percentage
+  layout for export. Percentages, differences, confidence intervals and colors ride along; the total
+  row/column and reference row/column are swapped, and the whole-table test is re-keyed. It handles a
+  single table (one row variable, one column variable, at most one total row/column).
 * New `display` argument in `tab()` for an opt-in **composite display** showing two fields per cell:
   `display = "pct (n)"` prints each percentage with its count (e.g. `76% (13)`), `display = "n (pct)"`
   the reverse. It is a display overlay for text output (the console, `tab_kable()`, `tab_md()`) --
@@ -30,6 +37,11 @@
   plain table with a short message explaining that tabxplor formatting was skipped. Variable-role
   detection for rendering is now position-independent (a factor moved after the value columns is no
   longer mis-read).
+* `tab_md()` now renders a **list of tables one after another** when they cannot be merged --- e.g.
+  a `tab()` with several `row_vars` and a `tab_vars` (which returns a list of subtabled tables), or a
+  list of tables with different `col_vars`. Each table keeps its own `tab_vars` sub-tables. A list of
+  tables sharing the same `col_vars` (and no `tab_vars`) is still merged into one, as before. (This
+  replaces the previous "same col_vars / no tab_vars" errors for `tab_md()`.)
 * Redesigned, faster colors. The `color` argument now separates **what** is measured from **how**
   significance is shown. `color` accepts `TRUE` (a smart per-column-type default: percentage-point
   difference on the text + a "×2" relative-risk highlight on the background for factors, mean ratio

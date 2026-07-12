@@ -90,7 +90,7 @@ testthat::test_that("tab_md works with tab_vars (grouped tables)", {
 
 # === SECTION: List of tables ==================================================
 
-testthat::test_that("tab_md works with list of tables sharing col_vars", {
+testthat::test_that("tab_md merges a list of tables sharing col_vars (no tab_vars)", {
   t1 <- tabs
   t2 <- tab(gss, relig, marital, pct = "row")
   md <- tab_md(list(t1, t2), print = FALSE)
@@ -98,17 +98,30 @@ testthat::test_that("tab_md works with list of tables sharing col_vars", {
   testthat::expect_gt(nchar(md), 0)
 })
 
-testthat::test_that("tab_md errors on list with different col_vars", {
-  t1 <- tab(gss, race, marital)
-  t2 <- tab(gss, race, relig)
-  testthat::expect_error(tab_md(list(t1, t2), print = FALSE),
-                         "same col_vars")
+# Phase 10d list method: a NON-mergeable list (different col_vars, or tab_vars) is no longer an
+# error -- each table renders one-after-another, joined by a blank line.
+testthat::test_that("tab_md renders a list with different col_vars one-after-another", {
+  t1 <- tab(gss, race, marital, pct = "row")
+  t2 <- tab(gss, race, relig, pct = "row")
+  md <- tab_md(list(t1, t2), print = FALSE)
+  testthat::expect_type(md, "character")
+  # both tables present: a marital level (table 1) AND a relig level (table 2)
+  testthat::expect_true(grepl("Divorced", md))              # marital col header
+  testthat::expect_true(grepl("Protestant|Catholic", md))  # relig col header
+  # rendered as two separate tables (blank line between)
+  testthat::expect_true(grepl("\n\n", md))
 })
 
-testthat::test_that("tab_md errors on list with tab_vars", {
-  tabs_sub
-  testthat::expect_error(tab_md(list(tabs_sub), print = FALSE),
-                         "no tab_vars")
+testthat::test_that("tab_md renders a list of tab_vars tables (each keeps its sub-tables)", {
+  t1 <- tab(gss, race, marital, year, pct = "row")
+  t2 <- tab(gss, relig, marital, year, pct = "row")
+  md <- tab_md(list(t1, t2), print = FALSE)
+  testthat::expect_type(md, "character")
+  # the shared row_var of the tab() list (2 row_vars + tab_var) also renders both tables
+  r  <- tab(gss, c(race, relig), marital, year, pct = "row")
+  md_r <- tab_md(r, print = FALSE)
+  testthat::expect_type(md_r, "character")
+  testthat::expect_gt(nchar(md_r), nchar(tab_md(t1, print = FALSE)))
 })
 
 # === SECTION: File output =====================================================

@@ -8,8 +8,10 @@
 
 #' Export a tabxplor table to a markdown table
 #'
-#' @param tabs A table made with \code{\link{tab}} or \code{\link{tab_many}},
-#'   or a `list` of tab with the same `col_vars` and no `tab_vars`.
+#' @param tabs A table made with \code{\link{tab}} or \code{\link{tab_many}}, or a `list` of tab.
+#'   A list of tables sharing the same `col_vars` (and no `tab_vars`) is merged into one; any other
+#'   list --- several `row_vars` and/or `tab_vars` (e.g. `tab()` with several row variables and a
+#'   `tab_vars`) --- is rendered one table after another, each keeping its own sub-tables.
 #' @param bold_references Bold reference/total rows with markdown `**...**`.
 #' @param special_formatting Passed to \code{\link[=format.tabxplor_fmt]{format()}}.
 #'   When `TRUE`, shows "ref:" prefix on diff reference cells, "mean:" on ctr
@@ -42,24 +44,44 @@ tab_md <- function(tabs,
                    file = NULL,
                    print = TRUE) {
 
-  # --- Steps 1-5: shared exporter prep (list->compact, degrade, roles, bold rows). ---
-  # Phase 10d: the block-A "canonical col_vars -> validate -> compact", the graceful-degrade check,
-  # the role detection, and the bold-row set are the ONE shared tab_export_prep(). md keeps tab_vars
-  # (drop_tab_vars = FALSE) and does its own str_trunc (wrap = NULL); its real-col_var span index
-  # (new_col_var) is derived locally from the shared col_var_map (kable's transition index differs).
+  # --- Phase 10d: shared exporter prep + the base/list split. ---
+  # A single tab (or a mergeable same-col_vars / no-tab_vars list) renders as ONE table; a NON-mergeable
+  # list (several row_vars and/or tab_vars -> tab() returns a list) renders each table
+  # one-after-another (list_method = TRUE), each keeping its own tab_vars sub-tables. md keeps tab_vars
+  # (drop_tab_vars = FALSE) and does its own str_trunc (wrap = NULL).
   prep <- tab_export_prep(tabs, backend = "md", drop_tab_vars = FALSE, wrap = NULL,
                           compute = if (bold_references) c("refs", "bold") else "refs",
-                          what = "tab_md()")
-  rd <- prep$tables[[1]]
+                          list_method = TRUE, what = "tab_md()")
 
-  # Graceful degrade -- render a plain pipe table (+ a message), honouring file/clipboard/print.
+  parts   <- purrr::map_chr(prep$tables, md_render_one,
+                            special_formatting = special_formatting,
+                            wrap_rows = wrap_rows, subtext = subtext)
+  md_text <- paste(parts, collapse = "\n\n")
+
+  if (!is.null(file)) writeLines(md_text, file)
+  if (clipboard) {
+    if (!requireNamespace("clipr", quietly = TRUE)) {
+      warning("Package 'clipr' is needed to copy to clipboard. ",
+              "Install it with install.packages('clipr').")
+    } else {
+      clipr::write_clip(md_text)
+    }
+  }
+  if (print) {
+    cat(md_text, "\n")
+    return(invisible(md_text))
+  }
+  md_text
+}
+
+
+# Render ONE prepared table (`rd`, from tab_export_prep) to a markdown string (no file/clipboard/print
+# -- tab_md() joins the parts and handles those). Holds the md-specific rendering (Steps 4-13).
+md_render_one <- function(rd, special_formatting, wrap_rows, subtext) {
+  # Graceful degrade -- a table that can't be read as a tabxplor table renders as a plain pipe table.
   if (isTRUE(rd$vars$degrade)) {
     tab_degrade_inform(rd$vars$reason)
-    md_text <- paste(knitr::kable(tibble::as_tibble(tabs), format = "pipe"), collapse = "\n")
-    if (!is.null(file)) writeLines(md_text, file)
-    if (clipboard && requireNamespace("clipr", quietly = TRUE)) clipr::write_clip(md_text)
-    if (print) { cat(md_text, "\n"); return(invisible(md_text)) }
-    return(md_text)
+    return(paste(knitr::kable(tibble::as_tibble(rd$tab), format = "pipe"), collapse = "\n"))
   }
 
   tabs         <- rd$tab
@@ -301,24 +323,7 @@ tab_md <- function(tabs,
   }
 
   md_text <- paste(all_lines, collapse = "\n")
-
-  if (!is.null(file)) writeLines(md_text, file)
-
-  if (clipboard) {
-    if (!requireNamespace("clipr", quietly = TRUE)) {
-      warning("Package 'clipr' is needed to copy to clipboard. ",
-              "Install it with install.packages('clipr').")
-    } else {
-      clipr::write_clip(md_text)
-    }
-  }
-
-  if (print) {
-    cat(md_text, "\n")
-    invisible(md_text)
-  } else {
-    md_text
-  }
+  md_text
 }
 
 

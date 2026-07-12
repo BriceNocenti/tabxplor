@@ -180,17 +180,35 @@ tab_totcol_range <- function(tab, fmt_cols, col_var_map, totcols,
 
 # === SECTION: the render-model builder ==============================================
 
-# Resolve the input into the list of tables to render. Phase 10d preserves the CURRENT behaviour: a
-# single tab -> itself; a list of tabs -> validate same col_vars + no tab_vars (block A), then
-# compact into ONE table. `compact = FALSE` keeps the list unmerged (the base+list split), each
-# rendered one-after-another by the caller. (The multi-table "list method" for tab_vars-lists -- which
-# used to hard-error -- is an additive follow-up; today `compact = TRUE` reproduces the error.)
+# Non-erroring twin of tab_check_same_col_vars(): TRUE iff a list of tabs can be merged by
+# tab_compact() -- i.e. NO tab_vars anywhere AND all share the same (longest) col_vars set.
 #' @keywords internal
-tab_resolve_tables <- function(tabs, compact, what, call = rlang::caller_env()) {
+tab_list_mergeable <- function(tabs) {
+  if (any(purrr::map_lgl(tabs, ~ length(tab_get_vars(.)$tab_vars) > 0))) return(FALSE)
+  cvs <- purrr::map(tabs, ~ {
+    v <- tab_get_vars(.)$col_vars
+    v[!v %in% c("all_col_vars", "", "no") & !is.na(v)]
+  })
+  lens    <- purrr::map_int(cvs, length)
+  longest <- cvs[[dplyr::first(which(lens == max(lens, na.rm = TRUE)))]]
+  all(purrr::map_lgl(cvs, ~ all(. %in% longest)))
+}
+
+# Resolve the input into the list of tables to render.
+#   - a single tab             -> itself.
+#   - a MERGEABLE list          -> compact into ONE table (same col_vars, no tab_vars).
+#   - a NON-mergeable list      -> `list_method = TRUE` (tab_md): return the list, rendered
+#                                  one-after-another (each keeps its own tab_vars sub-tables);
+#                                  `list_method = FALSE` (tab_kable / tab_plot, no list renderer yet):
+#                                  error with the historical message (block A).
+#' @keywords internal
+tab_resolve_tables <- function(tabs, compact, list_method = FALSE, what,
+                               call = rlang::caller_env()) {
   if (is.data.frame(tabs) || !is.list(tabs)) return(list(tabs))
-  # a list of tabs
-  tab_check_same_col_vars(tabs, what = what, call = call)  # errors on mismatched col_vars / tab_vars
-  if (compact) list(tab_compact(tabs)) else tabs
+  if (compact && tab_list_mergeable(tabs)) return(list(tab_compact(tabs)))
+  if (list_method) return(tabs)                 # render each separately (the list method)
+  tab_check_same_col_vars(tabs, what = what, call = call)  # errors (kable/plot) -- current behaviour
+  tabs
 }
 
 
@@ -309,6 +327,7 @@ tab_export_prep <- function(tabs,
                             theme         = "light",
                             html_24_bit   = NULL,
                             color_legend  = TRUE,
+                            list_method   = FALSE,
                             what          = NULL) {
   backend <- match.arg(backend)
   if (is.null(what)) what <- paste0("tab_", backend, "()")
@@ -328,7 +347,8 @@ tab_export_prep <- function(tabs,
     grey2 = dplyr::if_else(theme[1] == "light", "#111111", "#EEEEEE")
   )
 
-  resolved <- tab_resolve_tables(tabs, compact = compact, what = what)
+  resolved <- tab_resolve_tables(tabs, compact = compact, list_method = list_method,
+                                 what = what)
 
   tables <- purrr::map(
     resolved,

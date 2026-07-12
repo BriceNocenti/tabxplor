@@ -1123,6 +1123,7 @@ row-axis restructure. Weigh against Phase 10b (`format.tabxplor_fmt` `case_when`
 O(cells) display/build levers, independent of each other.
 
 
+
 ### Phase 10 — Unified exporter prep & display
 
 Fully redesign exports to unify the different kind of exports in a common fast framework. One shared exporter-prep helper for `tab_xl`/`tab_kable`/`tab_md`/`tab_plot`; keep export parity (`format.tabxplor_fmt` vs the `tab_xl` bypass). **Full design brief: `dev/tabxplor_phase10_exporters.md`** (the single self-contained Phase 10 architecture doc — READ FIRST); decisions in `dev/tabxplor_1.4.0_decisions.md` §7-8, §10, §21-23, §33.
@@ -1145,7 +1146,17 @@ We must **make a grounded choice for jamovi jmvtab module base display of tables
 
 #### Phase 10b — study the right design and create a planned architecture document (DONE)
 
-Wrote **`dev/tabxplor_phase10_exporters.md`** — the single self-contained Phase 10 architecture doc governing 10c→10g. Core: (1) a normalized **`tabxplor_render` ephemeral sidecar** (NOT tab attributes — dplyr desyncs them) holding the derive-once quantities (reference/total masks, colour slots/hex, stars, blank mask, bold rows, `[min;max]`, labels), consumed identically by the `format()`-string backends and the `tab_xl` numeric bypass; (2) one **`tab_export_prep()`** helper (new `R/tab-export-prep.R`) replacing the 4×-duplicated preamble + per-exporter role detection, base(single)+list(several) split; (3) **`format()`/`get_reference()`** `case_when`→boolean rewrite + a `.ref=` precompute arg (masks once, not 4×) + `format(syntax="excel")` folding `numfmt()` in; (4) robust var detection via `dplyr::group_vars()` + graceful `degrade` (fixes the no-factor crash) + `test-edge-cases.R`; (5) `[min;max]` table-level pre-pass; (6) tab_xl backend seam (openxlsx v1, ready for Phase 11); (7) `tab_transpose()` finished + opt-in transpose-at-export; (8) `tab_plot()` soft-deprecated. **New decisions:** opt-in multi-field display (`pct (n)`/`pct ± ci`) via a new optional **`display_spec` attribute (9→10)** parsed only in `format()` (zero cost when unused); the `label` attribute → `tab_kable` header tooltip only. Sequencing + per-step golden/parity verification in the doc §12.
+Wrote **`dev/tabxplor_phase10_exporters.md`** — the single self-contained Phase 10 architecture doc governing 10c→10g. Core:
+1. a normalized **`tabxplor_render` ephemeral sidecar** (NOT tab attributes — dplyr desyncs them) holding the derive-once quantities (reference/total masks, colour slots/hex, stars, blank mask, bold rows, `[min;max]`, labels), consumed identically by the `format()`-string backends and the `tab_xl` numeric bypass;
+2. one **`tab_export_prep()`** helper (new `R/tab-export-prep.R`) replacing the 4×-duplicated preamble + per-exporter role detection, base(single)+list(several) split;
+3. **`format()`/`get_reference()`** `case_when`→boolean rewrite + a `.ref=` precompute arg (masks once, not 4×) + `format(syntax="excel")` folding `numfmt()` in;
+4. robust var detection via `dplyr::group_vars()` + graceful `degrade` (fixes the no-factor crash) + `test-edge-cases.R`; 
+5. `[min;max]` table-level pre-pass;
+6. tab_xl backend seam (openxlsx v1, ready for Phase 11);
+7. `tab_transpose()` finished + opt-in transpose-at-export;
+8. `tab_plot()` soft-deprecated.
+
+**New decisions:** opt-in multi-field display (`pct (n)`/`pct ± ci`) via a new optional **`display_spec` attribute (9→10)** parsed only in `format()` (zero cost when unused); the `label` attribute → `tab_kable` header tooltip only. Sequencing + per-step golden/parity verification in the doc §12.
 
 #### Phase 10c — rework format() for console display and exports that uses it (DONE)
 
@@ -1176,19 +1187,27 @@ Scope confirmed with the maintainer: `display_spec` = a **curated** whitelist as
   backends; Excel keeps the primary field). `test-fmt-contract.R` 9→10 + snapshot accepted.
 
 
-#### Phase 10d — common prep function
+#### Phase 10d — common prep function (DONE 2026-07-12)
 
 Design and implement the common prep function, looking carefully at all the changes and new features that will come next to ensure the shared prep function is ready for them.
 - When a feature is export-type specific, like for example Excel only, it should be justified.
 - `tab_totcol_range()`
 
-##### Part 1 DONE (2026-07-12) — byte-identical (full suite PASS 1501 / FAIL 0, NO golden regen; kable/md A/B `identical()` across 10 fixtures)
+**Part 1 (byte-identical; kable/md A/B `identical()` across 10 fixtures).**
+- New **`R/tab-export-prep.R`**: `tab_export_prep()` builds the ephemeral `tabxplor_render` model ONCE and `tab_kable`/`tab_md`/`tab_plot` consume it, deleting the 4× duplicated blocks — A (compact via `tab_check_same_col_vars()` + the existing `tab_compact()`), B (degrade via `tab_render_vars()`), C (role detection), D (bold rows via `tab_bold_rows()`) — and the two-channel colour loop (now `fmt_col_ann()`, per-column `ann`).
+- Derive-once win: `get_reference` once → `format(.ref=)`, `fmt_channel_codes` once.
+- Medium-specific quirks stay LOCAL (md tab_vars keep+blank + `str_trunc` + span index + `new_group` trim; kable knitr `*`-escape + `row_spec`; plot ggpubr). `tab_totcol_range()` built + INERT (consumed in 10e/10f). 
+- `tab_plot()` soft-deprecated (`lifecycle` superseded).
+- `test-export-prep.R`.
 
-New **`R/tab-export-prep.R`**: `tab_export_prep()` builds the ephemeral `tabxplor_render` model ONCE and `tab_kable`/`tab_md`/`tab_plot` consume it, deleting the 4× duplicated blocks — A (compact via `tab_check_same_col_vars()` + the existing `tab_compact()`), B (degrade via `tab_render_vars()`), C (role detection), D (bold rows via `tab_bold_rows()`) — and the two-channel colour loop (now `fmt_col_ann()`, per-column `ann`). Derive-once win: `get_reference` once → `format(.ref=)`, `fmt_channel_codes` once. Medium-specific quirks stay LOCAL (md tab_vars keep+blank + `str_trunc` + span index + `new_group` trim; kable knitr `*`-escape + `row_spec`; plot ggpubr). `tab_totcol_range()` built + INERT (consumed in 10e/10f). `tab_plot()` soft-deprecated (`lifecycle` superseded). `test-export-prep.R` (39) added. Detail: `dev/tabxplor_phase10_exporters.md` (Status) + decisions §33. **Part 2 = `tab_transpose()` (point E), after the maintainer commits Part 1.**
+**Part 2.**
+(a) **`tab_md()` list method**: a non-mergeable list (several row_vars and/or tab_vars → `tab()` returns a list; or differing col_vars) renders each table one-after-another (each keeping its tab_vars sub-tables) instead of erroring — gated by `tab_export_prep(list_method=)`; `tab_kable`/`tab_plot` keep the historical error. `tab_md` split into a thin wrapper + `md_render_one()`. 
+(b) **`tab_transpose()`** finished + exported (`lifecycle` experimental): `tidyr` pivot + rebuild flattened per-column attrs from a representative col_var column + swap axis flags (`type` row↔col; `in_totrow` field ↔ `totcol` attr; `in_refrow` ↔ `refcol`) + re-key `test`. Render-identical to a native `pct="col"` table; round-trips. `test-transpose.R` (53). The per-exporter `transpose=` arg is 10e/10f/10g. Detail: `dev/tabxplor_phase10_exporters.md` (Status) + decisions §33.
 
 #### Phase 10e — rework tab_kable()
 
 Comment accélerer cette fonction ? Faire une version plus light par défaut, sans les interactive tooltips etc. ? Accélerer les tooltips ? See design choices from Phase 10a.
+Same list method than tab_md to handle more cases (and same in deprecated tab_plot() ? ) ?
 Enlever l'affichage des vrais `NA` en `""` dans kable plus proprement qu'en les enlevant à la fin dans le html, pour qu’ils soient enlevés dans tous les cas de figure possible (knitr, .Rmd, etc. ; in the past I had some tables left with ugly NA formattings) ? How to really do it reliably ?
 
 #### Phase 10f — tab_md()
@@ -1209,17 +1228,17 @@ Enlever l'affichage des vrais `NA` en `""` dans kable plus proprement qu'en les 
 
 
 
-
 ### Phase 11 — Excel engine migration (openxlsx → openxlsx2)
 
-Isolated on purpose: a full dependency swap should not be entangled with the Phase 10 exporter-prep unification and its export-parity churn. Runs **after** Phase 10 (needs the unified single-tab + list `tab_xl` methods in place). May slip to a **1.4.x follow-up release** — it does not block the rest of 1.4.0.
+Isolated on purpose: a full dependency swap should not be entangled with the Phase 10 exporter-prep unification and its export-parity churn. Runs **after** Phase 10 (needs the unified single-tab + list `tab_xl` methods in place).
 - Precondition: `test-export-parity.R` green on openxlsx v1 first, so the swap is verified byte-for-byte against a known-good baseline.
 - Swap `tab_xl()` from `openxlsx` to `openxlsx2` (Suggests). Rule number 1: read openxlsx2 documentation thoroughly, then build a small set of **shared/common styles** created once and reused (the main openxlsx2 speed lever).
-- Use Phase 10 shared exporter-prep helper : tell me if it’s need further modifications.
-- Re-verify export parity (`format.tabxplor_fmt` vs the `tab_xl` numeric bypass) after the swap.
-- Update `DESCRIPTION` Suggests (`openxlsx` → `openxlsx2`) and every `requireNamespace()`/`openxlsx::` call site.
+- Use Phase 10 shared exporter-prep helper : if it needs further modifications, we shall implement them here.
+- Re-verify export parity (`format.tabxplor_fmt` vs the `tab_xl` numeric bypass).
 
 Add an option to use **conditional formatting** instead of hard text colors. This was awful and very slow with openxlsx v1 — check whether openxlsx2 makes it less horrible / faster.
+
+
 
 ### Phase 12 – Manual reviews
 

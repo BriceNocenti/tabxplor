@@ -2152,29 +2152,134 @@ tab_spread <- function(tabs, spread_vars, names_prefix, names_sort = FALSE,
 }
 
 
-# # NEW FUNCTION TO FINISH, DOCUMENT and integrate into the package ?
-# #' @export
-# #'
-# # @examples
-# tab_transpose <- function(tabs, name = "variables") {
-#   row_var <- tab_get_vars(tabs, "row_var")$row_var
-#   totrow_names <- filter(tabs, is_totrow(tabs)) |> pull(1) |> as.character()
-#   if (length(totrow_names) >= 2) stop("not working for now with many total rows")
-#   totcol_name <- is_totcol(tabs) ; totcol_name <- names(totcol_name[totcol_name])
-#   if (length(totcol_name) >= 2) stop("not working for now with many total columns")
-  
-#   tabs |>
-#     pivot_longer(cols = -1, names_to = name, values_to = "value") |> 
-#     pivot_wider(names_from = all_of(row_var), values_from = value, names_sort = TRUE) |> 
-#     mutate(across(where(is.character), as_factor)) |>
-#     mutate(across(where(is_fmt), ~ set_type(., "col"))) |> 
-#     mutate(across(where(is_fmt), ~ as_totcol(., FALSE))) |> 
-#     mutate(across(any_of(totrow_names), ~ as_totrow(as_totcol(.), FALSE))) |>
-#     mutate(across(where(is_fmt), ~ if_else(!!sym(name) == totcol_name, 
-#                                            as_totrow(.), 
-#                                            as_totrow(., FALSE)))) |> 
-#     new_tab()
-# }
+#' Transpose a cross-table (swap its rows and columns)
+#'
+#' @description
+#' `r lifecycle::badge("experimental")`
+#'
+#' Flips a \pkg{tabxplor} table so its rows become columns and its columns become rows. The main use
+#' is the **column-percentage inversion** workflow: to color a `pct = "col"` table with several row
+#' variables (which the coloring/compaction machinery cannot do directly), build it the other way ---
+#' swap the row and column variables and use `pct = "row"` --- then `tab_transpose()` flips the
+#' rendered grid back to the column-percentage layout. Percentages, differences, confidence intervals
+#' and colors ride along on the per-cell fields; only the axis roles are swapped (row type <-> column
+#' type, total row <-> total column, reference row <-> reference column), and the whole-table test is
+#' re-keyed by the new column variable.
+#'
+#' @param tabs A single table made with \code{\link{tab}} (one row variable, one column variable; not
+#'   a subtabled table with `tab_vars`, and at most one total row and one total column).
+#' @param name The name to give the new first (label) column, holding the old column-variable levels.
+#'   `NULL` (default) uses the old column-variable name.
+#'
+#' @return A transposed `tabxplor_tab`.
+#' @export
+#'
+#' @examples
+#' \donttest{
+#' # build marital x race as row percentages, then display it as race x marital:
+#' tab(forcats::gss_cat, marital, race, pct = "row", color = "diff") |>
+#'   tab_transpose() |>
+#'   tab_md()
+#' }
+tab_transpose <- function(tabs, name = NULL) {
+  if (!is.data.frame(tabs)) {
+    cli::cli_abort("{.arg tabs} must be a {.pkg tabxplor} table.")
+  }
+  tabs <- dplyr::ungroup(tabs)
+
+  vars <- tab_get_vars(tabs)
+  if (length(vars$tab_vars) > 0) {
+    cli::cli_abort(c(
+      "{.fn tab_transpose} does not support tables with {.arg tab_vars} yet.",
+      "i" = "It transposes a single table (one row variable, one column variable)."
+    ))
+  }
+  row_var <- vars$row_var
+  if (length(row_var) != 1) {
+    cli::cli_abort("{.fn tab_transpose} needs a table with exactly one row variable.")
+  }
+
+  fmt_mask <- purrr::map_lgl(tabs, is_fmt)
+  fmtc     <- names(tabs)[fmt_mask]
+  if (length(fmtc) == 0) {
+    cli::cli_abort("{.arg tabs} has no {.pkg tabxplor} formatted columns to transpose.")
+  }
+
+  # --- capture the axis roles BEFORE the pivot (in_totrow / in_refrow are uniform across fmt cols) ---
+  totrow_lgl   <- vctrs::field(tabs[[fmtc[1]]], "in_totrow")
+  refrow_lgl   <- vctrs::field(tabs[[fmtc[1]]], "in_refrow")
+  totcol_names <- fmtc[purrr::map_lgl(tabs[fmtc], is_totcol)]
+  refcol_names <- fmtc[purrr::map_lgl(tabs[fmtc], is_refcol)]
+  labels        <- as.character(dplyr::pull(tabs, tidyselect::all_of(row_var)))
+  totrow_labels <- labels[totrow_lgl]
+  refrow_labels <- labels[refrow_lgl]
+  if (length(totrow_labels) > 1) {
+    cli::cli_abort("{.fn tab_transpose} does not work (yet) with more than one total row.")
+  }
+  if (length(totcol_names) > 1) {
+    cli::cli_abort("{.fn tab_transpose} does not work (yet) with more than one total column.")
+  }
+
+  # representative REAL col_var level column (not the total column, not the count "all_col_vars"),
+  # whose per-column attributes are copied onto every transposed column (they are uniform).
+  real_col_vars <- vars$col_vars[!vars$col_vars %in%
+                                   c("all_col_vars", "", "no", NA_character_)]
+  old_col_var <- if (length(real_col_vars) > 0) real_col_vars[[1]] else NA_character_
+  rep_name <- fmtc[purrr::map_lgl(tabs[fmtc], ~ identical(get_col_var(.), old_col_var))]
+  rep_name <- if (length(rep_name) > 0) rep_name[[1]] else fmtc[[1]]
+  rep_attrs <- purrr::set_names(
+    lapply(fmt_col_attrs, function(a) attr(tabs[[rep_name]], a, exact = TRUE)), fmt_col_attrs)
+  old_type <- if (is.null(rep_attrs$type)) "row" else rep_attrs$type
+  new_type <- switch(old_type, row = "col", col = "row", old_type)
+
+  # --- the pivot: old columns become rows, old row_var levels become columns ---
+  if (is.null(name)) name <- if (!is.na(old_col_var)) old_col_var else "variables"
+  long <- tabs |>
+    tidyr::pivot_longer(cols = tidyselect::all_of(fmtc),
+                        names_to = name, values_to = "value")
+  long[[name]] <- factor(long[[name]], levels = fmtc)          # keep the col_var-level order as rows
+  wide <- long |>
+    tidyr::pivot_wider(names_from = tidyselect::all_of(row_var),
+                       values_from = "value", names_sort = FALSE)
+
+  new_fmtc   <- setdiff(names(wide), name)                     # = the old row_var levels
+  new_labels <- as.character(wide[[name]])                     # = fmtc (the old column names)
+
+  # --- rebuild the flattened per-column attributes + swap the axis flags ---
+  for (nm in new_fmtc) {
+    col <- wide[[nm]]
+    for (a in fmt_col_attrs) attr(col, a) <- rep_attrs[[a]]    # restore uniform col_var attributes
+    col <- set_type(col, new_type)                            # row <-> col
+    col <- set_col_var(col, row_var)                          # new col_var = old row_var
+    col <- as_totcol(col, FALSE)
+    col <- as_refcol(col, FALSE)
+    col <- as_totrow(col, new_labels %in% totcol_names)       # old total COLUMN -> new total ROW
+    col <- as_refrow(col, new_labels %in% refcol_names)       # old reference COLUMN -> new ref ROW
+    wide[[nm]] <- col
+  }
+  # old total ROW -> new total COLUMN; old reference ROW -> new reference COLUMN (else, under the
+  # col%-inversion, the total column is the reference, matching a native pct = "col" table).
+  if (length(totrow_labels) == 1 && totrow_labels %in% new_fmtc) {
+    wide[[totrow_labels]] <- as_totcol(wide[[totrow_labels]], TRUE)
+  }
+  ref_target <- if (length(refrow_labels) >= 1) refrow_labels[[1]]
+                else if (length(totrow_labels) == 1) totrow_labels else character(0)
+  if (length(ref_target) == 1 && ref_target %in% new_fmtc) {
+    wide[[ref_target]] <- as_refcol(wide[[ref_target]], TRUE)
+  }
+
+  wide[[name]] <- factor(new_labels, levels = new_labels)
+
+  # re-key the whole-table test tibble: the new row_var is the old col_var and vice versa.
+  test <- get_test(tabs)
+  if (is.data.frame(test) && nrow(test) > 0) {
+    rv <- test[["row_var"]]; cv <- test[["col_var"]]
+    test[["row_var"]] <- cv
+    test[["col_var"]] <- rv
+  }
+
+  new_tab(wide, subtext = get_subtext(tabs), test = test)
+}
 
 
 

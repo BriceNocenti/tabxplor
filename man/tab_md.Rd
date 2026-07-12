@@ -16,8 +16,10 @@ tab_md(
 )
 }
 \arguments{
-\item{tabs}{A table made with \code{\link{tab}} or \code{\link{tab_many}},
-or a \code{list} of tab with the same \code{col_vars} and no \code{tab_vars}.}
+\item{tabs}{A table made with \code{\link{tab}} or \code{\link{tab_many}}, or a \code{list} of tab.
+A list of tables sharing the same \code{col_vars} (and no \code{tab_vars}) is merged into one; any other
+list --- several \code{row_vars} and/or \code{tab_vars} (e.g. \code{tab()} with several row variables and a
+\code{tab_vars}) --- is rendered one table after another, each keeping its own sub-tables.}
 
 \item{bold_references}{Bold reference/total rows with markdown \verb{**...**}.}
 
