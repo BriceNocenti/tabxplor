@@ -1942,6 +1942,13 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
     out[both] <- paste0(parts[[1]][both], " (", parts[[2]][both], ")")
   }
 
+  # Phase 10e: honour the `na` argument on the main path. Historically NA cells were hard-coded to NA
+  # (`out[na_out] <- NA` above) and `na` was consumed only by the display_spec branch. Applied LAST so
+  # it dominates every intermediate append. Default na=NA -> no-op (byte-identical for the console and
+  # any caller not passing `na`); tab_kable()/tab_md() pass na="" -> NA cells render "" at source,
+  # which retires tab_kable()'s post-hoc `>NA</span>` string surgery.
+  if (!is.na(na)) out[na_out] <- na
+
   #out <- stringr::str_pad(out, max(stringr::str_length(out), na.rm = TRUE))
   out
 }

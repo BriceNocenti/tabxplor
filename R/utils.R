@@ -97,6 +97,10 @@ NULL
 
   options("tabxplor.always_add_css_in_tab_kable" = TRUE)
 
+  # Phase 10e: tab_kable() render engine. "kableExtra" (default) or "html" (dependency-free,
+  # self-contained inline-CSS <table>; faster; used by the jamovi live display). See R/tab-render-html.R.
+  options("tabxplor.tab_kable_engine" = "kableExtra")
+
   # Phase 8: opt-in parallel build of many tables in ONE tab() call (Suggests-only {mirai}).
   # FALSE = off (default); TRUE = auto workers; an integer = that many daemons. `parallel_min` is
   # the smallest row_var count worth dispatching (fewer -> serial: setup would outweigh the gain).
@@ -1641,7 +1645,7 @@ set_chroma <- function(cols, c = 0.1) {
 #' @return (Invisibly) the generated HTML as a single string.
 #' @examples
 #' \dontrun{
-#' text_colors <- c(plain = "#888888", pos3 = "#0baedb", pos5 = "#265aff")
+#' text_colors <- c(plain = "#989898", pos3 = "#0baedb", pos5 = "#265aff")
 #' background_colors <- c(plain = "#ffffff", pos3 = "#91b837", pos5 = "#05ae30")
 #' preview_colour_grid(text_colors, background_colors)
 #' }

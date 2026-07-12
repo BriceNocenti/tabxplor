@@ -427,13 +427,22 @@ Exports to `.xlsx` via `openxlsx` (Suggests-only dependency). Features:
 - `hide_near_zero`: cells displaying as 0 are grayed out
 - `n_min`: columns/rows with too few observations are grayed out
 
-### tab_kable() — HTML/LaTeX Export (`R/tab_classes.R`)
+### tab_kable() — HTML Export (`R/tab_classes.R` + `R/tab-render-html.R`)
 
-Uses `kableExtra` for HTML table output. Supports:
+`tab_kable()` = `tab_export_prep(list_method=TRUE)` → map the `render_kable_html()` **engine seam**
+(`R/tab-render-html.R`, Phase 10e) over the prepared tables → `tab_kable_join()`. The `engine` argument
+(default `getOption("tabxplor.tab_kable_engine","kableExtra")`) picks the backend, both driven by the
+same `tabxplor_render` model so they cannot diverge in content:
 
-- Color formatting via inline CSS
-- HTML tooltips (popover) for confidence intervals
-- Custom CSS injection via `inst/tab.css`
+- **`"kableExtra"`** — the legacy `knitr::kable` + `kable_classic`/`row_spec`/`column_spec` pipeline
+  (byte-identical to pre-10e). Colour via inline CSS, HTML tooltips/popover, `inst/tab.css` injection.
+- **`"html"`** — a dependency-free, self-contained inline-CSS `<table>` (styles on `<td>`, no per-cell
+  `<span>`, a scoped `<style>` block, vectorised assembly). ~3x faster / ~6x lighter; emits the same
+  bootstrap tooltip attributes; used by the jamovi live display (`tab_render_scrollbox()` replaces
+  `kableExtra::scroll_box`). A non-mergeable list renders table-after-table (both engines).
+
+Tooltips (`tab_kable_print_tooltip()`) are `any()`-gated so each field's `format()` runs only when the
+column has it. NA cells render blank at source (`format.tabxplor_fmt(na="")`), not via a post-hoc regex.
 
 ### tab_md() — Markdown Export (`R/tab_md.R`)
 
@@ -505,6 +514,7 @@ All options are set in `.onLoad()` in `R/utils.R`. Users can override via `optio
 | `tabxplor.kable_html_font` | DejaVu Sans | Font for HTML kable output |
 | `tabxplor.kable_popover` | `FALSE` | Show CI as HTML tooltip |
 | `tabxplor.always_add_css_in_tab_kable` | `TRUE` | Inject custom CSS in kable |
+| `tabxplor.tab_kable_engine` | `"kableExtra"` | `tab_kable()` engine (`"kableExtra"` / `"html"`) |
 
 ## File-by-File Guide
 

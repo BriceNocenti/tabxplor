@@ -3,6 +3,16 @@
 # tabxplor 1.4.0 (in development)
 
 ## New features
+* `tab_kable()` gains a faster, dependency-free HTML render engine. The new `engine` argument
+  (`"kableExtra"`, the default, or `"html"`) selects it; `engine = "html"` produces a self-contained,
+  inline-CSS `<table>` that needs no external stylesheet --- about 3x faster and much lighter than the
+  kableExtra output, and used by the jamovi live display. Set a session default with
+  `options(tabxplor.tab_kable_engine = "html")`.
+* `tab_kable()` now renders a **list of non-mergeable tables** (different column variables, or tables
+  with sub-tables) one after another, instead of stopping with an error.
+* `tab_kable()` is faster overall: the hover tooltips are computed only for the fields a column actually
+  has (roughly a 30% speed-up on colored tables), and empty cells now render as blank in every context
+  (knitr, R Markdown, ...) instead of occasionally showing "NA".
 * New `tab_counts()` --- build a full color-coded cross-table from **already-aggregated counts**
   instead of microdata. It accepts long tidy counts (e.g. a `dplyr::count()` result), a wide
   `data.frame` of counts (with `cols` / `col_name`), a `table` / `xtabs` / `matrix` object, and

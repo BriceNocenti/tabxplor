@@ -12,10 +12,23 @@ KEY CONSTRAINTS:
 See: CLAUDE.md § "Phase 10", dev/tabxplor_1.4.0_decisions.md §33 (the decision record).
 -->
 
-Status: **10c DONE (2026-07-12); 10d DONE (Part 1 shared prep + Part 2 tab_transpose, 2026-07-12);
-10e→10g not started.** 10a decision settled (below); this document is the 10b deliverable and governs
-10d→10g. Read this first, then the matching `dev/tabxplor_1.4.0_decisions.md` sections and
-`dev/tabxplor_architecture.md` "Export System".
+Status: **10c DONE; 10d DONE; 10e DONE (2026-07-12); 10f→10g not started.** 10a decision settled
+(below); this document is the 10b deliverable and governs 10d→10g. Read this first, then the matching
+`dev/tabxplor_1.4.0_decisions.md` sections and `dev/tabxplor_architecture.md` "Export System".
+
+**10e (DONE) — `render_kable_html()` hybrid engine seam** (`R/tab-render-html.R`): kableExtra (default,
+byte-identical carve — git-stash A/B empty) + a dependency-free self-contained inline-CSS `<table>`
+engine (no per-cell `<span>`; ~3× faster / ~6× less memory; used by the jamovi live path + opt-in
+`engine="html"` / `getOption("tabxplor.tab_kable_engine")`). Cheap `any()`-gated tooltips + `.ref` reuse
+(byte-identical, −29% on kableExtra); `format(na=)` honoured on the main path (retires the `>NA</span>`
+regex); list method (non-mergeable list → table-after-table, both engines); totblock-border roles lifted
+into the prep. jamovi `.render_html` / `tab_html_string` / `jmvtab_export` now use `engine="html"` (no
+lightable/cosmo includeCSS, no scroll_box hack → `tab_render_scrollbox()`). Locked by
+`test-render-html.R` (snapshots + cross-engine parity + DOM-size guard). **DEFERRED (see §5, §7, and
+`decisions.md` §33):** the spanning header (redundant — kable inherits the console's `Other_race` col_var
+disambiguation, so its "parity" rationale is false), the `[min;max]` total-column consumption (unsettled
+semantics — inconsistent within the Total column + overlaps the `n` column), the label header tooltip
+(the source `label` attr does not survive `tab()` building), and the `transpose=` arg (uniform in 10f/10g).
 
 **Phase 10d Part 2 done (2026-07-12):**
 - **`tab_md()` list method (maintainer request, "tab_vars too in tab_md()")**: a NON-mergeable list
@@ -437,7 +450,7 @@ display; it is kept for future improvement.
 |-----------|-------|--------|
 | **10c** format() + detection | `get_reference` boolean rewrite; `format(syntax, .ref)` + `numfmt`→excel; `tab_render_vars` + graceful degrade + `tab_get_vars` guards; `tab_totcol_range()`; `display_spec` (9→10 attr); label capture in build | `test-golden.R`/`_snaps/`, `test-fmt-contract.R` (regen 9→10), `test-color-golden.R`, `test-export-parity.R`; **re-profile format()**; new `test-edge-cases.R` |
 | **10d** shared prep | `tab_export_prep`, `tab_check_same_col_vars`, render-model + `ann`, base/list split, `tab_transpose`; refactor kable/md/plot to consume it | byte-identical: kable/md snapshots + jamovi `.render_html` unchanged; `test-benchmark.R` no regression |
-| **10e** kable | NA-hiding in prep, `add_header_above` spanning header, `n_min`/`hide_near_zero` grey, label tooltip, light mode, `render_kable_html()` seam | kable snapshots + jamovi live render unchanged (except intended NA/tooltip); DOM-size check |
+| **10e** kable **(DONE)** | `render_kable_html()` hybrid seam (kableExtra byte-identical + home-built html engine), cheap `any()`-gated tooltips, `format(na=)`→NA at source, list method, totblock roles, jamovi→`engine="html"`. **Deferred:** spanning header (redundant), `[min;max]` (unsettled), label tooltip (attr lost in build), `transpose=` (10f/10g) | `test-render-html.R` snapshots + cross-engine parity + DOM-size guard; kableExtra byte-identical (git-stash A/B); full suite 1601/0 |
 | **10f** md | short pandoc colour spans from `ann` slots, wrap-not-truncate, optional title, list method | `test-tab_md.R` snapshots (conscious regen for colour spans) |
 | **10g** xl | base+list via seam, `format(syntax="excel")`, stars-in-numfmt, `[min;max]` text cells, plain-df support, tab_logit borders | **extend `test-export-parity.R`** (diff/ci/or/stars/label/range); `test-tab_xl.R` incl. a non-tabxplor df — the v1 baseline that gates Phase 11 |
 

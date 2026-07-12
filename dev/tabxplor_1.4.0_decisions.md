@@ -2133,3 +2133,57 @@ round-trips. Single row_var, ≤1 total row/col, no tab_vars (else `cli_abort`).
 `transpose=` arg wiring stays 10e/10f/10g (mechanism ready). `test-transpose.R` (53). Full suite PASS
 1566 / FAIL 0, no golden regen.
 
+
+### 10e IMPLEMENTED (2026-07-12) — tab_kable hybrid engine + cheap tooltips + deferrals
+
+**Hybrid engine (maintainer-approved this session).** `render_kable_html()` seam in
+`R/tab-render-html.R`; `tab_kable()` = `option-resolve → tab_export_prep(list_method=TRUE) →
+map(render_kable_html) → tab_kable_join`. New public arg `engine` (`getOption(
+"tabxplor.tab_kable_engine","kableExtra")`). `"kableExtra"` = the legacy pipeline carved out verbatim,
+**byte-identical** (git-stash A/B over an 8-fixture × 3-variant matrix → empty diff; the two `any_bg`
+branches unified since `cell_spec(background=NULL)` ≡ omitting it). `"html"` = a dependency-free,
+self-contained inline-CSS `<table>` renderer: styles go directly on `<td>` (no per-cell `<span>` → the
+DOM-size win), vectorised `do.call(paste0, td_cols)` assembly, a scoped one-time `<style>` block; it
+emits the SAME bootstrap `data-toggle`/`title` tooltip attributes so hover tooltips keep working in
+jamovi (maintainer: kableExtra tooltips already work there). Serialization differs benignly (kableExtra
+colours = `rgba(...)`, html = `#hex`; kableExtra emits empty `title=""`, html omits it) — cross-engine
+CONTENT parity (cell text + non-empty tooltip content) is identical and tested (`test-render-html.R`).
+
+**Cheap tooltips (byte-identical).** `tab_kable_print_tooltip()` `any()`-gates each of the ~9
+`format(set_display(x, field))` fragments so the expensive pass runs only when the column carries that
+field (a pct column has no or/mean/sd; a mean column has no rr/or/pct); a failed gate yields `rep("",
+n)` = the original all-FALSE `if_else`/`case_when` output → tooltip string byte-identical. Also reuses
+the prep's precomputed `.ref` (ref_cells).
+
+**NA at source.** `format.tabxplor_fmt(na=)` is now honoured on the main path (a final
+`if (!is.na(na)) out[na_out] <- na`, applied after every append). Default `na=NA` → no-op, byte-identical
+for the console and every non-`na` caller; `tab_kable`/`tab_md` pass `na=""` → NA cells render `""` at
+source. Retires tab_kable's `interactive()`-gated `str_replace_all(">NA</span>", …)` (byte-identical in
+the always-CSS default; the only visible change is the rare non-CSS batch case where NA used to leak).
+
+**Perf** (`dev/benchmarks/results_1.4.0/phase10e_{baseline,after}.txt`, gss_cat): cheap tooltips 0.50→
+0.36 s (−29%) on the kableExtra big table; html engine 0.16 s (3.1× vs baseline, mem 8.5→1.3 MB), 0.072 s
+w/o tooltips. The html engine WITH tooltips (0.16 s) beats the old jamovi kableExtra path WITHOUT them
+(0.22 s), so jamovi can regain interactive tooltips cheaply (left OFF pending a live check). jamovi
+`.render_html` / `tab_html_string` / `jmvtab_export` now use `engine="html"` (dropped lightable/cosmo
+`includeCSS` + `scroll_box` + class-strip → `tab_render_scrollbox()`; html export no longer needs
+kableExtra). Full suite 1601/0, no golden regen.
+
+**Deferred (with blockers — honest scoping):**
+- **Spanning col_var header** — the doc's "brings kable to parity with the console" rationale is FALSE:
+  the console does not use a spanning header; it disambiguates multiple col_vars by suffixing the col_var
+  name to colliding level names (`Other_race` vs `Other_relig`), which the kable already inherits from
+  the same built columns. A spanning header would be redundant, so it is dropped (respecting the
+  maintainer's "don't add clutter").
+- **`[min;max]` total-column consumption** — `tab_totcol_range` only differs under `na="drop"` with
+  diverging col_var NA rates; wiring it as "overwrite where `differ`" makes the `pct="row"` Total column
+  show "100%" on most rows but a base-count range (`[15;17]`) on others (inconsistent within one column),
+  and the base is already shown in the separate `n` column. The intended semantics (does Total always
+  show the base? relation to the `n` column?) need a maintainer decision; helper stays INERT (as 10d).
+- **Label header tooltip** — `tab_export_labels()` reads `attr(col, "label")` on the built tab, but the
+  source `label` attribute does NOT survive `tab()` building (`prep$labels` is NULL even when the source
+  had labels). Needs label propagation through the build pipeline first (out of a render change).
+- **`transpose=` arg** — wire uniformly across kable/md/xl in 10f/10g (mechanism ready, 10d).
+- **`kable_tabxplor_style()`** — an `@export`ed near-duplicate of the tab_kable styling for plain
+  tibbles, now unused internally (the degrade path uses `kableExtra::kbl`). Candidate for soft-deprecation
+  (maintainer's call — it is public API).

@@ -134,35 +134,20 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
       )
     },
 
-    # Render a tab (or list of tabs) to standalone HTML for the Jamovi results iframe.
-    # Formatting does not survive kableExtra's classes in Jamovi, so the lightable + bootstrap
-    # CSS is injected manually and the "kableExtra" class dropped. (The CSS-only rework is Phase 8.)
+    # Render a tab (or list of tabs) to standalone HTML for the Jamovi results iframe. Phase 10e:
+    # uses the dependency-free, self-contained html engine (inline CSS, no lightable/bootstrap
+    # includeCSS, no kableExtra class-strip hack) wrapped in an inline-styled scroll box. This is
+    # ~3x faster than the old kableExtra path (dev/benchmarks/results_1.4.0/phase10e_after.txt).
+    # tooltips stay OFF here for now; the html engine emits the SAME bootstrap tooltip attributes,
+    # so they can be turned on once verified live in jamovi (they are now cheap -- WS3).
     .render_html = function(tabs) {
-      tabs_html <- tab_kable(
-        tabs,
+      tab_kable(
+        tabs, engine = "html",
         wrap_rows = self$options$wrap_rows,
         wrap_cols = self$options$wrap_cols,
-        fixed_thead = FALSE,  # not working in Jamovi
-        # Phase 7e perf: drop the per-cell hover tooltips -- they roughly DOUBLE the render time
-        # (~570 -> ~250 ms on a 21k-row 1x3 table) and the interactive JS does not fire in Jamovi
-        # anyway (§7). The full CSS-only render rewrite is Phase 8.
-        tooltips = FALSE,
-        position = "left"
+        tooltips = FALSE
       ) |>
-        kableExtra::scroll_box(
-          width = "1080px",
-          fixed_thead = FALSE,
-          box_css = "border: none; padding: 0; overflow-x: auto !important; display: block; table-layout: auto;",
-          extra_css = "margin-left: 0; width: 100%;"
-        )
-
-      class(tabs_html) <- "knitr_kable"
-      paste0(
-        htmltools::includeCSS(system.file("lightable-0.0.1/lightable.css", package = "kableExtra")),
-        htmltools::includeCSS(system.file("rmd/h/bootstrap/css/cosmo.min.css", package = "rmarkdown")),
-        as.character(tabs_html)
-      ) |>
-        vctrs::vec_restore(tabs_html)
+        tab_render_scrollbox()
     },
 
     # Report an export result via a native jmvcore::Notice (info / error), inserted at the top of

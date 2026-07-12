@@ -43,6 +43,10 @@ R/
 │                              color palettes, set_color_style(), set_color_breaks()
 ├── tab_xl.R        (4132 L)  Excel export via openxlsx (Suggests-only)
 ├── tab_md.R         (366 L)  Markdown export (standalone, new in v1.3.1)
+├── tab-export-prep.R (~400 L) Phase 10d shared exporter prep: tab_export_prep() -> tabxplor_render
+│                              model (roles/ann/bold/range/labels), consumed by kable/md/plot/xl
+├── tab-render-html.R (~350 L) Phase 10e tab_kable render seam: render_kable_html() (kableExtra +
+│                              home-built self-contained html engines) + tab_kable_join/scrollbox
 ├── utils.R         (1306 L)  Pipe re-export, .onLoad() options setup, factor utilities
 ├── tab_logit.R     (1009 L)  WIP — entirely commented out (future logistic regression)
 ├── tab_logit_2.R    (706 L)  WIP — entirely commented out (logit diagnostics/plots)
@@ -1150,7 +1154,7 @@ Wrote **`dev/tabxplor_phase10_exporters.md`** — the single self-contained Phas
 1. a normalized **`tabxplor_render` ephemeral sidecar** (NOT tab attributes — dplyr desyncs them) holding the derive-once quantities (reference/total masks, colour slots/hex, stars, blank mask, bold rows, `[min;max]`, labels), consumed identically by the `format()`-string backends and the `tab_xl` numeric bypass;
 2. one **`tab_export_prep()`** helper (new `R/tab-export-prep.R`) replacing the 4×-duplicated preamble + per-exporter role detection, base(single)+list(several) split;
 3. **`format()`/`get_reference()`** `case_when`→boolean rewrite + a `.ref=` precompute arg (masks once, not 4×) + `format(syntax="excel")` folding `numfmt()` in;
-4. robust var detection via `dplyr::group_vars()` + graceful `degrade` (fixes the no-factor crash) + `test-edge-cases.R`; 
+4. robust var detection via `dplyr::group_vars()` + graceful `degrade` (fixes the no-factor crash) + `test-edge-cases.R`;
 5. `[min;max]` table-level pre-pass;
 6. tab_xl backend seam (openxlsx v1, ready for Phase 11);
 7. `tab_transpose()` finished + opt-in transpose-at-export;
@@ -1196,24 +1200,55 @@ Design and implement the common prep function, looking carefully at all the chan
 **Part 1 (byte-identical; kable/md A/B `identical()` across 10 fixtures).**
 - New **`R/tab-export-prep.R`**: `tab_export_prep()` builds the ephemeral `tabxplor_render` model ONCE and `tab_kable`/`tab_md`/`tab_plot` consume it, deleting the 4× duplicated blocks — A (compact via `tab_check_same_col_vars()` + the existing `tab_compact()`), B (degrade via `tab_render_vars()`), C (role detection), D (bold rows via `tab_bold_rows()`) — and the two-channel colour loop (now `fmt_col_ann()`, per-column `ann`).
 - Derive-once win: `get_reference` once → `format(.ref=)`, `fmt_channel_codes` once.
-- Medium-specific quirks stay LOCAL (md tab_vars keep+blank + `str_trunc` + span index + `new_group` trim; kable knitr `*`-escape + `row_spec`; plot ggpubr). `tab_totcol_range()` built + INERT (consumed in 10e/10f). 
+- Medium-specific quirks stay LOCAL (md tab_vars keep+blank + `str_trunc` + span index + `new_group` trim; kable knitr `*`-escape + `row_spec`; plot ggpubr). `tab_totcol_range()` built + INERT (consumed in 10e/10f).
 - `tab_plot()` soft-deprecated (`lifecycle` superseded).
 - `test-export-prep.R`.
 
 **Part 2.**
-(a) **`tab_md()` list method**: a non-mergeable list (several row_vars and/or tab_vars → `tab()` returns a list; or differing col_vars) renders each table one-after-another (each keeping its tab_vars sub-tables) instead of erroring — gated by `tab_export_prep(list_method=)`; `tab_kable`/`tab_plot` keep the historical error. `tab_md` split into a thin wrapper + `md_render_one()`. 
+(a) **`tab_md()` list method**: a non-mergeable list (several row_vars and/or tab_vars → `tab()` returns a list; or differing col_vars) renders each table one-after-another (each keeping its tab_vars sub-tables) instead of erroring — gated by `tab_export_prep(list_method=)`; `tab_kable`/`tab_plot` keep the historical error. `tab_md` split into a thin wrapper + `md_render_one()`.
 (b) **`tab_transpose()`** finished + exported (`lifecycle` experimental): `tidyr` pivot + rebuild flattened per-column attrs from a representative col_var column + swap axis flags (`type` row↔col; `in_totrow` field ↔ `totcol` attr; `in_refrow` ↔ `refcol`) + re-key `test`. Render-identical to a native `pct="col"` table; round-trips. `test-transpose.R` (53). The per-exporter `transpose=` arg is 10e/10f/10g. Detail: `dev/tabxplor_phase10_exporters.md` (Status) + decisions §33.
 
-#### Phase 10e — rework tab_kable()
+#### Phase 10e — rework tab_kable() (DONE 2026-07-12)
 
-Comment accélerer cette fonction ? Faire une version plus light par défaut, sans les interactive tooltips etc. ? Accélerer les tooltips ? See design choices from Phase 10a.
-Same list method than tab_md to handle more cases (and same in deprecated tab_plot() ? ) ?
-Enlever l'affichage des vrais `NA` en `""` dans kable plus proprement qu'en les enlevant à la fin dans le html, pour qu’ils soient enlevés dans tous les cas de figure possible (knitr, .Rmd, etc. ; in the past I had some tables left with ugly NA formattings) ? How to really do it reliably ?
+**Hybrid render engine behind a `render_kable_html()` seam** (new `R/tab-render-html.R`). `tab_kable()`
+is now `option-resolve → tab_export_prep(list_method=TRUE) → map(render_kable_html) → tab_kable_join`;
+its ~220-line monolith body was carved out. New public arg **`engine`** (`getOption(
+"tabxplor.tab_kable_engine","kableExtra")`):
+- **`"kableExtra"` (default)** = the legacy pipeline, **BYTE-IDENTICAL** to pre-10e (git-stash A/B empty
+  diff over a fixture matrix; the two `any_bg` branches unified — `background=NULL` ≡ omit; totblock
+  borders + legend read the prep, NA-regex retired). Locked by `test-render-html.R` structure snapshots.
+- **`"html"`** = a dependency-free, self-contained inline-CSS `<table>` renderer (colours/bold on `<td>`,
+  **no per-cell `<span>`** → DOM-size win; vectorised `do.call(paste0, …)` assembly; emits the same
+  bootstrap tooltip `data-toggle`/`title` attributes so hover tooltips work in jamovi). Cross-engine
+  content parity (same cell text + tooltip content) is tested.
+
+Other changes: **cheap tooltips** — `tab_kable_print_tooltip()` `any()`-gates each of the ~9 `format(
+set_display())` fragments (skips the ones the column has no field for) + reuses the prep's `.ref`
+(byte-identical); **NA-hiding at source** — `format.tabxplor_fmt(na=)` is now honoured on the main path
+(final overwrite; default `na=NA` → no-op / byte-identical), retiring the post-hoc `>NA</span>` regex;
+**list method** — a non-mergeable list renders table-after-table (both engines) instead of erroring;
+**total-block border roles** lifted into `prep_one_table()` (`roles$totblock_top/bottom`, shared, i18n
+caveat flagged); **jamovi live render + `tab_html_string()`/`jmvtab_export()` switched to `engine="html"`**
+(self-contained; dropped the lightable/cosmo `includeCSS` + `scroll_box` + class-strip → `tab_render_
+scrollbox()`; html export no longer needs kableExtra).
+
+**Perf** (gss_cat, `dev/benchmarks/results_1.4.0/phase10e_{baseline,after}.txt`): cheap tooltips cut the
+kableExtra big-table render 0.50→0.36 s (−29%); the **html engine = 0.16 s (3.1× vs baseline, 5.8× less
+memory)**, 0.072 s without tooltips. The html engine WITH tooltips (0.16 s) beats the old jamovi
+kableExtra path WITHOUT tooltips (0.22 s). Full suite green (1601); no golden regen.
+
+**DEFERRED with documented blockers (decisions §33)** — three doc-listed 10e "features" hit real issues:
+1. **spanning col_var header** — its "parity with console" rationale is false (the console disambiguates col_vars by suffixing level names `Other_race`, which kable already inherits → a spanning header is redundant);
+2. **`[min;max]` total column** — unsettled semantics (would make the `pct="row"` Total column show "100%" on most rows but a base-count range on others, overlapping the existing `n` column);
+3. **label header tooltip** — the source `label` attribute does NOT survive `tab()` building (`prep$labels` is NULL), so it needs core-pipeline plumbing first. `transpose=` arg deferred to 10f/10g (uniform wiring). Flagged for the maintainer: `kable_tabxplor_style()` is an orphaned exported duplicate (candidate for soft-deprecation).
 
 #### Phase 10f — tab_md()
 
 `tab_md()` current version was made for a specific use case and never totally integrated into tabxplor : the aim is to fully integrate it.
-- color helpers must be handled with very shorts pandoc bracketed spans, everything padded and align to preserve human readability assuming monospace font (even out of preview mode). Examples for diffs : `.+5`, `.+10`, `.+20`, `.+30`, `.-5`, `.-10`, `.-20`, `.-30` etc. ; examples for ratios : `.x1.2`, `.x1.5`, `.x2`, `.x4`, `./1.2`, `./1.5`, `./2`, `./4`, etc. : ould these names be valid css classes / pandoc bracketed spans ?. Is there a possibility to make them these css classes work inside jamovi, for exemple in a html rectangle, with a light yet modern markdown preview working with tables (natively, or by adding html/js new dependencies ? ; load these possible dependencies when the tabxplor function and menu load ? What about the css styles, should we load them at tabxplor UI startup or at table creation ?) ?
+- color helpers must be handled with very shorts pandoc bracketed spans, everything padded and align to preserve human readability assuming monospace font (even out of preview mode). Examples for diffs : `.+5`, `.+10`, `.+20`, `.+30`, `.-5`, `.-10`, `.-20`, `.-30` etc. ; examples for ratios : `.x1.2`, `.x1.5`, `.x2`, `.x4`, `./1.2`, `./1.5`, `./2`, `./4`, etc. : would these names be valid css classes / pandoc bracketed spans ?.
+- Is there a possibility to make them these css classes work inside jamovi, for exemple in a html rectangle, with a light yet modern markdown preview working with tables (natively, or by adding html/js new dependencies ? ; load these possible dependencies when the tabxplor function and menu load ? What about the css styles, should we load them at tabxplor UI startup or at table creation ?) ?
+- Even if they do not work on jamovi, I want them to work in Positron IDE Viewer, be it with pandoc bracketed spans (prefered solution if workable) or another way
+- Even if pandock bracketed spans not working on tab_kable inside Viewer, I still want an option to export as very simple markdown with pandoc bracketed spans, to use in markdown editors with customisable css working with bracketed spans (just for information, I have Positron IDE custom syntax highlighting in normal editor with a personal VS code extension). It shall really remain simple human readable padded/aligned markdown.
 
 #### Phase 10g – rework tab_xl() (still openxlsx v1; engine swap is Phase 9)
 
@@ -1225,6 +1260,14 @@ Enlever l'affichage des vrais `NA` en `""` dans kable plus proprement qu'en les 
 - Prep-helpers `numfmt`→`format(syntax="excel")`
 
 **Stays on openxlsx v1** — the openxlsx2 engine swap is Phase 9.
+
+
+#### Phase 10h – additional columns and pvalue lines simplification (optional)
+
+`add_n`, `add_pct`, pvalue_lines : only add these additional rows or columns at display ?
+- Distingish between display modes that can use `display_spec` to print several informations in the same cell (console, kable, md ; for example print `add_n` as : `"100% (n= 114)"`), and display modes that needs to create new columns/rows (Excel ; for example print `add_n` by adding an ).
+  + The main caveat, if I understand it well, is that `display_spec` is a column attribute ? Would there be a reliable way to use the already existing display vctrs field at it’s place (removing `display_spec` as a column attribute), ensuring simple displays like `pct` or `diff` stay on a fast track for maximum performance, compared to more complex display like `pct (n)` (that of course themselves need to be the fastest possible).
+- Since `add_n`, `add_pct` and `pvalue_lines` as actual rows and columns in the data were exceptions that added complexity to the code, their removal calls for a huge code simplication.
 
 
 

@@ -474,6 +474,10 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #' @param whitespace_only Set to `FALSE` to wrap also on non whitespace characters.
 # @param unbreakable_spaces Set to `FALSE` to keep normal spaces in text (auto-break).
 #' @param get_data Get the transformed data instead of the html table.
+#' @param engine The HTML render engine. `"kableExtra"` (default) uses \pkg{kableExtra};
+#'  `"html"` uses a dependency-free, self-contained (inline-CSS) `<table>` renderer that is
+#'  faster and needs no external CSS (used by the jamovi live UI). Defaults to
+#'  \code{getOption("tabxplor.tab_kable_engine", "kableExtra")}.
 #' @param ... Other arguments to pass to \code{\link[kableExtra:kable_styling]{kableExtra::kable_styling}}.
 
 #' @return A html table (opened in the viewer in RStudio). Differences from totals,
@@ -494,218 +498,59 @@ tab_kable <- function(tabs,
                       get_data = FALSE,
                       full_width = FALSE,
                       wrap_rows = 35, wrap_cols = 15,
-                      whitespace_only = TRUE, # unbreakable_spaces = TRUE,
+                      whitespace_only = TRUE,
+                      engine = NULL,
                       ...) {
-  #theme <- if (is.null(theme)) { getOption("tabxplor.color_style_theme") } else { theme }
   color_type <-
     if (is.null(color_type)) { getOption("tabxplor.color_style_type") } else {color_type}
-
   html_24_bit <-
     if (is.null(html_24_bit)) {getOption("tabxplor.color_html_24_bit")} else {html_24_bit}
-
   html_font <-
     if (is.null(html_font)) {getOption("tabxplor.kable_html_font")} else {html_font}
-
-
-
   popover <- if (is.null(popover)) {getOption("tabxplor.kable_popover")} else {popover}
+  engine  <- if (is.null(engine)) {getOption("tabxplor.tab_kable_engine", "kableExtra")} else {engine}
+  engine  <- match.arg(engine, c("kableExtra", "html"))
 
-  # --- Phase 10d: shared exporter prep (list->compact, degrade, roles, two-channel colours, bold). ---
+  # --- Phase 10d: shared exporter prep (list/compact, degrade, roles, two-channel colours, bold). ---
   # The block-A "canonical col_vars -> validate -> compact", the graceful-degrade check, the role
   # detection, the per-column colour codes (fmt_channel_codes) and the bold-row set are the ONE shared
-  # tab_export_prep(). The colour precedence (measure hex > reference/total cell > grey) and the two
-  # channels (text -> font, background -> fill) live in the prep's `ann` now (see fmt_col_ann()).
+  # tab_export_prep(). `list_method = TRUE`: a non-mergeable list (several row_vars / tab_vars) is
+  # rendered table-after-table instead of erroring (Phase 10e, like tab_md()).
   prep <- tab_export_prep(
-    tabs, backend = "kable",
+    tabs, backend = "kable", list_method = TRUE,
     wrap = list(rows = wrap_rows, cols = wrap_cols, exdent = 2,
                 whitespace_only = whitespace_only, unbreakable_spaces = TRUE, brk = "<br>"),
     color_type = color_type, theme = theme, html_24_bit = html_24_bit,
     color_legend = color_legend, what = "tab_kable()"
   )
-  rd <- prep$tables[[1]]
 
-  if (isTRUE(rd$vars$degrade)) {
-    tab_degrade_inform(rd$vars$reason)
-    return(kableExtra::kbl(tibble::as_tibble(tabs)))
-  }
+  # Phase 10e: render each prepared table through the engine seam. The colour legend is CONTENT (a
+  # measure summary), so it is prepended per table to `subtext` here; the seam styles everything else.
+  in_knitr <- !is.null(knitr::opts_knit$get("out.format"))
+  parts <- purrr::map(prep$tables, function(rd) {
+    subtext <- character(0)
+    if (!isTRUE(rd$vars$degrade)) {
+      subtext <- rd$subtext
+      if (color_legend && length(rd$roles$color_cols) != 0) {
+        subtext <- c(
+          suppressWarnings(tab_color_legend(
+            rd$tab, mode = "html",
+            html_type   = color_type[1],
+            html_theme  = theme[1],
+            html_24_bit = html_24_bit[1],
+            text_color  = prep$meta$theme_cols$text,
+            grey_color  = prep$meta$theme_cols$grey)),
+          subtext)
+      }
+    }
+    render_kable_html(rd, prep$meta, engine = engine, subtext = subtext, caption = caption,
+                      tooltips = tooltips, popover = popover, html_font = html_font,
+                      full_width = full_width, get_data = get_data, in_knitr = in_knitr, ...)
+  })
 
-  tabs     <- rd$tab
-  tab_vars <- rd$vars$tab_vars
-  subtext  <- rd$subtext
+  if (get_data) return(if (length(parts) == 1L) parts[[1]] else parts)
 
-  # kable-only: escape markdown stars in knitr contexts (else signif stars * break the html). The
-  # role/colour derivations are content-independent, so escaping AFTER the prep is byte-identical.
-  if (!is.null(knitr::opts_knit$get("out.format"))) {
-    tabs <- tabs |>
-      dplyr::mutate(dplyr::across(dplyr::where(is.character),
-                                  ~ stringr::str_replace_all(., "\\*", "\\\\*")))
-  }
-
-  new_group   <- rd$roles$new_group
-  row_var     <- rd$roles$row_var_col
-  color_cols  <- rd$roles$color_cols
-  fmt_cols    <- rd$roles$fmt_cols
-  other_cols  <- rd$roles$other_cols
-  totcols     <- rd$roles$totcols
-  totrows     <- rd$roles$totrows
-  no_totrows  <- rd$roles$no_totrows
-  new_col_var <- rd$roles$new_col_var
-  any_bg      <- rd$roles$any_bg
-
-  text_color <- prep$meta$theme_cols$text
-  grey_color <- prep$meta$theme_cols$grey
-
-  # Per-fmt-column colour vectors (derive-once) from the prep's `ann`, keyed by column name.
-  color_font <- purrr::map(rd$ann, "font")
-  color_back <- purrr::map(rd$ann, "back")
-  color_bold <- purrr::map(rd$ann, "bold")
-
-  if (any_bg) {
-    out <- tabs %>%
-      dplyr::mutate(dplyr::across(
-        where(is_fmt),
-        ~ format(., html = TRUE, special_formatting = TRUE, na = "",
-                 .ref = ann_ref(rd$ann[[dplyr::cur_column()]])) %>%
-          kableExtra::cell_spec(
-            bold       = color_bold[[dplyr::cur_column()]],
-            color      = color_font[[dplyr::cur_column()]],
-            background = color_back[[dplyr::cur_column()]],
-            tooltip = if (!popover & tooltips) {tab_kable_print_tooltip(.)} else {NULL},
-            popover = if (popover & tooltips) {tab_kable_print_tooltip(., popover = TRUE)} else {NULL}
-          )
-      ))
-
-  } else {
-    out <- tabs %>%
-      dplyr::mutate(dplyr::across(
-        where(is_fmt),
-        ~ format(., html = TRUE, special_formatting = TRUE, na = "",
-                 .ref = ann_ref(rd$ann[[dplyr::cur_column()]])) %>%
-          kableExtra::cell_spec(
-            bold  = color_bold[[dplyr::cur_column()]],
-            color = color_font[[dplyr::cur_column()]],
-            tooltip = if (!popover & tooltips) {tab_kable_print_tooltip(.)} else {NULL},
-            popover = if (popover & tooltips) {tab_kable_print_tooltip(., popover = TRUE)} else {NULL}
-          )
-      ))
-  }
-
-  if (get_data) return(out)
-
-  # refs2 <- tabs[[fmt_cols[1]]] %>% get_reference(mode = "all_totals")
-  #
-  #   out <- out %>%
-  #     dplyr::mutate(dplyr::across(
-  #       where(~ !is_fmt(.)),
-  #       ~ as.character(.) %>% kableExtra::cell_spec(align = "r", bold  = refs2)
-  #       ))
-
-  if (color_legend) {
-    if (length(color_cols) != 0) subtext <- c(
-   suppressWarnings(tab_color_legend(tabs,
-                       mode = "html",
-                       html_type  = color_type[1],
-                       html_theme = theme[1],
-                       html_24_bit = html_24_bit[1],
-                       text_color = text_color,
-                       grey_color = grey_color)),
-      subtext)
-  }
-
-
-  alignement <- rd$roles$align
-
-  out <- knitr::kable(out, escape = FALSE, format = "html", align = alignement,
-                      #table.attr = "style=\"border-top: 0; border-bottom: 0; cellspacing: -10pt\"",
-                      caption = caption)
-  # table.attr changes css style of table_classic (no upper and lower big lines)
-
-  if (theme[1] == "light") {
-    out <- out %>% kableExtra::kable_classic(
-      lightable_options = "hover", # "striped", ?
-      #bootstrap_options = c("hover", "condensed", "responsive", "bordered"), #"striped",
-      full_width = full_width,
-      html_font = html_font, # "DejaVu Sans Condensed", # row_label_position
-      #fixed_thead = TRUE,
-      ...
-    )
-
-  } else {
-    out <- out %>% kableExtra::kable_material_dark(
-      lightable_options = "hover",
-      bootstrap_options = c("hover", "condensed", "responsive"), #"striped",
-      full_width = full_width,
-      html_font = html_font, # "DejaVu Sans Condensed", # row_label_position
-      #fixed_thead = TRUE,
-      ...
-    )
-
-  }
-
-  # Bold reference/total rows (block D) -- from the prep's derive-once bold-row set.
-  tot_or_ref <- rd$bold_rows
-
-  tot_n_pval <- is_totrow(tabs) |
-    (!is_totrow(tabs) & dplyr::pull(tabs, row_var) %in% c("n", "pvalue", "row_pct"))
-
-  tot_rows_1 <- which(
-    dplyr::if_else(tot_n_pval,
-                   !dplyr::lag(tot_n_pval),
-                   FALSE)
-  )
-  tot_rows_last <- which(
-    dplyr::if_else(tot_n_pval,
-                   !dplyr::lead(tot_n_pval, default = FALSE),
-                   FALSE)
-  )
-
-
-
-if (length(subtext) != 0) {
-  out <- out %>% kableExtra::add_footnote(subtext, notation = "none", escape = FALSE)
-}
-
-
-out <- out %>%
-  kableExtra::row_spec(
-    0, color = text_color, bold = TRUE,
-    extra_css = "border-top: 0px solid ; border-bottom: 1px solid ;font-size: 90%;vertical-align: bottom;line-height: 0.9;padding: 3px;text-align: center;" #
-  ) %>%
-  kableExtra::row_spec(tot_or_ref, bold = TRUE) %>%
-  # kableExtra::row_spec(
-  #   totrows, #bold = TRUE,
-  #   extra_css = "border-top: 1px solid ; border-bottom: 1px solid ;"
-  # ) %>%
-  kableExtra::row_spec(tot_rows_1, extra_css = "border-top: 1px solid ;") %>%
-  kableExtra::row_spec(tot_rows_last, extra_css = "border-bottom: 1px solid ;") %>%
-  #kableExtra::row_spec(no_totrows, extra_css = "border-top: 0px solid ;") %>%
-  kableExtra::column_spec(fmt_cols, extra_css = "white-space: nowrap;") %>%
-  kableExtra::column_spec(unique(c(new_col_var, ncol(tabs))), border_right = TRUE) %>%
-  kableExtra::column_spec(other_cols, border_left = TRUE) %>%
-  kableExtra::column_spec(totcols, border_left = TRUE, width_min = 11) %>% # bold = TRUE
-  kableExtra::column_spec(row_var, width_min = 20) %>%
-  kableExtra::row_spec(new_group, extra_css = "border-bottom: 2px solid;") %>%
-  kableExtra::row_spec(nrow(tabs), extra_css = "border-bottom: 1px solid;") |>
-  kableExtra::row_spec(1:nrow(tabs), extra_css = "vertical-align: top; line-height: 0.85;padding: 3px;")
-
-
-if (getOption("tabxplor.always_add_css_in_tab_kable") | interactive()) {
-  out <- paste0(
-
-    htmltools::includeCSS(system.file("tab.css", package = "tabxplor")),
-    "\n",
-    # "<script type=\"text/x-mathjax-config\">MathJax.Hub.Config({tex2jax: {inlineMath: [[\"$\",\"$\"]]}})</script>",
-    # "<script async src=\"https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML\"></script>",
-    # "\n",
-    as.character(out) |>
-      stringr::str_replace_all(">NA</span>", "></span>") #|>
-    #stringr::str_replace_all("<td style", '<td class = "align-top"; style')
-  ) |>
-    vctrs::vec_restore(out)
-}
-
-
-out
+  tab_kable_join(parts, engine, theme = prep$meta$theme)
 }
 
 
@@ -1640,93 +1485,99 @@ if (color_legend & length(color_cols) != 0) {
 
 
 #' @keywords internal
-tab_kable_print_tooltip <- function(x, popover = FALSE) {
+# Phase 10e: each `out_*` fragment is now any()-gated -- the expensive format(set_display(x, ...)) pass
+# runs ONLY when at least one cell of the column carries that field (a pct column has no or/mean/sd; a
+# mean column has no rr/or/pct). When the gate fails the fragment is rep("", n), which is exactly what
+# the original if_else/case_when produced (all-FALSE condition), so the tooltip string is BYTE-IDENTICAL
+# -- only the discarded format() calls are skipped. `.ref` (the prep's precomputed ref_cells) skips the
+# get_reference() re-derivation.
+tab_kable_print_tooltip <- function(x, popover = FALSE, .ref = NULL) {
 
-  ref     <- get_reference(x, mode = "cells")
+  n       <- length(x)
+  blank   <- rep("", n)
+  ref     <- if (!is.null(.ref)) .ref else get_reference(x, mode = "cells")
   totcol  <- is_totcol(x)
   totrows <- is_totrow(x)
   tottabs <- is_tottab(x)
   type    <- get_type(x)
+  digits  <- get_digits(x)
 
-  diff     <- get_diff(x)
-  ratio    <- get_ratio(x)
-  or       <- get_or(x)
-  digits   <- get_digits(x)
-
-
-  ok_diff  <- !is.na(diff) & !((totcol | totrows) & get_pct(x) == 1)
-  out_diff <- dplyr::case_when(
-    ref & any(ok_diff)       ~ "diff: ref",
-    ok_diff & type == "mean" ~ paste0("diff: ", stringi::stri_unescape_unicode("\\u00d7"), #multiplication sign
-                                      format(set_display(x, "diff")) ),
-    ok_diff                  ~ paste0("diff: ",      format(set_display(x, "diff")) ),
-    # ok_diff & diff >= 0      ~ paste0("diff: ", "+", format(set_display(x, "diff")) ),
-    # ok_diff & diff < 0       ~ paste0("diff: ",      format(set_display(x, "diff")) ),
-    TRUE                     ~ ""
-  )
+  ok_diff  <- !is.na(get_diff(x)) & !((totcol | totrows) & get_pct(x) == 1)
+  out_diff <- if (any(ok_diff)) {
+    dplyr::case_when(
+      ref & any(ok_diff)       ~ "diff: ref",
+      ok_diff & type == "mean" ~ paste0("diff: ", stringi::stri_unescape_unicode("\\u00d7"), #multiplication sign
+                                        format(set_display(x, "diff")) ),
+      ok_diff                  ~ paste0("diff: ",      format(set_display(x, "diff")) ),
+      TRUE                     ~ ""
+    )
+  } else blank
 
   ci_type  <- get_ci_type(x)
   ci_start <- switch(ci_type, "cell" = "ci: ", "")
-  out_ci   <- dplyr::if_else(
-    condition = !is.na(get_ci(x)),
-    true      = paste0(ci_start, format(set_display(x, "ci") %>%
-                                          set_digits(dplyr::if_else(digits == 0L,
-                                                                    digits + 1L,
-                                                                    digits))) ),
-    false     = ""
-  )
+  has_ci   <- !is.na(get_ci(x))
+  out_ci   <- if (any(has_ci)) {
+    dplyr::if_else(
+      condition = has_ci,
+      true      = paste0(ci_start, format(set_display(x, "ci") %>%
+                                            set_digits(dplyr::if_else(digits == 0L,
+                                                                      digits + 1L,
+                                                                      digits))) ),
+      false     = ""
+    )
+  } else blank
 
   out_diff <- switch(ci_type,
                      "diff" = paste0(out_diff, " ", stringr::str_remove(out_ci, "%$")),
                      out_diff)
   out_ci   <- switch(ci_type, "cell" = out_ci, "")
 
-  out_pct <- dplyr::if_else(
-    condition = type %in% c("col", "row", "all", "all_tabs") &
-      !is.na(get_pct(x)) & !get_display(x) %in% c("pct", "pct_ci"),
-    true      = format(set_display(x, "pct")),
-    false     = ""
-  )
+  cond_pct <- type %in% c("col", "row", "all", "all_tabs") &
+    !is.na(get_pct(x)) & !get_display(x) %in% c("pct", "pct_ci")
+  out_pct <- if (any(cond_pct)) {
+    dplyr::if_else(cond_pct, format(set_display(x, "pct")), "")
+  } else blank
 
-  out_mean <- dplyr::if_else(
-    condition = type == "mean" & !is.na(get_mean(x)) & !get_display(x) %in% c("mean", "mean_ci"),
-    true      = format(set_display(x, "mean")),
-    false     = ""
-  )
+  cond_mean <- type == "mean" & !is.na(get_mean(x)) & !get_display(x) %in% c("mean", "mean_ci")
+  out_mean <- if (any(cond_mean)) {
+    dplyr::if_else(cond_mean, format(set_display(x, "mean")), "")
+  } else blank
 
-  out_sd <- dplyr::if_else(
-    condition = type == "mean" & !is.na(get_var(x)) & !get_display(x) == "var",
-    true      = dplyr::if_else(
-      x$var >= 0,
-      true  = paste0("sd: ", format(set_display(set_digits(set_var(x, suppressWarnings(sqrt(x$var))), x$digits + 1L), "var"))),
-      false = ""),
-    false     = ""
-  )
+  cond_sd <- type == "mean" & !is.na(get_var(x)) & !get_display(x) == "var"
+  out_sd <- if (any(cond_sd)) {
+    dplyr::if_else(
+      cond_sd,
+      dplyr::if_else(
+        x$var >= 0,
+        true  = paste0("sd: ", format(set_display(set_digits(set_var(x, suppressWarnings(sqrt(x$var))), x$digits + 1L), "var"))),
+        false = ""),
+      "")
+  } else blank
 
-  out_rr <- dplyr::if_else(
-    condition = type %in% c("col", "row") & !is.na(get_ratio(x)) & !get_display(x) == "rr",
-    true      = paste0("rr: ", format(set_display(x, "or")) ),
-    false     = ""
-  )
+  cond_rr <- type %in% c("col", "row") & !is.na(get_ratio(x)) & !get_display(x) == "rr"
+  out_rr <- if (any(cond_rr)) {
+    dplyr::if_else(cond_rr, paste0("rr: ", format(set_display(x, "or")) ), "")
+  } else blank
 
-  out_or <- dplyr::if_else(
-    condition = type %in% c("col", "row") & !is.na(get_or(x)) & !get_display(x) %in% c("or", "OR", "or_pct", "OR_pct"),
-    true      = paste0("OR: ", format(set_display(x, "or")) ),
-    false     = ""
-  )
+  cond_or <- type %in% c("col", "row") & !is.na(get_or(x)) &
+    !get_display(x) %in% c("or", "OR", "or_pct", "OR_pct")
+  out_or <- if (any(cond_or)) {
+    dplyr::if_else(cond_or, paste0("OR: ", format(set_display(x, "or")) ), "")
+  } else blank
 
+  cond_ctr <- !is.na(get_ctr(x)) & !get_ctr(x) == Inf & !((totcol | totrows) & get_pct(x) == 1 )
+  out_ctr <- if (any(cond_ctr)) {
+    mctr      <- if (get_comp_all(x)) { totrows & tottabs & !totcol } else { totrows & !totcol }
+    ctr_start <- dplyr::if_else(mctr, "mean_ctr: ", "contrib: ")
+    dplyr::if_else(cond_ctr,
+                   paste0(ctr_start, format(set_display(x, "ctr")) %>% stringr::str_remove("^-")),
+                   "")
+  } else blank
 
-  mctr <- if (get_comp_all(x)) { totrows & tottabs & !totcol } else { totrows & !totcol }
-  ctr_start <- dplyr::if_else(mctr,"mean_ctr: ", "contrib: ")
-  out_ctr <- dplyr::if_else(condition = !is.na(get_ctr(x)) & !get_ctr(x) == Inf &
-                              !((totcol | totrows) & get_pct(x) == 1 ),
-                            true      = paste0(ctr_start, format(set_display(x, "ctr")) %>%
-                                                 stringr::str_remove("^-")),
-                            false     = "")
-
-  out_n <- dplyr::if_else(condition = !is.na(get_n(x)) & !get_display(x) == "n",
-                          true      = paste0("n: ", format(set_display(x, "n")) ),
-                          false     = "")
+  cond_n <- !is.na(get_n(x)) & !get_display(x) == "n"
+  out_n <- if (any(cond_n)) {
+    dplyr::if_else(cond_n, paste0("n: ", format(set_display(x, "n")) ), "")
+  } else blank
 
   out <- paste(out_pct, out_mean, out_sd, out_diff, out_rr, out_or,
                out_ci, out_ctr, out_n, sep = " ; ") %>%

@@ -41,26 +41,17 @@ resolveExportPath <- function(path, ext = "xlsx") {
   normalizePath(path, mustWork = FALSE)
 }
 
-# Render a built tab (or list of tabs) to a self-contained HTML string. Reuses tab_kable() +
-# inlines the lightable/bootstrap CSS (the same route jmvtab.b.R's live render uses), so the file
-# opens correctly in any browser with no external assets, webshot or pandoc.
+# Render a built tab (or list of tabs) to a self-contained HTML string via the Phase 10e home-built
+# html engine (inline CSS in a <style> block), so the file opens in any browser with no external
+# assets, webshot, pandoc -- or even kableExtra (which the html engine does not use).
 #' @keywords internal
 #' @noRd
 tab_html_string <- function(tabs, wrap_rows = 35, wrap_cols = 15, standalone = TRUE, ...) {
-  k <- tab_kable(tabs, wrap_rows = wrap_rows, wrap_cols = wrap_cols,
-                 fixed_thead = FALSE, tooltips = FALSE, position = "left", ...)
-
-  css_of <- function(pkg, file) {
-    p <- system.file(file, package = pkg)
-    if (nzchar(p)) as.character(htmltools::includeCSS(p)) else ""
-  }
-  css  <- paste0(css_of("kableExtra", "lightable-0.0.1/lightable.css"),
-                 css_of("rmarkdown", "rmd/h/bootstrap/css/cosmo.min.css"))
-  body <- as.character(k)
-
-  if (!standalone) return(paste0(css, body))
-  paste0("<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"utf-8\"/>\n",
-         css, "\n</head>\n<body>\n", body, "\n</body>\n</html>\n")
+  body <- as.character(tab_kable(tabs, engine = "html", wrap_rows = wrap_rows,
+                                 wrap_cols = wrap_cols, tooltips = FALSE, ...))
+  if (!standalone) return(body)
+  paste0("<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"utf-8\"/>\n</head>\n<body>\n",
+         body, "\n</body>\n</html>\n")
 }
 
 # Write a built tab (or list of tabs) to a file in the chosen format. Returns the path invisibly.
@@ -80,9 +71,7 @@ jmvtab_export <- function(tabs, format = c("excel", "html", "md"), path, replace
       tab_xl(tabs, path = path, sheets = "unique", open = FALSE, replace = replace)
     },
     html = {
-      if (!requireNamespace("kableExtra", quietly = TRUE)) {
-        stop("Package 'kableExtra' is required for HTML export.", call. = FALSE)
-      }
+      # Phase 10e: html export uses the self-contained home-built engine -> no kableExtra needed.
       writeLines(tab_html_string(tabs, ...), path)
     },
     md = tab_md(tabs, file = path, print = FALSE)

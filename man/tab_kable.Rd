@@ -19,6 +19,7 @@ tab_kable(
   wrap_rows = 35,
   wrap_cols = 15,
   whitespace_only = TRUE,
+  engine = NULL,
   ...
 )
 }
@@ -73,6 +74,11 @@ a LaTeX table.}
 \item{wrap_cols}{By default, colnames are wrapped when larger than 12 characters.}
 
 \item{whitespace_only}{Set to \code{FALSE} to wrap also on non whitespace characters.}
+
+\item{engine}{The HTML render engine. \code{"kableExtra"} (default) uses \pkg{kableExtra};
+\code{"html"} uses a dependency-free, self-contained (inline-CSS) \verb{<table>} renderer that is
+faster and needs no external CSS (used by the jamovi live UI). Defaults to
+\code{getOption("tabxplor.tab_kable_engine", "kableExtra")}.}
 
 \item{...}{Other arguments to pass to \code{\link[kableExtra:kable_styling]{kableExtra::kable_styling}}.}
 }

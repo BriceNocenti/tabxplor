@@ -264,6 +264,19 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
   row_var_name <- tab_render_vars(tab)$row_var
   row_var_col  <- which(names(tab) == row_var_name)
 
+  # Total-BLOCK border rows (block D borders), lifted verbatim from tab_kable (derive-once, shared by
+  # both render engines). A "total block" is a maximal run of total rows OR the reserved n/pvalue/
+  # row_pct label rows; the first row of each run gets a top border, the last a bottom border.
+  # WARNING: the c("n","pvalue","row_pct") whitelist is un-translated (English row labels) -> it
+  # silently misses jamovi's gettext labels. Kept as-is for byte-identity; a real fix needs a per-row
+  # role flag on the add_n/add_pct/pvalue rows rather than a value match on the row-label column.
+  tot_block <- is_totrow(tab) |
+    (!is_totrow(tab) & tab[[row_var_col]] %in% c("n", "pvalue", "row_pct"))
+  totblock_top <-
+    which(dplyr::if_else(tot_block, !dplyr::lag(tot_block), FALSE))
+  totblock_bottom <-
+    which(dplyr::if_else(tot_block, !dplyr::lead(tot_block, default = FALSE), FALSE))
+
   # kable/plot col_var transition index (one-liner). md keeps its own real-col_var span loop.
   new_col_var <- col_var_map
   new_col_var[names(other_cols)] <- names(other_cols)
@@ -300,7 +313,8 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
                 col_vars = rv$col_vars, col_vars_levels = rv$col_vars_levels),
     roles = list(fmt_mask = fmt_mask, fmt_cols = fmt_cols, other_cols = other_cols,
                  row_var_col = row_var_col, totcols = totcols, totrows = totrows,
-                 no_totrows = no_totrows, real_col_vars = real_col_vars,
+                 no_totrows = no_totrows, totblock_top = totblock_top,
+                 totblock_bottom = totblock_bottom, real_col_vars = real_col_vars,
                  col_var_map = col_var_map, new_col_var = new_col_var,
                  new_group = new_group, align = align,
                  color_cols = color_cols, any_bg = any_bg),
@@ -343,7 +357,7 @@ tab_export_prep <- function(tabs,
   theme_cols <- list(
     theme = theme[1],
     text  = dplyr::if_else(theme[1] == "light", "#000000", "#FFFFFF"),
-    grey  = dplyr::if_else(theme[1] == "light", "#888888", "#BBBBBB"),
+    grey  = dplyr::if_else(theme[1] == "light", "#989898", "#BBBBBB"),
     grey2 = dplyr::if_else(theme[1] == "light", "#111111", "#EEEEEE")
   )
 
