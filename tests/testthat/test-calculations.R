@@ -689,10 +689,10 @@ testthat::test_that("vectorised chi2 applies the Yates correction on 2x2 like ch
   testthat::expect_equal(chi2_row$pvalue,    ref$p.value,           tolerance = 1e-10)
 })
 
-testthat::test_that("chi2 is unaffected by add_n columns and rows", {
+testthat::test_that("chi2 is unaffected by add_n (now a display-only column)", {
   ref_tab  <- tab_plain(gss, race, marital, pct = "row") |> tab_chi2()
   ref_row  <- get_test(ref_tab) |> dplyr::filter(.data$test == "chi2")
-  # a built table already carrying add_n column + row, then chi2 on it (the historical bug case)
+  # Phase 10i-B: add_n is display-only, so `tab(add_n = TRUE)` builds the SAME core table chi2 sees.
   addn_tab <- tab(gss, race, marital, pct = "row", add_n = TRUE) |> tab_chi2()
   addn_row <- get_test(addn_tab) |> dplyr::filter(.data$test == "chi2")
 

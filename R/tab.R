@@ -1792,10 +1792,11 @@ tab_assemble_tables <- function(ctx) {
       tabs_text <- dplyr::select(tabs_text, -tidyselect::any_of(rm_levels))
     }
 
-    # Add column or row with n counts, or column or row with the other kind of percentages.
-    # tab_add_n_pct() operates on the tabs_text LIST (shared with the historical batch path); wrap this
-    # single table for it (the list NAME is cosmetic there, only the totcol/totrow VALUES matter).
-    tabs_text <- tab_add_n_pct(purrr::set_names(list(tabs_text), row_var), add_n, add_pct)[[1]]
+    # Phase 10i-B: add_n / add_pct are NO LONGER baked here. The intent is stored in the
+    # `render_extras` attribute (below), and tab_materialize_extras() re-creates the add_n `n`
+    # column / in-cell composite + the add_pct `col_pct` / `row_pct` at DISPLAY, byte-identically
+    # (it reuses this very tab_add_n_pct() on the finished table). This keeps the built tab the
+    # "core" table and lets the reserved-`n`/`row_pct`/`all_col_vars` special-cases downstream go.
 
     #Remove unwanted total columns
     if (!tot_cols_type %in% c("each", "no_no_create")) {
@@ -1870,12 +1871,15 @@ tab_assemble_tables <- function(ctx) {
   if (is.logical(tests)) tests <- new_test_tibble()
   if (!is.null(chi2_num)) tests <- dplyr::bind_rows(tests, chi2_num)
 
+  # Phase 10i-B: store the add_n / add_pct DISPLAY intent (materialised by tab_materialize_extras()).
+  render_extras <- list(add_n = isTRUE(add_n), add_pct = isTRUE(add_pct))
   if (!lv1_group_vars(tab)) {
     tab    <- dplyr::group_by(tab, !!!tab_vars)
     groups <- dplyr::group_data(tab)
-    tab    <- new_grouped_tab(tab, groups = groups, subtext = subtext, test = tests)
+    tab    <- new_grouped_tab(tab, groups = groups, subtext = subtext, test = tests,
+                              render_extras = render_extras)
   } else {
-    tab <- new_tab(tab, subtext = subtext, test = tests)
+    tab <- new_tab(tab, subtext = subtext, test = tests, render_extras = render_extras)
   }
 
   # Row_var finishing done: ctx$tabs is the single finished tabxplor_tab/grouped_tab (the whole-table
@@ -2299,7 +2303,11 @@ tab_transpose <- function(tabs, name = NULL) {
     test[["col_var"]] <- rv
   }
 
-  new_tab(wide, subtext = get_subtext(tabs), test = test)
+  # Phase 10i-B: carry the add_n/add_pct DISPLAY intent through the transpose (orientation-agnostic --
+  # the materialiser adds add_n as a ROW once the table reads as col%). So transpose(row% add_n) then
+  # display == a native col% add_n table.
+  new_tab(wide, subtext = get_subtext(tabs), test = test,
+          render_extras = get_render_extras(tabs))
 }
 
 
@@ -5604,13 +5612,10 @@ chi2_compute_test <- function(tabs, comp, row_var, col_vars_levels,
                               col_vars_levels_no_tot, is_a_mean, all_col_tot) {
   # Phase 9b-5: the kept-rows MASK over `tabs` (replaces the tabs2 = tabs[!is_totrow,] record-slice,
   # which reconstructed every fmt column just to read counts off it). Drops total rows (and total tabs
-  # under comp = "all") and any add_n/add_pct display rows (reserved row_var labels "n"/"row_pct", so a
-  # table already carrying them is tested cleanly). is_totrow/is_tottab are the pass-2 fmt_row_flag
-  # fast path (plain logical, no reconstruction).
+  # under comp = "all"). is_totrow/is_tottab are the pass-2 fmt_row_flag fast path (plain logical, no
+  # reconstruction). Phase 10i-B: the former add_n/add_pct row exclusion ("n"/"row_pct") is gone --
+  # chi2 runs at build on the CORE table, which never carries those display-only rows.
   mask2 <- if (comp == "all") !is_totrow(tabs) & !is_tottab(tabs) else !is_totrow(tabs)
-  if (as.character(row_var) %in% names(tabs)) {
-    mask2 <- mask2 & !(as.character(tabs[[as.character(row_var)]]) %in% c("n", "row_pct"))
-  }
   n_rows2 <- sum(mask2)
 
   # Subtable grouping over the kept rows. Byte-identical to group_indices()/group_keys() of the
@@ -5755,9 +5760,11 @@ chi2_write_contrib <- function(tabs, calc, comp, color, col_vars_levels,
   gids <- unique(gid)
 
   # --- 1a. absolute signed contribution -> `var` (eligible: non-mean cells of a real col_var) ---
+  # Phase 10i-B: the `all_col_vars` exclusion (add_n/add_pct helper columns) is gone -- contrib runs
+  # at build on the CORE table, which never carries them; only the total column (`no_col_var`) is out.
   var_after <- purrr::set_names(lapply(fmt_nms, function(nm) get_var(tabs[[nm]])), fmt_nms)
   elig_col  <- purrr::keep(fmt_nms, function(nm) get_type(tabs[[nm]]) != "mean" &&
-                             !get_col_var(tabs[[nm]]) %in% c("no_col_var", "all_col_vars"))
+                             get_col_var(tabs[[nm]]) != "no_col_var")
   for (nm in elig_col) {
     tot_nm <- as.character(tot_cols[[nm]])
     xwn <- get_wn(tabs[[nm]]); twn <- get_wn(tabs[[tot_nm]])
@@ -6638,6 +6645,42 @@ tab_add_n_pct <- function(tabs_text, add_n, add_pct) {
 }
 
 
+# tab_fold_addn_incell() -- Phase 10i-B decision 1. For TEXT backends (console / kable / md), the
+# add_n base moves out of a separate `n` COLUMN and into the Total cell as an in-cell composite
+# `{pct} (n={n})` (via the Phase-10i-A display grammar). The materialiser first builds the real `n`
+# column with tab_add_n_pct() (byte-identical to the old build), then this drops it and folds the
+# base into the Total column's display. Default (`tabxplor.totcol_range = "off"`): each Total cell
+# shows its OWN base `{n}`. Option `"range"` / `"min"`: the cross-col_var base via tab_totcol_range()
+# (a per-row literal `[min;max]` / smallest), for tables whose col_vars have differing NA bases.
+# NB: run BEFORE tab_pvalue_lines(), so the Total column has only data/total cells (all eligible).
+tab_fold_addn_incell <- function(tab) {
+  tot_nm <- dplyr::last(names(tab)[is_totcol(tab) & get_type(tab) == "row" &
+                                     get_col_var(tab) != "no_col_var"])
+  if (length(tot_nm) != 1 || is.na(tot_nm)) return(dplyr::select(tab, -tidyselect::any_of("n")))
+  style <- getOption("tabxplor.totcol_range", "off")
+
+  tmpl <- if (identical(style, "off")) {
+    NULL                                              # uniform "{pct} (n={n})"
+  } else {
+    fmt_cols <- which(purrr::map_lgl(tab, is_fmt))
+    rng      <- tab_totcol_range(tab, fmt_cols, get_col_var(tab), which(is_totcol(tab)),
+                                 style = style)
+    # per-row literal: "{pct} (n=<base>)"; a row with no base falls back to "{pct}".
+    dplyr::if_else(is.na(rng$text), "{pct}", paste0("{pct} (n=", rng$text, ")"))
+  }
+
+  tab <- dplyr::select(tab, -tidyselect::any_of("n"))   # drop the xl-style `n` column
+  dplyr::mutate(tab, dplyr::across(tidyselect::all_of(tot_nm), function(col) {
+    d    <- get_display(col)
+    # only genuine value cells where both fields render (Phase-10i-A `both` guard); the Total
+    # column is all pct/n non-NA here (p-value rows are materialised later), so this is all cells.
+    elig <- !is.na(get_num(set_display(col, "pct"))) & !is.na(get_num(set_display(col, "n")))
+    if (is.null(tmpl)) d[elig] <- "{pct} (n={n})" else d[elig] <- tmpl[elig]
+    set_display(col, d)
+  }))
+}
+
+
 # tab_apply_n_min() -- the small-base display filter (Phase 7g). A PURE end-of-pipeline DISPLAY
 # helper: it recomputes NOTHING (no fields, no chi2/ANOVA, no CI). The user has already seen the
 # whole table; n_min just strips the noise of unreliable small-base cells so it reads cleanly.
@@ -6658,27 +6701,21 @@ tab_apply_n_min <- function(tab, n_min) {
   if (length(fmt_names) == 0) return(tab)
 
   type   <- purrr::map_chr(tab[fmt_names], get_type)
-  helper <- purrr::map_lgl(tab[fmt_names], ~ get_col_var(.) == "all_col_vars")
   totcol <- purrr::map_lgl(tab[fmt_names], is_totcol)
 
   cell_base <- function(col) if (get_type(col) == "mean") get_n(col) else get_tot_n(col)
 
   # --- protected rows (never dropped) --------------------------------------------------------
+  # Phase 10i-B: n_min runs at build on the CORE table -- the add_n/add_pct/p-value extras are
+  # materialised later, at display -- so the former helper-COLUMN ("all_col_vars") and helper-ROW
+  # ("n"/"row_pct"/p-value) protections are dead. Only the total row / total table are protected.
   fmt_all <- tab[fmt_names]
   totrow  <- purrr::reduce(purrr::map(fmt_all, is_totrow), `|`)
   tottab  <- purrr::reduce(purrr::map(fmt_all, is_tottab), `|`)
-  # Phase 10i-B: the p-value line is no longer in the core table when n_min runs (materialised at
-  # display), so its `pline` (all-n-NA) protection is dead -- dropped. The add_n/add_pct helper rows
-  # ("n"/"row_pct") are still baked here in Increment 1 (kept below); Increment 2 drops `helprow` too.
-  rvars   <- tab_get_vars(tab)$row_var
-  rvars   <- rvars[rvars %in% names(tab)]
-  helprow <- if (length(rvars)) {
-    purrr::reduce(purrr::map(tab[rvars], ~ as.character(.) %in% c("n", "row_pct")), `|`)
-  } else rep(FALSE, nrow(tab))
-  protect <- totrow | tottab | helprow
+  protect <- totrow | tottab
 
   # --- row-drop + cell-blank on row-oriented columns -----------------------------------------
-  row_cols <- fmt_names[type %in% c("row", "all", "mean") & !helper]  # totcol INCLUDED in the max
+  row_cols <- fmt_names[type %in% c("row", "all", "mean")]  # totcol INCLUDED in the max
   if (length(row_cols) > 0) {
     bases    <- purrr::map(tab[row_cols], ~ { b <- cell_base(.); b[is.na(b)] <- Inf; b })
     row_base <- purrr::reduce(bases, pmax)
@@ -6692,8 +6729,8 @@ tab_apply_n_min <- function(tab, n_min) {
       if (length(gv) > 0) tab <- dplyr::group_by(tab, dplyr::across(tidyselect::all_of(gv)))
     }
   }
-  # blank surviving weak cells (row-oriented, non-total, non-helper stat columns)
-  blank_cols <- fmt_names[type %in% c("row", "all", "mean") & !helper & !totcol]
+  # blank surviving weak cells (row-oriented, non-total stat columns)
+  blank_cols <- fmt_names[type %in% c("row", "all", "mean") & !totcol]
   blank_cols <- intersect(blank_cols, names(tab))
   if (length(blank_cols) > 0) {
     tab <- dplyr::mutate(tab, dplyr::across(
@@ -6708,7 +6745,7 @@ tab_apply_n_min <- function(tab, n_min) {
   }
 
   # --- column-drop on col-oriented columns (pct = "col") -------------------------------------
-  drop_cols <- fmt_names[type == "col" & !helper & !totcol]
+  drop_cols <- fmt_names[type == "col" & !totcol]
   drop_cols <- intersect(drop_cols, names(tab))
   if (length(drop_cols) > 0) {
     weak <- purrr::map_lgl(tab[drop_cols], ~ {

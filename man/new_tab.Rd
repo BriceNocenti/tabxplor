@@ -10,6 +10,7 @@ new_tab(
   subtext = "",
   test = new_test_tibble(),
   chi2 = NULL,
+  render_extras = NULL,
   ...,
   class = character()
 )
@@ -20,6 +21,7 @@ new_grouped_tab(
   subtext = "",
   test = new_test_tibble(),
   chi2 = NULL,
+  render_extras = NULL,
   ...,
   class = character()
 )

@@ -75,6 +75,7 @@
 new_tab <-
   function(tabs = tibble::tibble(), subtext = "",
            test = new_test_tibble(), chi2 = NULL,
+           render_extras = NULL,
            ..., class = character()) {
     stopifnot(is.data.frame(tabs))
     #vec_assert(subtext    , character())
@@ -82,8 +83,13 @@ new_tab <-
     # Soft-deprecated `chi2` arg (renamed `test` in 1.4.0): if supplied, it feeds `test`.
     if (!is.null(chi2)) test <- chi2
 
-    tibble::new_tibble(tabs, subtext = subtext, test = test, ...,
-                       nrow = nrow(tabs), class = c(class, "tabxplor_tab"))
+    out <- tibble::new_tibble(tabs, subtext = subtext, test = test, ...,
+                              nrow = nrow(tabs), class = c(class, "tabxplor_tab"))
+    # Phase 10i-B: `render_extras` (list(add_n=, add_pct=)) is the display-only intent for the add_n /
+    # add_pct extras -- set only when supplied (a NULL attribute would be dropped anyway), so tables
+    # never given it (raw tab_plain, older objects) simply have no attribute -> materialiser no-op.
+    if (!is.null(render_extras)) attr(out, "render_extras") <- render_extras
+    out
   }
 
 #' @param groups The grouping data.
@@ -94,6 +100,7 @@ new_grouped_tab <-
   function(tabs = tibble::tibble(), groups,
            subtext = "",
            test = new_test_tibble(), chi2 = NULL,
+           render_extras = NULL,
            ..., class = character()) {
     if (missing(groups)) groups <- attr(tabs, "groups")
     class <- c(class, c("tabxplor_grouped_tab", "grouped_df"))
@@ -102,7 +109,7 @@ new_grouped_tab <-
     if (!is.null(chi2)) test <- chi2
 
     new_tab(tabs, groups = groups,
-            subtext = subtext, test = test,
+            subtext = subtext, test = test, render_extras = render_extras,
             ...,
             class = class)
   }
@@ -140,6 +147,96 @@ set_test <- function(x, test) {
   attr(x, "test") <- test
   x
 }
+
+# Phase 10i-B: `render_extras` -- the DISPLAY-only intent for the add_n / add_pct extras, a small
+# table-level list `list(add_n = <lgl>, add_pct = <lgl>)`. The built tab() no longer carries the add_n
+# `n` column / add_pct `col_pct` column-or-rows; it stores this intent (born in tab_assemble_tables)
+# and tab_materialize_extras() re-creates the rows/cols at display. Carried through dplyr verbs exactly
+# like `subtext`/`test` (every S3 method threads `render_extras = get_render_extras(...)`); the vctrs
+# reconcilers take x's (a scalar intent, not row-bound like `test`). NULL -> no extras.
+get_render_extras <- purrr::attr_getter("render_extras")
+set_render_extras <- function(x, render_extras) {
+  attr(x, "render_extras") <- render_extras
+  x
+}
+
+
+# Phase 10i-B back-compat shim -- `tabs$n` / `tabs[["n"]]` / `pull(tabs, "n")` (and `col_pct`). add_n /
+# add_pct are now DISPLAY-only, so the built tab has no `n` / `col_pct` column; old user code reading
+# that column would get NULL. When the column is ABSENT but WAS requested (the render_extras intent),
+# reconstruct it from the Total column -- byte-identical to the old add_n/add_pct column -- with a
+# soft-deprecation (removed in a future version). Only a genuine COLUMN reconstruction applies (pct=
+# "row"); under pct="col" add_n/add_pct were ROWS, so there was never an `n`/`col_pct` column -> NULL.
+# The accessors below GATE on `%in% names(x)`, so the normal fast path pays nothing.
+#' @keywords internal
+tabxplor_deprecated_column <- function(x, name, user_env = rlang::caller_env(2)) {
+  if (length(name) != 1L || is.na(name) || !name %in% c("n", "col_pct")) return(NULL)
+  re   <- get_render_extras(x)
+  want <- (name == "n" && isTRUE(re$add_n)) || (name == "col_pct" && isTRUE(re$add_pct))
+  if (!want) return(NULL)
+  hyd  <- tryCatch(tab_materialize_extras(x, backend = "xl", pvalue = FALSE),
+                   error = function(e) NULL)
+  # `nrow` guard: pct="col" add_n/add_pct is a ROW (name not a column) -> fall through to NextMethod.
+  if (is.null(hyd) || !name %in% names(hyd) || nrow(hyd) != nrow(x)) return(NULL)
+  lifecycle::deprecate_soft(
+    "1.4.0", I(paste0("`$", name, "` on a tabxplor tab")),
+    details = c(
+      paste0("The `", name, "` column is now added only at display; it is reconstructed here from ",
+             "the Total column and will stop being reconstructed in a future version."),
+      i = paste0("Read it from the printed / exported table, or use `get_n()` on the `Total` column.")),
+    user_env = user_env)
+  hyd[[name]]
+}
+
+#' Extract a column of a tabxplor tab (with the Phase 10i-B add_n/add_pct back-compat shim)
+#' @param x A \code{tabxplor_tab}.
+#' @param name,i A column name.
+#' @param ... Passed on.
+#' @return The column, or the reconstructed add_n/add_pct column (deprecated), or the base method's value.
+#' @method $ tabxplor_tab
+#' @export
+`$.tabxplor_tab` <- function(x, name) {
+  if (name %in% names(x)) return(.subset2(x, name))          # fast path (exact, no partial matching)
+  shim <- tabxplor_deprecated_column(x, name, user_env = rlang::caller_env())
+  if (!is.null(shim)) return(shim)
+  NextMethod()
+}
+
+#' @rdname cash-.tabxplor_tab
+#' @method [[ tabxplor_tab
+#' @export
+`[[.tabxplor_tab` <- function(x, i, ...) {
+  if (...length() == 0L && is.character(i) && length(i) == 1L && !i %in% names(x)) {
+    shim <- tabxplor_deprecated_column(x, i, user_env = rlang::caller_env())
+    if (!is.null(shim)) return(shim)
+  }
+  NextMethod()
+}
+
+#' @rdname cash-.tabxplor_tab
+#' @importFrom dplyr pull
+#' @param var,name See \code{\link[dplyr:pull]{dplyr::pull}}.
+#' @param .data A \code{tabxplor_tab}.
+#' @method pull tabxplor_tab
+#' @export
+pull.tabxplor_tab <- function(.data, var = -1, name = NULL, ...) {
+  # Capture `var` as a quosure and inspect its name. Only a bare/`"..."` name of a DEPRECATED, ABSENT
+  # display-only column is intercepted; everything else DELEGATES to dplyr's pull on the DECLASSED
+  # tibble with the quosure RE-INJECTED (`!!vq`) -- this preserves tidy-select's NSE, which a plain
+  # NextMethod() would break (the quosure environment gets rebound).
+  vq  <- rlang::enquo(var)
+  lbl <- tryCatch(rlang::as_name(vq), error = function(e) NULL)
+  if (!is.null(lbl) && lbl %in% c("n", "col_pct") && !lbl %in% names(.data)) {
+    shim <- tabxplor_deprecated_column(.data, lbl, user_env = rlang::caller_env())
+    if (!is.null(shim)) return(shim)
+  }
+  dplyr::pull(tibble::as_tibble(.data), !!vq, name = {{ name }}, ...)
+}
+
+#' @rdname cash-.tabxplor_tab
+#' @method pull tabxplor_grouped_tab
+#' @export
+pull.tabxplor_grouped_tab <- pull.tabxplor_tab
 
 # The empty-placeholder `test` tibble (used before any test has run). Tidy schema: adding a new
 # test type = adding rows (never a schema change); tab_var columns are added when populated.
@@ -227,6 +324,10 @@ print.tabxplor_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = N
     return(invisible(x))
   }
 
+  # Phase 10i-B: materialise the add_n (in-cell {pct} (n={n})) / add_pct (col_pct) display extras for
+  # the console (backend "text"); p-value stays the print_chi2() block (pvalue = FALSE), NOT rows.
+  x <- tab_materialize_extras(x, backend = "text", pvalue = FALSE)
+
   # Phase 10i-B (decision 2): the console shows the compact chi2/F test block (print_chi2), NOT
   # p-value body rows. It sits AFTER the kable branch so `print = "kable"` renders p-value ROWS (via
   # tab_kable -> tab_export_prep materialize) rather than the block. print_chi2() now fires for a
@@ -294,6 +395,9 @@ print.tabxplor_grouped_tab <- function(x, width = NULL, ..., n = 100,
     print(x)
     return(invisible(x))
   }
+
+  # Phase 10i-B: materialise add_n / add_pct for the console (backend "text"); p-value stays the block.
+  x <- tab_materialize_extras(x, backend = "text", pvalue = FALSE)
 
   # Phase 10i-B (decision 2): see print.tabxplor_tab -- the console shows the chi2/F block, not
   # p-value rows; placed after the kable branch so `print = "kable"` renders p-value rows instead.
@@ -820,6 +924,7 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
 
 
   subtext <- get_subtext(tabs[[1]])
+  render_extras_first <- get_render_extras(tabs[[1]])
 
   tabs_chi2 <- purrr::map_df(tabs, ~get_test(.) )
 
@@ -860,7 +965,9 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
       dplyr::rename_with(~ "Total", .cols = tidyselect::starts_with("Total_"))
   }
 
-  tabs <- new_tab(tabs, subtext = subtext, test = tabs_chi2) |>
+  # Phase 10i-B: carry the add_n/add_pct intent through the merge (all per-row_var tabs share it).
+  tabs <- new_tab(tabs, subtext = subtext, test = tabs_chi2,
+                  render_extras = render_extras_first) |>
     dplyr::group_by(!!rlang::sym("row_var"))
 
   # if (pvalue_lines) {
@@ -892,7 +999,26 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
 #' @noRd
 tab_materialize_extras <- function(tab, backend = c("text", "xl"), pvalue = TRUE) {
   backend <- match.arg(backend)
-  # Increment 2 hooks here: add_pct column/row + add_n (in-cell / `n` column) from `render_extras`.
+
+  # --- add_n / add_pct (from the render_extras intent) -----------------------------------------
+  re      <- get_render_extras(tab)
+  add_n   <- isTRUE(re$add_n)
+  add_pct <- isTRUE(re$add_pct)
+  if (add_n || add_pct) {
+    # Reuse tab_add_n_pct() verbatim (byte-identical field construction; its grouped outer-mutate
+    # reproduces the per-subtable scoping on the final merged / tab_vars-grouped table -- proven).
+    # It yields the "xl-style" output: a real `n` COLUMN (pct="row" add_n) / `n` ROW (pct="col"),
+    # the add_pct `col_pct` column / `row_pct` row.
+    tab <- tab_add_n_pct(list(tab), add_n = add_n, add_pct = add_pct)[[1]]
+    # TEXT backends fold the add_n `n` COLUMN into the Total cell (`{pct} (n={n})`); Excel keeps the
+    # real numeric column. The pct="col" add_n ROW and add_pct col_pct/row_pct are backend-invariant.
+    if (identical(backend, "text") && add_n && "n" %in% names(tab)) {
+      tab <- tab_fold_addn_incell(tab)
+    }
+    tab <- set_render_extras(tab, NULL)          # consumed -> a second call is a no-op (idempotent)
+  }
+
+  # --- p-value rows (from the kept `test` attribute) -------------------------------------------
   if (pvalue) tab <- tab_pvalue_lines(tab)
   tab
 }
@@ -914,6 +1040,7 @@ tab_materialize_extras <- function(tab, backend = c("text", "xl"), pvalue = TRUE
 # }
 tab_pvalue_lines <- function(tabs) {
   subtext  <- get_subtext(tabs)
+  render_extras <- get_render_extras(tabs)
   test_tbl <- get_test(tabs)
   if (is.null(test_tbl) || nrow(test_tbl) == 0) return(tabs)
 
@@ -996,7 +1123,7 @@ tab_pvalue_lines <- function(tabs) {
     if (nm %in% fmt_nms) build_col(nm) else skel[[nm]]), names(tabs))
   tabs <- tibble::new_tibble(out, nrow = n0 + k)
 
-  new_tab(tabs, subtext = subtext) |>
+  new_tab(tabs, subtext = subtext, render_extras = render_extras) |>
     dplyr::group_by(!!!rlang::syms(groups))
 }
 
@@ -1793,7 +1920,7 @@ group_by.tabxplor_tab <- function(.data,
   out <- NextMethod()
   groups <- dplyr::group_data(out)
   new_grouped_tab(out, groups,
-                  subtext = get_subtext(.data), test = get_test(.data))
+                  subtext = get_subtext(.data), test = get_test(.data), render_extras = get_render_extras(.data))
 }
 
 
@@ -1903,11 +2030,11 @@ group_by.tabxplor_tab <- function(.data,
     if (length(groups) > 0) out <- out |> dplyr::group_by(!!!groups)
 
     if (lv1_group_vars(out)) {
-      new_tab(out, subtext = get_subtext(.data), test = get_test(.data))
+      new_tab(out, subtext = get_subtext(.data), test = get_test(.data), render_extras = get_render_extras(.data))
 
     } else {
       groups <- dplyr::group_data(out)
-      new_grouped_tab(out, groups, subtext = get_subtext(.data), test = get_test(.data))
+      new_grouped_tab(out, groups, subtext = get_subtext(.data), test = get_test(.data), render_extras = get_render_extras(.data))
     }
 
 }
@@ -1935,7 +2062,7 @@ rowwise.tabxplor_tab <- function(data, ...) {
   out <- NextMethod()
   groups <- dplyr::group_data(out)
   out <- new_grouped_tab(out, groups,
-                         subtext = get_subtext(data), test = get_test(data))
+                         subtext = get_subtext(data), test = get_test(data), render_extras = get_render_extras(data))
 
   `class<-`(out, stringr::str_replace(class(out), "grouped_df", "rowwise_df"))
 }
@@ -1971,7 +2098,9 @@ tab_cast <- function(x, to, ..., x_arg = "", to_arg = "") {
   if (length(subtext) > 1) subtext <- subtext[subtext != ""]
   test        <- vctrs::vec_rbind(get_test(x), get_test(to))
 
-  new_tab(out, subtext = subtext, test = test)
+  # render_extras is a SCALAR intent (not row-bound like test): take x's (fall back to `to`'s).
+  render_extras <- get_render_extras(x); if (is.null(render_extras)) render_extras <- get_render_extras(to)
+  new_tab(out, subtext = subtext, test = test, render_extras = render_extras)
 }
 
 #' @rdname tab_cast
@@ -1986,7 +2115,8 @@ tab_ptype2 <- function(x, y, ..., x_arg = "", y_arg = "") {
   subtext     <- vctrs::vec_c(get_subtext(x), get_subtext(y)) %>% unique()
   if (length(subtext) > 1) subtext <- subtext[subtext != ""]
 
-  new_tab(out, subtext = subtext, test = test)
+  render_extras <- get_render_extras(x); if (is.null(render_extras)) render_extras <- get_render_extras(y)
+  new_tab(out, subtext = subtext, test = test, render_extras = render_extras)
 }
 
 
@@ -2080,7 +2210,7 @@ vec_cast.data.frame.tabxplor_tab <- function(x, to, ...) {
 ungroup.tabxplor_grouped_tab <- function (x, ...)
 {
   if (missing(...)) {
-    new_tab(x, subtext = get_subtext(x), test = get_test(x))
+    new_tab(x, subtext = get_subtext(x), test = get_test(x), render_extras = get_render_extras(x))
   }
   else {
     old_groups <- dplyr::group_vars(x)
@@ -2122,10 +2252,10 @@ lv1_group_vars <- function(tabs) {
 dplyr_row_slice.tabxplor_grouped_tab <- function(data, i, ...) {
   out <- NextMethod()
   if (lv1_group_vars(out)) {
-    new_tab(out, subtext = get_subtext(data), test = get_test(data))
+    new_tab(out, subtext = get_subtext(data), test = get_test(data), render_extras = get_render_extras(data))
   } else {
     groups <- dplyr::group_data(out)
-    new_grouped_tab(out, groups, subtext = get_subtext(data), test = get_test(data))
+    new_grouped_tab(out, groups, subtext = get_subtext(data), test = get_test(data), render_extras = get_render_extras(data))
   }
 }
 # dplyr:::dplyr_row_slice.grouped_df
@@ -2141,10 +2271,10 @@ dplyr_row_slice.tabxplor_grouped_tab <- function(data, i, ...) {
 dplyr_col_modify.tabxplor_grouped_tab <- function(data, cols) {
   out <- NextMethod()
   if (lv1_group_vars(out)) {
-    new_tab(out, subtext = get_subtext(data), test = get_test(data))
+    new_tab(out, subtext = get_subtext(data), test = get_test(data), render_extras = get_render_extras(data))
   } else {
     groups <- dplyr::group_data(out)
-    new_grouped_tab(out, groups, subtext = get_subtext(data), test = get_test(data))
+    new_grouped_tab(out, groups, subtext = get_subtext(data), test = get_test(data), render_extras = get_render_extras(data))
   }
 }
 # dplyr:::dplyr_col_modify.grouped_df
@@ -2159,10 +2289,10 @@ dplyr_col_modify.tabxplor_grouped_tab <- function(data, cols) {
 dplyr_reconstruct.tabxplor_grouped_tab <- function(data, template) {
   out <- NextMethod()
   if (lv1_group_vars(out)) {
-    new_tab(out, subtext = get_subtext(data), test = get_test(data))
+    new_tab(out, subtext = get_subtext(data), test = get_test(data), render_extras = get_render_extras(data))
   } else {
     groups <- dplyr::group_data(out)
-    new_grouped_tab(out, groups, subtext = get_subtext(data), test = get_test(data))
+    new_grouped_tab(out, groups, subtext = get_subtext(data), test = get_test(data), render_extras = get_render_extras(data))
   }
 }
 # dplyr:::dplyr_reconstruct.grouped_df
@@ -2180,10 +2310,10 @@ dplyr_reconstruct.tabxplor_grouped_tab <- function(data, template) {
 `[.tabxplor_grouped_tab` <- function(x, i, j, drop = FALSE) {
   out <- NextMethod()
   if (lv1_group_vars(out)) {
-    new_tab(out, subtext = get_subtext(x), test = get_test(x))
+    new_tab(out, subtext = get_subtext(x), test = get_test(x), render_extras = get_render_extras(x))
   } else {
     groups <- dplyr::group_data(out)
-    new_grouped_tab(out, groups, subtext = get_subtext(x), test = get_test(x))
+    new_grouped_tab(out, groups, subtext = get_subtext(x), test = get_test(x), render_extras = get_render_extras(x))
   }
 }
 # dplyr:::`[.grouped_df`
@@ -2203,10 +2333,10 @@ dplyr_reconstruct.tabxplor_grouped_tab <- function(data, template) {
 `[<-.tabxplor_grouped_tab` <- function(x, i, j, ..., value) {
   out <- NextMethod()
   if (lv1_group_vars(out)) {
-    new_tab(out, subtext = get_subtext(x), test = get_test(x))
+    new_tab(out, subtext = get_subtext(x), test = get_test(x), render_extras = get_render_extras(x))
   } else {
     groups <- dplyr::group_data(out)
-    new_grouped_tab(out, groups, subtext = get_subtext(x), test = get_test(x))
+    new_grouped_tab(out, groups, subtext = get_subtext(x), test = get_test(x), render_extras = get_render_extras(x))
   }
 }
 # dplyr:::`[<-.grouped_df`
@@ -2225,10 +2355,10 @@ dplyr_reconstruct.tabxplor_grouped_tab <- function(data, template) {
 `[[<-.tabxplor_grouped_tab` <- function(x, ..., value) {
   out <- NextMethod()
   if (lv1_group_vars(out)) {
-    new_tab(out, subtext = get_subtext(x), test = get_test(x))
+    new_tab(out, subtext = get_subtext(x), test = get_test(x), render_extras = get_render_extras(x))
   } else {
     groups <- dplyr::group_data(out)
-    new_grouped_tab(out, groups, subtext = get_subtext(x), test = get_test(x))
+    new_grouped_tab(out, groups, subtext = get_subtext(x), test = get_test(x), render_extras = get_render_extras(x))
   }
 }
 # dplyr:::`[[<-.grouped_df`
@@ -2249,7 +2379,7 @@ rowwise.tabxplor_grouped_tab <- function(data, ...) {
   out <- NextMethod()
   groups <- dplyr::group_data(out)
 
-  out <- new_grouped_tab(out, groups, subtext = get_subtext(data), test = get_test(data))
+  out <- new_grouped_tab(out, groups, subtext = get_subtext(data), test = get_test(data), render_extras = get_render_extras(data))
   `class<-`(out, stringr::str_replace(class(out), "grouped_df", "rowwise_df"))
 }
 
@@ -2259,9 +2389,9 @@ rowwise.tabxplor_grouped_tab <- function(data, ...) {
 #   out <- NextMethod()
 #   groups <- dplyr::group_data(out)
 #   if (lv1_group_vars(out)) {
-#     new_tab(out, subtext = get_subtext(.data), test = get_test(.data))
+#     new_tab(out, subtext = get_subtext(.data), test = get_test(.data), render_extras = get_render_extras(.data))
 #   } else {
-#     new_grouped_tab(out, groups, subtext = get_subtext(.data), test = get_test(.data))
+#     new_grouped_tab(out, groups, subtext = get_subtext(.data), test = get_test(.data), render_extras = get_render_extras(.data))
 #   }
 # }
 # # dplyr:::rbind.grouped_df
@@ -2272,9 +2402,9 @@ rowwise.tabxplor_grouped_tab <- function(data, ...) {
 #   out <- NextMethod()
 #   groups <- dplyr::group_data(out)
 #   if (lv1_group_vars(out)) {
-#     new_tab(out, subtext = get_subtext(.data), test = get_test(.data))
+#     new_tab(out, subtext = get_subtext(.data), test = get_test(.data), render_extras = get_render_extras(.data))
 #   } else {
-#     new_grouped_tab(out, groups, subtext = get_subtext(.data), test = get_test(.data))
+#     new_grouped_tab(out, groups, subtext = get_subtext(.data), test = get_test(.data), render_extras = get_render_extras(.data))
 #   }
 # }
 # # dplyr:::cbind.grouped_df
@@ -2292,9 +2422,9 @@ summarise.tabxplor_grouped_tab <- function(.data, ..., .groups = NULL) {
   out <- NextMethod()
   groups <- dplyr::group_data(out)
   if (lv1_group_vars(out)) {
-    new_tab(out, subtext = get_subtext(.data), test = get_test(.data))
+    new_tab(out, subtext = get_subtext(.data), test = get_test(.data), render_extras = get_render_extras(.data))
   } else {
-    new_grouped_tab(out, groups, subtext = get_subtext(.data), test = get_test(.data))
+    new_grouped_tab(out, groups, subtext = get_subtext(.data), test = get_test(.data), render_extras = get_render_extras(.data))
   }
 }
 
@@ -2312,9 +2442,9 @@ select.tabxplor_grouped_tab <- function(.data, ...) {
   out <- NextMethod()
   groups <- dplyr::group_data(out)
   if (lv1_group_vars(out)) {
-    new_tab(out, subtext = get_subtext(.data), test = get_test(.data))
+    new_tab(out, subtext = get_subtext(.data), test = get_test(.data), render_extras = get_render_extras(.data))
   } else {
-    new_grouped_tab(out, groups, subtext = get_subtext(.data), test = get_test(.data))
+    new_grouped_tab(out, groups, subtext = get_subtext(.data), test = get_test(.data), render_extras = get_render_extras(.data))
   }
 }
 
@@ -2329,9 +2459,9 @@ rename.tabxplor_grouped_tab <- function(.data, ...) {
   out <- NextMethod()
   groups <- dplyr::group_data(out)
   if (lv1_group_vars(out)) {
-    new_tab(out, subtext = get_subtext(.data), test = get_test(.data))
+    new_tab(out, subtext = get_subtext(.data), test = get_test(.data), render_extras = get_render_extras(.data))
   } else {
-    new_grouped_tab(out, groups, subtext = get_subtext(.data), test = get_test(.data))
+    new_grouped_tab(out, groups, subtext = get_subtext(.data), test = get_test(.data), render_extras = get_render_extras(.data))
   }
 }
 
@@ -2349,9 +2479,9 @@ rename_with.tabxplor_grouped_tab <- function(.data, .fn, .cols = dplyr::everythi
   out <- NextMethod()
   groups <- dplyr::group_data(out)
   if (lv1_group_vars(out)) {
-    new_tab(out, subtext = get_subtext(.data), test = get_test(.data))
+    new_tab(out, subtext = get_subtext(.data), test = get_test(.data), render_extras = get_render_extras(.data))
   } else {
-    new_grouped_tab(out, groups, subtext = get_subtext(.data), test = get_test(.data))
+    new_grouped_tab(out, groups, subtext = get_subtext(.data), test = get_test(.data), render_extras = get_render_extras(.data))
   }
 }
 
@@ -2369,9 +2499,9 @@ relocate.tabxplor_grouped_tab <- function(.data, ...) { #.before = NULL, .after 
   out <- NextMethod()
   groups <- dplyr::group_data(out)
   if (lv1_group_vars(out)) {
-    new_tab(out, subtext = get_subtext(.data), test = get_test(.data))
+    new_tab(out, subtext = get_subtext(.data), test = get_test(.data), render_extras = get_render_extras(.data))
   } else {
-    new_grouped_tab(out, groups, subtext = get_subtext(.data), test = get_test(.data))
+    new_grouped_tab(out, groups, subtext = get_subtext(.data), test = get_test(.data), render_extras = get_render_extras(.data))
   }
 } # dplyr:::relocate.grouped_df
 
@@ -2385,9 +2515,9 @@ relocate.tabxplor_grouped_tab <- function(.data, ...) { #.before = NULL, .after 
 #   out <- NextMethod()
 #   groups <- dplyr::group_data(out)
 #   if (lv1_group_vars(out)) {
-#     new_tab(out, subtext = get_subtext(.data), test = get_test(.data))
+#     new_tab(out, subtext = get_subtext(.data), test = get_test(.data), render_extras = get_render_extras(.data))
 #   } else {
-#     new_grouped_tab(out, groups, subtext = get_subtext(.data), test = get_test(.data))
+#     new_grouped_tab(out, groups, subtext = get_subtext(.data), test = get_test(.data), render_extras = get_render_extras(.data))
 #   }
 # }
 # # dplyr:::distinct_.grouped_df
@@ -2415,7 +2545,7 @@ gtab_cast <- function(x, to, ..., x_arg = "", to_arg = "") {
   gdf <- dplyr::grouped_df(df, vars, drop = drop)
 
   groups <- dplyr::group_data(gdf)
-  new_grouped_tab(gdf, groups, subtext = get_subtext(to), test = get_test(to))
+  new_grouped_tab(gdf, groups, subtext = get_subtext(to), test = get_test(to), render_extras = get_render_extras(to))
 }
 
 #' @rdname tab_cast
@@ -2431,7 +2561,7 @@ gtab_ptype2 <- function(x, y, ..., x_arg = "", y_arg = "") {
   gdf <-  dplyr::grouped_df(common, vars, drop = drop)
 
   groups <- dplyr::group_data(gdf)
-  new_grouped_tab(gdf, groups, subtext = get_subtext(x), test = get_test(x))
+  new_grouped_tab(gdf, groups, subtext = get_subtext(x), test = get_test(x), render_extras = get_render_extras(x))
 }
 
 #Self-self

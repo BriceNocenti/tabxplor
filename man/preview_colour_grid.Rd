@@ -9,6 +9,8 @@ preview_colour_grid(
   background_colors,
   sample_text = paste0(sample(0:100, 1L), "\%"),
   show_contrast = TRUE,
+  table_bg = "#ffffff",
+  dark_threshold = 0.5,
   font_size = "16px",
   swatch_padding = "12px 16px",
   browse = TRUE
@@ -27,6 +29,13 @@ percentage (e.g. "27\%"), one value per call.}
 \item{show_contrast}{Logical; append the APCA lightness-contrast value (Lc)
 of text-on-background to each cell, on the same line as sample_text.
 Default TRUE.}
+
+\item{table_bg}{Backdrop colour of the whole table/page, e.g. "#1a1a1a" to
+preview dark mode. Default "#ffffff".}
+
+\item{dark_threshold}{oklch lightness (0-1) of \code{table_bg} below which the
+table switches to dark styling (white + slightly thicker borders, light
+text, transparent frame). Default 0.5.}
 
 \item{font_size}{CSS font-size for the table. Default "16px" (tab_kable base).}
 
@@ -48,6 +57,7 @@ Positron Viewer pane.
 text_colors <- c(plain = "#989898", pos3 = "#0baedb", pos5 = "#265aff")
 background_colors <- c(plain = "#ffffff", pos3 = "#91b837", pos5 = "#05ae30")
 preview_colour_grid(text_colors, background_colors)
+preview_colour_grid(text_colors, background_colors, table_bg = "#1a1a1a")  # dark
 }
 }
 \keyword{internal}

@@ -2446,3 +2446,51 @@ every row (benign — `get_wn()` recovers it, exports re-materialise it, and it 
 consistent with non-chi2 ones). `test-n_min.R` updated (the p-value line is no longer a body row; it
 now asserts the `test` attribute survives n_min instead). Increment 2 (add_n/add_pct + the
 `render_extras` attribute + dead special-case removal + the perf gate) is next.
+
+### Phase 10i-B Increment 2 DONE (2026-07-12) — add_n / add_pct rows/cols are display-only
+
+The built `tab()` no longer bakes add_n / add_pct: `tab_assemble_tables()` drops the `tab_add_n_pct()`
+call and stores the intent in a small **`render_extras = list(add_n=, add_pct=)` table attribute**
+(`get/set_render_extras`), carried through EVERY dplyr verb + the `tab_cast`/`tab_ptype2`/`gtab_*`
+reconcilers exactly like `subtext`/`test` (~37 threaded sites; the reconcilers take x's, a scalar intent).
+
+**Materialiser (byte-identity de-risked empirically).** Before touching the build I captured 11
+reference tables (Increment-1 build, add_n baked) and proved `tab_add_n_pct(list(final_table), …)`
+reproduces the add_n `n` column / add_pct `col_pct` column / the pct="col" `n`/`row_pct` rows
+**byte-identically** on the FINISHED table — its grouped outer-`mutate` reproduces the per-subtable
+`last()` scoping for single / merged (grouped by `"row_var"`) / tab_vars (grouped by the tab_var) /
+means / multi-col_var, so the Plan agent's "whole-table vs row_var scope" worry was moot and no
+tab_add_n_pct rewrite was needed. `tab_materialize_extras()` therefore just calls `tab_add_n_pct()`
+(xl-style columns/rows) + clears `render_extras` (idempotent). For TEXT backends
+**`tab_fold_addn_incell()`** drops the `n` column and folds the base into the Total cell as
+`{pct} (n={n})` (decision 1; default = the Total's own `{n}`, opt-in `options(tabxplor.totcol_range=)`
+`"range"`/`"min"` → the cross-col_var base via the now-live `tab_totcol_range()`). The full-build A/B
+(new core + `materialize("xl")` == the captured reference) is TRUE for all 11 shapes, before AND after
+the special-case removals. Console print materialises the text extras (`pvalue = FALSE`).
+`tab_transpose()` carries `render_extras` (orientation-agnostic → transpose(row% add_n) renders as a
+native col% add_n table). §10 `[min;max]` total-column range: now wired as the add_n opt-in option.
+
+**Dead special-cases removed** (the extras never exist at build now — chi2/ci/contrib run at STAGE 4,
+before the STAGE-5 materialise that is gone): `chi2_compute_test`'s `c("n","row_pct")` row-exclusion,
+contrib's `all_col_vars` exclusion, `tab_apply_n_min`'s `helper`/`helprow` (→ `protect = totrow|tottab`).
+KEPT (harmless robustness / re-entrant safety): the `tab_ci`/`tab_pct` `all_col_vars` vector extensions
+and `arrange`'s `%in% c("n","row_pct","pvalue")` guard. The export-prep total-block whitelist stays
+(the materialiser still tags the rows) — the i18n-robust marker is a deferred bonus.
+
+**Back-compat shim (maintainer request).** `$.tabxplor_tab` / `[[.tabxplor_tab` /
+`pull.tabxplor_tab`(+grouped): reading `tabs$n` / `tabs[["n"]]` / `pull(tabs, "n")` (or `col_pct`) on a
+core table reconstructs the column from the Total column (byte-identical to the old add_n/add_pct
+column) with a `lifecycle::deprecate_soft`; **gated on `%in% names(x)`** so the existing-column fast path
+pays nothing; only a genuine COLUMN reconstruction applies (pct="col" add_n was a ROW → NULL; add_n=FALSE
+→ NULL). `pull` re-injects the captured quosure into `dplyr::pull(as_tibble(.data), !!vq)` to preserve
+tidy-select NSE (a bare `NextMethod()` — and even `substitute()` — broke `pull(tabs, <col>)`).
+
+**Verification:** full suite green (**1815**; new `test-display-extras.R`). Perf gate (git-stash A/B,
+build vs display separately, `dev/benchmarks/results_1.4.0/phase10iB_display_only.txt`): BUILD 0.350 →
+0.330 s (−6 %), DISPLAY 0.320 → 0.350 s (+9 %), NET neutral — work moves build → display as designed
+(the jmvtab cached build is now cheaper). **Golden regen (conscious):** ALL `_golden/*.rds` (add_n/add_pct
+cols + pct="col" rows removed, `render_extras` gained), `c_or` colour (its pct="col" add_n row), and the
+`golden.md` + `render-html.md` display snapshots (add_n column → in-cell `100% (n=…)`; percentages / CI /
+stars / colours unchanged). Excel keeps a real `n` column. Tests updated: `test-n_min.R`
+(intent+`n`-absent), `test-calculations.R` (add_n-display-only chi2). Increment 3 (further pipeline
+simplification) is optional / open.

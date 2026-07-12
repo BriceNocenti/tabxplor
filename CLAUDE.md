@@ -125,7 +125,7 @@ Export:  tab_xl()  |  tab_kable()  |  tab_md()  |  tab_plot()
 | data.table internals     | `tab_plain()`/`tab_num()` rename `col_var` to internal names to avoid data.table conflicts. The user's column names are restored afterward.                                                                                                                                                                                                                                                       |
 | dplyr class preservation | 30+ S3 methods on `tabxplor_tab`/`tabxplor_grouped_tab` ensure class + attributes survive all dplyr verbs. Missing a method = silent class downgrade to `tbl_df`.                                                                                                                                                                                                                                 |
 | Options as config        | All defaults set in `.onLoad()` in `utils.R`. Users override via `options()`. Functions read with `getOption()`.                                                                                                                                                                                                                                                                                  |
-| Suggests-only guards     | `openxlsx2`, `ggplot2`, `jmvcore`, `ggpubr`, `cowplot`, `mirai` are in Suggests. Every call must be guarded with `requireNamespace()` or equivalent (tab_xl's ONE guard is in `tab_xl()`; `R/tab-xl-backend.R` wrappers are unguarded).                                                                                                                                                                                                                                                        |
+| Suggests-only guards     | `openxlsx2`, `ggplot2`, `jmvcore`, `ggpubr`, `cowplot`, `mirai` are in Suggests. Every call must be guarded with `requireNamespace()` or equivalent (tab_xl's ONE guard is in `tab_xl()`; `R/tab-xl-backend.R` wrappers are unguarded).                                                                                                                                                           |
 | Color break mirroring    | `set_color_breaks()` takes positive-only thresholds. Negative breaks are auto-mirrored internally. Any `pct_breaks` value > 1 triggers ratio comparison instead of difference (the "*2 rule").                                                                                                                                                                                                    |
 | Mean-diff asymmetry      | For `type="mean"` columns, the `diff` field stores a **ratio** (cell_mean / ref_mean), NOT a difference. Thresholds like 1.15 mean "+15% above reference". This asymmetry propagates into `color_formula()` and `format.tabxplor_fmt()`. **(1.4.0 §3: numeric `diff` becomes a real difference; the ratio moves to the `ratio` field — the never-used `rr` field renamed, placed after `diff`.)** |
 | tab_logit                | Entirely commented out (WIP). Do not try to use or integrate. Will be developed in the future.                                                                                                                                                                                                                                                                                                    |
@@ -139,7 +139,7 @@ Export:  tab_xl()  |  tab_kable()  |  tab_md()  |  tab_plot()
 
 - **`tabxplor_fmt`**: vctrs record (`new_rcrd()`) with **18 per-cell fields** (was 15 before v1.4.0 Phase 1a) and 9 per-column attributes (Phase 10i-A dropped `display_spec`). The critical distinction: fields vary per cell (accessed via `vctrs::field()`), attributes are scalar describing the whole column (accessed via `attr()`). Constructor chain: `fmt()` (public, validates + coerces) -> `new_fmt()` (internal, calls `vctrs::new_rcrd()`). *(Phase 1a reshaped 15→18 in one combined pass — decisions doc §9; `ci` is now derived from the `ci_inf`/`ci_sup` bounds by `get_ci()`, a bounds-shim.)*
 - **`mean` field overload** (cross-cutting): for **pct-type** columns the `mean` field carries the cell/reference **ratio** for the "*2 rule" (not an actual mean). Written by `tab_pct()`, read by `fmt_color_selection()`. The **`ratio` field** now exists (Phase 1a renamed the never-used `rr`→`ratio`; decisions doc §3); the overload removal + moving the ratio to `ratio` lands in **Phase 5** (color diff/ratio split), not yet done.
-- **`tabxplor_tab`**: tibble subclass via `tibble::new_tibble()` with `subtext` (legend text) and `chi2` (test results tibble) attributes. *(1.4.0 §16: the `chi2` attribute is hard-renamed `test`, also carrying the new ANOVA/Welch F — lands Phase 3.)*
+- **`tabxplor_tab`**: tibble subclass via `tibble::new_tibble()` with `subtext` (legend text), `test` (chi2/ANOVA-F results tibble; §16 hard-rename of the old `chi2` attribute) and — Phase 10i-B — `render_extras` (the `list(add_n=, add_pct=)` display intent) attributes, all carried through dplyr verbs by the S3 methods + vctrs reconcilers.
 - **`tabxplor_grouped_tab`**: extends `grouped_df` for subtabled results (when `tab_vars` are present). Requires separate S3 method for every dplyr verb.
 
 ### Export Parity
@@ -1308,19 +1308,19 @@ aggressive simplification is welcome.
 
 `add_n`, `add_pct` and pvalue_lines add complexity in the whole workflow. I want to **study the possibility to only add these additional rows or columns at display time**, using `tabxplor_tab` level attributes to know it must be done (or column-attributes, or global options, what would be best ?) ? This is a design task : just study if it would possible possible and reliable.
 - Distinguish between display modes that can use `display_spec` to print several informations in the same cell (console, kable, md ; for example print `add_n` as : `"100% (n= 114)"`), and display modes that needs to create new columns/rows (Excel ; for example print `add_n` by adding a new row or column efficiently, at the end ? Would it be a good idea to do it without redoing the whole fmt reconstruction, which is always a performance bottleneck ?).
-  + The main caveat, if I understand it well, is that `display_spec` is a column attribute ? Would there be a reliable way to use the already existing display vctrs field at it’s place (removing `display_spec` as a column attribute totally), ensuring simple displays like `pct` or `diff` stay on a fast track for maximum performance, compared to more complex display like `pct (n)` (that of course themselves need to be the fastest possible). 
+  + The main caveat, if I understand it well, is that `display_spec` is a column attribute ? Would there be a reliable way to use the already existing display vctrs field at it’s place (removing `display_spec` as a column attribute totally), ensuring simple displays like `pct` or `diff` stay on a fast track for maximum performance, compared to more complex display like `pct (n)` (that of course themselves need to be the fastest possible).
   + Also, for reliability, keep simple displays as they are, but require complex display to add tags for fields they want displayed, for more reliability ? For example : {`{pct} ({n})`,  `{pct> (n={n})`, `{pct} ({ratio})`, etc. What would be the most standard and reliable tag for this, if `{}` is not a good standard ? Display of `add_n` in console should be, for the total column of row percentages, something like : `{pct> (n={n})` (with `100%` in pct, and with everything padded and aligned for human readability). Check if it can be done fast enough, without hindering performance.
 - Print at display/export. Is the data necessary for this already available ?
-  + `add_n` must check all `tot_n` attributes, and display the smaller in a new `n` column or row (depending on pct type like now), or the interval min and max. Default to minimum. Global option to set min max instead ? Or would it be a good idea to do everything in a display spec like `{pct} [n:{n_min}-{n_max}]` (or is it a new white elephant that will reduce performance at display for nothing, since n_min and n_max does not even exist on the cell fields ?) ? 
+  + `add_n` must check all `tot_n` attributes, and display the smaller in a new `n` column or row (depending on pct type like now), or the interval min and max. Default to minimum. Global option to set min max instead ? Or would it be a good idea to do everything in a display spec like `{pct} [n:{n_min}-{n_max}]` (or is it a new white elephant that will reduce performance at display for nothing, since n_min and n_max does not even exist on the cell fields ?) ?
   + `add_pct` : does it have every data needed ?
   + pvalue_lines : we should store the global tests table as whole `tabxplor_tab`-level attribute, like in a former version of tabxplor (table is still there but removed at pvalue lines creation); the default behaviour should be "print pvalue as lines in the display/export if they were done and summary table is here". Ensure the test table display in console is fast (I think it may have been a display bottleneck in the past). global options should . pvalue_lines can’t really use the `<>` syntax, to instead of putting them in the display of another line or column, it’s better to actually create new lines or columns like now, but to do it at display/export efficiently.
 - Since `add_n`, `add_pct` and pvalue_lines as actual rows and columns in the data were exceptions that added complexity to the pipeline, their removal at all steps before display/export calls for a **huge code simplication**.
 
 **DESIGN SETTLED (2026-07-12) — see `dev/tabxplor_1.4.0_decisions.md` §34 (the full findings + phasing).**
-Verdict: worthwhile, not a white elephant. Decisions: 
+Verdict: worthwhile, not a white elephant. Decisions:
 1. **display-only** — the built tab omits the `n`/`col_pct` columns and p-value rows (kept only via `print()`/exporters); the `test` attribute is KEPT (stop dropping it); `tab_pvalue_lines()`/`tab_add_n_pct()` stay as on-demand materializers.
-2. the composite recipe moves to the per-cell **`display` field with a glue `{}` grammar** (`"{pct} (n={n})"`), **dropping the `display_spec` attribute** (10→9), with a short-circuited `get_num()` gate. 
-3. **add_pct = a real appended column/row** at display; only **add_n** goes in-cell (text) / an `n` column (Excel). 
+2. the composite recipe moves to the per-cell **`display` field with a glue `{}` grammar** (`"{pct} (n={n})"`), **dropping the `display_spec` attribute** (10→9), with a short-circuited `get_num()` gate.
+3. **add_pct = a real appended column/row** at display; only **add_n** goes in-cell (text) / an `n` column (Excel).
 
 ##### Phase 10i-A – consistent display `{}` grammar (DONE 2026-07-12)
 
@@ -1343,13 +1343,6 @@ regenerated (attr drop only). Full suite green.
 
 ##### Phase 10i-B – display-only migration
 
-Incremental implementation steps, maintainer commits between :
-- Increment 1: pvalue. **DONE (2026-07-12).**
-- Increment 2:  add_n/add_pct.
-- Add an Increment 3, global build table pipeline simplification, or not needed ?
-
-At the end, **`git stash` A/B perf gate** (build vs display/export measured separately, at least neutral).
-
 ###### Increment 1 DONE (2026-07-12) — p-value rows are display-only
 
 The built `tab()` no longer bakes p-value rows: `tab_assemble_output()` stops calling `tab_pvalue_lines()`,
@@ -1363,19 +1356,45 @@ kable/md/Excel/jamovi materialise p-value ROWS. New shared idempotent materialis
 `tab_resolve_tables`, before `prep_one_table`) and by `tab_xl()` (before `tab_transpose`); Increment-1
 body = `tab_pvalue_lines`. `tab_apply_n_min()` dropped its dead `pline` protection. jmvtab simplified:
 the tier-3 carrier no longer holds p-value rows, so `jmv_tab3_reref()` lost its `data_mask`/`pval_mask`
-+ "drop p-value rows before tab_ci" dance and `jmv_reapply_digits()` lost its `n==NA` skip.
+- "drop p-value rows before tab_ci" dance and `jmv_reapply_digits()` lost its `n==NA` skip.
 **Byte-identical exports** (`_snaps/`, export-parity green); the only golden changes are the 3
 chi2-driven fixtures (`f_chi2`, `f_color_contrib`, `c_contrib`) losing the "pvalue" row + a benign `wn`
 change (unweighted chi2 tables now store raw `wn=NA` instead of the fallback `tab_pvalue_lines` baked;
 `get_wn()` still recovers it). Suite green (1804). The `render_extras` attribute + add_n/add_pct
 migration is Increment 2.
 
+###### Increment 2 DONE (2026-07-12) — add_n / add_pct rows/cols are display-only
 
-#### Phase 10j – exports workflow additional integration and performance improvement ?
+The built `tab()` is now the "core" table: `tab_assemble_tables()` stops calling `tab_add_n_pct()` and
+instead stores the intent in a small **`render_extras = list(add_n=, add_pct=)` table attribute**
+(carried through every dplyr verb + the vctrs reconcilers exactly like `subtext`/`test` —
+`get/set_render_extras`, ~37 threaded sites). `tab_materialize_extras()` grew the add_n/add_pct arm: it
+**reuses `tab_add_n_pct()` verbatim** on the finished table (its grouped outer-mutate reproduces the
+per-subtable scoping — proven byte-identical across single / merged / tab_vars / means / multi-col_var /
+pct=row / pct=col), so Excel keeps a real `n` column; for TEXT backends **`tab_fold_addn_incell()`**
+folds add_n into the Total cell as `{pct} (n={n})` (decision 1; default = the Total's own base, opt-in
+`options(tabxplor.totcol_range=)` `"range"`/`"min"` → the cross-col_var base via `tab_totcol_range()`).
+Console print materialises the text extras (`pvalue=FALSE`, block for p-value). `tab_transpose()` carries
+`render_extras`. **Dead special-cases removed** (extras never exist at build now): `chi2_compute_test`'s
+`c("n","row_pct")` row-exclusion, contrib's `all_col_vars` exclusion, `tab_apply_n_min`'s helper/helprow
+(→ `protect = totrow|tottab`); KEPT the `tab_ci`/`tab_pct` `all_col_vars` vector extensions (harmless
+robustness) + `arrange`'s guard. **Back-compat shim** (`$.tabxplor_tab` / `[[.tabxplor_tab` /
+`pull.tabxplor_tab`+grouped): reading `tabs$n` / `tabs[["n"]]` / `pull(tabs,"n")` (or `col_pct`) on a
+core table reconstructs the column from the Total column (byte-identical) with a `lifecycle::deprecate_soft`
+— gated on `%in% names(x)` so the fast path is untouched; `pull` re-injects the quosure into
+`dplyr::pull(as_tibble(.data), !!vq)` to preserve tidy-select NSE (a bare NextMethod broke it). **Perf
+gate** (`dev/benchmarks/results_1.4.0/phase10iB_display_only.txt`): build −6 %, display +9 %, net neutral
+(work moves build→display; the jmvtab cached build is now cheaper). **Golden regen (conscious):** ALL
+`_golden/*.rds` (add_n/add_pct cols + pct=col rows removed, `render_extras` gained) + `c_or` colour + the
+`golden.md`/`render-html.md` display snapshots (add_n column → in-cell). Suite green (1815); `test-display-
+extras.R` added. **User-visible:** the add_n base moves to an in-cell `100% (n=…)` on console/kable/md
+(Excel keeps the `n` column); the built object loses the `n`/`col_pct` columns + p-value rows (use the
+`test` attribute / `get_n(tab$Total)` / the deprecated `$n`).
 
-Now that the common prep function is done, can you think about new ways to make it faster ?
-Can you identify some features whose removal would make the workflow faster, and that we can turn optional ?
-Can you think about some ways to integrate the different export function in the same framework, make their arguments, behaviours and styling match at maximum ?
+
+#### Phase 10j – workflows additional integration and performance improvement ?
+
+Now that the carrier allow to only construct `tabxplor_fmt` vctrs fields at the end, that a common preparation function for exports is done, and that `add_n`, `add_pct` et pvaluelines are only added at display, can you think about new ways to simplify the build table pipeline and the export pipeline, integrate the package function’s ecosystem, and make additional performance gains for the main use cases (10-60k survey tables with many row_vars and col_vars, 1M+ big datasets, instant live tables in jamovi with cache) ? Can you identify some features whose removal would make the workflow faster, and that we can turn optional ? Can you think about some ways to integrate the different export function in the same framework, make their arguments, behaviours and styling match at maximum ?Can you think of some ways to make it faster and improve performance further ?
 
 
 
@@ -1404,19 +1423,43 @@ Color UI finalisation
 - How are breaks passed in tab()/tab_many() handled, are they written as a per-column attribute, or was there another solution ? I can feel this part of the design was a bit shaky.
 - Redesign color legends for simplicity : they should be understandable by non-experts, while at the same time having just the enough technical terms for the experts to know exactly what happens technically here.
 
-Redesign color palettes with manual fine-tuning. Cf. other `dev/` documentation.
-
 Native dark mode/light mode management for exported tables, specially html tables
 - With kable or another html tables solution, use css exported and applied with the table ?
 - Wire this css on standard html dark mode toggle, with a global option in R to use Dark mode in viewer. As a result, the table should autochange it’s formatted we the user change to dark light mode on whichever html page the table is embedded with. Do web searches to find current good practices about this.
+
+I want to change the current default color palettes system, to simplify it a lot.
+
+Color breaks and color palette management is very not user friendly (base is ok, but customisation for expert users is unclear)
+- Now the `color = c("diff", "ratio")` argument is the right way to have both additive and multiplicative color helpers. So `color_style_` objects should now work without the old "ratio" value, and these `ratio` values should be removed from the `color_style_` entirely in the code.
+- in set_color_breaks(), it’s not currently possible to also provide "negative" breaks (under-represented side) to pass asymmetrical breaks (asymmetrical both in number of breaks and breaks values). That would be necessary, since with `ratio`, breaks >1 are sound, but breaks <1, when they are close do 1 (like 1.2), so the user may want to use fewers breaks on this side
+- The default for factors is `pct_diff = c(2)`, but it implement both a x2 and a /2 rule : f want to be able to enforce my classic `only x2` ratio rule, I want a possibility to force asymmetrical breaks, for example `pct_diff = c(2, asymmetrical=TRUE)` (with should be default to factors ; default for numeric variables should be `mean_ratio = c(-4, -2, -1.5, 1.15, 1.5, 2, 4)` )
+- The way I want it done : the user directly provides a list of breaks with possibly named arguments giving the color, either via set_color_breaks() or breaks argument (to be renamed `color_breaks` ; keep `breaks` soft-deprecated if it was already on tab() in 1.3.1, remove altogether if it was not) ; with `color_breaks` argument, the breaks are stored as a vctrs based column-level arguments ; with `color_breaks` argument, at display or export, tabxplor internally create a temp object with the vector, and compute the crayon styles too (both must be created and loaded first, and shall never be recreated for each cell in a table ; but at the same time it would be impossible to create lasting objects and give them all names, since ). Can you see some possible caveats here ? Some further simplifications ?
+  + For example `color_breaks = list(ratio_breaks = c(1/4, 1/2, 1/1.5, 1.2, 1.5, 2, 4))` (3 under-represented, 4 over-represented). Here no names provide colors, so base palettes are used.
+  + In `set_color_breaks()`, deprecate the old arguments (`set_color_breaks(pct_breaks = ...)`) and add the new ones (like `set_color_breaks(pct_diff = ..., pct_ratio = ...)`).
+  + Providing the names override the palette, but that can only be done in asymetrical mode : `color_breaks = list(pct_diff = c("#cb0000" = -30, "#ff3d00" = -20, "#FF8138" = -10, "#ffb300" = -5, "#C7D62C" = 5, "#83BB3F" = 10, "#3BA240" = 20, "#1b6e20" = 30))` . If at least one is provided, then a name should be provided for **all** breaks (error otherwise).
+  + The function then auto-detects where is the boundary between over-represented and under-represented depending on the type (0 for additive, 1 for multiplicative), and handle robustly the creation of the relevant interval for each color, taking into account where is the boundary.
+  + only giving the positive / over-represented side should still mirror it depending of the type, minus sign for additive and 1/x for multiplicative).
+  + Rule should be : if no `color_breaks` are saved as column-level attributes (not NULL or empty) the current ones are used (so the user can save a table, load it in a fresh session, and use set_color_breaks() to choose how to display) ; if some `color_breaks` already exist at column-level they override any package level settings (to change that, the user can still remove columns attributes manually).
+  + Make testthat tests to ensure it handles edge cases, and user’s errors or imprecisions (ex. not ordered) well.
+- The aim is to **simplify** : please remove traces of the old implementation altogether, we do not need to soft-deprecate everything here (very small user-base + I think nobody ever used it).
+
+Color legends
+- Even in Excel export, use styles inside the color legend cells to color the breaks with the relevant text or background color (+bold), to make it really usable (otherwise a legend that does not say what color is what is incomprehensible), while keeping the rest of the text in the cell black (+ plain).
+-
+
+Missing infos on exported tables, compared to what’s default in other statistical software ?
+- Display the variable names for `col_vars` : not in console, but in html and Excel, add a second headers line above the main headers row with the levels ; when contiguous fmt columns have the same col_vars, merge the variable names headers cells into a single cell (name of the same variable only needs to be given once).
+- For tab_md, just put it in the first column ?
+
 
 Display problems and improvements :
 - lists not working with `options(tabxplor.print = "kable")` auto-display (print() method), since they are not there own class ! Implement a new vctrs class "list_tabxplor_tab" with vctrs (that should still behave like a list in any other way)
 - with `list(tab(...), tab(...), ...) |> tab_kable()`, the result appear in console by defaut, it should be auto-routed to Viewer via class like kableExtra output (reuse class used by kableExtra if more simple and still reliable ?)
 - in kable output, with `color = c("diff", "ratio")`, tooltips have an empty `rr` field (it should be called "ratio", and print the actual ratio ; `ratio` display printing should always have a `×` symbol when >=1 and a `÷` symbol with the inversed (`1/ratio`) when <1, for example 0.5 shall print `"÷2"` ; defaut 1 digit, removing trailing zeros (`3.333` go to  `3.3` but `2.0000` go to `2`), respecting padding for perfect aligment in monospace font for human readability ; same in color legends)
-- When there are confidence intervals significance stars, they should display, in some way or another, in all exports types. They should be completely padded right everywhere, so the stars always align in monospace font. In tab_md() it’s not 
+- When there are confidence intervals significance stars, they should display, in some way or another, in all exports types. They should be completely padded right everywhere, so the stars always align in monospace font. In tab_md() it’s not
 - Un exports AND in console display, with any significance star in the column, all numbers should be padded right to keep numbers alignment and readability.
 - Does transpose at export work perfecty (colors and all) with `pct = "col"` and with numeric variables ? If not, calculate colors, and anything else relevant (other column-level attributes not usable after the transposition), before transposition ?
+
 
 
 ### Phase 14 — tab_logit integration and full redesign

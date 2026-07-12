@@ -187,6 +187,17 @@
   gain (~1.05–1.30× at 15M rows, more at larger N / sparser data).
 
 ## Changes that may affect existing code
+* **The unweighted-count `add_n` and the `add_pct` distribution are now display-time additions.** With
+  `add_n = TRUE` (the default), the base count no longer sits in a separate `n` column of the built
+  table: on the console, `tab_kable()` and `tab_md()` it now appears **inside the Total cell** as
+  `100% (n=1120)`; `tab_xl()` still writes a separate numeric `n` column. Likewise `add_pct` is drawn
+  only when the table is displayed/exported. The built object therefore no longer contains the `n` /
+  `col_pct` columns (nor the `pct = "col"` `n` / `row_pct` rows). Old code reading `tabs$n`,
+  `tabs[["n"]]` or `pull(tabs, "n")` still works — the column is reconstructed from the Total column
+  with a one-time deprecation message — but will stop being reconstructed in a future version; prefer
+  the displayed/exported table, or `get_n()` on the `Total` column. A global option
+  `options(tabxplor.totcol_range = "range")` (or `"min"`) makes the in-cell base show the cross-column
+  base range `[min;max]` when a table's column variables have different bases.
 * **Chi-squared / ANOVA p-values are now a display-time addition.** The table built by `tab()` keeps the
   test results (its `test` attribute) but no longer contains the p-value *rows* themselves; they are
   drawn when the table is displayed or exported. In the R **console** the p-values now appear as a

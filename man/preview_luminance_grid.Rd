@@ -11,6 +11,8 @@ preview_luminance_grid(
   chroma = c("fixed", "max"),
   sample_text = paste0(sample(0:100, 1L), "\%"),
   show_contrast = TRUE,
+  table_bg = "#ffffff",
+  dark_threshold = 0.5,
   font_size = "16px",
   swatch_padding = "12px 16px",
   browse = TRUE
@@ -29,6 +31,12 @@ Default seq(0.35, 0.95, length.out = 7).}
 
 \item{sample_text, show_contrast, font_size, swatch_padding, browse}{See
 \code{\link[=preview_colour_grid]{preview_colour_grid()}}.}
+
+\item{table_bg}{Backdrop colour of the whole table/page, e.g. "#1a1a1a" to
+preview dark mode. Default "#ffffff".}
+
+\item{dark_threshold}{oklch lightness (0-1) of \code{table_bg} below which the
+table switches to dark styling. Default 0.5.}
 }
 \value{
 (Invisibly) the generated HTML as a single string.
@@ -45,6 +53,7 @@ lightness/hue. Rendered as a \code{\link[=tab_kable]{tab_kable()}}-style table (
 \dontrun{
 preview_luminance_grid("#59c5bf", "#b9c653")                 # fixed chroma
 preview_luminance_grid("#59c5bf", "#b9c653", chroma = "max") # most vivid
+preview_luminance_grid("#59c5bf", "#b9c653", table_bg = "#1a1a1a")  # dark
 }
 }
 \keyword{internal}

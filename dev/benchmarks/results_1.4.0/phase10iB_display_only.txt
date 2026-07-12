@@ -1,0 +1,26 @@
+Phase 10i-B — add_n / add_pct / p-value rows as display-time materializations
+============================================================================
+
+Increment 1 (p-value display-only) + Increment 2 (add_n / add_pct display-only).
+Full suite green: FAIL 0 | PASS 1783 (31 pre-existing warnings).
+
+Byte-identity (A/B, xl backend): the new build (core, no extras) + tab_materialize_extras("xl")
+reproduces the pre-migration built table EXACTLY across 11 shapes (single / merged / tab_vars /
+means / multi-col_var / chi2 / pct=row / pct=col; add_n and add_pct):
+  A_row_addn B_row_addn_addpct C_col_addn D_col_addpct E_merge_addn E_merge_addpct
+  F_tabvars_addn F_tabvars_addpct G_mean_addn H_chi2_addn I_multicol_addn  -> ALL TRUE
+
+Perf gate (git-stash A/B, build vs display SEPARATELY; 6 chi2 tables from gss_cat, median of 5 reps):
+  INC1 (add_n baked at build):     BUILD 0.350 s | DISPLAY (tab_md x6) 0.320 s
+  INC2 (add_n/pvalue display-only): BUILD 0.330 s | DISPLAY (tab_md x6) 0.350 s
+  => BUILD faster (-6%); DISPLAY +9% (the materialise now runs at render); NET (build+display)
+     0.670 -> 0.680 s, neutral (within system.time noise). Work MOVES build -> display as designed
+     (the jmvtab live path especially benefits: the cached armed table is now cheaper to build, and
+     the extras materialise only at the final render).
+
+Golden regen (conscious): ALL structural _golden/*.rds (add_n `n` col / add_pct `col_pct` col / the
+pct=col n/row_pct rows removed; the `render_extras` intent attribute gained; f_chi2/f_color_contrib
+also lost the p-value row in Inc 1). Color golden: c_contrib (Inc1) + c_or (Inc2, pct=col add_n row).
+Display _snaps: golden.md + render-html.md regenerated -> add_n base moves from a separate `n`
+column to an in-cell `{pct} (n={n})` composite on the Total column (decision 1); percentages, CI
+brackets, significance stars, colours all unchanged.
