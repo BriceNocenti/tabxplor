@@ -207,3 +207,74 @@ testthat::test_that("wrap_rows truncates long row labels", {
   # Short wrap should produce shorter or equal output
   testthat::expect_lte(nchar(md_short), nchar(md_long))
 })
+
+# === SECTION: colour spans (Phase 10f) ========================================
+
+tabs_col <- tab(gss, race, marital, pct = "row", color = "diff")
+
+testthat::test_that("coloured table emits pandoc bracketed spans with break-derived classes", {
+  md <- tab_md(tabs_col, print = FALSE)
+  testthat::expect_true(grepl("]{.", md, fixed = TRUE))          # a span exists
+  testthat::expect_true(grepl("[{ ]\\.(p|m)[0-9]", md))          # a diff class (.p5 / .m10 / ...)
+  testthat::expect_true(grepl("[{ ]\\.n[}]", md))                # the neutral uniform-span class
+})
+
+testthat::test_that("color = FALSE yields plain markdown (no spans)", {
+  md <- tab_md(tabs_col, color = FALSE, print = FALSE)
+  testthat::expect_false(grepl("]{.", md, fixed = TRUE))
+})
+
+testthat::test_that("uncoloured table never gets spans (byte-identical default)", {
+  md_default <- tab_md(tabs, print = FALSE)                      # color = TRUE default
+  testthat::expect_false(grepl("]{.", md_default, fixed = TRUE))
+})
+
+testthat::test_that("two-channel colour emits a background (.bg...) class", {
+  t2 <- tab(gss, race, marital, pct = "row",
+            color = c(text = "diff", background = "ratio"))
+  md <- tab_md(t2, print = FALSE)
+  testthat::expect_true(grepl("\\.bg[a-z]", md))
+})
+
+testthat::test_that("coloured tables keep numbers aligned (equal pipe-line widths)", {
+  md    <- tab_md(tabs_col, print = FALSE)
+  lines <- strsplit(md, "\n")[[1]]
+  pl    <- lines[grepl("^[|]", lines)]
+  # single col_var -> all pipe lines identical width AND identical pipe count
+  testthat::expect_length(unique(nchar(pl)), 1L)
+  pipes <- purrr::map_int(pl, ~ stringr::str_count(., "[|]"))
+  testthat::expect_length(unique(pipes), 1L)
+})
+
+testthat::test_that("title renders a pandoc caption line", {
+  md <- tab_md(tabs_col, title = "My caption", print = FALSE)
+  testthat::expect_true(grepl("\n: My caption", md, fixed = TRUE))
+})
+
+# === SECTION: tab_md_css() ====================================================
+
+testthat::test_that("tab_md_css emits classes matching the table and a dark @media block", {
+  css <- tab_md_css(tabs_col)
+  testthat::expect_type(css, "character")
+  testthat::expect_true(grepl("\\.(p|m)[0-9]+ \\{ color:", css))          # a diff rule
+  testthat::expect_true(grepl("@media (prefers-color-scheme: dark)", css, fixed = TRUE))
+})
+
+testthat::test_that("tab_md_css dark_mode = 'none' omits the media block", {
+  css <- tab_md_css(tabs_col, dark_mode = "none")
+  testthat::expect_false(grepl("@media", css, fixed = TRUE))
+})
+
+testthat::test_that("tab_md(css = TRUE) embeds a <style> block", {
+  md <- tab_md(tabs_col, css = TRUE, print = FALSE)
+  testthat::expect_true(grepl("^<style>", md))
+  testthat::expect_true(grepl("</style>", md, fixed = TRUE))
+})
+
+testthat::test_that("tab_md_css writes to a file when file is given", {
+  tmp <- tempfile(fileext = ".css")
+  on.exit(unlink(tmp))
+  out <- tab_md_css(tabs_col, file = tmp)
+  testthat::expect_true(file.exists(tmp))
+  testthat::expect_gt(length(readLines(tmp)), 0)
+})

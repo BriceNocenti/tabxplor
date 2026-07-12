@@ -2669,19 +2669,32 @@ color_style_text_light <-
 
 #' @keywords internal
 color_style_text_light_24_blue_red <-
-  c(pos1 = "#93ED75",   #  c(pos1 = "#e4e65e",
-    pos2 = "#1AE6D6",   #    pos2 = "#cddc39", "#4EE6B9"
-    pos3 = "#00bcd4",   #    pos3 = "#8bc34a",
-    pos4 = "#1e88e5",   #    pos4 = "#589E38",
-    pos5 = "#0019ff",   #    pos5 = "#1b6e20",
+  c(
+    pos1 = "#93ED75",
+    pos2 = "#3ba888", # oklch(0.66 0.11 170)   # "#20a89b", # oklch(0.66 0.11 185)  "#0ba6ba", # "oklch(0.67 0.11 210)",
+    pos3 = "#0891c9", # oklch(0.62 0.13 235)   # "#0890a2", # "oklch(0.6 0.1 210)",
+    pos4 = "#0267c7", # oklch(0.52 0.17 255)   # "#027ad2", # "oklch(0.57 0.16 250)",
+    pos5 = "#300dfd", # oklch(0.47 0.30 270)   # "#265aff"  # "#2f60ee"  # "oklch(0.55 0.22 265)",
+    
+    neg1 = "#fdd835",
+    neg2 = "#c38c46", # oklch(0.68 0.11  70)   # "#d08747", # "oklch(0.69 0.12 60)",
+    neg3 = "#d26c28", # oklch(0.64 0.15  50)   # "#c8692d", # "oklch(0.62 0.14 50)",
+    neg4 = "#da4c01", # oklch(0.61 0.19  40)   # "#d04b0c", # "oklch(0.59 0.18 40)",
+    neg5 = "#dc0204",# oklch(0.56 0.23  29)   # "#e61301"  # "#d10f00"  # "oklch(0.54 0.22 30)",
 
-    neg1 = "#fdd835",   #    neg1 = "#ffeb3b",
-    neg2 = "#ffb300",   #    neg2 = "#ffc400",
-    neg3 = "#FF8138",   #    neg3 = "#ff9100",
-    neg4 = "#ff3d00",   #    neg4 = "#ff3d00",
-    neg5 = "#cb0000",
+    # pos1 = "#93ED75",   #  c(pos1 = "#e4e65e",
+    # pos2 = "#1AE6D6",   #    pos2 = "#cddc39", "#4EE6B9"
+    # pos3 = "#00bcd4",   #    pos3 = "#8bc34a",
+    # pos4 = "#1e88e5",   #    pos4 = "#589E38",
+    # pos5 = "#0019ff",   #    pos5 = "#1b6e20",
 
-    ratio = "#673AB7"
+    # neg1 = "#fdd835",   #    neg1 = "#ffeb3b",
+    # neg2 = "#ffb300",   #    neg2 = "#ffc400",
+    # neg3 = "#FF8138",   #    neg3 = "#ff9100",
+    # neg4 = "#ff3d00",   #    neg4 = "#ff3d00",
+    # neg5 = "#cb0000"#,
+
+    ratio = "#0267c7"
     #   "#8E24AA", "#7B1FA2" "#6A1B9A"
     # "#673AB7", "#5E35B1", "#512DA8", "#4527A0"
 
@@ -2709,17 +2722,29 @@ color_style_text_light_24_green_red <-
 
 #' @keywords internal
 color_style_bg_light <- # also change in select_in_color_style()
-  c(pos1 = "#CCFFCC", # rgb(4, 5, 4, maxColorValue = 5),
-    pos2 = "#99FF99", # rgb(3, 5, 3, maxColorValue = 5),
-    pos3 = "#66FF66", # rgb(2, 5, 2, maxColorValue = 5),
-    pos4 = "#33FF33", # rgb(1, 5, 1, maxColorValue = 5),
-    pos5 = "#00FF00", # rgb(0, 5, 0, maxColorValue = 5),
+  c(
+      neg1 = "#ffffff",
+      pos2 = "#F6F3FF", 
+      pos3 = "#E9E3FF", 
+      pos4 = "#DED3FF",
+      pos5 = "#D2C3FF",
 
-    neg1 = "#FFCCCC", # rgb(5, 4, 4, maxColorValue = 5),
-    neg2 = "#FF9999", # rgb(5, 3, 3, maxColorValue = 5),
-    neg3 = "#FF6666", # rgb(5, 2, 2, maxColorValue = 5),
-    neg4 = "#FF3333", # rgb(5, 1, 1, maxColorValue = 5),
-    neg5 = "#FF0000",  # rgb(5, 0, 0, maxColorValue = 5)
+      neg1 = "#ffffff",
+      neg2 = "#fff8e6", # oklch(0.98 0.025 90)    # "#fff5d9", # oklch(0.97 0.04 90)
+      neg3 = "#ffeab1", # oklch(0.94 0.076 90)    # "#ffe6a3", # oklch(0.93 0.09 90)
+      neg4 = "#fddb7c", # oklch(0.90 0.12  90)    # "#fcd76f", # oklch(0.89 0.13 90)
+      neg5 = "#ffce2d",# oklch(0.87 0.168 90)    # "#f9c718"#,# oklch(0.85 0.17 90)
+    # pos1 = "#CCFFCC", # rgb(4, 5, 4, maxColorValue = 5),
+    # pos2 = "#99FF99", # rgb(3, 5, 3, maxColorValue = 5),
+    # pos3 = "#66FF66", # rgb(2, 5, 2, maxColorValue = 5),
+    # pos4 = "#33FF33", # rgb(1, 5, 1, maxColorValue = 5),
+    # pos5 = "#00FF00", # rgb(0, 5, 0, maxColorValue = 5),
+
+    # neg1 = "#FFCCCC", # rgb(5, 4, 4, maxColorValue = 5),
+    # neg2 = "#FF9999", # rgb(5, 3, 3, maxColorValue = 5),
+    # neg3 = "#FF6666", # rgb(5, 2, 2, maxColorValue = 5),
+    # neg4 = "#FF3333", # rgb(5, 1, 1, maxColorValue = 5),
+    # neg5 = "#FF0000"#,  # rgb(5, 0, 0, maxColorValue = 5)
 
     ratio ="#6699FF" # rgb(3, 0, 5, maxColorValue = 5) #  "#9900FF" "#6600FF", "#6600CC"
 

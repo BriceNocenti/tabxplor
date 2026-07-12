@@ -12,9 +12,34 @@ KEY CONSTRAINTS:
 See: CLAUDE.md § "Phase 10", dev/tabxplor_1.4.0_decisions.md §33 (the decision record).
 -->
 
-Status: **10c DONE; 10d DONE; 10e DONE (2026-07-12); 10f→10g not started.** 10a decision settled
+Status: **10c DONE; 10d DONE; 10e DONE; 10f DONE (2026-07-12); 10g not started.** 10a decision settled
 (below); this document is the 10b deliverable and governs 10d→10g. Read this first, then the matching
 `dev/tabxplor_1.4.0_decisions.md` sections and `dev/tabxplor_architecture.md` "Export System".
+
+**Phase 10f done (2026-07-12) — `tab_md()` colour spans + `tab_md_css()` + per-table CSS.** A COLOURED
+table (any fmt column with an active colour measure, per `fmt_color_channels`) now renders every fmt cell
+as a **pandoc bracketed span** `[<num>]{.class}`; an uncoloured table (or `color = FALSE`) stays
+byte-identical to the plain padded layout. **Break-derived class names** (maintainer's choice over slot
+names — CSS-legal, readable, per-table): additive pct diff `p5`/`p10`/`p20`/`p30` (over) + `m5`/... (under);
+sd-standardized mean diff `sd0_2`/`sdm0_2`/...; multiplicative ratio/OR/the `x2` rule `x2`/`x1_5`/... +
+`d2`/... ; contribution fallback `b1`/`bm1`/... ; background channel = same names prefixed `bg`. Uncoloured
+cells get the neutral `.n` so the **uniform-span layout keeps numbers aligned in raw text** (maintainer's
+choice: "uniform spans for raw alignment"). The class names are **palette-INDEPENDENT** (slot→break), so
+`theme`/`color_type`/`html_24_bit` change only the CSS, never the markdown. New exported **`tab_md_css()`**
+generates the CSS matching *that table's* real breaks + palette (light + a `@media (prefers-color-scheme:
+dark)` block from the dark palette), reusing the SAME per-column slot maps the spans use (cells and CSS can
+never disagree); `tab_md(css = TRUE)` embeds it as an inline `<style>`. New `tab_md()` args: `color`
+(default TRUE), `theme`/`color_type`/`html_24_bit`, `title` (a pandoc caption `: title`, first table of a
+list only), `css`. `wrap_rows` default `50 → NULL` (lossless; a pipe cell can't hold a newline, so md
+"wrap" = "don't truncate"). Mechanism: extended the shared `fmt_col_ann()` to carry the per-cell
+`text_slot`/`bg_slot` the engine already produces (byte-neutral for kable/plot); md-specific
+`md_slot_class_map()`/`md_break_class()`/`md_span_attr()`/`md_color_cell()` + `md_css_rules()`/`md_css_block()`
+live in `tab_md.R` (naming + layout is a presentation concern, not the engine). Pandoc parity verified
+(spans, nested CI brackets `[[30;34]%]{.p5}`, `[**bold**]{.n}`, caption all render). Golden `_snaps/golden.md`
+regenerated for the 8 coloured display cases (4 factor `color="diff"` + 4 numeric means, which colour by
+default); the ~8 uncoloured cases stayed byte-identical. RDS structure fixtures untouched (spans are
+render-only). New `test-tab_md.R` colour/title/css tests. **Deferred to 10g:** the `transpose=` arg
+(uniform wiring). Full suite green.
 
 **10e (DONE) — `render_kable_html()` hybrid engine seam** (`R/tab-render-html.R`): kableExtra (default,
 byte-identical carve — git-stash A/B empty) + a dependency-free self-contained inline-CSS `<table>`
@@ -451,7 +476,7 @@ display; it is kept for future improvement.
 | **10c** format() + detection | `get_reference` boolean rewrite; `format(syntax, .ref)` + `numfmt`→excel; `tab_render_vars` + graceful degrade + `tab_get_vars` guards; `tab_totcol_range()`; `display_spec` (9→10 attr); label capture in build | `test-golden.R`/`_snaps/`, `test-fmt-contract.R` (regen 9→10), `test-color-golden.R`, `test-export-parity.R`; **re-profile format()**; new `test-edge-cases.R` |
 | **10d** shared prep | `tab_export_prep`, `tab_check_same_col_vars`, render-model + `ann`, base/list split, `tab_transpose`; refactor kable/md/plot to consume it | byte-identical: kable/md snapshots + jamovi `.render_html` unchanged; `test-benchmark.R` no regression |
 | **10e** kable **(DONE)** | `render_kable_html()` hybrid seam (kableExtra byte-identical + home-built html engine), cheap `any()`-gated tooltips, `format(na=)`→NA at source, list method, totblock roles, jamovi→`engine="html"`. **Deferred:** spanning header (redundant), `[min;max]` (unsettled), label tooltip (attr lost in build), `transpose=` (10f/10g) | `test-render-html.R` snapshots + cross-engine parity + DOM-size guard; kableExtra byte-identical (git-stash A/B); full suite 1601/0 |
-| **10f** md | short pandoc colour spans from `ann` slots, wrap-not-truncate, optional title, list method | `test-tab_md.R` snapshots (conscious regen for colour spans) |
+| **10f** md **(DONE)** | break-derived pandoc colour spans (uniform, aligned) + `tab_md_css()` per-table CSS + `title` caption + `wrap_rows=NULL` lossless + `color`/`theme`/`css` args; `fmt_col_ann` carries slots. **Deferred:** `transpose=` (10g) | `_snaps/golden.md` regen (8 coloured cases) + new `test-tab_md.R` colour/title/css tests; pandoc parity verified |
 | **10g** xl | base+list via seam, `format(syntax="excel")`, stars-in-numfmt, `[min;max]` text cells, plain-df support, tab_logit borders | **extend `test-export-parity.R`** (diff/ci/or/stars/label/range); `test-tab_xl.R` incl. a non-tabxplor df — the v1 baseline that gates Phase 11 |
 
 Cross-step landings: `[min;max]` helper (10c) → wired in prep (10d) → consumed text (10e/10f) / text-cell

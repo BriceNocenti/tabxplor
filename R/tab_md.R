@@ -1,10 +1,13 @@
-# PURPOSE: Export tabxplor tables to simple, human-readable markdown format.
-# ROLE: Parallel to tab_kable() (HTML) and tab_xl() (Excel) as a lightweight export.
+# PURPOSE: Export tabxplor tables to simple, human-readable markdown, colours as pandoc spans.
+# ROLE: Parallel to tab_kable() (HTML) and tab_xl() (Excel); consumes the shared tab_export_prep().
 # KEY CONSTRAINTS:
-#   - Must not modify any existing code; standalone file.
-#   - Padding must be monospace-precise: numbers right-aligned, pipes aligned.
+#   - Padding must be monospace-precise: numbers right-aligned, pipes aligned (raw text stays readable).
 #   - Bold rows (**...**) can touch pipes; normal cells have 1-space margins.
-# See: CLAUDE.md § Key Design Decisions > tab_md.
+#   - Phase 10f: a COLOURED table (any fmt column with a colour measure) wraps EVERY fmt cell in a
+#     break-derived pandoc span [<num>]{.class} (uncoloured cells get the neutral .n) so numbers stay
+#     aligned; an UNCOLOURED table (or color = FALSE) is byte-identical to the plain padded layout.
+#     Class names are palette-INDEPENDENT (slot -> break); tab_md_css() maps them to the palette hex.
+# See: CLAUDE.md Phase 10f, dev/tabxplor_phase10_exporters.md (Sec 12).
 
 #' Export a tabxplor table to a markdown table
 #'
@@ -16,8 +19,23 @@
 #' @param special_formatting Passed to \code{\link[=format.tabxplor_fmt]{format()}}.
 #'   When `TRUE`, shows "ref:" prefix on diff reference cells, "mean:" on ctr
 #'   totals, sigma on means.
-#' @param wrap_rows Max width for row labels before truncation.
+#' @param wrap_rows Max width for row labels before truncation. `NULL` (default) never truncates
+#'   (lossless -- the column grows); set a number to cap the label width. A markdown pipe cell cannot
+#'   hold a raw newline, so md "wrapping" means "do not truncate".
 #' @param subtext Print chi2/footnotes below the table.
+#' @param color When `TRUE` (default) and the table carries colours (e.g. built with
+#'   `tab(..., color = "diff")`), each fmt cell is wrapped in a short pandoc bracketed span
+#'   `[value]{.class}` so the markdown renders coloured in Quarto / RMarkdown / pandoc (and the
+#'   companion \code{\link{tab_md_css}} styles the classes). `FALSE` produces plain monochrome
+#'   markdown. Uncoloured tables never get spans.
+#' @param theme,color_type,html_24_bit Colour palette selectors (as in
+#'   \code{\link[=tab_kable]{tab_kable()}}); they only affect the CSS emitted by `css = TRUE` /
+#'   \code{\link{tab_md_css}}, since the span *class names* are palette-independent.
+#' @param title Optional table caption, rendered as a pandoc caption line `: title` (captions only the
+#'   first table of a list).
+#' @param css When `TRUE`, prepend an inline `<style>` block (from \code{\link{tab_md_css}}) matching
+#'   this table's breaks and palette, so the coloured markdown is self-contained. Default `FALSE`
+#'   (bring the stylesheet via the document's `css:` instead).
 #' @param clipboard Copy output to clipboard via \code{clipr::write_clip()}.
 #'   Requires the \pkg{clipr} package.
 #' @param file Path to write the markdown to a file. `NULL` (default) skips.
@@ -32,31 +50,53 @@
 #' tab(forcats::gss_cat, race, marital, pct = "row") |> tab_md()
 #' tab(forcats::gss_cat, race, marital, pct = "row", color = "diff") |> tab_md()
 #' tab(forcats::gss_cat, race, marital, pct = "row", color = "diff") |>
-#'   dplyr::mutate(dplyr::across(dplyr::where(is_fmt), ~set_display(., "diff"))) |> 
+#'   dplyr::mutate(dplyr::across(dplyr::where(is_fmt), ~set_display(., "diff"))) |>
 #'   tab_md()
 #' }
 tab_md <- function(tabs,
                    bold_references = TRUE,
                    special_formatting = TRUE,
-                   wrap_rows = 50,
+                   wrap_rows = NULL,
                    subtext = TRUE,
+                   color = TRUE,
+                   theme = c("light", "dark"),
+                   color_type = NULL,
+                   html_24_bit = NULL,
+                   title = NULL,
+                   css = FALSE,
                    clipboard = FALSE,
                    file = NULL,
                    print = TRUE) {
+  theme       <- match.arg(theme)
+  color_type  <- if (is.null(color_type )) getOption("tabxplor.color_style_type" ) else color_type
+  html_24_bit <- if (is.null(html_24_bit)) getOption("tabxplor.color_html_24_bit") else html_24_bit
 
-  # --- Phase 10d: shared exporter prep + the base/list split. ---
+  # --- Phase 10d/10f: shared exporter prep + the base/list split. ---
   # A single tab (or a mergeable same-col_vars / no-tab_vars list) renders as ONE table; a NON-mergeable
   # list (several row_vars and/or tab_vars -> tab() returns a list) renders each table
   # one-after-another (list_method = TRUE), each keeping its own tab_vars sub-tables. md keeps tab_vars
-  # (drop_tab_vars = FALSE) and does its own str_trunc (wrap = NULL).
+  # (drop_tab_vars = FALSE) and does its own str_trunc (wrap = NULL). 10f: adding "colors" to `compute`
+  # fills the per-cell slots fmt_col_ann() carries -> md_render_one() renders pandoc colour spans.
+  compute <- "refs"
+  if (bold_references) compute <- c(compute, "bold")
+  if (!isFALSE(color)) compute <- c(compute, "colors")
   prep <- tab_export_prep(tabs, backend = "md", drop_tab_vars = FALSE, wrap = NULL,
-                          compute = if (bold_references) c("refs", "bold") else "refs",
-                          list_method = TRUE, what = "tab_md()")
+                          compute = compute, color_type = color_type, theme = theme,
+                          html_24_bit = html_24_bit, list_method = TRUE, what = "tab_md()")
 
-  parts   <- purrr::map_chr(prep$tables, md_render_one,
-                            special_formatting = special_formatting,
-                            wrap_rows = wrap_rows, subtext = subtext)
+  parts   <- purrr::imap_chr(prep$tables, function(rd, i) {
+    md_render_one(rd, special_formatting = special_formatting, wrap_rows = wrap_rows,
+                  subtext = subtext, color = !isFALSE(color),
+                  title = if (i == 1) title else NULL,
+                  color_type = color_type, theme = theme, html_24_bit = html_24_bit)
+  })
   md_text <- paste(parts, collapse = "\n\n")
+
+  if (isTRUE(css)) {
+    md_text <- paste0(tab_md_css(tabs, theme = theme, color_type = color_type,
+                                 html_24_bit = html_24_bit, style_tag = TRUE),
+                      "\n\n", md_text)
+  }
 
   if (!is.null(file)) writeLines(md_text, file)
   if (clipboard) {
@@ -75,9 +115,71 @@ tab_md <- function(tabs,
 }
 
 
+#' CSS for the colour spans of \code{\link{tab_md}}
+#'
+#' Generates the CSS that styles the pandoc bracketed-span classes \code{\link{tab_md}} emits for a
+#' coloured table (`[value]{.p20}` etc.). The classes are **break-derived** so they are readable and
+#' match *this* table: additive percentage-point diffs are `p5`/`p10`/... (over-represented) and
+#' `m5`/`m10`/... (under-represented); standardized mean diffs are `sd0_2`/`sdm0_2`/...; ratios / odds
+#' ratios / the `x2` rule are `x2`/`x1_5`/... and `d2`/`d1_5`/...; contribution levels fall back to
+#' `b1`/`bm1`/.... Background-channel classes are the same names prefixed `bg`. The neutral class `.n`
+#' (uncoloured cells) is left unstyled (inherits the normal text colour).
+#'
+#' @param tabs The same table (or list of tables) passed to \code{\link{tab_md}}.
+#' @param theme,color_type,html_24_bit Palette selectors (as in \code{\link[=tab_kable]{tab_kable()}}).
+#' @param dark_mode When `"media"` (default) and `theme = "light"`, append a
+#'   `@media (prefers-color-scheme: dark)` block from the dark palette so the table follows the
+#'   viewer's colour scheme. `"none"` emits the single theme only.
+#' @param style_tag Wrap the CSS in a `<style>...</style>` tag (for embedding, as `tab_md(css = TRUE)`
+#'   does). Default `FALSE` returns bare CSS.
+#' @param file Optional path to write the CSS to; returns the string invisibly when given.
+#'
+#' @return A character string of CSS (visible, or invisible when `file` is given).
+#' @export
+#'
+#' @examples
+#' \donttest{
+#' tabs <- tab(forcats::gss_cat, race, marital, pct = "row", color = "diff")
+#' cat(tab_md_css(tabs))
+#' }
+tab_md_css <- function(tabs,
+                       theme = c("light", "dark"),
+                       color_type = NULL, html_24_bit = NULL,
+                       dark_mode = c("media", "none"),
+                       style_tag = FALSE, file = NULL) {
+  theme       <- match.arg(theme)
+  dark_mode   <- match.arg(dark_mode)
+  color_type  <- if (is.null(color_type )) getOption("tabxplor.color_style_type" ) else color_type
+  html_24_bit <- if (is.null(html_24_bit)) getOption("tabxplor.color_html_24_bit") else html_24_bit
+
+  css <- md_css_block(md_css_rules(tabs, color_type, theme, html_24_bit))
+
+  if (dark_mode == "media" && theme == "light") {
+    dark <- md_css_block(md_css_rules(tabs, color_type, "dark", html_24_bit), indent = "  ")
+    if (nzchar(dark)) {
+      css <- paste0(if (nzchar(css)) paste0(css, "\n") else "",
+                    "@media (prefers-color-scheme: dark) {\n", dark, "\n}")
+    }
+  }
+
+  if (isTRUE(style_tag)) css <- paste0("<style>\n", css, "\n</style>")
+  if (!is.null(file)) {
+    writeLines(css, file)
+    return(invisible(css))
+  }
+  css
+}
+
+
 # Render ONE prepared table (`rd`, from tab_export_prep) to a markdown string (no file/clipboard/print
 # -- tab_md() joins the parts and handles those). Holds the md-specific rendering (Steps 4-13).
-md_render_one <- function(rd, special_formatting, wrap_rows, subtext) {
+# Phase 10f: when the table carries colours and `color = TRUE`, every fmt cell is wrapped in a pandoc
+# bracketed span `[<num>]{.class}` (break-derived class, uncoloured cells get the neutral `.n`); the
+# uniform scaffold keeps the numbers aligned in raw text. Uncoloured tables (or color = FALSE) render
+# the byte-identical plain padded table.
+md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
+                          color = TRUE, title = NULL,
+                          color_type = NULL, theme = NULL, html_24_bit = NULL) {
   # Graceful degrade -- a table that can't be read as a tabxplor table renders as a plain pipe table.
   if (isTRUE(rd$vars$degrade)) {
     tab_degrade_inform(rd$vars$reason)
@@ -134,9 +236,12 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext) {
   })
   cell_data <- as.data.frame(cell_data, stringsAsFactors = FALSE)
 
-  # Truncate row labels
-  for (j in other_cols) {
-    cell_data[[j]] <- stringr::str_trunc(cell_data[[j]], wrap_rows)
+  # Truncate row labels (10f: only when wrap_rows is set; default NULL = lossless, column grows).
+  # A pipe cell cannot hold a raw newline, so md "wrap" means "do not truncate by default".
+  if (!is.null(wrap_rows)) {
+    for (j in other_cols) {
+      cell_data[[j]] <- stringr::str_trunc(cell_data[[j]], wrap_rows)
+    }
   }
 
   # For tables with tab_vars or compact tables: blank out grouping columns
@@ -165,6 +270,29 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext) {
     }
   }
 
+  # --- Step 6b (Phase 10f): per-cell pandoc span attributes (colour) ---
+  # A table is "coloured" iff some fmt column carries a colour measure. In that mode EVERY fmt cell is
+  # wrapped (uncoloured cells get the neutral `.n`) so numbers stay aligned; an uncoloured table keeps
+  # the byte-identical plain path. attr_mat holds the per-cell "{.class}" string (fmt columns only).
+  do_color <- isTRUE(color) && length(rd$ann) > 0L &&
+    any(vapply(rd$ann, function(a) isTRUE(a$has_color), logical(1)))
+  attr_mat <- NULL
+  if (do_color) {
+    attr_mat <- matrix("", nrow = nrow(cell_data), ncol = ncol(cell_data))
+    for (k in seq_along(fmt_cols)) {
+      nm  <- names(fmt_cols)[k]
+      j   <- fmt_cols[[k]]
+      a   <- rd$ann[[nm]]
+      ts  <- if (!is.null(a$text_slot)) a$text_slot else integer(nrow(cell_data))
+      bs  <- if (!is.null(a$bg_slot))   a$bg_slot   else integer(nrow(cell_data))
+      tmap <- md_slot_class_map(tabs[[j]], "text", color_type, theme, html_24_bit)
+      bmap <- md_slot_class_map(tabs[[j]], "bg",   color_type, theme, html_24_bit)
+      attr_mat[, j] <- vapply(seq_len(nrow(cell_data)),
+                              function(i) md_span_attr(ts[i], bs[i], tmap, bmap),
+                              character(1))
+    }
+  }
+
   # --- Step 7: Compute column widths ---
   n_rows <- nrow(cell_data)
   n_cols <- ncol(cell_data)
@@ -182,14 +310,28 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext) {
   #   left-aligned normal:  nchar + 2 (1 space each side)
   #   bold cell:            nchar + 4 (**...**)
   #   header:               nchar + 2
-  col_width <- integer(n_cols)
+  # Phase 10f: a coloured fmt column is laid out as " [<num>]<attr> " (fixed scaffold), so its width is
+  # num_width (numbers, bold-aware) + attr_width ({.class}) + 4, big enough for the header. num_width /
+  # attr_width are reused by the Step-11 scaffold so the numbers align (fixed offset) and pipes align.
+  col_width  <- integer(n_cols)
+  num_width  <- integer(n_cols)
+  attr_width <- integer(n_cols)
   for (j in seq_len(n_cols)) {
-    margin <- if (is_right[j]) 3L else 2L
-    widths <- cell_widths[, j] + margin  # normal cells
-    if (length(bold_rows) > 0) {
-      widths[bold_rows] <- cell_widths[bold_rows, j] + 4L  # bold cells
+    if (do_color && is_right[j]) {
+      w <- cell_widths[, j]
+      if (length(bold_rows) > 0) w[bold_rows] <- cell_widths[bold_rows, j] + 4L
+      nonempty <- nzchar(cell_data[[j]])
+      num_width[j]  <- if (any(nonempty)) max(w[nonempty]) else 0L
+      attr_width[j] <- if (any(nonempty)) max(nchar(attr_mat[nonempty, j])) else 0L
+      col_width[j]  <- max(num_width[j] + attr_width[j] + 4L, header_widths[j] + 2L)
+    } else {
+      margin <- if (is_right[j]) 3L else 2L
+      widths <- cell_widths[, j] + margin  # normal cells
+      if (length(bold_rows) > 0) {
+        widths[bold_rows] <- cell_widths[bold_rows, j] + 4L  # bold cells
+      }
+      col_width[j] <- max(c(widths, header_widths[j] + 2L))
     }
-    col_width[j] <- max(c(widths, header_widths[j] + 2L))
   }
 
   # --- Helper: pad a cell ---
@@ -285,8 +427,13 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext) {
     is_bold <- i %in% bold_rows
     row_cells <- character(n_cols)
     for (j in seq_len(n_cols)) {
-      row_cells[j] <- pad_cell(cell_data[[j]][i], col_width[j],
-                                is_right[j], is_bold)
+      if (do_color && is_right[j]) {
+        row_cells[j] <- md_color_cell(cell_data[[j]][i], attr_mat[i, j],
+                                      num_width[j], col_width[j], is_bold)
+      } else {
+        row_cells[j] <- pad_cell(cell_data[[j]][i], col_width[j],
+                                  is_right[j], is_bold)
+      }
     }
     body_lines[i] <- md_insert_col_sep(row_cells, new_col_var, n_cols,
                                         has_multi_col_vars)
@@ -318,6 +465,11 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext) {
   # --- Step 13: Assemble and output ---
   all_lines <- c(col_var_header_line, header_line, sep_line, body_lines)
 
+  # Optional caption -- a pandoc table caption line (numbered/cross-referenceable in Quarto).
+  if (!is.null(title)) {
+    all_lines <- c(all_lines, "", paste0(": ", title))
+  }
+
   if (length(subtext_text) > 0) {
     all_lines <- c(all_lines, "", subtext_text)
   }
@@ -341,4 +493,137 @@ md_insert_col_sep <- function(cells, new_col_var, n_cols, has_multi_col_vars) {
     }
   }
   paste0("|", paste(parts, collapse = "|"), "|")
+}
+
+
+# === SECTION: Phase 10f colour spans (break-derived pandoc classes) ==================
+
+# A colour break -> a concise, CSS-legal class name (classes cannot start with a digit / contain
+# +,.,/). Encodes direction + the actual break, so a reader knows what threshold a cell crossed:
+#   additive pct diff  : p5/p10/p20/p30  (over) , m5/m10/..  (under)      [break*100 pct-points]
+#   additive mean diff : sd0_2/sd0_5/..  (over) , sdm0_2/..   (under)      [Glass's delta, sd units]
+#   multiplicative     : x2/x1_5/x1_15   (over) , d2/d1_5/..  (under)      [ratio / OR / the x2 rule]
+#   contrib (fallback) : b1/b2/b3/b4     (over) , bm1/bm2/..  (under)      [signed break index]
+# `dir` is +1 (over-represented) / -1 (under-represented); `level` the break rank (for the fallback).
+#' @keywords internal
+md_break_class <- function(measure, center, is_mean, brk, dir, level) {
+  if (identical(measure, "contrib")) {
+    return(paste0(if (dir > 0L) "b" else "bm", level))
+  }
+  if (center == 1) {                       # multiplicative (ratio / or / x2)
+    v <- gsub("[.]", "_", format(brk, trim = TRUE, scientific = FALSE))
+    return(paste0(if (dir > 0L) "x" else "d", v))
+  }
+  if (isTRUE(is_mean)) {                    # additive, sd-standardized (Glass's delta)
+    v <- gsub("[.]", "_", format(brk, trim = TRUE, scientific = FALSE))
+    return(paste0(if (dir > 0L) "sd" else "sdm", v))
+  }
+  paste0(if (dir > 0L) "p" else "m", as.character(round(brk * 100)))   # additive pct-points
+}
+
+# For one fmt column + one channel, the map slot-integer (0..11) -> {class name, hex}. Reuses the
+# engine (fmt_color_plan gives measure/center/breaks + the level->palette-slot maps + the x2 overlay),
+# so md never forks the colour math -- it only names the slots the engine already assigns. Returns two
+# length-12 vectors indexed by `slot + 1L` (slot 0 = uncoloured -> "" / NA). Background-channel names
+# are prefixed "bg" (a distinct CSS class -> the background palette). `class` drives the span; `hex`
+# drives tab_md_css().
+#' @keywords internal
+md_slot_class_map <- function(col, channel = c("text", "bg"),
+                              color_type = NULL, theme = NULL, html_24_bit = NULL) {
+  channel <- match.arg(channel)
+  cls <- rep("",            12L)
+  hex <- rep(NA_character_, 12L)
+
+  color <- if (channel == "text") get_color(col) else get_color_bg(col)
+  plan  <- fmt_color_plan(col, channel, color = color)
+  if (is.null(plan)) return(list(class = cls, hex = hex))
+
+  is_mean <- get_type(col) %in% c("mean", "n")
+  palette <- get_color_style("color_code",
+                             type = if (channel == "text") color_type else "bg",
+                             theme = theme, html_24_bit = html_24_bit)
+
+  lv        <- seq_along(plan$pos_breaks)
+  pos_names <- vapply(lv, function(l) md_break_class(plan$measure, plan$center, is_mean,
+                                                     plan$pos_breaks[l], 1L, l), character(1))
+  neg_names <- vapply(lv, function(l) md_break_class(plan$measure, plan$center, is_mean,
+                                                     plan$pos_breaks[l], -1L, l), character(1))
+  slots <- c(plan$pos_slots[lv + 1L], plan$neg_slots[lv + 1L])
+  names_ <- c(pos_names, neg_names)
+  if (!is.null(plan$x2)) {
+    slots  <- c(slots, plan$x2$slot)
+    names_ <- c(names_, md_break_class("ratio", 1, FALSE, plan$x2$v, 1L, NA_integer_))
+  }
+  keep   <- slots > 0L
+  slots  <- slots[keep]
+  names_ <- names_[keep]
+  if (channel == "bg") names_ <- paste0("bg", names_)
+
+  cls[slots + 1L] <- names_
+  hex[slots + 1L] <- toupper(unname(palette[slots]))
+  list(class = cls, hex = hex)
+}
+
+# The pandoc bracketed-span attribute for ONE cell: "{.p20 .bgx2}" / "{.p20}" / "{.bgx2}" / "{.n}"
+# (both channels uncoloured -> the neutral uniform-span class, so numbers still align in raw text).
+#' @keywords internal
+md_span_attr <- function(text_slot, bg_slot, tmap, bmap, neutral = "n") {
+  parts <- character(0)
+  tc <- tmap$class[text_slot + 1L]
+  if (nzchar(tc)) parts <- c(parts, paste0(".", tc))
+  bc <- bmap$class[bg_slot + 1L]
+  if (nzchar(bc)) parts <- c(parts, paste0(".", bc))
+  if (length(parts) == 0L) parts <- paste0(".", neutral)
+  paste0("{", paste(parts, collapse = " "), "}")
+}
+
+# One coloured fmt cell as the fixed scaffold " [<num>]<attr> " padded to `total_width`. The number is
+# right-padded to `num_width` INSIDE the brackets, so `[` and the number sit at a fixed offset every row
+# (numbers align); the whole body is right-padded so the next pipe lands at a fixed column (pipes align).
+# An empty/NA cell renders as blank of the same width (no empty span).
+#' @keywords internal
+md_color_cell <- function(text, attr, num_width, total_width, is_bold) {
+  if (!nzchar(text)) return(strrep(" ", total_width))
+  content <- if (is_bold) paste0("**", text, "**") else text
+  body    <- paste0("[", stringr::str_pad(content, num_width, side = "left"), "]", attr)
+  paste0(" ", stringr::str_pad(body, total_width - 1L, side = "right"))
+}
+
+# The distinct span class -> {property, hex} rules for a table (or list), for tab_md_css(). Reuses the
+# shared prep + the same per-column slot maps the spans use, so the CSS can never disagree with the
+# cells. Text-channel classes -> `color`; background-channel classes -> `background-color`.
+#' @keywords internal
+md_css_rules <- function(tabs, color_type, theme, html_24_bit) {
+  prep <- tab_export_prep(tabs, backend = "md", drop_tab_vars = FALSE, wrap = NULL,
+                          compute = c("refs", "colors"), color_type = color_type, theme = theme,
+                          html_24_bit = html_24_bit, list_method = TRUE, what = "tab_md_css()")
+  class <- character(0)
+  prop  <- character(0)
+  hex   <- character(0)
+  for (rd in prep$tables) {
+    if (isTRUE(rd$vars$degrade)) next
+    for (j in rd$roles$fmt_cols) {
+      col  <- rd$tab[[j]]
+      tmap <- md_slot_class_map(col, "text", color_type, theme, html_24_bit)
+      bmap <- md_slot_class_map(col, "bg",   color_type, theme, html_24_bit)
+      tsel <- nzchar(tmap$class)
+      bsel <- nzchar(bmap$class)
+      class <- c(class, tmap$class[tsel], bmap$class[bsel])
+      prop  <- c(prop, rep("color", sum(tsel)), rep("background-color", sum(bsel)))
+      hex   <- c(hex, tmap$hex[tsel], bmap$hex[bsel])
+    }
+  }
+  keep <- !duplicated(class)
+  class <- class[keep]
+  prop  <- prop[keep]
+  hex   <- hex[keep]
+  ord   <- order(class)
+  list(class = class[ord], prop = prop[ord], hex = hex[ord])
+}
+
+# Assemble CSS rule lines from md_css_rules() output (empty string when no coloured class).
+#' @keywords internal
+md_css_block <- function(rules, indent = "") {
+  if (length(rules$class) == 0L) return("")
+  paste0(indent, ".", rules$class, " { ", rules$prop, ": ", rules$hex, "; }", collapse = "\n")
 }

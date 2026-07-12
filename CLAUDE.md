@@ -42,7 +42,9 @@ R/
 │                              print methods, tab_kable(), tab_plot(), tab_compact(),
 │                              color palettes, set_color_style(), set_color_breaks()
 ├── tab_xl.R        (4132 L)  Excel export via openxlsx (Suggests-only)
-├── tab_md.R         (366 L)  Markdown export (standalone, new in v1.3.1)
+├── tab_md.R         (~560 L) Markdown export: plain padded pipe table + (Phase 10f) break-derived
+│                              pandoc colour spans [<num>]{.p20} (uniform, aligned) via tab_export_prep;
+│                              tab_md_css() per-table CSS generator; md_slot_class_map/md_break_class
 ├── tab-export-prep.R (~400 L) Phase 10d shared exporter prep: tab_export_prep() -> tabxplor_render
 │                              model (roles/ann/bold/range/labels), consumed by kable/md/plot/xl
 ├── tab-render-html.R (~350 L) Phase 10e tab_kable render seam: render_kable_html() (kableExtra +
@@ -1242,7 +1244,11 @@ kableExtra path WITHOUT tooltips (0.22 s). Full suite green (1601); no golden re
 2. **`[min;max]` total column** — unsettled semantics (would make the `pct="row"` Total column show "100%" on most rows but a base-count range on others, overlapping the existing `n` column);
 3. **label header tooltip** — the source `label` attribute does NOT survive `tab()` building (`prep$labels` is NULL), so it needs core-pipeline plumbing first. `transpose=` arg deferred to 10f/10g (uniform wiring). Flagged for the maintainer: `kable_tabxplor_style()` is an orphaned exported duplicate (candidate for soft-deprecation).
 
-#### Phase 10f — tab_md()
+#### Phase 10f — tab_md() (DONE 2026-07-12)
+
+Coloured markdown export via **break-derived pandoc bracketed spans**. A COLOURED table (any fmt column whose `fmt_color_channels` gives a non-zero slot) wraps EVERY fmt cell in `[<num>]{.class}` (uncoloured cells get the neutral `.n`) so numbers stay aligned in raw text (**uniform-span layout**, maintainer's choice); an UNCOLOURED table (or `color = FALSE`) is byte-identical to the plain layout. **Class names** (maintainer's choice over slot names — CSS-legal, readable, per-table): pct diff `p5/p10/p20/p30` + `m5/...`; sd mean diff `sd0_2/sdm0_2/...`; ratio/OR/`x2` rule `x2/x1_5/...` + `d2/...`; contrib `b1/bm1/...`; background = same names prefixed `bg`. Names are **palette-INDEPENDENT** (slot->break); `theme/color_type/html_24_bit` change only the CSS. New exported **`tab_md_css(tabs)`** generates CSS matching *that table's* breaks + palette (+ a `@media (prefers-color-scheme: dark)` block), reusing the SAME slot maps the spans use (cells <-> CSS can't disagree); `tab_md(css = TRUE)` embeds it inline. New `tab_md()` args: `color` (default TRUE), `theme/color_type/html_24_bit`, `title` (pandoc caption), `css`; `wrap_rows` default `50 -> NULL` (lossless). Shared `fmt_col_ann()` extended to carry per-cell `text_slot`/`bg_slot` (byte-neutral for kable/plot). Golden `_snaps/golden.md` regenerated for the 8 coloured display cases (numeric means colour by default); uncoloured cases byte-identical. Detail: `dev/tabxplor_phase10_exporters.md` (Status + Sec 12). **Deferred to 10g:** the `transpose=` arg.
+
+##### Original plan (historical intent)
 
 `tab_md()` current version was made for a specific use case and never totally integrated into tabxplor : the aim is to fully integrate it.
 - color helpers must be handled with very shorts pandoc bracketed spans, everything padded and align to preserve human readability assuming monospace font (even out of preview mode). Examples for diffs : `.+5`, `.+10`, `.+20`, `.+30`, `.-5`, `.-10`, `.-20`, `.-30` etc. ; examples for ratios : `.x1.2`, `.x1.5`, `.x2`, `.x4`, `./1.2`, `./1.5`, `./2`, `./4`, etc. : would these names be valid css classes / pandoc bracketed spans ?.
@@ -1313,7 +1319,10 @@ Native dark mode/light mode management for exported tables, specially html table
 - With kable or another html tables solution, use css exported and applied with the table ?
 - Wire this css on standard html dark mode toggle, with a global option in R to use Dark mode in viewer. As a result, the table should autochange it’s formatted we the user change to dark light mode on whichever html page the table is embedded with. Do web searches to find current good practices about this.
 
-
+Display problems and improvements :
+- lists not working with `options(tabxplor.print = "kable")` auto-display (print() method), since they are not there own class ! Implement a new vctrs class "list_tabxplor_tab" with vctrs (that should still behave like a list in any other way)
+- with `list(tab(...), tab(...), ...) |> tab_kable()`, the result appear in console by defaut, it should be auto-routed to Viewer via class like kableExtra output (reuse class used by kableExtra if more simple and still reliable ?)
+- in kable output, with `color = c("diff", "ratio")`, tooltips have an empty `rr` field (it should be called "ratio", and print the actual ratio ; `ratio` display printing should always have a `×` symbol when >=1 and a `÷` symbol with the inversed (`1/ratio`) when <1, for example 0.5 shall print `"÷2"` ; defaut 1 digit, removing trailing zeros (`3.333` go to  `3.3` but `2.0000` go to `2`), respecting padding for perfect aligment in monospace font for human readability ; same in color legends)
 
 ### Phase 14 — tab_logit integration and full redesign
 

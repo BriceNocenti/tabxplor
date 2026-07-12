@@ -71,12 +71,19 @@ fmt_col_ann <- function(col, theme_cols, color_type = "text", html_24_bit = NULL
   grey_this <- if (has_col || has_bgc) theme_cols$grey else theme_cols$grey2
 
   if (has_col || has_bgc) {
-    codes    <- fmt_channel_codes(col, color_type, theme_cols$theme, html_24_bit)
-    text_hex <- codes$text
-    bg_hex   <- codes$bg
+    codes     <- fmt_channel_codes(col, color_type, theme_cols$theme, html_24_bit)
+    text_hex  <- codes$text
+    bg_hex    <- codes$bg
+    # Phase 10f: keep the raw slot integers fmt_channel_codes() already produced -- tab_md() maps
+    # them to break-derived pandoc span classes (.p20 / .bgx2 / ...). Byte-neutral for kable/plot,
+    # which read font/back/bold only.
+    text_slot <- codes$text_slot
+    bg_slot   <- codes$bg_slot
   } else {
-    text_hex <- rep(NA_character_, length(col))
-    bg_hex   <- rep(NA_character_, length(col))
+    text_hex  <- rep(NA_character_, length(col))
+    bg_hex    <- rep(NA_character_, length(col))
+    text_slot <- integer(length(col))
+    bg_slot   <- integer(length(col))
   }
 
   list(
@@ -84,6 +91,8 @@ fmt_col_ann <- function(col, theme_cols, color_type = "text", html_24_bit = NULL
     ref_cells  = ref_cells,
     text_hex   = text_hex,
     bg_hex     = bg_hex,
+    text_slot  = text_slot,
+    bg_slot    = bg_slot,
     font = dplyr::case_when(!is.na(text_hex) ~ text_hex,
                             ref_alltot       ~ theme_cols$text,
                             TRUE             ~ grey_this),

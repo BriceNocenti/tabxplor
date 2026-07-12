@@ -8,8 +8,14 @@ tab_md(
   tabs,
   bold_references = TRUE,
   special_formatting = TRUE,
-  wrap_rows = 50,
+  wrap_rows = NULL,
   subtext = TRUE,
+  color = TRUE,
+  theme = c("light", "dark"),
+  color_type = NULL,
+  html_24_bit = NULL,
+  title = NULL,
+  css = FALSE,
   clipboard = FALSE,
   file = NULL,
   print = TRUE
@@ -27,9 +33,28 @@ list --- several \code{row_vars} and/or \code{tab_vars} (e.g. \code{tab()} with 
 When \code{TRUE}, shows "ref:" prefix on diff reference cells, "mean:" on ctr
 totals, sigma on means.}
 
-\item{wrap_rows}{Max width for row labels before truncation.}
+\item{wrap_rows}{Max width for row labels before truncation. \code{NULL} (default) never truncates
+(lossless -- the column grows); set a number to cap the label width. A markdown pipe cell cannot
+hold a raw newline, so md "wrapping" means "do not truncate".}
 
 \item{subtext}{Print chi2/footnotes below the table.}
+
+\item{color}{When \code{TRUE} (default) and the table carries colours (e.g. built with
+\code{tab(..., color = "diff")}), each fmt cell is wrapped in a short pandoc bracketed span
+\verb{[value]\{.class\}} so the markdown renders coloured in Quarto / RMarkdown / pandoc (and the
+companion \code{\link{tab_md_css}} styles the classes). \code{FALSE} produces plain monochrome
+markdown. Uncoloured tables never get spans.}
+
+\item{theme, color_type, html_24_bit}{Colour palette selectors (as in
+\code{\link[=tab_kable]{tab_kable()}}); they only affect the CSS emitted by \code{css = TRUE} /
+\code{\link{tab_md_css}}, since the span \emph{class names} are palette-independent.}
+
+\item{title}{Optional table caption, rendered as a pandoc caption line \verb{: title} (captions only the
+first table of a list).}
+
+\item{css}{When \code{TRUE}, prepend an inline \verb{<style>} block (from \code{\link{tab_md_css}}) matching
+this table's breaks and palette, so the coloured markdown is self-contained. Default \code{FALSE}
+(bring the stylesheet via the document's \verb{css:} instead).}
 
 \item{clipboard}{Copy output to clipboard via \code{clipr::write_clip()}.
 Requires the \pkg{clipr} package.}
@@ -50,7 +75,7 @@ Export a tabxplor table to a markdown table
 tab(forcats::gss_cat, race, marital, pct = "row") |> tab_md()
 tab(forcats::gss_cat, race, marital, pct = "row", color = "diff") |> tab_md()
 tab(forcats::gss_cat, race, marital, pct = "row", color = "diff") |>
-  dplyr::mutate(dplyr::across(dplyr::where(is_fmt), ~set_display(., "diff"))) |> 
+  dplyr::mutate(dplyr::across(dplyr::where(is_fmt), ~set_display(., "diff"))) |>
   tab_md()
 }
 }

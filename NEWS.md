@@ -3,6 +3,17 @@
 # tabxplor 1.4.0 (in development)
 
 ## New features
+* `tab_md()` now exports **colored** markdown. A table built with colors (e.g. `tab(..., color = "diff")`)
+  renders each cell as a short pandoc bracketed span `[value]{.class}`, so it shows up colored in Quarto,
+  R Markdown and pandoc. The class names are readable and describe the color break --- `p5`/`p10`/`p20`
+  (over-represented), `m5`/... (under), `x2`/`x1_5` and `d2`/... (ratios), `sd0_2`/... (standardized mean
+  differences); the background channel uses the same names prefixed `bg`. Numbers still line up in a
+  monospace editor. `color = FALSE` gives plain monochrome markdown, and an uncolored table is unchanged.
+* New `tab_md_css()` --- generate the CSS that styles those spans, matching the exact color breaks and
+  palette of your table (with a `prefers-color-scheme: dark` block). Use `tab_md(css = TRUE)` to embed it
+  inline, or include the stylesheet in your document.
+* `tab_md()` gains a `title` argument (rendered as a pandoc table caption) and, by default,
+  `wrap_rows = NULL` no longer truncates long row labels (pass a number to cap them).
 * `tab_kable()` gains a faster, dependency-free HTML render engine. The new `engine` argument
   (`"kableExtra"`, the default, or `"html"`) selects it; `engine = "html"` produces a self-contained,
   inline-CSS `<table>` that needs no external stylesheet --- about 3x faster and much lighter than the
