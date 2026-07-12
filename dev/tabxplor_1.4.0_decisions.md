@@ -2551,3 +2551,32 @@ Three increments (maintainer commit between each):
 Files: `R/tab-export.R` (new), `R/tab-export-prep.R`, `R/tab_classes.R`, `R/tab_md.R`, `R/tab_xl.R`,
 `R/tab.R` (dead-constant), regenerated `NAMESPACE` + 5 `man/*.Rd`. Full detail: `dev/
 tabxplor_phase10_exporters.md` (10j-A Status).
+
+### Phase 10j-B IMPLEMENTED (2026-07-13) — PARTIAL GO; build at its floor confirmed
+
+PoC-gated (B-i), then a scoped rewrite (B-ii). Full numbers + scripts: `dev/benchmarks/results_1.4.0/
+phase10j_tests.txt`. The honest reframing of §30's "~22 %": the whole-table test path IS 26 %, but on the
+tables that cost time the **`agg_chi2` engine dominates** `chi2_compute_test` (73 % on chunky many-subtable
+shapes; already data.table, not a target) — the recoverable marshalling is much smaller than the coarse
+share implied.
+
+- **Byte-identity PROVEN (26/26 `identical()`)** for both candidate rewrites across factor/mixed/mean ×
+  comp tab/all × 0-2 tab_vars × weighted × 2×2 Yates. Landmine: `agg_chi2`/`agg_anova` DROP degenerate
+  subtables (n<2 / no valid cells); the live code recovers them as all-NA rows via `distinct(long)+
+  left_join(engine)`, so a byte-identical rewrite MUST re-implement that shape (match the full tuple set,
+  NA where the engine dropped).
+- **LANDED:** `is_a_mean` → direct `get_type()` read (`tab_chi2()`, `R/tab.R`) — was a per-col_var
+  `dplyr::select(ungroup(tabs))` reconstructing fmt columns to read the scalar `type` attr. **~3.15 % of the
+  whole `tab()` call** (6.1× on the op, noise-free), byte-identical (suite 1842/0, no golden regen), a
+  genuine simplification.
+- **ABANDONED:** the `chi2_compute_test` marshalling rewrite (~6 %, byte-identical but engine-capped and a
+  base-R re-shape of `distinct+left_join`, not a simplification); the shared `detect_totcols` (<1 %,
+  CI-path risk). The bigger adjacent lever `tab_compact` (21.9 %) is a different task. **The build is at its
+  floor (§35 confirmed).**
+
+Also this session (independent correctness): the flagged `color="contrib"` + `comp="all"` colour crash
+turned out to be THREE render bugs — `get_mean_contrib()` size-0 under comp="all" without a total table
+(new `grand_totrow()` degrade, shared with `chi2_write_contrib()`'s seed protection), the kable tooltip's
+NA `cond_ctr` on the Total column, and `tab_md()`'s NA-unsafe tab_var blanking on materialised p-value rows.
+All byte-identical; +`c_contrib_all`/`c_contrib_all_notab` colour goldens + an exporter render-no-crash test.
+Semantics confirmed: comp="all" = whole-table chi2+contribs, comp="tab" = per-subtable.

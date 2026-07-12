@@ -30,6 +30,10 @@
 #   c_after_ci / c_ci-> REGENERATE. pct CI-gated: color_all_signif now grades the CI-floor against
 #                       pct_diff breaks (fixes the asymmetric upper-arm + the odd-length negative-
 #                       direction bug that made c_ci ERROR on the baseline).
+#   c_contrib_all / c_contrib_all_notab
+#                    -> NEW (Phase 10j-B). Lock contrib + comp = "all" colouring, previously
+#                       uncovered and crashing (get_mean_contrib returned length 0 without a total
+#                       table). Generated fresh after the grand_totrow() fix -- not a regeneration.
 #   c_mean_diff / c_mean_diff_ci / c_mean_after_ci
 #                    -> REGENERATE. Numeric diff family now colors the sd-standardized difference
 #                       (Glass's delta, mean_diff breaks) instead of the ratio overload.

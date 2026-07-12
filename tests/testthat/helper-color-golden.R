@@ -111,6 +111,13 @@ color_golden_cases <- function() {
       tab(gss, marital, race, pct = "row", ci = "diff", color = "ci"))),
     c_contrib        = function() color_golden_capture_tab(
       tab(gss, marital, race, pct = "row", color = "contrib")),
+    # contrib + comp = "all": the whole-table mean-contribution colour. WITH tab_vars the seed lives
+    # on the total table's total row; WITHOUT tab_vars grand_totrow() degrades to the plain total row
+    # (both previously crashed the colour engine -- get_mean_contrib size 0 / mis-stored seed).
+    c_contrib_all    = function() color_golden_capture_tab(suppressWarnings(
+      tab(gss, marital, race, tab_vars = year, pct = "row", color = "contrib", comp = "all"))),
+    c_contrib_all_notab = function() color_golden_capture_tab(suppressWarnings(
+      tab(gss, marital, race, pct = "row", color = "contrib", comp = "all"))),
     c_or             = function() color_golden_capture_tab(
       tab(gss, marital, race, pct = "col", OR = "OR", color = "OR")),
 

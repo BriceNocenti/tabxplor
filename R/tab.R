@@ -5542,11 +5542,16 @@ tab_chi2 <- function(tabs, calc = c("ctr", "p", "var", "counts"),
   comp <- tab_validate_comp(tabs, comp = ifelse(is.null(comp), "null", comp))
   tabs <- tabs %>% tab_match_comp_and_tottab(comp)
 
+  # Phase 10j-B: per col_var, is ANY of its level columns a mean? Read get_type() -- a scalar column
+  # attribute -- DIRECTLY off each level column, instead of dplyr::select(ungroup(tabs), <levels>) per
+  # col_var (which reconstructed the fmt columns just to read that attribute: ~4.6 % of a chi2 build).
+  # Byte-identical (PoC dev/benchmarks/phase10j_tests_parity.R: 26/26 identical over factor/mixed/mean
+  # x comp tab/all x 0-2 tab_vars x weighted x a 2x2 Yates).
   is_a_mean <-
-    purrr::map_lgl(col_vars_levels,
-                   ~ purrr::map_lgl(dplyr::select(dplyr::ungroup(tabs), !!!.),
-                                    ~ get_type(.) == "mean") %>% any()
-    )
+    purrr::map_lgl(col_vars_levels, function(levs) {
+      cols <- purrr::map_chr(levs, rlang::as_name)
+      any(vapply(cols, function(cc) get_type(tabs[[cc]]) == "mean", logical(1)))
+    })
   # Phase 3b: mean col_vars now get an ANOVA F (the chi2 mirror), so an all-means table is no
   # longer skipped -- only the factor total-row/total-col scaffolding (which is factor-oriented)
   # is skipped for it. The ANOVA runs on the data rows (row_var-level groups) via agg_anova().
@@ -5814,8 +5819,10 @@ chi2_write_contrib <- function(tabs, calc, comp, color, col_vars_levels,
     # divide by the seed to get the relative contribution (|cell| / group-total), keeping the protected
     # total rows untouched (comp = "tab": total rows; comp = "all": total rows of the total table).
     ctr_final <- purrr::set_names(lapply(fmt_nms, function(nm) {
-      prot <- if (comp == "tab") is_totrow(tabs[[nm]]) else
-                (is_totrow(tabs[[nm]]) & is_tottab(tabs[[nm]]))
+      # comp = "all": protect the total table's total row (it holds the whole-table mean-contribution
+      # seed, read back by get_mean_contrib); grand_totrow() degrades to the plain total row when
+      # there is no total table (no tab_vars), so the seed is stored, not overwritten.
+      prot <- if (comp == "tab") is_totrow(tabs[[nm]]) else grand_totrow(tabs[[nm]])
       dplyr::if_else(prot, ctr_after[[nm]], var_after[[nm]] / ctr_after[[nm]])
     }), fmt_nms)
 

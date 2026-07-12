@@ -33,7 +33,12 @@ found to be at floor — see decisions §35). Three byte-identical increments:
 - **A-iii:** `tab_plot()` list-method parity (a non-mergeable list → a list of ggplots, via a
   per-element recursion — no display investment on the superseded function); removed the dead
   `fmt_frame_fields` constant. New `test-export.R`; suite 1827/0.
-- Perf lever (10j-B, `tab_apply_tests` base-R) is a separate later session.
+- **Perf lever (10j-B, `tab_apply_tests` base-R) — DONE 2026-07-13, PARTIAL GO.** PoC proved a rewrite
+  byte-identical (26/26) but the honest profile showed the test path is engine-dominated (`agg_chi2` is
+  already data.table); landed only the clean `is_a_mean` direct-`get_type` read (~3.15 % whole-call,
+  simplification), abandoned the `chi2_compute_test` marshalling rewrite (~6 %, not a simplification). Build
+  is at its floor. Also fixed the `contrib`+`comp="all"` colour crash (three render bugs). Detail:
+  `dev/benchmarks/results_1.4.0/phase10j_tests.txt`, decisions §35.
 
 **10h — Excel engine migration (openxlsx → openxlsx2), DONE (2026-07-12).** Maintainer chose a
 **full clean migration** over §9's dual-backend seam: `tab_xl()` rewritten on **openxlsx2 only**;
@@ -101,9 +106,10 @@ was a "white elephant", so aggressive simplification is welcome.
   plain-df degrade test, and `skip_if_not_installed("openxlsx")` guards. Full suite green.
 - **DEFERRED to the openxlsx2 phase (10h/11):** the backend closure seam, significance **stars** in
   Excel, the `[min;max]` total-column consumption (still INERT), the `transpose=` arg, and the
-  per-table-writer split. **Pre-existing (NOT 10g)**: `color="contrib"` + `comp="all"` errors in the
-  shared colour engine (`get_mean_contrib()` size 0) for `tab_kable` too — a Phase 5 issue to fix
-  separately.
+  per-table-writer split. **Pre-existing (NOT 10g) — FIXED Phase 10j-B (2026-07-13)**: `color="contrib"`
+  + `comp="all"` errored in the shared colour engine (`get_mean_contrib()` size 0) for `tab_kable`/`tab_xl`;
+  fixed via `grand_totrow()` (degrade the grand-total cell to the plain total row when there is no total
+  table), plus two adjacent render bugs (kable tooltip `cond_ctr` NA, `tab_md` tab_var blanking NA).
 
 **Phase 10f done (2026-07-12) — `tab_md()` colour spans + `tab_md_css()` + per-table CSS.** A COLOURED
 table (any fmt column with an active colour measure, per `fmt_color_channels`) now renders every fmt cell

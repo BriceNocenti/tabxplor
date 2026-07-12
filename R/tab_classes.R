@@ -1747,7 +1747,11 @@ tab_kable_print_tooltip <- function(x, popover = FALSE, .ref = NULL) {
     dplyr::if_else(cond_or, paste0("OR: ", format(set_display(x, "or")) ), "")
   } else blank
 
-  cond_ctr <- !is.na(get_ctr(x)) & !get_ctr(x) == Inf & !((totcol | totrows) & get_pct(x) == 1 )
+  # NA-safe: a contrib table writes `ctr` onto the Total column, whose `pct` is NA -> the bare
+  # get_pct(x) == 1 exclusion returned NA and crashed `if (any(cond_ctr))`. An NA pct is not a 100%
+  # base, so guard the comparison (mirrors cond_pct's !is.na(get_pct(x)) above).
+  cond_ctr <- !is.na(get_ctr(x)) & !(get_ctr(x) == Inf) &
+    !((totcol | totrows) & !is.na(get_pct(x)) & get_pct(x) == 1)
   out_ctr <- if (any(cond_ctr)) {
     mctr      <- if (get_comp_all(x)) { totrows & tottabs & !totcol } else { totrows & !totcol }
     ctr_start <- dplyr::if_else(mctr, "mean_ctr: ", "contrib: ")

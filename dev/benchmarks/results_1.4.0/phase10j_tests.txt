@@ -1,0 +1,104 @@
+Phase 10j-B — tab_apply_tests / tab_chi2 base-R marshalling
+B-i (PoC + profile), 2026-07-12. NO source change to the test path (measurements via monkey-patch).
+Scripts: dev/benchmarks/phase10j_profile.R, phase10j_probe.R, phase10j_tests_parity.R.
+Fixture: tab(gss_cat, c(marital,race,rincome,partyid), c(relig,denom,year[factor]),
+              pct="row", color="diff", chi2=TRUE)  -- 12 factor x factor chi2 tables.
+  (gss_cat has only 7 discrete vars; the §30 "5x3" is approximated by this 4x3.)
+Whole tab() call: median 0.62 s.
+
+================================================================================
+2a. PROFILE — where the ~22 % (§30 lever #3) actually is
+================================================================================
+by.total (fraction of the whole tab() call):
+  tab_apply_tests ............ 26.0 %   (§30's ~22 %; ci="no" here so all of it is tab_chi2)
+    tab_chi2 ................. 25.9 %
+      chi2_compute_test ...... 17.1 %
+        agg_chi2 (ENGINE) .... 5.6 %    <- already data.table, NOT a target
+      tab_chi2 head .......... ~8.8 %   (dominated by is_a_mean, below)
+  tab_compact (the MERGE) .... 21.9 %   <- a SEPARATE lever, not this task
+
+LINE profile inside the chi2 region (fraction of the whole call):
+  L5545  is_a_mean  ............................ 4.6 %  <- per-col_var dplyr::select(ungroup(tabs))
+                                                          just to read get_type (a scalar attr). CLEAN.
+  L5653  agg_chi2 (engine) ..................... 5.6 %  (kept)
+  L5708  final assembly (arrange/join/relocate)  4.0 %  (tiny tibble; locale-arrange byte-risk if ported)
+  L5635  long-frame build (imap/bind_rows) ..... 3.3 %
+  L5642  tibble() per col_var ................... 2.3 %
+  L5655  join-back (distinct/left_join/transmute) 2.6 %
+  L5624  subtable-grouping select(!where(is_fmt)) 0.7 %  <- CHEAP -> KEEP (avoids group-order port risk)
+  L5554/5559 tab_match_* / detect_totcols ...... ~1.6 %
+
+Key correction to the §30 framing: on a chunky many-subtable table the ENGINE dominates
+chi2_compute_test (agg_chi2 = 73 % of it on the 2-tab_vars shape). The marshalling only
+dominates on small tables. So the whole-call recoverable is much less than 17 %.
+
+================================================================================
+2b. PoC — byte-identity PROVEN (identical(), the 9d method), then measured
+================================================================================
+Two candidates vs the REAL live functions, across 26 shapes
+  (factor / mixed / mean col_vars x comp tab/all x 0-2 tab_vars x unweighted/weighted x a 2x2 Yates):
+
+  fast_chi2_compute_test()  identical(): 26 / 26   GREEN
+  fast_is_a_mean()          identical(): 26 / 26   GREEN
+
+  Byte-identity landmine found + resolved in the PoC: agg_chi2/agg_anova DROP degenerate
+  subtables (n<2 / no valid cells); the live code recovers them as all-NA rows via
+  distinct(long)+left_join(engine). A naive "build rows from the engine output" candidate LOSES
+  them (8/26 mixed+tab_vars fails). The correct rewrite rebuilds the FULL (table_id,cv,subtab)
+  tuple set from the inputs and match()es the engine results (NA where dropped) -- i.e. it must
+  RE-IMPLEMENT the distinct+left_join shape in base-R. => not a simplification, just faster primitives.
+
+MEASURED speedups:
+  is_a_mean         : 0.00276 s -> 0.00041 s   6.78x   (isolated)
+  chi2_compute_test : 0.0793 s  -> 0.0732 s    1.08x   (isolated, chunky shape -> engine-dominated)
+
+AGGREGATE recoverable (whole tab() call, fast fn monkey-patched into the namespace -- NO source edit):
+  is_a_mean (head)           ~ 4.0 %   (4.6 % op x 6.78x; CLEAN, genuinely simpler, LOW risk)
+  chi2_compute_test rewrite    6.3 %   (0.6226 s -> 0.5836 s; byte-identical, but NOT a simplification,
+                                        engine-capped on real tables, assembly left on the table)
+  --------------------------------------------------------------------------
+  COMBINED (full rewrite)    ~10.3 %   right at the abandon threshold.
+
+================================================================================
+2c. GATE — recommendation (STOP; awaiting maintainer's B-ii decision)
+================================================================================
+FEASIBILITY: byte-identity is PROVEN for the full rewrite (26/26). Not a blocker.
+
+VALUE / RISK, the honest split:
+  * is_a_mean -> direct get_type() read : ~4 %, byte-identical, genuinely SIMPLER (removes a
+      per-col_var dplyr::select that reconstructs fmt columns to read one scalar attr). LOW risk.
+      Clear GO on its own.
+  * chi2_compute_test marshalling rewrite : 6.3 %, byte-identical, BUT (a) engine-dominated on the
+      tables that actually cost time (agg_chi2 stays), (b) byte-identity forces re-implementing the
+      distinct+left_join NA-fill in base-R -> the SAME logical shape, less readable, contra the
+      "simplify, don't add confusion" mandate, (c) the ~4 % assembly was kept (recovering it adds
+      locale-dependent arrange() byte-risk).
+
+RECOMMENDATION: PARTIAL GO.
+  - Implement the is_a_mean clean win (+ optionally the ~1-2 % cheap head metadata reads
+    detect_totcols / tot_cols_names in base-R) => ~4-5 %, byte-identical, a real simplification.
+  - ABANDON the chi2_compute_test marshalling rewrite: its ~6 % is engine-capped and it is a
+    readability-neutral-to-worse base-R re-shape, not a simplification; the build is otherwise at
+    its floor (§35). The bigger adjacent lever is tab_compact (21.9 %), which is a different task.
+  (The full ~10 % rewrite IS available and byte-identical if raw speed is preferred over readability.)
+
+================================================================================
+B-ii OUTCOME (maintainer decision: PARTIAL GO) — 2026-07-13
+================================================================================
+LANDED: is_a_mean -> direct get_type() read (R/tab.R, tab_chi2()). Byte-identical
+  (full suite 1842 pass / 0 fail, NO golden regeneration). Noise-free measurement on the
+  fixture (isolated old-vs-new, summed over the 4 row_vars):
+    old (per-col_var dplyr::select(ungroup(tabs))) 0.02342 s -> new 0.00382 s  (6.1x)
+    = 3.15 % of the whole tab() call. A genuine simplification (no longer reconstructs the
+    fmt columns of each col_var just to read one scalar type attribute).
+
+ABANDONED (per the recommendation): the chi2_compute_test marshalling rewrite. Byte-identity
+  was PROVEN (26/26) but its ~6 % is engine-capped (agg_chi2 stays) and byte-identity forces a
+  base-R re-implementation of the distinct+left_join NA-fill -- the same logical shape, less
+  readable -> not a simplification. Left as-is; the build is at its floor (§35).
+
+SKIPPED (judgment): the sub-1 % head metadata ops. detect_totcols() is SHARED (CI path,
+  tab_add_n_pct) -> not worth the cross-path risk for ~0.8 %; tot_cols_names / col_vars_levels_no_tot
+  are already base-R and cheap. Rewriting them would be micro-opt noise, not a simplification.
+
+Phase 10j-B COMPLETE.

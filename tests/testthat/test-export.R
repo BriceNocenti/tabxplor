@@ -48,6 +48,25 @@ testthat::test_that("deprecated tab_xl(print_color_legend) still feeds color_leg
   )
 })
 
+testthat::test_that("contrib tables render through every exporter (comp tab/all, +/- tab_vars)", {
+  # Regression for two Phase 10j-B crashes: the colour engine (get_mean_contrib size 0 under
+  # comp = "all" without a total table) and the kable tooltip (cond_ctr NA on the Total column,
+  # which broke ANY contrib table via tab_kable, incl. the default comp = "tab").
+  gss <- forcats::gss_cat
+  contribs <- list(
+    tab     = tab(gss, marital, race, pct = "row", color = "contrib"),
+    all     = suppressWarnings(tab(gss, marital, race, pct = "row", color = "contrib", comp = "all")),
+    all_tab = tab(gss, marital, race, tab_vars = year, pct = "row", color = "contrib", comp = "all")
+  )
+  for (nm in names(contribs)) {
+    t <- contribs[[nm]]
+    testthat::expect_no_error(as.character(tab_kable(t)))                    # crash 2 (tooltip)
+    testthat::expect_type(tab_md(t, print = FALSE), "character")
+    f <- tempfile(fileext = ".xlsx")
+    testthat::expect_no_error(tab_xl(t, path = f, open = FALSE, replace = TRUE))  # crash 1
+  }
+})
+
 testthat::test_that("tab_plot renders a non-mergeable list as a list of plots (list-method parity)", {
   testthat::skip_if_not_installed("ggpubr")
   testthat::skip_if_not_installed("cowplot")

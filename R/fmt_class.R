@@ -1373,17 +1373,30 @@ get_tot_wn <- function(x) {
   tw
 }
 
+# grand_totrow() -- the whole-table grand-total row mask under comp = "all": the total row of the
+# total table (is_totrow & is_tottab). Degrades to the plain total row when there is no total-table
+# axis (no tab_vars), so a single unsubtabled table is treated as its own total table -- keeping
+# comp = "all" usable (and byte-identical to comp = "tab") there instead of crashing the colour
+# engine / storing the mean-contribution seed on an empty selection. Shared by get_mean_contrib()
+# (read) and chi2_write_contrib() (write) so the two never drift.
+#' @keywords internal
+grand_totrow <- function(x) {
+  g <- is_totrow(x) & is_tottab(x)
+  if (any(g)) g else is_totrow(x)
+}
+
 #' @keywords internal
 get_mean_contrib <- function(x) {
   comp    <- get_comp_all(x)
   totrows <- is_totrow(x)
-  tottabs <- is_tottab(x)
   ctr     <- get_ctr(x)
 
   if (!any(totrows)) return(rep(NA_real_, length(x)))
 
   if (comp) {
-    rep(ctr[totrows & tottabs], length(x))
+    grand <- grand_totrow(x)
+    if (!any(grand)) return(rep(NA_real_, length(x)))
+    rep(ctr[grand][sum(grand)], length(x))
   } else {
     tibble::tibble(
       ctr = ctr,

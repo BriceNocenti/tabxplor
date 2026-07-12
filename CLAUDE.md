@@ -1400,9 +1400,20 @@ Now that the carrier allow to only construct `tabxplor_fmt` vctrs fields at the 
 
 Fresh profile: build + Excel-write are at their FLOOR (§29-§31, §35); the clean high-value work is export INTEGRATION. Split into **Phase 10j-A (export framework, DONE)** + **Phase 10j-B (the one remaining build-perf lever — `tab_apply_tests`/`tab_chi2` base-R marshalling ~22 %, PoC-gated, a separate later session)**. Detail: `dev/tabxplor_phase10_exporters.md` (10j-A Status), decisions §35.
 
-##### Phase 10j-A — Unified export framework (DONE, 2026-07-12)
+##### Phase 10j-A — Unified export framework (DONE)
 
 Three byte-identical increments (no golden regen; suite 1827/0). New exported **`tab_export(x, format = c("kable","md","xl","plot"), path=, ...)`** facade (`R/tab-export.R`) + shared **`resolve_export_opts()`** (`R/tab-export-prep.R`). The four exporters unified: `color` (monochrome) + `transpose` on all (transpose centralised in `tab_export_prep()`, materialise→transpose); `tab_md(title→caption)` + `tab_xl(print_color_legend→color_legend)` soft-deprecated; `tab_xl` now consumes the prep's two-channel colour SLOTS (deleted its private `fmt_color_channels()` pass) and is **theme-aware**. `fmt_col_ann()` always returns the full monochrome-capable ann (fixed `color=FALSE` on html/plot/xl). `tab_plot()` gained list-method parity (non-mergeable list → list of ggplots). Removed the dead `fmt_frame_fields` constant. New `test-export.R`.
+
+##### Phase 10j-B — build-perf lever: `tab_apply_tests` / `tab_chi2` marshalling (DONE — 2026-07-13)
+
+PoC-first (B-i), then a maintainer-scoped partial rewrite (B-ii). Full record + numbers: `dev/benchmarks/results_1.4.0/phase10j_tests.txt` (+ scripts `phase10j_profile.R` / `phase10j_probe.R` / `phase10j_tests_parity.R`).
+
+- **Profile** (fresh, gss_cat 4×3 factor chi2 fixture): the "~22 %" is real (26 %) but the honest decomposition reframes it — on the tables that cost time the **`agg_chi2` engine dominates** `chi2_compute_test` (73 % on chunky many-subtable shapes; already data.table, not a target). The single biggest CLEAN line was `is_a_mean` (4.6 % by.total) — a per-col_var `dplyr::select(ungroup(tabs))` reconstructing fmt columns just to read the scalar `type` attr.
+- **PoC** proved BOTH candidate rewrites **byte-identical (26/26 `identical()`)** across factor/mixed/mean × comp tab/all × 0-2 tab_vars × weighted × 2×2 Yates. Landmine: `agg_chi2`/`agg_anova` DROP degenerate subtables → the live `distinct+left_join` recovers them as NA rows; a byte-identical rewrite must re-implement that shape.
+- **LANDED (B-ii): `is_a_mean` → direct `get_type()` read** (`tab_chi2()`, `R/tab.R`). **~3.15 % of the whole `tab()` call** (6.1× on the op, noise-free isolated sum), byte-identical (full suite 1842/0, no golden regen), a genuine simplification.
+- **ABANDONED: the `chi2_compute_test` marshalling rewrite** — byte-identity was proven but its ~6 % is engine-capped and forces a base-R re-implementation of `distinct+left_join` (same shape, less readable → not a simplification). The shared `detect_totcols` (<1 %, CI-path risk) was likewise skipped. Build is at its floor (§35).
+
+**Also fixed this session (the flagged `contrib`+`comp="all"` crash → three render bugs):** `grand_totrow()` degrade in `get_mean_contrib()`/`chi2_write_contrib()` (colour engine), NA-safe `cond_ctr` (kable tooltip), NA-safe tab_var blanking (`tab_md`) — see "Last Phase a" above. Byte-identical, +2 colour goldens + an exporter render test.
 
 
 
@@ -1532,15 +1543,28 @@ What about `multi_logit`, who handles passing of multiple models (like different
 
 Known bugs to fix (found but out of scope when discovered):
 
-- **`color = "contrib"` + `comp = "all"` crashes the colour engine** (Phase 5 issue, found in Phase 10g).
-  `fmt_color_plan()` → `get_mean_contrib(x)` returns length 0 while the column has N cells, so
-  `dplyr::if_else(is_totrow(x), NA_real_, get_ctr(x) / get_mean_contrib(x))` ([R/fmt_class.R](R/fmt_class.R),
-  `fmt_color_plan`, the `"contrib"` `raw` branch) errors `false must have size N, not size 0`. Hits BOTH
-  `tab_kable()` and `tab_xl()` (any exporter that colours a `comp="all"` contrib table); `tab()` builds
-  the table fine — only colouring fails. Default `comp="tab"` contrib is unaffected. Root cause is the
-  empirical `get_mean_contrib()` on the total-table (`all_tabs`) structure; the colour golden does not
-  cover `contrib`+`comp="all"`, which is why it went unnoticed.
-  + Note : wanted behaviour for tab_vars with contribs is : if `comp="all"` chi2 test and contribs are calculated on the whole table (all combinations of row_vars and tab_vars levels) ; if `comp="tab"` a chi2 test is realise for each subtable, and the variance + contribs are calculated at this level. Please confirm it’s what the current code does.
+- **FIXED (Phase 10j-B, 2026-07-12): contrib rendering crashes.** Fixing the flagged `color="contrib"` +
+  `comp="all"` colour crash surfaced THREE distinct render bugs (all now fixed, golden-locked, byte-identical
+  to every working path):
+  1. **Colour engine** — `get_mean_contrib()` returned length 0 under `comp="all"` when there is NO total
+     table (no tab_vars), so `fmt_color_plan()`'s `get_ctr(x) / get_mean_contrib(x)` errored
+     `false must have size N, not size 0` (both `tab_kable`/`tab_xl`). Fix: new shared `grand_totrow()`
+     ([R/fmt_class.R](R/fmt_class.R)) = `is_totrow & is_tottab`, **degrading to `is_totrow` when there is
+     no total-table axis** so a single table is its own total table; used by BOTH `get_mean_contrib()`
+     (read) and `chi2_write_contrib()`'s seed protection ([R/tab.R](R/tab.R)) so the mean-contribution seed
+     is stored where it is read. `get_mean_contrib()` also never returns length 0 now (graceful → NA).
+  2. **Kable tooltip** — `cond_ctr` ([R/tab_classes.R](R/tab_classes.R)) did `get_pct(x) == 1` on the Total
+     column (whose `pct` is NA while `ctr` is written), yielding NA → `if (any(cond_ctr))` crashed **any**
+     contrib table via `tab_kable(tooltip=TRUE)`, incl. the default `comp="tab"`. Fix: NA-safe guard
+     (mirrors the sibling `cond_pct`).
+  3. **Markdown** — `tab_md()`'s tab_var-blanking loop ([R/tab_md.R](R/tab_md.R)) did `vals[i]==vals[i-1]`
+     without NA-safety, crashing on the NA tab_var of a **materialised p-value row** → **any**
+     `chi2=TRUE` + tab_vars table via `tab_md`. Fix: blank NA/repeat cells NA-safely (kable already tolerated).
+  **Semantics confirmed (the maintainer's note):** the code DOES implement the wanted behaviour — `comp="all"`
+  ungroups the table ([tab.R:5557](R/tab.R#L5557)) so chi2 + contributions are computed on the WHOLE table
+  (all row_var × tab_var level combinations, referenced to the grand total); `comp="tab"` keeps per-subtable
+  grouping so a chi2 + contributions are computed PER subtable (each vs its own total row). Coverage added:
+  `c_contrib_all` / `c_contrib_all_notab` colour goldens + an exporter render-no-crash test (`test-export.R`).
 - **`document()` `@inheritParams` notice on topic `fmt`** (cosmetic, since Phase 10g added `@param syntax`
   / `@param .ref` to `format.tabxplor_fmt`): roxygen warns "All parameters are already documented; none
   remain to be inherited." Harmless (man pages write correctly, NAMESPACE unchanged); tidy up `fmt()`'s

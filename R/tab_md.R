@@ -262,7 +262,10 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
       if (length(tv_idx) == 1) {
         vals <- cell_data[[tv_idx]]
         for (i in seq_along(vals)) {
-          if (i > 1 && vals[i] == vals[i - 1]) {
+          # blank a tab_var cell that repeats the previous label OR is NA (a continuation row such as
+          # a materialised p-value line, which belongs to the preceding sub-table) -- NA-safe so the
+          # `if` never receives a missing value (kable already tolerates these rows).
+          if (i > 1 && (is.na(vals[i]) || isTRUE(vals[i] == vals[i - 1]))) {
             cell_data[[tv_idx]][i] <- ""
           }
         }
