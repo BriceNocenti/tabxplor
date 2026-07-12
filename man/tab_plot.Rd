@@ -44,7 +44,12 @@ A \code{\link[ggplot2]{ggplot}} object to be printed in the
 \code{RStudio} Plots pane or exported as image, using \code{\link[ggpubr]{ggtexttable}}.
 }
 \description{
-Print a tabxplor table as plot
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#superseded}{\figure{lifecycle-superseded.svg}{options: alt='[Superseded]'}}}{\strong{[Superseded]}}
+
+Superseded (1.4.0): \code{tab_plot()} renders a \pkg{tabxplor} table as a \pkg{ggpubr} image, but its
+display is limited and it is no longer actively developed. It keeps working and is retained for a
+future redesign; prefer \code{\link{tab_kable}} (HTML), \code{\link{tab_md}} (markdown) or
+\code{\link{tab_xl}} (Excel).
 }
 \examples{
 \donttest{

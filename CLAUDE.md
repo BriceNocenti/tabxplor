@@ -1147,17 +1147,18 @@ We must **make a grounded choice for jamovi jmvtab module base display of tables
 
 Wrote **`dev/tabxplor_phase10_exporters.md`** — the single self-contained Phase 10 architecture doc governing 10c→10g. Core: (1) a normalized **`tabxplor_render` ephemeral sidecar** (NOT tab attributes — dplyr desyncs them) holding the derive-once quantities (reference/total masks, colour slots/hex, stars, blank mask, bold rows, `[min;max]`, labels), consumed identically by the `format()`-string backends and the `tab_xl` numeric bypass; (2) one **`tab_export_prep()`** helper (new `R/tab-export-prep.R`) replacing the 4×-duplicated preamble + per-exporter role detection, base(single)+list(several) split; (3) **`format()`/`get_reference()`** `case_when`→boolean rewrite + a `.ref=` precompute arg (masks once, not 4×) + `format(syntax="excel")` folding `numfmt()` in; (4) robust var detection via `dplyr::group_vars()` + graceful `degrade` (fixes the no-factor crash) + `test-edge-cases.R`; (5) `[min;max]` table-level pre-pass; (6) tab_xl backend seam (openxlsx v1, ready for Phase 11); (7) `tab_transpose()` finished + opt-in transpose-at-export; (8) `tab_plot()` soft-deprecated. **New decisions:** opt-in multi-field display (`pct (n)`/`pct ± ci`) via a new optional **`display_spec` attribute (9→10)** parsed only in `format()` (zero cost when unused); the `label` attribute → `tab_kable` header tooltip only. Sequencing + per-step golden/parity verification in the doc §12.
 
-#### Phase 10c — rework format() for console display and exports that uses it
+#### Phase 10c — rework format() for console display and exports that uses it (DONE)
 
-##### Done (2026-07-12)
+Display of `tabxplor_tab` on console is quite long, and kable and fmt export uses it two, even in Jamovi display which must be the fastest possible : what are the performance bottlenecks and how to make it faster / remove useless stuffs and white elephants here ?
+- Particularly, `format()`/`get_reference` display `case_when` must be changed for performance.
 
-Byte-identical (full suite green; conscious structural golden regen only for the new `display_spec`
-attribute). Full record: `dev/tabxplor_phase10_exporters.md` (Status block) + `dev/tabxplor_1.4.0_decisions.md`
-§33; profile `dev/benchmarks/results_1.4.0/phase10c_profile.txt`. Scope confirmed with the maintainer:
-`display_spec` = a **curated** whitelist as its own isolated step (not the full parser); the prep-helpers
-`numfmt`→`format(syntax="excel")` / `tab_totcol_range()` / label-capture were **deferred to their consumer
-sub-phase** (10g / 10d / 10e) to avoid unwired / duplicate-source code.
+The `tabxplor_tab` class and the grouped one currently have a kind of bug that forbids them to work with every data.frame (like : with no `tabxplor_fmt` ; with no factors ; with factors after fmt columns and not before ; etc.) : it may come from the way `row_vars` and `tab_vars` are detected and from `tab_get_vars` etc. **I think this bug may only or essentilly happen for grouped tabs**. Obviously, these detections are absolutely needed to print colors etc., but currently, the failing mode is display error or export error.
+- I would want a more user-friendly failing mode, still printing the df without the specialt tabxplor formattings and colors. Add testthat tests to be sure there cases do not throw error. Use messages if needed to explain to the user why it fails. Implement testthat tests with edge cases.
+- More generally, I wonder if there’s a more reliable way to handle detection of row, col, tab vars, and the other informations needed for fmt and colors to compute, with smart fallbacks (no colors, no fmt formatting, etc.).
 
+Passing a vector in display to display several fields, as an opt-in option ? (Won't work in Excel, but anyway Excel export do not use `format()` ?) Would it be possible to find a reliable syntax to command exactly the wanted fields and seps in a display ? Like `pct (n)` or `pct ± ci` ? Would it really be useful for data analysis users, or a white elephant with theoretical useless flexibility again ?
+
+Scope confirmed with the maintainer: `display_spec` = a **curated** whitelist as its own isolated step (not the full parser)
 - **`get_reference()` (`fmt_class.R`) `case_when` → base boolean composition** (branch selectors are scalar
   attributes; arms are per-cell boolean of the field masks). A/B-verified byte-identical + the
   subset-equivalence `get_reference(x[m]) == get_reference(x)[m]` the `.ref` memoization relies on.
@@ -1174,26 +1175,21 @@ sub-phase** (10g / 10d / 10e) to avoid unwired / duplicate-source code.
   / `set_display_spec()`, curated whitelist `c("pct (n)", "n (pct)")`, parsed only in `format()` (text
   backends; Excel keeps the primary field). `test-fmt-contract.R` 9→10 + snapshot accepted.
 
-Display of `tabxplor_tab` on console is quite long, and kable and fmt export uses it two, even in Jamovi display which must be the fastest possible : what are the performance bottlenecks and how to make it faster / remove useless stuffs and white elephants here ?
-- Particularly, `format()`/`get_reference` display `case_when` must be changed for performance.
-
-The `tabxplor_tab` class and the grouped one currently have a kind of bug that forbids them to work with every data.frame (like : with no `tabxplor_fmt` ; with no factors ; with factors after fmt columns and not before ; etc.) : it may come from the way `row_vars` and `tab_vars` are detected and from `tab_get_vars` etc. **I think this bug may only or essentilly happen for grouped tabs**. Obviously, these detections are absolutely needed to print colors etc., but currently, the failing mode is display error or export error.
-- I would want a more user-friendly failing mode, still printing the df without the specialt tabxplor formattings and colors. Add testthat tests to be sure there cases do not throw error. Use messages if needed to explain to the user why it fails. Implement testthat tests with edge cases.
-- More generally, I wonder if there’s a more reliable way to handle detection of row, col, tab vars, and the other informations needed for fmt and colors to compute, with smart fallbacks (no colors, no fmt formatting, etc.).
-
-Passing a vector in display to display several fields, as an opt-in option ? (Won't work in Excel, but anyway Excel export do not use `format()` ?) Would it be possible to find a reliable syntax to command exactly the wanted fields and seps in a display ? Like `pct (n)` or `pct ± ci` ? Would it really be useful for data analysis users, or a white elephant with theoretical useless flexibility again ?
-
 
 #### Phase 10d — common prep function
 
 Design and implement the common prep function, looking carefully at all the changes and new features that will come next to ensure the shared prep function is ready for them.
 - When a feature is export-type specific, like for example Excel only, it should be justified.
+- `tab_totcol_range()`
+
+##### Part 1 DONE (2026-07-12) — byte-identical (full suite PASS 1501 / FAIL 0, NO golden regen; kable/md A/B `identical()` across 10 fixtures)
+
+New **`R/tab-export-prep.R`**: `tab_export_prep()` builds the ephemeral `tabxplor_render` model ONCE and `tab_kable`/`tab_md`/`tab_plot` consume it, deleting the 4× duplicated blocks — A (compact via `tab_check_same_col_vars()` + the existing `tab_compact()`), B (degrade via `tab_render_vars()`), C (role detection), D (bold rows via `tab_bold_rows()`) — and the two-channel colour loop (now `fmt_col_ann()`, per-column `ann`). Derive-once win: `get_reference` once → `format(.ref=)`, `fmt_channel_codes` once. Medium-specific quirks stay LOCAL (md tab_vars keep+blank + `str_trunc` + span index + `new_group` trim; kable knitr `*`-escape + `row_spec`; plot ggpubr). `tab_totcol_range()` built + INERT (consumed in 10e/10f). `tab_plot()` soft-deprecated (`lifecycle` superseded). `test-export-prep.R` (39) added. Detail: `dev/tabxplor_phase10_exporters.md` (Status) + decisions §33. **Part 2 = `tab_transpose()` (point E), after the maintainer commits Part 1.**
 
 #### Phase 10e — rework tab_kable()
 
 Comment accélerer cette fonction ? Faire une version plus light par défaut, sans les interactive tooltips etc. ? Accélerer les tooltips ? See design choices from Phase 10a.
 Enlever l'affichage des vrais `NA` en `""` dans kable plus proprement qu'en les enlevant à la fin dans le html, pour qu’ils soient enlevés dans tous les cas de figure possible (knitr, .Rmd, etc. ; in the past I had some tables left with ugly NA formattings) ? How to really do it reliably ?
-
 
 #### Phase 10f — tab_md()
 
@@ -1207,6 +1203,7 @@ Enlever l'affichage des vrais `NA` en `""` dans kable plus proprement qu'en les 
 - Integrate numfmt() in format(type = "xl")
 - avec tab_logit (references), on perd les bordures des groupes aussi ? Vérifier.
 - Add the end it must work with tab_logit() and *** : significance stars used as formatting.
+- Prep-helpers `numfmt`→`format(syntax="excel")`
 
 **Stays on openxlsx v1** — the openxlsx2 engine swap is Phase 9.
 
@@ -1224,9 +1221,23 @@ Isolated on purpose: a full dependency swap should not be entangled with the Pha
 
 Add an option to use **conditional formatting** instead of hard text colors. This was awful and very slow with openxlsx v1 — check whether openxlsx2 makes it less horrible / faster.
 
+### Phase 12 – Manual reviews
+
+Final verification that statistical results are the same for tabxplor 1.3.1 (installed CRAN version) and tabxplor 1.4.0, with manual review of the maintainer. Create two Excel files in mirror, with one exact same sheet for each analysis, and in this sheet a first standard table with the revelant colors (often mostly pct display), and a second table with the relevant vctrs field (ex : contrib, chi2, etc.). Each time, the first col_vars is a factor and the second col_vars is a numeric variable. The use cases and calculations to review :
+- `tab_vars = <x>, pct = "row", color = "diff"`  # diff of the numeric variable will be different
+- `tab_vars = <x>, pct = "row", color = "ratio"` # only 1.4.0, to compare with the former "diff" with numeric variable
+- `tab_vars = <x>, pct = "col", color = "diff"`
+- `tab_vars = <x>, color = "contrib", comp = "all"`
+- `pct = "row", color = "diff", color_signif = "grey_non_signif"` # ci method Agresti-Caffo for comparison
+- `wt = <x>, pct = "row", color = "diff", color_signif = "grey_non_signif"` # ci method Agresti-Caffo for comparison # take any numeric var for the weights even if they are not weights.
+- `pct = "col", color = "diff", color_signif = "grey_non_signif"` # ci method Agresti-Caffo for comparison
+- `wt = <x>, color = "diff", color_signif = "grey_non_signif"` # ci method Agresti-Caffo for comparison
+- `pct = "row", ci = "cell"` # ci cell method Wilson
+- etc. # what other use cases would be important to review here ?
 
 
-### Phase 12 – Finalise color UI, redesign color palettes with manual fine-tuning for clarity
+
+### Phase 13 – Finalise color UI, redesign color palettes with manual fine-tuning for clarity
 
 Color UI finalisation
 - Would it be possible / consistent to add this possibility:
@@ -1242,12 +1253,12 @@ Native dark mode/light mode management for exported tables, specially html table
 
 
 
-### Phase 13 — tab_logit integration and full redesign
+### Phase 14 — tab_logit integration and full redesign
 
 Integration of `tab_logit.R` (currently commented out) into the package, then redesign and rewrite of `tab_logit` and `multi_logit`, and maybe extension to all `lm` + `glm` regression models inside the same unified framework.
 - logit and regression models functions will be introduced in tabxplor 1.4.0 : **no backward-compatibility needed**, but the public API and internal workflows both need to be carefully redesigned for user-friendliness, consistency, performance and future-proofing.
 
-#### Phase 13a – integrate current version in tabxplor framework cleanly
+#### Phase 14a – integrate current version in tabxplor framework cleanly
 
 An important design question should be answered first : should I keep the content of `tab_logit.R` inside tabxplor package, even if it makes the count of tabxplor dependencies very high (CRAN current policies on that matter ?) ? Or should I create a `regxplor` subpackage (name is `available::available()`) relying on tabxplor (with more frictions during dev, both human dev and Claude Code assisted dev, or not necessarily and there are reliable way to avoid them ?), and in this case, as a package always loading with tabxplor, or as a package just importing tabxplor ? Make detailed web searches about modern good practices and tidyverse good practices, then write your analysis in `dev\tabxplor_1.4.0_decisions.md` (respecting it’s internal style and logic).
 
@@ -1259,7 +1270,7 @@ The current `tab_logit.R` code, made outside of the package, was a way to use ta
 - All exports (kable, md, Excel) should work natively with the resulting tabxplor_tab (or grouped one, etc.).
 
 
-#### Phase 13b – design choices and statistical framework
+#### Phase 14b – design choices and statistical framework
 
 Statistical sanity 1 : how to handle dependent var factors with 3+ levels ?
 - The function currently binarise all levels against the reference level chosen, and gives one column per non-reference level, instead of using multinomial logistic regression : I known it’s expert way it’s done, but at the same time I find multinomial logistic regressions very difficult to read, since relative risk ratios with their double reference are farther from experience and intuition and car be thoroughly misinterpreted with not enough knowledge of reference rows and cols (it’s also very difficult to teach to sociology students, and to put in a meaningful sentence it a scientific papers : contrary to odds ratio, that can be put in sentence quite cleanly still understanding what you compare with what). Please, make detailed web searches, and tell me what the statistical consensus is about that, what are the different possibilities and rationales make by and social scientists both (particularly in quantitative sociology).
@@ -1273,18 +1284,18 @@ What extension ? Full `lm`/`glm` set + keep current multinomial logistic reg ?
 Summary statistics ?
 - What whole analysis/model level test and pvalue should be added, for example on a pvalue_line like chi2 test for crosstables and ANOVA for factor x numeric ? What other model level summary statistics should absolutely be added to keep with standard practices with `lm`/`glm` models ?
 
-#### Phase 13c – implement testthat tests
+#### Phase 14c – implement testthat tests
 
 Implement testthat tests
 - They should include tests of statistical soundness, attesting the results matches base `glm` etc. results, unweighted +  survey weights design.
 
-#### Phase 13d – tab_logit rewrite
+#### Phase 14d – tab_logit rewrite
 
 Implement the design make in the former phase.
 - Chose reference for each var with a vector (possibly named for simplicity) ? (permit to take ref in the middle while keeping order of ordinal vars, or useless white elephant ?) ?
 - Implement things with contrasts ?
 
-#### Phase 13e – tab_logit jamovi UI
+#### Phase 14e – tab_logit jamovi UI
 
 Add a full tab_logit analysis in Jamovi to give it a user-friendly UI : name it `jmvtab_logit`
 Are there some user-friendly pieces that we could reuse from other well known models/regressions Jamovi modules ?
@@ -1296,7 +1307,7 @@ What about `multi_logit`, who handles passing of multiple models (like different
 
 
 
-### Last Phase — package user-friendly documentation
+### Last Phase — verif and package user-friendly documentation
 
 #### Last Phase a – Bug corrections
 

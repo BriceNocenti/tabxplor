@@ -42,32 +42,19 @@ tab_md <- function(tabs,
                    file = NULL,
                    print = TRUE) {
 
-  # --- Step 1: Handle list input + compact ---
-  if (is.list(tabs) & !is.data.frame(tabs)) {
-    # NOTE: this "longest col_vars set = canonical" selection is duplicated in tab_compact()
-    # (and tab_xl); candidate for the WS4 unified export-prep. See CLAUDE.md roadmap.
-    same_col_vars <- purrr::map(tabs, ~ tab_get_vars(.)$col_vars)
-    same_col_vars <- same_col_vars |>
-      purrr::map(~ .[!. %in% c("all_col_vars", "", "no") & !is.na(.)])
-    longest_col_vars <- purrr::map_int(same_col_vars, length)
-    longest_col_vars <-
-      dplyr::first(which(longest_col_vars == max(longest_col_vars, na.rm = TRUE)))
-    longest_col_vars <- same_col_vars[[longest_col_vars]]
-    same_col_vars <- same_col_vars |> purrr::map_lgl(~ all(. %in% longest_col_vars))
-    if (!all(same_col_vars)) {
-      stop("tab_md() can only be used with a list of tab if they have the same col_vars")
-    }
-    if (any(purrr::map_lgl(tabs, ~ length(tab_get_vars(.)$tab_vars) > 0))) {
-      stop("tab_md() can only be used with a list of tab if they have no tab_vars")
-    }
-    tabs <- tab_compact(tabs)
-  }
+  # --- Steps 1-5: shared exporter prep (list->compact, degrade, roles, bold rows). ---
+  # Phase 10d: the block-A "canonical col_vars -> validate -> compact", the graceful-degrade check,
+  # the role detection, and the bold-row set are the ONE shared tab_export_prep(). md keeps tab_vars
+  # (drop_tab_vars = FALSE) and does its own str_trunc (wrap = NULL); its real-col_var span index
+  # (new_col_var) is derived locally from the shared col_var_map (kable's transition index differs).
+  prep <- tab_export_prep(tabs, backend = "md", drop_tab_vars = FALSE, wrap = NULL,
+                          compute = if (bold_references) c("refs", "bold") else "refs",
+                          what = "tab_md()")
+  rd <- prep$tables[[1]]
 
-  # Phase 10c: graceful degrade -- a table that can't be read as a tabxplor table renders as a
-  # plain pipe table (+ a message), honouring file/clipboard/print, instead of crashing.
-  rv <- tab_render_vars(tabs)
-  if (isTRUE(rv$degrade)) {
-    tab_degrade_inform(rv$reason)
+  # Graceful degrade -- render a plain pipe table (+ a message), honouring file/clipboard/print.
+  if (isTRUE(rd$vars$degrade)) {
+    tab_degrade_inform(rd$vars$reason)
     md_text <- paste(knitr::kable(tibble::as_tibble(tabs), format = "pipe"), collapse = "\n")
     if (!is.null(file)) writeLines(md_text, file)
     if (clipboard && requireNamespace("clipr", quietly = TRUE)) clipr::write_clip(md_text)
@@ -75,42 +62,28 @@ tab_md <- function(tabs,
     return(md_text)
   }
 
-  # --- Step 2: Extract metadata ---
-  tab_vars <- tab_get_vars(tabs)$tab_vars
-  subtext_text <- if (subtext) {
-    get_subtext(tabs) |> purrr::discard(\(x) x == "")
-  } else {
-    character(0)
-  }
+  tabs         <- rd$tab
+  tab_vars     <- rd$vars$tab_vars
+  subtext_text <- if (subtext) rd$subtext else character(0)
 
-  # --- Step 3: Compute group boundaries ---
-  new_group <- dplyr::group_indices(tabs)
-  new_group <- which(new_group != dplyr::lead(new_group, default = max(new_group) + 1L))
-  # Remove the very last row from separators (no separator after last row)
+  # md drops the trailing separator (no line after the last row); the prep's new_group is the base.
+  new_group <- rd$roles$new_group
   new_group <- new_group[new_group < nrow(tabs)]
 
-  tabs <- tabs |> dplyr::ungroup()
-
-  # --- Step 4: Identify column roles ---
-  row_var_name <- tab_get_vars(tabs)$row_var
-  fmt_mask  <- purrr::map_lgl(tabs, is_fmt)
-  fmt_cols  <- which(fmt_mask)
-  other_cols <- which(!fmt_mask)
-
-  # Detect real col_var groups (excluding "all_col_vars", "", "no", NA)
-  col_var_map <- get_col_var(tabs)
-  real_col_vars <- unique(col_var_map[fmt_mask])
-  real_col_vars <- real_col_vars[!real_col_vars %in%
-                                   c("all_col_vars", "", "no", NA_character_)]
+  fmt_mask   <- rd$roles$fmt_mask
+  fmt_cols   <- rd$roles$fmt_cols
+  other_cols <- rd$roles$other_cols
+  col_var_map   <- rd$roles$col_var_map
+  real_col_vars <- rd$roles$real_col_vars
   has_multi_col_vars <- length(real_col_vars) > 1
+  bold_rows  <- rd$bold_rows
 
-  # Positions where real col_var changes (for separator columns)
+  # md-local: positions where a REAL col_var changes (span-header separators). Distinct from kable's
+  # col-border transition index, so it is not shared.
   new_col_var <- integer(0)
   if (has_multi_col_vars) {
-    # Build simplified col_var map: group non-real col_vars with neighbours
     cv_simplified <- col_var_map
     cv_simplified[names(other_cols)] <- names(other_cols)
-    # Mark transitions between real col_var groups only
     for (k in seq_along(cv_simplified)[-1]) {
       prev_cv <- cv_simplified[k - 1]
       curr_cv <- cv_simplified[k]
@@ -121,29 +94,13 @@ tab_md <- function(tabs,
     }
   }
 
-  # --- Step 5: Identify bold rows ---
-  if (bold_references && length(fmt_cols) > 0) {
-    refref <- purrr::map_dfr(tabs[fmt_cols],
-                             \(x) get_reference(x, mode = "all_totals"))
-    # Keep only discriminating columns (mixed TRUE/FALSE): an all-reference or all-non-ref
-    # column says nothing about which ROWS are references. A row is then bold iff it is a
-    # reference/total in EVERY discriminating column (rowSums == ncol, below).
-    keep <- purrr::map_lgl(refref, \(x) any(x) & !all(x))
-    if (any(keep)) {
-      refref <- refref[, keep, drop = FALSE]
-      bold_rows <- which(rowSums(refref) == ncol(refref))
-    } else {
-      bold_rows <- integer(0)
-    }
-  } else {
-    bold_rows <- integer(0)
-  }
-
   # --- Step 6: Format all cells to character ---
-  # Format fmt columns
-  cell_data <- purrr::map(tabs, \(col) {
+  # Format fmt columns. The reference masks are reused from the prep's `ann` (.ref) so
+  # format() does not re-run get_reference() -- byte-identical (Phase 10c subset-equivalence).
+  cell_data <- purrr::imap(tabs, \(col, nm) {
     if (is_fmt(col)) {
-      out <- format(col, special_formatting = special_formatting, na = "") |>
+      out <- format(col, special_formatting = special_formatting, na = "",
+                    .ref = ann_ref(rd$ann[[nm]])) |>
         stringr::str_trim()
       out[is.na(out)] <- ""
       out

@@ -195,6 +195,8 @@
 * `tab_pct()`, `tab_tot()` and `tab_totaltab()` are **superseded**: percentages, differences and
   totals are computed directly by `tab()` / `tab_plain()` / `tab_num()`. They still work on an
   existing table.
+* `tab_plot()` is **superseded**: its ggplot rendering is limited and no longer actively developed.
+  It keeps working; prefer `tab_kable()` (HTML), `tab_md()` (markdown) or `tab_xl()` (Excel).
 
 ## Bug corrections (Phase 6)
 * Fixed a crash in `tab_num(<tab_vars>, ci = "cell")` (and thus in `tab()` / the Jamovi module

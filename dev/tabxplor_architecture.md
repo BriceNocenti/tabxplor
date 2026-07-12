@@ -366,6 +366,25 @@ The `color`/`color_signif` **arguments** are parsed by `normalize_color_spec()` 
 
 Four export formats, all in separate files.
 
+### Shared exporter prep + render-model (`R/tab-export-prep.R`, Phase 10d)
+
+`tab_export_prep(tabs, backend, compact, drop_tab_vars, wrap, compute, ...)` computes ONCE the
+derive-once quantities every text exporter used to re-derive per render, and returns an ephemeral
+`tabxplor_render` (a class-tagged list — NOT tab attributes, which dplyr desyncs). `tab_kable`,
+`tab_md` and `tab_plot` are now `prep <- tab_export_prep(...); render from prep$tables[[1]]`. It
+factors: block A (list → `tab_check_same_col_vars()` + the existing `tab_compact()`), block B (degrade
+via `tab_render_vars()`), role detection (`fmt_cols`/`other_cols`/`totcols`/`totrows`/`col_var_map`/
+`new_group`/`row_var_col`/`align`), the per-column `ann` sidecar (reference masks via `get_reference`,
+two-channel colour codes via `fmt_col_ann()`→`fmt_channel_codes()`, gated by `compute`), and the
+bold-row set (`tab_bold_rows()`). The derive-once win — `get_reference` computed once and passed to
+`format(.ref=)` (not 4×/column), `fmt_channel_codes` once — lives in `ann`. Medium-specific quirks stay
+LOCAL to each exporter (md keeps+blanks tab_vars and uses `str_trunc` → `drop_tab_vars=FALSE`,
+`wrap=NULL`; kable's knitr `*`-escape + `row_spec`/`column_spec`; plot's ggpubr render; the divergent
+`new_col_var` transition index). `tab_totcol_range()` (the `[min;max]` total-column base pre-pass, §10)
+is built and populated into the model but INERT until consumed (10e/10f). Byte-identical to the
+pre-Phase-10d exporters (golden/color-golden/md-snapshot/A/B locked). `tab_plot()` is soft-deprecated
+(`lifecycle` superseded) here.
+
 ### Render-time variable detection + graceful degrade (Phase 10c)
 
 `tab_render_vars()` (`R/tab.R`) is the robust, position-independent role detector used by the print

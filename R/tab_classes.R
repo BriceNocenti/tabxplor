@@ -510,134 +510,62 @@ tab_kable <- function(tabs,
 
   popover <- if (is.null(popover)) {getOption("tabxplor.kable_popover")} else {popover}
 
-  # with a list of tab, bind them all in a single tab if possible
-  if (is.list(tabs) & !is.data.frame(tabs)) {
-    same_col_vars <- purrr::map(tabs, ~ tab_get_vars(.)$col_vars)
-    same_col_vars <- same_col_vars |>
-      purrr::map(~ .[!. %in% c("all_col_vars", "", "no") & !is.na(.)])
-    longest_col_vars <- purrr::map_int(same_col_vars, length)
-    longest_col_vars <-
-      dplyr::first(which(longest_col_vars == max(longest_col_vars, na.rm = TRUE)))
-    longest_col_vars <- same_col_vars[[longest_col_vars]]
-    same_col_vars <- same_col_vars |> purrr::map_lgl(~ all(. %in% longest_col_vars))
-    if(!all(same_col_vars)) {
-      stop("tab_kable() can only be used with a list of tab if they have the same col_vars")
-    }
+  # --- Phase 10d: shared exporter prep (list->compact, degrade, roles, two-channel colours, bold). ---
+  # The block-A "canonical col_vars -> validate -> compact", the graceful-degrade check, the role
+  # detection, the per-column colour codes (fmt_channel_codes) and the bold-row set are the ONE shared
+  # tab_export_prep(). The colour precedence (measure hex > reference/total cell > grey) and the two
+  # channels (text -> font, background -> fill) live in the prep's `ann` now (see fmt_col_ann()).
+  prep <- tab_export_prep(
+    tabs, backend = "kable",
+    wrap = list(rows = wrap_rows, cols = wrap_cols, exdent = 2,
+                whitespace_only = whitespace_only, unbreakable_spaces = TRUE, brk = "<br>"),
+    color_type = color_type, theme = theme, html_24_bit = html_24_bit,
+    color_legend = color_legend, what = "tab_kable()"
+  )
+  rd <- prep$tables[[1]]
 
-    if (any(purrr::map_lgl(tabs, ~ length(tab_get_vars(.)$tab_vars) > 0 )) ) {
-      stop("tab_kable() can only be used with a list of tab if they have no tab_vars")
-    }
-
-    tabs <- tab_compact(tabs) # pvalue_lines = TRUE
-  }
-
-  # Phase 10c: graceful degrade -- a table that can't be read as a tabxplor table (no fmt columns /
-  # no factor row variable / ambiguous layout) renders as a plain kable + a message, not a crash.
-  rv <- tab_render_vars(tabs)
-  if (isTRUE(rv$degrade)) {
-    tab_degrade_inform(rv$reason)
+  if (isTRUE(rd$vars$degrade)) {
+    tab_degrade_inform(rd$vars$reason)
     return(kableExtra::kbl(tibble::as_tibble(tabs)))
   }
 
+  tabs     <- rd$tab
+  tab_vars <- rd$vars$tab_vars
+  subtext  <- rd$subtext
 
-  #   otherwise signif stars * break the html
-  if(!is.null(knitr::opts_knit$get("out.format"))) {
+  # kable-only: escape markdown stars in knitr contexts (else signif stars * break the html). The
+  # role/colour derivations are content-independent, so escaping AFTER the prep is byte-identical.
+  if (!is.null(knitr::opts_knit$get("out.format"))) {
     tabs <- tabs |>
-      dplyr::mutate(
-        dplyr::across(
-          dplyr::where(is.character) ,  # & tidyselect::starts_with("s")
-          ~ stringr::str_replace_all(., "\\*", "\\\\*")
-        ),
-
-        # dplyr::across(
-        #   dplyr::where(is.factor) ,  # & tidyselect::starts_with("s")
-        #   ~ forcats::fct_relabel(., ~ stringr::str_replace_all(., "\\*", "\\\\*"))
-        # )
-
-      )
+      dplyr::mutate(dplyr::across(dplyr::where(is.character),
+                                  ~ stringr::str_replace_all(., "\\*", "\\\\*")))
   }
 
+  new_group   <- rd$roles$new_group
+  row_var     <- rd$roles$row_var_col
+  color_cols  <- rd$roles$color_cols
+  fmt_cols    <- rd$roles$fmt_cols
+  other_cols  <- rd$roles$other_cols
+  totcols     <- rd$roles$totcols
+  totrows     <- rd$roles$totrows
+  no_totrows  <- rd$roles$no_totrows
+  new_col_var <- rd$roles$new_col_var
+  any_bg      <- rd$roles$any_bg
 
-  tab_vars <- tab_get_vars(tabs)$tab_vars
-  subtext  <- get_subtext(tabs) %>% purrr::discard(. == "")
+  text_color <- prep$meta$theme_cols$text
+  grey_color <- prep$meta$theme_cols$grey
 
-  new_group <- tabs %>% #dplyr::group_by(dplyr::across(where(is.factor))) %>%
-    dplyr::group_indices()
-  new_group <- which(new_group != dplyr::lead(new_group, default = max(new_group) + 1))
-
-
-  tabs <- tabs %>% dplyr::ungroup() %>% dplyr::select(-tidyselect::all_of(tab_vars))
-
-  tabs <- tabs |>
-    tab_wrap_text(wrap_rows = wrap_rows,
-                  wrap_cols = wrap_cols,
-                  exdent = 2,
-                  whitespace_only = whitespace_only,
-                  unbreakable_spaces = TRUE,
-                  brk = "<br>")
-
-
-  row_var <- which(names(tabs) == tab_get_vars(tabs)$row_var)
-
-  color_cols <- get_color(tabs)
-  color_cols <- which(!color_cols %in% c("", "no") & !is.na(color_cols))
-  fmt_cols   <- which(purrr::map_lgl(tabs, is_fmt))
-
-  other_cols <- which(purrr::map_lgl(tabs, ~ !is_fmt(.)))
-
-  totcols     <- which(is_totcol(tabs))
-  totrows     <- which(is_totrow(tabs))
-  no_totrows  <- which(!is_totrow(tabs))
-
-  new_col_var <- get_col_var(tabs)
-  new_col_var[names(other_cols)] <- names(other_cols)
-  new_col_var <- which(new_col_var != dplyr::lead(new_col_var, default = "._at_the_end"))
-
-  text_color  <- dplyr::if_else(theme[1] == "light", "#000000", "#FFFFFF")
-  grey_color  <- dplyr::if_else(theme[1] == "light", "#888888", "#BBBBBB")
-  grey_color2 <- dplyr::if_else(theme[1] == "light", "#111111", "#EEEEEE")
-
-  # Phase 5: per-fmt-column two-channel colour codes from the vectorised engine (fmt_channel_codes).
-  #   TEXT channel -> font colour (cell_spec color=); BACKGROUND channel -> fill (cell_spec background=).
-  #   font precedence: measure text hex (coloured) > reference/total cell (text_color) > grey.
-  #   coloured fmt columns grey out with grey_color; plain fmt columns with grey_color2.
-  #   `color_type` selects the TEXT channel's palette family (default "text"); the bg channel always
-  #   uses the "bg" palette. (The old single-channel color_type="bg" render-as-background is superseded
-  #   by the explicit background channel; see NEWS.)
-  any_bg <- any(purrr::map_lgl(tabs[fmt_cols], ~ {
-    b <- get_color_bg(.); length(b) != 0L && !is.na(b) && !b %in% c("", "no")
-  }))
-
-  color_font <- vector("list", length(fmt_cols)) |> stats::setNames(names(fmt_cols))
-  color_back <- color_font
-  color_bold <- color_font
-  for (cn in names(fmt_cols)) {
-    col     <- tabs[[cn]]
-    is_ref  <- get_reference(col, mode = "all_totals")
-    ct      <- get_color(col)   ; has_col <- length(ct) != 0L && !is.na(ct) && !ct %in% c("", "no")
-    cb      <- get_color_bg(col); has_bgc <- length(cb) != 0L && !is.na(cb) && !cb %in% c("", "no")
-    grey_this <- if (has_col || has_bgc) grey_color else grey_color2
-
-    if (has_col || has_bgc) {
-      codes    <- fmt_channel_codes(col, color_type[1], theme[1], html_24_bit[1])
-      text_hex <- codes$text
-      bg_hex   <- codes$bg
-    } else {
-      text_hex <- rep(NA_character_, length(col))
-      bg_hex   <- rep(NA_character_, length(col))
-    }
-    color_font[[cn]] <- dplyr::case_when(!is.na(text_hex) ~ text_hex,
-                                         is_ref           ~ text_color,
-                                         TRUE             ~ grey_this)
-    color_back[[cn]] <- dplyr::if_else(is.na(bg_hex), "none", bg_hex)
-    color_bold[[cn]] <- !is.na(text_hex) | is_ref
-  }
+  # Per-fmt-column colour vectors (derive-once) from the prep's `ann`, keyed by column name.
+  color_font <- purrr::map(rd$ann, "font")
+  color_back <- purrr::map(rd$ann, "back")
+  color_bold <- purrr::map(rd$ann, "bold")
 
   if (any_bg) {
     out <- tabs %>%
       dplyr::mutate(dplyr::across(
         where(is_fmt),
-        ~ format(., html = TRUE, special_formatting = TRUE, na = "") %>%
+        ~ format(., html = TRUE, special_formatting = TRUE, na = "",
+                 .ref = ann_ref(rd$ann[[dplyr::cur_column()]])) %>%
           kableExtra::cell_spec(
             bold       = color_bold[[dplyr::cur_column()]],
             color      = color_font[[dplyr::cur_column()]],
@@ -651,7 +579,8 @@ tab_kable <- function(tabs,
     out <- tabs %>%
       dplyr::mutate(dplyr::across(
         where(is_fmt),
-        ~ format(., html = TRUE, special_formatting = TRUE, na = "") %>%
+        ~ format(., html = TRUE, special_formatting = TRUE, na = "",
+                 .ref = ann_ref(rd$ann[[dplyr::cur_column()]])) %>%
           kableExtra::cell_spec(
             bold  = color_bold[[dplyr::cur_column()]],
             color = color_font[[dplyr::cur_column()]],
@@ -684,12 +613,7 @@ tab_kable <- function(tabs,
   }
 
 
-  alignement <- tabs |>
-    purrr::map_chr(
-      ~ dplyr::if_else(condition = is_fmt(.) | is.numeric(.),
-                       true      = "r",
-                       false     = "l")
-    )
+  alignement <- rd$roles$align
 
   out <- knitr::kable(out, escape = FALSE, format = "html", align = alignement,
                       #table.attr = "style=\"border-top: 0; border-bottom: 0; cellspacing: -10pt\"",
@@ -718,11 +642,8 @@ tab_kable <- function(tabs,
 
   }
 
-  # # Needed to make refrows or if not totrows in bold,
-  # tot_or_ref <- tabs[[fmt_cols[1]]] %>% get_reference(mode = "all_totals") %>% which()
-  refref <- purrr::map_dfr(tabs[fmt_cols] , ~ get_reference(., mode = "all_totals") )
-  refref <- refref |> dplyr::select(-where(all), -where(~ !any(.)))
-  tot_or_ref <- which(rowSums(refref) == ncol(refref))
+  # Bold reference/total rows (block D) -- from the prep's derive-once bold-row set.
+  tot_or_ref <- rd$bold_rows
 
   tot_n_pval <- is_totrow(tabs) |
     (!is_totrow(tabs) & dplyr::pull(tabs, row_var) %in% c("n", "pvalue", "row_pct"))
@@ -1209,6 +1130,14 @@ tab_pvalue_lines <- function(tabs) {
 
 #' Print a tabxplor table as plot
 #'
+#' @description
+#' `r lifecycle::badge("superseded")`
+#'
+#' Superseded (1.4.0): `tab_plot()` renders a \pkg{tabxplor} table as a \pkg{ggpubr} image, but its
+#' display is limited and it is no longer actively developed. It keeps working and is retained for a
+#' future redesign; prefer \code{\link{tab_kable}} (HTML), \code{\link{tab_md}} (markdown) or
+#' \code{\link{tab_xl}} (Excel).
+#'
 #' @param tabs A table made with \code{\link{tab}} or \code{\link{tab_many}}.
 #' @param color_type  Set to \code{"text"} to color the text, \code{"bg"} to color the
 #' background. By default it takes \code{getOption("tabxplor.color_style_type")}.
@@ -1265,90 +1194,48 @@ tab_plot <- function(tabs,
   html_24_bit <-
     if (is.null(html_24_bit)) {getOption("tabxplor.color_html_24_bit")} else {html_24_bit}
 
-  # Phase 10c: graceful degrade (tab_plot is soft-deprecated) -- return the plain data + a message
-  # instead of crashing when the table can't be read as a tabxplor table.
-  rv <- tab_render_vars(tabs)
-  if (isTRUE(rv$degrade)) {
-    tab_degrade_inform(rv$reason)
+  # --- Phase 10d: shared exporter prep (degrade, roles, two-channel colours, bold rows/cols). ---
+  # tab_plot has no list->compact preamble; everything else (role detection, refs2/refs3, the colour
+  # loop) is the ONE shared tab_export_prep(). Plot drops tab_vars, wraps with exdent = 1 /
+  # unbreakable_spaces = FALSE (the "\n" break). Output is a ggplot -> no golden lock; A/B-verified.
+  prep <- tab_export_prep(
+    tabs, backend = "plot",
+    wrap = list(rows = wrap_rows, cols = wrap_cols, exdent = 1,
+                whitespace_only = whitespace_only, unbreakable_spaces = FALSE, brk = "\n"),
+    color_type = color_type, theme = theme, html_24_bit = html_24_bit,
+    color_legend = color_legend, what = "tab_plot()"
+  )
+  rd <- prep$tables[[1]]
+
+  if (isTRUE(rd$vars$degrade)) {
+    tab_degrade_inform(rd$vars$reason)
     return(invisible(tibble::as_tibble(tabs)))
   }
 
-  row_var  <- tab_get_vars(tabs)$row_var
-  tab_vars <- tab_get_vars(tabs)$tab_vars
-  subtext  <- get_subtext(tabs) %>% purrr::discard(. == "")
+  tabs        <- rd$tab
+  row_var     <- rd$vars$row_var
+  tab_vars    <- rd$vars$tab_vars
+  subtext     <- rd$subtext
+  new_group   <- rd$roles$new_group
+  color_cols  <- rd$roles$color_cols
+  fmt_cols    <- rd$roles$fmt_cols
+  other_cols  <- rd$roles$other_cols
+  totcols     <- rd$roles$totcols
+  totrows     <- rd$roles$totrows
+  no_totrows  <- rd$roles$no_totrows
+  new_col_var <- rd$roles$new_col_var
+  any_bg      <- rd$roles$any_bg
 
-  new_group <- tabs %>% #dplyr::group_by(dplyr::across(where(is.factor))) %>%
-    dplyr::group_indices()
-  new_group <- which(new_group != dplyr::lead(new_group, default = max(new_group) + 1))
+  refs2 <- rd$bold_rows   # bold rows (reference/total in every discriminating column)
+  refs3 <- rd$bold_cols   # bold columns (all-reference columns)
 
+  text_color  <- prep$meta$theme_cols$text
+  grey_color  <- prep$meta$theme_cols$grey
+  grey_color2 <- prep$meta$theme_cols$grey2
 
-  tabs <- tabs |> dplyr::ungroup() |> dplyr::select(-tidyselect::all_of(tab_vars))
-
-  tabs <- tabs |>
-    tab_wrap_text(wrap_rows = wrap_rows, wrap_cols = wrap_cols, exdent = 1,
-                  whitespace_only = whitespace_only, unbreakable_spaces = FALSE)
-
-
-  color_cols <- get_color(tabs)
-  color_cols <- which(!color_cols %in% c("", "no") & !is.na(color_cols))
-  fmt_cols   <- which(purrr::map_lgl(tabs, is_fmt))
-
-  other_cols <- which(purrr::map_lgl(tabs, ~ !is_fmt(.)))
-
-  totcols     <- which(is_totcol(tabs))
-  totrows     <- which(is_totrow(tabs))
-  no_totrows  <- which(!is_totrow(tabs))
-
-  new_col_var <- get_col_var(tabs)
-  new_col_var[names(other_cols)] <- names(other_cols)
-  new_col_var <- which(new_col_var != dplyr::lead(new_col_var, default = "._at_the_end"))
-
-  # ????
-  refref <- purrr::map_dfr(tabs[fmt_cols] , ~ get_reference(., mode = "all_totals") )
-  refref2 <- refref |> dplyr::select(-where(all), -where(~ !any(.)))
-  refs2 <- which(rowSums(refref2) == ncol(refref2))
-  #refs2 <- tabs[[fmt_cols[1]]] %>% get_reference(mode = "all_totals") %>% which()
-  # refs2 <- which(rowSums(refref) == length(fmt_cols))
-
-  refref <- purrr::map_dfr(tabs[fmt_cols] , ~ get_reference(., mode = "all_totals") )
-
-
-
-  refs3 <- refref |> dplyr::select(dplyr::where(all)) |> names()
-
-
-  text_color  <- dplyr::if_else(theme[1] == "light", "#000000", "#FFFFFF")
-  grey_color  <- dplyr::if_else(theme[1] == "light", "#888888", "#BBBBBB")
-  grey_color2 <- dplyr::if_else(theme[1] == "light", "#111111", "#EEEEEE")
-
-  # Phase 5: per-fmt-column two-channel colour codes (fmt_channel_codes).
-  #   font colour: measure text hex (coloured) > reference/total (text_color) > grey.
-  #   bg fill: the background channel hex, "none" when absent. `color_type` selects the text
-  #   channel palette family (default "text"); the bg channel always uses the "bg" palette.
-  any_bg <- any(purrr::map_lgl(tabs[fmt_cols], ~ {
-    b <- get_color_bg(.); length(b) != 0L && !is.na(b) && !b %in% c("", "no")
-  }))
-
-  build_plot_colors <- function(col) {
-    is_ref <- get_reference(col, mode = "all_totals")
-    ct <- get_color(col)   ; has_col <- length(ct) != 0L && !is.na(ct) && !ct %in% c("", "no")
-    cb <- get_color_bg(col); has_bgc <- length(cb) != 0L && !is.na(cb) && !cb %in% c("", "no")
-    grey_this <- if (has_col || has_bgc) grey_color else grey_color2
-    if (has_col || has_bgc) {
-      codes <- fmt_channel_codes(col, color_type[1], theme[1], html_24_bit[1])
-      text_hex <- codes$text; bg_hex <- codes$bg
-    } else {
-      text_hex <- rep(NA_character_, length(col)); bg_hex <- rep(NA_character_, length(col))
-    }
-    list(font = dplyr::case_when(!is.na(text_hex) ~ text_hex,
-                                 is_ref           ~ text_color,
-                                 TRUE             ~ grey_this),
-         back = dplyr::if_else(is.na(bg_hex), "none", bg_hex))
-  }
-
-  plot_colors     <- purrr::map(tabs[fmt_cols], build_plot_colors)
-  color_selection <- purrr::map(plot_colors, "font")
-  bg_selection    <- purrr::map(plot_colors, "back")
+  # Per-fmt-column colour vectors (derive-once) from the prep's `ann`, keyed by column name.
+  color_selection <- purrr::map(rd$ann, "font")
+  bg_selection    <- purrr::map(rd$ann, "back")
 
   if (length(other_cols) != 0) {
     other_font <- as.list(dplyr::mutate(tabs[other_cols],
@@ -1377,7 +1264,8 @@ tab_plot <- function(tabs,
     dplyr::mutate(
       dplyr::across(
         where(is_fmt),
-        ~ format(., special_formatting = TRUE)
+        ~ format(., special_formatting = TRUE,
+                 .ref = ann_ref(rd$ann[[dplyr::cur_column()]]))
       ),
       dplyr::across( # otherwise, unbreakable spaces fail in some graphic devices
         where(is.factor),

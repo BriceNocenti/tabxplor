@@ -12,9 +12,36 @@ KEY CONSTRAINTS:
 See: CLAUDE.md § "Phase 10", dev/tabxplor_1.4.0_decisions.md §33 (the decision record).
 -->
 
-Status: **10c DONE (2026-07-12); 10d→10g not started.** 10a decision settled (below); this document is the
-10b deliverable and governs 10d→10g. Read this first, then the matching `dev/tabxplor_1.4.0_decisions.md`
-sections and `dev/tabxplor_architecture.md` "Export System".
+Status: **10c DONE (2026-07-12); 10d Part 1 DONE (2026-07-12); 10d Part 2 (tab_transpose) + 10e→10g not
+started.** 10a decision settled (below); this document is the 10b deliverable and governs 10d→10g. Read
+this first, then the matching `dev/tabxplor_1.4.0_decisions.md` sections and
+`dev/tabxplor_architecture.md` "Export System".
+
+**Phase 10d Part 1 done (2026-07-12), byte-identical (full suite green PASS 1501 / FAIL 0, NO golden
+regen; kable/md A/B-verified `identical()` across 10 fixtures × {kable, kable+tooltip, kable-dark,
+get_data, md}):**
+- **§2 the shared prep — new `R/tab-export-prep.R`.** `tab_export_prep(tabs, backend, compact,
+  drop_tab_vars, wrap, compute, ...)` builds the `tabxplor_render` model ONCE and `tab_kable`/`tab_md`/
+  `tab_plot` consume it, deleting the 4× blocks A (compact via `tab_check_same_col_vars` + the existing
+  `tab_compact`), B (degrade via `tab_render_vars`), C (role detection), D (bold rows via `tab_bold_rows`)
+  and the two-channel colour loop (now `fmt_col_ann()`, keyed by fmt-col name → `roles`/`ann`). The
+  derive-once win (`get_reference` not 4×/col via the `.ref =` passed to `format()`; `fmt_channel_codes`
+  once) lives in `ann`. **Kept LOCAL** (genuinely medium-specific, not false-unified): md's tab_vars
+  keep+blank + `str_trunc` (`drop_tab_vars = FALSE`, `wrap = NULL`) + its real-col_var span index; md's
+  `new_group` trailing-separator trim; kable's knitr `*`-escape + `row_spec`/`column_spec` styling; plot's
+  ggpubr rendering.
+- **§5 `tab_totcol_range()`** built (per-row base range across col_vars), populated into
+  `render$…$range_totcol` but **INERT** (no exporter consumes it yet → byte-identical; consumption +
+  golden regen is 10e/10f).
+- **§11 `tab_plot()` soft-deprecated** (`lifecycle::badge("superseded")` roxygen; refactored onto the
+  prep so it doesn't rot). ggplot has no golden lock → structural + shared-derivation verification.
+- **Base+list split**: the prep returns a `tables` LIST; the exporters render `tables[[1]]` (single /
+  compacted) — the CURRENT list-compaction behaviour preserved exactly. The true N-table "list method"
+  (render tab_vars-lists one-after-another, currently an error) is an additive follow-up.
+- New `tests/testthat/test-export-prep.R` (39) locks the render-model shape, role/ann/bold derivations,
+  degrade path, `tab_check_same_col_vars`, `tab_bold_rows` edge, and `tab_totcol_range`.
+- **DEFERRED as flagged**: `format(syntax="excel")` (10g, not present in source); the `[min;max]`
+  CONSUMPTION (10e/10f); label capture is built (`tab_export_labels`) but only rendered by kable in 10e.
 
 **Phase 10c done (2026-07-12), all byte-identical (golden/color/export-parity green; conscious
 structural regen only for the new `display_spec` attribute):**

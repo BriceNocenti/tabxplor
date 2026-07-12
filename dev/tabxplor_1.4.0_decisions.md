@@ -2097,3 +2097,23 @@ rewrite; `format()`/`pillar_shaft` `.ref` memoization + `if_else`→base + the *
 also confirmed the §23 stale ranking: `format()`'s residual cost is now all `stringr`/`stringi` (a future
 lever), not the deleted `fmt_color_selection`.
 
+**Phase 10d Part 1 DONE (2026-07-12)** — the shared exporter prep, byte-identical (full suite green PASS
+1501 / FAIL 0, NO golden regen; kable/md A/B-verified `identical()` across 10 fixtures). New
+`R/tab-export-prep.R`: `tab_export_prep()` builds the `tabxplor_render` model ONCE and `tab_kable`/
+`tab_md`/`tab_plot` consume it, deleting the 4× duplicated blocks A (compact via `tab_check_same_col_vars`
++ the existing `tab_compact`), B (degrade via `tab_render_vars`), C (role detection), D (bold rows via
+`tab_bold_rows`) and the two-channel colour loop (now `fmt_col_ann()`). The derive-once win
+(`get_reference` not 4×/col via `format(.ref=)`; `fmt_channel_codes` once) lives in the per-column `ann`.
+Factoring principle honoured (§ Aim): factor only the genuinely-shared expensive quantities; the
+medium-specific quirks stay LOCAL (md's tab_vars keep+blank + `str_trunc` + real-col_var span index + its
+`new_group` trailing trim; kable's knitr `*`-escape + `row_spec`/`column_spec`; plot's ggpubr render) —
+where kable and md genuinely differ (the `new_col_var` transition index, the `tab_bold_rows` empty-set
+edge) each keeps its own tiny derivation reading the shared `col_var_map` rather than a false unification.
+`tab_totcol_range()` built + populated INERT (consumption + golden regen is 10e/10f). `tab_plot()`
+soft-deprecated (`lifecycle::badge("superseded")`). `tab_export_prep` returns a `tables` LIST but the
+exporters render `tables[[1]]` (current list-compaction preserved); the true N-table list method is an
+additive follow-up. Flagged/handled: the doc's "md drops tab_vars" was wrong (md keeps+blanks → prep uses
+`drop_tab_vars = FALSE`); `format(syntax="excel")` is not in source (10g). Detail:
+`dev/tabxplor_phase10_exporters.md` (Status block). **Part 2 (point E = `tab_transpose()`) follows after
+the maintainer commits Part 1.**
+
