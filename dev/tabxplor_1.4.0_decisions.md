@@ -2642,3 +2642,318 @@ of 1** (not 0) for the `"or"` measure; `format()` `disp_or` adds **`1/OR`** reci
 model-OR reference row shows a bare "1". Stars + magnitude/greyed colours light up automatically from the
 written `pvalue` + bounds. Excel keeps the raw OR number (no `1/x` string). tab_logit_2.R (or_plot/lm_plots)
 deferred to a later display phase; visible OR CI bracket + OR+ME/OR+PCT layouts stay 12b/12d.
+
+---
+
+## 37. Phase 12b — regression tables: statistical framework & design for `tab_reg` (2026-07-13, DESIGN)
+
+Phase 12b settles the **statistics + architecture** for tabxplor's regression tables — generalising the
+Phase-12a binary-logit `tab_logit()`/`multi_logit()` into a unified regression-table function `tab_reg()`.
+This section is the permanent record: it keeps the trace of **four deep web-research passes** + a **git study
+of the pre-package draft** + **two maintainer AskUserQuestion rounds** that settled every fork. **No product
+code changes in 12b** — it governs 12c (tests), 12d (rewrite), 12e (jamovi UI). **No back-compat** on the
+regression functions (the maintainer's explicit licence to redesign the API radically).
+
+The governing aim (mirrors the 1.4.0 aim): **reuse the existing fmt / `test`-attribute machinery, not fork
+it** — the fmt record already carries an additive shape (`display="diff"`, `ci_type="diff"`, neutral 0) and a
+multiplicative shape (`display="or"`, `ci_type="or"`, neutral 1, `1/x` reciprocal), which are exactly the
+gaussian-β and OR/IRR shapes, so the unified engine needs **near-zero new field plumbing** (verified against
+`fmt_class.R`); and the whole-table `test` attribute (§16/§24, rendered by `print_chi2`/`tab_pvalue_lines`/
+`tab_materialize_extras`) is the direct analogue of a regression model-summary footer. Add the **fewest new
+dependencies** and **match ecosystem conventions** (gtsummary / parameters / sjPlot) without over-engineering.
+
+### Research grounding (the four passes + git study)
+
+- **Pass 1 — lm/glm table ecosystem + model-level stats.** Effect measure by family is universal: gaussian →
+  raw β; logistic → OR = exp(β); poisson/quasipoisson/negbin → IRR = exp(β). Packages split only on *who*
+  exponentiates: **manual** (`broom::tidy(exponentiate=)`, gtsummary, modelsummary, stargazer) vs
+  **family-aware auto** (sjPlot `tab_model`, `parameters`/easystats, which offers `exponentiate="nongaussian"`
+  — exp non-Gaussian, leave OLS raw — the cleanest mixed-family default). Mature tools **label each model
+  column by its own measure** ("Beta"/"OR"/"IRR") rather than one global header. `broom::glance.lm` gives
+  R²/adjR²/F+p/sigma/AIC/BIC/logLik/deviance/nobs; `glance.glm` gives null/residual deviance/AIC/BIC/logLik/
+  nobs but **no R² and no omnibus test** (both must be computed). Pseudo-R² is genuinely contested:
+  `performance::r2` defaults Tjur (logit)/Nagelkerke (GLM)/McFadden (multinomial); sjPlot prints Nagelkerke;
+  **sociology/Stata/Long-Freese expect McFadden** — always print the measure's name. modelsummary's default
+  footer (`Num.Obs./R2/R2 Adj./AIC/BIC/Log.Lik./RMSE/F`) is a good "how much is enough" yardstick.
+- **Pass 2 — nominal ≥3 (MNL vs binary) + survey weights.** **Begg & Gray (1984)**: fitting K−1 binary logits
+  of "j vs ref" *on the two-category subset {j, ref}* is **consistent** for the baseline-category MNL
+  coefficients — same estimand, MNL merely more efficient (uses all categories jointly). The honesty
+  condition: use the **subset** form ("j vs ref"), NOT "j vs pooled rest" (a different, incoherent model whose
+  predicted probabilities don't sum to 1; Li et al. 2024; advocated mainly in ML — Rifkin & Klautau 2004).
+  IIA is a non-issue for individual-attribute sociology models (Cheng-Long 2007; Allison). **Survey weights**:
+  raw population-total weights fed to `glm(weights=)` shrink SEs to ~0 (base R treats them as precision/
+  frequency weights, information ∝ Σw). The fix is **design-based** `survey::svyglm`: Horvitz-Thompson /
+  Taylor-linearization sandwich SEs that are **invariant to weight scale** (svyglm even rescales weights to
+  sum-to-n internally for stability, changing nothing) — so non-normalised weights are neutralised
+  automatically, point estimates equal `glm(weights=)` (hence **match the weighted crosstabs**), and inference
+  is honest. Kish `n_eff=(Σw)²/Σw²` is only a stopgap (ignores clustering). `svydesign(ids=~1, weights=~w)` is
+  an acceptable honest default; caveat — it ignores clustering/stratification and can understate variance
+  (Winship-Radbill note the weight-vs-not debate; for the *descriptive* "match my weighted tables" contract,
+  weighting is right).
+- **Pass 3 — MNL contrasts, ordinal, AME.** **exp(baseline-category MNL coef) IS the "OR (j vs reference
+  level)"** — the same parameter as the Begg-Gray subset logit (Rodríguez GLM notes; Werth *Categorical
+  Regression*: RRR "equivalent to odds ratios in logistic regression"). So **fit ONE MNL and label exp(coef)
+  as "OR (j vs ref)"** — honest, efficient, keeping "vs ref" in the label. One MNL yields **any pairwise
+  contrast** `exp(β_j − β_k)` and **any reference outcome level** with no refit (CI needs the *joint* vcov:
+  `Var(β_j−β_k)=Var(β_j)+Var(β_k)−2Cov`). **"j vs rest" has no constant OR** — `log[P(j)/(1−P(j))] = x'β_j −
+  logΣ_{k≠j}exp(x'β_k)` is not linear in x, so it is a **covariate-dependent marginal quantity**, not a
+  coefficient; the clean single-reference summary is the **AME / averaged predicted probability on P(Y=j)**
+  from one fit. **Proportional-odds ordinal** (`MASS::polr`, one cumulative OR per predictor level, one
+  column) is a defensible default for ordered ≥3 outcomes **only if diagnosed**: the parallel-lines assumption
+  is "often violated" (Williams gologit2; Long-Freese), tested by Brant/LR, over-rejects at large N; fall back
+  to partial-PO / gologit / MNL. `nnet` **and** `MASS` are R **Recommended** packages (always installed) → MNL
+  and ordinal are **dependency-free**. **AME** (average marginal effect = sample-average of per-obs `dP/dx`,
+  vs MEM at the means / MER at representative values) is the sociology standard (**Mood 2010**; Long-Freese;
+  Williams 2012; Bartus 2005) because probability-scale effects are **comparable across models/groups where
+  ORs are not**; AME needs the **fitted model + data + vcov** (NOT reconstructable from a reported OR), and
+  generalises: logit/MNL/ordinal → probability points, poisson → count, gaussian → the coefficient itself.
+  Point estimates + predicted probabilities are safe in base R (`predict()`); **AME/contrast standard errors
+  need the delta method** (averaging `predict(se.fit=)` is *wrong*) → depend on **`marginaleffects` (Suggests)**
+  for inference, do not hand-roll delta-method SEs.
+- **Pass 4 — model comparison, dispersion, dependency inventory** (agent + maintainer knowledge). Nested LR
+  tests via `anova(m1, m2, test="LRT")` (needs nesting + same rows/response); survey → `anova.svyglm`
+  (Rao-Scott working-LRT / Wald) and `regTermTest`. Table packages mostly show **per-column GOF (AIC/BIC/
+  pseudo-R²)** and leave formal nested tests to `anova()` — so an explicit comparison mode is a genuine
+  feature, not a reinvention. **Dispersion is a Poisson / grouped-binomial issue, NOT ungrouped 0/1**: for
+  Bernoulli data the dispersion parameter is not identifiable (`quasibinomial` ≈ 1) — quasibinomial matters
+  only for *grouped/proportion* binomial (e.g. the summed-score outcome) or to silence the non-integer-weight
+  warning under svyglm; report residual-deviance/df (or Pearson/df) and the correction (quasipoisson: scaled
+  SEs, **no AIC**; `MASS::glm.nb`: has a likelihood/AIC, preferred for strong overdispersion). Dependency
+  inventory: everything needed (McFadden `1−logLik/logLik_null`, Nagelkerke, AIC/BIC, LR-vs-null
+  `null.deviance−deviance` on `df.null−df.residual`, MNL, ordinal, survey `psrsq`/`regTermTest`) is
+  **base R + the Recommended `MASS`/`nnet` + the already-Suggested `broom`/`survey`** — the **only** genuinely
+  new Suggests is `marginaleffects` (AME inference).
+- **Git study (commit `6e47bab^`, the pre-package parsnip draft — `tab_logit.R` 1009 L + `tab_logit_2.R`
+  706 L, fully commented-out).** Recovered features: `nb_questions` (summed-score → grouped binomial, the
+  integer-outcome path — dropped by 12a); `split_var` (fit the model within each level of a grouping var →
+  subtables); `multiplicator` (a continuous predictor's effect per k units, e.g. OR per 10 years); the
+  `empirical_OR` companion (raw empirical odds/% beside the model OR); `readable_OR` (predicted probability +
+  a `marginal_effect = prob − prob[reference]` — **confirming the old ME was MER-at-reference, not AME**);
+  `or_plot` (finalfit-style OR forest plot) and `lm_plots` (2×2 glm/lm diagnostics).
+
+### The decisions
+
+#### D1 — Unified `tab_reg` engine + friendly wrappers; effect measure per family
+
+One internal engine dispatching on `family`: `stats::lm`/`stats::glm`, `survey::svyglm` (weighted),
+`nnet::multinom` (nominal), `MASS::polr` (ordinal), `MASS::glm.nb` (negbin). Public
+`tab_reg(data, dependent, predictors, family = , effect = , wt = , …)`. **`predictors` dispatch** (maintainer:
+one function, dispatch on argument type): a **character vector** = one model, and `dependent` may itself be a
+vector → **one column per dependent**; a **named list of predictor sets** = **model-comparison mode** (one
+`dependent` → **one column per model**, predictors absent from a model left blank). The two are mutually
+exclusive (error if both a vector-of-dependents and a list-of-models). `tab_logit()` / `multi_logit()` are
+kept as **thin binomial-family wrappers** with the curated binary-outcome UX; **`tab_reg(family="binomial")`
+gives the identical UX** (the wrapper is discoverability sugar, not a different path).
+
+Effect measure per family, **auto-labelled per column** (ecosystem: `parameters`/sjPlot): gaussian → **β**
+(raw, additive — reuse the fmt `display="diff"`-shape, `ci_type="diff"`, neutral 0); binomial → **OR**;
+poisson/quasipoisson/negbin → **IRR** (both multiplicative — reuse `display="or"`, `ci_type="or"`, neutral 1,
+`1/x` reciprocal display). Default **`exponentiate = "nongaussian"`** (exp non-Gaussian, OLS raw); a mixed-
+family table shows β/OR/IRR per column, never one global "Estimate" header. **Verdict:** the fmt already
+carries both shapes, so a unified engine is *less* code than the two forked math paths, not more.
+
+#### D2 — Family comes from the outcome, never the R storage type
+
+Consensus (Pass 1): the GLM family is a modelling choice; the only safe data-driven rule is **2 distinct
+non-missing values → binomial**. Integers are **not** silently Poisson (overdispersion / zero-inflation); a
+double in [0,1] is not 0/1. **Verdict:** `family` is explicit and overridable; auto-detect **only** the 0/1 →
+binomial case and **emit a message**. Outcome types supported:
+
+- binary factor / 0-1 numeric → **binary logit** (as 12a);
+- **summed-score integer 0..q → grouped binomial** (reinstated from the git draft): `nb_questions`/`trials`
+  (default = the score's max) → model `cbind(score, q − score)` (proportion of "yes" out of q items). This is
+  the **only** place `quasibinomial` and the dispersion flag genuinely apply (D7);
+- count integer → **poisson**, with **quasipoisson / `MASS::glm.nb`** for overdispersion;
+- continuous → **gaussian** (`lm`);
+- nominal factor ≥3 → **MNL** (D3);
+- ordered factor ≥3 → **proportional-odds** (D4).
+
+#### D3 — Nominal ≥3 outcome: ONE efficient MNL, honest OR labelling, three effect flavours
+
+Fit **one** `nnet::multinom` (dependency-free) and read `exp(β_j)` as **"OR (j vs reference level)"** — the
+Begg-Gray result makes this the *same parameter* as the subset {j,ref} binary logit, estimated efficiently
+(supersedes the roadmap's "three separate binary logits"). The **"vs reference" must stay in the label** (never
+a bare "OR"). Three effect flavours, all from the single fit:
+
+1. **"j vs reference-level" OR = `exp(β_j)`** — the default; a **constant, profile-free** coefficient. Any
+   reference outcome level is available as `exp(β_j − β_k)` with no refit (CI from the **joint** vcov).
+2. **"j vs rest" OR at the reference profile** (maintainer wants this) — there is **no constant** j-vs-rest OR
+   (it is covariate-dependent), so it is computed as an **adjusted odds ratio at a fixed profile** (default:
+   all other predictors at their reference), i.e. the ratio of the "j vs not-j" odds at (level m, others=ref)
+   vs (ref, others=ref), with a **delta-method CI** from the MNL vcov. Documented as **profile-conditional**
+   (changes with the held-fixed values; odds ratios don't average cleanly — the probability scale is preferred
+   for a one-number summary).
+3. **AME + predicted probabilities** (D5) — the clean, averageable single-reference summary on P(Y=j).
+
+Also align `tab()`'s **empirical** OR for a 3+ level dependent (currently labelled "RRR"): RRR ≡ j-vs-ref OR,
+so relabel and let the `OR` argument choose the reference outcome level; a "j vs rest" empirical flavour is
+documented as at-profile / deferred.
+
+#### D4 — Ordered ≥3 outcome: proportional-odds default, **diagnosed**
+
+Default to the **cumulative-logit / proportional-odds** model (`MASS::polr`, dependency-free): one column, one
+**cumulative OR per predictor level** — the parsimony/interpretability win the maintainer wants. But **not
+silently**: auto-run a **Brant / LR proportional-odds test**, **warn on violation** (explicitly noting that the
+test **over-rejects at survey-scale N**), and offer fallbacks — **partial proportional odds** (`ordinal::clm`
+`nominal=` / `VGAM`, a Suggests upgrade), generalized ordered logit, or **MNL**. Agresti endorses the family
+as the natural ordered-outcome default; Williams / Long-Freese require the assumption to be tested — the
+diagnosed default honours both.
+
+#### D5 — Interpretation MODE — an orthogonal `effect=` axis (OR ⟂ AME)
+
+`effect=` is orthogonal to the family (which fixes the *native* coefficient):
+
+- **`"coefficient"` (default)** — the native per-family effect: β / OR / IRR / cumulative-OR (= RRR for MNL).
+- **`"ame"`** — **AME + predicted probabilities**, the sociology standard (Mood 2010): probability points for
+  logit/MNL/ordinal, expected-count change for poisson, and *the coefficient itself* for gaussian. AME is the
+  **sample average** of per-observation `dP/dx` (not MEM/MER); it needs the **fitted model + data + vcov**, so
+  `tab_reg` must **retain (or refit) the model**, not "reconstruct from the OR". For MNL/ordinal it is a
+  per-category AME (the coherent single-reference summary of D3-flavour 2's intent).
+
+Display integration: an **AME reuses the additive `diff` shape** (neutral 0, coloured like a difference); a
+**predicted probability reuses `pct`**; when both are shown, compose with the Phase-10i-A **`{}` grammar**
+(e.g. `"{pct} (Δ{diff})"`). A **MER-at-reference** "adjusted prediction at a profile" is available as an
+explicit option and **shares the machinery** with D3-flavour 2 (the reference-profile evaluation). **Note:**
+the old draft's marginal effect was MER-at-reference — we make **AME the default** and keep MER as the opt-in.
+**Dependency:** predicted-probability + AME **point** estimates in base R (`predict()`); **SEs/CIs and the
+general cross-family/MNL/ordinal machinery via `marginaleffects` (Suggests, gated)** — hand-rolled delta-method
+SEs are the reliability trap to avoid.
+
+#### D6 — Survey weights: always `svyglm`, design-based, scale-invariant
+
+Weighted models **always** go through `survey::svyglm` (never `glm(weights=)`). This one choice
+simultaneously (i) **neutralises non-normalised population-total weights** (design-based sandwich SEs are
+scale-invariant), (ii) gives **point estimates that match the weighted crosstabs**, and (iii) yields honest
+inference — resolving the maintainer's discrepancy-vs-significance tension in a single move. **No weight
+normalisation** (svyglm handles it; Kish `n_eff` is only a last-resort stopgap and is not needed). Accept, in
+increasing flexibility (maintainer chose the widest): a **weight column** (default `svydesign(ids=~1,
+weights=~w)`, `quasibinomial`/`quasipoisson` to silence the non-integer warning) → optional **`ids`/`strata`/
+`fpc`** pass-through (correct clustered-design SEs — French national surveys are clustered) → a **prebuilt
+`survey::svydesign` / `svrepdesign`** object (replicate weights, calibration). Document that `ids=~1` ignores
+clustering/stratification and can understate variance. Under weights the **glance stats degrade** (D7): LR/
+profile → **Wald / `regTermTest`** (Lumley-Scott 2014); pseudo-R² → **`survey::psrsq`** (Cox-Snell/Nagelkerke,
+Lumley 2017 — McFadden is not survey-native); AIC → **Rao-Scott survey AIC** (Lumley-Scott 2015); suppress
+naive R²/F/logLik/deviance.
+
+#### D7 — Unified model / test-summary framework (footer), shared with `tab()`
+
+**Generalise the existing `test` table-attribute** (§16/§24 — the tidy `[row_var col_var test statistic df1
+df2 pvalue n variance min_e]` tibble) into ONE shared **GOF/summary** attribute used by **both `tab()` and
+`tab_reg`**; the `test` vocabulary grows: today's `chi2`/`F_welch`/`F_classic` plus `lr_null`/`mcfadden_r2`/
+`nagelkerke_r2`/`aic`/`bic`/`dispersion`/`n`/… (each row keyed by column, carrying `statistic`/`df`/`pvalue`/
+`value`). This is the direct analogue of the crosstab chi2/ANOVA line, so it reuses the whole rendering path.
+
+- **Default regression footer:** **N + LR-test-vs-null + McFadden R² + AIC/BIC**; lm: **N + R²/adjR² + F-test**
+  (+ residual SE). All computable dependency-light from the fit (`null.deviance − deviance` on `df.null −
+  df.residual`; `1 − logLik/logLik_null`; `AIC()/BIC()`). A shared **`stats=`** argument selects the set
+  (per-context defaults: crosstab → the chi2/ANOVA test; regression → the above).
+- **Dispersion flag** for **poisson / grouped-binomial only** (NOT ungrouped 0/1 — Pass 4): report residual-
+  deviance/df (or Pearson/df) and the recommended correction (quasipoisson / `glm.nb`).
+- **Multi-model comparison:** LR test **vs the NULL model by default**; opt-in **vs a chosen baseline model**
+  or **sequential (each vs the previous)**; **fall back to AIC/BIC + a message** when models are non-nested or
+  N differs (`anova(..., test="LRT")`; svyglm → `anova.svyglm`/`regTermTest`). A full model-summary line is
+  always kept per column.
+- **Rendering, unified with crosstabs:** console → a footer block (generalise `print_chi2()`); exports →
+  appended rows (generalise `tab_pvalue_lines()`/`tab_materialize_extras()`), with the maintainer's **border
+  rule** — a box around **each model's whole summary block**, **no** internal borders between its lines. Solve
+  the "which test?" ambiguity (the bare `pvalue` row name; different tests per column) by **embedding the
+  label in the cell**: `"2.9% (Chi2)"`, `"0.4% (LR vs null)"`, `"F, Welch"` — self-documenting, generic row
+  label. **Full-cell significance colour is the default**; **partial-colour** (numeric part only, suffix
+  black) is a documented **future refinement** (feasible on all four backends — console crayon substring,
+  kable `<span>`, Excel rich-text — but cross-backend cost, so not day-one). Excel keeps the raw value behind
+  the formatted text.
+
+#### D8 — Inference: CI ⇄ stars exact duals (carry 12a §20/§36)
+
+`method="wald"` default (in-house `exp(coef ± crit·se)` + Wald p; glm `qnorm`, svyglm `qt` with design df),
+`"profile"` opt-in (unweighted glm, `MASS`, LR-test p). Both keep **CI ⇄ p ⇄ stars exact duals**.
+`color_signif` default **`"grey_non_signif"`** for OR/IRR (greys effects whose interval covers the neutral
+value). For gaussian β the neutral is 0 (reuse the `diff` significance gate); for OR/IRR it is 1 (the Phase-12a
+`"or"` gate). This extends 12a's four inert fmt reader-patches to IRR (same `ci_type="or"` machinery) and to
+gaussian β (existing `ci_type="diff"`), with **no new fmt fields**.
+
+#### D9 — Formulas: tidyselect default, formula escape-hatch for experts
+
+Variables via **tidyselect / character vectors** by default (consistent with `tab()`); a **formula
+escape-hatch** — `tab_reg(data, y ~ x1 + poly(x2, 2) + x1:x3)` — for power users, the RHS driving the model
+and the row-skeleton built from the fitted terms. Documented caveats: compound terms (interactions, `poly()`,
+`I()`) render as **term rows, best-effort**, not clean level rows; `^` in a formula means **factor crossing**,
+not squaring (use `I(x^2)`/`poly()`).
+
+#### D10 — Dropped features reinstated (git study; maintainer-chosen)
+
+Reinstate: **`split_var`** (fit the regression within each level of a grouping variable → subtables — the
+regression analogue of `tab()`'s `tab_vars`); **`multiplicator`** (a continuous predictor's effect per k
+units, e.g. OR per decade of age); **`empirical_OR`** (raw empirical odds/% beside the model-adjusted OR —
+the "OR + PCT" layout, connecting the model to the descriptive crosstab). The **summed-score binomial** goes
+via D2. The old `readable_OR` **predicted-probability / absolute-odds** columns are **folded into the AME
+mode** (D5), not revived separately. **`or_plot`** (OR forest plot) and **`lm_plots`** (glm/lm diagnostics)
+stay **deferred to a later display phase**. (Confirmed: the old marginal effect was MER-at-reference,
+superseded by AME.)
+
+#### D11 — Dependency-light footprint
+
+Engine: base `stats` (lm/glm) + **`nnet::multinom`** + **`MASS::polr`/`glm.nb`** — `nnet` and `MASS` are R
+**Recommended** packages (always installed) → **zero new dependency** for MNL, ordinal, and negbin. `broom`
+and `survey` are already Suggests. The **only new Suggests is `marginaleffects`** (gated, AME inference only;
+point estimates via base `predict()`). `ordinal` (clm) / `VGAM` are optional Suggests for the partial-PO
+fallback (D4). Explicitly **not** pulled in: parsnip/tidymodels/hardhat/poissonreg (dropped in 12a) and the
+heavy `performance`/`parameters` stack (their footer stats are computed in-house from the fit).
+
+### Phasing (12c → 12e)
+
+- **12c — tests:** statistical-soundness parity vs `stats::glm`/`lm`, `survey::svyglm`, `nnet::multinom`,
+  `MASS::polr` (unweighted + survey-weighted): OR/β/IRR, CI, p, McFadden/AIC/LR-vs-null, AME point estimates
+  (+ `marginaleffects` where available), summed-score grouped-binomial, the Brant PO test, `1/OR` display.
+- **12d — rewrite:** the unified `tab_reg` engine + the `effect=`/`family=`/comparison API; **tidyselect**
+  variable selection; **per-variable reference levels via a named vector** in the selectors; contrasts.
+- **12e — jamovi UI:** `jmvtab_logit` / `jmvtab_reg` analyses (reuse existing regression-module UI patterns;
+  a single logit analysis with a "+" to add predictor subsets for `multi_logit`-style comparison).
+- Display-phase (later): `or_plot` forest plot, `lm_plots` diagnostics, the visible OR-CI bracket, and the
+  OR+ME / OR+PCT composite layouts.
+
+### Sources (Phase 12b)
+
+**Ecosystem / effect measures (Pass 1):** gtsummary `tbl_regression` <https://www.danieldsjoberg.com/gtsummary/articles/tbl_regression.html>
+and `tbl_merge` <https://www.danieldsjoberg.com/gtsummary/reference/tbl_merge.html> ; sjPlot `tab_model`
+<https://strengejacke.github.io/sjPlot/articles/tab_model_estimates.html> ; modelsummary
+<https://modelsummary.com/vignettes/modelsummary.html> + `gof_map` <https://github.com/vincentarelbundock/modelsummary/blob/main/R/gof_map.R> ;
+parameters `compare_parameters` (`exponentiate="nongaussian"`) <https://easystats.github.io/parameters/reference/compare_parameters.html> ;
+performance `r2` <https://easystats.github.io/performance/reference/r2.html> ; broom `glance.lm`/`glance.glm`/`glance.svyglm`
+<https://broom.tidymodels.org/reference/glance.glm.html> ; overdispersion in counts
+<https://www.theanalysisfactor.com/glm-r-overdispersion-count-regression/> ; UCLA pseudo-R²
+<https://stats.oarc.ucla.edu/other/mult-pkg/faq/general/faq-what-are-pseudo-r-squareds/> ; Long & Freese,
+*Regression Models for Categorical Dependent Variables Using Stata*.
+
+**MNL / one-vs-rest / survey weights (Pass 2-3):** Begg & Gray (1984), *Biometrika* 71:11-18 (via mlogitBMA
+vignette <https://cran.r-project.org/web/packages/mlogitBMA/vignettes/conversion.pdf>) ; Rodríguez GLM notes
+<https://grodri.github.io/glms/notes/c6s2> ; Werth *Categorical Regression* (RRR≡OR)
+<https://bookdown.org/sarahwerth2024/CategoricalBook/multinomial-logit-regression-r.html> ; Li et al. 2024
+(dichotomized vs MNL, incoherent probabilities) <https://pmc.ncbi.nlm.nih.gov/articles/PMC10889078/> ;
+Rifkin & Klautau (2004) "In Defense of One-Vs-All", *JMLR* 5:101-141 <https://www.jmlr.org/papers/volume5/rifkin04a/rifkin04a.pdf> ;
+Cheng & Long (2007) IIA <https://journals.sagepub.com/doi/10.1177/0049124106292361> ; Allison IIA
+<https://statisticalhorizons.com/iia/> ; Lumley `svyglm` <http://r-survey.r-forge.r-project.org/pkgdown/docs/reference/svyglm.html> ;
+CRAN survey manual <https://cran.r-project.org/web/packages/survey/survey.pdf> ; Lumley & Scott (2017)
+"Fitting Regression Models to Survey Data" ; Displayr on sampling weights
+<https://www.displayr.com/the-correct-treatment-of-sampling-weights-in-statistical-tests/> ; Winship & Radbill
+(1994) <https://journals.sagepub.com/doi/10.1177/0049124194023002004> ; Stata pweights/aweights FAQ
+<https://www.stata.com/support/faqs/statistics/weights-and-summary-statistics/>.
+
+**Ordinal / AME (Pass 3):** Agresti *Analysis of Ordinal Categorical Data* <https://alanagresti.com/ordinal/ord.html> ;
+Williams `gologit2` (proportional-odds "often violated", Brant/partial-PO) <https://www.stata.com/meeting/4nasug/gologit2.pdf> ;
+UCLA ordinal logit (`MASS::polr`) <https://stats.oarc.ucla.edu/r/dae/ordinal-logistic-regression/> ; Mood (2010)
+"Logistic Regression: Why We Cannot Do What We Think We Can Do", *Eur. Sociol. Rev.* 26(1):67-82
+<https://academic.oup.com/esr/article-abstract/26/1/67/540767> ; Williams (2012) "Using the margins command",
+*Stata Journal* ; Bartus (2005) marginal effects, *Stata Journal* ; Arel-Bundock et al. (2024) `marginaleffects`,
+*JSS* 111(9) <https://marginaleffects.com> ; delta-method (why averaging `predict` SEs is wrong)
+<https://cran.r-project.org/web/packages/modmarg/vignettes/delta-method.html> ; R "Recommended" packages
+(`MASS`/`nnet` always installed) <https://cran.r-project.org/web/packages/MASS/index.html>.
+
+**Model comparison / dispersion / survey glance (Pass 4):** `survey::regTermTest` <https://r-survey.r-forge.r-project.org/pkgdown/docs/reference/regTermTest.html> ;
+`survey::anova.svyglm` <http://r-survey.r-forge.r-project.org/pkgdown/docs/reference/anova.svyglm.html> ;
+`survey::psrsq` (Lumley 2017 pseudo-R² under complex sampling) <https://rdrr.io/rforge/survey/man/psrsq.html> ;
+Lumley & Scott (2015) "AIC and BIC for modelling with complex survey data", *JSSAM* 3(1) ; overdispersion /
+quasibinomial not identifiable for Bernoulli (GLMM FAQ / Bolker) ; `MASS::glm.nb`.
+
+**Git study:** commit `6e47bab^` — `R/tab_logit.R` / `R/tab_logit_2.R` (pre-package parsnip draft:
+`nb_questions`, `split_var`, `multiplicator`, `empirical_OR`, `readable_OR`, `or_plot`, `lm_plots`).
