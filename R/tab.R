@@ -1338,7 +1338,11 @@ tab_setup <- function(ctx) {
     TRUE                                                       ~ "some"
   )
 
-  if (all( pct == "row" & OR %in% c("OR", "or", "OR_pct", "or_pct"))  ) {
+  # WARNING: `pct` is per-col_var (length ncolvars), `OR` is per-row_var (length nrowvars) -- a
+  # vectorised `pct == "row" & OR %in% ...` recycles and warns when the counts don't divide (e.g. 3x4).
+  # Two independent scalar reductions are byte-identical (all(A & B) == all(A) && all(B) for any lengths)
+  # without the recycle. Twin of the Phase 9a fix at tab_assemble_tables (~L1859).
+  if (all(pct == "row") && all(OR %in% c("OR", "or", "OR_pct", "or_pct"))) {
     tot_cols_type <- "no_delete"
   }
 

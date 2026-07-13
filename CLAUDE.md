@@ -1680,6 +1680,24 @@ Display problems and improvements :
 
 Known bugs to fix (found but out of scope when discovered):
 
+##### mirai parallel crash under load_all + `pct`/`OR` recycle warning (FIXED 2026-07-13)
+
+Two byte-identical fixes (full suite green FAIL 0 / PASS 2070, NO golden regen).
+1. **`tab(parallel=)` crashed under `devtools::load_all()`** with `object 'tab_build_one' not found`
+   whenever the call had **≥ 2 row_vars** (1 row_var stays serial below `parallel_min = 2`). Root cause:
+   the mirai daemons bind the *installed* (stale) tabxplor namespace, which lacks `tab_build_one`; an
+   installed 1.4.0 works, but dev sessions don't. Fix ([R/tab-parallel.R](R/tab-parallel.R)): new
+   `tab_dev_pkg_path()` (dev detected via the loaded namespace path + an `R/` source check) + a
+   `tab_pool_ensure()` branch that `pkgload::load_all()`s the dev source on each freshly spawned daemon
+   (once per pool, before dispatch). Inert once installed (`tab_dev_pkg_path()` → NULL). No manual pre-warm
+   needed anymore. New `test-parallel-parity.R` case locks the auto-load (parallel without `warm_pool()`).
+2. **Spurious recycle warning** `In pct == "row" & OR %in% c(...) : longer object length is not a
+   multiple of shorter object length` on multi-row_var × multi-col_var tables whose counts don't divide
+   (e.g. 3 × 4), independent of OR/parallel/`levels`. Root cause: [tab.R:1341](R/tab.R#L1341) combined the
+   per-col_var `pct` (length ncolvars) with the per-row_var `OR` (length nrowvars) via vectorised `&` —
+   the twin of the Phase 9a L1859 fix, missed. Fix: `all(pct == "row") && all(OR %in% c(...))`
+   (byte-identical: `all(A & B) ≡ all(A) && all(B)` for any lengths, minus the recycle).
+
 ##### colour `color_all_signif` ratio channel + significance-stars UX (FIXED 2026-07-13)
 
 Interrupted Phase 12 to fix two colour/significance defects + redesign stars. Full suite green
@@ -1710,8 +1728,8 @@ display-snapshot regen for the new star padding).
    is correctly starred-but-uncoloured — legitimate, and now off by default.
 
 Flagged out of scope: weight column literally named `"wt"` → `num_moment_scan` name-collision crash;
-the multi-row_var `pct == "row" & OR %in%` length-mismatch warning ([tab.R:1252](R/tab.R#L1252), Phase-9
-latent); `contrib` + `color_all_signif` colours nothing (contrib has no diff CI — pre-existing gap).
+`contrib` + `color_all_signif` colours nothing (contrib has no diff CI — pre-existing gap). (The
+multi-row_var `pct`/`OR` length-mismatch warning + the mirai load_all crash were FIXED 2026-07-13, above.)
 
 ##### contrib rendering crashes (Phase 10j-B) (FIXED 2026-07-12)
 Fixing the flagged `color="contrib"` + `comp="all"` colour crash surfaced THREE distinct render bugs (all now fixed, golden-locked, byte-identical  to every working path):

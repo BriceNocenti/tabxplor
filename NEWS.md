@@ -278,6 +278,12 @@
   export to Excel, install `openxlsx2`. The produced workbooks look essentially the same.
 
 ## Bug corrections
+* `tab(parallel = )` now works when the package is loaded with `devtools::load_all()` (it used to fail
+  with `object 'tab_build_one' not found` for calls with two or more row variables). This only affected
+  package development, not installed versions.
+* Fixed a spurious warning (`longer object length is not a multiple of shorter object length`) on
+  tables with several row variables and several column variables whose counts do not divide (e.g. 3 × 4).
+  Output was already correct; the warning is gone.
 * **`color_signif = "color_all_signif"` on a ratio (or two-channel `color = c("diff", "ratio")`) table
   no longer mis-colours.** The "guaranteed effect" colouring fed the difference confidence bound into
   the ratio (multiplicative) scale, so nearly every significant cell — including over-represented ones

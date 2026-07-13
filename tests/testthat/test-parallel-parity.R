@@ -96,3 +96,12 @@ test_that("tab_parallel_stop() shuts the tabxplor pool down", {
                    error = function(e) 0L)
   expect_identical(left, 0L)
 })
+
+test_that("parallel works WITHOUT a manual pre-warm (tab_pool_ensure auto-load_all in dev)", {
+  # Regression for the `object 'tab_build_one' not found` crash: with no manual warm_pool(), the pool
+  # tab_pool_ensure() spawns on the first >= 2 row_var dispatch must load the current source itself.
+  tab_parallel_stop()                                # clean slate: no daemons, no dev load
+  .pool$n <- NULL
+  expect_error(tab_par(), NA)                        # no crash on the fresh, self-warmed pool
+  expect_identical(tab_par(), tab_seq())             # and byte-identical to serial
+})

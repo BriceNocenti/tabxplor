@@ -15,7 +15,8 @@
 #   - Uses a NAMED compute profile ("tabxplor") so it never clobbers a user's own daemons() pool.
 #   - Workers run the INSTALLED tabxplor (a fresh process); byte-identity requires main + workers to
 #     run the same source -- automatic once installed (R CMD check installs first). In dev (load_all)
-#     the parity test pre-warms the pool with pkgload::load_all() (test-only, see test-parallel-parity.R).
+#     tab_pool_ensure() now auto-load_all's the current source on each freshly spawned daemon (via
+#     tab_dev_pkg_path()), so tab(parallel=) just works under load_all -- no manual pre-warm needed.
 #   - jmvtab (live cache) is ALWAYS serial: tab_parallel_workers() returns 0 when ctx$cache_env is set
 #     -> the serial map keeps its cache hooks (jmv_cache_aggregate in tab_aggregate; jmv_cache_store_tests
 #     in tab_build_tables).
@@ -58,9 +59,27 @@ tab_parallel_workers <- function(parallel = NULL, cache_env = NULL) {
 }
 
 
+# tab_dev_pkg_path() -- the dev SOURCE path when tabxplor is loaded via devtools/pkgload, else NULL.
+# WARNING: the daemons bind the INSTALLED tabxplor namespace (a fresh process). Under load_all that
+# namespace is the STALE installed build (no tab_build_one) -> mirai_map() errors. Detect dev via the
+# loaded namespace path (wd-independent) + an R/ source check that installed libs fail (they ship no R/
+# sources), so tab_pool_ensure() can load_all the current source on the daemons. NULL once installed /
+# when pkgload is absent -> zero cost, unchanged behaviour.
+#' @keywords internal
+#' @noRd
+tab_dev_pkg_path <- function() {
+  if (!requireNamespace("pkgload", quietly = TRUE)) return(NULL)
+  p <- tryCatch(getNamespaceInfo("tabxplor", "path"), error = function(e) NULL)
+  if (is.null(p) || !file.exists(file.path(p, "R", "tab-parallel.R"))) return(NULL)
+  normalizePath(p)
+}
+
+
 # tab_pool_ensure() -- lazily warm the named daemon pool once, reuse it across calls.
 # Only (re)spawns when the current daemon count differs from `workers`, so a pre-warmed pool (e.g. the
-# parity test's load_all'd daemons) is reused untouched.
+# parity test's load_all'd daemons) is reused untouched. On a FRESH spawn in dev, it load_all's the dev
+# source on the daemons (once per pool, not per tab() call) so tab(parallel=) works under load_all; inert
+# once installed (tab_dev_pkg_path() -> NULL).
 #' @keywords internal
 #' @noRd
 tab_pool_ensure <- function(workers, compute = tabxplor_compute) {
@@ -72,6 +91,13 @@ tab_pool_ensure <- function(workers, compute = tabxplor_compute) {
   if (isTRUE(have != workers)) {
     if (have > 0L) mirai::daemons(0, .compute = compute)
     mirai::daemons(workers, .compute = compute)
+    dev <- tab_dev_pkg_path()
+    if (!is.null(dev)) {
+      mirai::everywhere(
+        { suppressMessages(pkgload::load_all(dev, quiet = TRUE)) },
+        dev = dev, .compute = compute
+      )
+    }
   }
   invisible(workers)
 }
