@@ -7,10 +7,11 @@
 tab_reg(
   data,
   dependent,
-  predictors,
+  predictors = NULL,
   family = "auto",
   wt = NULL,
   exponentiate = "nongaussian",
+  trials = NULL,
   conf_level = 0.95,
   method = c("wald", "profile"),
   reference = NULL,
@@ -24,12 +25,14 @@ tab_reg(
 \arguments{
 \item{data}{A data frame.}
 
-\item{dependent}{Character. The outcome variable name(s). With a \code{predictors} character vector,
-several names give one odds-ratio/beta column per outcome; with a \code{predictors} list, a single
-name is required.}
+\item{dependent}{Character outcome variable name(s), \strong{or a model formula} (the escape hatch).
+With a \code{predictors} character vector, several names give one effect column per outcome; with a
+\code{predictors} list, a single name is required. A formula supplies its own model (leave
+\code{predictors} unset).}
 
 \item{predictors}{Either a character vector of predictor names (one model), or a \strong{named list}
-of character vectors (one model per element, its name labelling the column).}
+of character vectors (one model per element, its name labelling the column). Leave \code{NULL} when
+\code{dependent} is a formula.}
 
 \item{family}{The model family. \code{"auto"} (default) detects only the unambiguous binary
 (-> \code{"binomial"}) and continuous (-> \code{"gaussian"}) cases and emits a message; otherwise set it
@@ -42,6 +45,11 @@ explicitly: \code{"gaussian"} (linear), \code{"binomial"} (logistic), \code{"poi
 exponentiates every family except gaussian (odds ratios / incidence-rate ratios, leaving linear
 betas raw); \code{TRUE} / \code{FALSE} force it on / off for all columns.}
 
+\item{trials}{Grouped-binomial (summed-score) outcomes only. The number of items behind the score,
+fitting \code{cbind(score, trials - score)} as a binomial. \code{NULL} (default) fits an ordinary binary
+logit; a single integer (or a vector named by dependent) sets the item count; \code{TRUE} uses each
+dependent's observed maximum score. Requires \code{family = "binomial"}.}
+
 \item{conf_level}{Confidence level for the intervals. Default \code{0.95}.}
 
 \item{method}{How the interval and p-value are computed. \code{"wald"} (default) uses the Wald interval
@@ -51,7 +59,9 @@ the likelihood-ratio test: more accurate near separation, unweighted binomial/po
 (else it falls back to Wald with a message; gaussian always uses the exact-t interval).}
 
 \item{reference}{Optional named vector \code{c(var = "baseline level")} choosing the treatment-contrast
-reference level of one or more factor predictors.}
+reference level of one or more factor predictors (the effect of every other level is measured
+against it). This is how factor contrasts are set; other contrast codings can be applied by
+passing a formula in \code{dependent} with the terms already coded.}
 
 \item{inverse_two_level_factors}{Logical, binomial only. If \code{TRUE} (default), models the FIRST
 level of a 2-level factor dependent (e.g. \code{"1-Married"} before \code{"2-Not married"}).}
@@ -86,6 +96,11 @@ design (\code{\link[survey:svyglm]{survey::svyglm()}}), which gives correct desi
 frequency-inflated ones of \code{glm(weights=)}. \code{broom} (always) and \code{survey} (only with \code{wt}) are
 optional dependencies. \code{tab_logit()} / \code{multi_logit()} are convenience wrappers for the binomial
 family.
+
+A \strong{summed-score} outcome (a count of "yes" answers out of a fixed number of items) is fit as a
+grouped binomial when you pass \code{trials} (the number of items). Power users can pass a \strong{model
+formula} as \code{dependent} -- \code{tab_reg(data, y ~ x1 + poly(x2, 2) + x1:x3)} -- driving the model
+directly; simple \code{y ~ a + b} formulas behave exactly like \code{dependent = "y"}, \code{predictors = c("a", "b")}, while interactions / \code{poly()} / \code{I()} terms render as best-effort term rows.
 }
 \examples{
 data <- forcats::gss_cat |>
@@ -97,5 +112,7 @@ tab_reg(data, dependent = "married", predictors = c("race", "rincome"),
 # linear (betas):
 tab_reg(data, dependent = "tvhours", predictors = c("race", "age"),
         family = "gaussian")
+# formula escape-hatch (same model, terser):
+tab_reg(data, married ~ race + rincome, family = "binomial")
 
 }

@@ -1591,26 +1591,26 @@ lot since the 2026-07 profile (§23/§27 predate the carve + Phase 8).
 
 **Stage split** (trace accumulators on the five `tab_build()` stages):
 
-| stage | s/call | share | what it is |
-|-------|--------|-------|------------|
-| `tab_setup` | **0.005** | **0.2 %** | ALL the arg resolution + the row/col-axis recycling (`pct_vect`, `ref_vect`, `vec_recycle` × nrowvars) + `tab_resolve_settings()` |
-| `tab_prepare_pop` | 0.008 | 0.4 % | select / na / lump / levels, once on the whole DB |
-| `tab_aggregate` | 0.001 | — | scan-fusion OFF by default → the raw scans happen inside `tab_transform` |
-| `tab_transform` | ~0.7 | ~33 % | `tab_plain`/`tab_num` (scan + **fmt-record build**) + chi2 + ci |
-| `tab_assemble_tables` | 0.05 | 2 % | level-drop, add_n, totals, join, wrap |
-| `tab_assemble_output` | merge ~0.72 | ~34 % | `tab_compact()` (merge 5 tables → 1) + p-value lines |
+| stage                 | s/call      | share     | what it is                                                                                                                        |
+|-----------------------|-------------|-----------|-----------------------------------------------------------------------------------------------------------------------------------|
+| `tab_setup`           | **0.005**   | **0.2 %** | ALL the arg resolution + the row/col-axis recycling (`pct_vect`, `ref_vect`, `vec_recycle` × nrowvars) + `tab_resolve_settings()` |
+| `tab_prepare_pop`     | 0.008       | 0.4 %     | select / na / lump / levels, once on the whole DB                                                                                 |
+| `tab_aggregate`       | 0.001       | —         | scan-fusion OFF by default → the raw scans happen inside `tab_transform`                                                          |
+| `tab_transform`       | ~0.7        | ~33 %     | `tab_plain`/`tab_num` (scan + **fmt-record build**) + chi2 + ci                                                                   |
+| `tab_assemble_tables` | 0.05        | 2 %       | level-drop, add_n, totals, join, wrap                                                                                             |
+| `tab_assemble_output` | merge ~0.72 | ~34 %     | `tab_compact()` (merge 5 tables → 1) + p-value lines                                                                              |
 
 **Full-call diffs** (authoritative — no trace overhead):
 
-| call | median s |
-|------|----------|
-| 1 row_var × 1 col_var (colored+chi2) | 0.12 |
-| 1 row_var × 5 col_vars | 0.46 |
-| 5 row_vars × 3 col_vars, `output_list = TRUE` (**no merge**) | **1.37** |
-| 5 row_vars × 3 col_vars, default (**merge**) | **2.09** |
-| ⇒ the merge (`tab_compact`) alone | **0.72 (34 %)** |
-| `tab_pvalue_lines` (list or merged) | ≈ 0 |
-| `format()` on the merged table (print/kable/md only, not build) | 0.10 |
+| call                                                            | median s        |
+|-----------------------------------------------------------------|-----------------|
+| 1 row_var × 1 col_var (colored+chi2)                            | 0.12            |
+| 1 row_var × 5 col_vars                                          | 0.46            |
+| 5 row_vars × 3 col_vars, `output_list = TRUE` (**no merge**)    | **1.37**        |
+| 5 row_vars × 3 col_vars, default (**merge**)                    | **2.09**        |
+| ⇒ the merge (`tab_compact`) alone                               | **0.72 (34 %)** |
+| `tab_pvalue_lines` (list or merged)                             | ≈ 0             |
+| `format()` on the merged table (print/kable/md only, not build) | 0.10            |
 
 **Rprof self/total** on the full call: `vec_case_when` **40 % total** (72 % of `tab_compact`); the
 remainder is `tabxplor_fmt` record reconstruction — `structure` / `new_data_frame` / `list_unchop` /
@@ -1822,13 +1822,13 @@ profile changes the answers.
 `load_all` source. Two decompositions (Rprof self/total on the merged call, plus a list-path Rprof to
 isolate the merge marginal):
 
-| cost | share (merged) | nature |
-|------|----------------|--------|
-| `[.data.table` wide-math (leaf scans + dcast + pct/diff/total) | **~30 %** | fixed per-op overhead × ~150 `[.data.table` calls over 15 tiny leaf tables |
-| `tab_apply_tests` (chi2/ANOVA marshalling) | **~22 %** | dplyr-on-small-tibbles + count-matrix extraction; `agg_*` math itself is cheap |
-| compact **L3 reconcile** (`vec_ptype_common` → 9× `dplyr::if_else` per col) | **~7 %** | the ENTIRE merge marginal (drops to 1.8 % in the list path) |
-| redundant per-leaf `relabel_levels_in_varnames` + select/mutate narrowing | **~5 %** | each leaf re-narrows the 21 k-row data |
-| fmt materialize (`new_rcrd`, one per column) | **~3 %** | irreducible |
+| cost                                                                        | share (merged) | nature                                                                         |
+|-----------------------------------------------------------------------------|----------------|--------------------------------------------------------------------------------|
+| `[.data.table` wide-math (leaf scans + dcast + pct/diff/total)              | **~30 %**      | fixed per-op overhead × ~150 `[.data.table` calls over 15 tiny leaf tables     |
+| `tab_apply_tests` (chi2/ANOVA marshalling)                                  | **~22 %**      | dplyr-on-small-tibbles + count-matrix extraction; `agg_*` math itself is cheap |
+| compact **L3 reconcile** (`vec_ptype_common` → 9× `dplyr::if_else` per col) | **~7 %**       | the ENTIRE merge marginal (drops to 1.8 % in the list path)                    |
+| redundant per-leaf `relabel_levels_in_varnames` + select/mutate narrowing   | **~5 %**       | each leaf re-narrows the 21 k-row data                                         |
+| fmt materialize (`new_rcrd`, one per column)                                | **~3 %**       | irreducible                                                                    |
 
 **Two facts reframe everything.** (1) The build is **N-INDEPENDENT**: replicating gss_cat to 215 k
 rows leaves the merged call at ~0.81 s (≈ the 21 k-row 0.79 s). So the ~30 % `[.data.table` cost is
@@ -1952,12 +1952,12 @@ Raw file: `dev/benchmarks/results_1.4.0/cumulative_1.3.1_vs_1.4.0.txt`.
 
 ### The four use cases
 
-| use case (fixture) | 1.3.1 | 1.4.0 | cumulative |
-|---|---|---|---|
-| **Many factor tables, merged** (gss_cat 21k, 5 rv × 3 cv = 15 tables, pct row, colour diff, chi2) | 1.78 s | 0.59 s | **3.0×** |
-| **Many factor tables, list** (same) | 1.27 s | 0.61 s | **2.1×** |
-| **Numeric means, large** (8M replicated survey, `tab_num(age, tvhours)`, weighted, many groups) | 0.65 s | 0.63 s | ~flat |
-| **Single big factor table** (2M rows, `tab(marital, race, wt, pct row)`) | 0.08 s | 0.06 s | ~1.3× |
+| use case (fixture)                                                                                | 1.3.1  | 1.4.0  | cumulative |
+|---------------------------------------------------------------------------------------------------|--------|--------|------------|
+| **Many factor tables, merged** (gss_cat 21k, 5 rv × 3 cv = 15 tables, pct row, colour diff, chi2) | 1.78 s | 0.59 s | **3.0×**   |
+| **Many factor tables, list** (same)                                                               | 1.27 s | 0.61 s | **2.1×**   |
+| **Numeric means, large** (8M replicated survey, `tab_num(age, tvhours)`, weighted, many groups)   | 0.65 s | 0.63 s | ~flat      |
+| **Single big factor table** (2M rows, `tab(marital, race, wt, pct row)`)                          | 0.08 s | 0.06 s | ~1.3×      |
 
 The cumulative win is concentrated in the **many-small-tables O(cells) path** (the package's core
 "export dozens of coloured exploratory tables" workflow): **~2–3× serial**. It comes from Phase 3
@@ -1968,12 +1968,12 @@ The cumulative win is concentrated in the **many-small-tables O(cells) path** (t
 
 Same fixture (43k rows, **8 factor row_vars × 2 col_vars**, chi2, list output), three-way on one machine:
 
-| build | time | gain |
-|---|---|---|
-| 1.3.1 serial | 1.39 s | baseline |
-| 1.4.0 serial | 0.72 s | base **1.93×** |
-| 1.4.0 parallel W=8 (warm pool) | 0.27 s | parallel **2.67×** (over 1.4.0 serial) |
-| **total 1.3.1 → 1.4.0 parallel** | **1.39 → 0.27** | **5.15× = 1.93 × 2.67** |
+| build                            | time            | gain                                   |
+|----------------------------------|-----------------|----------------------------------------|
+| 1.3.1 serial                     | 1.39 s          | baseline                               |
+| 1.4.0 serial                     | 0.72 s          | base **1.93×**                         |
+| 1.4.0 parallel W=8 (warm pool)   | 0.27 s          | parallel **2.67×** (over 1.4.0 serial) |
+| **total 1.3.1 → 1.4.0 parallel** | **1.39 → 0.27** | **5.15× = 1.93 × 2.67**                |
 
 **They stack cleanly (the product is exact).** The two levers are **orthogonal**: base improvements
 shrink the per-table O(cells) work; `parallel=` runs the (now cheaper) per-`row_var` tables concurrently
@@ -2118,7 +2118,7 @@ lever), not the deleted `fmt_color_selection`.
 1501 / FAIL 0, NO golden regen; kable/md A/B-verified `identical()` across 10 fixtures). New
 `R/tab-export-prep.R`: `tab_export_prep()` builds the `tabxplor_render` model ONCE and `tab_kable`/
 `tab_md`/`tab_plot` consume it, deleting the 4× duplicated blocks A (compact via `tab_check_same_col_vars`
-+ the existing `tab_compact`), B (degrade via `tab_render_vars`), C (role detection), D (bold rows via
+- the existing `tab_compact`), B (degrade via `tab_render_vars`), C (role detection), D (bold rows via
 `tab_bold_rows`) and the two-channel colour loop (now `fmt_col_ann()`). The derive-once win
 (`get_reference` not 4×/col via `format(.ref=)`; `fmt_channel_codes` once) lives in the per-column `ann`.
 Factoring principle honoured (§ Aim): factor only the genuinely-shared expensive quantities; the
@@ -2350,11 +2350,11 @@ emits the "core" table only.**
   conscious regen; benchmark `get_num()` (the gate must be negligible per the Phase 9d O(cells) ethos).
 - **Phase 10i-B — display-only migration (ONE session, TWO increments, maintainer commit between).** Both
   increments share the materializer + reserved-marker removal + jmvtab simplification.
-  - **Increment 1 — pvalue display-only** (+ its jmvtab coupling): stop dropping `test`; remove the
+  + **Increment 1 — pvalue display-only** (+ its jmvtab coupling): stop dropping `test`; remove the
     build-time bake; call the bake in `tab_export_prep` + console print; consolidate `print_chi2`; remove
     the reserved-`"pvalue"`-row special-cases; simplify `jmv_tab3_reref` + `jmv_reapply_digits`. Golden RDS
     regen (no p-value rows in the built tab); rendered `_snaps/` + exports byte-identical. → commit.
-  - **Increment 2 — add_n/add_pct display-only**: intent attribute + dplyr S3 carry; remove the build-time
+  + **Increment 2 — add_n/add_pct display-only**: intent attribute + dplyr S3 carry; remove the build-time
     `tab_add_n_pct`; materializer gains add_n (in-cell text via the Phase-A grammar + `tab_totcol_range`;
     xl `n` column) + add_pct (appended col/row); remove the reserved-`"n"`/`"row_pct"`/`"all_col_vars"`
     special-cases; role-tag the total block. Golden RDS regen + **conscious console/kable/md snapshot
@@ -2940,6 +2940,29 @@ Full suite green (FAIL 0, PASS 1927), colour/golden byte-identical, `devtools::d
 - **Deferred to 12c-ii:** summed-score grouped binomial, formula escape-hatch, contrasts. **Cosmetic
   (Phase 13 legend redesign):** the β legend shows SD breaks as `%`, the IRR legend says "OR", a `coef`
   md cell reuses a `pXX` class (self-consistent — regression tables aren't mixed with pct columns).
+
+### 12c-ii DONE (2026-07-13) — grouped binomial + formula escape-hatch
+
+- **Summed-score grouped binomial (D2):** new `tab_reg(trials = )` arg (binomial only). A numeric
+  summed-score outcome `0..q` is fit as `glm(cbind(score, trials-score) ~ ., binomial)` (weighted →
+  `svyglm` quasibinomial), reusing the OR/`or` fmt shape unchanged. `trials`: `NULL` (default → binary
+  logit), an integer / per-dependent named vector, or `TRUE` (observed max per dependent). Column
+  label = `"<dep>: OR"` (a score has no positive level → skip `reg_positive_level`). `exponentiate =
+  FALSE` gives the β (coef) shape. Validates integer-valued `0 ≤ score ≤ trials`; errors for a
+  non-binomial family; the ordinary >2-level binomial abort now hints at `trials=`. Parity locked vs
+  hand `glm(cbind(...))`.
+- **Formula escape-hatch (D9):** `dependent` now accepts a model formula (`predictors` defaults to
+  `NULL`; exactly one of formula / `predictors`). `reg_parse_formula()` classifies it: a **simple**
+  formula (bare response ~ bare main-effect columns) reduces losslessly to the dependent+predictors
+  character path (`identical()` to the equivalent call — zero new skeleton code); a **compound** one
+  (interactions / `poly()` / `I()` / calls) is a single model fit **verbatim** with a best-effort
+  skeleton read from the fitted terms (`reg_skeleton_from_fit()`: pure-factor main effects → level
+  rows + reference; every other term → one row per assigned coefficient column, `term` = the
+  model-matrix name so `reg_column()` aligns). `trials`/`inverse_two_level_factors` do not apply to a
+  compound formula (the user controls the LHS); explicit `family` required when the response is a call.
+- **Refactor:** `reg_build()` now fits-all then columns-all so the skeleton can come from the fit;
+  `reg_fit()` gained `trials`/`formula` params and returns `$fit`. `reg_prep_binary` abort improved.
+- **Not done (unchanged from 12c-i):** the Phase-13 legend cosmetics above.
 
 ### Phasing (12c → 12i — re-cut 2026-07-13; per-phase detail in the CLAUDE.md roadmap)
 

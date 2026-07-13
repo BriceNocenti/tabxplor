@@ -16,6 +16,10 @@
 #     ADDITIVE (gaussian beta / log-odds) -> the `diff` field, type="coef", display="coef",
 #     ci_type="diff", color="diff" (neutral 0), with `var`=var(Y) so the colour is the effect-size
 #     beta/SD(Y) against the mean_diff (Cohen) breaks -- the additive twin of OR-coloured-by-ratio.
+#   - 12c-ii: `trials` fits a summed-score outcome as GROUPED binomial (cbind(score, trials-score));
+#     a model FORMULA in `dependent` is the escape hatch -- a simple `y ~ a + b` reduces to the
+#     dependent+predictors path, a compound one (interactions / poly() / I()) is fit verbatim with a
+#     best-effort skeleton read from the fitted terms (reg_skeleton_from_fit).
 # See: CLAUDE.md Phase 12c ; dev/tabxplor_1.4.0_decisions.md S37.
 
 # === Internal engine ================================================================
@@ -34,6 +38,34 @@ reg_check_deps <- function(wt) {
       "i" = 'Install it with {.code install.packages("survey")}.'
     ))
   }
+}
+
+# Parse a formula escape-hatch (D9). Returns the LHS outcome name, the bare RHS variables (for
+# reference= / family-detect / labels), the verbatim formula, and `simple`: TRUE iff LHS is a bare
+# column name AND every RHS term is a bare main-effect column of `data` (no `:`, poly(), I(), calls).
+# A simple formula reduces losslessly to the dependent+predictors character path; a compound one is
+# fit verbatim with a skeleton read from the fitted terms (reg_skeleton_from_fit).
+reg_parse_formula <- function(formula, data) {
+  lhs <- rlang::f_lhs(formula)
+  if (is.null(lhs)) {
+    cli::cli_abort("A regression {.arg formula} needs a response, e.g. {.code y ~ x1 + x2}.")
+  }
+  lhs_is_name <- rlang::is_symbol(lhs)
+  dependent   <- if (lhs_is_name) rlang::as_string(lhs) else all.vars(lhs)[1]
+
+  tt     <- stats::terms(formula, data = data)
+  labels <- attr(tt, "term.labels")
+  orders <- attr(tt, "order")
+  rhs_vars <- all.vars(rlang::f_rhs(formula))
+
+  simple <- lhs_is_name &&
+    dependent %in% names(data) &&
+    length(labels) > 0L &&
+    all(orders == 1L) &&
+    all(labels %in% names(data))
+
+  list(dependent = dependent, predictors = rhs_vars, labels = labels,
+       formula = formula, lhs_is_name = lhs_is_name, simple = simple)
 }
 
 # Auto-detect the model family from the outcome -- ONLY the unambiguous 0/1 -> binomial and the
@@ -83,6 +115,8 @@ reg_prep_binary <- function(data, dependent, inverse_two_level_factors) {
       cli::cli_abort(c(
         "The dependent variable {.val {dependent}} must be binary (2 levels).",
         "x" = "It has {nlevels(y)} level{?s}: {.val {levels(y)}}.",
+        "i" = paste0("For a summed-score outcome (0..q items), pass {.arg trials} to fit a grouped ",
+                     "binomial."),
         "i" = "Multinomial / 3+ level outcomes are planned for a later phase (12d)."
       ))
     }
@@ -158,6 +192,50 @@ reg_skeleton <- function(data, predictors) {
   )
 }
 
+# The skeleton for the COMPOUND-formula path (D9): built from the FITTED model, not the data, so the
+# rows match whatever the user's formula produced. Intercept first, then each fitted term: a pure
+# factor main effect (its label is one of fit$xlevels) expands to level rows (first = reference, no
+# term); every other term (numeric main effect, interaction, poly(), I(), fn call) emits one row per
+# coefficient column assigned to it, labelled by the coefficient name -- best-effort, no reference row.
+# `term` values equal the model-matrix column names, which broom::tidy() reproduces, so reg_column()
+# aligns by term exactly as on the data-skeleton path.
+reg_skeleton_from_fit <- function(fit) {
+  tt      <- stats::terms(fit)
+  labels  <- attr(tt, "term.labels")
+  assign  <- attr(stats::model.matrix(fit), "assign")   # 0 = intercept, k = labels[k]
+  coefnms <- names(stats::coef(fit))
+  xlev    <- fit$xlevels
+
+  parts <- purrr::map(seq_along(labels), function(k) {
+    lab  <- labels[k]
+    cols <- coefnms[assign == k]
+    if (lab %in% names(xlev)) {                          # pure factor main effect -> level rows
+      lv <- xlev[[lab]]
+      tibble::tibble(
+        var    = lab,
+        level  = lv,
+        term   = c(NA_character_, paste0(lab, lv[-1])),
+        is_ref = c(TRUE, rep(FALSE, length(lv) - 1L))
+      )
+    } else {                                             # numeric / interaction / poly / I() -> terms
+      lvl <- sub(paste0("^", term_prefix(lab)), "", cols)
+      lvl[!nzchar(lvl)] <- cols[!nzchar(lvl)]            # a single-column term keeps the full name
+      tibble::tibble(var = lab, level = lvl, term = cols, is_ref = FALSE)
+    }
+  })
+  dplyr::bind_rows(
+    tibble::tibble(var = "Constant", level = "Reference population",
+                   term = "(Intercept)", is_ref = TRUE),
+    parts
+  )
+}
+
+# Strip a term's own name off its coefficient names for a shorter `level` label (best-effort):
+# "poly(age, 2)1" -> "1"; a name we can't shorten is left whole. Regex-escaped so poly()/I() are safe.
+term_prefix <- function(label) {
+  stringr::str_replace_all(label, "([.\\\\+*?\\[^\\]$(){}=!<>|:#/-])", "\\\\\\1")
+}
+
 # Per-coefficient LIKELIHOOD-RATIO p-values (the dual of the profile-likelihood CI). Each coefficient
 # is dropped from the model matrix in turn and the deviance change is a 1-df chi-square. Unweighted
 # glm only (binomial/poisson); for a factor it tests one level vs the reference, matching the
@@ -186,7 +264,8 @@ reg_lr_pvalues <- function(fit) {
 # fixed-dispersion glm (binomial/poisson), else t(df.residual); this matches broom's own z/t p, so
 # the CI and the stars are exact duals. method="profile" (unweighted glm) swaps to confint + LR p.
 reg_fit <- function(data, dependent, predictors, family, wt, do_exp,
-                    inverse_two_level_factors, conf_level, method) {
+                    inverse_two_level_factors, conf_level, method,
+                    trials = NULL, formula = NULL) {
   mdata <- tidyr::drop_na(data, tidyselect::all_of(c(dependent, predictors, wt)))
 
   fac_preds <- predictors[purrr::map_lgl(
@@ -200,12 +279,30 @@ reg_fit <- function(data, dependent, predictors, family, wt, do_exp,
 
   positive_level <- NULL
   weighted <- !is.null(wt)
+  # grouped binomial: a summed-score outcome (0..trials) fit as cbind(score, trials-score) (D2). Only
+  # on the non-formula path (a compound formula controls its own LHS, so `trials` does not apply).
+  grouped <- family == "binomial" && !is.null(trials) && is.null(formula)
+  if (grouped) {
+    s <- mdata[[dependent]]
+    if (!is.numeric(s) || any(s %% 1 != 0, na.rm = TRUE)) {
+      cli::cli_abort(c("A summed-score outcome ({.arg trials}) must be integer-valued.",
+                       "x" = "{.val {dependent}} is {.cls {class(s)}}."))
+    }
+    if (any(s < 0 | s > trials, na.rm = TRUE)) {
+      cli::cli_abort(c("{.val {dependent}} scores must lie in {.val {0}}..{.val {trials}} (= {.arg trials}).",
+                       "x" = "Observed range: {.val {range(s, na.rm = TRUE)}}."))
+    }
+    mdata[[".gb_succ"]] <- s
+    mdata[[".gb_fail"]] <- trials - s
+  }
 
   fam_obj <- switch(
     family,
     "binomial" = {
-      mdata <- reg_prep_binary(mdata, dependent, inverse_two_level_factors)
-      positive_level <- attr(mdata, "positive_level")
+      if (is.null(trials) && is.null(formula)) {
+        mdata <- reg_prep_binary(mdata, dependent, inverse_two_level_factors)
+        positive_level <- attr(mdata, "positive_level")
+      }
       if (weighted) stats::quasibinomial("logit") else stats::binomial("logit")
     },
     "poisson" = if (weighted) stats::quasipoisson("log") else stats::poisson("log"),
@@ -213,16 +310,21 @@ reg_fit <- function(data, dependent, predictors, family, wt, do_exp,
     "gaussian" = stats::gaussian(),
     cli::cli_abort("Unsupported {.arg family}: {.val {family}}.")
   )
-  if (family != "binomial" && !is.numeric(mdata[[dependent]])) {
+  if (is.null(formula) && !grouped && family != "binomial" && !is.numeric(mdata[[dependent]])) {
     cli::cli_abort(c(
       "A {.val {family}} outcome must be numeric.",
       "x" = "{.val {dependent}} is {.cls {class(mdata[[dependent]])}}."
     ))
   }
 
-  fml <- stats::as.formula(paste0(
-    "`", dependent, "` ~ ", paste0("`", predictors, "`", collapse = " + ")
-  ))
+  fml <- if (!is.null(formula)) {
+    formula                                            # compound escape-hatch: fit verbatim
+  } else {
+    resp <- if (grouped) "cbind(`.gb_succ`, `.gb_fail`)" else paste0("`", dependent, "`")
+    stats::as.formula(paste0(
+      resp, " ~ ", paste0("`", predictors, "`", collapse = " + ")
+    ))
+  }
 
   fit <- if (family == "gaussian" && !weighted) {
     stats::lm(fml, data = mdata)
@@ -270,7 +372,7 @@ reg_fit <- function(data, dependent, predictors, family, wt, do_exp,
   # var(Y) drives the additive gaussian effect-size colour (beta/SD(Y)); NA otherwise (no std colour)
   var_y <- if (!do_exp && family == "gaussian") stats::var(mdata[[dependent]]) else NA_real_
 
-  list(tidy = td, nobs = nrow(mdata), var_y = var_y, positive_level = positive_level)
+  list(tidy = td, nobs = nrow(mdata), var_y = var_y, positive_level = positive_level, fit = fit)
 }
 
 # Align one fit to the union skeleton -> a single fmt column (length = nrow(skeleton)), in the
@@ -317,17 +419,28 @@ reg_column <- function(skeleton, fit_res, model_predictors, col_var, effect_shap
   }
 }
 
-# The shared builder: fit every column spec, align to one union skeleton, assemble a grouped_tab.
-# specs = list of list(dependent, predictors, label). union_predictors = the ordered skeleton set.
+# The shared builder: fit every column spec, align to one skeleton, assemble a grouped_tab. specs =
+# list of list(dependent, predictors, label, trials, formula, compound). The data-skeleton (union of
+# the specs' predictors) is used unless a spec is a compound formula (single model), in which case the
+# skeleton is read from its fitted terms (reg_skeleton_from_fit). Fit-all first so the skeleton can
+# come from the fit before the columns are aligned.
 reg_build <- function(data, specs, union_predictors, family, wt, do_exp, effect_shape,
                       inverse_two_level_factors, conf_level, method, color, color_signif,
                       cleannames, subtext) {
-  skeleton <- reg_skeleton(data, union_predictors)
+  fits <- purrr::map(specs, function(sp) {
+    reg_fit(data, sp$dependent, sp$predictors, family, wt, do_exp,
+            inverse_two_level_factors, conf_level, method,
+            trials = sp$trials, formula = sp$formula)
+  })
 
-  cols <- purrr::map(specs, function(sp) {
-    f <- reg_fit(data, sp$dependent, sp$predictors, family, wt, do_exp,
-                 inverse_two_level_factors, conf_level, method)
-    reg_column(skeleton, f, sp$predictors, sp$label, effect_shape, color, color_signif)
+  compound <- purrr::map_lgl(specs, ~ isTRUE(.$compound))
+  skeleton <- if (any(compound)) reg_skeleton_from_fit(fits[[1]]$fit)
+              else                reg_skeleton(data, union_predictors)
+
+  cols <- purrr::map2(fits, specs, function(f, sp) {
+    # a compound formula is one model: every skeleton row belongs to it (else compound-term rows go NA)
+    model_predictors <- if (isTRUE(sp$compound)) unique(skeleton$var) else sp$predictors
+    reg_column(skeleton, f, model_predictors, sp$label, effect_shape, color, color_signif)
   })
 
   disp_levels <- skeleton$level
@@ -368,12 +481,20 @@ reg_build <- function(data, specs, union_predictors, family, wt, do_exp, effect_
 #' optional dependencies. `tab_logit()` / `multi_logit()` are convenience wrappers for the binomial
 #' family.
 #'
+#' A **summed-score** outcome (a count of "yes" answers out of a fixed number of items) is fit as a
+#' grouped binomial when you pass `trials` (the number of items). Power users can pass a **model
+#' formula** as `dependent` -- `tab_reg(data, y ~ x1 + poly(x2, 2) + x1:x3)` -- driving the model
+#' directly; simple `y ~ a + b` formulas behave exactly like `dependent = "y"`, `predictors = c("a",
+#' "b")`, while interactions / `poly()` / `I()` terms render as best-effort term rows.
+#'
 #' @param data A data frame.
-#' @param dependent Character. The outcome variable name(s). With a `predictors` character vector,
-#'   several names give one odds-ratio/beta column per outcome; with a `predictors` list, a single
-#'   name is required.
+#' @param dependent Character outcome variable name(s), **or a model formula** (the escape hatch).
+#'   With a `predictors` character vector, several names give one effect column per outcome; with a
+#'   `predictors` list, a single name is required. A formula supplies its own model (leave
+#'   `predictors` unset).
 #' @param predictors Either a character vector of predictor names (one model), or a **named list**
-#'   of character vectors (one model per element, its name labelling the column).
+#'   of character vectors (one model per element, its name labelling the column). Leave `NULL` when
+#'   `dependent` is a formula.
 #' @param family The model family. `"auto"` (default) detects only the unambiguous binary
 #'   (-> `"binomial"`) and continuous (-> `"gaussian"`) cases and emits a message; otherwise set it
 #'   explicitly: `"gaussian"` (linear), `"binomial"` (logistic), `"poisson"` / `"quasipoisson"`
@@ -382,6 +503,10 @@ reg_build <- function(data, specs, union_predictors, family, wt, do_exp, effect_
 #' @param exponentiate Whether to exponentiate coefficients into ratios. `"nongaussian"` (default)
 #'   exponentiates every family except gaussian (odds ratios / incidence-rate ratios, leaving linear
 #'   betas raw); `TRUE` / `FALSE` force it on / off for all columns.
+#' @param trials Grouped-binomial (summed-score) outcomes only. The number of items behind the score,
+#'   fitting `cbind(score, trials - score)` as a binomial. `NULL` (default) fits an ordinary binary
+#'   logit; a single integer (or a vector named by dependent) sets the item count; `TRUE` uses each
+#'   dependent's observed maximum score. Requires `family = "binomial"`.
 #' @param conf_level Confidence level for the intervals. Default `0.95`.
 #' @param method How the interval and p-value are computed. `"wald"` (default) uses the Wald interval
 #'   and the Wald z / t test: fast, matches standard software output, and the only option for weighted
@@ -389,7 +514,9 @@ reg_build <- function(data, specs, union_predictors, family, wt, do_exp, effect_
 #'   the likelihood-ratio test: more accurate near separation, unweighted binomial/poisson models only
 #'   (else it falls back to Wald with a message; gaussian always uses the exact-t interval).
 #' @param reference Optional named vector `c(var = "baseline level")` choosing the treatment-contrast
-#'   reference level of one or more factor predictors.
+#'   reference level of one or more factor predictors (the effect of every other level is measured
+#'   against it). This is how factor contrasts are set; other contrast codings can be applied by
+#'   passing a formula in `dependent` with the terms already coded.
 #' @param inverse_two_level_factors Logical, binomial only. If `TRUE` (default), models the FIRST
 #'   level of a 2-level factor dependent (e.g. `"1-Married"` before `"2-Not married"`).
 #' @param color,color_signif How the effect measure is coloured (`NULL` uses the per-family default:
@@ -411,17 +538,47 @@ reg_build <- function(data, specs, union_predictors, family, wt, do_exp, effect_
 #' # linear (betas):
 #' tab_reg(data, dependent = "tvhours", predictors = c("race", "age"),
 #'         family = "gaussian")
+#' # formula escape-hatch (same model, terser):
+#' tab_reg(data, married ~ race + rincome, family = "binomial")
 #'
 #' @export
-tab_reg <- function(data, dependent, predictors,
+tab_reg <- function(data, dependent, predictors = NULL,
                     family = "auto", wt = NULL, exponentiate = "nongaussian",
-                    conf_level = 0.95, method = c("wald", "profile"),
+                    trials = NULL, conf_level = 0.95, method = c("wald", "profile"),
                     reference = NULL, inverse_two_level_factors = TRUE,
                     color = NULL, color_signif = NULL,
                     cleannames = NULL, subtext = "") {
   method <- match.arg(method)
-  stopifnot(is.data.frame(data), is.character(dependent), length(dependent) >= 1L)
+  stopifnot(is.data.frame(data))
   cleannames <- if (is.null(cleannames)) getOption("tabxplor.cleannames", TRUE) else cleannames
+
+  # formula escape-hatch (D9): a formula in `dependent` supplies the model. A SIMPLE formula (bare
+  # response ~ bare main-effect vars) reduces losslessly to the dependent+predictors character path;
+  # a COMPOUND one (interactions / poly() / I() / calls) is fit verbatim with a fit-read skeleton.
+  formula_mode <- FALSE
+  raw_formula  <- NULL
+  if (rlang::is_formula(dependent)) {
+    if (!is.null(predictors)) {
+      cli::cli_abort("Provide either a formula in {.arg dependent} or {.arg predictors}, not both.")
+    }
+    parsed <- reg_parse_formula(dependent, data)
+    if (!parsed$lhs_is_name && identical(family, "auto")) {
+      cli::cli_abort(c("Cannot auto-detect {.arg family} from a transformed formula response.",
+                       "i" = "Set {.arg family} explicitly when the response is not a bare variable."))
+    }
+    dependent <- parsed$dependent
+    if (parsed$simple) {
+      predictors <- parsed$labels                       # main-effect vars, in formula order
+    } else {
+      formula_mode <- TRUE
+      raw_formula  <- parsed$formula
+      predictors   <- parsed$predictors                 # RHS bare vars (reference= / drop_na)
+    }
+  } else if (is.null(predictors)) {
+    cli::cli_abort(c("{.arg predictors} is required.",
+                     "i" = "Or pass a model formula as {.arg dependent}, e.g. {.code y ~ x1 + x2}."))
+  }
+  stopifnot(is.character(dependent), length(dependent) >= 1L)
 
   # predictors dispatch: named list -> model-comparison ; character vector -> one model per dependent
   is_comparison <- is.list(predictors)
@@ -441,6 +598,24 @@ tab_reg <- function(data, dependent, predictors,
   effect_shape <- if (do_exp) "ratio" else "additive"
   eff_word     <- reg_effect_word(family, do_exp)
 
+  # trials -> grouped binomial (D2): a summed-score outcome fit as cbind(score, trials-score). NULL =
+  # off (binary logit). TRUE = observed max per dependent. Numeric / named vector = the item count.
+  trials_for <- function(d) NULL
+  if (!is.null(trials)) {
+    if (family != "binomial") {
+      cli::cli_abort("{.arg trials} applies only to the {.val binomial} family (grouped / summed-score).")
+    }
+    if (formula_mode) {
+      cli::cli_warn("{.arg trials} is ignored with a compound formula; write {.code cbind()} in it instead.")
+    } else {
+      tv <- if (isTRUE(trials))              purrr::map_dbl(dependent, ~ max(data[[.x]], na.rm = TRUE))
+            else if (!is.null(names(trials))) unname(trials[dependent])
+            else                              rep_len(as.numeric(trials), length(dependent))
+      tv <- stats::setNames(as.integer(round(tv)), dependent)
+      trials_for <- function(d) tv[[d]]
+    }
+  }
+
   # base `%||%` is R >= 4.4 only; the package supports R >= 4.1, so use explicit is.null().
   if (is.null(color))        color        <- if (effect_shape == "ratio") "OR" else "diff"
   if (is.null(color_signif)) color_signif <- "grey_non_signif"
@@ -455,11 +630,13 @@ tab_reg <- function(data, dependent, predictors,
     }
     labels <- make.unique(names(models))
     specs  <- purrr::map2(models, labels,
-                          ~ list(dependent = dependent, predictors = .x, label = .y))
+                          ~ list(dependent = dependent, predictors = .x, label = .y,
+                                 trials = trials_for(dependent), compound = FALSE, formula = NULL))
     union_predictors <- all_predictors
   } else {
     labels <- purrr::map_chr(dependent, function(d) {
-      base <- if (family == "binomial") {
+      # a summed-score / compound-formula binomial has no single "positive level" -> label by name
+      base <- if (family == "binomial" && !formula_mode && is.null(trials_for(d))) {
         pl <- reg_positive_level(data, d, inverse_two_level_factors)
         if (cleannames) pl <- stringr::str_remove_all(pl, cleannames_condition())
         pl
@@ -468,7 +645,9 @@ tab_reg <- function(data, dependent, predictors,
     })
     labels <- make.unique(labels)
     specs  <- purrr::map2(dependent, labels,
-                          ~ list(dependent = .x, predictors = predictors, label = .y))
+                          ~ list(dependent = .x, predictors = predictors, label = .y,
+                                 trials = trials_for(.x), compound = formula_mode,
+                                 formula = raw_formula))
     union_predictors <- predictors
   }
 

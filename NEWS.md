@@ -15,7 +15,10 @@
   coloured by their standardized effect size. Survey weights (`wt =`, via `survey::svyglm`),
   per-variable reference levels (`reference = c(var = "level")`), and Wald vs profile-likelihood
   intervals (`method =`) are supported. `broom` and `survey` (and `MASS` for `method = "profile"`)
-  are optional dependencies.
+  are optional dependencies. A summed-score outcome (a count of "yes" out of a fixed number of items)
+  is fit as a grouped binomial by passing `trials =` (the number of items). Power users can pass a
+  model **formula** as `dependent` (e.g. `tab_reg(data, y ~ x1 + poly(x2, 2) + x1:x3)`) instead of a
+  `predictors` vector.
 * `tab_logit()` and `multi_logit()` are now thin wrappers of `tab_reg()` for the binomial family,
   keeping the curated binary-outcome interface (`tab_logit(data, dependent, predictors)` for one
   logit per dependent; `multi_logit(data, dependent, models = list(...))` for model comparison).

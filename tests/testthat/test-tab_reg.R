@@ -166,6 +166,104 @@ test_that("colour: gaussian beta greys non-significant / reference, colours a la
   expect_true(all(txt[cand] != 0))
 })
 
+# ---- summed-score grouped binomial (Phase 12c-ii) -------------------------------------------
+
+gb_data <- function() {
+  reg_data() |>
+    dplyr::mutate(score = pmin(as.integer(tvhours), 10L))   # a summed score 0..10 ("yes" out of 10)
+}
+
+test_that("grouped binomial (trials=) matches glm(cbind(s, q-s)); OR fmt shape", {
+  skip_if_not_installed("broom")
+  d   <- gb_data()
+  t1  <- tab_reg(d, "score", "race", family = "binomial", trials = 10, cleannames = FALSE)
+  col <- t1[["score: OR"]]
+
+  expect_identical(get_type(col), "row")
+  expect_identical(get_display(col)[1], "or")
+  expect_identical(get_ci_type(col), "or")
+
+  dm <- d |> dplyr::filter(!is.na(score), !is.na(race))
+  dm$race <- forcats::fct_drop(factor(dm$race))
+  g  <- stats::glm(cbind(score, 10 - score) ~ race, data = dm, family = stats::binomial())
+  co <- summary(g)$coefficients
+  z  <- stats::qnorm(0.975)
+
+  keep <- !is.na(get_pvalue(col))
+  expect_equal(sort(get_or(col)[keep]),     sort(exp(unname(co[, 1]))),          tolerance = 1e-6)
+  expect_equal(sort(get_ci_inf(col)[keep]), sort(exp(unname(co[, 1] - z * co[, 2]))), tolerance = 1e-6)
+  expect_equal(sort(get_ci_sup(col)[keep]), sort(exp(unname(co[, 1] + z * co[, 2]))), tolerance = 1e-6)
+  expect_equal(sort(get_pvalue(col)[keep]), sort(unname(co[, 4])),               tolerance = 1e-6)
+  # the first race level is the reference (OR == 1, no CI/p)
+  ref <- is_refrow(col) & as.character(t1$var) == "race"
+  expect_true(all(get_or(col)[ref] == 1))
+})
+
+test_that("trials=TRUE uses the observed max score; exponentiate=FALSE gives the coef shape", {
+  skip_if_not_installed("broom")
+  d  <- gb_data()
+  auto <- tab_reg(d, "score", "race", family = "binomial", trials = TRUE, cleannames = FALSE)
+  ten  <- tab_reg(d, "score", "race", family = "binomial", trials = 10,   cleannames = FALSE)
+  expect_equal(max(d$score, na.rm = TRUE), 10L)
+  expect_equal(get_or(auto[["score: OR"]]), get_or(ten[["score: OR"]]))
+
+  b <- tab_reg(d, "score", "race", family = "binomial", trials = 10, exponentiate = FALSE,
+               cleannames = FALSE)[["score: \u03b2"]]
+  expect_identical(get_type(b), "coef")
+  expect_identical(get_ci_type(b), "diff")
+})
+
+test_that("trials errors outside the binomial family; ordinary >2-level binomial still aborts", {
+  skip_if_not_installed("broom")
+  d <- gb_data()
+  expect_error(tab_reg(d, "score", "race", family = "poisson", trials = 10), "trials")
+  expect_error(tab_reg(d, "score", "race", family = "binomial"), "binary|trials")  # no trials -> abort
+})
+
+# ---- formula escape-hatch (Phase 12c-ii) ----------------------------------------------------
+
+test_that("a simple formula reduces to the dependent+predictors path (identical)", {
+  skip_if_not_installed("broom")
+  d  <- reg_data()
+  t1 <- tab_reg(d, married ~ race + rincome, family = "binomial", cleannames = FALSE)
+  t2 <- tab_reg(d, "married", c("race", "rincome"), family = "binomial", cleannames = FALSE)
+  expect_identical(t1, t2)
+})
+
+test_that("a compound formula (poly) fits with best-effort term rows; coefs match lm", {
+  skip_if_not_installed("broom")
+  d   <- reg_data()
+  t1  <- tab_reg(d, tvhours ~ race + poly(age, 2), family = "gaussian", cleannames = FALSE)
+  col <- t1[["tvhours: \u03b2"]]
+
+  expect_true(any(grepl("poly\\(age, 2\\)", as.character(t1$var))))   # poly -> its own term block
+  expect_true(any(as.character(t1$var) == "race"))                    # race still a factor block
+  ref <- is_refrow(col) & as.character(t1$var) == "race"
+  expect_true(all(get_diff(col)[ref] == 0))                          # factor reference level = 0
+
+  dm <- d |> dplyr::filter(!is.na(tvhours), !is.na(age), !is.na(race))
+  m  <- stats::lm(tvhours ~ race + poly(age, 2), data = dm)
+  co <- summary(m)$coefficients
+  keep <- !is.na(get_pvalue(col))
+  expect_equal(sort(get_diff(col)[keep]), sort(unname(co[, "Estimate"])), tolerance = 1e-6)
+})
+
+test_that("a compound formula with an interaction renders and exports without error", {
+  skip_if_not_installed("broom")
+  t1 <- tab_reg(reg_data(), tvhours ~ race * rincome, family = "gaussian", cleannames = FALSE)
+  expect_s3_class(t1, "tabxplor_grouped_tab")
+  expect_true(any(grepl(":", as.character(t1$var))))                  # the interaction term rows
+  expect_no_error(tab_kable(t1))
+  expect_no_error(tab_md(t1))
+})
+
+test_that("formula errors: predictors both supplied, and a call-LHS with family='auto'", {
+  skip_if_not_installed("broom")
+  d <- reg_data()
+  expect_error(tab_reg(d, married ~ race, predictors = "race"), "either")
+  expect_error(tab_reg(d, I(tvhours > 2) ~ race), "auto-detect|explicit")
+})
+
 # ---- exports --------------------------------------------------------------------------------
 
 test_that("gaussian tab_reg output exports through every backend without error", {

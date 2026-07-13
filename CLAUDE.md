@@ -69,7 +69,9 @@ R/
 │                              color="OR"). tab_logit()/multi_logit() = thin binomial-family wrappers.
 │                              reg_* helpers (fit/skeleton/column/build); `predictors` char-vec (one
 │                              model, dependent may be a vector) vs named list (model comparison);
-│                              per-variable reference= relevel. 12c-ii: grouped-binomial, formula, contrasts.
+│                              per-variable reference= relevel. 12c-ii: `trials` grouped-binomial
+│                              (cbind(score,q-score)) + formula escape-hatch (simple->char path, compound
+│                              ->reg_skeleton_from_fit); reg_build fits-all then columns-all.
 ├── tab_logit.R      (~5 L)   Emptied in Phase 12c (renamed -> tab_reg.R; git rm pending).
 ├── tab_logit_2.R    (~8 L)   Emptied in Phase 12a (git rm pending). or_plot/lm_plots deferred.
 ├── jmvtab-cache.R  (~800 L)  jmvtab live multi-tier cache: content-addressed store + hashing +
@@ -1517,19 +1519,29 @@ The build below is re-cut (2026-07-13) from the settled §37 design. **A Phase =
 #### Phase 12c – `tab_reg` core engine + effect columns (DONE)
 
 The foundational rewrite: ONE internal engine (family dispatch) + the shared effect-column machinery, reusing the fmt additive-`diff` / multiplicative-`or` shapes (≈ no new fields). `tab_logit`/`multi_logit` become binomial wrappers.
+
+##### Phase 12c-i – unified engine for tab_reg() (DONE)
+
 - engine skeleton; **binomial at parity with 12a** (`tab_reg(family="binomial")` ≡ `tab_logit`); `predictors` char-vector vs named-list dispatch; **tidyselect** variables + **per-variable reference levels via named vectors**.
 - **gaussian (lm → β)** + **poisson (IRR)**; per-column effect labels (β/OR/IRR); `exponentiate="nongaussian"`.
-- **summed-score grouped binomial** (`nb_questions`/`trials` + quasibinomial) + the **formula escape-hatch** + **contrasts**.
-
-##### Phase 12c-i – unified engine for tab_reg()
 
 `R/tab_logit.R` → **`R/tab_reg.R`** (family-generic engine; old file + `tab_logit_2.R` emptied, `git rm` pending — `rm` blocked). **`tab_reg(data, dependent, predictors, family=, exponentiate="nongaussian", wt=, reference=, method=, color=, color_signif=, …)`** over ONE engine (`reg_check_deps`/`reg_detect_family`/`reg_prep_binary`/`reg_apply_references`/`reg_skeleton`/`reg_fit`/`reg_lr_pvalues`/`reg_column`/`reg_build`): `stats::lm` (gaussian) / `glm` (binomial/poisson) / `survey::svyglm` (weighted) + `broom::tidy`. `predictors` char-vec = one model (dependent may be a vector → column per dependent); named list = model comparison. `exponentiate` drives the fmt shape: **additive β** → `diff`/type="coef"/display="coef"/ci_type="diff"/color="diff"; **multiplicative OR·IRR** → `or`/type="row"/display="or"/ci_type="or"/color="OR". CI ⇄ p exact duals (z for fixed-dispersion glm, t(df) for lm/quasi/svyglm; profile+LR opt-in). `tab_logit()`/`multi_logit()` are thin binomial wrappers (curated UX unchanged; `test-tab_logit.R` still green).
 - **fmt integration (the maintainer's `type` question):** ONE new `type` VALUE **`"coef"`** (gaussian β only) + ONE new `display` TOKEN **`"coef"`** (raw signed render, no ×100/%/×) + **reuse the `var` field** for var(Y) (the β/SD(Y) effect-size colour, standardized like a mean-diff but by its OWN `var`, not `get_ref_var()`). **No new fmt fields, no new attributes** (18/9 contract intact). OR/IRR stay on the proven `type="row"` path. Also: `fmt_color_plan()` now excludes reference rows from colouring for the diff/ratio/or measures (`gate & !is_refrow`) — byte-identical for crosstabs (their ref cells are diff=0/OR=1 → already slot 0), it uncolours the regression **intercept** (in_refrow but a non-neutral baseline). Excel unchanged (a `coef` cell hits `excel_numfmt_code`'s plain-number branch).
 - **β colour = effect-size gradient** (maintainer decision): β/SD(Y) vs the `mean_diff` (Cohen 0.2/0.5/0.8/1.2) breaks — verified end-to-end (a large standardized β colours, a tiny-but-significant one stays grey). Family `"auto"` detects only binary→binomial / continuous→gaussian (message), else aborts (§37 D2).
 - **Verified:** full suite green (FAIL 0, PASS 1927), incl. colour/golden byte-identity; new `test-tab_reg.R` (β/CI/p vs lm, IRR/CI/p vs glm, coef shape, `exponentiate`, `reference`, family-auto, colour, exports); `test-tab_logit.R` (binomial wrapper) unchanged & green. `devtools::document()` done.
-- **Deferred to 12c-ii:** summed-score grouped binomial (`nb_questions`/`trials`), the formula escape-hatch, contrasts. **Known cosmetic (Phase 13 legend redesign):** the β legend shows the SD breaks as `%`, and the IRR legend says "OR"; a `coef` md cell reuses a `pXX` class name (self-consistent, no collision — regression tables aren't mixed with pct columns).
+- **Done in 12c-ii (2026-07-13):** summed-score grouped binomial (`trials`) + the formula escape-hatch; contrasts = no-op (already `reference=`). **Known cosmetic (Phase 13 legend redesign):** the β legend shows the SD breaks as `%`, and the IRR legend says "OR"; a `coef` md cell reuses a `pXX` class name (self-consistent, no collision — regression tables aren't mixed with pct columns).
 
-##### Phase 12c-ii: summed-score grouped binomial, formula escape-hatch, contrasts.
+##### Phase 12c-ii: summed-score grouped binomial, formula escape-hatch (DONE — 2026-07-13)
+
+- **`tab_reg(trials=)`** (binomial only): a summed-score outcome `0..q` → `glm(cbind(score, trials-score)
+  ~ ., binomial)` (weighted → svyglm quasibinomial), reusing the OR/`or` fmt shape. `NULL` = binary logit,
+  an int / per-dependent named vector, or `TRUE` (observed max). Label `"<dep>: OR"`; `exponentiate=FALSE`
+  → β shape. Parity vs hand `glm(cbind(...))`.
+- **Formula escape-hatch**: `dependent` accepts a model formula (`predictors` now defaults `NULL`; exactly
+  one of the two). `reg_parse_formula()`: a **simple** `y ~ a + b` reduces losslessly to the char path
+  (`identical()`); a **compound** one (interactions / `poly()` / `I()`) is fit verbatim with a best-effort
+  skeleton from the fitted terms (`reg_skeleton_from_fit()`). `reg_build()` refactored fit-all→column-all;
+  `reg_fit()` returns `$fit`.
 
 #### Phase 12d – nominal & ordinal 3+ level outcomes
 
@@ -1564,7 +1576,7 @@ One regression analysis (family / outcome / predictors / `effect` / reference); 
 `or_plot` (OR forest plot, finalfit-style), `lm_plots` (2×2 glm/lm diagnostics), the visible OR-CI bracket, and the OR+ME / OR+PCT composite cell layouts.
 
 
-
+DEUS SUCE MOU
 
 
 ### Phase 13 – Finalise color UI, redesign color palettes with manual fine-tuning for clarity
