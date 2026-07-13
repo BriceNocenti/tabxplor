@@ -131,9 +131,10 @@ test_that("tier-2 test is reused across pct/ref toggles and matches a fresh chi2
   r3 <- jmvtab_build(gss, jmv_opts(row_vars = "marital", col_vars = "race", pct = "row",
                                    ref = "1", chi2 = TRUE), r2$store)
   expect_equal(sum(r3$hits$test), 1)                       # ref change reuses the test
-  # a cached-test run is byte-identical to a fresh chi2 run
+  # a cached-test run is byte-identical to a fresh chi2 run (jmv_opts sets stars = TRUE, so the
+  # expected tab() must too -- stars are opt-in / storage-driven since the bug-fix)
   expect_equal(r3$tabs, tab(gss, marital, race, pct = "row", ref = "1", chi2 = TRUE, ci = "auto",
-                            cleannames = FALSE))
+                            stars = TRUE, cleannames = FALSE))
 })
 
 test_that("contrib coloring does NOT use the tier-2 cache (recomputes per-cell fields)", {

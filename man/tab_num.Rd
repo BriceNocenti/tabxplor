@@ -105,7 +105,7 @@ relative total cell (or relative first cell when \code{ref = "first"}).
 \item{conf_level}{The confidence level for the confidence intervals,
 as a single numeric between 0 and 1. Default to 0.95 (95\%).}
 
-\item{stars}{Logical (default \code{TRUE}, or \code{options("tabxplor.stars")} when \code{NULL}).
+\item{stars}{Logical (opt-in; default \code{FALSE}, or \code{options("tabxplor.stars")} when \code{NULL}).
 With \code{ci = "diff"}, print per-cell Welch t significance stars for the difference from the
 reference row; the mean-diff interval then uses the Welch t quantile (z when \code{FALSE}).}
 

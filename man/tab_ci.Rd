@@ -52,7 +52,7 @@ difference
 \item{visible}{By default confidence intervals are calculated and used to set colors,
 but not printed. Set to \code{TRUE} to print them in the result.}
 
-\item{stars}{Logical (default \code{TRUE}, or \code{options("tabxplor.stars")} when \code{NULL}).
+\item{stars}{Logical (opt-in; default \code{FALSE}, or \code{options("tabxplor.stars")} when \code{NULL}).
 With \code{ci = "diff"}, store and print per-cell significance stars for the difference from
 the reference, read from the same interval that is displayed (universal CI-inclusion), so the
 stars and the bracket never disagree. \code{FALSE} skips the significance computation.}

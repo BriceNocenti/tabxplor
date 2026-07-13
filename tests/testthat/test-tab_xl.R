@@ -74,21 +74,23 @@ testthat::test_that("tab_xl degrades to a plain sheet for a non-tabxplor data.fr
   testthat::expect_true(file.exists(p))
 })
 
-# Phase 10h: significance stars are folded into the Excel numFmt code (0.0%"***"), keeping the cell a
-# real number. Gated by the same option as the text path (getOption("tabxplor.stars")).
+# Phase 10h / bug-fix: significance stars are folded into the Excel numFmt code (0.0%"***"), keeping
+# the cell a real number. STORAGE-driven (like the console): a table built with stars = TRUE carries
+# a per-cell pvalue -> star literals; the opt-out default (stars = FALSE) writes none.
 testthat::test_that("tab_xl folds significance stars into the numFmt code", {
   testthat::skip_if_not_installed("openxlsx2")
   tb <- tab(forcats::gss_cat, marital, race, pct = "row", color = "diff",
-            color_signif = "color_all_signif")
+            color_signif = "color_all_signif", stars = TRUE)
   p  <- withr::local_tempfile(fileext = ".xlsx")
   suppressMessages(tab_xl(tb, path = p, sheets = "unique", replace = TRUE, open = FALSE))
   codes <- openxlsx2::wb_load(p)$styles_mgr$styles$numFmts
   testthat::expect_true(any(grepl("\\*", codes)))                 # a code carries the star literal
 
-  # with stars off, no star literal is written
-  withr::local_options(tabxplor.stars = FALSE)
+  # a table built without stars stores no pvalue -> no star literal
+  tb2 <- tab(forcats::gss_cat, marital, race, pct = "row", color = "diff",
+             color_signif = "color_all_signif", stars = FALSE)
   p2 <- withr::local_tempfile(fileext = ".xlsx")
-  suppressMessages(tab_xl(tb, path = p2, sheets = "unique", replace = TRUE, open = FALSE))
+  suppressMessages(tab_xl(tb2, path = p2, sheets = "unique", replace = TRUE, open = FALSE))
   codes2 <- openxlsx2::wb_load(p2)$styles_mgr$styles$numFmts
   testthat::expect_false(any(grepl("\\*", codes2)))
 })

@@ -1749,6 +1749,10 @@ excel_numfmt_code <- function(digits, pct, ci, text) {
 #' @param na How `NA`s should be printed. Default to `NA`.
 #' @param special_formatting Set to `TRUE` to print more verbose results,
 #' like indicating which is the reference row or col for differences.
+#' @param stars Append significance stars after the value (opt-in; default `FALSE`). Stars appear
+#' only where a per-cell p-value was stored (diff-type CIs / regression coefficients) and are
+#' right-padded so numbers stay aligned. The main display (console, [tab_kable()], [tab_md()]) sets
+#' this `TRUE`; tooltip / secondary-field re-renders leave it `FALSE`, so stars never leak.
 #' @param syntax `"text"` (default) returns the rendered display strings; `"excel"` returns the
 #' per-cell Excel number-format codes used by [tab_xl()] (the raw value is written unchanged).
 #' @param .ref Internal: precomputed reference masks `list(cells=, all_totals=)` (derive-once
@@ -1757,7 +1761,7 @@ excel_numfmt_code <- function(digits, pct, ci, text) {
 #' @return The fmt printed in a character vector.
 #' @export
 format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
-                                special_formatting = FALSE,
+                                special_formatting = FALSE, stars = FALSE,
                                 syntax = c("text", "excel"), .ref = NULL) {
   syntax <- match.arg(syntax)
 
@@ -2049,14 +2053,21 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
     }
   }
 
-  # Phase 3a: append significance stars (universal CI-inclusion) after the cell value, wherever
-  # a per-cell pvalue was stored (diff-type CIs). Single source of truth -> flows to console,
-  # tab_md() and tab_kable(). get_stars() is "" for NA pvalue; gated by the option so a table
-  # built with stars can still be printed without them. See dev/tabxplor_1.4.0_decisions.md §20.
-  if (isTRUE(getOption("tabxplor.stars", TRUE))) {
+  # Phase 3a / bug-fix: append significance stars (universal CI-inclusion) after the cell value,
+  # wherever a per-cell pvalue was stored (diff-type CIs / regression coefficients). OPT-IN: the
+  # `stars` argument (default FALSE) is TRUE only at the MAIN display sites (pillar_shaft, tab_kable,
+  # tab_md) -- so tooltip / character-cast re-renders never leak stars onto secondary fields.
+  # get_stars() is already "" for NA pvalue, so a table built with stars = FALSE shows none anyway.
+  # PADDING: when any value cell is starred, right-pad every value cell's star field to the
+  # column-max star width (stars left, spaces right) so the numbers stay aligned in a monospace font.
+  if (isTRUE(stars)) {
     st  <- get_stars(x)
-    add <- !is.na(out) & nzchar(st)
-    out[add] <- paste0(out[add], st[add])
+    val <- !is.na(out) & nzchar(out)
+    if (any(val & nzchar(st))) {
+      w  <- max(nchar(st[val]))
+      st_pad <- formatC(st, width = -w)          # left-justify glyphs, pad right with spaces
+      out[val] <- paste0(out[val], st_pad[val])
+    }
   }
 
   # Phase 7g: a "blank" cell (n_min mask) renders as a true empty string in every consumer
@@ -2080,7 +2091,8 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
       xc    <- x[cells]
       toks  <- lapply(seq_along(seg$fields), function(i) {
         xi <- if (i == 1L) xc else set_pvalue(xc, NA_real_)   # stars ride the primary token
-        format(set_display(xi, seg$fields[i]), na = na, special_formatting = FALSE)
+        format(set_display(xi, seg$fields[i]), na = na, special_formatting = FALSE,
+               stars = isTRUE(stars) && i == 1L)
       })
       strs <- vector("list", length(seg$pieces)); ti <- 0L
       for (j in seq_along(seg$pieces)) {
@@ -2123,7 +2135,7 @@ pillar_shaft.tabxplor_fmt <- function(x, ..., .ref = NULL) {
 
   # Phase 10c: `.ref` (precomputed reference masks) threads through to the internal format() and
   # the greying `totals` mask below. NULL on the console path (each computed as before).
-  out     <- format(x, special_formatting = TRUE, .ref = .ref)
+  out     <- format(x, special_formatting = TRUE, stars = TRUE, .ref = .ref)
   display <- get_display(x)
   nas     <- is.na(display)
   color   <- get_color(x)
@@ -2476,10 +2488,23 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
   sig_neg[is.na(sig_neg)] <- FALSE
 
   if (policy == "color_all_signif") {
+    # The GUARANTEED (CI-floor) magnitude, on the MEASURE'S OWN scale so fmt_color_slots() folds it
+    # around the right centre. The stored bounds are the shared cell-vs-ref DIFFERENCE CI (centre 0)
+    # for diff/ratio, or the native OR CI (centre 1) for `or`.
     floor_q <- dplyr::case_when(sig_pos ~ get_ci_inf(x),
                                 sig_neg ~ get_ci_sup(x),
                                 TRUE    ~ NA_real_)
-    if (measure == "diff" && is_std_diff && isTRUE(scale$std)) floor_q <- floor_q / sd_ref
+    if (measure == "ratio") {
+      # ratio has no native CI: convert the guaranteed DIFF to a guaranteed RATIO. Since
+      # ratio - 1 = diff / p_ref, (ratio - 1) * (guar_diff / diff) = guar_diff / p_ref, so the
+      # guaranteed ratio is 1 + guar_diff/p_ref = (p_ref + guar_diff)/p_ref (centre 1). Without this
+      # the raw diff bound (~0.05) was folded around 1 -> 1/0.05 -> strongest UNDER colour on every
+      # significant cell, regardless of direction.
+      floor_q <- 1 + (get_ratio(x) - 1) * (floor_q / get_diff(x))
+      floor_q[!is.finite(floor_q)] <- NA_real_
+    } else if (measure == "diff" && is_std_diff && isTRUE(scale$std)) {
+      floor_q <- floor_q / sd_ref
+    }
     score <- floor_q
     gate  <- !is.na(floor_q)
   } else if (policy == "grey_non_signif") {

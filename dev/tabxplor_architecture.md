@@ -299,9 +299,16 @@ engine; the reference (`x_n`, `ref`, `ref_n`) is the **weighted estimate + unwei
 
 **Significance = universal CI-inclusion**: the stored `pvalue` is the inversion p of the *same*
 interval that draws the bracket, so `get_stars()` (`*`/`**`/`***` from `options("tabxplor.signif_levels")`)
-can never disagree with the bracket. `stars` arg (default `TRUE`, `ci="diff"` only; `ci="cell"` →
-`pvalue = NA`). Kish `n_eff` opt-in for numeric CIs via `options("tabxplor.kish_neff")` (needs the
-`Σw²` accumulator, added to the numeric scan only when opted in).
+can never disagree with the bracket. Stars are **opt-in** (STORAGE-driven): `stars` arg default
+`FALSE` (option `tabxplor.stars` = `FALSE`), `ci="diff"` only — a plain `tab()` stores no `pvalue`
+(so `get_stars()` is `""`); `tab_reg()` sets `stars = TRUE` itself. Display is a separate opt-in:
+`format(x, stars = FALSE)` by default — the MAIN display sites (`pillar_shaft`, `tab_kable`, `tab_md`,
+and the `tab_xl` numFmt fold) pass `stars = TRUE`, while tooltip / character-cast re-renders keep the
+default `FALSE`, so stars never leak onto secondary fields. When shown, `format()` **right-pads** each
+value cell's star field to the column-max width so numbers stay aligned. `pvalue` feeds ONLY the stars
+(colour significance reads the bounds), so not storing it when stars are off changes nothing else.
+Kish `n_eff` opt-in for numeric CIs via `options("tabxplor.kish_neff")` (needs the `Σw²` accumulator,
+added to the numeric scan only when opted in).
 
 Accessors: `get_ci()` = upper arm (`ci_sup − ci_center`, retro-compatible with the `$ci` field extraction);
 `get_ci_moe()` = larger arm for the `± moe` display; `fmt(ci=)` stores absolute symmetric bounds
@@ -355,7 +362,7 @@ Breaks live in `options("tabxplor.color_breaks")` as a **named list of five posi
 Coloring is decomposed into three orthogonal per-column choices: **measure** (`diff`/`ratio`/`contrib`/`or`, in the `color` attribute `[1]` = text, `[2]` = background), **channel** (text vs background), and **significance policy** (the `color_signif` attribute: `ignore`/`grey_non_signif`/`color_all_signif`). All feed one engine in `R/fmt_class.R`:
 
 1. `fmt_color_plan(x, channel, color, signif)` builds a plan: it decodes the measure+policy (`color_measure_policy()`), picks the scale for the measure×column-type, computes the per-cell `score` (e.g. `get_diff`; standardized `get_diff / sqrt(get_ref_var)` for numeric diff; `get_ratio`; `get_ctr / get_mean_contrib`), the significance `gate` (from the stored `get_ci_inf`/`get_ci_sup` bounds), and the `pos_slots`/`neg_slots` maps (`build_slots()`/`color_slot_table()`).
-2. `fmt_color_slots(x, plan)` folds `score` to a magnitude around `center`, then `findInterval(mag, pos_breaks)` → level → palette slot (0 = uncolored, 1..10 = grid, 11 = the legacy ×2 override), zeroing ungated cells. This C-level path replaced the old per-cell `keep_last_break` reduce (48–1290× faster).
+2. `fmt_color_slots(x, plan)` folds `score` to a magnitude around `center`, then `findInterval(mag, pos_breaks)` → level → palette slot (0 = uncolored, 1..10 = grid, 11 = the legacy ×2 override), zeroing ungated cells. This C-level path replaced the old per-cell `keep_last_break` reduce (48–1290× faster). **`color_all_signif` computes `score` = the guaranteed (CI-floor) magnitude ON THE MEASURE'S OWN SCALE** so the fold's `center` matches: for `diff` the floor is the stored difference bound (centre 0); for `or` the native OR bound (centre 1); for `ratio` — which has no native CI — the shared diff floor is converted to a guaranteed ratio `1 + (get_ratio - 1) * (guar_diff / get_diff)` (centre 1). Feeding the raw diff bound into a centre-1 fold was the "ratio floods /4" bug.
 3. `fmt_color_channels(x)` → `list(text_slot, bg_slot)`.
 
 Every consumer maps `(text_slot, bg_slot)` to colour the same way: `pillar_shaft.tabxplor_fmt()` (console, the reference two-channel consumer), `fmt_get_color_code()` (single-channel, the golden), the shared `fmt_channel_codes()` helper (text + bg hex, used by `tab_kable`/`tab_plot`/`tab_xl`), and `tab_color_legend()` (which reads the same scales, so legend and cells never disagree). The old combined strings (`"diff_ci"`/`"after_ci"`/`"ci"`) are decoded to (measure, policy) by `color_measure_policy()`.

@@ -13,6 +13,7 @@ multi_logit(
   conf_level = 0.95,
   method = c("wald", "profile"),
   color_signif = c("grey_non_signif", "ignore", "color_all_signif"),
+  stars = TRUE,
   cleannames = NULL,
   subtext = ""
 )
@@ -40,6 +41,9 @@ the likelihood-ratio test: more accurate near separation, unweighted binomial/po
 
 \item{color_signif}{How significance drives the colours. \code{"grey_non_signif"} (default) colours
 only odds ratios whose confidence interval excludes 1 and greys the rest.}
+
+\item{stars}{Logical (default \code{TRUE} for regression tables, where significance stars are standard).
+When \code{FALSE}, the per-cell p-value is dropped and no stars are shown (colours still read the CI).}
 
 \item{cleannames}{Logical. If \code{TRUE}, strips numeric prefixes from factor levels for display.
 Uses \code{getOption("tabxplor.cleannames")} when \code{NULL}.}

@@ -91,8 +91,9 @@ testthat::test_that("stars ride the PRIMARY token, not the secondary (not double
   x <- fmt(n = c(100L, 100L), type = "row", pct = c(0.4, 0.6),
            diff = c(0.1, -0.1), ci_inf = c(0.02, -0.2), ci_sup = c(0.18, -0.02),
            pvalue = c(0.0005, 0.03), ci_type = "diff", display = "pct")
-  plain <- format(x)                              # "40%***", "60%*" (stars on the pct primary)
-  comp  <- format(set_display(x, "{pct} ({n})"))  # "40%*** (100)", "60%* (100)"
+  # stars are opt-in in format(): request them explicitly (they show at the main display).
+  plain <- format(x, stars = TRUE)                            # "40%***", "60%*"
+  comp  <- format(set_display(x, "{pct} ({n})"), stars = TRUE)  # "40%*** (100)", "60%* (100)"
   testthat::expect_identical(stringr::str_count(plain, "\\*"),
                              stringr::str_count(comp,  "\\*"))   # same star count -> not doubled
   testthat::expect_true(any(stringr::str_count(plain, "\\*") > 0))  # the test is meaningful

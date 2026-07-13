@@ -210,8 +210,8 @@ default the interval is printed in the \verb{[inf;sup]} form; set
 \item{conf_level}{The confidence level, as a single numeric between 0 and 1.
 Default to 0.95 (95\%).}
 
-\item{stars}{Logical. When \code{TRUE} (the default) and \code{ci = "diff"}, each cell shows
-significance stars for the difference from its reference (\code{*} p<0.10, \code{**} p<0.05,
+\item{stars}{Logical. When \code{TRUE} (opt-in; default \code{FALSE}) and \code{ci = "diff"}, each
+cell shows significance stars for the difference from its reference (\code{*} p<0.10, \code{**} p<0.05,
 \code{***} p<0.01, customisable via \code{options("tabxplor.signif_levels")} /
 \code{"tabxplor.signif_labels"}). Significance is read from the same interval that is displayed
 (universal CI-inclusion), so stars and bracket never disagree. \code{FALSE} skips the

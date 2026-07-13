@@ -216,9 +216,10 @@ NULL
 #'  Set `options("tabxplor.ci_print" = "moe")` to print `pct +- moe` instead.
 #' @param conf_level The confidence level, as a single numeric between 0 and 1.
 #' Default to 0.95 (95%).
-#' @param stars Logical (default \code{TRUE}). With \code{ci = "diff"}, print significance stars
-#' for each cell's difference from its reference, read from the displayed interval itself
-#' (universal CI-inclusion). \code{NULL} uses `options("tabxplor.stars")`. See \code{\link{tab_many}}.
+#' @param stars Logical (default \code{FALSE} \emph{opt-in}). With \code{ci = "diff"}, print
+#' significance stars for each cell's difference from its reference, read from the displayed interval
+#' itself (universal CI-inclusion). \code{NULL} uses `options("tabxplor.stars")` (default
+#' \code{FALSE}). See \code{\link{tab_many}}.
 #' @param method_cell,method_diff Character strings choosing the confidence-interval method for
 #' \code{ci = "cell"} (\code{"wilson"} default, or \code{"wald"}) / \code{ci = "diff"}
 #' (\code{"newcombe"} default, \code{"ac"} or \code{"wald"}). See \code{\link{tab_many}}.
@@ -850,8 +851,8 @@ finalize_one_col <- function(col, spec) {
 #'  `options("tabxplor.ci_print" = "moe")` to print `pct +- moe` instead.
 #' @param conf_level The confidence level, as a single numeric between 0 and 1.
 #' Default to 0.95 (95%).
-#' @param stars Logical. When \code{TRUE} (the default) and \code{ci = "diff"}, each cell shows
-#' significance stars for the difference from its reference (\code{*} p<0.10, \code{**} p<0.05,
+#' @param stars Logical. When \code{TRUE} (opt-in; default \code{FALSE}) and \code{ci = "diff"}, each
+#' cell shows significance stars for the difference from its reference (\code{*} p<0.10, \code{**} p<0.05,
 #' \code{***} p<0.01, customisable via `options("tabxplor.signif_levels")` /
 #' `"tabxplor.signif_labels"`). Significance is read from the same interval that is displayed
 #' (universal CI-inclusion), so stars and bracket never disagree. \code{FALSE} skips the
@@ -1192,7 +1193,7 @@ tab_setup <- function(ctx) {
     if (is.null(cleannames)) { getOption("tabxplor.cleannames") } else {cleannames}
 
   # Phase 3a: significance stars default (universal CI-inclusion). NULL -> option default.
-  stars <- if (is.null(stars)) getOption("tabxplor.stars", TRUE) else stars
+  stars <- if (is.null(stars)) getOption("tabxplor.stars", FALSE) else stars
 
   # pvalue_line <-
   #   if (is.null(pvalue_line)) { getOption("tabxplor.pvalue_lines") } else {pvalue_line}
@@ -3697,7 +3698,7 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, OR, color, pct,
 #'   }
 #' @param conf_level The confidence level for the confidence intervals,
 #'  as a single numeric between 0 and 1. Default to 0.95 (95%).
-#' @param stars Logical (default \code{TRUE}, or `options("tabxplor.stars")` when \code{NULL}).
+#' @param stars Logical (opt-in; default \code{FALSE}, or `options("tabxplor.stars")` when \code{NULL}).
 #' With \code{ci = "diff"}, print per-cell Welch t significance stars for the difference from the
 #' reference row; the mean-diff interval then uses the Welch t quantile (z when \code{FALSE}).
 #' @param num Set to \code{TRUE} to obtain a table with normal numeric vectors (not `fmt`).
@@ -4217,7 +4218,7 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
     # the Welch-t inversion p (universal CI-inclusion) -- NA for cell CIs and when stars are
     # opted out (one interval eval). See dev/tabxplor_1.4.0_decisions.md §20.
     if (ci %in% c("cell", "diff")) {
-      stars_on <- if (is.null(stars)) getOption("tabxplor.stars", TRUE) else stars
+      stars_on <- if (is.null(stars)) getOption("tabxplor.stars", FALSE) else stars
       want_p   <- isTRUE(stars_on) && ci == "diff"
       cvs      <- as.character(col_vars)
 
@@ -5183,7 +5184,7 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
 #'  \code{\link{tab_num}} or \code{\link{tab_chi2}} with rows, or \code{\link{tab_ci}}.
 #' @param conf_level The confidence level, as a single numeric between 0 and 1.
 #' Default to 0.95 (95%).
-#' @param stars Logical (default \code{TRUE}, or `options("tabxplor.stars")` when \code{NULL}).
+#' @param stars Logical (opt-in; default \code{FALSE}, or `options("tabxplor.stars")` when \code{NULL}).
 #' With \code{ci = "diff"}, store and print per-cell significance stars for the difference from
 #' the reference, read from the same interval that is displayed (universal CI-inclusion), so the
 #' stars and the bracket never disagree. \code{FALSE} skips the significance computation.
@@ -5260,7 +5261,7 @@ tab_ci <- function(tabs,
             all(method_diff %in% c("newcombe", "ac", "wald"))
   )
   # Phase 3a: significance stars default (universal CI-inclusion). NULL -> option default.
-  stars <- if (is.null(stars)) getOption("tabxplor.stars", TRUE) else stars
+  stars <- if (is.null(stars)) getOption("tabxplor.stars", FALSE) else stars
 
   subtext <- get_subtext(tabs)
   chi2    <- get_chi2(tabs)

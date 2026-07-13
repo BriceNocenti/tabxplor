@@ -462,8 +462,9 @@ test_that("binomial AME: diff/pct/CI/p match marginaleffects; AME-first composed
   expect_true(is.na(get_diff(col)[ref]))                # the reference level has no marginal effect
   expect_true(is.na(get_pvalue(col)[ref]))
 
-  # rendered cell: AME first (a "-" here), stars on the AME, adjusted prediction in parentheses
-  txt <- format(col, special_formatting = TRUE)
+  # rendered cell: AME first (a "-" here), stars on the AME, adjusted prediction in parentheses.
+  # stars are opt-in in format() (they show at the MAIN display; tab_reg stores the pvalue by default).
+  txt <- format(col, special_formatting = TRUE, stars = TRUE)
   expect_match(trimws(txt[blk]), "^-[0-9.]+%\\*+ \\([0-9.]+%\\)$")
   expect_match(trimws(txt[ref]), "^\\([0-9.]+%\\)$")
 })

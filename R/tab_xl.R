@@ -241,8 +241,7 @@ tab_xl <-
       text_size_headers = text_size_headers,
       text_size_subtext = text_size_subtext,
       text_pal          = get_color_style("color_code", theme = theme, type = color_type),
-      bg_pal            = get_color_style("color_code", theme = theme, type = "bg"),
-      stars_on          = isTRUE(getOption("tabxplor.stars", TRUE))
+      bg_pal            = get_color_style("color_code", theme = theme, type = "bg")
     )
 
     # === Per-table plans (pure: raw values + numFmt codes + colour slots + font plan + geometry) ===
@@ -324,15 +323,20 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, start, sheet, title, sub
   start_col_var <- which(cv_names != "" & cv_names != dplyr::lag(cv_names, default = NA_character_))
 
   # Number formats: format(syntax = "excel") is the single display source of truth. Fold significance
-  # stars into the numFmt literal (0.0%"***") when stars are on, keeping the cell a real number; a
-  # "TEXT"-coded cell (ci display) maps to Excel's "@" text format; NA codes stay General.
+  # stars into the numFmt literal (0.0%"***"), keeping the cell a real number; a "TEXT"-coded cell
+  # (ci display) maps to Excel's "@" text format; NA codes stay General. Stars are STORAGE-driven
+  # (get_stars() is "" when no pvalue was stored -> a plain tab() shows none, tab_reg() shows them) --
+  # so this matches the console. When any cell is starred, pad EVERY value cell's star literal to the
+  # column-max width (spaces for non-starred cells) so the numbers stay aligned in the column.
   numfmt <- if (length(fmt_cols)) purrr::map_dfr(fmt_cols, function(ci) {
     col  <- tab[[ci]]
     code <- format(col, syntax = "excel")
-    if (o$stars_on) {
-      st   <- get_stars(col)
-      fold <- !is.na(code) & code != "TEXT" & nzchar(st)
-      code[fold] <- paste0(code[fold], '"', st[fold], '"')
+    st   <- get_stars(col)
+    val  <- !is.na(code) & code != "TEXT"
+    if (any(val & nzchar(st))) {
+      w      <- max(nchar(st[val & nzchar(st)]))
+      st_pad <- formatC(st, width = -w)                 # glyphs left, spaces right ("" -> w spaces)
+      code[val] <- paste0(code[val], '"', st_pad[val], '"')
     }
     code[!is.na(code) & code == "TEXT"] <- "@"
     tibble::tibble(col = as.integer(ci), row = seq_along(code) + data_row0, code = code)

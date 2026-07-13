@@ -233,9 +233,12 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   # format() does not re-run get_reference() -- byte-identical (Phase 10c subset-equivalence).
   cell_data <- purrr::imap(tabs, \(col, nm) {
     if (is_fmt(col)) {
-      out <- format(col, special_formatting = special_formatting, na = "",
+      # stars = TRUE: main display. When a column carries significance stars, format() right-pads the
+      # star field so numbers stay aligned; trim ONLY the leading side to preserve that trailing pad
+      # (byte-identical when no star is present -- format() emits no trailing space otherwise).
+      out <- format(col, special_formatting = special_formatting, na = "", stars = TRUE,
                     .ref = ann_ref(rd$ann[[nm]])) |>
-        stringr::str_trim()
+        stringr::str_trim(side = "left")
       out[is.na(out)] <- ""
       out
     } else if (is.factor(col)) {

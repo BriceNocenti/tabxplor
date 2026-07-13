@@ -234,6 +234,13 @@
   gain (~1.05–1.30× at 15M rows, more at larger N / sparser data).
 
 ## Changes that may affect existing code
+* **Significance stars are now opt-in (off by default).** A plain `tab()` no longer prints `*`/`**`/`***`
+  after the cells: pass `stars = TRUE` (or set `options(tabxplor.stars = TRUE)`) to get them. Regression
+  tables from `tab_reg()`/`tab_logit()`/`multi_logit()` still show stars by default (pass
+  `stars = FALSE` to turn them off). When shown, stars are **right-padded** so the numbers stay aligned
+  in a monospace font, and they no longer leak into `tab_kable()` tooltips (only the primary value is
+  starred). A table built without stars stores no per-cell `pvalue` (`$pvalue` is `NA`); the colour
+  significance policies (`color_signif`) are unaffected — they read the confidence bounds, not the stars.
 * **The unweighted-count `add_n` and the `add_pct` distribution are now display-time additions.** With
   `add_n = TRUE` (the default), the base count no longer sits in a separate `n` column of the built
   table: on the console, `tab_kable()` and `tab_md()` it now appears **inside the Total cell** as
@@ -271,6 +278,11 @@
   export to Excel, install `openxlsx2`. The produced workbooks look essentially the same.
 
 ## Bug corrections
+* **`color_signif = "color_all_signif"` on a ratio (or two-channel `color = c("diff", "ratio")`) table
+  no longer mis-colours.** The "guaranteed effect" colouring fed the difference confidence bound into
+  the ratio (multiplicative) scale, so nearly every significant cell — including over-represented ones
+  — got the strongest *under-represented* colour. It now colours the guaranteed **ratio**, so the
+  colour direction always matches the cell (over-represented → over-colour, under → under-colour).
 * `tab()` with two or more row variables AND two or more column variables no longer errors ("pct can't be recycled"); percentages are recycled correctly across the table.
 * A reference level whose label contains regular-expression characters (e.g. `"$25000 or more"`) is
   now matched exactly, so it correctly selects its row/column (it was silently ignored before). A

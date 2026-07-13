@@ -84,7 +84,7 @@ render_kableExtra_engine <- function(rd, meta, subtext, caption, tooltips, popov
   out <- tabs %>%
     dplyr::mutate(dplyr::across(
       where(is_fmt),
-      ~ format(., html = TRUE, special_formatting = TRUE, na = "",
+      ~ format(., html = TRUE, special_formatting = TRUE, na = "", stars = TRUE,
                .ref = ann_ref(rd$ann[[dplyr::cur_column()]])) %>%
         kableExtra::cell_spec(
           bold       = color_bold[[dplyr::cur_column()]],
@@ -182,7 +182,8 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
   # (a) format every column once -> list of chr[n_row] (reuse .ref via the prep's ann)
   cells <- purrr::imap(tab, function(col, name) {
     if (is_fmt(col)) {
-      format(col, html = TRUE, special_formatting = TRUE, na = "", .ref = ann_ref(ann[[name]]))
+      format(col, html = TRUE, special_formatting = TRUE, na = "", stars = TRUE,
+             .ref = ann_ref(ann[[name]]))
     } else {
       as.character(col)
     }

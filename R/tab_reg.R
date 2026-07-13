@@ -990,6 +990,8 @@ reg_build <- function(data, specs, union_predictors, family, wt, do_exp, effect_
 #' @param color,color_signif How the effect measure is coloured (`NULL` uses the per-family default:
 #'   `"OR"` magnitude for ratios, standardized `"diff"` for betas; significance policy
 #'   `"grey_non_signif"`). See [tab()].
+#' @param stars Logical (default `TRUE` for regression tables, where significance stars are standard).
+#'   When `FALSE`, the per-cell p-value is dropped and no stars are shown (colours still read the CI).
 #' @param cleannames Logical. If `TRUE`, strips numeric prefixes from factor levels for display.
 #'   Uses `getOption("tabxplor.cleannames")` when `NULL`.
 #' @param subtext Optional character. A note shown below the table.
@@ -1028,7 +1030,7 @@ tab_reg <- function(data, dependent, predictors = NULL,
                     effect = c("coefficient", "ame"), at = c("average", "reference"),
                     trials = NULL, conf_level = 0.95, method = c("wald", "profile"),
                     reference = NULL, inverse_two_level_factors = TRUE,
-                    color = NULL, color_signif = NULL,
+                    color = NULL, color_signif = NULL, stars = TRUE,
                     cleannames = NULL, subtext = "") {
   method <- match.arg(method)
   effect <- match.arg(effect)
@@ -1167,9 +1169,19 @@ tab_reg <- function(data, dependent, predictors = NULL,
   if (!is.null(note)) subtext <- if (nzchar(subtext)) paste0(subtext, " ", note) else note
 
   reg_check_deps(family, wt, needs_marginaleffects = effect == "ame" || mnl_vsrest)
-  reg_build(data, specs, union_predictors, family, wt, do_exp, effect_shape,
-            inverse_two_level_factors, conf_level, method, color, color_signif,
-            cleannames, subtext, eff_word, effect, at)
+  res <- reg_build(data, specs, union_predictors, family, wt, do_exp, effect_shape,
+                   inverse_two_level_factors, conf_level, method, color, color_signif,
+                   cleannames, subtext, eff_word, effect, at)
+
+  # stars = TRUE (default) for regression tables -- the per-cell pvalue is stored by reg_build so the
+  # main display shows significance stars. stars = FALSE strips it (pvalue is stars-only; colours read
+  # the CI bounds), so the table renders without stars.
+  if (!isTRUE(stars)) {
+    for (nm in names(res)[vapply(res, is_fmt, logical(1))]) {
+      res[[nm]] <- set_pvalue(res[[nm]], NA_real_)
+    }
+  }
+  res
 }
 
 
@@ -1201,14 +1213,14 @@ tab_logit <- function(data, dependent, predictors, wt = NULL,
                       conf_level = 0.95,
                       method = c("wald", "profile"),
                       color_signif = c("grey_non_signif", "ignore", "color_all_signif"),
-                      cleannames = NULL, subtext = "") {
+                      stars = TRUE, cleannames = NULL, subtext = "") {
   method       <- match.arg(method)
   color_signif <- match.arg(color_signif)
   stopifnot(is.character(predictors), length(predictors) >= 1L)
   tab_reg(data, dependent = dependent, predictors = predictors, family = "binomial", wt = wt,
           conf_level = conf_level, method = method,
           inverse_two_level_factors = inverse_two_level_factors,
-          color_signif = color_signif, cleannames = cleannames, subtext = subtext)
+          color_signif = color_signif, stars = stars, cleannames = cleannames, subtext = subtext)
 }
 
 
@@ -1241,12 +1253,12 @@ multi_logit <- function(data, dependent, models, wt = NULL,
                         conf_level = 0.95,
                         method = c("wald", "profile"),
                         color_signif = c("grey_non_signif", "ignore", "color_all_signif"),
-                        cleannames = NULL, subtext = "") {
+                        stars = TRUE, cleannames = NULL, subtext = "") {
   method       <- match.arg(method)
   color_signif <- match.arg(color_signif)
   stopifnot(is.character(dependent), length(dependent) == 1L, is.list(models), length(models) >= 1L)
   tab_reg(data, dependent = dependent, predictors = models, family = "binomial", wt = wt,
           conf_level = conf_level, method = method,
           inverse_two_level_factors = inverse_two_level_factors,
-          color_signif = color_signif, cleannames = cleannames, subtext = subtext)
+          color_signif = color_signif, stars = stars, cleannames = cleannames, subtext = subtext)
 }

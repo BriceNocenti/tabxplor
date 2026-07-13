@@ -20,6 +20,7 @@ tab_reg(
   inverse_two_level_factors = TRUE,
   color = NULL,
   color_signif = NULL,
+  stars = TRUE,
   cleannames = NULL,
   subtext = ""
 )
@@ -91,6 +92,9 @@ level of a 2-level factor dependent (e.g. \code{"1-Married"} before \code{"2-Not
 \item{color, color_signif}{How the effect measure is coloured (\code{NULL} uses the per-family default:
 \code{"OR"} magnitude for ratios, standardized \code{"diff"} for betas; significance policy
 \code{"grey_non_signif"}). See \code{\link[=tab]{tab()}}.}
+
+\item{stars}{Logical (default \code{TRUE} for regression tables, where significance stars are standard).
+When \code{FALSE}, the per-cell p-value is dropped and no stars are shown (colours still read the CI).}
 
 \item{cleannames}{Logical. If \code{TRUE}, strips numeric prefixes from factor levels for display.
 Uses \code{getOption("tabxplor.cleannames")} when \code{NULL}.}

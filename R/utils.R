@@ -74,9 +74,10 @@ NULL
 
   options("tabxplor.ci_print" = "ci") # or "moe"
 
-  # Phase 3a significance stars (universal CI-inclusion). `stars` default, and the star
-  # thresholds/labels read by get_stars(). Thresholds are nested p-value cutoffs.
-  options("tabxplor.stars"         = TRUE)
+  # Phase 3a significance stars (universal CI-inclusion). `stars` default (OPT-IN: FALSE, so a plain
+  # tab() stores no per-cell pvalue and shows no stars; tab_reg() sets stars = TRUE itself), and the
+  # star thresholds/labels read by get_stars(). Thresholds are nested p-value cutoffs.
+  options("tabxplor.stars"         = FALSE)
   options("tabxplor.signif_levels" = c(0.10, 0.05, 0.01))
   options("tabxplor.signif_labels" = c("*", "**", "***"))
 

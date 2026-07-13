@@ -206,9 +206,10 @@ Set \code{options("tabxplor.ci_print" = "moe")} to print \code{pct +- moe} inste
 \item{conf_level}{The confidence level, as a single numeric between 0 and 1.
 Default to 0.95 (95\%).}
 
-\item{stars}{Logical (default \code{TRUE}). With \code{ci = "diff"}, print significance stars
-for each cell's difference from its reference, read from the displayed interval itself
-(universal CI-inclusion). \code{NULL} uses \code{options("tabxplor.stars")}. See \code{\link{tab_many}}.}
+\item{stars}{Logical (default \code{FALSE} \emph{opt-in}). With \code{ci = "diff"}, print
+significance stars for each cell's difference from its reference, read from the displayed interval
+itself (universal CI-inclusion). \code{NULL} uses \code{options("tabxplor.stars")} (default
+\code{FALSE}). See \code{\link{tab_many}}.}
 
 \item{method_cell, method_diff}{Character strings choosing the confidence-interval method for
 \code{ci = "cell"} (\code{"wilson"} default, or \code{"wald"}) / \code{ci = "diff"}

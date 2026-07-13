@@ -94,3 +94,52 @@ testthat::test_that("engine: no color mode -> NULL plan -> all slot 0", {
   testthat::expect_null(fmt_color_plan(col, "text"))
   testthat::expect_equal(fmt_color_slots(col, NULL), rep(0L, 3))
 })
+
+# --- Bug-fix: color_all_signif on the RATIO channel uses a GUARANTEED RATIO, not the raw diff bound.
+# Before the fix the branch fed get_ci_inf/get_ci_sup (a DIFFERENCE, centre 0) straight into the
+# ratio fold (centre 1): a bound of ~0.05 folded to 1/0.05 -> strongest UNDER colour on every
+# significant cell regardless of direction (over-represented cells wrongly got the /4 colour).
+testthat::test_that("color_all_signif ratio channel colours the guaranteed RATIO (Bug 2)", {
+  p_ref  <- c(0.2, 0.6, 0.7, 0.5)
+  pct    <- c(0.6, 0.66, 0.1, 0.52)
+  diff   <- pct - p_ref
+  ratio  <- pct / p_ref
+  ci_inf <- c(0.30, 0.01, -0.70, -0.05)   # cell1/2 sig over, cell3 sig under, cell4 spans 0
+  ci_sup <- c(0.50, 0.11, -0.50,  0.09)
+  col <- fmt(n = rep(100L, 4), type = "row", pct = pct, diff = diff, ratio = ratio,
+             ci_inf = ci_inf, ci_sup = ci_sup, ci_type = "diff")
+  col <- set_color(col, c("diff", "ratio"))
+  col <- set_color_signif(col, "color_all_signif")
+
+  plan      <- fmt_color_plan(col, "bg", color = "ratio")
+  guar_diff <- dplyr::case_when(ci_inf > 0 ~ ci_inf, ci_sup < 0 ~ ci_sup, TRUE ~ NA_real_)
+  expected  <- 1 + (ratio - 1) * (guar_diff / diff)          # centre-1 guaranteed ratio
+  testthat::expect_equal(plan$score, expected)
+  testthat::expect_false(isTRUE(all.equal(plan$score[1], ci_inf[1])))  # NOT the raw diff bound
+  testthat::expect_gt(plan$score[1], 1)                      # over-rep guaranteed ratio > 1
+  testthat::expect_lt(plan$score[3], 1)                      # under-rep guaranteed ratio < 1
+
+  slot <- fmt_color_slots(col, plan)
+  bs   <- build_slots(length(plan$pos_breaks), "bg")
+  pos  <- bs$pos_slots[-1]; neg <- bs$neg_slots[-1]
+  testthat::expect_false(slot[1] %in% neg)                   # over-rep NEVER an under-colour (the bug)
+  testthat::expect_true(slot[1] %in% pos)                    # strong guaranteed over-ratio -> over
+  testthat::expect_false(slot[3] %in% pos)                   # under-rep never an over-colour
+  testthat::expect_equal(slot[4], 0L)                        # not significant -> uncoloured
+})
+
+testthat::test_that("grey_non_signif ratio channel still colours the OBSERVED ratio (regression)", {
+  p_ref  <- c(0.2, 0.5); pct <- c(0.6, 0.52)
+  diff   <- pct - p_ref; ratio <- pct / p_ref
+  ci_inf <- c(0.30, -0.05); ci_sup <- c(0.50, 0.09)          # cell1 sig over, cell2 not sig
+  col <- fmt(n = rep(100L, 2), type = "row", pct = pct, diff = diff, ratio = ratio,
+             ci_inf = ci_inf, ci_sup = ci_sup, ci_type = "diff")
+  col <- set_color(col, c("diff", "ratio"))
+  col <- set_color_signif(col, "grey_non_signif")
+  plan <- fmt_color_plan(col, "bg", color = "ratio")
+  testthat::expect_equal(plan$score, ratio)                  # observed ratio, not a floor
+  slot <- fmt_color_slots(col, plan)
+  bs   <- build_slots(length(plan$pos_breaks), "bg")
+  testthat::expect_true(slot[1] %in% bs$pos_slots[-1])       # ratio 3 (>=2) significant -> over colour
+  testthat::expect_equal(slot[2], 0L)                        # not significant -> greyed
+})

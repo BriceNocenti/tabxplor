@@ -33,6 +33,10 @@ read from the Phase-3a stored bounds `get_ci_inf`/`get_ci_sup` (never re-derived
 - **Add/rename a measure**: `color_measure_policy()` (decode string → measure + policy), then the
   `switch(measure, …)` blocks in `fmt_color_plan()` (scale selection, `raw` per-cell quantity,
   `color_all_signif` floor). Numeric standardized diff divides by `sqrt(get_ref_var(x))`.
+  **`color_all_signif` floor MUST be on the measure's own scale** (the fold's `center`): `diff` → the
+  stored diff bound (centre 0); `or` → the native OR bound (centre 1); `ratio` (no native CI) → convert
+  the shared diff floor `1 + (get_ratio − 1)·(guar_diff/get_diff)` (centre 1). Feeding a diff bound
+  (~0.05) into a centre-1 fold gives `1/0.05` → max under-colour on every cell (the ratio-flood bug).
 - **slot lookup**: `color_slot_table(L, channel)` / `build_slots(K, channel)` map level → palette
   slot (text vs bg families spread intensities differently). No hand-tuned hex-sniff anymore.
 - **Every consumer maps `(text_slot, bg_slot)` → colour the same way**: console `pillar_shaft`

@@ -10,6 +10,7 @@
   html = FALSE,
   na = NA,
   special_formatting = FALSE,
+  stars = FALSE,
   syntax = c("text", "excel"),
   .ref = NULL
 )
@@ -25,6 +26,11 @@
 
 \item{special_formatting}{Set to \code{TRUE} to print more verbose results,
 like indicating which is the reference row or col for differences.}
+
+\item{stars}{Append significance stars after the value (opt-in; default \code{FALSE}). Stars appear
+only where a per-cell p-value was stored (diff-type CIs / regression coefficients) and are
+right-padded so numbers stay aligned. The main display (console, \code{\link[=tab_kable]{tab_kable()}}, \code{\link[=tab_md]{tab_md()}}) sets
+this \code{TRUE}; tooltip / secondary-field re-renders leave it \code{FALSE}, so stars never leak.}
 
 \item{syntax}{\code{"text"} (default) returns the rendered display strings; \code{"excel"} returns the
 per-cell Excel number-format codes used by \code{\link[=tab_xl]{tab_xl()}} (the raw value is written unchanged).}
