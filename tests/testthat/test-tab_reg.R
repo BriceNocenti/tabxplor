@@ -418,3 +418,164 @@ test_that("multinomial + ordinal tab_reg output exports without error", {
   expect_no_error(tab_kable(ord))
   expect_no_error(tab_md(ord))
 })
+
+# ---- effect = "ame": average marginal effects + adjusted predictions (Phase 12e-i) ----------
+# Parity is checked against marginaleffects run on the SAME model tab_reg fits (binomial: fct_rev to
+# model the positive level; factor predictors fct_drop'd), aligning the AME by the "Level - Reference"
+# contrast label. The composed cell is AME-first ("-8%*** (16%)") with the prediction in parentheses.
+
+test_that("binomial AME: diff/pct/CI/p match marginaleffects; AME-first composed cell", {
+  skip_if_not_installed("broom")
+  skip_if_not_installed("marginaleffects")
+  d   <- reg_data()
+  t1  <- tab_reg(d, "married", c("race", "age"), family = "binomial", effect = "ame",
+                 cleannames = FALSE)
+  col <- t1[["Married: AME"]]
+
+  expect_identical(get_type(col), "row")
+  expect_identical(get_ci_type(col), "diff")
+  expect_identical(get_color(col), "diff")
+
+  dm <- d |> dplyr::filter(!is.na(married), !is.na(race), !is.na(age))
+  dm$race    <- forcats::fct_drop(dm$race)
+  dm$married <- forcats::fct_rev(forcats::fct_drop(factor(dm$married)))     # glm models P(Married)
+  g   <- stats::glm(married ~ race + age, data = dm, family = stats::binomial())
+  acr <- as.data.frame(marginaleffects::avg_comparisons(g, variables = "race", newdata = dm))
+  aca <- as.data.frame(marginaleffects::avg_comparisons(g, variables = "age",  newdata = dm))
+  ap  <- as.data.frame(marginaleffects::avg_predictions(g, by = "race", newdata = dm))
+
+  keep <- !is.na(get_diff(col))
+  expect_equal(sort(get_diff(col)[keep]),   sort(c(acr$estimate, aca$estimate)),   tolerance = 1e-6)
+  expect_equal(sort(get_ci_inf(col)[keep]), sort(c(acr$conf.low, aca$conf.low)),   tolerance = 1e-6)
+  expect_equal(sort(get_ci_sup(col)[keep]), sort(c(acr$conf.high, aca$conf.high)), tolerance = 1e-6)
+  expect_equal(sort(get_pvalue(col)[keep]), sort(c(acr$p.value, aca$p.value)),     tolerance = 1e-6)
+  expect_equal(sort(get_pct(col)[!is.na(get_pct(col))]), sort(ap$estimate),        tolerance = 1e-6)
+
+  # displays: reference level -> prediction only; non-ref factor -> composite AME-first; numeric -> AME
+  disp   <- get_display(col)
+  ref    <- which(as.character(t1$levels) == "Other" & as.character(t1$var) == "race")
+  blk    <- which(as.character(t1$var) == "race" & as.character(t1$levels) == "Black")
+  agerow <- which(as.character(t1$var) == "age")
+  expect_identical(disp[ref],    "({pct})")
+  expect_identical(disp[blk],    "{diff} ({pct})")
+  expect_identical(disp[agerow], "diff")
+  expect_true(is.na(get_diff(col)[ref]))                # the reference level has no marginal effect
+  expect_true(is.na(get_pvalue(col)[ref]))
+
+  # rendered cell: AME first (a "-" here), stars on the AME, adjusted prediction in parentheses
+  txt <- format(col, special_formatting = TRUE)
+  expect_match(trimws(txt[blk]), "^-[0-9.]+%\\*+ \\([0-9.]+%\\)$")
+  expect_match(trimws(txt[ref]), "^\\([0-9.]+%\\)$")
+})
+
+test_that("gaussian AME uses the coef shape and matches marginaleffects", {
+  skip_if_not_installed("broom")
+  skip_if_not_installed("marginaleffects")
+  d   <- reg_data()
+  col <- tab_reg(d, "tvhours", c("age", "race"), family = "gaussian", effect = "ame",
+                 cleannames = FALSE)[["tvhours: AME"]]
+  expect_identical(get_type(col), "coef")
+  expect_identical(get_ci_type(col), "diff")
+
+  dm <- d |> dplyr::filter(!is.na(tvhours), !is.na(age), !is.na(race))
+  dm$race <- forcats::fct_drop(dm$race)
+  m   <- stats::lm(tvhours ~ age + race, data = dm)
+  ac  <- rbind(as.data.frame(marginaleffects::avg_comparisons(m, variables = "age",  newdata = dm)),
+               as.data.frame(marginaleffects::avg_comparisons(m, variables = "race", newdata = dm)))
+  keep <- !is.na(get_diff(col)) & !is_refrow(col)       # reference betas are the additive neutral 0
+  expect_equal(sort(get_diff(col)[keep]),   sort(ac$estimate),  tolerance = 1e-6)
+  expect_equal(sort(get_pvalue(col)[keep]), sort(ac$p.value),   tolerance = 1e-6)
+})
+
+test_that("poisson AME is a raw count-change and matches marginaleffects", {
+  skip_if_not_installed("broom")
+  skip_if_not_installed("marginaleffects")
+  d   <- reg_data()
+  col <- tab_reg(d, "tvhours", c("age", "race"), family = "poisson", effect = "ame",
+                 cleannames = FALSE)[["tvhours: AME"]]
+  expect_identical(get_type(col), "coef")
+
+  dm <- d |> dplyr::filter(!is.na(tvhours), !is.na(age), !is.na(race))
+  dm$race <- forcats::fct_drop(dm$race)
+  m   <- stats::glm(tvhours ~ age + race, data = dm, family = stats::poisson())
+  ac  <- rbind(as.data.frame(marginaleffects::avg_comparisons(m, variables = "age",  newdata = dm)),
+               as.data.frame(marginaleffects::avg_comparisons(m, variables = "race", newdata = dm)))
+  keep <- !is.na(get_diff(col)) & !is_refrow(col)
+  expect_equal(sort(get_diff(col)[keep]), sort(ac$estimate), tolerance = 1e-6)
+})
+
+test_that("multinomial AME: one column per outcome category, matches marginaleffects", {
+  skip_if_not_installed("broom")
+  skip_if_not_installed("nnet")
+  skip_if_not_installed("marginaleffects")
+  d  <- mnl_data()
+  t1 <- tab_reg(d, "party3", c("race", "age"), family = "multinomial", effect = "ame",
+                cleannames = FALSE)
+  expect_true(all(c("Ind: AME", "Dem: AME", "Rep: AME") %in% names(t1)))   # every outcome category
+
+  dm <- d |> dplyr::filter(!is.na(party3), !is.na(race), !is.na(age))
+  dm$race   <- forcats::fct_drop(dm$race)
+  dm$party3 <- forcats::fct_drop(dm$party3)
+  m  <- nnet::multinom(party3 ~ race + age, data = dm, trace = FALSE)
+  ac <- rbind(as.data.frame(marginaleffects::avg_comparisons(m, variables = "race", newdata = dm)),
+              as.data.frame(marginaleffects::avg_comparisons(m, variables = "age",  newdata = dm)))
+  for (j in c("Ind", "Dem", "Rep")) {
+    col  <- t1[[paste0(j, ": AME")]]
+    keep <- !is.na(get_diff(col))
+    acj  <- ac[ac$group == j, ]
+    expect_equal(sort(get_diff(col)[keep]),   sort(acj$estimate), tolerance = 1e-6)
+    expect_equal(sort(get_pvalue(col)[keep]), sort(acj$p.value),  tolerance = 1e-6)
+  }
+})
+
+test_that("ordinal AME: one column per outcome category, matches marginaleffects", {
+  skip_if_not_installed("broom")
+  skip_if_not_installed("MASS")
+  skip_if_not_installed("marginaleffects")
+  d  <- ord_data()
+  t1 <- suppressWarnings(tab_reg(d, "spectrum", "race", family = "ordinal", effect = "ame",
+                                 cleannames = FALSE))
+  expect_true(all(c("Rep: AME", "Ind: AME", "Dem: AME") %in% names(t1)))
+
+  dm <- d |> dplyr::filter(!is.na(spectrum), !is.na(race))
+  dm$race <- forcats::fct_drop(dm$race)
+  o  <- MASS::polr(spectrum ~ race, data = dm, Hess = TRUE, method = "logistic")
+  ac <- as.data.frame(marginaleffects::avg_comparisons(o, variables = "race", newdata = dm))
+  for (j in c("Rep", "Ind", "Dem")) {
+    col  <- t1[[paste0(j, ": AME")]]
+    keep <- !is.na(get_diff(col))
+    acj  <- ac[ac$group == j, ]
+    expect_equal(sort(get_diff(col)[keep]), sort(acj$estimate), tolerance = 1e-6)
+  }
+})
+
+test_that("weighted binomial AME (svyglm) is population-weighted and matches marginaleffects", {
+  skip_if_not_installed("broom")
+  skip_if_not_installed("survey")
+  skip_if_not_installed("marginaleffects")
+  d   <- reg_data() |> dplyr::filter(!is.na(tvhours))
+  col <- tab_reg(d, "married", "race", family = "binomial", wt = "tvhours", effect = "ame",
+                 cleannames = FALSE)[["Married: AME"]]
+
+  dm <- d |> dplyr::filter(!is.na(married), !is.na(race))
+  dm$race    <- forcats::fct_drop(dm$race)
+  dm$married <- forcats::fct_rev(forcats::fct_drop(factor(dm$married)))
+  des <- survey::svydesign(ids = ~1, weights = ~tvhours, data = dm)
+  g   <- survey::svyglm(married ~ race, design = des, family = stats::quasibinomial())
+  ac  <- as.data.frame(marginaleffects::avg_comparisons(g, variables = "race", newdata = dm,
+                                                        wts = "tvhours"))
+  keep <- !is.na(get_diff(col))
+  expect_equal(sort(get_diff(col)[keep]), sort(ac$estimate), tolerance = 1e-6)
+})
+
+test_that("AME tables export through every backend without error", {
+  skip_if_not_installed("broom")
+  skip_if_not_installed("marginaleffects")
+  t1 <- tab_reg(reg_data(), "married", c("race", "age"), family = "binomial", effect = "ame")
+  expect_no_error(tab_kable(t1))
+  expect_no_error(tab_md(t1))
+  skip_if_not_installed("openxlsx2")
+  xf <- withr::local_tempfile(fileext = ".xlsx")
+  expect_no_error(tab_xl(t1, path = xf, replace = TRUE))
+  expect_true(file.exists(xf))
+})

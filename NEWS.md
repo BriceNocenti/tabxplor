@@ -26,6 +26,12 @@
   `MASS::polr`), giving one cumulative-odds-ratio column; the parallel-lines assumption is tested with
   the Brant test (install the `brant` package) and a warning is issued if it is violated. `family =
   "auto"` now detects these from the outcome type. `nnet` and `brant` are optional dependencies.
+* `tab_reg()` gains an `effect = "ame"` mode: instead of the model coefficient, each cell shows the
+  **average marginal effect** with the adjusted **predicted probability** in parentheses (e.g.
+  `-8%*** (16%)`) --- a probability-scale, cross-model-comparable interpretation. It works for
+  logistic / multinomial / ordinal (percentage points, one column per outcome category), poisson
+  (expected-count change) and gaussian (the coefficient) outcomes, and honours survey weights. Needs
+  the `marginaleffects` package (a new optional dependency).
 * `tab_logit()` and `multi_logit()` are now thin wrappers of `tab_reg()` for the binomial family,
   keeping the curated binary-outcome interface (`tab_logit(data, dependent, predictors)` for one
   logit per dependent; `multi_logit(data, dependent, models = list(...))` for model comparison).

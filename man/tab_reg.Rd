@@ -11,6 +11,7 @@ tab_reg(
   family = "auto",
   wt = NULL,
   exponentiate = "nongaussian",
+  effect = c("coefficient", "ame"),
   trials = NULL,
   conf_level = 0.95,
   method = c("wald", "profile"),
@@ -44,7 +45,16 @@ Set it explicitly with \code{"gaussian"} (linear), \code{"binomial"} (logistic),
 
 \item{exponentiate}{Whether to exponentiate coefficients into ratios. \code{"nongaussian"} (default)
 exponentiates every family except gaussian (odds ratios / incidence-rate ratios, leaving linear
-betas raw); \code{TRUE} / \code{FALSE} force it on / off for all columns.}
+betas raw); \code{TRUE} / \code{FALSE} force it on / off for all columns. Ignored when \code{effect = "ame"}
+(marginal effects are always on the response scale).}
+
+\item{effect}{The interpretation scale, orthogonal to \code{family}. \code{"coefficient"} (default) shows the
+native per-family effect (beta / OR / IRR / cumulative-OR). \code{"ame"} shows \strong{average marginal
+effects} with the adjusted \strong{predicted probability} in parentheses (e.g. \verb{-8\%*** (16\%)}): a
+probability-scale, cross-model-comparable summary (Mood 2010) for logistic / multinomial / ordinal
+outcomes (percentage points), the expected-count change for poisson, and the coefficient itself for
+gaussian. Requires the \code{marginaleffects} package. A multinomial / ordinal outcome gets one AME
+column per outcome category.}
 
 \item{trials}{Grouped-binomial (summed-score) outcomes only. The number of items behind the score,
 fitting \code{cbind(score, trials - score)} as a binomial. \code{NULL} (default) fits an ordinary binary
@@ -96,6 +106,10 @@ crosstab.
 be a vector -> one column per dependent; a \strong{named list} of predictor sets fits one model each ->
 one column per model (predictors absent from a model are left blank), for comparing specifications.
 
+\code{effect = "ame"} switches from the native coefficient to \strong{average marginal effects} with the
+adjusted \strong{predicted probability} shown in parentheses (e.g. \verb{-8\%*** (16\%)}) -- a probability-scale,
+cross-model-comparable interpretation (Mood 2010), computed with the \code{marginaleffects} package.
+
 Unweighted models use \code{\link[stats:lm]{stats::lm()}} / \code{\link[stats:glm]{stats::glm()}}; a \code{wt} weight column switches to a survey
 design (\code{\link[survey:svyglm]{survey::svyglm()}}), which gives correct design-based standard errors rather than the
 frequency-inflated ones of \code{glm(weights=)}. \code{broom} (always) and \code{survey} (only with \code{wt}) are
@@ -121,6 +135,9 @@ data <- forcats::gss_cat |>
 # logistic (odds ratios):
 tab_reg(data, dependent = "married", predictors = c("race", "rincome"),
         family = "binomial")
+# average marginal effects + adjusted predictions (needs the marginaleffects package):
+tab_reg(data, dependent = "married", predictors = c("race", "rincome"),
+        family = "binomial", effect = "ame")
 # linear (betas):
 tab_reg(data, dependent = "tvhours", predictors = c("race", "age"),
         family = "gaussian")

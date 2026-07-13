@@ -3003,6 +3003,44 @@ Maintainer choices this session (D3/D4): reference-outcome via `reference=`; "j 
 - **Deferred (unchanged plan):** the "j vs rest OR at reference profile" flavour + AME (12e);
   weighted MNL/ordinal + survey design (12g); the Phase-13 legend cosmetics.
 
+### 12e-i DONE (2026-07-13) — AME / adjusted-prediction interpretation mode (`effect = "ame"`)
+
+The orthogonal `effect = c("coefficient", "ame")` axis (D5). `effect="ame"` shows the sample-average
+**marginal effect** with the adjusted **predicted probability** in parentheses, AME-first
+(`-8%*** (16%)`). Reuses the existing fmt fields/tokens — **NO new fmt fields, attributes, `type`/
+`display`/`ci_type` tokens, or colour branches** (verified); `effect="coefficient"` byte-identical (NO
+golden regeneration). Full suite green. Maintainer forks (AskUserQuestion, this session): marginaleffects
+sole engine; one composed cell **AME-first** (prediction in parens, reference shows only its prediction);
+**two increments** — 12e-i (sample-average, this session) then 12e-ii (opt-in profile axis).
+
+- **Engine = `marginaleffects` (new gated Suggests)** — `reg_marginal()` wraps `avg_comparisons()`
+  (AME) + `avg_predictions()` (adjusted prediction), on the RESPONSE scale, with **`newdata` = the
+  fitted frame REQUIRED** (marginaleffects' own data recovery fails past the fitting scope / on dropped
+  levels — probed). A factor AME is keyed by `(var, level)` parsed from the `"Level - Reference"`
+  contrast label (NOT by row order — order is not level-order). `reg_check_deps(effect=)` aborts with an
+  install hint when absent. No hand-rolled `predict()`+delta-method SEs (the §37 D5 trap).
+- **fmt shape (`reg_marginal_column()`), composed via the Phase-10i-A `{}` grammar, AME-first** (so the
+  existing "stars ride the primary token" rule puts `***` on the AME with **no `fmt_class.R` change**):
+  prob-scale families (binomial/MNL/ordinal) → `type="row"`, per-cell display `"{diff} ({pct})"` (non-ref
+  factor level) / `"({pct})"` (reference level: prediction only) / `"diff"` (numeric predictor);
+  gaussian/poisson (no probability to compose) → the raw `type="coef"` shape (+ `var`=var(Y) for the
+  effect-size colour). The Constant / out-of-model cells use the `"blank"` token (an NA display would
+  fall back to `get_n()` in `get_num()`). `color="diff"`, `color_signif="grey_non_signif"` defaults.
+- **MNL/ordinal → one AME column per OUTCOME CATEGORY** (all levels, in outcome-level order — the AME is
+  defined on P(Y=j) for every category, unlike the K−1 "vs ref" OR columns), labelled `"<category>: AME"`
+  and split by the marginaleffects `group` column.
+- **Survey weights**: `reg_marginal()` passes `wts` = the weight column so the sample-average is a
+  **population (weighted)** AME/prediction matching the weighted crosstabs (§14); omitted when unweighted
+  (marginaleffects rejects `wts = NULL`). Weighted binomial/poisson AME works (svyglm design vcov);
+  weighted MNL/ordinal stays guarded.
+- **Parity locked** (`test-tab_reg.R`, all `skip_if_not_installed("marginaleffects")`): `diff`/`pct`/
+  CI/`pvalue` vs marginaleffects run on the identical model (binomial fct_rev'd to model the positive
+  level), for binomial/gaussian/poisson/MNL(per group)/ordinal(per group) + weighted svyglm; the
+  composed AME-first render + reference-cell `(pred)` + per-cell display tokens; exports (kable/md/xl).
+- **Deferred to 12e-ii** (maintainer's two-increment split): the opt-in profile axis (MER-at-reference +
+  the 12d-deferred "j vs rest OR at reference profile"). `exponentiate` is ignored under `effect="ame"`
+  (AME is always response-scale). The gaussian/poisson AME legend inherits the Phase-13 legend cosmetics.
+
 ### Phasing (12c → 12i — re-cut 2026-07-13; per-phase detail in the CLAUDE.md roadmap)
 
 The build is re-cut into **fresh-session Phases with commit-and-verify increments** (the old monolithic

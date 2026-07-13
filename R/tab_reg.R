@@ -29,17 +29,34 @@
 #     fit's $call so brant works out of the fitting scope). Both reuse the OR fmt shape unchanged;
 #     both share reg_wald_from_tidy so CI <-> p <-> stars stay exact duals. Weighted MNL/ordinal
 #     deferred (guarded error).
-# See: CLAUDE.md Phase 12c/12d ; dev/tabxplor_1.4.0_decisions.md S37.
+#   - 12e-i: effect="ame" (marginaleffects Suggests, guarded) is the orthogonal interpretation axis --
+#     sample-average marginal effects + adjusted predictions on the RESPONSE scale. reg_marginal()
+#     wraps avg_comparisons()/avg_predictions() (newdata = the fitted frame is REQUIRED); a factor AME
+#     is keyed by (var, level) from the "Level - Reference" contrast label. reg_marginal_column()
+#     composes them AME-first via the {} display grammar: prob-scale families (binomial/MNL/ordinal)
+#     get type="row" + "{diff} ({pct})" (reference level -> "({pct})", numeric -> "diff"); gaussian/
+#     poisson get the raw type="coef". MNL/ordinal -> one AME column per outcome CATEGORY (all levels).
+#     No new fmt fields/attributes/tokens; effect="coefficient" byte-identical. Profile axis (MER /
+#     "j vs rest at profile") deferred to 12e-ii.
+# See: CLAUDE.md Phase 12c/12d/12e ; dev/tabxplor_1.4.0_decisions.md S37.
 
 # === Internal engine ================================================================
 
 # broom is needed for every fit; survey only for the weighted (wt) path; nnet / MASS for the
-# nominal (multinomial) / ordinal (proportional-odds) families (both R Recommended -> normally present).
-reg_check_deps <- function(family, wt) {
+# nominal (multinomial) / ordinal (proportional-odds) families (both R Recommended -> normally present);
+# marginaleffects only for effect="ame" (the AME / adjusted-prediction engine, Phase 12e).
+reg_check_deps <- function(family, wt, effect = "coefficient") {
   if (!requireNamespace("broom", quietly = TRUE)) {
     cli::cli_abort(c(
       "{.pkg broom} is required for regression tables.",
       "i" = 'Install it with {.code install.packages("broom")}.'
+    ))
+  }
+  if (effect == "ame" && !requireNamespace("marginaleffects", quietly = TRUE)) {
+    cli::cli_abort(c(
+      '{.pkg marginaleffects} is required for {.code effect = "ame"} (average marginal effects).',
+      "i" = 'Install it with {.code install.packages("marginaleffects")}, or use the default ',
+      "i" = '{.code effect = "coefficient"}.'
     ))
   }
   if (!is.null(wt) && !requireNamespace("survey", quietly = TRUE)) {
@@ -132,8 +149,10 @@ reg_detect_family <- function(data, dependent) {
 }
 
 # The effect-measure word shown per column (S37 D1 -- auto-labelled per column, never one global
-# header). Additive (raw) -> beta ; multiplicative -> OR (binomial) / IRR (poisson) / exp(beta).
-reg_effect_word <- function(family, do_exp) {
+# header). effect="ame" -> "AME" (average marginal effect, response scale). Otherwise: additive (raw)
+# -> beta ; multiplicative -> OR (binomial) / IRR (poisson) / exp(beta).
+reg_effect_word <- function(family, do_exp, effect = "coefficient") {
+  if (effect == "ame") return("AME")
   if (!do_exp) return("\u03b2")                  # beta (raw / log-odds coefficient)
   switch(family,
          "binomial" = , "multinomial" = , "ordinal" = "OR",
@@ -141,9 +160,18 @@ reg_effect_word <- function(family, do_exp) {
          "exp(\u03b2)")
 }
 
-# A one-line note appended to the table's subtext, so a multinomial / ordinal table self-documents its
-# estimand (the "vs <ref>" per-category detail lives in the column labels).
-reg_model_note <- function(family, do_exp) {
+# A one-line note appended to the table's subtext, so a table self-documents its estimand (the
+# "vs <ref>" per-category detail lives in the column labels). effect="ame" gets its own note (the cells
+# show the adjusted prediction + the marginal effect), overriding the coefficient-scale note.
+reg_model_note <- function(family, do_exp, effect = "coefficient") {
+  if (effect == "ame") {
+    prob <- family %in% c("binomial", "multinomial", "ordinal")
+    return(if (prob)
+      paste0("Average marginal effects on the probability scale (percentage points). Each cell shows ",
+             "the effect vs the reference level and, in parentheses, the adjusted predicted probability.")
+    else
+      "Average marginal effects (response scale, sample-averaged).")
+  }
   switch(family,
     "ordinal"     = if (do_exp) "Cumulative odds ratios (proportional-odds model)."
                     else        "Proportional-odds model (log-odds coefficients).",
@@ -344,7 +372,7 @@ reg_fit_multinom <- function(mdata, dependent, predictors, do_exp, conf_level, m
   td$term <- stringr::str_remove_all(td$term, "`")     # strip formula backticks -> match skeleton
   td  <- reg_wald_from_tidy(td, conf_level, do_exp)
   list(tidy = td, nobs = nrow(mdata), var_y = NA_real_, positive_level = NULL,
-       fit = fit, y_ref = y_levels[1], y_levels = y_levels[-1])
+       fit = fit, data = mdata, y_ref = y_levels[1], y_levels = y_levels[-1])
 }
 
 # Ordered 3+ level outcome: proportional-odds cumulative logit (MASS::polr). exp(coef) is one
@@ -372,7 +400,8 @@ reg_fit_ordinal <- function(mdata, dependent, predictors, do_exp, conf_level, me
   td$term <- stringr::str_remove_all(td$term, "`")
   td  <- reg_wald_from_tidy(td, conf_level, do_exp)
   reg_ordinal_diagnostic(fit)                                # Brant PO test -> warn (gated on brant)
-  list(tidy = td, nobs = nrow(mdata), var_y = NA_real_, positive_level = NULL, fit = fit)
+  list(tidy = td, nobs = nrow(mdata), var_y = NA_real_, positive_level = NULL, fit = fit,
+       data = mdata)
 }
 
 # Diagnose the proportional-odds (parallel-lines) assumption with the Brant test (the `brant` package,
@@ -532,7 +561,8 @@ reg_fit <- function(data, dependent, predictors, family, wt, do_exp,
   # var(Y) drives the additive gaussian effect-size colour (beta/SD(Y)); NA otherwise (no std colour)
   var_y <- if (!do_exp && family == "gaussian") stats::var(mdata[[dependent]]) else NA_real_
 
-  list(tidy = td, nobs = nrow(mdata), var_y = var_y, positive_level = positive_level, fit = fit)
+  list(tidy = td, nobs = nrow(mdata), var_y = var_y, positive_level = positive_level, fit = fit,
+       data = mdata)
 }
 
 # Align one fit to the union skeleton -> a single fmt column (length = nrow(skeleton)), in the
@@ -579,6 +609,105 @@ reg_column <- function(skeleton, fit_res, model_predictors, col_var, effect_shap
   }
 }
 
+
+# === effect = "ame": average marginal effects + adjusted predictions (Phase 12e) ====
+
+# Per-predictor average marginal effects (marginaleffects::avg_comparisons) + adjusted predicted
+# probabilities (avg_predictions), on the RESPONSE scale, for ONE fitted model. Returns a keyed tidy
+# `ame` (one row per (var, level[, group]) with `ame`/`ame_lo`/`ame_hi`/`ame_p`) and, on the probability
+# scale, `pred` (each factor level's adjusted prediction; numeric predictors have no per-level
+# prediction). Alignment is by (var, level) -- the factor AME contrast label is "Level - Reference"
+# (marginaleffects), so `level` is the part before " - " (the reference level itself has no AME row).
+# `newdata = data` (the complete-case fitted frame) is REQUIRED: marginaleffects' own data recovery
+# fails once the fitting scope is gone / dropped levels differ (probed 2026-07-13). A single-outcome
+# glm/lm has `group = NA`; multinom/polr carry the outcome category in `group`.
+reg_marginal <- function(fit, data, predictors, prob_scale, conf_level, wt = NULL) {
+  # A weighted (svyglm) fit needs `wts` at the AVERAGING step too, so the sample-average AME /
+  # prediction is a population (weighted) quantity matching the weighted crosstabs (S14); without it
+  # marginaleffects averages with equal weights (and warns). `wts` names the weight column in newdata;
+  # it is OMITTED when unweighted (marginaleffects rejects `wts = NULL`, its default is FALSE).
+  wts_arg <- if (is.null(wt)) list() else list(wts = wt)
+  amelist <- purrr::map(predictors, function(v) {
+    ac <- as.data.frame(do.call(marginaleffects::avg_comparisons, c(
+      list(fit, variables = v, newdata = data, conf_level = conf_level), wts_arg)))
+    is_fac <- is.factor(data[[v]]) || is.character(data[[v]])
+    level  <- if (is_fac) sub(" - .*$", "", ac$contrast) else v
+    grp    <- if ("group" %in% names(ac)) as.character(ac$group) else NA_character_
+    tibble::tibble(var = v, level = as.character(level), group = grp,
+                   ame = ac$estimate, ame_lo = ac$conf.low, ame_hi = ac$conf.high, ame_p = ac$p.value)
+  })
+  ame <- dplyr::bind_rows(amelist)
+
+  predlist <- if (prob_scale) purrr::map(predictors, function(v) {
+    if (!(is.factor(data[[v]]) || is.character(data[[v]]))) return(NULL)  # no per-level pred for numerics
+    ap  <- as.data.frame(do.call(marginaleffects::avg_predictions, c(
+      list(fit, by = v, newdata = data, conf_level = conf_level), wts_arg)))
+    grp <- if ("group" %in% names(ap)) as.character(ap$group) else NA_character_
+    tibble::tibble(var = v, level = as.character(ap[[v]]), group = grp, pred = ap$estimate)
+  }) else list()
+  pred <- dplyr::bind_rows(purrr::compact(predlist))
+
+  list(ame = ame, pred = pred)
+}
+
+# Build ONE fmt column from a reg_marginal() result, for a given outcome `group` (NA for a single-outcome
+# glm/lm/poisson). Aligns the AME (`diff` field) + the adjusted prediction (`pct` field) to the shared
+# (var, level) skeleton; the per-cell display composes them AME-first on the probability scale
+# ("{diff} ({pct})"), a reference level shows only its prediction ("({pct})"), a numeric predictor shows
+# the bare AME ("diff"), and a raw-scale family (gaussian / poisson) shows a plain "coef" (no prediction
+# to compose). Reference levels + the Constant carry no AME; predictors ABSENT from this model stay NA.
+reg_marginal_column <- function(skeleton, marg, model_predictors, numeric_preds, prob_scale, var_y,
+                                nobs, group, color, color_signif, col_var) {
+  amt <- marg$ame; prd <- marg$pred
+  if (!is.na(group)) {
+    amt <- amt[!is.na(amt$group) & amt$group == group, , drop = FALSE]
+    if (nrow(prd)) prd <- prd[!is.na(prd$group) & prd$group == group, , drop = FALSE]
+  }
+  key   <- paste(skeleton$var, skeleton$level, sep = "\r")
+  a_key <- paste(amt$var, amt$level, sep = "\r")
+  m     <- match(key, a_key)
+  ame_v <- amt$ame[m]; lo_v <- amt$ame_lo[m]; hi_v <- amt$ame_hi[m]; p_v <- amt$ame_p[m]
+  pred_v <- if (nrow(prd)) prd$pred[match(key, paste(prd$var, prd$level, sep = "\r"))]
+            else            rep(NA_real_, nrow(skeleton))
+
+  n_rows   <- nrow(skeleton)
+  in_model <- skeleton$var %in% c("Constant", model_predictors)
+  is_const <- skeleton$var == "Constant"
+  is_ref   <- skeleton$is_ref & !is_const & in_model
+  is_num   <- skeleton$var %in% numeric_preds & in_model
+  refrows  <- is_ref | is_const
+
+  # "blank" (not NA) for the Constant / out-of-model cells: an NA display falls back to get_n() in
+  # get_num(), so it must be an explicit blank-token (renders "") rather than left unset.
+  display <- rep("blank", n_rows)
+  if (prob_scale) {
+    compos <- in_model & !is_const & !is_ref & !is_num & !is.na(ame_v) & !is.na(pred_v)
+    display[compos]                    <- "{diff} ({pct})"     # non-ref factor level: AME (prediction)
+    display[in_model & is_ref & !is.na(pred_v)] <- "({pct})"   # reference level: prediction only
+    display[in_model & is_num & !is.na(ame_v)]  <- "diff"      # numeric predictor: bare AME
+    ame_v[is_ref] <- NA_real_                                  # reference has no marginal effect
+    fmt(
+      n = rep(as.integer(nobs), n_rows),
+      pct = pred_v, diff = ame_v, ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
+      type = "row", display = display, digits = 1L, ci_type = "diff",
+      color = color, color_signif = color_signif, col_var = col_var,
+      comp_all = FALSE, in_refrow = refrows
+    )
+  } else {
+    display[in_model & !is_const & !is.na(ame_v)] <- "coef"    # raw AME (gaussian == coef; poisson count)
+    ame_v[is_ref] <- 0                                         # additive neutral at the reference
+    display[in_model & is_ref]      <- "coef"
+    fmt(
+      n = rep(as.integer(nobs), n_rows),
+      diff = ame_v, ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
+      var = rep(var_y, n_rows),                               # var(Y): standardizes the effect-size colour
+      type = "coef", display = display, digits = 2L, ci_type = "diff",
+      color = color, color_signif = color_signif, col_var = col_var,
+      comp_all = FALSE, in_refrow = refrows
+    )
+  }
+}
+
 # Split ONE multinomial fit into one OR column per non-reference outcome category. Each category's
 # tidy rows (`y.level == j`, y.level dropped) look like a standard glm tidy, so reg_column() aligns
 # them to the shared predictor skeleton unchanged. Label = "<j> vs <ref>: OR" (prefixed by the
@@ -606,19 +735,50 @@ reg_columns_multinom <- function(skeleton, f, sp, effect_shape, color, color_sig
 # (one per outcome category), so the per-spec columns are flattened into one (label, col) list.
 reg_build <- function(data, specs, union_predictors, family, wt, do_exp, effect_shape,
                       inverse_two_level_factors, conf_level, method, color, color_signif,
-                      cleannames, subtext, eff_word) {
+                      cleannames, subtext, eff_word, effect = "coefficient") {
   fits <- purrr::map(specs, function(sp) {
     reg_fit(data, sp$dependent, sp$predictors, family, wt, do_exp,
             inverse_two_level_factors, conf_level, method,
             trials = sp$trials, formula = sp$formula)
   })
 
+  # effect="ame" always keys by the ORIGINAL variables (AMEs marginalise over the model's functional
+  # form), so a compound formula still gets a clean bare-variable skeleton; the coefficient path keeps
+  # its fit-read skeleton for compound terms.
   compound <- purrr::map_lgl(specs, ~ isTRUE(.$compound))
-  skeleton <- if (any(compound)) reg_skeleton_from_fit(fits[[1]]$fit)
-              else                reg_skeleton(data, union_predictors)
+  skeleton <- if (effect == "ame")   reg_skeleton(data, union_predictors)
+              else if (any(compound)) reg_skeleton_from_fit(fits[[1]]$fit)
+              else                    reg_skeleton(data, union_predictors)
 
   multi_col  <- family == "multinomial"
   prefix_dep <- length(specs) > 1L
+
+  if (effect == "ame") {
+    prob_scale    <- family %in% c("binomial", "multinomial", "ordinal")
+    per_category  <- family %in% c("multinomial", "ordinal")
+    numeric_preds <- union_predictors[!purrr::map_lgl(
+      union_predictors, ~ is.factor(data[[.x]]) || is.character(data[[.x]]))]
+    built <- purrr::flatten(purrr::map2(fits, specs, function(f, sp) {
+      marg  <- reg_marginal(f$fit, f$data, sp$predictors, prob_scale, conf_level, wt)
+      var_y <- if (!prob_scale) suppressWarnings(stats::var(as.numeric(f$data[[sp$dependent]])))
+               else NA_real_
+      if (per_category) {                            # one AME column per OUTCOME category (all levels)
+        groups <- levels(as.factor(f$data[[sp$dependent]]))
+        purrr::map(groups, function(g) {
+          jc  <- if (cleannames) stringr::str_remove_all(g, cleannames_condition()) else g
+          lab <- paste0(if (prefix_dep) paste0(sp$dependent, " - ") else "", jc, ": ", eff_word)
+          list(label = lab,
+               col   = reg_marginal_column(skeleton, marg, sp$predictors, numeric_preds, prob_scale,
+                                           var_y, f$nobs, g, color, color_signif, lab))
+        })
+      } else {
+        list(list(label = sp$label,
+                  col   = reg_marginal_column(skeleton, marg, sp$predictors, numeric_preds, prob_scale,
+                                              var_y, f$nobs, NA_character_, color, color_signif,
+                                              sp$label)))
+      }
+    }))
+  } else {
   built <- purrr::flatten(purrr::map2(fits, specs, function(f, sp) {
     if (multi_col) {
       reg_columns_multinom(skeleton, f, sp, effect_shape, color, color_signif,
@@ -631,6 +791,7 @@ reg_build <- function(data, specs, union_predictors, family, wt, do_exp, effect_
                                    effect_shape, color, color_signif)))
     }
   }))
+  }
   labels <- make.unique(purrr::map_chr(built, "label"))
 
   disp_levels <- skeleton$level
@@ -667,6 +828,10 @@ reg_build <- function(data, specs, union_predictors, family, wt, do_exp, effect_
 #' be a vector -> one column per dependent; a **named list** of predictor sets fits one model each ->
 #' one column per model (predictors absent from a model are left blank), for comparing specifications.
 #'
+#' `effect = "ame"` switches from the native coefficient to **average marginal effects** with the
+#' adjusted **predicted probability** shown in parentheses (e.g. `-8%*** (16%)`) -- a probability-scale,
+#' cross-model-comparable interpretation (Mood 2010), computed with the `marginaleffects` package.
+#'
 #' Unweighted models use [stats::lm()] / [stats::glm()]; a `wt` weight column switches to a survey
 #' design ([survey::svyglm()]), which gives correct design-based standard errors rather than the
 #' frequency-inflated ones of `glm(weights=)`. `broom` (always) and `survey` (only with `wt`) are
@@ -702,7 +867,15 @@ reg_build <- function(data, specs, union_predictors, family, wt, do_exp, effect_
 #' @param wt Optional. Name of a weight column (character). Uses survey-weighted estimation.
 #' @param exponentiate Whether to exponentiate coefficients into ratios. `"nongaussian"` (default)
 #'   exponentiates every family except gaussian (odds ratios / incidence-rate ratios, leaving linear
-#'   betas raw); `TRUE` / `FALSE` force it on / off for all columns.
+#'   betas raw); `TRUE` / `FALSE` force it on / off for all columns. Ignored when `effect = "ame"`
+#'   (marginal effects are always on the response scale).
+#' @param effect The interpretation scale, orthogonal to `family`. `"coefficient"` (default) shows the
+#'   native per-family effect (beta / OR / IRR / cumulative-OR). `"ame"` shows **average marginal
+#'   effects** with the adjusted **predicted probability** in parentheses (e.g. `-8%*** (16%)`): a
+#'   probability-scale, cross-model-comparable summary (Mood 2010) for logistic / multinomial / ordinal
+#'   outcomes (percentage points), the expected-count change for poisson, and the coefficient itself for
+#'   gaussian. Requires the `marginaleffects` package. A multinomial / ordinal outcome gets one AME
+#'   column per outcome category.
 #' @param trials Grouped-binomial (summed-score) outcomes only. The number of items behind the score,
 #'   fitting `cbind(score, trials - score)` as a binomial. `NULL` (default) fits an ordinary binary
 #'   logit; a single integer (or a vector named by dependent) sets the item count; `TRUE` uses each
@@ -737,6 +910,9 @@ reg_build <- function(data, specs, union_predictors, family, wt, do_exp, effect_
 #' # logistic (odds ratios):
 #' tab_reg(data, dependent = "married", predictors = c("race", "rincome"),
 #'         family = "binomial")
+#' # average marginal effects + adjusted predictions (needs the marginaleffects package):
+#' tab_reg(data, dependent = "married", predictors = c("race", "rincome"),
+#'         family = "binomial", effect = "ame")
 #' # linear (betas):
 #' tab_reg(data, dependent = "tvhours", predictors = c("race", "age"),
 #'         family = "gaussian")
@@ -753,11 +929,13 @@ reg_build <- function(data, specs, union_predictors, family, wt, do_exp, effect_
 #' @export
 tab_reg <- function(data, dependent, predictors = NULL,
                     family = "auto", wt = NULL, exponentiate = "nongaussian",
+                    effect = c("coefficient", "ame"),
                     trials = NULL, conf_level = 0.95, method = c("wald", "profile"),
                     reference = NULL, inverse_two_level_factors = TRUE,
                     color = NULL, color_signif = NULL,
                     cleannames = NULL, subtext = "") {
   method <- match.arg(method)
+  effect <- match.arg(effect)
   stopifnot(is.data.frame(data))
   cleannames <- if (is.null(cleannames)) getOption("tabxplor.cleannames", TRUE) else cleannames
 
@@ -815,7 +993,7 @@ tab_reg <- function(data, dependent, predictors = NULL,
   do_exp       <- isTRUE(exponentiate) ||
     (identical(exponentiate, "nongaussian") && family != "gaussian")
   effect_shape <- if (do_exp) "ratio" else "additive"
-  eff_word     <- reg_effect_word(family, do_exp)
+  eff_word     <- reg_effect_word(family, do_exp, effect)
 
   # trials -> grouped binomial (D2): a summed-score outcome fit as cbind(score, trials-score). NULL =
   # off (binary logit). TRUE = observed max per dependent. Numeric / named vector = the item count.
@@ -836,7 +1014,8 @@ tab_reg <- function(data, dependent, predictors = NULL,
   }
 
   # base `%||%` is R >= 4.4 only; the package supports R >= 4.1, so use explicit is.null().
-  if (is.null(color))        color        <- if (effect_shape == "ratio") "OR" else "diff"
+  # effect="ame" always colours the marginal effect as a difference (neutral 0), never as a ratio.
+  if (is.null(color))        color        <- if (effect_shape == "ratio" && effect != "ame") "OR" else "diff"
   if (is.null(color_signif)) color_signif <- "grey_non_signif"
 
   all_predictors <- if (is_comparison) unique(purrr::flatten_chr(predictors)) else predictors
@@ -876,13 +1055,13 @@ tab_reg <- function(data, dependent, predictors = NULL,
     union_predictors <- predictors
   }
 
-  note <- reg_model_note(family, do_exp)
+  note <- reg_model_note(family, do_exp, effect)
   if (!is.null(note)) subtext <- if (nzchar(subtext)) paste0(subtext, " ", note) else note
 
-  reg_check_deps(family, wt)
+  reg_check_deps(family, wt, effect)
   reg_build(data, specs, union_predictors, family, wt, do_exp, effect_shape,
             inverse_two_level_factors, conf_level, method, color, color_signif,
-            cleannames, subtext, eff_word)
+            cleannames, subtext, eff_word, effect)
 }
 
 
