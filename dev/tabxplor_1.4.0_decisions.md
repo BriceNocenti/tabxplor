@@ -2710,15 +2710,21 @@ dependencies** and **match ecosystem conventions** (gtsummary / parameters / sjP
   Point estimates + predicted probabilities are safe in base R (`predict()`); **AME/contrast standard errors
   need the delta method** (averaging `predict(se.fit=)` is *wrong*) → depend on **`marginaleffects` (Suggests)**
   for inference, do not hand-roll delta-method SEs.
-- **Pass 4 — model comparison, dispersion, dependency inventory** (agent + maintainer knowledge). Nested LR
-  tests via `anova(m1, m2, test="LRT")` (needs nesting + same rows/response); survey → `anova.svyglm`
-  (Rao-Scott working-LRT / Wald) and `regTermTest`. Table packages mostly show **per-column GOF (AIC/BIC/
-  pseudo-R²)** and leave formal nested tests to `anova()` — so an explicit comparison mode is a genuine
-  feature, not a reinvention. **Dispersion is a Poisson / grouped-binomial issue, NOT ungrouped 0/1**: for
-  Bernoulli data the dispersion parameter is not identifiable (`quasibinomial` ≈ 1) — quasibinomial matters
-  only for *grouped/proportion* binomial (e.g. the summed-score outcome) or to silence the non-integer-weight
-  warning under svyglm; report residual-deviance/df (or Pearson/df) and the correction (quasipoisson: scaled
-  SEs, **no AIC**; `MASS::glm.nb`: has a likelihood/AIC, preferred for strong overdispersion). Dependency
+- **Pass 4 — model comparison, dispersion, dependency inventory** (agent completed 2026-07-13, confirming the
+  analysis). Nested LR tests via `anova(m1, m2, test="LRT")` (**LRT ≡ Chisq**; chi² for binomial/poisson,
+  **F** for gaussian/quasi — the doc's own rule; `anova()` **errors on an N-mismatch**, worth mirroring);
+  survey → `anova.svyglm` (Rao-Scott **working**-LRT / Wald) and `regTermTest`. **No** mainstream table package
+  auto-inserts a between-column nested test — they show **per-column GOF (AIC/BIC/pseudo-R²)** and leave formal
+  tests to `anova()`/`lmtest::lrtest` — so an opt-in comparison footer is a genuine differentiator (prior art:
+  Stata `nestreg` = sequential, `lrtest` = vs-baseline). **Dispersion is a Poisson / grouped-binomial issue,
+  NOT ungrouped 0/1** (Bolker GLMM FAQ: for Bernoulli data the variance is fixed at p(1−p), so dispersion is
+  not identifiable): print the **Pearson dispersion** `Σ(pearson resid)²/df.residual` (better-behaved than
+  deviance/df), flag at **>1.5** (strong **>2**). `quasibinomial` returns ≈1 on 0/1 data (it does NOT fix
+  overdispersion) — its real jobs are grouped/proportion binomial and silencing the non-integer-weight warning
+  under svyglm. The cross-cutting rule: enforce a **central same-N / same-response / same-likelihood guard
+  once** and degrade with a clear message (LR → AIC/BIC; ordinary → working/design-based under survey; else
+  "not shown"). Overdispersion correction: quasipoisson (scaled SEs, **no AIC**) or `MASS::glm.nb` (has a
+  likelihood/AIC, preferred for strong overdispersion). Dependency
   inventory: everything needed (McFadden `1−logLik/logLik_null`, Nagelkerke, AIC/BIC, LR-vs-null
   `null.deviance−deviance` on `df.null−df.residual`, MNL, ordinal, survey `psrsq`/`regTermTest`) is
   **base R + the Recommended `MASS`/`nnet` + the already-Suggested `broom`/`survey`** — the **only** genuinely
@@ -2847,12 +2853,19 @@ df2 pvalue n variance min_e]` tibble) into ONE shared **GOF/summary** attribute 
   (+ residual SE). All computable dependency-light from the fit (`null.deviance − deviance` on `df.null −
   df.residual`; `1 − logLik/logLik_null`; `AIC()/BIC()`). A shared **`stats=`** argument selects the set
   (per-context defaults: crosstab → the chi2/ANOVA test; regression → the above).
-- **Dispersion flag** for **poisson / grouped-binomial only** (NOT ungrouped 0/1 — Pass 4): report residual-
-  deviance/df (or Pearson/df) and the recommended correction (quasipoisson / `glm.nb`).
-- **Multi-model comparison:** LR test **vs the NULL model by default**; opt-in **vs a chosen baseline model**
-  or **sequential (each vs the previous)**; **fall back to AIC/BIC + a message** when models are non-nested or
-  N differs (`anova(..., test="LRT")`; svyglm → `anova.svyglm`/`regTermTest`). A full model-summary line is
-  always kept per column.
+- **Dispersion flag** for **poisson / grouped-binomial only** (NOT ungrouped 0/1 — the dispersion parameter
+  is not identifiable for Bernoulli data): print the **Pearson dispersion** `Σ(pearson resid)²/df.residual`
+  (better-behaved than deviance/df), flag at **>1.5** (strong **>2**); correction = quasipoisson (scaled SEs,
+  **no AIC**) or `MASS::glm.nb` (has AIC).
+- **Multi-model comparison** — a **`compare = c("none", "null", "baseline", "sequential")`** argument (default
+  `"null"`; `baseline=` picks the reference column): each column's LR test vs the null / a chosen baseline /
+  the previous model (`anova(m1, m2, test="LRT")`; **LRT ≡ Chisq** — chi² for binomial/poisson, **F** for
+  gaussian/quasi). A **central same-N / same-response / same-family guard** (mirrors `anova()`'s own error)
+  **falls back to AIC/BIC + a message** on non-nesting or N-mismatch. Under survey there is no true likelihood
+  → the **working (Rao-Scott) LR / Wald** test (`regTermTest` / `anova.svyglm`), **relabelled** so no true-LR
+  claim is made. (No mainstream table package auto-inserts a between-column nested test — Stata `nestreg` /
+  `lrtest` are the prior art — so this footer is a genuine differentiator.) A full model-summary line is kept
+  per column.
 - **Rendering, unified with crosstabs:** console → a footer block (generalise `print_chi2()`); exports →
   appended rows (generalise `tab_pvalue_lines()`/`tab_materialize_extras()`), with the maintainer's **border
   rule** — a box around **each model's whole summary block**, **no** internal borders between its lines. Solve
@@ -2900,17 +2913,56 @@ point estimates via base `predict()`). `ordinal` (clm) / `VGAM` are optional Sug
 fallback (D4). Explicitly **not** pulled in: parsnip/tidymodels/hardhat/poissonreg (dropped in 12a) and the
 heavy `performance`/`parameters` stack (their footer stats are computed in-house from the fit).
 
-### Phasing (12c → 12e)
+### 12c-i DONE (2026-07-13) — `tab_reg` core engine + effect columns
 
-- **12c — tests:** statistical-soundness parity vs `stats::glm`/`lm`, `survey::svyglm`, `nnet::multinom`,
-  `MASS::polr` (unweighted + survey-weighted): OR/β/IRR, CI, p, McFadden/AIC/LR-vs-null, AME point estimates
-  (+ `marginaleffects` where available), summed-score grouped-binomial, the Brant PO test, `1/OR` display.
-- **12d — rewrite:** the unified `tab_reg` engine + the `effect=`/`family=`/comparison API; **tidyselect**
-  variable selection; **per-variable reference levels via a named vector** in the selectors; contrasts.
-- **12e — jamovi UI:** `jmvtab_logit` / `jmvtab_reg` analyses (reuse existing regression-module UI patterns;
-  a single logit analysis with a "+" to add predictor subsets for `multi_logit`-style comparison).
-- Display-phase (later): `or_plot` forest plot, `lm_plots` diagnostics, the visible OR-CI bracket, and the
-  OR+ME / OR+PCT composite layouts.
+Shipped the core (gaussian β / binomial OR / poisson IRR), the `tab_logit`/`multi_logit` binomial
+wrappers, statistical-parity goldens, per-variable `reference=` levels, and `exponentiate="nongaussian"`.
+Full suite green (FAIL 0, PASS 1927), colour/golden byte-identical, `devtools::document()` done.
+
+- **Engine:** `R/tab_logit.R` → `R/tab_reg.R` (old files emptied, `git rm` pending). `tab_reg()` over ONE
+  engine (`stats::lm`/`glm`, `survey::svyglm`, `broom::tidy`) with `reg_*` helpers; `predictors` char-vec =
+  one model (dependent may be a vector → column per dependent) vs named list = model comparison;
+  `exponentiate` drives the fmt shape (D1): additive β → `diff`; multiplicative OR/IRR → `or`. CI ⇄ p exact
+  duals (z for fixed-dispersion glm, t(df) for lm/quasi/svyglm; profile+LR opt-in, D8).
+- **fmt integration decision (the maintainer's `type` question):** the effect-size-gradient choice for β
+  makes a dedicated `type` the clean routing point (the crosstab `get_ref_var()` standardization has a
+  refrow-at-END grouping meaningless for a regression skeleton; `display="diff"` can't render a raw coef).
+  Resolved with the FEWEST moving parts: **one new `type` VALUE `"coef"`** (β only) + **one new `display`
+  TOKEN `"coef"`** (raw signed render) + **reuse the `var` FIELD** for var(Y) (the β/SD(Y) colour
+  standardizes by its OWN `var`, not `get_ref_var()`). **No new fmt fields, no new attributes** — the
+  18-field/9-attribute contract holds. OR/IRR keep `type="row"` (proven, unchanged). `fmt_color_plan()` also
+  excludes reference rows from the diff/ratio/or colour (`gate & !is_refrow`): byte-identical for crosstabs
+  (their ref cells are diff=0/OR=1 → already slot 0), it uncolours the regression **intercept** (in_refrow
+  but a non-neutral baseline). Excel unchanged (a `coef` cell hits `excel_numfmt_code`'s plain-number branch).
+- **β colour = effect-size gradient** (maintainer decision over single-tone / |z|): β/SD(Y) vs the
+  `mean_diff` (Cohen 0.2/0.5/0.8/1.2) breaks — the additive twin of OR-by-ratio; verified (a large
+  standardized β colours; a tiny-but-significant one stays grey — practical vs statistical significance).
+- **Deferred to 12c-ii:** summed-score grouped binomial, formula escape-hatch, contrasts. **Cosmetic
+  (Phase 13 legend redesign):** the β legend shows SD breaks as `%`, the IRR legend says "OR", a `coef`
+  md cell reuses a `pXX` class (self-consistent — regression tables aren't mixed with pct columns).
+
+### Phasing (12c → 12i — re-cut 2026-07-13; per-phase detail in the CLAUDE.md roadmap)
+
+The build is re-cut into **fresh-session Phases with commit-and-verify increments** (the old monolithic
+"12c tests / 12d rewrite / 12e jamovi" is dropped; tests are folded into every phase's gate). Each build
+phase commits only with **statistical-parity goldens green** vs base `glm`/`lm`/`svyglm`/`nnet::multinom`/
+`MASS::polr` (unweighted + survey):
+
+- **12c — `tab_reg` core:** engine + family dispatch (binomial parity with 12a → gaussian β / poisson IRR),
+  per-column effect labels, `exponentiate="nongaussian"`, tidyselect + per-variable named-vector references,
+  summed-score grouped binomial, the formula escape-hatch, contrasts.
+- **12d — nominal & ordinal outcomes:** one MNL (`nnet::multinom`, j-vs-ref OR) + proportional-odds
+  (`MASS::polr`, diagnosed) + the "j vs rest OR at reference profile" flavour.
+- **12e — AME / predicted-probability mode:** the `effect=` axis (base `predict()` points + `marginaleffects`
+  Suggests for SEs); MER-at-reference opt-in; extended to MNL/ordinal.
+- **12f — unified model/test-summary footer + model comparison** (cross-cutting, touches `tab()`): generalise
+  the `test` attribute, the default footer stats, the dispersion flag, multi-model LR (vs null / baseline /
+  sequential), in-cell test labels + border rule + shared `stats=` arg.
+- **12g — survey design + companion features:** ids/strata/fpc + prebuilt design objects + degraded glance;
+  `split_var`; `multiplicator`; `empirical_OR`.
+- **12h — jamovi UI:** `jmvtab_reg` / `jmvtab_logit` (needs the maintainer's `.h.R` regen).
+- **12i — display phase (deferred):** `or_plot` forest plot, `lm_plots` diagnostics, the visible OR-CI
+  bracket, the OR+ME / OR+PCT composite layouts.
 
 ### Sources (Phase 12b)
 
@@ -2953,7 +3005,16 @@ UCLA ordinal logit (`MASS::polr`) <https://stats.oarc.ucla.edu/r/dae/ordinal-log
 `survey::anova.svyglm` <http://r-survey.r-forge.r-project.org/pkgdown/docs/reference/anova.svyglm.html> ;
 `survey::psrsq` (Lumley 2017 pseudo-R² under complex sampling) <https://rdrr.io/rforge/survey/man/psrsq.html> ;
 Lumley & Scott (2015) "AIC and BIC for modelling with complex survey data", *JSSAM* 3(1) ; overdispersion /
-quasibinomial not identifiable for Bernoulli (GLMM FAQ / Bolker) ; `MASS::glm.nb`.
+R manual `anova.glm` (LRT≡Chisq; chi²-vs-F by family; same-data error) <https://stat.ethz.ch/R-manual/R-patched/RHOME/library/stats/html/anova.glm.html> ;
+Stata `nestreg` <https://www.stata.com/manuals/rnestreg.pdf> + `lrtest` <https://www.stata.com/manuals/rlrtest.pdf> ;
+RMPH §8.8 survey LR-vs-Wald <https://bookdown.org/rwnahhas/RMPH/survey-likelihood.html> ; Bolker GLMM FAQ
+(Bernoulli overdispersion not identifiable; Pearson φ; >2 rule) <https://bbolker.github.io/mixedmodels-misc/glmmFAQ.html> ;
+Hilbe "Can binary logistic models be overdispersed?" <http://www.highstat.com/Books/BGS/GLMGLMM/pdfs/HILBE-Can_binary_logistic_models_be_overdispersed2Jul2013.pdf> ;
+quasi-binomial ≈1 on 0/1 <https://randomeffect.net/post/2020/10/12/quasi-binomial-in-r-glm/> ; NB vs quasipoisson
+<https://metricgate.com/blogs/negbin-vs-quasi-poisson-overdispersion/> ; R "Recommended" set incl. MASS/nnet
+<https://cran.r-project.org/web/packages/nnet/nnet.pdf> ; pseudo-R² closed forms (DescTools `PseudoR2`)
+<https://andrisignorell.github.io/DescTools/reference/PseudoR2.html> ; marginaleffects response-scale averaging
+<https://larmarange.github.io/broom.helpers/articles/marginal_tidiers.html> ; `MASS::glm.nb`.
 
 **Git study:** commit `6e47bab^` — `R/tab_logit.R` / `R/tab_logit_2.R` (pre-package parsnip draft:
 `nb_questions`, `split_var`, `multiplicator`, `empirical_OR`, `readable_OR`, `or_plot`, `lm_plots`).

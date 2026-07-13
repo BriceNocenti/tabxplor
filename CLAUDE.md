@@ -60,12 +60,18 @@ R/
 ├── tab-render-html.R (~350 L) Phase 10e tab_kable render seam: render_kable_html() (kableExtra +
 │                              home-built self-contained html engines) + tab_kable_join/scrollbox
 ├── utils.R         (1306 L)  Pipe re-export, .onLoad() options setup, factor utilities
-├── tab_logit.R     (~330 L)  Phase 12a: LIVE logistic-regression tables. tab_logit() (deps as OR
-│                              columns) + multi_logit() (models as OR columns) -> tabxplor_tab, via
-│                              a direct stats::glm / survey::svyglm + broom::tidy engine (no parsnip).
-│                              OR in the `or` field, log-OR Wald exp() CI in ci_inf/ci_sup, Wald p in
-│                              pvalue, ci_type="or", color="OR", color_signif="grey_non_signif".
-├── tab_logit_2.R     (~9 L)  Emptied in Phase 12a (git rm pending). or_plot/lm_plots deferred.
+├── tab_reg.R       (~590 L)  Phase 12c: unified regression tables. tab_reg() over ONE engine
+│                              (stats::lm/glm, survey::svyglm; broom::tidy) with family dispatch and
+│                              exponentiate-driven fmt shape: gaussian beta (additive -> `diff` field,
+│                              type="coef", display="coef", ci_type="diff", color="diff", `var`=var(Y)
+│                              for the beta/SD(Y) effect-size colour) | binomial OR / poisson IRR
+│                              (multiplicative -> `or`, type="row", display="or", ci_type="or",
+│                              color="OR"). tab_logit()/multi_logit() = thin binomial-family wrappers.
+│                              reg_* helpers (fit/skeleton/column/build); `predictors` char-vec (one
+│                              model, dependent may be a vector) vs named list (model comparison);
+│                              per-variable reference= relevel. 12c-ii: grouped-binomial, formula, contrasts.
+├── tab_logit.R      (~5 L)   Emptied in Phase 12c (renamed -> tab_reg.R; git rm pending).
+├── tab_logit_2.R    (~8 L)   Emptied in Phase 12a (git rm pending). or_plot/lm_plots deferred.
 ├── jmvtab-cache.R  (~800 L)  jmvtab live multi-tier cache: content-addressed store + hashing +
 │                             jmv_cache_aggregate (tier 1-2, tab_aggregate hook) + the Phase 7f
 │                             tier-3 CARRIER cache (Phase 9b-7: jmv_carrier_unwrap/wrap store, not a
@@ -132,7 +138,7 @@ Export:  tab_xl()  |  tab_kable()  |  tab_md()  |  tab_plot()
 | Suggests-only guards     | `openxlsx2`, `ggplot2`, `jmvcore`, `ggpubr`, `cowplot`, `mirai` are in Suggests. Every call must be guarded with `requireNamespace()` or equivalent (tab_xl's ONE guard is in `tab_xl()`; `R/tab-xl-backend.R` wrappers are unguarded).                                                                                                                                                           |
 | Color break mirroring    | `set_color_breaks()` takes positive-only thresholds. Negative breaks are auto-mirrored internally. Any `pct_breaks` value > 1 triggers ratio comparison instead of difference (the "*2 rule").                                                                                                                                                                                                    |
 | Mean-diff asymmetry      | For `type="mean"` columns, the `diff` field stores a **ratio** (cell_mean / ref_mean), NOT a difference. Thresholds like 1.15 mean "+15% above reference". This asymmetry propagates into `color_formula()` and `format.tabxplor_fmt()`. **(1.4.0 §3: numeric `diff` becomes a real difference; the ratio moves to the `ratio` field — the never-used `rr` field renamed, placed after `diff`.)** |
-| tab_logit                | Phase 12a LIVE: binary logit OR tables via glm/svyglm+broom (no parsnip). broom/survey are guarded Suggests. OR columns are ordinary fmt (ci_type="or"). Statistical redesign (multinomial, weights policy, lm/glm) is 12b+.                                                                                                                                                                          |
+| tab_reg                  | Phase 12c LIVE: unified regression tables (gaussian beta / binomial OR / poisson IRR) over lm/glm/svyglm+broom (no parsnip). tab_logit/multi_logit are binomial wrappers. Effect shape is exponentiate-driven: additive beta -> `diff`+type="coef"+display="coef"+ci_type="diff"; multiplicative OR/IRR -> `or`+type="row"+ci_type="or". No new fmt fields/attributes: `type` gains value "coef", `display` gains token "coef", the `var` field carries var(Y). 12c-ii: grouped-binomial/formula/contrasts; 12d+: MNL/ordinal/AME.  |
 
 
 ---
@@ -218,7 +224,8 @@ devtools::test("d:/Statistiques/github/tabxplor", filter = "tab")  # one/few fil
 | `test-tab.R`         | Core: plain tables, pct, totals, NA, CI, chi2, references, wrapping |
 | `test-tab_classes.R` | Class preservation through dplyr verbs                              |
 | `test-tab_xl.R`      | Basic Excel export                                                  |
-| `test-tab_logit.R`   | Phase 12a: OR/CI/p parity vs glm/svyglm, colours, exports, 1/OR     |
+| `test-tab_logit.R`   | Phase 12a: binomial-wrapper OR/CI/p parity vs glm/svyglm, 1/OR      |
+| `test-tab_reg.R`     | Phase 12c: beta/OR/IRR parity vs lm/glm, coef shape, family, colour |
 
 ---
 
@@ -1492,12 +1499,11 @@ this was a structural + fmt-field integration, not the 12b statistical redesign.
 (display phase); visible OR CI bracket / OR+ME/OR+PCT layouts (12b/12d); `jmvtab_logit` UI (12e).
 
 
+#### Phase 12b – design choices and statistical framework (DONE)
 
-#### Phase 12b – design choices and statistical framework
+See details in `dev/tabxplor_1.4.0_decisions.md` §37.
 
-##### Done — design settled (2026-07-13); full record + all web-search citations in `dev/tabxplor_1.4.0_decisions.md` §37
-
-Grounded in 4 web-research passes + a git study of the pre-package draft + 2 maintainer decision rounds. Settled (built in 12d):
+ Grounded in 4 web-research passes + a git study of the pre-package draft + 2 maintainer decision rounds. Settled (built in 12d):
 - **Unified `tab_reg(data, dependent, predictors, family=, effect=, wt=)`** over ONE glm/lm/svyglm/multinom/polr engine; `predictors` = char vector (one model; `dependent` may be a vector → column per dependent) OR a named list (comparison mode → column per model). `tab_logit`/`multi_logit` kept as binomial wrappers (same UX). Effect per family, per-column label: gaussian → β (fmt `diff` shape, neutral 0), binomial → OR, poisson/negbin → IRR (fmt `or` shape, neutral 1); `exponentiate="nongaussian"` default. **fmt already carries both shapes → ~no new fields.**
 - **Family from the outcome, explicit** (only 0/1→binomial auto). **Summed-score integer 0..q → grouped binomial** (`nb_questions`/`trials`, reinstated) — the only place quasibinomial + dispersion apply; count → poisson (+quasipoisson/glm.nb); continuous → gaussian.
 - **Nominal ≥3 → ONE MNL** (`nnet::multinom`), `exp(coef)` labelled "OR (j vs ref)" (= RRR, Begg-Gray; efficient + honest); any reference level / pairwise from one fit. Flavours: default j-vs-ref OR; opt-in "j vs rest OR at reference profile" (adjusted, delta-method CI); AME + predicted probabilities. **Ordered ≥3 → proportional-odds** (`MASS::polr`) default, **diagnosed** (Brant/LR test + warn + MNL/partial-PO fallback).
@@ -1506,39 +1512,58 @@ Grounded in 4 web-research passes + a git study of the pre-package draft + 2 mai
 - **Unified model/test-summary footer**: generalise the `test` attribute (shared by `tab()` + `tab_reg`); default N + LR-vs-null + McFadden R² + AIC/BIC (lm: R²/adjR²/F); dispersion flag for poisson/grouped-binomial; multi-model LR vs null (opt-in vs baseline / sequential); in-cell test label (`"2.9% (Chi2)"`); border box per model block; shared `stats=` arg.
 - **Formulas**: tidyselect default + a formula escape-hatch for experts. **Reinstate** `split_var`, `multiplicator`, `empirical_OR`; `or_plot`/`lm_plots` deferred to a display phase. **Deps**: nnet+MASS (Recommended, free) + broom/survey (Suggests); `marginaleffects` the only new Suggests.
 
-##### Original questions (historical intent)
+The build below is re-cut (2026-07-13) from the settled §37 design. **A Phase = a fresh Claude Code session**; **increments (i/ii/…) = commit-and-verify pauses inside one session** (do the whole session at once if it fits). Every build Phase's verification gate = **statistical-soundness parity** vs base `glm`/`lm`/`svyglm`/`nnet::multinom`/`MASS::polr` (unweighted + survey) with green goldens — this folds the old standalone "tests" phase into each Phase. Final release gate = `devtools::check()`.
 
-Statistical sanity 1 : how to handle dependent var factors with 3+ levels ?
-- The function currently binarise all levels against the reference level chosen, and gives one column per non-reference level, instead of using multinomial logistic regression : I known it’s expert way it’s done, but at the same time I find multinomial logistic regressions very difficult to read, since relative risk ratios with their double reference are farther from experience and intuition and car be thoroughly misinterpreted with not enough knowledge of reference rows and cols (it’s also very difficult to teach to sociology students, and to put in a meaningful sentence it a scientific papers : contrary to odds ratio, that can be put in sentence quite cleanly still understanding what you compare with what). Please, make detailed web searches, and tell me what the statistical consensus is about that, what are the different possibilities and rationales make by and social scientists both (particularly in quantitative sociology).
+#### Phase 12c – `tab_reg` core engine + effect columns (DONE)
 
-Statistical sanity 2 : how to handle survey weights ?
-- Most of my real world data are French national surveys, which always come with weights. The first version of `tab_logit` was made to handle this : on one hand, no weights is common practice, but if the percentages used by logistic regression do not match the percentages the user really have in it’s base empirical crosstables, there’s a bizarre discrepency ; 2. since weights are most of the time not normalised, using weighted counts that are many times higher than the real number of people in the sample destroys significativity tests and confidence intervals since they always pass (total weighted n gives the overall population measured in the national census).
+The foundational rewrite: ONE internal engine (family dispatch) + the shared effect-column machinery, reusing the fmt additive-`diff` / multiplicative-`or` shapes (≈ no new fields). `tab_logit`/`multi_logit` become binomial wrappers.
+- engine skeleton; **binomial at parity with 12a** (`tab_reg(family="binomial")` ≡ `tab_logit`); `predictors` char-vector vs named-list dispatch; **tidyselect** variables + **per-variable reference levels via named vectors**.
+- **gaussian (lm → β)** + **poisson (IRR)**; per-column effect labels (β/OR/IRR); `exponentiate="nongaussian"`.
+- **summed-score grouped binomial** (`nb_questions`/`trials` + quasibinomial) + the **formula escape-hatch** + **contrasts**.
 
-What extension ? Full `lm`/`glm` set + keep current multinomial logistic reg ?
-- Extend the function to numeric variables as predictors ? Extend it to ensure it also works for integer dependent variables as poisson regression ? Generalise the framework most common `lm` + `glm` regressions models, like multiple linear regressions for doubles (with the possibility to chose the type of regression per dependent var, since the R class of the dependent var, double or integer, do not clearly states if the underlying distribution is gaussian or poisson if its counts or binomial if it’s percentages, etc.) ? What would be caveats ? In this case, function should be renamed `tab_reg`. Many things should be reworked to keep both logistic models specificities, plus be closer to standard practices in term of `lm` + `glm` display.
+##### Phase 12c-i – unified engine for tab_reg()
 
-Summary statistics ?
-- What whole analysis/model level test and pvalue should be added, for example on a pvalue_line like chi2 test for crosstables and ANOVA for factor x numeric ? What other model level summary statistics should absolutely be added to keep with standard practices with `lm`/`glm` models ?
+`R/tab_logit.R` → **`R/tab_reg.R`** (family-generic engine; old file + `tab_logit_2.R` emptied, `git rm` pending — `rm` blocked). **`tab_reg(data, dependent, predictors, family=, exponentiate="nongaussian", wt=, reference=, method=, color=, color_signif=, …)`** over ONE engine (`reg_check_deps`/`reg_detect_family`/`reg_prep_binary`/`reg_apply_references`/`reg_skeleton`/`reg_fit`/`reg_lr_pvalues`/`reg_column`/`reg_build`): `stats::lm` (gaussian) / `glm` (binomial/poisson) / `survey::svyglm` (weighted) + `broom::tidy`. `predictors` char-vec = one model (dependent may be a vector → column per dependent); named list = model comparison. `exponentiate` drives the fmt shape: **additive β** → `diff`/type="coef"/display="coef"/ci_type="diff"/color="diff"; **multiplicative OR·IRR** → `or`/type="row"/display="or"/ci_type="or"/color="OR". CI ⇄ p exact duals (z for fixed-dispersion glm, t(df) for lm/quasi/svyglm; profile+LR opt-in). `tab_logit()`/`multi_logit()` are thin binomial wrappers (curated UX unchanged; `test-tab_logit.R` still green).
+- **fmt integration (the maintainer's `type` question):** ONE new `type` VALUE **`"coef"`** (gaussian β only) + ONE new `display` TOKEN **`"coef"`** (raw signed render, no ×100/%/×) + **reuse the `var` field** for var(Y) (the β/SD(Y) effect-size colour, standardized like a mean-diff but by its OWN `var`, not `get_ref_var()`). **No new fmt fields, no new attributes** (18/9 contract intact). OR/IRR stay on the proven `type="row"` path. Also: `fmt_color_plan()` now excludes reference rows from colouring for the diff/ratio/or measures (`gate & !is_refrow`) — byte-identical for crosstabs (their ref cells are diff=0/OR=1 → already slot 0), it uncolours the regression **intercept** (in_refrow but a non-neutral baseline). Excel unchanged (a `coef` cell hits `excel_numfmt_code`'s plain-number branch).
+- **β colour = effect-size gradient** (maintainer decision): β/SD(Y) vs the `mean_diff` (Cohen 0.2/0.5/0.8/1.2) breaks — verified end-to-end (a large standardized β colours, a tiny-but-significant one stays grey). Family `"auto"` detects only binary→binomial / continuous→gaussian (message), else aborts (§37 D2).
+- **Verified:** full suite green (FAIL 0, PASS 1927), incl. colour/golden byte-identity; new `test-tab_reg.R` (β/CI/p vs lm, IRR/CI/p vs glm, coef shape, `exponentiate`, `reference`, family-auto, colour, exports); `test-tab_logit.R` (binomial wrapper) unchanged & green. `devtools::document()` done.
+- **Deferred to 12c-ii:** summed-score grouped binomial (`nb_questions`/`trials`), the formula escape-hatch, contrasts. **Known cosmetic (Phase 13 legend redesign):** the β legend shows the SD breaks as `%`, and the IRR legend says "OR"; a `coef` md cell reuses a `pXX` class name (self-consistent, no collision — regression tables aren't mixed with pct columns).
 
-#### Phase 12c – implement testthat tests
+##### Phase 12c-ii: summed-score grouped binomial, formula escape-hatch, contrasts.
 
-Implement testthat tests
-- They should include tests of statistical soundness, attesting the results matches base `glm` etc. results, unweighted +  survey weights design.
+#### Phase 12d – nominal & ordinal 3+ level outcomes
 
-#### Phase 12d – tab_logit rewrite
+- nominal ≥3 → ONE `nnet::multinom`; `exp(coef)` as "OR (j vs ref)" columns; any reference / pairwise from one fit (joint-vcov CI); align `tab()` empirical-OR terminology.
+- ordered ≥3 → `MASS::polr` proportional-odds default + **Brant/LR PO diagnostic** + warn + fallback (MNL / partial-PO via `ordinal`/`VGAM`).
+-the **"j vs rest OR at reference profile"** flavour (adjusted, delta-method CI).
 
-Implement the design make in the former phase. Plus :
-- Now variables arguments only work with character vectors : integrate in tabxplor current tidyselect framework.
-- Would it be possible to add the possibility to choose reference level for each var by passing a named vector in the variable selectors ? (permit to take ref in the middle while keeping order of ordinal vars, or useless white elephant ?) ?
-- Implement things with contrasts ?
+#### Phase 12e – AME / predicted-probability interpretation mode
 
-#### Phase 12e – tab_logit jamovi UI
+The orthogonal `effect=` axis (`"coefficient"` default vs `"ame"`).
+- AME + predicted-probability engine (base `predict()` points; `marginaleffects` Suggests for SEs) for binomial/gaussian/poisson; display via the additive-`diff` / `pct` shapes + `{}` grammar; **MER-at-reference** opt-in (shares the 12d-iii profile machinery).
+- AME / predicted probabilities for **MNL + ordinal** (per-category).
 
-Add a full tab_logit analysis in Jamovi to give it a user-friendly UI : name it `jmvtab_logit`
-Are there some user-friendly pieces that we could reuse from other well known models/regressions Jamovi modules ?
+#### Phase 12f – unified model/test-summary footer + model comparison
 
-What about `multi_logit`, who handles passing of multiple models (like different subsets of the same variables) for comparison ?
-- Would it be possible to add it’s own jamovi analysis and UI, or would it be too complicated / useless ? Just one jamovi UI for logits, with possibility to choose predictors variables, then click on "+" button to add a subset of them, with the possibility to add any new set with "+" ?
+- **generalise the `test` attribute** → shared GOF/summary vocab; `tab_reg` footer (N / LR-vs-null / McFadden R² / AIC / BIC; lm: R²/adjR²/F); **dispersion flag** (poisson / grouped-binomial). Keep `tab()` crosstabs byte-identical (golden).
+- **multi-model LR comparison** (vs null default; opt-in vs a chosen baseline / sequential; AIC/BIC + message when non-nested / N differs).
+- **unified rendering**: in-cell test labels (`"2.9% (Chi2)"`, `"0.4% (LR vs null)"`), border box per model summary block, shared **`stats=`** arg, console/export/Excel parity; align `tab()`'s p-value rendering (conscious golden regen).
+
+#### Phase 12g – survey design + reinstated companion features
+
+- full survey: **ids/strata/fpc** pass-through + accept a prebuilt `survey::svydesign`/`svrepdesign`; survey-degraded glance (Wald/`regTermTest`, `psrsq`, Rao-Scott AIC). Commit: weighted parity vs `svyglm` + design.
+- **`split_var`** (by-group subtable models — the regression analogue of `tab_vars`).
+- **`multiplicator`** (per-k-unit continuous scaling) + **`empirical_OR`** (OR + empirical % beside the model OR).
+
+#### Phase 12h – jamovi UI: `jmvtab_reg` / `jmvtab_logit`
+
+One regression analysis (family / outcome / predictors / `effect` / reference); a "+" to add predictor subsets for `multi_logit`-style model comparison; reuse patterns from known regression jamovi modules. `.h.R` regeneration + live verification is the maintainer's interactive step.
+
+#### Phase 12i – regression display phase
+
+`or_plot` (OR forest plot, finalfit-style), `lm_plots` (2×2 glm/lm diagnostics), the visible OR-CI bracket, and the OR+ME / OR+PCT composite cell layouts.
+
+
 
 
 
@@ -1573,6 +1598,8 @@ Color breaks and color palette management is very not user friendly (base is ok,
 Color legends
 - Even in Excel export, use styles inside the color legend cells to color the breaks with the relevant text or background color (+bold), to make it really usable (otherwise a legend that does not say what color is what is incomprehensible), while keeping the rest of the text in the cell black (+ plain).
 - Make the color legend more easy to read for  non-expert users, and implement a French translation (detect OS language + override by optional argument in export functions ?)
+- Integrate `tab_reg()` into the colors legends reliably and usefully for the user. Currently the β legend shows the SD breaks as %, and the IRR legend says "OR".
+
 
 Missing infos on exported tables, compared to what’s default in other statistical software ?
 - Display the variable names for `col_vars` : not in console, but in html and Excel, add a second headers line above the main headers row with the levels ; when contiguous fmt columns have the same col_vars, merge the variable names headers cells into a single cell (name of the same variable only needs to be given once).
@@ -1586,6 +1613,7 @@ Display problems and improvements :
 - When there are confidence intervals significance stars, they should display, in some way or another, in all exports types. They should be completely padded right everywhere, so the stars always align in monospace font. In tab_md() it’s not
 - Un exports AND in console display, with any significance star in the column, all numbers should be padded right to keep numbers alignment and readability.
 - Does transpose at export work perfecty (colors and all) with `pct = "col"` and with numeric variables ? If not, calculate colors, and anything else relevant (other column-level attributes not usable after the transposition), before transposition ?
+
 
 
 

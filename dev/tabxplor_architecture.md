@@ -665,21 +665,30 @@ Utilities and initialization:
 - Factor manipulation utilities (`fct_recode_helper`, etc.)
 - `score_from_lv1()` — scoring helper for survey data
 
-### R/tab_logit.R (Phase 12a — LIVE)
+### R/tab_reg.R (Phase 12c — LIVE; renamed from R/tab_logit.R)
 
-Logistic-regression tables as native `tabxplor_tab` objects. Public: `tab_logit(data, dependent,
-predictors, wt, ...)` (one predictor set, dependents as odds-ratio columns) and `multi_logit(data,
-dependent, models, ...)` (one dependent, named model sets as columns — blank where a predictor is
-absent). Internal engine: `logit_fit()` (complete-case `stats::glm` unweighted / `survey::svyglm` on
-`svydesign` weighted → `broom::tidy`, with the log-OR **Wald** CI computed in-house so it is the exact
-dual of the Wald p), `logit_skeleton()` (the var/level/term rows), `logit_column()` (align a fit → one
-OR fmt column), `logit_build()` (shared assembler → `new_tab() |> group_by(var)`). `broom`/`survey` are
-`requireNamespace()`-guarded Suggests. An OR column is an ordinary fmt: `or` field, log-OR Wald exp()
-bounds in `ci_inf`/`ci_sup`, Wald p in `pvalue`, `type="row"`, `display="or"`, `color="OR"`,
-`color_signif="grey_non_signif"`, `ci_type="or"` (multiplicative neutral 1) — so it prints (with `1/OR`
-for OR<1 + stars + greyed non-significant cells), colours and exports like any crosstab. See CLAUDE.md
-Phase 12a + decisions §36. `R/tab_logit_2.R` was emptied (the parsnip draft + or_plot/lm_plots forest
-plot/diagnostics dropped; deferred to a later display phase).
+Unified regression tables as native `tabxplor_tab` objects, over ONE family-dispatching engine. Public:
+`tab_reg(data, dependent, predictors, family, exponentiate, wt, reference, method, color, color_signif,
+...)`; `predictors` as a character vector = one model (`dependent` may be a vector → one column per
+outcome), or a named list = model comparison (one column per model, blank where a predictor is absent).
+`tab_logit()`/`multi_logit()` are thin **binomial-family wrappers** (curated binary-outcome UX). Internal
+engine: `reg_detect_family()` (auto: binary→binomial / continuous→gaussian, else abort), `reg_fit()`
+(complete-case `stats::lm` (gaussian) / `glm` (binomial/poisson) / `survey::svyglm` (weighted) →
+`broom::tidy`; Wald CI in-house — z for fixed-dispersion glm, t(df.residual) for lm/quasi/svyglm — the
+exact dual of the Wald p; `method="profile"` = `confint`+LR for unweighted binomial/poisson),
+`reg_skeleton()` (var/level/term rows), `reg_column()` (align a fit → one fmt column), `reg_build()`
+(assembler → `new_tab() |> group_by(var)`). `broom`/`survey`(/`MASS` for profile) are
+`requireNamespace()`-guarded Suggests.
+
+`exponentiate` (default `"nongaussian"`) drives the fmt shape: **multiplicative** OR/IRR → the `or` field,
+`type="row"`, `display="or"`, `ci_type="or"`, `color="OR"` (neutral 1, `1/x` reciprocal); **additive**
+gaussian β / log-odds → the `diff` field, `type="coef"`, `display="coef"` (raw signed render, no ×100/%/×),
+`ci_type="diff"`, `color="diff"` (neutral 0), with the `var` field carrying var(Y) so the colour is the
+effect-size **β/SD(Y)** against the `mean_diff` (Cohen) breaks. Reference rows (crosstab reference /
+regression intercept + factor baselines) are never coloured (`fmt_color_plan`'s `gate & !is_refrow`).
+No new fmt fields/attributes — `type` gained the value `"coef"`, `display` the token `"coef"`. See CLAUDE.md
+Phase 12c + decisions §37. `R/tab_logit.R` and `R/tab_logit_2.R` are emptied (`git rm` pending; the
+parsnip draft + or_plot/lm_plots deferred to a later display phase).
 
 ### R/jmvtab.b.R and R/jmvtab.h.R
 

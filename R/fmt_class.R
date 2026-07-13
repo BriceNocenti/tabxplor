@@ -380,6 +380,7 @@ get_num <- function(x) {
   out[!nas & display == "pct"    ] <- get_pct (x)[!nas & display == "pct"    ]
   out[!nas & display == "pvalue" ] <- get_pct (x)[!nas & display == "pvalue" ]
   out[!nas & display == "diff"   ] <- get_diff(x)[!nas & display == "diff"   ]
+  out[!nas & display == "coef"   ] <- get_diff(x)[!nas & display == "coef"   ]  # Phase 12c: raw regression coef -> diff field
   out[!nas & display == "pct_ci" ] <- get_pct (x)[!nas & display == "pct_ci" ]
   out[!nas & display == "ctr"    ] <- get_ctr (x)[!nas & display == "ctr"    ]
   out[!nas & display == "mean"   ] <- get_mean(x)[!nas & display == "mean"   ]
@@ -411,6 +412,7 @@ set_num <- function(x, value) {
   out[!nas & display == "wn"  ] <- set_wn  (x[!nas & display == "wn"  ], value[!nas & display == "wn"  ])
   out[!nas & display == "pct" ] <- set_pct (x[!nas & display == "pct" ], value[!nas & display == "pct" ])
   out[!nas & display == "diff"] <- set_diff(x[!nas & display == "diff"], value[!nas & display == "diff"])
+  out[!nas & display == "coef"] <- set_diff(x[!nas & display == "coef"], value[!nas & display == "coef"])  # Phase 12c
   out[!nas & display == "ctr" ] <- set_ctr (x[!nas & display == "ctr" ], value[!nas & display == "ctr" ])
   out[!nas & display == "mean"] <- set_mean(x[!nas & display == "mean"], value[!nas & display == "mean"])
   out[!nas & display == "var" ] <- set_var (x[!nas & display == "var" ], value[!nas & display == "var" ])
@@ -452,7 +454,11 @@ get_type.data.frame <- function(x, ...) purrr::map_chr(x, ~ get_type(.))
 #' @export
 set_type      <- function(x, type) {
   if (type %in% c("no", "", NA_character_)) type <- "n"
-  stopifnot(type %in% c("row", "col", "all", "all_tabs", "mean", "n"))
+  # "coef" (Phase 12c): a regression-coefficient column (gaussian beta). It routes the effect-size
+  # color (mean_diff Cohen scale, standardized by beta/SD(Y) via the `var` field) and the raw
+  # `display="coef"` render, without abusing "mean"/"row" or fighting get_ref_var() (whose
+  # refrow-at-END grouping is built for crosstab subtable totals). OR/IRR stay on "row".
+  stopifnot(type %in% c("row", "col", "all", "all_tabs", "mean", "n", "coef"))
   `attr<-`(x ,"type"    , type)
 }
 
@@ -1919,6 +1925,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
    out[type_ci] <- switch(
      type,
      "n"       = ,
+     "coef"    = ,                                     # Phase 12c: coef CI moe is unit-scale (no %)
      "mean"    = paste0(pm, out[type_ci]),
      "row"     = ,
      "col"     = ,
@@ -1941,6 +1948,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
     disp_diff   <- display == "diff" & !nas
     disp_moe    <- disp_ci & ci_print_moe # no if `ci_print = "ci"`
     disp_ctr    <- display == "ctr" & !nas
+    disp_coef   <- display == "coef" & !nas             # Phase 12c: raw regression coefficient
     disp_or     <- display %in% c("or", "OR") & !nas
     disp_or_pct <- display %in% c("or_pct", "OR_pct") & !nas
     # get_var() (the vctrs::field accessor) not x$var (the dplyr::pull `$` method): x$var here ran
@@ -2028,6 +2036,15 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
     if (any(disp_or_pct)) {
       reffmt  <- set_display(x[disp_or_pct], "pct") |> set_digits(0L) |> format()
       out[disp_or_pct] <- paste0(out[disp_or_pct], " (", reffmt, ")")
+    }
+
+    if (any(disp_coef)) {
+      # Phase 12c: a regression-coefficient cell renders as the plain signed value (no x100 / % / x
+      # -- "coef" is absent from the pct_or_ci / diff_mean masks). Reference-level coefficients are
+      # 0 (the additive neutral); show a bare "0" (the additive twin of the OR "1"). The intercept
+      # ("Constant") carries the baseline value (diff != 0), so it keeps its number.
+      ref0 <- disp_coef & !is.na(get_diff(x)) & get_diff(x) == 0
+      out[ref0] <- "0"
     }
   }
 
@@ -2417,10 +2434,15 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
              else get_color_signif(x)
 
   is_mean <- type %in% c("mean", "n")
+  # Phase 12c: a "coef" column (gaussian regression beta) colours the STANDARDIZED effect beta/SD(Y)
+  # against the mean_diff (Cohen 0.2/0.5/0.8/1.2) breaks -- the additive twin of OR-by-ratio. It uses
+  # the mean_diff scale like a mean-diff, but standardizes by its OWN `var` field (= var(Y), constant),
+  # NOT by get_ref_var() (whose refrow-at-END grouping is meaningless for a regression skeleton).
+  is_std_diff <- is_mean || type == "coef"
   sc      <- color_scales(x)
   scale   <- switch(measure,
-                    "diff"    = if (is_mean) sc$mean_diff  else sc$pct_diff,
-                    "ratio"   = if (is_mean) sc$mean_ratio else sc$pct_ratio,
+                    "diff"    = if (is_std_diff) sc$mean_diff  else sc$pct_diff,
+                    "ratio"   = if (is_mean)     sc$mean_ratio else sc$pct_ratio,
                     "or"      = sc$mean_ratio,
                     "contrib" = sc$contrib)
   center <- scale$center
@@ -2436,8 +2458,8 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
 
   # numeric diff is standardized (Glass's delta) unless absolute unit breaks were supplied
   sd_ref <- NULL
-  if (measure == "diff" && is_mean && isTRUE(scale$std)) {
-    sd_ref      <- sqrt(get_ref_var(x))
+  if (measure == "diff" && is_std_diff && isTRUE(scale$std)) {
+    sd_ref      <- if (type == "coef") sqrt(get_var(x)) else sqrt(get_ref_var(x))
     raw         <- raw / sd_ref
     raw[!is.finite(raw)] <- NA_real_        # sd_ref 0/NA -> undefined -> uncolored
   }
@@ -2456,7 +2478,7 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
     floor_q <- dplyr::case_when(sig_pos ~ get_ci_inf(x),
                                 sig_neg ~ get_ci_sup(x),
                                 TRUE    ~ NA_real_)
-    if (measure == "diff" && is_mean && isTRUE(scale$std)) floor_q <- floor_q / sd_ref
+    if (measure == "diff" && is_std_diff && isTRUE(scale$std)) floor_q <- floor_q / sd_ref
     score <- floor_q
     gate  <- !is.na(floor_q)
   } else if (policy == "grey_non_signif") {
@@ -2470,6 +2492,11 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
     gate  <- !is.na(raw)
     if (measure == "contrib") gate <- gate & !is_totrow(x)
   }
+
+  # Phase 12c: a reference row is a baseline, not an effect -> never coloured. Redundant for
+  # crosstabs (a reference cell's diff is 0 / OR is 1, already slot 0), it uncolours a regression
+  # INTERCEPT (in_refrow but a non-neutral baseline value) under every policy.
+  if (measure %in% c("diff", "ratio", "or")) gate <- gate & !is_refrow(x)
 
   pos_breaks <- if (isTRUE(mp$single0)) c(0) else scale$pos
   slots      <- build_slots(length(pos_breaks), channel)
@@ -2926,6 +2953,7 @@ vec_ptype_abbr.tabxplor_fmt <- function(x, ...) {
   out <- paste0(type, "-", display) %>%
     stringr::str_replace("^n-n", "n") %>%
     stringr::str_replace("^mean-mean", "mean") %>%
+    stringr::str_replace("^coef-coef", "coef") %>%   # Phase 12c
     stringr::str_replace("^mixed-mixed", "mixed") %>%
     stringr::str_replace("([^%]+%)-pct", "\\1") %>%
     stringr::str_remove("^NA") %>%
@@ -2953,6 +2981,7 @@ vec_ptype_full.tabxplor_fmt <- function(x, ...) {
   out <- paste0("fmt-", type, "-", display) %>%
     stringr::str_replace("-n-n", "-n") %>%
     stringr::str_replace("-mean-mean", "-mean") %>%
+    stringr::str_replace("-coef-coef", "-coef") %>%   # Phase 12c
     stringr::str_replace("-mixed-mixed", "-mixed") %>%
     stringr::str_replace("([^%]+%)-pct", "\\1") %>%
     stringr::str_remove("-NA") %>%
