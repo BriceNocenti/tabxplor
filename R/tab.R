@@ -188,9 +188,10 @@ NULL
 #'    a total table with a total row), or with the first line of the total table
 #'    when \code{ref = "first"}.
 #' }
-#' @param OR With `pct = "row"` or `pct = "col"`, calculate and print odds ratios
-#'   (for binary variables) or relative risks ratios (for variables with 3 levels
-#'   or more).
+#' @param OR With `pct = "row"` or `pct = "col"`, calculate and print odds ratios:
+#'   for a binary variable the usual odds ratio; for a variable with 3 levels or more,
+#'   the odds ratio of each level versus the reference level (the empirical analogue of
+#'   the "OR (j vs reference)" from a multinomial [tab_reg()] model).
 #'  \itemize{
 #'   \item \code{"no"}: by default, no OR are calculated.
 #'   \item \code{"OR"}: print OR (instead of percentages).
@@ -820,9 +821,10 @@ finalize_one_col <- function(col, spec) {
 #'    a total table with a total row), or with the reference line of the total table
 #'    when \code{ref = "first"}, an integer or a regular expression.
 #' }
-#' @param OR With `pct = "row"` or `pct = "col"`, calculate and print odds ratios
-#'   (for binary variables) or relative risks ratios (for variables with 3 levels
-#'   or more).
+#' @param OR With `pct = "row"` or `pct = "col"`, calculate and print odds ratios:
+#'   for a binary variable the usual odds ratio; for a variable with 3 levels or more,
+#'   the odds ratio of each level versus the reference level (the empirical analogue of
+#'   the "OR (j vs reference)" from a multinomial [tab_reg()] model).
 #'  \itemize{
 #'   \item \code{"no"}: by default, no OR are calculated.
 #'   \item \code{"OR"}: print OR (instead of percentages).
@@ -2703,9 +2705,10 @@ fmt_stack_frames <- function(frames, meta) {
 #'  (\code{comp = "all"}) ?
 #'  \code{comp} must be set once and for all the first time you use \code{\link{tab_plain}},
 #'  \code{\link{tab_num}} or \code{\link{tab_chi2}} with rows, or \code{\link{tab_ci}}.
-#' @param OR With `pct = "row"` or `pct = "col"`, calculate and print odds ratios
-#'   (for binary variables) or relative risks ratios (for variables with 3 levels
-#'   or more).
+#' @param OR With `pct = "row"` or `pct = "col"`, calculate and print odds ratios:
+#'   for a binary variable the usual odds ratio; for a variable with 3 levels or more,
+#'   the odds ratio of each level versus the reference level (the empirical analogue of
+#'   the "OR (j vs reference)" from a multinomial [tab_reg()] model).
 #'  \itemize{
 #'   \item \code{"no"}: by default, no OR are calculated.
 #'   \item \code{"OR"}: print OR (instead of percentages).
@@ -3534,7 +3537,7 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, OR, color, pct,
       tabs_rr <- data.table::copy(tabs_pct)
       set_cols(tabs_rr, RR)
 
-      # Odds ratio (binary) or relative risk ratios : rr / reference ROW
+      # Odds ratio (binary) or per-level OR vs the reference (3+ levels) : rr / reference ROW
       tabs_or <- data.table::copy(tabs_pct)
       set_cols(tabs_or, RR / RR[ra, , drop = FALSE])
     }
@@ -3581,7 +3584,7 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, OR, color, pct,
       tabs_rr <- data.table::copy(tabs_pct)
       set_cols(tabs_rr, RR)
 
-      # Odds ratio (binary) or relative risk ratios : rr / reference COLUMN
+      # Odds ratio (binary) or per-level OR vs the reference (3+ levels) : rr / reference COLUMN
       tabs_or <- data.table::copy(tabs_pct)
       if (length(refcols) != 0 & !is.na(refcols)) {
         set_cols(tabs_or, RR / RR[, refcols])

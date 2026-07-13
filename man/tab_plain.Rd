@@ -60,9 +60,10 @@ totals (or from first cells when \code{ref = "first"}).
 color based on odds ratios (or relative risks ratios)
 }}
 
-\item{OR}{With \code{pct = "row"} or \code{pct = "col"}, calculate and print odds ratios
-(for binary variables) or relative risks ratios (for variables with 3 levels
-or more).
+\item{OR}{With \code{pct = "row"} or \code{pct = "col"}, calculate and print odds ratios:
+for a binary variable the usual odds ratio; for a variable with 3 levels or more,
+the odds ratio of each level versus the reference level (the empirical analogue of
+the "OR (j vs reference)" from a multinomial \code{\link[=tab_reg]{tab_reg()}} model).
 \itemize{
 \item \code{"no"}: by default, no OR are calculated.
 \item \code{"OR"}: print OR (instead of percentages).

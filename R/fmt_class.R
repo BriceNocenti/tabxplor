@@ -100,7 +100,8 @@ globalVariables(c("table_id", "row_id", "col_id", "o", "rowtot", "coltot", "ok",
 #' vectors the length of \code{n}. Calculate with \code{tab_ci}.
 #' @param pvalue The per-cell significance p-value, as a double vector the length of
 #' \code{n}.
-#' @param or The odds ratio or relative risk ratio, as a double vector the length of \code{n}.
+#' @param or The odds ratio (for a 3+ level variable, the OR of each level versus the reference),
+#'   as a double vector the length of \code{n}.
 #' @param tot_n The cell's own (unweighted) percentage base, as a double vector the length
 #' of \code{n}.
 #' @param in_totrow \code{TRUE} when the cell is part of a total row
@@ -1353,7 +1354,7 @@ get_stars  <- function(x, p = get_pvalue(x)) {
 #' @keywords internal
 # @export
 get_pvalue <- fmt_field_factory("pvalue")
-# @describeIn fmt get the "or" field (odds ratio or relative risk ratio)
+# @describeIn fmt get the "or" field (odds ratio; per-level OR vs the reference for 3+ level vars)
 #' @keywords internal
 # @export
 get_or     <- fmt_field_factory("or")
@@ -1649,7 +1650,7 @@ set_ci      <- function(x, value) {
 #' @keywords internal
 # @export
 set_pvalue  <- fmt_set_field_factory("pvalue" , cast = double()   )
-# @describeIn fmt set the "or" field (odds ratio or relative risk ratio)
+# @describeIn fmt set the "or" field (odds ratio; per-level OR vs the reference for 3+ level vars)
 #' @keywords internal
 # @export
 set_or      <- fmt_set_field_factory("or"     , cast = double()   )

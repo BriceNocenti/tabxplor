@@ -19,6 +19,13 @@
   is fit as a grouped binomial by passing `trials =` (the number of items). Power users can pass a
   model **formula** as `dependent` (e.g. `tab_reg(data, y ~ x1 + poly(x2, 2) + x1:x3)`) instead of a
   `predictors` vector.
+* `tab_reg()` now also handles **3+ level categorical outcomes**. A nominal (unordered) outcome is fit
+  as one multinomial logit (`family = "multinomial"`, `nnet::multinom`), giving one odds-ratio column
+  per outcome category versus the reference (`reference = c(outcome = "level")` sets the baseline
+  category). An ordered outcome is fit as a proportional-odds cumulative logit (`family = "ordinal"`,
+  `MASS::polr`), giving one cumulative-odds-ratio column; the parallel-lines assumption is tested with
+  the Brant test (install the `brant` package) and a warning is issued if it is violated. `family =
+  "auto"` now detects these from the outcome type. `nnet` and `brant` are optional dependencies.
 * `tab_logit()` and `multi_logit()` are now thin wrappers of `tab_reg()` for the binomial family,
   keeping the curated binary-outcome interface (`tab_logit(data, dependent, predictors)` for one
   logit per dependent; `multi_logit(data, dependent, models = list(...))` for model comparison).

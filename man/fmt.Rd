@@ -191,7 +191,8 @@ vectors the length of \code{n}. Calculate with \code{tab_ci}.}
 \item{pvalue}{The per-cell significance p-value, as a double vector the length of
 \code{n}.}
 
-\item{or}{The odds ratio or relative risk ratio, as a double vector the length of \code{n}.}
+\item{or}{The odds ratio (for a 3+ level variable, the OR of each level versus the reference),
+as a double vector the length of \code{n}.}
 
 \item{tot_n}{The cell's own (unweighted) percentage base, as a double vector the length
 of \code{n}.}

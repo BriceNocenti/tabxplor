@@ -1,12 +1,14 @@
 # PURPOSE: Regression tables (effect measures) as native tabxplor_tab objects.
 # ROLE: tab_reg() fits one model per column across families and renders the per-family effect measure
-#   -- gaussian beta (additive), binomial OR / poisson IRR (multiplicative) -- through the
-#   tabxplor_fmt diff|or / ci_inf|ci_sup / pvalue / var fields, so a regression table prints,
-#   colours and exports (kable / md / Excel) exactly like a crosstab. tab_logit()/multi_logit() are
-#   thin binomial-family wrappers with the curated binary-outcome UX.
+#   -- gaussian beta (additive), binomial OR / poisson IRR / multinomial OR / ordinal cumulative OR
+#   (multiplicative) -- through the tabxplor_fmt diff|or / ci_inf|ci_sup / pvalue / var fields, so a
+#   regression table prints, colours and exports (kable / md / Excel) exactly like a crosstab.
+#   tab_logit()/multi_logit() are thin binomial-family wrappers with the curated binary-outcome UX.
 # KEY CONSTRAINTS:
-#   - Direct engine: stats::lm/glm (unweighted) / survey::svyglm (weighted) + broom::tidy. No parsnip.
-#   - broom (always), survey (wt path), MASS (method="profile" glm) are Suggests -> guarded.
+#   - Direct engine: stats::lm/glm (unweighted) / survey::svyglm (weighted) + nnet::multinom (nominal
+#     3+ level) + MASS::polr (ordinal 3+ level), all tidied with broom::tidy. No parsnip.
+#   - broom (always), survey (wt path), MASS (ordinal + method="profile"), nnet (multinomial), brant
+#     (ordinal PO diagnostic) are Suggests -> guarded.
 #   - CI <-> p are DUALS (CI <-> stars can never disagree). method="wald" (default): in-house Wald
 #     CI (coef +/- crit*se, exp()'d for ratio measures) + the model's own Wald p; crit is z for
 #     fixed-dispersion glm (binomial/poisson), t(df.residual) for lm / quasi* / weighted svyglm --
@@ -20,12 +22,20 @@
 #     a model FORMULA in `dependent` is the escape hatch -- a simple `y ~ a + b` reduces to the
 #     dependent+predictors path, a compound one (interactions / poly() / I()) is fit verbatim with a
 #     best-effort skeleton read from the fitted terms (reg_skeleton_from_fit).
-# See: CLAUDE.md Phase 12c ; dev/tabxplor_1.4.0_decisions.md S37.
+#   - 12d: nominal 3+ level -> ONE multinom -> reg_build splits its `y.level` tidy into one OR column
+#     per non-reference category ("<j> vs <ref>: OR"); the outcome baseline is set by `reference`
+#     keyed on the dependent. Ordered 3+ level -> polr -> one cumulative-OR column (cut-point rows
+#     dropped -> "Constant" NA), with a Brant PO diagnostic (reg_ordinal_diagnostic, self-heals the
+#     fit's $call so brant works out of the fitting scope). Both reuse the OR fmt shape unchanged;
+#     both share reg_wald_from_tidy so CI <-> p <-> stars stay exact duals. Weighted MNL/ordinal
+#     deferred (guarded error).
+# See: CLAUDE.md Phase 12c/12d ; dev/tabxplor_1.4.0_decisions.md S37.
 
 # === Internal engine ================================================================
 
-# broom is needed for every fit; survey only for the weighted (wt) path.
-reg_check_deps <- function(wt) {
+# broom is needed for every fit; survey only for the weighted (wt) path; nnet / MASS for the
+# nominal (multinomial) / ordinal (proportional-odds) families (both R Recommended -> normally present).
+reg_check_deps <- function(family, wt) {
   if (!requireNamespace("broom", quietly = TRUE)) {
     cli::cli_abort(c(
       "{.pkg broom} is required for regression tables.",
@@ -36,6 +46,18 @@ reg_check_deps <- function(wt) {
     cli::cli_abort(c(
       "{.pkg survey} is required for weighted regression (the {.arg wt} argument).",
       "i" = 'Install it with {.code install.packages("survey")}.'
+    ))
+  }
+  if (family == "multinomial" && !requireNamespace("nnet", quietly = TRUE)) {
+    cli::cli_abort(c(
+      "{.pkg nnet} is required for multinomial (nominal 3+ level) outcomes.",
+      "i" = 'Install it with {.code install.packages("nnet")}.'
+    ))
+  }
+  if (family == "ordinal" && !requireNamespace("MASS", quietly = TRUE)) {
+    cli::cli_abort(c(
+      "{.pkg MASS} is required for ordinal (proportional-odds) outcomes.",
+      "i" = 'Install it with {.code install.packages("MASS")}.'
     ))
   }
 }
@@ -68,9 +90,11 @@ reg_parse_formula <- function(formula, data) {
        formula = formula, lhs_is_name = lhs_is_name, simple = simple)
 }
 
-# Auto-detect the model family from the outcome -- ONLY the unambiguous 0/1 -> binomial and the
-# clearly-continuous -> gaussian cases (a message is emitted). An integer/count with 3+ values is
-# ambiguous (poisson vs grouped-binomial vs gaussian) and must be named explicitly (S37 D2).
+# Auto-detect the model family from the outcome (a message is emitted). The safe data-driven rules
+# (S37 D2): 0/1 or any 2-level outcome -> binomial; an ORDERED factor with 3+ levels -> ordinal
+# (proportional-odds); an UNORDERED factor / character with 3+ levels -> multinomial; a non-integer
+# numeric -> gaussian. An integer/count with 3+ values stays ambiguous (poisson vs grouped-binomial
+# vs gaussian) and must be named explicitly.
 reg_detect_family <- function(data, dependent) {
   y <- data[[dependent]]
   u <- unique(stats::na.omit(y))
@@ -79,6 +103,20 @@ reg_detect_family <- function(data, dependent) {
       "{.val {dependent}}: binary outcome detected -> {.code family = \"binomial\"} (logistic)."
     )))
     return("binomial")
+  }
+  if (is.ordered(y) && length(u) >= 3L) {
+    cli::cli_inform(c("i" = paste0(
+      "{.val {dependent}}: ordered outcome detected -> {.code family = \"ordinal\"} ",
+      "(proportional-odds)."
+    )))
+    return("ordinal")
+  }
+  if ((is.factor(y) || is.character(y)) && length(u) >= 3L) {
+    cli::cli_inform(c("i" = paste0(
+      "{.val {dependent}}: nominal outcome detected -> {.code family = \"multinomial\"} (multinomial ",
+      "logistic)."
+    )))
+    return("multinomial")
   }
   if (is.numeric(y) && any(y %% 1 != 0, na.rm = TRUE)) {
     cli::cli_inform(c("i" = paste0(
@@ -89,7 +127,7 @@ reg_detect_family <- function(data, dependent) {
   cli::cli_abort(c(
     "Cannot auto-detect the model family for {.val {dependent}}.",
     "i" = paste0("Set {.arg family} explicitly: {.val gaussian} (linear), {.val poisson} (counts), ",
-                 "{.val binomial} (logistic).")
+                 "{.val binomial} (logistic), {.val multinomial} / {.val ordinal} (3+ level).")
   ))
 }
 
@@ -97,7 +135,21 @@ reg_detect_family <- function(data, dependent) {
 # header). Additive (raw) -> beta ; multiplicative -> OR (binomial) / IRR (poisson) / exp(beta).
 reg_effect_word <- function(family, do_exp) {
   if (!do_exp) return("\u03b2")                  # beta (raw / log-odds coefficient)
-  switch(family, "binomial" = "OR", "poisson" = , "quasipoisson" = "IRR", "exp(\u03b2)")
+  switch(family,
+         "binomial" = , "multinomial" = , "ordinal" = "OR",
+         "poisson" = , "quasipoisson" = "IRR",
+         "exp(\u03b2)")
+}
+
+# A one-line note appended to the table's subtext, so a multinomial / ordinal table self-documents its
+# estimand (the "vs <ref>" per-category detail lives in the column labels).
+reg_model_note <- function(family, do_exp) {
+  switch(family,
+    "ordinal"     = if (do_exp) "Cumulative odds ratios (proportional-odds model)."
+                    else        "Proportional-odds model (log-odds coefficients).",
+    "multinomial" = if (do_exp) "Multinomial odds ratios (each category vs the reference)."
+                    else        "Multinomial log-odds coefficients.",
+    NULL)
 }
 
 # Prepare a binary dependent: a 0/1 numeric becomes a 2-level factor ("Not <dep>" / "<dep>"); any
@@ -258,6 +310,105 @@ reg_lr_pvalues <- function(fit) {
   stats::setNames(p, stringr::str_remove_all(colnames(X), "`"))
 }
 
+# Wald CI + p from a tidy carrying `estimate` + `std.error` on the log scale. multinom / polr are ML
+# with fixed dispersion, so the quantile is z (qnorm) -- the same branch the fixed-dispersion glm path
+# uses. Both CI and p come from estimate/se, so they are exact duals (CI <-> stars can never disagree),
+# and both survive an NaN se (a rank-deficient / empty cell -> NaN, matching the base model). `do_exp`
+# exponentiates the estimate and the bounds (OR/IRR). Fills conf.low/conf.high/p.value in place.
+reg_wald_from_tidy <- function(td, conf_level, do_exp) {
+  crit <- stats::qnorm(1 - (1 - conf_level) / 2)
+  lo   <- td$estimate - crit * td$std.error
+  hi   <- td$estimate + crit * td$std.error
+  p    <- 2 * stats::pnorm(-abs(td$estimate / td$std.error))
+  est  <- td$estimate
+  if (do_exp) { est <- exp(est); lo <- exp(lo); hi <- exp(hi) }
+  td$estimate <- est; td$conf.low <- lo; td$conf.high <- hi; td$p.value <- p
+  td
+}
+
+# Nominal 3+ level outcome: ONE multinomial logit (nnet::multinom). exp(coef) is the "OR (j vs the
+# reference outcome level)" -- the Begg-Gray estimand, one set of coefficients per non-reference
+# category (the tidy carries a `y.level` column that reg_build splits into one OR column per category).
+# The reference category is the outcome factor's FIRST level (set via `reference` upstream, MNL only).
+reg_fit_multinom <- function(mdata, dependent, predictors, do_exp, conf_level, method) {
+  if (method == "profile") {
+    cli::cli_inform(c("!" = "Profile intervals are not defined for multinomial models; using Wald."))
+  }
+  mdata[[dependent]] <- forcats::fct_drop(as.factor(mdata[[dependent]]))
+  y_levels <- levels(mdata[[dependent]])
+  fml <- stats::as.formula(paste0(
+    "`", dependent, "` ~ ", paste0("`", predictors, "`", collapse = " + ")
+  ))
+  fit <- nnet::multinom(fml, data = mdata, trace = FALSE)
+  td  <- broom::tidy(fit)                              # y.level, term, estimate, std.error, ...
+  td$term <- stringr::str_remove_all(td$term, "`")     # strip formula backticks -> match skeleton
+  td  <- reg_wald_from_tidy(td, conf_level, do_exp)
+  list(tidy = td, nobs = nrow(mdata), var_y = NA_real_, positive_level = NULL,
+       fit = fit, y_ref = y_levels[1], y_levels = y_levels[-1])
+}
+
+# Ordered 3+ level outcome: proportional-odds cumulative logit (MASS::polr). exp(coef) is one
+# cumulative OR per predictor level -> ONE column (the cut-point "scale" rows are dropped, so the
+# skeleton "Constant" cell stays NA). The parallel-lines assumption is diagnosed (Brant test -> warn).
+reg_fit_ordinal <- function(mdata, dependent, predictors, do_exp, conf_level, method) {
+  if (method == "profile") {
+    cli::cli_inform(c("!" = "Profile intervals are not defined for proportional-odds models; using Wald."))
+  }
+  y <- mdata[[dependent]]
+  if (!is.ordered(y)) {
+    y <- as.ordered(forcats::fct_drop(as.factor(y)))
+    lv_str <- paste(levels(y), collapse = " < ")
+    cli::cli_inform(c("i" = "{.val {dependent}}: treated as ordered ({lv_str})."))
+  } else {
+    y <- forcats::fct_drop(y)
+  }
+  mdata[[dependent]] <- y
+  fml <- stats::as.formula(paste0(
+    "`", dependent, "` ~ ", paste0("`", predictors, "`", collapse = " + ")
+  ))
+  fit <- MASS::polr(fml, data = mdata, Hess = TRUE, method = "logistic")
+  td  <- broom::tidy(fit)
+  td  <- td[td$coef.type == "coefficient", , drop = FALSE]   # drop cut-point ("scale") intercepts
+  td$term <- stringr::str_remove_all(td$term, "`")
+  td  <- reg_wald_from_tidy(td, conf_level, do_exp)
+  reg_ordinal_diagnostic(fit)                                # Brant PO test -> warn (gated on brant)
+  list(tidy = td, nobs = nrow(mdata), var_y = NA_real_, positive_level = NULL, fit = fit)
+}
+
+# Diagnose the proportional-odds (parallel-lines) assumption with the Brant test (the `brant` package,
+# a Suggests). Warn when the omnibus test rejects; a missing `brant` skips it with a hint; a failing
+# test (sparse data) is swallowed -- a diagnostic must never break the table.
+reg_ordinal_diagnostic <- function(fit) {
+  if (!requireNamespace("brant", quietly = TRUE)) {
+    cli::cli_inform(c("i" = paste0(
+      "Proportional-odds (parallel-lines) assumption not tested: install {.pkg brant} to run the ",
+      "Brant test."
+    )))
+    return(invisible())
+  }
+  # brant rebuilds the model frame via eval.parent(fit$call), needing the fit's `data`/`formula`
+  # SYMBOLS resolvable in brant's caller frame -- which fails once we are past the fitting scope. Make
+  # this (copy-on-modify) fit self-contained from its own stored model frame so brant works anywhere.
+  fit$call$data    <- fit$model
+  fit$call$formula <- stats::formula(fit)
+  bt <- tryCatch({ utils::capture.output(res <- brant::brant(fit)); res },
+                 error = function(e) NULL)
+  if (is.null(bt) || !is.matrix(bt) ||
+      !"Omnibus" %in% rownames(bt) || !"probability" %in% colnames(bt)) {
+    return(invisible())                                      # unexpected shape -> stay silent
+  }
+  p <- suppressWarnings(as.numeric(bt["Omnibus", "probability"]))
+  if (!is.na(p) && p < 0.05) {
+    cli::cli_warn(c(
+      "!" = "The proportional-odds (parallel-lines) assumption is rejected (Brant omnibus p = {signif(p, 2)}).",
+      "i" = paste0("Cumulative odds ratios may mislead; consider {.code family = \"multinomial\"} or a ",
+                   "partial proportional-odds model."),
+      "i" = "The Brant test over-rejects at large N; inspect the per-variable tests too."
+    ))
+  }
+  invisible()
+}
+
 # Fit ONE model on complete cases -> a tidy of the (per-family) effect measure + CI + p + the model n
 # (+ var(Y) for the additive gaussian effect-size colour). `do_exp` chooses the estimate scale:
 # TRUE -> exp(coef) (OR/IRR, multiplicative); FALSE -> raw coef (beta, additive). Wald CI uses z for
@@ -275,6 +426,15 @@ reg_fit <- function(data, dependent, predictors, family, wt, do_exp,
     mdata <- dplyr::mutate(mdata, dplyr::across(
       tidyselect::all_of(fac_preds), ~ forcats::fct_drop(as.factor(.))
     ))
+  }
+
+  # 3+ level categorical outcomes have their own engines (nnet::multinom / MASS::polr); they share the
+  # Wald machinery (reg_wald_from_tidy) so the CI <-> p <-> stars duality holds, but not the glm path.
+  if (family == "multinomial") {
+    return(reg_fit_multinom(mdata, dependent, predictors, do_exp, conf_level, method))
+  }
+  if (family == "ordinal") {
+    return(reg_fit_ordinal(mdata, dependent, predictors, do_exp, conf_level, method))
   }
 
   positive_level <- NULL
@@ -419,14 +579,34 @@ reg_column <- function(skeleton, fit_res, model_predictors, col_var, effect_shap
   }
 }
 
+# Split ONE multinomial fit into one OR column per non-reference outcome category. Each category's
+# tidy rows (`y.level == j`, y.level dropped) look like a standard glm tidy, so reg_column() aligns
+# them to the shared predictor skeleton unchanged. Label = "<j> vs <ref>: OR" (prefixed by the
+# dependent when several dependents / models coexist, to disambiguate). Returns a list of {label, col}.
+reg_columns_multinom <- function(skeleton, f, sp, effect_shape, color, color_signif,
+                                 eff_word, cleannames, prefix_dep) {
+  y_ref <- if (cleannames) stringr::str_remove_all(f$y_ref, cleannames_condition()) else f$y_ref
+  purrr::map(f$y_levels, function(j) {
+    sub      <- f
+    sub$tidy <- f$tidy[f$tidy$y.level == j,
+                       setdiff(names(f$tidy), "y.level"), drop = FALSE]
+    jc  <- if (cleannames) stringr::str_remove_all(j, cleannames_condition()) else j
+    lab <- paste0(if (prefix_dep) paste0(sp$dependent, " - ") else "",
+                  jc, " vs ", y_ref, ": ", eff_word)
+    list(label = lab,
+         col   = reg_column(skeleton, sub, sp$predictors, lab, effect_shape, color, color_signif))
+  })
+}
+
 # The shared builder: fit every column spec, align to one skeleton, assemble a grouped_tab. specs =
 # list of list(dependent, predictors, label, trials, formula, compound). The data-skeleton (union of
 # the specs' predictors) is used unless a spec is a compound formula (single model), in which case the
 # skeleton is read from its fitted terms (reg_skeleton_from_fit). Fit-all first so the skeleton can
-# come from the fit before the columns are aligned.
+# come from the fit before the columns are aligned. A multinomial fit contributes SEVERAL columns
+# (one per outcome category), so the per-spec columns are flattened into one (label, col) list.
 reg_build <- function(data, specs, union_predictors, family, wt, do_exp, effect_shape,
                       inverse_two_level_factors, conf_level, method, color, color_signif,
-                      cleannames, subtext) {
+                      cleannames, subtext, eff_word) {
   fits <- purrr::map(specs, function(sp) {
     reg_fit(data, sp$dependent, sp$predictors, family, wt, do_exp,
             inverse_two_level_factors, conf_level, method,
@@ -437,11 +617,21 @@ reg_build <- function(data, specs, union_predictors, family, wt, do_exp, effect_
   skeleton <- if (any(compound)) reg_skeleton_from_fit(fits[[1]]$fit)
               else                reg_skeleton(data, union_predictors)
 
-  cols <- purrr::map2(fits, specs, function(f, sp) {
-    # a compound formula is one model: every skeleton row belongs to it (else compound-term rows go NA)
-    model_predictors <- if (isTRUE(sp$compound)) unique(skeleton$var) else sp$predictors
-    reg_column(skeleton, f, model_predictors, sp$label, effect_shape, color, color_signif)
-  })
+  multi_col  <- family == "multinomial"
+  prefix_dep <- length(specs) > 1L
+  built <- purrr::flatten(purrr::map2(fits, specs, function(f, sp) {
+    if (multi_col) {
+      reg_columns_multinom(skeleton, f, sp, effect_shape, color, color_signif,
+                           eff_word, cleannames, prefix_dep)
+    } else {
+      # a compound formula is one model: every skeleton row belongs to it (else compound-term rows go NA)
+      model_predictors <- if (isTRUE(sp$compound)) unique(skeleton$var) else sp$predictors
+      list(list(label = sp$label,
+                col   = reg_column(skeleton, f, model_predictors, sp$label,
+                                   effect_shape, color, color_signif)))
+    }
+  }))
+  labels <- make.unique(purrr::map_chr(built, "label"))
 
   disp_levels <- skeleton$level
   if (cleannames) {
@@ -452,7 +642,7 @@ reg_build <- function(data, specs, union_predictors, family, wt, do_exp, effect_
     var    = forcats::fct_inorder(skeleton$var),
     levels = forcats::fct_inorder(disp_levels)
   )
-  for (i in seq_along(cols)) tab[[specs[[i]]$label]] <- cols[[i]]
+  for (i in seq_along(built)) tab[[labels[i]]] <- built[[i]]$col
 
   tab |>
     new_tab(subtext = subtext) |>
@@ -466,10 +656,12 @@ reg_build <- function(data, specs, union_predictors, family, wt, do_exp, effect_
 #'
 #' Fits one regression model per column and returns a `tabxplor` table of the per-family effect
 #' measure -- linear **beta** (gaussian), **odds ratios** (binomial / logistic), **incidence-rate
-#' ratios** (poisson) -- one row per predictor level (the reference level shown as the neutral value
-#' `0` or `1`), grouped by predictor. Each cell stores the estimate, its confidence interval and
-#' p-value, so the table prints with significance stars, greys out non-significant effects, and
-#' exports (kable / Markdown / Excel) like any `tabxplor` crosstab.
+#' ratios** (poisson), **multinomial odds ratios** (one column per outcome category vs the reference,
+#' nominal 3+ level), **cumulative odds ratios** (ordinal / proportional-odds) -- one row per predictor
+#' level (the reference level shown as the neutral value `0` or `1`), grouped by predictor. Each cell
+#' stores the estimate, its confidence interval and p-value, so the table prints with significance
+#' stars, greys out non-significant effects, and exports (kable / Markdown / Excel) like any `tabxplor`
+#' crosstab.
 #'
 #' `predictors` selects the mode: a **character vector** fits one model, and `dependent` may itself
 #' be a vector -> one column per dependent; a **named list** of predictor sets fits one model each ->
@@ -480,6 +672,13 @@ reg_build <- function(data, specs, union_predictors, family, wt, do_exp, effect_
 #' frequency-inflated ones of `glm(weights=)`. `broom` (always) and `survey` (only with `wt`) are
 #' optional dependencies. `tab_logit()` / `multi_logit()` are convenience wrappers for the binomial
 #' family.
+#'
+#' A **nominal** outcome with 3+ unordered levels is fit as one multinomial logit ([nnet::multinom()]),
+#' giving **one odds-ratio column per non-reference outcome category** ("`<category>` vs `<reference>`:
+#' OR"). An **ordered** outcome with 3+ levels is fit as a proportional-odds cumulative logit
+#' ([MASS::polr()]), giving one cumulative-odds-ratio column; the parallel-lines assumption is tested
+#' with the Brant test (install the `brant` package) and a warning is issued if it is violated.
+#' (Weighted 3+ level models are planned for a later release.)
 #'
 #' A **summed-score** outcome (a count of "yes" answers out of a fixed number of items) is fit as a
 #' grouped binomial when you pass `trials` (the number of items). Power users can pass a **model
@@ -495,10 +694,11 @@ reg_build <- function(data, specs, union_predictors, family, wt, do_exp, effect_
 #' @param predictors Either a character vector of predictor names (one model), or a **named list**
 #'   of character vectors (one model per element, its name labelling the column). Leave `NULL` when
 #'   `dependent` is a formula.
-#' @param family The model family. `"auto"` (default) detects only the unambiguous binary
-#'   (-> `"binomial"`) and continuous (-> `"gaussian"`) cases and emits a message; otherwise set it
-#'   explicitly: `"gaussian"` (linear), `"binomial"` (logistic), `"poisson"` / `"quasipoisson"`
-#'   (counts).
+#' @param family The model family. `"auto"` (default) detects a binary (-> `"binomial"`), an ordered
+#'   3+ level (-> `"ordinal"`), a nominal 3+ level (-> `"multinomial"`), or a continuous
+#'   (-> `"gaussian"`) outcome and emits a message; an integer count stays ambiguous and must be named.
+#'   Set it explicitly with `"gaussian"` (linear), `"binomial"` (logistic), `"poisson"` /
+#'   `"quasipoisson"` (counts), `"multinomial"` (nominal 3+ level), `"ordinal"` (ordered 3+ level).
 #' @param wt Optional. Name of a weight column (character). Uses survey-weighted estimation.
 #' @param exponentiate Whether to exponentiate coefficients into ratios. `"nongaussian"` (default)
 #'   exponentiates every family except gaussian (odds ratios / incidence-rate ratios, leaving linear
@@ -515,7 +715,9 @@ reg_build <- function(data, specs, union_predictors, family, wt, do_exp, effect_
 #'   (else it falls back to Wald with a message; gaussian always uses the exact-t interval).
 #' @param reference Optional named vector `c(var = "baseline level")` choosing the treatment-contrast
 #'   reference level of one or more factor predictors (the effect of every other level is measured
-#'   against it). This is how factor contrasts are set; other contrast codings can be applied by
+#'   against it). For a **multinomial** outcome, keying the vector by the outcome name (e.g.
+#'   `c(partyid = "Independent")`) also sets the baseline outcome category all the OR columns are
+#'   compared against. This is how factor contrasts are set; other contrast codings can be applied by
 #'   passing a formula in `dependent` with the terms already coded.
 #' @param inverse_two_level_factors Logical, binomial only. If `TRUE` (default), models the FIRST
 #'   level of a 2-level factor dependent (e.g. `"1-Married"` before `"2-Not married"`).
@@ -540,6 +742,13 @@ reg_build <- function(data, specs, union_predictors, family, wt, do_exp, effect_
 #'         family = "gaussian")
 #' # formula escape-hatch (same model, terser):
 #' tab_reg(data, married ~ race + rincome, family = "binomial")
+#' # multinomial (nominal 3+ level): one OR column per outcome category vs the reference
+#' tab_reg(forcats::gss_cat, dependent = "partyid", predictors = c("race", "age"),
+#'         family = "multinomial", reference = c(partyid = "Independent"))
+#' # ordinal (proportional-odds): one cumulative-OR column
+#' income3 <- forcats::gss_cat |>
+#'   dplyr::mutate(income = factor(rincome, ordered = TRUE))
+#' tab_reg(income3, dependent = "income", predictors = "race", family = "ordinal")
 #'
 #' @export
 tab_reg <- function(data, dependent, predictors = NULL,
@@ -591,7 +800,17 @@ tab_reg <- function(data, dependent, predictors = NULL,
   }
 
   if (identical(family, "auto")) family <- reg_detect_family(data, dependent[[1]])
-  family <- rlang::arg_match(family, c("gaussian", "binomial", "poisson", "quasipoisson"))
+  family <- rlang::arg_match(family, c("gaussian", "binomial", "poisson", "quasipoisson",
+                                       "multinomial", "ordinal"))
+
+  # Weighted multinomial / ordinal are deferred (no design-based multinomial engine in survey; svyolr
+  # lands with the full survey-design phase). A weighted binary/count/linear model still uses svyglm.
+  if (!is.null(wt) && family %in% c("multinomial", "ordinal")) {
+    cli::cli_abort(c(
+      "Weighted {.val {family}} regression is not yet supported.",
+      "i" = "Drop {.arg wt}, or use an unweighted model (survey-weighted 3+ level models are planned)."
+    ))
+  }
 
   do_exp       <- isTRUE(exponentiate) ||
     (identical(exponentiate, "nongaussian") && family != "gaussian")
@@ -621,7 +840,13 @@ tab_reg <- function(data, dependent, predictors = NULL,
   if (is.null(color_signif)) color_signif <- "grey_non_signif"
 
   all_predictors <- if (is_comparison) unique(purrr::flatten_chr(predictors)) else predictors
-  if (!is.null(reference)) data <- reg_apply_references(data, reference, all_predictors)
+  if (!is.null(reference)) {
+    # A multinomial's baseline is the OUTCOME factor's first level, so `reference` keyed by the
+    # dependent relevels it too (unified "reference level of any variable"). An ordinal outcome must
+    # keep its order -> never releveled; predictor contrasts are releveled for every family.
+    relevelable <- if (family == "multinomial") c(all_predictors, dependent) else all_predictors
+    data <- reg_apply_references(data, reference, relevelable)
+  }
 
   if (is_comparison) {
     models <- predictors
@@ -651,10 +876,13 @@ tab_reg <- function(data, dependent, predictors = NULL,
     union_predictors <- predictors
   }
 
-  reg_check_deps(wt)
+  note <- reg_model_note(family, do_exp)
+  if (!is.null(note)) subtext <- if (nzchar(subtext)) paste0(subtext, " ", note) else note
+
+  reg_check_deps(family, wt)
   reg_build(data, specs, union_predictors, family, wt, do_exp, effect_shape,
             inverse_two_level_factors, conf_level, method, color, color_signif,
-            cleannames, subtext)
+            cleannames, subtext, eff_word)
 }
 
 

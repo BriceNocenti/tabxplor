@@ -2964,6 +2964,45 @@ Full suite green (FAIL 0, PASS 1927), colour/golden byte-identical, `devtools::d
   `reg_fit()` gained `trials`/`formula` params and returns `$fit`. `reg_prep_binary` abort improved.
 - **Not done (unchanged from 12c-i):** the Phase-13 legend cosmetics above.
 
+### 12d DONE (2026-07-13) — nominal (multinomial) & ordinal (proportional-odds) 3+ level outcomes
+
+Two new families added to the SAME engine, byte-identically reusing the OR/`or` fmt shape (**no new
+fmt fields, attributes, `type`/`display`/`ci_type` tokens, or `fmt_color_plan` branches** — verified),
+full suite green (**1949**, FAIL 0), **NO golden regeneration** (new families; tab() change prose-only).
+Maintainer choices this session (D3/D4): reference-outcome via `reference=`; "j vs rest at profile"
+→ 12e; Brant via the `brant` package; weighted MNL/ordinal → 12g.
+
+- **Nominal ≥3 → ONE `nnet::multinom`** (D3): `reg_fit_multinom()` fits one multinomial logit; the
+  `broom::tidy` carries a `y.level` column, and **`reg_build()` splits it into one OR column per
+  non-reference category**, labelled `"<j> vs <ref>: OR"` (Begg-Gray: `exp(β_j)` = the "OR (j vs
+  reference)" estimand). The baseline category is the outcome factor's first level — set via
+  `reference` keyed on the DEPENDENT (`reference = c(partyid = "Independent")`; `reg_apply_references`
+  relevels the outcome only for MNL, since an ordered outcome must keep its order). Parity vs
+  `nnet::multinom` + broom Wald (exp(coef)/CI/p) locked per category.
+- **Ordered ≥3 → `MASS::polr`** (D4): `reg_fit_ordinal()` fits a proportional-odds cumulative logit;
+  the tidy is filtered to `coef.type == "coefficient"` (cut-point/"scale" rows dropped → no
+  `(Intercept)` → the skeleton "Constant" cell stays NA), giving ONE cumulative-OR column. An
+  unordered factor passed with `family="ordinal"` is coerced to ordered (message). Parity vs
+  `MASS::polr` + broom locked. **PO diagnostic** (`reg_ordinal_diagnostic`): the Brant test via the
+  `brant` package (a Suggests) → `cli_warn` when the omnibus rejects; a missing `brant` skips with a
+  hint; a failing test is swallowed. **Landmine fixed:** `brant::brant` rebuilds the model frame via
+  `eval.parent(fit$call)`, needing the `data`/`formula` SYMBOLS resolvable in *its caller's* frame,
+  which fails outside the fitting scope — so the diagnostic first makes the (copy-on-modify) fit
+  self-contained: `fit$call$data <- fit$model; fit$call$formula <- stats::formula(fit)`.
+- **Shared Wald** (`reg_wald_from_tidy`): both helpers compute CI from `estimate ± qnorm·se` and p
+  from the Wald z on the same estimate/se (MNL/polr are fixed-dispersion ML → `qnorm`, matching the
+  glm binomial/poisson branch), so **CI ⇄ p ⇄ stars stay exact duals** and both survive an NaN se
+  (rank-deficient / empty cell → NaN, matching the base model). `do_exp` exponentiates in place.
+- **Wiring:** `reg_detect_family()` auto-detects ordered→ordinal / unordered-factor→multinomial (2
+  levels still → binomial; integer count still ambiguous → abort); `family` arg_match + `reg_effect_word`
+  + `reg_check_deps(family, wt)` (nnet/MASS) extended; a **weighted MNL/ordinal guard** errors (no
+  design-based MNL engine in `survey`; svyolr → 12g); a per-family **auto model-note** appended to
+  `subtext`. `tab()` empirical-OR **prose** (tab.R/fmt_class.R `@param OR`, the `or` field docs, the
+  inline pct="row"/"col" comments) relabelled "relative risks ratio" → per-level OR vs the reference
+  (no computation change). `nnet` + `brant` added to Suggests.
+- **Deferred (unchanged plan):** the "j vs rest OR at reference profile" flavour + AME (12e);
+  weighted MNL/ordinal + survey design (12g); the Phase-13 legend cosmetics.
+
 ### Phasing (12c → 12i — re-cut 2026-07-13; per-phase detail in the CLAUDE.md roadmap)
 
 The build is re-cut into **fresh-session Phases with commit-and-verify increments** (the old monolithic

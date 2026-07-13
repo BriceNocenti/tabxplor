@@ -60,18 +60,22 @@ R/
 ├── tab-render-html.R (~350 L) Phase 10e tab_kable render seam: render_kable_html() (kableExtra +
 │                              home-built self-contained html engines) + tab_kable_join/scrollbox
 ├── utils.R         (1306 L)  Pipe re-export, .onLoad() options setup, factor utilities
-├── tab_reg.R       (~590 L)  Phase 12c: unified regression tables. tab_reg() over ONE engine
-│                              (stats::lm/glm, survey::svyglm; broom::tidy) with family dispatch and
-│                              exponentiate-driven fmt shape: gaussian beta (additive -> `diff` field,
-│                              type="coef", display="coef", ci_type="diff", color="diff", `var`=var(Y)
-│                              for the beta/SD(Y) effect-size colour) | binomial OR / poisson IRR
+├── tab_reg.R       (~810 L)  Phase 12c/12d: unified regression tables. tab_reg() over ONE engine
+│                              (stats::lm/glm, survey::svyglm, nnet::multinom, MASS::polr; broom::tidy)
+│                              with family dispatch and exponentiate-driven fmt shape: gaussian beta
+│                              (additive -> `diff` field, type="coef", display="coef", ci_type="diff",
+│                              color="diff", `var`=var(Y) for the beta/SD(Y) effect-size colour) |
+│                              binomial OR / poisson IRR / multinomial OR / ordinal cumulative OR
 │                              (multiplicative -> `or`, type="row", display="or", ci_type="or",
 │                              color="OR"). tab_logit()/multi_logit() = thin binomial-family wrappers.
-│                              reg_* helpers (fit/skeleton/column/build); `predictors` char-vec (one
-│                              model, dependent may be a vector) vs named list (model comparison);
-│                              per-variable reference= relevel. 12c-ii: `trials` grouped-binomial
-│                              (cbind(score,q-score)) + formula escape-hatch (simple->char path, compound
-│                              ->reg_skeleton_from_fit); reg_build fits-all then columns-all.
+│                              reg_* helpers (fit/skeleton/column/build + reg_wald_from_tidy shared Wald
+│                              CI<->p dual); `predictors` char-vec (one model, dependent may be a vector)
+│                              vs named list (model comparison); per-variable reference= relevel. 12c-ii:
+│                              `trials` grouped-binomial + formula escape-hatch; reg_build fits-all then
+│                              columns-all. 12d: reg_fit_multinom (one OR col per y.level category "j vs
+│                              ref", reference= keyed on the outcome sets baseline) / reg_fit_ordinal
+│                              (polr cumulative OR, Constant NA; reg_ordinal_diagnostic = Brant PO test,
+│                              self-heals fit$call for brant); weighted MNL/ordinal deferred (guard).
 ├── tab_logit.R      (~5 L)   Emptied in Phase 12c (renamed -> tab_reg.R; git rm pending).
 ├── tab_logit_2.R    (~8 L)   Emptied in Phase 12a (git rm pending). or_plot/lm_plots deferred.
 ├── jmvtab-cache.R  (~800 L)  jmvtab live multi-tier cache: content-addressed store + hashing +
@@ -140,7 +144,7 @@ Export:  tab_xl()  |  tab_kable()  |  tab_md()  |  tab_plot()
 | Suggests-only guards     | `openxlsx2`, `ggplot2`, `jmvcore`, `ggpubr`, `cowplot`, `mirai` are in Suggests. Every call must be guarded with `requireNamespace()` or equivalent (tab_xl's ONE guard is in `tab_xl()`; `R/tab-xl-backend.R` wrappers are unguarded).                                                                                                                                                           |
 | Color break mirroring    | `set_color_breaks()` takes positive-only thresholds. Negative breaks are auto-mirrored internally. Any `pct_breaks` value > 1 triggers ratio comparison instead of difference (the "*2 rule").                                                                                                                                                                                                    |
 | Mean-diff asymmetry      | For `type="mean"` columns, the `diff` field stores a **ratio** (cell_mean / ref_mean), NOT a difference. Thresholds like 1.15 mean "+15% above reference". This asymmetry propagates into `color_formula()` and `format.tabxplor_fmt()`. **(1.4.0 §3: numeric `diff` becomes a real difference; the ratio moves to the `ratio` field — the never-used `rr` field renamed, placed after `diff`.)** |
-| tab_reg                  | Phase 12c LIVE: unified regression tables (gaussian beta / binomial OR / poisson IRR) over lm/glm/svyglm+broom (no parsnip). tab_logit/multi_logit are binomial wrappers. Effect shape is exponentiate-driven: additive beta -> `diff`+type="coef"+display="coef"+ci_type="diff"; multiplicative OR/IRR -> `or`+type="row"+ci_type="or". No new fmt fields/attributes: `type` gains value "coef", `display` gains token "coef", the `var` field carries var(Y). 12c-ii: grouped-binomial/formula/contrasts; 12d+: MNL/ordinal/AME.  |
+| tab_reg                  | Phase 12c/12d LIVE: unified regression tables (gaussian beta / binomial OR / poisson IRR / multinomial OR / ordinal cumulative OR) over lm/glm/svyglm/nnet::multinom/MASS::polr + broom (no parsnip). tab_logit/multi_logit are binomial wrappers. Effect shape is exponentiate-driven: additive beta -> `diff`+type="coef"+display="coef"+ci_type="diff"; multiplicative OR/IRR/cumOR -> `or`+type="row"+ci_type="or". No new fmt fields/attributes (12d reuses the OR shape as-is): `type` gains value "coef", `display` gains token "coef", the `var` field carries var(Y). 12d: MNL = one OR col per outcome category vs ref (reference= keyed on the outcome); ordinal polr + Brant PO diagnostic; weighted MNL/ordinal + AME/j-vs-rest deferred (12e/12g).  |
 
 
 ---
@@ -1543,11 +1547,26 @@ The foundational rewrite: ONE internal engine (family dispatch) + the shared eff
   skeleton from the fitted terms (`reg_skeleton_from_fit()`). `reg_build()` refactored fit-all→column-all;
   `reg_fit()` returns `$fit`.
 
-#### Phase 12d – nominal & ordinal 3+ level outcomes
+#### Phase 12d – nominal & ordinal 3+ level outcomes (DONE — 2026-07-13)
 
-- nominal ≥3 → ONE `nnet::multinom`; `exp(coef)` as "OR (j vs ref)" columns; any reference / pairwise from one fit (joint-vcov CI); align `tab()` empirical-OR terminology.
-- ordered ≥3 → `MASS::polr` proportional-odds default + **Brant/LR PO diagnostic** + warn + fallback (MNL / partial-PO via `ordinal`/`VGAM`).
--the **"j vs rest OR at reference profile"** flavour (adjusted, delta-method CI).
+Both families added to the SAME engine, byte-identically reusing the OR/`or` fmt shape (no new fmt
+fields/attributes/tokens/color branches); full suite green (1949), NO golden regen. Detail:
+`dev/tabxplor_1.4.0_decisions.md` §37 "12d DONE".
+- **nominal ≥3 → ONE `nnet::multinom`** (`reg_fit_multinom`): `exp(β_j)` = "OR (j vs reference)" —
+  `reg_build` splits the `y.level` tidy into **one OR column per non-reference category** (`"j vs ref:
+  OR"`). Outcome baseline = the outcome factor's first level, set via `reference` keyed on the
+  DEPENDENT (`reference = c(partyid = "Independent")`; MNL only). `tab()` empirical-OR **terminology**
+  aligned (prose only: "relative risks ratio" → per-level OR vs the reference).
+- **ordered ≥3 → `MASS::polr`** (`reg_fit_ordinal`): one **cumulative-OR column** (cut-point rows
+  dropped → "Constant" NA). **Brant PO diagnostic** (`reg_ordinal_diagnostic`, via the `brant`
+  Suggests) warns on violation; a missing `brant` skips with a hint. Landmine: brant rebuilds the model
+  frame via `eval.parent(fit$call)` → the diagnostic self-heals the (copy) fit's `$call$data`/`$formula`
+  so it works out of the fitting scope.
+- Shared `reg_wald_from_tidy` (qnorm Wald) keeps CI ⇄ p ⇄ stars exact duals for both. `family="auto"`
+  detects ordered→ordinal / unordered-factor→multinomial. `nnet`+`brant` → Suggests.
+- **Deferred (per maintainer this session):** the **"j vs rest OR at reference profile"** flavour
+  (adjusted, delta-method CI) → **12e** (shares the AME / `marginaleffects` machinery); weighted
+  MNL/ordinal (svyolr; guarded error now) → **12g**; joint-vcov pairwise / partial-PO fallback (later).
 
 #### Phase 12e – AME / predicted-probability interpretation mode
 

@@ -34,10 +34,11 @@ With a \code{predictors} character vector, several names give one effect column 
 of character vectors (one model per element, its name labelling the column). Leave \code{NULL} when
 \code{dependent} is a formula.}
 
-\item{family}{The model family. \code{"auto"} (default) detects only the unambiguous binary
-(-> \code{"binomial"}) and continuous (-> \code{"gaussian"}) cases and emits a message; otherwise set it
-explicitly: \code{"gaussian"} (linear), \code{"binomial"} (logistic), \code{"poisson"} / \code{"quasipoisson"}
-(counts).}
+\item{family}{The model family. \code{"auto"} (default) detects a binary (-> \code{"binomial"}), an ordered
+3+ level (-> \code{"ordinal"}), a nominal 3+ level (-> \code{"multinomial"}), or a continuous
+(-> \code{"gaussian"}) outcome and emits a message; an integer count stays ambiguous and must be named.
+Set it explicitly with \code{"gaussian"} (linear), \code{"binomial"} (logistic), \code{"poisson"} /
+\code{"quasipoisson"} (counts), \code{"multinomial"} (nominal 3+ level), \code{"ordinal"} (ordered 3+ level).}
 
 \item{wt}{Optional. Name of a weight column (character). Uses survey-weighted estimation.}
 
@@ -60,7 +61,9 @@ the likelihood-ratio test: more accurate near separation, unweighted binomial/po
 
 \item{reference}{Optional named vector \code{c(var = "baseline level")} choosing the treatment-contrast
 reference level of one or more factor predictors (the effect of every other level is measured
-against it). This is how factor contrasts are set; other contrast codings can be applied by
+against it). For a \strong{multinomial} outcome, keying the vector by the outcome name (e.g.
+\code{c(partyid = "Independent")}) also sets the baseline outcome category all the OR columns are
+compared against. This is how factor contrasts are set; other contrast codings can be applied by
 passing a formula in \code{dependent} with the terms already coded.}
 
 \item{inverse_two_level_factors}{Logical, binomial only. If \code{TRUE} (default), models the FIRST
@@ -81,10 +84,12 @@ A \code{tabxplor_grouped_tab} (grouped by predictor), one effect column per mode
 \description{
 Fits one regression model per column and returns a \code{tabxplor} table of the per-family effect
 measure -- linear \strong{beta} (gaussian), \strong{odds ratios} (binomial / logistic), \strong{incidence-rate
-ratios} (poisson) -- one row per predictor level (the reference level shown as the neutral value
-\code{0} or \code{1}), grouped by predictor. Each cell stores the estimate, its confidence interval and
-p-value, so the table prints with significance stars, greys out non-significant effects, and
-exports (kable / Markdown / Excel) like any \code{tabxplor} crosstab.
+ratios} (poisson), \strong{multinomial odds ratios} (one column per outcome category vs the reference,
+nominal 3+ level), \strong{cumulative odds ratios} (ordinal / proportional-odds) -- one row per predictor
+level (the reference level shown as the neutral value \code{0} or \code{1}), grouped by predictor. Each cell
+stores the estimate, its confidence interval and p-value, so the table prints with significance
+stars, greys out non-significant effects, and exports (kable / Markdown / Excel) like any \code{tabxplor}
+crosstab.
 }
 \details{
 \code{predictors} selects the mode: a \strong{character vector} fits one model, and \code{dependent} may itself
@@ -96,6 +101,13 @@ design (\code{\link[survey:svyglm]{survey::svyglm()}}), which gives correct desi
 frequency-inflated ones of \code{glm(weights=)}. \code{broom} (always) and \code{survey} (only with \code{wt}) are
 optional dependencies. \code{tab_logit()} / \code{multi_logit()} are convenience wrappers for the binomial
 family.
+
+A \strong{nominal} outcome with 3+ unordered levels is fit as one multinomial logit (\code{\link[nnet:multinom]{nnet::multinom()}}),
+giving \strong{one odds-ratio column per non-reference outcome category} ("\verb{<category>} vs \verb{<reference>}:
+OR"). An \strong{ordered} outcome with 3+ levels is fit as a proportional-odds cumulative logit
+(\code{\link[MASS:polr]{MASS::polr()}}), giving one cumulative-odds-ratio column; the parallel-lines assumption is tested
+with the Brant test (install the \code{brant} package) and a warning is issued if it is violated.
+(Weighted 3+ level models are planned for a later release.)
 
 A \strong{summed-score} outcome (a count of "yes" answers out of a fixed number of items) is fit as a
 grouped binomial when you pass \code{trials} (the number of items). Power users can pass a \strong{model
@@ -114,5 +126,12 @@ tab_reg(data, dependent = "tvhours", predictors = c("race", "age"),
         family = "gaussian")
 # formula escape-hatch (same model, terser):
 tab_reg(data, married ~ race + rincome, family = "binomial")
+# multinomial (nominal 3+ level): one OR column per outcome category vs the reference
+tab_reg(forcats::gss_cat, dependent = "partyid", predictors = c("race", "age"),
+        family = "multinomial", reference = c(partyid = "Independent"))
+# ordinal (proportional-odds): one cumulative-OR column
+income3 <- forcats::gss_cat |>
+  dplyr::mutate(income = factor(rincome, ordered = TRUE))
+tab_reg(income3, dependent = "income", predictors = "race", family = "ordinal")
 
 }
