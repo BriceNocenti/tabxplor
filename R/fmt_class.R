@@ -801,7 +801,9 @@ get_ci_type.data.frame <- function(x, ...) {
 #' @return A modified fmt vector.
 #' @export
 set_ci_type   <- function(x, ci_type) {
-  stopifnot(ci_type %in% c("cell", "diff", "diff_row", "diff_col",
+  # "or" (Phase 12a): the cell carries a log-OR Wald exp() interval in ci_inf/ci_sup, centred on
+  # the odds ratio (neutral value 1) -- read by ci_center() and the color significance gate.
+  stopifnot(ci_type %in% c("cell", "diff", "diff_row", "diff_col", "or",
                            "no", "", NA_character_))
   `attr<-`(x ,"ci_type" , ci_type)
 }
@@ -1315,6 +1317,7 @@ get_ci_sup <- fmt_field_factory("ci_sup")
 #' @keywords internal
 ci_center  <- function(x) {
   if (get_ci_type(x) %in% c("diff", "diff_row", "diff_col")) get_diff(x)
+  else if (get_ci_type(x) == "or")                          get_or(x)   # Phase 12a: OR CI centred on the odds ratio
   else if (get_type(x) == "mean")                            get_mean(x)
   else                                                       get_pct(x)
 }
@@ -1995,31 +1998,31 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
     }
 
     if (any(disp_or)) {
-      # refcol  <- is_refcol(x)
+      # Phase 12a: OR display. (1) an OR < 1 prints as "1/x" so it compares symmetrically to an
+      # OR > 1 (odds ratios are multiplicatively symmetric) -- everywhere, incl. empirical OR.
+      # (2) reference rows (OR == 1) print a bare "1", annotated with the empirical reference %
+      # when one is present (an empirical-OR crosstab); a pure model-OR table (tab_logit) has no
+      # pct, so the "( )" annotation drops. The empirical-OR path is byte-identical to before
+      # except for the intended 1/x rendering of OR < 1 cells.
       if (is.null(ref_alltot)) ref_alltot <- get_reference(x, "all_totals")
-      refer   <- ref_alltot[disp_or]
-      reffmt  <- set_display(x[disp_or], "pct") |> # ifelse(refcol, "pct", "rr")
-        set_digits(0L) |> format() #%>% stringr::str_trim()
-      reffmt <- suppressWarnings(
-        stringr::str_pad(reffmt,
-                         suppressWarnings(
-                           max(stringr::str_length(reffmt), na.rm = TRUE)
-                         )
+      refer  <- ref_alltot[disp_or]
+      or_val <- get_or(x)[disp_or]
+      or_dig <- digits[disp_or]
+      vals   <- out[disp_or]
+
+      recip       <- !is.na(or_val) & or_val > 0 & or_val < 1
+      vals[recip] <- paste0("1/", print_num(1 / or_val[recip], or_dig[recip]))
+      one         <- stringr::str_replace(vals, "1\\.0+", "1")
+
+      if (any(!is.na(get_pct(x)[disp_or]))) {                # empirical-OR crosstab: annotate ref %
+        reffmt <- set_display(x[disp_or], "pct") |> set_digits(0L) |> format()
+        reffmt <- suppressWarnings(
+          stringr::str_pad(reffmt, suppressWarnings(max(stringr::str_length(reffmt), na.rm = TRUE)))
         )
-      )
-      out[disp_or] <- ifelse(
-        refer & !is.na(reffmt),
-        paste0(stringr::str_replace(out[disp_or], "1.0+", "1"),
-               " (", reffmt, ")"),
-        out[disp_or]
-      )
-      # out[disp_or] <- dplyr::case_when(
-      #   ref & type == "row" & refcol ~ paste0("1 (ref)"),
-      #   ref & type == "row"          ~ paste0("1 (rel ", reffmt, ")"),
-      #   ref & type == "col" & refrows~ paste0("1 (ref)"),
-      #   ref & type == "col"          ~ paste0("1 (rel ", reffmt, ")"),
-      #   TRUE                         ~ out[disp_or]
-      # )
+        out[disp_or] <- ifelse(refer & !is.na(reffmt), paste0(one, " (", reffmt, ")"), vals)
+      } else {                                               # pure model-OR: bare "1" on ref rows
+        out[disp_or] <- ifelse(refer, one, vals)
+      }
     }
 
     if (any(disp_or_pct)) {
@@ -2439,10 +2442,13 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
     raw[!is.finite(raw)] <- NA_real_        # sd_ref 0/NA -> undefined -> uncolored
   }
 
-  # significance from the Phase-3a bounds (only a diff-type interval is meaningful here)
+  # significance from the stored bounds. A diff-type CI tests exclusion of 0; an OR CI (ci_type
+  # "or", log-OR Wald exp() bounds) tests exclusion of 1, the multiplicative neutral (Phase 12a).
   has_diff_ci <- get_ci_type(x) %in% c("diff", "diff_row", "diff_col")
-  sig_pos <- has_diff_ci & get_ci_inf(x) > 0
-  sig_neg <- has_diff_ci & get_ci_sup(x) < 0
+  is_or_ci    <- measure == "or" & get_ci_type(x) == "or"
+  neutral     <- if (measure == "or") 1 else 0
+  sig_pos <- (has_diff_ci | is_or_ci) & get_ci_inf(x) > neutral
+  sig_neg <- (has_diff_ci | is_or_ci) & get_ci_sup(x) < neutral
   sig_pos[is.na(sig_pos)] <- FALSE
   sig_neg[is.na(sig_neg)] <- FALSE
 

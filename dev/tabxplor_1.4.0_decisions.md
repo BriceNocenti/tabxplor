@@ -2580,3 +2580,65 @@ turned out to be THREE render bugs — `get_mean_contrib()` size-0 under comp="a
 NA `cond_ctr` on the Total column, and `tab_md()`'s NA-unsafe tab_var blanking on materialised p-value rows.
 All byte-identical; +`c_contrib_all`/`c_contrib_all_notab` colour goldens + an exporter render-no-crash test.
 Semantics confirmed: comp="all" = whole-table chi2+contribs, comp="tab" = per-subtable.
+
+## 36. Phase 12a — tab_logit integration: location + engine + fmt (2026-07-13, DONE)
+
+The two open questions the roadmap asked to be settled here, plus the fmt-field integration. Suite green
+**1877/0**, no golden regen; `test-tab_logit.R` = 35 tests (glm/svyglm OR/CI/p parity, colours, exports).
+
+### D1 — Location: keep inside tabxplor (NOT a `regxplor` subpackage)
+
+Kept in tabxplor with `broom`/`survey` as `requireNamespace()`-guarded Suggests (the openxlsx2/ggplot2/mirai
+pattern). Web-checked (CRAN policy + R-pkgs 2e): CRAN weighs *strong* deps (Imports/Depends), not Suggests
+used conditionally — so guarded Suggests cost ~0 toward the "too many deps" worry. A subpackage would force
+EXPORTING many tabxplor internals across a boundary (`fmt0`, `cleannames_condition`, `new_tab`, the colour
+engine, `tab_apply_reference`) and double dev/CI/release friction (the maintainer's stated concern), for no
+CRAN benefit — decisively so once D2 drops the tidymodels stack (the only "heavy" motivation). Verdict: the
+regression table IS a tabxplor table; it belongs in tabxplor.
+
+### D2 — Engine: direct `stats::glm` / `survey::svyglm` + `broom::tidy` (NOT parsnip)
+
+The draft wrapped glm in parsnip/workflows/hardhat + a top-level `parsnip:::`-internals `svglm2` survey
+engine. Web-checked: parsnip's glm engine only calls `stats::glm` — the abstraction buys pluggable engines
+tab_logit doesn't need. Dropping it REMOVED `workflows`/`hardhat`/`poissonreg` from Suggests (net dep
+reduction), killed the version-fragile `parsnip:::` calls + the load-time engine-registration side effect,
+and unified the weights path (`survey::svyglm(quasibinomial, svydesign)` directly — correct design-based SEs,
+vs the frequency-inflated N of `glm(weights=)`; this already fixes the 12b weight-inflation concern for the
+*inference*, the normalization *policy* stays 12b). Statistics identical (same glm fit).
+
+### Inference method — `method = "wald"` (default) vs `"profile"` (settled 2026-07-13)
+
+Web-checked (Cytel; The Stats Geek; RMPH; r-statistics.co): the LR / profile-likelihood interval + test
+is **statistically preferred** (more accurate for small samples / rare events / near-separation / skewed
+likelihoods; more powerful; robust to Hauck-Donner), BUT the **Wald** z-test + interval is the **universal
+software default** (R `summary.glm`, Stata, SPSS, SAS; base `confint.default`) and the **only option for
+survey-weighted models** (profile is undefined for `svyglm` — the maintainer's primary data). **Verdict:
+default `"wald"`** — reproducible/teachable, uniform across weighted+unweighted, one fit, dual-clean; **opt-in
+`"profile"`** for accuracy on unweighted glm (weighted -> Wald + a message; needs MASS, added to Suggests).
+
+**Both modes keep CI <-> p (hence CI <-> stars) EXACT duals** (§20 honoured):
+- `"wald"`: CI computed in-house `exp(coef +/- crit*se)` (glm `qnorm`, svyglm `qt` with design df) + the
+  Wald p from `broom::tidy`. NOT `broom::tidy(conf.int=)`, which silently switches to profile when MASS is
+  loaded (would break the duality). Stored natural-scale in `ci_inf`/`ci_sup`; `pvalue` = the Wald p.
+- `"profile"`: profile CI from `stats::confint` (MASS) + a **per-coefficient LR-test p** (`logit_lr_pvalues`:
+  drop each model-matrix column, 1-df deviance chi-square = the exact dual of the profile CI; a test locks
+  CI-excludes-1 <-> LR p<alpha).
+
+### `color_signif` default = `"grey_non_signif"` (opt-in `"ignore"` / `"color_all_signif"`)
+
+Odds-ratio significance drives the colour, as a `tab_logit()`/`multi_logit()` argument over the existing
+`color_signif` fmt attribute + the Phase-12a OR gate (exclusion of 1): default greys ORs whose CI includes
+1 (colours only the significant, by magnitude); `"ignore"` colours every OR by magnitude;
+`"color_all_signif"` colours the significant by their conservative interval bound.
+
+### fmt integration — OR is an ordinary fmt column, 4 inert reader patches (§1, §20)
+
+No new `type`. An OR column is `type="row"`, `display="or"`, `color="OR"`,
+`color_signif="grey_non_signif"`, with a NEW `ci_type="or"` (log-OR Wald exp() bounds, multiplicative
+neutral 1). Reader patches in `fmt_class.R` (all inert for non-OR, golden-verified): `set_ci_type` enum
+`+"or"`; `ci_center()` centres an OR CI on the OR; `fmt_color_plan()` significance gate tests **exclusion
+of 1** (not 0) for the `"or"` measure; `format()` `disp_or` adds **`1/OR`** reciprocal display for OR<1
+(`0.25 -> "1/4"`, everywhere incl. empirical OR — byte-identical for OR>=1) + a no-pct guard so a pure
+model-OR reference row shows a bare "1". Stars + magnitude/greyed colours light up automatically from the
+written `pvalue` + bounds. Excel keeps the raw OR number (no `1/x` string). tab_logit_2.R (or_plot/lm_plots)
+deferred to a later display phase; visible OR CI bracket + OR+ME/OR+PCT layouts stay 12b/12d.

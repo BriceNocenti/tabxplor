@@ -665,9 +665,21 @@ Utilities and initialization:
 - Factor manipulation utilities (`fct_recode_helper`, etc.)
 - `score_from_lv1()` — scoring helper for survey data
 
-### R/tab_logit.R and R/tab_logit_2.R (WIP)
+### R/tab_logit.R (Phase 12a — LIVE)
 
-Entirely commented out. Future logistic regression integration using parsnip/tidymodels. Contains draft code for `multi_logit()`, `readable_OR()`, `or_plot()`. Do not try to use or integrate these — they are a work in progress.
+Logistic-regression tables as native `tabxplor_tab` objects. Public: `tab_logit(data, dependent,
+predictors, wt, ...)` (one predictor set, dependents as odds-ratio columns) and `multi_logit(data,
+dependent, models, ...)` (one dependent, named model sets as columns — blank where a predictor is
+absent). Internal engine: `logit_fit()` (complete-case `stats::glm` unweighted / `survey::svyglm` on
+`svydesign` weighted → `broom::tidy`, with the log-OR **Wald** CI computed in-house so it is the exact
+dual of the Wald p), `logit_skeleton()` (the var/level/term rows), `logit_column()` (align a fit → one
+OR fmt column), `logit_build()` (shared assembler → `new_tab() |> group_by(var)`). `broom`/`survey` are
+`requireNamespace()`-guarded Suggests. An OR column is an ordinary fmt: `or` field, log-OR Wald exp()
+bounds in `ci_inf`/`ci_sup`, Wald p in `pvalue`, `type="row"`, `display="or"`, `color="OR"`,
+`color_signif="grey_non_signif"`, `ci_type="or"` (multiplicative neutral 1) — so it prints (with `1/OR`
+for OR<1 + stars + greyed non-significant cells), colours and exports like any crosstab. See CLAUDE.md
+Phase 12a + decisions §36. `R/tab_logit_2.R` was emptied (the parsnip draft + or_plot/lm_plots forest
+plot/diagnostics dropped; deferred to a later display phase).
 
 ### R/jmvtab.b.R and R/jmvtab.h.R
 

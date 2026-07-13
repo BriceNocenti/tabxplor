@@ -1,546 +1,193 @@
-# data <- forcats::gss_cat |>
-# dplyr::mutate(
-#   married = dplyr::case_when(
-#     marital == "Married"                                                ~ factor("1-Married"),
-#     marital %in% c("Never married", "Separated", "Divorced", "Widowed") ~ factor("2-Not married"),
-#     TRUE                                                                ~ factor(NA_character_)
-#   ),
-
-#   white = dplyr::case_when(
-#     race == "White"               ~ factor("1-White"),
-#     race %in% c("Black", "Other") ~ factor("2-Non-white"),
-#     TRUE                          ~ factor(NA_character_)
-#   ),
-  
-# )
-
-
-
-
-# testthat::test_that("tab_logit works", {
-
-#   tab_logit(
-#     data,
-#     dependent = "married",
-#     predictors = c("race", "rincome", "partyid", "relig"),
-#     cleannames = TRUE,
-#     subtext = "Test subtext"
-#   ) #|>
-#     #testthat::expect_s3_class("tabxplor_tab")
-
-#   data |>
-#     dplyr::filter(!is.na(.data$tvhours) & .data$tvhours > 0) |>
-#     tab_logit(
-#       dependent = c("married", "white"),
-#       predictors = c("rincome", "partyid", "relig"),
-#       inverse_two_level_factors = TRUE,
-#       wt = "tvhours"
-#     ) #|>
-#     #testthat::expect_s3_class("tabxplor_tab")
-
-#   tab_logit(
-#     data,
-#     dependent = "married",
-#     predictors = c("race", "rincome", "partyid", "relig"),
-#     full_table = TRUE
-#   ) #|>
-#     #testthat::expect_s3_class("tabxplor_tab")
-
-#   data |>
-#     dplyr::filter(!is.na(.data$race) & !is.na(married)) |>
-#     tab_logit(
-#       dependent = "married",
-#       predictors = c("rincome", "partyid", "relig"),
-#       split_var = "race",
-#       cleannames = TRUE,
-#     ) #|>
-#     #testthat::expect_s3_class("tabxplor_tab")
-
-
-
-# # Basic logistic regression
-# tab_logit(
-#   data,
-#   dependent = "married",
-#   predictors = c("race", "rincome")
-# )
-
-# # Multiple predictors with clean names
-# tab_logit(
-#   data,
-#   dependent = "married",
-#   predictors = c("race", "rincome", "partyid"),
-#   cleannames = TRUE
-# )
-
-# # Stratified analysis by race
-# data |>
-#   dplyr::filter(!is.na(race) & !is.na(married)) |>
-#   tab_logit(
-#     dependent = "married",
-#     predictors = c("rincome", "partyid"),
-#     split_var = "race"
-#   )
-
-# # Full model diagnostics
-# tab_logit(
-#   data,
-#   dependent = "married",
-#   predictors = c("race", "rincome", "relig"),
-#   full_table = TRUE,
-#   subtext = "Model fit statistics included"
-# )
-
-# # Weighted regression
-# data |>
-#   dplyr::filter(!is.na(tvhours) & tvhours > 0) |>
-#   tab_logit(
-#     dependent = "married",
-#     predictors = c("rincome", "partyid"),
-#     wt = "tvhours"
-#   )
-
-
-
-
-# # Multi logistic regressions tests
-
-# # Define predictor sequences
-# predictor_models <- list(
-#   "demographic" = c("race"),
-#   "socioeconomic" = c("rincome", "relig"),
-#   "full" = c("race", "rincome", "relig")
-# )
-
-# # Run logistic regressions on marriage status
-# results <- multi_logit(
-#   data,
-#   dependent = "married",
-#   predictors_sequence = predictor_models #,
-#   #marginal_effects = TRUE
-# )
-
-# # View results
-# results$married
-
-# # Multiple outcomes with grouping
-# predictor_models_split <- list(
-#   "demographic" = c("age", "rincome"),
-#   "full" = c("age", "rincome", "relig")
-# )
-
-# results_by_race <- multi_logit(
-#   data,
-#   dependent = "married",
-#   predictors_sequence = predictor_models_split,
-#   split_var = "race",
-#   marginal_effects = FALSE
-# )
-
-  
-  
-# data <- forcats::gss_cat |>
-# dplyr::mutate(
-#   married = dplyr::case_when(
-#     marital == "Married"                                                ~ factor("1-Married"),
-#     marital %in% c("Never married", "Separated", "Divorced", "Widowed") ~ factor("2-Not married"),
-#     TRUE                                                                ~ factor(NA_character_)
-#   ),
-#   white = dplyr::case_when(
-#     race == "White"               ~ factor("1-White"),
-#     race %in% c("Black", "Other") ~ factor("2-Non-white"),
-#     TRUE                          ~ factor(NA_character_)
-#   ),
-# )
-# dependent <-  "married"
-# predictors_sequence <- predictor_models 
-# split_var = NULL
-# wt = NULL
-# nb_questions = NULL
-# odds_ratios = TRUE
-# marginal_effects = FALSE
-# signif = TRUE
-# add_pct = FALSE
-# add_n = FALSE
-# empirical_odds_ratio = TRUE
-# inverse_two_level_factors = TRUE
-# cleannames = TRUE
-# ci = FALSE
-# subtext = ""
-
-
-
-
-
-
-
-#   # data, dependent, predictors, split_var = NULL, wt = NULL,
-#   # full_table = FALSE,
-#   # inverse_two_level_factors = TRUE,
-#   # cleannames = NULL,
-#   # subtext = ""
-
-#   # tab_plain(data, col_var = hair_color) |>
-#   #   testthat::expect_s3_class("tabxplor_tab")
-#   # tab_plain(data, sex, hair_color, wt = mass) |>
-#   #   testthat::expect_s3_class("tabxplor_tab")
-#   # tab_plain(data, sex, hair_color, gender, wt = mass) |>
-#   #   testthat::expect_s3_class("tabxplor_tab")
-#   # tab_plain(data, row_var = hair_color, col_var = NULL, gender, wt = mass) |>
-#   #   testthat::expect_s3_class("tabxplor_tab")
-#   # tab_plain(data, row_var = NULL, col_var = hair_color, gender, wt = mass) |>
-#   #   testthat::expect_s3_class("tabxplor_tab")
-#   # tab_plain(data, sex, hair_color, gender, wt = mass, na = "drop") |>
-#   #   testthat::expect_s3_class("tabxplor_tab")
-
-#   # tab_plain(data, sex, sex) |> testthat::expect_s3_class("tabxplor_tab")
-#   # tab_plain(data, sex, sex, gender, na = "drop") |>
-#   #   testthat::expect_s3_class("tabxplor_tab")
-#   # tab_plain(data, sex, sex, gender, wt = mass) |>
-#   #   testthat::expect_s3_class("tabxplor_tab")
-
-#   # tab_plain(data, "gender", "sex", NA_character_) |>
-#   #   testthat::expect_s3_class("tabxplor_tab")
-#   # tab_plain(data, "gender", NA_character_) |>
-#   #   testthat::expect_s3_class("tabxplor_tab")
-#   # tab_plain(data, NA_character_, "sex") |>
-#   #   testthat::expect_s3_class("tabxplor_tab")
-#   # tab_plain(data, "gender", "sex", NULL) |>
-#   #   testthat::expect_s3_class("tabxplor_tab")
-# })
-
-
-# # testthat::test_that("tab_plain works with num and df", {
-# #   tab_plain(data, sex, hair_color, num = TRUE)                    |> testthat::expect_s3_class("tabxplor_tab")
-# #   tab_plain(data, sex, hair_color, df = TRUE)                     |> testthat::expect_s3_class("data.frame")
-
-# #   tab_plain(data, sex, hair_color, gender, wt = mass, num = TRUE) |> testthat::expect_s3_class("tabxplor_tab")
-# #   tab_plain(data, sex, hair_color, gender, wt = mass, df = TRUE)  |> testthat::expect_s3_class("data.frame")
-
-# # })
-
-# # testthat::test_that("tab_plain works with totals and total table", {
-# #   tab_plain(data, sex, hair_color, tot = c("row", "col"))         |> testthat::expect_s3_class("tabxplor_tab")
-# #   tab_plain(data, sex, hair_color, gender, tot = c("row", "col")) |> testthat::expect_s3_class("tabxplor_tab")
-# #   tab_plain(data, sex, hair_color, gender, totaltab = "line")     |> testthat::expect_s3_class("tabxplor_tab")
-# #   tab_plain(data, sex, hair_color, gender, totaltab = "table")    |> testthat::expect_s3_class("tabxplor_tab")
-# #   tab_plain(data, sex, hair_color, gender, totaltab = "no")       |> testthat::expect_s3_class("tabxplor_tab")
-# # })
-
-# # testthat::test_that("tab_plain works with pct and diffs", {
-# #   tab_plain(data, sex, hair_color, pct = "row")                       |> testthat::expect_s3_class("tabxplor_tab")
-# #   tab_plain(data, sex, hair_color, pct = "col")                       |> testthat::expect_s3_class("tabxplor_tab")
-# #   tab_plain(data, sex, hair_color, pct = "all")                       |> testthat::expect_s3_class("tabxplor_tab")
-# #   tab_plain(data, sex, hair_color, pct = "all_tabs")                  |> testthat::expect_s3_class("tabxplor_tab")
-
-# #   tab_plain(data, sex, hair_color, gender, pct = "row")               |> testthat::expect_s3_class("tabxplor_tab")
-# #   tab_plain(data, sex, hair_color, gender, pct = "col")               |> testthat::expect_s3_class("tabxplor_tab")
-# #   tab_plain(data, sex, hair_color, gender, pct = "all")               |> testthat::expect_s3_class("tabxplor_tab")
-# #   tab_plain(data, sex, hair_color, gender, pct = "all_tabs")          |> testthat::expect_s3_class("tabxplor_tab")
-
-# #   tab_plain(data, sex, hair_color, pct = "row", ref = "^male")        |> testthat::expect_s3_class("tabxplor_tab")
-# #   tab_plain(data, sex, hair_color, gender, pct = "row", ref = 2)     |> testthat::expect_s3_class("tabxplor_tab")
-
-# #   tab_plain(data, sex, hair_color, gender, pct = "row", comp = "all") |> testthat::expect_s3_class("tabxplor_tab")
-# #   tab_plain(data, sex, hair_color, gender, pct = "row", ref = "tot",
-# #             comp = "all")                                             |> testthat::expect_s3_class("tabxplor_tab")
-# #   tab_plain(data, sex, hair_color, gender, pct = "row", ref = 3,
-# #             comp = "all", totaltab = "table")                         |> testthat::expect_s3_class("tabxplor_tab")
-
-# #   tab_plain(data, sex, hair_color, pct = "col", ref = "brown")       |> testthat::expect_s3_class("tabxplor_tab")
-# #   tab_plain(data, sex, hair_color, pct = "col", ref = 3)             |> testthat::expect_s3_class("tabxplor_tab")
-
-# #   #warnings
-# #   tab_plain(data, sex, hair_color, pct = "row", ref = 47)                |> testthat::expect_warning()
-# #   tab_plain(data, sex, hair_color, pct = "row", ref = "no_existing_cat") |> testthat::expect_warning()
-# #   tab_plain(data, sex, hair_color, pct = "col", ref = 47)                |> testthat::expect_warning()
-# #   tab_plain(data, sex, hair_color, pct = "col", ref = "no_existing_cat") |> testthat::expect_warning()
-# #   #tab_plain(data, sex, hair_color, pct = "col", comp = "all")             |> testthat::expect_warning()
-# #   #tab_plain(data, sex, hair_color, gender, pct = "col", ref = "black", comp = "all") |> testthat::expect_warning()
-# #   #tab_plain(data, sex, hair_color, gender, pct = "col", comp = "all")     |> testthat::expect_warning()
-# # })
-
-# # testthat::test_that("tab_plain works with OR", {
-# #   tab_plain(data, sex, hair_color, pct = "row", OR = "OR")            |> testthat::expect_s3_class("tabxplor_tab")
-# #   tab_plain(data, sex, hair_color, pct = "col", OR = "OR_pct")        |> testthat::expect_s3_class("tabxplor_tab")
-
-# #   tab_plain(data, sex, hair_color, pct = "row", OR = "OR", ref = "^male")       |> testthat::expect_s3_class("tabxplor_tab")
-# #   tab_plain(data, sex, hair_color, gender, pct = "row", OR = "OR", ref = 2)     |> testthat::expect_s3_class("tabxplor_tab")
-
-# #   tab_plain(data, sex, hair_color, gender, pct = "row", OR = "OR", ref = "tot",
-# #             comp = "all")                                             |> testthat::expect_s3_class("tabxplor_tab")
-# #   tab_plain(data, sex, hair_color, gender, pct = "row", OR = "OR", ref = 3,
-# #             comp = "all", totaltab = "table")                         |> testthat::expect_s3_class("tabxplor_tab")
-# # })
-
-# # testthat::test_that("tab_num works with missing, NULL, NA, etc.", {
-# #   # set_color_breaks(mean_breaks = c(1.05, 1.10, 1.20, 1.50))
-# #   tab_num(data, sex, height, na = "drop")                                       %>% testthat::expect_s3_class("tabxplor_tab")
-# #   tab_num(data, sex, height, wt = mass)                                         %>% testthat::expect_s3_class("tabxplor_tab")
-# #   tab_num(data, sex, height, ref = "no", ci = "no", tot = "row")                %>% testthat::expect_s3_class("tabxplor_tab")
-# #   tab_num(data, sex, c(height, birth_year))                                     %>% testthat::expect_s3_class("tabxplor_tab")
-# #   tab_num(data, sex, c(height, birth_year), gender, tot = "row",totaltab = "table") %>% testthat::expect_s3_class("tabxplor_tab")
-# #   tab_num(data, sex, c(height, birth_year), c(gender, eye_color), comp = "all") %>% testthat::expect_s3_class("tabxplor_tab")
-# #   tab_num(data, col_var = birth_year)                                           %>% testthat::expect_s3_class("tabxplor_tab")
-# #   })
-
-
-# # testthat::test_that("tab_num works with diff and ci", {
-# #   tab_num(data, sex, c(height, birth_year), na = "drop", ref = "no")        %>% testthat::expect_s3_class("tabxplor_tab")
-# #   tab_num(data, sex, c(height, birth_year), na = "drop")
-
-# #   tab_num(data, sex, c(height, birth_year), na = "drop", color = "diff")     %>% testthat::expect_s3_class("tabxplor_tab")
-# #   tab_num(data, sex, c(height, birth_year), na = "drop", color = "diff_ci")  %>% testthat::expect_s3_class("tabxplor_tab")
-# #   tab_num(data, sex, c(height, birth_year), na = "drop", color = "after_ci") %>% testthat::expect_s3_class("tabxplor_tab")
-# #   tab_num(data, sex, c(height, birth_year), na = "drop", color = "")         %>% testthat::expect_s3_class("tabxplor_tab")
-
-# #   tab_num(data, sex, c(height, birth_year), na = "drop", ref = "^male")     %>% testthat::expect_s3_class("tabxplor_tab")
-# #   tab_num(data, sex, c(height, birth_year), na = "drop", ref = 3,
-# #           color = "diff_ci", tot = "row")                                    %>% testthat::expect_s3_class("tabxplor_tab")
-# #   tab_num(data, sex, c(height, birth_year), na = "drop", color = "after_ci") %>% testthat::expect_s3_class("tabxplor_tab")
-
-# #   tab_num(data, sex, c(height, birth_year), na = "drop", ci = "cell")        %>% testthat::expect_s3_class("tabxplor_tab")
-
-# #   tab_num(data, sex, c(height, birth_year), na = "drop", ci = "diff")        %>% testthat::expect_s3_class("tabxplor_tab")
-
-# # })
-
-# # testthat::test_that("tab_num works with with df and num", {
-# #   tab_num(data, sex, c(height, birth_year), na = "drop",
-# #           tot = "row", totaltab = "table", num = TRUE)         %>% testthat::expect_s3_class("tabxplor_tab")
-# #   tab_num(data, sex, c(height, birth_year), gender, na = "drop",
-# #           tot = "row", totaltab = "table", num = TRUE)         %>% testthat::expect_s3_class("tabxplor_tab")
-
-# #   tab_num(data, sex, c(height, birth_year), na = "drop",
-# #           tot = "row", totaltab = "table", df = TRUE)          %>% testthat::expect_s3_class("data.frame")
-# #   tab_num(data, sex, c(height, birth_year), gender, na = "drop",
-# #           tot = "row", totaltab = "table",df = TRUE) %>% testthat::expect_s3_class("data.frame")
-# # })
-
-
-# # testthat::test_that("tab et tab_many works with missing, NULL, NA, etc., in variables", {
-# #   tab(data, "gender", "sex", NA_character_) %>% testthat::expect_s3_class("tabxplor_tab")
-# #   tab(data, "gender", NA_character_)        %>% testthat::expect_s3_class("tabxplor_tab")
-# #   tab(data, NA_character_, "sex")           %>% testthat::expect_s3_class("tabxplor_tab")
-# #   tab(data, "gender", "sex", NULL)          %>% testthat::expect_s3_class("tabxplor_tab")
-# #   #tab(data, "gender", "sex", "")           %>% testthat::expect_s3_class("tabxplor_tab")
-# #   #tab(data, "gender", "sex", "no")         %>% testthat::expect_s3_class("tabxplor_tab")
-
-# #   tab_many(data, "gender")                                                     %>% testthat::expect_s3_class("tabxplor_tab")
-# #   tab_many(data, "gender", wt = mass)                                          %>% testthat::expect_s3_class("tabxplor_tab")
-# #   tab_many(data, "gender", col_vars = NULL         , tab_vars = NULL)          %>% testthat::expect_s3_class("tabxplor_tab")
-# #   tab_many(data, "gender", col_vars = NA_character_, tab_vars = NA_character_) %>% testthat::expect_s3_class("tabxplor_tab")
-# #   tab_many(data, "gender", col_vars = ""           , tab_vars = "")            %>% testthat::expect_s3_class("tabxplor_tab")
-# #   tab_many(data, "gender", col_vars = "no"         , tab_vars = "no")          %>% testthat::expect_s3_class("tabxplor_tab")
-# #   tab_many(data, gender, col_vars = hair_color , tab_vars = sex)               %>% testthat::expect_s3_class("tabxplor_tab")
-# # })
-
-
-# # testthat::test_that("tab_many works with numeric variables", {
-# #   tab_many(data, sex, mass)         |> testthat::expect_s3_class("tabxplor_tab")
-# #   tab_many(data, sex, mass, gender) |> testthat::expect_s3_class("tabxplor_tab")
-# # })
-
-# # testthat::test_that("vectorisation of pct in tab_many works", {
-# #   tab_many(data, sex, c(hair_color, eye_color), pct = "row")
-# #   tab_many(data, sex, c(hair_color, mass, gender), pct = "row")                 |> testthat::expect_s3_class("tabxplor_tab")
-# #   tab_many(data, sex, c(hair_color, mass, gender), pct = c("row", NA, "col"))   |> testthat::expect_s3_class("tabxplor_tab")
-# #   tab_many(data, c(sex, gender), hair_color, pct = c("row", "col")) |> length() |> testthat::expect_equal(2)
-# #   tab_many(data, c(sex, eye_color), c(hair_color, mass, gender),
-# #            pct = list(sex = list("row", "col", "col"), eye_color = list("col", "row", "row"))
-# #   ) |>
-# #     length() |> testthat::expect_equal(2)
-# # })
-
-# # testthat::test_that("tab_many works with levels = 'first'", {
-# #   tabs1 <- tab_many(data, sex, c(hair_color, eye_color), pct = "row", levels = "first")
-# #   testthat::expect_false("brown_hair_color" %in% names(tabs1))
-
-# #   tabs2 <- tab_many(data, sex, c(hair_color, eye_color), pct = "row", levels = c("first", "all"))
-# #   testthat::expect_false("brown_hair_color" %in% names(tabs2))
-# #   testthat::expect_true("orange" %in% names(tabs2))
-# # })
-
-# # testthat::test_that("tab_many na arguments work the right way", {
-# #   tabs1 <- tab_many(data, gender, hair_color, sex, na = "drop_all")
-# #   testthat::expect_true(all(!stringr::str_detect(dplyr::pull(tabs1,  sex), "^NA")))
-
-# #   tabs2 <- tab_many(data, gender, hair_color, sex, na_drop_all = gender)
-# #   testthat::expect_true(all(!stringr::str_detect(dplyr::pull(tabs2,  sex), "^NA")))
-# #   testthat::expect_true(any(stringr::str_detect(names(tabs2), "^NA")))
-# # })
-
-
-# # testthat::test_that("all tab functions works with no tab_vars", {
-# #   data %>% #with no tab_vars
-# #     tab_plain(sex, hair_color, wt = mass, pct = "row") %>%
-# #     #tab_totaltab() %>%
-# #     #tab_tot() %>%
-# #     #tab_pct() %>%
-# #     tab_ci("diff", color = "after_ci") %>%
-# #     tab_chi2() %>%
-# #     testthat::expect_s3_class("tabxplor_tab")
-# # })
-
-# # testthat::test_that("all tab functions works with no col_var", {
-# #   data %>%
-# #     tab_plain(sex, pct = "col") %>%
-# #     #tab_totaltab() %>%
-# #     #tab_tot() %>%
-# #     #tab_pct("col") %>%
-# #     tab_ci("diff", color = "after_ci") %>%
-# #     tab_chi2() %>%
-# #     testthat::expect_s3_class("tabxplor_tab")
-# # })
-
-# # testthat::test_that("all tab functions works with no row_var", {
-# #   data %>%
-# #     tab_plain(col_var = hair_color, tot = c("row", "col"), pct = "row") %>%
-# #     #tab_totaltab() %>% error
-# #     #tab_tot() %>%
-# #     #tab_pct() %>%
-# #     tab_ci() %>%
-# #     tab_chi2() %>%
-# #     testthat::expect_s3_class("tabxplor_tab")
-# # })
-
-# # testthat::test_that("all tab functions works with totaltab = 'line'", {
-# #   data %>%
-# #     tab_plain(sex, hair_color, gender, pct = "row") %>%
-# #     #tab_totaltab("line") %>%
-# #     #tab_tot() %>%
-# #     #tab_pct() %>%
-# #     tab_ci("diff", color = "after_ci") %>%
-# #     tab_chi2() %>%
-# #     testthat::expect_s3_class("tabxplor_tab")
-# # })
-
-# # testthat::test_that("tab_num works (with color)", {
-# #   testthat::expect_true(
-# #     !is.na(tab_prepare(data, sex, mass) %>%
-# #              tab_num(sex, mass, tot = "row", ref = "tot", color = "after_ci") %>%
-
-# #              tab_chi2() %>%
-# #              dplyr::pull(mass) %>% vec_data() %>% dplyr::pull(var) %>% dplyr::last())
-# #   )
-# # })
-
-# # testthat::test_that("tab_many work with tribble", {
-
-# #   tibble::tribble(
-# #     ~row_var, ~col_vars                           , ~tab_vars     , ~levels,
-# #     "sex"   , "hair_color"                        , NA_character_ , "all"  ,
-# #     "sex"   , c("mass", "hair_color", "eye_color"), "gender"      , "first",
-# #     "sex"   , c("hair_color", "eye_color", "mass"), "gender"      , "all"  ,
-# #   ) %>%
-# #     purrr::pmap(tab_many, data = data, totcol = "no", totaltab = "no") %>%
-# #     testthat::expect_type("list")
-
-# #   # not needed, since the opportunity of proceeding that way is not clear ?
-# #   # purrr::map(tabs, ~ tab_totaltab(.) %>%
-# #   #              tab_tot() %>%
-# #   #              tab_pct() %>%
-# #   #              tab_ci() %>%
-# #   #              tab_chi2()
-# #   # )
-# # })
-
-# # testthat::test_that("tab work with tribble (even many tab_vars)", {
-# #   tibble::tribble(
-# #     ~row_var, ~col_var    , ~tab_vars                 ,
-# #     "sex"   , "hair_color", NA_character_             ,
-# #     "sex"   , "mass"      , "gender"                  ,
-# #     "sex"   , "eye_color" , c("gender",  "hair_color"),
-# #   ) %>%
-# #     purrr::pmap(tab, data = data) %>%
-# #     testthat::expect_type("list")
-# # })
-
-
-
-# # #' @keywords internal
-# # expect_color <- function(object) {
-# #   # 1. Capture object and label
-# #   act <- testthat::quasi_label(rlang::enquo(object), arg = "object")
-
-# #   # 2. Call expect()
-# #   act$color <- fmt_color_selection(act$val) %>% purrr::flatten_lgl()
-# #   testthat::expect(
-# #     any(act$color),
-# #     sprintf("%s doesn't return any colored cell.", act$lab)
-# #   )
-
-# #   # 3. Invisibly return the value
-# #   invisible(act$val)
-# # }
-
-# # testthat::test_that("printing colors works", {
-# #   set_color_style(type = "bg", theme = "dark")
-# #   tab(data, sex, hair_color, pct = "row", color = "diff"    ) %>% print() %>%
-# #     testthat::expect_output()
-# #   set_color_style(type = "text", theme = "dark")
-# #   set_color_breaks(pct_breaks = c(0.05, 0.15, 0.3),
-# #                    mean_breaks = c(1.15,  2, 4),
-# #                    contrib_breaks = c(1, 2, 5)     )
-# #   tab(data, sex, hair_color, pct = "row", color = "diff_ci" ) %>% print() %>%
-# #     testthat::expect_output()
-# #   set_color_style(type = "bg", theme = "light")
-# #   tab(data, sex, hair_color, pct = "row", color = "after_ci") %>% print() %>%
-# #     testthat::expect_output()
-
-# #   set_color_style(type = "text")
-# #   set_color_breaks(pct_breaks = c(0.05, 0.1, 0.2, 0.3),
-# #                    mean_breaks = c(1.15, 1.5, 2, 4),
-# #                    contrib_breaks = c(1, 2, 5, 10)     )
-# #   tab(data, sex, hair_color, pct = "row", color = "contrib" ) %>% print() %>%
-# #     testthat::expect_output()
-# #   set_color_style(type = "text", theme = "dark")
-# # })
-
-
-# # testthat::test_that("tab colors are calculated with counts and pct", {
-# #   tab(data, sex, hair_color, pct = "row") # must not have colors
-# #   tab(data, sex, hair_color, pct = "row", color = "diff"    )  %>% dplyr::pull(brown) %>% expect_color()
-# #   tab(data, sex, hair_color, pct = "row", color = "diff_ci" )  %>% dplyr::pull(`NA`)  %>% expect_color()
-# #   tab(data, sex, hair_color, pct = "row", color = "after_ci")  %>% dplyr::pull(`NA`)  %>% expect_color()
-# #   tab(data, sex, hair_color, pct = "row", color = "contrib" )  %>% dplyr::pull(`NA`) %>% expect_color()
-# #   tab(data, sex, hair_color, pct = "no" , color = "contrib" )  %>% dplyr::pull(`NA`) %>% expect_color()
-# #   tab(data, sex, hair_color, pct = "row", color = "OR"      )  %>% dplyr::pull(brown) %>% expect_color()
-
-# #   tab(data, sex, hair_color, pct = "row"     , color = "auto") %>% dplyr::pull(brown) %>% expect_color()
-# #   tab(data, sex, hair_color, pct = "col"     , color = "auto") %>% dplyr::pull(brown) %>% expect_color()
-# #   tab(data, sex, hair_color, pct = "all"     , color = "auto") %>% dplyr::pull(`NA`) %>% expect_color()
-# #   tab(data, sex, hair_color, pct = "all_tabs", color = "auto") %>% dplyr::pull(`NA`) %>% expect_color()
-
-# #   # breakss <- get_color_breaks()
-# #   # set_color_breaks(pct_breaks = c(0.05, 0.10, 0.20, 0.30, 2.00) )
-# #   # set_color_breaks(pct_breaks = c(0.05, 0.10, 0.20, 2.00, 0.30) )
-# #  })
-
-# # testthat::test_that("tab colors are calculated with text supplementary columns", {
-# #   tab(data, sex, hair_color, pct = "row", sup_cols = eye_color, color = "diff"    ) %>% dplyr::pull(black_eye_color) %>% expect_color()
-# #   tab(data, sex, hair_color, pct = "row", sup_cols = eye_color, color = "diff_ci" ) %>% dplyr::pull(`NA`) %>% expect_color()
-# #   tab(data, sex, hair_color, pct = "row", sup_cols = eye_color, color = "auto"    ) %>% dplyr::pull(black_eye_color) %>% expect_color()
-# # })
-
-# # testthat::test_that("tab colors are calculated with mean supplementary columns", {
-# #   tab(dplyr::storms, category, wind, color = "auto")                         %>% dplyr::pull(wind) %>% expect_color()
-# #   tab(dplyr::storms, category, status, sup_cols =  wind, color = "diff"    ) %>% dplyr::pull(wind) %>% expect_color()
-# #   tab(dplyr::storms, category, status, sup_cols =  wind, color = "diff_ci" ) %>% dplyr::pull(wind) %>% expect_color()
-# #   tab(dplyr::storms, category, status, sup_cols =  wind, color = "after_ci") %>% dplyr::pull(wind) %>% expect_color()
-
-# #   tab(dplyr::storms, category, status, sup_cols =  wind, color = "auto"    ) |> testthat::expect_s3_class("tabxplor_tab")
-# #   tab(dplyr::storms, category, status, sup_cols = c("pressure", "wind")) |> testthat::expect_s3_class("tabxplor_tab")
-# # })
-
-# # testthat::test_that("tab_many works with and without add_n and add_pct", {
-# #   tab_many(data, "sex", "hair_color", pct = "row", color = "diff", add_n   = FALSE)                 |> testthat::expect_s3_class("tabxplor_tab")
-# #   tab_many(data, "sex", "hair_color", pct = "row", color = "diff", add_n   = FALSE, add_pct = TRUE) |> testthat::expect_s3_class("tabxplor_tab")
-# #   tab_many(data, "sex", "hair_color", pct = "row", color = "diff", add_pct = TRUE)                  |> testthat::expect_s3_class("tabxplor_tab")
-# #   tab_many(data, "sex", "hair_color", pct = "col", color = "diff", add_n   = FALSE)                 |> testthat::expect_s3_class("tabxplor_tab")
-# #   tab_many(data, "sex", "hair_color", pct = "col", color = "diff", add_n   = FALSE, add_pct = TRUE) |> testthat::expect_s3_class("tabxplor_tab")
-# #   tab_many(data, "sex", "hair_color", pct = "col", color = "diff", add_pct = TRUE)                  |> testthat::expect_s3_class("tabxplor_tab")
-# # })
-
-
-
+# Phase 12a: tab_logit() / multi_logit() -- odds-ratio tables from binary logit models.
+# Statistical soundness is checked against a hand-run stats::glm / survey::svyglm + the log-OR
+# Wald interval that tab_logit stores (the exact dual of the Wald p-value).
+
+logit_data <- function() {
+  forcats::gss_cat |>
+    dplyr::mutate(
+      married = factor(dplyr::if_else(marital == "Married", "Married", "Not married"))
+    )
+}
+
+test_that("tab_logit() returns a grouped odds-ratio tab with the right structure", {
+  skip_if_not_installed("broom")
+  t1 <- tab_logit(logit_data(), "married", c("race", "rincome"))
+
+  expect_s3_class(t1, "tabxplor_grouped_tab")
+  expect_identical(dplyr::group_vars(t1), "var")
+  expect_true("Married: OR" %in% names(t1))
+  col <- t1[["Married: OR"]]
+  expect_true(is_fmt(col))
+  expect_identical(get_display(col)[1], "or")
+  expect_identical(get_type(col), "row")
+  expect_identical(get_ci_type(col), "or")
+  expect_identical(get_color(col), "OR")
+  expect_identical(get_color_signif(col), "grey_non_signif")
+  # reference rows (factor baselines) carry OR == 1, no CI/p
+  ref_lvls <- is_refrow(col) & as.character(t1$var) != "Constant"
+  expect_true(all(get_or(col)[ref_lvls] == 1))
+  expect_true(all(is.na(get_pvalue(col)[ref_lvls])))
+})
+
+test_that("tab_logit() odds ratios / CI / p match stats::glm (unweighted)", {
+  skip_if_not_installed("broom")
+  data <- logit_data()
+  t1   <- tab_logit(data, "married", c("race", "rincome"), cleannames = FALSE)
+  col  <- t1[["Married: OR"]]
+
+  d <- data |> dplyr::filter(!is.na(race), !is.na(rincome), !is.na(married))
+  d$married <- forcats::fct_rev(forcats::fct_drop(factor(d$married)))   # glm models "Married"
+  g  <- stats::glm(married ~ race + rincome, data = d, family = stats::binomial())
+  co <- summary(g)$coefficients
+  z  <- stats::qnorm(0.975)
+  orm <- exp(co[, "Estimate"])
+  lom <- exp(co[, "Estimate"] - z * co[, "Std. Error"])
+  him <- exp(co[, "Estimate"] + z * co[, "Std. Error"])
+  pm  <- co[, "Pr(>|z|)"]
+
+  keep <- !is.na(get_pvalue(col))            # intercept + estimated coefs (ref levels are NA)
+  expect_equal(sum(keep), length(orm))
+  expect_equal(sort(get_or(col)[keep]),     sort(unname(orm)), tolerance = 1e-6)
+  expect_equal(sort(get_ci_inf(col)[keep]), sort(unname(lom)), tolerance = 1e-6)
+  expect_equal(sort(get_ci_sup(col)[keep]), sort(unname(him)), tolerance = 1e-6)
+  expect_equal(sort(get_pvalue(col)[keep]), sort(unname(pm)),  tolerance = 1e-6)
+
+  # spot-check term correspondence (not just the multiset)
+  i <- which(as.character(t1$levels) == "Black")
+  expect_equal(get_or(col)[i], unname(orm["raceBlack"]), tolerance = 1e-6)
+})
+
+test_that("tab_logit() matches survey::svyglm with survey weights", {
+  skip_if_not_installed("broom")
+  skip_if_not_installed("survey")
+  data <- logit_data() |>
+    dplyr::filter(!is.na(tvhours)) |>
+    dplyr::mutate(w = tvhours + 1)                 # strictly positive weights
+  col <- tab_logit(data, "married", c("race", "rincome"), wt = "w",
+                   cleannames = FALSE)[["Married: OR"]]
+
+  dw <- data |> dplyr::filter(!is.na(race), !is.na(rincome), !is.na(married))
+  dw$married <- forcats::fct_rev(forcats::fct_drop(factor(dw$married)))
+  des <- survey::svydesign(ids = ~1, weights = ~w, data = dw)
+  sg  <- survey::svyglm(married ~ race + rincome, design = des,
+                        family = stats::quasibinomial())
+  co  <- summary(sg)$coefficients
+  tq  <- stats::qt(0.975, sg$df.residual)
+  orw <- exp(co[, 1])
+  low <- exp(co[, 1] - tq * co[, 2])
+  hiw <- exp(co[, 1] + tq * co[, 2])
+  pw  <- co[, 4]
+
+  keep <- !is.na(get_pvalue(col))
+  expect_equal(sort(get_or(col)[keep]),     sort(unname(orw)), tolerance = 1e-6)
+  expect_equal(sort(get_ci_inf(col)[keep]), sort(unname(low)), tolerance = 1e-6)
+  expect_equal(sort(get_ci_sup(col)[keep]), sort(unname(hiw)), tolerance = 1e-6)
+  expect_equal(sort(get_pvalue(col)[keep]), sort(unname(pw)),  tolerance = 1e-6)
+})
+
+test_that("colour: grey_non_signif greys CI-includes-1 cells, colours large significant OR", {
+  skip_if_not_installed("broom")
+  t1  <- tab_logit(logit_data(), "married", c("race", "rincome"), cleannames = FALSE)
+  col <- t1[["Married: OR"]]
+  txt <- fmt_color_channels(col)$text
+  sig <- !is.na(get_ci_inf(col)) & (get_ci_inf(col) > 1 | get_ci_sup(col) < 1)
+
+  expect_true(all(txt[!sig] == 0))                 # only significant cells coloured
+  expect_true(all(txt[is_refrow(col)] == 0))       # reference cells uncoloured
+  big <- which(as.character(t1$levels) == "Black") # OR ~ 1/2.36, p < 0.001, |effect| > break
+  expect_true(txt[big] != 0)
+})
+
+test_that("multi_logit() puts one OR column per model, blank where a predictor is absent", {
+  skip_if_not_installed("broom")
+  t2 <- multi_logit(logit_data(), "married",
+                    models = list(demographic = c("race", "age"),
+                                  full        = c("race", "age", "rincome")))
+  expect_s3_class(t2, "tabxplor_grouped_tab")
+  expect_true(all(c("demographic", "full") %in% names(t2)))
+
+  # rincome rows exist (union skeleton) but are empty in the demographic column
+  rincome_rows <- as.character(t2$var) == "rincome"
+  expect_true(any(rincome_rows))
+  expect_true(all(is.na(get_or(t2[["demographic"]])[rincome_rows])))
+  expect_false(all(is.na(get_or(t2[["full"]])[rincome_rows])))
+})
+
+test_that("a 3+ level dependent errors cleanly", {
+  skip_if_not_installed("broom")
+  expect_error(tab_logit(logit_data(), "marital", "race"), "binary|2 level")
+})
+
+test_that("tab_logit() output exports through every backend without error", {
+  skip_if_not_installed("broom")
+  t1 <- tab_logit(logit_data(), "married", c("race", "rincome"))
+  expect_no_error(tab_kable(t1))
+  expect_no_error(tab_md(t1))
+  skip_if_not_installed("openxlsx2")
+  xf <- withr::local_tempfile(fileext = ".xlsx")
+  expect_no_error(tab_xl(t1, path = xf, replace = TRUE))
+  expect_true(file.exists(xf))
+})
+
+test_that("1/OR display renders OR < 1 as a reciprocal", {
+  skip_if_not_installed("broom")
+  t1  <- tab_logit(logit_data(), "married", c("race", "rincome"), cleannames = FALSE)
+  txt <- format(t1[["Married: OR"]], special_formatting = TRUE)
+  i <- which(as.character(t1$levels) == "Black")   # OR well below 1
+  expect_match(txt[i], "^1/")
+})
+
+test_that("method = 'profile' uses profile-likelihood CI + LR-test p (dual)", {
+  skip_if_not_installed("broom")
+  skip_if_not_installed("MASS")
+  data <- logit_data()
+  col  <- tab_logit(data, "married", c("race", "rincome"), method = "profile",
+                    cleannames = FALSE)[["Married: OR"]]
+
+  d <- data |> dplyr::filter(!is.na(race), !is.na(rincome), !is.na(married))
+  d$married <- forcats::fct_rev(forcats::fct_drop(factor(d$married)))
+  g  <- stats::glm(married ~ race + rincome, data = d, family = stats::binomial())
+  ci <- suppressMessages(exp(stats::confint(g)))                 # profile CI
+
+  keep <- !is.na(get_pvalue(col))
+  expect_equal(sort(get_ci_inf(col)[keep]), sort(unname(ci[, 1])), tolerance = 1e-4)
+  expect_equal(sort(get_ci_sup(col)[keep]), sort(unname(ci[, 2])), tolerance = 1e-4)
+
+  # CI and LR p are exact duals: a clearly significant term excludes 1, a clearly non-sig one includes it
+  p     <- get_pvalue(col)[keep]
+  excl1 <- get_ci_inf(col)[keep] > 1 | get_ci_sup(col)[keep] < 1
+  expect_true(all(excl1[p < 0.01]))
+  expect_true(all(!excl1[p > 0.10]))
+})
+
+test_that("method = 'profile' falls back to Wald for weighted models (with a message)", {
+  skip_if_not_installed("broom")
+  skip_if_not_installed("survey")
+  data <- logit_data() |>
+    dplyr::filter(!is.na(tvhours)) |>
+    dplyr::mutate(w = tvhours + 1)
+  expect_message(
+    tw <- tab_logit(data, "married", c("race", "rincome"), wt = "w",
+                    method = "profile", cleannames = FALSE),
+    "not defined for survey"
+  )
+  colw <- tab_logit(data, "married", c("race", "rincome"), wt = "w",
+                    method = "wald", cleannames = FALSE)[["Married: OR"]]
+  expect_equal(get_ci_inf(tw[["Married: OR"]]), get_ci_inf(colw))
+  expect_equal(get_pvalue(tw[["Married: OR"]]), get_pvalue(colw))
+})
+
+test_that("color_signif = 'ignore' colours non-significant odds ratios too", {
+  skip_if_not_installed("broom")
+  col <- tab_logit(logit_data(), "married", c("race", "rincome"),
+                   color_signif = "ignore", cleannames = FALSE)[["Married: OR"]]
+  expect_identical(get_color_signif(col), "ignore")
+
+  txt <- fmt_color_channels(col)$text
+  orr <- get_or(col)
+  mag <- ifelse(orr >= 1, orr, 1 / orr)
+  sig <- !is.na(get_ci_inf(col)) & (get_ci_inf(col) > 1 | get_ci_sup(col) < 1)
+  cand <- which(!is.na(orr) & mag > 1.16 & !sig & !is_refrow(col))   # non-sig but large |OR|
+  skip_if(length(cand) == 0)
+  expect_true(all(txt[cand] != 0))                                   # coloured under "ignore"
+})

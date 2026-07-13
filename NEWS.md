@@ -3,6 +3,18 @@
 # tabxplor 1.4.0 (in development)
 
 ## New features
+* New `tab_logit()` and `multi_logit()` --- **logistic-regression tables** as color-coded
+  `tabxplor` tables. `tab_logit(data, dependent, predictors)` fits a binary logit per dependent
+  variable and shows the odds ratios (one column per dependent) grouped by predictor, with the
+  reference level as `1`; `multi_logit(data, dependent, models = list(...))` compares several models
+  side by side (one column each). Each odds ratio carries its 95% confidence interval and p-value, so
+  the table prints with significance stars, greys out non-significant odds ratios, shows odds ratios
+  below 1 as `1/x`, and exports to Excel / HTML / Markdown like any other table. Survey weights are
+  supported (`wt =`, via `survey::svyglm`). `method = "wald"` (default) or `"profile"` chooses Wald
+  vs profile-likelihood intervals and tests; `color_signif` controls how significance drives the
+  colours. `broom` and `survey` (and `MASS` for `method = "profile"`) are optional dependencies.
+* `tab()` odds-ratio columns (and any odds ratio) now print values below 1 as `1/x` (e.g. `1/4`
+  instead of `0.25`), so they compare symmetrically with odds ratios above 1.
 * `tab_md()` now exports **colored** markdown. A table built with colors (e.g. `tab(..., color = "diff")`)
   renders each cell as a short pandoc bracketed span `[value]{.class}`, so it shows up colored in Quarto,
   R Markdown and pandoc. The class names are readable and describe the color break --- `p5`/`p10`/`p20`

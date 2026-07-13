@@ -1,1009 +1,373 @@
+# PURPOSE: Logistic-regression tables (odds ratios) as native tabxplor_tab objects.
+# ROLE: tab_logit()/multi_logit() fit binary logit models and render odds ratios + Wald CIs +
+#   p-values through the tabxplor_fmt `or`/`ci_inf`/`ci_sup`/`pvalue` fields, so a regression table
+#   prints, colours and exports (kable / md / Excel) exactly like a crosstab.
+# KEY CONSTRAINTS:
+#   - Direct engine: stats::glm (unweighted) / survey::svyglm (weighted) + broom::tidy. No parsnip.
+#   - broom + survey (+ MASS for method="profile") are Suggests -> requireNamespace()-guarded.
+#   - CI <-> p are always DUALS (CI <-> stars can never disagree). method="wald" (default): the
+#     Wald interval exp(coef +/- crit*se) computed in-house + the Wald p (NOT broom's conf.int,
+#     which silently switches to profile likelihood when MASS is loaded). method="profile":
+#     profile-likelihood CI (stats::confint) + LR-test p (both likelihood-based). Wald is the only
+#     option for weighted models (profile is undefined for survey designs).
+#   - OR columns are ordinary fmt: type="row", display="or", color="OR",
+#     color_signif="grey_non_signif", ci_type="or" (log-OR Wald exp() bounds, multiplicative
+#     neutral 1). ci_center()/fmt_color_plan()/format() read those (Phase 12a fmt patches).
+# See: CLAUDE.md Phase 12a ; dev/tabxplor_1.4.0_decisions.md.
+
+# === Internal engine ================================================================
+
+# broom is needed for every fit; survey only for the weighted (wt) path.
+logit_check_deps <- function(wt) {
+  if (!requireNamespace("broom", quietly = TRUE)) {
+    cli::cli_abort(c(
+      "{.pkg broom} is required for logistic-regression tables.",
+      "i" = 'Install it with {.code install.packages("broom")}.'
+    ))
+  }
+  if (!is.null(wt) && !requireNamespace("survey", quietly = TRUE)) {
+    cli::cli_abort(c(
+      "{.pkg survey} is required for weighted logistic regression (the {.arg wt} argument).",
+      "i" = 'Install it with {.code install.packages("survey")}.'
+    ))
+  }
+}
+
+# Prepare a binary dependent: a 0/1 numeric becomes a 2-level factor ("Not <dep>" / "<dep>");
+# any other input must have exactly 2 levels, optionally reversed so glm models the FIRST level
+# (inverse_two_level_factors -- the maintainer's convention, e.g. "1-Married" first = modelled).
+logit_prep_dependent <- function(data, dependent, inverse_two_level_factors) {
+  y <- data[[dependent]]
+  if (is.numeric(y) && all(stats::na.omit(y) %in% c(0, 1))) {
+    y <- factor(y, levels = c(0, 1), labels = c(paste0("Not ", dependent), dependent))
+  } else {
+    y <- forcats::fct_drop(as.factor(y))
+    if (nlevels(y) != 2L) {
+      cli::cli_abort(c(
+        "The dependent variable {.val {dependent}} must be binary (2 levels).",
+        "x" = "It has {nlevels(y)} level{?s}: {.val {levels(y)}}.",
+        "i" = "Multinomial / 3+ level outcomes are planned for a later phase."
+      ))
+    }
+    if (inverse_two_level_factors) y <- forcats::fct_rev(y)
+  }
+  data[[dependent]] <- y
+  data
+}
+
+# The modelled ("positive") level whose odds the OR describes = the level glm predicts.
+logit_positive_level <- function(data, dependent, inverse_two_level_factors) {
+  y <- data[[dependent]]
+  if (is.numeric(y) && all(stats::na.omit(y) %in% c(0, 1))) return(dependent)
+  lv <- levels(forcats::fct_drop(as.factor(y)))
+  lv[if (inverse_two_level_factors) 1L else 2L]
+}
+
+# The (var, level, term, is_ref) row skeleton for a set of predictors, in display order: the
+# intercept ("Constant") first, then each predictor's levels (factor / character) -- first level =
+# reference, no glm term -- or a single row for a numeric predictor. `term` matches glm/svyglm
+# coefficient names so a fit aligns to the skeleton by term.
+logit_skeleton <- function(data, predictors) {
+  parts <- purrr::map(predictors, function(p) {
+    v <- data[[p]]
+    if (is.factor(v) || is.character(v)) {
+      lv <- levels(forcats::fct_drop(as.factor(v)))
+      tibble::tibble(
+        var    = p,
+        level  = lv,
+        term   = c(NA_character_, paste0(p, lv[-1])),
+        is_ref = c(TRUE, rep(FALSE, length(lv) - 1L))
+      )
+    } else {
+      tibble::tibble(var = p, level = p, term = p, is_ref = FALSE)
+    }
+  })
+  dplyr::bind_rows(
+    tibble::tibble(var = "Constant", level = "Reference population",
+                   term = "(Intercept)", is_ref = TRUE),
+    parts
+  )
+}
+
+# Per-coefficient LIKELIHOOD-RATIO p-values (the dual of the profile-likelihood CI). Each coefficient
+# is dropped from the model matrix in turn and the deviance change is a 1-df chi-square. Works on a
+# fitted (unweighted) glm; for a factor this tests one level vs the reference, matching the per-level
+# odds ratio the table shows.
+logit_lr_pvalues <- function(fit) {
+  X   <- stats::model.matrix(fit)
+  y   <- fit$y
+  w   <- fit$prior.weights
+  off <- fit$offset
+  if (is.null(off)) off <- rep(0, length(y))
+  ic  <- which(colnames(X) == "(Intercept)")
+  dev_full <- fit$deviance
+  p <- vapply(seq_len(ncol(X)), function(j) {
+    red <- suppressWarnings(stats::glm.fit(
+      X[, -j, drop = FALSE], y, weights = w, offset = off, family = fit$family,
+      intercept = length(ic) > 0L && j != ic
+    ))
+    stats::pchisq(red$deviance - dev_full, df = 1, lower.tail = FALSE)
+  }, numeric(1))
+  stats::setNames(p, stringr::str_remove_all(colnames(X), "`"))
+}
+
+# Fit one binary logit on complete cases -> a tidy of ODDS RATIOS + CI + p + the model n.
+# method = "wald" (default): Wald interval exp(coef +/- crit*se) + Wald p (glm -> normal z quantile;
+#   svyglm -> t with design residual df) -- each the exact dual of broom's p for that engine.
+# method = "profile": profile-likelihood CI (stats::confint via MASS) + LR-test p -- both
+#   likelihood-based, so still exact duals. Unweighted glm only; a weighted model falls back to Wald
+#   (profile likelihood is not defined for survey designs) with a one-time message.
+logit_fit <- function(data, dependent, predictors, wt,
+                      inverse_two_level_factors, conf_level, method) {
+  mdata <- tidyr::drop_na(data, tidyselect::all_of(c(dependent, predictors, wt)))
+
+  fac_preds <- predictors[purrr::map_lgl(
+    predictors, ~ is.factor(mdata[[.]]) || is.character(mdata[[.]])
+  )]
+  if (length(fac_preds) > 0L) {
+    mdata <- dplyr::mutate(mdata, dplyr::across(
+      tidyselect::all_of(fac_preds), ~ forcats::fct_drop(as.factor(.))
+    ))
+  }
+  mdata <- logit_prep_dependent(mdata, dependent, inverse_two_level_factors)
+
+  fml <- stats::as.formula(paste0(
+    "`", dependent, "` ~ ", paste0("`", predictors, "`", collapse = " + ")
+  ))
+
+  weighted <- !is.null(wt)
+  fit <- if (!weighted) {
+    stats::glm(fml, data = mdata, family = stats::binomial("logit"))
+  } else {
+    design <- survey::svydesign(ids = ~1,
+                                weights = stats::as.formula(paste0("~`", wt, "`")),
+                                data = mdata)
+    survey::svyglm(fml, design = design, family = stats::quasibinomial("logit"))
+  }
+
+  td <- broom::tidy(fit)                            # log scale: estimate, std.error, p.value
+  td$term <- stringr::str_remove_all(td$term, "`")  # strip formula backticks -> match skeleton
+
+  use_profile <- method == "profile" && !weighted
+  if (method == "profile" && weighted) {
+    cli::cli_inform(c("!" = paste0("Profile-likelihood intervals are not defined for survey-weighted ",
+                                   "models; using Wald for {.arg wt} models.")))
+  }
+
+  if (use_profile) {
+    if (!requireNamespace("MASS", quietly = TRUE)) {
+      cli::cli_abort(c('{.pkg MASS} is required for {.code method = "profile"}.',
+                       "i" = '- Install it, or use {.code method = "wald"} (the default).'))
+    }
+    ci  <- suppressMessages(exp(stats::confint(fit, level = conf_level)))
+    idx <- match(td$term, stringr::str_remove_all(rownames(ci), "`"))
+    td$conf.low  <- unname(ci[idx, 1])
+    td$conf.high <- unname(ci[idx, 2])
+    lrp <- logit_lr_pvalues(fit)
+    td$p.value   <- unname(lrp[match(td$term, names(lrp))])
+    td$estimate  <- exp(td$estimate)
+  } else {
+    crit <- if (weighted) stats::qt(1 - (1 - conf_level) / 2, df = stats::df.residual(fit))
+            else          stats::qnorm(1 - (1 - conf_level) / 2)
+    td$conf.low  <- exp(td$estimate - crit * td$std.error)
+    td$conf.high <- exp(td$estimate + crit * td$std.error)
+    td$estimate  <- exp(td$estimate)
+  }
+
+  list(tidy = td, nobs = nrow(mdata))
+}
+
+# Align one fit to the union skeleton -> a single OR fmt column (length = nrow(skeleton)).
+# Reference LEVELS of predictors present in this model get OR = 1 (no CI/p); predictors ABSENT
+# from this model stay NA (empty cells); the Constant carries the intercept (baseline) odds.
+logit_column <- function(skeleton, tidy, nobs, model_predictors, col_var, color_signif) {
+  m   <- match(skeleton$term, tidy$term)
+  est <- tidy$estimate[m]
+  lo  <- tidy$conf.low[m]
+  hi  <- tidy$conf.high[m]
+  p   <- tidy$p.value[m]
+
+  in_model <- skeleton$var %in% c("Constant", model_predictors)
+  ref_lvl  <- skeleton$is_ref & skeleton$var != "Constant" & in_model
+  est[ref_lvl] <- 1
+  lo[ref_lvl]  <- NA_real_
+  hi[ref_lvl]  <- NA_real_
+  p[ref_lvl]   <- NA_real_
+
+  fmt(
+    n            = rep(as.integer(nobs), nrow(skeleton)),
+    or           = est,
+    ci_inf       = lo,
+    ci_sup       = hi,
+    pvalue       = p,
+    type         = "row",
+    display      = "or",
+    digits       = 2L,
+    ref          = "1",
+    ci_type      = "or",
+    color        = "OR",
+    color_signif = color_signif,
+    col_var      = col_var,
+    comp_all     = FALSE,
+    in_refrow    = ref_lvl | skeleton$var == "Constant"
+  )
+}
+
+# The shared builder: fit every column spec, align to one union skeleton, assemble a grouped_tab.
+# specs = list of list(dependent, predictors, label). union_predictors = the ordered skeleton set.
+logit_build <- function(data, specs, union_predictors, wt,
+                        inverse_two_level_factors, conf_level, method, color_signif,
+                        cleannames, subtext) {
+  skeleton <- logit_skeleton(data, union_predictors)
+
+  cols <- purrr::map(specs, function(sp) {
+    f <- logit_fit(data, sp$dependent, sp$predictors, wt,
+                   inverse_two_level_factors, conf_level, method)
+    logit_column(skeleton, f$tidy, f$nobs, sp$predictors, sp$label, color_signif)
+  })
+
+  disp_levels <- skeleton$level
+  if (cleannames) {
+    disp_levels <- stringr::str_remove_all(disp_levels, cleannames_condition())
+  }
+
+  tab <- tibble::tibble(
+    var    = forcats::fct_inorder(skeleton$var),
+    levels = forcats::fct_inorder(disp_levels)
+  )
+  for (i in seq_along(cols)) tab[[specs[[i]]$label]] <- cols[[i]]
+
+  tab |>
+    new_tab(subtext = subtext) |>
+    dplyr::group_by(var)
+}
 
 
+# === Public API =====================================================================
+
+#' Logistic-regression table (odds ratios)
+#'
+#' Fits one binary logistic regression per `dependent` variable on a shared set of `predictors`
+#' and returns a `tabxplor` table of odds ratios: one column per dependent, one row per predictor
+#' level (the reference level shown as `1`), grouped by predictor. Each cell stores the odds ratio,
+#' its log-OR Wald 95% confidence interval and p-value, so the table prints with significance stars,
+#' greys out non-significant odds ratios, and exports (kable / Markdown / Excel) like any
+#' `tabxplor` crosstab.
+#'
+#' Unweighted models use [stats::glm()]; a `wt` weight column switches to a survey design
+#' ([survey::svyglm()] on [survey::svydesign()]), which gives correct design-based standard errors
+#' rather than the frequency-inflated ones of `glm(weights=)`. `broom` (always) and `survey` (only
+#' when `wt` is used) are optional dependencies.
+#'
+#' @param data A data frame.
+#' @param dependent Character vector of binary dependent variable name(s). Each must be a 2-level
+#'   factor/character or a 0/1 numeric.
+#' @param predictors Character vector of predictor variable name(s).
+#' @param wt Optional. Name of a weight column (character). Uses survey-weighted estimation.
+#' @param inverse_two_level_factors Logical. If `TRUE` (default), models the FIRST level of a
+#'   2-level factor dependent (e.g. `"1-Married"` before `"2-Not married"`).
+#' @param conf_level Confidence level for the odds-ratio intervals. Default `0.95`.
+#' @param method How the interval and p-value are computed. `"wald"` (default) uses the Wald
+#'   interval `exp(coef +/- z * se)` and the Wald z / t test: fast, matches standard software output
+#'   (R `summary()`, Stata, SPSS), and the only option for weighted models. `"profile"` uses the
+#'   profile-likelihood interval (`stats::confint()`, needs the `MASS` package) and the
+#'   likelihood-ratio test: more accurate for small samples or near-separation, but unweighted
+#'   models only (a weighted model falls back to Wald with a message).
+#' @param color_signif How significance drives the colours (odds ratios only). `"grey_non_signif"`
+#'   (default) colours only odds ratios whose confidence interval excludes 1 and greys the rest;
+#'   `"ignore"` colours every odds ratio by magnitude; `"color_all_signif"` colours the significant
+#'   ones by their conservative interval bound.
+#' @param cleannames Logical. If `TRUE`, strips numeric prefixes from factor levels for display
+#'   (e.g. `"1-Married"` -> `"Married"`). Uses `getOption("tabxplor.cleannames")` when `NULL`.
+#' @param subtext Optional character. A note shown below the table.
+#'
+#' @return A `tabxplor_grouped_tab` (grouped by predictor), one odds-ratio column per `dependent`.
+#'
+#' @examples
+#' data <- forcats::gss_cat |>
+#'   dplyr::mutate(married = factor(dplyr::if_else(marital == "Married",
+#'                                                 "Married", "Not married")))
+#' tab_logit(data, dependent = "married", predictors = c("race", "rincome"))
+#'
+#' @export
+tab_logit <- function(data, dependent, predictors, wt = NULL,
+                      inverse_two_level_factors = TRUE,
+                      conf_level = 0.95,
+                      method = c("wald", "profile"),
+                      color_signif = c("grey_non_signif", "ignore", "color_all_signif"),
+                      cleannames = NULL, subtext = "") {
+  logit_check_deps(wt)
+  method       <- match.arg(method)
+  color_signif <- match.arg(color_signif)
+  stopifnot(is.data.frame(data), is.character(dependent), is.character(predictors),
+            length(predictors) >= 1L)
+  cleannames <- if (is.null(cleannames)) getOption("tabxplor.cleannames", TRUE) else cleannames
+
+  labels <- purrr::map_chr(dependent, function(d) {
+    pl <- logit_positive_level(data, d, inverse_two_level_factors)
+    if (cleannames) pl <- stringr::str_remove_all(pl, cleannames_condition())
+    paste0(pl, ": OR")
+  })
+  labels <- make.unique(labels)
+
+  specs <- purrr::map2(dependent, labels,
+                       ~ list(dependent = .x, predictors = predictors, label = .y))
+
+  logit_build(data, specs, union_predictors = predictors, wt = wt,
+              inverse_two_level_factors = inverse_two_level_factors,
+              conf_level = conf_level, method = method, color_signif = color_signif,
+              cleannames = cleannames, subtext = subtext)
+}
 
 
+#' Compare several logistic-regression models (odds ratios side by side)
+#'
+#' Fits several nested or competing models for ONE binary `dependent`, one per named predictor set
+#' in `models`, and returns a `tabxplor` table with one odds-ratio column per model. Predictors
+#' absent from a given model are left blank in that column, so the sensitivity of each odds ratio
+#' to the model specification is read across a row. Same engine, fields and display as [tab_logit()].
+#'
+#' @inheritParams tab_logit
+#' @param dependent Character. Name of the single binary dependent variable.
+#' @param models A named list of character vectors; each element is one model's predictor set and
+#'   its name labels the column. Unnamed elements are labelled `model1`, `model2`, ...
+#'
+#' @return A `tabxplor_grouped_tab` (grouped by predictor), one odds-ratio column per model.
+#'
+#' @examples
+#' data <- forcats::gss_cat |>
+#'   dplyr::mutate(married = factor(dplyr::if_else(marital == "Married",
+#'                                                 "Married", "Not married")))
+#' multi_logit(
+#'   data, dependent = "married",
+#'   models = list(demographic = c("race", "age"),
+#'                 full        = c("race", "age", "rincome"))
+#' )
+#'
+#' @export
+multi_logit <- function(data, dependent, models, wt = NULL,
+                        inverse_two_level_factors = TRUE,
+                        conf_level = 0.95,
+                        method = c("wald", "profile"),
+                        color_signif = c("grey_non_signif", "ignore", "color_all_signif"),
+                        cleannames = NULL, subtext = "") {
+  logit_check_deps(wt)
+  method       <- match.arg(method)
+  color_signif <- match.arg(color_signif)
+  stopifnot(is.data.frame(data), is.character(dependent), length(dependent) == 1L,
+            is.list(models), length(models) >= 1L)
+  if (is.null(names(models)) || any(names(models) == "")) {
+    names(models) <- paste0("model", seq_along(models))
+  }
+  cleannames <- if (is.null(cleannames)) getOption("tabxplor.cleannames", TRUE) else cleannames
 
+  labels <- make.unique(names(models))
+  specs  <- purrr::map2(models, labels,
+                        ~ list(dependent = dependent, predictors = .x, label = .y))
+  union_predictors <- unique(purrr::flatten_chr(models))
 
-
-# ## multi_logit, with new parsnip engine survey weights ----
-
-
-
-# # Bug correction :
-# #  - Pass characters in factors
-
-# # Enhancements : 
-# #  - Split 3lv+ factors in binary vars (what is better, multinomial or that ?) ?
-
-
-
-# #' Run Multiple Logistic Regressions
-# #'
-# #' Performs logistic regressions on multiple dependent variables with a sequence
-# #' of predictor sets. Optionally calculates marginal effects and can split
-# #' analysis by a grouping variable.
-# #'
-# #' @param data A data frame containing the variables for analysis.
-# #' @param dependents Character vector of dependent variable names. Each should
-# #'   be a binary factor variable.
-# #' @param predictors_sequence A named list of character vectors, where each
-# #'   element contains predictor variable names for a model specification.
-# #'   Names will be used to label the model sequence.
-# #' @param split_var Optional. Character string naming a variable to split the
-# #'   analysis by groups.
-# #' @param marginal_effects Logical. If `TRUE`, calculates marginal effects for
-# #'   each predictor. Default is `FALSE`.
-# #' @param signif Logical. If `TRUE`, includes significance indicators in output.
-# #'   Default is `FALSE`.
-# #' @param wt Optional. Character string naming a weight variable for weighted
-# #'   regression.
-# #' @param subtext Optional. Character vector of subtitle text to add to output
-# #'   tables.
-# #' @param nb_questions Optional. Named integer vector providing the number of
-# #'   questions used to construct each dependent variable (for display purposes).
-# #' @param cleannames Logical. If `TRUE`, cleans variable names in output.
-# #'   Default is `TRUE`.
-# #' @param ... Additional arguments passed to underlying regression functions.
-# #'
-# #' @return A named list of tables (class `tab`), one for each dependent variable.
-# #'   Each table contains odds ratios and optionally marginal effects for the
-# #'   sequence of models specified in `predictors_sequence`.
-# #'
-# #' @examples
-# #' # Prepare data with binary outcome
-# #' data <- forcats::gss_cat |>
-# #'   dplyr::mutate(
-# #'     married = dplyr::case_when(
-# #'       marital == "Married" ~ factor("1-Married"),
-# #'       marital %in% c("Never married", "Separated", "Divorced", "Widowed") ~ 
-# #'         factor("2-Not married"),
-# #'       TRUE ~ factor(NA_character_)
-# #'     )
-# #'   )
-# #'
-# #' # Define predictor sequences
-# #' predictor_models <- list(
-# #'   "demographic" = c("age", "race"),
-# #'   "socioeconomic" = c("rincome", "relig"),
-# #'   "full" = c("age", "race", "rincome", "relig")
-# #' )
-# #'
-# #' # Run logistic regressions on marriage status
-# #' results <- multi_logit(
-# #'   data,
-# #'   dependents = "married",
-# #'   predictors_sequence = predictor_models,
-# #'   marginal_effects = TRUE
-# #' )
-# #'
-# #' # View results
-# #' results$married
-# #'
-# #' # Multiple outcomes with grouping
-# #' predictor_models_split <- list(
-# #'   "demographic" = c("age", "rincome"),
-# #'   "full" = c("age", "rincome", "relig")
-# #' )
-# #'
-# #' results_by_race <- multi_logit(
-# #'   data,
-# #'   dependents = "married",
-# #'   predictors_sequence = predictor_models_split,
-# #'   split_var = "race",
-# #'   marginal_effects = FALSE
-# #' )
-# #'
-# #' @export
-# multi_logit <- function(data, dependent, predictors_sequence, split_var = NULL, wt = NULL,
-#                         nb_questions, 
-#                         odds_ratios = TRUE, marginal_effects = FALSE, signif = TRUE,
-#                         add_pct = FALSE, add_n = FALSE, empirical_odds_ratio = FALSE, 
-#                         inverse_two_level_factors = TRUE, cleannames = NULL, ci = FALSE,
-#                         subtext = "") {
-  
-#   cleannames <-
-#     if (is.null(cleannames)) { getOption("tabxplor.cleannames") } else {cleannames}
-  
-#   variables_list <- c(dependent, 
-#                       purrr::flatten_chr(predictors_sequence), 
-#                       split_var, wt
-#   )
-  
-#   data <- dplyr::select(data, tidyselect::all_of(variables_list))
-  
-#   dependent_class <- purrr::map_chr(data[dependent], class)
-#   data <- data |> # enlever levels inutilisées dans variables dependantes
-#     dplyr::mutate(dplyr::across(
-#       tidyselect::all_of(dependent) & where(is.factor), 
-#       forcats::fct_drop
-#     ))
-  
-#   dependent_min   <- purrr::map_if(data[dependent], dependent_class %in% c("numeric", "integer"),
-#                             ~ min(., na.rm = TRUE), .else = ~ 0L) |> purrr::flatten_int()
-#   dependent_max   <- purrr::map_if(data[dependent], dependent_class %in% c("numeric", "integer"),
-#                             ~ max(., na.rm = TRUE), .else = ~ 1L) |> purrr::flatten_int()
-#   dependent_int   <- purrr::map_lgl(data[dependent], ~rlang::is_integerish(.) & !is.factor(.))
-#   dependent_nlv   <- purrr::map_if(data[dependent], dependent_class == "factor", 
-#                             ~nlevels(as.factor(.)), .else = ~ 0L) |> purrr::flatten_int()
-  
-  
-#   factors_2lv <- dependent_class %in% c("factor", "character") & dependent_nlv == 2 | 
-#     (dependent_int & dependent_min == 0 & dependent_max == 1)
-  
-#   factors_3lv <- dependent_class == "factor" & dependent_nlv >= 3
-#   if (any(factors_3lv)) stop(paste0("some factors have more than 2 levels: ", 
-#                                     paste0(names(factors_3lv)[factors_3lv], 
-#                                            collapse = ", ")))
-  
-#   if (any(factors_2lv & dependent_int)) {
-#     data <- data |> dplyr::mutate(dplyr::across(tidyselect::all_of(dependent[factors_2lv & dependent_int]), 
-#                                   ~ as.factor(.) |> 
-#                                     `levels<-`(c(paste0("Pas ", dplyr::cur_column()), 
-#                                                  dplyr::cur_column() ) )) )   
-#   }
-  
-#   if(any(factors_2lv & !dependent_int & inverse_two_level_factors)) {
-#     data <- data |> dplyr::mutate(dplyr::across(tidyselect::all_of(dependent[factors_2lv & !dependent_int]), 
-#                                   ~ forcats::fct_rev(as.factor(.)) ))  
-#   }
-  
-  
-  
-#   integer3 <- !factors_2lv & dependent_int
-  
-#   if (any(integer3)) requireNamespace("poissonreg", quietly = TRUE)
-  
-#   # double_01 <- !factors_2lv &!dependent_int & dependent_class == "numeric" & 
-#   #   dependent_min >= 0 & dependent_max <= 1
-  
-#   if (missing(nb_questions)) {
-#     nb_questions <- dplyr::if_else(integer3, as.integer(dependent_max), 1L)
-    
-#   } else {
-#     nb_questions <- vctrs::vec_recycle(vctrs::vec_cast(nb_questions, integer()), 
-#                                        length(dependent))
-#   }
-#   nb_questions <- nb_questions |> purrr::set_names(dependent)
-  
-#   if (any(integer3)) {
-#     data <- data |> 
-#       dplyr::mutate(dplyr::across(tidyselect::all_of(dependent[integer3]), ~ ./nb_questions[dplyr::cur_column()] ))  
-#   }
-  
-  
-#   reference_population <- "Reference population"
-#   # paste0( #"Population de réference (modèle complet): ",
-#   #   paste0(
-#   #     unique(purrr::flatten_chr(predictors_sequence)) %>%
-#   #     purrr::keep(purrr::map_lgl(., ~ dplyr::pull(data, .) |> is.factor() )) |>
-#   #     purrr::map_chr(~ dplyr::pull(data, .) |> levels() |> dplyr::first()), 
-#   #          collapse = ", "), 
-#   #   " (modèle complet)"
-#   # )
-  
-#   predictors <- predictors_sequence |> purrr::flatten_chr() |> unique()
-  
-#   data <- data |> dplyr::mutate(NA_pred = dplyr::if_any(.cols = tidyselect::all_of(predictors), is.na)) 
-#   if (sum(data$NA_pred, na.rm = TRUE) > 0) {
-#     message(paste0(sum(data$NA_pred), " rows with NA in at least one predictor were removed"))
-#     data <- data |> dplyr::filter(!NA_pred) |> dplyr::select(-NA_pred)
-#   }
-
-
-  
-#   if (cleannames) {
-#     data <- data |> dplyr::mutate(dplyr::across(
-#       where(is.factor), 
-#       ~forcats::fct_relabel(., ~stringr::str_remove_all(., tabxplor:::cleannames_condition()))
-#     ))
-#   }
-  
-  
-#   if (!is.null(wt)) {
-#     data <- data |> dplyr::mutate(
-#       base_wt    = !!rlang::sym(wt), 
-#       !!rlang::sym(wt) := hardhat::importance_weights(!!rlang::sym(wt))
-#     )
-#   }
-  
-  
-#   # Specify the models
-#   if (is.null(split_var)) {
-#     models_vars <- tidyr::crossing(
-#       dependent = forcats::as_factor(dependent),
-#       predictors = predictors_sequence,
-#       data = list(data)
-#     ) |>
-#       dplyr::mutate(
-#         lv1 = purrr::map2(
-#           data,
-#           predictors,
-#           ~ purrr::map_chr(.y, function(.pred) {
-#             dplyr::first(levels(forcats::fct_drop(dplyr::pull(.x, .pred))))
-#           })
-#         ),
-#         split_var = ""
-#       )
-    
-#   } else {
-#     data_split <- data |>
-#       dplyr::rename(dplyr::any_of(c("split_var" = split_var))) |>
-#       dplyr::mutate(split_var = forcats::fct_drop(split_var)) |>
-#       dplyr::group_by(split_var) |>
-#       tidyr::nest() |>
-#       dplyr::filter(dplyr::if_any(1, ~ !is.na(.))) |>
-#       dplyr::rename(data = data)
-
-#     models_vars <- tidyr::crossing(
-#       dependent = forcats::as_factor(dependent),
-#       predictors = predictors_sequence,
-#       split_var = data_split$split_var
-#     ) |>
-#       dplyr::left_join(data_split, by = "split_var") |>
-#       dplyr::filter(purrr::map_lgl(.data$data, ~!is.null(.))) |>
-#       dplyr::mutate(
-#         lv1 = purrr::map2(
-#           data,
-#           predictors,
-#           ~ purrr::map_chr(.y, function(.pred) {
-#             dplyr::first(levels(forcats::fct_drop(dplyr::pull(.x, .pred))))
-#           })
-#         ),
-#       )
-#   }
-  
-#   # # WRONG NUMBER OF LEVELS SOMEWHERE ?
-#   # models_vars <- models_vars |> 
-#   #   dplyr::mutate(
-#   #     data = purrr::map(data, 
-#   #                       ~ dplyr::mutate(., across(where(is.factor), fct_drop)) )
-#   #     )
-  
-  
-#   if (is.null(wt)) {
-#     glm_model <- 
-#       parsnip::poisson_reg() |> # since logistic_reg() means binary dependent (2 lv factor)
-#       parsnip::set_engine("glm", family = stats::quasibinomial(link = "logit") )
-    
-#     binary_model <- 
-#       parsnip::logistic_reg() |> 
-#       parsnip::set_engine("glm", family = stats::binomial(link = "logit") )
-    
-    
-#     models_vars <- models_vars |> 
-#       dplyr::mutate(model_type = dplyr::if_else(factors_2lv[dependent], 
-#                                                 list("bin" = binary_model), 
-#                                                 list("glm" = glm_model)), 
-                    
-#                     nb_questions = nb_questions[dependent],
-                    
-#                     # wflow_var = list(workflows::workflow_variables(
-#                     #   dependent    = tidyselect::matches(dependent),
-#                     #   predictors  = tidyselect::all_of(predictors)
-#                     # )),
-                    
-                    
-#                     # recipe = pmap(list(data, dependent, predictors), 
-#                     #               function(.dat, .dependent, .pred)
-#                     #               ~ recipe(.dat) |> 
-#                     #                 update_role(all_of(.dependent), new_role = "dependent") |>
-#                     #                 update_role(all_of(.pred), new_role = "predictor")
-#                     #               ),
-#                     #               
-#                     #wflow = purrr::map2(recipe, model_type, ~ workflows::workflow(.x, .y))
-                    
-#                     wflow = purrr::pmap(list(data, dependent, predictors, model_type), 
-#                                  function(.dat, .dependent, .pred, .model)
-#                                    workflows::workflow() |> 
-#                                    workflows::add_model(.model) |> 
-#                                    workflows::add_variables(outcomes  = tidyselect::all_of(.dependent), 
-#                                                  predictors = tidyselect::all_of(.pred))
-#                     ), 
-                    
-                    
-#       )
-    
-#     models_vars <- models_vars |> 
-#       dplyr::mutate(
-#         empirical_OR = purrr::pmap(
-#           list(data, predictors, dependent, names(model_type)), 
-#           ~ if (..4 == "bin" & (empirical_odds_ratio | add_pct) ) {
-#             tabs <- 
-#               withr::with_options(
-#                 list(tabxplor.output_kable = FALSE, 
-#                      tabxplor.compact = FALSE, 
-#                      tabxplor.pvalue_lines = FALSE 
-#                 ), 
-#                 tabxplor::tab_many(..1, tidyselect::all_of(..2), tidyselect::all_of(..3), 
-#                                    pct = "row", OR = "or", na = "drop", 
-#                                    add_n = FALSE, cleannames = cleannames
-#                 ))
-            
-            
-#           } else {
-#             NULL
-#           }
-#         ), 
-#       )   
-#     # models_vars$empirical_OR
-    
-#     # models_vars <- models_vars |> 
-#     #   dplyr::mutate(
-#     #     empirical_OR = purrr::pmap(
-#     #       list(data, predictors, dependent), 
-#     #       ~ withr::with_options(
-#     #         list(tabxplor.output_kable = FALSE, 
-#     #              tabxplor.compact = FALSE, 
-#     #              tabxplor.pvalue_lines = FALSE 
-#     #         ), 
-#     #         tabxplor::tab_many(..1, tidyselect::all_of(..2), tidyselect::all_of(dependent), 
-#     #                            pct = "row", OR = "or", na = "drop", add_n = FALSE
-#     #         ))
-#     #     ), 
-#     #   )
-    
-#   } else { # with survey weights
-#     # dw <- survey::svydesign(ids = ~ 1, data = data, weights = ~ pondqaa)
-    
-#     glm_model <- 
-#       parsnip::poisson_reg() |> # since logistic_reg() means binary dependent (2 lv factor)
-#       parsnip::set_engine("svglm2", family = stats::quasibinomial(link = "logit") #, 
-#                           #survey_weights = wt
-#       )
-    
-#     binary_model <- 
-#       parsnip::logistic_reg() |> 
-#       parsnip::set_engine("svglm2", family = stats::quasibinomial(link = "logit") #, 
-#                           #weights = as.formula(paste0("~", wt ))
-#       )
-    
-#     models_vars <- models_vars |> 
-#       dplyr::mutate(model_type = dplyr::if_else(factors_2lv[dependent], 
-#                                                 list("bin" = binary_model), 
-#                                                 list("glm" = glm_model)), 
-#                     nb_questions = nb_questions[dependent],
-                    
-#                     wflow = purrr::pmap(list(data, dependent, predictors, model_type), 
-#                                  function(.dat, .dependent, .pred, .model)
-#                                    workflows::workflow() |> 
-#                                    workflows::add_model(.model) |> 
-#                                    workflows::add_variables(outcomes   = tidyselect::all_of(.dependent), 
-#                                                  predictors = tidyselect::all_of(.pred)    ) |>
-#                                    workflows::add_case_weights(!!rlang::sym(wt))
-#                     ), 
-                    
-                    
-#       )
-    
-#     models_vars <- models_vars |> 
-#       dplyr::mutate(
-#         empirical_OR = purrr::pmap(
-#           list(data, predictors, dependent, names(model_type)), 
-#           ~ if (..4 == "bin" & (empirical_odds_ratio | add_pct) ) {
-#             tabs <- withr::with_options(
-#               list(tabxplor.output_kable = FALSE, 
-#                    tabxplor.compact = FALSE, 
-#                    tabxplor.pvalue_lines = FALSE 
-#               ), 
-#               tabxplor::tab_many(..1, tidyselect::all_of(..2), tidyselect::all_of(..3), 
-#                                  pct = "row", OR = "or", na = "drop", add_n = FALSE,
-#                                  wt = base_wt, cleannames = cleannames
-#               ))
-#           } else {
-#             NULL
-#           }
-#         ), 
-#       ) 
-#     # models_vars$empirical_OR
-#   }
-  
-  
-#   models_vars <- models_vars |> 
-#     dplyr::mutate(
-#       empirical_OR = purrr::pmap(
-#         list(empirical_OR, dependent, names(model_type)), 
-#         ~ if (..3 == "bin" & (empirical_odds_ratio | add_pct) ) {
-#           tabs <- purrr::map(
-#             ..1, 
-#             ~ dplyr::mutate(.,
-#                             var = factor(names(.)[[1]]), 
-#                             .before = 1                 ) |>
-#               dplyr::rename_with(~"levels", .cols = 2)
-#           ) |> 
-#             dplyr::bind_rows()
-          
-#           n_vect <- tabs |> 
-#             dplyr::select(where(is_fmt)) |> 
-#             dplyr::mutate(dplyr::across(where(is_fmt), ~ .$n)) |> 
-#             rowSums() |>
-#             as.integer()
-          
-#           tabs <- tabs |>
-#             dplyr::mutate(dplyr::across(where(is_fmt), ~ dplyr::mutate(., n = n_vect))) 
-
-#           tabs <- dplyr::filter(tabs, !is_totrow(tabs))
-          
-#           # tabs <- dplyr::mutate(tabs, ref = tabxplor::is_refrow(tabs))
-          
-#           tabs |> 
-#             dplyr::select(-3) |> 
-#             dplyr::rename_with(~ "Empirical OR", .cols = where(is_fmt)) # function(.var) as.character(..2)
-          
-#         } else {
-#           NULL
-#         }
-#       ), 
-#     )   
-#   # models_vars$empirical_OR
-  
-  
-  
-  
-#   #With repice ?
-#   # logit_recipe <-
-#   #   recipe() %>%
-#   #   step_dummy(all_nominal_predictors())
-  
-  
-#   # Run the models
-#   models <- models_vars |> 
-#     dplyr::mutate(fit = purrr::map2(wflow, data, ~ parsnip::fit(.x, data = .y)))
-  
-  
-  
-#   # Retrieve coefficients, calculate Odds, probabilities and marginal effects
-#   models <- models |> 
-#     dplyr::mutate(OR_table = purrr::map2(fit, nb_questions, 
-#                                          ~ readable_OR(.x, n = .y, format = FALSE, 
-#                                                        ci = ci)))
-  
-#   models <- models |> 
-#     dplyr::mutate(
-#       OR = purrr::map(OR_table, 
-#                       ~ dplyr::select(., parameter, OR = Odds_ratio, signif, 
-#                                       dplyr::any_of(c("OR_inf", "OR_sup")))), 
-#       ME = purrr::map(OR_table, ~ dplyr::select(., parameter, ME = marginal_effect, 
-#                                                 OR = Odds_ratio, 
-#                                                 tidyselect::any_of(c("p" = "prob × n",
-#                                                                      "p" = "prob")), 
-#                                                 signif)), 
-      
-#       model_name = dplyr::if_else(split_var == "", 
-#                                   true  = names(predictors), 
-#                                   false = paste0(names(predictors), ":by:", split_var)
-#       )
-      
-#       #   paste0(names(predictors), ":by:", split_var) |>
-#       # stringr::str_remove("\\:by\\:$")
-#     )
-  
-  
-#   # # Nested models comparison: drop-in-deviance test
-#   # models <- models |> 
-#   #   mutate(n = dplyr::row_number()) |> 
-#   #   group_by(dependent, split_var) |>
-#   #   mutate(
-#   #     nested_with = map2_int(
-#   #       predictors, list(predictors), 
-#   #       ~ map_lgl(.y, function(.pred) !identical(.x, .pred) & all(.pred  %in% .x)) |>
-#   #         which() |> dplyr::last() #|> tidyr::replace_na("")
-#   #     ), 
-#   #     
-#   #     nested_with = n[nested_with]
-#   #   ) |> 
-#   #   dplyr::ungroup() |>
-#   #   select(-n) |> 
-#   #   mutate(drop_in_dev_test = NA_real_, 
-#   #          fit_nested_with = fit[nested_with])
-#   # 
-#   # models[!is.na(models$nested_with),] <- models[!is.na(models$nested_with),] |> 
-#   #   mutate(drop_in_dev_test = purrr::map2_dbl(fit, fit_nested_with,
-#   #                                         ~ anova(extract_fit_engine(.x),
-#   #                                                 extract_fit_engine(.y), 
-#   #                                                 test = "Chisq") |>
-#   #                                           pull(`Pr(>Chi)`) |> dplyr::nth(2)
-#   #   ))
-#   # # anova(extract_fit_engine(models$fit[[1]]),  
-#   # #       extract_fit_engine(models$fit[[3]]), 
-#   # #       test = "Chisq")
-#   # 
-#   # models <- models |> 
-#   #   mutate(drop_in_dev_test = stringr::str_c(
-#   #     "/ ", stringr::str_replace(model_name[nested_with], ":by:", " "), ", ",
-#   #     if_else(drop_in_dev_test < 0.05, 
-#   #             true  = "signif", #"signif drop in deviance", 
-#   #             false = "not signif"), # "no signif drop in deviance"), 
-#   #     " (p=", round(drop_in_dev_test, digits = 3), ")" ) 
-#   #   ) |> 
-#   #   select(-nested_with, -fit_nested_with)
-#   # 
-#   # # TO DO : notes dans les noms des modèles + renvoie au subtext ? NON
-  
-  
-  
-#   # Odds-ratio tables
-#   if (odds_ratios) {
-#     OR <- models |> 
-#       dplyr::select(dependent, model_name, OR, predictors, dplyr::any_of(c("OR_inf", "OR_sup"))) |> 
-#       dplyr::mutate(
-#         OR = purrr::map2(
-#           OR, model_name, 
-#           ~ dplyr::rename(
-#             .x, 
-#             tidyselect::all_of(c(purrr::set_names("OR", paste0("OR_", .y)), 
-#                                  purrr::set_names("signif", paste0("s_", .y)) )), 
-#             tidyselect::any_of(c(purrr::set_names("OR_inf", paste0("OR_inf_", .y)), 
-#                                  purrr::set_names("OR_sup", paste0("OR_sup_", .y))  )) 
-#           )
-#         ) ) |> 
-#       dplyr::group_by(dependent) |> 
-#       dplyr::group_split() 
-    
-#     OR <- OR |>
-#       purrr::set_names(purrr::map_chr(OR, ~ as.character(.$dependent[1]))) |> 
-#       purrr::map(~ purrr::reduce(.$OR, ~ dplyr::full_join(.x, .y, by = "parameter")))
-    
-    
-#     OR <- OR |> 
-#       purrr::map(~ dplyr::mutate(
-#         ., 
-#         var = purrr::map(parameter,
-#                          function(.param) purrr::map_lgl(predictors, 
-#                                                          function(.pred) stringr::str_detect(.param,
-#                                                                                     paste0("^", .pred))
-#                          ) ) |> 
-#           purrr::map(~ predictors[which(.)]) |> 
-#           purrr::map(~ if (length(.) == 0) {"Constant"} else {.}) |>
-#           purrr::flatten_chr() |> 
-#           forcats::as_factor() |> 
-#           forcats::fct_relevel(c("Constant", 
-#                                  predictors)), 
-        
-#         levels = forcats::as_factor(dplyr::if_else(
-#           condition = stringr::str_detect(parameter, "Intercept"), 
-#           true      = reference_population,  
-#           false     = stringr::str_remove(parameter, as.character(var))
-#         )), 
-        
-#         ref         = var == "Constant"
-#       ) |> 
-#         dplyr::select(var, levels, tidyselect::everything(), -parameter)
-#       )
-#     # OR[[1]]
-    
-#     ################# HEEREEEEEEEEEEE ###########
-
-#     OR <- 
-#       purrr::pmap(list(OR, models$predictors, models$lv1, 
-#                        models$empirical_OR, names(models$model_type) ), 
-#                   ~ {
-#                     rename_vect <- purrr::set_names(..2, ..3)
-                    
-#                     new_data <- dplyr::select(..1, -levels) |> 
-#                       dplyr::filter(var != "Constant") |>
-#                       dplyr::distinct(var, .keep_all = TRUE) |>
-#                       dplyr::mutate(
-#                         dplyr::across(tidyselect::starts_with("OR_"), ~ 1    ), 
-#                         dplyr::across(tidyselect::starts_with("OR_inf"), ~ NA_real_), 
-#                         dplyr::across(tidyselect::starts_with("OR_sup"), ~ NA_real_), 
-#                         dplyr::across(tidyselect::starts_with("s_" ), ~ "   "),
-#                         levels = forcats::fct_recode(var, !!!rename_vect)     ,
-#                         ref    = TRUE
-#                       )  |>
-#                       dplyr::select(var, levels, tidyselect::everything())
-                    
-#                     tabs <- dplyr::bind_rows(new_data, ..1) |> dplyr::arrange(var)
-                    
-#                     # bind empirical odds ratio (and pct) tables
-#                     if (..5 == "bin" & (empirical_odds_ratio | add_pct) ) {
-#                       tabs <- tabs |> dplyr::left_join(..4, by = c("var", "levels"))
-#                     } 
-                    
-#                     tabs
-#                   }
-#       )
-    
-#     OR <-  
-#       purrr::map2(OR, names(models$model_type),  # models$dependent
-#                   ~ (if (.y == "bin" & (empirical_odds_ratio | add_pct) ) {
-#                     dplyr::mutate(
-#                       .x, 
-                      
-#                       var2 = var, #otherwise tabxplor internal mutate use var field (variance)
-                      
-#                       # !!rlang::sym(..3) := 
-#                       pct = `Empirical OR` |> 
-#                         set_display("pct") |> 
-#                         set_color("diff") |>
-#                         tidyr::replace_na(tabxplor:::fmt0("pct", type = "row")) |>
-#                         dplyr::mutate(or = NA_real_,
-#                                       pct = dplyr::if_else(
-#                                         var2 != "Constant",
-#                                         true  = pct,
-#                                         false = NA_real_),
-#                                       in_refrow = ref 
-#                         ),
-                      
-#                       n = set_display(pct, "n") |> set_color("") |> 
-#                         dplyr::mutate(or = NA_real_, pct = NA_real_, diff = NA_real_, 
-#                                       n = dplyr::if_else(
-#                                         var2 != "Constant",
-#                                         true  = n,
-#                                         false = NA_integer_),
-#                                       in_refrow = ref 
-#                         ), 
-                      
-#                       `Empirical OR` = `Empirical OR` |> 
-#                         tidyr::replace_na(tabxplor:::fmt0("or", type = "row")) |> 
-#                         set_color("OR") |> 
-#                         set_display("or") |> 
-#                         set_col_var("Empirical OR") |>
-#                         dplyr::mutate(pct = NA_real_, #rep(NA_real_, length(pct)), 
-#                                       or = dplyr::if_else(
-#                                         var2 != "Constant",
-#                                         true  = or,
-#                                         false = NA_real_),
-#                                       in_refrow = ref 
-#                         ),
-                      
-#                       dplyr::across(where(is.double) & !tidyselect::starts_with(c("OR_inf", "OR_sup")), 
-#                                     ~ fmt(
-#                                       n    = `Empirical OR`$n, 
-#                                       wn   = `Empirical OR`$wn,
-#                                       # pct  = dplyr::if_else(
-#                                       #   var2 == "Constant", 
-#                                       #   true  = stats::weighted.mean(`Empirical OR`$pct, 
-#                                       #                                w = `Empirical OR`$wn, 
-#                                       #                                na.rm = TRUE), 
-#                                       #   false = `Empirical OR`$pct),
-#                                       # diff = dplyr::if_else(
-#                                       #   var2 == "Constant", 
-#                                       #   true  = 0, 
-#                                       #   false = `Empirical OR`$diff),
-#                                       type      = "row", 
-#                                       digits    = 2L, 
-#                                       or        = .x, 
-#                                       display   = "or", 
-#                                       # diff      = dplyr::if_else(
-#                                       #   !str_detect(replace_na(eval_tidy(sym(str_replace(cur_column(),
-#                                       #                                                    "^OR_", "s_"))), ""),
-#                                       #               "/*" # in gray when not in 90% ci
-#                                       #   ) | var2 == "Constant", 
-#                                       #   true  = 0, 
-#                                       #   false = .), 
-                                      
-#                                       ref       = "1", 
-#                                       color     = "OR", 
-#                                       #in_totrow = row_number() == 1,
-#                                       in_refrow = ref, # dplyr::row_number() == 1, 
-#                                       col_var = dplyr::cur_column() |> stringr::str_remove("^OR_") |>
-#                                         stringr::str_remove(":by:.*$"), 
-#                                       comp_all = FALSE, 
-#                                     ))
-#                     )
-                    
-#                   } else {
-#                     dplyr::mutate(
-#                       .x, 
-#                       dplyr::across(where(is.double) & !tidyselect::starts_with(c("OR_inf", "OR_sup")), 
-#                                     ~ fmt(
-#                                       n = rep(0, length(.x)), 
-#                                       type      = "row", 
-#                                       digits    = 2L, 
-#                                       or        = .x, 
-#                                       display   = "or", 
-#                                       ref       = "1", 
-#                                       color     = "OR", 
-#                                       #in_totrow = row_number() == 1,
-#                                       in_refrow = ref, # dplyr::row_number() == 1, 
-#                                       col_var = dplyr::cur_column() |> stringr::str_remove("^OR_") |>
-#                                         stringr::str_remove(":by:.*$"), 
-#                                       comp_all = FALSE, 
-#                                     ))
-#                     )
-#                   }) |> 
-#                     dplyr::rename_with(~ stringr::str_replace(., ":by:", " ") |> 
-#                                          stringr::str_replace("^OR_", "OR ") ) |>
-#                     dplyr::select(-tidyselect::any_of(c("ref", "var2"))) |>
-#                     dplyr::select(var, levels, dplyr::any_of(c("pct", "Empirical OR")), 
-#                                   tidyselect::everything() & -dplyr::any_of("n"), dplyr::any_of("n")) # |>
-#                   #dplyr::rename_with(~ str_remove(., "^OR_")) |>
-#                   #dplyr::arrange(var) |>
-#                   #new_tab()
-#       )
-    
-    
-#     if (!add_pct) {
-#       OR <- OR |> 
-#         purrr::map(~ dplyr::select(., -tidyselect::any_of(c("pct"))))
-#     }
-    
-#     if (!empirical_odds_ratio) {
-#       OR <- OR |> 
-#         purrr::map(~ dplyr::select(., -tidyselect::any_of(c("Empirical OR"))))
-#     }
-    
-#     if (!add_n) {
-#       OR <- OR |> 
-#         purrr::map(~ dplyr::select(., -tidyselect::any_of(c("n"))))
-#     }
-    
-#     if (signif) {
-#       OR <- OR |> purrr::map(
-#         ~ dplyr::rename_with(., 
-#                              .cols = tidyselect::starts_with("s_"), 
-#                              .fn = ~ paste0("s", seq_along(.) ))
-#       )
-#     } else {
-#       OR <- OR |> 
-#         purrr::map(~ dplyr::select(., -tidyselect::starts_with("s_")))
-#     }
-#   }
-  
-  
-#   # Marginal effects tables
-#   if (marginal_effects) {
-#     ME <- models |> 
-#       dplyr::select(dependent, model_name, ME) |> 
-#       dplyr::mutate(ME = purrr::map2(ME, model_name, 
-#                                      ~ dplyr::rename(.x, tidyselect::all_of(c(purrr::set_names("ME", paste0("ME_", .y)),
-#                                                                   purrr::set_names("OR", paste0("OR_", .y)),
-#                                                                   purrr::set_names("p" , paste0("p_", .y)),
-#                                                                   purrr::set_names("signif", paste0("s_", .y)))) ) |>
-#                                        dplyr::mutate(dplyr::across(tidyselect::starts_with(c("ME_", "p_")), get_num))
-#       ) ) |> 
-#       dplyr::group_by(dependent) |> 
-#       dplyr::group_split()
-    
-#     ME <- ME |>
-#       purrr::set_names(purrr::map_chr(ME, ~ as.character(.$dependent[1]))) |> 
-#       purrr::map(~ purrr::reduce(.$ME, ~ dplyr::full_join(.x, .y, by = "parameter")))
-    
-#     ME <- ME |> 
-#       purrr::map(~ dplyr::mutate(
-#         ., 
-#         var = purrr::map(
-#           parameter, 
-#           function(.param) purrr::map_lgl(predictors, 
-#                                           function(.pred) stringr::str_detect(.param,
-#                                                                               paste0("^", .pred))
-#           ) ) |> 
-#           purrr::map(~ predictors[which(.)]) |> 
-#           purrr::map(~ if (length(.) == 0) {"Constant"} else {.}) |>
-#           purrr::flatten_chr() |> 
-#           forcats::as_factor() |> forcats::fct_relevel(c("Constant", 
-#                                                 predictors)), 
-        
-#         levels = forcats::as_factor(dplyr::if_else(
-#           condition = stringr::str_detect(parameter, "Intercept"), 
-#           true      = reference_population,  
-#           false     = stringr::str_remove(parameter, as.character(var))
-#         ))
-#       ) |> 
-#         dplyr::select(var, levels, tidyselect::everything(), -parameter)
-#       )
-    
-#     ME <- ME |>
-#       purrr::map(~  dplyr::mutate(., dplyr::across(
-#         where(is.double) & tidyselect::starts_with("ME_"), 
-#         ~ fmt(
-#           0, 
-#           type      = "OR", 
-#           digits    = 2L, 
-#           or        = dplyr::if_else(
-#             var == "Constant", 
-#             true  = tidyr::replace_na(rlang::eval_tidy(rlang::sym(stringr::str_replace(dplyr::cur_column(),
-#                                                                 "^ME_", "p_"))), 0), 
-#             false = .), 
-          
-#           diff      = dplyr::if_else(
-#             !stringr::str_detect(tidyr::replace_na(rlang::eval_tidy(rlang::sym(stringr::str_replace(dplyr::cur_column(),
-#                                                                     "^ME_", "s_"))), ""),
-#                         "/*" # in gray when not in 90% ci
-#             ) | var == "Constant", 
-#             true  = 0, 
-#             false = tidyr::replace_na(rlang::eval_tidy(rlang::sym(stringr::str_replace(dplyr::cur_column(),
-#                                                                 "^ME_", "OR_"))), 1) ), 
-          
-#           ref       = "1", 
-#           color     = "diff", 
-#           #in_totrow = row_number() == 1,
-#           in_refrow = dplyr::row_number() == 1, 
-#           col_var = dplyr::cur_column() |> stringr::str_remove("^ME_") |>
-#             stringr::str_remove(":by:.*$"), 
-#           comp_all = FALSE, 
-#         ))
-#       ) |> 
-#         dplyr::select(-tidyselect::starts_with(c("s_", "OR_", "p_"))) |>
-#         dplyr::rename_with(~ stringr::str_replace(., ":by:", " ") |> 
-#                              stringr::str_replace("^ME_", "ME ") ) #|>
-#       #dplyr::rename_with(~ str_remove(., "^ME_")) |>
-#       #dplyr::arrange(var) |>
-#       #new_tab()
-#       )
-#   }
-  
-#   if (marginal_effects & odds_ratios) {
-#     res <- purrr::map2(OR, ME, ~dplyr::left_join(dplyr::mutate(.x, ` ` = ""), .y,
-#                                                  by = c("var", "levels")) )
-#   } else if (marginal_effects) {
-#     res <- ME
-#   } else if (odds_ratios) {
-#     res <- OR
-#   } else{
-#     return(models)
-#   }
-  
-#   res_names <- paste0(names(res), dplyr::if_else(nb_questions > 1, 
-#                                                  true  = paste0(" (n=", nb_questions, ")"), 
-#                                                  false = ""))
-  
-#   purrr::set_names(res, res_names) |> 
-#     purrr::map(~ tabxplor::new_tab(., subtext = subtext) |> dplyr::group_by(var))
-# }
-
-
-
-# #' Logistic regression summary table
-# #'
-# #' Creates a formatted table of logistic regression results with odds ratios,
-# #' confidence intervals, and significance tests. Supports multiple models,
-# #' stratified analysis, and weighted regressions.
-# #'
-# #' @param data A data frame containing the variables for analysis.
-# #' @param dependent Character vector. Name(s) of the binary dependent variable(s).
-# #'   Each must have exactly 2 levels.
-# #' @param predictors Character vector. Name(s) of predictor variable(s) to include
-# #'   in the model(s).
-# #' @param split_var Character. Optional variable name to stratify the analysis.
-# #'   Creates separate models for each level of this variable.
-# #' @param wt Character. Optional name of weighting variable for weighted regression.
-# #' @param full_table Logical. If `TRUE`, returns comprehensive model diagnostics
-# #'   including AIC, BIC, and pseudo-R². Default: `FALSE`.
-# #' @param inverse_two_level_factors Logical. If `TRUE`, reverses the reference
-# #'   level for binary factors (models the first level instead of the second).
-# #'   Default: `TRUE`.
-# #' @param cleannames Logical. If `TRUE`, removes numeric prefixes from factor
-# #'   levels (e.g., "1-Married" becomes "Married"). Uses global option
-# #'   `tabxplor.cleannames` if `NULL`. Default: `NULL`.
-# #' @param subtext Character. Optional subtitle text to display below the table.
-# #'   Default: `""`.
-# #'
-# #' @return A `tabxplor_tab` object containing:
-# #'   - Odds ratios with 95% confidence intervals
-# #'   - p-values and significance indicators (*, **, ***)
-# #'   - Model fit statistics (if `full_table = TRUE`)
-# #'   - Formatted table ready for display or export
-# #'
-# #' @examples
-# #' # Prepare example data
-# #' data <- forcats::gss_cat |>
-# #'   dplyr::mutate(
-# #'     married = dplyr::case_when(
-# #'       marital == "Married" ~ factor("1-Married"),
-# #'       marital %in% c("Never married", "Separated", "Divorced", "Widowed") ~ 
-# #'         factor("2-Not married"),
-# #'       TRUE ~ factor(NA_character_)
-# #'     )
-# #'   )
-# #'
-# #' # Basic logistic regression
-# #' tab_logit(
-# #'   data,
-# #'   dependent = "married",
-# #'   predictors = c("race", "rincome")
-# #' )
-# #'
-# #' # Multiple predictors with clean names
-# #' tab_logit(
-# #'   data,
-# #'   dependent = "married",
-# #'   predictors = c("race", "rincome", "partyid"),
-# #'   cleannames = TRUE
-# #' )
-# #'
-# #' # Stratified analysis by race
-# #' data |>
-# #'   dplyr::filter(!is.na(race) & !is.na(married)) |>
-# #'   tab_logit(
-# #'     dependent = "married",
-# #'     predictors = c("rincome", "partyid"),
-# #'     split_var = "race"
-# #'   )
-# #'
-# #' # Full model diagnostics
-# #' tab_logit(
-# #'   data,
-# #'   dependent = "married",
-# #'   predictors = c("race", "rincome", "relig"),
-# #'   full_table = TRUE,
-# #'   subtext = "Model fit statistics included"
-# #' )
-# #'
-# #' # Weighted regression
-# #' data |>
-# #'   dplyr::filter(!is.na(tvhours) & tvhours > 0) |>
-# #'   tab_logit(
-# #'     dependent = "married",
-# #'     predictors = c("rincome", "partyid"),
-# #'     wt = "tvhours"
-# #'   )
-# #'
-# #' @export
-# tab_logit <- function(data, dependent, predictors, split_var = NULL, wt = NULL,
-#                       full_table = FALSE,
-#                       inverse_two_level_factors = TRUE, 
-#                       cleannames = NULL, 
-#                       subtext = "") { # nb_questions
-#   if(length(dependent) > 1 & full_table) {
-#     stop("not possible to pass several `dependent` variables with `full_table = TRUE`")
-#   } 
-  
-#   stopifnot(is.character(predictors))
-  
-#   cleannames <-
-#     if (is.null(cleannames)) { getOption("tabxplor.cleannames") } else {cleannames}
-  
-#   tabs <- multi_logit(data = data,
-#                       dependent = dependent, 
-#                       predictors_sequence = list("model" = predictors),
-#                       split_var = split_var, 
-#                       wt = wt,
-#                       odds_ratios = TRUE, marginal_effects = FALSE, signif = TRUE,
-#                       ci = FALSE,
-#                       add_pct = full_table, add_n = full_table, empirical_odds_ratio = full_table, 
-#                       inverse_two_level_factors = inverse_two_level_factors, 
-#                       cleannames = cleannames)
-  
-#   print(tabs)
-    
-#   dependent_lv1 <- purrr::map_chr(
-#     data[dependent], 
-#     ~levels(forcats::fct_drop(.))[if(inverse_two_level_factors) {1} else {2}]
-#   )
-    
-#   # if (!is.null(split_var)) {
-#   #   split_var_levels <- purrr::map_chr(
-#   #     data[split_var], 
-#   #     ~levels(forcats::fct_drop(.))
-#   #   )
-#   # }
-
-#   if (cleannames) {
-#     dependent_lv1 <- stringr::str_remove_all(dependent_lv1, tabxplor:::cleannames_condition()) 
-
-#     # if (!is.null(split_var)) {
-#     #   split_var_levels <- stringr::str_remove_all(split_var_levels, tabxplor:::cleannames_condition()) 
-#     # }
-#   } 
-
-#   dependent_lv1 <- paste0(dependent_lv1, ": OR")
-  
-#   if(length(dependent) >= 2) {
-    
-#     tabs <- 
-#       purrr::pmap(list(tabs, dependent_lv1, seq_along(dependent)), 
-#                   ~ dplyr::rename(..1, 
-#                                   tidyselect::any_of(purrr::set_names("OR model", ..2)),
-#                                   tidyselect::any_of(purrr::set_names("s1", paste0("s", ..3) )),
-
-#                   )
-#       ) |>
-#       purrr::reduce(~dplyr::left_join(.x, .y, by = c("var", "levels")))
-    
-#   } else {
-#     tabs <- tabs[[1]] |>
-#       dplyr::rename(tidyselect::any_of(purrr::set_names("OR model", dependent_lv1)) )
-#   }
-  
-#   tabs |> 
-#     # dplyr::mutate(dplyr::across(
-#     #   where(is.character) & tidyselect::starts_with("s"), 
-#     #   htmltools::htmlEscape # otherwise stars *** break the html doc...
-#     # )) |> 
-#     tabxplor::new_tab(subtext = subtext) |> 
-#     dplyr::group_by(var) 
-# }
-
-
-
+  logit_build(data, specs, union_predictors = union_predictors, wt = wt,
+              inverse_two_level_factors = inverse_two_level_factors,
+              conf_level = conf_level, method = method, color_signif = color_signif,
+              cleannames = cleannames, subtext = subtext)
+}

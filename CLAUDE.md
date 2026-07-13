@@ -60,8 +60,12 @@ R/
 ├── tab-render-html.R (~350 L) Phase 10e tab_kable render seam: render_kable_html() (kableExtra +
 │                              home-built self-contained html engines) + tab_kable_join/scrollbox
 ├── utils.R         (1306 L)  Pipe re-export, .onLoad() options setup, factor utilities
-├── tab_logit.R     (1009 L)  WIP — entirely commented out (future logistic regression)
-├── tab_logit_2.R    (706 L)  WIP — entirely commented out (logit diagnostics/plots)
+├── tab_logit.R     (~330 L)  Phase 12a: LIVE logistic-regression tables. tab_logit() (deps as OR
+│                              columns) + multi_logit() (models as OR columns) -> tabxplor_tab, via
+│                              a direct stats::glm / survey::svyglm + broom::tidy engine (no parsnip).
+│                              OR in the `or` field, log-OR Wald exp() CI in ci_inf/ci_sup, Wald p in
+│                              pvalue, ci_type="or", color="OR", color_signif="grey_non_signif".
+├── tab_logit_2.R     (~9 L)  Emptied in Phase 12a (git rm pending). or_plot/lm_plots deferred.
 ├── jmvtab-cache.R  (~800 L)  jmvtab live multi-tier cache: content-addressed store + hashing +
 │                             jmv_cache_aggregate (tier 1-2, tab_aggregate hook) + the Phase 7f
 │                             tier-3 CARRIER cache (Phase 9b-7: jmv_carrier_unwrap/wrap store, not a
@@ -128,7 +132,7 @@ Export:  tab_xl()  |  tab_kable()  |  tab_md()  |  tab_plot()
 | Suggests-only guards     | `openxlsx2`, `ggplot2`, `jmvcore`, `ggpubr`, `cowplot`, `mirai` are in Suggests. Every call must be guarded with `requireNamespace()` or equivalent (tab_xl's ONE guard is in `tab_xl()`; `R/tab-xl-backend.R` wrappers are unguarded).                                                                                                                                                           |
 | Color break mirroring    | `set_color_breaks()` takes positive-only thresholds. Negative breaks are auto-mirrored internally. Any `pct_breaks` value > 1 triggers ratio comparison instead of difference (the "*2 rule").                                                                                                                                                                                                    |
 | Mean-diff asymmetry      | For `type="mean"` columns, the `diff` field stores a **ratio** (cell_mean / ref_mean), NOT a difference. Thresholds like 1.15 mean "+15% above reference". This asymmetry propagates into `color_formula()` and `format.tabxplor_fmt()`. **(1.4.0 §3: numeric `diff` becomes a real difference; the ratio moves to the `ratio` field — the never-used `rr` field renamed, placed after `diff`.)** |
-| tab_logit                | Entirely commented out (WIP). Do not try to use or integrate. Will be developed in the future.                                                                                                                                                                                                                                                                                                    |
+| tab_logit                | Phase 12a LIVE: binary logit OR tables via glm/svyglm+broom (no parsnip). broom/survey are guarded Suggests. OR columns are ordinary fmt (ci_type="or"). Statistical redesign (multinomial, weights policy, lm/glm) is 12b+.                                                                                                                                                                          |
 
 
 ---
@@ -214,7 +218,7 @@ devtools::test("d:/Statistiques/github/tabxplor", filter = "tab")  # one/few fil
 | `test-tab.R`         | Core: plain tables, pct, totals, NA, CI, chi2, references, wrapping |
 | `test-tab_classes.R` | Class preservation through dplyr verbs                              |
 | `test-tab_xl.R`      | Basic Excel export                                                  |
-| `test-tab_logit.R`   | Inactive (commented out, mirrors WIP code)                          |
+| `test-tab_logit.R`   | Phase 12a: OR/CI/p parity vs glm/svyglm, colours, exports, 1/OR     |
 
 ---
 
@@ -1442,9 +1446,7 @@ numeric-bypass limitation, **deferred** (contained fix: write `format(col)` for 
 Integration of `tab_logit.R` (currently commented out) into the package, then redesign and rewrite of `tab_logit` and `multi_logit`, and maybe extension to all `lm` + `glm` regression models inside the same unified framework.
 - logit and regression models functions will be introduced in tabxplor 1.4.0 : **no backward-compatibility needed**, but the public API and internal workflows both need to be carefully redesigned for user-friendliness, consistency, performance and future-proofing.
 
-#### Phase 12a – integrate current version in tabxplor framework cleanly
-
-An important design question should be answered first : should I keep the content of `tab_logit.R` inside tabxplor package, even if it makes the count of tabxplor dependencies very high (CRAN current policies on that matter ?) ? Or should I create a `regxplor` subpackage (name is `available::available()`) relying on tabxplor (with more frictions during dev, both human dev and Claude Code assisted dev, or not necessarily and there are reliable way to avoid them ?), and in this case, as a package always loading with tabxplor, or as a package just importing tabxplor ? Make detailed web searches about modern good practices and tidyverse good practices, then write your analysis in `dev\tabxplor_1.4.0_decisions.md` (respecting it’s internal style and logic).
+#### Phase 12a – integrate current version in tabxplor framework cleanly (DONE)
 
 The current `tab_logit.R` code, made outside of the package, was a way to use tabxplor vctrs fields former implementation to store the logit data, but the way to do it may have been pragmatic/messy/ad hoc : first, before modifying tab_logit() behaviour, I want to integrate it with the rest of the package.
 - Do not hesitate to redesign it thoroughly for consistency with tabxplor package architecture. Fix ad hoc stuffs to make it fits perfectly inside tabxplor framework.
@@ -1452,6 +1454,43 @@ The current `tab_logit.R` code, made outside of the package, was a way to use ta
 - Do ne hesitate to rethink the articulation between `tab_logit` and `multi_logit`, and the internal workflows in general.
 - Integrate confidence intervals with the new `ci_inf` / `ci_sup` vctrs fields (check its in fact `exp()` bounds), and also with the new `color_signif` framework (with logistic regression, sensible default may be "grey_non_signif").
 - All exports (kable, md, Excel) should work natively with the resulting tabxplor_tab (or grouped one, etc.).
+
+The commented-out draft is now LIVE, clean, first-class tabxplor code (full suite green **1877**, no golden
+regen; new `test-tab_logit.R` = 35 tests). Statistical behaviour unchanged (binary logit, 2-level only);
+this was a structural + fmt-field integration, not the 12b statistical redesign.
+
+- **Two foundational decisions settled (maintainer-approved; rationale in `dev/tabxplor_1.4.0_decisions.md` §36):**
+  (1) **Location = keep inside tabxplor** (no `regxplor` subpackage). (2) **Engine = direct `stats::glm` /
+  `survey::svyglm` + `broom::tidy`** — the parsnip/workflows/hardhat/poissonreg stack + the `parsnip:::`
+  `svglm2` engine were dropped (parsnip's glm engine only called `stats::glm`), so dropping it REMOVED deps;
+  `broom` + `survey` (already Suggests) are the only ones, `requireNamespace()`-guarded. This dissolved the
+  "deps too heavy -> split the package" motivation.
+- **`R/tab_logit.R` rewritten** (~330 L, was 1009 L of comments): internal `logit_fit()` (glm/svyglm on
+  complete cases), `logit_skeleton()` (var/level/term rows), `logit_column()` (align a fit -> one OR fmt
+  column), `logit_build()` (shared). `tab_logit(data, dependent, predictors, wt, ...)` = dependents as OR
+  columns; `multi_logit(data, dependent, models, ...)` = named models as OR columns (blank where a predictor
+  is absent). `R/tab_logit_2.R` emptied (or_plot/lm_plots deferred; `git rm` pending — rm was blocked).
+- **Inference `method`** (arg, default `"wald"`; researched — decisions §36): `"wald"` = in-house Wald CI
+  `exp(coef +/- crit*se)` (glm z, svyglm t w/ design df) + Wald p — universal software default, only option
+  for weighted `svyglm`, one fit, dual-clean. `"profile"` (opt-in, unweighted glm; needs MASS) = profile CI
+  (`stats::confint`) + per-coefficient **LR-test** p — more accurate small-sample; weighted -> Wald + message.
+  Both keep **CI <-> stars EXACT duals** (NOT broom's `conf.int`, which switches to profile when MASS loads).
+  Parity verified vs hand-run glm/svyglm (OR/CI/p). svyglm design-based SEs answer the 12b weight-inflation
+  concern for the *inference* (normalization policy stays 12b). **`color_signif` arg** (default
+  `"grey_non_signif"`; opt-in `"ignore"`/`"color_all_signif"`) drives OR colouring via the existing attribute.
+- **OR columns are ordinary fmt** (no new type): `type="row"`, `display="or"`, `color="OR"`,
+  `color_signif="grey_non_signif"`, and a **new `ci_type="or"`** (log-OR Wald exp() bounds, multiplicative
+  neutral 1). Four localized `fmt_class.R` reader patches (all inert for non-OR): `set_ci_type` enum `+"or"`;
+  `ci_center()` OR branch (centre = the OR); `fmt_color_plan()` significance gate tests **exclusion of 1**
+  for the `"or"` measure (was hard-coded exclusion of 0); `format()` `disp_or` adds **`1/OR`** reciprocal
+  display for OR<1 (`0.25 -> "1/4"`, everywhere incl. empirical OR — byte-identical for OR>=1) + a no-pct
+  guard so a pure model-OR ref row shows bare "1". Stars/colours light up automatically from the written
+  `pvalue`/bounds. Excel keeps the raw OR number. Follows `/vctrs-field` + `/color-mode`.
+
+**Deferred (later phases, unchanged):** multinomial / 3+ level, weight-normalization policy, lm/glm +
+`tab_reg` (12b); tidyselect + named-vector ref levels, contrasts (12d); `or_plot` forest plot + `lm_plots`
+(display phase); visible OR CI bracket / OR+ME/OR+PCT layouts (12b/12d); `jmvtab_logit` UI (12e).
+
 
 
 #### Phase 12b – design choices and statistical framework
