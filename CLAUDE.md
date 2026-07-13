@@ -918,14 +918,12 @@ Suite green (375 blocks, 0 fail), no golden regen (UI-only + behaviour-preservin
 Confirmation : jmvtab works well on jamovi 2.7.37
 
 
-### Phase 8 – Parallelisation opt-in for the "many tables at once" survey workflow
+### Phase 8 – Parallelisation opt-in for the "many tables at once" survey workflow (DONE)
 
 Phase 6b — 2026-07-09 researched whether parallelising `tab()`/`jmvtab()` over `row_vars` is a real perf win. **Verdict: a substantial, reliable win for the PRIMARY workflow — worth a Suggests-only opt-in; NOT a forced default, NOT for big data / live jmvtab.** Grounded PoC (mirai / base `parallel` / future.apply, W∈{1,2,4,8,12}). Parallelising the row_var/pair axis is **byte-identical** (0/82 tables checked). The key result **inverts the naïve prior**: the *small/typical survey* df is the sweet spot, the 8M df the worst case. On **10k–60k-row surveys × many tables** (tabxplor's core "export dozens of colored tables" use case): **~2.5–3.3× at W=4** (commodity/university PC), **~4× at W=8**, ~1 s setup, ~0 memory, **wins even on a fresh call** — because per-table cost is N-independent O(cells) fmt/chi2 work (seq batch flat ~2.5 s from 10k→60k). On 8M it ≈break-even-to-loss (memory-bandwidth wall + 336 MB×W transfer); few tables always lose; future.apply unusable (per-call df resend); data.table's own threading barely helps (~1.2×). jmvtab *live* = no (cached aggregate → nothing O(N) to parallelise). Recommended opt-in: `options(tabxplor.parallel=)` gating an internal `tab_pmap()` at the `tab_build()` seam, persistent pool + `setDTthreads(1)` + df pre-loaded once + byte-identical fallback, skip below a table-count threshold, **after** Phase 2/7c (the batch-export path does NOT overlap the cache, so the gain persists). Full findings + tables: `dev/tabxplor_1.4.0_decisions.md` **§26**; scripts `dev/benchmarks/parallel_poc_{micro,tab,survey,mirai_dispatcher}.R`, results in `results_1.4.0/phase6b_*.txt`.
 - We should first choose only one parallelisation engine / package : either `mirai` or `parallel`. What would be the best choice for both performance and future-proofing ? Anyway the package should be in Suggest.
 - If workers setup step is needed, it should be done the first time parallelisation is used and reused afterwards.
 - It should work on Windows / Linux / MAC, but for performance the main focus is Windows.
-
-#### Done (2026-07-10)
 
 New public `tab(..., parallel = )` (also `tab_many()`; `NULL`→`options("tabxplor.parallel")` off / `FALSE`
 serial / `TRUE` auto workers / integer N). **Engine = `mirai`** (Suggests-only; R-core's official cluster
@@ -983,9 +981,7 @@ orthogonal to the restructure. **Implemented 2026-07-11: (1) done byte-identical
 cosmetic NSE-boundary extraction (poor risk/reward), so only the dead-code cleanup was done.**
 
 
-#### Phase 9a — Internal clarify & simplification
-
-##### Done (2026-07-11)
+#### Phase 9a — Internal clarify & simplification (DONE)
 
 **Outer-map row-axis collapse landed byte-identical (full suite 1364 pass / 0 fail, NO golden regen).**
 `tab_build()` is now `tab_setup → tab_prepare_pop → tab_aggregate → **tab_build_tables()**`. The new
@@ -1038,15 +1034,15 @@ Decisions taken : **tiered** (bank the safe merge win first, gate the big rewrit
 
 **Open questions (settle before committing carrier code):** **Q1** boundary A vs B. **Q2** carrier-join (L2) vs materialize-around-the-cheap-join (join is 0.9% → lean the latter, drops L2). **Q3** *worth it now?* — the **largest byte-identity surface in 1.4.0** for ~20-45%, value **back-loaded** (9b-4 is low-payoff infra; 9b-5 is the win); weigh vs pausing at passes 2-4. **Q4** sequence 9b-5 with **Phase 10** exporter-prep (same fmt read paths).
 
-##### Phase 9b-1 — surgical `tab_compact` merge fix (done — 2026-07-11)
+##### Phase 9b-1 — surgical `tab_compact` merge fix (DONE)
 
 **9b-1 — surgical `tab_compact` merge fix (byte-identical).** The merge promoted totrow→refrow with `if_else(is_totrow & !any(is_refrow), as_refrow(.), .)` over each fmt column — a `vec_case_when` record round-trip (72 % of `tab_compact` per §29). Replaced by a direct `in_refrow` field write (new internal `promote_totrow_to_refrow()` in `R/tab_classes.R`, kept inside the per-sub-table `imap` so `any(in_refrow)` stays grouped per row_var). `as_refrow` only flips that field → byte-identical. **`tab_compact` 0.390→0.160 s (2.44×)** on the gss_cat 5×3 fixture; full merged call 1.78→1.55 s; `output_list` (no-merge) unchanged. Record: `dev/benchmarks/results_1.4.0/phase9b1_tab_compact.txt`.
 
-##### Phase 9b-2 — measurement spike (done — 2026-07-11)
+##### Phase 9b-2 — measurement spike (DONE)
 
 Harness `dev/benchmarks/phase9b2_fmt_cost_decomp.R` decomposed the per-table build across the 4 shapes. **Verdict: GO for 9b-3.** On the common factor path ~**30 %** (`vec_restore` reconstruction) to ~**48 %** (+`vec_case_when`) of the build is recoverable; the **materialize-once floor is ~0.5 %** (1.4 ms/21 cols) and pushing records through ops is **54.5× slower** than plain — so the fmt cost is almost entirely redundant reconstruction. Numeric-only tables gain ~nothing (cost = the data.table scan; `tab_num` already materializes once). **Fold the writers into 9b-3** — not a separate committable rung. Record: `dev/benchmarks/results_1.4.0/phase9b2_decomposition.txt`; full analysis `dev/tabxplor_phase9b_fmt_display_only.md` §5.
 
-##### Phase 9b-3 — in-place fmt-reconstruction wins (DONE: passes 1-4)
+##### Phase 9b-3 — in-place fmt-reconstruction wins (DONE)
 
 The four **byte-identical, in-place** optimizations toward the "materialize `tabxplor_fmt` records ONCE at the very end" goal — each a golden-gated committable step, no carrier yet. Cumulative **~26% off the common merged call / ~34% off the per-table build**. The deferred-materialization **carrier core** that finishes the job followed in **Phases 9b-4 → 9b-6** below (9b-4 tests-boundary round-trip, 9b-5 ci/chi2 writes, **9b-6 the Boundary-B local unwrap of `tab_compact`/`tab_pvalue_lines`** — which subsumed 9b-7; another −28..−30% on the merged call).
 
@@ -1058,11 +1054,11 @@ The four **byte-identical, in-place** optimizations toward the "materialize `tab
 
 **Done (2026-07-11): pass 4 — `new_test_tibble` memoization** (byte-identical, modest ~3-6% common build). The empty-placeholder `test` tibble costs ~1.4 ms/call (`tibble()` validation), built several times per table; it's stateless → memoized (`R/tab_classes.R`, cached copy shared safely via R copy-on-modify). Full suite green, no golden regen. The remaining `tab_pvalue_lines` cost (`bind_rows`+`vec_restore` adding the p-value row) is the vctrs **record combine**, inherent to the fmt type — only the deferred-materialization carrier removes it (the carrier core, Phases 9b-4→9b-7). Doc §6. **Corrected cost model** (profiling, `dev/benchmarks/results_1.4.0/phase9b3_profile.txt` + doc §6): the col_var **join is cheap (0.9%) — NOT the target** (drop the L2 focus; keep the record `full_join`); the ~30% reconstruction is **pervasive `dplyr`-over-fmt**; the **#1 recoverable chunk is `tab_apply_tests`/`tab_chi2` at 20%** (repeated `is_totrow` scans + `dplyr`-over-fmt group-matching). **Revised staging** (doc §6, supersedes the join-first order): (1) `tab_chi2`/`tab_apply_tests` on plain fields with row/col masks computed once (the 20%, needs the carrier at the tests boundary); (2) defer the leaf materialization so the carrier reaches the tests; (3) `tab_assemble_tables`+`tab_add_n_pct` on the carrier, `fmt_wrap` at `tab_build_one` end. Landmines: L1 (types) + L5 (boundary) + L6 (ci/chi2) + L7 (add_n); **L2 dropped**, L3/L4 avoided. Full brief: `dev/tabxplor_phase9b_fmt_display_only.md` §6.
 
-##### Phase 9b-4 — carrier to the tests boundary (DONE — 2026-07-11)
+##### Phase 9b-4 — carrier to the tests boundary (DONE)
 
 Implemented as the **lean post-join round-trip** (maintainer decision, not the design's leaf-emits-carrier): two internal helpers next to `fmt_materialize_col` (`R/tab.R`) — **`fmt_unwrap(tab)`** decomposes a built table to a carrier `list(is_fmt, factors, fmt = per-col list(frame = as.list(vec_data(col)), meta = the 9 attrs), attrs = attributes(tab))`; **`fmt_wrap(carrier)`** is its exact inverse (materialize each fmt col via `fmt_materialize_col`, pass factor cols through, restore `attrs` wholesale). A byte-identical **no-op** `fmt_wrap(fmt_unwrap(tabs_text))` is inserted in `tab_transform()` right before `tab_apply_tests()` — establishing the carrier at the tests seam; `tabs_num` untouched. New `test-carrier-parity.R` (15 tests) locks `identical()` across factor/numeric/mixed/weighted/col%/add_pct/ci + grouped + subtext/test attrs. **L1** held (fmt-contract `typeof` lock green: `new_fmt` does no cast, so `vec_data → new_fmt` preserves types). Full suite green (FAIL 0, PASS 1354), NO golden regen. Bench: no-op adds +0.08 s / +6.9% (gss_cat 5×3 merged) — a temporary second materialization of each row_var's factor table, recovered by 9b-5. **Step A dropped** (leaf emits carrier + tail port): under Q2 (keep the record `full_join`) the leaf materializes for the join anyway, so the leaf-tail port is never load-bearing under Boundary A. Detail: `dev/tabxplor_phase9b_fmt_display_only.md` §7.2.
 
-##### Phase 9b-5 — DONE (2026-07-11): the tests-boundary WRITES on plain fields
+##### Phase 9b-5 — the tests-boundary WRITES on plain fields (DONE)
 
 Both increments landed byte-identical (full suite FAIL 0 | PASS 1354, NO golden regen; git-stash `identical()` A/B: 10 contrib + 21 ci shapes). All in `R/tab.R`. The reframing that governs it: the chi2 whole-table **TEST is NOT the cost** (a 40×15 A/B was 0.1000 == 0.1000 s; the §6 "20%" was the DEFAULT-`calc` contrib writes, not the pipeline `calc="p"` test) — the O(cells) fmt cost is the **WRITES**. Approach throughout = **precompute-then-single-write** (real setters over plain vectors, NOT a `fmt_unwrap`/`fmt_wrap` round-trip). Recurring landmines: writes are **per subtable / grouped** (old grouped mutates) → run ungrouped then restore grouping; and combining fmt via `dplyr::if_else` / a grouped-mutate **recombine** **materialises the `wn` field** (NA→n) → reproduced with `set_wn(get_wn())` for exactly the columns/paths where the old code did.
 
@@ -1071,11 +1067,11 @@ Both increments landed byte-identical (full suite FAIL 0 | PASS 1354, NO golden 
 
 Combined: the two WRITE-heavy paths (contrib −44 %, ci −20 % vs pre-9b-5) recovered; the READ paths (chi2 test, common `color="diff"`) flat.
 
-##### Phase 9b-6 — Boundary B via local unwrap (DONE — 2026-07-11)
+##### Phase 9b-6 — Boundary B via local unwrap (DONE)
 
 **Re-scoped (maintainer, this session) from "step D / Boundary A" → "Boundary B via local unwrap".** Grounded finding: 9b-6-as-designed (carrier through `tab_assemble_tables`, materialize at `tab_build_one` end) buys **~0 % on the common path** (after 9b-5 everything inside `tab_build_one` is cheap: leaves materialize once; `tab_apply_tests` no longer reconstructs; `tab_assemble_tables` ~2 %; add_n on `pct="row"` adds one col; the join is 0.9 %). The real ~15-25 % was **Boundary B** — `tab_compact`'s `vec_rbind` + `tab_pvalue_lines`' `bind_rows` in `tab_assemble_output`. Both were rewritten to row-bind on **plain field-frames via a LOCAL `fmt_unwrap`→wrap** (the 9b-5 pattern), so `tab_build_one` keeps returning **records** (no `test-parallel-parity` re-lock) and **9b-6+9b-7 collapse into this one deliverable** (Boundary A skipped). New primitive `fmt_stack_frames()` (`R/tab.R`). Increment 1 = `tab_compact` (`tab_stack_tables()`: `vec_ptype_common` reconcile = **L3**, promote_totrow folded onto the field frame = **L4**; ~neutral perf, byte-identical, scales with #row_vars). Increment 2 = `tab_pvalue_lines` (**the win**: fmt-free skeleton for row order + per-column field append, subsuming the pass-3 masked fill). Byte-identity key: the old `vec_cast` materialised `wn` (NA→n; `get_wn` is the only getter with a fallback) — reproduced via `fr$wn <- get_wn(col)`. **Bench (gss_cat 5×3): merge_s −28..−30 %, list_s −8..−14 %, mem 51→45 MB; numeric ~flat** (`dev/benchmarks/results_1.4.0/phase9b6_boundaryB.txt`). Full suite FAIL 0, NO golden regen; 12-shape git-stash `identical()` A/B green (incl. per-row_var-ref L3, tab_vars-grouped pvalue, numeric ANOVA, list path). `fmt_unwrap`/`fmt_wrap` now load-bearing.
 
-##### Phase 9b-7 — jmvtab tier-3 carrier + instant reference re-ref (DONE — 2026-07-11)
+##### Phase 9b-7 — jmvtab tier-3 carrier + instant reference re-ref (DONE)
 
 Scoped up (maintainer) from the literal "carrier + re-paint" (which barely moves the render-bound live UI) to **carrier + the deferred instant reference re-ref** — "change the reference level live → recompute only diff/ratio/CI, no rebuild" (cache-design §4c). All in `R/jmvtab-cache.R`; the reference-picker UI already exists (7g-iii) → NO `.h.R` regen. Byte-identical, full suite green (1433/0), NO golden regen.
 
@@ -1084,7 +1080,7 @@ Scoped up (maintainer) from the literal "carrier + re-paint" (which barely moves
 - **Result** (`dev/benchmarks/results_1.4.0/phase9b7_reref.txt`): a ref change is **~3–4.5× faster** (reref vs rebuild). Locked by `test-jmvtab-cache.R` (reref == rebuild across 12 shapes + tab() anchor + fallbacks + $state). Detail + landmines: `dev/tabxplor_phase9b_fmt_display_only.md` §8.
 
 
-##### Phase 9c — further simplifications ? (DONE — 2026-07-11)
+##### Phase 9c — further simplifications ? (DONE)
 
 Full analysis + fresh profile: `dev/tabxplor_1.4.0_decisions.md` §30. The three questions, answered:
 
@@ -1111,7 +1107,7 @@ Full analysis + fresh profile: `dev/tabxplor_1.4.0_decisions.md` §30. The three
   `tab_plain(.fine=)` directly (the factor analogue of `test-num-fuse-parity.R`); the carve fusion test
   repointed (default == `.by_table`, both raw now).
 
-##### Phase 9d — leaf math on base-R / matrix (DONE — 2026-07-11)
+##### Phase 9d — leaf math on base-R / matrix
 
 `tab_plain()`'s three chained-`[.data.table` leaf blocks now run on plain numeric matrices / base-R
 group-sums (the §30 lever 4, ~30 %). **Factor-only**; byte-identical (full suite FAIL 0 / PASS 1400, NO
@@ -1126,17 +1122,6 @@ FALSE` for `$`/space value-cell names. Region D (the `rowSums` Total column) kep
 common −11 % / ci −7.4 % per-row_var build (E+F); git-stash A/B with tab_vars (B/C `map2` multiplier) 1
 tab_var −20 %, 2 tab_vars × 2 col_vars −51 %. Detail: `dev/tabxplor_1.4.0_decisions.md` §31.
 
-##### Phase 9d — original plan (historical intent)
-
-The §30 profile pins the single largest remaining chunk of `tab()` at **~30 %**: the fixed per-op
-overhead of ~150 `[.data.table` calls across the 15 tiny leaf tables (dcast + pct/diff/total math), NOT
-the O(N) scan (the build is N-independent) and NOT copying. The only lever big enough to move it: once
-the counts are dcasted to a tiny wide table, do the pct/diff/total arithmetic with **base-R / matrix ops**
-(`rowSums`/`sweep`/vectorised indexing) instead of chained `[.data.table` calls — eliminating most of the
-~150 per-op invocations. This is a real leaf-math rewrite with **float-order / NA byte-identity risk**
-(golden-locked), so it belongs in its own phase, not folded into 9c. Orthogonal to the carrier and to the
-row-axis restructure. Weigh against Phase 10b (`format.tabxplor_fmt` `case_when` → base) — both are
-O(cells) display/build levers, independent of each other.
 
 
 
@@ -1303,7 +1288,6 @@ aggressive simplification is welcome.
 - **Parallel-write-merge studied, NOT pursued** (maintainer chose styles-manager only): each worker builds its sheet in its own wb, main merges via `wb_clone_worksheet(from=)` — works only via a save→`wb_load`→clone workaround (clone fails on in-memory borders, the same openxlsx2 styles bug), ~2.5–3× for batches only, but dominated by the styles-manager win (which also helps single-table export) + adds mirai/temp-file/merge machinery. Detail: `dev/benchmarks/results_1.4.0/phase10h_openxlsx2.txt`.
 
 
-
 #### Phase 10i – additional rows/columns and pvalue lines simplification ?
 
 `add_n`, `add_pct` and pvalue_lines add complexity in the whole workflow. I want to **study the possibility to only add these additional rows or columns at display time**, using `tabxplor_tab` level attributes to know it must be done (or column-attributes, or global options, what would be best ?) ? This is a design task : just study if it would possible possible and reliable.
@@ -1321,6 +1305,7 @@ Verdict: worthwhile, not a white elephant. Decisions:
 1. **display-only** — the built tab omits the `n`/`col_pct` columns and p-value rows (kept only via `print()`/exporters); the `test` attribute is KEPT (stop dropping it); `tab_pvalue_lines()`/`tab_add_n_pct()` stay as on-demand materializers.
 2. the composite recipe moves to the per-cell **`display` field with a glue `{}` grammar** (`"{pct} (n={n})"`), **dropping the `display_spec` attribute** (10→9), with a short-circuited `get_num()` gate.
 3. **add_pct = a real appended column/row** at display; only **add_n** goes in-cell (text) / an `n` column (Excel).
+
 
 ##### Phase 10i-A – consistent display `{}` grammar (DONE 2026-07-12)
 
@@ -1340,6 +1325,7 @@ consumer (`get_num`/`set_num`, `format()` masks, `vec_ptype_abbr`/`vec_ptype_ful
 pipeline unchanged; sugar vs `{}` = one-time ~0.2 ms validation, no per-cell cost). Tests:
 `test-display-grammar.R` + `test-fmt_class.R` + `test-fmt-contract.R` 10→9 (+ snapshot); goldens
 regenerated (attr drop only). Full suite green.
+
 
 ##### Phase 10i-B – display-only migration
 
@@ -1418,7 +1404,7 @@ PoC-first (B-i), then a maintainer-scoped partial rewrite (B-ii). Full record + 
 
 
 
-### Phase 12 – Manual reviews
+### Phase 11 – Manual reviews
 
 Final verification that statistical results are the same for tabxplor 1.3.1 (installed CRAN version) and tabxplor 1.4.0, with manual review of the maintainer. Create two Excel files in mirror, with one exact same sheet for each analysis, and in this sheet a first standard table with the revelant colors (often mostly pct display), and a second table with the relevant vctrs field (ex : contrib, chi2, etc.). Each time, the first col_vars is a factor and the second col_vars is a numeric variable. The use cases and calculations to review :
 - `tab_vars = <x>, pct = "row", color = "diff"`  # diff of the numeric variable will be different
@@ -1431,6 +1417,76 @@ Final verification that statistical results are the same for tabxplor 1.3.1 (ins
 - `wt = <x>, color = "diff", color_signif = "grey_non_signif"` # ci method Agresti-Caffo for comparison
 - `pct = "row", ci = "cell"` # ci cell method Wilson
 - etc. # what other use cases would be important to review here ?
+
+### Phase 11a — style-name collision fixed
+
+The 1.4.0 review workbook degenerated on **every table after the first** (offset/missing borders, random
+font sizes, subtext shown bold+oversized+coloured, first-column level names wrongly bold, numeric colours
+absent). **One root cause**: `xl_apply_styles()` reset its name counter + font/fill/border caches **per
+table**, re-minting the style names `txf1`/`txl1`/`txb1`/`txx1` in openxlsx2's **workbook-global**
+`styles_mgr`, whose `get_*_id(name)` returns the **first** match — so from table 2 on, every table was
+painted with **table 1's** style objects. **Fix** (`R/tab_xl.R` only, byte-identical single-table path,
+299 export tests green, no golden regen): one **workbook-scoped `xl_style_registrar(wb)`** dedups
+fonts/fills/borders/xfs by content + hands out globally-unique names; `xl_apply_styles` became a thin
+apply loop threaded through `xl_write_table`. Verified against the 1.3.1 reference across all 15 sheets
+(headers sz9-bold [thin,thin]; subtotals bold+left; level names non-bold; subtext sz9-normal-black).
+**Secondary findings**: numeric `color="diff"` colours DO apply, just sparse by design (Glass's Δ,
+`mean_diff_breaks` — intended Phase 5, ≠ 1.3.1's ratio); factor colour hex differs (Phase 5 palette,
+intended); `ci="cell"` shows the raw proportion under Excel `@` text format — a real, separate
+numeric-bypass limitation, **deferred** (contained fix: write `format(col)` for `code=="TEXT"` cells).
+
+
+
+### Phase 12 — tab_logit integration and full redesign
+
+Integration of `tab_logit.R` (currently commented out) into the package, then redesign and rewrite of `tab_logit` and `multi_logit`, and maybe extension to all `lm` + `glm` regression models inside the same unified framework.
+- logit and regression models functions will be introduced in tabxplor 1.4.0 : **no backward-compatibility needed**, but the public API and internal workflows both need to be carefully redesigned for user-friendliness, consistency, performance and future-proofing.
+
+#### Phase 12a – integrate current version in tabxplor framework cleanly
+
+An important design question should be answered first : should I keep the content of `tab_logit.R` inside tabxplor package, even if it makes the count of tabxplor dependencies very high (CRAN current policies on that matter ?) ? Or should I create a `regxplor` subpackage (name is `available::available()`) relying on tabxplor (with more frictions during dev, both human dev and Claude Code assisted dev, or not necessarily and there are reliable way to avoid them ?), and in this case, as a package always loading with tabxplor, or as a package just importing tabxplor ? Make detailed web searches about modern good practices and tidyverse good practices, then write your analysis in `dev\tabxplor_1.4.0_decisions.md` (respecting it’s internal style and logic).
+
+The current `tab_logit.R` code, made outside of the package, was a way to use tabxplor vctrs fields former implementation to store the logit data, but the way to do it may have been pragmatic/messy/ad hoc : first, before modifying tab_logit() behaviour, I want to integrate it with the rest of the package.
+- Do not hesitate to redesign it thoroughly for consistency with tabxplor package architecture. Fix ad hoc stuffs to make it fits perfectly inside tabxplor framework.
+- Do not hesitate to break it into subfunctions when needed, convenient or future-proofing.
+- Do ne hesitate to rethink the articulation between `tab_logit` and `multi_logit`, and the internal workflows in general.
+- Integrate confidence intervals with the new `ci_inf` / `ci_sup` vctrs fields (check its in fact `exp()` bounds), and also with the new `color_signif` framework (with logistic regression, sensible default may be "grey_non_signif").
+- All exports (kable, md, Excel) should work natively with the resulting tabxplor_tab (or grouped one, etc.).
+
+
+#### Phase 12b – design choices and statistical framework
+
+Statistical sanity 1 : how to handle dependent var factors with 3+ levels ?
+- The function currently binarise all levels against the reference level chosen, and gives one column per non-reference level, instead of using multinomial logistic regression : I known it’s expert way it’s done, but at the same time I find multinomial logistic regressions very difficult to read, since relative risk ratios with their double reference are farther from experience and intuition and car be thoroughly misinterpreted with not enough knowledge of reference rows and cols (it’s also very difficult to teach to sociology students, and to put in a meaningful sentence it a scientific papers : contrary to odds ratio, that can be put in sentence quite cleanly still understanding what you compare with what). Please, make detailed web searches, and tell me what the statistical consensus is about that, what are the different possibilities and rationales make by and social scientists both (particularly in quantitative sociology).
+
+Statistical sanity 2 : how to handle survey weights ?
+- Most of my real world data are French national surveys, which always come with weights. The first version of `tab_logit` was made to handle this : on one hand, no weights is common practice, but if the percentages used by logistic regression do not match the percentages the user really have in it’s base empirical crosstables, there’s a bizarre discrepency ; 2. since weights are most of the time not normalised, using weighted counts that are many times higher than the real number of people in the sample destroys significativity tests and confidence intervals since they always pass (total weighted n gives the overall population measured in the national census).
+
+What extension ? Full `lm`/`glm` set + keep current multinomial logistic reg ?
+- Extend the function to numeric variables as predictors ? Extend it to ensure it also works for integer dependent variables as poisson regression ? Generalise the framework most common `lm` + `glm` regressions models, like multiple linear regressions for doubles (with the possibility to chose the type of regression per dependent var, since the R class of the dependent var, double or integer, do not clearly states if the underlying distribution is gaussian or poisson if its counts or binomial if it’s percentages, etc.) ? What would be caveats ? In this case, function should be renamed `tab_reg`. Many things should be reworked to keep both logistic models specificities, plus be closer to standard practices in term of `lm` + `glm` display.
+
+Summary statistics ?
+- What whole analysis/model level test and pvalue should be added, for example on a pvalue_line like chi2 test for crosstables and ANOVA for factor x numeric ? What other model level summary statistics should absolutely be added to keep with standard practices with `lm`/`glm` models ?
+
+#### Phase 12c – implement testthat tests
+
+Implement testthat tests
+- They should include tests of statistical soundness, attesting the results matches base `glm` etc. results, unweighted +  survey weights design.
+
+#### Phase 12d – tab_logit rewrite
+
+Implement the design make in the former phase. Plus :
+- Now variables arguments only work with character vectors : integrate in tabxplor current tidyselect framework.
+- Would it be possible to add the possibility to choose reference level for each var by passing a named vector in the variable selectors ? (permit to take ref in the middle while keeping order of ordinal vars, or useless white elephant ?) ?
+- Implement things with contrasts ?
+
+#### Phase 12e – tab_logit jamovi UI
+
+Add a full tab_logit analysis in Jamovi to give it a user-friendly UI : name it `jmvtab_logit`
+Are there some user-friendly pieces that we could reuse from other well known models/regressions Jamovi modules ?
+
+What about `multi_logit`, who handles passing of multiple models (like different subsets of the same variables) for comparison ?
+- Would it be possible to add it’s own jamovi analysis and UI, or would it be too complicated / useless ? Just one jamovi UI for logits, with possibility to choose predictors variables, then click on "+" button to add a subset of them, with the possibility to add any new set with "+" ?
 
 
 
@@ -1464,7 +1520,7 @@ Color breaks and color palette management is very not user friendly (base is ok,
 
 Color legends
 - Even in Excel export, use styles inside the color legend cells to color the breaks with the relevant text or background color (+bold), to make it really usable (otherwise a legend that does not say what color is what is incomprehensible), while keeping the rest of the text in the cell black (+ plain).
--
+- Make the color legend more easy to read for  non-expert users, and implement a French translation (detect OS language + override by optional argument in export functions ?)
 
 Missing infos on exported tables, compared to what’s default in other statistical software ?
 - Display the variable names for `col_vars` : not in console, but in html and Excel, add a second headers line above the main headers row with the levels ; when contiguous fmt columns have the same col_vars, merge the variable names headers cells into a single cell (name of the same variable only needs to be given once).
@@ -1479,57 +1535,6 @@ Display problems and improvements :
 - Un exports AND in console display, with any significance star in the column, all numbers should be padded right to keep numbers alignment and readability.
 - Does transpose at export work perfecty (colors and all) with `pct = "col"` and with numeric variables ? If not, calculate colors, and anything else relevant (other column-level attributes not usable after the transposition), before transposition ?
 
-
-
-### Phase 14 — tab_logit integration and full redesign
-
-Integration of `tab_logit.R` (currently commented out) into the package, then redesign and rewrite of `tab_logit` and `multi_logit`, and maybe extension to all `lm` + `glm` regression models inside the same unified framework.
-- logit and regression models functions will be introduced in tabxplor 1.4.0 : **no backward-compatibility needed**, but the public API and internal workflows both need to be carefully redesigned for user-friendliness, consistency, performance and future-proofing.
-
-#### Phase 14a – integrate current version in tabxplor framework cleanly
-
-An important design question should be answered first : should I keep the content of `tab_logit.R` inside tabxplor package, even if it makes the count of tabxplor dependencies very high (CRAN current policies on that matter ?) ? Or should I create a `regxplor` subpackage (name is `available::available()`) relying on tabxplor (with more frictions during dev, both human dev and Claude Code assisted dev, or not necessarily and there are reliable way to avoid them ?), and in this case, as a package always loading with tabxplor, or as a package just importing tabxplor ? Make detailed web searches about modern good practices and tidyverse good practices, then write your analysis in `dev\tabxplor_1.4.0_decisions.md` (respecting it’s internal style and logic).
-
-The current `tab_logit.R` code, made outside of the package, was a way to use tabxplor vctrs fields former implementation to store the logit data, but the way to do it may have been pragmatic/messy/ad hoc : first, before modifying tab_logit() behaviour, I want to integrate it with the rest of the package.
-- Do not hesitate to redesign it thoroughly for consistency with tabxplor package architecture. Fix ad hoc stuffs to make it fits perfectly inside tabxplor framework.
-- Do not hesitate to break it into subfunctions when needed, convenient or future-proofing.
-- Do ne hesitate to rethink the articulation between `tab_logit` and `multi_logit`, and the internal workflows in general.
-- Integrate confidence intervals with the new `ci_inf` / `ci_sup` vctrs fields (check its in fact `exp()` bounds), and also with the new `color_signif` framework (with logistic regression, sensible default may be "grey_non_signif").
-- All exports (kable, md, Excel) should work natively with the resulting tabxplor_tab (or grouped one, etc.).
-
-
-#### Phase 14b – design choices and statistical framework
-
-Statistical sanity 1 : how to handle dependent var factors with 3+ levels ?
-- The function currently binarise all levels against the reference level chosen, and gives one column per non-reference level, instead of using multinomial logistic regression : I known it’s expert way it’s done, but at the same time I find multinomial logistic regressions very difficult to read, since relative risk ratios with their double reference are farther from experience and intuition and car be thoroughly misinterpreted with not enough knowledge of reference rows and cols (it’s also very difficult to teach to sociology students, and to put in a meaningful sentence it a scientific papers : contrary to odds ratio, that can be put in sentence quite cleanly still understanding what you compare with what). Please, make detailed web searches, and tell me what the statistical consensus is about that, what are the different possibilities and rationales make by and social scientists both (particularly in quantitative sociology).
-
-Statistical sanity 2 : how to handle survey weights ?
-- Most of my real world data are French national surveys, which always come with weights. The first version of `tab_logit` was made to handle this : on one hand, no weights is common practice, but if the percentages used by logistic regression do not match the percentages the user really have in it’s base empirical crosstables, there’s a bizarre discrepency ; 2. since weights are most of the time not normalised, using weighted counts that are many times higher than the real number of people in the sample destroys significativity tests and confidence intervals since they always pass (total weighted n gives the overall population measured in the national census).
-
-What extension ? Full `lm`/`glm` set + keep current multinomial logistic reg ?
-- Extend the function to numeric variables as predictors ? Extend it to ensure it also works for integer dependent variables as poisson regression ? Generalise the framework most common `lm` + `glm` regressions models, like multiple linear regressions for doubles (with the possibility to chose the type of regression per dependent var, since the R class of the dependent var, double or integer, do not clearly states if the underlying distribution is gaussian or poisson if its counts or binomial if it’s percentages, etc.) ? What would be caveats ? In this case, function should be renamed `tab_reg`. Many things should be reworked to keep both logistic models specificities, plus be closer to standard practices in term of `lm` + `glm` display.
-
-Summary statistics ?
-- What whole analysis/model level test and pvalue should be added, for example on a pvalue_line like chi2 test for crosstables and ANOVA for factor x numeric ? What other model level summary statistics should absolutely be added to keep with standard practices with `lm`/`glm` models ?
-
-#### Phase 14c – implement testthat tests
-
-Implement testthat tests
-- They should include tests of statistical soundness, attesting the results matches base `glm` etc. results, unweighted +  survey weights design.
-
-#### Phase 14d – tab_logit rewrite
-
-Implement the design make in the former phase.
-- Chose reference for each var with a vector (possibly named for simplicity) ? (permit to take ref in the middle while keeping order of ordinal vars, or useless white elephant ?) ?
-- Implement things with contrasts ?
-
-#### Phase 14e – tab_logit jamovi UI
-
-Add a full tab_logit analysis in Jamovi to give it a user-friendly UI : name it `jmvtab_logit`
-Are there some user-friendly pieces that we could reuse from other well known models/regressions Jamovi modules ?
-
-What about `multi_logit`, who handles passing of multiple models (like different subsets of the same variables) for comparison ?
-- Would it be possible to add it’s own jamovi analysis and UI, or would it be too complicated / useless ? Just one jamovi UI for logits, with possibility to choose predictors variables, then click on "+" button to add a subset of them, with the possibility to add any new set with "+" ?
 
 
 ### Phase 15 — Jamovi UI French translation

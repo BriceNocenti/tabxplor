@@ -16,6 +16,10 @@
 #   - Shared-style fast path: each cell's FULL style (font+fill+border+alignment) is precomposed and
 #     applied ONCE by id (set_cell_style) over the fewest coalesced multi-area dims (xl_coalesce) --
 #     far fewer + cheaper openxlsx2 calls than a wb_add_* per aspect. numFmt merges on afterwards.
+#   - ONE workbook-scoped style registrar (xl_style_registrar) dedups styles across ALL tables and
+#     keeps style NAMES globally unique: openxlsx2's styles_mgr is workbook-global and resolves a name
+#     to its FIRST match, so per-table name reuse mis-applied table 1's styles to every later table
+#     (Phase 11a fix).
 #   - The plan builder is pure; the workbook is assembled serially (the openxlsx2 write dominates and
 #     is inherently serial -- parallelising it was measured not worth it).
 
@@ -257,7 +261,10 @@ tab_xl <-
     xlb_base_font(wb, font_text, text_size)
     purrr::walk(sheet_titles, ~ xlb_add_sheet(wb, .))
     purrr::walk(unique(sheet), ~ xlb_freeze(wb, ., 3L))
-    purrr::walk(plans, ~ xl_write_table(wb, ., opts))
+    # ONE style registrar for the whole workbook -> globally-unique style names (Phase 11a: per-table
+    # name reuse silently applied table 1's styles to every later table).
+    reg <- xl_style_registrar(wb)
+    purrr::walk(plans, ~ xl_write_table(wb, ., opts, reg))
 
     path <- tab_xl_resolve_path(path, replace)
     xlb_save(wb, path)
@@ -489,15 +496,20 @@ xl_build_styles <- function(header_row, data_rows, last_row, ncl, fmt_cols, txt_
 }
 
 
-# Register each distinct style ONCE (deduped fonts/fills/borders + a composed cell xf) and apply it
-# by id with set_cell_style over its coalesced dims -- far fewer + cheaper openxlsx2 calls than a
-# separate wb_add_* per aspect. numFmt is applied separately by the writer (it merges cross-aspect).
+# WORKBOOK-SCOPED style registrar: deduplicates fonts / fills / borders / composed cell-xfs by CONTENT
+# across ALL tables and hands out GLOBALLY-UNIQUE style NAMES.
+# WARNING (Phase 11a bug): openxlsx2's styles_mgr is workbook-global and its get_*_id(name) resolves a
+#   name to the FIRST matching entry (match(name, df$name)). The old xl_apply_styles reset its uid()
+#   counter + caches per table, so from the 2nd table on every "txf1"/"txl1"/"txb1"/"txx1" name
+#   collided with table 1's -- and get_xf_id("txx<i>") silently returned TABLE 1's i-th xf, applying
+#   table 1's styles to every later table (offset borders, wrong font sizes, dead colours). ONE
+#   registrar per workbook keeps the names monotonic and shares style objects across tables.
 #' @keywords internal
-xl_apply_styles <- function(wb, s, styles) {
-  if (!nrow(styles)) return(invisible(wb))
+xl_style_registrar <- function(wb) {
   sm  <- wb$styles_mgr
   fc  <- new.env(parent = emptyenv()); lc <- new.env(parent = emptyenv())
-  bc  <- new.env(parent = emptyenv()); ctr <- 0L
+  bc  <- new.env(parent = emptyenv()); xc <- new.env(parent = emptyenv())
+  ctr <- 0L
   uid <- function() { ctr <<- ctr + 1L; ctr }
   font_id <- function(name, size, bold, color) {
     key <- paste(name, size, bold, color, sep = "\r")
@@ -534,19 +546,42 @@ xl_apply_styles <- function(wb, s, styles) {
     }
     bc[[key]]
   }
+  # composed cell xf: dedup on the full (font, fill, border, alignment) tuple.
+  xf_id <- function(fname, fsize, fbold, fcolor, fill, bt, bb, bl, br, ah, av, aw, ar) {
+    fid <- font_id(fname, fsize, fbold, fcolor)
+    lid <- fill_id(fill)
+    bid <- border_id(bt, bb, bl, br)
+    key <- paste(fid, lid, bid, ah, av, aw, ar, sep = "\r")
+    if (is.null(xc[[key]])) {
+      nm <- paste0("txx", uid())
+      sm$add(openxlsx2::create_cell_style(
+        font_id = fid, fill_id = lid, border_id = bid,
+        horizontal = ah, vertical = av, wrap_text = aw, text_rotation = ar), nm)
+      xc[[key]] <- sm$get_xf_id(nm)
+    }
+    xc[[key]]
+  }
+  list(xf_id = xf_id)
+}
+
+
+# Apply the precomposed cell styles by id (font + fill + border + alignment in ONE composed xf per
+# distinct style, deduped WORKBOOK-WIDE through `reg`) over each style's coalesced dims. numFmt is
+# applied separately by the writer (it merges cross-aspect, per cell).
+#' @keywords internal
+xl_apply_styles <- function(wb, s, styles, reg) {
+  if (!nrow(styles)) return(invisible(wb))
   for (i in seq_len(nrow(styles))) {
     r <- styles[i, ]
     if (is.na(r$dims)) next
-    nm <- paste0("txx", uid())
-    sm$add(openxlsx2::create_cell_style(
-      font_id       = font_id(r$fname, r$fsize, r$fbold, r$fcolor),
-      fill_id       = fill_id(r$fill),
-      border_id     = border_id(r$bt, r$bb, r$bl, r$br),
-      horizontal    = if (!is.na(r$ah)) r$ah else "",
-      vertical      = if (nzchar(r$av)) r$av else "",
-      wrap_text     = if (isTRUE(r$aw)) "1" else "",
-      text_rotation = if (r$ar != 0L) as.character(r$ar) else ""), nm)
-    wb$set_cell_style(sheet = s, dims = r$dims, style = sm$get_xf_id(nm))
+    xf <- reg$xf_id(
+      r$fname, r$fsize, r$fbold, r$fcolor, r$fill,
+      r$bt, r$bb, r$bl, r$br,
+      if (!is.na(r$ah)) r$ah else "",
+      if (nzchar(r$av)) r$av else "",
+      if (isTRUE(r$aw)) "1" else "",
+      if (r$ar != 0L) as.character(r$ar) else "")
+    wb$set_cell_style(sheet = s, dims = r$dims, style = xf)
   }
   invisible(wb)
 }
@@ -554,9 +589,10 @@ xl_apply_styles <- function(wb, s, styles) {
 
 # Per-sheet writer: write the raw values, then apply the precomposed cell styles by id (font + fill +
 # border + alignment in ONE set_cell_style per distinct style), then the numFmt merging pass and the
-# column widths / row heights.
+# column widths / row heights. `reg` is the workbook-scoped style registrar (Phase 11a) shared across
+# every table, so style NAMES never collide across the workbook.
 #' @keywords internal
-xl_write_table <- function(wb, plan, o) {
+xl_write_table <- function(wb, plan, o, reg) {
   s   <- plan$sheet
   hdr <- plan$header_row
 
@@ -566,7 +602,7 @@ xl_write_table <- function(wb, plan, o) {
   if (length(plan$subtext)) xlb_write_cell(wb, s, xl_cell(plan$subtext_row, 1L), plan$subtext)
 
   # --- styles: one composed xf (font + fill + border + alignment) per distinct cell style ---
-  xl_apply_styles(wb, s, plan$styles)
+  xl_apply_styles(wb, s, plan$styles, reg)
 
   # --- number formats: one shared code over the fewest coalesced ranges (merges onto the xf) ---
   if (nrow(plan$numfmt)) {
@@ -616,3 +652,5 @@ tab_get_titles <- function(tabs, row, col, tab, max = 3) {
   }
   res
 }
+
+
