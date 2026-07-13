@@ -12,6 +12,7 @@ tab_reg(
   wt = NULL,
   exponentiate = "nongaussian",
   effect = c("coefficient", "ame"),
+  at = c("average", "reference"),
   trials = NULL,
   conf_level = 0.95,
   method = c("wald", "profile"),
@@ -55,6 +56,14 @@ probability-scale, cross-model-comparable summary (Mood 2010) for logistic / mul
 outcomes (percentage points), the expected-count change for poisson, and the coefficient itself for
 gaussian. Requires the \code{marginaleffects} package. A multinomial / ordinal outcome gets one AME
 column per outcome category.}
+
+\item{at}{Where the profile-conditional quantities are evaluated (needs \code{marginaleffects}).
+\code{"average"} (default) is the sample average (the AME / adjusted prediction over the data).
+\code{"reference"} evaluates at the \strong{reference profile} --- every other predictor held at its
+reference (factor first level, numeric mean): for \code{effect = "ame"} this gives the marginal effect
+\emph{at reference} (MER) with the adjusted prediction there; for a \strong{multinomial} \code{effect = "coefficient"} it gives the odds ratio of each outcome category \emph{versus the rest} at that profile
+(one column per category). It has no effect on ordinary coefficients (they are profile-independent).
+Note the reference profile can be an unusual baseline (e.g. a factor's first level = \code{"No answer"}).}
 
 \item{trials}{Grouped-binomial (summed-score) outcomes only. The number of items behind the score,
 fitting \code{cbind(score, trials - score)} as a binomial. \code{NULL} (default) fits an ordinary binary
@@ -109,6 +118,9 @@ one column per model (predictors absent from a model are left blank), for compar
 \code{effect = "ame"} switches from the native coefficient to \strong{average marginal effects} with the
 adjusted \strong{predicted probability} shown in parentheses (e.g. \verb{-8\%*** (16\%)}) -- a probability-scale,
 cross-model-comparable interpretation (Mood 2010), computed with the \code{marginaleffects} package.
+\code{at = "reference"} instead evaluates at a \strong{reference profile} (other predictors held at their
+reference level / mean): the marginal effect \emph{at reference}, or -- for a multinomial
+\code{effect = "coefficient"} -- the odds ratio of each outcome category \emph{versus the rest} at that profile.
 
 Unweighted models use \code{\link[stats:lm]{stats::lm()}} / \code{\link[stats:glm]{stats::glm()}}; a \code{wt} weight column switches to a survey
 design (\code{\link[survey:svyglm]{survey::svyglm()}}), which gives correct design-based standard errors rather than the
@@ -138,6 +150,9 @@ tab_reg(data, dependent = "married", predictors = c("race", "rincome"),
 # average marginal effects + adjusted predictions (needs the marginaleffects package):
 tab_reg(data, dependent = "married", predictors = c("race", "rincome"),
         family = "binomial", effect = "ame")
+# marginal effects at the reference profile (others at their reference level / mean):
+tab_reg(data, dependent = "married", predictors = c("race", "rincome"),
+        family = "binomial", effect = "ame", at = "reference")
 # linear (betas):
 tab_reg(data, dependent = "tvhours", predictors = c("race", "age"),
         family = "gaussian")

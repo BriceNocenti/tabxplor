@@ -3041,6 +3041,35 @@ sole engine; one composed cell **AME-first** (prediction in parens, reference sh
   the 12d-deferred "j vs rest OR at reference profile"). `exponentiate` is ignored under `effect="ame"`
   (AME is always response-scale). The gaussian/poisson AME legend inherits the Phase-13 legend cosmetics.
 
+### 12e-ii DONE (2026-07-13) — the `at` profile axis (MER-at-reference + MNL "j vs rest" OR at profile)
+
+New `at = c("average", "reference")`. `at="reference"` evaluates the profile-conditional quantities at
+the **reference profile** — every OTHER predictor held at its reference (**factor first level, numeric
+mean**), via `marginaleffects::datagrid()` → `comparisons()`/`predictions()` (a single row, so **no
+averaging / no weights**). Maintainer forks (AskUserQuestion, this session): (1) profile baseline =
+**reference level only** (factors at first level — documented caveat: can be an odd baseline, e.g.
+`rincome`=`"No answer"`; numerics at mean); (2) **include the "j vs rest" OR now**. Full suite green, NO
+golden regeneration (`at="average"` byte-identical to 12e-i, coefficient path untouched).
+
+- **`effect="ame"` + `at="reference"` → MER** (marginal effect at reference) + the adjusted prediction
+  there, all families incl. per-category MNL/ordinal. Same `reg_marginal_column()` `"prob"`/`"raw"`
+  shapes; the label word switches **AME → MER** (`reg_effect_word(at=)`); the subtext says "at the
+  reference profile". Parity vs `comparisons`/`predictions` at the matching datagrid (diff/pred/CI/p).
+- **`effect="coefficient"` + `at="reference"` + `family="multinomial"` → "j vs rest" OR at the profile**
+  (D3-flavour-2): `comparisons(comparison="lnor")` → `exp()` = the OR of "category j vs the rest" for
+  each predictor level, at the profile; **one `or`-shape column per outcome category** ("`<j>` vs rest:
+  OR", neutral 1 at the reference level, no prediction). New `reg_marginal_column()` **`shape="or"`**.
+  The factor level is parsed from BOTH contrast-label formats (`"Level - Reference"` and
+  `"ln(odds(Level) / odds(Ref))"`). Parity vs `comparison="lnor"` per category.
+- **`at="reference"` no-ops on ordinary (non-MNL) coefficients** (profile-independent) — a one-time
+  message, then `at` reverts to `"average"`. `reg_check_deps()` now requires `marginaleffects` for
+  BOTH `effect="ame"` and the MNL-coefficient profile path (`needs_marginaleffects` flag).
+- **No new fmt fields/attributes**; the OR path reuses the existing `or`/`type="row"`/`ci_type="or"`/
+  `display="or"` shape (12a). Reference-profile SEs for `svyglm` stay design-based (marginaleffects
+  `vcov(fit)`); weights are not applied at a single-row profile.
+- **Deferred**: fully custom `newdata=`/`profile=` grids, a "typical" (mode) baseline, and the empirical
+  j-vs-rest flavour on `tab()` (all future). Legend cosmetics remain Phase 13.
+
 ### Phasing (12c → 12i — re-cut 2026-07-13; per-phase detail in the CLAUDE.md roadmap)
 
 The build is re-cut into **fresh-session Phases with commit-and-verify increments** (the old monolithic

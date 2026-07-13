@@ -32,6 +32,11 @@
   logistic / multinomial / ordinal (percentage points, one column per outcome category), poisson
   (expected-count change) and gaussian (the coefficient) outcomes, and honours survey weights. Needs
   the `marginaleffects` package (a new optional dependency).
+* `tab_reg()` gains an `at = "reference"` option (needs `marginaleffects`): evaluate at a **reference
+  profile** (every other predictor held at its reference level / mean) instead of averaging. With
+  `effect = "ame"` this gives the marginal effect *at reference* (the column reads "MER"); with a
+  **multinomial** `effect = "coefficient"` it gives the odds ratio of each outcome category *versus the
+  rest* at that profile (one column per category).
 * `tab_logit()` and `multi_logit()` are now thin wrappers of `tab_reg()` for the binomial family,
   keeping the curated binary-outcome interface (`tab_logit(data, dependent, predictors)` for one
   logit per dependent; `multi_logit(data, dependent, models = list(...))` for model comparison).

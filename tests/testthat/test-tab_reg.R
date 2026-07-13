@@ -579,3 +579,86 @@ test_that("AME tables export through every backend without error", {
   expect_no_error(tab_xl(t1, path = xf, replace = TRUE))
   expect_true(file.exists(xf))
 })
+
+# ---- the `at` profile axis (Phase 12e-ii) ---------------------------------------------------
+# at="reference": marginal effects + adjusted predictions at the reference profile (others at their
+# first level / mean); MNL coefficient + at="reference": the "j vs rest" OR at that profile. Parity is
+# checked against marginaleffects comparisons()/predictions() at a datagrid built the same way.
+
+test_that("MER-at-reference (binomial): effect/prediction/CI match marginaleffects at the profile", {
+  skip_if_not_installed("broom")
+  skip_if_not_installed("marginaleffects")
+  d   <- reg_data()
+  t1  <- tab_reg(d, "married", c("race", "age"), family = "binomial", effect = "ame",
+                 at = "reference", cleannames = FALSE)
+  col <- t1[["Married: MER"]]                           # the label switches AME -> MER at reference
+  expect_identical(get_type(col), "row")
+
+  dm <- d |> dplyr::filter(!is.na(married), !is.na(race), !is.na(age))
+  dm$race    <- forcats::fct_drop(dm$race)
+  dm$married <- forcats::fct_rev(forcats::fct_drop(factor(dm$married)))
+  g    <- stats::glm(married ~ race + age, data = dm, family = stats::binomial())
+  grid <- marginaleffects::datagrid(model = g, race = levels(dm$race)[1], age = mean(dm$age))
+  acr  <- as.data.frame(marginaleffects::comparisons(g, variables = "race", newdata = grid))
+  aca  <- as.data.frame(marginaleffects::comparisons(g, variables = "age",  newdata = grid))
+  pg   <- marginaleffects::datagrid(model = g, race = levels(dm$race), age = mean(dm$age))
+  ap   <- as.data.frame(marginaleffects::predictions(g, newdata = pg))
+
+  keep <- !is.na(get_diff(col))
+  expect_equal(sort(get_diff(col)[keep]),   sort(c(acr$estimate, aca$estimate)),   tolerance = 1e-6)
+  expect_equal(sort(get_ci_inf(col)[keep]), sort(c(acr$conf.low, aca$conf.low)),   tolerance = 1e-6)
+  expect_equal(sort(get_pvalue(col)[keep]), sort(c(acr$p.value, aca$p.value)),     tolerance = 1e-6)
+  expect_equal(sort(get_pct(col)[!is.na(get_pct(col))]), sort(ap$estimate),        tolerance = 1e-6)
+})
+
+test_that("MNL 'j vs rest' OR at the reference profile matches marginaleffects (comparison='lnor')", {
+  skip_if_not_installed("broom")
+  skip_if_not_installed("nnet")
+  skip_if_not_installed("marginaleffects")
+  d  <- mnl_data()
+  t1 <- tab_reg(d, "party3", c("race", "age"), family = "multinomial", at = "reference",
+                cleannames = FALSE)
+  expect_true(all(c("Ind vs rest: OR", "Dem vs rest: OR", "Rep vs rest: OR") %in% names(t1)))
+  expect_identical(get_ci_type(t1[["Dem vs rest: OR"]]), "or")
+
+  dm <- d |> dplyr::filter(!is.na(party3), !is.na(race), !is.na(age))
+  dm$race   <- forcats::fct_drop(dm$race)
+  dm$party3 <- forcats::fct_drop(dm$party3)
+  m    <- nnet::multinom(party3 ~ race + age, data = dm, trace = FALSE)
+  grid <- marginaleffects::datagrid(model = m, race = levels(dm$race)[1], age = mean(dm$age))
+  lc   <- rbind(
+    as.data.frame(marginaleffects::comparisons(m, variables = "race", newdata = grid, comparison = "lnor")),
+    as.data.frame(marginaleffects::comparisons(m, variables = "age",  newdata = grid, comparison = "lnor")))
+  for (j in c("Ind", "Dem", "Rep")) {
+    col  <- t1[[paste0(j, " vs rest: OR")]]
+    vals <- get_or(col)[!is.na(get_or(col)) & !is_refrow(col)]   # exclude the neutral reference OR = 1
+    expect_equal(sort(vals), sort(exp(lc[lc$group == j, ]$estimate)), tolerance = 1e-6)
+  }
+  ref <- is_refrow(t1[["Ind vs rest: OR"]]) & as.character(t1$var) == "race"
+  expect_true(all(get_or(t1[["Ind vs rest: OR"]])[ref] == 1))    # reference predictor level -> OR 1
+})
+
+test_that("at='reference' is a no-op (with a message) for non-multinomial coefficients", {
+  skip_if_not_installed("broom")
+  skip_if_not_installed("marginaleffects")
+  d <- reg_data()
+  expect_message(
+    t1 <- tab_reg(d, "married", "race", family = "binomial", at = "reference", cleannames = FALSE),
+    "profile-independent"
+  )
+  t2 <- tab_reg(d, "married", "race", family = "binomial", cleannames = FALSE)
+  expect_equal(get_or(t1[["Married: OR"]]), get_or(t2[["Married: OR"]]))   # identical coefficients
+})
+
+test_that("MER-at-reference exports through every backend without error", {
+  skip_if_not_installed("broom")
+  skip_if_not_installed("marginaleffects")
+  t1 <- tab_reg(reg_data(), "married", c("race", "age"), family = "binomial", effect = "ame",
+                at = "reference")
+  expect_no_error(tab_kable(t1))
+  expect_no_error(tab_md(t1))
+  skip_if_not_installed("nnet")
+  t2 <- tab_reg(mnl_data(), "party3", "race", family = "multinomial", at = "reference")
+  expect_no_error(tab_kable(t2))
+  expect_no_error(tab_md(t2))
+})
