@@ -1657,20 +1657,21 @@ Per-group export footer for split tables (per-group GOF is in get_test())
 
 Final redesign of color palette and color breaks management.
 
-#### Phase 13a – Colors and breaks API final redesign
-
-##### Done (2026-07-14)
+#### Phase 13a – Colors and breaks API final redesign (DONE)
 
 Full colours/breaks redesign; suite GREEN (0 fail / 0 error, run with `NOT_CRAN=true` so snapshots fire), NO fmt field/attribute change (18 fields / 9 attrs intact). Governing decisions: this session's four forks. Files: `R/tab_classes.R` (config + palettes), `R/fmt_class.R` (engine), `R/tab.R` (arg parse + per-table breaks), exporters + legend.
 
 - **`color` grammar = position×names.** `normalize_color_spec()`/`resolve_col_measures()`/`finalize_one_col()` (R/tab.R): **position = channel** (1st→text, 2nd→background), **names = column type** (`pct`/`mean`). Forms: `FALSE` / `TRUE` (smart per-type) / scalar / positional `c("diff","ratio")` / named `c(pct="diff", mean="ratio")` / `list(pct=c("diff","ratio"), mean="ratio")`. The old `c(text=,background=)` channel-name form is REMOVED. spec = `list(mode, legacy, text, bg, types, signif)` (`legacy` still drives the pipeline ci/chi2). **LANDMINE fixed**: `color="auto"` (internal default) must map to `legacy="auto"` in `legacy_union()` — else numeric fields lose ci.
 - **Breaks notation.** Canonical scale reshaped `list(pos,center,strict,std)` → **`list(center, strict, std, over=list(breaks,slots), under=list(breaks,slots))`** (both sides POSITIVE magnitudes; engine folds + findInterval per side). Input = signed/reciprocal literals (one-sided auto-mirrors, two-sided as-is, `NA` skips a slot) OR `list(over=,under=)` (no mirror; omit a side = off, e.g. `pct_ratio=list(over=2)` = the "only x2" rule, the new factor default). Order-robust. `mk_color_scale`/`parse_color_side`/`intensity_slots` (drop 2nd→4th→1st) in R/tab_classes.R; deprecated `pct_breaks`/`mean_breaks`/`contrib_breaks` args DROPPED. New numeric default `mean_ratio=list(over=c(1.15,1.5,2,4), under=c(1.5,2,4))`.
-- **`color_signif` rename** `"color_all_signif"` → **`"guaranteed_effect"`** everywhere (clean, no shim).
+- **`color_signif` rename** `"color_all_signif"` → **`"guaranteed_effect"`** everywhere.
+- **COMPAT shims (Phase 13a, grep `COMPAT (Phase 13a)`)** — the removed surface degrades with NO error via thin entry-point shims + `lifecycle::deprecate_soft`: `set_color_style()` (→ options + `set_color_palette()`; `custom_palette`→4+4, `html_24_bit` inert), `color = c(text=,background=)` (→ positional), `color_signif = "color_all_signif"` (→ `guaranteed_effect`), `set_color_breaks(pct_breaks=/mean_breaks=/contrib_breaks=)` (→ new scales), inert `html_24_bit`/`...` on `get_color_style`/`fmt_get_color_code`. Locked by a test block in `test-color-config.R`.
 - **Per-table `color_breaks=`** arg on `tab()`/`tab_num()`/`tab_many()` (table attribute set LAST; `push_color_breaks`/`pop_color_breaks` install it transiently at print + each exporter; robust fallback to global). NOT threaded through dplyr (a heavy chain drops it → global fallback, documented).
 - **Engine.** `fmt_color_plan`/`fmt_color_slots`/`fmt_color_channels`: per-direction over/under breaks+slots; **x2/slot-11 override REMOVED** (ratio-on-bg replaces it); slot domain now **0 / 1-4 over / 5-8 under** (an 8-hex palette). `build_slots`/`color_slot_table` deleted. `pillar_shaft.tab_chi2_fmt` + `print_chi2`/`print_reg_footer` use `cs[[8]]`/`cs[[4]]` (unnamed palette).
 - **Palettes.** 8 OKLCH base palettes (`default_*_colors`) → `tabxplor_palette_env` via `build_palettes()`; new **`set_color_palette()`** replaces `set_color_style()`/`custom_palette`. `get_color_style(mode,type,theme)` = 8-vec (4 over + 4 under); **24-bit console default**, curated 8-bit (`palette_8bit`) only in RStudio; exports always 24-bit. `html_24_bit` REMOVED internally, kept inert on exporters. Old 6×11-slot palettes + green_red/blue_red variants deleted.
 - **Legend + exporters** (`tab_color_legend`, `fmt_channel_codes`, `md_slot_class_map`, tab_kable/xl/plot) rewired to the 8-slot palette + over/under; no x2 row.
 - **Goldens**: `_color_golden/*.rds` regenerated (new palette + x2 removal); `_snaps/render-html.md` + `golden.md` accepted (conscious colour change); structure `.rds` + `test-fmt-contract` byte-identical. Tests: `test-color-config.R` / `test-color-engine.R` rewritten to the new API. **Deferred to 13b/13c**: colour legends redesign + French; light/dark kable CSS. **jmvtab**: `color_all_signif`→`guaranteed_effect` renamed in `.a.yaml`/`.u.yaml`/`.h.R`; the new `color`/breaks grammar is NOT yet wired into the jmvtab UI (a maintainer `jmvtab.h.R` regen + a jmvtab wiring pass are open).
+
+##### History
 
 **Redesign the more simple and user-friendly color and breaks management system possible, without thinking about soft-deprecating anything**.
 
@@ -1753,7 +1754,7 @@ Display problems and improvements :
 - Does transpose at export work perfecty (colors and all) with `pct = "col"` and with numeric variables ? If not, calculate colors, and anything else relevant (other column-level attributes not usable after the transposition), before transposition ?
 
 
-### Phase 14 – jamovi UI: `jmvtab_reg`
+### Phase 14 – jamovi UI `jmvtab_reg`
 
 One user-friendly, fast, clear and simple regression analysis, starting from jmvtab template and adapting it to the regression functions and use case.
 A "+" to add predictor subsets for `multi_logit`-style model comparison, selecting or selecting out among already chosen predictors.

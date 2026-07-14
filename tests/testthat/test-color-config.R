@@ -209,3 +209,40 @@ testthat::test_that("per-table color_breaks overrides the global at render", {
   # after pop the global default is restored (no top-intensity flooding on the default breaks)
   testthat::expect_equal(getOption("tabxplor.color_breaks")$pct_diff$over$breaks, c(0.05, 0.1, 0.2, 0.3))
 })
+
+# --- COMPAT (Phase 13a): deprecated colour surfaces degrade with no error, mapped to the new API ---
+testthat::test_that("deprecated colour arguments / functions are wired, not errors", {
+  withr::defer({
+    tabxplor_palette_env$base <- default_palette_base(); build_palettes()
+    options("tabxplor.color_breaks" = default_color_scales(),
+            "tabxplor.color_style_type" = "text", "tabxplor.color_style_theme" = "light")
+  })
+  d <- forcats::gss_cat
+
+  # set_color_style() -> options + set_color_palette(), with a soft-deprecation
+  lifecycle::expect_deprecated(set_color_style(type = "bg", theme = "dark"))
+  testthat::expect_equal(getOption("tabxplor.color_style_theme"), "dark")
+  withr::local_options(lifecycle_verbosity = "quiet")
+  set_color_style(type = "text", custom_palette = sprintf("#%06X", seq_len(11) * 1000L))
+  testthat::expect_length(get_color_style("color_code", type = "text", theme = "light"), 8L)
+  tabxplor_palette_env$base <- default_palette_base(); build_palettes()
+
+  # color = c(text =, background =) -> positional channels
+  lifecycle::expect_deprecated(
+    tt <- tab(d, race, marital, pct = "row", color = c(text = "diff", background = "ratio")))
+  testthat::expect_equal(unname(fmt_color_attr(tt$Married)), c("diff", "ratio"))
+
+  # color_signif = "color_all_signif" -> "guaranteed_effect"
+  lifecycle::expect_deprecated(
+    g <- tab(d, race, marital, pct = "row", color = "diff", color_signif = "color_all_signif"))
+  testthat::expect_equal(get_color_signif(g$Married), "guaranteed_effect")
+
+  # set_color_breaks(pct_breaks =) -> pct_diff (<=1) + pct_ratio (>1)
+  lifecycle::expect_deprecated(set_color_breaks(pct_breaks = c(0.05, 0.1, 0.2, 2, 0.3)))
+  testthat::expect_equal(getOption("tabxplor.color_breaks")$pct_diff$over$breaks, c(0.05, 0.1, 0.2, 0.3))
+  testthat::expect_equal(getOption("tabxplor.color_breaks")$pct_ratio$over$breaks, 2)
+
+  # inert html_24_bit is absorbed, not an error
+  testthat::expect_no_error(get_color_style("color_code", type = "text", html_24_bit = "blue_red"))
+  testthat::expect_no_error(fmt_get_color_code(g$Married, html_24_bit = "blue_red"))
+})

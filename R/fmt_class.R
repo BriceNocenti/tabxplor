@@ -1008,6 +1008,9 @@ set_color     <- function(x, color) {
 set_color_signif <- function(x, color_signif) {
   color_signif <- color_signif[1]
   if (is.na(color_signif) || color_signif %in% c("", "no")) color_signif <- "ignore"
+  # COMPAT (Phase 13a): the renamed policy value, accepted silently here (the user-facing
+  # deprecation message fires once in normalize_color_spec()).
+  if (identical(color_signif, "color_all_signif")) color_signif <- "guaranteed_effect"
   ok <- c("ignore", "grey_non_signif", "guaranteed_effect")
   if (!color_signif %in% ok) {
     cli::cli_abort(c("Unknown {.arg color_signif} value {.val {color_signif}}.",
@@ -1099,6 +1102,7 @@ validate_display_template <- function(recipe) {
 
 #' Get HTML Color Code of a fmt vector
 #' @param x The fmt vector to get the html color codes from.
+#' @param ... Absorbs deprecated arguments (e.g. \code{html_24_bit}); ignored.
 #'
 #' @param type The style type, \code{"text"} to color the text, \code{"bg"} to color the background.
 #' @param theme Is your console or html table background \code{"light"} or \code{"dark"} ? Default
@@ -1112,7 +1116,7 @@ validate_display_template <- function(recipe) {
 #' dplyr::mutate(tabs, across(where(is_fmt), fmt_get_color_code))
 #'}
 
-fmt_get_color_code <- function(x, type = "text", theme = "light") {
+fmt_get_color_code <- function(x, type = "text", theme = "light", ...) {  # ... absorbs deprecated html_24_bit
   color <- get_color(x)
   if (length(color) == 0L || is.na(color[1]) || color[1] %in% c("no", "")) {
     return(rep(NA_character_, length(x)))

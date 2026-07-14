@@ -5,6 +5,7 @@
 \alias{tab_get_vars}
 \alias{is_tab}
 \alias{set_color_palette}
+\alias{set_color_style}
 \alias{get_color_style}
 \alias{set_color_breaks}
 \alias{get_color_breaks}
@@ -68,7 +69,19 @@ set_color_palette(
   theme = NULL
 )
 
-get_color_style(mode = c("crayon", "color_code"), type = NULL, theme = NULL)
+set_color_style(
+  type = c("text", "bg"),
+  theme = NULL,
+  html_24_bit = NULL,
+  custom_palette = NULL
+)
+
+get_color_style(
+  mode = c("crayon", "color_code"),
+  type = NULL,
+  theme = NULL,
+  ...
+)
 
 set_color_breaks(breaks = NULL, ...)
 
@@ -304,24 +317,28 @@ under-represented (\code{*_colors_neg}) sides.}
 
 \item{theme}{\code{"light"} or \code{"dark"}; defaults to the current setting.}
 
-\item{mode}{By default, \code{get_color_style} returns a list of \pkg{crayon} coloring
-functions. Set to \code{"color_code"} to return html color codes.}
-
 \item{type}{Default \code{"positive"} returns a readable form: a plain vector of magnitudes
 when the scale is symmetric, or a \code{list(over =, under =)} of magnitudes otherwise. Set to
 \code{"all"} to get the signed / reciprocal thresholds the engine compares against
 (\code{c(-x, x)} for additive scales, \code{c(1/x, x)} for multiplicative ones).}
 
-\item{breaks}{A named list of scales to set, e.g.
-\code{list(pct_diff = c(0.05, 0.1, 0.2, 0.3), pct_ratio = list(over = 2))}. Unset scales keep
-their current value.}
+\item{custom_palette}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} A former 10/11-slot palette; its 4
+over- and 4 under-represented colours are mapped onto \code{set_color_palette()}.}
+
+\item{mode}{By default, \code{get_color_style} returns a list of \pkg{crayon} coloring
+functions. Set to \code{"color_code"} to return html color codes.}
 
 \item{...}{Scales passed individually and named, e.g.
 \code{set_color_breaks(pct_diff = c(0.05, 0.1, 0.2), mean_ratio = c(1.15, 1.5, 2, 4))}. Each
 value is either a plain vector of signed / reciprocal literals (negatives, or ratios < 1, are
 the under-represented side; a one-sided vector auto-mirrors; \code{NA} skips an intensity slot)
 or a \code{list(over =, under =)} of magnitudes (no mirror; omit a side to switch it off, e.g.
-\code{list(over = 2)} for the "only x2" rule).}
+\code{list(over = 2)} for the "only x2" rule). The old \code{pct_breaks} / \code{mean_breaks} /
+\code{contrib_breaks} arguments are soft-deprecated but still work (mapped onto the new scales).}
+
+\item{breaks}{A named list of scales to set, e.g.
+\code{list(pct_diff = c(0.05, 0.1, 0.2, 0.3), pct_ratio = list(over = 2))}. Unset scales keep
+their current value.}
 
 \item{brk}{When missing, return the full named list of break scales (\code{pct_diff},
 \code{pct_ratio}, \code{mean_diff}, \code{mean_ratio}, \code{contrib}) -- the same shape
@@ -386,6 +403,11 @@ scale drops that measure for its column type.
 \item \code{set_color_palette()}: customise the color palette used to print \code{\link{tab}}. Each palette
 is 4 hex codes ordered faint -> strong. Provide only the ones you want to change; the OKLCH
 defaults are used otherwise. The crayon styles are (re)built once, not per cell.
+
+\item \code{set_color_style()}: \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Superseded by \code{set_color_palette()}.
+Kept as a back-compat shim: \code{type}/\code{theme} still take effect (as options);
+\code{custom_palette} maps its over/under colours onto the new 4+4 palette; \code{html_24_bit}
+is inert (exports are always 24-bit).
 
 \item \code{get_color_style()}: get the color palette as \pkg{crayon} functions or html codes: an 8-element
 vector (4 over-represented intensities then 4 under-represented), indexed by the engine slot.

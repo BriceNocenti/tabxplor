@@ -3280,15 +3280,47 @@ set_color_palette <- function(text_colors = NULL, text_colors_neg = NULL,
   invisible()
 }
 
+# === COMPAT (Phase 13a) — deprecated colour surface wired to the new behaviour, no error ==========
+# Thin shims mapping the removed 1.3.x/Phase-5 API onto set_color_palette() / the new options / the
+# new grammar, each with lifecycle::deprecate_soft(). Grep "COMPAT (Phase 13a)" to find/remove them.
+
+#' Set the color style (deprecated)
+#' @describeIn tab_many `r lifecycle::badge("deprecated")` Superseded by \code{set_color_palette()}.
+#' Kept as a back-compat shim: \code{type}/\code{theme} still take effect (as options);
+#' \code{custom_palette} maps its over/under colours onto the new 4+4 palette; \code{html_24_bit}
+#' is inert (exports are always 24-bit).
+#' @param custom_palette `r lifecycle::badge("deprecated")` A former 10/11-slot palette; its 4
+#' over- and 4 under-represented colours are mapped onto \code{set_color_palette()}.
+#' @export
+set_color_style <- function(type = c("text", "bg"), theme = NULL,
+                            html_24_bit = NULL, custom_palette = NULL) {
+  lifecycle::deprecate_soft("1.4.0", "set_color_style()", "set_color_palette()")
+  if (!missing(type) && length(type)) options("tabxplor.color_style_type" = type[1])
+  if (!is.null(theme)) set_color_palette(theme = theme[1])
+  if (length(custom_palette) >= 10L) {
+    # old order pos1..pos5, neg1..neg5[, ratio] -> new 4 over + 4 under (drop the faintest pos1/neg1)
+    cp   <- unname(custom_palette)
+    over <- cp[2:5]; under <- cp[7:10]
+    if (identical(type[1], "bg")) {
+      set_color_palette(background_colors = over, background_colors_neg = under)
+    } else {
+      set_color_palette(text_colors = over, text_colors_neg = under)
+    }
+  }
+  invisible()
+}
+# === end COMPAT (Phase 13a) ======================================================================
+
 #' @describeIn tab_many get the color palette as \pkg{crayon} functions or html codes: an 8-element
 #' vector (4 over-represented intensities then 4 under-represented), indexed by the engine slot.
 #' @param mode By default, \code{get_color_style} returns a list of \pkg{crayon} coloring
 #' functions. Set to \code{"color_code"} to return html color codes.
 #' @param type \code{"text"} (font colour) or \code{"bg"} (background fill).
 #' @param theme \code{"light"} or \code{"dark"}; defaults to the current setting.
+#' @param ... Absorbs deprecated arguments (e.g. \code{html_24_bit}); ignored.
 #' @return A list of 8 crayon color functions, or a vector of 8 color html codes.
 #' @export
-get_color_style <- function(mode = c("crayon", "color_code"), type = NULL, theme = NULL) {
+get_color_style <- function(mode = c("crayon", "color_code"), type = NULL, theme = NULL, ...) {
   type  <- if (is.null(type )) getOption("tabxplor.color_style_type" ) else type
   theme <- if (is.null(theme)) getOption("tabxplor.color_style_theme") else theme
   if (is.null(type)  || is.na(type[1]))  type  <- "text"
@@ -3497,7 +3529,8 @@ default_color_scales <- function() {
 #' value is either a plain vector of signed / reciprocal literals (negatives, or ratios < 1, are
 #' the under-represented side; a one-sided vector auto-mirrors; \code{NA} skips an intensity slot)
 #' or a \code{list(over =, under =)} of magnitudes (no mirror; omit a side to switch it off, e.g.
-#' \code{list(over = 2)} for the "only x2" rule).
+#' \code{list(over = 2)} for the "only x2" rule). The old \code{pct_breaks} / \code{mean_breaks} /
+#' \code{contrib_breaks} arguments are soft-deprecated but still work (mapped onto the new scales).
 #'
 #' @return Sets the global option "tabxplor.color_breaks" (a named list of scales) and returns
 #' it invisibly.
@@ -3512,7 +3545,25 @@ set_color_breaks <- function(breaks = NULL, ...) {
   cur <- getOption("tabxplor.color_breaks")
   if (is.null(cur) || is.null(cur$pct_diff)) cur <- default_color_scales()
 
-  combined <- c(if (is.null(breaks)) list() else breaks, list(...))
+  dots <- list(...)
+  # COMPAT (Phase 13a): the old flat args pct_breaks / mean_breaks / contrib_breaks, mapped onto the
+  # new scales (pct_breaks splits <=1 -> pct_diff, >1 -> pct_ratio) with a soft-deprecation.
+  old_args <- intersect(names(dots), c("pct_breaks", "mean_breaks", "contrib_breaks"))
+  if (length(old_args)) {
+    lifecycle::deprecate_soft("1.4.0", I(paste0("set_color_breaks(", old_args[1], ")")),
+                              with = I("set_color_breaks(pct_diff = , pct_ratio = , mean_ratio = , contrib = )"))
+    if (!is.null(dots$pct_breaks)) {
+      pb <- dots$pct_breaks
+      cur$pct_diff  <- mk_color_scale("pct_diff",  sort(pb[pb <= 1]))
+      rr <- pb[pb > 1]
+      cur$pct_ratio <- mk_color_scale("pct_ratio", if (length(rr)) list(over = sort(rr)) else numeric())
+    }
+    if (!is.null(dots$mean_breaks))    cur$mean_ratio <- mk_color_scale("mean_ratio", sort(dots$mean_breaks))
+    if (!is.null(dots$contrib_breaks)) cur$contrib    <- mk_color_scale("contrib",    sort(dots$contrib_breaks))
+    dots <- dots[setdiff(names(dots), old_args)]
+  }
+
+  combined <- c(if (is.null(breaks)) list() else breaks, dots)
   if (length(combined) == 0L) {
     options("tabxplor.color_breaks" = cur)
     return(invisible(cur))

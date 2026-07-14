@@ -4,7 +4,7 @@
 \alias{fmt_get_color_code}
 \title{Get HTML Color Code of a fmt vector}
 \usage{
-fmt_get_color_code(x, type = "text", theme = "light")
+fmt_get_color_code(x, type = "text", theme = "light", ...)
 }
 \arguments{
 \item{x}{The fmt vector to get the html color codes from.}
@@ -13,6 +13,8 @@ fmt_get_color_code(x, type = "text", theme = "light")
 
 \item{theme}{Is your console or html table background \code{"light"} or \code{"dark"} ? Default
 to the current setting (RStudio theme when detectable, else \code{"light"}).}
+
+\item{...}{Absorbs deprecated arguments (e.g. \code{html_24_bit}); ignored.}
 }
 \value{
 A character vector with html color codes, of the length of the initial vector.

@@ -616,6 +616,13 @@ tab_apply_display <- function(tabs, display) {
 normalize_color_spec <- function(color, color_signif = "ignore") {
   signif <- if (length(color_signif) == 0L) "ignore" else color_signif[1]
   if (is.na(signif) || signif %in% c("", "no")) signif <- "ignore"
+  # COMPAT (Phase 13a): the renamed policy value, wired through with a soft-deprecation.
+  if (identical(signif, "color_all_signif")) {
+    lifecycle::deprecate_soft("1.4.0", I('color_signif = "color_all_signif"'),
+                              with = I('color_signif = "guaranteed_effect"'),
+                              user_env = rlang::caller_env(2))
+    signif <- "guaranteed_effect"
+  }
   ok_signif <- c("ignore", "grey_non_signif", "guaranteed_effect")
   if (!signif %in% ok_signif) {
     cli::cli_abort(c("Unknown {.arg color_signif} value {.val {signif}}.",
@@ -673,6 +680,21 @@ normalize_color_spec <- function(color, color_signif = "ignore") {
     }
     return(list(mode = "off", legacy = "no", text = "", bg = NA_character_,
                 types = NULL, signif = "ignore"))
+  }
+
+  # COMPAT (Phase 13a): the former channel-name form c(text =, background =). Names are now COLUMN
+  # TYPES, so remap text/background -> the positional channel form, with a soft-deprecation.
+  cnms <- names(color)
+  if (!is.null(cnms) && length(setdiff(cnms[nzchar(cnms)], c("text", "background", "bg"))) == 0L &&
+      any(cnms %in% c("text", "background", "bg"))) {
+    lifecycle::deprecate_soft("1.4.0", I('color = c(text = , background = )'),
+                              with = I('a positional color = c("diff", "ratio")'),
+                              user_env = rlang::caller_env(2))
+    cc   <- as.character(color)
+    tval <- if ("text" %in% cnms) cc[cnms == "text"][1] else ""
+    bval <- if ("background" %in% cnms) cc[cnms == "background"][1]
+            else if ("bg" %in% cnms) cc[cnms == "bg"][1] else NA_character_
+    color <- if (is.na(bval)) tval else c(tval, bval)   # -> positional; falls through to the flat path
   }
 
   # ---- list(pct =, mean =) or a NAMED vector : per column TYPE ----
