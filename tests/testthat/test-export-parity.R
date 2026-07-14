@@ -111,11 +111,16 @@ testthat::test_that("format(syntax = 'excel') emits the expected numFmt codes", 
   testthat::expect_true(all(
     first_codes(tab_num(gss, race, age, digits = 1L)) == "#,##0.0"))
 
-  # a single fmt column, direct: mean 2 digits, and a diff (pct) display -> percentage code
+  # a single fmt column, direct: mean 2 digits, and a diff (pct) display -> signed percentage code
   m <- tab_num(gss, race, age, digits = 2L)[["age"]]
   testthat::expect_equal(format(set_display(m, "mean"), syntax = "excel")[[1]], "#,##0.00")
   dcol <- tab(gss, marital, race, pct = "row", digits = 1L)[["Black"]]
-  testthat::expect_equal(format(set_display(dcol, "diff"), syntax = "excel")[[1]], "0.0%")
+  # Phase 13c-v: a pct diff gets an explicit +/- sign; contrib too; a ratio gets a leading x.
+  testthat::expect_equal(format(set_display(dcol, "diff"), syntax = "excel")[[1]], "+0.0%;-0.0%")
+  ccol <- fmt(n = 1L, ctr = 0.05, type = "row", display = "ctr", digits = 1L)
+  testthat::expect_equal(format(ccol, syntax = "excel")[[1]], "+0.0%;-0.0%")
+  rcol <- set_digits(set_ratio(set_display(dcol, "rr"), 1.5), 1L)
+  testthat::expect_match(format(rcol, syntax = "excel")[[1]], '^"[^"]+"#,##0.0$')
 
   # pct_ci (ci = "cell") -> TEXT (the value+CI string is pre-formatted; a documented limitation)
   ci <- tab(gss, marital, race, pct = "row", ci = "cell")

@@ -30,6 +30,7 @@ tab_xl(
   color = TRUE,
   transpose = FALSE,
   conditional_format = FALSE,
+  or_numeric = getOption("tabxplor.xl_or_numeric", FALSE),
   print_color_legend = lifecycle::deprecated()
 )
 }
@@ -100,6 +101,10 @@ columns). Useful for column percentages tables with several row variables.}
 \item{conditional_format}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#experimental}{\figure{lifecycle-experimental.svg}{options: alt='[Experimental]'}}}{\strong{[Experimental]}} Reserved for a future opt-in
 to use Excel conditional formatting instead of hard cell colours. Not yet implemented: setting
 it emits a message and falls back to the (fast, exact) hard-style colouring.}
+
+\item{or_numeric}{Odds ratios export as text ("1/x" reciprocal for OR < 1) by default so an OR
+below 1 reads symmetrically to an OR above 1. Set to \code{TRUE} (or the option
+\code{tabxplor.xl_or_numeric}) to keep them as real, editable numbers instead.}
 
 \item{print_color_legend}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Renamed to \code{color_legend}.}
 }

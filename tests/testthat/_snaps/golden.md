@@ -3,60 +3,64 @@
     Code
       cat(tab_md(cases[[name]](), print = FALSE))
     Output
+      |               |         race          |                   |
       | marital       |Other  |Black  |White  |            Total  |
       |:--------------|------:|------:|------:|------------------:|
-      | No answer     |  12%  |  12%  |  76%  |      100% (n=17)  |
-      | Never married |  12%  |  24%  |  64%  |   100% (n=5 416)  |
-      | Separated     |  15%  |  26%  |  59%  |     100% (n=743)  |
-      | Divorced      |   6%  |  15%  |  79%  |   100% (n=3 383)  |
-      | Widowed       |   4%  |  14%  |  82%  |   100% (n=1 807)  |
+      | No answer     |  12%  |  12%  |  76%  |  100% (n=    17)  |
+      | Never married |  12%  |  24%  |  64%  |  100% (n= 5 416)  |
+      | Separated     |  15%  |  26%  |  59%  |  100% (n=   743)  |
+      | Divorced      |   6%  |  15%  |  79%  |  100% (n= 3 383)  |
+      | Widowed       |   4%  |  14%  |  82%  |  100% (n= 1 807)  |
       | Married       |   9%  |   9%  |  82%  |  100% (n=10 117)  |
-      |**Total**      | **9%**|**15%**|**76%**|**100% (n=21 483)**|
+      |**Total**      | **9%**|**15%**|**76%**|**100%** (n=21 483)|
 
 # golden display (tab_md) unchanged: f_ci_cell
 
     Code
       cat(tab_md(cases[[name]](), print = FALSE))
     Output
+      |               |               race                |                   |
       | marital       |    Other  |    Black  |    White  |            Total  |
       |:--------------|----------:|----------:|----------:|------------------:|
-      | No answer     |  [3;34]%  |  [3;34]%  | [53;90]%  |      100% (n=17)  |
-      | Never married | [11;13]%  | [23;25]%  | [63;65]%  |   100% (n=5 416)  |
-      | Separated     | [12;18]%  | [23;30]%  | [55;62]%  |     100% (n=743)  |
-      | Divorced      |   [5;7]%  | [13;16]%  | [78;80]%  |   100% (n=3 383)  |
-      | Widowed       |   [3;5]%  | [13;16]%  | [80;83]%  |   100% (n=1 807)  |
+      | No answer     |  [3;34]%  |  [3;34]%  | [53;90]%  |  100% (n=    17)  |
+      | Never married | [11;13]%  | [23;25]%  | [63;65]%  |  100% (n= 5 416)  |
+      | Separated     | [12;18]%  | [23;30]%  | [55;62]%  |  100% (n=   743)  |
+      | Divorced      |   [5;7]%  | [13;16]%  | [78;80]%  |  100% (n= 3 383)  |
+      | Widowed       |   [3;5]%  | [13;16]%  | [80;83]%  |  100% (n= 1 807)  |
       | Married       |  [9;10]%  |   [8;9]%  | [81;83]%  |  100% (n=10 117)  |
-      |**Total**      |     **9%**|    **15%**|    **76%**|**100% (n=21 483)**|
+      |**Total**      |     **9%**|    **15%**|    **76%**|**100%** (n=21 483)|
 
 # golden display (tab_md) unchanged: f_ci_diff
 
     Code
       cat(tab_md(cases[[name]](), print = FALSE))
     Output
+      |               |             race              |                   |
       | marital       |  Other  |   Black  |   White  |            Total  |
       |:--------------|--------:|---------:|---------:|------------------:|
-      | No answer     | 12%     |  12%     |  76%     |      100% (n=17)  |
-      | Never married | 12%***  |  24%***  |  64%***  |   100% (n=5 416)  |
-      | Separated     | 15%***  |  26%***  |  59%***  |     100% (n=743)  |
-      | Divorced      |  6%***  |  15%     |  79%***  |   100% (n=3 383)  |
-      | Widowed       |  4%***  |  14%     |  82%***  |   100% (n=1 807)  |
+      | No answer     | 12%     |  12%     |  76%     |  100% (n=    17)  |
+      | Never married | 12%***  |  24%***  |  64%***  |  100% (n= 5 416)  |
+      | Separated     | 15%***  |  26%***  |  59%***  |  100% (n=   743)  |
+      | Divorced      |  6%***  |  15%     |  79%***  |  100% (n= 3 383)  |
+      | Widowed       |  4%***  |  14%     |  82%***  |  100% (n= 1 807)  |
       | Married       |  9%     |   9%***  |  82%***  |  100% (n=10 117)  |
-      |**Total**      |**9%   **|**15%   **|**76%   **|**100% (n=21 483)**|
+      |**Total**      |**9%   **|**15%   **|**76%   **|**100%** (n=21 483)|
 
 # golden display (tab_md) unchanged: f_color_diff
 
     Code
       cat(tab_md(cases[[name]](), print = FALSE))
     Output
+      |               |                       race                        |                           |
       | marital       |        Other  |          Black  |          White  |                    Total  |
       |:--------------|--------------:|----------------:|----------------:|--------------------------:|
-      | No answer     | [   12%]{.n}  | [    12%]{.n}   | [    76%]{.n}   | [        100% (n=17)]{.n} |
-      | Never married | [   12%]{.n}  | [    24%]{.p5}  | [    64%]{.m10} | [     100% (n=5 416)]{.n} |
-      | Separated     | [   15%]{.p5} | [    26%]{.p10} | [    59%]{.m10} | [       100% (n=743)]{.n} |
-      | Divorced      | [    6%]{.n}  | [    15%]{.n}   | [    79%]{.n}   | [     100% (n=3 383)]{.n} |
-      | Widowed       | [    4%]{.m5} | [    14%]{.n}   | [    82%]{.p5}  | [     100% (n=1 807)]{.n} |
+      | No answer     | [   12%]{.n}  | [    12%]{.n}   | [    76%]{.n}   | [    100% (n=    17)]{.n} |
+      | Never married | [   12%]{.n}  | [    24%]{.p5}  | [    64%]{.m10} | [    100% (n= 5 416)]{.n} |
+      | Separated     | [   15%]{.p5} | [    26%]{.p10} | [    59%]{.m10} | [    100% (n=   743)]{.n} |
+      | Divorced      | [    6%]{.n}  | [    15%]{.n}   | [    79%]{.n}   | [    100% (n= 3 383)]{.n} |
+      | Widowed       | [    4%]{.m5} | [    14%]{.n}   | [    82%]{.p5}  | [    100% (n= 1 807)]{.n} |
       | Married       | [    9%]{.n}  | [     9%]{.m5}  | [    82%]{.p5}  | [    100% (n=10 117)]{.n} |
-      |**Total**      | [**9%**]{.n}  | [**15%**]{.n}   | [**76%**]{.n}   | [**100% (n=21 483)**]{.n} |
+      |**Total**      | [**9%**]{.n}  | [**15%**]{.n}   | [**76%**]{.n}   | [**100%** (n=21 483)]{.n} |
       
       Shades of blue: cells ≥ the Total row [+5]{.p5}; [+10]{.p10}; [+20]{.p20}; [+30]{.p30} points. Shades of yellow to red: cells ≤ the Total row [-5]{.m5}; [-10]{.m10}; [-20]{.m20}; [-30]{.m30} points.
 
@@ -119,7 +123,7 @@
     Code
       cat(tab_md(cases[[name]](), print = FALSE))
     Output
-      |         |        h        | |                 k                 |
+      |         |        h        | |            k             |        |
       | g       |     x  |     y  | |     p  |     q  |     r  | Total  |
       |:--------|-------:|-------:| |-------:|-------:|-------:|-------:|
       | A       |   35%  |   29%  | |   30%  |   37%  |   36%  |   34%  |
@@ -133,21 +137,23 @@
     Code
       cat(tab_md(cases[[name]](), print = FALSE))
     Output
-      | marital       |No.answer  |Never.married  |Separated  |Divorced  |Widowed  |Married  |            Total  |
+      |               |                               marital                                |                   |
+      | marital       |No answer  |Never married  |Separated  |Divorced  |Widowed  |Married  |            Total  |
       |:--------------|----------:|--------------:|----------:|---------:|--------:|--------:|------------------:|
-      | No answer     |     100%  |           0%  |       0%  |      0%  |     0%  |     0%  |      100% (n=17)  |
-      | Never married |       0%  |         100%  |       0%  |      0%  |     0%  |     0%  |   100% (n=5 416)  |
-      | Separated     |       0%  |           0%  |     100%  |      0%  |     0%  |     0%  |     100% (n=743)  |
-      | Divorced      |       0%  |           0%  |       0%  |    100%  |     0%  |     0%  |   100% (n=3 383)  |
-      | Widowed       |       0%  |           0%  |       0%  |      0%  |   100%  |     0%  |   100% (n=1 807)  |
+      | No answer     |     100%  |           0%  |       0%  |      0%  |     0%  |     0%  |  100% (n=    17)  |
+      | Never married |       0%  |         100%  |       0%  |      0%  |     0%  |     0%  |  100% (n= 5 416)  |
+      | Separated     |       0%  |           0%  |     100%  |      0%  |     0%  |     0%  |  100% (n=   743)  |
+      | Divorced      |       0%  |           0%  |       0%  |    100%  |     0%  |     0%  |  100% (n= 3 383)  |
+      | Widowed       |       0%  |           0%  |       0%  |      0%  |   100%  |     0%  |  100% (n= 1 807)  |
       | Married       |       0%  |           0%  |       0%  |      0%  |     0%  |   100%  |  100% (n=10 117)  |
-      |**Total**      |     **0%**|        **25%**|     **3%**|   **16%**|   **8%**|  **47%**|**100% (n=21 483)**|
+      |**Total**      |     **0%**|        **25%**|     **3%**|   **16%**|   **8%**|  **47%**|**100%** (n=21 483)|
 
 # golden display (tab_md) unchanged: n_mean_w
 
     Code
       cat(tab_md(cases[[name]](), print = FALSE))
     Output
+      |         |         v         |
       | g       |                v  |
       |:--------|------------------:|
       | A       | [    10 (σ3)]{.n} |
@@ -162,6 +168,7 @@
     Code
       cat(tab_md(cases[[name]](), print = FALSE))
     Output
+      |         |             v             |
       | grp     |                        v  |
       |:--------|--------------------------:|
       | A       | [    2.5 (σ1.3)]{.sdm0_2} |
@@ -176,13 +183,13 @@
     Code
       cat(tab_md(cases[[name]](), print = FALSE))
     Output
-      |         |       h       | |                   k                    |
+      |         |       h       | |           k           |                |
       | g       |    x  |    y  | |    p  |    q  |    r  |         Total  |
       |:--------|------:|------:| |------:|------:|------:|---------------:|
       | A       |  52%  |  48%  | |  29%  |  34%  |  37%  |  100% (n=187)  |
       | B       |  46%  |  54%  | |  34%  |  32%  |  34%  |  100% (n=195)  |
       | C       |  44%  |  56%  | |  39%  |  27%  |  34%  |  100% (n=163)  |
-      |**Total**|**47%**|**53%**| |**34%**|**31%**|**35%**|**100% (n=545)**|
+      |**Total**|**47%**|**53%**| |**34%**|**31%**|**35%**|**100%** (n=545)|
 
 # golden display (tab_md) unchanged: n_mean_color
 
@@ -249,6 +256,7 @@
     Code
       cat(tab_md(cases[[name]](), print = FALSE))
     Output
+      |               |                         race                         |                  |
       | marital       |           Other  |         Black  |           White  |           Total  |
       |:--------------|-----------------:|---------------:|-----------------:|-----------------:|
       | No answer     | [      0%]{.n}   | [      0%]{.n} | [      0%]{.n}   | [      0%]{.n}   |
@@ -267,8 +275,8 @@
     Code
       cat(tab_md(cases[[name]](), print = FALSE))
     Output
-      |               |                         race                         | |                                                                                                                                                     relig                                                                                                                                                      |
-      | marital       |      Other_race  |         Black  |           White  | |       No.answer  |      Don.t.know  |Inter.nondenominational  |Native.american  |      Christian  |Orthodox.christian  |    Moslem.islam  |  Other.eastern  |        Hinduism  |       Buddhism  |   Other_relig  |          None  |          Jewish  |        Catholic  |      Protestant  |           Total  |
+      |               |                         race                         | |                                                                                                                                            relig                                                                                                                                            |                  |
+      | marital       |           Other  |         Black  |           White  | |       No answer  |      Don't know  |Inter-nondenominational  |Native american  |      Christian  |Orthodox-christian  |    Moslem/islam  |  Other eastern  |        Hinduism  |       Buddhism  |         Other  |          None  |          Jewish  |        Catholic  |      Protestant  |           Total  |
       |:--------------|-----------------:|---------------:|-----------------:| |-----------------:|-----------------:|------------------------:|----------------:|----------------:|-------------------:|-----------------:|----------------:|-----------------:|----------------:|---------------:|---------------:|-----------------:|-----------------:|-----------------:|-----------------:|
       | No answer     | [      0%]{.n}   | [      0%]{.n} | [      0%]{.n}   | | [      4%]{.n}   | [      0%]{.n}   | [      0%]{.n}          | [      0%]{.n}  | [      0%]{.n}  | [      0%]{.n}     | [      0%]{.n}   | [      0%]{.n}  | [      0%]{.n}   | [      1%]{.n}  | [      0%]{.n} | [      0%]{.n} | [      0%]{.n}   | [      0%]{.n}   | [      0%]{.n}   | [      0%]{.n}   |
       | Never married | [     32%]{.m5}  | [     42%]{.n} | [     21%]{.m20} | | [     24%]{.m10} | [     40%]{.n}   | [     28%]{.m10}        | [     35%]{.m5} | [     32%]{.m5} | [     14%]{.m20}   | [     30%]{.m10} | [     31%]{.m5} | [     31%]{.m5}  | [     33%]{.m5} | [     38%]{.n} | [     40%]{.n} | [     24%]{.m10} | [     25%]{.m10} | [     20%]{.m20} | [     25%]{.m10} |
@@ -286,6 +294,7 @@
     Code
       cat(tab_md(cases[[name]](), print = FALSE))
     Output
+      |               |              race               |            |
       | marital       |    Other  | Black  |     White  |     Total  |
       |:--------------|----------:|-------:|-----------:|-----------:|
       | No answer     |    0%     |    0%  |     0%     |     0%     |

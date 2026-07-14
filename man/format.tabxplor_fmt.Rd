@@ -11,6 +11,7 @@
   na = NA,
   special_formatting = FALSE,
   stars = FALSE,
+  bold_split = FALSE,
   syntax = c("text", "excel"),
   .ref = NULL
 )
@@ -31,6 +32,10 @@ like indicating which is the reference row or col for differences.}
 only where a per-cell p-value was stored (diff-type CIs / regression coefficients) and are
 right-padded so numbers stay aligned. The main display (console, \code{\link[=tab_kable]{tab_kable()}}, \code{\link[=tab_md]{tab_md()}}) sets
 this \code{TRUE}; tooltip / secondary-field re-renders leave it \code{FALSE}, so stars never leak.}
+
+\item{bold_split}{Internal (default \code{FALSE}): when \code{TRUE}, attach a per-cell \code{primary_nchar}
+attribute giving the bold-prefix width of a composite \code{"{pct} (n={n})"} cell, so exporters can
+bold only the primary field in a bold row. Off by default -> the output is attribute-free.}
 
 \item{syntax}{\code{"text"} (default) returns the rendered display strings; \code{"excel"} returns the
 per-cell Excel number-format codes used by \code{\link[=tab_xl]{tab_xl()}} (the raw value is written unchanged).}

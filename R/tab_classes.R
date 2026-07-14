@@ -525,6 +525,59 @@ print.tabxplor_grouped_tab <- function(x, width = NULL, ..., n = 100,
 
   }
 
+
+# === SECTION: tabxplor_tabs -- the multi-table list class (Phase 13c-iv) =========================
+
+# A lightweight S3 wrapper over the LIST that tab()/tab_many() return for a multi-table result (>= 2
+# row_vars, tab_vars present, or output_list = TRUE). It IS a list (inherits "list") -- is.list(),
+# `[[`, length(), lapply(), purrr::map() all keep working -- and only adds a print / knit_print that
+# renders like a single tab (kable -> Viewer, or the tibble list) plus `[` / `c` that keep the class.
+# A single tab is returned bare (a tabxplor_tab), never wrapped, so the common case is unchanged.
+#' @keywords internal
+new_tabxplor_tabs <- function(x) {
+  structure(x, class = c("tabxplor_tabs", "list"))
+}
+
+# Wrap a multi-table list; no-op on a single tab (data.frame) or an already-wrapped / kable object.
+#' @keywords internal
+as_tabxplor_tabs <- function(x) {
+  if (is.list(x) && !is.data.frame(x) && !inherits(x, "tabxplor_tabs")) new_tabxplor_tabs(x) else x
+}
+
+#' Printing method for a list of tabxplor tables
+#'
+#' @param x A \code{tabxplor_tabs} object (the list returned by \code{\link{tab}} /
+#'   \code{\link{tab_many}} for a multi-table result).
+#' @param ... Passed to the per-table print method.
+#' @return \code{x}, invisibly.
+#' @export
+print.tabxplor_tabs <- function(x, ...) {
+  # Mirror print.tabxplor_tab: honour options("tabxplor.print"). "kable" renders all tables joined
+  # (routed to the Viewer, like a single tab); otherwise print each element's tibble in sequence.
+  if (getOption("tabxplor.print") == "kable") {
+    print(tab_kable(x))
+    return(invisible(x))
+  }
+  for (i in seq_along(x)) {
+    print(x[[i]], ...)
+    if (i < length(x)) cat("\n")
+  }
+  invisible(x)
+}
+
+#' @export
+`[.tabxplor_tabs` <- function(x, ...) new_tabxplor_tabs(NextMethod())
+
+#' @export
+c.tabxplor_tabs <- function(...) new_tabxplor_tabs(NextMethod())
+
+# knit_print so a `tabxplor_tabs` embedded in an Rmd/Quarto chunk renders as the joined kable.
+#' @exportS3Method knitr::knit_print
+knit_print.tabxplor_tabs <- function(x, ...) {
+  knitr::knit_print(tab_kable(x), ...)
+}
+
+
 #' @keywords internal
 # Phase 3b: render the tidy `test` attribute (Chi2 + ANOVA F) as a readable, colored block above
 # the table. In the normal tab() flow the p-values are materialised as body rows by
@@ -1151,6 +1204,31 @@ tab_materialize_extras <- function(tab, backend = c("text", "xl"), pvalue = TRUE
       tab <- tab_fold_addn_incell(tab)
     }
     tab <- set_render_extras(tab, NULL)          # consumed -> a second call is a no-op (idempotent)
+  }
+
+  # --- Excel-only: a mean + sd twin column (Phase 13c-v) ---------------------------------------
+  # Console / kable / md show the sd inline as "mean (sigma sd)" (special_formatting); Excel cannot, so
+  # for each numeric mean column insert an uncoloured sibling "<var>_sd" holding sd = sqrt(var) (display
+  # "var" -> get_num() IS the sd; the sigma prefix is added by tab_xl's numFmt). Purely an Excel layout
+  # concern: the built table + the text backends (inline sd) are untouched.
+  if (identical(backend, "xl")) {
+    is_mean_col <- function(col) is_fmt(col) && identical(get_type(col), "mean") &&
+      any(get_display(col) %in% c("mean", "mean_ci"))
+    means <- names(tab)[purrr::map_lgl(tab, is_mean_col)]
+    for (nm in means) {
+      sdc <- tab[[nm]]
+      tab[[paste0(nm, "_sd")]] <-
+        set_color(set_display(set_var(sdc, suppressWarnings(sqrt(get_var(sdc)))), "var"), "no")
+    }
+    if (length(means) > 0) {                     # place each _sd directly after its mean column
+      ord <- names(tab)
+      for (nm in rev(means)) {
+        sd_nm <- paste0(nm, "_sd")
+        rest  <- ord[ord != sd_nm]
+        ord   <- append(rest, sd_nm, after = which(rest == nm))
+      }
+      tab <- tab[ord]
+    }
   }
 
   # --- p-value rows (from the kept `test` attribute) -------------------------------------------
@@ -1958,9 +2036,12 @@ tab_kable_print_tooltip <- function(x, popover = FALSE, .ref = NULL) {
       "")
   } else blank
 
+  # Phase 13c-i: the ratio tooltip line was mislabelled ("rr:") and formatted the OR field, so a
+  # color = c("diff","ratio") table (a ratio but no OR) showed an empty value. Format the rr field
+  # (the ×/÷ ratio display) under a clearer "ratio:" label; still hidden when no cell carries a ratio.
   cond_rr <- type %in% c("col", "row") & !is.na(get_ratio(x)) & !disp == "rr"
   out_rr <- if (any(cond_rr)) {
-    dplyr::if_else(cond_rr, paste0("rr: ", format(set_display(x, "or")) ), "")
+    dplyr::if_else(cond_rr, paste0("ratio: ", format(set_display(x, "rr")) ), "")
   } else blank
 
   cond_or <- type %in% c("col", "row") & !is.na(get_or(x)) &

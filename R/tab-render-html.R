@@ -51,10 +51,30 @@ render_kable_html <- function(rd, meta,
 # === SECTION: the legacy kableExtra engine (byte-identical carve of tab_kable() 536-708) ==========
 
 #' @keywords internal
+# Phase 13c-ii: build one HTML cell string, keeping only the PRIMARY field of a composite bold cell
+# bold. A bold composite cell (`pn` = primary-field width) gets its escaped suffix wrapped in a
+# normal-weight <span> so the "(n=...)" part overrides the inherited row/cell bold; each part is
+# escaped separately so the offset can't drift. Non-composite / non-bold cells are just escaped.
+# `esc`: the HTML-escape fn -- htmltools::htmlEscape for the cell_spec path (escape = FALSE downstream,
+# byte-identical to escape = TRUE), identity for the home-built engine (which places cells raw).
+#' @keywords internal
+html_cell_text <- function(raw, pn, bold, esc = htmltools::htmlEscape) {
+  out <- esc(raw)
+  if (is.null(pn)) return(out)
+  hit <- bold & !is.na(pn) & pn >= 1L & pn < nchar(raw)
+  if (any(hit)) {
+    out[hit] <- paste0(esc(substr(raw[hit], 1L, pn[hit])),
+                       "<span style=\"font-weight:normal;\">",
+                       esc(substr(raw[hit], pn[hit] + 1L, nchar(raw[hit]))), "</span>")
+  }
+  out
+}
+
 render_kableExtra_engine <- function(rd, meta, subtext, caption, tooltips, popover,
                                      html_font, full_width, get_data, in_knitr, ...) {
   tabs  <- rd$tab
   theme <- meta$theme
+  cvh   <- rd$col_var_header       # Phase 13c-iii: spanning names + suffix-stripped level labels
 
   # kableExtra-only: escape markdown stars in knitr contexts, else the significance `*` become markdown
   # (byte-identical to the old in-tab_kable escape). NOT done for the html engine (raw HTML fragment).
@@ -81,30 +101,52 @@ render_kableExtra_engine <- function(rd, meta, subtext, caption, tooltips, popov
 
   # Unified fmt-across (was two any_bg branches): background = NULL when the table has no bg channel is
   # identical to omitting it (cell_spec default), so ONE branch reproduces both byte-for-byte.
+  # Phase 13c-ii: partial-bold composite cells -- format(bold_split = TRUE) marks the primary-field
+  # width; html_cell_text() escapes the value AND wraps a bold cell's composite suffix in a normal
+  # <span>, then cell_spec(escape = FALSE) (byte-identical to escape = TRUE for non-composite cells).
   out <- tabs %>%
     dplyr::mutate(dplyr::across(
       where(is_fmt),
-      ~ format(., html = TRUE, special_formatting = TRUE, na = "", stars = TRUE,
-               .ref = ann_ref(rd$ann[[dplyr::cur_column()]])) %>%
+      ~ {
+        col   <- .
+        colnm <- dplyr::cur_column()
+        raw   <- format(col, html = TRUE, special_formatting = TRUE, na = "", stars = TRUE,
+                        bold_split = TRUE, .ref = ann_ref(rd$ann[[colnm]]))
+        boldc <- color_bold[[colnm]]
+        txt   <- html_cell_text(raw, attr(raw, "primary_nchar"),
+                                (seq_along(raw) %in% rd$bold_rows) | boldc)
         kableExtra::cell_spec(
-          bold       = color_bold[[dplyr::cur_column()]],
-          color      = color_font[[dplyr::cur_column()]],
-          background = if (any_bg) color_back[[dplyr::cur_column()]] else NULL,
+          txt, escape = FALSE,
+          bold       = boldc,
+          color      = color_font[[colnm]],
+          background = if (any_bg) color_back[[colnm]] else NULL,
           tooltip = if (!popover & tooltips) {
-            tab_kable_print_tooltip(., .ref = rd$ann[[dplyr::cur_column()]]$ref_cells)
+            tab_kable_print_tooltip(col, .ref = rd$ann[[colnm]]$ref_cells)
           } else {NULL},
           popover = if (popover & tooltips) {
-            tab_kable_print_tooltip(., popover = TRUE, .ref = rd$ann[[dplyr::cur_column()]]$ref_cells)
+            tab_kable_print_tooltip(col, popover = TRUE, .ref = rd$ann[[colnm]]$ref_cells)
           } else {NULL}
         )
+      }
     ))
 
   if (get_data) return(out)
 
   alignement <- rd$roles$align
 
+  # Phase 13c-iii: level headers use the suffix-stripped labels (the col_var name is written in the
+  # spanning header row added below).
   out <- knitr::kable(out, escape = FALSE, format = "html", align = alignement,
-                      caption = caption)
+                      caption = caption, col.names = cvh$clean)
+
+  # Phase 13c-iii: the col_var spanning-name header row above the level names -- each variable name
+  # merged (colspan) over its contiguous level columns; blank (" ") over the row var / total / count
+  # columns. Applied on the plain kable (before the theme) so kableExtra emits a clean <div> style.
+  runs <- tab_header_runs(cvh$label)
+  if (any(nzchar(runs$labels))) {
+    header_above <- stats::setNames(runs$spans, ifelse(nzchar(runs$labels), runs$labels, " "))
+    out <- kableExtra::add_header_above(out, header_above)
+  }
 
   if (theme == "light") {
     out <- out %>% kableExtra::kable_classic(
@@ -175,15 +217,17 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
   roles <- rd$roles
   ann   <- rd$ann
   nm    <- names(tab)
+  cvh   <- rd$col_var_header       # Phase 13c-iii: spanning names + suffix-stripped level labels
   n_row <- nrow(tab)
   n_col <- ncol(tab)
   tc    <- meta$theme_cols
 
-  # (a) format every column once -> list of chr[n_row] (reuse .ref via the prep's ann)
+  # (a) format every column once -> list of chr[n_row] (reuse .ref via the prep's ann). bold_split =
+  # TRUE marks the composite primary-field width (Phase 13c-ii) so step (c) can bold only the primary.
   cells <- purrr::imap(tab, function(col, name) {
     if (is_fmt(col)) {
       format(col, html = TRUE, special_formatting = TRUE, na = "", stars = TRUE,
-             .ref = ann_ref(ann[[name]]))
+             bold_split = TRUE, .ref = ann_ref(ann[[name]]))
     } else {
       as.character(col)
     }
@@ -232,7 +276,12 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
       }
     }
     j <- match(name, nm)
-    paste0('<td style="', col_style[j], cs, '"', tip, '>', cell, '</td>')
+    # Phase 13c-ii: in a bold row/cell, bold only the PRIMARY field of a composite "{pct} (n={n})"
+    # cell (the "(n=...)" stays plain). Cells are placed raw here, so esc = identity (byte-identical).
+    bold_cell <- seq_len(n_row) %in% rd$bold_rows
+    if (!is.null(a)) bold_cell <- bold_cell | a$bold
+    cell_html <- html_cell_text(cell, attr(cell, "primary_nchar"), bold_cell, esc = identity)
+    paste0('<td style="', col_style[j], cs, '"', tip, '>', cell_html, '</td>')
   })
 
   # (d) rows: paste0 across the LIST of column vectors -> all n_row rows in one call
@@ -256,9 +305,23 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
     "font-size:90%;vertical-align:bottom;line-height:0.9;padding:3px;text-align:center;")
   # col_style first (its borders/nowrap/widths apply to the header too), hdr_style last so its
   # text-align:center wins over the column's data alignment (kableExtra centres all headers).
+  # Phase 13c-iii: level headers use the suffix-stripped labels (the col_var name is written in the
+  # spanning row above).
   head_cells <- paste0('<th style="', col_style, hdr_style, '">',
-                       htmltools::htmlEscape(nm), '</th>')
+                       htmltools::htmlEscape(cvh$clean), '</th>')
   thead <- paste0('<tr>', paste0(head_cells, collapse = ""), '</tr>')
+
+  # Phase 13c-iii: the col_var spanning-name header row -- each variable name centred (colspan) over its
+  # contiguous level columns; an empty cell over the row var / total / count columns.
+  cvh_runs <- tab_header_runs(cvh$label)
+  span_thead <- if (any(nzchar(cvh_runs$labels))) {
+    span_style <- paste0("color:", tc$text, ";font-weight:bold;border-bottom:1px solid;",
+                         "text-align:center;padding:3px;")
+    span_cells <- paste0('<th colspan="', cvh_runs$spans, '" style="', span_style, '">',
+                         ifelse(nzchar(cvh_runs$labels), htmltools::htmlEscape(cvh_runs$labels), ""),
+                         '</th>')
+    paste0('<tr>', paste0(span_cells, collapse = ""), '</tr>')
+  } else ""
 
   cap <- if (!is.null(caption) && length(caption) && nzchar(caption)) {
     paste0('<caption>', htmltools::htmlEscape(caption), '</caption>')
@@ -271,7 +334,7 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
 
   paste0(
     '<table class="tabxplor-tab tabxplor-', meta$theme, '">', cap,
-    '<thead>', thead, '</thead>',
+    '<thead>', span_thead, thead, '</thead>',
     '<tbody>', body, '</tbody>',
     tfoot,
     '</table>'
@@ -323,9 +386,12 @@ tab_kable_join <- function(parts, engine, theme = "light") {
     return(structure(out, format = "html", class = "knitr_kable"))
   }
 
-  # kableExtra list: stack the rendered tables one-after-another.
+  # kableExtra list: stack the rendered tables one-after-another. Phase 13c-iv: give the joined HTML
+  # the `kableExtra` class so print.kableExtra routes it to the Viewer (like a single table does),
+  # instead of the bare `knitr_kable` that just cat()s to the console.
   chr <- vapply(parts, as.character, character(1))
-  structure(paste(chr, collapse = "\n<br>\n"), format = "html", class = "knitr_kable")
+  structure(paste(chr, collapse = "\n<br>\n"), format = "html",
+            class = c("kableExtra", "knitr_kable"))
 }
 
 # Wrap a home-built html fragment in a horizontally-scrollable div (replaces kableExtra::scroll_box

@@ -1717,7 +1717,7 @@ ci_html_subscript <- function(x, html = FALSE) {
 #   text   = base_plus_ci (pct_ci/mean_ci) -> written as TEXT (the value+CI string is pre-formatted).
 # WARNING: a negative digit count rounds to a power of ten (Excel thousands mask). A percentage
 # rounded to a power of ten yields no code -> Excel "General".
-excel_numfmt_code <- function(digits, pct, ci, text) {
+excel_numfmt_code <- function(digits, pct, ci, text, signed = FALSE, ratio = FALSE) {
   out <- rep(NA_character_, length(digits))
   ok  <- !is.na(digits)
   if (!any(ok)) return(out)
@@ -1726,6 +1726,8 @@ excel_numfmt_code <- function(digits, pct, ci, text) {
   p    <- pct[ok]
   isci <- ci[ok]
   txt  <- text[ok]
+  sgn  <- if (length(signed) == 1L) rep(signed, sum(ok)) else signed[ok]
+  rat  <- if (length(ratio)  == 1L) rep(ratio,  sum(ok)) else ratio[ok]
   n_inf <- n < 0
   n_0   <- n == 0
   rep0_n <- vapply(abs(n), function(k) paste0(rep("0", k), collapse = ""), character(1))
@@ -1743,7 +1745,16 @@ excel_numfmt_code <- function(digits, pct, ci, text) {
       vapply(abs(n), function(k) paste0(rep(",",     k %/% 3), collapse = ""), character(1))),
     TRUE         ~ paste0("#,##0.", rep0_n)
   )
-  out[ok] <- dplyr::if_else(isci, paste0(stringi::stri_unescape_unicode("\\u00b1"), res), res)
+  res <- dplyr::if_else(isci, paste0(stringi::stri_unescape_unicode("\\u00b1"), res), res)
+  # Phase 13c-v: an explicit +/- sign for diff/contrib cells (a signed difference reads clearer), and a
+  # leading multiply sign for ratio cells (kept a real, editable number). Skip TEXT / power-of-ten (NA)
+  # codes. `+0.0%;-0.0%` = positive shows "+", negative shows "-"; `"x"#,##0.0` = "x2.0".
+  can <- !is.na(res) & res != "TEXT"
+  s2  <- can & sgn
+  res[s2] <- paste0("+", res[s2], ";-", res[s2])
+  r2  <- can & rat
+  res[r2] <- paste0('"', mult_sign, '"', res[r2])
+  out[ok] <- res
   out
 }
 
@@ -1767,6 +1778,9 @@ excel_numfmt_code <- function(digits, pct, ci, text) {
 #' only where a per-cell p-value was stored (diff-type CIs / regression coefficients) and are
 #' right-padded so numbers stay aligned. The main display (console, [tab_kable()], [tab_md()]) sets
 #' this `TRUE`; tooltip / secondary-field re-renders leave it `FALSE`, so stars never leak.
+#' @param bold_split Internal (default `FALSE`): when `TRUE`, attach a per-cell `primary_nchar`
+#' attribute giving the bold-prefix width of a composite `"{pct} (n={n})"` cell, so exporters can
+#' bold only the primary field in a bold row. Off by default -> the output is attribute-free.
 #' @param syntax `"text"` (default) returns the rendered display strings; `"excel"` returns the
 #' per-cell Excel number-format codes used by [tab_xl()] (the raw value is written unchanged).
 #' @param .ref Internal: precomputed reference masks `list(cells=, all_totals=)` (derive-once
@@ -1776,6 +1790,7 @@ excel_numfmt_code <- function(digits, pct, ci, text) {
 #' @export
 format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
                                 special_formatting = FALSE, stars = FALSE,
+                                bold_split = FALSE,
                                 syntax = c("text", "excel"), .ref = NULL) {
   syntax <- match.arg(syntax)
 
@@ -1832,8 +1847,13 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
     # pvalue is shown x100 with "%" by its own rendering path (not pct_or_ci), so add it to the
     # Excel "%" mask; a p-value shown as a "<0.01%" threshold still stores its raw value.
     excel_pct <- pct_or_ci | (!nas & display == "pvalue")
+    # Phase 13c-v: pct diff + contrib get an explicit +/- sign; ratio gets a leading x. Mean diffs are
+    # left as-is (their text display is still the legacy ratio, deferred to Phase 5 -- don't desync).
     return(excel_numfmt_code(digits, pct = excel_pct,
-                             ci = !nas & display == "ci", text = plus_ci))
+                             ci = !nas & display == "ci", text = plus_ci,
+                             signed = !nas & (display == "ctr" |
+                                                (display == "diff" & type != "mean")),
+                             ratio  = !nas & display == "rr"))
   }
 
 
@@ -1918,6 +1938,29 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   }
   out[n_wn] <- out[n_wn] %>% prettyNum(big.mark = " ", preserve.width = "individual")
   out[pct_no_ci] <- paste0(out[pct_no_ci], "%") #pillar::style_subtle()
+
+  # Phase 13c-i: ratio (rr) display shows the multiplicative sign, so ratios read symmetrically (like
+  # the legend and the OR display): a cell >= its reference prints "x2", a cell below prints "/2"
+  # (the divide sign over 1/ratio). Default 1 digit (>= the column's digits), trailing zeros trimmed,
+  # right-padded so the column aligns in a monospace font. Text syntax only (Excel returned early
+  # above -> ratio stays a real number there, per the Phase 13c Excel decision).
+  disp_rr <- ok & display == "rr"
+  if (any(disp_rr)) {
+    rv  <- get_ratio(x)[disp_rr]
+    inv <- !is.na(rv) & rv > 0 & rv < 1
+    mag <- ifelse(inv, 1 / rv, rv)
+    dg  <- pmax(1L, digits[disp_rr])
+    num <- sprintf(paste0("%.", dg, "f"), mag)      # dg >= 1 -> always a decimal point
+    num <- sub("\\.?0+$", "", num)                  # trim trailing zeros + a bare trailing dot
+    # a ratio rounding to 1 is "equal to the reference" -> always show "x1" (never the confusing "/1").
+    sym <- ifelse(inv & num != "1", div_sign, mult_sign)
+    val <- out[disp_rr]
+    nn  <- !is.na(rv)
+    val[nn] <- paste0(sym[nn], num[nn])
+    if (any(nn))
+      val[nn] <- stringr::str_pad(val[nn], max(stringr::str_length(val[nn])), side = "left")
+    out[disp_rr] <- val
+  }
 
   if (any(pvalue)) {
     p    <- get_pct(x[pvalue])
@@ -2115,7 +2158,9 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   # is kept). tab(display=) writes the template only onto value cells, so p-value/blank/total cells
   # keep their own token and are never composited.
   composite <- !nas & grepl("{", raw_display, fixed = TRUE)
+  prim_nchar <- NULL                                          # Phase 13c-ii bold-prefix widths
   if (any(composite)) {
+    if (bold_split) prim_nchar <- rep(NA_integer_, length(out))
     for (tmpl in unique(raw_display[composite])) {
       seg   <- parse_display_template(tmpl)
       if (!any(seg$is_tok)) next
@@ -2126,14 +2171,31 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
         format(set_display(xi, seg$fields[i]), na = na, special_formatting = FALSE,
                stars = isTRUE(stars) && i == 1L)
       })
+      # Phase 13c-i: align each {field} to a uniform width within the column so numbers line up in a
+      # monospace font (e.g. "100% (n=  849)" / "100% (n=3 648)"). Right-aligned (left-pad) over the
+      # non-NA cells; the literal pieces are constant, so only the {tokens} are padded.
+      toks <- lapply(toks, function(s) {
+        keep <- !is.na(s)
+        if (any(keep))
+          s[keep] <- stringr::str_pad(s[keep], max(stringr::str_length(s[keep])), side = "left")
+        s
+      })
       strs <- vector("list", length(seg$pieces)); ti <- 0L
       for (j in seq_along(seg$pieces)) {
         if (seg$is_tok[j]) { ti <- ti + 1L; strs[[j]] <- toks[[ti]] }
         else               { strs[[j]] <- rep(seg$pieces[j], length(cells)) }
       }
-      ok  <- Reduce(`&`, lapply(toks, function(s) !is.na(s)))
-      asm <- do.call(paste0, strs)
-      out[cells[ok]] <- asm[ok]
+      ok_c <- Reduce(`&`, lapply(toks, function(s) !is.na(s)))
+      asm  <- do.call(paste0, strs)
+      out[cells[ok_c]] <- asm[ok_c]
+      # Phase 13c-ii: OPT-IN (bold_split) record of the bold-prefix width (through the FIRST {token})
+      # so exporters bold only the primary field of a composite cell in a bold row; the remaining
+      # literals/tokens stay plain. Off by default -> format() output is attribute-free / byte-identical.
+      if (bold_split) {
+        first_tok <- which(seg$is_tok)[1]
+        prefix    <- do.call(paste0, strs[seq_len(first_tok)])
+        prim_nchar[cells[ok_c]] <- nchar(prefix)[ok_c]
+      }
     }
   }
 
@@ -2143,6 +2205,11 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   # any caller not passing `na`); tab_kable()/tab_md() pass na="" -> NA cells render "" at source,
   # which retires tab_kable()'s post-hoc `>NA</span>` string surgery.
   if (!is.na(na)) out[na_out] <- na
+
+  # Phase 13c-ii: expose the per-cell bold-prefix width of composite cells (NA elsewhere) so exporters
+  # can bold only the primary field in bold rows. Dropped silently by any downstream string op, so
+  # consumers must read it right after format() (see md_render_one / render_*_engine / tab_xl).
+  if (!is.null(prim_nchar)) attr(out, "primary_nchar") <- prim_nchar
 
   #out <- stringr::str_pad(out, max(stringr::str_length(out), na.rm = TRUE))
   out

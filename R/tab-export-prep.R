@@ -314,6 +314,11 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
     tab_totcol_range(tab, fmt_cols, col_var_map, totcols)
   } else NULL
 
+  # Phase 13c-iii: the shared col_var HEADER model (spanning variable-name row + suffix-stripped level
+  # labels), consumed by every exporter so the two header rows stay in sync (console is unchanged).
+  col_var_header <- tab_col_var_header(
+    tab, list(col_var_map = col_var_map, real_col_vars = real_col_vars, totcols = totcols))
+
   list(
     tab = tab,
     vars = list(degrade = FALSE, row_var = row_var_name, tab_vars = tab_vars,
@@ -329,8 +334,40 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
     bold_rows = bold_rows,
     bold_cols = bold_cols,
     range_totcol = range_totcol,
+    col_var_header = col_var_header,
     subtext = subtext
   )
+}
+
+# Phase 13c-iii: the shared col_var HEADER model. Per column, `label` = the spanning col_var NAME, shown
+# only for a real-col_var LEVEL column -- blank for the row var, the count / all_col_vars column, and
+# total columns (a total column is the row marginal, not a col_var level, so it stands alone). `clean` =
+# the level name with its disambiguation "_<col_var>" suffix stripped (two col_vars sharing a level
+# "Other" are stored uniquely as "Other_race"/"Other_grp"; exports show the bare "Other" under the
+# variable-name span, per the maintainer's rule -- never print the suffix once the name is written).
+#' @keywords internal
+tab_col_var_header <- function(tab, roles) {
+  nms   <- names(tab)
+  cvm   <- roles$col_var_map
+  real  <- roles$real_col_vars
+  totc  <- seq_along(nms) %in% roles$totcols
+  label <- unname(cvm)
+  label[!(label %in% real)] <- ""            # row_var / all_col_vars / "" -> no span name
+  label[totc] <- ""                          # total column stands alone (the marginal, not a level)
+  clean <- nms
+  for (j in which(label != "")) {
+    suff <- paste0("_", cvm[[j]])
+    if (endsWith(nms[j], suff)) clean[j] <- substr(nms[j], 1L, nchar(nms[j]) - nchar(suff))
+  }
+  list(label = label, clean = clean)
+}
+
+# Phase 13c-iii: run-length-encode the header `label` vector into (label, span) runs for the spanning
+# header row -- blank runs keep the label "" (each exporter maps it to its own empty-cell form).
+#' @keywords internal
+tab_header_runs <- function(label) {
+  r <- rle(label)
+  list(labels = r$values, spans = r$lengths)
 }
 
 

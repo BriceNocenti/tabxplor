@@ -572,7 +572,11 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
 
   # Phase 13a: a per-table color_breaks override, stored as a table attribute (set LAST so no earlier
   # step strips it; installed transiently at render). NULL (default) -> the global breaks apply.
-  set_color_breaks_attr(result, resolve_color_breaks_arg(color_breaks))
+  result <- set_color_breaks_attr(result, resolve_color_breaks_arg(color_breaks))
+
+  # Phase 13c-iv: a multi-table result becomes a tabxplor_tabs (still a list) so it auto-prints like a
+  # single tab and routes to the Viewer under options("tabxplor.print" = "kable"). No-op on a single tab.
+  as_tabxplor_tabs(result)
 }
 
 
@@ -1086,7 +1090,9 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
     output = if (isTRUE(compact)) "single" else "legacy"
   )
   result <- finalize_color_spec(result, color_spec)
-  set_color_breaks_attr(result, resolve_color_breaks_arg(color_breaks))
+  result <- set_color_breaks_attr(result, resolve_color_breaks_arg(color_breaks))
+  # Phase 13c-iv: wrap the multi-table list (tab_many keeps its list-default) so it auto-prints.
+  as_tabxplor_tabs(result)
 }
 
 

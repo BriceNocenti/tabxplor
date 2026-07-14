@@ -1166,8 +1166,9 @@ bind_datas_for_tab <- function(data, vars) {
 #' @keywords internal
 unbrk      <- stringi::stri_unescape_unicode("\\u202f") # unbreakable space
 sigma_sign <- stringi::stri_unescape_unicode("\\u03c3") # sigma for sd
-mult_sign  <- stringi::stri_unescape_unicode("\\u00d7")
+mult_sign  <- stringi::stri_unescape_unicode("\\u00d7") # multiply sign (ratio >= 1)
 cross      <- stringi::stri_unescape_unicode("\\u00d7")
+div_sign   <- stringi::stri_unescape_unicode("\\u00f7") # divide sign (ratio < 1, shows 1/ratio)
 
 # # Not working
 # # Css link towards https://github.com/web-fonts/dejavu-sans-condensed

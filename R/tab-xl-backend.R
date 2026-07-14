@@ -117,6 +117,10 @@ xlb_write_richtext <- function(wb, sheet, dims, runs, size = NULL, font = NULL) 
 xlb_numfmt <- function(wb, sheet, dims, code)
   wb$add_numfmt(sheet = sheet, dims = dims, numfmt = code)
 
+# Phase 13c-iii: merge a horizontal cell range (the col_var spanning-name header).
+xlb_merge <- function(wb, sheet, dims)
+  wb$merge_cells(sheet = sheet, dims = dims)
+
 xlb_col_widths <- function(wb, sheet, cols, widths)
   wb$set_col_widths(sheet = sheet, cols = cols, widths = widths)
 

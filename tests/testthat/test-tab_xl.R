@@ -115,3 +115,49 @@ testthat::test_that("tab_xl(conditional_format = TRUE) informs and falls back", 
   )
   testthat::expect_true(file.exists(p))
 })
+
+# Phase 13c-v: Excel value/format + col_var spanning header.
+
+testthat::test_that("ci = 'cell' exports the CI text (not the raw proportion)", {
+  testthat::skip_if_not_installed("openxlsx2")
+  t   <- tab(forcats::gss_cat, marital, race, pct = "row", ci = "cell")
+  tmp <- tempfile(fileext = ".xlsx"); tab_xl(t, path = tmp, open = FALSE, replace = TRUE)
+  df  <- openxlsx2::wb_to_df(openxlsx2::wb_load(tmp), col_names = FALSE)
+  testthat::expect_true(any(grepl("\\[[0-9]+;[0-9]+\\]", as.matrix(df))))   # a "[lo;hi]" bracket
+})
+
+testthat::test_that("OR exports as 1/x text by default, numbers with or_numeric = TRUE", {
+  testthat::skip_if_not_installed("openxlsx2")
+  testthat::skip_if_not_installed("broom")
+  d  <- forcats::gss_cat
+  d$married <- factor(ifelse(d$marital == "Married", "yes", "no"))
+  tl <- tab_logit(d, "married", c("race", "relig"))
+  tmp <- tempfile(fileext = ".xlsx"); tab_xl(tl, path = tmp, open = FALSE, replace = TRUE)
+  or_col <- openxlsx2::wb_to_df(openxlsx2::wb_load(tmp), col_names = FALSE)[[2]]
+  testthat::expect_true(any(grepl("1/", or_col, fixed = TRUE)))             # reciprocal text present
+  tmp2 <- tempfile(fileext = ".xlsx"); tab_xl(tl, path = tmp2, open = FALSE, replace = TRUE, or_numeric = TRUE)
+  or_col2 <- openxlsx2::wb_to_df(openxlsx2::wb_load(tmp2), col_names = FALSE)[[2]]
+  num <- suppressWarnings(as.numeric(or_col2))
+  testthat::expect_true(any(!is.na(num) & num > 0))                        # real numbers now
+})
+
+testthat::test_that("numeric vars export a mean + separate _sd column", {
+  testthat::skip_if_not_installed("openxlsx2")
+  t   <- tab_num(forcats::gss_cat, race, c(age, tvhours), digits = 1L)
+  tmp <- tempfile(fileext = ".xlsx"); tab_xl(t, path = tmp, open = FALSE, replace = TRUE)
+  hdr <- as.character(openxlsx2::wb_to_df(openxlsx2::wb_load(tmp), col_names = FALSE)[3, ])
+  testthat::expect_true(all(c("age", "age_sd", "tvhours", "tvhours_sd") %in% hdr))
+})
+
+testthat::test_that("Excel gets a col_var spanning-name row + suffix-stripped level labels", {
+  testthat::skip_if_not_installed("openxlsx2")
+  d <- forcats::gss_cat
+  d$grp <- factor(ifelse(d$age < 40, "Young", "Other"))
+  t   <- tab(d, row_vars = marital, col_vars = c(race, grp), pct = "row")
+  tmp <- tempfile(fileext = ".xlsx"); tab_xl(t, path = tmp, open = FALSE, replace = TRUE)
+  df  <- openxlsx2::wb_to_df(openxlsx2::wb_load(tmp), col_names = FALSE)
+  span_row <- as.character(df[2, ]); hdr_row <- as.character(df[3, ])
+  testthat::expect_true(all(c("race", "grp") %in% span_row))               # spanning names row
+  testthat::expect_true("Other" %in% hdr_row)                              # suffix stripped
+  testthat::expect_false(any(hdr_row == "Other_race", na.rm = TRUE))
+})

@@ -228,6 +228,7 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   real_col_vars <- rd$roles$real_col_vars
   has_multi_col_vars <- length(real_col_vars) > 1
   bold_rows  <- rd$bold_rows
+  cvh        <- rd$col_var_header      # Phase 13c-iii: spanning names + suffix-stripped level labels
 
   # md-local: positions where a REAL col_var changes (span-header separators). Distinct from kable's
   # col-border transition index, so it is not shared.
@@ -248,23 +249,28 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   # --- Step 6: Format all cells to character ---
   # Format fmt columns. The reference masks are reused from the prep's `ann` (.ref) so
   # format() does not re-run get_reference() -- byte-identical (Phase 10c subset-equivalence).
-  cell_data <- purrr::imap(tabs, \(col, nm) {
+  # stars = TRUE: main display. When a column carries significance stars, format() right-pads the star
+  # field so numbers stay aligned; trim ONLY the leading side to preserve that trailing pad
+  # (byte-identical when no star is present -- format() emits no trailing space otherwise).
+  # Phase 13c-ii: bold_split = TRUE also attaches primary_nchar (the bold-prefix width of a composite
+  # "{pct} (n={n})" cell, on the UN-trimmed string) so a bold row bolds only the primary field
+  # (the "(n=...)" stays plain). str_trim(left) shifts it by the leading spaces removed -> prim = pn - lead.
+  fmt_out <- purrr::imap(tabs, \(col, nm) {
     if (is_fmt(col)) {
-      # stars = TRUE: main display. When a column carries significance stars, format() right-pads the
-      # star field so numbers stay aligned; trim ONLY the leading side to preserve that trailing pad
-      # (byte-identical when no star is present -- format() emits no trailing space otherwise).
-      out <- format(col, special_formatting = special_formatting, na = "", stars = TRUE,
-                    .ref = ann_ref(rd$ann[[nm]])) |>
-        stringr::str_trim(side = "left")
-      out[is.na(out)] <- ""
-      out
-    } else if (is.factor(col)) {
-      as.character(col)
+      raw     <- format(col, special_formatting = special_formatting, na = "", stars = TRUE,
+                        bold_split = TRUE, .ref = ann_ref(rd$ann[[nm]]))
+      pn      <- attr(raw, "primary_nchar")
+      trimmed <- stringr::str_trim(raw, side = "left")
+      lead    <- nchar(raw) - nchar(trimmed)
+      trimmed[is.na(trimmed)] <- ""
+      list(txt  = trimmed,
+           prim = if (is.null(pn)) rep(NA_integer_, length(col)) else pn - lead)
     } else {
-      as.character(col)
+      list(txt = as.character(col), prim = rep(NA_integer_, length(col)))
     }
   })
-  cell_data <- as.data.frame(cell_data, stringsAsFactors = FALSE)
+  cell_data <- as.data.frame(lapply(fmt_out, `[[`, "txt"), stringsAsFactors = FALSE)
+  prim_mat  <- do.call(cbind, lapply(fmt_out, `[[`, "prim"))   # per-cell bold-split point (NA = whole)
 
   # Truncate row labels (10f: only when wrap_rows is set; default NULL = lossless, column grows).
   # A pipe cell cannot hold a raw newline, so md "wrap" means "do not truncate by default".
@@ -329,7 +335,10 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   # --- Step 7: Compute column widths ---
   n_rows <- nrow(cell_data)
   n_cols <- ncol(cell_data)
-  col_names <- names(cell_data)
+  # Phase 13c-iii: the level-header row uses the suffix-stripped labels (the col_var name is now written
+  # in the span row above), keeping the tab_var headers blanked (names(cell_data) == "" for tab_vars).
+  col_names <- cvh$clean
+  col_names[names(cell_data) == ""] <- ""
 
   # For each cell, compute the raw text width
   cell_widths <- matrix(0L, nrow = n_rows, ncol = n_cols)
@@ -370,9 +379,10 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   # --- Helper: pad a cell ---
   # is_right: TRUE for fmt (right-aligned), FALSE for text (left-aligned)
   # is_bold: TRUE to wrap with **
-  pad_cell <- function(text, width, is_right, is_bold) {
+  # split_at: Phase 13c-ii -- for a composite cell, the bold-prefix width (NA = bold the whole cell).
+  pad_cell <- function(text, width, is_right, is_bold, split_at = NA_integer_) {
     if (is_bold && nchar(text) > 0) {
-      bold_text <- paste0("**", text, "**")
+      bold_text <- md_bold(text, split_at)                # partial (composite) or whole-cell bold
       if (is_right) {
         stringr::str_pad(bold_text, width, side = "left")
       } else {
@@ -390,36 +400,34 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
     }
   }
 
-  # --- Step 8: Build col_var header row (only if multiple col_vars) ---
+  # --- Step 8: col_var spanning header row (Phase 13c-iii) ---
+  # The variable NAME is centred over its level columns (from the shared header model), a single blank
+  # cell over the row var / total / count columns. Shown for a single col_var too (was multi-only).
   col_var_header_line <- NULL
-  if (has_multi_col_vars) {
+  if (any(nzchar(cvh$label))) {
     header_parts <- character(0)
     j <- 1
     while (j <= n_cols) {
-      cv <- col_var_map[j]
-      if (cv %in% real_col_vars) {
-        # Group consecutive columns with the same real col_var
+      lbl <- cvh$label[j]
+      if (nzchar(lbl)) {
+        # Group consecutive columns spanned by the same col_var name
         j_end <- j
-        while (j_end < n_cols && col_var_map[j_end + 1] == cv) {
-          j_end <- j_end + 1
-        }
+        while (j_end < n_cols && cvh$label[j_end + 1] == lbl) j_end <- j_end + 1
         group_cols <- j:j_end
         span <- sum(col_width[group_cols]) + length(group_cols) - 1
-        # Center the col_var name over its group
-        label <- cv
         header_parts <- c(header_parts,
                           stringr::str_pad(
-                            stringr::str_pad(label,
-                                             nchar(label) + (span - nchar(label)) %/% 2,
+                            stringr::str_pad(lbl,
+                                             nchar(lbl) + (span - nchar(lbl)) %/% 2,
                                              side = "left"),
                             span, side = "right"))
-        # Add separator column between real col_var groups
+        # Add separator column between real col_var groups (multi col_var only)
         if (j_end %in% new_col_var && j_end < n_cols) {
           header_parts <- c(header_parts, " ")
         }
         j <- j_end + 1
       } else {
-        # Non-grouped column: empty cell matching column width
+        # Non-grouped column (row var / total / count): empty cell matching column width
         header_parts <- c(header_parts, strrep(" ", col_width[j]))
         j <- j + 1
       }
@@ -460,12 +468,13 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
     is_bold <- i %in% bold_rows
     row_cells <- character(n_cols)
     for (j in seq_len(n_cols)) {
+      split_at <- prim_mat[i, j]                          # Phase 13c-ii composite bold-prefix width
       if (do_color && is_right[j]) {
         row_cells[j] <- md_color_cell(cell_data[[j]][i], attr_mat[i, j],
-                                      num_width[j], col_width[j], is_bold)
+                                      num_width[j], col_width[j], is_bold, split_at)
       } else {
         row_cells[j] <- pad_cell(cell_data[[j]][i], col_width[j],
-                                  is_right[j], is_bold)
+                                  is_right[j], is_bold, split_at)
       }
     }
     body_lines[i] <- md_insert_col_sep(row_cells, new_col_var, n_cols,
@@ -612,11 +621,21 @@ md_span_attr <- function(text_slot, bg_slot, tmap, bmap, neutral = "n") {
 # (numbers align); the whole body is right-padded so the next pipe lands at a fixed column (pipes align).
 # An empty/NA cell renders as blank of the same width (no empty span).
 #' @keywords internal
-md_color_cell <- function(text, attr, num_width, total_width, is_bold) {
+md_color_cell <- function(text, attr, num_width, total_width, is_bold, split_at = NA_integer_) {
   if (!nzchar(text)) return(strrep(" ", total_width))
-  content <- if (is_bold) paste0("**", text, "**") else text
+  content <- if (is_bold) md_bold(text, split_at) else text   # Phase 13c-ii partial/whole bold
   body    <- paste0("[", stringr::str_pad(content, num_width, side = "left"), "]", attr)
   paste0(" ", stringr::str_pad(body, total_width - 1L, side = "right"))
+}
+
+# Phase 13c-ii: wrap the bold-prefix of a cell in **...**. For a composite cell (split_at = the primary
+# field's width) only the primary token is bold and the rest ("(n=...)") stays plain; a plain cell
+# (split_at NA / covering the whole text) is bolded whole. Adds exactly one ** pair either way, so the
+# +4 width budget the column-width computation reserves for bold cells is unchanged.
+#' @keywords internal
+md_bold <- function(text, split_at = NA_integer_) {
+  if (is.na(split_at) || split_at < 1L || split_at >= nchar(text)) return(paste0("**", text, "**"))
+  paste0("**", substr(text, 1L, split_at), "**", substr(text, split_at + 1L, nchar(text)))
 }
 
 # The distinct span class -> {property, hex} rules for a table (or list), for tab_md_css(). Reuses the

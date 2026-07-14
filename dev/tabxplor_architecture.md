@@ -390,6 +390,19 @@ is built and populated into the model but INERT until consumed (10e/10f). Byte-i
 pre-Phase-10d exporters (golden/color-golden/md-snapshot/A/B locked). `tab_plot()` is soft-deprecated
 (`lifecycle` superseded) here.
 
+**Phase 13c** adds a shared **col_var HEADER model** to the render-model: `tab_col_var_header(tab, roles)`
+returns per column a spanning `label` (the col_var NAME, blank over the row var / total / count columns)
++ a `clean` level label (the `_<col_var>` disambiguation suffix stripped, e.g. `Other_race`→`Other`);
+`tab_header_runs(label)` run-length-encodes it into (label, span) cells. Every exporter renders a
+spanning variable-name row above the level names from this ONE model: md a centred visual row (single
+col_var too), kableExtra `add_header_above` + `col.names=clean`, the html engine a `<thead>` colspan row,
+Excel a merged span row (`xlb_merge`) with a one-row geometry shift (`span_off` in `tab_xl_plan_one`,
+`+6` stacking). Also 13c: **composite `{}` displays** are token-padded + partial-bolded (bold only the
+first field in a total/reference row) via `format(bold_split=TRUE)`→`primary_nchar` (md `md_bold`, html
+`html_cell_text`); the multi-table LIST return is now a **`tabxplor_tabs`** S3 class (auto-print + Viewer);
+`tab_xl` writes ci="cell"/OR as text columns (`xl_materialize_data`, `or_numeric`), adds a mean `_sd`
+twin column, and signs (`+`/`x`/`sigma`) in the numFmt.
+
 ### Render-time variable detection + graceful degrade (Phase 10c)
 
 `tab_render_vars()` (`R/tab.R`) is the robust, position-independent role detector used by the print

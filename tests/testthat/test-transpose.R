@@ -105,3 +105,19 @@ testthat::test_that("tab_transpose works on a plain table (no totals)", {
   testthat::expect_s3_class(tr, "tabxplor_tab")
   testthat::expect_identical(tab_get_vars(tr)$row_var, "race")
 })
+
+# Phase 13c-vi: transpose at export keeps colours (both channels) + numeric means/sd.
+
+testthat::test_that("transpose at export keeps both colour channels (diff + ratio)", {
+  t <- tab(forcats::gss_cat, marital, race, pct = "row", color = c("diff", "ratio"))
+  h <- as.character(tab_kable(t, engine = "html", transpose = TRUE))
+  testthat::expect_true(grepl("color:#", h))            # text-channel colour survives
+  testthat::expect_true(grepl("background-color", h))   # background-channel colour survives
+})
+
+testthat::test_that("transpose at export keeps numeric means + inline sd + colour", {
+  tn <- tab_num(forcats::gss_cat, race, c(age, tvhours), color = "diff")
+  md <- tab_md(tn, transpose = TRUE, print = FALSE)
+  testthat::expect_true(grepl("]{.", md, fixed = TRUE))       # colour spans present
+  testthat::expect_true(grepl(intToUtf8(0x03c3), md))         # inline sigma sd survives
+})

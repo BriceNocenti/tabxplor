@@ -46,6 +46,9 @@
 #' @param conditional_format `r lifecycle::badge("experimental")` Reserved for a future opt-in
 #'   to use Excel conditional formatting instead of hard cell colours. Not yet implemented: setting
 #'   it emits a message and falls back to the (fast, exact) hard-style colouring.
+#' @param or_numeric Odds ratios export as text ("1/x" reciprocal for OR < 1) by default so an OR
+#'   below 1 reads symmetrically to an OR above 1. Set to \code{TRUE} (or the option
+#'   \code{tabxplor.xl_or_numeric}) to keep them as real, editable numbers instead.
 #' @param titles The titles of the different tables, as a character vector. When missing
 #'   titles are given based on the names of the variables.
 #' @param caption A single caption; a shortcut that fills \code{titles} (an explicit \code{titles}
@@ -96,6 +99,7 @@ tab_xl <-
            hide_near_zero = Inf, theme = c("light", "dark"),
            color_type = "text", html_24_bit = NULL, color = TRUE,
            transpose = FALSE, conditional_format = FALSE,
+           or_numeric = getOption("tabxplor.xl_or_numeric", FALSE),
            print_color_legend = lifecycle::deprecated()) {
 
     # Phase 13a: install a per-table color_breaks override for the render (no-op otherwise).
@@ -227,12 +231,13 @@ tab_xl <-
     }
 
     # Sheet-stacking offsets: within a sheet each stacked table starts below the previous one
-    # (rows + subtext + 5 blank). Absolute geometry is derived from `start` in the plan builder.
+    # (rows + subtext + 6 blank -- Phase 13c-iii: +1 for the col_var spanning-name header row).
+    # Absolute geometry is derived from `start` in the plan builder.
     newsheet <- sheet != dplyr::lag(sheet, default = -1L)
     start <- tibble::tibble(newsheet, rows = purrr::map_int(tabs, nrow),
                             sub = purrr::map_int(subtext, length)) |>
       dplyr::group_by(gr = cumsum(as.integer(.data$newsheet))) |>
-      dplyr::mutate(start = dplyr::lag(cumsum(.data$rows + .data$sub + 5L), default = 0L) + 1L) |>
+      dplyr::mutate(start = dplyr::lag(cumsum(.data$rows + .data$sub + 6L), default = 0L) + 1L) |>
       dplyr::pull(.data$start)
 
     sheet_titles <- titles[newsheet] |> stringr::str_sub(1, 25)
@@ -257,7 +262,8 @@ tab_xl <-
       text_size_headers = text_size_headers,
       text_size_subtext = text_size_subtext,
       text_pal          = get_color_style("color_code", theme = theme, type = color_type),
-      bg_pal            = get_color_style("color_code", theme = theme, type = "bg")
+      bg_pal            = get_color_style("color_code", theme = theme, type = "bg"),
+      or_numeric        = isTRUE(or_numeric)      # Phase 13c-v: OR as text (1/x) by default
     )
 
     # === Per-table plans (pure: raw values + numFmt codes + colour slots + font plan + geometry) ===
@@ -267,6 +273,7 @@ tab_xl <-
     plans <- purrr::pmap(
       list(tab = tabs, roles = roles, ann = purrr::map(rd, "ann"),
            bold_rows = purrr::map(rd, "bold_rows"),
+           col_var_header = purrr::map(rd, "col_var_header"),
            start = start, sheet = sheet, title = titles, subtext = subtext,
            legend_runs = legend_runs, colwidth = colwidth),
       tab_xl_plan_one, o = opts
@@ -322,14 +329,36 @@ tab_xl_resolve_path <- function(path, replace) {
 # Geometry (given `start`): title row = start; header row = start + 1; data rows = start + 2 ..
 # start + 1 + nrow; subtext below. Column role indices come from the shared prep `roles`.
 #' @keywords internal
-tab_xl_plan_one <- function(tab, roles, ann, bold_rows, start, sheet, title, subtext,
+# Phase 13c-v: build the per-cell VALUE tibble Excel writes. A text-mode fmt column (ci = "cell" / OR)
+# becomes its format() display string (character); every other fmt column its raw get_num() number.
+# Mixed column types in one tibble are fine (openxlsx2 writes each column by its R type).
+#' @keywords internal
+xl_materialize_data <- function(tab, fmt_cols, text_fmt_cols) {
+  for (ci in fmt_cols) {
+    tab[[ci]] <- if (ci %in% text_fmt_cols) {
+      format(tab[[ci]], special_formatting = TRUE, na = "", stars = TRUE)
+    } else {
+      get_num(tab[[ci]])
+    }
+  }
+  tibble::as_tibble(tab)
+}
+
+tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, sheet, title, subtext,
                             legend_runs = list(), colwidth, o) {
   n   <- nrow(tab)
   ncl <- ncol(tab)
-  data_row0  <- start + 1L                      # data row i -> i + data_row0
-  header_row <- start + 1L
+  # Phase 13c-iii: a col_var spanning-NAME header row sits above the level-name header (whenever the
+  # table has a col_var), shifting the header + data + everything below down by one row. `data_row0`,
+  # `header_row`, `last_row` derive every absolute position, so downstream offsets follow automatically.
+  cvh        <- col_var_header
+  has_span   <- !is.null(cvh) && any(nzchar(cvh$label))
+  span_off   <- if (has_span) 1L else 0L
+  span_row   <- start + 1L                       # the spanning-name row (used only if has_span)
+  header_row <- start + 1L + span_off
+  data_row0  <- header_row                       # data row i -> i + data_row0
   data_rows  <- seq_len(n) + data_row0
-  last_row   <- start + 1L + n
+  last_row   <- data_row0 + n
 
   fmt_cols    <- roles$fmt_cols
   txt_cols    <- roles$other_cols
@@ -340,15 +369,34 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, start, sheet, title, sub
   cv_names      <- get_col_var(tab)
   start_col_var <- which(cv_names != "" & cv_names != dplyr::lag(cv_names, default = NA_character_))
 
-  # Number formats: format(syntax = "excel") is the single display source of truth. Fold significance
-  # stars into the numFmt literal (0.0%"***"), keeping the cell a real number; a "TEXT"-coded cell
-  # (ci display) maps to Excel's "@" text format; NA codes stay General. Stars are STORAGE-driven
-  # (get_stars() is "" when no pvalue was stored -> a plain tab() shows none, tab_reg() shows them) --
-  # so this matches the console. When any cell is starred, pad EVERY value cell's star literal to the
-  # column-max width (spaces for non-starred cells) so the numbers stay aligned in the column.
-  numfmt <- if (length(fmt_cols)) purrr::map_dfr(fmt_cols, function(ci) {
-    col  <- tab[[ci]]
+  # Phase 13c-v: OR cells export as TEXT (the "1/x" reciprocal string) by DEFAULT so an OR < 1 reads
+  # symmetrically to an OR > 1 -- there is no point keeping the < 1 side numeric while the > 1 side is
+  # too; opt in to real numbers with tab_xl(or_numeric = TRUE). A column carrying any TEXT-coded cell
+  # (ci = "cell" brackets, or OR) is written as the format() display STRING (special_formatting = TRUE,
+  # so the 1/x + stars appear) under Excel's "@" text format -- it keeps the exact console display at
+  # the cost of a raw editable number (the accepted trade-off; pct/diff/mean/n stay real numbers).
+  or_family <- c("or", "OR", "or_pct", "OR_pct", "est_ci")
+  xl_code   <- function(col) {
     code <- format(col, syntax = "excel")
+    if (!isTRUE(o$or_numeric)) code[get_display(col) %in% or_family] <- "TEXT"
+    code
+  }
+  text_fmt_cols <- fmt_cols[vapply(
+    fmt_cols, function(ci) { cd <- xl_code(tab[[ci]]); any(!is.na(cd) & cd == "TEXT") }, logical(1))]
+
+  # Number formats: format(syntax = "excel") is the single display source of truth. Fold significance
+  # stars into the numFmt literal (0.0%"***"), keeping the cell a real number; a "TEXT"-coded column
+  # (ci / OR) is written as a string with Excel's "@" text format; NA codes stay General. Stars are
+  # STORAGE-driven (get_stars() is "" when no pvalue was stored). When any cell is starred, pad EVERY
+  # value cell's star literal to the column-max width so numbers stay aligned in the column.
+  numfmt <- if (length(fmt_cols)) purrr::map_dfr(fmt_cols, function(ci) {
+    col <- tab[[ci]]
+    if (ci %in% text_fmt_cols) {                        # text-mode column -> "@" per written cell
+      val  <- format(col, special_formatting = TRUE, na = "", stars = TRUE)
+      code <- ifelse(!is.na(val) & nzchar(val), "@", NA_character_)
+      return(tibble::tibble(col = as.integer(ci), row = seq_along(code) + data_row0, code = code))
+    }
+    code <- xl_code(col)
     st   <- get_stars(col)
     val  <- !is.na(code) & code != "TEXT"
     if (any(val & nzchar(st))) {
@@ -368,6 +416,9 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, start, sheet, title, sub
       m <- has_lbl & val
       code[m] <- paste0(code[m], '"', lbl[m], '"')
     }
+    # Phase 13c-v: the mean's sd twin column (display "var") gets a leading sigma so Excel reads "s2.5".
+    vmask <- disp == "var" & val
+    if (any(vmask)) code[vmask] <- paste0('"', sigma_sign, '"', code[vmask])
     code[!is.na(code) & code == "TEXT"] <- "@"
     tibble::tibble(col = as.integer(ci), row = seq_along(code) + data_row0, code = code)
   }) else tibble::tibble(col = integer(), row = integer(), code = character())
@@ -387,8 +438,8 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, start, sheet, title, sub
   colour <- dplyr::filter(colour, .data$slot > 0L)
 
   subtext_clean <- subtext[!is.na(subtext) & subtext != ""]
-  subtext_rows  <- if (length(subtext_clean)) seq_along(subtext_clean) + n + start + 1L else integer()
-  ref_rows      <- bold_rows + start + 1L
+  subtext_rows  <- if (length(subtext_clean)) seq_along(subtext_clean) + last_row else integer()
+  ref_rows      <- bold_rows + data_row0
   ref_row_cols  <- union(fmt_cols, txt_cols)
 
   # Unified FONT plan: openxlsx2's wb_add_font(update=) is buggy over large ranges when the sheet has
@@ -434,22 +485,31 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, start, sheet, title, sub
   styles <- xl_build_styles(
     header_row = header_row, data_rows = data_rows, last_row = last_row, ncl = ncl,
     fmt_cols = fmt_cols, txt_cols = txt_cols, totcols = totcols, start_col_var = start_col_var,
-    tot_rows      = roles$totrows         + start + 1L,
-    tot_rows_1    = roles$totblock_top    + start + 1L,
-    tot_rows_last = roles$totblock_bottom + start + 1L,
-    end_group     = utils::head(roles$new_group, -1L) + start + 1L,
+    tot_rows      = roles$totrows         + data_row0,
+    tot_rows_1    = roles$totblock_top    + data_row0,
+    tot_rows_last = roles$totblock_bottom + data_row0,
+    end_group     = utils::head(roles$new_group, -1L) + data_row0,
     fonts = fonts, bg_fill = bg_fill, title_row = start, subtext_rows = subtext_rows, o = o
   )
 
   list(
     sheet = sheet,
     title = title, title_row = start,
-    subtext = subtext_clean, subtext_row = n + start + 2L,
+    subtext = subtext_clean, subtext_row = last_row + 1L,
     # Phase 13b: the coloured legend runs occupy the FIRST rows of the subtext block (legend merged
     # first, above), overwritten with rich text by the writer.
-    legend_runs = legend_runs, legend_row = n + start + 2L,
-    data = dplyr::mutate(tab, dplyr::across(where(is_fmt), get_num)) |> tibble::as_tibble(),
-    header_row = header_row,
+    legend_runs = legend_runs, legend_row = last_row + 1L,
+    # Phase 13c-v: fmt cell values -- a text-mode column (ci = "cell" / OR) is written as its format()
+    # display STRING (the exact console text, "@"-formatted above); every other column writes the raw
+    # get_num() number and lets Excel's numFmt code format it. Built per column so the tibble carries a
+    # mix of character (text-mode) and numeric columns.
+    data = xl_materialize_data(tab, fmt_cols, text_fmt_cols),
+    header_row = header_row, ncl = ncl,
+    # Phase 13c-iii: the level header shows the suffix-stripped labels; the writer overwrites the header
+    # cells with them and (when has_span) writes the merged col_var spanning-name row above.
+    clean_names = if (!is.null(cvh)) cvh$clean else names(tab),
+    span_row = if (has_span) span_row else NA_integer_,
+    header_runs = if (has_span) tab_header_runs(cvh$label) else NULL,
     fmt_cols = fmt_cols, row_var_col = row_var_col, colwidth = colwidth,
     styles = styles, numfmt = numfmt
   )
@@ -638,8 +698,34 @@ xl_write_table <- function(wb, plan, o, reg) {
   xlb_write_cell(wb, s, xl_cell(plan$title_row, 1L), plan$title)
   if (length(plan$subtext)) xlb_write_cell(wb, s, xl_cell(plan$subtext_row, 1L), plan$subtext)
 
+  # Phase 13c-iii: overwrite the level-header cells with the suffix-stripped labels (the col_var name is
+  # written in the spanning row above), then the merged col_var spanning-name row (a variable name over
+  # its contiguous level columns; blank over the row var / total / count columns).
+  for (j in seq_len(plan$ncl)) xlb_write_cell(wb, s, xl_cell(hdr, j), plan$clean_names[j])
+  if (!is.na(plan$span_row)) {
+    runs <- plan$header_runs
+    col0 <- 1L
+    for (k in seq_along(runs$labels)) {
+      c1 <- col0; c2 <- col0 + runs$spans[k] - 1L
+      if (nzchar(runs$labels[k])) {
+        xlb_write_cell(wb, s, xl_cell(plan$span_row, c1), runs$labels[k])
+        if (c2 > c1)
+          xlb_merge(wb, s, paste0(xl_cell(plan$span_row, c1), ":", xl_cell(plan$span_row, c2)))
+      }
+      col0 <- c2 + 1L
+    }
+  }
+
   # --- styles: one composed xf (font + fill + border + alignment) per distinct cell style ---
   xl_apply_styles(wb, s, plan$styles, reg)
+
+  # Phase 13c-iii: style the col_var spanning-name row (bold + centred, like the level header).
+  if (!is.na(plan$span_row)) {
+    xf <- reg$xf_id(o$font_text, o$text_size_headers, TRUE, NA_character_, NA_character_,
+                    0L, 0L, 0L, 0L, "center", "", "", "")
+    wb$set_cell_style(sheet = s, style = xf,
+                      dims = paste0(xl_cell(plan$span_row, 1L), ":", xl_cell(plan$span_row, plan$ncl)))
+  }
 
   # --- number formats: one shared code over the fewest coalesced ranges (merges onto the xf) ---
   if (nrow(plan$numfmt)) {

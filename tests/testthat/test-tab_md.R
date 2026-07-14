@@ -183,17 +183,20 @@ testthat::test_that("tab_md alignment separator uses : for right/left alignment"
   testthat::expect_true(grepl(":-", sep_line))
 })
 
-testthat::test_that("tab_md all pipe lines have same number of pipes", {
-  
+testthat::test_that("tab_md pipe grid lines have same number of pipes", {
+
   md <- tab_md(tabs, bold_references = FALSE, print = FALSE)
   lines <- strsplit(md, "\n")[[1]]
   pipe_lines <- lines[grepl("^\\|", lines)]
 
-  # All lines should have same pipe count
-  pipe_counts <- purrr::map_int(pipe_lines,
-                                ~ stringr::str_count(., "\\|"))
+  # Phase 13c-iii: the col_var spanning-NAME header row (above the level header) is a visual title that
+  # merges cells, so it has fewer pipes by design. Check the pipe GRID -- the level header + alignment
+  # separator + data rows (from the separator's preceding line onward) -- which stays equal-width.
+  sep  <- which(grepl("^\\|[-: |]+$", pipe_lines))[1]
+  grid <- pipe_lines[seq.int(sep - 1L, length(pipe_lines))]
+  pipe_counts <- purrr::map_int(grid, ~ stringr::str_count(., "\\|"))
   testthat::expect_true(length(unique(pipe_counts)) == 1,
-                        label = "all pipe lines have same number of pipes")
+                        label = "all grid pipe lines have same number of pipes")
 })
 
 # === SECTION: wrap_rows =======================================================
@@ -243,9 +246,12 @@ testthat::test_that("coloured tables keep numbers aligned (equal pipe-line width
   md    <- tab_md(tabs_col, print = FALSE)
   lines <- strsplit(md, "\n")[[1]]
   pl    <- lines[grepl("^[|]", lines)]
-  # single col_var -> all pipe lines identical width AND identical pipe count
-  testthat::expect_length(unique(nchar(pl)), 1L)
-  pipes <- purrr::map_int(pl, ~ stringr::str_count(., "[|]"))
+  # Phase 13c-iii: exclude the col_var spanning-name header row (a visual title that merges cells);
+  # the pipe GRID (level header + separator + data) stays identical width AND identical pipe count.
+  sep  <- which(grepl("^[|][-: |]+$", pl))[1]
+  grid <- pl[seq.int(sep - 1L, length(pl))]
+  testthat::expect_length(unique(nchar(grid)), 1L)
+  pipes <- purrr::map_int(grid, ~ stringr::str_count(., "[|]"))
   testthat::expect_length(unique(pipes), 1L)
 })
 

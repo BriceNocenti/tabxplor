@@ -27,6 +27,18 @@
   `tab_plot()` / `tab_export()` forces the language. Excel legends are now colour-coded (rich text),
   `tab_md()` gained a colour legend, and regression tables (`tab_reg()`) get correct wording
   (β with SD thresholds, IRR vs OR).
+* **Exports & display polish.** HTML, Excel and Markdown exports now show the **column-variable name**
+  in a spanning header above its level columns (contiguous same-variable columns merged into one cell),
+  and the level names drop the disambiguating `_<variable>` suffix (e.g. `Other_race` -> `Other`). A
+  multi-table result (from `tab(output_list = TRUE)`, several row variables with tab-variables, or
+  `tab_many()`) is now a **`tabxplor_tabs`** list that prints like a single table (and `list |>
+  tab_kable()` opens in the Viewer) while still behaving like a plain list. Composite displays such as
+  `"{pct} (n={n})"` are padded so the numbers line up, and only the first field stays bold in total /
+  reference rows. Ratios now print with a multiply / divide sign (`x2`, `/2`); a colour = c("diff",
+  "ratio") table's tooltip shows the ratio correctly. **Excel**: `ci = "cell"` intervals and odds
+  ratios (with the `1/x` reciprocal) export as readable text; a new `tab_xl(or_numeric = TRUE)` keeps
+  odds ratios as numbers; differences and contributions get an explicit `+`/`-` sign, ratios a leading
+  `x`; each numeric variable exports a mean column plus a separate `<var>_sd` column.
 * New `tab_reg()` --- **regression tables** as color-coded `tabxplor` tables, over one engine with a
   `family` argument: linear coefficients (`"gaussian"`), odds ratios (`"binomial"`, logistic) or
   incidence-rate ratios (`"poisson"`), one row per predictor level grouped by predictor. Pass a

@@ -42,7 +42,9 @@ R/
 ├── tab_classes.R   (3554 L)  tabxplor_tab/grouped_tab classes, 30+ dplyr S3 methods,
 │                              print methods, tab_kable(), tab_plot(), tab_compact(),
 │                              OKLCH color palettes, set_color_palette()/get_color_style(),
-│                              set_color_breaks() (over/under scales), color_breaks table attr
+│                              set_color_breaks() (over/under scales), color_breaks table attr;
+│                              Phase 13c-iv tabxplor_tabs (multi-table LIST class: print/[/c/knit_print,
+│                              auto-print + Viewer routing); tab_materialize_extras (+ xl mean/_sd col)
 ├── tab_xl.R        (~595 L)  Excel export via openxlsx2 (Suggests-only; Phase 10h). Single-tab-first
 │                              + list. tab_xl() orchestrator -> tab_xl_plan_one() (pure per-table plan:
 │                              raw values + numFmt codes w/ stars + a precomposed per-cell STYLE grid
@@ -50,15 +52,19 @@ R/
 │                              xl_apply_styles = register deduped fonts/fills/borders + composed xf,
 │                              apply by id with set_cell_style, then the numFmt merging pass). Consumes
 │                              tab-export-prep (roles/refs/bold) + format(syntax="excel"); transpose
-│                              arg; conditional_format experimental; n_min/hide_near_zero inert
+│                              arg; conditional_format experimental; n_min/hide_near_zero inert.
+│                              Phase 13c-v: xl_materialize_data (ci-cell/OR text columns; or_numeric
+│                              arg), +/x/sigma numFmt, mean/_sd twin col, col_var span header + geometry
 ├── tab-xl-backend.R (~110 L) Phase 10h openxlsx2 backend: plumbing xlb_* engine wrappers (in-place R6
-│                              $) + the pure range coalescer (xl_runs/xl_coalesce -> fewest multi-area
-│                              dims). Styling-model notes (precompose + set_cell_style fast path).
+│                              $, +xlb_merge) + the pure range coalescer (xl_runs/xl_coalesce -> fewest
+│                              multi-area dims). Styling-model notes (precompose + set_cell_style path).
 ├── tab_md.R         (~560 L) Markdown export: plain padded pipe table + (Phase 10f) break-derived
 │                              pandoc colour spans [<num>]{.p20} (uniform, aligned) via tab_export_prep;
 │                              tab_md_css() per-table CSS generator; md_slot_class_map/md_break_class
 ├── tab-export-prep.R (~400 L) Phase 10d shared exporter prep: tab_export_prep() -> tabxplor_render
-│                              model (roles/ann/bold/range/labels), consumed by kable/md/plot/xl
+│                              model (roles/ann/bold/range/labels), consumed by kable/md/plot/xl;
+│                              Phase 13c-iii col_var header model tab_col_var_header()/tab_header_runs()
+│                              (spanning names + suffix-stripped level labels)
 ├── tab-render-html.R (~350 L) Phase 10e tab_kable render seam: render_kable_html() (kableExtra +
 │                              home-built self-contained html engines) + tab_kable_join/scrollbox
 ├── utils.R         (1306 L)  Pipe re-export, .onLoad() options setup, factor utilities
@@ -1738,6 +1744,52 @@ UNCHANGED (`test-color-golden.R` green); conscious regen of `_snaps/golden.md` +
 
 
 ### Phase 13c – Exports and display improvements
+
+#### Done (2026-07-15)
+
+Six sub-phases, full suite green (2285), goldens regenerated consciously (`golden.md` + `render-html.md`:
+composite padding, partial bold, spanning headers, suffix-stripped level names). No fmt field/attribute
+change.
+- **13c-i display core** (`R/fmt_class.R`, `R/tab_classes.R`, `R/utils.R`): composite `{}` tokens
+  right-padded to a uniform per-column width (`100% (n=  849)`); ratio (`rr`) display shows a multiply /
+  divide sign (`x2` / `/2` = the divide sign over `1/ratio`, new `div_sign`; text backends only — Excel
+  stays numeric); the kable/console **ratio tooltip** now formats the `rr` field under a `ratio:` label
+  (was the empty `or` field). Stars already right-pad/align (verified).
+- **13c-ii composite partial bold** (`R/fmt_class.R`, `R/tab_md.R`, `R/tab-render-html.R`): a bold
+  row/col bolds only a composite cell's FIRST field (`**100%** (n=…)`). `format(bold_split = TRUE)`
+  attaches a per-cell `primary_nchar` attr (default off -> attribute-free / byte-identical); md wraps the
+  prefix (`md_bold`), both html engines wrap the suffix in a `font-weight:normal` span (`html_cell_text`;
+  `cell_spec(escape = FALSE)` proven byte-identical to `escape = TRUE`). **Excel N/A** — composites there
+  resolve to their primary numeric value, no string.
+- **13c-iii col_var spanning headers + suffix stripping** (`R/tab-export-prep.R` shared
+  `tab_col_var_header()` -> per-column `label`/`clean` + `tab_header_runs()`): the col_var NAME spans its
+  level columns (a Total column stands alone); level names drop the `_<col_var>` disambiguation suffix.
+  md spanning row shown for a single col_var too (a VISUAL title row -> fewer pipes; the pipe-grid tests
+  were scoped to the level-header + separator + data); kableExtra `add_header_above` + `col.names`; html
+  engine `<thead>` colspan row; Excel span row + `xlb_merge` (below).
+- **13c-iv `tabxplor_tabs` list class** (`R/tab_classes.R`, wrapped at `tab()`/`tab_many()` return): an
+  S3 list (inherits `"list"`; `print`/`[`/`c`/`knit_print`) for multi-table results -> auto-prints like a
+  single tab (honours `options("tabxplor.print")`) and `list |> tab_kable()` routes to the Viewer
+  (`tab_kable_join` gives the joined kableExtra-engine HTML the `kableExtra` class). `is.list`/`[[`/`map`
+  unaffected; a single tab is returned bare.
+- **13c-v Excel** (`R/tab_xl.R`, `R/tab-xl-backend.R`, `R/fmt_class.R`): `excel_numfmt_code()` gains an
+  explicit `+`/`-` sign for pct diff + contrib and a leading `x` for ratio (kept numeric). ci = "cell"
+  intervals + OR (with `1/x`) export as **text** columns (`xl_materialize_data`, `@` numFmt); new
+  `tab_xl(or_numeric = TRUE)` / `options(tabxplor.xl_or_numeric)` keeps OR numeric. Each numeric mean
+  gets a sibling **`<var>_sd`** column (sqrt(var), uncoloured, sigma numFmt — injected in
+  `tab_materialize_extras(backend = "xl")`; console/kable/md keep inline `(sd)`). The **col_var spanning
+  header** shifts the geometry down one row (`span_off`, `+6` stacking, `xlb_merge`, clean level labels).
+- **13c-vi**: transpose-at-export verified — both colour channels + numeric means/sd survive; no fix
+  needed.
+
+Caveats / deferred: **`+Nsd` sd-unit display for mean_diff** deferred (overlaps Phase 5's numeric-diff
+DISPLAY). Excel ratio stays a real number, so `< 1` shows `x0.5` (the divide sign needs an inverted value
+-> text only, not used). md col_var-name row is a visual title (not a valid pandoc pipe row -- matches the
+pre-existing multi-col_var behaviour). Pre-existing test `tab_logit "color_signif='ignore' colours
+non-sig ORs"` fails **in isolation** but passes in the full suite (a color-breaks-leak ordering artifact,
+NOT from 13c).
+
+---
 
 Missing infos on exported tables, compared to what’s default in other statistical software ?
 - Display the variable names for `col_vars` : not in console, but in html and Excel, add a second headers line above the main headers row with the levels ; when contiguous fmt columns have the same col_vars, merge the variable names headers cells into a single cell (name of the same variable only needs to be given once).
