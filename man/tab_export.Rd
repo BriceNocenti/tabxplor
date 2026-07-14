@@ -13,6 +13,7 @@ tab_export(
   html_24_bit = NULL,
   color = TRUE,
   color_legend = TRUE,
+  lang = NULL,
   transpose = FALSE,
   caption = NULL,
   ...
@@ -36,7 +37,11 @@ inverse (colours follow the theme).}
 
 \item{color}{Set to \code{FALSE} to render without colours (monochrome).}
 
-\item{color_legend}{Print the colour legend with the subtext (\code{"kable"}/\code{"xl"}/\code{"plot"}).}
+\item{color_legend}{Print the colour legend with the subtext
+(\code{"kable"}/\code{"md"}/\code{"xl"}/\code{"plot"}).}
+
+\item{lang}{Legend language: \code{NULL} (auto from the R/OS locale, English fallback),
+\code{"en"} or \code{"fr"}.}
 
 \item{transpose}{Set to \code{TRUE} to transpose each table before export (rows become columns) --
 the col-percentages-with-several-row-variables use case.}

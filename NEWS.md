@@ -17,6 +17,16 @@
   `set_color_palette()`); console output is 24-bit truecolor (falling back to an 8-bit palette only in
   the RStudio console). `set_color_style()` (and its `custom_palette`/`html_24_bit` machinery) is
   replaced by `set_color_palette()`; the export functions keep an inert `html_24_bit` argument.
+* **Meaningful colour legends.** The colour legend below each table is now a readable sentence -- e.g.
+  *"Shades of blue: cells >= the Total row +5; +10; +20; +30 points. ... Grey: not significantly
+  different from the Total row (Newcombe score interval, 95% confidence)."* -- with each break-word
+  shown in its own colour. It names the reference (row/column Total or the reference category), the
+  thresholds, the significance policy and the exact confidence-interval method and level actually used.
+  A **French translation** is included and selected automatically from the R/OS locale (English
+  otherwise); a new `lang` argument (`"en"` / `"fr"`) on `tab_kable()` / `tab_md()` / `tab_xl()` /
+  `tab_plot()` / `tab_export()` forces the language. Excel legends are now colour-coded (rich text),
+  `tab_md()` gained a colour legend, and regression tables (`tab_reg()`) get correct wording
+  (β with SD thresholds, IRR vs OR).
 * New `tab_reg()` --- **regression tables** as color-coded `tabxplor` tables, over one engine with a
   `family` argument: linear coefficients (`"gaussian"`), odds ratios (`"binomial"`, logistic) or
   incidence-rate ratios (`"poisson"`), one row per predictor level grouped by predictor. Pass a

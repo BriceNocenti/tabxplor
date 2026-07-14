@@ -28,6 +28,9 @@
 #'   `[value]{.class}` so the markdown renders coloured in Quarto / RMarkdown / pandoc (and the
 #'   companion \code{\link{tab_md_css}} styles the classes). `FALSE` produces plain monochrome
 #'   markdown. Uncoloured tables never get spans.
+#' @param color_legend When `TRUE` (default) and the table is coloured, prepend a colour-legend prose
+#'   line (its break-words in the same pandoc classes as the cells) above the subtext.
+#' @param lang Colour-legend language: `NULL` (auto from the R/OS locale, English fallback), `"en"` or `"fr"`.
 #' @param theme,color_type,html_24_bit Colour palette selectors (as in
 #'   \code{\link[=tab_kable]{tab_kable()}}); they only affect the CSS emitted by `css = TRUE` /
 #'   \code{\link{tab_md_css}}, since the span *class names* are palette-independent.
@@ -62,6 +65,8 @@ tab_md <- function(tabs,
                    wrap_rows = NULL,
                    subtext = TRUE,
                    color = TRUE,
+                   color_legend = TRUE,
+                   lang = NULL,
                    theme = c("light", "dark"),
                    color_type = NULL,
                    html_24_bit = NULL,
@@ -100,6 +105,7 @@ tab_md <- function(tabs,
   parts   <- purrr::imap_chr(prep$tables, function(rd, i) {
     md_render_one(rd, special_formatting = special_formatting, wrap_rows = wrap_rows,
                   subtext = subtext, color = color,
+                  color_legend = color_legend, lang = lang,
                   title = if (i == 1) caption else NULL,
                   color_type = color_type, theme = theme)
   })
@@ -190,7 +196,7 @@ tab_md_css <- function(tabs,
 # uniform scaffold keeps the numbers aligned in raw text. Uncoloured tables (or color = FALSE) render
 # the byte-identical plain padded table.
 md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
-                          color = TRUE, title = NULL,
+                          color = TRUE, color_legend = TRUE, lang = NULL, title = NULL,
                           color_type = NULL, theme = NULL) {
   # Graceful degrade -- a table that can't be read as a tabxplor table renders as a plain pipe table.
   if (isTRUE(rd$vars$degrade)) {
@@ -201,6 +207,15 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   tabs         <- rd$tab
   tab_vars     <- rd$vars$tab_vars
   subtext_text <- if (subtext) rd$subtext else character(0)
+
+  # Phase 13b: prepend the colour legend as a prose line, its break-words wrapped in the SAME pandoc
+  # span classes the cells use (md_break_class-consistent -> tab_md_css() colours them). Only when
+  # coloured (a legend describes the colours). Prepended above the user subtext.
+  if (isTRUE(color) && isTRUE(color_legend) && length(rd$roles$color_cols) != 0) {
+    leg <- suppressWarnings(tab_color_legend(tabs, medium = "md", style = "prose", lang = lang,
+                                             color_type = color_type, theme = theme))
+    if (length(leg)) subtext_text <- c(leg, subtext_text)
+  }
 
   # md drops the trailing separator (no line after the last row); the prep's new_group is the base.
   new_group <- rd$roles$new_group

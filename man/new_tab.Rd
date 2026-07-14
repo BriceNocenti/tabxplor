@@ -11,6 +11,7 @@ new_tab(
   test = new_test_tibble(),
   chi2 = NULL,
   render_extras = NULL,
+  ci_settings = NULL,
   ...,
   class = character()
 )
@@ -22,6 +23,7 @@ new_grouped_tab(
   test = new_test_tibble(),
   chi2 = NULL,
   render_extras = NULL,
+  ci_settings = NULL,
   ...,
   class = character()
 )

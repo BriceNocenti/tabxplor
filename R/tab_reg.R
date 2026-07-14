@@ -1378,7 +1378,9 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
     if (is.null(tests) || nrow(tests) == 0) tests <- new_test_tibble()
     return(
       combined |>
-        new_tab(subtext = subtext, test = tests) |>
+        new_tab(subtext = subtext, test = tests,
+                ci_settings = list(conf_level = conf_level, method_cell = NA_character_,
+                                   method_diff = method)) |>
         dplyr::group_by(!!rlang::sym(split_var), var)
     )
   }
@@ -1521,7 +1523,9 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
   # the crosstab renderers ignore it); it is materialised as a console block / export rows at display,
   # never baked into the fmt columns (the coefficient skeleton stays intact for downstream reads).
   tab |>
-    new_tab(subtext = subtext, test = reg_gof) |>
+    new_tab(subtext = subtext, test = reg_gof,
+            ci_settings = list(conf_level = conf_level, method_cell = NA_character_,
+                               method_diff = method)) |>
     dplyr::group_by(var)
 }
 

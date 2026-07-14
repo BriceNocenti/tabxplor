@@ -9,6 +9,7 @@ tab_xl(
   path = NULL,
   replace = FALSE,
   open = rlang::is_interactive(),
+  lang = NULL,
   colnames_rotation = 0,
   remove_tab_vars = TRUE,
   colwidth = 10,
@@ -44,6 +45,9 @@ to change default directory. By default replace is \code{TRUE} when \code{path} 
 Use \code{replace = TRUE} to overwrite existing files. Use \code{open = FALSE}
 if you don't want to automatically open the tables in Excel (or another
 software associated with .xlsx files).}
+
+\item{lang}{Colour-legend language: \code{NULL} (auto from the R/OS locale, English fallback),
+\code{"en"} or \code{"fr"}.}
 
 \item{colnames_rotation}{Rotate the names of columns to an angle (in degrees).}
 

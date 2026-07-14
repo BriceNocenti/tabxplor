@@ -2655,178 +2655,442 @@ fmt_channel_codes <- function(x, color_type = "text", theme = "light") {
 
 
 
+# === SECTION: Phase 13b colour legend ==============================================================
+# tab_color_legend() builds the human-readable colour legend, driven by the SAME per-channel plan
+# (fmt_color_plan) + slot->palette path the CELLS use, so legend and cells can never disagree.
+# Pipeline (one spec -> two assemblers -> per-medium renderer):
+#   legend_specs(x)                         per col_var group: measures / breaks / ref / method /
+#                                           policy / shade names / reg effect word.
+#   legend_tokens_terse / _prose            a TOKEN stream (plain-text | coloured-break tokens);
+#                                           `terse` = compact (console), `prose` = full sentences
+#                                           (exports), translated via gettext (domain "R-tabxplor").
+#   legend_render_line(tokens, medium)      console crayon / html text_spec / md pandoc span /
+#                                           excel fmt_txt runs / plain.
+# The break-word colours come from the engine's per-side slots (over 1:4, under 5:8) indexed into the
+# 8-hex palette -- the exact path fmt_channel_codes() / md_slot_class_map() use for the cells.
+
+# fixed (non-translated) symbols, kept as \uXXXX so R source stays ASCII.
+.lg_ge    <- "\u2265"   # >=
+.lg_le    <- "\u2264"   # <=
+.lg_times <- "\u00d7"   # x  (times)
+.lg_div   <- "\u00f7"   # /  (division)
+.lg_beta  <- "\u03b2"   # beta
+
+# a legend token: plain text (c = NA) or a coloured break-word (c = palette slot 1:8).
+.lg_tok  <- function(t) list(t = t, c = NA_integer_, ch = NA_character_, cls = NA_character_)
+.lg_ctok <- function(t, slot, ch, cls) list(t = t, c = as.integer(slot), ch = ch, cls = cls)
+
+# resolve the display language: explicit `lang` > options(tabxplor.lang) > R/OS locale; english default.
 #' @keywords internal
-tab_color_legend <- function(x, colored = TRUE, mode = c("console", "html"),
-                             html_theme = NULL, html_type = NULL,
-                             text_color = NULL, grey_color = NULL,
-                             add_color_and_diff_types = FALSE, all_variables_names = FALSE) {
-  # PURPOSE: build the human-readable colour legend, driven by the SAME per-channel plan
-  # (fmt_color_plan) and slot->palette path the cells use, so legend and cells can never disagree.
-  # Two channels are described independently (text measure + background measure); each measure's
-  # thresholds are read from the canonical scales and coloured by their palette slots. Numeric
-  # `diff` shows the standardized (Glass's delta, SD) thresholds; ratios show x/1 operators.
-  mode        <- mode[1]
-  html_theme  <- if (is.null(html_theme)) getOption("tabxplor.color_style_theme") else html_theme
+legend_resolve_lang <- function(lang = NULL) {
+  if (is.null(lang) || identical(lang, "")) lang <- getOption("tabxplor.lang", "auto")
+  lang <- tolower(as.character(lang)[1])
+  if (lang %in% c("fr", "french", "francais", "fran\u00e7ais")) return("fr")
+  if (lang %in% c("en", "english"))                             return("en")
+  # auto: prioritise the MESSAGE-language signals (a user running English R on a French Windows must
+  # get English), falling back to the character locale only when none is set.
+  sources <- c(Sys.getenv("LANGUAGE"), Sys.getlocale("LC_MESSAGES"),
+               Sys.getenv("LC_MESSAGES"), Sys.getenv("LANG"), Sys.getenv("LC_ALL"))
+  sources <- sources[nzchar(sources)]
+  probe   <- if (length(sources)) sources[1] else Sys.getlocale("LC_CTYPE")
+  if (grepl("(^|[^a-z])fr|franc", probe, ignore.case = TRUE)) "fr" else "en"
+}
 
-  # keep only coloured fmt columns (text OR background channel)
-  is_f  <- purrr::map_lgl(x, is_fmt)
-  ct    <- get_color(x)
-  cbg   <- get_color_bg(x)
-  keep  <- is_f & ((!is.na(ct)  & !ct  %in% c("no", "")) |
-                   (!is.na(cbg) & !cbg %in% c("no", "")))
-  if (!any(keep)) return(NULL)
+# number -> string (trimmed, no padding), FR decimal comma.
+legend_num <- function(v, lang) {
+  s <- trimws(formatC(v, format = "fg", digits = 4, drop0trailing = TRUE))
+  if (identical(lang, "fr")) s <- gsub("[.]", ",", s)
+  s
+}
 
-  # group columns by col_var (colour is uniform within a col_var); keep the first coloured column
-  # of each col_var as its representative.
-  col_vars_levels <- tab_get_vars(x)$col_vars_levels %>%
-    purrr::discard(names(.) == "all_col_vars")
-  kept_names <- names(x)[keep]
-  reps <- col_vars_levels %>%                                # map_chr keeps the col_var names
-    purrr::map_chr(~ {
-      cols <- .x[.x %in% kept_names]
-      if (length(cols) == 0) NA_character_ else cols[1]
+# a compact reference word for the terse (console) form.
+legend_ref_short <- function(spec, lang) {
+  ref <- spec$ref
+  switch(ref$kind,
+         "tot"      = if (!is.na(ref$label) && nzchar(ref$label)) ref$label else gettext("Total"),
+         "level"    = if (!is.na(ref$label) && nzchar(ref$label)) ref$label else gettext("ref."),
+         "category" = gettext("ref."),
+         "indep"    = gettext("indep."),
+         "")
+}
+
+# one break threshold -> its bare label (no colour), per measure. `is_std` = the diff is sd-standardized
+# (numeric mean / regression coef): show SD units, not pct-points.
+legend_break_label <- function(measure, brk, dir, is_std, lang) {
+  neg <- dir < 0L
+  if (identical(measure, "diff") && !is_std) {                 # pct-points
+    paste0(if (neg) "-" else "+", legend_num(abs(brk) * 100, lang))
+  } else if (identical(measure, "diff")) {                     # sd-standardized (Glass's delta / coef)
+    paste0(if (neg) "-" else "+", legend_num(abs(brk), lang))
+  } else if (measure %in% c("ratio", "contrib")) {
+    paste0(if (neg) .lg_div else .lg_times, legend_num(abs(brk), lang))
+  } else if (identical(measure, "or")) {
+    if (neg) paste0("1/", legend_num(abs(brk), lang)) else legend_num(abs(brk), lang)
+  } else as.character(brk)
+}
+
+# the coloured break tokens of one channel, split over / under (each a list of tokens). Slot 0 (a
+# scale that skips an intensity via NA) -> a plain, uncoloured token. `cls` = the md pandoc class,
+# md_break_class-consistent with the cells (bg channel -> "bg" prefix), so tab_md_css() colours them.
+legend_break_tokens <- function(plan, is_std, is_mean, channel, lang) {
+  if (is.null(plan)) return(list(over = list(), under = list()))
+  measure <- plan$measure
+  mk_side <- function(breaks, slots, dir) {
+    lapply(seq_along(breaks), function(l) {
+      slot <- slots[l + 1L]
+      lab  <- legend_break_label(measure, breaks[l], dir, is_std, lang)
+      if (is.na(slot) || slot == 0L) return(.lg_tok(lab))
+      cls <- md_break_class(measure, plan$center, is_mean, breaks[l], dir, l)
+      if (identical(channel, "bg")) cls <- paste0("bg", cls)
+      .lg_ctok(lab, slot, channel, cls)
     })
-  reps <- reps[!is.na(reps)]
-  if (length(reps) == 0) return(NULL)
-
-  # ---- formatting helpers --------------------------------------------------------------------
-  format_g <- function(v) trimws(formatC(v, format = "fg", digits = 3, drop0trailing = TRUE))
-
-  ref_label <- function(r) {
-    if (length(r) == 0 || is.na(r)) return("")
-    ri <- suppressWarnings(as.integer(r))
-    if (!is.na(ri)) return(paste0("row", ri))
-    switch(r, "first" = "1st", "tot" = "tot", r)
   }
+  list(over  = mk_side(plan$over_breaks,  plan$over_slots,  +1L),
+       under = mk_side(plan$under_breaks, plan$under_slots, -1L))
+}
 
-  measure_word <- function(measure, is_mean, std) {
-    switch(measure,
-           "diff"    = if (is_mean && std) "diff/sd" else "diff",
-           "ratio"   = "ratio",
-           "or"      = "OR",
-           "contrib" = "contrib",
-           measure)
-  }
+# join tokens with a plain-text separator.
+legend_join <- function(toks, sep) {
+  if (length(toks) == 0) return(list())
+  out <- list(toks[[1]])
+  for (i in seq_along(toks)[-1]) out <- c(out, list(.lg_tok(sep)), list(toks[[i]]))
+  out
+}
 
-  brk_label <- function(measure, v, dir, is_mean, std) {
-    if (v == 0) return("signif")                             # single-0 break = the old "ci" look
-    if (measure == "diff" && !is_mean) {
-      lab <- paste0(sprintf("%1.0f", abs(v) * 100), "%")
-      if (dir > 0) paste0("+", lab) else paste0("-", lab)
-    } else if (measure == "diff" && is_mean && std) {
-      if (dir > 0) paste0("+", format_g(v), "sd") else paste0("-", format_g(v), "sd")
-    } else if (measure == "diff" && is_mean) {
-      if (dir > 0) paste0("+", format_g(v)) else paste0("-", format_g(v))
-    } else if (measure %in% c("ratio", "or")) {
-      if (dir > 0) paste0(cross, format_g(v)) else paste0("/", format_g(v))
-    } else if (measure == "contrib") {
-      paste0(cross, format_g(v))
+# default palette -> baked colour-shade names; a custom palette (set_color_palette) -> NA (generic,
+# the coloured break-words carry the meaning). The over side of the default palette is teal->blue,
+# the under side gold->red, in both light and dark, so the names are hue-descriptive and theme-free.
+legend_shade_names <- function() {
+  is_default <- tryCatch({
+    b <- get0("base", envir = tabxplor_palette_env)
+    is.null(b) || (identical(b$text_colors,     default_text_colors) &&
+                   identical(b$text_colors_neg, default_text_colors_neg))
+  }, error = function(e) FALSE)
+  if (isTRUE(is_default))
+    c(over = gettext("Shades of blue"), under = gettext("Shades of yellow to red"))
+  else
+    c(over = NA_character_, under = NA_character_)
+}
+
+# a regression column's effect word (OR / IRR / beta / AME / MER), read from the column-name suffix the
+# package itself writes ("<base>: <word>", reg_effect_word); NA when not a recognised reg label.
+legend_reg_effect_word <- function(cn) {
+  w <- sub(".*:[[:space:]]*", "", cn)
+  if (identical(w, cn)) return(NA_character_)
+  if (w %in% c("OR", "IRR", .lg_beta, "AME", "MER", paste0("exp(", .lg_beta, ")"))) w else NA_character_
+}
+
+# recover a NON-total reference's actual label (the marked reference row / column). Returns NA when
+# there is no single unambiguous label -- e.g. a grouped table's per-subtable references, or a total
+# reference (those use the generic localized "Total"). The prose falls back gracefully on NA.
+legend_ref_label <- function(x, col, orientation) {
+  tryCatch({
+    if (identical(orientation, "col")) {
+      idx <- which(purrr::map_lgl(x, ~ is_fmt(.) && isTRUE(is_refcol(.))))
+      if (length(idx) == 0) return(NA_character_)
+      nm <- names(x)[idx[[1]]]
+      if (startsWith(nm, "Total")) NA_character_ else nm     # a total column -> the generic "Total"
     } else {
-      as.character(v)
+      rv <- tab_get_vars(x)$row_var
+      if (is.null(rv) || length(rv) == 0 || is.na(rv)) return(NA_character_)
+      idx <- which(is_refrow(col))                           # the marked reference row(s) only
+      if (length(idx) == 0) return(NA_character_)
+      labs <- unique(as.character(x[[rv]][idx]))
+      if (length(labs) == 1) labs else NA_character_          # ambiguous across subtables -> generic
     }
-  }
+  }, error = function(e) NA_character_)
+}
 
-  # colour one label with a palette slot, for the current mode / channel
-  paint <- function(label, slot, palette_type) {
-    if (!isTRUE(colored) || is.na(slot) || slot == 0L) return(label)
-    if (mode == "console") {
-      get_color_style("crayon", type = palette_type)[[slot]](label)
-    } else {
-      hex <- get_color_style("color_code", type = palette_type, theme = html_theme)[[slot]]
-      if (palette_type == "text") kableExtra::text_spec(label, color = hex)
-      else                        kableExtra::text_spec(label, background = hex)
-    }
-  }
+# per col_var reference descriptor (kind + recovered label + orientation). A "tot" reference always
+# uses the generic localized "Total" (label = NA); only a non-total reference (ref = "first" / a level /
+# an index) recovers its actual label.
+legend_ref_info <- function(x, col, measure, orientation) {
+  if (identical(measure, "contrib"))
+    return(list(kind = "indep", label = NA_character_, orientation = orientation))
+  if (identical(measure, "or"))
+    return(list(kind = "category", label = legend_ref_label(x, col, "row"), orientation = "row"))
+  ref <- get_ref_type(col); ref <- if (length(ref)) as.character(ref)[1] else "tot"
+  if (identical(ref, "tot"))
+    list(kind = "tot", label = NA_character_, orientation = orientation)
+  else
+    list(kind = "level", label = legend_ref_label(x, col, orientation), orientation = orientation)
+}
 
-  # one channel's coloured threshold string, from its plan (NULL -> no channel). The over and under
-  # sides carry their own magnitudes (asymmetric scales) and their own palette slots (over 1:4,
-  # under 5:8), so each side is laid out independently.
-  channel_scale <- function(plan, is_mean, std, palette_type) {
-    if (is.null(plan)) return(NA_character_)
+# the localized reference phrase used in the lead / grey note.
+legend_ref_phrase <- function(spec, lang) {
+  ref <- spec$ref
+  lab <- ref$label
+  if (identical(ref$kind, "indep")) return(gettext("independence"))
+  if (identical(ref$kind, "category")) {
+    if (!is.na(lab) && nzchar(lab)) return(gettextf("the reference category (%s)", lab))
+    return(gettext("the reference category"))
+  }
+  base <- if (identical(ref$orientation, "col")) gettext("column") else gettext("row")
+  if (is.na(lab) || !nzchar(lab)) lab <- gettext("Total")
+  gettextf("the %s %s", lab, base)                 # EN "the Total row"; FR "la %2$s %1$s" -> "la ligne Total"
+}
+
+# the CI-method name (NA when there is none, e.g. contrib).
+legend_method_name <- function(spec) {
+  cis <- spec$ci_settings
+  if (isTRUE(spec$is_reg)) {
+    if (identical(cis$method_diff, "profile")) return(gettext("profile-likelihood interval"))
+    if (identical(spec$ci_type, "or"))         return(gettext("Wald interval on the log odds-ratio"))
+    return(gettext("Wald interval"))
+  }
+  if (identical(spec$measure_text, "or")) return(gettext("Wald interval on the log odds-ratio"))
+  if (identical(spec$measure_text, "contrib")) return(NA_character_)
+  if (isTRUE(spec$is_mean)) return(gettext("Welch t interval"))
+  md <- cis$method_diff; if (is.null(md)) md <- "newcombe"
+  switch(md,
+         "newcombe" = gettext("Newcombe score interval"),
+         "ac"       = gettext("Wald interval with Agresti-Caffo adjustment"),
+         "wald"     = gettext("Wald interval"),
+         gettext("confidence interval"))
+}
+
+# "<method>, 95% confidence" (or just the confidence text when there is no method name).
+legend_method_phrase <- function(spec, lang) {
+  conf <- gettextf("%s%% confidence", legend_num(spec$ci_settings$conf_level * 100, lang))
+  m    <- legend_method_name(spec)
+  if (is.na(m)) conf else gettextf("%s, %s", m, conf)
+}
+
+# the measure / effect word (reg effect word takes precedence).
+legend_measure_word <- function(measure, is_std, eff_word, lang) {
+  if (!is.na(eff_word)) return(eff_word)
+  switch(measure,
+         "diff"    = if (isTRUE(is_std)) gettext("standardized difference") else gettext("difference"),
+         "ratio"   = gettext("ratio"),
+         "or"      = "OR",
+         "contrib" = gettext("contribution to Chi2"),
+         measure)
+}
+
+legend_ucfirst <- function(s) {
+  if (!nzchar(s)) return(s)
+  paste0(toupper(substr(s, 1, 1)), substr(s, 2, nchar(s)))
+}
+
+# ---- assemblers: spec -> token stream --------------------------------------------------------------
+
+# TERSE (console): compact, one line per group -- names? + measure (ref): <breaks>  [; bg]  [policy].
+legend_tokens_terse <- function(spec, lang, show_names) {
+  colon <- if (identical(lang, "fr")) " : " else ": "
+  toks <- list()
+  if (show_names) toks <- c(toks, list(.lg_tok(paste0(paste(utils::head(spec$col_names, 3),
+                                                            collapse = ", "), colon))))
+  rs <- legend_ref_short(spec, lang)
+  add_channel <- function(plan, prefix, is_bg) {
+    mw <- legend_measure_word(plan$measure, spec$is_std, spec$eff_word, lang)
+    bt <- legend_break_tokens(plan, spec$is_std, spec$is_mean, if (is_bg) "bg" else "text", lang)
+    seq_toks <- c(rev(bt$under), bt$over)
+    lbl <- paste0(prefix, mw, if (!is_bg && nzchar(rs)) paste0(" (", rs, ")") else "", colon)
+    c(list(.lg_tok(lbl)), legend_join(seq_toks, " "))
+  }
+  if (!is.null(spec$plan_txt)) toks <- c(toks, add_channel(spec$plan_txt, "", FALSE))
+  if (!is.null(spec$plan_bg))  toks <- c(toks, list(.lg_tok(if (identical(lang, "fr")) " ; " else "; ")),
+                                         add_channel(spec$plan_bg, paste0(gettext("bg"), " "), TRUE))
+  pn <- switch(spec$policy,
+               "grey_non_signif"   = gettext("significant only"),
+               "guaranteed_effect" = gettext("significant, error-adjusted"),
+               "")
+  if (nzchar(pn)) toks <- c(toks, list(.lg_tok(paste0(" [", pn, "]"))))
+  toks
+}
+
+# PROSE (exports): full translatable sentences with coloured break-words. Everything measure-specific
+# (subject / lead / unit / whether the reference is in the lead) is derived from the PLAN's own
+# measure inside one_side(), so the text channel (e.g. diff) and the background channel (e.g. ratio)
+# each describe themselves correctly.
+legend_tokens_prose <- function(spec, lang, show_names) {
+  ref_phrase  <- legend_ref_phrase(spec, lang)
+  meth_phrase <- legend_method_phrase(spec, lang)
+  # French typography: a (thin) space before the high punctuation ; : (matches the user's examples).
+  semi  <- if (identical(lang, "fr")) " ; " else "; "
+  colon <- if (identical(lang, "fr")) " : " else ": "
+
+  one_side <- function(plan, dir, is_bg, no_shade = FALSE) {
+    if (is.null(plan)) return(NULL)
+    bt   <- legend_break_tokens(plan, spec$is_std, spec$is_mean, if (is_bg) "bg" else "text", lang)
+    side <- if (dir > 0) bt$over else bt$under
+    if (length(side) == 0) return(NULL)
     measure <- plan$measure
-    neg <- purrr::map_chr(seq_along(plan$under_breaks), ~ paint(
-      brk_label(measure, plan$under_breaks[.x], -1L, is_mean, std),
-      plan$under_slots[.x + 1L], palette_type))
-    pos <- purrr::map_chr(seq_along(plan$over_breaks), ~ paint(
-      brk_label(measure, plan$over_breaks[.x], +1L, is_mean, std),
-      plan$over_slots[.x + 1L], palette_type))
-    labs <- c(rev(neg), pos)
-    labs <- labs[nzchar(labs)]
-    paste(labs, collapse = " ")
+    subject <- if (!is.na(spec$eff_word)) spec$eff_word
+               else if (identical(measure, "or")) "OR" else gettext("cells")
+    has_ref_lead <- !identical(measure, "or") && !isTRUE(spec$is_coef)  # coef / OR carry the ref in the note only
+    unit <- switch(measure,
+                   "diff" = if (isTRUE(spec$is_std)) paste0(" ", gettext("SD")) else paste0(" ", gettext("points")),
+                   "")
+    cmp   <- if (dir > 0) .lg_ge else .lg_le
+    shade <- if (no_shade) NA_character_ else if (dir > 0) spec$shades[["over"]] else spec$shades[["under"]]
+    lead  <- if (has_ref_lead) gettextf("%s %s %s", subject, cmp, ref_phrase) else gettextf("%s %s", subject, cmp)
+    head_toks <- if (!is.na(shade)) list(.lg_tok(paste0(shade, colon, lead, " ")))
+                 else               list(.lg_tok(paste0(legend_ucfirst(lead), " ")))
+    # guaranteed_effect: the coloured thresholds are the CI floor -> annotate the OVER sentence
+    # ("..., after subtracting the margin of error (<method>).") instead of a bare ".".
+    tail <- if (dir > 0 && identical(spec$policy, "guaranteed_effect"))
+              paste0(unit, ", ", gettextf("after subtracting the margin of error (%s)", meth_phrase), ".")
+            else paste0(unit, ".")
+    c(head_toks, legend_join(side, semi), list(.lg_tok(tail)))
   }
 
-  policy_note <- function(policy) {
-    switch(policy,
-           "grey_non_signif"  = " [signif. only]",
-           "guaranteed_effect" = " [signif., CI-floor]",
-           "")
+  toks <- list()
+  if (show_names)
+    toks <- c(toks, list(.lg_tok(paste0(paste(spec$col_names, collapse = ", "), " \u2014 "))))
+
+  is_bg_only <- is.null(spec$plan_txt)
+  primary    <- if (is_bg_only) spec$plan_bg else spec$plan_txt
+  ov <- one_side(primary, +1L, is_bg_only); un <- one_side(primary, -1L, is_bg_only)
+  if (!is.null(ov)) toks <- c(toks, ov)
+  if (!is.null(un)) toks <- c(toks, list(.lg_tok(" ")), un)
+
+  # a second measure on the background channel (e.g. color = c("diff","ratio")).
+  if (!is.null(spec$plan_txt) && !is.null(spec$plan_bg)) {
+    bgw <- legend_measure_word(spec$measure_bg, spec$is_std, NA_character_, lang)
+    toks <- c(toks, list(.lg_tok(paste0(" ", gettextf("Background colour (%s):", bgw)))))
+    bov <- one_side(spec$plan_bg, +1L, TRUE, no_shade = TRUE)
+    bun <- one_side(spec$plan_bg, -1L, TRUE, no_shade = TRUE)
+    if (!is.null(bov)) toks <- c(toks, list(.lg_tok(" ")), bov)
+    if (!is.null(bun)) toks <- c(toks, list(.lg_tok(" ")), bun)
   }
 
-  # ---- per-representative-column legend spec (imap: cn = column name, cv = col_var name) ------
+  # the grey-cells note (guaranteed_effect already annotated the over sentence).
+  if (identical(spec$policy, "grey_non_signif"))
+    toks <- c(toks, list(.lg_tok(paste0(" ", gettextf("Grey: not significantly different from %s (%s).",
+                                                  ref_phrase, meth_phrase)))))
+  else if (identical(spec$policy, "guaranteed_effect"))
+    toks <- c(toks, list(.lg_tok(paste0(" ", gettextf(
+      "Grey: not significantly different from %s after the margin of error.", ref_phrase)))))
+  toks
+}
+
+# ---- render a token stream for one medium ----------------------------------------------------------
+# excel -> a list of runs list(text=, color=, bold=); every other medium -> a single string.
+legend_render_line <- function(tokens, medium, theme, color_type, colored) {
+  slot_hex <- function(slot, ch)
+    toupper(unname(get_color_style("color_code",
+                                   type = if (identical(ch, "text")) color_type else "bg",
+                                   theme = theme)[slot]))
+  if (identical(medium, "excel")) {
+    return(lapply(tokens, function(tk) {
+      if (isTRUE(colored) && !is.na(tk$c) && tk$c > 0L)
+        list(text = tk$t, color = slot_hex(tk$c, tk$ch), bold = TRUE)
+      else list(text = tk$t, color = NA_character_, bold = FALSE)
+    }))
+  }
+  parts <- vapply(tokens, function(tk) {
+    if (!isTRUE(colored) || is.na(tk$c) || tk$c == 0L) return(tk$t)
+    if (identical(medium, "console")) {
+      get_color_style("crayon", type = if (identical(tk$ch, "text")) color_type else "bg")[[tk$c]](tk$t)
+    } else if (identical(medium, "html")) {
+      hex <- slot_hex(tk$c, tk$ch)
+      if (identical(tk$ch, "text")) kableExtra::text_spec(tk$t, color = hex)
+      else                          kableExtra::text_spec(tk$t, background = hex)
+    } else if (identical(medium, "md")) {
+      if (is.na(tk$cls) || !nzchar(tk$cls)) tk$t else paste0("[", tk$t, "]{.", tk$cls, "}")
+    } else tk$t
+  }, character(1))
+  paste0(parts, collapse = "")
+}
+
+# ---- build the per col_var specs -------------------------------------------------------------------
+#' @keywords internal
+legend_specs <- function(x) {
+  is_f <- purrr::map_lgl(x, is_fmt)
+  ct   <- get_color(x); cbg <- get_color_bg(x)
+  keep <- is_f & ((!is.na(ct)  & !ct  %in% c("no", "")) |
+                  (!is.na(cbg) & !cbg %in% c("no", "")))
+  if (!any(keep)) return(list())
+
+  col_vars_levels <- tab_get_vars(x)$col_vars_levels
+  col_vars_levels <- col_vars_levels[names(col_vars_levels) != "all_col_vars"]
+  kept_names <- names(x)[keep]
+  reps <- purrr::map_chr(col_vars_levels, function(cols) {
+    cc <- cols[cols %in% kept_names]; if (length(cc) == 0) NA_character_ else cc[[1]]
+  })
+  reps <- reps[!is.na(reps)]
+  if (length(reps) == 0) return(list())
+
+  is_reg <- tryCatch(is_reg_footer(get_test(x)), error = function(e) FALSE)
+  cis    <- get_ci_settings(x); if (is.null(cis)) cis <- default_ci_settings()
+  shades <- legend_shade_names()
+
   specs <- purrr::imap(reps, function(cn, cv) {
     col      <- x[[cn]]
-    is_mean  <- get_type(col) %in% c("mean", "n")
     plan_txt <- fmt_color_plan(col, "text", color = get_color(col))
     plan_bg  <- fmt_color_plan(col, "bg",   color = get_color_bg(col))
     if (is.null(plan_txt) && is.null(plan_bg)) return(NULL)
-    scales   <- color_scales(col)
-    std      <- isTRUE(scales$mean_diff$std)
-    policy   <- if (!is.null(plan_txt)) plan_txt$policy else "ignore"
+    type     <- get_type(col)
+    is_coef  <- identical(type, "coef")
+    is_mean  <- type %in% c("mean", "n")
+    is_std   <- is_mean || is_coef                  # matches fmt_color_plan's is_std_diff (fixes the beta bug)
+    policy   <- if (!is.null(plan_txt)) plan_txt$policy else plan_bg$policy
     m_txt    <- if (!is.null(plan_txt)) plan_txt$measure else NA_character_
     m_bg     <- if (!is.null(plan_bg))  plan_bg$measure  else NA_character_
-    reference <- ref_label(get_ref_type(col)[1])
-    list(
-      col_var = cv,
-      sig     = paste(m_txt, m_bg, policy, reference, is_mean, std, sep = "\r"),
-      is_mean = is_mean, std = std, policy = policy, ref = reference,
-      m_txt = m_txt, m_bg = m_bg,
-      txt = if (!is.null(plan_txt)) channel_scale(plan_txt, is_mean, std, "text") else NA_character_,
-      bg  = if (!is.null(plan_bg))  channel_scale(plan_bg,  is_mean, std, "bg")   else NA_character_
-    )
-  }) %>% purrr::compact()
+    orient   <- if (identical(type, "col")) "col" else "row"
+    eff_word <- if (isTRUE(is_reg)) legend_reg_effect_word(cn) else NA_character_
+    ref      <- legend_ref_info(x, col, m_txt, orient)
+    ci_type  <- get_ci_type(col)
+    sig <- paste(m_txt, m_bg, policy, orient, is_std, eff_word, ref$kind, ref$label, ci_type, sep = "\r")
+    list(col_var = cv, plan_txt = plan_txt, plan_bg = plan_bg,
+         measure_text = m_txt, measure_bg = m_bg,
+         is_mean = is_mean, is_std = is_std, is_coef = is_coef,
+         policy = policy, orientation = orient, ci_type = ci_type,
+         is_reg = is_reg, eff_word = eff_word, ci_settings = cis, shades = shades,
+         ref = ref, sig = sig)
+  })
+  purrr::compact(specs)
+}
+
+#' Build the colour legend of a table
+#'
+#' Internal. Returns one legend line per colour-signature group. For \code{medium = "excel"} each line
+#' is a list of runs \code{list(text, color, bold)} (for a rich-text cell); otherwise a character string.
+#' @param x A \code{tabxplor_tab}.
+#' @param medium One of "console", "html", "md", "excel", "plain".
+#' @param style "terse" (compact, console default) or "prose" (full sentences, export default).
+#' @param lang NULL (auto from locale) / "en" / "fr".
+#' @param colored Whether to colour the break-words.
+#' @param theme,color_type Palette theme / family (default from options).
+#' @return A character vector (or, for excel, a list of run-lists), or NULL when nothing is coloured.
+#' @keywords internal
+tab_color_legend <- function(x, medium = c("console", "html", "md", "excel", "plain"),
+                             style = NULL, lang = NULL, colored = TRUE,
+                             theme = NULL, color_type = NULL) {
+  medium <- match.arg(medium)
+  if (is.null(style))      style      <- if (identical(medium, "console")) "terse" else "prose"
+  if (is.null(theme))      theme      <- getOption("tabxplor.color_style_theme", "light")
+  if (is.null(color_type)) color_type <- getOption("tabxplor.color_style_type", "text")
+
+  # apply the resolved language for the gettext lookups. LANGUAGE env is the reliable, mid-session,
+  # R>=4.1 lever (Sys.setLanguage() needs R>=4.2 and is flaky on Windows); restored on exit.
+  lg  <- legend_resolve_lang(lang)
+  old <- Sys.getenv("LANGUAGE", unset = NA_character_)
+  Sys.setenv(LANGUAGE = lg)
+  on.exit(if (is.na(old)) Sys.unsetenv("LANGUAGE") else Sys.setenv(LANGUAGE = old), add = TRUE)
+
+  specs <- legend_specs(x)
   if (length(specs) == 0) return(NULL)
 
-  # ---- group col_vars sharing a signature, assemble one legend line each ---------------------
-  grp   <- split(specs, purrr::map_chr(specs, "sig"))
-  lines <- purrr::map_chr(grp, function(g) {
-    s      <- g[[1]]
-    vnames <- unique(purrr::map_chr(g, "col_var"))
-    etc    <- if (!all_variables_names && length(vnames) > 3) ",..." else ""
-    if (!all_variables_names) vnames <- utils::head(vnames, 3)
-    names_txt <- paste0(paste(vnames, collapse = ", "), etc)
-
-    if (add_color_and_diff_types) {
-      cty <- paste0("[color:", s$m_txt,
-                    if (!is.na(s$m_bg)) paste0("+", s$m_bg) else "", "]")
-      dty <- if (!is.na(s$m_txt) && s$m_txt %in% c("diff", "ratio", "or"))
-        paste0(" [ref:", s$ref, "]") else ""
-      names_txt <- paste0(cty, dty, " ", names_txt)
-    }
-
-    ref_part <- if (!is.na(s$m_txt) && s$m_txt %in% c("diff", "ratio", "or") && nzchar(s$ref)) {
-      paste0("/", s$ref)
-    } else if (identical(s$m_txt, "contrib")) "/indep." else ""
-    body <- character(0)
-    if (!is.na(s$txt))
-      body <- c(body, paste0(measure_word(s$m_txt, s$is_mean, s$std), ref_part, ": ", s$txt))
-    if (!is.na(s$bg))
-      body <- c(body, paste0("bg ", measure_word(s$m_bg, s$is_mean, s$std), ": ", s$bg))
-    body <- paste0(paste(body, collapse = "; "), policy_note(s$policy))
-
-    if (isTRUE(colored) && mode == "console") {
-      names_txt <- pillar::style_subtle(paste0(names_txt, ": "))
-    } else if (mode != "console" && !is.null(grey_color)) {
-      names_txt <- kableExtra::text_spec(paste0(names_txt, ": "), color = grey_color)
-    } else {
-      names_txt <- paste0(names_txt, ": ")
-    }
-    paste0(names_txt, body)
+  grp        <- split(specs, purrr::map_chr(specs, "sig"))
+  show_names <- length(grp) > 1
+  lines <- purrr::map(grp, function(g) {
+    spec <- g[[1]]
+    spec$col_names <- unique(purrr::map_chr(g, "col_var"))
+    toks <- if (identical(style, "prose")) legend_tokens_prose(spec, lg, show_names)
+            else                           legend_tokens_terse(spec, lg, show_names)
+    legend_render_line(toks, medium, theme, color_type, colored)
   })
 
-  unname(lines)
+  # enc2utf8 the catalog output (gettext may return the native encoding on some platforms).
+  if (identical(medium, "excel")) {
+    return(unname(purrr::map(lines, function(line)
+      purrr::map(line, function(r) { r$text <- enc2utf8(r$text); r }))))  # run-lists
+  }
+  enc2utf8(unname(unlist(lines)))
 }
-# tab_color_legend(tabs[[7]]) %>% cli::cat_line()
-# tab_color_legend(tabs[[7]], colored = FALSE)
+# tab_color_legend(tabs[[7]], medium = "console") %>% cli::cat_line()
 
 # Phase 13a: the level -> palette-slot mapping now lives with the break scales themselves
 # (mk_color_scale() precomputes over$slots / under$slots via intensity_slots(), R/tab_classes.R),

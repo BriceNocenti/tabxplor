@@ -49,6 +49,16 @@ on the background channel (`color = c("diff", "ratio")`, default `pct_ratio = li
   `fmt_channel_codes()` (text hex + bg hex, used by tab_kable/tab_plot/tab_xl), `tab_md`'s
   `md_slot_class_map()`, and `tab_color_legend()`. All index an **8-hex vector** (`get_color_style()`
   = 4 over + 4 under). Do NOT special-case an exporter — route through these.
+- **The legend (Phase 13b, R/fmt_class.R)** is `legend_specs(x)` (per col_var group: measure/breaks/
+  ref/method/policy/shade + reg effect word) → `legend_tokens_terse`/`_prose` (a TOKEN stream) →
+  `legend_render_line(medium)` (console crayon / html `text_spec` / md pandoc span / excel `fmt_txt`
+  runs / plain). `tab_color_legend(x, medium=, style=, lang=)`: console = terse, exports = prose
+  (translatable via `gettext`, domain `R-tabxplor`, FR in `po/R-fr.po`; `lang` sets the `LANGUAGE`
+  env for the build). It NAMES the CI method/level from the table's stored **`ci_settings`** attribute
+  (`list(conf_level, method_cell, method_diff)`, set in `tab_assemble_tables`, carried through dplyr;
+  `default_ci_settings()` fallback). Shade names ("blue"/"yellow-red") come from `legend_shade_names()`
+  (default palette only). Changing legend wording → regen `_snaps/golden.md` + `_snaps/render-html.md`
+  (per-CELL hex `test-color-golden.R` must stay green — the legend never touches cell colours).
 
 ## Config (R/tab_classes.R)
 

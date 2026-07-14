@@ -11,6 +11,8 @@ tab_md(
   wrap_rows = NULL,
   subtext = TRUE,
   color = TRUE,
+  color_legend = TRUE,
+  lang = NULL,
   theme = c("light", "dark"),
   color_type = NULL,
   html_24_bit = NULL,
@@ -46,6 +48,11 @@ hold a raw newline, so md "wrapping" means "do not truncate".}
 \verb{[value]\{.class\}} so the markdown renders coloured in Quarto / RMarkdown / pandoc (and the
 companion \code{\link{tab_md_css}} styles the classes). \code{FALSE} produces plain monochrome
 markdown. Uncoloured tables never get spans.}
+
+\item{color_legend}{When \code{TRUE} (default) and the table is coloured, prepend a colour-legend prose
+line (its break-words in the same pandoc classes as the cells) above the subtext.}
+
+\item{lang}{Colour-legend language: \code{NULL} (auto from the R/OS locale, English fallback), \code{"en"} or \code{"fr"}.}
 
 \item{theme, color_type, html_24_bit}{Colour palette selectors (as in
 \code{\link[=tab_kable]{tab_kable()}}); they only affect the CSS emitted by \code{css = TRUE} /

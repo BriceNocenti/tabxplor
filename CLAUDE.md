@@ -1705,7 +1705,7 @@ Color breaks and color palette management is very not user friendly (base is ok,
   + Make testthat tests to ensure it handles edge cases, and user’s errors or imprecisions (ex. not ordered) well.
 - The aim is to **simplify** : please remove traces of the old implementation altogether, we do not need to soft-deprecate everything here (very small user-base + I think nobody ever used it).
 
-### Phase 13b – meaningful color legends
+### Phase 13b – meaningful color legends (DONE)
 
 Color legends
 - Redesign color legends for simplicity : they should be understandable by non-experts, while at the same time having just the enough technical terms for the experts to know exactly what’s happening technically here.
@@ -1717,26 +1717,45 @@ Color legends
   + OR, `color_signif="grey_non_signif"` : "Nuances de bleu : OR >= 1,15 ; 1,5 ; 2 ; 4. Nuances du jaune au rouge : OR <= 1/1,15 ; 1/1,5 ; 1/2 ; 1/4. Grisé : chiffre non significativement différent de celui de la modalité de référence (intervalle de Wald avec ajustement d’Agresti et Caffo, seuil de confiance à 95%)."
 - Integrate `tab_reg()` into the colors legends reliably and usefully for the user. Currently the β legend shows the SD breaks as %, and the IRR legend says "OR".
 
-### Phase 13c – Light mode/Dark mode in kable exports
+`tab_color_legend()` (`R/fmt_class.R`) rewritten into a **token-stream**: `legend_specs(x)` (per col_var
+group) -> `legend_tokens_terse`/`_prose` -> `legend_render_line(medium)` (console crayon / html
+`text_spec` / md pandoc span / **excel `openxlsx2::fmt_txt` runs** / plain). **Console = terse compact,
+exports = readable prose**; break-word colours come from the SAME 8-slot palette the cells use.
+**French translation** via `gettext`/`gettextf` (domain `R-tabxplor`, `po/R-fr.po` filled + compiled to
+`inst/po/fr/LC_MESSAGES/R-tabxplor.mo` via `tools::update_pkg_po`; `bindtextdomain` in `.onLoad`): auto
+from R/OS locale (English fallback) + a `lang` arg (`"en"`/`"fr"`, sets the `LANGUAGE` env for the build,
+NOT `Sys.setLanguage()` — R>=4.1) on `tab_kable`/`tab_md`/`tab_xl`/`tab_plot`/`tab_export`; FR typography
+(space before `; :`). The CI method + level are named from a NEW display-only **`ci_settings`** table
+attribute (`list(conf_level, method_cell, method_diff)`, set in `tab_assemble_tables`, carried through
+dplyr like `render_extras`; `default_ci_settings()` fallback). Shade names ("blue"/"yellow-red") only for
+the default palette (`legend_shade_names()`), else generic. **Excel legend cells** are coloured rich-text
+(`xlb_write_richtext`, `R/tab-xl-backend.R`); **`tab_md()` gained a colour legend** (break-words in the
+same pandoc classes as the cells). **tab_reg fixed**: β shows SD/Glass thresholds (not `%`), IRR says
+"IRR" not "OR" (effect word from the column-name suffix, gated by `is_reg_footer`). Cell colours
+UNCHANGED (`test-color-golden.R` green); conscious regen of `_snaps/golden.md` + `_snaps/render-html.md`
+(legend-only) + the 4 CI `_golden/*.rds` (only the `ci_settings` attr added). `test-color-legend.R` (43).
 
-Native dark mode/light mode management for exported tables, specially html tables
-- With kable or another html tables solution, use css exported and applied with the table ?
-- Wire this css on standard html dark mode toggle, with a global option in R to use Dark mode in viewer. As a result, the table should autochange it’s formatted we the user change to dark light mode on whichever html page the table is embedded with. Overall background color should be "#111111", text and borders overall color "#ffffff". Do web searches to find current good practices about this. If relevant, ensure linewidth of borders, etc., fit for readability in Dark mode.
-- Do thorough web searches to gather good practices on that matter. If there’s a red flag or impossibility, tell me.
-- Don’t use in jmvtab jamovi module : there’s only a Light mode, and it should print the fastest possible in live js UI, so don’t waste time with the Dark+Light detection and autotoggle.
-- Would it be easy to do the same, using css in the html part of tab_md exports ? Or would it be unreliable ? (Only for markdown embedded in html. For the use in interactive editor, of course, I’ll map the pandoc spans to the relevant dark or light colors myself.)
-- Maybe an argument to choose between : light mode ; dark mode ; autodetection + autotoggle ? autodetection can default if it’s really reliable ; otherwise better keept light mode as default. Add a global option to handle.
 
 
-### Phase 13d – Exports and display improvements
+### Phase 13c – Exports and display improvements
 
 Missing infos on exported tables, compared to what’s default in other statistical software ?
 - Display the variable names for `col_vars` : not in console, but in html and Excel, add a second headers line above the main headers row with the levels ; when contiguous fmt columns have the same col_vars, merge the variable names headers cells into a single cell (name of the same variable only needs to be given once).
 - For tab_md, just put it in the first column ?
 
 Custom display formatting :
-- For custom display like "{pct} (n={n})", I want the result padded/aligned for human readability assuming monospace font : not only for n in totals, but for **all** custom displays. For example, current display is : "100% (n=849)", "100% (n=3 648)", "100% (n=519)", "100% (n=1 178)", "100% (n=1 066)", "100% (n=902)", "100% (n=1 025)", "100% (n=9 187)". I would want : "100% (n=  849)", "100% (n=3 648)", "100% (n=  519)", "100% (n=1 178)", "100% (n=1 066)", "100% (n=  902)", "100% (n=1 025)", "100% (n=9 187)".
+- For custom display like "{pct} (n={n})", I want the result padded/aligned for maximum human readability assuming monospace font : not only for n in totals, but for **all** custom displays. For example, current display is : "100% (n=849)", "100% (n=3 648)", "100% (n=519)", "100% (n=1 178)", "100% (n=1 066)", "100% (n=902)", "100% (n=1 025)", "100% (n=9 187)". I would want : "100% (n=  849)", "100% (n=3 648)", "100% (n=  519)", "100% (n=1 178)", "100% (n=1 066)", "100% (n=  902)", "100% (n=1 025)", "100% (n=9 187)".
 - Also, for Total columns and rows "{pct} (n={n})", is there a simple and realiable way to keep the percentages in bold, but force the "(n={n})" part to plain not-bold ? Mostly in html, md and Excel exports. Keep it specifically for "{pct} (n={n})", or generalise for all custom displays (the first <token> can be bold or not-bold, the next ones are always no-bold), or would it be complicated and performance-reducing for display ?
+
+
+Display problems and improvements :
+- lists not working with `options(tabxplor.print = "kable")` auto-display (print() method), since they are not there own class ! Implement a new vctrs class "list_tabxplor_tab" with vctrs (that should still behave like a list in any other way)
+- with `list(tab(...), tab(...), ...) |> tab_kable()`, the result appear in console by defaut, it should be auto-routed to Viewer via class like kableExtra output (reuse class used by kableExtra if more simple and still reliable ?)
+- in kable output, with `color = c("diff", "ratio")`, tooltips have an empty `rr` field (it should be called "ratio", and print the actual ratio, or be invisible when there is no ratio ; `ratio` display printing should always have a `×` symbol when >=1 and a `÷` symbol with the inversed (`1/ratio`) when <1, for example 0.5 shall print `"÷2"` ; defaut 1 digit, removing trailing zeros (`3.333` go to  `3.3` but `2.0000` go to `2`, with the user-friendly padding), respecting padding for perfect aligment in monospace font for maximum human readability)
+- When there are confidence intervals significance stars, they should display, in some way or another, in all exports types. They should be completely padded right everywhere, so the stars always align in monospace font. In tab_md() it’s not
+- In exports AND in console display, with any significance star in the column, all numbers should be padded right to keep numbers alignment and readability.
+- Does transpose at export work perfecty (colors and all) with `pct = "col"` and with numeric variables ? If not, calculate colors, and anything else relevant (other column-level attributes not usable after the transposition), before transposition ?
+
 
 Excel formattings :
 - `ci = "cell"` not working at all, Excel only shows the raw base number with all digits and no formatting. Export as pure text ?
@@ -1744,14 +1763,15 @@ Excel formattings :
 - What other such cases should be handled ? What are the ones that will need to use the pure text + formatting approach (not ideal, since then user don’t have access to raw numbers in Excel) ? What are the ones were another solution is doable (several columns stay readable like in the mean + sd case, other workarounds exist, etc.) ?
 - Ensure numbers formattings are used to : explicit `+` for `diff` and `contrib` ; explicit `+<number>sd`/`-<number>sd` for mean_diff with standardised diffs measured in sd (only if user does not provides the breaks scale, of course) ; leading `×` and `÷` symbols for `ratio` ; what else ?
 
+### Phase 13d – Light mode/Dark mode in kable exports
 
-Display problems and improvements :
-- lists not working with `options(tabxplor.print = "kable")` auto-display (print() method), since they are not there own class ! Implement a new vctrs class "list_tabxplor_tab" with vctrs (that should still behave like a list in any other way)
-- with `list(tab(...), tab(...), ...) |> tab_kable()`, the result appear in console by defaut, it should be auto-routed to Viewer via class like kableExtra output (reuse class used by kableExtra if more simple and still reliable ?)
-- in kable output, with `color = c("diff", "ratio")`, tooltips have an empty `rr` field (it should be called "ratio", and print the actual ratio ; `ratio` display printing should always have a `×` symbol when >=1 and a `÷` symbol with the inversed (`1/ratio`) when <1, for example 0.5 shall print `"÷2"` ; defaut 1 digit, removing trailing zeros (`3.333` go to  `3.3` but `2.0000` go to `2`), respecting padding for perfect aligment in monospace font for human readability ; same in color legends)
-- When there are confidence intervals significance stars, they should display, in some way or another, in all exports types. They should be completely padded right everywhere, so the stars always align in monospace font. In tab_md() it’s not
-- In exports AND in console display, with any significance star in the column, all numbers should be padded right to keep numbers alignment and readability.
-- Does transpose at export work perfecty (colors and all) with `pct = "col"` and with numeric variables ? If not, calculate colors, and anything else relevant (other column-level attributes not usable after the transposition), before transposition ?
+Native dark mode/light mode management for exported tables, specially html tables
+- With kable or another html tables solution, use css exported and applied with the table ?
+- Wire this css on standard html dark mode toggle, with a global option in R to use Dark mode in viewer. As a result, the table should autochange it’s formatted we the user change to dark light mode on whichever html page the table is embedded with. Overall background color should be "#111111", text and borders overall color "#ffffff". Do web searches to find current good practices about this. If relevant, ensure linewidth of borders, etc., fit for readability in Dark mode.
+- Do thorough web searches to gather good practices on that matter : general good practices ; quarto and knitr good practices ; etc.. If there’s a red flag or impossibility, tell me.
+- Don’t use in jmvtab jamovi module : there’s only a Light mode, and it should print the fastest possible in live js UI, so don’t waste time with the Dark+Light detection and autotoggle.
+- Would it be easy to do the same, using css in the html part of tab_md exports ? Or would it be unreliable ? (Only for markdown embedded in html. For the use in interactive editor, of course, I’ll map the pandoc spans to the relevant dark or light colors myself.)
+- Maybe an argument to choose between : light mode ; dark mode ; autodetection + autotoggle ? autodetection can default if it’s really reliable ; otherwise better keept light mode as default. Add a global option to handle.
 
 
 ### Phase 14 – jamovi UI `jmvtab_reg`

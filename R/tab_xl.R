@@ -57,6 +57,8 @@
 #' @param html_24_bit Kept for a uniform exporter signature; inert for Excel (always 24-bit).
 #' @param color Set to \code{FALSE} to export without colours (monochrome).
 #' @param color_legend Should the color legends be printed with the subtexts ?
+#' @param lang Colour-legend language: \code{NULL} (auto from the R/OS locale, English fallback),
+#'   \code{"en"} or \code{"fr"}.
 #' @param print_color_legend `r lifecycle::badge("deprecated")` Renamed to \code{color_legend}.
 #' @param sheets The Excel sheets options :
 #' \itemize{
@@ -85,6 +87,7 @@
 #'   }
 tab_xl <-
   function(tabs, path = NULL, replace = FALSE, open = rlang::is_interactive(),
+           lang = NULL,
            colnames_rotation = 0, remove_tab_vars = TRUE,
            colwidth = 10, color_legend = TRUE,
            sheets = "auto", n_min = 0, titles, caption = NULL,
@@ -198,13 +201,22 @@ tab_xl <-
         sheets
       }
 
-    # subtext (+ colour legend) computed once on the main process.
+    # subtext (+ colour legend) computed once on the main process. Phase 13b: the legend is built as
+    # RICH-TEXT runs (medium = "excel") so each break-word is coloured (its palette hex + bold) while
+    # the rest stays plain black -- written as fmt_txt cells by the writer. Its plain text (derived from
+    # the runs so it matches byte-for-byte) is merged into `subtext` for the geometry / styling; the
+    # legend occupies the first `length(legend_runs)` subtext rows, overwritten with rich text below.
     subtext <- purrr::map(tabs, get_subtext) |>
       purrr::map(~ stringr::str_replace_all(., "\\\n", " ") |> stringr::str_replace_all(" +", " "))
+    legend_runs <- rep(list(list()), length(tabs))
     if (isTRUE(color_legend)) {
-      legend <- purrr::map(tabs, ~ suppressWarnings(
-        tab_color_legend(., colored = FALSE, add_color_and_diff_types = TRUE)))
-      subtext <- purrr::map2(subtext, legend, ~ c(.y, .x))
+      legend_runs <- purrr::map(tabs, ~ suppressWarnings(
+        tab_color_legend(., medium = "excel", style = "prose", lang = lang,
+                         theme = theme, color_type = color_type)))
+      legend_runs <- purrr::map(legend_runs, ~ if (is.null(.)) list() else .)
+      legend_plain <- purrr::map(legend_runs, ~ purrr::map_chr(
+        ., function(line) paste0(purrr::map_chr(line, "text"), collapse = "")))
+      subtext <- purrr::map2(subtext, legend_plain, ~ c(.y, .x))
     }
 
     if (missing(titles)) {
@@ -255,7 +267,8 @@ tab_xl <-
     plans <- purrr::pmap(
       list(tab = tabs, roles = roles, ann = purrr::map(rd, "ann"),
            bold_rows = purrr::map(rd, "bold_rows"),
-           start = start, sheet = sheet, title = titles, subtext = subtext, colwidth = colwidth),
+           start = start, sheet = sheet, title = titles, subtext = subtext,
+           legend_runs = legend_runs, colwidth = colwidth),
       tab_xl_plan_one, o = opts
     )
 
@@ -309,7 +322,8 @@ tab_xl_resolve_path <- function(path, replace) {
 # Geometry (given `start`): title row = start; header row = start + 1; data rows = start + 2 ..
 # start + 1 + nrow; subtext below. Column role indices come from the shared prep `roles`.
 #' @keywords internal
-tab_xl_plan_one <- function(tab, roles, ann, bold_rows, start, sheet, title, subtext, colwidth, o) {
+tab_xl_plan_one <- function(tab, roles, ann, bold_rows, start, sheet, title, subtext,
+                            legend_runs = list(), colwidth, o) {
   n   <- nrow(tab)
   ncl <- ncol(tab)
   data_row0  <- start + 1L                      # data row i -> i + data_row0
@@ -431,6 +445,9 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, start, sheet, title, sub
     sheet = sheet,
     title = title, title_row = start,
     subtext = subtext_clean, subtext_row = n + start + 2L,
+    # Phase 13b: the coloured legend runs occupy the FIRST rows of the subtext block (legend merged
+    # first, above), overwritten with rich text by the writer.
+    legend_runs = legend_runs, legend_row = n + start + 2L,
     data = dplyr::mutate(tab, dplyr::across(where(is_fmt), get_num)) |> tibble::as_tibble(),
     header_row = header_row,
     fmt_cols = fmt_cols, row_var_col = row_var_col, colwidth = colwidth,
@@ -630,6 +647,16 @@ xl_write_table <- function(wb, plan, o, reg) {
       dplyr::group_by(.data$code) |>
       dplyr::summarise(dims = xl_coalesce(.data$col, .data$row), .groups = "drop") |>
       purrr::pwalk(function(code, dims) xlb_numfmt(wb, s, dims, code))
+  }
+
+  # --- Phase 13b: overwrite the legend rows (first of the subtext block) with coloured rich text ---
+  if (length(plan$legend_runs)) {
+    for (i in seq_along(plan$legend_runs)) {
+      runs <- plan$legend_runs[[i]]
+      if (length(runs))
+        xlb_write_richtext(wb, s, xl_cell(plan$legend_row + i - 1L, 1L), runs,
+                           size = o$text_size_subtext, font = o$font_text)
+    }
   }
 
   # --- column widths / row heights ---

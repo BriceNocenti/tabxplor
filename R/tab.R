@@ -1955,13 +1955,19 @@ tab_assemble_tables <- function(ctx) {
 
   # Phase 10i-B: store the add_n / add_pct DISPLAY intent (materialised by tab_materialize_extras()).
   render_extras <- list(add_n = isTRUE(add_n), add_pct = isTRUE(add_pct))
+  # Phase 13b: record which CI method / confidence level was actually used, so tab_color_legend() can
+  # name it (only meaningful when a CI was computed; harmless otherwise -- absent settings fall back).
+  ci_settings <- if (!identical(ci, "no")) {
+    list(conf_level = conf_level, method_cell = method_cell, method_diff = method_diff)
+  } else NULL
   if (!lv1_group_vars(tab)) {
     tab    <- dplyr::group_by(tab, !!!tab_vars)
     groups <- dplyr::group_data(tab)
     tab    <- new_grouped_tab(tab, groups = groups, subtext = subtext, test = tests,
-                              render_extras = render_extras)
+                              render_extras = render_extras, ci_settings = ci_settings)
   } else {
-    tab <- new_tab(tab, subtext = subtext, test = tests, render_extras = render_extras)
+    tab <- new_tab(tab, subtext = subtext, test = tests, render_extras = render_extras,
+                   ci_settings = ci_settings)
   }
 
   # Row_var finishing done: ctx$tabs is the single finished tabxplor_tab/grouped_tab (the whole-table
@@ -2389,7 +2395,7 @@ tab_transpose <- function(tabs, name = NULL) {
   # the materialiser adds add_n as a ROW once the table reads as col%). So transpose(row% add_n) then
   # display == a native col% add_n table.
   new_tab(wide, subtext = get_subtext(tabs), test = test,
-          render_extras = get_render_extras(tabs))
+          render_extras = get_render_extras(tabs), ci_settings = get_ci_settings(tabs))
 }
 
 

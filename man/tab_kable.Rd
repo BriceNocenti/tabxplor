@@ -13,6 +13,7 @@ tab_kable(
   tooltips = TRUE,
   popover = NULL,
   color_legend = TRUE,
+  lang = NULL,
   caption = knitr::opts_current$get("tab.cap"),
   transpose = FALSE,
   html_font = NULL,
@@ -55,7 +56,9 @@ $(document).ready(function(){
 </script>
 }}
 
-\item{color_legend}{Print colors legend below the table ?
+\item{color_legend}{Print colors legend below the table ?}
+
+\item{lang}{Colour-legend language: \code{NULL} (auto from the R/OS locale, English fallback), \code{"en"} or \code{"fr"}.
 You can then use a \code{css} chunk in rmarkdown to change popovers colors.}
 
 \item{caption}{The table caption. For formatting, you need to use a \code{css}

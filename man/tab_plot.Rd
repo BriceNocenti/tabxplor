@@ -11,6 +11,7 @@ tab_plot(
   html_24_bit = NULL,
   color = TRUE,
   color_legend = TRUE,
+  lang = NULL,
   caption = NULL,
   transpose = FALSE,
   wrap_rows = 35,
@@ -33,6 +34,8 @@ background. By default it takes \code{getOption("tabxplor.color_style_type")}.}
 \item{color}{Set to \code{FALSE} to render the table without colours (monochrome).}
 
 \item{color_legend}{Print colors legend below the table ?}
+
+\item{lang}{Colour-legend language: \code{NULL} (auto from the R/OS locale, English fallback), \code{"en"} or \code{"fr"}.}
 
 \item{caption}{The table caption.}
 

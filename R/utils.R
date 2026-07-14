@@ -103,6 +103,13 @@ NULL
   options("tabxplor.parallel"     = FALSE)
   options("tabxplor.parallel_min" = 2L)
 
+  # Phase 13b: the colour-legend language. "auto" follows the R/OS locale (English fallback); "en"/"fr"
+  # force it. Per-call `lang =` on the exporters overrides. Bind the R-tabxplor gettext catalog to the
+  # package's compiled .mo (found under system.file("po"); harmless if absent -> English msgids).
+  options("tabxplor.lang" = "auto")
+  po <- system.file("po", package = pkgname)
+  if (nzchar(po)) try(bindtextdomain("R-tabxplor", po), silent = TRUE)
+
   invisible()
 }
 

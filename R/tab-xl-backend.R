@@ -93,6 +93,26 @@ xlb_write_cell <- function(wb, sheet, dims, x)
   wb$add_data(sheet = sheet, x = x, dims = dims,
               col_names = FALSE, na = NULL, apply_cell_style = FALSE)
 
+# Phase 13b: write ONE rich-text cell (openxlsx2::fmt_txt) from a run list -- each run
+# list(text, color = <hex|NA>, bold). Coloured break-words carry their palette hex + bold; the rest
+# stays plain black (the sheet subtext font). Rich text keeps the per-run colour INSIDE the string,
+# bypassing the one-font-per-cell xf model, so the colour legend is readable in Excel. `size`/`font`
+# match the surrounding subtext cell so the rich cell doesn't jump size.
+xlb_write_richtext <- function(wb, sheet, dims, runs, size = NULL, font = NULL) {
+  rt <- NULL
+  for (r in runs) {
+    if (!nzchar(r$text)) next
+    col   <- if (!is.na(r$color)) xl_color(r$color) else NULL
+    piece <- openxlsx2::fmt_txt(r$text, color = col, bold = isTRUE(r$bold),
+                                size = size, font = font)
+    rt <- if (is.null(rt)) piece else rt + piece
+  }
+  if (is.null(rt)) return(invisible(wb))
+  wb$add_data(sheet = sheet, x = rt, dims = dims,
+              col_names = FALSE, na = NULL, apply_cell_style = FALSE)
+  invisible(wb)
+}
+
 # numFmt is applied as a grouped merging pass (it merges onto the precomposed xf, cross-aspect).
 xlb_numfmt <- function(wb, sheet, dims, code)
   wb$add_numfmt(sheet = sheet, dims = dims, numfmt = code)
