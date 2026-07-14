@@ -18,6 +18,9 @@ tab_reg(
   method = c("wald", "profile"),
   reference = NULL,
   inverse_two_level_factors = TRUE,
+  stats = NULL,
+  compare = c("none", "baseline", "sequential"),
+  baseline = NULL,
   color = NULL,
   color_signif = NULL,
   stars = TRUE,
@@ -88,6 +91,24 @@ passing a formula in \code{dependent} with the terms already coded.}
 
 \item{inverse_two_level_factors}{Logical, binomial only. If \code{TRUE} (default), models the FIRST
 level of a 2-level factor dependent (e.g. \code{"1-Married"} before \code{"2-Not married"}).}
+
+\item{stats}{The goodness-of-fit statistics shown in the model-summary \strong{footer} (one block per
+model). \code{NULL} (default) uses the per-family set: linear models show N, R square, adjusted R
+square, the overall F-test and the residual SD; other models show N, the likelihood-ratio test
+versus the null model, McFadden's pseudo-R square, AIC and BIC (poisson / grouped-binomial models
+also show the Pearson dispersion). Pass a character vector to pick and order the statistics
+(\code{"n"}, \code{"lr_null"}, \code{"mcfadden_r2"}, \code{"aic"}, \code{"bic"}, \code{"dispersion"}, \code{"r2"}, \code{"r2_adj"},
+\code{"f_model"}, \code{"sigma"}), or \code{FALSE} / \code{"none"} to hide the footer. Weighted models show a reduced,
+survey-appropriate set (design-based Wald test, Nagelkerke pseudo-R square, AIC).}
+
+\item{compare}{Add a \strong{model-comparison} footer row (only with several models / dependents).
+\code{"none"} (default) adds nothing; \code{"baseline"} tests each model against the \code{baseline} column;
+\code{"sequential"} tests each model against the previous one. Uses a likelihood-ratio test (F for
+linear / quasi models); when the models are not nested or fit on different numbers of observations
+it falls back to the AIC difference with a message.}
+
+\item{baseline}{For \code{compare = "baseline"}: which column is the reference model (its label, or a
+position). Defaults to the first model.}
 
 \item{color, color_signif}{How the effect measure is coloured (\code{NULL} uses the per-family default:
 \code{"OR"} magnitude for ratios, standardized \code{"diff"} for betas; significance policy

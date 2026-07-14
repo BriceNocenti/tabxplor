@@ -1,0 +1,191 @@
+# Phase 12f: the regression model-summary footer (GOF stats in the `test` attribute, materialised as a
+# console block / export rows at display) + multi-model comparison, plus the shared bits: the "gof"
+# fmt display token and the crosstab in-cell test label. GOF parity is checked against broom::glance /
+# base logLik/AIC/BIC / stats::anova run on the SAME model tab_reg fits.
+
+reg_data <- function() {
+  forcats::gss_cat |>
+    dplyr::mutate(
+      married = factor(dplyr::if_else(marital == "Married", "Married", "Not married"))
+    )
+}
+
+# ---- the "gof" display token ----------------------------------------------------------------
+
+test_that("the 'gof' token renders a plain big-mark number (per-cell digits) and is uncolored", {
+  x   <- fmt(display = "gof", type = "n", n = NA_integer_,
+             diff = c(5231, 0.033, 28766.4), digits = c(0L, 3L, 0L))
+  txt <- format(x)
+  expect_equal(trimws(txt), c("5 231", "0.033", "28 766"))
+  expect_false(any(grepl("%|\\+", txt)))                 # no percentage / no "+" sign
+  expect_true(all(fmt_color_channels(x)$text == 0))      # gof is forced uncoloured
+  expect_true(all(fmt_color_channels(x)$background == 0))
+})
+
+# ---- footer parity: binomial (glm) ----------------------------------------------------------
+
+test_that("binomial footer N/LR-null/McFadden/AIC/BIC match a hand-fit glm; display-only", {
+  skip_if_not_installed("broom")
+  d   <- reg_data()
+  t1  <- tab_reg(d, "married", c("race", "rincome"), family = "binomial", cleannames = FALSE)
+  tst <- get_test(t1)
+  cv  <- "Married: OR"
+  gv  <- function(s) tst$statistic[tst$col_var == cv & tst$test == s]
+
+  # the footer is DISPLAY-ONLY: the built object is the coefficient skeleton, no "Model fit" rows
+  expect_false(any(as.character(t1$var) == "Model fit"))
+  expect_true(is_reg_footer(tst))
+
+  dm <- d |> dplyr::filter(!is.na(married), !is.na(race), !is.na(rincome))
+  dm$married <- forcats::fct_rev(forcats::fct_drop(factor(dm$married)))
+  dm$race    <- forcats::fct_drop(dm$race); dm$rincome <- forcats::fct_drop(dm$rincome)
+  g  <- stats::glm(married ~ race + rincome, data = dm, family = stats::binomial())
+  g0 <- stats::glm(married ~ 1,              data = dm, family = stats::binomial())
+
+  expect_equal(gv("n"),   as.numeric(stats::nobs(g)))
+  expect_equal(gv("aic"), stats::AIC(g), tolerance = 1e-6)
+  expect_equal(gv("bic"), stats::BIC(g), tolerance = 1e-6)
+  lr <- g$null.deviance - g$deviance
+  expect_equal(gv("lr_null"), lr, tolerance = 1e-6)
+  expect_equal(tst$pvalue[tst$col_var == cv & tst$test == "lr_null"],
+               stats::pchisq(lr, g$df.null - g$df.residual, lower.tail = FALSE), tolerance = 1e-6)
+  expect_equal(gv("mcfadden_r2"),
+               1 - as.numeric(stats::logLik(g)) / as.numeric(stats::logLik(g0)), tolerance = 1e-6)
+})
+
+test_that("the footer does not alter the built coefficient skeleton (stats= toggle)", {
+  skip_if_not_installed("broom")
+  d       <- reg_data()
+  with    <- tab_reg(d, "married", "race", family = "binomial", cleannames = FALSE)
+  without <- tab_reg(d, "married", "race", family = "binomial", stats = FALSE, cleannames = FALSE)
+  col <- "Married: OR"
+  expect_equal(nrow(with), nrow(without))
+  expect_equal(get_or(with[[col]]), get_or(without[[col]]))
+  expect_equal(sum(!is.na(get_pvalue(with[[col]]))), sum(!is.na(get_pvalue(without[[col]]))))
+  expect_false(is_reg_footer(get_test(without)))
+
+  # materialised only at display (backend text/xl, pvalue = TRUE)
+  mat <- tab_materialize_extras(with, backend = "text", pvalue = TRUE)
+  expect_true(any(as.character(mat$var) == "Model fit"))
+  expect_true("N" %in% as.character(mat$levels))
+  expect_gt(nrow(mat), nrow(with))
+})
+
+test_that("stats= picks and the footer keeps only the requested stats", {
+  skip_if_not_installed("broom")
+  tst <- get_test(tab_reg(reg_data(), "married", "race", family = "binomial",
+                          stats = c("n", "aic"), cleannames = FALSE))
+  expect_setequal(unique(tst$test), c("n", "aic"))
+})
+
+# ---- footer parity: gaussian (lm) -----------------------------------------------------------
+
+test_that("gaussian footer (N/R2/adjR2/F/sigma) matches broom::glance", {
+  skip_if_not_installed("broom")
+  d   <- reg_data()
+  t1  <- tab_reg(d, "tvhours", c("age", "race"), family = "gaussian", cleannames = FALSE)
+  tst <- get_test(t1); cv <- "tvhours: \u03b2"
+  gv  <- function(s) unname(tst$statistic[tst$col_var == cv & tst$test == s])
+
+  # the lm default footer set (D7): N + R2 + adjR2 + F + residual SD (no AIC/BIC unless stats= asks)
+  expect_setequal(unique(tst$test), c("n", "r2", "r2_adj", "f_model", "sigma"))
+  dm <- d |> dplyr::filter(!is.na(tvhours), !is.na(age), !is.na(race))
+  g  <- broom::glance(stats::lm(tvhours ~ age + race, data = dm))
+  expect_equal(gv("r2"),      g$r.squared,     tolerance = 1e-6)
+  expect_equal(gv("r2_adj"),  g$adj.r.squared, tolerance = 1e-6)
+  expect_equal(gv("f_model"), unname(g$statistic), tolerance = 1e-6)
+  expect_equal(gv("sigma"),   g$sigma,         tolerance = 1e-6)
+
+  # AIC/BIC are available on request (stats=)
+  t2 <- tab_reg(d, "tvhours", c("age", "race"), family = "gaussian",
+                stats = c("n", "aic", "bic"), cleannames = FALSE)
+  t2t <- get_test(t2)
+  expect_equal(unname(t2t$statistic[t2t$test == "aic"]), g$AIC, tolerance = 1e-6)
+  expect_equal(unname(t2t$statistic[t2t$test == "bic"]), g$BIC, tolerance = 1e-6)
+})
+
+# ---- footer parity: poisson dispersion ------------------------------------------------------
+
+test_that("poisson footer carries a Pearson dispersion matching sum(pearson^2)/df + warns", {
+  skip_if_not_installed("broom")
+  d <- reg_data()
+  expect_warning(t1 <- tab_reg(d, "tvhours", c("age", "race"), family = "poisson",
+                               cleannames = FALSE), "dispersion")
+  tst <- get_test(t1); cv <- "tvhours: IRR"
+  dm  <- d |> dplyr::filter(!is.na(tvhours), !is.na(age), !is.na(race))
+  m   <- stats::glm(tvhours ~ age + race, data = dm, family = stats::poisson())
+  phi <- sum(stats::residuals(m, "pearson")^2) / stats::df.residual(m)
+  expect_equal(tst$statistic[tst$col_var == cv & tst$test == "dispersion"], phi, tolerance = 1e-6)
+})
+
+# ---- multi-model comparison -----------------------------------------------------------------
+
+test_that("compare='baseline' adds an LR-vs-baseline row matching anova() (same-N nested models)", {
+  skip_if_not_installed("broom")
+  d  <- reg_data()
+  mc <- multi_logit(d, "married",
+                    models = list(demo = c("race", "age"), full = c("race", "age", "rincome")),
+                    compare = "baseline", cleannames = FALSE)
+  cmp <- get_test(mc) |> dplyr::filter(test == "compare_baseline")
+  expect_equal(nrow(cmp), 1L)                             # only the non-baseline column
+
+  dm <- d |> dplyr::filter(!is.na(married), !is.na(race), !is.na(age), !is.na(rincome))
+  dm$married <- forcats::fct_rev(forcats::fct_drop(factor(dm$married)))
+  dm$race <- forcats::fct_drop(dm$race); dm$rincome <- forcats::fct_drop(dm$rincome)
+  m1 <- stats::glm(married ~ race + age,           data = dm, family = stats::binomial())
+  m2 <- stats::glm(married ~ race + age + rincome, data = dm, family = stats::binomial())
+  an <- stats::anova(m1, m2, test = "Chisq")
+  expect_equal(cmp$statistic, an$Deviance[2],       tolerance = 1e-6)
+  expect_equal(cmp$pvalue,    an[["Pr(>Chi)"]][2],  tolerance = 1e-6)
+})
+
+test_that("compare falls back to Delta-AIC (with a message) when N differs across models", {
+  skip_if_not_installed("broom")
+  d <- reg_data()                                        # tvhours has NAs -> different N than race-only
+  expect_message(
+    mc <- multi_logit(d, "married",
+                      models = list(a = "race", b = c("race", "tvhours")),
+                      compare = "baseline", cleannames = FALSE),
+    "not nested or N differs"
+  )
+  expect_true("compare_baseline_aic" %in% get_test(mc)$test)
+})
+
+test_that("compare no-ops (message) for a single model", {
+  skip_if_not_installed("broom")
+  expect_message(
+    tab_reg(reg_data(), "married", "race", family = "binomial", compare = "baseline",
+            cleannames = FALSE),
+    "at least two models"
+  )
+})
+
+# ---- footer renders through every backend ---------------------------------------------------
+
+test_that("the regression footer renders (console block + export rows) without error", {
+  skip_if_not_installed("broom")
+  t1 <- tab_reg(reg_data(), "married", c("race", "age"), family = "binomial")
+  expect_output(print(t1), "N=")                         # the console footer block
+  md <- tab_md(t1, print = FALSE)
+  expect_true(any(grepl("Model fit", md)))               # the export footer rows
+  expect_true(any(grepl("McFadden", md)))
+  expect_no_error(tab_kable(t1))
+  skip_if_not_installed("openxlsx2")
+  xf <- withr::local_tempfile(fileext = ".xlsx")
+  expect_no_error(tab_xl(t1, path = xf, replace = TRUE))
+})
+
+# ---- the shared crosstab in-cell test label -------------------------------------------------
+
+test_that("a crosstab p-value cell embeds its test label ('(Chi2)')", {
+  ct <- tab(forcats::gss_cat, marital, race, pct = "row", chi2 = TRUE)
+  md <- tab_md(ct, print = FALSE)
+  expect_true(any(grepl("\\(Chi2\\)", md)))
+})
+
+test_that("a mixed factor/mean table labels each p-value cell by its own test", {
+  ct <- tab(forcats::gss_cat, marital, c(race, tvhours), pct = "row", chi2 = TRUE)
+  md <- tab_md(ct, print = FALSE)
+  expect_true(any(grepl("\\(Chi2\\)", md)))              # the factor col_var
+  expect_true(any(grepl("\\(F", md)))                    # the mean col_var (ANOVA F)
+})

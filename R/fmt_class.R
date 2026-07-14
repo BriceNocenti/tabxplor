@@ -382,6 +382,7 @@ get_num <- function(x) {
   out[!nas & display == "pvalue" ] <- get_pct (x)[!nas & display == "pvalue" ]
   out[!nas & display == "diff"   ] <- get_diff(x)[!nas & display == "diff"   ]
   out[!nas & display == "coef"   ] <- get_diff(x)[!nas & display == "coef"   ]  # Phase 12c: raw regression coef -> diff field
+  out[!nas & display == "gof"    ] <- get_diff(x)[!nas & display == "gof"    ]  # Phase 12f: model-fit stat (N/R2/AIC/...) -> diff field
   out[!nas & display == "pct_ci" ] <- get_pct (x)[!nas & display == "pct_ci" ]
   out[!nas & display == "ctr"    ] <- get_ctr (x)[!nas & display == "ctr"    ]
   out[!nas & display == "mean"   ] <- get_mean(x)[!nas & display == "mean"   ]
@@ -414,6 +415,7 @@ set_num <- function(x, value) {
   out[!nas & display == "pct" ] <- set_pct (x[!nas & display == "pct" ], value[!nas & display == "pct" ])
   out[!nas & display == "diff"] <- set_diff(x[!nas & display == "diff"], value[!nas & display == "diff"])
   out[!nas & display == "coef"] <- set_diff(x[!nas & display == "coef"], value[!nas & display == "coef"])  # Phase 12c
+  out[!nas & display == "gof" ] <- set_diff(x[!nas & display == "gof" ], value[!nas & display == "gof" ])  # Phase 12f
   out[!nas & display == "ctr" ] <- set_ctr (x[!nas & display == "ctr" ], value[!nas & display == "ctr" ])
   out[!nas & display == "mean"] <- set_mean(x[!nas & display == "mean"], value[!nas & display == "mean"])
   out[!nas & display == "var" ] <- set_var (x[!nas & display == "var" ], value[!nas & display == "var" ])
@@ -1803,7 +1805,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   pct_no_ci     <- ok & display %in% c("pct", "diff", "ctr") & !(display == "diff" & type == "mean")
   diff_pct      <- ok & display == "diff" & type != "mean"
   n_wn          <- ok & (display %in% c("n", "wn", "mean", "mean_ci", "var", "rr", "or", "or_pct",
-                                        "OR", "OR_pct") |
+                                        "OR", "OR_pct", "gof") |             # Phase 12f: gof -> big.mark
                            (display == "ci" & type == "mean") )
   type_ci       <- ok & display == "ci"
   pvalue        <- ok & display == "pvalue"
@@ -2292,17 +2294,20 @@ pillar_shaft.tab_chi2_fmt <- function(x, ...) {
   # print color type somewhere (and brk legend beneath ?) ----
 
   out     <- format(x)
-  display <- get_display(x)
+  # Phase 12f: a p-value cell may carry an in-cell test label ("{pvalue} (Chi2)"); resolve the
+  # composite to its PRIMARY token so the red/green colouring still fires on the labelled cell.
+  display <- display_primary(get_display(x))
   nas     <- is.na(display)
 
   color_style <- get_color_style()
 
-  pvalues <- out[!nas & display == "pvalue"]
-  p_values <- get_num(x)[!nas & display == "pvalue"]
+  is_p     <- !nas & display == "pvalue"
+  pvalues  <- out[is_p]
+  p_values <- get_num(x)[is_p]
 
   # Non-significant p-values (>= 5%) print red (neg5), significant ones green (pos5):
   # red warns the reader the (sub)table may not differ from the independence hypothesis.
-  out[!nas & display == "pvalue"] <-
+  out[is_p] <-
     dplyr::if_else(condition = p_values >= 0.05,
                    true      = color_style$neg5(pvalues),
                    false     = color_style$pos5(pvalues) )
@@ -2577,7 +2582,9 @@ fmt_color_slots <- function(x, plan) {
   slot[!plan$gate] <- 0L
   # Phase 7g: a "blank" cell (n_min mask) shows no value, so it must show no colour either --
   # in both channels and in fmt_get_color_code (which all route through here).
-  slot[get_display(x) == "blank"] <- 0L
+  # Phase 12f: a "gof" cell (a model-fit stat: N/R2/AIC/BIC/dispersion) is never effect-coloured --
+  # a large AIC in the `diff` field would otherwise score to the strongest colour slot.
+  slot[get_display(x) %in% c("blank", "gof")] <- 0L
   slot
 }
 

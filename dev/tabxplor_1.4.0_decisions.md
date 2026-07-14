@@ -3070,6 +3070,55 @@ golden regeneration (`at="average"` byte-identical to 12e-i, coefficient path un
 - **Deferred**: fully custom `newdata=`/`profile=` grids, a "typical" (mode) baseline, and the empirical
   j-vs-rest flavour on `tab()` (all future). Legend cosmetics remain Phase 13.
 
+### 12f DONE (2026-07-14) — model-summary footer + model comparison + crosstab in-cell test labels
+
+Both increments landed this session; full suite green, NO crosstab `.rds` golden regen (footer + label are
+DISPLAY-ONLY; the one snapshot touched — `_snaps/render-html.md` — is the conscious `(Chi2)` label + the
+maintainer's independent `#989898`→`#BBBBBB` grey). Maintainer forks (AskUserQuestion): **add in-cell test
+labels to crosstabs too**; **both increments this session**; **weighted footer minimal now** (full survey
+glance → 12g).
+
+- **Storage — one `test` attribute, disjoint discriminators (D7).** The GOF travels in the SAME crosstab
+  `test` tibble (`new_test_tibble()` schema unchanged) with NEW `test` strings that never collide with
+  `"chi2"`/`"F_welch"`/`"F_classic"`: `n`, `lr_null`, `wald_null`, `mcfadden_r2`, `nagelkerke_r2`, `r2`,
+  `r2_adj`, `f_model`, `sigma`, `aic`, `bic`, `dispersion`, `compare_baseline`(`_f`/`_aic`), `compare_seq`
+  (`_f`/`_aic`). `col_var` = the model's first output column; value-stats store the number in `statistic`
+  (pvalue NA), test-stats store statistic+df+pvalue. **Because the discriminators are disjoint,
+  `test_display_rows()` (chi2/F only) makes `print_chi2`/`tab_pvalue_lines` no-op on a reg table and the reg
+  renderers no-op on a crosstab → crosstab `test` tibbles never change shape → no crosstab golden regen.**
+  (`f_model`, NOT `F*` — a collision would cross-contaminate both paths.)
+- **Computation (`R/tab_reg.R`).** `reg_glance(fit, family, grouped, weighted, nobs)` → the tidy GOF; LR/
+  McFadden via `reg_null_loglik()` — **glm binomial/poisson ANALYTIC from the stored `null.deviance`**
+  (`ll_0 = ll_full − LR/2`, no `update()` env fragility), multinom/polr refit the intercept-only model on
+  the stored model frame. Dispersion = `Σ(pearson)²/df.res` (poisson/grouped only) + a `cli_warn` >1.5. lm
+  from `broom::glance`. svyglm degraded (Rao-Scott `regTermTest` relabelled "Wald vs null", `psrsq`
+  Nagelkerke, AIC) with the internal survey notes suppressed. `reg_footer_stats()` resolves `stats=` (per-
+  family default / char vector / FALSE). `reg_gof_tibble()` skips `reg_glance` entirely when `stats=FALSE`
+  (no wasted fit, no warnings). `reg_compare_rows()` + `reg_compare_guard()` (same-N + nesting, the top
+  hazard) + `reg_compare_extract()` (anova table) — `compare="baseline"/"sequential"`, LR (Chisq) / F (lm/
+  quasi), Delta-AIC fallback + `cli_inform`; weighted / single-model no-op with a message. **`compare`
+  default `"none"`** (not D7's "null": `lr_null` already lives in the footer, so a `compare="null"` row
+  would duplicate it).
+- **Display-only rendering (`R/tab_classes.R`).** `reg_footer_spec()` (label + gof/pvalue kind + digits) →
+  `print_reg_footer()` (console block, parallel to `print_chi2`, hooked into both print methods) +
+  `reg_footer_lines()` (appended "Model fit" rows, parallel to `tab_pvalue_lines`, via `fmt_stack_frames`;
+  idempotent — drops the `test` rows). `tab_materialize_extras()` calls it after `tab_pvalue_lines` (which
+  no-ops on reg). The built object stays the coefficient skeleton (existing 12c–12e parity tests hold).
+- **New fmt token `"gof"`** (`R/fmt_class.R`, the design's "reuse `coef`" was unsafe — `coef` prints exact-0
+  as bare `"0"` and effect-colours large AIC): reads `diff`, plain big-mark number honouring per-cell
+  `digits`, no `%`/`+`, **forced uncoloured** (the `fmt_color_slots` slot-0 line, beside `"blank"`). Value
+  stats → `gof`; LR/F/compare p → the `pvalue` token.
+- **Crosstab in-cell label.** `pvalue_line_fmt(p, label)` builds the composite `display = "{pvalue}
+  (<label>)"` (reuses the Phase-10i-A `{}` grammar — internal, no user-whitelist change); `test_cell_label()`
+  maps `chi2`→"Chi2", `F_welch`→"F, Welch", `F_classic`→"F". `pillar_shaft` resolves `display_primary`
+  before the red/green pvalue colour. Excel keeps the raw number (label is a text-backend suffix).
+- **Border box** (`R/tab-export-prep.R`): the `tot_block` whitelist gains `reg_footer_labels()` (a crosstab
+  never has an "AIC"/"McFadden R2" row-label → byte-identical). Tests: `test-tab_reg-footer.R` (44 — parity
+  vs broom::glance/logLik/anova, display-only invariant, dispersion, compare + N-mismatch fallback, the gof
+  token, the crosstab labels).
+- **Deferred**: full survey glance (12g); Excel numFmt-literal in-cell label; per-cell mixed-test label in a
+  compare row (homogeneous-discriminator rows make it unnecessary); legend cosmetics (Phase 13).
+
 ### Phasing (12c → 12i — re-cut 2026-07-13; per-phase detail in the CLAUDE.md roadmap)
 
 The build is re-cut into **fresh-session Phases with commit-and-verify increments** (the old monolithic

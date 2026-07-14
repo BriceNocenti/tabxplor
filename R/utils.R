@@ -1342,7 +1342,7 @@ po_to_dt <- function(file) {
 #
 # Visual review of colour combinations in the Positron Viewer pane.
 #
-#   preview_colour_grid()    - every text x background combination of two vectors
+#   preview_color_grid()    - every text x background combination of two vectors
 #   preview_luminance_grid() - luminance shades of one text/background pair
 #
 # Both render exactly like tab_kable(): a knitr::kable() + kableExtra::kable_classic()
@@ -1574,7 +1574,7 @@ po_to_dt <- function(file) {
   body <- outer(seq_len(n_row), seq_len(n_col), Vectorize(function(i, j) {
     lc_txt <- if (isTRUE(show_contrast)) {
       lc <- .cg_apca(text_hex[i, j], bg_hex[i, j])
-      sprintf(' <span style="font-weight:400;opacity:.75;font-size:90%%;">Lc\u00a0%d</span>',
+      sprintf(' <span style="font-weight:400;opacity:.75;font-size:90%%;">(%d)</span>',
               as.integer(round(abs(lc))))
     } else ""
     kableExtra::cell_spec(paste0(sample_html, lc_txt), format = "html", escape = FALSE,
@@ -1713,27 +1713,27 @@ set_chroma <- function(cols, c = 0.1) {
 #' @param dark_threshold oklch lightness (0-1) of `table_bg` below which the
 #'   table switches to dark styling (white + slightly thicker borders, light
 #'   text, transparent frame). Default 0.5.
-#' @param font_size CSS font-size for the table. Default "16px" (tab_kable base).
-#' @param swatch_padding CSS padding for each swatch cell. Default "12px 16px".
+#' @param font_size CSS font-size for the table. Default "14px".
+#' @param swatch_padding CSS padding for each swatch cell. Default "1px 1px".
 #' @param browse Logical; open the result in the Viewer. Default TRUE.
 #'
 #' @return (Invisibly) the generated HTML as a single string.
 #' @examples
 #' \dontrun{
-#' text_colors <- c(plain = "#989898", pos3 = "#0baedb", pos5 = "#265aff")
+#' text_colors <- c(plain = "#888888", pos3 = "#0baedb", pos5 = "#265aff")
 #' background_colors <- c(plain = "#ffffff", pos3 = "#91b837", pos5 = "#05ae30")
-#' preview_colour_grid(text_colors, background_colors)
-#' preview_colour_grid(text_colors, background_colors, table_bg = "#1a1a1a")  # dark
+#' preview_color_grid(text_colors, background_colors)
+#' preview_color_grid(text_colors, background_colors, table_bg = "#1a1a1a")  # dark
 #' }
 #' @keywords internal
-preview_colour_grid <- function(text_colors,
+preview_color_grid <- function(text_colors,
                                 background_colors,
                                 sample_text = paste0(sample(0:100, 1L), "%"),
                                 show_contrast = TRUE,
                                 table_bg = "#ffffff",
                                 dark_threshold = 0.5,
-                                font_size = "16px",
-                                swatch_padding = "12px 16px",
+                                font_size = "14px",
+                                swatch_padding = "2px 1px",
                                 browse = TRUE) {
   .cg_require()
   stopifnot(length(text_colors) >= 1, length(background_colors) >= 1,
@@ -1789,7 +1789,7 @@ preview_colour_grid <- function(text_colors,
 #' @param dark_threshold oklch lightness (0-1) of `table_bg` below which the
 #'   table switches to dark styling. Default 0.5.
 #' @param sample_text,show_contrast,font_size,swatch_padding,browse See
-#'   [preview_colour_grid()].
+#'   [preview_color_grid()].
 #'
 #' @return (Invisibly) the generated HTML as a single string.
 #' @examples
@@ -1846,6 +1846,132 @@ preview_luminance_grid <- function(text_color,
     browse = browse
   )
 }
+
+#' @keywords internal
+lcd_simulate_oklch <- function(
+  colours,
+  chroma_scale      = 0.60,  # how much to reduce chroma (0–1)
+  lightness_center  = 0.50,  # where lightness is “anchored” (0–1 scale)
+  lightness_compress = 0.90  # how much to compress lightness range (0–1)
+) {
+  # Decode hex (or R color names) directly to OKLCH
+  oklch <- farver::decode_colour(colours, to = "oklch")
+  L <- oklch[, 1]
+  C <- oklch[, 2]
+  H <- oklch[, 3]
+  
+  # Reduce chroma to simulate less vivid LCD color reproduction
+  C_new <- C * chroma_scale
+  C_new <- pmax(C_new, 0)       # no negative chroma
+  
+  # Compress lightness toward a center value
+  # L is on 0–1 scale inside farver’s OKLCH representation
+  L_new <- lightness_center + lightness_compress * (L - lightness_center)
+  
+  # Reassemble modified OKLCH
+  oklch_new <- cbind(L_new, C_new, H)
+  
+  # Convert back to sRGB and clamp to valid range for encoding
+  rgb_new <- farver::convert_colour(oklch_new, from = "oklch", to = "rgb")
+  rgb_new <- pmin(pmax(rgb_new, 0), 255)
+  
+  # Encode back to hex
+  farver::encode_colour(rgb_new, from = "rgb")
+}
+
+#' Simulate color vision deficiency for hex colors using farver + colorspace
+#'
+#' @param col Character vector of hex colors (e.g. "#03ab86").
+#' @param type Type of CVD to simulate: "deutan" (green cone defective)
+#'   or "protan" (red cone defective). These are the two most common
+#'   congenital red–green deficiencies.
+#' @param severity Numeric in [0, 1], Machado-style severity parameter
+#'   (0 = normal vision, 1 = full dichromacy). Values around 1 correspond
+#'   to deuteranopia/protanopia; values in (0, 1) emulate anomalous
+#'   trichromacy.
+#'
+#' @return Character vector of hex colors representing how a trichromatic,
+#'   color-normal viewer would see your input colors if they had the
+#'   specified color vision deficiency.
+#'
+#' @details
+#' The implementation follows the physiologically-based model of
+#' Machado et al. (2009), using the RGB transform matrices provided by
+#' colorspace::deutanomaly_cvd and colorspace::protanomaly_cvd
+#' (interpolated by severity).[web:64][web:65]
+#'
+#' Gamma-corrected sRGB is linearised, transformed in RGB, and then
+#' re-gamma-corrected. Conversion between hex and RGB is handled by
+#' farver::decode_colour() and farver::encode_colour().[web:74][web:78]
+#'
+#' You can always inspect or design your palette in OKLCH using
+#' farver::decode_colour(col, to = "oklch") before or after simulation;[web:74][web:69]
+#' the CVD model itself, however, operates in sRGB.
+#'
+#' @keywords internal
+simulate_cvd_farver <- function(col,
+                                type = c("deutan", "protan"),
+                                severity = 1) {
+  # Dependencies:
+  # farver    >= 2.1.0  (for decode_colour / encode_colour)
+  # colorspace >= 2.1.0 (for Machado CVD matrices)
+  type <- match.arg(type)
+
+  if (!requireNamespace("farver", quietly = TRUE)) {
+    stop("Package 'farver' is required but not installed.")
+  }
+  if (!requireNamespace("colorspace", quietly = TRUE)) {
+    stop("Package 'colorspace' is required but not installed.")
+  }
+
+  # 1. Pick the appropriate list of CVD transform matrices
+  #    from colorspace (Machado 2009 implementation).[web:64][web:57][web:65]
+  transform_list <- switch(
+    type,
+    deutan = colorspace::deutanomaly_cvd,
+    protan = colorspace::protanomaly_cvd
+  )
+
+  # Interpolate matrix for given severity in [0, 1]
+  M <- colorspace::interpolate_cvd_transform(transform_list,
+                                             severity = severity)
+
+  # 2. Decode hex to sRGB (0–255) using farver.[web:74]
+  rgb_255 <- farver::decode_colour(col, to = "rgb")
+
+  # Normalise to 0–1
+  rgb <- rgb_255 / 255
+
+  # 3. Convert sRGB to linear RGB (per IEC 61966-2-1).[web:57]
+  srgb_to_linear <- function(x) {
+    ifelse(x <= 0.04045,
+           x / 12.92,
+           ((x + 0.055) / 1.055) ^ 2.4)
+  }
+  rgb_lin <- srgb_to_linear(rgb)
+
+  # 4. Apply 3×3 CVD transform matrix in linear RGB.[web:64][web:65]
+  # rgb_lin is n × 3; we want n × 3 back, so multiply by t(M).
+  rgb_lin_sim <- as.matrix(rgb_lin) %*% t(M)
+
+  # 5. Convert linear RGB back to gamma-corrected sRGB.[web:57]
+  linear_to_srgb <- function(x) {
+    ifelse(x <= 0.0031308,
+           12.92 * x,
+           1.055 * (x ^ (1 / 2.4)) - 0.055)
+  }
+  rgb_sim <- linear_to_srgb(rgb_lin_sim)
+
+  # Clamp to [0, 1] and scale to 0–255
+  rgb_sim_clamped <- pmin(pmax(rgb_sim, 0), 1)
+  rgb_sim_255 <- round(rgb_sim_clamped * 255)
+
+  # 6. Encode back to hex using farver.[web:78]
+  col_sim <- farver::encode_colour(rgb_sim_255, from = "rgb")
+
+  col_sim
+}
+
 
 
 

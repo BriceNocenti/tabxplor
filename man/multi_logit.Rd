@@ -12,6 +12,9 @@ multi_logit(
   inverse_two_level_factors = TRUE,
   conf_level = 0.95,
   method = c("wald", "profile"),
+  stats = NULL,
+  compare = c("none", "baseline", "sequential"),
+  baseline = NULL,
   color_signif = c("grey_non_signif", "ignore", "color_all_signif"),
   stars = TRUE,
   cleannames = NULL,
@@ -38,6 +41,24 @@ and the Wald z / t test: fast, matches standard software output, and the only op
 models. \code{"profile"} uses the profile-likelihood interval (\code{\link[stats:confint]{stats::confint()}}, needs \code{MASS}) and
 the likelihood-ratio test: more accurate near separation, unweighted binomial/poisson models only
 (else it falls back to Wald with a message; gaussian always uses the exact-t interval).}
+
+\item{stats}{The goodness-of-fit statistics shown in the model-summary \strong{footer} (one block per
+model). \code{NULL} (default) uses the per-family set: linear models show N, R square, adjusted R
+square, the overall F-test and the residual SD; other models show N, the likelihood-ratio test
+versus the null model, McFadden's pseudo-R square, AIC and BIC (poisson / grouped-binomial models
+also show the Pearson dispersion). Pass a character vector to pick and order the statistics
+(\code{"n"}, \code{"lr_null"}, \code{"mcfadden_r2"}, \code{"aic"}, \code{"bic"}, \code{"dispersion"}, \code{"r2"}, \code{"r2_adj"},
+\code{"f_model"}, \code{"sigma"}), or \code{FALSE} / \code{"none"} to hide the footer. Weighted models show a reduced,
+survey-appropriate set (design-based Wald test, Nagelkerke pseudo-R square, AIC).}
+
+\item{compare}{Add a \strong{model-comparison} footer row (only with several models / dependents).
+\code{"none"} (default) adds nothing; \code{"baseline"} tests each model against the \code{baseline} column;
+\code{"sequential"} tests each model against the previous one. Uses a likelihood-ratio test (F for
+linear / quasi models); when the models are not nested or fit on different numbers of observations
+it falls back to the AIC difference with a message.}
+
+\item{baseline}{For \code{compare = "baseline"}: which column is the reference model (its label, or a
+position). Defaults to the first model.}
 
 \item{color_signif}{How significance drives the colours. \code{"grey_non_signif"} (default) colours
 only odds ratios whose confidence interval excludes 1 and greys the rest.}

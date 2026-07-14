@@ -30,7 +30,7 @@ Default seq(0.35, 0.95, length.out = 7).}
 (maximum in-gamut chroma per shade). Default "fixed".}
 
 \item{sample_text, show_contrast, font_size, swatch_padding, browse}{See
-\code{\link[=preview_colour_grid]{preview_colour_grid()}}.}
+\code{\link[=preview_color_grid]{preview_color_grid()}}.}
 
 \item{table_bg}{Backdrop colour of the whole table/page, e.g. "#1a1a1a" to
 preview dark mode. Default "#ffffff".}

@@ -60,7 +60,7 @@ R/
 ├── tab-render-html.R (~350 L) Phase 10e tab_kable render seam: render_kable_html() (kableExtra +
 │                              home-built self-contained html engines) + tab_kable_join/scrollbox
 ├── utils.R         (1306 L)  Pipe re-export, .onLoad() options setup, factor utilities
-├── tab_reg.R       (~1030L)  Phase 12c/12d/12e: unified regression tables. tab_reg() over ONE engine
+├── tab_reg.R       (~1290L)  Phase 12c/12d/12e/12f: unified regression tables. tab_reg() over ONE engine
 │                              (stats::lm/glm, survey::svyglm, nnet::multinom, MASS::polr; broom::tidy)
 │                              with family dispatch and exponentiate-driven fmt shape: gaussian beta
 │                              (additive -> `diff` field, type="coef", display="coef", ci_type="diff",
@@ -85,6 +85,13 @@ R/
 │                              datagrid -> comparisons/predictions): MER-at-reference (effect="ame",
 │                              label AME->MER) + MNL "j vs rest" OR at profile (coefficient, lnor->exp,
 │                              reg_marginal_column shape="or"); at no-ops on ordinary coefficients.
+│                              12f: model-summary FOOTER (reg_glance/reg_gof_tibble/reg_footer_stats: N/
+│                              LR-null/McFadden/AIC/BIC, lm R2/adjR2/F/sigma, poisson dispersion; svyglm
+│                              degraded) + compare= (reg_compare_rows/reg_compare_guard, LR/F/dAIC)
+│                              stored in the `test` attr with DISJOINT discriminators; DISPLAY-ONLY
+│                              (rendered by R/tab_classes.R print_reg_footer/reg_footer_lines). One new
+│                              fmt token "gof" (uncoloured). Crosstab p-value cells gain in-cell test
+│                              labels ("{pvalue} (Chi2)"). stats=/compare=/baseline= args.
 ├── tab_logit.R      (~5 L)   Emptied in Phase 12c (renamed -> tab_reg.R; git rm pending).
 ├── tab_logit_2.R    (~8 L)   Emptied in Phase 12a (git rm pending). or_plot/lm_plots deferred.
 ├── jmvtab-cache.R  (~800 L)  jmvtab live multi-tier cache: content-addressed store + hashing +
@@ -1589,17 +1596,26 @@ The orthogonal `effect=` axis (`"coefficient"` default vs `"ame"`).
 
 New `at = c("average", "reference")`. `at="reference"` evaluates at the **reference profile** (other predictors at their reference = factor first level / numeric mean) via `marginaleffects::datagrid()` → `comparisons()`/`predictions()` (single row, no averaging/weights): `effect="ame"` → the marginal effect at reference (**MER**, label AME→MER) + adjusted prediction there; **MNL** `effect="coefficient"` → the **"j vs rest" OR at the profile** (`comparison="lnor"` → exp, new `reg_marginal_column()` `shape="or"`, one `or` column per outcome category). `at` no-ops on ordinary coefficients (profile-independent → message). Maintainer forks: reference-level baseline (documented odd-baseline caveat); include j-vs-rest OR now. **No new fmt fields; `at="average"` byte-identical to 12e-i; no golden regen; full suite green.** Parity locked vs marginaleffects at the datagrid (`test-tab_reg.R`). Detail: `dev/tabxplor_1.4.0_decisions.md` §37 "12e-ii DONE". (Deferred: custom `newdata=`/"typical"-mode baseline; empirical j-vs-rest on `tab()`.)
 
-#### Phase 12f – unified model/test-summary footer + model comparison
+#### Phase 12f – unified model/test-summary footer + model comparison (DONE — 2026-07-14)
 
-- **generalise the `test` attribute** → shared GOF/summary vocab; `tab_reg` footer (N / LR-vs-null / McFadden R² / AIC / BIC; lm: R²/adjR²/F); **dispersion flag** (poisson / grouped-binomial). Keep `tab()` crosstabs byte-identical (golden).
-- **multi-model LR comparison** (vs null default; opt-in vs a chosen baseline / sequential; AIC/BIC + message when non-nested / N differs).
-- **unified rendering**: in-cell test labels (`"2.9% (Chi2)"`, `"0.4% (LR vs null)"`), border box per model summary block, shared **`stats=`** arg, console/export/Excel parity; align `tab()`'s p-value rendering (conscious golden regen).
+- **generalise the `test` attribute** → shared GOF/summary vocab; `tab_reg` footer (N / LR-vs-null / McFadden R² / AIC / BIC; lm: R²/adjR²/F/σ); **dispersion flag** (poisson / grouped-binomial). Crosstabs byte-identical.
+- **multi-model comparison** (`compare = baseline / sequential`; LR / F; Δ-AIC + message when non-nested / N differs).
+- **unified rendering**: in-cell test labels (`"2.9% (Chi2)"`); console block (`print_reg_footer`) + export rows (`reg_footer_lines`) + border box (whitelist); shared **`stats=`** arg.
+
+`tab_reg` tables gained a **model-summary footer** + **model comparison**, and `tab()` crosstab p-value cells gained **in-cell test labels** — all stored in ONE `test` attribute with DISJOINT reg discriminators (so the crosstab renderers ignore the reg rows and vice versa → **crosstab `.rds` goldens byte-identical, no regen**; only `_snaps/render-html.md` re-accepted for the `(Chi2)` label).
+- The footer is **display-only** (built object = coefficient skeleton).
+- `reg_glance`/`reg_gof_tibble`/`reg_footer_stats`/`reg_compare_rows` (R/tab_reg.R) + `reg_footer_spec`/`print_reg_footer`/`reg_footer_lines`/`pvalue_line_fmt(label=)` (R/tab_classes.R) + ONE new fmt display token **`"gof"`** (forced uncoloured, R/fmt_class.R).
+- `stats=`/`compare=`/`baseline=` args; `compare` default `"none"` (lr_null already in the footer) 
+- Weighted footer minimal (survey Wald/Nagelkerke/AIC; full glance → 12g).
+
 
 #### Phase 12g – survey design + reinstated companion features
 
 - full survey: **ids/strata/fpc** pass-through + accept a prebuilt `survey::svydesign`/`svrepdesign`; survey-degraded glance (Wald/`regTermTest`, `psrsq`, Rao-Scott AIC). Commit: weighted parity vs `svyglm` + design.
 - **`split_var`** (by-group subtable models — the regression analogue of `tab_vars`).
 - **`multiplicator`** (per-k-unit continuous scaling) + **`empirical_OR`** (OR + empirical % beside the model OR).
+
+- implement a **reduced set of summary statistics for weighted models** (Rao-Scott Wald, Nagelkerke, AIC, etc.). Carefully study what’s needed/appropriate and make me a proposition.
 
 #### Phase 12h – jamovi UI: `jmvtab_reg` / `jmvtab_logit`
 
@@ -1625,7 +1641,14 @@ Native dark mode/light mode management for exported tables, specially html table
 - With kable or another html tables solution, use css exported and applied with the table ?
 - Wire this css on standard html dark mode toggle, with a global option in R to use Dark mode in viewer. As a result, the table should autochange it’s formatted we the user change to dark light mode on whichever html page the table is embedded with. Do web searches to find current good practices about this.
 
-I want to change the current default color palettes system, to simplify it a lot.
+I want to change the current default color palettes system, to simplify it a lot : 
+- My new oklch color palettes, one made for light mode and one made for dark mode, are now saved in `tab_classes.R` as : `default_text_colors`, `default_text_colors_neg`, `default_dark_text_colors`, `default_dark_text_colors_neg`, `default_background_colors`, `default_background_colors_neg`, `default_dark_background_colors`, `default_dark_background_colors_neg`
+- At package load, I want to assign then to corresponding objects, but I want the user to be able to customise these objects using a special `set_` function : `text_colors`, `text_colors_neg`, `dark_text_colors`, `dark_text_colors_neg`, `background_colors`, `background_colors_neg`, `dark_background_colors`, `dark_background_colors_neg`
+- <MAINTAINER SHOULD FINISH THAT>
+
+
+
+
 
 Color breaks and color palette management is very not user friendly (base is ok, but customisation for expert users is unclear)
 - Now the `color = c("diff", "ratio")` argument is the right way to have both additive and multiplicative color helpers. So `color_style_` objects should now work without the old "ratio" value, and these `ratio` values should be removed from the `color_style_` entirely in the code.

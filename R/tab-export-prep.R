@@ -276,8 +276,10 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
   # WARNING: the c("n","pvalue","row_pct") whitelist is un-translated (English row labels) -> it
   # silently misses jamovi's gettext labels. Kept as-is for byte-identity; a real fix needs a per-row
   # role flag on the add_n/add_pct/pvalue rows rather than a value match on the row-label column.
+  # Phase 12f: the reg GOF footer rows (row-label "N"/"AIC"/... ) form a total-block too -> the box.
+  # A crosstab never contains those labels, so its tot_block is byte-identical (render-html unchanged).
   tot_block <- is_totrow(tab) |
-    (!is_totrow(tab) & tab[[row_var_col]] %in% c("n", "pvalue", "row_pct"))
+    (!is_totrow(tab) & tab[[row_var_col]] %in% c("n", "pvalue", "row_pct", reg_footer_labels()))
   totblock_top <-
     which(dplyr::if_else(tot_block, !dplyr::lag(tot_block), FALSE))
   totblock_bottom <-
@@ -387,7 +389,7 @@ tab_export_prep <- function(tabs,
   theme_cols <- list(
     theme = theme[1],
     text  = dplyr::if_else(theme[1] == "light", "#000000", "#FFFFFF"),
-    grey  = dplyr::if_else(theme[1] == "light", "#989898", "#BBBBBB"),
+    grey  = dplyr::if_else(theme[1] == "light", "#BBBBBB", "#BBBBBB"), # "#989898", "#717171"
     grey2 = dplyr::if_else(theme[1] == "light", "#111111", "#EEEEEE")
   )
 

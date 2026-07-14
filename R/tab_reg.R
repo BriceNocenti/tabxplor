@@ -44,7 +44,18 @@
 #     effect="coefficient" the "j vs rest" OR at the profile (comparison="lnor" -> exp, the `or` shape,
 #     one column per outcome category). reg_marginal_column() gained the "or" shape. `at` no-ops on
 #     ordinary coefficients (profile-independent -> message).
-# See: CLAUDE.md Phase 12c/12d/12e ; dev/tabxplor_1.4.0_decisions.md S37.
+#   - 12f: the model-summary FOOTER (GOF stats) + multi-model comparison. reg_glance() computes N /
+#     LR-vs-null / McFadden R2 / AIC / BIC (glm+MNL+ordinal), N / R2 / adjR2 / F / sigma (lm), a
+#     Pearson-dispersion flag (poisson / grouped binomial), and a reduced survey set (svyglm: Wald /
+#     Nagelkerke / AIC). reg_gof_tibble() stores them in the whole-table `test` attribute keyed by the
+#     model column, with reg-specific discriminators DISJOINT from the crosstab "chi2"/"F_*" (so the
+#     footer is invisible to the crosstab renderers and vice versa). reg_compare_rows() adds a
+#     model-comparison row (compare = baseline / sequential; anova LR, F for lm/quasi; Delta-AIC + a
+#     message on non-nesting / N-mismatch). The footer is DISPLAY-ONLY (R/tab_classes.R:
+#     print_reg_footer console block, reg_footer_lines export rows); the built object stays the
+#     coefficient skeleton. `stats=` picks the set (FALSE hides it). No new fmt fields; ONE new display
+#     token "gof" (a plain model-fit number, forced uncoloured).
+# See: CLAUDE.md Phase 12c-12f ; dev/tabxplor_1.4.0_decisions.md S37.
 
 # === Internal engine ================================================================
 
@@ -791,6 +802,254 @@ reg_columns_multinom <- function(skeleton, f, sp, effect_shape, color, color_sig
   })
 }
 
+# === Model-summary footer (Phase 12f): GOF stats stored in the `test` attribute ==================
+# The regression GOF is stored in the SAME whole-table `test` tibble crosstabs use (schema
+# new_test_tibble(): row_var/col_var/test/statistic/df1/df2/pvalue/n/variance/min_e), adding ROWS with
+# NEW `test` discriminators that never collide with the crosstab "chi2"/"F_welch"/"F_classic" -- so
+# test_display_rows() (chi2/F only) makes print_chi2()/tab_pvalue_lines() auto-no-op on a reg table,
+# and the reg renderers (R/tab_classes.R) auto-no-op on a crosstab. Value-stats (n/r2/aic/...) carry
+# the number in `statistic` (pvalue NA); test-stats (lr_null/f_model/wald_null/compare_*) carry
+# statistic + df + pvalue. `col_var` = the model's FIRST output column label (MNL/ordinal place the
+# footer under the first category column). The footer is DISPLAY-ONLY (never baked into the fmt
+# columns), materialised by R/tab_classes.R at print / export.
+
+# The null-model log-likelihood, for LR-vs-null + McFadden -- robust to the fitting scope. glm
+# (binomial/poisson) is ANALYTIC from the stored null.deviance (no refit, no `update()` env fragility:
+# ll_0 = ll_full - LR/2 where LR = null.deviance - deviance); multinom/polr refit the intercept-only
+# model on the stored model frame. Returns NULL when the null can't be recovered.
+reg_null_loglik <- function(fit, family) {
+  if (family %in% c("binomial", "poisson") &&
+      !is.null(fit$null.deviance) && !is.null(fit$deviance)) {
+    ll_f <- tryCatch(as.numeric(stats::logLik(fit)), error = function(e) NA_real_)
+    lr   <- fit$null.deviance - fit$deviance
+    df   <- fit$df.null - fit$df.residual
+    return(list(ll_f = ll_f, ll_0 = ll_f - lr / 2, df = df))
+  }
+  null <- tryCatch({
+    mf   <- stats::model.frame(fit)
+    fla  <- stats::reformulate("1", response = names(mf)[1])
+    if (inherits(fit, "multinom")) nnet::multinom(fla, data = mf, trace = FALSE)
+    else if (inherits(fit, "polr")) MASS::polr(fla, data = mf, Hess = TRUE)
+    else NULL
+  }, error = function(e) NULL)
+  if (is.null(null)) return(NULL)
+  llf <- tryCatch(stats::logLik(fit),  error = function(e) NULL)
+  ll0 <- tryCatch(stats::logLik(null), error = function(e) NULL)
+  if (is.null(llf) || is.null(ll0)) return(NULL)
+  list(ll_f = as.numeric(llf), ll_0 = as.numeric(ll0),
+       df = attr(llf, "df") - attr(ll0, "df"))
+}
+
+# Pearson dispersion (over/under-dispersion diagnosis): poisson / grouped binomial only -- the
+# dispersion parameter is not identifiable for ungrouped Bernoulli data. phi = Sum(pearson resid^2) /
+# df.residual (better-behaved than deviance/df). A warning fires at >1.5 (strong >2), mirroring the
+# reg_ordinal_diagnostic() pattern.
+reg_dispersion <- function(fit) {
+  rp  <- tryCatch(stats::residuals(fit, type = "pearson"), error = function(e) NULL)
+  dfr <- tryCatch(stats::df.residual(fit), error = function(e) NA_real_)
+  if (is.null(rp) || is.na(dfr) || dfr <= 0) return(NA_real_)
+  phi <- sum(rp^2, na.rm = TRUE) / dfr
+  if (!is.na(phi) && phi > 1.5) {
+    cli::cli_warn(c(
+      "!" = paste0("Over-dispersion detected (Pearson dispersion = {signif(phi, 3)}",
+                   "{if (phi > 2) ', strong' else ''}); standard errors may be too small."),
+      "i" = paste0("Consider {.code family = \"quasipoisson\"} (scaled SEs) or a negative-binomial ",
+                   "model.")
+    ))
+  }
+  phi
+}
+
+# GOF stats for ONE fit -> a tidy tibble (test, statistic, df1, df2, pvalue) in the reg-footer
+# vocabulary. Dependency-light: broom::glance (lm) + base logLik/AIC/BIC + the analytic/refit null.
+# quasi* / svyglm have no true likelihood -> those stats stay NA / a relabelled Rao-Scott Wald (survey),
+# never a false LR. `nobs` comes from the fit_res (multinom has no stats::nobs()).
+reg_glance <- function(fit, family, grouped, weighted, nobs) {
+  row <- function(test, statistic = NA_real_, df1 = NA_real_, df2 = NA_real_, pvalue = NA_real_)
+    tibble::tibble(test = test, statistic = statistic, df1 = df1, df2 = df2, pvalue = pvalue)
+  out <- row("n", statistic = as.numeric(nobs))
+
+  if (weighted) {
+    # svyglm: no true likelihood -> Rao-Scott Wald-vs-null (relabelled) + Nagelkerke pseudo-R2 + AIC.
+    # survey's psrsq / AIC emit "rsquared may be wrong" / "zero weight" notes under scaled weights; these
+    # are inherent approximations of a survey summary, not user-actionable -> suppressed (the footer is a
+    # descriptive summary, not the primary design-based inference).
+    terms_all <- attr(stats::terms(fit), "term.labels")
+    wt <- if (length(terms_all) > 0)
+      tryCatch(suppressWarnings(survey::regTermTest(fit, stats::reformulate(terms_all))),
+               error = function(e) NULL)
+    else NULL
+    if (!is.null(wt)) out <- dplyr::bind_rows(out, row("wald_null",
+      statistic = as.numeric(wt$Ftest), df1 = as.numeric(wt$df), df2 = as.numeric(wt$ddf),
+      pvalue = as.numeric(wt$p)))
+    nk <- tryCatch(suppressWarnings(as.numeric(survey::psrsq(fit, method = "Nagelkerke"))),
+                   error = function(e) NA_real_)
+    if (!is.na(nk)) out <- dplyr::bind_rows(out, row("nagelkerke_r2", statistic = nk))
+    aic <- tryCatch(suppressWarnings(as.numeric(stats::AIC(fit))), error = function(e) NA_real_)
+    if (!is.na(aic)) out <- dplyr::bind_rows(out, row("aic", statistic = aic))
+    return(out)
+  }
+
+  if (family == "gaussian") {
+    g <- tryCatch(broom::glance(fit), error = function(e) NULL)
+    if (!is.null(g)) out <- dplyr::bind_rows(out,
+      row("r2",      statistic = g$r.squared),
+      row("r2_adj",  statistic = g$adj.r.squared),
+      row("f_model", statistic = g$statistic, df1 = g$df, df2 = g$df.residual, pvalue = g$p.value),
+      row("sigma",   statistic = g$sigma),
+      row("aic",     statistic = g$AIC),
+      row("bic",     statistic = g$BIC))
+    return(out)
+  }
+
+  # glm binomial/poisson + multinom/polr: LR-vs-null + McFadden from the null log-likelihood; AIC/BIC.
+  # quasi* (no logLik) -> those stay NA (footer shows N + dispersion).
+  nl <- reg_null_loglik(fit, family)
+  if (!is.null(nl) && !is.na(nl$ll_f) && !is.na(nl$ll_0) && !is.na(nl$df) && nl$df > 0) {
+    lr <- 2 * (nl$ll_f - nl$ll_0)
+    out <- dplyr::bind_rows(out,
+      row("lr_null", statistic = lr, df1 = nl$df, pvalue = stats::pchisq(lr, nl$df, lower.tail = FALSE)),
+      row("mcfadden_r2", statistic = 1 - nl$ll_f / nl$ll_0))
+  }
+  aic <- tryCatch(as.numeric(stats::AIC(fit)), error = function(e) NA_real_)
+  bic <- tryCatch(as.numeric(stats::BIC(fit)), error = function(e) NA_real_)
+  if (!is.na(aic)) out <- dplyr::bind_rows(out, row("aic", statistic = aic))
+  if (!is.na(bic)) out <- dplyr::bind_rows(out, row("bic", statistic = bic))
+  if (family == "poisson" || grouped) {
+    phi <- reg_dispersion(fit)
+    if (!is.na(phi)) out <- dplyr::bind_rows(out, row("dispersion", statistic = phi))
+  }
+  out
+}
+
+# Resolve the `stats=` argument -> the ordered set of footer discriminators. Per-context defaults:
+# glm -> n/lr_null/mcfadden_r2/aic/bic (+dispersion for poisson/grouped); lm -> n/r2/r2_adj/f_model/
+# sigma; weighted -> n/wald_null/nagelkerke_r2/aic. A character vector overrides (keeping its order,
+# valid names only); FALSE / "none" suppresses the footer; NULL / "all" / TRUE = the default set.
+reg_footer_stats <- function(family, weighted, grouped, stats) {
+  default <- if (weighted) c("n", "wald_null", "nagelkerke_r2", "aic")
+    else if (family == "gaussian") c("n", "r2", "r2_adj", "f_model", "sigma")
+    else { s <- c("n", "lr_null", "mcfadden_r2", "aic", "bic")
+           if (family == "poisson" || grouped) s <- c(s, "dispersion"); s }
+  if (is.null(stats) || identical(stats, "all") || isTRUE(stats)) return(default)
+  if (isFALSE(stats) || identical(stats, "none")) return(character(0))
+  valid <- c("n", "lr_null", "wald_null", "mcfadden_r2", "nagelkerke_r2",
+             "r2", "r2_adj", "f_model", "sigma", "aic", "bic", "dispersion")
+  stats[stats %in% valid]
+}
+
+# Assemble the whole-table `test` tibble for a regression table: one row per (fit's first column x
+# footer stat), in new_test_tibble() schema. `fit_first_col` = the fmt column each fit is keyed under
+# (MNL/ordinal -> the first category column). `grouped_by_fit` marks grouped-binomial fits (dispersion).
+reg_gof_tibble <- function(fits, fit_first_col, family, weighted, grouped_by_fit, stats, nobs_by_fit) {
+  rows <- purrr::map(seq_along(fits), function(i) {           # integer index (fits may be NAMED)
+    f    <- fits[[i]]
+    keep <- reg_footer_stats(family, weighted, isTRUE(grouped_by_fit[[i]]), stats)
+    if (length(keep) == 0) return(NULL)                        # stats = FALSE -> no glance, no warnings
+    g    <- reg_glance(f$fit, family, isTRUE(grouped_by_fit[[i]]), weighted, nobs_by_fit[[i]])
+    g    <- g[g$test %in% keep, , drop = FALSE]
+    g    <- g[order(match(g$test, keep)), , drop = FALSE]        # spec order
+    if (nrow(g) == 0) return(NULL)
+    tibble::tibble(row_var = "", col_var = fit_first_col[[i]], test = g$test,
+                   statistic = g$statistic, df1 = g$df1, df2 = g$df2, pvalue = g$pvalue,
+                   n = as.numeric(nobs_by_fit[[i]]), variance = NA_real_, min_e = NA_real_)
+  })
+  rows <- purrr::compact(rows)
+  if (length(rows) == 0) return(new_test_tibble())
+  dplyr::bind_rows(rows)
+}
+
+# --- Multi-model comparison (Phase 12f-ii): each model column vs a baseline / the previous model ----
+# The nesting / same-N guard mirrors anova()'s own error: an LR / F test between two models is only
+# valid on the SAME complete-case set (differing predictor missingness silently changes N) and when
+# one model nests in the other. On a guard failure the comparison falls back to Delta-AIC + a message.
+reg_compare_guard <- function(m_ref, m_full) {
+  ok_n   <- tryCatch(stats::nobs(m_ref) == stats::nobs(m_full), error = function(e) FALSE)
+  t_ref  <- tryCatch(attr(stats::terms(m_ref),  "term.labels"), error = function(e) NULL)
+  t_full <- tryCatch(attr(stats::terms(m_full), "term.labels"), error = function(e) NULL)
+  nested <- !is.null(t_ref) && !is.null(t_full) && all(t_ref %in% t_full)
+  isTRUE(ok_n) && nested
+}
+
+# Pull statistic / df / p from an anova() comparison table (last row): glm "Chisq" (Deviance + Df +
+# Pr(>Chi)) vs lm/quasi "F" (F + Df + Res.Df + Pr(>F)).
+reg_compare_extract <- function(an, use_f) {
+  k     <- nrow(an)
+  p_col <- grep("^Pr\\(", names(an), value = TRUE)
+  p     <- if (length(p_col)) suppressWarnings(as.numeric(an[[p_col[1]]][k])) else NA_real_
+  df1   <- suppressWarnings(abs(as.numeric(an[["Df"]][k])))
+  if (use_f) list(stat = suppressWarnings(as.numeric(an[["F"]][k])), df1 = df1,
+                  df2 = suppressWarnings(as.numeric(an[["Res.Df"]][k])), p = p)
+  else       list(stat = suppressWarnings(as.numeric(an[["Deviance"]][k])), df1 = df1,
+                  df2 = NA_real_, p = p)
+}
+
+# Append one comparison row per model column to the GOF `test` tibble. `compare = "baseline"` tests
+# each column vs the `baseline=` column (default the first); `"sequential"` vs the previous column.
+# LR (Chisq) for binomial/poisson/multinomial/ordinal, F for gaussian/quasi. Guard failure -> a
+# Delta-AIC row (test "compare_*_aic", a value stat) + a one-time message. Weighted / single-column
+# tables no-op (with a message). Distinct discriminators per test kind keep each footer row homogeneous
+# (all LR, all F, or all Delta-AIC) so the row label alone names the test -- no in-cell label needed.
+reg_compare_rows <- function(reg_gof, fits, specs, family, weighted, fit_first_col,
+                             compare = "none", baseline = NULL, conf_level = 0.95) {
+  if (identical(compare, "none")) return(reg_gof)
+  if (weighted) {
+    cli::cli_inform(c("i" = "Model comparison ({.arg compare}) is not available for weighted models yet."))
+    return(reg_gof)
+  }
+  n <- length(fits)
+  if (n < 2L) {
+    cli::cli_inform(c("i" = paste0("{.arg compare} needs at least two models (a {.arg predictors} list ",
+                                   "or several dependents); ignored.")))
+    return(reg_gof)
+  }
+  use_f  <- family %in% c("gaussian", "quasipoisson")
+  base_i <- if (compare == "baseline") {
+    if (is.null(baseline))          1L
+    else if (is.numeric(baseline))  as.integer(baseline)
+    else                            match(baseline, purrr::map_chr(specs, "label"))
+  } else NA_integer_
+  if (compare == "baseline" && (is.na(base_i) || base_i < 1L || base_i > n)) {
+    cli::cli_warn("{.arg baseline} {.val {baseline}} matches no model; using the first.")
+    base_i <- 1L
+  }
+
+  row <- function(test, col_var, statistic = NA_real_, df1 = NA_real_, df2 = NA_real_,
+                  pvalue = NA_real_, nobs = NA_real_)
+    tibble::tibble(row_var = "", col_var = col_var, test = test, statistic = statistic,
+                   df1 = df1, df2 = df2, pvalue = pvalue, n = nobs,
+                   variance = NA_real_, min_e = NA_real_)
+
+  tag  <- if (compare == "sequential") "seq" else "baseline"
+  rows <- purrr::map(seq_len(n), function(i) {
+    ref_i <- if (compare == "sequential") i - 1L else base_i
+    if (is.na(ref_i) || ref_i < 1L || ref_i == i) return(NULL)
+    m_full <- fits[[i]]$fit; m_ref <- fits[[ref_i]]$fit
+    col    <- fit_first_col[[i]]
+    if (reg_compare_guard(m_ref, m_full)) {
+      an <- tryCatch(stats::anova(m_ref, m_full, test = if (use_f) "F" else "Chisq"),
+                     error = function(e) NULL)
+      if (!is.null(an)) {
+        e <- reg_compare_extract(an, use_f)
+        if (!is.na(e$p)) {
+          disc <- if (use_f) paste0("compare_", tag, "_f") else paste0("compare_", tag)
+          return(row(disc, col, statistic = e$stat, df1 = e$df1, df2 = e$df2, pvalue = e$p,
+                     nobs = fits[[i]]$nobs))
+        }
+      }
+    }
+    daic <- tryCatch(as.numeric(stats::AIC(m_full) - stats::AIC(m_ref)), error = function(e) NA_real_)
+    cli::cli_inform(c("i" = paste0(
+      "Column {.val {col}}: models are not nested or N differs -> showing the AIC difference vs the ",
+      "{if (compare == 'sequential') 'previous' else 'baseline'} model instead of a likelihood-ratio test.")))
+    row(paste0("compare_", tag, "_aic"), col, statistic = daic, nobs = fits[[i]]$nobs)
+  })
+  rows <- purrr::compact(rows)
+  if (length(rows) == 0) return(reg_gof)
+  dplyr::bind_rows(reg_gof, dplyr::bind_rows(rows))
+}
+
+
 # The shared builder: fit every column spec, align to one skeleton, assemble a grouped_tab. specs =
 # list of list(dependent, predictors, label, trials, formula, compound). The data-skeleton (union of
 # the specs' predictors) is used unless a spec is a compound formula (single model), in which case the
@@ -799,7 +1058,8 @@ reg_columns_multinom <- function(skeleton, f, sp, effect_shape, color, color_sig
 # (one per outcome category), so the per-spec columns are flattened into one (label, col) list.
 reg_build <- function(data, specs, union_predictors, family, wt, do_exp, effect_shape,
                       inverse_two_level_factors, conf_level, method, color, color_signif,
-                      cleannames, subtext, eff_word, effect = "coefficient", at = "average") {
+                      cleannames, subtext, eff_word, effect = "coefficient", at = "average",
+                      stats = NULL, compare = "none", baseline = NULL) {
   fits <- purrr::map(specs, function(sp) {
     reg_fit(data, sp$dependent, sp$predictors, family, wt, do_exp,
             inverse_two_level_factors, conf_level, method,
@@ -820,11 +1080,14 @@ reg_build <- function(data, specs, union_predictors, family, wt, do_exp, effect_
   numeric_preds <- union_predictors[!purrr::map_lgl(
     union_predictors, ~ is.factor(data[[.x]]) || is.character(data[[.x]]))]
 
+  # built_per_fit: a list PER FIT of {label, col} lists (a multinomial / MNL-vs-rest / AME-per-category
+  # fit contributes SEVERAL columns). Kept un-flattened so reg_gof_tibble() can key the model-summary
+  # footer to each fit's FIRST output column (Phase 12f).
   if (effect == "ame") {
     prob_scale   <- family %in% c("binomial", "multinomial", "ordinal")
     per_category <- family %in% c("multinomial", "ordinal")
     shape        <- if (prob_scale) "prob" else "raw"
-    built <- purrr::flatten(purrr::map2(fits, specs, function(f, sp) {
+    built_per_fit <- purrr::map2(fits, specs, function(f, sp) {
       marg  <- reg_marginal(f$fit, f$data, sp$predictors, conf_level, wt,
                             at = at, want_pred = prob_scale)
       var_y <- if (!prob_scale) suppressWarnings(stats::var(as.numeric(f$data[[sp$dependent]])))
@@ -844,11 +1107,11 @@ reg_build <- function(data, specs, union_predictors, family, wt, do_exp, effect_
                                               var_y, f$nobs, NA_character_, color, color_signif,
                                               sp$label)))
       }
-    }))
+    })
   } else if (mnl_vsrest) {
     # MNL "j vs rest" OR at the reference profile (D3-flavour-2): exp of the profile log-odds-ratio of
     # "category j vs the rest" for each predictor level; one OR column per outcome category.
-    built <- purrr::flatten(purrr::map2(fits, specs, function(f, sp) {
+    built_per_fit <- purrr::map2(fits, specs, function(f, sp) {
       marg   <- reg_marginal(f$fit, f$data, sp$predictors, conf_level, wt,
                              at = "reference", comparison = "lnor", want_pred = FALSE)
       groups <- levels(as.factor(f$data[[sp$dependent]]))
@@ -859,22 +1122,37 @@ reg_build <- function(data, specs, union_predictors, family, wt, do_exp, effect_
              col   = reg_marginal_column(skeleton, marg, sp$predictors, numeric_preds, "or",
                                          NA_real_, f$nobs, g, color, color_signif, lab))
       })
-    }))
+    })
   } else {
-  built <- purrr::flatten(purrr::map2(fits, specs, function(f, sp) {
-    if (multi_col) {
-      reg_columns_multinom(skeleton, f, sp, effect_shape, color, color_signif,
-                           eff_word, cleannames, prefix_dep)
-    } else {
-      # a compound formula is one model: every skeleton row belongs to it (else compound-term rows go NA)
-      model_predictors <- if (isTRUE(sp$compound)) unique(skeleton$var) else sp$predictors
-      list(list(label = sp$label,
-                col   = reg_column(skeleton, f, model_predictors, sp$label,
-                                   effect_shape, color, color_signif)))
-    }
-  }))
+    built_per_fit <- purrr::map2(fits, specs, function(f, sp) {
+      if (multi_col) {
+        reg_columns_multinom(skeleton, f, sp, effect_shape, color, color_signif,
+                             eff_word, cleannames, prefix_dep)
+      } else {
+        # a compound formula is one model: every skeleton row belongs to it (else compound rows go NA)
+        model_predictors <- if (isTRUE(sp$compound)) unique(skeleton$var) else sp$predictors
+        list(list(label = sp$label,
+                  col   = reg_column(skeleton, f, model_predictors, sp$label,
+                                     effect_shape, color, color_signif)))
+      }
+    })
   }
+  built  <- purrr::flatten(built_per_fit)
   labels <- make.unique(purrr::map_chr(built, "label"))
+
+  # Phase 12f: the model-summary footer -- key each fit's GOF to its FIRST output column (make.unique'd).
+  fit_ncol      <- purrr::map_int(built_per_fit, length)
+  fit_first_idx <- cumsum(c(1L, utils::head(fit_ncol, -1L)))
+  fit_first_col <- labels[fit_first_idx]
+  grouped_by_fit <- purrr::map_lgl(specs, ~ family == "binomial" && !is.null(.$trials) &&
+                                     !isTRUE(.$compound))
+  nobs_by_fit    <- purrr::map_dbl(fits, "nobs")
+  reg_gof <- reg_gof_tibble(fits, fit_first_col, family, weighted = !is.null(wt),
+                            grouped_by_fit = grouped_by_fit, stats = stats,
+                            nobs_by_fit = nobs_by_fit)
+  reg_gof <- reg_compare_rows(reg_gof, fits, specs, family, weighted = !is.null(wt),
+                              fit_first_col = fit_first_col, compare = compare, baseline = baseline,
+                              conf_level = conf_level)
 
   disp_levels <- skeleton$level
   if (cleannames) {
@@ -887,8 +1165,11 @@ reg_build <- function(data, specs, union_predictors, family, wt, do_exp, effect_
   )
   for (i in seq_along(built)) tab[[labels[i]]] <- built[[i]]$col
 
+  # Phase 12f: the GOF footer travels in the whole-table `test` attribute (disjoint discriminators, so
+  # the crosstab renderers ignore it); it is materialised as a console block / export rows at display,
+  # never baked into the fmt columns (the coefficient skeleton stays intact for downstream reads).
   tab |>
-    new_tab(subtext = subtext) |>
+    new_tab(subtext = subtext, test = reg_gof) |>
     dplyr::group_by(var)
 }
 
@@ -987,6 +1268,21 @@ reg_build <- function(data, specs, union_predictors, family, wt, do_exp, effect_
 #'   passing a formula in `dependent` with the terms already coded.
 #' @param inverse_two_level_factors Logical, binomial only. If `TRUE` (default), models the FIRST
 #'   level of a 2-level factor dependent (e.g. `"1-Married"` before `"2-Not married"`).
+#' @param stats The goodness-of-fit statistics shown in the model-summary **footer** (one block per
+#'   model). `NULL` (default) uses the per-family set: linear models show N, R square, adjusted R
+#'   square, the overall F-test and the residual SD; other models show N, the likelihood-ratio test
+#'   versus the null model, McFadden's pseudo-R square, AIC and BIC (poisson / grouped-binomial models
+#'   also show the Pearson dispersion). Pass a character vector to pick and order the statistics
+#'   (`"n"`, `"lr_null"`, `"mcfadden_r2"`, `"aic"`, `"bic"`, `"dispersion"`, `"r2"`, `"r2_adj"`,
+#'   `"f_model"`, `"sigma"`), or `FALSE` / `"none"` to hide the footer. Weighted models show a reduced,
+#'   survey-appropriate set (design-based Wald test, Nagelkerke pseudo-R square, AIC).
+#' @param compare Add a **model-comparison** footer row (only with several models / dependents).
+#'   `"none"` (default) adds nothing; `"baseline"` tests each model against the `baseline` column;
+#'   `"sequential"` tests each model against the previous one. Uses a likelihood-ratio test (F for
+#'   linear / quasi models); when the models are not nested or fit on different numbers of observations
+#'   it falls back to the AIC difference with a message.
+#' @param baseline For `compare = "baseline"`: which column is the reference model (its label, or a
+#'   position). Defaults to the first model.
 #' @param color,color_signif How the effect measure is coloured (`NULL` uses the per-family default:
 #'   `"OR"` magnitude for ratios, standardized `"diff"` for betas; significance policy
 #'   `"grey_non_signif"`). See [tab()].
@@ -1030,11 +1326,13 @@ tab_reg <- function(data, dependent, predictors = NULL,
                     effect = c("coefficient", "ame"), at = c("average", "reference"),
                     trials = NULL, conf_level = 0.95, method = c("wald", "profile"),
                     reference = NULL, inverse_two_level_factors = TRUE,
+                    stats = NULL, compare = c("none", "baseline", "sequential"), baseline = NULL,
                     color = NULL, color_signif = NULL, stars = TRUE,
                     cleannames = NULL, subtext = "") {
-  method <- match.arg(method)
-  effect <- match.arg(effect)
-  at     <- match.arg(at)
+  method  <- match.arg(method)
+  effect  <- match.arg(effect)
+  at      <- match.arg(at)
+  compare <- match.arg(compare)
   stopifnot(is.data.frame(data))
   cleannames <- if (is.null(cleannames)) getOption("tabxplor.cleannames", TRUE) else cleannames
 
@@ -1171,7 +1469,8 @@ tab_reg <- function(data, dependent, predictors = NULL,
   reg_check_deps(family, wt, needs_marginaleffects = effect == "ame" || mnl_vsrest)
   res <- reg_build(data, specs, union_predictors, family, wt, do_exp, effect_shape,
                    inverse_two_level_factors, conf_level, method, color, color_signif,
-                   cleannames, subtext, eff_word, effect, at)
+                   cleannames, subtext, eff_word, effect, at,
+                   stats = stats, compare = compare, baseline = baseline)
 
   # stars = TRUE (default) for regression tables -- the per-cell pvalue is stored by reg_build so the
   # main display shows significance stars. stars = FALSE strips it (pvalue is stars-only; colours read
@@ -1212,13 +1511,14 @@ tab_logit <- function(data, dependent, predictors, wt = NULL,
                       inverse_two_level_factors = TRUE,
                       conf_level = 0.95,
                       method = c("wald", "profile"),
+                      stats = NULL,
                       color_signif = c("grey_non_signif", "ignore", "color_all_signif"),
                       stars = TRUE, cleannames = NULL, subtext = "") {
   method       <- match.arg(method)
   color_signif <- match.arg(color_signif)
   stopifnot(is.character(predictors), length(predictors) >= 1L)
   tab_reg(data, dependent = dependent, predictors = predictors, family = "binomial", wt = wt,
-          conf_level = conf_level, method = method,
+          conf_level = conf_level, method = method, stats = stats,
           inverse_two_level_factors = inverse_two_level_factors,
           color_signif = color_signif, stars = stars, cleannames = cleannames, subtext = subtext)
 }
@@ -1231,6 +1531,7 @@ tab_logit <- function(data, dependent, predictors, wt = NULL,
 #' `tabxplor` table with one odds-ratio column per model (predictors absent from a model left blank).
 #'
 #' @inheritParams tab_logit
+#' @inheritParams tab_reg
 #' @param dependent Character. Name of the single binary dependent variable.
 #' @param models A named list of character vectors; each element is one model's predictor set and its
 #'   name labels the column. Unnamed elements are labelled `model1`, `model2`, ...
@@ -1252,13 +1553,16 @@ multi_logit <- function(data, dependent, models, wt = NULL,
                         inverse_two_level_factors = TRUE,
                         conf_level = 0.95,
                         method = c("wald", "profile"),
+                        stats = NULL, compare = c("none", "baseline", "sequential"), baseline = NULL,
                         color_signif = c("grey_non_signif", "ignore", "color_all_signif"),
                         stars = TRUE, cleannames = NULL, subtext = "") {
   method       <- match.arg(method)
+  compare      <- match.arg(compare)
   color_signif <- match.arg(color_signif)
   stopifnot(is.character(dependent), length(dependent) == 1L, is.list(models), length(models) >= 1L)
   tab_reg(data, dependent = dependent, predictors = models, family = "binomial", wt = wt,
           conf_level = conf_level, method = method,
+          stats = stats, compare = compare, baseline = baseline,
           inverse_two_level_factors = inverse_two_level_factors,
           color_signif = color_signif, stars = stars, cleannames = cleannames, subtext = subtext)
 }

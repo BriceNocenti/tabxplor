@@ -40,6 +40,18 @@
 * `tab_logit()` and `multi_logit()` are now thin wrappers of `tab_reg()` for the binomial family,
   keeping the curated binary-outcome interface (`tab_logit(data, dependent, predictors)` for one
   logit per dependent; `multi_logit(data, dependent, models = list(...))` for model comparison).
+* `tab_reg()` tables now show a **model-summary footer** (below the coefficients): the number of
+  observations, a likelihood-ratio test versus the null model, McFadden's pseudo-R square and AIC/BIC
+  for logistic / poisson / multinomial / ordinal models; the R square, adjusted R square, overall
+  F-test and residual SD for linear models; and a Pearson-dispersion flag (with a warning) for poisson
+  and grouped-binomial models. The `stats =` argument picks and orders the statistics, or hides the
+  footer (`stats = FALSE`). Weighted models show a survey-appropriate reduced set.
+* `tab_reg()` / `multi_logit()` gain a `compare =` argument for **model comparison**: `"baseline"`
+  tests each model against a chosen `baseline` column, `"sequential"` against the previous model
+  (likelihood-ratio test, F for linear models; an AIC difference with a message when the models are
+  not nested or fit on different numbers of observations).
+* `tab()` crosstab p-value rows now label each cell with the test it ran (e.g. `2.9% (Chi2)`,
+  `1.4% (F, Welch)`), so a table mixing categorical and numeric columns is self-documenting.
 * `tab()` odds-ratio columns (and any odds ratio) now print values below 1 as `1/x` (e.g. `1/4`
   instead of `0.25`), so they compare symmetrically with odds ratios above 1.
 * `tab_md()` now exports **colored** markdown. A table built with colors (e.g. `tab(..., color = "diff")`)

@@ -266,11 +266,66 @@ test_display_rows <- function(test_tbl, anova = getOption("tabxplor.anova", "wel
 
 # Build the fmt "pvalue" cells for a p-value display row, reproducing the pre-1.4.0 cell fields
 # (display "pvalue"; pct = p; diff drives the >=5% flag; n cleared). Vectorised over p.
-pvalue_line_fmt <- function(p) {
-  fmt(display = "pvalue", type = "n", n = NA_integer_,
+# Phase 12f: `label` (per col_var, e.g. "Chi2" / "F, Welch") turns the cell into the composite
+# display "{pvalue} (<label>)" -- the in-cell test label that self-documents a mixed factor/mean row.
+# NA / "" leaves the bare "pvalue" token (byte-identical to the pre-12f cell). The label is a text-
+# backend suffix only (Excel keeps the raw p-value number).
+pvalue_line_fmt <- function(p, label = NA_character_) {
+  disp <- ifelse(is.na(label) | !nzchar(label), "pvalue", paste0("{pvalue} (", label, ")"))
+  fmt(display = disp, type = "n", n = NA_integer_,
       var = p, pct = p, ci_inf = 0, ci_sup = 0, ctr = 0,
       diff = dplyr::if_else(p > 0.05, -0.5, 0), digits = 2L, col_var = "chi2_cols")
 }
+
+# The label shown in a crosstab p-value cell for each test type (Phase 12f). NULL -> no in-cell label.
+test_cell_label <- function(test) {
+  switch(test, "chi2" = "Chi2", "F_welch" = "F, Welch", "F_classic" = "F", NA_character_)
+}
+
+
+# === Regression model-summary footer (Phase 12f) =================================================
+# GOF stats travel in the whole-table `test` attribute with reg-specific discriminators (built by
+# reg_gof_tibble() / reg_compare_rows() in R/tab_reg.R). This section renders them as a console block
+# (print_reg_footer, parallel to print_chi2) or appended export rows (reg_footer_lines, parallel to
+# tab_pvalue_lines). The discriminators are DISJOINT from the crosstab "chi2"/"F_*", so print_chi2 /
+# tab_pvalue_lines no-op on a regression table and these renderers no-op on a crosstab -- one `test`
+# attribute, two rendering paths, no crosstab byte-identity impact.
+
+# One entry per footer stat: its row label + how the cell renders. kind "gof" -> a plain number (the
+# "gof" display token reading the `statistic` value); kind "pvalue" -> a p-value cell (from `pvalue`).
+# `digits` applies to gof cells. Order here = the display / fallback order.
+reg_footer_spec <- function() list(
+  n                    = list(label = "N",                    kind = "gof",    digits = 0L),
+  lr_null              = list(label = "LR vs null",           kind = "pvalue"),
+  wald_null            = list(label = "Wald vs null",         kind = "pvalue"),
+  f_model              = list(label = "F",                    kind = "pvalue"),
+  r2                   = list(label = "R2",              kind = "gof",   digits = 3L),
+  r2_adj               = list(label = "Adjusted R2",     kind = "gof",   digits = 3L),
+  mcfadden_r2          = list(label = "McFadden R2",     kind = "gof",   digits = 3L),
+  nagelkerke_r2        = list(label = "Nagelkerke R2",   kind = "gof",   digits = 3L),
+  sigma                = list(label = "Residual SD",          kind = "gof",   digits = 2L),
+  aic                  = list(label = "AIC",                  kind = "gof",   digits = 0L),
+  bic                  = list(label = "BIC",                  kind = "gof",   digits = 0L),
+  dispersion           = list(label = "Dispersion",           kind = "gof",   digits = 2L),
+  compare_baseline     = list(label = "LR vs baseline",       kind = "pvalue"),
+  compare_baseline_f   = list(label = "F vs baseline",        kind = "pvalue"),
+  compare_baseline_aic = list(label = "Delta-AIC vs baseline", kind = "gof",  digits = 0L),
+  compare_seq          = list(label = "LR vs previous",       kind = "pvalue"),
+  compare_seq_f        = list(label = "F vs previous",        kind = "pvalue"),
+  compare_seq_aic      = list(label = "Delta-AIC vs previous", kind = "gof",  digits = 0L)
+)
+reg_footer_test_types <- function() names(reg_footer_spec())
+reg_footer_labels     <- function() unname(vapply(reg_footer_spec(), `[[`, character(1), "label"))
+is_reg_footer <- function(test_tbl)
+  !is.null(test_tbl) && nrow(test_tbl) > 0 && any(test_tbl$test %in% reg_footer_test_types())
+
+# A single footer cell (one fmt value), for the appended export rows. gof -> the "gof" token (value in
+# `diff`); pvalue -> the pvalue_line_fmt shape (no in-cell label: the reg row label already names the
+# stat). A missing stat -> a "blank" cell (renders "").
+reg_gof_cell   <- function(value, digits) fmt(display = "gof", type = "n", n = NA_integer_,
+                                              diff = value, digits = as.integer(digits))
+reg_pvalue_cell <- function(p) pvalue_line_fmt(p)
+reg_blank_cell  <- function() fmt(display = "blank", type = "n", n = NA_integer_)
 
 # # In doc exemple they do :
 #  df_colour <- function(x) {
@@ -333,6 +388,7 @@ print.tabxplor_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = N
   # tab_kable -> tab_export_prep materialize) rather than the block. print_chi2() now fires for a
   # normal tab() too, because the `test` attribute is no longer dropped at build (Phase 10i-B).
   print_chi2(x, width = width)
+  print_reg_footer(x, width = width)  # Phase 12f: regression GOF block (no-op on crosstabs)
 
   # Use pillar::char() on row_var to control truncation. Phase 10c: robust, position-independent
   # detection (degrade -> no min-width fixup, prints the plain tibble without crashing).
@@ -402,6 +458,7 @@ print.tabxplor_grouped_tab <- function(x, width = NULL, ..., n = 100,
   # Phase 10i-B (decision 2): see print.tabxplor_tab -- the console shows the chi2/F block, not
   # p-value rows; placed after the kable branch so `print = "kable"` renders p-value rows instead.
   print_chi2(x, width = width)
+  print_reg_footer(x, width = width)  # Phase 12f: regression GOF block (no-op on crosstabs)
 
   # Use pillar::char() on row_var to control truncation. Phase 10c: robust, position-independent
   # detection (degrade -> no min-width fixup, prints the plain tibble without crashing).
@@ -469,6 +526,42 @@ print_chi2 <- function(x, width = NULL) {
            formatC(r$statistic, format = "g", digits = 3), " (", df_txt, ") p=", p_txt)
   })
 
+  cli::cat_line(lines)
+  cli::cat_line()
+}
+
+#' @keywords internal
+# Phase 12f: render the regression GOF footer as a console block (one line per model column), from the
+# reg-specific rows of the `test` attribute. Parallel to print_chi2(); no-op on a crosstab (no reg
+# discriminators). A gof stat shows "<label>=<value>"; a p-value stat shows "<label> p=<p%>" (coloured
+# red/green by >=0.05, like print_chi2). Called from both print methods, after print_chi2().
+print_reg_footer <- function(x, width = NULL) {
+  test_tbl <- get_test(x)
+  if (!is_reg_footer(test_tbl)) return(NULL)
+  spec <- reg_footer_spec()
+  reg  <- test_tbl[test_tbl$test %in% names(spec), , drop = FALSE]
+  if (nrow(reg) == 0) return(NULL)
+  cs <- get_color_style()
+
+  fmt_val <- function(v, digits) prettyNum(formatC(v, format = "f", digits = digits),
+                                           big.mark = " ")
+  lines <- purrr::map_chr(unique(reg$col_var), function(cv) {
+    sub   <- reg[reg$col_var == cv, , drop = FALSE]
+    sub   <- sub[order(match(sub$test, names(spec))), , drop = FALSE]
+    parts <- purrr::pmap_chr(sub, function(...) {
+      r  <- list(...)
+      sp <- spec[[r$test]]
+      if (identical(sp$kind, "gof")) {
+        paste0(sp$label, "=", fmt_val(r$statistic, sp$digits))
+      } else {
+        p_txt <- if (isTRUE(r$pvalue < 0.0001)) "<0.01%"
+                 else paste0(formatC(r$pvalue * 100, format = "g", digits = 3), "%")
+        p_txt <- if (isTRUE(r$pvalue >= 0.05)) cs$neg5(p_txt) else cs$pos5(p_txt)
+        paste0(sp$label, " p=", p_txt)
+      }
+    })
+    paste0("# ", cv, ": ", paste(parts, collapse = "  "))
+  })
   cli::cat_line(lines)
   cli::cat_line()
 }
@@ -1025,7 +1118,10 @@ tab_materialize_extras <- function(tab, backend = c("text", "xl"), pvalue = TRUE
   }
 
   # --- p-value rows (from the kept `test` attribute) -------------------------------------------
+  # tab_pvalue_lines no-ops on a regression table (no chi2/F rows), so the order is safe: a crosstab
+  # gets the chi2 p-value row, a regression table gets its GOF footer rows (Phase 12f).
   if (pvalue) tab <- tab_pvalue_lines(tab)
+  if (pvalue && is_reg_footer(get_test(tab))) tab <- reg_footer_lines(tab)
   tab
 }
 
@@ -1065,10 +1161,13 @@ tab_pvalue_lines <- function(tabs) {
   disp <- dplyr::filter(disp, .data$col_var %in% names(cv_to_col), !is.na(.data$pvalue))
   if (nrow(disp) == 0) return(tabs)
 
-  # one p-value row per subtable, the p-value fmt cell placed under each col_var's first-level col
+  # one p-value row per subtable, the p-value fmt cell placed under each col_var's first-level col.
+  # Phase 12f: the cell embeds the test label ("Chi2" / "F, Welch") so a mixed factor/mean p-value row
+  # self-documents which test each column ran (composite "{pvalue} (<label>)" display).
   tabs_pvalue_lines <- disp |>
     dplyr::mutate(.col  = unname(cv_to_col[.data$col_var]),
-                  .cell = pvalue_line_fmt(.data$pvalue)) |>
+                  .cell = pvalue_line_fmt(.data$pvalue,
+                                          label = purrr::map_chr(.data$test, test_cell_label))) |>
     dplyr::select(tidyselect::any_of(tab_vars), ".col", ".cell") |>
     tidyr::pivot_wider(names_from = ".col", values_from = ".cell") |>
     dplyr::mutate(!!rlang::sym(row_var) := forcats::as_factor("pvalue"))
@@ -1131,6 +1230,70 @@ tab_pvalue_lines <- function(tabs) {
 
   new_tab(tabs, subtext = subtext, render_extras = render_extras) |>
     dplyr::group_by(!!!rlang::syms(groups))
+}
+
+# Phase 12f: materialise the regression GOF footer as appended rows (one row per stat, a "Model fit"
+# group), the export analogue of tab_pvalue_lines(). Each stat cell is placed under its model column
+# (the first output column of the fit; MNL/ordinal blank the other category columns), and the row-label
+# column carries the stat label. Reuses the tab_pvalue_lines fmt-frame append (fmt_stack_frames on plain
+# field-vectors). Idempotent: the `test` attribute is dropped, so a second call no-ops. Renders nothing
+# on a crosstab (is_reg_footer FALSE).
+reg_footer_lines <- function(tabs) {
+  test_tbl <- get_test(tabs)
+  if (!is_reg_footer(test_tbl)) return(tabs)
+  spec <- reg_footer_spec()
+  reg  <- test_tbl[test_tbl$test %in% names(spec), , drop = FALSE]
+  if (nrow(reg) == 0) return(tabs)
+
+  subtext   <- get_subtext(tabs)
+  groups    <- dplyr::groups(tabs)
+  group_chr <- purrr::map_chr(groups, rlang::as_name)
+
+  fmt_nms <- names(tabs)[purrr::map_lgl(tabs, is_fmt)]
+  nonfmt  <- setdiff(names(tabs), fmt_nms)
+  # the row-label column = the non-grouping factor (reg groups by `var`; the label column is `levels`).
+  rlc     <- setdiff(nonfmt, group_chr)
+  row_lab_col <- if (length(rlc) >= 1L) rlc[length(rlc)] else nonfmt[length(nonfmt)]
+
+  stats_present <- names(spec)[names(spec) %in% unique(reg$test)]
+  K  <- length(stats_present)
+  if (K == 0) return(tabs)
+  n0 <- nrow(tabs)
+  footer_labels <- unname(vapply(stats_present, function(s) spec[[s]]$label, character(1)))
+
+  cell_for <- function(nm, s) {
+    r <- reg[reg$col_var == nm & reg$test == s, , drop = FALSE]
+    if (nrow(r) == 0) return(reg_blank_cell())
+    sp <- spec[[s]]
+    if (identical(sp$kind, "gof")) reg_gof_cell(r$statistic[1], sp$digits) else reg_pvalue_cell(r$pvalue[1])
+  }
+  footer_frame <- function(nm) {
+    fcol   <- do.call(vctrs::vec_c, lapply(stats_present, function(s) cell_for(nm, s)))
+    fr     <- as.list(vctrs::vec_data(fcol))
+    fr$wn  <- get_wn(fcol)
+    fr
+  }
+  build_col <- function(nm) {
+    of    <- as.list(vctrs::vec_data(tabs[[nm]]))
+    of$wn <- get_wn(tabs[[nm]])
+    meta  <- purrr::set_names(
+      lapply(fmt_col_attrs, function(a) attr(tabs[[nm]], a, exact = TRUE)), fmt_col_attrs)
+    fmt_stack_frames(list(of, footer_frame(nm)), meta)
+  }
+  refactor <- function(orig, add) {
+    lv  <- levels(as.factor(orig))
+    factor(c(as.character(orig), add), levels = c(lv, setdiff(unique(add), lv)))
+  }
+
+  out <- purrr::set_names(lapply(names(tabs), function(nm) {
+    if (nm %in% fmt_nms)           build_col(nm)
+    else if (nm == row_lab_col)    refactor(tabs[[nm]], footer_labels)
+    else                           refactor(tabs[[nm]], rep("Model fit", K))
+  }), names(tabs))
+  tabs2 <- tibble::new_tibble(out, nrow = n0 + K)
+
+  new_tab(tabs2, subtext = subtext) |>            # `test` dropped -> idempotent
+    dplyr::group_by(!!!rlang::syms(group_chr))
 }
 
 
