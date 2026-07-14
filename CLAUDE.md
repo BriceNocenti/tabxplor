@@ -60,8 +60,9 @@ R/
 ├── tab-render-html.R (~350 L) Phase 10e tab_kable render seam: render_kable_html() (kableExtra +
 │                              home-built self-contained html engines) + tab_kable_join/scrollbox
 ├── utils.R         (1306 L)  Pipe re-export, .onLoad() options setup, factor utilities
-├── tab_reg.R       (~1290L)  Phase 12c/12d/12e/12f: unified regression tables. tab_reg() over ONE engine
-│                              (stats::lm/glm, survey::svyglm, nnet::multinom, MASS::polr; broom::tidy)
+├── tab_reg.R       (~1700L)  Phase 12c–12g: unified regression tables. tab_reg() over ONE engine
+│                              (stats::lm/glm, survey::svyglm/svyolr, svyVGAM::svy_vglm, nnet::multinom,
+│                              MASS::polr; broom::tidy)
 │                              with family dispatch and exponentiate-driven fmt shape: gaussian beta
 │                              (additive -> `diff` field, type="coef", display="coef", ci_type="diff",
 │                              color="diff", `var`=var(Y) for the beta/SD(Y) effect-size colour) |
@@ -91,7 +92,16 @@ R/
 │                              stored in the `test` attr with DISJOINT discriminators; DISPLAY-ONLY
 │                              (rendered by R/tab_classes.R print_reg_footer/reg_footer_lines). One new
 │                              fmt token "gof" (uncoloured). Crosstab p-value cells gain in-cell test
-│                              labels ("{pvalue} (Chi2)"). stats=/compare=/baseline= args.
+│                              labels ("{pvalue} (Chi2)"). stats=/compare=/baseline= args. 12g: SURVEY
+│                              designs (wt=/ids=/strata=/fpc=/nest= -> reg_make_design per model; a prebuilt
+│                              design as `data` -> reg_subset_design/reg_resolve_design; reg_svyglm_env
+│                              binds svyglm for AIC/anova when survey unattached; reduced weighted glance
+│                              n/wald_null/nagelkerke[/cox_snell]/Rao-Scott-AIC via reg_aic_value; weighted
+│                              compare = anova.svyglm Wald). Weighted 3+ level: svyolr / svy_vglm.
+│                              split_var = tab_vars analogue (reg_build recurses per group on shared
+│                              skeleton_data, stacks grouped_tab (split_var,var); tab_spread works,
+│                              group-aware print_reg_footer). multiplicator (OR^k) + empirical_OR
+│                              (reg_empirical_or crude %/OR beside model OR, binary). No new fmt fields.
 ├── tab_logit.R      (~5 L)   Emptied in Phase 12c (renamed -> tab_reg.R; git rm pending).
 ├── tab_logit_2.R    (~8 L)   Emptied in Phase 12a (git rm pending). or_plot/lm_plots deferred.
 ├── jmvtab-cache.R  (~800 L)  jmvtab live multi-tier cache: content-addressed store + hashing +
@@ -160,7 +170,7 @@ Export:  tab_xl()  |  tab_kable()  |  tab_md()  |  tab_plot()
 | Suggests-only guards     | `openxlsx2`, `ggplot2`, `jmvcore`, `ggpubr`, `cowplot`, `mirai` are in Suggests. Every call must be guarded with `requireNamespace()` or equivalent (tab_xl's ONE guard is in `tab_xl()`; `R/tab-xl-backend.R` wrappers are unguarded).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | Color break mirroring    | `set_color_breaks()` takes positive-only thresholds. Negative breaks are auto-mirrored internally. Any `pct_breaks` value > 1 triggers ratio comparison instead of difference (the "*2 rule").                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | Mean-diff asymmetry      | For `type="mean"` columns, the `diff` field stores a **ratio** (cell_mean / ref_mean), NOT a difference. Thresholds like 1.15 mean "+15% above reference". This asymmetry propagates into `color_formula()` and `format.tabxplor_fmt()`. **(1.4.0 §3: numeric `diff` becomes a real difference; the ratio moves to the `ratio` field — the never-used `rr` field renamed, placed after `diff`.)**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| tab_reg                  | Phase 12c/12d/12e-i LIVE: unified regression tables (gaussian beta / binomial OR / poisson IRR / multinomial OR / ordinal cumulative OR) over lm/glm/svyglm/nnet::multinom/MASS::polr + broom (no parsnip). tab_logit/multi_logit are binomial wrappers. Effect shape is exponentiate-driven: additive beta -> `diff`+type="coef"+display="coef"+ci_type="diff"; multiplicative OR/IRR/cumOR -> `or`+type="row"+ci_type="or". No new fmt fields/attributes: `type` gains value "coef", `display` gains token "coef", the `var` field carries var(Y). 12d: MNL = one OR col per outcome category vs ref (reference= keyed on the outcome); ordinal polr + Brant PO diagnostic. 12e-i: orthogonal `effect="ame"` (marginaleffects Suggests) = sample-avg AME + adjusted prediction, composed AME-first `"{diff} ({pct})"` (reuses fmt shapes, no new fields/tokens; MNL/ordinal = one AME col per category). 12e-ii: `at="reference"` profile axis = MER-at-reference (effect="ame") + MNL "j vs rest" OR at profile (coefficient, comparison="lnor", `shape="or"`); reference-level baseline; `at` no-ops on ordinary coefficients. Weighted MNL/ordinal deferred (12g). |
+| tab_reg                  | Phase 12c–12g LIVE: unified regression tables (gaussian beta / binomial OR / poisson IRR / multinomial OR / ordinal cumulative OR) over lm/glm/svyglm/svyolr/svy_vglm/nnet::multinom/MASS::polr + broom (no parsnip). tab_logit/multi_logit are binomial wrappers. Effect shape is exponentiate-driven: additive beta -> `diff`+type="coef"+display="coef"+ci_type="diff"; multiplicative OR/IRR/cumOR -> `or`+type="row"+ci_type="or". No new fmt fields/attributes: `type` gains value "coef", `display` gains token "coef", the `var` field carries var(Y). 12d: MNL = one OR col per outcome category vs ref; ordinal polr + Brant PO diagnostic. 12e: orthogonal `effect="ame"` (marginaleffects) + `at="reference"` profile axis. 12f: model-summary footer + compare= in the `test` attr. 12g: SURVEY designs — `wt=`/`ids=`/`strata=`/`fpc=`/`nest=` + a prebuilt survey.design/svyrep.design as `data`; reduced weighted glance (Wald/Nagelkerke/Cox-Snell/Rao-Scott-AIC) + weighted compare (anova.svyglm Wald); weighted 3+ level (svyolr / svyVGAM); `split_var` (tab_vars analogue, tab_spread-able); `multiplicator` (OR^k); `empirical_OR` (crude %/OR beside model OR, binary). No new fmt fields; new Suggests svyVGAM. |
 
 
 ---
@@ -1609,21 +1619,25 @@ New `at = c("average", "reference")`. `at="reference"` evaluates at the **refere
 - Weighted footer minimal (survey Wald/Nagelkerke/AIC; full glance → 12g).
 
 
-#### Phase 12g – survey design + reinstated companion features
+#### Phase 12g – survey design + reinstated companion features (DONE — 2026-07-14)
 
-- full survey: **ids/strata/fpc** pass-through + accept a prebuilt `survey::svydesign`/`svrepdesign`; survey-degraded glance (Wald/`regTermTest`, `psrsq`, Rao-Scott AIC). Commit: weighted parity vs `svyglm` + design.
-- **`split_var`** (by-group subtable models — the regression analogue of `tab_vars`).
-- **`multiplicator`** (per-k-unit continuous scaling) + **`empirical_OR`** (OR + empirical % beside the model OR).
+Four increments, byte-identical for unweighted / no-new-arg calls (NO golden regen); full suite green (2194). New Suggests `svyVGAM`. Detail: `dev/tabxplor_1.4.0_decisions.md` §37 "12g DONE".
+- **12g-i survey designs**: `tab_reg(wt=, ids=, strata=, fpc=, nest=)` builds a `survey::svydesign` per model (`reg_make_design`); a **prebuilt `survey.design`/`svyrep.design` passed as `data`** is subset()'d per model (`reg_subset_design`/`reg_resolve_design`, `reg_relevel_design` for `reference`). `reg_svyglm_env()` binds `survey::svyglm` into the fit's formula env so `AIC.svyglm`/`anova.svyglm` work unattached (fixed a silent-NA-AIC bug + the length-3 `AIC.svyglm` vector via `reg_aic_value`). Reduced weighted glance = n / Wald-vs-null (`regTermTest`) / Nagelkerke (`psrsq`, + selectable `cox_snell_r2`) / Rao-Scott AIC; weighted comparison via `anova.svyglm` Wald (`compare_*_wald`).
+- **12g-ii weighted 3+ level**: guard lifted — ordinal → `survey::svyolr` (positive-weights hint on failure), nominal → `svyVGAM::svy_vglm`; both reuse OR/`or` shape; `effect="ame"`/MNL `at="reference"` refused for weighted. (`svyVGAM` MNL parity is skip-guarded — not on the Rscript libpath here.)
+- **12g-iii `split_var`**: the `tab_vars` analogue — `reg_build` recurses per group on a shared skeleton and stacks into a grouped_tab `(split_var, var)`; **`tab_spread(split_var)` works with NO `tab_spread` change** (split_var placed first → `levels` stays row_var); console footer group-aware, export footer skipped for splits.
+- **12g-iv `multiplicator`** (`c(var=k)`, numeric predictors → OR^k / β·k, p unchanged) + **`empirical_OR`** (single binary logit → `Emp. %`/`Emp. OR` from a direct weighted 2×2, `reg_empirical_or`).
 
-- implement a **reduced set of summary statistics for weighted models** (Rao-Scott Wald, Nagelkerke, AIC, etc.). Carefully study what’s needed/appropriate and make me a proposition.
 
-#### Phase 12h – jamovi UI: `jmvtab_reg` / `jmvtab_logit`
-
-One regression analysis (family / outcome / predictors / `effect` / reference); a "+" to add predictor subsets for `multi_logit`-style model comparison; reuse patterns from known regression jamovi modules. `.h.R` regeneration + live verification is the maintainer's interactive step.
-
-#### Phase 12i – regression display phase
+#### Phase 12h – regression display phase
 
 `or_plot` (OR forest plot, finalfit-style), `lm_plots` (2×2 glm/lm diagnostics), the visible OR-CI bracket, and the OR+ME / OR+PCT composite cell layouts.
+Excel numFmt-literal in-cell test label.
+Per-group export footer for split tables (per-group GOF is in get_test())
+
+
+#### Phase 12i – jamovi UI: `jmvtab_reg`
+
+One regression analysis (family / outcome / predictors / `effect` / reference); a "+" to add predictor subsets for `multi_logit`-style model comparison; reuse patterns from known regression jamovi modules.
 
 
 
@@ -1639,7 +1653,7 @@ Color UI finalisation
 
 Native dark mode/light mode management for exported tables, specially html tables
 - With kable or another html tables solution, use css exported and applied with the table ?
-- Wire this css on standard html dark mode toggle, with a global option in R to use Dark mode in viewer. As a result, the table should autochange it’s formatted we the user change to dark light mode on whichever html page the table is embedded with. Do web searches to find current good practices about this.
+- Wire this css on standard html dark mode toggle, with a global option in R to use Dark mode in viewer. As a result, the table should autochange it’s formatted we the user change to dark light mode on whichever html page the table is embedded with. Overall background color should be "#111111", text overall color "#ffffff",   Do web searches to find current good practices about this. 
 
 I want to change the current default color palettes system, to simplify it a lot : 
 - My new oklch color palettes, one made for light mode and one made for dark mode, are now saved in `tab_classes.R` as : `default_text_colors`, `default_text_colors_neg`, `default_dark_text_colors`, `default_dark_text_colors_neg`, `default_background_colors`, `default_background_colors_neg`, `default_dark_background_colors`, `default_dark_background_colors_neg`

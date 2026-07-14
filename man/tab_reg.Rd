@@ -10,6 +10,10 @@ tab_reg(
   predictors = NULL,
   family = "auto",
   wt = NULL,
+  ids = NULL,
+  strata = NULL,
+  fpc = NULL,
+  nest = FALSE,
   exponentiate = "nongaussian",
   effect = c("coefficient", "ame"),
   at = c("average", "reference"),
@@ -18,6 +22,9 @@ tab_reg(
   method = c("wald", "profile"),
   reference = NULL,
   inverse_two_level_factors = TRUE,
+  split_var = NULL,
+  multiplicator = NULL,
+  empirical_OR = FALSE,
   stats = NULL,
   compare = c("none", "baseline", "sequential"),
   baseline = NULL,
@@ -29,7 +36,9 @@ tab_reg(
 )
 }
 \arguments{
-\item{data}{A data frame.}
+\item{data}{A data frame, \strong{or a prebuilt survey design} (\code{\link[survey:svydesign]{survey::svydesign()}} /
+\code{\link[survey:svrepdesign]{survey::svrepdesign()}}). When a design is passed, its weights (and clustering / stratification /
+calibration) drive the estimation and \code{wt} / \code{ids} / \code{strata} / \code{fpc} are ignored.}
 
 \item{dependent}{Character outcome variable name(s), \strong{or a model formula} (the escape hatch).
 With a \code{predictors} character vector, several names give one effect column per outcome; with a
@@ -46,7 +55,18 @@ of character vectors (one model per element, its name labelling the column). Lea
 Set it explicitly with \code{"gaussian"} (linear), \code{"binomial"} (logistic), \code{"poisson"} /
 \code{"quasipoisson"} (counts), \code{"multinomial"} (nominal 3+ level), \code{"ordinal"} (ordered 3+ level).}
 
-\item{wt}{Optional. Name of a weight column (character). Uses survey-weighted estimation.}
+\item{wt}{Optional. Name of a weight column (character). Switches to design-based survey estimation
+(\code{\link[survey:svyglm]{survey::svyglm()}}): the sandwich standard errors are scale-invariant, so raw population weights
+are handled correctly (no normalisation) and the point estimates match the weighted crosstabs.}
+
+\item{ids, strata, fpc}{Optional survey-design specification for the \code{wt} path (each a column name /
+character vector, or a formula such as \code{~psu} / \code{~region}). \code{ids} gives the cluster identifier(s)
+from largest to smallest stage (default no clustering); \code{strata} the stratifying variable(s);
+\code{fpc} the finite-population correction. Give correct clustering/stratification for honest
+design-based variances (a flat \code{ids = ~1} can understate them). Ignored when \code{data} is a design.}
+
+\item{nest}{Logical. Passed to \code{\link[survey:svydesign]{survey::svydesign()}}: set \code{TRUE} when cluster ids are reused across
+strata. Default \code{FALSE}.}
 
 \item{exponentiate}{Whether to exponentiate coefficients into ratios. \code{"nongaussian"} (default)
 exponentiates every family except gaussian (odds ratios / incidence-rate ratios, leaving linear
@@ -92,6 +112,22 @@ passing a formula in \code{dependent} with the terms already coded.}
 \item{inverse_two_level_factors}{Logical, binomial only. If \code{TRUE} (default), models the FIRST
 level of a 2-level factor dependent (e.g. \code{"1-Married"} before \code{"2-Not married"}).}
 
+\item{split_var}{Optional. Name of a grouping variable (character): the regression analogue of
+\code{\link[=tab]{tab()}}'s \code{tab_vars}. The same model(s) are fitted \strong{within each level} of this variable and the
+per-group tables are stacked into one grouped table (grouped by \code{split_var}), sharing the
+variable/level stub. Use \code{\link[=tab_spread]{tab_spread()}} on \code{split_var} to pivot the groups into side-by-side
+columns for an easy across-group comparison. A level absent from a group shows empty cells.}
+
+\item{multiplicator}{Optional named numeric vector \code{c(var = k)} rescaling a \strong{continuous}
+predictor's effect to a k-unit change (e.g. \code{c(age = 10)} shows the odds ratio / beta per decade
+of age = OR^10 / beta*10). The confidence interval scales with it; the p-value is unchanged. Names
+must be numeric predictors; not available for multinomial / ordinal outcomes.}
+
+\item{empirical_OR}{Logical (binary logistic outcome only). If \code{TRUE}, adds a descriptive \strong{crude
+percentage} and \strong{crude odds ratio} column (\code{"Emp. \%"}, \code{"Emp. OR"}) beside the model odds ratio,
+for each factor predictor level -- the unadjusted "OR + PCT" companion connecting the model to the
+descriptive crosstab. Default \code{FALSE}.}
+
 \item{stats}{The goodness-of-fit statistics shown in the model-summary \strong{footer} (one block per
 model). \code{NULL} (default) uses the per-family set: linear models show N, R square, adjusted R
 square, the overall F-test and the residual SD; other models show N, the likelihood-ratio test
@@ -104,8 +140,9 @@ survey-appropriate set (design-based Wald test, Nagelkerke pseudo-R square, AIC)
 \item{compare}{Add a \strong{model-comparison} footer row (only with several models / dependents).
 \code{"none"} (default) adds nothing; \code{"baseline"} tests each model against the \code{baseline} column;
 \code{"sequential"} tests each model against the previous one. Uses a likelihood-ratio test (F for
-linear / quasi models); when the models are not nested or fit on different numbers of observations
-it falls back to the AIC difference with a message.}
+linear / quasi models, a design-based Wald test for weighted / survey models); when the models are
+not nested or fit on different numbers of observations it falls back to the AIC difference with a
+message.}
 
 \item{baseline}{For \code{compare = "baseline"}: which column is the reference model (its label, or a
 position). Defaults to the first model.}

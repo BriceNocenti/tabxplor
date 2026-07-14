@@ -385,16 +385,25 @@ test_that("family='auto' detects nominal -> multinomial and ordered -> ordinal (
   expect_message(suppressWarnings(tab_reg(ord_data(), "spectrum", "race")), "ordinal")
 })
 
-test_that("weighted multinomial / ordinal are deferred (error)", {
+test_that("weighted 3+ level: ordinal works (svyolr), MNL needs svyVGAM (Phase 12g)", {
   skip_if_not_installed("broom")
-  expect_error(
-    tab_reg(mnl_data(), "party3", "race", family = "multinomial", wt = "tvhours"),
-    "not yet supported"
-  )
-  expect_error(
-    tab_reg(ord_data(), "spectrum", "race", family = "ordinal", wt = "tvhours"),
-    "not yet supported"
-  )
+  skip_if_not_installed("survey")
+  # weighted ordinal is now supported via survey::svyolr (positive weights: svyolr's start-value
+  # glm.fit step cannot take zero weights, and gss_cat's tvhours has zeros).
+  ord_w <- dplyr::mutate(ord_data(), w = tvhours + 1)
+  t_ord <- suppressMessages(tab_reg(ord_w, "spectrum", "race", family = "ordinal", wt = "w"))
+  expect_s3_class(t_ord, "tabxplor_tab")
+  # weighted multinomial via svyVGAM when available, else a clear install-hint error
+  mnl_w <- dplyr::mutate(mnl_data(), w = tvhours + 1)
+  if (requireNamespace("svyVGAM", quietly = TRUE)) {
+    t_mnl <- suppressMessages(tab_reg(mnl_w, "party3", "race", family = "multinomial", wt = "w"))
+    expect_s3_class(t_mnl, "tabxplor_tab")
+  } else {
+    expect_error(
+      tab_reg(mnl_w, "party3", "race", family = "multinomial", wt = "w"),
+      "svyVGAM"
+    )
+  }
 })
 
 test_that("ordinal PO diagnostic warns when the parallel-lines assumption is violated", {

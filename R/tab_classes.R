@@ -303,15 +303,18 @@ reg_footer_spec <- function() list(
   r2_adj               = list(label = "Adjusted R2",     kind = "gof",   digits = 3L),
   mcfadden_r2          = list(label = "McFadden R2",     kind = "gof",   digits = 3L),
   nagelkerke_r2        = list(label = "Nagelkerke R2",   kind = "gof",   digits = 3L),
+  cox_snell_r2         = list(label = "Cox-Snell R2",    kind = "gof",   digits = 3L),
   sigma                = list(label = "Residual SD",          kind = "gof",   digits = 2L),
   aic                  = list(label = "AIC",                  kind = "gof",   digits = 0L),
   bic                  = list(label = "BIC",                  kind = "gof",   digits = 0L),
   dispersion           = list(label = "Dispersion",           kind = "gof",   digits = 2L),
   compare_baseline     = list(label = "LR vs baseline",       kind = "pvalue"),
   compare_baseline_f   = list(label = "F vs baseline",        kind = "pvalue"),
+  compare_baseline_wald = list(label = "Wald vs baseline",    kind = "pvalue"),
   compare_baseline_aic = list(label = "Delta-AIC vs baseline", kind = "gof",  digits = 0L),
   compare_seq          = list(label = "LR vs previous",       kind = "pvalue"),
   compare_seq_f        = list(label = "F vs previous",        kind = "pvalue"),
+  compare_seq_wald     = list(label = "Wald vs previous",     kind = "pvalue"),
   compare_seq_aic      = list(label = "Delta-AIC vs previous", kind = "gof",  digits = 0L)
 )
 reg_footer_test_types <- function() names(reg_footer_spec())
@@ -545,8 +548,13 @@ print_reg_footer <- function(x, width = NULL) {
 
   fmt_val <- function(v, digits) prettyNum(formatC(v, format = "f", digits = digits),
                                            big.mark = " ")
-  lines <- purrr::map_chr(unique(reg$col_var), function(cv) {
-    sub   <- reg[reg$col_var == cv, , drop = FALSE]
+  # One footer line per model column, and -- under split_var (Phase 12g) -- per split group (the group
+  # level is tagged in `row_var`): "# <col_var> | <group>: ..." so the per-group N / GOF stay separate
+  # instead of being concatenated onto one line. row_var = "" (no split) -> just "# <col_var>: ...".
+  reg$row_var <- if (is.null(reg$row_var)) "" else ifelse(is.na(reg$row_var), "", reg$row_var)
+  keys  <- unique(reg[, c("col_var", "row_var"), drop = FALSE])
+  lines <- purrr::pmap_chr(keys, function(col_var, row_var) {
+    sub   <- reg[reg$col_var == col_var & reg$row_var == row_var, , drop = FALSE]
     sub   <- sub[order(match(sub$test, names(spec))), , drop = FALSE]
     parts <- purrr::pmap_chr(sub, function(...) {
       r  <- list(...)
@@ -560,7 +568,8 @@ print_reg_footer <- function(x, width = NULL) {
         paste0(sp$label, " p=", p_txt)
       }
     })
-    paste0("# ", cv, ": ", paste(parts, collapse = "  "))
+    lbl <- if (nzchar(row_var)) paste0(col_var, " | ", row_var) else col_var
+    paste0("# ", lbl, ": ", paste(parts, collapse = "  "))
   })
   cli::cat_line(lines)
   cli::cat_line()
@@ -1244,6 +1253,10 @@ reg_footer_lines <- function(tabs) {
   spec <- reg_footer_spec()
   reg  <- test_tbl[test_tbl$test %in% names(spec), , drop = FALSE]
   if (nrow(reg) == 0) return(tabs)
+  # split_var (Phase 12g): the footer carries per-group GOF (the group level tagged in `row_var`). The
+  # row-append model here can't place per-group footer blocks cleanly, so the appended EXPORT footer is
+  # skipped for split tables (the console footer is group-aware; per-group GOF stays in get_test()).
+  if (!is.null(reg$row_var) && any(nzchar(reg$row_var[!is.na(reg$row_var)]))) return(tabs)
 
   subtext   <- get_subtext(tabs)
   groups    <- dplyr::groups(tabs)

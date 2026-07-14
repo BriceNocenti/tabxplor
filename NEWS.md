@@ -50,6 +50,21 @@
   tests each model against a chosen `baseline` column, `"sequential"` against the previous model
   (likelihood-ratio test, F for linear models; an AIC difference with a message when the models are
   not nested or fit on different numbers of observations).
+* `tab_reg()` (and `tab_logit()` / `multi_logit()`) gain full **survey-design** support: pass a weight
+  column with `wt =` plus optional `ids =` / `strata =` / `fpc =` / `nest =` for clustered / stratified
+  designs, or pass a **prebuilt `survey::svydesign()` / `svrepdesign()` object as `data`**. Estimation
+  is design-based (`survey::svyglm`), so raw population weights need no rescaling and the point estimates
+  match the weighted crosstabs. Weighted models show a survey-appropriate footer (design-based Wald test
+  vs the null, Nagelkerke pseudo-R square, Rao-Scott AIC) and support model comparison (a design-based
+  Wald test). Survey-weighted **ordinal** (`survey::svyolr`) and **multinomial** (needs the new optional
+  `svyVGAM` package) outcomes are now supported too.
+* `tab_reg()` gains a `split_var =` argument --- the regression analogue of `tab()`'s `tab_vars`: the
+  same model is fitted **within each level** of a grouping variable and the per-group tables are stacked.
+  Use `tab_spread()` on the grouping variable to place the groups side by side for an across-group
+  comparison.
+* `tab_reg()` gains `multiplicator =` (a named vector like `c(age = 10)` showing a continuous predictor's
+  effect **per k units**, e.g. the odds ratio per decade) and `empirical_OR =` (for a binary logistic
+  outcome, adds the **crude percentage and crude odds ratio** beside the model odds ratio).
 * `tab()` crosstab p-value rows now label each cell with the test it ran (e.g. `2.9% (Chi2)`,
   `1.4% (F, Welch)`), so a table mixing categorical and numeric columns is self-documenting.
 * `tab()` odds-ratio columns (and any odds ratio) now print values below 1 as `1/x` (e.g. `1/4`

@@ -1972,6 +1972,140 @@ simulate_cvd_farver <- function(col,
   col_sim
 }
 
+plot_oklch_hue_strip_cvd <- function(
+  L = 0.72,
+  n = 360,
+  type = c("deutan", "protan", "tritan"),
+  severity = 1,
+  h_range = c(0, 360),
+  chroma_mode = c("fixed", "relative_max", "max"),
+  C = 0.12,
+  C_prop = 0.6,
+  bg = "#ffffff",
+  border = NA,
+  main = NULL
+) {
+  type <- match.arg(type)
+  chroma_mode <- match.arg(chroma_mode)
+
+  if (!requireNamespace("farver", quietly = TRUE)) {
+    stop("Package 'farver' is required.")
+  }
+  if (!requireNamespace("colorspace", quietly = TRUE)) {
+    stop("Package 'colorspace' is required.")
+  }
+
+  h <- seq(h_range[1], h_range[2], length.out = n)
+
+  srgb_to_linear <- function(x) {
+    ifelse(x <= 0.04045, x / 12.92, ((x + 0.055) / 1.055)^2.4)
+  }
+
+  linear_to_srgb <- function(x) {
+    ifelse(x <= 0.0031308, 12.92 * x, 1.055 * (x^(1 / 2.4)) - 0.055)
+  }
+
+  simulate_hex_cvd <- function(col, type = "deutan", severity = 1) {
+    transform_list <- switch(
+      type,
+      deutan = colorspace::deutanomaly_cvd,
+      protan = colorspace::protanomaly_cvd,
+      tritan = colorspace::tritanomaly_cvd
+    )
+
+    M <- colorspace::interpolate_cvd_transform(transform_list, severity = severity)
+
+    rgb_255 <- farver::decode_colour(col, to = "rgb")
+    rgb <- rgb_255 / 255
+    rgb_lin <- srgb_to_linear(rgb)
+    rgb_lin_sim <- as.matrix(rgb_lin) %*% t(M)
+    rgb_sim <- linear_to_srgb(rgb_lin_sim)
+    rgb_sim <- pmin(pmax(rgb_sim, 0), 1)
+    rgb_sim_255 <- round(rgb_sim * 255)
+
+    farver::encode_colour(rgb_sim_255, from = "rgb")
+  }
+
+  max_chroma_for_hue <- function(L, h, tol = 1e-4, max_iter = 22) {
+    lo <- 0
+    hi <- 0.4
+
+    is_in_gamut <- function(C) {
+      rgb <- farver::convert_colour(cbind(L, C, h), from = "oklch", to = "rgb")
+      all(is.finite(rgb)) && all(rgb >= 0) && all(rgb <= 255)
+    }
+
+    while (is_in_gamut(hi) && hi < 1.5) {
+      hi <- hi * 1.5
+    }
+
+    for (i in seq_len(max_iter)) {
+      mid <- (lo + hi) / 2
+      if (is_in_gamut(mid)) {
+        lo <- mid
+      } else {
+        hi <- mid
+      }
+      if ((hi - lo) < tol) break
+    }
+
+    lo
+  }
+
+  c_max <- vapply(h, function(hh) max_chroma_for_hue(L, hh), numeric(1))
+
+  chroma <- switch(
+    chroma_mode,
+    fixed = pmin(C, c_max),
+    relative_max = pmin(C_prop * c_max, c_max),
+    max = c_max
+  )
+
+  oklch_mat <- cbind(L = rep(L, length(h)), C = chroma, H = h)
+  rgb_mat <- farver::convert_colour(oklch_mat, from = "oklch", to = "rgb")
+  rgb_mat <- pmin(pmax(round(rgb_mat), 0), 255)
+  hex_normal <- farver::encode_colour(rgb_mat, from = "rgb")
+  hex_cvd <- simulate_hex_cvd(hex_normal, type = type, severity = severity)
+
+  old_par <- par(no.readonly = TRUE)
+  on.exit(par(old_par), add = TRUE)
+
+  par(mar = c(2.2, 3.2, 3.2, 1.2), xaxs = "i", yaxs = "i", bg = bg)
+
+  plot.new()
+  plot.window(xlim = c(min(h), max(h)), ylim = c(0, 2))
+
+  xleft <- h[-length(h)]
+  xright <- h[-1]
+
+  rect(xleft, 1.05, xright, 1.95, col = hex_normal[-length(hex_normal)], border = border)
+  rect(xleft, 0.05, xright, 0.95, col = hex_cvd[-length(hex_cvd)], border = border)
+
+  axis(1, at = seq(0, 360, by = 60), labels = seq(0, 360, by = 60), line = -0.5)
+  mtext("Hue angle h", side = 1, line = 1.2)
+
+  text(min(h) + 0.01 * diff(range(h)), 1.5,
+       labels = sprintf("Normal vision — L = %.2f, chroma_mode = %s", L, chroma_mode),
+       adj = c(0, 0.5), cex = 0.9)
+
+  text(min(h) + 0.01 * diff(range(h)), 0.5,
+       labels = sprintf("%s simulation — severity = %.2f", type, severity),
+       adj = c(0, 0.5), cex = 0.9)
+
+  if (is.null(main)) {
+    main <- sprintf("OKLCH hue strip and %s simulation", type)
+  }
+  title(main = main)
+
+  invisible(list(
+    hue = h,
+    L = L,
+    c_max = c_max,
+    chroma = chroma,
+    hex_normal = hex_normal,
+    hex_cvd = hex_cvd
+  ))
+}
 
 
 

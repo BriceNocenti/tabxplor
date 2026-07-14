@@ -55,14 +55,28 @@
 #     print_reg_footer console block, reg_footer_lines export rows); the built object stays the
 #     coefficient skeleton. `stats=` picks the set (FALSE hides it). No new fmt fields; ONE new display
 #     token "gof" (a plain model-fit number, forced uncoloured).
-# See: CLAUDE.md Phase 12c-12f ; dev/tabxplor_1.4.0_decisions.md S37.
+#   - 12g: SURVEY designs + companion features. `wt` (+ optional ids/strata/fpc/nest) builds a
+#     survey::svydesign per model (reg_make_design); a PREBUILT survey.design / svyrep.design passed as
+#     `data` is subset()'d per model (reg_subset_design / reg_resolve_design) -- design-based, no weight
+#     normalisation. reg_svyglm_env() binds survey::svyglm into the fit's formula env so AIC.svyglm /
+#     anova.svyglm work when survey is loaded but not attached. Weighted 3+ level lifted: ordinal ->
+#     survey::svyolr, nominal -> svyVGAM::svy_vglm (Suggests). Weighted glance = the reduced survey set
+#     (n / Wald-vs-null / Nagelkerke [+ selectable Cox-Snell] / Rao-Scott AIC); weighted comparison =
+#     anova.svyglm Wald (compare_*_wald). `split_var` = the tab_vars analogue: reg_build recurses per
+#     group on a SHARED skeleton (skeleton_data) and stacks into a grouped_tab (split_var + var), so
+#     tab_spread(split_var) pivots groups to columns (no tab_spread change: split_var placed first so
+#     `levels` stays the row_var; console footer is group-aware, export footer skipped for splits).
+#     `multiplicator` (c(var=k)) scales a continuous predictor's native coef by k before CI/exp (OR^k),
+#     p unchanged. `empirical_OR` (binary) = crude % + crude OR (reg_empirical_or, direct weighted 2x2)
+#     beside the model OR. No new fmt fields/attributes.
+# See: CLAUDE.md Phase 12c-12g ; dev/tabxplor_1.4.0_decisions.md S37.
 
 # === Internal engine ================================================================
 
 # broom is needed for every fit; survey only for the weighted (wt) path; nnet / MASS for the
 # nominal (multinomial) / ordinal (proportional-odds) families (both R Recommended -> normally present);
 # marginaleffects only for effect="ame" (the AME / adjusted-prediction engine, Phase 12e).
-reg_check_deps <- function(family, wt, needs_marginaleffects = FALSE) {
+reg_check_deps <- function(family, weighted, needs_marginaleffects = FALSE) {
   if (!requireNamespace("broom", quietly = TRUE)) {
     cli::cli_abort(c(
       "{.pkg broom} is required for regression tables.",
@@ -76,22 +90,31 @@ reg_check_deps <- function(family, wt, needs_marginaleffects = FALSE) {
       "i" = 'default {.code effect = "coefficient"}, {.code at = "average"}.'
     ))
   }
-  if (!is.null(wt) && !requireNamespace("survey", quietly = TRUE)) {
+  if (isTRUE(weighted) && !requireNamespace("survey", quietly = TRUE)) {
     cli::cli_abort(c(
-      "{.pkg survey} is required for weighted regression (the {.arg wt} argument).",
+      "{.pkg survey} is required for weighted / survey-design regression.",
       "i" = 'Install it with {.code install.packages("survey")}.'
     ))
   }
-  if (family == "multinomial" && !requireNamespace("nnet", quietly = TRUE)) {
+  if (family == "multinomial" && !isTRUE(weighted) && !requireNamespace("nnet", quietly = TRUE)) {
     cli::cli_abort(c(
       "{.pkg nnet} is required for multinomial (nominal 3+ level) outcomes.",
       "i" = 'Install it with {.code install.packages("nnet")}.'
     ))
   }
-  if (family == "ordinal" && !requireNamespace("MASS", quietly = TRUE)) {
+  if (family == "ordinal" && !isTRUE(weighted) && !requireNamespace("MASS", quietly = TRUE)) {
     cli::cli_abort(c(
       "{.pkg MASS} is required for ordinal (proportional-odds) outcomes.",
       "i" = 'Install it with {.code install.packages("MASS")}.'
+    ))
+  }
+  # Weighted 3+ level (Phase 12g): ordinal -> survey::svyolr (already covered by the survey check);
+  # multinomial -> svyVGAM::svy_vglm (+ its VGAM dependency), a separate optional Suggests.
+  if (isTRUE(weighted) && family == "multinomial" &&
+      !requireNamespace("svyVGAM", quietly = TRUE)) {
+    cli::cli_abort(c(
+      "{.pkg svyVGAM} is required for survey-weighted multinomial (nominal 3+ level) models.",
+      "i" = 'Install it with {.code install.packages("svyVGAM")}, or drop the weights / design.'
     ))
   }
 }
@@ -379,11 +402,13 @@ reg_wald_from_tidy <- function(td, conf_level, do_exp) {
   td
 }
 
-# Nominal 3+ level outcome: ONE multinomial logit (nnet::multinom). exp(coef) is the "OR (j vs the
-# reference outcome level)" -- the Begg-Gray estimand, one set of coefficients per non-reference
-# category (the tidy carries a `y.level` column that reg_build splits into one OR column per category).
-# The reference category is the outcome factor's FIRST level (set via `reference` upstream, MNL only).
-reg_fit_multinom <- function(mdata, dependent, predictors, do_exp, conf_level, method) {
+# Nominal 3+ level outcome: ONE multinomial logit -- unweighted nnet::multinom, weighted
+# svyVGAM::svy_vglm (Phase 12g). exp(coef) is the "OR (j vs the reference outcome level)" -- the
+# Begg-Gray estimand, one set of coefficients per non-reference category (the tidy carries a `y.level`
+# column that reg_build splits into one OR column per category). The reference category is the outcome
+# factor's FIRST level (set via `reference` upstream, MNL only).
+reg_fit_multinom <- function(mdata, dependent, predictors, do_exp, conf_level, method,
+                             weighted = FALSE, make_design = NULL) {
   if (method == "profile") {
     cli::cli_inform(c("!" = "Profile intervals are not defined for multinomial models; using Wald."))
   }
@@ -392,6 +417,31 @@ reg_fit_multinom <- function(mdata, dependent, predictors, do_exp, conf_level, m
   fml <- stats::as.formula(paste0(
     "`", dependent, "` ~ ", paste0("`", predictors, "`", collapse = " + ")
   ))
+
+  if (weighted) {
+    # svyVGAM::svy_vglm with VGAM's multinomial: refLevel = 1 makes the FIRST (reference) level the
+    # baseline, matching nnet. VGAM names coefficients "term:k", k = the k-th NON-reference category
+    # (in level order) -> parse each name into (term, y.level) so reg_build's per-category split works.
+    fit <- svyVGAM::svy_vglm(fml, design = make_design(mdata),
+                             family = VGAM::multinomial(refLevel = 1))
+    cf  <- if (!is.null(fit$coef)) fit$coef else stats::coef(fit)   # svy_vglm stores $coef / $var
+    V   <- if (!is.null(fit$var))  fit$var  else stats::vcov(fit)
+    se  <- sqrt(diag(V))
+    nm  <- names(cf)
+    k   <- suppressWarnings(as.integer(sub("^.*:(\\d+)$", "\\1", nm)))
+    trm <- sub(":\\d+$", "", nm)
+    if (any(is.na(k)) || max(k) > length(y_levels) - 1L) {
+      cli::cli_abort(c("Could not map {.pkg svyVGAM} coefficients to outcome categories.",
+                       "i" = "Unexpected coefficient names: {.val {nm[is.na(k)]}}."))
+    }
+    ylev <- y_levels[-1]                               # non-reference categories, in level order
+    td   <- tibble::tibble(y.level = ylev[k], term = stringr::str_remove_all(trm, "`"),
+                           estimate = unname(cf), std.error = unname(se[nm]))
+    td   <- reg_wald_from_tidy(td, conf_level, do_exp)
+    return(list(tidy = td, nobs = nrow(mdata), var_y = NA_real_, positive_level = NULL,
+                fit = fit, data = mdata, y_ref = y_levels[1], y_levels = y_levels[-1]))
+  }
+
   fit <- nnet::multinom(fml, data = mdata, trace = FALSE)
   td  <- broom::tidy(fit)                              # y.level, term, estimate, std.error, ...
   td$term <- stringr::str_remove_all(td$term, "`")     # strip formula backticks -> match skeleton
@@ -400,10 +450,12 @@ reg_fit_multinom <- function(mdata, dependent, predictors, do_exp, conf_level, m
        fit = fit, data = mdata, y_ref = y_levels[1], y_levels = y_levels[-1])
 }
 
-# Ordered 3+ level outcome: proportional-odds cumulative logit (MASS::polr). exp(coef) is one
-# cumulative OR per predictor level -> ONE column (the cut-point "scale" rows are dropped, so the
-# skeleton "Constant" cell stays NA). The parallel-lines assumption is diagnosed (Brant test -> warn).
-reg_fit_ordinal <- function(mdata, dependent, predictors, do_exp, conf_level, method) {
+# Ordered 3+ level outcome: proportional-odds cumulative logit -- unweighted MASS::polr, weighted
+# survey::svyolr (Phase 12g). exp(coef) is one cumulative OR per predictor level -> ONE column (the
+# cut-point "scale" rows are dropped, so the skeleton "Constant" cell stays NA). The parallel-lines
+# assumption is diagnosed (Brant test) for the unweighted fit; the design-based fit degrades that.
+reg_fit_ordinal <- function(mdata, dependent, predictors, do_exp, conf_level, method,
+                            weighted = FALSE, make_design = NULL) {
   if (method == "profile") {
     cli::cli_inform(c("!" = "Profile intervals are not defined for proportional-odds models; using Wald."))
   }
@@ -419,6 +471,30 @@ reg_fit_ordinal <- function(mdata, dependent, predictors, do_exp, conf_level, me
   fml <- stats::as.formula(paste0(
     "`", dependent, "` ~ ", paste0("`", predictors, "`", collapse = " + ")
   ))
+
+  if (weighted) {
+    # survey::svyolr: coef() also returns the cut-point ("zeta") thresholds -> read the SLOPES from
+    # fit$coefficients and their SEs from the matching vcov() rows (the cumulative-OR terms only).
+    # svyolr's start-value glm.fit step cannot take zero/negative weights -> a clear hint on failure.
+    fit <- tryCatch(
+      survey::svyolr(fml, design = make_design(mdata)),
+      error = function(e) cli::cli_abort(c(
+        "The survey-weighted ordinal model ({.fn survey::svyolr}) failed to fit.",
+        "x" = conditionMessage(e),
+        "i" = "{.fn svyolr} needs strictly positive weights - check for zero / negative weights."
+      ))
+    )
+    cf  <- fit$coefficients
+    se  <- sqrt(diag(stats::vcov(fit)))[names(cf)]
+    td  <- tibble::tibble(term = stringr::str_remove_all(names(cf), "`"),
+                          estimate = unname(cf), std.error = unname(se))
+    td  <- reg_wald_from_tidy(td, conf_level, do_exp)
+    cli::cli_inform(c("i" = paste0("The proportional-odds (parallel-lines) assumption is not tested for ",
+                                   "survey-weighted ordinal models (the Brant test needs an unweighted fit).")))
+    return(list(tidy = td, nobs = nrow(mdata), var_y = NA_real_, positive_level = NULL, fit = fit,
+                data = mdata))
+  }
+
   fit <- MASS::polr(fml, data = mdata, Hess = TRUE, method = "logistic")
   td  <- broom::tidy(fit)
   td  <- td[td$coef.type == "coefficient", , drop = FALSE]   # drop cut-point ("scale") intercepts
@@ -463,15 +539,91 @@ reg_ordinal_diagnostic <- function(fit) {
   invisible()
 }
 
+# --- Survey design construction (Phase 12g) --------------------------------------------------------
+# A weight column (+ optional ids/strata/fpc/nest) is turned into a survey.design *per model*, on the
+# complete-case model frame -- ids = ~1 (no clustering) by default reproduces the flat weighted path
+# exactly. A PREBUILT survey.design / svyrep.design (passed as `data`) is NOT rebuilt (replicate /
+# calibrated designs cannot be) -- it is subset()'d to the model's complete cases (domain estimation)
+# with its model-frame variables replaced by the recoded `mdata` (same rows, same order).
+# `design_spec` = list(design = <prebuilt or NULL>, wt, ids, strata, fpc, nest).
+
+# Coerce a design argument (NULL / a column name or char vector / a formula) to a survey formula.
+reg_design_formula <- function(x) {
+  if (is.null(x)) return(NULL)
+  if (rlang::is_formula(x)) return(x)
+  stats::reformulate(x)
+}
+# The data columns a design spec references (for drop_na, so svydesign never sees NA weights/strata/fpc).
+reg_design_vars <- function(design_spec) {
+  if (!is.null(design_spec$design)) return(character(0))   # a prebuilt design carries its own metadata
+  parts <- list(design_spec$wt, design_spec$ids, design_spec$strata, design_spec$fpc)
+  unique(unlist(purrr::map(parts, function(x) {
+    if (is.null(x)) character(0) else if (rlang::is_formula(x)) all.vars(x) else as.character(x)
+  })))
+}
+reg_make_design <- function(data, wt, ids, strata, fpc, nest) {
+  survey::svydesign(
+    ids     = if (is.null(ids)) stats::as.formula("~1") else reg_design_formula(ids),
+    strata  = reg_design_formula(strata),
+    fpc     = reg_design_formula(fpc),
+    weights = reg_design_formula(wt),
+    data    = data,
+    nest    = nest
+  )
+}
+# Subset a prebuilt design to the model's complete cases, then swap its model frame for the recoded
+# `mdata` (drop_na + fct_drop + reg_prep_binary + grouped-binomial cols already applied). The design
+# metadata slots (strata / cluster / fpc / prob) are subset by `[` and stay row-aligned with mdata.
+reg_subset_design <- function(design, keep_mask, mdata) {
+  dd <- design[keep_mask, ]
+  dd$variables <- mdata
+  dd
+}
+# The survey design for a model's (recoded) complete-case frame: a prebuilt design is subset()'d and
+# has its model frame swapped for `mdata`; a weight column (+ ids/strata/fpc/nest) is built into a fresh
+# design on `mdata`. `data` + `drop_vars` give the complete-case mask for the subset path. Shared by the
+# glm (svyglm) and the 3+ level (svyolr / svy_vglm) weighted branches -- one design constructor.
+reg_resolve_design <- function(design_spec, mdata, data, drop_vars) {
+  if (!is.null(design_spec$design)) {
+    keep_mask <- stats::complete.cases(data[, drop_vars, drop = FALSE])
+    reg_subset_design(design_spec$design, keep_mask, mdata)
+  } else {
+    reg_make_design(mdata, design_spec$wt, design_spec$ids,
+                    design_spec$strata, design_spec$fpc, design_spec$nest)
+  }
+}
+# AIC.svyglm / anova.svyglm refit sub-models with an UNQUALIFIED `svyglm()` call evaluated in the model
+# formula's environment. When `survey` is loaded via `::` but NOT attached (the normal tabxplor case),
+# that lookup fails ("could not find function svyglm"). Bind `survey::svyglm` into a child of the
+# formula/terms environment so the survey glance (AIC) and model comparison (anova) work regardless.
+reg_svyglm_env <- function(fit) {
+  env <- tryCatch(environment(stats::formula(fit)), error = function(e) NULL)
+  if (is.null(env)) env <- globalenv()
+  if (!exists("svyglm", envir = env, inherits = TRUE)) {
+    ne <- new.env(parent = env)
+    assign("svyglm", survey::svyglm, envir = ne)
+    try(environment(fit$formula) <- ne, silent = TRUE)
+    try(environment(fit$terms)   <- ne, silent = TRUE)
+  }
+  fit
+}
+# Relevel predictor / outcome reference levels INSIDE a prebuilt design (factor releveling touches only
+# $variables, never the weights / strata / fpc / row set), so a design-based fit honours `reference=`.
+reg_relevel_design <- function(design, reference, relevelable) {
+  design$variables <- reg_apply_references(design$variables, reference, relevelable)
+  design
+}
+
 # Fit ONE model on complete cases -> a tidy of the (per-family) effect measure + CI + p + the model n
 # (+ var(Y) for the additive gaussian effect-size colour). `do_exp` chooses the estimate scale:
 # TRUE -> exp(coef) (OR/IRR, multiplicative); FALSE -> raw coef (beta, additive). Wald CI uses z for
 # fixed-dispersion glm (binomial/poisson), else t(df.residual); this matches broom's own z/t p, so
 # the CI and the stars are exact duals. method="profile" (unweighted glm) swaps to confint + LR p.
-reg_fit <- function(data, dependent, predictors, family, wt, do_exp,
+reg_fit <- function(data, dependent, predictors, family, design_spec, do_exp,
                     inverse_two_level_factors, conf_level, method,
-                    trials = NULL, formula = NULL) {
-  mdata <- tidyr::drop_na(data, tidyselect::all_of(c(dependent, predictors, wt)))
+                    trials = NULL, formula = NULL, multiplicator = NULL) {
+  drop_vars <- unique(c(dependent, predictors, reg_design_vars(design_spec)))
+  mdata     <- tidyr::drop_na(data, tidyselect::all_of(drop_vars))
 
   fac_preds <- predictors[purrr::map_lgl(
     predictors, ~ is.factor(mdata[[.]]) || is.character(mdata[[.]])
@@ -482,17 +634,25 @@ reg_fit <- function(data, dependent, predictors, family, wt, do_exp,
     ))
   }
 
-  # 3+ level categorical outcomes have their own engines (nnet::multinom / MASS::polr); they share the
-  # Wald machinery (reg_wald_from_tidy) so the CI <-> p <-> stars duality holds, but not the glm path.
+  weighted <- !is.null(design_spec$design) || !is.null(design_spec$wt)
+  # A closure the fit branches call with their OWN recoded model frame -> the matching survey design
+  # (build the weight-column design / subset the prebuilt one). Lets the MNL / ordinal engines, which
+  # recode the outcome themselves, get a row-aligned design without re-deriving the mask.
+  make_design <- function(recoded_mdata) reg_resolve_design(design_spec, recoded_mdata, data, drop_vars)
+
+  # 3+ level categorical outcomes have their own engines: unweighted -> nnet::multinom / MASS::polr;
+  # weighted -> svyVGAM::svy_vglm / survey::svyolr. All share the Wald machinery (reg_wald_from_tidy) so
+  # the CI <-> p <-> stars duality holds, but not the glm path.
   if (family == "multinomial") {
-    return(reg_fit_multinom(mdata, dependent, predictors, do_exp, conf_level, method))
+    return(reg_fit_multinom(mdata, dependent, predictors, do_exp, conf_level, method,
+                            weighted, make_design))
   }
   if (family == "ordinal") {
-    return(reg_fit_ordinal(mdata, dependent, predictors, do_exp, conf_level, method))
+    return(reg_fit_ordinal(mdata, dependent, predictors, do_exp, conf_level, method,
+                           weighted, make_design))
   }
 
   positive_level <- NULL
-  weighted <- !is.null(wt)
   # grouped binomial: a summed-score outcome (0..trials) fit as cbind(score, trials-score) (D2). Only
   # on the non-formula path (a compound formula controls its own LHS, so `trials` does not apply).
   grouped <- family == "binomial" && !is.null(trials) && is.null(formula)
@@ -545,14 +705,27 @@ reg_fit <- function(data, dependent, predictors, family, wt, do_exp,
   } else if (!weighted) {
     stats::glm(fml, data = mdata, family = fam_obj)
   } else {
-    design <- survey::svydesign(ids = ~1,
-                                weights = stats::as.formula(paste0("~`", wt, "`")),
-                                data = mdata)
-    survey::svyglm(fml, design = design, family = fam_obj)
+    # weighted: svyglm on the design for this model's complete cases (built or subset via make_design)
+    survey::svyglm(fml, design = make_design(mdata), family = fam_obj)
   }
+  if (weighted) fit <- reg_svyglm_env(fit)   # make survey::svyglm visible to AIC / anova null-refits
 
   td <- broom::tidy(fit)                            # native scale: estimate, std.error, p.value
   td$term <- stringr::str_remove_all(td$term, "`")  # strip formula backticks -> match skeleton
+
+  # multiplicator (Phase 12g): a k-unit change of a continuous predictor multiplies its native-scale
+  # coefficient by k (beta -> beta*k, se -> se*|k|; exp() then gives OR^k). Applied on the native scale
+  # BEFORE the CI so the Wald interval scales automatically; the profile CI (monotone reparametrisation)
+  # scales linearly too. The z / LR p is scale-invariant (testing beta=0 <=> k*beta=0) -> unchanged.
+  mult_vec <- rep(1, nrow(td))
+  if (!is.null(multiplicator)) {
+    for (v in names(multiplicator)) {
+      mi <- td$term == v
+      if (any(mi)) mult_vec[mi] <- as.numeric(multiplicator[[v]])
+    }
+    td$estimate  <- td$estimate  * mult_vec
+    td$std.error <- td$std.error * abs(mult_vec)
+  }
 
   use_profile <- method == "profile" && !weighted && family %in% c("binomial", "poisson")
   if (method == "profile" && weighted) {
@@ -567,7 +740,7 @@ reg_fit <- function(data, dependent, predictors, family, wt, do_exp,
     }
     ci  <- suppressMessages(stats::confint(fit, level = conf_level))   # log/native scale
     idx <- match(td$term, stringr::str_remove_all(rownames(ci), "`"))
-    lo  <- unname(ci[idx, 1]); hi <- unname(ci[idx, 2])
+    lo  <- unname(ci[idx, 1]) * mult_vec; hi <- unname(ci[idx, 2]) * mult_vec  # scale profile bounds
     lrp <- reg_lr_pvalues(fit)
     td$p.value <- unname(lrp[match(td$term, names(lrp))])
   } else {
@@ -632,6 +805,62 @@ reg_column <- function(skeleton, fit_res, model_predictors, col_var, effect_shap
       comp_all = FALSE, in_refrow = refrows
     )
   }
+}
+
+
+# === empirical_OR: the descriptive crude OR / % beside the model OR (Phase 12g, binary logit) =======
+
+# For each FACTOR predictor, the crude empirical percentage (of the model's positive outcome level) and
+# the crude odds ratio of that level vs the predictor's reference level, from the weighted 2x2 counts --
+# the descriptive "OR + PCT" companion to the adjusted model OR. Computed DIRECTLY (not via tab()) so the
+# outcome direction matches the model's `positive_level` and the reference level matches the skeleton.
+# Returns a tibble keyed by (var, level): emp_pct, emp_diff (vs the reference %), emp_or, emp_n.
+reg_empirical_or <- function(data, fac_preds, dependent, positive_level, wt) {
+  pos <- as.character(data[[dependent]]) == positive_level
+  w   <- if (is.null(wt)) rep(1, nrow(data)) else as.numeric(data[[wt]])
+  purrr::map_dfr(fac_preds, function(p) {
+    x  <- data[[p]]
+    ok <- !is.na(x) & !is.na(pos) & !is.na(w)
+    lv <- levels(forcats::fct_drop(as.factor(x[ok])))
+    per <- purrr::map(lv, function(l) {
+      m    <- ok & x == l
+      wpos <- sum(w[m & pos]); wneg <- sum(w[m & !pos])
+      list(pct = wpos / (wpos + wneg), odds = wpos / wneg, n = sum(m))
+    })
+    ref_pct  <- per[[1]]$pct
+    ref_odds <- per[[1]]$odds
+    tibble::tibble(var = p, level = lv,
+                   emp_pct  = purrr::map_dbl(per, "pct"),
+                   emp_diff = purrr::map_dbl(per, ~ .$pct - ref_pct),
+                   emp_or   = purrr::map_dbl(per, ~ .$odds / ref_odds),
+                   emp_n    = purrr::map_int(per, ~ as.integer(.$n)))
+  })
+}
+
+# Two fmt columns ("Emp. %", "Emp. OR") aligned to the skeleton, for reg_build to prepend before the
+# model OR. Numeric predictors / the Constant -> empty cells; reference levels -> % = its own value
+# (diff 0), OR = 1. Descriptive (no CI / stars): "Emp. %" colours by pct-diff, "Emp. OR" by OR.
+reg_empirical_columns <- function(skeleton, emp, fac_preds) {
+  ekey <- paste(emp$var, emp$level, sep = "\r")
+  mi   <- match(paste(skeleton$var, skeleton$level, sep = "\r"), ekey)
+  n_rows  <- nrow(skeleton)
+  is_fac  <- skeleton$var %in% fac_preds
+  refrows <- skeleton$is_ref & is_fac
+  list(
+    "Emp. %" = fmt(
+      pct = emp$emp_pct[mi], diff = emp$emp_diff[mi],
+      n = emp$emp_n[mi], tot_n = emp$emp_n[mi],
+      type = "row", display = "pct", digits = 0L, ref = "tot",
+      color = "diff", color_signif = "ignore", col_var = "Emp. %",
+      comp_all = FALSE, in_refrow = refrows
+    ),
+    "Emp. OR" = fmt(
+      or = emp$emp_or[mi], n = emp$emp_n[mi],
+      type = "row", display = "or", digits = 2L, ref = "1", ci_type = "or",
+      color = "OR", color_signif = "ignore", col_var = "Emp. OR",
+      comp_all = FALSE, in_refrow = refrows
+    )
+  )
 }
 
 
@@ -860,6 +1089,14 @@ reg_dispersion <- function(fit) {
   phi
 }
 
+# AIC as a single number. AIC.svyglm (Rao-Scott survey AIC) returns a NAMED vector
+# c(eff.p, AIC, deltabar) -> take the "AIC" element; a plain glm/lm AIC is already scalar.
+reg_aic_value <- function(fit) {
+  a <- tryCatch(suppressWarnings(stats::AIC(fit)), error = function(e) NA_real_)
+  if (length(a) > 1L && !is.null(names(a)) && "AIC" %in% names(a)) return(as.numeric(a[["AIC"]]))
+  as.numeric(a)[1]
+}
+
 # GOF stats for ONE fit -> a tidy tibble (test, statistic, df1, df2, pvalue) in the reg-footer
 # vocabulary. Dependency-light: broom::glance (lm) + base logLik/AIC/BIC + the analytic/refit null.
 # quasi* / svyglm have no true likelihood -> those stats stay NA / a relabelled Rao-Scott Wald (survey),
@@ -874,7 +1111,8 @@ reg_glance <- function(fit, family, grouped, weighted, nobs) {
     # survey's psrsq / AIC emit "rsquared may be wrong" / "zero weight" notes under scaled weights; these
     # are inherent approximations of a survey summary, not user-actionable -> suppressed (the footer is a
     # descriptive summary, not the primary design-based inference).
-    terms_all <- attr(stats::terms(fit), "term.labels")
+    # svy_vglm (weighted MNL) has no terms component -> the Wald-vs-null degrades away (footer = n only).
+    terms_all <- tryCatch(attr(stats::terms(fit), "term.labels"), error = function(e) character(0))
     wt <- if (length(terms_all) > 0)
       tryCatch(suppressWarnings(survey::regTermTest(fit, stats::reformulate(terms_all))),
                error = function(e) NULL)
@@ -885,7 +1123,10 @@ reg_glance <- function(fit, family, grouped, weighted, nobs) {
     nk <- tryCatch(suppressWarnings(as.numeric(survey::psrsq(fit, method = "Nagelkerke"))),
                    error = function(e) NA_real_)
     if (!is.na(nk)) out <- dplyr::bind_rows(out, row("nagelkerke_r2", statistic = nk))
-    aic <- tryCatch(suppressWarnings(as.numeric(stats::AIC(fit))), error = function(e) NA_real_)
+    cs <- tryCatch(suppressWarnings(as.numeric(survey::psrsq(fit, method = "Cox-Snell"))),
+                   error = function(e) NA_real_)                # selectable via stats=; not in the default set
+    if (!is.na(cs)) out <- dplyr::bind_rows(out, row("cox_snell_r2", statistic = cs))
+    aic <- reg_aic_value(fit)
     if (!is.na(aic)) out <- dplyr::bind_rows(out, row("aic", statistic = aic))
     return(out)
   }
@@ -911,7 +1152,7 @@ reg_glance <- function(fit, family, grouped, weighted, nobs) {
       row("lr_null", statistic = lr, df1 = nl$df, pvalue = stats::pchisq(lr, nl$df, lower.tail = FALSE)),
       row("mcfadden_r2", statistic = 1 - nl$ll_f / nl$ll_0))
   }
-  aic <- tryCatch(as.numeric(stats::AIC(fit)), error = function(e) NA_real_)
+  aic <- reg_aic_value(fit)
   bic <- tryCatch(as.numeric(stats::BIC(fit)), error = function(e) NA_real_)
   if (!is.na(aic)) out <- dplyr::bind_rows(out, row("aic", statistic = aic))
   if (!is.na(bic)) out <- dplyr::bind_rows(out, row("bic", statistic = bic))
@@ -933,7 +1174,7 @@ reg_footer_stats <- function(family, weighted, grouped, stats) {
            if (family == "poisson" || grouped) s <- c(s, "dispersion"); s }
   if (is.null(stats) || identical(stats, "all") || isTRUE(stats)) return(default)
   if (isFALSE(stats) || identical(stats, "none")) return(character(0))
-  valid <- c("n", "lr_null", "wald_null", "mcfadden_r2", "nagelkerke_r2",
+  valid <- c("n", "lr_null", "wald_null", "mcfadden_r2", "nagelkerke_r2", "cox_snell_r2",
              "r2", "r2_adj", "f_model", "sigma", "aic", "bic", "dispersion")
   stats[stats %in% valid]
 }
@@ -986,17 +1227,15 @@ reg_compare_extract <- function(an, use_f) {
 
 # Append one comparison row per model column to the GOF `test` tibble. `compare = "baseline"` tests
 # each column vs the `baseline=` column (default the first); `"sequential"` vs the previous column.
-# LR (Chisq) for binomial/poisson/multinomial/ordinal, F for gaussian/quasi. Guard failure -> a
-# Delta-AIC row (test "compare_*_aic", a value stat) + a one-time message. Weighted / single-column
-# tables no-op (with a message). Distinct discriminators per test kind keep each footer row homogeneous
-# (all LR, all F, or all Delta-AIC) so the row label alone names the test -- no in-cell label needed.
+# LR (Chisq) for binomial/poisson/multinomial/ordinal, F for gaussian/quasi; for WEIGHTED models a
+# design-based Wald test (anova.svyglm, method="Wald") -> the "compare_*_wald" discriminator, so no
+# false-LR claim is made under survey sampling. Guard failure -> a Delta-AIC row (test "compare_*_aic",
+# a value stat -- Rao-Scott AIC.svyglm under weights) + a one-time message. Single-column tables no-op.
+# Distinct discriminators per test kind keep each footer row homogeneous (all LR / F / Wald / Delta-AIC)
+# so the row label alone names the test -- no in-cell label needed.
 reg_compare_rows <- function(reg_gof, fits, specs, family, weighted, fit_first_col,
                              compare = "none", baseline = NULL, conf_level = 0.95) {
   if (identical(compare, "none")) return(reg_gof)
-  if (weighted) {
-    cli::cli_inform(c("i" = "Model comparison ({.arg compare}) is not available for weighted models yet."))
-    return(reg_gof)
-  }
   n <- length(fits)
   if (n < 2L) {
     cli::cli_inform(c("i" = paste0("{.arg compare} needs at least two models (a {.arg predictors} list ",
@@ -1027,18 +1266,32 @@ reg_compare_rows <- function(reg_gof, fits, specs, family, weighted, fit_first_c
     m_full <- fits[[i]]$fit; m_ref <- fits[[ref_i]]$fit
     col    <- fit_first_col[[i]]
     if (reg_compare_guard(m_ref, m_full)) {
-      an <- tryCatch(stats::anova(m_ref, m_full, test = if (use_f) "F" else "Chisq"),
-                     error = function(e) NULL)
-      if (!is.null(an)) {
-        e <- reg_compare_extract(an, use_f)
-        if (!is.na(e$p)) {
-          disc <- if (use_f) paste0("compare_", tag, "_f") else paste0("compare_", tag)
-          return(row(disc, col, statistic = e$stat, df1 = e$df1, df2 = e$df2, pvalue = e$p,
-                     nobs = fits[[i]]$nobs))
+      if (weighted) {
+        # design-based Wald test on the extra term(s): anova.svyglm(method="Wald") -> a regTermTest
+        # ($Ftest/$df/$ddf/$p), the same object reg_glance's Wald-vs-null uses.
+        e <- tryCatch({
+          an <- stats::anova(m_ref, m_full, method = "Wald", test = "F")
+          list(stat = as.numeric(an$Ftest), df1 = as.numeric(an$df),
+               df2 = as.numeric(an$ddf), p = as.numeric(an$p))
+        }, error = function(e) NULL)
+        if (!is.null(e) && !is.na(e$p)) {
+          return(row(paste0("compare_", tag, "_wald"), col, statistic = e$stat, df1 = e$df1,
+                     df2 = e$df2, pvalue = e$p, nobs = fits[[i]]$nobs))
+        }
+      } else {
+        an <- tryCatch(stats::anova(m_ref, m_full, test = if (use_f) "F" else "Chisq"),
+                       error = function(e) NULL)
+        if (!is.null(an)) {
+          e <- reg_compare_extract(an, use_f)
+          if (!is.na(e$p)) {
+            disc <- if (use_f) paste0("compare_", tag, "_f") else paste0("compare_", tag)
+            return(row(disc, col, statistic = e$stat, df1 = e$df1, df2 = e$df2, pvalue = e$p,
+                       nobs = fits[[i]]$nobs))
+          }
         }
       }
     }
-    daic <- tryCatch(as.numeric(stats::AIC(m_full) - stats::AIC(m_ref)), error = function(e) NA_real_)
+    daic <- tryCatch(reg_aic_value(m_full) - reg_aic_value(m_ref), error = function(e) NA_real_)
     cli::cli_inform(c("i" = paste0(
       "Column {.val {col}}: models are not nested or N differs -> showing the AIC difference vs the ",
       "{if (compare == 'sequential') 'previous' else 'baseline'} model instead of a likelihood-ratio test.")))
@@ -1056,29 +1309,66 @@ reg_compare_rows <- function(reg_gof, fits, specs, family, weighted, fit_first_c
 # skeleton is read from its fitted terms (reg_skeleton_from_fit). Fit-all first so the skeleton can
 # come from the fit before the columns are aligned. A multinomial fit contributes SEVERAL columns
 # (one per outcome category), so the per-spec columns are flattened into one (label, col) list.
-reg_build <- function(data, specs, union_predictors, family, wt, do_exp, effect_shape,
+reg_build <- function(data, specs, union_predictors, family, design_spec, weighted, do_exp, effect_shape,
                       inverse_two_level_factors, conf_level, method, color, color_signif,
                       cleannames, subtext, eff_word, effect = "coefficient", at = "average",
-                      stats = NULL, compare = "none", baseline = NULL) {
+                      stats = NULL, compare = "none", baseline = NULL, split_var = NULL,
+                      multiplicator = NULL, empirical_OR = FALSE, skeleton_data = data) {
+  # split_var (Phase 12g): the regression analogue of tab()'s tab_vars -- fit the SAME model(s) within
+  # each level of a grouping variable and STACK the per-group tables into one grouped_tab (grouped by
+  # split_var + var), so tab_spread(split_var) can pivot the groups into side-by-side columns. Each group
+  # is a recursive reg_build on its data subset, sharing ONE skeleton (skeleton_data = the full data) so
+  # every group has the same rows/columns (a level absent in a group -> empty cells). split_var is placed
+  # FIRST so `levels` stays the last factor column -> tab_get_vars()/tab_spread() see row_var = "levels",
+  # tab_vars = c(split_var, "var") with no change to the crosstab spread machinery.
+  if (!is.null(split_var)) {
+    sl <- levels(forcats::fct_drop(as.factor(data[[split_var]])))
+    parts <- purrr::map(sl, function(g) {
+      gmask <- !is.na(data[[split_var]]) & data[[split_var]] == g
+      sub   <- data[gmask, , drop = FALSE]
+      ds_g  <- design_spec
+      if (!is.null(design_spec$design)) ds_g$design <- design_spec$design[gmask, ]  # subset the design
+      tg  <- reg_build(sub, specs, union_predictors, family, ds_g, weighted, do_exp, effect_shape,
+                       inverse_two_level_factors, conf_level, method, color, color_signif,
+                       cleannames, subtext, eff_word, effect, at, stats, compare, baseline,
+                       split_var = NULL, multiplicator = multiplicator, empirical_OR = empirical_OR,
+                       skeleton_data = data)
+      tst <- get_test(tg); if (!is.null(tst) && nrow(tst) > 0) tst$row_var <- as.character(g)
+      list(data = tibble::add_column(tibble::as_tibble(dplyr::ungroup(tg)),
+                                     "{split_var}" := factor(g, levels = sl), .before = 1L),
+           test = tst)
+    })
+    combined <- vctrs::vec_rbind(!!!purrr::map(parts, "data"))
+    tests    <- purrr::list_rbind(purrr::compact(purrr::map(parts, "test")))
+    if (is.null(tests) || nrow(tests) == 0) tests <- new_test_tibble()
+    return(
+      combined |>
+        new_tab(subtext = subtext, test = tests) |>
+        dplyr::group_by(!!rlang::sym(split_var), var)
+    )
+  }
+
   fits <- purrr::map(specs, function(sp) {
-    reg_fit(data, sp$dependent, sp$predictors, family, wt, do_exp,
+    reg_fit(data, sp$dependent, sp$predictors, family, design_spec, do_exp,
             inverse_two_level_factors, conf_level, method,
-            trials = sp$trials, formula = sp$formula)
+            trials = sp$trials, formula = sp$formula, multiplicator = multiplicator)
   })
 
   # marginaleffects paths (effect="ame", and the MNL "j vs rest" OR at the reference profile) always key
   # by the ORIGINAL variables, so a compound formula still gets a clean bare-variable skeleton; the plain
-  # coefficient path keeps its fit-read skeleton for compound terms.
+  # coefficient path keeps its fit-read skeleton for compound terms. `skeleton_data` (Phase 12g split_var)
+  # is the FULL data so every split group shares one skeleton (missing group levels -> empty cells); it
+  # defaults to `data`, so non-split builds are unchanged.
   compound   <- purrr::map_lgl(specs, ~ isTRUE(.$compound))
   mnl_vsrest <- effect == "coefficient" && at == "reference" && family == "multinomial"
-  skeleton <- if (effect == "ame" || mnl_vsrest) reg_skeleton(data, union_predictors)
+  skeleton <- if (effect == "ame" || mnl_vsrest) reg_skeleton(skeleton_data, union_predictors)
               else if (any(compound))            reg_skeleton_from_fit(fits[[1]]$fit)
-              else                               reg_skeleton(data, union_predictors)
+              else                               reg_skeleton(skeleton_data, union_predictors)
 
   multi_col     <- family == "multinomial"
   prefix_dep    <- length(specs) > 1L
   numeric_preds <- union_predictors[!purrr::map_lgl(
-    union_predictors, ~ is.factor(data[[.x]]) || is.character(data[[.x]]))]
+    union_predictors, ~ is.factor(skeleton_data[[.x]]) || is.character(skeleton_data[[.x]]))]
 
   # built_per_fit: a list PER FIT of {label, col} lists (a multinomial / MNL-vs-rest / AME-per-category
   # fit contributes SEVERAL columns). Kept un-flattened so reg_gof_tibble() can key the model-summary
@@ -1088,7 +1378,7 @@ reg_build <- function(data, specs, union_predictors, family, wt, do_exp, effect_
     per_category <- family %in% c("multinomial", "ordinal")
     shape        <- if (prob_scale) "prob" else "raw"
     built_per_fit <- purrr::map2(fits, specs, function(f, sp) {
-      marg  <- reg_marginal(f$fit, f$data, sp$predictors, conf_level, wt,
+      marg  <- reg_marginal(f$fit, f$data, sp$predictors, conf_level, design_spec$wt,
                             at = at, want_pred = prob_scale)
       var_y <- if (!prob_scale) suppressWarnings(stats::var(as.numeric(f$data[[sp$dependent]])))
                else NA_real_
@@ -1112,7 +1402,7 @@ reg_build <- function(data, specs, union_predictors, family, wt, do_exp, effect_
     # MNL "j vs rest" OR at the reference profile (D3-flavour-2): exp of the profile log-odds-ratio of
     # "category j vs the rest" for each predictor level; one OR column per outcome category.
     built_per_fit <- purrr::map2(fits, specs, function(f, sp) {
-      marg   <- reg_marginal(f$fit, f$data, sp$predictors, conf_level, wt,
+      marg   <- reg_marginal(f$fit, f$data, sp$predictors, conf_level, design_spec$wt,
                              at = "reference", comparison = "lnor", want_pred = FALSE)
       groups <- levels(as.factor(f$data[[sp$dependent]]))
       purrr::map(groups, function(g) {
@@ -1147,10 +1437,10 @@ reg_build <- function(data, specs, union_predictors, family, wt, do_exp, effect_
   grouped_by_fit <- purrr::map_lgl(specs, ~ family == "binomial" && !is.null(.$trials) &&
                                      !isTRUE(.$compound))
   nobs_by_fit    <- purrr::map_dbl(fits, "nobs")
-  reg_gof <- reg_gof_tibble(fits, fit_first_col, family, weighted = !is.null(wt),
+  reg_gof <- reg_gof_tibble(fits, fit_first_col, family, weighted = weighted,
                             grouped_by_fit = grouped_by_fit, stats = stats,
                             nobs_by_fit = nobs_by_fit)
-  reg_gof <- reg_compare_rows(reg_gof, fits, specs, family, weighted = !is.null(wt),
+  reg_gof <- reg_compare_rows(reg_gof, fits, specs, family, weighted = weighted,
                               fit_first_col = fit_first_col, compare = compare, baseline = baseline,
                               conf_level = conf_level)
 
@@ -1158,11 +1448,31 @@ reg_build <- function(data, specs, union_predictors, family, wt, do_exp, effect_
   if (cleannames) {
     disp_levels <- stringr::str_remove_all(disp_levels, cleannames_condition())
   }
+  # multiplicator (Phase 12g): relabel the display level of each scaled numeric predictor so the row
+  # reads "<var> | per <k>" (the effect is now per k units). Numeric predictors have level == var.
+  if (!is.null(multiplicator)) {
+    for (v in names(multiplicator)) {
+      hit <- skeleton$var == v & skeleton$level == v
+      if (any(hit)) disp_levels[hit] <- paste0("per ", multiplicator[[v]])
+    }
+  }
 
   tab <- tibble::tibble(
     var    = forcats::fct_inorder(skeleton$var),
     levels = forcats::fct_inorder(disp_levels)
   )
+  # empirical_OR (Phase 12g, binary coefficient path): the descriptive crude % + OR of each FACTOR
+  # predictor level, placed just before the model OR (aligned to the shared skeleton).
+  if (isTRUE(empirical_OR) && family == "binomial" && effect == "coefficient") {
+    fac_preds_e <- union_predictors[!purrr::map_lgl(
+      union_predictors, ~ is.numeric(skeleton_data[[.x]]))]
+    pos_lvl <- fits[[1]]$positive_level
+    if (length(fac_preds_e) > 0L && !is.null(pos_lvl)) {
+      emp     <- reg_empirical_or(data, fac_preds_e, specs[[1]]$dependent, pos_lvl, design_spec$wt)
+      emp_cols <- reg_empirical_columns(skeleton, emp, fac_preds_e)
+      for (nm in names(emp_cols)) tab[[nm]] <- emp_cols[[nm]]
+    }
+  }
   for (i in seq_along(built)) tab[[labels[i]]] <- built[[i]]$col
 
   # Phase 12f: the GOF footer travels in the whole-table `test` attribute (disjoint discriminators, so
@@ -1217,7 +1527,9 @@ reg_build <- function(data, specs, union_predictors, family, wt, do_exp, effect_
 #' directly; simple `y ~ a + b` formulas behave exactly like `dependent = "y"`, `predictors = c("a",
 #' "b")`, while interactions / `poly()` / `I()` terms render as best-effort term rows.
 #'
-#' @param data A data frame.
+#' @param data A data frame, **or a prebuilt survey design** ([survey::svydesign()] /
+#'   [survey::svrepdesign()]). When a design is passed, its weights (and clustering / stratification /
+#'   calibration) drive the estimation and `wt` / `ids` / `strata` / `fpc` are ignored.
 #' @param dependent Character outcome variable name(s), **or a model formula** (the escape hatch).
 #'   With a `predictors` character vector, several names give one effect column per outcome; with a
 #'   `predictors` list, a single name is required. A formula supplies its own model (leave
@@ -1230,7 +1542,16 @@ reg_build <- function(data, specs, union_predictors, family, wt, do_exp, effect_
 #'   (-> `"gaussian"`) outcome and emits a message; an integer count stays ambiguous and must be named.
 #'   Set it explicitly with `"gaussian"` (linear), `"binomial"` (logistic), `"poisson"` /
 #'   `"quasipoisson"` (counts), `"multinomial"` (nominal 3+ level), `"ordinal"` (ordered 3+ level).
-#' @param wt Optional. Name of a weight column (character). Uses survey-weighted estimation.
+#' @param wt Optional. Name of a weight column (character). Switches to design-based survey estimation
+#'   ([survey::svyglm()]): the sandwich standard errors are scale-invariant, so raw population weights
+#'   are handled correctly (no normalisation) and the point estimates match the weighted crosstabs.
+#' @param ids,strata,fpc Optional survey-design specification for the `wt` path (each a column name /
+#'   character vector, or a formula such as `~psu` / `~region`). `ids` gives the cluster identifier(s)
+#'   from largest to smallest stage (default no clustering); `strata` the stratifying variable(s);
+#'   `fpc` the finite-population correction. Give correct clustering/stratification for honest
+#'   design-based variances (a flat `ids = ~1` can understate them). Ignored when `data` is a design.
+#' @param nest Logical. Passed to [survey::svydesign()]: set `TRUE` when cluster ids are reused across
+#'   strata. Default `FALSE`.
 #' @param exponentiate Whether to exponentiate coefficients into ratios. `"nongaussian"` (default)
 #'   exponentiates every family except gaussian (odds ratios / incidence-rate ratios, leaving linear
 #'   betas raw); `TRUE` / `FALSE` force it on / off for all columns. Ignored when `effect = "ame"`
@@ -1268,6 +1589,19 @@ reg_build <- function(data, specs, union_predictors, family, wt, do_exp, effect_
 #'   passing a formula in `dependent` with the terms already coded.
 #' @param inverse_two_level_factors Logical, binomial only. If `TRUE` (default), models the FIRST
 #'   level of a 2-level factor dependent (e.g. `"1-Married"` before `"2-Not married"`).
+#' @param split_var Optional. Name of a grouping variable (character): the regression analogue of
+#'   [tab()]'s `tab_vars`. The same model(s) are fitted **within each level** of this variable and the
+#'   per-group tables are stacked into one grouped table (grouped by `split_var`), sharing the
+#'   variable/level stub. Use [tab_spread()] on `split_var` to pivot the groups into side-by-side
+#'   columns for an easy across-group comparison. A level absent from a group shows empty cells.
+#' @param multiplicator Optional named numeric vector `c(var = k)` rescaling a **continuous**
+#'   predictor's effect to a k-unit change (e.g. `c(age = 10)` shows the odds ratio / beta per decade
+#'   of age = OR^10 / beta*10). The confidence interval scales with it; the p-value is unchanged. Names
+#'   must be numeric predictors; not available for multinomial / ordinal outcomes.
+#' @param empirical_OR Logical (binary logistic outcome only). If `TRUE`, adds a descriptive **crude
+#'   percentage** and **crude odds ratio** column (`"Emp. %"`, `"Emp. OR"`) beside the model odds ratio,
+#'   for each factor predictor level -- the unadjusted "OR + PCT" companion connecting the model to the
+#'   descriptive crosstab. Default `FALSE`.
 #' @param stats The goodness-of-fit statistics shown in the model-summary **footer** (one block per
 #'   model). `NULL` (default) uses the per-family set: linear models show N, R square, adjusted R
 #'   square, the overall F-test and the residual SD; other models show N, the likelihood-ratio test
@@ -1279,8 +1613,9 @@ reg_build <- function(data, specs, union_predictors, family, wt, do_exp, effect_
 #' @param compare Add a **model-comparison** footer row (only with several models / dependents).
 #'   `"none"` (default) adds nothing; `"baseline"` tests each model against the `baseline` column;
 #'   `"sequential"` tests each model against the previous one. Uses a likelihood-ratio test (F for
-#'   linear / quasi models); when the models are not nested or fit on different numbers of observations
-#'   it falls back to the AIC difference with a message.
+#'   linear / quasi models, a design-based Wald test for weighted / survey models); when the models are
+#'   not nested or fit on different numbers of observations it falls back to the AIC difference with a
+#'   message.
 #' @param baseline For `compare = "baseline"`: which column is the reference model (its label, or a
 #'   position). Defaults to the first model.
 #' @param color,color_signif How the effect measure is coloured (`NULL` uses the per-family default:
@@ -1322,10 +1657,12 @@ reg_build <- function(data, specs, union_predictors, family, wt, do_exp, effect_
 #'
 #' @export
 tab_reg <- function(data, dependent, predictors = NULL,
-                    family = "auto", wt = NULL, exponentiate = "nongaussian",
+                    family = "auto", wt = NULL, ids = NULL, strata = NULL, fpc = NULL, nest = FALSE,
+                    exponentiate = "nongaussian",
                     effect = c("coefficient", "ame"), at = c("average", "reference"),
                     trials = NULL, conf_level = 0.95, method = c("wald", "profile"),
-                    reference = NULL, inverse_two_level_factors = TRUE,
+                    reference = NULL, inverse_two_level_factors = TRUE, split_var = NULL,
+                    multiplicator = NULL, empirical_OR = FALSE,
                     stats = NULL, compare = c("none", "baseline", "sequential"), baseline = NULL,
                     color = NULL, color_signif = NULL, stars = TRUE,
                     cleannames = NULL, subtext = "") {
@@ -1333,8 +1670,26 @@ tab_reg <- function(data, dependent, predictors = NULL,
   effect  <- match.arg(effect)
   at      <- match.arg(at)
   compare <- match.arg(compare)
-  stopifnot(is.data.frame(data))
   cleannames <- if (is.null(cleannames)) getOption("tabxplor.cleannames", TRUE) else cleannames
+
+  # Phase 12g: `data` may be a PREBUILT survey design (survey.design / svyrep.design), gtsummary-style.
+  # Extract its model frame for family-detect / reference / skeleton; keep the design for the fits.
+  design_obj <- NULL
+  if (inherits(data, c("survey.design", "survey.design2", "svyrep.design"))) {
+    if (!requireNamespace("survey", quietly = TRUE)) {
+      cli::cli_abort(c("{.pkg survey} is required to pass a survey design as {.arg data}.",
+                       "i" = 'Install it with {.code install.packages("survey")}.'))
+    }
+    design_obj <- data
+    data       <- design_obj$variables
+    if (!is.null(wt) || !is.null(ids) || !is.null(strata) || !is.null(fpc)) {
+      cli::cli_inform(c("i" = paste0("{.arg data} is already a survey design; {.arg wt} / {.arg ids} / ",
+                                     "{.arg strata} / {.arg fpc} are ignored.")))
+      wt <- NULL; ids <- NULL; strata <- NULL; fpc <- NULL
+    }
+  }
+  stopifnot(is.data.frame(data))
+  weighted <- !is.null(design_obj) || !is.null(wt)
 
   # formula escape-hatch (D9): a formula in `dependent` supplies the model. A SIMPLE formula (bare
   # response ~ bare main-effect vars) reduces losslessly to the dependent+predictors character path;
@@ -1378,12 +1733,16 @@ tab_reg <- function(data, dependent, predictors = NULL,
   family <- rlang::arg_match(family, c("gaussian", "binomial", "poisson", "quasipoisson",
                                        "multinomial", "ordinal"))
 
-  # Weighted multinomial / ordinal are deferred (no design-based multinomial engine in survey; svyolr
-  # lands with the full survey-design phase). A weighted binary/count/linear model still uses svyglm.
-  if (!is.null(wt) && family %in% c("multinomial", "ordinal")) {
+  # Phase 12g: survey-weighted 3+ level outcomes are supported -- ordinal via survey::svyolr, nominal
+  # via svyVGAM::svy_vglm (checked in reg_check_deps). The marginaleffects paths (effect="ame", and the
+  # multinomial "j vs rest" OR at the reference profile) have no method for svyolr / svy_vglm -> error.
+  if (weighted && family %in% c("multinomial", "ordinal") &&
+      (effect == "ame" || (family == "multinomial" && at == "reference"))) {
     cli::cli_abort(c(
-      "Weighted {.val {family}} regression is not yet supported.",
-      "i" = "Drop {.arg wt}, or use an unweighted model (survey-weighted 3+ level models are planned)."
+      paste0("Marginal-effects output ({.code effect = \"ame\"}", if (family == "multinomial")
+             ' or {.code at = "reference"}' else "", ") is not available for survey-weighted ",
+             "{.val {family}} models."),
+      "i" = "Use the default {.code effect = \"coefficient\"} (at = \"average\"), or drop the weights."
     ))
   }
 
@@ -1432,7 +1791,12 @@ tab_reg <- function(data, dependent, predictors = NULL,
     # dependent relevels it too (unified "reference level of any variable"). An ordinal outcome must
     # keep its order -> never releveled; predictor contrasts are releveled for every family.
     relevelable <- if (family == "multinomial") c(all_predictors, dependent) else all_predictors
-    data <- reg_apply_references(data, reference, relevelable)
+    if (!is.null(design_obj)) {
+      design_obj <- reg_relevel_design(design_obj, reference, relevelable)  # relevel inside the design
+      data       <- design_obj$variables
+    } else {
+      data <- reg_apply_references(data, reference, relevelable)
+    }
   }
 
   if (is_comparison) {
@@ -1466,11 +1830,58 @@ tab_reg <- function(data, dependent, predictors = NULL,
   note <- reg_model_note(family, do_exp, effect, at)
   if (!is.null(note)) subtext <- if (nzchar(subtext)) paste0(subtext, " ", note) else note
 
-  reg_check_deps(family, wt, needs_marginaleffects = effect == "ame" || mnl_vsrest)
-  res <- reg_build(data, specs, union_predictors, family, wt, do_exp, effect_shape,
+  # split_var (Phase 12g): one grouping column, distinct from the outcome / predictors, that a model is
+  # fitted within each level of. Must be a factor / character; reg_build recurses per level and stacks.
+  if (!is.null(split_var)) {
+    if (!is.character(split_var) || length(split_var) != 1L) {
+      cli::cli_abort("{.arg split_var} must be a single column name (character).")
+    }
+    if (!split_var %in% names(data)) {
+      cli::cli_abort("{.arg split_var} {.val {split_var}} is not a column of {.arg data}.")
+    }
+    if (split_var %in% c(dependent, all_predictors)) {
+      cli::cli_abort("{.arg split_var} {.val {split_var}} cannot also be the outcome or a predictor.")
+    }
+    if (!is.factor(data[[split_var]]) && !is.character(data[[split_var]])) {
+      cli::cli_abort("{.arg split_var} {.val {split_var}} must be a factor or character column.")
+    }
+  }
+
+  # multiplicator (Phase 12g): a named numeric vector c(var = k) scaling a CONTINUOUS predictor's effect
+  # to per-k units (OR^k / beta*k). Names must be numeric predictors of the glm-family models.
+  if (!is.null(multiplicator)) {
+    if (!is.numeric(multiplicator) || is.null(names(multiplicator))) {
+      cli::cli_abort("{.arg multiplicator} must be a named numeric vector, e.g. {.code c(age = 10)}.")
+    }
+    if (family %in% c("multinomial", "ordinal")) {
+      cli::cli_abort("{.arg multiplicator} is not supported for {.val {family}} models.")
+    }
+    num_preds <- all_predictors[!purrr::map_lgl(
+      all_predictors, ~ is.factor(data[[.x]]) || is.character(data[[.x]]))]
+    bad <- setdiff(names(multiplicator), num_preds)
+    if (length(bad) > 0L) {
+      cli::cli_abort(c("{.arg multiplicator} names must be numeric predictors.",
+                       "x" = "Not numeric predictor{?s}: {.val {bad}}."))
+    }
+  }
+
+  # empirical_OR (Phase 12g): the descriptive crude % + OR beside the model OR -- binary logit,
+  # coefficient effect, one outcome only (the crude OR is a 2x2 quantity per factor-predictor level).
+  if (isTRUE(empirical_OR)) {
+    if (family != "binomial" || effect != "coefficient" || length(dependent) != 1L) {
+      cli::cli_abort(c(
+        "{.arg empirical_OR} is only available for a single binary logistic outcome (coefficient effect).",
+        "i" = "It shows the descriptive crude odds ratio / percentage beside the model odds ratio."))
+    }
+  }
+
+  design_spec <- list(design = design_obj, wt = wt, ids = ids, strata = strata, fpc = fpc, nest = nest)
+  reg_check_deps(family, weighted, needs_marginaleffects = effect == "ame" || mnl_vsrest)
+  res <- reg_build(data, specs, union_predictors, family, design_spec, weighted, do_exp, effect_shape,
                    inverse_two_level_factors, conf_level, method, color, color_signif,
                    cleannames, subtext, eff_word, effect, at,
-                   stats = stats, compare = compare, baseline = baseline)
+                   stats = stats, compare = compare, baseline = baseline, split_var = split_var,
+                   multiplicator = multiplicator, empirical_OR = empirical_OR)
 
   # stars = TRUE (default) for regression tables -- the per-cell pvalue is stored by reg_build so the
   # main display shows significance stars. stars = FALSE strips it (pvalue is stars-only; colours read
@@ -1508,7 +1919,9 @@ tab_reg <- function(data, dependent, predictors = NULL,
 #'
 #' @export
 tab_logit <- function(data, dependent, predictors, wt = NULL,
-                      inverse_two_level_factors = TRUE,
+                      ids = NULL, strata = NULL, fpc = NULL, nest = FALSE,
+                      inverse_two_level_factors = TRUE, split_var = NULL, multiplicator = NULL,
+                      empirical_OR = FALSE,
                       conf_level = 0.95,
                       method = c("wald", "profile"),
                       stats = NULL,
@@ -1518,6 +1931,8 @@ tab_logit <- function(data, dependent, predictors, wt = NULL,
   color_signif <- match.arg(color_signif)
   stopifnot(is.character(predictors), length(predictors) >= 1L)
   tab_reg(data, dependent = dependent, predictors = predictors, family = "binomial", wt = wt,
+          ids = ids, strata = strata, fpc = fpc, nest = nest, split_var = split_var,
+          multiplicator = multiplicator, empirical_OR = empirical_OR,
           conf_level = conf_level, method = method, stats = stats,
           inverse_two_level_factors = inverse_two_level_factors,
           color_signif = color_signif, stars = stars, cleannames = cleannames, subtext = subtext)
@@ -1550,7 +1965,9 @@ tab_logit <- function(data, dependent, predictors, wt = NULL,
 #'
 #' @export
 multi_logit <- function(data, dependent, models, wt = NULL,
-                        inverse_two_level_factors = TRUE,
+                        ids = NULL, strata = NULL, fpc = NULL, nest = FALSE,
+                        inverse_two_level_factors = TRUE, split_var = NULL, multiplicator = NULL,
+                        empirical_OR = FALSE,
                         conf_level = 0.95,
                         method = c("wald", "profile"),
                         stats = NULL, compare = c("none", "baseline", "sequential"), baseline = NULL,
@@ -1561,6 +1978,8 @@ multi_logit <- function(data, dependent, models, wt = NULL,
   color_signif <- match.arg(color_signif)
   stopifnot(is.character(dependent), length(dependent) == 1L, is.list(models), length(models) >= 1L)
   tab_reg(data, dependent = dependent, predictors = models, family = "binomial", wt = wt,
+          ids = ids, strata = strata, fpc = fpc, nest = nest, split_var = split_var,
+          multiplicator = multiplicator, empirical_OR = empirical_OR,
           conf_level = conf_level, method = method,
           stats = stats, compare = compare, baseline = baseline,
           inverse_two_level_factors = inverse_two_level_factors,

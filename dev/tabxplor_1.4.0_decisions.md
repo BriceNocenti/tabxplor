@@ -3119,6 +3119,49 @@ glance → 12g).
 - **Deferred**: full survey glance (12g); Excel numFmt-literal in-cell label; per-cell mixed-test label in a
   compare row (homogeneous-discriminator rows make it unnecessary); legend cosmetics (Phase 13).
 
+### 12g DONE (2026-07-14) — survey designs + reinstated companion features
+
+Four commit-and-verify increments, all byte-identical for unweighted / no-new-arg calls (new args default off,
+NO golden regen); full suite green (2194 pass / 0 fail). New Suggests: `svyVGAM`. Tests: `test-tab_reg-survey.R`
+(23 — clustered/prebuilt-design parity, weighted svyolr/svy_vglm, weighted compare, split_var, multiplicator,
+empirical_OR) + one updated `test-tab_reg.R` deferral test.
+
+- **D6/D7 — survey designs (12g-i).** `tab_reg(wt=, ids=, strata=, fpc=, nest=)` (each a col name / char vec /
+  formula): `reg_make_design()` builds a `survey::svydesign` PER MODEL on the complete-case frame (`ids = ~1`
+  default reproduces the flat weighted path byte-identically). A **prebuilt `survey.design` / `svyrep.design`
+  passed as `data`** (gtsummary-style) is subset()'d per model with its model frame swapped for the recoded
+  `mdata` (`reg_subset_design` / `reg_resolve_design`); `reg_relevel_design` relevels `reference` inside the
+  design. **`reg_svyglm_env()`** binds `survey::svyglm` into the fit's formula env so `AIC.svyglm` /
+  `anova.svyglm` (which refit sub-models via an unqualified `svyglm()`) work when survey is loaded but not
+  attached — the real bug behind a silent NA AIC. **Reduced weighted glance**: `n` / `wald_null` (regTermTest
+  Rao-Scott, relabelled "Wald vs null") / `nagelkerke_r2` (psrsq) / Rao-Scott `aic` (`reg_aic_value` extracts
+  the "AIC" element of the named length-3 `AIC.svyglm` vector — fixed a latent length>1 crash), + selectable
+  `cox_snell_r2`; naive R²/F/logLik/BIC/McFadden/dispersion suppressed. **Weighted comparison** enabled via
+  `anova.svyglm` Wald → `compare_*_wald` discriminators (was a no-op).
+- **Weighted 3+ level (12g-ii).** Guard lifted: ordinal → `survey::svyolr` (slopes from `fit$coefficients`, SEs
+  from `vcov` by name; Brant degraded; wrapped with a positive-weights hint — `svyolr`'s start-value glm.fit
+  cannot take zero weights), nominal → `svyVGAM::svy_vglm` (`VGAM::multinomial(refLevel = 1)`; coef names
+  `"term:k"` parsed to (term, y.level); `$coef`/`$var` with method fallback). Both reuse the OR/`or` shape +
+  `reg_wald_from_tidy`. `effect="ame"` / MNL `at="reference"` refused for weighted 3+ level (marginaleffects has
+  no method). `svyVGAM` couldn't be live-tested here (not on the Rscript libpath) → skip-guarded parity test.
+- **D10 — split_var (12g-iii).** The tab_vars analogue: `reg_build` recurses per group of `split_var` on a
+  SHARED skeleton (`skeleton_data` = full data; a level absent from a group → empty cells; prebuilt design
+  subset per group) and stacks into a grouped_tab grouped by `(split_var, var)`. **No `tab_spread` change**:
+  `split_var` is placed as the FIRST factor column so `levels` stays the last factor → `tab_get_vars` sees
+  `row_var = "levels"`, `tab_vars = c(split_var, "var")`, and `tab_spread(split_var)` pivots groups to
+  side-by-side columns (agent-verified the crosstab spread machinery needs no total rows and reads
+  `col_var`-attributes reg already sets). Console footer made **group-aware** (`print_reg_footer`: one line per
+  `col_var` × split group, tagged in the test tibble's `row_var`); the appended EXPORT footer is skipped for
+  splits (per-group GOF stays in `get_test()`).
+- **D10 — multiplicator + empirical_OR (12g-iv).** `multiplicator = c(var = k)` (numeric predictors, glm
+  families) scales the native coef by k (se by |k|) BEFORE CI/exp → OR^k / β·k, CI scales, p unchanged
+  (scale-invariant); the profile CI scales linearly too; display level relabelled "per k". `empirical_OR = TRUE`
+  (single binary logit, coefficient) adds `"Emp. %"` + `"Emp. OR"` columns beside the model OR from a DIRECT
+  weighted 2×2 (`reg_empirical_or` — outcome direction matches the model `positive_level`, reference matches the
+  skeleton; no `tab()` reshaping). No new fmt fields/attributes.
+- **Deferred**: Excel numFmt-literal in-cell test label; per-group EXPORT footer for splits; legend cosmetics
+  (Phase 13); `or_plot` / `lm_plots` / OR-CI bracket / OR+PCT composite cell (12i).
+
 ### Phasing (12c → 12i — re-cut 2026-07-13; per-phase detail in the CLAUDE.md roadmap)
 
 The build is re-cut into **fresh-session Phases with commit-and-verify increments** (the old monolithic

@@ -46,6 +46,7 @@ Suggests:
     nnet (>= 7.3.0),
     brant (>= 0.3.0),
     survey (>= 3.0.0),
+    svyVGAM (>= 1.2),
     marginaleffects (>= 0.20.0),
     withr (>= 3.0.0),
     gridExtra (>= 2.3.0),
