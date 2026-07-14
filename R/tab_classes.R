@@ -2947,6 +2947,8 @@ vec_cast.data.frame.tabxplor_grouped_tab <- function(x, to, ...) {
 #
 # }
 
+
+## OLD COLOR PALETTES (TO DEPRECATE) ----
 # DESIGN: 6 color palettes, each with 11 named hex codes: pos1-pos5 (over-represented),
 #   neg1-neg5 (under-represented), ratio (for *2 rule comparison). Palettes:
 #   text_dark, text_light (8-bit), text_light_24_blue_red, text_light_24_green_red (24-bit),
@@ -2954,7 +2956,6 @@ vec_cast.data.frame.tabxplor_grouped_tab <- function(x, to, ...) {
 #   Hues are hand-tuned so the eye tells the intensity levels apart immediately on real
 #   tables. 8-bit variants target terminals without truecolor; the 24-bit blue-red variant
 #   is a more colorblind-friendly alternative to the traditional green-red.
-#   TODO(future): proper colorblind-safe palettes — a strong feature for a color-heavy pkg.
 #' @keywords internal
 color_style_text_dark <-
   c(pos1 = "#CCCC33", # rgb(4, 4, 1, maxColorValue = 5),
@@ -2993,45 +2994,6 @@ color_style_text_light <-
     #purrr::map(~ crayon::make_style(., colors = 256))
 
 
-
-# # #install_github("jmw86069/jamba", upgrade = "never")
-# former <-  c(white = "#111111",
-#              grey = "#888888",
-#              pos1 = "#66CCFF",
-#              pos2 = "#33FFFF",
-#              pos3 = "#00CCFF",
-#              pos4 = "#0066FF",
-#              pos5 = "#0000FF",
-#              neg1 = "#CC9966",
-#              neg2 = "#FF9933",
-#              neg3 = "#FF6600",
-#              neg4 = "#FF3333",
-#              neg5 = "#FF0000" )
-#
-#
-# change <- jamba::col2hcl("#4EE6B9")
-# change[1,] <- 180
-# change <- jamba::hcl2col(change)
-# change
-#
-# # c(white = "#111111", grey = "#bbbbbb",
-# #         "#e4e65e", "#C7D62C", "#83BB3F", "#3BA240", "#1b6e20",
-# #         "#fdd835", "#ffb300", "#FF8138", "#ff3d00", "#cb0000" )
-# #
-# new1 <- c(white = "#111111", grey = "#bbbbbb",
-#           "#7BF245", "#1de9b6", "#26c6da", "#1e88e5", "#0019ff",
-#           "#fdd835", "#ffb300", "#FF8138", "#ff3d00", "#cb0000" )
-#
-#
-# new2 <- c(white = "#111111", grey = "#bbbbbb",
-#           "#93ED75", "#4EE6B9", "#00bcd4", "#1e88e5", "#0019ff",
-#           "#fdd835", "#ffb300", "#FF8138", "#ff3d00", "#cb0000" )
-#
-# new3 <- c(white = "#111111", grey = "#bbbbbb",
-#           "#93ED75", "#1AE6D6", "#00bcd4", "#1e88e5", "#0019ff",
-#           "#fdd835", "#ffb300", "#FF8138", "#ff3d00", "#cb0000" )
-# color_graph(former, new1, new2, new3)
-
 #' @keywords internal
 color_style_text_light_24_blue_red <-
   c(
@@ -3046,18 +3008,6 @@ color_style_text_light_24_blue_red <-
     neg3 = "#d26c28", # oklch(0.64 0.15  50)   # "#c8692d", # "oklch(0.62 0.14 50)",
     neg4 = "#da4c01", # oklch(0.61 0.19  40)   # "#d04b0c", # "oklch(0.59 0.18 40)",
     neg5 = "#dc0204",# oklch(0.56 0.23  29)   # "#e61301"  # "#d10f00"  # "oklch(0.54 0.22 30)",
-
-    # pos1 = "#93ED75",   #  c(pos1 = "#e4e65e",
-    # pos2 = "#1AE6D6",   #    pos2 = "#cddc39", "#4EE6B9"
-    # pos3 = "#00bcd4",   #    pos3 = "#8bc34a",
-    # pos4 = "#1e88e5",   #    pos4 = "#589E38",
-    # pos5 = "#0019ff",   #    pos5 = "#1b6e20",
-
-    # neg1 = "#fdd835",   #    neg1 = "#ffeb3b",
-    # neg2 = "#ffb300",   #    neg2 = "#ffc400",
-    # neg3 = "#FF8138",   #    neg3 = "#ff9100",
-    # neg4 = "#ff3d00",   #    neg4 = "#ff3d00",
-    # neg5 = "#cb0000"#,
 
     ratio = "#0267c7"
     #   "#8E24AA", "#7B1FA2" "#6A1B9A"
@@ -3099,17 +3049,6 @@ color_style_bg_light <- # also change in select_in_color_style()
       neg3 = "#ffeab1", # oklch(0.94 0.076 90)    # "#ffe6a3", # oklch(0.93 0.09 90)
       neg4 = "#fddb7c", # oklch(0.90 0.12  90)    # "#fcd76f", # oklch(0.89 0.13 90)
       neg5 = "#ffce2d",# oklch(0.87 0.168 90)    # "#f9c718"#,# oklch(0.85 0.17 90)
-    # pos1 = "#CCFFCC", # rgb(4, 5, 4, maxColorValue = 5),
-    # pos2 = "#99FF99", # rgb(3, 5, 3, maxColorValue = 5),
-    # pos3 = "#66FF66", # rgb(2, 5, 2, maxColorValue = 5),
-    # pos4 = "#33FF33", # rgb(1, 5, 1, maxColorValue = 5),
-    # pos5 = "#00FF00", # rgb(0, 5, 0, maxColorValue = 5),
-
-    # neg1 = "#FFCCCC", # rgb(5, 4, 4, maxColorValue = 5),
-    # neg2 = "#FF9999", # rgb(5, 3, 3, maxColorValue = 5),
-    # neg3 = "#FF6666", # rgb(5, 2, 2, maxColorValue = 5),
-    # neg4 = "#FF3333", # rgb(5, 1, 1, maxColorValue = 5),
-    # neg5 = "#FF0000"#,  # rgb(5, 0, 0, maxColorValue = 5)
 
     ratio ="#6699FF" # rgb(3, 0, 5, maxColorValue = 5) #  "#9900FF" "#6600FF", "#6600CC"
 
@@ -3134,6 +3073,190 @@ color_style_bg_dark <- # also change in select_in_color_style()
     ) #%>%
 #purrr::map(~ crayon::make_style(., bg = TRUE, colors = 256))
 
+
+
+
+## NEW COLOR PALETTES (to wire to the code) ----
+
+# OKLCH Chroma Peaks
+# - Blue            H265 / L45  ; H180 to 265
+# - to Orange Red   H28 / L62   ; H90 to 28   (avoid true red ?)
+# 
+# - Green           H142 / L86  ; H110 to H160
+# - to Violet Red   H325 / L70  ; H285 to H25
+
+### Light palette ----
+#### Text colors ----
+default_text_colors <- c(
+  "#02a5b3", # oklch(0.66 0.1124 205) # better for color blindness
+  #"#03ab86", # oklch(0.66 0.13 167)   # "#20a89b", # oklch(0.66 0.11 185)  "#0ba6ba", # "oklch(0.67 0.11 210)",
+  "#0891c9", # oklch(0.62 0.13 235)   # "#0890a2", # "oklch(0.6 0.1 210)",
+  "#0267c7", # oklch(0.52 0.17 255)   # "#027ad2", # "oklch(0.57 0.16 250)",
+  "#300dfd"  # oklch(0.47 0.30 270)   # "#265aff"  # "#2f60ee"  # "oklch(0.55 0.22 265)",
+)
+default_text_colors_neg <- c( 
+  # more ligthness differences for color blinds
+  "#dca331", # oklch(0.75 0.1400 80)   # "#d6a54d", # oklch(0.75 0.1197 80)    
+  "#de7c01", # oklch(0.68 0.1596 60)   # "#de7c01", # oklch(0.68 0.1596 60)
+  "#dd5301", # oklch(0.62 0.1868 42)   # "#dd5301", # oklch(0.62 0.1868 42)
+  "#d60103"#,# oklch(0.55 0.2253 29)   # "#d60103"#,# oklch(0.55 0.2253 29) 
+  # "#b58629", # oklch(0.65 0.12 80)    # neg2 = "#c38c46", # oklch(0.68 0.11  70)   # "#d08747", # "oklch(0.69 0.12 60)",
+  # "#c46d02", # oklch(0.62 0.1449 60)  # neg3 = "#d26c28", # oklch(0.64 0.15  50)   # "#c8692d", # "oklch(0.62 0.14 50)",
+  # "#cf4e01", # oklch(0.59 0.1775 42)  # neg4 = "#da4c01", # oklch(0.61 0.19  40)   # "#d04b0c", # "oklch(0.59 0.18 40)",
+  # "#dc0204"#,# oklch(0.56 0.23  29)   # neg5 = "#dc0204"#,# oklch(0.56 0.23  29)   # "#e61301"  # "#d10f00"  # "oklch(0.54 0.22 30)",
+)
+
+#### Background colors ----
+default_background_colors <-  c(
+  "#dffcff", # oklch(0.97 0.0304 205)  # better for color blindness
+  # "#e3fcf1", # oklch(0.97 0.0300 167) # "#e3fcf1", # oklch(0.97 0.0300 167)   # "#F6F3FF", # oklch(0.97 0.016 295)
+  "#d7efff", # oklch(0.94 0.0336 235) # "#d4f0ff", # oklch(0.94 0.0358 230)   # "#E9E3FF", # oklch(0.93 0.038 295)
+  "#cee3ff", # oklch(0.91 0.0439 255) # "#d3e2ff", # oklch(0.91 0.0429 265)   # "#DED3FF", # oklch(0.89 0.060 295)
+  "#bbccff"  # oklch(0.85 0.0733 270) # "#c8c7ff"  # oklch(0.85 0.0771 285)   # "#D2C3FF"# # oklch(0.85 0.084 295)
+)
+default_background_colors_neg <- c(
+  "#fff4e1", # oklch(0.97 0.0271 80)   # "#ffeccd", # oklch(0.95 0.0456 80)    # "#ffe9e5", # oklch(0.95 0.0249 30)  # "#fff8e6", # oklch(0.98 0.025 90) 
+  "#ffe6d3", # oklch(0.94 0.0374 60)   # "#ffddc3", # oklch(0.92 0.051 60)     # "#ffdad3", # oklch(0.92 0.0461 30)  # "#ffeab1", # oklch(0.94 0.076 90) 
+  "#ffd7c8", # oklch(0.91 0.0488 42)   # "#ffcebc", # oklch(0.89 0.0608 42)    # "#ffcdc5", # oklch(0.89 0.0575 30)  # "#fddb7c", # oklch(0.90 0.12  90) 
+  "#ffbaaf"#,# oklch(0.85 0.082 29)    # "#ffbfb5"#,# oklch(0.86 0.0754 29.01) # "#ffbfb4"#,# oklch(0.86 0.0754 30)  # "#ffce2d"#,# oklch(0.87 0.168 90) 
+)
+
+
+### Dark palette ----
+#### Dark text colors ----
+default_dark_text_colors <- c(
+  "#028282", # oklch(0.55 0.0934 195) # better for color blindness
+  "#018bc1", # oklch(0.60 0.1270 235)
+  "#4687d8", # oklch(0.62 0.1400 255)
+  "#6987ff"#,# oklch(0.66 0.1797 270)
+  # "#288463", # oklch(0.55 0.1000 165)   "#03ab86", # oklch(0.66 0.13 167)   
+  # "#0190a3", # oklch(0.60 0.1037 210)   "#0891c9", # oklch(0.62 0.13 235)   
+  # "#078fd1", # oklch(0.62 0.1406 240)   "#0267c7", # oklch(0.52 0.17 255)   
+  # "#5b8bff"#,# oklch(0.66 0.1798 265)   "#300dfd"  # oklch(0.47 0.30 270)   
+)
+default_dark_text_colors_neg <- c(
+  # more ligthness differences for color blinds
+  "#867002", # oklch(0.55 0.1124 95)
+  "#b87501", # oklch(0.62 0.1341 70)
+  "#ec6f02", # oklch(0.68 0.1792 50)  
+  "#ff626b"# # oklch(0.70 0.1906 20)  
+  # "#977e05", # oklch(0.60 0.1221 95)  "#7a6001", # oklch(0.50 0.102 90),  # "#b58629", # oklch(0.65 0.12 80)    
+  # "#c17b01", # oklch(0.64 0.1384 70)  "#a65c01", # oklch(0.55 0.129 60),  # "#c46d02", # oklch(0.62 0.1449 60)  
+  # "#ec6f02", # oklch(0.68 0.1792 50)  "#d74b01", # oklch(0.60 0.188 40),  # "#cf4e01", # oklch(0.59 0.1775 42)  
+  # "#ff626b"# # oklch(0.70 0.1906 20)  "#fe4a36"#,# oklch(0.67 0.220 30),  # "#dc0204"#,# oklch(0.56 0.23  29)   
+)
+
+
+#### Dark background colors ----
+default_dark_background_colors <-  c(
+  "#001b1b", # oklch(0.20 0.0336 195)  # better for color blindness
+  "#002537", # oklch(0.25 0.0526 235)
+  "#132d5c", # oklch(0.30 0.0900 261)
+  "#17226d"#,# oklch(0.30 0.1300 270)
+  #"#001c11", # oklch(0.20 0.0418 165)  # "#002115", # oklch(0.22 0.0461 165) # "#001c12", # oklch(0.20 0.0407 167)    # "#e3fcf1", # oklch(0.97 0.0300 167) 
+  #"#00272d", # oklch(0.25 0.0429 210)  # "#00272d", # oklch(0.25 0.0429 210) # "#002538", # oklch(0.25 0.0543 236.97)   # "#d7efff", # oklch(0.94 0.0336 235) 
+  #"#00314c", # oklch(0.30 0.0684 240)  # "#002c45", # oklch(0.28 0.0640 240) # "#002d5c", # oklch(0.30 0.0961 254.26)   # "#cee3ff", # oklch(0.91 0.0439 255) 
+  #"#0d246e"#,# oklch(0.30 0.1300 265)  # "#0d246e"#,# oklch(0.30 0.1300 265) # "#243278"#,# oklch(0.35 0.12 270.4)   # "#bbccff"  # oklch(0.85 0.0733 270) 
+)
+default_dark_background_colors_neg <- c(
+  "#1c1600", # oklch(0.20 0.0407 95) # "#211a00", # oklch(0.22 0.045 95) # "#1f1400", # oklch(0.2 0.0412 81.48)   # "#fff4e1", # oklch(0.97 0.0271 80) 
+  "#321c00", # oklch(0.25 0.0537 70) # "#321c00", # oklch(0.25 0.0537 70) # "#2f1d0e", # oklch(0.25 0.0374 59.56)   # "#ffe6d3", # oklch(0.94 0.0374 60) 
+  "#4c1f00", # oklch(0.30 0.0792 50) # "#441b00", # oklch(0.28 0.0738 50) # "#511900", # oklch(0.3 0.0906 41.62)   # "#ffd7c8", # oklch(0.91 0.0488 42) 
+  "#6b141f"# # oklch(0.35 0.1200 20) # "#6b141f"# # oklch(0.35 0.12 19.39) # "#6c1610"#,# oklch(0.35 0.12 29)   # "#ffbaaf"#,# oklch(0.85 0.082 29)  
+)
+
+# ### Color palettes visual tests, with color blind mode ----
+# # Light palette
+# light_text_palette <- c(plain= "#9f9f9f", default_text_colors, default_text_colors_neg)
+# light_bg_palette   <- c(plain= "#ffffff",default_background_colors, default_background_colors_neg)
+# preview_color_grid(light_text_palette, light_bg_palette) # #show_contrast = FALSE  
+# #    Lc ≥ 75 for body text ; ≥ 60 for larger/heavier text ; ≥ 45 for large headlines ; below ~30 is decorative-only.
+
+
+# #   color blindness
+# preview_color_grid(simulate_cvd_farver(light_text_palette, type = "deutan", severity = 1), 
+#                    simulate_cvd_farver(light_bg_palette, type = "deutan", severity = 1),
+#                    table_bg = lcd_simulate_oklch("#ffffff")
+#                    )
+# preview_color_grid(simulate_cvd_farver(light_text_palette, type = "deutan", severity = 0.5), 
+#                    simulate_cvd_farver(light_bg_palette, type = "deutan", severity = 0.5),
+#                    table_bg = lcd_simulate_oklch("#ffffff")
+#                    )
+# preview_color_grid(simulate_cvd_farver(light_text_palette, type = "protan"), 
+#                    simulate_cvd_farver(light_bg_palette, type = "protan"),
+#                    table_bg = lcd_simulate_oklch("#ffffff")
+#                    )
+# preview_color_grid(simulate_cvd_farver(light_text_palette, type = "protan", severity = 0.5), 
+#                    simulate_cvd_farver(light_bg_palette, type = "protan", severity = 0.5),
+#                    table_bg = lcd_simulate_oklch("#ffffff")
+#                    )
+
+# #   bad LCD approximation
+# preview_color_grid(lcd_simulate_oklch(light_text_palette), 
+#                    lcd_simulate_oklch(light_bg_palette),
+#                    table_bg = lcd_simulate_oklch("#ffffff")
+#                    )
+
+# # default_text_colors |> farver::decode_colour(to = "oklch") # Inspect OKLCH coordinates
+
+
+
+# # Dark palette
+# dark_text_palette <- c(plain= "#707070", default_dark_text_colors, default_dark_text_colors_neg)
+# dark_bg_palette   <- c(plain= "#111111", default_dark_background_colors, default_dark_background_colors_neg)
+# preview_color_grid(dark_text_palette, dark_bg_palette,  table_bg = "#111111")
+
+# #   color blindness
+# preview_color_grid(simulate_cvd_farver(dark_text_palette, type = "deutan", severity = 0.5), 
+#                    simulate_cvd_farver(dark_bg_palette, type = "deutan"),
+#                    table_bg = lcd_simulate_oklch("#111111")
+#                    )
+# preview_color_grid(simulate_cvd_farver(dark_text_palette, type = "deutan"), 
+#                    simulate_cvd_farver(dark_bg_palette, type = "deutan"),
+#                    table_bg = lcd_simulate_oklch("#111111")
+#                    )
+
+# preview_color_grid(simulate_cvd_farver(dark_text_palette, type = "protan"), 
+#                    simulate_cvd_farver(dark_bg_palette, type = "protan"),
+#                    table_bg = lcd_simulate_oklch("#111111")
+#                    )
+
+# #   bad LCD approximation
+# preview_color_grid(lcd_simulate_oklch(dark_text_palette), 
+#                   lcd_simulate_oklch(dark_bg_palette),
+#                   table_bg = lcd_simulate_oklch("#111111")
+#                   )
+                   
+
+# # Simuler une palette normale et une palette color blind cote-à-cote
+# plot_oklch_hue_strip_cvd(L = 0.65,type = "deutan", severity = 1, C=0.16) # chroma_mode = "max"
+# plot_oklch_hue_strip_cvd(L = 0.65,type = "deutan", severity = 0.5, C=0.16) 
+# plot_oklch_hue_strip_cvd(L = 0.65,type = "protan", severity = 1, C=0.16)
+# plot_oklch_hue_strip_cvd(L = 0.65,type = "tritan", severity = 1, C=0.16)
+
+
+# # preview_color_grid(diff_colors, set_luminance(background_colors, 0.99)) 
+# # set_luminance(background_colors, 0.99) |> farver::get_channel("l", space = "oklch")
+# # # set_luminance(background_colors, c(0.99, 0.90, 0.85, 0.80, 0.72))
+
+# # preview_color_grid(diff_colors, set_luminance(background_colors2, 0.95)) 
+
+# # preview_color_grid(diff_colors, set_luminance(diff_colors, 0.95)) 
+# # preview_color_grid(diff_colors, set_luminance(diff_colors, 0.8) |> set_chroma(0.12)) 
+
+
+# # preview_luminance_grid("#59c5bf", "#b9c653")                  # fixed source chroma, capped to gamut
+# # preview_luminance_grid("#59c5bf", "#b9c653", chroma = "max")  # most vivid shade at each L
+# # preview_luminance_grid("#0185e4", "#68b430", l_values = seq(0.40, 0.90, by = 0.10)) # custom lightness ramp
+# # # Lc ≥ 75 for body text ; ≥ 60 for larger/heavier text ; ≥ 45 for large headlines ; below ~30 is decorative-only.
+
+
+
+
+
+
+
+## Color functions ----
 
 
 #' Define the color style used to print \code{\link{tab}}

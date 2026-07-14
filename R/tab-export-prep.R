@@ -389,7 +389,7 @@ tab_export_prep <- function(tabs,
   theme_cols <- list(
     theme = theme[1],
     text  = dplyr::if_else(theme[1] == "light", "#000000", "#FFFFFF"),
-    grey  = dplyr::if_else(theme[1] == "light", "#BBBBBB", "#BBBBBB"), # "#989898", "#717171"
+    grey  = dplyr::if_else(theme[1] == "light", "#9f9f9f", "#707070"), # "#989898", "#717171"
     grey2 = dplyr::if_else(theme[1] == "light", "#111111", "#EEEEEE")
   )
 

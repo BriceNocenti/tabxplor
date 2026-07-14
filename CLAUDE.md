@@ -1637,7 +1637,9 @@ Per-group export footer for split tables (per-group GOF is in get_test())
 
 #### Phase 12i – jamovi UI: `jmvtab_reg`
 
-One regression analysis (family / outcome / predictors / `effect` / reference); a "+" to add predictor subsets for `multi_logit`-style model comparison; reuse patterns from known regression jamovi modules.
+One user-friendly, fast, clear and simple regression analysis, starting from jmvtab template and adapting it to the regression functions and use case.
+A "+" to add predictor subsets for `multi_logit`-style model comparison, selecting or selecting out among already chosen predictors.
+Reuse patterns from jmvtab primarily. Customise .js to grey out options that are not possible with the other selected arguments or outcomes types. When relevant, reuse patterns from known regression jamovi modules.
 
 
 
@@ -1655,10 +1657,16 @@ Native dark mode/light mode management for exported tables, specially html table
 - With kable or another html tables solution, use css exported and applied with the table ?
 - Wire this css on standard html dark mode toggle, with a global option in R to use Dark mode in viewer. As a result, the table should autochange it’s formatted we the user change to dark light mode on whichever html page the table is embedded with. Overall background color should be "#111111", text overall color "#ffffff",   Do web searches to find current good practices about this. 
 
-I want to change the current default color palettes system, to simplify it a lot : 
-- My new oklch color palettes, one made for light mode and one made for dark mode, are now saved in `tab_classes.R` as : `default_text_colors`, `default_text_colors_neg`, `default_dark_text_colors`, `default_dark_text_colors_neg`, `default_background_colors`, `default_background_colors_neg`, `default_dark_background_colors`, `default_dark_background_colors_neg`
-- At package load, I want to assign then to corresponding objects, but I want the user to be able to customise these objects using a special `set_` function : `text_colors`, `text_colors_neg`, `dark_text_colors`, `dark_text_colors_neg`, `background_colors`, `background_colors_neg`, `dark_background_colors`, `dark_background_colors_neg`
-- <MAINTAINER SHOULD FINISH THAT>
+I want to change the current default color palettes system, to simplify it a lot. My new oklch color palettes, one made for Light mode and one made for Dark mode, are now saved in `tab_classes.R` "## NEW COLOR PALETTES (to wire to the code) ----" as : `default_text_colors`, `default_text_colors_neg`, `default_dark_text_colors`, `default_dark_text_colors_neg`, `default_background_colors`, `default_background_colors_neg`, `default_dark_background_colors`, `default_dark_background_colors_neg`. 
+- Text and background variants have been made to be usable together in a readable way (`color = c("diff", "ratio")`).
+- At package load, I want to assign then to corresponding objects, but I want the user to be able to customise these objects using a special `set_` function, overwriting the crayon objects so they are only computed once (and not for each table or, worse, cell) : `text_colors`, `text_colors_neg`, `dark_text_colors`, `dark_text_colors_neg`, `background_colors`, `background_colors_neg`, `dark_background_colors`, `dark_background_colors_neg`
+- Assume, and state in documentation, that they will always be **4 positive colors and 4 negative colors** in all color palettes, for simplification. They it’s a break choices that users state if they want only 3 or 2 or 1 colors for each side.
+- Positive and negative colors are now separated in two different vectors for clarity.
+- The `pos1`, `pos2`, `pos3` etc. names are removed : they introduced a useless complexity and some friction. Now, only rely on position.
+- Instead of The 24 bits versions should be default : only fallback to 8 bits for consoles that do not handle 24 bit colors. Remove the old useless 24 bits palettes in `tab_classes.R` "## OLD COLOR PALETTES (TO DEPRECATE) ----" : only keep the 8 bits ones, that are needed for use inside RStudio R console (Positron IDE have 24 bits), and fallback to them only if the user is in RStudio IDE (is there a way to reliably detect that ? If there’s a way to detect Positron or VScodiumi-based-IDE instead to go 24 bits in console, it’s also possible). 
+
+- **First redesign the more simple and user-friendly color and breaks management system possible, without thinking about soft-deprecated anything** : it’s ok to break the current UI, nobody has ever used it for custom colors and breaks. They, but in a second time, we’ll see if it’s possible to wire the old code and functions into the new behaviour, possibly in a degraded mode.
+- Simplify the get and set color styles functions. Remove `html_24_bit = c("blue_red", "green_red", "no")` argument : default to 24 bit, fallback to 8 bits on RStudio. We only one palette (pos + neg) for each combination of light/dark and text/bg.
 
 
 
