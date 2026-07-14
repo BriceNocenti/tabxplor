@@ -3,6 +3,20 @@
 # tabxplor 1.4.0 (in development)
 
 ## New features
+* **Redesigned colours & breaks API.** The `color` argument now has a simple grammar: **position
+  picks the visual channel** (1st value -> text, 2nd -> background) and **names pick the column type**
+  (`pct` / `mean`). So `color = c("diff", "ratio")` colours the text by the difference and the
+  background by the ratio; `color = c(pct = "diff", mean = "ratio")` colours factors by difference and
+  numeric means by ratio; `color = list(pct = c("diff", "ratio"), mean = "ratio")` combines both.
+  `color = TRUE` is the smart per-type default. The significance policy `"color_all_signif"` is
+  renamed **`"guaranteed_effect"`**. Colour thresholds accept **signed / reciprocal literals** (a
+  one-sided vector auto-mirrors; a two-sided one is used as-is) and a `list(over =, under =)` escape
+  hatch for asymmetric scales -- e.g. `pct_ratio = list(over = 2)` is the "only x2" rule (the new
+  factor default). A new per-table `color_breaks =` argument on `tab()` overrides the global thresholds
+  for one table. New OKLCH light/dark, text/background palettes are the default (customise with the new
+  `set_color_palette()`); console output is 24-bit truecolor (falling back to an 8-bit palette only in
+  the RStudio console). `set_color_style()` (and its `custom_palette`/`html_24_bit` machinery) is
+  replaced by `set_color_palette()`; the export functions keep an inert `html_24_bit` argument.
 * New `tab_reg()` --- **regression tables** as color-coded `tabxplor` tables, over one engine with a
   `family` argument: linear coefficients (`"gaussian"`), odds ratios (`"binomial"`, logistic) or
   incidence-rate ratios (`"poisson"`), one row per predictor level grouped by predictor. Pass a

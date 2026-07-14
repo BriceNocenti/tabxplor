@@ -236,21 +236,27 @@ NULL
 #'   \item \code{"contrib"}: signed contribution to the chi-squared (reference-free).
 #'   \item \code{"OR"}: empirical odds ratio (for \code{pct = "row"}/\code{"col"}).
 #'  }
-#' To color two measures at once, pass a length-2 vector: unnamed \code{c("diff", "ratio")}
-#' puts the first on the text channel and the second on the background; named
-#' \code{c(text = "diff", background = "ratio")} is explicit; \code{c(background = "ratio")}
-#' colors only the background. Only \code{diff} / \code{ratio} may go on the background.
-#' Thresholds come from \code{\link{set_color_breaks}}. (The old combined strings
-#' \code{"diff_ci"}, \code{"after_ci"} and \code{"ci"} still work but are soft-deprecated in
-#' favor of \code{color_signif}.)
+#' The grammar: \strong{position picks the channel} (1st value -> text, 2nd -> background) and
+#' \strong{names pick the column type} (\code{pct} / \code{mean}). So \code{c("diff", "ratio")}
+#' puts \code{diff} on the text and \code{ratio} on the background of every column;
+#' \code{c(pct = "diff", mean = "ratio")} colors factors by \code{diff} and numeric means by
+#' \code{ratio} (text channel); \code{list(pct = c("diff", "ratio"), mean = "ratio")} combines
+#' both (per-type, with channels). Only \code{diff} / \code{ratio} may go on the background.
+#' Thresholds come from \code{\link{set_color_breaks}} or the per-table \code{color_breaks}
+#' argument. (The old combined strings \code{"diff_ci"}, \code{"after_ci"} and \code{"ci"} still
+#' work but are soft-deprecated in favor of \code{color_signif}.)
 #' @param color_signif How significance gates the color, as a single string:
 #'  \itemize{
 #'   \item \code{"ignore"} (default): color every deviation by its observed size.
 #'   \item \code{"grey_non_signif"}: color by the observed size, but grey out cells whose
 #'   deviation is not significant at \code{conf_level}.
-#'   \item \code{"color_all_signif"}: color by the guaranteed (confidence-bound) effect --
+#'   \item \code{"guaranteed_effect"}: color by the guaranteed (confidence-bound) effect --
 #'   only cells whose interval clears the threshold, with dimmer, conservative colors.
 #'  }
+#' @param color_breaks A per-table override of the colour thresholds, a named list of scales like
+#' \code{\link{set_color_breaks}} accepts, e.g. \code{list(pct_ratio = list(over = 2))}. Stored as
+#' a table attribute and applied at print / export; \code{NULL} (default) uses the global breaks.
+#' Unset scales fall back to the global setting.
 #' @param add_n For `pct = "row"` or `pct = "col"`, set to `FALSE` not to add another
 #' column or row with unweighted counts (`n`).
 #' @param add_pct Set to `TRUE` to add a column with the frequencies of the row
@@ -378,6 +384,7 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
                 tot = c("row", "col"), total_names = "Total",
                 add_n = TRUE, add_pct = FALSE,
                 subtext = "", digits = 0, n_min = 0, display = NULL,
+                color_breaks = NULL,
                 output_list = FALSE, parallel = NULL,
                 spread_vars, names_prefix = NULL, names_sort = FALSE,
                 row_var, col_var,
@@ -561,7 +568,11 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
 
   # Phase 10i-A: opt-in composite display recipe (e.g. `display = "pct (n)"` or `"{pct} (n={n})"`)
   # written into the display FIELD of value cells; NULL (default) leaves the plain single-field display.
-  tab_apply_display(result, display)
+  result <- tab_apply_display(result, display)
+
+  # Phase 13a: a per-table color_breaks override, stored as a table attribute (set LAST so no earlier
+  # step strips it; installed transiently at render). NULL (default) -> the global breaks apply.
+  set_color_breaks_attr(result, resolve_color_breaks_arg(color_breaks))
 }
 
 
@@ -595,86 +606,136 @@ tab_apply_display <- function(tabs, display) {
 }
 
 
-# Phase 5: parse the tab() `color` / `color_signif` arguments into a spec. `color` accepts FALSE,
-# TRUE (per-type default scheme), a scalar measure/old-string, an unnamed c(text, background), or
-# a named c(text=, background=). Returns list(legacy, per_type, bg, text, signif): `legacy` is the
-# scalar string fed to the (text-channel) tab_many pipeline so its ci/chi2 side effects still fire;
-# `text`/`bg`/`signif`/`per_type` drive finalize_color_spec() on the built table.
+# Phase 13a: `color` grammar -- POSITION = channel (1st -> text, 2nd -> background), NAMES = column
+# type (pct / mean). FALSE -> off; TRUE -> the smart per-type default; a scalar/positional vector ->
+# the same measure(s) on every column; a NAMED vector or a list(pct =, mean =) -> per column type
+# (each entry a positional channel vector). Returns list(mode, legacy, text, bg, types, signif):
+# `legacy` is the scalar string fed to the (text-channel) pipeline so its ci/chi2 side effects still
+# fire; `mode`/`text`/`bg`/`types`/`signif` drive finalize_color_spec() on the built table.
 #' @keywords internal
 normalize_color_spec <- function(color, color_signif = "ignore") {
   signif <- if (length(color_signif) == 0L) "ignore" else color_signif[1]
   if (is.na(signif) || signif %in% c("", "no")) signif <- "ignore"
-  ok_signif <- c("ignore", "grey_non_signif", "color_all_signif")
+  ok_signif <- c("ignore", "grey_non_signif", "guaranteed_effect")
   if (!signif %in% ok_signif) {
     cli::cli_abort(c("Unknown {.arg color_signif} value {.val {signif}}.",
                      "i" = "Valid: {.val {ok_signif}}."))
   }
+  # normalize_color_spec() is called by tab()/tab_num(), so the real user is two frames up; this keeps
+  # the deprecation nudge for user calls but silent for tab_many()'s internal recursion.
+  uenv       <- rlang::caller_env(2)
+  norm       <- function(m) if (is.na(m) || identical(m, "no")) "" else if (identical(m, "or")) "OR" else m
+  ok_measure <- c("diff", "ratio", "contrib", "OR", "auto", "diff_ci", "after_ci", "ci", "")
 
+  deprecate_old <- function(text) {
+    if (text %in% c("diff_ci", "after_ci", "ci")) {
+      lifecycle::deprecate_soft(
+        "1.4.0",
+        I(paste0("The `color = \"", text, "\"` mode")),
+        with = I("`color = \"diff\"` with the `color_signif` argument"),
+        user_env = uenv)
+    }
+  }
+
+  # one positional channel vector (text[, background]) -> c(text, bg-or-NA) validated measures
+  parse_channels <- function(v) {
+    v    <- unname(as.character(v))
+    text <- norm(v[1])
+    bg   <- if (length(v) >= 2L) norm(v[2]) else NA_character_
+    if (!is.na(bg) && bg == "") bg <- NA_character_
+    if (!text %in% ok_measure) cli::cli_abort("Unknown color measure {.val {text}}.")
+    if (!is.na(bg) && !bg %in% c("diff", "ratio")) {
+      cli::cli_abort("{.val {bg}} cannot go on the background channel (only {.val diff} / {.val ratio}).")
+    }
+    deprecate_old(text)
+    c(text, if (is.na(bg)) NA_character_ else bg)
+  }
+
+  # the pipeline legacy string demanded by a set of measures (ci/chi2/OR side-effects)
+  legacy_union <- function(ms) {
+    ms <- ms[!is.na(ms) & ms != ""]
+    if ("auto"    %in% ms) return("auto")     # resolved per column type downstream (tab_resolve_settings)
+    if ("contrib" %in% ms) return("contrib")
+    if ("OR"      %in% ms) return("OR")
+    old <- ms[ms %in% c("diff_ci", "after_ci", "ci")]
+    if (length(old)) return(old[1])
+    if (any(ms %in% c("diff", "ratio"))) {
+      return(switch(signif, "grey_non_signif" = "diff_ci", "guaranteed_effect" = "after_ci", "diff"))
+    }
+    "no"
+  }
+
+  # ---- FALSE / TRUE ----
   if (is.logical(color)) {
     if (isTRUE(color)) {
-      return(list(legacy = "auto", per_type = TRUE, bg = NA_character_, text = "auto", signif = signif))
+      return(list(mode = "auto", legacy = "auto", text = "auto", bg = NA_character_,
+                  types = NULL, signif = signif))
     }
-    return(list(legacy = "no", per_type = FALSE, bg = NA_character_, text = "", signif = "ignore"))
+    return(list(mode = "off", legacy = "no", text = "", bg = NA_character_,
+                types = NULL, signif = "ignore"))
   }
 
-  nms   <- names(color)                       # capture BEFORE as.character() (which drops names)
-  color <- as.character(color)
-  names(color) <- nms
-  if (!is.null(nms) && any(nzchar(nms))) {
-    text <- if ("text" %in% nms) unname(color[["text"]]) else ""
-    bg   <- if ("background" %in% nms) unname(color[["background"]]) else
-            if ("bg" %in% nms) unname(color[["bg"]]) else NA_character_
-  } else if (length(color) >= 2L) {
-    text <- color[1]; bg <- color[2]
-  } else {
-    text <- color[1]; bg <- NA_character_
-  }
-  norm <- function(m) if (is.na(m) || identical(m, "no")) "" else if (identical(m, "or")) "OR" else m
-  text <- norm(text); bg <- if (is.na(bg)) NA_character_ else norm(bg)
-  if (!is.na(bg) && bg == "") bg <- NA_character_
-  if (!is.na(bg) && !bg %in% c("diff", "ratio")) {
-    cli::cli_abort("{.val {bg}} cannot go on the background channel (only {.val diff} / {.val ratio}).")
+  # ---- list(pct =, mean =) or a NAMED vector : per column TYPE ----
+  is_typed <- (is.list(color) && !is.null(names(color)) && all(nzchar(names(color)))) ||
+    (!is.null(names(color)) && any(nzchar(names(color))))
+  if (is_typed) {
+    nms <- names(color)
+    if (is.null(nms) || !all(nzchar(nms)) || !all(nms %in% c("pct", "mean"))) {
+      cli::cli_abort(c("A per-type {.arg color} must be named by column type ({.field pct} / {.field mean}).",
+                       "i" = 'e.g. {.code list(pct = c("diff", "ratio"), mean = "ratio")}.',
+                       "i" = "For two channels on every column use positions: {.code c(\"diff\", \"ratio\")}."))
+    }
+    entries <- if (is.list(color)) color else as.list(color)
+    types   <- purrr::map(entries, parse_channels)
+    legacy  <- legacy_union(unlist(types, use.names = FALSE))
+    return(list(mode = "by_type", legacy = legacy, text = NA_character_, bg = NA_character_,
+                types = types, signif = signif))
   }
 
-  ok_text <- c("diff", "ratio", "contrib", "OR", "auto", "diff_ci", "after_ci", "ci", "")
-  if (!text %in% ok_text) cli::cli_abort("Unknown text color measure {.val {text}}.")
-
-  # Phase 5: the combined color strings are superseded by `color` + `color_signif`
-  # ("diff_ci" = diff + grey_non_signif, "after_ci"/"ci" = diff + color_all_signif). They keep
-  # working unchanged (the engine decodes them, byte-identical) -- this is only a gentle nudge.
-  if (text %in% c("diff_ci", "after_ci", "ci")) {
-    lifecycle::deprecate_soft(
-      "1.4.0",
-      I(paste0("The `color = \"", text, "\"` mode")),
-      with = I("`color = \"diff\"` with the `color_signif` argument"),
-      # normalize_color_spec() is called by tab()/tab_num(), so the real user is two frames up;
-      # this keeps the nudge for user calls but silent for tab_many()'s internal recursion.
-      user_env = rlang::caller_env(2)
-    )
-  }
-
-  legacy <- if (text %in% c("", "no")) {
-    if (!is.na(bg)) "diff" else "no"                       # bg-only still needs ref/pct -> "diff"
-  } else if (text %in% c("diff", "ratio")) {
-    switch(signif, "grey_non_signif" = "diff_ci", "color_all_signif" = "after_ci", "diff")
-  } else {
-    text                                                    # contrib / OR / auto / old strings
-  }
-
-  list(legacy = legacy, per_type = FALSE, bg = bg, text = text, signif = signif)
+  # ---- unnamed scalar / positional vector : the SAME measure(s) on every column ----
+  ch     <- parse_channels(color)
+  text   <- ch[1]; bg <- ch[2]
+  legacy <- if (text %in% c("", "no") && !is.na(bg)) "diff" else legacy_union(ch)
+  list(mode = "flat", legacy = legacy, text = text, bg = bg, types = NULL, signif = signif)
 }
 
-# Apply the color spec to a built table (or a list of tables), rewriting the color / color_signif
-# attributes to the clean (measure, policy) model ONLY when a new capability is used (color = TRUE,
+# Apply the color spec to a built table (or list), rewriting the color / color_signif attributes to
+# the clean (measure, policy) model ONLY when a new capability is used (color = TRUE, a per-type spec,
 # a background channel, an explicit color_signif, or the `ratio` measure). Plain old scalar colors
-# pass through untouched (no golden churn; the engine decodes them). color = TRUE resolves per
-# column type here (factor -> diff text + ratio bg; numeric -> ratio text; OR cols -> or).
+# pass through untouched (no golden churn; the engine decodes them).
 #' @keywords internal
 finalize_color_spec <- function(x, spec) {
   if (is.list(x) && !is.data.frame(x)) return(purrr::map(x, ~ finalize_color_spec(., spec)))
-  rewrite <- spec$per_type || !is.na(spec$bg) || spec$signif != "ignore" || identical(spec$text, "ratio")
+  rewrite <- spec$mode %in% c("auto", "by_type") || !is.na(spec$bg) ||
+    spec$signif != "ignore" || identical(spec$text, "ratio")
   if (!rewrite) return(x)
   dplyr::mutate(x, dplyr::across(dplyr::where(is_fmt), ~ finalize_one_col(.x, spec)))
+}
+
+# The per-column measure vector (text[, background]) the spec assigns to a column, given its built
+# color + type. NULL = leave the column as the pipeline built it (e.g. contrib/OR under a pct/mean
+# spec, or a type the spec does not mention).
+#' @keywords internal
+resolve_col_measures <- function(spec, type, built) {
+  if (spec$mode == "auto") {                                # color = TRUE smart per-type default
+    if (built == "OR")      return("OR")
+    if (built == "contrib") return(NULL)                    # counts / all -> keep contrib
+    if (type %in% c("mean", "n", "coef"))             return("ratio")          # numeric -> ratio text
+    if (type %in% c("row", "col", "all", "all_tabs")) return(c("diff", "ratio"))  # factor -> diff + ratio bg
+    return(NULL)
+  }
+  if (spec$mode == "by_type") {
+    if (built %in% c("OR", "contrib")) return(NULL)         # not keyable by pct/mean -> keep built
+    key <- if (type %in% c("mean", "n", "coef")) "mean"
+           else if (type %in% c("row", "col", "all", "all_tabs")) "pct" else NA_character_
+    if (is.na(key) || is.null(spec$types[[key]])) return(NULL)
+    m <- spec$types[[key]]
+    return(if (is.na(m[2])) m[1] else m)
+  }
+  # flat
+  text <- if (identical(spec$text, "auto")) color_measure_policy(built, type)$measure else spec$text
+  if (text == "" && is.na(spec$bg)) return(NULL)
+  if (is.na(spec$bg)) text else c(text, spec$bg)
 }
 
 #' @keywords internal
@@ -682,22 +743,10 @@ finalize_one_col <- function(col, spec) {
   built <- get_color(col)
   type  <- get_type(col)
   if (built %in% c("", "no")) return(col)                  # the pipeline did not color this column
-  if (spec$per_type) {
-    # color = TRUE default scheme, resolved per column type (only where the pipeline already colored)
-    if (built == "OR")      return(set_color(col, "OR"))                        # odds-ratio columns
-    if (built == "contrib") return(col)                                        # counts/all -> contrib
-    if (type == "mean")     return(set_color_signif(set_color(col, "ratio"), spec$signif))  # numeric
-    if (type %in% c("row", "col", "all", "all_tabs")) {                        # factor % -> diff + ratio bg
-      return(set_color_signif(set_color(col, c("diff", "ratio")), spec$signif))
-    }
-    return(col)
-  }
-  # text measure: "auto" -> the measure the pipeline built; "" -> empty (a background-only cell);
-  # else the explicit measure.
-  text <- if (identical(spec$text, "auto")) color_measure_policy(built, type)$measure else spec$text
-  if (text == "" && is.na(spec$bg)) return(col)            # nothing to set
-  col <- if (is.na(spec$bg)) set_color(col, text) else set_color(col, c(text, spec$bg))
-  set_color_signif(col, spec$signif)
+  measures <- resolve_col_measures(spec, type, built)
+  if (is.null(measures)) return(col)
+  if (length(measures) == 1L && measures %in% c("", "no")) return(col)
+  set_color_signif(set_color(col, measures), spec$signif)
 }
 
 
@@ -867,12 +916,14 @@ finalize_one_col <- function(col, spec) {
 #' two-proportion score test), \code{"ac"} (Agresti-Caffo) or \code{"wald"}. Whatever method is
 #' chosen, the stars come from that same interval, so they always agree with the bracket.
 #' @param color Which measure(s) to color, on which visual channel -- see \code{\link{tab}}
-#' for the full description (\code{FALSE}/\code{TRUE}, a measure such as \code{"diff"}, or a
-#' two-channel \code{c(text, background)} / \code{c(text = , background = )}). The old combined
-#' strings \code{"diff_ci"}/\code{"after_ci"}/\code{"ci"} still work (superseded by
-#' \code{color} + \code{color_signif}). Applies to all \code{row_vars}.
+#' for the full grammar (\code{FALSE}/\code{TRUE}, a measure such as \code{"diff"}, a positional
+#' two-channel \code{c("diff", "ratio")}, or a per-type \code{c(pct = , mean = )} /
+#' \code{list(pct = , mean = )}). The old combined strings
+#' \code{"diff_ci"}/\code{"after_ci"}/\code{"ci"} still work (superseded by \code{color} +
+#' \code{color_signif}). Applies to all \code{row_vars}.
 #' @param color_signif How significance gates the color -- see \code{\link{tab}}
-#' (\code{"ignore"} / \code{"grey_non_signif"} / \code{"color_all_signif"}).
+#' (\code{"ignore"} / \code{"grey_non_signif"} / \code{"guaranteed_effect"}).
+#' @param color_breaks A per-table colour-threshold override -- see \code{\link{tab}}.
 #' @param parallel Opt-in parallel build of the per-\code{row_var} tables (Suggests-only
 #' \pkg{mirai}); see \code{\link{tab}}. \code{NULL} (default) reads the
 #' \code{tabxplor.parallel} option.
@@ -951,6 +1002,7 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
                      totrow = TRUE, totcol = "last", total_names = "Total",
                      add_n = TRUE, add_pct = FALSE,
                      digits = 0, subtext = "", n_min = 0, color_signif = "ignore",
+                     color_breaks = NULL,
                      parallel = NULL,
                      .by_table = FALSE,
 
@@ -1011,7 +1063,8 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
     filter = if (missing(filter)) NULL else {{ filter }},
     output = if (isTRUE(compact)) "single" else "legacy"
   )
-  finalize_color_spec(result, color_spec)
+  result <- finalize_color_spec(result, color_spec)
+  set_color_breaks_attr(result, resolve_color_breaks_arg(color_breaks))
 }
 
 
@@ -3684,12 +3737,13 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, OR, color, pct,
 #'  \code{comp} must be set once and for all the first time you use \code{\link{tab_plain}},
 #'  \code{\link{tab_num}} or \code{\link{tab_chi2}} with rows, or \code{\link{tab_ci}}.
 #' @param color Which measure(s) to color, on which channel -- see \code{\link{tab}} for the full
-#'   syntax (\code{FALSE}/\code{TRUE}, a measure name, or a two-channel \code{c(text, background)}
-#'   vector). For numeric means the useful measures are \code{"diff"} (standardized, Glass's
-#'   \eqn{\Delta}) and \code{"ratio"} (mean ratio); \code{TRUE} uses \code{"ratio"}. Default
-#'   \code{"auto"} keeps the historical behavior.
+#'   grammar (\code{FALSE}/\code{TRUE}, a measure name, or a positional two-channel
+#'   \code{c("diff", "ratio")} vector). For numeric means the useful measures are \code{"diff"}
+#'   (standardized, Glass's \eqn{\Delta}) and \code{"ratio"} (mean ratio); \code{TRUE} uses
+#'   \code{"ratio"}. Default \code{"auto"} keeps the historical behavior.
 #' @param color_signif How significance gates the color (\code{"ignore"} / \code{"grey_non_signif"}
-#'   / \code{"color_all_signif"}) -- see \code{\link{tab}}.
+#'   / \code{"guaranteed_effect"}) -- see \code{\link{tab}}.
+#' @param color_breaks A per-table colour-threshold override -- see \code{\link{tab}}.
 #' @param subtext A character vector to print rows of legend under the table.
 #' @param ci The type of confidence intervals to calculate, passed to \code{\link{tab_ci}}
 #'  (automatically added if needed for \code{color}).
@@ -3735,6 +3789,7 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
                     totaltab = "line", totaltab_name = "Ensemble",
                     tot = NULL, total_names = "Total",
                     subtext = "", digits = 0, num = FALSE, df = FALSE,
+                    color_breaks = NULL,
                     .fine = NULL, .by_table = FALSE
 ) {
 
@@ -4472,7 +4527,8 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
 
   # Phase 5: set the final two-channel colour / significance-policy attributes (a no-op for a
   # plain scalar colour passed straight through, e.g. when tab_many() drives tab_num()).
-  finalize_color_spec(result, color_spec)
+  result <- finalize_color_spec(result, color_spec)
+  set_color_breaks_attr(result, resolve_color_breaks_arg(color_breaks))
 }
 
 

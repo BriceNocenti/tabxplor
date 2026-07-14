@@ -116,7 +116,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 options=list(
                     "ignore",
                     "grey_non_signif",
-                    "color_all_signif"),
+                    "guaranteed_effect"),
                 default="ignore")
             private$..chi2 <- jmvcore::OptionBool$new(
                 "chi2",
@@ -548,7 +548,7 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   deviation by its observed size.    \item \code{"grey_non_signif"}: color by
 #'   observed size, but grey out cells whose    deviation is not significant (at
 #'   \code{conf_level}). A confidence interval on the    difference is computed
-#'   automatically.    \item \code{"color_all_signif"}: color by the guaranteed
+#'   automatically.    \item \code{"guaranteed_effect"}: color by the guaranteed
 #'   (confidence-bound) effect --    only cells whose interval clears the
 #'   threshold show, with dimmer colors.  }
 #' @param chi2 Set to \code{TRUE} to add a test p-value row: a Chi-square test

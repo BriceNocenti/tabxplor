@@ -191,7 +191,7 @@ children:
                   - type: RadioButton
                     name: color_signif_3
                     optionName: color_signif
-                    optionPart: color_all_signif
+                    optionPart: guaranteed_effect
                     enable: (!(color:no))
       - type: LayoutBox
         margin: large

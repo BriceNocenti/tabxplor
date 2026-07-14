@@ -241,7 +241,7 @@ difference first.
 }}
 
 \item{color_signif}{How significance gates the color, as a single string
-(\code{"ignore"} / \code{"grey_non_signif"} / \code{"color_all_signif"}). See \code{\link{tab}}.}
+(\code{"ignore"} / \code{"grey_non_signif"} / \code{"guaranteed_effect"}). See \code{\link{tab}}.}
 
 \item{x}{The object to test, to get a field in, or to modify.}
 
@@ -388,7 +388,7 @@ all of them in the whole tibble.
 
 \item \code{get_color_bg()}: get the background-channel color measure (\code{NA} when there is none)
 
-\item \code{get_color_signif()}: get the significance policy (\code{"ignore"} / \code{"grey_non_signif"} / \code{"color_all_signif"})
+\item \code{get_color_signif()}: get the significance policy (\code{"ignore"} / \code{"grey_non_signif"} / \code{"guaranteed_effect"})
 
 \item \code{set_color()}: set the "color" attribute of a \code{fmt} vector
 

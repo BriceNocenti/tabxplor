@@ -230,8 +230,11 @@ testthat::test_that("uncoloured table never gets spans (byte-identical default)"
 })
 
 testthat::test_that("two-channel colour emits a background (.bg...) class", {
+  # a low ratio break so at least one cell qualifies for the background (ratio) channel
+  set_color_breaks(pct_ratio = c(1.2))
+  withr::defer(options("tabxplor.color_breaks" = default_color_scales()))
   t2 <- tab(gss, race, marital, pct = "row",
-            color = c(text = "diff", background = "ratio"))
+            color = c("diff", "ratio"))               # positional: diff text + ratio background
   md <- tab_md(t2, print = FALSE)
   testthat::expect_true(grepl("\\.bg[a-z]", md))
 })

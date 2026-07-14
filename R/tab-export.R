@@ -22,7 +22,7 @@
 #' @param theme By default (\code{"light"}) a white table with black text; \code{"dark"} for the
 #'   inverse (colours follow the theme).
 #' @param color_type By default the text is coloured; set to \code{"bg"} to colour the background.
-#' @param html_24_bit Use 24-bit colours (\code{TRUE}) or the 8-bit fallback (\code{FALSE}).
+#' @param html_24_bit `r lifecycle::badge("deprecated")` Inert since 1.4.0 (exports are always 24-bit).
 #' @param color Set to \code{FALSE} to render without colours (monochrome).
 #' @param color_legend Print the colour legend with the subtext (\code{"kable"}/\code{"xl"}/\code{"plot"}).
 #' @param transpose Set to \code{TRUE} to transpose each table before export (rows become columns) --

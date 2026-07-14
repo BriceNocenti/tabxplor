@@ -1992,7 +1992,7 @@ tab_logit <- function(data, dependent, predictors, wt = NULL,
                       conf_level = 0.95,
                       method = c("wald", "profile"),
                       stats = NULL, estimate_display = c("value", "ci", "prob", "ame"),
-                      color_signif = c("grey_non_signif", "ignore", "color_all_signif"),
+                      color_signif = c("grey_non_signif", "ignore", "guaranteed_effect"),
                       stars = TRUE, cleannames = NULL, subtext = "") {
   method       <- match.arg(method)
   color_signif <- match.arg(color_signif)
@@ -2041,7 +2041,7 @@ multi_logit <- function(data, dependent, models, wt = NULL,
                         method = c("wald", "profile"),
                         stats = NULL, compare = c("none", "baseline", "sequential"), baseline = NULL,
                         estimate_display = c("value", "ci", "prob", "ame"),
-                        color_signif = c("grey_non_signif", "ignore", "color_all_signif"),
+                        color_signif = c("grey_non_signif", "ignore", "guaranteed_effect"),
                         stars = TRUE, cleannames = NULL, subtext = "") {
   method       <- match.arg(method)
   compare      <- match.arg(compare)

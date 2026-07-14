@@ -32,7 +32,7 @@ inverse (colours follow the theme).}
 
 \item{color_type}{By default the text is coloured; set to \code{"bg"} to colour the background.}
 
-\item{html_24_bit}{Use 24-bit colours (\code{TRUE}) or the 8-bit fallback (\code{FALSE}).}
+\item{html_24_bit}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Inert since 1.4.0 (exports are always 24-bit).}
 
 \item{color}{Set to \code{FALSE} to render without colours (monochrome).}
 

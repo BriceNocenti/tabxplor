@@ -23,7 +23,7 @@ multi_logit(
   compare = c("none", "baseline", "sequential"),
   baseline = NULL,
   estimate_display = c("value", "ci", "prob", "ame"),
-  color_signif = c("grey_non_signif", "ignore", "color_all_signif"),
+  color_signif = c("grey_non_signif", "ignore", "guaranteed_effect"),
   stars = TRUE,
   cleannames = NULL,
   subtext = ""

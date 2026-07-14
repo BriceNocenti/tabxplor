@@ -26,6 +26,7 @@ tab_num(
   digits = 0,
   num = FALSE,
   df = FALSE,
+  color_breaks = NULL,
   .fine = NULL,
   .by_table = FALSE
 )
@@ -47,13 +48,13 @@ are converted to factor.}
 \item{wt}{A weight variable, of class numeric. Leave empty for unweighted results.}
 
 \item{color}{Which measure(s) to color, on which channel -- see \code{\link{tab}} for the full
-syntax (\code{FALSE}/\code{TRUE}, a measure name, or a two-channel \code{c(text, background)}
-vector). For numeric means the useful measures are \code{"diff"} (standardized, Glass's
-\eqn{\Delta}) and \code{"ratio"} (mean ratio); \code{TRUE} uses \code{"ratio"}. Default
-\code{"auto"} keeps the historical behavior.}
+grammar (\code{FALSE}/\code{TRUE}, a measure name, or a positional two-channel
+\code{c("diff", "ratio")} vector). For numeric means the useful measures are \code{"diff"}
+(standardized, Glass's \eqn{\Delta}) and \code{"ratio"} (mean ratio); \code{TRUE} uses
+\code{"ratio"}. Default \code{"auto"} keeps the historical behavior.}
 
 \item{color_signif}{How significance gates the color (\code{"ignore"} / \code{"grey_non_signif"}
-/ \code{"color_all_signif"}) -- see \code{\link{tab}}.}
+/ \code{"guaranteed_effect"}) -- see \code{\link{tab}}.}
 
 \item{na}{The policy to adopt for missing values in row and tab variables (factors),
 as a single string.
@@ -143,6 +144,8 @@ rows and cols.}
 \item{df}{Set to \code{TRUE} to obtain a plain data.frame (not a \code{tibble}),
 with normal numeric vectors (not \code{fmt}). Useful, for example, to pass the table to
 correspondence analysis with \pkg{FactoMineR}.}
+
+\item{color_breaks}{A per-table colour-threshold override -- see \code{\link{tab}}.}
 
 \item{.fine, .by_table}{Internal. \code{.fine} is a pre-computed moment-sum aggregate (from
 \code{tab_aggregate_num()}) to adopt instead of scanning the raw data; \code{.by_table} forces

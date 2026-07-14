@@ -141,7 +141,7 @@ globalVariables(c("table_id", "row_id", "col_id", "o", "rowtot", "coltot", "ok",
 #'   (except mean columns, from numeric variables).
 #' }
 #' @param color_signif How significance gates the color, as a single string
-#' (\code{"ignore"} / \code{"grey_non_signif"} / \code{"color_all_signif"}). See \code{\link{tab}}.
+#' (\code{"ignore"} / \code{"grey_non_signif"} / \code{"guaranteed_effect"}). See \code{\link{tab}}.
 #' @return A vector of class \code{tabxplor_fmt}.
 #' @export
 #'
@@ -954,7 +954,7 @@ get_color_bg <- function(x, ...) {
   if (length(a) >= 2L) a[2] else NA_character_
 }
 
-#' @describeIn fmt get the significance policy (\code{"ignore"} / \code{"grey_non_signif"} / \code{"color_all_signif"})
+#' @describeIn fmt get the significance policy (\code{"ignore"} / \code{"grey_non_signif"} / \code{"guaranteed_effect"})
 #' @export
 get_color_signif <- function(x, ...) {
   if (is.data.frame(x)) return(purrr::map_chr(x, ~ get_color_signif(.)))
@@ -1008,7 +1008,7 @@ set_color     <- function(x, color) {
 set_color_signif <- function(x, color_signif) {
   color_signif <- color_signif[1]
   if (is.na(color_signif) || color_signif %in% c("", "no")) color_signif <- "ignore"
-  ok <- c("ignore", "grey_non_signif", "color_all_signif")
+  ok <- c("ignore", "grey_non_signif", "guaranteed_effect")
   if (!color_signif %in% ok) {
     cli::cli_abort(c("Unknown {.arg color_signif} value {.val {color_signif}}.",
                      "i" = "Valid: {.val {ok}}."))
@@ -1100,13 +1100,9 @@ validate_display_template <- function(recipe) {
 #' Get HTML Color Code of a fmt vector
 #' @param x The fmt vector to get the html color codes from.
 #'
-#' @param type The style type in \code{set_color_style} and \code{get_color_style},
-#'  \code{"text"} to color the text, \code{"bg"} to color the background.
-#' @param theme For \code{set_color_style} and \code{get_color_style}, is your console
-#' or html table background \code{"light"} or \code{"dark"} ? Default to RStudio theme.
-#' @param html_24_bit Use 24bits colors palettes for html tables : set to `"green_red"`
-#' or `"blue_red"`. Only with `mode = "color_code"` (not `mode = "crayon"`) and
-#' `theme = "light`. Default to \code{getOption("tabxplor.color_html_24_bit")}.
+#' @param type The style type, \code{"text"} to color the text, \code{"bg"} to color the background.
+#' @param theme Is your console or html table background \code{"light"} or \code{"dark"} ? Default
+#' to the current setting (RStudio theme when detectable, else \code{"light"}).
 #' @return A character vector with html color codes, of the length of the initial vector.
 #' @export
 #'
@@ -1116,24 +1112,20 @@ validate_display_template <- function(recipe) {
 #' dplyr::mutate(tabs, across(where(is_fmt), fmt_get_color_code))
 #'}
 
-fmt_get_color_code <- function(x, type = "text", theme = "light", html_24_bit = NULL) {
-  html_24_bit <- if (is.null(html_24_bit)) {getOption("tabxplor.color_html_24_bit")} else {html_24_bit}
-
+fmt_get_color_code <- function(x, type = "text", theme = "light") {
   color <- get_color(x)
   if (length(color) == 0L || is.na(color[1]) || color[1] %in% c("no", "")) {
     return(rep(NA_character_, length(x)))
   }
 
-  # `type` selects BOTH the slot table channel (text/bg families spread intensities differently)
-  # and the palette variant, so the rendered hex matches the palette.
+  # `type` selects the palette family (text vs bg); the slot integer (1:8) indexes it.
   channel <- if (type == "bg") "bg" else "text"
   slot    <- fmt_color_slots(x, fmt_color_plan(x, channel = channel))
-  styles  <- get_color_style("color_code", type = type, theme = theme, html_24_bit = html_24_bit)
+  styles  <- get_color_style("color_code", type = type, theme = theme)
 
   out     <- rep(NA_character_, length(x))
   colored <- slot > 0L
-  # historical output is upper-case hex (the old path str_to_upper'd); the 24-bit palettes carry
-  # lower-case codes, so upper-case here to keep the rendered code identical.
+  # historical output is upper-case hex; the 24-bit palettes carry lower-case codes.
   out[colored] <- toupper(unname(styles[slot[colored]]))
   out
 }
@@ -2339,12 +2331,13 @@ pillar_shaft.tab_chi2_fmt <- function(x, ...) {
   pvalues  <- out[is_p]
   p_values <- get_num(x)[is_p]
 
-  # Non-significant p-values (>= 5%) print red (neg5), significant ones green (pos5):
-  # red warns the reader the (sub)table may not differ from the independence hypothesis.
+  # Non-significant p-values (>= 5%) print in the strongest under-represented colour (slot 8),
+  # significant ones in the strongest over-represented colour (slot 4): a warning colour flags a
+  # (sub)table that may not differ from the independence hypothesis.
   out[is_p] <-
     dplyr::if_else(condition = p_values >= 0.05,
-                   true      = color_style$neg5(pvalues),
-                   false     = color_style$pos5(pvalues) )
+                   true      = color_style[[8]](pvalues),
+                   false     = color_style[[4]](pvalues) )
 
   pillar::new_pillar_shaft_simple(out, align = "right", na = "")
 }
@@ -2457,7 +2450,7 @@ color_measure_policy <- function(color, type) {
   )
   policy <- dplyr::case_when(
     color == "diff_ci"             ~ "grey_non_signif",
-    color %in% c("after_ci", "ci") ~ "color_all_signif",
+    color %in% c("after_ci", "ci") ~ "guaranteed_effect",
     TRUE                           ~ "ignore"
   )
   list(measure = measure, policy = policy, single0 = color == "ci")
@@ -2497,8 +2490,8 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
                     "ratio"   = if (is_mean)     sc$mean_ratio else sc$pct_ratio,
                     "or"      = sc$mean_ratio,
                     "contrib" = sc$contrib)
-  center <- scale$center
-  strict <- scale$strict
+  center <- if (is.null(scale)) 0 else scale$center
+  strict <- if (is.null(scale)) TRUE else scale$strict
 
   # observed per-cell quantity
   raw <- switch(measure,
@@ -2526,7 +2519,7 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
   sig_pos[is.na(sig_pos)] <- FALSE
   sig_neg[is.na(sig_neg)] <- FALSE
 
-  if (policy == "color_all_signif") {
+  if (policy == "guaranteed_effect") {
     # The GUARANTEED (CI-floor) magnitude, on the MEASURE'S OWN scale so fmt_color_slots() folds it
     # around the right centre. The stored bounds are the shared cell-vs-ref DIFFERENCE CI (centre 0)
     # for diff/ratio, or the native OR CI (centre 1) for `or`.
@@ -2563,23 +2556,24 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
   # INTERCEPT (in_refrow but a non-neutral baseline value) under every policy.
   if (measure %in% c("diff", "ratio", "or")) gate <- gate & !is_refrow(x)
 
-  pos_breaks <- if (isTRUE(mp$single0)) c(0) else scale$pos
-  slots      <- build_slots(length(pos_breaks), channel)
-
-  # Legacy in-text x2 (byte-identity for the scalar color="diff" on factors): the x2 ratio
-  # currently colors slot 11 wherever the diff is not already at its strongest break. It rides
-  # BOTH the text and bg palettes today (select_in_color_style injected it regardless), so it is
-  # channel-independent here. Step 4 moves it to the dedicated background channel.
-  x2 <- NULL
-  if (measure == "diff" && !is_mean && policy == "ignore" && length(sc$pct_ratio$pos) == 1L) {
-    x2 <- list(v = sc$pct_ratio$pos[1], slot = 11L,
-               rr = get_ratio(x),       # §3: the reference-relative ratio (repointed off `mean`)
-               top = slots$pos_slots[length(pos_breaks) + 1L])
+  # Per-direction breaks + palette slots (Phase 13a). Each side of the scale carries its own
+  # magnitudes (over$breaks / under$breaks) and intensities 1:4 (over$slots / under$slots). The
+  # engine folds every cell to a magnitude >= the neutral, findInterval() against the side's breaks,
+  # and reads the intensity: over -> slots 1:4, under -> slots 5:8 (the two halves of the 8-colour
+  # palette). The former in-text "x2 rule" is gone -- it is now just a 1-break ratio scale carried on
+  # the dedicated background channel (color = c("diff", "ratio")).
+  if (isTRUE(mp$single0)) {                  # legacy color = "ci": one shade per direction, break at 0
+    over_breaks <- 0; over_slots <- c(0L, 3L); under_breaks <- 0; under_slots <- c(0L, 7L)
+  } else {
+    over_breaks  <- scale$over$breaks
+    under_breaks <- scale$under$breaks
+    over_slots   <- c(0L, scale$over$slots)         # 0 = neutral level, then intensities 1:4
+    under_slots  <- c(0L, scale$under$slots + 4L)   # 0 = neutral, then 5:8 (under half of the palette)
   }
 
   list(measure = measure, policy = policy, score = score, center = center, strict = strict,
-       pos_breaks = pos_breaks, pos_slots = slots$pos_slots, neg_slots = slots$neg_slots,
-       gate = gate, x2 = x2)
+       over_breaks = over_breaks, over_slots = over_slots,
+       under_breaks = under_breaks, under_slots = under_slots, gate = gate)
 }
 
 #' @keywords internal
@@ -2597,20 +2591,19 @@ fmt_color_slots <- function(x, plan) {
   }
   mag[!is.finite(mag)] <- NA_real_
   dir[is.na(dir)]      <- 0L
-  level <- findInterval(mag, plan$pos_breaks, left.open = plan$strict)
-  level[is.na(level)]  <- 0L
 
   slot <- integer(n)
   posi <- dir > 0L
   negi <- dir < 0L
-  slot[posi] <- plan$pos_slots[level[posi] + 1L]
-  slot[negi] <- plan$neg_slots[level[negi] + 1L]
-
-  if (!is.null(plan$x2)) {
-    rr <- plan$x2$rr
-    ov <- posi & slot != plan$x2$top & !is.na(rr) & rr > plan$x2$v
-    ov[is.na(ov)] <- FALSE
-    slot[ov] <- plan$x2$slot
+  if (any(posi)) {
+    lp <- findInterval(mag[posi], plan$over_breaks, left.open = plan$strict)
+    lp[is.na(lp)] <- 0L
+    slot[posi] <- plan$over_slots[lp + 1L]
+  }
+  if (any(negi)) {
+    ln <- findInterval(mag[negi], plan$under_breaks, left.open = plan$strict)
+    ln[is.na(ln)] <- 0L
+    slot[negi] <- plan$under_slots[ln + 1L]
   }
 
   slot[!plan$gate] <- 0L
@@ -2637,16 +2630,12 @@ fmt_color_channels <- function(x) {
 # uses the "bg" palette. This mirrors pillar_shaft.tabxplor_fmt's two-channel logic, so console and
 # exports render identical colours. (fmt_get_color_code stays single-channel for the golden.)
 #' @keywords internal
-fmt_channel_codes <- function(x, color_type = "text", theme = "light", html_24_bit = NULL) {
-  html_24_bit <-
-    if (is.null(html_24_bit)) {getOption("tabxplor.color_html_24_bit")} else {html_24_bit}
+fmt_channel_codes <- function(x, color_type = "text", theme = "light") {
   n  <- length(x)
   ch <- fmt_color_channels(x)
 
-  text_styles <- get_color_style("color_code", type = color_type, theme = theme,
-                                 html_24_bit = html_24_bit)
-  bg_styles   <- get_color_style("color_code", type = "bg", theme = theme,
-                                 html_24_bit = html_24_bit)
+  text_styles <- get_color_style("color_code", type = color_type, theme = theme)
+  bg_styles   <- get_color_style("color_code", type = "bg", theme = theme)
 
   text <- rep(NA_character_, n)
   bg   <- rep(NA_character_, n)
@@ -2664,7 +2653,7 @@ fmt_channel_codes <- function(x, color_type = "text", theme = "light", html_24_b
 
 #' @keywords internal
 tab_color_legend <- function(x, colored = TRUE, mode = c("console", "html"),
-                             html_theme = NULL, html_type = NULL, html_24_bit,
+                             html_theme = NULL, html_type = NULL,
                              text_color = NULL, grey_color = NULL,
                              add_color_and_diff_types = FALSE, all_variables_names = FALSE) {
   # PURPOSE: build the human-readable colour legend, driven by the SAME per-channel plan
@@ -2673,7 +2662,6 @@ tab_color_legend <- function(x, colored = TRUE, mode = c("console", "html"),
   # thresholds are read from the canonical scales and coloured by their palette slots. Numeric
   # `diff` shows the standardized (Glass's delta, SD) thresholds; ratios show x/1 operators.
   mode        <- mode[1]
-  if (missing(html_24_bit)) html_24_bit <- getOption("tabxplor.color_html_24_bit")
   html_theme  <- if (is.null(html_theme)) getOption("tabxplor.color_style_theme") else html_theme
 
   # keep only coloured fmt columns (text OR background channel)
@@ -2740,27 +2728,25 @@ tab_color_legend <- function(x, colored = TRUE, mode = c("console", "html"),
     if (mode == "console") {
       get_color_style("crayon", type = palette_type)[[slot]](label)
     } else {
-      hex <- get_color_style("color_code", type = palette_type, theme = html_theme,
-                             html_24_bit = if (palette_type == "text") html_24_bit else NULL)[[slot]]
+      hex <- get_color_style("color_code", type = palette_type, theme = html_theme)[[slot]]
       if (palette_type == "text") kableExtra::text_spec(label, color = hex)
       else                        kableExtra::text_spec(label, background = hex)
     }
   }
 
-  # one channel's coloured threshold string, from its plan (NULL -> no channel)
+  # one channel's coloured threshold string, from its plan (NULL -> no channel). The over and under
+  # sides carry their own magnitudes (asymmetric scales) and their own palette slots (over 1:4,
+  # under 5:8), so each side is laid out independently.
   channel_scale <- function(plan, is_mean, std, palette_type) {
     if (is.null(plan)) return(NA_character_)
     measure <- plan$measure
-    K       <- length(plan$pos_breaks)
-    neg <- purrr::map_chr(seq_len(K), ~ paint(
-      brk_label(measure, plan$pos_breaks[.x], -1L, is_mean, std),
-      plan$neg_slots[.x + 1L], palette_type))
-    pos <- purrr::map_chr(seq_len(K), ~ paint(
-      brk_label(measure, plan$pos_breaks[.x], +1L, is_mean, std),
-      plan$pos_slots[.x + 1L], palette_type))
-    x2 <- character(0)
-    if (!is.null(plan$x2)) x2 <- paint(paste0(cross, format_g(plan$x2$v)), plan$x2$slot, "text")
-    labs <- c(rev(neg), pos, x2)
+    neg <- purrr::map_chr(seq_along(plan$under_breaks), ~ paint(
+      brk_label(measure, plan$under_breaks[.x], -1L, is_mean, std),
+      plan$under_slots[.x + 1L], palette_type))
+    pos <- purrr::map_chr(seq_along(plan$over_breaks), ~ paint(
+      brk_label(measure, plan$over_breaks[.x], +1L, is_mean, std),
+      plan$over_slots[.x + 1L], palette_type))
+    labs <- c(rev(neg), pos)
     labs <- labs[nzchar(labs)]
     paste(labs, collapse = " ")
   }
@@ -2768,7 +2754,7 @@ tab_color_legend <- function(x, colored = TRUE, mode = c("console", "html"),
   policy_note <- function(policy) {
     switch(policy,
            "grey_non_signif"  = " [signif. only]",
-           "color_all_signif" = " [signif., CI-floor]",
+           "guaranteed_effect" = " [signif., CI-floor]",
            "")
   }
 
@@ -2838,54 +2824,10 @@ tab_color_legend <- function(x, colored = TRUE, mode = c("console", "html"),
 # tab_color_legend(tabs[[7]]) %>% cli::cat_line()
 # tab_color_legend(tabs[[7]], colored = FALSE)
 
-# Phase 5 (Step 2): the level -> palette-slot rule, replacing select_in_color_style's hand-tuned
-# lookup + fragile hex-sniff. `channel` ("text"/"bg") picks the palette family EXPLICITLY (the
-# sniff guessed it from pos1's hex, and its "#000033e" typo made bg_dark fall through to the
-# text table -- a bug this rule fixes, so bg_dark coloring changes consciously at Step 3).
-# `L` = 2*K = the number of signed break levels (K positive). Returns the slot index for each
-# of the L levels, so that with few breaks the chosen intensities stay visually spread out.
-# Byte-identical to select_in_color_style for the text family (locked by test-color-engine.R).
-#' @keywords internal
-color_slot_table <- function(L, channel = c("text", "bg")) {
-  channel <- match.arg(channel)
-  key <- as.character(L)
-  if (channel == "bg") {
-    switch(key,
-           "0"  = integer(0),
-           "1"  = 3L,
-           "2"  = c(3L, 8L),
-           "4"  = c(1L, 3L, 6L, 8L),
-           "6"  = c(1L, 3L, 5L, 6L, 8L, 10L),
-           "8"  = c(1L, 2L, 3L, 4L, 6L, 7L, 8L, 10L),
-           "10" = 1:10,
-           cli::cli_abort("Unsupported color break count L = {L} (max 5 breaks per side).")
-    )
-  } else {
-    switch(key,
-           "0"  = integer(0),
-           "1"  = 3L,
-           "2"  = c(3L, 8L),
-           "4"  = c(3L, 5L, 8L, 10L),
-           "6"  = c(3L, 4L, 5L, 8L, 9L, 10L),
-           "8"  = c(2L, 3L, 4L, 5L, 7L, 8L, 9L, 10L),
-           "10" = 1:10,
-           cli::cli_abort("Unsupported color break count L = {L} (max 5 breaks per side).")
-    )
-  }
-}
-
-# Per-direction level->slot maps for K positive breaks: pos_slots[level+1] / neg_slots[level+1],
-# with a leading 0 for the neutral (uncolored) level 0. The x2 ratio (slot 11) is injected
-# separately by the engine's x2 override, not here.
-#' @keywords internal
-build_slots <- function(K, channel = c("text", "bg")) {
-  channel <- match.arg(channel)
-  if (K == 0L) return(list(pos_slots = 0L, neg_slots = 0L))
-  base     <- color_slot_table(2L * K, channel)
-  list(pos_slots = c(0L, base[seq_len(K)]),
-       neg_slots = c(0L, base[K + seq_len(K)]))
-}
-
+# Phase 13a: the level -> palette-slot mapping now lives with the break scales themselves
+# (mk_color_scale() precomputes over$slots / under$slots via intensity_slots(), R/tab_classes.R),
+# so the old color_slot_table() / build_slots() lookups are gone. fmt_color_plan() reads the
+# per-side breaks + slots directly; fmt_color_slots() folds + findInterval() per direction.
 
 #' @keywords internal
 get_reference <- function(x, mode = c("cells", "lines", "all_totals")) {

@@ -80,7 +80,7 @@ testthat::test_that("tab_xl degrades to a plain sheet for a non-tabxplor data.fr
 testthat::test_that("tab_xl folds significance stars into the numFmt code", {
   testthat::skip_if_not_installed("openxlsx2")
   tb <- tab(forcats::gss_cat, marital, race, pct = "row", color = "diff",
-            color_signif = "color_all_signif", stars = TRUE)
+            color_signif = "guaranteed_effect", stars = TRUE)
   p  <- withr::local_tempfile(fileext = ".xlsx")
   suppressMessages(tab_xl(tb, path = p, sheets = "unique", replace = TRUE, open = FALSE))
   codes <- openxlsx2::wb_load(p)$styles_mgr$styles$numFmts
@@ -88,7 +88,7 @@ testthat::test_that("tab_xl folds significance stars into the numFmt code", {
 
   # a table built without stars stores no pvalue -> no star literal
   tb2 <- tab(forcats::gss_cat, marital, race, pct = "row", color = "diff",
-             color_signif = "color_all_signif", stars = FALSE)
+             color_signif = "guaranteed_effect", stars = FALSE)
   p2 <- withr::local_tempfile(fileext = ".xlsx")
   suppressMessages(tab_xl(tb2, path = p2, sheets = "unique", replace = TRUE, open = FALSE))
   codes2 <- openxlsx2::wb_load(p2)$styles_mgr$styles$numFmts

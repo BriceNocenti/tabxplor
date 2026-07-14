@@ -95,6 +95,9 @@ tab_xl <-
            transpose = FALSE, conditional_format = FALSE,
            print_color_legend = lifecycle::deprecated()) {
 
+    # Phase 13a: install a per-table color_breaks override for the render (no-op otherwise).
+    .cb <- push_color_breaks(tabs); on.exit(pop_color_breaks(.cb), add = TRUE)
+
     if (!requireNamespace("openxlsx2", quietly = TRUE)) {
       stop(paste0("Package \"openxlsx2\" needed for this function to work. ",
                   "You can install it with : install.packages('openxlsx2')"),
@@ -124,10 +127,11 @@ tab_xl <-
       lifecycle::deprecate_soft("1.4.0", "tab_xl(print_color_legend)", "tab_xl(color_legend)")
       color_legend <- print_color_legend
     }
-    # Shared option resolver (theme/color_type/html_24_bit/color/color_legend/transpose). Phase 10j
-    # makes tab_xl theme-aware: the palettes below now honour `theme` (was hardcoded "light").
-    o <- resolve_export_opts(theme, color_type, html_24_bit, color, color_legend, transpose, caption)
-    theme <- o$theme; color_type <- o$color_type; html_24_bit <- o$html_24_bit
+    # Shared option resolver (theme/color_type/color/color_legend/transpose). Phase 10j makes tab_xl
+    # theme-aware: the palettes below now honour `theme` (was hardcoded "light"). `html_24_bit` is
+    # inert (Phase 13a): Excel is always 24-bit.
+    o <- resolve_export_opts(theme, color_type, color, color_legend, transpose, caption)
+    theme <- o$theme; color_type <- o$color_type
     color_legend <- o$color_legend; color <- o$color
     # `caption` (single) is the unified alias; an explicit `titles` (per-sheet) still wins.
     if (!is.null(caption) && missing(titles)) titles <- caption
@@ -162,7 +166,7 @@ tab_xl <-
     prep <- tab_export_prep(
       tabs, backend = "xl", compact = FALSE, drop_tab_vars = remove_tab_vars,
       list_method = TRUE, compute = compute, transpose = transpose,
-      color_type = color_type, theme = theme, html_24_bit = html_24_bit,
+      color_type = color_type, theme = theme,
       color_legend = color_legend, what = "tab_xl()"
     )
     rd <- prep$tables

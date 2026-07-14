@@ -56,8 +56,7 @@ tab_check_same_col_vars <- function(tabs, what = "tab_export_prep()",
 # would take -- skipping the fmt_channel_codes() hex-mapping cost.
 # BYTE-IDENTICAL (want_colors = TRUE) to the tab_kable colour loop (tab_classes.R) / tab_plot colours.
 #' @keywords internal
-fmt_col_ann <- function(col, theme_cols, color_type = "text", html_24_bit = NULL,
-                        want_colors = TRUE) {
+fmt_col_ann <- function(col, theme_cols, color_type = "text", want_colors = TRUE) {
   ref_alltot <- get_reference(col, mode = "all_totals")
   ref_cells  <- get_reference(col, mode = "cells")
 
@@ -68,7 +67,7 @@ fmt_col_ann <- function(col, theme_cols, color_type = "text", html_24_bit = NULL
   grey_this <- if (has_col || has_bgc) theme_cols$grey else theme_cols$grey2
 
   if (has_col || has_bgc) {
-    codes     <- fmt_channel_codes(col, color_type, theme_cols$theme, html_24_bit)
+    codes     <- fmt_channel_codes(col, color_type, theme_cols$theme)
     text_hex  <- codes$text
     bg_hex    <- codes$bg
     # Phase 10f: keep the raw slot integers fmt_channel_codes() already produced -- tab_md() maps
@@ -221,7 +220,7 @@ tab_resolve_tables <- function(tabs, compact, list_method = FALSE, what,
 # Build the render-model for ONE resolved table (already compacted / single). See the file header.
 #' @keywords internal
 prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
-                           theme_cols, color_type, html_24_bit) {
+                           theme_cols, color_type) {
   rv <- tab_render_vars(tab)
   if (isTRUE(rv$degrade)) {
     return(list(tab = tab, vars = list(degrade = TRUE, reason = rv$reason)))
@@ -298,7 +297,7 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
   want_colors <- "colors" %in% compute
   ann <- purrr::map(
     stats::setNames(names(fmt_cols), names(fmt_cols)),
-    ~ fmt_col_ann(tab[[.x]], theme_cols, color_type, html_24_bit, want_colors)
+    ~ fmt_col_ann(tab[[.x]], theme_cols, color_type, want_colors)
   )
   any_bg <- if (want_colors) any(purrr::map_lgl(ann, ~ isTRUE(.$has_bgc))) else FALSE
 
@@ -337,21 +336,20 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
 
 # === SECTION: shared option resolver (Phase 10j) ====================================
 
-# Resolve the canonical shared export options ONCE (theme / color_type / html_24_bit + the on/off
+# Resolve the canonical shared export options ONCE (theme / color_type + the on/off
 # toggles), so every exporter AND the tab_export() facade share one set of names, defaults and option
 # fallbacks (killing the copy-pasted `match.arg(theme)` + `if (is.null(color_type)) getOption(...)`
 # preambles). `color = FALSE` renders monochrome AND disables the colour legend (which would otherwise
 # describe colours the cells no longer show). Returns a normalized scalar list.
 #' @keywords internal
 resolve_export_opts <- function(theme = c("light", "dark"),
-                                color_type = NULL, html_24_bit = NULL,
+                                color_type = NULL,
                                 color = TRUE, color_legend = TRUE,
                                 transpose = FALSE, caption = NULL) {
   theme <- match.arg(theme)
   if (is.null(color_type))  color_type  <- getOption("tabxplor.color_style_type")
-  if (is.null(html_24_bit)) html_24_bit <- getOption("tabxplor.color_html_24_bit")
   color <- isTRUE(color)
-  list(theme = theme, color_type = color_type, html_24_bit = html_24_bit,
+  list(theme = theme, color_type = color_type,
        color = color, color_legend = isTRUE(color_legend) && color,
        transpose = isTRUE(transpose), caption = caption)
 }
@@ -370,7 +368,6 @@ tab_export_prep <- function(tabs,
                             compute       = NULL,
                             color_type    = NULL,
                             theme         = "light",
-                            html_24_bit   = NULL,
                             color_legend  = TRUE,
                             transpose     = FALSE,
                             list_method   = FALSE,
@@ -384,7 +381,6 @@ tab_export_prep <- function(tabs,
   }
   # base `%||%` is R >= 4.4 only; the package supports R >= 4.1, so use explicit is.null().
   if (is.null(color_type))  color_type  <- getOption("tabxplor.color_style_type")
-  if (is.null(html_24_bit)) html_24_bit <- getOption("tabxplor.color_html_24_bit")
 
   theme_cols <- list(
     theme = theme[1],
@@ -411,7 +407,7 @@ tab_export_prep <- function(tabs,
     resolved,
     ~ prep_one_table(.x, backend = backend, drop_tab_vars = drop_tab_vars,
                      wrap = wrap, compute = compute, theme_cols = theme_cols,
-                     color_type = color_type[1], html_24_bit = html_24_bit[1])
+                     color_type = color_type[1])
   )
 
   # table-level labels (survey `label` attributes of the source variables), Suggests-guarded; only
@@ -423,7 +419,7 @@ tab_export_prep <- function(tabs,
       tables = tables,
       labels = labels,
       meta = list(backend = backend, compact = compact, theme = theme[1],
-                  color_type = color_type[1], html_24_bit = html_24_bit[1],
+                  color_type = color_type[1],
                   color_legend = color_legend, theme_cols = theme_cols,
                   compute = compute)
     ),

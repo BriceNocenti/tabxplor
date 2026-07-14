@@ -376,6 +376,8 @@ untab <- function(tabs) {
 #' @method print tabxplor_tab
 print.tabxplor_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = NULL,
                                max_footer_lines = NULL, min_row_var = 30, get_text = FALSE) {
+  # Phase 13a: install this table's per-table color_breaks override for the render (no-op otherwise).
+  .cb <- push_color_breaks(x); on.exit(pop_color_breaks(.cb), add = TRUE)
   if (getOption("tabxplor.print") == "kable") {
     x <- tab_kable(x)
     print(x)
@@ -449,6 +451,8 @@ print.tabxplor_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = N
 print.tabxplor_grouped_tab <- function(x, width = NULL, ..., n = 100,
                                        max_extra_cols = NULL,max_footer_lines = NULL,
                                        min_row_var = 30, get_text = FALSE) {
+  # Phase 13a: install this table's per-table color_breaks override for the render (no-op otherwise).
+  .cb <- push_color_breaks(x); on.exit(pop_color_breaks(.cb), add = TRUE)
   if (getOption("tabxplor.print") == "kable") {
     x <- tab_kable(x)
     print(x)
@@ -524,7 +528,7 @@ print_chi2 <- function(x, width = NULL) {
       paste0(paste(purrr::map_chr(tvs, ~ as.character(r[[.x]])), collapse = " / "), " - ")
     } else ""
     p_txt <- paste0(formatC(r$pvalue * 100, format = "g", digits = 3), "%")
-    p_txt <- if (isTRUE(r$pvalue >= 0.05)) cs$neg5(p_txt) else cs$pos5(p_txt)
+    p_txt <- if (isTRUE(r$pvalue >= 0.05)) cs[[8]](p_txt) else cs[[4]](p_txt)
     paste0("# ", prefix, r$col_var, ": ", stat_lbl, "=",
            formatC(r$statistic, format = "g", digits = 3), " (", df_txt, ") p=", p_txt)
   })
@@ -564,7 +568,7 @@ print_reg_footer <- function(x, width = NULL) {
       } else {
         p_txt <- if (isTRUE(r$pvalue < 0.0001)) "<0.01%"
                  else paste0(formatC(r$pvalue * 100, format = "g", digits = 3), "%")
-        p_txt <- if (isTRUE(r$pvalue >= 0.05)) cs$neg5(p_txt) else cs$pos5(p_txt)
+        p_txt <- if (isTRUE(r$pvalue >= 0.05)) cs[[8]](p_txt) else cs[[4]](p_txt)
         paste0(sp$label, " p=", p_txt)
       }
     })
@@ -654,9 +658,8 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #' background. By default it takes \code{getOption("tabxplor.color_style_type")}.
 #' @param theme By default, a white table with black text, Set to \code{"dark"} for a
 #' black table with white text.
-#' @param html_24_bit Use 24bits colors palettes for html tables : set to `"green_red"`
-#' or `"blue_red"`. Only with `mode = "color_code"` (not `mode = "crayon"`) and
-#' `theme = "light`. Default to \code{getOption("tabxplor.color_html_24_bit")}.
+#' @param html_24_bit `r lifecycle::badge("deprecated")` Inert since 1.4.0: exports are always
+#' 24-bit (the OKLCH palettes). Kept only so old calls do not error.
 #' @param tooltips By default, html tooltips are used to display additional informations
 #' at mouse hover. Set to \code{FALSE} to discard.
 #' @param popover By default, takes \code{getOption("tabxplor.kable_popover")}. When
@@ -717,9 +720,12 @@ tab_kable <- function(tabs,
                       whitespace_only = TRUE,
                       engine = NULL,
                       ...) {
-  # Phase 10j: the theme/color_type/html_24_bit/color/color_legend preamble is the shared resolver.
-  o <- resolve_export_opts(theme, color_type, html_24_bit, color, color_legend, transpose)
-  theme <- o$theme; color_type <- o$color_type; html_24_bit <- o$html_24_bit
+  # Phase 13a: install a per-table color_breaks override for the render (no-op otherwise).
+  .cb <- push_color_breaks(tabs); on.exit(pop_color_breaks(.cb), add = TRUE)
+  # Phase 10j: the theme/color_type/color/color_legend preamble is the shared resolver. `html_24_bit`
+  # is inert (Phase 13a): exports are always 24-bit, kept only so old calls do not error.
+  o <- resolve_export_opts(theme, color_type, color, color_legend, transpose)
+  theme <- o$theme; color_type <- o$color_type
   color_legend <- o$color_legend
   compute <- c("refs", "bold", "range", "labels")
   if (o$color) compute <- c(compute, "colors")
@@ -738,7 +744,7 @@ tab_kable <- function(tabs,
     tabs, backend = "kable", list_method = TRUE, compute = compute, transpose = o$transpose,
     wrap = list(rows = wrap_rows, cols = wrap_cols, exdent = 2,
                 whitespace_only = whitespace_only, unbreakable_spaces = TRUE, brk = "<br>"),
-    color_type = color_type, theme = theme, html_24_bit = html_24_bit,
+    color_type = color_type, theme = theme,
     color_legend = color_legend, what = "tab_kable()"
   )
 
@@ -755,7 +761,6 @@ tab_kable <- function(tabs,
             rd$tab, mode = "html",
             html_type   = color_type[1],
             html_theme  = theme[1],
-            html_24_bit = html_24_bit[1],
             text_color  = prep$meta$theme_cols$text,
             grey_color  = prep$meta$theme_cols$grey)),
           subtext)
@@ -1348,9 +1353,8 @@ reg_footer_lines <- function(tabs) {
 #' background. By default it takes \code{getOption("tabxplor.color_style_type")}.
 #' @param theme By default, a white table with black text, Set to \code{"dark"} for a
 #' black table with white text.
-#' @param html_24_bit Use 24bits colors palettes for html tables : set to `"green_red"`
-#' or `"blue_red"`. Only with `mode = "color_code"` (not `mode = "crayon"`) and
-#' `theme = "light`. Default to \code{getOption("tabxplor.color_html_24_bit")}.
+#' @param html_24_bit `r lifecycle::badge("deprecated")` Inert since 1.4.0: exports are always
+#' 24-bit (the OKLCH palettes). Kept only so old calls do not error.
 #' @param color Set to \code{FALSE} to render the table without colours (monochrome).
 #' @param color_legend Print colors legend below the table ?
 #' @param transpose Set to \code{TRUE} to transpose the table before export (rows become columns).
@@ -1374,6 +1378,8 @@ tab_plot <- function(tabs,
                      color = TRUE, color_legend = TRUE, caption = NULL, transpose = FALSE,
                      wrap_rows = 35, wrap_cols = 14, # unbreakable_spaces = TRUE
                      whitespace_only = TRUE) {
+  # Phase 13a: install a per-table color_breaks override for the render (no-op otherwise).
+  .cb <- push_color_breaks(tabs); on.exit(pop_color_breaks(.cb), add = TRUE)
   if (!requireNamespace("ggpubr", quietly = TRUE)) {
     stop(paste0("Package \"ggpubr\" needed for this function to work. ",
                 "You can install it with : install.packages('ggpubr')"),
@@ -1400,14 +1406,15 @@ tab_plot <- function(tabs,
   # by the prep below), still returns one plot.
   if (is.list(tabs) && !is.data.frame(tabs) && length(tabs) > 1L && !tab_list_mergeable(tabs)) {
     return(purrr::map(tabs, tab_plot, theme = theme, color_type = color_type,
-                      html_24_bit = html_24_bit, color = color, color_legend = color_legend,
+                      color = color, color_legend = color_legend,
                       caption = caption, transpose = transpose, wrap_rows = wrap_rows,
                       wrap_cols = wrap_cols, whitespace_only = whitespace_only))
   }
 
-  # Phase 10j: shared option resolver (theme/color_type/html_24_bit/color/color_legend/transpose).
-  o <- resolve_export_opts(theme, color_type, html_24_bit, color, color_legend, transpose)
-  theme <- o$theme; color_type <- o$color_type; html_24_bit <- o$html_24_bit
+  # Phase 10j: shared option resolver (theme/color_type/color/color_legend/transpose). `html_24_bit`
+  # is inert (Phase 13a).
+  o <- resolve_export_opts(theme, color_type, color, color_legend, transpose)
+  theme <- o$theme; color_type <- o$color_type
   color_legend <- o$color_legend
   compute <- c("refs", "bold", "range", "labels")
   if (o$color) compute <- c(compute, "colors")
@@ -1420,7 +1427,7 @@ tab_plot <- function(tabs,
     tabs, backend = "plot", compute = compute, transpose = o$transpose,
     wrap = list(rows = wrap_rows, cols = wrap_cols, exdent = 1,
                 whitespace_only = whitespace_only, unbreakable_spaces = FALSE, brk = "\n"),
-    color_type = color_type, theme = theme, html_24_bit = html_24_bit,
+    color_type = color_type, theme = theme,
     color_legend = color_legend, what = "tab_plot()"
   )
   rd <- prep$tables[[1]]
@@ -1601,7 +1608,6 @@ if (color_legend & length(color_cols) != 0) {
                                    mode = "html",
                                    html_type   = color_type[1],
                                    html_theme  = theme[1],
-                                   html_24_bit = html_24_bit[1],
                                    text_color  = text_color,
                                    grey_color  = grey_color)) |>
     stringr::str_split("</span>|<span style=\"") |>
@@ -2966,132 +2972,22 @@ vec_cast.data.frame.tabxplor_grouped_tab <- function(x, to, ...) {
 # }
 
 
-## OLD COLOR PALETTES (TO DEPRECATE) ----
-# DESIGN: 6 color palettes, each with 11 named hex codes: pos1-pos5 (over-represented),
-#   neg1-neg5 (under-represented), ratio (for *2 rule comparison). Palettes:
-#   text_dark, text_light (8-bit), text_light_24_blue_red, text_light_24_green_red (24-bit),
-#   bg_light, bg_dark. Selected via set_color_style(type, theme, html_24_bit).
-#   Hues are hand-tuned so the eye tells the intensity levels apart immediately on real
-#   tables. 8-bit variants target terminals without truecolor; the 24-bit blue-red variant
-#   is a more colorblind-friendly alternative to the traditional green-red.
+## 8-BIT FALLBACK PALETTES (RStudio console only) ----
+# The console default is the 24-bit OKLCH palette (below). RStudio's console does not render
+# 24-bit truecolor, so there we fall back to these curated 256-colour palettes -- 4 over + 4 neg
+# each, trimmed from the historical tabxplor palettes (the old faint pos1/neg1 and the ratio slot
+# dropped, to match the 4-intensity model). Positron / modern terminals get the 24-bit palette.
 #' @keywords internal
-color_style_text_dark <-
-  c(pos1 = "#CCCC33", # rgb(4, 4, 1, maxColorValue = 5),
-    pos2 = "#CCFF33", # rgb(4, 5, 1, maxColorValue = 5),
-    pos3 = "#99FF33", # rgb(3, 5, 1, maxColorValue = 5),
-    pos4 = "#33FF33", # rgb(1, 5, 1, maxColorValue = 5),
-    pos5 = "#00FF00", # rgb(0, 5, 0, maxColorValue = 5),
-
-    neg1 = "#CC9966", # rgb(4, 3, 2, maxColorValue = 5),
-    neg2 = "#FF9933", # rgb(5, 3, 1, maxColorValue = 5),
-    neg3 = "#FF6633", # rgb(5, 2, 1, maxColorValue = 5),
-    neg4 = "#FF3300", # rgb(5, 1, 0, maxColorValue = 5),
-    neg5 = "#FF0000",  # rgb(5, 0, 0, maxColorValue = 5)
-
-    ratio ="#3366FF"  # "#7B1FA2",
-
-  ) # |>
-#purrr::map(~ crayon::make_style(., colors = 256))
-
-#' @keywords internal
-color_style_text_light <-
-  c(pos1 = "#66CCFF", # rgb(2, 4, 5, maxColorValue = 5),
-    pos2 = "#33FFFF", # rgb(1, 5, 5, maxColorValue = 5),
-    pos3 = "#00CCFF", # rgb(0, 4, 5, maxColorValue = 5),
-    pos4 = "#0066FF", # rgb(0, 2, 5, maxColorValue = 5),
-    pos5 = "#0000FF", # rgb(0, 0, 5, maxColorValue = 5),
-
-    neg1 =  "#CC9966", # rgb(4, 3, 2, maxColorValue = 5),
-    neg2 =  "#FF9933", # rgb(5, 3, 1, maxColorValue = 5),
-    neg3 =  "#FF6600", # rgb(5, 2, 0, maxColorValue = 5),
-    neg4 =  "#FF3333", # rgb(5, 1, 1, maxColorValue = 5),
-    neg5 =  "#FF0000",  # rgb(5, 0, 0, maxColorValue = 5)
-
-    ratio = "#6633CC" # "#6600CC"
-  ) #|>
-    #purrr::map(~ crayon::make_style(., colors = 256))
-
-
-#' @keywords internal
-color_style_text_light_24_blue_red <-
-  c(
-    pos1 = "#93ED75",
-    pos2 = "#3ba888", # oklch(0.66 0.11 170)   # "#20a89b", # oklch(0.66 0.11 185)  "#0ba6ba", # "oklch(0.67 0.11 210)",
-    pos3 = "#0891c9", # oklch(0.62 0.13 235)   # "#0890a2", # "oklch(0.6 0.1 210)",
-    pos4 = "#0267c7", # oklch(0.52 0.17 255)   # "#027ad2", # "oklch(0.57 0.16 250)",
-    pos5 = "#300dfd", # oklch(0.47 0.30 270)   # "#265aff"  # "#2f60ee"  # "oklch(0.55 0.22 265)",
-    
-    neg1 = "#fdd835",
-    neg2 = "#c38c46", # oklch(0.68 0.11  70)   # "#d08747", # "oklch(0.69 0.12 60)",
-    neg3 = "#d26c28", # oklch(0.64 0.15  50)   # "#c8692d", # "oklch(0.62 0.14 50)",
-    neg4 = "#da4c01", # oklch(0.61 0.19  40)   # "#d04b0c", # "oklch(0.59 0.18 40)",
-    neg5 = "#dc0204",# oklch(0.56 0.23  29)   # "#e61301"  # "#d10f00"  # "oklch(0.54 0.22 30)",
-
-    ratio = "#0267c7"
-    #   "#8E24AA", "#7B1FA2" "#6A1B9A"
-    # "#673AB7", "#5E35B1", "#512DA8", "#4527A0"
-
-  )  #    neg5 = "#cb0000" )
-
-# pct_ratio_color_style <- c(ratio = "#6A1B9A")
-
-#' @keywords internal
-color_style_text_light_24_green_red <-
-  c(pos1 = "#e4e65e",   #  c(pos1 = "#e4e65e",
-    pos2 = "#C7D62C",   #    pos2 = "#cddc39",
-    pos3 = "#83BB3F",   #    pos3 = "#8bc34a",
-    pos4 = "#3BA240",   #    pos4 = "#589E38",
-    pos5 = "#1b6e20",   #    pos5 = "#1b6e20",
-
-    neg1 = "#fdd835",   #    neg1 = "#ffeb3b",
-    neg2 = "#ffb300",   #    neg2 = "#ffc400",
-    neg3 = "#FF8138",   #    neg3 = "#ff9100",
-    neg4 = "#ff3d00",   #    neg4 = "#ff3d00",
-    neg5 = "#cb0000",
-
-    ratio ="#1976D2"   # "#7B1FA2",
-
-    )  #    neg5 = "#cb0000" )
-
-#' @keywords internal
-color_style_bg_light <- # also change in select_in_color_style()
-  c(
-      neg1 = "#ffffff",
-      pos2 = "#F6F3FF", 
-      pos3 = "#E9E3FF", 
-      pos4 = "#DED3FF",
-      pos5 = "#D2C3FF",
-
-      neg1 = "#ffffff",
-      neg2 = "#fff8e6", # oklch(0.98 0.025 90)    # "#fff5d9", # oklch(0.97 0.04 90)
-      neg3 = "#ffeab1", # oklch(0.94 0.076 90)    # "#ffe6a3", # oklch(0.93 0.09 90)
-      neg4 = "#fddb7c", # oklch(0.90 0.12  90)    # "#fcd76f", # oklch(0.89 0.13 90)
-      neg5 = "#ffce2d",# oklch(0.87 0.168 90)    # "#f9c718"#,# oklch(0.85 0.17 90)
-
-    ratio ="#6699FF" # rgb(3, 0, 5, maxColorValue = 5) #  "#9900FF" "#6600FF", "#6600CC"
-
-    ) #%>%
-#purrr::map(~ crayon::make_style(., bg = TRUE, colors = 256))
-
-#' @keywords internal
-color_style_bg_dark <- # also change in select_in_color_style()
-  c(pos1 = "#000033", #rgb(0, 0, 1, maxColorValue = 5),
-    pos2 = "#000066", #rgb(0, 0, 2, maxColorValue = 5),
-    pos3 = "#000099", #rgb(0, 0, 3, maxColorValue = 5),
-    pos4 = "#0000CC", #rgb(0, 0, 4, maxColorValue = 5),
-    pos5 = "#0000FF", #rgb(0, 0, 5, maxColorValue = 5),
-
-    neg1 = "#330000", #rgb(1, 0, 0, maxColorValue = 5),
-    neg2 = "#660000", #rgb(2, 0, 0, maxColorValue = 5),
-    neg3 = "#990000", #rgb(3, 0, 0, maxColorValue = 5),
-    neg4 = "#CC0000", #rgb(4, 0, 0, maxColorValue = 5),
-    neg5 = "#FF0000", #rgb(5, 0, 0, maxColorValue = 5)
-
-    ratio ="#6600CC"  # "#7B1FA2",
-    ) #%>%
-#purrr::map(~ crayon::make_style(., bg = TRUE, colors = 256))
-
-
+palette_8bit <- list(
+  text_light = c("#33FFFF", "#00CCFF", "#0066FF", "#0000FF",   # over (faint -> strong)
+                 "#FF9933", "#FF6600", "#FF3333", "#FF0000"),  # under
+  text_dark  = c("#CCFF33", "#99FF33", "#33FF33", "#00FF00",
+                 "#FF9933", "#FF6633", "#FF3300", "#FF0000"),
+  bg_light   = c("#F6F3FF", "#E9E3FF", "#DED3FF", "#D2C3FF",
+                 "#fff8e6", "#ffeab1", "#fddb7c", "#ffce2d"),
+  bg_dark    = c("#000066", "#000099", "#0000CC", "#0000FF",
+                 "#660000", "#990000", "#CC0000", "#FF0000")
+)
 
 
 ## NEW COLOR PALETTES (to wire to the code) ----
@@ -3277,109 +3173,131 @@ default_dark_background_colors_neg <- c(
 ## Color functions ----
 
 
-#' Define the color style used to print \code{\link{tab}}
-#' @describeIn tab_many define the color style used to print \code{\link{tab}}.
-#' @param type The style type in \code{set_color_style} and \code{get_color_style},
-#'  \code{"text"} to color the text, \code{"bg"} to color the background.
-#' @param theme For \code{set_color_style} and \code{get_color_style}, is your console
-#' or html table background \code{"light"} or \code{"dark"} ? Default to RStudio theme.
-#' @param html_24_bit Use 24bits colors palettes for html tables : set to `"green_red"`
-#' or `"blue_red"`. Only with `mode = "color_code"` (not `mode = "crayon"`) and
-#' `theme = "light`. Default to \code{getOption("tabxplor.color_html_24_bit")}.
-#' @param custom_palette Possibility to provide a custom color styles, as a character
-#' vector of 10 html color codes (the five first for over-represented numbers,
-#' the five last for under-represented ones). The result is saved to
-#' \code{options("tabxplor.color_style")}. To discard, relaunch the function with
-#' \code{custom_palette = NULL}.
-#'
-#' @return Set global options \code{"tabxplor.color_style_type"} and
-#' \code{"tabxplor.color_style_theme"}, used when printing \code{\link{tab}} objects.
+# PURPOSE: the render-time colour palettes (Phase 13a). Eight OKLCH base palettes -- one per
+# (light/dark theme x text/background channel x over-/under-represented side) -- each 4 hex codes
+# (faint -> strong), position-based (no pos1..neg5 names, no ratio slot). They are composed into
+# 8-element slot vectors (4 over + 4 under) and pre-built once into crayon style functions, stored
+# in an internal env and only rebuilt by set_color_palette(). The engine indexes them by the
+# integer slot from fmt_color_slots() (1:4 = over intensities, 5:8 = under). See dev/new_colors_UI.md.
+#' @keywords internal
+tabxplor_palette_env <- new.env(parent = emptyenv())
+
+# The eight OKLCH defaults (defined above as default_*_colors), as the seed base palette.
+#' @keywords internal
+default_palette_base <- function() {
+  list(
+    text_colors                = default_text_colors,
+    text_colors_neg            = default_text_colors_neg,
+    background_colors          = default_background_colors,
+    background_colors_neg      = default_background_colors_neg,
+    dark_text_colors           = default_dark_text_colors,
+    dark_text_colors_neg       = default_dark_text_colors_neg,
+    dark_background_colors     = default_dark_background_colors,
+    dark_background_colors_neg = default_dark_background_colors_neg
+  )
+}
+
+# Compose the base palettes into the 8-slot hex vectors + pre-built crayon functions. The console
+# uses 24-bit OKLCH, except in the RStudio console (no truecolor) where the curated 8-bit fallback
+# is used; exports (mode = "color_code") always use the 24-bit hex.
+#' @keywords internal
+build_palettes <- function() {
+  e <- tabxplor_palette_env
+  if (is.null(e$base)) e$base <- default_palette_base()
+  b <- e$base
+  e$hex <- list(
+    text_light = c(b$text_colors,            b$text_colors_neg),
+    text_dark  = c(b$dark_text_colors,       b$dark_text_colors_neg),
+    bg_light   = c(b$background_colors,       b$background_colors_neg),
+    bg_dark    = c(b$dark_background_colors,  b$dark_background_colors_neg)
+  )
+  bit8 <- isTRUE(Sys.getenv("RSTUDIO") == "1")
+  ncol <- if (bit8) 256L else crayon::num_colors()
+  mk <- function(key, is_bg) {
+    src <- if (bit8) palette_8bit[[key]] else e$hex[[key]]
+    purrr::map(src, ~ crayon::make_style(., bg = is_bg, colors = ncol))
+  }
+  e$crayon <- list(
+    text_light = mk("text_light", FALSE), text_dark = mk("text_dark", FALSE),
+    bg_light   = mk("bg_light",   TRUE),  bg_dark   = mk("bg_dark",   TRUE)
+  )
+  invisible()
+}
+
+#' Define the color palette used to print \code{\link{tab}}
+#' @describeIn tab_many customise the color palette used to print \code{\link{tab}}. Each palette
+#' is 4 hex codes ordered faint -> strong. Provide only the ones you want to change; the OKLCH
+#' defaults are used otherwise. The crayon styles are (re)built once, not per cell.
+#' @param text_colors,text_colors_neg,background_colors,background_colors_neg Light-theme palettes
+#' (4 hex each): the text (font) and background (fill) colours for the over- (\code{*_colors}) and
+#' under-represented (\code{*_colors_neg}) sides.
+#' @param dark_text_colors,dark_text_colors_neg,dark_background_colors,dark_background_colors_neg
+#' The dark-theme counterparts (4 hex each).
+#' @param theme \code{"light"} or \code{"dark"} for the console / exports; defaults to the current
+#' setting (RStudio theme when detectable, else \code{"light"}).
+#' @return Sets the internal color palettes (invisibly) and the option
+#' \code{"tabxplor.color_style_theme"}.
 #' @export
-#'
-#' @examples set_color_style(type = "bg")
-set_color_style <- function(type = c("text", "bg"),
-                            theme = NULL,
-                            html_24_bit = c("blue_red", "green_red", "no"),
-                            custom_palette = NULL) {
-  stopifnot(all(type %in% c("text", "bg")))
-  options("tabxplor.color_style_type" = type[1])
+#' @examples set_color_palette(text_colors = c("#02a5b3", "#0891c9", "#0267c7", "#300dfd"))
+set_color_palette <- function(text_colors = NULL, text_colors_neg = NULL,
+                              background_colors = NULL, background_colors_neg = NULL,
+                              dark_text_colors = NULL, dark_text_colors_neg = NULL,
+                              dark_background_colors = NULL, dark_background_colors_neg = NULL,
+                              theme = NULL) {
+  e <- tabxplor_palette_env
+  if (is.null(e$base)) e$base <- default_palette_base()
 
-  stopifnot(all(html_24_bit %in% c("green_red", "blue_red", "no")))
-  options("tabxplor.color_html_24_bit" = html_24_bit[1])
+  set1 <- function(nm, val) {
+    if (is.null(val)) return(invisible())
+    if (!is.character(val) || length(val) != 4L) {
+      cli::cli_abort(c("{.arg {nm}} must be 4 hex color codes (faint -> strong).",
+                       "x" = "{length(val)} were given."))
+    }
+    e$base[[nm]] <- unname(val)
+  }
+  set1("text_colors", text_colors)
+  set1("text_colors_neg", text_colors_neg)
+  set1("background_colors", background_colors)
+  set1("background_colors_neg", background_colors_neg)
+  set1("dark_text_colors", dark_text_colors)
+  set1("dark_text_colors_neg", dark_text_colors_neg)
+  set1("dark_background_colors", dark_background_colors)
+  set1("dark_background_colors_neg", dark_background_colors_neg)
 
+  options("tabxplor.color_style_type" = getOption("tabxplor.color_style_type", "text"))
   if (is.null(theme)) {
-    is_RStudio <- function() Sys.getenv("RSTUDIO") == "1" & rlang::is_interactive()  #.Platform$GUI == "RStudio"
-    is_dark <- if (is_RStudio()) { rstudioapi::getThemeInfo()$dark } else { FALSE }
-    options("tabxplor.color_style_theme" = ifelse(is_dark, "dark", "light"))
+    if (is.null(getOption("tabxplor.color_style_theme"))) {
+      is_dark <- isTRUE(Sys.getenv("RSTUDIO") == "1" && rlang::is_interactive()) &&
+        isTRUE(tryCatch(rstudioapi::getThemeInfo()$dark, error = function(e) FALSE))
+      options("tabxplor.color_style_theme" = if (is_dark) "dark" else "light")
+    }
   } else {
-    stopifnot(length(theme) == 1 & all(theme %in% c("dark", "light")))
+    stopifnot(length(theme) == 1L, theme %in% c("dark", "light"))
     options("tabxplor.color_style_theme" = theme)
   }
 
-  if (length(custom_palette) != 0) {
-    # 11 slots: pos1..pos5 (over-represented), neg1..neg5 (under-represented), ratio (the x2).
-    if (length(custom_palette) != 11 || !is.character(custom_palette)) {
-      cli::cli_abort(c(
-        "{.arg custom_palette} must be a character vector of length 11.",
-        "i" = "Order: {.val pos1}..{.val pos5}, {.val neg1}..{.val neg5}, {.val ratio}."
-      ))
-    }
-    options("tabxplor.color_style" = purrr::set_names(
-      custom_palette,
-      c("pos1","pos2","pos3","pos4","pos5", "neg1","neg2","neg3","neg4","neg5", "ratio")
-    ))
-    return(invisible(custom_palette))
-  } else {
-    options("tabxplor.color_style" = NULL)
-    return(invisible())
-  }
-
-  # assign("tabxplor_color_breaks", tabxplor_color_breaks, pos = rlang::global_env() )
+  build_palettes()
+  invisible()
 }
 
-#' @describeIn tab_many get color styles as \pkg{crayon} functions or html codes.
+#' @describeIn tab_many get the color palette as \pkg{crayon} functions or html codes: an 8-element
+#' vector (4 over-represented intensities then 4 under-represented), indexed by the engine slot.
 #' @param mode By default, \code{get_color_style} returns a list of \pkg{crayon} coloring
 #' functions. Set to \code{"color_code"} to return html color codes.
-#' @return A vector of crayon color functions, or a vector of color html codes.
+#' @param type \code{"text"} (font colour) or \code{"bg"} (background fill).
+#' @param theme \code{"light"} or \code{"dark"}; defaults to the current setting.
+#' @return A list of 8 crayon color functions, or a vector of 8 color html codes.
 #' @export
-get_color_style <- function(mode = c("crayon", "color_code"),
-                            type = NULL, theme = NULL, html_24_bit = NULL) {
+get_color_style <- function(mode = c("crayon", "color_code"), type = NULL, theme = NULL) {
+  type  <- if (is.null(type )) getOption("tabxplor.color_style_type" ) else type
+  theme <- if (is.null(theme)) getOption("tabxplor.color_style_theme") else theme
+  if (is.null(type)  || is.na(type[1]))  type  <- "text"
+  if (is.null(theme) || is.na(theme[1])) theme <- "light"
+  key <- paste0(if (identical(type[1], "bg")) "bg" else "text", "_", theme[1])
 
-  type  <- if (is.null(type )) {getOption("tabxplor.color_style_type" )} else {type }
-  theme <- if (is.null(theme)) {getOption("tabxplor.color_style_theme")} else {theme}
-  html_24_bit <-
-    if (is.null(html_24_bit)) {getOption("tabxplor.color_html_24_bit")} else {html_24_bit}
-
-  if (mode[1] == "crayon") html_24_bit <- "no"
-
-  custom_palette <- getOption("tabxplor.color_style")
-  if (is.null(custom_palette)) {
-    color_style <-
-      switch(type,
-             "text" = switch(theme,
-                             "dark"  = color_style_text_dark,
-                             "light" = switch(html_24_bit,
-                                              "green_red" = color_style_text_light_24_green_red,
-                                              "blue_red"  = color_style_text_light_24_blue_red,
-                                              "no"        = color_style_text_light)
-             ),
-
-             "bg"   = switch(theme,
-                             "light" = color_style_bg_light,
-                             "dark"  = color_style_bg_dark
-             )
-      )
-
-    # if (mode[1] == "color_code" & !color_bits == "24") color_style <- color_style %>%
-    #   purrr::map_chr(~ attr(., "_styles", exact = TRUE) %>% names())
-  } else {
-    color_style <- custom_palette
-  }
-
-  if (mode[1] == "crayon") color_style <- color_style %>%
-    purrr::map(~ crayon::make_style(., bg = type[1] == "bg", colors = 256))
-
-  color_style
+  e <- tabxplor_palette_env
+  if (is.null(e$hex)) build_palettes()
+  if (identical(mode[1], "crayon")) e$crayon[[key]] else e$hex[[key]]
 }
 
 
@@ -3410,36 +3328,74 @@ get_color_style <- function(mode = c("crayon", "color_code"),
 
 #Color breaks for printing fmt in tabs ------------------------------------------------
 
-# PURPOSE: the canonical color-break representation (Phase 5) and its accessors.
+# PURPOSE: the canonical color-break representation (Phase 13a) and its accessors.
 # The stored option "tabxplor.color_breaks" is a named list of the five measure scales
 #   pct_diff, pct_ratio, mean_diff, mean_ratio, contrib
-# each a list(pos = <positive breaks, sorted>, center, strict, std):
-#   - pos    : positive-only thresholds; the engine mirrors them (additive c(x,-x),
-#              multiplicative c(x,1/x)) at render time.
+# each a list(center, strict, std, over = list(breaks, slots), under = list(breaks, slots)):
+#   - over/under : the two sides, each a list(breaks = <ascending POSITIVE magnitudes>,
+#                  slots = <intensities 1:4 into the 4-colour palette>). An empty side is off.
+#                  Both are magnitudes: the engine folds every cell to a magnitude >= the neutral
+#                  (abs for additive, 1/x for multiplicative) and picks the side by direction.
 #   - center : 0 for additive scales (pct_diff, mean_diff, contrib), 1 for multiplicative
 #              (pct_ratio, mean_ratio) -- the neutral value each break is measured from.
 #   - strict : TRUE reproduces a strict `>`/`<` comparison, FALSE an inclusive `>=`/`<=`
 #              (contrib). On-break cells fall in the lower band when strict.
 #   - std    : mean_diff only -- TRUE colors the sd-standardized difference (Glass's delta),
 #              FALSE colors the raw difference in data units.
-# The Phase-5 findInterval engine (fmt_color_plan/fmt_color_slots) reads this shape directly.
-# See: dev/new_colors_UI.md §7 ; CLAUDE.md > 1.4.0 roadmap > Phase 5.
+# The findInterval engine (fmt_color_plan/fmt_color_slots) reads this shape directly.
+# See: dev/new_colors_UI.md ; CLAUDE.md > 1.4.0 roadmap > Phase 13a.
 
+# Default intensity-slot selection for k thresholds on one side, mapped into the 4 palette
+# intensities. Fewer than 4 breaks drop the 2nd intensity first, then the 4th, then the 1st,
+# so a single break lands on the medium-strong colour (intensity 3).
 #' @keywords internal
-default_color_scales <- function() {
-  list(
-    pct_diff   = list(pos = c(0.05, 0.1, 0.2, 0.3), center = 0, strict = TRUE,  std = FALSE),
-    pct_ratio  = list(pos = c(2),                   center = 1, strict = TRUE,  std = FALSE),
-    mean_diff  = list(pos = c(0.2, 0.5, 0.8),       center = 0, strict = TRUE,  std = TRUE ),
-    mean_ratio = list(pos = c(1.15, 1.5, 2, 4),     center = 1, strict = TRUE,  std = FALSE),
-    contrib    = list(pos = c(1, 2, 5, 10),         center = 0, strict = FALSE, std = FALSE)
-  )
+intensity_slots <- function(k) {
+  switch(as.character(k),
+         "0" = integer(0),
+         "1" = 3L,
+         "2" = c(1L, 3L),
+         "3" = c(1L, 3L, 4L),
+         "4" = c(1L, 2L, 3L, 4L),
+         cli::cli_abort(c("At most 4 color breaks per side (there are 4 palette intensities).",
+                          "x" = "{k} were given.")))
 }
 
-# Validate one user scale and wrap it into the canonical list(pos, center, strict, std).
-# `values` NULL/empty drops the measure for that column type (§7.4) -- except mean_diff = NULL,
-# which restores the standardized default. Multiplicative scales (pct_ratio/mean_ratio) require
-# all breaks > 1 (mirrored to 1/x); additive scales require all > 0 (mirrored to -x).
+# Parse one side (over- or under-represented) given as POSITIVE magnitudes, possibly with NA
+# marking a skipped intensity slot. Returns list(breaks = <ascending magnitudes>, slots = <1:4>).
+# Without NA the slots come from intensity_slots(); with NA the non-NA positions ARE the intensities.
+#' @keywords internal
+parse_color_side <- function(v, name) {
+  if (length(v) == 0) return(list(breaks = numeric(0), slots = integer(0)))
+  if (length(v) > 4) {
+    cli::cli_abort(c("Color breaks {.arg {name}} accept at most 4 values per side.",
+                     "x" = "{length(v)} were given."))
+  }
+  if (anyNA(v)) {
+    slots  <- which(!is.na(v))
+    breaks <- as.double(v[slots])
+  } else {
+    slots  <- intensity_slots(length(v))
+    breaks <- as.double(v)
+  }
+  if (length(breaks) > 1 && is.unsorted(breaks, strictly = TRUE)) {
+    cli::cli_abort("Color break magnitudes {.arg {name}} must be strictly increasing.")
+  }
+  if (any(breaks <= 0)) {
+    cli::cli_abort("Color break magnitudes {.arg {name}} must be > 0.")
+  }
+  list(breaks = breaks, slots = as.integer(slots))
+}
+
+# Validate one user scale and wrap it into the canonical
+#   list(center, strict, std, over = list(breaks, slots), under = list(breaks, slots)).
+# Input forms (see dev/new_colors_UI.md / Phase 13a):
+#   - a plain numeric vector of SIGNED / RECIPROCAL literals: negatives (additive) or values < 1
+#     (multiplicative) are the under-represented side; a one-sided vector auto-mirrors, a two-sided
+#     one is used as-is. `NA` entries skip an intensity slot (one-sided vectors only).
+#   - list(over =, under =): explicit per-side magnitudes, NO mirror; omit a side to switch it off
+#     (e.g. list(over = 2) = the "only x2" rule).
+#   - NULL / empty: drop the measure for its column type -- except mean_diff = NULL, which restores
+#     the standardized (Glass's delta) default.
 #' @keywords internal
 mk_color_scale <- function(name, values) {
   valid <- c("pct_diff", "pct_ratio", "mean_diff", "mean_ratio", "contrib")
@@ -3450,35 +3406,76 @@ mk_color_scale <- function(name, values) {
   center <- if (name %in% c("pct_ratio", "mean_ratio")) 1 else 0
   strict <- name != "contrib"
 
-  if (is.null(values) || length(values) == 0) {
+  # NULL / empty: drop the measure, except mean_diff -> standardized default.
+  if (is.null(values) || (is.numeric(values) && length(values) == 0L)) {
     if (name == "mean_diff") {
-      return(list(pos = c(0.2, 0.5, 0.8), center = 0, strict = TRUE, std = TRUE))
+      side <- parse_color_side(c(0.2, 0.5, 0.8), name)
+      return(list(center = 0, strict = TRUE, std = TRUE, over = side, under = side))
     }
-    return(list(pos = numeric(), center = center, strict = strict, std = FALSE))
+    empty <- list(breaks = numeric(0), slots = integer(0))
+    return(list(center = center, strict = strict, std = FALSE, over = empty, under = empty))
+  }
+
+  # over/under list form: explicit per-side magnitudes, no mirror.
+  if (is.list(values)) {
+    nms <- names(values)
+    if (is.null(nms) || !all(nzchar(nms)) || !all(nms %in% c("over", "under"))) {
+      cli::cli_abort(c("A color scale given as a list must use {.field over} / {.field under}.",
+                       "i" = 'e.g. {.code list(over = c(1.5, 2, 4))} for the over-represented side only.'))
+    }
+    over  <- parse_color_side(if (is.null(values$over))  numeric(0) else values$over,  name)
+    under <- parse_color_side(if (is.null(values$under)) numeric(0) else values$under, name)
+    return(list(center = center, strict = strict, std = FALSE, over = over, under = under))
   }
 
   if (!is.numeric(values)) {
-    cli::cli_abort("Color breaks {.arg {name}} must be numeric, not {.cls {class(values)}}.")
+    cli::cli_abort(c("Color breaks {.arg {name}} must be numeric or a {.code list(over =, under =)}.",
+                     "x" = "Got {.cls {class(values)}}."))
   }
-  if (anyNA(values)) cli::cli_abort("Color breaks {.arg {name}} must not contain missing values.")
-  if (length(values) > 5) {
-    cli::cli_abort(c("Color breaks {.arg {name}} accept at most 5 values (color steps).",
-                     "x" = "{length(values)} were given."))
-  }
-  if (length(values) > 1 && is.unsorted(values, strictly = TRUE)) {
-    cli::cli_abort("Color breaks {.arg {name}} must be strictly increasing.")
-  }
+
+  nonna <- values[!is.na(values)]
   if (center == 1) {
-    if (any(values <= 1)) {
-      cli::cli_abort(c("Ratio breaks {.arg {name}} must all be > 1.",
-                       "i" = "They are mirrored to 1/x for the under-represented side."))
-    }
-  } else if (any(values <= 0)) {
-    cli::cli_abort(c("Breaks {.arg {name}} must all be > 0.",
-                     "i" = "They are mirrored to -x for the under-represented side."))
+    if (any(nonna == 1)) cli::cli_abort("Ratio breaks {.arg {name}} cannot equal 1 (the neutral value).")
+    if (any(nonna <= 0)) cli::cli_abort("Ratio breaks {.arg {name}} must be > 0.")
+    over_sel  <- values > 1
+    under_sel <- values < 1
+  } else {
+    if (any(nonna == 0)) cli::cli_abort("Breaks {.arg {name}} cannot equal 0 (the neutral value).")
+    over_sel  <- values > 0
+    under_sel <- values < 0
   }
-  # mean_diff supplied in data units -> absolute coloring (std = FALSE); NULL handled above.
-  list(pos = as.double(values), center = center, strict = strict, std = FALSE)
+  has_over  <- any(over_sel,  na.rm = TRUE)
+  has_under <- any(under_sel, na.rm = TRUE)
+
+  # magnitude of one side (NA preserved as a slot-skip marker)
+  to_mag <- function(x, side) {
+    if (center == 1) { if (side == "over") x else 1 / x } else { if (side == "over") x else -x }
+  }
+
+  if (has_over && has_under) {                      # two-sided: use as-is, no mirror, no NA
+    if (anyNA(values)) {
+      cli::cli_abort(c("Color breaks {.arg {name}}: NA slot-skips are only allowed on a one-sided vector.",
+                       "i" = "Use the {.code list(over =, under =)} form for asymmetric scales with skips."))
+    }
+    over  <- parse_color_side(sort(to_mag(values[over_sel],  "over")),  name)
+    under <- parse_color_side(sort(to_mag(values[under_sel], "under")), name)
+  } else {                                          # one-sided: mirror to both, keep NA positions
+    side <- if (has_under && !has_over) "under" else "over"
+    parsed <- parse_color_side(to_mag(values, side), name)
+    over <- parsed; under <- parsed
+  }
+  list(center = center, strict = strict, std = FALSE, over = over, under = under)
+}
+
+#' @keywords internal
+default_color_scales <- function() {
+  list(
+    pct_diff   = mk_color_scale("pct_diff",   c(0.05, 0.1, 0.2, 0.3)),
+    pct_ratio  = mk_color_scale("pct_ratio",  list(over = 2)),
+    mean_diff  = mk_color_scale("mean_diff",  NULL),
+    mean_ratio = mk_color_scale("mean_ratio", list(over = c(1.15, 1.5, 2, 4), under = c(1.5, 2, 4))),
+    contrib    = mk_color_scale("contrib",    c(1, 2, 5, 10))
+  )
 }
 
 
@@ -3493,70 +3490,94 @@ mk_color_scale <- function(name, values) {
 #' \code{mean_ratio} the mean ratio, \code{contrib} the chi2 contribution. An empty/\code{NULL}
 #' scale drops that measure for its column type.
 #' @param breaks A named list of scales to set, e.g.
-#' \code{list(pct_diff = c(0.05, 0.1, 0.2, 0.3), pct_ratio = c(2))}. Unset scales keep their
-#' current value.
-#' @param ... Unused; forces the following arguments to be named.
-#' @param pct_breaks,mean_breaks,contrib_breaks `r lifecycle::badge("deprecated")` The old
-#' positional arguments. \code{pct_breaks} is split into \code{pct_diff} (values \eqn{\le} 1)
-#' and \code{pct_ratio} (values > 1); \code{mean_breaks} maps to \code{mean_ratio};
-#' \code{contrib_breaks} to \code{contrib}.
+#' \code{list(pct_diff = c(0.05, 0.1, 0.2, 0.3), pct_ratio = list(over = 2))}. Unset scales keep
+#' their current value.
+#' @param ... Scales passed individually and named, e.g.
+#' \code{set_color_breaks(pct_diff = c(0.05, 0.1, 0.2), mean_ratio = c(1.15, 1.5, 2, 4))}. Each
+#' value is either a plain vector of signed / reciprocal literals (negatives, or ratios < 1, are
+#' the under-represented side; a one-sided vector auto-mirrors; \code{NA} skips an intensity slot)
+#' or a \code{list(over =, under =)} of magnitudes (no mirror; omit a side to switch it off, e.g.
+#' \code{list(over = 2)} for the "only x2" rule).
 #'
 #' @return Sets the global option "tabxplor.color_breaks" (a named list of scales) and returns
 #' it invisibly.
 #' @export
-#' @examples set_color_breaks(list(
+#' @examples set_color_breaks(
 #'   pct_diff   = c(0.05, 0.15, 0.3),
-#'   pct_ratio  = c(2),
+#'   pct_ratio  = list(over = 2),
 #'   mean_ratio = c(1.15, 2, 4),
 #'   contrib    = c(1, 2, 5)
-#' ))
-set_color_breaks <- function(breaks = NULL, ...,
-                             pct_breaks, mean_breaks, contrib_breaks) {
+#' )
+set_color_breaks <- function(breaks = NULL, ...) {
   cur <- getOption("tabxplor.color_breaks")
   if (is.null(cur) || is.null(cur$pct_diff)) cur <- default_color_scales()
 
-  # NEW form: a fully named list of measure scales, merged over the current setting.
-  if (!is.null(breaks)) {
-    if (!is.list(breaks) || is.null(names(breaks)) || any(names(breaks) == "")) {
-      cli::cli_abort(c("{.arg breaks} must be a fully named list of color scales.",
-                       "i" = "e.g. {.code list(pct_diff = c(0.05, 0.1, 0.2, 0.3))}."))
-    }
-    for (nm in names(breaks)) cur[[nm]] <- mk_color_scale(nm, breaks[[nm]])
+  combined <- c(if (is.null(breaks)) list() else breaks, list(...))
+  if (length(combined) == 0L) {
+    options("tabxplor.color_breaks" = cur)
+    return(invisible(cur))
   }
-
-  # OLD positional args (soft-deprecated): map onto the new scales.
-  if (!missing(pct_breaks)) {
-    lifecycle::deprecate_soft(
-      "1.4.0", "set_color_breaks(pct_breaks)",
-      details = 'Use `set_color_breaks(list(pct_diff = ., pct_ratio = .))`.'
-    )
-    if (!is.numeric(pct_breaks) || sum(pct_breaks > 1) > 1) {
-      cli::cli_abort("`pct_breaks` must be numeric with at most one value > 1 (the x2 rule).")
-    }
-    cur$pct_diff  <- mk_color_scale("pct_diff",  sort(pct_breaks[pct_breaks <= 1]))
-    rr <- pct_breaks[pct_breaks > 1]
-    cur$pct_ratio <- mk_color_scale("pct_ratio", if (length(rr)) rr else numeric())
+  nms <- names(combined)
+  if (is.null(nms) || any(!nzchar(nms))) {
+    cli::cli_abort(c("Color scales must be named.",
+                     "i" = "e.g. {.code set_color_breaks(pct_ratio = list(over = 2))} or",
+                     "i" = "{.code set_color_breaks(list(pct_diff = c(0.05, 0.1, 0.2)))}."))
   }
-  if (!missing(mean_breaks)) {
-    lifecycle::deprecate_soft(
-      "1.4.0", "set_color_breaks(mean_breaks)",
-      details = 'Use `set_color_breaks(list(mean_ratio = .))`.'
-    )
-    cur$mean_ratio <- mk_color_scale("mean_ratio", sort(mean_breaks))
-  }
-  if (!missing(contrib_breaks)) {
-    lifecycle::deprecate_soft(
-      "1.4.0", "set_color_breaks(contrib_breaks)",
-      details = 'Use `set_color_breaks(list(contrib = .))`.'
-    )
-    cur$contrib <- mk_color_scale("contrib", sort(contrib_breaks))
-  }
+  combined <- combined[!duplicated(nms, fromLast = TRUE)]   # a later value overrides an earlier one
+  for (nm in names(combined)) cur[[nm]] <- mk_color_scale(nm, combined[[nm]])
 
   options("tabxplor.color_breaks" = cur)
   invisible(cur)
 }
 
 
+# --- Per-table color_breaks override (Phase 13a) --------------------------------------------------
+# `tab(color_breaks = list(...))` validates the user scales into a PARTIAL canonical list and stores
+# it as the table attribute "color_breaks" (set at the very END of tab(), so no dplyr verb strips it
+# before the user gets it). At render time, push_color_breaks() merges that partial list OVER the live
+# global option for the duration of the render, then pop restores. Robust by design: a missing / NULL /
+# malformed attribute simply falls back to the global breaks. A heavy dplyr chain between build and
+# render drops the attribute -> global fallback (documented; the global set_color_breaks() still works).
+
+#' @keywords internal
+resolve_color_breaks_arg <- function(color_breaks) {
+  if (is.null(color_breaks)) return(NULL)
+  if (!is.list(color_breaks) || is.null(names(color_breaks)) || any(!nzchar(names(color_breaks)))) {
+    cli::cli_abort(c("{.arg color_breaks} must be a named list of color scales.",
+                     "i" = "e.g. {.code list(pct_ratio = list(over = 2), pct_diff = c(0.05, 0.1, 0.2))}."))
+  }
+  purrr::imap(color_breaks, ~ mk_color_scale(.y, .x))
+}
+
+#' @keywords internal
+set_color_breaks_attr <- function(x, cb) {
+  if (is.null(cb)) return(x)
+  if (is.list(x) && !is.data.frame(x)) return(purrr::map(x, set_color_breaks_attr, cb))
+  attr(x, "color_breaks") <- cb
+  x
+}
+
+# Install a table's color_breaks attribute as the transient global option; returns a state to restore
+# with pop_color_breaks() (NULL when there is no override -> nothing to restore). Each render entry
+# point calls: st <- push_color_breaks(tabs); on.exit(pop_color_breaks(st), add = TRUE).
+#' @keywords internal
+push_color_breaks <- function(tabs) {
+  tb <- if (is.list(tabs) && !is.data.frame(tabs)) {
+    if (length(tabs) >= 1L) attr(tabs[[1]], "color_breaks", exact = TRUE) else NULL
+  } else attr(tabs, "color_breaks", exact = TRUE)
+  if (is.null(tb) || !is.list(tb) || length(tb) == 0L) return(NULL)
+  old  <- getOption("tabxplor.color_breaks")
+  base <- if (is.null(old) || is.null(old$pct_diff)) default_color_scales() else old
+  for (nm in names(tb)) base[[nm]] <- tb[[nm]]
+  options("tabxplor.color_breaks" = base)
+  list(old = old)
+}
+
+#' @keywords internal
+pop_color_breaks <- function(state) {
+  if (!is.null(state)) options("tabxplor.color_breaks" = state$old)
+  invisible()
+}
 
 
 
@@ -3590,37 +3611,43 @@ set_color_breaks <- function(breaks = NULL, ...,
 
 #' Get the breaks currently used to print colors
 #' @describeIn tab_many get the color breaks currently in use, in the canonical Phase-5 shape.
-#' @param brk When missing, return the full named list of positive-only break scales
-#' (\code{pct_diff}, \code{pct_ratio}, \code{mean_diff}, \code{mean_ratio}, \code{contrib}) --
-#' the same shape \code{\link{set_color_breaks}} accepts, so it round-trips. Specify one scale
-#' name to return only its breaks. The old aliases \code{"pct"} (-> \code{pct_diff}) and
-#' \code{"mean"} (-> \code{mean_ratio}) are still accepted.
-#' @param type Default \code{"positive"} returns the positive-only thresholds. Set to
-#' \code{"all"} to get the mirrored (signed) thresholds the engine compares against
-#' (\code{c(x, -x)} for additive scales, \code{c(x, 1/x)} for multiplicative ones).
+#' @param brk When missing, return the full named list of break scales (\code{pct_diff},
+#' \code{pct_ratio}, \code{mean_diff}, \code{mean_ratio}, \code{contrib}) -- the same shape
+#' \code{\link{set_color_breaks}} accepts, so it round-trips. Specify one scale name to return
+#' only its breaks. The old aliases \code{"pct"} (-> \code{pct_diff}) and \code{"mean"} (->
+#' \code{mean_ratio}) are still accepted.
+#' @param type Default \code{"positive"} returns a readable form: a plain vector of magnitudes
+#' when the scale is symmetric, or a \code{list(over =, under =)} of magnitudes otherwise. Set to
+#' \code{"all"} to get the signed / reciprocal thresholds the engine compares against
+#' (\code{c(-x, x)} for additive scales, \code{c(1/x, x)} for multiplicative ones).
 #'
-#' @return The color breaks as a double vector, or a named list of double vectors.
+#' @return The color breaks as a double vector or a \code{list(over =, under =)}, or a named list
+#' of these.
 #' @export
 get_color_breaks <- function(brk, type = c("positive", "all")) {
   scales <- getOption("tabxplor.color_breaks")
   if (is.null(scales) || is.null(scales$pct_diff)) scales <- default_color_scales()
 
-  mirror <- function(sc) {
-    if (identical(type[1], "all")) {
-      if (isTRUE(sc$center == 1)) c(sc$pos, 1 / sc$pos) else c(sc$pos, -sc$pos)
-    } else {
-      sc$pos
-    }
+  lit_under <- function(sc) if (isTRUE(sc$center == 1)) 1 / sc$under$breaks else -sc$under$breaks
+
+  as_form <- function(sc) {
+    ob <- sc$over$breaks; ub <- sc$under$breaks
+    if (identical(type[1], "all")) return(c(rev(lit_under(sc)), ob))
+    if (length(ob) == 0L && length(ub) == 0L) return(numeric(0))
+    if (length(ub) == 0L) return(list(over = ob))
+    if (length(ob) == 0L) return(list(under = ub))
+    if (identical(ob, ub) && identical(sc$over$slots, sc$under$slots)) return(ob)
+    list(over = ob, under = ub)
   }
 
-  if (missing(brk)) return(purrr::map(scales, mirror))
+  if (missing(brk)) return(purrr::map(scales, as_form))
 
   brk <- switch(brk, "pct" = "pct_diff", "mean" = "mean_ratio", brk)
   if (!brk %in% names(scales)) {
     cli::cli_abort(c("Unknown color break {.val {brk}}.",
                      "i" = "Valid scales: {.val {names(scales)}} (aliases {.val pct}, {.val mean})."))
   }
-  mirror(scales[[brk]])
+  as_form(scales[[brk]])
 }
 
 # get_color_breaks()

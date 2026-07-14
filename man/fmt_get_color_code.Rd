@@ -4,20 +4,15 @@
 \alias{fmt_get_color_code}
 \title{Get HTML Color Code of a fmt vector}
 \usage{
-fmt_get_color_code(x, type = "text", theme = "light", html_24_bit = NULL)
+fmt_get_color_code(x, type = "text", theme = "light")
 }
 \arguments{
 \item{x}{The fmt vector to get the html color codes from.}
 
-\item{type}{The style type in \code{set_color_style} and \code{get_color_style},
-\code{"text"} to color the text, \code{"bg"} to color the background.}
+\item{type}{The style type, \code{"text"} to color the text, \code{"bg"} to color the background.}
 
-\item{theme}{For \code{set_color_style} and \code{get_color_style}, is your console
-or html table background \code{"light"} or \code{"dark"} ? Default to RStudio theme.}
-
-\item{html_24_bit}{Use 24bits colors palettes for html tables : set to \code{"green_red"}
-or \code{"blue_red"}. Only with \code{mode = "color_code"} (not \code{mode = "crayon"}) and
-\verb{theme = "light}. Default to \code{getOption("tabxplor.color_html_24_bit")}.}
+\item{theme}{Is your console or html table background \code{"light"} or \code{"dark"} ? Default
+to the current setting (RStudio theme when detectable, else \code{"light"}).}
 }
 \value{
 A character vector with html color codes, of the length of the initial vector.

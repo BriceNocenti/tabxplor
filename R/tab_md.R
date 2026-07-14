@@ -72,13 +72,16 @@ tab_md <- function(tabs,
                    file = NULL,
                    print = TRUE,
                    title = lifecycle::deprecated()) {
+  # Phase 13a: install a per-table color_breaks override for the render (no-op otherwise).
+  .cb <- push_color_breaks(tabs); on.exit(pop_color_breaks(.cb), add = TRUE)
   # Phase 10j: `title` renamed to `caption` (unified across exporters); `transpose` added.
   if (lifecycle::is_present(title)) {
     lifecycle::deprecate_soft("1.4.0", "tab_md(title)", "tab_md(caption)")
     caption <- title
   }
-  o <- resolve_export_opts(theme, color_type, html_24_bit, color, transpose = transpose)
-  theme <- o$theme; color_type <- o$color_type; html_24_bit <- o$html_24_bit; color <- o$color
+  # `html_24_bit` is inert (Phase 13a): markdown colour spans map to CSS classes, always 24-bit.
+  o <- resolve_export_opts(theme, color_type, color, transpose = transpose)
+  theme <- o$theme; color_type <- o$color_type; color <- o$color
 
   # --- Phase 10d/10f: shared exporter prep + the base/list split. ---
   # A single tab (or a mergeable same-col_vars / no-tab_vars list) renders as ONE table; a NON-mergeable
@@ -91,20 +94,20 @@ tab_md <- function(tabs,
   if (color) compute <- c(compute, "colors")
   prep <- tab_export_prep(tabs, backend = "md", drop_tab_vars = FALSE, wrap = NULL,
                           compute = compute, transpose = o$transpose, color_type = color_type,
-                          theme = theme, html_24_bit = html_24_bit, list_method = TRUE,
+                          theme = theme, list_method = TRUE,
                           what = "tab_md()")
 
   parts   <- purrr::imap_chr(prep$tables, function(rd, i) {
     md_render_one(rd, special_formatting = special_formatting, wrap_rows = wrap_rows,
                   subtext = subtext, color = color,
                   title = if (i == 1) caption else NULL,
-                  color_type = color_type, theme = theme, html_24_bit = html_24_bit)
+                  color_type = color_type, theme = theme)
   })
   md_text <- paste(parts, collapse = "\n\n")
 
   if (isTRUE(css)) {
     md_text <- paste0(tab_md_css(tabs, theme = theme, color_type = color_type,
-                                 html_24_bit = html_24_bit, style_tag = TRUE),
+                                 style_tag = TRUE),
                       "\n\n", md_text)
   }
 
@@ -160,12 +163,11 @@ tab_md_css <- function(tabs,
   theme       <- match.arg(theme)
   dark_mode   <- match.arg(dark_mode)
   color_type  <- if (is.null(color_type )) getOption("tabxplor.color_style_type" ) else color_type
-  html_24_bit <- if (is.null(html_24_bit)) getOption("tabxplor.color_html_24_bit") else html_24_bit
 
-  css <- md_css_block(md_css_rules(tabs, color_type, theme, html_24_bit))
+  css <- md_css_block(md_css_rules(tabs, color_type, theme))
 
   if (dark_mode == "media" && theme == "light") {
-    dark <- md_css_block(md_css_rules(tabs, color_type, "dark", html_24_bit), indent = "  ")
+    dark <- md_css_block(md_css_rules(tabs, color_type, "dark"), indent = "  ")
     if (nzchar(dark)) {
       css <- paste0(if (nzchar(css)) paste0(css, "\n") else "",
                     "@media (prefers-color-scheme: dark) {\n", dark, "\n}")
@@ -189,7 +191,7 @@ tab_md_css <- function(tabs,
 # the byte-identical plain padded table.
 md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
                           color = TRUE, title = NULL,
-                          color_type = NULL, theme = NULL, html_24_bit = NULL) {
+                          color_type = NULL, theme = NULL) {
   # Graceful degrade -- a table that can't be read as a tabxplor table renders as a plain pipe table.
   if (isTRUE(rd$vars$degrade)) {
     tab_degrade_inform(rd$vars$reason)
@@ -301,8 +303,8 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
       a   <- rd$ann[[nm]]
       ts  <- if (!is.null(a$text_slot)) a$text_slot else integer(nrow(cell_data))
       bs  <- if (!is.null(a$bg_slot))   a$bg_slot   else integer(nrow(cell_data))
-      tmap <- md_slot_class_map(tabs[[j]], "text", color_type, theme, html_24_bit)
-      bmap <- md_slot_class_map(tabs[[j]], "bg",   color_type, theme, html_24_bit)
+      tmap <- md_slot_class_map(tabs[[j]], "text", color_type, theme)
+      bmap <- md_slot_class_map(tabs[[j]], "bg",   color_type, theme)
       attr_mat[, j] <- vapply(seq_len(nrow(cell_data)),
                               function(i) md_span_attr(ts[i], bs[i], tmap, bmap),
                               character(1))
@@ -537,18 +539,18 @@ md_break_class <- function(measure, center, is_mean, brk, dir, level) {
   paste0(if (dir > 0L) "p" else "m", as.character(round(brk * 100)))   # additive pct-points
 }
 
-# For one fmt column + one channel, the map slot-integer (0..11) -> {class name, hex}. Reuses the
-# engine (fmt_color_plan gives measure/center/breaks + the level->palette-slot maps + the x2 overlay),
-# so md never forks the colour math -- it only names the slots the engine already assigns. Returns two
-# length-12 vectors indexed by `slot + 1L` (slot 0 = uncoloured -> "" / NA). Background-channel names
-# are prefixed "bg" (a distinct CSS class -> the background palette). `class` drives the span; `hex`
-# drives tab_md_css().
+# For one fmt column + one channel, the map slot-integer (0..8) -> {class name, hex}. Reuses the
+# engine (fmt_color_plan gives measure/center + the per-side breaks + palette slots), so md never forks
+# the colour math -- it only names the slots the engine already assigns. Returns two length-9 vectors
+# indexed by `slot + 1L` (slot 0 = uncoloured -> "" / NA; over 1:4, under 5:8). Background-channel
+# names are prefixed "bg" (a distinct CSS class -> the background palette). `class` drives the span;
+# `hex` drives tab_md_css().
 #' @keywords internal
 md_slot_class_map <- function(col, channel = c("text", "bg"),
-                              color_type = NULL, theme = NULL, html_24_bit = NULL) {
+                              color_type = NULL, theme = NULL) {
   channel <- match.arg(channel)
-  cls <- rep("",            12L)
-  hex <- rep(NA_character_, 12L)
+  cls <- rep("",            9L)
+  hex <- rep(NA_character_, 9L)
 
   color <- if (channel == "text") get_color(col) else get_color_bg(col)
   plan  <- fmt_color_plan(col, channel, color = color)
@@ -557,19 +559,16 @@ md_slot_class_map <- function(col, channel = c("text", "bg"),
   is_mean <- get_type(col) %in% c("mean", "n")
   palette <- get_color_style("color_code",
                              type = if (channel == "text") color_type else "bg",
-                             theme = theme, html_24_bit = html_24_bit)
+                             theme = theme)
 
-  lv        <- seq_along(plan$pos_breaks)
-  pos_names <- vapply(lv, function(l) md_break_class(plan$measure, plan$center, is_mean,
-                                                     plan$pos_breaks[l], 1L, l), character(1))
-  neg_names <- vapply(lv, function(l) md_break_class(plan$measure, plan$center, is_mean,
-                                                     plan$pos_breaks[l], -1L, l), character(1))
-  slots <- c(plan$pos_slots[lv + 1L], plan$neg_slots[lv + 1L])
+  ov_lv     <- seq_along(plan$over_breaks)
+  un_lv     <- seq_along(plan$under_breaks)
+  pos_names <- vapply(ov_lv, function(l) md_break_class(plan$measure, plan$center, is_mean,
+                                                        plan$over_breaks[l], 1L, l), character(1))
+  neg_names <- vapply(un_lv, function(l) md_break_class(plan$measure, plan$center, is_mean,
+                                                        plan$under_breaks[l], -1L, l), character(1))
+  slots  <- c(plan$over_slots[ov_lv + 1L], plan$under_slots[un_lv + 1L])
   names_ <- c(pos_names, neg_names)
-  if (!is.null(plan$x2)) {
-    slots  <- c(slots, plan$x2$slot)
-    names_ <- c(names_, md_break_class("ratio", 1, FALSE, plan$x2$v, 1L, NA_integer_))
-  }
   keep   <- slots > 0L
   slots  <- slots[keep]
   names_ <- names_[keep]
@@ -609,10 +608,10 @@ md_color_cell <- function(text, attr, num_width, total_width, is_bold) {
 # shared prep + the same per-column slot maps the spans use, so the CSS can never disagree with the
 # cells. Text-channel classes -> `color`; background-channel classes -> `background-color`.
 #' @keywords internal
-md_css_rules <- function(tabs, color_type, theme, html_24_bit) {
+md_css_rules <- function(tabs, color_type, theme) {
   prep <- tab_export_prep(tabs, backend = "md", drop_tab_vars = FALSE, wrap = NULL,
                           compute = c("refs", "colors"), color_type = color_type, theme = theme,
-                          html_24_bit = html_24_bit, list_method = TRUE, what = "tab_md_css()")
+                          list_method = TRUE, what = "tab_md_css()")
   class <- character(0)
   prop  <- character(0)
   hex   <- character(0)
@@ -620,8 +619,8 @@ md_css_rules <- function(tabs, color_type, theme, html_24_bit) {
     if (isTRUE(rd$vars$degrade)) next
     for (j in rd$roles$fmt_cols) {
       col  <- rd$tab[[j]]
-      tmap <- md_slot_class_map(col, "text", color_type, theme, html_24_bit)
-      bmap <- md_slot_class_map(col, "bg",   color_type, theme, html_24_bit)
+      tmap <- md_slot_class_map(col, "text", color_type, theme)
+      bmap <- md_slot_class_map(col, "bg",   color_type, theme)
       tsel <- nzchar(tmap$class)
       bsel <- nzchar(bmap$class)
       class <- c(class, tmap$class[tsel], bmap$class[bsel])

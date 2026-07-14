@@ -322,47 +322,32 @@ around the estimate. `format()` reads `ci_inf`/`ci_sup` directly (× 100 for pro
 
 The color system has three layers, all working together to determine which cells get which colors at which intensity.
 
-### Layer 1 — Palettes
+### Layer 1 — Palettes (Phase 13a OKLCH)
 
-Six predefined color palettes are defined as named character vectors in `R/tab_classes.R` (around line 2892). Each palette has 11 hex color codes:
+Eight base palettes are defined as unnamed 4-hex vectors in `R/tab_classes.R` (`## NEW COLOR PALETTES`): `default_text_colors`, `default_text_colors_neg`, `default_background_colors`, `default_background_colors_neg`, and the `default_dark_*` counterparts — one per (light/dark theme × text/background channel × over/under side), each 4 hex codes ordered faint → strong (position-based, no `pos1..neg5` names, no `ratio` slot). At load `set_color_palette()` seeds them into an internal `tabxplor_palette_env` and pre-builds the crayon functions (`build_palettes()`); users override any of the eight with `set_color_palette(text_colors = , …)`.
 
-- `pos1` through `pos5`: Increasing intensity for over-represented values (green/blue spectrum)
-- `neg1` through `neg5`: Increasing intensity for under-represented values (yellow/orange/red spectrum)
-- `ratio`: Special color for the "*2 rule" ratio comparison (purple/blue)
+`get_color_style(mode, type, theme)` returns an **8-element slot vector** = 4 over-represented intensities then 4 under-represented, for the given channel × theme. `mode = "crayon"` gives console functions (24-bit truecolor, or a curated 8-bit `palette_8bit` in the RStudio console); `mode = "color_code"` gives hex (exports, always 24-bit). There is no `html_24_bit` / green_red-blue_red variant / `set_color_style()` / `custom_palette` anymore.
 
-The palettes are:
+### Layer 2 — Breaks (Phase 13a over/under scales)
 
-| Palette | Use case |
-| ------- | -------- |
-| `color_style_text_dark` | Console text on dark background |
-| `color_style_text_light` | Console text on light background |
-| `color_style_text_light_24_blue_red` | HTML 24-bit (green→blue→red) |
-| `color_style_text_light_24_green_red` | HTML 24-bit (green→red, traditional) |
-| `color_style_bg_light` | Cell background on light theme |
-| `color_style_bg_dark` | Cell background on dark theme |
+Breaks live in `options("tabxplor.color_breaks")` as a **named list of five scales**, set by `set_color_breaks(list(...))` or `set_color_breaks(pct_diff = , …)`. Each scale is `list(center, strict, std, over = list(breaks, slots), under = list(breaks, slots))` — both sides carry POSITIVE magnitudes (the engine folds each cell to a magnitude and picks the side by direction) and the intensity `slots` (1..4) each break maps to.
 
-Selection is done by `set_color_style(type, theme, html_24_bit)`, which sets `options("tabxplor.color_style")`. `get_color_style()` returns either crayon functions (for console) or hex codes (for HTML/Excel), depending on the `mode` parameter.
+| Scale | Applies to | Default | `center` | notes |
+| ----- | ---------- | ------- | -------- | ----- |
+| `pct_diff` | factor difference (pp) | `c(0.05, 0.1, 0.2, 0.3)` (mirrored) | 0 | additive |
+| `pct_ratio` | factor relative risk | `list(over = 2)` — the "×2 rule", over-only | 1 | multiplicative |
+| `mean_diff` | numeric difference | `NULL` → `c(0.2, 0.5, 0.8)`, `std = TRUE` | 0 | sd-standardized (Glass's Δ); data-unit values → absolute |
+| `mean_ratio` | numeric ratio / OR | `list(over = c(1.15,1.5,2,4), under = c(1.5,2,4))` | 1 | multiplicative, asymmetric |
+| `contrib` | χ² contribution | `c(1, 2, 5, 10)` (mirrored) | 0 | inclusive (`strict = FALSE`) |
 
-### Layer 2 — Breaks (Phase 5 canonical scales)
-
-Breaks live in `options("tabxplor.color_breaks")` as a **named list of five positive-only scales**, set by `set_color_breaks(list(...))`. Each scale is `list(pos, center, strict, std)`:
-
-| Scale | Applies to | Default `pos` | `center` | notes |
-| ----- | ---------- | ------------- | -------- | ----- |
-| `pct_diff` | factor difference (pp) | `c(0.05, 0.1, 0.2, 0.3)` | 0 | additive, mirror `c(x, -x)` |
-| `pct_ratio` | factor relative risk | `c(2)` | 1 | multiplicative, mirror `c(x, 1/x)` — the "×2 rule" |
-| `mean_diff` | numeric difference | `NULL` → `c(0.2, 0.5, 0.8)`, `std = TRUE` | 0 | sd-standardized (Glass's Δ) by default; data-unit values → absolute |
-| `mean_ratio` | numeric ratio / OR | `c(1.15, 1.5, 2, 4)` | 1 | multiplicative |
-| `contrib` | χ² contribution | `c(1, 2, 5, 10)` | 0 | inclusive (`strict = FALSE`) |
-
-`center` is the neutral value each break is measured from; `strict` picks `>`/`<` vs `>=`/`<=`; `std` (mean_diff only) toggles standardized vs raw. Mirroring is applied by the engine. The old flat args `pct_breaks`/`mean_breaks`/`contrib_breaks` are soft-deprecated and mapped onto these. `get_color_breaks()` returns the positive scales (round-trips with `set_color_breaks()`); `type = "all"` mirrors.
+Input notation: a plain vector of **signed / reciprocal literals** (negatives for additive, `1/x` for multiplicative; a one-sided vector auto-mirrors, a two-sided one is used as-is, an `NA` skips an intensity slot), or a **`list(over =, under =)`** of magnitudes (no mirror; omit a side to switch it off). `mk_color_scale()` + `parse_color_side()` + `intensity_slots()` build the canonical shape; `get_color_breaks()` round-trips (a readable form; `type = "all"` gives the signed engine breaks). A per-table override: `tab(color_breaks = list(...))` stores a table attribute, installed transiently at render by `push_color_breaks()` / `pop_color_breaks()` (fallback to the global option when absent/malformed).
 
 ### Layer 3 — The vectorised `findInterval` engine (three axes)
 
-Coloring is decomposed into three orthogonal per-column choices: **measure** (`diff`/`ratio`/`contrib`/`or`, in the `color` attribute `[1]` = text, `[2]` = background), **channel** (text vs background), and **significance policy** (the `color_signif` attribute: `ignore`/`grey_non_signif`/`color_all_signif`). All feed one engine in `R/fmt_class.R`:
+Coloring is decomposed into three orthogonal per-column choices: **measure** (`diff`/`ratio`/`contrib`/`or`, in the `color` attribute `[1]` = text, `[2]` = background), **channel** (text vs background), and **significance policy** (the `color_signif` attribute: `ignore`/`grey_non_signif`/`guaranteed_effect`). All feed one engine in `R/fmt_class.R`:
 
-1. `fmt_color_plan(x, channel, color, signif)` builds a plan: it decodes the measure+policy (`color_measure_policy()`), picks the scale for the measure×column-type, computes the per-cell `score` (e.g. `get_diff`; standardized `get_diff / sqrt(get_ref_var)` for numeric diff; `get_ratio`; `get_ctr / get_mean_contrib`), the significance `gate` (from the stored `get_ci_inf`/`get_ci_sup` bounds), and the `pos_slots`/`neg_slots` maps (`build_slots()`/`color_slot_table()`).
-2. `fmt_color_slots(x, plan)` folds `score` to a magnitude around `center`, then `findInterval(mag, pos_breaks)` → level → palette slot (0 = uncolored, 1..10 = grid, 11 = the legacy ×2 override), zeroing ungated cells. This C-level path replaced the old per-cell `keep_last_break` reduce (48–1290× faster). **`color_all_signif` computes `score` = the guaranteed (CI-floor) magnitude ON THE MEASURE'S OWN SCALE** so the fold's `center` matches: for `diff` the floor is the stored difference bound (centre 0); for `or` the native OR bound (centre 1); for `ratio` — which has no native CI — the shared diff floor is converted to a guaranteed ratio `1 + (get_ratio - 1) * (guar_diff / get_diff)` (centre 1). Feeding the raw diff bound into a centre-1 fold was the "ratio floods /4" bug.
+1. `fmt_color_plan(x, channel, color, signif)` builds a plan: it decodes the measure+policy (`color_measure_policy()`), picks the scale for the measure×column-type, computes the per-cell `score` (e.g. `get_diff`; standardized `get_diff / sqrt(get_ref_var)` for numeric diff; `get_ratio`; `get_ctr / get_mean_contrib`), the significance `gate` (from the stored `get_ci_inf`/`get_ci_sup` bounds), and the per-side `over_breaks`/`over_slots` + `under_breaks`/`under_slots` (read straight from the scale).
+2. `fmt_color_slots(x, plan)` folds `score` to a magnitude around `center`, then `findInterval()` **per direction** (`over_breaks` for over-cells, `under_breaks` for under-cells) → level → palette slot (0 = uncolored, **1..4 = over intensities, 5..8 = under**), zeroing ungated cells. The former in-text ×2 / slot-11 override is gone (the ×2 rule is now a 1-break `pct_ratio` scale on the background channel). **`guaranteed_effect` computes `score` = the guaranteed (CI-floor) magnitude ON THE MEASURE'S OWN SCALE** so the fold's `center` matches: for `diff` the floor is the stored difference bound (centre 0); for `or` the native OR bound (centre 1); for `ratio` — which has no native CI — the shared diff floor is converted to a guaranteed ratio `1 + (get_ratio - 1) * (guar_diff / get_diff)` (centre 1). Feeding the raw diff bound into a centre-1 fold was the "ratio floods /4" bug.
 3. `fmt_color_channels(x)` → `list(text_slot, bg_slot)`.
 
 Every consumer maps `(text_slot, bg_slot)` to colour the same way: `pillar_shaft.tabxplor_fmt()` (console, the reference two-channel consumer), `fmt_get_color_code()` (single-channel, the golden), the shared `fmt_channel_codes()` helper (text + bg hex, used by `tab_kable`/`tab_plot`/`tab_xl`), and `tab_color_legend()` (which reads the same scales, so legend and cells never disagree). The old combined strings (`"diff_ci"`/`"after_ci"`/`"ci"`) are decoded to (measure, policy) by `color_measure_policy()`.
@@ -572,7 +557,7 @@ The foundation file. Contains:
 - **Lines 1040–1340**: Internal field accessors via `fmt_field_factory()`, reference detection (`get_reference()`).
 - **Lines 1340–1630**: `format.tabxplor_fmt()` — the central display method handling 20+ display modes.
 - **Lines 1630–1870**: `pillar_shaft.tabxplor_fmt()` — console color rendering, `mutate.tabxplor_fmt()`.
-- **`fmt_color_plan()` / `fmt_color_slots()` / `fmt_color_channels()` / `fmt_channel_codes()`** — the vectorised `findInterval` color engine + the shared exporter slot→hex helper (Layer 3 above); `color_measure_policy()` decodes the legacy strings; `color_slot_table()` / `build_slots()` map levels to palette slots.
+- **`fmt_color_plan()` / `fmt_color_slots()` / `fmt_color_channels()` / `fmt_channel_codes()`** — the vectorised `findInterval` color engine + the shared exporter slot→hex helper (Layer 3 above); `color_measure_policy()` decodes the legacy strings; the level→intensity map lives with the scale (`mk_color_scale()` → `intensity_slots()`).
 - **`tab_color_legend()`** — the color legend, driven by the same per-channel plan + canonical scales as the cells.
 - **Lines 2670–2900**: `get_reference()` — identifies reference cells (totals, first row, or regex match).
 - **Lines 2900–3341**: vctrs arithmetic (`vec_arith`), casting (`vec_cast`), type compatibility (`vec_ptype2`), comparison/equality proxies.
@@ -637,7 +622,7 @@ Classes, dplyr methods, and colors. Contains:
 - **Lines 1500–2400**: Dplyr S3 methods (30+ methods for group_by, select, mutate, filter, arrange, rename, relocate, rowwise, summarise, ungroup, dplyr_row_slice, dplyr_col_modify, dplyr_reconstruct). Also `lv1_group_vars()` helper.
 - **Lines 2400–2890**: Tab/grouped_tab vctrs casting methods (`vec_ptype2`, `vec_cast`).
 - **Lines 2890–3100**: Color palette constants (6 palettes).
-- **Lines 3100–3210**: `set_color_style()`, `get_color_style()`.
+- **Palettes / styles**: `set_color_palette()`, `get_color_style()`, `build_palettes()`, `tabxplor_palette_env`, `palette_8bit`.
 - **Lines 3210–3554**: `set_color_breaks()`, `get_color_breaks()`, color legend generation.
 
 ### R/tab_xl.R (~470 lines) + R/tab-xl-backend.R (~155 lines)

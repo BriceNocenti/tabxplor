@@ -46,18 +46,12 @@ NULL
   # data.table::getDTthreads(verbose = getOption("datatable.verbose"))
 
 
-  set_color_style()
+  set_color_palette()
 
-  # option "tabxplor.color_breaks" : canonical Phase-5 scales (see set_color_breaks()).
-  # Equivalent to the former pct_breaks = c(0.05, 0.1, 0.2, 2, 0.3), mean_breaks =
-  # c(1.15, 1.5, 2, 4), contrib_breaks = c(1, 2, 5, 10); the x2 rule is now the pct_ratio scale.
-  set_color_breaks(list(
-    pct_diff   = c(0.05, 0.1, 0.2, 0.3),
-    pct_ratio  = c(2),
-    mean_diff  = NULL,
-    mean_ratio = c(1.15, 1.5, 2, 4),
-    contrib    = c(1, 2, 5, 10)
-  ))
+  # option "tabxplor.color_breaks" : canonical Phase-13a scales (see set_color_breaks()).
+  # pct_ratio is the "only x2" rule (over side only); mean_ratio is asymmetric (4 over / 3 under);
+  # mean_diff = NULL restores the standardized (Glass's delta) default.
+  options("tabxplor.color_breaks" = default_color_scales())
 
   options("tabxplor.print" = "console") # options("tabxplor.print" = "kable")
 

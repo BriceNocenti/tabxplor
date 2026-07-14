@@ -27,7 +27,7 @@
 #                       which the OLD formula matched in BOTH directions (spurious color + a
 #                       length-9 vector for an 8-cell column). New engine drops it (NaN->uncolored).
 #                       Data-cell coloring is byte-identical. bg regen.
-#   c_after_ci / c_ci-> REGENERATE. pct CI-gated: color_all_signif now grades the CI-floor against
+#   c_after_ci / c_ci-> REGENERATE. pct CI-gated: guaranteed_effect now grades the CI-floor against
 #                       pct_diff breaks (fixes the asymmetric upper-arm + the odd-length negative-
 #                       direction bug that made c_ci ERROR on the baseline).
 #   c_contrib_all / c_contrib_all_notab

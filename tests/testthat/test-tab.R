@@ -494,24 +494,24 @@ expect_color <- function(object) {
 
 testthat::test_that("printing colors works", {
   withr::local_options(lifecycle_verbosity = "quiet")
-  set_color_style(type = "bg", theme = "dark")
+  withr::defer(options("tabxplor.color_style_type" = "text", "tabxplor.color_style_theme" = "light"))
+  options("tabxplor.color_style_type" = "bg", "tabxplor.color_style_theme" = "dark")
   tab(data, sex, hair_color, pct = "row", color = "diff"    ) %>% print() %>%
     testthat::expect_output()
-  set_color_style(type = "text", theme = "dark")
-  set_color_breaks(list(pct_diff = c(0.05, 0.15, 0.3), pct_ratio = c(2),
+  options("tabxplor.color_style_type" = "text", "tabxplor.color_style_theme" = "dark")
+  set_color_breaks(list(pct_diff = c(0.05, 0.15, 0.3), pct_ratio = list(over = 2),
                         mean_ratio = c(1.15, 2, 4), contrib = c(1, 2, 5)))
   tab(data, sex, hair_color, pct = "row", color = "diff_ci" ) %>% print() %>%
     testthat::expect_output()
-  set_color_style(type = "bg", theme = "light")
+  options("tabxplor.color_style_type" = "bg", "tabxplor.color_style_theme" = "light")
   tab(data, sex, hair_color, pct = "row", color = "after_ci") %>% print() %>%
     testthat::expect_output()
 
-  set_color_style(type = "text")
-  set_color_breaks(list(pct_diff = c(0.05, 0.1, 0.2, 0.3), pct_ratio = c(2),
+  options("tabxplor.color_style_type" = "text")
+  set_color_breaks(list(pct_diff = c(0.05, 0.1, 0.2, 0.3), pct_ratio = list(over = 2),
                         mean_ratio = c(1.15, 1.5, 2, 4), contrib = c(1, 2, 5, 10)))
   tab(data, sex, hair_color, pct = "row", color = "contrib" ) %>% print() %>%
     testthat::expect_output()
-  set_color_style(type = "text", theme = "dark")
 })
 
 

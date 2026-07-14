@@ -88,7 +88,7 @@ single string.  \itemize{    \item \code{"ignore"}: by default, color every
 deviation by its observed size.    \item \code{"grey_non_signif"}: color by
 observed size, but grey out cells whose    deviation is not significant (at
 \code{conf_level}). A confidence interval on the    difference is computed
-automatically.    \item \code{"color_all_signif"}: color by the guaranteed
+automatically.    \item \code{"guaranteed_effect"}: color by the guaranteed
 (confidence-bound) effect --    only cells whose interval clears the
 threshold show, with dimmer colors.  }}
 

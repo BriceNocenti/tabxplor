@@ -1,5 +1,16 @@
 # tabxplor colours & breaks — new UI implementation brief
 
+> **SUPERSEDED IN PART BY PHASE 13a (2026-07-14)** — this brief describes the Phase 5 framework; the
+> Phase 13a redesign changed the public API and internals. Where they differ, Phase 13a wins (see
+> CLAUDE.md > Phase 13a Done). Key changes: `color` grammar is now **position = channel, names = column
+> type** (`c(pct=,mean=)` / `list(pct=,mean=)`; the `c(text=,background=)` form is REMOVED); the policy
+> `"color_all_signif"` is renamed **`"guaranteed_effect"`**; break scales are
+> `list(center,strict,std, over=list(breaks,slots), under=list(breaks,slots))` fed by signed/reciprocal
+> literals or `list(over=,under=)` (the "×2 rule" is an over-only `pct_ratio`, no in-text slot-11); the
+> palette is 8 OKLCH base colours (`set_color_palette()`, slots 1-4 over / 5-8 under; no
+> `html_24_bit`/`set_color_style`); a per-table `color_breaks=` argument exists. The sections below are
+> kept as historical intent.
+>
 > SINGLE STARTING POINT for implementing the redesigned colour/breaks framework (tabxplor 1.4.0,
 > "Phase 5"). This file is self-contained: a fresh session should be able to implement from it alone.
 > It records the WHY, the settled architecture, the full user-facing API, the statistics, the

@@ -39,6 +39,7 @@ tab(
   digits = 0,
   n_min = 0,
   display = NULL,
+  color_breaks = NULL,
   output_list = FALSE,
   parallel = NULL,
   spread_vars,
@@ -91,20 +92,22 @@ the standardized difference Glass's \eqn{\Delta} for numeric means).
 \item \code{"contrib"}: signed contribution to the chi-squared (reference-free).
 \item \code{"OR"}: empirical odds ratio (for \code{pct = "row"}/\code{"col"}).
 }
-To color two measures at once, pass a length-2 vector: unnamed \code{c("diff", "ratio")}
-puts the first on the text channel and the second on the background; named
-\code{c(text = "diff", background = "ratio")} is explicit; \code{c(background = "ratio")}
-colors only the background. Only \code{diff} / \code{ratio} may go on the background.
-Thresholds come from \code{\link{set_color_breaks}}. (The old combined strings
-\code{"diff_ci"}, \code{"after_ci"} and \code{"ci"} still work but are soft-deprecated in
-favor of \code{color_signif}.)}
+The grammar: \strong{position picks the channel} (1st value -> text, 2nd -> background) and
+\strong{names pick the column type} (\code{pct} / \code{mean}). So \code{c("diff", "ratio")}
+puts \code{diff} on the text and \code{ratio} on the background of every column;
+\code{c(pct = "diff", mean = "ratio")} colors factors by \code{diff} and numeric means by
+\code{ratio} (text channel); \code{list(pct = c("diff", "ratio"), mean = "ratio")} combines
+both (per-type, with channels). Only \code{diff} / \code{ratio} may go on the background.
+Thresholds come from \code{\link{set_color_breaks}} or the per-table \code{color_breaks}
+argument. (The old combined strings \code{"diff_ci"}, \code{"after_ci"} and \code{"ci"} still
+work but are soft-deprecated in favor of \code{color_signif}.)}
 
 \item{color_signif}{How significance gates the color, as a single string:
 \itemize{
 \item \code{"ignore"} (default): color every deviation by its observed size.
 \item \code{"grey_non_signif"}: color by the observed size, but grey out cells whose
 deviation is not significant at \code{conf_level}.
-\item \code{"color_all_signif"}: color by the guaranteed (confidence-bound) effect --
+\item \code{"guaranteed_effect"}: color by the guaranteed (confidence-bound) effect --
 only cells whose interval clears the threshold, with dimmer, conservative colors.
 }}
 
@@ -267,6 +270,11 @@ Excel falls back to the primary field). A \code{\{\}} template listing the field
 \emph{primary}, shown alone by Excel and used for coloring. \code{NULL} (default) keeps the plain
 single-field display. It is a display overlay only: colors, differences and the underlying fields
 are unchanged.}
+
+\item{color_breaks}{A per-table override of the colour thresholds, a named list of scales like
+\code{\link{set_color_breaks}} accepts, e.g. \code{list(pct_ratio = list(over = 2))}. Stored as
+a table attribute and applied at print / export; \code{NULL} (default) uses the global breaks.
+Unset scales fall back to the global setting.}
 
 \item{output_list}{Logical (default \code{FALSE}). With several \code{row_var}, \code{FALSE}
 merges the mirror tables into a single \code{tabxplor_tab}; \code{TRUE} returns a list with

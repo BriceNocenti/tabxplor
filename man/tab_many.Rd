@@ -4,7 +4,7 @@
 \alias{tab_many}
 \alias{tab_get_vars}
 \alias{is_tab}
-\alias{set_color_style}
+\alias{set_color_palette}
 \alias{get_color_style}
 \alias{set_color_breaks}
 \alias{get_color_breaks}
@@ -46,6 +46,7 @@ tab_many(
   subtext = "",
   n_min = 0,
   color_signif = "ignore",
+  color_breaks = NULL,
   parallel = NULL,
   .by_table = FALSE,
   filter
@@ -55,21 +56,21 @@ tab_get_vars(tabs, vars = c("row_var", "col_vars", "tab_vars"))
 
 is_tab(x)
 
-set_color_style(
-  type = c("text", "bg"),
-  theme = NULL,
-  html_24_bit = c("blue_red", "green_red", "no"),
-  custom_palette = NULL
+set_color_palette(
+  text_colors = NULL,
+  text_colors_neg = NULL,
+  background_colors = NULL,
+  background_colors_neg = NULL,
+  dark_text_colors = NULL,
+  dark_text_colors_neg = NULL,
+  dark_background_colors = NULL,
+  dark_background_colors_neg = NULL,
+  theme = NULL
 )
 
-get_color_style(
-  mode = c("crayon", "color_code"),
-  type = NULL,
-  theme = NULL,
-  html_24_bit = NULL
-)
+get_color_style(mode = c("crayon", "color_code"), type = NULL, theme = NULL)
 
-set_color_breaks(breaks = NULL, ..., pct_breaks, mean_breaks, contrib_breaks)
+set_color_breaks(breaks = NULL, ...)
 
 get_color_breaks(brk, type = c("positive", "all"))
 }
@@ -104,10 +105,11 @@ the following :
 \code{pct = list(row_var1 = list("row", "col", "col"), row_var2 = list("col", "row", "row"))}}
 
 \item{color}{Which measure(s) to color, on which visual channel -- see \code{\link{tab}}
-for the full description (\code{FALSE}/\code{TRUE}, a measure such as \code{"diff"}, or a
-two-channel \code{c(text, background)} / \code{c(text = , background = )}). The old combined
-strings \code{"diff_ci"}/\code{"after_ci"}/\code{"ci"} still work (superseded by
-\code{color} + \code{color_signif}). Applies to all \code{row_vars}.}
+for the full grammar (\code{FALSE}/\code{TRUE}, a measure such as \code{"diff"}, a positional
+two-channel \code{c("diff", "ratio")}, or a per-type \code{c(pct = , mean = )} /
+\code{list(pct = , mean = )}). The old combined strings
+\code{"diff_ci"}/\code{"after_ci"}/\code{"ci"} still work (superseded by \code{color} +
+\code{color_signif}). Applies to all \code{row_vars}.}
 
 \item{OR}{With \code{pct = "row"} or \code{pct = "col"}, calculate and print odds ratios:
 for a binary variable the usual odds ratio; for a variable with 3 levels or more,
@@ -272,6 +274,8 @@ row; own base below \code{n_min} blanks the cell) without recomputing anything.}
 
 \item{color_signif}{How significance gates the color -- see \code{\link{tab}}.}
 
+\item{color_breaks}{A per-table colour-threshold override -- see \code{\link{tab}}.}
+
 \item{parallel}{Opt-in parallel build of the per-\code{row_var} tables (Suggests-only
 \pkg{mirai}); see \code{\link{tab}}. \code{NULL} (default) reads the
 \code{tabxplor.parallel} option.}
@@ -292,42 +296,38 @@ more visible into the code.}
 
 \item{x}{A object to test with \code{\link{is_tab}}.}
 
-\item{type}{Default \code{"positive"} returns the positive-only thresholds. Set to
-\code{"all"} to get the mirrored (signed) thresholds the engine compares against
-(\code{c(x, -x)} for additive scales, \code{c(x, 1/x)} for multiplicative ones).}
+\item{text_colors, text_colors_neg, background_colors, background_colors_neg}{Light-theme palettes
+(4 hex each): the text (font) and background (fill) colours for the over- (\code{*_colors}) and
+under-represented (\code{*_colors_neg}) sides.}
 
-\item{theme}{For \code{set_color_style} and \code{get_color_style}, is your console
-or html table background \code{"light"} or \code{"dark"} ? Default to RStudio theme.}
+\item{dark_text_colors, dark_text_colors_neg, dark_background_colors, dark_background_colors_neg}{The dark-theme counterparts (4 hex each).}
 
-\item{html_24_bit}{Use 24bits colors palettes for html tables : set to \code{"green_red"}
-or \code{"blue_red"}. Only with \code{mode = "color_code"} (not \code{mode = "crayon"}) and
-\verb{theme = "light}. Default to \code{getOption("tabxplor.color_html_24_bit")}.}
-
-\item{custom_palette}{Possibility to provide a custom color styles, as a character
-vector of 10 html color codes (the five first for over-represented numbers,
-the five last for under-represented ones). The result is saved to
-\code{options("tabxplor.color_style")}. To discard, relaunch the function with
-\code{custom_palette = NULL}.}
+\item{theme}{\code{"light"} or \code{"dark"}; defaults to the current setting.}
 
 \item{mode}{By default, \code{get_color_style} returns a list of \pkg{crayon} coloring
 functions. Set to \code{"color_code"} to return html color codes.}
 
+\item{type}{Default \code{"positive"} returns a readable form: a plain vector of magnitudes
+when the scale is symmetric, or a \code{list(over =, under =)} of magnitudes otherwise. Set to
+\code{"all"} to get the signed / reciprocal thresholds the engine compares against
+(\code{c(-x, x)} for additive scales, \code{c(1/x, x)} for multiplicative ones).}
+
 \item{breaks}{A named list of scales to set, e.g.
-\code{list(pct_diff = c(0.05, 0.1, 0.2, 0.3), pct_ratio = c(2))}. Unset scales keep their
-current value.}
+\code{list(pct_diff = c(0.05, 0.1, 0.2, 0.3), pct_ratio = list(over = 2))}. Unset scales keep
+their current value.}
 
-\item{...}{Unused; forces the following arguments to be named.}
+\item{...}{Scales passed individually and named, e.g.
+\code{set_color_breaks(pct_diff = c(0.05, 0.1, 0.2), mean_ratio = c(1.15, 1.5, 2, 4))}. Each
+value is either a plain vector of signed / reciprocal literals (negatives, or ratios < 1, are
+the under-represented side; a one-sided vector auto-mirrors; \code{NA} skips an intensity slot)
+or a \code{list(over =, under =)} of magnitudes (no mirror; omit a side to switch it off, e.g.
+\code{list(over = 2)} for the "only x2" rule).}
 
-\item{pct_breaks, mean_breaks, contrib_breaks}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} The old
-positional arguments. \code{pct_breaks} is split into \code{pct_diff} (values \eqn{\le} 1)
-and \code{pct_ratio} (values > 1); \code{mean_breaks} maps to \code{mean_ratio};
-\code{contrib_breaks} to \code{contrib}.}
-
-\item{brk}{When missing, return the full named list of positive-only break scales
-(\code{pct_diff}, \code{pct_ratio}, \code{mean_diff}, \code{mean_ratio}, \code{contrib}) --
-the same shape \code{\link{set_color_breaks}} accepts, so it round-trips. Specify one scale
-name to return only its breaks. The old aliases \code{"pct"} (-> \code{pct_diff}) and
-\code{"mean"} (-> \code{mean_ratio}) are still accepted.}
+\item{brk}{When missing, return the full named list of break scales (\code{pct_diff},
+\code{pct_ratio}, \code{mean_diff}, \code{mean_ratio}, \code{contrib}) -- the same shape
+\code{\link{set_color_breaks}} accepts, so it round-trips. Specify one scale name to return
+only its breaks. The old aliases \code{"pct"} (-> \code{pct_diff}) and \code{"mean"} (->
+\code{mean_ratio}) are still accepted.}
 }
 \value{
 A \code{tibble} of class \code{tab}, possibly with colored reading helpers.
@@ -342,15 +342,16 @@ A list with the variables names.
 
 A single logical.
 
-Set global options \code{"tabxplor.color_style_type"} and
-\code{"tabxplor.color_style_theme"}, used when printing \code{\link{tab}} objects.
+Sets the internal color palettes (invisibly) and the option
+\code{"tabxplor.color_style_theme"}.
 
-A vector of crayon color functions, or a vector of color html codes.
+A list of 8 crayon color functions, or a vector of 8 color html codes.
 
 Sets the global option "tabxplor.color_breaks" (a named list of scales) and returns
 it invisibly.
 
-The color breaks as a double vector, or a named list of double vectors.
+The color breaks as a double vector or a \code{list(over =, under =)}, or a named list
+of these.
 }
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#superseded}{\figure{lifecycle-superseded.svg}{options: alt='[Superseded]'}}}{\strong{[Superseded]}}
@@ -382,9 +383,12 @@ scale drops that measure for its column type.
 
 \item \code{is_tab()}: a test function for class tabxplor_tab
 
-\item \code{set_color_style()}: define the color style used to print \code{\link{tab}}.
+\item \code{set_color_palette()}: customise the color palette used to print \code{\link{tab}}. Each palette
+is 4 hex codes ordered faint -> strong. Provide only the ones you want to change; the OKLCH
+defaults are used otherwise. The crayon styles are (re)built once, not per cell.
 
-\item \code{get_color_style()}: get color styles as \pkg{crayon} functions or html codes.
+\item \code{get_color_style()}: get the color palette as \pkg{crayon} functions or html codes: an 8-element
+vector (4 over-represented intensities then 4 under-represented), indexed by the engine slot.
 
 \item \code{set_color_breaks()}: set the breaks used to print colors.
 
@@ -448,11 +452,11 @@ pmap(
   .f = tab_many,
   data = forcats::gss_cat, color = "auto", chi2 = TRUE)
 }
-set_color_style(type = "bg")
-set_color_breaks(list(
+set_color_palette(text_colors = c("#02a5b3", "#0891c9", "#0267c7", "#300dfd"))
+set_color_breaks(
   pct_diff   = c(0.05, 0.15, 0.3),
-  pct_ratio  = c(2),
+  pct_ratio  = list(over = 2),
   mean_ratio = c(1.15, 2, 4),
   contrib    = c(1, 2, 5)
-))
+)
 }

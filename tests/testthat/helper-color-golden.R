@@ -16,36 +16,29 @@
 #     must reproduce byte-for-byte. Factor "diff" is the LOCKED tripwire Phase 5 must not move.
 # See: CLAUDE.md > 1.4.0 roadmap > Phase 5 ; dev/new_colors_UI.md §13 (Step 0).
 
-# The render combinations that cover all 6 palettes (text light/dark 8-bit, text-light 24-bit
-# blue_red/green_red, background light/dark). type/theme/html_24_bit are passed explicitly to
-# fmt_get_color_code so the capture does not depend on the color_style options being set.
+# The render combinations that cover all four palettes (Phase 13a): text / background x light / dark.
+# type/theme are passed explicitly to fmt_get_color_code so the capture does not depend on the
+# color_style options being set.
 color_golden_render_matrix <- function() {
   tibble::tribble(
-    ~type,  ~theme,  ~html_24_bit,
-    "text", "light", "no",
-    "text", "dark",  "no",
-    "text", "light", "blue_red",
-    "text", "light", "green_red",
-    "bg",   "light", "no",
-    "bg",   "dark",  "no",
+    ~type,  ~theme,
+    "text", "light",
+    "text", "dark",
+    "bg",   "light",
+    "bg",   "dark",
   )
 }
 
-# Capture fmt_get_color_code() for one fmt column across the whole render matrix. Wrapped in
-# tryCatch so a mode that ERRORS on the current source (the pct CI-gated modes have a known
-# break-indexing bug -- odd-length ci breaks suppress the negative direction, so keep_last_break
-# gets an empty slice) is captured as an "<error: ...>" sentinel instead of crashing generation.
-# Those modes are slated for conscious regeneration at Step 3; the sentinel documents the
-# before-state ("errors today"), which the fix legitimately replaces with real colors.
+# Capture fmt_get_color_code() for one fmt column across the whole render matrix.
 color_golden_capture_col <- function(col) {
   rm <- color_golden_render_matrix()
-  purrr::pmap(rm, function(type, theme, html_24_bit) {
+  purrr::pmap(rm, function(type, theme) {
     tryCatch(
-      fmt_get_color_code(col, type = type, theme = theme, html_24_bit = html_24_bit),
+      fmt_get_color_code(col, type = type, theme = theme),
       error = function(e) paste0("<error: ", conditionMessage(e), ">")
     )
   }) |>
-    rlang::set_names(paste(rm$type, rm$theme, rm$html_24_bit, sep = "/"))
+    rlang::set_names(paste(rm$type, rm$theme, sep = "/"))
 }
 
 # Capture every colored fmt column of a whole table (named by column).

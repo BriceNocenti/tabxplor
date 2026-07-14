@@ -223,7 +223,7 @@ test_that("Phase 7f: display / colour toggles re-use the armed table (warm == co
     "ratio"      = o0(color = "ratio"),
     "auto"       = o0(color = "auto"),
     "grey"       = o0(color_signif = "grey_non_signif"),
-    "color_all"  = o0(color_signif = "color_all_signif"),
+    "color_all"  = o0(color_signif = "guaranteed_effect"),
     "cleannames" = o0(cleannames = TRUE)
   )
   for (nm in names(toggles)) {
@@ -238,7 +238,7 @@ test_that("Phase 7f: colour / digits toggles are byte-identical to a fresh tab()
   o0 <- function(...) jmv_opts(row_vars = "marital", col_vars = "race", pct = "row",
                                color = "diff", chi2 = TRUE, ...)
   for (o in list(o0(digits = 2), o0(color = "ratio"), o0(color = "auto"),
-                 o0(color_signif = "grey_non_signif"), o0(color_signif = "color_all_signif"))) {
+                 o0(color_signif = "grey_non_signif"), o0(color_signif = "guaranteed_effect"))) {
     expect_equal(jmvtab_build(gss, o, NULL)$tabs, jmv_oracle(o, gss))
   }
   # numeric means: digits + significance policy

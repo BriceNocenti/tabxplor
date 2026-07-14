@@ -25,7 +25,7 @@ fmt_contract_field_types <- c(
 )
 
 # The 9 per-column attributes and their constructor defaults. Phase 5 added `color_signif`
-# (the significance policy: "ignore" / "grey_non_signif" / "color_all_signif") -- it cannot fold
+# (the significance policy: "ignore" / "grey_non_signif" / "guaranteed_effect") -- it cannot fold
 # into `color` (which is measure x channel) and pillar_shaft renders columns standalone, so the
 # policy must live on the column. The `color` attribute is now length 1 (text) or 2 (text, bg).
 # Phase 10i-A DROPPED the Phase-10c `display_spec` attribute (10 -> 9): the opt-in composite display
