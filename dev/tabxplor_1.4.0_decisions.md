@@ -3160,9 +3160,37 @@ empirical_OR) + one updated `test-tab_reg.R` deferral test.
   weighted 2×2 (`reg_empirical_or` — outcome direction matches the model `positive_level`, reference matches the
   skeleton; no `tab()` reshaping). No new fmt fields/attributes.
 - **Deferred**: Excel numFmt-literal in-cell test label; per-group EXPORT footer for splits; legend cosmetics
-  (Phase 13); `or_plot` / `lm_plots` / OR-CI bracket / OR+PCT composite cell (12i).
+  (Phase 13); `or_plot` / `lm_plots` / OR-CI bracket / OR+PCT composite cell (12h — the display phase).
 
-### Phasing (12c → 12i — re-cut 2026-07-13; per-phase detail in the CLAUDE.md roadmap)
+### 12h DONE (2026-07-14) — regression display phase
+
+Five deliverables, all byte-identical for existing tables (crosstab goldens + all parity suites unchanged, NO
+golden regen; +27 tests: `test-tab_reg-display.R`, `test-tab_reg-plots.R`). Full suite green apart from the
+maintainer's in-progress colour-palette snapshots (`test-render-html.R`, pre-existing, unrelated).
+
+- **`estimate_display` = the estimate-cell layout** (arg on `tab_reg`/`tab_logit`/`multi_logit`; threaded
+  through `reg_build`). `"value"` (default, byte-identical) | `"ci"` a new **`est_ci` display token** (raw
+  estimate + a visible `[ci_inf; ci_sup]` bracket, NO 1/x reciprocal — dispatches OR vs β on `ci_type`;
+  `fmt_class.R`: get_num/set_num/digits≥2/`disp_est_ci` render block, no other change → crosstabs untouched)
+  | `"prob"` / `"ame"` = FOLD the model-adjusted predicted probability / average marginal effect into the OR
+  cell via the existing `{}` grammar (`"{or} ({pct})"` / `"{or} ({diff})"`, reusing `reg_marginal`). The
+  folds are **binomial coefficient only** (degrade to `"ci"` + message otherwise; ignored for `effect="ame"`).
+  `reg_apply_estimate_display()` (`tab_reg.R`) does the display-set + field-fold. No new fmt fields/attributes.
+- **Excel in-cell test label** (`tab_xl_plan_one`): mirror the stars fold — a `"{pvalue} (Chi2)"` composite's
+  pure-literal suffix is appended to the numFmt code (`0.00%" (Chi2)"`), so Excel shows `2.9% (Chi2)` instead
+  of dropping the label. Crosstab chi2/F rows + reg-footer p-value rows.
+- **Per-group export footer for splits** (`reg_footer_lines`): the early-return for split tables is gone;
+  the rebuild interleaves `[group data | group footer]` over `grp_lv`, one "Model fit" block per split group
+  (cells keyed by `reg$row_var == group`). Non-split path is a single pseudo-group `""` → byte-identical.
+- **`or_plot(tabs)`** (new `R/tab_reg_plots.R`, exported, experimental): a finalfit-style OR forest plot on a
+  `tabxplor_tab` — reads the stored fmt fields (`get_or`/`get_ci_inf`/`get_ci_sup`/`get_stars`/`get_n`), NO
+  refit; a log-scale point+`geom_linerange` plot beside a `geom_text` table, `gridExtra::grid.arrange`.
+  Defaults to the first MODEL OR column (skips `Emp. OR`); `column=` selects; multi-column → message.
+- **`lm_plots(model)`** (same file, exported, experimental): a `ggplot2` 2×2 diagnostic panel (Residuals vs
+  Fitted / Normal Q-Q / Scale-Location / Residuals vs Leverage + Cook's contours) for a fitted `lm`/`glm`,
+  or a data-frame form that fits one. `ggplot2` + `gridExtra` guarded (Suggests).
+
+### Phasing (12c → 12h — re-cut 2026-07-13; per-phase detail in the CLAUDE.md roadmap)
 
 The build is re-cut into **fresh-session Phases with commit-and-verify increments** (the old monolithic
 "12c tests / 12d rewrite / 12e jamovi" is dropped; tests are folded into every phase's gate). Each build

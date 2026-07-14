@@ -60,7 +60,7 @@ R/
 ├── tab-render-html.R (~350 L) Phase 10e tab_kable render seam: render_kable_html() (kableExtra +
 │                              home-built self-contained html engines) + tab_kable_join/scrollbox
 ├── utils.R         (1306 L)  Pipe re-export, .onLoad() options setup, factor utilities
-├── tab_reg.R       (~1700L)  Phase 12c–12g: unified regression tables. tab_reg() over ONE engine
+├── tab_reg.R       (~1780L)  Phase 12c–12h: unified regression tables. tab_reg() over ONE engine
 │                              (stats::lm/glm, survey::svyglm/svyolr, svyVGAM::svy_vglm, nnet::multinom,
 │                              MASS::polr; broom::tidy)
 │                              with family dispatch and exponentiate-driven fmt shape: gaussian beta
@@ -102,8 +102,15 @@ R/
 │                              skeleton_data, stacks grouped_tab (split_var,var); tab_spread works,
 │                              group-aware print_reg_footer). multiplicator (OR^k) + empirical_OR
 │                              (reg_empirical_or crude %/OR beside model OR, binary). No new fmt fields.
+│                              12h (display): estimate_display= arg -> est_ci token (estimate + visible
+│                              [ci_inf;ci_sup] bracket, no 1/x; fmt_class.R only) | "prob"/"ame" fold
+│                              predicted prob / AME into the OR cell via {} grammar (binomial coef only,
+│                              reg_apply_estimate_display + reg_marginal). No new fmt fields.
+├── tab_reg_plots.R  (~230 L) Phase 12h display: or_plot() (finalfit-style OR forest plot ON a
+│                              tabxplor_tab -- reads fmt fields, NO refit; gridExtra 2-panel) + lm_plots()
+│                              (ggplot2 2x2 glm/lm diagnostics). ggplot2+gridExtra guarded (Suggests).
 ├── tab_logit.R      (~5 L)   Emptied in Phase 12c (renamed -> tab_reg.R; git rm pending).
-├── tab_logit_2.R    (~8 L)   Emptied in Phase 12a (git rm pending). or_plot/lm_plots deferred.
+├── tab_logit_2.R    (~8 L)   Emptied in Phase 12a (git rm pending). or_plot/lm_plots -> tab_reg_plots.R.
 ├── jmvtab-cache.R  (~800 L)  jmvtab live multi-tier cache: content-addressed store + hashing +
 │                             jmv_cache_aggregate (tier 1-2, tab_aggregate hook) + the Phase 7f
 │                             tier-3 CARRIER cache (Phase 9b-7: jmv_carrier_unwrap/wrap store, not a
@@ -258,6 +265,8 @@ devtools::test("d:/Statistiques/github/tabxplor", filter = "tab")  # one/few fil
 | `test-tab_xl.R`      | Basic Excel export                                                                              |
 | `test-tab_logit.R`   | Phase 12a: binomial-wrapper OR/CI/p parity vs glm/svyglm, 1/OR                                  |
 | `test-tab_reg.R`     | Phase 12c/12d/12e: beta/OR/IRR/MNL/ordinal + AME parity vs lm/glm/multinom/polr/marginaleffects |
+| `test-tab_reg-display.R` | Phase 12h: estimate_display (est_ci bracket / prob / ame folds), Excel test label, split footer |
+| `test-tab_reg-plots.R`   | Phase 12h: or_plot() / lm_plots() smoke tests (build a gtable without error)                    |
 
 ---
 
@@ -1630,32 +1639,30 @@ Four increments, byte-identical for unweighted / no-new-arg calls (NO golden reg
 
 #### Phase 12h – regression display phase
 
-`or_plot` (OR forest plot, finalfit-style), `lm_plots` (2×2 glm/lm diagnostics), the visible OR-CI bracket, and the OR+ME / OR+PCT composite cell layouts.
+`or_plot` (OR forest plot, finalfit-style, already used in tab_logit.R tab_logit2.R gited drafts), `lm_plots` (2×2 glm/lm diagnostics),
+The visible OR-CI bracket.
+The OR+ME / OR+PCT composite cell layouts.
 Excel numFmt-literal in-cell test label.
 Per-group export footer for split tables (per-group GOF is in get_test())
 
 
-#### Phase 12i – jamovi UI: `jmvtab_reg`
-
-One user-friendly, fast, clear and simple regression analysis, starting from jmvtab template and adapting it to the regression functions and use case.
-A "+" to add predictor subsets for `multi_logit`-style model comparison, selecting or selecting out among already chosen predictors.
-Reuse patterns from jmvtab primarily. Customise .js to grey out options that are not possible with the other selected arguments or outcomes types. When relevant, reuse patterns from known regression jamovi modules.
 
 
 
 
-### Phase 13 – Finalise color UI, redesign color palettes with manual fine-tuning for clarity
 
-Color UI finalisation
-- Would it be possible / consistent to add this possibility:
-`color = c(pct="diff", mean="ratio")`, to have diff for factors and ratio for means, passing internally the c("diff", "ratio") color while passing empty breaks for the not wanted ones ?
+### Phase 13 – Finalise display and colors API
+
+Final redesign of color palette and color breaks management.
+
+#### Phase 13a – Colors and breaks API final redesign
+
+**Redesign the more simple and user-friendly color and breaks management system possible, without thinking about soft-deprecating anything**.
+
+Would it be possible / consistent to add this possibility:
+`color = c(pct="diff", mean="ratio")`, to have diff for factors and ratio for means, passing internally the c("diff", "ratio") color while passing empty breaks for the not wanted ones ? If it’s a white elephant tell me.
 - How are breaks passed in tab()/tab_many() handled, are they written as a per-column attribute, or was there another solution ? I can feel this part of the design was a bit shaky.
-- Redesign color legends for simplicity : they should be understandable by non-experts, while at the same time having just the enough technical terms for the experts to know exactly what happens technically here.
-- Replace `color_signif = "color_all_signif"` with `color_signif = "guaranteed_effect"`
-
-Native dark mode/light mode management for exported tables, specially html tables
-- With kable or another html tables solution, use css exported and applied with the table ?
-- Wire this css on standard html dark mode toggle, with a global option in R to use Dark mode in viewer. As a result, the table should autochange it’s formatted we the user change to dark light mode on whichever html page the table is embedded with. Overall background color should be "#111111", text overall color "#ffffff",   Do web searches to find current good practices about this. 
+- Replace `color_signif = "color_all_signif"` with `color_signif = "guaranteed_effect"`, clearer. Need to be changed in `dev/` documentation about colors UI too (no traces of the old name altogether = better).
 
 I want to change the current default color palettes system, to simplify it a lot. My new oklch color palettes, one made for Light mode and one made for Dark mode, are now saved in `tab_classes.R` "## NEW COLOR PALETTES (to wire to the code) ----" as : `default_text_colors`, `default_text_colors_neg`, `default_dark_text_colors`, `default_dark_text_colors_neg`, `default_background_colors`, `default_background_colors_neg`, `default_dark_background_colors`, `default_dark_background_colors_neg`. 
 - Text and background variants have been made to be usable together in a readable way (`color = c("diff", "ratio")`).
@@ -1663,30 +1670,29 @@ I want to change the current default color palettes system, to simplify it a lot
 - Assume, and state in documentation, that they will always be **4 positive colors and 4 negative colors** in all color palettes, for simplification. They it’s a break choices that users state if they want only 3 or 2 or 1 colors for each side.
 - Positive and negative colors are now separated in two different vectors for clarity.
 - The `pos1`, `pos2`, `pos3` etc. names are removed : they introduced a useless complexity and some friction. Now, only rely on position.
-- Instead of The 24 bits versions should be default : only fallback to 8 bits for consoles that do not handle 24 bit colors. Remove the old useless 24 bits palettes in `tab_classes.R` "## OLD COLOR PALETTES (TO DEPRECATE) ----" : only keep the 8 bits ones, that are needed for use inside RStudio R console (Positron IDE have 24 bits), and fallback to them only if the user is in RStudio IDE (is there a way to reliably detect that ? If there’s a way to detect Positron or VScodiumi-based-IDE instead to go 24 bits in console, it’s also possible). 
-
-- **First redesign the more simple and user-friendly color and breaks management system possible, without thinking about soft-deprecated anything** : it’s ok to break the current UI, nobody has ever used it for custom colors and breaks. They, but in a second time, we’ll see if it’s possible to wire the old code and functions into the new behaviour, possibly in a degraded mode.
+- Instead of The 24 bits versions should be default : only fallback to 8 bits for consoles that do not handle 24 bit colors. Remove the old useless 24 bits palettes in `tab_classes.R` "## OLD COLOR PALETTES (TO DEPRECATE) ----" : only keep the 8 bits ones, that are needed for use inside RStudio R console (Positron IDE have 24 bits), remove their first value pos1/neg and their ratio value if still here, and fallback to them only if the user is in RStudio IDE (is there a way to reliably detect that ? If there’s a way to detect Positron or VScodiumi-based-IDE instead to go 24 bits in console, it’s also possible).
 - Simplify the get and set color styles functions. Remove `html_24_bit = c("blue_red", "green_red", "no")` argument : default to 24 bit, fallback to 8 bits on RStudio. We only one palette (pos + neg) for each combination of light/dark and text/bg.
-
-
-
-
 
 Color breaks and color palette management is very not user friendly (base is ok, but customisation for expert users is unclear)
 - Now the `color = c("diff", "ratio")` argument is the right way to have both additive and multiplicative color helpers. So `color_style_` objects should now work without the old "ratio" value, and these `ratio` values should be removed from the `color_style_` entirely in the code.
 - in set_color_breaks(), it’s not currently possible to also provide "negative" breaks (under-represented side) to pass asymmetrical breaks (asymmetrical both in number of breaks and breaks values). That would be necessary, since with `ratio`, breaks >1 are sound, but breaks <1, when they are close do 1 (like 1.2), so the user may want to use fewers breaks on this side
-- The default for factors is `pct_diff = c(2)`, but it implement both a x2 and a /2 rule : f want to be able to enforce my classic `only x2` ratio rule, I want a possibility to force asymmetrical breaks, for example `pct_diff = c(2, asymmetrical=TRUE)` (with should be default to factors ; default for numeric variables should be `mean_ratio = c(-4, -2, -1.5, 1.15, 1.5, 2, 4)` )
-- The way I want it done : the user directly provides a list of breaks with possibly named arguments giving the color, either via set_color_breaks() or breaks argument (to be renamed `color_breaks` ; keep `breaks` soft-deprecated if it was already on tab() in 1.3.1, remove altogether if it was not) ; with `color_breaks` argument, the breaks are stored as a vctrs based column-level arguments ; with `color_breaks` argument, at display or export, tabxplor internally create a temp object with the vector, and compute the crayon styles too (both must be created and loaded first, and shall never be recreated for each cell in a table ; but at the same time it would be impossible to create lasting objects and give them all names, since ). Can you see some possible caveats here ? Some further simplifications ?
-  + For example `color_breaks = list(ratio_breaks = c(1/4, 1/2, 1/1.5, 1.2, 1.5, 2, 4))` (3 under-represented, 4 over-represented). Here no names provide colors, so base palettes are used.
+- The default for factors is `pct_diff = c(2)`, but it implement both a x2 and a /2 rule : f want to be able to enforce my classic `only x2` ratio rule, I want a possibility to force asymmetrical breaks, for example `pct_diff = c(2, asymmetrical=TRUE)` (with should be default to factors ; default for numeric variables should be `mean_ratio = c(-1.5, -2, -4, 1.15, 1.5, 2, 4)` )
+- I would prefer the order to micmic that of the color palettes : first the negative values from closest to bound to farthest to bound, then the positive level from closest to bound to farthest to bound. If the order is wrong, the code should attempt to order it in the logical way for color management anyway.
+- The way I want it done : the user directly provides a list of breaks with possibly named arguments giving the color, either via set_color_breaks() or breaks argument (to be renamed `color_breaks` ; keep `breaks` soft-deprecated if it was already on tab() in 1.3.1, remove altogether if it was not) ; with `color_breaks` argument, the breaks are stored as a vctrs based column-level arguments ; with `color_breaks` argument, at display or export, tabxplor internally create a temp object with the vector, and compute the crayon styles too (both must be created and loaded first, and shall never be recreated for each cell in a table). Can you see some possible caveats here ? Some further simplifications ?
+  + For example `color_breaks = list(ratio_breaks = c(1/1.5, 1/2, 1/4, 1.2, 1.5, 2, 4))` (3 under-represented, 4 over-represented). Here no names provide colors, so base palettes are used.
+  + Since color palettes have always 4 positive colors and 4 negative colors, passing `NA` should indicate which color is not used. Ex :  `color_breaks = list(ratio_breaks = c(NA, 1/1.5, 1/2, 1/4, 1.2, 1.5, 2, 4))` (here negative color 1 is not used). When no NA is provided to tell what colors are used exactly, a graceful fallback should select colors nonetheless (first excluding color n°2, then color n°4, then color n°1).
   + In `set_color_breaks()`, deprecate the old arguments (`set_color_breaks(pct_breaks = ...)`) and add the new ones (like `set_color_breaks(pct_diff = ..., pct_ratio = ...)`).
-  + Providing the names override the palette, but that can only be done in positive + negative mode : `color_breaks = list(pct_diff = c("#cb0000" = -30, "#ff3d00" = -20, "#FF8138" = -10, "#ffb300" = -5, "#C7D62C" = 5, "#83BB3F" = 10, "#3BA240" = 20, "#1b6e20" = 30))` . If at least one is provided, then a name should be provided for **all** breaks (error otherwise).
+  + Providing the names to override the palette, but of course that can only be done in positive + negative mode : `color_breaks = list(pct_diff = c("#cb0000" = -30, "#ff3d00" = -20, "#FF8138" = -10, "#ffb300" = -5, "#C7D62C" = 5, "#83BB3F" = 10, "#3BA240" = 20, "#1b6e20" = 30))` ?  Of course if at least one is provided, then a name should be provided for **all** breaks (error otherwise). Would it be reliable or another white elephant ?
   + The function then auto-detects where is the boundary between over-represented and under-represented depending on the type (0 for additive, 1 for multiplicative), and handle robustly the creation of the relevant interval for each color, taking into account where is the boundary.
   + only giving the positive / over-represented side should still mirror it depending of the type, minus sign for additive and 1/x for multiplicative).
   + Rule should be : if no `color_breaks` are saved as column-level attributes (not NULL or empty) the current ones are used (so the user can save a table, load it in a fresh session, and use set_color_breaks() to choose how to display) ; if some `color_breaks` already exist at column-level they override any package level settings (to change that, the user can still remove columns attributes manually).
   + Make testthat tests to ensure it handles edge cases, and user’s errors or imprecisions (ex. not ordered) well.
 - The aim is to **simplify** : please remove traces of the old implementation altogether, we do not need to soft-deprecate everything here (very small user-base + I think nobody ever used it).
 
+### Phase 13b – meaningful color legends
+
 Color legends
+- Redesign color legends for simplicity : they should be understandable by non-experts, while at the same time having just the enough technical terms for the experts to know exactly what’s happening technically here.
 - Even in Excel export, use styles inside the color legend cells to color the breaks with the relevant text or background color (+bold), to make it really usable (otherwise a legend that does not say what color is what is incomprehensible), while keeping the rest of the text in the cell black (+ plain).
 - Make the color legend more easy to read for  non-expert users, and implement a French translation (detect OS language + override by optional argument in export functions ?) Here are meaningful exemples  in French, to generalise and translate (in every case, of course, it is only meaningful if each break is of the same color than in the table). They can be written via a script, knowing : ligne/colonne, reference Total or level name, type of ci ; and a string "Nuances de bleu"/"Nuance du jaune au rouge" that can be baked with tabxplor default color palette, and have a fallback to not saying which color it is in the sentence with custom palettes ?
   + pct diff : "Nuances de bleu pour les cases >= à la ligne Total +5; +10 ; +20 ; +30 points. Nuances du jaune au rouge : <= à la ligne Total -5 ; -10 ; -20 ; -30 points."
@@ -1695,12 +1701,32 @@ Color legends
   + OR, `color_signif="grey_non_signif"` : "Nuances de bleu : OR >= 1,15 ; 1,5 ; 2 ; 4. Nuances du jaune au rouge : OR <= 1/1,15 ; 1/1,5 ; 1/2 ; 1/4. Grisé : chiffre non significativement différent de celui de la modalité de référence (intervalle de Wald avec ajustement d’Agresti et Caffo, seuil de confiance à 95%)."
 - Integrate `tab_reg()` into the colors legends reliably and usefully for the user. Currently the β legend shows the SD breaks as %, and the IRR legend says "OR".
 
+### Phase 13c – Light mode/Dark mode in kable exports
+
+Native dark mode/light mode management for exported tables, specially html tables
+- With kable or another html tables solution, use css exported and applied with the table ?
+- Wire this css on standard html dark mode toggle, with a global option in R to use Dark mode in viewer. As a result, the table should autochange it’s formatted we the user change to dark light mode on whichever html page the table is embedded with. Overall background color should be "#111111", text and borders overall color "#ffffff". Do web searches to find current good practices about this. If relevant, ensure linewidth of borders, etc., fit for readability in Dark mode.
+- Do thorough web searches to gather good practices on that matter. If there’s a red flag or impossibility, tell me.
+- Don’t use in jmvtab jamovi module : there’s only a Light mode, and it should print the fastest possible in live js UI, so don’t waste time with the Dark+Light detection and autotoggle.
+- Would it be easy to do the same, using css in the html part of tab_md exports ? Or would it be unreliable ? (Only for markdown embedded in html. For the use in interactive editor, of course, I’ll map the pandoc spans to the relevant dark or light colors myself.)
+- Maybe an argument to choose between : light mode ; dark mode ; autodetection + autotoggle ? autodetection can default if it’s really reliable ; otherwise better keept light mode as default. Add a global option to handle.
 
 
+### Phase 13d – Exports and display improvements
 
 Missing infos on exported tables, compared to what’s default in other statistical software ?
 - Display the variable names for `col_vars` : not in console, but in html and Excel, add a second headers line above the main headers row with the levels ; when contiguous fmt columns have the same col_vars, merge the variable names headers cells into a single cell (name of the same variable only needs to be given once).
 - For tab_md, just put it in the first column ?
+
+Custom display formatting :
+- For custom display like "{pct} (n={n})", I want the result padded/aligned for human readability assuming monospace font : not only for n in totals, but for **all** custom displays. For example, current display is : "100% (n=849)", "100% (n=3 648)", "100% (n=519)", "100% (n=1 178)", "100% (n=1 066)", "100% (n=902)", "100% (n=1 025)", "100% (n=9 187)". I would want : "100% (n=  849)", "100% (n=3 648)", "100% (n=  519)", "100% (n=1 178)", "100% (n=1 066)", "100% (n=  902)", "100% (n=1 025)", "100% (n=9 187)".
+- Also, for Total columns and rows "{pct} (n={n})", is there a simple and realiable way to keep the percentages in bold, but force the "(n={n})" part to plain not-bold ? Mostly in html, md and Excel exports. Keep it specifically for "{pct} (n={n})", or generalise for all custom displays (the first <token> can be bold or not-bold, the next ones are always no-bold), or would it be complicated and performance-reducing for display ?
+
+Excel formattings :
+- `ci = "cell"` not working at all, Excel only shows the raw base number with all digits and no formatting. Export as pure text ?
+- For numeric variables, by default, Excel should print a mean column with the base name (colored) + a sd column with the same name and suffix "_sd" (not colored, formatting with sigma symbol first).
+- What other such cases should be handled ? What are the ones that will need to use the pure text + formatting approach (not ideal, since then user don’t have access to raw numbers in Excel) ? What are the ones were another solution is doable (several columns stay readable like in the mean + sd case, other workarounds exist, etc.) ?
+- Ensure numbers formattings are used to : explicit `+` for `diff` and `contrib` ; explicit `+<number>sd`/`-<number>sd` for mean_diff with standardised diffs measured in sd (only if user does not provides the breaks scale, of course) ; leading `×` and `÷` symbols for `ratio` ; what else ?
 
 
 Display problems and improvements :
@@ -1708,10 +1734,15 @@ Display problems and improvements :
 - with `list(tab(...), tab(...), ...) |> tab_kable()`, the result appear in console by defaut, it should be auto-routed to Viewer via class like kableExtra output (reuse class used by kableExtra if more simple and still reliable ?)
 - in kable output, with `color = c("diff", "ratio")`, tooltips have an empty `rr` field (it should be called "ratio", and print the actual ratio ; `ratio` display printing should always have a `×` symbol when >=1 and a `÷` symbol with the inversed (`1/ratio`) when <1, for example 0.5 shall print `"÷2"` ; defaut 1 digit, removing trailing zeros (`3.333` go to  `3.3` but `2.0000` go to `2`), respecting padding for perfect aligment in monospace font for human readability ; same in color legends)
 - When there are confidence intervals significance stars, they should display, in some way or another, in all exports types. They should be completely padded right everywhere, so the stars always align in monospace font. In tab_md() it’s not
-- Un exports AND in console display, with any significance star in the column, all numbers should be padded right to keep numbers alignment and readability.
+- In exports AND in console display, with any significance star in the column, all numbers should be padded right to keep numbers alignment and readability.
 - Does transpose at export work perfecty (colors and all) with `pct = "col"` and with numeric variables ? If not, calculate colors, and anything else relevant (other column-level attributes not usable after the transposition), before transposition ?
 
 
+### Phase 14 – jamovi UI: `jmvtab_reg`
+
+One user-friendly, fast, clear and simple regression analysis, starting from jmvtab template and adapting it to the regression functions and use case.
+A "+" to add predictor subsets for `multi_logit`-style model comparison, selecting or selecting out among already chosen predictors.
+Reuse patterns from jmvtab primarily. Customise .js to grey out options that are not possible with the other selected arguments or outcomes types. When relevant, reuse patterns from known regression jamovi modules.
 
 
 ### Phase 15 — Jamovi UI French translation
@@ -1723,7 +1754,44 @@ Display problems and improvements :
 
 #### Last Phase a – Bug corrections
 
-Known bugs to fix (found but out of scope when discovered):
+See below for known bugs yet to fix.
+
+#### Last Phase b – simplify main user-facing functions roxygen documentation
+
+Simplify tab() and other main functions documentation, to make it more easily understandable and more helpful to students that are not statistical experts and may have difficulties with programming.
+
+#### Last Phase c – Create several vignettes
+
+The current vignette should be the basis for non-expert users, while also permitting expert users to understand what this package is really interesting for.
+
+All the part about "programming with tabxplor" and its vctrs fields should come in their own vignette, and it must be uptaded and extended.
+
+tab_logit should come with it’s own vignette.
+
+
+#### Last Phase d – full `pkgdown` documentation
+
+Implement a full pkgdown documentation.
+- Where ? On github pages ? Elsewhere with tidyverse ecosystem provided servers ?
+
+
+
+
+### Reference — bugs, benchmarks, perf
+
+#### Discovered bugs
+
+In-code these are tagged for grep: `# KNOWN-BUG:` (bugs below), `# FIXME:` / `# FIXME(clarify):` / `# FIXME(future):` (suspect logic or future work, several tied to the Phase 5 color work), `# OBSOLETE:` (dead-code banners, e.g. the stale `tab_xl` duplicate). Fix each bug inside the phase that rewrites the relevant code, not as a separate pass.
+
+- FIXED (Phase 1a): `fmt()` public constructor cast `totcol` into `refcol` (the `refcol` argument was silently ignored). Now casts `refcol`. Low impact (refcol is normally set internally).
+- FIXED (Phase 7g-iii, golden-locked): two latent `ref` bugs surfaced by the reference picker. (1) `diff_index()` matched a level label as a REGEX, so a metacharacter label (e.g. `"$25000 or more"`) silently mismatched (the reported "picking the 2nd row_var does nothing" — `rincome` has `$` levels) and a substring label multi-matched — now EXACT-match-first, then regex. (2) `resolve_ref_vector()`'s `length(ref)==1` early return recycled even a NAMED length-1 ref, so `c(race = "Black")` leaked to every col_var — now only an UNNAMED length-1 recycles; a named one is name-matched. Both byte-identical on existing goldens (the goldens' refs are `first`/`tot`/non-substring labels).
+- FIXED (Phase 6e, golden-locked; hardened Phase 7d-i): `tab_num(..., <tab_vars>, ci="cell")` used to error ("some columns don't belong to the data.table: [tab_var]") in the `tot="no"` grand-total-only grouping-set / `na="keep"` reorder path. 6e made the grand total a length-1 list so `num_rollup()` keeps every tab_var present; 7d-i added a defensive `intersect(tab_vars, names(tabs_tot))` guard at the reorder + an `expect_no_error` regression in `test-num-fuse-parity.R`. Locked by golden `n_ci_tabvars` / `n_ci_tabvars_all`, both `comp` modes.
+- `set_color_style(custom_palette=)` (`tab_classes.R` ~L3120): length check requires 10 but the message says 11 and 11 names (`pos1..neg5, ratio`) are applied — the `ratio` slot ends up valueless, so custom palettes are broken for the ratio color. Fix by accepting length 11.
+- **FIXED (Phase 7e)**: `tab(data, >=2 row_vars, >=2 col_vars)` used to error "pct can't be recycled" for ANY `pct` (the multi×multi tables jmvtab drives). `tab()` recycles `pct` to a per-col_var vector (`pct = c(rep(pct, length(col_var)), ...)`), but `pct_vect` only broadcasts a per-col_var vector when there is exactly ONE row_var (branch B); with ≥2 row_vars it falls to the `else` stop. Fix: add a branch `is.character(pct) & length(pct) == length(col_vars)` → `rep(list(pct), length(row_vars))`. Pre-existing (reproduces pre-7d-ii on `git stash`); low impact (multi×multi + output_list); fix with the recycling code.
+- `tab()` errors on a `data.table` **input** (works on tibble/data.frame). `tab(as.data.table(gss), marital, race)` → `tab_num()` "Selections can't have missing values" from `tidyselect::eval_select(col_vars, data)` (`tab.R` ~L3203) — under a data.table input the numeric-col_var index path (`as.character(col_vars)[col_vars_num]`, `tab.R` ~L1304) yields an NA selection. Low impact (users pass tibbles/data.frames; `tab()` does its own `setDT` on a narrowed copy internally). Discovered in the Phase 6b PoC (§26). Fix belongs with the Phase 2/6 aggregate-core / col_var-classification code, not a separate pass.
+- FIXED (this session): `set_num()` wrote `display=="diff"` via `set_pct()` (should be `set_diff()`), so setting the displayed value of a diff cell went to the wrong field. Now uses `set_diff()`.
+- FIXED (workstream 5): `relabel_levels_in_varnames()` (`tab.R` ~L5592) made big weighted tables ~60× slower. Its `across(where(...))` predicate ran on **every** column with vectorised `&`/`|`, so the character branch `any(. %in% names(data))` coerced whole 8M-row numeric/factor columns to strings (~15s × 2 calls). Rewrote it to examine **only the `col_vars` targets** with short-circuit `&&`/`||` (numeric targets cost ~0); output byte-identical. 8M `tab(wt=)`: ~30s → ~0.2s; unweighted tables also faster + ~90% less memory.
+
 
 ##### mirai parallel crash under load_all + `pct`/`OR` recycle warning (FIXED 2026-07-13)
 
@@ -1795,43 +1863,6 @@ Fixing the flagged `color="contrib"` + `comp="all"` colour crash surfaced THREE 
   **Semantics confirmed (the maintainer's note):** the code DOES implement the wanted behaviour — `comp="all"` ungroups the table ([tab.R:5557](R/tab.R#L5557)) so chi2 + contributions are computed on the WHOLE table  (all row_var × tab_var level combinations, referenced to the grand total); `comp="tab"` keeps per-subtable  grouping so a chi2 + contributions are computed PER subtable (each vs its own total row). Coverage added: `c_contrib_all` / `c_contrib_all_notab` colour goldens + an exporter render-no-crash test (`test-export.R`).
 
 
-
-
-#### Last Phase b – simplify main user-facing functions roxygen documentation
-
-Simplify tab() and other main functions documentation, to make it more easily understandable and more helpful to students that are not statistical experts and may have difficulties with programming.
-
-#### Last Phase c – Create several vignettes
-
-The current vignette should be the basis for non-expert users, while also permitting expert users to understand what this package is really interesting for.
-
-All the part about "programming with tabxplor" and its vctrs fields should come in their own vignette, and it must be uptaded and extended.
-
-tab_logit should come with it’s own vignette.
-
-
-#### Last Phase d – full `pkgdown` documentation
-
-Implement a full pkgdown documentation.
-- Where ? On github pages ? Elsewhere with tidyverse ecosystem provided servers ?
-
-
-
-
-### Reference — bugs, benchmarks, perf
-
-#### Discovered bugs
-
-In-code these are tagged for grep: `# KNOWN-BUG:` (bugs below), `# FIXME:` / `# FIXME(clarify):` / `# FIXME(future):` (suspect logic or future work, several tied to the Phase 5 color work), `# OBSOLETE:` (dead-code banners, e.g. the stale `tab_xl` duplicate). Fix each bug inside the phase that rewrites the relevant code, not as a separate pass.
-
-- FIXED (Phase 1a): `fmt()` public constructor cast `totcol` into `refcol` (the `refcol` argument was silently ignored). Now casts `refcol`. Low impact (refcol is normally set internally).
-- FIXED (Phase 7g-iii, golden-locked): two latent `ref` bugs surfaced by the reference picker. (1) `diff_index()` matched a level label as a REGEX, so a metacharacter label (e.g. `"$25000 or more"`) silently mismatched (the reported "picking the 2nd row_var does nothing" — `rincome` has `$` levels) and a substring label multi-matched — now EXACT-match-first, then regex. (2) `resolve_ref_vector()`'s `length(ref)==1` early return recycled even a NAMED length-1 ref, so `c(race = "Black")` leaked to every col_var — now only an UNNAMED length-1 recycles; a named one is name-matched. Both byte-identical on existing goldens (the goldens' refs are `first`/`tot`/non-substring labels).
-- FIXED (Phase 6e, golden-locked; hardened Phase 7d-i): `tab_num(..., <tab_vars>, ci="cell")` used to error ("some columns don't belong to the data.table: [tab_var]") in the `tot="no"` grand-total-only grouping-set / `na="keep"` reorder path. 6e made the grand total a length-1 list so `num_rollup()` keeps every tab_var present; 7d-i added a defensive `intersect(tab_vars, names(tabs_tot))` guard at the reorder + an `expect_no_error` regression in `test-num-fuse-parity.R`. Locked by golden `n_ci_tabvars` / `n_ci_tabvars_all`, both `comp` modes.
-- `set_color_style(custom_palette=)` (`tab_classes.R` ~L3120): length check requires 10 but the message says 11 and 11 names (`pos1..neg5, ratio`) are applied — the `ratio` slot ends up valueless, so custom palettes are broken for the ratio color. Fix by accepting length 11.
-- **FIXED (Phase 7e)**: `tab(data, >=2 row_vars, >=2 col_vars)` used to error "pct can't be recycled" for ANY `pct` (the multi×multi tables jmvtab drives). `tab()` recycles `pct` to a per-col_var vector (`pct = c(rep(pct, length(col_var)), ...)`), but `pct_vect` only broadcasts a per-col_var vector when there is exactly ONE row_var (branch B); with ≥2 row_vars it falls to the `else` stop. Fix: add a branch `is.character(pct) & length(pct) == length(col_vars)` → `rep(list(pct), length(row_vars))`. Pre-existing (reproduces pre-7d-ii on `git stash`); low impact (multi×multi + output_list); fix with the recycling code.
-- `tab()` errors on a `data.table` **input** (works on tibble/data.frame). `tab(as.data.table(gss), marital, race)` → `tab_num()` "Selections can't have missing values" from `tidyselect::eval_select(col_vars, data)` (`tab.R` ~L3203) — under a data.table input the numeric-col_var index path (`as.character(col_vars)[col_vars_num]`, `tab.R` ~L1304) yields an NA selection. Low impact (users pass tibbles/data.frames; `tab()` does its own `setDT` on a narrowed copy internally). Discovered in the Phase 6b PoC (§26). Fix belongs with the Phase 2/6 aggregate-core / col_var-classification code, not a separate pass.
-- FIXED (this session): `set_num()` wrote `display=="diff"` via `set_pct()` (should be `set_diff()`), so setting the displayed value of a diff cell went to the wrong field. Now uses `set_diff()`.
-- FIXED (workstream 5): `relabel_levels_in_varnames()` (`tab.R` ~L5592) made big weighted tables ~60× slower. Its `across(where(...))` predicate ran on **every** column with vectorised `&`/`|`, so the character branch `any(. %in% names(data))` coerced whole 8M-row numeric/factor columns to strings (~15s × 2 calls). Rewrote it to examine **only the `col_vars` targets** with short-circuit `&&`/`||` (numeric targets cost ~0); output byte-identical. 8M `tab(wt=)`: ~30s → ~0.2s; unweighted tables also faster + ~90% less memory.
 
 #### Benchmarks (`dev/benchmarks/`)
 

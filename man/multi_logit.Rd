@@ -22,6 +22,7 @@ multi_logit(
   stats = NULL,
   compare = c("none", "baseline", "sequential"),
   baseline = NULL,
+  estimate_display = c("value", "ci", "prob", "ame"),
   color_signif = c("grey_non_signif", "ignore", "color_all_signif"),
   stars = TRUE,
   cleannames = NULL,
@@ -96,6 +97,13 @@ message.}
 
 \item{baseline}{For \code{compare = "baseline"}: which column is the reference model (its label, or a
 position). Defaults to the first model.}
+
+\item{estimate_display}{What each effect cell shows beside the estimate. \code{"value"} (default) the plain
+estimate (e.g. \code{2.34}); \code{"ci"} adds a visible confidence-interval bracket (\verb{2.34 [1.20; 4.50]}, any
+family); \code{"prob"} folds the model-adjusted predicted probability into the odds-ratio cell
+(\verb{2.34 (16\%)}); \code{"ame"} folds the average marginal effect (\verb{2.34 (+8\%)}). \code{"prob"}/\code{"ame"} need the
+\code{marginaleffects} package and apply to binomial (logistic) coefficient models only (they degrade to
+\code{"ci"} otherwise, with a message).}
 
 \item{color_signif}{How significance drives the colours. \code{"grey_non_signif"} (default) colours
 only odds ratios whose confidence interval excludes 1 and greys the rest.}

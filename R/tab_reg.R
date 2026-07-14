@@ -807,6 +807,40 @@ reg_column <- function(skeleton, fit_res, model_predictors, col_var, effect_shap
   }
 }
 
+# Phase 12h: apply the `estimate_display` layout to ONE coefficient column. "value" = unchanged (plain
+# OR / IRR / beta); "ci" = the `est_ci` token (estimate + a VISIBLE [ci_inf; ci_sup] bracket, dispatching
+# OR vs beta on ci_type); "prob" / "ame" = FOLD the model-adjusted predicted probability / average
+# marginal effect into the OR cell via the {} grammar ("{or} ({pct})" / "{or} ({diff})"), reusing
+# reg_marginal(). The fold is binomial-coefficient-only (guaranteed by the tab_reg() degrade): stars ride
+# the OR (the primary token) and its CI drives the colour; the (annotation) is a descriptive companion.
+reg_apply_estimate_display <- function(col, mode, skeleton, f, sp, family, design_spec, conf_level,
+                                       numeric_preds, model_predictors) {
+  if (mode == "value") return(col)
+  if (mode == "ci")    return(set_display(col, "est_ci"))
+
+  marg     <- reg_marginal(f$fit, f$data, sp$predictors, conf_level, design_spec$wt,
+                           at = "average", want_pred = mode == "prob")
+  key      <- paste(skeleton$var, skeleton$level, sep = "\r")
+  in_model <- skeleton$var %in% c("Constant", model_predictors)
+  is_const <- skeleton$var == "Constant"
+  is_ref   <- skeleton$is_ref & !is_const & in_model
+  disp     <- get_display(col)
+  if (mode == "prob") {
+    prd    <- marg$pred
+    pred_v <- if (nrow(prd)) prd$pred[match(key, paste(prd$var, prd$level, sep = "\r"))]
+              else           rep(NA_real_, length(key))
+    col    <- vctrs::`field<-`(col, "pct", pred_v)
+    disp[in_model & !is_const & !is.na(pred_v)] <- "{or} ({pct})"
+  } else {                                                   # "ame"
+    amt    <- marg$ame
+    ame_v  <- amt$ame[match(key, paste(amt$var, amt$level, sep = "\r"))]
+    ame_v[is_ref] <- NA_real_                                # reference level has no marginal effect
+    col    <- vctrs::`field<-`(col, "diff", ame_v)
+    disp[in_model & !is_const & !is_ref & !is.na(ame_v)] <- "{or} ({diff})"
+  }
+  set_display(col, disp)
+}
+
 
 # === empirical_OR: the descriptive crude OR / % beside the model OR (Phase 12g, binary logit) =======
 
@@ -1313,7 +1347,8 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
                       inverse_two_level_factors, conf_level, method, color, color_signif,
                       cleannames, subtext, eff_word, effect = "coefficient", at = "average",
                       stats = NULL, compare = "none", baseline = NULL, split_var = NULL,
-                      multiplicator = NULL, empirical_OR = FALSE, skeleton_data = data) {
+                      multiplicator = NULL, empirical_OR = FALSE, estimate_display = "value",
+                      skeleton_data = data) {
   # split_var (Phase 12g): the regression analogue of tab()'s tab_vars -- fit the SAME model(s) within
   # each level of a grouping variable and STACK the per-group tables into one grouped_tab (grouped by
   # split_var + var), so tab_spread(split_var) can pivot the groups into side-by-side columns. Each group
@@ -1332,7 +1367,7 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
                        inverse_two_level_factors, conf_level, method, color, color_signif,
                        cleannames, subtext, eff_word, effect, at, stats, compare, baseline,
                        split_var = NULL, multiplicator = multiplicator, empirical_OR = empirical_OR,
-                       skeleton_data = data)
+                       estimate_display = estimate_display, skeleton_data = data)
       tst <- get_test(tg); if (!is.null(tst) && nrow(tst) > 0) tst$row_var <- as.character(g)
       list(data = tibble::add_column(tibble::as_tibble(dplyr::ungroup(tg)),
                                      "{split_var}" := factor(g, levels = sl), .before = 1L),
@@ -1416,14 +1451,21 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
   } else {
     built_per_fit <- purrr::map2(fits, specs, function(f, sp) {
       if (multi_col) {
-        reg_columns_multinom(skeleton, f, sp, effect_shape, color, color_signif,
-                             eff_word, cleannames, prefix_dep)
+        cols <- reg_columns_multinom(skeleton, f, sp, effect_shape, color, color_signif,
+                                     eff_word, cleannames, prefix_dep)
+        # Phase 12h: estimate_display="ci" adds the visible interval to each category's OR column
+        # (the prob/ame folds are degraded to "ci" for MNL in tab_reg()).
+        if (estimate_display != "value") {
+          cols <- purrr::map(cols, function(lc) { lc$col <- set_display(lc$col, "est_ci"); lc })
+        }
+        cols
       } else {
         # a compound formula is one model: every skeleton row belongs to it (else compound rows go NA)
         model_predictors <- if (isTRUE(sp$compound)) unique(skeleton$var) else sp$predictors
-        list(list(label = sp$label,
-                  col   = reg_column(skeleton, f, model_predictors, sp$label,
-                                     effect_shape, color, color_signif)))
+        col <- reg_column(skeleton, f, model_predictors, sp$label, effect_shape, color, color_signif)
+        col <- reg_apply_estimate_display(col, estimate_display, skeleton, f, sp, family,
+                                          design_spec, conf_level, numeric_preds, model_predictors)
+        list(list(label = sp$label, col = col))
       }
     })
   }
@@ -1618,6 +1660,12 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
 #'   message.
 #' @param baseline For `compare = "baseline"`: which column is the reference model (its label, or a
 #'   position). Defaults to the first model.
+#' @param estimate_display What each effect cell shows beside the estimate. `"value"` (default) the plain
+#'   estimate (e.g. `2.34`); `"ci"` adds a visible confidence-interval bracket (`2.34 [1.20; 4.50]`, any
+#'   family); `"prob"` folds the model-adjusted predicted probability into the odds-ratio cell
+#'   (`2.34 (16%)`); `"ame"` folds the average marginal effect (`2.34 (+8%)`). `"prob"`/`"ame"` need the
+#'   `marginaleffects` package and apply to binomial (logistic) coefficient models only (they degrade to
+#'   `"ci"` otherwise, with a message).
 #' @param color,color_signif How the effect measure is coloured (`NULL` uses the per-family default:
 #'   `"OR"` magnitude for ratios, standardized `"diff"` for betas; significance policy
 #'   `"grey_non_signif"`). See [tab()].
@@ -1664,12 +1712,14 @@ tab_reg <- function(data, dependent, predictors = NULL,
                     reference = NULL, inverse_two_level_factors = TRUE, split_var = NULL,
                     multiplicator = NULL, empirical_OR = FALSE,
                     stats = NULL, compare = c("none", "baseline", "sequential"), baseline = NULL,
+                    estimate_display = c("value", "ci", "prob", "ame"),
                     color = NULL, color_signif = NULL, stars = TRUE,
                     cleannames = NULL, subtext = "") {
   method  <- match.arg(method)
   effect  <- match.arg(effect)
   at      <- match.arg(at)
   compare <- match.arg(compare)
+  estimate_display <- match.arg(estimate_display)
   cleannames <- if (is.null(cleannames)) getOption("tabxplor.cleannames", TRUE) else cleannames
 
   # Phase 12g: `data` may be a PREBUILT survey design (survey.design / svyrep.design), gtsummary-style.
@@ -1761,6 +1811,21 @@ tab_reg <- function(data, dependent, predictors = NULL,
     (identical(exponentiate, "nongaussian") && family != "gaussian")
   effect_shape <- if (do_exp) "ratio" else "additive"
   eff_word     <- reg_effect_word(family, do_exp, effect, at)
+
+  # Phase 12h: `estimate_display` = the estimate-cell layout. "value" (plain) / "ci" (a visible interval,
+  # any family) apply everywhere; the "prob"/"ame" folds (OR + adjusted probability / OR + marginal
+  # effect, via reg_marginal) are probability-scale -> binomial coefficient models only. Marginal-effects
+  # output (effect="ame" / the MNL "j vs rest" OR at reference) already has its own layout -> ignored.
+  if (estimate_display != "value" && (effect == "ame" || mnl_vsrest)) {
+    cli::cli_inform(c("i" = "{.arg estimate_display} is ignored with marginal-effects output."))
+    estimate_display <- "value"
+  }
+  if (estimate_display %in% c("prob", "ame") && !(family == "binomial" && !formula_mode)) {
+    cli::cli_inform(c(
+      "!" = paste0("{.arg estimate_display = \"{estimate_display}\"} needs a binomial coefficient ",
+                   "model; showing the confidence interval instead.")))
+    estimate_display <- "ci"
+  }
 
   # trials -> grouped binomial (D2): a summed-score outcome fit as cbind(score, trials-score). NULL =
   # off (binary logit). TRUE = observed max per dependent. Numeric / named vector = the item count.
@@ -1876,12 +1941,14 @@ tab_reg <- function(data, dependent, predictors = NULL,
   }
 
   design_spec <- list(design = design_obj, wt = wt, ids = ids, strata = strata, fpc = fpc, nest = nest)
-  reg_check_deps(family, weighted, needs_marginaleffects = effect == "ame" || mnl_vsrest)
+  reg_check_deps(family, weighted, needs_marginaleffects = effect == "ame" || mnl_vsrest ||
+                   estimate_display %in% c("prob", "ame"))
   res <- reg_build(data, specs, union_predictors, family, design_spec, weighted, do_exp, effect_shape,
                    inverse_two_level_factors, conf_level, method, color, color_signif,
                    cleannames, subtext, eff_word, effect, at,
                    stats = stats, compare = compare, baseline = baseline, split_var = split_var,
-                   multiplicator = multiplicator, empirical_OR = empirical_OR)
+                   multiplicator = multiplicator, empirical_OR = empirical_OR,
+                   estimate_display = estimate_display)
 
   # stars = TRUE (default) for regression tables -- the per-cell pvalue is stored by reg_build so the
   # main display shows significance stars. stars = FALSE strips it (pvalue is stars-only; colours read
@@ -1924,16 +1991,18 @@ tab_logit <- function(data, dependent, predictors, wt = NULL,
                       empirical_OR = FALSE,
                       conf_level = 0.95,
                       method = c("wald", "profile"),
-                      stats = NULL,
+                      stats = NULL, estimate_display = c("value", "ci", "prob", "ame"),
                       color_signif = c("grey_non_signif", "ignore", "color_all_signif"),
                       stars = TRUE, cleannames = NULL, subtext = "") {
   method       <- match.arg(method)
   color_signif <- match.arg(color_signif)
+  estimate_display <- match.arg(estimate_display)
   stopifnot(is.character(predictors), length(predictors) >= 1L)
   tab_reg(data, dependent = dependent, predictors = predictors, family = "binomial", wt = wt,
           ids = ids, strata = strata, fpc = fpc, nest = nest, split_var = split_var,
           multiplicator = multiplicator, empirical_OR = empirical_OR,
           conf_level = conf_level, method = method, stats = stats,
+          estimate_display = estimate_display,
           inverse_two_level_factors = inverse_two_level_factors,
           color_signif = color_signif, stars = stars, cleannames = cleannames, subtext = subtext)
 }
@@ -1971,17 +2040,20 @@ multi_logit <- function(data, dependent, models, wt = NULL,
                         conf_level = 0.95,
                         method = c("wald", "profile"),
                         stats = NULL, compare = c("none", "baseline", "sequential"), baseline = NULL,
+                        estimate_display = c("value", "ci", "prob", "ame"),
                         color_signif = c("grey_non_signif", "ignore", "color_all_signif"),
                         stars = TRUE, cleannames = NULL, subtext = "") {
   method       <- match.arg(method)
   compare      <- match.arg(compare)
   color_signif <- match.arg(color_signif)
+  estimate_display <- match.arg(estimate_display)
   stopifnot(is.character(dependent), length(dependent) == 1L, is.list(models), length(models) >= 1L)
   tab_reg(data, dependent = dependent, predictors = models, family = "binomial", wt = wt,
           ids = ids, strata = strata, fpc = fpc, nest = nest, split_var = split_var,
           multiplicator = multiplicator, empirical_OR = empirical_OR,
           conf_level = conf_level, method = method,
           stats = stats, compare = compare, baseline = baseline,
+          estimate_display = estimate_display,
           inverse_two_level_factors = inverse_two_level_factors,
           color_signif = color_signif, stars = stars, cleannames = cleannames, subtext = subtext)
 }

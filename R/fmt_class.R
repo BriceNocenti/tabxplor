@@ -392,6 +392,13 @@ get_num <- function(x) {
   out[!nas & display == "rr"     ] <- get_ratio(x)[!nas & display == "rr"     ]
   out[!nas & display %in% c("or", "OR")] <- get_or(x)[!nas & display %in% c("or", "OR")     ]
   out[!nas & display == "or_pct" ] <- get_or  (x)[!nas & display == "or_pct" ]
+  # Phase 12h: est_ci = "<estimate> [ci_inf; ci_sup]" (regression OR / beta with a visible interval).
+  # The PRIMARY number is the point estimate: the OR (ci_type=="or") or the coefficient (else). ci_type
+  # is a per-column scalar attribute, so one branch per column (never mixed within a column).
+  est_ci_m <- !nas & display == "est_ci"
+  if (any(est_ci_m)) {
+    out[est_ci_m] <- (if (identical(as.character(get_ci_type(x))[1], "or")) get_or(x) else get_diff(x))[est_ci_m]
+  }
   # Phase 7g: "blank" is a display-only mask (the n_min helper sets it on small-base cells);
   # it carries NO number (format() emits ""), while the underlying n/pct/tot_n stay intact so
   # the mask is fully reversible by resetting `display`.
@@ -422,6 +429,15 @@ set_num <- function(x, value) {
   out[!nas & display == "ci"  ] <- set_ci   (x[!nas & display == "ci"  ], value[!nas & display == "ci"  ])
   out[!nas & display == "rr"  ] <- set_ratio(x[!nas & display == "rr"  ], value[!nas & display == "rr"  ])
   out[!nas & display %in% c("or", "OR")] <- set_or(x[!nas & display %in% c("or", "OR")  ], value[!nas & display == "or"  ])
+  # Phase 12h: est_ci writes back to its point-estimate field (OR or coefficient), like get_num reads it.
+  est_ci_m <- !nas & display == "est_ci"
+  if (any(est_ci_m)) {
+    out[est_ci_m] <- if (identical(as.character(get_ci_type(x))[1], "or")) {
+      set_or(x[est_ci_m], value[est_ci_m])
+    } else {
+      set_diff(x[est_ci_m], value[est_ci_m])
+    }
+  }
   out
 }
 
@@ -1778,7 +1794,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   nas  <- is.na(display)
   digits <- get_digits(x)
   digits[!nas & display == "n"] <- 0
-  digits[!nas & display %in% c("or", "or_pct", "OR", "OR_pct") & # no "var" (used in chi2_table)
+  digits[!nas & display %in% c("or", "or_pct", "OR", "OR_pct", "est_ci") & # no "var" (used in chi2_table)
            digits < 2L] <- 2L
 
 
@@ -1958,6 +1974,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
     disp_coef   <- display == "coef" & !nas             # Phase 12c: raw regression coefficient
     disp_or     <- display %in% c("or", "OR") & !nas
     disp_or_pct <- display %in% c("or_pct", "OR_pct") & !nas
+    disp_est_ci <- display == "est_ci" & !nas           # Phase 12h: estimate + visible CI bracket
     # get_var() (the vctrs::field accessor) not x$var (the dplyr::pull `$` method): x$var here ran
     # unconditionally for EVERY column and was ~28% of format() self-time (Phase 10c profile).
     disp_mean_sd <- display == "mean" & type == "mean" & !nas & !is.na(get_var(x))
@@ -2038,6 +2055,23 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
       } else {                                               # pure model-OR: bare "1" on ref rows
         out[disp_or] <- ifelse(refer, one, vals)
       }
+    }
+
+    if (any(disp_est_ci)) {
+      # Phase 12h: OR / beta cell with a VISIBLE confidence interval. `out` already holds the RAW point
+      # estimate (get_num -> get_or / get_diff, no x100, NO 1/x reciprocal -- the standard forest-plot
+      # convention when a bracket is shown), to which we append the real asymmetric bounds
+      # [ci_inf; ci_sup] (exp() Wald for OR, additive Wald for beta). Reference rows have NA bounds ->
+      # no bracket (bare "1" / coefficient baseline). Stars are appended by the shared block below.
+      lo  <- get_ci_inf(x)[disp_est_ci]
+      hi  <- get_ci_sup(x)[disp_est_ci]
+      dg  <- digits[disp_est_ci]
+      brk <- ifelse(
+        is.na(lo) | is.na(hi), "",
+        paste0(" [", sprintf(paste0("%-0.", dg, "f"), lo), ";",
+               sprintf(paste0("%-0.", dg, "f"), hi), "]")
+      )
+      out[disp_est_ci] <- paste0(out[disp_est_ci], brk)
     }
 
     if (any(disp_or_pct)) {

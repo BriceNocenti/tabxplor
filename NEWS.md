@@ -65,6 +65,19 @@
 * `tab_reg()` gains `multiplicator =` (a named vector like `c(age = 10)` showing a continuous predictor's
   effect **per k units**, e.g. the odds ratio per decade) and `empirical_OR =` (for a binary logistic
   outcome, adds the **crude percentage and crude odds ratio** beside the model odds ratio).
+* `tab_reg()` (and `tab_logit()` / `multi_logit()`) gain an `estimate_display =` argument controlling
+  what each effect cell shows beside the estimate: `"ci"` adds a visible confidence-interval bracket
+  (`2.34 [1.20; 4.50]`); for logistic models `"prob"` folds the adjusted predicted probability into the
+  odds-ratio cell (`2.34 (16%)`) and `"ame"` folds the average marginal effect (`2.34 (+8%)`). The
+  probability folds need the `marginaleffects` package.
+* New `or_plot()` --- a finalfit-style **odds-ratio forest plot** of a `tab_logit()` / `tab_reg()` table
+  (log-scale point-and-interval plot beside a table of the estimates), and `lm_plots()` --- a `ggplot2`
+  2x2 **diagnostic panel** (Residuals vs Fitted, Normal Q-Q, Scale-Location, Residuals vs Leverage) for a
+  fitted `lm` / `glm`. Both need `ggplot2` and `gridExtra` (optional dependencies).
+* Regression tables built with `split_var =` now also show their **per-group model-summary footer** when
+  exported (kable / Markdown / Excel), one block per group (previously only the console showed it).
+* Excel export now keeps the **in-cell test label** on p-value cells (e.g. a chi-square p-value shows as
+  `2.9% (Chi2)`), folded into the cell number format, instead of dropping the label.
 * `tab()` crosstab p-value rows now label each cell with the test it ran (e.g. `2.9% (Chi2)`,
   `1.4% (F, Welch)`), so a table mixing categorical and numeric columns is self-documenting.
 * `tab()` odds-ratio columns (and any odds ratio) now print values below 1 as `1/x` (e.g. `1/4`

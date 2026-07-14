@@ -28,6 +28,7 @@ tab_reg(
   stats = NULL,
   compare = c("none", "baseline", "sequential"),
   baseline = NULL,
+  estimate_display = c("value", "ci", "prob", "ame"),
   color = NULL,
   color_signif = NULL,
   stars = TRUE,
@@ -146,6 +147,13 @@ message.}
 
 \item{baseline}{For \code{compare = "baseline"}: which column is the reference model (its label, or a
 position). Defaults to the first model.}
+
+\item{estimate_display}{What each effect cell shows beside the estimate. \code{"value"} (default) the plain
+estimate (e.g. \code{2.34}); \code{"ci"} adds a visible confidence-interval bracket (\verb{2.34 [1.20; 4.50]}, any
+family); \code{"prob"} folds the model-adjusted predicted probability into the odds-ratio cell
+(\verb{2.34 (16\%)}); \code{"ame"} folds the average marginal effect (\verb{2.34 (+8\%)}). \code{"prob"}/\code{"ame"} need the
+\code{marginaleffects} package and apply to binomial (logistic) coefficient models only (they degrade to
+\code{"ci"} otherwise, with a message).}
 
 \item{color, color_signif}{How the effect measure is coloured (\code{NULL} uses the per-family default:
 \code{"OR"} magnitude for ratios, standardized \code{"diff"} for betas; significance policy

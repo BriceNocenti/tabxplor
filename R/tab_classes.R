@@ -1253,10 +1253,6 @@ reg_footer_lines <- function(tabs) {
   spec <- reg_footer_spec()
   reg  <- test_tbl[test_tbl$test %in% names(spec), , drop = FALSE]
   if (nrow(reg) == 0) return(tabs)
-  # split_var (Phase 12g): the footer carries per-group GOF (the group level tagged in `row_var`). The
-  # row-append model here can't place per-group footer blocks cleanly, so the appended EXPORT footer is
-  # skipped for split tables (the console footer is group-aware; per-group GOF stays in get_test()).
-  if (!is.null(reg$row_var) && any(nzchar(reg$row_var[!is.na(reg$row_var)]))) return(tabs)
 
   subtext   <- get_subtext(tabs)
   groups    <- dplyr::groups(tabs)
@@ -1271,39 +1267,61 @@ reg_footer_lines <- function(tabs) {
   stats_present <- names(spec)[names(spec) %in% unique(reg$test)]
   K  <- length(stats_present)
   if (K == 0) return(tabs)
-  n0 <- nrow(tabs)
   footer_labels <- unname(vapply(stats_present, function(s) spec[[s]]$label, character(1)))
 
-  cell_for <- function(nm, s) {
-    r <- reg[reg$col_var == nm & reg$test == s, , drop = FALSE]
+  # split_var (Phase 12h): a split table carries per-group GOF (the group level tagged in `reg$row_var`;
+  # split_var is the FIRST grouping column). It gets one "Model fit" footer block PER group, placed at
+  # the end of that group's rows; a plain table gets one block at the end (a single pseudo-group ""). The
+  # rebuild iterates groups in row order, interleaving [group data | group footer], so order is preserved.
+  reg_rv    <- if (is.null(reg$row_var)) rep(NA_character_, nrow(reg)) else reg$row_var
+  is_split  <- any(nzchar(reg_rv[!is.na(reg_rv)]))
+  split_col <- if (is_split) group_chr[[1]] else NA_character_
+  grp_of    <- if (is_split) as.character(tabs[[split_col]]) else rep("", nrow(tabs))
+  grp_lv    <- unique(grp_of)
+
+  cell_for <- function(nm, s, g) {
+    sel <- reg$col_var == nm & reg$test == s &
+      (if (is_split) (!is.na(reg_rv) & reg_rv == g) else TRUE)
+    r <- reg[sel, , drop = FALSE]
     if (nrow(r) == 0) return(reg_blank_cell())
     sp <- spec[[s]]
     if (identical(sp$kind, "gof")) reg_gof_cell(r$statistic[1], sp$digits) else reg_pvalue_cell(r$pvalue[1])
   }
-  footer_frame <- function(nm) {
-    fcol   <- do.call(vctrs::vec_c, lapply(stats_present, function(s) cell_for(nm, s)))
-    fr     <- as.list(vctrs::vec_data(fcol))
-    fr$wn  <- get_wn(fcol)
-    fr
+  footer_frame <- function(nm, g) {
+    fcol  <- do.call(vctrs::vec_c, lapply(stats_present, function(s) cell_for(nm, s, g)))
+    fr    <- as.list(vctrs::vec_data(fcol)); fr$wn <- get_wn(fcol); fr
   }
+  # per fmt column: interleave [group field-frame, group footer-frame] over groups, then stack once.
   build_col <- function(nm) {
-    of    <- as.list(vctrs::vec_data(tabs[[nm]]))
-    of$wn <- get_wn(tabs[[nm]])
-    meta  <- purrr::set_names(
+    meta   <- purrr::set_names(
       lapply(fmt_col_attrs, function(a) attr(tabs[[nm]], a, exact = TRUE)), fmt_col_attrs)
-    fmt_stack_frames(list(of, footer_frame(nm)), meta)
+    frames <- unlist(lapply(grp_lv, function(g) {
+      idx <- which(grp_of == g)
+      of  <- as.list(vctrs::vec_data(tabs[[nm]][idx])); of$wn <- get_wn(tabs[[nm]][idx])
+      list(of, footer_frame(nm, g))
+    }), recursive = FALSE)
+    fmt_stack_frames(frames, meta)
   }
-  refactor <- function(orig, add) {
-    lv  <- levels(as.factor(orig))
-    factor(c(as.character(orig), add), levels = c(lv, setdiff(unique(add), lv)))
+  # non-fmt column: each group's original values then its K footer values (labels / group / "Model fit").
+  build_nonfmt <- function(nm) {
+    orig <- tabs[[nm]]
+    combined <- unlist(lapply(grp_lv, function(g) {
+      base <- as.character(orig)[grp_of == g]
+      foot <- if (nm == row_lab_col)          footer_labels
+              else if (identical(nm, split_col)) rep(g, K)
+              else                             rep("Model fit", K)
+      c(base, foot)
+    }))
+    if (is.factor(orig)) {
+      lv <- levels(orig)
+      factor(combined, levels = c(lv, setdiff(unique(combined), lv)))
+    } else combined
   }
 
   out <- purrr::set_names(lapply(names(tabs), function(nm) {
-    if (nm %in% fmt_nms)           build_col(nm)
-    else if (nm == row_lab_col)    refactor(tabs[[nm]], footer_labels)
-    else                           refactor(tabs[[nm]], rep("Model fit", K))
+    if (nm %in% fmt_nms) build_col(nm) else build_nonfmt(nm)
   }), names(tabs))
-  tabs2 <- tibble::new_tibble(out, nrow = n0 + K)
+  tabs2 <- tibble::new_tibble(out, nrow = length(out[[1]]))
 
   new_tab(tabs2, subtext = subtext) |>            # `test` dropped -> idempotent
     dplyr::group_by(!!!rlang::syms(group_chr))

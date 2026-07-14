@@ -338,6 +338,18 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, start, sheet, title, sub
       st_pad <- formatC(st, width = -w)                 # glyphs left, spaces right ("" -> w spaces)
       code[val] <- paste0(code[val], '"', st_pad[val], '"')
     }
+    # Phase 12h: fold an in-cell TEST LABEL ("{pvalue} (Chi2)") into the numFmt literal so Excel shows
+    # "2.9% (Chi2)" (crosstab chi2/F p-value rows + reg-footer p-value rows), instead of the bare number
+    # (the label was previously dropped: format(syntax="excel") resolves the composite to its pvalue
+    # PRIMARY before the text expansion). Only the pvalue-composite has a pure-literal suffix; other
+    # composites ({pct} (n={n})) keep the Excel primary (their annotation lives in a separate column).
+    disp <- get_display(col)
+    lbl  <- sub("^\\{\\s*pvalue\\s*\\}(.*)$", "\\1", disp)
+    has_lbl <- !is.na(disp) & disp != lbl & !grepl("{", lbl, fixed = TRUE) & nzchar(trimws(lbl))
+    if (any(has_lbl & val)) {
+      m <- has_lbl & val
+      code[m] <- paste0(code[m], '"', lbl[m], '"')
+    }
     code[!is.na(code) & code == "TEXT"] <- "@"
     tibble::tibble(col = as.integer(ci), row = seq_along(code) + data_row0, code = code)
   }) else tibble::tibble(col = integer(), row = integer(), code = character())
