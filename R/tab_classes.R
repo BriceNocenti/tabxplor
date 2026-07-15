@@ -1481,8 +1481,15 @@ reg_footer_lines <- function(tabs) {
 #'
 #' @examples
 #' \donttest{
-#' tab(forcats::gss_cat, race, marital, pct = "row", color = "diff") |>
-#'   tab_plot()
+#' # ggpubr / gtable / ggplot2 are Suggests-only and tab_plot() stops without them, so guard the
+#' # example: \donttest{} does NOT exempt it from R CMD check --as-cran, which CRAN also runs
+#' # without Suggests installed.
+#' if (requireNamespace("ggpubr", quietly = TRUE) &&
+#'     requireNamespace("gtable", quietly = TRUE) &&
+#'     requireNamespace("ggplot2", quietly = TRUE)) {
+#'   tab(forcats::gss_cat, race, marital, pct = "row", color = "diff") |>
+#'     tab_plot()
+#' }
 #' }
 #'
 tab_plot <- function(tabs,

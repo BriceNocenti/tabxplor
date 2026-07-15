@@ -5,7 +5,7 @@ Authors@R:
     person(given = "Brice",
            family = "Nocenti",
            role = c("aut", "cre"),
-           email = "brice.nocenti@gmail.com")
+           email = "brice.nocenti@protonmail.com")
 Description: Make it easy to deal with multiple cross-tables in data exploration, by
   creating them, manipulating them, and adding color helpers to highlight
   important informations (differences from totals, comparisons between lines or

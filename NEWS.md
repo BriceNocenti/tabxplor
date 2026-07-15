@@ -263,6 +263,12 @@
   (e.g. `"$25000 or more"`) work as references.
 
 ## Internal
+* Examples that need a `Suggests` package (`tab_reg()`, `tab_logit()`, `multi_logit()` → **broom**,
+  plus **marginaleffects** / **nnet** / **MASS** for the AME, multinomial and ordinal cases;
+  `tab_xl()` → **openxlsx2**; `tab_plot()` → **ggpubr**/**gtable**/**ggplot2**) are now wrapped in
+  `requireNamespace()`, so they skip instead of failing where those packages are absent. The three
+  slow `tab_reg()` examples moved into `\donttest{}` (they are still checked, just not in the timed
+  pass): `tab_reg` examples went from ~22 s to ~1.3 s.
 * Fixed a spurious deprecation warning: using the current colour API on a numeric column — e.g.
   `tab(df, x, num_var, color = "ratio", color_signif = "grey_non_signif")` — internally builds the
   legacy string `"diff_ci"` and used to re-check it against the deprecation gate, blaming the user for

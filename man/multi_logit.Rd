@@ -128,10 +128,12 @@ models for ONE binary \code{dependent}, one per named predictor set in \code{mod
 data <- forcats::gss_cat |>
   dplyr::mutate(married = factor(dplyr::if_else(marital == "Married",
                                                 "Married", "Not married")))
-multi_logit(
-  data, dependent = "married",
-  models = list(demographic = c("race", "age"),
-                full        = c("race", "age", "rincome"))
-)
+if (requireNamespace("broom", quietly = TRUE)) {
+  multi_logit(
+    data, dependent = "married",
+    models = list(demographic = c("race", "age"),
+                  full        = c("race", "age", "rincome"))
+  )
+}
 
 }

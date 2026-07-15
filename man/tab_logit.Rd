@@ -117,6 +117,8 @@ for the engine, weighting and interval details.
 data <- forcats::gss_cat |>
   dplyr::mutate(married = factor(dplyr::if_else(marital == "Married",
                                                 "Married", "Not married")))
-tab_logit(data, dependent = "married", predictors = c("race", "rincome"))
+if (requireNamespace("broom", quietly = TRUE)) {
+  tab_logit(data, dependent = "married", predictors = c("race", "rincome"))
+}
 
 }

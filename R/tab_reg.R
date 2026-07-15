@@ -1691,27 +1691,41 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
 #' data <- forcats::gss_cat |>
 #'   dplyr::mutate(married = factor(dplyr::if_else(marital == "Married",
 #'                                                 "Married", "Not married")))
-#' # logistic (odds ratios):
-#' tab_reg(data, dependent = "married", predictors = c("race", "rincome"),
-#'         family = "binomial")
+#' # Every regression table needs broom; the heavier families need their own engine. Guarding each
+#' # keeps the examples runnable where Suggests are absent (CRAN checks such a flavour).
+#' if (requireNamespace("broom", quietly = TRUE)) {
+#'   # logistic (odds ratios):
+#'   print(tab_reg(data, dependent = "married", predictors = c("race", "rincome"),
+#'                 family = "binomial"))
+#'   # linear (betas):
+#'   print(tab_reg(data, dependent = "tvhours", predictors = c("race", "age"),
+#'                 family = "gaussian"))
+#'   # formula escape-hatch (same model, terser):
+#'   print(tab_reg(data, married ~ race + rincome, family = "binomial"))
+#' }
+#'
+#' \donttest{
 #' # average marginal effects + adjusted predictions (needs the marginaleffects package):
-#' tab_reg(data, dependent = "married", predictors = c("race", "rincome"),
-#'         family = "binomial", effect = "ame")
-#' # marginal effects at the reference profile (others at their reference level / mean):
-#' tab_reg(data, dependent = "married", predictors = c("race", "rincome"),
-#'         family = "binomial", effect = "ame", at = "reference")
-#' # linear (betas):
-#' tab_reg(data, dependent = "tvhours", predictors = c("race", "age"),
-#'         family = "gaussian")
-#' # formula escape-hatch (same model, terser):
-#' tab_reg(data, married ~ race + rincome, family = "binomial")
+#' if (requireNamespace("broom", quietly = TRUE) &&
+#'     requireNamespace("marginaleffects", quietly = TRUE)) {
+#'   print(tab_reg(data, dependent = "married", predictors = c("race", "rincome"),
+#'                 family = "binomial", effect = "ame"))
+#'   # marginal effects at the reference profile (others at their reference level / mean):
+#'   print(tab_reg(data, dependent = "married", predictors = c("race", "rincome"),
+#'                 family = "binomial", effect = "ame", at = "reference"))
+#' }
 #' # multinomial (nominal 3+ level): one OR column per outcome category vs the reference
-#' tab_reg(forcats::gss_cat, dependent = "partyid", predictors = c("race", "age"),
-#'         family = "multinomial", reference = c(partyid = "Independent"))
+#' if (requireNamespace("broom", quietly = TRUE) && requireNamespace("nnet", quietly = TRUE)) {
+#'   print(tab_reg(forcats::gss_cat, dependent = "partyid", predictors = c("race", "age"),
+#'                 family = "multinomial", reference = c(partyid = "Independent")))
+#' }
 #' # ordinal (proportional-odds): one cumulative-OR column
-#' income3 <- forcats::gss_cat |>
-#'   dplyr::mutate(income = factor(rincome, ordered = TRUE))
-#' tab_reg(income3, dependent = "income", predictors = "race", family = "ordinal")
+#' if (requireNamespace("broom", quietly = TRUE) && requireNamespace("MASS", quietly = TRUE)) {
+#'   income3 <- forcats::gss_cat |>
+#'     dplyr::mutate(income = factor(rincome, ordered = TRUE))
+#'   print(tab_reg(income3, dependent = "income", predictors = "race", family = "ordinal"))
+#' }
+#' }
 #'
 #' @export
 tab_reg <- function(data, dependent, predictors = NULL,
@@ -1992,7 +2006,9 @@ tab_reg <- function(data, dependent, predictors = NULL,
 #' data <- forcats::gss_cat |>
 #'   dplyr::mutate(married = factor(dplyr::if_else(marital == "Married",
 #'                                                 "Married", "Not married")))
-#' tab_logit(data, dependent = "married", predictors = c("race", "rincome"))
+#' if (requireNamespace("broom", quietly = TRUE)) {
+#'   tab_logit(data, dependent = "married", predictors = c("race", "rincome"))
+#' }
 #'
 #' @export
 tab_logit <- function(data, dependent, predictors, wt = NULL,
@@ -2036,11 +2052,13 @@ tab_logit <- function(data, dependent, predictors, wt = NULL,
 #' data <- forcats::gss_cat |>
 #'   dplyr::mutate(married = factor(dplyr::if_else(marital == "Married",
 #'                                                 "Married", "Not married")))
-#' multi_logit(
-#'   data, dependent = "married",
-#'   models = list(demographic = c("race", "age"),
-#'                 full        = c("race", "age", "rincome"))
-#' )
+#' if (requireNamespace("broom", quietly = TRUE)) {
+#'   multi_logit(
+#'     data, dependent = "married",
+#'     models = list(demographic = c("race", "age"),
+#'                   full        = c("race", "age", "rincome"))
+#'   )
+#' }
 #'
 #' @export
 multi_logit <- function(data, dependent, models, wt = NULL,
