@@ -10,6 +10,11 @@
 \item{x}{A fmt object.}
 
 \item{...}{Other parameter.}
+
+\item{.ref}{Internal: precomputed reference masks, as
+\code{list(cells =, all_totals =)}, threaded to \code{format()} to avoid deriving them again
+(exporters compute them once for the whole table). \code{NULL} (the default, and the console
+path) recomputes them. Not for direct use.}
 }
 \value{
 A fmt printed in a pillar.

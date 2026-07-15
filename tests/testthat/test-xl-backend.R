@@ -28,3 +28,31 @@ test_that("xl_coalesce covers exactly the target cells", {
   cols <- rep(3:7, each = 8L); rows <- rep(3:10, times = 5L)
   expect_identical(xl_coalesce(cols, rows), "C3:G10")
 })
+
+
+# ---- sheet-name sanitisation -----------------------------------------------------------------
+
+test_that("xl_clean_sheet_name replaces every Excel-illegal character with a space", {
+  expect_identical(xl_clean_sheet_name("a/b"),   "a b")
+  expect_identical(xl_clean_sheet_name("a?b"),   "a b")
+  expect_identical(xl_clean_sheet_name("a*b"),   "a b")
+  expect_identical(xl_clean_sheet_name("a:b"),   "a b")
+  expect_identical(xl_clean_sheet_name("a[b]c"), "a b c")
+  # the real driver: Phase 12d names OR columns "<level> vs <ref>: OR"
+  expect_identical(xl_clean_sheet_name("Married vs Never: OR"), "Married vs Never  OR")
+  # a legal name is untouched (so ordinary sheet titles are byte-identical)
+  expect_identical(xl_clean_sheet_name("marital x race"), "marital x race")
+  expect_identical(xl_clean_sheet_name(c("a/b", "ok")), c("a b", "ok"))
+})
+
+test_that("xl_clean_sheet_name leaves openxlsx2 nothing to fix (no 'illegal characters' warning)", {
+  skip_if_not_installed("openxlsx2")
+  # The point of the helper: openxlsx2 would silently apply this same substitution and warn.
+  # Feeding it a pre-cleaned name must therefore be both silent AND a no-op.
+  for (nm in c("Married vs Never: OR", "a/b", "a[b]c", "marital x race")) {
+    clean <- xl_clean_sheet_name(nm)
+    wb    <- openxlsx2::wb_workbook()
+    expect_no_warning(wb$add_worksheet(sheet = clean))
+    expect_identical(unname(utils::tail(wb$get_sheet_names(), 1)), clean)
+  }
+})

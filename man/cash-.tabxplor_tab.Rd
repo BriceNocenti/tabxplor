@@ -18,13 +18,16 @@
 \arguments{
 \item{x}{A \code{tabxplor_tab}.}
 
-\item{name, i}{A column name.}
+\item{name}{For \code{$}, a column name. For \code{\link[dplyr:pull]{dplyr::pull}}, the column
+to use to name the result -- see its documentation.}
+
+\item{i}{A column name.}
 
 \item{...}{Passed on.}
 
 \item{.data}{A \code{tabxplor_tab}.}
 
-\item{var, name}{See \code{\link[dplyr:pull]{dplyr::pull}}.}
+\item{var}{See \code{\link[dplyr:pull]{dplyr::pull}}.}
 }
 \value{
 The column, or the reconstructed add_n/add_pct column (deprecated), or the base method's value.

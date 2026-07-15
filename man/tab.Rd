@@ -297,11 +297,14 @@ given: a string prefixed to each new column name, and whether to sort the new co
 \item{row_var, col_var}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Singular aliases of
 \code{row_vars}/\code{col_vars} (which now accept several variables). Kept working.}
 
-\item{.cache, .defer_level_merge, .return_armed}{Internal, for the jamovi \code{jmvtab} live cache
-only: \code{.cache} is a mutable environment the content-addressed multi-tier store is threaded
-through (Phase 7e); \code{.defer_level_merge} keeps full factor levels through the aggregate and
-test so \code{levels} becomes a display-time drop; \code{.return_armed} (Phase 7f) returns the
-pre-\code{finalize_color_spec} table so the tier-3 cache can re-paint colours without a rebuild.
+\item{.cache, .defer_level_merge, .return_armed, .levels_order}{Internal, for the jamovi
+\code{jmvtab} live cache only: \code{.cache} is a mutable environment the content-addressed
+multi-tier store is threaded through (Phase 7e); \code{.defer_level_merge} keeps full factor
+levels through the aggregate and test so \code{levels} becomes a display-time drop;
+\code{.return_armed} (Phase 7f) returns the pre-\code{finalize_color_spec} table so the tier-3
+cache can re-paint colours without a rebuild; \code{.levels_order} (Phase 7g-ii) is a named list
+of factor level orders applied post-aggregate, backing the jamovi level-reordering control (in R,
+relevel with \code{\link[forcats:fct_relevel]{forcats::fct_relevel}} before calling \code{tab()}).
 All default off; not for direct use.}
 
 \item{filter}{A \code{\link[dplyr:filter]{dplyr::filter}} to apply to the data frame

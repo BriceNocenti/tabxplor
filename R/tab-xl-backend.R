@@ -76,6 +76,24 @@ xlb_new_workbook <- function() openxlsx2::wb_workbook()
 xlb_base_font <- function(wb, name, size = 10)
   wb$set_base_font(font_size = size, font_name = name)
 
+# Excel forbids  \ / ? * : [ ]  in a worksheet name. openxlsx2 does not reject such a name: it
+# silently rewrites each illegal character to a space and warns ("Fixing: removing illegal
+# characters found in sheet name"). Regression tables trip this routinely -- Phase 12d names OR
+# columns "<level> vs <ref>: OR", and the colon reaches the sheet title. Applying the substitution
+# ourselves leaves openxlsx2 nothing to fix, so the warning is gone rather than merely muffled.
+# PURE (no workbook) -- unit-tested against openxlsx2's own output in test-xl-backend.R.
+#
+# DESIGN: verified identical to openxlsx2 for every illegal character EXCEPT backslash, where
+# openxlsx2 emits TWO spaces for one "\" (its own quirk); we emit one. Unreachable here -- titles
+# are built from variable names and level labels -- and one space is the correct reading.
+# WARNING: fixed = TRUE, one character at a time -- do NOT "simplify" this to a bracket-expression
+# regex. In a POSIX bracket expression a backslash is a literal, not an escape, so the obvious
+# "[\\\\/?*:\\[\\]]" silently matches nothing of what it looks like it matches.
+xl_clean_sheet_name <- function(x) {
+  for (ch in c("\\", "/", "?", "*", ":", "[", "]")) x <- gsub(ch, " ", x, fixed = TRUE)
+  x
+}
+
 # gridlines are turned off at sheet creation (replaces v1 showGridLines)
 xlb_add_sheet <- function(wb, title)
   wb$add_worksheet(sheet = title, grid_lines = FALSE)

@@ -66,6 +66,14 @@
 #' ANOVA F for mean columns), filled by \code{\link{tab_chi2}}. Renamed from \code{chi2}
 #' in tabxplor 1.4.0.
 #' @param chi2 `r lifecycle::badge("deprecated")` Soft-deprecated alias of \code{test}.
+#' @param render_extras Display-only intent for the \code{add_n} / \code{add_pct} extras, as
+#' \code{list(add_n =, add_pct =)}. Since tabxplor 1.4.0 those rows/columns are no longer baked
+#' into the table: they are materialised at print/export time from this attribute. \code{NULL}
+#' (the default) means no extras.
+#' @param ci_settings Display-only metadata for the colour legend, as
+#' \code{list(conf_level =, method_cell =, method_diff =)}: which confidence level and confidence
+#' interval methods were actually used. \code{NULL} (the default) makes the legend fall back to
+#' the package defaults.
 #' @param ... Needed to implement subclasses.
 #' @param class Needed to implement subclasses.
 #'
@@ -212,7 +220,9 @@ tabxplor_deprecated_column <- function(x, name, user_env = rlang::caller_env(2))
 
 #' Extract a column of a tabxplor tab (with the Phase 10i-B add_n/add_pct back-compat shim)
 #' @param x A \code{tabxplor_tab}.
-#' @param name,i A column name.
+#' @param i A column name.
+#' @param name For \code{$}, a column name. For \code{\link[dplyr:pull]{dplyr::pull}}, the column
+#' to use to name the result -- see its documentation.
 #' @param ... Passed on.
 #' @return The column, or the reconstructed add_n/add_pct column (deprecated), or the base method's value.
 #' @method $ tabxplor_tab
@@ -237,7 +247,7 @@ tabxplor_deprecated_column <- function(x, name, user_env = rlang::caller_env(2))
 
 #' @rdname cash-.tabxplor_tab
 #' @importFrom dplyr pull
-#' @param var,name See \code{\link[dplyr:pull]{dplyr::pull}}.
+#' @param var See \code{\link[dplyr:pull]{dplyr::pull}}.
 #' @param .data A \code{tabxplor_tab}.
 #' @method pull tabxplor_tab
 #' @export
@@ -2804,7 +2814,15 @@ rename.tabxplor_grouped_tab <- function(.data, ...) {
 #' @return An object of class \code{tabxplor_grouped_tab}.
 #' @export
 rename_with.tabxplor_grouped_tab <- function(.data, .fn, .cols = dplyr::everything(), ...) {
-  out <- NextMethod()
+  # `.cols` is a tidyselect selection, so it cannot go through NextMethod(): that forwards it as the
+  # bare symbol `.cols`, dplyr's enquo(.cols) captures THAT, and tidyselect then resolves it as an
+  # external vector -- deprecated since tidyselect 1.1.0 (and a future error). Re-inject the quosure
+  # and dispatch by dropping our own class, the same fix pull.tabxplor_tab() uses for `var`.
+  # `.data` keeps its grouped_df class, so the next method sees exactly what NextMethod() gave it.
+  cols_quo <- rlang::enquo(.cols)
+  bare     <- .data
+  class(bare) <- setdiff(class(bare), "tabxplor_grouped_tab")
+  out <- dplyr::rename_with(bare, .fn, !!cols_quo, ...)
   groups <- dplyr::group_data(out)
   if (lv1_group_vars(out)) {
     new_tab(out, subtext = get_subtext(.data), test = get_test(.data), render_extras = get_render_extras(.data), ci_settings = get_ci_settings(.data))
@@ -3185,6 +3203,7 @@ default_dark_background_colors_neg <- c(
 )
 
 # ### Color palettes visual tests, with color blind mode ----
+# source("d:/Statistiques/github/tabxplor/dev/color_palette_tools.R", encoding = "UTF-8")
 # # Light palette
 # light_text_palette <- c(plain= "#9f9f9f", default_text_colors, default_text_colors_neg)
 # light_bg_palette   <- c(plain= "#ffffff",default_background_colors, default_background_colors_neg)
@@ -3396,6 +3415,7 @@ set_color_palette <- function(text_colors = NULL, text_colors_neg = NULL,
 #' is inert (exports are always 24-bit).
 #' @param custom_palette `r lifecycle::badge("deprecated")` A former 10/11-slot palette; its 4
 #' over- and 4 under-represented colours are mapped onto \code{set_color_palette()}.
+#' @param html_24_bit `r lifecycle::badge("deprecated")` Inert since 1.4.0 (exports are always 24-bit).
 #' @export
 set_color_style <- function(type = c("text", "bg"), theme = NULL,
                             html_24_bit = NULL, custom_palette = NULL) {

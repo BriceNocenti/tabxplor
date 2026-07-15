@@ -240,7 +240,10 @@ tab_xl <-
       dplyr::mutate(start = dplyr::lag(cumsum(.data$rows + .data$sub + 6L), default = 0L) + 1L) |>
       dplyr::pull(.data$start)
 
-    sheet_titles <- titles[newsheet] |> stringr::str_sub(1, 25)
+    # Clean AFTER the 25-char cut and BEFORE the de-duplication below: openxlsx2 would otherwise do
+    # the identical substitution itself (with a warning) at add_worksheet() time -- i.e. after our
+    # de-duplication, which would then have run on names that are not the final ones.
+    sheet_titles <- titles[newsheet] |> stringr::str_sub(1, 25) |> xl_clean_sheet_name()
     sheet_titles <- dplyr::if_else(duplicated(sheet_titles),
                                    stringr::str_c(sheet_titles, ".2"), sheet_titles)
     nb <- 2

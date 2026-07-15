@@ -288,11 +288,14 @@ NULL
 #' Useful when printing multiples tabs with \code{\link[tibble:tribble]{tibble::tribble}},
 #' to use different filters for similar tables or simply make the field of observation
 #' more visible into the code.
-#' @param .cache,.defer_level_merge,.return_armed Internal, for the jamovi \code{jmvtab} live cache
-#' only: \code{.cache} is a mutable environment the content-addressed multi-tier store is threaded
-#' through (Phase 7e); \code{.defer_level_merge} keeps full factor levels through the aggregate and
-#' test so \code{levels} becomes a display-time drop; \code{.return_armed} (Phase 7f) returns the
-#' pre-\code{finalize_color_spec} table so the tier-3 cache can re-paint colours without a rebuild.
+#' @param .cache,.defer_level_merge,.return_armed,.levels_order Internal, for the jamovi
+#' \code{jmvtab} live cache only: \code{.cache} is a mutable environment the content-addressed
+#' multi-tier store is threaded through (Phase 7e); \code{.defer_level_merge} keeps full factor
+#' levels through the aggregate and test so \code{levels} becomes a display-time drop;
+#' \code{.return_armed} (Phase 7f) returns the pre-\code{finalize_color_spec} table so the tier-3
+#' cache can re-paint colours without a rebuild; \code{.levels_order} (Phase 7g-ii) is a named list
+#' of factor level orders applied post-aggregate, backing the jamovi level-reordering control (in R,
+#' relevel with \code{\link[forcats:fct_relevel]{forcats::fct_relevel}} before calling \code{tab()}).
 #' All default off; not for direct use.
 # @param ... Arguments to pass to \code{\link{tab_ci}} and \code{\link{tab_chi2}}.
 #'
@@ -617,7 +620,7 @@ tab_apply_display <- function(tabs, display) {
 # `legacy` is the scalar string fed to the (text-channel) pipeline so its ci/chi2 side effects still
 # fire; `mode`/`text`/`bg`/`types`/`signif` drive finalize_color_spec() on the built table.
 #' @keywords internal
-normalize_color_spec <- function(color, color_signif = "ignore") {
+normalize_color_spec <- function(color, color_signif = "ignore", deprecate = TRUE) {
   signif <- if (length(color_signif) == 0L) "ignore" else color_signif[1]
   if (is.na(signif) || signif %in% c("", "no")) signif <- "ignore"
   # COMPAT (Phase 13a): the renamed policy value, wired through with a soft-deprecation.
@@ -638,7 +641,15 @@ normalize_color_spec <- function(color, color_signif = "ignore") {
   norm       <- function(m) if (is.na(m) || identical(m, "no")) "" else if (identical(m, "or")) "OR" else m
   ok_measure <- c("diff", "ratio", "contrib", "OR", "auto", "diff_ci", "after_ci", "ci", "")
 
+  # WARNING: `deprecate = FALSE` is not a convenience -- it is required on the internal seam.
+  # legacy_union() MANUFACTURES "diff_ci"/"after_ci" (e.g. color = "ratio" + color_signif =
+  # "grey_non_signif" -> "diff_ci") and tab_transform() hands that string to tab_num(), which
+  # re-parses it here. Deprecating then blames the user for a string the pipeline wrote. The `uenv`
+  # heuristic above is not enough: lifecycle's from_testthat() deliberately forces a package's own
+  # internal soft-deprecations to warn while its suite runs, so the false positive surfaces in
+  # tabxplor's tests -- and in the tests of any package that calls tab() on a numeric column.
   deprecate_old <- function(text) {
+    if (!deprecate) return(invisible(NULL))
     if (text %in% c("diff_ci", "after_ci", "ci")) {
       lifecycle::deprecate_soft(
         "1.4.0",
@@ -1785,7 +1796,11 @@ tab_transform <- function(ctx) {
                         ref = ref, ci = ci, conf_level = conf_level, stars = stars, comp = comp,
                         color = color_num, totaltab = totaltab, totaltab_name = totaltab_name,
                         tot = dplyr::if_else(totrow, "row", "no"), total_names = total_names,
-                        .fine = fine_num, .by_table = .by_table)
+                        .fine = fine_num, .by_table = .by_table,
+                        # `color_num` is the pipeline's own legacy string (legacy_union() may have
+                        # built "diff_ci"/"after_ci" from the user's color + color_signif), so
+                        # tab_num() must not deprecate it back at the user.
+                        .color_deprecate = FALSE)
     # Phase 3b: whole-table test for NUMERIC col_vars = one-way ANOVA (Welch + classic F), via
     # tab_chi2()'s test step (it detects mean col_vars and calls agg_anova()). Only the tidy `test`
     # tibble is kept (merged with the factor test at assemble); NULL when chi2 is off for this row_var.
@@ -3800,6 +3815,9 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, OR, color, pct,
 #' @param .fine,.by_table Internal. `.fine` is a pre-computed moment-sum aggregate (from
 #' \code{tab_aggregate_num()}) to adopt instead of scanning the raw data; `.by_table` forces
 #' the table-by-table path (a fresh scan). Both default to the fresh-scan behaviour.
+#' @param .color_deprecate Internal. Set to \code{FALSE} by \code{tab()}'s pipeline to mark
+#' \code{color} as an internally-generated legacy string, so re-parsing it raises no deprecation
+#' against the user. Not for direct use.
 #'
 #' @return A \code{tibble} of class \code{tabxplor_tab}. If \code{...} (\code{tab_vars})
 #'  are provided, a \code{tab} of class \code{tabxplor_grouped_tab}.
@@ -3824,7 +3842,7 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
                     tot = NULL, total_names = "Total",
                     subtext = "", digits = 0, num = FALSE, df = FALSE,
                     color_breaks = NULL,
-                    .fine = NULL, .by_table = FALSE
+                    .fine = NULL, .by_table = FALSE, .color_deprecate = TRUE
 ) {
 
   row_var_quo <- rlang::enquo(row_var)
@@ -3878,7 +3896,9 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
   total_names  <- vctrs::vec_recycle(total_names, 2)
   # Phase 5: `color` accepts the new forms (FALSE/TRUE/scalar/c(text,bg)/named) + `color_signif`.
   # Parse to a spec, run the pipeline on the text-channel legacy string, finalize on the result.
-  color_spec <- normalize_color_spec(color, color_signif)
+  # `.color_deprecate = FALSE` (set only by tab_transform()) marks `color` as the pipeline's own
+  # legacy string, so re-parsing it here does not raise a deprecation against the user.
+  color_spec <- normalize_color_spec(color, color_signif, deprecate = .color_deprecate)
   color      <- color_spec$legacy
   stopifnot(color %in% c("auto", "diff", "diff_ci", "after_ci", "no", ""))
 

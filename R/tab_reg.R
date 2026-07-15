@@ -109,13 +109,19 @@ reg_check_deps <- function(family, weighted, needs_marginaleffects = FALSE) {
     ))
   }
   # Weighted 3+ level (Phase 12g): ordinal -> survey::svyolr (already covered by the survey check);
-  # multinomial -> svyVGAM::svy_vglm (+ its VGAM dependency), a separate optional Suggests.
-  if (isTRUE(weighted) && family == "multinomial" &&
-      !requireNamespace("svyVGAM", quietly = TRUE)) {
-    cli::cli_abort(c(
-      "{.pkg svyVGAM} is required for survey-weighted multinomial (nominal 3+ level) models.",
-      "i" = 'Install it with {.code install.packages("svyVGAM")}, or drop the weights / design.'
-    ))
+  # multinomial -> svyVGAM::svy_vglm, whose family argument is VGAM::multinomial(). VGAM is a hard
+  # dependency of svyVGAM, so it is present whenever svyVGAM is -- but reg_fit_multinom() calls
+  # VGAM:: directly, so guard it explicitly: an implicit guard is invisible to R CMD check.
+  if (isTRUE(weighted) && family == "multinomial") {
+    missing_pkgs <- c("svyVGAM", "VGAM")[
+      !vapply(c("svyVGAM", "VGAM"), requireNamespace, logical(1), quietly = TRUE)
+    ]
+    if (length(missing_pkgs) > 0) {
+      cli::cli_abort(c(
+        "{.pkg {missing_pkgs}} {?is/are} required for survey-weighted multinomial (nominal 3+ level) models.",
+        "i" = 'Install {?it/them} with {.code install.packages("svyVGAM")}, or drop the weights / design.'
+      ))
+    }
   }
 }
 

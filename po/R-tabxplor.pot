@@ -1,7 +1,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: tabxplor 1.3.1.9000\n"
-"POT-Creation-Date: 2026-07-14 21:42\n"
+"POT-Creation-Date: 2026-07-15 12:46\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -383,22 +383,4 @@ msgid "entry is not character vector or list of data.frames"
 msgstr ""
 
 msgid "tab should be an object from either ggpubr::ggtexttable() or gridExtra::tableGrob()."
-msgstr ""
-
-msgid "Package 'farver' is required for oklch handling."
-msgstr ""
-
-msgid "Package '%s' is required to render the colour grid."
-msgstr ""
-
-msgid "Package 'farver' is required but not installed."
-msgstr ""
-
-msgid "Package 'colorspace' is required but not installed."
-msgstr ""
-
-msgid "Package 'farver' is required."
-msgstr ""
-
-msgid "Package 'colorspace' is required."
 msgstr ""

@@ -87,7 +87,10 @@ test_that("gaussian beta renders raw (no % / x glyph), reference shows 0", {
 test_that("tab_reg() poisson IRR / CI / p match glm(poisson); fmt uses the OR shape", {
   skip_if_not_installed("broom")
   d   <- reg_data()
-  t1  <- tab_reg(d, "tvhours", c("age", "race"), family = "poisson", cleannames = FALSE)
+  # suppressWarnings: this fixture is genuinely over-dispersed, so the Phase 12f dispersion flag
+  # fires. That is correct and asserted in test-tab_reg-footer.R; here it is incidental noise.
+  t1  <- suppressWarnings(tab_reg(d, "tvhours", c("age", "race"), family = "poisson",
+                                  cleannames = FALSE))
   col <- t1[["tvhours: IRR"]]
 
   expect_identical(get_type(col), "row")
@@ -176,7 +179,10 @@ gb_data <- function() {
 test_that("grouped binomial (trials=) matches glm(cbind(s, q-s)); OR fmt shape", {
   skip_if_not_installed("broom")
   d   <- gb_data()
-  t1  <- tab_reg(d, "score", "race", family = "binomial", trials = 10, cleannames = FALSE)
+  # suppressWarnings: the grouped-binomial fixture is over-dispersed -> the Phase 12f dispersion
+  # flag fires (correct; asserted in test-tab_reg-footer.R). This test is about the OR/CI/p parity.
+  t1  <- suppressWarnings(tab_reg(d, "score", "race", family = "binomial", trials = 10,
+                                  cleannames = FALSE))
   col <- t1[["score: OR"]]
 
   expect_identical(get_type(col), "row")
@@ -202,13 +208,17 @@ test_that("grouped binomial (trials=) matches glm(cbind(s, q-s)); OR fmt shape",
 test_that("trials=TRUE uses the observed max score; exponentiate=FALSE gives the coef shape", {
   skip_if_not_installed("broom")
   d  <- gb_data()
-  auto <- tab_reg(d, "score", "race", family = "binomial", trials = TRUE, cleannames = FALSE)
-  ten  <- tab_reg(d, "score", "race", family = "binomial", trials = 10,   cleannames = FALSE)
+  # suppressWarnings: over-dispersed fixture -> the dispersion flag (asserted in test-tab_reg-footer.R).
+  auto <- suppressWarnings(tab_reg(d, "score", "race", family = "binomial", trials = TRUE,
+                                   cleannames = FALSE))
+  ten  <- suppressWarnings(tab_reg(d, "score", "race", family = "binomial", trials = 10,
+                                   cleannames = FALSE))
   expect_equal(max(d$score, na.rm = TRUE), 10L)
   expect_equal(get_or(auto[["score: OR"]]), get_or(ten[["score: OR"]]))
 
-  b <- tab_reg(d, "score", "race", family = "binomial", trials = 10, exponentiate = FALSE,
-               cleannames = FALSE)[["score: \u03b2"]]
+  b <- suppressWarnings(tab_reg(d, "score", "race", family = "binomial", trials = 10,
+                                exponentiate = FALSE,
+                                cleannames = FALSE))[["score: \u03b2"]]
   expect_identical(get_type(b), "coef")
   expect_identical(get_ci_type(b), "diff")
 })
@@ -501,8 +511,10 @@ test_that("poisson AME is a raw count-change and matches marginaleffects", {
   skip_if_not_installed("broom")
   skip_if_not_installed("marginaleffects")
   d   <- reg_data()
-  col <- tab_reg(d, "tvhours", c("age", "race"), family = "poisson", effect = "ame",
-                 cleannames = FALSE)[["tvhours: AME"]]
+  # suppressWarnings: over-dispersed poisson fixture -> the dispersion flag (asserted in
+  # test-tab_reg-footer.R). This test is about the AME scale and its marginaleffects parity.
+  col <- suppressWarnings(tab_reg(d, "tvhours", c("age", "race"), family = "poisson",
+                                  effect = "ame", cleannames = FALSE))[["tvhours: AME"]]
   expect_identical(get_type(col), "coef")
 
   dm <- d |> dplyr::filter(!is.na(tvhours), !is.na(age), !is.na(race))
@@ -564,14 +576,18 @@ test_that("weighted binomial AME (svyglm) is population-weighted and matches mar
   skip_if_not_installed("survey")
   skip_if_not_installed("marginaleffects")
   d   <- reg_data() |> dplyr::filter(!is.na(tvhours))
-  col <- tab_reg(d, "married", "race", family = "binomial", wt = "tvhours", effect = "ame",
-                 cleannames = FALSE)[["Married: AME"]]
+  # suppressWarnings: the fixture uses tvhours as a stand-in weight and it contains zeros, so
+  # svyglm() warns ("observations with zero weight not used for calculating dispersion"). That is
+  # upstream (survey/stats), not tabxplor, and it fires identically on the hand-run oracle below.
+  col <- suppressWarnings(tab_reg(d, "married", "race", family = "binomial", wt = "tvhours",
+                                  effect = "ame", cleannames = FALSE))[["Married: AME"]]
 
   dm <- d |> dplyr::filter(!is.na(married), !is.na(race))
   dm$race    <- forcats::fct_drop(dm$race)
   dm$married <- forcats::fct_rev(forcats::fct_drop(factor(dm$married)))
   des <- survey::svydesign(ids = ~1, weights = ~tvhours, data = dm)
-  g   <- survey::svyglm(married ~ race, design = des, family = stats::quasibinomial())
+  g   <- suppressWarnings(
+    survey::svyglm(married ~ race, design = des, family = stats::quasibinomial()))
   ac  <- as.data.frame(marginaleffects::avg_comparisons(g, variables = "race", newdata = dm,
                                                         wts = "tvhours"))
   keep <- !is.na(get_diff(col))

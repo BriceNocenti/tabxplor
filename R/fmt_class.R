@@ -29,6 +29,31 @@ globalVariables(c("table_id", "row_id", "col_id", "o", "rowtot", "coltot", "ok",
                   "grandtot", "nr", "nc", "e", "contrib", "signed_contrib",
                   "statistic", "df", "min_e", "w", "group_id"))
 
+# The `ctx` fields of the tab_build() pipeline (Phase 7d-ii). Each stage starts with
+# `list2env(ctx, environment())` (R/tab.R: tab_setup / tab_prepare_pop / tab_aggregate /
+# tab_transform / tab_assemble_tables / tab_assemble_output), which binds every ctx field as a
+# local -- correct at run time, but invisible to codetools, which then reports each one as an
+# undefined global. Listing them here is the only way to keep R CMD check quiet short of
+# unpacking ~70 fields by hand in six functions.
+globalVariables(c(
+  "by_table", "chi2", "chi2_num", "cleannames", "col_vars", "col_vars_num", "col_vars_quo",
+  "col_vars_text", "color_ci", "color_ctr", "color_diff_OR", "color_num", "comp", "conf_level",
+  "data", "digits", "fine_fused", "fine_num", "lv1", "method_cell", "method_diff", "na",
+  "na_drop_all_quo", "na_num", "na_text", "names_prefix", "names_sort", "other_if_less_than",
+  "other_level", "output", "pct", "pct_vect", "ref", "ref2", "remove_levels", "row_vars",
+  "row_vars_quo", "spread_vars", "stars", "subtext", "tab_row_names", "tab_vars", "tab_vars_quo",
+  "tabs_num", "tot_cols_type", "total_names", "totaltab", "totaltab_name", "totrow",
+  "with_filter", "wt", "wt_quo", "add_n", "add_pct", "ci", "OR"))
+
+# NSE column symbols in dplyr verbs over ordinary data frames:
+#   `var`               -- reg_build()'s group_by(var) on the regression skeleton (R/tab_reg.R)
+#   `name`/`size`/`color` -- tab_xl_plan_one()'s font/style plan tibbles (R/tab_xl.R)
+globalVariables(c("var", "name", "size", "color"))
+
+# mirai daemon globals (R/tab-parallel.R): `tabx_opts`/`tabx_ship` are list2env()'d into each
+# daemon's .GlobalEnv by tab_pmap(); `.stop` is mirai_map()'s own collection selector.
+globalVariables(c("tabx_opts", "tabx_ship", ".stop"))
+
 
 # EXPORTED FUNCTIONS TO WORK WITH CLASS FMT ##############################################
 
@@ -726,7 +751,8 @@ as_refrow  <- function(x, in_refrow = TRUE) {
 
 
 #' @describeIn fmt get comparison level of fmt columns
-#' @inheritParams fmt
+# No @inheritParams fmt here: @describeIn merges this block into the `fmt` topic, where `x` is
+# already documented -- roxygen2 then errors that nothing remains to inherit.
 #' @param replace_na By default, \code{\link{get_comp_all}} takes NA in comparison level
 #' to be a \code{FALSE} (=comparison at subtables/groups level). Set to \code{FALSE}
 #' to avoid this behavior.
@@ -2224,7 +2250,10 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
 #'
 #' @param x A fmt object.
 #' @param ... Other parameter.
-#'
+#' @param .ref Internal: precomputed reference masks, as
+#' \code{list(cells =, all_totals =)}, threaded to \code{format()} to avoid deriving them again
+#' (exporters compute them once for the whole table). \code{NULL} (the default, and the console
+#' path) recomputes them. Not for direct use.
 #'
 #' @return A fmt printed in a pillar.
 #' @importFrom pillar pillar_shaft

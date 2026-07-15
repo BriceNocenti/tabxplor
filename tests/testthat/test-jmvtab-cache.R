@@ -340,11 +340,15 @@ test_that("Phase 9b-7: non-rerefable ref changes rebuild but stay byte-identical
     list(a = jmv_opts(row_vars = "marital", col_vars = "race", tab_vars = "year", pct = "row", color = "diff", chi2 = TRUE, comp = "all"),
          b = jmv_opts(row_vars = "marital", col_vars = "race", tab_vars = "year", pct = "row", color = "diff", chi2 = TRUE, comp = "all", ref = "1"))
   )
+  # suppressWarnings: some cases deliberately warn (comp = "all" announces the added total table;
+  # ref = "1" matches no row label and falls back). Both are correct behaviour and asserted in
+  # test-tab.R; here they are incidental -- this test is about rebuild-vs-reref, and `ref = "1"`
+  # only has to DIFFER from case `a`'s ref to force the tier-3 miss.
   for (cs in cases) {
-    st <- suppressMessages(jmvtab_build(gss, cs$a, NULL))$store
-    r  <- suppressMessages(jmvtab_build(gss, cs$b, st))
+    st <- suppressWarnings(suppressMessages(jmvtab_build(gss, cs$a, NULL)))$store
+    r  <- suppressWarnings(suppressMessages(jmvtab_build(gss, cs$b, st)))
     expect_false(isTRUE(r$hits$tab3), info = paste("rebuild (not reref):", cs$b$pct, cs$b$color))
-    expect_equal(r$tabs, jmv_oracle(cs$b, gss))
+    expect_equal(r$tabs, suppressWarnings(jmv_oracle(cs$b, gss)))
   }
 })
 

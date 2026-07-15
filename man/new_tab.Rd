@@ -41,6 +41,16 @@ in tabxplor 1.4.0.}
 
 \item{chi2}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Soft-deprecated alias of \code{test}.}
 
+\item{render_extras}{Display-only intent for the \code{add_n} / \code{add_pct} extras, as
+\code{list(add_n =, add_pct =)}. Since tabxplor 1.4.0 those rows/columns are no longer baked
+into the table: they are materialised at print/export time from this attribute. \code{NULL}
+(the default) means no extras.}
+
+\item{ci_settings}{Display-only metadata for the colour legend, as
+\code{list(conf_level =, method_cell =, method_diff =)}: which confidence level and confidence
+interval methods were actually used. \code{NULL} (the default) makes the legend fall back to
+the package defaults.}
+
 \item{...}{Needed to implement subclasses.}
 
 \item{class}{Needed to implement subclasses.}

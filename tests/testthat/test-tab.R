@@ -200,9 +200,27 @@ testthat::test_that("Phase 6: output_list / merge / deprecations / KNOWN-BUG fix
   # row_var axis globalised on tab(): OR/ci/chi2 must be scalar
   testthat::expect_error(tab(gss, c(marital, relig), race, pct = "col", OR = c("OR", "no")))
 
-  # totrow / totcol soft-deprecated on tab_many (Phase 6e)
-  lifecycle::expect_deprecated(tab_many(gss, marital, race, totrow = FALSE))
-  lifecycle::expect_deprecated(tab_many(gss, marital, race, totcol = "no"))
+  # totrow / totcol soft-deprecated on tab_many (Phase 6e). Each call raises TWO deprecations --
+  # tab_many() itself (Phase 6f) plus the argument -- so both must be caught, innermost first, or
+  # the uncaught one surfaces as a test warning.
+  lifecycle::expect_deprecated(
+    lifecycle::expect_deprecated(tab_many(gss, marital, race, totrow = FALSE), "totrow"),
+    "tab_many")
+  lifecycle::expect_deprecated(
+    lifecycle::expect_deprecated(tab_many(gss, marital, race, totcol = "no"), "totcol"),
+    "tab_many")
+
+  # Deliberate user-facing warnings. Asserted here because other suites (test-jmvtab-cache.R)
+  # suppress them as incidental, so without this they would be uncovered.
+  # comp = "all" with a ref that is not the total row forces the full total table (a `ref = "tot"`
+  # comparison only needs a total LINE, and warns differently).
+  testthat::expect_warning(
+    tab(gss, marital, race, tab_vars = year, pct = "row", color = "diff", comp = "all",
+        ref = "Married"),
+    "full total table")
+  testthat::expect_warning(
+    tab(gss, marital, race, pct = "row", color = "diff", ref = "no-such-level"),
+    "no rows were found as reference")
 
   # KNOWN-BUG fixed: tab_num(<tab_vars>, ci="cell") no longer crashes (both comp modes)
   testthat::expect_no_error(tab_num(gss, race, age, marital, ci = "cell"))

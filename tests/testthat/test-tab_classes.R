@@ -111,7 +111,7 @@ testthat::test_that("dplyr::rename, rename_with and relocate preserves class tab
 testthat::test_that("[<- and [[<- preserves class tabxplor_grouped_tab", {
   grouped_tabs[4]     <- dplyr::mutate(grouped_tabs[4],
                                        dplyr::across(.cols = dplyr::everything(), .fns = ~ set_display(., "ctr")))
-  grouped_tabs[[2]]   <- grouped_tabs[[2]] %>% forcats::fct_recode("kéké" = "Black")
+  grouped_tabs[[2]]   <- grouped_tabs[[2]] %>% forcats::fct_recode("k\u00e9k\u00e9" = "Black")
   grouped_tabs[[2,2]] <- factor("White")
   testthat::expect_s3_class(grouped_tabs, "tabxplor_grouped_tab")
 })

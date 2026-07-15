@@ -263,6 +263,21 @@
   (e.g. `"$25000 or more"`) work as references.
 
 ## Internal
+* Fixed a spurious deprecation warning: using the current colour API on a numeric column — e.g.
+  `tab(df, x, num_var, color = "ratio", color_signif = "grey_non_signif")` — internally builds the
+  legacy string `"diff_ci"` and used to re-check it against the deprecation gate, blaming the user for
+  a value the pipeline itself wrote. Invisible in normal use, but it surfaced in the test suite of any
+  package calling `tab()`. The genuine deprecation of `color = "diff_ci"`/`"after_ci"`/`"ci"` still
+  fires for real user calls.
+* `tab_xl()` no longer triggers openxlsx2's "removing illegal characters found in sheet name" warning:
+  sheet titles are sanitised with the same substitution openxlsx2 would apply (each of `\ / ? * : [ ]`
+  becomes a space), so the workbook is unchanged. Regression tables hit this routinely, since
+  `tab_reg()` names odds-ratio columns `"<level> vs <reference>: OR"`.
+* Silenced a tidyselect 1.1.0 deprecation ("using an external vector in selections") on the jamovi
+  cache's numeric-aggregate path, and one raised by `dplyr::rename_with()` on a grouped tabxplor table
+  (`NextMethod()` forwarded the column selection as a bare symbol).
+* `VGAM` and `pkgload` are now declared in `Suggests` (they were used but undeclared), and survey-weighted
+  multinomial models check for `VGAM` explicitly alongside `svyVGAM`.
 * The jamovi module (`jmvtab`) gained several user-facing features: a **reference-level picker** (choose the comparison level of each variable from a compact Material list, with "Total" as the visible default; it covers the row variables under row percentages and the column variables under column percentages, follows the level-reordering panel, and shows a second-reference section only when odds ratios are requested); **export to Excel, HTML or Markdown** (pick a format, the button label follows, and the file is written to a typed path defaulting to your Documents folder, with a confirmation notice); an **`n_min`** control to hide small-base rows/columns; a **Wald** option for the cell confidence interval; and a clearer **statistical-test** toggle (Chi-square for categorical columns, ANOVA F for numeric ones) with a Welch-vs-classic ANOVA choice.
 * The jamovi module (`jmvtab`) UI is now consistent with what the analysis actually computes: options that have no effect given the others are greyed out (e.g. the total-table and comparison-table choices when there are no table variables; the significance-stars and difference-CI method when cell intervals are chosen; the significance policy when colors are off; the count/percentage extras when there are no percentages), always keeping their value so it returns when they become relevant again. The number-of-digits control is now a dropdown, and the legend/path text boxes fill their row. The significance policy and the confidence interval are no longer wired to fight each other — choosing "grey non-significant" simply colors accordingly (the needed interval is computed automatically), and never silently changes the CI setting.
 * The jamovi module (`jmvtab`) now uses a live multi-tier cache: after the first table, changing an option (percentages, reference, colors, display, adding a variable) reuses the cached counts and chi-squared/ANOVA instead of recomputing everything, so results update near-instantly on normal survey data. The Jamovi HTML render also drops the per-cell hover tooltips (inert in Jamovi and roughly half the render time). The module drives the same `tab()` pipeline with the cache injected (no separate code path), so its tables stay identical to `tab()`. Beyond the counts/tests, changing only the **display or colours** (number of digits, the displayed value, the colour measure `"diff"`/`"ratio"`, or the `color_signif` significance policy) now reuses the already-built table and only re-paints it, skipping the whole cell rebuild — these toggles are effectively instant even on a big table-of-tables (e.g. a colour change on a 9-table grid dropped from ~1.1 s to ~0.04–0.19 s). Building `tab()` / `tab_num()` tables is also a little faster overall (the per-cell format assembly hoists its constant work out of the inner loop).

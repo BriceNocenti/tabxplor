@@ -21,7 +21,7 @@ testthat::test_that("tab_cache_keys emits the tier 0-2 skeleton", {
   testthat::expect_identical(keys$tier2$comp, "tab")
 })
 
-testthat::test_that("population descriptor encodes each na mode (§3.1)", {
+testthat::test_that("population descriptor encodes each na mode (\u00a73.1)", {
   # keep / drop -> full population (per-pair reuse is widest).
   testthat::expect_identical(
     tabxplor:::tab_cache_keys(na = "keep", row_vars = "a", col_vars = "b")$tier0$population,

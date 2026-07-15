@@ -254,8 +254,14 @@ jmv_cache_aggregate <- function(ctx) {
       } else {
         rv_sym  <- ctx$row_vars[[i]]
         wt_part <- if (weighted) wt else NULL
+        # num_cols/tab_vars are already-resolved character vectors. Passing them as bare symbols
+        # made tidyselect resolve them as external vectors -- deprecated since tidyselect 1.1.0.
+        # as.character() keeps them a CALL (not a bare symbol), which selects by value silently and
+        # mirrors tab_aggregate()'s own call at tab.R ~L1709. Do NOT `!!`-inject the value instead:
+        # a literal would make quo_miss_na_null_empty_no() read a column named "no" as "no column".
         agg <- rlang::inject(tab_aggregate_num(
-          data, !!rv_sym, num_cols, tab_vars, wt = !!wt_part, na = na_rv
+          data, !!rv_sym, as.character(num_cols), as.character(tab_vars),
+          wt = !!wt_part, na = na_rv
         ))
         fine_num[[i]] <- agg
         store <- jmv_cache_put(store, "agg", key,
