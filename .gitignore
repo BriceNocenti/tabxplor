@@ -4,8 +4,17 @@
 .httr-oauth
 .DS_Store
 inst/doc
+
+# Generated benchmark fixtures: large, regenerable, never commit.
+# big_pc18_full_15M.rds (572 MB) was tracked by mistake and purged from history --
+# it is over GitHub's 100 MB hard limit, so re-adding it would break the push.
 dev/benchmarks/big_df.rds
+dev/benchmarks/big_pc18_full_15M.rds
 dev/benchmarks/results_*.csv
+
+# Dev-console captures: keep the unzipped folders (they are the readable reference),
+# never the zips -- they are pure duplicates of those folders.
+dev/jamovi/dev_console_live_capture/*.zip
 
 # jamovi options js
 jamovi/ui/*.options.js
