@@ -184,11 +184,11 @@ Read from the same confidence interval that is displayed, so stars and
 bracket always agree.}
 
 \item{method_cell}{The proportion confidence-interval method for \code{ci =
-  "cell"}: \code{"wilson"} (the score interval, default) or \code{"wald"}
+"cell"}: \code{"wilson"} (the score interval, default) or \code{"wald"}
 (the normal approximation).}
 
 \item{method_diff}{The proportion confidence-interval method for \code{ci =
-  "diff"}. \code{"newcombe"} (default) is the dual of the two-proportion
+"diff"}. \code{"newcombe"} (default) is the dual of the two-proportion
 score test, so the interval and the significance stars always agree.}
 
 \item{totaltab}{The total table, if there are subtables/groups   (i.e. when
