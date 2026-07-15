@@ -215,11 +215,16 @@ testthat::test_that("wrap_rows truncates long row labels", {
 
 tabs_col <- tab(gss, race, marital, pct = "row", color = "diff")
 
-testthat::test_that("coloured table emits pandoc bracketed spans with break-derived classes", {
+testthat::test_that("coloured table emits pandoc bracketed spans with slot classes", {
   md <- tab_md(tabs_col, print = FALSE)
   testthat::expect_true(grepl("]{.", md, fixed = TRUE))          # a span exists
-  testthat::expect_true(grepl("[{ ]\\.(p|m)[0-9]", md))          # a diff class (.p5 / .m10 / ...)
-  testthat::expect_true(grepl("[{ ]\\.n[}]", md))                # the neutral uniform-span class
+  testthat::expect_true(grepl("[{ ]\\.(p|m)[1-4][} ]", md))      # a text-channel slot class
+  # Phase 13d: classes name a palette SLOT (1-4 over / 1-4 under), never a break value, so the
+  # stylesheet is table-independent. Nothing may reintroduce a break-derived name.
+  testthat::expect_false(grepl("[{ ]\\.(p|m)[0-9]{2}", md))      # no .p20 / .m10
+  testthat::expect_false(grepl("[{ ]\\.(sd|x|d|b)", md))         # no .sd0_2 / .x2 / .d2 / .b1
+  # Phase 13d: an uncoloured cell gets NO span (the `.n` neutral is gone) -- alignment is padding's job.
+  testthat::expect_false(grepl("[{ ]\\.n[}]", md))
 })
 
 testthat::test_that("color = FALSE yields plain markdown (no spans)", {
@@ -232,14 +237,51 @@ testthat::test_that("uncoloured table never gets spans (byte-identical default)"
   testthat::expect_false(grepl("]{.", md_default, fixed = TRUE))
 })
 
-testthat::test_that("two-channel colour emits a background (.bg...) class", {
+testthat::test_that("numbers stay aligned when coloured and uncoloured cells mix in a column", {
+  # Phase 13d: dropping the `.n` neutral removed the span that used to give EVERY cell of a coloured
+  # column the same "[num]{...}" scaffold. An uncoloured cell now uses a bracket-free geometry ("  " in
+  # place of " [") so the number's right edge lands at the same offset. The sibling pipe-width test
+  # cannot see this: padding to total_width keeps the pipes aligned even if the numbers drift.
+  md    <- tab_md(tabs_col, print = FALSE)
+  lines <- strsplit(md, "\n")[[1]]
+  # the alignment row. NOTE the character class excludes spaces on purpose: the Phase 13c-iii col_var
+  # spanning-name row is `|        |   marital   |`, which a `[-: ]+` class matches -- picking it up
+  # here makes `right` all-FALSE and the whole test vacuous.
+  sep   <- which(grepl("^[|][-:]+[|]", lines))[1]
+  testthat::expect_false(is.na(sep))
+  split_row <- function(l) strsplit(l, "|", fixed = TRUE)[[1]][-1]
+  right <- grepl("-:$", trimws(split_row(lines[sep])))      # right-aligned = the fmt columns
+  data  <- lines[seq(sep + 1L, length(lines))]              # data rows only (headers are left-aligned)
+  data  <- data[grepl("^[|]", data)]
+  cells <- lapply(data, split_row)
+
+  for (j in which(right)) {
+    col <- vapply(cells, function(x) if (length(x) >= j) x[[j]] else "", character(1))
+    col <- col[nzchar(trimws(col))]
+    if (length(col) < 2L) next
+    # where the number ENDS inside the cell: just before "]" when wrapped in a span, else at the last
+    # non-space character. A coloured and an uncoloured cell of the same column must agree.
+    ends <- vapply(col, function(cell) {
+      br <- regexpr("]{.", cell, fixed = TRUE)
+      if (br > 0) br - 1L else nchar(sub("[ ]+$", "", cell))
+    }, integer(1), USE.NAMES = FALSE)
+    if (length(unique(ends)) > 1L) {
+      testthat::fail(paste0("column ", j, " numbers misaligned at offsets ",
+                            paste(unique(ends), collapse = "/"), ":\n",
+                            paste0("[", col, "]", collapse = "\n")))
+    }
+  }
+  testthat::succeed()
+})
+
+testthat::test_that("two-channel colour emits a background slot class", {
   # a low ratio break so at least one cell qualifies for the background (ratio) channel
   set_color_breaks(pct_ratio = c(1.2))
   withr::defer(options("tabxplor.color_breaks" = default_color_scales()))
   t2 <- tab(gss, race, marital, pct = "row",
             color = c("diff", "ratio"))               # positional: diff text + ratio background
   md <- tab_md(t2, print = FALSE)
-  testthat::expect_true(grepl("\\.bg[a-z]", md))
+  testthat::expect_true(grepl("[{ ]\\.(o|u)[1-4][} ]", md))     # Phase 13d: bg slots, was ".bg<break>"
 })
 
 testthat::test_that("coloured tables keep numbers aligned (equal pipe-line widths)", {
@@ -267,18 +309,34 @@ testthat::test_that("the deprecated `title` arg still feeds `caption`", {
   testthat::expect_true(grepl("\n: My caption", md, fixed = TRUE))
 })
 
-# === SECTION: tab_md_css() ====================================================
+# === SECTION: tab_md_css() / tab_css() ========================================
 
-testthat::test_that("tab_md_css emits classes matching the table and a dark @media block", {
-  css <- tab_md_css(tabs_col)
+testthat::test_that("tab_md_css emits the slot colour rules, bare and chrome-free", {
+  css <- tab_md_css()
   testthat::expect_type(css, "character")
-  testthat::expect_true(grepl("\\.(p|m)[0-9]+ \\{ color:", css))          # a diff rule
-  testthat::expect_true(grepl("@media (prefers-color-scheme: dark)", css, fixed = TRUE))
+  testthat::expect_true(grepl("\\.p1\\{color:", css))                     # a text-slot rule
+  testthat::expect_true(grepl("\\.o1\\{background-color:", css))          # a bg-slot rule
+  # The md contract: BARE selectors the user maps in their own editor CSS -- no table chrome.
+  testthat::expect_false(grepl("tabxplor-tab", css, fixed = TRUE))
 })
 
-testthat::test_that("tab_md_css dark_mode = 'none' omits the media block", {
-  css <- tab_md_css(tabs_col, dark_mode = "none")
-  testthat::expect_false(grepl("@media", css, fixed = TRUE))
+testthat::test_that("tab_md_css theme = 'auto' adds the media block; 'light' does not", {
+  testthat::expect_true(grepl("@media (prefers-color-scheme: dark)",
+                              tab_md_css(theme = "auto"), fixed = TRUE))
+  testthat::expect_false(grepl("@media", tab_md_css(theme = "light"), fixed = TRUE))
+})
+
+testthat::test_that("the stylesheet is TABLE-INDEPENDENT", {
+  # Phase 13d: this is the property that replaces per-table CSS and scoping. Two tables with DIFFERENT
+  # color_breaks -- which used to produce conflicting `.p20` rules -- now share one stylesheet, because
+  # a class names a palette slot, not a threshold. If this ever fails, collisions are back.
+  withr::local_options(list(tabxplor.color_breaks = default_color_scales()))
+  a <- tab_md_css(theme = "auto")
+  set_color_breaks(pct_diff = c(1, 2, 3, 4))
+  b <- tab_md_css(theme = "auto")
+  testthat::expect_identical(a, b)
+  # ... and it does not depend on any table at all (the `tabs` argument is inert).
+  testthat::expect_identical(tab_md_css(tabs_col), tab_md_css())
 })
 
 testthat::test_that("tab_md(css = TRUE) embeds a <style> block", {

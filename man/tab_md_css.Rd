@@ -4,45 +4,24 @@
 \alias{tab_md_css}
 \title{CSS for the colour spans of \code{\link{tab_md}}}
 \usage{
-tab_md_css(
-  tabs,
-  theme = c("light", "dark"),
-  color_type = NULL,
-  html_24_bit = NULL,
-  dark_mode = c("media", "none"),
-  style_tag = FALSE,
-  file = NULL
-)
+tab_md_css(tabs = NULL, ...)
 }
 \arguments{
-\item{tabs}{The same table (or list of tables) passed to \code{\link{tab_md}}.}
+\item{tabs}{Ignored (the CSS is table-independent). Kept so \code{tab_md_css(tabs)} still reads naturally.}
 
-\item{theme, color_type, html_24_bit}{Palette selectors (as in \code{\link[=tab_kable]{tab_kable()}}).}
-
-\item{dark_mode}{When \code{"media"} (default) and \code{theme = "light"}, append a
-\verb{@media (prefers-color-scheme: dark)} block from the dark palette so the table follows the
-viewer's colour scheme. \code{"none"} emits the single theme only.}
-
-\item{style_tag}{Wrap the CSS in a \verb{<style>...</style>} tag (for embedding, as \code{tab_md(css = TRUE)}
-does). Default \code{FALSE} returns bare CSS.}
-
-\item{file}{Optional path to write the CSS to; returns the string invisibly when given.}
+\item{...}{Passed to \code{\link{tab_css}} (\code{theme}, \code{color_type}, \code{style_tag}, \code{file}).}
 }
 \value{
-A character string of CSS (visible, or invisible when \code{file} is given).
+A character string of CSS (invisible when \code{file} is given).
 }
 \description{
-Generates the CSS that styles the pandoc bracketed-span classes \code{\link{tab_md}} emits for a
-coloured table (\verb{[value]\{.p20\}} etc.). The classes are \strong{break-derived} so they are readable and
-match \emph{this} table: additive percentage-point diffs are \code{p5}/\code{p10}/... (over-represented) and
-\code{m5}/\code{m10}/... (under-represented); standardized mean diffs are \code{sd0_2}/\code{sdm0_2}/...; ratios / odds
-ratios / the \code{x2} rule are \code{x2}/\code{x1_5}/... and \code{d2}/\code{d1_5}/...; contribution levels fall back to
-\code{b1}/\code{bm1}/.... Background-channel classes are the same names prefixed \code{bg}. The neutral class \code{.n}
-(uncoloured cells) is left unstyled (inherits the normal text colour).
+A thin wrapper around \code{\link[=tab_css]{tab_css(chrome = FALSE)}}, kept for discoverability
+alongside \code{\link{tab_md}}. The stylesheet does not depend on the table -- classes name a palette
+\strong{slot}, not a break -- so \code{tabs} is ignored and one stylesheet styles every table in a document.
 }
 \examples{
-\donttest{
-tabs <- tab(forcats::gss_cat, race, marital, pct = "row", color = "diff")
-cat(tab_md_css(tabs))
+cat(tab_md_css())
 }
+\seealso{
+\code{\link[=tab_css]{tab_css()}}, which is the generator and also styles \code{tab_kable(engine = "html")}.
 }

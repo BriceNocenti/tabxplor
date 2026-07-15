@@ -13,7 +13,7 @@ tab_md(
   color = TRUE,
   color_legend = TRUE,
   lang = NULL,
-  theme = c("light", "dark"),
+  theme = NULL,
   color_type = NULL,
   html_24_bit = NULL,
   caption = NULL,
@@ -56,7 +56,8 @@ line (its break-words in the same pandoc classes as the cells) above the subtext
 
 \item{theme, color_type, html_24_bit}{Colour palette selectors (as in
 \code{\link[=tab_kable]{tab_kable()}}); they only affect the CSS emitted by \code{css = TRUE} /
-\code{\link{tab_md_css}}, since the span \emph{class names} are palette-independent.}
+\code{\link{tab_css}}, since the span \emph{class names} are palette- and theme-independent. \code{theme}
+accepts \code{"auto"} (follow the reader's colour scheme).}
 
 \item{caption}{Optional table caption, rendered as a pandoc caption line \verb{: caption} (captions only
 the first table of a list).}
@@ -64,9 +65,9 @@ the first table of a list).}
 \item{transpose}{Set to \code{TRUE} to transpose each table before export (rows become columns) --
 the col-percentages-with-several-row-variables use case.}
 
-\item{css}{When \code{TRUE}, prepend an inline \verb{<style>} block (from \code{\link{tab_md_css}}) matching
-this table's breaks and palette, so the coloured markdown is self-contained. Default \code{FALSE}
-(bring the stylesheet via the document's \verb{css:} instead).}
+\item{css}{When \code{TRUE}, prepend an inline \verb{<style>} block (from \code{\link{tab_css}}), so the
+coloured markdown is self-contained. Default \code{FALSE} (bring the stylesheet via the document's
+\verb{css:}, or emit \code{\link{tab_css}} once at the top of the document -- it styles every table).}
 
 \item{clipboard}{Copy output to clipboard via \code{clipr::write_clip()}.
 Requires the \pkg{clipr} package.}

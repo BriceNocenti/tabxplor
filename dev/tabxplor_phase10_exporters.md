@@ -532,10 +532,18 @@ orchestration untouched.
 
 ## 10. jamovi live display (10a) — DECIDED: keep + optimize kableExtra; home-built HTML is Plan B
 
-jamovi's results panel **only honors inline CSS** (CSS via `htmlDependencies` never applies —
-[jamovi #1529](https://github.com/jamovi/jamovi/issues/1529)) and **won't reliably run htmlwidget JS**, so
+jamovi's results panel **ignores `htmlDependencies`**
+([jamovi #1529](https://github.com/jamovi/jamovi/issues/1529)) and **won't reliably run htmlwidget JS**, so
 interactive tables (reactable/DT) are out and the module already hand-inlines lightable + bootstrap CSS
 ([jmvtab.b.R:159-165](../R/jmvtab.b.R#L159)).
+
+> ⚠ **RETRACTED (Phase 13d):** this used to read "*only honors inline CSS*", which was true of
+> `htmlDependencies` but got over-read into "no `<style>` tags". Settled from the dev-console capture,
+> not inference: the Html element renders via jQuery `e.html(r.content)` (which inserts `<style>` as a
+> live node), there is **no sanitizer** on that path, and jamovi itself appends
+> `<style class="module-asset">` to `$head`. It has its own stylesheet mechanism and simply never
+> processes htmltools deps. `<style>` blocks inside our fragment work — `html_style_block()`'s
+> `border-collapse` has been load-bearing there since 10e. Phase 13d depends on this.
 
 **Decision: keep kableExtra everywhere and optimize it first; only fall back to a dependency-free
 home-built `<table>` renderer if that isn't fast/clean enough.** No reactable/JS, no tinytable, no gt. The

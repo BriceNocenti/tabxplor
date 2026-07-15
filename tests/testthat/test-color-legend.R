@@ -114,8 +114,10 @@ testthat::test_that("excel medium returns rich-text runs with hex + bold on the 
 testthat::test_that("md medium wraps break-words in the same pandoc classes as the cells", {
   tb <- tab(gss, marital, race, pct = "row", color = "diff")
   l  <- suppressWarnings(tab_color_legend(tb, medium = "md", style = "prose", lang = "en"))
-  testthat::expect_match(l, "\\[\\+5\\]\\{\\.p5\\}", perl = TRUE)
-  testthat::expect_match(l, "\\[-30\\]\\{\\.m30\\}", perl = TRUE)
+  # Phase 13d: the class names the palette SLOT, so the FIRST break (+5) is .p1 and the fourth (-30)
+  # is .m4 -- the label still carries the threshold, which is the legend's whole job.
+  testthat::expect_match(l, "\\[\\+5\\]\\{\\.p1\\}", perl = TRUE)
+  testthat::expect_match(l, "\\[-30\\]\\{\\.m4\\}", perl = TRUE)
 })
 
 testthat::test_that("a custom palette drops the baked colour-shade names", {

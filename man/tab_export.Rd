@@ -8,7 +8,7 @@ tab_export(
   x,
   format = c("kable", "md", "xl", "plot"),
   path = NULL,
-  theme = c("light", "dark"),
+  theme = NULL,
   color_type = NULL,
   html_24_bit = NULL,
   color = TRUE,
@@ -29,7 +29,11 @@ tab_export(
 \code{"kable"} the rendered text is written to it; ignored for \code{"plot"}.}
 
 \item{theme}{By default (\code{"light"}) a white table with black text; \code{"dark"} for the
-inverse (colours follow the theme).}
+inverse (colours follow the theme). \code{"auto"} follows the reader's colour scheme (their OS,
+and any dark-mode toggle of the host page), which needs a stylesheet: it works for
+\code{format = "kable"} with \code{engine = "html"} and for \code{"md"}, and resolves to
+\code{"light"} for the static \code{"xl"} / \code{"plot"} backends and the kableExtra engine.
+Defaults to \code{getOption("tabxplor.theme")}. See \code{\link{tab_css}}.}
 
 \item{color_type}{By default the text is coloured; set to \code{"bg"} to colour the background.}
 

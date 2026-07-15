@@ -6,13 +6,19 @@
 #     legacy row_spec()/column_spec() pipeline, just carved out of tab_kable() and reading the prep's
 #     derive-once roles instead of recomputing them). Locked by test-exports.R + the new kable HTML
 #     snapshot (test-render-html.R).
-#   - engine = "html" is the home-built renderer: inline styles on <td> (no per-cell <span>), so it is
-#     self-contained (jamovi honours only inline CSS, issue #1529) and ~O(n_col+n_row) paste0 calls
-#     (Phase 9 idiom: base masks, vectorised assembly, NO case_when/if_else over fmt). It reproduces the
-#     kableExtra visual (content-identical -- same cell text, colours, tooltips), not byte-identical DOM.
+#   - engine = "html" is the home-built renderer: geometry inline on <td>, colour as a slot CLASS (no
+#     per-cell <span>), and ~O(n_col+n_row) paste0 calls (Phase 9 idiom: base masks, vectorised
+#     assembly, NO case_when/if_else over fmt). It reproduces the kableExtra visual (content-identical
+#     -- same cell text, colours, tooltips), not byte-identical DOM.
+#   - Phase 13d: this engine is THEME-AGNOSTIC. Colour lives in classes (tx_slot_class) resolved by the
+#     stylesheet tab_css() builds, which is what makes theme = "auto" possible: an inline `style` beats
+#     every stylesheet rule short of `!important`, so inline hex could never follow a dark-mode toggle.
+#     Do not reintroduce inline colour here. The <style> is hoisted ONCE by tab_kable_join(); it works
+#     in jamovi (its results view injects our HTML through jQuery .html(), which applies <style> nodes,
+#     and it has no sanitizer on that path -- what jamovi ignores is htmlDependency, not <style>).
 #   - The two engines wire the SAME 10e features (spanning header, [min;max] total column, NA="") off
 #     the shared render-model, so they cannot drift.
-# See: dev/tabxplor_phase10_exporters.md Sec 10, CLAUDE.md Phase 10e.
+# See: dev/tabxplor_phase10_exporters.md Sec 10, CLAUDE.md Phase 10e + 13d, R/tab-css.R.
 
 
 # === SECTION: the seam =================================================================
@@ -73,6 +79,9 @@ html_cell_text <- function(raw, pn, bold, esc = htmltools::htmlEscape) {
 render_kableExtra_engine <- function(rd, meta, subtext, caption, tooltips, popover,
                                      html_font, full_width, get_data, in_knitr, ...) {
   tabs  <- rd$tab
+  # Phase 13d: only ever "light"/"dark" here -- tab_kable() downgrades "auto" before the prep, because
+  # kableExtra bakes its theme at render time (kable_classic / kable_material_dark) and its HTML is not
+  # ours to restyle. Auto dark mode is an engine = "html" feature.
   theme <- meta$theme
   cvh   <- rd$col_var_header       # Phase 13c-iii: spanning names + suffix-stripped level labels
 
@@ -209,8 +218,9 @@ render_kableExtra_engine <- function(rd, meta, subtext, caption, tooltips, popov
 # === SECTION: the home-built HTML engine =========================================================
 
 # Vectorised, dependency-free <table>: one style string per column, one per row, cells built as
-# per-column vectors then concatenated with do.call(paste0, .). Returns the BARE <table> string (the
-# scoped <style> block is hoisted ONCE by tab_kable_join()).
+# per-column vectors then concatenated with do.call(paste0, .). Returns the BARE <table> string; the
+# <style> block (which carries the whole theme -- see the file header) is hoisted ONCE by
+# tab_kable_join(). Nothing here reads `meta$theme`.
 #' @keywords internal
 render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, get_data) {
   tab   <- rd$tab
@@ -220,7 +230,6 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
   cvh   <- rd$col_var_header       # Phase 13c-iii: spanning names + suffix-stripped level labels
   n_row <- nrow(tab)
   n_col <- ncol(tab)
-  tc    <- meta$theme_cols
 
   # (a) format every column once -> list of chr[n_row] (reuse .ref via the prep's ann). bold_split =
   # TRUE marks the composite primary-field width (Phase 13c-ii) so step (c) can bold only the primary.
@@ -249,14 +258,26 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
   col_style[roles$row_var_col]<- paste0(col_style[roles$row_var_col], "min-width:10em;")
 
   # (c) per-column <td> vectors over rows (colours/bold/tooltips from the prep's ann)
+  # Phase 13d: colour is emitted as a slot CLASS, never as inline hex -- an inline `style` beats every
+  # stylesheet rule short of `!important`, so inline colour makes dark mode impossible. The class is a
+  # pure function of the slot the engine already assigned (tx_slot_class), so cells and tab_css() cannot
+  # disagree, and this renderer is THEME-AGNOSTIC: the theme lives only in the stylesheet.
+  #   text_slot > 0        -> .p1-.p4 / .m1-.m4      bg_slot > 0 -> .o1-.o4 / .u1-.u4
+  #   ref_alltot, slot 0   -> no class: `theme_cols$text` IS the table's colour, so it inherits
+  #   otherwise            -> .g1 (column has a colour measure) / .g2 (it has none)
   td_html <- purrr::imap(cells, function(cell, name) {
     a  <- ann[[name]]
-    cs <- rep("", n_row)
+    cs <- rep("", n_row)      # inline style: bold only (theme-independent)
+    cls <- rep("", n_row)
     if (!is.null(a)) {
-      cs <- paste0("color:", a$font, ";")
-      hasbg <- a$back != "none"
-      cs[hasbg] <- paste0(cs[hasbg], "background-color:", a$back[hasbg], ";")
-      cs[a$bold] <- paste0(cs[a$bold], "font-weight:bold;")
+      tsl <- if (length(a$text_slot) == n_row) a$text_slot else integer(n_row)
+      bsl <- if (length(a$bg_slot)   == n_row) a$bg_slot   else integer(n_row)
+      cls <- tx_slot_class("text", tsl)
+      bgc <- tx_slot_class("bg",   bsl)
+      cls <- paste0(cls, ifelse(nzchar(cls) & nzchar(bgc), " ", ""), bgc)
+      grey <- !nzchar(cls) & !a$ref_alltot
+      cls[grey] <- if (isTRUE(a$has_color) || isTRUE(a$has_bgc)) "g1" else "g2"
+      cs[a$bold] <- "font-weight:bold;"
     }
     tip <- rep("", n_row)
     if (tooltips && is_fmt(tab[[name]])) {
@@ -281,7 +302,8 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
     bold_cell <- seq_len(n_row) %in% rd$bold_rows
     if (!is.null(a)) bold_cell <- bold_cell | a$bold
     cell_html <- html_cell_text(cell, attr(cell, "primary_nchar"), bold_cell, esc = identity)
-    paste0('<td style="', col_style[j], cs, '"', tip, '>', cell_html, '</td>')
+    paste0('<td style="', col_style[j], cs, '"',
+           ifelse(nzchar(cls), paste0(' class="', cls, '"'), ""), tip, '>', cell_html, '</td>')
   })
 
   # (d) rows: paste0 across the LIST of column vectors -> all n_row rows in one call
@@ -300,8 +322,12 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
   body <- paste0('<tr style="', rs, '">', row_inner, '</tr>', collapse = "\n")
 
   # header (level-name row), styled like the legacy row_spec(0)
+  # Phase 13d: no `color:` -- the header inherits `.tabxplor-tab{color:}` from the stylesheet, so it
+  # flips with the theme. Everything else stays INLINE on purpose: col_style's `text-align:right` is
+  # inline, so a stylesheet header rule could not beat it -- the inline-last-wins order below is what
+  # centres headers over right-aligned data.
   hdr_style <- paste0(
-    "color:", tc$text, ";font-weight:bold;border-top:0;border-bottom:1px solid;",
+    "font-weight:bold;border-top:0;border-bottom:1px solid;",
     "font-size:90%;vertical-align:bottom;line-height:0.9;padding:3px;text-align:center;")
   # col_style first (its borders/nowrap/widths apply to the header too), hdr_style last so its
   # text-align:center wins over the column's data alignment (kableExtra centres all headers).
@@ -315,8 +341,8 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
   # contiguous level columns; an empty cell over the row var / total / count columns.
   cvh_runs <- tab_header_runs(cvh$label)
   span_thead <- if (any(nzchar(cvh_runs$labels))) {
-    span_style <- paste0("color:", tc$text, ";font-weight:bold;border-bottom:1px solid;",
-                         "text-align:center;padding:3px;")
+    span_style <- paste0("font-weight:bold;border-bottom:1px solid;",
+                         "text-align:center;padding:3px;")   # colour inherited (Phase 13d)
     span_cells <- paste0('<th colspan="', cvh_runs$spans, '" style="', span_style, '">',
                          ifelse(nzchar(cvh_runs$labels), htmltools::htmlEscape(cvh_runs$labels), ""),
                          '</th>')
@@ -332,8 +358,10 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
            paste0(subtext, collapse = "<br>"), '</td></tr></tfoot>')
   } else ""
 
+  # Phase 13d: no `tabxplor-<theme>` token -- the stylesheet carries the theme, and under "auto" the
+  # markup must not commit to one.
   paste0(
-    '<table class="tabxplor-tab tabxplor-', meta$theme, '">', cap,
+    '<table class="tabxplor-tab">', cap,
     '<thead>', span_thead, thead, '</thead>',
     '<tbody>', body, '</tbody>',
     tfoot,
@@ -352,37 +380,25 @@ render_html_degrade <- function(tab) {
   cols <- lapply(tab, function(col) paste0('<td>', htmltools::htmlEscape(as.character(col)), '</td>'))
   row_inner <- if (length(cols)) do.call(paste0, cols) else rep("", nrow(tab))
   body <- paste0('<tr>', row_inner, '</tr>', collapse = "\n")
-  paste0('<table class="tabxplor-tab tabxplor-light"><thead>', thead,
+  paste0('<table class="tabxplor-tab"><thead>', thead,
          '</thead><tbody>', body, '</tbody></table>')
 }
 
 
 # === SECTION: join + jamovi helpers ===============================================================
 
-# The scoped, self-contained <style> block for the html engine (jamovi honours only inline/`<style>`
-# CSS, issue #1529). Ports the still-relevant inst/tab.css rules off the kableExtra .lightable class.
-#' @keywords internal
-html_style_block <- function() {
-  paste0(
-    "<style>",
-    ".tabxplor-tab{border-collapse:collapse;border-top:0;border-bottom:0;margin:0;}",
-    ".tabxplor-tab caption{text-align:center;font-weight:bold;font-size:120%;}",
-    ".tabxplor-tab tfoot{font-size:80%;text-align:left;}",
-    ".tabxplor-tab tbody tr:hover{background:rgba(0,0,0,.045);}",
-    ".tabxplor-tab.tabxplor-dark{background:#212121;color:#fff;}",
-    "</style>"
-  )
-}
-
 # Join the per-table render parts (single table => length-1 list). kableExtra: concatenate the
 # knitr_kable objects (keeping the class). html: hoist ONE <style> block, stack the <table> fragments.
+# Phase 13d: `css` is the stylesheet built by tab_kable() (tab_css(); "" when the document supplies it
+# itself). It replaced the old static html_style_block() -- the theme now lives entirely in the CSS,
+# so this function no longer needs to know it.
 #' @keywords internal
-tab_kable_join <- function(parts, engine, theme = "light") {
+tab_kable_join <- function(parts, engine, css = "") {
   if (length(parts) == 1L && engine == "kableExtra") return(parts[[1]])
 
   if (engine == "html") {
     body <- paste(unlist(parts), collapse = "\n<br>\n")
-    out  <- paste0(html_style_block(), "\n", body)
+    out  <- if (nzchar(css)) paste0("<style>", css, "</style>\n", body) else body
     return(structure(out, format = "html", class = "knitr_kable"))
   }
 

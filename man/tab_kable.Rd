@@ -6,7 +6,7 @@
 \usage{
 tab_kable(
   tabs,
-  theme = c("light", "dark"),
+  theme = NULL,
   color_type = NULL,
   html_24_bit = NULL,
   color = TRUE,
@@ -23,6 +23,7 @@ tab_kable(
   wrap_cols = 15,
   whitespace_only = TRUE,
   engine = NULL,
+  css = NULL,
   ...
 )
 }
@@ -30,8 +31,11 @@ tab_kable(
 \item{tabs}{A table made with \code{\link{tab}} or \code{\link{tab_many}},
 or a \code{list} of tab with the same \code{col_vars} and no \code{tab_vars}.}
 
-\item{theme}{By default, a white table with black text, Set to \code{"dark"} for a
-black table with white text.}
+\item{theme}{By default (\code{"light"}) a white table with black text; \code{"dark"} for a black
+table with white text; \code{"auto"} to follow the \strong{reader's} colour scheme -- their operating
+system, and any dark-mode toggle of the host page (Quarto, Bootstrap 5.3, Tailwind). \code{"auto"}
+needs \code{engine = "html"} (kableExtra's themes are baked at render time); asking it of the kableExtra
+engine renders light with a message. Defaults to \code{getOption("tabxplor.theme")}.}
 
 \item{color_type}{Set to \code{"text"} to color the text, \code{"bg"} to color the
 background. By default it takes \code{getOption("tabxplor.color_style_type")}.}
@@ -88,6 +92,12 @@ a LaTeX table.}
 \code{"html"} uses a dependency-free, self-contained (inline-CSS) \verb{<table>} renderer that is
 faster and needs no external CSS (used by the jamovi live UI). Defaults to
 \code{getOption("tabxplor.tab_kable_engine", "kableExtra")}.}
+
+\item{css}{\code{engine = "html"} only: inline the stylesheet with the table, so the output is
+self-contained (default, from \code{getOption("tabxplor.kable_css")}). Set \code{FALSE} in a many-table
+document that emits \code{\link{tab_css}} once at the top -- the stylesheet is table-independent,
+so one copy styles every table. With \code{FALSE} and no \code{\link{tab_css}} call, tables render
+uncoloured.}
 
 \item{...}{Other arguments to pass to \code{\link[kableExtra:kable_styling]{kableExtra::kable_styling}}.}
 }

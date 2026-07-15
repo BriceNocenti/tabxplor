@@ -2054,8 +2054,8 @@ This section records only the decisions settled in the 10a/10b design session; t
 10c→10g implementation.
 
 **10a — jamovi live-display engine: keep + optimize kableExtra first; home-built HTML table is Plan B.**
-Grounded (web + the existing code): jamovi's results panel **only honors inline CSS** (CSS via
-`htmlDependencies` never applies — [jamovi #1529](https://github.com/jamovi/jamovi/issues/1529)) and won't
+Grounded (web + the existing code): jamovi's results panel ignores `htmlDependencies`
+([jamovi #1529](https://github.com/jamovi/jamovi/issues/1529)) and won't
 reliably run htmlwidget JS, so interactive tables (reactable/DT) are out, `gt` is heavy (global rule avoids
 it), and `tinytable`'s interactivity wouldn't fire live either. So keep kableExtra and make the win come
 from the shared prep (colours/refs derived **once**), NA-hiding moved into prep, `tooltips = FALSE` (already
@@ -3267,3 +3267,79 @@ quasi-binomial ≈1 on 0/1 <https://randomeffect.net/post/2020/10/12/quasi-binom
 
 **Git study:** commit `6e47bab^` — `R/tab_logit.R` / `R/tab_logit_2.R` (pre-package parsnip draft:
 `nb_questions`, `split_var`, `multiplicator`, `empirical_OR`, `readable_OR`, `or_plot`, `lm_plots`).
+
+---
+
+## 38. Phase 13d — Light/Dark mode in kable exports (DONE 2026-07-16)
+
+### The constraint that shaped everything
+
+`tab_kable(engine = "html")` wrote `color:#RRGGBB` **inline on every `<td>`**. An inline `style` beats
+any stylesheet rule short of `!important`, so **no `@media (prefers-color-scheme: dark)` block could
+ever recolour those cells**. Dark mode was therefore never a CSS-authoring job: it required moving cell
+colour out of the `style` attribute. Everything below follows from that.
+
+### The keystone — name classes by palette SLOT, not by break
+
+The old `md_break_class()` vocabulary (`p20`, `m5`, `x2`, `d2`, `sd0_2`, `b1`, `bg*`) re-encoded the
+*threshold* a cell crossed. The palette does not care: it has exactly **8 slots per channel** (1-4 over,
+5-8 under — the engine's own domain since 13a). Naming by slot makes the stylesheet a **pure function of
+(palette, color_type, theme)**, which cascades into every property this phase needed:
+
+- **Table-independent CSS** → emit it once per document (`tab_css()`), reuse for every table.
+- **Collisions impossible** → `.p3` is the same shade in every table, whatever its `color_breaks`. The
+  planned per-render hash/scope wrapper was **dropped as unnecessary**, not implemented and disabled.
+- **One vocabulary for every measure** → diff / ratio / contrib / OR each had a naming branch; all gone.
+- **Uniform 2-char width** → serves `tab_md`'s padded-monospace goal that `sd0_2`-vs-`p5` undermined.
+- **The class is a pure function of the slot integer** → `fmt_color_plan()` and the palette lookup drop
+  out of the *cell* path entirely (`tx_slot_class()` replaces the per-column `md_slot_class_map()`).
+
+Vocabulary (maintainer's choice): text `.p1-.p4` / `.m1-.m4`; background `.o1-.o4` / `.u1-.u4`; html-only
+chrome `.g1`/`.g2` (the two greys) + `.tabxplor-tab`. A reference cell gets **no class** — `theme_cols$text`
+*is* the table's colour, so it inherits.
+
+### Consequences
+
+- **`render_html_engine()` is theme-agnostic.** The theme lives entirely in the stylesheet; the markup
+  is byte-identical across light/dark/auto (locked by a test). This is what makes `"auto"` possible.
+- **DELETED**: `html_style_block()` (static, hard-coded `#212121`/`#fff`), `md_break_class()`,
+  `md_slot_class_map()`, `md_css_rules()`, `md_css_block()`, the `.n` md neutral, the legend token's
+  `cls` field (derivable), and `tab_kable_join()`'s dead `theme` param.
+- **`tab_md_css(dark_mode=)` deleted, not deprecated** — `tab_md_css()` is new in unreleased 1.4.0, so
+  `deprecate_soft("1.4.0", ...)` would have deprecated an argument in the version introducing it.
+  `tab_md_css()` survives as a thin wrapper on `tab_css(chrome = FALSE)`.
+
+### The `"auto"` cascade — 4 layers, ORDER is the contract
+
+`@media (prefers-color-scheme)` only reports the **OS**. Every framework shipping a dark *toggle*
+translates the preference into a class/attribute via JS — Quarto sets `body.quarto-dark`, Bootstrap 5.3
+`[data-bs-theme]`, Tailwind `html.dark` — which a media query cannot see. So: light base → `@media` dark
+(wins on source order) → explicit-toggle **light** → explicit-toggle **dark** (both out-specify the media
+block, so a page toggle beats the OS in *both* directions; dark last breaks a pathological tie).
+Locked by an ordering test, because no assertion on hex would catch a reorder.
+
+### Three latent bugs this surfaced
+
+1. **`theme = "auto"` crashed.** `get_color_style(theme = "auto")` builds the key `"text_auto"` → `NULL`
+   palette → length-0 → `vapply` error; and `theme_cols`'s `if_else(theme == "light", ...)` silently took
+   the **dark** branch. Fixed by funnelling every palette lookup through `tx_palette_theme()` and
+   resolving at the prep (`meta$theme` keeps the render intent; `meta$theme_cols` is always a real palette).
+2. **The legend would have frozen light** — it sits in the table's own `<tfoot>` with inline hex.
+   **The plan's discriminator (`theme == "auto"`) was WRONG**: `engine = "html"` + `theme = "light"` +
+   `css = FALSE` + a document-level `tab_css("auto")` is a real case where the cells follow the toggle
+   and inline hex would not. The correct discriminator is the **ENGINE** — "does our stylesheet ship
+   with this output" — so `tab_color_legend(classes = identical(engine, "html"))`. kableExtra carries no
+   tabxplor stylesheet and keeps inline hex.
+3. **`currentColor` borders took the CELL's hex**, not the text colour (a `+20%` cell had a red border).
+   Explicit `border-color` fixes it — a light-mode change, NEWS'd.
+
+### Accepted costs
+
+- **Light mode changes**: the table now owns `color`/`background`/`border-color` (decision: symmetric).
+  Unavoidable — `auto` cannot flip borders without owning `color`, and owning `color` without owning
+  `background` is unreadable on a dark page.
+- **Dark islands**: a dark-OS reader of a light-only page gets a dark table on white. Inherent to
+  `prefers-color-scheme`; mitigated by `auto` being opt-in and by fg+bg always being set together.
+  Escape hatch if ever unacceptable: drop the `@media` layer → toggle-only.
+- **jamovi** is unaffected (light-only, one layer) and *depends* on `<style>` working there — see the
+  §10a retraction above, settled from the dev-console capture.

@@ -17,6 +17,18 @@
   `set_color_palette()`); console output is 24-bit truecolor (falling back to an 8-bit palette only in
   the RStudio console). `set_color_style()` (and its `custom_palette`/`html_24_bit` machinery) is
   replaced by `set_color_palette()`; the export functions keep an inert `html_24_bit` argument.
+* **Dark mode.** `theme` gains **`"auto"`** on `tab_kable()` / `tab_md()` / `tab_css()` /
+  `tab_export()`: the table follows the **reader's** colour scheme -- their operating system, and any
+  dark-mode toggle of the page it is embedded in (Quarto, Bootstrap 5.3, Tailwind) -- flipping live as
+  they switch. Dark tables are `#111111` with white text and borders. Set the default globally with
+  `options(tabxplor.theme = "auto")` (or `"dark"`, e.g. for the Viewer). `"auto"` needs a stylesheet,
+  so it applies to `tab_kable(engine = "html")` and `tab_md()`; the static backends (`tab_xl()`,
+  `tab_plot()`, and the kableExtra engine, whose themes are baked at render time) resolve it to
+  `"light"`. In a document with many tables, emit `tab_css(theme = "auto")` once at the top and set
+  `options(tabxplor.kable_css = FALSE)` -- the stylesheet is the same for every table.
+  *Note:* the html engine now sets the table's text, background and border colours explicitly. Light
+  tables therefore gain a white background, and borders are one colour instead of inheriting each
+  cell's colour (a `+20%` cell no longer has a coloured border).
 * **Meaningful colour legends.** The colour legend below each table is now a readable sentence -- e.g.
   *"Shades of blue: cells >= the Total row +5; +10; +20; +30 points. ... Grey: not significantly
   different from the Total row (Newcombe score interval, 95% confidence)."* -- with each break-word
@@ -120,13 +132,15 @@
   instead of `0.25`), so they compare symmetrically with odds ratios above 1.
 * `tab_md()` now exports **colored** markdown. A table built with colors (e.g. `tab(..., color = "diff")`)
   renders each cell as a short pandoc bracketed span `[value]{.class}`, so it shows up colored in Quarto,
-  R Markdown and pandoc. The class names are readable and describe the color break --- `p5`/`p10`/`p20`
-  (over-represented), `m5`/... (under), `x2`/`x1_5` and `d2`/... (ratios), `sd0_2`/... (standardized mean
-  differences); the background channel uses the same names prefixed `bg`. Numbers still line up in a
-  monospace editor. `color = FALSE` gives plain monochrome markdown, and an uncolored table is unchanged.
-* New `tab_md_css()` --- generate the CSS that styles those spans, matching the exact color breaks and
-  palette of your table (with a `prefers-color-scheme: dark` block). Use `tab_md(css = TRUE)` to embed it
-  inline, or include the stylesheet in your document.
+  R Markdown and pandoc. The class names are short and uniform --- `p1`-`p4` (over-represented text),
+  `m1`-`m4` (under-represented text), `o1`-`o4` / `u1`-`u4` for the background channel --- so numbers
+  still line up in a monospace editor. `color = FALSE` gives plain monochrome markdown, and an
+  uncolored table is unchanged.
+* New `tab_css()` --- generate the stylesheet for those spans (and for `tab_kable(engine = "html")`).
+  It takes no table: the class names identify a *palette shade*, not a threshold, so **one stylesheet
+  styles every table in a document**, whatever their color breaks. Use `tab_md(css = TRUE)` /
+  `tab_kable(css = TRUE)` to embed it inline, or emit `tab_css()` once at the top of a document.
+  (`tab_md_css()` is a thin wrapper on it.)
 * `tab_md()` gains a `caption` argument (rendered as a pandoc table caption) and, by default,
   `wrap_rows = NULL` no longer truncates long row labels (pass a number to cap them).
 * `tab_kable()` gains a faster, dependency-free HTML render engine. The new `engine` argument

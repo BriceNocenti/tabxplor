@@ -315,7 +315,8 @@ under-represented (\code{*_colors_neg}) sides.}
 
 \item{dark_text_colors, dark_text_colors_neg, dark_background_colors, dark_background_colors_neg}{The dark-theme counterparts (4 hex each).}
 
-\item{theme}{\code{"light"} or \code{"dark"}; defaults to the current setting.}
+\item{theme}{\code{"light"} or \code{"dark"}; defaults to the current setting. (A palette is always
+one or the other: the export theme \code{"auto"} resolves to \code{"light"} here.)}
 
 \item{type}{Default \code{"positive"} returns a readable form: a plain vector of magnitudes
 when the scale is symmetric, or a \code{list(over =, under =)} of magnitudes otherwise. Set to

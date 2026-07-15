@@ -77,7 +77,6 @@ testthat::test_that("tab_kable html engine structure is stable", {
 
   testthat::expect_snapshot(cat(rh_strip_style(tab_kable(counts,   engine = "html"))))
   testthat::expect_snapshot(cat(rh_strip_style(tab_kable(row_diff, engine = "html"))))
-  testthat::expect_snapshot(cat(rh_strip_style(tab_kable(row_diff, engine = "html", theme = "dark"))))
   testthat::expect_snapshot(cat(rh_strip_style(tab_kable(bg,       engine = "html"))))
   testthat::expect_snapshot(cat(rh_strip_style(suppressWarnings(tab_kable(chi2, engine = "html")))))
 })
@@ -88,6 +87,128 @@ testthat::test_that("html engine output is self-contained (inline <style>, no ex
   testthat::expect_match(h, "<style")
   testthat::expect_false(grepl("<link", h))
   testthat::expect_false(grepl("includeCSS|lightable|cosmo", h))
+})
+
+# === SECTION: Phase 13d -- theme lives in the CSS, not the markup =========================
+
+testthat::test_that("cells carry slot classes, never inline colour", {
+  h <- as.character(tab_kable(tab(gss, marital, race, pct = "row", color = "diff"),
+                              engine = "html", tooltips = FALSE))
+  b <- rh_tbody(h)
+  # THE constraint of Phase 13d: an inline `style` beats every stylesheet rule short of !important, so
+  # inline colour would make theme = "auto" impossible. If this fails, dark mode is silently broken.
+  testthat::expect_false(grepl("color:#", b))
+  testthat::expect_match(b, 'class="(p|m)[1-4]')          # a coloured cell
+  testthat::expect_match(b, 'class="g[12]"')              # an uncoloured cell
+  testthat::expect_match(h, '<table class="tabxplor-tab">', fixed = TRUE)   # no theme token
+})
+
+testthat::test_that("the MARKUP is theme-agnostic; only the stylesheet differs", {
+  tb <- tab(gss, marital, race, pct = "row", color = "diff")
+  mk <- function(th) rh_strip_style(tab_kable(tb, engine = "html", theme = th))
+  cs <- function(th) as.character(tab_kable(tb, engine = "html", theme = th))
+  # This is the property that makes "auto" possible at all -- one DOM, three stylesheets.
+  testthat::expect_identical(mk("light"), mk("dark"))
+  testthat::expect_identical(mk("light"), mk("auto"))
+  testthat::expect_false(identical(cs("light"), cs("dark")))
+})
+
+testthat::test_that("theme drives the emitted CSS (light / dark / auto)", {
+  tb <- tab(gss, marital, race, pct = "row", color = "diff")
+  cs <- function(th) as.character(tab_kable(tb, engine = "html", theme = th))
+
+  light <- cs("light")
+  testthat::expect_false(grepl("@media", light, fixed = TRUE))
+  testthat::expect_false(grepl("quarto", light, fixed = TRUE))
+  testthat::expect_true(grepl(".tabxplor-tab{color:#000000;background:#ffffff;}", light, fixed = TRUE))
+
+  dark <- cs("dark")
+  testthat::expect_false(grepl("@media", dark, fixed = TRUE))
+  testthat::expect_true(grepl(".tabxplor-tab{color:#FFFFFF;background:#111111;}", dark, fixed = TRUE))
+  testthat::expect_true(grepl("border-color:#FFFFFF", dark, fixed = TRUE))
+
+  auto <- cs("auto")
+  testthat::expect_true(grepl("@media (prefers-color-scheme: dark)", auto, fixed = TRUE))
+  testthat::expect_true(grepl("body.quarto-dark",     auto, fixed = TRUE))
+  testthat::expect_true(grepl("body.quarto-light",    auto, fixed = TRUE))
+  testthat::expect_true(grepl("[data-bs-theme=dark]", auto, fixed = TRUE))
+})
+
+testthat::test_that("the generated CSS is syntactically valid in every mode", {
+  # A single malformed rule makes the browser drop it -- and, inside @media, potentially the whole
+  # block -- with no error anywhere. No selector-presence test catches that, so check the shape.
+  for (chrome in c(TRUE, FALSE)) for (th in c("light", "dark", "auto")) {
+    css <- tab_css(theme = th, chrome = chrome, style_tag = FALSE)
+    lab <- paste0(th, if (chrome) "/chrome" else "/md")
+    testthat::expect_identical(lengths(regmatches(css, gregexpr("[{]", css))),
+                               lengths(regmatches(css, gregexpr("[}]", css))), label = lab)
+    body <- trimws(gsub("@media \\(prefers-color-scheme: dark\\) \\{|^\\}$", "",
+                        strsplit(css, "\n")[[1]]))
+    body <- body[nzchar(body)]
+    testthat::expect_true(all(grepl("^[^{}]+\\{([-a-z]+:[^;{}]+;)+\\}$", body)), label = lab)
+  }
+})
+
+testthat::test_that("the auto cascade layers are ordered so a page toggle beats the OS", {
+  # THE contract of theme = "auto". `@media (prefers-color-scheme)` only reports the OS; Quarto and
+  # friends toggle a CLASS, which a media query cannot see. The hook layers must therefore come AFTER
+  # the media block (they also out-specify it), and light before dark. Reordering these silently makes
+  # an explicit page toggle lose to the reader's OS -- which no assertion on hex would catch.
+  auto <- as.character(tab_kable(tab(gss, marital, race, pct = "row", color = "diff"),
+                                 engine = "html", theme = "auto"))
+  testthat::expect_lt(regexpr("@media", auto, fixed = TRUE),
+                      regexpr("body.quarto-light", auto, fixed = TRUE))
+  testthat::expect_lt(regexpr("body.quarto-light", auto, fixed = TRUE),
+                      regexpr("body.quarto-dark", auto, fixed = TRUE))
+})
+
+testthat::test_that('theme = "auto" downgrades on the kableExtra engine, with one message', {
+  testthat::skip_if_not_installed("kableExtra")
+  tb <- tab(gss, marital, race, pct = "row", color = "diff")
+  testthat::expect_message(tab_kable(tb, engine = "kableExtra", theme = "auto"), "auto")
+  testthat::expect_identical(
+    as.character(suppressMessages(tab_kable(tb, engine = "kableExtra", theme = "auto"))),
+    as.character(tab_kable(tb, engine = "kableExtra", theme = "light")))
+})
+
+testthat::test_that("the theme is read from options(tabxplor.theme), explicit wins", {
+  tb <- tab(gss, marital, race, pct = "row", color = "diff")
+  withr::local_options(list(tabxplor.theme = "dark"))
+  testthat::expect_identical(as.character(tab_kable(tb, engine = "html")),
+                             as.character(tab_kable(tb, engine = "html", theme = "dark")))
+  testthat::expect_identical(as.character(tab_kable(tb, engine = "html", theme = "light")),
+                             as.character(withr::with_options(list(tabxplor.theme = "light"),
+                                                              tab_kable(tb, engine = "html"))))
+})
+
+testthat::test_that("css = FALSE drops the <style> but keeps the classes", {
+  tb <- tab(gss, marital, race, pct = "row", color = "diff")
+  h  <- as.character(tab_kable(tb, engine = "html", css = FALSE))
+  testthat::expect_false(grepl("<style", h, fixed = TRUE))
+  testthat::expect_match(rh_tbody(h), 'class="(p|m)[1-4]')
+  # the once-per-document workflow: options() drives it, and tab_css() supplies the stylesheet
+  withr::local_options(list(tabxplor.kable_css = FALSE))
+  testthat::expect_false(grepl("<style", as.character(tab_kable(tb, engine = "html")), fixed = TRUE))
+  testthat::expect_match(tab_css(theme = "auto"), "^<style>")
+})
+
+testthat::test_that("the colour legend uses classes on the html engine, hex on kableExtra", {
+  tb   <- tab(gss, marital, race, pct = "row", color = "diff")
+  foot <- function(h) regmatches(as.character(h),
+                                 regexpr("(?s)<tfoot>.*?</tfoot>", as.character(h), perl = TRUE))
+  # The legend sits in the table's own <tfoot>, so inline hex would freeze it while the cells it
+  # describes follow a toggle. The discriminator is the ENGINE (does our stylesheet ship?), NOT the
+  # theme: engine = "html" + theme = "light" + css = FALSE is a real case (the document supplies
+  # tab_css("auto") itself), and inline hex would be wrong there too.
+  for (th in c("light", "dark", "auto")) {
+    f <- foot(tab_kable(tb, engine = "html", theme = th, color_legend = TRUE))
+    testthat::expect_false(grepl('<span style="color:#', f, fixed = TRUE))
+    testthat::expect_match(f, '<span class="(p|m)[1-4]">')
+  }
+  testthat::skip_if_not_installed("kableExtra")
+  # kableExtra carries no tabxplor stylesheet -> classes would render the legend uncoloured.
+  testthat::expect_match(foot(tab_kable(tb, engine = "kableExtra", color_legend = TRUE)),
+                         '<span style="color:#')
 })
 
 # === SECTION: cross-engine content parity ================================================

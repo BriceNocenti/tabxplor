@@ -6,7 +6,7 @@
 \usage{
 tab_plot(
   tabs,
-  theme = c("light", "dark"),
+  theme = NULL,
   color_type = NULL,
   html_24_bit = NULL,
   color = TRUE,

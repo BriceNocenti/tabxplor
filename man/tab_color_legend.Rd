@@ -11,7 +11,8 @@ tab_color_legend(
   lang = NULL,
   colored = TRUE,
   theme = NULL,
-  color_type = NULL
+  color_type = NULL,
+  classes = FALSE
 )
 }
 \arguments{
@@ -26,6 +27,11 @@ tab_color_legend(
 \item{colored}{Whether to colour the break-words.}
 
 \item{theme, color_type}{Palette theme / family (default from options).}
+
+\item{classes}{\code{medium = "html"} only: emit the break-words as CSS slot classes rather than inline
+hex, because a tabxplor stylesheet ships with the output (\code{tab_kable(engine = "html")}). Then the
+legend follows a theme toggle exactly like the cells it describes. \code{FALSE} (the kableExtra engine,
+which carries no stylesheet of ours) keeps inline hex.}
 }
 \value{
 A character vector (or, for excel, a list of run-lists), or NULL when nothing is coloured.

@@ -741,10 +741,18 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #'   or a `list` of tab with the same `col_vars` and no `tab_vars`.
 #' @param color_type  Set to \code{"text"} to color the text, \code{"bg"} to color the
 #' background. By default it takes \code{getOption("tabxplor.color_style_type")}.
-#' @param theme By default, a white table with black text, Set to \code{"dark"} for a
-#' black table with white text.
+#' @param theme By default (\code{"light"}) a white table with black text; \code{"dark"} for a black
+#' table with white text; \code{"auto"} to follow the **reader's** colour scheme -- their operating
+#' system, and any dark-mode toggle of the host page (Quarto, Bootstrap 5.3, Tailwind). \code{"auto"}
+#' needs `engine = "html"` (kableExtra's themes are baked at render time); asking it of the kableExtra
+#' engine renders light with a message. Defaults to \code{getOption("tabxplor.theme")}.
 #' @param html_24_bit `r lifecycle::badge("deprecated")` Inert since 1.4.0: exports are always
 #' 24-bit (the OKLCH palettes). Kept only so old calls do not error.
+#' @param css `engine = "html"` only: inline the stylesheet with the table, so the output is
+#' self-contained (default, from \code{getOption("tabxplor.kable_css")}). Set `FALSE` in a many-table
+#' document that emits \code{\link{tab_css}} once at the top -- the stylesheet is table-independent,
+#' so one copy styles every table. With `FALSE` and no \code{\link{tab_css}} call, tables render
+#' uncoloured.
 #' @param tooltips By default, html tooltips are used to display additional informations
 #' at mouse hover. Set to \code{FALSE} to discard.
 #' @param popover By default, takes \code{getOption("tabxplor.kable_popover")}. When
@@ -795,7 +803,7 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #' tab_kable(tabs, theme = "light", color_type = "text")
 #' }
 tab_kable <- function(tabs,
-                      theme = c("light", "dark"), color_type = NULL, html_24_bit = NULL,
+                      theme = NULL, color_type = NULL, html_24_bit = NULL,
                       color = TRUE, tooltips = TRUE, popover = NULL, color_legend = TRUE,
                       lang = NULL,
                       caption = knitr::opts_current$get("tab.cap"),
@@ -805,13 +813,13 @@ tab_kable <- function(tabs,
                       full_width = FALSE,
                       wrap_rows = 35, wrap_cols = 15,
                       whitespace_only = TRUE,
-                      engine = NULL,
+                      engine = NULL, css = NULL,
                       ...) {
   # Phase 13a: install a per-table color_breaks override for the render (no-op otherwise).
   .cb <- push_color_breaks(tabs); on.exit(pop_color_breaks(.cb), add = TRUE)
   # Phase 10j: the theme/color_type/color/color_legend preamble is the shared resolver. `html_24_bit`
   # is inert (Phase 13a): exports are always 24-bit, kept only so old calls do not error.
-  o <- resolve_export_opts(theme, color_type, color, color_legend, transpose)
+  o <- resolve_export_opts(theme, color_type, color, color_legend, transpose, allow_auto = TRUE)
   theme <- o$theme; color_type <- o$color_type
   color_legend <- o$color_legend
   compute <- c("refs", "bold", "range", "labels")
@@ -821,6 +829,18 @@ tab_kable <- function(tabs,
   popover <- if (is.null(popover)) {getOption("tabxplor.kable_popover")} else {popover}
   engine  <- if (is.null(engine)) {getOption("tabxplor.tab_kable_engine", "kableExtra")} else {engine}
   engine  <- match.arg(engine, c("kableExtra", "html"))
+  css     <- if (is.null(css)) {getOption("tabxplor.kable_css", TRUE)} else {isTRUE(css)}
+
+  # Phase 13d: "auto" (follow the reader's colour scheme) needs a stylesheet we control. kableExtra's
+  # themes are baked at render time (kable_classic / kable_material_dark) and its HTML is not ours to
+  # restyle, so downgrade rather than pretend.
+  if (identical(theme, "auto") && !identical(engine, "html")) {
+    cli::cli_inform(
+      c("!" = 'theme = "auto" needs {.code engine = "html"}; rendering {.val light}.',
+        "i" = "The kableExtra engine's themes are static."),
+      .frequency = "once", .frequency_id = "tabxplor_theme_auto_kableextra")
+    theme <- "light"
+  }
 
   # --- Phase 10d: shared exporter prep (list/compact, degrade, roles, two-channel colours, bold). ---
   # The block-A "canonical col_vars -> validate -> compact", the graceful-degrade check, the role
@@ -846,7 +866,10 @@ tab_kable <- function(tabs,
         subtext <- c(
           suppressWarnings(tab_color_legend(
             rd$tab, medium = "html", style = "prose", lang = lang,
-            color_type = color_type[1], theme = theme[1])),
+            color_type = color_type[1], theme = theme[1],
+            # Phase 13d: the html engine ships a tabxplor stylesheet, so the legend uses the same slot
+            # classes as the cells and follows any theme toggle with them. kableExtra does not.
+            classes = identical(engine, "html"))),
           subtext)
       }
     }
@@ -857,7 +880,13 @@ tab_kable <- function(tabs,
 
   if (get_data) return(if (length(parts) == 1L) parts[[1]] else parts)
 
-  tab_kable_join(parts, engine, theme = prep$meta$theme)
+  # Phase 13d: the html engine's cells carry slot CLASSES, so the theme lives entirely here. The
+  # stylesheet is table-independent (see tab_css()), hence built once per call -- or not at all, when a
+  # document emitted tab_css() itself (options("tabxplor.kable_css" = FALSE)). kableExtra styles inline.
+  style <- if (css && identical(engine, "html")) {
+    tab_css(theme = theme, color_type = color_type, chrome = TRUE, style_tag = FALSE)
+  } else ""
+  tab_kable_join(parts, engine, css = style)
 }
 
 
@@ -1493,7 +1522,7 @@ reg_footer_lines <- function(tabs) {
 #' }
 #'
 tab_plot <- function(tabs,
-                     theme = c("light", "dark"), color_type = NULL, html_24_bit = NULL,
+                     theme = NULL, color_type = NULL, html_24_bit = NULL,
                      color = TRUE, color_legend = TRUE, lang = NULL, caption = NULL, transpose = FALSE,
                      wrap_rows = 35, wrap_cols = 14, # unbreakable_spaces = TRUE
                      whitespace_only = TRUE) {
@@ -3448,7 +3477,8 @@ set_color_style <- function(type = c("text", "bg"), theme = NULL,
 #' @param mode By default, \code{get_color_style} returns a list of \pkg{crayon} coloring
 #' functions. Set to \code{"color_code"} to return html color codes.
 #' @param type \code{"text"} (font colour) or \code{"bg"} (background fill).
-#' @param theme \code{"light"} or \code{"dark"}; defaults to the current setting.
+#' @param theme \code{"light"} or \code{"dark"}; defaults to the current setting. (A palette is always
+#' one or the other: the export theme \code{"auto"} resolves to \code{"light"} here.)
 #' @param ... Absorbs deprecated arguments (e.g. \code{html_24_bit}); ignored.
 #' @return A list of 8 crayon color functions, or a vector of 8 color html codes.
 #' @export
@@ -3457,6 +3487,11 @@ get_color_style <- function(mode = c("crayon", "color_code"), type = NULL, theme
   theme <- if (is.null(theme)) getOption("tabxplor.color_style_theme") else theme
   if (is.null(type)  || is.na(type[1]))  type  <- "text"
   if (is.null(theme) || is.na(theme[1])) theme <- "light"
+  # Phase 13d: a palette is always light/dark. "auto" is an EXPORT render intent (`theme = "auto"`
+  # means "follow the reader"), and it reaches here whenever a caller forwards its own theme -- e.g.
+  # the exported fmt_get_color_code(theme = "auto"). Without this it would build the key "text_auto",
+  # find NULL, and error on a length-0 vector further down. Resolve at the one chokepoint.
+  theme <- tx_palette_theme(theme)
   key <- paste0(if (identical(type[1], "bg")) "bg" else "text", "_", theme[1])
 
   e <- tabxplor_palette_env

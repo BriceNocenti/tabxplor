@@ -58,15 +58,30 @@ R/
 ├── tab-xl-backend.R (~110 L) Phase 10h openxlsx2 backend: plumbing xlb_* engine wrappers (in-place R6
 │                              $, +xlb_merge) + the pure range coalescer (xl_runs/xl_coalesce -> fewest
 │                              multi-area dims). Styling-model notes (precompose + set_cell_style path).
-├── tab_md.R         (~560 L) Markdown export: plain padded pipe table + (Phase 10f) break-derived
-│                              pandoc colour spans [<num>]{.p20} (uniform, aligned) via tab_export_prep;
-│                              tab_md_css() per-table CSS generator; md_slot_class_map/md_break_class
+├── tab_md.R         (~490 L) Markdown export: plain padded pipe table + (Phase 10f) pandoc colour
+│                              spans [<num>]{.p3} (aligned) via tab_export_prep; md_span_attr/
+│                              md_color_cell (13d: slot classes via tx_slot_class, no `.n` neutral --
+│                              an uncoloured cell is bracket-free, padded to the same offset);
+│                              tab_md_css() = thin wrapper on tab_css(chrome = FALSE)
+├── tab-css.R        (~230 L) Phase 13d: THE one CSS generator, shared by tab_md + tab_kable("html").
+│                              tab_css() (exported; takes NO table -- the stylesheet is a pure function
+│                              of palette+color_type+theme, so one copy styles every table in a doc and
+│                              class collisions are impossible); tx_slot_class (slot -> .p/.m/.o/.u),
+│                              tx_palette_theme ("auto"->"light"; the ONLY place auto is resolved),
+│                              tx_chrome_hex (single source, also read by tab_export_prep's theme_cols),
+│                              tx_css_rules/tx_css_render + the tx_dark_hooks/tx_light_hooks page-toggle
+│                              selectors. "auto" = 4 cascade layers; their ORDER is the contract.
 ├── tab-export-prep.R (~400 L) Phase 10d shared exporter prep: tab_export_prep() -> tabxplor_render
 │                              model (roles/ann/bold/range/labels), consumed by kable/md/plot/xl;
+│                              resolve_export_opts() (13d: theme=NULL -> options("tabxplor.theme"),
+│                              gains "auto" gated by allow_auto; static backends get "light");
 │                              Phase 13c-iii col_var header model tab_col_var_header()/tab_header_runs()
 │                              (spanning names + suffix-stripped level labels)
-├── tab-render-html.R (~350 L) Phase 10e tab_kable render seam: render_kable_html() (kableExtra +
-│                              home-built self-contained html engines) + tab_kable_join/scrollbox
+├── tab-render-html.R (~340 L) Phase 10e tab_kable render seam: render_kable_html() (kableExtra +
+│                              home-built html engines) + tab_kable_join(css=)/scrollbox. 13d: the html
+│                              engine is THEME-AGNOSTIC -- colour is a slot CLASS, never inline hex
+│                              (inline would beat any @media rule); the theme lives only in the <style>
+│                              tab_kable() builds. html_style_block() deleted.
 ├── utils.R         (1364 L)  Pipe re-export, .onLoad() options setup, factor utilities.
 │                              NOT the colour-palette DESIGN tools (preview_color_grid /
 │                              simulate_cvd_farver / plot_oklch_hue_strip_cvd / set_luminance...):
@@ -263,9 +278,17 @@ Before working on the `tabxplor_fmt` type system, arithmetic, or display, fetch 
 
 ```r
 # In a temp .R file (outside tests/), then run:  Rscript that_file.R   (isolated; tests live source)
-devtools::test("d:/Statistiques/github/tabxplor")                  # whole suite (~46s)
-devtools::test("d:/Statistiques/github/tabxplor", filter = "tab")  # one/few files: regex on test-<name>.R
+devtools::test("~/github/tabxplor")                  # whole suite
+devtools::test("~/github/tabxplor", filter = "tab")  # one/few files: regex on test-<name>.R
 ```
+
+⚠ Dev now runs **inside WSL2 Ubuntu 26.04** (`~/github/tabxplor` on ext4), not Windows. The old `d:/Statistiques/github/tabxplor` paths are dead — the Windows checkout survives **build-only** for Windows `.jmo` (see *Jamovi module development*). The `~46s` / `225s -> 56s` suite timings recorded here were measured on Windows/NTFS and have **not** been re-measured on ext4 — treat them as order-of-magnitude only.
+
+⚠ **The suite is now MINUTES, not `56s` — that figure predates Phase 12.** The four `tab_reg` files fit real
+models (`glm`/`svyglm`/`multinom`/`polr`/`marginaleffects`) and dominate the wall-clock. Give a full run a
+generous timeout, and **pass `TESTTHAT_CPUS=8`** (the `Config/testthat/parallel: true` default picks far
+fewer). ⚠ A detached run (`setsid nohup … &`) is **killed when the Bash tool's shell exits** — use the
+tool's own `run_in_background`, or filter to the files you touched (`filter = "render-html|tab_md"`).
 
 **Test files:**
 
@@ -284,14 +307,20 @@ devtools::test("d:/Statistiques/github/tabxplor", filter = "tab")  # one/few fil
 
 ## Jamovi module development
 
-tabxplor currently use jamovi `2.6.44.0` (solid). Version 1.4.0 will also be tested on jamovi current "solid" version `2.7.37` afterwards.
+tabxplor currently use jamovi `2.6.44.0` (solid). Version 1.4.0 will also be tested on jamovi current "solid" version `2.7.37` afterwards (Phase 7i confirmed 2.7.37 ✓).
 
-After you modify jamovi functions and configuration files, regeneration of `.h.R` file is interactive step only. Ask the maintainer to install it using this code, but do not do it yourself :
+⛔ **jamovi is NOT installed in this WSL2 distro yet — it is Phase C3 of `~/github/.WSL2_sandbox_migration/ROADMAP.md`.** Until C3 lands, **every `.h.R` regeneration is blocked** — and there are several outstanding (Phases 7a, 7e, 7g-i, 7g-ii, 7g-iii, 7h all end with an "OPEN — maintainer step: regenerate `jmvtab.h.R`"). They cannot be done from here, and they cannot be batched away: `jmvtools::install()` needs a **running jamovi app** (it fails headlessly with *"jamovi could not be accessed"*).
 
-```r
-options(jamovi_home='C:/Program Files/jamovi 2.6.44.0')
-devtools::load_all() ; jmvtools::install() ; devtools::load_all()
-```
+⚠ **There are now TWO build paths, and they are not interchangeable — `.jmo` bundles are platform-specific** (migration Phase A1):
+
+| Target | jamovi | Checkout | Recipe |
+|---|---|---|---|
+| **Linux `.jmo`** (WSL, the dev path) | flatpak `org.jamovi.jamovi`, installed by C3 | `~/github/tabxplor` — **authoritative for source** | `jmvtools::install(home = 'flatpak')` (setup doc §7.4; the SDK `org.freedesktop.Sdk//24.08` is REQUIRED — `flatpak run --devel` is how the compiler reaches R) |
+| **Windows `.jmo`** (release only) | Windows jamovi, **kept forever** | `D:\Statistiques\github\tabxplor` — **build-only: pull, build, never edit** | `options(jamovi_home='C:/Program Files/jamovi 2.6.44.0'); devtools::load_all(); jmvtools::install(); devtools::load_all()` |
+
+**A Linux jamovi cannot produce a Windows bundle**, so the Windows checkout survives *even if C3 fully succeeds* — this is not a C3-failure fallback. The rule that matters: **never edit tabxplor in both places.** Edit in WSL, pull on Windows, build there.
+
+⚠ **C3 pins `jmvtools` to a 2.7.x build**: GitHub main is `28.3` (tracking jamovi's 2.7 → 28 renumbering) and a newer bundled compiler can emit a `jms` version 2.7.36 refuses. Check `packageVersion("jmvtools")`. Whether Flathub still serves the **2.6.44** commit is C3's literal first command (`flatpak remote-info --log flathub org.jamovi.jamovi`) — 2.6.44 compatibility is verified **on Windows only**.
 
 To know the real structure of the final .html and .js, check at this live capture done from dev console (for a basic table) :
 - `dev/jamovi/dev_console_live_capture/Jamovi_tabxplor_1_3_1_basic_table.html` : the live html from tabxplor 1.3.1 jamovi module
@@ -301,7 +330,7 @@ To know the real structure of the final .html and .js, check at this live captur
 
 To **capture new html** in the dev console, **ask the maintainer whenever you need**.
 
-Look at `D:/Statistiques/github/tabxplor/dev/tabxplor_1.4.0_jamovi_dev.md` and `@dev/jamovi/` for detailed informations.
+Look at `dev/tabxplor_1.4.0_jamovi_dev.md` and `@dev/jamovi/` for detailed informations.
 
 
 ---
@@ -421,7 +450,7 @@ Grounding (code refs + statistics + caveats) in `dev/tabxplor_1.4.0_decisions.md
 
 #### Verification (every phase)
 
-- **Byte-identity**: `devtools::test("d:/Statistiques/github/tabxplor")` after each phase; `test-golden.R` + `test-export-parity.R` + `test-fmt-contract.R` + `test-fuse-parity.R` stay green. Intentional output changes → rerun `dev/make_golden.R`, review the `_golden/`/`_snaps/` diff consciously, `testthat::snapshot_accept()`.
+- **Byte-identity**: `devtools::test("~/github/tabxplor")` after each phase; `test-golden.R` + `test-export-parity.R` + `test-fmt-contract.R` + `test-fuse-parity.R` stay green. Intentional output changes → rerun `dev/make_golden.R`, review the `_golden/`/`_snaps/` diff consciously, `testthat::snapshot_accept()`.
 - **Performance**: run the harness (see *Reference > Benchmarks*) before/after Phases 2, 3, 6; save to `dev/benchmarks/results_1.4.0/`; confirm the Phase 3 CI/chi2 win. When past benchmarks on the former tabxplor version are missing, use installed **tabxplor 1.3.1** version.
 - **From-the-middle**: feed the same data as microdata / long counts / wide / freq+N → identical fmt tables where `n` is real; CI/chi2 warn+skip on freq-only.
 - **Release gate**: `devtools::check()` (~3 min, run manually) before CRAN.
@@ -710,8 +739,7 @@ Prerequisite fix — **`tab()` completed as the true `tab_many()` replacement**:
 
 jmvtab baseline wired to **`tab()`** (not `tab_many(compact=TRUE)`): `.a.yaml`/`.u.yaml` replace the old `color` list with **`color`** (no/auto/diff/ratio/contrib/OR) + a new **`color_signif`** list (ignore/grey_non_signif/color_all_signif); `na` gains drop_all/common_base; `lvs`→`levels`; expert **`stars`/`method_cell`/`method_diff`** added in the collapsed CI box. `.b.R` fully rewritten (dead code stripped): maps `color` "no"→`FALSE` / "auto"→`TRUE` / else the measure string, forces `ci="diff"` when a `color_signif` policy is set with `ci="auto"`, and keeps the historical Excel export (redesign is 7f). `.js` stripped to the one live handler. Backend `tab()` wiring validated on 12 option combos (colors, levels, na, contrib/OR, methods).
 
-**OPEN — maintainer step**: `jmvtab.h.R` (generated from `.a.yaml`) could NOT be regenerated headlessly (`jmvtools::prepare()` → "jamovi could not be accessed"; needs the running jamovi app). Regenerate + review in the running jamovi with:
-`options(jamovi_home='C:/Program Files/jamovi 2.6.44.0'); devtools::load_all(); jmvtools::install(); devtools::load_all()`.
+**OPEN — maintainer step**: `jmvtab.h.R` (generated from `.a.yaml`) could NOT be regenerated headlessly (`jmvtools::prepare()` → "jamovi could not be accessed"; needs the running jamovi app). ⛔ **Now additionally blocked on migration Phase C3** — jamovi is not installed in WSL2 yet; see *Jamovi module development* for the two build paths (WSL/flatpak vs the Windows build-only checkout).
 
 #### Phase 7b — Draw a detailed map of required computations and interdependence between arguments
 
@@ -987,7 +1015,13 @@ Confirmation : jmvtab works well on jamovi 2.7.37
 Phase 6b — 2026-07-09 researched whether parallelising `tab()`/`jmvtab()` over `row_vars` is a real perf win. **Verdict: a substantial, reliable win for the PRIMARY workflow — worth a Suggests-only opt-in; NOT a forced default, NOT for big data / live jmvtab.** Grounded PoC (mirai / base `parallel` / future.apply, W∈{1,2,4,8,12}). Parallelising the row_var/pair axis is **byte-identical** (0/82 tables checked). The key result **inverts the naïve prior**: the *small/typical survey* df is the sweet spot, the 8M df the worst case. On **10k–60k-row surveys × many tables** (tabxplor's core "export dozens of colored tables" use case): **~2.5–3.3× at W=4** (commodity/university PC), **~4× at W=8**, ~1 s setup, ~0 memory, **wins even on a fresh call** — because per-table cost is N-independent O(cells) fmt/chi2 work (seq batch flat ~2.5 s from 10k→60k). On 8M it ≈break-even-to-loss (memory-bandwidth wall + 336 MB×W transfer); few tables always lose; future.apply unusable (per-call df resend); data.table's own threading barely helps (~1.2×). jmvtab *live* = no (cached aggregate → nothing O(N) to parallelise). Recommended opt-in: `options(tabxplor.parallel=)` gating an internal `tab_pmap()` at the `tab_build()` seam, persistent pool + `setDTthreads(1)` + df pre-loaded once + byte-identical fallback, skip below a table-count threshold, **after** Phase 2/7c (the batch-export path does NOT overlap the cache, so the gain persists). Full findings + tables: `dev/tabxplor_1.4.0_decisions.md` **§26**; scripts `dev/benchmarks/parallel_poc_{micro,tab,survey,mirai_dispatcher}.R`, results in `results_1.4.0/phase6b_*.txt`.
 - We should first choose only one parallelisation engine / package : either `mirai` or `parallel`. What would be the best choice for both performance and future-proofing ? Anyway the package should be in Suggest.
 - If workers setup step is needed, it should be done the first time parallelisation is used and reused afterwards.
-- It should work on Windows / Linux / MAC, but for performance the main focus is Windows.
+- ~~It should work on Windows / Linux / MAC, but for performance the main focus is Windows.~~ ⚠ **Superseded: dev + the primary run platform are now WSL2 Ubuntu.** It must still work on all three (CRAN), but see the WSL2 caveats below. `mirai` stays the right engine regardless — it is cross-platform, and a CRAN package cannot rely on `fork`.
+
+⚠ **§26's numbers were measured on Windows PSOCK — re-measure before trusting them on WSL2.** The thresholds they justify (`tabxplor.parallel_min = 2L`, the "8M ≈ break-even-to-loss" verdict, the "~1 s setup", the "336 MB×W transfer") are all consequences of Windows having **no `fork`**: every worker needed a full data resend. Linux forks with copy-on-write, so setup and transfer are far cheaper and the break-evens plausibly move — the 8M verdict in particular may not survive. Nothing is broken; the numbers are simply from another platform.
+
+⚠ **`detectCores(logical = FALSE)` is unreliable under WSL2 → `tab_parallel_workers()`'s "physical cores" intent is broken here.** Measured on this distro: it returns **12**, while `lscpu` reports 6 cores × 2 threads and the real host is an 8-core Ryzen 7 5800X3D. WSL2 does not expose SMT topology. The `min(..., 8L)` cap accidentally keeps the result sane (8 workers, not 11), so **this is a latent wrong-reason, not a live bug**.
+
+⚠ **The deeper WSL2 change: the CPU is SHARED with Windows.** `.wslconfig` grants the distro 12 of the host's 16 threads *as a ceiling*, and heavy Windows-side CPU/GPU work runs concurrently. "Detect all cores and take n−1" was right on native Windows and is wrong here — it leaves no headroom. Prefer an explicit `parallel = <n>` over `parallel = TRUE` when the Windows side is busy.
 
 New public `tab(..., parallel = )` (also `tab_many()`; `NULL`→`options("tabxplor.parallel")` off / `FALSE`
 serial / `TRUE` auto workers / integer N). **Engine = `mirai`** (Suggests-only; R-core's official cluster
@@ -1205,7 +1239,9 @@ New common features for all kind of exports
 
 #### Phase 10a — design efficient Jamovi jmvtab display for live usage (DONE)
 
-**DECIDED: keep + optimize kableExtra first; a dependency-free home-built `<table>` renderer is Plan B.** Grounded (web + code): jamovi's results panel only honors inline CSS (CSS via `htmlDependencies` never applies) and won't reliably run htmlwidget JS, so interactive tables (reactable/DT) are out, `gt` is heavy (global rule avoids it), `tinytable`'s interactivity wouldn't fire live. The win comes from the shared prep (colours/refs derived ONCE), NA-hiding in prep, `tooltips=FALSE` (already Phase 7e), a "light" kableExtra path; the eventual home-built swap is isolated behind a `render_kable_html()` seam. The §23 profile's #1 lever (`fmt_color_selection`) is stale (deleted in Phase 5) → re-profile before ranking levers. Recorded in `dev/tabxplor_1.4.0_decisions.md` §33; full rationale in `dev/tabxplor_phase10_exporters.md` §10.
+**DECIDED: keep + optimize kableExtra first; a dependency-free home-built `<table>` renderer is Plan B.** Grounded (web + code): jamovi's results panel ignores `htmlDependencies` and won't reliably run htmlwidget JS, so interactive tables (reactable/DT) are out, `gt` is heavy (global rule avoids it), `tinytable`'s interactivity wouldn't fire live.
+
+⚠ **This section used to say jamovi "only honors inline CSS". That is true of `htmlDependencies` and was over-read into "no `<style>` tags" — RETRACTED in Phase 13d, from the capture, not inference.** `dev/jamovi/.../resultsview-*.js`: the Html element renders `e.html(r.content)` (jQuery, which inserts `<style>` as a live node), there is **no sanitizer** on that path (the `sanitize` hits are quill-delta-to-html, for the *annotation editor*; the `xss` hits are x86 mnemonics in a highlight.js keyword list), and jamovi itself does `this.$head.append('<style class="module-asset">'+t+'</style>')`. jamovi has its OWN stylesheet mechanism (`.module-asset`) and simply never processes htmltools deps. `html_style_block()`'s `border-collapse` has in fact been **load-bearing in jamovi since Phase 10e** — which is why the tables look right. Phase 13d moves cell colour into `<style>`-resolved classes and relies on this. The win comes from the shared prep (colours/refs derived ONCE), NA-hiding in prep, `tooltips=FALSE` (already Phase 7e), a "light" kableExtra path; the eventual home-built swap is isolated behind a `render_kable_html()` seam. The §23 profile's #1 lever (`fmt_color_selection`) is stale (deleted in Phase 5) → re-profile before ranking levers. Recorded in `dev/tabxplor_1.4.0_decisions.md` §33; full rationale in `dev/tabxplor_phase10_exporters.md` §10.
 
 We must **make a grounded choice for jamovi jmvtab module base display of tables** : improve tab_kable() performance even without tooltips ? Fix tooltips calculation for them to be fast, since it gives a modern interactive look to the whole table ? Just make a faster flat html table ? Make it format with markdown tables with css classes ? : would it be possible to print .md inside html, with custom .css classes, in Jamovi, with a modern and professional look ? ; if a markdown js module is needed for it to be modern and professional-looking, can it (like, loaded when jmvtab UI loads ?) Jamovi own built-in table thing was unusable and without colors, formatting, etc. in the past, I wonder if it’s still the case. Otherwise, would there be a more modern option than kable for html tables in R (for example, js html tables with buttons in it to change number of digits, or even order of lines and cols, etc. ? ) ? What about the new types of tables Quarto tends to use nowadays ? Make web searches when needed, then write your detailed findings in `dev\tabxplor_1.4.0_decisions.md` (respecting it’s internal style and logic).
 
@@ -1747,9 +1783,7 @@ UNCHANGED (`test-color-golden.R` green); conscious regen of `_snaps/golden.md` +
 
 
 
-### Phase 13c – Exports and display improvements
-
-#### Done (2026-07-15)
+### Phase 13c – Exports and display improvements (DONE)
 
 Six sub-phases, full suite green (2285), goldens regenerated consciously (`golden.md` + `render-html.md`:
 composite padding, partial bold, spanning headers, suffix-stripped level names). No fmt field/attribute
@@ -1819,7 +1853,41 @@ Excel formattings :
 - What other such cases should be handled ? What are the ones that will need to use the pure text + formatting approach (not ideal, since then user don’t have access to raw numbers in Excel) ? What are the ones were another solution is doable (several columns stay readable like in the mean + sd case, other workarounds exist, etc.) ?
 - Ensure numbers formattings are used to : explicit `+` for `diff` and `contrib` ; explicit `+<number>sd`/`-<number>sd` for mean_diff with standardised diffs measured in sd (only if user does not provides the breaks scale, of course) ; leading `×` and `÷` symbols for `ratio` ; what else ?
 
-### Phase 13d – Light mode/Dark mode in kable exports
+### Phase 13d – Light mode/Dark mode in kable exports (DONE)
+
+`theme` gains **`"auto"`** (follow the reader's OS **and** the host page's dark toggle) on
+`tab_kable`/`tab_md`/`tab_css`/`tab_export`; new `options(tabxplor.theme = "light")` +
+`options(tabxplor.kable_css = TRUE)`. Full record + landmines: `dev/tabxplor_1.4.0_decisions.md` **§38**.
+
+- **Why it was never a CSS job**: the html engine wrote `color:#hex` **inline on every `<td>`**, and an
+  inline style beats any `@media` rule short of `!important`. Cells had to carry classes.
+- **The keystone — classes named by palette SLOT, not by break** (`.p1-.p4`/`.m1-.m4` text,
+  `.o1-.o4`/`.u1-.u4` bg, `+ .g1`/`.g2` html chrome). The stylesheet becomes a pure function of
+  (palette, color_type, theme) → **table-independent**, so: one `tab_css()` styles a whole document
+  (`options(tabxplor.kable_css = FALSE)` + one `results='asis'` chunk); **collisions are impossible**
+  (the planned hash/scope wrapper was dropped as unneeded); ALL measures share one vocabulary; and the
+  class is a pure function of the slot int, so `fmt_color_plan()`+palette leave the cell path.
+  **DELETED**: `html_style_block`, `md_break_class`, `md_slot_class_map`, `md_css_rules`,
+  `md_css_block`, the md `.n` neutral, the legend token's `cls` field, `tab_kable_join(theme=)`.
+- **`render_html_engine()` is now THEME-AGNOSTIC** — markup byte-identical across light/dark/auto
+  (test-locked); the theme lives only in the `<style>`. `tab_md_css()` = thin wrapper on
+  `tab_css(chrome = FALSE)`; its `dark_mode` arg **deleted, not deprecated** (never shipped).
+- **`"auto"` = 4 cascade layers, ORDER is the contract**: light base → `@media` dark → toggle-light →
+  toggle-dark. `@media` only reports the OS; Quarto/Bootstrap/Tailwind toggle a CLASS it cannot see, so
+  the hook layers must follow and out-specify it (ordering test).
+- **Scope**: html engine only. kableExtra bakes its theme at render time (`kable_classic`/
+  `kable_material_dark`) and its HTML is not ours → `"auto"` downgrades with a one-time message. Static
+  backends (`tab_xl`, `tab_plot`) resolve `"auto"` → `"light"` via `resolve_export_opts(allow_auto=)`.
+- **3 latent bugs fixed**: `theme="auto"` crashed (`get_color_style("auto")` → NULL palette; and
+  `theme_cols`' `if_else` silently took the dark branch); the legend would have frozen light (**the
+  discriminator is the ENGINE — "does our stylesheet ship?" — NOT the theme**: `html`+`light`+
+  `css=FALSE`+a doc-level `tab_css("auto")` is real); `currentColor` borders took the CELL's hex.
+- **Accepted**: light mode now owns `background`/`border-color` (symmetric; NEWS'd); dark islands on a
+  light-only page are inherent to `prefers-color-scheme` (auto is opt-in, fg+bg always set together).
+- **jamovi unaffected** (light-only) and its `<style>` support is now EVIDENCED, not assumed — see the
+  Phase 10a retraction above.
+
+#### Original plan (historical intent)
 
 Native dark mode/light mode management for exported tables, specially html tables
 - With kable or another html tables solution, use css exported and applied with the table ?
@@ -1908,11 +1976,31 @@ variables are a dependency version, a libc, and two wrong tests. Suite now green
 **Flagged, not fixed** (pre-existing, unrelated to CI): (a) row labels render with **U+202F narrow
 no-break spaces** instead of ASCII spaces in BOTH html engines ("No answer" -> `No<U+202F>answer`), so
 `rh_cells()`-vs-`levels()` comparisons silently under-test and copy-paste from HTML yields NBSPs —
-looks deliberate (no-wrap labels), worth confirming; (b) **dependency drift**: the dev library was
+looks deliberate (no-wrap labels), worth confirming; (b) ~~**dependency drift**: the dev library was
 behind CRAN on 11/13 key packages incl. `vctrs 0.6.5 -> 0.7.3` and `dplyr 1.1.4 -> 1.2.1` — CI tests
 the package against dependencies the dev machine has never run. Maintainer is installing R 4.6.1 +
-a fresh library; **re-run the suite after that** (this session's fixes are dependency-independent, but
-vctrs 0.7 / dplyr 1.2 are unexercised here).
+a fresh library; **re-run the suite after that**~~ — ✅ **CLOSED 2026-07-15 by the WSL2 migration (Phase C2).**
+
+##### ✅ The dev machine now MATCHES CI — the drift is gone, and the re-run is done
+
+Measured on the new WSL2 Ubuntu 26.04 library (R 4.6.1, 484 packages from P3M `resolute`):
+**`vctrs 0.7.3` · `dplyr 1.2.1` · `kableExtra 1.4.1` · `tibble 3.3.1` · `tidyr 1.3.2` · `pillar 1.11.1`**
+— i.e. **exactly the versions CI had and Windows never ran**. `devtools::check("~/github/tabxplor")` on
+that library: **0 errors / 0 warnings / 0 notes** on R 4.6.1 **and** on R-devel 4.7.0. `check()` sets
+`NOT_CRAN=true`, so the snapshots fired — vctrs 0.7 / dplyr 1.2 are now **exercised**, not assumed.
+
+Two of this section's own findings are settled by that, and both should be read as *retired*:
+
+- **The kableExtra 1.4.0-vs-1.4.1 split no longer exists locally.** The 7 snapshot fails came from the dev
+  box being on 1.4.0 while CI shipped 1.4.1; the dev box **is** on 1.4.1 now, and the decoupling fix (html
+  engine emits its legend `<span>` inline; kableExtra output asserted on invariants, not bytes) is
+  validated on it. ⚠ The upstream `text_spec` `class="TRUE"` regression is still worth reporting.
+- **The Linux-only gettext bug class is now reproducible on the dev machine.** This section records the
+  3 `test-color-legend` fails as *"Linux only; macOS/Windows passed"* — i.e. Windows could not reproduce
+  it and only CI caught it. Verified on WSL2: the `.mo` is installed, `gettext("Shades of blue")` returns
+  **"Nuances de bleu"**, and the file runs **43 pass / 0 skip** — the FR tests actually exercise here
+  rather than passing vacuously. **Linux-only defects now surface before CI.** (The `LANG=C` capability
+  probe still governs: under `R CMD check`, which forces `LANGUAGE=en`, they skip by design.)
 
 #### Last Phase b – simplify main user-facing functions roxygen documentation
 
@@ -2031,6 +2119,10 @@ Fixing the flagged `color="contrib"` + `comp="all"` colour crash surfaced THREE 
 #### Benchmarks (`dev/benchmarks/`)
 
 The performance harness lives in `dev/benchmarks/` (`.Rbuildignore`'d). Per the scope decision, save every phase's before/after runs under `dev/benchmarks/results_1.4.0/`.
+
+⚠ **Every committed baseline below was measured on WINDOWS/NTFS. Dev is now WSL2 Ubuntu on ext4 — do NOT diff a WSL2 run against them.** Affected: `dev/benchmarks/baseline.csv`, `tests/testthat/benchmark_baseline.csv`, `jmvtab_benchmark_baseline.csv`, `jmvtab_big_benchmark_baseline.csv`, plus every absolute timing quoted in the roadmap phases above (`~46s` suite, `225s -> 56s` parallel, the §26 parallel PoC, the Phase 5/7f/9b/10 speedups). The *ratios* within a single run stay meaningful; the absolutes do not cross the platform boundary. Nothing fails — benchmarks are opt-in (`TABXPLOR_BENCH=true`) and `test-benchmark.R` never fails — so this is a **silently misleading comparison**, not a broken test. Re-baseline consciously on ext4 before drawing any conclusion, and note the platform in the file when you do.
+
+⚠ **The 8M fixtures are NOT in WSL2.** Migration Phase A1 ruled `big_df.rds` (161 MB) and `big_pc18_full_15M.rds` (572 MB) *reproducible* and deliberately did not copy them (`.gitignore`: *"Generated benchmark fixtures: large, regenerable, never commit"*; `gen_big_df.R` is tracked). The first `run_bench.R` therefore **regenerates the fixture first** — expect a long, one-off build, not a hang. The 13 loose `dev/benchmarks/results_*.csv` WERE copied; `results_1.4.0/` is tracked.
 
 - `run_bench.R` — heavy 8M-row `tab()` harness: `source("dev/benchmarks/run_bench.R")`. Compares to `dev/benchmarks/baseline.csv`; writes `results_<stamp>.csv` (git-ignored).
 - `run_fused_vs_bytable.R` — fused vs table-by-table arbiter on a 15M fixture (the `.by_table` flag). *(OBSOLETE since Phase 9c removed the tab()-level factor fusion — `.fine` now only reaches `tab_plain` via jmvtab / `tab_counts()`.)*

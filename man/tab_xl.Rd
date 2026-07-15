@@ -24,7 +24,7 @@ tab_xl(
   text_size_headers = 9,
   text_size_subtext = 9,
   hide_near_zero = Inf,
-  theme = c("light", "dark"),
+  theme = NULL,
   color_type = "text",
   html_24_bit = NULL,
   color = TRUE,

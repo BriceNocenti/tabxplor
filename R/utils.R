@@ -93,8 +93,21 @@ NULL
   options("tabxplor.always_add_css_in_tab_kable" = TRUE)
 
   # Phase 10e: tab_kable() render engine. "kableExtra" (default) or "html" (dependency-free,
-  # self-contained inline-CSS <table>; faster; used by the jamovi live display). See R/tab-render-html.R.
+  # self-contained <table> + stylesheet; faster; used by the jamovi live display). See R/tab-render-html.R.
   options("tabxplor.tab_kable_engine" = "kableExtra")
+
+  # Phase 13d: the EXPORT theme -- "light" (default), "dark", or "auto" (follow the reader's colour
+  # scheme: their OS, plus any dark-mode toggle of the host page). "auto" needs a stylesheet, so only
+  # tab_kable(engine = "html") / tab_md() / tab_css() honour it; static backends (tab_xl, tab_plot, the
+  # kableExtra engine) resolve it to "light". See R/tab-css.R.
+  # WARNING: NOT `tabxplor.color_style_theme`, which is a different axis -- that one is the CONSOLE
+  # palette theme, set by set_color_palette() (which auto-detects an RStudio dark theme).
+  options("tabxplor.theme" = "light")
+
+  # Phase 13d: whether tab_kable(engine = "html") inlines the stylesheet with each table (TRUE =
+  # self-contained: Viewer, jamovi, standalone .html). Set FALSE in a many-table .Rmd/.qmd that emits
+  # tab_css() once at the top -- the CSS is table-independent, so one copy styles every table.
+  options("tabxplor.kable_css" = TRUE)
 
   # Phase 8: opt-in parallel build of many tables in ONE tab() call (Suggests-only {mirai}).
   # FALSE = off (default); TRUE = auto workers; an integer = that many daemons. `parallel_min` is

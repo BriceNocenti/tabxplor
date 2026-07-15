@@ -100,7 +100,7 @@ tab_xl <-
            sheets = "auto", n_min = 0, titles, caption = NULL,
            font_text = "DejaVu Sans Condensed", font_num = "DejaVu Sans",
            text_size = 10, text_size_headers = 9, text_size_subtext = 9,
-           hide_near_zero = Inf, theme = c("light", "dark"),
+           hide_near_zero = Inf, theme = NULL,
            color_type = "text", html_24_bit = NULL, color = TRUE,
            transpose = FALSE, conditional_format = FALSE,
            or_numeric = getOption("tabxplor.xl_or_numeric", FALSE),

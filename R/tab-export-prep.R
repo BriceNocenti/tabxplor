@@ -378,12 +378,22 @@ tab_header_runs <- function(label) {
 # fallbacks (killing the copy-pasted `match.arg(theme)` + `if (is.null(color_type)) getOption(...)`
 # preambles). `color = FALSE` renders monochrome AND disables the colour legend (which would otherwise
 # describe colours the cells no longer show). Returns a normalized scalar list.
+#
+# DESIGN: `theme = NULL` -> options("tabxplor.theme") is the package idiom (cf. color_type / engine /
+# popover) and the only way to wire an option through match.arg().
+# WARNING (Phase 13d): "auto" (follow the reader's colour scheme) is a RENDER intent, not a palette --
+# only media that emit a stylesheet can honour it (tab_kable(engine = "html"), tab_md/tab_css). Static
+# backends pass `allow_auto = FALSE` and get "light". Everything downstream of a palette lookup must go
+# through tx_palette_theme() (R/tab-css.R), NOT this value.
 #' @keywords internal
-resolve_export_opts <- function(theme = c("light", "dark"),
+resolve_export_opts <- function(theme = NULL,
                                 color_type = NULL,
                                 color = TRUE, color_legend = TRUE,
-                                transpose = FALSE, caption = NULL) {
-  theme <- match.arg(theme)
+                                transpose = FALSE, caption = NULL,
+                                allow_auto = FALSE) {
+  if (is.null(theme)) theme <- getOption("tabxplor.theme", "light")
+  theme <- match.arg(theme[1], c("light", "dark", "auto"))
+  if (identical(theme, "auto") && !isTRUE(allow_auto)) theme <- "light"
   if (is.null(color_type))  color_type  <- getOption("tabxplor.color_style_type")
   color <- isTRUE(color)
   list(theme = theme, color_type = color_type,
@@ -419,11 +429,19 @@ tab_export_prep <- function(tabs,
   # base `%||%` is R >= 4.4 only; the package supports R >= 4.1, so use explicit is.null().
   if (is.null(color_type))  color_type  <- getOption("tabxplor.color_style_type")
 
+  # Phase 13d: `theme` may be the render intent "auto"; a PALETTE is always light/dark. Resolve once
+  # here so theme_cols (and fmt_col_ann -> fmt_channel_codes -> get_color_style, which reads
+  # theme_cols$theme) can never be handed "auto" -- get_color_style() would build the key "text_auto",
+  # find no palette and error. `meta$theme` below keeps the intent for the renderer.
+  # WARNING: the hex here MUST stay in sync with tx_chrome_hex() (R/tab-css.R), which emits the same
+  # colours as CSS rules for the html engine. Both read tx_chrome_hex(); do not inline literals.
+  pal_theme  <- tx_palette_theme(theme[1])
+  chrome     <- tx_chrome_hex(pal_theme)
   theme_cols <- list(
-    theme = theme[1],
-    text  = dplyr::if_else(theme[1] == "light", "#000000", "#FFFFFF"),
-    grey  = dplyr::if_else(theme[1] == "light", "#9f9f9f", "#707070"), # "#989898", "#717171"
-    grey2 = dplyr::if_else(theme[1] == "light", "#111111", "#EEEEEE")
+    theme = pal_theme,
+    text  = chrome$text,
+    grey  = chrome$grey,
+    grey2 = chrome$grey2
   )
 
   resolved <- tab_resolve_tables(tabs, compact = compact, list_method = list_method,

@@ -2763,7 +2763,7 @@ fmt_channel_codes <- function(x, color_type = "text", theme = "light") {
 #   legend_render_line(tokens, medium)      console crayon / html text_spec / md pandoc span /
 #                                           excel fmt_txt runs / plain.
 # The break-word colours come from the engine's per-side slots (over 1:4, under 5:8) indexed into the
-# 8-hex palette -- the exact path fmt_channel_codes() / md_slot_class_map() use for the cells.
+# 8-hex palette -- the exact path fmt_channel_codes() / tx_slot_class() use for the cells.
 
 # fixed (non-translated) symbols, kept as \uXXXX so R source stays ASCII.
 .lg_ge    <- "\u2265"   # >=
@@ -2773,8 +2773,10 @@ fmt_channel_codes <- function(x, color_type = "text", theme = "light") {
 .lg_beta  <- "\u03b2"   # beta
 
 # a legend token: plain text (c = NA) or a coloured break-word (c = palette slot 1:8).
-.lg_tok  <- function(t) list(t = t, c = NA_integer_, ch = NA_character_, cls = NA_character_)
-.lg_ctok <- function(t, slot, ch, cls) list(t = t, c = as.integer(slot), ch = ch, cls = cls)
+# Phase 13d: the CSS class is not stored -- it is tx_slot_class(ch, c), derived at render time, so a
+# legend break-word and the cells it describes cannot name different classes.
+.lg_tok  <- function(t) list(t = t, c = NA_integer_, ch = NA_character_)
+.lg_ctok <- function(t, slot, ch) list(t = t, c = as.integer(slot), ch = ch)
 
 # resolve the display language: explicit `lang` > options(tabxplor.lang) > R/OS locale; english default.
 #' @keywords internal
@@ -2837,8 +2839,8 @@ legend_break_label <- function(measure, brk, dir, is_std, lang) {
 }
 
 # the coloured break tokens of one channel, split over / under (each a list of tokens). Slot 0 (a
-# scale that skips an intensity via NA) -> a plain, uncoloured token. `cls` = the md pandoc class,
-# md_break_class-consistent with the cells (bg channel -> "bg" prefix), so tab_md_css() colours them.
+# scale that skips an intensity via NA) -> a plain, uncoloured token. The token carries the palette
+# slot; its colour (hex) or class is resolved per medium at render time.
 legend_break_tokens <- function(plan, is_std, is_mean, channel, lang) {
   if (is.null(plan)) return(list(over = list(), under = list()))
   measure <- plan$measure
@@ -2847,9 +2849,7 @@ legend_break_tokens <- function(plan, is_std, is_mean, channel, lang) {
       slot <- slots[l + 1L]
       lab  <- legend_break_label(measure, breaks[l], dir, is_std, lang)
       if (is.na(slot) || slot == 0L) return(.lg_tok(lab))
-      cls <- md_break_class(measure, plan$center, is_mean, breaks[l], dir, l)
-      if (identical(channel, "bg")) cls <- paste0("bg", cls)
-      .lg_ctok(lab, slot, channel, cls)
+      .lg_ctok(lab, slot, channel)
     })
   }
   list(over  = mk_side(plan$over_breaks,  plan$over_slots,  +1L),
@@ -3074,11 +3074,14 @@ legend_tokens_prose <- function(spec, lang, show_names) {
 
 # ---- render a token stream for one medium ----------------------------------------------------------
 # excel -> a list of runs list(text=, color=, bold=); every other medium -> a single string.
-legend_render_line <- function(tokens, medium, theme, color_type, colored) {
+legend_render_line <- function(tokens, medium, theme, color_type, colored, classes = FALSE) {
+  # Phase 13d: `theme` may be the render intent "auto"; a palette is always light/dark. Without this,
+  # get_color_style() builds the key "text_auto", finds no palette and errors on a length-0 vector.
+  pal      <- tx_palette_theme(theme)
   slot_hex <- function(slot, ch)
     toupper(unname(get_color_style("color_code",
                                    type = if (identical(ch, "text")) color_type else "bg",
-                                   theme = theme)[slot]))
+                                   theme = pal)[slot]))
   if (identical(medium, "excel")) {
     return(lapply(tokens, function(tk) {
       if (isTRUE(colored) && !is.na(tk$c) && tk$c > 0L)
@@ -3097,14 +3100,29 @@ legend_render_line <- function(tokens, medium, theme, color_type, colored) {
       # hostage to kableExtra's release schedule -- and it was the last kableExtra call on the
       # home-built "self-contained" html engine's path. Legend tokens are package-generated
       # ("+5", "x2", "1/1.5"), so they need no escaping (uncoloured tokens are emitted raw too).
-      hex <- slot_hex(tk$c, tk$ch)
-      if (identical(tk$ch, "text"))
-        paste0("<span style=\"color:", hex, " !important;\">", tk$t, "</span>")
-      else
-        paste0("<span style=\"background-color:", hex, " !important;border-radius:4px;",
-               "padding-right:4px;padding-left:4px;\">", tk$t, "</span>")
+      # Phase 13d: `classes` = "our stylesheet ships with this output", i.e. the html engine. There the
+      # break-word must carry a CLASS, exactly like the cells it describes -- the legend sits in the
+      # table's own <tfoot>, so inline hex would freeze it while the cells follow a theme toggle. The
+      # discriminator is the ENGINE, not the theme: engine = "html" + theme = "light" + css = FALSE is
+      # a real case (a document that emits tab_css("auto") itself), and there hex would be wrong too.
+      # kableExtra carries no tabxplor stylesheet, so it keeps inline hex. (No `!important` on the
+      # class path: it existed to beat kableExtra's lightable rules, which never match here.)
+      if (isTRUE(classes)) {
+        cls <- tx_slot_class(tk$ch, tk$c)
+        if (identical(tk$ch, "text")) paste0("<span class=\"", cls, "\">", tk$t, "</span>")
+        else paste0("<span class=\"", cls, "\" style=\"border-radius:4px;",
+                    "padding-right:4px;padding-left:4px;\">", tk$t, "</span>")
+      } else {
+        hex <- slot_hex(tk$c, tk$ch)
+        if (identical(tk$ch, "text"))
+          paste0("<span style=\"color:", hex, " !important;\">", tk$t, "</span>")
+        else
+          paste0("<span style=\"background-color:", hex, " !important;border-radius:4px;",
+                 "padding-right:4px;padding-left:4px;\">", tk$t, "</span>")
+      }
     } else if (identical(medium, "md")) {
-      if (is.na(tk$cls) || !nzchar(tk$cls)) tk$t else paste0("[", tk$t, "]{.", tk$cls, "}")
+      cls <- tx_slot_class(tk$ch, tk$c)
+      if (!nzchar(cls)) tk$t else paste0("[", tk$t, "]{.", cls, "}")
     } else tk$t
   }, character(1))
   paste0(parts, collapse = "")
@@ -3169,11 +3187,15 @@ legend_specs <- function(x) {
 #' @param lang NULL (auto from locale) / "en" / "fr".
 #' @param colored Whether to colour the break-words.
 #' @param theme,color_type Palette theme / family (default from options).
+#' @param classes `medium = "html"` only: emit the break-words as CSS slot classes rather than inline
+#'   hex, because a tabxplor stylesheet ships with the output (`tab_kable(engine = "html")`). Then the
+#'   legend follows a theme toggle exactly like the cells it describes. `FALSE` (the kableExtra engine,
+#'   which carries no stylesheet of ours) keeps inline hex.
 #' @return A character vector (or, for excel, a list of run-lists), or NULL when nothing is coloured.
 #' @keywords internal
 tab_color_legend <- function(x, medium = c("console", "html", "md", "excel", "plain"),
                              style = NULL, lang = NULL, colored = TRUE,
-                             theme = NULL, color_type = NULL) {
+                             theme = NULL, color_type = NULL, classes = FALSE) {
   medium <- match.arg(medium)
   if (is.null(style))      style      <- if (identical(medium, "console")) "terse" else "prose"
   if (is.null(theme))      theme      <- getOption("tabxplor.color_style_theme", "light")
@@ -3210,7 +3232,7 @@ tab_color_legend <- function(x, medium = c("console", "html", "md", "excel", "pl
     spec$col_names <- unique(purrr::map_chr(g, "col_var"))
     toks <- if (identical(style, "prose")) legend_tokens_prose(spec, lg, show_names)
             else                           legend_tokens_terse(spec, lg, show_names)
-    legend_render_line(toks, medium, theme, color_type, colored)
+    legend_render_line(toks, medium, theme, color_type, colored, classes = classes)
   })
 
   # enc2utf8 the catalog output (gettext may return the native encoding on some platforms).
