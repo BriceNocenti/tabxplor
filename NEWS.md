@@ -401,6 +401,14 @@
   label-collision guard scanned whole data columns instead of just factor levels, coercing an
   8M-row weight column to strings. Fixed — weighted `tab()` on 8M rows drops from ~30s to ~0.2s,
   and unweighted tables (and their memory use) also improve. Output is unchanged.
+* On Linux, the `lang` argument of `tab_kable()`, `tab_md()`, `tab_xl()`, `tab_plot()` and
+  `tab_export()` silently had no effect: `lang = "fr"` returned an English colour legend. Setting the
+  `LANGUAGE` environment variable is not enough on its own, because glibc caches translated strings;
+  the cache is now flushed around the switch. (Windows and macOS were unaffected, which is why this
+  went unnoticed.) Note that gettext ignores `LANGUAGE` entirely when the locale is `C`, so `lang`
+  cannot translate under `LANG=C`.
+* The colour legend's HTML no longer depends on `kableExtra`, so `tab_kable(engine = "html")` is now
+  genuinely self-contained (as documented) and its output is stable across `kableExtra` versions.
 
 ## Deprecations
 * The combined `color` strings `"diff_ci"`, `"after_ci"` and `"ci"` are soft-deprecated: use

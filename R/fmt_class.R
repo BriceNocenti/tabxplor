@@ -21,11 +21,11 @@ NULL
 
 # binding for global variables not found by R CMD check
 . = NULL
-globalVariables(c(":=", ".SD", ".N"))
+utils::globalVariables(c(":=", ".SD", ".N"))
 # data.table NSE column symbols used in tab_plain()'s aggregation j-expressions:
-globalVariables(c("n", "wn"))
+utils::globalVariables(c("n", "wn"))
 # Phase 3b test engine (R/tab-agg.R) data.table NSE column symbols:
-globalVariables(c("table_id", "row_id", "col_id", "o", "rowtot", "coltot", "ok",
+utils::globalVariables(c("table_id", "row_id", "col_id", "o", "rowtot", "coltot", "ok",
                   "grandtot", "nr", "nc", "e", "contrib", "signed_contrib",
                   "statistic", "df", "min_e", "w", "group_id"))
 
@@ -35,7 +35,7 @@ globalVariables(c("table_id", "row_id", "col_id", "o", "rowtot", "coltot", "ok",
 # local -- correct at run time, but invisible to codetools, which then reports each one as an
 # undefined global. Listing them here is the only way to keep R CMD check quiet short of
 # unpacking ~70 fields by hand in six functions.
-globalVariables(c(
+utils::globalVariables(c(
   "by_table", "chi2", "chi2_num", "cleannames", "col_vars", "col_vars_num", "col_vars_quo",
   "col_vars_text", "color_ci", "color_ctr", "color_diff_OR", "color_num", "comp", "conf_level",
   "data", "digits", "fine_fused", "fine_num", "lv1", "method_cell", "method_diff", "na",
@@ -48,11 +48,11 @@ globalVariables(c(
 # NSE column symbols in dplyr verbs over ordinary data frames:
 #   `var`               -- reg_build()'s group_by(var) on the regression skeleton (R/tab_reg.R)
 #   `name`/`size`/`color` -- tab_xl_plan_one()'s font/style plan tibbles (R/tab_xl.R)
-globalVariables(c("var", "name", "size", "color"))
+utils::globalVariables(c("var", "name", "size", "color"))
 
 # mirai daemon globals (R/tab-parallel.R): `tabx_opts`/`tabx_ship` are list2env()'d into each
 # daemon's .GlobalEnv by tab_pmap(); `.stop` is mirai_map()'s own collection selector.
-globalVariables(c("tabx_opts", "tabx_ship", ".stop"))
+utils::globalVariables(c("tabx_opts", "tabx_ship", ".stop"))
 
 
 # EXPORTED FUNCTIONS TO WORK WITH CLASS FMT ##############################################
@@ -2792,6 +2792,17 @@ legend_resolve_lang <- function(lang = NULL) {
   if (grepl("(^|[^a-z])fr|franc", probe, ignore.case = TRUE)) "fr" else "en"
 }
 
+# Flush gettext's cache of already-translated strings, so a mid-session LANGUAGE change is honoured.
+# glibc caches per (domain, msgid) and only invalidates on setlocale()/bindtextdomain()/textdomain();
+# without this, LANGUAGE changes silently no-op on Linux (they happen to work on Windows/macOS).
+# Binding a throwaway domain is the portable flush (what withr::local_language() does since 3.0.0);
+# the older Sys.setlocale(LC_MESSAGES) trick fails on musl/Alpine (withr#213).
+#' @keywords internal
+flush_gettext_cache <- function() {
+  try(invisible(bindtextdomain("tabxplor_reset", tempdir())), silent = TRUE)
+  invisible(NULL)
+}
+
 # number -> string (trimmed, no padding), FR decimal comma.
 legend_num <- function(v, lang) {
   s <- trimws(formatC(v, format = "fg", digits = 4, drop0trailing = TRUE))
@@ -3080,9 +3091,18 @@ legend_render_line <- function(tokens, medium, theme, color_type, colored) {
     if (identical(medium, "console")) {
       get_color_style("crayon", type = if (identical(tk$ch, "text")) color_type else "bg")[[tk$c]](tk$t)
     } else if (identical(medium, "html")) {
+      # DESIGN: the span is emitted inline rather than via kableExtra::text_spec(). text_spec()'s
+      # byte output is version-unstable (1.4.0 -> 1.4.1 moved the rgba alpha 255 -> 1, dropped the
+      # tile border-radius and leaked `class="TRUE"`), which made every legend-bearing snapshot
+      # hostage to kableExtra's release schedule -- and it was the last kableExtra call on the
+      # home-built "self-contained" html engine's path. Legend tokens are package-generated
+      # ("+5", "x2", "1/1.5"), so they need no escaping (uncoloured tokens are emitted raw too).
       hex <- slot_hex(tk$c, tk$ch)
-      if (identical(tk$ch, "text")) kableExtra::text_spec(tk$t, color = hex)
-      else                          kableExtra::text_spec(tk$t, background = hex)
+      if (identical(tk$ch, "text"))
+        paste0("<span style=\"color:", hex, " !important;\">", tk$t, "</span>")
+      else
+        paste0("<span style=\"background-color:", hex, " !important;border-radius:4px;",
+               "padding-right:4px;padding-left:4px;\">", tk$t, "</span>")
     } else if (identical(medium, "md")) {
       if (is.na(tk$cls) || !nzchar(tk$cls)) tk$t else paste0("[", tk$t, "]{.", tk$cls, "}")
     } else tk$t
@@ -3161,10 +3181,24 @@ tab_color_legend <- function(x, medium = c("console", "html", "md", "excel", "pl
 
   # apply the resolved language for the gettext lookups. LANGUAGE env is the reliable, mid-session,
   # R>=4.1 lever (Sys.setLanguage() needs R>=4.2 and is flaky on Windows); restored on exit.
+  # WARNING: setting LANGUAGE is NOT enough on its own -- glibc caches translated strings, and the
+  # cache is only invalidated by setlocale()/bindtextdomain()/textdomain(). Without a flush the
+  # switch silently no-ops on Linux once the cache is warm (it happens to work on Windows/macOS,
+  # which is why this went unnoticed until CI): `lang = "fr"` returned English. Flush BEFORE (drop
+  # any entry cached under the previous language) and AFTER (don't leak ours to the next caller).
+  # bindtextdomain() is the portable lever -- the older Sys.setlocale() trick fails on musl
+  # (withr#213); this mirrors withr::local_language(), which we can't call (Suggests-only).
+  # NOTE: gettext ignores LANGUAGE altogether when the locale is "C", so this cannot translate
+  # under LANG=C (e.g. inside testthat, which sets LANG=C) -- that is a gettext rule, not a bug here.
   lg  <- legend_resolve_lang(lang)
   old <- Sys.getenv("LANGUAGE", unset = NA_character_)
+  flush_gettext_cache()
   Sys.setenv(LANGUAGE = lg)
-  on.exit(if (is.na(old)) Sys.unsetenv("LANGUAGE") else Sys.setenv(LANGUAGE = old), add = TRUE)
+  flush_gettext_cache()
+  on.exit({
+    if (is.na(old)) Sys.unsetenv("LANGUAGE") else Sys.setenv(LANGUAGE = old)
+    flush_gettext_cache()
+  }, add = TRUE)
 
   specs <- legend_specs(x)
   if (length(specs) == 0) return(NULL)

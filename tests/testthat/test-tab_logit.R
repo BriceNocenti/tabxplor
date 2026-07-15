@@ -187,7 +187,19 @@ test_that("color_signif = 'ignore' colours non-significant odds ratios too", {
   orr <- get_or(col)
   mag <- ifelse(orr >= 1, orr, 1 / orr)
   sig <- !is.na(get_ci_inf(col)) & (get_ci_inf(col) > 1 | get_ci_sup(col) < 1)
-  cand <- which(!is.na(orr) & mag > 1.16 & !sig & !is_refrow(col))   # non-sig but large |OR|
+
+  # The OR colour scale is ASYMMETRIC (since Phase 13a the mean_ratio default is
+  # over = c(1.15, 1.5, 2, 4) but under = c(1.5, 2, 4)), so the first break differs by DIRECTION:
+  # an OR of 1/1.34 is legitimately uncoloured. Derive each side's threshold from the scale in
+  # force rather than hard-coding one (the old `mag > 1.16` assumed symmetry, so it claimed
+  # under-side ORs in (1.16, 1.5) must be coloured -- false, and it only ever passed by inheriting
+  # a symmetric scale leaked by an earlier test file; it failed alone and on macOS). Pin the scale
+  # so the test is self-sufficient and order-independent (a prerequisite for parallel test runs).
+  withr::local_options(list(tabxplor.color_breaks = default_color_scales()))
+  sc     <- getOption("tabxplor.color_breaks")$mean_ratio
+  first  <- function(b) if (length(b)) min(b) else Inf   # empty side = that direction never colours
+  brk    <- ifelse(orr >= 1, first(sc$over$breaks), first(sc$under$breaks))
+  cand <- which(!is.na(orr) & mag > brk & !sig & !is_refrow(col))    # non-sig but past its break
   skip_if(length(cand) == 0)
   expect_true(all(txt[cand] != 0))                                   # coloured under "ignore"
 })

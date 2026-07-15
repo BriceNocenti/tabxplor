@@ -142,6 +142,28 @@ testthat::test_that("French catalog translates the prose when the .mo is availab
   # guarded: only when the compiled catalog is bound (skip on a fresh checkout before update_pkg_po).
   po <- system.file("po", "fr", "LC_MESSAGES", "R-tabxplor.mo", package = "tabxplor")
   skip_if(!nzchar(po) || !file.exists(po), "R-tabxplor fr catalog not compiled")
+  # Whether a mid-session LANGUAGE switch can translate AT ALL is a property of the environment,
+  # not of tabxplor: R must be built with NLS, and GNU gettext ignores LANGUAGE entirely when the
+  # locale is "C" -- which is the case under R CMD check on Linux (check.R forces LANGUAGE=en, and
+  # testthat's local_reproducible_output() sets LANG/LANGUAGE to "C" for every test_that() block).
+  # That combination is why this test failed on the 3 Linux jobs and passed on macOS/Windows, whose
+  # libintl honours LANGUAGE regardless. So PROBE the capability with a raw gettext() call rather
+  # than guessing from LANG (a plain LANG check would skip on Windows/macOS too, throwing away the
+  # only platforms that can actually exercise the translation). The probe deliberately uses the
+  # SAME cache-flush production uses, so it fails only where translation is genuinely impossible.
+  skip_if_not(capabilities("NLS"), "R built without NLS")
+  can_translate <- function() {
+    old <- Sys.getenv("LANGUAGE", unset = NA_character_)
+    on.exit({
+      if (is.na(old)) Sys.unsetenv("LANGUAGE") else Sys.setenv(LANGUAGE = old)
+      tabxplor:::flush_gettext_cache()
+    }, add = TRUE)
+    tabxplor:::flush_gettext_cache()
+    Sys.setenv(LANGUAGE = "fr")
+    tabxplor:::flush_gettext_cache()
+    !identical(gettext("Shades of blue", domain = "R-tabxplor"), "Shades of blue")
+  }
+  skip_if_not(can_translate(), "gettext cannot honour LANGUAGE here (locale is C)")
   tb <- tab(gss, marital, race, pct = "row", color = "diff",
             color_signif = "grey_non_signif", ci = "diff")
   l  <- suppressWarnings(tab_color_legend(tb, medium = "plain", style = "prose", lang = "fr"))

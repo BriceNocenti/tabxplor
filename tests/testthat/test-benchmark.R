@@ -10,9 +10,8 @@
 # See: helper-benchmark.R, dev/make_benchmark_baseline.R, CLAUDE.md > 1.4.0 roadmap.
 
 testthat::test_that("small tab() pipeline timings (informational, never fails)", {
-  # skip_on_cran() keeps timings off the CRAN farm (variance/time limits) but STILL runs under a
-  # local devtools::check() and devtools::test(), where NOT_CRAN is set. Remove it to run on CRAN too.
   testthat::skip_on_cran()
+  skip_unless_benchmarks()   # opt-in: TABXPLOR_BENCH=true (see helper-benchmark.R for why)
 
   n   <- nrow(forcats::gss_cat)
   cur <- benchmark_run("small_gss_cat", n, benchmark_small_ops(), iterations = 3L)
@@ -34,6 +33,7 @@ testthat::test_that("jmvtab live-cache timings (informational, never fails)", {
   # partyid x (race, marital, relig), pct = "row", color = "diff" on full gss_cat. Currently dominated
   # by the tab_kable render (jmv_render_kable) -- this benchmark tracks that as it is optimised.
   testthat::skip_on_cran()
+  skip_unless_benchmarks()   # opt-in: TABXPLOR_BENCH=true (see helper-benchmark.R for why)
 
   n   <- nrow(forcats::gss_cat)
   cur <- benchmark_run("jmvtab_gss_cat", n, benchmark_jmvtab_ops(), iterations = 3L)
@@ -55,6 +55,7 @@ testthat::test_that("jmvtab BIG table-of-tables timings (informational, never fa
   # pct = "row", color = "diff". Warm change ~2s in the Jamovi UI today (improvable). Its own frozen
   # baseline (jmvtab_big_benchmark_baseline.csv) so the small benchmark stays a stable reference.
   testthat::skip_on_cran()
+  skip_unless_benchmarks()   # opt-in: TABXPLOR_BENCH=true (see helper-benchmark.R for why)
 
   n   <- nrow(forcats::gss_cat)
   cur <- benchmark_run("jmvtab_big_gss_cat", n, benchmark_jmvtab_big_ops(), iterations = 3L)

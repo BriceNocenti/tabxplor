@@ -7,6 +7,27 @@
 #   - `bench` is Suggests-only: benchmark_measure() degrades to system.time() without it.
 #   - Timings are informational; nothing here should ever fail a test.
 
+# Gate for the informational benchmark blocks: OPT-IN, off by default.
+#
+# Why not skip_on_cran() alone (what these used before): NOT_CRAN is set to "true" by BOTH
+# devtools::test() and devtools::check() (its literal default is env_vars = c(NOT_CRAN = "true")),
+# and by r-lib/actions. So skip_on_cran() only ever skipped on the CRAN farm -- the timings still
+# ran on every local test run and every CI job, costing ~46s (21% of the suite) to print numbers
+# nobody reads mid-development, and asserting nothing. They are a signal to READ deliberately, so
+# they should be requested deliberately. Two further reasons this has to be an explicit gate:
+#   - under Config/testthat/parallel, stdout from test files is DISCARDED, so the printed
+#     comparison -- the block's entire output -- would silently vanish;
+#   - timings from a parallel run are meaningless anyway (workers contend for cores).
+# Run them with:  TABXPLOR_BENCH=true (and serial, e.g. TESTTHAT_PARALLEL=false)
+#   Sys.setenv(TABXPLOR_BENCH = "true"); devtools::test(filter = "benchmark")
+# The heavy 8M-row harness stays where it was: dev/benchmarks/run_bench.R.
+skip_unless_benchmarks <- function() {
+  testthat::skip_if_not(
+    isTRUE(as.logical(Sys.getenv("TABXPLOR_BENCH", "false"))),
+    "informational benchmarks are opt-in (set TABXPLOR_BENCH=true)"
+  )
+}
+
 # Representative small operations on forcats::gss_cat (deterministic).
 benchmark_small_ops <- function() {
   gss <- forcats::gss_cat

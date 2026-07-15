@@ -29,7 +29,14 @@ rh_titles <- function(h) {                       # non-empty tooltip contents
   sort(unique(ti[ti != 'title=""']))
 }
 
-# === SECTION: kableExtra engine (default) -- structure snapshot ==========================
+# === SECTION: kableExtra engine (default) -- version-robust structure assertions ==========
+# WARNING: do NOT snapshot this engine's bytes. Its cells come from kableExtra::cell_spec(), whose
+# output is version-unstable -- 1.4.0 -> 1.4.1 moved the rgba alpha (255 -> 1), dropped leading
+# padding and (text_spec) leaked a stray `class="TRUE"`. Byte-snapshotting it made CI red on all 5
+# platforms for a change tabxplor did not make, and put kableExtra's release schedule in charge of
+# our test suite. We do not own that HTML, so we assert the parts we DO own -- the cells, the
+# colouring, the tooltips, the geometry -- which survived 1.4.1 untouched. The home-built engine's
+# HTML *is* ours, so it keeps its byte snapshot below.
 
 testthat::test_that("tab_kable kableExtra engine structure is stable", {
   testthat::skip_if_not_installed("kableExtra")
@@ -37,10 +44,27 @@ testthat::test_that("tab_kable kableExtra engine structure is stable", {
   row_diff <- tab(gss, marital, race, pct = "row", color = "diff")
   chi2     <- suppressWarnings(tab(gss, marital, race, pct = "row", chi2 = TRUE))
 
-  testthat::expect_snapshot(cat(rh_strip_style(tab_kable(counts))))
-  testthat::expect_snapshot(cat(rh_strip_style(tab_kable(row_diff))))
-  testthat::expect_snapshot(cat(rh_strip_style(tab_kable(row_diff, theme = "dark"))))
-  testthat::expect_snapshot(cat(rh_strip_style(suppressWarnings(tab_kable(chi2)))))
+  # geometry: exactly one <tbody>, one <tr> per row. chi2 gains ONE extra row -- the p-value row is
+  # materialised at display (Phase 10i-B), so it is not in nrow(tb).
+  for (tb in list(counts, row_diff)) {
+    h <- rh_strip_style(tab_kable(tb))
+    testthat::expect_match(h, "<table")
+    body <- rh_tbody(h)
+    testthat::expect_length(body, 1L)
+    testthat::expect_equal(lengths(regmatches(body, gregexpr("<tr", body)))[[1]], nrow(tb))
+  }
+  bc <- rh_tbody(rh_strip_style(suppressWarnings(tab_kable(chi2))))
+  testthat::expect_equal(lengths(regmatches(bc, gregexpr("<tr", bc)))[[1]], nrow(chi2) + 1L)
+
+  # colouring reaches the cells, and only when asked for
+  hd <- rh_strip_style(tab_kable(row_diff))
+  hm <- rh_strip_style(tab_kable(row_diff, color = FALSE))
+  testthat::expect_match(hd, "color:")
+  testthat::expect_false(identical(hd, hm))
+  # theme is honoured
+  testthat::expect_false(identical(rh_strip_style(tab_kable(row_diff, theme = "dark")), hd))
+  # tooltips carry the underlying fields
+  testthat::expect_true(any(grepl("^title=\"diff:", rh_titles(hd))))
 })
 
 # === SECTION: home-built html engine -- structure snapshot + self-contained ==============

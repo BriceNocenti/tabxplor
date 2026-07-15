@@ -1848,6 +1848,72 @@ Reuse patterns from jmvtab primarily. Customise .js to grey out options that are
 
 See below for known bugs yet to fix.
 
+##### CI green-up (2026-07-15) — 3 causes, none R-version-related
+
+First GitHub Actions run of the 1.4.0 branch: **all 5 jobs red**. Diagnosis (each reproduced locally,
+NOT guessed): devel/release/oldrel-1 fail **identically**, so R version is not a variable — the
+variables are a dependency version, a libc, and two wrong tests. Suite now green **in parallel, 225s
+-> 56s**.
+
+1. **kableExtra 1.4.0 (local) vs 1.4.1 (CRAN/CI)** — 7 `test-render-html` snapshot fails on ALL
+   platforms. `text_spec`/`cell_spec` HTML changed (rgba alpha `255`->`1`, leading padding dropped,
+   tile `border-radius` dropped, and `text_spec` leaks a stray `class="TRUE"` — an upstream
+   regression, its `background_as_tile` default; **worth reporting to kableExtra**). Fix = **decouple,
+   not regenerate**: the legend `<span>` is now emitted INLINE in `legend_render_line()`
+   (R/fmt_class.R) instead of via `kableExtra::text_spec()` — which was ALSO the last kableExtra call
+   on the "self-contained" html engine's path (its test claimed self-containment; it was false). The
+   kableExtra-engine byte snapshot was **replaced by version-robust assertions** (geometry / colour
+   on-off / theme / tooltips): we do not own that HTML, so we must not lock its bytes. Proven: html
+   engine output is now **byte-identical under 1.4.0 and 1.4.1**, so its snapshots regenerate safely
+   on either. `_snaps/render-html.md` regenerated (legend line only; all data rows unchanged).
+2. **glibc gettext cache — a REAL user-facing bug** (3 `test-color-legend` fails, **Linux only**;
+   macOS/Windows passed). `tab_color_legend()` set `LANGUAGE` without flushing, so on Linux
+   `lang = "fr"` silently returned **English** for every exporter. glibc caches translated strings and
+   only invalidates on `setlocale`/`bindtextdomain`/`textdomain`. Fix: new `flush_gettext_cache()`
+   (`bindtextdomain("reset", tempdir())` — the portable lever; the older `Sys.setlocale` trick fails
+   on musl, withr#213) called **before and after** the switch + on exit, mirroring
+   `withr::local_language()` (Suggests-only, so inlined). **Constraint that cannot be fixed**: gettext
+   IGNORES `LANGUAGE` when the locale is `C`, and `R CMD check` forces `LANGUAGE=en` while testthat's
+   `local_reproducible_output()` sets `LANG`/`LANGUAGE=C` — so the test **probes the capability with a
+   raw `gettext()` call** and skips only where translation is genuinely impossible (keeps coverage on
+   macOS/Windows; a blunt `LANG=C` skip would have killed it everywhere).
+3. **`test-tab_logit.R:192` was simply wrong** (macOS only in-suite; **failed in isolation
+   everywhere** — the "colour-breaks-leak" note above it). It asserted every non-sig OR with
+   `mag > 1.16` is coloured, but OR colouring reads the **`mean_ratio`** scale, which Phase 13a made
+   **asymmetric** (`over = 1.15,1.5,2,4` / `under = 1.5,2,4`): an OR of `1/1.34` is legitimately
+   uncoloured. It only ever passed by inheriting a symmetric scale from an earlier file. Now derives
+   each side's threshold from the scale in force + pins it with `withr::local_options()`.
+
+**Test-suite policy changes** (grounded in testthat/r-pkgs/CRAN primary sources):
+- **`Config/testthat/parallel: true`** + `Config/testthat/start-first` (slowest files first).
+  **225s -> 56s.** Prerequisite was #3: parallel workers run disjoint file subsets, so any test that
+  passes only via another file's leaked state starts failing. Enabling it immediately exposed a
+  **latent load bug**: 6 unqualified `globalVariables()` calls in `R/fmt_class.R` + `utils` declared
+  nowhere — `load_all()` crashed in the (reduced-default) subprocess. Now `utils::globalVariables()`,
+  `utils` added to Imports.
+- **Benchmarks are opt-in** (`skip_unless_benchmarks()` in helper-benchmark.R, gate
+  `TABXPLOR_BENCH=true`). `skip_on_cran()` did NOT hold them back: `NOT_CRAN="true"` is set by
+  `devtools::test()`, by `devtools::check()` (its literal default) AND by r-lib/actions — so ~46s
+  (21% of the suite) ran on every local run and every CI job to print numbers nobody reads, asserting
+  nothing. Also required: under parallel, **stdout from test files is discarded**, so their printed
+  comparison would silently vanish, and parallel timings are meaningless anyway.
+- **Snapshots stay shipped.** `expect_snapshot()` defaults to `cran = FALSE`, so testthat skips them
+  on CRAN — shipping costs nothing at submission and can never fail a CRAN check. `.Rbuildignore`ing
+  them would also remove them from CI (which checks the built tarball), i.e. would have hidden bug #2.
+  The rule to hold: **snapshot only output we own**; assert invariants on anyone else's.
+- **No CRAN 10-minute test limit exists** (the folklore "10" is `_R_CHECK_TIMINGS_`, a 10-**second**
+  *reporting* threshold; the real `_R_CHECK_*_TIMEOUT_` vars default to `0` = no limit). Policy says
+  only "as little CPU time as possible". The actionable target is r-pkgs': **tests under ~1 min**.
+
+**Flagged, not fixed** (pre-existing, unrelated to CI): (a) row labels render with **U+202F narrow
+no-break spaces** instead of ASCII spaces in BOTH html engines ("No answer" -> `No<U+202F>answer`), so
+`rh_cells()`-vs-`levels()` comparisons silently under-test and copy-paste from HTML yields NBSPs —
+looks deliberate (no-wrap labels), worth confirming; (b) **dependency drift**: the dev library was
+behind CRAN on 11/13 key packages incl. `vctrs 0.6.5 -> 0.7.3` and `dplyr 1.1.4 -> 1.2.1` — CI tests
+the package against dependencies the dev machine has never run. Maintainer is installing R 4.6.1 +
+a fresh library; **re-run the suite after that** (this session's fixes are dependency-independent, but
+vctrs 0.7 / dplyr 1.2 are unexercised here).
+
 #### Last Phase b – simplify main user-facing functions roxygen documentation
 
 Simplify tab() and other main functions documentation, to make it more easily understandable and more helpful to students that are not statistical experts and may have difficulties with programming.
@@ -1880,6 +1946,10 @@ In-code these are tagged for grep: `# KNOWN-BUG:` (bugs below), `# FIXME:` / `# 
 - FIXED (Phase 1a): `fmt()` public constructor cast `totcol` into `refcol` (the `refcol` argument was silently ignored). Now casts `refcol`. Low impact (refcol is normally set internally).
 - FIXED (Phase 7g-iii, golden-locked): two latent `ref` bugs surfaced by the reference picker. (1) `diff_index()` matched a level label as a REGEX, so a metacharacter label (e.g. `"$25000 or more"`) silently mismatched (the reported "picking the 2nd row_var does nothing" — `rincome` has `$` levels) and a substring label multi-matched — now EXACT-match-first, then regex. (2) `resolve_ref_vector()`'s `length(ref)==1` early return recycled even a NAMED length-1 ref, so `c(race = "Black")` leaked to every col_var — now only an UNNAMED length-1 recycles; a named one is name-matched. Both byte-identical on existing goldens (the goldens' refs are `first`/`tot`/non-substring labels).
 - FIXED (Phase 6e, golden-locked; hardened Phase 7d-i): `tab_num(..., <tab_vars>, ci="cell")` used to error ("some columns don't belong to the data.table: [tab_var]") in the `tot="no"` grand-total-only grouping-set / `na="keep"` reorder path. 6e made the grand total a length-1 list so `num_rollup()` keeps every tab_var present; 7d-i added a defensive `intersect(tab_vars, names(tabs_tot))` guard at the reorder + an `expect_no_error` regression in `test-num-fuse-parity.R`. Locked by golden `n_ci_tabvars` / `n_ci_tabvars_all`, both `comp` modes.
+- FIXED (2026-07-15, CI green-up): `tab_color_legend()`'s `lang` argument silently did nothing on **Linux** (`lang="fr"` returned English) — `Sys.setenv(LANGUAGE=)` alone can't switch gettext once glibc has cached a lookup. Now flushed via `flush_gettext_cache()` before/after/on-exit. Caught only because the snapshot tests SHIP and run on CI's Linux jobs. Cannot work under `LANG=C` (gettext ignores `LANGUAGE` there) — a documented gettext rule, not a package bug.
+- FIXED (2026-07-15, CI green-up): 6 unqualified `globalVariables()` calls in `R/fmt_class.R` with `utils` declared nowhere — `pkgload::load_all()` crashed ("could not find function globalVariables") in any process without `utils` attached, e.g. a testthat parallel worker. Now `utils::globalVariables()` + `utils` in Imports. Latent since forever; surfaced by turning on `Config/testthat/parallel`.
+- FIXED (2026-07-15, CI green-up): `test-tab_logit.R` "colour_signif='ignore'" asserted a symmetric OR break (`mag > 1.16`) against the **asymmetric** `mean_ratio` scale (`under` starts at 1.5 since Phase 13a) — wrong test; failed in isolation everywhere and on macOS CI, passing elsewhere only via a leaked global scale. Now derives the threshold per direction from the scale in force and pins it.
+- **NOT a bug, but confirm the intent**: row labels are rendered with **U+202F narrow no-break spaces** in place of ASCII spaces by BOTH html engines (`"No answer"` -> `No<U+202F>answer`). Consistent across engines so it looks deliberate (keeps labels from wrapping), but it means HTML copy-paste yields NBSPs and any test comparing rendered cells to `levels()` silently matches nothing.
 - `set_color_style(custom_palette=)` (`tab_classes.R` ~L3120): length check requires 10 but the message says 11 and 11 names (`pos1..neg5, ratio`) are applied — the `ratio` slot ends up valueless, so custom palettes are broken for the ratio color. Fix by accepting length 11.
 - **FIXED (Phase 7e)**: `tab(data, >=2 row_vars, >=2 col_vars)` used to error "pct can't be recycled" for ANY `pct` (the multi×multi tables jmvtab drives). `tab()` recycles `pct` to a per-col_var vector (`pct = c(rep(pct, length(col_var)), ...)`), but `pct_vect` only broadcasts a per-col_var vector when there is exactly ONE row_var (branch B); with ≥2 row_vars it falls to the `else` stop. Fix: add a branch `is.character(pct) & length(pct) == length(col_vars)` → `rep(list(pct), length(row_vars))`. Pre-existing (reproduces pre-7d-ii on `git stash`); low impact (multi×multi + output_list); fix with the recycling code.
 - `tab()` errors on a `data.table` **input** (works on tibble/data.frame). `tab(as.data.table(gss), marital, race)` → `tab_num()` "Selections can't have missing values" from `tidyselect::eval_select(col_vars, data)` (`tab.R` ~L3203) — under a data.table input the numeric-col_var index path (`as.character(col_vars)[col_vars_num]`, `tab.R` ~L1304) yields an NA selection. Low impact (users pass tibbles/data.frames; `tab()` does its own `setDT` on a narrowed copy internally). Discovered in the Phase 6b PoC (§26). Fix belongs with the Phase 2/6 aggregate-core / col_var-classification code, not a separate pass.
