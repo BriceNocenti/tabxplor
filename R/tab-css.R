@@ -70,6 +70,13 @@ tx_slot_class <- function(channel = c("text", "bg"), slot) {
 # that ships a dark TOGGLE translates the preference into a class/attribute via JS, which a media query
 # cannot see. Emitting both directions lets an explicit toggle win over the OS either way.
 # WARNING: keep these in ONE place -- they are the only part of the design that can rot upstream.
+#
+# KNOWN GAP (verified in a browser 2026-07-16, deliberately NOT fixed): the light list has no Tailwind
+# entry, because Tailwind's class strategy expresses light as the ABSENCE of `html.dark` -- there is no
+# `html.light` to match. So on a Tailwind class-strategy page with a dark OS, the page is light and our
+# table follows the OS into dark: a dark island. Every other framework here sets an explicit light
+# class/attribute, so it only affects Tailwind. Fixing it needs a signal that "a class strategy is in
+# force" (a `color-scheme` probe, or an opt-out of the @media layer) -- see decisions 38.
 tx_dark_hooks  <- c("body.quarto-dark",  "[data-bs-theme=dark]",  "[data-theme=dark]", "html.dark")
 tx_light_hooks <- c("body.quarto-light", "[data-bs-theme=light]", "[data-theme=light]")
 

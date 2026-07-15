@@ -3341,5 +3341,13 @@ Locked by an ordering test, because no assertion on hex would catch a reorder.
 - **Dark islands**: a dark-OS reader of a light-only page gets a dark table on white. Inherent to
   `prefers-color-scheme`; mitigated by `auto` being opt-in and by fg+bg always being set together.
   Escape hatch if ever unacceptable: drop the `@media` layer → toggle-only.
+  **Browser-verified 2026-07-16** (maintainer, all hooks): OS toggle, `body.quarto-*`, `[data-bs-theme]`
+  and `[data-theme]` all flip correctly, both directions. The ONE gap, seen and consciously parked:
+  **Tailwind's class strategy**, where light is the ABSENCE of `html.dark` and there is no `html.light`
+  to hook — so a dark OS + a light Tailwind page leaves the table dark. Narrow (every other framework
+  sets an explicit light class/attribute) and it is the dark-island case, not a new one. A fix needs a
+  signal that a class strategy is in force — e.g. probing the computed `color-scheme`, or letting a
+  document opt out of the `@media` layer (`tab_css(os = FALSE)`), which would make `auto` toggle-only
+  for that page. Not built: it trades a real default (follow the reader's OS) for one framework.
 - **jamovi** is unaffected (light-only, one layer) and *depends* on `<style>` working there — see the
   §10a retraction above, settled from the dev-console capture.

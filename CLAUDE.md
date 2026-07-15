@@ -282,13 +282,48 @@ devtools::test("~/github/tabxplor")                  # whole suite
 devtools::test("~/github/tabxplor", filter = "tab")  # one/few files: regex on test-<name>.R
 ```
 
+⚠ **Two test/tooling steps need `dangerouslyDisableSandbox` here — root-caused 2026-07-16 from the bwrap
+command line, do not re-diagnose:**
+
+- **`test-parallel-parity.R` fails sandboxed** (`fail=1 err=7`, ~0.7 s) with
+  `nanonext::.dispatcher_start: 16 | Permission denied`. Cause: bwrap runs **`--unshare-net`**, and
+  mirai's dispatcher needs sockets. **Not a regression** — it passes 11/11 unsandboxed. Any full-suite
+  run inside the sandbox reports these 8 as failures; ignore them or run that file unsandboxed.
+- **`devtools::document()` fails sandboxed** with *"cannot open file 'NAMESPACE': Read-only file
+  system"*. Cause: bwrap `--ro-bind`s `NAMESPACE` and `man/` specifically (the rest of the repo is
+  writable, which is why snapshot writes succeed). Run it unsandboxed.
+
 ⚠ Dev now runs **inside WSL2 Ubuntu 26.04** (`~/github/tabxplor` on ext4), not Windows. The old `d:/Statistiques/github/tabxplor` paths are dead — the Windows checkout survives **build-only** for Windows `.jmo` (see *Jamovi module development*). The `~46s` / `225s -> 56s` suite timings recorded here were measured on Windows/NTFS and have **not** been re-measured on ext4 — treat them as order-of-magnitude only.
 
-⚠ **The suite is now MINUTES, not `56s` — that figure predates Phase 12.** The four `tab_reg` files fit real
-models (`glm`/`svyglm`/`multinom`/`polr`/`marginaleffects`) and dominate the wall-clock. Give a full run a
-generous timeout, and **pass `TESTTHAT_CPUS=8`** (the `Config/testthat/parallel: true` default picks far
-fewer). ⚠ A detached run (`setsid nohup … &`) is **killed when the Bash tool's shell exits** — use the
-tool's own `run_in_background`, or filter to the files you touched (`filter = "render-html|tab_md"`).
+**Measured on ext4 / WSL2, 2026-07-16 (per-file, serial): total `359 s`, 2357 passing; slowest
+`test-tab_reg.R` `33.6 s`, then `counts-parity` / `calculations` / `color-legend` ~23-25 s, most files
+1-13 s.** Under `Config/testthat/parallel: true` the wall clock is roughly the SLOWEST FILE, so the
+recorded `56 s` is consistent and still right. **A multi-minute run means something else is wrong — look
+for orphans (below) before blaming the code.** Pass `TESTTHAT_CPUS=8`: `parallel: true` alone picks only
+~2 processes here.
+
+⛔ **NEVER kill a test run by killing its parent — you orphan the workers, and they do NOT stop.**
+Measured 2026-07-16: two `TaskStop`'d suites left 6 R processes (2 `--file=…` parents + 4
+`--no-readline --slave` testthat/mirai workers) alive for **52 minutes at ~860 % CPU** (one had burned
+174 min of CPU time). They silently starve every later run — a suite that "takes 15 minutes" is usually
+this, not the code. Symptoms + rules:
+
+- **Diagnose AND kill unsandboxed — bwrap runs `--unshare-pid --proc /proc`**, so each Bash tool call
+  gets its OWN PID namespace (`ps` shows the shell as PID 1). Two consequences: `ps aux` **cannot see
+  the orphans**, and a *sandboxed* `kill <host-pid>` cannot kill them — worse, a low PID like `34`
+  usually DOES exist inside the namespace, so it would kill **the wrong process**. Both `ps` and `kill`
+  must run unsandboxed. Identify yours by the parent's
+  `--file=/tmp/claude-…/<session-id>/scratchpad/…` — never by name alone (Positron runs its own R, and
+  killing that is destructive).
+- **Never `pkill -f <pattern>`.** Measured: `pkill -f testthat` matched and killed the calling shell,
+  and `pkill -f t9.R` is what orphaned the workers (parent SIGKILLed -> exit 137, children reparented
+  and kept running). Read `ps` first, then `kill` explicit PIDs.
+- **Prefer not to create them**: run the suite in the foreground with a long timeout, or
+  `filter =` to the files you touched. `setsid nohup … &` is ALSO killed when the tool's shell exits.
+- **Never pipe a long run through `tail`/`head`** — they buffer until EOF, so the output file stays
+  empty and the run looks hung. Write the incremental log to a file and read that.
+- ⚠ Killing PIDs needs the maintainer: the auto-mode classifier denies it (rightly — this is a shared
+  dev box). Surface the `ps` evidence and hand over the exact `kill -9 <pids>`.
 
 **Test files:**
 
@@ -1882,6 +1917,11 @@ Excel formattings :
   `theme_cols`' `if_else` silently took the dark branch); the legend would have frozen light (**the
   discriminator is the ENGINE — "does our stylesheet ship?" — NOT the theme**: `html`+`light`+
   `css=FALSE`+a doc-level `tab_css("auto")` is real); `currentColor` borders took the CELL's hex.
+- **Browser-verified** (maintainer, 2026-07-16): OS toggle + `body.quarto-*` + `[data-bs-theme]` +
+  `[data-theme]` all flip both ways. ONE known gap, consciously parked: **Tailwind's class strategy**
+  (light = the ABSENCE of `html.dark`, so there is nothing to hook) leaves a dark island on a dark OS.
+  Narrow — every other framework sets an explicit light class. Detail + the two possible fixes:
+  decisions §38 + the hook block in `R/tab-css.R`.
 - **Accepted**: light mode now owns `background`/`border-color` (symmetric; NEWS'd); dark islands on a
   light-only page are inherent to `prefers-color-scheme` (auto is opt-in, fg+bg always set together).
 - **jamovi unaffected** (light-only) and its `<style>` support is now EVIDENCED, not assumed — see the
