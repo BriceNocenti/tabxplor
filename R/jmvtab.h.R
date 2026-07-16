@@ -41,7 +41,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             digits = "0",
             n_min = 0,
             export_format = "excel",
-            exportExcel = NULL,
+            exportExcel = FALSE,
             path = "~/Documents/Table",
             xl_replace = FALSE, ...) {
 
@@ -708,7 +708,7 @@ jmvtab <- function(
     digits = "0",
     n_min = 0,
     export_format = "excel",
-    exportExcel,
+    exportExcel = FALSE,
     path = "~/Documents/Table",
     xl_replace = FALSE) {
 

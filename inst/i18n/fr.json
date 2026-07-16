@@ -4,8 +4,8 @@
         "messages": {
             "": {
                 "domain": "messages",
-                "plural_forms": "nplurals=2; plural=(n != 1);",
-                "lang": "fr"
+                "lang": "fr",
+                "plural_forms": "nplurals=2; plural=(n != 1);"
             },
             "<b>col_vars = <i>(column variables)</i></b>": [
                 "<b>col_vars = <i>(variables de colonne)</i></b>"
@@ -266,6 +266,5 @@
                 "wrap_rows = <i>(nb lettres avant saut de ligne)</i>"
             ]
         }
-    },
-    "code": "fr"
+    }
 }

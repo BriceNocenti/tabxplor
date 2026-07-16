@@ -41,7 +41,7 @@ jmvtab(
   digits = "0",
   n_min = 0,
   export_format = "excel",
-  exportExcel,
+  exportExcel = FALSE,
   path = "~/Documents/Table",
   xl_replace = FALSE
 )

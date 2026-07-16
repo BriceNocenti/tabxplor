@@ -344,18 +344,28 @@ this, not the code. Symptoms + rules:
 
 tabxplor currently use jamovi `2.6.44.0` (solid). Version 1.4.0 will also be tested on jamovi current "solid" version `2.7.37` afterwards (Phase 7i confirmed 2.7.37 ✓).
 
-⛔ **jamovi is NOT installed in this WSL2 distro yet — it is Phase C3 of `~/github/.WSL2_sandbox_migration/ROADMAP.md`.** Until C3 lands, **every `.h.R` regeneration is blocked** — and there are several outstanding (Phases 7a, 7e, 7g-i, 7g-ii, 7g-iii, 7h all end with an "OPEN — maintainer step: regenerate `jmvtab.h.R`"). They cannot be done from here, and they cannot be batched away: `jmvtools::install()` needs a **running jamovi app** (it fails headlessly with *"jamovi could not be accessed"*).
+✅ **jamovi IS installed in this WSL2 distro (migration Phase C3, 2026-07-16): flatpak `org.jamovi.jamovi` 2.7.36, bundled R 4.5.0.** Launch it with **`jamovi`** (the `~/.local/bin/jamovi` wrapper — never bare `flatpak run`, see below). The module builds with `jmvtools::install(home = "flatpak")` in ~2 min, and Crosstables is verified running on real data.
+
+✅ **The six "OPEN — maintainer step: regenerate `jmvtab.h.R`" items (Phases 7a, 7e, 7g-i, 7g-ii, 7g-iii, 7h) are CLOSED** — one `jmvtools::prepare()` covered all of them, and the compiled **`uijs` blob** means those UI changes are live in a running app for the first time.
+
+⚠ **`prepare()` proved the hand-edited `.h.R` had a latent bug**, so do not hand-edit it again. `R/jmvtab.h.R` was hand-mirrored to the YAML across ~7 commits; the compiler reproduced 778 of its 780 lines but corrected `exportExcel` (`type: Action`) from `NULL` → `FALSE` **and gave it a default it lacked** — without which `tabxplor::jmvtab()` called from R throws. The never-edit rule earned its keep.
+
+⚠⚠ **`ELECTRON_RUN_AS_NODE` — do not debug jamovi without knowing this.** Claude Code/Positron export `ELECTRON_RUN_AS_NODE=1`; flatpak passes it into the sandbox and jamovi's Electron runs as **plain node** → **exit 0, no window, no error**, and `jmvtools::install()` dies `"bad option: --install"` (rc=9). `flatpak run --unset-env=` is NOT enough (zypak re-spawns children via the host); only `env -u` on the host works — which is what the `jamovi` wrapper does. In R: `Sys.unsetenv("ELECTRON_RUN_AS_NODE")` before `jmvtools::install()`. ⚠ `jmvtools::check()` passes regardless — it never reaches Electron — so a green `check()` proves nothing here.
+
+⚠ **WSLg is in COPY MODE** (known WSL 2.7.x bug [microsoft/WSL#40618](https://github.com/microsoft/WSL/issues/40618)): windows can be slow or render blank (taskbar entry + penguin icon, `[WARN:COPY MODE]` in the title). **Not a jamovi problem** — plain `xmessage` fails identically. One-time fix, persists across reboots: `sudo mkdir -p /mnt/shared_memory && sudo mount -t tmpfs tmpfs /mnt/shared_memory`. ⚠ The bug is *unstable* — it sometimes renders fine without the mount, then regresses; a working window is not evidence the mount is unneeded.
 
 ⚠ **There are now TWO build paths, and they are not interchangeable — `.jmo` bundles are platform-specific** (migration Phase A1):
 
 | Target | jamovi | Checkout | Recipe |
 |---|---|---|---|
-| **Linux `.jmo`** (WSL, the dev path) | flatpak `org.jamovi.jamovi`, installed by C3 | `~/github/tabxplor` — **authoritative for source** | `jmvtools::install(home = 'flatpak')` (setup doc §7.4; the SDK `org.freedesktop.Sdk//24.08` is REQUIRED — `flatpak run --devel` is how the compiler reaches R) |
+| **Linux `.jmo`** (WSL, the dev path) | flatpak `org.jamovi.jamovi` **2.7.36 ✅ installed (C3)** | `~/github/tabxplor` — **authoritative for source** | `jmvtools::install(home = 'flatpak')` (setup doc §7.4; the SDK `org.freedesktop.Sdk//24.08` is REQUIRED — `flatpak run --devel` is how the compiler reaches R) |
 | **Windows `.jmo`** (release only) | Windows jamovi, **kept forever** | `D:\Statistiques\github\tabxplor` — **build-only: pull, build, never edit** | `options(jamovi_home='C:/Program Files/jamovi 2.6.44.0'); devtools::load_all(); jmvtools::install(); devtools::load_all()` |
 
 **A Linux jamovi cannot produce a Windows bundle**, so the Windows checkout survives *even if C3 fully succeeds* — this is not a C3-failure fallback. The rule that matters: **never edit tabxplor in both places.** Edit in WSL, pull on Windows, build there.
 
-⚠ **C3 pins `jmvtools` to a 2.7.x build**: GitHub main is `28.3` (tracking jamovi's 2.7 → 28 renumbering) and a newer bundled compiler can emit a `jms` version 2.7.36 refuses. Check `packageVersion("jmvtools")`. Whether Flathub still serves the **2.6.44** commit is C3's literal first command (`flatpak remote-info --log flathub org.jamovi.jamovi`) — 2.6.44 compatibility is verified **on Windows only**.
+✅ **`jmvtools` is pinned to 2.7.26** (C3). ⚠ Never `install.packages("jmvtools", repos="https://repo.jamovi.org")` — that index serves 2.7.26 **and** 28.0-28.3, so R takes **28.3**, whose newer compiler can emit a `jms` version 2.7.36 refuses. Reinstall with the explicit tarball: `install.packages("https://repo.jamovi.org/src/contrib/jmvtools_2.7.26.tar.gz", repos = NULL, type = "source")` (install `node` from that repo first — `repos = NULL` resolves no deps).
+
+⛔ **The 2.6.44 flatpak is GONE** (C3): Flathub retains only 4 commits, back to 2.7.29 (2026-05-12); 2.6.44 was built 2025-03-06 and is pruned. **2.6-solid compatibility is verified on Windows only** — via the build-only Windows checkout, which is kept forever regardless.
 
 To know the real structure of the final .html and .js, check at this live capture done from dev console (for a basic table) :
 - `dev/jamovi/dev_console_live_capture/Jamovi_tabxplor_1_3_1_basic_table.html` : the live html from tabxplor 1.3.1 jamovi module
@@ -774,7 +784,7 @@ Prerequisite fix — **`tab()` completed as the true `tab_many()` replacement**:
 
 jmvtab baseline wired to **`tab()`** (not `tab_many(compact=TRUE)`): `.a.yaml`/`.u.yaml` replace the old `color` list with **`color`** (no/auto/diff/ratio/contrib/OR) + a new **`color_signif`** list (ignore/grey_non_signif/color_all_signif); `na` gains drop_all/common_base; `lvs`→`levels`; expert **`stars`/`method_cell`/`method_diff`** added in the collapsed CI box. `.b.R` fully rewritten (dead code stripped): maps `color` "no"→`FALSE` / "auto"→`TRUE` / else the measure string, forces `ci="diff"` when a `color_signif` policy is set with `ci="auto"`, and keeps the historical Excel export (redesign is 7f). `.js` stripped to the one live handler. Backend `tab()` wiring validated on 12 option combos (colors, levels, na, contrib/OR, methods).
 
-**OPEN — maintainer step**: `jmvtab.h.R` (generated from `.a.yaml`) could NOT be regenerated headlessly (`jmvtools::prepare()` → "jamovi could not be accessed"; needs the running jamovi app). ⛔ **Now additionally blocked on migration Phase C3** — jamovi is not installed in WSL2 yet; see *Jamovi module development* for the two build paths (WSL/flatpak vs the Windows build-only checkout).
+✅ **CLOSED 2026-07-16 (migration C3)**: `jmvtab.h.R` regenerated + module built + installed on the WSL flatpak jamovi 2.7.36. See *Jamovi module development*.
 
 #### Phase 7b — Draw a detailed map of required computations and interdependence between arguments
 
@@ -890,7 +900,7 @@ The main improvement would be not to rely on `tab()` like now, but to drive the 
 
 New **`R/jmvtab-cache.R`**: the content-addressed multi-tier live cache. The module **reuses `tab()` end to end** (its color spec, `na` translation, totals, recycling) with the cache injected through a mutable `cache_env` — two new internal args `.cache` / `.defer_level_merge` on `tab()`/`tab_build()`; `tab_aggregate()`'s one-line hook delegates to `jmv_cache_aggregate()` (cache-injected tier-1 build + tier-2 keys), `tab_build()` calls `jmv_cache_store_tests()` after transform. **No math fork** — `jmv_cache_aggregate()` is byte-identical to `tab(cleannames = FALSE)`. Enablers: `tab_transform()` generalised so `.fine` is a per-pair named list (`fine_for_pair()`, dispatches on `is.data.table` → batch path unchanged) + a `cached_test` hook on `tab_apply_tests()` (`set_test()` added); `tab_prepare_pop()` `defer_level_merge` (full levels for a cacheable aggregate + test; the level-drop moves to `tab_assemble`). Store: tiers 1 (per-pair counts / per-row_var moment sums) + 2 (chi2/ANOVA) only — fmt is O(cells), recomputed; atomic-vector lists (never a live `data.table`), schema-versioned, per-entry byte ceiling + byte-bounded LRU; hosted on a hidden 0-size **Image** result element's `$state` (only Images persist `$state`). Data identity = **per-column** fingerprint (adding a variable reuses other pairs; opt-in `options(tabxplor.jmv_full_hash=)`). `jmvtab.b.R` is now a thin orchestrator over the engine-free `jmvtab_build()`. **Fixed the pre-existing `pct`-recycling BLOCKER** (multi×multi tables). Two documented divergences from `tab()`: cleannames-at-display (colliding levels stay separate) + `levels="first"` tests full levels. Locked by `test-jmvtab-cache.R` (41 tests); full suite green (1191). **Refinements vs the design doc**: tier-2 key-of-keys; contrib never uses the test cache; exact-grain keying (grain rollup + per-measure numeric caching deferred). Detail: `dev/tabxplor_jmvtab_cache_design.md` §8 STATUS.
 
-**OPEN — maintainer step**: regenerate `jmvtab.h.R` from the updated `jmvtab.r.yaml` (adds the hidden `cache_state` Image) in the running jamovi app (`jmvtools::prepare()` can't run headlessly), then live-verify.
+✅ **CLOSED 2026-07-16 (migration C3)**: regenerated + built + installed; the hidden `cache_state` Image is in the compiled module.
 
 
 #### Phase 7f — Optimizing the O(cells) fmt build
@@ -1011,7 +1021,7 @@ The picker was **rebuilt as a Material `CustomControl` `refPickerCtrl`** (siblin
 
 **Backend (per-col_var col% references + fixes):** `tab()` now supports **one reference column per col_var under `pct="col"`** — a `ref` NAMED BY COL_VAR (impossible under the old single-ref collapse). Mechanism: `ref_vect` (per row_var × per col_var, the reference analogue of `pct_vect`) threaded into the factor leaf `tab_plain()` only; the col% math (`tab_apply_reference`) is unchanged (one col_var per leaf, so the leaf IS the per-col_var group). `resolve_ref_vector()` gained a `what=` arg (col_var warnings) and now name-matches a NAMED length-1 ref (fixed a latent recycle bug). `diff_index()` **exact-match-first** (then regex) — a chosen level label is matched literally, fixing metacharacter labels (e.g. `"$25000 or more"` — the reported "2nd row_var does nothing" bug) and substring collisions, while the stored `ref` attribute stays human-readable. `detect_refcol()` (fmt_class.R) makes `tab_ci()`'s diff-CI reference column follow the marked `refcol` (byte-identical for first/tot). Golden-locked: `f_col_ref_lvl/multi/partial/ci/or`; full suite green (1327), all existing goldens byte-identical.
 
-**OPEN — maintainer step**: regenerate `jmvtab.h.R` from `.a.yaml` in the running jamovi app (`jmvtools::install()` can't run headlessly), then live-verify the picker. The field-level instant re-ref (`jmv_tab3_reref`) is now **ON** (Phase 9b-7): a ref change re-refs the cached carrier instead of rebuilding (~3–4.5× faster, byte-identical).
+✅ **CLOSED 2026-07-16 (migration C3)**: regenerated + built + installed; the picker is compiled into the `uijs` blob. ⚠ **Live-verify still owed** — C3 confirmed Crosstables runs on real data, but did not exercise the picker specifically. The field-level instant re-ref (`jmv_tab3_reref`) is **ON** (Phase 9b-7): a ref change re-refs the cached carrier instead of rebuilding (~3–4.5× faster, byte-identical).
 
 
 #### Phase 7h — Jamovi UI js consistency and user-friendliness
@@ -1037,7 +1047,7 @@ jmvtab jamovi UI needs a **full .js customisation** of it’s buttons and other 
 
 **Accepted limitations** (documented): `color="diff"`/`"ratio"` stay pct-greyed on a pure-numeric (means-only) table — benign, `color="auto"` already colours means; type-aware selectability would need imperative `.js` reading `measureType` (follow-up). `anova` enabled on `chi2` regardless of a numeric col_var (harmless no-op).
 
-Suite green (375 blocks, 0 fail), no golden regen (UI-only + behaviour-preserving digits cast). **OPEN — maintainer step**: regenerate `jmvtab.h.R` from the new `digits` List in the running jamovi app (`jmvtools::install()` can't run headless), then live-verify each greying rule + the digits dropdown + subtext width.
+Suite green (375 blocks, 0 fail), no golden regen (UI-only + behaviour-preserving digits cast). ✅ **CLOSED 2026-07-16 (migration C3)**: regenerated + built + installed. ⚠ **Live-verify still owed** — each greying rule, the digits dropdown and the subtext width have not been exercised in the running app.
 
 
 #### Phase 7i — test compatibility with Jamovi last solid version 2.7.37 (done)
@@ -2068,6 +2078,26 @@ Implement a full pkgdown documentation.
 ### Reference — bugs, benchmarks, perf
 
 #### Discovered bugs
+
+- **NEW (2026-07-16, seen live in jamovi on WSL; COSMETIC, pre-existing — not a migration issue).**
+  A live `jmvtab` session prints, 3×, while the user adds the analysis and picks variables:
+  *"! tabxplor formatting and colors skipped: the table has no tabxplor_fmt columns (not a
+  tabxplor table). ℹ Rendering the plain table instead."* — the Phase 10c `tab_render_vars()`
+  degrade path ([R/tab.R:2494](R/tab.R#L2494)). **The real tables are unaffected** (colours render
+  correctly); this fires only on the transient degenerate shapes jamovi passes mid-selection.
+  Reproduced (scripts in the C3 session; `jmvtab_build()` + `tab_kable(engine="html")`):
+  + **`data` with 1 column, no vars selected** → emits the message **even though the built table
+    HAS an fmt column** (`fmt=1/2`) ⇒ the degrade is reached on some *other* table inside
+    `tab_kable`'s prep than the one returned, and **the message is misleading, not just noisy**.
+    Start at `tab_export_prep()` / `tab_materialize_extras()`, not at `tab_render_vars()`.
+  + **0-row `data` + named vars** → hard **ERROR** `"data is of length 0 (possibly after filter or
+    na = 'drop_all')"` from `tab_plain()` via `purrr::pmap()` ([R/tab.R:1814](R/tab.R#L1814)).
+    A 0-row table should degrade gracefully, not abort.
+  + NOT the cause (each tested and cleared): the tier-3 **carrier** cache (all of fresh build /
+    exact-tuple hit / digits re-apply / colour re-apply / `saveRDS` round-trip keep `fmt=4/5`);
+    empty `row_vars`/`col_vars` against full data; `jmvtab_build()` itself.
+  Fix in whichever phase next touches the exporter prep. Add the degenerate shapes to
+  `test-edge-cases.R`.
 
 In-code these are tagged for grep: `# KNOWN-BUG:` (bugs below), `# FIXME:` / `# FIXME(clarify):` / `# FIXME(future):` (suspect logic or future work, several tied to the Phase 5 color work), `# OBSOLETE:` (dead-code banners, e.g. the stale `tab_xl` duplicate). Fix each bug inside the phase that rewrites the relevant code, not as a separate pass.
 

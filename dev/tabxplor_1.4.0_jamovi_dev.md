@@ -18,6 +18,17 @@ It is built on three evidence bases, in increasing order of authority:
    our own `.u.yaml`/`.js`, and exactly how our table lands in the DOM. **Sections 5–7 are
    derived from it and supersede the docs where they disagree.** See §17 for the file index.
 
+⚠ **Updated 2026-07-16 (migration Phase C3): the dev environment moved to WSL2.** The build path
+is now the **flatpak jamovi 2.7.36** (bundled R **4.5.0**) in Ubuntu 26.04, driven by **jmvtools
+2.7.26**; Windows jamovi survives **build-only**, for Windows `.jmo` and as the sole 2.6-solid
+test target (the 2.6.44 flatpak commit has been pruned from Flathub). §3 is rewritten for this.
+
+⚠ **The live capture in §5–§7 is from Windows jamovi 2.6.44 and has NOT been re-captured on
+2.7.36.** It remains the authority on runtime *architecture* (the iframe/coms/results model is
+stable across the series), but treat **version-specific details as provisional** — notably the
+`rVersion` stamp (§5.2) and the uicompiler enums (§6.8). Ask the maintainer for a fresh capture
+when a 2.7-specific answer is needed.
+
 The three target features:
 
 1. a per-variable **reference-level** picker (the reference of each `row_var` under
@@ -91,8 +102,9 @@ Pain points (all addressed below):
 - **Excel export is fragile** — ActionButton + JS reset + hand-rolled `dir.exists()` +
   default `"S:/Documents"` + failed `FilePicker`/`%USERPROFILE%` experiments in comments →
   §14 (solved by `SummaryTables::resolveExportPath()`).
-- **Two confirmed footguns from the live capture** (§5.2): the module runs in Jamovi's
-  bundled R (4.4.1), not your R 4.5.1 — the root of the `~`/path quirks; and the compiler
+- **Two confirmed footguns from the live capture** (§5.2): the module runs in jamovi's
+  **bundled** R, not your system R — the root of the `~`/path quirks (4.4.1 in the captured
+  Windows 2.6.44; **4.5.0 on the WSL flatpak 2.7.36**; system R is now 4.6.1) — and the compiler
   ships JS comments verbatim, so the 295 commented lines in `jmvtab.js` are downloaded by
   every user. Clean `jmvtab.js` before release.
 
@@ -100,20 +112,33 @@ Pain points (all addressed below):
 
 ## 3. Toolchain and the dev loop
 
-### 3.1 Install (Windows 11)
+### 3.1 Install
 
-1. **Jamovi desktop app** (from `jamovi.org`) — the install target and the R engine host.
-   Build against the same Jamovi series you run (a `.jmo` is tied to OS + arch + series).
-2. **R** + **Rtools** matching it (to build the `.jmo`).
-3. **`node`** and **`jmvtools`** from the Jamovi repo:
+⚠ **A `.jmo` is tied to OS + arch + jamovi series**, so there are **two build paths and they are not interchangeable** (migration A1/C3). Edit source in **one place only** — WSL.
+
+| Target | jamovi | Checkout | Build |
+|---|---|---|---|
+| **Linux `.jmo`** — the dev path | flatpak `org.jamovi.jamovi` **2.7.36**, bundled R **4.5.0** | `~/github/tabxplor` — **authoritative for source** | `jmvtools::install(home = 'flatpak')` |
+| **Windows `.jmo`** — release only | Windows jamovi (**kept forever**; the only 2.6-solid path) | `D:\Statistiques\github\tabxplor` — **pull, build, never edit** | `options(jamovi_home='C:/Program Files/jamovi 2.6.44.0'); jmvtools::install()` |
+
+**Prerequisites** (WSL side, done by migration C3 — see `~/github/.WSL2_sandbox_migration/` §7):
+
+1. **jamovi** — `flatpak --user install flathub org.jamovi.jamovi` **plus `org.freedesktop.Sdk//24.08`**, which is *required*: `flatpak run --devel` swaps Platform→SDK and that is how the compiler reaches jamovi's R.
+2. **R** — any; see §5.2, the module is built by *jamovi's* bundled R, not yours. (**No Rtools** on Linux; the SDK's g++ compiles.)
+3. **`node` + `jmvtools`** — ⚠ **pin jmvtools**; the obvious command installs the wrong version:
 
    ```r
-   install.packages('node', repos = 'https://repo.jamovi.org')
-   install.packages('jmvtools',
-                    repos = c('https://repo.jamovi.org', 'https://cran.r-project.org'))
+   install.packages('node', repos = 'https://repo.jamovi.org')          # -> 1.3
+   # NOT install.packages('jmvtools', repos='https://repo.jamovi.org') -- that index serves
+   # 2.7.26 AND 28.0-28.3, so R takes 28.3, whose compiler can emit a `jms` 2.7.36 refuses.
+   install.packages('https://repo.jamovi.org/src/contrib/jmvtools_2.7.26.tar.gz',
+                    repos = NULL, type = 'source')                      # repos=NULL resolves NO deps
+   packageVersion('jmvtools')                                           # MUST be 2.7.26
    ```
 
    `jmvtools` vendors the Node `jamovi-compiler` (`jmc`); `node` supplies the runtime.
+
+⚠⚠ **`ELECTRON_RUN_AS_NODE` will waste your day if you don't know it.** Positron/Claude Code export it; flatpak passes it into the sandbox; jamovi's Electron then runs as **plain node** → **exit 0, no window, no error**, and `jmvtools::install()` dies `"bad option: --install"` (rc=9). `flatpak run --unset-env=` is *not* enough (zypak re-spawns children via the host). Use `env -u` on the host — the **`jamovi`** wrapper (`~/.local/bin/jamovi`) does it, plus DPI scaling. In R: `Sys.unsetenv("ELECTRON_RUN_AS_NODE")` before `install()`. ⚠ `check()` passes regardless (it never reaches Electron), so a green `check()` proves nothing.
 
 ### 3.2 `jmvtools` functions
 
@@ -122,9 +147,18 @@ Pain points (all addressed below):
 `.jmo` · `check()` verify Jamovi is found · `i18nCreate()/i18nUpdate()` catalogs ·
 `version()`.
 
-### 3.3 Windows: point jmvtools at Jamovi
+### 3.3 Point jmvtools at jamovi
 
-Auto-detect fails on Windows — set the home path:
+**WSL / flatpak (the dev path)** — pass `home='flatpak'`; `jmc` then shells out to
+`flatpak run org.jamovi.jamovi` with **no hardcoded paths** (`installer.js`), so a `--user`
+install is found fine:
+
+```r
+jmvtools::check(home = 'flatpak')     # -> "jamovi 2.7.36 found at /usr/bin/flatpak"
+jmvtools::install(home = 'flatpak')
+```
+
+**Windows (release builds only)** — auto-detect fails, so set the home path:
 
 ```r
 options(jamovi_home = 'C:/Program Files/jamovi/bin')   # adjust to your install
@@ -140,8 +174,24 @@ edit yaml/js/b.R ─▶ jmvtools::prepare()  (fast, regenerate .h.R + UI blob)
                  ─▶ jmvtools::install()   (build .jmo, install) ─▶ reload analysis in Jamovi
 ```
 
-For complex modules: `prepare()` then `devtools::document()` twice, then `install()`. UI not
-updating → close Jamovi fully, reinstall (Windows `.jmo` file locks).
+For complex modules: `prepare()` then `devtools::document()` twice, then `install()` — the
+`.h.R` carries the roxygen `@param` blocks that feed `man/jmvtab.Rd`. UI not updating → close
+jamovi fully, reinstall (this was a Windows `.jmo` file-lock issue; unverified on flatpak).
+
+⚠ **Never hand-edit `R/jmvtab.h.R`, even to keep it in sync with the YAML.** It was hand-mirrored
+across ~7 phases; when C3 finally ran `prepare()`, the compiler reproduced **778 of 780 lines** but
+corrected `exportExcel` (`type: Action`) from `NULL` → `FALSE` **and supplied a default it lacked** —
+without which `tabxplor::jmvtab()` called from R throws at the `exportExcel = exportExcel`
+pass-through. The mirror was *nearly* right and still shipped a latent bug, on the newest option.
+
+**Build cost, measured (C3, WSL flatpak): `install()` ≈ 2 min.** jamovi's bundled R serves
+**binaries** for most of tabxplor's dep tree; only a few (e.g. `openxlsx2`) compile, via the SDK's
+g++ 14.3.0. Verify the install by mechanism, not by the "Module installed successfully" message:
+
+```bash
+grep -E '^version:|^rVersion:' ~/.jamovi/modules/tabxplor/jamovi.yaml   # rVersion == jamovi --r-version
+ls -l ~/.jamovi/modules/tabxplor/ui/jmvtab.js                           # the compiled uijs blob
+```
 
 ### 3.5 `jamovi-compiler` (`jmc`)
 
@@ -251,9 +301,12 @@ parsed by js-yaml, yielding `{options, uijs, i18n, languages}`. In the captured
 
 Two load-bearing facts:
 
-- **The module runs in Jamovi's BUNDLED R (`rVersion: 4.4.1-x64`), not your system R 4.5.1.**
-  This is the root cause of `path.expand("~")` → Documents, and of package-version drift.
-  Always test inside Jamovi, and use `Sys.getenv("USERPROFILE")` for paths (§14).
+- **The module runs in Jamovi's BUNDLED R, not your system R.** The stamp is read from the target
+  jamovi at build time, so it is self-consistent by construction — and it **differs per build path**:
+  **`4.5.0-x64`** on the WSL flatpak (jamovi 2.7.36) vs **`4.4.1-x64`** in the captured Windows
+  2.6.44 (below). Your system R (4.6.1 in WSL) is irrelevant to module compatibility. This is the
+  root cause of `path.expand("~")` → Documents, and of package-version drift. Always test inside
+  jamovi, and use `Sys.getenv("USERPROFILE")` for paths (§14).
 - **The compiler embeds `.js` comments verbatim** — the whole commented-out ANOVA example +
   failed export experiments (**295 `//` lines**) ship inside the served `uijs` blob to every
   user. Delete dead/commented code from `jamovi/js/jmvtab.js` before release.
@@ -516,7 +569,10 @@ mirroring the resolver (`tab_resolve_settings()` + the leaves). Two mechanisms, 
   in the enable path). Consequence: `color="diff"`/`"ratio"` stay pct-greyed on a pure-means table;
   `color="auto"` (always enabled) covers colouring means, so no user is blocked. A follow-up could move
   those enables to imperative `.js` reading the cached `measureType`.
-- **TextBox `width:` has no `auto` in the 2.6.44 COMPILER.** The uicompiler schema enum is only
+- **TextBox `width:` has no `auto` in the 2.6.44 COMPILER.** ⚠ Measured against the **2.6.44**
+  bundled compiler; the WSL path now builds with **jmvtools 2.7.26**, and whether its uicompiler
+  widened this enum is **untested** — re-check before assuming the workaround is still needed.
+  The uicompiler schema enum is only
   `small | normal | large | largest` (the runtime bundle lists `auto`/`smallest`, but they fail
   `jmvtools::prepare()`/`install()` with `<opt>.width is not one of enum values`). `largest` caps at
   200px. To make a text box fill its (stretchFactor) cell, clear the fixed-width `silky-option-<size>-text`
