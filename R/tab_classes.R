@@ -3494,8 +3494,12 @@ build_palettes <- function() {
 #' \code{background_colors} without these makes them follow it unchanged (readable only if your fills
 #' already are). There is no dark counterpart: an Excel legend cell is on a white page whatever the
 #' theme, and the dark fills read there as-is.
-#' @param theme \code{"light"} or \code{"dark"} for the console / exports; defaults to the current
-#' setting (RStudio theme when detectable, else \code{"light"}).
+#' @param theme \code{"light"} or \code{"dark"} for the console / exports, or \code{"auto"} to detect
+#' the console's colour scheme now (the RStudio theme, the Positron theme, or \code{COLORFGBG};
+#' \code{"light"} when it cannot be told). Defaults to the current setting. Detection is best-effort
+#' and resolved ONCE: call again after changing your editor's theme. (This is the console only ---
+#' \code{\link{tab_css}} / \code{\link{tab_kable}} take their own \code{theme = "auto"}, which follows
+#' the reader's browser.)
 #' @return Sets the internal color palettes (invisibly) and the option
 #' \code{"tabxplor.color_style_theme"}.
 #' @export
@@ -3536,15 +3540,18 @@ set_color_palette <- function(text_colors = NULL, text_colors_neg = NULL,
     e$base$bg_legend_colors_neg <- unname(background_colors_neg)
 
   options("tabxplor.color_style_type" = getOption("tabxplor.color_style_type", "text"))
+  # Phase 14g: `theme = "auto"` detects the console's colour scheme (tx_detect_theme(): RStudio's
+  # getThemeInfo(), Positron's cached settings, COLORFGBG; anything unresolved -> "light"). The
+  # RESOLVED value is stored, so no per-print cost -- and so a mid-session theme switch needs another
+  # set_color_palette(theme = "auto"). NULL keeps the current setting, detecting only if there is none
+  # (what .onLoad does).
   if (is.null(theme)) {
     if (is.null(getOption("tabxplor.color_style_theme"))) {
-      is_dark <- isTRUE(Sys.getenv("RSTUDIO") == "1" && rlang::is_interactive()) &&
-        isTRUE(tryCatch(rstudioapi::getThemeInfo()$dark, error = function(e) FALSE))
-      options("tabxplor.color_style_theme" = if (is_dark) "dark" else "light")
+      options("tabxplor.color_style_theme" = tx_detect_theme())
     }
   } else {
-    stopifnot(length(theme) == 1L, theme %in% c("dark", "light"))
-    options("tabxplor.color_style_theme" = theme)
+    stopifnot(length(theme) == 1L, theme %in% c("dark", "light", "auto"))
+    options("tabxplor.color_style_theme" = if (identical(theme, "auto")) tx_detect_theme() else theme)
   }
 
   build_palettes()

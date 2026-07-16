@@ -23,3 +23,10 @@ options(lifecycle_verbosity = "quiet")
 # mirai daemon pool, for exactly this reason.
 # Also the CRAN-friendly setting (checks are limited to 2 cores).
 if (requireNamespace("data.table", quietly = TRUE)) data.table::setDTthreads(1L)
+
+# Pin the console colour theme (Phase 14g). tabxplor now DETECTS it at load, from the editor: on a dark
+# Positron the default becomes "dark", so any test reading the option would compare a dark palette
+# against a light expectation -- passing on CI (which has no editor -> "light") and failing on the
+# maintainer's machine, or the reverse. That divergence is precisely what the 2026-07-15 CI green-up
+# spent a day on. The suite must not depend on where it runs.
+options(tabxplor.color_style_theme = "light")

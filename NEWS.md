@@ -27,6 +27,13 @@
   hugs background colours around the text with rounded corners rather than flooding the cell, and
   highlights the hovered row. `options(tabxplor.tab_kable_engine = "kableExtra")` (or
   `tab_kable(engine = "kableExtra")`) restores the previous renderer.
+* **The console follows your editor's theme.** `set_color_palette(theme = "auto")` detects whether
+  your console is light or dark and picks the matching palette; it is also what tabxplor does on load,
+  so a dark editor gets dark-suited colours with no setting. It reads RStudio's theme, **Positron's**
+  theme (which no R package has been able to detect --- `rstudioapi::getThemeInfo()` is still
+  unsupported there), or the terminal's `COLORFGBG`. Best-effort by nature: anything it cannot
+  establish stays `"light"`, and it never warns. Resolved once, so call it again after switching
+  themes. (Exports are unaffected: their `theme = "auto"` follows the *reader's* browser.)
 * **Dark mode.** `theme` gains **`"auto"`** on `tab_kable()` / `tab_md()` / `tab_css()` /
   `tab_export()`: the table follows the **reader's** colour scheme -- their operating system, and any
   dark-mode toggle of the page it is embedded in (Quarto, Bootstrap 5.3, Tailwind) -- flipping live as

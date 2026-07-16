@@ -123,8 +123,11 @@ testthat::test_that("a runs-medium background break-word uses the darker bg_lege
   # WHY: a run carries a font colour but no fill, and the background palette (L 0.85-0.97) is
   # invisible drawn as text on Excel's white sheet.
   tb   <- tab(gss, marital, race, pct = "row", color = c("diff", "ratio"))
+  # theme pinned: Phase 14g makes the DEFAULT console theme detected from the editor, so an
+  # option-driven legend would use the dark palette on a dark machine and never match `*_pal` below.
   hexf <- function(medium) {
-    l <- suppressWarnings(tab_color_legend(tb, medium = medium, style = "prose", lang = "en"))
+    l <- suppressWarnings(tab_color_legend(tb, medium = medium, style = "prose", lang = "en",
+                                           theme = "light"))
     if (identical(medium, "runs")) {
       f <- unlist(l, recursive = FALSE)
       toupper(stats::na.omit(vapply(f, function(r) r$color, character(1))))

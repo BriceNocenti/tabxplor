@@ -2540,7 +2540,39 @@ changed on purpose — see below); no `.rds`, no `render-html.md`.
   is "markdown rendered to a styled html table", and md→html would give a worse table; the real ask
   (md renders well in Quarto) is delivered by the validity + fenced-div CSS fixes above.
 
-#### Phase 14g — console theme / IDE detection
+#### Phase 14g — console theme / IDE detection (DONE — 2026-07-17)
+
+**It works, end to end, on your machine.** New **`R/tab-theme-detect.R`**: `tx_detect_theme()` →
+`"light"`/`"dark"`, wired into `set_color_palette(theme = "auto")` (new value) and `.onLoad`. Verified
+live here: `workbench.colorTheme = "Starless Monokai Atom"` → `izumii.starless-monokai/package.json` →
+`uiTheme: vs-dark` → **dark** ✓. Full suite **FAIL 0 | PASS 2897**; `test-theme-detect.R` (41) drives
+every probe from **injected fixtures**, so it never depends on the host IDE.
+
+- **Your live test is NOT needed — don't bother running it.** The roadmap flagged
+  `.ps.ui.evaluateWhenClause` as a confirmation step you'd have to try by hand. The History-cache chain
+  resolves the theme on its own, so the private ark RPC (`# TODO: Unexport these methods`) is not used
+  at all. One fewer thing depending on an unexported API.
+- **A roadmap measurement was stale, in our favour**: `POSITRON=1` and `TERM_PROGRAM=vscode` ARE set in
+  the Positron **integrated terminal** (recorded as empty → *"terminal-side detection is dead here"*).
+  Since that is where you actually run R, detection works there — and it is right on the merits, the
+  terminal's background being the editor theme's.
+- All five traps encoded: `isAvailable()` lies in ark (gate on `hasFun()` + `RSTUDIO=="1"`); `$dark` can
+  be NA (`isTRUE`); `readRStudioPreference()` always returns your default (unused); the theme NAME is
+  never a signal (exact-name → `uiTheme`); `autoDetectColorScheme` → bail (colorTheme is then stale).
+- **PRIVACY honoured**: two keys pulled by regex, the file never parsed (it is JSONC anyway), so the
+  `claudeQuota.sessionKey` beside them never enters R. Test-locked with a fake secret in the fixture.
+- **Never warns** (not just never errors): `readLines()` warns *before* it errors, so `tryCatch(error=)`
+  let it through — `file.exists()` first. `expect_silent`-locked.
+- **Cost**: the extension scan is one level deep — recursive cost **70 ms at every load**, now **9 ms**,
+  and only inside Positron.
+- ⚠ **`setup.R` now pins `tabxplor.color_style_theme = "light"`**: detection makes the default
+  machine-dependent, which is exactly the CI-passes/local-fails divergence the 2026-07-15 green-up
+  spent a day on. Two colour-legend tests that read the option were pinned too.
+- **Not done** (deliberate): re-detecting at PRINT. The resolved value is stored, so switching your
+  editor theme mid-session needs another `set_color_palette(theme = "auto")` — per-print detection
+  would mean an rstudioapi RPC / a file scan on every table.
+
+##### Original research (historical intent)
 
 **The research paid off — there IS a workaround, and it works on your actual setup.** Upstream is a
 dead end ([posit-dev/positron#2986](https://github.com/posit-dev/positron/issues/2986), *"Support
@@ -2631,6 +2663,74 @@ Also here: `tx_ide()` (rstudio/positron/vscode/terminal/jamovi), used to re-chec
 `"auto"` ([tab_classes.R:3435](R/tab_classes.R#L3435) currently `stopifnot(theme %in% c("dark","light"))`).
 Tests must not depend on the host IDE: unit-test the name→uiTheme resolver and the layering with
 injected fixtures.
+
+---
+
+---
+
+### Phase 14 — QUESTIONS FOR THE MAINTAINER (written 2026-07-17, after 14c–14g)
+
+Phases 14c → 14g are done and committed (suite **FAIL 0 | PASS 2897**; `check()` was 0/0/0 at 14e).
+Below is everything I judged yours to decide rather than mine to guess. Nothing here blocks the code
+that shipped.
+
+#### A. Please look at these two, in a browser / in Excel
+
+1. **`dev/review_manual/phase14e_html_engine.html`** — the new default html engine (fonts, padding,
+   pill backgrounds, hover, `theme = "auto"`). Toggle your OS dark mode on the page.
+2. **The Excel colour legend's background break-words** (14c). You asked for "-0.2 oklch lightness".
+   Delivered exactly — but I want you to see it: the result is **faint** (L≈0.65–0.77 at C≈0.03 on
+   white; `#9fbbbe` … `#7e8dbd`). It is a big improvement on the invisible fills, and the ladder is
+   there, but if it still reads poorly the levers are −0.3 lightness, or a chroma boost, or dropping
+   the hue link and using the TEXT palette (readable, but then the legend's two channels share
+   colours). Constants: `default_bg_legend_colors` in `R/tab_classes.R`; recipe
+   `dev/color_palette_tools.R::darken_for_legend()`.
+
+#### B. Decisions I made that you may want to reverse
+
+3. **14f — the md col_var-name row.** Your spec said "first BODY row, lower contrast, visually marked
+   … whole name in the first cell only, deliberately not pipe-aligned, **followed by a separator
+   row**". I could not make that last clause mean anything valid: a pipe table has exactly ONE
+   delimiter row, and a row of dashes in the body renders as literal dashes. So I built: header
+   (levels) → delimiter → **italic name row** (first cell of its group, one cell per column, not
+   pipe-aligned) → data. If you meant something else by "separator row", say so.
+4. **14e — `css = FALSE` now renders UNSTYLED**, not merely uncoloured. Moving the geometry into
+   classes is what makes the table restyleable (your own rule), but it means a table with no
+   stylesheet has no layout either. The docs say so. Acceptable?
+5. **14d — the Excel title.** Now e.g. `"marital, relig, partyid +1 more by year, age"` (was "levels by
+   multi (tabbed by row_var)"). You asked me to propose: that is the proposal — all names up to 3, then
+   `+N more`; sheet names are the same string cut to 25. Change `max` in `tab_get_titles()` if you want
+   more or fewer.
+
+#### C. Things I found and did NOT fix (each needs your judgment)
+
+6. **A pre-existing golden drift, now baked in.** `n_ci_tabvars.rds` / `n_ci_tabvars_all.rds` have a
+   `ci_sup` `NA` where the code now produces `NaN`. It **reproduces on unmodified HEAD** (so it is not
+   Phase 14's), and `expect_equal`'s tolerance treats NA and NaN as equal, which is why no test ever
+   saw it. Regenerating the goldens necessarily wrote it in. Worth a look: a NaN there may be a real
+   edge in the mean-CI path (n≤1?), or merely cosmetic.
+7. **Excel mean/sd column WIDTH** (14d). Headers are now `mean` / `sd`; you also asked to narrow those
+   columns. Not done — it needs a judgment call about fitting the digits AND the span name above.
+8. **`tab_plot()`'s legend block** still holds ~60 lines of half-commented dead code around the part I
+   rewrote (14c). `tab_plot` is soft-deprecated; say the word and I will delete the rest.
+9. **`inst/tab.css` is now dead for the default engine** — every selector is `.lightable-classic`-scoped,
+   i.e. kableExtra-only. Keep (the legacy engine uses it) or drop with the engine?
+10. **`color_type = "bg"` is still vestigial** (flagged back in Phase 5): it picks the TEXT channel's
+    palette family only; the CHANNEL decides font-vs-fill. Deprecate?
+
+#### D. Deferred from 14e — needs a live check only you can do
+
+11. **The VS Code / Positron webview hooks** (`body.vscode-dark`, `data-vscode-theme-kind`) for
+    `theme = "auto"` in the Viewer. The roadmap itself says to verify the DOM FIRST, and it is right:
+    R html usually lands in an **iframe**, while the class sits on the OUTER webview body — the hook
+    may never match, and shipping a selector that cannot fire is worse than not shipping it. Also
+    [vscode#176698](https://github.com/microsoft/vscode/issues/176698) reports `prefers-color-scheme`
+    resolving *light* under a dark theme in webviews, which would mean `auto`'s base layer is wrong in
+    the Viewer regardless. **What I need**: open a `tab_kable(theme = "auto")` in the Positron Viewer,
+    right-click → Inspect, and tell me whether the table's own `<body>` (not the outer one) carries
+    `vscode-dark`.
+12. **`pct = "col"` compactness** and the `min-width:10em` / `5.5em` review (14e) — both are visual
+    calls I would rather you made on the sample in A1. They are one line each in `tab_css()` now.
 
 ---
 
