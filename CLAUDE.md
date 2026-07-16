@@ -2386,7 +2386,57 @@ the `tab_xl` title, and any future consumer in one place.
   the wrong file under `replace = FALSE`. **`mean`/`sd` header naming applies wherever the columns are
   separated, not only Excel.**
 
-#### Phase 14e — the html engine becomes the default, and is designed properly
+#### Phase 14e — the html engine becomes the default, and is designed properly (DONE — 2026-07-17)
+
+`options(tabxplor.tab_kable_engine)` is now **`"html"`**. Full suite **FAIL 0 | PASS 2812**;
+`check()` 0 errors / 0 warnings / 0 notes. Only `_snaps/render-html.md`'s 4 html-engine snapshots moved
+(reviewed); no `_golden/*.rds`, no `_color_golden/*.rds`. A browser-checkable sample is written to
+**`dev/review_manual/phase14e_html_engine.html`** (theme = "auto" + a composite-display table).
+
+**The governing decision: the engine emits NO inline styles.** Every look — geometry included — is a
+**role class** resolved by `tab_css()` (`tx-r`/`tx-l`, `tx-num`, `tx-br`/`tx-bl`, `tx-tot`/`tx-rv`,
+`tx-b`, `tx-bt`/`tx-bb`/`tx-bb2`, `tx-span`, `tx-pill`). Three reasons, in order of weight: (1) **an
+inline style cannot be overridden by a user's CSS**, so the maintainer's own rule — *"must continue to
+work with common css customisation, as kableExtra does... a good, compact, readable default that can be
+overwritten"* — was **impossible** while the engine wrote its own borders/widths; (2) it FIXES the
+coloured-border bug at the root (`border-right:1px solid` is a shorthand → resets `border-color` to
+`currentColor` = the cell's palette hex, and inline it beat the stylesheet's rule); (3) the markup
+shrinks. This extends 13d's colour rule to everything. **Consequence**: `css = FALSE` + no `tab_css()`
+now renders *unstyled*, not merely uncoloured.
+
+- **Viewer/knit routing**: `tab_kable_join()` claims the **`kableExtra` class** for the html output (it
+  IS an html fragment with `format = "html"`) rather than duplicating `print.kableExtra` /
+  `knit_print.kableExtra`. Ends the maintainer's hand `class<-` workaround. kableExtra is a Suggests →
+  absent, the class is inert and it falls back to today's `cat()`.
+- **BUG — a wrapped header rendered its `<br>` literally.** `tab_wrap_text()` wraps long header names
+  on `<br>`, and the engine html-escaped the whole label. kableExtra never hit it (`kable(escape =
+  FALSE)`). New `html_escape_br()`: escape, then restore **only the tag we inject** — a `<` in a user's
+  own level name stays escaped (test-locked both ways).
+- **Fonts** DejaVu Sans Condensed (text) / DejaVu Sans (numbers), mirroring `tab_xl`'s
+  `font_text`/`font_num` — kableExtra used DejaVu Sans throughout. **Geometry**: `padding:3px 4px`
+  (~1mm sides, was touching the border) + `line-height:1.1` (was 0.85, crammed). **Hover** →
+  kableExtra's lightable yellow. **Dark** → `#CECDC3` on `#222222` (pure white on near-black glares).
+- **Background = a PILL** (`<span class="tx-pill o3">`) hugging the text, rounded — a full-cell flood
+  reads as a blocky grid **and** swallows the row hover (a child's background always paints over its
+  row's, whatever the specificity; kableExtra escaped this only because it fills a `<span>`).
+- **U+2007 figure space** (decision 1): new `format(pad =)`, defaulting to `fig_space` when
+  `html = TRUE` and a plain space otherwise, threaded through all 6 alignment sites + the composite
+  recursion; `tab_xl` passes it explicitly (⚠ `html = TRUE` is NOT the lever there — it would also
+  switch on the html-only `<sub>` markup). Console/md keep ASCII, so their goldens are byte-identical.
+- **Test-suite trap found**: the `kableExtra engine (default)` section relied on the DEFAULT, so
+  flipping it made the whole section silently assert against the *other* engine. Every call there now
+  pins `engine = "kableExtra"`.
+- **Bug caught by our own CSS well-formedness test**: a rule accidentally split across two `c()`
+  elements became two broken lines. Worth keeping that test.
+
+**DEFERRED (flagged for the maintainer, see the questions block after 14g):** the **VS Code/Positron
+webview hooks** (`body.vscode-dark` / `data-vscode-theme-kind`) — the roadmap itself demands a live DOM
+check FIRST (R html usually lands in an *iframe*, and the class sits on the OUTER webview body, so the
+hook may never match); `pct="col"` compactness and the `min-width:10em`/`5.5em` review (needs a visual
+judgment); tooltip dark styling; `inst/tab.css` is now dead for the default engine (all
+`.lightable-classic`-scoped) — kableExtra-only, left alone.
+
+##### Original plan (historical intent)
 
 Its own session; the maintainer's feedback is the brief. Make `engine = "html"` the default for
 `tab_kable`/`tab_export`, then:

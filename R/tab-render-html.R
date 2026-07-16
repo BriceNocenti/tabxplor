@@ -96,6 +96,14 @@ render_kable_html <- function(rd, meta,
 # `esc`: the HTML-escape fn -- htmltools::htmlEscape for the cell_spec path (escape = FALSE downstream,
 # byte-identical to escape = TRUE), identity for the home-built engine (which places cells raw).
 #' @keywords internal
+# Escape a label, then put back the ONE tag the package itself injects: tab_wrap_text() wraps long
+# header names on "<br>". Escaping the whole string rendered it literally ("Tele:<br>occasionnel");
+# not escaping at all would pass a user's own "<" straight into the markup.
+#' @keywords internal
+html_escape_br <- function(x) {
+  gsub("&lt;br&gt;", "<br>", htmltools::htmlEscape(x), fixed = TRUE)
+}
+
 html_cell_text <- function(raw, pn, bold, esc = htmltools::htmlEscape) {
   out <- esc(raw)
   if (is.null(pn)) return(out)
@@ -283,14 +291,22 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
     return(df)
   }
 
-  # (b) column-CONSTANT style prefix, one string per column
-  col_style <- ifelse(roles$align == "r", "text-align:right;", "text-align:left;")
-  col_style[roles$fmt_cols]   <- paste0(col_style[roles$fmt_cols], "white-space:nowrap;")
-  br_cols                     <- unique(c(roles$new_col_var, n_col))
-  col_style[br_cols]          <- paste0(col_style[br_cols], "border-right:1px solid;")
-  col_style[roles$other_cols] <- paste0(col_style[roles$other_cols], "border-left:1px solid;")
-  col_style[roles$totcols]    <- paste0(col_style[roles$totcols], "border-left:1px solid;min-width:5.5em;")
-  col_style[roles$row_var_col]<- paste0(col_style[roles$row_var_col], "min-width:10em;")
+  # (b) column-CONSTANT CLASSES, one string per column.
+  # Phase 14e: these were inline `style=` strings. Three reasons they are classes now:
+  #   1. an inline style cannot be overridden by a user's CSS, so the "good default you can restyle"
+  #      contract (what kableExtra gives) was impossible;
+  #   2. `border-right:1px solid` is a SHORTHAND -- it resets border-color to `currentColor`, i.e. the
+  #      cell's own palette colour, so a +20% cell drew a blue border. Inline, it also beat the
+  #      stylesheet's border-color rule. As a class it simply inherits the one border colour;
+  #   3. the markup shrinks (one short class vs a repeated style string per cell).
+  # The names are the ROLE, not the styling, so the stylesheet stays the only place that decides looks.
+  cls_col <- ifelse(roles$align == "r", "tx-r", "tx-l")
+  add_cls <- function(v, i, k) { v[i] <- paste0(v[i], " ", k); v }
+  cls_col <- add_cls(cls_col, roles$fmt_cols,    "tx-num")   # numbers: nowrap + the number font
+  cls_col <- add_cls(cls_col, unique(c(roles$new_col_var, n_col)), "tx-br")
+  cls_col <- add_cls(cls_col, roles$other_cols,  "tx-bl")
+  cls_col <- add_cls(cls_col, roles$totcols,     "tx-bl tx-tot")
+  cls_col <- add_cls(cls_col, roles$row_var_col, "tx-rv")
 
   # (c) per-column <td> vectors over rows (colours/bold/tooltips from the prep's ann)
   # Phase 13d: colour is emitted as a slot CLASS, never as inline hex -- an inline `style` beats every
@@ -301,19 +317,19 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
   #   ref_alltot, slot 0   -> no class: `theme_cols$text` IS the table's colour, so it inherits
   #   otherwise            -> .g1 (column has a colour measure) / .g2 (it has none)
   td_html <- purrr::imap(cells, function(cell, name) {
-    a  <- ann[[name]]
-    cs <- rep("", n_row)      # inline style: bold only (theme-independent)
-    cls <- rep("", n_row)
+    a   <- ann[[name]]
+    cls <- rep("", n_row)      # the <td>'s classes: text slot / grey / bold
+    bgc <- rep("", n_row)      # the background slot, which rides the PILL span (below), not the <td>
     if (!is.null(a)) {
       tsl <- if (length(a$text_slot) == n_row) a$text_slot else integer(n_row)
       bsl <- if (length(a$bg_slot)   == n_row) a$bg_slot   else integer(n_row)
       cls <- tx_slot_class("text", tsl)
       bgc <- tx_slot_class("bg",   bsl)
-      cls <- paste0(cls, ifelse(nzchar(cls) & nzchar(bgc), " ", ""), bgc)
-      grey <- !nzchar(cls) & !a$ref_alltot
+      grey <- !nzchar(cls) & !nzchar(bgc) & !a$ref_alltot
       cls[grey] <- if (isTRUE(a$has_color) || isTRUE(a$has_bgc)) "g1" else "g2"
-      cs[a$bold] <- "font-weight:bold;"
+      cls[a$bold] <- trimws(paste(cls[a$bold], "tx-b"))
     }
+    bg <- nzchar(bgc)
     tip <- rep("", n_row)
     if (tooltips && is_fmt(tab[[name]])) {
       tp <- tab_kable_print_tooltip(tab[[name]],
@@ -332,49 +348,45 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
     bold_cell <- seq_len(n_row) %in% rd$bold_rows
     if (!is.null(a)) bold_cell <- bold_cell | a$bold
     cell_html <- html_cell_text(cell, attr(cell, "primary_nchar"), bold_cell, esc = identity)
-    paste0('<td style="', col_style[j], cs, '"',
-           ifelse(nzchar(cls), paste0(' class="', cls, '"'), ""), tip, '>', cell_html, '</td>')
+    # Phase 14e: a background-coloured cell wraps its text in a PILL (an inline span, rounded, hugging
+    # the text) instead of flooding the whole <td>. Full-cell fills read as a heavy blocky grid, and
+    # they also swallow the row-hover highlight (a child's background always paints over its row's).
+    # The colour class moves onto the span; the text class stays on the <td> so `.p*` still cascades.
+    if (any(bg)) {
+      cell_html[bg] <- paste0('<span class="tx-pill ', bgc[bg], '">', cell_html[bg], '</span>')
+    }
+    paste0('<td class="', trimws(paste(cls_col[j], cls)), '"', tip, '>', cell_html, '</td>')
   })
 
   # (d) rows: paste0 across the LIST of column vectors -> all n_row rows in one call
   row_inner <- do.call(paste0, td_html)
 
-  # (e) row-style vector (index assignment; kable border precedence: last-wins for the final row)
-  rs <- rep("vertical-align:top;line-height:0.85;padding:3px;", n_row)
-  rs[rd$bold_rows]        <- paste0(rs[rd$bold_rows], "font-weight:bold;")
-  rs[roles$totblock_top]  <- paste0(rs[roles$totblock_top], "border-top:1px solid;")
-  bottom <- rep("", n_row)
-  bottom[roles$totblock_bottom] <- "border-bottom:1px solid;"
-  bottom[roles$new_group]       <- "border-bottom:2px solid;"
-  bottom[n_row]                 <- "border-bottom:1px solid;"
-  rs <- paste0(rs, bottom)
+  # (e) per-row CLASSES (Phase 14e; was an inline style string -- see (b) for why)
+  rcls <- rep("", n_row)
+  radd <- function(i, k) rcls[i] <<- paste0(rcls[i], " ", k)
+  radd(rd$bold_rows,            "tx-b")
+  radd(roles$totblock_top,      "tx-bt")
+  radd(roles$totblock_bottom,   "tx-bb")
+  radd(roles$new_group,         "tx-bb2")   # a thicker rule between row_var blocks
+  radd(n_row,                   "tx-bb")    # the table's last row always closes
+  body <- paste0('<tr class="', trimws(rcls), '">', row_inner, '</tr>', collapse = "\n")
 
-  body <- paste0('<tr style="', rs, '">', row_inner, '</tr>', collapse = "\n")
-
-  # header (level-name row), styled like the legacy row_spec(0)
-  # Phase 13d: no `color:` -- the header inherits `.tabxplor-tab{color:}` from the stylesheet, so it
-  # flips with the theme. Everything else stays INLINE on purpose: col_style's `text-align:right` is
-  # inline, so a stylesheet header rule could not beat it -- the inline-last-wins order below is what
-  # centres headers over right-aligned data.
-  hdr_style <- paste0(
-    "font-weight:bold;border-top:0;border-bottom:1px solid;",
-    "font-size:90%;vertical-align:bottom;line-height:0.9;padding:3px;text-align:center;")
-  # col_style first (its borders/nowrap/widths apply to the header too), hdr_style last so its
-  # text-align:center wins over the column's data alignment (kableExtra centres all headers).
   # Phase 13c-iii: level headers use the suffix-stripped labels (the col_var name is written in the
-  # spanning row above).
-  head_cells <- paste0('<th style="', col_style, hdr_style, '">',
-                       htmltools::htmlEscape(cvh$clean), '</th>')
+  # spanning row above). The look is `.tabxplor-tab thead th` in the stylesheet.
+  # WARNING: `cvh$clean` may legitimately contain `<br>` -- tab_wrap_text() (via tab_export_prep's
+  # `wrap`) wraps long header names with it, so html-escaping the whole label printed a literal
+  # "Telе:<br>occasionnel". kableExtra never hit this: it passes col.names through knitr::kable(escape
+  # = FALSE). Escape, then restore the tag we ourselves injected -- so a `<` a USER put in a level name
+  # is still escaped.
+  head_cells <- paste0('<th class="', cls_col, '">', html_escape_br(cvh$clean), '</th>')
   thead <- paste0('<tr>', paste0(head_cells, collapse = ""), '</tr>')
 
   # Phase 13c-iii: the col_var spanning-name header row -- each variable name centred (colspan) over its
   # contiguous level columns; an empty cell over the row var / total / count columns.
   cvh_runs <- tab_header_runs(cvh$label)
   span_thead <- if (any(nzchar(cvh_runs$labels))) {
-    span_style <- paste0("font-weight:bold;border-bottom:1px solid;",
-                         "text-align:center;padding:3px;")   # colour inherited (Phase 13d)
-    span_cells <- paste0('<th colspan="', cvh_runs$spans, '" style="', span_style, '">',
-                         ifelse(nzchar(cvh_runs$labels), htmltools::htmlEscape(cvh_runs$labels), ""),
+    span_cells <- paste0('<th class="tx-span" colspan="', cvh_runs$spans, '">',
+                         ifelse(nzchar(cvh_runs$labels), html_escape_br(cvh_runs$labels), ""),
                          '</th>')
     paste0('<tr>', paste0(span_cells, collapse = ""), '</tr>')
   } else ""
@@ -429,7 +441,13 @@ tab_kable_join <- function(parts, engine, css = "") {
   if (engine == "html") {
     body <- paste(unlist(parts), collapse = "\n<br>\n")
     out  <- if (nzchar(css)) paste0("<style>", css, "</style>\n", body) else body
-    return(structure(out, format = "html", class = "knitr_kable"))
+    # Phase 14e: the `kableExtra` class is what routes an HTML table to the Viewer (print.kableExtra)
+    # and knits it (knit_print.kableExtra). Without it this was a bare `knitr_kable`, whose print just
+    # cat()s the markup to the console -- so the maintainer had to re-class it by hand to see a table.
+    # We produce the same thing kableExtra does (an HTML fragment, `format = "html"`), so we claim the
+    # class rather than duplicate its two methods. Both live in kableExtra, a Suggests: without it the
+    # class is inert and printing falls back to knitr_kable's cat(), which is the old behaviour.
+    return(structure(out, format = "html", class = c("kableExtra", "knitr_kable")))
   }
 
   # kableExtra list: stack the rendered tables one-after-another. Phase 13c-iv: give the joined HTML

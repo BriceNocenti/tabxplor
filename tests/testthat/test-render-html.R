@@ -29,7 +29,9 @@ rh_titles <- function(h) {                       # non-empty tooltip contents
   sort(unique(ti[ti != 'title=""']))
 }
 
-# === SECTION: kableExtra engine (default) -- version-robust structure assertions ==========
+# === SECTION: kableExtra engine (legacy) -- version-robust structure assertions ==========
+# Phase 14e made "html" the DEFAULT engine, so every call here pins engine = "kableExtra"
+# explicitly -- otherwise this whole section would silently assert against the other engine.
 # WARNING: do NOT snapshot this engine's bytes. Its cells come from kableExtra::cell_spec(), whose
 # output is version-unstable -- 1.4.0 -> 1.4.1 moved the rgba alpha (255 -> 1), dropped leading
 # padding and (text_spec) leaked a stray `class="TRUE"`. Byte-snapshotting it made CI red on all 5
@@ -47,22 +49,25 @@ testthat::test_that("tab_kable kableExtra engine structure is stable", {
   # geometry: exactly one <tbody>, one <tr> per row. chi2 gains ONE extra row -- the p-value row is
   # materialised at display (Phase 10i-B), so it is not in nrow(tb).
   for (tb in list(counts, row_diff)) {
-    h <- rh_strip_style(tab_kable(tb))
+    h <- rh_strip_style(tab_kable(tb, engine = "kableExtra"))
     testthat::expect_match(h, "<table")
     body <- rh_tbody(h)
     testthat::expect_length(body, 1L)
     testthat::expect_equal(lengths(regmatches(body, gregexpr("<tr", body)))[[1]], nrow(tb))
   }
-  bc <- rh_tbody(rh_strip_style(suppressWarnings(tab_kable(chi2))))
+  bc <- rh_tbody(rh_strip_style(suppressWarnings(tab_kable(chi2, engine = "kableExtra"))))
   testthat::expect_equal(lengths(regmatches(bc, gregexpr("<tr", bc)))[[1]], nrow(chi2) + 1L)
 
-  # colouring reaches the cells, and only when asked for
-  hd <- rh_strip_style(tab_kable(row_diff))
-  hm <- rh_strip_style(tab_kable(row_diff, color = FALSE))
+  # colouring reaches the cells, and only when asked for. kableExtra bakes colour INLINE (it carries
+  # no stylesheet of ours), which is also why its theme shows in the markup -- both are the opposite
+  # of the html engine below, and that contrast is the point of having two sections.
+  hd <- rh_strip_style(tab_kable(row_diff, engine = "kableExtra"))
+  hm <- rh_strip_style(tab_kable(row_diff, engine = "kableExtra", color = FALSE))
   testthat::expect_match(hd, "color:")
   testthat::expect_false(identical(hd, hm))
   # theme is honoured
-  testthat::expect_false(identical(rh_strip_style(tab_kable(row_diff, theme = "dark")), hd))
+  testthat::expect_false(identical(
+    rh_strip_style(tab_kable(row_diff, engine = "kableExtra", theme = "dark")), hd))
   # tooltips carry the underlying fields
   testthat::expect_true(any(grepl("^title=\"diff:", rh_titles(hd))))
 })
@@ -98,8 +103,10 @@ testthat::test_that("cells carry slot classes, never inline colour", {
   # THE constraint of Phase 13d: an inline `style` beats every stylesheet rule short of !important, so
   # inline colour would make theme = "auto" impossible. If this fails, dark mode is silently broken.
   testthat::expect_false(grepl("color:#", b))
-  testthat::expect_match(b, 'class="(p|m)[1-4]')          # a coloured cell
-  testthat::expect_match(b, 'class="g[12]"')              # an uncoloured cell
+  # Phase 14e: the class attribute now also carries ROLE classes (align / borders / widths), so the
+  # slot class is no longer first -- match it anywhere in the attribute.
+  testthat::expect_match(b, 'class="[^"]*\\b(p|m)[1-4]\\b')   # a text-coloured cell
+  testthat::expect_match(b, 'class="[^"]*\\bg[12]\\b')        # an uncoloured cell
   testthat::expect_match(h, '<table class="tabxplor-tab">', fixed = TRUE)   # no theme token
 })
 
@@ -124,8 +131,12 @@ testthat::test_that("theme drives the emitted CSS (light / dark / auto)", {
 
   dark <- cs("dark")
   testthat::expect_false(grepl("@media", dark, fixed = TRUE))
-  testthat::expect_true(grepl(".tabxplor-tab{color:#FFFFFF;background:#111111;}", dark, fixed = TRUE))
-  testthat::expect_true(grepl("border-color:#FFFFFF", dark, fixed = TRUE))
+  # Phase 14e: dark is #CECDC3 on #222222 -- pure white on near-black is a glare-y contrast for body
+  # text. Read the values from tx_chrome_hex() rather than re-hardcoding them here.
+  dk <- tabxplor:::tx_chrome_hex("dark")
+  testthat::expect_true(grepl(paste0(".tabxplor-tab{color:", dk$text, ";background:", dk$bg, ";}"),
+                              dark, fixed = TRUE))
+  testthat::expect_true(grepl(paste0("border-color:", dk$border), dark, fixed = TRUE))
 
   auto <- cs("auto")
   testthat::expect_true(grepl("@media (prefers-color-scheme: dark)", auto, fixed = TRUE))
@@ -185,7 +196,7 @@ testthat::test_that("css = FALSE drops the <style> but keeps the classes", {
   tb <- tab(gss, marital, race, pct = "row", color = "diff")
   h  <- as.character(tab_kable(tb, engine = "html", css = FALSE))
   testthat::expect_false(grepl("<style", h, fixed = TRUE))
-  testthat::expect_match(rh_tbody(h), 'class="(p|m)[1-4]')
+  testthat::expect_match(rh_tbody(h), 'class="[^"]*\\b(p|m)[1-4]\\b')
   # the once-per-document workflow: options() drives it, and tab_css() supplies the stylesheet
   withr::local_options(list(tabxplor.kable_css = FALSE))
   testthat::expect_false(grepl("<style", as.character(tab_kable(tb, engine = "html")), fixed = TRUE))
@@ -245,7 +256,8 @@ testthat::test_that("tab_css() bolds the text slot classes, not the background o
   }
   # theme-independent -> emitted ONCE, not per cascade layer
   testthat::expect_equal(lengths(regmatches(a <- tab_css(theme = "auto", style_tag = FALSE),
-                                            gregexpr("font-weight:bold;}", a, fixed = TRUE))), 1L)
+                                            gregexpr(".p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4{font-weight:bold;}",
+                                                     a, fixed = TRUE))), 1L)
 })
 
 # === SECTION: cross-engine content parity ================================================
@@ -321,4 +333,77 @@ testthat::test_that("engine is resolved from the option", {
   withr::local_options(tabxplor.tab_kable_engine = "html")
   h <- as.character(tab_kable(tb))
   testthat::expect_match(h, "tabxplor-tab")   # the home-built class
+})
+
+
+# === SECTION: Phase 14e -- the html engine as the default renderer =========================
+
+testthat::test_that("html is the default engine and its output is Viewer-routed / knittable", {
+  testthat::expect_equal(getOption("tabxplor.tab_kable_engine"), "html")
+  h <- tab_kable(tab(gss, marital, race, pct = "row"))
+  # the `kableExtra` class is what print.kableExtra / knit_print.kableExtra dispatch on; without it a
+  # bare knitr_kable just cat()s the markup to the console instead of opening the Viewer.
+  testthat::expect_s3_class(h, "kableExtra")
+  testthat::expect_s3_class(h, "knitr_kable")
+  testthat::expect_equal(attr(h, "format"), "html")
+  testthat::expect_match(as.character(h), '<table class="tabxplor-tab">', fixed = TRUE)
+})
+
+testthat::test_that("geometry is CLASSES, not inline styles (so a user's CSS can win)", {
+  h <- as.character(tab_kable(tab(gss, marital, race, pct = "row", color = "diff"),
+                              engine = "html", tooltips = FALSE))
+  b <- rh_tbody(h)
+  # An inline style beats any stylesheet rule short of !important, so ANY inline style on a cell is a
+  # thing the user cannot restyle. The engine must emit none.
+  testthat::expect_false(grepl("<td[^>]*style=", b))
+  testthat::expect_false(grepl("<th[^>]*style=", h))
+  testthat::expect_false(grepl("<tr[^>]*style=", b))
+  # ... and the roles it emits instead are all defined by the stylesheet
+  css <- tab_css(style_tag = FALSE)
+  for (k in c("tx-r", "tx-l", "tx-num", "tx-br", "tx-bl", "tx-tot", "tx-rv", "tx-b", "tx-pill")) {
+    testthat::expect_match(css, paste0("[.]", k, "\\b"), label = k)
+  }
+})
+
+testthat::test_that("a wrapped header keeps its <br>, a user's markup is still escaped", {
+  # tab_wrap_text() breaks long header names on "<br>"; escaping the whole label printed a literal
+  # "Some very long<br>race level name" (kableExtra never hit this -- knitr::kable(escape = FALSE)).
+  d <- gss; levels(d$race)[1] <- "Some very long race level name"
+  h <- as.character(tab_kable(tab(d, marital, race, pct = "row"), engine = "html", tooltips = FALSE))
+  testthat::expect_match(h, "<th[^>]*>[^<]*<br>")
+  testthat::expect_false(grepl("&lt;br&gt;", h, fixed = TRUE))
+  # only the tag we inject ourselves is restored: a "<" in a user's own level name stays escaped
+  d2 <- gss; levels(d2$race)[1] <- "a <script> b"
+  h2 <- as.character(tab_kable(tab(d2, marital, race, pct = "row"), engine = "html",
+                               tooltips = FALSE))
+  testthat::expect_false(grepl("<script>", h2, fixed = TRUE))
+  testthat::expect_match(h2, "&lt;script&gt;", fixed = TRUE)
+})
+
+testthat::test_that("a background colour is a pill hugging the text, not a full-cell flood", {
+  # a low ratio break, so a background fires on this data whatever the defaults are
+  tb <- tab(gss, marital, race, pct = "row", color = c("diff", "ratio"),
+            color_breaks = list(pct_ratio = list(over = 1.05)))
+  h  <- as.character(tab_kable(tb, engine = "html", tooltips = FALSE))
+  b <- rh_tbody(h)
+  # the bg slot class rides the span; the <td> keeps the text slot (so `.p*` still cascades)
+  testthat::expect_match(b, '<span class="tx-pill [ou][1-4]">')
+  testthat::expect_false(grepl('<td class="[^"]*\\b[ou][1-4]\\b', b))
+  testthat::expect_match(tab_css(style_tag = FALSE), "[.]tx-pill[{]border-radius")
+})
+
+testthat::test_that("format() pads with FIGURE spaces for html/Excel, ASCII for console/md", {
+  # U+2007 is exactly a digit wide; an ASCII space is half a digit in DejaVu Sans, and CSS collapses
+  # runs of them -- so console-aligned composites arrived ragged in html.
+  t <- tab(gss, marital, race, pct = "row", display = "{pct} (n={n})")
+  ht <- format(t$Other, html = TRUE, na = "", stars = TRUE)
+  mt <- format(t$Other, na = "", stars = TRUE)
+  testthat::expect_true(any(grepl(fig_space, ht, fixed = TRUE)))
+  testthat::expect_false(any(grepl(fig_space, mt, fixed = TRUE)))
+  testthat::expect_true(any(grepl("  ", mt, fixed = TRUE)))          # md keeps ASCII runs
+  # same visible text either way -- only the pad character differs
+  testthat::expect_identical(gsub(fig_space, " ", ht, fixed = TRUE), mt)
+  # and it reaches the rendered media
+  testthat::expect_true(grepl(fig_space, as.character(tab_kable(t, engine = "html")), fixed = TRUE))
+  testthat::expect_false(grepl(fig_space, tab_md(t, print = FALSE, color = FALSE), fixed = TRUE))
 })

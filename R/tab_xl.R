@@ -412,7 +412,10 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
   numfmt <- if (length(fmt_cols)) purrr::map_dfr(fmt_cols, function(ci) {
     col <- tab[[ci]]
     if (ci %in% text_fmt_cols) {                        # text-mode column -> "@" per written cell
-      val  <- format(col, special_formatting = TRUE, na = "", stars = TRUE)
+      # Phase 14e: Excel renders in a proportional font, so the alignment padding must be figure
+      # spaces (a digit wide), not ASCII half-digit spaces -- as in html. `html = TRUE` is NOT the
+      # lever here: it would also switch on the html-only <sub> markup.
+      val  <- format(col, special_formatting = TRUE, na = "", stars = TRUE, pad = fig_space)
       code <- ifelse(!is.na(val) & nzchar(val), "@", NA_character_)
       return(tibble::tibble(col = as.integer(ci), row = seq_along(code) + data_row0, code = code))
     }

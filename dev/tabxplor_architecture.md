@@ -517,15 +517,41 @@ model (merge across aspects; replace within; the font `update` bug; borders reje
 
 `tab_kable()` = `tab_export_prep(list_method=TRUE)` → map the `render_kable_html()` **engine seam**
 (`R/tab-render-html.R`, Phase 10e) over the prepared tables → `tab_kable_join()`. The `engine` argument
-(default `getOption("tabxplor.tab_kable_engine","kableExtra")`) picks the backend, both driven by the
-same `tabxplor_render` model so they cannot diverge in content:
+(default `getOption("tabxplor.tab_kable_engine")`, **`"html"` since Phase 14e**) picks the backend, both
+driven by the same `tabxplor_render` model so they cannot diverge in content:
 
-- **`"kableExtra"`** — the legacy `knitr::kable` + `kable_classic`/`row_spec`/`column_spec` pipeline
+- **`"html"` (the default)** — a dependency-free, self-contained `<table>` + one stylesheet, vectorised
+  assembly. ~3x faster / ~6x lighter; emits the same bootstrap tooltip attributes; used by the jamovi
+  live display (`tab_render_scrollbox()` replaces `kableExtra::scroll_box`).
+- **`"kableExtra"` (legacy)** — the `knitr::kable` + `kable_classic`/`row_spec`/`column_spec` pipeline
   (byte-identical to pre-10e). Colour via inline CSS, HTML tooltips/popover, `inst/tab.css` injection.
-- **`"html"`** — a dependency-free, self-contained inline-CSS `<table>` (styles on `<td>`, no per-cell
-  `<span>`, a scoped `<style>` block, vectorised assembly). ~3x faster / ~6x lighter; emits the same
-  bootstrap tooltip attributes; used by the jamovi live display (`tab_render_scrollbox()` replaces
-  `kableExtra::scroll_box`). A non-mergeable list renders table-after-table (both engines).
+  It bakes its theme at render time, so it cannot follow `theme = "auto"` (which downgrades to light).
+
+A list renders table-after-table (both engines; Phase 14d: it is never merged).
+
+**The html engine emits NO inline styles** (Phase 14e). Every look — geometry included — is a **role
+class** resolved by `tab_css()`: `tx-r`/`tx-l` (align), `tx-num` (numbers: nowrap + the number font),
+`tx-br`/`tx-bl` (borders), `tx-tot`/`tx-rv` (min-widths), `tx-b` (bold), `tx-bt`/`tx-bb`/`tx-bb2` (row
+rules), `tx-span` (the col_var header), `tx-pill` (a background), plus the colour slots (`.p*`/`.m*` on
+the `<td>`, `.o*`/`.u*` on the pill span). Three reasons, in order of weight:
+
+1. **an inline style cannot be overridden by a user's CSS**, so "a good default you can restyle" (what
+   kableExtra gives) was impossible while the engine wrote its own borders and widths;
+2. `border-right:1px solid` is a **shorthand** — it resets `border-color` to `currentColor`, i.e. the
+   cell's own palette colour, so a `+20%` cell drew a blue border; inline, it also beat the
+   stylesheet's `border-color` rule;
+3. the markup shrinks (one short class vs a repeated style string per cell).
+
+This extends Phase 13d's rule (colour must be a class, or `theme = "auto"` is impossible) to
+everything else. Consequence: with `css = FALSE` **and** no `tab_css()` in the document, the table now
+renders unstyled, not merely uncoloured.
+
+Two engine-specific details worth knowing: a **background colour is a pill** (`<span class="tx-pill
+o3">`) hugging the text rather than a full-cell fill — a flood reads as a blocky grid *and* swallows the
+row hover (a child's background always paints over its row's, whatever the specificity); and header
+labels go through **`html_escape_br()`**, which escapes and then restores the one tag the package itself
+injects (`tab_wrap_text()` wraps long header names on `<br>`), so a `<` in a user's own level name is
+still escaped. kableExtra never needed this — `knitr::kable(escape = FALSE)` passes col.names through.
 
 Tooltips (`tab_kable_print_tooltip()`) are `any()`-gated so each field's `format()` runs only when the
 column has it. NA cells render blank at source (`format.tabxplor_fmt(na="")`), not via a post-hoc regex.

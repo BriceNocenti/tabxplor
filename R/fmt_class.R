@@ -1811,6 +1811,11 @@ excel_numfmt_code <- function(digits, pct, ci, text, signed = FALSE, ratio = FAL
 #' @param bold_split Internal (default `FALSE`): when `TRUE`, attach a per-cell `primary_nchar`
 #' attribute giving the bold-prefix width of a composite `"{pct} (n={n})"` cell, so exporters can
 #' bold only the primary field in a bold row. Off by default -> the output is attribute-free.
+#' @param pad The character used to pad values into alignment (composite displays, significance
+#' stars, confidence intervals). Defaults to a plain space, or to a **figure space** (`U+2007`, exactly
+#' one digit wide) when `html = TRUE`. Media read in a monospace font (the console, markdown) want the
+#' plain space; media rendered in a proportional font (html, Excel) need the figure space, since an
+#' ASCII space is only half a digit wide there -- and CSS collapses runs of them.
 #' @param syntax `"text"` (default) returns the rendered display strings; `"excel"` returns the
 #' per-cell Excel number-format codes used by [tab_xl()] (the raw value is written unchanged).
 #' @param .ref Internal: precomputed reference masks `list(cells=, all_totals=)` (derive-once
@@ -1820,7 +1825,7 @@ excel_numfmt_code <- function(digits, pct, ci, text, signed = FALSE, ratio = FAL
 #' @export
 format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
                                 special_formatting = FALSE, stars = FALSE,
-                                bold_split = FALSE,
+                                bold_split = FALSE, pad = if (isTRUE(html)) fig_space else " ",
                                 syntax = c("text", "excel"), .ref = NULL) {
   syntax <- match.arg(syntax)
 
@@ -1912,7 +1917,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
       ci_print_trim <- function(x) {
         x <- stringr::str_remove_all(x, paste0("^", pm, "0$|^", pm, "0.0+$|^", pm, "-0.0+$|^",
                                                pm, "NA"))
-        stringr::str_pad(x, max(stringr::str_length(x)))
+        stringr::str_pad(x, max(stringr::str_length(x)), pad = pad)
       }
 
 
@@ -2006,7 +2011,8 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
     nn  <- !is.na(rv)
     val[nn] <- paste0(sym[nn], num[nn])
     if (any(nn))
-      val[nn] <- stringr::str_pad(val[nn], max(stringr::str_length(val[nn])), side = "left")
+      val[nn] <- stringr::str_pad(val[nn], max(stringr::str_length(val[nn])), side = "left",
+                                  pad = pad)
     out[disp_rr] <- val
   }
 
@@ -2080,7 +2086,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
                                               suppressWarnings(sqrt(get_var(x[disp_mean_sd]))) ), "var")),
                   digits = get_digits(x[disp_mean_sd])) # + 1L
       sd <- sd |>
-        stringr::str_pad(width = max(stringr::str_length(sd)), side = "right")
+        stringr::str_pad(width = max(stringr::str_length(sd)), side = "right", pad = pad)
 
       out[disp_mean_sd] <- paste0(out[disp_mean_sd], unbrk, "(", sigma_sign, sd, ")")
     }
@@ -2143,7 +2149,8 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
       if (any(!is.na(get_pct(x)[disp_or]))) {                # empirical-OR crosstab: annotate ref %
         reffmt <- set_display(x[disp_or], "pct") |> set_digits(0L) |> format()
         reffmt <- suppressWarnings(
-          stringr::str_pad(reffmt, suppressWarnings(max(stringr::str_length(reffmt), na.rm = TRUE)))
+          stringr::str_pad(reffmt, suppressWarnings(max(stringr::str_length(reffmt), na.rm = TRUE)),
+                           pad = pad)
         )
         out[disp_or] <- ifelse(refer & !is.na(reffmt), paste0(one, " (", reffmt, ")"), vals)
       } else {                                               # pure model-OR: bare "1" on ref rows
@@ -2195,7 +2202,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
     val <- !is.na(out) & nzchar(out)
     if (any(val & nzchar(st))) {
       w  <- max(nchar(st[val]))
-      st_pad <- formatC(st, width = -w)          # left-justify glyphs, pad right with spaces
+      st_pad <- stringr::str_pad(st, w, side = "right", pad = pad)  # glyphs left, pad right
       out[val] <- paste0(out[val], st_pad[val])
     }
   }
@@ -2224,7 +2231,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
       toks  <- lapply(seq_along(seg$fields), function(i) {
         xi <- if (i == 1L) xc else set_pvalue(xc, NA_real_)   # stars ride the primary token
         format(set_display(xi, seg$fields[i]), na = na, special_formatting = FALSE,
-               stars = isTRUE(stars) && i == 1L)
+               stars = isTRUE(stars) && i == 1L, pad = pad)   # the inner tokens pad too
       })
       # Phase 13c-i: align each {field} to a uniform width within the column so numbers line up in a
       # monospace font (e.g. "100% (n=  849)" / "100% (n=3 648)"). Right-aligned (left-pad) over the
@@ -2232,7 +2239,8 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
       toks <- lapply(toks, function(s) {
         keep <- !is.na(s)
         if (any(keep))
-          s[keep] <- stringr::str_pad(s[keep], max(stringr::str_length(s[keep])), side = "left")
+          s[keep] <- stringr::str_pad(s[keep], max(stringr::str_length(s[keep])), side = "left",
+                                     pad = pad)
         s
       })
       strs <- vector("list", length(seg$pieces)); ti <- 0L

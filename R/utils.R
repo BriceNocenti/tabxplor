@@ -92,9 +92,11 @@ NULL
 
   options("tabxplor.always_add_css_in_tab_kable" = TRUE)
 
-  # Phase 10e: tab_kable() render engine. "kableExtra" (default) or "html" (dependency-free,
-  # self-contained <table> + stylesheet; faster; used by the jamovi live display). See R/tab-render-html.R.
-  options("tabxplor.tab_kable_engine" = "kableExtra")
+  # tab_kable() render engine. Phase 14e makes "html" the DEFAULT: the home-built engine is
+  # dependency-free, self-contained (<table> + one stylesheet), ~3x faster, restyleable (its geometry
+  # is CSS classes, not inline styles) and the only engine that can follow a theme = "auto" toggle.
+  # "kableExtra" keeps the legacy renderer (its own themes, baked at render time). R/tab-render-html.R.
+  options("tabxplor.tab_kable_engine" = "html")
 
   # Phase 13d: the EXPORT theme -- "light" (default), "dark", or "auto" (follow the reader's colour
   # scheme: their OS, plus any dark-mode toggle of the host page). "auto" needs a stylesheet, so only
@@ -1182,6 +1184,13 @@ sigma_sign <- stringi::stri_unescape_unicode("\\u03c3") # sigma for sd
 mult_sign  <- stringi::stri_unescape_unicode("\\u00d7") # multiply sign (ratio >= 1)
 cross      <- stringi::stri_unescape_unicode("\\u00d7")
 div_sign   <- stringi::stri_unescape_unicode("\\u00f7") # divide sign (ratio < 1, shows 1/ratio)
+# Phase 14d/14e: FIGURE SPACE -- defined by Unicode to be exactly as wide as a digit in fonts with
+# tabular figures, which is what format()'s alignment padding assumes. An ASCII space is only HALF a
+# digit in DejaVu Sans (measured: 651 vs 1303/2048 em), so "100% (n=  849)" aligned in the console
+# collapsed into a ragged mess in html/Excel -- and CSS additionally collapses runs of ASCII spaces.
+# Used where the output is rendered in a PROPORTIONAL font (html, Excel); console/markdown, which are
+# read in a monospace font, keep the ASCII space (see format.tabxplor_fmt(pad =)).
+fig_space  <- stringi::stri_unescape_unicode("\\u2007")
 
 # # Not working
 # # Css link towards https://github.com/web-fonts/dejavu-sans-condensed

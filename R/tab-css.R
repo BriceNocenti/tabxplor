@@ -31,13 +31,18 @@ tx_palette_theme <- function(theme) {
 #   grey  : an uncoloured cell in a column that HAS a colour measure
 #   grey2 : an uncoloured cell in a column with no colour measure
 #' @keywords internal
+# Phase 14e: `hover` is kableExtra's lightable yellow (its `tbody tr:hover` -- more visible and more
+# familiar than the grey wash we had). DARK: pure #FFFFFF on #111111 is a harsh, glare-y contrast for
+# body text; #CECDC3 on #222222 is the (softer, warmer) pairing the maintainer asked for. The border
+# stays the text colour, so it softens with it.
+#' @keywords internal
 tx_chrome_hex <- function(theme = "light") {
   if (identical(tx_palette_theme(theme), "dark")) {
-    list(text = "#FFFFFF", grey = "#707070", grey2 = "#EEEEEE",
-         bg = "#111111", border = "#FFFFFF", hover = "rgba(255,255,255,.06)")
+    list(text = "#CECDC3", grey = "#707070", grey2 = "#EEEEEE",
+         bg = "#222222", border = "#CECDC3", hover = "rgba(255,242,204,.10)")
   } else {
     list(text = "#000000", grey = "#9f9f9f", grey2 = "#111111",
-         bg = "#ffffff", border = "#000000", hover = "rgba(0,0,0,.045)")
+         bg = "#ffffff", border = "#000000", hover = "#FFFCE5")
   }
 }
 
@@ -162,9 +167,44 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE) {
   # The background classes stay unbolded, exactly like the cells: a fill alone does not bold.
   bold_slots <- paste0(paste0(".", tx_slot_class("text", 1:8), collapse = ","), "{font-weight:bold;}")
   static <- c(bold_slots, if (isTRUE(chrome)) c(
-    ".tabxplor-tab{border-collapse:collapse;border-top:0;border-bottom:0;margin:0;}",
+    # Phase 14e: the html engine's GEOMETRY lives here, not inline on every cell. An inline style
+    # cannot be overridden by a user's CSS, so "a good default you can restyle" (what kableExtra gives)
+    # was impossible while the engine wrote its own borders and widths. The engine now emits ROLE
+    # classes (tx-r/tx-l align, tx-num numbers, tx-br/tx-bl borders, tx-tot total col, tx-rv row-var
+    # col, tx-b bold, tx-bt/tx-bb/tx-bb2 row rules, tx-span the col_var header, tx-pill a background)
+    # and every look is decided here. Overriding is then ordinary CSS -- no !important needed, because
+    # nothing of ours is inline any more.
+    # DejaVu Sans Condensed for text and DejaVu Sans for numbers mirrors tab_xl()'s font_text/font_num,
+    # so a table looks the same exported to Excel or to html. Both degrade through the stack.
+    paste0(".tabxplor-tab{border-collapse:collapse;border-top:0;border-bottom:0;margin:0;",
+           "font-family:\"DejaVu Sans Condensed\",\"DejaVu Sans\",Arial,helvetica,sans-serif;}"),
     ".tabxplor-tab caption{text-align:center;font-weight:bold;font-size:120%;}",
     ".tabxplor-tab tfoot{font-size:80%;text-align:left;}",
+    # readable-compact: a real vertical rhythm (line-height 0.85 crammed the rows) + ~1mm of side
+    # padding, so text no longer touches the column borders.
+    ".tabxplor-tab th,.tabxplor-tab td{padding:3px 4px;vertical-align:top;line-height:1.1;}",
+    paste0(".tabxplor-tab thead th{font-weight:bold;font-size:90%;text-align:center;",
+           "vertical-align:bottom;line-height:1;border-top:0;border-bottom:1px solid;}"),
+    ".tabxplor-tab .tx-span{font-weight:bold;font-size:90%;text-align:center;border-bottom:1px solid;}",
+    ".tabxplor-tab .tx-r{text-align:right;}",
+    ".tabxplor-tab .tx-l{text-align:left;}",
+    # thead th's `text-align:center` must beat the column's own alignment: same specificity (0,2,0)
+    # vs (0,2,0), so SOURCE ORDER decides -- this pair must stay after .tx-r/.tx-l.
+    ".tabxplor-tab thead .tx-r,.tabxplor-tab thead .tx-l{text-align:center;}",
+    paste0(".tabxplor-tab .tx-num{white-space:nowrap;",
+           "font-family:\"DejaVu Sans\",Arial,helvetica,sans-serif;}"),
+    ".tabxplor-tab .tx-br{border-right:1px solid;}",
+    ".tabxplor-tab .tx-bl{border-left:1px solid;}",
+    ".tabxplor-tab .tx-tot{min-width:5.5em;}",
+    ".tabxplor-tab .tx-rv{min-width:10em;}",
+    ".tabxplor-tab .tx-b,.tabxplor-tab tr.tx-b{font-weight:bold;}",
+    ".tabxplor-tab tr.tx-bt>*{border-top:1px solid;}",
+    ".tabxplor-tab tr.tx-bb>*{border-bottom:1px solid;}",
+    ".tabxplor-tab tr.tx-bb2>*{border-bottom:2px solid;}",
+    # a background HUGS its text (rounded, inline) rather than flooding the cell: a full-cell fill
+    # reads as a blocky grid AND swallows the row hover (a child's background always paints over its
+    # row's, whatever the specificity).
+    ".tabxplor-tab .tx-pill{border-radius:4px;padding:1px 4px;}",
     # Phase 14b: a cell tooltip is one line of "field: value ; field: value" prose, but bootstrap caps
     # .tooltip-inner at max-width:200px, so it wrapped to four lines and was unreadable.
     # WARNING: this selector is NOT scopable. Bootstrap moves the tooltip element to <body>

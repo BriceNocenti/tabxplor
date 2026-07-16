@@ -17,6 +17,16 @@
   `set_color_palette()`); console output is 24-bit truecolor (falling back to an 8-bit palette only in
   the RStudio console). `set_color_style()` (and its `custom_palette`/`html_24_bit` machinery) is
   replaced by `set_color_palette()`; the export functions keep an inert `html_24_bit` argument.
+* **A new HTML table engine, and it is now the default.** `tab_kable()` (and `tab_export()`) render
+  with tabxplor's own dependency-free engine instead of kableExtra: a self-contained `<table>` plus one
+  stylesheet, about 3x faster and much smaller, and the only engine that can follow `theme = "auto"`.
+  Its output opens in the Viewer and knits like kableExtra's. The look is **restyleable**: the table's
+  geometry is CSS classes rather than inline styles, so your own CSS can override any of it -- no
+  `!important` needed. It uses DejaVu Sans Condensed for text and DejaVu Sans for numbers (matching
+  `tab_xl()`), pads numbers with figure spaces so composite cells like `100% (n=  849)` line up,
+  hugs background colours around the text with rounded corners rather than flooding the cell, and
+  highlights the hovered row. `options(tabxplor.tab_kable_engine = "kableExtra")` (or
+  `tab_kable(engine = "kableExtra")`) restores the previous renderer.
 * **Dark mode.** `theme` gains **`"auto"`** on `tab_kable()` / `tab_md()` / `tab_css()` /
   `tab_export()`: the table follows the **reader's** colour scheme -- their operating system, and any
   dark-mode toggle of the page it is embedded in (Quarto, Bootstrap 5.3, Tailwind) -- flipping live as
@@ -404,6 +414,12 @@
   export to Excel, install `openxlsx2`. The produced workbooks look essentially the same.
 
 ## Bug corrections
+* **A wrapped column header showed its line break as text.** A long header name is wrapped with
+  `<br>`, which the HTML engine escaped along with everything else, printing a literal
+  `Télé:<br>occasionnel`.
+* **Coloured cells no longer draw coloured borders** in the HTML engine: the inline `border-right:
+  1px solid` shorthand reset the border colour to the cell's own text colour, so a `+20%` cell got a
+  blue border.
 * **Tables know their own variables.** A table now records which variables are its rows, columns and
   tab-variables instead of leaving each function to guess them back from the column types. The guess
   could not survive `tab()` merging several row variables into one table -- that merge renames the
