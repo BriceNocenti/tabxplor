@@ -349,6 +349,34 @@ ci_prop_diff <- function(p1, n1, p2, n2, conf_level = 0.95, method = "newcombe",
   )
 }
 
+# MULTIPLICATIVE shape, proportion RATIO: Katz's log-RR interval (Phase 14b) --
+# exp(log(p1/p2) +/- z * se), se(log RR) = sqrt((1-p1)/(n1 p1) + (1-p2)/(n2 p2)). The bounds are on
+# the RATIO scale (neutral 1), stored as ci_type = "ratio", and its dual is the log-RR Wald test, so
+# bracket <-> stars stay exact duals (§20) like every other method here.
+#
+# Why it exists: `ratio` had no native interval, so a ratio-coloured cell borrowed the DIFFERENCE
+# bounds and converted them, holding the reference proportion fixed at its point estimate. That is a
+# valid significance test (H0: p1 = p2 is the same null on either scale) but not a ratio interval:
+# it ignores the reference's own uncertainty. When the ratio is the measure the reader sees, it now
+# owns the stored interval, and any difference channel converts FROM it instead.
+# Weighted rule (§14): WEIGHTED proportions p1/p2, UNWEIGHTED bases n1/n2.
+# WARNING: undefined at p1 = 0 (log 0) or p2 = 0 (the division) -> NA bounds and NA p, so an empty
+# cell or an empty reference is left uncoloured/unstarred rather than +/-Inf. Katz is the standard
+# large-sample RR interval and, like every Wald-family method here, wants a few counts per cell.
+ci_katz_rr <- function(p1, n1, p2, n2, conf_level = 0.95, want_p = TRUE) {
+  rr  <- p1 / p2
+  lrr <- log(rr)
+  se  <- sqrt((1 - p1) / (n1 * p1) + (1 - p2) / (n2 * p2))
+  z   <- zscore_formula(conf_level)
+  inf <- exp(lrr - z * se)
+  sup <- exp(lrr + z * se)
+  pvalue <- if (want_p) 2 * stats::pnorm(-abs(lrr / se)) else vctrs::vec_recycle(NA_real_, length(rr))
+  pvalue <- vctrs::vec_recycle(pvalue, length(rr))
+  bad <- !is.finite(lrr) | !is.finite(se) | se == 0
+  inf[bad] <- NA_real_; sup[bad] <- NA_real_; pvalue[bad] <- NA_real_
+  list(inf = inf, sup = sup, pvalue = pvalue)
+}
+
 # Mean-difference CI + inclusion significance (Welch-t pivot when stars are on, z otherwise).
 # Weighted rule (§14): weighted means/variances, unweighted n1/n2.
 ci_mean_diff2 <- function(m1, v1, n1, m2, v2, n2, conf_level = 0.95, want_p = TRUE) {

@@ -49,7 +49,7 @@ tabxplor creates, manipulates, and formats color-coded cross-tabulation tables f
 | `type` | character | Column type: "n", "mean", "row", "col", "all", "all_tabs" |
 | `comp_all` | logical | Compare against total table (TRUE) or subtable (FALSE) |
 | `ref` | character | Reference type: "tot" or "first" |
-| `ci_type` | character | CI type: "", "no", "cell", "diff", "auto" |
+| `ci_type` | character | Which interval the `ci_inf`/`ci_sup` bounds are, i.e. their SCALE + centre. Additive (neutral 0): `"diff"`, `"diff_row"`, `"diff_col"` — centred on `diff`. Multiplicative (neutral 1): `"or"` (Phase 12a, log-OR Wald, centred on `or`), `"ratio"` (Phase 14b, Katz log-RR, centred on `ratio`). Descriptive: `"cell"` — centred on `pct` / `mean`. Absent: `""`, `"no"`. Read by `ci_center()`, `format()`'s bracket, `fmt_color_plan()`'s significance gate and the legend |
 | `col_var` | character | Name of the column variable this belongs to |
 | `totcol` | logical | This column is a total column |
 | `refcol` | logical | This column is a reference column |
@@ -292,10 +292,26 @@ significance `pvalue`, all computed by the **closed-form vectorised engine in `R
   & Wald (proportion diff) and z / Welch-t (means).
 - **score** — asymmetric Wilson (`ci_wilson()`, cell proportion) and its hybrid Newcombe-10
   (`ci_newcombe()`, proportion diff), the latter's inversion p found by a vectorised bisection.
+- **multiplicative** (Phase 14b) — Katz's log-RR (`ci_katz_rr()`, proportion RATIO): the bounds are on
+  the **ratio scale** (neutral 1, `ci_type = "ratio"`, centred on the ratio), its dual the log-RR Wald.
 
 Defaults: **Wilson** (`ci="cell"`), **Newcombe** (`ci="diff"`, `method_diff="newcombe"`; also `"ac"`,
 `"wald"`), Welch-t (means). `tab_ci()` (proportions) and `tab_num()` (means) both route through the
 engine; the reference (`x_n`, `ref`, `ref_n`) is the **weighted estimate + unweighted n** of §14.
+
+**Which scale (Phase 14b): the interval belongs to the measure the reader sees.** Only ONE interval is
+stored per column, so it is the *text* channel's: `color = "ratio"` / `c("ratio","diff")` on percentage
+columns gives Katz bounds (`tab_ci(ci_scale = "ratio")`, resolved once in `tab_resolve_settings()` →
+`ci_scale`), and a background diff channel derives from them; every other `color` keeps the difference
+interval, where a ratio channel derives instead. `fmt_color_plan()`'s `rescale_bound()` maps a bound
+either way — `diff` and `ratio` are both affine in the cell proportion with the reference at its point
+estimate (`ratio − 1 = diff / p_ref`). Percentage columns only: a mean keeps its difference interval
+(a ratio of means needs Fieller's theorem), which is also why the numeric default is unaffected even
+though a mean's text channel is the ratio under `color = TRUE`. `ci = "cell"` has no ratio counterpart.
+
+**Significance reads the stored `ci_type`, not the measure** (Phase 14b): an interval is significant
+when it excludes ITS OWN neutral — 0 for the additive `diff*` scales, 1 for the multiplicative `or` /
+`ratio` ones. All three test the same null (`p1 = p2`), so whichever interval is stored answers it.
 
 **Significance = universal CI-inclusion**: the stored `pvalue` is the inversion p of the *same*
 interval that draws the bracket, so `get_stars()` (`*`/`**`/`***` from `options("tabxplor.signif_levels")`)

@@ -43,7 +43,8 @@ utils::globalVariables(c(
   "other_level", "output", "pct", "pct_vect", "ref", "ref2", "remove_levels", "row_vars",
   "row_vars_quo", "spread_vars", "stars", "subtext", "tab_row_names", "tab_vars", "tab_vars_quo",
   "tabs_num", "tot_cols_type", "total_names", "totaltab", "totaltab_name", "totrow",
-  "with_filter", "wt", "wt_quo", "add_n", "add_pct", "ci", "OR"))
+  "with_filter", "wt", "wt_quo", "add_n", "add_pct", "ci", "OR", "color_signif",
+  "color_ratio_ci", "ci_scale"))
 
 # NSE column symbols in dplyr verbs over ordinary data frames:
 #   `var`               -- reg_build()'s group_by(var) on the regression skeleton (R/tab_reg.R)
@@ -852,9 +853,11 @@ get_ci_type.data.frame <- function(x, ...) {
 #' @return A modified fmt vector.
 #' @export
 set_ci_type   <- function(x, ci_type) {
-  # "or" (Phase 12a): the cell carries a log-OR Wald exp() interval in ci_inf/ci_sup, centred on
-  # the odds ratio (neutral value 1) -- read by ci_center() and the color significance gate.
-  stopifnot(ci_type %in% c("cell", "diff", "diff_row", "diff_col", "or",
+  # The two MULTIPLICATIVE interval scales (neutral 1, read by ci_center() + the colour significance
+  # gate + format()'s bracket), as opposed to the additive diff* ones (neutral 0):
+  #   "or"    (Phase 12a) -- a log-OR Wald exp() interval, centred on the odds ratio.
+  #   "ratio" (Phase 14b) -- a Katz log-RR exp() interval, centred on the cell/reference ratio.
+  stopifnot(ci_type %in% c("cell", "diff", "diff_row", "diff_col", "or", "ratio",
                            "no", "", NA_character_))
   `attr<-`(x ,"ci_type" , ci_type)
 }
@@ -1365,6 +1368,7 @@ get_ci_sup <- fmt_field_factory("ci_sup")
 ci_center  <- function(x) {
   if (get_ci_type(x) %in% c("diff", "diff_row", "diff_col")) get_diff(x)
   else if (get_ci_type(x) == "or")                          get_or(x)   # Phase 12a: OR CI centred on the odds ratio
+  else if (get_ci_type(x) == "ratio")                       get_ratio(x)# Phase 14b: Katz RR CI centred on the ratio
   else if (get_type(x) == "mean")                            get_mean(x)
   else                                                       get_pct(x)
 }
@@ -1849,14 +1853,27 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   mean_ci <- ok & display == "mean_ci"
   diff_mean <- ok & display == "diff" & type == "mean"
 
-  disp_ci   <- display == "ci" & ci_type == "diff" & !nas
+  # Phase 14b: the stored interval's SCALE, a scalar (ci_type is a column attribute). The additive
+  # diff* scales are shown x100 with a "%"; the multiplicative "ratio" one is a bare ratio (neutral 1)
+  # -- never x100, never clamped to [0;100], no "%". Same shape as a mean's absolute bounds, hence
+  # `ci_bare`, which is what the branches below actually key on.
+  ci_mult   <- ci_type %in% c("or", "ratio")
+  ci_bare   <- (type == "mean") | ci_mult
+  disp_ci   <- display == "ci" & ci_type %in% c("diff", "ratio") & !nas
+  # A ratio interval on a pct column would inherit that column's digits = 0 and print "[1;2]".
+  # 2 decimals, exactly like the `or` displays just above: a ratio bracket is the same kind of
+  # quantity, and at 1 decimal the bounds routinely round equal -- which makes the block below
+  # collapse the bracket to a bare point estimate ("0.6" for a real [0.55;0.63]).
+  digits[!nas & display == "ci" & ci_type == "ratio" & digits < 2L] <- 2L
   plus_ci <- (pct_ci | mean_ci) # ci_pct_mean
   plus_disp_ci <- (plus_ci | disp_ci)
   # plus_ci <- (ci_pct_mean | disp_ci)# & !is.na(get_ci(x))
 
   #pct_or_pct_ci <- ok & display %in% c("pct", "pct_ci", "diff", "ctr")
   pct_no_ci     <- ok & display %in% c("pct", "diff", "ctr") & !(display == "diff" & type == "mean")
-  diff_pct      <- ok & display == "diff" & type != "mean"
+  # Phase 14b: EVERY diff display is signed (see the sign block below). Means keep their own mask
+  # only because their digits are bumped to >= 1 and they take no x100 / "%".
+  diff_signed   <- ok & display == "diff"
   n_wn          <- ok & (display %in% c("n", "wn", "mean", "mean_ci", "var", "rr", "or", "or_pct",
                                         "OR", "OR_pct", "gof") |             # Phase 12f: gof -> big.mark
                            (display == "ci" & type == "mean") )
@@ -1873,12 +1890,13 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
     # pvalue is shown x100 with "%" by its own rendering path (not pct_or_ci), so add it to the
     # Excel "%" mask; a p-value shown as a "<0.01%" threshold still stores its raw value.
     excel_pct <- pct_or_ci | (!nas & display == "pvalue")
-    # Phase 13c-v: pct diff + contrib get an explicit +/- sign; ratio gets a leading x. Mean diffs are
-    # left as-is (their text display is still the legacy ratio, deferred to Phase 5 -- don't desync).
+    # Phase 13c-v: diff + contrib get an explicit +/- sign; ratio gets a leading x.
+    # Phase 14b: mean diffs join the `signed` mask. They were excluded only because their text display
+    # was still the legacy multiply sign, which that display no longer is -- so excluding them now is
+    # what WOULD desync the bypass from format()'s "+1.2".
     return(excel_numfmt_code(digits, pct = excel_pct,
                              ci = !nas & display == "ci", text = plus_ci,
-                             signed = !nas & (display == "ctr" |
-                                                (display == "diff" & type != "mean")),
+                             signed = !nas & display %in% c("ctr", "diff"),
                              ratio  = !nas & display == "rr"))
   }
 
@@ -1916,19 +1934,23 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
       # Phase 3a: read the real asymmetric bounds ci_inf/ci_sup directly (Wilson/Newcombe/AC/
       # Welch-t) instead of reconstructing a symmetric bracket from the half-width. This also
       # resolves the former WS2 mean-scaling FIXME -- the stored mean-diff bounds are absolute.
-      lower <- dplyr::if_else(plus_disp_ci[plus_disp_ci] & type == "mean",
+      # Phase 14b: `ci_bare` (a mean's absolute bounds, or a multiplicative ratio one) widens what was
+      # `type == "mean"` -- a ratio interval is likewise shown as stored, not x100.
+      lower <- dplyr::if_else(plus_disp_ci[plus_disp_ci] & ci_bare,
                               get_ci_inf(x)[plus_disp_ci],
                               get_ci_inf(x)[plus_disp_ci] * 100)
-      upper <- dplyr::if_else(plus_disp_ci[plus_disp_ci] & type == "mean",
+      upper <- dplyr::if_else(plus_disp_ci[plus_disp_ci] & ci_bare,
                               get_ci_sup(x)[plus_disp_ci],
                               get_ci_sup(x)[plus_disp_ci] * 100)
 
-      # The estimate the bracket is centred on -- shown when the rounded bounds coincide.
+      # The estimate the bracket is centred on -- shown when the rounded bounds coincide. ci_center()
+      # is the same dispatch the bounds were built on (diff / ratio / or), so it cannot disagree.
+      ctr_for_ci <- ci_center(x)
       ref_for_ci <- dplyr::if_else(
         disp_ci[plus_disp_ci],
-        true  = dplyr::if_else(plus_disp_ci[plus_disp_ci] & type == "mean",
-                               true  =  get_diff(x)[plus_disp_ci],
-                               false =  get_diff(x)[plus_disp_ci] * 100 ),
+        true  = dplyr::if_else(plus_disp_ci[plus_disp_ci] & ci_bare,
+                               true  =  ctr_for_ci[plus_disp_ci],
+                               false =  ctr_for_ci[plus_disp_ci] * 100 ),
         false = out[plus_disp_ci])
 
       lower <- dplyr::if_else(pct_ci[plus_disp_ci], pmax(lower,   0), lower)
@@ -1948,7 +1970,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
                            "]"
         )
       )
-      out_ci <- paste0(out_ci, dplyr::if_else(plus_disp_ci[plus_disp_ci] & type == "mean", "", "%")) # pct_ci[plus_disp_ci]
+      out_ci <- paste0(out_ci, dplyr::if_else(plus_disp_ci[plus_disp_ci] & ci_bare, "", "%")) # pct_ci[plus_disp_ci]
     }
   }
   # }
@@ -2001,12 +2023,19 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
     )
   }
 
-  out[diff_pct] <- ifelse(                            # "+" sign on positive pct diffs
-    !startsWith(out[diff_pct], "-"),            # !out[diff_pct] %in% c("0%", ) &
-    paste0("+", out[diff_pct]),
-    out[diff_pct]
+  # Phase 14b: an explicit "+" on every non-negative diff, means included. The numeric `diff` field
+  # has been a real difference (cell_mean - ref_mean) since Phase 2, but its DISPLAY kept the legacy
+  # multiply sign, so a mean diff read "x-0.2" -- a multiplicative glyph on an additive quantity,
+  # which no reader could tell from the ratio. Means now render in the variable's own units
+  # ("+1.2" / "-0.22"), exactly like a pct diff minus the "%". The sd-standardized (Glass's delta)
+  # view the colour uses stays a COLOUR device: it is named by the legend and by the tooltip's
+  # "std diff:" line, never by the cell -- so the number always equals $diff, and tab_xl (which
+  # writes the raw field) cannot desync. `ratio` is what carries a multiply sign now (disp_rr above).
+  out[diff_signed] <- ifelse(
+    !startsWith(out[diff_signed], "-"),
+    paste0("+", out[diff_signed]),
+    out[diff_signed]
   )
-  out[diff_mean] <- paste0(mult_sign, out[diff_mean]) # multiply sign on mean diffs
 
 
  if (ci_print_moe) {
@@ -2622,32 +2651,50 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
     raw[!is.finite(raw)] <- NA_real_        # sd_ref 0/NA -> undefined -> uncolored
   }
 
-  # significance from the stored bounds. A diff-type CI tests exclusion of 0; an OR CI (ci_type
-  # "or", log-OR Wald exp() bounds) tests exclusion of 1, the multiplicative neutral (Phase 12a).
-  has_diff_ci <- get_ci_type(x) %in% c("diff", "diff_row", "diff_col")
-  is_or_ci    <- measure == "or" & get_ci_type(x) == "or"
-  neutral     <- if (measure == "or") 1 else 0
-  sig_pos <- (has_diff_ci | is_or_ci) & get_ci_inf(x) > neutral
-  sig_neg <- (has_diff_ci | is_or_ci) & get_ci_sup(x) < neutral
+  # Significance from the stored bounds. Phase 14b: it is a property of the INTERVAL, not of the
+  # measure being coloured -- an interval is significant when it excludes ITS OWN neutral (0 for the
+  # additive diff* scales, 1 for the multiplicative "or"/"ratio" ones). This was keyed on the measure,
+  # which held only while each measure had exactly one possible ci_type; now that `ratio` can own the
+  # stored interval (and a `diff` channel derive from it), the two must be read apart. It also fixes
+  # the old mismatch: measure "or" + a difference ci_type tested the diff bounds against the OR's
+  # neutral 1, so nothing was ever significant. All three scales test the same null (p1 = p2), so
+  # whichever interval is stored answers it.
+  cit         <- get_ci_type(x)
+  ci_mult     <- cit %in% c("or", "ratio")
+  has_ci      <- cit %in% c("diff", "diff_row", "diff_col", "or", "ratio")
+  ci_neutral  <- if (ci_mult) 1 else 0
+  sig_pos <- has_ci & get_ci_inf(x) > ci_neutral
+  sig_neg <- has_ci & get_ci_sup(x) < ci_neutral
   sig_pos[is.na(sig_pos)] <- FALSE
   sig_neg[is.na(sig_neg)] <- FALSE
 
   if (policy == "guaranteed_effect") {
     # The GUARANTEED (CI-floor) magnitude, on the MEASURE'S OWN scale so fmt_color_slots() folds it
-    # around the right centre. The stored bounds are the shared cell-vs-ref DIFFERENCE CI (centre 0)
-    # for diff/ratio, or the native OR CI (centre 1) for `or`.
+    # around the right centre. The stored bounds may be on ANOTHER scale: only one interval is stored
+    # per column (the primary/text measure's), and the second channel derives from it.
     floor_q <- dplyr::case_when(sig_pos ~ get_ci_inf(x),
                                 sig_neg ~ get_ci_sup(x),
                                 TRUE    ~ NA_real_)
-    if (measure == "ratio") {
-      # ratio has no native CI: convert the guaranteed DIFF to a guaranteed RATIO. Since
-      # ratio - 1 = diff / p_ref, (ratio - 1) * (guar_diff / diff) = guar_diff / p_ref, so the
-      # guaranteed ratio is 1 + guar_diff/p_ref = (p_ref + guar_diff)/p_ref (centre 1). Without this
-      # the raw diff bound (~0.05) was folded around 1 -> 1/0.05 -> strongest UNDER colour on every
-      # significant cell, regardless of direction.
-      floor_q <- 1 + (get_ratio(x) - 1) * (floor_q / get_diff(x))
+    # `diff` and `ratio` are two views of ONE cell-vs-reference comparison: both are affine in the
+    # cell proportion with the reference held at its point estimate (ratio - 1 = diff / p_ref). So a
+    # bound on either maps exactly onto the other by one ratio of offsets from their neutrals -- no
+    # new field, and the diff -> ratio direction is byte-identical to the expression that was here.
+    # Without it the raw diff bound (~0.05) was folded around the ratio's centre 1 -> 1/0.05 ->
+    # strongest UNDER colour on every significant cell, regardless of direction.
+    rescale_bound <- function(q, pt_from, nt_from, pt_to, nt_to)
+      nt_to + (pt_to - nt_to) * (q - nt_from) / (pt_from - nt_from)
+    # The scrub stays scoped to the conversions (a 0/0 there gives NaN); leaving it off the
+    # unconverted measures is what keeps every existing colour byte-identical.
+    ci_is_ratio <- identical(cit, "ratio")
+    if (measure == "ratio" && !ci_is_ratio) {          # diff bound -> ratio bound
+      floor_q <- rescale_bound(floor_q, get_diff(x),  0, get_ratio(x), 1)
       floor_q[!is.finite(floor_q)] <- NA_real_
-    } else if (measure == "diff" && is_std_diff && isTRUE(scale$std)) {
+    } else if (measure == "diff" && ci_is_ratio) {     # ratio bound -> diff bound (the mirror)
+      floor_q <- rescale_bound(floor_q, get_ratio(x), 1, get_diff(x),  0)
+      floor_q[!is.finite(floor_q)] <- NA_real_
+    }
+    # A mean/coef never carries a ratio CI (Katz is proportions-only), so this cannot combine above.
+    if (measure == "diff" && is_std_diff && isTRUE(scale$std)) {
       floor_q <- floor_q / sd_ref
     }
     score <- floor_q
@@ -2974,6 +3021,10 @@ legend_method_name <- function(spec) {
   if (identical(spec$measure_text, "or")) return(gettext("Wald interval on the log odds-ratio"))
   if (identical(spec$measure_text, "contrib")) return(NA_character_)
   if (isTRUE(spec$is_mean)) return(gettext("Welch t interval"))
+  # Phase 14b: the STORED interval names itself. A ratio-coloured proportion column carries the Katz
+  # log-RR bounds, not one of the `method_diff` difference approximations the switch below names --
+  # and the legend must not claim a method the bracket was never built with.
+  if (identical(spec$ci_type, "ratio")) return(gettext("Katz interval on the log risk-ratio"))
   md <- cis$method_diff; if (is.null(md)) md <- "newcombe"
   switch(md,
          "newcombe" = gettext("Newcombe score interval"),

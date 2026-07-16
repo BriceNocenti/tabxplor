@@ -13,7 +13,8 @@ tab_ci(
   visible = FALSE,
   stars = NULL,
   method_cell = "wilson",
-  method_diff = "newcombe"
+  method_diff = "newcombe",
+  ci_scale = "diff"
 )
 }
 \arguments{
@@ -62,7 +63,16 @@ stars and the bracket never disagree. \code{FALSE} skips the significance comput
 
 \item{method_diff}{Character string, the proportion CI method for \code{ci = "diff"}: one of
 \code{"newcombe"} (default, hybrid-score, dual of the two-proportion score test), \code{"ac"}
-(Agresti-Caffo) or \code{"wald"}. Whatever the method, the stars come from that interval.}
+(Agresti-Caffo) or \code{"wald"}. Whatever the method, the stars come from that interval.
+It selects among the \emph{difference} methods only -- see \code{ci_scale}.}
+
+\item{ci_scale}{Character string, the scale the \code{ci = "diff"} interval is expressed on:
+\code{"diff"} (default) for a difference interval (neutral 0, one of the \code{method_diff}
+methods), or \code{"ratio"} for Katz's log-risk-ratio interval (neutral 1), stored as
+\code{ci_type = "ratio"} and centred on the cell/reference ratio. \code{tab()} sets it from the
+colour: the measure the reader sees owns the interval, so \code{color = "ratio"} (or
+\code{c("ratio", "diff")}) asks for the ratio one. Percentage columns only -- a mean keeps its
+difference interval, a ratio of means being a different problem (Fieller's theorem).}
 }
 \value{
 A \code{tibble} of class \code{tab}, colored based on differences (from

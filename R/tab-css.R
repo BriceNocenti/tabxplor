@@ -157,7 +157,16 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE) {
   static <- if (isTRUE(chrome)) c(
     ".tabxplor-tab{border-collapse:collapse;border-top:0;border-bottom:0;margin:0;}",
     ".tabxplor-tab caption{text-align:center;font-weight:bold;font-size:120%;}",
-    ".tabxplor-tab tfoot{font-size:80%;text-align:left;}"
+    ".tabxplor-tab tfoot{font-size:80%;text-align:left;}",
+    # Phase 14b: a cell tooltip is one line of "field: value ; field: value" prose, but bootstrap caps
+    # .tooltip-inner at max-width:200px, so it wrapped to four lines and was unreadable.
+    # WARNING: this selector is NOT scopable. Bootstrap moves the tooltip element to <body>
+    # (data-container="body", which is what stops a table's overflow from clipping it), so it is never
+    # a descendant of .tabxplor-tab and no ancestor selector can reach it. It therefore applies to any
+    # other bootstrap tooltip on the host page. Accepted: a one-line tooltip is what every bootstrap
+    # tooltip wants, the rule is unprefixed so a host stylesheet loaded later still wins, and it ships
+    # only with chrome = TRUE (never from tab_md()'s colour-only stylesheet).
+    ".tooltip-inner{max-width:none;white-space:nowrap;}"
   ) else character(0)
 
   body <- if (identical(theme, "auto")) {

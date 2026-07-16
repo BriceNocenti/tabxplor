@@ -2016,7 +2016,11 @@ if (color_legend & length(color_cols) != 0) {
 # the original if_else/case_when produced (all-FALSE condition), so the tooltip string is BYTE-IDENTICAL
 # -- only the discarded format() calls are skipped. `.ref` (the prep's precomputed ref_cells) skips the
 # get_reference() re-derivation.
-tab_kable_print_tooltip <- function(x, popover = FALSE, .ref = NULL) {
+# Phase 14b: TEXT only -- it used to also wrap its output in kableExtra::spec_popover() when
+# `popover = TRUE`, i.e. return HTML attributes from a text builder. The html engine passed that
+# through and wrapped it AGAIN, so `tab_kable(engine = "html", popover = TRUE)` rendered the escaped
+# attribute string as its own popover content. Attributes now live in tab_tooltip_attrs() alone.
+tab_kable_print_tooltip <- function(x, .ref = NULL) {
 
   n       <- length(x)
   blank   <- rep("", n)
@@ -2030,15 +2034,47 @@ tab_kable_print_tooltip <- function(x, popover = FALSE, .ref = NULL) {
   # field just like a plain "pct" cell would (the field-suppression guards below read `disp`).
   disp    <- display_primary(get_display(x))
 
-  ok_diff  <- !is.na(get_diff(x)) & !((totcol | totrows) & get_pct(x) == 1)
-  out_diff <- if (any(ok_diff)) {
+  # Phase 14b: format() right-pads a column to its widest cell so the numbers align in the TABLE; in
+  # a prose tooltip that pad is noise ("ratio:   x1"). Every interpolated value goes through this.
+  tip_num <- function(v) stringr::str_trim(format(v))
+
+  # Phase 14b: diff and ratio are ONE comparison group -- one gate, one "ref" token.
+  # `comparable` is the exclusion the diff line always had (a Total-column / total-row cell that IS
+  # its own base has nothing to compare itself to); it now gates the ratio line too, which used to
+  # print a vacuous "ratio: x1" down every Total column. NA-safe: a contrib table writes onto the
+  # Total column, whose pct is NA -- and an NA pct is not a 100% base (mirrors cond_pct / cond_ctr).
+  comparable <- !((totcol | totrows) & !is.na(get_pct(x)) & get_pct(x) == 1)
+  ok_diff    <- !is.na(get_diff(x))  & comparable
+  # `type == "mean"` was excluded, so a mean column showed no ratio line at all -- though under the
+  # default color = TRUE the ratio is exactly what colours it.
+  ok_rr      <- !is.na(get_ratio(x)) & comparable & !disp == "rr" &
+    type %in% c("col", "row", "mean")
+  # A reference cell's whole comparison group collapses to ONE "ref": its diff is 0 and its ratio 1
+  # by construction, so "diff: ref ; ratio: x1" said nothing, twice. The cell already prints
+  # "ref:38%" -- the tooltip only has to name the role, and keep the load-bearing "n:".
+  ref_grp    <- ref & (ok_diff | ok_rr)
+  show_rr    <- ok_rr & !ref_grp
+
+  out_diff <- if (any(ok_diff | ref_grp)) {
     dplyr::case_when(
-      ref & any(ok_diff)       ~ "diff: ref",
-      ok_diff & type == "mean" ~ paste0("diff: ", stringi::stri_unescape_unicode("\\u00d7"), #multiplication sign
-                                        format(set_display(x, "diff")) ),
-      ok_diff                  ~ paste0("diff: ",      format(set_display(x, "diff")) ),
-      TRUE                     ~ ""
+      ref_grp ~ "ref",
+      ok_diff ~ paste0("diff: ", tip_num(set_display(x, "diff"))),
+      TRUE    ~ ""
     )
+  } else blank
+
+  # Phase 14b: a mean column is coloured by the sd-standardized difference (Glass's delta =
+  # diff / sd_ref) against the mean_diff breaks, but the cell shows the RAW difference in the
+  # variable's own units -- so the legend's "+0.2; +0.5; +0.8 standard deviations" had no per-cell
+  # counterpart. Surface it on hover, next to the `sd:` it is measured in. Only where sd_ref
+  # resolves: an absent / zero-variance reference row leaves the ratio undefined (and the cell
+  # uncoloured), so it earns no line.
+  ok_std  <- ok_diff & !ref_grp & type == "mean"
+  out_std <- if (any(ok_std)) {
+    std <- get_diff(x) / suppressWarnings(sqrt(get_ref_var(x)))
+    std[!is.finite(std)] <- NA_real_
+    dplyr::if_else(ok_std & !is.na(std),
+                   paste0("std diff: ", sprintf("%+.2f", std), "sd"), "")
   } else blank
 
   ci_type  <- get_ci_type(x)
@@ -2047,85 +2083,89 @@ tab_kable_print_tooltip <- function(x, popover = FALSE, .ref = NULL) {
   out_ci   <- if (any(has_ci)) {
     dplyr::if_else(
       condition = has_ci,
-      true      = paste0(ci_start, format(set_display(x, "ci") %>%
-                                            set_digits(dplyr::if_else(digits == 0L,
-                                                                      digits + 1L,
-                                                                      digits))) ),
+      true      = paste0(ci_start, tip_num(set_display(x, "ci") %>%
+                                             set_digits(dplyr::if_else(digits == 0L,
+                                                                       digits + 1L,
+                                                                       digits))) ),
       false     = ""
     )
   } else blank
 
+  # str_trim: on a reference cell out_diff is the bare "ref" and out_ci is empty (a reference is
+  # never compared to itself -> NA bounds), which would otherwise leave a trailing space.
   out_diff <- switch(ci_type,
-                     "diff" = paste0(out_diff, " ", stringr::str_remove(out_ci, "%$")),
+                     "diff"  = ,
+                     "ratio" = stringr::str_trim(paste0(out_diff, " ",
+                                                        stringr::str_remove(out_ci, "%$"))),
                      out_diff)
   out_ci   <- switch(ci_type, "cell" = out_ci, "")
 
   cond_pct <- type %in% c("col", "row", "all", "all_tabs") &
     !is.na(get_pct(x)) & !disp %in% c("pct", "pct_ci")
   out_pct <- if (any(cond_pct)) {
-    dplyr::if_else(cond_pct, format(set_display(x, "pct")), "")
+    dplyr::if_else(cond_pct, tip_num(set_display(x, "pct")), "")
   } else blank
 
   cond_mean <- type == "mean" & !is.na(get_mean(x)) & !disp %in% c("mean", "mean_ci")
   out_mean <- if (any(cond_mean)) {
-    dplyr::if_else(cond_mean, format(set_display(x, "mean")), "")
+    dplyr::if_else(cond_mean, tip_num(set_display(x, "mean")), "")
   } else blank
 
   cond_sd <- type == "mean" & !is.na(get_var(x)) & !disp == "var"
   out_sd <- if (any(cond_sd)) {
+    vr <- get_var(x)                                   # get_var()/get_digits(), not the `$` proxy pull
     dplyr::if_else(
       cond_sd,
       dplyr::if_else(
-        x$var >= 0,
-        true  = paste0("sd: ", format(set_display(set_digits(set_var(x, suppressWarnings(sqrt(x$var))), x$digits + 1L), "var"))),
+        vr >= 0,
+        true  = paste0("sd: ", tip_num(set_display(set_digits(set_var(x, suppressWarnings(sqrt(vr))),
+                                                              get_digits(x) + 1L), "var"))),
         false = ""),
       "")
   } else blank
 
   # Phase 13c-i: the ratio tooltip line was mislabelled ("rr:") and formatted the OR field, so a
   # color = c("diff","ratio") table (a ratio but no OR) showed an empty value. Format the rr field
-  # (the ×/÷ ratio display) under a clearer "ratio:" label; still hidden when no cell carries a ratio.
-  cond_rr <- type %in% c("col", "row") & !is.na(get_ratio(x)) & !disp == "rr"
-  out_rr <- if (any(cond_rr)) {
-    dplyr::if_else(cond_rr, paste0("ratio: ", format(set_display(x, "rr")) ), "")
+  # (the ×/÷ ratio display) under a clearer "ratio:" label. Gate: `show_rr` (Phase 14b, above).
+  out_rr <- if (any(show_rr)) {
+    dplyr::if_else(show_rr, paste0("ratio: ", tip_num(set_display(x, "rr")) ), "")
   } else blank
 
   cond_or <- type %in% c("col", "row") & !is.na(get_or(x)) &
     !disp %in% c("or", "OR", "or_pct", "OR_pct")
   out_or <- if (any(cond_or)) {
-    dplyr::if_else(cond_or, paste0("OR: ", format(set_display(x, "or")) ), "")
+    dplyr::if_else(cond_or, paste0("OR: ", tip_num(set_display(x, "or")) ), "")
   } else blank
 
-  # NA-safe: a contrib table writes `ctr` onto the Total column, whose `pct` is NA -> the bare
-  # get_pct(x) == 1 exclusion returned NA and crashed `if (any(cond_ctr))`. An NA pct is not a 100%
-  # base, so guard the comparison (mirrors cond_pct's !is.na(get_pct(x)) above).
-  cond_ctr <- !is.na(get_ctr(x)) & !(get_ctr(x) == Inf) &
-    !((totcol | totrows) & !is.na(get_pct(x)) & get_pct(x) == 1)
+  # `comparable` (Phase 14b) is the same base-cell exclusion this line had spelled out for itself.
+  cond_ctr <- !is.na(get_ctr(x)) & !(get_ctr(x) == Inf) & comparable
   out_ctr <- if (any(cond_ctr)) {
     mctr      <- if (get_comp_all(x)) { totrows & tottabs & !totcol } else { totrows & !totcol }
     ctr_start <- dplyr::if_else(mctr, "mean_ctr: ", "contrib: ")
     dplyr::if_else(cond_ctr,
-                   paste0(ctr_start, format(set_display(x, "ctr")) %>% stringr::str_remove("^-")),
+                   paste0(ctr_start, tip_num(set_display(x, "ctr")) %>% stringr::str_remove("^-")),
                    "")
   } else blank
 
   cond_n <- !is.na(get_n(x)) & !disp == "n"
   out_n <- if (any(cond_n)) {
-    dplyr::if_else(cond_n, paste0("n: ", format(set_display(x, "n")) ), "")
+    dplyr::if_else(cond_n, paste0("n: ", tip_num(set_display(x, "n")) ), "")
   } else blank
 
-  out <- paste(out_pct, out_mean, out_sd, out_diff, out_rr, out_or,
-               out_ci, out_ctr, out_n, sep = " ; ") %>%
-    stringr::str_replace_all(";  ; ", "; ") %>%
-    stringr::str_replace_all(";  ; ", "; ") %>%
-    stringr::str_replace_all(";  ; ", "; ") %>%
-    stringr::str_remove("^ *; *") %>%
-    stringr::str_remove(" *; *$") |>
-    stringr::str_remove("NA *;")
-
-  out[is.na(out) | out == "NA"] <- ""
-
-  if (popover) out <- kableExtra::spec_popover(out, position = "left")
+  # Phase 14b: join the NON-EMPTY fragments per cell. The old chain pasted all of them with a fixed
+  # " ; " separator and then rewrote the result to collapse the empty slots -- str_replace_all(";  ; ",
+  # "; ") three times, plus head/tail trims and an "NA ;" scrub. Non-overlapping matching means one
+  # pass cannot collapse adjacent empties, which is why it was repeated: it silently assumed no cell
+  # ever leaves >4 in a row. Adding a 10th fragment would have broken that assumption. This is exact,
+  # for any number of fragments, and drops the NA scrub (an NA fragment is simply not joined).
+  frags <- list(out_pct, out_mean, out_sd, out_diff, out_std, out_rr, out_or,
+                out_ci, out_ctr, out_n)
+  out <- rep("", n)
+  for (f in frags) {
+    k <- !is.na(f) & nzchar(f)
+    if (!any(k)) next
+    out[k] <- paste0(out[k], ifelse(nzchar(out[k]), " ; ", ""), f[k])
+  }
 
   out
 }

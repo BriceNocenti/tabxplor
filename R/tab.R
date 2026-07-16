@@ -568,6 +568,9 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
            # Phase 14a: the NORMALIZED policy (post the "color_all_signif" COMPAT rename), so
            # tab_resolve_settings() can force the difference CI a gated colour needs.
            color_signif = color_spec$signif,
+           # Phase 14b: same reason -- the two-channel spec, not the legacy string, knows whether the
+           # ratio is the measure the reader sees (and so owns the stored interval).
+           color_ratio_ci = color_pct_text_is_ratio(color_spec),
            add_n = add_n, add_pct = add_pct,
            subtext = subtext, n_min = n_min, parallel = parallel,
            spread_vars = spread_vars, names_prefix = names_prefix, names_sort = names_sort,
@@ -765,6 +768,26 @@ finalize_color_spec <- function(x, spec) {
     spec$signif != "ignore" || identical(spec$text, "ratio")
   if (!rewrite) return(x)
   dplyr::mutate(x, dplyr::across(dplyr::where(is_fmt), ~ finalize_one_col(.x, spec)))
+}
+
+# Phase 14b: does the TEXT channel of a PROPORTION column carry the ratio measure? That is the
+# trigger for the Katz ratio CI: the measure the reader sees owns the stored interval, and any second
+# channel derives from it (fmt_color_plan()'s rescale_bound). Decided here, on the spec, because the
+# `legacy` string tab_resolve_settings() runs on cannot express it -- legacy_union() maps every ratio
+# onto a diff-family string, which is exactly why the policy had to be threaded separately in 14a.
+#
+# PROPORTIONS ONLY. Katz is a risk-RATIO interval for two proportions; a ratio of MEANS would need
+# Fieller's theorem (out of scope), so numeric columns keep their difference CI whatever their text
+# channel is. That is also what keeps the numeric default on today's behaviour: under color = TRUE a
+# mean column's text channel IS the ratio (resolve_col_measures below).
+#' @keywords internal
+color_pct_text_is_ratio <- function(spec) {
+  if (is.null(spec) || is.null(spec$mode)) return(FALSE)
+  m <- switch(spec$mode,
+              "flat"    = spec$text,
+              "by_type" = spec$types[["pct"]][1],
+              NA_character_)   # "auto" -> a pct column's text channel is "diff"; "off" -> no colour
+  identical(unname(m), "ratio")
 }
 
 # The per-column measure vector (text[, background]) the spec assigns to a column, given its built
@@ -1153,6 +1176,7 @@ ctx_update <- function(ctx, updates) {
 #' @noRd
 tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
                       pct = "no", color = "no", color_signif = "ignore",
+                      color_ratio_ci = FALSE,
                       OR = "no", chi2 = FALSE,
                       na = "keep", levels = "all", na_drop_all,
                       cleannames = NULL, output = "single", #pvalue_line = NULL,
@@ -1195,7 +1219,8 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
     row_vars_quo = rlang::enquo(row_vars), col_vars_quo = rlang::enquo(col_vars),
     tab_vars_quo = rlang::enquo(tab_vars), wt_quo = rlang::enquo(wt),
     na_drop_all_quo = rlang::enquo(na_drop_all),
-    pct = pct, color = color, color_signif = color_signif, OR = OR, chi2 = chi2,
+    pct = pct, color = color, color_signif = color_signif,
+    color_ratio_ci = color_ratio_ci, OR = OR, chi2 = chi2,
     na = na, levels = levels,
     cleannames = cleannames, output = output,
     other_if_less_than = other_if_less_than, other_level = other_level,
@@ -1267,7 +1292,7 @@ tab_build_tables <- function(ctx) {
 #' @noRd
 tab_rowvar_ctxs <- function(ctx) {
   n <- length(ctx$row_vars)
-  per_rv <- c("row_vars", "color", "OR", "chi2", "ref", "ref2", "comp", "ci",
+  per_rv <- c("row_vars", "color", "OR", "chi2", "ref", "ref2", "comp", "ci", "ci_scale",
               "totaltab", "totrow", "color_diff_OR", "color_ctr", "color_ci", "color_num",
               "ref_vect", "pct_vect", "na_text", "na_num", "fine_num")
   shared <- ctx[setdiff(names(ctx), c(per_rv, "data", "fine_fused"))]
@@ -1522,6 +1547,7 @@ tab_setup <- function(ctx) {
                                          ref = ref, pct_vect = pct_vect,
                                          col_vars_text = col_vars_text, totrow = totrow,
                                          color_signif = color_signif,
+                                         color_ratio_ci = color_ratio_ci,
                                          na = na, wt_name = as.character(wt),
                                          other_if_less_than = other_if_less_than, comp = comp,
                                          tab_vars = as.character(tab_vars),
@@ -1531,6 +1557,7 @@ tab_setup <- function(ctx) {
   color         <- .settings$color
   chi2          <- .settings$chi2
   ci            <- .settings$ci
+  ci_scale      <- .settings$ci_scale     # Phase 14b: "diff" / "ratio" (the Katz interval)
   totrow        <- .settings$totrow
   color_diff_OR <- .settings$color_diff_OR
   color_ctr     <- .settings$color_ctr
@@ -1548,7 +1575,7 @@ tab_setup <- function(ctx) {
     tab_row_names = tab_row_names, na_drop_all = na_drop_all,
     cleannames = cleannames, stars = stars, lvs = lvs,
     totaltab = totaltab, totrow = totrow, ref = ref, ref2 = ref2, ref_vect = ref_vect,
-    OR = OR, comp = comp, color = color, ci = ci, chi2 = chi2,
+    OR = OR, comp = comp, color = color, ci = ci, ci_scale = ci_scale, chi2 = chi2,
     digits = digits, total_names = total_names, conf_level = conf_level, na = na,
     totcol = totcol, tot_cols_type = tot_cols_type, pct_vect = pct_vect,
     color_diff_OR = color_diff_OR, color_ctr = color_ctr,
@@ -1872,7 +1899,7 @@ tab_transform <- function(ctx) {
                                  color_ctr = color_ctr, color_ci = color_ci,
                                  conf_level = conf_level, stars = stars,
                                  method_cell = method_cell, method_diff = method_diff,
-                                 cached_test = cached_test)
+                                 ci_scale = ci_scale, cached_test = cached_test)
     tabs_text <- applied$tab
     tests     <- applied$test
   }
@@ -5329,6 +5356,14 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
 #' @param method_diff Character string, the proportion CI method for \code{ci = "diff"}: one of
 #' \code{"newcombe"} (default, hybrid-score, dual of the two-proportion score test), \code{"ac"}
 #' (Agresti-Caffo) or \code{"wald"}. Whatever the method, the stars come from that interval.
+#' It selects among the \emph{difference} methods only -- see \code{ci_scale}.
+#' @param ci_scale Character string, the scale the \code{ci = "diff"} interval is expressed on:
+#' \code{"diff"} (default) for a difference interval (neutral 0, one of the \code{method_diff}
+#' methods), or \code{"ratio"} for Katz's log-risk-ratio interval (neutral 1), stored as
+#' \code{ci_type = "ratio"} and centred on the cell/reference ratio. \code{tab()} sets it from the
+#' colour: the measure the reader sees owns the interval, so \code{color = "ratio"} (or
+#' \code{c("ratio", "diff")}) asks for the ratio one. Percentage columns only -- a mean keeps its
+#' difference interval, a ratio of means being a different problem (Fieller's theorem).
 #' @param color The type of colors to print, as a single string.
 #' \itemize{
 #'   \item \code{"no"}: by default, no colors are printed
@@ -5390,8 +5425,10 @@ tab_ci <- function(tabs,
                    color = "no",
                    visible = FALSE,
                    stars = NULL,
-                   method_cell = "wilson", method_diff = "newcombe") {
+                   method_cell = "wilson", method_diff = "newcombe",
+                   ci_scale = "diff") {
   stopifnot(all(ci %in% c("auto", "cell", "diff", "no")), #"r_to_r", "c_to_c", "tab_to_tab",
+            all(ci_scale %in% c("diff", "ratio")),
             all(comp %in%  c("tab", "all")),
             all(method_cell %in% c("wilson", "wald")),
             all(method_diff %in% c("newcombe", "ac", "wald"))
@@ -5558,11 +5595,23 @@ tab_ci <- function(tabs,
         "diff_col" = ,
         "diff_row" = switch(
           tp,
+          # Phase 14b: a MEAN keeps the difference interval whatever the colour asks -- a ratio of
+          # means would need Fieller's theorem, not Katz (which is a two-PROPORTION method). This is
+          # also what keeps the numeric default unchanged: under color = TRUE a mean's text channel
+          # already IS the ratio.
           "mean" = ci_mean_diff2(get_mean(col), get_var(col), x_n[[nm]],
                                  ref[[nm]], ref_var[[nm]], ref_n[[nm]],
                                  conf_level = conf_level, want_p = want_p),
-          ci_prop_diff(get_pct(col), x_n[[nm]], ref[[nm]], ref_n[[nm]],
-                       conf_level = conf_level, method = method_diff, want_p = want_p)))
+          # Proportions: the interval follows the measure the reader sees (ci_scale, resolved once in
+          # tab_resolve_settings()). "ratio" -> Katz log-RR bounds on the ratio scale; else the
+          # difference methods. `method_diff` selects among the DIFFERENCE approximations only --
+          # Katz is the sole ratio interval offered, so it is not one of its values.
+          if (identical(ci_scale[1], "ratio"))
+            ci_katz_rr(get_pct(col), x_n[[nm]], ref[[nm]], ref_n[[nm]],
+                       conf_level = conf_level, want_p = want_p)
+          else
+            ci_prop_diff(get_pct(col), x_n[[nm]], ref[[nm]], ref_n[[nm]],
+                         conf_level = conf_level, method = method_diff, want_p = want_p)))
       ci_inf[[nm]] <- res$inf; ci_sup[[nm]] <- res$sup; pvalue[[nm]] <- res$pvalue
     }
 
@@ -5601,6 +5650,14 @@ tab_ci <- function(tabs,
 
     #Change ci_type and color, even for totals with no ci result
     ci_with_ref <- stringr::str_remove(ci_with_ref, "_row|_col")
+    # Phase 14b: name the SCALE the bounds were actually built on, so every reader (ci_center(),
+    # format()'s bracket, the colour significance gate, the legend) dispatches off the stored
+    # attribute rather than re-deriving the colour spec. Only the proportion diff columns switch:
+    # `ci_scale` is a whole-table setting, but means took the difference branch above regardless.
+    if (identical(ci_scale[1], "ratio")) {
+      is_ratio_ci <- ci_with_ref == "diff" & type != "mean"
+      ci_with_ref[is_ratio_ci] <- "ratio"
+    }
     ci_yes_ref  <- !is.na(ci_with_ref) & !ci_with_ref == "no"
 
     tabs[ci_yes_ref] <-
@@ -6585,7 +6642,7 @@ resolve_ref_vector <- function(ref, row_vars_chr, what = "row_var") {
 # "no"` skips the CI step. WARNING: keep byte-identical to the pre-6a two-batch passes.
 tab_apply_tests <- function(tab, do_chi2, ci, comp, color_ctr, color_ci,
                             conf_level, stars, method_cell, method_diff,
-                            cached_test = NULL) {
+                            ci_scale = "diff", cached_test = NULL) {
   if (isTRUE(do_chi2)) {
     # Phase 7e tier-2 cache: on a hit (cached_test supplied) and the common non-contrib path,
     # inject the cached omnibus test instead of re-running the vectorised engine. Restricted to
@@ -6608,7 +6665,8 @@ tab_apply_tests <- function(tab, do_chi2, ci, comp, color_ctr, color_ci,
   if (ci != "no") {
     tab <- tab_ci(tabs = tab, ci = ci, comp = comp, conf_level = conf_level,
                   color = color_ci, visible = ci == "cell", stars = stars,
-                  method_cell = method_cell, method_diff = method_diff)
+                  method_cell = method_cell, method_diff = method_diff,
+                  ci_scale = ci_scale)
   }
 
   list(tab = tab, test = test)

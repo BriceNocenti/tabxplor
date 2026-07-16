@@ -29,6 +29,16 @@
   *Note:* the html engine now sets the table's text, background and border colours explicitly. Light
   tables therefore gain a white background, and borders are one colour instead of inheriting each
   cell's colour (a `+20%` cell no longer has a coloured border).
+* **A real confidence interval for the ratio.** When the ratio is the measure you display -- the text
+  channel, i.e. `color = "ratio"` or `color = c("ratio", "diff")` on percentage columns -- the stored
+  interval is now **Katz's log-risk-ratio interval**, on the ratio scale and centred on the ratio
+  itself, instead of a difference interval converted after the fact with the reference held fixed.
+  Significance stars, greying and `"guaranteed_effect"` thresholds all read it, and the legend names
+  it. The interval belongs to the measure the reader sees: a second (background) channel derives from
+  it, which is what the ratio channel has always done. **Nothing changes unless you ask for it** --
+  `color = TRUE`, `"diff"` and `c("diff", "ratio")` keep the difference interval exactly as before.
+  Percentage columns only: a mean keeps its difference interval, a ratio of means being a different
+  problem (Fieller's theorem). Available directly as `tab_ci(ci_scale = "ratio")`.
 * **Meaningful colour legends.** The colour legend below each table is now a readable sentence -- e.g.
   *"Shades of blue: cells >= the Total row +5; +10; +20; +30 points. ... Grey: not significantly
   different from the Total row (Newcombe score interval, 95% confidence)."* -- with each break-word
@@ -389,6 +399,21 @@
   export to Excel, install `openxlsx2`. The produced workbooks look essentially the same.
 
 ## Bug corrections
+* **Mean differences no longer print a multiplication sign.** A `diff` on a numeric column showed
+  `×-0.2` — a multiplicative glyph on an additive quantity, indistinguishable from a ratio. The field
+  has held a real difference (cell mean − reference mean) since the 1.4.0 aggregate rewrite; the
+  display now matches it, in the variable's own units and with an explicit sign (`+1.2` / `-0.22`),
+  exactly like a percentage difference minus the `%`. Excel follows. The `×` now belongs to the ratio
+  alone. The sd-standardized view the colours use stays a colour device: the legend names its
+  thresholds, and cell tooltips gained a `std diff:` line so you can read them off a cell.
+* **Cell tooltips (`tab_kable()`).** Several fixes: a mean difference showed the multiplication sign
+  twice (`diff: ××-0.2`); a reference cell said `diff: ref ; ratio: ×1` — the same thing twice, plus a
+  vacuous ratio — and now says `ref` once, keeping its `n:`; a Total column, where every cell is its
+  own base, printed `ratio: ×1` on every row and now prints none; and values arrived padded with the
+  column's alignment spaces (`ratio:   ×1`). A mean column now shows the ratio it is coloured by
+  (it was suppressed). Tooltips are also reachable on the last columns again — they reorient when they
+  would overflow the window instead of always opening rightwards — and no longer wrap to four lines.
+  `tab_kable(engine = "html", popover = TRUE)` showed its own HTML attributes as the popover text.
 * **`color_signif` no longer greys out the whole table.** Asking for a significance policy without
   also writing `ci = "diff"` by hand produced an all-grey table: the confidence interval the policy
   gates on was never computed. `color_signif = "grey_non_signif"` / `"guaranteed_effect"` now request

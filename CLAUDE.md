@@ -28,14 +28,16 @@ R/
 │                              tab_rowvar_ctxs) ; tab_transform / tab_assemble_tables are SCALAR over one
 │                              row_var ; tab_assemble_output (merge/pvalue/unwrap);
 │                              tab_lump_others/tab_cleannames_relabel (extracted from tab_prepare)
-├── tab-agg.R        (~470 L) Aggregate-core (Phase 2-3): num_derive_stats/num_rollup, num_moment_scan
+├── tab-agg.R        (~500 L) Aggregate-core (Phase 2-3): num_derive_stats/num_rollup, num_moment_scan
 │                              + tab_aggregate_num (numeric tier-1 producer, Phase 7d-i),
-│                              CI engine (ci_pivot/ci_wilson/ci_newcombe/…), agg_chi2/agg_anova
+│                              CI engine (ci_pivot/ci_wilson/ci_newcombe/ci_katz_rr/…: 14b's Katz
+│                              log-RR is the RATIO-scale interval, ci_type="ratio"), agg_chi2/agg_anova
 ├── tab-counts.R     (~360 L) tab_counts() from-the-middle constructor (Phase 4): reshape any
 │                              input shape → count-aggregate → tab_plain(.fine) + shared finalize
-├── tab-resolve.R    (~180 L) tab_resolve_settings() (Phase 7b): the ONE pure arg-overwrite
+├── tab-resolve.R    (~200 L) tab_resolve_settings() (Phase 7b): the ONE pure arg-overwrite
 │                              cascade (color="auto"/forcing/split) shared by tab_build+tab_counts;
-│                              resolve_color_auto_num() (numeric arm). The jmvtab .js / cache boundary.
+│                              resolve_color_auto_num() (numeric arm); emits ci_scale (14b: "ratio"
+│                              = the Katz interval). The jmvtab .js / cache boundary.
 ├── tab-parallel.R   (~200 L) Phase 8/9a row-axis dispatch (Suggests-only mirai): tab_pmap() + trampoline,
 │                              named "tabxplor" pool (tab_pool_ensure/tab_parallel_workers/
 │                              tab_parallel_stop), tab_build_one() (the per-row_var worker, serial OR mirai).
@@ -77,11 +79,14 @@ R/
 │                              gains "auto" gated by allow_auto; static backends get "light");
 │                              Phase 13c-iii col_var header model tab_col_var_header()/tab_header_runs()
 │                              (spanning names + suffix-stripped level labels)
-├── tab-render-html.R (~340 L) Phase 10e tab_kable render seam: render_kable_html() (kableExtra +
+├── tab-render-html.R (~370 L) Phase 10e tab_kable render seam: render_kable_html() (kableExtra +
 │                              home-built html engines) + tab_kable_join(css=)/scrollbox. 13d: the html
 │                              engine is THEME-AGNOSTIC -- colour is a slot CLASS, never inline hex
 │                              (inline would beat any @media rule); the theme lives only in the <style>
-│                              tab_kable() builds. html_style_block() deleted.
+│                              tab_kable() builds. html_style_block() deleted. 14b: tab_tooltip_attrs()
+│                              = the ONE bootstrap tooltip/popover attr builder both engines use
+│                              (placement "auto right"; kableExtra takes it pre-classed ke_tooltip --
+│                              its spec_tooltip() match.arg CANNOT emit the two-token form)
 ├── utils.R         (1364 L)  Pipe re-export, .onLoad() options setup, factor utilities.
 │                              NOT the colour-palette DESIGN tools (preview_color_grid /
 │                              simulate_cvd_farver / plot_oklch_hue_strip_cvd / set_luminance...):
@@ -2096,8 +2101,13 @@ contrib/OR not forced), `test-calculations.R` (single-row test + chisq.test pari
 - **`tests/testthat/setup.R`'s `lifecycle_verbosity = "quiet"` has never worked** --
   `testthat::local_reproducible_output()` re-sets it to `"warning"` inside every `test_that()`. See the
   corrected comment there. Quiet comes from not calling the deprecated surface, or `suppressWarnings()`.
-- **`test-carve-parity.R` hand-builds a THIRD ctx** mirroring `tab_build()`'s -- a new ctx field must be
-  added there too, or `tab_setup()`'s `list2env(ctx)` leaves the local undefined.
+- **A new `ctx` field must be added in FOUR places**, or something breaks quietly:
+  (1) `tab_build()`'s ctx; (2) `tab_counts()`'s ctx; (3) `test-carve-parity.R`'s hand-built ctx (a THIRD
+  builder mirroring `tab_build`'s -- otherwise `tab_setup()`'s `list2env(ctx)` leaves the local
+  undefined and every stage-composition test errors); (4) **`utils::globalVariables()` in
+  `R/fmt_class.R`** -- `list2env(ctx, environment())` is invisible to codetools, so R CMD check NOTEs
+  `no visible binding for global variable`. Only `devtools::check()` catches (4); the suite is green
+  without it.
 
 ##### Original plan (historical intent)
 
@@ -2136,7 +2146,67 @@ Pure semantics; no display work. All five are reproduced above.
 `color = TRUE` + signif tables genuinely change — that is the point). New tests in
 `test-color-engine.R`, `test-calculations.R`, `test-display-extras.R`, `test-parallel-parity.R`.
 
-#### Phase 14b — tooltips + the numeric-diff display
+#### Phase 14b — tooltips + the numeric-diff display (DONE — 2026-07-17)
+
+All seven bullets landed. **Full suite FAIL 0 | WARN 0 | PASS 2725; `check()` 0/0/0; NO golden
+regeneration** — every `_golden/*.rds` and `_color_golden/*.rds` is byte-identical, only
+`_snaps/render-html.md` moved (tooltip text + placement, reviewed). New: `test-tooltips-14b.R`,
+`test-ci-ratio-katz.R`. Maintainer forks this session: do all 7 at once; mean diff = **raw signed
+difference + a `std diff:` tooltip line** (NOT sd units in the cell — the number must stay `$diff`,
+Excel writes the raw field, and `scale$std` belongs to the *colour* scale, which `color = TRUE` does
+not even consult for a mean); placement = **`"auto right"`**, not a last-N-columns rule.
+
+- **Numeric-diff display (the Phase-2 D3 leftover)** — `format()` now signs EVERY diff (`diff_signed`
+  = `ok & display == "diff"`); the mean branch's `mult_sign` is gone (`+1.2` / `-0.22`, the variable's
+  own units). The Excel `signed` mask widened to `display %in% c("ctr", "diff")` — excluding means is
+  what would desync the bypass now. `×`/`÷` belong to `rr` alone.
+- **Tooltip** (`tab_kable_print_tooltip`, now TEXT-only): shared `comparable` gate (the base-cell
+  exclusion the diff line had, NA-safe, now also gating ratio + reused by `cond_ctr`); ONE `ref` token
+  for the diff+ratio group (`ref_grp`); `type == "mean"` added to the ratio gate; `tip_num()` trims the
+  column padding off every interpolated value; new `std diff:` line (Glass's Δ, mean columns, where
+  `sd_ref` resolves). The `ref & any(ok_diff)` tautology is gone (it sat *inside* `if (any(ok_diff))`).
+- **Fragment join rewritten** — the old chain pasted all fragments with a fixed `" ; "` then rewrote
+  the result (`str_replace_all(";  ; ", "; ")` ×3 + trims + an `"NA ;"` scrub). Non-overlapping
+  matching means one pass cannot collapse adjacent empties, so it silently assumed <5 in a row; the
+  10th fragment makes 9-empty runs reachable (a Total cell is `n:` only). **A/B proved the OLD side
+  wrong** (`"f1: 5 ;"` / `"; f10: 5"`). Now an exact per-cell non-empty join.
+- **Placement** — ONE builder `tab_tooltip_attrs()` (`R/tab-render-html.R`) for both engines: the
+  kableExtra path passes it pre-classed (`cell_spec()` honours a `ke_tooltip`/`ke_popover` verbatim),
+  the html path pastes it into the `<td>`. `data-placement="auto right"` = Bootstrap's auto token
+  (prefer right, reorient on overflow) — measured at render time, so it also covers a scrolled table
+  or a narrow pane. ⚠ **`kableExtra::spec_tooltip()` cannot emit it**: its `match.arg()` takes ONE
+  token from `c("right","bottom","top","left","auto")`, so `"auto right"` errors and `c("auto","right")`
+  silently yields a length-2 attribute. Hence the hand-built string. `.tooltip-inner{max-width:none;
+  white-space:nowrap;}` added to `tab_css(chrome = TRUE)` — ⚠ NOT scopable (bootstrap moves the
+  tooltip to `<body>`, which is what stops the table clipping it), documented in place.
+- **Two pre-existing bugs fixed in passing**: the html engine's popover rendered its own escaped
+  ATTRIBUTE STRING as its content (`tab_kable_print_tooltip(popover=)` returned `spec_popover()`
+  attributes from a *text* builder, and the engine wrapped them again) — the arg is deleted, attrs
+  live only in `tab_tooltip_attrs()`; and the html popover omitted `data-trigger`, so it needed a
+  CLICK where kableExtra's opened on HOVER (the shared builder ends the drift).
+- **Katz ratio CI** — `ci_katz_rr()` (`R/tab-agg.R`), `ci_type = "ratio"` (the 4-site Phase-12a "or"
+  pattern: enum, `ci_center()`, the colour gate, `format()`'s bracket + a 2-digit bump so the bounds
+  do not round equal and collapse to a point). Trigger = `color_pct_text_is_ratio(spec)` (R/tab.R)
+  -> `tab_build(color_ratio_ci=)` -> ctx -> `tab_resolve_settings()`, which emits the new per-row_var
+  **`ci_scale`** ("diff"/"ratio", only where `ci == "diff"`) -> `tab_apply_tests()` -> `tab_ci(ci_scale=)`.
+  Threaded exactly like 14a's `color_signif`, and for the same reason: `legacy_union()` maps every
+  ratio onto a diff-family string, so the legacy `color` cannot carry it. **Proportions only** (a mean
+  ratio needs Fieller) — which is also what keeps `color = TRUE` untouched, since a mean's *text*
+  channel already IS the ratio.
+- **The significance gate is now CI-driven, not measure-driven** (`fmt_color_plan`): an interval is
+  significant when it excludes ITS OWN neutral (0 additive / 1 multiplicative). Keying it on the
+  measure only held while each measure had exactly one possible ci_type. It also fixes a latent
+  mismatch: measure `"or"` + a difference ci_type tested the diff bounds against 1 -> never
+  significant (the hazard 14a's cascade works around with `& !auto_or`).
+- **`rescale_bound()`** replaces the ad-hoc diff->ratio conversion: `diff` and `ratio` are both affine
+  in the cell proportion with the reference at its point estimate (`ratio - 1 = diff / p_ref`), so ONE
+  helper maps a bound either way by a ratio of offsets from the neutrals. The diff->ratio direction is
+  byte-identical to the expression it replaces; ratio->diff is the new mirror (the derived bg channel).
+- Legend names Katz off the STORED `ci_type` (not `method_diff`, which never built it) + FR
+  translation (`po/R-fr.po`, `.mo` recompiled — **`gettext` had to be apt-installed on this box**;
+  `tools::update_pkg_po()` needs `msgfmt`/`msgmerge`/`msginit`).
+
+##### Original plan (historical intent)
 
 - **Kill the double `×`**: drop the tooltip's hard-coded `×` ([tab_classes.R:2037](R/tab_classes.R#L2037)).
 - **Land the deferred numeric-diff display** (Phase 2's D3 leftover): `format()`'s mean-diff branch
@@ -2545,6 +2615,8 @@ In-code these are tagged for grep: `# KNOWN-BUG:` (bugs below), `# FIXME:` / `# 
 - FIXED (Phase 1a): `fmt()` public constructor cast `totcol` into `refcol` (the `refcol` argument was silently ignored). Now casts `refcol`. Low impact (refcol is normally set internally).
 - FIXED (Phase 7g-iii, golden-locked): two latent `ref` bugs surfaced by the reference picker. (1) `diff_index()` matched a level label as a REGEX, so a metacharacter label (e.g. `"$25000 or more"`) silently mismatched (the reported "picking the 2nd row_var does nothing" — `rincome` has `$` levels) and a substring label multi-matched — now EXACT-match-first, then regex. (2) `resolve_ref_vector()`'s `length(ref)==1` early return recycled even a NAMED length-1 ref, so `c(race = "Black")` leaked to every col_var — now only an UNNAMED length-1 recycles; a named one is name-matched. Both byte-identical on existing goldens (the goldens' refs are `first`/`tot`/non-substring labels).
 - FIXED (Phase 6e, golden-locked; hardened Phase 7d-i): `tab_num(..., <tab_vars>, ci="cell")` used to error ("some columns don't belong to the data.table: [tab_var]") in the `tot="no"` grand-total-only grouping-set / `na="keep"` reorder path. 6e made the grand total a length-1 list so `num_rollup()` keeps every tab_var present; 7d-i added a defensive `intersect(tab_vars, names(tabs_tot))` guard at the reorder + an `expect_no_error` regression in `test-num-fuse-parity.R`. Locked by golden `n_ci_tabvars` / `n_ci_tabvars_all`, both `comp` modes.
+- FIXED (Phase 14b): `tab_kable(engine = "html", popover = TRUE)` rendered its own escaped ATTRIBUTE STRING as the popover content (`data-content="data-toggle=&quot;popover&quot;..."`). `tab_kable_print_tooltip(popover = TRUE)` returned `kableExtra::spec_popover()`'s attributes from a *text* builder, and the html engine wrapped them again. Attributes now live only in `tab_tooltip_attrs()`; the arg is deleted. The same builder also ends a second drift: the html popover omitted `data-trigger`, so it needed a CLICK where kableExtra's opened on HOVER.
+- FIXED (Phase 14b): the tooltip fragment join left a dangling `"f1: 5 ;"` / leading `"; f10: 5"` past 4 adjacent empty fragments — `str_replace_all(";  ; ", "; ")` matches non-overlapping, so the 3 repeats could not collapse a longer run. Latent (no cell reached 5 empties) until the 10th fragment made 9-empty runs reachable. Now an exact per-cell non-empty join.
 - FIXED (2026-07-15, CI green-up): `tab_color_legend()`'s `lang` argument silently did nothing on **Linux** (`lang="fr"` returned English) — `Sys.setenv(LANGUAGE=)` alone can't switch gettext once glibc has cached a lookup. Now flushed via `flush_gettext_cache()` before/after/on-exit. Caught only because the snapshot tests SHIP and run on CI's Linux jobs. Cannot work under `LANG=C` (gettext ignores `LANGUAGE` there) — a documented gettext rule, not a package bug.
 - FIXED (2026-07-15, CI green-up): 6 unqualified `globalVariables()` calls in `R/fmt_class.R` with `utils` declared nowhere — `pkgload::load_all()` crashed ("could not find function globalVariables") in any process without `utils` attached, e.g. a testthat parallel worker. Now `utils::globalVariables()` + `utils` in Imports. Latent since forever; surfaced by turning on `Config/testthat/parallel`.
 - FIXED (2026-07-15, CI green-up): `test-tab_logit.R` "colour_signif='ignore'" asserted a symmetric OR break (`mag > 1.16`) against the **asymmetric** `mean_ratio` scale (`under` starts at 1.5 since Phase 13a) — wrong test; failed in isolation everywhere and on macOS CI, passing elsewhere only via a leaked global scale. Now derives the threshold per direction from the scale in force and pins it.

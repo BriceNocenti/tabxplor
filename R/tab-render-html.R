@@ -21,6 +21,38 @@
 # See: dev/tabxplor_phase10_exporters.md Sec 10, CLAUDE.md Phase 10e + 13d, R/tab-css.R.
 
 
+# === SECTION: tooltips =================================================================
+
+# Phase 14b: ONE builder for the bootstrap tooltip/popover attribute string, shared by both engines --
+# the kableExtra path hands it to cell_spec() pre-classed, the home-built path pastes it into the <td>.
+# They used to construct it separately ("match kableExtra's attributes so the JS binds identically"),
+# which had already drifted: the home-built popover omitted data-trigger, so it needed a CLICK where
+# kableExtra's opened on HOVER. One builder, one placement, no drift.
+#
+# WARNING: kableExtra::spec_tooltip()/spec_popover() CANNOT emit this placement -- their match.arg()
+# takes tokens from c("right","bottom","top","left","auto"), so "auto right" errors outright and
+# c("auto", "right") silently yields a length-2 attribute that recycles into the title. The string is
+# therefore built here and passed through the `ke_tooltip`/`ke_popover` class cell_spec() honours (it
+# pastes such an object into the <span> verbatim, without re-calling spec_*()).
+#' @keywords internal
+tab_tooltip_attrs <- function(text, popover = FALSE, escape = FALSE) {
+  esc <- if (escape) htmltools::htmlEscape(text, attribute = TRUE) else text
+  # "auto right" is Bootstrap's auto token: prefer right, reorient to left when the tooltip would
+  # overflow the viewport. It keeps today's look while fixing the last columns being unreachable in a
+  # narrow Viewer pane -- and unlike a "last N columns" rule in R it is measured at render time, so it
+  # also covers a horizontally scrolled table and a wide tooltip on a middle column.
+  out <- if (popover) {
+    paste0('data-toggle="popover" data-container="body" data-trigger="hover"',
+           ' data-placement="auto right" title="" data-content="', esc, '"')
+  } else {
+    paste0('data-toggle="tooltip" data-container="body"',
+           ' data-placement="auto right" title="', esc, '"')
+  }
+  class(out) <- if (popover) "ke_popover" else "ke_tooltip"
+  out
+}
+
+
 # === SECTION: the seam =================================================================
 
 # Render ONE prepared table (rd = prep$tables[[i]], meta = prep$meta) to HTML. `subtext` already has
@@ -129,11 +161,14 @@ render_kableExtra_engine <- function(rd, meta, subtext, caption, tooltips, popov
           bold       = boldc,
           color      = color_font[[colnm]],
           background = if (any_bg) color_back[[colnm]] else NULL,
+          # Phase 14b: pre-built (tab_tooltip_attrs) so both engines share one placement; cell_spec()
+          # passes a `ke_tooltip`/`ke_popover` through untouched.
           tooltip = if (!popover & tooltips) {
-            tab_kable_print_tooltip(col, .ref = rd$ann[[colnm]]$ref_cells)
+            tab_tooltip_attrs(tab_kable_print_tooltip(col, .ref = rd$ann[[colnm]]$ref_cells))
           } else {NULL},
           popover = if (popover & tooltips) {
-            tab_kable_print_tooltip(col, popover = TRUE, .ref = rd$ann[[colnm]]$ref_cells)
+            tab_tooltip_attrs(tab_kable_print_tooltip(col, .ref = rd$ann[[colnm]]$ref_cells),
+                              popover = TRUE)
           } else {NULL}
         )
       }
@@ -281,19 +316,14 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
     }
     tip <- rep("", n_row)
     if (tooltips && is_fmt(tab[[name]])) {
-      tp <- tab_kable_print_tooltip(tab[[name]], popover = popover,
+      tp <- tab_kable_print_tooltip(tab[[name]],
                                     .ref = if (is.null(a)) NULL else a$ref_cells)
       nz <- !is.na(tp) & nzchar(tp)
       if (any(nz)) {
-        esc <- htmltools::htmlEscape(tp[nz], attribute = TRUE)
-        # Match kableExtra's bootstrap tooltip/popover attributes so the JS binds identically in
-        # jamovi (data-container/placement) and standalone HTML.
-        tip[nz] <- if (popover) {
-          paste0(' data-toggle="popover" data-container="body" data-placement="right" title="" data-content="',
-                 esc, '"')
-        } else {
-          paste0(' data-toggle="tooltip" data-container="body" data-placement="right" title="', esc, '"')
-        }
+        # Phase 14b: the SAME builder the kableExtra engine uses, so the bootstrap JS binds identically
+        # here, in jamovi and in standalone HTML (leading space: this is pasted straight after the
+        # style attribute's closing quote).
+        tip[nz] <- paste0(" ", tab_tooltip_attrs(tp[nz], popover = popover, escape = TRUE))
       }
     }
     j <- match(name, nm)

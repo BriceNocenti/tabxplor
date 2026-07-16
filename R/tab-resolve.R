@@ -43,14 +43,19 @@
 #   values). Defaulted so pre-7d-ii callers and the colour-cascade tests are unaffected; used
 #   only to build `$cache_keys`. `wt_name`/`tab_vars`/`row_vars`/`col_vars` are character names;
 #   `filter_expr` a symbolic string (or NA).
-# @return list(color, chi2, ci, totrow, color_diff_OR, color_ctr, color_ci, color_num,
-#   cache_keys). `cache_keys` = the symbolic key material for the persisted jmvtab cache tiers
+# @param color_ratio_ci Scalar logical (Phase 14b): the PCT text channel carries the `ratio`
+#   measure, so the stored cell-vs-reference interval is the Katz one on the ratio scale. From
+#   `color_pct_text_is_ratio()`; like `color_signif` it cannot ride the `color` string.
+# @return list(color, chi2, ci, ci_scale, totrow, color_diff_OR, color_ctr, color_ci, color_num,
+#   cache_keys). `ci_scale` ("diff"/"ratio", over row_vars) = the scale the difference CI is
+#   expressed on. `cache_keys` = the symbolic key material for the persisted jmvtab cache tiers
 #   0-2 (dev/tabxplor_jmvtab_cache_design.md §3); the tier-2 shaped-aggregate hash + population
 #   hashes are added by the module (Phase 7e).
 # @keywords internal
 # @noRd
 tab_resolve_settings <- function(color, OR, ci, chi2, ref, pct_vect, col_vars_text,
                                  totrow = NULL, color_signif = "ignore",
+                                 color_ratio_ci = FALSE,
                                  na = "keep", wt_name = character(),
                                  other_if_less_than = 0, comp = "tab",
                                  tab_vars = character(), row_vars = character(),
@@ -139,6 +144,19 @@ tab_resolve_settings <- function(color, OR, ci, chi2, ref, pct_vect, col_vars_te
   }
   ci[color %in% c("diff_ci", "after_ci") & ci != "diff"] <- "diff"
 
+  # Phase 14b: which SCALE the cell-vs-reference interval is expressed on. The interval belongs to
+  # the measure the reader SEES (the text channel): when that is the ratio, the bounds are Katz
+  # log-RR ones on the ratio scale (ci_type = "ratio", neutral 1) and a background diff channel
+  # derives from them; otherwise they are the difference methods (neutral 0) and a ratio channel
+  # derives -- which is what happened for every ratio until now. `color_ratio_ci` already means
+  # "the PCT text channel is the ratio" (color_pct_text_is_ratio(), R/tab.R); it is scalar because
+  # the colour axis is globalised over row_vars (§5), and it says nothing about numeric columns --
+  # tab_ci() applies it only where a proportion CI is what is being computed.
+  # Only where a difference CI is computed at all: `ci = "cell"` is a one-proportion interval with
+  # no reference, so it has no ratio counterpart.
+  ci_scale <- rep("diff", length(ci))
+  if (isTRUE(color_ratio_ci)) ci_scale[ci == "diff"] <- "ratio"
+
   # Split the one resolved colour into the sub-pass each step reads: the diff/OR colour ->
   # tab_plain(); the contrib colour -> tab_chi2(); the ci colour -> tab_ci(); the numeric
   # colour -> tab_num(). "auto" only survives here for numeric-only tables (see above).
@@ -180,7 +198,7 @@ tab_resolve_settings <- function(color, OR, ci, chi2, ref, pct_vect, col_vars_te
                                tab_vars = tab_vars, row_vars = row_vars, col_vars = col_vars,
                                filter_expr = filter_expr)
 
-  list(color = color, chi2 = chi2, ci = ci, totrow = totrow,
+  list(color = color, chi2 = chi2, ci = ci, ci_scale = ci_scale, totrow = totrow,
        color_diff_OR = color_diff_OR, color_ctr = color_ctr,
        color_ci = color_ci, color_num = color_num,
        cache_keys = cache_keys)

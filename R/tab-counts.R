@@ -306,7 +306,10 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
     na_drop_all_quo = rlang::quo(NULL),
     # Phase 14a: tab_counts() takes only the LEGACY colour strings (a policy is reachable as
     # color = "diff_ci" / "after_ci"), so the separate policy the resolver reads is always "ignore".
-    pct = pct, color = color, color_signif = "ignore", OR = OR, chi2 = test,
+    # Phase 14b: same -- a legacy string can never name the `ratio` measure, so the ratio CI is not
+    # reachable here and the difference interval stays the only one built.
+    pct = pct, color = color, color_signif = "ignore", color_ratio_ci = FALSE,
+    OR = OR, chi2 = test,
     na = na, levels = "all",
     cleannames = FALSE, output = "single",
     other_if_less_than = 0, other_level = "Others",

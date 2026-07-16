@@ -3351,3 +3351,126 @@ Locked by an ordering test, because no assertion on hex would catch a reorder.
   for that page. Not built: it trades a real default (follow the reader's OS) for one framework.
 - **jamovi** is unaffected (light-only, one layer) and *depends* on `<style>` working there — see the
   §10a retraction above, settled from the dev-console capture.
+
+---
+
+## 39. Phase 14b — tooltips, the numeric-diff display, and the Katz ratio interval (DONE 2026-07-17)
+
+Three decisions were forked with the maintainer this session; the rest of the phase is the roadmap's
+own bullet list. Landed byte-identically on every existing fixture: full suite **FAIL 0 | PASS 2725**,
+`check()` **0/0/0**, **no golden regeneration** (`_golden/` and `_color_golden/` untouched; only
+`_snaps/render-html.md` moved — the tooltip text + placement it exists to lock).
+
+### 39.1 The numeric-diff display is the RAW difference; `sd` stays a colour device
+
+The Phase-2 D3 leftover: the numeric `diff` FIELD has been a real difference (`cell_mean − ref_mean`)
+since the aggregate rewrite, but `format()` still prepended the legacy multiply sign — `×-0.2`, a
+multiplicative glyph on an additive quantity, indistinguishable from the ratio it sits beside.
+
+The open fork was *which number* the cell shows, because the roadmap contradicted itself: §14b said
+"a signed difference", while §13c-v deferred a "`+Nsd` sd-unit display for mean_diff … with
+standardised diffs" and the maintainer's instinct was "no manual scale → sd units, manual breaks →
+the variable's units" — which maps exactly onto the existing `scale$std` flag.
+
+**Decided: the raw signed difference, always, plus a `std diff:` tooltip line.** Three grounded
+reasons the display must not follow `scale$std`:
+
+1. **`std` belongs to the mean_diff COLOUR scale, which the default never consults.** Under
+   `color = TRUE` a mean column's text channel is `"ratio"` ([tab.R resolve_col_measures](../R/tab.R)),
+   so there is no `std` to follow in the commonest case. `display` and `color` are orthogonal axes;
+   coupling them makes `display = "diff"` undefined whenever the colour measure is not the diff.
+2. **It would make a colour config rewrite data.** `set_color_breaks(mean_diff = ...)` — documented as
+   a colour setting — would silently change the numbers in the table.
+3. **Excel writes the raw field** via `get_num()`, so a standardized text display desyncs the bypass
+   unless `tab_xl` also switches; and `sd_ref` can be 0/NA, which would blank a perfectly good diff.
+
+So the cell number always equals `$diff` and equals what Excel writes. The sd view is surfaced where
+it is *explained*: the legend already states its thresholds, and the tooltip — the mean-diff's main
+surface, since the cell itself shows the mean — gained `std diff: -0.09sd` beside the existing `sd:`.
+The Excel `signed` mask widened to `display %in% c("ctr", "diff")`: excluding means is now what would
+desync it. **`+Nsd` in the cell is therefore closed, not deferred.**
+
+### 39.2 Tooltip placement = Bootstrap's `auto` token, not a column rule
+
+The roadmap proposed emitting `placement="left"` for the last columns. Rejected in favour of
+`data-placement="auto right"` (prefer right, reorient on overflow): Bootstrap measures the viewport at
+render time, so it also covers a horizontally scrolled table, a narrow Viewer pane, and a wide tooltip
+on a *middle* column — none of which a "last N columns" proxy catches, and it needs no threshold.
+
+⚠ **`kableExtra::spec_tooltip()`/`spec_popover()` cannot emit it** — their `match.arg(position,
+c("right","bottom","top","left","auto"), several.ok = TRUE)` rejects `"auto right"` outright, and
+`c("auto","right")` silently returns a length-2 `data-placement` that recycles into the title. Verified
+against the installed source. So the attribute string is built by ONE shared `tab_tooltip_attrs()`
+(`R/tab-render-html.R`) and handed to `cell_spec()` pre-classed as `ke_tooltip`/`ke_popover`, which it
+pastes verbatim (probe-verified). This also ends a drift the "match kableExtra's attributes" comment
+claimed did not exist: the html engine omitted `data-trigger`, so its popovers needed a CLICK where
+kableExtra's opened on HOVER.
+
+The one-line rule `.tooltip-inner{max-width:none;white-space:nowrap;}` is **not scopable**: bootstrap
+moves the tooltip to `<body>` (`data-container="body"` — which is what stops the table's overflow
+clipping it), so it is never a descendant of `.tabxplor-tab`. Accepted, unprefixed, chrome-only.
+
+### 39.3 The Katz ratio interval, and the gate that had to become CI-driven
+
+**The rule: the interval belongs to the measure the reader sees.** `ratio` had no native interval, so a
+ratio-coloured cell borrowed the DIFFERENCE bounds and converted them with the reference held at its
+point estimate. That is a valid significance test — H0: `p1 = p2` is the same null on either scale —
+but not a ratio interval: it ignores the reference's own uncertainty. When the ratio is the **text
+channel** of a proportion column it now owns the stored bounds (`ci_type = "ratio"`, Katz log-RR,
+neutral 1), and a background diff channel derives from *them* instead.
+
+- **Trigger** = `color_pct_text_is_ratio(spec)` → `tab_build(color_ratio_ci=)` → ctx →
+  `tab_resolve_settings()` → the new per-row_var **`ci_scale`** → `tab_apply_tests()` → `tab_ci()`.
+  Threaded exactly like 14a's `color_signif`, for the same reason: `legacy_union()` maps every ratio
+  onto a diff-family string, so the legacy `color` cannot carry it.
+- **Contained by construction**: `color = TRUE` / `"diff"` / `c("diff","ratio")` keep the difference
+  interval. The asymmetry between `c("diff","ratio")` and `c("ratio","diff")` is the design, not a
+  wart — the primary measure gets the exact interval, the secondary derives.
+- **Proportions only.** A ratio of MEANS needs Fieller's theorem, not Katz (a two-proportion method).
+  This is also what keeps the numeric default unchanged: under `color = TRUE` a mean's text channel
+  already IS the ratio, so a naive "text channel is ratio → Katz" rule would have moved every numeric
+  table. `tab_ci()` applies `ci_scale` only on the non-mean branch.
+- **`ci = "cell"`** has no ratio counterpart (a one-proportion interval has no reference), so
+  `ci_scale` is only ever `"ratio"` where `ci == "diff"`.
+
+**The significance gate is now CI-driven.** `fmt_color_plan()` keyed the neutral on the MEASURE, which
+held only while each measure had exactly one possible ci_type. With a `diff` channel able to ride a
+ratio interval the two must be read apart: an interval is significant when it excludes ITS OWN neutral
+(0 additive / 1 multiplicative). This also fixes a latent mismatch — measure `"or"` + a difference
+ci_type tested the diff bounds against 1, so nothing was ever significant. That is precisely the
+"OR + policy would grey the WHOLE table" hazard §14a works around in the cascade with `& !auto_or`;
+the cascade guard stays (an OR table must keep its own `ci_type = "or"` bounds), but the gate is no
+longer the thing that would break if it were removed.
+
+**`rescale_bound()`** replaces the ad-hoc conversion. `diff` and `ratio` are both affine in the cell
+proportion with the reference at its point estimate (`ratio − 1 = diff / p_ref`), so ONE helper maps a
+bound either way by a ratio of offsets from the neutrals. The diff→ratio direction is byte-identical to
+the expression it replaces (`1 + (ratio−1)*(floor/diff)`); ratio→diff is the new mirror. The
+`!is.finite` scrub stays scoped to the conversions (where 0/0 → NaN) — widening it would have silently
+changed Inf-bound behaviour for `diff`/`or`.
+
+**Display**: the bracket needed a scale switch (`ci_bare` = a mean's absolute bounds *or* a
+multiplicative one → no ×100, no `[0;100]` clamp, no `%`) and a **2-digit bump** matching the `or`
+displays — at 1 digit a ratio's bounds routinely round equal, which makes the degenerate-bracket rule
+collapse `[0.55;0.63]` to a bare `"0.6"`. `ci_center()` gains the ratio, so `get_ci()` reads the
+half-width back off the right centre. The legend names Katz off the **stored `ci_type`**, never
+`method_diff` (which selects among the *difference* approximations and never built this interval).
+
+**Verification**: parity against a hand-computed Katz interval + its Wald dual; the CI ⇄ stars duality
+across 3 confidence levels and >100 cells (the first probe was **vacuous** — `stars` defaults FALSE, so
+every `pvalue` was NA and `all(logical(0))` passed; the test now asserts a non-zero count);
+`guaranteed_effect` colours the correct side of 1; the derived bg channel agrees in direction with the
+ratio text channel. `test-ci-ratio-katz.R`.
+
+### 39.4 Two pre-existing bugs found while doing it
+
+- **`tab_kable(engine = "html", popover = TRUE)`** rendered its own escaped attribute string as the
+  popover content. `tab_kable_print_tooltip(popover = TRUE)` returned `spec_popover()`'s ATTRIBUTES
+  from a *text* builder; the html engine passed that through and wrapped it again. Fixed by
+  construction (attrs live only in `tab_tooltip_attrs()`); the arg is deleted.
+- **The tooltip fragment join** pasted all fragments with a fixed `" ; "` and then rewrote the result
+  to collapse empties: `str_replace_all(";  ; ", "; ")` ×3 + trims + an `"NA ;"` scrub. Non-overlapping
+  matching means one pass cannot collapse adjacent empties — hence the 3 repeats, which silently
+  assumed no cell leaves >4 in a row. Adding a 10th fragment (`std diff:`) makes 9-empty runs reachable
+  (a Total cell is `n:` only). A 4000-grid A/B proved the **old** side wrong (`"f1: 5 ;"`,
+  `"; f10: 5"`); replaced by an exact per-cell non-empty join.
