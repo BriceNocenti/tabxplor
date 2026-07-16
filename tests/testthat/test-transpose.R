@@ -81,7 +81,7 @@ testthat::test_that("a reference row becomes a reference column", {
 # === SECTION: test attribute re-keyed ========================================
 
 testthat::test_that("the whole-table test is re-keyed by the new col_var", {
-  orig <- tab(gss, marital, race, pct = "row", chi2 = TRUE)
+  orig <- tab(gss, marital, race, pct = "row", test = TRUE)
   tr   <- tab_transpose(orig)
   to <- get_test(orig); tt <- get_test(tr)
   if (nrow(to) > 0) {

@@ -27,7 +27,7 @@ jmv_oracle <- function(opts, data) {
   rlang::inject(tab(
     data, row_vars = tidyselect::all_of(opts$row_vars), col_vars = tidyselect::all_of(opts$col_vars),
     tab_vars = tidyselect::all_of(opts$tab_vars), wt = !!wt_sym, pct = opts$pct, color = color,
-    color_signif = opts$color_signif, OR = opts$OR, chi2 = opts$chi2, na = opts$na,
+    color_signif = opts$color_signif, OR = opts$OR, test = opts$chi2, na = opts$na,
     levels = opts$levels, ref = opts$ref, ref2 = opts$ref2, comp = opts$comp, ci = ci,
     conf_level = opts$conf_level, stars = opts$stars, method_cell = opts$method_cell,
     method_diff = opts$method_diff, cleannames = FALSE, totaltab = opts$totaltab, digits = opts$digits,
@@ -133,7 +133,7 @@ test_that("tier-2 test is reused across pct/ref toggles and matches a fresh chi2
   expect_equal(sum(r3$hits$test), 1)                       # ref change reuses the test
   # a cached-test run is byte-identical to a fresh chi2 run (jmv_opts sets stars = TRUE, so the
   # expected tab() must too -- stars are opt-in / storage-driven since the bug-fix)
-  expect_equal(r3$tabs, tab(gss, marital, race, pct = "row", ref = "1", chi2 = TRUE, ci = "auto",
+  expect_equal(r3$tabs, tab(gss, marital, race, pct = "row", ref = "1", test = TRUE, ci = "auto",
                             stars = TRUE, cleannames = FALSE))
 })
 

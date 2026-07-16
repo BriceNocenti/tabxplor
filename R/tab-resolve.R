@@ -24,7 +24,12 @@
 #
 # @param color         Legacy text-channel colour string, recycled over row_vars
 #   ("no"/"auto"/"diff"/"diff_ci"/"after_ci"/"contrib"/"OR"). `normalize_color_spec()` has
-#   already collapsed the two-channel `color`/`color_signif` spec into this before we run.
+#   already collapsed the two-channel `color` spec into this before we run.
+# @param color_signif  The NORMALIZED significance policy ("ignore"/"grey_non_signif"/
+#   "guaranteed_effect"), i.e. `normalize_color_spec()$signif`. Phase 14a: the parser can only
+#   fold the policy into `color` for an explicit "diff"/"ratio" measure -- `color = TRUE`/"auto"
+#   must stay "auto" for the per-type dispatch below -- so the policy arrives separately and the
+#   "a gated colour needs the difference CI" rule is applied here, on the RESOLVED colour.
 # @param OR,ci,chi2    Row-axis argument vectors (recycled over row_vars). `chi2` logical.
 # @param ref           Per-row_var reference spec (from resolve_ref_vector()); only its
 #   symbolic emptiness ("no"/""/NA) is inspected here, never a literal/regex value.
@@ -45,28 +50,67 @@
 # @keywords internal
 # @noRd
 tab_resolve_settings <- function(color, OR, ci, chi2, ref, pct_vect, col_vars_text,
-                                 totrow = NULL,
+                                 totrow = NULL, color_signif = "ignore",
                                  na = "keep", wt_name = character(),
                                  other_if_less_than = 0, comp = "tab",
                                  tab_vars = character(), row_vars = character(),
                                  col_vars = character(), filter_expr = NA_character_) {
 
+  # Hoisted out of the `color = "auto"` case_when below, because the Phase 14a `color_signif`
+  # forcing needs the SAME predicates and must run BEFORE it (see there).
+  pct_rowcol <- purrr::map_lgl(pct_vect, ~ all(.[col_vars_text] %in% c("row", "col")))
+  auto_or    <- purrr::map2_lgl(
+    pct_vect, OR,
+    ~ all(.x[col_vars_text] %in% c("row", "col") &
+            .y[col_vars_text] %in% c("OR", "OR_pct", "or", "or_pct"))
+  )
+  num_only   <- sum(col_vars_text) == 0
+
+  # Phase 14a: a `color_signif` policy must force the difference CI it gates on -- BEFORE the
+  # `color = "auto"` resolution below, so that `tab(color = TRUE, color_signif = <policy>)` is
+  # identical to the explicit `tab(color = TRUE, ci = "diff", color_signif = <policy>)` the user
+  # has to write today. Why it belongs here and not in normalize_color_spec(): the parser folds the
+  # policy into the legacy string ("diff" -> "diff_ci"/"after_ci") only for an EXPLICIT diff/ratio
+  # measure; `color = TRUE`/"auto" must arrive as "auto" (it dispatches per column type just below),
+  # so the policy could not ride the string -- ci stayed "no", fmt_color_plan()'s gate saw NA bounds,
+  # and EVERY cell went grey on the DEFAULT color = TRUE.
+  # Gated == the colour will be diff-family: an explicit diff (legacy_union() never emits "ratio"),
+  # or an "auto" that resolves to row/col percentages here, or to the numeric arm (num_only -> "auto"
+  # survives and tab_num()/resolve_color_auto_num() turns it into a diff).
+  # NEVER forced for the other two measures, and both exclusions matter:
+  #   contrib -- has no difference CI at all (documented gap); pct_rowcol is FALSE for it anyway.
+  #   OR      -- carries its OWN ci_type = "or" bounds (centre 1). It IS pct = "row"/"col", so it
+  #              matches pct_rowcol; forcing ci = "diff" would overwrite those bounds with a
+  #              difference CI centred on 0, whose inf is then tested against the OR neutral 1 ->
+  #              never significant -> the policy would grey the WHOLE table. Hence `& !auto_or`.
+  # WARNING: `auto_or` / `pct_rowcol` are all() over the FACTOR col_vars, so on a numeric-only table
+  # they are all(logical(0)) == TRUE -- vacuously. Hence the num_only arm must be tested FIRST and on
+  # its own: an "auto" numeric-only table is never an OR table (a mean has no OR notion; the OR branch
+  # of the case_when below is itself guarded by `!num_only`), and its colour is resolved later by
+  # tab_num()/resolve_color_auto_num() into a diff -- so it IS gated.
+  signif_on <- !identical(color_signif, "ignore") && !is.na(color_signif[1])
+  if (signif_on) {
+    gated <- color %in% c("diff", "diff_ci", "after_ci") |
+      (color == "auto" & (num_only | (!auto_or & pct_rowcol)))
+    if (any(gated & ci == "cell")) {
+      cli::cli_abort(c(
+        "{.arg color_signif} = {.val {color_signif}} gates the colour on the DIFFERENCE confidence interval, but {.arg ci} = {.val cell} asks for the cell one.",
+        "i" = "Use {.code ci = \"diff\"} (the default under a {.arg color_signif} policy), or {.code color_signif = \"ignore\"}."
+      ))
+    }
+    ci[gated & ci != "diff"] <- "diff"
+  }
+
   # DESIGN: color = "auto" resolves from the pct/OR/ci settings of the FACTOR col_vars ONLY:
   # OR-type -> "OR"; row/col pct + ci = "diff" -> "after_ci"; row/col pct -> "diff";
   # counts/all -> "contrib". A numeric-only table (no factor col_vars) keeps "auto" here and
   # is resolved by tab_num() via resolve_color_auto_num() (a mean has no contrib/OR notion).
-  color_auto_text <- color == "auto" & ! sum(col_vars_text) == 0
+  color_auto_text <- color == "auto" & ! num_only
   if (any(color_auto_text)) color <- dplyr::case_when(
-    purrr::map2_lgl(
-      pct_vect, OR,
-      ~ all(.x[col_vars_text] %in% c("row", "col") &
-              .y[col_vars_text] %in% c("OR", "OR_pct", "or", "or_pct")
-      )
-    )
-    ~ "OR",
+    auto_or                   ~ "OR",
 
-    purrr::map_lgl(pct_vect, ~ all(.[col_vars_text] %in% c("row", "col"))) & ci == "diff" ~ "after_ci",
-    purrr::map_lgl(pct_vect, ~ all(.[col_vars_text] %in% c("row", "col")))                ~ "diff"    ,
+    pct_rowcol & ci == "diff" ~ "after_ci",
+    pct_rowcol                ~ "diff"    ,
     purrr::map_lgl(pct_vect, ~ all(.[col_vars_text] %in% c("", "no", "all", "all_tabs"))) ~ "contrib" ,
     TRUE                                                                                  ~ "no" ,
   )

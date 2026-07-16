@@ -71,7 +71,7 @@ test_that("estimate_display prob/ame degrade to 'ci' for non-binomial (message)"
 test_that("Excel folds the in-cell test label into the numFmt literal", {
   skip_if_not_installed("openxlsx2")
   d  <- reg_data()
-  ct <- suppressWarnings(tab(d, race, marital, pct = "row", chi2 = TRUE))
+  ct <- suppressWarnings(tab(d, race, marital, pct = "row", test = TRUE))
   f  <- tempfile(fileext = ".xlsx")
   tab_xl(ct, path = f, replace = TRUE)
   tmp <- tempfile(); dir.create(tmp); utils::unzip(f, exdir = tmp)

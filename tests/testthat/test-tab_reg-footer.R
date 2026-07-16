@@ -178,13 +178,13 @@ test_that("the regression footer renders (console block + export rows) without e
 # ---- the shared crosstab in-cell test label -------------------------------------------------
 
 test_that("a crosstab p-value cell embeds its test label ('(Chi2)')", {
-  ct <- tab(forcats::gss_cat, marital, race, pct = "row", chi2 = TRUE)
+  ct <- tab(forcats::gss_cat, marital, race, pct = "row", test = TRUE)
   md <- tab_md(ct, print = FALSE)
   expect_true(any(grepl("\\(Chi2\\)", md)))
 })
 
 test_that("a mixed factor/mean table labels each p-value cell by its own test", {
-  ct <- tab(forcats::gss_cat, marital, c(race, tvhours), pct = "row", chi2 = TRUE)
+  ct <- tab(forcats::gss_cat, marital, c(race, tvhours), pct = "row", test = TRUE)
   md <- tab_md(ct, print = FALSE)
   expect_true(any(grepl("\\(Chi2\\)", md)))              # the factor col_var
   expect_true(any(grepl("\\(F", md)))                    # the mean col_var (ANOVA F)

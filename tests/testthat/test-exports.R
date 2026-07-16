@@ -54,7 +54,7 @@ testthat::test_that("tab_kable works with counts (no color)", {
 testthat::test_that("tab_kable works with chi2 subtext", {
   testthat::skip_if_not_installed("kableExtra")
 
-  tabs <- tab(gss, race, marital, pct = "row", chi2 = TRUE, color = "diff")
+  tabs <- tab(gss, race, marital, pct = "row", test = TRUE, color = "diff")
   testthat::expect_no_error(tab_kable(tabs))
 })
 
@@ -71,7 +71,7 @@ testthat::test_that("tab_kable works with numeric tables", {
 testthat::test_that("tab_kable with contrib color works", {
   testthat::skip_if_not_installed("kableExtra")
 
-  tabs <- tab(gss, race, marital, pct = "row", chi2 = TRUE, color = "contrib")
+  tabs <- tab(gss, race, marital, pct = "row", test = TRUE, color = "contrib")
   testthat::expect_no_error(tab_kable(tabs))
 })
 
@@ -118,7 +118,7 @@ testthat::test_that("tab_plot works with contrib color", {
   testthat::skip_if_not_installed("ggpubr")
   testthat::skip_if_not_installed("cowplot")
 
-  tabs <- tab(gss, race, marital, pct = "row", chi2 = TRUE, color = "contrib")
+  tabs <- tab(gss, race, marital, pct = "row", test = TRUE, color = "contrib")
   testthat::expect_no_error(tab_plot(tabs))
 })
 
@@ -127,7 +127,7 @@ testthat::test_that("tab_plot works with contrib color", {
 testthat::test_that("tab_xl creates a valid Excel file with multiple color types", {
   testthat::skip_if_not_installed("openxlsx2")
 
-  tabs <- tab(gss, race, marital, pct = "row", chi2 = TRUE, color = "diff")
+  tabs <- tab(gss, race, marital, pct = "row", test = TRUE, color = "diff")
   tmp <- tempfile(fileext = ".xlsx")
   on.exit(unlink(tmp))
 
@@ -139,7 +139,7 @@ testthat::test_that("tab_xl creates a valid Excel file with multiple color types
 testthat::test_that("tab_xl works with contrib color type", {
   testthat::skip_if_not_installed("openxlsx2")
 
-  tabs <- tab(gss, race, marital, pct = "row", chi2 = TRUE, color = "contrib")
+  tabs <- tab(gss, race, marital, pct = "row", test = TRUE, color = "contrib")
   tmp <- tempfile(fileext = ".xlsx")
   on.exit(unlink(tmp))
 

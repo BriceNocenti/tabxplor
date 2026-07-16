@@ -114,3 +114,91 @@ testthat::test_that("grey_non_signif ratio channel still colours the OBSERVED ra
   testthat::expect_true(slot[1] >= 1L && slot[1] <= 4L)      # ratio 3 (>=2) significant -> over colour
   testthat::expect_equal(slot[2], 0L)                        # not significant -> greyed
 })
+
+
+# --- Phase 14a: the guaranteed_effect break offset --------------------------------------------
+# Under `guaranteed_effect` the score is the CI FLOOR, so the scale must START at the neutral value:
+# "the interval excludes the neutral" IS the definition of a guaranteed effect, and such a cell must
+# be coloured. Before 14a the floor was scored against the ordinary magnitude breaks, so a
+# significant-but-modest cell (diff +7%, ci_inf +0.4%) stayed grey.
+
+testthat::test_that("offset_guaranteed_breaks shifts each scale onto its neutral", {
+  # additive: subtract the first break -> starts at 0
+  testthat::expect_equal(offset_guaranteed_breaks(c(0.05, 0.10, 0.20, 0.30), 0),
+                         c(0, 0.05, 0.15, 0.25))
+  # multiplicative: divide by the first break -> starts at 1
+  testthat::expect_equal(offset_guaranteed_breaks(c(1.15, 1.5, 2, 4), 1),
+                         c(1.15, 1.5, 2, 4) / 1.15)
+  # a single break collapses onto the neutral (any guaranteed effect then takes slot 1)
+  testthat::expect_equal(offset_guaranteed_breaks(0.05, 0), 0)
+  testthat::expect_equal(offset_guaranteed_breaks(2, 1), 1)
+  # an empty side (that measure is off for this column type) is untouched
+  testthat::expect_equal(offset_guaranteed_breaks(numeric(0), 0), numeric(0))
+  testthat::expect_equal(offset_guaranteed_breaks(numeric(0), 1), numeric(0))
+  # the sides are independent: an ASYMMETRIC scale offsets each by its OWN first break
+  testthat::expect_equal(offset_guaranteed_breaks(c(1.5, 2, 4), 1), c(1.5, 2, 4) / 1.5)
+})
+
+testthat::test_that("guaranteed_effect offsets the plan's breaks; other policies do not", {
+  mk <- function(policy) {
+    col <- fmt(n = rep(100L, 3), type = "row", pct = c(.6, .4, .5), diff = c(.1, -.1, 0),
+               ci_inf = c(.05, -.15, -.02), ci_sup = c(.15, -.05, .02), ci_type = "diff")
+    set_color_signif(set_color(col, "diff"), policy)
+  }
+  ge <- fmt_color_plan(mk("guaranteed_effect"), "text")
+  gn <- fmt_color_plan(mk("grey_non_signif"),   "text")
+  ig <- fmt_color_plan(mk("ignore"),            "text")
+  sc <- color_scales(mk("ignore"))$pct_diff
+
+  testthat::expect_equal(ge$over_breaks,  sc$over$breaks  - sc$over$breaks[1])
+  testthat::expect_equal(ge$under_breaks, sc$under$breaks - sc$under$breaks[1])
+  testthat::expect_equal(ge$over_breaks[1], 0)                    # the scale starts at the neutral
+  # every other policy scores the OBSERVED value -> the ordinary breaks, untouched
+  testthat::expect_equal(gn$over_breaks, sc$over$breaks)
+  testthat::expect_equal(ig$over_breaks, sc$over$breaks)
+})
+
+testthat::test_that("guaranteed_effect: significant => coloured, in the right direction", {
+  # the exact shape the maintainer reported: significant (0 outside the CI) but a floor far below
+  # the first ordinary break (0.05) -- it MUST be coloured now.
+  col <- fmt(n = rep(500L, 4), type = "row", pct = c(.27, .13, .2, .2),
+             diff  = c( .07, -.07,  .004, 0),
+             ci_inf = c(.004, -.166, -.02, NA),      # cell 1 sig over (floor 0.4% << 5%)
+             ci_sup = c(.166, -.004,  .03, NA),      # cell 2 sig under; cell 3 not sig
+             ci_type = "diff")
+  col  <- set_color_signif(set_color(col, "diff"), "guaranteed_effect")
+  plan <- fmt_color_plan(col, "text")
+  slot <- fmt_color_slots(col, plan)
+
+  testthat::expect_true(slot[1] >= 1L && slot[1] <= 4L)   # guaranteed +0.4% -> an OVER slot, not grey
+  testthat::expect_true(slot[2] >= 5L)                    # guaranteed -0.4% -> an UNDER slot
+  testthat::expect_equal(slot[3], 0L)                     # CI spans 0 -> no guaranteed effect -> grey
+  testthat::expect_equal(slot[4], 0L)                     # no CI -> grey
+
+  # the invariant, stated directly: no cell may be significant yet uncoloured
+  sig <- !is.na(get_ci_inf(col)) & (get_ci_inf(col) > 0 | get_ci_sup(col) < 0)
+  testthat::expect_equal(sum(sig & slot == 0L), 0L)
+})
+
+testthat::test_that("guaranteed_effect: strict breaks keep an exactly-neutral floor uncoloured", {
+  # findInterval(left.open = strict): a floor of exactly 0 is NOT beyond the 0 break -> slot 0.
+  # Only a floor strictly beyond the neutral (i.e. a real guaranteed effect) colours.
+  col <- fmt(n = rep(500L, 2), type = "row", pct = c(.3, .3), diff = c(.1, .1),
+             ci_inf = c(0, 1e-9), ci_sup = c(.2, .2), ci_type = "diff")
+  col  <- set_color_signif(set_color(col, "diff"), "guaranteed_effect")
+  slot <- fmt_color_slots(col, fmt_color_plan(col, "text"))
+  testthat::expect_equal(slot[1], 0L)                     # floor exactly 0 -> not a guaranteed effect
+  testthat::expect_true(slot[2] >= 1L)                    # floor just beyond 0 -> coloured
+})
+
+testthat::test_that("guaranteed_effect offsets the RATIO (multiplicative) scale around 1", {
+  set_color_breaks(pct_ratio = c(1.5, 2, 4))
+  withr::defer(options("tabxplor.color_breaks" = default_color_scales()))
+  p_ref <- 0.2; pct <- 0.24                               # ratio 1.2 -- below the 1.5 first break
+  col <- fmt(n = 500L, type = "row", pct = pct, diff = pct - p_ref, ratio = pct / p_ref,
+             ci_inf = 0.01, ci_sup = 0.07, ci_type = "diff")
+  col  <- set_color_signif(set_color(col, c("diff", "ratio")), "guaranteed_effect")
+  plan <- fmt_color_plan(col, "bg", color = "ratio")
+  testthat::expect_equal(plan$over_breaks[1], 1)          # multiplicative neutral
+  testthat::expect_true(fmt_color_slots(col, plan)[1] >= 1L)   # significant -> coloured
+})

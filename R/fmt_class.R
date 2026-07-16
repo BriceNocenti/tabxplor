@@ -2556,6 +2556,19 @@ color_measure_policy <- function(color, type) {
   list(measure = measure, policy = policy, single0 = color == "ci")
 }
 
+# Phase 14a: shift ONE per-direction break scale so its first break sits at the neutral value, for
+# the `guaranteed_effect` policy (the why is at the call site in fmt_color_plan). `breaks` are
+# POSITIVE magnitudes -- fmt_color_slots() folds each side around the centre -- so the neutral
+# magnitude is 0 on an additive scale and 1 on a multiplicative one. Empty side (that measure is off
+# for this column type) -> unchanged.
+#   additive       c(0.05, 0.10, 0.20, 0.30) -> c(0, 0.05, 0.15, 0.25)
+#   multiplicative c(1.15, 1.5,  2,    4   ) -> c(1, 1.30, 1.74, 3.48)
+#' @keywords internal
+offset_guaranteed_breaks <- function(breaks, center) {
+  if (length(breaks) == 0L || is.na(breaks[1])) return(breaks)
+  if (identical(center, 1)) breaks / breaks[1] else breaks - breaks[1]
+}
+
 #' @keywords internal
 fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = NULL) {
   channel <- match.arg(channel)
@@ -2669,6 +2682,19 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
     under_breaks <- scale$under$breaks
     over_slots   <- c(0L, scale$over$slots)         # 0 = neutral level, then intensities 1:4
     under_slots  <- c(0L, scale$under$slots + 4L)   # 0 = neutral, then 5:8 (under half of the palette)
+
+    # Phase 14a: under `guaranteed_effect` the score is the CI FLOOR -- the effect you are confident
+    # of AT LEAST -- so the scale must START at the neutral value: a cell whose interval excludes the
+    # neutral IS a guaranteed effect and must be coloured. Scoring the floor against the ordinary
+    # magnitude breaks left every significant-but-modest cell grey (diff = +7% with ci_inf = +0.4%
+    # scored 0.004 < the 0.05 first break -> uncoloured, though "0 is outside the interval" is exactly
+    # what the mode exists to show). Offset each side by its OWN first break -- the sides are
+    # independent and may be asymmetric (Phase 13a). The user cannot express this (0 / 1 are rejected
+    # as breaks), so it must be internal. `legend_specs()` reads this same plan, so the legend follows.
+    if (identical(policy, "guaranteed_effect")) {
+      over_breaks  <- offset_guaranteed_breaks(over_breaks,  center)
+      under_breaks <- offset_guaranteed_breaks(under_breaks, center)
+    }
   }
 
   list(measure = measure, policy = policy, score = score, center = center, strict = strict,

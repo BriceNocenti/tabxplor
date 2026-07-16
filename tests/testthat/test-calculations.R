@@ -908,3 +908,54 @@ testthat::test_that("all pct values are between 0 and 1 (inclusive)", {
                           label = paste0("pct in [0,1] for col ", col))
   }
 })
+
+
+# --- Phase 14a: a row_var with exactly ONE non-total row -----------------------------------------
+# vapply() returns a MATRIX only when FUN.VALUE has length > 1, so a single non-total row made
+# chi2_compute_test()'s `M` a plain vector, ncol(M) NULL, and every rep(times = ncM) die with
+# "invalid 'times' argument". It surfaced through mirai ("In index: 3 ... error in rep()") but was
+# never parallel-specific -- the serial map hits the identical line.
+
+testthat::test_that("test = TRUE survives a row_var with a single non-total row", {
+  d <- dplyr::mutate(forcats::gss_cat, one = factor("only"))
+  testthat::expect_no_error(t <- tab(d, one, marital, pct = "row", test = TRUE))
+  te <- get_test(t)
+  # a 1-row table is degenerate (df = 0) -> NA, like any other degenerate table
+  testthat::expect_equal(nrow(te), 1L)
+  testthat::expect_true(is.na(te$pvalue))
+
+  # and inside a multi-row_var table, where only ONE row_var is degenerate
+  testthat::expect_no_error(tab(d, c(race, one), c(marital, relig), pct = "row", test = TRUE))
+  # with a numeric col_var alongside (the ANOVA arm)
+  testthat::expect_no_error(tab(d, c(race, one), c(marital, tvhours), pct = "row", test = TRUE))
+})
+
+testthat::test_that("a normal chi2 still matches stats::chisq.test after the single-row fix", {
+  t  <- tab(forcats::gss_cat, race, marital, pct = "row", test = TRUE)
+  te <- get_test(t)
+  m  <- table(forcats::gss_cat$race, forcats::gss_cat$marital)
+  m  <- m[rowSums(m) > 0, colSums(m) > 0, drop = FALSE]   # tab_chi2 drops empty rows/cols
+  ref <- suppressWarnings(stats::chisq.test(m))
+  testthat::expect_equal(te$statistic, unname(ref$statistic))
+  testthat::expect_equal(te$df1, unname(ref$parameter))
+  testthat::expect_equal(te$pvalue, ref$p.value)
+})
+
+
+# --- Phase 14a: chi2 renamed test ---------------------------------------------------------------
+
+testthat::test_that("tab(chi2 = ) is soft-deprecated but identical to tab(test = )", {
+  lifecycle::expect_deprecated(
+    old <- tab(forcats::gss_cat, race, marital, pct = "row", chi2 = TRUE))
+  new <- tab(forcats::gss_cat, race, marital, pct = "row", test = TRUE)
+  testthat::expect_equal(old, new)
+  # the default path never nudges
+  testthat::expect_no_condition(tab(forcats::gss_cat, race, marital, pct = "row"),
+                                class = "lifecycle_warning_deprecated")
+})
+
+testthat::test_that("test = TRUE names the test per column type (chi2 for factors, F for means)", {
+  te <- get_test(tab(forcats::gss_cat, race, c(marital, tvhours), pct = "row", test = TRUE))
+  testthat::expect_equal(te$test[te$col_var == "marital"], "chi2")
+  testthat::expect_true(all(c("F_welch", "F_classic") %in% te$test[te$col_var == "tvhours"]))
+})

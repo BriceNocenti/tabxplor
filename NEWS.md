@@ -389,6 +389,27 @@
   export to Excel, install `openxlsx2`. The produced workbooks look essentially the same.
 
 ## Bug corrections
+* **`color_signif` no longer greys out the whole table.** Asking for a significance policy without
+  also writing `ci = "diff"` by hand produced an all-grey table: the confidence interval the policy
+  gates on was never computed. `color_signif = "grey_non_signif"` / `"guaranteed_effect"` now request
+  that interval themselves, for every form of `color` — including the default `color = TRUE`, which
+  was the worst hit. `tab(color = TRUE, color_signif = "grey_non_signif")` is now identical to
+  `tab(color = TRUE, ci = "diff", color_signif = "grey_non_signif")`. Combining a policy with an
+  explicit `ci = "cell"` (which measures something else) is now an error rather than silent grey.
+* **`color_signif = "guaranteed_effect"` now colours every significant cell.** Its thresholds start at
+  the neutral value (`0`, or `1` for a ratio): the mode colours the effect you are confident of *at
+  least*, so a cell whose interval excludes 0 is by definition a guaranteed effect and must be
+  coloured. It previously reused the ordinary thresholds, leaving a significant-but-modest cell (e.g.
+  `+7%`, interval `[+0.4; +16.6]`) grey. The default `5; 10; 20; 30` scale becomes `0; 5; 15; 25`
+  under this policy — as the colour legend already claimed. The legend follows automatically.
+* **A statistical test no longer fails on a variable with a single category.** `test = TRUE` (formerly
+  `chi2 = TRUE`) errored with `invalid 'times' argument` when a row variable had exactly one non-total
+  row — e.g. after `na = "drop"` emptied its other levels. Such a table is degenerate and now yields
+  an `NA` test, like any other degenerate table. Under `parallel = TRUE` the same bug surfaced as an
+  opaque `mirai_map()` error; it was never parallel-specific.
+* **The `n` row is back on `pct = "col"` tables with several row variables.** With two or more row
+  variables the `add_n` (and `add_pct`) row was silently dropped. Each sub-table now gets its own `n`
+  row, directly under its own Total row.
 * `tab(parallel = )` now works when the package is loaded with `devtools::load_all()` (it used to fail
   with `object 'tab_build_one' not found` for calls with two or more row variables). This only affected
   package development, not installed versions.
@@ -425,6 +446,10 @@
   genuinely self-contained (as documented) and its output is stable across `kableExtra` versions.
 
 ## Deprecations
+* `chi2` is renamed **`test`** in `tab()` and `tab_counts()` (soft-deprecated; `chi2` still works).
+  The whole-(sub)table test is a Chi-squared only for factor `col_vars` — a numeric one gets Welch's
+  F (one-way ANOVA) — so the old name described half of what the argument does.
+  `tab_many()` keeps `chi2` (it is itself soft-deprecated).
 * The combined `color` strings `"diff_ci"`, `"after_ci"` and `"ci"` are soft-deprecated: use
   `color = "diff"` with the new `color_signif` argument (`"grey_non_signif"` for `"diff_ci"`,
   `"color_all_signif"` for `"after_ci"`/`"ci"`). They still work unchanged.

@@ -76,7 +76,7 @@ testthat::test_that("means use the n base (not tot_n) for the drop", {
 })
 
 testthat::test_that("n_min never drops the total row, and keeps the add_n intent + test attr", {
-  out <- tab(gss, race, marital, pct = "row", chi2 = TRUE, add_n = TRUE, n_min = 3000)
+  out <- tab(gss, race, marital, pct = "row", test = TRUE, add_n = TRUE, n_min = 3000)
   # total row present
   testthat::expect_true(any(is_totrow(out$Total)))
   # Phase 10i-B: add_n / add_pct / p-value are now DISPLAY-only -- the built "core" table has NO `n`
@@ -91,9 +91,9 @@ testthat::test_that("n_min never drops the total row, and keeps the add_n intent
 })
 
 testthat::test_that("n_min preserves class and table attributes", {
-  base <- tab(gss, race, marital, tab_vars = year, pct = "row", chi2 = TRUE)
+  base <- tab(gss, race, marital, tab_vars = year, pct = "row", test = TRUE)
   # tab_vars -> a list of grouped tabs; apply n_min and check the first survives as a tab.
-  out  <- tab(gss, race, marital, tab_vars = year, pct = "row", chi2 = TRUE,
+  out  <- tab(gss, race, marital, tab_vars = year, pct = "row", test = TRUE,
               n_min = 200, output_list = TRUE)
   testthat::expect_true(inherits(out[[1]], "tabxplor_tab") ||
                           inherits(out[[1]], "tabxplor_grouped_tab"))

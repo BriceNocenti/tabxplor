@@ -15,7 +15,7 @@ tab(
   color = "no",
   color_signif = "ignore",
   OR = "no",
-  chi2 = FALSE,
+  test = FALSE,
   na = "keep",
   levels = "all",
   cleannames = NULL,
@@ -47,6 +47,7 @@ tab(
   names_sort = FALSE,
   row_var,
   col_var,
+  chi2 = lifecycle::deprecated(),
   .cache = NULL,
   .defer_level_merge = FALSE,
   .return_armed = FALSE,
@@ -121,9 +122,11 @@ the "OR (j vs reference)" from a multinomial \code{\link[=tab_reg]{tab_reg()}} m
 \item \code{"OR_pct"}: print OR, with percentages in bracket.
 }}
 
-\item{chi2}{Set to \code{TRUE} to calculate Chi2 summaries with \code{\link{tab_chi2}}.
-Useful to print metadata, and to color cells based on their contribution to variance
-(\code{color = "contrib"}). Automatically added if needed for \code{color}.}
+\item{test}{Set to \code{TRUE} to calculate a statistical test of independence for each
+(sub)table: \strong{Chi-squared} for factor \code{col_vars}, \strong{Welch's F} (one-way
+ANOVA) for numeric ones -- see \code{\link{tab_chi2}}. Useful to print metadata, and to
+color cells based on their contribution to variance (\code{color = "contrib"}).
+Automatically added if needed for \code{color}.}
 
 \item{na}{The policy to adopt for missing values, as a single string :
 \itemize{
@@ -296,6 +299,10 @@ given: a string prefixed to each new column name, and whether to sort the new co
 
 \item{row_var, col_var}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Singular aliases of
 \code{row_vars}/\code{col_vars} (which now accept several variables). Kept working.}
+
+\item{chi2}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Renamed to \code{test} in 1.4.0: the test is a
+Chi-squared only for factors (numeric \code{col_vars} get Welch's F), so the old name was
+misleading. Still works.}
 
 \item{.cache, .defer_level_merge, .return_armed, .levels_order}{Internal, for the jamovi
 \code{jmvtab} live cache only: \code{.cache} is a mutable environment the content-addressed

@@ -199,8 +199,9 @@ tab_counts_normalize <- function(data, row_col, col_col, tab_cols, n_col, wn_col
 #' @param base For `input = "pct"`: the column holding each row's sample size N.
 #' @param input `"counts"` (default) or `"pct"` (with `cols` and `base`: the level columns hold
 #'   frequencies, and counts are rebuilt from them and `base`).
-#' @param pct,color,OR,chi2,na,ref,ref2,comp,ci,conf_level,stars,method_cell,method_diff,totaltab,totaltab_name,tot,total_names,add_n,add_pct,subtext,digits
+#' @param pct,color,OR,test,na,ref,ref2,comp,ci,conf_level,stars,method_cell,method_diff,totaltab,totaltab_name,tot,total_names,add_n,add_pct,subtext,digits
 #'   Same meaning as in [tab()].
+#' @param chi2 `r lifecycle::badge("deprecated")` Renamed to \code{test} in 1.4.0 (see [tab()]).
 #'
 #' @return A `tabxplor_tab` (or `tabxplor_grouped_tab` when `tab_vars` are provided).
 #' @export
@@ -220,7 +221,7 @@ tab_counts_normalize <- function(data, row_col, col_col, tab_cols, n_col, wn_col
 #'            col_name = "race", pct = "row")
 tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
                        cols, col_name = "variable", base, input = c("counts", "pct"),
-                       pct = "no", color = "no", OR = "no", chi2 = FALSE,
+                       pct = "no", color = "no", OR = "no", test = FALSE,
                        na = "keep",
                        ref = "auto", ref2 = "first", comp = "tab",
                        ci = "no", conf_level = 0.95, stars = NULL,
@@ -228,7 +229,14 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
                        totaltab = "line", totaltab_name = "Ensemble",
                        tot = c("row", "col"), total_names = "Total",
                        add_n = TRUE, add_pct = FALSE,
-                       subtext = "", digits = 0) {
+                       subtext = "", digits = 0,
+                       chi2 = lifecycle::deprecated()) {
+
+  # Phase 14a: `chi2` renamed `test` (see tab()) -- kept working, one soft nudge.
+  if (lifecycle::is_present(chi2)) {
+    lifecycle::deprecate_soft("1.4.0", "tab_counts(chi2 = )", "tab_counts(test = )")
+    test <- chi2
+  }
 
   input <- rlang::arg_match(input)
   vctrs::vec_assert(pct, size = 1); vctrs::vec_assert(color, size = 1)
@@ -265,12 +273,12 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
   tab_vars   <- resh$tab_vars
 
   # Base-less input: no real unweighted n -> inference is not defined; keep pct/diff/colors.
-  if (!has_real_n && (!identical(ci, "no") || !isFALSE(chi2))) {
+  if (!has_real_n && (!identical(ci, "no") || !isFALSE(test))) {
     cli::cli_warn(c(
-      "!" = "The counts are not whole numbers (weighted or frequency-only): confidence intervals and chi-square are disabled.",
+      "!" = "The counts are not whole numbers (weighted or frequency-only): confidence intervals and the test are disabled.",
       "i" = "Provide real unweighted counts in {.arg counts} (with the weighted counts in {.arg wt_counts}) to enable them."
     ))
-    ci <- "no"; chi2 <- FALSE
+    ci <- "no"; test <- FALSE
   }
 
   # -- Phase 7d-ii / 9a: route the single (row_var x col_var) FACTOR pair through the SAME engine stages
@@ -296,7 +304,10 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
                    else rlang::quo(c(!!!rlang::syms(tab_vars))),
     wt_quo = if (weighted) rlang::quo(wn) else rlang::quo(NULL),
     na_drop_all_quo = rlang::quo(NULL),
-    pct = pct, color = color, OR = OR, chi2 = chi2, na = na, levels = "all",
+    # Phase 14a: tab_counts() takes only the LEGACY colour strings (a policy is reachable as
+    # color = "diff_ci" / "after_ci"), so the separate policy the resolver reads is always "ignore".
+    pct = pct, color = color, color_signif = "ignore", OR = OR, chi2 = test,
+    na = na, levels = "all",
     cleannames = FALSE, output = "single",
     other_if_less_than = 0, other_level = "Others",
     ref = ref, ref2 = ref2, comp = comp, ci = ci, conf_level = conf_level, stars = stars,

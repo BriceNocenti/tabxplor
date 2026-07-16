@@ -6,7 +6,7 @@
 
 gss <- forcats::gss_cat
 
-t_basic <- tab(gss, race, marital, pct = "row", color = "diff", chi2 = TRUE)
+t_basic <- tab(gss, race, marital, pct = "row", color = "diff", test = TRUE)
 t_multi <- tab(gss, race, c(marital, relig), pct = "row", color = "diff")
 t_tv    <- tab(gss, race, marital, year, pct = "row", color = "diff")
 

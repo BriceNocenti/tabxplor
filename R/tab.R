@@ -197,9 +197,14 @@ NULL
 #'   \item \code{"OR"}: print OR (instead of percentages).
 #'   \item \code{"OR_pct"}: print OR, with percentages in bracket.
 #' }
-#' @param chi2 Set to \code{TRUE} to calculate Chi2 summaries with \code{\link{tab_chi2}}.
-#' Useful to print metadata, and to color cells based on their contribution to variance
-#'  (\code{color = "contrib"}). Automatically added if needed for \code{color}.
+#' @param test Set to \code{TRUE} to calculate a statistical test of independence for each
+#' (sub)table: \strong{Chi-squared} for factor \code{col_vars}, \strong{Welch's F} (one-way
+#' ANOVA) for numeric ones -- see \code{\link{tab_chi2}}. Useful to print metadata, and to
+#' color cells based on their contribution to variance (\code{color = "contrib"}).
+#' Automatically added if needed for \code{color}.
+#' @param chi2 `r lifecycle::badge("deprecated")` Renamed to \code{test} in 1.4.0: the test is a
+#' Chi-squared only for factors (numeric \code{col_vars} get Welch's F), so the old name was
+#' misleading. Still works.
 #' @param ci The type of confidence intervals to calculate, passed to \code{\link{tab_ci}}
 #'  (automatically added if needed for \code{color}).
 #'   \itemize{
@@ -376,7 +381,7 @@ NULL
 #'   }
 tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
                 pct = "no", color = "no", color_signif = "ignore",
-                OR = "no", chi2 = FALSE,
+                OR = "no", test = FALSE,
                 na = "keep", levels = "all",
                 cleannames = NULL, #compact = NULL, # pvalue_line = NULL,
                 other_if_less_than = 0, other_level = "Others",
@@ -391,9 +396,17 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
                 output_list = FALSE, parallel = NULL,
                 spread_vars, names_prefix = NULL, names_sort = FALSE,
                 row_var, col_var,
+                chi2 = lifecycle::deprecated(),
                 .cache = NULL, .defer_level_merge = FALSE, .return_armed = FALSE,
                 .levels_order = NULL,
                 filter) {
+
+  # Phase 14a: `chi2` renamed `test` -- for a numeric col_var the whole-table test is Welch's F, not
+  # a chi2 (Phase 3b), so the old name named only half of what it does.
+  if (lifecycle::is_present(chi2)) {
+    lifecycle::deprecate_soft("1.4.0", "tab(chi2 = )", "tab(test = )")
+    test <- chi2
+  }
 
   # Phase 6f (§6): singular row_var/col_var are soft-deprecated aliases of the plural
   # row_vars/col_vars (which now accept one variable OR several). Capture the effective quosure
@@ -494,7 +507,7 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
   # them. (The col_var axis stays flexible: pct/levels/digits are still per col_var in tab_many.)
   vctrs::vec_assert(OR  , size = 1)
   vctrs::vec_assert(ci  , size = 1)
-  vctrs::vec_assert(chi2, size = 1)
+  vctrs::vec_assert(test, size = 1)
 
   # Phase 6g (§4, S3) + Phase 7a: `na` population policy.
   # - "keep": NAs shown as an explicit level.
@@ -543,13 +556,18 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
            pct  = c(rep(pct, length(col_var)), rep("row", length(sup_cols))),
            ref = ref, ref2 = ref2, #c(ref, rep(ref , length(sup_cols))),
            comp = comp,
-           chi2 = chi2,
+           # tab_build()'s internal arg keeps the `chi2` name (it drives tab_chi2(); the ANOVA arm
+           # branches inside tab_transform()); only the PUBLIC tab() surface is renamed.
+           chi2 = test,
            ci = ci,
            conf_level = conf_level,
            stars = stars,
            method_cell = method_cell, method_diff = method_diff,
            OR = OR,
            color = color,
+           # Phase 14a: the NORMALIZED policy (post the "color_all_signif" COMPAT rename), so
+           # tab_resolve_settings() can force the difference CI a gated colour needs.
+           color_signif = color_spec$signif,
            add_n = add_n, add_pct = add_pct,
            subtext = subtext, n_min = n_min, parallel = parallel,
            spread_vars = spread_vars, names_prefix = names_prefix, names_sort = names_sort,
@@ -1087,7 +1105,8 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
     data = data,
     row_vars = {{ row_vars }}, col_vars = {{ col_vars }}, tab_vars = {{ tab_vars }},
     wt = {{ wt }},
-    pct = pct, color = color_spec$legacy, OR = OR, chi2 = chi2, na = na, levels = levels,
+    pct = pct, color = color_spec$legacy, color_signif = color_spec$signif,
+    OR = OR, chi2 = chi2, na = na, levels = levels,
     na_drop_all = {{ na_drop_all }},
     cleannames = cleannames, other_if_less_than = other_if_less_than,
     other_level = other_level, ref = ref, ref2 = ref2, comp = comp, ci = ci,
@@ -1133,7 +1152,8 @@ ctx_update <- function(ctx, updates) {
 #' @keywords internal
 #' @noRd
 tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
-                      pct = "no", color = "no", OR = "no", chi2 = FALSE,
+                      pct = "no", color = "no", color_signif = "ignore",
+                      OR = "no", chi2 = FALSE,
                       na = "keep", levels = "all", na_drop_all,
                       cleannames = NULL, output = "single", #pvalue_line = NULL,
                       other_if_less_than = 0, other_level = "Others",
@@ -1175,7 +1195,8 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
     row_vars_quo = rlang::enquo(row_vars), col_vars_quo = rlang::enquo(col_vars),
     tab_vars_quo = rlang::enquo(tab_vars), wt_quo = rlang::enquo(wt),
     na_drop_all_quo = rlang::enquo(na_drop_all),
-    pct = pct, color = color, OR = OR, chi2 = chi2, na = na, levels = levels,
+    pct = pct, color = color, color_signif = color_signif, OR = OR, chi2 = chi2,
+    na = na, levels = levels,
     cleannames = cleannames, output = output,
     other_if_less_than = other_if_less_than, other_level = other_level,
     ref = ref, ref2 = ref2, comp = comp, ci = ci, conf_level = conf_level, stars = stars,
@@ -1500,6 +1521,7 @@ tab_setup <- function(ctx) {
   .settings     <- tab_resolve_settings(color = color, OR = OR, ci = ci, chi2 = chi2,
                                          ref = ref, pct_vect = pct_vect,
                                          col_vars_text = col_vars_text, totrow = totrow,
+                                         color_signif = color_signif,
                                          na = na, wt_name = as.character(wt),
                                          other_if_less_than = other_if_less_than, comp = comp,
                                          tab_vars = as.character(tab_vars),
@@ -5761,7 +5783,14 @@ chi2_compute_test <- function(tabs, comp, row_var, col_vars_levels,
         lv_cols <- purrr::map_chr(levels, rlang::as_name)
         if (length(lv_cols) == 0) return(NULL)
         M  <- vapply(lv_cols, function(cc) as.double(get_n(tabs[[cc]])[mask2]), double(n_rows2))
-        ncM <- ncol(M)
+        # Phase 14a: `length(lv_cols)`, NOT `ncol(M)`. vapply() only returns a MATRIX when
+        # FUN.VALUE has length > 1, so a row_var with exactly ONE non-total row (n_rows2 == 1 --
+        # e.g. all but one level emptied by na = "drop") made M a plain vector, ncol(M) NULL, and
+        # every rep(times = ncM) below died with "invalid 'times' argument". It surfaced as a
+        # mirai error ("In index: 3 ... Caused by error in rep()"), but was never parallel-specific:
+        # the serial map hits the identical line. `length(lv_cols)` is the column count by
+        # construction and is shape-independent (as.vector(M) is column-major either way).
+        ncM <- length(lv_cols)
         tibble::tibble(
           col_var  = cv,
           subtab   = rep(subtab_idx, times = ncM),
@@ -6586,6 +6615,45 @@ tab_apply_tests <- function(tab, do_chi2, ci, comp, color_ctr, color_ci,
 }
 
 
+# tab_append_pctcol_rows() -- Phase 14a. Under pct = "col" the add_n / add_pct extras are ROWS: a
+# re-displayed copy of a sub-table's total row. `transform` takes the sliced source row(s) and
+# returns the row(s) to insert. Two bugs lived in the inline `bind_rows(tab, slice(tab, last_totrow))`
+# this replaces:
+#   1. `last_totrow` is a GLOBAL row index (is_totrow.data.frame is not group-aware), but a merged
+#      multi-row_var tab is a grouped_df where dplyr::slice() indexes WITHIN each group. No group had
+#      that many rows, so slice() returned ZERO rows and bind_rows() silently dropped the extra --
+#      the reported "the n row disappears with several row_vars". Fix: slice on the ungrouped tab.
+#   2. only the LAST total row of the whole table was copied, and appended at the very bottom. With
+#      several row_vars that single row would sit under the last sub-table as if it belonged to it.
+#      Fix: one row per sub-table, spliced in right after its OWN source row.
+# Byte-identical wherever a table has one sub-table whose total row is last (every shape the goldens
+# cover): one source row, spliced after the last row == appended.
+# WARNING: the group column must NOT be relabelled -- the copy keeps its sub-table's `row_var` value
+# so it stays inside that group; `transform` only relabels tab_get_vars()$row_var (= "levels" on a
+# compacted tab, the real row_var otherwise).
+tab_append_pctcol_rows <- function(tab, transform) {
+  gv   <- dplyr::group_vars(tab)
+  flat <- dplyr::ungroup(tab)
+  n0   <- nrow(flat)
+  tot  <- is_totrow(flat) & tab_get_vars(flat)$row_var != "no_row_var"
+  if (!any(tot)) return(tab)
+  gid  <- if (length(gv) > 0) dplyr::group_indices(tab) else rep(1L, n0)
+  grps <- unique(gid[tot])
+  # SOURCE = each sub-table's last total row; ANCHOR = the END of that sub-table. They differ once a
+  # previous pass has already inserted an extra (add_pct runs before add_n), and anchoring on the
+  # group's end is what keeps the historical `Total | row_pct | n` order -- with one ungrouped
+  # sub-table it is exactly the old `bind_rows(tab, ...)` append.
+  src    <- vapply(grps, function(g) { i <- which(tot & gid == g); i[[length(i)]] }, integer(1))
+  anchor <- vapply(grps, function(g) { i <- which(gid == g);       i[[length(i)]] }, integer(1))
+  ord    <- order(src)
+  src    <- src[ord]; anchor <- anchor[ord]
+  out    <- dplyr::bind_rows(flat, transform(dplyr::slice(flat, src)))
+  # splice: bind_rows put the new rows at the very end, so re-order by "just after my sub-table".
+  out    <- dplyr::slice(out, order(c(seq_len(n0), anchor + 0.5)))
+  if (length(gv) > 0) dplyr::group_by(out, dplyr::across(tidyselect::all_of(gv))) else out
+}
+
+
 # tab_add_n_pct() -- append the base-n column (add_n) and/or the col%/row% companion
 # (add_pct) to each built factor table. Extracted verbatim from tab_many()'s finalize so
 # BOTH tab_many() and tab_counts() share ONE implementation (no divergence). Operates on the
@@ -6671,13 +6739,14 @@ tab_add_n_pct <- function(tabs_text, add_n, add_pct) {
         if (add_pct) {
           tabs_text <-
             purrr::pmap(
-              list(tabs_text, last_totrow_pct_cols_no_empty, last_totrow, last_totrow_pct_cols),
+              list(tabs_text, last_totrow_pct_cols_no_empty, last_totrow_pct_cols),
               ~ {
                 totcols_ref <- purrr::map_chr(detect_totcols(..1), as.character)
+                val_cols    <- ..3
+                row_lab     <- tab_get_vars(..1)$row_var
                 if (..2) {
-                  dplyr::bind_rows(
-                    ..1,
-                    dplyr::slice(..1, ..3) |>
+                  tab_append_pctcol_rows(..1, function(src) {
+                    src |>
                       dplyr::mutate(
                         dplyr::across(
                           where(is_fmt),
@@ -6695,16 +6764,15 @@ tab_add_n_pct <- function(tabs_text, add_n, add_pct) {
                                         set_ctr(NA_real_) |> set_var(NA_real_)
                                         ),
                         dplyr::across(
-                          where(is_fmt) & -tidyselect::all_of(..4),
+                          where(is_fmt) & -tidyselect::all_of(val_cols),
                           ~ set_num(., value = NA_real_)
                         ),
                         dplyr::across(
-                          all_of(tab_get_vars(..1)$row_var),
+                          all_of(row_lab),
                           ~ factor("row_pct")
                         )
                       )
-
-                  )
+                  })
                 } else {
                   ..1
                 }
@@ -6714,30 +6782,32 @@ tab_add_n_pct <- function(tabs_text, add_n, add_pct) {
 
         if (add_n) {
           tabs_text <-
-            purrr::pmap(list(tabs_text, last_totrow_pct_cols_no_empty, last_totrow, last_totrow_pct_cols),
-                        ~ if (..2) {
-                          dplyr::bind_rows(
-                            ..1,
-                            dplyr::slice(..1, ..3) |> set_display("n") |>
-                              dplyr::mutate(
-                                dplyr::across(where(is_fmt), ~ as_totrow(., FALSE)  |>
-                                                set_diff(NA_real_) |> set_ci(NA_real_) |>
-                                                set_mean(NA_real_) |> set_pct(NA_real_) |>
-                                                set_ctr(NA_real_) |> set_var(NA_real_)
-                                              ),
-                                dplyr::across(
-                                  where(is_fmt) & -tidyselect::all_of(..4),
-                                  ~ set_num(., value = NA_real_)
-                                ),
-                                dplyr::across(
-                                  all_of(tab_get_vars(..1)$row_var),
-                                  ~ factor("n")
+            purrr::pmap(list(tabs_text, last_totrow_pct_cols_no_empty, last_totrow_pct_cols),
+                        ~ {
+                          val_cols <- ..3
+                          row_lab  <- tab_get_vars(..1)$row_var
+                          if (..2) {
+                            tab_append_pctcol_rows(..1, function(src) {
+                              src |> set_display("n") |>
+                                dplyr::mutate(
+                                  dplyr::across(where(is_fmt), ~ as_totrow(., FALSE)  |>
+                                                  set_diff(NA_real_) |> set_ci(NA_real_) |>
+                                                  set_mean(NA_real_) |> set_pct(NA_real_) |>
+                                                  set_ctr(NA_real_) |> set_var(NA_real_)
+                                                ),
+                                  dplyr::across(
+                                    where(is_fmt) & -tidyselect::all_of(val_cols),
+                                    ~ set_num(., value = NA_real_)
+                                  ),
+                                  dplyr::across(
+                                    all_of(row_lab),
+                                    ~ factor("n")
+                                  )
                                 )
-                              )
-
-                          )
-                        } else {
-                          ..1
+                            })
+                          } else {
+                            ..1
+                          }
                         }
             )
         }

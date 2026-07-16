@@ -22,12 +22,12 @@ testthat::test_that("fmt carrier round-trip is identical() (factor / numeric / m
   tabs <- list(
     plain     = tab(gss, marital, race),
     pct_color = tab(gss, marital, race, pct = "row", color = "diff"),
-    chi2      = tab(gss, marital, race, pct = "row", color = "diff", chi2 = TRUE),
+    test      = tab(gss, marital, race, pct = "row", color = "diff", test = TRUE),
     ci_cell   = tab(gss, marital, race, pct = "row", ci = "cell", stars = TRUE),
     ci_diff   = tab(gss, marital, race, pct = "row", color = "diff", ci = "diff"),
-    weighted  = tab(gss, marital, race, wt = w, pct = "row", color = "diff", chi2 = TRUE),
-    numeric   = tab(gss, marital, age, pct = "row", ci = "cell", chi2 = TRUE),
-    mixed     = tab(gss, marital, c(race, age), pct = "row", chi2 = TRUE),
+    weighted  = tab(gss, marital, race, wt = w, pct = "row", color = "diff", test = TRUE),
+    numeric   = tab(gss, marital, age, pct = "row", ci = "cell", test = TRUE),
+    mixed     = tab(gss, marital, c(race, age), pct = "row", test = TRUE),
     add_pct   = tab(gss, marital, race, pct = "row", add_pct = TRUE),
     col_pct   = tab(gss, marital, race, pct = "col", color = "diff")
   )
@@ -47,7 +47,7 @@ testthat::test_that("round-trip preserves grouped_tab class + groups/subtext/tes
 
   # a chi2 table carries both a non-empty subtext (legend) and a populated `test` attribute;
   # identical() covers them, plus targeted checks that neither is dropped by the round-trip.
-  t  <- tab(gss, marital, race, pct = "row", color = "diff", chi2 = TRUE)
+  t  <- tab(gss, marital, race, pct = "row", color = "diff", test = TRUE)
   rt <- roundtrip(t)
   testthat::expect_identical(attr(rt, "subtext"),   attr(t, "subtext"))
   testthat::expect_identical(tabxplor:::get_test(rt), tabxplor:::get_test(t))

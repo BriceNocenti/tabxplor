@@ -160,7 +160,7 @@ for (vname in names(verb_coverage)) {
 # default and every test above would still pass. These blocks close that hole -- the most
 # valuable coverage before the Phase 6 class-model rewrite touches every reattach site.
 #
-# tab_plain() |> tab_chi2() is the REAL populator of the chi2 attribute (tab(chi2 = TRUE) does
+# tab_plain() |> tab_chi2() is the REAL populator of the chi2 attribute (tab(test = TRUE) does
 # NOT fill it for simple tables -- see the DESIGN note in test-calculations.R). subtext has no
 # lightweight real populator (the subtext= arg stores whole population data), so a sentinel is
 # set directly; that still faithfully exercises the carry path (methods do

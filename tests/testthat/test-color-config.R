@@ -246,3 +246,61 @@ testthat::test_that("deprecated colour arguments / functions are wired, not erro
   testthat::expect_no_error(get_color_style("color_code", type = "text", html_24_bit = "blue_red"))
   testthat::expect_no_error(fmt_get_color_code(g$Married, html_24_bit = "blue_red"))
 })
+
+
+# --- Phase 14a: a color_signif policy forces the difference CI it gates on ----------------------
+# normalize_color_spec() can only fold the policy into the legacy colour string for an EXPLICIT
+# diff/ratio measure; `color = TRUE`/"auto" must reach tab_resolve_settings() as "auto" (it
+# dispatches per column type), so the policy could not ride the string -> ci stayed "no" ->
+# fmt_color_plan()'s gate saw NA bounds -> EVERY cell grey, on the DEFAULT color = TRUE.
+
+testthat::test_that("color = TRUE + a color_signif policy computes the difference CI", {
+  for (pol in c("grey_non_signif", "guaranteed_effect")) {
+    t <- tab(forcats::gss_cat, race, marital, pct = "row", color = TRUE, color_signif = pol)
+    fmt_cols <- t[purrr::map_lgl(t, is_fmt)]
+    testthat::expect_true(any(!is.na(unlist(purrr::map(fmt_cols, get_ci_sup)))), label = pol)
+    testthat::expect_true(any(get_ci_type(t) == "diff"), label = pol)
+  }
+})
+
+testthat::test_that("an implicit color_signif CI == the explicit ci = 'diff' table", {
+  # the user should not have to write ci = "diff" to get what color_signif asks for
+  for (pol in c("grey_non_signif", "guaranteed_effect")) {
+    for (cv in list(rlang::expr(marital), rlang::expr(tvhours), rlang::expr(c(marital, tvhours)))) {
+      a <- tab(forcats::gss_cat, race, !!cv, pct = "row", color = TRUE, color_signif = pol)
+      b <- tab(forcats::gss_cat, race, !!cv, pct = "row", color = TRUE, ci = "diff",
+               color_signif = pol)
+      testthat::expect_equal(a, b)
+    }
+  }
+})
+
+testthat::test_that("color_signif = 'ignore' does NOT force a CI", {
+  t <- tab(forcats::gss_cat, race, marital, pct = "row", color = TRUE)
+  fmt_cols <- t[purrr::map_lgl(t, is_fmt)]
+  testthat::expect_true(all(is.na(unlist(purrr::map(fmt_cols, get_ci_sup)))))
+})
+
+testthat::test_that("an explicit ci = 'cell' with a color_signif policy is an error", {
+  testthat::expect_error(
+    tab(forcats::gss_cat, race, marital, pct = "row", color = TRUE, ci = "cell",
+        color_signif = "grey_non_signif"),
+    "cell"
+  )
+  # ... but ci = "cell" is fine without a policy
+  testthat::expect_no_error(
+    tab(forcats::gss_cat, race, marital, pct = "row", color = TRUE, ci = "cell"))
+})
+
+testthat::test_that("contrib / OR never get a difference CI forced on them", {
+  # contrib has no difference CI (documented gap)
+  t <- tab(forcats::gss_cat, race, marital, color = "contrib", color_signif = "grey_non_signif")
+  testthat::expect_false(any(get_ci_type(t) == "diff"))
+
+  # OR is pct = "row", so it matches the diff-family predicate -- but it carries its OWN ci_type =
+  # "or" bounds (centre 1). Forcing a difference CI (centre 0) would have its inf tested against the
+  # OR neutral 1 -> never significant -> the policy would grey the WHOLE table.
+  o <- tab(forcats::gss_cat, marital, race, pct = "col", OR = "OR", color = TRUE,
+           color_signif = "grey_non_signif")
+  testthat::expect_false(any(get_ci_type(o) == "diff"))
+})

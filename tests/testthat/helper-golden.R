@@ -51,7 +51,7 @@ golden_cases <- function() {
     f_counts         = function() tab(gss, marital, race, pct = "no"),
     f_ci_cell        = function() tab(gss, marital, race, pct = "row", ci = "cell"),
     f_ci_diff        = function() tab(gss, marital, race, pct = "row", ci = "diff", stars = TRUE),   # Newcombe diff-interval + stars (stars opt-in since the bug-fix)
-    f_chi2           = function() tab(gss, marital, race, pct = "row", chi2 = TRUE),
+    f_chi2           = function() tab(gss, marital, race, pct = "row", test = TRUE),
     f_ref_first      = function() tab(gss, marital, race, pct = "row", ref = "first"),
     f_or             = function() tab(gss, marital, race, pct = "col", OR = "OR"),     # empirical OR; Phase 1 (rr->ratio) / Phase 3 (Wald p, 1/OR)
     f_color_diff     = function() tab(gss, marital, race, pct = "row", color = "diff"),

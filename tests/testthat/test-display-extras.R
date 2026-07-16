@@ -8,7 +8,7 @@ gss <- forcats::gss_cat
 
 # --- the built "core" table carries the intent, not the extras --------------------------------
 testthat::test_that("built tab() is the core table: no n/col_pct column, no p-value rows, intent kept", {
-  t <- tab(gss, marital, race, pct = "row", add_n = TRUE, chi2 = TRUE)
+  t <- tab(gss, marital, race, pct = "row", add_n = TRUE, test = TRUE)
   testthat::expect_false("n" %in% names(t))
   testthat::expect_false("col_pct" %in% names(t))
   testthat::expect_identical(get_render_extras(t), list(add_n = TRUE, add_pct = FALSE))
@@ -91,4 +91,52 @@ testthat::test_that("pull() of an existing column keeps tidy-select NSE (shim do
   tabs <- tab(gss, race, c(age, tvhours), comp = "all")
   testthat::expect_true(is_fmt(dplyr::pull(dplyr::filter(tabs, race == "White"), tvhours)))
   testthat::expect_true(is_fmt(dplyr::pull(tabs, age)))
+})
+
+
+# --- Phase 14a: the pct = "col" add_n / add_pct ROW on a merged multi-row_var table --------------
+# `last_totrow` is a GLOBAL index (is_totrow.data.frame is not group-aware), but a merged
+# multi-row_var tab is a grouped_df where dplyr::slice() indexes WITHIN each group -- no group had
+# that many rows, so slice() returned 0 rows and bind_rows() silently dropped the extra.
+
+row_labels <- function(tt) {
+  m <- tabxplor:::tab_materialize_extras(tt, backend = "text", pvalue = FALSE)
+  as.character(m[[tab_get_vars(m)$row_var]])
+}
+
+testthat::test_that("pct = 'col' add_n adds one n row per sub-table, whatever the row_var count", {
+  g <- forcats::gss_cat
+  testthat::expect_equal(sum(row_labels(tab(g, race, marital, pct = "col")) == "n"), 1L)
+  testthat::expect_equal(sum(row_labels(tab(g, race, c(marital, relig), pct = "col")) == "n"), 1L)
+  # the regression: 2+ row_vars used to lose the row entirely
+  testthat::expect_equal(sum(row_labels(tab(g, c(race, marital), relig, pct = "col")) == "n"), 2L)
+  testthat::expect_equal(
+    sum(row_labels(tab(g, c(race, marital), c(relig, partyid), pct = "col")) == "n"), 2L)
+  testthat::expect_equal(
+    sum(row_labels(tab(g, c(race, marital, partyid), relig, pct = "col")) == "n"), 3L)
+})
+
+testthat::test_that("each n row sits in its OWN sub-table, right after that sub-table's Total", {
+  m <- tabxplor:::tab_materialize_extras(
+    tab(forcats::gss_cat, c(race, marital), relig, pct = "col"),
+    backend = "text", pvalue = FALSE)
+  lv <- as.character(m$levels)
+  # the n row directly follows its Total row, and stays inside its group
+  testthat::expect_equal(lv[which(lv == "n") - 1L], c("Total", "Total"))
+  testthat::expect_equal(as.character(m$row_var)[lv == "n"], c("race", "marital"))
+})
+
+testthat::test_that("add_pct keeps the historical Total | row_pct | n order", {
+  lv <- row_labels(tab(forcats::gss_cat, c(race, marital), relig, pct = "col", add_pct = TRUE))
+  i  <- which(lv == "Total")[1]
+  testthat::expect_equal(lv[i:(i + 2L)], c("Total", "row_pct", "n"))
+})
+
+testthat::test_that("the n row carries the column's real unweighted base", {
+  m <- tabxplor:::tab_materialize_extras(
+    tab(forcats::gss_cat, c(race, marital), relig, pct = "col"),
+    backend = "text", pvalue = FALSE)
+  lv <- as.character(m$levels)
+  testthat::expect_equal(get_num(m[["Protestant"]])[lv == "n"],
+                         get_n(m[["Protestant"]])[lv == "Total"])
 })

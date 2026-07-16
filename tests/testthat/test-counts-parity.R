@@ -22,8 +22,8 @@ testthat::test_that("long counts == microdata across pct / chi2 / ci configs", {
   for (i in seq_len(nrow(grid))) {
     p <- grid$pct[i]; k <- grid$chi2[i]; cc <- grid$ci[i]
     testthat::expect_equal(
-      tab_counts(cu, marital, race, counts = n, pct = p, chi2 = k, ci = cc),
-      tab(gss, marital, race, pct = p, chi2 = k, ci = cc),
+      tab_counts(cu, marital, race, counts = n, pct = p, test = k, ci = cc),
+      tab(gss, marital, race, pct = p, test = k, ci = cc),
       info = sprintf("pct=%s chi2=%s ci=%s", p, k, cc)
     )
   }
@@ -33,8 +33,8 @@ testthat::test_that("long counts == microdata with color = 'diff'", {
   gss <- counts_gss()
   cu  <- dplyr::count(gss, marital, race)
   testthat::expect_equal(
-    tab_counts(cu, marital, race, counts = n, pct = "row", color = "diff", ci = "cell", chi2 = TRUE),
-    tab(gss, marital, race, pct = "row", color = "diff", ci = "cell", chi2 = TRUE))
+    tab_counts(cu, marital, race, counts = n, pct = "row", color = "diff", ci = "cell", test = TRUE),
+    tab(gss, marital, race, pct = "row", color = "diff", ci = "cell", test = TRUE))
 })
 
 # Phase 7d-ii: tab_counts() now routes through the SAME tab_setup()/tab_transform()/tab_assemble()
@@ -66,8 +66,8 @@ testthat::test_that("weighted counts (real n + weighted wn) == weighted microdat
 
   for (cc in c("no", "cell", "diff")) {
     testthat::expect_equal(
-      tab_counts(cw, marital, race, counts = n, wt_counts = wn, pct = "row", ci = cc, chi2 = TRUE),
-      tab(gss, marital, race, wt = w, pct = "row", ci = cc, chi2 = TRUE),
+      tab_counts(cw, marital, race, counts = n, wt_counts = wn, pct = "row", ci = cc, test = TRUE),
+      tab(gss, marital, race, wt = w, pct = "row", ci = cc, test = TRUE),
       info = paste0("ci=", cc))
   }
 })
@@ -76,8 +76,8 @@ testthat::test_that("tab_vars (subtables) == microdata", {
   gss <- counts_gss()
   c3  <- dplyr::count(gss, year, marital, race)                           # tab_vars = year
   testthat::expect_equal(
-    tab_counts(c3, marital, race, year, counts = n, pct = "row", chi2 = TRUE),
-    tab(gss, marital, race, year, pct = "row", chi2 = TRUE))
+    tab_counts(c3, marital, race, year, counts = n, pct = "row", test = TRUE),
+    tab(gss, marital, race, year, pct = "row", test = TRUE))
 })
 
 testthat::test_that("na = 'keep'/'drop' == microdata when the counts carry the NA level", {
@@ -96,43 +96,43 @@ testthat::test_that("uncount() oracle: aggregate path == a genuine microdata pat
   gss <- counts_gss()
   cu  <- dplyr::count(gss, marital, race)
   testthat::expect_equal(
-    tab_counts(cu, marital, race, counts = n, pct = "row", ci = "cell", chi2 = TRUE),
-    tab(tidyr::uncount(cu, n), marital, race, pct = "row", ci = "cell", chi2 = TRUE))
+    tab_counts(cu, marital, race, counts = n, pct = "row", ci = "cell", test = TRUE),
+    tab(tidyr::uncount(cu, n), marital, race, pct = "row", ci = "cell", test = TRUE))
 })
 
 testthat::test_that("wide data.frame == microdata", {
   gss  <- counts_gss()
-  ref  <- tab(gss, marital, race, pct = "row", chi2 = TRUE, ci = "cell")
+  ref  <- tab(gss, marital, race, pct = "row", test = TRUE, ci = "cell")
   wide <- tidyr::pivot_wider(dplyr::count(gss, marital, race),
                              names_from = race, values_from = n, values_fill = 0)
   testthat::expect_equal(
     tab_counts(wide, row_var = marital, cols = !marital, col_name = "race",
-               pct = "row", chi2 = TRUE, ci = "cell"),
+               pct = "row", test = TRUE, ci = "cell"),
     ref)
 })
 
 testthat::test_that("table / xtabs objects == microdata (empty levels dropped)", {
   gss <- counts_gss()
-  ref <- tab(gss, marital, race, pct = "row", chi2 = TRUE, ci = "cell")
+  ref <- tab(gss, marital, race, pct = "row", test = TRUE, ci = "cell")
   testthat::expect_equal(
     tab_counts(table(marital = gss$marital, race = gss$race),
-               pct = "row", chi2 = TRUE, ci = "cell"), ref)
+               pct = "row", test = TRUE, ci = "cell"), ref)
   testthat::expect_equal(
     tab_counts(stats::xtabs(~ marital + race, data = gss),
-               pct = "row", chi2 = TRUE, ci = "cell"), ref)
+               pct = "row", test = TRUE, ci = "cell"), ref)
   # a bare matrix with named dimnames (coerced via as.table())
   m <- unclass(table(gss$marital, gss$race)); names(dimnames(m)) <- c("marital", "race")
-  testthat::expect_equal(tab_counts(m, pct = "row", chi2 = TRUE, ci = "cell"), ref)
+  testthat::expect_equal(tab_counts(m, pct = "row", test = TRUE, ci = "cell"), ref)
   # a 3D table becomes tab_vars, and empty tab_var x row_var combinations are dropped
   testthat::expect_equal(
     tab_counts(table(year = gss$year, marital = gss$marital, race = gss$race),
-               row_var = marital, col_var = race, tab_vars = year, pct = "row", chi2 = TRUE),
-    tab(gss, marital, race, year, pct = "row", chi2 = TRUE))
+               row_var = marital, col_var = race, tab_vars = year, pct = "row", test = TRUE),
+    tab(gss, marital, race, year, pct = "row", test = TRUE))
 })
 
 testthat::test_that("frequencies + base N: full precision == microdata, exactly", {
   gss  <- counts_gss()
-  ref  <- tab(gss, marital, race, pct = "row", chi2 = TRUE, ci = "cell")
+  ref  <- tab(gss, marital, race, pct = "row", test = TRUE, ci = "cell")
   freq <- dplyr::count(gss, marital, race) |>
     dplyr::group_by(marital) |>
     dplyr::mutate(N = sum(n), pct = n / N) |>            # full-precision proportions
@@ -140,7 +140,7 @@ testthat::test_that("frequencies + base N: full precision == microdata, exactly"
     tidyr::pivot_wider(names_from = race, values_from = pct, values_fill = 0)
   testthat::expect_equal(
     tab_counts(freq, row_var = marital, cols = !c(marital, N), col_name = "race",
-               base = N, input = "pct", pct = "row", chi2 = TRUE, ci = "cell"),
+               base = N, input = "pct", pct = "row", test = TRUE, ci = "cell"),
     ref)
 })
 
@@ -149,7 +149,7 @@ testthat::test_that("base-less (non-integer) counts disable CI/chi2 with a messa
   cu  <- dplyr::count(gss, marital, race)
   cu$n <- cu$n + 0.5                                     # fractional -> not a real unweighted n
   testthat::expect_warning(
-    out <- tab_counts(cu, marital, race, counts = n, pct = "row", ci = "cell", chi2 = TRUE),
+    out <- tab_counts(cu, marital, race, counts = n, pct = "row", ci = "cell", test = TRUE),
     "not whole numbers")
   testthat::expect_true(all(is.na(get_ci_inf(out[[2]]))))           # CI skipped
   testthat::expect_equal(nrow(dplyr::filter(get_test(out), test == "chi2")), 0L)  # chi2 skipped

@@ -121,7 +121,7 @@ testthat::test_that("chi2 handles sparse tables without error", {
   )
   # chisq.test may warn about expected < 5, but should not error
   testthat::expect_no_error(
-    suppressWarnings(tab(d, x, y, pct = "row", chi2 = TRUE))
+    suppressWarnings(tab(d, x, y, pct = "row", test = TRUE))
   )
 })
 
@@ -269,7 +269,7 @@ gss <- forcats::gss_cat
 
 testthat::test_that("tab with all options combined does not error", {
   testthat::expect_no_error(
-    tab(gss, race, marital, pct = "row", chi2 = TRUE, ci = "cell",
+    tab(gss, race, marital, pct = "row", test = TRUE, ci = "cell",
         conf_level = 0.95, color = "diff")
   )
 })
@@ -304,7 +304,7 @@ testthat::test_that("tab_render_vars matches tab_get_vars on well-formed tables"
   fixtures <- list(
     single   = tb10c,
     col_pct  = tab(gss, marital, race, pct = "col"),
-    two_cv   = tab(gss, marital, c(race, relig), pct = "row", chi2 = TRUE),
+    two_cv   = tab(gss, marital, c(race, relig), pct = "row", test = TRUE),
     means    = tab_num(gss, marital, c(age, tvhours), ci = "cell"),
     compact2 = tab(gss, c(marital, relig), race, pct = "row"),
     plain    = tab_plain(gss, marital, race)

@@ -42,7 +42,7 @@ testthat::test_that("tab_kable kableExtra engine structure is stable", {
   testthat::skip_if_not_installed("kableExtra")
   counts   <- tab(gss, marital, race)
   row_diff <- tab(gss, marital, race, pct = "row", color = "diff")
-  chi2     <- suppressWarnings(tab(gss, marital, race, pct = "row", chi2 = TRUE))
+  chi2     <- suppressWarnings(tab(gss, marital, race, pct = "row", test = TRUE))
 
   # geometry: exactly one <tbody>, one <tr> per row. chi2 gains ONE extra row -- the p-value row is
   # materialised at display (Phase 10i-B), so it is not in nrow(tb).
@@ -73,7 +73,7 @@ testthat::test_that("tab_kable html engine structure is stable", {
   counts   <- tab(gss, marital, race)
   row_diff <- tab(gss, marital, race, pct = "row", color = "diff")
   bg       <- tab(gss, marital, race, pct = "row", color = c("diff", "ratio"))
-  chi2     <- suppressWarnings(tab(gss, marital, race, pct = "row", chi2 = TRUE))
+  chi2     <- suppressWarnings(tab(gss, marital, race, pct = "row", test = TRUE))
 
   testthat::expect_snapshot(cat(rh_strip_style(tab_kable(counts,   engine = "html"))))
   testthat::expect_snapshot(cat(rh_strip_style(tab_kable(row_diff, engine = "html"))))

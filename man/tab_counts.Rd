@@ -18,7 +18,7 @@ tab_counts(
   pct = "no",
   color = "no",
   OR = "no",
-  chi2 = FALSE,
+  test = FALSE,
   na = "keep",
   ref = "auto",
   ref2 = "first",
@@ -35,7 +35,8 @@ tab_counts(
   add_n = TRUE,
   add_pct = FALSE,
   subtext = "",
-  digits = 0
+  digits = 0,
+  chi2 = lifecycle::deprecated()
 )
 }
 \arguments{
@@ -65,7 +66,9 @@ holding the \code{col_var} levels.}
 \item{input}{\code{"counts"} (default) or \code{"pct"} (with \code{cols} and \code{base}: the level columns hold
 frequencies, and counts are rebuilt from them and \code{base}).}
 
-\item{pct, color, OR, chi2, na, ref, ref2, comp, ci, conf_level, stars, method_cell, method_diff, totaltab, totaltab_name, tot, total_names, add_n, add_pct, subtext, digits}{Same meaning as in \code{\link[=tab]{tab()}}.}
+\item{pct, color, OR, test, na, ref, ref2, comp, ci, conf_level, stars, method_cell, method_diff, totaltab, totaltab_name, tot, total_names, add_n, add_pct, subtext, digits}{Same meaning as in \code{\link[=tab]{tab()}}.}
+
+\item{chi2}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Renamed to \code{test} in 1.4.0 (see \code{\link[=tab]{tab()}}).}
 }
 \value{
 A \code{tabxplor_tab} (or \code{tabxplor_grouped_tab} when \code{tab_vars} are provided).
