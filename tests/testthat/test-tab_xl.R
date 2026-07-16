@@ -141,12 +141,19 @@ testthat::test_that("OR exports as 1/x text by default, numbers with or_numeric 
   testthat::expect_true(any(!is.na(num) & num > 0))                        # real numbers now
 })
 
-testthat::test_that("numeric vars export a mean + separate _sd column", {
+testthat::test_that("numeric vars export a mean + separate sd column, named by the statistic", {
   testthat::skip_if_not_installed("openxlsx2")
   t   <- tab_num(forcats::gss_cat, race, c(age, tvhours), digits = 1L)
   tmp <- tempfile(fileext = ".xlsx"); tab_xl(t, path = tmp, open = FALSE, replace = TRUE)
-  hdr <- as.character(openxlsx2::wb_to_df(openxlsx2::wb_load(tmp), col_names = FALSE)[3, ])
-  testthat::expect_true(all(c("age", "age_sd", "tvhours", "tvhours_sd") %in% hdr))
+  df   <- openxlsx2::wb_to_df(openxlsx2::wb_load(tmp), col_names = FALSE)
+  span <- as.character(df[2, ])   # Phase 13c-iii col_var spanning-name row (row 1 = the title)
+  hdr  <- as.character(df[3, ])   # level-header row
+  # Phase 14d: the variable name is said ONCE, by the span; the level headers say which statistic
+  # (they used to repeat it: "age" / "age_sd" under an "age" span).
+  testthat::expect_true(all(c("age", "tvhours") %in% span))
+  testthat::expect_equal(sum(hdr == "mean", na.rm = TRUE), 2L)
+  testthat::expect_equal(sum(hdr == "sd",   na.rm = TRUE), 2L)
+  testthat::expect_false(any(c("age_sd", "tvhours_sd") %in% hdr))
 })
 
 testthat::test_that("Excel gets a col_var spanning-name row + suffix-stripped level labels", {

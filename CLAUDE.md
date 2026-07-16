@@ -2303,7 +2303,54 @@ still holds ~60 lines of half-commented dead code.
 - **`tab_reg` legend wording** is already fixed (13b); re-verify β/IRR after the numeric-diff display
   change in 14b.
 
-#### Phase 14d — transpose, list container, `tab_xl`
+#### Phase 14d — transpose, list container, `tab_xl` (DONE — 2026-07-17)
+
+Every bullet landed. Full suite **FAIL 0 | WARN 0 | PASS 2782**. Conscious golden regen: **the `vars`
+attribute only** — 28 of 36 `_golden/*.rds` gained it and are otherwise `identical()` (proven by
+stripping the attr and comparing); the 8 that did not are raw `tab_num()` leaves, which never reach the
+stage that records roles (the documented heuristic-fallback case). No `_snaps/` moved.
+
+- **The framework fix — `vars` recorded, not inferred.** New table attribute
+  `list(row_vars, col_vars, tab_vars, compacted)`, written in `tab_assemble_tables()` / `tab_compact()`
+  and re-keyed by `tab_transpose()`; read via new **`tab_vars_recorded()`**, which **validates it
+  against the real columns** (a dplyr chain can rename/drop them) → NULL → the old heuristic, so
+  hand-built tables still work. ⚠ **CONTRACT**: `tab_get_vars()`'s `row_var`/`tab_vars` stay **column**
+  names (what every consumer indexes with); `row_vars` carries the **source** names. They differ only
+  on a merged table — conflating them would have broken every `x[[row_var]]`.
+- **PREREQUISITE (done first, byte-identical): `tab_attrs()` / `tab_restore()` / `tab_bind_attrs()`.**
+  The ~34 dplyr S3 methods + vctrs reconcilers each named every attribute by hand, so `subtext` / `test`
+  / `render_extras` / `ci_settings` had each paid the same ~34-site edit. A 5th attribute would have
+  paid it a 5th time. Now: one `new_tab()` formal + a getter/setter + **one line in `tab_attrs()`**.
+- **`tab_compact()` re-merge guard.** The heuristic used to catch an already-merged table *by accident*
+  (reading its synthetic `row_var` column as a tab_var → the bail). Truthful roles remove that accident,
+  so the guard is now explicit (`compacted` → no-op) — otherwise it would have merged a second time.
+- **`tab_transpose()` with several row_vars.** Folds the `(row_var, levels)` pair into one key column so
+  the existing single-row_var pivot runs unchanged; each old row_var becomes a **col_var** with its own
+  total/reference column (exporters span its name over its levels for free). Levels are suffixed
+  `_<var>` only where two row_vars share one (tab()'s own `Other_race` convention, which
+  `tab_col_var_header()` already strips). The total-row guard is now per sub-table.
+- **BUG FOUND — `dplyr::pull(tabs, all_of(row_var))` read the DATA MASK.** tidyselect resolves
+  `row_var` against the columns first, and a merged table has a column literally *named* `row_var` — so
+  it silently pulled that column instead of the local variable. Latent (a merged table never got past
+  the old guard); now `tabs[[row_var]]`.
+- **Never merge a list at export** (decision 5). Deleted the branch **and `tab_list_mergeable()`** —
+  which re-ran `tab_get_vars()` over every tab immediately before `tab_compact()` re-ran the identical
+  scan. `tab_resolve_tables()`'s `compact` arg is gone (dead; nothing read `meta$compact`).
+- **`tab_xl`**: new shared `xl_finish()` → `cat`s the resolved path (decision 8) and **fixes the
+  double-resolve** (`tab_xl_resolve_path()` is NOT pure — with `replace = FALSE` it auto-numbers past
+  the file it just wrote, so the two degrade paths opened a file that never existed). `tab_get_titles()`
+  rewritten per decision 4 (real names via `vars`, elide past 3 with "+N more", no NA fall-through);
+  mean/sd headers → `mean` / `sd` under the col_var span, **gated on the split existing** so the text
+  backends (sd inline) are untouched — their wording is 14e's.
+- **`transpose` now runs BEFORE materialise**: the extras are ORIENTED (add_n is a column under row%, a
+  row under col%), so materialising first baked the pre-transpose orientation in. `tab_md(transpose =
+  TRUE)` of a row% table is now **byte-identical** to the native col% table (test-locked).
+
+**Flagged for the maintainer** (see the questions block after 14g): a pre-existing golden drift
+(`n_ci_tabvars*`'s `ci_sup` `NA`→`NaN`, invisible to `expect_equal`'s tolerance, reproduces on
+unmodified HEAD) is now baked in; and the Excel mean/sd column WIDTH was not narrowed.
+
+##### Original plan (historical intent)
 
 **Step 1 — the framework fix: stop INFERRING roles, RECORD them.** (Maintainer: *"fixed at framework
 level, reliably, by finding what solid and reliable property differentiates"*.) There is no reliable

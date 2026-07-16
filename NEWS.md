@@ -404,6 +404,26 @@
   export to Excel, install `openxlsx2`. The produced workbooks look essentially the same.
 
 ## Bug corrections
+* **Tables know their own variables.** A table now records which variables are its rows, columns and
+  tab-variables instead of leaving each function to guess them back from the column types. The guess
+  could not survive `tab()` merging several row variables into one table -- that merge renames the
+  first column to `levels` and keeps the variable names only as values of a `row_var` column, which the
+  guess then read as a tab-variable. Three consequences are fixed: `tab_transpose()` refused such a
+  table, citing tab-variables it did not have (it now transposes it -- each row variable becomes a
+  column variable with its own total); the Excel title read *"levels by multi (tabbed by row_var)"*,
+  naming nothing (titles now name the real variables, listing up to three then "+N more", and no
+  longer fall through to a literal `NA`); and `tab_get_vars()` reported the merge's scaffolding.
+* **`tab_xl()` now tells you where the file went** (a `cat`-style message), and no longer opens the
+  wrong file: on its fallback paths it resolved the path twice, and with `replace = FALSE` the second
+  resolution auto-numbered *past* the file it had just written.
+* **A list of tables is never merged at export.** `tab_kable()` / `tab_md()` / `tab_xl()` /
+  `tab_plot()` used to glue a list back into one table when its column variables happened to match --
+  overriding a user who had asked to keep them apart (`output_list = TRUE`, `tab_many()`, or their own
+  `list()`). `tab()` still merges its own row variables at build time, as before.
+* **`transpose = TRUE` on a row-percentage table** now renders exactly like the equivalent column-
+  percentage table: the base is an `n` row, not `100% (n=849)` folded into the total cell.
+* **Excel mean/sd headers.** A numeric variable exported `NB_MUSIQUES` and `NB_MUSIQUES_sd` under a
+  `NB_MUSIQUES` spanning header -- the name three times. The columns are now headed `mean` and `sd`.
 * **`tab_plot()`'s colour legend** printed raw HTML fragments as text (`color:#02A5B3 !important;">+5`)
   in uniform black: it recovered the legend by scraping regexes back out of the HTML rendering, and
   those had silently stopped matching when the legend was rewritten. It now reads the legend's own

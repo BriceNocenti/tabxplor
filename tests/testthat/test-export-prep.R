@@ -99,21 +99,18 @@ testthat::test_that("tab_check_same_col_vars accepts same col_vars, rejects mism
 
 # === SECTION: base vs list split =============================================
 
-testthat::test_that("a list with matching col_vars compacts to ONE render table", {
+testthat::test_that("a list is NEVER merged at export, even with matching col_vars (Phase 14d)", {
+  # It used to be compacted into one render table. `tab()` already merges what it decides to merge;
+  # a list reaching an exporter is one the user asked to keep separate (output_list / tab_many /
+  # their own list()), so gluing it back together overrode them.
   lst <- list(tab(gss, race, marital, pct = "row", color = "diff"),
               tab(gss, relig, marital, pct = "row", color = "diff"))
-  p <- tabxplor:::tab_export_prep(lst, backend = "md", drop_tab_vars = FALSE, wrap = NULL)
-  testthat::expect_length(p$tables, 1L)
-  testthat::expect_false(p$tables[[1]]$vars$degrade)
-})
-
-testthat::test_that("tab_list_mergeable: same col_vars + no tab_vars only", {
-  same <- list(tab(gss, race, marital, pct = "row"), tab(gss, relig, marital, pct = "row"))
-  testthat::expect_true(tabxplor:::tab_list_mergeable(same))
-  diffcv <- list(tab(gss, race, marital, pct = "row"), tab(gss, race, relig, pct = "row"))
-  testthat::expect_false(tabxplor:::tab_list_mergeable(diffcv))
-  withtv <- list(tab(gss, race, marital, year, pct = "row"))
-  testthat::expect_false(tabxplor:::tab_list_mergeable(withtv))
+  p <- tabxplor:::tab_export_prep(lst, backend = "md", drop_tab_vars = FALSE, wrap = NULL,
+                                  list_method = TRUE)
+  testthat::expect_length(p$tables, 2L)
+  testthat::expect_false(any(purrr::map_lgl(p$tables, ~ isTRUE(.$vars$degrade))))
+  # ... while tab() merging its OWN row_vars is untouched: that is a build-time decision.
+  testthat::expect_s3_class(tab(gss, c(race, relig), marital, pct = "row"), "tabxplor_tab")
 })
 
 testthat::test_that("list_method keeps a non-mergeable list as N tables; else it errors", {
@@ -167,4 +164,49 @@ testthat::test_that("tab_totcol_range yields [min;max] when bases differ (na='dr
   rng <- rd$range_totcol
   testthat::expect_true(any(rng$differ))
   testthat::expect_true(any(grepl("^\\[.*;.*\\]$", rng$text[rng$differ])))
+})
+
+
+# === SECTION: recorded variable roles (Phase 14d) ===========================
+
+testthat::test_that("the `vars` attribute records the roles a merged table cannot show", {
+  # tab_compact() renames column 1 to the literal "levels" and keeps the row-variable names only as
+  # levels of a synthetic column NAMED "row_var" -- so the column-type heuristic read that meta column
+  # as a tab_var. Recording the roles at build time is the fix.
+  merged <- tab(gss, c(race, relig), marital, pct = "row")
+  v <- tabxplor:::get_vars_attr(merged)
+  testthat::expect_equal(v$row_vars, c("race", "relig"))   # the SOURCE names, unrecoverable otherwise
+  testthat::expect_true(v$compacted)
+  testthat::expect_length(v$tab_vars, 0L)
+  # tab_get_vars() keeps its COLUMN-name contract, and now tells the truth about tab_vars
+  testthat::expect_equal(tab_get_vars(merged)$row_var, "levels")
+  testthat::expect_length(tab_get_vars(merged)$tab_vars, 0L)
+  # a real tab_var is still reported
+  testthat::expect_equal(tab_get_vars(tab(gss, race, marital, year, pct = "row"))$tab_vars, "year")
+})
+
+testthat::test_that("`vars` survives dplyr verbs, and a stale one loses to the real columns", {
+  merged <- tab(gss, c(race, relig), marital, pct = "row")
+  for (f in list(function(x) dplyr::filter(x, TRUE),
+                 function(x) dplyr::mutate(x, zz = 1),
+                 function(x) dplyr::ungroup(x),
+                 function(x) dplyr::arrange(x))) {
+    testthat::expect_length(tab_get_vars(f(merged))$tab_vars, 0L)
+  }
+  # a `vars` naming columns that are gone must not win over what is actually there
+  faked <- tabxplor:::set_vars_attr(tab(gss, race, marital, pct = "row"),
+                                    tabxplor:::new_vars_attr(row_vars = "gone_var"))
+  testthat::expect_null(tabxplor:::tab_vars_recorded(faked))
+  testthat::expect_equal(tab_get_vars(faked)$row_var, "race")   # heuristic fallback
+})
+
+testthat::test_that("a table with no recorded roles still detects them (tab_num / hand-built)", {
+  leaf <- tab_num(gss, race, age)
+  testthat::expect_null(tabxplor:::get_vars_attr(leaf))
+  testthat::expect_equal(tab_get_vars(leaf)$row_var, "race")
+})
+
+testthat::test_that("tab_compact() on an already-merged table is a no-op", {
+  merged <- tab(gss, c(race, relig), marital, pct = "row")
+  testthat::expect_identical(tab_compact(merged), merged)
 })

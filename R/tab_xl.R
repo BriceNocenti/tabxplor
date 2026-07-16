@@ -153,8 +153,7 @@ tab_xl <-
     rv <- if (is.data.frame(tabs)) tab_render_vars(tabs) else list(degrade = FALSE)
     if (isTRUE(rv$degrade)) {
       tab_degrade_inform(rv$reason)
-      xlb_write_xlsx(tibble::as_tibble(tabs), tab_xl_resolve_path(path, replace))
-      if (isTRUE(open)) xlb_open(tab_xl_resolve_path(path, replace))
+      xl_finish(function(p) xlb_write_xlsx(tibble::as_tibble(tabs), p), path, replace, open)
       return(invisible(tabs_base))
     }
     if (is.data.frame(tabs)) tabs <- list(tabs)
@@ -175,7 +174,7 @@ tab_xl <-
     compute <- c("refs", "bold")
     if (color) compute <- c(compute, "colors")
     prep <- tab_export_prep(
-      tabs, backend = "xl", compact = FALSE, drop_tab_vars = remove_tab_vars,
+      tabs, backend = "xl", drop_tab_vars = remove_tab_vars,
       list_method = TRUE, compute = compute, transpose = transpose,
       color_type = color_type, theme = theme,
       color_legend = color_legend, what = "tab_xl()"
@@ -185,14 +184,16 @@ tab_xl <-
     # Graceful degrade: any unreadable list member is written as a plain sheet, with a message.
     if (any(purrr::map_lgl(rd, ~ isTRUE(.$vars$degrade)))) {
       purrr::walk(rd, ~ if (isTRUE(.$vars$degrade)) tab_degrade_inform(.$vars$reason))
-      xlb_write_xlsx(purrr::map(rd, ~ tibble::as_tibble(.$tab)), tab_xl_resolve_path(path, replace))
-      if (isTRUE(open)) xlb_open(tab_xl_resolve_path(path, replace))
+      xl_finish(function(p) xlb_write_xlsx(purrr::map(rd, ~ tibble::as_tibble(.$tab)), p),
+                path, replace, open)
       return(invisible(tabs_base))
     }
 
     tabs           <- purrr::map(rd, "tab")           # ungrouped, tab_vars dropped when requested
     roles          <- purrr::map(rd, "roles")
-    row_vars       <- purrr::map(rd, ~ .$vars$row_var)
+    # Phase 14d: the SOURCE names for the title (`row_var` is the column holding the labels, which on
+    # a merged table is the literal "levels"); geometry elsewhere keeps using `roles`.
+    row_vars       <- purrr::map(rd, ~ .$vars$row_vars %||% .$vars$row_var)
     tab_vars       <- purrr::map(rd, ~ .$vars$tab_vars)
     col_vars_plain <- purrr::map(rd, ~ .$vars$col_vars)
 
@@ -296,12 +297,24 @@ tab_xl <-
     reg <- xl_style_registrar(wb)
     purrr::walk(plans, ~ xl_write_table(wb, ., opts, reg))
 
-    path <- tab_xl_resolve_path(path, replace)
-    xlb_save(wb, path)
-    if (isTRUE(open)) xlb_open(path)
-
+    xl_finish(function(p) xlb_save(wb, p), path, replace, open)
     invisible(tabs_base)
   }
+
+
+# Resolve the path ONCE, write through it, tell the user where the file went, open it if asked.
+# WHY once: tab_xl_resolve_path() is not pure -- with `replace = FALSE` it auto-numbers PAST any
+# existing file, so calling it a second time (as the two degrade paths did) returned Tab2.xlsx after
+# writing Tab1.xlsx, and `open` opened a file that had never been written.
+# WHY the message: the default path is a tempdir(), and the function returns `tabs` (so a pipe keeps
+# flowing), so a user with `open = FALSE` had no way at all to find the file.
+xl_finish <- function(write, path, replace, open) {
+  path <- tab_xl_resolve_path(path, replace)
+  write(path)
+  cli::cli_inform(c("v" = "Excel file written to {.file {path}}"))
+  if (isTRUE(open)) xlb_open(path)
+  invisible(path)
+}
 
 
 # Resolve the export path: default to options("tabxplor.export_dir") or tempdir()/Tab, ensure the
@@ -771,25 +784,31 @@ xl_write_table <- function(wb, plan, o, reg) {
 }
 
 
+# Name a variable set for a title: every name up to `max`, then "+N more" -- never "multi", which named
+# nothing, and never a bare index. Placeholders and empties drop out.
+tab_title_names <- function(x, max = 3) {
+  x <- as.character(x)
+  x <- x[!is.na(x) & nzchar(x) & !x %in% c("no_row_var", "no_col_var", "all_col_vars")]
+  if (length(x) == 0) return("")
+  if (length(x) <= max) return(paste(x, collapse = ", "))
+  paste0(paste(x[seq_len(max)], collapse = ", "), " +", length(x) - max, " more")
+}
+
 #' @keywords internal
 tab_get_titles <- function(tabs, row, col, tab, max = 3) {
-  res <- dplyr::case_when(
-    row ==  "no_row_var" & length(col) <= max ~ paste(col, collapse = ", "),
-    row ==  "no_row_var" & length(col) >  max ~ paste(col[1:max], "etc.",
-                                                      collapse = ", "),
-    all(col ==  "no_col_var")           ~ row,
-    length(row) == 1 & length(col) <= max ~ paste(row, "by",
-                                                  paste(col, collapse = ", ")),
-    length(row) == 1 & length(col) >  max ~ paste(row, "by multi"),
-  )
-  if (!missing(tab)) {
-    if (length(tab) >= 1) res <-
-        if (length(tabs) >= 2) {
-          paste0(res, " (tabbed by ", paste(tab, collapse = ", "), ")")
-        } else {
-          paste0(res, " (tabbed by ", tab, ")")
-        }
-  }
+  # Phase 14d: was a case_when over `length(row) == 1` with NO fallback, fed the DETECTED roles. On a
+  # merged table (several row_vars) those roles were the merge's own scaffolding, so the title read
+  # "levels by multi (tabbed by row_var)" -- three words, none of them a variable of the user's -- and
+  # any shape the branches missed fell through to a literal "NA". The roles are recorded now, so the
+  # real names are available; name them all, eliding past `max` with a count.
+  rows <- tab_title_names(row, max)
+  cols <- tab_title_names(col, max)
+  res  <- if (!nzchar(rows) && !nzchar(cols)) "Table"
+          else if (!nzchar(rows)) cols
+          else if (!nzchar(cols)) rows
+          else paste(rows, "by", cols)
+  tabn <- if (missing(tab)) "" else tab_title_names(tab, max)
+  if (nzchar(tabn)) res <- paste0(res, " (tabbed by ", tabn, ")")
   res
 }
 

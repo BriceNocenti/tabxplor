@@ -185,34 +185,23 @@ tab_totcol_range <- function(tab, fmt_cols, col_var_map, totcols,
 
 # === SECTION: the render-model builder ==============================================
 
-# Non-erroring twin of tab_check_same_col_vars(): TRUE iff a list of tabs can be merged by
-# tab_compact() -- i.e. NO tab_vars anywhere AND all share the same (longest) col_vars set.
-#' @keywords internal
-tab_list_mergeable <- function(tabs) {
-  if (any(purrr::map_lgl(tabs, ~ length(tab_get_vars(.)$tab_vars) > 0))) return(FALSE)
-  cvs <- purrr::map(tabs, ~ {
-    v <- tab_get_vars(.)$col_vars
-    v[!v %in% c("all_col_vars", "", "no") & !is.na(v)]
-  })
-  lens    <- purrr::map_int(cvs, length)
-  longest <- cvs[[dplyr::first(which(lens == max(lens, na.rm = TRUE)))]]
-  all(purrr::map_lgl(cvs, ~ all(. %in% longest)))
-}
-
 # Resolve the input into the list of tables to render.
-#   - a single tab             -> itself.
-#   - a MERGEABLE list          -> compact into ONE table (same col_vars, no tab_vars).
-#   - a NON-mergeable list      -> `list_method = TRUE` (tab_md): return the list, rendered
-#                                  one-after-another (each keeps its own tab_vars sub-tables);
-#                                  `list_method = FALSE` (tab_kable / tab_plot, no list renderer yet):
-#                                  error with the historical message (block A).
+#   - a single tab        -> itself.
+#   - a list              -> `list_method = TRUE` (tab_md / tab_xl / tab_plot): the list, rendered
+#                            one-after-another (each keeps its own tab_vars sub-tables);
+#                            `list_method = FALSE` (tab_kable, no list renderer yet): error (block A).
+# Phase 14d: a list is NEVER merged here. `tab()` already merges what it decides to merge (a
+# `tab_compact()` at build time, recorded as `compacted` in the `vars` attribute); a list reaching an
+# exporter is one the user asked to keep separate -- via `output_list = TRUE`, `tab_many()`, or their
+# own `list()` -- and silently gluing it back together at render time overrode that. It also removed
+# the need for `tab_list_mergeable()`, the non-erroring twin of `tab_check_same_col_vars()` that
+# re-ran `tab_get_vars()` over every tab immediately before `tab_compact()` re-ran the identical scan.
 #' @keywords internal
-tab_resolve_tables <- function(tabs, compact, list_method = FALSE, what,
+tab_resolve_tables <- function(tabs, list_method = FALSE, what,
                                call = rlang::caller_env()) {
   if (is.data.frame(tabs) || !is.list(tabs)) return(list(tabs))
-  if (compact && tab_list_mergeable(tabs)) return(list(tab_compact(tabs)))
   if (list_method) return(tabs)                 # render each separately (the list method)
-  tab_check_same_col_vars(tabs, what = what, call = call)  # errors (kable/plot) -- current behaviour
+  tab_check_same_col_vars(tabs, what = what, call = call)  # errors (kable) -- current behaviour
   tabs
 }
 
@@ -357,7 +346,20 @@ tab_col_var_header <- function(tab, roles) {
   clean <- nms
   for (j in which(label != "")) {
     suff <- paste0("_", cvm[[j]])
-    if (endsWith(nms[j], suff)) clean[j] <- substr(nms[j], 1L, nchar(nms[j]) - nchar(suff))
+    if (endsWith(nms[j], suff)) {
+      clean[j] <- substr(nms[j], 1L, nchar(nms[j]) - nchar(suff))
+    } else if (identical(nms[j], cvm[[j]]) && is_fmt(tab[[j]]) &&
+               identical(get_type(tab[[j]]), "mean") && paste0(cvm[[j]], "_sd") %in% nms) {
+      # Phase 14d: where a numeric variable is SPLIT across columns (the Excel mean + `<var>_sd`
+      # sibling), both are named after the variable -- so under its own span it was said three times
+      # ("NB_MUSIQUES" / "NB_MUSIQUES_sd" below a "NB_MUSIQUES" header). The span says which variable;
+      # the level header should say which STATISTIC. Gated on the sibling existing, so the text
+      # backends -- which fold the sd into the mean cell as "47.2 (17.3)" and so split nothing -- are
+      # untouched (their own header wording is Phase 14e's).
+      clean[j] <- "mean"
+    } else if (identical(nms[j], paste0(cvm[[j]], "_sd"))) {
+      clean[j] <- "sd"
+    }
   }
   list(label = label, clean = clean)
 }
@@ -409,7 +411,6 @@ resolve_export_opts <- function(theme = NULL,
 #' @keywords internal
 tab_export_prep <- function(tabs,
                             backend       = c("kable", "md", "plot", "xl"),
-                            compact       = TRUE,
                             drop_tab_vars = TRUE,
                             wrap          = NULL,
                             compute       = NULL,
@@ -444,8 +445,15 @@ tab_export_prep <- function(tabs,
     grey2 = chrome$grey2
   )
 
-  resolved <- tab_resolve_tables(tabs, compact = compact, list_method = list_method,
-                                 what = what)
+  resolved <- tab_resolve_tables(tabs, list_method = list_method, what = what)
+
+  # Phase 10j: opt-in transpose-at-export (all four exporters share this seam; console never transposes).
+  # Phase 14d: it now runs BEFORE materialise, not after. The extras are ORIENTED -- add_n is a column
+  # under row% and a row under col% -- so materialising first baked the pre-transpose orientation in,
+  # and `transpose(pct = "row")` showed its base in-cell as "100% (n=849)" where the native col% table
+  # it is supposed to match shows an `n` ROW. Transposing the core table first also means the pivot
+  # never has to carry synthetic rows/columns.
+  if (isTRUE(transpose)) resolved <- purrr::map(resolved, tab_transpose)
 
   # Phase 10i-B: hydrate the "core" table into its rendered shape ONCE, on the still-grouped resolved
   # tables (before prep_one_table ungroups), so p-value rows + add_n/add_pct are real rows/cols the
@@ -453,10 +461,6 @@ tab_export_prep <- function(tabs,
   # Total cell (backend "text").
   mat_backend <- if (identical(backend, "xl")) "xl" else "text"
   resolved <- purrr::map(resolved, tab_materialize_extras, backend = mat_backend, pvalue = TRUE)
-
-  # Phase 10j: opt-in transpose-at-export, applied AFTER materialise so the order matches tab_xl's
-  # historical materialise->transpose (all four exporters now share this seam; console never transposes).
-  if (isTRUE(transpose)) resolved <- purrr::map(resolved, tab_transpose)
 
   tables <- purrr::map(
     resolved,
@@ -473,7 +477,7 @@ tab_export_prep <- function(tabs,
     list(
       tables = tables,
       labels = labels,
-      meta = list(backend = backend, compact = compact, theme = theme[1],
+      meta = list(backend = backend, theme = theme[1],
                   color_type = color_type[1],
                   color_legend = color_legend, theme_cols = theme_cols,
                   compute = compute)

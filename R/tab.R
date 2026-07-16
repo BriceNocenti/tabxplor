@@ -2030,14 +2030,19 @@ tab_assemble_tables <- function(ctx) {
   ci_settings <- if (!identical(ci, "no")) {
     list(conf_level = conf_level, method_cell = method_cell, method_diff = method_diff)
   } else NULL
+  # Phase 14d: record the variable ROLES here, where they are known. Recovering them from the finished
+  # table is guesswork (and wrong after tab_compact) -- see get_vars_attr() in R/tab_classes.R.
+  vars_attr <- new_vars_attr(row_vars = row_var, col_vars = as.character(col_vars),
+                             tab_vars = as.character(tab_vars))
   if (!lv1_group_vars(tab)) {
     tab    <- dplyr::group_by(tab, !!!tab_vars)
     groups <- dplyr::group_data(tab)
     tab    <- new_grouped_tab(tab, groups = groups, subtext = subtext, test = tests,
-                              render_extras = render_extras, ci_settings = ci_settings)
+                              render_extras = render_extras, ci_settings = ci_settings,
+                              vars = vars_attr)
   } else {
     tab <- new_tab(tab, subtext = subtext, test = tests, render_extras = render_extras,
-                   ci_settings = ci_settings)
+                   ci_settings = ci_settings, vars = vars_attr)
   }
 
   # Row_var finishing done: ctx$tabs is the single finished tabxplor_tab/grouped_tab (the whole-table
@@ -2388,15 +2393,47 @@ tab_transpose <- function(tabs, name = NULL) {
     cli::cli_abort("{.arg tabs} has no {.pkg tabxplor} formatted columns to transpose.")
   }
 
+  # Phase 14d: SEVERAL row_vars (a merged tab(): `row_var` + `levels` columns). Its row key is the
+  # PAIR (row_var, level), so fold the pair into one key column and let the single-row_var pivot below
+  # run unchanged; `src_row_var` then maps each new column back to the variable it came from, which
+  # becomes that column's col_var (so a merged row% table transposes into a col% table whose col_vars
+  # are the old row_vars -- exporters span their names over their levels for free).
+  # The level names are suffixed `_<var>` ONLY where two row_vars share one, mirroring the convention
+  # tab() itself uses for colliding col_var levels (`Other_race`) -- and the exporters' suffix
+  # stripping (tab_col_var_header) reverses it.
+  merged      <- isTRUE(tab_vars_recorded(tabs)$compacted)
+  src_row_var <- NULL
+  if (merged) {
+    src   <- as.character(tabs[["row_var"]])
+    lvl   <- as.character(tabs[[row_var]])
+    dup   <- lvl %in% names(which(tapply(src, lvl, function(s) length(unique(s))) > 1))
+    key   <- ifelse(dup, paste0(lvl, "_", src), lvl)
+    if (anyDuplicated(key)) {
+      cli::cli_abort(c("{.fn tab_transpose} cannot name the transposed columns uniquely.",
+                       "i" = "Two rows share the same variable and level."))
+    }
+    src_row_var <- stats::setNames(src, key)
+    tabs[[".tx_key"]] <- factor(key, levels = key)
+    row_var <- ".tx_key"
+  }
+
   # --- capture the axis roles BEFORE the pivot (in_totrow / in_refrow are uniform across fmt cols) ---
   totrow_lgl   <- vctrs::field(tabs[[fmtc[1]]], "in_totrow")
   refrow_lgl   <- vctrs::field(tabs[[fmtc[1]]], "in_refrow")
   totcol_names <- fmtc[purrr::map_lgl(tabs[fmtc], is_totcol)]
   refcol_names <- fmtc[purrr::map_lgl(tabs[fmtc], is_refcol)]
-  labels        <- as.character(dplyr::pull(tabs, tidyselect::all_of(row_var)))
+  # WARNING: base `[[`, NOT dplyr::pull(all_of(row_var)) -- tidyselect evaluates `row_var` in the DATA
+  # MASK first, and a merged table has a column literally NAMED `row_var`, so the tidyselect form
+  # silently pulled that column instead of the local variable. (Latent before Phase 14d: a merged table
+  # never got past the tab_vars guard above.)
+  labels        <- as.character(tabs[[row_var]])
   totrow_labels <- labels[totrow_lgl]
   refrow_labels <- labels[refrow_lgl]
-  if (length(totrow_labels) > 1) {
+  # One total row per SUB-TABLE (a merged table legitimately has one per row_var); each becomes its
+  # own total column. Only a single sub-table with two total rows is ambiguous.
+  max_per_sub <- function(x) if (merged) max(c(0L, table(as.character(tabs[["row_var"]])[x])))
+                             else sum(x)
+  if (max_per_sub(totrow_lgl) > 1) {
     cli::cli_abort("{.fn tab_transpose} does not work (yet) with more than one total row.")
   }
   if (length(totcol_names) > 1) {
@@ -2417,6 +2454,9 @@ tab_transpose <- function(tabs, name = NULL) {
 
   # --- the pivot: old columns become rows, old row_var levels become columns ---
   if (is.null(name)) name <- if (!is.na(old_col_var)) old_col_var else "variables"
+  # the merged table's (row_var, levels) pair is now carried by .tx_key: drop the originals, else
+  # pivot_wider would treat them as extra id columns and give one row per (col_var level x row_var).
+  if (merged) tabs <- tabs[, setdiff(names(tabs), c("row_var", "levels")), drop = FALSE]
   long <- tabs |>
     tidyr::pivot_longer(cols = tidyselect::all_of(fmtc),
                         names_to = name, values_to = "value")
@@ -2433,7 +2473,8 @@ tab_transpose <- function(tabs, name = NULL) {
     col <- wide[[nm]]
     for (a in fmt_col_attrs) attr(col, a) <- rep_attrs[[a]]    # restore uniform col_var attributes
     col <- set_type(col, new_type)                            # row <-> col
-    col <- set_col_var(col, row_var)                          # new col_var = old row_var
+    # new col_var = the old row variable this column's rows came from (per column when merged)
+    col <- set_col_var(col, if (merged) unname(src_row_var[[nm]]) else row_var)
     col <- as_totcol(col, FALSE)
     col <- as_refcol(col, FALSE)
     col <- as_totrow(col, new_labels %in% totcol_names)       # old total COLUMN -> new total ROW
@@ -2442,13 +2483,14 @@ tab_transpose <- function(tabs, name = NULL) {
   }
   # old total ROW -> new total COLUMN; old reference ROW -> new reference COLUMN (else, under the
   # col%-inversion, the total column is the reference, matching a native pct = "col" table).
-  if (length(totrow_labels) == 1 && totrow_labels %in% new_fmtc) {
-    wide[[totrow_labels]] <- as_totcol(wide[[totrow_labels]], TRUE)
+  # Phase 14d: ONE per sub-table, not one per table -- a merged table has a total row per row_var, and
+  # each must become its own total column (the guard above already rejects two within one sub-table).
+  for (lab in intersect(totrow_labels, new_fmtc)) {
+    wide[[lab]] <- as_totcol(wide[[lab]], TRUE)
   }
-  ref_target <- if (length(refrow_labels) >= 1) refrow_labels[[1]]
-                else if (length(totrow_labels) == 1) totrow_labels else character(0)
-  if (length(ref_target) == 1 && ref_target %in% new_fmtc) {
-    wide[[ref_target]] <- as_refcol(wide[[ref_target]], TRUE)
+  ref_targets <- if (length(refrow_labels) >= 1) refrow_labels else totrow_labels
+  for (lab in intersect(ref_targets, new_fmtc)) {
+    wide[[lab]] <- as_refcol(wide[[lab]], TRUE)
   }
 
   wide[[name]] <- factor(new_labels, levels = new_labels)
@@ -2464,12 +2506,41 @@ tab_transpose <- function(tabs, name = NULL) {
   # Phase 10i-B: carry the add_n/add_pct DISPLAY intent through the transpose (orientation-agnostic --
   # the materialiser adds add_n as a ROW once the table reads as col%). So transpose(row% add_n) then
   # display == a native col% add_n table.
-  new_tab(wide, subtext = get_subtext(tabs), test = test,
-          render_extras = get_render_extras(tabs), ci_settings = get_ci_settings(tabs))
+  # Phase 14d: the roles SWAP, so (like `test` above) they must be re-keyed, never passed through.
+  # The result is a single-row_var table whose row_var is the old col_var and whose col_vars are the
+  # old row_vars -- `compacted` is FALSE again: the merged shape is gone, undone by the pivot.
+  attrs <- tab_attrs(tabs)
+  attrs$test <- test
+  attrs$vars <- new_vars_attr(row_vars = name,
+                              col_vars = unique(purrr::map_chr(wide[new_fmtc], get_col_var)),
+                              tab_vars = character(0))
+  rlang::exec(new_tab, wide, !!!attrs)
 }
 
 
 
+
+
+# Phase 14d: read the RECORDED roles (the `vars` attribute), validated against the table's actual
+# columns -- a dplyr chain can rename or drop the very columns the attribute names, and a stale
+# attribute must never beat what is really there. NULL -> the caller keeps the column-type heuristic.
+# CONTRACT: the returned `row_var`/`tab_vars` are COLUMN names (what every consumer indexes with),
+# NOT the source variable names. On a compacted table those differ: the row levels live in a column
+# literally named "levels" and the source names only in the `row_var` column's values -- which is
+# exactly why the roles have to be recorded. `row_vars` carries the source names for the few callers
+# that want them (the tab_xl title).
+#' @keywords internal
+tab_vars_recorded <- function(tabs) {
+  v <- get_vars_attr(tabs)
+  if (is.null(v)) return(NULL)
+  nms     <- names(tabs)
+  row_col <- if (isTRUE(v$compacted)) "levels" else v$row_vars
+  if (length(row_col) != 1 || !row_col %in% nms) return(NULL)
+  tab_vars <- v$tab_vars
+  if (!all(tab_vars %in% nms)) return(NULL)
+  list(row_var = row_col, tab_vars = tab_vars,
+       row_vars = v$row_vars, compacted = isTRUE(v$compacted))
+}
 
 
 #' @describeIn tab_many Get the variables names of a \pkg{tabxplor} \code{tab}
@@ -2484,6 +2555,7 @@ tab_transpose <- function(tabs, name = NULL) {
 # @examples
 tab_get_vars <- function(tabs, vars = c("row_var", "col_vars", "tab_vars")) {
   stopifnot(is.data.frame(tabs))
+  rec <- tab_vars_recorded(tabs)
 
   if ("col_vars" %in% vars) {
     fmtc <- purrr::map_lgl(tabs, is_fmt)
@@ -2503,12 +2575,13 @@ tab_get_vars <- function(tabs, vars = c("row_var", "col_vars", "tab_vars")) {
   # character so downstream `which()/%in%` stay well-defined (the crash is caught upstream by
   # tab_render_vars(), but tab_get_vars() must not itself emit a stray NULL). See tab_render_vars().
   if ("row_var" %in% vars) {
-    row_var <- names(utils::tail(fct_cols[fct_cols], 1L))
+    row_var <- if (!is.null(rec)) rec$row_var else names(utils::tail(fct_cols[fct_cols], 1L))
     if (is.null(row_var)) row_var <- character(0)
   }
 
   if ("tab_vars" %in% vars) tab_vars <-
-    if (length(row_var) == 0) names(fct_cols[fct_cols])
+    if (!is.null(rec))            rec$tab_vars
+    else if (length(row_var) == 0) names(fct_cols[fct_cols])
     else names(fct_cols[fct_cols & names(fct_cols) != row_var])
 
 
@@ -2553,21 +2626,34 @@ tab_render_vars <- function(tabs) {
   col_vars_levels <- purrr::map(col_vars_names, ~ names(col_vars[col_vars == .])) %>%
     purrr::set_names(col_vars_names)
 
-  # row_var = last factor NOT in the grouping; tab_vars = every other factor (column order, so it
-  # matches tab_get_vars() exactly). An ungrouped table falls back to the last-factor heuristic.
-  groups    <- intersect(dplyr::group_vars(tabs), fct_names)
-  non_group <- setdiff(fct_names, groups)
-  row_var   <- if (length(groups) == 0 || length(non_group) == 0) {
-    utils::tail(fct_names, 1L)
+  # Phase 14d: the RECORDED roles first (validated against the real columns); the detection below is
+  # the fallback for a table that never recorded them (tab_plain(), a hand-built frame, an older
+  # object). row_var = last factor NOT in the grouping; tab_vars = every other factor (column order,
+  # so it matches tab_get_vars() exactly). An ungrouped table falls back to the last-factor heuristic.
+  rec <- tab_vars_recorded(tabs)
+  if (!is.null(rec)) {
+    row_var  <- rec$row_var
+    tab_vars <- rec$tab_vars
   } else {
-    utils::tail(non_group, 1L)
+    groups    <- intersect(dplyr::group_vars(tabs), fct_names)
+    non_group <- setdiff(fct_names, groups)
+    row_var   <- if (length(groups) == 0 || length(non_group) == 0) {
+      utils::tail(fct_names, 1L)
+    } else {
+      utils::tail(non_group, 1L)
+    }
+    tab_vars <- setdiff(fct_names, row_var)
   }
-  tab_vars <- setdiff(fct_names, row_var)
 
   if (length(row_var) == 0 || is.na(row_var) || !row_var %in% fct_names)
     return(list(degrade = TRUE, reason = "could not identify the row variable"))
 
+  # `row_var` is the COLUMN holding the row labels; `row_vars` is the SOURCE variable name(s) it came
+  # from. They differ only on a merged table, where the column is the literal "levels" and the real
+  # names live in the `row_var` column's values -- which is what a title or a caption wants to name.
   list(degrade = FALSE, row_var = row_var, tab_vars = tab_vars,
+       row_vars = if (!is.null(rec)) rec$row_vars else row_var,
+       compacted = !is.null(rec) && isTRUE(rec$compacted),
        col_vars = col_vars_names, col_vars_levels = col_vars_levels)
 }
 

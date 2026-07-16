@@ -121,3 +121,57 @@ testthat::test_that("transpose at export keeps numeric means + inline sd + colou
   testthat::expect_true(grepl("]{.", md, fixed = TRUE))       # colour spans present
   testthat::expect_true(grepl(intToUtf8(0x03c3), md))         # inline sigma sd survives
 })
+
+
+# === SECTION: several row_vars (Phase 14d) ==================================
+
+testthat::test_that("transpose works with several row_vars: each becomes a col_var", {
+  # Before Phase 14d this aborted with a message about `tab_vars` the table did not have: after
+  # tab_compact() the roles were guessed from the columns, and the merge's own `row_var` meta column
+  # read as a tab_var. The roles are recorded now, so the guard tells the truth.
+  t  <- tab(gss, c(marital, relig), race, pct = "row")
+  tr <- tab_transpose(t)
+
+  v <- tab_get_vars(tr)
+  testthat::expect_setequal(v$col_vars, c("marital", "relig"))   # old row_vars -> col_vars
+  testthat::expect_equal(v$row_var, "race")                      # old col_var  -> row_var
+  testthat::expect_length(v$tab_vars, 0L)
+  testthat::expect_false(isTRUE(get_vars_attr(tr)$compacted))    # the merged shape is undone
+
+  # every ROW of the merged table survives as its own column (`levels(t$levels)` would be the union of
+  # both row_vars' levels, which can include one with no rows at all)
+  testthat::expect_length(setdiff(names(tr), "race"), nrow(t))
+  # ONE total + reference column per sub-table (not one per table)
+  totc <- names(tr)[purrr::map_lgl(tr, ~ is_fmt(.) && is_totcol(.))]
+  testthat::expect_setequal(totc, c("Total_marital", "Total_relig"))
+  testthat::expect_setequal(names(tr)[purrr::map_lgl(tr, ~ is_fmt(.) && is_refcol(.))], totc)
+  # each column's col_var is the variable its rows came from
+  testthat::expect_equal(get_col_var(tr[["Total_marital"]]), "marital")
+  testthat::expect_equal(get_col_var(tr[["Total_relig"]]),   "relig")
+  # values: the transposed cell equals the original one
+  testthat::expect_equal(get_num(tr[["Divorced"]])[match("Black", as.character(tr$race))],
+                         get_num(t[["Black"]])[which(as.character(t$levels) == "Divorced" &
+                                                       as.character(t$row_var) == "marital")])
+})
+
+testthat::test_that("transpose suffixes ONLY levels shared by two row_vars", {
+  t  <- tab(gss, c(marital, relig), race, pct = "row")
+  tr <- tab_transpose(t)
+  # "Total" (and "No answer") exist under both -> suffixed; "Divorced" is marital's alone -> bare
+  testthat::expect_true(all(c("Total_marital", "Total_relig", "No answer_marital") %in% names(tr)))
+  testthat::expect_true("Divorced" %in% names(tr))
+  testthat::expect_false("Divorced_marital" %in% names(tr))
+})
+
+testthat::test_that("a REAL tab_var still aborts, and says so truthfully", {
+  testthat::expect_error(tab_transpose(tab(gss, marital, race, year, pct = "row")), "tab_vars")
+})
+
+testthat::test_that("transposed row% renders exactly like a native col% table (Phase 14d)", {
+  # The extras are ORIENTED: add_n is a column under row%, a ROW under col%. Materialising before the
+  # transpose baked the wrong one in ("100% (n=849)" in-cell instead of an `n` row).
+  transposed <- tab_md(tab(gss, marital, race, pct = "row"), transpose = TRUE,
+                       print = FALSE, color = FALSE)
+  native     <- tab_md(tab(gss, race, marital, pct = "col"), print = FALSE, color = FALSE)
+  testthat::expect_identical(transposed, native)
+})

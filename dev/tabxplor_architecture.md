@@ -72,14 +72,35 @@ tabxplor creates, manipulates, and formats color-coded cross-tabulation tables f
   `min_e`. Chi-squared is filled for factor columns, ANOVA F for mean columns (both computed by the
   vectorised engine in `R/tab-agg.R` — `agg_chi2()` / `agg_anova()` — via `tab_chi2()`). Read it with
   `get_test()` (which also falls back to the old `chi2` attribute); `get_chi2()` is a kept alias.
+- `render_extras` (Phase 10i-B) / `ci_settings` (Phase 13b) — the display-only intents, above.
+- `vars` (Phase 14d): `list(row_vars, col_vars, tab_vars, compacted)` — the table's OWN record of its
+  variable roles, written where the truth is known (`tab_assemble_tables()` / `tab_compact()`, and
+  re-keyed by `tab_transpose()`). **The roles cannot be recovered from a built table**: `tab_compact()`
+  renames column 1 to the literal `"levels"` and keeps the row-variable names only as levels of a
+  synthetic column *named* `row_var`, so the "last factor is the row_var, the others are tab_vars"
+  heuristic reported `row_var = "levels", tab_vars = "row_var"` on a merged table with no tab_vars —
+  which is why `tab_transpose()` aborted over tab_vars that were never there and a `tab_xl` title read
+  *"levels by multi (tabbed by row_var)"*. Sniffing for a column named `row_var` would be the ad-hoc
+  layer this replaces. `tab_get_vars()` / `tab_render_vars()` read it via `tab_vars_recorded()`, which
+  **validates it against the real columns** (a dplyr chain can rename or drop them) and returns NULL →
+  the heuristic fallback, so hand-built tables (`tab_plain()`, `tab_num()`, older objects) still work.
+  ⚠ `tab_get_vars()`'s `row_var`/`tab_vars` stay **column** names (what consumers index with);
+  `row_vars` carries the **source** names, which differ on a merged table.
 
-Constructor: `new_tab(tabs, subtext, test)` (the old `chi2 =` argument still works, mapped to `test`).
+Constructors: `new_tab(tabs, subtext, test, render_extras, ci_settings, vars)` (the old `chi2 =`
+argument still works, mapped to `test`) and `new_grouped_tab(tabs, groups, …)`.
+
+**Adding a table attribute** is a 3-line job, not a ~34-site one (Phase 14d): a `new_tab()` formal, a
+getter/setter, and one line in **`tab_attrs()`** — the ONE list of the attributes. `tab_restore(out,
+from)` rebuilds a table from a template (used by every dplyr S3 method, with `lv1_group_vars()`'s
+auto-downgrade) and `tab_bind_attrs(x, other)` reconciles a bind (the vctrs `ptype2`/`cast` pair:
+`subtext` unions, the row-bound `test` rbinds, the rest are scalar intents taking x's). Before this,
+each verb named every attribute by hand, so `subtext`/`test`/`render_extras`/`ci_settings` each paid
+the same ~34-site edit, and an attribute dropped in one verb failed silently.
 
 ### tabxplor_grouped_tab — Subtabled Results
 
-When `tab_vars` are provided, the result is a `tabxplor_grouped_tab` — a `grouped_df` subclass. It carries the same `subtext` and `test` attributes, plus `groups` data from dplyr.
-
-Constructor: `new_grouped_tab(tabs, groups, subtext, test)`.
+When `tab_vars` are provided, the result is a `tabxplor_grouped_tab` — a `grouped_df` subclass. It carries the same table attributes, plus `groups` data from dplyr.
 
 This class requires a separate S3 method for **every dplyr verb** to preserve class and attributes through operations. See the dplyr Integration section below.
 

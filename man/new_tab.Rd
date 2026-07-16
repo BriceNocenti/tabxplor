@@ -12,6 +12,7 @@ new_tab(
   chi2 = NULL,
   render_extras = NULL,
   ci_settings = NULL,
+  vars = NULL,
   ...,
   class = character()
 )
@@ -24,6 +25,7 @@ new_grouped_tab(
   chi2 = NULL,
   render_extras = NULL,
   ci_settings = NULL,
+  vars = NULL,
   ...,
   class = character()
 )
@@ -50,6 +52,11 @@ into the table: they are materialised at print/export time from this attribute. 
 \code{list(conf_level =, method_cell =, method_diff =)}: which confidence level and confidence
 interval methods were actually used. \code{NULL} (the default) makes the legend fall back to
 the package defaults.}
+
+\item{vars}{The table's variable roles, as
+\code{list(row_vars =, col_vars =, tab_vars =, compacted =)}, recorded when the table is built
+rather than guessed back from it afterwards. \code{NULL} (the default) makes
+\code{tab_get_vars()} fall back to detecting them from the column types.}
 
 \item{...}{Needed to implement subclasses.}
 
