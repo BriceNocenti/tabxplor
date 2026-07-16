@@ -176,8 +176,11 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE) {
     # nothing of ours is inline any more.
     # DejaVu Sans Condensed for text and DejaVu Sans for numbers mirrors tab_xl()'s font_text/font_num,
     # so a table looks the same exported to Excel or to html. Both degrade through the stack.
-    paste0(".tabxplor-tab{border-collapse:collapse;border-top:0;border-bottom:0;margin:0;",
-           "font-family:\"DejaVu Sans Condensed\",\"DejaVu Sans\",Arial,helvetica,sans-serif;}"),
+    # `.tabxplor-tab` is the <table> itself (the html engine) OR a wrapping <div> (a markdown table
+    # inside its pandoc fenced div, Phase 14f) -- `border-collapse` only means something on a table, so
+    # name both. Every other rule below is a descendant selector and reaches the table either way.
+    paste0(".tabxplor-tab,.tabxplor-tab table{border-collapse:collapse;border-top:0;border-bottom:0;",
+           "margin:0;font-family:\"DejaVu Sans Condensed\",\"DejaVu Sans\",Arial,helvetica,sans-serif;}"),
     ".tabxplor-tab caption{text-align:center;font-weight:bold;font-size:120%;}",
     ".tabxplor-tab tfoot{font-size:80%;text-align:left;}",
     # readable-compact: a real vertical rhythm (line-height 0.85 crammed the rows) + ~1mm of side

@@ -40,9 +40,15 @@
 #' @param transpose Set to `TRUE` to transpose each table before export (rows become columns) --
 #'   the col-percentages-with-several-row-variables use case.
 #' @param title `r lifecycle::badge("deprecated")` Renamed to `caption`.
+#' @param col_var_names When `TRUE` (default) the column variables' names are written as a first,
+#'   italic body row, above their level columns. Set to `FALSE` to drop it (the level names alone).
 #' @param css When `TRUE`, prepend an inline `<style>` block (from \code{\link{tab_css}}), so the
 #'   coloured markdown is self-contained. Default `FALSE` (bring the stylesheet via the document's
 #'   `css:`, or emit \code{\link{tab_css}} once at the top of the document -- it styles every table).
+#'   Each table is also wrapped in a pandoc fenced div `::: {.tabxplor-tab}`, which pandoc renders as
+#'   `<div class="tabxplor-tab">` -- the hook \code{\link{tab_css}}'s table styling needs, since
+#'   pandoc emits a bare `<table>` it could not otherwise reach. So the rendered HTML of a markdown
+#'   table can look like `tab_kable()`'s, not just be coloured.
 #' @param clipboard Copy output to clipboard via \code{clipr::write_clip()}.
 #'   Requires the \pkg{clipr} package.
 #' @param file Path to write the markdown to a file. `NULL` (default) skips.
@@ -73,6 +79,7 @@ tab_md <- function(tabs,
                    html_24_bit = NULL,
                    caption = NULL,
                    transpose = FALSE,
+                   col_var_names = TRUE,
                    css = FALSE,
                    clipboard = FALSE,
                    file = NULL,
@@ -110,14 +117,21 @@ tab_md <- function(tabs,
                   subtext = subtext, color = color,
                   color_legend = color_legend, lang = lang,
                   title = if (i == 1) caption else NULL,
+                  col_var_names = col_var_names,
                   color_type = color_type, theme = theme)
   })
   md_text <- paste(parts, collapse = "\n\n")
 
+  # Phase 14f: with a stylesheet, wrap each table in a pandoc fenced div. Pandoc emits a BARE `<table>`
+  # for a pipe table, which none of tab_css()'s `.tabxplor-tab ...` rules can reach -- so a rendered
+  # markdown table got the colours but none of the layout (compact padding, thin spacer columns,
+  # borders). `::: {.tabxplor-tab}` renders as `<div class="tabxplor-tab">`, which every existing
+  # selector matches, and `chrome = TRUE` becomes meaningful for markdown for the first time.
+  # The raw markdown stays readable: two marker lines, no change to the table itself.
   if (isTRUE(css)) {
     md_text <- paste0(tab_css(theme = theme, color_type = color_type,
-                              chrome = FALSE, style_tag = TRUE),
-                      "\n\n", md_text)
+                              chrome = TRUE, style_tag = TRUE),
+                      "\n\n::: {.tabxplor-tab}\n", md_text, "\n:::")
   }
 
   if (!is.null(file)) writeLines(md_text, file)
@@ -165,7 +179,7 @@ tab_md_css <- function(tabs = NULL, ...) {
 # the byte-identical plain padded table.
 md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
                           color = TRUE, color_legend = TRUE, lang = NULL, title = NULL,
-                          color_type = NULL, theme = NULL) {
+                          col_var_names = TRUE, color_type = NULL, theme = NULL) {
   # Graceful degrade -- a table that can't be read as a tabxplor table renders as a plain pipe table.
   if (isTRUE(rd$vars$degrade)) {
     tab_degrade_inform(rd$vars$reason)
@@ -234,7 +248,11 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
       list(txt  = trimmed,
            prim = if (is.null(pn)) rep(NA_integer_, length(col)) else pn - lead)
     } else {
-      list(txt = as.character(col), prim = rep(NA_integer_, length(col)))
+      # Phase 14f: a `|` in a level or tab_var label would open a spurious cell and desync the whole
+      # row's column count. Escape it -- pandoc renders `\|` as a literal pipe inside a cell. Only the
+      # non-fmt (label) columns can contain one; fmt cells are numbers the package formats itself.
+      list(txt = gsub("|", "\\|", as.character(col), fixed = TRUE),
+           prim = rep(NA_integer_, length(col)))
     }
   })
   cell_data <- as.data.frame(lapply(fmt_out, `[[`, "txt"), stringsAsFactors = FALSE)
@@ -329,10 +347,18 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   attr_width <- integer(n_cols)
   for (j in seq_len(n_cols)) {
     if (do_color && is_right[j]) {
-      w <- cell_widths[, j]
-      if (length(bold_rows) > 0) w[bold_rows] <- cell_widths[bold_rows, j] + 4L
+      # Phase 14f: `num_width` is the width of the VISIBLE value, so the bold rows' +4 must NOT enter
+      # it. `**` is markup, not text: adding it here padded the value INSIDE the bracket, so every
+      # coloured cell in a column that has any bold row read "[    38%]{.p2}" -- four spaces pandoc
+      # discards, and which in the raw markdown push the number out of line with the bold one. The
+      # bold cells' extra 4 is a property of THEIR text, so it belongs in col_width (below) only.
       nonempty <- nzchar(cell_data[[j]])
-      num_width[j]  <- if (any(nonempty)) max(w[nonempty]) else 0L
+      # `num_width` is the widest cell measured in the raw columns its content occupies UP TO its last
+      # visible character -- the value plus any markup that precedes that character (md_extra()).
+      # Padding to it aligns what the reader sees; padding to the value alone (or, worse, adding the
+      # bold +4 to the value) does not, because the markup is invisible only once rendered.
+      vis <- cell_widths[, j] + md_extra(cell_data[[j]], seq_len(n_rows) %in% bold_rows, prim_mat[, j])
+      num_width[j]  <- if (any(nonempty)) max(vis[nonempty]) else 0L
       attr_width[j] <- if (any(nonempty)) max(nchar(attr_mat[nonempty, j])) else 0L
       col_width[j]  <- max(num_width[j] + attr_width[j] + 4L, header_widths[j] + 2L)
     } else {
@@ -369,11 +395,17 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
     }
   }
 
-  # --- Step 8: col_var spanning header row (Phase 13c-iii) ---
-  # The variable NAME is centred over its level columns (from the shared header model), a single blank
-  # cell over the row var / total / count columns. Shown for a single col_var too (was multi-only).
+  # --- Step 8: the col_var-name row (Phase 13c-iii; re-sited in Phase 14f) ---
+  # WARNING: this row is a BODY row -- it is emitted AFTER the delimiter (see Step 13). It used to sit
+  # above the level-name header, which made a TWO-ROW HEADER, and **pandoc does not have those**: it
+  # silently gave up on the whole table and rendered it as a line-block followed by a paragraph of
+  # pipes. Every tab_md() table carrying a col_var name (i.e. every normal one -- 13c-iii shows the
+  # name for a single col_var too) was invalid. Verified with pandoc 3.7.
+  # Below the delimiter it parses, and it is styled as data: the name in the FIRST cell of its group
+  # (a centred span would need a colspan pandoc pipe tables cannot express), italic, so it reads as a
+  # sub-heading rather than a value. `col_var_names = FALSE` drops it.
   col_var_header_line <- NULL
-  if (any(nzchar(cvh$label))) {
+  if (isTRUE(col_var_names) && any(nzchar(cvh$label))) {
     header_parts <- character(0)
     j <- 1
     while (j <= n_cols) {
@@ -384,12 +416,16 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
         while (j_end < n_cols && cvh$label[j_end + 1] == lbl) j_end <- j_end + 1
         group_cols <- j:j_end
         span <- sum(col_width[group_cols]) + length(group_cols) - 1
+        # The name goes in the FIRST cell of its group, italic; the rest of the group is blank. It is
+        # one cell PER COLUMN, never a merged one -- a pipe row must keep the table's cell count or
+        # pandoc shifts the data. A long name simply overflows its own cell: that row is deliberately
+        # not pipe-ALIGNED (it parses; only a markdown linter minds), because padding to it would
+        # widen every column below it.
+        nm_cell <- paste0(" *", lbl, "*")
         header_parts <- c(header_parts,
-                          stringr::str_pad(
-                            stringr::str_pad(lbl,
-                                             nchar(lbl) + (span - nchar(lbl)) %/% 2,
-                                             side = "left"),
-                            span, side = "right"))
+                          stringr::str_pad(nm_cell, col_width[j], side = "right"))
+        if (j_end > j) header_parts <- c(header_parts,
+                                         strrep(" ", col_width[(j + 1L):j_end]))
         # Add separator column between real col_var groups (multi col_var only)
         if (j_end %in% new_col_var && j_end < n_cols) {
           header_parts <- c(header_parts, " ")
@@ -429,7 +465,7 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
       paste0(":", dashes)
     }
   }
-  sep_line <- md_insert_col_sep(sep_cells, new_col_var, n_cols, has_multi_col_vars)
+  sep_line <- md_insert_col_sep(sep_cells, new_col_var, n_cols, has_multi_col_vars, fill = "-")
 
   # --- Step 11: Build body rows ---
   body_lines <- character(n_rows)
@@ -440,7 +476,8 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
       split_at <- prim_mat[i, j]                          # Phase 13c-ii composite bold-prefix width
       if (do_color && is_right[j]) {
         row_cells[j] <- md_color_cell(cell_data[[j]][i], attr_mat[i, j],
-                                      num_width[j], col_width[j], is_bold, split_at)
+                                      num_width[j], col_width[j], is_bold, split_at,
+                                      attr_width = attr_width[j])
       } else {
         row_cells[j] <- pad_cell(cell_data[[j]][i], col_width[j],
                                   is_right[j], is_bold, split_at)
@@ -474,7 +511,9 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   }
 
   # --- Step 13: Assemble and output ---
-  all_lines <- c(col_var_header_line, header_line, sep_line, body_lines)
+  # Phase 14f: the col_var-name row goes BELOW the delimiter (a body row). Above it, it made a two-row
+  # header, which pandoc does not accept -- see Step 8.
+  all_lines <- c(header_line, sep_line, col_var_header_line, body_lines)
 
   # Optional caption -- a pandoc table caption line (numbered/cross-referenceable in Quarto).
   if (!is.null(title)) {
@@ -491,7 +530,10 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
 
 
 # Helper: insert empty separator columns between col_var groups
-md_insert_col_sep <- function(cells, new_col_var, n_cols, has_multi_col_vars) {
+# `fill` is what the thin spacer column between col_var groups contains. It MUST be "-" on the
+# delimiter row: a pandoc delimiter cell has to be dashes (optionally with `:`), and a blank one ("| |")
+# made pandoc reject the table outright. Every other row wants a blank spacer.
+md_insert_col_sep <- function(cells, new_col_var, n_cols, has_multi_col_vars, fill = " ") {
   if (!has_multi_col_vars || length(new_col_var) == 0) {
     return(paste0("|", paste(cells, collapse = "|"), "|"))
   }
@@ -500,7 +542,7 @@ md_insert_col_sep <- function(cells, new_col_var, n_cols, has_multi_col_vars) {
   for (j in seq_along(cells)) {
     parts <- c(parts, cells[j])
     if (j %in% new_col_var && j < n_cols) {
-      parts <- c(parts, " ")  # empty separator column
+      parts <- c(parts, fill)  # the thin separator column
     }
   }
   paste0("|", paste(parts, collapse = "|"), "|")
@@ -521,24 +563,45 @@ md_span_attr <- function(text_slot, bg_slot) {
   paste0("{", paste0(".", parts, collapse = " "), "}")
 }
 
-# One fmt cell of a coloured column, as the fixed scaffold " [<num>]<attr> " padded to `total_width`.
-# The number is right-padded to `num_width` INSIDE the brackets, so `[` and the number sit at a fixed
-# offset every row (numbers align); the whole body is right-padded so the next pipe lands at a fixed
-# column (pipes align). An empty/NA cell renders as blank of the same width (no empty span).
-# DESIGN (Phase 13d): an UNCOLOURED cell carries no span (`attr = ""`), so it uses the bracket-free
-# geometry -- two leading spaces stand in for " [", putting the number's right edge at num_width + 2,
-# exactly where a bracketed cell's is. Alignment is preserved without a do-nothing `.n` class. (Pandoc
-# strips cell padding, so the rendered table is unaffected either way.)
+# One fmt cell of a coloured column: "<pad>[<num>]<attr><pad>", padded to `total_width`.
+# Phase 14f: the alignment target is the VISIBLE NUMBER, not the markup. Markup (`[`, `**`) is invisible
+# once rendered but occupies columns in the raw file, so the number's right edge is placed at a fixed
+# offset and each cell's markup PREFIX grows leftwards into its own pad. That is what lets a bold cell
+# `**54%**` and a coloured one `[42%]{.m2}` show their numbers in the same column of the raw markdown.
+# Before, `num_width` carried the bold rows' +4 and the value was padded INSIDE the bracket
+# ("[    38%]{.p2}") -- four spaces pandoc discards, and which shifted the number the other way.
+# The attr is padded to `attr_width` (pandoc ignores spaces inside `{...}`: `{.m2  }` == `{.m2}`), so
+# the closing `}` lines up too when classes differ in length. The whole body is then right-padded so
+# the next pipe lands at a fixed column.
+# DESIGN (Phase 13d): an UNCOLOURED cell carries no span (`attr = ""`) and needs no bracket -- its pad
+# absorbs the missing markup, so its number aligns with the others without a do-nothing `.n` class.
 #' @keywords internal
-md_color_cell <- function(text, attr, num_width, total_width, is_bold, split_at = NA_integer_) {
+md_color_cell <- function(text, attr, num_width, total_width, is_bold, split_at = NA_integer_,
+                          attr_width = nchar(attr)) {
   if (!nzchar(text)) return(strrep(" ", total_width))
   content <- if (is_bold) md_bold(text, split_at) else text   # Phase 13c-ii partial/whole bold
-  body    <- if (nzchar(attr)) {
-    paste0("[", stringr::str_pad(content, num_width, side = "left"), "]", attr)
-  } else {
-    paste0(" ", stringr::str_pad(content, num_width, side = "left"))
-  }
-  paste0(" ", stringr::str_pad(body, total_width - 1L, side = "right"))
+  # An uncoloured cell uses " " where a coloured one opens its bracket, so a bracket costs no offset.
+  open  <- if (nzchar(attr)) "[" else " "
+  attr2 <- if (nzchar(attr) && attr_width > nchar(attr)) {
+    sub("[}]$", paste0(strrep(" ", attr_width - nchar(attr)), "}"), attr)
+  } else attr
+  close <- if (nzchar(attr)) paste0("]", attr2) else ""
+  # Pad by the cell's own VISIBLE-END width (value + the markup preceding its last visible character),
+  # so every cell's last visible character lands on the same raw column. The markup grows leftwards
+  # into the pad instead of pushing the value right.
+  vis  <- nchar(text) + md_extra(text, is_bold, split_at)
+  body <- paste0(strrep(" ", max(0L, num_width - vis)), open, content, close)
+  stringr::str_pad(paste0(" ", body), total_width, side = "right")
+}
+
+# How many RAW columns of markup precede a cell's last visible character. md_bold() adds "**" twice:
+# for a whole-cell bold the closing pair sits AFTER the value (so it costs nothing here, 2); for a
+# COMPOSITE cell it bolds only the primary field, so the closing pair sits mid-cell, before the
+# "(n=...)" tail -- both pairs precede the last visible character (4). Vectorised over a column.
+#' @keywords internal
+md_extra <- function(text, is_bold, split_at) {
+  whole <- is.na(split_at) | split_at < 1L | split_at >= nchar(text)
+  ifelse(!is_bold | !nzchar(text), 0L, ifelse(whole, 2L, 4L))
 }
 
 # Phase 13c-ii: wrap the bold-prefix of a cell in **...**. For a composite cell (split_at = the primary

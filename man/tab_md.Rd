@@ -18,6 +18,7 @@ tab_md(
   html_24_bit = NULL,
   caption = NULL,
   transpose = FALSE,
+  col_var_names = TRUE,
   css = FALSE,
   clipboard = FALSE,
   file = NULL,
@@ -65,9 +66,16 @@ the first table of a list).}
 \item{transpose}{Set to \code{TRUE} to transpose each table before export (rows become columns) --
 the col-percentages-with-several-row-variables use case.}
 
+\item{col_var_names}{When \code{TRUE} (default) the column variables' names are written as a first,
+italic body row, above their level columns. Set to \code{FALSE} to drop it (the level names alone).}
+
 \item{css}{When \code{TRUE}, prepend an inline \verb{<style>} block (from \code{\link{tab_css}}), so the
 coloured markdown is self-contained. Default \code{FALSE} (bring the stylesheet via the document's
-\verb{css:}, or emit \code{\link{tab_css}} once at the top of the document -- it styles every table).}
+\verb{css:}, or emit \code{\link{tab_css}} once at the top of the document -- it styles every table).
+Each table is also wrapped in a pandoc fenced div \verb{::: \{.tabxplor-tab\}}, which pandoc renders as
+\verb{<div class="tabxplor-tab">} -- the hook \code{\link{tab_css}}'s table styling needs, since
+pandoc emits a bare \verb{<table>} it could not otherwise reach. So the rendered HTML of a markdown
+table can look like \code{tab_kable()}'s, not just be coloured.}
 
 \item{clipboard}{Copy output to clipboard via \code{clipr::write_clip()}.
 Requires the \pkg{clipr} package.}

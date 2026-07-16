@@ -258,12 +258,16 @@ testthat::test_that("numbers stay aligned when coloured and uncoloured cells mix
   for (j in which(right)) {
     col <- vapply(cells, function(x) if (length(x) >= j) x[[j]] else "", character(1))
     col <- col[nzchar(trimws(col))]
+    col <- col[grepl("[0-9]", col)]     # skip the italic col_var-name row (Phase 14f: a body row)
     if (length(col) < 2L) next
-    # where the number ENDS inside the cell: just before "]" when wrapped in a span, else at the last
-    # non-space character. A coloured and an uncoloured cell of the same column must agree.
+    # Where the VISIBLE number ends, in raw columns. Phase 14f: strip the markup that FOLLOWS it
+    # (`]{.p1}`, `**`) -- the old metric took the last non-space character, so a bold cell measured
+    # its closing `**` and could only ever agree with a coloured one by accident. What must line up
+    # for a human reading the raw file is the number; the markup around it is invisible once rendered.
     ends <- vapply(col, function(cell) {
-      br <- regexpr("]{.", cell, fixed = TRUE)
-      if (br > 0) br - 1L else nchar(sub("[ ]+$", "", cell))
+      v <- sub("\\][{][^}]*[}][ ]*$", "", cell)   # ]{.p1 .o2}
+      v <- sub("\\*\\*[ ]*$", "", v)              # a closing **
+      nchar(sub("[ ]+$", "", v))
     }, integer(1), USE.NAMES = FALSE)
     if (length(unique(ends)) > 1L) {
       testthat::fail(paste0("column ", j, " numbers misaligned at offsets ",
@@ -351,4 +355,91 @@ testthat::test_that("tab_md_css writes to a file when file is given", {
   out <- tab_md_css(tabs_col, file = tmp)
   testthat::expect_true(file.exists(tmp))
   testthat::expect_gt(length(readLines(tmp)), 0)
+})
+
+
+# === SECTION: Phase 14f -- the output must be VALID PANDOC ==============================
+
+# THE test this file was missing. Every assertion here was green while pandoc rejected the table
+# outright: tabxplor emitted the col_var name as a SECOND HEADER ROW, which pipe tables do not have,
+# so pandoc gave up and rendered a line-block plus a paragraph of pipes. Nothing looked at the render.
+md_pandoc_html <- function(md) {
+  f <- withr::local_tempfile(fileext = ".md")
+  writeLines(md, f)
+  out <- suppressWarnings(system2("pandoc", c(shQuote(f), "-t", "html"),
+                                  stdout = TRUE, stderr = FALSE))
+  paste(out, collapse = "\n")
+}
+
+testthat::test_that("tab_md() output is valid pandoc: it renders as a real <table>", {
+  testthat::skip_if(Sys.which("pandoc") == "", "pandoc not on PATH")
+  cases <- list(
+    "one col_var"    = tab(gss, marital, race, pct = "row"),
+    "two col_vars"   = tab(gss, marital, c(race, relig), pct = "row"),
+    "coloured"       = tab(gss, marital, c(race, relig), pct = "row", color = "diff"),
+    "tab_vars"       = tab(gss, marital, race, year, pct = "row"),
+    "numeric col_var"= tab(gss, marital, c(race, tvhours), pct = "row"),
+    "no col_var name"= tab(gss, marital, race, pct = "row")
+  )
+  for (nm in names(cases)) {
+    md <- tab_md(cases[[nm]], print = FALSE,
+                 col_var_names = !identical(nm, "no col_var name"))
+    h  <- md_pandoc_html(md)
+    testthat::expect_match(h, "<table", label = nm)
+    # the two symptoms of a table pandoc refused
+    testthat::expect_false(grepl("line-block", h, fixed = TRUE), label = nm)
+    testthat::expect_false(grepl("|:--", h, fixed = TRUE), label = nm)
+    # every data cell really became a cell
+    testthat::expect_gt(lengths(regmatches(h, gregexpr("<td", h)))[[1]], nrow(cases[[nm]]))
+  }
+})
+
+testthat::test_that("the delimiter row's spacer column is dashes, not a blank", {
+  # "| |" is not a valid pandoc delimiter cell -- it is what invalidated multi-col_var tables.
+  md <- tab_md(tab(gss, marital, c(race, relig), pct = "row"), print = FALSE, color = FALSE)
+  sep <- strsplit(md, "\n")[[1]][2]
+  testthat::expect_match(sep, "|-|", fixed = TRUE)
+  testthat::expect_no_match(sep, "| |", fixed = TRUE)
+})
+
+testthat::test_that("col_var_names = FALSE drops the name row", {
+  t <- tab(gss, marital, race, pct = "row")
+  testthat::expect_match(tab_md(t, print = FALSE, color = FALSE), "[*]race[*]", perl = TRUE)
+  testthat::expect_no_match(tab_md(t, print = FALSE, color = FALSE, col_var_names = FALSE),
+                            "[*]race[*]", perl = TRUE)
+})
+
+testthat::test_that("a pipe in a label is escaped, not a spurious cell", {
+  d <- gss; levels(d$marital)[1] <- "yes | no"
+  md <- tab_md(tab(d, marital, race, pct = "row"), print = FALSE, color = FALSE)
+  testthat::expect_match(md, "yes \\| no", fixed = TRUE)
+  # every body row still has the same number of cells as the header
+  lines <- strsplit(md, "\n")[[1]]
+  ncell <- function(l) lengths(regmatches(l, gregexpr("(?<!\\\\)[|]", l, perl = TRUE)))
+  testthat::expect_true(all(ncell(lines[grepl("^[|]", lines)]) == ncell(lines[1])))
+})
+
+testthat::test_that("coloured cells align on the NUMBER, with no padding inside the bracket", {
+  # the bold rows' `**` used to inflate num_width, padding every coloured cell INSIDE its span
+  # ("[    38%]{.p2}") -- spaces pandoc discards, and which push the number out of line.
+  md <- tab_md(tab(gss, marital, race, pct = "row", color = "diff"), print = FALSE)
+  testthat::expect_no_match(md, "\\[ +[0-9]", perl = TRUE)
+  # the numbers of one column share a right edge in the raw text
+  lines <- strsplit(md, "\n")[[1]]
+  data  <- lines[grepl("^[|] [A-Z]", lines)]
+  pos   <- regexpr("[0-9]+%\\]?\\{?[^|]*[|]", data)
+  testthat::expect_true(length(unique(vapply(data, function(l) {
+    m <- gregexpr("[0-9]+%", l)[[1]]; m[1] + attr(m, "match.length")[1]
+  }, numeric(1)))) == 1L)
+})
+
+testthat::test_that("css = TRUE wraps the table in a fenced div the stylesheet can reach", {
+  md <- tab_md(tab(gss, marital, race, pct = "row", color = "diff"), print = FALSE, css = TRUE)
+  testthat::expect_match(md, "::: {.tabxplor-tab}", fixed = TRUE)
+  testthat::expect_match(md, "<style>", fixed = TRUE)
+  testthat::skip_if(Sys.which("pandoc") == "", "pandoc not on PATH")
+  h <- md_pandoc_html(md)
+  # pandoc emits a BARE <table> for a pipe table; the div is the only hook tab_css() can style
+  testthat::expect_match(h, '<div class="tabxplor-tab">', fixed = TRUE)
+  testthat::expect_match(h, "<table", fixed = TRUE)
 })

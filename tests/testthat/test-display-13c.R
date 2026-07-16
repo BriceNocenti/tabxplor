@@ -92,7 +92,13 @@ testthat::test_that("shared header model: spanning labels + suffix-stripped clea
 testthat::test_that("md/kable/html show the col_var name spanning header (single col_var too)", {
   t  <- tab(forcats::gss_cat, marital, race, pct = "row")
   md <- tab_md(t, color = FALSE, print = FALSE)
-  testthat::expect_match(strsplit(md, "\n")[[1]][1], "race")   # spanning name row above levels
+  # Phase 14f: in markdown the name is the first BODY row (line 3: header, delimiter, then it). Above
+  # the delimiter it was a second header row, which pandoc does not accept -- it rejected the whole
+  # table. Locked by "tab_md() output is valid pandoc" in test-tab_md.R.
+  lines <- strsplit(md, "\n")[[1]]
+  testthat::expect_match(lines[3], "race")
+  testthat::expect_match(lines[3], "[*]race[*]", perl = TRUE)   # italic: it reads as a sub-heading
+  testthat::expect_no_match(lines[1], "race")
   hk <- as.character(tab_kable(t, engine = "kableExtra"))
   testthat::expect_true(grepl("race</div>", hk))               # add_header_above cell
   hh <- as.character(tab_kable(t, engine = "html"))

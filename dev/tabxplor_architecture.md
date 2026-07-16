@@ -565,6 +565,33 @@ Lightweight standalone export (new in v1.3.1):
 - Handles multi-table lists and compact tables
 - Can copy to clipboard or write to file
 
+**The output must be VALID PANDOC — and nothing checked that until Phase 14f**, so it was not: the
+col_var name row sat above the level header, i.e. a **two-row header**, which pipe tables do not have.
+Pandoc gave up on the whole table and emitted a line-block plus a paragraph of pipes. Every table
+carrying a col_var name (every normal one) was affected, invisibly, because every test asserted on the
+markdown *string*. `test-tab_md.R` now renders through pandoc (`skip_if` pandoc is absent). Three rules
+follow, and they are the ones to keep:
+
+- the col_var name is a **body row** (italic, first cell of its group, **one cell per column** — a
+  merged cell desyncs the row's count and pandoc shifts the data); `col_var_names = FALSE` drops it;
+- the thin spacer column between col_vars needs `-` on the **delimiter** row (`md_insert_col_sep(fill=)`;
+  one helper builds all four row types, so the fill is a parameter);
+- a `|` in a label is escaped (label columns only — fmt cells are package-formatted numbers).
+
+**Padding aligns the VISIBLE end, not the raw one.** Markup (`[`, `**`) occupies raw columns but
+vanishes when rendered, so each cell pads by `nchar(text) + md_extra()` — the markup that PRECEDES its
+last visible character: 0 plain, 2 for a whole-cell bold (its closing `**` follows the value), **4 for
+a composite bold** (`**100%** (n=…)`: both pairs precede the `)`). The markup then grows leftwards into
+the pad and every number shares a raw column. Before, the bold rows' `+4` entered `num_width`, which
+pads *inside* the bracket (`[    38%]{.p2}`) — spaces pandoc discards, and which pushed the number the
+wrong way. The attr is padded to `attr_width` so `}` lines up (pandoc reads `{.m2  }` as `{.m2}`).
+
+**`css = TRUE` wraps each table in a pandoc fenced div** `::: {.tabxplor-tab}` → `<div
+class="tabxplor-tab">`. Pandoc emits a BARE `<table>` for a pipe table, which no `tab_css()` rule could
+reach, so a rendered md table got the colours but none of the layout; the div is the hook every
+existing selector already matches (hence `.tabxplor-tab table` in the border-collapse rule: the class
+is the table itself in html, a wrapping div here).
+
 ### tab_plot() — ggplot Visualization (`R/tab_classes.R`)
 
 Creates a `ggpubr::ggtexttable` from a tabxplor table (soft-deprecated / superseded — kept, not invested

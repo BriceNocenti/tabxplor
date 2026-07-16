@@ -2480,7 +2480,44 @@ Its own session; the maintainer's feedback is the brief. Make `engine = "html"` 
   `#ddd` + unreached `row_spec(0)` in kableExtra).
 - Also here: `pct="col"` compactness, and `min-width:10em`/`5.5em` review.
 
-#### Phase 14f — `tab_md`
+#### Phase 14f — `tab_md` (DONE — 2026-07-17)
+
+Full suite **FAIL 0 | PASS 2850**. Conscious golden regen: `_snaps/golden.md` only (the md layout
+changed on purpose — see below); no `.rds`, no `render-html.md`.
+
+- ⛔ **THE FIND: `tab_md()`'s output was NOT VALID PANDOC — every normal table.** The 13c-iii col_var
+  name row sat ABOVE the level header, i.e. a **two-row header**, which pipe tables do not have:
+  pandoc gives up and renders the whole thing as a line-block + a paragraph of pipes (reproduced on
+  pandoc 3.7 with tabxplor's own output; 0 `<td>` emitted). It had been shipping since 13c-iii because
+  **nothing ever rendered the md** — every test asserted on the markdown string. Fixed by moving the
+  name to the **first BODY row** (decision 3): italic, in the FIRST cell of its group, one cell per
+  column (never merged — a pipe row must keep the cell count or pandoc shifts the data), that row
+  deliberately not pipe-*aligned* (a long name overflows rather than widening every column below).
+  New **`tab_md(col_var_names = FALSE)`** drops it. **New test renders through pandoc** across 6
+  shapes — the test that was missing.
+- **Two more invalidities**: the spacer column's delimiter cell was `| |` (not a legal delimiter →
+  `md_insert_col_sep(fill = "-")`, since one helper builds all 4 row types); and a `|` in a level label
+  opened a spurious cell (now escaped `\|`, label columns only — fmt cells are package-formatted).
+- **Padding model rebuilt around the VISIBLE end.** The bold rows' `+4` entered `num_width`, which
+  pads INSIDE the bracket → `[    38%]{.p2}`: four spaces pandoc discards, and which push the number
+  *out* of line with the bold cell in the raw file. Now each cell pads by its own visible-end width
+  (`md_extra()`: markup that PRECEDES the last visible character — 0 plain, 2 whole-bold since its
+  closing `**` follows the value, **4 composite-bold** whose closing `**` sits mid-cell before the
+  `(n=…)` tail), so the markup grows leftwards into the pad and every number shares a raw column. The
+  attr is padded to `attr_width` so `}` lines up (verified: pandoc reads `{.m2   }` == `{.m2}`).
+- **`css = TRUE` now wraps the table in a pandoc fenced div** `::: {.tabxplor-tab}` → pandoc emits
+  `<div class="tabxplor-tab">`, the hook every `tab_css()` rule already matches (pandoc emits a BARE
+  `<table>`, which none could reach) — so `chrome = TRUE` is meaningful for md for the first time and a
+  rendered md table gets the layout, not just the colours. `.tabxplor-tab table` added to the
+  border-collapse rule (the class is the table itself in html, a wrapping div in md).
+- **The existing test suite earned its keep twice**: the pipe-grid test caught my first name-row draft
+  merging cells, and the numbers-aligned test caught the composite-bold case. Both metrics needed
+  fixing too (they measured the RAW end, so a bold cell could only agree by accident).
+- `tab_export("html_md")` — **declined** (the maintainer's own note): `tab_kable(engine = "html")` IS
+  "markdown rendered to a styled html table", and the real ask (md renders well in Quarto) is what the
+  validity + fenced-div fixes deliver.
+
+##### Original plan (historical intent)
 
 - **Valid pandoc.** Verified with pandoc 3.7: the spacer column's delimiter must be `-` not `" "`
   (`|-|` works); `{.p2    }` (padded attr) parses; a two-row header does not.

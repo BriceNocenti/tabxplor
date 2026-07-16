@@ -414,6 +414,18 @@
   export to Excel, install `openxlsx2`. The produced workbooks look essentially the same.
 
 ## Bug corrections
+* **`tab_md()` output was not valid pandoc.** The column-variable name was written as a *second header
+  row*, which pipe tables do not have: pandoc gave up on the whole table and rendered it as a
+  line-block followed by a paragraph of pipes. Every markdown table carrying a column-variable name
+  (that is, every normal one) was affected. The name is now the first body row, in italics, and a
+  new `tab_md(col_var_names = FALSE)` drops it. Two smaller invalidities went with it: the thin spacer
+  column between column variables now holds a dash on the delimiter row (a blank one is not a legal
+  delimiter cell), and a `|` inside a level name is escaped instead of opening a spurious cell.
+* **Coloured markdown cells wasted four spaces inside every span.** A bold row made the whole column
+  reserve room for its `**`, but that room was added *inside* the brackets (`[    38%]{.p2}`) --
+  spaces pandoc discards, and which pushed the number out of line with the bold one in the raw file.
+  Cells are now padded by their visible width, so the numbers line up and the markup grows leftwards
+  into the padding.
 * **A wrapped column header showed its line break as text.** A long header name is wrapped with
   `<br>`, which the HTML engine escaped along with everything else, printing a literal
   `Télé:<br>occasionnel`.
