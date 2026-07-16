@@ -62,7 +62,7 @@
       | Married       |      9%       | [     9%]{.m1} | [    82%]{.p1} |      100% (n=10 117)  |
       |**Total**      |  **9%**       |  **15%**       |  **76%**       |  **100%** (n=21 483)  |
       
-      Shades of blue: cells ≥ the Total row [+5]{.p1}; [+10]{.p2}; [+20]{.p3}; [+30]{.p4} points. Shades of yellow to red: cells ≤ the Total row [-5]{.m1}; [-10]{.m2}; [-20]{.m3}; [-30]{.m4} points.
+      Shades of blue: cells ≥ the Total row **[+5]{.p1}**; **[+10]{.p2}**; **[+20]{.p3}**; **[+30]{.p4}** points. Shades of yellow to red: cells ≤ the Total row **[-5]{.m1}**; **[-10]{.m2}**; **[-20]{.m3}**; **[-30]{.m4}** points.
 
 # golden display (tab_md) unchanged: n_mean
 
@@ -104,7 +104,7 @@
       | ------------- | ------------------- | ----------------------- | | --------------------- |
       |**Ensemble**   |**Total Ensemble**   |  **47.2 (σ17.3)**       | |  **3.0 (σ2.6)**       |
       
-      Shades of blue: cells ≥ the Total row [+0.2]{.p1}; [+0.5]{.p3}; [+0.8]{.p4} SD. Shades of yellow to red: cells ≤ the Total row [-0.2]{.m1}; [-0.5]{.m3}; [-0.8]{.m4} SD.
+      Shades of blue: cells ≥ the Total row **[+0.2]{.p1}**; **[+0.5]{.p3}**; **[+0.8]{.p4}** SD. Shades of yellow to red: cells ≤ the Total row **[-0.2]{.m1}**; **[-0.5]{.m3}**; **[-0.8]{.m4}** SD.
 
 # golden display (tab_md) unchanged: n_mean_ci
 
@@ -161,7 +161,7 @@
       | C       |      10 (σ3)  |
       |**Total**|  **10 (σ3)**  |
       
-      Shades of blue: cells ≥ the Total row [+0.2]{.p1}; [+0.5]{.p3}; [+0.8]{.p4} SD. Shades of yellow to red: cells ≤ the Total row [-0.2]{.m1}; [-0.5]{.m3}; [-0.8]{.m4} SD.
+      Shades of blue: cells ≥ the Total row **[+0.2]{.p1}**; **[+0.5]{.p3}**; **[+0.8]{.p4}** SD. Shades of yellow to red: cells ≤ the Total row **[-0.2]{.m1}**; **[-0.5]{.m3}**; **[-0.8]{.m4}** SD.
 
 # golden display (tab_md) unchanged: n_mean_sparse
 
@@ -176,7 +176,7 @@
       | C       |                       |
       |**Total**|  **3.0 (σ1.6)**       |
       
-      Shades of blue: cells ≥ the Total row [+0.2]{.p1}; [+0.5]{.p3}; [+0.8]{.p4} SD. Shades of yellow to red: cells ≤ the Total row [-0.2]{.m1}; [-0.5]{.m3}; [-0.8]{.m4} SD.
+      Shades of blue: cells ≥ the Total row **[+0.2]{.p1}**; **[+0.5]{.p3}**; **[+0.8]{.p4}** SD. Shades of yellow to red: cells ≤ the Total row **[-0.2]{.m1}**; **[-0.5]{.m3}**; **[-0.8]{.m4}** SD.
 
 # golden display (tab_md) unchanged: totn_row_drop
 
@@ -204,7 +204,7 @@
       | White   |      48.7 (σ17.5)       | |      2.8 (σ2.3)       |
       |**Total**|  **47.2 (σ17.3)**       | |  **3.0 (σ2.6)**       |
       
-      Shades of blue: cells ≥ the Total row [+0.2]{.p1}; [+0.5]{.p3}; [+0.8]{.p4} SD. Shades of yellow to red: cells ≤ the Total row [-0.2]{.m1}; [-0.5]{.m3}; [-0.8]{.m4} SD.
+      Shades of blue: cells ≥ the Total row **[+0.2]{.p1}**; **[+0.5]{.p3}**; **[+0.8]{.p4}** SD. Shades of yellow to red: cells ≤ the Total row **[-0.2]{.m1}**; **[-0.5]{.m3}**; **[-0.8]{.m4}** SD.
 
 # golden display (tab_md) unchanged: n_mean_tottab
 
@@ -249,7 +249,7 @@
       |               | White               |      48.7 (σ17.5)       | |      2.8 (σ2.3)       |
       |               |**Total Ensemble**   |  **47.2 (σ17.3)**       | |  **3.0 (σ2.6)**       |
       
-      Shades of blue: cells ≥ the Total row [+0.2]{.p1}; [+0.5]{.p3}; [+0.8]{.p4} SD. Shades of yellow to red: cells ≤ the Total row [-0.2]{.m1}; [-0.5]{.m3}; [-0.8]{.m4} SD.
+      Shades of blue: cells ≥ the Total row **[+0.2]{.p1}**; **[+0.5]{.p3}**; **[+0.8]{.p4}** SD. Shades of yellow to red: cells ≤ the Total row **[-0.2]{.m1}**; **[-0.5]{.m3}**; **[-0.8]{.m4}** SD.
 
 # golden display (tab_md) unchanged: f_col_ref_lvl
 
@@ -268,7 +268,7 @@
       |**Total**      |  **100%**       |  **100%**  |  **100%**       |  **100%**       |
       | n             |     1 959       |     3 129  |    16 395       |    21 483       |
       
-      Shades of blue: cells ≥ the Black column [+5]{.p1}; [+10]{.p2}; [+20]{.p3}; [+30]{.p4} points. Shades of yellow to red: cells ≤ the Black column [-5]{.m1}; [-10]{.m2}; [-20]{.m3}; [-30]{.m4} points.
+      Shades of blue: cells ≥ the Black column **[+5]{.p1}**; **[+10]{.p2}**; **[+20]{.p3}**; **[+30]{.p4}** points. Shades of yellow to red: cells ≤ the Black column **[-5]{.m1}**; **[-10]{.m2}**; **[-20]{.m3}**; **[-30]{.m4}** points.
 
 # golden display (tab_md) unchanged: f_col_ref_multi
 
@@ -287,7 +287,7 @@
       |**Total**      |  **100%**       |  **100%**  |  **100%**       | |  **100%**       |  **100%**       |  **100%**               |  **100%**       |  **100%**       |  **100%**          |  **100%**       |  **100%**       |  **100%**       |  **100%**       |  **100%**  |  **100%**  |  **100%**       |  **100%**       |  **100%**       |  **100%**       |
       | n             |     1 959       |     3 129  |    16 395       | |        93       |        15       |       109               |        23       |       689       |        95          |       104       |        32       |        71       |       147       |       224  |     3 523  |       388       |     5 124       |    10 846       |    21 483       |
       
-      Shades of blue: cells ≥ the Black column [+5]{.p1}; [+10]{.p2}; [+20]{.p3}; [+30]{.p4} points. Shades of yellow to red: cells ≤ the Black column [-5]{.m1}; [-10]{.m2}; [-20]{.m3}; [-30]{.m4} points.
+      Shades of blue: cells ≥ the Black column **[+5]{.p1}**; **[+10]{.p2}**; **[+20]{.p3}**; **[+30]{.p4}** points. Shades of yellow to red: cells ≤ the Black column **[-5]{.m1}**; **[-10]{.m2}**; **[-20]{.m3}**; **[-30]{.m4}** points.
 
 # golden display (tab_md) unchanged: f_col_ref_ci
 

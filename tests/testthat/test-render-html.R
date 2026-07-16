@@ -202,13 +202,50 @@ testthat::test_that("the colour legend uses classes on the html engine, hex on k
   # tab_css("auto") itself), and inline hex would be wrong there too.
   for (th in c("light", "dark", "auto")) {
     f <- foot(tab_kable(tb, engine = "html", theme = th, color_legend = TRUE))
-    testthat::expect_false(grepl('<span style="color:#', f, fixed = TRUE))
-    testthat::expect_match(f, '<span class="(p|m)[1-4]">')
+    testthat::expect_false(grepl("color:#", f, fixed = TRUE))   # no inline hex ANYWHERE in the legend
+    testthat::expect_match(f, '<span class="(p|m)[1-4]"')
   }
   testthat::skip_if_not_installed("kableExtra")
   # kableExtra carries no tabxplor stylesheet -> classes would render the legend uncoloured.
   testthat::expect_match(foot(tab_kable(tb, engine = "kableExtra", color_legend = TRUE)),
-                         '<span style="color:#')
+                         'style="[^"]*color:#')
+})
+
+testthat::test_that("legend break-words are bold in every medium (Phase 14c)", {
+  tb <- tab(gss, marital, race, pct = "row", color = c("diff", "ratio"))
+  # html: inline on BOTH channels, so it holds on the kableExtra path (no stylesheet of ours) and on
+  # the background classes (which are deliberately not bolded by the stylesheet, as the cells aren't).
+  for (cl in c(TRUE, FALSE)) {
+    spans <- unlist(regmatches(
+      l <- tab_color_legend(tb, medium = "html", classes = cl),
+      gregexpr("<span [^>]*>", l)))
+    testthat::expect_true(length(spans) > 0)
+    testthat::expect_true(all(grepl("font-weight:bold;", spans, fixed = TRUE)))
+  }
+  # md: `**` so the RAW markdown shows them too (the stylesheet bold only reaches a render).
+  testthat::expect_match(tab_color_legend(tb, medium = "md"), "[*][*]\\[[+]5\\]\\{[.]p1\\}[*][*]")
+  testthat::expect_match(tab_color_legend(tb, medium = "md"), "[*][*]\\[.2\\]\\{[.]o3\\}[*][*]")
+  # runs (excel / plot)
+  runs <- tab_color_legend(tb, medium = "runs")[[1]]
+  coloured <- purrr::keep(runs, ~ !is.na(.$color))
+  testthat::expect_true(length(coloured) > 0)
+  testthat::expect_true(all(purrr::map_lgl(coloured, "bold")))
+  # console: crayon bold wraps the colour style. `cli.num_colors` is the real gate (crayon defers to
+  # cli::num_ansi_colors(), which reads it FIRST) -- testthat pins it to 1 for reproducible output.
+  withr::with_options(list(cli.num_colors = 256, crayon.enabled = TRUE, crayon.colors = 256), {
+    testthat::expect_match(tab_color_legend(tb, medium = "console"), "\033[[]1m")
+  })
+})
+
+testthat::test_that("tab_css() bolds the text slot classes, not the background ones (Phase 14c)", {
+  for (chrome in c(TRUE, FALSE)) {              # tab_md_css() is tab_css(chrome = FALSE)
+    css <- tab_css(style_tag = FALSE, chrome = chrome)
+    testthat::expect_match(css, ".p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4{font-weight:bold;}", fixed = TRUE)
+    testthat::expect_false(grepl("[.]o1[^{]*[{][^}]*font-weight", css))
+  }
+  # theme-independent -> emitted ONCE, not per cascade layer
+  testthat::expect_equal(lengths(regmatches(a <- tab_css(theme = "auto", style_tag = FALSE),
+                                            gregexpr("font-weight:bold;}", a, fixed = TRUE))), 1L)
 })
 
 # === SECTION: cross-engine content parity ================================================

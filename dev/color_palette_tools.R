@@ -352,6 +352,20 @@ set_luminance <- function(cols, l = 0.95) {
     setNames(names(cols))
 }
 
+# The Excel/plot legend fallback: shift luminance DOWN by `by`, keep hue, cap chroma to gamut.
+# An Excel rich-text run (and a ggpubr text label) carries a font colour but no fill, so a
+# background-channel break-word in the colour legend must be drawn as TEXT -- and the background
+# palette is far too light to read on a white sheet. Baked into R/tab_classes.R as
+# default_bg_legend_colors / _neg (light only; the dark background palette is already dark enough to
+# read on white, and darkening it collapses the whole ladder to black). Recipe:
+#   darken_for_legend(default_background_colors)      -> default_bg_legend_colors
+#   darken_for_legend(default_background_colors_neg)  -> default_bg_legend_colors_neg
+#' @noRd
+darken_for_legend <- function(cols, by = 0.2) {
+  l <- farver::decode_colour(cols, to = "oklch")[, 1]
+  unname(set_luminance(cols, pmax(l - by, 0)))
+}
+
 # set chroma (scalar or one-per-colour), keep hue + luminance, cap to gamut
 #' @noRd
 set_chroma <- function(cols, c = 0.1) {

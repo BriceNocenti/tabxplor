@@ -2235,7 +2235,60 @@ not even consult for a mean); placement = **`"auto right"`**, not a last-N-colum
 
 **Verify:** `test-color-engine.R` + a new tooltip test; goldens for the mean-diff display.
 
-#### Phase 14c — colour legends
+#### Phase 14c — colour legends (DONE — 2026-07-17)
+
+All four bullets landed, plus **two defects the item-4 re-verification turned up** and **one the
+`tab_plot` legend had been carrying silently**. Full suite **FAIL 0 | WARN 0 | PASS 2751**; `document()`
+clean. Golden `_golden/*.rds` + `_color_golden/*.rds` **all byte-identical — no colour regeneration**;
+only the two legend-bearing display snapshots moved (`render-html.md`: 17 spans gain
+`font-weight:bold;`; `golden.md`: 8 md legend lines gain `**`), each diffed token-by-token first.
+
+- **Bold break-words, every medium.** Runs already did; console composes `crayon::bold`, html emits
+  `font-weight:bold` **inline**, md wraps `**[+5]{.p1}**`. Inline/markup rather than left to the
+  stylesheet, because it must hold on the **background** channel (whose `.o*`/`.u*` stay unbolded —
+  they mirror the cells, where a fill alone does not bold) and on the **kableExtra** path (no
+  stylesheet of ours ships there).
+- **`tab_css()`/`tab_md_css()` bold the text slots** (`.p1..m4{font-weight:bold;}`, emitted once,
+  `chrome`-independent — it is theme-independent so it must not sit in the 4×-emitted rule table).
+  This is the maintainer's separate "like in kable" note, and it IS kable: `tab_export_prep()`'s
+  `bold = !is.na(text_hex) | ref_alltot` already bolds every text-coloured cell in kableExtra AND the
+  html engine, so the rule is a **no-op there** and exists for the one medium with no other way to say
+  it — `tab_md()`'s bare `[42%]{.p2}` spans.
+- **Excel bg-legend readability** (decision 6). A rich-text run carries a font colour but **no fill**,
+  so a background break-word is drawn as text — and the background palette (L 0.85–0.97) is invisible
+  on white. New 9th palette `default_bg_legend_colors`/`_neg` = the same hues at **−0.2 OKLCH
+  lightness** (chroma kept, gamut-capped), baked from new `dev/color_palette_tools.R::darken_for_legend()`,
+  reachable as `get_color_style(type = "bg_legend")` (color_code-only: it substitutes for a fill, and a
+  console has one → crayon aborts). **Light only, deliberately**: the legend cell's page is white
+  whatever the `theme`, the dark fills (L 0.20–0.35) already read there, and −0.2 collapses them to
+  black (measured: `#001b1b` → `#000000`, slots 3/4 both → L 0.10) — so `bg_legend_dark` is the dark bg
+  palette unchanged. `set_color_palette(bg_legend_colors=, bg_legend_colors_neg=)` added; setting
+  `background_colors` without them makes them follow the fills verbatim (a custom green fill must never
+  keep the default blue legend word).
+- **Console `theme` divergence** fixed: it read `options(tabxplor.color_style_theme)` while `slot_hex()`
+  right above used the resolved `pal` — the two could disagree.
+- **`medium = "excel"` → `"runs"`** (internal fn, 2 call sites): the concept is "draws TEXT, cannot
+  fill", which is Excel **and** `tab_plot`. Both now take the bg_legend palette.
+- **BUG FOUND + FIXED — `tab_plot()`'s legend was raw HTML in black.** It scraped the legend back out of
+  the *html* rendering with regexes (`^color: rgba...`) that stopped matching when Phase 13b replaced
+  kableExtra's `text_spec` spans with inline hex; every token rendered as e.g.
+  `color:#02A5B3 !important;">+5` in uniform black. Rewritten onto `medium = "runs"` (the structure it
+  always wanted: text + hex per token) — **~45 lines of regex deleted**, adjacent same-colour runs
+  folded into one ggtexttable cell.
+- **BUG FOUND + FIXED — two `tab_reg` legend wordings** (item 4 asked to re-verify β/IRR; β/SD and
+  IRR-vs-OR from 13b hold, but): (1) a β legend said *"not significantly different from **the Total
+  row**"* — a reg table has no total row; `legend_ref_info()` read ref_type "tot" like any fmt column.
+  `is_coef` now takes the same "reference category" branch as OR/IRR (imprecise for a numeric
+  predictor's per-unit β, whose null is 0 — the same approximation the OR arm always made). (2) a
+  Poisson **IRR** was described as a *"Wald interval on the log **odds-ratio**"*: `ci_type = "or"` is
+  the multiplicative **shape**, shared by OR / IRR / cumulative OR, so the name now comes from the
+  effect word (+ 2 new FR strings, `.mo` recompiled).
+
+**Flagged for the maintainer** (not fixed here — judgment calls, see the questions block after 14g):
+the darkened light legend hues are faint (L≈0.65–0.77 at C≈0.03), and `tab_plot()`'s legend block
+still holds ~60 lines of half-commented dead code.
+
+##### Original plan (historical intent)
 
 - **Bold the coloured break words** in every medium (Excel already does; html/md/console do not — the
   `bold = TRUE` at [fmt_class.R:3088](R/fmt_class.R#L3088) is excel-only). html: add `font-weight:bold`

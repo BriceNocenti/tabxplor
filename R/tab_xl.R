@@ -219,7 +219,7 @@ tab_xl <-
     legend_runs <- rep(list(list()), length(tabs))
     if (isTRUE(color_legend)) {
       legend_runs <- purrr::map(tabs, ~ suppressWarnings(
-        tab_color_legend(., medium = "excel", style = "prose", lang = lang,
+        tab_color_legend(., medium = "runs", style = "prose", lang = lang,
                          theme = theme, color_type = color_type)))
       legend_runs <- purrr::map(legend_runs, ~ if (is.null(.)) list() else .)
       legend_plain <- purrr::map(legend_runs, ~ purrr::map_chr(

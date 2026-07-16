@@ -2984,10 +2984,15 @@ legend_ref_label <- function(x, col, orientation) {
 # per col_var reference descriptor (kind + recovered label + orientation). A "tot" reference always
 # uses the generic localized "Total" (label = NA); only a non-total reference (ref = "first" / a level /
 # an index) recovers its actual label.
-legend_ref_info <- function(x, col, measure, orientation) {
+# Phase 14c: `is_coef` (a regression beta) must take the same "category" branch as OR/IRR. It reads
+# ref_type "tot" like any fmt column, but a regression table HAS no total row -- the legend claimed
+# "not significantly different from the Total row". Its baseline is the reference category, exactly as
+# for the multiplicative effects. (Imprecise for a numeric predictor's per-unit beta, whose null is 0
+# -- the same approximation the OR arm has always made.)
+legend_ref_info <- function(x, col, measure, orientation, is_coef = FALSE) {
   if (identical(measure, "contrib"))
     return(list(kind = "indep", label = NA_character_, orientation = orientation))
-  if (identical(measure, "or"))
+  if (identical(measure, "or") || isTRUE(is_coef))
     return(list(kind = "category", label = legend_ref_label(x, col, "row"), orientation = "row"))
   ref <- get_ref_type(col); ref <- if (length(ref)) as.character(ref)[1] else "tot"
   if (identical(ref, "tot"))
@@ -3015,7 +3020,16 @@ legend_method_name <- function(spec) {
   cis <- spec$ci_settings
   if (isTRUE(spec$is_reg)) {
     if (identical(cis$method_diff, "profile")) return(gettext("profile-likelihood interval"))
-    if (identical(spec$ci_type, "or"))         return(gettext("Wald interval on the log odds-ratio"))
+    # Phase 14c: ci_type "or" is the multiplicative SHAPE, shared by the odds ratio, the Poisson rate
+    # ratio and the cumulative OR -- naming it "log odds-ratio" unconditionally called a Poisson IRR an
+    # odds ratio. The effect word (the column-name suffix the package itself writes) is the scale.
+    if (identical(spec$ci_type, "or")) {
+      w <- spec$eff_word; if (is.null(w) || is.na(w)) w <- ""
+      return(switch(w,
+                    "IRR" = gettext("Wald interval on the log rate-ratio"),
+                    "OR"  = gettext("Wald interval on the log odds-ratio"),
+                    gettext("Wald interval on the log scale")))
+    }
     return(gettext("Wald interval"))
   }
   if (identical(spec$measure_text, "or")) return(gettext("Wald interval on the log odds-ratio"))
@@ -3150,16 +3164,20 @@ legend_tokens_prose <- function(spec, lang, show_names) {
 }
 
 # ---- render a token stream for one medium ----------------------------------------------------------
-# excel -> a list of runs list(text=, color=, bold=); every other medium -> a single string.
+# "runs" -> a list of runs list(text=, color=, bold=); every other medium -> a single string.
+# Phase 14c: EVERY medium bolds its coloured break-words (they must carry the same visual weight as
+# the coloured numbers they describe -- kable/html already bold every text-coloured cell).
 legend_render_line <- function(tokens, medium, theme, color_type, colored, classes = FALSE) {
   # Phase 13d: `theme` may be the render intent "auto"; a palette is always light/dark. Without this,
   # get_color_style() builds the key "text_auto", finds no palette and errors on a length-0 vector.
-  pal      <- tx_palette_theme(theme)
+  pal <- tx_palette_theme(theme)
+  # Phase 14c: a "runs" medium draws TEXT and cannot fill, so a background break-word borrows the
+  # darker bg_legend palette (the fills themselves are invisible on the white page a run sits on).
+  fam <- function(ch) if (identical(ch, "text")) color_type
+                      else if (identical(medium, "runs")) "bg_legend" else "bg"
   slot_hex <- function(slot, ch)
-    toupper(unname(get_color_style("color_code",
-                                   type = if (identical(ch, "text")) color_type else "bg",
-                                   theme = pal)[slot]))
-  if (identical(medium, "excel")) {
+    toupper(unname(get_color_style("color_code", type = fam(ch), theme = pal)[slot]))
+  if (identical(medium, "runs")) {
     return(lapply(tokens, function(tk) {
       if (isTRUE(colored) && !is.na(tk$c) && tk$c > 0L)
         list(text = tk$t, color = slot_hex(tk$c, tk$ch), bold = TRUE)
@@ -3169,7 +3187,10 @@ legend_render_line <- function(tokens, medium, theme, color_type, colored, class
   parts <- vapply(tokens, function(tk) {
     if (!isTRUE(colored) || is.na(tk$c) || tk$c == 0L) return(tk$t)
     if (identical(medium, "console")) {
-      get_color_style("crayon", type = if (identical(tk$ch, "text")) color_type else "bg")[[tk$c]](tk$t)
+      # `theme` is an argument, so the palette must follow it -- reading the option here silently
+      # rendered a legend the caller never asked for (it disagreed with slot_hex above).
+      style <- get_color_style("crayon", type = fam(tk$ch), theme = pal)[[tk$c]]
+      crayon::bold(style(tk$t))
     } else if (identical(medium, "html")) {
       # DESIGN: the span is emitted inline rather than via kableExtra::text_spec(). text_spec()'s
       # byte output is version-unstable (1.4.0 -> 1.4.1 moved the rgba alpha 255 -> 1, dropped the
@@ -3184,22 +3205,29 @@ legend_render_line <- function(tokens, medium, theme, color_type, colored, class
       # a real case (a document that emits tab_css("auto") itself), and there hex would be wrong too.
       # kableExtra carries no tabxplor stylesheet, so it keeps inline hex. (No `!important` on the
       # class path: it existed to beat kableExtra's lightable rules, which never match here.)
+      # `font-weight:bold` is emitted INLINE, not left to the .p*/.m* stylesheet rule: it must hold on
+      # the background channel too (whose .o*/.u* classes are deliberately not bold -- they mirror the
+      # cells, where a fill alone does not bold), and on the kableExtra path, which ships no CSS of ours.
       if (isTRUE(classes)) {
         cls <- tx_slot_class(tk$ch, tk$c)
-        if (identical(tk$ch, "text")) paste0("<span class=\"", cls, "\">", tk$t, "</span>")
-        else paste0("<span class=\"", cls, "\" style=\"border-radius:4px;",
+        if (identical(tk$ch, "text"))
+          paste0("<span class=\"", cls, "\" style=\"font-weight:bold;\">", tk$t, "</span>")
+        else paste0("<span class=\"", cls, "\" style=\"font-weight:bold;border-radius:4px;",
                     "padding-right:4px;padding-left:4px;\">", tk$t, "</span>")
       } else {
         hex <- slot_hex(tk$c, tk$ch)
         if (identical(tk$ch, "text"))
-          paste0("<span style=\"color:", hex, " !important;\">", tk$t, "</span>")
+          paste0("<span style=\"font-weight:bold;color:", hex, " !important;\">", tk$t, "</span>")
         else
-          paste0("<span style=\"background-color:", hex, " !important;border-radius:4px;",
-                 "padding-right:4px;padding-left:4px;\">", tk$t, "</span>")
+          paste0("<span style=\"font-weight:bold;background-color:", hex,
+                 " !important;border-radius:4px;padding-right:4px;padding-left:4px;\">",
+                 tk$t, "</span>")
       }
     } else if (identical(medium, "md")) {
+      # `**` on top of the .p*/.m* stylesheet bold: it is what makes the break-words stand out in the
+      # RAW markdown too (the file must read well unrendered), and it covers the .o*/.u* channel.
       cls <- tx_slot_class(tk$ch, tk$c)
-      if (!nzchar(cls)) tk$t else paste0("[", tk$t, "]{.", cls, "}")
+      if (!nzchar(cls)) tk$t else paste0("**[", tk$t, "]{.", cls, "}**")
     } else tk$t
   }, character(1))
   paste0(parts, collapse = "")
@@ -3241,7 +3269,7 @@ legend_specs <- function(x) {
     m_bg     <- if (!is.null(plan_bg))  plan_bg$measure  else NA_character_
     orient   <- if (identical(type, "col")) "col" else "row"
     eff_word <- if (isTRUE(is_reg)) legend_reg_effect_word(cn) else NA_character_
-    ref      <- legend_ref_info(x, col, m_txt, orient)
+    ref      <- legend_ref_info(x, col, m_txt, orient, is_coef = is_coef)
     ci_type  <- get_ci_type(col)
     sig <- paste(m_txt, m_bg, policy, orient, is_std, eff_word, ref$kind, ref$label, ci_type, sep = "\r")
     list(col_var = cv, plan_txt = plan_txt, plan_bg = plan_bg,
@@ -3256,10 +3284,13 @@ legend_specs <- function(x) {
 
 #' Build the colour legend of a table
 #'
-#' Internal. Returns one legend line per colour-signature group. For \code{medium = "excel"} each line
-#' is a list of runs \code{list(text, color, bold)} (for a rich-text cell); otherwise a character string.
+#' Internal. Returns one legend line per colour-signature group. For \code{medium = "runs"} each line
+#' is a list of runs \code{list(text, color, bold)}; otherwise a character string.
 #' @param x A \code{tabxplor_tab}.
-#' @param medium One of "console", "html", "md", "excel", "plain".
+#' @param medium One of "console", "html", "md", "runs", "plain". \code{"runs"} is for the media that
+#'   draw the legend as coloured TEXT and cannot fill: an Excel rich-text cell (\code{\link{tab_xl}})
+#'   and a \pkg{ggpubr} label (\code{\link{tab_plot}}). It returns the runs unrendered, and draws the
+#'   background channel from the darker \code{bg_legend} palette (see \code{\link{set_color_palette}}).
 #' @param style "terse" (compact, console default) or "prose" (full sentences, export default).
 #' @param lang NULL (auto from locale) / "en" / "fr".
 #' @param colored Whether to colour the break-words.
@@ -3268,9 +3299,9 @@ legend_specs <- function(x) {
 #'   hex, because a tabxplor stylesheet ships with the output (`tab_kable(engine = "html")`). Then the
 #'   legend follows a theme toggle exactly like the cells it describes. `FALSE` (the kableExtra engine,
 #'   which carries no stylesheet of ours) keeps inline hex.
-#' @return A character vector (or, for excel, a list of run-lists), or NULL when nothing is coloured.
+#' @return A character vector (or, for "runs", a list of run-lists), or NULL when nothing is coloured.
 #' @keywords internal
-tab_color_legend <- function(x, medium = c("console", "html", "md", "excel", "plain"),
+tab_color_legend <- function(x, medium = c("console", "html", "md", "runs", "plain"),
                              style = NULL, lang = NULL, colored = TRUE,
                              theme = NULL, color_type = NULL, classes = FALSE) {
   medium <- match.arg(medium)
@@ -3313,7 +3344,7 @@ tab_color_legend <- function(x, medium = c("console", "html", "md", "excel", "pl
   })
 
   # enc2utf8 the catalog output (gettext may return the native encoding on some platforms).
-  if (identical(medium, "excel")) {
+  if (identical(medium, "runs")) {
     return(unname(purrr::map(lines, function(line)
       purrr::map(line, function(r) { r$text <- enc2utf8(r$text); r }))))  # run-lists
   }

@@ -66,6 +66,8 @@ set_color_palette(
   dark_text_colors_neg = NULL,
   dark_background_colors = NULL,
   dark_background_colors_neg = NULL,
+  bg_legend_colors = NULL,
+  bg_legend_colors_neg = NULL,
   theme = NULL
 )
 
@@ -314,6 +316,13 @@ more visible into the code.}
 under-represented (\code{*_colors_neg}) sides.}
 
 \item{dark_text_colors, dark_text_colors_neg, dark_background_colors, dark_background_colors_neg}{The dark-theme counterparts (4 hex each).}
+
+\item{bg_legend_colors, bg_legend_colors_neg}{(4 hex each) The FONT stand-in for
+\code{background_colors} in the colour legend of media that cannot fill a run (Excel,
+\code{\link{tab_plot}}); the defaults are the background colours at -0.2 OKLCH lightness. Setting
+\code{background_colors} without these makes them follow it unchanged (readable only if your fills
+already are). There is no dark counterpart: an Excel legend cell is on a white page whatever the
+theme, and the dark fills read there as-is.}
 
 \item{theme}{\code{"light"} or \code{"dark"}; defaults to the current setting. (A palette is always
 one or the other: the export theme \code{"auto"} resolves to \code{"light"} here.)}

@@ -1,7 +1,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: tabxplor 1.3.1.9000\n"
-"POT-Creation-Date: 2026-07-16 23:56\n"
+"POT-Creation-Date: 2026-07-17 00:35\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -52,7 +52,13 @@ msgstr ""
 msgid "profile-likelihood interval"
 msgstr ""
 
+msgid "Wald interval on the log rate-ratio"
+msgstr ""
+
 msgid "Wald interval on the log odds-ratio"
+msgstr ""
+
+msgid "Wald interval on the log scale"
 msgstr ""
 
 msgid "Wald interval"

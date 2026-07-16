@@ -1752,49 +1752,29 @@ tab_plot <- function(tabs,
 
 if (color_legend & length(color_cols) != 0) {
 
+  # Phase 14c: read the legend's RUN stream (text + hex per token) directly. It used to be scraped back
+  # out of the html rendering with regexes that had silently stopped matching (Phase 13b replaced
+  # kableExtra's `color: rgba(...)` spans with inline hex), so every legend token rendered as a raw
+  # html fragment in black. "runs" is the medium built for exactly this: draw-as-text, no fill (a
+  # background break-word borrows the darker bg_legend palette, as in Excel).
   color_legend <- suppressWarnings(tab_color_legend(tabs,
-                                   medium     = "html", style = "prose", lang = lang,
+                                   medium     = "runs", style = "prose", lang = lang,
                                    color_type = color_type[1],
                                    theme      = theme[1])) |>
-    stringr::str_split("</span>|<span style=\"") |>
-    purrr::imap_dfr(
-      ~ tibble::tibble(n = as.integer(.y), base = .x)
-    ) |>
-    dplyr::mutate(
-      base = stringr::str_remove_all(.data$base, "<b>|</b>") |>
-        #stringr::str_remove_all("^;") |>
-        stringr::str_squish(), # |>
-        #stringr::str_replace(":$", " "),
-      color = stringr::str_extract(.data$base, "^color: rgba.[^\\)]+") |>
-        stringr::str_remove_all("color: rgba\\("),
-      text  = stringr::str_remove(.data$base, '^.+!important;\\" >'),
-
-      # base = stringr::str_remove_all(base, "</b>; "),
-    ) |>
-    dplyr::filter(!.data$base %in% c("", ";")) |>
-    dplyr::mutate(text = stringr::str_replace_all(.data$text, "; *;", ";")) |>
-    dplyr::group_by(!!rlang::sym("n")) |>
-    dplyr::mutate(bold = stringr::str_detect(.data$base, "color: rgba") &
-                    dplyr::row_number() != 1 ) |>
-    dplyr::ungroup() |>
-    tidyr::separate(col = .data$color, into = c("c1", "c2", "c3", "c4"), sep = ", ") |>
-    dplyr::mutate(
-      text  = dplyr::if_else(.data$bold, paste0(.data$text, " ;"), .data$text),
-      dplyr::across(tidyselect::all_of(c("c1", "c2", "c3", "c4")),
-             ~dplyr::if_else(!is.na(.), as.integer(.), 0L)),
-      color      = grDevices::rgb(.data$c1/255, .data$c2/255, .data$c3/255),
-      #bold_start = bold & !dplyr::lag(bold, default = FALSE),
-      #bold_stop  = bold & !dplyr::lead(bold, default = FALSE)
-    ) |>
-    dplyr::select("n", "text", "color") |> # bold_start, bold_stop,
-    dplyr::mutate(
-      dplyr::across( # otherwise, unbreakable spaces fail in some graphic devices
-        where(is.character),
-        ~ stringr::str_replace_all(., unbrk, " ")
-      ),
-    ) |>
-    dplyr::group_by(!!rlang::sym("n")) |>
-    dplyr::group_split(.keep = FALSE)
+    purrr::map(function(line) {
+      text  <- purrr::map_chr(line, "text")
+      color <- purrr::map_chr(line, "color")
+      color[is.na(color)] <- text_color
+      # one ggtexttable column per token is wasteful (and the separators are their own tokens): fold
+      # each run of same-coloured tokens into one cell.
+      grp <- cumsum(color != dplyr::lag(color, default = ""))
+      tibble::tibble(
+        text  = vapply(split(text, grp), paste0, character(1), collapse = ""),
+        color = color[!duplicated(grp)]
+      ) |>
+        # otherwise, unbreakable spaces fail in some graphic devices
+        dplyr::mutate(text = stringr::str_replace_all(.data$text, unbrk, " "))
+    })
 
 
 
@@ -3228,10 +3208,31 @@ default_background_colors <-  c(
   "#bbccff"  # oklch(0.85 0.0733 270) # "#c8c7ff"  # oklch(0.85 0.0771 285)   # "#D2C3FF"# # oklch(0.85 0.084 295)
 )
 default_background_colors_neg <- c(
-  "#fff4e1", # oklch(0.97 0.0271 80)   # "#ffeccd", # oklch(0.95 0.0456 80)    # "#ffe9e5", # oklch(0.95 0.0249 30)  # "#fff8e6", # oklch(0.98 0.025 90) 
-  "#ffe6d3", # oklch(0.94 0.0374 60)   # "#ffddc3", # oklch(0.92 0.051 60)     # "#ffdad3", # oklch(0.92 0.0461 30)  # "#ffeab1", # oklch(0.94 0.076 90) 
-  "#ffd7c8", # oklch(0.91 0.0488 42)   # "#ffcebc", # oklch(0.89 0.0608 42)    # "#ffcdc5", # oklch(0.89 0.0575 30)  # "#fddb7c", # oklch(0.90 0.12  90) 
-  "#ffbaaf"#,# oklch(0.85 0.082 29)    # "#ffbfb5"#,# oklch(0.86 0.0754 29.01) # "#ffbfb4"#,# oklch(0.86 0.0754 30)  # "#ffce2d"#,# oklch(0.87 0.168 90) 
+  "#fff4e1", # oklch(0.97 0.0271 80)   # "#ffeccd", # oklch(0.95 0.0456 80)    # "#ffe9e5", # oklch(0.95 0.0249 30)  # "#fff8e6", # oklch(0.98 0.025 90)
+  "#ffe6d3", # oklch(0.94 0.0374 60)   # "#ffddc3", # oklch(0.92 0.051 60)     # "#ffdad3", # oklch(0.92 0.0461 30)  # "#ffeab1", # oklch(0.94 0.076 90)
+  "#ffd7c8", # oklch(0.91 0.0488 42)   # "#ffcebc", # oklch(0.89 0.0608 42)    # "#ffcdc5", # oklch(0.89 0.0575 30)  # "#fddb7c", # oklch(0.90 0.12  90)
+  "#ffbaaf"#,# oklch(0.85 0.082 29)    # "#ffbfb5"#,# oklch(0.86 0.0754 29.01) # "#ffbfb4"#,# oklch(0.86 0.0754 30)  # "#ffce2d"#,# oklch(0.87 0.168 90)
+)
+
+#### Background-legend colors (Phase 14c) ----
+# WHY: a colour legend break-word that describes the BACKGROUND channel cannot be drawn with a fill in
+# every medium -- an Excel rich-text run and a ggpubr text label carry a font colour only. Drawn as
+# text, the background palette above (L 0.85-0.97) is invisible on a white sheet. These are the same
+# hues with -0.2 OKLCH lightness (chroma kept, capped to gamut), so the ladder and the visual link to
+# the fills survive. Produced by dev/color_palette_tools.R::darken_for_legend(); regenerate there.
+# NOTE: light only. The dark background palette (L 0.20-0.35) already reads as text on the white sheet
+# an Excel legend cell sits on, and -0.2 would collapse it to black -- build_palettes() uses it as-is.
+default_bg_legend_colors <- c(
+  "#9fbbbe", # oklch(0.77 0.0308 205)  <- #dffcff
+  "#98aebd", # oklch(0.74 0.0328 238)  <- #d7efff
+  "#8fa3bd", # oklch(0.71 0.0444 255)  <- #cee3ff
+  "#7e8dbd"  # oklch(0.65 0.0742 271)  <- #bbccff
+)
+default_bg_legend_colors_neg <- c(
+  "#bdb3a1", # oklch(0.77 0.0274 82)   <- #fff4e1
+  "#bda694", # oklch(0.74 0.0369 60)   <- #ffe6d3
+  "#bd988a", # oklch(0.71 0.0489 42)   <- #ffd7c8
+  "#bc7c72"  # oklch(0.65 0.0820 29)   <- #ffbaaf
 )
 
 
@@ -3393,7 +3394,9 @@ default_palette_base <- function() {
     dark_text_colors           = default_dark_text_colors,
     dark_text_colors_neg       = default_dark_text_colors_neg,
     dark_background_colors     = default_dark_background_colors,
-    dark_background_colors_neg = default_dark_background_colors_neg
+    dark_background_colors_neg = default_dark_background_colors_neg,
+    bg_legend_colors           = default_bg_legend_colors,
+    bg_legend_colors_neg       = default_bg_legend_colors_neg
   )
 }
 
@@ -3409,7 +3412,13 @@ build_palettes <- function() {
     text_light = c(b$text_colors,            b$text_colors_neg),
     text_dark  = c(b$dark_text_colors,       b$dark_text_colors_neg),
     bg_light   = c(b$background_colors,       b$background_colors_neg),
-    bg_dark    = c(b$dark_background_colors,  b$dark_background_colors_neg)
+    bg_dark    = c(b$dark_background_colors,  b$dark_background_colors_neg),
+    # Phase 14c: the FONT stand-in for the background palette, used where a fill is impossible (an
+    # Excel rich-text run / a ggpubr text label -> the colour legend). See default_bg_legend_colors.
+    # There is no dark variant to bake: the legend cell's page is white whatever the theme, and the
+    # dark fills already read there.
+    bg_legend_light = c(b$bg_legend_colors,        b$bg_legend_colors_neg),
+    bg_legend_dark  = c(b$dark_background_colors,  b$dark_background_colors_neg)
   )
   bit8 <- isTRUE(Sys.getenv("RSTUDIO") == "1")
   ncol <- if (bit8) 256L else crayon::num_colors()
@@ -3433,6 +3442,12 @@ build_palettes <- function() {
 #' under-represented (\code{*_colors_neg}) sides.
 #' @param dark_text_colors,dark_text_colors_neg,dark_background_colors,dark_background_colors_neg
 #' The dark-theme counterparts (4 hex each).
+#' @param bg_legend_colors,bg_legend_colors_neg (4 hex each) The FONT stand-in for
+#' \code{background_colors} in the colour legend of media that cannot fill a run (Excel,
+#' \code{\link{tab_plot}}); the defaults are the background colours at -0.2 OKLCH lightness. Setting
+#' \code{background_colors} without these makes them follow it unchanged (readable only if your fills
+#' already are). There is no dark counterpart: an Excel legend cell is on a white page whatever the
+#' theme, and the dark fills read there as-is.
 #' @param theme \code{"light"} or \code{"dark"} for the console / exports; defaults to the current
 #' setting (RStudio theme when detectable, else \code{"light"}).
 #' @return Sets the internal color palettes (invisibly) and the option
@@ -3443,6 +3458,7 @@ set_color_palette <- function(text_colors = NULL, text_colors_neg = NULL,
                               background_colors = NULL, background_colors_neg = NULL,
                               dark_text_colors = NULL, dark_text_colors_neg = NULL,
                               dark_background_colors = NULL, dark_background_colors_neg = NULL,
+                              bg_legend_colors = NULL, bg_legend_colors_neg = NULL,
                               theme = NULL) {
   e <- tabxplor_palette_env
   if (is.null(e$base)) e$base <- default_palette_base()
@@ -3463,6 +3479,15 @@ set_color_palette <- function(text_colors = NULL, text_colors_neg = NULL,
   set1("dark_text_colors_neg", dark_text_colors_neg)
   set1("dark_background_colors", dark_background_colors)
   set1("dark_background_colors_neg", dark_background_colors_neg)
+  set1("bg_legend_colors", bg_legend_colors)
+  set1("bg_legend_colors_neg", bg_legend_colors_neg)
+  # A custom background palette must not keep the DEFAULT legend hues (a green fill described by a
+  # blue break-word). Deriving them would need an OKLCH gamut mapper (farver, dev-only), so the
+  # honest fallback is the fills themselves -- set bg_legend_colors explicitly for a readable one.
+  if (!is.null(background_colors)     && is.null(bg_legend_colors))
+    e$base$bg_legend_colors <- unname(background_colors)
+  if (!is.null(background_colors_neg) && is.null(bg_legend_colors_neg))
+    e$base$bg_legend_colors_neg <- unname(background_colors_neg)
 
   options("tabxplor.color_style_type" = getOption("tabxplor.color_style_type", "text"))
   if (is.null(theme)) {
@@ -3516,7 +3541,9 @@ set_color_style <- function(type = c("text", "bg"), theme = NULL,
 #' vector (4 over-represented intensities then 4 under-represented), indexed by the engine slot.
 #' @param mode By default, \code{get_color_style} returns a list of \pkg{crayon} coloring
 #' functions. Set to \code{"color_code"} to return html color codes.
-#' @param type \code{"text"} (font colour) or \code{"bg"} (background fill).
+#' @param type \code{"text"} (font colour), \code{"bg"} (background fill), or \code{"bg_legend"}
+#' (\code{mode = "color_code"} only): the darker FONT stand-in for the background palette, for the
+#' media that cannot fill (an Excel rich-text run, a \pkg{ggpubr} text label) -- see the colour legend.
 #' @param theme \code{"light"} or \code{"dark"}; defaults to the current setting. (A palette is always
 #' one or the other: the export theme \code{"auto"} resolves to \code{"light"} here.)
 #' @param ... Absorbs deprecated arguments (e.g. \code{html_24_bit}); ignored.
@@ -3532,11 +3559,19 @@ get_color_style <- function(mode = c("crayon", "color_code"), type = NULL, theme
   # the exported fmt_get_color_code(theme = "auto"). Without this it would build the key "text_auto",
   # find NULL, and error on a length-0 vector further down. Resolve at the one chokepoint.
   theme <- tx_palette_theme(theme)
-  key <- paste0(if (identical(type[1], "bg")) "bg" else "text", "_", theme[1])
+  fam <- switch(type[1], "bg" = "bg", "bg_legend" = "bg_legend", "text")
+  key <- paste0(fam, "_", theme[1])
 
   e <- tabxplor_palette_env
   if (is.null(e$hex)) build_palettes()
-  if (identical(mode[1], "crayon")) e$crayon[[key]] else e$hex[[key]]
+  if (identical(mode[1], "crayon")) {
+    # bg_legend exists only to substitute for a fill in media that have no fill; a console HAS one.
+    if (identical(fam, "bg_legend")) {
+      cli::cli_abort('{.arg type} {.val bg_legend} has no crayon styles: use {.code mode = "color_code"},
+                      or {.arg type} {.val bg} for a real background.')
+    }
+    e$crayon[[key]]
+  } else e$hex[[key]]
 }
 
 

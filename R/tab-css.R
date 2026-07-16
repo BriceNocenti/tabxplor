@@ -154,7 +154,14 @@ tx_css_layer <- function(rules, which = c("light", "dark"), hooks = NULL, indent
 #' @keywords internal
 tx_css_render <- function(rules, theme = "light", chrome = TRUE) {
   theme  <- match.arg(theme[1], c("light", "dark", "auto"))
-  static <- if (isTRUE(chrome)) c(
+  # Theme-INDEPENDENT, so it belongs here rather than in the rule table (which is emitted once per
+  # cascade layer under "auto"). Phase 14c: a text-coloured cell is bold in every other medium
+  # (tab_export_prep's `bold = !is.na(text_hex) | ref_alltot` drives kableExtra AND the html engine's
+  # inline weight), so the stylesheet must carry it for the one medium that has no other way to say
+  # it: tab_md(), whose cells are bare `[42%]{.p2}` spans. Harmlessly redundant on the html engine.
+  # The background classes stay unbolded, exactly like the cells: a fill alone does not bold.
+  bold_slots <- paste0(paste0(".", tx_slot_class("text", 1:8), collapse = ","), "{font-weight:bold;}")
+  static <- c(bold_slots, if (isTRUE(chrome)) c(
     ".tabxplor-tab{border-collapse:collapse;border-top:0;border-bottom:0;margin:0;}",
     ".tabxplor-tab caption{text-align:center;font-weight:bold;font-size:120%;}",
     ".tabxplor-tab tfoot{font-size:80%;text-align:left;}",
@@ -167,7 +174,7 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE) {
     # tooltip wants, the rule is unprefixed so a host stylesheet loaded later still wins, and it ships
     # only with chrome = TRUE (never from tab_md()'s colour-only stylesheet).
     ".tooltip-inner{max-width:none;white-space:nowrap;}"
-  ) else character(0)
+  ) else character(0))
 
   body <- if (identical(theme, "auto")) {
     dark_media <- tx_css_layer(rules, "dark", indent = "  ")

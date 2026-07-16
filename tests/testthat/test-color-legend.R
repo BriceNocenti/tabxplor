@@ -76,10 +76,18 @@ testthat::test_that("tab_reg: beta shows SD, IRR says IRR, OR says OR", {
   testthat::expect_match(lb, "SD")
   testthat::expect_no_match(lb, "\\+20%", perl = TRUE)   # the old beta-shows-percent bug (0.2 -> +20%)
 
+  # Phase 14c: a regression table has NO total row -- its baseline is the reference category.
+  testthat::expect_match(lb, "the reference category")
+  testthat::expect_no_match(lb, "Total")
+
   i <- suppressWarnings(tab_reg(gss, "tvhours", c("marital", "race"), family = "poisson"))
   li <- leg_en(i)
   testthat::expect_match(li, "IRR \u2265")
   testthat::expect_no_match(li, "OR \u2265")
+  # Phase 14c: ci_type "or" is the multiplicative SHAPE (OR / IRR / cumulative OR alike); naming it
+  # unconditionally called a Poisson rate ratio an odds ratio.
+  testthat::expect_match(li, "Wald interval on the log rate-ratio")
+  testthat::expect_no_match(li, "odds-ratio")
 
   d2 <- dplyr::mutate(gss, married = as.integer(marital == "Married"))
   o  <- suppressWarnings(tab_logit(d2, "married", "race"))
@@ -99,9 +107,9 @@ testthat::test_that("terse console form is compact and coloured-word based", {
   testthat::expect_no_match(l, "Shades of blue")  # terse omits the prose shade names
 })
 
-testthat::test_that("excel medium returns rich-text runs with hex + bold on the break-words", {
+testthat::test_that("runs medium returns rich-text runs with hex + bold on the break-words", {
   tb   <- tab(gss, marital, race, pct = "row", color = "diff")
-  runs <- suppressWarnings(tab_color_legend(tb, medium = "excel", style = "prose", lang = "en"))
+  runs <- suppressWarnings(tab_color_legend(tb, medium = "runs", style = "prose", lang = "en"))
   testthat::expect_type(runs, "list")
   flat <- unlist(runs, recursive = FALSE)
   cols <- vapply(flat, function(r) r$color, character(1))
@@ -109,6 +117,50 @@ testthat::test_that("excel medium returns rich-text runs with hex + bold on the 
   testthat::expect_true(any(!is.na(cols)))                       # some coloured runs
   testthat::expect_true(all(bold[!is.na(cols)]))                 # coloured runs are bold
   testthat::expect_true(all(grepl("^#[0-9A-F]{6}$", cols[!is.na(cols)])))
+})
+
+testthat::test_that("a runs-medium background break-word uses the darker bg_legend palette", {
+  # WHY: a run carries a font colour but no fill, and the background palette (L 0.85-0.97) is
+  # invisible drawn as text on Excel's white sheet.
+  tb   <- tab(gss, marital, race, pct = "row", color = c("diff", "ratio"))
+  hexf <- function(medium) {
+    l <- suppressWarnings(tab_color_legend(tb, medium = medium, style = "prose", lang = "en"))
+    if (identical(medium, "runs")) {
+      f <- unlist(l, recursive = FALSE)
+      toupper(stats::na.omit(vapply(f, function(r) r$color, character(1))))
+    } else toupper(unlist(regmatches(l, gregexpr("#[0-9A-Fa-f]{6}", l))))
+  }
+  bg_pal  <- toupper(get_color_style("color_code", type = "bg",        theme = "light"))
+  leg_pal <- toupper(get_color_style("color_code", type = "bg_legend", theme = "light"))
+  testthat::expect_false(any(bg_pal %in% leg_pal))               # the two families are disjoint
+  testthat::expect_true(any(hexf("runs") %in% leg_pal))          # runs -> darkened
+  testthat::expect_false(any(hexf("runs") %in% bg_pal))
+  testthat::expect_true(any(hexf("html") %in% bg_pal))           # html CAN fill -> the real hex
+  # a custom background palette must not keep the DEFAULT (blue) legend hues
+  old <- get("base", envir = tabxplor:::tabxplor_palette_env)
+  on.exit({ assign("base", old, envir = tabxplor:::tabxplor_palette_env)
+            tabxplor:::build_palettes() }, add = TRUE)
+  green <- c("#e8f6e8", "#cceccc", "#a8dda8", "#7cc97c")
+  set_color_palette(background_colors = green)
+  testthat::expect_equal(unname(get_color_style("color_code", type = "bg_legend",
+                                                theme = "light")[1:4]), green)
+})
+
+testthat::test_that("get_color_style(type = 'bg_legend') is color_code-only", {
+  testthat::expect_length(get_color_style("color_code", type = "bg_legend", theme = "light"), 8L)
+  testthat::expect_error(get_color_style("crayon", type = "bg_legend"), "bg_legend")
+})
+
+testthat::test_that("the console legend honours its `theme` argument, not the option", {
+  # It used to read getOption("tabxplor.color_style_theme") and silently disagree with the palette
+  # every other medium resolved from `theme`.
+  tb <- tab(gss, marital, race, pct = "row", color = "diff")
+  withr::with_options(list(cli.num_colors = 256, crayon.enabled = TRUE, crayon.colors = 256,
+                           tabxplor.color_style_theme = "light"), {
+    lite <- suppressWarnings(tab_color_legend(tb, medium = "console", theme = "light"))
+    dark <- suppressWarnings(tab_color_legend(tb, medium = "console", theme = "dark"))
+    testthat::expect_false(identical(lite, dark))
+  })
 })
 
 testthat::test_that("md medium wraps break-words in the same pandoc classes as the cells", {

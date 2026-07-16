@@ -6,7 +6,7 @@
 \usage{
 tab_color_legend(
   x,
-  medium = c("console", "html", "md", "excel", "plain"),
+  medium = c("console", "html", "md", "runs", "plain"),
   style = NULL,
   lang = NULL,
   colored = TRUE,
@@ -18,7 +18,10 @@ tab_color_legend(
 \arguments{
 \item{x}{A \code{tabxplor_tab}.}
 
-\item{medium}{One of "console", "html", "md", "excel", "plain".}
+\item{medium}{One of "console", "html", "md", "runs", "plain". \code{"runs"} is for the media that
+draw the legend as coloured TEXT and cannot fill: an Excel rich-text cell (\code{\link{tab_xl}})
+and a \pkg{ggpubr} label (\code{\link{tab_plot}}). It returns the runs unrendered, and draws the
+background channel from the darker \code{bg_legend} palette (see \code{\link{set_color_palette}}).}
 
 \item{style}{"terse" (compact, console default) or "prose" (full sentences, export default).}
 
@@ -34,10 +37,10 @@ legend follows a theme toggle exactly like the cells it describes. \code{FALSE} 
 which carries no stylesheet of ours) keeps inline hex.}
 }
 \value{
-A character vector (or, for excel, a list of run-lists), or NULL when nothing is coloured.
+A character vector (or, for "runs", a list of run-lists), or NULL when nothing is coloured.
 }
 \description{
-Internal. Returns one legend line per colour-signature group. For \code{medium = "excel"} each line
-is a list of runs \code{list(text, color, bold)} (for a rich-text cell); otherwise a character string.
+Internal. Returns one legend line per colour-signature group. For \code{medium = "runs"} each line
+is a list of runs \code{list(text, color, bold)}; otherwise a character string.
 }
 \keyword{internal}

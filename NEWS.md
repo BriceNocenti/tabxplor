@@ -48,7 +48,12 @@
   otherwise); a new `lang` argument (`"en"` / `"fr"`) on `tab_kable()` / `tab_md()` / `tab_xl()` /
   `tab_plot()` / `tab_export()` forces the language. Excel legends are now colour-coded (rich text),
   `tab_md()` gained a colour legend, and regression tables (`tab_reg()`) get correct wording
-  (β with SD thresholds, IRR vs OR).
+  (β with SD thresholds and its reference category, IRR vs OR on their own scales). The break-words
+  are **bold** in every medium, matching the coloured numbers they describe -- and in HTML and
+  Markdown so is every coloured cell, which `tab_css()` / `tab_md_css()` now style for you. Where the
+  legend cannot fill a word (Excel rich text, `tab_plot()`), a background break-word is drawn in a
+  darker variant of its fill instead of being unreadable on a white page (customise with
+  `set_color_palette(bg_legend_colors =)`).
 * **Exports & display polish.** HTML, Excel and Markdown exports now show the **column-variable name**
   in a spanning header above its level columns (contiguous same-variable columns merged into one cell),
   and the level names drop the disambiguating `_<variable>` suffix (e.g. `Other_race` -> `Other`). A
@@ -399,6 +404,12 @@
   export to Excel, install `openxlsx2`. The produced workbooks look essentially the same.
 
 ## Bug corrections
+* **`tab_plot()`'s colour legend** printed raw HTML fragments as text (`color:#02A5B3 !important;">+5`)
+  in uniform black: it recovered the legend by scraping regexes back out of the HTML rendering, and
+  those had silently stopped matching when the legend was rewritten. It now reads the legend's own
+  colour data.
+* **The console colour legend ignored its `theme` argument**, silently rendering the palette from
+  `options(tabxplor.color_style_theme)` instead of the one asked for.
 * **Mean differences no longer print a multiplication sign.** A `diff` on a numeric column showed
   `×-0.2` — a multiplicative glyph on an additive quantity, indistinguishable from a ratio. The field
   has held a real difference (cell mean − reference mean) since the 1.4.0 aggregate rewrite; the
