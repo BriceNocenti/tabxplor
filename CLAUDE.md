@@ -1976,6 +1976,25 @@ model, no borders between category columns; a single-model OR table shows no dup
 collapse). Confirm crosstab goldens unchanged (the rule fires only when name==col_var for ALL columns —
 a crosstab has level names ≠ col_var).
 
+##### Done (2026-07-18)
+
+Both landed. Full suite **FAIL 0 | WARN 0 | SKIP 4 | PASS 3243**; **NO golden and NO snapshot moved**
+(no reg table is snapshotted; crosstab headers are byte-identical). Sample:
+`dev/review_manual/phase14s_mnl.html`.
+
+- **G (one col_var per MNL model)**: the three MNL column builders (`reg_columns_multinom`, the MNL AME
+  per-category, the MNL "vs rest") pass `sp$label` (the unique model id) as the `col_var` while keeping
+  the per-category `lab` as the visible NAME. Borders are drawn at col_var TRANSITIONS (`new_col_var`),
+  so a shared col_var removes the inter-category border (verified: `new_col_var` no longer lists the 2nd
+  category column) and the model name spans the categories once. The GOF footer keys by the output LABEL
+  (`fit_first_col`), so col_var is display/border-only — footer-safe.
+- **L3 (drop the redundant name row)**: in `tab_col_var_header()` ([R/tab-export-prep.R](R/tab-export-prep.R)),
+  after the level-header rewrites, blank the whole span `label` when `all(clean[level] == col_var[level])`.
+  ⚠ Compare the CLEAN (displayed) header, NOT the raw column name: a numeric col_var has raw name ==
+  col_var ("tvhours") but a clean header of "mean (sd)", so comparing raw names would have wrongly dropped
+  its span (and lost the variable name). A crosstab (level "Black" != col_var "race") is never affected;
+  a single-model reg ("Married: OR" == "Married: OR") drops the span, showing the name once.
+
 ---
 
 #### Phase 14t — DESIGN-FIRST: the empirical (crude) framework across families/effects

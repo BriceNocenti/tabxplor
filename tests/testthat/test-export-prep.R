@@ -404,3 +404,21 @@ testthat::test_that("the literal `row_var` header is always dropped (a bug fix, 
     testthat::expect_equal(names(rd$tab)[[1]], "row_var", label = vn)   # the COLUMN still exists
   }
 })
+
+# Phase 14s (L3): the col_var spanning-name row is dropped when every level column's DISPLAYED header
+# already equals its col_var (a reg table named after the model). A crosstab (level != col_var) keeps it.
+testthat::test_that("L3: a redundant col_var span (name == col_var for all cols) is dropped", {
+  span <- function(t) {
+    rd <- tabxplor:::tab_export_prep(t, backend = "kable", wrap = NULL)$tables[[1]]
+    any(nzchar(rd$col_var_header$label))
+  }
+  # crosstab: level "Black" != col_var "race" -> span kept
+  testthat::expect_true(span(tab(gss, marital, race, pct = "row")))
+  # numeric col_var: header "mean (sd)" != col_var "tvhours" -> span kept
+  testthat::expect_true(span(tab(gss, marital, tvhours, pct = "row")))
+  testthat::skip_if_not_installed("broom")
+  d <- forcats::gss_cat |>
+    dplyr::mutate(married = factor(dplyr::if_else(marital == "Married", "Married", "Not married")))
+  # single-model reg: column named "Married: OR" == its col_var -> span dropped
+  testthat::expect_false(span(tab_reg(d, "married", c("race", "age"), family = "binomial")))
+})

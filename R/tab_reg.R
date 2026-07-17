@@ -1088,8 +1088,11 @@ reg_columns_multinom <- function(skeleton, f, sp, effect_shape, color, color_sig
     jc  <- if (cleannames) stringr::str_remove_all(j, cleannames_condition()) else j
     lab <- paste0(if (prefix_dep) paste0(sp$dependent, " - ") else "",
                   jc, " vs ", y_ref, ": ", eff_word)
+    # Phase 14s (G): every category column of ONE model shares `sp$label` as its col_var, so no border
+    # is drawn between them (borders separate DIFFERENT col_vars) and the model name spans them once.
+    # The visible column NAME stays the per-category `lab`.
     list(label = lab,
-         col   = reg_column(skeleton, sub, sp$predictors, lab, effect_shape, color, color_signif))
+         col   = reg_column(skeleton, sub, sp$predictors, sp$label, effect_shape, color, color_signif))
   })
 }
 
@@ -1459,9 +1462,11 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
         purrr::map(groups, function(g) {
           jc  <- if (cleannames) stringr::str_remove_all(g, cleannames_condition()) else g
           lab <- paste0(if (prefix_dep) paste0(sp$dependent, " - ") else "", jc, ": ", eff_word)
+          # Phase 14s (G): the per-category AME columns of one model share `sp$label` as col_var (no
+          # inter-category border); the visible NAME stays `lab`.
           list(label = lab,
                col   = reg_marginal_column(skeleton, marg, sp$predictors, numeric_preds, shape,
-                                           var_y, f$nobs, g, color, color_signif, lab))
+                                           var_y, f$nobs, g, color, color_signif, sp$label))
         })
       } else {
         # Phase 14r (E): the model OR (exp of the fit's coefficient, aligned to the skeleton by term)
@@ -1487,9 +1492,10 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
       purrr::map(groups, function(g) {
         jc  <- if (cleannames) stringr::str_remove_all(g, cleannames_condition()) else g
         lab <- paste0(if (prefix_dep) paste0(sp$dependent, " - ") else "", jc, " vs rest: OR")
+        # Phase 14s (G): shared col_var (`sp$label`) across the "vs rest" category columns of one model.
         list(label = lab,
              col   = reg_marginal_column(skeleton, marg, sp$predictors, numeric_preds, "or",
-                                         NA_real_, f$nobs, g, color, color_signif, lab))
+                                         NA_real_, f$nobs, g, color, color_signif, sp$label))
       })
     })
   } else {

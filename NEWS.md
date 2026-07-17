@@ -631,6 +631,9 @@
 * `tab_reg()` tooltips are cleaner: the model-fit footer rows no longer show a nonsensical tooltip; the
   per-cell `n:` is the row-level count where one exists (e.g. `empirical_OR = TRUE`) instead of the
   whole-model N; and an `effect = "ame"` column still shows the model odds ratio on hover.
+* Multinomial `tab_reg()` tables no longer draw borders between the outcome-category columns of one
+  model (they now share one spanning header naming the model). And a regression table whose columns are
+  named after the model no longer repeats that name in a redundant spanning row above the headers.
 
 ## Deprecations
 * `tab_transpose()` is **soft-deprecated** in favour of the exporters' `transpose = TRUE` argument.

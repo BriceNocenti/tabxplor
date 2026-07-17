@@ -349,6 +349,12 @@ test_that("tab_reg() multinomial OR / CI / p match nnet::multinom; one OR column
   ref <- is_refrow(col1) & as.character(t1$var) == "race"   # reference predictor level -> OR 1, no p
   expect_true(all(get_or(col1)[ref] == 1))
   expect_true(all(is.na(get_pvalue(col1)[ref])))
+
+  # Phase 14s (G): every category column of ONE model shares a single col_var (the model label), so no
+  # border is drawn between them; the visible column NAMES stay per-category.
+  cvs <- vapply(c("Dem vs Ind: OR", "Rep vs Ind: OR"), function(nm) get_col_var(t1[[nm]])[1], character(1))
+  expect_equal(length(unique(cvs)), 1L)                     # shared col_var
+  expect_false(identical(unname(cvs[1]), "Dem vs Ind: OR")) # not the per-category name
 })
 
 test_that("reference= keyed by the outcome sets the multinomial baseline category", {

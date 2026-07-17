@@ -530,6 +530,13 @@ tab_col_var_header <- function(tab, roles, name_cols = TRUE) {
       clean[j] <- "sd"
     }
   }
+  # Phase 14s (L3): if EVERY level column's DISPLAYED header already equals its col_var, the spanning
+  # name row would only duplicate the column headers -> drop it. A regression table named after the
+  # model / outcome ("Married: OR" over "Married: OR") is the case this targets. Compare the CLEAN
+  # header, not the raw name, so a numeric col_var (header "mean (sd)", col_var "tvhours") is NOT
+  # dropped; a crosstab (level "Black" != col_var "race") is never affected.
+  lvl <- which(is_level)
+  if (length(lvl) > 0 && all(clean[lvl] == unname(cvm)[lvl])) label <- rep("", length(nms))
   list(label = label, clean = clean)
 }
 
