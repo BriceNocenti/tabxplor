@@ -2454,6 +2454,11 @@ pillar_shaft.tabxplor_fmt <- function(x, ..., .ref = NULL) {
       out[cells] <- bg_crayons[[s]](out[cells])
     }
     totals <- if (!is.null(.ref)) .ref$all_totals else get_reference(x, "all_totals") #c("cells","lines")
+    # Phase 14q: a reference ROW is also an anchor. A regression EMPIRICAL column carries
+    # ref_type = "tot" yet marks its reference CATEGORY via in_refrow, which get_reference("all_totals")
+    # misses -- so its reference cells were greyed in the console too. For crosstabs is_refrow is a
+    # subset of `totals`, so this is a no-op there.
+    totals <- totals | is_refrow(x)
 
     # Cells matching no break on EITHER channel are greyed (style_subtle) so colored cells stand
     # out; reference/total cells are exempt, staying full-strength as reading anchors.
@@ -3200,9 +3205,15 @@ legend_tokens_prose <- function(spec, lang, show_names) {
   }
 
   # the grey-cells note (guaranteed_effect already annotated the over sentence).
+  # Phase 14q (Item B): under grey_non_signif a cell is coloured only when it is significant AND its
+  # effect reaches the first break, so an UNCOLOURED cell may be significant-but-small (some even carry
+  # stars). The old "Grey: not significantly different" was therefore statistically false: the only
+  # guarantee is coloured => significant. State that directly.
   if (identical(spec$policy, "grey_non_signif"))
-    toks <- c(toks, list(.lg_tok(paste0(" ", gettextf("Grey: not significantly different from %s (%s).",
-                                                  ref_phrase, meth_phrase)))))
+    toks <- c(toks, list(.lg_tok(paste0(" ", gettextf(
+      paste0("Coloured: significantly different from %s (%s), by at least the first colour ",
+             "threshold. Uncoloured: either not significant, or too small a difference to colour."),
+      ref_phrase, meth_phrase)))))
   else if (identical(spec$policy, "guaranteed_effect"))
     toks <- c(toks, list(.lg_tok(paste0(" ", gettextf(
       "Grey: not significantly different from %s after the margin of error.", ref_phrase)))))

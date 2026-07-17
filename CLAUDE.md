@@ -1842,6 +1842,43 @@ Tests: `test-tab_reg-footer.R` (Brant row present for ordinal; reg reference + g
 `tab_export_prep()` roles / the render model, not a raw hex), `test-color-legend.R` (grey_non_signif
 wording; add a FR case if the harness allows — see the CI gettext note in the roadmap).
 
+##### Done (2026-07-18)
+
+All three items landed. Full suite **FAIL 0 | WARN 0 | SKIP 4 | PASS 3230**; `document()` clean; **NO
+golden and NO snapshot moved** (the reg tables + the grey_non_signif legend are not snapshotted; the
+legend wording is asserted directly). Browser sample: `dev/review_manual/phase14q_reg_readability.html`.
+
+- **Greying (Items D/J).** The root cause was NOT that gof cells miss the exclusion generically — it was
+  a MISMATCH: the empirical `Emp. %` column carries `ref_type = "tot"` yet marks its reference CATEGORY
+  via `in_refrow`, so `get_reference("all_totals")` (which returns the total ROW under ref = "tot")
+  returned empty and greyed the reference cells. Introduced ONE shared "black anchor" concept:
+  + `fmt_col_ann()` ([R/tab-export-prep.R](R/tab-export-prep.R)) now computes `keep_black = ref_alltot |
+    is_refrow(col)` and drives `font`/`bold` off it (returns the mask too). For a crosstab `is_refrow`
+    is a subset of `ref_alltot`, so byte-identical there — only reg reference columns change.
+  + The GOF FOOTER rows are un-greyed at the TABLE level in `prep_one_table()`: a footer row is one where
+    EVERY fmt cell is a footer stat (display `gof`/`pvalue`/`blank`). A crosstab chi2 pvalue row is NOT
+    (its other cells stay `pct`), so this never touches a crosstab and needs no reg gate — and it catches
+    the `pvalue` footer rows (LR vs null) that a per-cell `%in% c("gof","blank")` rule would have missed.
+    The whole footer row goes black + bold (font + keep_black + `bold_rows` union so LABELS bold too).
+  + The html engine ([R/tab-render-html.R](R/tab-render-html.R)) reads `a$keep_black` instead of
+    `a$ref_alltot`; the console `pillar_shaft` greying ([R/fmt_class.R](R/fmt_class.R)) ORs `is_refrow(x)`
+    into its `totals` exempt set. Deliberately kept `ann$ref_alltot` semantic (feeds the reference
+    intercept + `tab_bold_rows`); the styling decision is the separate `keep_black`.
+- **Legend (Item B).** The `grey_non_signif` prose note was statistically false. Rewrote to state the true
+  guarantee — *"Coloured: significantly different from ‹ref› (‹method›), by at least the first colour
+  threshold. Uncoloured: either not significant, or too small a difference to colour."* — EN + FR
+  (`po/R-fr.po` + `.mo` recompiled), and documented under `color_signif` in `?tab`. The terse console tag
+  (`[significant only]`) was left — it already describes the colouring rule correctly (coloured ⇒
+  significant). `guaranteed_effect` left as-is (defensible). This also answers Item J's `***`-but-grey.
+- **Brant (Item I).** `reg_ordinal_diagnostic()` now RETURNS the omnibus p (still warns); `reg_fit_ordinal`
+  stashes it as `attr(fit, "brant_po")` (computed once, at fit time); `reg_glance()` emits a `brant_po`
+  row for unweighted ordinal; `reg_footer_spec()` gains `brant_po = list(label = "Brant PO test", kind =
+  "pvalue")` + the default/valid stats lists. Weighted (svyolr) has no Brant fit → attr absent → skipped.
+
+**Landmine for the next reg session**: the footer-row detection ("all fmt cells are gof/pvalue/blank")
+is the robust, language-independent alternative to the `reg_footer_labels()` English-label match that
+`tot_block` still uses — a real per-row role flag would retire both, but that is deferred.
+
 ---
 
 #### Phase 14r — tab_reg tooltips + the AME NA bug

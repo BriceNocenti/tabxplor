@@ -338,7 +338,10 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
       bsl <- if (length(a$bg_slot)   == n_row) a$bg_slot   else integer(n_row)
       cls <- tx_slot_class("text", tsl)
       bgc <- tx_slot_class("bg",   bsl)
-      grey <- !nzchar(cls) & !nzchar(bgc) & !a$ref_alltot
+      # Phase 14q: keep_black = ref_alltot | is_refrow | footer (the black reading anchors), so reg
+      # reference cells and GOF footer cells are no longer greyed. == ref_alltot for a crosstab.
+      keep <- if (length(a$keep_black) == n_row) a$keep_black else a$ref_alltot
+      grey <- !nzchar(cls) & !nzchar(bgc) & !keep
       cls[grey] <- if (isTRUE(a$has_color) || isTRUE(a$has_bgc)) "g1" else "g2"
       cls[a$bold] <- trimws(paste(cls[a$bold], "tx-b"))
     }

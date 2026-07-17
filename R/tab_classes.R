@@ -416,6 +416,7 @@ reg_footer_spec <- function() list(
   aic                  = list(label = "AIC",                  kind = "gof",   digits = 0L),
   bic                  = list(label = "BIC",                  kind = "gof",   digits = 0L),
   dispersion           = list(label = "Dispersion",           kind = "gof",   digits = 2L),
+  brant_po             = list(label = "Brant PO test",         kind = "pvalue"),
   compare_baseline     = list(label = "LR vs baseline",       kind = "pvalue"),
   compare_baseline_f   = list(label = "F vs baseline",        kind = "pvalue"),
   compare_baseline_wald = list(label = "Wald vs baseline",    kind = "pvalue"),

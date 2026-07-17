@@ -33,7 +33,11 @@ testthat::test_that("the CI method + confidence level come from the stored ci_se
   tb1 <- tab(gss, marital, race, pct = "row", color = "diff",
              color_signif = "grey_non_signif", ci = "diff")
   l1  <- leg_en(tb1)
-  testthat::expect_match(l1, "Grey: not significantly different from the Total row")
+  # Phase 14q: the note states the true guarantee (coloured => significant), not the false
+  # "grey => non-significant" (a grey cell may be significant-but-small).
+  testthat::expect_match(l1, "Coloured: significantly different from the Total row")
+  testthat::expect_match(l1, "Uncoloured: either not significant, or too small a difference")
+  testthat::expect_no_match(l1, "Grey: not significantly different")
   testthat::expect_match(l1, "Newcombe score interval, 95% confidence")
 
   # an explicit method_diff = "ac" + a non-default conf_level must be reflected
@@ -227,4 +231,7 @@ testthat::test_that("French catalog translates the prose when the .mo is availab
   testthat::expect_match(l, "Nuances de bleu")
   testthat::expect_match(l, "la ligne Total")
   testthat::expect_match(l, "seuil de confiance \u00e0 95 %")
+  # Phase 14q: the corrected grey_non_signif note, translated
+  testthat::expect_match(l, "Color\u00e9 : significativement diff\u00e9rent")
+  testthat::expect_no_match(l, "Gris\u00e9 : chiffre non significativement")
 })

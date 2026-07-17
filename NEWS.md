@@ -615,6 +615,13 @@
   in versions <= 1.3.1: the `n` (and, when weighted, `wn`) column had disappeared from the display,
   and the internal `no_col_var` placeholder could surface as a spanning column header. Both are fixed.
 * `fct_recode_helper(freq = TRUE)` no longer errors with "object 'pct' not found".
+* Regression tables (`tab_reg()`) are more readable: the model-fit footer (N, AIC, ...) and the
+  reference-category cells now render black and bold instead of greyed out, and an ordinal model's
+  footer gains a **Brant proportional-odds test** p-value row.
+* The `color_signif = "grey_non_signif"` colour legend was statistically misleading. It said an
+  un-coloured cell is "not significantly different from the reference", but such a cell can be
+  significant yet too small to colour. The legend now states the true guarantee -- a *coloured* cell
+  is significantly different -- and this is documented under `color_signif` in `?tab`.
 
 ## Deprecations
 * `tab_transpose()` is **soft-deprecated** in favour of the exporters' `transpose = TRUE` argument.

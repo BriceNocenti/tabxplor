@@ -107,7 +107,10 @@ work but are soft-deprecated in favor of \code{color_signif}.)}
 \itemize{
 \item \code{"ignore"} (default): color every deviation by its observed size.
 \item \code{"grey_non_signif"}: color by the observed size, but grey out cells whose
-deviation is not significant at \code{conf_level}.
+deviation is not significant at \code{conf_level}. A cell is coloured only when it is BOTH
+significant AND at least as large as the first colour threshold, so an un-coloured (grey) cell
+may still be significant -- just too small to colour (and it can carry significance stars). The
+only guarantee is: a coloured cell is significantly different from its reference.
 \item \code{"guaranteed_effect"}: color by the guaranteed (confidence-bound) effect --
 only cells whose interval clears the threshold, with dimmer, conservative colors.
 }}

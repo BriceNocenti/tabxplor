@@ -506,7 +506,9 @@ reg_fit_ordinal <- function(mdata, dependent, predictors, do_exp, conf_level, me
   td  <- td[td$coef.type == "coefficient", , drop = FALSE]   # drop cut-point ("scale") intercepts
   td$term <- stringr::str_remove_all(td$term, "`")
   td  <- reg_wald_from_tidy(td, conf_level, do_exp)
-  reg_ordinal_diagnostic(fit)                                # Brant PO test -> warn (gated on brant)
+  # Brant PO test -> warn (gated on brant); stash the omnibus p on the fit so reg_glance() can add the
+  # "Brant PO test" footer row without recomputing (Phase 14q Item I).
+  attr(fit, "brant_po") <- reg_ordinal_diagnostic(fit)
   list(tidy = td, nobs = nrow(mdata), var_y = NA_real_, positive_level = NULL, fit = fit,
        data = mdata)
 }
@@ -520,7 +522,7 @@ reg_ordinal_diagnostic <- function(fit) {
       "Proportional-odds (parallel-lines) assumption not tested: install {.pkg brant} to run the ",
       "Brant test."
     )))
-    return(invisible())
+    return(invisible(NA_real_))
   }
   # brant rebuilds the model frame via eval.parent(fit$call), needing the fit's `data`/`formula`
   # SYMBOLS resolvable in brant's caller frame -- which fails once we are past the fitting scope. Make
@@ -531,7 +533,7 @@ reg_ordinal_diagnostic <- function(fit) {
                  error = function(e) NULL)
   if (is.null(bt) || !is.matrix(bt) ||
       !"Omnibus" %in% rownames(bt) || !"probability" %in% colnames(bt)) {
-    return(invisible())                                      # unexpected shape -> stay silent
+    return(invisible(NA_real_))                             # unexpected shape -> stay silent
   }
   p <- suppressWarnings(as.numeric(bt["Omnibus", "probability"]))
   if (!is.na(p) && p < 0.05) {
@@ -542,7 +544,8 @@ reg_ordinal_diagnostic <- function(fit) {
       "i" = "The Brant test over-rejects at large N; inspect the per-variable tests too."
     ))
   }
-  invisible()
+  # Phase 14q (Item I): return the omnibus p so reg_glance() can surface it as a footer row.
+  invisible(p)
 }
 
 # --- Survey design construction (Phase 12g) --------------------------------------------------------
@@ -1200,6 +1203,12 @@ reg_glance <- function(fit, family, grouped, weighted, nobs) {
     phi <- reg_dispersion(fit)
     if (!is.na(phi)) out <- dplyr::bind_rows(out, row("dispersion", statistic = phi))
   }
+  # Phase 14q (Item I): the Brant proportional-odds omnibus p, computed once at fit time and stashed on
+  # the fit (reg_fit_ordinal). Weighted ordinal (svyolr) has no Brant fit -> the attr is absent -> skip.
+  if (family == "ordinal" && !weighted) {
+    bp <- attr(fit, "brant_po")
+    if (!is.null(bp) && !is.na(bp)) out <- dplyr::bind_rows(out, row("brant_po", pvalue = bp))
+  }
   out
 }
 
@@ -1211,11 +1220,12 @@ reg_footer_stats <- function(family, weighted, grouped, stats) {
   default <- if (weighted) c("n", "wald_null", "nagelkerke_r2", "aic")
     else if (family == "gaussian") c("n", "r2", "r2_adj", "f_model", "sigma")
     else { s <- c("n", "lr_null", "mcfadden_r2", "aic", "bic")
-           if (family == "poisson" || grouped) s <- c(s, "dispersion"); s }
+           if (family == "poisson" || grouped) s <- c(s, "dispersion")
+           if (family == "ordinal") s <- c(s, "brant_po"); s }  # Phase 14q Item I
   if (is.null(stats) || identical(stats, "all") || isTRUE(stats)) return(default)
   if (isFALSE(stats) || identical(stats, "none")) return(character(0))
   valid <- c("n", "lr_null", "wald_null", "mcfadden_r2", "nagelkerke_r2", "cox_snell_r2",
-             "r2", "r2_adj", "f_model", "sigma", "aic", "bic", "dispersion")
+             "r2", "r2_adj", "f_model", "sigma", "aic", "bic", "dispersion", "brant_po")
   stats[stats %in% valid]
 }
 

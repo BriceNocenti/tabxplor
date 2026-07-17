@@ -189,3 +189,54 @@ test_that("a mixed factor/mean table labels each p-value cell by its own test", 
   expect_true(any(grepl("\\(Chi2\\)", md)))              # the factor col_var
   expect_true(any(grepl("\\(F", md)))                    # the mean col_var (ANOVA F)
 })
+
+# ---- Phase 14q: readability -----------------------------------------------------------------
+
+test_that("ordinal footer carries a Brant PO test p-value row (Item I)", {
+  skip_if_not_installed("MASS")
+  skip_if_not_installed("brant")
+  d <- forcats::gss_cat |>
+    dplyr::mutate(rincome = forcats::fct_recode(rincome, NULL = "No answer", NULL = "Refused",
+                                                NULL = "Don't know", NULL = "Not applicable") |>
+                    forcats::fct_relevel(sort))
+  suppressWarnings(t <- tab_reg(d, "rincome", c("marital", "race"), family = "ordinal"))
+  tst <- get_test(t)
+  expect_true("brant_po" %in% tst$test)
+  p <- tst$pvalue[tst$test == "brant_po"]
+  expect_true(all(!is.na(p) & p >= 0 & p <= 1))
+  # renders as a "Brant PO test" export row
+  md <- tab_md(t, print = FALSE)
+  expect_true(any(grepl("Brant PO test", md)))
+})
+
+test_that("reg reference cells and GOF footer render black + bold, data cells stay grey (Items D/J)", {
+  skip_if_not_installed("broom")
+  d <- reg_data()
+  t <- tab_reg(d, "married", c("race", "rincome"), family = "binomial", empirical_OR = TRUE)
+  rd <- tabxplor:::tab_export_prep(t, backend = "kable", wrap = NULL)$tables[[1]]
+  tabm <- rd$tab
+
+  emp   <- "Emp. %"
+  ann_e <- rd$ann[[emp]]
+  refr  <- tabxplor::is_refrow(tabm[[emp]])
+  expect_true(any(refr))
+  # the empirical-column reference CATEGORY cells are kept black + bold (were greyed: ref_type "tot"
+  # yet marked per-category via in_refrow, so get_reference("all_totals") missed them)
+  expect_true(all(ann_e$keep_black[refr]))
+  expect_true(all(ann_e$bold[refr]))
+
+  # the GOF footer rows (all fmt cells are gof/pvalue/blank) are black + bold in EVERY column
+  fmt_nm <- names(tabm)[purrr::map_lgl(tabm, tabxplor::is_fmt)]
+  footer <- purrr::reduce(purrr::map(fmt_nm, ~ tabxplor:::display_primary(
+    tabxplor:::get_display(tabm[[.x]])) %in% c("gof", "pvalue", "blank")), `&`)
+  expect_true(any(footer))
+  for (nm in fmt_nm) {
+    expect_true(all(rd$ann[[nm]]$keep_black[footer]))
+    expect_true(all(rd$ann[[nm]]$bold[footer]))
+  }
+
+  # a plain uncoloured, non-reference, non-footer data cell is STILL greyable (keep_black FALSE) --
+  # greying still makes the coloured cells pop
+  data_rows <- !refr & !footer
+  expect_false(all(ann_e$keep_black[data_rows]))
+})

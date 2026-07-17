@@ -63,6 +63,13 @@ tab_check_same_col_vars <- function(tabs, what = "tab_export_prep()",
 fmt_col_ann <- function(col, theme_cols, want_colors = TRUE) {
   ref_alltot <- get_reference(col, mode = "all_totals")
   ref_cells  <- get_reference(col, mode = "cells")
+  # Phase 14q: greying makes coloured cells pop, but a reading ANCHOR must stay black. `ref_alltot`
+  # catches the crosstab total / reference row; a regression EMPIRICAL column (`Emp. %`) carries
+  # ref_type = "tot" yet marks its reference CATEGORY via in_refrow, so ref_alltot misses it -- hence
+  # the extra `is_refrow(col)`. For crosstabs is_refrow is a subset of ref_alltot, so this is a no-op
+  # there. GOF footer ROWS are un-greyed at the table level in prep_one_table() (a per-column helper
+  # cannot tell a footer row from a data row).
+  keep_black <- ref_alltot | is_refrow(col)
 
   ct <- get_color(col)
   has_col <- want_colors && length(ct) != 0L && !is.na(ct) && !ct %in% c("", "no")
@@ -93,11 +100,12 @@ fmt_col_ann <- function(col, theme_cols, want_colors = TRUE) {
     bg_hex     = bg_hex,
     text_slot  = text_slot,
     bg_slot    = bg_slot,
+    keep_black = keep_black,
     font = dplyr::case_when(!is.na(text_hex) ~ text_hex,
-                            ref_alltot       ~ theme_cols$text,
+                            keep_black       ~ theme_cols$text,
                             TRUE             ~ grey_this),
     back = dplyr::if_else(is.na(bg_hex), "none", bg_hex),
-    bold = !is.na(text_hex) | ref_alltot,
+    bold = !is.na(text_hex) | keep_black,
     has_color = has_col || has_bgc,
     has_bgc   = has_bgc
   )
@@ -397,11 +405,31 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
   )
   any_bg <- if (want_colors) any(purrr::map_lgl(ann, ~ isTRUE(.$has_bgc))) else FALSE
 
+  # Phase 14q: the regression GOF FOOTER rows must read black + bold -- they are model-fit numbers,
+  # not data to grey out so colours pop. A footer row is one where EVERY fmt cell is a footer stat
+  # (display gof / pvalue / blank); a crosstab chi2 pvalue row is NOT (its non-pvalue cells stay
+  # "pct"), so this never touches a crosstab and needs no reg gate. Un-grey the whole row in every
+  # column's ann (font + keep_black, which the html engine reads) and mark it bold.
+  footer_rows <- if (length(fmt_cols) > 0) {
+    purrr::reduce(purrr::map(names(fmt_cols),
+      ~ display_primary(get_display(tab[[.x]])) %in% c("gof", "pvalue", "blank")), `&`)
+  } else logical(nrow(tab))
+  if (any(footer_rows)) {
+    ann <- purrr::map(ann, function(a) {
+      a$keep_black[footer_rows] <- TRUE
+      a$font[footer_rows]       <- theme_cols$text
+      a$bold[footer_rows]       <- TRUE
+      a
+    })
+  }
+
   # --- bold rows + bold cols (block D), reusing ann$ref_alltot ---
   ref_alltot_list <- purrr::map(ann, "ref_alltot")
   bold_rows <- if ("bold" %in% compute) {
     tab_bold_rows(ref_alltot_list, md_style = identical(backend, "md"))
   } else integer(0)
+  # Phase 14q: footer rows' LABEL cells (row-var / level columns) bold too, matching the value cells.
+  if ("bold" %in% compute && any(footer_rows)) bold_rows <- union(bold_rows, which(footer_rows))
   bold_cols <- if ("bold" %in% compute && length(ref_alltot_list) > 0) {
     names(which(purrr::map_lgl(ref_alltot_list, all)))
   } else character(0)
