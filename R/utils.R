@@ -98,6 +98,19 @@ NULL
   # "kableExtra" keeps the legacy renderer (its own themes, baked at render time). R/tab-render-html.R.
   options("tabxplor.tab_kable_engine" = "html")
 
+  # Phase 14m-ii: the NUMBER font of each font-bearing export, monospace so significance stars,
+  # "(n=...)" composites and decimals align without special-casing (a proportional "*" is narrower
+  # than a digit). Text (row labels, headers) stays Condensed. Each is one revert lever:
+  #   - html engine  -> a CSS font-family stack (tab_css()'s `.tx-num` rule, R/tab-css.R).
+  #   - Excel        -> a single font name (xlsx has no fallback list, so the option IS the fallback).
+  #   - tab_plot     -> a device-portable graphics family. "mono" resolves to a monospace font on any
+  #     device; NB ggpubr has no per-column font, so it applies to the whole plot body (labels too) --
+  #     set "" to keep the ggpubr default. tab_plot() is superseded.
+  options("tabxplor.tab_kable_num_font" = tx_num_font_html)
+  options("tabxplor.xl_font_num"        = "DejaVu Sans Mono")
+  options("tabxplor.xl_font_text"       = "DejaVu Sans Condensed")
+  options("tabxplor.plot_num_font"      = "mono")
+
   # Phase 13d: the EXPORT theme -- "light" (default), "dark", or "auto" (follow the reader's colour
   # scheme: their OS, plus any dark-mode toggle of the host page). "auto" needs a stylesheet, so only
   # tab_kable(engine = "html") / tab_md() / tab_css() honour it; static backends (tab_xl, tab_plot, the
@@ -1201,6 +1214,15 @@ div_sign   <- stringi::stri_unescape_unicode("\\u00f7") # divide sign (ratio < 1
 # Used where the output is rendered in a PROPORTIONAL font (html, Excel); console/markdown, which are
 # read in a monospace font, keep the ASCII space (see format.tabxplor_fmt(pad =)).
 fig_space  <- stringi::stri_unescape_unicode("\\u2007")
+
+# Phase 14m-ii: the html engine's NUMBER font -- a MONOSPACE stack. In a monospace font every glyph
+# (digits, "%", "(", ")", the significance "*", and the figure-space pad) is exactly one width, so
+# stars, "(n=...)" composites and decimal columns line up with no special-casing -- the proportional
+# DejaVu Sans made "*" narrower than a digit, so a starred cell slid out of its column. The TEXT
+# channel (row labels, headers) stays DejaVu Sans Condensed. Ends in the generic `monospace` so a
+# monospace font is guaranteed even where none of the named ones is installed. `tab_kable(engine =
+# "html")` reads it via getOption("tabxplor.tab_kable_num_font"); one option reverts the whole change.
+tx_num_font_html <- '"DejaVu Sans Mono", "Consolas", "Liberation Mono", "Menlo", monospace'
 
 # # Not working
 # # Css link towards https://github.com/web-fonts/dejavu-sans-condensed

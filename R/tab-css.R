@@ -222,8 +222,11 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE) {
     # col, tx-b bold, tx-bt/tx-bb/tx-bb2 row rules, tx-span the col_var header, tx-pill a background)
     # and every look is decided here. Overriding is then ordinary CSS -- no !important needed, because
     # nothing of ours is inline any more.
-    # DejaVu Sans Condensed for text and DejaVu Sans for numbers mirrors tab_xl()'s font_text/font_num,
-    # so a table looks the same exported to Excel or to html. Both degrade through the stack.
+    # DejaVu Sans Condensed for text (the table-wide rule below) and a MONOSPACE stack for numbers
+    # (`.tx-num`, Phase 14m-ii) mirrors tab_xl()'s font_text/font_num, so a table looks the same
+    # exported to Excel or to html. Monospace is what lets significance stars and "(n=...)" composites
+    # line up (every glyph one width); revert with options("tabxplor.tab_kable_num_font"). Both degrade
+    # through the stack.
     # `.tabxplor-tab` is the <table> itself (the html engine) OR a wrapping <div> (a markdown table
     # inside its pandoc fenced div, Phase 14f) -- `border-collapse` only means something on a table, so
     # name both. Every other rule below is a descendant selector and reaches the table either way.
@@ -249,7 +252,7 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE) {
     # vs (0,2,0), so SOURCE ORDER decides -- this pair must stay after .tx-r/.tx-l.
     ".tabxplor-tab thead .tx-r,.tabxplor-tab thead .tx-l{text-align:center;}",
     paste0(".tabxplor-tab .tx-num{white-space:nowrap;",
-           "font-family:\"DejaVu Sans\",Arial,helvetica,sans-serif;}"),
+           "font-family:", getOption("tabxplor.tab_kable_num_font", tx_num_font_html), ";}"),
     ".tabxplor-tab .tx-br{border-right-style:solid;border-right-width:1px;}",
     ".tabxplor-tab .tx-bl{border-left-style:solid;border-left-width:1px;}",
     # Phase 14j: `.tx-tot` (total column) and `.tx-rv` (the row-variable levels column) are still

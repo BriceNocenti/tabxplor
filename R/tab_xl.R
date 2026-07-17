@@ -53,10 +53,12 @@
 #'   titles are given based on the names of the variables.
 #' @param caption A single caption; a shortcut that fills \code{titles} (an explicit \code{titles}
 #'   still wins). Unified name across all exporters.
-#' @param font_text,font_num Font for text (labels, headers) and for numbers. Default from
-#'   \code{options(tabxplor.xl_font_text)} / \code{options(tabxplor.xl_font_num)}. Note that xlsx,
-#'   unlike CSS, has \strong{no font-fallback list}: only one name can be recorded per font, so if it
-#'   is missing on the machine opening the workbook, Excel substitutes by its own rules and no
+#' @param font_text,font_num Font for text (labels, headers) and for numbers. Defaults from
+#'   \code{options(tabxplor.xl_font_text)} (\code{"DejaVu Sans Condensed"}) /
+#'   \code{options(tabxplor.xl_font_num)} (\code{"DejaVu Sans Mono"}, since 1.4.0 -- a \strong{monospace}
+#'   number font aligns significance stars and \code{(n=...)} composites without special-casing). Note
+#'   that xlsx, unlike CSS, has \strong{no font-fallback list}: only one name can be recorded per font,
+#'   so if it is missing on the machine opening the workbook, Excel substitutes by its own rules and no
 #'   fallback can be named here. Set the options to a font you know is installed.
 #' @param text_size,text_size_headers,text_size_subtext Font sizes of text elements.
 #' @param theme By default (\code{"light"}) a white table with black text; set to \code{"dark"}
@@ -107,7 +109,7 @@ tab_xl <-
            colwidth = 10, color_legend = TRUE,
            sheets = "auto", n_min = 0, titles, caption = NULL,
            font_text = getOption("tabxplor.xl_font_text", "DejaVu Sans Condensed"),
-           font_num  = getOption("tabxplor.xl_font_num",  "DejaVu Sans"),
+           font_num  = getOption("tabxplor.xl_font_num",  "DejaVu Sans Mono"),
            text_size = 10, text_size_headers = 9, text_size_subtext = 9,
            hide_near_zero = Inf, theme = NULL,
            color_type = lifecycle::deprecated(), html_24_bit = NULL, color = TRUE,

@@ -372,6 +372,23 @@ testthat::test_that("geometry is CLASSES, not inline styles (so a user's CSS can
   }
 })
 
+testthat::test_that("the number font is a MONOSPACE stack, the text font stays Condensed", {
+  # Phase 14m-ii: numbers are drawn in a monospace font so significance stars and "(n=...)" composites
+  # line up (every glyph one width); a proportional "*" is narrower than a digit and slid out of column.
+  css <- tab_css(style_tag = FALSE)
+  # the whole-table (text) rule keeps Condensed
+  testthat::expect_match(css, "font-family:\"DejaVu Sans Condensed\"", fixed = TRUE)
+  # the number cells switch to a monospace stack ending in the generic `monospace`
+  num_rule <- regmatches(css, regexpr("[.]tx-num\\{[^}]*\\}", css))
+  testthat::expect_match(num_rule, "DejaVu Sans Mono", fixed = TRUE)
+  testthat::expect_match(num_rule, "monospace;}")
+  # one option is the whole revert lever
+  css2 <- withr::with_options(list(tabxplor.tab_kable_num_font = "\"Courier New\", monospace"),
+                              tab_css(style_tag = FALSE))
+  testthat::expect_match(css2, "[.]tx-num\\{[^}]*Courier New")
+  testthat::expect_no_match(css2, "[.]tx-num\\{[^}]*DejaVu Sans Mono")
+})
+
 testthat::test_that("no border SHORTHAND survives in the stylesheet (coloured cells, plain borders)", {
   # THE regression lock for the pass-2 defect "the text color actually change the borders colors ...
   # which is awful". `border-right:1px solid` is a shorthand: it resets border-right-color to
@@ -452,20 +469,36 @@ testthat::test_that("a background colour is a pill hugging the text, not a full-
   testthat::expect_match(tab_css(style_tag = FALSE), "[.]tx-pill[{]border-radius")
 })
 
-testthat::test_that("format() pads with FIGURE spaces for html/Excel, ASCII for console/md", {
+testthat::test_that("format() pads with FIGURE spaces for html/Excel, ASCII for the console", {
   # U+2007 is exactly a digit wide; an ASCII space is half a digit in DejaVu Sans, and CSS collapses
   # runs of them -- so console-aligned composites arrived ragged in html.
   t <- tab(gss, marital, race, pct = "row", display = "{pct} (n={n})")
   ht <- format(t$Other, html = TRUE, na = "", stars = TRUE)
-  mt <- format(t$Other, na = "", stars = TRUE)
+  mt <- format(t$Other, na = "", stars = TRUE)                       # format() default = the console
   testthat::expect_true(any(grepl(fig_space, ht, fixed = TRUE)))
   testthat::expect_false(any(grepl(fig_space, mt, fixed = TRUE)))
-  testthat::expect_true(any(grepl("  ", mt, fixed = TRUE)))          # md keeps ASCII runs
+  testthat::expect_true(any(grepl("  ", mt, fixed = TRUE)))          # the console keeps ASCII runs
   # same visible text either way -- only the pad character differs
   testthat::expect_identical(gsub(fig_space, " ", ht, fixed = TRUE), mt)
   # and it reaches the rendered media
   testthat::expect_true(grepl(fig_space, as.character(tab_kable(t, engine = "html")), fixed = TRUE))
-  testthat::expect_false(grepl(fig_space, tab_md(t, print = FALSE, color = FALSE), fixed = TRUE))
+})
+
+testthat::test_that("tab_md pads VALUE-INTERNAL alignment with figure space, cell edges with ASCII", {
+  # Phase 14m-ii, Item A: markdown sets no font of its own, so a pandoc-rendered table lands in the
+  # host's PROPORTIONAL font -- where ASCII pad collapses and "100% (n=  673)" arrives ragged. The
+  # figure space (a digit wide, non-collapsing) goes ONLY inside a value; cell-edge padding + spacer
+  # columns stay ASCII, so pandoc still strips them and an empty cell renders `<td></td>` (`:empty`,
+  # the hook Phase 14m keys on). nchar is unchanged, so the raw-markdown column layout is unmoved.
+  t  <- tab(gss, marital, race, pct = "row", display = "{pct} (n={n})")
+  md <- tab_md(t, print = FALSE, color = FALSE, css = FALSE)
+  testthat::expect_true(grepl(fig_space, md, fixed = TRUE))          # the (n=...) padding is figure space
+  testthat::expect_true(grepl("  ", md, fixed = TRUE))               # cell-edge padding stays ASCII
+  # a coloured table with empty cells: no cell is written as a lone run of figure spaces (that would
+  # render `<td> </td>`, breaking `:empty`). Blank/spacer cells must be ASCII-emptied.
+  tc  <- tab(gss, c(race, marital), relig, pct = "row", color = "diff")
+  rows <- strsplit(tab_md(tc, print = FALSE, color = TRUE, css = FALSE), "\n", fixed = TRUE)[[1]]
+  testthat::expect_false(any(grepl(paste0("\\|", fig_space, "+\\|"), rows)))
 })
 
 # === SECTION: the label column -- rowspan + vertical name (Phase 14i) ========

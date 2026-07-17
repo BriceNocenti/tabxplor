@@ -1778,6 +1778,17 @@ tab_plot <- function(tabs,
     tabs[[cl]][!show] <- ""
   }
 
+  # Phase 14m-ii: a monospace body font so the numbers, significance stars and "(n=...)" composites
+  # line up. WARNING: ggpubr 1.0.0 exposes no per-COLUMN font (table_cell_font() takes no family and
+  # replaces the cell gpar), so this applies to the WHOLE body -- the row labels turn monospace too, a
+  # small deviation from "text stays Condensed" that only affects the superseded tab_plot(). Revert
+  # with options("tabxplor.plot_num_font" = "") (-> the ggpubr default). "mono" is a device-portable
+  # graphics family, so it resolves to a monospace font on any device.
+  plot_num_font <- getOption("tabxplor.plot_num_font", "mono")
+  tbody_args <- list(color = "black", size = 11, fill = "white", linewidth = 0,
+                     linecolor = "black", hjust = 0.98, x = 0.95) # x/hjust = right-adjust
+  if (nzchar(plot_num_font)) tbody_args$fontfamily <- plot_num_font
+
   tabs_gg <- tabs |>
     dplyr::mutate(
       dplyr::across(
@@ -1805,24 +1816,7 @@ tab_plot <- function(tabs,
       rows = NULL, # base_size = 11,
       theme = ggpubr::ttheme("blank",
                              padding = grid::unit(c(4, 3), "mm"), # c(h, v)
-                             # rownames.style = ggpubr::rownames_style(
-                             #   color = "black", #face = "plain", #parse = TRUE,
-                             #   size      = 11,
-                             #   fill      = "white", #c("grey95", "grey90"),
-                             #   linewidth = 0,
-                             #   linecolor = "black",
-                             #
-                             #   hjust = 0, x = 0.95 # right ajust
-                             #   ),
-                              tbody.style = ggpubr::tbody_style(
-                               color = "black", #face = "plain", #parse = TRUE,
-                               size      = 11,
-                               fill      = "white", #c("grey95", "grey90"),
-                               linewidth = 0,
-                               linecolor = "black",
-
-                               hjust = 0.98, x = 0.95 # right ajust
-                             )),
+                             tbody.style = do.call(ggpubr::tbody_style, tbody_args)),
     )
 
   # tabs |>

@@ -3,9 +3,12 @@
 #        hard-coded ASCII space, half a digit wide in a proportional font and collapsed by CSS);
 #        a mean cell with no sd is padded to the "(sigma sd)" tail so the means align; a bold row
 #        bolds only the mean of a "mean (sigma sd)" cell; the Excel star pad uses the same glyph.
-# KEY CONSTRAINT: console + markdown are read in a MONOSPACE font, where an ASCII space is already
-#        exactly one digit wide -- they must keep it. Only html/Excel get the figure space.
-# See: CLAUDE.md > Phase 14h.
+# KEY CONSTRAINT: the CONSOLE is read in a MONOSPACE font, where an ASCII space is already exactly one
+#        digit wide -- it keeps ASCII (format()'s default pad). html/Excel get the figure space.
+#        Phase 14m-ii reopened this FOR MARKDOWN's value-internal padding only: a pandoc-rendered md
+#        table lands in the host's PROPORTIONAL font, so tab_md() now pads INSIDE a value with a figure
+#        space (its cell-edge + spacer padding stays ASCII -- see test-render-html.R).
+# See: CLAUDE.md > Phase 14h + 14m-ii.
 
 fig <- stringi::stri_unescape_unicode("\\u2007")   # FIGURE SPACE, one digit wide
 sig <- stringi::stri_unescape_unicode("\\u03c3")   # sigma
@@ -108,6 +111,43 @@ testthat::test_that("tab_md(): a bold row bolds the mean, not the sd", {
   testthat::expect_match(md, paste0("\\*\\*[0-9.]+\\*\\*", nbs, "\\(", sig), all = FALSE)
   testthat::expect_no_match(md, paste0("\\*\\*[0-9.]+", nbs, "\\(", sig, "[0-9. ]+\\)\\*\\*"),
                             all = TRUE)
+})
+
+# === Phase 14m-ii: markdown value-internal padding is figure space ================
+
+testthat::test_that("tab_md() pads a composite's (n=...) with figure space, not ASCII", {
+  t  <- tab(forcats::gss_cat, marital, race, pct = "row", display = "{pct} (n={n})")
+  md <- tab_md(t, print = FALSE, color = FALSE, css = FALSE)
+  # the (n=...) alignment inside a value is a figure space now (survives pandoc + the host font)
+  testthat::expect_match(md, paste0("(n=", fig), fixed = TRUE)
+  # but the raw layout is byte-for-byte the old one bar the pad glyph: normalise the figure spaces
+  # back to ASCII and it equals what format()'s ASCII pad produces at the same widths (nchar-stable).
+  testthat::expect_false(grepl(fig, gsub(fig, " ", md, fixed = TRUE), fixed = TRUE))
+})
+
+testthat::test_that("format()'s DEFAULT pad (the console) stays ASCII", {
+  # the console must NOT move to figure space -- a monospace ASCII space is already one digit wide.
+  x <- fmt(n = c(849L, 3648L), pct = c(1, 1), type = "row", display = "{pct} (n={n})")
+  testthat::expect_identical(format(x), c("100% (n=  849)", "100% (n=3 648)"))
+})
+
+# === footer summary stats are not star-padded (Phase 14m-ii, L5) ==================
+
+testthat::test_that("format(): a gof / pvalue footer cell reaches the column edge (no star pad)", {
+  # in a starred column, a "gof" (N/AIC) or "pvalue" summary cell reserves NO star column, so a
+  # right-aligned summary number reaches the edge instead of lining up under the starred data.
+  x <- fmt(n = c(100L, 100L, NA, NA),
+           pct    = c(0.4, 0.6, NA, 0.03),          # pvalue cell stores its p in pct
+           diff   = c(0.1, -0.1, 21483, NA),        # gof cell stores its stat in diff
+           ci_inf = c(0.05, -0.2, NA, NA), ci_sup = c(0.15, -0.05, NA, NA),
+           pvalue = c(0.0005, 0.5, NA, NA), ci_type = "diff",
+           display = c("diff", "diff", "gof", "pvalue"), digits = c(0L, 0L, 0L, 2L))
+  f <- format(x, special_formatting = TRUE, na = "", stars = TRUE, html = TRUE)
+  # the diff data cell IS star-padded to width 3 (stars left, fig pad right)
+  testthat::expect_true(endsWith(f[1], paste0("***")) || endsWith(f[2], strrep(fig, 3)))
+  # the gof + pvalue cells carry NO trailing figure-space star pad
+  testthat::expect_false(endsWith(f[3], fig))
+  testthat::expect_false(endsWith(f[4], fig))
 })
 
 # === the Excel star pad ===========================================================

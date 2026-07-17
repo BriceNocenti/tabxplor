@@ -2232,9 +2232,14 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   # get_stars() is already "" for NA pvalue, so a table built with stars = FALSE shows none anyway.
   # PADDING: when any value cell is starred, right-pad every value cell's star field to the
   # column-max star width (stars left, spaces right) so the numbers stay aligned in a monospace font.
+  # Phase 14m-ii (L5): a footer SUMMARY cell (a "gof" stat -- N/AIC/R2 -- or a "pvalue" row) never
+  # carries a per-cell star, so it does NOT reserve the star column: a right-aligned summary number then
+  # reaches the column edge (the data cells' stars hang into the width beside it) rather than being
+  # indented to line up under the starred data. get_stars() is "" for these anyway, so dropping them
+  # leaves the width `w` unchanged -- the only effect is that they take no trailing pad.
   if (isTRUE(stars)) {
     st  <- get_stars(x)
-    val <- !is.na(out) & nzchar(out)
+    val <- !is.na(out) & nzchar(out) & !(display %in% c("gof", "pvalue"))
     if (any(val & nzchar(st))) {
       w  <- max(nchar(st[val]))
       st_pad <- stringr::str_pad(st, w, side = "right", pad = pad)  # glyphs left, pad right

@@ -1508,6 +1508,25 @@ in `<style>`) + `_snaps/golden.md` (md figure space vs ASCII) — conscious, no 
 `test-render-html.R` (mono font in the stylesheet), `test-tab_xl.R` (fmt-text cells use the number font),
 `test-digit-space.R` (md figure space).
 
+##### Done (2026-07-17)
+
+Full suite **FAIL 0 | WARN 0 | PASS 3151**; `document()` clean; **no `.rds` golden moved**. Full record:
+decisions **§44**. The number font is now a monospace stack in every font-bearing export, options-gated
+per medium (`tabxplor.tab_kable_num_font` html / `tabxplor.xl_font_num` Excel / `tabxplor.plot_num_font`
+tab_plot); text stays Condensed. **L4 needed no code** — the existing star-padding just works in mono.
+**Item A**: `tab_md()` pads a value's INTERNAL alignment (`format(pad = fig_space)`) with a figure space
+(cell-edge + spacer padding stays ASCII, so `:empty` survives for §43); verified through a real pandoc
+render, and `_snaps/golden.md` moved 48 lines PROVEN to be the pure ASCII→U+2007 swap in `n`-rows.
+**L5**: footer `gof`/`pvalue` summary cells drop out of `format()`'s star-padding, so they reach the
+column edge. **`_snaps/render-html.md` did NOT move** — its snapshots strip the `<style>`, so the font
+rule isn't captured there (the Verify note above was wrong about that).
+
+**Deviations, flagged**: (1) **tab_plot** is whole-body mono (ggpubr 1.0.0 has no per-column font), so
+row labels turn mono too — confined to the superseded function, reverts with `plot_num_font = ""`.
+(2) **Numbering tangle**: this phase and the tab_md-pass-2 phase below both read "14m-ii", and pass-2
+refers to the figure-space swap as "14m-i". The md figure space was done HERE (Item A, forward-compatible
+with the unbuilt §43). Suggest renumbering: 14m-i = tab_md borders/compactness (§43), 14m-ii = fonts (§44).
+
 #### Phase 14m-ii — `tab_md()`, pass 2 — **DESIGN SETTLED (2026-07-17), build pending**
 
 Full design + specificity math + the verified pandoc constraints: **`dev/tabxplor_1.4.0_decisions.md`
@@ -1742,6 +1761,7 @@ changes (those are 14r), so the two phases don't both touch the tooltip builder.
    Fix by flagging the reg reference row (`as_refrow`/`in_refrow`) or extending the exclusion, whichever is
    cleaner. The maintainer's suggested "treat footer as total rows" is the same idea — but prefer the
    explicit `display`/`is-reference` gate over faking a total row (which would perturb other masks).
+   Also, like in tab(), **reference row must by in bold**, including the text columns live "levels".
 2. **grey_non_signif legend is false** (`R/fmt_class.R:3197-3203`). Reword the grey note so it is
    statistically true: the only guarantee is **coloured ⇒ significantly different from ‹ref› (‹method›)**;
    an uncoloured cell is *either* not significant *or* too small an effect to reach the first colour

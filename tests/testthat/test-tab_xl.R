@@ -97,9 +97,10 @@ testthat::test_that("tab_xl folds significance stars into the numFmt code", {
 
 # Phase 14l: the fonts we emit must carry NO `scheme`. openxlsx2::create_font() defaults
 # scheme = "minor" = "this IS the theme's body font", and Excel then resolves the font from the THEME,
-# ignoring our explicit `name` -- so every number, correctly named "DejaVu Sans" in the XML, was drawn
-# in the theme's minor font ("DejaVu Sans Condensed", written by xlb_base_font). Invisible to any
-# assertion on values or on `name`: only the raw <font> XML shows it.
+# ignoring our explicit `name` -- so every number, correctly named in the XML, was drawn in the theme's
+# minor font ("DejaVu Sans Condensed", written by xlb_base_font). Invisible to any assertion on values
+# or on `name`: only the raw <font> XML shows it.
+# Phase 14m-ii: the default number font is now the MONOSPACE "DejaVu Sans Mono" (stars/composites align).
 testthat::test_that("tab_xl emits no font `scheme` (numbers really render in font_num)", {
   testthat::skip_if_not_installed("openxlsx2")
   tb <- tab(forcats::gss_cat, marital, c(race, tvhours), pct = "row", color = TRUE)
@@ -113,7 +114,9 @@ testthat::test_that("tab_xl emits no font `scheme` (numbers really render in fon
   testthat::expect_true(grepl("DejaVu Sans Condensed", fonts[grepl("<scheme", fonts)]))
   # every font WE registered names itself and lets the name stand
   testthat::expect_false(any(grepl("<scheme", fonts[!grepl("<scheme", fonts)])))
-  testthat::expect_true(any(grepl('name val="DejaVu Sans"', fonts, fixed = TRUE)))
+  # numbers in the monospace font, text in Condensed
+  testthat::expect_true(any(grepl('name val="DejaVu Sans Mono"', fonts, fixed = TRUE)))
+  testthat::expect_true(any(grepl('name val="DejaVu Sans Condensed"', fonts, fixed = TRUE)))
 })
 
 # Phase 14l: an "<var>_sd" sibling holds "s2.1" under a header of "sd" -- it never needs a mean's width.
@@ -149,6 +152,30 @@ testthat::test_that("tab_xl fonts are settable by option", {
   testthat::expect_true(any(grepl('name val="Courier New"', fonts, fixed = TRUE)))
   testthat::expect_true(any(grepl('name val="Georgia"',     fonts, fixed = TRUE)))
   testthat::expect_false(any(grepl("DejaVu", fonts)))       # nothing hardcoded past the option
+})
+
+# Phase 14m-ii: a text-SHAPED fmt cell (ci = "cell" bracket, or the "1/x" OR string) carries
+# significance stars, so it must render in the NUMBER font too, not the text font. Those columns are
+# already in roles$fmt_cols (so mk_src(fmt_cols, font_num) covers them); this traces one bracket cell's
+# style -> font to prove it, distinguishing the number font from the text font.
+testthat::test_that("tab_xl draws text-shaped fmt cells (ci = 'cell') in the number font", {
+  testthat::skip_if_not_installed("openxlsx2")
+  withr::local_options(tabxplor.xl_font_num = "Courier New", tabxplor.xl_font_text = "Georgia")
+  tb <- tab(forcats::gss_cat, marital, race, pct = "row", ci = "cell")
+  p  <- withr::local_tempfile(fileext = ".xlsx")
+  suppressMessages(tab_xl(tb, path = p, sheets = "unique", replace = TRUE, open = FALSE))
+  wb    <- openxlsx2::wb_load(p)
+  cc    <- wb$worksheets[[1]]$sheet_data$cc
+  xf    <- wb$styles_mgr$styles$cellXfs
+  fonts <- wb$styles_mgr$styles$fonts
+  font_of <- function(cell_style) {                        # c_s (0-based) -> xf -> fontId -> <font>
+    fid <- as.integer(sub('.*fontId="(\\d+)".*', "\\1", xf[as.integer(cell_style) + 1L])) + 1L
+    fonts[fid]
+  }
+  br <- cc[grepl("[", cc$is, fixed = TRUE) | grepl("[", cc$v, fixed = TRUE), , drop = FALSE]
+  testthat::expect_gt(nrow(br), 0)                         # the ci brackets ARE text-shaped cells
+  testthat::expect_true(grepl('name val="Courier New"', font_of(br$c_s[1]), fixed = TRUE))
+  testthat::expect_false(grepl("Georgia", font_of(br$c_s[1]), fixed = TRUE))
 })
 
 # Phase 10h: transpose = TRUE exports the transposed table (still a valid, readable workbook).

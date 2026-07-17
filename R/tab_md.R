@@ -265,8 +265,18 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   # (the "(n=...)" stays plain). str_trim(left) shifts it by the leading spaces removed -> prim = pn - lead.
   fmt_out <- purrr::imap(tabs, \(col, nm) {
     if (is_fmt(col)) {
+      # Phase 14m-ii: pad the VALUE-INTERNAL alignment (thousands mark, "(n=...)", star field, ci
+      # brackets, the sd-less mean tail) with a FIGURE SPACE. Markdown sets no font of its own, so when
+      # pandoc renders the table to html the number cells fall in the host's PROPORTIONAL font -- where
+      # an ASCII space is half a digit wide and CSS collapses runs of them, so "100% (n=  673)" arrived
+      # ragged. A figure space is a digit wide and never collapses, so the composites line up. This is
+      # `format()`'s pad only: the CELL-EDGE alignment (pad_cell / md_color_cell) and the spacer columns
+      # stay ASCII on purpose -- pandoc strips cell-edge whitespace, so an empty cell must render `<td></td>`
+      # (`:empty`), the hook Phase 14m's spacer-collapse + blank-row separators key on. nchar is
+      # unchanged (a figure space is one codepoint), so the raw-markdown column layout is byte-for-byte
+      # the same, only the pad glyph inside a value differs.
       raw     <- format(col, special_formatting = special_formatting, na = "", stars = TRUE,
-                        bold_split = TRUE, .ref = ann_ref(rd$ann[[nm]]))
+                        bold_split = TRUE, pad = fig_space, .ref = ann_ref(rd$ann[[nm]]))
       pn      <- attr(raw, "primary_nchar")
       trimmed <- stringr::str_trim(raw, side = "left")
       lead    <- nchar(raw) - nchar(trimmed)

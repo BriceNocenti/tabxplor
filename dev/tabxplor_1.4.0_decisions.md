@@ -3952,3 +3952,65 @@ gate if the maintainer later wants it — but it would change the plain `_snaps/
   render; degrades to a blank gap row (no border) on an ancient engine, never to breakage.
 - The name-row underline appears only on the styled (coloured/`css`) path; a plain table's col_var-name
   row has no rule under it (it is already visually distinct, and plain is the GFM/text target).
+
+---
+
+## 44. Phase 14m-ii — monospace numbers + the markdown figure space (DONE 2026-07-17)
+
+Pass-3 groups A (md alignment) / L4 (star width) / L5 (footer stars). One root cause: in a
+**proportional** font the significance `*` is narrower than a digit, so a starred cell slid out of its
+column, and no digit-width padding can compensate for the star's own width. The maintainer's settled
+route (pass-3 decision 2): make the **number font monospace** in every font-bearing export — then digits,
+`%`, brackets, `*` and the pad glyph are all one width and everything lines up with no special-casing.
+
+**What landed**
+
+- **The number font is monospace, options-gated per medium** (revert is one option; the text channel —
+  row labels, headers — stays DejaVu Sans Condensed everywhere):
+  + html engine → `.tx-num{font-family:…}` reads `options("tabxplor.tab_kable_num_font")`, default the
+    `tx_num_font_html` constant (`"DejaVu Sans Mono", …, monospace`). The rule is more specific than the
+    table-wide Condensed rule, so numbers switch and text does not.
+  + Excel → `options("tabxplor.xl_font_num")` default `"DejaVu Sans Mono"` (was `"DejaVu Sans"`). No
+    routing work: a text-SHAPED fmt cell (`ci="cell"` bracket, the `1/x` OR string) is already in
+    `roles$fmt_cols`, and `mk_src(fmt_cols, name = font_num)` covers it — proven by a style-trace test
+    (a bracket cell's `fontId` resolves to the mono `<font>`). All font defaults now sit in `.onLoad`.
+  + tab_plot → `options("tabxplor.plot_num_font")` default `"mono"` (a device-portable graphics family).
+    ⚠ **ggpubr 1.0.0 has no per-column font** (`table_cell_font()` takes no family and *replaces* the
+    cell `gpar`; `tbody_style(...)` is whole-body), so it is applied to the WHOLE body via
+    `tbody_style(fontfamily=)` — the row labels turn monospace too. A small deviation from "text stays
+    Condensed", confined to the **superseded** tab_plot; `options(tabxplor.plot_num_font = "")` reverts.
+- **L4 needs no code**: the pre-existing figure-space star-padding in `format()`/`tab_xl()` just works
+  once the font is monospace (`format()`'s star field: value + stars, right-padded to the column-max star
+  width; in mono the value right-edges align and the stars occupy the fixed trailing columns).
+- **Item A — the markdown figure space.** md sets no font of its own, so a pandoc render lands in the
+  host's PROPORTIONAL font. `md_render_one()` now calls `format(pad = fig_space)`, so a value's INTERNAL
+  padding (thousands mark, `(n=…)`, star field, ci bracket, sd-less mean tail) is figure-space — a digit
+  wide and non-collapsing. **Reopens 14h's "md keeps ASCII", for md only.**
+  + ⚠ **HARD CONSTRAINT (verified against §43's `:empty` mechanism)**: the swap is `format()`'s pad
+    ONLY. The **cell-edge** padding (`pad_cell` / `md_color_cell` / the `md_insert_col_sep` spacer) stays
+    ASCII, because pandoc strips cell-edge whitespace — so a blank cell must render `<td></td>` (`:empty`,
+    the hook §43's spacer-collapse + blank-row separators key on), never `<td> </td>`. Verified through a
+    real pandoc render: the composite carries figure spaces, and the table still has empty `<td></td>`.
+  + `nchar` is unchanged (a figure space is one codepoint), so the raw-markdown column layout is
+    byte-for-byte the old one; `_snaps/golden.md` moved 48 lines, **all** proven to be the ASCII→U+2007
+    swap in `n`-rows (normalising U+2007→space makes old and new identical). No `.rds` golden moved.
+- **L5 — footer summary stats reach the column edge.** In `format()`'s star block a `gof` (N/AIC/R²) or
+  `pvalue` summary cell is dropped from the padded set (`!(display %in% c("gof","pvalue"))`). They carry
+  no per-cell star, so reserving the trailing star column only indented them under the starred data;
+  now a right-aligned summary number reaches the edge (data stars hang beside it). `get_stars()` is `""`
+  for them, so the column-max star width `w` is unchanged — the only effect is no trailing pad. The
+  console footer (`print_reg_footer`, prose) was never star-padded, so it needed nothing.
+
+**Snapshots / verification.** Full suite FAIL 0 | WARN 0 | PASS 3151; `document()` clean.
+`_snaps/render-html.md` did NOT move — its snapshots `rh_strip_style()` the `<style>` block, so the
+font rule is not captured there (the roadmap expected a move; it was wrong about where the font lives).
+`_snaps/golden.md` regen is the pure glyph swap above. Reg display/GOF snapshots did not move (L5 leaves
+`get_stars()==""` cells' width unchanged; the reg md tests assert substrings, not the fig-affected pad).
+Browser/Excel samples: `dev/review_manual/phase14mii_html_engine.html` + `phase14mii_md_rendered.html`.
+
+**Flagged for the maintainer (numbering).** The roadmap carries **two** phases labelled `14m-ii`: this
+one (fonts, groups A/L4/L5) and the tab_md pass-2 (borders/compactness, §43) — and §43 additionally
+refers to the figure-space swap as "14m-i (former 14v)". So the md figure space appears both as Item A
+here and as "14m-i" there. This session did it here (the roadmap assigns Item A to this phase and it is
+forward-compatible with §43, which is not yet built). The numbers want disentangling: e.g. 14m-i = the
+tab_md borders/compactness (§43), 14m-ii = fonts (this section, §44), with the figure space owned here.
