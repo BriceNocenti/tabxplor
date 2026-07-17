@@ -1984,7 +1984,7 @@ Native dark mode/light mode management for exported tables, specially html table
 
 ### Phase 14 – manual review by maintainer and next improvements
 
-#### Context
+#### Context : 14a to 14g
 
 `dev/review_manual/tab_manual_review_pass_1.R` is the maintainer's first hands-on review of tabxplor
 1.4.0 on real survey data (`pc18`). Its `#` comments are the spec. This plan turns them into phases.
@@ -2020,7 +2020,7 @@ Two systemic findings worth naming once:
   the chain `workbench.colorTheme` → extension `package.json` → `uiTheme: vs-dark` resolves your actual
   theme correctly today. §14g ships it best-effort, silent, degrading to today's behaviour.
 
-#### Decisions taken with the maintainer
+##### Decisions taken with the maintainer
 
 1. **Padding** → swap the pad char to **U+2007 FIGURE SPACE** for HTML + Excel only; console/md keep
    ASCII. Measured in DejaVu Sans: `U+2007` = 1303/2048 em = **exactly** the digit width (1303), while
@@ -2548,6 +2548,407 @@ injected fixtures.
     calls I would rather you made on the sample in A1. They are one line each in `tab_css()` now.
 
 ---
+
+
+#### Context : Phases 14h to 14o
+
+`dev/review_manual/tab_manual_review_pass_2.R` (+ the mid-session `tab_md_test_2.md`/`.htm`) is the
+maintainer's second hands-on review of 1.4.0 on real survey data. Its `#` comments are the spec. Phases
+14a–14g are committed; this plan turns pass 2 into phases 14h–14o, each a **fresh Claude Code session**.
+The three hard ones (14m, 14n, 14o) **start with a design step, not with code**.
+
+Every defect below was **reproduced and root-caused** during planning, not guessed. Five have causes
+neither the review nor the roadmap had named, and three of those change the shape of the fix:
+
+| # | Symptom (maintainer) | Verified root cause |
+|---|---|---|
+| 1 | `row_var` name repeats on every row (html, md, Excel) | **A Phase 14d regression.** `tab_md()`'s blanking loop ([tab_md.R:271](R/tab_md.R#L271)) is gated on `tab_vars`; 14d made `tab_compact()` correctly record `tab_vars = character(0)` ([tab_classes.R:1243](R/tab_classes.R#L1243)), so the loop went silent. The html engines never had blanking at all — they sidestep real tab_vars with `drop_tab_vars = TRUE`, which a compacted table never triggers. **md does not "already do it" — it stopped.** |
+| 2 | Excel title `levels by ROCK, JAZZ, CLASSIQUE +8 more` | `tab_render_vars()` DOES return `row_vars` (the source names, [tab.R:2653](R/tab.R#L2653)), but `prep_one_table()` rebuilds `vars` without it ([tab-export-prep.R:313](R/tab-export-prep.R#L313)) → `tab_xl`'s `.$vars$row_vars %||% .$vars$row_var` ([tab_xl.R:196](R/tab_xl.R#L196)) falls back to the literal `"levels"`. **One line.** |
+| 3 | `(n=1 811)` padding wrong | The thousands separator is a **plain ASCII space** ([fmt_class.R:1992](R/fmt_class.R#L1992) `prettyNum(big.mark = " ")`) — half a digit wide in DejaVu Sans, and collapsed by CSS. `big.mark` never consulted `pad`, so the figure space that 14a-decision-1 introduced fixed the padding and the separator kept breaking it. |
+| 4 | Borders take the text colour | **Not fixed in 13d/14e, only narrowed** — 3 docs record it as fixed. `.tabxplor-tab .tx-br{border-right:1px solid;}` (0,2,0 — [tab-css.R:199](R/tab-css.R#L199)) is a SHORTHAND: it resets `border-right-color` to `currentColor`, and it out-specifies `.tabxplor-tab td{border-color:…}` (0,1,1 — [tab-css.R:107](R/tab-css.R#L107)). Live on `tab(gss_cat, marital, c(race, relig), pct="row", color="diff")`: 6 of 140 `<td>`s carry both a border class and a colour class (incl. `.g1` grey → grey border). |
+| 5 | "levels and Total columns very wide for nothing" | The **only** widths in the stylesheet are `.tx-rv{min-width:10em}` ([tab-css.R:202](R/tab-css.R#L202)) and `.tx-tot{min-width:5.5em}` ([:201](R/tab-css.R#L201)) — exactly the two columns named. Everything else is already auto-width. |
+| 6 | Excel numbers in Condensed | The XML **already says** `DejaVu Sans` (verified: `Excel_test.xlsx` fonts 1–10). But `openxlsx2::create_font()` defaults **`scheme = "minor"`** and we never override it ([tab_xl.R:640](R/tab_xl.R#L640)), tagging every font as "the theme's minor font" — which `xlb_base_font()` sets to `font_text` = **DejaVu Sans Condensed** (verified in the file's `theme1.xml`). |
+| 7 | `theme="auto"` always dark in the Viewer | The dark layer is `@media (prefers-color-scheme: dark)` ([tab-css.R:222](R/tab-css.R#L222)), which in an Electron webview follows the **OS**, not Positron's colour theme — so toggling Positron cannot move it. |
+| 8 | Transpose colours numerics wrongly | `tab_transpose()` copies **ONE representative column's** `fmt_col_attrs` onto every transposed column ([tab.R:2445-2456](R/tab.R#L2445)). A transposed column mixes variables; one fmt column cannot carry two `type`/`digits`/`color` values. **Unfixable at the object level.** |
+| 9 | md spacers/separators bad in rendered html | Verified against pandoc 3.7 on `tab_md_test_2.md`: spacers become real empty `<th></th>`/`<td></td>` columns with `padding:3px 4px`; the sub-table separators ([tab_md.R:490-511](R/tab_md.R#L490)) become literal rows of dashes. |
+| 10 | md rendered html: a border under **every** row | **Not our CSS — the host's.** Quarto tags the table `class="caption-top table"`, and Bootstrap's `.table > :not(caption) > * > *` sets `border-bottom-width` on every cell (its `.table-borderless` sibling is in the file, so Bootstrap is confirmed present). `tab_css()` has no such rule: its border rules are all class-gated, and md-rendered html carries no classes — it only sets `border-color`, which is why the host's borders come out **black on every row**. |
+
+##### Answering the review's two questions about the DOM capture
+
+- **`dev/review_manual/Positron_Inspect_kable_theme_auto.html` is the OUTER workbench DOM** — our markup
+  appears in it only as escaped console text (`&lt;table class="tabxplor-tab"&gt;`), so it cannot show the
+  table's own `<body>`. What it *does* prove is decisive: the Viewer is a **cross-origin webview iframe**
+  (`vscode-webview://…/index-external.html?…extensionId=positron.positron-r`). VS Code's
+  `body.vscode-dark` sits on the outer host; it cannot reach our document. **Do not ship the `vscode-*`
+  hooks the roadmap contemplated** — they would never fire.
+- **Ask the maintainer for one live check** (14k): with `theme = "auto"` open in the Viewer, toggle
+  **Windows** dark mode. If it flips, the webview follows the OS (expected); if it stays dark, something
+  forces it and the diagnosis needs one more pass.
+
+##### Settled this session (maintainer)
+
+1. **One Total row**: collapse only when the total rows are identical **as displayed** — same rendered
+   strings at the chosen digits. 17.22% and 17.31% both printing "17%" still collapse; the diffs/CI were
+   computed per block beforehand and stay right.
+2. **Transpose**: soft-deprecate `tab_transpose()`; flip only at export, on the render model.
+3. **`theme="auto"`**: resolved R-side for the interactive Viewer, browser-side for files. Option default
+   `"light"` → `"auto"`.
+4. **Excel legend**: keep the lighter L ladder, boost chroma proportionally (tunable + preview).
+5. **`var_names = c("both","rows","cols","none")`** — one shared arg; `tab_md(col_var_names=)` deprecated onto it.
+6. **Title**: dependent first, decided by `pct`; max 2 names + "+N more".
+7. **Figure space**: html + Excel only; console and md keep ASCII (monospace — an ASCII space is already
+   exactly one digit wide there).
+8. **`color_type`**: deprecate (confirmed vestigial).
+
+---
+
+## Phase 14h — one digit-width space, everywhere it must align
+
+Mechanical, cheap, no design. Do it first: 14i/14j/14m all read the padded output.
+
+**Why** — finding 3, plus four siblings found with it:
+
+- `big.mark = " "` ([fmt_class.R:1992](R/fmt_class.R#L1992)) and the same in `print_reg_footer`'s
+  `fmt_val` ([tab_classes.R:714](R/tab_classes.R#L714)).
+- The Excel star pad is ASCII: `formatC(st, width = -w)` ([tab_xl.R:425](R/tab_xl.R#L425)) — inconsistent
+  with [:418](R/tab_xl.R#L418), which already passes `pad = fig_space`. Its width mask
+  (`st[val & nzchar(st)]`) also differs from `format()`'s (`st[val]`, [fmt_class.R:2205](R/fmt_class.R#L2205));
+  they agree only because `nchar("") == 0`.
+- The mean/sd joiner is `unbrk` (U+202F, [fmt_class.R:2091](R/fmt_class.R#L2091)) — a narrow no-break space
+  inside a cell whose digits must align. This is the review's "replace all unbreakable spaces with this
+  good 1 digit sep, everywhere padding have to be aligned well".
+- **sd-less mean cells are not padded**: `format()` right-pads the sd *text* ([:2089](R/fmt_class.R#L2089)),
+  but a cell with no sd gets nothing → `1.0` and `1.7 (σ2.1)` do not align.
+- **`bold_split` misses the mean/sd cell**: it covers `{}` templates only; the `disp_mean_sd` branch sets
+  no `primary_nchar`, so a bold Total row bolds `4 (σ11)` whole — and bold DejaVu Sans is wider than plain,
+  which is the review's "bold cells are not perfectly aligned with plain font weight cells".
+
+**What**
+
+1. `big.mark = pad` in `format.tabxplor_fmt()`. `pad` already resolves per backend
+   ([fmt_class.R:1828](R/fmt_class.R#L1828): `" "` text / `fig_space` html; `tab_xl.R:418` passes it
+   explicitly) → **console + md unchanged, html + Excel aligned, one line**. Same in `print_reg_footer`.
+2. `pad`-ify the mean/sd joiner and the Excel star pad; unify the two star-width masks.
+3. Pad an sd-less mean cell to the column's `unbrk (σ…)` width ([fmt_class.R:2085-2092](R/fmt_class.R#L2085)).
+4. Extend `primary_nchar` to the mean/sd branch → `bold_split` bolds only the mean; `(σ…)` stays plain in
+   md + both html engines. Excel needs nothing (mean and sd are separate columns there).
+5. Delete `cross` ([utils.R:1185](R/utils.R#L1185)) — a dead byte-identical duplicate of `mult_sign`, zero
+   call sites.
+
+**Verify** — `test-display-grammar.R` / `test-fmt_class.R`: `format(html = TRUE)` of a 4-digit-`n` column
+contains no ASCII space; a mean column with a mixed-NA sd has constant `nchar()`; `bold_split` splits a
+mean cell at the mean. `test-tab_xl.R`: the star pad char. **Expected regen**: `_snaps/render-html.md`
+only — `_snaps/golden.md` (console, `pad = " "`) must NOT move; if it does, the change leaked.
+
+**Do not touch**: the U+202F in row LABELS ([tab_classes.R:2299-2315](R/tab_classes.R#L2299), the
+`unbreakable_spaces` option). It is not padding; it is the separately-flagged "is this deliberate?" item.
+
+### Done (2026-07-17)
+
+Full suite **FAIL 0 | WARN 0 | PASS 2923**; no `_golden/*.rds` and no `_color_golden/*.rds` touched.
+Conscious regen of the two DISPLAY snapshots only (see below). New `test-digit-space.R` (26).
+
+- **`big.mark = pad`** ([fmt_class.R](R/fmt_class.R)) — the one-line fix. `pad` already resolved per
+  medium, so the console/markdown keep the ASCII space (already exactly one digit wide there) and
+  html/Excel get the figure space. Proof: the whole `_snaps/render-html.md` diff is **28 ASCII spaces
+  becoming U+2007** — mapping U+2007 to a space on both sides makes new and old byte-identical.
+- **Excel star pad** ([tab_xl.R](R/tab_xl.R)) — `formatC(width = -w)` (ASCII) -> `str_pad(pad = fig_space)`,
+  and the two star-width masks unified on `st[val]` ("" is width 0, so it IS the column max).
+- **sd-less mean cells padded** to the `(sigma sd)` tail, so the MEANS align, not the cell edges.
+  ⚠ Exact in the console/markdown (monospace) only: in html/Excel it lands within ~1 digit-width,
+  because `(`, sigma and `)` are not digit-wide — **no run of spaces can match them**. An exact fix
+  needs markup (a hidden tail), which belongs to 14j, not to `format()`.
+- **`bold_split` reaches the mean/sd cell** — a bold row now renders `**47.2** (sigma17.3)`, the tail
+  plain, exactly as a composite `{pct} (n={n})` cell does. `prim_nchar` moved above the
+  `special_formatting` block (two branches write it now) and is attached only when something actually
+  split, so the output stays attribute-free otherwise.
+- **`cross` deleted** (a byte-identical duplicate of `mult_sign`, zero call sites). Two stale
+  `fmt_class.R` header lines fixed in passing (`cross`; and "for type=mean, diff stores a RATIO" —
+  false since Phase 2).
+
+**BUG FOUND AND FIXED while building, which the suite did NOT catch**: the sd-less mask keyed on
+`is.na(get_var(x))`, which is **also true of an EMPTY cell** — so padding pasted onto the NA and
+produced the literal string `"NA       "`. Only the `na` argument (kable/md pass `""`) hid it; the
+console, which keeps NA, printed it. Fixed with `!na_out`, regression-tested. The lesson for 14i/14j:
+`is.na(var)` is not "has no sd", it is "has no sd **or is empty**".
+
+**Deviation from the plan, deliberate**: the plan's "pad-ify the mean/sd joiner" was **not done**, and
+`print_reg_footer`'s `big.mark` needed **no change**. The joiner (`unbrk`, U+202F) is a non-breaking
+SEPARATOR, identical in every cell of the column, so it cannot misalign anything; making it `pad` would
+lose the no-break property in md, and making it `fig_space` would move the console snapshot AND require
+teaching the plot backend's three `unbrk`-strip sites ([tab_classes.R:1740](R/tab_classes.R#L1740),
+[:1744](R/tab_classes.R#L1744), [:1871](R/tab_classes.R#L1871)) about a second exotic space — all for a
+sub-glyph gain inside an approximation that is inherent (above). `print_reg_footer` is console-only, so
+its ASCII `big.mark` was already the right glyph; the EXPORT footer renders through `format()`'s `gof`
+token and got the fix for free.
+
+**Snapshots regenerated (conscious)**: `_snaps/render-html.md` (the space swap, proven above) and
+`_snaps/golden.md`. The latter was NOT expected to move; it did, for three reasons, each verified by
+normalising every padding difference away and re-diffing — no number and no content changed:
+(1) sd-less means are now padded; (2) bold mean cells split; (3) md's column budget grows by 2 on those
+columns, because `md_extra()` correctly charges 4 markup columns for a partial-bold cell instead of 2.
+
+---
+
+## Phase 14i — the variable-name model (one shared label column)
+
+**Why** — findings 1 and 2. Today, in all three backends, a compacted table renders a column with the
+literal header `row_var` and its value on every row.
+
+**What**
+
+1. **Pass `row_vars` + `compacted` through** `prep_one_table()`'s `vars`
+   ([tab-export-prep.R:313](R/tab-export-prep.R#L313)). `tab_render_vars()` already returns both. This
+   alone fixes the Excel title's `"levels"` and unblocks 14l.
+2. **New shared role `roles$label_cols`** in `prep_one_table()` — the leading factor columns whose value
+   repeats down a block: the synthetic `row_var` column when `compacted`, the `tab_vars` when kept. One
+   definition, four consumers. This is the "shared function, be consistent between export types" the
+   review asks for.
+3. **New shared arg `var_names = c("both","rows","cols","none")`** (+ `options("tabxplor.var_names")`),
+   resolved in `resolve_export_opts()`, on `tab_kable`/`tab_md`/`tab_xl`/`tab_plot`/`tab_export`.
+   `tab_md(col_var_names=)` ([tab_md.R:82](R/tab_md.R#L82)) → `lifecycle::deprecate_soft` onto it.
+   `"cols"` drops the row_var label column entirely; `"rows"` drops the col_var spanning row.
+   The literal `"row_var"` **header** is always dropped (an internal name, never informative) — that is a
+   bug fix, not a `var_names` setting.
+4. **Render the name once**: md extends the existing blanking loop from `tab_vars` to `label_cols` (and
+   blanks its header); html gives the label column a `rowspan` over the block; Excel merges the block's
+   cells (`xlb_merge`).
+5. **Vertical label** (html + Excel), so a long name costs no horizontal space and wraps into several
+   vertical lines: html `writing-mode: sideways-lr` on a new class in `tab_css(chrome = TRUE)`; Excel
+   reuses the **existing** `create_cell_style(text_rotation=)` machinery
+   ([tab_xl.R:677](R/tab_xl.R#L677) — today only driven by `colnames_rotation`). The maintainer verified
+   the Excel 90° result is good.
+6. **md**: no bold on the label cell (exclude `label_cols` from the bold-row markup — the *level* stays
+   bold when it is the reference row, which is wanted); keep the col_var name italic; add the **dash
+   separator row under the col_var name row**, reusing `dash_line` from Step 12
+   ([tab_md.R:490-511](R/tab_md.R#L490)).
+
+**Watch out** — html `rowspan` breaks the engine's column-wise `paste0` assembly
+([tab-render-html.R:319-359](R/tab-render-html.R#L319)): the label column must be built separately and
+its repeat rows omitted. A 1-row block must fall back to horizontal text (a rotated cell in a 1-row block
+is clipped in Excel and forces a tall row).
+
+**Verify** — `test-export-prep.R` (`roles$label_cols` for compacted / tab_vars / plain; `vars$row_vars`
+present); `test-tab_md.R` (name once, header blank, not bold, separator row); `test-render-html.R`
+(rowspan, no repeat); `test-tab_xl.R` (merge + rotation); `test-export.R` (`var_names` on all four
+exporters). gss_cat only.
+
+---
+
+## Phase 14j — the html engine, pass 2 (borders + compactness)
+
+**Why** — findings 4 and 5, plus the dead weight found alongside.
+
+**What**
+
+1. **Borders → longhands.** `border-right-style:solid; border-right-width:1px` never touches
+   `border-right-color`, so the (0,1,1) `border-color` rule applies and every border is the chrome colour
+   (in dark: `#CECDC3`, "the same shade of white as normal text" — exactly what was asked). Apply to
+   `.tx-br`, `.tx-bl`, `tr.tx-bt>*`, `tr.tx-bb>*`, `tr.tx-bb2>*`, `thead th`, `.tx-span`
+   ([tab-css.R:189-206](R/tab-css.R#L189)). **Correct the three docs** that record this as fixed
+   (`CLAUDE.md:2288`, `dev/tabxplor_architecture.md:552`, decisions §33) and the stale claim at
+   [tab-render-html.R:296-301](R/tab-render-html.R#L296).
+2. **Auto-width = delete the two `min-width`s** ([tab-css.R:201-202](R/tab-css.R#L201)). The browser's auto
+   table layout then sizes every column to its content — that IS the "reliable auto-width feature", free
+   and with no measurement. Keep a fixed-width escape hatch (`tab_kable(col_width=)` + option) as asked.
+   `pct="col"` compactness is already OK per the review, and removing a *min*-width cannot hurt it.
+3. **`tvhours` says its name twice**: `tab_col_var_header()` ([tab-export-prep.R:346-363](R/tab-export-prep.R#L346))
+   only rewrites `clean` to `"mean"`/`"sd"` when the Excel `_sd` sibling exists. Text backends have no
+   sibling → `clean = "tvhours"` under the span `"tvhours"`. Fix: a mean column alone under its own span →
+   `clean = "mean (sd)"` (or `"mean"` when the column shows no sd).
+4. **Delete `inst/tab.css`** + its two `includeCSS` sites ([tab-render-html.R:248](R/tab-render-html.R#L248),
+   [tab_classes.R:1115](R/tab_classes.R#L1115)) + the `tabxplor.always_add_css_in_tab_kable` option. It is
+   `.lightable-classic`-scoped (a class only `kable_classic()` emits) → **dead on the default engine**, and
+   `inst/tab.css:46` has a latent bug (undefined `var(--border-color)`).
+   **Port the `.popover*` rules into `tab_css(chrome = TRUE)`** next to `.tooltip-inner` — the html engine
+   emits popovers and has never had them styled. Soft-deprecate `kable_tabxplor_style()`
+   ([tab_classes.R:1006-1129](R/tab_classes.R#L1006)), the orphaned exported duplicate flagged since 10e.
+5. **Delete `tab_export_labels()`** ([tab-export-prep.R:493](R/tab-export-prep.R#L493)) and `"labels"` from
+   `compute`: it runs on **every** export and **nothing reads `prep$labels`** (the `runs$labels` hits are a
+   different object). Pure waste. The pass-1 "label attribute → header tooltip" idea stays deferred — the
+   source `label` does not survive `tab()`, which is why this was never wired.
+6. Padding tune (~1mm sides, more row padding: `3px 4px` at [tab-css.R:188](R/tab-css.R#L188)); duplicate
+   `tx-bb` class on the last row ([tab-render-html.R:369](R/tab-render-html.R#L369)+[:371](R/tab-render-html.R#L371));
+   stale "kableExtra is the DEFAULT" header ([tab-render-html.R:5](R/tab-render-html.R#L5) — `.onLoad` sets
+   `html`). Hover is already kableExtra's yellow `#FFFCE5` ([tab-css.R:44](R/tab-css.R#L44)) — verify only.
+
+**Verify** — `test-render-html.R`: no `border-(top|right|bottom|left):` **shorthand** survives in
+`tab_css()`; no `min-width` in the default stylesheet; `mean (sd)` header; `expect_false(grepl("includeCSS", h))`
+for **both** engines. Add the multi-col_var fixture that actually exercises a coloured `tx-br` cell — the
+current fixtures never do, which is why the bug survived two phases.
+
+---
+
+## Phase 14k — `theme = "auto"` resolution + the Positron Viewer
+
+**Why** — finding 7, plus two Viewer complaints with the same origin.
+
+**What** — one rule: *"auto" = follow the reader's colour scheme, resolved by whoever can actually know it.*
+
+1. Interactive Viewer print → resolve R-side via `tx_detect_theme()`
+   ([tab-theme-detect.R:161](R/tab-theme-detect.R#L161), Phase 14g — it already resolves "Starless Monokai
+   Atom" → dark). Knitting (`knitr::is_html_output()`) or writing a file → the 4-layer browser cascade,
+   unchanged (the reader decides, correctly, for a shipped document).
+2. `options("tabxplor.theme")`: `"light"` → `"auto"` ([utils.R:107](R/utils.R#L107)). `tab_xl`/`tab_plot`
+   keep `allow_auto = FALSE` → light, so a dark IDE never yields a dark workbook.
+3. **The white pane below the table**: `tab_kable()` returns a bare `<table>` + `<style>`;
+   `print.kableExtra` wraps it with `htmltools::html_print`, whose `<body>` we never style. Give the result
+   its own class `c("tabxplor_kable", "kableExtra", "knitr_kable")` ([tab-render-html.R:450](R/tab-render-html.R#L450))
+   + a `print` method that wraps a **standalone page** with `html,body{background;color}` from
+   `tx_chrome_hex()`. **Never** in the returned or knitted html — it would repaint a Quarto page.
+4. Dark tooltips (`.tooltip-inner` / the ported `.popover`) → `tx_chrome_hex()` colours under dark.
+5. **Do not ship `vscode-*` hooks** — see the capture analysis above.
+
+**Verify** — `test-theme-detect.R` + `test-render-html.R`: with an explicit `theme`, the returned html is
+byte-identical whatever the detected theme (the detector must not leak into file output); `print` wraps,
+`knit_print` does not; `resolve_export_opts(allow_auto = FALSE)` still → light. Tests must inject a fake
+detector, never depend on the host IDE. **Ask the maintainer for the Windows-dark-mode toggle check.**
+
+---
+
+## Phase 14l — Excel, pass 2
+
+**What**
+
+1. **Fonts — `scheme = ""` in `create_font()`** ([tab_xl.R:640](R/tab_xl.R#L640)). Finding 6.
+   *Hypothesis, high confidence, not proven* (no Excel here): **verify by clicking a number cell — if the
+   font box reads "DejaVu Sans Condensed (Body)", it is confirmed.** The fix is harmless either way, since
+   every font already carries an explicit `name`.
+   **Honest limit**: xlsx has **no font-fallback list** — if DejaVu Sans Condensed is missing, Excel
+   substitutes by its own rules and we cannot name "DejaVu Sans" as the fallback. The levers: expose
+   `font_text`/`font_num` as options, and set the theme's minor font to `font_num` so anything unstyled
+   lands on DejaVu Sans.
+2. **Title** — dependent first, decided by `pct`, `max = 2`
+   (`tab_get_titles()` [tab_xl.R:800](R/tab_xl.R#L800), `tab_title_names()` [:792](R/tab_xl.R#L792)):
+   `pct="row"` → `"<col_vars> by <row_vars>"`; `pct="col"` → the reverse; `pct="no"`/mixed → col_vars first.
+   Depends on 14i's `row_vars` passthrough. Sheet name keeps its 25-char cut.
+3. **Legend chroma** — `darken_for_legend(cols, by = 0.2, chroma_boost = k)` in
+   `dev/color_palette_tools.R:355`, reusing the existing `set_chroma()`/`max_chroma()` gamut mapper.
+   Generate k ∈ {2, 3, 4} + a `preview_color_grid()` sheet → **maintainer picks** → bake into
+   `default_bg_legend_colors(_neg)` ([tab_classes.R:3271](R/tab_classes.R#L3271)). Light only, as today
+   (the dark bg palette already reads as text on a white sheet).
+4. **Deprecate `color_type`** (confirmed vestigial: it names only the TEXT channel's palette family — the
+   CHANNEL decides font-vs-fill, so `"bg"` is degenerate). Surface: 2 write sites, 5 option reads, 8 public
+   args, 3 `if text/else bg` branches ([fmt_class.R:3184](R/fmt_class.R#L3184),
+   [tab-css.R:114](R/tab-css.R#L114), [fmt_class.R:2818](R/fmt_class.R#L2818)), `set_color_style(type=)` +
+   its `custom_palette` bg branch, `tests/testthat/test-tab.R:515-528`, `test-color-config.R:218`.
+   Keep every arg accepted + inert with one `deprecate_soft`; hard-wire the text family.
+   ⚠ `tab_xl(color_type = "text")` is the **one** exporter with a literal default rather than `NULL`
+   ([tab_xl.R:104](R/tab_xl.R#L104)) → needs a `deprecated()` sentinel, not `missing()`.
+
+**Verify** — `test-tab_xl.R`: no `scheme` attribute on a number cell's font; title order + max 2 + real
+row_var names on a merged gss_cat table; legend run colours. `test-color-config.R`: `color_type` warns once
+and still renders.
+
+---
+
+## Phase 14m — `tab_md()`, pass 2 — **DESIGN FIRST**
+
+**Start with design, in a fresh session, out of the box.** Findings 9 and 10 are ONE problem: **the
+rendered-md html has no classes, so the block structure the other backends draw with role classes cannot
+be drawn the same way — and meanwhile the HOST's stylesheet draws its own borders on top of us.**
+
+**The constraint any design must respect**: pandoc pipe tables carry **no per-row/per-column classes**, and
+Phase 13d made `tab_css()` deliberately **table-independent** (one stylesheet per document; no ids, no
+hashes, no positional rules). So the only table-independent levers are `:empty`, `:has()`, and pandoc
+bracketed spans **inside** cells (`[x]{.cls}` — already the idiom everywhere). A positional `nth-child`
+rule would re-introduce per-table CSS and must not be used.
+
+**Candidate directions (the design step chooses and justifies):**
+
+- **Borders — reset, then redraw.** One parsimonious rule kills the host's per-row lines:
+  `.tabxplor-tab table td,.tabxplor-tab table th{border-width:0;}` — specificity (0,1,2) beats Bootstrap's
+  `.table > :not(caption) > * > *` (0,1,1), while our own class-gated rules (`.tx-br` etc., (0,2,0)) still
+  beat the reset, so the kable html engine is untouched. Place the reset **before** `.tabxplor-tab thead th`
+  ((0,1,2), a tie decided by source order) or that header underline goes too. Then redraw ONLY the block
+  rules — which is the same `:has(.sep)` / `:empty` mechanism as the separators below, so the two items
+  share one design. A Total-row border needs a marker too (decide whether it is worth the raw-md noise).
+- **Spacers** → 1 char in raw md + `.tabxplor-tab td:empty,.tabxplor-tab th:empty{padding:0;}`. Verified
+  safe: pandoc emits genuinely empty `<td></td>`/`<th></th>` for them, `:empty` is per-cell, and a column's
+  width follows its widest cell — so only a **fully** empty column collapses; the blanked label column of
+  14i keeps its width. Worst with `levels="first"` (a spacer between every column), which is the reported case.
+- **Separators** → either a fully-empty row + `tr:not(:has(td:not(:empty)))>*{border-top:1px solid;padding:0;line-height:0;}`,
+  or keep the dashes wrapped in a `{.sep}` span so `tr:has(.sep)` is selectable and `.sep{font-size:0}`
+  hides them in html while the raw md keeps a visible rule. **The second respects the stated rule** ("both
+  the .md file and the rendered html must be human readable + machine readable").
+- Fix the dash-width arithmetic ([tab_md.R:495](R/tab_md.R#L495)) — rules currently fall ~4 short of the
+  column and read ragged.
+- **Decouple the `::: {.tabxplor-tab}` div from the `<style>`** ([tab_md.R:131-135](R/tab_md.R#L131)):
+  `css = FALSE` makes the div unreachable, although [:45-47](R/tab_md.R#L45) advertises bringing the
+  stylesheet via the document's `css:`. The div is what every `.tabxplor-tab …` rule needs to match.
+- Cleanups: the dead `span` variable ([tab_md.R:418](R/tab_md.R#L418)); `tab_md_css()` ignores its `tabs`
+  argument ([tab_md.R:169](R/tab_md.R#L169)).
+
+**Verify** — `test-tab_md.R`: the pipe grid stays valid (the delimiter spacer must stay `-`, not blank —
+pandoc rejects `| |` there, [tab_md.R:533-535](R/tab_md.R#L533)); a spacer cell is `:empty`; the separator
+row is selectable by the chosen rule; the border reset precedes the `thead th` rule; a `levels="first"`
+snapshot. Re-render `tab_md_test_2.md` through pandoc and check the html by hand — the border/spacer work
+is only provable in a real Quarto render, since Bootstrap is what it fights.
+
+---
+
+## Phase 14n — one Total row for several row_vars — **DESIGN FIRST**
+
+**Rule (settled)**: collapse when the per-block total rows are identical **as displayed** — same rendered
+strings at the chosen digits. Otherwise keep them all and emit **one** message naming `na=` as the cause.
+Rationale: the diffs and CI were computed per block beforehand and stay right, so a sub-tenth difference
+behind the same printed "17%" is not a reason to show four identical-looking rows. Under `na="keep"` /
+`"common_base"` / `"drop_all"` the totals are identical by construction; under `na="drop"` (the
+maintainer's default) each row_var drops its own missing values, so they may genuinely differ.
+
+**Design first (fresh session), thinking past the current implementation.** The framework was never
+designed for several row_vars — `tab_compact()`'s synthetic `row_var`/`levels` columns are the scar, and
+they are the root cause of findings 1, 2 and 8. Questions the design must answer **before** any code:
+
+- **Where does the "as displayed" comparison live?** The rendered strings exist only in the prep — but
+  Excel bypasses `format()` for values (it writes `get_num()` + a numFmt), so "as displayed" there means
+  the numFmt-rounded value. One shared predicate for all four backends, or the rule silently diverges.
+- **Display-only or build-time?** Display-only matches the 10i-B direction (add_n and p-value rows are
+  already materialised by `tab_materialize_extras()`) and keeps the object honest: each block keeps its own
+  reference row.
+- The kept row is the **last** block's total, but the other blocks' `refrow` fields still point at their
+  own (now hidden) rows. What then happens to bold / `tx-b`, the `totblock_top`/`bottom` borders, and the
+  tooltips' `"ref"` marker?
+- **tab_vars must keep their per-sub-table totals** (they are not duplicates — the review says so
+  explicitly). And `comp = "all"`?
+- **Do this BEFORE 14o**: one Total row → after the flip, one Total column, which is exactly what kills the
+  `Total_DIPLOM` names the review saw.
+
+**Verify** — `test-display-extras.R`: a gss_cat multi-row_var table with `na="keep"` collapses; a fixture
+with genuinely different bases under `na="drop"` does not, and messages once; a tab_vars table is
+unaffected; the collapse is display-only (`nrow(tab(...))` unchanged).
+
+---
+
+## Phase 14o — transpose at the render level — **DESIGN FIRST**
+
+**Why** — finding 8. `tab_transpose()` cannot be repaired at the object level; the review's own diagnosis
+("colours must be calculated first from the not-transposed vctrs fields, then the transposition done not on
+vctrs fields") is exactly right, and `Total_DIPLOM` is the tell.
+
+**Design first (fresh session).** The flip belongs on the **render model**, where a cell is a string + slots
++ roles and no per-column attribute is needed. Points to settle before code:
+
+- `prep_one_table()` is per-**column** today (`ann` = a list per fmt column,
+  [tab-export-prep.R:311-328](R/tab-export-prep.R#L311)). Transposing needs a per-**cell** matrix (text,
+  text_slot, bg_slot, tooltip, bold, primary_nchar) + row/column role vectors. Decide: transpose a matrix
+  built inside prep, or restructure `ann` into matrices for every backend.
+- **Alignment**: `format()` pads per original column, and an original column becomes a transposed ROW.
+  The composite inner-token alignment (`100% (n=  849)`) stays correct along that row — which is right,
+  since a transposed column mixes variables. The **whole-cell** width must then be re-padded per transposed
+  column.
+- **Label columns**: the transposed table needs the (col_var, levels) pair mirroring (row_var, levels) —
+  the review's "current first column name is CONCERTS, should be levels and second". Reuse 14i's `label_cols`.
+- **Extras order**: `n` right after Total, numeric variables after both.
+- `tab_transpose()` → `lifecycle::deprecate_soft` (settled). Re-point `test-transpose.R` (16 tests) at the
+  render-level flip. Fix the stale "materialise → transpose" comments
+  ([tab-export-prep.R:409-410](R/tab-export-prep.R#L409), [tab_xl.R:161-163](R/tab_xl.R#L161)) — 14d already
+  reversed the order.
+
+**Verify** — the pass-1 rule: `tab(pct="row") |> tab_export(transpose=TRUE)` renders like `tab(pct="col")`
+for the 1×1 case; colours match the untransposed table cell-for-cell (the regression test that would have
+caught finding 8); a mixed factor+numeric multi-row_var table transposes with no `Total_<var>` name and no
+spurious numeric colour.
 
 
 

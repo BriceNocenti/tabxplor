@@ -208,7 +208,7 @@ tab(pc18, all_of(rows2), all_of(cols2), wt = POND, pct = "row", color = TRUE, na
 tab(pc18, all_of(rows2), all_of(cols2), wt = POND, pct = "row", color = TRUE, na = "drop", 
   levels = "first", ref = 1
 ) |> 
-  tab_xl(open = FALSE, path = "~/github/tabxplor/dev/review_manual/Excel_test")
+  tab_xl(open = FALSE, path = "~/github/tabxplor/dev/review_manual/Excel_test", replace = TRUE)
 # - Excel export should always print the path of the created file in console, otherwise there are 
 #   many cases (like : default) where the user can’t find it
 # - Color legends : "Background colour (ratio): Cells ≥ the Total row ×1.5; ×2; ×4" can’t use 

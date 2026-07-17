@@ -38,11 +38,13 @@ this \code{TRUE}; tooltip / secondary-field re-renders leave it \code{FALSE}, so
 attribute giving the bold-prefix width of a composite \code{"{pct} (n={n})"} cell, so exporters can
 bold only the primary field in a bold row. Off by default -> the output is attribute-free.}
 
-\item{pad}{The character used to pad values into alignment (composite displays, significance
-stars, confidence intervals). Defaults to a plain space, or to a \strong{figure space} (\code{U+2007}, exactly
-one digit wide) when \code{html = TRUE}. Media read in a monospace font (the console, markdown) want the
-plain space; media rendered in a proportional font (html, Excel) need the figure space, since an
-ASCII space is only half a digit wide there -- and CSS collapses runs of them.}
+\item{pad}{The character used to align numbers: it pads values (composite displays, significance
+stars, confidence intervals, a mean with no sd) \strong{and separates thousands}. Defaults to a plain
+space, or to a \strong{figure space} (\code{U+2007}, exactly one digit wide) when \code{html = TRUE}. Media read in
+a monospace font (the console, markdown) want the plain space; media rendered in a proportional font
+(html, Excel) need the figure space, since an ASCII space is only half a digit wide there -- and CSS
+collapses runs of them. One glyph for both jobs, so the thousands mark can never disagree with the
+padding around it.}
 
 \item{syntax}{\code{"text"} (default) returns the rendered display strings; \code{"excel"} returns the
 per-cell Excel number-format codes used by \code{\link[=tab_xl]{tab_xl()}} (the raw value is written unchanged).}

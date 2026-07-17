@@ -1182,7 +1182,6 @@ bind_datas_for_tab <- function(data, vars) {
 unbrk      <- stringi::stri_unescape_unicode("\\u202f") # unbreakable space
 sigma_sign <- stringi::stri_unescape_unicode("\\u03c3") # sigma for sd
 mult_sign  <- stringi::stri_unescape_unicode("\\u00d7") # multiply sign (ratio >= 1)
-cross      <- stringi::stri_unescape_unicode("\\u00d7")
 div_sign   <- stringi::stri_unescape_unicode("\\u00f7") # divide sign (ratio < 1, shows 1/ratio)
 # Phase 14d/14e: FIGURE SPACE -- defined by Unicode to be exactly as wide as a digit in fonts with
 # tabular figures, which is what format()'s alignment padding assumes. An ASCII space is only HALF a

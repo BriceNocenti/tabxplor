@@ -77,8 +77,9 @@
   multi-table result (from `tab(output_list = TRUE)`, several row variables with tab-variables, or
   `tab_many()`) is now a **`tabxplor_tabs`** list that prints like a single table (and `list |>
   tab_kable()` opens in the Viewer) while still behaving like a plain list. Composite displays such as
-  `"{pct} (n={n})"` are padded so the numbers line up, and only the first field stays bold in total /
-  reference rows. Ratios now print with a multiply / divide sign (`x2`, `/2`); a colour = c("diff",
+  `"{pct} (n={n})"`, and numeric `mean (sd)` cells, are padded so the numbers line up -- including a
+  mean whose sd is missing, which used to slide out of line -- and only the first field stays bold in
+  total / reference rows. Ratios now print with a multiply / divide sign (`x2`, `/2`); a colour = c("diff",
   "ratio") table's tooltip shows the ratio correctly. **Excel**: `ci = "cell"` intervals and odds
   ratios (with the `1/x` reciprocal) export as readable text; a new `tab_xl(or_numeric = TRUE)` keeps
   odds ratios as numbers; differences and contributions get an explicit `+`/`-` sign, ratios a leading

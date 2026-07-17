@@ -423,8 +423,11 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
     st   <- get_stars(col)
     val  <- !is.na(code) & code != "TEXT"
     if (any(val & nzchar(st))) {
-      w      <- max(nchar(st[val & nzchar(st)]))
-      st_pad <- formatC(st, width = -w)                 # glyphs left, spaces right ("" -> w spaces)
+      # Phase 14h: the same width and the same pad glyph as format()'s star field (fmt_class.R) --
+      # an unstarred "" is width 0, so the max over every value cell IS the column-max star width.
+      # formatC() padded with ASCII spaces, half a digit wide in the proportional font Excel renders.
+      w      <- max(nchar(st[val]))
+      st_pad <- stringr::str_pad(st, w, side = "right", pad = fig_space) # glyphs left, pad right
       code[val] <- paste0(code[val], '"', st_pad[val], '"')
     }
     # Phase 12h: fold an in-cell TEST LABEL ("{pvalue} (Chi2)") into the numFmt literal so Excel shows

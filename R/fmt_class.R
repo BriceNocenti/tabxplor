@@ -5,8 +5,9 @@
 #     pillar_shaft.tabxplor_fmt(), vec_arith methods, and possibly tab_pct/tab_ci/tab_chi2.
 #   - Fields are per-cell (vctrs::field), attributes are per-column (attr). Do not confuse.
 #   - pct is stored as 0-1 internally; multiplied by 100 only in format().
-#   - For type="mean", the diff field stores a RATIO (cell/ref), not a difference.
-#   - Display glyph constants (mult_sign, cross, unbrk, sigma_sign) are defined in utils.R.
+#   - `diff` is always a DIFFERENCE (Phase 2 flipped the numeric one; the ratio moved to `ratio`).
+#   - Display glyph constants (mult_sign, div_sign, unbrk, sigma_sign, fig_space) live in utils.R.
+#     fig_space (U+2007) is the pad wherever the output is rendered in a PROPORTIONAL font.
 # See: CLAUDE.md § Design Decisions > Type System.
 
 # Create formated numbers class
@@ -1811,11 +1812,13 @@ excel_numfmt_code <- function(digits, pct, ci, text, signed = FALSE, ratio = FAL
 #' @param bold_split Internal (default `FALSE`): when `TRUE`, attach a per-cell `primary_nchar`
 #' attribute giving the bold-prefix width of a composite `"{pct} (n={n})"` cell, so exporters can
 #' bold only the primary field in a bold row. Off by default -> the output is attribute-free.
-#' @param pad The character used to pad values into alignment (composite displays, significance
-#' stars, confidence intervals). Defaults to a plain space, or to a **figure space** (`U+2007`, exactly
-#' one digit wide) when `html = TRUE`. Media read in a monospace font (the console, markdown) want the
-#' plain space; media rendered in a proportional font (html, Excel) need the figure space, since an
-#' ASCII space is only half a digit wide there -- and CSS collapses runs of them.
+#' @param pad The character used to align numbers: it pads values (composite displays, significance
+#' stars, confidence intervals, a mean with no sd) **and separates thousands**. Defaults to a plain
+#' space, or to a **figure space** (`U+2007`, exactly one digit wide) when `html = TRUE`. Media read in
+#' a monospace font (the console, markdown) want the plain space; media rendered in a proportional font
+#' (html, Excel) need the figure space, since an ASCII space is only half a digit wide there -- and CSS
+#' collapses runs of them. One glyph for both jobs, so the thousands mark can never disagree with the
+#' padding around it.
 #' @param syntax `"text"` (default) returns the rendered display strings; `"excel"` returns the
 #' per-cell Excel number-format codes used by [tab_xl()] (the raw value is written unchanged).
 #' @param .ref Internal: precomputed reference masks `list(cells=, all_totals=)` (derive-once
@@ -1989,7 +1992,12 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
       out[plus_disp_ci] <- out_ci
     }
   }
-  out[n_wn] <- out[n_wn] %>% prettyNum(big.mark = " ", preserve.width = "individual")
+  # Phase 14h: the thousands mark IS the pad glyph. It used to be hard-coded to an ASCII space, which
+  # is only HALF a digit wide in a proportional font and which CSS collapses -- so "(n=1 811)" broke
+  # the very alignment the figure-space padding around it had just bought. `pad` resolves per medium
+  # (ASCII in the console/markdown, where it is already exactly one digit wide; fig_space in
+  # html/Excel), so the mark can never again disagree with the padding it sits in.
+  out[n_wn] <- out[n_wn] %>% prettyNum(big.mark = pad, preserve.width = "individual")
   out[pct_no_ci] <- paste0(out[pct_no_ci], "%") #pillar::style_subtle()
 
   # Phase 13c-i: ratio (rr) display shows the multiplicative sign, so ratios read symmetrically (like
@@ -2059,6 +2067,11 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
 
 
 
+  # Phase 13c-ii/14h: per-cell bold-prefix widths. Written by TWO branches -- the mean/sd tail below
+  # and the composite `{}` templates further down -- so it is allocated here, ahead of both. Attached
+  # to the result only if one of them actually wrote (format() stays attribute-free otherwise).
+  prim_nchar <- if (isTRUE(bold_split)) rep(NA_integer_, length(out)) else NULL
+
   if (special_formatting) {
     # Phase 10c: compute each reference mask ONCE for this column (was up to 3 get_reference()
     # calls here + 1 in pillar_shaft). The exporter prep (10d) passes precomputed masks via `.ref`;
@@ -2078,7 +2091,13 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
     # get_var() (the vctrs::field accessor) not x$var (the dplyr::pull `$` method): x$var here ran
     # unconditionally for EVERY column and was ~28% of format() self-time (Phase 10c profile).
     disp_mean_sd <- display == "mean" & type == "mean" & !nas & !is.na(get_var(x))
-
+    # Phase 14h: a mean cell whose var is NA gets no "(sigma sd)" tail, so under the column's
+    # right-align the whole cell slides right and its mean stops lining up with the others
+    # ("1.0" against "1.7 (s2.1)"). Padded to the tail's width below.
+    # WARNING: `!na_out` is load-bearing -- an EMPTY cell also has an NA var, and padding it would
+    # paste onto the NA, turning it into the literal string "NA" + spaces. Only the `na` argument
+    # (kable/md pass "") hid that; the console, which keeps NA, printed it.
+    disp_mean_nosd <- display == "mean" & type == "mean" & !nas & !na_out & is.na(get_var(x))
 
     if (any (disp_mean_sd)) {
       sd <-
@@ -2088,7 +2107,23 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
       sd <- sd |>
         stringr::str_pad(width = max(stringr::str_length(sd)), side = "right", pad = pad)
 
+      # Phase 14h: bold only the MEAN of a "mean (sigma sd)" cell in a bold row, exactly as a
+      # composite "{pct} (n={n})" cell does -- bold glyphs are wider than plain ones, so a fully
+      # bold cell stops aligning with the plain ones beside it. Recorded BEFORE the tail is pasted,
+      # and the stars appended later ride outside the prefix, so this offset stays valid.
+      if (isTRUE(bold_split)) prim_nchar[disp_mean_sd] <- nchar(out[disp_mean_sd])
+
       out[disp_mean_sd] <- paste0(out[disp_mean_sd], unbrk, "(", sigma_sign, sd, ")")
+
+      # WARNING: this pads by CHARACTER COUNT, which is exact only in a monospace medium (console,
+      # markdown). In html/Excel it lands within about one digit-width, because "(", sigma and ")"
+      # are not digit-wide -- no run of spaces can match them exactly there. An exact fix needs
+      # markup (a hidden tail), not padding; that belongs to the html engine, not to format().
+      if (any(disp_mean_nosd)) {
+        tail_w <- nchar(unbrk) + nchar(sigma_sign) + 2L + max(stringr::str_length(sd))
+        if (isTRUE(bold_split)) prim_nchar[disp_mean_nosd] <- nchar(out[disp_mean_nosd])
+        out[disp_mean_nosd] <- paste0(out[disp_mean_nosd], strrep(pad, tail_w))
+      }
     }
 
 
@@ -2220,9 +2255,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   # is kept). tab(display=) writes the template only onto value cells, so p-value/blank/total cells
   # keep their own token and are never composited.
   composite <- !nas & grepl("{", raw_display, fixed = TRUE)
-  prim_nchar <- NULL                                          # Phase 13c-ii bold-prefix widths
   if (any(composite)) {
-    if (bold_split) prim_nchar <- rep(NA_integer_, length(out))
     for (tmpl in unique(raw_display[composite])) {
       seg   <- parse_display_template(tmpl)
       if (!any(seg$is_tok)) next
@@ -2269,10 +2302,11 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   # which retires tab_kable()'s post-hoc `>NA</span>` string surgery.
   if (!is.na(na)) out[na_out] <- na
 
-  # Phase 13c-ii: expose the per-cell bold-prefix width of composite cells (NA elsewhere) so exporters
-  # can bold only the primary field in bold rows. Dropped silently by any downstream string op, so
-  # consumers must read it right after format() (see md_render_one / render_*_engine / tab_xl).
-  if (!is.null(prim_nchar)) attr(out, "primary_nchar") <- prim_nchar
+  # Phase 13c-ii: expose the per-cell bold-prefix width of composite and mean/sd cells (NA elsewhere)
+  # so exporters can bold only the primary field in bold rows. Dropped silently by any downstream
+  # string op, so consumers must read it right after format() (see md_render_one / render_*_engine).
+  # `any(!is.na())`: with nothing to split the result stays attribute-free, as before Phase 14h.
+  if (!is.null(prim_nchar) && any(!is.na(prim_nchar))) attr(out, "primary_nchar") <- prim_nchar
 
   #out <- stringr::str_pad(out, max(stringr::str_length(out), na.rm = TRUE))
   out

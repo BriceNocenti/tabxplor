@@ -181,5 +181,3 @@ tab(pc18, all_of(rows1), all_of(cols1), wt = POND, pct = "col", color = TRUE, na
 # **`pct = "col"` compactness** and the `min-width:10em` / `5.5em` : compactness is ok. 
 
 
-
-
