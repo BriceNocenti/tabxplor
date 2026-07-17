@@ -322,6 +322,10 @@
   gives each column variable its own reference column, instead of a single reference shared by all.
   A chosen level is matched by exact equality, so labels containing regular-expression characters
   (e.g. `"$25000 or more"`) work as references.
+* **The Excel fonts are settable**, via `options(tabxplor.xl_font_text)` and
+  `options(tabxplor.xl_font_num)` (defaulting to `"DejaVu Sans Condensed"` and `"DejaVu Sans"`). Note
+  that xlsx, unlike HTML/CSS, has no font-fallback list: only one name is recorded, so set these to a
+  font installed on the machine that will open the workbook.
 
 ## Internal
 * Examples that need a `Suggests` package (`tab_reg()`, `tab_logit()`, `multi_logit()` → **broom**,
@@ -436,6 +440,17 @@
   export to Excel, install `openxlsx2`. The produced workbooks look essentially the same.
 
 ## Bug corrections
+* **Excel numbers really render in the number font now.** They were named `DejaVu Sans` in the file
+  but drawn in `DejaVu Sans Condensed`: every font tabxplor wrote was tagged as "the theme's body
+  font", so Excel resolved it from the workbook theme (which is Condensed) and ignored the name.
+* **The Excel title reads naturally**, with the dependent variable first (`"race by marital"` under
+  `pct = "row"`, the reverse under `pct = "col"`) and at most two variable names before `"+N more"`.
+  It also no longer says `"levels by ..."` on a table built from several row-variables.
+* **The Excel colour legend's background swatches are legible.** The break-words describing the
+  background channel are drawn as text (an Excel cell can carry a font colour but no fill), and were
+  too pale to read on the white sheet; they are darker and more saturated now.
+* **The Excel `sd` column is no longer as wide as the mean.** A numeric mean's `sd` sibling holds a
+  short value under an `sd` header, so it takes a narrower column.
 * **HTML tables are compact again.** They stretched to the full width of the pane, padding every column
   with blank -- but only when a colour legend was shown, which is why it looked erratic. The legend sits
   in a cell spanning the whole table, and its one long line of prose, not the data, was deciding how
@@ -607,6 +622,13 @@
   shared by every exporter). The old argument still works.
 * `tab_xl(print_color_legend =)` is **soft-deprecated**, renamed to `tab_xl(color_legend =)` (the name
   the other exporters use). The old argument still works.
+* `color_type` is **soft-deprecated and now inert** on every exporter (`tab_kable()`, `tab_md()`,
+  `tab_xl()`, `tab_plot()`, `tab_css()`, `tab_export()`, `tab_md_css()`), together with the
+  `tabxplor.color_style_type` option. It globally repointed the *text* channel into the *fill*
+  palette (fill-coloured font); the visual channel is now chosen by position in the `color` argument
+  (`color = c(text, background)`). Both still accept their old values (a message is shown).
+  As a side effect this corrects an inconsistency: `tab_xl()` used to ignore the option while
+  `tab_export(., "xl")` honoured it -- neither does now.
 
 ## Bug corrections (Phase 6)
 * Fixed a crash in `tab_num(<tab_vars>, ci = "cell")` (and thus in `tab()` / the Jamovi module

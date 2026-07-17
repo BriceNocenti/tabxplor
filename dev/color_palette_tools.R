@@ -352,7 +352,8 @@ set_luminance <- function(cols, l = 0.95) {
     setNames(names(cols))
 }
 
-# The Excel/plot legend fallback: shift luminance DOWN by `by`, keep hue, cap chroma to gamut.
+# The Excel/plot legend fallback: shift luminance DOWN by `by`, scale chroma by `chroma_boost`, keep
+# hue, cap chroma to gamut.
 # An Excel rich-text run (and a ggpubr text label) carries a font colour but no fill, so a
 # background-channel break-word in the colour legend must be drawn as TEXT -- and the background
 # palette is far too light to read on a white sheet. Baked into R/tab_classes.R as
@@ -360,10 +361,31 @@ set_luminance <- function(cols, l = 0.95) {
 # read on white, and darkening it collapses the whole ladder to black). Recipe:
 #   darken_for_legend(default_background_colors)      -> default_bg_legend_colors
 #   darken_for_legend(default_background_colors_neg)  -> default_bg_legend_colors_neg
+#
+# DESIGN (Phase 14l): TWO levers, because they fix two different complaints and neither substitutes
+# for the other. MEASURED against the APCA bar in R/tab_classes.R's design notes (Lc >= 60 for
+# larger/heavier text -- a legend break-word is bold):
+#   * `by` (lightness) is what fixes FAINTNESS. APCA Lc is driven by lightness almost alone.
+#   * `chroma_boost` is what fixes GREYNESS, and moves Lc essentially not at all:
+#       by=0.2 k=1 -> Lc 39.6 45.4 50.4 59.9   (the original bake; 3 of 4 slots below the bar)
+#       by=0.2 k=3 -> Lc 38.3 44.7 50.5 60.8   <- 3x the chroma, Lc UNCHANGED
+#       by=0.3 k=2 -> Lc 55.3 60.8 65.4 74.4   <- shipped
+# So do not reach for chroma to fix a faint palette; deepen `by` first.
+# WARNING: the gamut ceiling makes a big `chroma_boost` self-defeating. At by=0.2 the max useful k per
+# slot is 4.4 / 4.7 / 3.5 / 2.5 -- above ~2.5 the strong slots cap out while the faint ones keep
+# rising, COMPRESSING the ladder into a pure-lightness ramp and destroying the chroma proportions the
+# palette inherits from the fills. Deepening `by` raises the ceiling, which is the other reason
+# by=0.3/k=2 wins: it is fully in-gamut on all 8 slots, so the proportions survive exactly.
 #' @noRd
-darken_for_legend <- function(cols, by = 0.2) {
-  l <- farver::decode_colour(cols, to = "oklch")[, 1]
-  unname(set_luminance(cols, pmax(l - by, 0)))
+darken_for_legend <- function(cols, by = 0.30, chroma_boost = 2) {
+  lch <- farver::decode_colour(cols, to = "oklch")
+  l   <- pmax(lch[, 1] - by, 0)
+  h   <- lch[, 3]; h[is.na(h)] <- 0                   # achromatic -> hue 0
+  cc  <- vapply(seq_along(l), function(i) {
+    if (lch[i, 2] < 1e-4) 0                                        # keep greys grey
+    else min(lch[i, 2] * chroma_boost, max_chroma(l[i], h[i]))     # boost, cap to gamut
+  }, numeric(1))
+  unname(farver::encode_colour(cbind(l, cc, h), from = "oklch"))
 }
 
 # set chroma (scalar or one-per-colour), keep hue + luminance, cap to gamut

@@ -418,7 +418,8 @@ Four export formats, all in separate files, plus one facade.
 **Unified facade (`R/tab-export.R`, Phase 10j-A).** `tab_export(x, format = c("kable","md","xl","plot"),
 path=, ...)` dispatches to the four exporters (mirrors `jmvtab_export`); the four functions stay exported
 and idiomatic. A shared **`resolve_export_opts()`** (`R/tab-export-prep.R`) resolves the canonical display
-options ONCE (`theme`/`color_type`/`html_24_bit`/`color`/`color_legend`/`transpose`/`caption`), so every
+options ONCE (`theme`/`color`/`color_legend`/`transpose`/`caption`/`var_names`; `color_type`/`html_24_bit`
+are deprecated + inert since Phase 14l), so every
 exporter shares one set of names and defaults: `color = FALSE` renders monochrome, `transpose = TRUE`
 transposes at export (centralised in `tab_export_prep()`, applied AFTER materialise — xl's historical
 order), `caption` is the single caption name (`tab_md(title)` / `tab_xl(print_color_legend)` are

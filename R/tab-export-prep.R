@@ -60,7 +60,7 @@ tab_check_same_col_vars <- function(tabs, what = "tab_export_prep()",
 # would take -- skipping the fmt_channel_codes() hex-mapping cost.
 # BYTE-IDENTICAL (want_colors = TRUE) to the tab_kable colour loop (tab_classes.R) / tab_plot colours.
 #' @keywords internal
-fmt_col_ann <- function(col, theme_cols, color_type = "text", want_colors = TRUE) {
+fmt_col_ann <- function(col, theme_cols, want_colors = TRUE) {
   ref_alltot <- get_reference(col, mode = "all_totals")
   ref_cells  <- get_reference(col, mode = "cells")
 
@@ -71,7 +71,7 @@ fmt_col_ann <- function(col, theme_cols, color_type = "text", want_colors = TRUE
   grey_this <- if (has_col || has_bgc) theme_cols$grey else theme_cols$grey2
 
   if (has_col || has_bgc) {
-    codes     <- fmt_channel_codes(col, color_type, theme_cols$theme)
+    codes     <- fmt_channel_codes(col, theme_cols$theme)
     text_hex  <- codes$text
     bg_hex    <- codes$bg
     # Phase 10f: keep the raw slot integers fmt_channel_codes() already produced -- tab_md() maps
@@ -270,7 +270,7 @@ tab_resolve_tables <- function(tabs, list_method = FALSE, what,
 # Build the render-model for ONE resolved table (already compacted / single). See the file header.
 #' @keywords internal
 prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
-                           theme_cols, color_type, var_names = "both") {
+                           theme_cols, var_names = "both") {
   rv <- tab_render_vars(tab)
   if (isTRUE(rv$degrade)) {
     return(list(tab = tab, vars = list(degrade = TRUE, reason = rv$reason)))
@@ -342,6 +342,17 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
   var_name_col <- label_cols[names(label_cols) %in% name_col]
   label_runs  <- tab_label_runs(tab, label_names)
 
+  # Phase 14l: the Excel-only "<var>_sd" siblings tab_materialize_extras(backend = "xl") splits off a
+  # numeric mean column into. ONE definition, read by tab_col_var_header() (which heads them "sd") and
+  # by tab_xl's column widths -- the rule used to be re-derived at each site.
+  # Naturally integer(0) for every other backend: nothing else creates those columns.
+  # WARNING: ungated by `var_names`, unlike the header rewrite. A width is not a naming decision, so
+  # `var_names = "none"` must still get a narrow sd column.
+  sd_cols <- fmt_cols[vapply(names(fmt_cols), function(nm) {
+    cv <- col_var_map[[nm]]
+    !is.na(cv) && nzchar(cv) && identical(nm, paste0(cv, "_sd"))
+  }, logical(1))]
+
   # Total-BLOCK border rows (block D borders), lifted verbatim from tab_kable (derive-once, shared by
   # both render engines). A "total block" is a maximal run of total rows OR the reserved n/pvalue/
   # row_pct label rows; the first row of each run gets a top border, the last a bottom border.
@@ -370,7 +381,7 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
   want_colors <- "colors" %in% compute
   ann <- purrr::map(
     stats::setNames(names(fmt_cols), names(fmt_cols)),
-    ~ fmt_col_ann(tab[[.x]], theme_cols, color_type, want_colors)
+    ~ fmt_col_ann(tab[[.x]], theme_cols, want_colors)
   )
   any_bg <- if (want_colors) any(purrr::map_lgl(ann, ~ isTRUE(.$has_bgc))) else FALSE
 
@@ -397,7 +408,7 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
   # the span changes what the level header must say (see tab_col_var_header()).
   col_var_header <- tab_col_var_header(
     tab, list(col_var_map = col_var_map, real_col_vars = real_col_vars, totcols = totcols,
-              var_name_col = var_name_col),
+              var_name_col = var_name_col, sd_cols = sd_cols),
     name_cols = var_names %in% c("both", "cols"))
 
   list(
@@ -416,7 +427,7 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
                  col_var_map = col_var_map, new_col_var = new_col_var,
                  new_group = new_group, align = align,
                  label_cols = label_cols, var_name_col = var_name_col,
-                 label_runs = label_runs,
+                 label_runs = label_runs, sd_cols = sd_cols,
                  color_cols = color_cols, any_bg = any_bg),
     ann = ann,
     bold_rows = bold_rows,
@@ -466,6 +477,8 @@ tab_col_var_header <- function(tab, roles, name_cols = TRUE) {
       # A numeric col_var contributes a column bearing the VARIABLE's own name, so under its own span
       # the name was said twice ("tvhours" over "tvhours") -- three times in Excel, which also splits
       # off a "<var>_sd" sibling. The span says which variable; the level header says which STATISTIC.
+      # NB a different question from `j %in% roles$sd_cols` below: this asks whether THIS mean has an
+      # sd sibling to hand its "(sd)" tail to, not whether j is one.
       clean[j] <- if (paste0(cvm[[j]], "_sd") %in% nms) {
         "mean"                       # Excel: the sd is its own column, headed "sd" below
       } else if (mean_shows_sd(tab[[j]])) {
@@ -473,7 +486,7 @@ tab_col_var_header <- function(tab, roles, name_cols = TRUE) {
       } else {
         "mean"
       }
-    } else if (isTRUE(name_cols) && identical(nms[j], paste0(cvm[[j]], "_sd"))) {
+    } else if (isTRUE(name_cols) && j %in% roles$sd_cols) {
       clean[j] <- "sd"
     }
   }
@@ -499,21 +512,23 @@ tab_header_runs <- function(label) {
 
 # === SECTION: shared option resolver (Phase 10j) ====================================
 
-# Resolve the canonical shared export options ONCE (theme / color_type + the on/off
-# toggles), so every exporter AND the tab_export() facade share one set of names, defaults and option
-# fallbacks (killing the copy-pasted `match.arg(theme)` + `if (is.null(color_type)) getOption(...)`
-# preambles). `color = FALSE` renders monochrome AND disables the colour legend (which would otherwise
-# describe colours the cells no longer show). Returns a normalized scalar list.
+# Resolve the canonical shared export options ONCE (theme + the on/off toggles), so every exporter AND
+# the tab_export() facade share one set of names, defaults and option fallbacks (killing the
+# copy-pasted `match.arg(theme)` preambles). `color = FALSE` renders monochrome AND disables the colour
+# legend (which would otherwise describe colours the cells no longer show). Returns a normalized scalar
+# list.
 #
-# DESIGN: `theme = NULL` -> options("tabxplor.theme") is the package idiom (cf. color_type / engine /
-# popover) and the only way to wire an option through match.arg().
+# DESIGN: `theme = NULL` -> options("tabxplor.theme") is the package idiom (cf. engine / popover) and
+# the only way to wire an option through match.arg().
 # WARNING (Phase 13d): "auto" (follow the reader's colour scheme) is a RENDER intent, not a palette --
 # only media that emit a stylesheet can honour it (tab_kable(engine = "html"), tab_md/tab_css). Static
 # backends pass `allow_auto = FALSE` and get "light". Everything downstream of a palette lookup must go
 # through tx_palette_theme() (R/tab-css.R), NOT this value.
+# WARNING (Phase 14l): `color_type` is GONE. It was the 2nd positional arg, so every call site was
+# converted to NAMED arguments in the same change -- do NOT reintroduce a positional call, it would
+# shift every later toggle silently (color -> color_type, color_legend -> color, ...).
 #' @keywords internal
 resolve_export_opts <- function(theme = NULL,
-                                color_type = NULL,
                                 color = TRUE, color_legend = TRUE,
                                 transpose = FALSE, caption = NULL,
                                 var_names = NULL,
@@ -521,13 +536,10 @@ resolve_export_opts <- function(theme = NULL,
   if (is.null(theme)) theme <- getOption("tabxplor.theme", "light")
   theme <- match.arg(theme[1], c("light", "dark", "auto"))
   if (identical(theme, "auto") && !isTRUE(allow_auto)) theme <- "light"
-  if (is.null(color_type))  color_type  <- getOption("tabxplor.color_style_type")
-  # Phase 14i: `var_names` is a NEW formal placed after `caption` -- every call site passes the
-  # arguments above it POSITIONALLY, so appending is the only safe insertion point.
   if (is.null(var_names)) var_names <- getOption("tabxplor.var_names", "both")
   var_names <- match.arg(var_names[1], c("both", "rows", "cols", "none"))
   color <- isTRUE(color)
-  list(theme = theme, color_type = color_type,
+  list(theme = theme,
        color = color, color_legend = isTRUE(color_legend) && color,
        transpose = isTRUE(transpose), caption = caption, var_names = var_names)
 }
@@ -543,7 +555,6 @@ tab_export_prep <- function(tabs,
                             drop_tab_vars = TRUE,
                             wrap          = NULL,
                             compute       = NULL,
-                            color_type    = NULL,
                             theme         = "light",
                             color_legend  = TRUE,
                             transpose     = FALSE,
@@ -558,8 +569,6 @@ tab_export_prep <- function(tabs,
       c("refs", "colors", "bold", "range")
     } else c("refs", "bold")  # md / xl
   }
-  # base `%||%` is R >= 4.4 only; the package supports R >= 4.1, so use explicit is.null().
-  if (is.null(color_type))  color_type  <- getOption("tabxplor.color_style_type")
 
   # Phase 13d: `theme` may be the render intent "auto"; a PALETTE is always light/dark. Resolve once
   # here so theme_cols (and fmt_col_ann -> fmt_channel_codes -> get_color_style, which reads
@@ -597,14 +606,13 @@ tab_export_prep <- function(tabs,
     resolved,
     ~ prep_one_table(.x, backend = backend, drop_tab_vars = drop_tab_vars,
                      wrap = wrap, compute = compute, theme_cols = theme_cols,
-                     color_type = color_type[1], var_names = var_names)
+                     var_names = var_names)
   )
 
   structure(
     list(
       tables = tables,
       meta = list(backend = backend, theme = theme[1],
-                  color_type = color_type[1],
                   color_legend = color_legend, theme_cols = theme_cols,
                   compute = compute)
     ),

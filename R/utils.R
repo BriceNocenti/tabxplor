@@ -31,7 +31,7 @@ NULL
 
 #' @keywords internal
 .onLoad <- function(libname, pkgname) {
-  # options "tabxplor.color_style_type" and "tabxplor.color_style_theme" :
+  # option "tabxplor.color_style_theme" is seeded by set_color_palette() below.
 
   # HISTORY: these OMP / data.table thread caps are commented out on purpose. data.table's
   # multithreading once triggered a CRAN thread-count flag that blocked tabxplor's acceptance,
@@ -149,7 +149,6 @@ NULL
 
 # getOption("tabxplor.color_breaks")
 # getOption("tabxplor.color_style_theme")
-# getOption("tabxplor.color_style_type")
 # get_color_breaks()
 # get_color_style()
 

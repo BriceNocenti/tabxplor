@@ -53,7 +53,11 @@
 #'   titles are given based on the names of the variables.
 #' @param caption A single caption; a shortcut that fills \code{titles} (an explicit \code{titles}
 #'   still wins). Unified name across all exporters.
-#' @param font_text,font_num Font for text and for numbers.
+#' @param font_text,font_num Font for text (labels, headers) and for numbers. Default from
+#'   \code{options(tabxplor.xl_font_text)} / \code{options(tabxplor.xl_font_num)}. Note that xlsx,
+#'   unlike CSS, has \strong{no font-fallback list}: only one name can be recorded per font, so if it
+#'   is missing on the machine opening the workbook, Excel substitutes by its own rules and no
+#'   fallback can be named here. Set the options to a font you know is installed.
 #' @param text_size,text_size_headers,text_size_subtext Font sizes of text elements.
 #' @param theme By default (\code{"light"}) a white table with black text; set to \code{"dark"}
 #'   for a black table with white text (the colours follow the theme).
@@ -79,8 +83,8 @@
 #' blanks or drops small-n cells at display and flows into every export.
 #' @param hide_near_zero `r lifecycle::badge("deprecated")` Removed in 1.4.0 (a rarely used,
 #' slow feature): the argument is kept for back-compatibility but no longer does anything.
-#' @param color_type By default, the text is colored. Set to \code{"bg"} to color
-#' the background instead.
+#' @param color_type `r lifecycle::badge("deprecated")` Inert since 1.4.0: the text channel always uses
+#' the text palette. The colour CHANNEL is chosen by `color = c(text, background)` (see \code{\link{tab}}).
 #'
 #' @return  The table(s) with formatting and colors in an Excel file, as a side effect.
 #'  Invisibly returns \code{tabs}.
@@ -102,10 +106,11 @@ tab_xl <-
            colnames_rotation = 0, remove_tab_vars = TRUE,
            colwidth = 10, color_legend = TRUE,
            sheets = "auto", n_min = 0, titles, caption = NULL,
-           font_text = "DejaVu Sans Condensed", font_num = "DejaVu Sans",
+           font_text = getOption("tabxplor.xl_font_text", "DejaVu Sans Condensed"),
+           font_num  = getOption("tabxplor.xl_font_num",  "DejaVu Sans"),
            text_size = 10, text_size_headers = 9, text_size_subtext = 9,
            hide_near_zero = Inf, theme = NULL,
-           color_type = "text", html_24_bit = NULL, color = TRUE,
+           color_type = lifecycle::deprecated(), html_24_bit = NULL, color = TRUE,
            transpose = FALSE, var_names = NULL, conditional_format = FALSE,
            or_numeric = getOption("tabxplor.xl_or_numeric", FALSE),
            print_color_legend = lifecycle::deprecated()) {
@@ -142,12 +147,13 @@ tab_xl <-
       lifecycle::deprecate_soft("1.4.0", "tab_xl(print_color_legend)", "tab_xl(color_legend)")
       color_legend <- print_color_legend
     }
-    # Shared option resolver (theme/color_type/color/color_legend/transpose). Phase 10j makes tab_xl
-    # theme-aware: the palettes below now honour `theme` (was hardcoded "light"). `html_24_bit` is
-    # inert (Phase 13a): Excel is always 24-bit.
-    o <- resolve_export_opts(theme, color_type, color, color_legend, transpose, caption,
-                             var_names = var_names)
-    theme <- o$theme; color_type <- o$color_type
+    if (lifecycle::is_present(color_type)) lifecycle::deprecate_soft("1.4.0", "tab_xl(color_type)")
+    # Shared option resolver (theme/color/color_legend/transpose). Phase 10j makes tab_xl theme-aware:
+    # the palettes below now honour `theme` (was hardcoded "light"). `html_24_bit` is inert
+    # (Phase 13a): Excel is always 24-bit.
+    o <- resolve_export_opts(theme = theme, color = color, color_legend = color_legend,
+                             transpose = transpose, caption = caption, var_names = var_names)
+    theme <- o$theme
     color_legend <- o$color_legend; color <- o$color
     # `caption` (single) is the unified alias; an explicit `titles` (per-sheet) still wins.
     if (!is.null(caption) && missing(titles)) titles <- caption
@@ -181,7 +187,7 @@ tab_xl <-
     prep <- tab_export_prep(
       tabs, backend = "xl", drop_tab_vars = remove_tab_vars,
       list_method = TRUE, compute = compute, transpose = transpose,
-      color_type = color_type, theme = theme, var_names = o$var_names,
+      theme = theme, var_names = o$var_names,
       color_legend = color_legend, what = "tab_xl()"
     )
     rd <- prep$tables
@@ -229,7 +235,7 @@ tab_xl <-
     if (isTRUE(color_legend)) {
       legend_runs <- purrr::map(tabs, ~ suppressWarnings(
         tab_color_legend(., medium = "runs", style = "prose", lang = lang,
-                         theme = theme, color_type = color_type)))
+                         theme = theme)))
       legend_runs <- purrr::map(legend_runs, ~ if (is.null(.)) list() else .)
       legend_plain <- purrr::map(legend_runs, ~ purrr::map_chr(
         ., function(line) paste0(purrr::map_chr(line, "text"), collapse = "")))
@@ -267,7 +273,7 @@ tab_xl <-
         stringr::str_c(stringr::str_remove(sheet_titles, "..$"), ".", nb), sheet_titles)
     }
 
-    # Colour palettes built ONCE (Phase 5): TEXT channel -> font colour (in the color_type family),
+    # Colour palettes built ONCE (Phase 5): TEXT channel -> font colour (the text palette),
     # BACKGROUND channel -> cell fill (bg palette). 11 hex per palette, indexed by slot integer.
     # Phase 10j: the palettes honour `theme` (default "light" == the old hardcoded value).
     opts <- list(
@@ -277,7 +283,7 @@ tab_xl <-
       colnames_rotation = colnames_rotation,
       text_size_headers = text_size_headers,
       text_size_subtext = text_size_subtext,
-      text_pal          = get_color_style("color_code", theme = theme, type = color_type),
+      text_pal          = get_color_style("color_code", theme = theme, type = "text"),
       bg_pal            = get_color_style("color_code", theme = theme, type = "bg"),
       or_numeric        = isTRUE(or_numeric)      # Phase 13c-v: OR as text (1/x) by default
     )
@@ -569,6 +575,9 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
     span_row = if (has_span) span_row else NA_integer_,
     header_runs = if (has_span) tab_header_runs(cvh$label) else NULL,
     fmt_cols = fmt_cols, row_var_col = row_var_col, colwidth = colwidth,
+    # Phase 14l: the Excel-only "<var>_sd" siblings (roles$sd_cols, the ONE definition of the rule).
+    # They hold "s2.1" under a header of "sd", so the standard numeric width is wasted on them.
+    sd_cols = unname(roles$sd_cols),
     # Phase 14i: the label columns' runs at ABSOLUTE sheet rows -- the writer merges each one, so a
     # row/tab variable is named once per block instead of on every row. `vname_col` is the name column
     # (values ARE variable names): merged AND rotated 90 degrees, so a long name costs one narrow
@@ -687,10 +696,19 @@ xl_style_registrar <- function(wb) {
   bc  <- new.env(parent = emptyenv()); xc <- new.env(parent = emptyenv())
   ctr <- 0L
   uid <- function() { ctr <<- ctr + 1L; ctr }
+  # WARNING (Phase 14l): `scheme = ""` is NOT cosmetic -- it is the whole reason a number cell renders
+  # in `font_num`. openxlsx2::create_font() defaults `scheme = "minor"` = "this IS the theme's body
+  # font", and Excel then resolves the font from the THEME, ignoring our explicit `name`. Since
+  # xlb_base_font(wb, font_text) writes the theme's minor font, every font we emitted -- all correctly
+  # named "DejaVu Sans" in the XML -- was drawn in "DejaVu Sans Condensed". Proven by unzipping the
+  # workbook: cellXfs -> fontId resolved to a font named DejaVu Sans on every numeric cell, while the
+  # font box in Excel read "DejaVu Sans Condensed (Body)". Never let `scheme` back in.
+  # WARNING: `scheme` is safely absent from the dedup key below ONLY because it is a constant. A
+  # per-font scheme would need `key` to grow a field, or two different fonts would collide onto one id.
   font_id <- function(name, size, bold, color) {
     key <- paste(name, size, bold, color, sep = "\r")
     if (is.null(fc[[key]])) {
-      args <- list(name = name, sz = as.character(size))
+      args <- list(name = name, sz = as.character(size), scheme = "")
       if (isTRUE(bold))   args$b     <- "1"
       if (!is.na(color))  args$color <- xl_color(color)
       nm <- paste0("txf", uid()); sm$add(do.call(openxlsx2::create_font, args), nm)
@@ -846,9 +864,15 @@ xl_write_table <- function(wb, plan, o, reg) {
       w <- if (rot > 30 && rot < 60) 8
       else if (rot >= 60) 6 + 8 * cos(rot / 90 * pi / 2)
       else "auto"
-      xlb_col_widths(wb, s, plan$fmt_cols, w)
+      xlb_col_widths(wb, s, plan$fmt_cols, w)   # "auto" already sizes an sd column to its content
     } else {
-      xlb_col_widths(wb, s, plan$fmt_cols, as.double(plan$colwidth))
+      # Phase 14l: an sd sibling holds "s2.1" under a header of "sd" -- it never needs the width its
+      # mean does. Scaled rather than fixed, so a user who widens `colwidth` for long numbers widens
+      # the sd column too; floored so a wide sigma value still fits.
+      cw     <- as.double(plan$colwidth)
+      sd_cls <- intersect(plan$fmt_cols, plan$sd_cols)
+      xlb_col_widths(wb, s, setdiff(plan$fmt_cols, sd_cls), cw)
+      if (length(sd_cls)) xlb_col_widths(wb, s, sd_cls, max(5, cw * 0.6))
     }
   }
   if (rot > 0) xlb_row_heights(wb, s, plan$header_row, 13.8 + 105 * sin(rot / 90 * pi / 2))
@@ -857,9 +881,23 @@ xl_write_table <- function(wb, plan, o, reg) {
 }
 
 
+# Which axis holds the DEPENDENT variable(s)? Under pct="row" a row is a GROUP and the column
+# distribution is what is being described ("race by marital" = the distribution of race, by marital
+# status); under pct="col" the two axes swap. `pct` is not an argument here, not in `vars`, and not in
+# the `vars` attribute -- its only surviving trace on a built table is the fmt columns' `type`.
+# DESIGN (Phase 14l): only an all-"col" table flips. A mean is always "Y by group" (type "mean"), and a
+# regression coefficient is profile-free (type "coef"), so neither is directional and neither may vote;
+# a genuinely mixed row+col table falls back to the dependent-first default rather than guessing.
+#' @keywords internal
+tab_title_rows_first <- function(tabs) {
+  types <- purrr::map_chr(tabs, ~ if (is_fmt(.)) get_type(.) else NA_character_)
+  dir   <- types[!is.na(types) & types %in% c("row", "col")]
+  length(dir) > 0 && all(dir == "col")
+}
+
 # Name a variable set for a title: every name up to `max`, then "+N more" -- never "multi", which named
 # nothing, and never a bare index. Placeholders and empties drop out.
-tab_title_names <- function(x, max = 3) {
+tab_title_names <- function(x, max = 2) {
   x <- as.character(x)
   x <- x[!is.na(x) & nzchar(x) & !x %in% c("no_row_var", "no_col_var", "all_col_vars")]
   if (length(x) == 0) return("")
@@ -868,18 +906,25 @@ tab_title_names <- function(x, max = 3) {
 }
 
 #' @keywords internal
-tab_get_titles <- function(tabs, row, col, tab, max = 3) {
+tab_get_titles <- function(tabs, row, col, tab, max = 2) {
   # Phase 14d: was a case_when over `length(row) == 1` with NO fallback, fed the DETECTED roles. On a
   # merged table (several row_vars) those roles were the merge's own scaffolding, so the title read
   # "levels by multi (tabbed by row_var)" -- three words, none of them a variable of the user's -- and
   # any shape the branches missed fell through to a literal "NA". The roles are recorded now, so the
   # real names are available; name them all, eliding past `max` with a count.
+  # Phase 14l: the DEPENDENT variable comes first ("ROCK, JAZZ by DIPLOM" reads as the thing described,
+  # then the thing it is broken down by), which under pct="row" is the col_vars -- so the old fixed
+  # "<rows> by <cols>" was backwards on the common table. `tabs` was already accepted and unused; it is
+  # what tab_title_rows_first() needs, so nothing new is threaded in.
   rows <- tab_title_names(row, max)
   cols <- tab_title_names(col, max)
-  res  <- if (!nzchar(rows) && !nzchar(cols)) "Table"
-          else if (!nzchar(rows)) cols
-          else if (!nzchar(cols)) rows
-          else paste(rows, "by", cols)
+  swap <- tab_title_rows_first(tabs)
+  a    <- if (swap) rows else cols     # the dependent axis, named first
+  b    <- if (swap) cols else rows
+  res  <- if (!nzchar(a) && !nzchar(b)) "Table"
+          else if (!nzchar(a)) b
+          else if (!nzchar(b)) a
+          else paste(a, "by", b)
   tabn <- if (missing(tab)) "" else tab_title_names(tab, max)
   if (nzchar(tabn)) res <- paste0(res, " (tabbed by ", tabn, ")")
   res

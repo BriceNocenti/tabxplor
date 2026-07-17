@@ -6,7 +6,7 @@
 \usage{
 tab_css(
   theme = NULL,
-  color_type = NULL,
+  color_type = lifecycle::deprecated(),
   chrome = TRUE,
   style_tag = TRUE,
   file = NULL
@@ -20,8 +20,8 @@ deliberate choice. \code{"auto"} emits every rule four times (a light base, the 
 both toggle directions), which is also what lets \code{\link[=tab_kable]{tab_kable()}}'s own Viewer page force the
 editor's theme -- see its \code{theme} argument.}
 
-\item{color_type}{\code{"text"} or \code{"bg"}: which palette family the text channel uses. Defaults to
-\code{getOption("tabxplor.color_style_type")}.}
+\item{color_type}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Inert since 1.4.0: the text channel always uses
+the text palette. The colour CHANNEL is chosen by \code{color = c(text, background)} (see \code{\link[=tab]{tab()}}).}
 
 \item{chrome}{When \code{TRUE} (default) also style the table itself (font/background/border colours,
 the greys) -- what \code{tab_kable(engine = "html")} needs. \code{FALSE} emits the colour classes only, which
@@ -60,8 +60,8 @@ tab_css(theme = "auto")
 }\if{html}{\out{</div>}}
 
 Every later \code{tab_kable()} then emits classes only. Two things to know: with \code{css = FALSE} and \strong{no}
-\code{tab_css()} call the tables render uncoloured; and one stylesheet means one \code{theme} and one
-\code{color_type} for the whole document (a per-table \code{color_type} would need its own \code{css = TRUE}).
+\code{tab_css()} call the tables render uncoloured; and one stylesheet means one \code{theme} for the whole
+document.
 }
 
 \section{Restyling a table}{

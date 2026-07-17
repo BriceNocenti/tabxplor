@@ -512,20 +512,21 @@ expect_color <- function(object) {
 
 testthat::test_that("printing colors works", {
   withr::local_options(lifecycle_verbosity = "quiet")
-  withr::defer(options("tabxplor.color_style_type" = "text", "tabxplor.color_style_theme" = "light"))
-  options("tabxplor.color_style_type" = "bg", "tabxplor.color_style_theme" = "dark")
+  # Phase 14l: the `tabxplor.color_style_type` option is deprecated + inert (it repointed the text
+  # channel into the fill palette -- the CHANNEL is now `color = c(text, background)`), so the legs no
+  # longer toggle it. `color_style_theme` (light/dark) is what makes them distinct.
+  withr::defer(options("tabxplor.color_style_theme" = "light"))
+  options("tabxplor.color_style_theme" = "dark")
   tab(data, sex, hair_color, pct = "row", color = "diff"    ) %>% print() %>%
     testthat::expect_output()
-  options("tabxplor.color_style_type" = "text", "tabxplor.color_style_theme" = "dark")
   set_color_breaks(list(pct_diff = c(0.05, 0.15, 0.3), pct_ratio = list(over = 2),
                         mean_ratio = c(1.15, 2, 4), contrib = c(1, 2, 5)))
   tab(data, sex, hair_color, pct = "row", color = "diff_ci" ) %>% print() %>%
     testthat::expect_output()
-  options("tabxplor.color_style_type" = "bg", "tabxplor.color_style_theme" = "light")
+  options("tabxplor.color_style_theme" = "light")
   tab(data, sex, hair_color, pct = "row", color = "after_ci") %>% print() %>%
     testthat::expect_output()
 
-  options("tabxplor.color_style_type" = "text")
   set_color_breaks(list(pct_diff = c(0.05, 0.1, 0.2, 0.3), pct_ratio = list(over = 2),
                         mean_ratio = c(1.15, 1.5, 2, 4), contrib = c(1, 2, 5, 10)))
   tab(data, sex, hair_color, pct = "row", color = "contrib" ) %>% print() %>%

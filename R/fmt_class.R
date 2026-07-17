@@ -2840,16 +2840,15 @@ fmt_color_channels <- function(x) {
 
 # The single slot -> hex mapping shared by the exporters (tab_kable / tab_plot / tab_xl). Returns the
 # per-cell colour code of BOTH channels (NA where uncoloured on that channel), plus the raw slot
-# vectors (for bold / gate decisions). The text channel is rendered in the `color_type` palette
-# family (the exporter's global text-vs-bg toggle, default "text"); the background channel always
-# uses the "bg" palette. This mirrors pillar_shaft.tabxplor_fmt's two-channel logic, so console and
-# exports render identical colours. (fmt_get_color_code stays single-channel for the golden.)
+# vectors (for bold / gate decisions). The text channel uses the "text" palette, the background
+# channel the "bg" palette. This mirrors pillar_shaft.tabxplor_fmt's two-channel logic, so console
+# and exports render identical colours. (fmt_get_color_code stays single-channel for the golden.)
 #' @keywords internal
-fmt_channel_codes <- function(x, color_type = "text", theme = "light") {
+fmt_channel_codes <- function(x, theme = "light") {
   n  <- length(x)
   ch <- fmt_color_channels(x)
 
-  text_styles <- get_color_style("color_code", type = color_type, theme = theme)
+  text_styles <- get_color_style("color_code", type = "text", theme = theme)
   bg_styles   <- get_color_style("color_code", type = "bg", theme = theme)
 
   text <- rep(NA_character_, n)
@@ -3209,13 +3208,16 @@ legend_tokens_prose <- function(spec, lang, show_names) {
 # "runs" -> a list of runs list(text=, color=, bold=); every other medium -> a single string.
 # Phase 14c: EVERY medium bolds its coloured break-words (they must carry the same visual weight as
 # the coloured numbers they describe -- kable/html already bold every text-coloured cell).
-legend_render_line <- function(tokens, medium, theme, color_type, colored, classes = FALSE) {
+legend_render_line <- function(tokens, medium, theme, colored, classes = FALSE) {
   # Phase 13d: `theme` may be the render intent "auto"; a palette is always light/dark. Without this,
   # get_color_style() builds the key "text_auto", finds no palette and errors on a length-0 vector.
   pal <- tx_palette_theme(theme)
   # Phase 14c: a "runs" medium draws TEXT and cannot fill, so a background break-word borrows the
   # darker bg_legend palette (the fills themselves are invisible on the white page a run sits on).
-  fam <- function(ch) if (identical(ch, "text")) color_type
+  # Phase 14l: the text channel is the "text" family (the color_type override is gone). Hard-wiring it
+  # also closes a latent bug -- color_type was fed here UNVALIDATED, so "bg_legend" would reach
+  # get_color_style("crayon", ...) and hit its cli_abort.
+  fam <- function(ch) if (identical(ch, "text")) "text"
                       else if (identical(medium, "runs")) "bg_legend" else "bg"
   slot_hex <- function(slot, ch)
     toupper(unname(get_color_style("color_code", type = fam(ch), theme = pal)[slot]))
@@ -3336,7 +3338,7 @@ legend_specs <- function(x) {
 #' @param style "terse" (compact, console default) or "prose" (full sentences, export default).
 #' @param lang NULL (auto from locale) / "en" / "fr".
 #' @param colored Whether to colour the break-words.
-#' @param theme,color_type Palette theme / family (default from options).
+#' @param theme Palette theme (default from options).
 #' @param classes `medium = "html"` only: emit the break-words as CSS slot classes rather than inline
 #'   hex, because a tabxplor stylesheet ships with the output (`tab_kable(engine = "html")`). Then the
 #'   legend follows a theme toggle exactly like the cells it describes. `FALSE` (the kableExtra engine,
@@ -3345,11 +3347,10 @@ legend_specs <- function(x) {
 #' @keywords internal
 tab_color_legend <- function(x, medium = c("console", "html", "md", "runs", "plain"),
                              style = NULL, lang = NULL, colored = TRUE,
-                             theme = NULL, color_type = NULL, classes = FALSE) {
+                             theme = NULL, classes = FALSE) {
   medium <- match.arg(medium)
   if (is.null(style))      style      <- if (identical(medium, "console")) "terse" else "prose"
   if (is.null(theme))      theme      <- getOption("tabxplor.color_style_theme", "light")
-  if (is.null(color_type)) color_type <- getOption("tabxplor.color_style_type", "text")
 
   # apply the resolved language for the gettext lookups. LANGUAGE env is the reliable, mid-session,
   # R>=4.1 lever (Sys.setLanguage() needs R>=4.2 and is flaky on Windows); restored on exit.
@@ -3382,7 +3383,7 @@ tab_color_legend <- function(x, medium = c("console", "html", "md", "runs", "pla
     spec$col_names <- unique(purrr::map_chr(g, "col_var"))
     toks <- if (identical(style, "prose")) legend_tokens_prose(spec, lg, show_names)
             else                           legend_tokens_terse(spec, lg, show_names)
-    legend_render_line(toks, medium, theme, color_type, colored, classes = classes)
+    legend_render_line(toks, medium, theme, colored, classes = classes)
   })
 
   # enc2utf8 the catalog output (gettext may return the native encoding on some platforms).

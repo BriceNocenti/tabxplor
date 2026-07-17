@@ -10,6 +10,12 @@
 #     openxlsx2 calls than a wb_add_* per aspect (the openxlsx2 "shared styles" fast path). numFmt is
 #     the one exception, applied as a grouped wb_add_numfmt pass that MERGES onto the composed xf.
 #   - xl_runs/xl_coalesce are pure base-R (A1 math reimplemented, no openxlsx2), unit-testable alone.
+#   - openxlsx2 TRAPS, each cost a session to diagnose:
+#     * create_font() defaults `scheme = "minor"` = "this IS the theme's body font" -> Excel resolves
+#       the font from the WORKBOOK THEME (set via set_base_font -> font_text = Condensed), IGNORING the
+#       explicit `name`. tab_xl passes `scheme = ""` so a cell renders in the font it names (Phase 14l).
+#     * wb_add_font(update=) is buggy over large ranges with scattered cells -> aggregate a cell's whole
+#       font descriptor and apply with update=FALSE (the precompose above sidesteps it entirely).
 
 # === SECTION: A1 geometry + range coalescing (pure, testable) ========================
 

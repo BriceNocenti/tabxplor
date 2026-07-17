@@ -1,10 +1,10 @@
 # PURPOSE: The ONE CSS generator for every tabxplor stylesheet (Phase 13d).
-# ROLE: Turns (palette, color_type, theme) into CSS rules consumed by BOTH media that can carry a
+# ROLE: Turns (palette, theme) into CSS rules consumed by BOTH media that can carry a
 #   stylesheet: tab_kable(engine = "html") and tab_md()/tab_css(). Replaces the old per-table
 #   md_css_rules()/md_css_block()/md_break_class()/md_slot_class_map() (tab_md.R) and the static,
 #   hard-coded html_style_block() (tab-render-html.R).
 # KEY CONSTRAINTS:
-#   - The CSS is TABLE-INDEPENDENT: a pure function of (palette, color_type, theme). That is the whole
+#   - The CSS is TABLE-INDEPENDENT: a pure function of (palette, theme). That is the whole
 #     point of naming classes by palette SLOT rather than by break value -- it is what lets a document
 #     emit the stylesheet ONCE (tab_css()) and reuse it for every table, and what makes class collisions
 #     impossible (`.p3` means the same shade in every table, whatever its color_breaks).
@@ -131,9 +131,7 @@ tx_light_hooks <- c("body.quarto-light", "[data-bs-theme=light]", "[data-theme=l
 # same slot vocabulary the cells use. `chrome = FALSE` gives colour rules only (the tab_md contract:
 # bare class selectors the user maps in their own editor CSS).
 #' @keywords internal
-tx_css_rules <- function(color_type = NULL, chrome = TRUE) {
-  if (is.null(color_type)) color_type <- getOption("tabxplor.color_style_type")
-
+tx_css_rules <- function(chrome = TRUE) {
   sel <- character(0); prop <- character(0); lt <- character(0); dk <- character(0)
   add <- function(s, p, l, d) {
     sel  <<- c(sel, s); prop <<- c(prop, p); lt <<- c(lt, l); dk <<- c(dk, d)
@@ -158,10 +156,12 @@ tx_css_rules <- function(color_type = NULL, chrome = TRUE) {
     add(".g2", "color", cl$grey2, cd$grey2)
   }
 
+  # Phase 14l: the text channel uses the text family and the bg channel the bg family -- the loop
+  # variable IS the family now the color_type override is gone (it used to repoint the text channel
+  # into the fill palette, i.e. fill-coloured font).
   for (ch in c("text", "bg")) {
-    type <- if (ch == "text") color_type else "bg"
-    pl   <- get_color_style("color_code", type = type, theme = "light")
-    pd   <- get_color_style("color_code", type = type, theme = "dark")
+    pl   <- get_color_style("color_code", type = ch, theme = "light")
+    pd   <- get_color_style("color_code", type = ch, theme = "dark")
     prp  <- if (ch == "text") "color" else "background-color"
     for (s in 1:8) {
       add(paste0(".", tx_slot_class(ch, s)), prp,
@@ -362,8 +362,8 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE) {
 #' ````
 #'
 #' Every later `tab_kable()` then emits classes only. Two things to know: with `css = FALSE` and **no**
-#' `tab_css()` call the tables render uncoloured; and one stylesheet means one `theme` and one
-#' `color_type` for the whole document (a per-table `color_type` would need its own `css = TRUE`).
+#' `tab_css()` call the tables render uncoloured; and one stylesheet means one `theme` for the whole
+#' document.
 #'
 #' @section Restyling a table:
 #' Nothing is written inline on a cell, so **any** of the look can be overridden by adding your own
@@ -386,8 +386,8 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE) {
 #'   deliberate choice. `"auto"` emits every rule four times (a light base, the OS media query, then
 #'   both toggle directions), which is also what lets [tab_kable()]'s own Viewer page force the
 #'   editor's theme -- see its `theme` argument.
-#' @param color_type `"text"` or `"bg"`: which palette family the text channel uses. Defaults to
-#'   `getOption("tabxplor.color_style_type")`.
+#' @param color_type `r lifecycle::badge("deprecated")` Inert since 1.4.0: the text channel always uses
+#'   the text palette. The colour CHANNEL is chosen by `color = c(text, background)` (see [tab()]).
 #' @param chrome When `TRUE` (default) also style the table itself (font/background/border colours,
 #'   the greys) -- what `tab_kable(engine = "html")` needs. `FALSE` emits the colour classes only, which
 #'   is what `tab_md()` wants: bare selectors you can map in your own editor's CSS.
@@ -400,10 +400,11 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE) {
 #' @examples
 #' cat(tab_css(theme = "auto"))
 #' cat(tab_css(chrome = FALSE, style_tag = FALSE))  # the markdown flavour
-tab_css <- function(theme = NULL, color_type = NULL, chrome = TRUE,
+tab_css <- function(theme = NULL, color_type = lifecycle::deprecated(), chrome = TRUE,
                     style_tag = TRUE, file = NULL) {
-  o   <- resolve_export_opts(theme, color_type, allow_auto = TRUE)
-  css <- tx_css_render(tx_css_rules(o$color_type, chrome = chrome), o$theme, chrome = chrome)
+  if (lifecycle::is_present(color_type)) lifecycle::deprecate_soft("1.4.0", "tab_css(color_type)")
+  o   <- resolve_export_opts(theme = theme, allow_auto = TRUE)
+  css <- tx_css_render(tx_css_rules(chrome = chrome), o$theme, chrome = chrome)
   if (isTRUE(style_tag)) css <- paste0("<style>\n", css, "\n</style>")
   if (!is.null(file)) {
     writeLines(css, file)

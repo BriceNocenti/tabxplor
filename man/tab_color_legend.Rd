@@ -11,7 +11,6 @@ tab_color_legend(
   lang = NULL,
   colored = TRUE,
   theme = NULL,
-  color_type = NULL,
   classes = FALSE
 )
 }
@@ -29,7 +28,7 @@ background channel from the darker \code{bg_legend} palette (see \code{\link{set
 
 \item{colored}{Whether to colour the break-words.}
 
-\item{theme, color_type}{Palette theme / family (default from options).}
+\item{theme}{Palette theme (default from options).}
 
 \item{classes}{\code{medium = "html"} only: emit the break-words as CSS slot classes rather than inline
 hex, because a tabxplor stylesheet ships with the output (\code{tab_kable(engine = "html")}). Then the

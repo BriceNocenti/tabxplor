@@ -14,7 +14,7 @@ tab_md(
   color_legend = TRUE,
   lang = NULL,
   theme = NULL,
-  color_type = NULL,
+  color_type = lifecycle::deprecated(),
   html_24_bit = NULL,
   caption = NULL,
   transpose = FALSE,
@@ -56,10 +56,13 @@ line (its break-words in the same pandoc classes as the cells) above the subtext
 
 \item{lang}{Colour-legend language: \code{NULL} (auto from the R/OS locale, English fallback), \code{"en"} or \code{"fr"}.}
 
-\item{theme, color_type, html_24_bit}{Colour palette selectors (as in
+\item{theme, html_24_bit}{Colour palette selectors (as in
 \code{\link[=tab_kable]{tab_kable()}}); they only affect the CSS emitted by \code{css = TRUE} /
 \code{\link{tab_css}}, since the span \emph{class names} are palette- and theme-independent. \code{theme}
 accepts \code{"auto"} (follow the reader's colour scheme).}
+
+\item{color_type}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Inert since 1.4.0: the text channel always uses
+the text palette. The colour CHANNEL is chosen by \code{color = c(text, background)} (see \code{\link{tab}}).}
 
 \item{caption}{Optional table caption, rendered as a pandoc caption line \verb{: caption} (captions only
 the first table of a list).}

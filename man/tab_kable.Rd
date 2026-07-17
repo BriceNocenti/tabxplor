@@ -7,7 +7,7 @@
 tab_kable(
   tabs,
   theme = NULL,
-  color_type = NULL,
+  color_type = lifecycle::deprecated(),
   html_24_bit = NULL,
   color = TRUE,
   tooltips = TRUE,
@@ -45,8 +45,8 @@ Positron's, best-effort).
 the kableExtra engine renders light with a message. Defaults to \code{getOption("tabxplor.theme")},
 i.e. \code{"light"} -- a dark table is always a deliberate choice.}
 
-\item{color_type}{Set to \code{"text"} to color the text, \code{"bg"} to color the
-background. By default it takes \code{getOption("tabxplor.color_style_type")}.}
+\item{color_type}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Inert since 1.4.0: the text channel always uses
+the text palette. The colour CHANNEL is chosen by \code{color = c(text, background)} (see \code{\link{tab}}).}
 
 \item{html_24_bit}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Inert since 1.4.0: exports are always
 24-bit (the OKLCH palettes). Kept only so old calls do not error.}
@@ -128,6 +128,6 @@ Print a tabxplor table in html
 \examples{
 \donttest{
 tabs <- tab(forcats::gss_cat, race, marital, year, pct = "row", color = "diff")
-tab_kable(tabs, theme = "light", color_type = "text")
+tab_kable(tabs, theme = "light")
 }
 }

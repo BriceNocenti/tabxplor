@@ -95,6 +95,62 @@ testthat::test_that("tab_xl folds significance stars into the numFmt code", {
   testthat::expect_false(any(grepl("\\*", codes2)))
 })
 
+# Phase 14l: the fonts we emit must carry NO `scheme`. openxlsx2::create_font() defaults
+# scheme = "minor" = "this IS the theme's body font", and Excel then resolves the font from the THEME,
+# ignoring our explicit `name` -- so every number, correctly named "DejaVu Sans" in the XML, was drawn
+# in the theme's minor font ("DejaVu Sans Condensed", written by xlb_base_font). Invisible to any
+# assertion on values or on `name`: only the raw <font> XML shows it.
+testthat::test_that("tab_xl emits no font `scheme` (numbers really render in font_num)", {
+  testthat::skip_if_not_installed("openxlsx2")
+  tb <- tab(forcats::gss_cat, marital, c(race, tvhours), pct = "row", color = TRUE)
+  p  <- withr::local_tempfile(fileext = ".xlsx")
+  suppressMessages(tab_xl(tb, path = p, sheets = "unique", replace = TRUE, open = FALSE))
+  fonts <- openxlsx2::wb_load(p)$styles_mgr$styles$fonts
+
+  # exactly ONE scheme survives: font 0, openxlsx2's own base font, where "minor" is semantically
+  # right (it IS the theme's body font, and it is what Excel measures column widths in).
+  testthat::expect_equal(sum(grepl("<scheme", fonts)), 1L)
+  testthat::expect_true(grepl("DejaVu Sans Condensed", fonts[grepl("<scheme", fonts)]))
+  # every font WE registered names itself and lets the name stand
+  testthat::expect_false(any(grepl("<scheme", fonts[!grepl("<scheme", fonts)])))
+  testthat::expect_true(any(grepl('name val="DejaVu Sans"', fonts, fixed = TRUE)))
+})
+
+# Phase 14l: an "<var>_sd" sibling holds "s2.1" under a header of "sd" -- it never needs a mean's width.
+testthat::test_that("tab_xl narrows the sd column", {
+  testthat::skip_if_not_installed("openxlsx2")
+  tb <- tab(forcats::gss_cat, marital, c(race, tvhours), pct = "row")
+  p  <- withr::local_tempfile(fileext = ".xlsx")
+  suppressMessages(tab_xl(tb, path = p, sheets = "unique", replace = TRUE, open = FALSE))
+  cols <- openxlsx2::wb_load(p)$worksheets[[1]]$cols_attr
+  wid  <- function(i) {                      # width of the col_attr entry covering column i
+    lo <- as.integer(sub('.*min="(\\d+)".*', "\\1", cols))
+    hi <- as.integer(sub('.*max="(\\d+)".*', "\\1", cols))
+    as.double(sub('.*width="([0-9.]+)".*', "\\1", cols))[which(lo <= i & hi >= i)][1]
+  }
+  # geometry: A = row labels, B:D = race levels, E = Total, F = mean, G = sd, H = n
+  testthat::expect_lt(wid(7), wid(6))                      # the sd column is narrower than its mean
+  testthat::expect_equal(wid(7), wid(6) - 4)               # max(5, colwidth * 0.6) at colwidth = 10
+  # it scales with `colwidth` rather than being a fixed number
+  p2 <- withr::local_tempfile(fileext = ".xlsx")
+  suppressMessages(tab_xl(tb, path = p2, sheets = "unique", replace = TRUE, open = FALSE,
+                          colwidth = 20))
+  cols <- openxlsx2::wb_load(p2)$worksheets[[1]]$cols_attr
+  testthat::expect_equal(wid(7), wid(6) - 8)               # 20 -> 12
+})
+
+testthat::test_that("tab_xl fonts are settable by option", {
+  testthat::skip_if_not_installed("openxlsx2")
+  withr::local_options(tabxplor.xl_font_num = "Courier New", tabxplor.xl_font_text = "Georgia")
+  tb <- tab(forcats::gss_cat, marital, race, pct = "row", color = TRUE)
+  p  <- withr::local_tempfile(fileext = ".xlsx")
+  suppressMessages(tab_xl(tb, path = p, sheets = "unique", replace = TRUE, open = FALSE))
+  fonts <- openxlsx2::wb_load(p)$styles_mgr$styles$fonts
+  testthat::expect_true(any(grepl('name val="Courier New"', fonts, fixed = TRUE)))
+  testthat::expect_true(any(grepl('name val="Georgia"',     fonts, fixed = TRUE)))
+  testthat::expect_false(any(grepl("DejaVu", fonts)))       # nothing hardcoded past the option
+})
+
 # Phase 10h: transpose = TRUE exports the transposed table (still a valid, readable workbook).
 testthat::test_that("tab_xl(transpose = TRUE) writes a valid workbook", {
   testthat::skip_if_not_installed("openxlsx2")
@@ -183,7 +239,8 @@ testthat::test_that("tab_xl: a merged table names each row-variable once, merged
   # row 1 = title, row 2 = the col_var span, row 3 = level headers, data from row 4 (Phase 13c-iii)
   # Phase 14i: the title names the SOURCE row_vars -- it read "levels by relig" (the merge's own
   # scaffolding column) because the prep dropped `vars$row_vars`.
-  testthat::expect_equal(as.character(d[1, 1]), "race, marital by relig")
+  # Phase 14l: and the DEPENDENT axis leads -- this is pct="row", so the col_var comes first.
+  testthat::expect_equal(as.character(d[1, 1]), "relig by race, marital")
   # one merge per block, in column A
   merges <- paste(wb$worksheets[[1]]$mergeCells, collapse = " ")
   testthat::expect_match(merges, 'ref="A4:A7"', fixed = TRUE)

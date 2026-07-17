@@ -9,7 +9,7 @@ tab_export(
   format = c("kable", "md", "xl", "plot"),
   path = NULL,
   theme = NULL,
-  color_type = NULL,
+  color_type = lifecycle::deprecated(),
   html_24_bit = NULL,
   color = TRUE,
   color_legend = TRUE,
@@ -36,7 +36,8 @@ and any dark-mode toggle of the host page), which needs a stylesheet: it works f
 \code{"light"} for the static \code{"xl"} / \code{"plot"} backends and the kableExtra engine.
 Defaults to \code{getOption("tabxplor.theme")}. See \code{\link{tab_css}}.}
 
-\item{color_type}{By default the text is coloured; set to \code{"bg"} to colour the background.}
+\item{color_type}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Inert since 1.4.0: the text channel always uses
+the text palette. The colour CHANNEL is chosen by \code{color = c(text, background)} (see \code{\link{tab}}).}
 
 \item{html_24_bit}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Inert since 1.4.0 (exports are always 24-bit).}
 

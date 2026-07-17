@@ -31,10 +31,12 @@
 #' @param color_legend When `TRUE` (default) and the table is coloured, prepend a colour-legend prose
 #'   line (its break-words in the same pandoc classes as the cells) above the subtext.
 #' @param lang Colour-legend language: `NULL` (auto from the R/OS locale, English fallback), `"en"` or `"fr"`.
-#' @param theme,color_type,html_24_bit Colour palette selectors (as in
+#' @param theme,html_24_bit Colour palette selectors (as in
 #'   \code{\link[=tab_kable]{tab_kable()}}); they only affect the CSS emitted by `css = TRUE` /
 #'   \code{\link{tab_css}}, since the span *class names* are palette- and theme-independent. `theme`
 #'   accepts `"auto"` (follow the reader's colour scheme).
+#' @param color_type `r lifecycle::badge("deprecated")` Inert since 1.4.0: the text channel always uses
+#'   the text palette. The colour CHANNEL is chosen by `color = c(text, background)` (see \code{\link{tab}}).
 #' @param caption Optional table caption, rendered as a pandoc caption line `: caption` (captions only
 #'   the first table of a list).
 #' @param transpose Set to `TRUE` to transpose each table before export (rows become columns) --
@@ -80,7 +82,7 @@ tab_md <- function(tabs,
                    color_legend = TRUE,
                    lang = NULL,
                    theme = NULL,
-                   color_type = NULL,
+                   color_type = lifecycle::deprecated(),
                    html_24_bit = NULL,
                    caption = NULL,
                    transpose = FALSE,
@@ -91,6 +93,7 @@ tab_md <- function(tabs,
                    print = TRUE,
                    title = lifecycle::deprecated(),
                    col_var_names = lifecycle::deprecated()) {
+  if (lifecycle::is_present(color_type)) lifecycle::deprecate_soft("1.4.0", "tab_md(color_type)")
   # Phase 13a: install a per-table color_breaks override for the render (no-op otherwise).
   .cb <- push_color_breaks(tabs); on.exit(pop_color_breaks(.cb), add = TRUE)
   # Phase 10j: `title` renamed to `caption` (unified across exporters); `transpose` added.
@@ -112,9 +115,9 @@ tab_md <- function(tabs,
   # `html_24_bit` is inert (Phase 13a): markdown colour spans map to CSS classes, always 24-bit.
   # Phase 13d: `allow_auto` -- markdown carries a stylesheet (css = TRUE / tab_css()), so it can follow
   # the reader's colour scheme. The spans themselves are theme-independent (only the CSS differs).
-  o <- resolve_export_opts(theme, color_type, color, transpose = transpose,
+  o <- resolve_export_opts(theme = theme, color = color, transpose = transpose,
                            var_names = var_names, allow_auto = TRUE)
-  theme <- o$theme; color_type <- o$color_type; color <- o$color
+  theme <- o$theme; color <- o$color
 
   # --- Phase 10d/10f: shared exporter prep + the base/list split. ---
   # A single tab (or a mergeable same-col_vars / no-tab_vars list) renders as ONE table; a NON-mergeable
@@ -126,7 +129,7 @@ tab_md <- function(tabs,
   if (bold_references) compute <- c(compute, "bold")
   if (color) compute <- c(compute, "colors")
   prep <- tab_export_prep(tabs, backend = "md", drop_tab_vars = FALSE, wrap = NULL,
-                          compute = compute, transpose = o$transpose, color_type = color_type,
+                          compute = compute, transpose = o$transpose,
                           theme = theme, var_names = o$var_names, list_method = TRUE,
                           what = "tab_md()")
 
@@ -135,7 +138,7 @@ tab_md <- function(tabs,
                   subtext = subtext, color = color,
                   color_legend = color_legend, lang = lang,
                   title = if (i == 1) caption else NULL,
-                  color_type = color_type, theme = theme)
+                  theme = theme)
   })
   md_text <- paste(parts, collapse = "\n\n")
 
@@ -146,8 +149,7 @@ tab_md <- function(tabs,
   # selector matches, and `chrome = TRUE` becomes meaningful for markdown for the first time.
   # The raw markdown stays readable: two marker lines, no change to the table itself.
   if (isTRUE(css)) {
-    md_text <- paste0(tab_css(theme = theme, color_type = color_type,
-                              chrome = TRUE, style_tag = TRUE),
+    md_text <- paste0(tab_css(theme = theme, chrome = TRUE, style_tag = TRUE),
                       "\n\n::: {.tabxplor-tab}\n", md_text, "\n:::")
   }
 
@@ -175,7 +177,7 @@ tab_md <- function(tabs,
 #' **slot**, not a break -- so `tabs` is ignored and one stylesheet styles every table in a document.
 #'
 #' @param tabs Ignored (the CSS is table-independent). Kept so `tab_md_css(tabs)` still reads naturally.
-#' @param ... Passed to \code{\link{tab_css}} (`theme`, `color_type`, `style_tag`, `file`).
+#' @param ... Passed to \code{\link{tab_css}} (`theme`, `style_tag`, `file`).
 #'
 #' @return A character string of CSS (invisible when `file` is given).
 #' @seealso [tab_css()], which is the generator and also styles `tab_kable(engine = "html")`.
@@ -196,7 +198,7 @@ tab_md_css <- function(tabs = NULL, ...) {
 # the byte-identical plain padded table.
 md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
                           color = TRUE, color_legend = TRUE, lang = NULL, title = NULL,
-                          color_type = NULL, theme = NULL) {
+                          theme = NULL) {
   # Graceful degrade -- a table that can't be read as a tabxplor table renders as a plain pipe table.
   if (isTRUE(rd$vars$degrade)) {
     tab_degrade_inform(rd$vars$reason)
@@ -219,7 +221,7 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   # Only when coloured (a legend describes the colours). Prepended above the user subtext.
   if (isTRUE(color) && isTRUE(color_legend) && length(rd$roles$color_cols) != 0) {
     leg <- suppressWarnings(tab_color_legend(tabs, medium = "md", style = "prose", lang = lang,
-                                             color_type = color_type, theme = theme))
+                                             theme = theme))
     if (length(leg)) subtext_text <- c(leg, subtext_text)
   }
 
@@ -653,5 +655,5 @@ md_bold <- function(text, split_at = NA_integer_) {
 }
 
 # Phase 13d: md_css_rules() / md_css_block() / md_break_class() / md_slot_class_map() are GONE. The
-# stylesheet is table-independent (a pure function of palette + color_type + theme), so it is generated
+# stylesheet is table-independent (a pure function of palette + theme), so it is generated
 # by tab_css() (R/tab-css.R) with no prep walk, no per-column plan and no per-table CSS.

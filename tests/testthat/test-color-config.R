@@ -171,16 +171,16 @@ testthat::test_that("two-channel colour: background channel renders independentl
   col2 <- function(t) t[[which(purrr::map_lgl(t, is_fmt))[2]]]
 
   tt <- col2(tab(d, marital, race, pct = "row", color = TRUE))    # diff text + ratio bg
-  testthat::expect_true(any(!is.na(fmt_channel_codes(tt, "text", "light")$text)))
+  testthat::expect_true(any(!is.na(fmt_channel_codes(tt, "light")$text)))
 
   # a lone diff measure on the background: text empty, background coloured
   bgo    <- col2(tab(d, marital, race, pct = "row", color = c("", "diff")))
-  codesb <- fmt_channel_codes(bgo, "text", "light")
+  codesb <- fmt_channel_codes(bgo, "light")
   testthat::expect_true(all(is.na(codesb$text)))
   testthat::expect_true(any(!is.na(codesb$bg)))
 
   both <- col2(tab(d, marital, race, pct = "row", color = c("diff", "diff")))
-  cb   <- fmt_channel_codes(both, "text", "light")
+  cb   <- fmt_channel_codes(both, "light")
   testthat::expect_true(any(!is.na(cb$text)))
   testthat::expect_true(any(!is.na(cb$bg)))
 })
@@ -215,11 +215,12 @@ testthat::test_that("deprecated colour arguments / functions are wired, not erro
   withr::defer({
     tabxplor_palette_env$base <- default_palette_base(); build_palettes()
     options("tabxplor.color_breaks" = default_color_scales(),
-            "tabxplor.color_style_type" = "text", "tabxplor.color_style_theme" = "light")
+            "tabxplor.color_style_theme" = "light")
   })
   d <- forcats::gss_cat
 
-  # set_color_style() -> options + set_color_palette(), with a soft-deprecation
+  # set_color_style() -> options + set_color_palette(), with a soft-deprecation. Phase 14l dropped its
+  # `tabxplor.color_style_type` WRITE (that option is deprecated), so only the theme half survives.
   lifecycle::expect_deprecated(set_color_style(type = "bg", theme = "dark"))
   testthat::expect_equal(getOption("tabxplor.color_style_theme"), "dark")
   withr::local_options(lifecycle_verbosity = "quiet")
@@ -245,6 +246,77 @@ testthat::test_that("deprecated colour arguments / functions are wired, not erro
   # inert html_24_bit is absorbed, not an error
   testthat::expect_no_error(get_color_style("color_code", type = "text", html_24_bit = "blue_red"))
   testthat::expect_no_error(fmt_get_color_code(g$Married, html_24_bit = "blue_red"))
+})
+
+
+# --- Phase 14l: the `color_type` argument / option are deprecated + inert ------------------------
+testthat::test_that("color_type is deprecated on every exporter and does nothing", {
+  d  <- forcats::gss_cat
+  tb <- tab(d, marital, race, pct = "row", color = TRUE)
+
+  # each of the 7 public surfaces warns once when color_type is explicitly passed
+  lifecycle::expect_deprecated(tab_kable(tb, color_type = "bg", engine = "html"))
+  lifecycle::expect_deprecated(tab_md(tb, color_type = "bg", print = FALSE))
+  lifecycle::expect_deprecated(tab_css(color_type = "bg"))
+  lifecycle::expect_deprecated(tab_export(tb, "md", color_type = "bg", print = FALSE))
+  lifecycle::expect_deprecated(tab_md_css(color_type = "bg"))
+  p <- withr::local_tempfile(fileext = ".xlsx")
+  lifecycle::expect_deprecated(suppressMessages(
+    tab_xl(tb, color_type = "bg", path = p, open = FALSE, replace = TRUE)))
+  testthat::skip_if_not_installed("ggpubr")
+  lifecycle::expect_deprecated(tab_plot(tb, color_type = "bg"))
+})
+
+testthat::test_that("color_type is INERT: tab_css output is byte-identical with or without it", {
+  withr::local_options(lifecycle_verbosity = "quiet")
+  # tab_css is a pure function of (palette, theme), so byte-equality is the strongest inert proof.
+  testthat::expect_identical(tab_css(color_type = "bg", style_tag = FALSE),
+                             tab_css(style_tag = FALSE))
+})
+
+testthat::test_that("color_type default is no longer a literal that warns", {
+  testthat::skip_if_not_installed("openxlsx2")
+  # tab_xl's default was the literal "text" (the one exporter that ignored the option). Now the
+  # sentinel: a plain call must NOT warn about color_type.
+  tb <- tab(forcats::gss_cat, marital, race, pct = "row", color = TRUE)
+  p  <- withr::local_tempfile(fileext = ".xlsx")
+  n  <- 0
+  withCallingHandlers(
+    suppressMessages(tab_xl(tb, path = p, open = FALSE, replace = TRUE)),
+    warning = function(w) { if (grepl("color_type", conditionMessage(w))) n <<- n + 1
+                            invokeRestart("muffleWarning") })
+  testthat::expect_equal(n, 0L)
+})
+
+testthat::test_that("the color_style_type OPTION is inert, and warns only when non-default", {
+  withr::defer(rlang::reset_warning_verbosity("lifecycle_The option \"tabxplor.color_style_type\""))
+  # inert: option = "bg" renders the SAME as an explicit text lookup (channel is chosen by `color=`).
+  # Both reads fire the option-deprecation warning (the check is unconditional on `type`), so both are
+  # suppressed here -- the warning itself is asserted separately below.
+  withr::with_options(list(tabxplor.color_style_type = "bg"), {
+    a <- suppressWarnings(get_color_style("color_code", theme = "light"))
+    b <- suppressWarnings(get_color_style("color_code", type = "text", theme = "light"))
+    testthat::expect_identical(a, b)
+  })
+  # warns when set non-default
+  rlang::reset_warning_verbosity("lifecycle_The option \"tabxplor.color_style_type\"")
+  withr::with_options(list(tabxplor.color_style_type = "bg"),
+    lifecycle::expect_deprecated(get_color_style("color_code"), "color_style_type"))
+  # silent when unset (the normal case now the seed write is gone)
+  withr::with_options(list(tabxplor.color_style_type = NULL),
+    testthat::expect_no_warning(get_color_style("color_code")))
+})
+
+testthat::test_that("the color_type=bg_legend latent abort can't be reached via the option", {
+  withr::local_options(lifecycle_verbosity = "quiet")
+  tb <- tab(forcats::gss_cat, marital, race, pct = "row", color = c("diff", "ratio"))
+  # the option used to reach get_color_style("crayon", type = "bg_legend") via legend_render_line's
+  # unvalidated fam("text"); hard-wiring "text" closes it. The DIRECT abort still stands (below).
+  withr::with_options(list(tabxplor.color_style_type = "bg_legend"), {
+    testthat::expect_no_error(suppressWarnings(print(tb)))
+    testthat::expect_no_error(suppressWarnings(tab_color_legend(tb, medium = "console")))
+  })
+  testthat::expect_error(get_color_style("crayon", type = "bg_legend"), "bg_legend")
 })
 
 

@@ -9,7 +9,7 @@ tab_md_css(tabs = NULL, ...)
 \arguments{
 \item{tabs}{Ignored (the CSS is table-independent). Kept so \code{tab_md_css(tabs)} still reads naturally.}
 
-\item{...}{Passed to \code{\link{tab_css}} (\code{theme}, \code{color_type}, \code{style_tag}, \code{file}).}
+\item{...}{Passed to \code{\link{tab_css}} (\code{theme}, \code{style_tag}, \code{file}).}
 }
 \value{
 A character string of CSS (invisible when \code{file} is given).

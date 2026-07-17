@@ -25,7 +25,8 @@
 #'   \code{format = "kable"} with \code{engine = "html"} and for \code{"md"}, and resolves to
 #'   \code{"light"} for the static \code{"xl"} / \code{"plot"} backends and the kableExtra engine.
 #'   Defaults to \code{getOption("tabxplor.theme")}. See \code{\link{tab_css}}.
-#' @param color_type By default the text is coloured; set to \code{"bg"} to colour the background.
+#' @param color_type `r lifecycle::badge("deprecated")` Inert since 1.4.0: the text channel always uses
+#' the text palette. The colour CHANNEL is chosen by `color = c(text, background)` (see \code{\link{tab}}).
 #' @param html_24_bit `r lifecycle::badge("deprecated")` Inert since 1.4.0 (exports are always 24-bit).
 #' @param color Set to \code{FALSE} to render without colours (monochrome).
 #' @param color_legend Print the colour legend with the subtext
@@ -51,32 +52,35 @@
 #' tab_export(tabs, "md")
 #' }
 tab_export <- function(x, format = c("kable", "md", "xl", "plot"), path = NULL,
-                       theme = NULL, color_type = NULL, html_24_bit = NULL,
+                       theme = NULL, color_type = lifecycle::deprecated(), html_24_bit = NULL,
                        color = TRUE, color_legend = TRUE, lang = NULL, transpose = FALSE,
                        caption = NULL, var_names = NULL, ...) {
   format <- match.arg(format)
+  # Phase 14l: `color_type` is deprecated -- warn ONCE here and never forward it, so the child
+  # exporter (which also has the sentinel) does not warn a second time.
+  if (lifecycle::is_present(color_type)) lifecycle::deprecate_soft("1.4.0", "tab_export(color_type)")
   switch(
     format,
     kable = {
       cap <- if (is.null(caption)) knitr::opts_current$get("tab.cap") else caption
-      k <- tab_kable(x, theme = theme, color_type = color_type, html_24_bit = html_24_bit,
+      k <- tab_kable(x, theme = theme, html_24_bit = html_24_bit,
                      color = color, color_legend = color_legend, lang = lang, caption = cap,
                      transpose = transpose, var_names = var_names, ...)
       if (!is.null(path)) writeLines(as.character(k), path)
       k
     },
-    md = tab_md(x, theme = theme, color_type = color_type, html_24_bit = html_24_bit,
+    md = tab_md(x, theme = theme, html_24_bit = html_24_bit,
                 color = color, color_legend = color_legend, lang = lang,
                 transpose = transpose, caption = caption, var_names = var_names,
                 file = path, ...),
-    xl = tab_xl(x, path = path, theme = theme, color_type = color_type, html_24_bit = html_24_bit,
+    xl = tab_xl(x, path = path, theme = theme, html_24_bit = html_24_bit,
                 color = color, color_legend = color_legend, lang = lang, transpose = transpose,
                 caption = caption, var_names = var_names, ...),
     plot = {
       if (!is.null(path)) {
         cli::cli_warn("{.arg path} is ignored for {.code format = \"plot\"} (returns a ggplot).")
       }
-      tab_plot(x, theme = theme, color_type = color_type, html_24_bit = html_24_bit,
+      tab_plot(x, theme = theme, html_24_bit = html_24_bit,
                color = color, color_legend = color_legend, lang = lang, transpose = transpose,
                caption = caption, var_names = var_names, ...)
     }

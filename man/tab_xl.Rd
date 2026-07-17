@@ -18,14 +18,14 @@ tab_xl(
   n_min = 0,
   titles,
   caption = NULL,
-  font_text = "DejaVu Sans Condensed",
-  font_num = "DejaVu Sans",
+  font_text = getOption("tabxplor.xl_font_text", "DejaVu Sans Condensed"),
+  font_num = getOption("tabxplor.xl_font_num", "DejaVu Sans"),
   text_size = 10,
   text_size_headers = 9,
   text_size_subtext = 9,
   hide_near_zero = Inf,
   theme = NULL,
-  color_type = "text",
+  color_type = lifecycle::deprecated(),
   html_24_bit = NULL,
   color = TRUE,
   transpose = FALSE,
@@ -79,7 +79,11 @@ titles are given based on the names of the variables.}
 \item{caption}{A single caption; a shortcut that fills \code{titles} (an explicit \code{titles}
 still wins). Unified name across all exporters.}
 
-\item{font_text, font_num}{Font for text and for numbers.}
+\item{font_text, font_num}{Font for text (labels, headers) and for numbers. Default from
+\code{options(tabxplor.xl_font_text)} / \code{options(tabxplor.xl_font_num)}. Note that xlsx,
+unlike CSS, has \strong{no font-fallback list}: only one name can be recorded per font, so if it
+is missing on the machine opening the workbook, Excel substitutes by its own rules and no
+fallback can be named here. Set the options to a font you know is installed.}
 
 \item{text_size, text_size_headers, text_size_subtext}{Font sizes of text elements.}
 
@@ -89,8 +93,8 @@ slow feature): the argument is kept for back-compatibility but no longer does an
 \item{theme}{By default (\code{"light"}) a white table with black text; set to \code{"dark"}
 for a black table with white text (the colours follow the theme).}
 
-\item{color_type}{By default, the text is colored. Set to \code{"bg"} to color
-the background instead.}
+\item{color_type}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Inert since 1.4.0: the text channel always uses
+the text palette. The colour CHANNEL is chosen by \code{color = c(text, background)} (see \code{\link{tab}}).}
 
 \item{html_24_bit}{Kept for a uniform exporter signature; inert for Excel (always 24-bit).}
 

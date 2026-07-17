@@ -41,23 +41,35 @@ cols2 <- c(musique_vars, "NB_MUSIQUES") # plus the related score as numeric vari
 
 
 
-### kable and md tests ---- 
+### md tests and others ---- 
 
 
-# tab(pc18, all_of(rows1), nb_cine, wt = POND, pct = "col", color = TRUE, na = "drop") |> 
-#   tab_kable()
+# How to handle significance stars in tab_md ? 
+tab(pc18, all_of(rows2), c(ROCK, JAZZ, CLASSIQUE), wt = POND, pct = "row",  na = "drop", 
+   color = TRUE, color_signif = "grey_non_signif", ref = 1,  # stars = TRUE
+) |> 
+  tab_export("md", css = TRUE)
+# - Strangely enough for me, significance stars actually renders well with the md (quarto/pandoc). 
+# - The rendered html of course does not respect the padding/alignement, but I wonder if there would 
+#   be a trick for it too work here too ? If instead of normal spaces, we pass the right kind of  
+#   special space to match the * widths, would the alignment be kept after pandoc html render ?e
+#  Same thing for the "100% (n= 673)" like column in md, of course (would the 1 digit space work here ?)
+# - By the way : with color_sign = "grey_non_signif", the tooltip is actually statistically false. 
+#  It writes : "Grey: not significantly different from the Total row (Newcombe score interval, 95% confidence).", 
+#   but that is only true with "guaranteed_effect" ; since, with "grey_non_signif", significative 
+#   differences with small effects are greyed out (and some have stars !), we must change this legend. Here, 
+#   the only thing we’re sure about, it that all colored cells are significantly different from ref
+#   (but not all significant cells are colored). Explain it in a clear but straightforward way.
 
-# tab(pc18, all_of(rows1), all_of(cols1), wt = POND, pct = "col", color = TRUE, na = "drop") |> 
-#   tab_kable(theme = "auto")
 
 
-
-# tab(pc18, all_of(rows2), c(ROCK, JAZZ, CLASSIQUE), wt = POND, pct = "row", color = TRUE, na = "drop", 
-#     levels = "first", ref = 1
-# ) |> 
-#   tab_export("md", css = TRUE)
-
-
+# This important exported helper is not working anomyre with `freq = TRUE`` 
+#  (it’s ok with `freq = FALSE`) : try to fix it, and add testthat tests for it since it’s exported.
+fct_recode_helper(forcats::gss_cat, all_of("rincome"))
+# Error in `purrr::map()` at tabxplor/R/utils.R:284:5:
+# ℹ In index: 1.
+# Caused by error in `.f()`:
+# ! object 'pct' not found
 
 
 
@@ -74,51 +86,101 @@ options(tabxplor.parallel = TRUE, tabxplor.cleannames = TRUE, tabxplor.print = "
 
 data <- forcats::gss_cat |>
 dplyr::mutate(married = factor(dplyr::if_else(marital == "Married",
-"01-Married",
-"02-Not married")
-))
+    "01-Married",
+    "02-Not married")
+   ),
+   race = forcats::fct_relevel(race, "White", "Black", "Other"), 
+   marital = forcats::fct_relevel(marital, "Married", "Separated", "Divorced", "Widowed", "Never married", "No answer"),
+
+  across(where(is.factor), ~ forcats::fct_recode(., "NULL" = "No answer", "NULL" = "Refused", "NULL" = "Don't know", "NULL" = "Not applicable")),
+
+  rincome = forcats::fct_recode(   # "new" = "old" 
+    rincome,
+    "1-Lt $10000"      = "Lt $1000"      ,
+    "1-Lt $10000"      = "$1000 to 2999" ,
+    "1-Lt $10000"      = "$3000 to 3999" ,
+    "1-Lt $10000"      = "$4000 to 4999" ,
+    "1-Lt $10000"      = "$5000 to 5999" ,
+    "1-Lt $10000"      = "$6000 to 6999" ,
+    "1-Lt $10000"      = "$7000 to 7999" ,
+    "1-Lt $10000"      = "$8000 to 9999" ,
+    "2-$10000 - 14999" = "$10000 - 14999",
+    "3-$15000 - 24999" = "$15000 - 19999",
+    "4-$15000 - 24999" = "$20000 - 24999",
+    "5-$25000 or more" = "$25000 or more"
+    ) |> 
+    forcats::fct_relevel(sort) |>
+    as.ordered(),
+)
+
+
 
 # logistic (odds ratios):
-tab_reg(data, dependent = "married", predictors = c("race", "rincome"), family = "binomial")     # genuinely occupy all horizontal space, too much blank            # occupy half the space, compact, good 
+tab_reg(data, dependent = "married", predictors = c("race", "rincome"), family = "binomial", 
+        empirical_OR = TRUE
+)  
 # - Summary stats are difficult to read because they are greyed out : 
-#    a vctrs fields trick can certainly resolve this, like considering them as a total rows 
+#    a vctrs fields trick can certainly resolve this, like considering them as a total rows (study this carefully) ? 
+# - For the reference rows, the reference "Emp. %" appear in grey (should be black : reference row)
+# - The "n" in the tooltip is not good, it gives the N of the whole model (already in summary statistics),
+#    but what is useful there is the n for the row level (put it when it exists, for ex with `empirical = TRUE` ; NA otherwise).
+
+tab_reg(data, married ~ race + rincome, family = "binomial", effect = "ame", cleannames = FALSE) 
+# - some AME do not appear and may be missing value : but among them, with OR.
+#  "$20000 - 24999" is two stars significant and "$15000 - 19999" is one star significant ("$10000 - 14999" 
+#  is missing too and is not significant), so these NA values are strange ! Please enquire. 
+#  I checked  if it was a "cleanames = TRUE" option problem handling "-", since the three missing rows have "-" in their name,
+#    but it’s not.
+# - even with effect = "ame", I still want the OR in the tooltips. Any data already computed in vctrs fields
+#   that can really help the user interpret and understand the model is a good candidate for tooltips.
 
 
-tab_reg(data, dependent = "married", predictors = c("race", "rincome"), family = "binomial")     # genuinely occupy all horizontal space, too much blank
-tab(data, c("race", "rincome"), married, pct = "row", color = TRUE, na = "drop")                 # occupy all horizontal space but a tiny porton, too much blank
-tab(pc18, all_of(rows1), TELE, wt = POND, pct = "col", color = TRUE, na = "drop", levels="first")# genuinely occupy all horizontal space, too much blank
-tab(pc18, all_of(rows1), nb_cine, wt = POND, pct = "col", color = TRUE, na = "drop")   
-# - For a reason unknown, standard tab() with few columns sometimes do not occupy all horizontal space, 
-#    in html in Positron Viewer pane, sometimes don’t, which is inconsistent and bad looking (far too much blank); 
-#    tab_reg() does the same : here very few column and numbers, yet all the horizontal space taken. 
-#    Where does it come from ? To fix in all exports, it’s not only tab_reg.
+tab_reg(data, dependent = "married", predictors = c("race", "rincome"), family = "binomial", 
+        effect = "ame", empirical_OR = TRUE
+) 
+# "Error in `tab_reg()` at dev/review_manual/tab_manual_review_pass_3.R:95:1:
+# ! `empirical_OR` is only available for a single binary logistic outcome (coefficient effect).
+# ℹ It shows the descriptive crude odds ratio / percentage beside the model odds ratio."
+# - Replace `empirical_OR` argument with `empirical` (no soft-deprecated : new function in 1.4.0) ;
+#   for  effect = "ame", which prints both modelised difference from reference level (AME ; MER too) 
+#   and modelised/adjusted percentage (predicted probability). 
+#   What would be the right empirical comparison, base percentage + empirical diff ? 
+# - For all types of models, **rule should be** : `empirical=TRUE` prints the empirical computation 
+#   that is adapted for the comparison (which is also the modelised quantity with only one predictor). 
+#   What is it for a lm() regression, just the mean per level of the predictor and difference of mean from reference ?
+#   Make web searches, ensure the framework to compare "modelised" versus "empirical" is statistically sound, good practice, standard.
 
+
+tab_reg(data, dependent = "marital", predictors = c("race", "rincome"), family = "multinomial")
+# - With multinomial, where a same model have different columns, set all the colums to the same col_var, 
+#   so that horizontal borders between the columns are automatically removed.
+
+tab_reg(data, dependent = "marital", predictors = c("race", "rincome"), family = "multinomial", 
+  effect = "ame", at = "average"
+)
+# here, adding many column for `empirical=TRUE` would create too much columns. But there is a way : 
+#  would there be a trick to print the empirical pct and the empirical diff from ref, for the user to
+#  seem if they are close or far from the modelised ones (problem : the vctrs fields only have 
+#  1 pct and 1 diff fields ! Is there a hack, that would not mess with tab() tooltips or 
+#  other tab_reg() tooltips ) ?
+
+
+# # odds ratio of each outcome category versus the rest at reference population work
+# # (but in fact, like predicted, it’s still more difficult to read than AME at average)
+# tab_reg(data, dependent = "marital", predictors = c("race", "rincome"), family = "multinomial", 
+#   effect = "coefficient", at = "reference"
+# )
+
+# ordinal (proportional-odds): one cumulative-OR column
+tab_reg(data, dependent = "rincome", predictors = c("marital", "race"), family = "ordinal")
+# - Add Brant omnibus pvalue in summary statistics for "ordinal" ?
 
 
 # linear (betas):
 tab_reg(data, dependent = "tvhours", predictors = c("race", "age"), family = "gaussian")
-
-
-# formula escape-hatch (same model, terser):
-tab_reg(data, married ~ race + rincome, family = "binomial")
-
-
-# average marginal effects + adjusted predictions (needs the marginaleffects package):
-
-tab_reg(data, dependent = "married", predictors = c("race", "rincome"), family = "binomial", effect = "ame")
-# marginal effects at the reference profile (others at their reference level / mean):
-tab_reg(data, dependent = "married", predictors = c("race", "rincome"), family = "binomial", 
-  effect = "ame", at = "reference")
-
-# multinomial (nominal 3+ level): one OR column per outcome category vs the reference
-tab_reg(forcats::gss_cat, dependent = "partyid", predictors = c("race", "age"), family = "multinomial", 
-  reference = c(partyid = "Independent"))
-
-# ordinal (proportional-odds): one cumulative-OR column
-income3 <- forcats::gss_cat |> dplyr::mutate(income = factor(rincome, ordered = TRUE))
-tab_reg(income3, dependent = "income", predictors = "race", family = "ordinal")
-
-
+# - here too, reference it greyed out, but must be black (0)
+# - Also here, for "race" predictor, I have two cells with "***" but that are greyed out (Black 1/1.30, Other 1/1.44), 
+#    I don’t understand, please enquire and explain it to me.
 
 
 
@@ -126,8 +188,8 @@ tab_reg(income3, dependent = "income", predictors = "race", family = "ordinal")
 
 #### comparaison with results of former tab_logit functions ----
 
-##### startup
-ct13_reg <- readRDS("dev/review_manual/ct13_reg.rgs")
+# startup
+ct13_reg <- readRDS("dev/review_manual/ct13_reg.rds") # no to use in testthat, confidential data !
 
 vars_sociodemo  <- c("SEXE", "AGE4", "DIPLOME4")
 vars_metier     <- c("PPP1ex", "FAPPPreg", "ENCADR", "PUBLIC")
@@ -138,40 +200,21 @@ scores_RPS_predictors2 <- list(
   "employeur" = "EMP4reg",
   "orga"      = "cah_ORGA",
   "sociodemo" = vars_sociodemo,
-  "metier"    = c("PPP1", "ENCADR"), #"FAPPPreg" "PUBLIC", 
+  "metier"    = c("PPP1", "ENCADR"), 
   "sauf_orga" = c(vars_sociodemo, c("PPP1", "ENCADR"), vars_emp),
-  #"sans sd"   = c("PPP1", "ENCADR", vars_emp, "cah_ORGA"),
   "complet"   = c(vars_sociodemo, c("PPP1", "ENCADR"), vars_emp, "cah_ORGA")
 )
 
 vars_scores_RPS13_final <- 
-  c("score_risques_phy", #"score_horaires13", 
-    #"score_insecurite13", 
-    #"score_relations_collegues13", 
+  c("score_risques_phy", 
     "score_relations_chef13", "score_orga_hostile", 
     "score_emopub13", "score_charge_mentale", "score_contrad13", 
-    #"score_non_reconnaissance",
-    "score_conflits_ethiques13", "score_moyens" #, "score_ethique_moyens13" 
+    "score_conflits_ethiques13", "score_moyens"
   )
 
 nb_questions <- c(9, 6, 12, 6, 4, 4, 5, 7)
-  # vars_scores_RPS13_final |>
-  # stringr::str_replace("score_", "vars_") |> 
-  # rlang::syms() |> purrr::map_int(~rlang::eval_tidy(.) |> length())
 
-
-# # Scores finaux, predicteurs finaux
-# scores_RPS_logits <- 
-#   multi_logit(ct13_reg, vars_scores_RPS13_final,
-#               predictors_sequence = scores_RPS_predictors2, marginal_effects = FALSE,
-#               wt = "pondqaa", 
-#               nb_questions = vars_scores_RPS13_final |>
-#                 str_replace("score_", "vars_") |> 
-#                 syms() |> map_int(~eval_tidy(.) |> length())
-#   )
-
-
-##### models 
+##### logit models 
 scores_RPS_logits <- 
 tab_reg(
   ct13_reg, 
@@ -221,6 +264,8 @@ score_risques_phy_logits |> tab_export(theme="auto")
 #    with fallback to other monospace fonts, anytime there are stars (but it you have a DejaVu Sans solution I would like it).
 # - Remove tooltips from summary statistics, otherwise some show inconsistent "diff", etc. 
 #    For example, AIC "63 785" with diff tooltip "+6378526%". 
+
+
 
 
 

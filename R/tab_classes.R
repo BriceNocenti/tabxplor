@@ -815,8 +815,8 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #'
 #' @param tabs A table made with \code{\link{tab}} or \code{\link{tab_many}},
 #'   or a `list` of tab with the same `col_vars` and no `tab_vars`.
-#' @param color_type  Set to \code{"text"} to color the text, \code{"bg"} to color the
-#' background. By default it takes \code{getOption("tabxplor.color_style_type")}.
+#' @param color_type `r lifecycle::badge("deprecated")` Inert since 1.4.0: the text channel always uses
+#' the text palette. The colour CHANNEL is chosen by `color = c(text, background)` (see \code{\link{tab}}).
 #' @param theme By default (\code{"light"}) a white table with black text; \code{"dark"} for a black
 #' table with white text; \code{"auto"} (opt-in) to follow whoever is **reading** the table:
 #' \itemize{
@@ -890,10 +890,10 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #' @examples
 #' \donttest{
 #' tabs <- tab(forcats::gss_cat, race, marital, year, pct = "row", color = "diff")
-#' tab_kable(tabs, theme = "light", color_type = "text")
+#' tab_kable(tabs, theme = "light")
 #' }
 tab_kable <- function(tabs,
-                      theme = NULL, color_type = NULL, html_24_bit = NULL,
+                      theme = NULL, color_type = lifecycle::deprecated(), html_24_bit = NULL,
                       color = TRUE, tooltips = TRUE, popover = NULL, color_legend = TRUE,
                       lang = NULL,
                       caption = knitr::opts_current$get("tab.cap"),
@@ -906,13 +906,14 @@ tab_kable <- function(tabs,
                       whitespace_only = TRUE,
                       engine = NULL, css = NULL,
                       ...) {
+  if (lifecycle::is_present(color_type)) lifecycle::deprecate_soft("1.4.0", "tab_kable(color_type)")
   # Phase 13a: install a per-table color_breaks override for the render (no-op otherwise).
   .cb <- push_color_breaks(tabs); on.exit(pop_color_breaks(.cb), add = TRUE)
-  # Phase 10j: the theme/color_type/color/color_legend preamble is the shared resolver. `html_24_bit`
-  # is inert (Phase 13a): exports are always 24-bit, kept only so old calls do not error.
-  o <- resolve_export_opts(theme, color_type, color, color_legend, transpose,
-                           var_names = var_names, allow_auto = TRUE)
-  theme <- o$theme; color_type <- o$color_type
+  # Phase 10j: the theme/color/color_legend preamble is the shared resolver. `html_24_bit` is inert
+  # (Phase 13a): exports are always 24-bit, kept only so old calls do not error.
+  o <- resolve_export_opts(theme = theme, color = color, color_legend = color_legend,
+                           transpose = transpose, var_names = var_names, allow_auto = TRUE)
+  theme <- o$theme
   color_legend <- o$color_legend
   compute <- c("refs", "bold", "range")
   if (o$color) compute <- c(compute, "colors")
@@ -943,7 +944,7 @@ tab_kable <- function(tabs,
     tabs, backend = "kable", list_method = TRUE, compute = compute, transpose = o$transpose,
     wrap = list(rows = wrap_rows, cols = wrap_cols, exdent = 2,
                 whitespace_only = whitespace_only, unbreakable_spaces = TRUE, brk = "<br>"),
-    color_type = color_type, theme = theme, var_names = o$var_names,
+    theme = theme, var_names = o$var_names,
     color_legend = color_legend, what = "tab_kable()"
   )
 
@@ -958,7 +959,7 @@ tab_kable <- function(tabs,
         subtext <- c(
           suppressWarnings(tab_color_legend(
             rd$tab, medium = "html", style = "prose", lang = lang,
-            color_type = color_type[1], theme = theme[1],
+            theme = theme[1],
             # Phase 13d: the html engine ships a tabxplor stylesheet, so the legend uses the same slot
             # classes as the cells and follows any theme toggle with them. kableExtra does not.
             classes = identical(engine, "html"))),
@@ -976,7 +977,7 @@ tab_kable <- function(tabs,
   # stylesheet is table-independent (see tab_css()), hence built once per call -- or not at all, when a
   # document emitted tab_css() itself (options("tabxplor.kable_css" = FALSE)). kableExtra styles inline.
   style <- if (css && identical(engine, "html")) {
-    tab_css(theme = theme, color_type = color_type, chrome = TRUE, style_tag = FALSE)
+    tab_css(theme = theme, chrome = TRUE, style_tag = FALSE)
   } else ""
   # Phase 14k: `theme` rides along as an attribute so print.tabxplor_kable() can paint the Viewer's
   # page to match -- and, under "auto", resolve it from the editor (the browser cannot see Positron).
@@ -1618,8 +1619,8 @@ reg_footer_lines <- function(tabs) {
 #' \code{\link{tab_xl}} (Excel).
 #'
 #' @param tabs A table made with \code{\link{tab}} or \code{\link{tab_many}}.
-#' @param color_type  Set to \code{"text"} to color the text, \code{"bg"} to color the
-#' background. By default it takes \code{getOption("tabxplor.color_style_type")}.
+#' @param color_type `r lifecycle::badge("deprecated")` Inert since 1.4.0: the text channel always uses
+#' the text palette. The colour CHANNEL is chosen by `color = c(text, background)` (see \code{\link{tab}}).
 #' @param theme By default, a white table with black text, Set to \code{"dark"} for a
 #' black table with white text.
 #' @param html_24_bit `r lifecycle::badge("deprecated")` Inert since 1.4.0: exports are always
@@ -1653,11 +1654,12 @@ reg_footer_lines <- function(tabs) {
 #' }
 #'
 tab_plot <- function(tabs,
-                     theme = NULL, color_type = NULL, html_24_bit = NULL,
+                     theme = NULL, color_type = lifecycle::deprecated(), html_24_bit = NULL,
                      color = TRUE, color_legend = TRUE, lang = NULL, caption = NULL, transpose = FALSE,
                      var_names = NULL,
                      wrap_rows = 35, wrap_cols = 14, # unbreakable_spaces = TRUE
                      whitespace_only = TRUE) {
+  if (lifecycle::is_present(color_type)) lifecycle::deprecate_soft("1.4.0", "tab_plot(color_type)")
   # Phase 13a: install a per-table color_breaks override for the render (no-op otherwise).
   .cb <- push_color_breaks(tabs); on.exit(pop_color_breaks(.cb), add = TRUE)
   if (!requireNamespace("ggpubr", quietly = TRUE)) {
@@ -1685,17 +1687,17 @@ tab_plot <- function(tabs,
   # Phase 14d: a list is never merged at export any more (see tab_resolve_tables), so `length > 1` is
   # the whole condition -- the mergeable probe it used to run is gone.
   if (is.list(tabs) && !is.data.frame(tabs) && length(tabs) > 1L) {
-    return(purrr::map(tabs, tab_plot, theme = theme, color_type = color_type,
+    return(purrr::map(tabs, tab_plot, theme = theme,
                       color = color, color_legend = color_legend,
                       caption = caption, transpose = transpose, wrap_rows = wrap_rows,
                       wrap_cols = wrap_cols, whitespace_only = whitespace_only))
   }
 
-  # Phase 10j: shared option resolver (theme/color_type/color/color_legend/transpose). `html_24_bit`
-  # is inert (Phase 13a).
-  o <- resolve_export_opts(theme, color_type, color, color_legend, transpose,
-                           var_names = var_names)
-  theme <- o$theme; color_type <- o$color_type
+  # Phase 10j: shared option resolver (theme/color/color_legend/transpose). `html_24_bit` is inert
+  # (Phase 13a).
+  o <- resolve_export_opts(theme = theme, color = color, color_legend = color_legend,
+                           transpose = transpose, var_names = var_names)
+  theme <- o$theme
   color_legend <- o$color_legend
   compute <- c("refs", "bold", "range")
   if (o$color) compute <- c(compute, "colors")
@@ -1708,7 +1710,7 @@ tab_plot <- function(tabs,
     tabs, backend = "plot", compute = compute, transpose = o$transpose,
     wrap = list(rows = wrap_rows, cols = wrap_cols, exdent = 1,
                 whitespace_only = whitespace_only, unbreakable_spaces = FALSE, brk = "\n"),
-    color_type = color_type, theme = theme, var_names = o$var_names,
+    theme = theme, var_names = o$var_names,
     color_legend = color_legend, what = "tab_plot()"
   )
   rd <- prep$tables[[1]]
@@ -1902,7 +1904,6 @@ if (color_legend & length(color_cols) != 0) {
   # background break-word borrows the darker bg_legend palette, as in Excel).
   color_legend <- suppressWarnings(tab_color_legend(tabs,
                                    medium     = "runs", style = "prose", lang = lang,
-                                   color_type = color_type[1],
                                    theme      = theme[1])) |>
     purrr::map(function(line) {
       text  <- purrr::map_chr(line, "text")
@@ -3308,25 +3309,32 @@ default_background_colors_neg <- c(
   "#ffbaaf"#,# oklch(0.85 0.082 29)    # "#ffbfb5"#,# oklch(0.86 0.0754 29.01) # "#ffbfb4"#,# oklch(0.86 0.0754 30)  # "#ffce2d"#,# oklch(0.87 0.168 90)
 )
 
-#### Background-legend colors (Phase 14c) ----
+#### Background-legend colors (Phase 14c, rebaked 14l) ----
 # WHY: a colour legend break-word that describes the BACKGROUND channel cannot be drawn with a fill in
 # every medium -- an Excel rich-text run and a ggpubr text label carry a font colour only. Drawn as
 # text, the background palette above (L 0.85-0.97) is invisible on a white sheet. These are the same
-# hues with -0.2 OKLCH lightness (chroma kept, capped to gamut), so the ladder and the visual link to
+# hues at -0.30 OKLCH lightness and 2x chroma (capped to gamut), so the ladder and the visual link to
 # the fills survive. Produced by dev/color_palette_tools.R::darken_for_legend(); regenerate there.
+# DESIGN (Phase 14l): the 14c bake was -0.2 L at 1x chroma and read as faint. The fix needed BOTH
+# levers, and the reason is measured (see darken_for_legend's header): APCA Lc is driven by lightness
+# almost alone, so chroma alone would have fixed the greyness and left Lc at 39.6-60.8 -- 3 of the 4
+# slots below the >= 60 bar these palettes were designed against. -0.30/2x gives Lc 55.3-75.3 and is
+# fully in-gamut on all 8 slots, so the chroma proportions inherited from the fills survive exactly
+# (a bigger boost caps the strong slots out and flattens the ladder instead).
 # NOTE: light only. The dark background palette (L 0.20-0.35) already reads as text on the white sheet
-# an Excel legend cell sits on, and -0.2 would collapse it to black -- build_palettes() uses it as-is.
+# an Excel legend cell sits on, and darkening would collapse it to black -- build_palettes() uses it
+# as-is.
 default_bg_legend_colors <- c(
-  "#9fbbbe", # oklch(0.77 0.0308 205)  <- #dffcff
-  "#98aebd", # oklch(0.74 0.0328 238)  <- #d7efff
-  "#8fa3bd", # oklch(0.71 0.0444 255)  <- #cee3ff
-  "#7e8dbd"  # oklch(0.65 0.0742 271)  <- #bbccff
+  "#67A1A7", # oklch(0.67 0.0611 204)  <- #dffcff
+  "#6492B0", # oklch(0.64 0.0674 238)  <- #d7efff
+  "#5E85B8", # oklch(0.61 0.0896 255)  <- #cee3ff
+  "#5169C7"  # oklch(0.55 0.1481 270)  <- #bbccff
 )
 default_bg_legend_colors_neg <- c(
-  "#bdb3a1", # oklch(0.77 0.0274 82)   <- #fff4e1
-  "#bda694", # oklch(0.74 0.0369 60)   <- #ffe6d3
-  "#bd988a", # oklch(0.71 0.0489 42)   <- #ffd7c8
-  "#bc7c72"  # oklch(0.65 0.0820 29)   <- #ffbaaf
+  "#A7936F", # oklch(0.67 0.0553 82)   <- #fff4e1
+  "#AE815E", # oklch(0.64 0.0741 59)   <- #ffe6d3
+  "#B56E53", # oklch(0.61 0.0989 41)   <- #ffd7c8
+  "#BE4034"  # oklch(0.55 0.1639 29)   <- #ffbaaf
 )
 
 
@@ -3468,8 +3476,9 @@ default_dark_background_colors_neg <- c(
 ## Color functions ----
 
 
-# PURPOSE: the render-time colour palettes (Phase 13a). Eight OKLCH base palettes -- one per
-# (light/dark theme x text/background channel x over-/under-represented side) -- each 4 hex codes
+# PURPOSE: the render-time colour palettes (Phase 13a). Ten OKLCH base palettes -- eight being one per
+# (light/dark theme x text/background channel x over-/under-represented side), plus the two Phase-14c
+# bg_legend sides (the font stand-in for the fills, light only) -- each 4 hex codes
 # (faint -> strong), position-based (no pos1..neg5 names, no ratio slot). They are composed into
 # 8-element slot vectors (4 over + 4 under) and pre-built once into crayon style functions, stored
 # in an internal env and only rebuilt by set_color_palette(). The engine indexes them by the
@@ -3477,7 +3486,7 @@ default_dark_background_colors_neg <- c(
 #' @keywords internal
 tabxplor_palette_env <- new.env(parent = emptyenv())
 
-# The eight OKLCH defaults (defined above as default_*_colors), as the seed base palette.
+# The ten OKLCH defaults (defined above as default_*_colors), as the seed base palette.
 #' @keywords internal
 default_palette_base <- function() {
   list(
@@ -3587,7 +3596,6 @@ set_color_palette <- function(text_colors = NULL, text_colors_neg = NULL,
   if (!is.null(background_colors_neg) && is.null(bg_legend_colors_neg))
     e$base$bg_legend_colors_neg <- unname(background_colors_neg)
 
-  options("tabxplor.color_style_type" = getOption("tabxplor.color_style_type", "text"))
   # Phase 14g: `theme = "auto"` detects the console's colour scheme (tx_detect_theme(): RStudio's
   # getThemeInfo(), Positron's cached settings, COLORFGBG; anything unresolved -> "light"). The
   # RESOLVED value is stored, so no per-print cost -- and so a mid-session theme switch needs another
@@ -3622,7 +3630,9 @@ set_color_palette <- function(text_colors = NULL, text_colors_neg = NULL,
 set_color_style <- function(type = c("text", "bg"), theme = NULL,
                             html_24_bit = NULL, custom_palette = NULL) {
   lifecycle::deprecate_soft("1.4.0", "set_color_style()", "set_color_palette()")
-  if (!missing(type) && length(type)) options("tabxplor.color_style_type" = type[1])
+  # Phase 14l: the `tabxplor.color_style_type` option is deprecated (it never chose a family; it
+  # repointed the text channel into the fill palette). `type` stays LOAD-BEARING below -- it routes
+  # `custom_palette` to the text vs background slot -- but it no longer writes the option.
   if (!is.null(theme)) set_color_palette(theme = theme[1])
   if (length(custom_palette) >= 10L) {
     # old order pos1..pos5, neg1..neg5[, ratio] -> new 4 over + 4 under (drop the faintest pos1/neg1)
@@ -3651,7 +3661,18 @@ set_color_style <- function(type = c("text", "bg"), theme = NULL,
 #' @return A list of 8 crayon color functions, or a vector of 8 color html codes.
 #' @export
 get_color_style <- function(mode = c("crayon", "color_code"), type = NULL, theme = NULL, ...) {
-  type  <- if (is.null(type )) getOption("tabxplor.color_style_type" ) else type
+  # Phase 14l: `type` (the palette-FAMILY selector) stays; the OPTION tabxplor.color_style_type is
+  # deprecated -- it never chose a family, it globally repointed the TEXT channel into the FILL
+  # palette, i.e. fill-coloured font (the CHANNEL is chosen by `color = c(text, background)`). Warn
+  # once per session (deprecate_warn dedups and fires from these nested internal frames; deprecate_soft
+  # keys on the USER frame, so it would be silent from pillar_shaft). Only fires for someone who set
+  # the option to a non-default value -- for everyone else it is NULL now the seed write is gone.
+  opt_type <- getOption("tabxplor.color_style_type")
+  if (!is.null(opt_type) && !identical(opt_type, "text")) {
+    lifecycle::deprecate_warn(
+      "1.4.0", I('The option "tabxplor.color_style_type"'),
+      details = 'The colour CHANNEL is chosen by `color = c(text, background)` (see `?tab`).')
+  }
   theme <- if (is.null(theme)) getOption("tabxplor.color_style_theme") else theme
   if (is.null(type)  || is.na(type[1]))  type  <- "text"
   if (is.null(theme) || is.na(theme[1])) theme <- "light"

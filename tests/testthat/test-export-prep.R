@@ -224,12 +224,69 @@ testthat::test_that("the prep passes the SOURCE row_vars + compacted through", {
   testthat::expect_equal(rd$vars$row_vars, c("race", "marital"))
   testthat::expect_true(rd$vars$compacted)
   testthat::expect_equal(rd$vars$row_var, "levels")   # the COLUMN contract is unchanged
+  # Phase 14l: the DEPENDENT axis is named first. This is a pct="row" table, so the col_var leads.
   testthat::expect_equal(tabxplor:::tab_get_titles(rd$tab, rd$vars$row_vars, rd$vars$col_vars),
-                         "race, marital by relig")
+                         "relig by race, marital")
   # a plain table reports itself
   rd2 <- tabxplor:::tab_export_prep(t_basic, backend = "kable", wrap = NULL)$tables[[1]]
   testthat::expect_equal(rd2$vars$row_vars, "race")
   testthat::expect_false(rd2$vars$compacted)
+})
+
+testthat::test_that("the title names the DEPENDENT axis first, decided by pct", {
+  # Phase 14l: `pct` survives on a built table ONLY as the fmt columns' `type`, so the order is read
+  # from there. Under pct="row" a row is a GROUP and the col_var is what is described.
+  ti <- function(tabs) {
+    rd <- tabxplor:::tab_export_prep(tabs, backend = "xl", list_method = TRUE,
+                                     compute = c("refs", "bold"))$tables[[1]]
+    tabxplor:::tab_get_titles(rd$tab, rd$vars$row_vars, rd$vars$col_vars, rd$vars$tab_vars)
+  }
+  testthat::expect_equal(ti(tab(gss, marital, race, pct = "row")), "race by marital")
+  # pct="col" swaps the axes back -- the ONLY case that flips
+  testthat::expect_equal(ti(tab(gss, c(race, marital), relig, pct = "col")),
+                         "race, marital by relig")
+  # a mean is always "Y by group", so it must NOT vote for a flip
+  testthat::expect_equal(ti(tab(gss, marital, tvhours)), "tvhours by marital")
+  testthat::expect_equal(ti(tab(gss, c(race, marital), c(relig, tvhours), pct = "row")),
+                         "relig, tvhours by race, marital")
+  # counts: no directional type at all -> the dependent-first default
+  testthat::expect_equal(ti(tab(gss, marital, race, pct = "no")), "race by marital")
+  testthat::expect_equal(ti(tab(gss, marital, race, tab_vars = year, pct = "row")),
+                         "race by marital (tabbed by year)")
+})
+
+testthat::test_that("roles$sd_cols finds the Excel sd siblings, ungated by var_names", {
+  # Phase 14l: ONE definition of the "<var>_sd" rule, read by tab_col_var_header() and by tab_xl's
+  # column widths. The header rewrite is gated on `var_names`; the ROLE must not be -- a width is not
+  # a naming decision.
+  pr <- function(vn) tabxplor:::tab_export_prep(
+    tab(gss, marital, c(race, tvhours), pct = "row"), backend = "xl", list_method = TRUE,
+    var_names = vn, compute = c("refs", "bold"))$tables[[1]]
+  for (vn in c("both", "cols", "rows", "none")) {
+    testthat::expect_equal(names(pr(vn)$roles$sd_cols), "tvhours_sd", info = vn)
+  }
+  # the HEADER, by contrast, is gated: no span row -> the level header must name the variable itself
+  h <- function(vn) { p <- pr(vn); p$col_var_header$clean[p$roles$fmt_cols] }
+  testthat::expect_true(all(c("mean", "sd") %in% h("both")))
+  testthat::expect_true("tvhours_sd" %in% h("none"))
+  # a table with no numeric col_var has no sd sibling at all
+  p0 <- tabxplor:::tab_export_prep(tab(gss, marital, race, pct = "row"), backend = "xl",
+                                   list_method = TRUE, compute = c("refs", "bold"))$tables[[1]]
+  testthat::expect_length(p0$roles$sd_cols, 0)
+  # and neither does a text backend, which never materialises them (the sd is inline there)
+  pk <- tabxplor:::tab_export_prep(tab(gss, marital, c(race, tvhours), pct = "row"),
+                                   backend = "kable", wrap = NULL)$tables[[1]]
+  testthat::expect_length(pk$roles$sd_cols, 0)
+})
+
+testthat::test_that("a title elides past `max` = 2 names", {
+  testthat::expect_equal(tabxplor:::tab_title_names(c("a", "b")), "a, b")
+  testthat::expect_equal(tabxplor:::tab_title_names(c("a", "b", "c")), "a, b +1 more")
+  testthat::expect_equal(tabxplor:::tab_title_names(c("a", "b", "c", "d", "e")), "a, b +3 more")
+  # placeholders never reach a title
+  testthat::expect_equal(tabxplor:::tab_title_names(c("no_row_var", "all_col_vars")), "")
+  # the default really is 2 (the formal, not just the helper)
+  testthat::expect_equal(formals(tabxplor:::tab_get_titles)$max, 2)
 })
 
 testthat::test_that("label_cols / var_name_col: the merged name column vs the kept tab_vars", {

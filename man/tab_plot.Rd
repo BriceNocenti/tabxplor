@@ -7,7 +7,7 @@
 tab_plot(
   tabs,
   theme = NULL,
-  color_type = NULL,
+  color_type = lifecycle::deprecated(),
   html_24_bit = NULL,
   color = TRUE,
   color_legend = TRUE,
@@ -26,8 +26,8 @@ tab_plot(
 \item{theme}{By default, a white table with black text, Set to \code{"dark"} for a
 black table with white text.}
 
-\item{color_type}{Set to \code{"text"} to color the text, \code{"bg"} to color the
-background. By default it takes \code{getOption("tabxplor.color_style_type")}.}
+\item{color_type}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Inert since 1.4.0: the text channel always uses
+the text palette. The colour CHANNEL is chosen by \code{color = c(text, background)} (see \code{\link{tab}}).}
 
 \item{html_24_bit}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Inert since 1.4.0: exports are always
 24-bit (the OKLCH palettes). Kept only so old calls do not error.}
