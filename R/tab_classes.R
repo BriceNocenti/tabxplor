@@ -818,10 +818,17 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #' @param color_type  Set to \code{"text"} to color the text, \code{"bg"} to color the
 #' background. By default it takes \code{getOption("tabxplor.color_style_type")}.
 #' @param theme By default (\code{"light"}) a white table with black text; \code{"dark"} for a black
-#' table with white text; \code{"auto"} to follow the **reader's** colour scheme -- their operating
-#' system, and any dark-mode toggle of the host page (Quarto, Bootstrap 5.3, Tailwind). \code{"auto"}
-#' needs `engine = "html"` (kableExtra's themes are baked at render time); asking it of the kableExtra
-#' engine renders light with a message. Defaults to \code{getOption("tabxplor.theme")}.
+#' table with white text; \code{"auto"} (opt-in) to follow whoever is **reading** the table:
+#' \itemize{
+#'   \item in a file or a knitted document, the reader's browser decides -- their operating system,
+#'     plus any dark-mode toggle of the host page (Quarto, Bootstrap 5.3, Tailwind);
+#'   \item printed to the **Viewer**, your editor decides. Its webview reports the operating system
+#'     rather than the editor's colour theme, so the theme is resolved in R instead (RStudio's, or
+#'     Positron's, best-effort).
+#' }
+#' \code{"auto"} needs `engine = "html"` (kableExtra's themes are baked at render time); asking it of
+#' the kableExtra engine renders light with a message. Defaults to \code{getOption("tabxplor.theme")},
+#' i.e. \code{"light"} -- a dark table is always a deliberate choice.
 #' @param html_24_bit `r lifecycle::badge("deprecated")` Inert since 1.4.0: exports are always
 #' 24-bit (the OKLCH palettes). Kept only so old calls do not error.
 #' @param css `engine = "html"` only: inline the stylesheet with the table, so the output is
@@ -874,9 +881,10 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #'  \code{getOption("tabxplor.tab_kable_engine", "html")}.
 #' @param ... Other arguments to pass to \code{\link[kableExtra:kable_styling]{kableExtra::kable_styling}}.
 
-#' @return A html table (opened in the viewer in RStudio). Differences from totals,
-#' confidence intervals, contribution to variance, and unweighted counts,
-#' are available in an html tooltip at cells hover.
+#' @return A html table. Printing it opens it in the Viewer, on a page painted to match the table --
+#' so a `theme = "dark"` table no longer sits in a white pane. Differences from totals, confidence
+#' intervals, contribution to variance, and unweighted counts, are available in an html tooltip at
+#' cells hover.
 #' @export
 #'
 #' @examples
@@ -970,7 +978,9 @@ tab_kable <- function(tabs,
   style <- if (css && identical(engine, "html")) {
     tab_css(theme = theme, color_type = color_type, chrome = TRUE, style_tag = FALSE)
   } else ""
-  tab_kable_join(parts, engine, css = style)
+  # Phase 14k: `theme` rides along as an attribute so print.tabxplor_kable() can paint the Viewer's
+  # page to match -- and, under "auto", resolve it from the editor (the browser cannot see Positron).
+  tab_kable_join(parts, engine, css = style, theme = theme)
 }
 
 

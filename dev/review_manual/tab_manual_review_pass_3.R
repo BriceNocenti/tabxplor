@@ -154,9 +154,11 @@ vars_scores_RPS13_final <-
     "score_conflits_ethiques13", "score_moyens" #, "score_ethique_moyens13" 
   )
 
-nb_questions <- vars_scores_RPS13_final |>
-  stringr::str_replace("score_", "vars_") |> 
-  rlang::syms() |> purrr::map_int(~rlang::eval_tidy(.) |> length())
+nb_questions <- c(9, 6, 12, 6, 4, 4, 5, 7)
+  # vars_scores_RPS13_final |>
+  # stringr::str_replace("score_", "vars_") |> 
+  # rlang::syms() |> purrr::map_int(~rlang::eval_tidy(.) |> length())
+
 
 # # Scores finaux, predicteurs finaux
 # scores_RPS_logits <- 
@@ -181,16 +183,49 @@ tab_reg(
 # ! With a list of models in `predictors`, `dependent` must be a single name.
 # ℹ A vector of dependents is for the one-model-per-outcome mode."
 # - It should work with several dependent vars + predictors list (like in the former out-of-package multi_logit ; 
-#    trails must then accept a vector)
-
+#    trails must then accept a vector), but output a list of tabxplor_tab, 
+#    so that with tab_export("xl") the user gets a workbook with one sheet per dependent variable.
 
 
 score_risques_phy_logits <- 
 tab_reg(
   ct13_reg, 
   dependent = vars_scores_RPS13_final[[1]], predictors = scores_RPS_predictors2, wt = "pondqaa", 
-  family = "binomial", trials = nb_questions[[1]], empirical_OR = TRUE, compare = "sequential", 
+  family = "binomial", trials = nb_questions[[1]], empirical_OR = TRUE, compare = "baseline", 
+  baseline = "complet",
   cleannames = FALSE
 )
+score_risques_phy_logits |> tab_export(theme="auto")
+# Very good. Few improvements : 
+# - In row variables, the order of the variables in not totally what I would expect, but it’s a bit tricky :
+#   I just want that, when a model is provided that contains all the predictors in the other models,
+#   (what we can call the "complete" model) the order of predictors of this model is kept at the end ; 
+#   if there’s not complete model, just keep the current behaviour.
+# - When I pass `compare = "baseline", baseline = "complet"`, I have warnings "models are not nested or N differs -> showing the AIC difference vs the baseline model instead of a
+#    likelihood-ratio test". What is happening ? 
+#    1. Is to because the code only test if current model is
+#     a subset of baseline (here it’s the opposite : "complet" is to be tested against all other models as baseline ; 
+#     so maybe also test, not only if baseline is a subset of current model, but if the current model is a subset of baseline too ?)
+#    2. It’s because N is not exactly the same in all tables due to NA handling ? In this case, add an opt-in
+#     argument `na="drop_all"` (like in tab() ) to fit all models on the same population (remove any individual with NA to any predictor or NA to the current dependent var)
+# - The name of the model appear two type, first as tabxplor col_var name, then as normal header : how
+#    to resolve that without breaking tab() exports and in a simple way ? Simple rule saying that if
+#    the name of a fmt column is the same than it’s col_var, for all fmt columns, silently drop the variable name additional title row ?
+# - There as still padding/alignment inconsistencies. Is it because of the width of the "*" symbol in DejaVu Sans ? 
+#   Is there a way to fix that, putting a kind of space of exactly the right midth in DejaVu Sans to pad the stars ? 
+#   Example with small misalignement in custom html (both grey color ad plain font weight) :
+#           "1.13** 	"
+#           "1.02   	"
+# - Would there be a reliable way to not pad the summary statistics for stars (just right align) ? 
+#   A last trick would be to use DejaVu Sans Mono for all numbers/fmt cells, 
+#    with fallback to other monospace fonts, anytime there are stars (but it you have a DejaVu Sans solution I would like it).
+# - Remove tooltips from summary statistics, otherwise some show inconsistent "diff", etc. 
+#    For example, AIC "63 785" with diff tooltip "+6378526%". 
 
-score_risques_phy
+
+
+
+
+
+
+

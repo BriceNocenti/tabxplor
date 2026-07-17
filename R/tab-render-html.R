@@ -20,7 +20,12 @@
 #     and it has no sanitizer on that path -- what jamovi ignores is htmlDependency, not <style>).
 #   - The two engines wire the SAME 10e features (spanning header, [min;max] total column, NA="") off
 #     the shared render-model, so they cannot drift.
-# See: dev/tabxplor_phase10_exporters.md Sec 10, CLAUDE.md Phase 10e + 13d, R/tab-css.R.
+#   - Phase 14k: the html result is classed `tabxplor_kable` and carries the render intent in a
+#     `tabxplor_theme` attribute -- but ONLY when our stylesheet ships with it (tab_kable_join()).
+#     print.tabxplor_kable() is the one place a theme is resolved in R rather than by the browser: the
+#     Viewer's page is OURS, and its webview cannot see the editor's theme. Everything else (a file, a
+#     knitted document) still delegates to the reader via the tab_css() cascade.
+# See: dev/tabxplor_phase10_exporters.md Sec 10, CLAUDE.md Phase 10e + 13d + 14k, R/tab-css.R.
 
 
 # === SECTION: tooltips =================================================================
@@ -469,10 +474,11 @@ render_html_degrade <- function(tab) {
 # Join the per-table render parts (single table => length-1 list). kableExtra: concatenate the
 # knitr_kable objects (keeping the class). html: hoist ONE <style> block, stack the <table> fragments.
 # Phase 13d: `css` is the stylesheet built by tab_kable() (tab_css(); "" when the document supplies it
-# itself). It replaced the old static html_style_block() -- the theme now lives entirely in the CSS,
-# so this function no longer needs to know it.
+# itself). It replaced the old static html_style_block() -- the theme now lives entirely in the CSS.
+# Phase 14k: `theme` is the render INTENT ("light"/"dark"/"auto"), carried to print.tabxplor_kable() so
+# the standalone page it opens in the Viewer can paint itself to match. See the attr rule below.
 #' @keywords internal
-tab_kable_join <- function(parts, engine, css = "") {
+tab_kable_join <- function(parts, engine, css = "", theme = NULL) {
   if (length(parts) == 1L && engine == "kableExtra") return(parts[[1]])
 
   if (engine == "html") {
@@ -482,9 +488,17 @@ tab_kable_join <- function(parts, engine, css = "") {
     # and knits it (knit_print.kableExtra). Without it this was a bare `knitr_kable`, whose print just
     # cat()s the markup to the console -- so the maintainer had to re-class it by hand to see a table.
     # We produce the same thing kableExtra does (an HTML fragment, `format = "html"`), so we claim the
-    # class rather than duplicate its two methods. Both live in kableExtra, a Suggests: without it the
-    # class is inert and printing falls back to knitr_kable's cat(), which is the old behaviour.
-    return(structure(out, format = "html", class = c("kableExtra", "knitr_kable")))
+    # class rather than duplicate its two methods. kableExtra is an Import, so both always exist.
+    # Phase 14k prepends `tabxplor_kable`, whose print() paints the Viewer's page (below).
+    out <- structure(out, format = "html",
+                     class = c("tabxplor_kable", "kableExtra", "knitr_kable"))
+    # THE RULE: tabxplor paints a page only when tabxplor's own stylesheet ships with the table -- the
+    # same discriminator Phase 13d/14j use for the colour legend ("does our stylesheet ship?"). With
+    # css = "" the document supplies it (options("tabxplor.kable_css" = FALSE) + tab_css()) or nothing
+    # does, and in the Viewer there is no document: painting the page #222222 around a table we did not
+    # style would leave it black-on-#222222, i.e. unreadable. No attr => print does nothing new.
+    if (nzchar(css)) attr(out, "tabxplor_theme") <- theme
+    return(out)
   }
 
   # kableExtra list: stack the rendered tables one-after-another. Phase 13c-iv: give the joined HTML
@@ -493,6 +507,75 @@ tab_kable_join <- function(parts, engine, css = "") {
   chr <- vapply(parts, as.character, character(1))
   structure(paste(chr, collapse = "\n<br>\n"), format = "html",
             class = c("kableExtra", "knitr_kable"))
+}
+
+
+# === SECTION: the Viewer page (Phase 14k) =========================================================
+
+# The standalone page print.tabxplor_kable() opens in the Viewer: the table, plus the chrome around it.
+# Pure and self-contained -- `detected` is the impure probe as a DEFAULT ARGUMENT (the idiom
+# R/tab-theme-detect.R already established: tx_positron_settings(file=), tx_theme_kind(ext_dir=)), so
+# R's lazy evaluation forces it ONLY in the "auto" branch and a test can drive every path with no
+# mocking and no dependence on the host IDE.
+#
+# WHY "auto" is resolved HERE, in R, rather than left to the 4-layer cascade: the Viewer is an Electron
+# webview, where `@media (prefers-color-scheme)` reports the OPERATING SYSTEM, not the editor's colour
+# theme -- so the cascade cannot see a dark Positron on a light OS (or the reverse), and the table ends
+# up fighting the pane around it. Only R can see the editor (tx_detect_theme(), Phase 14g). A file or a
+# knitted document keeps the cascade untouched: there the READER decides, and the browser is right.
+#
+# HOW the resolution is expressed: a `data-theme` wrapper, i.e. this page declares an explicit toggle,
+# which is exactly what tx_dark_hooks/tx_light_hooks exist for -- cascade layers 3/4 (0,2,x) then beat
+# the @media layer (0,1,x) in BOTH directions. No fifth layer, no second copy of the stylesheet, no new
+# mechanism. It is emitted only under "auto": with an explicit theme the stylesheet is a single static
+# layer carrying no hook rule at all, so a wrapper would be inert markup -- and its absence is what
+# proves the detector never leaks into an explicit theme.
+#' @keywords internal
+tx_kable_page <- function(html, theme = "light", detected = tx_detect_theme()) {
+  auto     <- identical(theme, "auto")
+  resolved <- if (auto) detected else tx_palette_theme(theme)
+  paste0(
+    "<style>", tx_page_style(resolved), "</style>\n",
+    if (auto) paste0('<div data-theme="', resolved, '">'),
+    as.character(html),
+    if (auto) "</div>"
+  )
+}
+
+#' Print a tabxplor html table
+#'
+#' Opens the html table \code{\link{tab_kable}} returned in the Viewer, on a page painted to match it
+#' -- so a \code{theme = "dark"} table no longer sits in a white pane. Under \code{theme = "auto"} the
+#' theme is resolved from **your editor** rather than your operating system: the Viewer is a webview,
+#' and its \code{prefers-color-scheme} reports the OS, so it cannot see the editor the table is sitting
+#' in. Anything else -- a non-interactive print, a knitted document, or a table tabxplor did not style
+#' (\code{css = FALSE}, or the kableExtra engine) -- prints exactly as \pkg{kableExtra} does.
+#'
+#' @param x A html table returned by \code{\link{tab_kable}}.
+#' @param ... Passed to \pkg{kableExtra}'s print method.
+#' @return \code{x}, invisibly.
+#' @seealso \code{\link{tab_kable}}, \code{\link{tab_css}}
+#' @export
+print.tabxplor_kable <- function(x, ...) {
+  theme <- attr(x, "tabxplor_theme")
+  # Everything but an interactive Viewer print falls through to kableExtra's own method, byte for byte:
+  #   - no theme      : we did not ship the stylesheet, so the page is not ours to paint (see the join)
+  #   - !interactive(): kableExtra's print cat()s the markup; there is no page. (This is also the ONLY
+  #                     branch the test suite executes -- testthat is never interactive.)
+  #   - knitting      : the page belongs to the DOCUMENT. Painting its html,body would repaint Quarto
+  #                     around the table. knit_print is likewise NOT overridden: dispatch walks the
+  #                     class vector on to knit_print.kableExtra, which is what we want.
+  if (is.null(theme) || !interactive() ||
+      !isTRUE(getOption("kableExtra_view_html", TRUE)) ||
+      !is.null(knitr::opts_knit$get("out.format"))) {
+    return(NextMethod())
+  }
+  # Delegate, never reimplement: kableExtra's print is what attaches jquery + bootstrap + its two
+  # UNEXPORTED html dependencies (html_dependency_kePrint / _lightable) -- the JS that binds our
+  # tooltips in the Viewer. Reproducing it would mean reaching into kableExtra:::.
+  print(structure(tx_kable_page(as.character(x), theme),
+                  format = "html", class = c("kableExtra", "knitr_kable")), ...)
+  invisible(x)
 }
 
 # Wrap a home-built html fragment in a horizontally-scrollable div (replaces kableExtra::scroll_box

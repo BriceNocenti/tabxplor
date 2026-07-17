@@ -103,7 +103,11 @@ NULL
   # tab_kable(engine = "html") / tab_md() / tab_css() honour it; static backends (tab_xl, tab_plot, the
   # kableExtra engine) resolve it to "light". See R/tab-css.R.
   # WARNING: NOT `tabxplor.color_style_theme`, which is a different axis -- that one is the CONSOLE
-  # palette theme, set by set_color_palette() (which auto-detects an RStudio dark theme).
+  # palette theme, set by set_color_palette() (which auto-detects the editor's theme, Phase 14g).
+  # DESIGN (Phase 14k): "light" STAYS the default and "auto" is opt-in -- this reverses the roadmap's
+  # plan to flip it. Unlike the console (a pane we can measure), an export is read who-knows-where, so
+  # a dark table must be asked for, not inferred. tab_kable()'s Viewer print is the one place "auto" is
+  # resolved in R rather than by the browser: only R can see the editor around the pane.
   options("tabxplor.theme" = "light")
 
   # Phase 13d: whether tab_kable(engine = "html") inlines the stylesheet with each table (TRUE =

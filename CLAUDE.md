@@ -77,6 +77,9 @@ R/
 │                              out-specifies the one border-color rule -- the 2-phase bug) and NO column
 │                              width (.tx-rv/.tx-tot emitted UNSTYLED = the user's fixed-width hooks,
 │                              ?tab_css); .tx-foot keeps the footnote out of the table's max-content.
+│                              14k: tx_page_style() = the chrome (html,body) of a page WE build -- the
+│                              2 callers are print.tabxplor_kable + tab_html_string; NEVER tab_css (a
+│                              host page is not ours to repaint). No vscode-* hooks (webview iframe).
 ├── tab-export-prep.R (~570 L) Phase 10d shared exporter prep: tab_export_prep() -> tabxplor_render
 │                              model (roles/ann/bold/range), consumed by kable/md/plot/xl;
 │                              resolve_export_opts() (13d: theme=NULL -> options("tabxplor.theme"),
@@ -103,6 +106,14 @@ R/
 │                              its spec_tooltip() match.arg CANNOT emit the two-token form). 14e made
 │                              "html" the DEFAULT; 14j puts the footnote in a .tx-foot div (width:0 =>
 │                              it stops deciding the table's width) + dedups the row classes.
+│                              14k: tx_kable_page() (pure; the probe is a DEFAULT ARG = the only way to
+│                              test it, testthat is never interactive()) + print.tabxplor_kable = the
+│                              ONE place a theme is resolved in R not the browser (a Viewer webview's
+│                              @media reports the OS, never the editor). It delegates to kableExtra's
+│                              print (its 2 UNEXPORTED html deps bind the tooltips); knit_print is NOT
+│                              overridden (a host document is not ours). tab_kable_join(theme=) carries
+│                              the intent, but ONLY when our stylesheet ships (engine html + nzchar(css))
+│                              -- painting a page we did not style = an unreadable table.
 ├── utils.R         (1364 L)  Pipe re-export, .onLoad() options setup, factor utilities.
 │                              NOT the colour-palette DESIGN tools (preview_color_grid /
 │                              simulate_cvd_farver / plot_oklch_hue_strip_cvd / set_luminance...):
@@ -2611,8 +2622,10 @@ neither the review nor the roadmap had named, and three of those change the shap
    strings at the chosen digits. 17.22% and 17.31% both printing "17%" still collapse; the diffs/CI were
    computed per block beforehand and stay right.
 2. **Transpose**: soft-deprecate `tab_transpose()`; flip only at export, on the render model.
-3. **`theme="auto"`**: resolved R-side for the interactive Viewer, browser-side for files. Option default
-   `"light"` → `"auto"`.
+3. **`theme="auto"`**: resolved R-side for the interactive Viewer, browser-side for files. ~~Option default
+   `"light"` → `"auto"`.~~ **AMENDED 2026-07-17 (14k): the option default STAYS `"light"`; `"auto"` is
+   opt-in only** — unlike the console, an export is read who-knows-where, so a dark table must be asked
+   for, never inferred.
 4. **Excel legend**: keep the lighter L ladder, boost chroma proportionally (tunable + preview).
 5. **`var_names = c("both","rows","cols","none")`** — one shared arg; `tab_md(col_var_names=)` deprecated onto it.
 6. **Title**: dependent first, decided by `pct`; max 2 names + "+N more".
@@ -2889,30 +2902,44 @@ document() time. **Pre-existing since 13d, reproduces at HEAD** (verified on a c
 
 ---
 
-#### Phase 14k — `theme = "auto"` resolution + the Positron Viewer
+#### Phase 14k — `theme = "auto"` resolution + the Positron Viewer (DONE — 2026-07-17)
 
-**Why** — finding 7, plus two Viewer complaints with the same origin.
+Both Viewer defects fixed. Full suite **FAIL 0 | WARN 0 | PASS 3090**; `document()` clean (0 warnings,
+was 89); **NO golden regeneration of any kind** — not one `_golden`/`_color_golden`/`_snaps` file moved.
+Browser sample: `dev/review_manual/phase14k_viewer_page.html`. Full record: decisions **§41**.
 
-**What** — one rule: *"auto" = follow the reader's colour scheme, resolved by whoever can actually know it.*
-
-1. Interactive Viewer print → resolve R-side via `tx_detect_theme()`
-   ([tab-theme-detect.R:161](R/tab-theme-detect.R#L161), Phase 14g — it already resolves "Starless Monokai
-   Atom" → dark). Knitting (`knitr::is_html_output()`) or writing a file → the 4-layer browser cascade,
-   unchanged (the reader decides, correctly, for a shipped document).
-2. `options("tabxplor.theme")`: `"light"` → `"auto"` ([utils.R:107](R/utils.R#L107)). `tab_xl`/`tab_plot`
-   keep `allow_auto = FALSE` → light, so a dark IDE never yields a dark workbook.
-3. **The white pane below the table**: `tab_kable()` returns a bare `<table>` + `<style>`;
-   `print.kableExtra` wraps it with `htmltools::html_print`, whose `<body>` we never style. Give the result
-   its own class `c("tabxplor_kable", "kableExtra", "knitr_kable")` ([tab-render-html.R:450](R/tab-render-html.R#L450))
-   + a `print` method that wraps a **standalone page** with `html,body{background;color}` from
-   `tx_chrome_hex()`. **Never** in the returned or knitted html — it would repaint a Quarto page.
-4. Dark tooltips (`.tooltip-inner` / the ported `.popover`) → `tx_chrome_hex()` colours under dark.
-5. **Do not ship `vscode-*` hooks** — see the capture analysis above.
-
-**Verify** — `test-theme-detect.R` + `test-render-html.R`: with an explicit `theme`, the returned html is
-byte-identical whatever the detected theme (the detector must not leak into file output); `print` wraps,
-`knit_print` does not; `resolve_export_opts(allow_auto = FALSE)` still → light. Tests must inject a fake
-detector, never depend on the host IDE. **Ask the maintainer for the Windows-dark-mode toggle check.**
+- **THE SPLIT**: `"auto"` = *follow the reader — resolved by whoever can actually know*. A file or a
+  knit keeps the 4-layer cascade (the browser is right there). An interactive Viewer print resolves in
+  **R**, because the Viewer is an Electron webview whose `@media (prefers-color-scheme)` reports the
+  **OS**, not Positron's theme — finding 7. `knit_print` is deliberately NOT overridden (dispatch walks
+  the class vector to `knit_print.kableExtra`), so a Quarto page is never repainted.
+- **THE ONE RULE**: *tabxplor paints a page only when tabxplor's own stylesheet ships with the table* —
+  the 13d/14j legend discriminator. `engine == "html" && nzchar(css)` closes three holes at once, each
+  of which would have made a table UNREADABLE, not merely ugly: `css = FALSE` (no stylesheet reaches the
+  Viewer → a dark pane around an unstyled black-on-white table), the kableExtra engine (its
+  `kable_material_dark` paints `#363640`, two-tone on our `#222222`; its degrade returns a bare `kbl()`),
+  and it leaves the html degrade needing no guard (`render_html_degrade()` emits `class="tabxplor-tab"`).
+- **No new mechanism**: `<div data-theme="dark">` makes the print page an explicit host toggle, so
+  cascade layers 3/4 (0,2,x) beat the `@media` layer (0,1,x) both ways. Emitted only under `"auto"` —
+  its absence proves the detector cannot leak into an explicit theme. No `!important` either:
+  `save_html()` puts its `body{background-color:white}` + bootstrap in `<head>`, ours rides in the body.
+- **`tx_page_style(theme)`** (R/tab-css.R) = the chrome of a page WE build; exactly two callers —
+  `print.tabxplor_kable()` (passes a resolved theme) and `tab_html_string(standalone=TRUE)` (passes the
+  intent, so `"auto"` keeps the `@media` cascade: that file is opened elsewhere).
+  **`tx_kable_page(html, theme, detected = tx_detect_theme())`** (R/tab-render-html.R) = the pure seam;
+  the probe is a DEFAULT ARG (the `tab-theme-detect.R` idiom), which is the only way to test this at all
+  — testthat is never `interactive()`, so the gated-ON branch is unreachable from the suite.
+- **Amendments**: item 2 (option default → auto) **reversed** — see settled decision 3 above. Item 4
+  (dark tooltips) **skipped**, keeping 14j's geometry-only rule; the look, if it ever lands, is settled:
+  both match the table (`#222222`/`#CECDC3`/1px `#707070`), in `tx_page_style()` only. Item 5 (no
+  `vscode-*` hooks) **confirmed and recorded** beside `tx_dark_hooks`: the Viewer is a cross-origin
+  webview iframe, so those hooks could never fire. The roadmap's OS-toggle live-check is **superseded**:
+  the editor now wins by design, because the editor is the pane around the table.
+- **Fixed in passing (§40's flag, pre-existing since 13d, verified on a clean HEAD clone)**: roxygen2
+  (>= 7.1) EVALUATES a ` ```{r} ` chunk written in markdown, and `?tab_css`'s "Two workflows" section had
+  one inside a raw-Rd `\preformatted{}` purely to SHOW it — so `document()` ran `tab_css()`, pasted the
+  whole stylesheet into the help page, emitted **89** link warnings (one per bracketed CSS token) and
+  leaked literal `**bold**`. Fixed with a four-backtick fence and no `{r}` info string. **89 → 0.**
 
 ---
 

@@ -3567,9 +3567,146 @@ snapshots regenerated and audited mechanically rather than eyeballed:
 
 ### Flagged, not fixed
 
-- **`man/tab_css.Rd`'s "Two workflows" section ships raw markdown** (`**bold**`, backticks) into the help
+- ~~**`man/tab_css.Rd`'s "Two workflows" section ships raw markdown** (`**bold**`, backticks) into the help
   page, and `document()` emits 5 "could not resolve link" warnings whose topics (`1`,
   `data-bs-theme=light`, …) are exactly the bracketed tokens of `tab_css(theme = "auto")`'s OUTPUT — i.e.
   roxygen looks to be EVALUATING the ` ```{r, results="asis"} ` chunk inside `\preformatted{}` at
   document() time. **Pre-existing since 13d; reproduces at HEAD** (verified by documenting a clean HEAD
-  checkout). Not 14j's, and the section right below it renders correctly.
+  checkout). Not 14j's, and the section right below it renders correctly.~~ **FIXED in 14k** — the
+  diagnosis was exactly right, and the count was 89, not 5. See §41.
+
+---
+
+## 41. Phase 14k — `theme = "auto"` resolution + the Positron Viewer (DONE 2026-07-17)
+
+Two Viewer defects from review pass 2, plus two maintainer amendments that reversed roadmap items and
+shrank the phase to its core.
+
+### Why the browser could not be trusted with `theme = "auto"` — but only in the Viewer
+
+The 13d cascade delegates the decision to the reader's browser, which is right *because* the browser is
+the only layer that knows. The Viewer is the one place where that stops being true: it is an **Electron
+webview**, where `@media (prefers-color-scheme)` reports the **operating system**, not Positron's colour
+theme. So the table could not see the editor it was sitting in — the maintainer's finding 7. Only R can
+see the editor, via `tx_detect_theme()` (Phase 14g, verified resolving this machine's
+`"Starless Monokai Atom"` → `vs-dark` → dark).
+
+That splits cleanly, and the split *is* the design:
+
+| where | who decides | how |
+|---|---|---|
+| a file, a knitted document | the reader | the 4-layer cascade, untouched |
+| an interactive Viewer print | the editor | `tx_detect_theme()` in R |
+
+`knit_print` is deliberately **not** overridden — dispatch walks the class vector on to
+`knit_print.kableExtra`, so a Quarto page is never repainted.
+
+### The white pane, and why no `!important`
+
+`kableExtra:::print.kableExtra` → `htmltools::html_print()` → `save_html(background = "white")`, a page
+whose `<body>` we never styled: a dark table in a white pane. `save_html.default` builds
+`<head>` + `<style>body{background-color:white;}</style>` + the html dependencies (bootstrap's own
+`body{}`) + `</head><body>` + **our string** — so a plain `html,body{...}` in our body-level `<style>`
+is last in document order at equal specificity (0,0,1). Source order is all it takes.
+
+### The one rule that governs the whole thing
+
+> **tabxplor paints a page only when tabxplor's own stylesheet ships with the table.**
+
+The same discriminator 13d/14j use for the colour legend ("does our stylesheet ship?"). One condition —
+`engine == "html" && nzchar(css)` — closes three holes that a first draft had, each of which would have
+produced an *unreadable* table rather than a cosmetic wart:
+
+- `css = FALSE` / the once-per-document `tab_css()` workflow → no stylesheet reaches the Viewer (there
+  is no document there) → painting the page `#222222` around an unstyled **black-on-white** table.
+- `engine = "kableExtra"` → it bakes its own theme (`kable_material_dark` paints its table `#363640`,
+  two-tone on our `#222222`), and its degrade branch returns a bare `kbl()` with no theme at all.
+- The **html** degrade path needs no guard at all: `render_html_degrade()` emits
+  `class="tabxplor-tab"`, so our stylesheet does style it.
+
+### How the resolution is expressed: no new mechanism
+
+A `<div data-theme="dark">` wrapper — i.e. the print page *declares an explicit host toggle*, which is
+exactly what `tx_dark_hooks`/`tx_light_hooks` exist for. Cascade layers 3/4 (0,2,x) then beat the
+`@media` layer (0,1,x) in **both** directions, which matters: the OS can be wrong about the editor
+either way. Considered and rejected: appending a second resolved static layer — it works (no hook
+matches in our own page, so a plain layer wins on source order), but costs a full extra copy of the
+stylesheet (~2-4 KB) and needs `color_type`/`chrome` carried as extra state, because re-reading the
+options at print time could disagree with build time. The div costs ~22 bytes.
+
+The wrapper is emitted **only** under `"auto"`: with an explicit theme the stylesheet is one static
+layer carrying no hook rule, so a wrapper would be inert markup — and its absence is what proves the
+detector cannot leak into an explicit theme (test-locked).
+
+### Decisions
+
+1. **The option default STAYS `"light"`; `"auto"` is opt-in** — *reverses* the roadmap's settled
+   decision 3 ("Option default `light` → `auto`"), on the maintainer's call: *"I want light theme to be
+   the default for all exports, and `theme="auto"` to be opt-in only."* Unlike the console (a pane we
+   can measure), an export is read who-knows-where, so a dark table must be asked for, never inferred.
+   This is what removed most of the phase: no `.onLoad` change, no jamovi pin, no test blast radius,
+   and the kableExtra `"auto"` downgrade message needs no gating — it can now only fire on a deliberate
+   request, which is exactly when it is wanted.
+2. **Item 4 (dark tooltips/popovers) skipped** — the maintainer's call, and it keeps 14j's recorded
+   rule intact (`tab_css()` styles `.tooltip-inner`/`.popover` **geometry only**: bootstrap moves them
+   to `<body>`, so the selector is unscopable and a colour rule repaints the host page's tooltips).
+   Recorded for a future landing, so it is not re-litigated: the look chosen is **both matching the
+   table** (`#222222` / `#CECDC3` / 1px `#707070`), and the only safe home is `tx_page_style()` — a page
+   we build ourselves is the one context where a repaint has no victim.
+3. **Item 5: no `vscode-*` hooks.** The pass-2 DOM capture settles it: the Viewer is a **cross-origin
+   webview iframe** (`vscode-webview://…/index-external.html`), so `body.vscode-dark` lives on the outer
+   workbench body and no selector of ours can ever reach it. A rule that cannot fire is worse than none.
+   Recorded next to `tx_dark_hooks`. The roadmap's diagnostic live-check is also superseded: after this
+   phase, toggling the OS deliberately does **not** move a Viewer table — the editor wins, because the
+   editor is the pane around it.
+4. **Page chrome is html-engine-only** (see the one rule). `engine = "kableExtra"` + `theme = "dark"`
+   keeps its white pane: we did not style that table, and its `#363640` would sit two-tone on ours.
+
+### Two pages, one helper
+
+`tx_page_style(theme)` is the chrome of a page **tabxplor itself builds**, and there are exactly two:
+`print.tabxplor_kable()`'s Viewer page (which passes a theme already resolved) and
+`tab_html_string(standalone = TRUE)` (which passes the intent, so `"auto"` keeps the `@media` cascade —
+that file is opened elsewhere). Fixing one and not the other is how the next session rediscovers the
+same bug.
+
+### The seam that makes it testable
+
+`tx_kable_page(html, theme, detected = tx_detect_theme())` — the impure probe as a **default argument**,
+the idiom `R/tab-theme-detect.R` already established (`tx_positron_settings(file =)`,
+`tx_theme_kind(ext_dir =)`). R's lazy evaluation forces it only in the `"auto"` branch, so it costs
+nothing otherwise, and every path is drivable with no mocking and no dependence on the host IDE. This
+matters more than it looks: **testthat is never `interactive()`**, so the print method's gated-ON branch
+is unreachable from the suite — without a pure seam the whole feature would be untestable.
+`local_mocked_bindings()` was considered and rejected: unused anywhere in this suite, it would need a
+`testthat` version bump, and it cannot mock `interactive()` (a base binding) anyway.
+
+### Fixed in passing: the `?tab_css` roxygen bug (§40's flag)
+
+§40 flagged it and diagnosed it exactly right; the count was **89** warnings, not 5. **roxygen2 (>= 7.1)
+EVALUATES a ` ```{r} ` chunk written in roxygen markdown** and splices its output into the help page —
+and `tab_css()`'s "Two workflows" section put one inside a raw-Rd `\preformatted{}` purely to *show* the
+user what to paste. So `document()` ran `tab_css(theme = "auto")` and pasted the **entire stylesheet**
+into `?tab_css`, with one "could not resolve link" warning per bracketed token of the CSS it printed
+(`\link{1}` — that is R's `[1] "<style>…"` console output — `\link{data-bs-theme=light}`, …); and because
+`\preformatted{}` is Rd rather than markdown, the surrounding prose leaked literal `**bold**` into the
+rendered page. Confirmed pre-existing by documenting a **clean HEAD clone**: identical 20-line rewrite,
+identical 89 warnings. Fixed by quoting the chunk in a **four-backtick fence with no `{r}` info string**
+(a longer fence may contain a shorter one, and no info string means no evaluation). **89 → 0 warnings**,
+and the help page now renders the chunk verbatim, as intended. The rule, recorded beside it: never mix
+raw Rd with a code fence.
+
+### Verification
+
+Full suite **FAIL 0 | WARN 0 | PASS 3090**; `document()` clean (0 warnings). **NO golden regeneration of
+any kind** — not one `_golden/*.rds`, `_color_golden/*.rds` or `_snaps/*.md` moved, as predicted: nothing
+here touches the build, `format()`, or the CSS content of any existing path. New `Phase 14k` section in
+`test-render-html.R` (10 tests): the page chrome's hex comes from `tx_chrome_hex()` and carries no
+`!important`; the toggle is symmetric; an explicit theme never consults the detector; the div matches a
+real selector in the cascade; the attr rule (`light` / `auto` / `NULL` on `css = FALSE` / `NULL` on
+kableExtra); the returned html never carries page chrome nor a resolved toggle (asserted *after*
+stripping the `<style>` — the auto cascade legitimately *names* `[data-theme=dark]` as a selector, which
+is the hook waiting for a host, not a decision); the gated-off print is byte-identical to
+`cat(as.character(x))`; and `resolve_export_opts(NULL)$theme == "light"` locks decision 1 above against a
+future accidental flip. Browser sample: `dev/review_manual/phase14k_viewer_page.html` (both resolutions,
+each in its own `srcdoc` iframe — inlining them would collide their two `html,body` rules).

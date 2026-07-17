@@ -47,11 +47,19 @@ resolveExportPath <- function(path, ext = "xlsx") {
 #' @keywords internal
 #' @noRd
 tab_html_string <- function(tabs, wrap_rows = 35, wrap_cols = 15, standalone = TRUE, ...) {
-  body <- as.character(tab_kable(tabs, engine = "html", wrap_rows = wrap_rows,
-                                 wrap_cols = wrap_cols, tooltips = FALSE, ...))
+  k    <- tab_kable(tabs, engine = "html", wrap_rows = wrap_rows,
+                    wrap_cols = wrap_cols, tooltips = FALSE, ...)
+  body <- as.character(k)
   if (!standalone) return(body)
-  paste0("<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"utf-8\"/>\n</head>\n<body>\n",
-         body, "\n</body>\n</html>\n")
+  # Phase 14k: this is the OTHER page tabxplor builds (print.tabxplor_kable()'s Viewer page is the
+  # first), so the same rule applies -- a page we write paints itself, or a dark table lands on a white
+  # <body>. The theme rides on the result, so there is no second option resolve to drift from: NULL
+  # means no stylesheet shipped, hence nothing of ours to match. "auto" keeps the @media cascade here,
+  # unlike the Viewer: this file is opened elsewhere, so only the reader's browser can know.
+  theme <- attr(k, "tabxplor_theme")
+  page  <- if (is.null(theme)) "" else paste0("<style>\n", tx_page_style(theme), "\n</style>\n")
+  paste0("<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"utf-8\"/>\n", page,
+         "</head>\n<body>\n", body, "\n</body>\n</html>\n")
 }
 
 # Write a built tab (or list of tabs) to a file in the chosen format. Returns the path invisibly.

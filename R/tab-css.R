@@ -55,6 +55,32 @@ tx_chrome_hex <- function(theme = "light") {
   }
 }
 
+# The chrome of a page tabxplor ITSELF builds -- there are exactly two: the standalone page
+# print.tabxplor_kable() opens in the Viewer, and tab_html_string(standalone = TRUE). Reuses
+# tx_chrome_hex(), so the pane can never drift from the table sitting in it.
+#
+# WHY it needs no !important, though it fights two rules it does not own: htmltools' save_html()
+# builds the page as <head> + `<style>body{background-color:white;}</style>` + the html dependencies
+# (bootstrap's own `body{}`) + </head><body> + OUR string. Ours is therefore LAST in document order at
+# equal specificity (0,0,1), which is all it takes.
+# WARNING: this must NEVER reach tab_css(). A knitted/Quarto page is the HOST's, not ours -- painting
+# its html,body would repaint the whole document around the table (Phase 13d's rule).
+#' @keywords internal
+tx_page_style <- function(theme = "light") {
+  decl <- function(t) {
+    ch <- tx_chrome_hex(t)
+    paste0("html,body{background:", ch$bg, ";color:", ch$text, ";}")
+  }
+  # "auto" is only ever reached by a page we WRITE (a file the reader opens elsewhere), so the reader's
+  # OS is the only signal available -- no hooks: a standalone page has no framework toggle to follow.
+  # An interactive print resolves "auto" R-side before calling here (only R can see the editor).
+  if (identical(theme, "auto")) {
+    paste0(decl("light"), "\n@media (prefers-color-scheme: dark){", decl("dark"), "}")
+  } else {
+    decl(tx_palette_theme(theme))
+  }
+}
+
 # slot integer -> class name. The engine's slot domain (Phase 13a) is 0 = uncoloured, 1-4
 # over-represented, 5-8 under-represented, per channel. Names are 2 chars and uniform-width, which
 # keeps raw markdown aligned in a monospace font:
@@ -91,6 +117,13 @@ tx_slot_class <- function(channel = c("text", "bg"), slot) {
 # table follows the OS into dark: a dark island. Every other framework here sets an explicit light
 # class/attribute, so it only affects Tailwind. Fixing it needs a signal that "a class strategy is in
 # force" (a `color-scheme` probe, or an opt-out of the @media layer) -- see decisions 38.
+#
+# NOT HERE, deliberately (Phase 14k): the VS Code / Positron webview hooks `body.vscode-dark` and
+# `[data-vscode-theme-kind]`. The Positron Viewer is a CROSS-ORIGIN webview IFRAME
+# (vscode-webview://.../index-external.html), so those live on the OUTER workbench body and no
+# selector of ours can ever reach them -- a rule that cannot fire is worse than no rule. The Viewer is
+# handled where it CAN be: print.tabxplor_kable() resolves "auto" in R (tx_detect_theme()) and sets
+# [data-theme] on the page it builds, so the hooks below do the work.
 tx_dark_hooks  <- c("body.quarto-dark",  "[data-bs-theme=dark]",  "[data-theme=dark]", "html.dark")
 tx_light_hooks <- c("body.quarto-light", "[data-bs-theme=light]", "[data-theme=light]")
 
@@ -294,6 +327,15 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE) {
 
 # === SECTION: the public generator =================================================================
 
+# WARNING (Phase 14k): in the "Two workflows" section below, the FOUR-backtick fence is load-bearing,
+# and so is the fact that it carries no `{r}` info string. roxygen2 (>= 7.1) EVALUATES a ```{r} chunk
+# written in roxygen markdown and splices its OUTPUT into the help page -- so the three-backtick chunk
+# we want to SHOW the user has to be quoted by a longer fence. It was not: the section used raw-Rd
+# \preformatted{} wrapped around a live chunk, so document() ran tab_css() and pasted the entire
+# stylesheet into ?tab_css, emitted ~89 "could not resolve link" warnings (one per bracketed token of
+# the CSS it printed: \link{1}, \link{data-bs-theme=light}, ...), and -- because \preformatted{} is Rd,
+# not markdown -- leaked literal **bold** into the rendered page. Never mix raw Rd with a code fence.
+
 #' Generate the tabxplor stylesheet
 #'
 #' The CSS that colours tabxplor tables. It is a **constant** -- a pure function of the colour palette,
@@ -311,12 +353,14 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE) {
 #'
 #' **Once per document.** In an `.Rmd`/`.qmd` with many tables, emit it once and let every table reuse
 #' it:
-#' \preformatted{
+#'
+#' ````
 #' ```{r, results = "asis"}
 #' options(tabxplor.kable_css = FALSE)
 #' tab_css(theme = "auto")
 #' ```
-#' }
+#' ````
+#'
 #' Every later `tab_kable()` then emits classes only. Two things to know: with `css = FALSE` and **no**
 #' `tab_css()` call the tables render uncoloured; and one stylesheet means one `theme` and one
 #' `color_type` for the whole document (a per-table `color_type` would need its own `css = TRUE`).
@@ -336,9 +380,12 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE) {
 #' background-coloured value), `.tx-span` (the variable-name header row), `.tx-foot` (the footnote).
 #' Rows carry `.tx-bt`/`.tx-bb`/`.tx-bb2` (top / bottom / thick-bottom rules).
 #'
-#' @param theme `"light"`, `"dark"`, or `"auto"` to follow the reader's colour scheme (their operating
-#'   system, and any dark-mode toggle of the host page: Quarto, Bootstrap 5.3, Tailwind). Defaults to
-#'   `getOption("tabxplor.theme")` (`"light"`).
+#' @param theme `"light"`, `"dark"`, or -- opt-in -- `"auto"` to follow the reader's colour scheme
+#'   (their operating system, and any dark-mode toggle of the host page: Quarto, Bootstrap 5.3,
+#'   Tailwind). Defaults to `getOption("tabxplor.theme")`, i.e. `"light"`: a dark table is always a
+#'   deliberate choice. `"auto"` emits every rule four times (a light base, the OS media query, then
+#'   both toggle directions), which is also what lets [tab_kable()]'s own Viewer page force the
+#'   editor's theme -- see its `theme` argument.
 #' @param color_type `"text"` or `"bg"`: which palette family the text channel uses. Defaults to
 #'   `getOption("tabxplor.color_style_type")`.
 #' @param chrome When `TRUE` (default) also style the table itself (font/background/border colours,

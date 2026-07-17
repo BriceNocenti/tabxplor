@@ -515,3 +515,133 @@ testthat::test_that("tab_css() carries the label / vertical-name role classes", 
   testthat::expect_no_match(css, "sideways", fixed = TRUE)
   testthat::expect_match(css, "writing-mode:vertical-rl", fixed = TRUE)
 })
+
+
+# === SECTION: Phase 14k -- theme = "auto" resolution + the Viewer page =====================
+# Everything here is PURE: tx_kable_page() takes the detector as an argument, so no test depends on
+# the host IDE, and none needs interactive() (testthat never is -- which is exactly why the print
+# method's own gate is asserted from the OTHER side, below).
+
+testthat::test_that('the export theme default is "light" -- "auto" is opt-in', {
+  # Phase 14k reversed the roadmap's plan to flip this default. A dark table is a deliberate choice;
+  # every export (file, knit, Excel, plot) must stay light until someone asks otherwise.
+  testthat::expect_identical(getOption("tabxplor.theme"), "light")          # what .onLoad() sets
+  testthat::expect_identical(resolve_export_opts(NULL, allow_auto = TRUE)$theme, "light")
+  # and the hard-coded fallback agrees, so an unset option can never silently mean "auto" either
+  withr::local_options(list(tabxplor.theme = NULL))
+  testthat::expect_identical(resolve_export_opts(NULL, allow_auto = TRUE)$theme, "light")
+})
+
+testthat::test_that("tx_page_style() paints the page from the SAME hex as the table", {
+  ch_l <- tx_chrome_hex("light"); ch_d <- tx_chrome_hex("dark")
+  testthat::expect_identical(tx_page_style("light"),
+                             paste0("html,body{background:", ch_l$bg, ";color:", ch_l$text, ";}"))
+  testthat::expect_identical(tx_page_style("dark"),
+                             paste0("html,body{background:", ch_d$bg, ";color:", ch_d$text, ";}"))
+  # a page we WRITE (tab_html_string) is opened elsewhere, so "auto" stays with the reader's browser
+  testthat::expect_match(tx_page_style("auto"), "@media (prefers-color-scheme: dark)", fixed = TRUE)
+  testthat::expect_match(tx_page_style("auto"), ch_d$bg, fixed = TRUE)
+  # no !important anywhere: our <style> rides in the BODY, after save_html()'s head rule and after
+  # bootstrap's, so plain source order already wins. If this ever fails, something moved to <head>.
+  for (th in c("light", "dark", "auto")) {
+    testthat::expect_no_match(tx_page_style(th), "!important", fixed = TRUE)
+  }
+})
+
+testthat::test_that('tx_kable_page(): "auto" resolves R-side and declares an explicit toggle', {
+  tbl <- '<table class="tabxplor-tab">T</table>'
+  for (d in c("dark", "light")) {
+    p <- tx_kable_page(tbl, theme = "auto", detected = d)
+    # the toggle is symmetric: the cascade must be forced in BOTH directions, because the Viewer's
+    # @media reports the OS and can therefore be wrong either way about the editor.
+    testthat::expect_match(p, paste0('<div data-theme="', d, '">'), fixed = TRUE)
+    testthat::expect_match(p, "</div>", fixed = TRUE)
+    testthat::expect_match(p, tx_chrome_hex(d)$bg, fixed = TRUE)     # pane matches the table
+    testthat::expect_match(p, tbl, fixed = TRUE)                     # table passed through verbatim
+  }
+})
+
+testthat::test_that("tx_kable_page(): an explicit theme never consults the detector", {
+  p <- tx_kable_page("<table>T</table>", theme = "dark", detected = "light")
+  testthat::expect_match(p, tx_chrome_hex("dark")$bg, fixed = TRUE)
+  # no wrapper at all: with an explicit theme the stylesheet is ONE static layer carrying no hook
+  # rule, so a data-theme div would be inert markup -- and its absence proves the detector cannot leak.
+  testthat::expect_no_match(p, "data-theme", fixed = TRUE)
+  testthat::expect_no_match(p, tx_chrome_hex("light")$bg, fixed = TRUE)
+})
+
+testthat::test_that("the data-theme toggle actually matches a rule in the auto cascade", {
+  # tx_kable_page() reuses tab_css()'s own documented hooks rather than inventing a fifth layer, so
+  # this is the join between the two halves: the div is worthless if no selector names it.
+  css <- tab_css(theme = "auto", style_tag = FALSE)
+  testthat::expect_match(css, "[data-theme=dark] .tabxplor-tab", fixed = TRUE)
+  testthat::expect_match(css, "[data-theme=light] .tabxplor-tab", fixed = TRUE)
+})
+
+testthat::test_that("the page theme rides along ONLY when our stylesheet ships with the table", {
+  tb <- tab(gss, marital, race, pct = "row", color = "diff")
+  # THE RULE: we paint a page only when we styled the table sitting on it.
+  k <- tab_kable(tb, engine = "html")
+  testthat::expect_s3_class(k, "tabxplor_kable")
+  testthat::expect_identical(attr(k, "tabxplor_theme"), "light")
+  testthat::expect_identical(attr(tab_kable(tb, engine = "html", theme = "auto"),
+                                  "tabxplor_theme"), "auto")
+  # css = FALSE: the document supplies the stylesheet (or nothing does). In the Viewer there IS no
+  # document, so painting the page dark would leave an unstyled black-on-#222222 table.
+  testthat::expect_null(attr(tab_kable(tb, engine = "html", css = FALSE), "tabxplor_theme"))
+  withr::with_options(list(tabxplor.kable_css = FALSE),
+                      testthat::expect_null(attr(tab_kable(tb, engine = "html"), "tabxplor_theme")))
+})
+
+testthat::test_that("the kableExtra engine is never page-painted", {
+  testthat::skip_if_not_installed("kableExtra")
+  tb <- tab(gss, marital, race, pct = "row", color = "diff")
+  # It bakes its own theme (kable_material_dark paints its table #363640, which would sit two-tone on
+  # our #222222 pane) and its degrade branch returns a bare kbl() with no theme at all. Same rule:
+  # our stylesheet does not ship, so the page is not ours to paint.
+  for (th in c("light", "dark")) {
+    k <- tab_kable(tb, engine = "kableExtra", theme = th)
+    testthat::expect_false(inherits(k, "tabxplor_kable"))
+    testthat::expect_null(attr(k, "tabxplor_theme"))
+  }
+})
+
+testthat::test_that("print() is byte-identical to today when it is not an interactive Viewer print", {
+  tb <- tab(gss, marital, race, pct = "row", color = "diff")
+  k  <- tab_kable(tb, engine = "html")
+  testthat::expect_s3_class(k, "tabxplor_kable")
+  # testthat is never interactive, so this IS the branch the suite runs: NextMethod() -> kableExtra's
+  # print -> cat(). It also covers a knit (`print()` inside a chunk) and kableExtra_view_html = FALSE.
+  # NOTE the assertion is deliberately on the OUTPUT, not the return value: kableExtra's print returns
+  # cat()'s NULL, and "byte-identical to today" outranks the returns-its-input convention here.
+  testthat::expect_identical(utils::capture.output(print(k)),
+                             utils::capture.output(cat(as.character(k))))
+})
+
+testthat::test_that("the page never leaks into the returned html, whatever the theme", {
+  tb <- tab(gss, marital, race, pct = "row", color = "diff")
+  # The returned object is what gets written to a file or knitted into someone else's document: it
+  # must carry the table and the cascade, never a page repaint and never a resolved toggle.
+  for (th in c("light", "dark", "auto")) {
+    h <- as.character(tab_kable(tb, engine = "html", theme = th))
+    # tab_css() must never paint html,body -- that is the HOST's, and repainting it around the table
+    # would recolour the whole document (Phase 13d). Asserted on the stylesheet itself.
+    testthat::expect_no_match(h, "html,body{", fixed = TRUE)
+    # ... and no data-theme WRAPPER. Strip the <style> first: under "auto" the cascade legitimately
+    # names `[data-theme=dark]` as a SELECTOR -- that is the hook waiting for a host, not a decision.
+    testthat::expect_no_match(rh_strip_style(h), "data-theme", fixed = TRUE)
+  }
+})
+
+testthat::test_that("tab_html_string() paints the standalone page it builds", {
+  tb <- tab(gss, marital, race, pct = "row")
+  h  <- tab_html_string(tb, theme = "dark")
+  testthat::expect_match(h, "html,body{background:#222222", fixed = TRUE)
+  # in <head>, before the table -- and the file is opened elsewhere, so "auto" keeps the @media
+  # cascade rather than resolving R-side the way the Viewer's own page does.
+  testthat::expect_lt(regexpr("html,body{", h, fixed = TRUE), regexpr("<body>", h, fixed = TRUE))
+  testthat::expect_match(tab_html_string(tb, theme = "auto"),
+                         "@media (prefers-color-scheme: dark)", fixed = TRUE)
+  # no stylesheet shipped => nothing of ours to match => no paint (the same one rule)
+  testthat::expect_no_match(tab_html_string(tb, css = FALSE), "html,body{", fixed = TRUE)
+})

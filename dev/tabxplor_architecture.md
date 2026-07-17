@@ -575,6 +575,29 @@ labels go through **`html_escape_br()`**, which escapes and then restores the on
 injects (`tab_wrap_text()` wraps long header names on `<br>`), so a `<` in a user's own level name is
 still escaped. kableExtra never needed this — `knitr::kable(escape = FALSE)` passes col.names through.
 
+**The Viewer page (Phase 14k, `print.tabxplor_kable`).** `theme = "auto"` means *follow the reader,
+resolved by whoever can actually know*. For a file or a knit that is the browser (the 13d cascade,
+untouched). For an interactive **Viewer** print it is not: the Viewer is an Electron webview whose
+`@media (prefers-color-scheme)` reports the **operating system**, not the editor's colour theme — so the
+table could not see the pane it sits in. `print.tabxplor_kable()` therefore resolves in R
+(`tx_detect_theme()`), and says so by wrapping the table in `<div data-theme="light|dark">`: our page
+becomes an explicit host toggle, and cascade layers 3/4 beat the `@media` layer in both directions. No
+fifth layer, no second stylesheet. It also paints the page itself (`tx_page_style()` →
+`html,body{background;color}`), which is what stops a dark table sitting in `html_print()`'s white pane;
+being body-level, it wins on source order over both `save_html()`'s own `body{}` and bootstrap's, with
+no `!important`. Everything else — a non-interactive print, a knit (`knit_print` is deliberately **not**
+overridden), or a table we did not style — falls through to `print.kableExtra`, byte for byte.
+
+The gate is one rule: **tabxplor paints a page only when tabxplor's own stylesheet ships with the
+table** (`tab_kable_join()` attaches the `tabxplor_theme` attribute only for `engine = "html"` and
+`nzchar(css)`; no attribute ⇒ print does nothing new). It is the same discriminator the colour legend
+uses, and it is what keeps `css = FALSE` (an unstyled black-on-white table) and the kableExtra engine
+(which bakes its own `#363640` dark table) from being painted into unreadability. `tx_page_style()` has
+exactly two callers — this print method and `tab_html_string(standalone = TRUE)`, the other page the
+package builds; the latter passes the *intent*, so `"auto"` keeps its `@media` cascade (that file is
+opened elsewhere). **No `vscode-*` hooks**: the Viewer is a cross-origin webview iframe, so
+`body.vscode-dark` sits on the outer workbench body and no selector of ours could ever reach it.
+
 Tooltips (`tab_kable_print_tooltip()`) are `any()`-gated so each field's `format()` runs only when the
 column has it. NA cells render blank at source (`format.tabxplor_fmt(na="")`), not via a post-hoc regex.
 

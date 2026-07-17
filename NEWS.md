@@ -44,10 +44,15 @@
   establish stays `"light"`, and it never warns. Resolved once, so call it again after switching
   themes. (Exports are unaffected: their `theme = "auto"` follows the *reader's* browser.)
 * **Dark mode.** `theme` gains **`"auto"`** on `tab_kable()` / `tab_md()` / `tab_css()` /
-  `tab_export()`: the table follows the **reader's** colour scheme -- their operating system, and any
-  dark-mode toggle of the page it is embedded in (Quarto, Bootstrap 5.3, Tailwind) -- flipping live as
-  they switch. Dark tables are `#111111` with white text and borders. Set the default globally with
-  `options(tabxplor.theme = "auto")` (or `"dark"`, e.g. for the Viewer). `"auto"` needs a stylesheet,
+  `tab_export()`: the table follows whoever is **reading** it, flipping live as they switch. In a file
+  or a knitted document that means the reader's browser -- their operating system, plus any dark-mode
+  toggle of the page it is embedded in (Quarto, Bootstrap 5.3, Tailwind). Printed to the **Viewer** it
+  means your editor: a Viewer webview reports the *operating system* rather than the editor's colour
+  theme, so tabxplor resolves the theme in R instead (RStudio's or Positron's), and the page around the
+  table is painted to match -- a `theme = "dark"` table no longer sits in a white pane. Dark tables are
+  `#CECDC3` on `#222222`. `theme` stays **`"light"` by default and `"auto"` is opt-in**: unlike the
+  console, an export is read who-knows-where, so a dark table is always a deliberate choice. Set the
+  default globally with `options(tabxplor.theme = "auto")` (or `"dark"`). `"auto"` needs a stylesheet,
   so it applies to `tab_kable(engine = "html")` and `tab_md()`; the static backends (`tab_xl()`,
   `tab_plot()`, and the kableExtra engine, whose themes are baked at render time) resolve it to
   `"light"`. In a document with many tables, emit `tab_css(theme = "auto")` once at the top and set

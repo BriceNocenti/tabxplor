@@ -13,9 +13,12 @@ tab_css(
 )
 }
 \arguments{
-\item{theme}{\code{"light"}, \code{"dark"}, or \code{"auto"} to follow the reader's colour scheme (their operating
-system, and any dark-mode toggle of the host page: Quarto, Bootstrap 5.3, Tailwind). Defaults to
-\code{getOption("tabxplor.theme")} (\code{"light"}).}
+\item{theme}{\code{"light"}, \code{"dark"}, or -- opt-in -- \code{"auto"} to follow the reader's colour scheme
+(their operating system, and any dark-mode toggle of the host page: Quarto, Bootstrap 5.3,
+Tailwind). Defaults to \code{getOption("tabxplor.theme")}, i.e. \code{"light"}: a dark table is always a
+deliberate choice. \code{"auto"} emits every rule four times (a light base, the OS media query, then
+both toggle directions), which is also what lets \code{\link[=tab_kable]{tab_kable()}}'s own Viewer page force the
+editor's theme -- see its \code{theme} argument.}
 
 \item{color_type}{\code{"text"} or \code{"bg"}: which palette family the text channel uses. Defaults to
 \code{getOption("tabxplor.color_style_type")}.}
@@ -43,21 +46,22 @@ under-represented text, \code{.o1}-\code{.o4} / \code{.u1}-\code{.u4} for the ba
 }
 \section{Two workflows}{
 
-**Self-contained (the default).** `tab_kable(css = TRUE)` and `tab_md(css = TRUE)` inline the
+\strong{Self-contained (the default).} \code{tab_kable(css = TRUE)} and \code{tab_md(css = TRUE)} inline the
 stylesheet with the table, so a single file works anywhere (RStudio/Positron Viewer, jamovi, a
-standalone `.html`). Nothing to do.
+standalone \code{.html}). Nothing to do.
 
-**Once per document.** In an `.Rmd`/`.qmd` with many tables, emit it once and let every table reuse
+\strong{Once per document.} In an \code{.Rmd}/\code{.qmd} with many tables, emit it once and let every table reuse
 it:
-\preformatted{
-```{r, results = "asis"}
+
+\if{html}{\out{<div class="sourceCode">}}\preformatted{```\{r, results = "asis"\}
 options(tabxplor.kable_css = FALSE)
 tab_css(theme = "auto")
 ```
-}
-Every later `tab_kable()` then emits classes only. Two things to know: with `css = FALSE` and **no**
-`tab_css()` call the tables render uncoloured; and one stylesheet means one `theme` and one
-`color_type` for the whole document (a per-table `color_type` would need its own `css = TRUE`).
+}\if{html}{\out{</div>}}
+
+Every later \code{tab_kable()} then emits classes only. Two things to know: with \code{css = FALSE} and \strong{no}
+\code{tab_css()} call the tables render uncoloured; and one stylesheet means one \code{theme} and one
+\code{color_type} for the whole document (a per-table \code{color_type} would need its own \code{css = TRUE}).
 }
 
 \section{Restyling a table}{
