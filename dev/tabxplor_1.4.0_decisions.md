@@ -3815,3 +3815,140 @@ hit its `cli_abort` — hard-wiring `"text"` closes it (test-locked).
 
 **Zero golden churn is the acceptance test**: default `color_type` was already `"text"` everywhere, so a
 correct removal changes no output — and none moved, across the whole suite.
+
+---
+
+## 43. Phase 14m — `tab_md()`, pass 2: taming the host in rendered markdown (DESIGN 2026-07-17)
+
+Findings 9 (spacer/separator cells render as ugly `<td>`s / literal dash rows) and 10 (the host draws a
+black border under every row) are **one problem seen from two sides**, and the maintainer's own drawing
+(a dash rule under the col_var name) is a *symptom* of it, not the fix. This section is the settled
+design; the build is a later session.
+
+### The root reframe: md and the html engine are DIFFERENT rendering contexts sharing one class name
+
+`.tabxplor-tab` means two different things:
+
+- **html engine** — `.tabxplor-tab` **is** the `<table>`. WE emit every `<td>` and put role classes on
+  it (`.tx-br`, `.tx-bb`, `.tx-r`, …). Every border is drawn only where a class says so; the single
+  `border-color` rule colours them; the table resets its own top/bottom border widths to 0. Nothing
+  extra is ever drawn, because we draw everything.
+- **md (pandoc)** — `.tabxplor-tab` is a `<div>` **wrapping** a pandoc `<table>` (the fenced div, Phase
+  14f). PANDOC emits the `<table>` and every `<td>`, and a pipe table **cannot carry per-cell classes**
+  — only pandoc's inline `text-align`, plus the inner `<span class="p1">` we put on a *value*. So NONE
+  of our `.tx-*` border classes ever match in md. The borders come from the **host** (Quarto adds
+  `class="caption-top table"`; Bootstrap's `.table>:not(caption)>*>*` gives every cell a
+  `border-bottom-width`), and our `.tabxplor-tab th,td{border-color:#000000}` rule **recolours the
+  host's borders black** — reproduced against the maintainer's real `tab_md_test_2.htm`.
+
+So the `.tabxplor-tab` chrome was written for the context where WE draw borders, and in md it is a guest
+fighting the host badly: it recolours the host's per-row lines (finding 10) and lets our raw-md
+readability devices — spacer columns, dash separator rows — leak into the render as ugly cells (finding
+9).
+
+### The organizing lever: `.tabxplor-tab table …` is an MD-ONLY selector
+
+`.tabxplor-tab table td` needs a `table` **descendant** of `.tabxplor-tab`. In md that is the div → the
+pandoc table → the cell (matches). In the html engine `.tabxplor-tab` **is** the table, with no nested
+one, so it **never matches**. This is a clean, table-independent discriminator between the two contexts:
+**md can be given its own chrome, scoped to `.tabxplor-tab table`, with zero risk to the html engine**,
+and without a single positional/`nth-child` rule (Phase 13d's table-independence contract holds).
+
+### Maintainer's two decisions (this session), and how they reconcile
+
+- **Blank-row separators, not `.sep` dash rows** (Q1). A block rule is drawn by injecting a **fully-empty
+  row** and collapsing it to a 1px border in CSS — **no pandoc marker token** (`[…]{.sep}`) in the raw
+  `.md`. This *supersedes the maintainer's own dash-row drawing* (they saw the trade-off and picked the
+  marker-free look). A blank row is plain markdown, valid in GFM as well as pandoc.
+- **GFM-clean when plain** (Q2). The pandoc **scaffold** (the `::: {.tabxplor-tab}` div + the
+  border-taming CSS) is gated on `styled = do_color || isTRUE(css)`. A plain uncoloured `tab_md()`
+  (`!do_color && !css`) is left **byte-identical** — no div, no scaffold, current output.
+
+These compose cleanly because the separator *style* (blank row) is orthogonal to the *scaffold* (div +
+CSS): a blank row is GFM-valid on its own; only the div and `.tabxplor-tab table` CSS are pandoc-only,
+and those are what the gate withholds from a plain table.
+
+### The mechanism (styled path only) — four rules, all scoped `.tabxplor-tab table`
+
+1. **Tame the host borders (finding 10).**
+   `.tabxplor-tab table td,.tabxplor-tab table th{border-width:0;}` — md-only by the `table` descendant.
+   Resets the host's per-cell border **widths** to 0. Specificity (0,1,2) beats Bootstrap's
+   `.table>:not(caption)>*>*` (0,1,1). `border-width` is **width-only** — it does NOT touch the
+   `border-color` contract (§40), and a 0-width border never renders whatever its colour, so the
+   `border-color:#000000` rule can stay exactly as it is. **Place it BEFORE `.tabxplor-tab thead th`**
+   (both 0,1,2 → the tie is decided by source order) or the header underline is reset too.
+2. **Redraw the block rules as collapsed blank rows (finding 9 + the name-underline).** Inject a
+   fully-empty row after the col_var-name row and at each sub-table boundary (`roles$new_group`), then:
+   `.tabxplor-tab table tbody tr:not(:has(td:not(:empty)))>*{border-top-style:solid;border-top-width:1px;`
+   `padding:0;line-height:0;}`. A `<tr>` whose every `<td>` is `:empty` is uniquely OUR blank row (a data
+   row has content; the name row has the `*ROCK*` name → not selected). Border **colour comes from the
+   existing `border-color` rule** (theme-aware for free). `border-top` sits at the row's top = the
+   boundary; the collapsed row is a 1px line. Specificity (0,2,2) beats the reset (0,1,2). *(Verified:
+   pandoc keeps a fully-blank body row as `<tr><td></td>…`, it is not dropped.)*
+3. **Collapse the spacer columns (finding 9).**
+   `.tabxplor-tab table td:empty,.tabxplor-tab table th:empty{padding:0;}`. The ASCII-filled spacer /
+   name-row-empty cells trim to `<td></td>` (`:empty`), so only a genuinely-empty spacer column collapses
+   to a hairline; a column with content in other rows keeps its width.
+4. **Decouple the `::: {.tabxplor-tab}` div from `<style>`.** Emit the div whenever `styled` (not only
+   `css = TRUE`), so the "one `tab_css()` per document" workflow (advertised in `?tab_md` / `?tab_css`)
+   actually reaches the table; the `<style>` block itself still ships only with `css = TRUE`.
+
+The three md-chrome rules live in `tab_css(chrome = TRUE)`'s static block (delivered inline by
+`css = TRUE`, or once per document by `tab_css()`), beside the html engine's geometry — invisible to it
+by selector. `tab_md_css()` (`chrome = FALSE`) omits them, as today (bare colour classes only).
+
+**No Total-row rule** (the roadmap asked to decide it). After the reset, the total row has no border, and
+none is redrawn: the header underline + the col_var-name underline + the sub-table separators are the
+only rules, exactly as the maintainer's own `tab_md_test_2.md` shows (a `**Total**` row at the bottom
+with no rule above it, uncomplained). Adding one would cost either a marker on the total row's cells or a
+blank row before it — raw-md noise for a rule the bold `**Total**` already signals. Skip it; it is a
+one-line addition (a blank row before `roles$totblock_top`) if ever wanted.
+
+### The DECISIVE coupling with 14v (verified this session)
+
+Pandoc renders a cell containing a **figure space** (U+2007) as `<td> </td>` — **not** `:empty`; a cell
+containing **ASCII space(s)** as `<td></td>` — **`:empty`**. So the whole `:empty`-based collapse
+(mechanism 3, and the blank rows of mechanism 2) **requires the blank/spacer cells to stay ASCII-filled
+(or truly empty)**. 14v switches md padding to figure space for value alignment — that swap MUST be
+limited to the padding **inside a value** (thousands separator, `n=` alignment); the cell-level
+alignment pad of empty and spacer cells stays ASCII, or `:empty` silently stops matching and every fix
+here dies. **Land 14v before or with 14m**, and gate its figure-space swap accordingly. This is the
+single most important cross-phase constraint of the pass.
+
+### Cleanups folded in
+
+- The Step-12 **dash-width arithmetic** (`col_width[j] - 2L`, ~4 short of the alignment separator) is
+  **moot** — dash separator rows are replaced by blank rows in the styled path.
+- Dead `span` local in the col_var-name-row block (`tab_md.R` ~L457: computed, never read) — remove.
+- `tab_md_css(tabs)` "ignores its `tabs` argument" — **intentional and documented** (the stylesheet is
+  table-independent; the arg is kept only so `tab_md_css(tabs)` reads naturally). Not a bug; leave it.
+
+### What the plain path keeps (the "byte-clean GFM" reading)
+
+`!styled` is left byte-identical: current dash separator rows (Step 12), no `:::` div, host borders. It
+is not a pandoc target, so its dash rows rendering as literal dashes in a hypothetical Quarto pass is an
+accepted edge. **Flagged**: unifying on blank rows there too (marginally cleaner GFM) is a one-line
+gate if the maintainer later wants it — but it would change the plain `_snaps/golden.md`, which "byte
+-clean" argues against.
+
+### Verification plan
+
+- **Real pandoc render** (the test this file already learned to run, Phase 14f): findings 9/10 gone —
+  no black per-row borders, the col_var-name underline and sub-table rules are 1px borders not dashes,
+  spacer columns collapse. Only provable in a Bootstrap host, since Bootstrap is what it fights.
+- **Structure**: a fully-blank row survives pandoc as `<tr>` of `:empty` cells and is `:has`-selected;
+  the reset rule precedes `.tabxplor-tab thead th`; the delimiter-row spacer stays `-` (a blank `| |`
+  still invalidates the table — the existing lock).
+- **The gate**: a plain uncoloured `tab_md()` is byte-identical (no `:::`); a coloured one carries the
+  div even with `css = FALSE`.
+- **The 14v coupling**: assert the blank/spacer cells contain no figure space (would break `:empty`).
+- Snapshots: a `levels = "first"` (spacers) + `tab_vars` (sub-table separators) case, regenerated
+  consciously.
+
+### Flagged for the maintainer
+
+- **`:has()` dependency.** Row-level "all cells empty" needs `:has()` (a `<tr>` with empty `<td>`
+  children is not itself `:empty`). Baseline widely-available since Dec 2023 → fine for a 2026 Quarto
+  render; degrades to a blank gap row (no border) on an ancient engine, never to breakage.
+- The name-row underline appears only on the styled (coloured/`css`) path; a plain table's col_var-name
+  row has no rule under it (it is already visually distinct, and plain is the GFM/text target).

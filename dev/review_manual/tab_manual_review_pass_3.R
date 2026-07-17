@@ -74,6 +74,15 @@ fct_recode_helper(forcats::gss_cat, all_of("rincome"))
 
 
 
+data |> tab(relig)
+# The simplest table is broken, the n column from version <= 1.3.1 dissappeared ! 
+data |> tab(relig, pct ="col")
+# same here : no "n" column like in 1.3.1 and before (only "pct")
+# when col_var column attribute is not a real name (here : "no_col_var", sometimes the special name for Total column), 
+#  it should never be displayed as a column variable name (it’s noise for the user)
+#
+# test these behaviours, in the current state they would badly break past code from version <= 1.3.1 
+
 
 
 
@@ -85,32 +94,37 @@ fct_recode_helper(forcats::gss_cat, all_of("rincome"))
 options(tabxplor.parallel = TRUE, tabxplor.cleannames = TRUE, tabxplor.print = "kable")
 
 data <- forcats::gss_cat |>
-dplyr::mutate(married = factor(dplyr::if_else(marital == "Married",
-    "01-Married",
-    "02-Not married")
-   ),
-   race = forcats::fct_relevel(race, "White", "Black", "Other"), 
-   marital = forcats::fct_relevel(marital, "Married", "Separated", "Divorced", "Widowed", "Never married", "No answer"),
+dplyr::mutate(
+  married = factor(dplyr::if_else(marital == "Married",
+  "01-Married",
+  "02-Not married")
+),
+black = factor(dplyr::if_else(race == "Black",
+  "01-Black",
+  "02-Not black")
+),
+race = forcats::fct_relevel(race, "White", "Black", "Other"), 
+marital = forcats::fct_relevel(marital, "Married", "Separated", "Divorced", "Widowed", "Never married", "No answer"),
 
-  across(where(is.factor), ~ forcats::fct_recode(., "NULL" = "No answer", "NULL" = "Refused", "NULL" = "Don't know", "NULL" = "Not applicable")),
+across(where(is.factor), ~ forcats::fct_recode(., "NULL" = "No answer", "NULL" = "Refused", "NULL" = "Don't know", "NULL" = "Not applicable")),
 
-  rincome = forcats::fct_recode(   # "new" = "old" 
-    rincome,
-    "1-Lt $10000"      = "Lt $1000"      ,
-    "1-Lt $10000"      = "$1000 to 2999" ,
-    "1-Lt $10000"      = "$3000 to 3999" ,
-    "1-Lt $10000"      = "$4000 to 4999" ,
-    "1-Lt $10000"      = "$5000 to 5999" ,
-    "1-Lt $10000"      = "$6000 to 6999" ,
-    "1-Lt $10000"      = "$7000 to 7999" ,
-    "1-Lt $10000"      = "$8000 to 9999" ,
-    "2-$10000 - 14999" = "$10000 - 14999",
-    "3-$15000 - 24999" = "$15000 - 19999",
-    "4-$15000 - 24999" = "$20000 - 24999",
-    "5-$25000 or more" = "$25000 or more"
-    ) |> 
-    forcats::fct_relevel(sort) |>
-    as.ordered(),
+rincome = forcats::fct_recode(   # "new" = "old" 
+  rincome,
+  "1-Lt $10000"      = "Lt $1000"      ,
+  "1-Lt $10000"      = "$1000 to 2999" ,
+  "1-Lt $10000"      = "$3000 to 3999" ,
+  "1-Lt $10000"      = "$4000 to 4999" ,
+  "1-Lt $10000"      = "$5000 to 5999" ,
+  "1-Lt $10000"      = "$6000 to 6999" ,
+  "1-Lt $10000"      = "$7000 to 7999" ,
+  "1-Lt $10000"      = "$8000 to 9999" ,
+  "2-10000 to 14999" = "$10000 - 14999",
+  "3-15000 to 24999" = "$15000 - 19999",
+  "4-15000 to 24999" = "$20000 - 24999",
+  "5-25000 or more"  = "$25000 or more"
+) |> 
+forcats::fct_relevel(sort) |>
+as.ordered(),
 )
 
 
@@ -269,6 +283,29 @@ score_risques_phy_logits |> tab_export(theme="auto")
 
 
 
+# Pass 4 ----
+
+data |> 
+  mutate(rincome = `class<-`(rincome, "factor")) |> # temporary : remove ordered to not break model
+  tab_reg(dependent = c("married", "black"), predictors = c("rincome", "tvhours", "relig"), family = "binomial", 
+          # effect = "ame", empirical_OR = TRUE
+  ) 
+
+data |> 
+mutate(rincome = `class<-`(rincome, "factor")) |> # temporary : remove ordered to not break model
+tab_reg(dependent = c(married, black), predictors = all_of(c("rincome", "tvhours", "relig")), family = "binomial",     
+) 
+
+
+
+
+# tab(pc18, all_of(rows1), CONCERTS, wt = POND, pct = "row", color = TRUE,
+#  color_signif = "grey_non_signif", na = "drop", ci="diff", stars = TRUE
+# ) |> 
+#   tab_xl(open = FALSE, path = "~/github/tabxplor/dev/review_manual/Excel_stars", replace = TRUE)
+
+# tab_reg(pc18, "ROCK", rows1, wt = "POND", family = "binomial") |> 
+#   tab_xl(open = FALSE, path = "~/github/tabxplor/dev/review_manual/Excel_stars_OR", replace = TRUE)
 
 
 
