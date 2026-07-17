@@ -97,7 +97,12 @@
   "ratio") table's tooltip shows the ratio correctly. **Excel**: `ci = "cell"` intervals and odds
   ratios (with the `1/x` reciprocal) export as readable text; a new `tab_xl(or_numeric = TRUE)` keeps
   odds ratios as numbers; differences and contributions get an explicit `+`/`-` sign, ratios a leading
-  `x`; each numeric variable exports a mean column plus a separate `<var>_sd` column.
+  `x`; each numeric variable exports a mean column plus a separate `<var>_sd` column. **Markdown**: a
+  coloured `tab_md()` now renders cleanly in a Quarto / Bootstrap document -- it no longer inherits a
+  black line under every row, its spacer columns collapse, and the rule under the variable-name row and
+  the sub-table separators are thin borders instead of rows of dashes. A coloured table also carries the
+  `::: {.tabxplor-tab}` wrapper even with `css = FALSE`, so a document-level `tab_css()` styles it; a
+  plain uncoloured `tab_md()` is unchanged.
 * New `tab_reg()` --- **regression tables** as color-coded `tabxplor` tables, over one engine with a
   `family` argument: linear coefficients (`"gaussian"`), odds ratios (`"binomial"`, logistic) or
   incidence-rate ratios (`"poisson"`), one row per predictor level grouped by predictor. Pass a

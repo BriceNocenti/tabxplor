@@ -20,7 +20,10 @@
 #   - NO column width (Phase 14j): the browser's auto table layout sizes each column to its content.
 #     `.tx-rv`/`.tx-tot`/`.tx-num` are emitted UNSTYLED, as hooks for a user's own fixed-width CSS
 #     (?tab_css). The table is sized by its data: `.tx-foot` keeps the footnote out of that sum.
-# See: CLAUDE.md Phase 13d + 14e + 14i + 14j, dev/tabxplor_phase10_exporters.md.
+#   - The three `.tabxplor-tab table ...` rules (Phase 14m-iii) are MD-ONLY by selector (a `table`
+#     descendant exists only in the pandoc <div>+<table>, never in the html engine where .tabxplor-tab
+#     IS the table): they tame the host's per-row borders and redraw our rules as collapsed blank rows.
+# See: CLAUDE.md Phase 13d + 14e + 14i + 14j + 14m-iii, dev/tabxplor_phase10_exporters.md.
 
 # === SECTION: theme + slot vocabulary ==============================================================
 
@@ -241,6 +244,23 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE) {
     # readable-compact: a real vertical rhythm (line-height 0.85 crammed the rows) + ~1mm of side
     # padding, so text no longer touches the column borders.
     ".tabxplor-tab th,.tabxplor-tab td{padding:3px 4px;vertical-align:top;line-height:1.1;}",
+    # Phase 14m-iii: the markdown chrome, scoped `.tabxplor-tab table` -- md-only BY SELECTOR (it needs a
+    # `table` DESCENDANT of `.tabxplor-tab`; in md that is the pandoc <div> -> <table>, in the html engine
+    # `.tabxplor-tab` IS the table with no nested one, so these three NEVER match there). In md we do NOT
+    # draw the borders -- the host (Bootstrap/Quarto) does, under every row -- and the `border-color` rule
+    # above then recolours the host's lines black. So: (1) reset the host's per-cell border WIDTHS to 0
+    # (width-only: it does NOT touch the border-color contract above -- a 0-width border never renders,
+    # whatever its colour); (2) redraw ONLY our own rules as a 1px border-top on a fully-blank row (all
+    # cells :empty -- uniquely OUR blank separator; a data/name row has content); (3) collapse the
+    # ASCII-empty spacer/blank cells to a hairline. See decisions §43.
+    # WARNING: rule (1) MUST stay BEFORE `.tabxplor-tab thead th` below -- both are (0,1,2), so the tie is
+    # broken by SOURCE ORDER and thead th's border-bottom (the header underline) must win.
+    # WARNING: NO border shorthand (border-width is a WIDTH property, not the `border`/`border-top`
+    # shorthand that resets border-*-color; longhands border-top-style/-width redraw the rule). §40 lock.
+    ".tabxplor-tab table td,.tabxplor-tab table th{border-width:0;}",
+    paste0(".tabxplor-tab table tbody tr:not(:has(td:not(:empty)))>*{",
+           "border-top-style:solid;border-top-width:1px;padding:0;line-height:0;}"),
+    ".tabxplor-tab table td:empty,.tabxplor-tab table th:empty{padding:0;}",
     paste0(".tabxplor-tab thead th{font-weight:bold;font-size:90%;text-align:center;",
            "vertical-align:bottom;line-height:1;border-top-width:0;",
            "border-bottom-style:solid;border-bottom-width:1px;}"),

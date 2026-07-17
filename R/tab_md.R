@@ -52,10 +52,13 @@
 #' @param css When `TRUE`, prepend an inline `<style>` block (from \code{\link{tab_css}}), so the
 #'   coloured markdown is self-contained. Default `FALSE` (bring the stylesheet via the document's
 #'   `css:`, or emit \code{\link{tab_css}} once at the top of the document -- it styles every table).
-#'   Each table is also wrapped in a pandoc fenced div `::: {.tabxplor-tab}`, which pandoc renders as
-#'   `<div class="tabxplor-tab">` -- the hook \code{\link{tab_css}}'s table styling needs, since
-#'   pandoc emits a bare `<table>` it could not otherwise reach. So the rendered HTML of a markdown
-#'   table can look like `tab_kable()`'s, not just be coloured.
+#'   Any **styled** table (coloured, or `css = TRUE`) is wrapped in a pandoc fenced div
+#'   `::: {.tabxplor-tab}`, which pandoc renders as `<div class="tabxplor-tab">` -- the hook
+#'   \code{\link{tab_css}}'s table styling needs, since pandoc emits a bare `<table>` it could not
+#'   otherwise reach. So the rendered HTML of a markdown table can look like `tab_kable()`'s (compact
+#'   layout, thin rules under the variable-name row and between sub-tables, no host borders), not just
+#'   be coloured -- even with `css = FALSE`, as long as the stylesheet is brought in some other way. A
+#'   plain uncoloured table is left byte-identical (no div).
 #' @param clipboard Copy output to clipboard via \code{clipr::write_clip()}.
 #'   Requires the \pkg{clipr} package.
 #' @param file Path to write the markdown to a file. `NULL` (default) skips.
@@ -135,22 +138,27 @@ tab_md <- function(tabs,
 
   parts   <- purrr::imap_chr(prep$tables, function(rd, i) {
     md_render_one(rd, special_formatting = special_formatting, wrap_rows = wrap_rows,
-                  subtext = subtext, color = color,
+                  subtext = subtext, color = color, css = css,
                   color_legend = color_legend, lang = lang,
                   title = if (i == 1) caption else NULL,
                   theme = theme)
   })
   md_text <- paste(parts, collapse = "\n\n")
 
-  # Phase 14f: with a stylesheet, wrap each table in a pandoc fenced div. Pandoc emits a BARE `<table>`
-  # for a pipe table, which none of tab_css()'s `.tabxplor-tab ...` rules can reach -- so a rendered
-  # markdown table got the colours but none of the layout (compact padding, thin spacer columns,
-  # borders). `::: {.tabxplor-tab}` renders as `<div class="tabxplor-tab">`, which every existing
-  # selector matches, and `chrome = TRUE` becomes meaningful for markdown for the first time.
-  # The raw markdown stays readable: two marker lines, no change to the table itself.
+  # Phase 14f/14m-iii: a STYLED table is wrapped in a pandoc fenced div, and (with `css = TRUE`) the
+  # stylesheet is prepended. Pandoc emits a BARE `<table>` for a pipe table, which none of tab_css()'s
+  # `.tabxplor-tab ...` rules can reach -- so a rendered markdown table got the colours but none of the
+  # layout (compact padding, thin spacer columns, the border-taming of 14m-iii). `::: {.tabxplor-tab}`
+  # renders as `<div class="tabxplor-tab">`, the hook every selector matches. 14m-iii DECOUPLES the div
+  # from `<style>`: a table is styled when it is coloured OR `css = TRUE`, and a styled table always
+  # carries the div -- so the "one tab_css() per document" workflow (bring the sheet via the document)
+  # reaches a coloured `tab_md(css = FALSE)` too. A plain uncoloured table stays byte-identical (no div).
+  # `md_has_color()` is the one definition of "is this table coloured", shared with md_render_one().
+  any_color <- any(vapply(prep$tables, md_has_color, logical(1), color = color))
+  styled    <- any_color || isTRUE(css)
+  if (styled) md_text <- paste0("::: {.tabxplor-tab}\n", md_text, "\n:::")
   if (isTRUE(css)) {
-    md_text <- paste0(tab_css(theme = theme, chrome = TRUE, style_tag = TRUE),
-                      "\n\n::: {.tabxplor-tab}\n", md_text, "\n:::")
+    md_text <- paste0(tab_css(theme = theme, chrome = TRUE, style_tag = TRUE), "\n\n", md_text)
   }
 
   if (!is.null(file)) writeLines(md_text, file)
@@ -197,7 +205,7 @@ tab_md_css <- function(tabs = NULL, ...) {
 # uniform scaffold keeps the numbers aligned in raw text. Uncoloured tables (or color = FALSE) render
 # the byte-identical plain padded table.
 md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
-                          color = TRUE, color_legend = TRUE, lang = NULL, title = NULL,
+                          color = TRUE, css = FALSE, color_legend = TRUE, lang = NULL, title = NULL,
                           theme = NULL) {
   # Graceful degrade -- a table that can't be read as a tabxplor table renders as a plain pipe table.
   if (isTRUE(rd$vars$degrade)) {
@@ -339,8 +347,11 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   # Phase 13d: the class is a pure function of the palette slot the engine already assigned, so no
   # per-column plan/palette lookup is needed here at all -- and the names match tab_kable()'s <td>
   # classes, both styled by the one tab_css() stylesheet.
-  do_color <- isTRUE(color) && length(rd$ann) > 0L &&
-    any(vapply(rd$ann, function(a) isTRUE(a$has_color), logical(1)))
+  do_color <- md_has_color(rd, color)
+  # Phase 14m-iii: a STYLED table (coloured, or the caller asked for the stylesheet) gets the pandoc
+  # chrome -- blank-row separators the stylesheet collapses to 1px rules (Steps 12/13) instead of the
+  # raw-text dash rows. A plain table (`!styled`) keeps the dash rows so its GFM output is byte-clean.
+  styled   <- do_color || isTRUE(css)
   attr_mat <- NULL
   if (do_color) {
     attr_mat <- matrix("", nrow = nrow(cell_data), ncol = ncol(cell_data))
@@ -464,7 +475,6 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
         j_end <- j
         while (j_end < n_cols && cvh$label[j_end + 1] == lbl) j_end <- j_end + 1
         group_cols <- j:j_end
-        span <- sum(col_width[group_cols]) + length(group_cols) - 1
         # The name goes in the FIRST cell of its group, italic; the rest of the group is blank. It is
         # one cell PER COLUMN, never a merged one -- a pipe row must keep the table's cell count or
         # pandoc shifts the data. A long name simply overflows its own cell: that row is deliberately
@@ -539,19 +549,24 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
 
   # --- Step 12: Insert sub-table separators ---
   if (length(new_group) > 0) {
-    # Build separator line with dashes matching column widths
-    dash_cells <- character(n_cols)
-    for (j in seq_len(n_cols)) {
-      dash_cells[j] <- paste0(" ", strrep("-", col_width[j] - 2L), " ")
+    # Phase 14m-iii: on the STYLED path a sub-table boundary is a fully-blank row (all cells :empty in
+    # the render) that tab_css() collapses to a 1px border-top -- a theme-aware rule with NO dash marker
+    # in the raw markdown. The PLAIN path keeps the dash row, so its GFM/text output stays byte-clean.
+    if (styled) {
+      sep_row <- md_blank_row(col_width, new_col_var, n_cols, has_multi_col_vars)
+    } else {
+      dash_cells <- character(n_cols)
+      for (j in seq_len(n_cols)) {
+        dash_cells[j] <- paste0(" ", strrep("-", col_width[j] - 2L), " ")
+      }
+      sep_row <- md_insert_col_sep(dash_cells, new_col_var, n_cols, has_multi_col_vars)
     }
-    dash_line <- md_insert_col_sep(dash_cells, new_col_var, n_cols,
-                                    has_multi_col_vars)
 
-    # Insert separators after the appropriate rows (in reverse to preserve indices)
+    # Insert separators after the appropriate rows
     result_lines <- character(0)
     prev <- 1
     for (g in new_group) {
-      result_lines <- c(result_lines, body_lines[prev:g], dash_line)
+      result_lines <- c(result_lines, body_lines[prev:g], sep_row)
       prev <- g + 1
     }
     if (prev <= n_rows) {
@@ -563,7 +578,13 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   # --- Step 13: Assemble and output ---
   # Phase 14f: the col_var-name row goes BELOW the delimiter (a body row). Above it, it made a two-row
   # header, which pandoc does not accept -- see Step 8.
-  all_lines <- c(header_line, sep_line, col_var_header_line, body_lines)
+  # Phase 14m-iii: on the styled path, follow the col_var-name row with a blank row -> tab_css() draws a
+  # 1px border-top under it (the "rule under the name" the maintainer asked for), theme-aware, with no
+  # dash in the raw markdown. Only when the name row exists (var_names may have dropped it).
+  name_underline <- if (styled && !is.null(col_var_header_line)) {
+    md_blank_row(col_width, new_col_var, n_cols, has_multi_col_vars)
+  } else NULL
+  all_lines <- c(header_line, sep_line, col_var_header_line, name_underline, body_lines)
 
   # Optional caption -- a pandoc table caption line (numbered/cross-referenceable in Quarto).
   if (!is.null(title)) {
@@ -596,6 +617,28 @@ md_insert_col_sep <- function(cells, new_col_var, n_cols, has_multi_col_vars, fi
     }
   }
   paste0("|", paste(parts, collapse = "|"), "|")
+}
+
+
+# Phase 14m-iii: a fully-blank pipe row -- every cell is ASCII spaces, so pandoc renders each cell as
+# `<td></td>` (`:empty`). tab_css() then selects the row (`tbody tr:not(:has(td:not(:empty)))`) and
+# collapses it to a 1px border-top: the sub-table / col_var-name rule, theme-aware, marker-free in the
+# raw markdown. WARNING: ASCII spaces ONLY. A cell of a FIGURE space (U+2007) renders `<td> </td>` --
+# NOT `:empty` -- and the whole 14m-iii collapse dies. The 14m-ii figure-space swap is confined to a
+# value's INTERNAL padding for exactly this reason; the cell-edge pad here must stay ASCII.
+#' @keywords internal
+md_blank_row <- function(col_width, new_col_var, n_cols, has_multi_col_vars) {
+  md_insert_col_sep(strrep(" ", col_width), new_col_var, n_cols, has_multi_col_vars)
+}
+
+
+# The ONE definition of "is this rendered table coloured" -- a table is coloured iff `color` is on and
+# some fmt column carries a colour measure (its prep annotation has `has_color`). Shared by tab_md()'s
+# fenced-div gate and md_render_one()'s span/styled logic, so the two cannot disagree.
+#' @keywords internal
+md_has_color <- function(rd, color) {
+  isTRUE(color) && length(rd$ann) > 0L &&
+    any(vapply(rd$ann, function(a) isTRUE(a$has_color), logical(1)))
 }
 
 

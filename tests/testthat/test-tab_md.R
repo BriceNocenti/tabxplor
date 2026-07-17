@@ -512,3 +512,75 @@ testthat::test_that("var_names = 'cols' / 'none' drops the row-variable name col
   testthat::expect_match(tab_md(merged, print = FALSE, color = FALSE, var_names = "rows"),
                          "*race*", fixed = TRUE)
 })
+
+# === SECTION: Phase 14m-iii -- taming the host in rendered markdown ============
+# Findings 9/10: in a Bootstrap/Quarto host the host draws a black line under every row and md's dash
+# separators / spacer columns leak as ugly cells. A STYLED table (coloured, or css = TRUE) now carries
+# the fenced div + blank-row separators tab_css() collapses to 1px rules; a plain table stays byte-clean.
+
+# A fully-blank pipe row: only pipes, spaces and the col_var spacer. It is what pandoc renders as a
+# <tr> of :empty <td>s, the hook the css collapse keys on.
+md_blank_rows <- function(md) {
+  lines <- strsplit(md, "\n")[[1]]
+  body  <- grep("^[|]", lines, value = TRUE)              # pipe rows only (skip legend / :::)
+  body[grepl("^[| ]+$", body) & !grepl("[-:]", body)]     # all-space cells, not the delimiter
+}
+
+testthat::test_that("a coloured table carries the fenced div even with css = FALSE (14m-iii decouple)", {
+  md <- tab_md(tab(gss, marital, race, pct = "row", color = "diff"), print = FALSE)  # css = FALSE
+  testthat::expect_match(md, "::: {.tabxplor-tab}", fixed = TRUE)
+  testthat::expect_no_match(md, "<style>", fixed = TRUE)                             # no sheet, just the hook
+  # ... a PLAIN uncoloured table is byte-clean: no div, no scaffold
+  plain <- tab_md(tab(gss, marital, race, pct = "row"), print = FALSE, color = FALSE)
+  testthat::expect_no_match(plain, ":::", fixed = TRUE)
+})
+
+testthat::test_that("the styled path draws blank-row separators; the plain path keeps dashes", {
+  col <- tab_md(tab(gss, marital, race, pct = "row", color = "diff"), print = FALSE)
+  # one blank row (the col_var-name underline; a single row_var has no sub-table boundary)
+  testthat::expect_length(md_blank_rows(col), 1L)
+  # a coloured tab_vars table adds one blank row per sub-table boundary on top of the name underline
+  t_tv <- tab(gss, marital, race, year, pct = "row", color = "diff") |>
+    dplyr::filter(year %in% c(2000, 2006))
+  testthat::expect_gte(length(md_blank_rows(tab_md(t_tv, print = FALSE))), 2L)
+  # the PLAIN counterpart keeps DASH separator rows (byte-clean GFM), not blank ones
+  t_tv_plain <- tab(gss, marital, race, year, pct = "row") |>
+    dplyr::filter(year %in% c(2000, 2006))
+  plain <- strsplit(tab_md(t_tv_plain, print = FALSE, color = FALSE), "\n")[[1]]
+  testthat::expect_true(any(grepl("^[|] +-+", plain)))          # a dash separator row survives
+})
+
+testthat::test_that("blank/spacer cells stay ASCII -- a figure space would break the :empty hook", {
+  # THE decisive 14m-ii coupling: pandoc renders a figure-space cell as `<td> </td>` (NOT :empty), so
+  # the whole css collapse dies. The figure-space swap must stay INSIDE a value; blank rows are ASCII.
+  fig <- "\u2007"   # U+2007 FIGURE SPACE (\uXXXX per the non-ascii rule)
+  for (t in list(tab(gss, marital, race, pct = "row", color = "diff"),
+                 tab(gss, marital, c(race, relig), pct = "row", color = "diff"))) {
+    md <- tab_md(t, print = FALSE)
+    testthat::expect_false(any(grepl(fig, md_blank_rows(md), fixed = TRUE)))
+  }
+})
+
+testthat::test_that("a blank separator row renders through pandoc as a <tr> of empty <td>s", {
+  testthat::skip_if(Sys.which("pandoc") == "", "pandoc not on PATH")
+  md <- tab_md(tab(gss, marital, race, pct = "row", color = "diff"), print = FALSE, css = TRUE)
+  h  <- md_pandoc_html(md)                                       # defined earlier in this file
+  # an empty <td> (any alignment style) exists -> the blank row survived as :empty cells
+  testthat::expect_match(h, "<td[^>]*></td>", perl = TRUE)
+  testthat::expect_match(h, '<div class="tabxplor-tab">', fixed = TRUE)
+})
+
+testthat::test_that("tab_css(chrome=TRUE) carries the md-only rules; tab_md_css() omits them", {
+  css <- tab_css(style_tag = FALSE)                              # chrome = TRUE
+  reset <- ".tabxplor-tab table td,.tabxplor-tab table th{border-width:0;}"
+  testthat::expect_match(css, reset, fixed = TRUE)
+  testthat::expect_match(css, "tr:not(:has(td:not(:empty)))", fixed = TRUE)     # blank-row rule
+  testthat::expect_match(css, ".tabxplor-tab table td:empty", fixed = TRUE)     # spacer collapse
+  # the reset MUST precede the header underline (same specificity -> source order decides the tie)
+  testthat::expect_lt(regexpr(reset, css, fixed = TRUE),
+                      regexpr(".tabxplor-tab thead th{", css, fixed = TRUE))
+  # the chrome-free flavour (tab_md_css) omits all three
+  bare <- tab_md_css(style_tag = FALSE)
+  testthat::expect_no_match(bare, reset, fixed = TRUE)
+  testthat::expect_no_match(bare, "tr:not(:has", fixed = TRUE)
+})

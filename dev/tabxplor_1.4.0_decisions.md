@@ -3953,6 +3953,42 @@ gate if the maintainer later wants it — but it would change the plain `_snaps/
 - The name-row underline appears only on the styled (coloured/`css`) path; a plain table's col_var-name
   row has no rule under it (it is already visually distinct, and plain is the GFM/text target).
 
+### DONE (2026-07-17, Phase 14m-iii) — built exactly as designed above
+
+Full suite **FAIL 0 | WARN 0 | PASS 3175**; `document()` clean. The four mechanisms landed verbatim:
+the three `.tabxplor-tab table …` rules in `tx_css_render()`'s `chrome = TRUE` block (rule 1 placed
+BEFORE `.tabxplor-tab thead th`, locked by a new source-order test); `md_render_one()` gained a `css`
+formal and a `styled = do_color || isTRUE(css)` local driving Step 12 (blank `md_blank_row()` on styled,
+dash on plain) and Step 13 (a name-underline `md_blank_row()` when the name row exists); `tab_md()`
+decouples the `:::` div from `<style>` via `any_color <- any(md_has_color(…))`. New helpers
+`md_blank_row()` (ASCII-only, next to `md_insert_col_sep()`) and `md_has_color()` (the ONE "is this
+table coloured" predicate, shared by the div gate and `md_render_one()`); dead `span` local removed.
+
+Verified on this box before writing a line: pandoc 3.7 keeps a fully-blank ASCII row as `<tr>` of
+`<td></td>` (`:empty`), the `*race*` name row stays non-empty (`<em>`), and a figure-space cell renders
+`<td> </td>` (NOT `:empty`) — so blank/spacer cells MUST stay ASCII (they do; 14m-ii's figure space is
+value-internal only). Lock-safe against the §40 no-border-shorthand test (`border-width` ≠ the
+`border-{side}:` shorthand) and the §42 width-floor test (`border-width` is preceded by `border-`, not
+`{`/`;`).
+
+**Conscious `golden.md` regen** (only file that moved besides `man/tab_md.Rd`): the **8** genuinely
+coloured display cases (`f_color_diff`, `n_mean`, `n_mean_w`, `n_mean_sparse`, `n_mean_color`,
+`n_mean_tottab`, `f_col_ref_lvl`, `f_col_ref_multi` — exactly the `has_color = has_col || has_bgc`
+set, which is why `tab_num` auto-colours but a plain `pct` `tab()` and `n_mean_ci`/`f_col_ref_ci` do
+not) gained the `:::` wrapper, one blank name-underline row, and — where a sub-table boundary existed —
+a dash→blank separator swap. **36 insertions / 12 deletions, zero data-row changes** (the blank rows
+reuse the existing `col_width`, so every number is byte-identical). `_snaps/render-html.md` did NOT
+move (it `rh_strip_style()`s the `<style>`, and the html engine never matches `.tabxplor-tab table`).
+
+Browser sample: `dev/review_manual/phase14miii_md_rendered.html` (three coloured cases rendered through
+pandoc into a page that reproduces Bootstrap's `.table>:not(caption)>*>*{border-bottom}` — the host
+findings 9/10 fight).
+
+**Flagged for the maintainer** (aesthetic, tunable): the col_var-name row is bracketed by two 1px
+rules — the header underline (thead border-bottom) above, the new name-underline below. This is the
+settled set (§43) and matches the "rule under the name" ask; if it reads heavy, dropping the
+name-underline is a one-line change (remove the Step-13 injection).
+
 ---
 
 ## 44. Phase 14m-ii — monospace numbers + the markdown figure space (DONE 2026-07-17)

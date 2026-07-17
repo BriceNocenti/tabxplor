@@ -79,10 +79,13 @@ above their level columns; the row-variable name is the leading column a table w
 \item{css}{When \code{TRUE}, prepend an inline \verb{<style>} block (from \code{\link{tab_css}}), so the
 coloured markdown is self-contained. Default \code{FALSE} (bring the stylesheet via the document's
 \verb{css:}, or emit \code{\link{tab_css}} once at the top of the document -- it styles every table).
-Each table is also wrapped in a pandoc fenced div \verb{::: \{.tabxplor-tab\}}, which pandoc renders as
-\verb{<div class="tabxplor-tab">} -- the hook \code{\link{tab_css}}'s table styling needs, since
-pandoc emits a bare \verb{<table>} it could not otherwise reach. So the rendered HTML of a markdown
-table can look like \code{tab_kable()}'s, not just be coloured.}
+Any \strong{styled} table (coloured, or \code{css = TRUE}) is wrapped in a pandoc fenced div
+\verb{::: \{.tabxplor-tab\}}, which pandoc renders as \verb{<div class="tabxplor-tab">} -- the hook
+\code{\link{tab_css}}'s table styling needs, since pandoc emits a bare \verb{<table>} it could not
+otherwise reach. So the rendered HTML of a markdown table can look like \code{tab_kable()}'s (compact
+layout, thin rules under the variable-name row and between sub-tables, no host borders), not just
+be coloured -- even with \code{css = FALSE}, as long as the stylesheet is brought in some other way. A
+plain uncoloured table is left byte-identical (no div).}
 
 \item{clipboard}{Copy output to clipboard via \code{clipr::write_clip()}.
 Requires the \pkg{clipr} package.}
