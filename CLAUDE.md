@@ -293,10 +293,10 @@ Before working on the `tabxplor_fmt` type system, arithmetic, or display, fetch 
 2026-07-16 (second session lost to it). `Config/testthat/parallel: true` runs each test file in its own
 PROCESS, and **each process then multi-threads on its own**:
 
-| thread source | per worker | x 8 workers | lever |
-|---|---|---|---|
-| data.table (defaults to 50 % of cores) | 6 | 48 | `setDTthreads(1L)` — now in `tests/testthat/setup.R` |
-| OpenBLAS *pthread* build (`lm`/`glm`/ggplot) | ~10 | ~80 | `OMP_NUM_THREADS=1` **in the env before R starts** |
+| thread source                                | per worker | x 8 workers | lever                                                |
+|----------------------------------------------|------------|-------------|------------------------------------------------------|
+| data.table (defaults to 50 % of cores)       | 6          | 48          | `setDTthreads(1L)` — now in `tests/testthat/setup.R` |
+| OpenBLAS *pthread* build (`lm`/`glm`/ggplot) | ~10        | ~80         | `OMP_NUM_THREADS=1` **in the env before R starts**   |
 
 **Measured: 165 threads on 12 cores (~14x oversubscribed) -> the suite ran >26 min instead of ~50 s**,
 two workers pegged at ~485 % CPU while the rest starved and the log went silent for 10 min. With both
@@ -2109,42 +2109,6 @@ contrib/OR not forced), `test-calculations.R` (single-row test + chisq.test pari
   `no visible binding for global variable`. Only `devtools::check()` catches (4); the suite is green
   without it.
 
-##### Original plan (historical intent)
-
-Pure semantics; no display work. All five are reproduced above.
-
-- **`color_signif` forces the CI it needs.** Rewrite `normalize_color_spec()` ([tab.R:623-700](R/tab.R#L623))
-  so the `signif` policy reaches the legacy string for **every** mode, not just the explicit
-  `"diff"`/`"ratio"` scalar. The `color = TRUE` arm ([tab.R:697](R/tab.R#L697)) currently short-circuits
-  `legacy_union()` entirely — that is the bug. Under `"auto"`/`"contrib"`/`"OR"` the policy must still
-  force `ci = "diff"` in `tab_resolve_settings()` ([tab-resolve.R:96](R/tab-resolve.R#L96)).
-  Explicit `ci = "cell"` + a signif policy → **error** (maintainer's call: "fail with an error here is
-  the most readable").
-- **`guaranteed_effect` break offset.** Verified: `fmt_color_plan()` compares the CI floor against the
-  **unoffset** breaks (`over_breaks = 0.05 0.10 0.20 0.30`), so a cell with `diff=+7%, ci_inf=+0.4%` is
-  significant yet uncoloured. Offset so the first break is the neutral value: subtract break[1] for
-  additive scales (`0, 0.05, 0.15, 0.25`), divide by break[1] for multiplicative (`1, 1.30, 1.74, 3.48`).
-  Do it **inside `fmt_color_plan()`** where `scale$over/under` are resolved, so `legend_specs()` — which
-  reads the same plan — follows automatically. (Today the legend prints the unoffset breaks; the Phase
-  13b spec text already said `+0; +5; +15; +25`, so legend and engine were both wrong.) Users cannot
-  supply `0`/`1` in breaks, so this must be internal. **testthat is explicitly required here**
-  (maintainer), incl. edge cases: 1 break, `NA` slots, asymmetric over/under, `strict` interaction —
-  under `left.open = TRUE` a floor of exactly 0 stays uncoloured and any significant floor gets ≥ slot 1,
-  which is the intent.
-- **`chi2_compute_test()` single-row crash.** `n_rows2 > 0` → handle `n_rows2 == 1` (either
-  `vapply(..., double(n_rows2))` + explicit `dim<-`, or `ncM <- length(lv_cols)`). Fixes the reported
-  mirai error and the identical serial one. Regression test: a row_var with exactly one non-total row.
-- **`tab_add_n_pct()` pct="col" grouped slice.** `slice()` → ungroup/slice/regroup (the Phase 9b-5
-  pattern already used elsewhere), and append **one `n` row per sub-table**, not one globally.
-- **`chi2` → `test`.** Soft-deprecate the argument on `tab()` / `tab_counts()` (and jmvtab) using the
-  established sentinel pattern — [tab_md.R:84-87](R/tab_md.R#L84) is the exemplar
-  (`lifecycle::deprecated()` + `is_present()` + `deprecate_soft`). `tab_many()` keeps `chi2` (it is
-  itself deprecated). Note `new_tab(test =, chi2 = NULL)` already did this rename for the *attribute*.
-  ~28 call sites in `R/`, ~86 in `tests/`.
-
-**Verify:** full suite; goldens regenerate consciously (the `guaranteed_effect` colours and the
-`color = TRUE` + signif tables genuinely change — that is the point). New tests in
-`test-color-engine.R`, `test-calculations.R`, `test-display-extras.R`, `test-parallel-parity.R`.
 
 #### Phase 14b — tooltips + the numeric-diff display (DONE — 2026-07-17)
 
@@ -2206,35 +2170,6 @@ not even consult for a mean); placement = **`"auto right"`**, not a last-N-colum
   translation (`po/R-fr.po`, `.mo` recompiled — **`gettext` had to be apt-installed on this box**;
   `tools::update_pkg_po()` needs `msgfmt`/`msgmerge`/`msginit`).
 
-##### Original plan (historical intent)
-
-- **Kill the double `×`**: drop the tooltip's hard-coded `×` ([tab_classes.R:2037](R/tab_classes.R#L2037)).
-- **Land the deferred numeric-diff display** (Phase 2's D3 leftover): `format()`'s mean-diff branch
-  ([fmt_class.R:2009](R/fmt_class.R#L2009)) must render a signed **difference**, not `×-0.2`. The field
-  has been a real difference since Phase 2; only the display lagged. Conscious golden change.
-- **Gate `cond_rr`** like `ok_diff`: no ratio line on Total columns / 100% cells; on a reference cell
-  emit **`ref`** once for the whole diff+ratio group (maintainer: *"only say 'ref' for this part,
-  keeping the very important 'n:'"*) instead of `diff: ref ; ratio: ×1`. Include `type == "mean"` in
-  `cond_rr` so a ratio-coloured mean column shows the ratio it is coloured by.
-- **Strip column-alignment padding from tooltips** (`ratio:   ×1` → `ratio: ×1`): the pad comes from
-  `format()`'s ratio right-align ([fmt_class.R:1986](R/fmt_class.R#L1986)) — meaningful in a cell,
-  noise in prose.
-- **Drop the `ref & any(ok_diff)` tautology** ([tab_classes.R:2036](R/tab_classes.R#L2036)).
-- **Katz ratio CI** (decision 7). New `ci_katz_rr()` in `R/tab-agg.R` beside `ci_wilson`/`ci_newcombe`.
-  Computed in `tab_ci()` where `x_n` (n1), `ref` (p2) and `ref_n` (n2) are **already in hand**
-  ([tab.R:5502-5520](R/tab.R#L5502)) — ~3 extra vector ops. Stored in `ci_inf`/`ci_sup` with
-  `ci_type = "ratio"`; `set_ci_type` enum gains `"ratio"`; `ci_center()`, `fmt_color_plan()`'s
-  significance gate (neutral = 1) and `format()`'s bracket follow the same 4-site pattern Phase 12a used
-  for `"or"`. Under `c("ratio","diff")` the **bg/diff** channel derives from the ratio bounds by the
-  inverse affine map (`diff = (ratio-1)·p_ref`), mirroring what the ratio channel does today.
-  Tooltip gains `guaranteed diff: +1.7%` (and `guaranteed ratio:`) under `guaranteed_effect`.
-- **Tooltip placement**: last columns are unreachable in the Positron Viewer and wrap to 4 lines. Both
-  engines hard-code `data-placement="right"` ([tab-render-html.R:290-296](R/tab-render-html.R#L290));
-  `popover=TRUE` already passes `position = "left"`. Flip to `left` for the last columns and set
-  `white-space:nowrap` on the tooltip so it stays one line.
-
-**Verify:** `test-color-engine.R` + a new tooltip test; goldens for the mean-diff display.
-
 #### Phase 14c — colour legends (DONE — 2026-07-17)
 
 All four bullets landed, plus **two defects the item-4 re-verification turned up** and **one the
@@ -2288,20 +2223,6 @@ only the two legend-bearing display snapshots moved (`render-html.md`: 17 spans 
 the darkened light legend hues are faint (L≈0.65–0.77 at C≈0.03), and `tab_plot()`'s legend block
 still holds ~60 lines of half-commented dead code.
 
-##### Original plan (historical intent)
-
-- **Bold the coloured break words** in every medium (Excel already does; html/md/console do not — the
-  `bold = TRUE` at [fmt_class.R:3088](R/fmt_class.R#L3088) is excel-only). html: add `font-weight:bold`
-  to the legend spans; md: `**[+5]{.p1}**`; console: the crayon `$bold` composition. And per the
-  maintainer's separate note, `tab_md_css()` should make **all** coloured text bold — i.e. `font-weight:
-  bold` on the slot classes, which currently carry none.
-- **Excel background-legend readability** (decision 6): add the darkened bg palette to
-  `dev/color_palette_tools.R`, bake `default_bg_legend_colors*` next to the 8 existing OKLCH palettes,
-  and use it for the bg-channel runs in `legend_render_line()`'s excel branch.
-- **Fix the console `theme` divergence** ([fmt_class.R:3094-3095](R/fmt_class.R#L3094)): the console
-  branch ignores the resolved `pal` and silently reads the option.
-- **`tab_reg` legend wording** is already fixed (13b); re-verify β/IRR after the numeric-diff display
-  change in 14b.
 
 #### Phase 14d — transpose, list container, `tab_xl` (DONE — 2026-07-17)
 
@@ -2350,41 +2271,6 @@ stage that records roles (the documented heuristic-fallback case). No `_snaps/` 
 (`n_ci_tabvars*`'s `ci_sup` `NA`→`NaN`, invisible to `expect_equal`'s tolerance, reproduces on
 unmodified HEAD) is now baked in; and the Excel mean/sd column WIDTH was not narrowed.
 
-##### Original plan (historical intent)
-
-**Step 1 — the framework fix: stop INFERRING roles, RECORD them.** (Maintainer: *"fixed at framework
-level, reliably, by finding what solid and reliable property differentiates"*.) There is no reliable
-*intrinsic* property: after `tab_compact()` the original row_var names survive only as the **values**
-(factor levels) of a column literally named `row_var`, and `tab_get_vars()`/`tab_render_vars()` then
-report `row_var = "levels"`, `tab_vars = "row_var"`. Sniffing those names is exactly the ad-hoc layer to
-avoid — and note `tab_render_vars()` (the *robust* Phase-10c detector) reports the same thing, because
-the problem is missing metadata, not weak heuristics.
-
-Fix: a new **`vars` table attribute** — `list(row_vars =, col_vars =, tab_vars =, compacted =)` — written
-where the truth is known (`tab_assemble_output()` / `tab_compact()`), carried through dplyr and the vctrs
-reconcilers exactly like `render_extras` / `ci_settings` already are (~37 threaded sites each; Phase 10i-B
-is the precedent). `tab_get_vars()` / `tab_render_vars()` read it when present and keep today's heuristic
-as the fallback for hand-built tables (so nothing user-facing breaks). This dissolves the transpose guard,
-the `tab_xl` title, and any future consumer in one place.
-
-- **`tab_transpose()` with several row_vars.** With `vars` present the guard becomes truthful (abort only
-  on a *genuine* tab_var, with an accurate message; maintainer: "complicated, no symmetry"). Then pivot on
-  the **composite key** `(row_var, levels)`; the "at most one total row" guard
-  ([tab.R:2350](R/tab.R#L2350)) becomes per-sub-table. The representative-attribute copy
-  ([tab.R:2358-2368](R/tab.R#L2358)) survives — fmt columns stay uniform per col_var.
-- **`pct="row" + transpose` ≈ `pct="col"`.** Today the transposed table shows add_n as
-  `100% (n=849)` in-cell. Materialise **after** the transpose for the add_n arm, or set the orientation
-  before materialising, so the `n` lands as a row.
-- **Never merge a list at export** (decision 5): delete the `compact && tab_list_mergeable()` branch at
-  [tab-export-prep.R:213](R/tab-export-prep.R#L213) and `tab_list_mergeable()` with it.
-- **`tab_xl()`**: `cat()` the resolved path (decision 8); rewrite `tab_get_titles()`
-  ([tab_xl.R:775-793](R/tab_xl.R#L775)) per decision 4 — read the **real** row_vars/col_vars (not the
-  compaction artefacts), elide past 3 with a count, add the missing `TRUE ~` fallback (some shapes
-  currently yield the literal `"NA"`); mean/sd headers → `mean` / `sd` under the col_var span (the
-  `paste0(nm, "_sd")` at [tab_classes.R:1258](R/tab_classes.R#L1258)) and narrow those columns; fix the
-  double `tab_xl_resolve_path()` on the degrade paths ([tab_xl.R:156-190](R/tab_xl.R#L156)) which opens
-  the wrong file under `replace = FALSE`. **`mean`/`sd` header naming applies wherever the columns are
-  separated, not only Excel.**
 
 #### Phase 14e — the html engine becomes the default, and is designed properly (DONE — 2026-07-17)
 
@@ -2436,50 +2322,6 @@ hook may never match); `pct="col"` compactness and the `min-width:10em`/`5.5em` 
 judgment); tooltip dark styling; `inst/tab.css` is now dead for the default engine (all
 `.lightable-classic`-scoped) — kableExtra-only, left alone.
 
-##### Original plan (historical intent)
-
-Its own session; the maintainer's feedback is the brief. Make `engine = "html"` the default for
-`tab_kable`/`tab_export`, then:
-
-- **Render like kableExtra does**: the returned object must display in the Positron Viewer *and* knit in
-  `.Rmd`/`.qmd`. Today the maintainer needs `` `class<-`(c("kableExtra","knitr_kable")) ``. Needs a
-  proper class + `print`/`knit_print` methods (13c-iv did this for `tabxplor_tabs`; `tab_kable_join()`
-  already tags the kableExtra path).
-- **Header `<br>` wrapping is escaped** — `Télé:<br>occasionnel` renders literally.
-- **Backgrounds** hug the text with rounded corners (the legend spans already do exactly this:
-  `border-radius:4px;padding-*:4px`), not full rectangular cells.
-- **Fonts**: kableExtra's look comes from `inst/tab.css` (DejaVu Sans Condensed text / DejaVu Sans
-  numbers) — carry it into `tab_css()`.
-- **Geometry**: more row padding (readable-compact), ~1mm left/right text padding.
-- **Borders take cell colours.** Cause: the inline shorthand `border-right:1px solid`
-  ([tab-render-html.R:254-257](R/tab-render-html.R#L254)) resets `border-*-color` to `currentColor`,
-  and an inline style beats `.tabxplor-tab td{border-color:…}`. Emit the hex inline, or use a class.
-- **Hover** → kableExtra's yellow, not grey.
-- **Dark**: text `#CECDC3` not `#ffffff`; try bg `#222222`; background colours need a readability pass;
-  tooltips need dark styling.
-- **The Positron Viewer findings (from the §14g research — these explain the white surround directly):**
-  + VS Code/Positron webviews set **`vscode-light` / `vscode-dark` on `<body>`**, plus
-    **`data-vscode-theme-kind="vscode-dark"`** and `--vscode-*` CSS variables. That is a **4th toggle
-    family** `tx_dark_hooks` / `tx_light_hooks` ([tab-css.R:80-81](R/tab-css.R#L80)) does not cover —
-    add it. Note this *also* closes the parked Tailwind-style gap for the Viewer, since
-    `vscode-light` is an explicit light class (unlike Tailwind's absence-of-`html.dark`).
-  + **`prefers-color-scheme` is unreliable in VS Code webviews** —
-    [microsoft/vscode#176698](https://github.com/microsoft/vscode/issues/176698) reports it always
-    resolving *light* under a dark theme. If that holds in Positron, `theme = "auto"`'s `@media` base
-    layer silently resolves light in the Viewer, and only the new `vscode-dark` hook can save it.
-  + **Positron force-injects its theme into Viewer webviews** —
-    [posit-dev/positron#3759](https://github.com/posit-dev/positron/issues/3759) (closed, fixed
-    2025.06). The original report was *an sjPlot HTML table rendering unreadable* — the same output
-    shape as ours. So the Viewer pushes its colours *onto* our HTML and will fight a table that sets its
-    own fg/bg. This is the likely cause of "rows dark, the rest of the pane white".
-  + ⚠ **Live check needed first**: R HTML usually lands in an **iframe inside** the webview, and
-    `body.vscode-dark` sits on the **outer** webview body — it may not reach our document. Verify before
-    designing around it (view the Viewer's DOM), rather than shipping a hook that never matches.
-- **U+2007 padding** (decision 1) lands here + in `tab_xl`.
-- **Spanning `<th>`**: fix in both engines (missing `font-size:90%`/bold in the html engine; the
-  `#ddd` + unreached `row_spec(0)` in kableExtra).
-- Also here: `pct="col"` compactness, and `min-width:10em`/`5.5em` review.
-
 #### Phase 14f — `tab_md` (DONE — 2026-07-17)
 
 Full suite **FAIL 0 | PASS 2850**. Conscious golden regen: `_snaps/golden.md` only (the md layout
@@ -2517,29 +2359,6 @@ changed on purpose — see below); no `.rds`, no `render-html.md`.
   "markdown rendered to a styled html table", and the real ask (md renders well in Quarto) is what the
   validity + fenced-div fixes deliver.
 
-##### Original plan (historical intent)
-
-- **Valid pandoc.** Verified with pandoc 3.7: the spacer column's delimiter must be `-` not `" "`
-  (`|-|` works); `{.p2    }` (padded attr) parses; a two-row header does not.
-- **col_var names → first body row** (decision 3), lower contrast + clear formatting + an option to
-  disable. Long names: whole name in the first cell, that row deliberately not pipe-aligned, followed by
-  the separator row. Guard against `|` in variable/level names.
-- **Padding model.** `num_width` is inflated by the bold `+4`
-  ([tab_md.R:331](R/tab_md.R#L331)) — the `**` are markup, not visible text, so every coloured cell in a
-  column with a bold row wastes 4 spaces (`[    38%]{.p2 .o2}` instead of `[38%]{.p2 .o2}`). Compute
-  widths from **visible** text; let markup prefixes (`**`, `[`) grow leftwards into the pad; pad the
-  **attr** to `attr_width` so `]` aligns (`[48%]{.p2    }`).
-- **Compact rendered html from md.** The maintainer wants the `.md` to carry everything needed for a
-  good Quarto render (compact, thin spacer columns, minimal-but-readable borders, less padding) — but
-  pandoc emits a bare `<table>` that `tab_css()`'s chrome cannot target. **Verified fix: wrap each table
-  in a pandoc fenced div** `::: {.tabxplor-tab}` … `:::` → `<div class="tabxplor-tab"><table>`, which
-  every existing `.tabxplor-tab td` selector already matches (only the `border-collapse` rule needs
-  `.tabxplor-tab table`). The `: caption {.cls}` route does **not** work (pandoc emits the braces
-  literally). So `tab_md(css = TRUE)` = `<style>` + fenced div, and `chrome = TRUE` becomes usable for md.
-- `tab_md_css()` bold (14c). `tab_export("html_md")` — **declined**: `tab_kable(engine="html")` already
-  is "markdown rendered to a styled html table", and md→html would give a worse table; the real ask
-  (md renders well in Quarto) is delivered by the validity + fenced-div CSS fixes above.
-
 #### Phase 14g — console theme / IDE detection (DONE — 2026-07-17)
 
 **It works, end to end, on your machine.** New **`R/tab-theme-detect.R`**: `tx_detect_theme()` →
@@ -2568,6 +2387,7 @@ every probe from **injected fixtures**, so it never depends on the host IDE.
 - ⚠ **`setup.R` now pins `tabxplor.color_style_theme = "light"`**: detection makes the default
   machine-dependent, which is exactly the CI-passes/local-fails divergence the 2026-07-15 green-up
   spent a day on. Two colour-legend tests that read the option were pinned too.
+
 - **Not done** (deliberate): re-detecting at PRINT. The resolved value is stored, so switching your
   editor theme mid-session needs another `set_color_palette(theme = "auto")` — per-print detection
   would mean an rstudioapi RPC / a file scan on every table.
@@ -2664,17 +2484,12 @@ Also here: `tx_ide()` (rstudio/positron/vscode/terminal/jamovi), used to re-chec
 Tests must not depend on the host IDE: unit-test the name→uiTheme resolver and the layering with
 injected fixtures.
 
----
 
 ---
 
-### Phase 14 — QUESTIONS FOR THE MAINTAINER (written 2026-07-17, after 14c–14g)
+#### Phase 14b-14g QUESTIONS FOR THE MAINTAINER (answered in `dev/review_manual/tab_manual_review_pass_2.R`)
 
-Phases 14c → 14g are done and committed (suite **FAIL 0 | PASS 2897**; `check()` was 0/0/0 at 14e).
-Below is everything I judged yours to decide rather than mine to guess. Nothing here blocks the code
-that shipped.
-
-#### A. Please look at these two, in a browser / in Excel
+##### A. Please look at these two, in a browser / in Excel
 
 1. **`dev/review_manual/phase14e_html_engine.html`** — the new default html engine (fonts, padding,
    pill backgrounds, hover, `theme = "auto"`). Toggle your OS dark mode on the page.
@@ -2686,7 +2501,7 @@ that shipped.
    colours). Constants: `default_bg_legend_colors` in `R/tab_classes.R`; recipe
    `dev/color_palette_tools.R::darken_for_legend()`.
 
-#### B. Decisions I made that you may want to reverse
+##### B. Decisions I made that you may want to reverse
 
 3. **14f — the md col_var-name row.** Your spec said "first BODY row, lower contrast, visually marked
    … whole name in the first cell only, deliberately not pipe-aligned, **followed by a separator
@@ -2702,7 +2517,7 @@ that shipped.
    `+N more`; sheet names are the same string cut to 25. Change `max` in `tab_get_titles()` if you want
    more or fewer.
 
-#### C. Things I found and did NOT fix (each needs your judgment)
+##### C. Things I found and did NOT fix (each needs your judgment)
 
 6. **A pre-existing golden drift, now baked in.** `n_ci_tabvars.rds` / `n_ci_tabvars_all.rds` have a
    `ci_sup` `NA` where the code now produces `NaN`. It **reproduces on unmodified HEAD** (so it is not
@@ -2718,7 +2533,7 @@ that shipped.
 10. **`color_type = "bg"` is still vestigial** (flagged back in Phase 5): it picks the TEXT channel's
     palette family only; the CHANNEL decides font-vs-fill. Deprecate?
 
-#### D. Deferred from 14e — needs a live check only you can do
+##### D. Deferred from 14e — needs a live check only you can do
 
 11. **The VS Code / Positron webview hooks** (`body.vscode-dark`, `data-vscode-theme-kind`) for
     `theme = "auto"` in the Viewer. The roadmap itself says to verify the DOM FIRST, and it is right:
@@ -2733,6 +2548,8 @@ that shipped.
     calls I would rather you made on the sample in A1. They are one line each in `tab_css()` now.
 
 ---
+
+
 
 ### Phase 15 – finalise jamovi module
 
@@ -2876,6 +2693,12 @@ Implement a full pkgdown documentation.
 ### Reference — bugs, benchmarks, perf
 
 #### Discovered bugs
+
+- **A pre-existing golden drift, now baked in.** `n_ci_tabvars.rds` / `n_ci_tabvars_all.rds` have a
+   `ci_sup` `NA` where the code now produces `NaN`. It **reproduces on unmodified HEAD** (so it is not
+   Phase 14's), and `expect_equal`'s tolerance treats NA and NaN as equal, which is why no test ever
+   saw it. Regenerating the goldens necessarily wrote it in. Worth a look: a NaN there may be a real
+   edge in the mean-CI path (n≤1?), or merely cosmetic.
 
 - **NEW (2026-07-16, seen live in jamovi on WSL; COSMETIC, pre-existing — not a migration issue).**
   A live `jmvtab` session prints, 3×, while the user adds the analysis and picks variables:

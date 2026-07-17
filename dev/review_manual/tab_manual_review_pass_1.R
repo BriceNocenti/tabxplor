@@ -36,6 +36,10 @@ set_color_breaks(pct_ratio = list(over = c(NA, 1.5, 2, 4), under = c(NA, 1.5, 2,
 rows1 <- c("DIPLOM", "CRITREVENU", "CRITAGE", "CSTOTR")
 cols1 <- c("CONCERTS", "TELE", "JV", "nb_cine", "NB_CONCERTS")
 
+#   `levels = "first"`
+rows2 <- c("SEXE", "DIPLOM", "CRITREVENU", "CRITAGE")
+cols2 <- c(musique_vars, "NB_MUSIQUES") # plus the related score as numeric variable
+
 ### base row and col percentages tests ---
 
 tab(pc18, all_of(rows1), all_of(cols1), wt = POND, pct = "row", color = TRUE, na = "drop")
@@ -195,8 +199,6 @@ tab(pc18_young, all_of(rows1), all_of(cols1),wt = POND, pct = "row", na = "drop"
 
 
 ### `levels = "first"` tests ---
-rows2 <- c("SEXE", "DIPLOM", "CRITREVENU", "CRITAGE")
-cols2 <- c(musique_vars, "NB_MUSIQUES") # plus the related score as numeric variable
 tab(pc18, all_of(rows2), all_of(cols2), wt = POND, pct = "row", color = TRUE, na = "drop", levels = "first")
 # - obviously, with binary col_vars, variable names and first level are redundant, 
 #   but at least it’s clear to everyone that each is a different variable. 
@@ -206,7 +208,7 @@ tab(pc18, all_of(rows2), all_of(cols2), wt = POND, pct = "row", color = TRUE, na
 tab(pc18, all_of(rows2), all_of(cols2), wt = POND, pct = "row", color = TRUE, na = "drop", 
   levels = "first", ref = 1
 ) |> 
-  tab_xl(open = FALSE, path = "~/out/Excel_test")
+  tab_xl(open = FALSE, path = "~/github/tabxplor/dev/review_manual/Excel_test")
 # - Excel export should always print the path of the created file in console, otherwise there are 
 #   many cases (like : default) where the user can’t find it
 # - Color legends : "Background colour (ratio): Cells ≥ the Total row ×1.5; ×2; ×4" can’t use 
@@ -366,8 +368,4 @@ tab(pc18, all_of(rows1), all_of(cols1), wt = POND, pct = "row", color = TRUE, na
 # - On Positron IDE Viewer, the table rows are in dark, but the rest of the pane, empty, is all white, 
 #  which is awful (should be the same background color than the base table).
 # - Tooltips are still white text on black background : we should think about changing their colors in Dark mode. 
-
-
-
-
 
