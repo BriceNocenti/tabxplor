@@ -421,9 +421,26 @@ and idiomatic. A shared **`resolve_export_opts()`** (`R/tab-export-prep.R`) reso
 options ONCE (`theme`/`color`/`color_legend`/`transpose`/`caption`/`var_names`; `color_type`/`html_24_bit`
 are deprecated + inert since Phase 14l), so every
 exporter shares one set of names and defaults: `color = FALSE` renders monochrome, `transpose = TRUE`
-transposes at export (centralised in `tab_export_prep()`, applied AFTER materialise — xl's historical
-order), `caption` is the single caption name (`tab_md(title)` / `tab_xl(print_color_legend)` are
-soft-deprecated aliases). `tab_xl` is now theme-aware.
+flips the FINISHED render model (Phase 14o — `tx_transpose_render()` in `R/tab-transpose-render.R`,
+after materialise; the old object-level `tab_transpose()` is soft-deprecated), `caption` is the single
+caption name (`tab_md(title)` / `tab_xl(print_color_legend)` are soft-deprecated aliases). `tab_xl` is
+now theme-aware.
+
+**Render-level transpose (Phase 14o, `R/tab-transpose-render.R`).** A transposed column is
+heterogeneous (a `%`, a mean, an `n`), so it cannot be a `tabxplor_fmt` column and cannot be
+`format()`ted — which is why the object-level flip mis-coloured numeric cells. `tx_transpose_render(rd,
+backend, meta)` instead flips the finished `prep_one_table()` model: cell strings + colour slots +
+tooltips are computed per (correct, homogeneous) source column, collected into matrices and transposed
+as plain data, producing a SYNTHETIC model whose `$tab` is a plain **character** tibble (`$transposed =
+TRUE`, `$cells` the pre-formatted strings, `$color_src` the original fmt table for the legend) with
+`roles`/`ann`/`col_var_header`/`label_runs` all flipped. Because every backend already falls back to
+`as.character()` for a non-fmt column and reads colours from `roles`/`ann`, **md and plot need no
+branch**; **html** injects `rd$cells` + the pre-built `rd$tooltips`; **Excel** writes the display TEXT
+(a `transposed` flag routes `xl_materialize_data`/numFmt/`is_refcol`/`get_col_var` around the absent fmt
+columns — editable numbers deferred). `tab_export_prep()` materialises **xl-style when transposing**
+(`n` a COLUMN → an `n` ROW; 14n has collapsed the Total rows → one Total column), superseding 14d's
+transpose-before-materialise. New leading `[variable-name, levels]` columns mirror `(row_var, levels)`;
+a real `tab_vars` table aborts.
 
 ### Shared exporter prep + render-model (`R/tab-export-prep.R`, Phase 10d)
 
@@ -505,8 +522,9 @@ Single-tab-first with a list method. Pipeline:
 
 - `tab_xl()` (orchestrator) — deprecations (incl. `print_color_legend`→`color_legend`),
   `resolve_export_opts()`, degrade, `tab_export_prep(backend="xl", compact=FALSE,
-  compute=c("refs","bold","colors"), transpose=)` (the prep now both materialises the display extras
-  AND transposes — Phase 10j — so `tab_xl` no longer front-runs them), sheet assignment
+  compute=c("refs","bold","colors"), transpose=)` (the prep materialises the display extras and, when
+  `transpose=`, flips the render model — Phase 14o; the plan builder takes a `transposed` flag and
+  writes the flipped char grid as coloured TEXT), sheet assignment
   (`sheets="auto"/"tabs"/"unique"`) + stacking offsets, then builds per-table **plans** (serial
   `purrr::pmap`) and assembles ONE workbook, writing each plan with `xl_write_table()`. Colours come
   from the shared prep `ann` two-channel SLOTS (Phase 10j — the private `fmt_color_channels()` pass is

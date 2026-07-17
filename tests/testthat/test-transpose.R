@@ -1,15 +1,24 @@
-# PURPOSE: Lock tab_transpose() (Phase 10d Part 2) -- the row%/col% axis flip for the
-#          column-percentage inversion workflow.
-# ROLE: Phase 10d Part 2. tab_transpose() is a NEW function (no byte-identity contract); these tests
-#        pin the flag swaps, the value/colour transpose, the test re-keying, and the guards.
+# PURPOSE: Lock the transpose axis flip -- the row%/col% "column-percentage inversion" workflow.
+# ROLE: Two contracts. (1) The DEPRECATED object-level tab_transpose() (Phase 10d) still works for the
+#        single-row_var round-trip it always supported -- those tests silence the soft-deprecation.
+#        (2) The Phase 14o RENDER-LEVEL transpose (`transpose = TRUE` on the exporters) fixes finding 8:
+#        colours are computed per (correct) source column then the finished model is flipped, so numeric
+#        cells keep their own colour, there is ONE Total column, and n sits right after Total.
 
 gss <- forcats::gss_cat
 
-# === SECTION: structure matches a native pct = "col" table ===================
+# a small wrapper: the object-level tab_transpose() is soft-deprecated (use transpose = TRUE), but still
+# supported for the single-row_var round-trip -- silence the deprecation where we test it on purpose.
+xpose <- function(...) {
+  withr::local_options(lifecycle_verbosity = "quiet")
+  tab_transpose(...)
+}
+
+# === SECTION: DEPRECATED object-level tab_transpose() (single row_var) ========
 
 testthat::test_that("transpose of a row% table == a native col% table (structure + render)", {
   orig   <- tab(gss, marital, race, pct = "row", color = "diff")
-  tr     <- tab_transpose(orig)
+  tr     <- xpose(orig)
   native <- tab(gss, race, marital, pct = "col", color = "diff")
 
   testthat::expect_identical(names(tr), names(native))
@@ -28,12 +37,9 @@ testthat::test_that("transpose of a row% table == a native col% table (structure
   testthat::expect_identical(tab_md(tr, print = FALSE), tab_md(native, print = FALSE))
 })
 
-# === SECTION: values + colours ride along (per-cell fields) ==================
-
 testthat::test_that("cell values transpose: orig[i, j] == transposed[j, i]", {
   orig <- tab(gss, marital, race, pct = "row", color = "diff")
-  tr   <- tab_transpose(orig)
-  # orig column "White" over marital rows  <->  tr column <marital level> over race rows (White = 3rd)
+  tr   <- xpose(orig)
   white_row <- which(as.character(dplyr::pull(tr, 1)) == "White")
   marital_lv <- "Never married"
   testthat::expect_equal(get_pct(tr[[marital_lv]])[white_row],
@@ -42,136 +48,120 @@ testthat::test_that("cell values transpose: orig[i, j] == transposed[j, i]", {
                          get_diff(orig[["White"]])[which(as.character(dplyr::pull(orig, 1)) == marital_lv)])
 })
 
-testthat::test_that("per-cell colour codes transpose (same colours as the built row% table)", {
-  orig <- tab(gss, marital, race, pct = "row", color = "diff")
-  tr   <- tab_transpose(orig)
-  # the colour of tr cell (White, Never married) == orig cell (Never married, White)
-  o_row <- which(as.character(dplyr::pull(orig, 1)) == "Never married")
-  t_row <- which(as.character(dplyr::pull(tr, 1)) == "White")
-  o_code <- fmt_channel_codes(orig[["White"]])$text[o_row]
-  t_code <- fmt_channel_codes(tr[["Never married"]])$text[t_row]
-  testthat::expect_identical(o_code, t_code)
-})
-
-# === SECTION: round-trip =====================================================
-
 testthat::test_that("transpose(transpose(x)) restores the original", {
   orig <- tab(gss, marital, race, pct = "row", color = "diff")
-  tr2  <- tab_transpose(tab_transpose(orig))
+  tr2  <- xpose(xpose(orig))
   testthat::expect_identical(names(tr2), names(orig))
   testthat::expect_equal(get_pct(tr2[["White"]]), get_pct(orig[["White"]]))
   testthat::expect_identical(get_type(tr2[["White"]]), get_type(orig[["White"]]))
   testthat::expect_identical(is_totcol(tr2[["Total"]]), is_totcol(orig[["Total"]]))
 })
 
-# === SECTION: reference row <-> reference column =============================
-
-testthat::test_that("a reference row becomes a reference column", {
-  orig <- tab(gss, marital, race, pct = "row", ref = "first", color = "diff")
-  # ref = "first" marks the first race... actually the reference is a row here; find it
-  refrow <- which(is_refrow(orig[[names(orig)[purrr::map_lgl(orig, is_fmt)][1]]]))
-  tr <- tab_transpose(orig)
-  if (length(refrow) == 1) {
-    reflab <- as.character(dplyr::pull(orig, 1))[refrow]
-    testthat::expect_true(is_refcol(tr[[reflab]]))
-  }
-  testthat::expect_s3_class(tr, "tabxplor_tab")
+testthat::test_that("tab_transpose() emits a soft-deprecation, and errors truthfully", {
+  withr::local_options(lifecycle_verbosity = "warning")
+  testthat::expect_warning(tab_transpose(tab(gss, marital, race, pct = "row")),
+                           class = "lifecycle_warning_deprecated")
+  testthat::expect_error(xpose(42), "tabxplor")
 })
 
-# === SECTION: test attribute re-keyed ========================================
+# === SECTION: RENDER-LEVEL transpose = TRUE (Phase 14o -- finding 8) ==========
 
-testthat::test_that("the whole-table test is re-keyed by the new col_var", {
-  orig <- tab(gss, marital, race, pct = "row", test = TRUE)
-  tr   <- tab_transpose(orig)
-  to <- get_test(orig); tt <- get_test(tr)
-  if (nrow(to) > 0) {
-    testthat::expect_identical(unique(tt$row_var), unique(to$col_var))  # swapped
-    testthat::expect_identical(unique(tt$col_var), unique(to$row_var))
-  }
-  testthat::expect_s3_class(tr, "tabxplor_tab")
+# the transposed render model for one table (post-materialise, post-flip)
+tx_prep <- function(t, backend = "kable", color = TRUE) {
+  compute <- if (color) c("refs", "colors", "bold") else c("refs", "bold")
+  tab_export_prep(t, backend = backend, transpose = TRUE, compute = compute)$tables[[1]]
+}
+# the untransposed reference must materialise the SAME way the transposed flip does (xl-style: `n` a
+# column, mean split off its sd), so the slot grids line up cell-for-cell. backend = "xl" does that.
+plain_prep <- function(t) {
+  tab_export_prep(t, backend = "xl", compute = c("refs", "colors", "bold"))$tables[[1]]
+}
+
+testthat::test_that("numeric cells keep their OWN colour on transpose (the finding-8 regression)", {
+  # A multi-row_var table with a numeric (mean) col_var. The object-level flip stamped one factor
+  # column's colour onto every transposed column, so the mean cells were coloured by a diff scale.
+  # The render-level flip computes each cell's slot on its source column, so slots match cell-for-cell.
+  t   <- tab(gss, c(marital, race), c(relig, tvhours), pct = "row", color = TRUE, na = "drop")
+  rd  <- tx_prep(t)
+  rdu <- plain_prep(t)
+
+  # untransposed slot matrix [orig row, orig data col] (drop the Excel _sd siblings -- none for kable)
+  data_i <- setdiff(unname(rdu$roles$fmt_cols), unname(rdu$roles$sd_cols))
+  onm    <- names(rdu$tab)
+  U <- vapply(data_i, function(j) rdu$ann[[onm[j]]]$text_slot, integer(nrow(rdu$tab)))
+  # transposed: ann keyed by data-column name; recompute the row order to map d -> new row
+  cvm     <- rdu$roles$col_var_map
+  is_tot  <- data_i %in% rdu$roles$totcols
+  is_n    <- unname(cvm[data_i]) %in% "all_col_vars"
+  types   <- vapply(data_i, function(j) get_type(rdu$tab[[j]]), character(1))
+  is_mean <- types %in% "mean" & !is_tot & !is_n
+  is_fac  <- !is_tot & !is_n & !is_mean
+  order_i <- c(data_i[is_fac], data_i[is_tot], data_i[is_n], data_i[is_mean])
+  new_row_of <- match(data_i, order_i)
+  dnames  <- names(rd$ann)
+  Tm <- vapply(dnames, function(nm) rd$ann[[nm]]$text_slot, integer(nrow(rd$tab)))
+
+  mism <- 0L
+  for (dc in seq_along(data_i)) for (r in seq_len(nrow(U)))
+    if (U[r, dc] != Tm[new_row_of[dc], r]) mism <- mism + 1L
+  testthat::expect_identical(mism, 0L)
 })
 
-# === SECTION: guards =========================================================
-
-testthat::test_that("tab_transpose errors on tab_vars / non-tabxplor input", {
-  testthat::expect_error(tab_transpose(tab(gss, marital, race, year, pct = "row")),
-                         "tab_vars")
-  testthat::expect_error(tab_transpose(42), "tabxplor")
+testthat::test_that("ONE Total column, no Total_<var> suffix (finding 8 + 14n collapse)", {
+  t  <- tab(gss, c(marital, race), c(relig, tvhours), pct = "row", color = TRUE, na = "drop")
+  md <- tab_md(t, transpose = TRUE, print = FALSE, color = FALSE)
+  testthat::expect_false(grepl("Total_", md, fixed = TRUE))
+  rd <- tx_prep(t, color = FALSE)
+  testthat::expect_length(rd$roles$totcols, 1L)                 # exactly one Total column
 })
 
-testthat::test_that("tab_transpose works on a plain table (no totals)", {
-  pl <- tab_plain(gss, marital, race, pct = "row")
-  tr <- tab_transpose(pl)
-  testthat::expect_s3_class(tr, "tabxplor_tab")
-  testthat::expect_identical(tab_get_vars(tr)$row_var, "race")
+testthat::test_that("n sits right after Total; numeric means last (finding 8)", {
+  t  <- tab(gss, c(marital, race), c(relig, tvhours), pct = "row", na = "drop")
+  rd <- tx_prep(t, color = FALSE)
+  lv <- as.character(rd$tab[["levels"]])
+  i_tot <- which(lv == "Total"); i_n <- which(lv == "n"); i_mean <- which(lv == "mean")
+  testthat::expect_identical(i_n, i_tot + 1L)                   # n immediately after Total
+  testthat::expect_true(i_mean > i_n)                          # the numeric row after both
 })
 
-# Phase 13c-vi: transpose at export keeps colours (both channels) + numeric means/sd.
-
-testthat::test_that("transpose at export keeps both colour channels (diff + ratio)", {
-  t <- tab(forcats::gss_cat, marital, race, pct = "row", color = c("diff", "ratio"))
-  h <- as.character(tab_kable(t, engine = "html", transpose = TRUE))
-  testthat::expect_true(grepl("color:#", h))            # text-channel colour survives
-  testthat::expect_true(grepl("background-color", h))   # background-channel colour survives
+testthat::test_that("leading [variable-name, levels] label columns mirror (row_var, levels)", {
+  t  <- tab(gss, c(marital, race), c(relig, tvhours), pct = "row", na = "drop")
+  rd <- tx_prep(t, color = FALSE)
+  testthat::expect_identical(names(rd$tab)[1:2], c("row_var", "levels"))
+  testthat::expect_true(all(c("relig", "tvhours") %in% rd$tab[["row_var"]]))
+  # the old row_vars span the new columns (a col_var header naming marital + race)
+  testthat::expect_true(all(c("marital", "race") %in% rd$col_var_header$label))
 })
 
-testthat::test_that("transpose at export keeps numeric means + inline sd + colour", {
-  tn <- tab_num(forcats::gss_cat, race, c(age, tvhours), color = "diff")
-  md <- tab_md(tn, transpose = TRUE, print = FALSE)
-  testthat::expect_true(grepl("]{.", md, fixed = TRUE))       # colour spans present
-  testthat::expect_true(grepl(intToUtf8(0x03c3), md))         # inline sigma sd survives
-})
-
-
-# === SECTION: several row_vars (Phase 14d) ==================================
-
-testthat::test_that("transpose works with several row_vars: each becomes a col_var", {
-  # Before Phase 14d this aborted with a message about `tab_vars` the table did not have: after
-  # tab_compact() the roles were guessed from the columns, and the merge's own `row_var` meta column
-  # read as a tab_var. The roles are recorded now, so the guard tells the truth.
-  t  <- tab(gss, c(marital, relig), race, pct = "row")
-  tr <- tab_transpose(t)
-
-  v <- tab_get_vars(tr)
-  testthat::expect_setequal(v$col_vars, c("marital", "relig"))   # old row_vars -> col_vars
-  testthat::expect_equal(v$row_var, "race")                      # old col_var  -> row_var
-  testthat::expect_length(v$tab_vars, 0L)
-  testthat::expect_false(isTRUE(get_vars_attr(tr)$compacted))    # the merged shape is undone
-
-  # every ROW of the merged table survives as its own column (`levels(t$levels)` would be the union of
-  # both row_vars' levels, which can include one with no rows at all)
-  testthat::expect_length(setdiff(names(tr), "race"), nrow(t))
-  # ONE total + reference column per sub-table (not one per table)
-  totc <- names(tr)[purrr::map_lgl(tr, ~ is_fmt(.) && is_totcol(.))]
-  testthat::expect_setequal(totc, c("Total_marital", "Total_relig"))
-  testthat::expect_setequal(names(tr)[purrr::map_lgl(tr, ~ is_fmt(.) && is_refcol(.))], totc)
-  # each column's col_var is the variable its rows came from
-  testthat::expect_equal(get_col_var(tr[["Total_marital"]]), "marital")
-  testthat::expect_equal(get_col_var(tr[["Total_relig"]]),   "relig")
-  # values: the transposed cell equals the original one
-  testthat::expect_equal(get_num(tr[["Divorced"]])[match("Black", as.character(tr$race))],
-                         get_num(t[["Black"]])[which(as.character(t$levels) == "Divorced" &
-                                                       as.character(t$row_var) == "marital")])
-})
-
-testthat::test_that("transpose suffixes ONLY levels shared by two row_vars", {
-  t  <- tab(gss, c(marital, relig), race, pct = "row")
-  tr <- tab_transpose(t)
-  # "Total" (and "No answer") exist under both -> suffixed; "Divorced" is marital's alone -> bare
-  testthat::expect_true(all(c("Total_marital", "Total_relig", "No answer_marital") %in% names(tr)))
-  testthat::expect_true("Divorced" %in% names(tr))
-  testthat::expect_false("Divorced_marital" %in% names(tr))
-})
-
-testthat::test_that("a REAL tab_var still aborts, and says so truthfully", {
-  testthat::expect_error(tab_transpose(tab(gss, marital, race, year, pct = "row")), "tab_vars")
-})
-
-testthat::test_that("transposed row% renders exactly like a native col% table (Phase 14d)", {
-  # The extras are ORIENTED: add_n is a column under row%, a ROW under col%. Materialising before the
-  # transpose baked the wrong one in ("100% (n=849)" in-cell instead of an `n` row).
+testthat::test_that("a single-row_var transpose still renders exactly like a native col% table", {
   transposed <- tab_md(tab(gss, marital, race, pct = "row"), transpose = TRUE,
                        print = FALSE, color = FALSE)
   native     <- tab_md(tab(gss, race, marital, pct = "col"), print = FALSE, color = FALSE)
   testthat::expect_identical(transposed, native)
+})
+
+testthat::test_that("transpose = TRUE keeps both colour channels + the numeric mean's sd", {
+  t <- tab(gss, marital, race, pct = "row", color = c("diff", "ratio"))
+  h <- as.character(tab_kable(t, transpose = TRUE))
+  testthat::expect_match(h, "tx-pill")                          # background-channel colour survives
+  testthat::expect_match(h, 'class="[^"]*p[0-9]')               # text-channel slot survives
+  tn <- tab_num(gss, race, c(age, tvhours), color = "diff")
+  md <- tab_md(tn, transpose = TRUE, print = FALSE)
+  testthat::expect_true(grepl(intToUtf8(0x03c3), md))           # inline sigma sd survives the flip
+})
+
+testthat::test_that("transpose = TRUE aborts on a REAL tab_vars table", {
+  testthat::expect_error(
+    tab_md(tab(gss, marital, race, year, pct = "row"), transpose = TRUE, print = FALSE),
+    "tab_vars")
+})
+
+testthat::test_that("every exporter accepts transpose = TRUE without error", {
+  t <- tab(gss, c(marital, race), c(relig, tvhours), pct = "row", color = TRUE, na = "drop")
+  testthat::expect_no_error(tab_md(t, transpose = TRUE, print = FALSE))
+  testthat::expect_no_error(tab_kable(t, transpose = TRUE))
+  testthat::expect_no_error(tab_xl(t, path = withr::local_tempfile(fileext = ".xlsx"),
+                                   transpose = TRUE, replace = TRUE, open = FALSE))
+  testthat::skip_if_not_installed("ggpubr")
+  testthat::expect_no_error(tab_plot(t, transpose = TRUE))
 })

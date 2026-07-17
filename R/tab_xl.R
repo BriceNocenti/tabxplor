@@ -174,9 +174,10 @@ tab_xl <-
     }
     if (is.data.frame(tabs)) tabs <- list(tabs)
 
-    # Phase 10j: display-extra materialise (backend "xl" keeps a real `n` column) + opt-in transpose are
-    # now centralised in tab_export_prep() (materialise -> transpose, the historical xl order); tab_xl
-    # just passes transpose = transpose below.
+    # Phase 10j: display-extra materialise (backend "xl" keeps a real `n` column) is centralised in
+    # tab_export_prep(); tab_xl just passes transpose = transpose below. Phase 14o: transpose is now a
+    # render-model flip (tx_transpose_render), AFTER materialise, so its `tab` is a plain character grid
+    # (values written as TEXT here; editable numbers deferred -- see tx_transpose_render()).
     colwidth <- vctrs::vec_recycle(colwidth, length(tabs))
 
     # === Shared exporter prep (Phase 10g/10j) ======================================
@@ -206,6 +207,10 @@ tab_xl <-
     }
 
     tabs           <- purrr::map(rd, "tab")           # ungrouped, tab_vars dropped when requested
+    # Phase 14o: a transposed table's `tab` is a plain character grid; the subtext / colour legend /
+    # title read the MEASURES + variable roles off the original fmt table, kept as `color_src`.
+    tabs_src       <- purrr::map(rd, ~ if (is.null(.$color_src)) .$tab else .$color_src)
+    transposed     <- purrr::map_lgl(rd, ~ isTRUE(.$transposed))
     roles          <- purrr::map(rd, "roles")
     # Phase 14d: the SOURCE names for the title (`row_var` is the column holding the labels, which on
     # a merged table is the literal "levels"); geometry elsewhere keeps using `roles`.
@@ -234,11 +239,11 @@ tab_xl <-
     # the rest stays plain black -- written as fmt_txt cells by the writer. Its plain text (derived from
     # the runs so it matches byte-for-byte) is merged into `subtext` for the geometry / styling; the
     # legend occupies the first `length(legend_runs)` subtext rows, overwritten with rich text below.
-    subtext <- purrr::map(tabs, get_subtext) |>
+    subtext <- purrr::map(tabs_src, get_subtext) |>
       purrr::map(~ stringr::str_replace_all(., "\\\n", " ") |> stringr::str_replace_all(" +", " "))
     legend_runs <- rep(list(list()), length(tabs))
     if (isTRUE(color_legend)) {
-      legend_runs <- purrr::map(tabs, ~ suppressWarnings(
+      legend_runs <- purrr::map(tabs_src, ~ suppressWarnings(
         tab_color_legend(., medium = "runs", style = "prose", lang = lang,
                          theme = theme)))
       legend_runs <- purrr::map(legend_runs, ~ if (is.null(.)) list() else .)
@@ -248,7 +253,7 @@ tab_xl <-
     }
 
     if (missing(titles)) {
-      titles <- purrr::pmap_chr(list(tabs, row_vars, col_vars_plain, tab_vars),
+      titles <- purrr::pmap_chr(list(tabs_src, row_vars, col_vars_plain, tab_vars),
                                 ~ tab_get_titles(..1, ..2, ..3, ..4))
     } else {
       titles <- vctrs::vec_recycle(titles, length(tabs))
@@ -303,7 +308,7 @@ tab_xl <-
            bold_rows = purrr::map(rd, "bold_rows"),
            col_var_header = purrr::map(rd, "col_var_header"),
            start = start, sheet = sheet, title = titles, subtext = subtext,
-           legend_runs = legend_runs, colwidth = colwidth),
+           legend_runs = legend_runs, colwidth = colwidth, transposed = transposed),
       tab_xl_plan_one, o = opts
     )
 
@@ -373,9 +378,11 @@ tab_xl_resolve_path <- function(path, replace) {
 # becomes its format() display string (character); every other fmt column its raw get_num() number.
 # Mixed column types in one tibble are fine (openxlsx2 writes each column by its R type).
 #' @keywords internal
-xl_materialize_data <- function(tab, fmt_cols, text_fmt_cols) {
+xl_materialize_data <- function(tab, fmt_cols, text_fmt_cols, transposed = FALSE) {
   for (ci in fmt_cols) {
-    tab[[ci]] <- if (ci %in% text_fmt_cols) {
+    tab[[ci]] <- if (isTRUE(transposed)) {
+      as.character(tab[[ci]])                       # Phase 14o: already a pre-formatted display string
+    } else if (ci %in% text_fmt_cols) {
       format(tab[[ci]], special_formatting = TRUE, na = "", stars = TRUE)
     } else {
       get_num(tab[[ci]])
@@ -385,7 +392,7 @@ xl_materialize_data <- function(tab, fmt_cols, text_fmt_cols) {
 }
 
 tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, sheet, title, subtext,
-                            legend_runs = list(), colwidth, o) {
+                            legend_runs = list(), colwidth, o, transposed = FALSE) {
   n   <- nrow(tab)
   ncl <- ncol(tab)
   # Phase 13c-iii: a col_var spanning-NAME header row sits above the level-name header (whenever the
@@ -407,9 +414,12 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
   font_num    <- if (isTRUE(roles$has_stars)) o$font_num_stars else o$font_num
   row_var_col <- roles$row_var_col
   totcols     <- roles$totcols
-  ref_cols    <- which(is_refcol(tab))
+  # Phase 14o: a transposed table's `tab` is plain character (no fmt columns), so the fmt accessors that
+  # re-derive roles from the tab (is_refcol / get_col_var) read from `roles` instead. Its reference is a
+  # ROW (the Total), carried by bold_rows, not a column.
+  ref_cols    <- if (isTRUE(transposed)) integer(0) else which(is_refcol(tab))
 
-  cv_names      <- get_col_var(tab)
+  cv_names      <- if (isTRUE(transposed)) unname(roles$col_var_map) else get_col_var(tab)
   start_col_var <- which(cv_names != "" & cv_names != dplyr::lag(cv_names, default = NA_character_))
 
   # Phase 14i: the label columns' runs, lifted to ABSOLUTE sheet rows. `label_merges` is one merge per
@@ -436,13 +446,16 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
     if (!isTRUE(o$or_numeric)) code[get_display(col) %in% or_family] <- "TEXT"
     code
   }
-  text_fmt_cols <- fmt_cols[vapply(
+  # Phase 14o: a transposed column is heterogeneous character (pre-formatted display strings, editable
+  # numbers deferred -- see tx_transpose_render()), so every fmt column is written as TEXT ("@"). The
+  # colours still ride the slot grid from `ann`.
+  text_fmt_cols <- if (isTRUE(transposed)) fmt_cols else fmt_cols[vapply(
     fmt_cols, function(ci) { cd <- xl_code(tab[[ci]]); any(!is.na(cd) & cd == "TEXT") }, logical(1))]
 
   # Phase 14i: Excel keeps only a merged range's top-left value, so the label repeats below one become
   # invisible ghosts a user would find again on unmerging. Blank them at the source -- the display
   # equivalent of md's blanked cells, and on the WRITTEN copy only (every role is read off `tab`).
-  xl_data <- xl_materialize_data(tab, fmt_cols, text_fmt_cols)
+  xl_data <- xl_materialize_data(tab, fmt_cols, text_fmt_cols, transposed = transposed)
   for (cl in names(roles$label_cols)) {
     if (!cl %in% names(xl_data)) next
     xl_data[[cl]] <- as.character(xl_data[[cl]])
@@ -460,7 +473,9 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
       # Phase 14e: Excel renders in a proportional font, so the alignment padding must be figure
       # spaces (a digit wide), not ASCII half-digit spaces -- as in html. `html = TRUE` is NOT the
       # lever here: it would also switch on the html-only <sub> markup.
-      val  <- format(col, special_formatting = TRUE, na = "", stars = TRUE, pad = fig_space)
+      # Phase 14o: a transposed column is already a pre-formatted display string (character).
+      val  <- if (isTRUE(transposed)) as.character(col)
+              else format(col, special_formatting = TRUE, na = "", stars = TRUE, pad = fig_space)
       code <- ifelse(!is.na(val) & nzchar(val), "@", NA_character_)
       return(tibble::tibble(col = as.integer(ci), row = seq_along(code) + data_row0, code = code))
     }

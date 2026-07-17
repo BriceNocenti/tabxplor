@@ -57,11 +57,12 @@ testthat::test_that("tab_materialize_extras('text') folds add_n into the Total c
 })
 
 # --- transpose carries the intent: transpose(row% add_n) renders like a native col% add_n ------
-testthat::test_that("tab_transpose carries render_extras (transpose == native col%)", {
-  tr     <- tab_transpose(tab(gss, marital, race, pct = "row", add_n = TRUE))
-  native <- tab(gss, race, marital, pct = "col", add_n = TRUE)
-  testthat::expect_identical(get_render_extras(tr), get_render_extras(native))
-  testthat::expect_identical(tab_md(tr, print = FALSE), tab_md(native, print = FALSE))
+# Phase 14o: the render-level `transpose = TRUE` materialises xl-style so add_n's `n` COLUMN flips into
+# an `n` ROW -- byte-identical to a native pct = "col" add_n table.
+testthat::test_that("transpose = TRUE carries render_extras (transpose == native col% add_n)", {
+  transposed <- tab_md(tab(gss, marital, race, pct = "row", add_n = TRUE), transpose = TRUE, print = FALSE)
+  native     <- tab_md(tab(gss, race, marital, pct = "col", add_n = TRUE), print = FALSE)
+  testthat::expect_identical(transposed, native)
 })
 
 # --- back-compat shim: $n / [[ / pull reconstruct the deprecated column ------------------------

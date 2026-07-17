@@ -524,8 +524,15 @@
   `tab_plot()` used to glue a list back into one table when its column variables happened to match --
   overriding a user who had asked to keep them apart (`output_list = TRUE`, `tab_many()`, or their own
   `list()`). `tab()` still merges its own row variables at build time, as before.
-* **`transpose = TRUE` on a row-percentage table** now renders exactly like the equivalent column-
-  percentage table: the base is an `n` row, not `100% (n=849)` folded into the total cell.
+* **`transpose = TRUE` now works with several variables and numeric columns.** It used to flip the
+  table's underlying data, which broke on anything but a single simple table: numeric-variable cells
+  were wrongly coloured, each variable's total became a separate `Total_<variable>` column, and the
+  count row landed last. Transposing now happens at the display stage, after the colours are computed
+  --- so numeric cells keep their own colour, there is a single `Total` column, the count row sits
+  right after it and numeric variables come last, and a single-variable transpose still matches the
+  equivalent column-percentage table exactly (its base is an `n` row, not `100% (n=849)` in the total
+  cell). Available on `tab_kable()` / `tab_md()` / `tab_xl()` / `tab_plot()` / `tab_export()`. (In
+  Excel, transposed cells are written as coloured text rather than editable numbers.)
 * **Excel mean/sd headers.** A numeric variable exported `NB_MUSIQUES` and `NB_MUSIQUES_sd` under a
   `NB_MUSIQUES` spanning header -- the name three times. The columns are now headed `mean` and `sd`.
 * **`tab_plot()`'s colour legend** printed raw HTML fragments as text (`color:#02A5B3 !important;">+5`)
@@ -606,6 +613,10 @@
   genuinely self-contained (as documented) and its output is stable across `kableExtra` versions.
 
 ## Deprecations
+* `tab_transpose()` is **soft-deprecated** in favour of the exporters' `transpose = TRUE` argument.
+  It flips the underlying data, which cannot represent a transposed column's mixed cell types, so it
+  mis-transposes tables with several variables or numeric columns. `transpose = TRUE` flips the display
+  instead and handles them. The function is kept for the single-variable round-trip it always supported.
 * `kable_tabxplor_style()` is **soft-deprecated** in favour of `tab_kable()`, which renders any
   table -- `tabxplor_tab` or plain data.frame -- and shares the exporter machinery. The old function
   predates it: it finds total rows and columns by matching the literal strings `"Total"`/`"Ensemble"`

@@ -17,22 +17,24 @@ a subtabled table with \code{tab_vars}, and at most one total row and one total 
 A transposed \code{tabxplor_tab}.
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#experimental}{\figure{lifecycle-experimental.svg}{options: alt='[Experimental]'}}}{\strong{[Experimental]}}
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}}
 
-Flips a \pkg{tabxplor} table so its rows become columns and its columns become rows. The main use
-is the \strong{column-percentage inversion} workflow: to color a \code{pct = "col"} table with several row
-variables (which the coloring/compaction machinery cannot do directly), build it the other way ---
-swap the row and column variables and use \code{pct = "row"} --- then \code{tab_transpose()} flips the
-rendered grid back to the column-percentage layout. Percentages, differences, confidence intervals
-and colors ride along on the per-cell fields; only the axis roles are swapped (row type <-> column
-type, total row <-> total column, reference row <-> reference column), and the whole-table test is
-re-keyed by the new column variable.
+\code{tab_transpose()} is \strong{soft-deprecated} since tabxplor 1.4.0. It flips the \emph{object} (the
+\code{tabxplor_fmt} fields), which cannot carry a transposed column's mixed cell types, so a table with
+several row variables or numeric columns transposes incorrectly (numeric cells mis-coloured,
+duplicated total columns). Use the exporters' \code{transpose = TRUE} argument instead --- it flips the
+finished render model after colours are computed, and handles several row variables and numeric
+columns:
+
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{tab(data, row_vars, col_vars, pct = "row") |> tab_kable(transpose = TRUE)   # or tab_md() / tab_xl()
+}\if{html}{\out{</div>}}
+
+The function is kept (unchanged) for the single-row-variable round-trip it always supported.
 }
 \examples{
 \donttest{
 # build marital x race as row percentages, then display it as race x marital:
-tab(forcats::gss_cat, marital, race, pct = "row", color = "diff") |>
-  tab_transpose() |>
-  tab_md()
+tab(forcats::gss_cat, marital, race, pct = "row") |>
+  tab_kable(transpose = TRUE)
 }
 }

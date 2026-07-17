@@ -283,7 +283,11 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
 
   # (a) format every column once -> list of chr[n_row] (reuse .ref via the prep's ann). bold_split =
   # TRUE marks the composite primary-field width (Phase 13c-ii) so step (c) can bold only the primary.
-  cells <- purrr::imap(tab, function(col, name) {
+  # Phase 14o: a TRANSPOSED model carries pre-formatted strings (its columns are heterogeneous and
+  # cannot be format()ted); use them directly (tx_transpose_render() built them per source column).
+  cells <- if (isTRUE(rd$transposed)) {
+    rd$cells
+  } else purrr::imap(tab, function(col, name) {
     if (is_fmt(col)) {
       format(col, html = TRUE, special_formatting = TRUE, na = "", stars = TRUE,
              bold_split = TRUE, .ref = ann_ref(ann[[name]]))
@@ -340,9 +344,13 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
     }
     bg <- nzchar(bgc)
     tip <- rep("", n_row)
-    if (tooltips && is_fmt(tab[[name]])) {
-      tp <- tab_kable_print_tooltip(tab[[name]],
-                                    .ref = if (is.null(a)) NULL else a$ref_cells)
+    # Phase 14o: a transposed model's columns are heterogeneous -- the per-column tooltip builder cannot
+    # run, so tx_transpose_render() pre-built and flipped the tooltips (kable backend only).
+    tp <- if (isTRUE(rd$transposed)) rd$tooltips[[name]]
+          else if (tooltips && is_fmt(tab[[name]]))
+            tab_kable_print_tooltip(tab[[name]], .ref = if (is.null(a)) NULL else a$ref_cells)
+          else NULL
+    if (tooltips && !is.null(tp)) {
       nz <- !is.na(tp) & nzchar(tp)
       if (any(nz)) {
         # Phase 14b: the SAME builder the kableExtra engine uses, so the bootstrap JS binds identically

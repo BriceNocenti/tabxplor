@@ -2347,16 +2347,20 @@ tab_spread <- function(tabs, spread_vars, names_prefix, names_sort = FALSE,
 #' Transpose a cross-table (swap its rows and columns)
 #'
 #' @description
-#' `r lifecycle::badge("experimental")`
+#' `r lifecycle::badge("deprecated")`
 #'
-#' Flips a \pkg{tabxplor} table so its rows become columns and its columns become rows. The main use
-#' is the **column-percentage inversion** workflow: to color a `pct = "col"` table with several row
-#' variables (which the coloring/compaction machinery cannot do directly), build it the other way ---
-#' swap the row and column variables and use `pct = "row"` --- then `tab_transpose()` flips the
-#' rendered grid back to the column-percentage layout. Percentages, differences, confidence intervals
-#' and colors ride along on the per-cell fields; only the axis roles are swapped (row type <-> column
-#' type, total row <-> total column, reference row <-> reference column), and the whole-table test is
-#' re-keyed by the new column variable.
+#' `tab_transpose()` is **soft-deprecated** since tabxplor 1.4.0. It flips the *object* (the
+#' `tabxplor_fmt` fields), which cannot carry a transposed column's mixed cell types, so a table with
+#' several row variables or numeric columns transposes incorrectly (numeric cells mis-coloured,
+#' duplicated total columns). Use the exporters' `transpose = TRUE` argument instead --- it flips the
+#' finished render model after colours are computed, and handles several row variables and numeric
+#' columns:
+#'
+#' ```r
+#' tab(data, row_vars, col_vars, pct = "row") |> tab_kable(transpose = TRUE)   # or tab_md() / tab_xl()
+#' ```
+#'
+#' The function is kept (unchanged) for the single-row-variable round-trip it always supported.
 #'
 #' @param tabs A single table made with \code{\link{tab}} (one row variable, one column variable; not
 #'   a subtabled table with `tab_vars`, and at most one total row and one total column).
@@ -2369,11 +2373,13 @@ tab_spread <- function(tabs, spread_vars, names_prefix, names_sort = FALSE,
 #' @examples
 #' \donttest{
 #' # build marital x race as row percentages, then display it as race x marital:
-#' tab(forcats::gss_cat, marital, race, pct = "row", color = "diff") |>
-#'   tab_transpose() |>
-#'   tab_md()
+#' tab(forcats::gss_cat, marital, race, pct = "row") |>
+#'   tab_kable(transpose = TRUE)
 #' }
 tab_transpose <- function(tabs, name = NULL) {
+  lifecycle::deprecate_soft(
+    "1.4.0", "tab_transpose()",
+    details = 'Use the `transpose = TRUE` argument of tab_kable() / tab_md() / tab_xl() / tab_export().')
   if (!is.data.frame(tabs)) {
     cli::cli_abort("{.arg tabs} must be a {.pkg tabxplor} table.")
   }

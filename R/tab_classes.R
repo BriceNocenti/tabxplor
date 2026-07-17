@@ -924,6 +924,17 @@ tab_kable <- function(tabs,
   engine  <- match.arg(engine, c("kableExtra", "html"))
   css     <- if (is.null(css)) {getOption("tabxplor.kable_css", TRUE)} else {isTRUE(css)}
 
+  # Phase 14o: a transposed table is a render-model flip whose columns are heterogeneous character
+  # (see tx_transpose_render()); the kableExtra engine cell_spec()s each fmt column, which no longer
+  # exists here, so transpose renders through the home-built html engine.
+  if (isTRUE(o$transpose) && !identical(engine, "html")) {
+    cli::cli_inform(
+      c("!" = 'transpose = TRUE renders through {.code engine = "html"}.',
+        "i" = "The kableExtra engine styles each formatted column, which a transposed table has not."),
+      .frequency = "once", .frequency_id = "tabxplor_transpose_engine")
+    engine <- "html"
+  }
+
   # Phase 13d: "auto" (follow the reader's colour scheme) needs a stylesheet we control. kableExtra's
   # themes are baked at render time (kable_classic / kable_material_dark) and its HTML is not ours to
   # restyle, so downgrade rather than pretend.
@@ -958,7 +969,8 @@ tab_kable <- function(tabs,
       if (color_legend && length(rd$roles$color_cols) != 0) {
         subtext <- c(
           suppressWarnings(tab_color_legend(
-            rd$tab, medium = "html", style = "prose", lang = lang,
+            if (is.null(rd$color_src)) rd$tab else rd$color_src,
+            medium = "html", style = "prose", lang = lang,
             theme = theme[1],
             # Phase 13d: the html engine ships a tabxplor stylesheet, so the legend uses the same slot
             # classes as the cells and follows any theme toggle with them. kableExtra does not.
@@ -1977,7 +1989,8 @@ if (color_legend & length(color_cols) != 0) {
   # kableExtra's `color: rgba(...)` spans with inline hex), so every legend token rendered as a raw
   # html fragment in black. "runs" is the medium built for exactly this: draw-as-text, no fill (a
   # background break-word borrows the darker bg_legend palette, as in Excel).
-  color_legend <- suppressWarnings(tab_color_legend(tabs,
+  color_legend <- suppressWarnings(tab_color_legend(
+                                   if (is.null(rd$color_src)) tabs else rd$color_src,
                                    medium     = "runs", style = "prose", lang = lang,
                                    theme      = theme[1])) |>
     purrr::map(function(line) {

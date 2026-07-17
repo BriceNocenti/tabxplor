@@ -108,6 +108,17 @@ R/
 │                              the level labels, since a level header may say "mean (sd)" only while the
 │                              span says the variable; tab_export_labels()/the `labels` slot DELETED (it
 │                              ran on every export and nothing read it)
+├── tab-transpose-render.R (~230 L) Phase 14o: THE render-level transpose. tx_transpose_render(rd,
+│                              backend) flips a FINISHED prep_one_table() model (a transposed column is
+│                              heterogeneous -> not an fmt column, cannot be format()ted; so colours +
+│                              strings are computed per source column then swapped as plain data). The
+│                              result is a SYNTHETIC model: $tab plain-character, $transposed=TRUE,
+│                              $cells pre-formatted, $color_src the fmt table for the legend; roles/ann/
+│                              col_var_header/label_runs flipped. md/plot need NO branch (char fallback +
+│                              ann); html injects $cells + flipped $tooltips; xl writes coloured TEXT
+│                              (numbers deferred). Materialise is xl-style when transposing (n col -> n
+│                              row); one Total col (14n); leading [var-name, levels] cols; real tab_vars
+│                              aborts. Object-level tab_transpose() soft-deprecated. See decisions §46
 ├── tab-render-html.R (~370 L) Phase 10e tab_kable render seam: render_kable_html() (kableExtra +
 │                              home-built html engines) + tab_kable_join(css=)/scrollbox. 13d: the html
 │                              engine is THEME-AGNOSTIC -- colour is a slot CLASS, never inline hex
@@ -1497,7 +1508,7 @@ snapshots strip the `<style>`, and the plain snapshot tables carry no `tx-has-st
 starred plot now; reverts with `plot_num_font = ""`. (2) **Numbering tangle** : let’s say this it `14m-ii`, and next is `14m-iii`
 
 
-#### Phase 14m-iii — `tab_md()`, pass 2 — **DESIGN SETTLED (2026-07-17), build pending**
+#### Phase 14m-iii — `tab_md()`, pass 2 — (DONE)
 
 Full design + specificity math + the verified pandoc constraints: **`dev/tabxplor_1.4.0_decisions.md`
 §43** (read first). Findings 9 (spacer/separator cells render as ugly `<td>`s / literal dashes) + 10 (the
@@ -1552,7 +1563,55 @@ plain path keeps dash separators (byte-clean) — unifying on blank rows there i
 
 ---
 
-#### Phase 14n — one Total row for several row_vars — **DESIGN FIRST**
+#### Phase 14n — one Total row for several row_vars (DONE — 2026-07-17)
+
+Both parts landed, DISPLAY-ONLY, in `R/tab_classes.R`; no fmt fields / attributes / public args; the core
+`tab()` object keeps every Total row (`nrow(tab(...))` unchanged). Full suite **FAIL 0 | WARN 0 | PASS
+3203**; `document()` clean; **no `.rds` golden and no `_snaps` moved** (both changes are display-only, and
+no existing snapshot rendered a collapsing compacted table). Full record: decisions **§45**. Browser/Excel
+samples: `dev/review_manual/phase14n_collapse.{html,xlsx}`.
+
+- **Collapse (`tab_collapse_total_rows()`)** — the final step of `tab_materialize_extras()`, so it reaches
+  the console + every export uniformly and all roles (`bold_rows` / `totblock_top`/`bottom` / `new_group` /
+  references / tooltips) recompute on the collapsed table with ZERO per-backend code. Guard:
+  `isTRUE(get_vars_attr()$compacted)` + `>= 2` Total rows — a single-row_var or a tab_vars table is never
+  compacted, so both are untouched (a tab_vars table's per-subtable totals are real, not duplicates;
+  `comp="all"` collapses via the same guard). Compares each block's whole **total BLOCK** (Total row +
+  contiguous `"n"`/`"row_pct"` summary rows, gated to the same group; a `"pvalue"` row is block-specific
+  and NOT swept in) "as displayed" via `format()` over EVERY fmt column — one canonical predicate for all
+  backends. The BLOCK (not just the Total row) is what makes `pct="col"` correct: there the Total is always
+  `"100%"` and the real base lives in the `n` row. Identical → drop all but the LAST block's total block
+  (`tab[setdiff(seq_len(nrow), drop), ]`, global indices → class/attrs/grouping kept); different (only
+  `na="drop"`) → keep all + `cli::cli_inform(.frequency="once")` naming `na="drop"`.
+- **Per-block p-value rows (`tab_pvalue_lines()`)** — the `test` attr already carries a `row_var`
+  discriminator, but the p-value rows were keyed on `tab_vars` only (empty for a compacted table), so two
+  row_vars' tests collided into one col_var column → a `values not uniquely identified` list-col + a single
+  mis-placed `row_var=NA` row. Fixed by keying on the table's GROUPING columns ∩ the test tibble (`row_var`
+  for compacted, `tab_vars` otherwise → byte-identical there). **Also carries the `vars` attribute** through
+  its `new_tab()` rebuild — a latent Phase 14d gap (the rebuild dropped `compacted`, which the collapse
+  guard reads) that only this phase exposed. p-value rows SURVIVE the collapse: each variable keeps its own
+  chi².
+
+**Landmines / caveats (read before the next display-row change):**
+
+- **`tab_pvalue_lines()`/`reg_footer_lines()` rebuild the tab with MORE rows via `new_tab()` and must
+  re-list every table attribute by hand** (they cannot use `tab_restore()`, which preserves nrow). Phase
+  14d added `vars` to `tab_attrs()` but NOT to these two rebuilds, so `compacted` was silently dropped
+  after any materialised p-value row — invisible until a downstream reader (the collapse guard) needed it.
+- **`add_n`/`add_pct`/`pvalue` summary rows are still detected by an English LABEL whitelist**
+  (`{"n","row_pct","pvalue"}`, `R/tab-export-prep.R` `totblock_top/bottom`; the collapse reuses `"n"`/
+  `"row_pct"`). The `row_pct` row's cells have display `"pct"` (indistinguishable from data by token), so a
+  display-token sweep can't catch it — the real fix is a per-row role flag, still deferred.
+- **The Phase 14a "one n row per sub-table" tests now assert the COLLAPSED count** under `na="keep"`; a
+  non-collapsing `na="drop"` uneven fixture keeps the per-sub-table coverage. `test-render-html.R` /
+  `test-tab_xl.R` "one-row block" fixtures moved off `levels=="Total"` (which the collapse drops) to a data
+  level.
+- **Not special-cased**: `add_n=FALSE` + `na="drop"` + `pct="row"` collapses silently if marginals round
+  identical (follows the literal "identical as displayed" rule); a lone kept p-value row after a collapsed
+  block still gets the `totblock` border box (cosmetic); transpose (14o) is unaffected (a transposed table
+  has no `>= 2` Total ROWS → collapse no-ops; the flipped case is 14o's job).
+
+##### Original plan (historical intent)
 
 **Rule (settled)**: collapse when the per-block total rows are identical **as displayed** — same rendered
 strings at the chosen digits. Otherwise keep them all and emit **one** message naming `na=` as the cause.
@@ -1585,7 +1644,7 @@ unaffected; the collapse is display-only (`nrow(tab(...))` unchanged).
 
 ---
 
-#### Phase 14o — transpose at the render level — **DESIGN FIRST**
+#### Phase 14o — transpose at the render level
 
 **Why** — finding 8. `tab_transpose()` cannot be repaired at the object level; the review's own diagnosis
 ("colours must be calculated first from the not-transposed vctrs fields, then the transposition done not on

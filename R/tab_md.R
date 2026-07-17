@@ -228,7 +228,9 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   # span classes the cells use (both call tx_slot_class(), so tab_css() colours them identically).
   # Only when coloured (a legend describes the colours). Prepended above the user subtext.
   if (isTRUE(color) && isTRUE(color_legend) && length(rd$roles$color_cols) != 0) {
-    leg <- suppressWarnings(tab_color_legend(tabs, medium = "md", style = "prose", lang = lang,
+    # Phase 14o: a transposed model's `tab` is plain character; the legend reads the original fmt table.
+    leg_tab <- if (is.null(rd$color_src)) tabs else rd$color_src
+    leg <- suppressWarnings(tab_color_legend(leg_tab, medium = "md", style = "prose", lang = lang,
                                              theme = theme))
     if (length(leg)) subtext_text <- c(leg, subtext_text)
   }

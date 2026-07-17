@@ -4152,3 +4152,65 @@ p-value row after a collapsed block still gets the normal `totblock` border box 
 `{"n","pvalue","row_pct"}` English value-match whitelist stays the deeper fragility for a future
 per-row role flag; (d) transpose (14o) is unaffected — a transposed table has no `>= 2` Total ROWS, so
 the collapse no-ops there; collapsing the flipped table is 14o's job.
+
+### 46. Phase 14o — transpose at the render level (2026-07-18)
+
+`tab_export(transpose = TRUE)` on a multi-row_var / numeric table was broken (review pass 2, finding 8):
+the old `tab_transpose()` ([R/tab.R]) flipped the **object** (a `pivot_longer`/`pivot_wider` on the
+`tabxplor_fmt` fields), then stamped **one representative column's** `fmt_col_attrs` onto every
+transposed column. A transposed column is HETEROGENEOUS (a `%`, a mean, an `n` stacked), and one fmt
+column carries only one `type`/`color`/`digits` — so numeric cells were coloured by a factor's diff
+scale (verified: `tvhours` `color=ratio`/`type=mean` → `type=col`/`color=diff` after the flip), each
+block's Total row pivoted to a `Total_<var>`-deduped column, and `n` landed last.
+
+**The fix — flip the finished RENDER MODEL, not the fields.** New `R/tab-transpose-render.R`
+(`tx_transpose_render(rd, backend, meta)`): colours and cell strings are computed per (correct,
+homogeneous) source column by `prep_one_table()`/the backend format call, collected into matrices, then
+rows and columns swap as plain data. The result is a **synthetic render model** whose `$tab` is a plain
+**character** tibble (`$transposed = TRUE`, `$cells` the pre-formatted strings), with `roles`/`ann`/
+`col_var_header`/`label_runs` all the flipped versions — structurally identical to a normal
+`prep_one_table()` result, so the existing backends render it with near-zero change.
+
+- **The "missing key"**: every backend already has an `is_fmt(col) ? format(col) : as.character(col)`
+  fallback and reads colours from `roles`/`ann` (per-cell/index). So **md and plot need NO backend
+  branch** — the synthetic char tab renders through the fallback, and `md_has_color()`/`attr_mat` key on
+  `rd$ann` (which carries the flipped slots). **html** needs one branch (`cells <- rd$cells`) + a
+  tooltip branch (heterogeneous columns can't run the per-column tooltip builder, so tooltips are
+  pre-built per source column then flipped). Colour parity is **cell-for-cell exact** (test-locked: 0
+  slot mismatches vs the untransposed xl-materialised model).
+- **Ordering (supersedes 14d's transpose-before-materialise hack)**: `tab_export_prep()` now
+  materialises **xl-style for EVERY backend when transposing** (`mat_backend <- xl || transpose`), so
+  `add_n`'s `n` COLUMN flips into an `n` ROW (matching native pct="col") and 14n has already collapsed
+  the redundant Total rows to one → **one Total column, no `Total_<var>`**. The `<var>_sd` sibling is
+  dropped (the mean cell re-folds its σ via `special_formatting`). Then the flip runs on the finished
+  model (`tables <- map(tables, tx_transpose_render)`), so 14d's object-level pre-materialise call is
+  deleted.
+- **New row order** (review): factor col_var levels → Total → `n` → numeric means. New leading columns
+  `[variable-name, levels]` mirror `(row_var, levels)` (from the original `col_var_header$label`/`clean`);
+  the new col_var header spans the old row_var names over the flipped columns (from the original
+  `var_name_col`/`row_var_col`); `new_group`/`new_col_var` swap axes (Total/`n` absorbed into the
+  preceding group so a single-row_var transpose has NO extra separators → **byte-identical to native
+  col%**, test-locked).
+- **Excel** (v1, honest deviation from the AskUserQuestion "numbers + numFmt"): a transposed column
+  mixes numeric and text cells, and one written column is ONE R type, so real editable numbers need a
+  per-cell writer (a large `tab_xl` change). Transposed Excel writes the **coloured display TEXT**
+  (`transposed` flag guards `xl_materialize_data` + the `text_fmt_cols`/numFmt path + the `is_refcol`/
+  `get_col_var` re-derivations to read `roles` instead). Editable numbers deferred. Subtext/legend/title
+  read the original fmt table, kept in `rd$color_src`.
+- **Guard**: a real `tab_vars` table aborts (`cli_abort`); a compacted several-row_var table (the
+  driver) transposes. **`tab_transpose()` (object) → `lifecycle::deprecate_soft`** (kept for the
+  single-row_var round-trip; the export arg is the supported path). Transposed `tab_kable` forces the
+  html engine (kableExtra `cell_spec`s each fmt column, which a transposed table has not).
+
+**Verification**: full suite FAIL 0 | WARN 0 | PASS 3192; `document()` clean; **no `.rds` golden and no
+`_snaps` moved** (the flip is additive; existing rendering byte-identical). New/re-pointed
+`test-transpose.R` (slot parity = the finding-8 regression; one Total column; n-after-Total order;
+leading label columns; single-row_var == native col%; every exporter accepts `transpose = TRUE`; real
+tab_vars aborts) + `test-display-extras.R` re-pointed to the render-level path. Samples:
+`dev/review_manual/phase14o_transpose.{html,md,xlsx}`.
+
+**Flagged for the maintainer**: (a) **Excel editable numbers deferred** — the maintainer chose
+numbers+numFmt; the heterogeneous-column reality made per-column numFmt impossible and per-cell numeric
+writing a large `tab_xl` change, so v1 writes coloured text. Revisit with a per-cell writer if editable
+transposed numbers matter. (b) The `has_color` grey-shade (g1/g2) on a mixed transposed column is
+`any(source has_color)` (cosmetic only). (c) `tab_plot()` transpose is best-effort (it is soft-deprecated).
