@@ -2380,6 +2380,9 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
     out[k] <- paste0(out[k], ifelse(nzchar(out[k]), " ; ", ""), f[k])
   }
 
+  # Phase 14r (L6): the GOF / blank footer cells carry model-fit numbers in fields never meant to be
+  # compared (e.g. AIC 63 785 lives in `diff` -> a nonsense "diff: +6378526%"). No tooltip for them.
+  out[disp %in% c("gof", "blank")] <- ""
   out
 }
 

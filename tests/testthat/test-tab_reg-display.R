@@ -99,3 +99,70 @@ test_that("split_var tables get a per-group export footer; plain tables one foot
   # split export renders through kable too
   expect_s3_class(suppressWarnings(tab_kable(t_split)), "kableExtra")
 })
+
+# ---- Phase 14r: tooltips + the AME NA bug ----------------------------------------------------
+
+# Data with an ORDERED-factor income predictor whose levels contain " - " ($20000 - 24999, ...).
+ame_data <- function() {
+  forcats::gss_cat |>
+    dplyr::mutate(
+      married = factor(dplyr::if_else(marital == "Married", "01-Married", "02-Not married")),
+      rincome = forcats::fct_recode(rincome, NULL = "No answer", NULL = "Refused",
+                                    NULL = "Don't know", NULL = "Not applicable") |>
+        forcats::fct_relevel(sort) |> as.ordered()
+    )
+}
+
+test_that("an ordered-factor predictor's AME is non-NA on every non-reference level (Item E)", {
+  skip_if_not_installed("broom")
+  skip_if_not_installed("marginaleffects")
+  d <- ame_data()
+  suppressWarnings(t <- tab_reg(d, "married", c("race", "rincome"), family = "binomial",
+                                effect = "ame", cleannames = FALSE))
+  col  <- first_fmt(t)
+  rin  <- as.character(t[[2]]) %in% levels(d$rincome)   # rincome level rows
+  # the '-' levels ($20000 - 24999, $15000 - 19999, $10000 - 14999) used to be NA; only the reference is
+  ame  <- get_diff(col)
+  expect_false(any(is.na(ame[rin]) & !is_refrow(col)[rin]))
+  # the AME tooltip carries the model OR too (Item E)
+  tips <- tabxplor:::tab_kable_print_tooltip(col)
+  expect_true(any(grepl("OR: ", tips)))
+})
+
+test_that("an ordered-factor predictor's coefficient OR is non-NA (was all-NA)", {
+  skip_if_not_installed("broom")
+  d <- ame_data()
+  suppressWarnings(t <- tab_reg(d, "married", c("race", "rincome"), family = "binomial",
+                                cleannames = FALSE))
+  col <- first_fmt(t)
+  rin <- as.character(t[[2]]) %in% levels(d$rincome)
+  or  <- get_or(col)
+  expect_true(all(!is.na(or[rin] | is_refrow(col)[rin])))     # every rincome level keyed
+  expect_gt(sum(!is.na(or[rin])), 0)
+})
+
+test_that("model effect columns drop the whole-model n; footer cells have no tooltip (Items D/L6)", {
+  skip_if_not_installed("broom")
+  d <- reg_data()
+  t <- tab_reg(d, "married", c("race", "age"), family = "binomial")
+  # no whole-model "n:" on the coefficient column (built table)
+  tips0 <- tabxplor:::tab_kable_print_tooltip(first_fmt(t))
+  expect_false(any(grepl("n: ", tips0)))
+  # the GOF footer rows are materialised at display -> materialise, then check they carry no tooltip
+  # (no nonsense "diff: +6378526%" on an AIC stored in the diff field)
+  tm   <- tabxplor:::tab_materialize_extras(t, backend = "text", pvalue = TRUE)
+  col  <- first_fmt(tm)
+  tips <- tabxplor:::tab_kable_print_tooltip(col)
+  disp <- tabxplor:::display_primary(get_display(col))
+  foot <- disp %in% c("gof", "blank")
+  expect_true(any(foot))
+  expect_true(all(!nzchar(tips[foot])))
+})
+
+test_that("empirical columns keep the per-LEVEL n in the tooltip (Item D)", {
+  skip_if_not_installed("broom")
+  d <- reg_data()
+  t <- tab_reg(d, "married", c("race", "rincome"), family = "binomial", empirical_OR = TRUE)
+  tips <- tabxplor:::tab_kable_print_tooltip(t[["Emp. OR"]])
+  expect_true(any(grepl("n: ", tips)))          # per-level counts survive
+})

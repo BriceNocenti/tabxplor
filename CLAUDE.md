@@ -1917,6 +1917,36 @@ bug)**. Tooltip builder + `reg_marginal`. Do this **before 14t** (empirical buil
 none); a footer cell has an empty tooltip. Snapshot regen limited to `_snaps/render-html.md` (tooltip
 text). Tests in `test-tab_reg-display.R`.
 
+##### Done (2026-07-18)
+
+All four landed. Full suite **FAIL 0 | WARN 0 | SKIP 4 | PASS 3238**; **NO golden and NO snapshot moved**
+(the reg tables + tooltips are not snapshotted). Sample: `dev/review_manual/phase14r_ame_tooltip.html`.
+
+- **The AME NA bug has TWO independent causes, not one.** Verified: `marginaleffects::avg_comparisons()`
+  produces the SAME `"Level - Reference"` labels + estimates for an ordered AND an unordered fit, so the
+  ordered factor does NOT break the AME. The NA cells were the `" - "` SPLIT: `sub(" - .*$", "", contrast)`
+  truncated `"$20000 - 24999 - $1000 to 2999"` → `"$20000"` → no skeleton match → NA (exactly the levels
+  the maintainer flagged). The ordered factor SEPARATELY breaks the COEFFICIENT path: glm/polr give
+  polynomial terms (`x.L`/`x.Q`) that don't align → an all-NA OR column (the "remove ordered to not break
+  the model" the maintainer did by hand in Pass 4). So both the roadmap's PRIMARY (de-order) and SECONDARY
+  (robust split) are real and both needed:
+  + de-order in `reg_fit` ([R/tab_reg.R](R/tab_reg.R)): `factor(fct_drop(as.factor(.)), ordered = FALSE)`
+    (was `as.factor()`, which KEEPS the ordered class). Predictors only; the ordinal outcome stays ordered.
+  + `reg_marginal()` strips the KNOWN prefix + reference suffix by `substr` instead of splitting on the
+    first `" - "` / first `")"` — handles a level containing `" - "` or `")"`. ⚠ The lnor contrast is
+    `ln(odds(<Level>) / odds(<Ref>))` with a DOUBLE closing paren; the suffix must include both (a test
+    caught the off-by-one).
+- **Row-level n (D)**: the model effect columns (`reg_column` OR/β, `reg_marginal_column` AME) set
+  `n = rep(NA_integer_, n_rows)` — the whole-model N is in the footer, not a per-cell tooltip. (⚠ `n`
+  drives `fmt()`'s recycle size, so it must be `rep(NA, n_rows)`, not a scalar.) The empirical columns
+  keep their real per-LEVEL n (`emp$emp_n`), which is what the maintainer wanted surfaced.
+- **OR in the AME tooltip (E)**: the binomial single-outcome AME column carries the coefficient OR
+  (`exp(tidy$estimate)`, keyed to the skeleton by term) in its `or` field via a new `reg_marginal_column
+  (or_tip=)` arg. Read-only — the AME display / colour never read `or` (colour goldens byte-identical), so
+  `cond_or` surfaces `OR: 0.42` on hover with zero display/colour impact.
+- **No footer tooltips (L6)**: one line at the end of `tab_kable_print_tooltip()` blanks any cell whose
+  display is `gof`/`blank` (kills the `diff: +6378526%` on an AIC stored in the `diff` field).
+
 ---
 
 #### Phase 14s — tab_reg multinomial: one col_var per model + drop redundant name row

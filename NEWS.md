@@ -622,6 +622,15 @@
   un-coloured cell is "not significantly different from the reference", but such a cell can be
   significant yet too small to colour. The legend now states the true guarantee -- a *coloured* cell
   is significantly different -- and this is documented under `color_signif` in `?tab`.
+* `tab_reg()` now handles **ordered-factor predictors**: an ordered predictor (e.g.
+  `as.ordered(income)`) used to produce polynomial contrasts that broke the coefficient column
+  (all-NA odds ratios) and left some average-marginal-effect (AME) cells empty. Ordered predictors are
+  coerced to ordinary factors internally (the ordinal *outcome* is unaffected), so no manual
+  de-ordering is needed. AME cells for levels whose label contains `" - "` (e.g. `"$20000 - 24999"`)
+  are also fixed.
+* `tab_reg()` tooltips are cleaner: the model-fit footer rows no longer show a nonsensical tooltip; the
+  per-cell `n:` is the row-level count where one exists (e.g. `empirical_OR = TRUE`) instead of the
+  whole-model N; and an `effect = "ame"` column still shows the model odds ratio on hover.
 
 ## Deprecations
 * `tab_transpose()` is **soft-deprecated** in favour of the exporters' `transpose = TRUE` argument.

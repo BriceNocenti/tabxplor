@@ -638,8 +638,15 @@ reg_fit <- function(data, dependent, predictors, family, design_spec, do_exp,
     predictors, ~ is.factor(mdata[[.]]) || is.character(mdata[[.]])
   )]
   if (length(fac_preds) > 0L) {
+    # Phase 14r: coerce factor/character predictors to UNORDERED factors. An ORDERED predictor makes
+    # glm / polr use polynomial contrasts (terms `x.L`/`x.Q`/...), which the coefficient path cannot
+    # align to the per-level skeleton -> an all-NA effect column (the "remove ordered to not break the
+    # model" the maintainer had to do by hand). Only PREDICTORS are de-ordered; an ordinal DEPENDENT
+    # keeps its order (reg_fit_ordinal re-imposes it). Level ORDER is preserved, so the reference (first
+    # level) and the display order are unchanged.
     mdata <- dplyr::mutate(mdata, dplyr::across(
-      tidyselect::all_of(fac_preds), ~ forcats::fct_drop(as.factor(.))
+      tidyselect::all_of(fac_preds),
+      ~ { f <- forcats::fct_drop(as.factor(.)); factor(f, levels = levels(f), ordered = FALSE) }
     ))
   }
 
@@ -798,7 +805,7 @@ reg_column <- function(skeleton, fit_res, model_predictors, col_var, effect_shap
 
   if (effect_shape == "ratio") {
     fmt(
-      n = rep(as.integer(fit_res$nobs), n_rows),
+      n = rep(NA_integer_, n_rows),   # Phase 14r (D): whole-model N is in the footer, not a per-cell "n:"
       or = est, ci_inf = lo, ci_sup = hi, pvalue = p,
       type = "row", display = "or", digits = 2L, ref = "1", ci_type = "or",
       color = color, color_signif = color_signif, col_var = col_var,
@@ -806,7 +813,7 @@ reg_column <- function(skeleton, fit_res, model_predictors, col_var, effect_shap
     )
   } else {
     fmt(
-      n = rep(as.integer(fit_res$nobs), n_rows),
+      n = rep(NA_integer_, n_rows),   # Phase 14r (D): whole-model N is in the footer, not a per-cell "n:"
       diff = est, ci_inf = lo, ci_sup = hi, pvalue = p,
       var = rep(fit_res$var_y, n_rows),                 # var(Y): standardizes beta/SD(Y) for colour
       type = "coef", display = "coef", digits = 2L, ci_type = "diff",
@@ -955,11 +962,19 @@ reg_marginal <- function(fit, data, predictors, conf_level, wt = NULL,
       as.data.frame(do.call(marginaleffects::avg_comparisons, c(
         list(fit, variables = v, newdata = data, conf_level = conf_level), wts_arg, cmp_arg)))
     is_fac <- is.factor(data[[v]]) || is.character(data[[v]])
-    # the factor contrast label is "Level - Reference" (difference) or "ln(odds(Level) / odds(Ref))"
-    # (comparison="lnor"); parse the Level either way. A numeric predictor keys on the variable name.
-    level  <- if (!is_fac)   v
-              else if (do_exp) sub("^ln\\(odds\\(([^)]+)\\).*$", "\\1", ac$contrast)
-              else             sub(" - .*$", "", ac$contrast)
+    # The factor contrast label is "<Level> - <Reference>" (difference) or
+    # "ln(odds(<Level>) / odds(<Reference>))" (comparison = "lnor"). Phase 14r: strip the KNOWN prefix +
+    # reference suffix instead of splitting on the FIRST " - " / first ")" -- a Level that itself
+    # contains " - " (e.g. "$20000 - 24999") or ")" was otherwise truncated and failed to key the AME to
+    # the skeleton, leaving an NA cell. The reference is the factor's first level (after de-ordering in
+    # reg_fit). A numeric predictor keys on the variable name.
+    ref_lv <- if (is_fac) levels(forcats::fct_drop(as.factor(data[[v]])))[1] else NA_character_
+    level  <- if (!is_fac) v else {
+      pre <- if (do_exp) "ln(odds(" else ""
+      # lnor contrast = "ln(odds(<Level>) / odds(<Ref>))" -- note the DOUBLE closing paren.
+      suf <- if (do_exp) paste0(") / odds(", ref_lv, "))") else paste0(" - ", ref_lv)
+      substr(ac$contrast, nchar(pre) + 1L, nchar(ac$contrast) - nchar(suf))
+    }
     grp    <- if ("group" %in% names(ac)) as.character(ac$group) else NA_character_
     est <- ac$estimate; lo <- ac$conf.low; hi <- ac$conf.high
     if (do_exp) { est <- exp(est); lo <- exp(lo); hi <- exp(hi) }   # lnor -> OR (and its CI)
@@ -993,7 +1008,7 @@ reg_marginal <- function(fit, data, predictors, conf_level, wt = NULL,
 # OR at the profile) the multiplicative "or" shape (reference -> 1, no prediction). Reference levels +
 # the Constant carry no effect; predictors ABSENT from this model stay NA (empty cells).
 reg_marginal_column <- function(skeleton, marg, model_predictors, numeric_preds, shape, var_y,
-                                nobs, group, color, color_signif, col_var) {
+                                nobs, group, color, color_signif, col_var, or_tip = NULL) {
   amt <- marg$ame; prd <- marg$pred
   if (!is.na(group)) {
     amt <- amt[!is.na(amt$group) & amt$group == group, , drop = FALSE]
@@ -1022,9 +1037,13 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, numeric_preds,
     display[in_model & is_ref & !is.na(pred_v)] <- "({pct})"   # reference level: prediction only
     display[in_model & is_num & !is.na(ame_v)]  <- "diff"      # numeric predictor: bare AME
     ame_v[is_ref] <- NA_real_                                  # reference has no marginal effect
+    # Phase 14r (E): carry the model OR (coefficient path) in the `or` field so cond_or surfaces it on
+    # hover though the cell DISPLAYS the AME. Read-only: the AME display / colour never read `or`, so it
+    # is inert everywhere but the tooltip. NA on the reference (which shows "ref").
+    or_v <- if (is.null(or_tip)) NA_real_ else or_tip
     fmt(
-      n = rep(as.integer(nobs), n_rows),
-      pct = pred_v, diff = ame_v, ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
+      n = rep(NA_integer_, n_rows),   # Phase 14r (D): no misleading whole-model N (see the empirical cols)
+      pct = pred_v, diff = ame_v, or = or_v, ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
       type = "row", display = display, digits = 1L, ci_type = "diff",
       color = color, color_signif = color_signif, col_var = col_var,
       comp_all = FALSE, in_refrow = refrows
@@ -1034,7 +1053,7 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, numeric_preds,
     ame_v[is_ref] <- 1                                         # multiplicative neutral at the reference
     display[in_model & is_ref] <- "or"
     fmt(
-      n = rep(as.integer(nobs), n_rows),
+      n = rep(NA_integer_, n_rows),   # Phase 14r (D): no misleading whole-model N (see the empirical cols)
       or = ame_v, ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
       type = "row", display = display, digits = 2L, ref = "1", ci_type = "or",
       color = color, color_signif = color_signif, col_var = col_var,
@@ -1045,7 +1064,7 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, numeric_preds,
     ame_v[is_ref] <- 0                                         # additive neutral at the reference
     display[in_model & is_ref]      <- "coef"
     fmt(
-      n = rep(as.integer(nobs), n_rows),
+      n = rep(NA_integer_, n_rows),   # Phase 14r (D): no misleading whole-model N (see the empirical cols)
       diff = ame_v, ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
       var = rep(var_y, n_rows),                               # var(Y): standardizes the effect-size colour
       type = "coef", display = display, digits = 2L, ci_type = "diff",
@@ -1445,10 +1464,17 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
                                            var_y, f$nobs, g, color, color_signif, lab))
         })
       } else {
+        # Phase 14r (E): the model OR (exp of the fit's coefficient, aligned to the skeleton by term)
+        # carried in the AME column's `or` field for the tooltip. Binomial single-outcome only -- for
+        # gaussian/poisson the coefficient is not an OR. NA on reference / out-of-model rows (term NA).
+        or_tip <- if (family == "binomial") {
+          td <- broom::tidy(f$fit); td$term <- stringr::str_remove_all(td$term, "`")
+          exp(td$estimate[match(skeleton$term, td$term)])
+        } else NULL
         list(list(label = sp$label,
                   col   = reg_marginal_column(skeleton, marg, sp$predictors, numeric_preds, shape,
                                               var_y, f$nobs, NA_character_, color, color_signif,
-                                              sp$label)))
+                                              sp$label, or_tip = or_tip)))
       }
     })
   } else if (mnl_vsrest) {
