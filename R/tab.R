@@ -107,6 +107,10 @@ NULL
 #'   This reproduces the historical \code{tab()} behaviour. Microdata only (not
 #'   \code{\link{tab_counts}}).
 #'   }
+#'   When several \code{row_vars} are combined into one table (no \code{tab_vars}), their \code{Total}
+#'   rows are identical whenever they share one population (\code{"keep"}, \code{"drop_all"},
+#'   \code{"common_base"}) and are then displayed as a \strong{single} Total row; only \code{"drop"}
+#'   can make them genuinely differ, in which case every Total row is kept (with a message).
 #' @param levels The levels of \code{col_vars} to keep, as a single string or a vector the same
 #' length as \code{col_vars} (for finer selections use \code{\link[dplyr:select]{dplyr::select}}) :
 #'  \itemize{

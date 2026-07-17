@@ -521,8 +521,9 @@ testthat::test_that("tab_md pads VALUE-INTERNAL alignment with figure space, cel
 testthat::test_that("html engine: a merged table names each row-variable once, via rowspan", {
   h <- rh_strip_style(as.character(
     tab_kable(tab(gss, c(race, marital), relig, pct = "row"), engine = "html", css = FALSE)))
-  # one cell per block, spanning it -- not one per row
-  testthat::expect_match(h, '<td class="[^"]*tx-lbl[^"]*" rowspan="4">race</td>')
+  # one cell per block, spanning it -- not one per row. Phase 14n collapses the redundant race Total
+  # (race is the FIRST block; the shared Total is kept under the LAST block, marital), so race spans 3.
+  testthat::expect_match(h, '<td class="[^"]*tx-lbl[^"]*" rowspan="3">race</td>')
   testthat::expect_match(h, '<td class="[^"]*tx-lbl[^"]*" rowspan="7">marital</td>')
   testthat::expect_length(gregexpr(">race</td>", h, fixed = TRUE)[[1]], 1L)
   testthat::expect_length(gregexpr("rowspan", h)[[1]], 2L)
@@ -534,9 +535,10 @@ testthat::test_that("html engine: a merged table names each row-variable once, v
 })
 
 testthat::test_that("html engine: tx-vname only where the run is longer than one row", {
-  # a rotated single-row cell just makes that row tall -> it falls back to horizontal.
+  # a rotated single-row cell just makes that row tall -> it falls back to horizontal. Keep a single
+  # DATA level for race (not its Total, which the Phase 14n collapse would drop as a duplicate).
   one <- tab(gss, c(race, marital), relig, pct = "row") |>
-    dplyr::filter(!(!!rlang::sym("row_var") == "race") | !!rlang::sym("levels") == "Total")
+    dplyr::filter(!(!!rlang::sym("row_var") == "race") | !!rlang::sym("levels") == "White")
   h <- rh_strip_style(as.character(tab_kable(one, engine = "html", css = FALSE)))
   testthat::expect_match(h, '<td class="[^"]*tx-lbl[^"]*" rowspan="1">race</td>')
   testthat::expect_no_match(h, 'tx-vname[^"]*" rowspan="1"')

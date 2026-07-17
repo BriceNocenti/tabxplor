@@ -12,6 +12,12 @@
   new **`var_names`** argument (`"both"` by default, `"rows"`, `"cols"` or `"none"`; also
   `options("tabxplor.var_names")`) picks which variable names to write, on `tab_kable()` / `tab_md()` /
   `tab_xl()` / `tab_plot()` / `tab_export()`. Level headers always keep their name.
+* **One Total row for several variables.** A table built from several `row_vars` used to repeat an
+  identical `Total` row once per variable. When those totals render identically (the usual case --
+  `na = "keep"`, `"drop_all"` or `"common_base"` share one population), tables now show a **single**
+  Total row; only `na = "drop"`, which can make the bases genuinely differ, keeps every Total (with a
+  message). The p-value row of such a table is now also placed **once per variable** (each variable's
+  own chi-squared), instead of collapsing into a single mis-placed row.
 * **Redesigned colours & breaks API.** The `color` argument now has a simple grammar: **position
   picks the visual channel** (1st value -> text, 2nd -> background) and **names pick the column type**
   (`pct` / `mean`). So `color = c("diff", "ratio")` colours the text by the difference and the

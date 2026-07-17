@@ -1405,7 +1405,81 @@ tab_materialize_extras <- function(tab, backend = c("text", "xl"), pvalue = TRUE
   # gets the chi2 p-value row, a regression table gets its GOF footer rows (Phase 12f).
   if (pvalue) tab <- tab_pvalue_lines(tab)
   if (pvalue && is_reg_footer(get_test(tab))) tab <- reg_footer_lines(tab)
+
+  # Phase 14n: collapse the redundant per-block Total rows of a compacted several-row_vars table. A
+  # DISPLAY-ONLY decision (it needs the "as displayed" equality) run last, so all roles recompute on the
+  # collapsed table; the core tab() object keeps every total row (nrow(tab(...)) unchanged).
+  tab <- tab_collapse_total_rows(tab)
   tab
+}
+
+# Phase 14n: on a COMPACTED several-row_vars table (tab_compact() stacked one standalone table per
+# row_var, each with its own Total row) the col_var marginal -- and its base n -- is a property of the
+# shared population, not the row_var. So under na = "keep"/"drop_all"/"common_base" every block's Total
+# is identical by construction; only na = "drop" (each row_var drops its OWN missing values) makes them
+# genuinely differ. This DISPLAY-ONLY step drops the redundant Total rows (keeping the LAST block's) when
+# every block's total renders identically, else keeps them all + one message naming na = "drop". Called
+# as the final step of tab_materialize_extras(), so bold / totblock borders / new_group / references /
+# tooltips all recompute on the collapsed table with zero per-backend code. A single-row_var or a
+# tab_vars table is never compacted, so the guard leaves both untouched (a tab_vars table's per-subtable
+# totals are real, not duplicates).
+#
+# The comparison unit is the whole TOTAL BLOCK -- the Total row + its trailing add_n base `n` row -- not
+# just the Total row: under pct = "col" the Total row is ALWAYS "100%" and the real base lives in the `n`
+# row, so comparing the Total row alone would silently collapse col% tables with a genuinely different N.
+#' @keywords internal
+#' @noRd
+tab_collapse_total_rows <- function(tab) {
+  if (!isTRUE(get_vars_attr(tab)$compacted)) return(tab)   # single row_var / tab_vars: untouched
+  is_tot <- is_totrow(tab)
+  tot    <- which(is_tot)
+  if (length(tot) < 2L) return(tab)
+
+  n_row   <- nrow(tab)
+  fmt_nms <- names(tab)[purrr::map_lgl(tab, is_fmt)]
+
+  # A block's total BLOCK = its Total row + the contiguous add_n / add_pct SUMMARY rows that follow it
+  # (row labels "n" / "row_pct" -- tab_materialize_extras()'s base/pct rows, drawn as "Total | row_pct |
+  # n"). A p-value row ("pvalue") is block-SPECIFIC (a different test per row_var), so it is NOT swept in
+  # and survives the collapse. The label match reuses the totblock_top/bottom whitelist (R/tab-export-
+  # prep.R) -- the same convention, not a new fragility; the sweep is gated to the SAME grouping value so
+  # it can never cross into the next block, even if a data level were literally named "n".
+  rv_col  <- tab_render_vars(tab)$row_var
+  lab     <- if (!is.null(rv_col) && rv_col %in% names(tab)) as.character(tab[[rv_col]]) else
+    rep(NA_character_, n_row)
+  grp_col <- dplyr::group_vars(tab)
+  grp     <- if (length(grp_col) >= 1L && grp_col[1] %in% names(tab)) as.character(tab[[grp_col[1]]]) else
+    rep(NA_character_, n_row)
+  is_summary <- !is_tot & lab %in% c("n", "row_pct")
+
+  block_rows <- function(i) {
+    rows <- i; j <- i + 1L
+    while (j <= n_row && is_summary[j] && identical(grp[j], grp[i])) { rows <- c(rows, j); j <- j + 1L }
+    rows
+  }
+  blocks <- lapply(tot, block_rows)
+
+  # "As displayed" signature: text format() over EVERY fmt column across the block's rows -- the single
+  # canonical predicate for all backends (two totals in one column pad to the same width, so string
+  # equality is displayed equality; comparing every column also catches the xl pct="row" case where the
+  # base n is a separate column, and any mean/_sd column).
+  sig <- vapply(blocks, function(rows)
+    paste(unlist(lapply(fmt_nms, function(nm) format(tab[[nm]][rows]))), collapse = "\r"),
+    character(1))
+
+  if (length(unique(sig)) > 1L) {                          # genuinely different totals -> keep them all
+    cli::cli_inform(
+      c("i" = paste0(
+        "The variables have different total rows, so every total is shown ",
+        "(under {.code na = \"drop\"} each variable drops its own missing values). ",
+        "Use {.code na = \"keep\"}, {.code \"drop_all\"} or {.code \"common_base\"} ",
+        "for a single total row.")),
+      .frequency = "once", .frequency_id = "tabxplor_totrows_differ")
+    return(tab)
+  }
+
+  drop_rows <- unlist(blocks[-length(blocks)])             # keep the LAST block's total; drop the rest
+  tab[setdiff(seq_len(n_row), drop_rows), ]                # global indices -> class/attrs/grouping kept
 }
 
 
@@ -1427,14 +1501,19 @@ tab_pvalue_lines <- function(tabs) {
   subtext  <- get_subtext(tabs)
   render_extras <- get_render_extras(tabs)
   ci_settings   <- get_ci_settings(tabs)
+  vars_attr     <- get_vars_attr(tabs)   # Phase 14n: carry the roles record (incl. `compacted`)
   test_tbl <- get_test(tabs)
   if (is.null(test_tbl) || nrow(test_tbl) == 0) return(tabs)
 
   groups   <- dplyr::groups(tabs)
   gv       <- tab_get_vars(tabs)
   row_var  <- gv$row_var
-  tab_vars <- purrr::map_chr(gv$tab_vars, rlang::as_name)
-  tab_vars <- intersect(tab_vars, names(test_tbl))
+  # Phase 14n: key the p-value rows by the table's GROUPING columns (its subtable axis) intersected
+  # with the test tibble -- the tab_vars for a tab_vars table (byte-identical to the old gv$tab_vars
+  # keying), the synthetic `row_var` column for a COMPACTED several-row_vars table. Keying on
+  # gv$tab_vars alone dropped the compacted discriminator, so two row_vars' tests collided into one
+  # col_var column -> a "values not uniquely identified" list-col + a single mis-placed row (row_var NA).
+  disc <- intersect(purrr::map_chr(groups, rlang::as_name), names(test_tbl))
 
   # first-level column of each col_var (where the p-value cell is placed): col_var -> column name
   first_lv  <- gv$col_vars_levels |> purrr::map_chr(~ rlang::as_name(dplyr::first(.)))
@@ -1452,7 +1531,7 @@ tab_pvalue_lines <- function(tabs) {
     dplyr::mutate(.col  = unname(cv_to_col[.data$col_var]),
                   .cell = pvalue_line_fmt(.data$pvalue,
                                           label = purrr::map_chr(.data$test, test_cell_label))) |>
-    dplyr::select(tidyselect::any_of(tab_vars), ".col", ".cell") |>
+    dplyr::select(tidyselect::any_of(disc), ".col", ".cell") |>
     tidyr::pivot_wider(names_from = ".col", values_from = ".cell") |>
     dplyr::mutate(!!rlang::sym(row_var) := forcats::as_factor("pvalue"))
 
@@ -1512,7 +1591,8 @@ tab_pvalue_lines <- function(tabs) {
     if (nm %in% fmt_nms) build_col(nm) else skel[[nm]]), names(tabs))
   tabs <- tibble::new_tibble(out, nrow = n0 + k)
 
-  new_tab(tabs, subtext = subtext, render_extras = render_extras, ci_settings = ci_settings) |>
+  new_tab(tabs, subtext = subtext, render_extras = render_extras, ci_settings = ci_settings,
+          vars = vars_attr) |>
     dplyr::group_by(!!!rlang::syms(groups))
 }
 

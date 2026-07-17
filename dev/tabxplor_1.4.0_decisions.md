@@ -4087,3 +4087,68 @@ significance stars** — the one case where a proportional `*` (narrower than a 
   orthogonal to the font. Full suite FAIL 0 | PASS 3159; no golden/snapshot moved (plain snapshot tables
   carry no `tx-has-stars`, and Excel defaults were already text-family). `tab-css.R`'s `.tx-num` mono
   (14m) never shipped in a release, so this is a redesign, not a user-visible revert.
+
+---
+
+### 45. Phase 14n — one Total row for several row_vars (2026-07-17)
+
+`tab(c(marital, race), relig)` builds each row_var as a standalone table (its own `Total` at the block
+bottom), then `tab_compact()` stacks them. The per-block `Total` rows are redundant: the col_var
+marginal (and its base `n`) is a property of the shared population, not the row_var. Under `na = "keep"`
+(default), `"drop_all"` and `"common_base"` every block shares one population, so the totals are
+identical by construction; only `na = "drop"` (each row_var drops its own NAs) can make them differ.
+
+**Rule (settled + maintainer AskUserQuestion):** collapse the redundant per-block Total rows to ONE
+(keep the LAST block's) when every block's total renders identically; otherwise keep them all and emit
+ONE message naming `na = "drop"` as the cause. Scope = **console + all exports** (fold into the single
+display chokepoint). Compare the whole **Total BLOCK** (Total row + its trailing add_n / add_pct summary
+rows), not just the Total row.
+
+**Implementation** — two localized, DISPLAY-ONLY changes in `R/tab_classes.R`; no fmt fields, no
+attributes, no public args; the core `tab()` object keeps every Total row (`nrow(tab(...))` unchanged).
+
+- **`tab_collapse_total_rows()`** — the final step of `tab_materialize_extras()`, so all roles
+  (`bold_rows` / `totblock_top`/`bottom` / `new_group` / references / tooltips) recompute on the
+  collapsed table with ZERO per-backend code. Guard: `isTRUE(get_vars_attr()$compacted)` and `>= 2`
+  Total rows — which excludes single-row_var and tab_vars tables (both `compacted = FALSE`), so a
+  tab_vars table's per-subtable totals (real, not duplicates) are untouched. A block's **total block** =
+  the Total row + contiguous following rows whose label is `"n"` / `"row_pct"` (the
+  `tab_materialize_extras()` summary rows — the same whitelist `totblock_top/bottom` uses), gated to the
+  same grouping value; a `"pvalue"` row is block-specific and is NOT swept in. The **"as displayed"
+  signature** is `format()` (text) over EVERY fmt column across the block rows — one canonical predicate
+  for all backends (two totals in one column pad to the same width; also catches the xl `pct="row"` case
+  where the base `n` is a separate column). Identical signatures → drop all but the last block's total
+  block (`tab[setdiff(seq_len(nrow), drop), ]`, global indices → class/attrs/grouping preserved,
+  group-safe); different → `cli::cli_inform(.frequency = "once")`.
+  - **Why the Total BLOCK, not the Total row**: under `pct = "col"` the Total row is ALWAYS `"100%"` and
+    the real base lives in the `n` row, so comparing the Total row alone would silently collapse col%
+    tables with a genuinely different N. Including the summary rows fixes this and handles add_pct's
+    `Total | row_pct | n` block (dropping the whole block, never orphaning a row_pct/n).
+  - **Why display-only + keep the last**: the `na = "drop"` case is decisive — genuinely different totals
+    must all survive, so the object keeps every total and the collapse is inherently a render decision
+    (needs "as displayed" equality). Dropped blocks' data cells keep their baked colours/diffs; the one
+    kept Total (last block) serves the whole table.
+
+- **`tab_pvalue_lines()` per-block keying** — the `test` attribute already carries a `row_var`
+  discriminator, but the p-value rows were keyed on `tab_vars` only (empty for a compacted table), so
+  two row_vars' tests collided into one col_var column → a `values not uniquely identified` list-col +
+  a single mis-placed row (`row_var = NA`). Fixed by keying on the table's **grouping columns** ∩ the
+  test tibble (`row_var` for compacted, `tab_vars` for a tab_vars table → byte-identical there). Each
+  block now gets its own p-value row sorted to its block bottom. **Also carries the `vars` attribute**
+  through its `new_tab()` rebuild (a latent Phase 14d gap: the rebuild dropped `compacted`, which the
+  collapse guard reads — exposed only by this phase).
+
+**Verification** — full suite FAIL 0 | WARN 0 | PASS 3203; **no `.rds` golden and no `_snaps` moved**
+(both changes are display-only; no existing snapshot rendered a collapsing compacted table). Updated:
+`test-display-extras.R` (the Phase 14a "n row per sub-table" tests now assert the collapsed count under
+`na = "keep"`, with a non-collapsing `na = "drop"` uneven fixture keeping the per-sub-table coverage) +
+new 14n tests; two structure assertions in `test-render-html.R` / `test-tab_xl.R` (compacted rowspans /
+merges shrink by the dropped Total; their "one-row block" fixtures switched from `levels == "Total"` —
+which the collapse drops — to a data level).
+
+**Caveats / flagged**: (a) `add_n = FALSE` + `na = "drop"` + `pct = "row"` collapses silently if the
+marginals round identically (nothing visible differs — follows the literal rule); (b) a lone kept
+p-value row after a collapsed block still gets the normal `totblock` border box (cosmetic); (c) the
+`{"n","pvalue","row_pct"}` English value-match whitelist stays the deeper fragility for a future
+per-row role flag; (d) transpose (14o) is unaffected — a transposed table has no `>= 2` Total ROWS, so
+the collapse no-ops there; collapsing the flipped table is 14o's job.
