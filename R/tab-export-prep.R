@@ -389,15 +389,16 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
 
   # Phase 13c-iii: the shared col_var HEADER model (spanning variable-name row + suffix-stripped level
   # labels), consumed by every exporter so the two header rows stay in sync (console is unchanged).
+  # Phase 14i: `name_cols` is the col-side twin of the `var_names` row-side drop above. A blank `label`
+  # is the WHOLE implementation: every backend already gates its spanning-name row on
+  # `any(nzchar(label))` -- md (tab_md.R), kableExtra + the html engine (tab-render-html.R), and
+  # tab_xl's `has_span` (which also drives its geometry offset). So no backend knows it exists.
+  # Phase 14j moved the decision INTO the header builder, which also owns the level labels: dropping
+  # the span changes what the level header must say (see tab_col_var_header()).
   col_var_header <- tab_col_var_header(
     tab, list(col_var_map = col_var_map, real_col_vars = real_col_vars, totcols = totcols,
-              var_name_col = var_name_col))
-
-  # Phase 14i: the col-side twin of the `var_names` row-side drop above. Blanking `label` is the WHOLE
-  # implementation: every backend already gates its spanning-name row on `any(nzchar(label))` -- md
-  # (tab_md.R), kableExtra + the html engine (tab-render-html.R), and tab_xl's `has_span` (which also
-  # drives its geometry offset). So one line here, and no backend needs to know the argument exists.
-  if (!var_names %in% c("both", "cols")) col_var_header$label[] <- ""
+              var_name_col = var_name_col),
+    name_cols = var_names %in% c("both", "cols"))
 
   list(
     tab = tab,
@@ -432,39 +433,59 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
 # the level name with its disambiguation "_<col_var>" suffix stripped (two col_vars sharing a level
 # "Other" are stored uniquely as "Other_race"/"Other_grp"; exports show the bare "Other" under the
 # variable-name span, per the maintainer's rule -- never print the suffix once the name is written).
+#
+# `name_cols` (Phase 14j) = will the spanning row actually be rendered (the col side of `var_names`)?
+# It moved here from prep_one_table(), which blanked `label` after the fact, because the two decisions
+# are ONE rule: a level header may name the STATISTIC ("mean") only when the span names the VARIABLE.
+# Blanking after the fact left `var_names = "none"` + Excel with a column headed "mean" and the
+# variable's name nowhere. Both `var_names` drops still live in the prep, so Phase 14i's property
+# holds: no backend knows the argument exists.
 #' @keywords internal
-tab_col_var_header <- function(tab, roles) {
+tab_col_var_header <- function(tab, roles, name_cols = TRUE) {
   nms   <- names(tab)
   cvm   <- roles$col_var_map
   real  <- roles$real_col_vars
   totc  <- seq_along(nms) %in% roles$totcols
-  label <- unname(cvm)
-  label[!(label %in% real)] <- ""            # row_var / all_col_vars / "" -> no span name
-  label[totc] <- ""                          # total column stands alone (the marginal, not a level)
+  # a real col_var LEVEL column: not the row var / all_col_vars / "" (no span name), and not a total
+  # column (the marginal, not a level). Kept separate from `label` because the rewrites below must run
+  # even when nothing is NAMED -- a "_race" suffix is noise whatever `var_names` says.
+  is_level <- (unname(cvm) %in% real) & !totc
+  label    <- ifelse(is_level & isTRUE(name_cols), unname(cvm), "")
   clean <- nms
   # Phase 14i: the merged table's name column is headed by the literal "row_var" -- an internal name,
-  # never informative, and the loop below never reaches it (it only visits LABELLED columns). Blanked
+  # never informative, and the loop below never reaches it (it only visits LEVEL columns). Blanked
   # unconditionally: this is a bug fix, not a `var_names` setting. One line, and md's `col_names`,
   # kableExtra's `col.names`, the html engine's `head_cells` and tab_xl's `clean_names` all follow.
   clean[roles$var_name_col] <- ""
-  for (j in which(label != "")) {
+  for (j in which(is_level)) {
     suff <- paste0("_", cvm[[j]])
     if (endsWith(nms[j], suff)) {
       clean[j] <- substr(nms[j], 1L, nchar(nms[j]) - nchar(suff))
-    } else if (identical(nms[j], cvm[[j]]) && is_fmt(tab[[j]]) &&
-               identical(get_type(tab[[j]]), "mean") && paste0(cvm[[j]], "_sd") %in% nms) {
-      # Phase 14d: where a numeric variable is SPLIT across columns (the Excel mean + `<var>_sd`
-      # sibling), both are named after the variable -- so under its own span it was said three times
-      # ("NB_MUSIQUES" / "NB_MUSIQUES_sd" below a "NB_MUSIQUES" header). The span says which variable;
-      # the level header should say which STATISTIC. Gated on the sibling existing, so the text
-      # backends -- which fold the sd into the mean cell as "47.2 (17.3)" and so split nothing -- are
-      # untouched (their own header wording is Phase 14e's).
-      clean[j] <- "mean"
-    } else if (identical(nms[j], paste0(cvm[[j]], "_sd"))) {
+    } else if (isTRUE(name_cols) && identical(nms[j], cvm[[j]]) && is_fmt(tab[[j]]) &&
+               identical(get_type(tab[[j]]), "mean")) {
+      # A numeric col_var contributes a column bearing the VARIABLE's own name, so under its own span
+      # the name was said twice ("tvhours" over "tvhours") -- three times in Excel, which also splits
+      # off a "<var>_sd" sibling. The span says which variable; the level header says which STATISTIC.
+      clean[j] <- if (paste0(cvm[[j]], "_sd") %in% nms) {
+        "mean"                       # Excel: the sd is its own column, headed "sd" below
+      } else if (mean_shows_sd(tab[[j]])) {
+        "mean (sd)"                  # text backends: format() folds the sd into the cell, "1.7 (s2.1)"
+      } else {
+        "mean"
+      }
+    } else if (isTRUE(name_cols) && identical(nms[j], paste0(cvm[[j]], "_sd"))) {
       clean[j] <- "sd"
     }
   }
   list(label = label, clean = clean)
+}
+
+# Does this mean column actually render a "(sigma sd)" tail? THE SAME predicate format() uses for its
+# `disp_mean_sd` mask (R/fmt_class.R), so the header and the cells cannot disagree: a mean cell shows
+# its sd exactly when the display is "mean" and the var field is there.
+#' @keywords internal
+mean_shows_sd <- function(col) {
+  any(get_display(col) == "mean" & !is.na(get_var(col)), na.rm = TRUE)
 }
 
 # Phase 13c-iii: run-length-encode the header `label` vector into (label, span) runs for the spanning
@@ -534,8 +555,8 @@ tab_export_prep <- function(tabs,
   if (is.null(what)) what <- paste0("tab_", backend, "()")
   if (is.null(compute)) {
     compute <- if (backend %in% c("kable", "plot")) {
-      c("refs", "colors", "bold", "range", "labels")
-    } else c("refs", "bold", "labels")  # md / xl
+      c("refs", "colors", "bold", "range")
+    } else c("refs", "bold")  # md / xl
   }
   # base `%||%` is R >= 4.4 only; the package supports R >= 4.1, so use explicit is.null().
   if (is.null(color_type))  color_type  <- getOption("tabxplor.color_style_type")
@@ -579,14 +600,9 @@ tab_export_prep <- function(tabs,
                      color_type = color_type[1], var_names = var_names)
   )
 
-  # table-level labels (survey `label` attributes of the source variables), Suggests-guarded; only
-  # tab_kable consumes them (Phase 10e). Cheap NULL when unused.
-  labels <- if ("labels" %in% compute) tab_export_labels(resolved) else NULL
-
   structure(
     list(
       tables = tables,
-      labels = labels,
       meta = list(backend = backend, theme = theme[1],
                   color_type = color_type[1],
                   color_legend = color_legend, theme_cols = theme_cols,
@@ -596,20 +612,8 @@ tab_export_prep <- function(tabs,
   )
 }
 
-
-# Capture each variable's `label` attribute (survey question text), when present. Consumed by
-# tab_kable only (Phase 10e). Returns a named chr (var -> label) or NULL.
-#' @keywords internal
-tab_export_labels <- function(resolved) {
-  labs <- purrr::map(resolved, function(tab) {
-    if (!is.data.frame(tab)) return(NULL)
-    out <- purrr::map(tab, ~ attr(.x, "label", exact = TRUE))
-    out <- out[!purrr::map_lgl(out, is.null)]
-    if (length(out) == 0) return(NULL)
-    purrr::map_chr(out, ~ as.character(.x)[[1]])
-  })
-  labs <- purrr::compact(labs)
-  if (length(labs) == 0) return(NULL)
-  out <- do.call(c, labs)
-  out[!duplicated(names(out))]
-}
+# Phase 14j: tab_export_labels() was DELETED here. It walked every column of every table harvesting
+# `attr(., "label")` on 100% of export paths, and nothing ever read the `prep$labels` it filled -- in
+# practice it returned NULL anyway, because the source `label` attribute does not survive tab()
+# building. It was built for a "label -> header tooltip" feature that was never wired for exactly that
+# reason; reviving it needs core-pipeline plumbing first, at which point it belongs with that work.

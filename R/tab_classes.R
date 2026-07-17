@@ -867,10 +867,11 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #'  column-variable names are the spanning row above their level columns. Level headers always
 #'  keep their name. Defaults to \code{getOption("tabxplor.var_names", "both")}.
 #' @param get_data Get the transformed data instead of the html table.
-#' @param engine The HTML render engine. `"kableExtra"` (default) uses \pkg{kableExtra};
-#'  `"html"` uses a dependency-free, self-contained (inline-CSS) `<table>` renderer that is
-#'  faster and needs no external CSS (used by the jamovi live UI). Defaults to
-#'  \code{getOption("tabxplor.tab_kable_engine", "kableExtra")}.
+#' @param engine The HTML render engine. `"html"` (default) is a dependency-free `<table>` renderer:
+#'  faster, and every look is a CSS class you can restyle (see [tab_css()]), which is what makes
+#'  `theme = "auto"` possible. `"kableExtra"` is the legacy engine (\pkg{kableExtra}); it bakes its own
+#'  theme, so it cannot follow the reader's colour scheme. Defaults to
+#'  \code{getOption("tabxplor.tab_kable_engine", "html")}.
 #' @param ... Other arguments to pass to \code{\link[kableExtra:kable_styling]{kableExtra::kable_styling}}.
 
 #' @return A html table (opened in the viewer in RStudio). Differences from totals,
@@ -905,12 +906,12 @@ tab_kable <- function(tabs,
                            var_names = var_names, allow_auto = TRUE)
   theme <- o$theme; color_type <- o$color_type
   color_legend <- o$color_legend
-  compute <- c("refs", "bold", "range", "labels")
+  compute <- c("refs", "bold", "range")
   if (o$color) compute <- c(compute, "colors")
   html_font <-
     if (is.null(html_font)) {getOption("tabxplor.kable_html_font")} else {html_font}
   popover <- if (is.null(popover)) {getOption("tabxplor.kable_popover")} else {popover}
-  engine  <- if (is.null(engine)) {getOption("tabxplor.tab_kable_engine", "kableExtra")} else {engine}
+  engine  <- if (is.null(engine)) {getOption("tabxplor.tab_kable_engine", "html")} else {engine}
   engine  <- match.arg(engine, c("kableExtra", "html"))
   css     <- if (is.null(css)) {getOption("tabxplor.kable_css", TRUE)} else {isTRUE(css)}
 
@@ -976,6 +977,15 @@ tab_kable <- function(tabs,
 
 #' Print a tabxplor table in html
 #'
+#' @description
+#' `r lifecycle::badge("deprecated")`
+#'
+#' Superseded by [tab_kable()], which renders any table -- `tabxplor_tab` or plain data.frame --
+#' through the shared exporter prep. This function predates it and never shared its machinery: it
+#' detects total rows/columns by matching the literal strings `"Total"`/`"Ensemble"` against names and
+#' values, so it is hardcoded to English and French, and it renders no colours, tooltips or spanning
+#' headers. Nothing in the package has ever called it.
+#'
 #' @param tabs A data.frame.
 #' @param theme By default, a white table with black text, Set to \code{"dark"} for a
 #' black table with white text.
@@ -1020,6 +1030,7 @@ kable_tabxplor_style <- function(tabs,
                                  whitespace_only = TRUE, # unbreakable_spaces = TRUE,
                                  subtext = "",
                                  ...) {
+  lifecycle::deprecate_soft("1.4.0", "kable_tabxplor_style()", "tab_kable()")
 
   html_font <-
     if (is.null(html_font)) {getOption("tabxplor.kable_html_font")} else {html_font}
@@ -1069,8 +1080,10 @@ kable_tabxplor_style <- function(tabs,
 
   }
 
-  if (length(subtext) != 0) {
-    if (subtext != "") out <- out %>% kableExtra::add_footnote(subtext, notation = "none", escape = FALSE)
+  # `if (subtext != "")` on a length-2 subtext is an error since R 4.2 ("the condition has length > 1")
+  # -- unreachable so far only because nothing calls this. any() is what the sibling engine does.
+  if (any(nzchar(subtext))) {
+    out <- out %>% kableExtra::add_footnote(subtext, notation = "none", escape = FALSE)
   }
 
   totcols <- which(stringr::str_detect(names(tabs), "^Total|^Ensemble"))
@@ -1674,7 +1687,7 @@ tab_plot <- function(tabs,
                            var_names = var_names)
   theme <- o$theme; color_type <- o$color_type
   color_legend <- o$color_legend
-  compute <- c("refs", "bold", "range", "labels")
+  compute <- c("refs", "bold", "range")
   if (o$color) compute <- c(compute, "colors")
 
   # --- Phase 10d: shared exporter prep (degrade, roles, two-channel colours, bold rows/cols). ---

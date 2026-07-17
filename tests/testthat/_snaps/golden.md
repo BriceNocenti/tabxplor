@@ -69,7 +69,7 @@
     Code
       cat(tab_md(cases[[name]](), print = FALSE))
     Output
-      |               | race                |                    age  | |              tvhours  |
+      |               | race                |              mean (sd)  | |            mean (sd)  |
       |:--------------|:--------------------|------------------------:|-|----------------------:|
       |               |                     | *age*                   | | *tvhours*             |
       | No answer     | Other               |     [34.0 (σ8.5 )]{.m3} | |     [2.0       ]{.m1} |
@@ -111,7 +111,7 @@
     Code
       cat(tab_md(cases[[name]](), print = FALSE))
     Output
-      | race  |         age  | |   tvhours  |
+      | race  |        mean  | |      mean  |
       |:------|-------------:|-|-----------:|
       |       | *age*        | | *tvhours*  |
       | Other | [38.8;40.1]  | | [2.6;2.9]  |
@@ -153,7 +153,7 @@
     Code
       cat(tab_md(cases[[name]](), print = FALSE))
     Output
-      | g       |            v  |
+      | g       |    mean (sd)  |
       |:--------|--------------:|
       |         | *v*           |
       | A       |      10 (σ3)  |
@@ -168,7 +168,7 @@
     Code
       cat(tab_md(cases[[name]](), print = FALSE))
     Output
-      | grp     |                    v  |
+      | grp     |            mean (sd)  |
       |:--------|----------------------:|
       |         | *v*                   |
       | A       |     [2.5 (σ1.3)]{.m1} |
@@ -196,7 +196,7 @@
     Code
       cat(tab_md(cases[[name]](), print = FALSE))
     Output
-      | race    |                    age  | |              tvhours  |
+      | race    |              mean (sd)  | |            mean (sd)  |
       |:--------|------------------------:|-|----------------------:|
       |         | *age*                   | | *tvhours*             |
       | Other   |     [39.5 (σ14.4)]{.m1} | |      2.8 (σ2.4)       |
@@ -211,7 +211,7 @@
     Code
       cat(tab_md(cases[[name]](), print = FALSE))
     Output
-      |               | race                |                    age  | |              tvhours  |
+      |               | race                |              mean (sd)  | |            mean (sd)  |
       |:--------------|:--------------------|------------------------:|-|----------------------:|
       |               |                     | *age*                   | | *tvhours*             |
       | No answer     | Other               |     [34.0 (σ8.5 )]{.m3} | |     [2.0       ]{.m1} |

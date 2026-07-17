@@ -95,10 +95,11 @@ a LaTeX table.}
 
 \item{whitespace_only}{Set to \code{FALSE} to wrap also on non whitespace characters.}
 
-\item{engine}{The HTML render engine. \code{"kableExtra"} (default) uses \pkg{kableExtra};
-\code{"html"} uses a dependency-free, self-contained (inline-CSS) \verb{<table>} renderer that is
-faster and needs no external CSS (used by the jamovi live UI). Defaults to
-\code{getOption("tabxplor.tab_kable_engine", "kableExtra")}.}
+\item{engine}{The HTML render engine. \code{"html"} (default) is a dependency-free \verb{<table>} renderer:
+faster, and every look is a CSS class you can restyle (see \code{\link[=tab_css]{tab_css()}}), which is what makes
+\code{theme = "auto"} possible. \code{"kableExtra"} is the legacy engine (\pkg{kableExtra}); it bakes its own
+theme, so it cannot follow the reader's colour scheme. Defaults to
+\code{getOption("tabxplor.tab_kable_engine", "html")}.}
 
 \item{css}{\code{engine = "html"} only: inline the stylesheet with the table, so the output is
 self-contained (default, from \code{getOption("tabxplor.kable_css")}). Set \code{FALSE} in a many-table

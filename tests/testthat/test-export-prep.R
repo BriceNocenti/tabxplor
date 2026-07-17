@@ -12,10 +12,13 @@ t_tv    <- tab(gss, race, marital, year, pct = "row", color = "diff")
 
 # === SECTION: render-model shape =============================================
 
-testthat::test_that("tab_export_prep returns a tabxplor_render with tables/labels/meta", {
+testthat::test_that("tab_export_prep returns a tabxplor_render with tables/meta", {
   p <- tabxplor:::tab_export_prep(t_basic, backend = "kable", wrap = NULL)
   testthat::expect_s3_class(p, "tabxplor_render")
-  testthat::expect_named(p, c("tables", "labels", "meta"))
+  # Phase 14j: the `labels` slot is gone. tab_export_labels() harvested every column's `label`
+  # attribute on every export and nothing ever read the result -- and the source `label` does not
+  # survive tab() building anyway, so it was always NULL.
+  testthat::expect_named(p, c("tables", "meta"))
   testthat::expect_length(p$tables, 1L)
   rd <- p$tables[[1]]
   testthat::expect_named(rd, c("tab", "vars", "roles", "ann", "bold_rows",
@@ -302,6 +305,36 @@ testthat::test_that("var_names drops the row-name column / the col_var span, and
   rd_tv <- tabxplor:::tab_export_prep(t_tv, backend = "md", drop_tab_vars = FALSE, wrap = NULL,
                                       var_names = "none")$tables[[1]]
   testthat::expect_true("year" %in% names(rd_tv$tab))
+})
+
+testthat::test_that("a numeric col_var names the VARIABLE once, and the statistic below it", {
+  # Pass 2: "tvhours is still repeating for the variable name + the normal header (factor level),
+  # better keep the variable name + just write 'mean (sd)' in the normal header". A numeric col_var
+  # contributes a column named after the variable, so under its own span the name was said twice --
+  # three times in Excel, which splits off a `<var>_sd` sibling too.
+  t_num <- tab(gss, marital, c(race, tvhours), pct = "row", color = "diff")
+  hdr <- function(backend, vn = "both") {
+    cvh <- tabxplor:::tab_export_prep(t_num, backend = backend, wrap = NULL,
+                                      var_names = vn)$tables[[1]]$col_var_header
+    stats::setNames(cvh$clean, cvh$label)
+  }
+  # text backends fold the sd into the cell ("1.7 (s2.1)"), so the header says so
+  testthat::expect_equal(unname(hdr("kable")[names(hdr("kable")) == "tvhours"]), "mean (sd)")
+  # Excel splits it into a real `_sd` column: one header each
+  testthat::expect_equal(unname(hdr("xl")[names(hdr("xl")) == "tvhours"]), c("mean", "sd"))
+
+  # ... but the level header may only name the STATISTIC while the span names the VARIABLE. Blanking
+  # the span after the fact (as Phase 14i did) left `var_names = "none"` with a column headed "mean"
+  # and the variable's name NOWHERE -- which is why the decision moved into tab_col_var_header().
+  testthat::expect_equal(unname(hdr("kable", "none")), c("marital", "Other", "Black", "White",
+                                                         "Total", "tvhours"))
+  testthat::expect_true(all(c("tvhours", "tvhours_sd") %in% hdr("xl", "none")))
+
+  # A mean column that shows no sd (ci = "cell" prints an interval) is just "mean" -- the header reads
+  # the same predicate format() does, so the two cannot disagree.
+  cvh <- tabxplor:::tab_export_prep(tab_num(gss, marital, tvhours, ci = "cell"),
+                                    backend = "kable", wrap = NULL)$tables[[1]]$col_var_header
+  testthat::expect_equal(cvh$clean[cvh$label == "tvhours"], "mean")
 })
 
 testthat::test_that("the literal `row_var` header is always dropped (a bug fix, not a setting)", {

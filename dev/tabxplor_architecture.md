@@ -545,15 +545,23 @@ A list renders table-after-table (both engines; Phase 14d: it is never merged).
 
 **The html engine emits NO inline styles** (Phase 14e). Every look — geometry included — is a **role
 class** resolved by `tab_css()`: `tx-r`/`tx-l` (align), `tx-num` (numbers: nowrap + the number font),
-`tx-br`/`tx-bl` (borders), `tx-tot`/`tx-rv` (min-widths), `tx-b` (bold), `tx-bt`/`tx-bb`/`tx-bb2` (row
-rules), `tx-span` (the col_var header), `tx-pill` (a background), plus the colour slots (`.p*`/`.m*` on
-the `<td>`, `.o*`/`.u*` on the pill span). Three reasons, in order of weight:
+`tx-br`/`tx-bl` (borders), `tx-b` (bold), `tx-bt`/`tx-bb`/`tx-bb2` (row rules), `tx-span` (the col_var
+header), `tx-pill` (a background), `tx-lbl`/`tx-vname` (a variable name spanning its block, Phase 14i),
+`tx-foot` (the footnote, Phase 14j), plus the colour slots (`.p*`/`.m*` on the `<td>`, `.o*`/`.u*` on
+the pill span). `tx-tot`/`tx-rv` are emitted with **no rule of their own** since 14j: their min-widths
+were deleted (the browser content-sizes every column, so a floor could only be too big), and they
+remain as the hooks a user pins a width on — `?tab_css` "Restyling a table". Three reasons, in order of
+weight:
 
 1. **an inline style cannot be overridden by a user's CSS**, so "a good default you can restyle" (what
    kableExtra gives) was impossible while the engine wrote its own borders and widths;
-2. `border-right:1px solid` is a **shorthand** — it resets `border-color` to `currentColor`, i.e. the
-   cell's own palette colour, so a `+20%` cell drew a blue border; inline, it also beat the
-   stylesheet's `border-color` rule;
+2. it is **half** of the coloured-border fix. `border-right:1px solid` is a **shorthand** — it resets
+   `border-color` to `currentColor`, i.e. the cell's own palette colour, so a `+20%` cell drew a blue
+   border; inline, it also beat the stylesheet's `border-color` rule. Moving it into a class removed
+   the *inline* precedence only: a class still out-specifies `td{border-color:…}`, so the shorthand
+   kept winning and 14e recorded the bug as fixed while it was not. **Phase 14j finished it**: the
+   stylesheet now uses `border-*-style`/`border-*-width` longhands exclusively, so nothing but the one
+   `border-color` rule ever names a border colour (locked by test-render-html.R);
 3. the markup shrinks (one short class vs a repeated style string per cell).
 
 This extends Phase 13d's rule (colour must be a class, or `theme = "auto"` is impossible) to

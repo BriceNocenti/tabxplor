@@ -431,6 +431,16 @@
   export to Excel, install `openxlsx2`. The produced workbooks look essentially the same.
 
 ## Bug corrections
+* **HTML tables are compact again.** They stretched to the full width of the pane, padding every column
+  with blank -- but only when a colour legend was shown, which is why it looked erratic. The legend sits
+  in a cell spanning the whole table, and its one long line of prose, not the data, was deciding how
+  wide the table wanted to be. The footnote no longer takes part in sizing. Column widths are now left
+  entirely to the browser as well (the levels and Total columns had a fixed minimum width that was
+  usually too wide); to pin one yourself, add e.g. `.tabxplor-tab .tx-rv { min-width: 10em; }` to your
+  own CSS -- see the new "Restyling a table" section of `?tab_css`.
+* **A numeric column no longer says its name twice.** A mean column sat under a spanning header bearing
+  the variable's name *and* repeated that name as its own header. The header now says which statistic:
+  `mean (sd)`, or `mean` and `sd` in Excel, where the two are separate columns.
 * **`tab_md()` output was not valid pandoc.** The column-variable name was written as a *second header
   row*, which pipe tables do not have: pandoc gave up on the whole table and rendered it as a
   line-block followed by a paragraph of pipes. Every markdown table carrying a column-variable name
@@ -446,9 +456,11 @@
 * **A wrapped column header showed its line break as text.** A long header name is wrapped with
   `<br>`, which the HTML engine escaped along with everything else, printing a literal
   `Télé:<br>occasionnel`.
-* **Coloured cells no longer draw coloured borders** in the HTML engine: the inline `border-right:
-  1px solid` shorthand reset the border colour to the cell's own text colour, so a `+20%` cell got a
-  blue border.
+* **Coloured cells no longer draw coloured borders** in the HTML engine: the `border-right: 1px solid`
+  shorthand reset the border colour to the cell's own text colour, so a `+20%` cell got a blue border
+  and a greyed-out one a grey border. Every border now takes the table's border colour, in both
+  themes. (Announced in an earlier 1.4.0 development version, where only half of it was fixed: moving
+  the rule off the cell's `style` attribute left the shorthand, and the shorthand was the cause.)
 * **Tables know their own variables.** A table now records which variables are its rows, columns and
   tab-variables instead of leaving each function to guess them back from the column types. The guess
   could not survive `tab()` merging several row variables into one table -- that merge renames the
@@ -547,6 +559,10 @@
   genuinely self-contained (as documented) and its output is stable across `kableExtra` versions.
 
 ## Deprecations
+* `kable_tabxplor_style()` is **soft-deprecated** in favour of `tab_kable()`, which renders any
+  table -- `tabxplor_tab` or plain data.frame -- and shares the exporter machinery. The old function
+  predates it: it finds total rows and columns by matching the literal strings `"Total"`/`"Ensemble"`
+  (so it only works in English and French), and renders no colours, tooltips or spanning headers.
 * `tab_md(col_var_names =)` is **soft-deprecated** in favour of the shared `var_names` argument, which
   every exporter takes and which also governs the row-variable name: `col_var_names = FALSE` is
   `var_names = "rows"` (or `"none"`). It still works.

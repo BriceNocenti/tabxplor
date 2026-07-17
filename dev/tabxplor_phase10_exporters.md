@@ -299,7 +299,10 @@ structure(
       )
       # ... one entry per rendered table
     ),
-    labels = <named chr: var -> question text | NULL>,   # §7 label attribute (kable tooltip)
+    # `labels` (§7, the label attribute for a kable header tooltip) was specified here and built, but
+    # NOTHING ever read it -- and the source `label` does not survive tab() building, so it was always
+    # NULL. DELETED in Phase 14j; the model is list(tables, meta). Reviving the feature needs the
+    # core-pipeline plumbing first, and belongs with that work.
     meta   = list(backend, compact, theme, color_type, html_24_bit, transpose, compute = <flags>)
   ),
   class = "tabxplor_render"

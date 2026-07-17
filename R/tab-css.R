@@ -14,7 +14,13 @@
 #   - Every LOOK is a role class here, geometry included (Phase 14e) -- the html engine emits no
 #     inline style, so a user's own CSS can override any of it. Phase 14i adds `.tx-lbl` (a cell
 #     rowspan'd over the block it names) and `.tx-vname` (a row-variable name, written vertically).
-# See: CLAUDE.md Phase 13d + 14e + 14i, dev/tabxplor_phase10_exporters.md.
+#   - NO border SHORTHAND (Phase 14j): a shorthand resets border-*-color to `currentColor` = the
+#     cell's palette hex, and every border rule here out-specifies the ONE border-color rule. Always
+#     border-*-style + border-*-width. Locked by test-render-html.R.
+#   - NO column width (Phase 14j): the browser's auto table layout sizes each column to its content.
+#     `.tx-rv`/`.tx-tot`/`.tx-num` are emitted UNSTYLED, as hooks for a user's own fixed-width CSS
+#     (?tab_css). The table is sized by its data: `.tx-foot` keeps the footnote out of that sum.
+# See: CLAUDE.md Phase 13d + 14e + 14i + 14j, dev/tabxplor_phase10_exporters.md.
 
 # === SECTION: theme + slot vocabulary ==============================================================
 
@@ -105,8 +111,14 @@ tx_css_rules <- function(color_type = NULL, chrome = TRUE) {
     cd <- tx_chrome_hex("dark")
     add(".tabxplor-tab", "color",      cl$text,  cd$text)
     add(".tabxplor-tab", "background", cl$bg,    cd$bg)
-    # Borders are emitted colourless by the engine, so they would inherit `currentColor` = the CELL's
-    # palette hex (a +20% cell got a red border). Set it explicitly: the spec is one border colour.
+    # THE one border-colour rule -- every border in this stylesheet takes its colour from here.
+    # WARNING: that only holds because no rule below uses a border SHORTHAND. `border-right:1px solid`
+    # would reset border-right-color to `currentColor` = the CELL's palette hex (a +20% cell drew a
+    # blue border), and `.tabxplor-tab .tx-br` (0,2,0) out-specifies this (0,1,1), so the shorthand
+    # would win however this rule is written. Phase 14e wrongly recorded the bug as fixed by moving the
+    # geometry off inline styles: that removed the inline half and left the shorthand half. Longhands
+    # (border-*-style / border-*-width) are what make this rule load-bearing -- keep it that way; the
+    # invariant is locked by test-render-html.R ("no border shorthand in the stylesheet").
     add(".tabxplor-tab th,.tabxplor-tab td", "border-color", cl$border, cd$border)
     add(".tabxplor-tab tbody tr:hover", "background", cl$hover, cd$hover)
     add(".g1", "color", cl$grey,  cd$grey)
@@ -182,7 +194,11 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE) {
     # `.tabxplor-tab` is the <table> itself (the html engine) OR a wrapping <div> (a markdown table
     # inside its pandoc fenced div, Phase 14f) -- `border-collapse` only means something on a table, so
     # name both. Every other rule below is a descendant selector and reaches the table either way.
-    paste0(".tabxplor-tab,.tabxplor-tab table{border-collapse:collapse;border-top:0;border-bottom:0;",
+    # WARNING (Phase 14j): NO border SHORTHAND anywhere below -- always border-*-style/-width. A
+    # shorthand resets border-*-color to `currentColor`, i.e. the cell's own palette hex, and every
+    # rule here out-specifies the one border-color rule above. Locked by test-render-html.R.
+    paste0(".tabxplor-tab,.tabxplor-tab table{border-collapse:collapse;",
+           "border-top-width:0;border-bottom-width:0;",
            "margin:0;font-family:\"DejaVu Sans Condensed\",\"DejaVu Sans\",Arial,helvetica,sans-serif;}"),
     ".tabxplor-tab caption{text-align:center;font-weight:bold;font-size:120%;}",
     ".tabxplor-tab tfoot{font-size:80%;text-align:left;}",
@@ -190,8 +206,10 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE) {
     # padding, so text no longer touches the column borders.
     ".tabxplor-tab th,.tabxplor-tab td{padding:3px 4px;vertical-align:top;line-height:1.1;}",
     paste0(".tabxplor-tab thead th{font-weight:bold;font-size:90%;text-align:center;",
-           "vertical-align:bottom;line-height:1;border-top:0;border-bottom:1px solid;}"),
-    ".tabxplor-tab .tx-span{font-weight:bold;font-size:90%;text-align:center;border-bottom:1px solid;}",
+           "vertical-align:bottom;line-height:1;border-top-width:0;",
+           "border-bottom-style:solid;border-bottom-width:1px;}"),
+    paste0(".tabxplor-tab .tx-span{font-weight:bold;font-size:90%;text-align:center;",
+           "border-bottom-style:solid;border-bottom-width:1px;}"),
     ".tabxplor-tab .tx-r{text-align:right;}",
     ".tabxplor-tab .tx-l{text-align:left;}",
     # thead th's `text-align:center` must beat the column's own alignment: same specificity (0,2,0)
@@ -199,10 +217,14 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE) {
     ".tabxplor-tab thead .tx-r,.tabxplor-tab thead .tx-l{text-align:center;}",
     paste0(".tabxplor-tab .tx-num{white-space:nowrap;",
            "font-family:\"DejaVu Sans\",Arial,helvetica,sans-serif;}"),
-    ".tabxplor-tab .tx-br{border-right:1px solid;}",
-    ".tabxplor-tab .tx-bl{border-left:1px solid;}",
-    ".tabxplor-tab .tx-tot{min-width:5.5em;}",
-    ".tabxplor-tab .tx-rv{min-width:10em;}",
+    ".tabxplor-tab .tx-br{border-right-style:solid;border-right-width:1px;}",
+    ".tabxplor-tab .tx-bl{border-left-style:solid;border-left-width:1px;}",
+    # Phase 14j: `.tx-tot` (total column) and `.tx-rv` (the row-variable levels column) are still
+    # EMITTED, deliberately with no rule of their own. They used to carry min-width:5.5em / 10em, which
+    # is what made "levels and Total columns very wide for nothing": a browser's auto table layout
+    # already sizes each column to its content, so a floor could only ever be too big. They remain as
+    # hooks -- `.tx-rv{min-width:10em}` in the user's own stylesheet is the fixed-width escape hatch
+    # (see ?tab_css), which is exactly what emitting roles instead of inline styles buys.
     # Phase 14i: a LABEL cell (`rowspan`ned over its block: a merged table's row-variable name, or a
     # kept tab_var's level) centres itself on the block it names rather than floating at its top.
     ".tabxplor-tab .tx-lbl{vertical-align:middle;text-align:center;}",
@@ -215,9 +237,22 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE) {
     paste0(".tabxplor-tab .tx-vname{writing-mode:vertical-rl;transform:rotate(180deg);",
            "white-space:normal;padding:4px 2px;}"),
     ".tabxplor-tab .tx-b,.tabxplor-tab tr.tx-b{font-weight:bold;}",
-    ".tabxplor-tab tr.tx-bt>*{border-top:1px solid;}",
-    ".tabxplor-tab tr.tx-bb>*{border-bottom:1px solid;}",
-    ".tabxplor-tab tr.tx-bb2>*{border-bottom:2px solid;}",
+    ".tabxplor-tab tr.tx-bt>*{border-top-style:solid;border-top-width:1px;}",
+    # WARNING: `tx-bb` (1px) and `tx-bb2` (2px) have IDENTICAL specificity (0,3,1), so a row carrying
+    # both -- the last row of a row_var block -- is decided by SOURCE ORDER here: tx-bb2 comes second
+    # and wins, which is the intended thicker rule. Do not reorder this pair.
+    ".tabxplor-tab tr.tx-bb>*{border-bottom-style:solid;border-bottom-width:1px;}",
+    ".tabxplor-tab tr.tx-bb2>*{border-bottom-style:solid;border-bottom-width:2px;}",
+    # Phase 14j: the footnote (subtext + colour legend) must not SIZE the table. Its cell spans every
+    # column, and its prose is ~330 characters on one line, so its max-content dwarfed the data's --
+    # and a table's used width is max(min-content, min(max-content, available)), so the table took the
+    # full pane and auto layout spread the slack across every column ("a tvhours cell half numbers half
+    # blank"). This was the real cause of the compactness complaint; the min-widths above were a
+    # sideshow. `width:0` is a definite size, so the cell contributes 0 to max-content (a percentage
+    # min-width resolves to 0 while sizing, against an indefinite containing block); at layout time the
+    # cell's width IS definite, so min-width:100% resolves and the text fills it. If a browser ever
+    # disagreed, the fallback is the old stretched table -- nothing breaks.
+    ".tabxplor-tab .tx-foot{width:0;min-width:100%;}",
     # a background HUGS its text (rounded, inline) rather than flooding the cell: a full-cell fill
     # reads as a blocky grid AND swallows the row hover (a child's background always paints over its
     # row's, whatever the specificity).
@@ -230,7 +265,18 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE) {
     # other bootstrap tooltip on the host page. Accepted: a one-line tooltip is what every bootstrap
     # tooltip wants, the rule is unprefixed so a host stylesheet loaded later still wins, and it ships
     # only with chrome = TRUE (never from tab_md()'s colour-only stylesheet).
-    ".tooltip-inner{max-width:none;white-space:nowrap;}"
+    ".tooltip-inner{max-width:none;white-space:nowrap;}",
+    # Phase 14j: the same for a POPOVER (tab_kable(popover = TRUE)), which the html engine has emitted
+    # since 10e with no styling at all -- bootstrap caps .popover at max-width:276px, so our one-line
+    # prose wrapped. `.popover-body` is bootstrap 4/5, `.popover-content` bootstrap 3 (rmarkdown's
+    # dependency, which is what kableExtra's print loads); naming both keeps this version-agnostic.
+    # DESIGN: geometry ONLY. inst/tab.css (the kableExtra path) also paints .popover white-on-black,
+    # and that is deliberately NOT ported: this selector is as unscopable as .tooltip-inner above, so a
+    # colour override would repaint the HOST page's popovers. "One line, not 276px" is what every
+    # bootstrap popover wants; a black background is our taste, imposed on someone else's page. Left
+    # unstyled, the popover simply inherits the host's own theme.
+    ".popover{max-width:none;}",
+    ".popover-body,.popover-content{padding:6px;white-space:nowrap;}"
   ) else character(0))
 
   body <- if (identical(theme, "auto")) {
@@ -274,6 +320,21 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE) {
 #' Every later `tab_kable()` then emits classes only. Two things to know: with `css = FALSE` and **no**
 #' `tab_css()` call the tables render uncoloured; and one stylesheet means one `theme` and one
 #' `color_type` for the whole document (a per-table `color_type` would need its own `css = TRUE`).
+#'
+#' @section Restyling a table:
+#' Nothing is written inline on a cell, so **any** of the look can be overridden by adding your own
+#' rules after the stylesheet -- no `!important` needed. Column widths in particular are left to the
+#' browser (it sizes each column to its content); to pin one, style its role:
+#' \preformatted{
+#' .tabxplor-tab .tx-rv  { min-width: 10em; }   /* the row-variable levels column */
+#' .tabxplor-tab .tx-tot { min-width: 5.5em; }  /* total columns                  */
+#' .tabxplor-tab .tx-num { min-width: 4em; }    /* every number column            */
+#' }
+#' The roles a cell can carry: `.tx-l`/`.tx-r` (alignment), `.tx-num` (numbers), `.tx-rv` (the
+#' row-variable levels column), `.tx-tot` (total columns), `.tx-bl`/`.tx-br` (side borders),
+#' `.tx-b` (bold), `.tx-lbl`/`.tx-vname` (a variable name spanning its block), `.tx-pill` (a
+#' background-coloured value), `.tx-span` (the variable-name header row), `.tx-foot` (the footnote).
+#' Rows carry `.tx-bt`/`.tx-bb`/`.tx-bb2` (top / bottom / thick-bottom rules).
 #'
 #' @param theme `"light"`, `"dark"`, or `"auto"` to follow the reader's colour scheme (their operating
 #'   system, and any dark-mode toggle of the host page: Quarto, Bootstrap 5.3, Tailwind). Defaults to

@@ -124,5 +124,73 @@ tab_reg(income3, dependent = "income", predictors = "race", family = "ordinal")
 
 
 
+#### comparaison with results of former tab_logit functions ----
+
+##### startup
+ct13_reg <- readRDS("dev/review_manual/ct13_reg.rgs")
+
+vars_sociodemo  <- c("SEXE", "AGE4", "DIPLOME4")
+vars_metier     <- c("PPP1ex", "FAPPPreg", "ENCADR", "PUBLIC")
+vars_emp        <- c("EMP4reg", "NBSALA2")
+
+# Modèles logits sur scores RPS (2013)
+scores_RPS_predictors2 <- list(
+  "employeur" = "EMP4reg",
+  "orga"      = "cah_ORGA",
+  "sociodemo" = vars_sociodemo,
+  "metier"    = c("PPP1", "ENCADR"), #"FAPPPreg" "PUBLIC", 
+  "sauf_orga" = c(vars_sociodemo, c("PPP1", "ENCADR"), vars_emp),
+  #"sans sd"   = c("PPP1", "ENCADR", vars_emp, "cah_ORGA"),
+  "complet"   = c(vars_sociodemo, c("PPP1", "ENCADR"), vars_emp, "cah_ORGA")
+)
+
+vars_scores_RPS13_final <- 
+  c("score_risques_phy", #"score_horaires13", 
+    #"score_insecurite13", 
+    #"score_relations_collegues13", 
+    "score_relations_chef13", "score_orga_hostile", 
+    "score_emopub13", "score_charge_mentale", "score_contrad13", 
+    #"score_non_reconnaissance",
+    "score_conflits_ethiques13", "score_moyens" #, "score_ethique_moyens13" 
+  )
+
+nb_questions <- vars_scores_RPS13_final |>
+  stringr::str_replace("score_", "vars_") |> 
+  rlang::syms() |> purrr::map_int(~rlang::eval_tidy(.) |> length())
+
+# # Scores finaux, predicteurs finaux
+# scores_RPS_logits <- 
+#   multi_logit(ct13_reg, vars_scores_RPS13_final,
+#               predictors_sequence = scores_RPS_predictors2, marginal_effects = FALSE,
+#               wt = "pondqaa", 
+#               nb_questions = vars_scores_RPS13_final |>
+#                 str_replace("score_", "vars_") |> 
+#                 syms() |> map_int(~eval_tidy(.) |> length())
+#   )
 
 
+##### models 
+scores_RPS_logits <- 
+tab_reg(
+  ct13_reg, 
+  dependent = vars_scores_RPS13_final, predictors = scores_RPS_predictors2, wt = "pondqaa", 
+  family = "binomial", trials = nb_questions, empirical_OR = TRUE, compare = "sequential", 
+  cleannames = FALSE
+)
+# "Error in `tab_reg()` at dev/review_manual/tab_manual_review_pass_3.R:169:1:
+# ! With a list of models in `predictors`, `dependent` must be a single name.
+# ℹ A vector of dependents is for the one-model-per-outcome mode."
+# - It should work with several dependent vars + predictors list (like in the former out-of-package multi_logit ; 
+#    trails must then accept a vector)
+
+
+
+score_risques_phy_logits <- 
+tab_reg(
+  ct13_reg, 
+  dependent = vars_scores_RPS13_final[[1]], predictors = scores_RPS_predictors2, wt = "pondqaa", 
+  family = "binomial", trials = nb_questions[[1]], empirical_OR = TRUE, compare = "sequential", 
+  cleannames = FALSE
+)
+
+score_risques_phy

@@ -2,14 +2,16 @@
 # ROLE: Phase 10e. tab_kable() = option resolution + tab_export_prep() + map(render_kable_html) + join.
 #       render_kable_html() isolates the engine so the render-model (rd, meta) stays engine-agnostic.
 # KEY CONSTRAINTS:
-#   - engine = "kableExtra" is the DEFAULT and reproduces the pre-10e output BYTE-IDENTICALLY (the
-#     legacy row_spec()/column_spec() pipeline, just carved out of tab_kable() and reading the prep's
-#     derive-once roles instead of recomputing them). Locked by test-exports.R + the new kable HTML
-#     snapshot (test-render-html.R).
-#   - engine = "html" is the home-built renderer: geometry inline on <td>, colour as a slot CLASS (no
-#     per-cell <span>), and ~O(n_col+n_row) paste0 calls (Phase 9 idiom: base masks, vectorised
-#     assembly, NO case_when/if_else over fmt). It reproduces the kableExtra visual (content-identical
-#     -- same cell text, colours, tooltips), not byte-identical DOM.
+#   - engine = "html" is the DEFAULT since Phase 14e (options("tabxplor.tab_kable_engine")): the
+#     home-built renderer. Geometry and colour are role CLASSES resolved by tab_css() -- it emits NO
+#     inline style at all -- assembled in ~O(n_col+n_row) paste0 calls (Phase 9 idiom: base masks,
+#     vectorised assembly, NO case_when/if_else over fmt). It reproduces the kableExtra visual
+#     (content-identical -- same cell text, colours, tooltips), not byte-identical DOM.
+#   - engine = "kableExtra" is the LEGACY path and reproduces the pre-10e output BYTE-IDENTICALLY (the
+#     row_spec()/column_spec() pipeline, just carved out of tab_kable() and reading the prep's
+#     derive-once roles instead of recomputing them). It bakes its own theme, so it cannot do
+#     theme = "auto", and its cell_spec() HTML is version-unstable -- which is why its tests assert
+#     invariants and never snapshot bytes (test-render-html.R).
 #   - Phase 13d: this engine is THEME-AGNOSTIC. Colour lives in classes (tx_slot_class) resolved by the
 #     stylesheet tab_css() builds, which is what makes theme = "auto" possible: an inline `style` beats
 #     every stylesheet rule short of `!important`, so inline hex could never follow a dark-mode toggle.
@@ -295,9 +297,11 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
   # Phase 14e: these were inline `style=` strings. Three reasons they are classes now:
   #   1. an inline style cannot be overridden by a user's CSS, so the "good default you can restyle"
   #      contract (what kableExtra gives) was impossible;
-  #   2. `border-right:1px solid` is a SHORTHAND -- it resets border-color to `currentColor`, i.e. the
-  #      cell's own palette colour, so a +20% cell drew a blue border. Inline, it also beat the
-  #      stylesheet's border-color rule. As a class it simply inherits the one border colour;
+  #   2. it is half of the coloured-border fix. `border-right:1px solid` is a SHORTHAND -- it resets
+  #      border-color to `currentColor`, i.e. the cell's own palette colour, so a +20% cell drew a
+  #      blue border. Moving it into a class removed the INLINE precedence; the shorthand itself
+  #      survived (and a class still out-specifies the border-color rule), so 14e recorded this as
+  #      fixed while it was not. Phase 14j finished it: R/tab-css.R now uses longhands only;
   #   3. the markup shrinks (one short class vs a repeated style string per cell).
   # The names are the ROLE, not the styling, so the stylesheet stays the only place that decides looks.
   cls_col <- ifelse(roles$align == "r", "tx-r", "tx-l")
@@ -381,14 +385,22 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
   row_inner <- do.call(paste0, td_html)
 
   # (e) per-row CLASSES (Phase 14e; was an inline style string -- see (b) for why)
+  # `radd` appends, it is not a set union -- so a row must reach each class through exactly ONE call
+  # (the last row is normally also a totblock_bottom, which used to emit `class="tx-bb tx-bb"`).
+  # WARNING: tx-bb (1px) and tx-bb2 (2px) have identical CSS specificity, so a row carrying both is
+  # decided by the stylesheet's source order, where tx-bb2 comes last and wins. That is intended (a
+  # thicker rule closes a row_var block); it is load-bearing, and R/tab-css.R says so at the rules.
   rcls <- rep("", n_row)
   radd <- function(i, k) rcls[i] <<- paste0(rcls[i], " ", k)
-  radd(rd$bold_rows,            "tx-b")
-  radd(roles$totblock_top,      "tx-bt")
-  radd(roles$totblock_bottom,   "tx-bb")
-  radd(roles$new_group,         "tx-bb2")   # a thicker rule between row_var blocks
-  radd(n_row,                   "tx-bb")    # the table's last row always closes
-  body <- paste0('<tr class="', trimws(rcls), '">', row_inner, '</tr>', collapse = "\n")
+  radd(rd$bold_rows,          "tx-b")
+  radd(roles$totblock_top,    "tx-bt")
+  # the table's last row always closes, so it folds into the bottom rule rather than repeating it
+  radd(union(roles$totblock_bottom, n_row), "tx-bb")
+  radd(roles$new_group,       "tx-bb2")     # a thicker rule between row_var blocks
+  rcls <- trimws(rcls)
+  # a row with no role gets a bare <tr>, not `<tr class="">`
+  rtag <- ifelse(nzchar(rcls), paste0('<tr class="', rcls, '">'), '<tr>')
+  body <- paste0(rtag, row_inner, '</tr>', collapse = "\n")
 
   # Phase 13c-iii: level headers use the suffix-stripped labels (the col_var name is written in the
   # spanning row above). The look is `.tabxplor-tab thead th` in the stylesheet.
@@ -414,9 +426,15 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
     paste0('<caption>', htmltools::htmlEscape(caption), '</caption>')
   } else ""
 
+  # Phase 14j: the footnote goes in a `tx-foot` div, which is what stops it SIZING the table. Its cell
+  # spans every column and its prose (subtext + the colour legend) is ~330 characters on one line, so
+  # its max-content dwarfed the data's -- and a table is as wide as min(max-content, available), so it
+  # took the whole pane and auto layout padded every column with the slack. That, not the min-widths
+  # 14e wrote, was the compactness complaint. The div's `width:0` contributes 0 to max-content; its
+  # `min-width:100%` fills the cell once the table is sized. See R/tab-css.R (.tx-foot).
   tfoot <- if (length(subtext) != 0) {
-    paste0('<tfoot><tr><td colspan="', n_col, '">',
-           paste0(subtext, collapse = "<br>"), '</td></tr></tfoot>')
+    paste0('<tfoot><tr><td colspan="', n_col, '"><div class="tx-foot">',
+           paste0(subtext, collapse = "<br>"), '</div></td></tr></tfoot>')
   } else ""
 
   # Phase 13d: no `tabxplor-<theme>` token -- the stylesheet carries the theme, and under "auto" the

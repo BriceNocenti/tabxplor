@@ -3331,7 +3331,12 @@ Locked by an ordering test, because no assertion on hex would catch a reorder.
    with this output" — so `tab_color_legend(classes = identical(engine, "html"))`. kableExtra carries no
    tabxplor stylesheet and keeps inline hex.
 3. **`currentColor` borders took the CELL's hex**, not the text colour (a `+20%` cell had a red border).
-   Explicit `border-color` fixes it — a light-mode change, NEWS'd.
+   Explicit `border-color` fixes it — a light-mode change, NEWS'd. ⚠ **This was WRONG, and stood for two
+   phases** (see §40): the explicit `border-color` rule is `.tabxplor-tab td` (0,1,1) and every border
+   rule is a class (0,2,0+), so the border SHORTHAND kept resetting the colour to `currentColor` and
+   kept winning. Only **Phase 14j** fixed it, with longhands. The lesson is not "we missed a case": it
+   is that this line, `NEWS.md`, `dev/tabxplor_architecture.md` and the comment beside the code all
+   asserted the fix while nothing tested it.
 
 ### Accepted costs
 
@@ -3474,3 +3479,97 @@ ratio text channel. `test-ci-ratio-katz.R`.
   assumed no cell leaves >4 in a row. Adding a 10th fragment (`std diff:`) makes 9-empty runs reachable
   (a Total cell is `n:` only). A 4000-grid A/B proved the **old** side wrong (`"f1: 5 ;"`,
   `"; f10: 5"`); replaced by an exact per-cell non-empty join.
+
+---
+
+## 40. Phase 14j — the html engine, pass 2: borders + compactness (DONE 2026-07-17)
+
+Two blocking defects from review pass 2, both misdiagnosed in the records before this session. Neither
+was a new bug: both had been reported, "fixed", and written up.
+
+### The border bug: a fix that was announced but never made
+
+`.tabxplor-tab .tx-br{border-right:1px solid;}` is a **shorthand**, so it resets `border-right-color`
+to `currentColor` = the cell's own palette hex; and at (0,2,0) it out-specifies the one
+`.tabxplor-tab td{border-color:…}` rule at (0,1,1). So a `+20%` cell drew a blue border and a greyed
+cell a grey one — exactly what the maintainer reported twice ("even greyed out cells, which is awful").
+
+Phase 14e moved the geometry off inline `style=` attributes and recorded the bug fixed. That removed
+the **inline** half; the **shorthand** half survived, and a class still out-specifies the colour rule.
+The claim then propagated into `NEWS.md` (user-facing), `dev/tabxplor_architecture.md`, §38 above, and
+the comment sitting beside the code — which stated the mechanism correctly and drew the wrong
+conclusion (*"As a class it simply inherits the one border colour"*). **Nothing tested it.** All five
+records are corrected.
+
+**Fix**: no border shorthand anywhere in the stylesheet — `border-*-style` + `border-*-width` only, so
+the single `border-color` rule is the only thing that ever names a border colour. **Locked two ways**,
+because either alone would have missed it: (1) `expect_no_match(css, "border-(top|right|bottom|left):")`
+for every theme; (2) a **multi-col_var** fixture asserting a `<td>` carries both a border class and a
+colour slot class — a single-col_var fixture never produces one, which is precisely why two phases of
+tests looked at this bug and saw nothing.
+
+### The compactness bug: the min-widths were a sideshow
+
+The roadmap blamed `min-width:10em` / `5.5em`. Measured instead: the colour legend sits in
+`<tfoot><td colspan="7">` and is **327 characters on one line**, against a widest data cell of 23. A
+table's used width is `max(min-content, min(max-content, available))`, so that one cell decided
+max-content, the table took the whole pane, and auto layout spread the slack across every column —
+"a tvhours cell is half numbers half blank", and pass-3's "genuinely occupy all horizontal space".
+
+The 14e sample was already the experiment: its Table 1 has the legend and was called not compact;
+Table 2 has none and was called compact. Same engine, same stylesheet. Every pass-3 "full width"
+example uses `color = TRUE`, i.e. has a legend — which is also the "sometimes, which is inconsistent".
+
+**Fix** (maintainer's choice of three): keep the `<tfoot>`, wrap the content in `<div class="tx-foot">`
+with `width:0;min-width:100%`. `width:0` is definite, so the cell contributes 0 to max-content (a
+percentage `min-width` resolves to 0 while sizing, against an indefinite containing block); at layout
+time the cell's width is definite, so the div refills it. Degrades to the old stretched table if a
+browser disagrees. The two `min-width`s are deleted as well: the browser already sizes each column to
+its content, so a floor could only ever be too big.
+
+### Decisions
+
+- **No `col_width` argument.** `.tx-rv`/`.tx-tot`/`.tx-num` are still emitted, deliberately unstyled;
+  `.tx-rv{min-width:10em}` in the user's own CSS is the fixed-width escape hatch, documented in
+  `?tab_css`. That is the payoff of 14e's no-inline-styles contract — a per-COLUMN width could not be a
+  class anyway, and would break the table-independent-stylesheet contract (13d).
+- **`inst/tab.css` KEPT.** The roadmap called it dead; it is dead only on the *default* engine and
+  still styles `engine = "kableExtra"`. Only `.popover` is ported to `tab_css()`, and **geometry only**
+  (`max-width:none` + padding + nowrap, `.popover-body` BS4/5 + `.popover-content` BS3): bootstrap
+  moves popovers to `<body>`, so the selector is as unscopable as `.tooltip-inner` — "one line, not
+  276px" is what every bootstrap popover wants, but tab.css's white-on-black is our taste and would
+  repaint the host page's popovers. Unstyled, a popover inherits the host's theme.
+- **`mean (sd)` header**: a numeric col_var's column is named after the variable, so under its own span
+  the name was said twice (three times in Excel, which splits off a `_sd` sibling). The level header now
+  names the STATISTIC — `mean (sd)` on text backends, `mean` + `sd` on Excel, `mean` when no sd is
+  shown (`ci = "cell"`). The predicate is `format()`'s own `disp_mean_sd`, so header and cells cannot
+  drift. The `var_names` col-side drop MOVED into `tab_col_var_header()`, because the two are one rule:
+  *a level header may name the statistic only while the span names the variable*. Blanking the span
+  afterwards (14i) left `var_names = "none"` + Excel with a column headed `mean` and the variable named
+  nowhere — a latent bug, now fixed. Both drops still live in the prep, so 14i's "no backend knows the
+  argument exists" holds.
+- **`tab_export_labels()` DELETED**: it walked every column of every table on 100% of export paths and
+  nothing read `prep$labels` — which was `NULL` in practice anyway, the source `label` not surviving
+  `tab()`. The render model is now `list(tables, meta)`.
+- **`kable_tabxplor_style()`** soft-deprecated (exported, zero callers, zero tests, regex role detection
+  hardcoded to `"Total"`/`"Ensemble"`), and its latent `if (subtext != "")` length>1 error fixed — a
+  deprecated function must still work.
+
+### Verification
+
+Full suite **FAIL 0 | PASS 3046**. **No `_golden/*.rds`, no `_color_golden/*.rds` moved.** Two display
+snapshots regenerated and audited mechanically rather than eyeballed:
+- `_snaps/render-html.md`: normalising away exactly the three intended changes (`<tr class="">` → `<tr>`,
+  the duplicate `tx-bb`, the `tx-foot` div) makes old and new **identical** — so no cell text, colour or
+  tooltip moved.
+- `_snaps/golden.md`: **6 changed lines, all header rows** (`age`/`tvhours`/`v` → `mean (sd)`, and → `mean`
+  on the `ci = "cell"` fixture, which is the predicate correctly distinguishing the two).
+
+### Flagged, not fixed
+
+- **`man/tab_css.Rd`'s "Two workflows" section ships raw markdown** (`**bold**`, backticks) into the help
+  page, and `document()` emits 5 "could not resolve link" warnings whose topics (`1`,
+  `data-bs-theme=light`, …) are exactly the bracketed tokens of `tab_css(theme = "auto")`'s OUTPUT — i.e.
+  roxygen looks to be EVALUATING the ` ```{r, results="asis"} ` chunk inside `\preformatted{}` at
+  document() time. **Pre-existing since 13d; reproduces at HEAD** (verified by documenting a clean HEAD
+  checkout). Not 14j's, and the section right below it renders correctly.

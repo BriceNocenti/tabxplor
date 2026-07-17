@@ -360,9 +360,69 @@ testthat::test_that("geometry is CLASSES, not inline styles (so a user's CSS can
   testthat::expect_false(grepl("<tr[^>]*style=", b))
   # ... and the roles it emits instead are all defined by the stylesheet
   css <- tab_css(style_tag = FALSE)
-  for (k in c("tx-r", "tx-l", "tx-num", "tx-br", "tx-bl", "tx-tot", "tx-rv", "tx-b", "tx-pill")) {
+  for (k in c("tx-r", "tx-l", "tx-num", "tx-br", "tx-bl", "tx-b", "tx-pill")) {
     testthat::expect_match(css, paste0("[.]", k, "\\b"), label = k)
   }
+  # ... except tx-tot / tx-rv, which Phase 14j left deliberately UNSTYLED: the browser auto-sizes
+  # every column, so their old min-widths could only ever be too big. They are still emitted, as the
+  # hooks a user pins a width on (?tab_css) -- which is the whole point of roles over inline styles.
+  for (k in c("tx-tot", "tx-rv")) {
+    testthat::expect_no_match(css, paste0("[.]", k, "\\{"), label = k)
+    testthat::expect_match(b, paste0("class=\"[^\"]*", k), label = k)
+  }
+})
+
+testthat::test_that("no border SHORTHAND survives in the stylesheet (coloured cells, plain borders)", {
+  # THE regression lock for the pass-2 defect "the text color actually change the borders colors ...
+  # which is awful". `border-right:1px solid` is a shorthand: it resets border-right-color to
+  # `currentColor` = the CELL's palette hex, and every border rule out-specifies the one
+  # `td{border-color:...}` rule -- so the shorthand always won. Phase 14e moved the geometry off inline
+  # styles and recorded the bug as fixed; that removed the INLINE half only, and three docs + NEWS
+  # repeated the claim for two phases while a +20% cell kept drawing a blue border. Nothing tested it.
+  # Both halves are locked here: the CSS uses longhands only, and a real cell carries both classes.
+  for (th in c("light", "dark", "auto")) {
+    css <- tab_css(theme = th, style_tag = FALSE)
+    testthat::expect_no_match(css, "border-(top|right|bottom|left)\\s*:", label = th)
+    # ... and the rule that must therefore win is present, for every theme in the file
+    testthat::expect_match(css, "border-color:", label = th)
+  }
+  # The markup half. It needs SEVERAL col_vars: a cell is only both bordered and coloured where a
+  # `tx-br` column separator meets a coloured value, which no single-col_var fixture ever produces --
+  # which is exactly why this survived unseen.
+  b <- rh_tbody(as.character(tab_kable(tab(gss, marital, c(race, relig), pct = "row",
+                                           color = "diff"), engine = "html", tooltips = FALSE)))
+  tds <- unlist(regmatches(b, gregexpr('<td class="[^"]*"', b)))
+  both <- grep("\\b(p|m)[1-4]\\b", grep("tx-br|tx-bl", tds, value = TRUE), value = TRUE)
+  testthat::expect_gt(length(both), 0)
+})
+
+testthat::test_that("the footnote does not SIZE the table", {
+  # The real cause of "not compact enough -- levels and Total columns are very wide for nothing".
+  # The legend cell spans every column and its prose is ~330 chars on one line, so it, not the data,
+  # decided the table's max-content -- and a table is as wide as min(max-content, available), so it
+  # took the whole pane and auto layout padded every column with the slack. `width:0` makes the cell
+  # contribute 0 to max-content; `min-width:100%` refills it once the table is sized by its data.
+  h <- as.character(tab_kable(tab(gss, marital, race, pct = "row", color = "diff"), engine = "html"))
+  testthat::expect_match(h, '<td colspan="5"><div class="tx-foot">', fixed = TRUE)
+  css <- tab_css(style_tag = FALSE)
+  testthat::expect_match(css, ".tx-foot{width:0;min-width:100%;}", fixed = TRUE)
+  # ... and no COLUMN carries a width floor any more: auto-sizing is the default (?tab_css shows how
+  # to pin one). Match a SIZING width only -- at the start of a declaration, so `border-top-width` and
+  # friends don't count. The tx-foot pair + the tooltip/popover caps are all that may remain.
+  widths <- unlist(regmatches(css, gregexpr("(?<=[;{])(min-|max-)?width:[^;}]*", css, perl = TRUE)))
+  testthat::expect_setequal(widths, c("width:0", "min-width:100%", "max-width:none", "max-width:none"))
+})
+
+testthat::test_that("a row reaches each role class once, and an unstyled row has no class attribute", {
+  # `radd` appends; it is not a set union. The last row is normally also a totblock_bottom, so it
+  # emitted class="tx-bb tx-bb".
+  h   <- as.character(tab_kable(tab(gss, c(marital, relig), race, pct = "row"), engine = "html"))
+  trs <- unlist(regmatches(h, gregexpr("<tr[^>]*>", h)))
+  cls <- gsub('.*class="([^"]*)".*', "\\1", grep("class=", trs, value = TRUE))
+  testthat::expect_false(any(vapply(strsplit(cls, " +"), function(v) anyDuplicated(v) > 0, logical(1))))
+  testthat::expect_false(grepl('<tr class="">', h, fixed = TRUE))
+  # a row_var block's last row is both tx-bb and tx-bb2; the 2px wins on source order (tab-css.R)
+  testthat::expect_true(any(grepl("tx-bb2", cls)))
 })
 
 testthat::test_that("a wrapped header keeps its <br>, a user's markup is still escaped", {
