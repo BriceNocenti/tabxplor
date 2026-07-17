@@ -100,10 +100,11 @@ testthat::test_that("tab_xl folds significance stars into the numFmt code", {
 # ignoring our explicit `name` -- so every number, correctly named in the XML, was drawn in the theme's
 # minor font ("DejaVu Sans Condensed", written by xlb_base_font). Invisible to any assertion on values
 # or on `name`: only the raw <font> XML shows it.
-# Phase 14m-ii: the default number font is now the MONOSPACE "DejaVu Sans Mono" (stars/composites align).
+# Phase 14m-ii (rework): numbers use proportional DejaVu Sans in a PLAIN table, and switch to the
+# monospace "Cascadia Mono" only when the table SHOWS significance stars (so the stars align).
 testthat::test_that("tab_xl emits no font `scheme` (numbers really render in font_num)", {
   testthat::skip_if_not_installed("openxlsx2")
-  tb <- tab(forcats::gss_cat, marital, c(race, tvhours), pct = "row", color = TRUE)
+  tb <- tab(forcats::gss_cat, marital, c(race, tvhours), pct = "row", color = TRUE)  # no stars
   p  <- withr::local_tempfile(fileext = ".xlsx")
   suppressMessages(tab_xl(tb, path = p, sheets = "unique", replace = TRUE, open = FALSE))
   fonts <- openxlsx2::wb_load(p)$styles_mgr$styles$fonts
@@ -114,9 +115,17 @@ testthat::test_that("tab_xl emits no font `scheme` (numbers really render in fon
   testthat::expect_true(grepl("DejaVu Sans Condensed", fonts[grepl("<scheme", fonts)]))
   # every font WE registered names itself and lets the name stand
   testthat::expect_false(any(grepl("<scheme", fonts[!grepl("<scheme", fonts)])))
-  # numbers in the monospace font, text in Condensed
-  testthat::expect_true(any(grepl('name val="DejaVu Sans Mono"', fonts, fixed = TRUE)))
+  # a plain table: numbers in the PROPORTIONAL DejaVu Sans, text in Condensed, no Cascadia
+  testthat::expect_true(any(grepl('name val="DejaVu Sans"', fonts, fixed = TRUE)))
   testthat::expect_true(any(grepl('name val="DejaVu Sans Condensed"', fonts, fixed = TRUE)))
+  testthat::expect_false(any(grepl("Cascadia", fonts)))
+  # a STARRED table: numbers switch to the monospace Cascadia Mono
+  d  <- forcats::gss_cat; d$married <- as.integer(d$marital == "Married")
+  tr <- suppressWarnings(tab_logit(d, "married", c("race", "relig")))
+  p2 <- withr::local_tempfile(fileext = ".xlsx")
+  suppressMessages(tab_xl(tr, path = p2, sheets = "unique", replace = TRUE, open = FALSE))
+  fonts2 <- openxlsx2::wb_load(p2)$styles_mgr$styles$fonts
+  testthat::expect_true(any(grepl('name val="Cascadia Mono"', fonts2, fixed = TRUE)))
 })
 
 # Phase 14l: an "<var>_sd" sibling holds "s2.1" under a header of "sd" -- it never needs a mean's width.
@@ -142,22 +151,31 @@ testthat::test_that("tab_xl narrows the sd column", {
   testthat::expect_equal(wid(7), wid(6) - 8)               # 20 -> 12
 })
 
-testthat::test_that("tab_xl fonts are settable by option", {
+testthat::test_that("tab_xl fonts are settable by option (plain vs starred)", {
   testthat::skip_if_not_installed("openxlsx2")
-  withr::local_options(tabxplor.xl_font_num = "Courier New", tabxplor.xl_font_text = "Georgia")
+  withr::local_options(tabxplor.xl_font_num = "Courier New", tabxplor.xl_font_text = "Georgia",
+                       tabxplor.xl_font_num_stars = "Consolas")
+  # plain table -> the NO-stars number font
   tb <- tab(forcats::gss_cat, marital, race, pct = "row", color = TRUE)
   p  <- withr::local_tempfile(fileext = ".xlsx")
   suppressMessages(tab_xl(tb, path = p, sheets = "unique", replace = TRUE, open = FALSE))
   fonts <- openxlsx2::wb_load(p)$styles_mgr$styles$fonts
   testthat::expect_true(any(grepl('name val="Courier New"', fonts, fixed = TRUE)))
   testthat::expect_true(any(grepl('name val="Georgia"',     fonts, fixed = TRUE)))
-  testthat::expect_false(any(grepl("DejaVu", fonts)))       # nothing hardcoded past the option
+  testthat::expect_false(any(grepl("DejaVu|Consolas", fonts)))   # nothing hardcoded; stars font unused
+  # starred table -> the STARS number font
+  d  <- forcats::gss_cat; d$married <- as.integer(d$marital == "Married")
+  tr <- suppressWarnings(tab_logit(d, "married", c("race", "relig")))
+  p2 <- withr::local_tempfile(fileext = ".xlsx")
+  suppressMessages(tab_xl(tr, path = p2, sheets = "unique", replace = TRUE, open = FALSE))
+  fonts2 <- openxlsx2::wb_load(p2)$styles_mgr$styles$fonts
+  testthat::expect_true(any(grepl('name val="Consolas"', fonts2, fixed = TRUE)))
 })
 
-# Phase 14m-ii: a text-SHAPED fmt cell (ci = "cell" bracket, or the "1/x" OR string) carries
-# significance stars, so it must render in the NUMBER font too, not the text font. Those columns are
-# already in roles$fmt_cols (so mk_src(fmt_cols, font_num) covers them); this traces one bracket cell's
-# style -> font to prove it, distinguishing the number font from the text font.
+# Phase 14m-ii: a text-SHAPED fmt cell (ci = "cell" bracket, or the "1/x" OR string) must render in the
+# NUMBER font, not the text font. Those columns are already in roles$fmt_cols (so mk_src(fmt_cols,
+# font_num) covers them); this traces one bracket cell's style -> font to prove it, distinguishing the
+# number font from the text font. (A plain ci = "cell" crosstab has no stars -> the proportional font_num.)
 testthat::test_that("tab_xl draws text-shaped fmt cells (ci = 'cell') in the number font", {
   testthat::skip_if_not_installed("openxlsx2")
   withr::local_options(tabxplor.xl_font_num = "Courier New", tabxplor.xl_font_text = "Georgia")

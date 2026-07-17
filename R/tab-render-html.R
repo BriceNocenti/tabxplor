@@ -444,8 +444,12 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
 
   # Phase 13d: no `tabxplor-<theme>` token -- the stylesheet carries the theme, and under "auto" the
   # markup must not commit to one.
+  # Phase 14m-ii (rework): a table that SHOWS significance stars gets `tx-has-stars`, which flips the
+  # number cells to the monospace stack (+ a size bump) in the stylesheet. A plain table stays DejaVu
+  # Sans. The class -- not an inline font -- keeps the look restyleable and tab_css() table-independent.
+  tbl_class <- if (isTRUE(roles$has_stars)) "tabxplor-tab tx-has-stars" else "tabxplor-tab"
   paste0(
-    '<table class="tabxplor-tab">', cap,
+    '<table class="', tbl_class, '">', cap,
     '<thead>', span_thead, thead, '</thead>',
     '<tbody>', body, '</tbody>',
     tfoot,

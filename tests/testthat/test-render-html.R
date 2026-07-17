@@ -372,21 +372,36 @@ testthat::test_that("geometry is CLASSES, not inline styles (so a user's CSS can
   }
 })
 
-testthat::test_that("the number font is a MONOSPACE stack, the text font stays Condensed", {
-  # Phase 14m-ii: numbers are drawn in a monospace font so significance stars and "(n=...)" composites
-  # line up (every glyph one width); a proportional "*" is narrower than a digit and slid out of column.
+testthat::test_that("numbers are DejaVu Sans by default, monospace only for a starred table", {
+  # Phase 14m-ii (rework): a proportional "*" is narrower than a digit, so stars break alignment -- but
+  # ONLY a starred table pays the monospace cost; a plain table keeps the compact proportional DejaVu
+  # Sans. Both rules ship; the per-table `tx-has-stars` class picks which applies (tab_css() stays
+  # table-independent). The size bump (Cascadia reads small) is body-only and preserves the row height.
   css <- tab_css(style_tag = FALSE)
-  # the whole-table (text) rule keeps Condensed
-  testthat::expect_match(css, "font-family:\"DejaVu Sans Condensed\"", fixed = TRUE)
-  # the number cells switch to a monospace stack ending in the generic `monospace`
-  num_rule <- regmatches(css, regexpr("[.]tx-num\\{[^}]*\\}", css))
-  testthat::expect_match(num_rule, "DejaVu Sans Mono", fixed = TRUE)
-  testthat::expect_match(num_rule, "monospace;}")
-  # one option is the whole revert lever
-  css2 <- withr::with_options(list(tabxplor.tab_kable_num_font = "\"Courier New\", monospace"),
-                              tab_css(style_tag = FALSE))
-  testthat::expect_match(css2, "[.]tx-num\\{[^}]*Courier New")
-  testthat::expect_no_match(css2, "[.]tx-num\\{[^}]*DejaVu Sans Mono")
+  testthat::expect_match(css, "font-family:\"DejaVu Sans Condensed\"", fixed = TRUE)   # text: Condensed
+  def_rule <- regmatches(css, regexpr("[.]tabxplor-tab [.]tx-num\\{[^}]*\\}", css))    # default: DejaVu Sans
+  testthat::expect_match(def_rule, "DejaVu Sans", fixed = TRUE)
+  testthat::expect_no_match(def_rule, "monospace")
+  star_rule <- regmatches(css, regexpr("[.]tx-has-stars [.]tx-num\\{[^}]*\\}", css))   # stars: Cascadia mono
+  testthat::expect_match(star_rule, "Cascadia Mono", fixed = TRUE)
+  testthat::expect_match(star_rule, "monospace;}")
+  testthat::expect_match(css, "[.]tx-has-stars td[.]tx-num\\{font-size:1.1em;line-height:1;\\}")  # body bump
+  # each font is its own revert lever
+  css2 <- withr::with_options(
+    list(tabxplor.tab_kable_num_font = "\"Georgia\", serif",
+         tabxplor.tab_kable_num_font_stars = "\"Courier New\", monospace"), tab_css(style_tag = FALSE))
+  testthat::expect_match(css2, "[.]tabxplor-tab [.]tx-num\\{[^}]*Georgia")
+  testthat::expect_match(css2, "[.]tx-has-stars [.]tx-num\\{[^}]*Courier New")
+})
+
+testthat::test_that("the html engine flags a starred table with tx-has-stars, a plain one not", {
+  plain   <- tab(gss, marital, race, pct = "row", color = "diff")
+  d <- gss; d$married <- as.integer(d$marital == "Married")
+  starred <- suppressWarnings(tab_logit(d, "married", c("race", "relig")))
+  hp <- as.character(tab_kable(plain,   engine = "html", css = FALSE))
+  hs <- as.character(tab_kable(starred, engine = "html", css = FALSE))
+  testthat::expect_no_match(hp, "tx-has-stars")
+  testthat::expect_match(hs, 'class="tabxplor-tab tx-has-stars"', fixed = TRUE)
 })
 
 testthat::test_that("no border SHORTHAND survives in the stylesheet (coloured cells, plain borders)", {

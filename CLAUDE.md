@@ -1466,68 +1466,27 @@ the roadmap plan.
 
 ---
 
-#### Phase 14m-ii — Monospace number font + stars/padding across exports
+#### Phase 14m-ii — Monospace number font + number font conditional on significance stars (DONE)
 
-Groups **A (md alignment)**, **L4 (star width)**, **L5 (footer stars)**. Cross-cutting display change;
-**revertible via options** (the maintainer will visually review and may revert). Coordinate with 14m
-(md rendering).
+Full suite **FAIL 0 | WARN 0 | PASS 3159**; `document()` clean; **no `.rds` golden / no snapshot moved**.
+Full record: decisions **§44 + §44b**. The number font is now **conditional on stars**: proportional
+**DejaVu Sans** by default, a monospace **Cascadia Mono** only when the table SHOWS significance stars
+(where a proportional `*` breaks alignment). Trigger = `roles$has_stars` (computed in the prep). html:
+`tab_css()` ships both `.tx-num` (DejaVu) and `.tx-has-stars .tx-num` (Cascadia + a body-only 1.1em size
+bump, row height unchanged) and `render_html_engine()` adds the `tx-has-stars` class to the `<table>`;
+Excel: `tab_xl()` gains `font_num_stars`, chosen per table; tab_plot: whole-body mono only when starred.
+Options: `tabxplor.tab_kable_num_font(_stars)`, `tabxplor.xl_font_num(_stars)`, `tabxplor.plot_num_font`.
+**L4** needs no code (star-padding works in mono). **Item A** (`tab_md()` figure-space) and **L5** (footer
+`gof`/`pvalue` cells drop out of star-padding) are unchanged, orthogonal to the font — `_snaps/golden.md`
+moved 48 lines (proven the pure ASCII→U+2007 swap in `n`-rows); `_snaps/render-html.md` did NOT move (its
+snapshots strip the `<style>`, and the plain snapshot tables carry no `tx-has-stars`).
 
-**Why** — `*` is not digit-width in the proportional DejaVu Sans used for numbers, so stars misalign the
-numbers in rendered html and Excel; digit-width figure-space padding cannot compensate for the star's own
-width.
+**Flagged**: (1) **tab_plot** whole-body mono (ggpubr 1.0.0 has no per-column font) fires only on a
+starred plot now; reverts with `plot_num_font = ""`. (2) **Numbering tangle**: this phase and the
+tab_md-pass-2 phase below both read "14m-ii", and pass-2 calls the figure-space swap "14m-i". Item A was
+done HERE. Suggest renumbering: 14m-i = tab_md borders/compactness (§43), 14m-ii = fonts (§44/§44b).
 
-**What (maintainer decision — the simple, solid route):**
-- **Number/fmt-cell font → DejaVu Sans Mono** (with monospace fallbacks) in **every font-bearing export**,
-  *always* (not conditional on stars): the html engine (`tab_css()` `.tx-num`/fmt-cell rules,
-  `R/tab-css.R`; currently DejaVu Sans), Excel (`options(tabxplor.xl_font_num)` default →
-  `create_font(scheme="")` from 14l, `R/tab_xl.R`), and `tab_plot`. In a monospace font every glyph is
-  digit-width, so stars, `%`, `(n=…)` and padding all align with no special handling.
-- **Text stays DejaVu Sans Condensed** (row labels, headers) — **except Excel fmt-cells-shaped-as-text**
-  (ci="cell" / OR text via `xl_materialize_data`), which get **mono** too (they carry stars). Route those
-  cells to the number font in `tab_xl`.
-- **md → figure space** (Item A): switch `tab_md` padding from ASCII to figure space (`fig_space`,
-  `R/utils.R:1193-1203`), so the `100% (n= 673)` column aligns in Quarto-rendered html (digit-width,
-  non-collapsing). md sets no font of its own; 14m owns any table-level md CSS. Note this reopens the
-  14h "md keeps ASCII" decision *for md only* — record it. (Console keeps ASCII — monospace already.)
-  ⚠ **HARD CONSTRAINT from 14m (verified, decisions §43): limit the swap to the padding INSIDE a value**
-  (thousands sep, `n=` alignment). **Empty and spacer cells MUST stay ASCII-filled (or empty)** — a
-  figure-space cell renders `<td> </td>` (NOT `:empty`), an ASCII cell renders `<td></td>` (`:empty`),
-  and 14m's spacer-collapse + blank-row-separator borders all key off `:empty`. Swap the wrong space and
-  every 14m fix silently dies.
-- **Footer stars** (L5): with mono, right-align footer summary stats and do NOT pad them for stars (the
-  numbers align at the right edge; stars hang). Small touch in `reg_footer_lines`/`print_reg_footer`.
-
-Because mono makes padding trivial, the existing figure-space padding in `format()`/`tab_xl` can stay
-(harmless in mono) — the ONLY substantive change is the font selection. Keep the change **options-gated**
-(`xl_font_num`, a new `tabxplor.tab_kable_num_font` or reuse the existing seam) so a revert is one option.
-
-**Verify** — render a stars-bearing reg/crosstab table in the html engine (`dev/review_manual/…html`) and
-Excel: numbers align under stars; text stays Condensed; Excel text-shaped fmt cells are mono. `tab_md`
-rendered through pandoc: the `(n=…)` column aligns. Snapshot regen: `_snaps/render-html.md` (font-family
-in `<style>`) + `_snaps/golden.md` (md figure space vs ASCII) — conscious, no RDS golden change. Tests in
-`test-render-html.R` (mono font in the stylesheet), `test-tab_xl.R` (fmt-text cells use the number font),
-`test-digit-space.R` (md figure space).
-
-##### Done (2026-07-17)
-
-Full suite **FAIL 0 | WARN 0 | PASS 3151**; `document()` clean; **no `.rds` golden moved**. Full record:
-decisions **§44**. The number font is now a monospace stack in every font-bearing export, options-gated
-per medium (`tabxplor.tab_kable_num_font` html / `tabxplor.xl_font_num` Excel / `tabxplor.plot_num_font`
-tab_plot); text stays Condensed. **L4 needed no code** — the existing star-padding just works in mono.
-**Item A**: `tab_md()` pads a value's INTERNAL alignment (`format(pad = fig_space)`) with a figure space
-(cell-edge + spacer padding stays ASCII, so `:empty` survives for §43); verified through a real pandoc
-render, and `_snaps/golden.md` moved 48 lines PROVEN to be the pure ASCII→U+2007 swap in `n`-rows.
-**L5**: footer `gof`/`pvalue` summary cells drop out of `format()`'s star-padding, so they reach the
-column edge. **`_snaps/render-html.md` did NOT move** — its snapshots strip the `<style>`, so the font
-rule isn't captured there (the Verify note above was wrong about that).
-
-**Deviations, flagged**: (1) **tab_plot** is whole-body mono (ggpubr 1.0.0 has no per-column font), so
-row labels turn mono too — confined to the superseded function, reverts with `plot_num_font = ""`.
-(2) **Numbering tangle**: this phase and the tab_md-pass-2 phase below both read "14m-ii", and pass-2
-refers to the figure-space swap as "14m-i". The md figure space was done HERE (Item A, forward-compatible
-with the unbuilt §43). Suggest renumbering: 14m-i = tab_md borders/compactness (§43), 14m-ii = fonts (§44).
-
-#### Phase 14m-ii — `tab_md()`, pass 2 — **DESIGN SETTLED (2026-07-17), build pending**
+#### Phase 14m-iii — `tab_md()`, pass 2 — **DESIGN SETTLED (2026-07-17), build pending**
 
 Full design + specificity math + the verified pandoc constraints: **`dev/tabxplor_1.4.0_decisions.md`
 §43** (read first). Findings 9 (spacer/separator cells render as ugly `<td>`s / literal dashes) + 10 (the
@@ -1565,7 +1524,7 @@ the border-taming CSS) is gated on `styled = do_color || isTRUE(css)`; a plain u
 
 ⚠ **DECISIVE 14m-i coupling (verified)**: a **figure-space** cell renders `<td> </td>` (NOT `:empty`); an
 **ASCII / empty** cell renders `<td></td>` (`:empty`). So every `:empty` fix here REQUIRES blank/spacer
-cells to stay ASCII-filled — former 14v's figure-space swap must be limited to padding **inside a value**
+cells to stay ASCII-filled — former 14m-i's figure-space swap must be limited to padding **inside a value**
 (thousands sep, `n=` alignment), never the pad of empty/spacer cells. **14v renamed 14m-i.**
 
 **Cleanups**: the Step-12 dash-width arithmetic is MOOT (blank rows replace dash rows); remove the dead

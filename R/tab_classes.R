@@ -1778,13 +1778,14 @@ tab_plot <- function(tabs,
     tabs[[cl]][!show] <- ""
   }
 
-  # Phase 14m-ii: a monospace body font so the numbers, significance stars and "(n=...)" composites
-  # line up. WARNING: ggpubr 1.0.0 exposes no per-COLUMN font (table_cell_font() takes no family and
-  # replaces the cell gpar), so this applies to the WHOLE body -- the row labels turn monospace too, a
-  # small deviation from "text stays Condensed" that only affects the superseded tab_plot(). Revert
-  # with options("tabxplor.plot_num_font" = "") (-> the ggpubr default). "mono" is a device-portable
-  # graphics family, so it resolves to a monospace font on any device.
-  plot_num_font <- getOption("tabxplor.plot_num_font", "mono")
+  # Phase 14m-ii (rework): a monospace body font ONLY when the table SHOWS significance stars (so the
+  # stars align); a plain table keeps the ggpubr default (proportional). WARNING: ggpubr 1.0.0 exposes
+  # no per-COLUMN font (table_cell_font() takes no family and replaces the cell gpar), so when it does
+  # apply it hits the WHOLE body -- the row labels turn monospace too, a small deviation confined to a
+  # STARRED, superseded tab_plot(). Revert with options("tabxplor.plot_num_font" = ""). "Cascadia Mono"
+  # must be available to the graphics device (else it substitutes).
+  plot_num_font <- if (isTRUE(rd$roles$has_stars))
+    getOption("tabxplor.plot_num_font", "Cascadia Mono") else ""
   tbody_args <- list(color = "black", size = 11, fill = "white", linewidth = 0,
                      linecolor = "black", hjust = 0.98, x = 0.95) # x/hjust = right-adjust
   if (nzchar(plot_num_font)) tbody_args$fontfamily <- plot_num_font

@@ -546,7 +546,8 @@ A list renders table-after-table (both engines; Phase 14d: it is never merged).
 
 **The html engine emits NO inline styles** (Phase 14e). Every look — geometry included — is a **role
 class** resolved by `tab_css()`: `tx-r`/`tx-l` (align), `tx-num` (numbers: nowrap + the number font --
-a MONOSPACE stack since Phase 14m-ii, so stars/composites align; `options("tabxplor.tab_kable_num_font")`),
+proportional DejaVu Sans by default, but a MONOSPACE stack when the table shows stars, via the
+`tx-has-stars` class on the `<table>`; Phase 14m-ii, `options("tabxplor.tab_kable_num_font" / "_stars")`),
 `tx-br`/`tx-bl` (borders), `tx-b` (bold), `tx-bt`/`tx-bb`/`tx-bb2` (row rules), `tx-span` (the col_var
 header), `tx-pill` (a background), `tx-lbl`/`tx-vname` (a variable name spanning its block, Phase 14i),
 `tx-foot` (the footnote, Phase 14j), plus the colour slots (`.p*`/`.m*` on the `<td>`, `.o*`/`.u*` on
@@ -700,9 +701,10 @@ All options are set in `.onLoad()` in `R/utils.R`. Users can override via `optio
 | `tabxplor.export_dir` | `NULL` | Default directory for tab_xl() export |
 | `tabxplor.output_kable` | `FALSE` | Auto-output as kable |
 | `tabxplor.kable_html_font` | DejaVu Sans | Font for the kableExtra engine (legacy) |
-| `tabxplor.tab_kable_num_font` | DejaVu Sans Mono stack | html engine `.tx-num` font (14m-ii; monospace) |
-| `tabxplor.xl_font_text` / `tabxplor.xl_font_num` | Condensed / Mono | Excel text / number fonts (14m-ii) |
-| `tabxplor.plot_num_font` | `"mono"` | tab_plot number font (14m-ii; whole-body, `""` = default) |
+| `tabxplor.tab_kable_num_font` / `_stars` | DejaVu Sans / Cascadia stack | html `.tx-num` font: no-stars / with-stars (14m-ii) |
+| `tabxplor.xl_font_text` | DejaVu Sans Condensed | Excel text font |
+| `tabxplor.xl_font_num` / `_stars` | DejaVu Sans / Cascadia Mono | Excel number font: no-stars / with-stars (14m-ii) |
+| `tabxplor.plot_num_font` | `"Cascadia Mono"` | tab_plot number font, applied only when stars (`""` = default) |
 | `tabxplor.kable_popover` | `FALSE` | Show CI as HTML tooltip |
 | `tabxplor.always_add_css_in_tab_kable` | `TRUE` | Inject custom CSS in kable |
 | `tabxplor.tab_kable_engine` | `"html"` | `tab_kable()` engine (`"html"` since 14e / `"kableExtra"`) |

@@ -222,11 +222,11 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE) {
     # col, tx-b bold, tx-bt/tx-bb/tx-bb2 row rules, tx-span the col_var header, tx-pill a background)
     # and every look is decided here. Overriding is then ordinary CSS -- no !important needed, because
     # nothing of ours is inline any more.
-    # DejaVu Sans Condensed for text (the table-wide rule below) and a MONOSPACE stack for numbers
-    # (`.tx-num`, Phase 14m-ii) mirrors tab_xl()'s font_text/font_num, so a table looks the same
-    # exported to Excel or to html. Monospace is what lets significance stars and "(n=...)" composites
-    # line up (every glyph one width); revert with options("tabxplor.tab_kable_num_font"). Both degrade
-    # through the stack.
+    # DejaVu Sans Condensed for text (the table-wide rule below) and DejaVu Sans for numbers -- switching
+    # to a MONOSPACE stack only for a starred table (see the `.tx-num` rules below, Phase 14m-ii) --
+    # mirrors tab_xl()'s font_text / font_num / font_num_stars, so a table looks the same exported to
+    # Excel or to html. Revert with options("tabxplor.tab_kable_num_font" / "_stars"). All degrade
+    # through their stacks.
     # `.tabxplor-tab` is the <table> itself (the html engine) OR a wrapping <div> (a markdown table
     # inside its pandoc fenced div, Phase 14f) -- `border-collapse` only means something on a table, so
     # name both. Every other rule below is a descendant selector and reaches the table either way.
@@ -251,8 +251,18 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE) {
     # thead th's `text-align:center` must beat the column's own alignment: same specificity (0,2,0)
     # vs (0,2,0), so SOURCE ORDER decides -- this pair must stay after .tx-r/.tx-l.
     ".tabxplor-tab thead .tx-r,.tabxplor-tab thead .tx-l{text-align:center;}",
+    # Phase 14m-ii (rework): numbers keep proportional DejaVu Sans by DEFAULT (compact, better-looking);
+    # a table that SHOWS significance stars carries a `tx-has-stars` class and its numbers switch to the
+    # monospace stack -- the one case where a proportional "*" (narrower than a digit) breaks alignment.
+    # Both rules ship in every stylesheet (so tab_css() stays table-independent); the per-table class
+    # picks which applies. `.tabxplor-tab.tx-has-stars .tx-num` (0,3,0) out-specifies the default (0,2,0).
+    # The size bump (Cascadia Mono reads small) is BODY-only (`td.tx-num`, never the `<th>` headers) and
+    # keeps the row height: font-size 1.1em x line-height 1 = 1.1*base = the text rows' line box.
     paste0(".tabxplor-tab .tx-num{white-space:nowrap;",
            "font-family:", getOption("tabxplor.tab_kable_num_font", tx_num_font_html), ";}"),
+    paste0(".tabxplor-tab.tx-has-stars .tx-num{font-family:",
+           getOption("tabxplor.tab_kable_num_font_stars", tx_num_font_html_stars), ";}"),
+    ".tabxplor-tab.tx-has-stars td.tx-num{font-size:1.1em;line-height:1;}",
     ".tabxplor-tab .tx-br{border-right-style:solid;border-right-width:1px;}",
     ".tabxplor-tab .tx-bl{border-left-style:solid;border-left-width:1px;}",
     # Phase 14j: `.tx-tot` (total column) and `.tx-rv` (the row-variable levels column) are still

@@ -4014,3 +4014,40 @@ refers to the figure-space swap as "14m-i (former 14v)". So the md figure space 
 here and as "14m-i" there. This session did it here (the roadmap assigns Item A to this phase and it is
 forward-compatible with §43, which is not yet built). The numbers want disentangling: e.g. 14m-i = the
 tab_md borders/compactness (§43), 14m-ii = fonts (this section, §44), with the figure space owned here.
+
+### 44b. Rework (2026-07-17) — the number font is CONDITIONAL on stars, not always monospace
+
+The maintainer replaced §44's "numbers are always monospace" with a more straightforward rule, after
+finding a monospace font too wide/ugly for ordinary tables: **numbers stay proportional DejaVu Sans
+(as before 1.4.0); they switch to monospace (default Cascadia Mono) ONLY when the table actually shows
+significance stars** — the one case where a proportional `*` (narrower than a digit) breaks alignment.
+
+- **The trigger**: `roles$has_stars` — computed once per table in `prep_one_table()` (R/tab-export-prep.R)
+  as `any(nzchar(get_stars(fmt cell)))`. `get_stars()` is "" for an absent/NA pvalue, so this is TRUE
+  exactly when a star will render (a `tab_reg`/`tab_logit` table, or `tab(stars = TRUE)` with a
+  significant cell) — a table BUILT with stars but showing none stays proportional, correctly.
+- **html engine**: `tab_css()` ships BOTH rules always (so it stays table-independent):
+  `.tabxplor-tab .tx-num` = proportional DejaVu Sans (`tabxplor.tab_kable_num_font`);
+  `.tabxplor-tab.tx-has-stars .tx-num` = the Cascadia stack (`tabxplor.tab_kable_num_font_stars`), (0,3,0)
+  so it wins; plus `.tabxplor-tab.tx-has-stars td.tx-num{font-size:1.1em;line-height:1;}` — a body-only
+  (`td`, never `<th>` headers) size bump (Cascadia reads small) that keeps the row height
+  (1.1em x line-height 1 = 1.1*base = the text rows' line box). `render_html_engine()` adds the
+  `tx-has-stars` class to the `<table>` when `roles$has_stars` — a CLASS, not an inline font, so the
+  restyleable/`@media` contract holds.
+- **Excel**: `tab_xl()` gains `font_num_stars` (default "Cascadia Mono", `tabxplor.xl_font_num_stars`)
+  beside `font_num` (reverted to "DejaVu Sans"); `tab_xl_plan_one()` picks
+  `if (roles$has_stars) o$font_num_stars else o$font_num` — PER TABLE, so a list export can mix a
+  starred reg sheet and a plain crosstab sheet. Row heights untouched (the §44-paused row-height plan
+  stays dead: "keep line height and everything").
+- **tab_plot**: the whole-body mono font is applied only when `rd$roles$has_stars` (else the ggpubr
+  default); `tabxplor.plot_num_font` default → "Cascadia Mono". Superseded; the whole-body limitation
+  now bites only on a starred plot.
+- **The Cascadia stack**: `"Cascadia Mono", "Cascadia Code", Menlo, Consolas, "DejaVu Sans Mono",
+  monospace`. `ui-monospace` is deliberately omitted — it resolves to the OS's OWN mono (SF Mono, ...),
+  which would override Cascadia if led with, and at the tail is never reached (Menlo/Consolas/DejaVu
+  cover every OS). `"Cascadia Code"` is a fallback: same metrics as Mono, far more widely installed
+  (ships with Windows Terminal / VS Code), digits/stars identical (no digit ligatures).
+- **Unchanged from §44**: the `tab_md()` figure-space (Item A) and the footer-stars L5 exclusion — both
+  orthogonal to the font. Full suite FAIL 0 | PASS 3159; no golden/snapshot moved (plain snapshot tables
+  carry no `tx-has-stars`, and Excel defaults were already text-family). `tab-css.R`'s `.tx-num` mono
+  (14m) never shipped in a release, so this is a redesign, not a user-visible revert.

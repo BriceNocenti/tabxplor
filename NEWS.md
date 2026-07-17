@@ -31,10 +31,10 @@
   stylesheet, about 3x faster and much smaller, and the only engine that can follow `theme = "auto"`.
   Its output opens in the Viewer and knits like kableExtra's. The look is **restyleable**: the table's
   geometry is CSS classes rather than inline styles, so your own CSS can override any of it -- no
-  `!important` needed. It uses DejaVu Sans Condensed for text and a **monospace** font for numbers
-  (matching `tab_xl()`) so significance stars and composite cells like `100% (n=  849)` line up in
-  every column, hugs background colours around the text with rounded corners rather than flooding the
-  cell, and highlights the hovered row. `options(tabxplor.tab_kable_engine = "kableExtra")` (or
+  `!important` needed. It uses DejaVu Sans Condensed for text and DejaVu Sans for numbers -- switching
+  numbers to a **monospace** font (matching `tab_xl()`) only when the table shows significance stars, so
+  the stars line up -- hugs background colours around the text with rounded corners rather than flooding
+  the cell, and highlights the hovered row. `options(tabxplor.tab_kable_engine = "kableExtra")` (or
   `tab_kable(engine = "kableExtra")`) restores the previous renderer.
 * **The console follows your editor's theme.** `set_color_palette(theme = "auto")` detects whether
   your console is light or dark and picks the matching palette; it is also what tabxplor does on load,
@@ -322,20 +322,26 @@
   gives each column variable its own reference column, instead of a single reference shared by all.
   A chosen level is matched by exact equality, so labels containing regular-expression characters
   (e.g. `"$25000 or more"`) work as references.
-* **The Excel fonts are settable**, via `options(tabxplor.xl_font_text)` and
-  `options(tabxplor.xl_font_num)` (defaulting to `"DejaVu Sans Condensed"` and, since the monospace
-  change below, `"DejaVu Sans Mono"`). Note that xlsx, unlike HTML/CSS, has no font-fallback list: only
-  one name is recorded, so set these to a font installed on the machine that will open the workbook.
-* **Numbers are drawn in a monospace font in every font-bearing export** -- the HTML engine, Excel and
-  `tab_plot()`. In a monospace font every glyph (digits, `%`, brackets, the significance `*`, the
-  alignment space) is one width, so stars and composite cells like `100% (n=  849)` line up in every
-  column with no special-casing. Text (row labels, headers) stays DejaVu Sans Condensed. `tab_md()`
-  keeps no font of its own, so it now aligns a value's inner padding with a **figure space** (a digit
-  wide, unlike the collapsing ASCII space) -- so `(n=...)` columns line up once the markdown is rendered
-  to HTML. Each is one option to revert: `options(tabxplor.tab_kable_num_font)` (a CSS font-family
-  stack), `options(tabxplor.xl_font_num)` (one Excel font name), `options(tabxplor.plot_num_font)` (a
-  graphics-device family; `""` for the default). A model-fit footer's summary numbers (N, AIC, ...) now
-  reach the column edge instead of reserving space for stars they never carry.
+* **Numbers switch to a monospace font when (and only when) a table shows significance stars.** A plain
+  table keeps the proportional **DejaVu Sans** it always had (compact, better-looking); a table with
+  stars uses a **monospace** font (default **Cascadia Mono**) so the stars -- and composite cells like
+  `100% (n=  849)` -- line up in every column, which a proportional `*` (narrower than a digit) cannot.
+  Text (row labels, headers) always stays DejaVu Sans Condensed. This applies to the HTML engine, Excel
+  and `tab_plot()`; in the HTML engine a starred table's numbers are also nudged one step larger
+  (Cascadia reads small) with no change to the row height. `tab_md()` keeps no font of its own, so it
+  aligns a value's inner padding with a **figure space** (a digit wide, unlike the collapsing ASCII
+  space) so `(n=...)` columns line up once the markdown is rendered to HTML. Each font is an option to
+  change: `options(tabxplor.tab_kable_num_font)` / `options(tabxplor.tab_kable_num_font_stars)` (CSS
+  font-family stacks for the HTML engine), `options(tabxplor.xl_font_num)` /
+  `options(tabxplor.xl_font_num_stars)` (Excel; also the `font_num` / `font_num_stars` arguments of
+  `tab_xl()`), and `options(tabxplor.plot_num_font)` (a graphics-device family; `""` for the ggpubr
+  default). A model-fit footer's summary numbers (N, AIC, ...) now reach the column edge instead of
+  reserving space for stars they never carry.
+* **The Excel fonts are settable**, via `options(tabxplor.xl_font_text)`,
+  `options(tabxplor.xl_font_num)` and `options(tabxplor.xl_font_num_stars)` (defaulting to
+  `"DejaVu Sans Condensed"`, `"DejaVu Sans"` and `"Cascadia Mono"`). Note that xlsx, unlike HTML/CSS,
+  has no font-fallback list: only one name is recorded, so set these to a font installed on the machine
+  that will open the workbook.
 
 ## Internal
 * Examples that need a `Suggests` package (`tab_reg()`, `tab_logit()`, `multi_logit()` → **broom**,

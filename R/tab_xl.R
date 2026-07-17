@@ -53,13 +53,15 @@
 #'   titles are given based on the names of the variables.
 #' @param caption A single caption; a shortcut that fills \code{titles} (an explicit \code{titles}
 #'   still wins). Unified name across all exporters.
-#' @param font_text,font_num Font for text (labels, headers) and for numbers. Defaults from
-#'   \code{options(tabxplor.xl_font_text)} (\code{"DejaVu Sans Condensed"}) /
-#'   \code{options(tabxplor.xl_font_num)} (\code{"DejaVu Sans Mono"}, since 1.4.0 -- a \strong{monospace}
-#'   number font aligns significance stars and \code{(n=...)} composites without special-casing). Note
-#'   that xlsx, unlike CSS, has \strong{no font-fallback list}: only one name can be recorded per font,
-#'   so if it is missing on the machine opening the workbook, Excel substitutes by its own rules and no
-#'   fallback can be named here. Set the options to a font you know is installed.
+#' @param font_text,font_num,font_num_stars Fonts for text (labels, headers) and for numbers. The number
+#'   font is chosen \strong{per table}: \code{font_num} (default \code{"DejaVu Sans"}) when the table
+#'   shows no significance stars, and \code{font_num_stars} (default \code{"Cascadia Mono"}, a
+#'   \strong{monospace} font) when it does -- monospace aligns the stars and \code{(n=...)} composites,
+#'   which a proportional font cannot. Defaults from \code{options(tabxplor.xl_font_text)} /
+#'   \code{options(tabxplor.xl_font_num)} / \code{options(tabxplor.xl_font_num_stars)}. Note that xlsx,
+#'   unlike CSS, has \strong{no font-fallback list}: only one name can be recorded per font, so if it is
+#'   missing on the machine opening the workbook, Excel substitutes by its own rules and no fallback can
+#'   be named here. Set the options to a font you know is installed.
 #' @param text_size,text_size_headers,text_size_subtext Font sizes of text elements.
 #' @param theme By default (\code{"light"}) a white table with black text; set to \code{"dark"}
 #'   for a black table with white text (the colours follow the theme).
@@ -109,7 +111,8 @@ tab_xl <-
            colwidth = 10, color_legend = TRUE,
            sheets = "auto", n_min = 0, titles, caption = NULL,
            font_text = getOption("tabxplor.xl_font_text", "DejaVu Sans Condensed"),
-           font_num  = getOption("tabxplor.xl_font_num",  "DejaVu Sans Mono"),
+           font_num  = getOption("tabxplor.xl_font_num",  "DejaVu Sans"),
+           font_num_stars = getOption("tabxplor.xl_font_num_stars", "Cascadia Mono"),
            text_size = 10, text_size_headers = 9, text_size_subtext = 9,
            hide_near_zero = Inf, theme = NULL,
            color_type = lifecycle::deprecated(), html_24_bit = NULL, color = TRUE,
@@ -280,6 +283,7 @@ tab_xl <-
     # Phase 10j: the palettes honour `theme` (default "light" == the old hardcoded value).
     opts <- list(
       font_num          = font_num,
+      font_num_stars    = font_num_stars,
       font_text         = font_text,
       text_size         = text_size,
       colnames_rotation = colnames_rotation,
@@ -398,6 +402,9 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
 
   fmt_cols    <- roles$fmt_cols
   txt_cols    <- roles$other_cols
+  # Phase 14m-ii (rework): monospace numbers (Cascadia Mono) only for a table that SHOWS stars, else the
+  # proportional font. Per-table, because a list export can mix starred (reg) and plain (crosstab) sheets.
+  font_num    <- if (isTRUE(roles$has_stars)) o$font_num_stars else o$font_num
   row_var_col <- roles$row_var_col
   totcols     <- roles$totcols
   ref_cols    <- which(is_refcol(tab))
@@ -518,7 +525,7 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
   }
   txt_colour <- dplyr::filter(colour, .data$channel == "text")
   fonts <- dplyr::bind_rows(
-    mk_src(data_rows, fmt_cols, name = o$font_num),                              # numeric font
+    mk_src(data_rows, fmt_cols, name = font_num),                                # numeric font
     mk_src(header_row, seq_len(ncl), bold = TRUE, size = o$text_size_headers),   # headers
     mk_src(c(header_row, data_rows), ref_cols, bold = TRUE),                     # reference cols
     mk_src(ref_rows, ref_row_cols, bold = TRUE),                                 # reference rows

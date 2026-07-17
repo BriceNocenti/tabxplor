@@ -316,6 +316,13 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
   fmt_cols   <- which(fmt_mask)
   other_cols <- which(!fmt_mask)
 
+  # Phase 14m-ii (rework): does this table actually SHOW significance stars? The number font switches to
+  # a monospace stack (so stars align) ONLY for a starred table; a plain table keeps proportional DejaVu
+  # Sans. get_stars() is "" for an absent/NA pvalue, so this is TRUE exactly when a star will render --
+  # read by the html engine (adds the `tx-has-stars` class), tab_xl (picks font_num_stars) and tab_plot.
+  has_stars <- length(fmt_cols) > 0 &&
+    any(vapply(fmt_cols, function(j) any(nzchar(get_stars(tab[[j]]))), logical(1)))
+
   col_var_map   <- get_col_var(tab)
   real_col_vars <- unique(col_var_map[fmt_mask])
   real_col_vars <- real_col_vars[!real_col_vars %in%
@@ -428,7 +435,7 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
                  new_group = new_group, align = align,
                  label_cols = label_cols, var_name_col = var_name_col,
                  label_runs = label_runs, sd_cols = sd_cols,
-                 color_cols = color_cols, any_bg = any_bg),
+                 color_cols = color_cols, any_bg = any_bg, has_stars = has_stars),
     ann = ann,
     bold_rows = bold_rows,
     bold_cols = bold_cols,

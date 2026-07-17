@@ -19,7 +19,8 @@ tab_xl(
   titles,
   caption = NULL,
   font_text = getOption("tabxplor.xl_font_text", "DejaVu Sans Condensed"),
-  font_num = getOption("tabxplor.xl_font_num", "DejaVu Sans Mono"),
+  font_num = getOption("tabxplor.xl_font_num", "DejaVu Sans"),
+  font_num_stars = getOption("tabxplor.xl_font_num_stars", "Cascadia Mono"),
   text_size = 10,
   text_size_headers = 9,
   text_size_subtext = 9,
@@ -79,13 +80,15 @@ titles are given based on the names of the variables.}
 \item{caption}{A single caption; a shortcut that fills \code{titles} (an explicit \code{titles}
 still wins). Unified name across all exporters.}
 
-\item{font_text, font_num}{Font for text (labels, headers) and for numbers. Defaults from
-\code{options(tabxplor.xl_font_text)} (\code{"DejaVu Sans Condensed"}) /
-\code{options(tabxplor.xl_font_num)} (\code{"DejaVu Sans Mono"}, since 1.4.0 -- a \strong{monospace}
-number font aligns significance stars and \code{(n=...)} composites without special-casing). Note
-that xlsx, unlike CSS, has \strong{no font-fallback list}: only one name can be recorded per font,
-so if it is missing on the machine opening the workbook, Excel substitutes by its own rules and no
-fallback can be named here. Set the options to a font you know is installed.}
+\item{font_text, font_num, font_num_stars}{Fonts for text (labels, headers) and for numbers. The number
+font is chosen \strong{per table}: \code{font_num} (default \code{"DejaVu Sans"}) when the table
+shows no significance stars, and \code{font_num_stars} (default \code{"Cascadia Mono"}, a
+\strong{monospace} font) when it does -- monospace aligns the stars and \code{(n=...)} composites,
+which a proportional font cannot. Defaults from \code{options(tabxplor.xl_font_text)} /
+\code{options(tabxplor.xl_font_num)} / \code{options(tabxplor.xl_font_num_stars)}. Note that xlsx,
+unlike CSS, has \strong{no font-fallback list}: only one name can be recorded per font, so if it is
+missing on the machine opening the workbook, Excel substitutes by its own rules and no fallback can
+be named here. Set the options to a font you know is installed.}
 
 \item{text_size, text_size_headers, text_size_subtext}{Font sizes of text elements.}
 
