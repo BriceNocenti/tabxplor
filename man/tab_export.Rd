@@ -16,6 +16,7 @@ tab_export(
   lang = NULL,
   transpose = FALSE,
   caption = NULL,
+  var_names = NULL,
   ...
 )
 }
@@ -51,6 +52,10 @@ Defaults to \code{getOption("tabxplor.theme")}. See \code{\link{tab_css}}.}
 the col-percentages-with-several-row-variables use case.}
 
 \item{caption}{A single caption / title for the table.}
+
+\item{var_names}{Which variable names to write beside the table: \code{"both"} (the default),
+\code{"rows"}, \code{"cols"} or \code{"none"}. Defaults to \code{getOption("tabxplor.var_names", "both")}.
+See \code{\link{tab_kable}}.}
 
 \item{...}{Format-specific arguments passed to the underlying exporter.}
 }

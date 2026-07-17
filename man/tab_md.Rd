@@ -18,12 +18,13 @@ tab_md(
   html_24_bit = NULL,
   caption = NULL,
   transpose = FALSE,
-  col_var_names = TRUE,
+  var_names = NULL,
   css = FALSE,
   clipboard = FALSE,
   file = NULL,
   print = TRUE,
-  title = lifecycle::deprecated()
+  title = lifecycle::deprecated(),
+  col_var_names = lifecycle::deprecated()
 )
 }
 \arguments{
@@ -66,8 +67,11 @@ the first table of a list).}
 \item{transpose}{Set to \code{TRUE} to transpose each table before export (rows become columns) --
 the col-percentages-with-several-row-variables use case.}
 
-\item{col_var_names}{When \code{TRUE} (default) the column variables' names are written as a first,
-italic body row, above their level columns. Set to \code{FALSE} to drop it (the level names alone).}
+\item{var_names}{Which variable names to write beside the table: \code{"both"} (the default),
+\code{"rows"}, \code{"cols"} or \code{"none"}. The column variables' names are written as an italic body row
+above their level columns; the row-variable name is the leading column a table with several
+\code{row_vars} uses to name each block (written once per block, in italics). See
+\code{\link{tab_kable}}.}
 
 \item{css}{When \code{TRUE}, prepend an inline \verb{<style>} block (from \code{\link{tab_css}}), so the
 coloured markdown is self-contained. Default \code{FALSE} (bring the stylesheet via the document's
@@ -86,6 +90,9 @@ Requires the \pkg{clipr} package.}
 return the character string.}
 
 \item{title}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Renamed to \code{caption}.}
+
+\item{col_var_names}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Replaced by \code{var_names}:
+\code{col_var_names = FALSE} is \code{var_names = "rows"} (or \code{"none"}).}
 }
 \value{
 A character string (visible or invisible depending on \code{print}).

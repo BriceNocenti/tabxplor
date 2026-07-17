@@ -35,6 +35,9 @@
 #' @param transpose Set to \code{TRUE} to transpose each table before export (rows become columns) --
 #'   the col-percentages-with-several-row-variables use case.
 #' @param caption A single caption / title for the table.
+#' @param var_names Which variable names to write beside the table: `"both"` (the default),
+#'   `"rows"`, `"cols"` or `"none"`. Defaults to \code{getOption("tabxplor.var_names", "both")}.
+#'   See \code{\link{tab_kable}}.
 #' @param ... Format-specific arguments passed to the underlying exporter.
 #'
 #' @return The value of the underlying exporter: an HTML/knitr object (\code{"kable"}), a markdown
@@ -50,7 +53,7 @@
 tab_export <- function(x, format = c("kable", "md", "xl", "plot"), path = NULL,
                        theme = NULL, color_type = NULL, html_24_bit = NULL,
                        color = TRUE, color_legend = TRUE, lang = NULL, transpose = FALSE,
-                       caption = NULL, ...) {
+                       caption = NULL, var_names = NULL, ...) {
   format <- match.arg(format)
   switch(
     format,
@@ -58,23 +61,24 @@ tab_export <- function(x, format = c("kable", "md", "xl", "plot"), path = NULL,
       cap <- if (is.null(caption)) knitr::opts_current$get("tab.cap") else caption
       k <- tab_kable(x, theme = theme, color_type = color_type, html_24_bit = html_24_bit,
                      color = color, color_legend = color_legend, lang = lang, caption = cap,
-                     transpose = transpose, ...)
+                     transpose = transpose, var_names = var_names, ...)
       if (!is.null(path)) writeLines(as.character(k), path)
       k
     },
     md = tab_md(x, theme = theme, color_type = color_type, html_24_bit = html_24_bit,
                 color = color, color_legend = color_legend, lang = lang,
-                transpose = transpose, caption = caption, file = path, ...),
+                transpose = transpose, caption = caption, var_names = var_names,
+                file = path, ...),
     xl = tab_xl(x, path = path, theme = theme, color_type = color_type, html_24_bit = html_24_bit,
                 color = color, color_legend = color_legend, lang = lang, transpose = transpose,
-                caption = caption, ...),
+                caption = caption, var_names = var_names, ...),
     plot = {
       if (!is.null(path)) {
         cli::cli_warn("{.arg path} is ignored for {.code format = \"plot\"} (returns a ggplot).")
       }
       tab_plot(x, theme = theme, color_type = color_type, html_24_bit = html_24_bit,
                color = color, color_legend = color_legend, lang = lang, transpose = transpose,
-               caption = caption, ...)
+               caption = caption, var_names = var_names, ...)
     }
   )
 }

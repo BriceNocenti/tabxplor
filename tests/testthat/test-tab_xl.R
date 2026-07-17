@@ -168,3 +168,65 @@ testthat::test_that("Excel gets a col_var spanning-name row + suffix-stripped le
   testthat::expect_true("Other" %in% hdr_row)                              # suffix stripped
   testthat::expect_false(any(hdr_row == "Other_race", na.rm = TRUE))
 })
+
+# === SECTION: the label column -- merge + rotation + the title (Phase 14i) ===
+
+testthat::test_that("tab_xl: a merged table names each row-variable once, merged and rotated", {
+  testthat::skip_if_not_installed("openxlsx2")
+  tmp <- withr::local_tempfile(fileext = ".xlsx")
+  suppressMessages(
+    tab_xl(tab(forcats::gss_cat, c(race, marital), relig, pct = "row"), path = tmp, open = FALSE, replace = TRUE)
+  )
+  wb <- openxlsx2::wb_load(tmp)
+  d  <- openxlsx2::wb_to_df(wb, col_names = FALSE)
+
+  # row 1 = title, row 2 = the col_var span, row 3 = level headers, data from row 4 (Phase 13c-iii)
+  # Phase 14i: the title names the SOURCE row_vars -- it read "levels by relig" (the merge's own
+  # scaffolding column) because the prep dropped `vars$row_vars`.
+  testthat::expect_equal(as.character(d[1, 1]), "race, marital by relig")
+  # one merge per block, in column A
+  merges <- paste(wb$worksheets[[1]]$mergeCells, collapse = " ")
+  testthat::expect_match(merges, 'ref="A4:A7"', fixed = TRUE)
+  testthat::expect_match(merges, 'ref="A8:A14"', fixed = TRUE)
+  # the name is written once per block, not on every row (Excel keeps only a merge's top-left value,
+  # so a repeat below it would be an invisible ghost the user finds again on unmerging)
+  testthat::expect_equal(as.character(d[4:14, 1]),
+                         c("race", rep(NA, 3), "marital", rep(NA, 6)))
+  # rotated 90 degrees, and the column narrowed to match (that is what the rotation buys)
+  testthat::expect_true(any(grepl('textRotation="90"', wb$styles_mgr$styles$cellXfs)))
+  testthat::expect_match(paste(unlist(wb$worksheets[[1]]$cols_attr), collapse = " "),
+                         '<col min="1" max="1"[^/]*width="4', perl = TRUE)
+  # the literal "row_var" header is gone
+  testthat::expect_true(is.na(d[3, 1]) || !nzchar(as.character(d[3, 1])))
+})
+
+testthat::test_that("tab_xl: a one-row block falls back to horizontal, with no merge", {
+  testthat::skip_if_not_installed("openxlsx2")
+  # Excel rejects a 1-cell "merge", and a rotated 1-row cell would only force a tall row. This also
+  # drives label_merges' empty-tibble path (a size-1 `col` recycled to zero rows).
+  one <- tab(forcats::gss_cat, c(race, marital), relig, pct = "row") |>
+    dplyr::filter(!!rlang::sym("levels") == "Total")
+  tmp <- withr::local_tempfile(fileext = ".xlsx")
+  suppressMessages(tab_xl(one, path = tmp, open = FALSE, replace = TRUE))
+  wb <- openxlsx2::wb_load(tmp)
+  testthat::expect_no_match(paste(wb$worksheets[[1]]$mergeCells, collapse = " "), "A", fixed = TRUE)
+  testthat::expect_false(any(grepl('textRotation="90"', wb$styles_mgr$styles$cellXfs)))
+  # each block is its own run, so both names are still written
+  testthat::expect_equal(as.character(openxlsx2::wb_to_df(wb, col_names = FALSE)[4:5, 1]),
+                         c("race", "marital"))
+})
+
+testthat::test_that("tab_xl: var_names = 'none' drops both name annotations", {
+  testthat::skip_if_not_installed("openxlsx2")
+  tmp <- withr::local_tempfile(fileext = ".xlsx")
+  suppressMessages(
+    tab_xl(tab(forcats::gss_cat, c(race, marital), relig, pct = "row"), path = tmp, open = FALSE,
+           replace = TRUE, var_names = "none")
+  )
+  wb <- openxlsx2::wb_load(tmp)
+  d  <- openxlsx2::wb_to_df(wb, col_names = FALSE)
+  # no name column -> no merge at all; and no span row, so the header climbs to row 2
+  testthat::expect_length(wb$worksheets[[1]]$mergeCells, 0L)
+  testthat::expect_equal(as.character(d[2, 1]), "levels")
+  testthat::expect_false(any(grepl('textRotation="90"', wb$styles_mgr$styles$cellXfs)))
+})

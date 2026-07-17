@@ -63,6 +63,10 @@
 #' @param lang Colour-legend language: \code{NULL} (auto from the R/OS locale, English fallback),
 #'   \code{"en"} or \code{"fr"}.
 #' @param print_color_legend `r lifecycle::badge("deprecated")` Renamed to \code{color_legend}.
+#' @param var_names Which variable names to write beside the table: `"both"` (the default),
+#'   `"rows"`, `"cols"` or `"none"`. The row-variable name is the leading column a table with
+#'   several `row_vars` uses to name each block (merged over it and rotated 90 degrees); the
+#'   column-variable names are the merged row above their level columns. See \code{\link{tab_kable}}.
 #' @param sheets The Excel sheets options :
 #' \itemize{
 #'   \item \code{"tabs"}: a new sheet is created for each table
@@ -102,7 +106,7 @@ tab_xl <-
            text_size = 10, text_size_headers = 9, text_size_subtext = 9,
            hide_near_zero = Inf, theme = NULL,
            color_type = "text", html_24_bit = NULL, color = TRUE,
-           transpose = FALSE, conditional_format = FALSE,
+           transpose = FALSE, var_names = NULL, conditional_format = FALSE,
            or_numeric = getOption("tabxplor.xl_or_numeric", FALSE),
            print_color_legend = lifecycle::deprecated()) {
 
@@ -141,7 +145,8 @@ tab_xl <-
     # Shared option resolver (theme/color_type/color/color_legend/transpose). Phase 10j makes tab_xl
     # theme-aware: the palettes below now honour `theme` (was hardcoded "light"). `html_24_bit` is
     # inert (Phase 13a): Excel is always 24-bit.
-    o <- resolve_export_opts(theme, color_type, color, color_legend, transpose, caption)
+    o <- resolve_export_opts(theme, color_type, color, color_legend, transpose, caption,
+                             var_names = var_names)
     theme <- o$theme; color_type <- o$color_type
     color_legend <- o$color_legend; color <- o$color
     # `caption` (single) is the unified alias; an explicit `titles` (per-sheet) still wins.
@@ -176,7 +181,7 @@ tab_xl <-
     prep <- tab_export_prep(
       tabs, backend = "xl", drop_tab_vars = remove_tab_vars,
       list_method = TRUE, compute = compute, transpose = transpose,
-      color_type = color_type, theme = theme,
+      color_type = color_type, theme = theme, var_names = o$var_names,
       color_legend = color_legend, what = "tab_xl()"
     )
     rd <- prep$tables
@@ -193,7 +198,10 @@ tab_xl <-
     roles          <- purrr::map(rd, "roles")
     # Phase 14d: the SOURCE names for the title (`row_var` is the column holding the labels, which on
     # a merged table is the literal "levels"); geometry elsewhere keeps using `roles`.
-    row_vars       <- purrr::map(rd, ~ .$vars$row_vars %||% .$vars$row_var)
+    # Phase 14i: the prep now always passes `row_vars` through, so the `%||%` fallback that used to
+    # guard this line is gone -- it was also a latent bug (base `%||%` is R >= 4.4; the package
+    # supports R >= 4.1 and imports it from nowhere), and it silently swallowed the missing field.
+    row_vars       <- purrr::map(rd, ~ .$vars$row_vars)
     tab_vars       <- purrr::map(rd, ~ .$vars$tab_vars)
     col_vars_plain <- purrr::map(rd, ~ .$vars$col_vars)
 
@@ -389,6 +397,18 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
   cv_names      <- get_col_var(tab)
   start_col_var <- which(cv_names != "" & cv_names != dplyr::lag(cv_names, default = NA_character_))
 
+  # Phase 14i: the label columns' runs, lifted to ABSOLUTE sheet rows. `label_merges` is one merge per
+  # run (skipping length-1 runs -- Excel rejects a 1-cell "merge", and a rotated 1-row cell would only
+  # force a tall row); `vname_runs` are the name column's, the only ones that also get the rotation.
+  label_merges <- purrr::imap(roles$label_runs, function(run, cl) {
+    at <- which(run$show & run$span > 1L)
+    tibble::tibble(col = match(cl, names(tab)),
+                   row1 = at + data_row0, row2 = at + run$span[at] - 1L + data_row0)
+  })
+  label_merges <- if (length(label_merges)) dplyr::bind_rows(label_merges)
+                  else tibble::tibble(col = integer(), row1 = integer(), row2 = integer())
+  vname_runs   <- label_merges[label_merges$col %in% roles$var_name_col, , drop = FALSE]
+
   # Phase 13c-v: OR cells export as TEXT (the "1/x" reciprocal string) by DEFAULT so an OR < 1 reads
   # symmetrically to an OR > 1 -- there is no point keeping the < 1 side numeric while the > 1 side is
   # too; opt in to real numbers with tab_xl(or_numeric = TRUE). A column carrying any TEXT-coded cell
@@ -403,6 +423,16 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
   }
   text_fmt_cols <- fmt_cols[vapply(
     fmt_cols, function(ci) { cd <- xl_code(tab[[ci]]); any(!is.na(cd) & cd == "TEXT") }, logical(1))]
+
+  # Phase 14i: Excel keeps only a merged range's top-left value, so the label repeats below one become
+  # invisible ghosts a user would find again on unmerging. Blank them at the source -- the display
+  # equivalent of md's blanked cells, and on the WRITTEN copy only (every role is read off `tab`).
+  xl_data <- xl_materialize_data(tab, fmt_cols, text_fmt_cols)
+  for (cl in names(roles$label_cols)) {
+    if (!cl %in% names(xl_data)) next
+    xl_data[[cl]] <- as.character(xl_data[[cl]])
+    xl_data[[cl]][!roles$label_runs[[cl]]$show] <- NA_character_
+  }
 
   # Number formats: format(syntax = "excel") is the single display source of truth. Fold significance
   # stars into the numFmt literal (0.0%"***"), keeping the cell a real number; a "TEXT"-coded column
@@ -515,6 +545,7 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
     tot_rows_1    = roles$totblock_top    + data_row0,
     tot_rows_last = roles$totblock_bottom + data_row0,
     end_group     = utils::head(roles$new_group, -1L) + data_row0,
+    vname_col     = unname(roles$var_name_col), vname_runs = vname_runs,
     fonts = fonts, bg_fill = bg_fill, title_row = start, subtext_rows = subtext_rows, o = o
   )
 
@@ -528,8 +559,9 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
     # Phase 13c-v: fmt cell values -- a text-mode column (ci = "cell" / OR) is written as its format()
     # display STRING (the exact console text, "@"-formatted above); every other column writes the raw
     # get_num() number and lets Excel's numFmt code format it. Built per column so the tibble carries a
-    # mix of character (text-mode) and numeric columns.
-    data = xl_materialize_data(tab, fmt_cols, text_fmt_cols),
+    # mix of character (text-mode) and numeric columns. Phase 14i blanks the label columns' repeats
+    # on it (above), so a merged range holds no ghost value under its top-left cell.
+    data = xl_data,
     header_row = header_row, ncl = ncl,
     # Phase 13c-iii: the level header shows the suffix-stripped labels; the writer overwrites the header
     # cells with them and (when has_span) writes the merged col_var spanning-name row above.
@@ -537,6 +569,11 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
     span_row = if (has_span) span_row else NA_integer_,
     header_runs = if (has_span) tab_header_runs(cvh$label) else NULL,
     fmt_cols = fmt_cols, row_var_col = row_var_col, colwidth = colwidth,
+    # Phase 14i: the label columns' runs at ABSOLUTE sheet rows -- the writer merges each one, so a
+    # row/tab variable is named once per block instead of on every row. `vname_col` is the name column
+    # (values ARE variable names): merged AND rotated 90 degrees, so a long name costs one narrow
+    # column. A kept tab_var is merged but never rotated -- its values are levels the user reads.
+    label_merges = label_merges, vname_col = unname(roles$var_name_col),
     styles = styles, numfmt = numfmt
   )
 }
@@ -549,6 +586,7 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
 #' @keywords internal
 xl_build_styles <- function(header_row, data_rows, last_row, ncl, fmt_cols, txt_cols, totcols,
                             start_col_var, tot_rows, tot_rows_1, tot_rows_last, end_group,
+                            vname_col = integer(0), vname_runs = NULL,
                             fonts, bg_fill, title_row, subtext_rows, o) {
   block_rows <- header_row:last_row
   nb  <- length(block_rows)
@@ -579,6 +617,21 @@ xl_build_styles <- function(header_row, data_rows, last_row, ncl, fmt_cols, txt_
     fc <- ci(fmt_cols); if (length(fc)) { ah[tri, fc] <- "right"; av[tri, fc] <- "top"; aw[tri, fc] <- FALSE }
     xc <- ci(txt_cols); if (length(xc)) { ah[tri, xc] <- "left";  av[tri, xc] <- "top"; aw[tri, xc] <- TRUE }
     if (length(tc))    { ah[tri, tc] <- "left";  av[tri, tc] <- "top"; aw[tri, tc] <- FALSE }
+  }
+  # Phase 14i: the row-variable NAME column reads vertically (90 degrees), centred on the block it
+  # merges over -- so a long name costs one narrow column instead of a wide one. `text_rotation` was
+  # already a per-cell matrix in the style dedup key (only `colnames_rotation` drove it), so this is a
+  # paint, and xl_coalesce() groups it for free. LAST, so it beats the total-row/total-col zones above
+  # (the name column is a text column, and a block's total row would otherwise re-align it to "left").
+  # Only the MERGED runs: a 1-row block stays horizontal (rotating it would just make the row tall).
+  if (length(vname_col) > 0 && !is.null(vname_runs) && nrow(vname_runs) > 0) {
+    vc <- ci(vname_col)
+    for (k in seq_len(nrow(vname_runs))) {
+      vi <- idx(vname_runs$row1[k]:vname_runs$row2[k])
+      if (length(vi) && length(vc)) {
+        ar[vi, vc] <- 90L; ah[vi, vc] <- "center"; av[vi, vc] <- "center"; aw[vi, vc] <- TRUE
+      }
+    }
   }
 
   # assemble the per-cell grid
@@ -742,6 +795,17 @@ xl_write_table <- function(wb, plan, o, reg) {
     }
   }
 
+  # Phase 14i: merge each LABEL run vertically, so a row/tab variable is named once per block. The
+  # name column's cells are also rotated 90 degrees (painted in xl_build_styles), which is what makes
+  # a long name cost one narrow column. Merged BEFORE the styles: openxlsx2 keeps the range's top-left
+  # value, and set_cell_style() over a merged range still reaches every cell of it.
+  if (nrow(plan$label_merges)) {
+    lm <- plan$label_merges
+    for (k in seq_len(nrow(lm))) {
+      xlb_merge(wb, s, paste0(xl_cell(lm$row1[k], lm$col[k]), ":", xl_cell(lm$row2[k], lm$col[k])))
+    }
+  }
+
   # --- styles: one composed xf (font + fill + border + alignment) per distinct cell style ---
   xl_apply_styles(wb, s, plan$styles, reg)
 
@@ -773,6 +837,9 @@ xl_write_table <- function(wb, plan, o, reg) {
 
   # --- column widths / row heights ---
   if (length(plan$row_var_col)) xlb_col_widths(wb, s, plan$row_var_col, 30)
+  # Phase 14i: the rotated name column is one line of vertical text wide -- the whole point of turning
+  # it. Left at the sheet default it would waste the width the rotation was meant to save.
+  if (length(plan$vname_col)) xlb_col_widths(wb, s, plan$vname_col, 3.5)
   rot <- o$colnames_rotation
   if (length(plan$fmt_cols)) {
     if (identical(plan$colwidth, "auto")) {

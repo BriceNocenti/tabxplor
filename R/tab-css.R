@@ -11,7 +11,10 @@
 #   - Cells and CSS read the SAME slot vocabulary (tx_slot_class), so they cannot disagree.
 #   - tx_chrome_hex() is the single source of the chrome colours; tab_export_prep()'s `theme_cols`
 #     reads it too, so the inline path and the CSS path cannot drift.
-# See: CLAUDE.md Phase 13d + dev/tabxplor_phase10_exporters.md.
+#   - Every LOOK is a role class here, geometry included (Phase 14e) -- the html engine emits no
+#     inline style, so a user's own CSS can override any of it. Phase 14i adds `.tx-lbl` (a cell
+#     rowspan'd over the block it names) and `.tx-vname` (a row-variable name, written vertically).
+# See: CLAUDE.md Phase 13d + 14e + 14i, dev/tabxplor_phase10_exporters.md.
 
 # === SECTION: theme + slot vocabulary ==============================================================
 
@@ -200,6 +203,17 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE) {
     ".tabxplor-tab .tx-bl{border-left:1px solid;}",
     ".tabxplor-tab .tx-tot{min-width:5.5em;}",
     ".tabxplor-tab .tx-rv{min-width:10em;}",
+    # Phase 14i: a LABEL cell (`rowspan`ned over its block: a merged table's row-variable name, or a
+    # kept tab_var's level) centres itself on the block it names rather than floating at its top.
+    ".tabxplor-tab .tx-lbl{vertical-align:middle;text-align:center;}",
+    # ... and a row-variable NAME is written vertically, so a long one costs no column width and wraps
+    # into several vertical lines instead of stretching the table sideways.
+    # WARNING: NOT `writing-mode:sideways-lr`, which reads the same way but is still flagged
+    # experimental with patchy support (Chrome shipped it late; MDN marks it so). `vertical-rl` +
+    # rotate(180deg) is the universally-supported equivalent -- bottom-to-top, matching the 90-degree
+    # rotation tab_xl writes into Excel.
+    paste0(".tabxplor-tab .tx-vname{writing-mode:vertical-rl;transform:rotate(180deg);",
+           "white-space:normal;padding:4px 2px;}"),
     ".tabxplor-tab .tx-b,.tabxplor-tab tr.tx-b{font-weight:bold;}",
     ".tabxplor-tab tr.tx-bt>*{border-top:1px solid;}",
     ".tabxplor-tab tr.tx-bb>*{border-bottom:1px solid;}",

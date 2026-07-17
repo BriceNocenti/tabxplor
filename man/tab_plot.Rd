@@ -14,6 +14,7 @@ tab_plot(
   lang = NULL,
   caption = NULL,
   transpose = FALSE,
+  var_names = NULL,
   wrap_rows = 35,
   wrap_cols = 14,
   whitespace_only = TRUE
@@ -40,6 +41,9 @@ background. By default it takes \code{getOption("tabxplor.color_style_type")}.}
 \item{caption}{The table caption.}
 
 \item{transpose}{Set to \code{TRUE} to transpose the table before export (rows become columns).}
+
+\item{var_names}{Which variable names to write beside the table: \code{"both"} (the default),
+\code{"rows"}, \code{"cols"} or \code{"none"}. See \code{\link{tab_kable}}.}
 
 \item{wrap_rows}{By default, rownames are wrapped when larger than 30 characters.}
 

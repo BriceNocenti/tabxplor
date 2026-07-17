@@ -16,6 +16,7 @@ tab_kable(
   lang = NULL,
   caption = knitr::opts_current$get("tab.cap"),
   transpose = FALSE,
+  var_names = NULL,
   html_font = NULL,
   get_data = FALSE,
   full_width = FALSE,
@@ -70,6 +71,12 @@ with \verb{caption\{\}}in rmarkdown.}
 
 \item{transpose}{Set to \code{TRUE} to transpose the table before export (rows become columns) --
 the col-percentages-with-several-row-variables use case.}
+
+\item{var_names}{Which variable names to write beside the table: \code{"both"} (the default),
+\code{"rows"}, \code{"cols"} or \code{"none"}. The row-variable name is the leading column a table with
+several \code{row_vars} uses to name each block (written once per block, vertically); the
+column-variable names are the spanning row above their level columns. Level headers always
+keep their name. Defaults to \code{getOption("tabxplor.var_names", "both")}.}
 
 \item{html_font}{A string for HTML css font. By default, it uses
 \code{'"DejaVu Sans", "Arial", arial, helvetica, sans-serif'}. Set another

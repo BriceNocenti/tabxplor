@@ -210,3 +210,107 @@ testthat::test_that("tab_compact() on an already-merged table is a no-op", {
   merged <- tab(gss, c(race, relig), marital, pct = "row")
   testthat::expect_identical(tab_compact(merged), merged)
 })
+
+# === SECTION: the label columns and their runs (Phase 14i) ===================
+
+testthat::test_that("the prep passes the SOURCE row_vars + compacted through", {
+  # Phase 14i: tab_render_vars() has returned both since 14d, but prep_one_table() rebuilt `vars`
+  # without them -- so tab_xl's title read "levels by relig" (the merge's own scaffolding column).
+  rd <- tabxplor:::tab_export_prep(tab(gss, c(race, marital), relig, pct = "row"),
+                                   backend = "kable", wrap = NULL)$tables[[1]]
+  testthat::expect_equal(rd$vars$row_vars, c("race", "marital"))
+  testthat::expect_true(rd$vars$compacted)
+  testthat::expect_equal(rd$vars$row_var, "levels")   # the COLUMN contract is unchanged
+  testthat::expect_equal(tabxplor:::tab_get_titles(rd$tab, rd$vars$row_vars, rd$vars$col_vars),
+                         "race, marital by relig")
+  # a plain table reports itself
+  rd2 <- tabxplor:::tab_export_prep(t_basic, backend = "kable", wrap = NULL)$tables[[1]]
+  testthat::expect_equal(rd2$vars$row_vars, "race")
+  testthat::expect_false(rd2$vars$compacted)
+})
+
+testthat::test_that("label_cols / var_name_col: the merged name column vs the kept tab_vars", {
+  # The two kinds are mutually exclusive by construction (tab_compact() bails on tab_vars).
+  merged <- tabxplor:::tab_export_prep(tab(gss, c(race, marital), relig, pct = "row"),
+                                       backend = "kable", wrap = NULL)$tables[[1]]
+  testthat::expect_equal(names(merged$roles$label_cols), "row_var")
+  testthat::expect_equal(names(merged$roles$var_name_col), "row_var")   # values ARE variable names
+
+  # a kept tab_var is a label column (blank/merge) but NOT a name column (its values are levels)
+  tv <- tabxplor:::tab_export_prep(t_tv, backend = "md", drop_tab_vars = FALSE,
+                                   wrap = NULL)$tables[[1]]
+  testthat::expect_equal(names(tv$roles$label_cols), "year")
+  testthat::expect_length(tv$roles$var_name_col, 0L)
+
+  # a dropped tab_var is not a label column at all, and a plain table has none
+  tvd <- tabxplor:::tab_export_prep(t_tv, backend = "kable", wrap = NULL)$tables[[1]]
+  testthat::expect_length(tvd$roles$label_cols, 0L)
+  plain <- tabxplor:::tab_export_prep(t_basic, backend = "kable", wrap = NULL)$tables[[1]]
+  testthat::expect_length(plain$roles$label_cols, 0L)
+  testthat::expect_length(plain$roles$label_runs, 0L)
+})
+
+testthat::test_that("tab_label_runs marks one run per block, and agrees with new_group", {
+  rd  <- tabxplor:::tab_export_prep(tab(gss, c(race, marital), relig, pct = "row"),
+                                    backend = "kable", wrap = NULL)$tables[[1]]
+  run <- rd$roles$label_runs[["row_var"]]
+  testthat::expect_equal(as.character(rd$tab[["row_var"]])[run$show], c("race", "marital"))
+  # a run start is the row after each group end; the spans tile the table exactly
+  testthat::expect_equal(which(run$show), c(1L, utils::head(rd$roles$new_group, -1L) + 1L))
+  testthat::expect_equal(sum(run$span), nrow(rd$tab))
+  testthat::expect_true(all(run$span[!run$show] == 0L))
+})
+
+testthat::test_that("tab_label_runs: NA is a continuation, and the columns nest", {
+  lr <- tabxplor:::tab_label_runs
+  # NA (a materialised p-value row belongs to the block above it) never starts a run
+  d1 <- data.frame(g = c("a", "a", NA, "b", NA))
+  testthat::expect_equal(which(lr(d1, "g")$g$show), c(1L, 4L))
+  testthat::expect_equal(lr(d1, "g")$g$span[c(1L, 4L)], c(3L, 2L))
+  # NESTED: an outer column's new run restarts the inner one, even when the inner value repeats.
+  # A naive per-column scan (md's old loop) would merge rows 1-2 of `in_` across the `out` change.
+  d2 <- data.frame(out = c("x", "y", "y"), in_ = c("k", "k", "k"))
+  testthat::expect_equal(which(lr(d2, c("out", "in_"))$in_$show), c(1L, 2L))
+  testthat::expect_equal(lr(d2, c("out", "in_"))$in_$span[c(1L, 2L)], c(1L, 2L))
+  # degenerate inputs
+  testthat::expect_length(lr(d1, character(0)), 0L)
+  testthat::expect_length(lr(d1[0, , drop = FALSE], "g"), 0L)
+})
+
+testthat::test_that("var_names drops the row-name column / the col_var span, and nothing else", {
+  merged <- tab(gss, c(race, marital), relig, pct = "row")
+  prep_of <- function(x, vn) tabxplor:::tab_export_prep(x, backend = "kable", wrap = NULL,
+                                                        var_names = vn)$tables[[1]]
+  expect <- function(vn, has_name_col, has_span) {
+    rd <- prep_of(merged, vn)
+    testthat::expect_equal("row_var" %in% names(rd$tab), has_name_col, label = vn)
+    testthat::expect_equal(any(nzchar(rd$col_var_header$label)), has_span, label = vn)
+    # dropping the name column must not leave a stale role behind
+    if (!has_name_col) testthat::expect_length(rd$roles$var_name_col, 0L)
+  }
+  expect("both", TRUE,  TRUE)
+  expect("rows", TRUE,  FALSE)   # row names only -> the col_var span goes
+  expect("cols", FALSE, TRUE)    # col names only -> the row-name column goes
+  expect("none", FALSE, FALSE)
+  testthat::expect_error(prep_of(merged, "nope"))
+
+  # It never touches a LEVEL column's header: `race` on a single-row_var table, `year` on a tab_var.
+  # That header identifies the column and costs no width (the maintainer's call, Phase 14i).
+  rd <- tabxplor:::tab_export_prep(t_basic, backend = "kable", wrap = NULL,
+                                   var_names = "none")$tables[[1]]
+  testthat::expect_equal(rd$col_var_header$clean[[1]], "race")
+  rd_tv <- tabxplor:::tab_export_prep(t_tv, backend = "md", drop_tab_vars = FALSE, wrap = NULL,
+                                      var_names = "none")$tables[[1]]
+  testthat::expect_true("year" %in% names(rd_tv$tab))
+})
+
+testthat::test_that("the literal `row_var` header is always dropped (a bug fix, not a setting)", {
+  # It is an internal name, never informative -- tab_col_var_header()'s suffix loop only visits
+  # LABELLED columns, so it survived. One blank there and md / kableExtra / html / xl all follow.
+  for (vn in c("both", "rows")) {
+    rd <- tabxplor:::tab_export_prep(tab(gss, c(race, marital), relig, pct = "row"),
+                                     backend = "kable", wrap = NULL, var_names = vn)$tables[[1]]
+    testthat::expect_equal(rd$col_var_header$clean[[1]], "", label = vn)
+    testthat::expect_equal(names(rd$tab)[[1]], "row_var", label = vn)   # the COLUMN still exists
+  }
+})

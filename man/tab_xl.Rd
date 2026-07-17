@@ -29,6 +29,7 @@ tab_xl(
   html_24_bit = NULL,
   color = TRUE,
   transpose = FALSE,
+  var_names = NULL,
   conditional_format = FALSE,
   or_numeric = getOption("tabxplor.xl_or_numeric", FALSE),
   print_color_legend = lifecycle::deprecated()
@@ -97,6 +98,11 @@ the background instead.}
 
 \item{transpose}{Set to \code{TRUE} to transpose each table before export (rows become
 columns). Useful for column percentages tables with several row variables.}
+
+\item{var_names}{Which variable names to write beside the table: \code{"both"} (the default),
+\code{"rows"}, \code{"cols"} or \code{"none"}. The row-variable name is the leading column a table with
+several \code{row_vars} uses to name each block (merged over it and rotated 90 degrees); the
+column-variable names are the merged row above their level columns. See \code{\link{tab_kable}}.}
 
 \item{conditional_format}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#experimental}{\figure{lifecycle-experimental.svg}{options: alt='[Experimental]'}}}{\strong{[Experimental]}} Reserved for a future opt-in
 to use Excel conditional formatting instead of hard cell colours. Not yet implemented: setting

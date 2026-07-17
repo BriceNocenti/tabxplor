@@ -40,8 +40,13 @@
 #' @param transpose Set to `TRUE` to transpose each table before export (rows become columns) --
 #'   the col-percentages-with-several-row-variables use case.
 #' @param title `r lifecycle::badge("deprecated")` Renamed to `caption`.
-#' @param col_var_names When `TRUE` (default) the column variables' names are written as a first,
-#'   italic body row, above their level columns. Set to `FALSE` to drop it (the level names alone).
+#' @param var_names Which variable names to write beside the table: `"both"` (the default),
+#'   `"rows"`, `"cols"` or `"none"`. The column variables' names are written as an italic body row
+#'   above their level columns; the row-variable name is the leading column a table with several
+#'   `row_vars` uses to name each block (written once per block, in italics). See
+#'   \code{\link{tab_kable}}.
+#' @param col_var_names `r lifecycle::badge("deprecated")` Replaced by `var_names`:
+#'   `col_var_names = FALSE` is `var_names = "rows"` (or `"none"`).
 #' @param css When `TRUE`, prepend an inline `<style>` block (from \code{\link{tab_css}}), so the
 #'   coloured markdown is self-contained. Default `FALSE` (bring the stylesheet via the document's
 #'   `css:`, or emit \code{\link{tab_css}} once at the top of the document -- it styles every table).
@@ -79,12 +84,13 @@ tab_md <- function(tabs,
                    html_24_bit = NULL,
                    caption = NULL,
                    transpose = FALSE,
-                   col_var_names = TRUE,
+                   var_names = NULL,
                    css = FALSE,
                    clipboard = FALSE,
                    file = NULL,
                    print = TRUE,
-                   title = lifecycle::deprecated()) {
+                   title = lifecycle::deprecated(),
+                   col_var_names = lifecycle::deprecated()) {
   # Phase 13a: install a per-table color_breaks override for the render (no-op otherwise).
   .cb <- push_color_breaks(tabs); on.exit(pop_color_breaks(.cb), add = TRUE)
   # Phase 10j: `title` renamed to `caption` (unified across exporters); `transpose` added.
@@ -92,10 +98,22 @@ tab_md <- function(tabs,
     lifecycle::deprecate_soft("1.4.0", "tab_md(title)", "tab_md(caption)")
     caption <- title
   }
+  # Phase 14i: `col_var_names` (md-only) generalised to the shared `var_names`, which also governs the
+  # row-variable name and is honoured by every exporter. FALSE = drop the col side of whatever
+  # `var_names` asks for, so the two compose rather than fight.
+  if (lifecycle::is_present(col_var_names)) {
+    lifecycle::deprecate_soft("1.4.0", "tab_md(col_var_names)", "tab_md(var_names)")
+    if (!isTRUE(col_var_names)) {
+      var_names <- resolve_export_opts(var_names = var_names)$var_names
+      var_names <- if (identical(var_names, "cols")) "none" else
+                   if (identical(var_names, "both")) "rows" else var_names
+    }
+  }
   # `html_24_bit` is inert (Phase 13a): markdown colour spans map to CSS classes, always 24-bit.
   # Phase 13d: `allow_auto` -- markdown carries a stylesheet (css = TRUE / tab_css()), so it can follow
   # the reader's colour scheme. The spans themselves are theme-independent (only the CSS differs).
-  o <- resolve_export_opts(theme, color_type, color, transpose = transpose, allow_auto = TRUE)
+  o <- resolve_export_opts(theme, color_type, color, transpose = transpose,
+                           var_names = var_names, allow_auto = TRUE)
   theme <- o$theme; color_type <- o$color_type; color <- o$color
 
   # --- Phase 10d/10f: shared exporter prep + the base/list split. ---
@@ -109,7 +127,7 @@ tab_md <- function(tabs,
   if (color) compute <- c(compute, "colors")
   prep <- tab_export_prep(tabs, backend = "md", drop_tab_vars = FALSE, wrap = NULL,
                           compute = compute, transpose = o$transpose, color_type = color_type,
-                          theme = theme, list_method = TRUE,
+                          theme = theme, var_names = o$var_names, list_method = TRUE,
                           what = "tab_md()")
 
   parts   <- purrr::imap_chr(prep$tables, function(rd, i) {
@@ -117,7 +135,6 @@ tab_md <- function(tabs,
                   subtext = subtext, color = color,
                   color_legend = color_legend, lang = lang,
                   title = if (i == 1) caption else NULL,
-                  col_var_names = col_var_names,
                   color_type = color_type, theme = theme)
   })
   md_text <- paste(parts, collapse = "\n\n")
@@ -179,7 +196,7 @@ tab_md_css <- function(tabs = NULL, ...) {
 # the byte-identical plain padded table.
 md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
                           color = TRUE, color_legend = TRUE, lang = NULL, title = NULL,
-                          col_var_names = TRUE, color_type = NULL, theme = NULL) {
+                          color_type = NULL, theme = NULL) {
   # Graceful degrade -- a table that can't be read as a tabxplor table renders as a plain pipe table.
   if (isTRUE(rd$vars$degrade)) {
     tab_degrade_inform(rd$vars$reason)
@@ -187,8 +204,15 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   }
 
   tabs         <- rd$tab
-  tab_vars     <- rd$vars$tab_vars
   subtext_text <- if (subtext) rd$subtext else character(0)
+
+  # Phase 14i: the LABEL columns (the shared blank/merge set: a merged table's synthetic name column,
+  # OR the kept tab_vars) and their runs -- see tab_label_runs(). This replaces md's own `tab_vars`
+  # gate, which 14d silenced on a merged table: tab_compact() correctly records tab_vars =
+  # character(0), so the loop went quiet and the row-variable name printed on EVERY row.
+  label_cols   <- rd$roles$label_cols
+  label_runs   <- rd$roles$label_runs
+  var_name_col <- rd$roles$var_name_col
 
   # Phase 13b: prepend the colour legend as a prose line, its break-words wrapped in the SAME pandoc
   # span classes the cells use (both call tx_slot_class(), so tab_css() colours them identically).
@@ -266,33 +290,34 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
     }
   }
 
-  # For tables with tab_vars or compact tables: blank out grouping columns
-  # except first row of each group (show label only once per sub-table)
-  if (length(tab_vars) > 0) {
-    for (tv in tab_vars) {
-      tv_idx <- which(names(cell_data) == tv)
-      if (length(tv_idx) == 1) {
-        vals <- cell_data[[tv_idx]]
-        for (i in seq_along(vals)) {
-          # blank a tab_var cell that repeats the previous label OR is NA (a continuation row such as
-          # a materialised p-value line, which belongs to the preceding sub-table) -- NA-safe so the
-          # `if` never receives a missing value (kable already tolerates these rows).
-          if (i > 1 && (is.na(vals[i]) || isTRUE(vals[i] == vals[i - 1]))) {
-            cell_data[[tv_idx]][i] <- ""
-          }
-        }
-      }
+  # Phase 14i: name each block ONCE -- blank every label cell that is not a run start (the run model is
+  # the prep's, shared with the html rowspan and the Excel merge). The old loop was a naive per-column
+  # `vals[i] == vals[i-1]` gated on `tab_vars`, so a merged table (which has none) named its
+  # row-variable on every row; tab_label_runs() also nests the columns, which the naive scan did not.
+  # The name column is ITALIC (the maintainer's call): it mirrors the *col_var* name row below and, in
+  # a column that otherwise holds level labels, marks the cell as a variable NAME. tab_var cells stay
+  # plain -- their values ARE levels ("Male"), not names. Done BEFORE the width pass, so the markup is
+  # measured; the column is left-aligned, so the padding needs no arithmetic.
+  for (cl in names(label_cols)) {
+    idx <- which(names(cell_data) == cl)
+    if (length(idx) != 1) next
+    show <- label_runs[[cl]]$show
+    cell_data[[idx]][!show] <- ""
+    if (cl %in% names(var_name_col)) {
+      nz <- show & nzchar(cell_data[[idx]]) & !is.na(cell_data[[idx]])
+      cell_data[[idx]][nz] <- paste0("*", cell_data[[idx]][nz], "*")
     }
   }
 
   is_right <- fmt_mask  # named logical: TRUE for fmt (right-aligned) columns
 
-  # Blank out tab_vars header names (they label sub-tables, not real columns)
-  if (length(tab_vars) > 0) {
-    for (tv in tab_vars) {
-      tv_idx <- which(names(cell_data) == tv)
-      if (length(tv_idx) == 1) names(cell_data)[tv_idx] <- ""
-    }
+  # Blank out the label columns' header names (they label sub-tables, not real columns). The `""`
+  # sentinel in names(cell_data) is what drives `col_names` at Step 7. Phase 14i: `tab_vars` ->
+  # `label_cols`, so a merged table's name column loses the literal "row_var" header here too (the
+  # prep already blanks it in cvh$clean, for the three backends that read the header model).
+  for (cl in names(label_cols)) {
+    idx <- which(names(cell_data) == cl)
+    if (length(idx) == 1) names(cell_data)[idx] <- ""
   }
 
   # --- Step 6b (Phase 10f): per-cell pandoc span attributes (colour) ---
@@ -334,6 +359,14 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   }
   header_widths <- nchar(col_names)
 
+  # Phase 14i: `bold_rows` is a pure ROW set, applied to every column -- so a bold row bolded the LABEL
+  # cell too (`**DIPLOM**`). The label columns opt out, here at the consumer (the prep cannot know a
+  # backend's markup). The LEVEL still bolds on a reference row, which is wanted. This is the ONE
+  # definition: the width pass below and the Step-11 body loop must charge the same markup, or the
+  # column over-pads by the `**` it no longer writes.
+  no_bold      <- seq_len(n_cols) %in% label_cols
+  bold_rows_of <- function(j) if (no_bold[j]) integer(0) else bold_rows
+
   # Column width = max of display widths:
   #   right-aligned normal: nchar + 3 (1 leading + 2 trailing for bold zone)
   #   left-aligned normal:  nchar + 2 (1 space each side)
@@ -357,15 +390,17 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
       # visible character -- the value plus any markup that precedes that character (md_extra()).
       # Padding to it aligns what the reader sees; padding to the value alone (or, worse, adding the
       # bold +4 to the value) does not, because the markup is invisible only once rendered.
-      vis <- cell_widths[, j] + md_extra(cell_data[[j]], seq_len(n_rows) %in% bold_rows, prim_mat[, j])
+      vis <- cell_widths[, j] + md_extra(cell_data[[j]], seq_len(n_rows) %in% bold_rows_of(j),
+                                         prim_mat[, j])
       num_width[j]  <- if (any(nonempty)) max(vis[nonempty]) else 0L
       attr_width[j] <- if (any(nonempty)) max(nchar(attr_mat[nonempty, j])) else 0L
       col_width[j]  <- max(num_width[j] + attr_width[j] + 4L, header_widths[j] + 2L)
     } else {
       margin <- if (is_right[j]) 3L else 2L
       widths <- cell_widths[, j] + margin  # normal cells
-      if (length(bold_rows) > 0) {
-        widths[bold_rows] <- cell_widths[bold_rows, j] + 4L  # bold cells
+      bj     <- bold_rows_of(j)
+      if (length(bj) > 0) {
+        widths[bj] <- cell_widths[bj, j] + 4L  # bold cells
       }
       col_width[j] <- max(c(widths, header_widths[j] + 2L))
     }
@@ -403,9 +438,11 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   # name for a single col_var too) was invalid. Verified with pandoc 3.7.
   # Below the delimiter it parses, and it is styled as data: the name in the FIRST cell of its group
   # (a centred span would need a colspan pandoc pipe tables cannot express), italic, so it reads as a
-  # sub-heading rather than a value. `col_var_names = FALSE` drops it.
+  # sub-heading rather than a value.
+  # Phase 14i: `var_names` drops it by blanking `cvh$label` in the prep -- so this gate needs no
+  # argument of its own (it is the same gate the html/kableExtra/xl span rows already used).
   col_var_header_line <- NULL
-  if (isTRUE(col_var_names) && any(nzchar(cvh$label))) {
+  if (any(nzchar(cvh$label))) {
     header_parts <- character(0)
     j <- 1
     while (j <= n_cols) {
@@ -474,13 +511,14 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
     row_cells <- character(n_cols)
     for (j in seq_len(n_cols)) {
       split_at <- prim_mat[i, j]                          # Phase 13c-ii composite bold-prefix width
+      bold_j   <- is_bold && !no_bold[j]   # Phase 14i -- see bold_rows_of() above
       if (do_color && is_right[j]) {
         row_cells[j] <- md_color_cell(cell_data[[j]][i], attr_mat[i, j],
-                                      num_width[j], col_width[j], is_bold, split_at,
+                                      num_width[j], col_width[j], bold_j, split_at,
                                       attr_width = attr_width[j])
       } else {
         row_cells[j] <- pad_cell(cell_data[[j]][i], col_width[j],
-                                  is_right[j], is_bold, split_at)
+                                  is_right[j], bold_j, split_at)
       }
     }
     body_lines[i] <- md_insert_col_sep(row_cells, new_col_var, n_cols,

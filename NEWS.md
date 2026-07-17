@@ -3,6 +3,15 @@
 # tabxplor 1.4.0 (in development)
 
 ## New features
+* **Variable names are written once, and you choose which ones.** A table built from several
+  `row_vars` used to repeat the row-variable name on every single row, under a meaningless `row_var`
+  header. Every exporter now names each block **once**: `tab_kable()` spans one cell over the block and
+  writes the name vertically (so a long name costs no column width), `tab_xl()` merges and rotates it
+  90 degrees, `tab_md()` writes it in italics, and the `row_var` header is gone. A kept `tab_vars`
+  column is merged the same way, but never rotated -- its values are levels you read, not a name. The
+  new **`var_names`** argument (`"both"` by default, `"rows"`, `"cols"` or `"none"`; also
+  `options("tabxplor.var_names")`) picks which variable names to write, on `tab_kable()` / `tab_md()` /
+  `tab_xl()` / `tab_plot()` / `tab_export()`. Level headers always keep their name.
 * **Redesigned colours & breaks API.** The `color` argument now has a simple grammar: **position
   picks the visual channel** (1st value -> text, 2nd -> background) and **names pick the column type**
   (`pct` / `mean`). So `color = c("diff", "ratio")` colours the text by the difference and the
@@ -538,6 +547,9 @@
   genuinely self-contained (as documented) and its output is stable across `kableExtra` versions.
 
 ## Deprecations
+* `tab_md(col_var_names =)` is **soft-deprecated** in favour of the shared `var_names` argument, which
+  every exporter takes and which also governs the row-variable name: `col_var_names = FALSE` is
+  `var_names = "rows"` (or `"none"`). It still works.
 * `chi2` is renamed **`test`** in `tab()` and `tab_counts()` (soft-deprecated; `chi2` still works).
   The whole-(sub)table test is a Chi-squared only for factor `col_vars` — a numeric one gets Welch's
   F (one-way ANOVA) — so the old name described half of what the argument does.

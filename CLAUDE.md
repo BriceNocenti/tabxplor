@@ -73,12 +73,18 @@ R/
 │                              tx_chrome_hex (single source, also read by tab_export_prep's theme_cols),
 │                              tx_css_rules/tx_css_render + the tx_dark_hooks/tx_light_hooks page-toggle
 │                              selectors. "auto" = 4 cascade layers; their ORDER is the contract.
-├── tab-export-prep.R (~400 L) Phase 10d shared exporter prep: tab_export_prep() -> tabxplor_render
+├── tab-export-prep.R (~570 L) Phase 10d shared exporter prep: tab_export_prep() -> tabxplor_render
 │                              model (roles/ann/bold/range/labels), consumed by kable/md/plot/xl;
 │                              resolve_export_opts() (13d: theme=NULL -> options("tabxplor.theme"),
 │                              gains "auto" gated by allow_auto; static backends get "light");
 │                              Phase 13c-iii col_var header model tab_col_var_header()/tab_header_runs()
-│                              (spanning names + suffix-stripped level labels)
+│                              (spanning names + suffix-stripped level labels);
+│                              Phase 14i variable-NAME model: tab_label_runs() -> roles$label_cols/
+│                              label_runs (name each block ONCE: md blanks / html rowspans / xl merges)
+│                              + roles$var_name_col (the merged `row_var` col: droppable, vertical,
+│                              italic, never bold) + the shared `var_names` arg, whose BOTH drops live
+│                              in prep_one_table() (the col side = blank col_var_header$label, which
+│                              every backend already gates its span row on -> zero backend code)
 ├── tab-render-html.R (~370 L) Phase 10e tab_kable render seam: render_kable_html() (kableExtra +
 │                              home-built html engines) + tab_kable_join(css=)/scrollbox. 13d: the html
 │                              engine is THEME-AGNOSTIC -- colour is a slot CLASS, never inline hex
@@ -2602,7 +2608,7 @@ neither the review nor the roadmap had named, and three of those change the shap
 
 ---
 
-## Phase 14h — one digit-width space, everywhere it must align
+#### Phase 14h — one digit-width space, everywhere it must align
 
 Mechanical, cheap, no design. Do it first: 14i/14j/14m all read the padded output.
 
@@ -2643,7 +2649,7 @@ only — `_snaps/golden.md` (console, `pad = " "`) must NOT move; if it does, th
 **Do not touch**: the U+202F in row LABELS ([tab_classes.R:2299-2315](R/tab_classes.R#L2299), the
 `unbreakable_spaces` option). It is not padding; it is the separately-flagged "is this deliberate?" item.
 
-### Done (2026-07-17)
+##### Done (2026-07-17)
 
 Full suite **FAIL 0 | WARN 0 | PASS 2923**; no `_golden/*.rds` and no `_color_golden/*.rds` touched.
 Conscious regen of the two DISPLAY snapshots only (see below). New `test-digit-space.R` (26).
@@ -2690,7 +2696,78 @@ columns, because `md_extra()` correctly charges 4 markup columns for a partial-b
 
 ---
 
-## Phase 14i — the variable-name model (one shared label column)
+#### Phase 14i — the variable-name model (one shared label column) (DONE — 2026-07-17)
+
+Both findings fixed. Full suite **FAIL 0 | WARN 0 | PASS 3023** (+100); `document()` clean. Every
+`_golden/*.rds` and `_color_golden/*.rds` **byte-identical**, `_snaps/render-html.md` unchanged; the
+ONLY churn is one conscious `_snaps/golden.md` line (a tab_var label cell de-bolded — see below).
+Browser/Excel sample: `dev/review_manual/phase14i_var_names.{html,md,xlsx}`.
+
+**The shape: two roles, and both `var_names` drops live in the prep.** The insight that shrank the
+phase — all four backends ALREADY gate the col_var span on `any(nzchar(cvh$label))` (md, kableExtra,
+the html engine, and tab_xl's `has_span`, which also drives its geometry offset). So blanking
+`col_var_header$label` in `prep_one_table()` drops the span row **everywhere with zero backend code**;
+the row-side drop is the twin (drop the column before the role detection, and even `tab_plot` — which
+reads no header model — inherits it). Two roles, deliberately distinct (conflating them would rotate
+"Male"/"Female"), **mutually exclusive by construction** since `tab_compact()` bails on tab_vars:
+- `roles$label_cols` + `roles$label_runs` — the leading factor cols whose value repeats down a block
+  (the synthetic `row_var` col when `compacted`, else the kept `tab_vars`). ONE run model, four
+  consumers: md blanks, the html engine `rowspan`s, Excel merges, tab_plot blanks.
+- `roles$var_name_col` — the name-VALUED subset only: `var_names` drops it, its header always blanks,
+  html/Excel rotate it, md italicises it, and it is never bold. A tab_var's values are LEVELS: merged
+  and blanked, never dropped, never rotated.
+
+- **Finding 2 (one line)**: `prep_one_table()`'s `vars` now carries `row_vars` + `compacted` (which
+  `tab_render_vars()` has returned since 14d). The Excel title reads **"race, marital by relig"**, was
+  "levels by relig". Unblocks 14l.
+- **New shared `tab_label_runs()`** (`R/tab-export-prep.R`): per column `list(show, span)`. Runs come
+  from the VALUES, not the grouping (`new_group` marks the full group COMBINATION for >= 2 tab_vars, so
+  the outer tab_var's run would be cut; values also survive an ungrouping dplyr chain). NA = a
+  continuation (md's rule verbatim: a materialised p-value row belongs to the block above). Nested
+  outer -> inner, which md's naive per-column scan was not.
+- **`var_names = c("both","rows","cols","none")`** + `options("tabxplor.var_names")`, on
+  `tab_kable`/`tab_md`/`tab_xl`/`tab_plot`/`tab_export` via `resolve_export_opts()` (the formal sits
+  **after `caption`** — every call site passes the ones above it positionally). It never touches a
+  LEVEL column's header (`marital` on a single-row_var table, `year` on a kept tab_var): that header
+  identifies the column, costs no width, and is the mirror of the col-side rule (which removes the span
+  row, never the level names). **Maintainer's call this session.** `tab_md(col_var_names)` →
+  `deprecate_soft` onto it (FALSE drops the col side of whatever `var_names` asks, so they compose);
+  its use site and the `md_render_one()` formal are deleted — the prep's blank `label` is the gate now.
+- **The literal `"row_var"` header is always dropped** (a bug fix, not a setting): one blank in
+  `tab_col_var_header()`, whose suffix loop only ever visited LABELLED columns. md / kableExtra / html
+  / xl all follow.
+- **md**: name once, **italic** (the maintainer's call — it mirrors the `*ROCK*` col_var row and marks
+  a NAME in a column that otherwise holds level labels; tab_var cells stay plain), never bold. ⚠ The
+  bold exclusion had to reach the WIDTH pass too (`bold_rows_of()`): `md_extra()` and the `+4` charge
+  markup width per column, so charging `**` the body no longer writes over-pads the column and the
+  pipes stop lining up. **The one golden line**: a tab_var's `**Ensemble**` label cell is now
+  `Ensemble` — exactly "bold not needed for row_vars names (or tab_vars names)"; the LEVEL
+  (`**Total Ensemble**`) still bolds, and the width is unchanged.
+- **html**: the roadmap's "watch out" was **free** — `td_html` is a list of per-column vectors joined by
+  `do.call(paste0, ...)`, so a continuation row just contributes `""`. `rowspan` per run; `tx-vname`
+  only where `span > 1` (a rotated 1-row cell just makes the row tall).
+- **Excel**: `xlb_merge()` per run (`text_rotation` was already a per-cell matrix in the style dedup
+  key, only `colnames_rotation` drove it) + 90 degrees + a narrow (3.5) name column. The label repeats
+  are **blanked in the written data**: Excel keeps only a merged range's top-left value, so a repeat
+  below it is an invisible ghost the user finds again on unmerging.
+
+**Two deviations from the roadmap's letter, both deliberate:**
+- **point 5's `writing-mode: sideways-lr` → `vertical-rl` + `rotate(180deg)`.** MDN still flags
+  `sideways-*` experimental with patchy support. The replacement reads the same way (bottom-to-top,
+  matching Excel's 90 degrees) and is supported since Chrome 8 / Safari 5.1. Test-locked.
+- **point 6's md dash separator row → deferred to 14m** (maintainer's call): reusing `dash_line` today
+  renders as a literal dash row in html, and 14m makes every separator row invisible at once.
+
+**Found and fixed in passing**: `%||%` at `tab_xl.R:196` and `tab_classes.R:1244` is **base R >= 4.4
+only** — DESCRIPTION says `R (>= 4.1)` and neither `data.table` nor `vctrs` (the only `import()`s)
+exports it, so both errored on R 4.1-4.3. The package knows (three other sites carry the *"use explicit
+is.null()"* comment); these two missed it. Step 1 deleted the `tab_xl` one outright.
+
+**Flagged for the maintainer** (not fixed here): `prep$labels` and `prep$range_totcol` are both **dead**
+— nothing reads either, and each costs a `compute` token on every kable/plot export. 14j item 5 already
+schedules `tab_export_labels()`; `range_totcol` is scheduled nowhere.
+
+##### Original plan (historical intent)
 
 **Why** — findings 1 and 2. Today, in all three backends, a compacted table renders a column with the
 literal header `row_var` and its value on every row.
@@ -2735,7 +2812,7 @@ exporters). gss_cat only.
 
 ---
 
-## Phase 14j — the html engine, pass 2 (borders + compactness)
+#### Phase 14j — the html engine, pass 2 (borders + compactness)
 
 **Why** — findings 4 and 5, plus the dead weight found alongside.
 
@@ -2779,7 +2856,7 @@ current fixtures never do, which is why the bug survived two phases.
 
 ---
 
-## Phase 14k — `theme = "auto"` resolution + the Positron Viewer
+#### Phase 14k — `theme = "auto"` resolution + the Positron Viewer
 
 **Why** — finding 7, plus two Viewer complaints with the same origin.
 
@@ -2806,7 +2883,7 @@ detector, never depend on the host IDE. **Ask the maintainer for the Windows-dar
 
 ---
 
-## Phase 14l — Excel, pass 2
+#### Phase 14l — Excel, pass 2
 
 **What**
 
@@ -2842,7 +2919,7 @@ and still renders.
 
 ---
 
-## Phase 14m — `tab_md()`, pass 2 — **DESIGN FIRST**
+#### Phase 14m — `tab_md()`, pass 2 — **DESIGN FIRST**
 
 **Start with design, in a fresh session, out of the box.** Findings 9 and 10 are ONE problem: **the
 rendered-md html has no classes, so the block structure the other backends draw with role classes cannot
@@ -2853,6 +2930,13 @@ Phase 13d made `tab_css()` deliberately **table-independent** (one stylesheet pe
 hashes, no positional rules). So the only table-independent levers are `:empty`, `:has()`, and pandoc
 bracketed spans **inside** cells (`[x]{.cls}` — already the idiom everywhere). A positional `nth-child`
 rule would re-introduce per-table CSS and must not be used.
+
+⚠ **Inherited from 14i (maintainer's call): the dash separator row UNDER the col_var name row.** The
+review asked for it (`| *ROCK* |` then `| ---------------- |` then the numbers), and 14i deferred it
+here rather than ship a second known-wrong-in-html row: reusing `dash_line` renders as literal dashes,
+which is finding 9. Design it WITH the sub-table separators below — same mechanism, one pass. `dash_line`
+lives inside the `new_group` block ([tab_md.R:490-511](R/tab_md.R#L490)) and must be lifted out to be
+reusable. The label column itself is done (14i): the name shows once per block, italic, not bold.
 
 **Candidate directions (the design step chooses and justifies):**
 
@@ -2887,7 +2971,7 @@ is only provable in a real Quarto render, since Bootstrap is what it fights.
 
 ---
 
-## Phase 14n — one Total row for several row_vars — **DESIGN FIRST**
+#### Phase 14n — one Total row for several row_vars — **DESIGN FIRST**
 
 **Rule (settled)**: collapse when the per-block total rows are identical **as displayed** — same rendered
 strings at the chosen digits. Otherwise keep them all and emit **one** message naming `na=` as the cause.
@@ -2920,7 +3004,7 @@ unaffected; the collapse is display-only (`nrow(tab(...))` unchanged).
 
 ---
 
-## Phase 14o — transpose at the render level — **DESIGN FIRST**
+#### Phase 14o — transpose at the render level — **DESIGN FIRST**
 
 **Why** — finding 8. `tab_transpose()` cannot be repaired at the object level; the review's own diagnosis
 ("colours must be calculated first from the not-transposed vctrs fields, then the transposition done not on

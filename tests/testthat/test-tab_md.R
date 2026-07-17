@@ -383,7 +383,7 @@ testthat::test_that("tab_md() output is valid pandoc: it renders as a real <tabl
   )
   for (nm in names(cases)) {
     md <- tab_md(cases[[nm]], print = FALSE,
-                 col_var_names = !identical(nm, "no col_var name"))
+                 var_names = if (identical(nm, "no col_var name")) "rows" else "both")
     h  <- md_pandoc_html(md)
     testthat::expect_match(h, "<table", label = nm)
     # the two symptoms of a table pandoc refused
@@ -402,11 +402,33 @@ testthat::test_that("the delimiter row's spacer column is dashes, not a blank", 
   testthat::expect_no_match(sep, "| |", fixed = TRUE)
 })
 
-testthat::test_that("col_var_names = FALSE drops the name row", {
+testthat::test_that("var_names drops the col_var name row", {
   t <- tab(gss, marital, race, pct = "row")
   testthat::expect_match(tab_md(t, print = FALSE, color = FALSE), "[*]race[*]", perl = TRUE)
-  testthat::expect_no_match(tab_md(t, print = FALSE, color = FALSE, col_var_names = FALSE),
-                            "[*]race[*]", perl = TRUE)
+  for (vn in c("rows", "none")) {
+    testthat::expect_no_match(tab_md(t, print = FALSE, color = FALSE, var_names = vn),
+                              "[*]race[*]", perl = TRUE)
+  }
+  testthat::expect_match(tab_md(t, print = FALSE, color = FALSE, var_names = "cols"),
+                         "[*]race[*]", perl = TRUE)
+})
+
+testthat::test_that("the deprecated `col_var_names` still drops the col_var name row", {
+  # Phase 14i: md-only `col_var_names` generalised to the shared `var_names`. FALSE drops the COL side
+  # of whatever `var_names` asks for, so the two compose instead of fighting.
+  t <- tab(gss, marital, race, pct = "row")
+  lifecycle::expect_deprecated(
+    md <- tab_md(t, print = FALSE, color = FALSE, col_var_names = FALSE)
+  )
+  testthat::expect_no_match(md, "[*]race[*]", perl = TRUE)
+  # ... and composes with an explicit var_names: "cols" + col_var_names = FALSE -> nothing left
+  suppressWarnings(
+    md2 <- tab_md(t, print = FALSE, color = FALSE, var_names = "cols", col_var_names = FALSE)
+  )
+  testthat::expect_no_match(md2, "[*]race[*]", perl = TRUE)
+  # TRUE is a no-op (still deprecated, but changes nothing)
+  suppressWarnings(md3 <- tab_md(t, print = FALSE, color = FALSE, col_var_names = TRUE))
+  testthat::expect_match(md3, "[*]race[*]", perl = TRUE)
 })
 
 testthat::test_that("a pipe in a label is escaped, not a spurious cell", {
@@ -442,4 +464,51 @@ testthat::test_that("css = TRUE wraps the table in a fenced div the stylesheet c
   # pandoc emits a BARE <table> for a pipe table; the div is the only hook tab_css() can style
   testthat::expect_match(h, '<div class="tabxplor-tab">', fixed = TRUE)
   testthat::expect_match(h, "<table", fixed = TRUE)
+})
+
+# === SECTION: the label columns -- name once, italic, not bold (Phase 14i) ===
+
+testthat::test_that("a merged table names each row-variable ONCE, italic, not bold", {
+  # Phase 14i regression: 14d made tab_compact() correctly record tab_vars = character(0), which
+  # SILENCED md's tab_vars-gated blanking loop -- so the row-variable name printed on every row.
+  md <- tab_md(tab(gss, c(race, marital), relig, pct = "row"), print = FALSE, color = FALSE)
+  lines <- strsplit(md, "\n")[[1]]
+  testthat::expect_length(grep("*race*", lines, fixed = TRUE), 1L)
+  testthat::expect_length(grep("*marital*", lines, fixed = TRUE), 1L)
+  # italic (it marks a NAME, like the col_var row), never bold -- even on a bold reference row
+  testthat::expect_no_match(md, "**race**", fixed = TRUE)
+  testthat::expect_no_match(md, "**marital**", fixed = TRUE)
+  # the literal "row_var" header is gone
+  testthat::expect_no_match(lines[[1]], "row_var", fixed = TRUE)
+})
+
+testthat::test_that("a kept tab_var is named once too, but PLAIN (its values are levels)", {
+  t  <- tab(gss, marital, race, year, pct = "row") |> dplyr::filter(year %in% c(2000, 2006))
+  md <- tab_md(t, print = FALSE, color = FALSE)
+  lines <- strsplit(md, "\n")[[1]]
+  testthat::expect_length(grep("| 2000 ", lines, fixed = TRUE), 1L)
+  testthat::expect_length(grep("| 2006 ", lines, fixed = TRUE), 1L)
+  testthat::expect_no_match(md, "*2000*", fixed = TRUE)   # a level is not a variable name
+  testthat::expect_no_match(md, "**2000**", fixed = TRUE)
+})
+
+testthat::test_that("the label column's de-bolding does not desync the column width", {
+  # md_extra() / the bold +4 charge markup width per column: leave them charging `**` the body no
+  # longer writes and the label column over-pads, so the pipes stop lining up.
+  md    <- tab_md(tab(gss, c(race, marital), relig, pct = "row"), print = FALSE, color = FALSE)
+  lines <- grep("^[|]", strsplit(md, "\n")[[1]], value = TRUE)
+  testthat::expect_length(unique(nchar(lines)), 1L)
+  testthat::expect_length(unique(purrr::map_int(gregexpr("|", lines, fixed = TRUE), length)), 1L)
+})
+
+testthat::test_that("var_names = 'cols' / 'none' drops the row-variable name column", {
+  merged <- tab(gss, c(race, marital), relig, pct = "row")
+  for (vn in c("cols", "none")) {
+    md <- tab_md(merged, print = FALSE, color = FALSE, var_names = vn)
+    testthat::expect_no_match(md, "*race*", fixed = TRUE, label = vn)
+    testthat::expect_no_match(md, "*marital*", fixed = TRUE, label = vn)
+    testthat::expect_match(md, "Never married", fixed = TRUE, label = vn)   # the levels stay
+  }
+  testthat::expect_match(tab_md(merged, print = FALSE, color = FALSE, var_names = "rows"),
+                         "*race*", fixed = TRUE)
 })

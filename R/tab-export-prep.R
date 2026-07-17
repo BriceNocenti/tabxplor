@@ -9,9 +9,13 @@
 #   - The render-model is an EPHEMERAL S3-tagged list, NOT tab attributes (dplyr rename/select desync
 #     bare attributes). Built once, consumed by one backend, discarded.
 #   - Genuinely medium-specific quirks stay LOCAL to each exporter (glyph/colour application,
-#     NA-hiding, the new_col_var transition index, md's tab_vars keep+blank). The prep factors only
-#     the shared, expensive, derive-once quantities.
-# See: dev/tabxplor_phase10_exporters.md (Sec 1-2, 5), CLAUDE.md Phase 10d, decisions.md Sec 33.
+#     NA-hiding, the new_col_var transition index). The prep factors only the shared, expensive,
+#     derive-once quantities -- and, from 14i, the shared MODEL the backends' markup differs over.
+#   - Phase 14i: the variable-NAME annotations are decided here, once, for all four backends:
+#     `roles$label_cols` / `label_runs` (name each block once: md blanks, html rowspans, Excel
+#     merges), `roles$var_name_col` (the merged table's name column), and the `var_names` argument,
+#     whose two drops happen in prep_one_table() so no backend needs to know it exists.
+# See: dev/tabxplor_phase10_exporters.md (Sec 1-2, 5), CLAUDE.md Phase 10d + 14i, decisions.md Sec 33.
 
 
 # === SECTION: canonical col_vars check (block A) =====================================
@@ -125,6 +129,63 @@ tab_bold_rows <- function(ref_alltot_list, md_style = FALSE) {
 }
 
 
+# === SECTION: the label columns and their runs (Phase 14i) ===========================
+
+# The shared run model for the LABEL columns -- the leading factor columns whose value repeats down a
+# block, and which every backend must therefore render ONCE per block: md blanks the repeats, the html
+# engine gives the run a `rowspan`, Excel merges it. One definition, four consumers (the review's "add
+# a shared function, be consistent between export types").
+#
+# Two kinds of label column, and they are MUTUALLY EXCLUSIVE by construction (tab_compact() bails on
+# tab_vars, so a merged table has none):
+#   - the synthetic `row_var` column of a merged table: its values are variable NAMES and its header is
+#     the literal "row_var" -> `roles$var_name_col`, which `var_names` can drop and which renders
+#     vertically / italic. It is neither the row_var (that is the literal "levels" column) nor a
+#     tab_var, so nothing named it before this phase;
+#   - the `tab_vars` when they are kept: their values are LEVELS and their header is a real variable
+#     name. Data -- never dropped by `var_names`, never rotated.
+#
+# Returns, per column, `list(show = lgl(n_row), span = int(n_row))`: `show[i]` marks a run START and
+# `span[i]` is its length; a `!show` row is a continuation (blank / omitted / merged over).
+#
+# DESIGN: runs come from the VALUES, not from the grouping. `roles$new_group` marks the same boundaries
+# for a merged table, but for >= 2 tab_vars it marks the full group COMBINATION, so the outer tab_var's
+# run (which spans several groups) would be cut. Values also survive a dplyr chain that ungrouped.
+# The scan is nested (outer -> inner): an outer column's new run restarts every inner one, so a
+# one-row group followed by a group repeating the inner value cannot be merged across. md's own loop
+# compared each column naively; that is equivalent under the nested ordering tab() produces, so this
+# is a hardening, not a behaviour change.
+# NA = a continuation, reproducing md's rule verbatim: a materialised p-value row carries NA in the
+# label column and belongs to the block above it.
+#' @keywords internal
+tab_label_runs <- function(tab, label_names) {
+  n <- nrow(tab)
+  res <- list()
+  if (length(label_names) == 0 || n == 0) return(res)
+
+  force <- rep(FALSE, n)
+  force[1] <- TRUE                                    # the first row always starts a run
+  for (cl in label_names) {
+    # base `[[`, never tidyselect: a merged table HAS a column named "row_var" (the data-mask trap
+    # tab_transpose() documents at tab.R ~L2425).
+    v    <- as.character(tab[[cl]])
+    locf <- v                                         # carry the last real value over the NA rows
+    for (i in seq_len(n)[-1]) if (is.na(locf[i])) locf[i] <- locf[i - 1]
+    start <- force
+    if (n > 1) {
+      changed <- !is.na(v[-1]) & (is.na(locf[-n]) | v[-1] != locf[-n])
+      start[-1] <- start[-1] | changed
+    }
+    at   <- which(start)
+    span <- rep(0L, n)
+    span[at] <- diff(c(at, n + 1L))
+    res[[cl]] <- list(show = start, span = span)
+    force <- start                                    # nest the next (inner) column inside this one
+  }
+  res
+}
+
+
 # === SECTION: total-column base range [min;max] (block B, decisions.md Sec 10) =======
 
 # Each col_var's own percentage base can differ (chiefly na="drop" with different NA rates), so one
@@ -209,7 +270,7 @@ tab_resolve_tables <- function(tabs, list_method = FALSE, what,
 # Build the render-model for ONE resolved table (already compacted / single). See the file header.
 #' @keywords internal
 prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
-                           theme_cols, color_type) {
+                           theme_cols, color_type, var_names = "both") {
   rv <- tab_render_vars(tab)
   if (isTRUE(rv$degrade)) {
     return(list(tab = tab, vars = list(degrade = TRUE, reason = rv$reason)))
@@ -225,6 +286,20 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
   tab <- dplyr::ungroup(tab)
   if (drop_tab_vars && length(tab_vars) > 0) {
     tab <- dplyr::select(tab, -tidyselect::all_of(tab_vars))
+  }
+  # Phase 14i: `var_names` drops the row-side variable-NAME annotation -- the merged table's synthetic
+  # `row_var` column, whose values ARE the names. Done HERE, before the role detection, so every index
+  # below is right and every backend (incl. tab_plot, which reads no header model) inherits one rule.
+  # The col side is the twin blank of `col_var_header$label` further down.
+  # It never touches a level column's header: `marital` on a single-row_var table, `year` on a kept
+  # tab_var. That header is the column's only identification and costs no width -- the maintainer's
+  # call, and the symmetric one (the col side removes the span row, never the level names).
+  # (the local is `name_col`, not `row_var`: with a column of that name in the frame, a same-named
+  # local is the tidyselect data-mask trap tab_transpose() documents at tab.R ~L2425.)
+  name_col <- if (isTRUE(rv$compacted) && "row_var" %in% names(tab)) "row_var" else character(0)
+  if (length(name_col) > 0 && !var_names %in% c("both", "rows")) {
+    tab      <- dplyr::select(tab, -tidyselect::all_of(name_col))
+    name_col <- character(0)
   }
   if (!is.null(wrap)) {
     tab <- tab_wrap_text(tab,
@@ -257,6 +332,15 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
   # come from the wrapped names -- matches tab_kable's `which(names(tabs) == tab_get_vars(...)$row_var)`).
   row_var_name <- tab_render_vars(tab)$row_var
   row_var_col  <- which(names(tab) == row_var_name)
+
+  # Phase 14i: the LABEL columns and their runs -- see tab_label_runs(). `label_cols` is the blank /
+  # rowspan / merge set (the synthetic name column OR the kept tab_vars, never both); `var_name_col`
+  # is the name-valued subset, the only one `var_names` drops, the header always blanks, and the html
+  # / Excel backends rotate. Both are named-int, indexed on the FINAL tab like every role above.
+  label_names <- intersect(c(name_col, tab_vars), names(tab))
+  label_cols  <- stats::setNames(match(label_names, names(tab)), label_names)
+  var_name_col <- label_cols[names(label_cols) %in% name_col]
+  label_runs  <- tab_label_runs(tab, label_names)
 
   # Total-BLOCK border rows (block D borders), lifted verbatim from tab_kable (derive-once, shared by
   # both render engines). A "total block" is a maximal run of total rows OR the reserved n/pvalue/
@@ -306,11 +390,23 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
   # Phase 13c-iii: the shared col_var HEADER model (spanning variable-name row + suffix-stripped level
   # labels), consumed by every exporter so the two header rows stay in sync (console is unchanged).
   col_var_header <- tab_col_var_header(
-    tab, list(col_var_map = col_var_map, real_col_vars = real_col_vars, totcols = totcols))
+    tab, list(col_var_map = col_var_map, real_col_vars = real_col_vars, totcols = totcols,
+              var_name_col = var_name_col))
+
+  # Phase 14i: the col-side twin of the `var_names` row-side drop above. Blanking `label` is the WHOLE
+  # implementation: every backend already gates its spanning-name row on `any(nzchar(label))` -- md
+  # (tab_md.R), kableExtra + the html engine (tab-render-html.R), and tab_xl's `has_span` (which also
+  # drives its geometry offset). So one line here, and no backend needs to know the argument exists.
+  if (!var_names %in% c("both", "cols")) col_var_header$label[] <- ""
 
   list(
     tab = tab,
+    # Phase 14i: `row_vars` (the SOURCE names) and `compacted` are passed through, not re-derived.
+    # tab_render_vars() has returned both since 14d, but this list dropped them -- so tab_xl's title
+    # read "levels by relig" (the merge's own scaffolding column) instead of "race, marital by relig".
+    # Both come from the `vars` ATTRIBUTE, so they are unaffected by the ungroup/drop/wrap above.
     vars = list(degrade = FALSE, row_var = row_var_name, tab_vars = tab_vars,
+                row_vars = rv$row_vars, compacted = isTRUE(rv$compacted),
                 col_vars = rv$col_vars, col_vars_levels = rv$col_vars_levels),
     roles = list(fmt_mask = fmt_mask, fmt_cols = fmt_cols, other_cols = other_cols,
                  row_var_col = row_var_col, totcols = totcols, totrows = totrows,
@@ -318,6 +414,8 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
                  totblock_bottom = totblock_bottom, real_col_vars = real_col_vars,
                  col_var_map = col_var_map, new_col_var = new_col_var,
                  new_group = new_group, align = align,
+                 label_cols = label_cols, var_name_col = var_name_col,
+                 label_runs = label_runs,
                  color_cols = color_cols, any_bg = any_bg),
     ann = ann,
     bold_rows = bold_rows,
@@ -344,6 +442,11 @@ tab_col_var_header <- function(tab, roles) {
   label[!(label %in% real)] <- ""            # row_var / all_col_vars / "" -> no span name
   label[totc] <- ""                          # total column stands alone (the marginal, not a level)
   clean <- nms
+  # Phase 14i: the merged table's name column is headed by the literal "row_var" -- an internal name,
+  # never informative, and the loop below never reaches it (it only visits LABELLED columns). Blanked
+  # unconditionally: this is a bug fix, not a `var_names` setting. One line, and md's `col_names`,
+  # kableExtra's `col.names`, the html engine's `head_cells` and tab_xl's `clean_names` all follow.
+  clean[roles$var_name_col] <- ""
   for (j in which(label != "")) {
     suff <- paste0("_", cvm[[j]])
     if (endsWith(nms[j], suff)) {
@@ -392,15 +495,20 @@ resolve_export_opts <- function(theme = NULL,
                                 color_type = NULL,
                                 color = TRUE, color_legend = TRUE,
                                 transpose = FALSE, caption = NULL,
+                                var_names = NULL,
                                 allow_auto = FALSE) {
   if (is.null(theme)) theme <- getOption("tabxplor.theme", "light")
   theme <- match.arg(theme[1], c("light", "dark", "auto"))
   if (identical(theme, "auto") && !isTRUE(allow_auto)) theme <- "light"
   if (is.null(color_type))  color_type  <- getOption("tabxplor.color_style_type")
+  # Phase 14i: `var_names` is a NEW formal placed after `caption` -- every call site passes the
+  # arguments above it POSITIONALLY, so appending is the only safe insertion point.
+  if (is.null(var_names)) var_names <- getOption("tabxplor.var_names", "both")
+  var_names <- match.arg(var_names[1], c("both", "rows", "cols", "none"))
   color <- isTRUE(color)
   list(theme = theme, color_type = color_type,
        color = color, color_legend = isTRUE(color_legend) && color,
-       transpose = isTRUE(transpose), caption = caption)
+       transpose = isTRUE(transpose), caption = caption, var_names = var_names)
 }
 
 
@@ -418,9 +526,11 @@ tab_export_prep <- function(tabs,
                             theme         = "light",
                             color_legend  = TRUE,
                             transpose     = FALSE,
+                            var_names     = "both",
                             list_method   = FALSE,
                             what          = NULL) {
-  backend <- match.arg(backend)
+  backend   <- match.arg(backend)
+  var_names <- match.arg(var_names[1], c("both", "rows", "cols", "none"))
   if (is.null(what)) what <- paste0("tab_", backend, "()")
   if (is.null(compute)) {
     compute <- if (backend %in% c("kable", "plot")) {
@@ -466,7 +576,7 @@ tab_export_prep <- function(tabs,
     resolved,
     ~ prep_one_table(.x, backend = backend, drop_tab_vars = drop_tab_vars,
                      wrap = wrap, compute = compute, theme_cols = theme_cols,
-                     color_type = color_type[1])
+                     color_type = color_type[1], var_names = var_names)
   )
 
   # table-level labels (survey `label` attributes of the source variables), Suggests-guarded; only

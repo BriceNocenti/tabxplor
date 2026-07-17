@@ -111,6 +111,14 @@ NULL
   # tab_css() once at the top -- the CSS is table-independent, so one copy styles every table.
   options("tabxplor.kable_css" = TRUE)
 
+  # Phase 14i: which variable NAMES the exporters annotate a table with. "both" (default) = today's
+  # behaviour; "rows" = only the row-variable names (a merged table's name column); "cols" = only the
+  # col_var spanning-name row; "none" = neither. It never touches a level column's HEADER (`marital`
+  # on a single-row_var table, `year` on a kept tab_var): that header identifies the column, costs no
+  # width, and is the col-side rule's mirror (which removes the span row, never the level names).
+  # Per-call `var_names =` on tab_kable/tab_md/tab_xl/tab_plot/tab_export overrides. R/tab-export-prep.R.
+  options("tabxplor.var_names" = "both")
+
   # Phase 8: opt-in parallel build of many tables in ONE tab() call (Suggests-only {mirai}).
   # FALSE = off (default); TRUE = auto workers; an integer = that many daemons. `parallel_min` is
   # the smallest row_var count worth dispatching (fewer -> serial: setup would outweigh the gain).

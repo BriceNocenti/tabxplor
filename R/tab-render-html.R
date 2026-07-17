@@ -358,6 +358,25 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
     paste0('<td class="', trimws(paste(cls_col[j], cls)), '"', tip, '>', cell_html, '</td>')
   })
 
+  # (c2) Phase 14i: the LABEL columns are re-emitted as ONE `rowspan` cell per block, so the row/tab
+  # variable is named once instead of on every row. A continuation row contributes the empty string --
+  # which is exactly what (d)'s column-wise paste0 needs, so the assembly is untouched.
+  # The name column additionally gets `tx-vname` (vertical text), but only where the run is longer than
+  # one row: a rotated single-row cell just makes that row tall, so it falls back to horizontal.
+  # html_escape_br() (not the raw path (c) takes): a label cell carries no markup of ours EXCEPT the
+  # `<br>` tab_wrap_text() may have injected, which is exactly what that helper preserves.
+  for (cl in names(roles$label_cols)) {
+    j    <- match(cl, nm)
+    run  <- roles$label_runs[[cl]]
+    if (is.null(run) || is.na(j)) next
+    vert <- cl %in% names(roles$var_name_col) & run$span > 1L
+    cls  <- paste(cls_col[j], "tx-lbl", ifelse(vert, "tx-vname", ""))
+    td   <- paste0('<td class="', trimws(cls), '" rowspan="', run$span, '">',
+                   html_escape_br(cells[[j]]), '</td>')
+    td[!run$show] <- ""
+    td_html[[j]]  <- td
+  }
+
   # (d) rows: paste0 across the LIST of column vectors -> all n_row rows in one call
   row_inner <- do.call(paste0, td_html)
 

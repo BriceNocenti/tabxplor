@@ -861,6 +861,11 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #' @param wrap_cols By default, colnames are wrapped when larger than 12 characters.
 #' @param whitespace_only Set to `FALSE` to wrap also on non whitespace characters.
 # @param unbreakable_spaces Set to `FALSE` to keep normal spaces in text (auto-break).
+#' @param var_names Which variable names to write beside the table: `"both"` (the default),
+#'  `"rows"`, `"cols"` or `"none"`. The row-variable name is the leading column a table with
+#'  several `row_vars` uses to name each block (written once per block, vertically); the
+#'  column-variable names are the spanning row above their level columns. Level headers always
+#'  keep their name. Defaults to \code{getOption("tabxplor.var_names", "both")}.
 #' @param get_data Get the transformed data instead of the html table.
 #' @param engine The HTML render engine. `"kableExtra"` (default) uses \pkg{kableExtra};
 #'  `"html"` uses a dependency-free, self-contained (inline-CSS) `<table>` renderer that is
@@ -884,6 +889,7 @@ tab_kable <- function(tabs,
                       lang = NULL,
                       caption = knitr::opts_current$get("tab.cap"),
                       transpose = FALSE,
+                      var_names = NULL,
                       html_font = NULL,
                       get_data = FALSE,
                       full_width = FALSE,
@@ -895,7 +901,8 @@ tab_kable <- function(tabs,
   .cb <- push_color_breaks(tabs); on.exit(pop_color_breaks(.cb), add = TRUE)
   # Phase 10j: the theme/color_type/color/color_legend preamble is the shared resolver. `html_24_bit`
   # is inert (Phase 13a): exports are always 24-bit, kept only so old calls do not error.
-  o <- resolve_export_opts(theme, color_type, color, color_legend, transpose, allow_auto = TRUE)
+  o <- resolve_export_opts(theme, color_type, color, color_legend, transpose,
+                           var_names = var_names, allow_auto = TRUE)
   theme <- o$theme; color_type <- o$color_type
   color_legend <- o$color_legend
   compute <- c("refs", "bold", "range", "labels")
@@ -927,7 +934,7 @@ tab_kable <- function(tabs,
     tabs, backend = "kable", list_method = TRUE, compute = compute, transpose = o$transpose,
     wrap = list(rows = wrap_rows, cols = wrap_cols, exdent = 2,
                 whitespace_only = whitespace_only, unbreakable_spaces = TRUE, brk = "<br>"),
-    color_type = color_type, theme = theme,
+    color_type = color_type, theme = theme, var_names = o$var_names,
     color_legend = color_legend, what = "tab_kable()"
   )
 
@@ -1240,8 +1247,12 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
   # levels of the synthetic `row_var` factor). Recorded, so no consumer has to guess them back.
   vars_merged <- new_vars_attr(
     row_vars  = purrr::map_chr(tabs, ~ {
-      v <- get_vars_attr(.); if (is.null(v)) tab_get_vars(.)$row_var else v$row_vars
-    } |> dplyr::first() %||% NA_character_),
+      v  <- get_vars_attr(.)
+      rv <- dplyr::first(if (is.null(v)) tab_get_vars(.)$row_var else v$row_vars)
+      # Phase 14i: was `%||% NA_character_`. Base `%||%` is R >= 4.4 only and the package supports
+      # R >= 4.1, importing it from nowhere (cf. resolve_export_opts()) -- so this errored on 4.1-4.3.
+      if (is.null(rv)) NA_character_ else rv
+    }),
     col_vars  = longest_col_vars,
     tab_vars  = character(0),          # guaranteed: the tab_vars bail above returned already
     compacted = TRUE
@@ -1595,6 +1606,8 @@ reg_footer_lines <- function(tabs) {
 #' @param lang Colour-legend language: \code{NULL} (auto from the R/OS locale, English fallback), \code{"en"} or \code{"fr"}.
 #' @param transpose Set to \code{TRUE} to transpose the table before export (rows become columns).
 #' @param caption The table caption.
+#' @param var_names Which variable names to write beside the table: `"both"` (the default),
+#'  `"rows"`, `"cols"` or `"none"`. See \code{\link{tab_kable}}.
 #' @param wrap_rows By default, rownames are wrapped when larger than 30 characters.
 #' @param wrap_cols By default, colnames are wrapped when larger than 12 characters.
 #' @param whitespace_only Set to `FALSE` to wrap also on non whitespace characters.
@@ -1619,6 +1632,7 @@ reg_footer_lines <- function(tabs) {
 tab_plot <- function(tabs,
                      theme = NULL, color_type = NULL, html_24_bit = NULL,
                      color = TRUE, color_legend = TRUE, lang = NULL, caption = NULL, transpose = FALSE,
+                     var_names = NULL,
                      wrap_rows = 35, wrap_cols = 14, # unbreakable_spaces = TRUE
                      whitespace_only = TRUE) {
   # Phase 13a: install a per-table color_breaks override for the render (no-op otherwise).
@@ -1656,7 +1670,8 @@ tab_plot <- function(tabs,
 
   # Phase 10j: shared option resolver (theme/color_type/color/color_legend/transpose). `html_24_bit`
   # is inert (Phase 13a).
-  o <- resolve_export_opts(theme, color_type, color, color_legend, transpose)
+  o <- resolve_export_opts(theme, color_type, color, color_legend, transpose,
+                           var_names = var_names)
   theme <- o$theme; color_type <- o$color_type
   color_legend <- o$color_legend
   compute <- c("refs", "bold", "range", "labels")
@@ -1670,7 +1685,7 @@ tab_plot <- function(tabs,
     tabs, backend = "plot", compute = compute, transpose = o$transpose,
     wrap = list(rows = wrap_rows, cols = wrap_cols, exdent = 1,
                 whitespace_only = whitespace_only, unbreakable_spaces = FALSE, brk = "\n"),
-    color_type = color_type, theme = theme,
+    color_type = color_type, theme = theme, var_names = o$var_names,
     color_legend = color_legend, what = "tab_plot()"
   )
   rd <- prep$tables[[1]]
@@ -1727,6 +1742,16 @@ tab_plot <- function(tabs,
         true  = "bold",
         false = "plain")
     ))
+
+  # Phase 14i: name each block once (the prep's shared run model, as md blanks and html rowspans). No
+  # rotation: a ggtexttable cell is a grob, not a table cell. `var_names` (the name column's drop and
+  # the col_var span suppression) is already honoured upstream, in the prep.
+  for (cl in names(rd$roles$label_cols)) {
+    if (!cl %in% names(tabs)) next
+    show <- rd$roles$label_runs[[cl]]$show
+    tabs[[cl]] <- as.character(tabs[[cl]])
+    tabs[[cl]][!show] <- ""
+  }
 
   tabs_gg <- tabs |>
     dplyr::mutate(

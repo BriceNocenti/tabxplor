@@ -70,6 +70,8 @@ cols2 <- c(musique_vars, "NB_MUSIQUES") # plus the related score as numeric vari
 # c("year", "marital", "age", "race", "rincome", "partyid", "relig", 
 # "denom", "tvhours")
 
+options(tabxplor.parallel = TRUE, tabxplor.cleannames = TRUE, tabxplor.print = "kable")
+
 data <- forcats::gss_cat |>
 dplyr::mutate(married = factor(dplyr::if_else(marital == "Married",
 "01-Married",
@@ -79,7 +81,7 @@ dplyr::mutate(married = factor(dplyr::if_else(marital == "Married",
 # logistic (odds ratios):
 tab_reg(data, dependent = "married", predictors = c("race", "rincome"), family = "binomial")     # genuinely occupy all horizontal space, too much blank            # occupy half the space, compact, good 
 # - Summary stats are difficult to read because they are greyed out : 
-#    a vctrs fields trick can certainly resolve this, like considering them as a 
+#    a vctrs fields trick can certainly resolve this, like considering them as a total rows 
 
 
 tab_reg(data, dependent = "married", predictors = c("race", "rincome"), family = "binomial")     # genuinely occupy all horizontal space, too much blank
@@ -88,8 +90,8 @@ tab(pc18, all_of(rows1), TELE, wt = POND, pct = "col", color = TRUE, na = "drop"
 tab(pc18, all_of(rows1), nb_cine, wt = POND, pct = "col", color = TRUE, na = "drop")   
 # - For a reason unknown, standard tab() with few columns sometimes do not occupy all horizontal space, 
 #    in html in Positron Viewer pane, sometimes don’t, which is inconsistent and bad looking (far too much blank); 
-#   tab_reg() does the same : here very few column and numbers, yet all the horizontal space taken. 
-#  Where does it come from ? To fix in all exports, it’s not only tab_reg.
+#    tab_reg() does the same : here very few column and numbers, yet all the horizontal space taken. 
+#    Where does it come from ? To fix in all exports, it’s not only tab_reg.
 
 
 
@@ -115,6 +117,9 @@ tab_reg(forcats::gss_cat, dependent = "partyid", predictors = c("race", "age"), 
 # ordinal (proportional-odds): one cumulative-OR column
 income3 <- forcats::gss_cat |> dplyr::mutate(income = factor(rincome, ordered = TRUE))
 tab_reg(income3, dependent = "income", predictors = "race", family = "ordinal")
+
+
+
 
 
 

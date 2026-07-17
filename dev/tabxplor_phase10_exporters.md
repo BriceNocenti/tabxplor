@@ -17,6 +17,10 @@ Status: **10c DONE; 10d DONE; 10e DONE; 10f DONE; 10g DONE; 10h DONE; 10i DONE; 
 10d→10j. Read this first, then the matching `dev/tabxplor_1.4.0_decisions.md` sections and
 `dev/tabxplor_architecture.md` "Export System".
 
+⚠ **Phase 14i extended the prep** (2026-07-17): the render-model gained `vars$row_vars` /
+`vars$compacted` and the `roles$label_cols` / `var_name_col` / `label_runs` label model, plus the shared
+`var_names` argument — **§14 below**, and CLAUDE.md's Phase 14i block.
+
 **10j-A — Unified export framework, DONE (2026-07-12).** The Phase 10j integration pass (perf was
 found to be at floor — see decisions §35). Three byte-identical increments:
 - **A-i:** `tab_xl()` consumes the shared prep `ann` two-channel colour SLOTS (`compute += "colors"`),
@@ -280,9 +284,14 @@ structure(
     tables = list(                      # length 1 when compacted; N for list / xl sheets
       list(
         tab   = <tabxplor_tab>,          # the tab actually rendered (canonical raw data)
-        vars  = list(row_var, col_vars, col_vars_levels, tab_vars, degrade = FALSE),
+        # 14i: `row_vars` = the SOURCE names (differ from `row_var`, the COLUMN, on a merged table,
+        # where it is the literal "levels"); `compacted` = several row_vars were merged.
+        vars  = list(row_var, row_vars, compacted, col_vars, col_vars_levels, tab_vars,
+                     degrade = FALSE),
         roles = list(fmt_cols, other_cols, row_var_col, totcols, totrows, no_totrows,
-                     real_col_vars, has_multi_col_vars, new_col_var, new_group, align),
+                     real_col_vars, has_multi_col_vars, new_col_var, new_group, align,
+                     # 14i: the label columns (name each block once) + their runs; see Sec 14
+                     label_cols, var_name_col, label_runs),
         ann   = <named list by fmt-col name>,   # per-column derive-once sidecar (below)
         bold_rows    = <int>,            # reference/total rows to embolden
         range_totcol = list(col = , text = , differ = ),   # §5 [min;max] injection
@@ -602,3 +611,49 @@ Cross-step landings: `[min;max]` helper (10c) → wired in prep (10d) → consum
   differing bases (rare); Option-C (`min` + note) is the documented fallback.
 - **compact + tab_vars** stays deferred (two-level nested rendering) — not entangled with this unification.
 - **Re-profile is a precondition for the 10e/10a lever ranking and the home-built-HTML fallback trigger.**
+
+---
+
+## 14. The variable-name model (Phase 14i, DONE 2026-07-17)
+
+The prep decides the variable-NAME annotations once, for all four backends. Full record: CLAUDE.md
+> Phase 14i. Two roles, deliberately distinct — conflating them would rotate "Male"/"Female" — and
+**mutually exclusive by construction** (`tab_compact()` bails on tab_vars, so a merged table has none):
+
+| role | is | consumers |
+|------|----|-----------|
+| `roles$label_cols` + `roles$label_runs` | the leading factor cols whose value repeats down a block: the synthetic `row_var` col when `compacted`, else the kept `tab_vars` | md blanks · html `rowspan`s · Excel merges · plot blanks |
+| `roles$var_name_col` | the name-VALUED subset only (values ARE variable names; header is the literal `"row_var"`) | `var_names` drops it · header always blank · html/Excel rotate · md italic · never bold |
+
+**`tab_label_runs(tab, label_names)`** → per column `list(show, span)`; `show[i]` marks a run START,
+`span[i]` its length. Runs come from the **VALUES**, not the grouping: `roles$new_group` marks the full
+group COMBINATION for ≥ 2 tab_vars (so an outer tab_var's run would be cut), and values survive a dplyr
+chain that ungrouped. NA = a continuation (a materialised p-value row belongs to the block above).
+Nested outer → inner.
+
+**`var_names = c("both","rows","cols","none")`** (+ `options("tabxplor.var_names")`), resolved by
+`resolve_export_opts()` — the formal sits **after `caption`**, since every call site passes the ones
+above it positionally. **Both drops live in `prep_one_table()`**, which is what makes this cheap:
+
+- **col side** — `col_var_header$label[] <- ""`. Every backend already gates its spanning-name row on
+  `any(nzchar(label))` (md, kableExtra, the html engine, and tab_xl's `has_span`, which also drives its
+  geometry offset), so **no backend code**. This is why `tab_md(col_var_names=)` could be deprecated
+  onto it by deleting its gate.
+- **row side** — drop the `var_name_col` column, before the role detection so every index is right.
+  `tab_plot` (which reads no header model) inherits it for free.
+
+It never touches a LEVEL column's header (`marital` on a single-row_var table, `year` on a kept
+tab_var): that header identifies the column, costs no width, and is the mirror of the col-side rule.
+**Maintainer's call.** The literal `"row_var"` header is blanked **unconditionally** in
+`tab_col_var_header()` (a bug fix, not a setting — its suffix loop only visited labelled columns).
+
+**Backend notes that cost time:**
+- **md** — the bold exclusion must reach the WIDTH pass (`bold_rows_of()`), not just the body loop:
+  `md_extra()` and the `+4` charge markup width per column, so charging `**` the body no longer writes
+  over-pads the column and the pipes stop lining up.
+- **html** — no assembly change needed: `td_html` is a list of per-column vectors joined by
+  `do.call(paste0, ...)`, so a continuation row contributes `""`. `tx-vname` only where `span > 1`.
+- **Excel** — the label repeats are **blanked in the written data**: Excel keeps only a merged range's
+  top-left value, so a repeat below it is an invisible ghost the user finds again on unmerging.
+- **CSS** — `.tx-vname` is `writing-mode:vertical-rl` + `rotate(180deg)`, **not** `sideways-lr` (still
+  experimental, patchy support). Same reading direction, universal support.

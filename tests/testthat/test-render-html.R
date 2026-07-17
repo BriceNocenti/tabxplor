@@ -407,3 +407,51 @@ testthat::test_that("format() pads with FIGURE spaces for html/Excel, ASCII for 
   testthat::expect_true(grepl(fig_space, as.character(tab_kable(t, engine = "html")), fixed = TRUE))
   testthat::expect_false(grepl(fig_space, tab_md(t, print = FALSE, color = FALSE), fixed = TRUE))
 })
+
+# === SECTION: the label column -- rowspan + vertical name (Phase 14i) ========
+
+testthat::test_that("html engine: a merged table names each row-variable once, via rowspan", {
+  h <- rh_strip_style(as.character(
+    tab_kable(tab(gss, c(race, marital), relig, pct = "row"), engine = "html", css = FALSE)))
+  # one cell per block, spanning it -- not one per row
+  testthat::expect_match(h, '<td class="[^"]*tx-lbl[^"]*" rowspan="4">race</td>')
+  testthat::expect_match(h, '<td class="[^"]*tx-lbl[^"]*" rowspan="7">marital</td>')
+  testthat::expect_length(gregexpr(">race</td>", h, fixed = TRUE)[[1]], 1L)
+  testthat::expect_length(gregexpr("rowspan", h)[[1]], 2L)
+  # the literal "row_var" header is gone (a bug fix, not a var_names setting)
+  testthat::expect_no_match(h, ">row_var<", fixed = TRUE)
+  # a rowspan must not desync the column-wise assembly: every row still closes
+  n_tr <- lengths(regmatches(h, gregexpr("<tr", h)))
+  testthat::expect_equal(n_tr, lengths(regmatches(h, gregexpr("</tr>", h))))
+})
+
+testthat::test_that("html engine: tx-vname only where the run is longer than one row", {
+  # a rotated single-row cell just makes that row tall -> it falls back to horizontal.
+  one <- tab(gss, c(race, marital), relig, pct = "row") |>
+    dplyr::filter(!(!!rlang::sym("row_var") == "race") | !!rlang::sym("levels") == "Total")
+  h <- rh_strip_style(as.character(tab_kable(one, engine = "html", css = FALSE)))
+  testthat::expect_match(h, '<td class="[^"]*tx-lbl[^"]*" rowspan="1">race</td>')
+  testthat::expect_no_match(h, 'tx-vname[^"]*" rowspan="1"')
+})
+
+testthat::test_that("html engine: var_names drops the row-name column / the col_var span", {
+  merged <- tab(gss, c(race, marital), relig, pct = "row")
+  h_of <- function(vn) rh_strip_style(as.character(
+    tab_kable(merged, engine = "html", css = FALSE, var_names = vn)))
+  testthat::expect_match(h_of("rows"), ">race</td>")
+  testthat::expect_no_match(h_of("rows"), "tx-span", fixed = TRUE)
+  testthat::expect_no_match(h_of("cols"), ">race</td>")
+  testthat::expect_match(h_of("cols"), "tx-span", fixed = TRUE)
+  testthat::expect_no_match(h_of("none"), "tx-span", fixed = TRUE)
+  testthat::expect_no_match(h_of("none"), "rowspan", fixed = TRUE)
+})
+
+testthat::test_that("tab_css() carries the label / vertical-name role classes", {
+  css <- tab_css(chrome = TRUE)
+  testthat::expect_match(css, ".tx-lbl", fixed = TRUE)
+  testthat::expect_match(css, ".tx-vname", fixed = TRUE)
+  # NOT `sideways-lr`: still experimental with patchy support. vertical-rl + rotate(180deg) is the
+  # universally-supported equivalent (bottom-to-top, matching tab_xl's 90-degree rotation).
+  testthat::expect_no_match(css, "sideways", fixed = TRUE)
+  testthat::expect_match(css, "writing-mode:vertical-rl", fixed = TRUE)
+})

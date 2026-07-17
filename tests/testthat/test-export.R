@@ -79,3 +79,39 @@ testthat::test_that("tab_plot renders a non-mergeable list as a list of plots (l
   testthat::expect_length(lst, 2L)
   testthat::expect_true(all(vapply(lst, is_gg, logical(1))))
 })
+
+# === SECTION: var_names, on all four exporters (Phase 14i) ===================
+
+testthat::test_that("var_names is honoured by every exporter, and defaults to the option", {
+  merged <- tab(forcats::gss_cat, c(race, relig), marital, pct = "row")
+
+  # kable (html engine) + md: the row-name column and the col_var span both answer to it
+  k_both <- as.character(tab_export(merged, "kable", engine = "html", css = FALSE))
+  k_none <- as.character(tab_export(merged, "kable", engine = "html", css = FALSE,
+                                    var_names = "none"))
+  testthat::expect_match(k_both, ">race</td>")
+  testthat::expect_no_match(k_none, ">race</td>")
+  testthat::expect_no_match(k_none, "tx-span", fixed = TRUE)
+
+  m_none <- tab_export(merged, "md", print = FALSE, color = FALSE, var_names = "none")
+  testthat::expect_no_match(m_none, "*race*", fixed = TRUE)
+  testthat::expect_no_match(m_none, "*marital*", fixed = TRUE)
+
+  # xl
+  testthat::skip_if_not_installed("openxlsx2")
+  tmp <- withr::local_tempfile(fileext = ".xlsx")
+  suppressMessages(tab_export(merged, "xl", path = tmp, open = FALSE, replace = TRUE,
+                              var_names = "none"))
+  testthat::expect_length(openxlsx2::wb_load(tmp)$worksheets[[1]]$mergeCells, 0L)
+
+  # plot (soft-deprecated, but it takes the same arg -- the drop happens in the shared prep)
+  testthat::skip_if_not_installed("ggpubr")
+  testthat::skip_if_not_installed("gtable")
+  testthat::expect_s3_class(
+    suppressWarnings(tab_export(merged, "plot", var_names = "none")), "ggplot")
+
+  # the option is the default
+  withr::local_options(tabxplor.var_names = "none")
+  testthat::expect_no_match(as.character(tab_export(merged, "kable", engine = "html", css = FALSE)),
+                            ">race</td>")
+})
