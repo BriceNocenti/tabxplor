@@ -582,6 +582,41 @@ testthat::test_that("tab works with and without add_n and add_pct", {
 })
 
 
+# Phase 14p: single-variable / no-col_var frequency tables keep their `n` / `pct` / `wn` columns at
+# DISPLAY (a <=1.3.1-breaking regression: the add_n intent used to fold + drop the real `n` column).
+testthat::test_that("single-variable frequency table keeps its n column (Phase 14p)", {
+  gss <- forcats::gss_cat
+  disp <- function(x) names(tabxplor:::tab_materialize_extras(x, backend = "text", pvalue = FALSE))
+
+  # plain count: levels + n
+  testthat::expect_setequal(disp(tab(gss, relig)), c("relig", "n"))
+  # add_n = FALSE must NOT drop the frequency n (it is primary content, not the display extra)
+  testthat::expect_setequal(disp(tab(gss, relig, add_n = FALSE)), c("relig", "n"))
+  # pct modes: pct + n both survive
+  testthat::expect_setequal(disp(tab(gss, relig, pct = "col")), c("relig", "pct", "n"))
+  testthat::expect_setequal(disp(tab(gss, relig, pct = "row")), c("relig", "pct", "n"))
+  # weighted: n + weighted wn both survive
+  testthat::expect_true(all(c("n", "wn") %in%
+                              disp(suppressMessages(tab(gss, relig, wt = tvhours)))))
+
+  # a real crosstab still folds add_n into the Total cell (unchanged) -> no separate `n` column
+  x <- tab(gss, relig, marital, pct = "row")
+  testthat::expect_false("n" %in% disp(x))
+  testthat::expect_true("Total" %in% disp(x))
+})
+
+# Phase 14p: the internal `no_col_var` sentinel must never surface as a spanning col_var name.
+testthat::test_that("no_col_var placeholder is not rendered as a col_var name (Phase 14p)", {
+  gss <- forcats::gss_cat
+  k1  <- as.character(tab_kable(tab(gss, relig), engine = "html"))
+  testthat::expect_false(grepl("no_col_var", k1))
+  k2  <- as.character(tab_kable(tab(gss, relig, pct = "col"), engine = "html"))
+  testthat::expect_false(grepl("no_col_var", k2))
+  m1  <- paste(tab_md(tab(gss, relig, pct = "col")), collapse = "\n")
+  testthat::expect_false(grepl("no_col_var", m1))
+})
+
+
 
 
 

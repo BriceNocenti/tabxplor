@@ -611,6 +611,10 @@
   cannot translate under `LANG=C`.
 * The colour legend's HTML no longer depends on `kableExtra`, so `tab_kable(engine = "html")` is now
   genuinely self-contained (as documented) and its output is stable across `kableExtra` versions.
+* A single-variable table (`tab(relig)`, `tab(relig, pct = "col")`) again shows its count column, as
+  in versions <= 1.3.1: the `n` (and, when weighted, `wn`) column had disappeared from the display,
+  and the internal `no_col_var` placeholder could surface as a spanning column header. Both are fixed.
+* `fct_recode_helper(freq = TRUE)` no longer errors with "object 'pct' not found".
 
 ## Deprecations
 * `tab_transpose()` is **soft-deprecated** in favour of the exporters' `transpose = TRUE` argument.

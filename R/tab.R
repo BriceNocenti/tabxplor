@@ -2028,7 +2028,15 @@ tab_assemble_tables <- function(ctx) {
   if (!is.null(chi2_num)) tests <- dplyr::bind_rows(tests, chi2_num)
 
   # Phase 10i-B: store the add_n / add_pct DISPLAY intent (materialised by tab_materialize_extras()).
-  render_extras <- list(add_n = isTRUE(add_n), add_pct = isTRUE(add_pct))
+  # Phase 14p: add_n / add_pct only make sense beside a col_var (they fold the base `n` / a `col_pct`
+  # into the crosstab). A no-col_var table (`tab(relig)`) is a plain frequency: its `n` / `pct` / `wn`
+  # columns ARE the primary content (built by tab_plain()'s no_col_var block), not display extras, so
+  # the intent must be OFF -- else tab_fold_addn_incell() would try to fold into a Total column that
+  # does not exist and silently DROP the real `n` column (the <=1.3.1 regression).
+  fmt_here        <- purrr::map_lgl(tab, is_fmt)
+  has_real_colvar <- any(fmt_here & get_col_var(tab) != "no_col_var")
+  render_extras <- list(add_n  = isTRUE(add_n)  && has_real_colvar,
+                        add_pct = isTRUE(add_pct) && has_real_colvar)
   # Phase 13b: record which CI method / confidence level was actually used, so tab_color_legend() can
   # name it (only meaningful when a CI was computed; harmless otherwise -- absent settings fall back).
   ci_settings <- if (!identical(ci, "no")) {

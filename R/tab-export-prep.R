@@ -325,8 +325,13 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
 
   col_var_map   <- get_col_var(tab)
   real_col_vars <- unique(col_var_map[fmt_mask])
+  # Phase 14p: `no_col_var` (the sentinel a no-col_var table's `n`/`pct`/`wn` columns carry) is NOT a
+  # real variable name -- rendering it as a spanning col_var header is noise. Excluded here so
+  # tab_col_var_header() marks those columns `is_level = FALSE` (no span label). "no_row_var" and the
+  # empty/`no` markers are the sibling sentinels.
   real_col_vars <- real_col_vars[!real_col_vars %in%
-                                   c("all_col_vars", "", "no", NA_character_)]
+                                   c("all_col_vars", "no_col_var", "no_row_var",
+                                     "", "no", NA_character_)]
 
   color_cols <- get_color(tab)
   color_cols <- which(!color_cols %in% c("", "no") & !is.na(color_cols))

@@ -1770,6 +1770,33 @@ count column is present; no header shows `no_col_var`/`Total` as a variable name
 never appears as a col_var name), `test-fct-recode-helper.R` (freq TRUE/FALSE on 1 var and several
 `gss_cat` factors — exported, currently untested).
 
+##### Done (2026-07-18)
+
+All three landed. Full suite **FAIL 0 | WARN 0 | SKIP 4 | PASS 3212**; **no `.rds` golden and no
+snapshot moved** (no existing snapshot rendered a bare `tab(one_var)`). Reproduced against **real CRAN
+1.3.1** (installed in a temp lib — the machine's `1.3.1.9000` already carried the regression, so it was
+useless as a reference). New `test-fct-recode-helper.R` (10); two new blocks in `test-tab.R`.
+
+- **The `n` column was NOT dropped at build — it survives into `names(tab(relig))`.** The regression is
+  at DISPLAY: `render_extras$add_n = TRUE` was set unconditionally, so `tab_materialize_extras()` ran
+  `tab_add_n_pct()` + `tab_fold_addn_incell()`, whose first line returns `select(-any_of("n"))` when
+  there is no `type == "row"` Total column to fold into — silently deleting the real frequency column.
+  Fix ([R/tab.R](R/tab.R) `tab_assemble_tables`): gate the intent on a real col_var —
+  `has_real_colvar = any(fmt & get_col_var(tab) != "no_col_var")`; a no-col_var table's `n`/`pct`/`wn`
+  are primary content, not display extras, so `add_n`/`add_pct` are forced OFF (they stay ON for a
+  numeric col_var, unchanged). This also means `add_n = FALSE` no longer drops the frequency `n` (it
+  never should have — the `n` is not the add_n extra). The roadmap's "the fmt column is named `n`"
+  diagnosis was wrong: the columns ARE `pct`/`n`, the object was fine, only the fold was wrong.
+- **`no_col_var` sentinel** ([R/tab-export-prep.R](R/tab-export-prep.R)): added to the `real_col_vars`
+  exclusion list (beside `all_col_vars`/`""`/`no`), so `tab_col_var_header()` never marks those columns
+  `is_level` → no span label. One line; every backend (md/kable/html/xl) follows. (The "Total special
+  name" case the review also named is already handled — a total column is excluded via `!totc`.)
+- **`fct_recode_helper(freq = TRUE)`** ([R/utils.R](R/utils.R)): the real cause was **unqualified
+  `filter`** — NOT imported, so it resolved to `stats::filter()`, which evaluated `!is_totrow(pct)`
+  outside the data mask → "object 'pct' not found". Fixed by fully qualifying the non-base calls
+  (`dplyr::filter`, `stringr::str_pad`/`str_length`, per the CLAUDE.md explicit-call rule); the columns
+  `pct`/`n` were always there, so no accessor rewrite was needed.
+
 ---
 
 #### Phase 14q — tab_reg readability: greying, footer, legend semantics

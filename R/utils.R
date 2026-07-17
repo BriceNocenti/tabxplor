@@ -297,25 +297,25 @@ fct_recode_helper <- function(data, .cols = -where(is.numeric), name_in, name_ou
   if (freq) { # With frequencies and counts helpers 
     frequencies <- names(data) |> 
       purrr::map(
-        ~ tab_plain(data, !!rlang::sym(.x), pct = "col", na = "drop") |> 
-          filter(!is_totrow(pct)) |> 
-          rename_with(~ "lvs", .cols = 1) |> 
-          mutate(lvs = paste0("\"",
-                              #stringi::stri_escape_unicode(
-                              stringr::str_replace_all(
-                                lvs, "\"", "'"
-                                #)
-                              ),
-                              "\""), 
-                 pct = format(pct), 
-                 n   = format(n), 
-                 txt = paste0(str_pad(pct, max(str_length(pct)) ), 
-                              " ", 
-                              str_pad(n, max(str_length(n)) )
+        # Phase 14p: fully qualify the non-base calls. `filter` is NOT imported, so the bare form
+        # resolved to stats::filter(), which evaluated `!is_totrow(pct)` OUTSIDE the data mask ->
+        # "object 'pct' not found" (the reported freq = TRUE crash). A no-col_var pct = "col" table
+        # is `<row_var> | pct | n`, so both columns exist and are read straight.
+        ~ tab_plain(data, !!rlang::sym(.x), pct = "col", na = "drop") |>
+          dplyr::filter(!is_totrow(.data$pct)) |>
+          dplyr::rename_with(~ "lvs", .cols = 1) |>
+          dplyr::mutate(lvs = paste0("\"",
+                              stringr::str_replace_all(lvs, "\"", "'"),
+                              "\""),
+                 pct = format(.data$pct),
+                 n   = format(n),
+                 txt = paste0(stringr::str_pad(pct, max(stringr::str_length(pct))),
+                              " ",
+                              stringr::str_pad(n, max(stringr::str_length(n)))
                  )
-          ) |> 
-          select(lvs, txt)
-      ) |> 
+          ) |>
+          dplyr::select(lvs, txt)
+      ) |>
       purrr::set_names(names(data)) 
     
     recode <- frequencies |>
