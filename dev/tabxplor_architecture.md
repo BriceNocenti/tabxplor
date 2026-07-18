@@ -30,7 +30,7 @@ tabxplor creates, manipulates, and formats color-coded cross-tabulation tables f
 | `pct` | double | Percentage (stored as 0–1, multiplied by 100 only in `format()`) |
 | `mean` | double | Cell mean (for numeric column variables) |
 | `diff` | double | Difference from reference. For type="mean" this is now a real difference too (Phase 2 flip); the mean/ref ratio moved to `ratio`. For pct columns: additive difference `cell_pct − ref_pct` |
-| `ratio` | double | Ratio to reference. **Written for numeric (mean) columns since Phase 2** (`cell_mean / ref_mean`); the pct-column ratio (the "×2 rule") still rides the `mean` overload until Phase 5. Renamed from `rr` (Phase 1a) |
+| `ratio` | double | Ratio to reference. Written for numeric (mean) columns (`cell_mean / ref_mean`, Phase 2) AND, since Phase 5, for pct columns (the "×2 rule" reference-relative ratio the colour engine reads) — the old `mean`-field overload is gone. Renamed from `rr` (Phase 1a) |
 | `ctr` | double | Contribution to chi-squared variance |
 | `var` | double | Variance (used for CI calculation) |
 | `ci_inf` | double | Lower confidence-interval bound (Phase 1a; real asymmetric bounds written in Phase 3) |
@@ -299,9 +299,7 @@ The `comp` argument adds another dimension:
 
 ### Mean diff vs ratio (Phase 2 flip)
 
-For `type = "mean"` columns the `diff` field is a real **difference** (`cell_mean − ref_mean`), like pct columns; the mean/reference **ratio** lives in the `ratio` field (`cell_mean / ref_mean`). Since Phase 5, `color = "diff"` on numeric means colors the **sd-standardized** difference (Glass's Δ = `diff / sqrt(ref var)`) against the `mean_diff` scale (`c(0.2, 0.5, 0.8)`), while `color = "ratio"` colors the `ratio` field against `mean_ratio` (`c(1.15, 1.5, 2, 4)`). For **pct** columns the `mean` field is now `NA` (the old mean/×2 overload is gone; the `ratio` field carries the relative risk that drives the ×2 rule).
-
-Note the remaining pct-column overload: for percentage columns the "×2 rule" ratio still rides the `mean` field (removed in Phase 5). So `mean` currently means an actual mean for `type = "mean"` and a pct ratio otherwise.
+For `type = "mean"` columns the `diff` field is a real **difference** (`cell_mean − ref_mean`), like pct columns; the mean/reference **ratio** lives in the `ratio` field (`cell_mean / ref_mean`). Since Phase 5, `color = "diff"` on numeric means colors the **sd-standardized** difference (Glass's Δ = `diff / sqrt(ref var)`) against the `mean_diff` scale (`c(0.2, 0.5, 0.8)`), while `color = "ratio"` colors the `ratio` field against `mean_ratio` (`c(1.15, 1.5, 2, 4)`). For **pct** columns the `mean` field is now `NA` (the old mean/×2 overload is gone; the `ratio` field carries the relative risk that drives the ×2 rule). So `mean` now means an actual mean on `type = "mean"` columns and nothing else — the field is single-purpose since Phase 5.
 
 ### Confidence Intervals & significance stars (Phase 3a)
 
