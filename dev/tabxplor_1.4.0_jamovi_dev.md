@@ -121,6 +121,13 @@ Pain points (all addressed below):
 | **Linux `.jmo`** — the dev path | flatpak `org.jamovi.jamovi` **2.7.36**, bundled R **4.5.0** | `~/github/tabxplor` — **authoritative for source** | `jmvtools::install(home = 'flatpak')` |
 | **Windows `.jmo`** — release only | Windows jamovi (**kept forever**; the only 2.6-solid path) | `D:\Statistiques\github\tabxplor` — **pull, build, never edit** | `options(jamovi_home='C:/Program Files/jamovi 2.6.44.0'); jmvtools::install()` |
 
+⚙ **The Windows build is now scripted** (Phase 15a): `dev/build_jmo_windows.R` (run
+`Rscript dev/build_jmo_windows.R` on Windows). It clones the current branch into a **throwaway temp
+folder** (not the `D:\` checkout), pins `jmvtools` to 2.7.26, installs deps, `Sys.unsetenv`s
+`ELECTRON_RUN_AS_NODE`, runs `jmvtools::install(home='C:/Program Files/jamovi 2.7.37.0')`, then
+verifies the landed module. Branch/jamovi-home overridable via CLI arg / `TABXPLOR_BRANCH` /
+`JAMOVI_HOME`. The manual recipe below still documents what it automates.
+
 **Prerequisites** (WSL side, done by migration C3 — see `~/github/.WSL2_sandbox_migration/` §7):
 
 1. **jamovi** — `flatpak --user install flathub org.jamovi.jamovi` **plus `org.freedesktop.Sdk//24.08`**, which is *required*: `flatpak run --devel` swaps Platform→SDK and that is how the compiler reaches jamovi's R.
