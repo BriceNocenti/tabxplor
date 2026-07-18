@@ -2120,57 +2120,209 @@ single unnamed reg table exported alone still mis-titles (the 14l flag, still op
 
 ---
 
-#### Phase 14 pass-3 (14p–14u) — decisions I need the maintainer to confirm (read tomorrow)
+#### Phase 14v — finish the `empirical = TRUE` framework
 
-All of 14p–14u are committed and green (suite FAIL 0 | PASS 3257; `document()` clean; no golden/snapshot
-churn). Below are the judgment calls + doubts I want you to confirm or redirect; each is a small,
-isolated follow-up. Nothing here is broken — these are *"is this what you wanted?"* items.
+`empirical = TRUE` (renamed from `empirical_OR`) adds the DESCRIPTIVE crude companion of the model effect: the *unadjusted* bivariate association between a factor predictor and the outcome, which IS the modelised quantity when there is a single predictor. This is the standard "crude vs adjusted" comparison (epidemiology / social science good practice): a large gap between the crude and the model column signals confounding /adjustment.
 
-1. **[14t] I kept `empirical_OR` as a deprecated alias, not a hard break.** The roadmap said "hard
-   rename, no soft-deprecate". I renamed to `empirical` but left `tab_reg(empirical_OR=)` working with a
-   `deprecate_warn` (your review + ct13 scripts call it, and nothing is on CRAN to protect). If you truly
-   want it GONE, I remove the alias in one line. **Confirm: keep the warning-alias, or hard-remove?**
+##### The family-appropriate crude quantity (design)
 
-2. **[14t] `empirical = TRUE` on an `effect = "ame"` table shows explicit `Emp. %` + `Emp. OR` COLUMNS**,
-   not a tooltip. The settled decision grouped "AME, multinomial → tooltip", but a single binomial AME is
-   only ~2 extra columns (no explosion), and the crude % coloured by the crude risk-difference directly
-   answers your "base % + empirical diff" question — cleaner than the fragile tooltip hack. **Confirm the
-   columns for binomial AME, or do you still want it tooltip-only?**
+| family            | modelised (adjusted)          | empirical (crude / unadjusted)                            | placement          |
+|-------------------|-------------------------------|-----------------------------------------------------------|--------------------|
+| binomial (OR)     | model OR per level            | crude % (P(pos\|level)) + crude OR (risk-diff: tooltips)  | explicit columns ✅ |
+| binomial (AME)    | avg marginal effect (model %) | observed % per level + observed risk-difference           | explicit columns ⏸ |
+| gaussian          | beta (adjusted mean-diff)     | crude mean(Y\|level) + mean-diff ? **problem, see below** | explicit columns ⏸ |
+| poisson (IRR)     | model IRR                     | crude rate (mean count) + crude rate-ratio                | explicit columns ⏸ |
+| multinomial (RRR) | one RRR col per category      | observed relative-risk ratio (RRR), PER category          | tooltip only ⏸     |
+| multinomial (AME) | AME (model %) per cat         | observed category % + crude diff, PER category            | tooltip only ⏸     |
 
-3. **[14t] gaussian / poisson / multinomial empirical are DEFERRED** — the full design + WHY is in
-   `dev/tabxplor_1.4.0_decisions.md` §45. The two real blockers needing YOUR call: (a) the gaussian/
-   poisson crude-mean column colour is under-specified (a `type="mean"` `color="diff"` column needs a
-   reference variance the crude path has no source for — options in §45); (b) the multinomial×AME
-   crude-in-tooltip is a genuine field conflict (the tooltip reads `ratio`/`ctr`/`mean` for row/mean
-   columns → any stash makes a spurious "ratio:"/"contrib:" line; a clean fix needs a dedicated reg-only
-   tooltip field). You already called (b) "marginal". **Decide the gaussian/poisson colour rule and I
-   wire those two families next; keep (b) deferred/opt-in unless you want the dedicated field.**
+Placement rule (settled with the maintainer): **explicit columns when few** (binomial, gaussian, poisson), apart from crude risk-diff with binomial OR (tooltips only) ; **tooltip-only when many** (multinomial — a column per category x empirical would explode the layout).
 
-4. **[14u] The reg-table SHEET/TITLE mis-titling is still open** (the 14l flag). A reg table records no
-   `vars` attribute, so its derived title reads "… by levels (tabbed by row_var)". I routed the K case
-   around it (a named `tabxplor_tabs` → sheet names = the dependents), but a SINGLE reg table exported
-   alone still mis-titles. **Want me to fix reg titling properly (record a `vars` attr in `reg_build` —
-   row_vars = the predictors, col_vars = the model/dependent)? It's a clean ~1-block change and would fix
-   every reg export title, not just the K sheet names.**
+##### What landed in Phase 14t
 
-5. **[14u] `na = "drop_all"` and the K multi-dependent mode are on `tab_reg()` only, not the wrappers.**
-   `multi_logit()` (the model-comparison wrapper) would be the natural home for `na = "drop_all"` too, and
-   could gain the several-dependents → list behaviour. I left the wrappers untouched to keep scope tight.
-   **Want `na=` (and/or the K mode) forwarded through `tab_logit`/`multi_logit`?**
+- **Binomial**, both `effect = "coefficient"` AND `effect = "ame"`: the crude `Emp. %` (coloured by the
+  crude risk-difference) + `Emp. OR` columns. Widening it to AME answers the review's "base % + empirical
+  diff" and un-blocks the `effect = "ame" + empirical` error (now these columns, no error). Must be corrected, cf. CLAUDE.md.
+- Other families / multinomial: `empirical = TRUE` temporarily emits a MESSAGE ("available only for a single
+  binary logistic outcome; ignored") and proceeds, instead of aborting : to modify after implementation.
 
-6. **[14q] Two small legend/label calls left as-is** (both defensible, flagging for the record): the
-   terse console policy tag still reads `[significant only]` (I only reworded the PROSE legend, which was
-   the statistically-false one); and `guaranteed_effect`'s grey note is unchanged (you said leave it).
-   **Confirm both, or want the terse tag reworded too?**
 
-7. **[14s] The L3 rule (drop the col_var span when every column's name == its col_var) now hides the
-   spanning row for a single-model reg table** (the name shows once, in the column header). This is what
-   you asked; flagging only so you eyeball `dev/review_manual/phase14s_mnl.html` +
-   `phase14q_reg_readability.html` and confirm the look.
+##### Binomial AME
 
-**Browser/Excel samples written this pass** (open to review): `phase14q_reg_readability.html`,
-`phase14r_ame_tooltip.html`, `phase14s_mnl.html`, `phase14u_multi_dep.xlsx` (all in
-`dev/review_manual/`).
+There’s a problem with Binomial AME + empirical : currently it’s not user-friendly/not the right quantities, because **the empirical part does not compare well at all to the modelised part**. When it’s bimonial with `effect = "ame"`, the `empirical = TRUE` columns should be : "Emp. %" is ok, then "Emp. diff", not "Emp. OR", since the modelised OR is not displayed here, and the ame modelise the difference relative to the reference level. The column headers should also tell more explicitly what is in the parenthesis of AME ("model %").
+- Current (`tab_reg(data, dependent = "married", predictors = c("rincome", "tvhours", "relig"), family = "binomial", effect = "ame", empirical = TRUE)`)  
+    "| levels         | Emp. % | Emp. OR | Married: AME     |
+     | Reference pop. |        |         |                  |
+     | Lt $10000      | 37%    | 1       |          (35.4%) |
+     | 10000 to 14999 | 41%    | 1.21    | +1.8%    (37.8%) |
+     | 15000 to 24999 | 42%    | 1.27    | +5.1%*   (41.1%) |
+     | 15000 to 24999 | 44%    | 1.37    | +6.3%***(42.9%) |
+     | 25000 or more  | 55%    | 2.13    |+16.8%*** (54.3%) |
+- It should be :
+    "| levels         | Emp. % | Emp. diff | Model AME (model %) |"
+
+
+Make empirical work with several dependent variables
+`data |> tab_reg(dependent = c("married", "black"), predictors = c("rincome", "tvhours", "relig"), family = "binomial", effect = "ame", empirical = TRUE)`
+- Message : "ℹ `empirical` (crude descriptive companion) is currently available only for a single binary logistic
+ outcome; ignored here." Should be made to work with several dependent variables and only one set of predictors.
+
+
+##### Gaussian / poisson : maintainer’s decisions
+
+**Gaussian / poisson colour is genuinely under-specified.** An `Emp. mean` column of `type = "mean"`
+  coloured by `color = "diff"` uses the sd-STANDARDIZED difference (Glass's Delta = diff / sd_ref, §18),
+  but the crude path has no reference variance (`var` field), so the colour scale is undefined.
+  
+Question : but in tab() with numeric vars, the reference do have a standard deviation, right ?
+
+Choice : colour the crude mean by the ratio.
+- This is actually the default in tab(), using `tab(mutate(forcats::gss_cat, race = forcats::fct_rev(race)), "race", tvhours, ref = 1, color = "ratio") |> mutate(ratio = tvhours |> set_display("ratio")) |> tab_md()`, same `than color = TRUE`. Table corrected by hand using `vctrs::vec_data` (see bug below)
+
+| race      |         mean (sd) |       ratio |
+|:----------|------------------:|------------:|
+|           |         *tvhours* |             |
+|           |                   |             |
+| **White** |    **2.8** (σ2.3) |       **1** |
+| Black     | [4.2 (σ3.5)]{.p2} | [1.51]{.p2} |
+| Other     |        2.8 (σ2.4) |        1.00 |
+| Total     |        3.0 (σ2.6) |        1.08 |
+
+It works for poisson regression :
+- `tab_reg(mutate(forcats::gss_cat, race = forcats::fct_rev(race)), "tvhours", "race", family = "poisson") |> tab_md()`
+
+|          | levels                   |   tvhours: IRR |
+|:---------|:-------------------------|---------------:|
+| Constant | **Reference population** |    **2.77***** |
+|          |                          |                |
+| race     | **White**                |          **1** |
+|          | Black                    | [1.51***]{.p2} |
+|          | Other                    |         1/1.00 |
+
+**It does not work for simple linear regression : what is the empirical quantity that matches the modelised quantity (β coefficient) here ?** Enquire, make web searches if necessary.
+- `tab_reg(mutate(forcats::gss_cat, race = forcats::fct_rev(race)), "tvhours", "race", family = "gaussian") |> tab_md()`
+
+|          | levels               |     tvhours: β |
+|:---------|:---------------------|---------------:|
+| Constant | Reference population |        2.77*** |
+|          |                      |                |
+| race     | White                |              0 |
+|          | Black                | [1.41***]{.p3} |
+|          | Other                |          -0.01 |
+|          |                      |                |
+
+
+By the way, there’s a bug to correct with `display = "ratio"` : it prints `n` instead of ratio (but ratio field is right in vctrs::vec_data) !
+`tab(mutate(forcats::gss_cat, race = forcats::fct_rev(race)), "race", tvhours, ref = 1, color = "ratio") |> mutate(ratio = tvhours |> set_display("ratio")) |> tab_md()`
+
+| race      |         mean (sd) |         ratio |
+|:----------|------------------:|--------------:|
+|           |         *tvhours* |               |
+|           |                   |               |
+| **White** |    **2.8** (σ2.3) |    **8610.0** |
+| Black     | [4.2 (σ3.5)]{.p2} | [1700.0]{.p2} |
+| Other     |        2.8 (σ2.4) |        1027.0 |
+| Total     |        3.0 (σ2.6) |       11337.0 |
+
+
+##### Multinomial : maintainer’s decisions and questions
+- **The multinomial x AME tooltip is a REAL field conflict, not just fiddly.** The tooltip builder
+  (`tab_kable_print_tooltip`) reads the `ratio` / `ctr` / `mean` fields for a `type = "row"`/`"mean"`
+  column (`out_rr` / `out_ctr` / `out_mean`), so stashing the crude % / diff in any of them makes a
+  SPURIOUS "ratio:" / "contrib:" line appear — exactly the "would mess with tab() tooltips or other
+  tab_reg() tooltips" the maintainer worried about. A clean version needs EITHER a genuinely free field
+  (none is safe for a row-type column) OR a new tooltip fragment gated on a reg marker (touches the
+  shared builder).
+- At the same time, this comparison of modelised quantities versus observed quantities is one of the best way to teach statistics at university : so we should find a way to do it.
+- What would be the best way to store a tooltip fragments, already formatted, without having to create a new vctrs field ? Use a named vector as column-level attribute, with names as levels, then to retrieve at export join it with levels column by names ? Can you think about a more reliable way to do it without creating a new vctrs field ?
+
+
+#### Phase 14w — reg tables titles, legends, and headers
+
+1. **[14u] The reg-table SHEET/TITLE mis-titling is still open** (the 14l flag). I want the above table title to be more informative, specific to regressions, of the type : "logistic regression : <dependent> by <explanatory_1, explanatory_2>, + <x> more", "linear regression : ...", "poisson regression : ...", "multinomial logistic regression : ...", "ordinal logistic regression : ..." ("tabbed by" with a split var). Sheet title : "linear_<dependent>_<explanatory_1>_etc", "logit...", "poisson...", "mlogit", "ologit...".
+
+2. The legend of regression models is not clear, and sometimes not specific enough compared to crosstables.
+- First, the model legend line must always come before the color legends line (otherwise the reading may not know what he’s reading.
+- Also, model legend line should state something like : "Model: logistic regression. Marginal effects on..." (or "Model: linear regression. ..." etc.). For example, multinomal OR currently have "Multinomial odds ratios (each category vs the reference).", that could be improved to : "Multinomial logistic regression: odds ratios (each category vs the reference)."
+- The colors legends should also be specific to models, when needed, not to be misleading ? Legend for Binomial Or is good ("Wald interval on the log odds-ratio"). But for Binomial AME color legend is the same than for a crosstable : it states "Newcombe" etc., which is false since colors used the model and AME own confidence interval, and pvalue for significance stars. It’s worth checking for other models too.
+- Current example with Binomial AME legend :
+    "Shades of blue: cells ≥ the Total row +5; +10; +20; +30 points. Shades of yellow to red: cells ≤ the Total row -5; -10; -20; -30 points. Coloured: significantly different from the Total row (Newcombe score interval, 95% confidence), by at least the first colour threshold. Uncoloured: either not significant, or too small a difference to colour.
+    Marginal effects on the probability scale (percentage points) (sample-averaged). Each cell shows the effect vs the reference level and, in parentheses, the adjusted predicted probability."
+- Current example with Binomial + empirical legend :
+"Emp. % — Shades of blue: cells ≥ the Total row +5; +10; +20; +30 points. Shades of yellow to red: cells ≤ the Total row -5; -10; -20; -30 points.
+01-Married: OR — Shades of blue: OR ≥ 1.15; 1.5; 2; 4. Shades of yellow to red: OR ≤ 1/1.5; 1/2; 1/4. Coloured: significantly different from the reference category (Wald interval on the log odds-ratio, 95% confidence), by at least the first colour threshold. Uncoloured: either not significant, or too small a difference to colour.
+Emp. OR — Shades of blue: OR ≥ 1.15; 1.5; 2; 4. Shades of yellow to red: OR ≤ 1/1.5; 1/2; 1/4"
+
+3. Regression models col_var name and columns names could be more clear and less redundant. The col_var name should always be of style "<dependent>: <level>", so that modelised quantities and empirical quantities both appear under the same col_var header (no vertical borders between them in html or Excel, reads as same group). The exception would be multinomial, where it is more clear if the col_var field and col_var title just stay "<dependent>: <effect>" (no vertical borders between the AME of OR of the different level, reads as same model) ; but then, we can remove the repeated "OR" or "AME" on each header / level name.
+
+Exemple with Binomial OR + empirical
+- Current :
+    "|       | Emp. % | Emp. OR | 01-Married: OR |
+     |levels | Emp. % | Emp. OR | 01-Married: OR |"
+- Should be something like (in html, Excel, and where col_var names are merged) :
+    "|       | married: 01-Married         |
+     |levels | Emp. % | Emp. OR | Model OR |"
+
+Exemple with Binomial AME + empirical (see statistical corrections made in Phase 14-v above)
+- Current (`tab_reg(data, dependent = "married", predictors = c("rincome", "tvhours", "relig"), family = "binomial", effect = "ame", empirical = TRUE)`)  
+    "|                | Emp. % | Emp. OR | Married: AME     |
+     | levels         | Emp. % | Emp. OR | Married: AME     |"
+- It should be something like :
+    "|                | married: 01-Married                      |
+     | levels         | Emp. % | Emp. diff | Model AME (model %) |"
+
+Exemple with Multinomial + OR
+- Current :
+    "|       | party3: OR                   |
+     |levels | Ind vs Rep: OR | Dem vs Rep: OR |"
+- Should be something like
+    "|       | party3: OR            |
+     |levels | Ind vs Rep | Dem vs Rep |"
+
+Exemple with Multinomial + AME
+- Current :
+    "|        | party3: AME                    |
+     | levels | Ind: AME | Dem: AME | Rep: AME |
+- Should be something like
+    "|        | party3: AME (model %) |
+     | levels | Ind | Dem| Rep |
+
+4. Lists of predictors use the column header / level name to give the name of the model, and remove duplicated col_var name row to keep vertical borders between different models. This is good, but side-effect is that reference level of dependent variable and which effect is displayed and are written nowhere. In this case, we shall use the title above the table to give the necessary informations about the model.
+- Current :
+    "married                        # title above table
+     | levels |  demo  |  full  |"
+- Should be something more like :
+    "Logistic regressions (models comparison) : married, "01-Married" (OR)    # title above table
+     | levels |  demo  |  full  |"
+
+Tell me where they would need a new column-level or table-level attribute to store model metadata.
+
+
+#### Phase 14x — small improvements and fixes
+
+1. [14t] Hard deprecate the `empirical_OR` alias. Maintainer did it manually, just verify he did not break anything.
+
+2. **[14u] for now `na = "drop_all"` and the K multi-dependent mode are on `tab_reg()` only, not the wrappers.** Please forward `na=` (and/or the K mode)  through `tab_logit`/`multi_logit` too.
+
+3. **[14q] the terse console policy tag still reads `[significant only]`** : rework it too.
+
+4. Bug: markdown misalignment problem resurfacing
+`tab(mutate(forcats::gss_cat, race = forcats::fct_rev(race)), "race", tvhours, ref = 1, color = "ratio") |> tab_md()`
+| race      |         mean (sd) |                     |
+|:----------|------------------:|---------------------|
+|           |         *tvhours* |                     |
+|           |                   |                     |
+| **White** |    **2.8** (σ2.3) | <!-- misaligned --> |
+| Black     | [4.2 (σ3.5)]{.p2} | <!-- misaligned --> |
+| Other     |        2.8 (σ2.4) | <!-- misaligned --> |
+| Total     |        3.0 (σ2.6) | <!-- misaligned --> |
+- It’s caused by the special char before the opening parenthesis in "2.8 (σ2.4)". It’s not specific to this case, but broader : verify this special space use, and fix it.
+
+5. Small change to crosstables color legends.
+- `color_sign = "grey_non_signif"`. "Uncoloured: either not significant, or too small a difference to colour." A clearer text would be : "Uncoloured: either not significant, or difference under ±5 points."
+
+
+
+
 
 ---
 

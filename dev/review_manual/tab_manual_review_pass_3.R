@@ -125,6 +125,12 @@ rincome = forcats::fct_recode(   # "new" = "old"
 ) |> 
 forcats::fct_relevel(sort) |>
 as.ordered(),
+
+party3 = factor(dplyr::case_when(
+  grepl("democrat", partyid)   ~ "Dem",
+  grepl("republican", partyid) ~ "Rep",
+  partyid %in% c("Independent", "Ind,near rep", "Ind,near dem") ~ "Ind"),
+levels = c("Ind", "Dem", "Rep"))
 )
 
 
@@ -287,69 +293,66 @@ score_risques_phy_logits |> tab_export() # theme="auto"
 
 # Pass 4 ----
 
-data |> 
-  mutate(rincome = `class<-`(rincome, "factor")) |> # temporary : remove ordered to not break model
-  tab_reg(dependent = c("married", "black"), predictors = c("rincome", "tvhours", "relig"), family = "binomial", 
-          # effect = "ame", empirical_OR = TRUE
-  ) 
 
-data |> 
-mutate(rincome = `class<-`(rincome, "factor")) |> # temporary : remove ordered to not break model
-tab_reg(dependent = c(married, black), predictors = all_of(c("rincome", "tvhours", "relig")), family = "binomial",     
-) 
+
+
+# tab_reg(data, "party3", c("race", "age"), family = "multinomial")
+# tab_reg(data, "party3", c("race", "age"), family = "multinomial", effect = "ame")
 
 
 
 
-# tab(pc18, all_of(rows1), CONCERTS, wt = POND, pct = "row", color = TRUE,
-#  color_signif = "grey_non_signif", na = "drop", ci="diff", stars = TRUE
-# ) |> 
-#   tab_xl(open = FALSE, path = "~/github/tabxplor/dev/review_manual/Excel_stars", replace = TRUE)
-
-# tab_reg(pc18, "ROCK", rows1, wt = "POND", family = "binomial") |> 
-#   tab_xl(open = FALSE, path = "~/github/tabxplor/dev/review_manual/Excel_stars_OR", replace = TRUE)
 
 
-# HTML engine — a font-family stack (install the candidate locally first, or it falls back):
-options(tabxplor.tab_kable_num_font = "DejaVu Sans") 
-options(tabxplor.tab_kable_num_font = "DejaVu Sans Mono") # biggest/widest
-options(tabxplor.tab_kable_num_font = '"IBM Plex Mono", monospace')
-options(tabxplor.tab_kable_num_font = "Cascadia Mono")  # big/wide
-options(tabxplor.tab_kable_num_font = "Cascadia Code") 
-options(tabxplor.tab_kable_num_font = "Consolas")  # too small
+# # tab(pc18, all_of(rows1), CONCERTS, wt = POND, pct = "row", color = TRUE,
+# #  color_signif = "grey_non_signif", na = "drop", ci="diff", stars = TRUE
+# # ) |> 
+# #   tab_xl(open = FALSE, path = "~/github/tabxplor/dev/review_manual/Excel_stars", replace = TRUE)
 
-options(tabxplor.tab_kable_num_font = "Liberation Mono") # better than DejaVu Sans Mono
-# options(tabxplor.tab_kable_num_font = "JSF Mono") # 
-# options(tabxplor.tab_kable_num_font = "Segoe UI Mono") # 
-# options(tabxplor.tab_kable_num_font = "Menlo") # 
-# ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono", Menlo, Consolas, "Liberation Mono", "DejaVu Sans Mono", monospace
-
-options(tabxplor.tab_kable_num_font = "Cascadia Mono") # big/wide
-bigger_numbers <- '<style>.tabxplor-tab td.tx-num{font-size:1.1em;line-height:1;}</style>'
-kab <- tab(pc18, all_of(rows1), all_of(cols1), wt = POND, pct = "row", color = TRUE, na = "drop") |> tab_export() 
-kab
-paste0(as.character(kab), bigger_numbers) |> vctrs::vec_restore(kab)
-tab(pc18, all_of(rows1), all_of(cols1), wt = POND, pct = "row", color = TRUE, na = "drop") |> tab_export(theme="auto") 
+# # tab_reg(pc18, "ROCK", rows1, wt = "POND", family = "binomial") |> 
+# #   tab_xl(open = FALSE, path = "~/github/tabxplor/dev/review_manual/Excel_stars_OR", replace = TRUE)
 
 
-options(tabxplor.tab_kable_num_font = "DejaVu Sans") 
-tab(pc18, all_of(rows1), all_of(cols1), wt = POND, pct = "row", color = TRUE, na = "drop") 
+# # HTML engine — a font-family stack (install the candidate locally first, or it falls back):
+# options(tabxplor.tab_kable_num_font = "DejaVu Sans") 
+# options(tabxplor.tab_kable_num_font = "DejaVu Sans Mono") # biggest/widest
+# options(tabxplor.tab_kable_num_font = '"IBM Plex Mono", monospace')
+# options(tabxplor.tab_kable_num_font = "Cascadia Mono")  # big/wide
+# options(tabxplor.tab_kable_num_font = "Cascadia Code") 
+# options(tabxplor.tab_kable_num_font = "Consolas")  # too small
+
+# options(tabxplor.tab_kable_num_font = "Liberation Mono") # better than DejaVu Sans Mono
+# # options(tabxplor.tab_kable_num_font = "JSF Mono") # 
+# # options(tabxplor.tab_kable_num_font = "Segoe UI Mono") # 
+# # options(tabxplor.tab_kable_num_font = "Menlo") # 
+# # ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono", Menlo, Consolas, "Liberation Mono", "DejaVu Sans Mono", monospace
+
+# options(tabxplor.tab_kable_num_font = "Cascadia Mono") # big/wide
+# bigger_numbers <- '<style>.tabxplor-tab td.tx-num{font-size:1.1em;line-height:1;}</style>'
+# kab <- tab(pc18, all_of(rows1), all_of(cols1), wt = POND, pct = "row", color = TRUE, na = "drop") |> tab_export() 
+# kab
+# paste0(as.character(kab), bigger_numbers) |> vctrs::vec_restore(kab)
+# tab(pc18, all_of(rows1), all_of(cols1), wt = POND, pct = "row", color = TRUE, na = "drop") |> tab_export(theme="auto") 
 
 
-score_risques_phy_logits |> tab_export()
-tab(forcats::gss_cat, marital, race, pct = "row", color = "diff") |> tab_export() 
+# options(tabxplor.tab_kable_num_font = "DejaVu Sans") 
+# tab(pc18, all_of(rows1), all_of(cols1), wt = POND, pct = "row", color = TRUE, na = "drop") 
 
 
-tab(forcats::gss_cat, marital, race, pct = "row", color = "diff") |>
-  tab_export()   # then open it
-
-# Excel (single installed name) and plot (device family):
-options(tabxplor.xl_font_num  = "Cascadia Mono")
-options(tabxplor.plot_num_font = "JetBrains Mono")
+# score_risques_phy_logits |> tab_export()
+# tab(forcats::gss_cat, marital, race, pct = "row", color = "diff") |> tab_export() 
 
 
+# tab(forcats::gss_cat, marital, race, pct = "row", color = "diff") |>
+#   tab_export()   # then open it
 
-options(tabxplor.tab_kable_num_font = 'ui-monospace, "Cascadia Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace')
+# # Excel (single installed name) and plot (device family):
+# options(tabxplor.xl_font_num  = "Cascadia Mono")
+# options(tabxplor.plot_num_font = "JetBrains Mono")
+
+
+
+# options(tabxplor.tab_kable_num_font = 'ui-monospace, "Cascadia Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace')
 
 
 

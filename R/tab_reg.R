@@ -67,8 +67,7 @@
 #     tab_spread(split_var) pivots groups to columns (no tab_spread change: split_var placed first so
 #     `levels` stays the row_var; console footer is group-aware, export footer skipped for splits).
 #     `multiplicator` (c(var=k)) scales a continuous predictor's native coef by k before CI/exp (OR^k),
-#     p unchanged. `empirical_OR` (binary) = crude % + crude OR (reg_empirical_or, direct weighted 2x2)
-#     beside the model OR. No new fmt fields/attributes.
+#     p unchanged.
 # See: CLAUDE.md Phase 12c-12g ; dev/tabxplor_1.4.0_decisions.md S37.
 
 # === Internal engine ================================================================
@@ -858,14 +857,14 @@ reg_apply_estimate_display <- function(col, mode, skeleton, f, sp, family, desig
 }
 
 
-# === empirical_OR: the descriptive crude OR / % beside the model OR (Phase 12g, binary logit) =======
+# === empirical : the descriptive crude OR / % beside the model OR (Phase 12g, binary logit) =======
 
 # For each FACTOR predictor, the crude empirical percentage (of the model's positive outcome level) and
 # the crude odds ratio of that level vs the predictor's reference level, from the weighted 2x2 counts --
 # the descriptive "OR + PCT" companion to the adjusted model OR. Computed DIRECTLY (not via tab()) so the
 # outcome direction matches the model's `positive_level` and the reference level matches the skeleton.
 # Returns a tibble keyed by (var, level): emp_pct, emp_diff (vs the reference %), emp_or, emp_n.
-reg_empirical_or <- function(data, fac_preds, dependent, positive_level, wt) {
+reg_empirical <- function(data, fac_preds, dependent, positive_level, wt) {
   pos <- as.character(data[[dependent]]) == positive_level
   w   <- if (is.null(wt)) rep(1, nrow(data)) else as.numeric(data[[wt]])
   purrr::map_dfr(fac_preds, function(p) {
@@ -1584,7 +1583,7 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
       union_predictors, ~ is.numeric(skeleton_data[[.x]]))]
     pos_lvl <- fits[[1]]$positive_level
     if (length(fac_preds_e) > 0L && !is.null(pos_lvl)) {
-      emp     <- reg_empirical_or(data, fac_preds_e, specs[[1]]$dependent, pos_lvl, design_spec$wt)
+      emp     <- reg_empirical(data, fac_preds_e, specs[[1]]$dependent, pos_lvl, design_spec$wt)
       emp_cols <- reg_empirical_columns(skeleton, emp, fac_preds_e)
       for (nm in names(emp_cols)) tab[[nm]] <- emp_cols[[nm]]
     }
@@ -1721,7 +1720,6 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
 #'   effect, for each factor predictor level -- the unadjusted bivariate association (which IS the
 #'   modelised quantity when there is a single predictor), connecting the model to the descriptive
 #'   crosstab. Works for both the coefficient and the `effect = "ame"` display. Default `FALSE`.
-#' @param empirical_OR `r lifecycle::badge("deprecated")` Renamed to `empirical`.
 #' @param stats The goodness-of-fit statistics shown in the model-summary **footer** (one block per
 #'   model). `NULL` (default) uses the per-family set: linear models show N, R square, adjusted R
 #'   square, the overall F-test and the residual SD; other models show N, the likelihood-ratio test
@@ -1812,7 +1810,7 @@ tab_reg <- function(data, dependent, predictors = NULL,
                     estimate_display = c("value", "ci", "prob", "ame"),
                     color = NULL, color_signif = NULL, stars = TRUE,
                     na = c("keep", "drop_all"),
-                    cleannames = NULL, subtext = "", empirical_OR = lifecycle::deprecated()) {
+                    cleannames = NULL, subtext = "") {
   method  <- match.arg(method)
   effect  <- match.arg(effect)
   at      <- match.arg(at)
@@ -1820,11 +1818,7 @@ tab_reg <- function(data, dependent, predictors = NULL,
   estimate_display <- match.arg(estimate_display)
   na      <- match.arg(na)
   cleannames <- if (is.null(cleannames)) getOption("tabxplor.cleannames", TRUE) else cleannames
-  # Phase 14t: `empirical_OR` renamed to `empirical` (it is now family-general, not OR-only).
-  if (lifecycle::is_present(empirical_OR)) {
-    lifecycle::deprecate_warn("1.4.0", "tab_reg(empirical_OR)", "tab_reg(empirical)")
-    empirical <- empirical_OR
-  }
+
 
   # Phase 14u (K): a LIST of models AND SEVERAL dependents -> one model-comparison table per dependent,
   # returned as a `tabxplor_tabs` list (so tab_export("xl") writes one sheet per dependent). Loop the

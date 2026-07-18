@@ -200,7 +200,7 @@ or_plot <- function(tabs, column = NULL, point_size = c(1.5, 6), title = NULL, .
     cli::cli_abort(c("No odds-ratio column found in {.arg tabs}.",
                      "i" = "{.fn or_plot} expects a {.fn tab_logit} / {.fn tab_reg} odds-ratio table."))
   }
-  # default to a MODEL odds-ratio column, not the descriptive "Emp. OR" companion (empirical_OR).
+  # default to a MODEL odds-ratio column, not the descriptive "Emp. OR" companion (empirical).
   model_cols <- or_cols[!grepl("^Emp\\.", or_cols)]
   default_col <- if (length(model_cols)) model_cols[[1]] else or_cols[[1]]
   col_nm <- if (!is.null(column)) column else default_col
