@@ -388,3 +388,56 @@ testthat::test_that("tab_xl degrades gracefully (writes the raw frame, no error)
     testthat::expect_true(file.exists(p))
   }
 })
+
+# === SECTION: Last Phase a bug-fixes ========================================
+
+# Fix 1: data.table input (was: "Selections can't have missing values" via the numeric col_var path).
+testthat::test_that("tab() accepts a data.table input, byte-identical to a data.frame", {
+  gss <- forcats::gss_cat
+  strip <- function(t) { attributes(t) <- attributes(t)[c("names", "row.names")]; t }
+  testthat::expect_no_error(f_dt <- tab(data.table::as.data.table(gss), marital, race))
+  testthat::expect_equal(strip(f_dt), strip(tab(gss, marital, race)))
+  # the numeric col_var path was the actual crash site
+  testthat::expect_no_error(n_dt <- tab(data.table::as.data.table(gss), marital, tvhours))
+  testthat::expect_equal(strip(n_dt), strip(tab(gss, marital, tvhours)))
+})
+
+# Fix 2: a 0-row jamovi build must degrade gracefully, never abort.
+testthat::test_that("jmvtab_build() + tab_kable() survive 0-row data", {
+  empty <- forcats::gss_cat[0, ]
+  opts  <- list(row_vars = "marital", col_vars = "race", tab_vars = character(),
+                wt = character(), color = "auto", color_signif = "ignore", ci = "auto",
+                digits = 0L, cleannames = FALSE, n_min = numeric())
+  testthat::expect_no_error(built <- tabxplor:::jmvtab_build(empty, opts, NULL))
+  testthat::expect_no_error(tab_kable(built$tabs, engine = "html"))
+})
+
+# Fix 3: the graceful-degrade notice is batch-aware -- suppressed when a real fmt table is present.
+testthat::test_that("degrade notice is suppressed when the render batch holds a real fmt table", {
+  real  <- tab(forcats::gss_cat, marital, race)
+  plain <- tibble::tibble(a = factor(c("x", "y")), b = c(1.5, 2.5))
+  # a mixed list: the plain peer must NOT emit the misleading "skipped" message
+  testthat::expect_no_message(tab_kable(list(real, plain), engine = "html"), message = "skipped")
+  # a lone non-tabxplor frame still informs (exactly once)
+  testthat::expect_message(tab_kable(plain, engine = "html"), "skipped")
+})
+
+# Fix 4: a weight literally named "wt" is shadow-proof (was: garbage column + warnings, numeric means).
+testthat::test_that("weight named 'wt' is byte-identical to any other weight name", {
+  set.seed(1); n <- 300
+  w <- runif(n, 0.5, 2)
+  d <- tibble::tibble(grp = factor(sample(c("a", "b", "c"), n, TRUE)),
+                      cat = factor(sample(c("x", "y"), n, TRUE)),
+                      val = rnorm(n, 10, 3), wt = w, weight = w)
+  strip <- function(t) { attributes(t) <- attributes(t)[c("names", "row.names")]; t }
+  testthat::expect_warning(tab(d, grp, val, wt = wt), NA)      # no "does not exist to remove"
+  testthat::expect_equal(strip(tab(d, grp, val, wt = wt)),  strip(tab(d, grp, val, wt = weight)))
+  testthat::expect_equal(strip(tab(d, grp, cat, wt = wt)),  strip(tab(d, grp, cat, wt = weight)))
+})
+
+# Fix 4: a weight that is ALSO a table variable is rejected early with a clear message.
+testthat::test_that("a weight used as a table variable errors clearly", {
+  d <- tibble::tibble(grp = factor(c("a", "b")), wt = c(1, 2), val = c(3, 4))
+  testthat::expect_error(tab(d, grp, wt, val, wt = wt), "also used as a row, column or tab variable")
+  testthat::expect_error(tab(d, wt, val, wt = wt),      "also used as a row, column or tab variable")
+})

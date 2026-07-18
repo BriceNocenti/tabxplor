@@ -1864,7 +1864,7 @@ tab_plot <- function(tabs,
   rd <- prep$tables[[1]]
 
   if (isTRUE(rd$vars$degrade)) {
-    tab_degrade_inform(rd$vars$reason)
+    if (isTRUE(rd$vars$notify)) tab_degrade_inform(rd$vars$reason)  # batch-aware (see tab_export_prep)
     return(invisible(tibble::as_tibble(tabs)))
   }
 

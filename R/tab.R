@@ -1398,9 +1398,13 @@ tab_setup <- function(ctx) {
     pos_col_vars <- tidyselect::eval_select(col_vars, data)
     col_vars     <- rlang::syms(names(pos_col_vars))
   }
-  col_vars_num  <- purrr::map_lgl(data[pos_col_vars], is.numeric)
-  col_vars_text <- purrr::map_lgl(data[pos_col_vars],
-                                  ~ is.factor(.) | is.character(.))
+  # DESIGN: extract by POSITION with `[[` (not `data[pos_col_vars]`): `df[<int vector>]` is column-
+  # subsetting on a data.frame/tibble but ROW-subsetting on a data.table, which silently mis-classified
+  # col_vars (-> NA col_var -> tab_num eval_select crash) on a data.table input. `data[[<int>]]` is
+  # engine-agnostic.
+  col_vars_num  <- purrr::map_lgl(pos_col_vars, ~ is.numeric(data[[.x]]))
+  col_vars_text <- purrr::map_lgl(pos_col_vars,
+                                  ~ is.factor(data[[.x]]) || is.character(data[[.x]]))
 
   tab_vars <- tab_vars_quo
   if (quo_miss_na_null_empty_no(tab_vars)) {
@@ -1417,6 +1421,17 @@ tab_setup <- function(ctx) {
     wt <- character() #rlang::sym("no_weight")
   } else {
     wt <- rlang::sym(rlang::as_name(wt_quo))
+  }
+  # Last Phase a bug-fix: a weight that is ALSO a selected variable is nonsensical (you cannot weight a
+  # mean by the same column you are averaging, nor cross a variable by itself) and used to abort with a
+  # cryptic data.table error. Fail early with a clear message. num_moment_scan is otherwise shadow-proof,
+  # so an ORDINARY weight named "wt" is fine -- only this double-role collision is rejected.
+  if (length(wt) != 0L &&
+      as.character(wt) %in% c(as.character(row_vars), as.character(col_vars), as.character(tab_vars))) {
+    cli::cli_abort(c(
+      "The weight variable {.val {as.character(wt)}} is also used as a row, column or tab variable.",
+      "i" = "A weight cannot be a table variable at the same time \u2014 pick a different weight column."
+    ))
   }
   # print(tab_vars) ; print(row_var) ; print(wt) ; print(col_vars)
 
@@ -3232,9 +3247,11 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
     data <- data %>%
       dplyr::select(!!!tab_vars, !!row_var, !!col_var, !!wt) %>%
       dplyr::mutate(dplyr::across(!!wt & !where(is.numeric), as.numeric)) %>%
-      # PERF/FIXME: redundant — relabel_levels_in_varnames() already runs once in tab_many
-      # (~L889). Kept for the step-by-step entry straight into tab_plain. Cheap now (post the
-      # short-circuit fix, see CLAUDE.md § Discovered bugs) but a removal candidate.
+      # DESIGN: REQUIRED for the direct tab_plain() entry (the public no-total escape hatch).
+      # tab_many() also relabels once upstream (~L889), so this is redundant ONLY on the tab()/
+      # tab_many() path; the op is idempotent and cheap (post the short-circuit fix, see CLAUDE.md
+      # § Discovered bugs). Keep it -- removing it would break a bare tab_plain() call for a
+      # negligible perf gain.
       relabel_levels_in_varnames(as.character(col_var))
     #Vars are not changed to factors here, but after data.table
   }
@@ -4188,6 +4205,12 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
   # (R/tab-agg.R), shared with the producer.
   use_raw <- .by_table || is.null(.fine) || df || num
 
+  # Last Phase a bug-fix: the weight name captured OUTSIDE any data.table `j`, so the mean-direct
+  # (df/num) blocks below reference it as a plain string. data.table `j` exposes columns as variables,
+  # so a column named "wt" would shadow the `wt` ARGUMENT (see num_moment_scan's WARNING); wt_name +
+  # get(wt_name) + `[, (wt_name) := NULL]` (dynamic drop, was the literal `wt`) are shadow-proof.
+  wt_name <- as.character(wt)
+
   if (use_raw) {
     data <- data %>%
       dplyr::select(!!!tab_vars, !!row_var, !!!col_vars, !!wt) %>%
@@ -4220,11 +4243,11 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
 
       } else {
         data[, purrr::map_if(.SD,
-                             names(.SD) != as.character(wt),
-                             ~ round(stats::weighted.mean(., eval(wt), na.rm = TRUE), 10),
+                             names(.SD) != wt_name,
+                             ~ round(stats::weighted.mean(., get(wt_name), na.rm = TRUE), 10),
                              .else = ~ NA_real_),
              .SDcols = as.character(c(col_vars, wt)),
-             keyby = c(tab_row_names)][, wt := NULL]
+             keyby = c(tab_row_names)][, (wt_name) := NULL]
       }
 
   } else {
@@ -4302,11 +4325,11 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
                                           as.character(c(tab_vars[!tab_vars %in% .], row_var)) ),
 
                          purrr::map_if(.SD,
-                                       names(.SD) != as.character(wt),
-                                       ~ round(stats::weighted.mean(., eval(wt), na.rm = TRUE), 10),
+                                       names(.SD) != wt_name,
+                                       ~ round(stats::weighted.mean(., get(wt_name), na.rm = TRUE), 10),
                                        .else = ~ NA_real_)),
                      .SDcols = as.character(c(col_vars, wt)),
-                     keyby = eval(.)][, wt := NULL][ , as.character(tab_vars) := purrr::map(.SD, as.factor),
+                     keyby = eval(.)][, (wt_name) := NULL][ , as.character(tab_vars) := purrr::map(.SD, as.factor),
                                                      .SDcols = as.character(tab_vars)]
             )
         )
@@ -4371,11 +4394,11 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
         tabs_totaltab <-
           data[, c(purrr::set_names(rep("Total", length(tab_vars)), as.character(tab_vars)),
                    purrr::map_if(.SD,
-                                 names(.SD) != as.character(wt),
-                                 ~ round(stats::weighted.mean(., eval(wt), na.rm = TRUE), 10),
+                                 names(.SD) != wt_name,
+                                 ~ round(stats::weighted.mean(., get(wt_name), na.rm = TRUE), 10),
                                  .else = ~ NA_real_)),
                .SDcols = as.character(c(col_vars, wt)),
-               keyby = eval(as.character(row_var))][, wt := NULL]
+               keyby = eval(as.character(row_var))][, (wt_name) := NULL]
       }
 
     } else {
@@ -6137,6 +6160,24 @@ var_contrib_ctr_signed <- function(xwn, twn, in_totrow, in_tottab, comp) {
   sign(spread) * spread^2 / expected_freq
 }
 
+# contrib_pvalue() -- the standardized-residual two-sided p-value companion to var_contrib_ctr_signed().
+# `v` is the cell's SIGNED contribution on the FREQUENCY scale = the chi2 contribution divided by N
+# (N = twn[n], the subtable grand total), so the Pearson residual is sign(v)*sqrt(|v|*N), asymptotically
+# N(0,1) under independence, and the two-sided p is 2*pnorm(-sqrt(|v|*N)). Total rows/tabs are margins,
+# not cells -> NA. Written into the `pvalue` field by chi2_write_contrib() so fmt_color_plan() can gate
+# `color = "contrib"` under a significance policy (contrib has NO confidence interval to gate on).
+# Weighted note: like the contribution itself, N and v are weighted -> the residual is approximate under
+# variable weights (anti-conservative), consistent with tabxplor's weighted-inference framework
+# (dev/tabxplor_1.4.0_decisions.md §10/§18); exact for unweighted tables.
+contrib_pvalue <- function(v, twn, in_totrow, in_tottab, comp) {
+  n  <- length(v)
+  pv <- 2 * stats::pnorm(-sqrt(abs(v) * twn[n]))
+  prot <- if (comp == "all") in_totrow | in_tottab else in_totrow
+  pv[prot] <- NA_real_
+  pv[!is.finite(pv)] <- NA_real_
+  pv
+}
+
 # chi2_write_contrib() -- Phase 9b-5: the per-cell contribution-to-variance WRITES (the `var` = signed
 # absolute contribution, and the `ctr` = relative contribution = |cell| / group-total) plus the
 # `comp_all` / contrib-`color` col-meta. The pre-9b-5 record path did this in ~6 successive
@@ -6163,6 +6204,11 @@ chi2_write_contrib <- function(tabs, calc, comp, color, col_vars_levels,
   # Phase 10i-B: the `all_col_vars` exclusion (add_n/add_pct helper columns) is gone -- contrib runs
   # at build on the CORE table, which never carries them; only the total column (`no_col_var`) is out.
   var_after <- purrr::set_names(lapply(fmt_nms, function(nm) get_var(tabs[[nm]])), fmt_nms)
+  # Last Phase a bug-fix: the per-cell standardized-residual p-value, computed here (where N = twn[n],
+  # the subtable grand total, is in hand) and stored in `pvalue` so fmt_color_plan() can gate
+  # `color = "contrib"` under a significance policy. Only under `do_ctr` (contrib coloring is on); the
+  # pipeline computes contributions solely then (calc = c("ctr","p")), so plain tables are untouched.
+  pval_after <- if (do_ctr) purrr::set_names(lapply(fmt_nms, function(nm) get_pvalue(tabs[[nm]])), fmt_nms)
   elig_col  <- purrr::keep(fmt_nms, function(nm) get_type(tabs[[nm]]) != "mean" &&
                              get_col_var(tabs[[nm]]) != "no_col_var")
   for (nm in elig_col) {
@@ -6170,11 +6216,14 @@ chi2_write_contrib <- function(tabs, calc, comp, color, col_vars_levels,
     xwn <- get_wn(tabs[[nm]]); twn <- get_wn(tabs[[tot_nm]])
     itr <- is_totrow(tabs[[nm]]); itt <- is_tottab(tabs[[nm]])
     v   <- var_after[[nm]]
+    pv  <- if (do_ctr) pval_after[[nm]]
     for (g in gids) {
       r <- which(gid == g)
       v[r] <- var_contrib_ctr_signed(xwn[r], twn[r], itr[r], itt[r], comp)
+      if (do_ctr) pv[r] <- contrib_pvalue(v[r], twn[r], itr[r], itt[r], comp)
     }
     var_after[[nm]] <- v
+    if (do_ctr) pval_after[[nm]] <- pv
   }
 
   ctr_final <- NULL; comp_all_val <- NULL; color_apply <- character(0)
@@ -6249,6 +6298,9 @@ chi2_write_contrib <- function(tabs, calc, comp, color, col_vars_levels,
       # plain set_ctr here does not, so fill wn from get_wn() (a no-op when wn is already set / weighted;
       # matters only for an unweighted table built via tab_plain() |> tab_chi2(), where wn was NA).
       col <- set_wn(col, get_wn(col))
+      # Last Phase a bug-fix: the standardized-residual p-value (contrib significance gate). A no-op on
+      # non-eligible columns (pval_after there is the original get_pvalue); the residual on contrib cells.
+      col <- set_pvalue(col, pval_after[[nm]])
       col <- set_comp_all(col, comp_all_val)
       if (nm %in% color_apply) col <- set_color(col, "contrib")
     }

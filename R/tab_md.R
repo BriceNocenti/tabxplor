@@ -212,7 +212,7 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
                           theme = NULL) {
   # Graceful degrade -- a table that can't be read as a tabxplor table renders as a plain pipe table.
   if (isTRUE(rd$vars$degrade)) {
-    tab_degrade_inform(rd$vars$reason)
+    if (isTRUE(rd$vars$notify)) tab_degrade_inform(rd$vars$reason)  # batch-aware (see tab_export_prep)
     return(paste(knitr::kable(tibble::as_tibble(rd$tab), format = "pipe"), collapse = "\n"))
   }
 

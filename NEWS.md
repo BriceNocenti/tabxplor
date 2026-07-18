@@ -706,6 +706,19 @@
   AIC fallback); and a new **`na = "drop_all"`** fits every model on one shared complete-case population
   so nested models get equal N.
 
+## Bug fixes
+* `tab()` now accepts a **`data.table`** as its `data` input (it used to error with "Selections can't
+  have missing values" whenever a numeric column was tabulated).
+* `color = "contrib"` now works **with a significance policy** (`color_signif = "grey_non_signif"` or
+  `"color_all_signif"`): it colours only the cells whose contribution to the Chi-squared is significant
+  (a standardized-residual test). It previously coloured nothing in that combination.
+* A **weight column literally named `"wt"`** no longer corrupts weighted numeric-mean tables (it used to
+  leak a spurious column and warn). Using the same column as both the weight and a row/column/tab
+  variable now raises a clear error instead of an obscure one.
+* The **jamovi** module no longer aborts on 0-row data (e.g. mid-selection or a fully filtered dataset)
+  and no longer prints a misleading "the table has no tabxplor_fmt columns" message when a formatted
+  table is present.
+
 ## Deprecations
 * `tab_transpose()` is **soft-deprecated** in favour of the exporters' `transpose = TRUE` argument.
   It flips the underlying data, which cannot represent a transposed column's mixed cell types, so it

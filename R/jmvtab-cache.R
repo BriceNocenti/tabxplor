@@ -833,6 +833,16 @@ jmvtab_build <- function(data, opts, store) {
   row_vars <- opts$row_vars
   col_vars <- opts$col_vars
   tab_vars <- opts$tab_vars
+  # DESIGN (Last Phase a bug-fix): a transient 0-row `data` (the jamovi live UI mid-selection, or a
+  # fully filtered dataset) must degrade gracefully, not abort. Both the length-0 placeholder injection
+  # below (`data$no_row_var <- factor(...)` throws "replacement has 1 row, data has 0") and tab()
+  # itself (`stop("data is of length 0")`) crash on 0 rows. Return a plain empty frame the exporters
+  # render plainly via tab_render_vars()'s graceful-degrade path.
+  if (nrow(data) == 0L) {
+    return(list(tabs  = tibble::tibble(),
+                store = jmv_cache_migrate(store),
+                hits  = list(agg = logical(0), test = logical(0))))
+  }
   if (length(row_vars) == 0L) { data$no_row_var <- factor("no_row_var"); row_vars <- "no_row_var" }
   if (length(col_vars) == 0L) { data$no_col_var <- factor("n");          col_vars <- "no_col_var" }
   data   <- jmv_coerce_numeric_cols(data, col_vars)   # integer/numeric col_var -> mean (match R)

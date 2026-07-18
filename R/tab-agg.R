@@ -108,10 +108,18 @@ num_rollup <- function(agg, by, drop_keys, moment_cols, tab_vars_chr) {
 #   v_wn = sum([w *] !is.na(x))  (weighted only)   v_w2 = sum(w^2 * !is.na(x))  (Kish opt-in only)
 # `wt` is the weight SYMBOL (character(0) when unweighted); `eval(wt)` looks the column up inside j.
 # WARNING: byte-identity-critical -- the as.double() coercions (32-bit overflow guard on Sigma x^2),
-# the eval(wt) weight lookup, the (no) .SDcols on the weighted branch, and the column construction
-# order (all _n, then _wn, _s1, _s2, _w2) must match num_derive_stats()'s expectations EXACTLY.
+# the weight lookup, the (no) .SDcols on the weighted branch, and the column construction order (all
+# _n, then _wn, _s1, _s2, _w2) must match num_derive_stats()'s expectations EXACTLY.
+# WARNING (Last Phase a bug-fix): the weight is referenced by the plain string `wt_name` (captured
+# OUTSIDE the data.table `[...]` call, where the `wt` argument is un-shadowed) and read with
+# get(wt_name) -- never the bare symbol `wt` inside `j`. data.table exposes every column as a `j`
+# variable, so a column literally named "wt" (the weight OR a col_var) used to SHADOW the `wt`
+# argument: as.character(wt) then returned the column's VALUES, corrupting the scratch column names
+# (a leaked garbage column + "does not exist to remove" warnings). Byte-identical for every ordinary
+# weight name; get(wt_name) is functionally eval(wt).
 num_moment_scan <- function(data, tab_row_names, col_vars, wt) {
   col_vars <- as.character(col_vars)
+  wt_name  <- as.character(wt)     # captured here (un-shadowed) -- see the WARNING above
   kish <- isTRUE(getOption("tabxplor.kish_neff", FALSE))
   if (length(wt) == 0) {
     data[,
@@ -130,41 +138,41 @@ num_moment_scan <- function(data, tab_row_names, col_vars, wt) {
   } else {
     data[,
          c(purrr::set_names(purrr::map_if(.SD,
-                                          names(.SD) != as.character(wt),
+                                          names(.SD) != wt_name,
                                           ~ sum(!is.na(.)),
                                           .else = ~ NA_real_),
-                            paste0(as.character(c(col_vars, wt)), "_n")),
+                            paste0(c(col_vars, wt_name), "_n")),
 
            purrr::set_names(purrr::map_if(.SD,
-                                          names(.SD) != as.character(wt),
-                                          ~ sum(as.integer(!is.na(.)) * eval(wt), na.rm = TRUE),
+                                          names(.SD) != wt_name,
+                                          ~ sum(as.integer(!is.na(.)) * get(wt_name), na.rm = TRUE),
                                           .else = ~ NA_real_),
-                            paste0(as.character(c(col_vars, wt)), "_wn")),
+                            paste0(c(col_vars, wt_name), "_wn")),
 
            purrr::set_names(purrr::map_if(.SD,
-                                          names(.SD) != as.character(wt),
-                                          ~ sum(eval(wt) * ., na.rm = TRUE),
+                                          names(.SD) != wt_name,
+                                          ~ sum(get(wt_name) * ., na.rm = TRUE),
                                           .else = ~ NA_real_),
-                            paste0(as.character(c(col_vars, wt)), "_s1")),
+                            paste0(c(col_vars, wt_name), "_s1")),
 
            purrr::set_names(purrr::map_if(.SD,
-                                          names(.SD) != as.character(wt),
-                                          ~ sum(eval(wt) * . * ., na.rm = TRUE),
+                                          names(.SD) != wt_name,
+                                          ~ sum(get(wt_name) * . * ., na.rm = TRUE),
                                           .else = ~ NA_real_),
-                            paste0(as.character(c(col_vars, wt)), "_s2")),
+                            paste0(c(col_vars, wt_name), "_s2")),
 
            # G1 (Phase 3a): Sigma w^2, the one extra sufficient statistic for Kish effective n
            # (n_eff = wn^2 / w2). Accumulated ONLY when opted in, so the default weighted path is
            # byte-identical and pays nothing. See dev/tabxplor_1.4.0_decisions.md §14.
            if (kish)
              purrr::set_names(purrr::map_if(.SD,
-                                            names(.SD) != as.character(wt),
-                                            ~ sum(eval(wt)^2 * as.integer(!is.na(.)), na.rm = TRUE),
+                                            names(.SD) != wt_name,
+                                            ~ sum(get(wt_name)^2 * as.integer(!is.na(.)), na.rm = TRUE),
                                             .else = ~ NA_real_),
-                              paste0(as.character(c(col_vars, wt)), "_w2"))
+                              paste0(c(col_vars, wt_name), "_w2"))
          ),
          keyby = c(tab_row_names)][
-           , paste0(wt, c("_n", "_wn", "_s1", "_s2", if (kish) "_w2")) := NULL]
+           , paste0(wt_name, c("_n", "_wn", "_s1", "_s2", if (kish) "_w2")) := NULL]
   }
 }
 

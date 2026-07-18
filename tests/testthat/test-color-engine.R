@@ -202,3 +202,44 @@ testthat::test_that("guaranteed_effect offsets the RATIO (multiplicative) scale 
   testthat::expect_equal(plan$over_breaks[1], 1)          # multiplicative neutral
   testthat::expect_true(fmt_color_slots(col, plan)[1] >= 1L)   # significant -> coloured
 })
+
+# Last Phase a: contrib gains a significance gate via the stored standardized-residual p-value.
+# Previously color="contrib" under a significance policy coloured NOTHING (no CI to gate on).
+testthat::test_that("engine: contrib + significance policy gates on the residual p-value", {
+  gss <- forcats::gss_cat
+  # grey_non_signif: a cell is coloured iff its residual is significant AND its contribution is large
+  t_grey <- tab(gss, marital, race, pct = "row", color = "contrib",
+                color_signif = "grey_non_signif")
+  cols   <- names(t_grey)[purrr::map_lgl(t_grey, is_fmt)]
+  any_col <- FALSE
+  for (nm in cols) {
+    x    <- t_grey[[nm]]
+    slot <- fmt_color_channels(x)$text_slot
+    pv   <- get_pvalue(x)
+    sig  <- !is_totrow(x) & !is.na(pv) & pv < 0.05
+    # every coloured cell must be significant & non-total (the gate direction we care about)
+    testthat::expect_true(all(slot[slot > 0L] > 0L & sig[slot > 0L]), info = nm)
+    if (any(slot > 0L)) any_col <- TRUE
+    # a clearly non-significant cell (pv large) is never coloured
+    testthat::expect_true(all(slot[!is.na(pv) & pv > 0.5] == 0L), info = nm)
+  }
+  testthat::expect_true(any_col)   # the fix: SOMETHING is coloured (was nothing)
+})
+
+testthat::test_that("engine: contrib + guaranteed_effect colours every significant cell", {
+  gss   <- forcats::gss_cat
+  t_all <- tab(gss, marital, race, pct = "row", color = "contrib",
+               color_signif = "guaranteed_effect")
+  cols  <- names(t_all)[purrr::map_lgl(t_all, is_fmt)]
+  n_col <- 0L
+  for (nm in cols) {
+    x    <- t_all[[nm]]
+    slot <- fmt_color_channels(x)$text_slot
+    pv   <- get_pvalue(x)
+    sig  <- !is_totrow(x) & !is.na(pv) & pv < 0.05
+    # guaranteed_effect offsets the scale to the neutral, so EVERY significant cell is coloured
+    testthat::expect_equal(slot > 0L, sig, info = nm)
+    n_col <- n_col + sum(slot > 0L)
+  }
+  testthat::expect_gt(n_col, 0L)
+})

@@ -640,7 +640,7 @@ One user-friendly, fast, clear and simple regression analysis, starting from jmv
 - A "+" to add predictor subsets to create predictor’s lists for models comparison, selecting, or selecting out, among the already chosen predictors.
 - For tests etc., use the dataset `gss_simple <- gss_cat_data_formatting()`, which is classic `forcats::gss_cat` formatted with merged levels for cleaner tables, and first levels chosen to be used as references (for color helpers, regressions, etc.) : I’ll use the same inside Jamovi to test and review the UI.
 
-##### Phase 15b-i (DONE, pending maintainer `prepare()` + live review)
+##### Phase 15b-i (DONE)
 
 The single-model UI is built: 6 files (`jamovi/jmvtabreg.{a,u,r}.yaml`, `jamovi/js/jmvtabreg.js`,
 `R/jmvtabreg.b.R`, `R/jmvtabreg-cache.R`) + `0000.yaml` registration + a `test-jmvtabreg-cache.R`.
@@ -650,10 +650,9 @@ Covers every family, multi-dependent, `empirical=TRUE`, a per-predictor referenc
 reparametrized live with no refit (chosen with the maintainer over serializing raw fit objects). Full
 suite green (FAIL 0). **Maintainer step (headless-impossible):** `jmvtools::prepare()` to generate
 `R/jmvtabreg.h.R` + the uijs blob, then `install(home='flatpak')` / `dev/build_jmo_windows.R`, then
-live-review with `gss_simple`. Until `prepare()` runs, `check()` will NOTE `jmvtabregBase` as an
-undefined global (the .h.R that defines it is not generated yet) — expected, not a bug.
+live-review with `gss_simple`. 
 
-##### Phase 15b-ii (DONE, pending maintainer `prepare()` + live review)
+##### Phase 15b-ii (DONE)
 
 The model-comparison "+" builder is built. A **Model comparison** CollapseBox holds `compare`
 (none/baseline/sequential), a `modelBuilderCtrl` CustomControl (checkbox-grid **cards**: name + a
@@ -667,8 +666,7 @@ the multiplicator fit-key was already correct). One cache change: the raw-fit ce
 4→24MB, store 16→96MB) so comparison fits (~9–11MB each) cache instead of graceful-skipping — decided
 with the maintainer. Full suite green (FAIL 0). **Maintainer step:** `jmvtools::prepare()` to generate
 `R/jmvtabreg.h.R` + the uijs blob, then `install(home='flatpak')` / `dev/build_jmo_windows.R`, then
-live-review the builder with `gss_simple`. Until `prepare()` runs, `check()` still NOTEs `jmvtabregBase`
-as an undefined global — expected.
+live-review the builder with `gss_simple`.
 
 ##### Phase 15b-iii — remaining polish (deferred)
 
@@ -703,15 +701,27 @@ Among the new global options created in 1.4.0, are they all useful and clearly n
 
 #### Last Phase c – code and framework simplifications
 
-How to further simplify tabxplor package framework ?
+How to further simplify tabxplor package framework ? Do four round of simplification, each on a fresh Claude Code session.
 - How to further integrate the internal functions into a reliable and simple ecosystem aimed at global code simplification ?
 - What features and ad hoc parts of the code are white elephants, that could be removed and integrated in a common global framework without meaningful losses for the user ? What should we give up or modify to enable a global simplification of some functions and code ?
 - What are the missing attributes, at table-level, column-level or fmt_cell-level, that would be necessary for a more reliable and straighforward architecture, or that would be necessary for further simplifications of the code/of the arguments ? At the contrary, what are the attributes that seem ad hoc, unnecessary, adding useless complexity to the code, and how to remove or modify them for simplification ?
 - What new arguments of v 1.4.0 could be merged or redesigned for simplicty of use, consistency and clarify ?
 
+##### Last Phase c-i  – First round of simplification
+
+
+##### Last Phase c-ii  – Second round of simplification
+
+
+##### Last Phase c-iii  – Third round of simplification
+
+
+##### Last Phase c-iiii  – Forth round of simplification
+
+
 #### Last Phase d – simplify main user-facing functions arguments and roxygen documentation
 
-Simplify `tab()` and `tab_reg()` and other main functions documentation, to make it more easily understandable and more helpful to students that are not statistical experts and may have difficulties with programming. And less terrifying – because the length of the current documentation may be terrifying for newcomers in R (specially my literary sociology students).
+Simplify `tab()` and `tab_reg()` and other main functions documentation, to make it more easily understandable and more helpful to students that are not statistical experts and may be true beginners with programming. And less terrifying – because the length of the current documentation may be terrifying for newcomers in R (specially my literary sociology students).
 - Would there be possibilities to nest some of the more complex argument in other functions ? For example, all the complex customisation things about ci refer to tab_ci(), with a link for the user to go further if he wants to ? All the complex things about color customisation somewhere else ? All the helpers set / get etc. somewhere else too, but with a ling to them somewhere in tab() page. What else could be grouped and put out of the main user-facing functions documentation ?
 - The order of the arguments matters, what comes first is / must be what really matters for base users/beginners (like variables, percentages, colors, etc.)
 
@@ -724,31 +734,31 @@ Each vignette must be user-friendly, understandable by novices for the base cros
 - For each vignette, carefully study the dev history in `dev/tabxplor_1.4.0_decisions.md`, `dev/tabxplor_1.4.0_roadmap_DONE_PHASES.md`, or other `dev/` .md when relevant : the aim is of course not to give the user any information about how the package was implement (would be useless to him), but to retrieve the more data possible about what were the intended real world use cases of each option, then **select** which part is **really** important for the user.
 - For real-world examples, use `gss_simple <- gss_cat_data_formatting()` (exported), which is classic `forcats::gss_cat` formatted with merged levels for cleaner tables, and first levels chosen to be used as references (for color helpers, regressions, etc.).
 
-##### base package introduction / tab() vignette
+##### Last Phase e-i – base package introduction / tab() vignette
 
-The current vignette should be the simple and useful basis for non-expert users, a light and direct introduction to what tabxplor do better than other packages (but with more humility than that !) : color helpers, references and confidence intervals for crosstables (factors and means), with exports, etc. It shall also permit expert users to understand what this package is really interesting for, by giving only the really necessary technical details.
+The current vignette should be the simple and useful basis for non-expert users, a light and direct introduction to what tabxplor do better than other packages (but with more humility than that !) : color helpers, references and confidence intervals for crosstables (factors and means), with exports, etc. It shall also permit expert users to understand what this package is really interesting for, by giving only the really necessary technical details. Maybe first a simple explanation about what do with color helpers, without significance ; then a concrete explanation of color_signif, for exemple "guaranteed_effect" to highligh all significant on tables from small samples ; and add, somewhere, the measure×color_signif summary table for experts, and other, to know exactly what are the possibilities.
 
 Something very close is what’s to be used for `README.Rmd` (never edit `README.md` manually). Or maybe do a much more concise introduction in the `README.Rmd`, presenting only the really interesting features of tabxplor for exploratory analysis (mostly colors helpers for crosstables, possibly taking significance into account, with at the end a last example of logistic regression with a meaningful comparaison of modelised quantities versus empirical/observed quantities) ?
 
-##### tab_reg() vignette
+##### Last Phase e-i – tab_reg() vignette
 tab_reg should come with it’s own very detailed vignette
 - A section for each kind of regression model : binomial, gaussian, poisson, etc. Explain how to use weighted models,  xplaining clearly and simply for beginners what is the chosen framework for weights (see dev history) and how to use simple survey weights (referto survey:: documentation for more complex cases, stating cleardy that stratified surveys can gain a bit of precision an narrow a bit confidence intervals if the strata variables are given).
 - Meaningful examples in each section, that should help the novice remember in what situation and what kind of variable he should use each kind of model, and briefly inform the expert about the exact underlying methodological choices.
 - Since tabxplor differenciates from other packages by the possibility to compare regression models estimates with their relative empirical/observed quantity, each section vignette should include a full detailed explanation with meaningful examples of what the `empirical = TRUE` framework does in this case (how to use and what to compare to what, which ci are calculated and why, what tab() code with ci compares to what tab_reg() one dependent/one predictor model, etc.).
 - Explain, in a simple way, what the different summary statistics for each case are for.
 
-##### programming with tabxplor vignette
+##### Last Phase e-i – programming with tabxplor vignette
 All the part about "programming with tabxplor" and its vctrs fields should come in their own vignette, and it must be updaded and extended, with user-friendly example stating the possibilities.
 
 
 #### Last Phase f – full `pkgdown` documentation + test coverage
 
-Implement a full pkgdown documentation.
+Implement a full pkgdown framework for online documentation.
 - Where ? On github pages ? Elsewhere with tidyverse ecosystem provided servers ?
 
 Add test coverage to github actions.
 
-#### Last Phase g – NEW.md simplification
+#### Last Phase g – NEWS.md simplification
 
 #### Last Phase h – tabxplor R french translation
 
@@ -771,25 +781,13 @@ What other strings should be translated in French ?
    feeding `qt`); `ci_pivot()` now coerces `df <= 0` to `NA` (clean NA, no NaN, no warning). The two
    goldens were regenerated with the rule-B mean CIs and no longer carry the NaN.
 
-- **NEW (2026-07-16, seen live in jamovi on WSL; COSMETIC, pre-existing — not a migration issue).**
-  A live `jmvtab` session prints, 3×, while the user adds the analysis and picks variables:
-  *"! tabxplor formatting and colors skipped: the table has no tabxplor_fmt columns (not a
-  tabxplor table). ℹ Rendering the plain table instead."* — the Phase 10c `tab_render_vars()`
-  degrade path ([R/tab.R:2494](R/tab.R#L2494)). **The real tables are unaffected** (colours render
-  correctly); this fires only on the transient degenerate shapes jamovi passes mid-selection.
-  Reproduced (scripts in the C3 session; `jmvtab_build()` + `tab_kable(engine="html")`):
-  + **`data` with 1 column, no vars selected** → emits the message **even though the built table
-    HAS an fmt column** (`fmt=1/2`) ⇒ the degrade is reached on some *other* table inside
-    `tab_kable`'s prep than the one returned, and **the message is misleading, not just noisy**.
-    Start at `tab_export_prep()` / `tab_materialize_extras()`, not at `tab_render_vars()`.
-  + **0-row `data` + named vars** → hard **ERROR** `"data is of length 0 (possibly after filter or
-    na = 'drop_all')"` from `tab_plain()` via `purrr::pmap()` ([R/tab.R:1814](R/tab.R#L1814)).
-    A 0-row table should degrade gracefully, not abort.
-  + NOT the cause (each tested and cleared): the tier-3 **carrier** cache (all of fresh build /
-    exact-tuple hit / digits re-apply / colour re-apply / `saveRDS` round-trip keep `fmt=4/5`);
-    empty `row_vars`/`col_vars` against full data; `jmvtab_build()` itself.
-  Fix in whichever phase next touches the exporter prep. Add the degenerate shapes to
-  `test-edge-cases.R`.
+- FIXED (Last Phase a): the two live-`jmvtab` degrade defects (2026-07-16). (1) The misleading 3×
+  *"formatting and colors skipped: no tabxplor_fmt columns"* message: `tab_export_prep()` now decides
+  the degrade notice ONCE per render batch and suppresses it when the batch still holds a real fmt
+  table (`vars$notify`, gated at the 5 exporter emit sites); a lone non-tabxplor input still informs.
+  (2) The 0-row hard **ERROR** (`"data is of length 0"`): `jmvtab_build()` now guards `nrow(data)==0`
+  and returns a graceful empty frame the exporters render plainly (the core `tab()` `stop()` is kept —
+  a public `tab()` on empty data still errors helpfully). Regression cases in `test-edge-cases.R`.
 
 In-code these are tagged for grep: `# KNOWN-BUG:` (bugs below), `# FIXME:` / `# FIXME(clarify):` / `# FIXME(future):` (suspect logic or future work, several tied to the Phase 5 color work), `# OBSOLETE:` (dead-code banners, e.g. the stale `tab_xl` duplicate). Fix each bug inside the phase that rewrites the relevant code, not as a separate pass.
 
@@ -803,10 +801,9 @@ In-code these are tagged for grep: `# KNOWN-BUG:` (bugs below), `# FIXME:` / `# 
 - FIXED (2026-07-15, CI green-up): `tab_color_legend()`'s `lang` argument silently did nothing on **Linux** (`lang="fr"` returned English) — `Sys.setenv(LANGUAGE=)` alone can't switch gettext once glibc has cached a lookup. Now flushed via `flush_gettext_cache()` before/after/on-exit. Caught only because the snapshot tests SHIP and run on CI's Linux jobs. Cannot work under `LANG=C` (gettext ignores `LANGUAGE` there) — a documented gettext rule, not a package bug.
 - FIXED (2026-07-15, CI green-up): 6 unqualified `globalVariables()` calls in `R/fmt_class.R` with `utils` declared nowhere — `pkgload::load_all()` crashed ("could not find function globalVariables") in any process without `utils` attached, e.g. a testthat parallel worker. Now `utils::globalVariables()` + `utils` in Imports. Latent since forever; surfaced by turning on `Config/testthat/parallel`.
 - FIXED (2026-07-15, CI green-up): `test-tab_logit.R` "colour_signif='ignore'" asserted a symmetric OR break (`mag > 1.16`) against the **asymmetric** `mean_ratio` scale (`under` starts at 1.5 since Phase 13a) — wrong test; failed in isolation everywhere and on macOS CI, passing elsewhere only via a leaked global scale. Now derives the threshold per direction from the scale in force and pins it.
-- **NOT a bug, but confirm the intent**: row labels are rendered with **U+202F narrow no-break spaces** in place of ASCII spaces by BOTH html engines (`"No answer"` -> `No<U+202F>answer`). Consistent across engines so it looks deliberate (keeps labels from wrapping), but it means HTML copy-paste yields NBSPs and any test comparing rendered cells to `levels()` silently matches nothing.
-- `set_color_style(custom_palette=)` (`tab_classes.R` ~L3120): length check requires 10 but the message says 11 and 11 names (`pos1..neg5, ratio`) are applied — the `ratio` slot ends up valueless, so custom palettes are broken for the ratio color. Fix by accepting length 11.
+- **NOT a bug — confirmed deliberate (Last Phase a)**: row labels render with **U+202F narrow no-break spaces** in the HTML/kable path ONLY (both engines, via `tab_wrap_text(unbreakable_spaces=TRUE)`), a no-wrap choice with an opt-out (`unbreakable_spaces=FALSE`). md / plot / console keep ASCII. The only side-effect is HTML copy-paste yielding NBSPs; kept as-is.
 - **FIXED (Phase 7e)**: `tab(data, >=2 row_vars, >=2 col_vars)` used to error "pct can't be recycled" for ANY `pct` (the multi×multi tables jmvtab drives). `tab()` recycles `pct` to a per-col_var vector (`pct = c(rep(pct, length(col_var)), ...)`), but `pct_vect` only broadcasts a per-col_var vector when there is exactly ONE row_var (branch B); with ≥2 row_vars it falls to the `else` stop. Fix: add a branch `is.character(pct) & length(pct) == length(col_vars)` → `rep(list(pct), length(row_vars))`. Pre-existing (reproduces pre-7d-ii on `git stash`); low impact (multi×multi + output_list); fix with the recycling code.
-- `tab()` errors on a `data.table` **input** (works on tibble/data.frame). `tab(as.data.table(gss), marital, race)` → `tab_num()` "Selections can't have missing values" from `tidyselect::eval_select(col_vars, data)` (`tab.R` ~L3203) — under a data.table input the numeric-col_var index path (`as.character(col_vars)[col_vars_num]`, `tab.R` ~L1304) yields an NA selection. Low impact (users pass tibbles/data.frames; `tab()` does its own `setDT` on a narrowed copy internally). Discovered in the Phase 6b PoC (§26). Fix belongs with the Phase 2/6 aggregate-core / col_var-classification code, not a separate pass.
+- FIXED (Last Phase a): `tab()` errored on a `data.table` **input**. Root cause: `tab_setup()` did `data[pos_col_vars]` to classify col_vars, which is COLUMN-subsetting on a data.frame/tibble but ROW-subsetting on a data.table → NA col_var → `tab_num()` "Selections can't have missing values". Now `purrr::map_lgl(pos_col_vars, ~ is.numeric(data[[.x]]))` (engine-agnostic `[[`-by-position).
 - FIXED (this session): `set_num()` wrote `display=="diff"` via `set_pct()` (should be `set_diff()`), so setting the displayed value of a diff cell went to the wrong field. Now uses `set_diff()`.
 - FIXED (workstream 5): `relabel_levels_in_varnames()` (`tab.R` ~L5592) made big weighted tables ~60× slower. Its `across(where(...))` predicate ran on **every** column with vectorised `&`/`|`, so the character branch `any(. %in% names(data))` coerced whole 8M-row numeric/factor columns to strings (~15s × 2 calls). Rewrote it to examine **only the `col_vars` targets** with short-circuit `&&`/`||` (numeric targets cost ~0); output byte-identical. 8M `tab(wt=)`: ~30s → ~0.2s; unweighted tables also faster + ~90% less memory.
 
@@ -858,9 +855,21 @@ display-snapshot regen for the new star padding).
    stars: under `color_all_signif` a significant cell whose GUARANTEED effect is below the first break
    is correctly starred-but-uncoloured — legitimate, and now off by default.
 
-Flagged out of scope: weight column literally named `"wt"` → `num_moment_scan` name-collision crash;
-`contrib` + `color_all_signif` colours nothing (contrib has no diff CI — pre-existing gap). (The
-multi-row_var `pct`/`OR` length-mismatch warning + the mirai load_all crash were FIXED 2026-07-13, above.)
+FIXED (Last Phase a): weight column literally named `"wt"` — the real cause was data.table `j`
+SHADOWING: a column named `"wt"` (the weight OR a col_var) masked the `wt` ARGUMENT inside the scan's
+`as.character(wt)` naming, leaking a garbage column + warnings (numeric means only; factor counts were
+fine). `num_moment_scan()` + the mean-direct branches now capture `wt_name` outside `j` and read the
+column via `get(wt_name)` (shadow-proof, byte-identical for ordinary names); `tab_setup()` also errors
+early if the weight is ALSO a selected variable (the nonsensical double-role that used to crash cryptically).
+
+FIXED (Last Phase a): `contrib` + a significance policy (`color_all_signif`/`grey_non_signif`) coloured
+nothing — contrib has no CI to gate on. Now `chi2_write_contrib()` computes each cell's standardized
+(Pearson) residual p-value at chi2-time (`N` in hand) and stores it in the `pvalue` field;
+`fmt_color_plan()` gates contrib on it. Both policies now colour significant contributions (exact vs
+`chisq.test` on unweighted tables; approximate under weights per the §10/§18 framework). Conscious
+golden: `f_color_contrib.rds` gained the `pvalue` field (contrib `ignore` colouring byte-identical).
+
+(The multi-row_var `pct`/`OR` length-mismatch warning + the mirai load_all crash were FIXED 2026-07-13, above.)
 
 ##### contrib rendering crashes (Phase 10j-B) (FIXED 2026-07-12)
 Fixing the flagged `color="contrib"` + `comp="all"` colour crash surfaced THREE distinct render bugs (all now fixed, golden-locked, byte-identical  to every working path):

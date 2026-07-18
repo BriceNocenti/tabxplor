@@ -2728,7 +2728,26 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
   sig_pos[is.na(sig_pos)] <- FALSE
   sig_neg[is.na(sig_neg)] <- FALSE
 
+  # Last Phase a bug-fix: `contrib` carries NO confidence interval (ci_type == ""), so its significance
+  # is read from the stored standardized-residual p-value (written by chi2_write_contrib) rather than
+  # the bounds; direction from the sign of the signed contribution `raw` (ctr/mean_contrib). Previously
+  # both signif policies gated on the absent bounds and coloured NOTHING. (The residual p-value is the
+  # one place colour reads `pvalue` -- justified because contrib has no interval.)
+  if (measure == "contrib") {
+    alpha   <- 1 - getOption("tabxplor.conf_level", 0.95)
+    pv      <- get_pvalue(x)
+    ctr_sig <- !is_totrow(x) & !is.na(pv) & pv < alpha
+    sig_pos <- ctr_sig & raw > 0; sig_pos[is.na(sig_pos)] <- FALSE
+    sig_neg <- ctr_sig & raw < 0; sig_neg[is.na(sig_neg)] <- FALSE
+  }
+
   if (policy == "guaranteed_effect") {
+    if (measure == "contrib") {
+      # No interval to take a CI-floor of: the guaranteed magnitude IS the contribution, gated by the
+      # residual test. The break-offset below (center 0) then colours EVERY significant cell.
+      score <- raw
+      gate  <- sig_pos | sig_neg
+    } else {
     # The GUARANTEED (CI-floor) magnitude, on the MEASURE'S OWN scale so fmt_color_slots() folds it
     # around the right centre. The stored bounds may be on ANOTHER scale: only one interval is stored
     # per column (the primary/text measure's), and the second channel derives from it.
@@ -2759,6 +2778,7 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
     }
     score <- floor_q
     gate  <- !is.na(floor_q)
+    }
   } else if (policy == "grey_non_signif") {
     score <- raw
     dir0  <- if (center == 1) dplyr::case_when(raw > 1 ~ 1L, raw < 1 ~ -1L, TRUE ~ 0L)

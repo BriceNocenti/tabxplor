@@ -200,7 +200,7 @@ tab_xl <-
 
     # Graceful degrade: any unreadable list member is written as a plain sheet, with a message.
     if (any(purrr::map_lgl(rd, ~ isTRUE(.$vars$degrade)))) {
-      purrr::walk(rd, ~ if (isTRUE(.$vars$degrade)) tab_degrade_inform(.$vars$reason))
+      purrr::walk(rd, ~ if (isTRUE(.$vars$notify)) tab_degrade_inform(.$vars$reason))  # batch-aware
       xl_finish(function(p) xlb_write_xlsx(purrr::map(rd, ~ tibble::as_tibble(.$tab)), p),
                 path, replace, open)
       return(invisible(tabs_base))

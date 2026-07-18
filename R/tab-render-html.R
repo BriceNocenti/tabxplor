@@ -89,7 +89,7 @@ render_kable_html <- function(rd, meta,
 
   # per-table graceful degrade (mirrors md_render_one(): a list may hold a malformed table)
   if (isTRUE(rd$vars$degrade)) {
-    tab_degrade_inform(rd$vars$reason)
+    if (isTRUE(rd$vars$notify)) tab_degrade_inform(rd$vars$reason)  # batch-aware (see tab_export_prep)
     if (engine == "html") return(render_html_degrade(rd$tab))
     return(kableExtra::kbl(tibble::as_tibble(rd$tab)))
   }

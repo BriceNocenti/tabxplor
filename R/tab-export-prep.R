@@ -693,6 +693,18 @@ tab_export_prep <- function(tabs,
                          meta = list(theme_cols = theme_cols))
   }
 
+  # Last Phase a bug-fix: decide the graceful-degrade NOTICE once for the whole render batch. A degraded
+  # (non-tabxplor) sub-table is only worth flagging when the batch holds NO real fmt table -- otherwise
+  # the "no tabxplor_fmt columns" message is MISLEADING (a formatted table IS shown alongside it). And
+  # then flag it only ONCE, not per degraded table. Each backend gates its tab_degrade_inform() on
+  # vars$notify (a single non-tabxplor input still informs: it is the sole, all-degraded table).
+  # tx_transpose_render() returns a degraded rd unchanged, so this survives the transpose flip above.
+  degraded <- purrr::map_lgl(tables, ~ isTRUE(.x$vars$degrade))
+  notify_i <- if (any(degraded) && !any(!degraded)) which(degraded)[1] else 0L
+  for (i in seq_along(tables)) {
+    if (isTRUE(tables[[i]]$vars$degrade)) tables[[i]]$vars$notify <- (i == notify_i)
+  }
+
   structure(
     list(
       tables = tables,
