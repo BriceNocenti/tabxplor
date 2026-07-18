@@ -287,6 +287,20 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
   tab_vars <- rv$tab_vars
   subtext  <- get_subtext(tab) %>% purrr::discard(. == "")
 
+  # Phase 14v: resolve the multinomial crude-companion tooltip fragments to a per-column, per-ROW list
+  # NOW -- while the predictor `var` column is still present (drop_tab_vars removes it below). Keyed by
+  # (var, level); NULL on a crosstab. ungroup / drop / wrap never reorder rows, so the per-row vectors
+  # stay aligned to the final tab. The render then indexes by column name (no `var` needed downstream).
+  emp_tips <- NULL
+  et_raw   <- get_empirical_tips(tab)
+  if (!is.null(et_raw)) {
+    lvl0 <- as.character(tab[[rv$row_var]])
+    var0 <- if ("var" %in% names(tab)) as.character(tab[["var"]]) else rep(NA_character_, nrow(tab))
+    key0 <- paste(var0, lvl0, sep = "\r")
+    emp_tips <- lapply(split(et_raw, et_raw$col), function(sub)
+      sub$tip[match(key0, paste(sub$var, sub$level, sep = "\r"))])
+  }
+
   # group boundaries -- computed BEFORE ungroup (needs the grouping)
   gi        <- dplyr::group_indices(tab)
   new_group <- which(gi != dplyr::lead(gi, default = max(gi) + 1L))
@@ -310,6 +324,7 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
     name_col <- character(0)
   }
   if (!is.null(wrap)) {
+    pre_wrap_names <- names(tab)
     tab <- tab_wrap_text(tab,
                          wrap_rows          = wrap$rows,
                          wrap_cols          = wrap$cols,
@@ -317,6 +332,10 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
                          whitespace_only    = wrap$whitespace_only,
                          unbreakable_spaces = wrap$unbreakable_spaces,
                          brk                = wrap$brk)
+    # Phase 14v: tab_wrap_text RENAMES columns (spaces -> unbreakable U+202F, long names wrapped), so the
+    # emp_tips keys (build-time column names) must follow, or the render lookup by the wrapped name fails.
+    if (!is.null(emp_tips))
+      names(emp_tips) <- stats::setNames(names(tab), pre_wrap_names)[names(emp_tips)]
   }
 
   # --- role detection on the FINAL (ungrouped / dropped / wrapped) tab ---
@@ -474,7 +493,10 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
     bold_cols = bold_cols,
     range_totcol = range_totcol,
     col_var_header = col_var_header,
-    subtext = subtext
+    subtext = subtext,
+    # Phase 14v: multinomial crude-companion tooltip fragments, per column -> per-row char vector
+    # (resolved above while `var` was present); reg_append_empirical_tip() appends them at html render.
+    empirical_tips = emp_tips
   )
 }
 

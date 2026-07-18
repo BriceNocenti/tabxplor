@@ -66,11 +66,16 @@ predictor's effect to a k-unit change (e.g. \code{c(age = 10)} shows the odds ra
 of age = OR^10 / beta*10). The confidence interval scales with it; the p-value is unchanged. Names
 must be numeric predictors; not available for multinomial / ordinal outcomes.}
 
-\item{empirical}{Logical (binary logistic outcome only, for now). If \code{TRUE}, adds a descriptive
-\strong{crude percentage} and \strong{crude odds ratio} column (\code{"Emp. \%"}, \code{"Emp. OR"}) beside the model
-effect, for each factor predictor level -- the unadjusted bivariate association (which IS the
-modelised quantity when there is a single predictor), connecting the model to the descriptive
-crosstab. Works for both the coefficient and the \code{effect = "ame"} display. Default \code{FALSE}.}
+\item{empirical}{Logical. If \code{TRUE}, adds the descriptive \strong{crude} (unadjusted, single-predictor)
+companion of the model effect for each factor-predictor level -- the unadjusted bivariate
+association, which IS the modelised quantity when there is a single predictor (the standard "crude
+vs adjusted" comparison; a large gap signals confounding). Per family: \strong{binomial} adds \verb{Emp. \%}
+\itemize{
+\item \verb{Emp. OR} (coefficient) or \verb{Emp. \%} + \verb{Emp. diff} (AME); \strong{gaussian} adds \verb{Emp. mean} +
+\verb{Emp. diff}; \strong{poisson} adds \verb{Emp. rate} + \verb{Emp. IRR}; \strong{multinomial} shows the crude \% +
+difference per category in the HTML tooltip (columns would explode). Also works with a vector of
+dependents. Ordinal has no clean crude analogue and is ignored (with a message). Default \code{FALSE}.
+}}
 
 \item{conf_level}{Confidence level for the intervals. Default \code{0.95}.}
 

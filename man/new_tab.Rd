@@ -13,6 +13,7 @@ new_tab(
   render_extras = NULL,
   ci_settings = NULL,
   vars = NULL,
+  empirical_tips = NULL,
   ...,
   class = character()
 )
@@ -26,6 +27,7 @@ new_grouped_tab(
   render_extras = NULL,
   ci_settings = NULL,
   vars = NULL,
+  empirical_tips = NULL,
   ...,
   class = character()
 )
@@ -57,6 +59,10 @@ the package defaults.}
 \code{list(row_vars =, col_vars =, tab_vars =, compacted =)}, recorded when the table is built
 rather than guessed back from it afterwards. \code{NULL} (the default) makes
 \code{tab_get_vars()} fall back to detecting them from the column types.}
+
+\item{empirical_tips}{Multinomial crude-companion tooltip data (a \code{tibble} keyed by column,
+predictor and level), set by \code{tab_reg(empirical = TRUE)}. \code{NULL} (default) for every
+other table. Carried through dplyr verbs; the HTML render appends it as a "crude:" tooltip fragment.}
 
 \item{...}{Needed to implement subclasses.}
 

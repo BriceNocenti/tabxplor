@@ -78,6 +78,9 @@
 #' \code{list(row_vars =, col_vars =, tab_vars =, compacted =)}, recorded when the table is built
 #' rather than guessed back from it afterwards. \code{NULL} (the default) makes
 #' \code{tab_get_vars()} fall back to detecting them from the column types.
+#' @param empirical_tips Multinomial crude-companion tooltip data (a \code{tibble} keyed by column,
+#' predictor and level), set by \code{tab_reg(empirical = TRUE)}. \code{NULL} (default) for every
+#' other table. Carried through dplyr verbs; the HTML render appends it as a "crude:" tooltip fragment.
 #' @param ... Needed to implement subclasses.
 #' @param class Needed to implement subclasses.
 #'
@@ -88,6 +91,7 @@ new_tab <-
   function(tabs = tibble::tibble(), subtext = "",
            test = new_test_tibble(), chi2 = NULL,
            render_extras = NULL, ci_settings = NULL, vars = NULL,
+           empirical_tips = NULL,
            ..., class = character()) {
     stopifnot(is.data.frame(tabs))
     #vec_assert(subtext    , character())
@@ -109,6 +113,10 @@ new_tab <-
     # of its variable roles. Absent -> tab_get_vars()/tab_render_vars() fall back to the column-type
     # heuristic (hand-built tables, tab_plain(), older objects).
     if (!is.null(vars)) attr(out, "vars") <- vars
+    # Phase 14v: `empirical_tips` -- multinomial crude-companion tooltip data (tibble col/var/level/tip),
+    # keyed by (final column label, predictor, displayed level). TOOLTIP-only (columns would explode);
+    # the render appends a "crude:" fragment. Carried like `vars`; absent -> no empirical tooltip.
+    if (!is.null(empirical_tips)) attr(out, "empirical_tips") <- empirical_tips
     out
   }
 
@@ -121,6 +129,7 @@ new_grouped_tab <-
            subtext = "",
            test = new_test_tibble(), chi2 = NULL,
            render_extras = NULL, ci_settings = NULL, vars = NULL,
+           empirical_tips = NULL,
            ..., class = character()) {
     if (missing(groups)) groups <- attr(tabs, "groups")
     class <- c(class, c("tabxplor_grouped_tab", "grouped_df"))
@@ -130,7 +139,7 @@ new_grouped_tab <-
 
     new_tab(tabs, groups = groups,
             subtext = subtext, test = test, render_extras = render_extras,
-            ci_settings = ci_settings, vars = vars,
+            ci_settings = ci_settings, vars = vars, empirical_tips = empirical_tips,
             ...,
             class = class)
   }
@@ -214,6 +223,13 @@ set_vars_attr <- function(x, vars) {
   attr(x, "vars") <- vars
   x
 }
+
+# Phase 14v: `empirical_tips` -- the multinomial crude-companion tooltip data (see new_tab()).
+get_empirical_tips <- purrr::attr_getter("empirical_tips")
+set_empirical_tips <- function(x, empirical_tips) {
+  attr(x, "empirical_tips") <- empirical_tips
+  x
+}
 new_vars_attr <- function(row_vars = character(0), col_vars = character(0),
                           tab_vars = character(0), compacted = FALSE) {
   list(row_vars = as.character(row_vars), col_vars = as.character(col_vars),
@@ -233,11 +249,12 @@ default_ci_settings <- function() {
 # is why the vctrs reconcilers still name it explicitly and only take tab_attrs() for the rest.
 #' @keywords internal
 tab_attrs <- function(from) {
-  list(subtext       = get_subtext(from),
-       test          = get_test(from),
-       render_extras = get_render_extras(from),
-       ci_settings   = get_ci_settings(from),
-       vars          = get_vars_attr(from))
+  list(subtext        = get_subtext(from),
+       test           = get_test(from),
+       render_extras  = get_render_extras(from),
+       ci_settings    = get_ci_settings(from),
+       vars           = get_vars_attr(from),
+       empirical_tips = get_empirical_tips(from))
 }
 
 # Rebuild `out` as the right tab class, carrying every table attribute of `from`. `lv1_group_vars()`
@@ -1605,7 +1622,7 @@ tab_pvalue_lines <- function(tabs) {
   tabs <- tibble::new_tibble(out, nrow = n0 + k)
 
   new_tab(tabs, subtext = subtext, render_extras = render_extras, ci_settings = ci_settings,
-          vars = vars_attr) |>
+          vars = vars_attr, empirical_tips = get_empirical_tips(tabs)) |>
     dplyr::group_by(!!!rlang::syms(groups))
 }
 
@@ -1691,7 +1708,10 @@ reg_footer_lines <- function(tabs) {
   }), names(tabs))
   tabs2 <- tibble::new_tibble(out, nrow = length(out[[1]]))
 
-  new_tab(tabs2, subtext = subtext) |>            # `test` dropped -> idempotent
+  # `test` dropped -> idempotent; `vars` + `empirical_tips` (Phase 14v) threaded through the rebuild,
+  # else the multinomial crude tooltip attribute is lost the moment the GOF footer is materialised.
+  new_tab(tabs2, subtext = subtext, vars = get_vars_attr(tabs),
+          empirical_tips = get_empirical_tips(tabs)) |>
     dplyr::group_by(!!!rlang::syms(group_chr))
 }
 
@@ -2260,7 +2280,7 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
   ok_diff    <- !is.na(get_diff(x))  & comparable
   # `type == "mean"` was excluded, so a mean column showed no ratio line at all -- though under the
   # default color = TRUE the ratio is exactly what colours it.
-  ok_rr      <- !is.na(get_ratio(x)) & comparable & !disp == "rr" &
+  ok_rr      <- !is.na(get_ratio(x)) & comparable & !disp %in% c("ratio", "rr") &
     type %in% c("col", "row", "mean")
   # A reference cell's whole comparison group collapses to ONE "ref": its diff is 0 and its ratio 1
   # by construction, so "diff: ref ; ratio: x1" said nothing, twice. The cell already prints

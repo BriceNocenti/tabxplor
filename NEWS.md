@@ -169,8 +169,17 @@
   Use `tab_spread()` on the grouping variable to place the groups side by side for an across-group
   comparison.
 * `tab_reg()` gains `multiplicator =` (a named vector like `c(age = 10)` showing a continuous predictor's
-  effect **per k units**, e.g. the odds ratio per decade) and `empirical_OR =` (for a binary logistic
-  outcome, adds the **crude percentage and crude odds ratio** beside the model odds ratio).
+  effect **per k units**, e.g. the odds ratio per decade) and **`empirical =`** --- the crude
+  (unadjusted, single-predictor) companion of the model effect, the standard "crude vs adjusted"
+  comparison. It now works across families: **binomial** adds `Emp. %` + `Emp. OR` (coefficient) or
+  `Emp. %` + `Emp. diff` (AME); **gaussian** adds `Emp. mean` + `Emp. diff` (coloured on the same
+  SD-standardized scale as the model beta); **poisson** adds `Emp. rate` + `Emp. IRR`; **multinomial**
+  shows the crude % + difference per category **in the HTML tooltip** (one column per category would be
+  too many). It also works with a vector of dependents (one crude companion per outcome). The old
+  `empirical_OR =` argument is soft-deprecated in favour of `empirical =`.
+* Fixed `set_display("ratio")` (and `fmt(display = "ratio")`): it printed the raw count instead of the
+  ratio. `"ratio"` is now the canonical display token (matching the field name); the legacy `"rr"` keeps
+  working.
 * `tab_reg()` (and `tab_logit()` / `multi_logit()`) gain an `estimate_display =` argument controlling
   what each effect cell shows beside the estimate: `"ci"` adds a visible confidence-interval bracket
   (`2.34 [1.20; 4.50]`); for logistic models `"prob"` folds the adjusted predicted probability into the

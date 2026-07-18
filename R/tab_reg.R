@@ -857,59 +857,143 @@ reg_apply_estimate_display <- function(col, mode, skeleton, f, sp, family, desig
 }
 
 
-# === empirical : the descriptive crude OR / % beside the model OR (Phase 12g, binary logit) =======
+# === empirical : the descriptive crude companion beside the model effect (Phase 12g / 14v) =========
 
-# For each FACTOR predictor, the crude empirical percentage (of the model's positive outcome level) and
-# the crude odds ratio of that level vs the predictor's reference level, from the weighted 2x2 counts --
-# the descriptive "OR + PCT" companion to the adjusted model OR. Computed DIRECTLY (not via tab()) so the
-# outcome direction matches the model's `positive_level` and the reference level matches the skeleton.
-# Returns a tibble keyed by (var, level): emp_pct, emp_diff (vs the reference %), emp_or, emp_n.
-reg_empirical <- function(data, fac_preds, dependent, positive_level, wt) {
-  pos <- as.character(data[[dependent]]) == positive_level
-  w   <- if (is.null(wt)) rep(1, nrow(data)) else as.numeric(data[[wt]])
+# The crude (unadjusted, single-predictor) companion of the model effect: the bivariate association
+# between a FACTOR predictor and the outcome, which IS the modelised quantity when there is one
+# predictor (standard "crude vs adjusted" comparison; a large gap signals confounding). Computed
+# DIRECTLY (not via tab()) so the outcome direction / reference level match the skeleton, per family:
+#   binomial : emp_base = P(positive | level), emp_ratio = crude OR (odds / ref odds).
+#   gaussian : emp_base = weighted mean(Y | level), emp_var = weighted var (tab()'s formula, so the
+#              "Emp. mean" sd matches tab() exactly), emp_ratio = mean / ref mean (unused for colour).
+#   poisson  : emp_base = weighted mean(count | level) (crude rate), emp_ratio = crude rate-ratio.
+# emp_diff is always emp_base - ref emp_base (risk- or mean-difference). Returns a tibble keyed by
+# (var, level): emp_base, emp_diff, emp_ratio, emp_var, emp_n (unweighted cell count).
+reg_empirical <- function(data, fac_preds, dependent, family, positive_level, wt) {
+  w  <- if (is.null(wt)) rep(1, nrow(data)) else as.numeric(data[[wt]])
+  yv <- data[[dependent]]
+  bin <- family == "binomial"
+  if (bin) pos  <- as.character(yv) == positive_level else ynum <- as.numeric(yv)
   purrr::map_dfr(fac_preds, function(p) {
     x  <- data[[p]]
-    ok <- !is.na(x) & !is.na(pos) & !is.na(w)
+    ok <- !is.na(x) & !is.na(w) & (if (bin) !is.na(pos) else !is.na(ynum))
     lv <- levels(forcats::fct_drop(as.factor(x[ok])))
     per <- purrr::map(lv, function(l) {
-      m    <- ok & x == l
-      wpos <- sum(w[m & pos]); wneg <- sum(w[m & !pos])
-      list(pct = wpos / (wpos + wneg), odds = wpos / wneg, n = sum(m))
+      m <- ok & x == l
+      if (bin) {
+        wpos <- sum(w[m & pos]); wneg <- sum(w[m & !pos])
+        list(base = wpos / (wpos + wneg), ratio_raw = wpos / wneg, var = NA_real_, n = sum(m))
+      } else {
+        n1 <- sum(m); wn <- sum(w[m]); s1 <- sum(w[m] * ynum[m]); s2 <- sum(w[m] * ynum[m]^2)
+        mean_l <- s1 / wn
+        # match tab()/num_derive_stats: unweighted -> stats::var (n-1), weighted -> ML (s2/wn - mean^2)
+        var_l  <- if (family == "gaussian") {
+          if (is.null(wt)) (s2 - s1^2 / n1) / (n1 - 1) else round(s2 / wn - (s1 / wn)^2, 10)
+        } else NA_real_
+        list(base = mean_l, ratio_raw = mean_l, var = var_l, n = n1)
+      }
     })
-    ref_pct  <- per[[1]]$pct
-    ref_odds <- per[[1]]$odds
-    tibble::tibble(var = p, level = lv,
-                   emp_pct  = purrr::map_dbl(per, "pct"),
-                   emp_diff = purrr::map_dbl(per, ~ .$pct - ref_pct),
-                   emp_or   = purrr::map_dbl(per, ~ .$odds / ref_odds),
-                   emp_n    = purrr::map_int(per, ~ as.integer(.$n)))
+    ref <- per[[1]]
+    tibble::tibble(
+      var = p, level = lv,
+      emp_base  = purrr::map_dbl(per, "base"),
+      emp_diff  = purrr::map_dbl(per, ~ .$base - ref$base),
+      emp_ratio = purrr::map_dbl(per, ~ .$ratio_raw / ref$ratio_raw),
+      emp_var   = purrr::map_dbl(per, "var"),
+      emp_n     = purrr::map_int(per, ~ as.integer(.$n))
+    )
   })
 }
 
-# Two fmt columns ("Emp. %", "Emp. OR") aligned to the skeleton, for reg_build to prepend before the
-# model OR. Numeric predictors / the Constant -> empty cells; reference levels -> % = its own value
-# (diff 0), OR = 1. Descriptive (no CI / stars): "Emp. %" colours by pct-diff, "Emp. OR" by OR.
-reg_empirical_columns <- function(skeleton, emp, fac_preds) {
-  ekey <- paste(emp$var, emp$level, sep = "\r")
-  mi   <- match(paste(skeleton$var, skeleton$level, sep = "\r"), ekey)
+# Two fmt columns aligned to the skeleton (base descriptive + crude effect mirroring the model's
+# measure & colour scale), for reg_build to prepend before the model column. Numeric predictors / the
+# Constant -> empty cells; reference levels -> neutral (diff 0 / OR 1) + in_refrow. Descriptive: no
+# CI / stars. Per (family, effect):
+#   binomial coef : Emp. % (colour = risk-diff) + Emp. OR (colour = ratio, like the model OR).
+#   binomial ame  : Emp. % + Emp. diff (crude risk-diff; the AME shows a difference, not an OR).
+#   gaussian      : Emp. mean (mean+sd, UNCOLOURED -- get_ref_var is meaningless on the flat reg
+#                   skeleton) + Emp. diff (crude mean-diff, type="coef" var=var(Y) -> diff/SD(Y),
+#                   the SAME standardized scale as the model beta, so crude vs adjusted are comparable).
+#   poisson       : Emp. rate (mean count, colour = rate-ratio) + Emp. IRR (crude rate-ratio, like IRR).
+reg_empirical_columns <- function(skeleton, emp, fac_preds, family, effect, var_y) {
+  mi      <- match(paste(skeleton$var, skeleton$level, sep = "\r"),
+                   paste(emp$var, emp$level, sep = "\r"))
   n_rows  <- nrow(skeleton)
   is_fac  <- skeleton$var %in% fac_preds
   refrows <- skeleton$is_ref & is_fac
-  list(
-    "Emp. %" = fmt(
-      pct = emp$emp_pct[mi], diff = emp$emp_diff[mi],
-      n = emp$emp_n[mi], tot_n = emp$emp_n[mi],
-      type = "row", display = "pct", digits = 0L, ref = "tot",
-      color = "diff", color_signif = "ignore", col_var = "Emp. %",
-      comp_all = FALSE, in_refrow = refrows
-    ),
-    "Emp. OR" = fmt(
-      or = emp$emp_or[mi], n = emp$emp_n[mi],
-      type = "row", display = "or", digits = 2L, ref = "1", ci_type = "or",
-      color = "OR", color_signif = "ignore", col_var = "Emp. OR",
-      comp_all = FALSE, in_refrow = refrows
-    )
-  )
+  base <- emp$emp_base[mi]; diffv <- emp$emp_diff[mi]; ratio <- emp$emp_ratio[mi]
+  varv <- emp$emp_var[mi];  nv    <- emp$emp_n[mi]
+
+  if (family == "binomial") {
+    base_col <- fmt(pct = base, diff = diffv, n = nv, tot_n = nv,
+                    type = "row", display = "pct", digits = 0L, ref = "tot",
+                    color = "diff", color_signif = "ignore", col_var = "Emp. %",
+                    comp_all = FALSE, in_refrow = refrows)
+    if (effect == "ame") {
+      # the AME models the risk-DIFFERENCE from the reference, so the crude companion is the crude
+      # risk-difference (not the OR, which the AME table does not display).
+      eff_col <- fmt(pct = base, diff = diffv, n = nv, tot_n = nv,
+                     type = "row", display = "diff", digits = 0L, ref = "tot",
+                     ci_type = "diff", color = "diff", color_signif = "ignore",
+                     col_var = "Emp. diff", comp_all = FALSE, in_refrow = refrows)
+      return(list("Emp. %" = base_col, "Emp. diff" = eff_col))
+    }
+    eff_col <- fmt(or = ratio, n = nv, type = "row", display = "or", digits = 2L,
+                   ref = "1", ci_type = "or", color = "OR", color_signif = "ignore",
+                   col_var = "Emp. OR", comp_all = FALSE, in_refrow = refrows)
+    return(list("Emp. %" = base_col, "Emp. OR" = eff_col))
+  }
+
+  if (family == "gaussian") {
+    base_col <- fmt(mean = base, var = varv, n = nv, tot_n = nv,
+                    type = "mean", display = "mean", digits = 2L,
+                    color = "", color_signif = "ignore", col_var = "Emp. mean",
+                    comp_all = FALSE, in_refrow = refrows)
+    eff_col  <- fmt(diff = diffv, var = rep(var_y, n_rows), n = nv,
+                    type = "coef", display = "coef", digits = 2L, ci_type = "diff",
+                    color = "diff", color_signif = "ignore", col_var = "Emp. diff",
+                    comp_all = FALSE, in_refrow = refrows)
+    return(list("Emp. mean" = base_col, "Emp. diff" = eff_col))
+  }
+
+  if (family == "poisson") {
+    base_col <- fmt(mean = base, ratio = ratio, n = nv, tot_n = nv,
+                    type = "mean", display = "mean", digits = 2L, ref = "1",
+                    color = "ratio", color_signif = "ignore", col_var = "Emp. rate",
+                    comp_all = FALSE, in_refrow = refrows)
+    eff_col  <- fmt(or = ratio, n = nv, type = "row", display = "or", digits = 2L,
+                    ref = "1", ci_type = "or", color = "OR", color_signif = "ignore",
+                    col_var = "Emp. IRR", comp_all = FALSE, in_refrow = refrows)
+    return(list("Emp. rate" = base_col, "Emp. IRR" = eff_col))
+  }
+  list()
+}
+
+# Multinomial crude tooltip data (Phase 14v): one column per outcome CATEGORY would explode the layout,
+# so the crude companion for multinomial is TOOLTIP-only. For each FACTOR predictor level and each
+# outcome category, the weighted observed proportion of that category and its difference from the
+# predictor's reference level (the crude analogue of the model's per-category effect). Returns a long
+# tibble keyed by (var, level [raw], category): prop, diff. reg_build turns it into the `empirical_tips`
+# table attribute (col = final column label, var, level [displayed], tip); the render appends it.
+reg_empirical_tips <- function(data, fac_preds, dependent, wt) {
+  w    <- if (is.null(wt)) rep(1, nrow(data)) else as.numeric(data[[wt]])
+  yv   <- as.factor(data[[dependent]])
+  cats <- levels(forcats::fct_drop(yv))
+  purrr::map_dfr(fac_preds, function(p) {
+    x  <- data[[p]]
+    ok <- !is.na(x) & !is.na(yv) & !is.na(w)
+    lv <- levels(forcats::fct_drop(as.factor(x[ok])))
+    grid <- purrr::map_dfr(lv, function(l) {
+      m  <- ok & x == l
+      wl <- sum(w[m])
+      tibble::tibble(level = l, category = cats,
+                     prop = purrr::map_dbl(cats, ~ sum(w[m & yv == .x]) / wl))
+    })
+    ref <- stats::setNames(grid$prop[grid$level == lv[1]], grid$category[grid$level == lv[1]])
+    grid$diff <- grid$prop - ref[grid$category]
+    grid$var  <- p
+    grid
+  })
 }
 
 
@@ -1090,7 +1174,7 @@ reg_columns_multinom <- function(skeleton, f, sp, effect_shape, color, color_sig
     # Phase 14s (G): every category column of ONE model shares `sp$label` as its col_var, so no border
     # is drawn between them (borders separate DIFFERENT col_vars) and the model name spans them once.
     # The visible column NAME stays the per-category `lab`.
-    list(label = lab,
+    list(label = lab, emp_key = j,   # emp_key: raw category, for the empirical tooltip (Phase 14v)
          col   = reg_column(skeleton, sub, sp$predictors, sp$label, effect_shape, color, color_signif))
   })
 }
@@ -1485,7 +1569,7 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
           lab <- paste0(if (prefix_dep) paste0(sp$dependent, " - ") else "", jc, ": ", eff_word)
           # Phase 14s (G): the per-category AME columns of one model share `sp$label` as col_var (no
           # inter-category border); the visible NAME stays `lab`.
-          list(label = lab,
+          list(label = lab, emp_key = g,   # emp_key: raw category, for the empirical tooltip (Phase 14v)
                col   = reg_marginal_column(skeleton, marg, sp$predictors, numeric_preds, shape,
                                            var_y, f$nobs, g, color, color_signif, sp$label))
         })
@@ -1574,27 +1658,87 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
     var    = forcats::fct_inorder(skeleton$var),
     levels = forcats::fct_inorder(disp_levels)
   )
-  # empirical (Phase 12g/14t): the descriptive crude % + OR of each FACTOR predictor level, placed just
-  # before the model column (aligned to the shared skeleton). The crude % (coloured by the crude risk-
-  # difference) + crude OR are the unadjusted companion of BOTH the coefficient OR and the AME (Phase 14t
-  # widened it from coefficient-only): the observed % per level answers "base % + empirical diff".
-  if (isTRUE(empirical) && family == "binomial" && effect %in% c("coefficient", "ame")) {
+  # empirical (Phase 12g / 14v): the descriptive crude (unadjusted, single-predictor) companion of the
+  # model effect -- a base descriptive column + a crude-effect column mirroring the model's measure &
+  # colour scale (reg_empirical_columns). Built PER FIT (per dependent), so it works with a vector of
+  # dependents. Column families only (binomial / gaussian / poisson); multinomial is tooltip-only
+  # (empirical_tips, below), ordinal is unsupported (dropped upstream). A grouped-binomial fit (trials)
+  # has no `positive_level` -> no crude 2x2 -> skipped (as before). Aligned to the shared skeleton.
+  emp_by_fit <- vector("list", length(specs))
+  if (isTRUE(empirical) && family %in% c("binomial", "gaussian", "poisson")) {
     fac_preds_e <- union_predictors[!purrr::map_lgl(
       union_predictors, ~ is.numeric(skeleton_data[[.x]]))]
-    pos_lvl <- fits[[1]]$positive_level
-    if (length(fac_preds_e) > 0L && !is.null(pos_lvl)) {
-      emp     <- reg_empirical(data, fac_preds_e, specs[[1]]$dependent, pos_lvl, design_spec$wt)
-      emp_cols <- reg_empirical_columns(skeleton, emp, fac_preds_e)
-      for (nm in names(emp_cols)) tab[[nm]] <- emp_cols[[nm]]
+    if (length(fac_preds_e) > 0L) {
+      for (i in seq_along(specs)) {
+        dep_i   <- specs[[i]]$dependent
+        pos_i   <- if (family == "binomial") fits[[i]]$positive_level else NULL
+        if (family == "binomial" && is.null(pos_i)) next   # grouped-binomial / compound: no crude 2x2
+        var_y_i <- if (family == "gaussian")
+          suppressWarnings(stats::var(as.numeric(data[[dep_i]]), na.rm = TRUE)) else NA_real_
+        emp_i   <- reg_empirical(data, fac_preds_e, dep_i, family, pos_i, design_spec$wt)
+        emp_by_fit[[i]] <- reg_empirical_columns(skeleton, emp_i, fac_preds_e, family, effect, var_y_i)
+      }
     }
   }
-  for (i in seq_along(built)) tab[[labels[i]]] <- built[[i]]$col
+  n_dep <- length(unique(purrr::map_chr(specs, "dependent")))
+  # one crude companion before all model columns when there is a single dependent (byte-identical
+  # layout, incl. a model-comparison list -- all its models share the dependent); per-fit before each
+  # fit's first model column when several dependents (names suffixed so they do not collide).
+  add_emp_cols <- function(tab, cols, suffix) {
+    for (nm in names(cols)) {
+      out_nm <- if (nzchar(suffix)) paste0(nm, " (", suffix, ")") else nm
+      tab[[out_nm]] <- cols[[nm]]
+    }
+    tab
+  }
+  if (n_dep <= 1L) {
+    if (!is.null(emp_by_fit[[1]])) tab <- add_emp_cols(tab, emp_by_fit[[1]], "")
+    for (i in seq_along(built)) tab[[labels[i]]] <- built[[i]]$col
+  } else {
+    for (i in seq_along(built)) {
+      fi <- match(i, fit_first_idx)                        # non-NA at a fit's first column
+      if (!is.na(fi) && !is.null(emp_by_fit[[fi]]))
+        tab <- add_emp_cols(tab, emp_by_fit[[fi]], specs[[fi]]$dependent)
+      tab[[labels[i]]] <- built[[i]]$col
+    }
+  }
+
+  # multinomial empirical (Phase 14v): TOOLTIP-only (one column per category would explode the layout).
+  # The crude % + diff per (category column, predictor level) travel in the `empirical_tips` table
+  # attribute (carried through dplyr like `test`); the render appends an "crude:" fragment. Keyed by the
+  # FINAL make.unique'd column label (each category column carries its raw category in `emp_key`).
+  empirical_tips <- NULL
+  if (isTRUE(empirical) && family == "multinomial") {
+    fac_preds_t <- union_predictors[!purrr::map_lgl(
+      union_predictors, ~ is.numeric(skeleton_data[[.x]]))]
+    has_cat <- any(!purrr::map_lgl(built, ~ is.null(.$emp_key)))
+    if (length(fac_preds_t) > 0L && has_cat) {
+      tipsd <- reg_empirical_tips(data, fac_preds_t, specs[[1]]$dependent, design_spec$wt)
+      tk    <- paste(tipsd$var, tipsd$level, tipsd$category, sep = "\r")
+      is_fac_t <- skeleton$var %in% fac_preds_t
+      tip_rows <- purrr::compact(purrr::imap(built, function(b, i) {
+        if (is.null(b$emp_key)) return(NULL)
+        mi2  <- match(paste(skeleton$var, skeleton$level, b$emp_key, sep = "\r"), tk)
+        keep <- is_fac_t & !is.na(mi2) & !is.na(tipsd$prop[mi2])
+        if (!any(keep)) return(NULL)
+        pr <- tipsd$prop[mi2][keep]; df <- tipsd$diff[mi2][keep]
+        tibble::tibble(
+          col   = labels[i],
+          var   = as.character(skeleton$var[keep]),
+          level = disp_levels[keep],
+          tip   = ifelse(skeleton$is_ref[keep],
+                         sprintf("crude: %.0f%%", pr * 100),
+                         sprintf("crude: %.0f%% (%+.0f)", pr * 100, df * 100)))
+      }))
+      if (length(tip_rows)) empirical_tips <- purrr::list_rbind(tip_rows)
+    }
+  }
 
   # Phase 12f: the GOF footer travels in the whole-table `test` attribute (disjoint discriminators, so
   # the crosstab renderers ignore it); it is materialised as a console block / export rows at display,
   # never baked into the fmt columns (the coefficient skeleton stays intact for downstream reads).
   tab |>
-    new_tab(subtext = subtext, test = reg_gof,
+    new_tab(subtext = subtext, test = reg_gof, empirical_tips = empirical_tips,
             ci_settings = list(conf_level = conf_level, method_cell = NA_character_,
                                method_diff = method)) |>
     dplyr::group_by(var)
@@ -1715,11 +1859,16 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
 #'   predictor's effect to a k-unit change (e.g. `c(age = 10)` shows the odds ratio / beta per decade
 #'   of age = OR^10 / beta*10). The confidence interval scales with it; the p-value is unchanged. Names
 #'   must be numeric predictors; not available for multinomial / ordinal outcomes.
-#' @param empirical Logical (binary logistic outcome only, for now). If `TRUE`, adds a descriptive
-#'   **crude percentage** and **crude odds ratio** column (`"Emp. %"`, `"Emp. OR"`) beside the model
-#'   effect, for each factor predictor level -- the unadjusted bivariate association (which IS the
-#'   modelised quantity when there is a single predictor), connecting the model to the descriptive
-#'   crosstab. Works for both the coefficient and the `effect = "ame"` display. Default `FALSE`.
+#' @param empirical Logical. If `TRUE`, adds the descriptive **crude** (unadjusted, single-predictor)
+#'   companion of the model effect for each factor-predictor level -- the unadjusted bivariate
+#'   association, which IS the modelised quantity when there is a single predictor (the standard "crude
+#'   vs adjusted" comparison; a large gap signals confounding). Per family: **binomial** adds `Emp. %`
+#'   + `Emp. OR` (coefficient) or `Emp. %` + `Emp. diff` (AME); **gaussian** adds `Emp. mean` +
+#'   `Emp. diff`; **poisson** adds `Emp. rate` + `Emp. IRR`; **multinomial** shows the crude % +
+#'   difference per category in the HTML tooltip (columns would explode). Also works with a vector of
+#'   dependents. Ordinal has no clean crude analogue and is ignored (with a message). Default `FALSE`.
+#' @param empirical_OR `r lifecycle::badge("deprecated")` Renamed `empirical` (now cross-family, not
+#'   OR-only).
 #' @param stats The goodness-of-fit statistics shown in the model-summary **footer** (one block per
 #'   model). `NULL` (default) uses the per-family set: linear models show N, R square, adjusted R
 #'   square, the overall F-test and the residual SD; other models show N, the likelihood-ratio test
@@ -1810,7 +1959,8 @@ tab_reg <- function(data, dependent, predictors = NULL,
                     estimate_display = c("value", "ci", "prob", "ame"),
                     color = NULL, color_signif = NULL, stars = TRUE,
                     na = c("keep", "drop_all"),
-                    cleannames = NULL, subtext = "") {
+                    cleannames = NULL, subtext = "",
+                    empirical_OR = lifecycle::deprecated()) {
   method  <- match.arg(method)
   effect  <- match.arg(effect)
   at      <- match.arg(at)
@@ -1818,6 +1968,12 @@ tab_reg <- function(data, dependent, predictors = NULL,
   estimate_display <- match.arg(estimate_display)
   na      <- match.arg(na)
   cleannames <- if (is.null(cleannames)) getOption("tabxplor.cleannames", TRUE) else cleannames
+  # Phase 14v: `empirical_OR` renamed to `empirical` (now cross-family, not OR-only). Soft-deprecated
+  # alias for the maintainer's existing scripts; resolved before the multi-dependent recursion below.
+  if (lifecycle::is_present(empirical_OR)) {
+    lifecycle::deprecate_warn("1.4.0", "tab_reg(empirical_OR)", "tab_reg(empirical)")
+    empirical <- empirical_OR
+  }
 
 
   # Phase 14u (K): a LIST of models AND SEVERAL dependents -> one model-comparison table per dependent,
@@ -1939,6 +2095,13 @@ tab_reg <- function(data, dependent, predictors = NULL,
     (identical(exponentiate, "nongaussian") && family != "gaussian")
   effect_shape <- if (do_exp) "ratio" else "additive"
   eff_word     <- reg_effect_word(family, do_exp, effect, at)
+  # Phase 14v: with an empirical companion, a prob-scale AME/MER cell folds in the model-adjusted
+  # predicted % as "{diff} ({pct})"; name it in the header ("... AME (model %)") so the parenthetical is
+  # unambiguous next to the crude "Emp. %". Gated on `empirical` (the maintainer's disambiguation case),
+  # prob-scale families only (gaussian/poisson AME is a bare effect, no % fold).
+  if (effect == "ame" && isTRUE(empirical) && family %in% c("binomial", "multinomial", "ordinal")) {
+    eff_word <- paste0(eff_word, " (model %)")
+  }
 
   # Phase 12h: `estimate_display` = the estimate-cell layout. "value" (plain) / "ci" (a visible interval,
   # any family) apply everywhere; the "prob"/"ame" folds (OR + adjusted probability / OR + marginal
@@ -2074,18 +2237,17 @@ tab_reg <- function(data, dependent, predictors = NULL,
     }
   }
 
-  # empirical (Phase 12g/14t): the descriptive crude % + OR beside the model effect -- the unadjusted
-  # bivariate association (which IS the modelised quantity when there is a single predictor). Binary
-  # logistic, one outcome, coefficient OR ame (the crude 2x2 % / OR is meaningful for both). Other
-  # families (gaussian mean-diff, poisson rate-ratio) and multinomial are DESIGNED but not yet wired
-  # (decisions.md Sec 37) -> a message, not an error, and `empirical` is dropped for this call.
-  if (isTRUE(empirical)) {
-    if (family != "binomial" || length(dependent) != 1L) {
-      cli::cli_inform(c("i" = paste0(
-        "{.arg empirical} (crude descriptive companion) is currently available only for a single ",
-        "binary logistic outcome; ignored here.")))
-      empirical <- FALSE
-    }
+  # empirical (Phase 12g / 14v): the descriptive crude companion beside the model effect -- the
+  # unadjusted bivariate association (which IS the modelised quantity when there is a single predictor).
+  # Wired for binomial / gaussian / poisson (explicit columns) and multinomial (tooltip only). A vector
+  # of dependents is supported (crude companion per dependent). Ordinal (cumulative OR) has no clean
+  # crude analogue -> a message, not an error, and `empirical` is dropped for this call.
+  if (isTRUE(empirical) &&
+      !family %in% c("binomial", "gaussian", "poisson", "multinomial")) {
+    cli::cli_inform(c("i" = paste0(
+      "{.arg empirical} (crude descriptive companion) is not available for {.val {family}} ",
+      "models; ignored here.")))
+    empirical <- FALSE
   }
 
   design_spec <- list(design = design_obj, wt = wt, ids = ids, strata = strata, fpc = fpc, nest = nest)

@@ -59,6 +59,18 @@ tab_tooltip_attrs <- function(text, popover = FALSE, escape = FALSE) {
   out
 }
 
+# Phase 14v: append the multinomial crude-companion tooltip fragment to a per-column tooltip vector `tp`
+# (from tab_kable_print_tooltip). The values are NOT in an fmt field -- so the shared per-column tooltip
+# builder never sees them and tab()/other reg tooltips are untouched. prep_one_table() resolved them to
+# rd$empirical_tips[[col_name]] (a per-row char vector, or NULL); a plain crosstab has none -> `tp`
+# returned unchanged.
+reg_append_empirical_tip <- function(tp, rd, col_name) {
+  add <- rd$empirical_tips[[col_name]]
+  if (is.null(add)) return(tp)
+  ifelse(!is.na(add) & nzchar(tp), paste0(tp, " ; ", add),
+         ifelse(!is.na(add), add, tp))
+}
+
 
 # === SECTION: the seam =================================================================
 
@@ -179,11 +191,13 @@ render_kableExtra_engine <- function(rd, meta, subtext, caption, tooltips, popov
           # Phase 14b: pre-built (tab_tooltip_attrs) so both engines share one placement; cell_spec()
           # passes a `ke_tooltip`/`ke_popover` through untouched.
           tooltip = if (!popover & tooltips) {
-            tab_tooltip_attrs(tab_kable_print_tooltip(col, .ref = rd$ann[[colnm]]$ref_cells))
+            tab_tooltip_attrs(reg_append_empirical_tip(
+              tab_kable_print_tooltip(col, .ref = rd$ann[[colnm]]$ref_cells), rd, colnm))
           } else {NULL},
           popover = if (popover & tooltips) {
-            tab_tooltip_attrs(tab_kable_print_tooltip(col, .ref = rd$ann[[colnm]]$ref_cells),
-                              popover = TRUE)
+            tab_tooltip_attrs(reg_append_empirical_tip(
+              tab_kable_print_tooltip(col, .ref = rd$ann[[colnm]]$ref_cells), rd, colnm),
+              popover = TRUE)
           } else {NULL}
         )
       }
@@ -353,6 +367,8 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
           else if (tooltips && is_fmt(tab[[name]]))
             tab_kable_print_tooltip(tab[[name]], .ref = if (is.null(a)) NULL else a$ref_cells)
           else NULL
+    # Phase 14v: append the multinomial crude-companion fragment (no-op on a crosstab / non-reg table)
+    if (tooltips && !is.null(tp) && !isTRUE(rd$transposed)) tp <- reg_append_empirical_tip(tp, rd, name)
     if (tooltips && !is.null(tp)) {
       nz <- !is.na(tp) & nzchar(tp)
       if (any(nz)) {

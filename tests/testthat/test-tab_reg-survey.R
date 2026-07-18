@@ -254,12 +254,11 @@ test_that("empirical crude OR matches the weighted 2x2 odds ratio", {
   expect_equal(unname(eo_fac), unname(hand), tolerance = 1e-8)
 })
 
-test_that("empirical is ignored (with a message) outside a single binary logistic model (Phase 14t)", {
+test_that("empirical: gaussian now produces crude columns (Phase 14v)", {
   d <- reg_split_data()
-  expect_message(
-    t <- tab_reg(d, "x2", "x1", family = "gaussian", empirical = TRUE),
-    "single binary logistic")
-  expect_false(any(grepl("^Emp\\.", names(t))))     # no empirical columns
+  # Phase 14v: gaussian empirical is now wired (crude mean + mean-difference), no longer ignored.
+  tg <- tab_reg(d, "x2", "x1", family = "gaussian", empirical = TRUE)
+  expect_true(all(c("Emp. mean", "Emp. diff") %in% names(tg)))
 })
 
 test_that("the deprecated empirical_OR argument still works, with a warning (Phase 14t)", {

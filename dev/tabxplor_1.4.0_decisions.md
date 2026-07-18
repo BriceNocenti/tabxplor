@@ -3904,15 +3904,18 @@ with no rule above it, uncomplained). Adding one would cost either a marker on t
 blank row before it — raw-md noise for a rule the bold `**Total**` already signals. Skip it; it is a
 one-line addition (a blank row before `roles$totblock_top`) if ever wanted.
 
-### The DECISIVE coupling with 14v (verified this session)
+### The DECISIVE coupling with the md figure-space swap (14m-i, formerly numbered "14v") (verified this session)
+
+(⚠ Numbering: this "14v" is the OLD figure-space swap, since renamed **14m-i** — NOT the current Phase
+14v, the empirical framework, §47.)
 
 Pandoc renders a cell containing a **figure space** (U+2007) as `<td> </td>` — **not** `:empty`; a cell
 containing **ASCII space(s)** as `<td></td>` — **`:empty`**. So the whole `:empty`-based collapse
 (mechanism 3, and the blank rows of mechanism 2) **requires the blank/spacer cells to stay ASCII-filled
-(or truly empty)**. 14v switches md padding to figure space for value alignment — that swap MUST be
+(or truly empty)**. 14m-i switches md padding to figure space for value alignment — that swap MUST be
 limited to the padding **inside a value** (thousands separator, `n=` alignment); the cell-level
 alignment pad of empty and spacer cells stays ASCII, or `:empty` silently stops matching and every fix
-here dies. **Land 14v before or with 14m**, and gate its figure-space swap accordingly. This is the
+here dies. **Land 14m-i before or with 14m-iii**, and gate its figure-space swap accordingly. This is the
 single most important cross-phase constraint of the pass.
 
 ### Cleanups folded in
@@ -3941,7 +3944,8 @@ gate if the maintainer later wants it — but it would change the plain `_snaps/
   still invalidates the table — the existing lock).
 - **The gate**: a plain uncoloured `tab_md()` is byte-identical (no `:::`); a coloured one carries the
   div even with `css = FALSE`.
-- **The 14v coupling**: assert the blank/spacer cells contain no figure space (would break `:empty`).
+- **The 14m-i coupling** (the md figure-space swap, formerly "14v"): assert the blank/spacer cells
+  contain no figure space (would break `:empty`).
 - Snapshots: a `levels = "first"` (spacers) + `tab_vars` (sub-table separators) case, regenerated
   consciously.
 
@@ -4214,3 +4218,94 @@ numbers+numFmt; the heterogeneous-column reality made per-column numFmt impossib
 writing a large `tab_xl` change, so v1 writes coloured text. Revisit with a per-cell writer if editable
 transposed numbers matter. (b) The `has_color` grey-shade (g1/g2) on a mixed transposed column is
 `any(source has_color)` (cosmetic only). (c) `tab_plot()` transpose is best-effort (it is soft-deprecated).
+
+
+## 47. Phase 14v — the empirical (crude) companion framework, finished (2026-07-18)
+
+⚠ **Doc pointer fix**: CLAUDE.md's Phase-14t note that "the full design is in `decisions.md` §45" (and
+that "§37 never existed — the design is now §45") was **stale** — §45 here is Phase 14n and §37 is
+Phase 12b. The empirical design lived only in CLAUDE.md's Phase-14v section; THIS is its decisions-doc
+record.
+
+### The governing claim (web-verified standard)
+
+`empirical = TRUE` adds the **crude / unadjusted** companion of the model effect: the bivariate
+association between a factor predictor and the outcome, which **IS the modelised quantity when there is
+a single predictor**. This is the textbook "crude vs adjusted" comparison (epidemiology / social
+science: `Greg::printCrudeAndAdjusted`, `finalfit`, `gtsummary`); a large crude-vs-model gap signals
+confounding. The parity tests (`test-tab_reg-empirical.R`) PROVE the identity per family:
+single-predictor model estimate == empirical column == `tab()` (no-model) quantity, to 1e-6.
+
+### The family-appropriate crude quantity + colour (each family: a base descriptive col + a crude-effect col mirroring the model's measure & colour scale)
+
+| family | base col | effect col | effect colour |
+|---|---|---|---|
+| binomial coef | `Emp. %` (risk-diff) | `Emp. OR` | ratio scale (like model OR) |
+| binomial AME | `Emp. %` | `Emp. diff` (crude risk-diff) | pct-diff scale (like the AME) |
+| gaussian | `Emp. mean` (mean+sd, **uncoloured**) | `Emp. diff` (crude mean-diff) | **diff / SD(Y)**, `var = var(Y)`, `type = "coef"` — the SAME Cohen scale as the model beta |
+| poisson | `Emp. rate` (ratio) | `Emp. IRR` (crude rate-ratio) | ratio scale (like model IRR) |
+| multinomial | — | tooltip only | — |
+
+**The gaussian colour decision (the one open question).** The maintainer's tentative "colour by ratio"
+is wrong for the additive beta; the real blocker was mis-stated. It is NOT "the crude path lacks a
+reference variance" — it is that **`get_ref_var()` is meaningless on a reg skeleton** (flat, many
+predictors, no grouping), which is exactly why the model beta column already standardizes by its OWN
+`var = var(Y)` instead of `get_ref_var()`. So the crude `Emp. diff` does the same (`type = "coef"`,
+`var = var(Y)`) → it colours on the identical SD-standardized scale as the model beta, and the two are
+directly colour-comparable (the pedagogical goal). The base `Emp. mean` shows the real per-level
+mean+sd but is **uncoloured** (a `type = "mean"` Glass's-Delta colour would need `get_ref_var`, broken
+here). Poisson/binomial are multiplicative → ratio/OR scale, no variance needed. Crude variance matches
+`tab()`'s formula exactly (unweighted `stats::var`, weighted ML) so `Emp. mean`'s sd == `tab()`'s sd.
+
+**Multinomial = tooltip-only, field-free.** One column per outcome category would explode the layout,
+so the crude % + diff per (category, level) travel in a **table attribute `empirical_tips`** (a tibble
+col/var/level/tip), carried through dplyr like `test`/`vars` (one `new_tab()` formal + getter/setter +
+one `tab_attrs()` line). `prep_one_table()` resolves it to a per-column, per-ROW char vector while the
+predictor `var` column is still present (drop_tab_vars removes it), and `reg_append_empirical_tip()`
+appends a "crude:" fragment at the two HTML render sites. **No new fmt field, no fmt-column attribute,
+no change to the shared `tab_kable_print_tooltip`** — so `tab()` and other reg tooltips are untouched
+(the maintainer's explicit worry). ⚠ TWO landmines, both cost a debugging pass: (1) the reg GOF-footer
+/ p-value rebuilds (`reg_footer_lines`, `tab_pvalue_lines`) must thread `empirical_tips` (and `vars`)
+through their `new_tab()`, else the attribute is lost the moment the footer materialises — the Phase-14n
+landmine, repeated. (2) `tab_wrap_text()` (the real `tab_kable` path) **RENAMES columns** — spaces →
+unbreakable U+202F, long names wrapped — so the `emp_tips` list, keyed by build-time column names, must
+be **re-keyed to the post-wrap names** in `prep_one_table()` (a no-wrap prep silently misses this, so
+the multinomial feature test must render WITH the real wrap). Multinomial + `split_var` drops the attr
+(the split rbinds un-classed tibbles); deferred, no error.
+
+### Structural
+
+- ONE `reg_empirical()` (per-family crude measures) + ONE `reg_empirical_columns()` (switch on
+  family/effect) + `reg_empirical_tips()` (multinomial). Dispatched from a `family` switch at the
+  reg_build assembly point.
+- **Multi-dependent**: empirical is built PER SPEC. `n_dep == 1` → one companion before all model
+  columns (byte-identical layout, incl. a model-comparison list). `n_dep > 1` → a companion per fit,
+  interleaved before each fit's first model column, names suffixed by dependent.
+- **AME header**: with `empirical = TRUE`, a prob-scale AME/MER header gains `(model %)` (the cell
+  folds the model-adjusted predicted %), to disambiguate from the crude `Emp. %`. Gated on `empirical`
+  to avoid churning every AME table's public column names.
+- **`empirical_OR` → `empirical`** soft-deprecated alias (`lifecycle::deprecated()`), for the
+  maintainer's existing scripts.
+- Grouped-binomial (`trials`) has no `positive_level` → no crude 2x2 → skipped (as before), flagged.
+
+### The `display = "ratio"` fix (canonicalize the token)
+
+`display_primary()` applied the `ratio→rr` alias only to composite `{ratio}` templates; a bare
+`set_display("ratio")` stayed `"ratio"` and the render only matched `"rr"` → it fell through to showing
+the raw count `n`. Fix (the maintainer's suggestion): **`"ratio"` is the canonical display token**
+(matching the field name), `"rr"` kept as a legacy synonym — the ~6 render/get/set sites accept
+`%in% c("ratio", "rr")`. `"rr"` is only ever a transient render token (never persisted), so golden-safe.
+
+**Verification**: full suite **FAIL 0 | WARN 0 | SKIP 4 | PASS 3308**; `document()` clean; **no `.rds`
+golden and no `_snaps` moved** (coefficient path byte-identical; the new families/columns are new, and
+the AME `(model %)` is gated on `empirical`). New `test-tab_reg-empirical.R` (52: the per-family parity
+identity + the feature tests). Samples: `dev/review_manual/phase14v_empirical.{html,md,xlsx}`.
+
+### Deferred / flagged for the maintainer
+
+- **gaussian/poisson base-column colour** — `Emp. mean` is uncoloured (the `get_ref_var`-on-reg-skeleton
+  limit); if a coloured base is wanted, it needs a per-predictor grouping mechanism (out of scope).
+- **grouped-binomial (`trials`) empirical** — skipped (needs the successes/trials response, not a
+  binary `positive_level`); the maintainer's ct13 scripts hit this.
+- **multinomial empirical is HTML-tooltip-only** — md / Excel / console do not carry it.
+- **reg-table titles still mis-generate** (the 14l/14w flag: reg tables record no `vars` attribute).

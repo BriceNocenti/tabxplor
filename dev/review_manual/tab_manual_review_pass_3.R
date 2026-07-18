@@ -299,9 +299,26 @@ score_risques_phy_logits |> tab_export() # theme="auto"
 # tab_reg(data, "party3", c("race", "age"), family = "multinomial")
 # tab_reg(data, "party3", c("race", "age"), family = "multinomial", effect = "ame")
 
+# Not necessarily a problem, but to understand well what is statistically happening here,
+#  how do we explain the gap between the two 95% CI ? 
+#  Is there a particular CI we could for numeric vars diffs in tab() to match what happens in linear reg ?
+# - With tab_reg() linear reg, confidence interval on diff (Black - White) is "[1.28;1.54]"
+mutate(forcats::gss_cat, race = forcats::fct_rev(race)) |> 
+  tab_reg("tvhours", "race", family = "gaussian", estimate_display = "ci") # |> tab_md()
+# - With tab() diff, confidence interval on diff (Black - White) is "[1.23;1.58]"
+mutate(forcats::gss_cat, race = forcats::fct_rev(race)) |> 
+  tab("race", tvhours, ref = 1, color = "diff", color_signif = "grey_non_signif", display = "{diff} {ci}", digits = 2) #|> 
+#mutate(diff = tvhours |> set_display("diff") |> set_digits(2)) # |> tab_md()
 
 
-
+# - With tab_reg() poisson reg, confidence interval on ratio (Black/White) is "[1.47;1.55]"
+mutate(forcats::gss_cat, race = forcats::fct_rev(race)) |> 
+  tab_reg("tvhours", "race", family = "poisson", estimate_display = "ci") # |> tab_md()
+# - With tab() diff, confidence interval on diff (Black - White) is "[1.23;1.58]" : 
+#   it’s the same than with diff ci above, is it normal or suspicious (to me it is suspicious) ?
+mutate(forcats::gss_cat, race = forcats::fct_rev(race)) |> 
+  tab("race", tvhours, ref = 1, color = "ratio", ci="ratio", color_signif = "grey_non_signif", display = "{ratio} {ci}", digits = 2) #|> 
+#mutate(diff = tvhours |> set_display("diff") |> set_digits(2)) # |> tab_md()
 
 
 # # tab(pc18, all_of(rows1), CONCERTS, wt = POND, pct = "row", color = TRUE,

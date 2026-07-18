@@ -182,8 +182,12 @@ R/
 │                              compare = anova.svyglm Wald). Weighted 3+ level: svyolr / svy_vglm.
 │                              split_var = tab_vars analogue (reg_build recurses per group on shared
 │                              skeleton_data, stacks grouped_tab (split_var,var); tab_spread works,
-│                              group-aware print_reg_footer). multiplicator (OR^k) + empirical_OR
-│                              (reg_empirical_or crude %/OR beside model OR, binary). No new fmt fields.
+│                              group-aware print_reg_footer). multiplicator (OR^k) + 14v `empirical`
+│                              (renamed from empirical_OR; cross-family crude companion: reg_empirical /
+│                              reg_empirical_columns per family -- binomial %/OR|%/diff, gaussian
+│                              mean/diff [diff/SD(Y), type=coef], poisson rate/IRR; multinomial =
+│                              tooltip via reg_empirical_tips -> `empirical_tips` table attr; per-spec
+│                              for a dependents vector). No new fmt fields.
 │                              12h (display): estimate_display= arg -> est_ci token (estimate + visible
 │                              [ci_inf;ci_sup] bracket, no 1/x; fmt_class.R only) | "prob"/"ame" fold
 │                              predicted prob / AME into the OR cell via {} grammar (binomial coef only,
@@ -270,7 +274,7 @@ Export:  tab_xl()  |  tab_kable()  |  tab_md()  |  tab_plot()
 
 - **`tabxplor_fmt`**: vctrs record (`new_rcrd()`) with **18 per-cell fields** (was 15 before v1.4.0 Phase 1a) and 9 per-column attributes (Phase 10i-A dropped `display_spec`). The critical distinction: fields vary per cell (accessed via `vctrs::field()`), attributes are scalar describing the whole column (accessed via `attr()`). Constructor chain: `fmt()` (public, validates + coerces) -> `new_fmt()` (internal, calls `vctrs::new_rcrd()`). *(Phase 1a reshaped 15→18 in one combined pass — decisions doc §9; `ci` is now derived from the `ci_inf`/`ci_sup` bounds by `get_ci()`, a bounds-shim.)*
 - **`mean` field overload** (cross-cutting): for **pct-type** columns the `mean` field carries the cell/reference **ratio** for the "*2 rule" (not an actual mean). Written by `tab_pct()`, read by `fmt_color_selection()`. The **`ratio` field** now exists (Phase 1a renamed the never-used `rr`→`ratio`; decisions doc §3); the overload removal + moving the ratio to `ratio` lands in **Phase 5** (color diff/ratio split), not yet done.
-- **`tabxplor_tab`**: tibble subclass via `tibble::new_tibble()` with `subtext` (legend text), `test` (chi2/ANOVA-F results tibble; §16 hard-rename of the old `chi2` attribute) and — Phase 10i-B — `render_extras` (the `list(add_n=, add_pct=)` display intent) attributes, all carried through dplyr verbs by the S3 methods + vctrs reconcilers.
+- **`tabxplor_tab`**: tibble subclass via `tibble::new_tibble()` with `subtext` (legend text), `test` (chi2/ANOVA-F results tibble; §16 hard-rename of the old `chi2` attribute), `render_extras` (Phase 10i-B, the `list(add_n=, add_pct=)` display intent), `vars` (Phase 14d, variable roles) and `empirical_tips` (Phase 14v, the multinomial crude-companion tooltip data) attributes, all carried through dplyr verbs by the S3 methods + vctrs reconcilers (one line each in `tab_attrs()`).
 - **`tabxplor_grouped_tab`**: extends `grouped_df` for subtabled results (when `tab_vars` are present). Requires separate S3 method for every dplyr verb.
 
 ### Export Parity
@@ -2175,9 +2179,8 @@ Make empirical work with several dependent variables
   
 Question : but in tab() with numeric vars, the reference do have a standard deviation, right ?
 
-Choice : colour the crude mean by the ratio.
-- This is actually the default in tab(), using `tab(mutate(forcats::gss_cat, race = forcats::fct_rev(race)), "race", tvhours, ref = 1, color = "ratio") |> mutate(ratio = tvhours |> set_display("ratio")) |> tab_md()`, same `than color = TRUE`. Table corrected by hand using `vctrs::vec_data` (see bug below)
-
+Poisson : the related crude quantity is the mean, colour by the ratio.
+- `tab(mutate(forcats::gss_cat, race = forcats::fct_rev(race)), "race", tvhours, ref = 1, color = "ratio") |> mutate(ratio = tvhours |> set_display("ratio")) |> tab_md()`, same `than color = TRUE`.
 | race      |         mean (sd) |       ratio |
 |:----------|------------------:|------------:|
 |           |         *tvhours* |             |
@@ -2186,10 +2189,7 @@ Choice : colour the crude mean by the ratio.
 | Black     | [4.2 (σ3.5)]{.p2} | [1.51]{.p2} |
 | Other     |        2.8 (σ2.4) |        1.00 |
 | Total     |        3.0 (σ2.6) |        1.08 |
-
-It works for poisson regression :
 - `tab_reg(mutate(forcats::gss_cat, race = forcats::fct_rev(race)), "tvhours", "race", family = "poisson") |> tab_md()`
-
 |          | levels                   |   tvhours: IRR |
 |:---------|:-------------------------|---------------:|
 | Constant | **Reference population** |    **2.77***** |
@@ -2198,7 +2198,17 @@ It works for poisson regression :
 |          | Black                    | [1.51***]{.p2} |
 |          | Other                    |         1/1.00 |
 
-**It does not work for simple linear regression : what is the empirical quantity that matches the modelised quantity (β coefficient) here ?** Enquire, make web searches if necessary.
+
+Linear regression : the matching quantity is the difference from reference ; color by standardised differences. 
+- `tab(mutate(forcats::gss_cat, race = forcats::fct_rev(race)), "race", tvhours, ref = 1, color = "diff") |> mutate(diff = tvhours |> set_display("diff") |> set_digits(2)) |> tab_md()`
+| race    |            mean (sd)  |             diff  |
+|:--------|----------------------:|------------------:|
+|         | *tvhours*             |                   |
+|         |                       |                   |
+|**White**|  **2.8** (σ2.3)       |  **ref:2.77**     |
+| Black   |     [4.2 (σ3.5)]{.p3} |      [+1.41]{.p3} |
+| Other   |      2.8 (σ2.4)       |       -0.01       |
+| Total   |      3.0 (σ2.6)       |       +0.21       |
 - `tab_reg(mutate(forcats::gss_cat, race = forcats::fct_rev(race)), "tvhours", "race", family = "gaussian") |> tab_md()`
 
 |          | levels               |     tvhours: β |

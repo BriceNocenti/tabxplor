@@ -395,7 +395,7 @@ get_num <- function(x) {
   # display values and the field each reads: n/(default)->n, wn->wn,
   # pct/pct_ci/pvalue->pct, diff->diff, ctr->ctr, mean/mean_ci->mean, var->var,
   # ci->get_ci() (the CI half-width, read from the ci_sup bound via the Phase 1a shim),
-  # rr->ratio (the "rr" display token maps to the renamed `ratio` field), or/OR/or_pct->or.
+  # ratio (canonical) / rr (legacy synonym) -> the `ratio` field, or/OR/or_pct->or.
   # format.tabxplor_fmt() renders these plus the CI/label variants (pct_ci, mean_ci,
   # or_pct, OR_pct). When adding a display value, keep this map, set_num() and format() in
   # sync (see the /vctrs-field skill).
@@ -416,7 +416,7 @@ get_num <- function(x) {
   out[!nas & display == "mean_ci"] <- get_mean(x)[!nas & display == "mean_ci"]
   out[!nas & display == "var"    ] <- get_var (x)[!nas & display == "var"    ]
   out[!nas & display == "ci"     ] <- get_ci   (x)[!nas & display == "ci"     ]
-  out[!nas & display == "rr"     ] <- get_ratio(x)[!nas & display == "rr"     ]
+  out[!nas & display %in% c("ratio", "rr")] <- get_ratio(x)[!nas & display %in% c("ratio", "rr")]
   out[!nas & display %in% c("or", "OR")] <- get_or(x)[!nas & display %in% c("or", "OR")     ]
   out[!nas & display == "or_pct" ] <- get_or  (x)[!nas & display == "or_pct" ]
   # Phase 12h: est_ci = "<estimate> [ci_inf; ci_sup]" (regression OR / beta with a visible interval).
@@ -454,7 +454,7 @@ set_num <- function(x, value) {
   out[!nas & display == "mean"] <- set_mean(x[!nas & display == "mean"], value[!nas & display == "mean"])
   out[!nas & display == "var" ] <- set_var (x[!nas & display == "var" ], value[!nas & display == "var" ])
   out[!nas & display == "ci"  ] <- set_ci   (x[!nas & display == "ci"  ], value[!nas & display == "ci"  ])
-  out[!nas & display == "rr"  ] <- set_ratio(x[!nas & display == "rr"  ], value[!nas & display == "rr"  ])
+  out[!nas & display %in% c("ratio", "rr")] <- set_ratio(x[!nas & display %in% c("ratio", "rr")], value[!nas & display %in% c("ratio", "rr")])
   out[!nas & display %in% c("or", "OR")] <- set_or(x[!nas & display %in% c("or", "OR")  ], value[!nas & display == "or"  ])
   # Phase 12h: est_ci writes back to its point-estimate field (OR or coefficient), like get_num reads it.
   est_ci_m <- !nas & display == "est_ci"
@@ -1882,7 +1882,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   # Phase 14b: EVERY diff display is signed (see the sign block below). Means keep their own mask
   # only because their digits are bumped to >= 1 and they take no x100 / "%".
   diff_signed   <- ok & display == "diff"
-  n_wn          <- ok & (display %in% c("n", "wn", "mean", "mean_ci", "var", "rr", "or", "or_pct",
+  n_wn          <- ok & (display %in% c("n", "wn", "mean", "mean_ci", "var", "rr", "ratio", "or", "or_pct",
                                         "OR", "OR_pct", "gof") |             # Phase 12f: gof -> big.mark
                            (display == "ci" & type == "mean") )
   type_ci       <- ok & display == "ci"
@@ -1905,7 +1905,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
     return(excel_numfmt_code(digits, pct = excel_pct,
                              ci = !nas & display == "ci", text = plus_ci,
                              signed = !nas & display %in% c("ctr", "diff"),
-                             ratio  = !nas & display == "rr"))
+                             ratio  = !nas & display %in% c("ratio", "rr")))
   }
 
 
@@ -2005,7 +2005,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   # (the divide sign over 1/ratio). Default 1 digit (>= the column's digits), trailing zeros trimmed,
   # right-padded so the column aligns in a monospace font. Text syntax only (Excel returned early
   # above -> ratio stays a real number there, per the Phase 13c Excel decision).
-  disp_rr <- ok & display == "rr"
+  disp_rr <- ok & display %in% c("ratio", "rr")   # "ratio" canonical, "rr" legacy synonym
   if (any(disp_rr)) {
     rv  <- get_ratio(x)[disp_rr]
     inv <- !is.na(rv) & rv > 0 & rv < 1
