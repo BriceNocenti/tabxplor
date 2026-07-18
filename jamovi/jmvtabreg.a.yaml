@@ -50,7 +50,6 @@ options:
     - name: split_var
       title: "<b>split_var = <i>(fit within each group)</i></b>"
       type: Variable
-      maxItemCount: 1
       suggested:
         - nominal
         - ordinal
@@ -328,7 +327,6 @@ options:
     - name: fpc
       title: "<b>fpc = <i>(finite population)</i></b>"
       type: Variable
-      maxItemCount: 1
       default: NULL
       description:
           R: >
