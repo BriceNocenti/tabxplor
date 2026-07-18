@@ -25,7 +25,7 @@ tab(
   ref2 = "first",
   comp = "tab",
   ci = "no",
-  conf_level = 0.95,
+  conf_level = getOption("tabxplor.conf_level", 0.95),
   stars = NULL,
   method_cell = "wilson",
   method_diff = "newcombe",

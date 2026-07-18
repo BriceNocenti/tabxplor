@@ -48,7 +48,9 @@
 #'     robust) or `"classic"` (pooled variance). Both are always stored in the `test` attribute.}
 #'   \item{`tabxplor.kish_neff`}{`FALSE` (default): use Kish's effective sample size
 #'     `(sum w)^2 / sum w^2` for weighted numeric (mean) confidence intervals / significance.}
-#'   \item{`tabxplor.conf_level`}{confidence level for the intervals, default `0.95`.}
+#'   \item{`tabxplor.conf_level`}{confidence level for the intervals and significance tests, default
+#'     `0.95`. The per-call `conf_level =` argument of [tab()], [tab_num()], [tab_ci()] and [tab_reg()]
+#'     overrides it.}
 #' }
 #'
 #' @section HTML / `tab_kable()` export:

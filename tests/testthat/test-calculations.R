@@ -542,6 +542,26 @@ testthat::test_that("cell CI for proportions matches DescTools::BinomCI wilson",
   }
 })
 
+testthat::test_that("option tabxplor.conf_level is the interval default; per-call arg overrides it (Last Phase c)", {
+  ci_width <- function() {
+    col <- tab(gss, race, marital, pct = "row", ci = "cell")[["Divorced"]]
+    mean(get_ci_sup(col) - get_ci_inf(col), na.rm = TRUE)
+  }
+  w90 <- withr::with_options(list(tabxplor.conf_level = 0.90), ci_width())
+  w95 <- withr::with_options(list(tabxplor.conf_level = 0.95), ci_width())
+  w99 <- withr::with_options(list(tabxplor.conf_level = 0.99), ci_width())
+
+  # the option widens the interval monotonically (it now genuinely drives the CIs)
+  testthat::expect_true(w90 < w95 && w95 < w99)
+
+  # a per-call conf_level = argument wins over the option
+  override <- withr::with_options(list(tabxplor.conf_level = 0.99), {
+    col <- tab(gss, race, marital, pct = "row", ci = "cell", conf_level = 0.90)[["Divorced"]]
+    mean(get_ci_sup(col) - get_ci_inf(col), na.rm = TRUE)
+  })
+  testthat::expect_equal(override, w90)
+})
+
 testthat::test_that("cell CI method_cell='wald' matches p +- z*sqrt(p(1-p)/n) (Phase 7g)", {
   tabs <- tab(gss, race, marital, pct = "row", ci = "cell", conf_level = 0.95,
               method_cell = "wald")

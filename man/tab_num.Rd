@@ -16,7 +16,7 @@ tab_num(
   ref = "tot",
   comp = c("tab", "all"),
   ci = NULL,
-  conf_level = 0.95,
+  conf_level = getOption("tabxplor.conf_level", 0.95),
   stars = NULL,
   method_mean_diff = "welch",
   method_mean_ratio = "robust",

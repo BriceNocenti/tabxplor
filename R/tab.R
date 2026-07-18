@@ -404,7 +404,7 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
                 cleannames = NULL, #compact = NULL, # pvalue_line = NULL,
                 other_if_less_than = 0, other_level = "Others",
                 ref = "auto", ref2 = "first", comp = "tab",
-                ci = "no", conf_level = 0.95, stars = NULL,
+                ci = "no", conf_level = getOption("tabxplor.conf_level", 0.95), stars = NULL,
                 method_cell = "wilson", method_diff = "newcombe",
                 method_ratio = "katz", method_mean_diff = "welch",
                 method_mean_ratio = "robust",
@@ -444,9 +444,6 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
 
   cleannames <-
     if (is.null(cleannames)) { getOption("tabxplor.cleannames") } else {cleannames}
-
-  # pvalue_line <-
-  #   if (is.null(pvalue_line)) { getOption("tabxplor.pvalue_lines") } else {pvalue_line}
 
 
   # `row_vars`/`col_vars` accept a <tidy-select> (one variable OR several, e.g. `c(race, relig)`),
@@ -1106,7 +1103,7 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
                      cleannames = NULL, compact = NULL, #pvalue_line = NULL,
                      other_if_less_than = 0, other_level = "Others",
                      ref = "auto", ref2 = "first", comp = "tab",
-                     ci = "no", conf_level = 0.95, stars = NULL, #ci_visible = FALSE,
+                     ci = "no", conf_level = getOption("tabxplor.conf_level", 0.95), stars = NULL, #ci_visible = FALSE,
                      method_cell = "wilson", method_diff = "newcombe",
                      method_ratio = "katz", method_mean_diff = "welch",
                      method_mean_ratio = "robust",
@@ -1371,9 +1368,6 @@ tab_setup <- function(ctx) {
 
   # Phase 3a: significance stars default (universal CI-inclusion). NULL -> option default.
   stars <- if (is.null(stars)) getOption("tabxplor.stars", FALSE) else stars
-
-  # pvalue_line <-
-  #   if (is.null(pvalue_line)) { getOption("tabxplor.pvalue_lines") } else {pvalue_line}
 
 
   stopifnot(levels %in% c("first", "all", "auto"))
@@ -4065,7 +4059,7 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
                     color = "auto", color_signif = "ignore",
                     na = c("keep", "drop", "drop_fct", "drop_num"),
                     ref = "tot", comp = c("tab", "all"),
-                    ci = NULL, conf_level = 0.95, stars = NULL, #ci_visible = FALSE,
+                    ci = NULL, conf_level = getOption("tabxplor.conf_level", 0.95), stars = NULL, #ci_visible = FALSE,
                     method_mean_diff = "welch", method_mean_ratio = "robust", ci_scale = "diff",
                     totaltab = "line", totaltab_name = "Ensemble",
                     tot = NULL, total_names = "Total",
@@ -5626,7 +5620,7 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
 tab_ci <- function(tabs,
                    ci = "auto",
                    comp = NULL,
-                   conf_level = 0.95,
+                   conf_level = getOption("tabxplor.conf_level", 0.95),
                    color = "no",
                    visible = FALSE,
                    stars = NULL,

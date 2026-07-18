@@ -51,7 +51,9 @@ the reader). \code{"auto"} needs a stylesheet, so only \code{tab_kable(engine = 
 robust) or \code{"classic"} (pooled variance). Both are always stored in the \code{test} attribute.}
 \item{\code{tabxplor.kish_neff}}{\code{FALSE} (default): use Kish's effective sample size
 \verb{(sum w)^2 / sum w^2} for weighted numeric (mean) confidence intervals / significance.}
-\item{\code{tabxplor.conf_level}}{confidence level for the intervals, default \code{0.95}.}
+\item{\code{tabxplor.conf_level}}{confidence level for the intervals and significance tests, default
+\code{0.95}. The per-call \verb{conf_level =} argument of \code{\link[=tab]{tab()}}, \code{\link[=tab_num]{tab_num()}}, \code{\link[=tab_ci]{tab_ci()}} and \code{\link[=tab_reg]{tab_reg()}}
+overrides it.}
 }
 }
 

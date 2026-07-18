@@ -90,11 +90,14 @@ NULL
   # stored in the `test` attribute; this only picks the p-value shown in the p-value row/stars.
   options("tabxplor.anova"         = "welch")
 
+  # Default confidence level for the intervals and significance tests. The per-call `conf_level`
+  # argument of tab() / tab_num() / tab_ci() / tab_reg() (and its wrappers) overrides it; it is also
+  # the fallback alpha of the `contrib` colour-significance gate. Single source of truth (Last Phase c).
+  options("tabxplor.conf_level"    = 0.95)
+
   # Phase 6: the `tabxplor.compact` option is dropped, superseded by the `output_list`
   # argument of tab() (default FALSE = merge; TRUE = list). tab_many()'s deprecated `compact`
   # argument still works (mapped onto the output shape).
-
-  # options("tabxplor.pvalue_lines" = FALSE)
 
   options("tabxplor.always_add_css_in_tab_kable" = TRUE)
 
@@ -117,6 +120,8 @@ NULL
   options("tabxplor.xl_font_num"        = "DejaVu Sans")                  # no stars (proportional)
   options("tabxplor.xl_font_num_stars"  = "Cascadia Mono")               # stars (monospace)
   options("tabxplor.xl_font_text"       = "DejaVu Sans Condensed")
+  # keep odds ratios as real numbers in Excel instead of "1/x" text; per-call tab_xl(or_numeric =).
+  options("tabxplor.xl_or_numeric"      = FALSE)
   options("tabxplor.plot_num_font"      = "Cascadia Mono")                # applied only when stars
 
   # Phase 13d: the EXPORT theme -- "light" (default), "dark", or "auto" (follow the reader's colour

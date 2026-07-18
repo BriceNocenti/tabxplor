@@ -17,7 +17,7 @@ tab_logit(
   split_var = NULL,
   multiplicator = NULL,
   empirical = FALSE,
-  conf_level = 0.95,
+  conf_level = getOption("tabxplor.conf_level", 0.95),
   method = c("wald", "profile"),
   stats = NULL,
   estimate_display = c("value", "ci", "prob", "ame"),

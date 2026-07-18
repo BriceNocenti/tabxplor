@@ -531,6 +531,10 @@
   export to Excel, install `openxlsx2`. The produced workbooks look essentially the same.
 
 ## Bug corrections
+* **`options(tabxplor.conf_level = )` now sets the confidence level everywhere, as documented.** It used
+  to affect only the `contrib` colour-significance test; it is now the default for the confidence
+  intervals and significance tests of `tab()`, `tab_num()`, `tab_ci()` and `tab_reg()` (each function's
+  `conf_level =` argument still overrides it). The default is unchanged (`0.95`).
 * **`levels = "first"` now handles missing values consistently.** A two-level column variable used to
   keep its `NA` column visible under `na = "keep"`, and a column variable with three or more levels used
   to keep the dropped-`NA` observations *inside* the percentage base under `na = "drop"`. Now, for any

@@ -18,7 +18,7 @@ tab_reg(
   effect = c("coefficient", "ame"),
   at = c("average", "reference"),
   trials = NULL,
-  conf_level = 0.95,
+  conf_level = getOption("tabxplor.conf_level", 0.95),
   method = c("wald", "profile"),
   reference = NULL,
   inverse_two_level_factors = TRUE,
