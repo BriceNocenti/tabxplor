@@ -15,7 +15,8 @@ reg_opts <- function(...) {
     effect = "coefficient", at = "average", estimate_display = "value",
     inverse_two_level_factors = TRUE, empirical = FALSE, reference = NULL, conf_level = 0.95,
     method = "wald", stars = TRUE, color = NULL, color_signif = "grey_non_signif", na = "keep",
-    cleannames = TRUE, stats = NULL, subtext = ""
+    cleannames = TRUE, stats = NULL, subtext = "",
+    compare = "none", baseline = 1L, multiplicator = NULL, trials = NULL
   )
   utils::modifyList(o, list(...))
 }
@@ -166,4 +167,94 @@ test_that("the store round-trips through serialization (jamovi $state)", {
   rt  <- unserialize(serialize(b1$store, NULL))
   b2  <- jmvtab_reg_build(gss, reg_opts(), rt)                # reuse across a serialize round-trip
   expect_gte(b2$hits, 1L)
+})
+
+
+# --- 5. the model-comparison "+" builder (Phase 15b-ii) -----------------------------------
+test_that("a predictor-subset list == tab_reg() model comparison", {
+  gss   <- gss_reg()
+  mods  <- list(demo = c("race", "age"), full = c("race", "age", "rincome"))
+  o     <- reg_opts(dependent = "married", predictors = mods, family = "binomial")
+  built <- quiet(jmvtab_reg_build(gss, o, NULL))$tabs
+  direct <- quiet(tab_reg(gss, "married", mods, family = "binomial", cleannames = TRUE))
+  expect_identical(reg_render(built), reg_render(direct))
+})
+
+test_that("compare = baseline adds a comparison footer row", {
+  gss <- gss_reg()
+  o   <- reg_opts(predictors = list(small = c("race", "age"),
+                                    full  = c("race", "age", "rincome")),
+                  family = "binomial", compare = "baseline", baseline = 2L, na = "drop_all")
+  t   <- quiet(jmvtab_reg_build(gss, o, NULL))$tabs
+  cmp <- get_test(t) |> dplyr::filter(grepl("^compare", test))
+  expect_gte(nrow(cmp), 1L)
+})
+
+test_that("a comparison list with several dependents yields a NULL table (guarded)", {
+  gss <- gss_reg()
+  o   <- reg_opts(dependent = c("married", "tvhours"),
+                  predictors = list(a = "race", b = c("race", "age")), family = "binomial")
+  expect_null(jmvtab_reg_build(gss, o, NULL)$tabs)
+})
+
+test_that("model-comparison fits are cached and reused (only fit new subsets)", {
+  gss  <- gss_reg()
+  mods <- list(demo = c("race", "age"), full = c("race", "age", "rincome"))
+  o    <- reg_opts(dependent = "married", predictors = mods, family = "binomial")
+
+  b1 <- quiet(jmvtab_reg_build(gss, o, NULL))
+  expect_equal(b1$hits, 0L)                                   # first build: both models fit
+
+  b2 <- quiet(jmvtab_reg_build(gss, o, b1$store))             # identical -> both fits reused
+  expect_gte(b2$hits, 2L)
+
+  # a display toggle (colour off) reuses both fits (no refit)
+  b3 <- quiet(jmvtab_reg_build(gss, reg_opts(dependent = "married", predictors = mods,
+                                             family = "binomial", color = "no"), b2$store))
+  expect_gte(b3$hits, 2L)
+
+  # add a model: the two existing fits are reused, only the new subset is fit
+  mods3 <- c(mods, list(age_only = "age"))
+  b4    <- quiet(jmvtab_reg_build(gss, reg_opts(dependent = "married", predictors = mods3,
+                                                family = "binomial"), b2$store))
+  expect_gte(b4$hits, 2L)
+})
+
+test_that("jmvtab_reg_models folds the builder into predictors (list or flat pool)", {
+  # empty builder -> the flat pool (single model); empty pool too -> NULL
+  expect_identical(jmvtab_reg_models(list(), c("race", "age")), c("race", "age"))
+  expect_null(jmvtab_reg_models(list(), character()))
+  # cards -> a named list in POOL ORDER; blank label -> model{i}; out-of-pool vars dropped
+  m <- jmvtab_reg_models(
+    list(list(label = "demo", vars = list("age", "race")),
+         list(label = "",     vars = list("race", "zzz"))),
+    c("race", "age", "rincome"))
+  expect_identical(m, list(demo = c("race", "age"), model2 = "race"))
+  # an all-empty card set -> the flat pool
+  expect_identical(jmvtab_reg_models(list(list(label = "x", vars = list())), c("race", "age")),
+                   c("race", "age"))
+})
+
+
+# --- 6. numeric-predictor scaling (multiplicator) -----------------------------------------
+test_that("jmvtab_reg_mult_vector folds the scaling picker into a named numeric", {
+  expect_null(jmvtab_reg_mult_vector(list()))
+  expect_null(jmvtab_reg_mult_vector(list(list(var = "age", k = ""))))
+  expect_identical(
+    jmvtab_reg_mult_vector(list(list(var = "age", k = "10"),
+                                list(var = "x",   k = "abc"))),
+    c(age = 10)
+  )
+})
+
+test_that("a multiplicator change is keyed (not stale) and matches tab_reg()", {
+  gss  <- gss_reg()
+  o10  <- reg_opts(predictors = c("race", "age"), family = "binomial", multiplicator = c(age = 10))
+  o05  <- reg_opts(predictors = c("race", "age"), family = "binomial", multiplicator = c(age = 5))
+  b10  <- quiet(jmvtab_reg_build(gss, o10, NULL))
+  b05  <- quiet(jmvtab_reg_build(gss, o05, b10$store))       # a different scaling -> a fresh fit, not stale
+  expect_false(identical(reg_render(b10$tabs), reg_render(b05$tabs)))
+  d10  <- quiet(tab_reg(gss, "married", c("race", "age"),
+                        family = "binomial", multiplicator = c(age = 10), cleannames = TRUE))
+  expect_identical(reg_render(b10$tabs), reg_render(d10))
 })

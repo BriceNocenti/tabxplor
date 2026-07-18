@@ -44,6 +44,8 @@ var onUpdate = function(ui) {
     stretchTextBox(ui, "subtext");
     stretchTextBox(ui, "path");
     renderRefPicker(ui);
+    renderModelBuilder(ui);
+    applyCompareEnables(ui);
 };
 
 // ---- Reference-level picker CustomControl (refPickerCtrl) ---------------------------------
@@ -57,7 +59,18 @@ var TABX = {
     refName: "font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;",
     refSel:  "width:100%;min-width:0;box-sizing:border-box;padding:2px 4px;border:1px solid rgba(0,0,0,0.28);border-radius:3px;background:#fff;color:#000;cursor:pointer;",
     refNote: "opacity:0.6;font-style:italic;",
-    hint:    "padding:8px;opacity:0.65;font-style:italic;"
+    hint:    "padding:8px;opacity:0.65;font-style:italic;",
+    // model-builder cards (one per model) + the numeric-predictor scaling input
+    cardBox:  "border:1px solid rgba(0,0,0,0.14);border-radius:5px;background:rgba(0,0,0,0.02);margin:6px;padding:6px 8px;width:66%;min-width:320px;box-sizing:border-box;",
+    cardHead: "display:flex;align-items:center;gap:8px;margin-bottom:4px;",
+    cardBase: "display:inline-flex;align-items:center;gap:3px;font-size:0.85em;opacity:0.8;white-space:nowrap;cursor:pointer;",
+    cardName: "flex:1 1 auto;min-width:0;box-sizing:border-box;padding:2px 6px;border:1px solid rgba(0,0,0,0.28);border-radius:3px;background:#fff;color:#000;font-weight:600;",
+    cardDel:  "flex:0 0 auto;border:none;background:transparent;cursor:pointer;font-size:1.1em;line-height:1;color:rgba(0,0,0,0.55);padding:2px 6px;",
+    cardVars: "display:flex;flex-wrap:wrap;gap:4px 14px;",
+    cardChk:  "display:inline-flex;align-items:center;gap:3px;white-space:nowrap;cursor:pointer;",
+    addBtn:   "margin:4px 6px 8px;padding:4px 12px;border:1px dashed rgba(0,0,0,0.35);border-radius:4px;background:rgba(0,0,0,0.03);color:#000;cursor:pointer;font-weight:600;",
+    multWrap: "display:flex;align-items:center;gap:2px;min-width:0;",
+    multInp:  "width:70px;box-sizing:border-box;padding:2px 4px;border:1px solid rgba(0,0,0,0.28);border-radius:3px;background:#fff;color:#000;"
 };
 
 var levelsCache = {};     // var -> [labels] | null (numeric/no-levels) | FETCHING sentinel
@@ -100,6 +113,39 @@ var reconcileRefLevels = function(ui, preds) {
     if (kept.length !== cur.length) ui.refLevels.setValue(kept);
 };
 
+// ---- Numeric-predictor scaling (multiplicator) ------------------------------------------
+// Folded into the numeric rows of the reference picker: a numeric predictor has no reference
+// level, so its row instead offers a "x k per unit" input (OR/beta per k units, e.g. per decade
+// of age). Stored by var in the hidden `multiplicator` Array; read by jmvtab_reg_mult_vector()
+// -> tab_reg(multiplicator =). Only numeric rows expose it, so only numeric predictors are ever
+// written (tab_reg validates the names are numeric).
+var multGet = function(ui) {
+    return ui.multiplicator ? utils.clone(ui.multiplicator.value(), []) : [];
+};
+
+var multSelected = function(ui, v) {
+    var arr = multGet(ui);
+    for (var i = 0; i < arr.length; i++)
+        if (arr[i].var === v) return (arr[i].k == null ? "" : String(arr[i].k));
+    return "";
+};
+
+var writeMult = function(ui, v, kval) {
+    if (!ui.multiplicator) return;
+    var arr = multGet(ui), kept = [];
+    for (var i = 0; i < arr.length; i++) if (arr[i].var !== v) kept.push(arr[i]);
+    if (kval != null && String(kval).length > 0) kept.push({ var: v, k: String(kval) });
+    ui.multiplicator.setValue(kept);
+};
+
+var reconcileMult = function(ui, preds) {
+    if (!ui.multiplicator) return;
+    var cur = multGet(ui), kept = [];
+    for (var i = 0; i < cur.length; i++)
+        if (preds.indexOf(cur[i].var) >= 0) kept.push(cur[i]);
+    if (kept.length !== cur.length) ui.multiplicator.setValue(kept);
+};
+
 var refLineControl = function(nameText, levels, selectedRef, onPick) {
     var row = document.createElement("div"); row.style.cssText = TABX.refRow;
     var lab = document.createElement("b"); lab.style.cssText = TABX.refName; lab.textContent = nameText;
@@ -138,12 +184,20 @@ var renderRefVarCard = function(ui, frag, v) {
         }
         return;
     }
-    if (cached === null) {   // numeric predictor: no reference level
+    if (cached === null) {   // numeric predictor: no reference level -> a "x k per unit" scaling input
         var row = document.createElement("div"); row.style.cssText = TABX.refRow;
         var b1 = document.createElement("b"); b1.style.cssText = TABX.refName; b1.textContent = v;
-        var nt = document.createElement("span"); nt.style.cssText = TABX.refNote;
-        nt.textContent = "numeric — no reference level";
-        row.appendChild(b1); row.appendChild(nt);
+        row.appendChild(b1);
+        var wrap = document.createElement("span"); wrap.style.cssText = TABX.multWrap;
+        var pre = document.createElement("span"); pre.textContent = "× ";
+        var inp = document.createElement("input");
+        inp.type = "number"; inp.step = "any"; inp.style.cssText = TABX.multInp;
+        inp.placeholder = "1"; inp.value = multSelected(ui, v);
+        inp.addEventListener("change", function() { writeMult(ui, v, inp.value); });
+        var suf = document.createElement("span"); suf.style.cssText = TABX.refNote;
+        suf.textContent = " per unit (numeric)";
+        wrap.appendChild(pre); wrap.appendChild(inp); wrap.appendChild(suf);
+        row.appendChild(wrap);
         frag.appendChild(row);
         return;
     }
@@ -158,6 +212,7 @@ var renderRefPicker = function(ui) {
     lastRefSig = refSig(ui);
     var preds = utils.clone(ui.predictors.value(), []);
     reconcileRefLevels(ui, preds);
+    reconcileMult(ui, preds);
 
     var frag = document.createElement("div");
     frag.setAttribute("data-tabx-refpick", "1");
@@ -172,16 +227,205 @@ var renderRefPicker = function(ui) {
     root.innerHTML = ""; root.appendChild(frag);
 };
 
+// ---- Model-comparison builder CustomControl (modelBuilderCtrl) ---------------------------
+// One card per model = an editable name + a checkbox per predictor in the pool (the `predictors`
+// slot) + a delete button; a "+ Add model" button appends a card defaulting to the FULL pool.
+// The cards are stored in the hidden `models` Array (Group{label, vars}); jmvtab_reg_models()
+// folds them into tab_reg()'s `predictors` (an EMPTY builder -> the flat pool = single model; >=1
+// card -> a named list = model comparison). When compare == "baseline", each card also shows a
+// radio marker writing its 1-based position to the hidden `baseline` option.
+//
+// The signature deliberately EXCLUDES `models`/`baseline` (like refSig excludes refLevels): a
+// checkbox / name / marker edit writes those and is SKIPPED by `updated`, so the in-place DOM edit
+// stands; add / delete change the card COUNT and re-render synchronously in their own handlers.
+
+var lastModelsSig = null;
+
+var modelsSig = function(ui) {
+    var pool    = utils.clone(ui.predictors.value(), []);
+    var compare = ui.compare ? ui.compare.value() : "none";
+    return JSON.stringify([pool, compare]);
+};
+
+var modelsGet = function(ui) { return utils.clone(ui.models.value(), []); };
+
+// Store card `i`'s checked vars in POOL ORDER (drop anything not in the pool). Guarded setValue.
+var setCardVars = function(ui, i, checkedSet, pool) {
+    var arr = modelsGet(ui);
+    if (!arr[i]) return;
+    arr[i] = { label: arr[i].label || "", vars: pool.filter(function(v) { return checkedSet[v]; }) };
+    ui.models.setValue(arr);
+};
+
+var setCardLabel = function(ui, i, label) {
+    var arr = modelsGet(ui);
+    if (!arr[i]) return;
+    arr[i] = { label: label, vars: (arr[i].vars || []).slice() };
+    ui.models.setValue(arr);
+};
+
+var addCard = function(ui, pool) {                       // a new card defaults to the full pool
+    var arr = modelsGet(ui);
+    arr.push({ label: "", vars: pool.slice() });
+    ui.models.setValue(arr);
+    renderModelBuilder(ui);                              // count changed -> synchronous re-render
+};
+
+var deleteCard = function(ui, i) {
+    var arr = modelsGet(ui);
+    arr.splice(i, 1);
+    ui.models.setValue(arr);
+    reconcileBaseline(ui);
+    renderModelBuilder(ui);
+};
+
+// Drop vars no longer in the pool; keep the card + its name (a growing pool does NOT retro-add a
+// new predictor to existing cards -- correct model-comparison semantics). Guarded setValue.
+var reconcileModels = function(ui, pool) {
+    var arr = modelsGet(ui), changed = false;
+    for (var i = 0; i < arr.length; i++) {
+        var vars = arr[i].vars || [];
+        var kept = pool.filter(function(v) { return vars.indexOf(v) >= 0; });
+        if (kept.length !== vars.length) { arr[i] = { label: arr[i].label || "", vars: kept }; changed = true; }
+    }
+    if (changed) ui.models.setValue(arr);
+};
+
+// Keep the stored baseline position within 1..n after add / delete.
+var reconcileBaseline = function(ui) {
+    if (!ui.baseline) return;
+    var n = modelsGet(ui).length;
+    var b = ui.baseline.value() || 1;
+    var clamped = Math.min(Math.max(b, 1), Math.max(n, 1));
+    if (clamped !== b) ui.baseline.setValue(clamped);
+};
+
+// `compare` needs >=2 models; the card COUNT is invisible to the declarative enable: DSL, so grey
+// it imperatively (mirrors applyWtEnables).
+var applyCompareEnables = function(ui) {
+    var n = (ui.models ? utils.clone(ui.models.value(), []) : []).length;
+    if (ui.compare && ui.compare.setEnabled) ui.compare.setEnabled(n >= 2);
+};
+
+var renderModelCard = function(ui, frag, card, i, pool, showBaseline, basePos) {
+    var box  = document.createElement("div"); box.style.cssText = TABX.cardBox;
+    var head = document.createElement("div"); head.style.cssText = TABX.cardHead;
+
+    if (showBaseline) {
+        var rl = document.createElement("label"); rl.style.cssText = TABX.cardBase;
+        var radio = document.createElement("input");
+        radio.type = "radio"; radio.name = "tabx-baseline"; radio.checked = (i + 1 === basePos);
+        radio.addEventListener("change", function() { if (ui.baseline) ui.baseline.setValue(i + 1); });
+        rl.appendChild(radio); rl.appendChild(document.createTextNode(" baseline"));
+        head.appendChild(rl);
+    }
+
+    var name = document.createElement("input");
+    name.type = "text"; name.style.cssText = TABX.cardName;
+    name.placeholder = "model" + (i + 1); name.value = card.label || "";
+    name.addEventListener("input", function() { setCardLabel(ui, i, name.value); });
+    head.appendChild(name);
+
+    var del = document.createElement("button");
+    del.type = "button"; del.style.cssText = TABX.cardDel; del.textContent = "×";
+    del.title = "Remove this model";
+    del.addEventListener("click", function() { deleteCard(ui, i); });
+    head.appendChild(del);
+    box.appendChild(head);
+
+    var vbox = document.createElement("div"); vbox.style.cssText = TABX.cardVars;
+    var checks = [];
+    var checkedNow = {};
+    (card.vars || []).forEach(function(v) { checkedNow[v] = true; });
+    pool.forEach(function(v) {
+        var lab = document.createElement("label"); lab.style.cssText = TABX.cardChk;
+        var cb  = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!checkedNow[v];
+        cb.addEventListener("change", function() {
+            var set = {};
+            checks.forEach(function(c) { if (c.cb.checked) set[c.v] = true; });
+            if (Object.keys(set).length === 0) { cb.checked = true; return; }  // keep >=1 per card
+            setCardVars(ui, i, set, pool);
+        });
+        checks.push({ v: v, cb: cb });
+        lab.appendChild(cb); lab.appendChild(document.createTextNode(" " + v));
+        vbox.appendChild(lab);
+    });
+    box.appendChild(vbox);
+    frag.appendChild(box);
+};
+
+var renderModelBuilder = function(ui) {
+    if (!ui.modelBuilderCtrl || !ui.models || !ui.predictors) return;
+    lastModelsSig = modelsSig(ui);
+    var pool = utils.clone(ui.predictors.value(), []);
+    reconcileModels(ui, pool);
+
+    var frag = document.createElement("div");
+    frag.setAttribute("data-tabx-models", "1");
+
+    if (pool.length === 0) {
+        var h0 = document.createElement("div"); h0.style.cssText = TABX.hint;
+        h0.textContent = "Select predictors first: they form the pool each model draws from.";
+        frag.appendChild(h0);
+    } else {
+        var cards   = modelsGet(ui);
+        var compare = ui.compare ? ui.compare.value() : "none";
+        var showBaseline = (compare === "baseline" && cards.length >= 2);
+        var basePos = ui.baseline ? (ui.baseline.value() || 1) : 1;
+        cards.forEach(function(card, i) {
+            renderModelCard(ui, frag, card, i, pool, showBaseline, basePos);
+        });
+        var note = document.createElement("div"); note.style.cssText = TABX.hint;
+        note.textContent = (cards.length === 0)
+            ? "Add two or more models to compare specifications; leave empty to fit one model on all predictors."
+            : "Each model draws from the predictors above; untick to leave a predictor out.";
+        frag.appendChild(note);
+
+        var add = document.createElement("button");
+        add.type = "button"; add.style.cssText = TABX.addBtn; add.textContent = "+ Add model";
+        add.addEventListener("click", function() { addCard(ui, pool); });
+        frag.appendChild(add);
+    }
+
+    var root = ui.modelBuilderCtrl.$el[0];
+    root.innerHTML = ""; root.appendChild(frag);
+    applyCompareEnables(ui);
+};
+
 module.exports = {
 
     // Root view update. Bound via `events: update:`; `view_updated` is the jus-3.0 alias -- keep both.
     update:       onUpdate,
     view_updated: onUpdate,
 
-    // A variable box changed: re-render the reference picker + re-apply the survey greying.
+    // A variable box changed: re-render the reference picker + the model builder (the predictor pool
+    // may have changed -> reconcile cards / scaling) + re-apply the survey greying.
     onChange_vars: function(ui) {
         applyWtEnables(ui);
         renderRefPicker(ui);
+        renderModelBuilder(ui);
+        applyCompareEnables(ui);
+    },
+
+    // `compare` changed: re-render the builder (baseline markers show only when compare == "baseline")
+    // and re-apply the >=2-models greying.
+    onChange_compare: function(ui) {
+        renderModelBuilder(ui);
+        applyCompareEnables(ui);
+    },
+
+    // modelBuilderCtrl: build on create. On `updated`, re-render ONLY when the pool / compare changed OR
+    // jamovi replaced our $el subtree (marker gone) -- a card / name / marker edit writes models/baseline
+    // (NOT in the signature), so it is SKIPPED and the in-place repaint stands.
+    modelBuilderCtrl_creating: function(ui) { renderModelBuilder(ui); },
+    modelBuilderCtrl_updated:  function(ui) {
+        if (!ui.modelBuilderCtrl || !ui.predictors) return;
+        var sig  = modelsSig(ui);
+        var root = ui.modelBuilderCtrl.$el[0];
+        var present = !!(root && root.firstChild && root.firstChild.getAttribute &&
+                         root.firstChild.getAttribute("data-tabx-models") === "1");
+        if (sig === lastModelsSig && present) return;
+        renderModelBuilder(ui);
     },
 
     // refPickerCtrl: build on create. On `updated`, re-render ONLY when the predictor set changed OR

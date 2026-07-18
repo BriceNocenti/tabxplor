@@ -9,6 +9,9 @@
 # ROLE (build core): jmvtab_reg_build() is the pure, engine-free entry the R6 backend (R/jmvtabreg.b.R)
 #       calls -- it maps the plain options list onto tab_reg(..., .fit_cache = cache_env) and returns
 #       list(tabs, store, hits). Kept engine-free so it is unit-testable without a live jamovi session.
+#       Picker folders map the hidden Array UI options into tab_reg() args: jmvtab_reg_ref_vector()
+#       (references), jmvtab_reg_models() (the model-comparison "+" builder -> `predictors` list or the
+#       flat pool), jmvtab_reg_mult_vector() (numeric-predictor scaling -> `multiplicator`).
 # KEY CONSTRAINTS:
 #   - jmvtabreg.h.R is GENERATED from jmvtabreg.a.yaml (jmvtools::prepare()); never hand-edit it.
 #   - Persist plain lists (coef vectors, vcov matrices, tibbles) -- NEVER a live object bound to an env.
@@ -22,8 +25,12 @@
 # === Constants =============================================================================
 JMVREG_CACHE_SCHEMA     <- 1L                    # bump on any store-shape change -> discard stale stores
 JMVREG_MAX_DIGEST_BYTES <- 512L * 1024L          # per-entry ceiling for the KB-sized digests
-JMVREG_MAX_FIT_BYTES    <- 4L * 1024L * 1024L    # per-entry ceiling for a raw fit (model + frame)
-JMVREG_MAX_STORE_BYTES  <- 16L * 1024L * 1024L   # whole-store budget (serialized every run -> bounded)
+# A raw reg_fit value (glm + model frame + tidy) is ~9-11 MB on survey-scale data (e.g. 21k rows).
+# MODEL COMPARISON forces this raw-fit tier (the reference-invariant digest fast-path is single-model
+# only), so the per-fit ceiling MUST clear a realistic fit or comparison never caches -> every display /
+# reference toggle refits every model. The store budget holds a handful of such fits (LRU-bounded).
+JMVREG_MAX_FIT_BYTES    <- 24L * 1024L * 1024L   # per-entry ceiling for a raw fit (comparison / ame / ...)
+JMVREG_MAX_STORE_BYTES  <- 96L * 1024L * 1024L   # whole-store budget (serialized to $state every run -> LRU-bounded)
 
 
 # === Store lifecycle =======================================================================
@@ -158,6 +165,47 @@ jmvtab_reg_ref_vector <- function(refLevels) {
 }
 
 
+# === Model-comparison builder + predictor scaling -> tab_reg() args =========================
+
+# Fold the model-builder (`models` Array of Group{label, vars}) + the flat predictor pool into
+# tab_reg()'s `predictors`. An EMPTY builder -> the flat pool = single model (a character vector, or
+# NULL when the pool is empty too -> a NULL table + hint). >=1 card -> a NAMED LIST of character
+# vectors = model-comparison mode (one effect column per model). Each card is intersected with the
+# pool (pool order, dropping stale vars); a blank label becomes "model{i}" (friendlier than
+# tab_reg()'s all-or-nothing rename); empty-var cards are dropped; if nothing survives -> the pool.
+#' @keywords internal
+#' @noRd
+jmvtab_reg_models <- function(models, pool) {
+  pool <- if (length(pool)) as.character(pool) else character()
+  flat <- if (length(pool)) pool else NULL
+  if (length(models) == 0L) return(flat)
+  built  <- lapply(models, function(e) intersect(pool, as.character(unlist(e$vars, use.names = FALSE))))
+  labels <- vapply(models, function(e) { v <- e$label; if (is.null(v)) "" else as.character(v) },
+                   character(1))
+  keep   <- vapply(built, length, integer(1)) > 0L
+  built  <- built[keep]; labels <- labels[keep]
+  if (length(built) == 0L) return(flat)
+  blank  <- !nzchar(labels)
+  labels[blank] <- paste0("model", seq_along(labels))[blank]
+  stats::setNames(built, labels)
+}
+
+# Fold the per-numeric-predictor scaling picker (`multiplicator` Array of Group{var, k}) into
+# tab_reg()'s named numeric `multiplicator`. Blank / non-numeric k dropped; NULL when nothing set.
+# Mirrors jmvtab_reg_ref_vector().
+#' @keywords internal
+#' @noRd
+jmvtab_reg_mult_vector <- function(multiplicator) {
+  if (length(multiplicator) == 0L) return(NULL)
+  get1 <- function(e, k) { v <- e[[k]]; if (is.null(v)) NA_character_ else as.character(v) }
+  vars <- vapply(multiplicator, get1, character(1), k = "var")
+  ks   <- suppressWarnings(as.numeric(vapply(multiplicator, get1, character(1), k = "k")))
+  keep <- !is.na(vars) & nzchar(vars) & !is.na(ks)
+  if (!any(keep)) return(NULL)
+  stats::setNames(ks[keep], vars[keep])
+}
+
+
 # === The engine-free build core ============================================================
 
 # Drive tab_reg() with the live fit cache injected. `opts` is the plain list the R6 backend's .opts()
@@ -171,9 +219,21 @@ jmvtab_reg_build <- function(data, opts, store = NULL) {
 
   nz  <- function(x) if (length(x) && nzchar(as.character(x)[[1]])) as.character(x) else NULL
   dep   <- nz(opts$dependent)
-  preds <- if (length(opts$predictors)) as.character(opts$predictors) else NULL
+  # `predictors` may be a character vector (single model) OR a named list of character vectors
+  # (model comparison, from jmvtab_reg_models()): pass a list through, coerce a vector.
+  preds <- opts$predictors
+  if (is.list(preds)) {
+    if (length(preds) == 0L) preds <- NULL
+  } else {
+    preds <- if (length(preds)) as.character(preds) else NULL
+  }
 
   if (is.null(dep) || is.null(preds)) {
+    return(list(tabs = NULL, store = cache_env$store, hits = 0L))
+  }
+  # model comparison (a predictor-subset list) needs a single dependent -> a friendly NULL / hint
+  # instead of tab_reg()'s abort while the user is still selecting.
+  if (is.list(preds) && length(dep) > 1L) {
     return(list(tabs = NULL, store = cache_env$store, hits = 0L))
   }
 
@@ -204,6 +264,10 @@ jmvtab_reg_build <- function(data, opts, store = NULL) {
     na           = opts$na,
     cleannames   = opts$cleannames,
     subtext      = opts$subtext,
+    compare       = if (is.null(opts$compare)) "none" else opts$compare,
+    baseline      = opts$baseline,
+    multiplicator = opts$multiplicator,
+    trials        = opts$trials,
     .fit_cache   = cache_env
   )
 

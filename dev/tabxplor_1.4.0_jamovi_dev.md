@@ -1257,8 +1257,7 @@ quasipoisson/multinomial/ordinal), multiple dependents, `exponentiate`/`effect`/
 (the `refPickerCtrl` CustomControl, simplified from jmvtab: axis = the `predictors` list, factor-only,
 no `ref2`), CI/`method`/`stars`, colours, `na`/`cleannames`/footer, survey `wt` + an **Advanced
 survey-design** collapse (a 2nd `VariableSupplier` for `ids`/`strata`/`fpc` + `nest`, greyed by JS
-when `wt` is empty), and Excel/HTML/MD export (reuses `R/jmvtab-export.R` verbatim). The
-model-comparison "+" builder + `compare`/`multiplicator`/`trials` are deferred to 15b-ii.
+when `wt` is empty), and Excel/HTML/MD export (reuses `R/jmvtab-export.R` verbatim).
 
 **The live cache (the maintainer's headline requirement) — a fit cache, not an aggregate cache.**
 `jmvtab_reg_build()` drives `tab_reg(..., .fit_cache = cache_env)`. The store (hidden `cache_state`
@@ -1270,8 +1269,38 @@ real refit; `test-jmvtabreg-cache.R`). Decided with the maintainer over serializ
 objects. Heavy paths (ame/profile/mnl-vs-rest/compound/MNL/ordinal/split) cache the raw fit and refit
 on a reference change.
 
+**Scope (15b-ii, done) — the model-comparison "+" builder.** A **Model comparison** CollapseBox holds
+a `compare` combo (`none`/`baseline`/`sequential`), the `modelBuilderCtrl` CustomControl, and a `trials`
+combo (`off`/`observed`/`fixed` + `trials_n`, declaratively greyed to binomial/auto). The builder is a
+**checkbox-grid card** UI (chosen with the maintainer over multi-select chips): each card = an editable
+name + one checkbox per predictor in the `predictors` pool + a delete `×`; a "+ Add model" button
+appends a card defaulting to the **full pool**; a card enforces **≥1 checked var** so a card index == a
+final model index. Cards are stored in the hidden `models` Array (`Group{label, vars:Array<Variable>}`),
+folded by `jmvtab_reg_models()` into `tab_reg()`'s `predictors`: an **empty builder → the flat pool**
+(single model, byte-identical to 15b-i); **≥1 card → a named list** = model comparison (one column per
+model). **Baseline** = a **per-card radio marker** (chosen over a dropdown), shown only when
+`compare=="baseline"`, writing the model's **1-based position** to the hidden `baseline` Integer (a
+position is exact given the non-empty-card invariant; safer than a by-label string that `make.unique`
+rewrites R-side). **`multiplicator`** (numeric-predictor scaling, OR/beta per k units) is folded into the
+**numeric rows of the reference picker** (References box relabelled "References and predictor scaling"):
+a numeric predictor has no reference level, so its row offers a `× k per unit` input writing the hidden
+`multiplicator` Array; `jmvtab_reg_mult_vector()` folds it to `tab_reg(multiplicator=)`. `compare` is
+imperatively greyed to ≥2 models (array length is invisible to `enable:`); the builder re-renders on a
+`predictors` (pool) or `compare` change; its signature `[pool, compare]` **excludes** `models`/`baseline`
+so a card/name/marker edit is an in-place repaint (mirrors `refSig` excluding `refLevels`).
+
+**Cache ceiling raised (15b-ii).** Model comparison forces the **raw-fit** cache tier (the KB digest
+fast-path is single-model only), and a `reg_fit` value is **~9–11 MB** on survey-scale data (21k rows) —
+over the old 4 MB `JMVREG_MAX_FIT_BYTES`, so comparison fits were silently skipped (every toggle refit
+every model). Bumped `JMVREG_MAX_FIT_BYTES` 4→24 MB and `JMVREG_MAX_STORE_BYTES` 16→96 MB (a contained
+`R/jmvtabreg-cache.R` change; the crosstab cache is untouched), so a comparison caches: display/compare/
+baseline/stars toggles reuse fits, add-a-model reuses existing + fits only the new subset, and only a
+reference/predictor/family change refits (a reference change in comparison mode relevels → a new key).
+
 **Gotchas re-confirmed.** No option named `levels` (a `jmvcore::Options` member — `method`/`family`/
-`effect`/`at`/`color`/`reference` are all safe, verified against `jmvcore/options.R`). `utils.clone`
-not `context.clone` (jus 3.0). Two `VariableSupplier`s (main + survey) is fine. The `.b.R` R6
-`inherit = jmvtabregBase` is lazy, so the file loads / `R CMD check`s before `prepare()` generates
-the header (until then `check()` NOTEs `jmvtabregBase` as an undefined global — expected).
+`effect`/`at`/`color`/`reference`/`compare`/`baseline`/`multiplicator`/`trials_mode`/`trials_n`/`models`
+are all safe, verified against `jmvcore/options.R`). `utils.clone` not `context.clone` (jus 3.0). Two
+`VariableSupplier`s (main + survey) is fine. The `.b.R` R6 `inherit = jmvtabregBase` is lazy, so the file
+loads / `R CMD check`s before `prepare()` generates the header (until then `check()` NOTEs `jmvtabregBase`
+as an undefined global — expected). `tab_reg.R` needed **no change** — the multiplicator fit-key was
+already correct (`extra` at `tab_reg.R:1815-1816`).

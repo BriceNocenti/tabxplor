@@ -65,7 +65,25 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
     .opts = function(wt) {
       list(
         dependent    = self$options$dependent,
-        predictors   = self$options$predictors,
+        # the model-builder (`models` Array) folds into `predictors`: empty -> the flat pool (one
+        # model); >=1 card -> a named list of predictor subsets (model comparison).
+        predictors   = jmvtab_reg_models(self$options$models, self$options$predictors),
+        # model-comparison test (footer): needs >=2 models; baseline = the chosen model's position.
+        compare      = self$options$compare,
+        baseline     = self$options$baseline,
+        # multiplicator (numeric-predictor scaling): not for multinomial / ordinal -> NULL there so a
+        # family switch never aborts tab_reg().
+        multiplicator = if (self$options$family %in% c("multinomial", "ordinal")) NULL
+                        else jmvtab_reg_mult_vector(self$options$multiplicator),
+        # trials (grouped / summed-score binomial): binomial only -> NULL for other families.
+        trials       = if (self$options$family %in% c("binomial", "auto"))
+                         switch(self$options$trials_mode,
+                                "observed" = TRUE,
+                                "fixed"    = { n <- self$options$trials_n
+                                               if (is.null(n) || is.na(n) || n < 1) NULL
+                                               else as.integer(n) },
+                                NULL)
+                       else NULL,
         wt           = wt,
         ids          = self$options$ids,
         strata       = self$options$strata,
@@ -108,11 +126,13 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         tab_render_scrollbox()
     },
 
-    # A friendly placeholder when the outcome / predictors are not both selected yet.
+    # A friendly placeholder when the outcome / predictors are not both selected yet (or a model
+    # comparison was requested with several dependents, which tab_reg() does not allow).
     .hint = function() {
       paste0("<div style='padding:12px;opacity:0.7;font-style:italic;'>",
              "Select a <b>dependent</b> (outcome) variable and one or more <b>predictors</b> ",
-             "to fit a regression.</div>")
+             "to fit a regression. For a model comparison (predictor subsets), choose a single ",
+             "dependent.</div>")
     },
 
     # Report an export result via a native jmvcore::Notice (info / error), inserted at the top.

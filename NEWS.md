@@ -8,7 +8,10 @@
   survey weights (with an advanced cluster / strata / fpc panel), a per-predictor reference-level picker,
   the crude-vs-model (`empirical`) companion columns, and Excel / HTML / Markdown export. Changing the
   display, colours or a predictor's reference level re-renders instantly by reusing the fitted model
-  (references are recomputed without refitting).
+  (references are recomputed without refitting). A **model-comparison builder** lets you add several
+  named models by ticking which predictors each one includes, with a comparison test (versus a baseline
+  or the previous model), plus per-predictor **effect scaling** (odds ratio / coefficient per *k* units)
+  and grouped / summed-score **binomial trials** — reusing already-fitted models so only new ones are fit.
 * **Confidence intervals for ratios and richer CI methods.** `color = "ratio"` on a numeric mean now
   produces a real **ratio-of-means** confidence interval (it used to silently show the *difference*
   interval). Three new arguments choose the interval method, each reproducing the matching regression:

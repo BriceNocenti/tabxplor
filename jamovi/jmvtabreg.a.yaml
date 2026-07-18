@@ -171,6 +171,43 @@ options:
            model effect (the bivariate association that IS the modelised quantity with
            a single predictor). Binomial / gaussian / poisson only.
 
+# Model comparison (Phase 15b-ii)
+    - name: compare
+      title: compare = (model-comparison test)
+      type: List
+      options:
+        - { title: "none (no comparison test)", name: none }
+        - { title: "vs a baseline model",       name: baseline }
+        - { title: "sequential (vs previous)",  name: sequential }
+      default: none
+      description:
+          R: >
+           With several models (a predictor-subset list), add a comparison-test footer
+           row: "baseline" tests each model against the chosen baseline model, "sequential"
+           against the previous one (LR / F / Wald, or an AIC difference when not nested).
+
+    - name: trials_mode
+      title: "trials = (grouped / summed-score binomial)"
+      type: List
+      options:
+        - { title: "off (binary logit)",       name: 'off' }
+        - { title: "observed max per outcome", name: observed }
+        - { title: "fixed number of trials",   name: fixed }
+      default: 'off'
+      description:
+          R: >
+           Grouped-binomial (summed-score) outcomes: fit cbind(score, trials - score).
+           "observed" uses each outcome's maximum score; "fixed" a set item count. Binomial only.
+
+    - name: trials_n
+      title: "number of trials"
+      type: Integer
+      min: 1
+      default: 1
+      description:
+          R: >
+           The fixed number of items behind a summed score (used when trials = "fixed").
+
 # References (hidden picker-backed option)
     - name: refLevels
       title: "Reference levels (per predictor)"
@@ -183,6 +220,42 @@ options:
               - name: var
                 type: Variable
               - name: ref
+                type: String
+
+# Model-builder + scaling (hidden picker-backed options)
+    - name: models
+      title: "Predictor subsets (model comparison)"
+      type: Array
+      hidden: true
+      default:
+      template:
+          type: Group
+          elements:
+              - name: label
+                type: String
+              - name: vars
+                type: Array
+                template:
+                    type: Variable
+
+    - name: baseline
+      title: "Baseline model position"
+      type: Integer
+      hidden: true
+      min: 1
+      default: 1
+
+    - name: multiplicator
+      title: "Predictor scaling (per k units)"
+      type: Array
+      hidden: true
+      default:
+      template:
+          type: Group
+          elements:
+              - name: var
+                type: Variable
+              - name: k
                 type: String
 
 # Confidence intervals

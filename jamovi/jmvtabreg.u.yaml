@@ -123,7 +123,45 @@ children:
             name: empirical
 
   - type: CollapseBox
-    label: <b>References (baseline levels)</b>
+    label: <b>Model comparison (+ predictor subsets)</b>
+    stretchFactor: 1
+    collapsed: true
+    children:
+      - type: LayoutBox
+        margin: large
+        children:
+          - type: Label
+            label: compare = <i>(model-comparison test)</i>
+            children:
+              - type: ComboBox
+                name: compare
+                events:
+                  change: ./jmvtabreg::onChange_compare
+      - type: LayoutBox
+        margin: none
+        children:
+          - type: CustomControl
+            name: modelBuilderCtrl
+            stretchFactor: 1
+            events:
+              creating: ./jmvtabreg::modelBuilderCtrl_creating
+              updated:  ./jmvtabreg::modelBuilderCtrl_updated
+      - type: LayoutBox
+        margin: large
+        children:
+          - type: Label
+            label: trials = <i>(grouped / summed-score binomial)</i>
+            children:
+              - type: ComboBox
+                name: trials_mode
+                enable: (family:binomial || family:auto)
+              - type: TextBox
+                name: trials_n
+                format: number
+                enable: ((family:binomial || family:auto) && trials_mode:fixed)
+
+  - type: CollapseBox
+    label: <b>References and predictor scaling</b>
     stretchFactor: 1
     collapsed: true
     children:
