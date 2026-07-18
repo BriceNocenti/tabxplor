@@ -694,3 +694,74 @@ test_that("MER-at-reference exports through every backend without error", {
   expect_no_error(tab_kable(t2))
   expect_no_error(tab_md(t2))
 })
+
+# === Phase 14u: model-comparison structure (K / L1 / L2 / na = "drop_all") ====================
+
+reg_2dep_data <- function() {
+  forcats::gss_cat |>
+    dplyr::mutate(
+      married = factor(dplyr::if_else(marital == "Married", "01-Married", "02-Not married")),
+      widowed = factor(dplyr::if_else(marital == "Widowed", "01-Widowed", "02-Not"))
+    )
+}
+
+test_that("K: several dependents x a list of models -> a tabxplor_tabs, one per dependent", {
+  skip_if_not_installed("broom")
+  d <- reg_2dep_data()
+  r <- suppressWarnings(tab_reg(
+    d, dependent = c("married", "widowed"),
+    predictors = list(demo = c("race", "age"), full = c("race", "age", "rincome")),
+    family = "binomial", cleannames = FALSE))
+  expect_s3_class(r, "tabxplor_tabs")
+  expect_length(r, 2L)
+  expect_equal(names(r), c("married", "widowed"))
+  expect_true(all(purrr::map_lgl(r, ~ inherits(., "tabxplor_tab") || inherits(., "tabxplor_grouped_tab"))))
+  # each is a model comparison: one OR column per model
+  expect_true(all(c("demo", "full") %in% names(r[[1]])))
+
+  # tab_export("xl") writes one sheet per dependent
+  skip_if_not_installed("openxlsx2")
+  f <- withr::local_tempfile(fileext = ".xlsx")
+  tab_xl(r, path = f, replace = TRUE, open = FALSE)
+  wb <- openxlsx2::wb_load(f)
+  expect_setequal(openxlsx2::wb_get_sheet_names(wb), c("married", "widowed"))
+})
+
+test_that("L1: a complete model's predictor order is kept (at the end)", {
+  skip_if_not_installed("broom")
+  d <- reg_2dep_data()
+  # `complete` is a superset of `a` -> the union takes `complete`'s own order (race, rincome, age)
+  r <- tab_reg(d, "married",
+               predictors = list(a = c("age", "race"), complete = c("race", "rincome", "age")),
+               family = "binomial", cleannames = FALSE)
+  ord <- unique(as.character(r$var)[as.character(r$var) %in% c("race", "age", "rincome")])
+  expect_equal(ord, c("race", "rincome", "age"))
+  # no complete model -> first-appearance order
+  r2 <- tab_reg(d, "married",
+                predictors = list(a = c("age", "race"), b = c("rincome")),
+                family = "binomial", cleannames = FALSE)
+  ord2 <- unique(as.character(r2$var)[as.character(r2$var) %in% c("race", "age", "rincome")])
+  expect_equal(ord2, c("age", "race", "rincome"))
+})
+
+test_that("L2: a SUPERSET baseline is recognised as nested (LR, not the AIC fallback) under drop_all", {
+  skip_if_not_installed("broom")
+  d <- reg_2dep_data()
+  r <- tab_reg(d, "married",
+               predictors = list(small = c("race", "age"), complete = c("race", "age", "rincome")),
+               family = "binomial", compare = "baseline", baseline = "complete",
+               na = "drop_all", cleannames = FALSE)
+  cmp <- get_test(r) |> dplyr::filter(grepl("^compare", test))
+  expect_true("compare_baseline" %in% cmp$test)            # LR test
+  expect_false(any(grepl("_aic$", cmp$test)))              # NOT the AIC fallback
+})
+
+test_that("na = 'drop_all' fits every model on one shared complete-case population (equal N)", {
+  skip_if_not_installed("broom")
+  d <- reg_2dep_data()                                     # rincome has NAs -> N would differ per model
+  r <- tab_reg(d, "married",
+               predictors = list(a = "race", b = c("race", "rincome")),
+               family = "binomial", stats = "n", na = "drop_all", cleannames = FALSE)
+  ns <- get_test(r) |> dplyr::filter(test == "n")
+  expect_equal(length(unique(ns$statistic)), 1L)           # both models share N
+})

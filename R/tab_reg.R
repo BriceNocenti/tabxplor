@@ -1276,12 +1276,29 @@ reg_gof_tibble <- function(fits, fit_first_col, family, weighted, grouped_by_fit
 # The nesting / same-N guard mirrors anova()'s own error: an LR / F test between two models is only
 # valid on the SAME complete-case set (differing predictor missingness silently changes N) and when
 # one model nests in the other. On a guard failure the comparison falls back to Delta-AIC + a message.
+# Phase 14u (L2): nesting is checked in BOTH directions -- `1L` = m_ref is the sub-model
+# (anova(m_ref, m_full)), `-1L` = m_full is the sub-model (baseline is the SUPERSET, e.g. a "complete"
+# model tested against each smaller one), `0L` = not nested / N differs. Testing only `t_ref %in%
+# t_full` (as before) wrongly rejected a superset baseline as non-nested -> the AIC fallback.
 reg_compare_guard <- function(m_ref, m_full) {
   ok_n   <- tryCatch(stats::nobs(m_ref) == stats::nobs(m_full), error = function(e) FALSE)
   t_ref  <- tryCatch(attr(stats::terms(m_ref),  "term.labels"), error = function(e) NULL)
   t_full <- tryCatch(attr(stats::terms(m_full), "term.labels"), error = function(e) NULL)
-  nested <- !is.null(t_ref) && !is.null(t_full) && all(t_ref %in% t_full)
-  isTRUE(ok_n) && nested
+  if (is.null(t_ref) || is.null(t_full) || !isTRUE(ok_n)) return(0L)
+  if (all(t_ref %in% t_full)) return(1L)                  # ref nested in full
+  if (all(t_full %in% t_ref)) return(-1L)                 # full nested in ref (superset baseline)
+  0L
+}
+
+# Phase 14u (L1): the predictor row order for a model-COMPARISON. If one model's predictor set is a
+# superset of every other model's (a "complete" model, hence of the whole union), keep THAT model's own
+# predictor order; otherwise first-appearance order (the historical behaviour). Downstream keys by
+# (var, level)/term and follows the skeleton's fct_inorder, so reordering the union is the whole change.
+reg_order_union <- function(models) {
+  sets  <- purrr::map(models, unique)
+  all_u <- unique(purrr::flatten_chr(sets))
+  complete_i <- which(purrr::map_lgl(sets, function(s) all(all_u %in% s)))
+  if (length(complete_i) > 0L) unique(sets[[complete_i[length(complete_i)]]]) else all_u
 }
 
 # Pull statistic / df / p from an anova() comparison table (last row): glm "Chisq" (Deviance + Df +
@@ -1337,12 +1354,17 @@ reg_compare_rows <- function(reg_gof, fits, specs, family, weighted, fit_first_c
     if (is.na(ref_i) || ref_i < 1L || ref_i == i) return(NULL)
     m_full <- fits[[i]]$fit; m_ref <- fits[[ref_i]]$fit
     col    <- fit_first_col[[i]]
-    if (reg_compare_guard(m_ref, m_full)) {
+    # Phase 14u (L2): anova() needs the SUB-model first; reg_compare_guard tells us which of the two it
+    # is (a superset baseline flips the order). The LR/F statistic + p test the extra term(s) either way.
+    dir  <- reg_compare_guard(m_ref, m_full)
+    m_lo <- if (dir >= 0L) m_ref  else m_full
+    m_hi <- if (dir >= 0L) m_full else m_ref
+    if (dir != 0L) {
       if (weighted) {
         # design-based Wald test on the extra term(s): anova.svyglm(method="Wald") -> a regTermTest
         # ($Ftest/$df/$ddf/$p), the same object reg_glance's Wald-vs-null uses.
         e <- tryCatch({
-          an <- stats::anova(m_ref, m_full, method = "Wald", test = "F")
+          an <- stats::anova(m_lo, m_hi, method = "Wald", test = "F")
           list(stat = as.numeric(an$Ftest), df1 = as.numeric(an$df),
                df2 = as.numeric(an$ddf), p = as.numeric(an$p))
         }, error = function(e) NULL)
@@ -1351,7 +1373,7 @@ reg_compare_rows <- function(reg_gof, fits, specs, family, weighted, fit_first_c
                      df2 = e$df2, pvalue = e$p, nobs = fits[[i]]$nobs))
         }
       } else {
-        an <- tryCatch(stats::anova(m_ref, m_full, test = if (use_f) "F" else "Chisq"),
+        an <- tryCatch(stats::anova(m_lo, m_hi, test = if (use_f) "F" else "Chisq"),
                        error = function(e) NULL)
         if (!is.null(an)) {
           e <- reg_compare_extract(an, use_f)
@@ -1727,6 +1749,11 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
 #'   `"grey_non_signif"`). See [tab()].
 #' @param stars Logical (default `TRUE` for regression tables, where significance stars are standard).
 #'   When `FALSE`, the per-cell p-value is dropped and no stars are shown (colours still read the CI).
+#' @param na How missing values are handled across a model comparison. `"keep"` (default) drops
+#'   `NA` rows per model (each model uses its own complete cases). `"drop_all"` fits every model on ONE
+#'   shared complete-case population (rows with no `NA` on any predictor / dependent / design variable),
+#'   so nested models get equal N and the likelihood-ratio comparison can run; note this **changes all
+#'   estimates** (shared population), hence opt-in. Ignored for a prebuilt survey design.
 #' @param cleannames Logical. If `TRUE`, strips numeric prefixes from factor levels for display.
 #'   Uses `getOption("tabxplor.cleannames")` when `NULL`.
 #' @param subtext Optional character. A note shown below the table.
@@ -1784,17 +1811,49 @@ tab_reg <- function(data, dependent, predictors = NULL,
                     stats = NULL, compare = c("none", "baseline", "sequential"), baseline = NULL,
                     estimate_display = c("value", "ci", "prob", "ame"),
                     color = NULL, color_signif = NULL, stars = TRUE,
+                    na = c("keep", "drop_all"),
                     cleannames = NULL, subtext = "", empirical_OR = lifecycle::deprecated()) {
   method  <- match.arg(method)
   effect  <- match.arg(effect)
   at      <- match.arg(at)
   compare <- match.arg(compare)
   estimate_display <- match.arg(estimate_display)
+  na      <- match.arg(na)
   cleannames <- if (is.null(cleannames)) getOption("tabxplor.cleannames", TRUE) else cleannames
   # Phase 14t: `empirical_OR` renamed to `empirical` (it is now family-general, not OR-only).
   if (lifecycle::is_present(empirical_OR)) {
     lifecycle::deprecate_warn("1.4.0", "tab_reg(empirical_OR)", "tab_reg(empirical)")
     empirical <- empirical_OR
+  }
+
+  # Phase 14u (K): a LIST of models AND SEVERAL dependents -> one model-comparison table per dependent,
+  # returned as a `tabxplor_tabs` list (so tab_export("xl") writes one sheet per dependent). Loop the
+  # dependents on the outside; each iteration is the ordinary single-dependent comparison (recursion,
+  # so every arg / message / family-detect is reused). `trials` is per-dependent (a vector or a named
+  # vector), split here. Placed BEFORE the design extraction so a survey design recurses intact.
+  if (is.list(predictors) && !inherits(predictors, "formula") && length(dependent) > 1L) {
+    if (!is.null(trials) && !isTRUE(trials) && is.null(names(trials)) &&
+        length(trials) > 1L && length(trials) != length(dependent)) {
+      cli::cli_abort(c("{.arg trials} must be length 1, one per dependent, or a named vector.",
+                       "x" = "Got {length(trials)} for {length(dependent)} dependents."))
+    }
+    tabs <- purrr::map(seq_along(dependent), function(i) {
+      d   <- dependent[[i]]
+      tri <- if (is.null(trials) || isTRUE(trials)) trials
+             else if (!is.null(names(trials)))      unname(trials[d])
+             else if (length(trials) == 1L)         as.numeric(trials)
+             else                                   trials[[i]]
+      tab_reg(data, dependent = d, predictors = predictors, family = family, wt = wt,
+              ids = ids, strata = strata, fpc = fpc, nest = nest, exponentiate = exponentiate,
+              effect = effect, at = at, trials = tri, conf_level = conf_level, method = method,
+              reference = reference, inverse_two_level_factors = inverse_two_level_factors,
+              split_var = split_var, multiplicator = multiplicator, empirical = empirical,
+              stats = stats, compare = compare, baseline = baseline,
+              estimate_display = estimate_display, color = color, color_signif = color_signif,
+              stars = stars, na = na, cleannames = cleannames, subtext = subtext)
+    })
+    names(tabs) <- dependent
+    return(new_tabxplor_tabs(tabs))
   }
 
   # Phase 12g: `data` may be a PREBUILT survey design (survey.design / svyrep.design), gtsummary-style.
@@ -1926,6 +1985,22 @@ tab_reg <- function(data, dependent, predictors = NULL,
   if (is.null(color_signif)) color_signif <- "grey_non_signif"
 
   all_predictors <- if (is_comparison) unique(purrr::flatten_chr(predictors)) else predictors
+
+  # Phase 14u (L2): na = "drop_all" fits every model on ONE shared complete-case population -- the union
+  # of all predictors + the dependent + design vars -- so genuinely-nested models get EQUAL N and the LR
+  # comparison fires (the default per-model NA drop can make N differ -> the AIC fallback). It CHANGES all
+  # estimates (shared population), hence opt-in. Not applied to a prebuilt survey design (subsetting is
+  # the design's own concern).
+  if (identical(na, "drop_all") && !formula_mode) {
+    if (!is.null(design_obj)) {
+      cli::cli_inform(c("i" = '{.code na = "drop_all"} is ignored for a prebuilt survey design.'))
+    } else {
+      keep_vars <- intersect(unique(c(dependent, all_predictors, wt, ids, strata, fpc, split_var)),
+                             names(data))
+      data <- tidyr::drop_na(data, tidyselect::all_of(keep_vars))
+    }
+  }
+
   if (!is.null(reference)) {
     # A multinomial's baseline is the OUTCOME factor's first level, so `reference` keyed by the
     # dependent relevels it too (unified "reference level of any variable"). An ordinal outcome must
@@ -1948,7 +2023,7 @@ tab_reg <- function(data, dependent, predictors = NULL,
     specs  <- purrr::map2(models, labels,
                           ~ list(dependent = dependent, predictors = .x, label = .y,
                                  trials = trials_for(dependent), compound = FALSE, formula = NULL))
-    union_predictors <- all_predictors
+    union_predictors <- reg_order_union(models)          # Phase 14u (L1): complete-model order if any
   } else {
     labels <- purrr::map_chr(dependent, function(d) {
       # a summed-score / compound-formula binomial has no single "positive level" -> label by name

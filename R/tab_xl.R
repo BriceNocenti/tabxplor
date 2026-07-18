@@ -221,6 +221,11 @@ tab_xl <-
     tab_vars       <- purrr::map(rd, ~ .$vars$tab_vars)
     col_vars_plain <- purrr::map(rd, ~ .$vars$col_vars)
 
+    # Phase 14u: a `tabxplor_tabs` is an EXPLICIT collection of independent tables (one reg comparison
+    # per dependent, or a several-row_vars output_list) -> one sheet each by default. The col-var "auto"
+    # stacking (below) grouped tables that share col_vars onto one sheet, which is wrong for these; it is
+    # kept for a plain manual `list(tab1, tab2)`.
+    if (identical(sheets, "auto") && inherits(tabs_base, "tabxplor_tabs")) sheets <- "tabs"
     stopifnot(sheets %in% c("tabs", "unique", "auto") |
                 (is.integer(sheets) & length(sheets) == length(tabs)))
     sheet <-
@@ -253,8 +258,18 @@ tab_xl <-
     }
 
     if (missing(titles)) {
-      titles <- purrr::pmap_chr(list(tabs_src, row_vars, col_vars_plain, tab_vars),
-                                ~ tab_get_titles(..1, ..2, ..3, ..4))
+      # Phase 14u: a NAMED tabxplor_tabs (a reg comparison per dependent -> names = the dependents; a
+      # several-row_vars output_list -> names = the row_vars) carries meaningful per-table names -> use
+      # them as the title / sheet name. Falls back to the derived title otherwise (and reg tables, which
+      # record no `vars`, still mis-title when unnamed -- a separate, flagged issue).
+      base_nm <- names(tabs_base)
+      if (inherits(tabs_base, "tabxplor_tabs") && length(base_nm) == length(tabs) &&
+          all(nzchar(base_nm))) {
+        titles <- base_nm
+      } else {
+        titles <- purrr::pmap_chr(list(tabs_src, row_vars, col_vars_plain, tab_vars),
+                                  ~ tab_get_titles(..1, ..2, ..3, ..4))
+      }
     } else {
       titles <- vctrs::vec_recycle(titles, length(tabs))
     }

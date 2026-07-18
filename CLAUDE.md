@@ -2089,6 +2089,35 @@ returns a list of tabs, `tab_export("xl")` writes one sheet each; a comparison w
 runs an LR test (no AIC-fallback warning) under `na="drop_all"`; a complete model's predictors sit last.
 Tests in `test-tab_reg.R` (list shape, ordering, nesting both directions, drop_all equal-N).
 
+##### Done (2026-07-18)
+
+All four landed. Full suite **FAIL 0 | WARN 0 | SKIP 4 | PASS 3257**; `document()` clean; **no golden /
+no snapshot moved**. Sample: `dev/review_manual/phase14u_multi_dep.xlsx`.
+
+- **K (dependents × models → list)**: a `tab_reg()` recursion at the TOP of the body (before the
+  design/family/spec machinery) intercepts `is.list(predictors) && length(dependent) > 1` and loops the
+  dependents, each an ordinary single-dependent comparison, wrapped as `new_tabxplor_tabs()`. Reuses
+  every arg/message/family-detect. `trials` split per dependent (vector / named). Placed before the
+  design extraction so a survey design recurses intact.
+- **tab_xl one sheet per dependent** (K's acceptance): a `tabxplor_tabs` is an EXPLICIT collection of
+  independent tables, so `sheets = "auto"` now defaults it to `"tabs"` (one sheet each) — the old
+  col-var "auto" STACKING (same col_vars → one sheet) merged K's tables (all share the model-label
+  col_vars). Also, a NAMED `tabxplor_tabs` uses its NAMES as titles/sheet-names (K → the dependents;
+  output_list → the row_vars), which sidesteps the reg mis-titling for the sheet name. This also affects
+  a several-row_vars `output_list` → xl (now one sheet each, named by row_var — cleaner, matches "never
+  merge a list").
+- **L1 (complete-model ordering)**: `reg_order_union()` — if one model's predictor set is a superset of
+  every other's, use THAT model's own predictor order; else first-appearance. One line at the union.
+- **L2 (bidirectional nesting)**: `reg_compare_guard()` returns a DIRECTION (`1`/`-1`/`0`) and
+  `reg_compare_rows()` passes the SUB-model to `anova()` first — so a superset `baseline` is nested (LR),
+  not the AIC fallback. `na = "drop_all"` (new arg) pre-filters `data` to the shared complete cases (the
+  union of predictors + dependent + design vars) so nested models get equal N; ignored for a prebuilt
+  design. Documented as opt-in (it changes all estimates).
+
+**Landmine**: the reg tables still record no `vars` attribute, so their DERIVED title is mis-generated
+("... by levels (tabbed by row_var)") — the sheet-name fix routes around it via the list names, but a
+single unnamed reg table exported alone still mis-titles (the 14l flag, still open).
+
 ---
 
 

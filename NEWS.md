@@ -638,6 +638,12 @@
   deprecation warning). It now also adds the crude percentage / odds-ratio companion columns to an
   `effect = "ame"` table (was coefficient-only), and is a message rather than an error for the families
   where the crude companion is not yet available (gaussian, poisson, multinomial).
+* `tab_reg()` accepts **several dependents AND a list of models at once**: it returns one model-comparison
+  table per dependent (as a list), so `tab_export("xl")` writes one sheet per dependent. Two more
+  model-comparison fixes: when one model is a superset of the others ("complete"), its predictor order is
+  kept; a superset used as the `baseline` is now recognised as nested (a likelihood-ratio test, not the
+  AIC fallback); and a new **`na = "drop_all"`** fits every model on one shared complete-case population
+  so nested models get equal N.
 
 ## Deprecations
 * `tab_transpose()` is **soft-deprecated** in favour of the exporters' `transpose = TRUE` argument.
