@@ -2,7 +2,7 @@
 % Please edit documentation in R/tab.R
 \name{tab}
 \alias{tab}
-\title{Single cross-table, with color helpers}
+\title{Cross-table with color helpers}
 \usage{
 tab(
   data,
@@ -348,14 +348,39 @@ considered as a \code{tab_vars} and used for grouping. To add text columns witho
 using them in calculations, be sure they are of class \code{character}.
 }
 \description{
-A full-featured function to create, manipulate and format single
-cross-tables, using colors to make the printed tab more easily readable
-(in R terminal or exported to Excel with \code{\link{tab_xl}}).
-Since objects of class \code{tabxplor_tab} are also of class \code{tibble}, you can then use all
-\pkg{dplyr} verbs to modify the result, like \code{\link[dplyr:select]{select}},
-like \code{\link[dplyr:arrange]{arrange}}, \code{\link[dplyr:filter]{filter}}
-or \code{\link[dplyr:mutate]{mutate}}.
-Wrapper around the more powerful \code{\link{tab_many}}.
+\code{tab()} builds a cross-table of one or several row variables by one or several column
+variables, and colors the cells so the table is easy to read at a glance --- in the R
+console, or exported to Excel, HTML or Word. Cells can show counts, row or column
+percentages, or (for a numeric column variable) means, optionally with differences,
+confidence intervals and statistical tests.
+
+The result is a \code{tibble} (of class \code{tabxplor_tab}), so you can keep working on it with the
+usual \pkg{dplyr} verbs (\code{\link[dplyr:select]{dplyr::select()}}, \code{\link[dplyr:filter]{dplyr::filter()}}, \code{\link[dplyr:arrange]{dplyr::arrange()}},
+\code{\link[dplyr:mutate]{dplyr::mutate()}}).
+
+New to the package? Start with \code{vignette("tabxplor")} and with just four arguments ---
+\code{data}, \code{row_vars}, \code{col_vars} and \code{pct} --- then add \code{color} when you want reading helpers.
+}
+\details{
+\code{tab()} has many arguments, but you only need a handful to begin. They fall into groups:
+\itemize{
+\item \strong{The table}: \code{data}, \code{row_vars}, \code{col_vars}, \code{tab_vars} (one sub-table per group),
+\code{wt} (a weight variable).
+\item \strong{What each cell shows}: \code{pct} (row or column percentages, or leave counts), \code{digits}.
+\item \strong{Colors (reading helpers)}: \code{color}, and \code{color_signif} (whether statistical
+significance gates the color). Thresholds and palettes are set once for the whole session
+with \code{\link[=set_color_breaks]{set_color_breaks()}} and \code{\link[=set_color_palette]{set_color_palette()}}; a color legend prints automatically.
+\item \strong{Comparisons}: \code{OR} (odds ratios), and \code{ref} / \code{ref2} / \code{comp} (which cell is the
+baseline for differences).
+\item \strong{Statistics}: \code{test} (chi-squared or Welch's F), and \code{ci} + \code{conf_level} + \code{stars}
+(confidence intervals). The fine interval methods (\code{method_cell}, \code{method_diff}, ...) are
+documented on \code{\link[=tab_ci]{tab_ci()}}.
+\item \strong{Totals & missing values}: \code{tot}, \code{total_names}, \code{totaltab}, \code{na}, \code{levels}.
+\item \strong{Advanced / output}: \code{display}, \code{n_min}, \code{output_list}, \code{parallel}, \code{spread_vars},
+\code{filter}.
+}
+The package-wide display, color and statistics defaults are \code{options()}, listed at
+\link{tabxplor-options}. \code{tab()} is a friendly wrapper around the more powerful \code{\link[=tab_many]{tab_many()}}.
 }
 \section{Significance stars}{
 
@@ -453,6 +478,10 @@ tab(data, race, marital, year, pct = "row") \%>\%
 
 }
 \seealso{
-\link{tabxplor-options} for the package-wide \code{options()} that set the display,
-colour, statistics and export defaults.
+\code{\link[=tab_many]{tab_many()}} (the full-featured engine behind \code{tab()}) and \code{\link[=tab_reg]{tab_reg()}} (regression tables).
+Go further with the helper functions: \code{\link[=tab_ci]{tab_ci()}} (confidence intervals and their methods),
+\code{\link[=set_color_breaks]{set_color_breaks()}} / \code{\link[=set_color_palette]{set_color_palette()}} / \code{\link[=set_color_style]{set_color_style()}} (colors),
+\code{\link[=tab_chi2]{tab_chi2()}} (statistical tests), \code{\link[=tab_pct]{tab_pct()}} / \code{\link[=tab_tot]{tab_tot()}} (percentages and totals).
+Export a table with \code{\link[=tab_xl]{tab_xl()}} (Excel), \code{\link[=tab_kable]{tab_kable()}} (HTML), \code{\link[=tab_md]{tab_md()}} (Markdown) or
+\code{\link[=tab_plot]{tab_plot()}}. Package-wide defaults live in \link{tabxplor-options}.
 }

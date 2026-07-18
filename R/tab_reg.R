@@ -2069,6 +2069,27 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
 #' stars, greys out non-significant effects, and exports (kable / Markdown / Excel) like any `tabxplor`
 #' crosstab.
 #'
+#' @details
+#' New to regressions with tabxplor? A first model needs only three arguments: `data`, `dependent`
+#' (the outcome) and `predictors`. tabxplor picks the right model from the outcome's type --- a
+#' two-level factor gives logistic **odds ratios**, a numeric gives linear **betas**, a count gives
+#' Poisson **rate ratios**, and a 3+ level factor gives multinomial or ordinal odds ratios --- so you
+#' rarely set `family` by hand. Add `empirical = TRUE` to show the crude (unadjusted) effect beside the
+#' model's adjusted one. See `vignette("tabxplor-reg")` for a guided tour.
+#'
+#' The arguments fall into groups:
+#' \itemize{
+#'   \item **The model**: `data`, `dependent`, `predictors` (a character vector = one model; a named
+#'     list = several models to compare), `family` (usually detected), `wt` (survey weights).
+#'   \item **What each cell shows**: `exponentiate`, `effect` (`"coefficient"` or average marginal
+#'     effect `"ame"`), `estimate_display`, `empirical` (crude vs adjusted effect).
+#'   \item **Colors & significance**: `color`, `color_signif`, `stars`, `conf_level` --- as in [tab()].
+#'   \item **Comparisons & structure**: `reference` (baseline levels), `compare` / `baseline` (model
+#'     comparison test), `split_var` (one table per group), `multiplier` (effect per *k* units).
+#'   \item **Survey design**: `wt`, `ids`, `strata`, `fpc`, `nest`, or pass a prebuilt design as `data`.
+#'   \item **Diagnostics**: `stats` (footer statistics), and the plots [or_plot()] / [lm_plots()].
+#' }
+#'
 #' `predictors` selects the mode: a **character vector** fits one model, and `dependent` may itself
 #' be a vector -> one column per dependent; a **named list** of predictor sets fits one model each ->
 #' one column per model (predictors absent from a model are left blank), for comparing specifications.

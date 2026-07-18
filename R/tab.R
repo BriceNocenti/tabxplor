@@ -68,15 +68,43 @@ NULL
 # MAIN USER-FRIENDLY FUNCTIONS ###########################################################
 
 
-#' Single cross-table, with color helpers
-#' @description A full-featured function to create, manipulate and format single
-#' cross-tables, using colors to make the printed tab more easily readable
-#' (in R terminal or exported to Excel with \code{\link{tab_xl}}).
-#' Since objects of class \code{tabxplor_tab} are also of class \code{tibble}, you can then use all
-#' \pkg{dplyr} verbs to modify the result, like \code{\link[dplyr:select]{select}},
-#' like \code{\link[dplyr:arrange]{arrange}}, \code{\link[dplyr:filter]{filter}}
-#' or \code{\link[dplyr:mutate]{mutate}}.
-#' Wrapper around the more powerful \code{\link{tab_many}}.
+#' Cross-table with color helpers
+#'
+#' @description
+#' `tab()` builds a cross-table of one or several row variables by one or several column
+#' variables, and colors the cells so the table is easy to read at a glance --- in the R
+#' console, or exported to Excel, HTML or Word. Cells can show counts, row or column
+#' percentages, or (for a numeric column variable) means, optionally with differences,
+#' confidence intervals and statistical tests.
+#'
+#' The result is a `tibble` (of class `tabxplor_tab`), so you can keep working on it with the
+#' usual \pkg{dplyr} verbs ([dplyr::select()], [dplyr::filter()], [dplyr::arrange()],
+#' [dplyr::mutate()]).
+#'
+#' New to the package? Start with `vignette("tabxplor")` and with just four arguments ---
+#' `data`, `row_vars`, `col_vars` and `pct` --- then add `color` when you want reading helpers.
+#'
+#' @details
+#' `tab()` has many arguments, but you only need a handful to begin. They fall into groups:
+#' \itemize{
+#'   \item **The table**: `data`, `row_vars`, `col_vars`, `tab_vars` (one sub-table per group),
+#'     `wt` (a weight variable).
+#'   \item **What each cell shows**: `pct` (row or column percentages, or leave counts), `digits`.
+#'   \item **Colors (reading helpers)**: `color`, and `color_signif` (whether statistical
+#'     significance gates the color). Thresholds and palettes are set once for the whole session
+#'     with [set_color_breaks()] and [set_color_palette()]; a color legend prints automatically.
+#'   \item **Comparisons**: `OR` (odds ratios), and `ref` / `ref2` / `comp` (which cell is the
+#'     baseline for differences).
+#'   \item **Statistics**: `test` (chi-squared or Welch's F), and `ci` + `conf_level` + `stars`
+#'     (confidence intervals). The fine interval methods (`method_cell`, `method_diff`, ...) are
+#'     documented on [tab_ci()].
+#'   \item **Totals & missing values**: `tot`, `total_names`, `totaltab`, `na`, `levels`.
+#'   \item **Advanced / output**: `display`, `n_min`, `output_list`, `parallel`, `spread_vars`,
+#'     `filter`.
+#' }
+#' The package-wide display, color and statistics defaults are `options()`, listed at
+#' [tabxplor-options]. `tab()` is a friendly wrapper around the more powerful [tab_many()].
+#'
 #' @param data A data frame.
 #' @param row_vars,col_vars <\link[tidyr:tidyr_tidy_select]{tidy-select}> The row variable(s),
 #'  printed with one level per line, and the column variable(s), printed with one level per
@@ -395,8 +423,13 @@ NULL
 #'   dplyr::arrange(year, is_totrow(.), desc(Married))
 #'   }
 #'
-#' @seealso [tabxplor-options] for the package-wide `options()` that set the display,
-#'   colour, statistics and export defaults.
+#' @seealso
+#'   [tab_many()] (the full-featured engine behind `tab()`) and [tab_reg()] (regression tables).
+#'   Go further with the helper functions: [tab_ci()] (confidence intervals and their methods),
+#'   [set_color_breaks()] / [set_color_palette()] / [set_color_style()] (colors),
+#'   [tab_chi2()] (statistical tests), [tab_pct()] / [tab_tot()] (percentages and totals).
+#'   Export a table with [tab_xl()] (Excel), [tab_kable()] (HTML), [tab_md()] (Markdown) or
+#'   [tab_plot()]. Package-wide defaults live in [tabxplor-options].
 tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
                 pct = "no", color = "no", color_signif = "ignore",
                 OR = "no", test = FALSE,

@@ -206,6 +206,26 @@ stars, greys out non-significant effects, and exports (kable / Markdown / Excel)
 crosstab.
 }
 \details{
+New to regressions with tabxplor? A first model needs only three arguments: \code{data}, \code{dependent}
+(the outcome) and \code{predictors}. tabxplor picks the right model from the outcome's type --- a
+two-level factor gives logistic \strong{odds ratios}, a numeric gives linear \strong{betas}, a count gives
+Poisson \strong{rate ratios}, and a 3+ level factor gives multinomial or ordinal odds ratios --- so you
+rarely set \code{family} by hand. Add \code{empirical = TRUE} to show the crude (unadjusted) effect beside the
+model's adjusted one. See \code{vignette("tabxplor-reg")} for a guided tour.
+
+The arguments fall into groups:
+\itemize{
+\item \strong{The model}: \code{data}, \code{dependent}, \code{predictors} (a character vector = one model; a named
+list = several models to compare), \code{family} (usually detected), \code{wt} (survey weights).
+\item \strong{What each cell shows}: \code{exponentiate}, \code{effect} (\code{"coefficient"} or average marginal
+effect \code{"ame"}), \code{estimate_display}, \code{empirical} (crude vs adjusted effect).
+\item \strong{Colors & significance}: \code{color}, \code{color_signif}, \code{stars}, \code{conf_level} --- as in \code{\link[=tab]{tab()}}.
+\item \strong{Comparisons & structure}: \code{reference} (baseline levels), \code{compare} / \code{baseline} (model
+comparison test), \code{split_var} (one table per group), \code{multiplier} (effect per \emph{k} units).
+\item \strong{Survey design}: \code{wt}, \code{ids}, \code{strata}, \code{fpc}, \code{nest}, or pass a prebuilt design as \code{data}.
+\item \strong{Diagnostics}: \code{stats} (footer statistics), and the plots \code{\link[=or_plot]{or_plot()}} / \code{\link[=lm_plots]{lm_plots()}}.
+}
+
 \code{predictors} selects the mode: a \strong{character vector} fits one model, and \code{dependent} may itself
 be a vector -> one column per dependent; a \strong{named list} of predictor sets fits one model each ->
 one column per model (predictors absent from a model are left blank), for comparing specifications.
