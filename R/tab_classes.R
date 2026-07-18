@@ -81,6 +81,9 @@
 #' @param empirical_tips Multinomial crude-companion tooltip data (a \code{tibble} keyed by column,
 #' predictor and level), set by \code{tab_reg(empirical = TRUE)}. \code{NULL} (default) for every
 #' other table. Carried through dplyr verbs; the HTML render appends it as a "crude:" tooltip fragment.
+#' @param reg_meta A regression table's model record (family, effect, dependent, reference level,
+#' predictors, ...), set by \code{\link{tab_reg}}. Drives the reg title/caption, the "Model:" legend
+#' line and the colour-legend wording. \code{NULL} (the default) means the table is not a regression.
 #' @param ... Needed to implement subclasses.
 #' @param class Needed to implement subclasses.
 #'
@@ -91,7 +94,7 @@ new_tab <-
   function(tabs = tibble::tibble(), subtext = "",
            test = new_test_tibble(), chi2 = NULL,
            render_extras = NULL, ci_settings = NULL, vars = NULL,
-           empirical_tips = NULL,
+           empirical_tips = NULL, reg_meta = NULL,
            ..., class = character()) {
     stopifnot(is.data.frame(tabs))
     #vec_assert(subtext    , character())
@@ -117,6 +120,15 @@ new_tab <-
     # keyed by (final column label, predictor, displayed level). TOOLTIP-only (columns would explode);
     # the render appends a "crude:" fragment. Carried like `vars`; absent -> no empirical tooltip.
     if (!is.null(empirical_tips)) attr(out, "empirical_tips") <- empirical_tips
+    # Phase 14w: `reg_meta` -- a regression table's OWN record of its model, a small list
+    # list(family=, effect=, at=, do_exp=, dependent=, positive_level=, predictors=, split_var=,
+    # comparison=, model_labels=, conf_level=). Set once by tab_reg(); read by the reg title / caption,
+    # the "Model:" footer line, and the colour legend (is_reg detection, the effect word, the CI-method
+    # scale). Carried like `vars`; absent -> not a regression table. WHY table-level (not a fmt field or
+    # column attribute): family/effect are single per table, and the per-column effect word is DERIVED
+    # from family + the column's ci_type/type (was parsed from the column-name suffix, which the 14w
+    # header rename breaks). Model-vs-empirical columns are told apart by the "Emp. " name prefix.
+    if (!is.null(reg_meta)) attr(out, "reg_meta") <- reg_meta
     out
   }
 
@@ -129,7 +141,7 @@ new_grouped_tab <-
            subtext = "",
            test = new_test_tibble(), chi2 = NULL,
            render_extras = NULL, ci_settings = NULL, vars = NULL,
-           empirical_tips = NULL,
+           empirical_tips = NULL, reg_meta = NULL,
            ..., class = character()) {
     if (missing(groups)) groups <- attr(tabs, "groups")
     class <- c(class, c("tabxplor_grouped_tab", "grouped_df"))
@@ -140,6 +152,7 @@ new_grouped_tab <-
     new_tab(tabs, groups = groups,
             subtext = subtext, test = test, render_extras = render_extras,
             ci_settings = ci_settings, vars = vars, empirical_tips = empirical_tips,
+            reg_meta = reg_meta,
             ...,
             class = class)
   }
@@ -230,6 +243,12 @@ set_empirical_tips <- function(x, empirical_tips) {
   attr(x, "empirical_tips") <- empirical_tips
   x
 }
+# Phase 14w: `reg_meta` -- a regression table's model record (see new_tab()).
+get_reg_meta <- purrr::attr_getter("reg_meta")
+set_reg_meta <- function(x, reg_meta) {
+  attr(x, "reg_meta") <- reg_meta
+  x
+}
 new_vars_attr <- function(row_vars = character(0), col_vars = character(0),
                           tab_vars = character(0), compacted = FALSE) {
   list(row_vars = as.character(row_vars), col_vars = as.character(col_vars),
@@ -255,7 +274,8 @@ tab_attrs <- function(from) {
        render_extras  = get_render_extras(from),
        ci_settings    = get_ci_settings(from),
        vars           = get_vars_attr(from),
-       empirical_tips = get_empirical_tips(from))
+       empirical_tips = get_empirical_tips(from),
+       reg_meta       = get_reg_meta(from))
 }
 
 # Rebuild `out` as the right tab class, carrying every table attribute of `from`. `lv1_group_vars()`
@@ -798,12 +818,16 @@ tbl_format_footer.tabxplor_tab <- function(x, setup, ...) {
 
   print_colors <- suppressWarnings(tab_color_legend(x))
   subtext <- get_subtext(x) %>% purrr::discard(. == "")
+  # Phase 14w (item 2): the regression "Model:" line comes BEFORE the colour legend (the reader must know
+  # what the numbers ARE before reading how they are coloured). NULL on a crosstab.
+  reg_line <- reg_model_line(get_reg_meta(x))
   if (length(print_colors) != 0) print_colors <- paste0(
     pillar::style_subtle("# "), print_colors
   )
   if (length(subtext) != 0) subtext <- pillar::style_subtle( paste0("# ", subtext) )
+  if (!is.null(reg_line)) reg_line <- pillar::style_subtle(paste0("# ", reg_line))
 
-  c(default_footer, print_colors, subtext)
+  c(default_footer, reg_line, print_colors, subtext)
 }
 
 
@@ -996,8 +1020,13 @@ tab_kable <- function(tabs,
             classes = identical(engine, "html"))),
           subtext)
       }
+      # Phase 14w (item 2): the "Model:" line above the colour legend (reg tables only; NULL otherwise).
+      if (!is.null(rd$reg_line)) subtext <- c(rd$reg_line, subtext)
     }
-    render_kable_html(rd, prep$meta, engine = engine, subtext = subtext, caption = caption,
+    # Phase 14w (item 1): a reg table auto-captions itself from `reg_title` when the user gave no caption.
+    cap <- caption
+    if (is.null(cap) && !is.null(rd$reg_title) && !is.na(rd$reg_title)) cap <- rd$reg_title
+    render_kable_html(rd, prep$meta, engine = engine, subtext = subtext, caption = cap,
                       tooltips = tooltips, popover = popover, html_font = html_font,
                       full_width = full_width, get_data = get_data, in_knitr = in_knitr, ...)
   })
@@ -1533,6 +1562,7 @@ tab_pvalue_lines <- function(tabs) {
   render_extras <- get_render_extras(tabs)
   ci_settings   <- get_ci_settings(tabs)
   vars_attr     <- get_vars_attr(tabs)   # Phase 14n: carry the roles record (incl. `compacted`)
+  reg_meta_attr <- get_reg_meta(tabs)    # Phase 14w: carry the reg model record through the rebuild
   test_tbl <- get_test(tabs)
   if (is.null(test_tbl) || nrow(test_tbl) == 0) return(tabs)
 
@@ -1623,7 +1653,7 @@ tab_pvalue_lines <- function(tabs) {
   tabs <- tibble::new_tibble(out, nrow = n0 + k)
 
   new_tab(tabs, subtext = subtext, render_extras = render_extras, ci_settings = ci_settings,
-          vars = vars_attr, empirical_tips = get_empirical_tips(tabs)) |>
+          vars = vars_attr, empirical_tips = get_empirical_tips(tabs), reg_meta = reg_meta_attr) |>
     dplyr::group_by(!!!rlang::syms(groups))
 }
 
@@ -1713,8 +1743,10 @@ reg_footer_lines <- function(tabs) {
   # else the multinomial crude tooltip attribute is lost the moment the GOF footer is materialised.
   # 14v-ii: thread ci_settings too (the crude-CI methods + conf_level the legend names) -- the
   # tab_pvalue_lines rebuild already does; this one did not, dropping it at footer materialisation.
+  # 14w: thread reg_meta too -- reg_footer_lines DROPS `test`, so is_reg detection must not depend on it;
+  # the legend reads reg_meta instead, and it must survive the footer materialisation.
   new_tab(tabs2, subtext = subtext, vars = get_vars_attr(tabs), ci_settings = get_ci_settings(tabs),
-          empirical_tips = get_empirical_tips(tabs)) |>
+          empirical_tips = get_empirical_tips(tabs), reg_meta = get_reg_meta(tabs)) |>
     dplyr::group_by(!!!rlang::syms(group_chr))
 }
 

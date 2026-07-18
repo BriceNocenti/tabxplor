@@ -252,27 +252,46 @@ tab_xl <-
         tab_color_legend(., medium = "runs", style = "prose", lang = lang,
                          theme = theme)))
       legend_runs <- purrr::map(legend_runs, ~ if (is.null(.)) list() else .)
+    }
+    # Phase 14w (item 2): prepend the regression "Model:" line as a plain (uncoloured) run line. It rides
+    # the SAME rich-text block as the colour legend (so the legend_row overwrite stays aligned) and prints
+    # FIRST. NULL on a crosstab -> nothing prepended.
+    legend_runs <- purrr::map2(tabs_src, legend_runs, function(t, runs) {
+      rl <- reg_model_line(get_reg_meta(t))
+      if (is.null(rl)) runs
+      else c(list(list(list(text = rl, color = NA_character_, bold = FALSE))), runs)
+    })
+    if (any(purrr::map_lgl(legend_runs, ~ length(.) > 0L))) {
       legend_plain <- purrr::map(legend_runs, ~ purrr::map_chr(
         ., function(line) paste0(purrr::map_chr(line, "text"), collapse = "")))
       subtext <- purrr::map2(subtext, legend_plain, ~ c(.y, .x))
     }
 
     if (missing(titles)) {
-      # Phase 14u: a NAMED tabxplor_tabs (a reg comparison per dependent -> names = the dependents; a
-      # several-row_vars output_list -> names = the row_vars) carries meaningful per-table names -> use
-      # them as the title / sheet name. Falls back to the derived title otherwise (and reg tables, which
-      # record no `vars`, still mis-title when unnamed -- a separate, flagged issue).
+      # Phase 14w (item 1): a regression table titles itself from its `reg_meta` (family + dependent +
+      # predictors, or dependent + reference + effect for a comparison) -- this is the reg fix for the old
+      # "levels by var" mis-title. Otherwise (Phase 14u): a NAMED tabxplor_tabs (a several-row_vars
+      # output_list -> names = the row_vars) uses its element names, and a plain table the vars-derived
+      # "X by Y" title.
       base_nm <- names(tabs_base)
-      if (inherits(tabs_base, "tabxplor_tabs") && length(base_nm) == length(tabs) &&
-          all(nzchar(base_nm))) {
-        titles <- base_nm
-      } else {
-        titles <- purrr::pmap_chr(list(tabs_src, row_vars, col_vars_plain, tab_vars),
-                                  ~ tab_get_titles(..1, ..2, ..3, ..4))
-      }
+      named_tabs <- inherits(tabs_base, "tabxplor_tabs") && length(base_nm) == length(tabs) &&
+        all(nzchar(base_nm))
+      titles <- purrr::pmap_chr(
+        list(tabs_src, row_vars, col_vars_plain, tab_vars, seq_along(tabs)),
+        function(t, rv, cv, tv, i) {
+          rt <- reg_title(get_reg_meta(t))
+          if (!is.na(rt)) rt
+          else if (named_tabs) base_nm[[i]]
+          else tab_get_titles(t, rv, cv, tv)
+        })
     } else {
       titles <- vctrs::vec_recycle(titles, length(tabs))
     }
+    # Phase 14w (item 1): a reg table's SHEET name is the compact "<short>_<dep>_<pred>" tag, not the
+    # truncated prose title. Non-reg tables keep the title (truncated below).
+    sheet_base <- purrr::map2_chr(tabs_src, titles, function(t, ti) {
+      sn <- reg_sheet_name(get_reg_meta(t)); if (!is.na(sn)) sn else ti
+    })
 
     # Sheet-stacking offsets: within a sheet each stacked table starts below the previous one
     # (rows + subtext + 6 blank -- Phase 13c-iii: +1 for the col_var spanning-name header row).
@@ -287,7 +306,7 @@ tab_xl <-
     # Clean AFTER the 25-char cut and BEFORE the de-duplication below: openxlsx2 would otherwise do
     # the identical substitution itself (with a warning) at add_worksheet() time -- i.e. after our
     # de-duplication, which would then have run on names that are not the final ones.
-    sheet_titles <- titles[newsheet] |> stringr::str_sub(1, 25) |> xl_clean_sheet_name()
+    sheet_titles <- sheet_base[newsheet] |> stringr::str_sub(1, 25) |> xl_clean_sheet_name()
     sheet_titles <- dplyr::if_else(duplicated(sheet_titles),
                                    stringr::str_c(sheet_titles, ".2"), sheet_titles)
     nb <- 2

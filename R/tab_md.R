@@ -137,10 +137,13 @@ tab_md <- function(tabs,
                           what = "tab_md()")
 
   parts   <- purrr::imap_chr(prep$tables, function(rd, i) {
+    # Phase 14w (item 1): a reg table auto-captions itself from `reg_title` when the user gave no caption.
+    cap <- if (i == 1) caption else NULL
+    if (is.null(cap) && !is.null(rd$reg_title) && !is.na(rd$reg_title)) cap <- rd$reg_title
     md_render_one(rd, special_formatting = special_formatting, wrap_rows = wrap_rows,
                   subtext = subtext, color = color, css = css,
                   color_legend = color_legend, lang = lang,
-                  title = if (i == 1) caption else NULL,
+                  title = cap,
                   theme = theme)
   })
   md_text <- paste(parts, collapse = "\n\n")
@@ -234,6 +237,8 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
                                              theme = theme))
     if (length(leg)) subtext_text <- c(leg, subtext_text)
   }
+  # Phase 14w (item 2): the "Model:" line above the colour legend (reg tables only; NULL otherwise).
+  if (!is.null(rd$reg_line)) subtext_text <- c(rd$reg_line, subtext_text)
 
   # md drops the trailing separator (no line after the last row); the prep's new_group is the base.
   new_group <- rd$roles$new_group

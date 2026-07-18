@@ -23,7 +23,7 @@ testthat::test_that("tab_export_prep returns a tabxplor_render with tables/meta"
   rd <- p$tables[[1]]
   testthat::expect_named(rd, c("tab", "vars", "roles", "ann", "bold_rows",
                                "bold_cols", "range_totcol", "col_var_header", "subtext",
-                               "empirical_tips"))
+                               "reg_line", "reg_title", "empirical_tips"))
   testthat::expect_false(rd$vars$degrade)
 })
 
@@ -420,6 +420,8 @@ testthat::test_that("L3: a redundant col_var span (name == col_var for all cols)
   testthat::skip_if_not_installed("broom")
   d <- forcats::gss_cat |>
     dplyr::mutate(married = factor(dplyr::if_else(marital == "Married", "Married", "Not married")))
-  # single-model reg: column named "Married: OR" == its col_var -> span dropped
-  testthat::expect_false(span(tab_reg(d, "married", c("race", "age"), family = "binomial")))
+  # Phase 14w (item 3): a single-model reg column is now named "Model OR" while its col_var names the
+  # OUTCOME ("married: Married") -> name != col_var -> the span is KEPT (it labels the outcome; with
+  # empirical companions it spans them all with no border between).
+  testthat::expect_true(span(tab_reg(d, "married", c("race", "age"), family = "binomial")))
 })

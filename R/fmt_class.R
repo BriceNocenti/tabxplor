@@ -3006,12 +3006,19 @@ legend_shade_names <- function() {
     c(over = NA_character_, under = NA_character_)
 }
 
-# a regression column's effect word (OR / IRR / beta / AME / MER), read from the column-name suffix the
-# package itself writes ("<base>: <word>", reg_effect_word); NA when not a recognised reg label.
-legend_reg_effect_word <- function(cn) {
-  w <- sub(".*:[[:space:]]*", "", cn)
-  if (identical(w, cn)) return(NA_character_)
-  if (w %in% c("OR", "IRR", .lg_beta, "AME", "MER", paste0("exp(", .lg_beta, ")"))) w else NA_character_
+# Phase 14w: a regression column's effect word (OR / IRR / beta / AME / MER), DERIVED from the table
+# family/effect (reg_meta) + the column's own ci_type / type -- replaces parsing the column-name suffix,
+# which the 14w header rename dropped ("Model OR" / "Ind vs Rep" no longer end in ": <word>"). An
+# EMPIRICAL crude column (% / mean / diff / rate) has no effect word; an empirical OR/IRR takes the
+# family's multiplicative word, so its legend names the right scale (Emp. IRR -> rate-ratio, item 5).
+legend_reg_eff_word <- function(col, cn, meta) {
+  if (identical(get_ci_type(col), "or"))
+    return(if (meta$family %in% c("poisson", "quasipoisson")) "IRR" else "OR")
+  if (!startsWith(cn, "Emp.")) {                       # a model (not crude) column
+    if (identical(meta$effect, "ame")) return(if (identical(meta$at, "reference")) "MER" else "AME")
+    if (identical(get_type(col), "coef") && !isTRUE(meta$do_exp)) return(.lg_beta)   # gaussian beta
+  }
+  NA_character_
 }
 
 # recover a NON-total reference's actual label (the marked reference row / column). Returns NA when
@@ -3043,10 +3050,12 @@ legend_ref_label <- function(x, col, orientation) {
 # "not significantly different from the Total row". Its baseline is the reference category, exactly as
 # for the multiplicative effects. (Imprecise for a numeric predictor's per-unit beta, whose null is 0
 # -- the same approximation the OR arm has always made.)
-legend_ref_info <- function(x, col, measure, orientation, is_coef = FALSE) {
+legend_ref_info <- function(x, col, measure, orientation, is_coef = FALSE, is_reg = FALSE) {
   if (identical(measure, "contrib"))
     return(list(kind = "indep", label = NA_character_, orientation = orientation))
-  if (identical(measure, "or") || isTRUE(is_coef))
+  # Phase 14w: a regression table has no total row -- every reg column (incl. AME, ci_type "diff", and the
+  # empirical crude columns) is compared to the predictor's REFERENCE CATEGORY, never "the Total row".
+  if (isTRUE(is_reg) || identical(measure, "or") || isTRUE(is_coef))
     return(list(kind = "category", label = legend_ref_label(x, col, "row"), orientation = "row"))
   ref <- get_ref_type(col); ref <- if (length(ref)) as.character(ref)[1] else "tot"
   if (identical(ref, "tot"))
@@ -3187,7 +3196,9 @@ legend_tokens_prose <- function(spec, lang, show_names) {
     measure <- plan$measure
     subject <- if (!is.na(spec$eff_word)) spec$eff_word
                else if (identical(measure, "or")) "OR" else gettext("cells")
-    has_ref_lead <- !identical(measure, "or") && !isTRUE(spec$is_coef)  # coef / OR carry the ref in the note only
+    # coef / OR / any regression measure carry the ref in the note only (a reg effect -- AME, crude diff --
+    # is already expressed relative to the reference, so "AME >= the reference category +5" is redundant).
+    has_ref_lead <- !identical(measure, "or") && !isTRUE(spec$is_coef) && !isTRUE(spec$is_reg)
     unit <- switch(measure,
                    "diff" = if (isTRUE(spec$is_std)) paste0(" ", gettext("SD")) else paste0(" ", gettext("points")),
                    "")
@@ -3325,17 +3336,25 @@ legend_specs <- function(x) {
   col_vars_levels <- tab_get_vars(x)$col_vars_levels
   col_vars_levels <- col_vars_levels[names(col_vars_levels) != "all_col_vars"]
   kept_names <- names(x)[keep]
-  reps <- purrr::map_chr(col_vars_levels, function(cols) {
-    cc <- cols[cols %in% kept_names]; if (length(cc) == 0) NA_character_ else cc[[1]]
-  })
-  reps <- reps[!is.na(reps)]
-  if (length(reps) == 0) return(list())
 
-  is_reg <- tryCatch(is_reg_footer(get_test(x)), error = function(e) FALSE)
+  meta   <- get_reg_meta(x)
+  is_reg <- !is.null(meta)                            # Phase 14w: robust, survives footer materialisation
   cis    <- get_ci_settings(x); if (is.null(cis)) cis <- default_ci_settings()
   shades <- legend_shade_names()
 
-  specs <- purrr::imap(reps, function(cn, cv) {
+  # One spec per colored column (was one per col_var), so several measures sharing a col_var -- a reg
+  # table's model + empirical columns under one outcome span (Phase 14w) -- each get their own spec.
+  # split(sig) below collapses identical signatures, so a crosstab's level columns still fold to one line
+  # (byte-identical legends): same sig -> one group -> the col_var prefix.
+  reps <- purrr::imap(col_vars_levels, function(cols, cv) {
+    cc <- cols[cols %in% kept_names]
+    purrr::map(cc, function(cn) list(cn = cn, cv = cv))
+  })
+  reps <- purrr::flatten(purrr::compact(reps))
+  if (length(reps) == 0) return(list())
+
+  specs <- purrr::map(reps, function(e) {
+    cn <- e$cn; cv <- e$cv
     col      <- x[[cn]]
     plan_txt <- fmt_color_plan(col, "text", color = get_color(col))
     plan_bg  <- fmt_color_plan(col, "bg",   color = get_color_bg(col))
@@ -3348,11 +3367,15 @@ legend_specs <- function(x) {
     m_txt    <- if (!is.null(plan_txt)) plan_txt$measure else NA_character_
     m_bg     <- if (!is.null(plan_bg))  plan_bg$measure  else NA_character_
     orient   <- if (identical(type, "col")) "col" else "row"
-    eff_word <- if (isTRUE(is_reg)) legend_reg_effect_word(cn) else NA_character_
-    ref      <- legend_ref_info(x, col, m_txt, orient, is_coef = is_coef)
+    eff_word <- if (isTRUE(is_reg)) legend_reg_eff_word(col, cn, meta) else NA_character_
+    role     <- if (isTRUE(is_reg) && startsWith(cn, "Emp.")) "emp" else "model"
+    ref      <- legend_ref_info(x, col, m_txt, orient, is_coef = is_coef, is_reg = is_reg)
     ci_type  <- get_ci_type(col)
-    sig <- paste(m_txt, m_bg, policy, orient, is_std, eff_word, ref$kind, ref$label, ci_type, sep = "\r")
-    list(col_var = cv, plan_txt = plan_txt, plan_bg = plan_bg,
+    # `role` keeps a shared-col_var reg table's model + empirical lines separate (same measure, distinct
+    # column); multinomial categories share role -> still one line. Crosstabs: role uniform -> no change.
+    sig <- paste(m_txt, m_bg, policy, orient, is_std, eff_word, ref$kind, ref$label, ci_type, role,
+                 sep = "\r")
+    list(col_var = cv, col_name = cn, plan_txt = plan_txt, plan_bg = plan_bg,
          measure_text = m_txt, measure_bg = m_bg,
          is_mean = is_mean, is_std = is_std, is_coef = is_coef,
          policy = policy, orientation = orient, ci_type = ci_type,
@@ -3414,9 +3437,14 @@ tab_color_legend <- function(x, medium = c("console", "html", "md", "runs", "pla
 
   grp        <- split(specs, purrr::map_chr(specs, "sig"))
   show_names <- length(grp) > 1
+  # Phase 14w: a col_var that spawns SEVERAL legend lines (a reg table's shared outcome col_var -> model +
+  # empirical) is prefixed by the COLUMN names (the col_var alone would be identical, hence ambiguous); a
+  # col_var with a single line keeps the col_var name (crosstabs, one multinomial span).
+  cv_lines <- table(unlist(lapply(grp, function(g) unique(purrr::map_chr(g, "col_var")))))
   lines <- purrr::map(grp, function(g) {
     spec <- g[[1]]
-    spec$col_names <- unique(purrr::map_chr(g, "col_var"))
+    cvs  <- unique(purrr::map_chr(g, "col_var"))
+    spec$col_names <- if (any(cv_lines[cvs] > 1)) unique(purrr::map_chr(g, "col_name")) else cvs
     toks <- if (identical(style, "prose")) legend_tokens_prose(spec, lg, show_names)
             else                           legend_tokens_terse(spec, lg, show_names)
     legend_render_line(toks, medium, theme, colored, classes = classes)

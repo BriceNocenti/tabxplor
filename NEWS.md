@@ -20,6 +20,14 @@
   "Emp." companion columns now carry a confidence interval, significance stars and significance-based
   colour, computed with the same method as the model — so crude and adjusted effects are directly
   comparable. The multinomial crude tooltip gains its intervals too.
+* **`tab_reg()` tables are clearer to read.** Regression tables now title themselves ("Logistic
+  regression: `<outcome>` by `<predictors>`", one sheet name per model in Excel), print a plain
+  "Model: …" description **above** the colour legend, and their headers are less repetitive: a model
+  column and its `empirical` companions sit under one outcome header ("`<outcome>: <level>`") with no
+  border between them, the model column reads "Model OR" / "Model β" / …, and a multinomial table drops
+  the repeated ": OR"/": AME" from each category column. Colour-legend wording is now model-accurate —
+  a marginal-effect (AME) table compares to "the reference category" (not "the Total row"), and a
+  Poisson rate is described as a rate-ratio (not an odds-ratio).
 * **Variable names are written once, and you choose which ones.** A table built from several
   `row_vars` used to repeat the row-variable name on every single row, under a meaningless `row_var`
   header. Every exporter now names each block **once**: `tab_kable()` spans one cell over the block and

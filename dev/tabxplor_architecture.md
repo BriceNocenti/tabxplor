@@ -865,6 +865,21 @@ No new fmt fields/attributes — `type` gained the value `"coef"`, `display` the
 Phase 12c + decisions §37. `R/tab_logit.R` and `R/tab_logit_2.R` are emptied (`git rm` pending; the
 parsnip draft + or_plot/lm_plots deferred to a later display phase).
 
+**Phase 14w — the reg display model.** `tab_reg()` attaches ONE table-level attribute **`reg_meta`**
+(list: `family`/`effect`/`at`/`do_exp`/`eff_word`/`dependent`/`positive_level`/`predictors`/`split_var`/
+`comparison`/`model_labels`/`conf_level`), carried like `vars` (a `new_tab()` formal + `get/set_reg_meta`
++ one `tab_attrs()` line + threaded through `reg_footer_lines`/`tab_pvalue_lines`). It drives: the reg
+**title/caption** (`reg_title` / `reg_family_display_name` / `reg_family_short` / `reg_sheet_name`; Excel
+title+sheet, md/kable caption); the **"Model:" legend line** (`reg_model_line`, ordered before the colour
+legend at every footer site); and the **colour legend** (`legend_specs()` reads `is_reg = !is.null(reg_meta)`
+— robust across footer materialisation, which drops `test` — derives the per-column effect word from
+`family`+`ci_type` instead of the column-name suffix, and always uses "the reference category"). Header
+rename (item 3): a single-outcome model column + its `empirical` companions share one outcome `col_var`
+("`<dep>`: `<level>`" / the dep name for a numeric outcome), the model column is named "Model `<eff>`",
+and a multinomial table strips ": OR"/": AME" from each category name — so one span covers a group with no
+border between its columns (the 14s span-drop + `new_col_var` border logic are unchanged). See CLAUDE.md
+Phase 14w + decisions §49.
+
 ### R/jmvtab.b.R and R/jmvtab.h.R
 
 Jamovi module integration. `jmvtab.h.R` is auto-generated from `jamovi/jmvtab.a.yaml` by

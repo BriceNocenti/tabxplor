@@ -278,7 +278,7 @@ Export:  tab_xl()  |  tab_kable()  |  tab_md()  |  tab_plot()
 
 - **`tabxplor_fmt`**: vctrs record (`new_rcrd()`) with **18 per-cell fields** (was 15 before v1.4.0 Phase 1a) and 9 per-column attributes (Phase 10i-A dropped `display_spec`). The critical distinction: fields vary per cell (accessed via `vctrs::field()`), attributes are scalar describing the whole column (accessed via `attr()`). Constructor chain: `fmt()` (public, validates + coerces) -> `new_fmt()` (internal, calls `vctrs::new_rcrd()`). *(Phase 1a reshaped 15→18 in one combined pass — decisions doc §9; `ci` is now derived from the `ci_inf`/`ci_sup` bounds by `get_ci()`, a bounds-shim.)*
 - **`mean` field overload** (cross-cutting): for **pct-type** columns the `mean` field carries the cell/reference **ratio** for the "*2 rule" (not an actual mean). Written by `tab_pct()`, read by `fmt_color_selection()`. The **`ratio` field** now exists (Phase 1a renamed the never-used `rr`→`ratio`; decisions doc §3); the overload removal + moving the ratio to `ratio` lands in **Phase 5** (color diff/ratio split), not yet done.
-- **`tabxplor_tab`**: tibble subclass via `tibble::new_tibble()` with `subtext` (legend text), `test` (chi2/ANOVA-F results tibble; §16 hard-rename of the old `chi2` attribute), `render_extras` (Phase 10i-B, the `list(add_n=, add_pct=)` display intent), `vars` (Phase 14d, variable roles) and `empirical_tips` (Phase 14v, the multinomial crude-companion tooltip data) attributes, all carried through dplyr verbs by the S3 methods + vctrs reconcilers (one line each in `tab_attrs()`).
+- **`tabxplor_tab`**: tibble subclass via `tibble::new_tibble()` with `subtext` (legend text), `test` (chi2/ANOVA-F results tibble; §16 hard-rename of the old `chi2` attribute), `render_extras` (Phase 10i-B, the `list(add_n=, add_pct=)` display intent), `vars` (Phase 14d, variable roles), `empirical_tips` (Phase 14v, the multinomial crude-companion tooltip data) and `reg_meta` (Phase 14w, a reg table's model record: family/effect/dependent/reference/predictors, driving its title + "Model:" legend line + colour-legend wording) attributes, all carried through dplyr verbs by the S3 methods + vctrs reconcilers (one line each in `tab_attrs()`).
 - **`tabxplor_grouped_tab`**: extends `grouped_df` for subtabled results (when `tab_vars` are present). Requires separate S3 method for every dplyr verb.
 
 ### Export Parity
@@ -2203,16 +2203,16 @@ Poisson : the related crude quantity is the mean, colour by the ratio.
 |          | Other                    |         1/1.00 |
 
 
-Linear regression : the matching quantity is the difference from reference ; color by standardised differences. 
+Linear regression : the matching quantity is the difference from reference ; color by standardised differences.
 - `tab(mutate(forcats::gss_cat, race = forcats::fct_rev(race)), "race", tvhours, ref = 1, color = "diff") |> mutate(diff = tvhours |> set_display("diff") |> set_digits(2)) |> tab_md()`
-| race    |            mean (sd)  |             diff  |
-|:--------|----------------------:|------------------:|
-|         | *tvhours*             |                   |
-|         |                       |                   |
-|**White**|  **2.8** (σ2.3)       |  **ref:2.77**     |
-| Black   |     [4.2 (σ3.5)]{.p3} |      [+1.41]{.p3} |
-| Other   |      2.8 (σ2.4)       |       -0.01       |
-| Total   |      3.0 (σ2.6)       |       +0.21       |
+| race      |         mean (sd) |         diff |
+|:----------|------------------:|-------------:|
+|           |         *tvhours* |              |
+|           |                   |              |
+| **White** |    **2.8** (σ2.3) | **ref:2.77** |
+| Black     | [4.2 (σ3.5)]{.p3} | [+1.41]{.p3} |
+| Other     |        2.8 (σ2.4) |        -0.01 |
+| Total     |        3.0 (σ2.6) |        +0.21 |
 - `tab_reg(mutate(forcats::gss_cat, race = forcats::fct_rev(race)), "tvhours", "race", family = "gaussian") |> tab_md()`
 
 |          | levels               |     tvhours: β |
@@ -2326,6 +2326,45 @@ plain numeric variable).
 - Deferred (out of scope, note only): robust HC SEs on `lm`/`svyglm` (reverse-direction match); Fieller
   as a 4th `method_mean_ratio`.
 
+###### DONE (2026-07-18)
+
+Full suite **FAIL 0 | WARN 0 | SKIP 4 | PASS 3462**; `document()` clean. Conscious golden regen: **7
+`_golden/*.rds`** only — 4 `ci_settings`-only (the attribute grew 3→6 fields), 3 mean-CI data
+(`n_mean_ci`, `n_ci_tabvars`, `n_ci_tabvars_all`, rule B z→t). **No `_color_golden` and no `_snaps`
+moved** (rule B did not flip any golden's significance; the numeric mean-CI *display* is not snapshotted).
+Samples: `dev/review_manual/phase14v_ii_*.{html,md,xlsx}`.
+
+**The maintainer chose rule B on principle** (method determines df, not the stars toggle): **t** where a
+variance/dispersion is estimated (mean cell → t(n−1), welch-diff → Welch-t, student-diff → t(n1+n2−2),
+quasipoisson-ratio → t(n1+n2−2)), **z** where the variance is a fixed function of the mean (robust
+ratio, naive poisson, all proportion CIs). This **reverses the §15/§19 stars-gating** and reaches the
+mean **cell** CI too (the largest churn; flagged and accepted). `ci_mean_diff2` now always uses the
+method's df; `ci_pivot` guards `df ≤ 0` (n=1 → clean NA, no NaN warning — also fixes the pre-existing
+`n_ci_tabvars` NaN drift).
+
+- **Part 1**: `ci_mean_ratio` / `ci_or` engines (`R/tab-agg.R`); `method_ratio`/`method_mean_diff`/
+  `method_mean_ratio` public args on `tab`/`tab_many`/`tab_ci` (+ `ci_settings` grows to 6 fields, named
+  in `legend_method_name` + FR). The bug is fixed: a ratio-coloured **mean** stores `ci_type = "ratio"`
+  and real ratio-of-means bounds (was the diff bounds mislabelled). Trigger =
+  `color_pct_text_is_ratio()` generalised to means (`by_type` `mean = "ratio"`; flat `color = "ratio"`
+  already fired), threaded into `tab_num` (path A, the pipeline mean CI) + `tab_ci` (path B).
+- **Part 2**: `reg_fit` scales SEs by √φ for unweighted poisson / grouped-binomial (MLE fit kept → GOF
+  footer intact), t(df.residual), p recomputed. `reg_dispersion` made pure; the over-dispersion warning
+  moved into `reg_fit` (single fire, reworded to the active adjustment, still contains "dispersion").
+- **Part 3**: empirical columns gain a crude CI + pvalue + significance colour (caller's `color_signif`),
+  method-matched (Newcombe / Woolf `ci_or` / Student=OLS / quasi-Poisson / Wilson); `Emp. mean` stays
+  uncoloured (cell CI for stars/tooltip). Multinomial tooltip carries Wilson + Newcombe CIs.
+  `reg_footer_lines` now threads `ci_settings`. **Pre-existing bug fixed**: `reg_empirical` saw the RAW
+  0/1-numeric outcome but `positive_level` is the labelled `"<dep>"` → crude base silently 0; now mirrors
+  `reg_prep_binary`'s recode.
+
+**Reg-legend prose deferred to 14w** (Q3): the empirical mean columns already name their method (Emp.
+rate → "quasi-Poisson interval"), but the `Emp. IRR` column's `ci_type = "or"` still reads "log
+odds-ratio" (should be rate-ratio) — a 14w refinement. **Concurrent maintainer change**: a new
+`gss_cat_data_formatting()` in `R/utils.R` (theirs, untouched); this session's `document()` generated
+its `.Rd` + NAMESPACE export.
+
+
 
 #### Phase 14w — reg tables titles, legends, and headers
 
@@ -2389,6 +2428,32 @@ Exemple with Multinomial + AME
 
 Tell me where they would need a new column-level or table-level attribute to store model metadata.
 
+##### Done (2026-07-18)
+
+All five items landed on ONE new table-level attribute **`reg_meta`** (the answer to the metadata
+question: family/effect/dependent/reference/predictors/split_var/comparison; NO column-level attribute
+and NO new fmt field — the per-column effect word is derived from `reg_meta$family`/`effect` + the
+column's `ci_type`/`type`, model-vs-empirical told apart by the `"Emp. "` name prefix). Carried like
+`vars` (a `new_tab()` formal + `get/set_reg_meta` + one `tab_attrs()` line + threaded through
+`reg_footer_lines`/`tab_pvalue_lines`; `is_reg` now reads `!is.null(get_reg_meta(x))`, surviving the
+footer materialisation that drops `test`). Full record + the flagged bare-header case: decisions **§49**.
+
+- **Titles (1/4)**: `reg_title()`/`reg_sheet_name()` (family display/short names) — "Logistic
+  regression: `<dep>` by `<preds>`" / comparison "…(models comparison): `<dep>`, '`<ref>`' (`<eff>`)";
+  Excel "logit_`<dep>`_`<pred>`" sheets. Caption in md/kable + Excel; console via the footer model line.
+- **Legend (2/5)**: `reg_model_line()` printed BEFORE the colour legend (console/md/kable/xl);
+  `legend_ref_info(is_reg=)` → "the reference category" (fixes AME's "Total row"); family-aware
+  effect-word → Poisson reads "rate-ratio" not "odds-ratio" (fixes Emp. IRR). `legend_specs()` now one
+  spec per coloured column + a `role` in `sig` (model + empirical get separate lines under a shared span).
+- **Headers (3)**: single-outcome model + empirical share one outcome col_var ("`<dep>`: `<level>`" /
+  numeric = the dep name), model column named "Model `<eff>`"; multinomial keeps "`<dep>`: `<eff>`" span
+  + strips ": OR"/": AME" from category names; comparison keeps per-model col_vars. GOF/`empirical_tips`
+  keys follow the renames. Crosstab goldens/snapshots byte-identical.
+
+Tests: new `test-tab_reg-14w.R`; existing reg tests updated to the "Model `<eff>`" / stripped names.
+**Suite: FAIL 0 | WARN 0 | SKIP 4 | PASS 3493.** Samples: `dev/review_manual/phase14w_reg.{html,md,xlsx}`.
+
+
 
 #### Phase 14x — small improvements and fixes
 
@@ -2434,9 +2499,11 @@ load_all() ; jmvtools::install(home = 'C:/Program Files/jamovi 2.7.37.0') ; load
 
 #### Phase 15b – jamovi UI `jmvtab_reg`
 
-One user-friendly, fast, clear and simple regression analysis, starting from jmvtab template and adapting it to the regression functions and use case.
-A "+" to add predictor subsets for `multi_logit`-style model comparison, selecting or selecting out among already chosen predictors.
-Reuse patterns from jmvtab primarily. Customise .js to grey out options that are not possible with the other selected arguments or outcomes types. When relevant, reuse patterns from known regression jamovi modules.
+One user-friendly, fast, clear and simple regression analysis, starting from jmvtab template and adapting it to the regression functions and use cases.
+- Reuse patterns from jmvtab primarily. Customise .js to grey out options that are not possible with the other selected arguments or outcomes types. When relevant, reuse patterns from known regression jamovi modules.
+- Fully use the possibility, specific to tabxplor, to compare regression models estimates with their relative empirical/observed quantities.
+- A "+" to add predictor subsets to create predictor’s lists for models comparison, selecting, or selecting out, among the already chosen predictors.
+
 
 
 #### Phase 15c — Jamovi UI French translation
@@ -2444,7 +2511,7 @@ Reuse patterns from jmvtab primarily. Customise .js to grey out options that are
 
 
 
-### Last Phase — verif and package user-friendly documentation
+### Last Phase — final simplifications and package user-friendly documentation
 
 
 #### Last Phase a – Bug corrections
@@ -2453,12 +2520,21 @@ Look below for known bugs yet to fix.
 
 #### Last Phase b – rethink package dependencies
 
-Package dependencies : are there imports or suggests that are used very little ? Imports and suggest that in general could be easily replaced with custom functions, or by copying a hand of opensource functions (thanking authors in the code) ?
+Package dependencies : are there Imports or Suggests that are used very little ? Imports and Suggests that in general could be easily replaced with custom functions, or by copying a hand of opensource functions (thanking authors in the code) ?
 
-Are there Suggest that we should better add to imports, since they are important for many functions ? Adding `broom::` in imports to be able to use `tab_reg()` natively in all cases, and only Suggests the packages necessary for more specific models ? Adding what else ? How many packages is it recommended to have at maximum and, particularly, after which threshold CRAN is currently giving a R CMD CHECK Note (do web searches) ?
+Are there Suggests that we should better add to Imports, since they are important for many functions ? Adding `broom::` in Imports to be able to use `tab_reg()` natively in all cases, and only Suggests the packages necessary for more specific models ? Adding what else ? How many packages is it recommended to have at maximum and, particularly, after which threshold is CRAN currently giving a R CMD CHECK Note (do web searches) ?
 
+Among the new global options created in 1.4.0, are they all useful and clearly named and documentated ?
 
-#### Last Phase c – simplify main user-facing functions arguments and roxygen documentation
+#### Last Phase c – code and framework simplifications
+
+How to further simplify tabxplor package framework ?
+- How to further integrate the internal functions into a reliable and simple ecosystem aimed at global code simplification ?
+- What features and ad hoc parts of the code are white elephants, that could be removed and integrated in a common global framework without meaningful losses for the user ? What should we give up or modify to enable a global simplification of some functions and code ?
+- What are the missing attributes, at table-level, column-level or fmt_cell-level, that would be necessary for a more reliable and straighforward architecture, or that would be necessary for further simplifications of the code/of the arguments ? At the contrary, what are the attributes that seem ad hoc, unnecessary, adding useless complexity to the code, and how to remove or modify them for simplification ?
+- What new arguments of v 1.4.0 could be merged or redesigned for simplicty of use, consistency and clarify ?
+
+#### Last Phase d – simplify main user-facing functions arguments and roxygen documentation
 
 Simplify `tab()` and `tab_reg()` and other main functions documentation, to make it more easily understandable and more helpful to students that are not statistical experts and may have difficulties with programming. And less terrifying – because the length of the current documentation may be terrifying for newcomers in R (specially my literary sociology students).
 - Would there be possibilities to nest some of the more complex argument in other functions ? For example, all the complex customisation things about ci refer to tab_ci(), with a link for the user to go further if he wants to ? All the complex things about color customisation somewhere else ? All the helpers set / get etc. somewhere else too, but with a ling to them somewhere in tab() page. What else could be grouped and put out of the main user-facing functions documentation ?
@@ -2467,7 +2543,7 @@ Simplify `tab()` and `tab_reg()` and other main functions documentation, to make
 Can you think about remaining possible simplifications of the arguments themselves, specially the new arguments introduced in v 1.4.0, since once they become public it will be difficult to modify them in next versions ? How could the main user-facing functions be more user-friendly ?
 
 
-#### Last Phase d – Create meaningful and user-friendly vignettes
+#### Last Phase e – Create meaningful and user-friendly vignettes
 
 Each vignette must be user-friendly, understandable by novices for the base crosstables one and regression models one, while still having just enough technical detail for the experts to known exactly what important technical choices were done internally.
 - For each vignette, carefully study the dev history in `dev/tabxplor_1.4.0_decisions.md`, `dev/tabxplor_1.4.0_roadmap_DONE_PHASES.md`, or other `dev/` .md when relevant : the aim is of course not to give the user any information about how the package was implement (would be useless to him), but to retrieve the more data possible about what were the intended real world use cases of each option, then **select** which part is **really** important for the user.
@@ -2475,31 +2551,39 @@ Each vignette must be user-friendly, understandable by novices for the base cros
 
 ##### base package introduction / tab() vignette
 
-The current vignette should be the basis for non-expert users, while also permitting expert users to understand what this package is really interesting for : crosstables, factors and means, colors, references, confidence intervals, exports, etc.
+The current vignette should be the simple and useful basis for non-expert users, a light and direct introduction to what tabxplor do better than other packages (but with more humility than that !) : color helpers, references and confidence intervals for crosstables (factors and means), with exports, etc. It shall also permit expert users to understand what this package is really interesting for, by giving only the really necessary technical details.
+
+Something very close is what’s to be used for `README.Rmd` (never edit `README.md` manually). Or maybe do a much more concise introduction in the `README.Rmd`, presenting only the really interesting features of tabxplor for exploratory analysis (mostly colors helpers for crosstables, possibly taking significance into account, with at the end a last example of logistic regression with a meaningful comparaison of modelised quantities versus empirical/observed quantities) ?
 
 ##### tab_reg() vignette
 tab_reg should come with it’s own very detailed vignette
-- A section for each kind of regression model : binomial, gaussian, poisson, etc.
-- Meaningful examples in each section, that should remember the novice in what situation and what kind of variable he should use each kind of model, and briefly inform the expert about the exact underlying methodological choices. 
+- A section for each kind of regression model : binomial, gaussian, poisson, etc. Explain how to use weighted models,  xplaining clearly and simply for beginners what is the chosen framework for weights (see dev history) and how to use simple survey weights (referto survey:: documentation for more complex cases, stating cleardy that stratified surveys can gain a bit of precision an narrow a bit confidence intervals if the strata variables are given).
+- Meaningful examples in each section, that should help the novice remember in what situation and what kind of variable he should use each kind of model, and briefly inform the expert about the exact underlying methodological choices.
 - Since tabxplor differenciates from other packages by the possibility to compare regression models estimates with their relative empirical/observed quantity, each section vignette should include a full detailed explanation with meaningful examples of what the `empirical = TRUE` framework does in this case (how to use and what to compare to what, which ci are calculated and why, what tab() code with ci compares to what tab_reg() one dependent/one predictor model, etc.).
+- Explain, in a simple way, what the different summary statistics for each case are for.
 
 ##### programming with tabxplor vignette
 All the part about "programming with tabxplor" and its vctrs fields should come in their own vignette, and it must be updaded and extended, with user-friendly example stating the possibilities.
 
 
-#### Last Phase e – full `pkgdown` documentation + test coverage
-
-Add test coverage to github actions.
+#### Last Phase f – full `pkgdown` documentation + test coverage
 
 Implement a full pkgdown documentation.
 - Where ? On github pages ? Elsewhere with tidyverse ecosystem provided servers ?
 
+Add test coverage to github actions.
 
-#### Last Phase f – tabxplor R french translation
+#### Last Phase g – NEW.md simplification
+
+#### Last Phase h – tabxplor R french translation
 
 All legends should be carefully translated to French.
 Could the package documentation be translated for French users ? Could the whole pkgdown easily have a french version, with the possibility to choose on the webpage ?  
 What other strings should be translated in French ?
+
+#### Last Phase i – github PR and CRAN release
+
+
 
 
 

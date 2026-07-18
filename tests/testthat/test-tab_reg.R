@@ -17,8 +17,8 @@ test_that("tab_reg(family='binomial') is identical to tab_logit()", {
   d  <- reg_data()
   t1 <- tab_reg(d, "married", c("race", "rincome"), family = "binomial", cleannames = FALSE)
   t2 <- tab_logit(d, "married", c("race", "rincome"), cleannames = FALSE)
-  expect_equal(get_or(t1[["Married: OR"]]),     get_or(t2[["Married: OR"]]))
-  expect_equal(get_pvalue(t1[["Married: OR"]]), get_pvalue(t2[["Married: OR"]]))
+  expect_equal(get_or(t1[["Model OR"]]),     get_or(t2[["Model OR"]]))
+  expect_equal(get_pvalue(t1[["Model OR"]]), get_pvalue(t2[["Model OR"]]))
 })
 
 test_that("family='auto' detects binary -> binomial (message) and ambiguous integer aborts", {
@@ -32,7 +32,7 @@ test_that("family='auto' detects a continuous outcome -> gaussian (message)", {
   skip_if_not_installed("broom")
   d <- reg_data() |> dplyr::mutate(score = age + 0.5)                 # non-integer -> continuous
   expect_message(col_tab <- tab_reg(d, "score", "race"), "continuous")
-  expect_identical(get_type(col_tab[["score: \u03b2"]]), "coef")
+  expect_identical(get_type(col_tab[["Model \u03b2"]]), "coef")
 })
 
 # ---- gaussian beta: parity + additive fmt shape ---------------------------------------------
@@ -41,7 +41,7 @@ test_that("tab_reg() gaussian betas / CI / p match stats::lm; fmt uses the addit
   skip_if_not_installed("broom")
   d   <- reg_data()
   t1  <- tab_reg(d, "tvhours", c("age", "race"), family = "gaussian", cleannames = FALSE)
-  col <- t1[["tvhours: \u03b2"]]
+  col <- t1[["Model \u03b2"]]
 
   expect_identical(get_type(col), "coef")
   expect_identical(get_display(col)[1], "coef")
@@ -75,7 +75,7 @@ test_that("tab_reg() gaussian betas / CI / p match stats::lm; fmt uses the addit
 test_that("gaussian beta renders raw (no % / x glyph), reference shows 0", {
   skip_if_not_installed("broom")
   t1  <- tab_reg(reg_data(), "tvhours", "race", family = "gaussian", cleannames = FALSE)
-  col <- t1[["tvhours: \u03b2"]]
+  col <- t1[["Model \u03b2"]]
   txt <- format(col, special_formatting = TRUE)
   expect_false(any(grepl("%", txt)))                 # no percentage suffix
   ref <- which(is_refrow(col) & as.character(t1$var) != "Constant")
@@ -91,7 +91,7 @@ test_that("tab_reg() poisson IRR / CI / p match glm(poisson); fmt uses the OR sh
   # fires. That is correct and asserted in test-tab_reg-footer.R; here it is incidental noise.
   t1  <- suppressWarnings(tab_reg(d, "tvhours", c("age", "race"), family = "poisson",
                                   cleannames = FALSE))
-  col <- t1[["tvhours: IRR"]]
+  col <- t1[["Model IRR"]]
 
   expect_identical(get_type(col), "row")
   expect_identical(get_display(col)[1], "or")
@@ -123,7 +123,7 @@ test_that("exponentiate=FALSE on a logit yields raw log-odds (additive coef shap
   skip_if_not_installed("broom")
   d   <- reg_data()
   col <- tab_reg(d, "married", "race", family = "binomial", exponentiate = FALSE,
-                 cleannames = FALSE)[["Married: \u03b2"]]
+                 cleannames = FALSE)[["Model \u03b2"]]
   expect_identical(get_type(col), "coef")
   expect_identical(get_ci_type(col), "diff")
 
@@ -140,7 +140,7 @@ test_that("reference= relevels a factor predictor's baseline", {
   d  <- reg_data()
   t1 <- tab_reg(d, "married", "race", family = "binomial",
                 reference = c(race = "White"), cleannames = FALSE)
-  col <- t1[["Married: OR"]]
+  col <- t1[["Model OR"]]
   white <- which(as.character(t1$levels) == "White" & as.character(t1$var) == "race")
   other <- which(as.character(t1$var) == "race" & as.character(t1$levels) != "White")
   expect_equal(get_or(col)[white], 1)                  # White is now the reference (OR == 1)
@@ -155,13 +155,13 @@ test_that("a character `predictors` with several dependents gives one column per
     dplyr::mutate(has_tv = factor(dplyr::if_else(tvhours > 0, "Some TV", "No TV"),
                                   levels = c("Some TV", "No TV")))   # positive level = "Some TV"
   t1 <- tab_reg(d, c("married", "has_tv"), "race", family = "binomial", cleannames = FALSE)
-  expect_true(all(c("Married: OR", "Some TV: OR") %in% names(t1)))
+  expect_true(all(c("Model OR (married)", "Model OR (has_tv)") %in% names(t1)))
 })
 
 test_that("colour: gaussian beta greys non-significant / reference, colours a large standardized beta", {
   skip_if_not_installed("broom")
   t1  <- tab_reg(reg_data(), "tvhours", c("age", "race"), family = "gaussian", cleannames = FALSE)
-  col <- t1[["tvhours: \u03b2"]]
+  col <- t1[["Model \u03b2"]]
   txt <- fmt_color_channels(col)$text
   sig <- !is.na(get_ci_inf(col)) & (get_ci_inf(col) > 0 | get_ci_sup(col) < 0)
 
@@ -187,7 +187,7 @@ test_that("grouped binomial (trials=) matches glm(cbind(s, q-s)); OR fmt shape",
   # flag fires (correct; asserted in test-tab_reg-footer.R). This test is about the OR/CI/p parity.
   t1  <- suppressWarnings(tab_reg(d, "score", "race", family = "binomial", trials = 10,
                                   cleannames = FALSE))
-  col <- t1[["score: OR"]]
+  col <- t1[["Model OR"]]
 
   expect_identical(get_type(col), "row")
   expect_identical(get_display(col)[1], "or")
@@ -222,11 +222,11 @@ test_that("trials=TRUE uses the observed max score; exponentiate=FALSE gives the
   ten  <- suppressWarnings(tab_reg(d, "score", "race", family = "binomial", trials = 10,
                                    cleannames = FALSE))
   expect_equal(max(d$score, na.rm = TRUE), 10L)
-  expect_equal(get_or(auto[["score: OR"]]), get_or(ten[["score: OR"]]))
+  expect_equal(get_or(auto[["Model OR"]]), get_or(ten[["Model OR"]]))
 
   b <- suppressWarnings(tab_reg(d, "score", "race", family = "binomial", trials = 10,
                                 exponentiate = FALSE,
-                                cleannames = FALSE))[["score: \u03b2"]]
+                                cleannames = FALSE))[["Model \u03b2"]]
   expect_identical(get_type(b), "coef")
   expect_identical(get_ci_type(b), "diff")
 })
@@ -252,7 +252,7 @@ test_that("a compound formula (poly) fits with best-effort term rows; coefs matc
   skip_if_not_installed("broom")
   d   <- reg_data()
   t1  <- tab_reg(d, tvhours ~ race + poly(age, 2), family = "gaussian", cleannames = FALSE)
-  col <- t1[["tvhours: \u03b2"]]
+  col <- t1[["Model \u03b2"]]
 
   expect_true(any(grepl("poly\\(age, 2\\)", as.character(t1$var))))   # poly -> its own term block
   expect_true(any(as.character(t1$var) == "race"))                    # race still a factor block
@@ -331,8 +331,8 @@ test_that("tab_reg() multinomial OR / CI / p match nnet::multinom; one OR column
   t1 <- tab_reg(d, "party3", c("race", "age"), family = "multinomial", cleannames = FALSE)
 
   # one OR column per non-reference outcome category, "vs <ref>" in the label
-  expect_true(all(c("Dem vs Ind: OR", "Rep vs Ind: OR") %in% names(t1)))
-  col1 <- t1[["Dem vs Ind: OR"]]
+  expect_true(all(c("Dem vs Ind", "Rep vs Ind") %in% names(t1)))
+  col1 <- t1[["Dem vs Ind"]]
   expect_identical(get_type(col1), "row")
   expect_identical(get_display(col1)[1], "or")
   expect_identical(get_ci_type(col1), "or")
@@ -346,7 +346,7 @@ test_that("tab_reg() multinomial OR / CI / p match nnet::multinom; one OR column
 
   for (j in c("Dem", "Rep")) {
     tj   <- td[td$y.level == j, ]
-    col  <- t1[[paste0(j, " vs Ind: OR")]]
+    col  <- t1[[paste0(j, " vs Ind")]]
     keep <- !is.na(get_pvalue(col))
     expect_equal(sum(keep), nrow(tj))
     expect_equal(sort(get_or(col)[keep]),     sort(exp(tj$estimate)),                   tolerance = 1e-6)
@@ -360,9 +360,9 @@ test_that("tab_reg() multinomial OR / CI / p match nnet::multinom; one OR column
 
   # Phase 14s (G): every category column of ONE model shares a single col_var (the model label), so no
   # border is drawn between them; the visible column NAMES stay per-category.
-  cvs <- vapply(c("Dem vs Ind: OR", "Rep vs Ind: OR"), function(nm) get_col_var(t1[[nm]])[1], character(1))
+  cvs <- vapply(c("Dem vs Ind", "Rep vs Ind"), function(nm) get_col_var(t1[[nm]])[1], character(1))
   expect_equal(length(unique(cvs)), 1L)                     # shared col_var
-  expect_false(identical(unname(cvs[1]), "Dem vs Ind: OR")) # not the per-category name
+  expect_false(identical(unname(cvs[1]), "Dem vs Ind")) # not the per-category name
 })
 
 test_that("reference= keyed by the outcome sets the multinomial baseline category", {
@@ -370,7 +370,7 @@ test_that("reference= keyed by the outcome sets the multinomial baseline categor
   skip_if_not_installed("nnet")
   t1 <- tab_reg(mnl_data(), "party3", "race", family = "multinomial",
                 reference = c(party3 = "Dem"), cleannames = FALSE)
-  expect_true(all(c("Ind vs Dem: OR", "Rep vs Dem: OR") %in% names(t1)))
+  expect_true(all(c("Ind vs Dem", "Rep vs Dem") %in% names(t1)))
 })
 
 test_that("tab_reg() ordinal cumulative OR / CI / p match MASS::polr; single column, Constant NA", {
@@ -379,7 +379,7 @@ test_that("tab_reg() ordinal cumulative OR / CI / p match MASS::polr; single col
   d   <- ord_data()
   t1  <- suppressWarnings(tab_reg(d, "spectrum", c("race", "age"),
                                   family = "ordinal", cleannames = FALSE))
-  col <- t1[["spectrum: OR"]]
+  col <- t1[["Model OR"]]
   expect_identical(get_type(col), "row")
   expect_identical(get_display(col)[1], "or")
   expect_identical(get_ci_type(col), "or")
@@ -463,7 +463,7 @@ test_that("binomial AME: diff/pct/CI/p match marginaleffects; AME-first composed
   d   <- reg_data()
   t1  <- tab_reg(d, "married", c("race", "age"), family = "binomial", effect = "ame",
                  cleannames = FALSE)
-  col <- t1[["Married: AME"]]
+  col <- t1[["Model AME"]]
 
   expect_identical(get_type(col), "row")
   expect_identical(get_ci_type(col), "diff")
@@ -507,7 +507,7 @@ test_that("gaussian AME uses the coef shape and matches marginaleffects", {
   skip_if_not_installed("marginaleffects")
   d   <- reg_data()
   col <- tab_reg(d, "tvhours", c("age", "race"), family = "gaussian", effect = "ame",
-                 cleannames = FALSE)[["tvhours: AME"]]
+                 cleannames = FALSE)[["Model AME"]]
   expect_identical(get_type(col), "coef")
   expect_identical(get_ci_type(col), "diff")
 
@@ -528,7 +528,7 @@ test_that("poisson AME is a raw count-change and matches marginaleffects", {
   # suppressWarnings: over-dispersed poisson fixture -> the dispersion flag (asserted in
   # test-tab_reg-footer.R). This test is about the AME scale and its marginaleffects parity.
   col <- suppressWarnings(tab_reg(d, "tvhours", c("age", "race"), family = "poisson",
-                                  effect = "ame", cleannames = FALSE))[["tvhours: AME"]]
+                                  effect = "ame", cleannames = FALSE))[["Model AME"]]
   expect_identical(get_type(col), "coef")
 
   dm <- d |> dplyr::filter(!is.na(tvhours), !is.na(age), !is.na(race))
@@ -547,7 +547,7 @@ test_that("multinomial AME: one column per outcome category, matches marginaleff
   d  <- mnl_data()
   t1 <- tab_reg(d, "party3", c("race", "age"), family = "multinomial", effect = "ame",
                 cleannames = FALSE)
-  expect_true(all(c("Ind: AME", "Dem: AME", "Rep: AME") %in% names(t1)))   # every outcome category
+  expect_true(all(c("Ind", "Dem", "Rep") %in% names(t1)))   # every outcome category
 
   dm <- d |> dplyr::filter(!is.na(party3), !is.na(race), !is.na(age))
   dm$race   <- forcats::fct_drop(dm$race)
@@ -556,7 +556,7 @@ test_that("multinomial AME: one column per outcome category, matches marginaleff
   ac <- rbind(as.data.frame(marginaleffects::avg_comparisons(m, variables = "race", newdata = dm)),
               as.data.frame(marginaleffects::avg_comparisons(m, variables = "age",  newdata = dm)))
   for (j in c("Ind", "Dem", "Rep")) {
-    col  <- t1[[paste0(j, ": AME")]]
+    col  <- t1[[j]]
     keep <- !is.na(get_diff(col))
     acj  <- ac[ac$group == j, ]
     expect_equal(sort(get_diff(col)[keep]),   sort(acj$estimate), tolerance = 1e-6)
@@ -571,14 +571,14 @@ test_that("ordinal AME: one column per outcome category, matches marginaleffects
   d  <- ord_data()
   t1 <- suppressWarnings(tab_reg(d, "spectrum", "race", family = "ordinal", effect = "ame",
                                  cleannames = FALSE))
-  expect_true(all(c("Rep: AME", "Ind: AME", "Dem: AME") %in% names(t1)))
+  expect_true(all(c("Rep", "Ind", "Dem") %in% names(t1)))
 
   dm <- d |> dplyr::filter(!is.na(spectrum), !is.na(race))
   dm$race <- forcats::fct_drop(dm$race)
   o  <- MASS::polr(spectrum ~ race, data = dm, Hess = TRUE, method = "logistic")
   ac <- as.data.frame(marginaleffects::avg_comparisons(o, variables = "race", newdata = dm))
   for (j in c("Rep", "Ind", "Dem")) {
-    col  <- t1[[paste0(j, ": AME")]]
+    col  <- t1[[j]]
     keep <- !is.na(get_diff(col))
     acj  <- ac[ac$group == j, ]
     expect_equal(sort(get_diff(col)[keep]), sort(acj$estimate), tolerance = 1e-6)
@@ -594,7 +594,7 @@ test_that("weighted binomial AME (svyglm) is population-weighted and matches mar
   # svyglm() warns ("observations with zero weight not used for calculating dispersion"). That is
   # upstream (survey/stats), not tabxplor, and it fires identically on the hand-run oracle below.
   col <- suppressWarnings(tab_reg(d, "married", "race", family = "binomial", wt = "tvhours",
-                                  effect = "ame", cleannames = FALSE))[["Married: AME"]]
+                                  effect = "ame", cleannames = FALSE))[["Model AME"]]
 
   dm <- d |> dplyr::filter(!is.na(married), !is.na(race))
   dm$race    <- forcats::fct_drop(dm$race)
@@ -631,7 +631,7 @@ test_that("MER-at-reference (binomial): effect/prediction/CI match marginaleffec
   d   <- reg_data()
   t1  <- tab_reg(d, "married", c("race", "age"), family = "binomial", effect = "ame",
                  at = "reference", cleannames = FALSE)
-  col <- t1[["Married: MER"]]                           # the label switches AME -> MER at reference
+  col <- t1[["Model MER"]]                           # the label switches AME -> MER at reference
   expect_identical(get_type(col), "row")
 
   dm <- d |> dplyr::filter(!is.na(married), !is.na(race), !is.na(age))
@@ -658,8 +658,8 @@ test_that("MNL 'j vs rest' OR at the reference profile matches marginaleffects (
   d  <- mnl_data()
   t1 <- tab_reg(d, "party3", c("race", "age"), family = "multinomial", at = "reference",
                 cleannames = FALSE)
-  expect_true(all(c("Ind vs rest: OR", "Dem vs rest: OR", "Rep vs rest: OR") %in% names(t1)))
-  expect_identical(get_ci_type(t1[["Dem vs rest: OR"]]), "or")
+  expect_true(all(c("Ind vs rest", "Dem vs rest", "Rep vs rest") %in% names(t1)))
+  expect_identical(get_ci_type(t1[["Dem vs rest"]]), "or")
 
   dm <- d |> dplyr::filter(!is.na(party3), !is.na(race), !is.na(age))
   dm$race   <- forcats::fct_drop(dm$race)
@@ -670,12 +670,12 @@ test_that("MNL 'j vs rest' OR at the reference profile matches marginaleffects (
     as.data.frame(marginaleffects::comparisons(m, variables = "race", newdata = grid, comparison = "lnor")),
     as.data.frame(marginaleffects::comparisons(m, variables = "age",  newdata = grid, comparison = "lnor")))
   for (j in c("Ind", "Dem", "Rep")) {
-    col  <- t1[[paste0(j, " vs rest: OR")]]
+    col  <- t1[[paste0(j, " vs rest")]]
     vals <- get_or(col)[!is.na(get_or(col)) & !is_refrow(col)]   # exclude the neutral reference OR = 1
     expect_equal(sort(vals), sort(exp(lc[lc$group == j, ]$estimate)), tolerance = 1e-6)
   }
-  ref <- is_refrow(t1[["Ind vs rest: OR"]]) & as.character(t1$var) == "race"
-  expect_true(all(get_or(t1[["Ind vs rest: OR"]])[ref] == 1))    # reference predictor level -> OR 1
+  ref <- is_refrow(t1[["Ind vs rest"]]) & as.character(t1$var) == "race"
+  expect_true(all(get_or(t1[["Ind vs rest"]])[ref] == 1))    # reference predictor level -> OR 1
 })
 
 test_that("at='reference' is a no-op (with a message) for non-multinomial coefficients", {
@@ -687,7 +687,7 @@ test_that("at='reference' is a no-op (with a message) for non-multinomial coeffi
     "profile-independent"
   )
   t2 <- tab_reg(d, "married", "race", family = "binomial", cleannames = FALSE)
-  expect_equal(get_or(t1[["Married: OR"]]), get_or(t2[["Married: OR"]]))   # identical coefficients
+  expect_equal(get_or(t1[["Model OR"]]), get_or(t2[["Model OR"]]))   # identical coefficients
 })
 
 test_that("MER-at-reference exports through every backend without error", {
@@ -732,7 +732,10 @@ test_that("K: several dependents x a list of models -> a tabxplor_tabs, one per 
   f <- withr::local_tempfile(fileext = ".xlsx")
   tab_xl(r, path = f, replace = TRUE, open = FALSE)
   wb <- openxlsx2::wb_load(f)
-  expect_setequal(openxlsx2::wb_get_sheet_names(wb), c("married", "widowed"))
+  # Phase 14w (item 1): a reg table's sheet name is the compact "<short>_<dep>_..." tag (a comparison
+  # collapses the predictors to "compare"), not the bare dependent.
+  expect_setequal(openxlsx2::wb_get_sheet_names(wb),
+                  c("logit_married_compare", "logit_widowed_compare"))
 })
 
 test_that("L1: a complete model's predictor order is kept (at the end)", {

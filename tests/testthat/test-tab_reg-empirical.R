@@ -75,7 +75,7 @@ test_that("binomial coefficient: single-predictor OR == crude OR (Emp. OR) == mo
   d <- emp_data()
   t <- tab_reg(d, "married", "race", family = "binomial", empirical = TRUE, cleannames = FALSE)
   emp_or <- get_or(t[["Emp. OR"]]); names(emp_or) <- as.character(t$levels)
-  mod_nm <- setdiff(grep(": OR$", names(t), value = TRUE), "Emp. OR")      # the single-pred model col
+  mod_nm <- "Model OR"                                                       # the single-pred model col
   mod_or <- get_or(t[[mod_nm]]);    names(mod_or) <- as.character(t$levels)
 
   pos <- emp_positive_level(t, d, "married")
@@ -180,7 +180,7 @@ test_that("multinomial: single-predictor RRR per category == crude 2x2 odds rati
   co <- stats::coef(m)                                      # rows = non-ref categories, cols = terms
   yref <- levels(d$party3)[1]                               # "Ind"
   for (j in rownames(co)) {                                 # "Dem", "Rep"
-    col <- get_or(t[[paste0(j, " vs ", yref, ": OR")]]); names(col) <- as.character(t$levels)
+    col <- get_or(t[[paste0(j, " vs ", yref)]]); names(col) <- as.character(t$levels)
     for (term in colnames(co)[-1]) {
       lev  <- sub("^race", "", term)
       # crude OR from the {j, ref-cat} x {level, ref-level} 2x2

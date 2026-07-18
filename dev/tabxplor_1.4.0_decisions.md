@@ -4311,6 +4311,7 @@ identity + the feature tests). Samples: `dev/review_manual/phase14v_empirical.{h
 - **reg-table titles still mis-generate** (the 14l/14w flag: reg tables record no `vars` attribute).
 
 
+
 ## 48. Phase 14v-ii — CI methods, over-dispersion, and empirical CIs (DESIGN 2026-07-18)
 
 Follow-up to §47, from the maintainer's two statistical questions about the crude-vs-model CI relation.
@@ -4478,40 +4479,55 @@ reg side, the §2 dispersion-scaling gives grouped-binomial the same protection.
   tab's Welch — the reverse direction; the maintainer chose the tab-side `student` opt-in instead);
   Fieller (exact, unbounded-aware) as a fourth `method_mean_ratio` (delta/log is the pragmatic default).
 
-### DONE (2026-07-18)
 
-Full suite **FAIL 0 | WARN 0 | SKIP 4 | PASS 3462**; `document()` clean. Conscious golden regen: **7
-`_golden/*.rds`** only — 4 `ci_settings`-only (the attribute grew 3→6 fields), 3 mean-CI data
-(`n_mean_ci`, `n_ci_tabvars`, `n_ci_tabvars_all`, rule B z→t). **No `_color_golden` and no `_snaps`
-moved** (rule B did not flip any golden's significance; the numeric mean-CI *display* is not snapshotted).
-Samples: `dev/review_manual/phase14v_ii_*.{html,md,xlsx}`.
+## 49. Phase 14w — reg table titles, legends, and headers (IMPLEMENTED 2026-07-18)
 
-**The maintainer chose rule B on principle** (method determines df, not the stars toggle): **t** where a
-variance/dispersion is estimated (mean cell → t(n−1), welch-diff → Welch-t, student-diff → t(n1+n2−2),
-quasipoisson-ratio → t(n1+n2−2)), **z** where the variance is a fixed function of the mean (robust
-ratio, naive poisson, all proportion CIs). This **reverses the §15/§19 stars-gating** and reaches the
-mean **cell** CI too (the largest churn; flagged and accepted). `ci_mean_diff2` now always uses the
-method's df; `ci_pivot` guards `df ≤ 0` (n=1 → clean NA, no NaN warning — also fixes the pre-existing
-`n_ci_tabvars` NaN drift).
+The spine: a reg table recorded NO structured model metadata, so titles / legends / effect-words were
+recovered by parsing column-name suffixes and by generic-crosstab heuristics that break for regressions.
+Answer to the maintainer's "where would a new attribute go" question: **ONE new table-level attribute
+`reg_meta`** (a list: `family` / `effect` / `at` / `do_exp` / `eff_word` / `dependent` /
+`positive_level` / `predictors` / `split_var` / `comparison` / `model_labels` / `conf_level`), set once by
+`tab_reg()`. **No column-level attribute and no new fmt field**: the per-column effect word is DERIVED at
+legend time from `reg_meta$family`/`effect` + the column's own `ci_type`/`type`; model-vs-empirical is
+told apart by the `"Emp. "` name prefix (consistent with the already name-keyed `test`/`empirical_tips`).
 
-- **Part 1**: `ci_mean_ratio` / `ci_or` engines (`R/tab-agg.R`); `method_ratio`/`method_mean_diff`/
-  `method_mean_ratio` public args on `tab`/`tab_many`/`tab_ci` (+ `ci_settings` grows to 6 fields, named
-  in `legend_method_name` + FR). The bug is fixed: a ratio-coloured **mean** stores `ci_type = "ratio"`
-  and real ratio-of-means bounds (was the diff bounds mislabelled). Trigger =
-  `color_pct_text_is_ratio()` generalised to means (`by_type` `mean = "ratio"`; flat `color = "ratio"`
-  already fired), threaded into `tab_num` (path A, the pipeline mean CI) + `tab_ci` (path B).
-- **Part 2**: `reg_fit` scales SEs by √φ for unweighted poisson / grouped-binomial (MLE fit kept → GOF
-  footer intact), t(df.residual), p recomputed. `reg_dispersion` made pure; the over-dispersion warning
-  moved into `reg_fit` (single fire, reworded to the active adjustment, still contains "dispersion").
-- **Part 3**: empirical columns gain a crude CI + pvalue + significance colour (caller's `color_signif`),
-  method-matched (Newcombe / Woolf `ci_or` / Student=OLS / quasi-Poisson / Wilson); `Emp. mean` stays
-  uncoloured (cell CI for stars/tooltip). Multinomial tooltip carries Wilson + Newcombe CIs.
-  `reg_footer_lines` now threads `ci_settings`. **Pre-existing bug fixed**: `reg_empirical` saw the RAW
-  0/1-numeric outcome but `positive_level` is the labelled `"<dep>"` → crude base silently 0; now mirrors
-  `reg_prep_binary`'s recode.
+Plumbing (the 14n/14v landmine): `reg_meta` is a `new_tab()`/`new_grouped_tab()` formal + `get/set_reg_meta`
++ ONE `tab_attrs()` line + threaded through the two footer rebuilds (`reg_footer_lines`, `tab_pvalue_lines`).
+`reg_footer_lines()` DROPS `test`, so `is_reg` must not depend on it — the legend now reads
+`!is.null(get_reg_meta(x))`, which survives footer materialisation.
 
-**Reg-legend prose deferred to 14w** (Q3): the empirical mean columns already name their method (Emp.
-rate → "quasi-Poisson interval"), but the `Emp. IRR` column's `ci_type = "or"` still reads "log
-odds-ratio" (should be rate-ratio) — a 14w refinement. **Concurrent maintainer change**: a new
-`gss_cat_data_formatting()` in `R/utils.R` (theirs, untouched); this session's `document()` generated
-its `.Rd` + NAMESPACE export.
+- **Item 1/4 titles** — `reg_title(reg_meta)`: single model "`<Family>`: `<dep>` by `<p1>, <p2> +N more`"
+  (+ " (tabbed by `<split_var>`)"); a model comparison "`<Family>`s (models comparison): `<dep>`,
+  '`<ref>`' (`<effect>`)" (the reference level + effect are otherwise written nowhere). Excel sheet =
+  compact `reg_sheet_name` ("logit_`<dep>`_`<pred>`", comparison → "…_compare"). DECIDED: caption in
+  md/kable + Excel; **console via the footer model line** (no console title-above).
+- **Item 2/5 legend** — the "Model:" line (`reg_model_line`) is generated fresh from `reg_meta` and
+  ordered BEFORE the colour legend at every footer site (console / md / kable / xl; the xl line rides the
+  same rich-text block as a plain leading run so `legend_row` stays aligned). `legend_ref_info(is_reg=)`
+  → every reg column compares to "the reference category" (fixes AME's wrong "the Total row"); the
+  family-aware effect-word derivation makes a Poisson IRR read "rate-ratio" not "odds-ratio" (item 5,
+  incl. `Emp. IRR`). `reg_model_note()` rewritten to a lower-case estimand fragment; `reg_model_line`
+  prepends "Model: `<family display name>`.".
+- **Item 3 headers** — single-outcome (binomial/gaussian/poisson): the model column AND its empirical
+  companions share ONE `col_var` (binomial "`<dep>`: `<positive_level>`"; numeric = the dependent name
+  alone), the model column NAME becomes "Model `<eff>`" ("Model OR"/"Model β"/"Model IRR"/"Model AME
+  (model %)"; multi-dependent suffixes " (`<dep>`)"). Multinomial keeps `col_var` "`<dep>`: `<effect>`"
+  and strips the repeated ": OR"/": AME" from each category NAME. A COMPARISON keeps each model's own
+  col_var = its name (borders between models; the outcome/ref/effect go in the title). The 14s span-drop
+  + `new_col_var` border logic need no change — the new names differ from the shared col_var, so the span
+  survives and the intra-group borders vanish for free. The GOF footer keys by the renamed model column
+  (`fit_first_col` = the "Model `<eff>`" label); `empirical_tips` follows the stripped category names.
+- **Legend grouping** — `legend_specs()` now emits one spec per coloured COLUMN (was one per col_var);
+  `split(sig)` (sig gains a model/empirical `role`) dedups, so a crosstab folds to one line per col_var
+  (byte-identical) but a shared-outcome col_var yields separate model + empirical lines. The line prefix
+  is the col_var when it spawns a single line, else the column names.
+
+**Verification**: full suite green (FAIL 0, PASS 3492 + new `test-tab_reg-14w.R`); **no golden and no
+snapshot moved** (crosstab legends byte-identical, reg tables are not snapshotted). Existing reg tests
+updated to the new column names (mechanical: "`<x>`: OR" -> "Model OR", multinomial ": OR" stripped, the
+survey greps switched to `^Model ` / ` vs `). Samples: `dev/review_manual/phase14w_reg.{html,md,xlsx}`.
+
+**Flagged / open**: a BARE single-model reg table (no empirical) now shows a 2-row header (the outcome
+span over "Model `<eff>`") where it used to be one row — the literal reading of item 3's "col_var name
+should ALWAYS be `<dep>: <level>`"; the maintainer can collapse it for the no-companion case if desired.
+`tab_plot()` does NOT yet show the "Model:" line (limited footer space; the colour legend still renders).

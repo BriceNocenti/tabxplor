@@ -29,7 +29,7 @@ test_that("binomial footer N/LR-null/McFadden/AIC/BIC match a hand-fit glm; disp
   d   <- reg_data()
   t1  <- tab_reg(d, "married", c("race", "rincome"), family = "binomial", cleannames = FALSE)
   tst <- get_test(t1)
-  cv  <- "Married: OR"
+  cv  <- "Model OR"
   gv  <- function(s) tst$statistic[tst$col_var == cv & tst$test == s]
 
   # the footer is DISPLAY-ONLY: the built object is the coefficient skeleton, no "Model fit" rows
@@ -58,7 +58,7 @@ test_that("the footer does not alter the built coefficient skeleton (stats= togg
   d       <- reg_data()
   with    <- tab_reg(d, "married", "race", family = "binomial", cleannames = FALSE)
   without <- tab_reg(d, "married", "race", family = "binomial", stats = FALSE, cleannames = FALSE)
-  col <- "Married: OR"
+  col <- "Model OR"
   expect_equal(nrow(with), nrow(without))
   expect_equal(get_or(with[[col]]), get_or(without[[col]]))
   expect_equal(sum(!is.na(get_pvalue(with[[col]]))), sum(!is.na(get_pvalue(without[[col]]))))
@@ -84,7 +84,7 @@ test_that("gaussian footer (N/R2/adjR2/F/sigma) matches broom::glance", {
   skip_if_not_installed("broom")
   d   <- reg_data()
   t1  <- tab_reg(d, "tvhours", c("age", "race"), family = "gaussian", cleannames = FALSE)
-  tst <- get_test(t1); cv <- "tvhours: \u03b2"
+  tst <- get_test(t1); cv <- "Model \u03b2"
   gv  <- function(s) unname(tst$statistic[tst$col_var == cv & tst$test == s])
 
   # the lm default footer set (D7): N + R2 + adjR2 + F + residual SD (no AIC/BIC unless stats= asks)
@@ -111,7 +111,7 @@ test_that("poisson footer carries a Pearson dispersion matching sum(pearson^2)/d
   d <- reg_data()
   expect_warning(t1 <- tab_reg(d, "tvhours", c("age", "race"), family = "poisson",
                                cleannames = FALSE), "dispersion")
-  tst <- get_test(t1); cv <- "tvhours: IRR"
+  tst <- get_test(t1); cv <- "Model IRR"
   dm  <- d |> dplyr::filter(!is.na(tvhours), !is.na(age), !is.na(race))
   m   <- stats::glm(tvhours ~ age + race, data = dm, family = stats::poisson())
   phi <- sum(stats::residuals(m, "pearson")^2) / stats::df.residual(m)

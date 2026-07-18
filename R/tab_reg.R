@@ -205,9 +205,34 @@ reg_effect_word <- function(family, do_exp, effect = "coefficient", at = "averag
          "exp(\u03b2)")
 }
 
-# A one-line note appended to the table's subtext, so a table self-documents its estimand (the
-# "vs <ref>" per-category detail lives in the column labels). effect="ame" gets its own note (the cells
-# show the adjusted prediction + the marginal effect), overriding the coefficient-scale note.
+# Phase 14w: the human name of the model family, shared by the reg title/caption and the "Model:" footer
+# line (reg_model_line). do_exp/effect do not change the NAME (the estimand phrase carries that detail).
+reg_family_display_name <- function(family) {
+  switch(family,
+    "gaussian"     = "linear regression",
+    "binomial"     = "logistic regression",
+    "poisson"      = "Poisson regression",
+    "quasipoisson" = "quasi-Poisson regression",
+    "multinomial"  = "multinomial logistic regression",
+    "ordinal"      = "ordinal logistic regression",
+    "regression")
+}
+
+# Phase 14w: the short model tag used for Excel sheet names ("logit_<dep>_<pred>...").
+reg_family_short <- function(family) {
+  switch(family,
+    "gaussian"     = "linear",
+    "binomial"     = "logit",
+    "poisson"      = "poisson",
+    "quasipoisson" = "qpoisson",
+    "multinomial"  = "mlogit",
+    "ordinal"      = "ologit",
+    "reg")
+}
+
+# The ESTIMAND phrase (lower-case fragment, never NULL) -- WHAT the numbers are. Composed into the
+# "Model: <family>. <estimand>." footer line by reg_model_line(). effect="ame" and the multinomial
+# "at reference" profile get their own phrasing; otherwise it is the coefficient/exp scale per family.
 reg_model_note <- function(family, do_exp, effect = "coefficient", at = "average") {
   if (effect == "ame") {
     prob  <- family %in% c("binomial", "multinomial", "ordinal")
@@ -215,22 +240,95 @@ reg_model_note <- function(family, do_exp, effect = "coefficient", at = "average
       " at the reference profile (other predictors held at their reference level / mean)"
     else " (sample-averaged)"
     return(if (prob)
-      paste0("Marginal effects on the probability scale (percentage points)", where,
-             ". Each cell shows the effect vs the reference level and, in parentheses, the adjusted ",
-             "predicted probability.")
+      paste0("marginal effects on the probability scale (percentage points)", where,
+             "; each cell shows the effect vs the reference level and, in parentheses, the adjusted ",
+             "predicted probability")
     else
-      paste0("Marginal effects on the response scale", where, "."))
+      paste0("marginal effects on the response scale", where))
   }
   if (at == "reference" && family == "multinomial") {
-    return(paste0("Odds ratios of each outcome category versus the rest, at the reference profile ",
-                  "(other predictors held at their reference level / mean); profile-conditional."))
+    return(paste0("odds ratios of each outcome category versus the rest, at the reference profile ",
+                  "(other predictors held at their reference level / mean); profile-conditional"))
   }
   switch(family,
-    "ordinal"     = if (do_exp) "Cumulative odds ratios (proportional-odds model)."
-                    else        "Proportional-odds model (log-odds coefficients).",
-    "multinomial" = if (do_exp) "Multinomial odds ratios (each category vs the reference)."
-                    else        "Multinomial log-odds coefficients.",
-    NULL)
+    "gaussian"     = "coefficients (mean difference vs the reference category)",
+    "binomial"     = if (do_exp) "odds ratios (vs the reference category)"
+                     else        "log-odds coefficients (vs the reference category)",
+    "poisson"      = ,
+    "quasipoisson" = if (do_exp) "incidence-rate ratios (vs the reference category)"
+                     else        "log-rate coefficients (vs the reference category)",
+    "multinomial"  = if (do_exp) "odds ratios (each category vs the reference)"
+                     else        "log-odds coefficients (each category vs the reference)",
+    "ordinal"      = if (do_exp) "cumulative odds ratios (proportional-odds model)"
+                     else        "proportional-odds model (log-odds coefficients)",
+    "")
+}
+
+# Phase 14w: the "Model: <family>. <estimand>." legend line, generated fresh from `reg_meta` at render
+# so it can be ordered BEFORE the colour legend (item 2). For a model comparison the caption is not shown
+# in the console, so the dependent + (binomial) reference level are named here too (item 4). NULL when the
+# table is not a regression (get_reg_meta -> NULL).
+reg_model_line <- function(meta) {
+  if (is.null(meta)) return(NULL)
+  fam <- reg_family_display_name(meta$family)
+  est <- reg_model_note(meta$family, meta$do_exp, meta$effect, meta$at)
+  who <- if (isTRUE(meta$comparison)) {
+    pl <- meta$positive_level[[1]]
+    if (!is.na(pl)) paste0(" of ", meta$dependent[[1]], " ('", pl, "')")
+    else            paste0(" of ", meta$dependent[[1]])
+  } else ""
+  paste0("Model: ", fam, who, if (nzchar(est)) paste0("; ", est) else "", ".")
+}
+
+# Phase 14w: the reg table's TITLE / caption (Excel title + sheet, md/kable caption). Single model:
+# "<Family>: <dep> by <p1>, <p2> +N more". Comparison: "<Family>s (models comparison): <dep>, '<ref>'
+# (<effect>)" -- the reference level + effect that would otherwise be written nowhere (item 4).
+reg_title <- function(meta, max = 2) {
+  if (is.null(meta)) return(NA_character_)
+  fam <- reg_family_display_name(meta$family)
+  Fam <- paste0(toupper(substr(fam, 1, 1)), substr(fam, 2, nchar(fam)))
+  dep <- tab_title_names(meta$dependent, max)
+  tabbed <- if (!is.null(meta$split_var)) paste0(" (tabbed by ", meta$split_var, ")") else ""
+  if (isTRUE(meta$comparison)) {
+    pl  <- meta$positive_level[[1]]
+    dref <- if (!is.na(pl)) paste0(dep, ", '", pl, "' (", meta$eff_word, ")")
+            else            paste0(dep, " (", meta$eff_word, ")")
+    paste0(Fam, "s (models comparison): ", dref, tabbed)
+  } else {
+    preds <- tab_title_names(meta$predictors, max)
+    paste0(Fam, ": ", dep, if (nzchar(preds)) paste0(" by ", preds) else "", tabbed)
+  }
+}
+
+# Phase 14w (item 1): a compact Excel sheet name for a reg table -- "<short>_<dep>_<pred>..." (e.g.
+# "logit_married_race_rincome"), truncated to 25 chars by the caller. A comparison collapses the
+# predictors to "compare" (they differ per model).
+reg_sheet_name <- function(meta) {
+  if (is.null(meta)) return(NA_character_)
+  tail <- if (isTRUE(meta$comparison)) c(meta$dependent[[1]], "compare")
+          else                         c(meta$dependent, meta$predictors)
+  paste(c(reg_family_short(meta$family), tail), collapse = "_")
+}
+
+# Phase 14w (item 3): the shared col_var for a SINGLE-outcome model column + its empirical companions,
+# so ONE span header names the outcome and no border separates them (they share a col_var). Binomial ->
+# "<dep>: <positive_level>"; a numeric outcome (gaussian/poisson) -> the dependent name alone. NOT used in
+# comparison mode (each model keeps its own col_var = model name, so borders separate the models, and the
+# outcome / reference / effect go in the title instead).
+reg_shared_col_var <- function(family, dependent, positive_level, cleannames) {
+  if (family == "binomial" && !is.null(positive_level) && !is.na(positive_level)) {
+    pl <- positive_level
+    if (isTRUE(cleannames)) pl <- stringr::str_remove_all(pl, cleannames_condition())
+    paste0(dependent, ": ", pl)
+  } else dependent
+}
+
+# Phase 14w (item 3): the single-model column NAME ("Model OR" / "Model IRR" / "Model AME (model %)"),
+# so the effect word lives in the column, not repeated in the span. Comparison mode keeps the model name;
+# a multi-dependent (several outcomes, one predictor set) suffixes the dependent so the names stay unique.
+reg_model_col_name <- function(eff_word, dependent, is_comparison, model_label, n_dep) {
+  if (isTRUE(is_comparison)) return(model_label)
+  if (n_dep > 1L) paste0("Model ", eff_word, " (", dependent, ")") else paste0("Model ", eff_word)
 }
 
 # Prepare a binary dependent: a 0/1 numeric becomes a 2-level factor ("Not <dep>" / "<dep>"); any
@@ -1236,10 +1334,10 @@ reg_columns_multinom <- function(skeleton, f, sp, effect_shape, color, color_sig
                        setdiff(names(f$tidy), "y.level"), drop = FALSE]
     jc  <- if (cleannames) stringr::str_remove_all(j, cleannames_condition()) else j
     lab <- paste0(if (prefix_dep) paste0(sp$dependent, " - ") else "",
-                  jc, " vs ", y_ref, ": ", eff_word)
-    # Phase 14s (G): every category column of ONE model shares `sp$label` as its col_var, so no border
-    # is drawn between them (borders separate DIFFERENT col_vars) and the model name spans them once.
-    # The visible column NAME stays the per-category `lab`.
+                  jc, " vs ", y_ref)
+    # Phase 14s (G) + 14w (item 3): every category column of ONE model shares `sp$label` ("<dep>: OR")
+    # as its col_var, so no border is drawn between them (borders separate DIFFERENT col_vars) and the
+    # model name + effect span them once. The repeated ": OR" is stripped from the per-category NAME.
     list(label = lab, emp_key = j,   # emp_key: raw category, for the empirical tooltip (Phase 14v)
          col   = reg_column(skeleton, sub, sp$predictors, sp$label, effect_shape, color, color_signif))
   })
@@ -1605,6 +1703,11 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
 
   multi_col     <- family == "multinomial"
   prefix_dep    <- length(specs) > 1L
+  # Phase 14w: a model COMPARISON (several models, one dependent) keeps each model's col_var = its own
+  # name (borders separate the models; the outcome/reference/effect go in the title). A single or
+  # multi-dependent table shares one outcome col_var per model column + its empirical companions.
+  n_dep         <- length(unique(purrr::map_chr(specs, "dependent")))
+  is_comparison <- length(specs) > 1L && n_dep == 1L
   numeric_preds <- union_predictors[!purrr::map_lgl(
     union_predictors, ~ is.factor(skeleton_data[[.x]]) || is.character(skeleton_data[[.x]]))]
 
@@ -1624,9 +1727,10 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
         groups <- levels(as.factor(f$data[[sp$dependent]]))
         purrr::map(groups, function(g) {
           jc  <- if (cleannames) stringr::str_remove_all(g, cleannames_condition()) else g
-          lab <- paste0(if (prefix_dep) paste0(sp$dependent, " - ") else "", jc, ": ", eff_word)
-          # Phase 14s (G): the per-category AME columns of one model share `sp$label` as col_var (no
-          # inter-category border); the visible NAME stays `lab`.
+          # Phase 14s (G) + 14w (item 3): the per-category AME columns of one model share `sp$label`
+          # ("<dep>: AME (model %)") as col_var (no inter-category border, one span names the effect
+          # once); the visible NAME is just the category (the repeated ": AME" is stripped).
+          lab <- paste0(if (prefix_dep) paste0(sp$dependent, " - ") else "", jc)
           list(label = lab, emp_key = g,   # emp_key: raw category, for the empirical tooltip (Phase 14v)
                col   = reg_marginal_column(skeleton, marg, sp$predictors, numeric_preds, shape,
                                            var_y, f$nobs, g, color, color_signif, sp$label))
@@ -1639,10 +1743,14 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
           td <- broom::tidy(f$fit); td$term <- stringr::str_remove_all(td$term, "`")
           exp(td$estimate[match(skeleton$term, td$term)])
         } else NULL
-        list(list(label = sp$label,
+        # Phase 14w (item 3): the single AME column shares the outcome col_var with its empirical
+        # companions; its NAME carries the effect ("Model AME (model %)").
+        cv <- if (is_comparison) sp$label
+              else reg_shared_col_var(family, sp$dependent, f$positive_level, cleannames)
+        list(list(label = reg_model_col_name(eff_word, sp$dependent, is_comparison, sp$label, n_dep),
                   col   = reg_marginal_column(skeleton, marg, sp$predictors, numeric_preds, shape,
                                               var_y, f$nobs, NA_character_, color, color_signif,
-                                              sp$label, or_tip = or_tip)))
+                                              cv, or_tip = or_tip)))
       }
     })
   } else if (mnl_vsrest) {
@@ -1654,8 +1762,9 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
       groups <- levels(as.factor(f$data[[sp$dependent]]))
       purrr::map(groups, function(g) {
         jc  <- if (cleannames) stringr::str_remove_all(g, cleannames_condition()) else g
-        lab <- paste0(if (prefix_dep) paste0(sp$dependent, " - ") else "", jc, " vs rest: OR")
-        # Phase 14s (G): shared col_var (`sp$label`) across the "vs rest" category columns of one model.
+        # Phase 14s (G) + 14w (item 3): shared col_var (`sp$label`) across the "vs rest" category columns
+        # of one model; the repeated ": OR" is stripped from the visible NAME (the span carries it).
+        lab <- paste0(if (prefix_dep) paste0(sp$dependent, " - ") else "", jc, " vs rest")
         list(label = lab,
              col   = reg_marginal_column(skeleton, marg, sp$predictors, numeric_preds, "or",
                                          NA_real_, f$nobs, g, color, color_signif, sp$label))
@@ -1675,10 +1784,14 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
       } else {
         # a compound formula is one model: every skeleton row belongs to it (else compound rows go NA)
         model_predictors <- if (isTRUE(sp$compound)) unique(skeleton$var) else sp$predictors
-        col <- reg_column(skeleton, f, model_predictors, sp$label, effect_shape, color, color_signif)
+        # Phase 14w (item 3): outcome col_var + "Model <effect>" name (comparison keeps the model name).
+        cv  <- if (is_comparison) sp$label
+               else reg_shared_col_var(family, sp$dependent, f$positive_level, cleannames)
+        col <- reg_column(skeleton, f, model_predictors, cv, effect_shape, color, color_signif)
         col <- reg_apply_estimate_display(col, estimate_display, skeleton, f, sp, family,
                                           design_spec, conf_level, numeric_preds, model_predictors)
-        list(list(label = sp$label, col = col))
+        list(list(label = reg_model_col_name(eff_word, sp$dependent, is_comparison, sp$label, n_dep),
+                  col = col))
       }
     })
   }
@@ -1734,12 +1847,18 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
         var_y_i <- if (family == "gaussian")
           suppressWarnings(stats::var(as.numeric(data[[dep_i]]), na.rm = TRUE)) else NA_real_
         emp_i   <- reg_empirical(data, fac_preds_e, dep_i, family, pos_i, design_spec$wt)
-        emp_by_fit[[i]] <- reg_empirical_columns(skeleton, emp_i, fac_preds_e, family, effect, var_y_i,
-                                                 conf_level = conf_level, color_signif = color_signif)
+        cols_i  <- reg_empirical_columns(skeleton, emp_i, fac_preds_e, family, effect, var_y_i,
+                                         conf_level = conf_level, color_signif = color_signif)
+        # Phase 14w (item 3): the crude companions share the model column's outcome col_var (one span,
+        # no border). NOT in comparison mode (the crude block stays a distinct col_var beside the models).
+        if (!is_comparison) {
+          scv    <- reg_shared_col_var(family, dep_i, pos_i, cleannames)
+          cols_i <- purrr::map(cols_i, ~ set_col_var(.x, scv))
+        }
+        emp_by_fit[[i]] <- cols_i
       }
     }
   }
-  n_dep <- length(unique(purrr::map_chr(specs, "dependent")))
   # one crude companion before all model columns when there is a single dependent (byte-identical
   # layout, incl. a model-comparison list -- all its models share the dependent); per-fit before each
   # fit's first model column when several dependents (names suffixed so they do not collide).
@@ -2267,8 +2386,9 @@ tab_reg <- function(data, dependent, predictors = NULL,
     union_predictors <- predictors
   }
 
-  note <- reg_model_note(family, do_exp, effect, at)
-  if (!is.null(note)) subtext <- if (nzchar(subtext)) paste0(subtext, " ", note) else note
+  # Phase 14w: the model note is NO LONGER baked into `subtext` here. It is generated fresh from `reg_meta`
+  # (reg_model_line) at render time, so it can be ordered BEFORE the colour legend. `subtext` now holds
+  # only user-supplied text.
 
   # split_var (Phase 12g): one grouping column, distinct from the outcome / predictors, that a model is
   # fitted within each level of. Must be a factor / character; reg_build recurses per level and stacks.
@@ -2336,7 +2456,26 @@ tab_reg <- function(data, dependent, predictors = NULL,
       res[[nm]] <- set_pvalue(res[[nm]], NA_real_)
     }
   }
-  res
+
+  # Phase 14w: the table's own model record (drives the reg title / caption, the "Model:" footer line, and
+  # the colour legend). Table-level: family/effect are one per table; the per-column effect word is derived
+  # from this + the column's ci_type (legend_specs), so no column-level attribute / fmt field is needed.
+  positive_levels <-
+    if (family == "binomial" && !formula_mode) {
+      purrr::map_chr(dependent, function(d) {
+        if (!is.null(trials_for(d))) return(NA_character_)
+        pl <- reg_positive_level(data, d, inverse_two_level_factors)
+        if (isTRUE(cleannames)) pl <- stringr::str_remove_all(pl, cleannames_condition())
+        pl
+      })
+    } else rep(NA_character_, length(dependent))
+  reg_meta <- list(
+    family = family, effect = effect, at = at, do_exp = do_exp, eff_word = eff_word,
+    dependent = dependent, positive_level = positive_levels, predictors = union_predictors,
+    split_var = split_var, comparison = is_comparison,
+    model_labels = if (is_comparison) labels else NULL, conf_level = conf_level
+  )
+  set_reg_meta(res, reg_meta)
 }
 
 

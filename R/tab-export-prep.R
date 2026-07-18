@@ -494,6 +494,12 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
     range_totcol = range_totcol,
     col_var_header = col_var_header,
     subtext = subtext,
+    # Phase 14w (item 2): the regression "Model:" line, prepended BEFORE the colour legend by every
+    # backend (a reader must know what the numbers ARE before how they are coloured). NULL on a crosstab.
+    reg_line = reg_model_line(get_reg_meta(tab)),
+    # Phase 14w (item 1): the regression title/caption, used when the exporter has no user caption. NA on
+    # a crosstab (those keep their own caption / auto-title path).
+    reg_title = reg_title(get_reg_meta(tab)),
     # Phase 14v: multinomial crude-companion tooltip fragments, per column -> per-row char vector
     # (resolved above while `var` was present); reg_append_empirical_tip() appends them at html render.
     empirical_tips = emp_tips

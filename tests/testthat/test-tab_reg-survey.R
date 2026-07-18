@@ -20,7 +20,7 @@ reg_survey_data <- function() {
 }
 
 or_col <- function(tab) {
-  nm <- grep(": OR$", names(tab), value = TRUE)[1]
+  nm <- grep("^Model ", names(tab), value = TRUE)[1]
   vapply(tab[[nm]], tabxplor::get_num, numeric(1))
 }
 
@@ -112,7 +112,7 @@ test_that("weighted ordinal (svyolr) matches a hand svyolr cumulative OR", {
   hand <- survey::svyolr(yo ~ x1 + x2, design = des)
 
   tab <- tab_reg(d, "yo", c("x1", "x2"), family = "ordinal", wt = "w")
-  oc  <- vapply(tab[[grep(": OR$", names(tab), value = TRUE)[1]]], tabxplor::get_num, numeric(1))
+  oc  <- vapply(tab[[grep("^Model ", names(tab), value = TRUE)[1]]], tabxplor::get_num, numeric(1))
   # skeleton = Constant (NA), x1 ref (1), x1lo, x1mid, x2 -> drop NA + reference
   oc  <- oc[!is.na(oc) & oc != 1]
   expect_equal(unname(oc), unname(exp(hand$coefficients)), tolerance = 1e-5)
@@ -128,8 +128,8 @@ test_that("weighted multinomial (svyVGAM) matches a hand svy_vglm OR", {
   hand_or <- exp(stats::coef(hand))
 
   tab <- tab_reg(d, "yn", c("x1", "x2"), family = "multinomial", wt = "w")
-  # one OR column per non-reference outcome category ("B", "C")
-  or_cols <- grep(": OR$", names(tab), value = TRUE)
+  # one OR column per non-reference outcome category ("B", "C"); 14w strips the trailing ": OR"
+  or_cols <- grep(" vs ", names(tab), value = TRUE)
   expect_length(or_cols, 2L)
   tv <- unlist(lapply(or_cols, function(nm) {
     v <- vapply(tab[[nm]], tabxplor::get_num, numeric(1)); v[!is.na(v) & v != 1]
@@ -173,7 +173,7 @@ test_that("each split group equals a manual per-subset fit", {
   for (grp in c("north", "south")) {
     sub  <- dplyr::filter(d, g == grp)
     hand <- stats::glm(as.integer(y == levels(y)[1]) ~ x1 + x2, data = sub, family = binomial())
-    tv   <- vapply(t[[grep(": OR$", names(t), value = TRUE)[1]]][t$g == grp], tabxplor::get_num, numeric(1))
+    tv   <- vapply(t[[grep("^Model ", names(t), value = TRUE)[1]]][t$g == grp], tabxplor::get_num, numeric(1))
     expect_equal(unname(tv[tv != 1]), unname(exp(stats::coef(hand))), tolerance = 1e-6)
   }
 })
@@ -205,7 +205,7 @@ test_that("split_var works with survey weights (per-group svyglm)", {
                             data = dplyr::mutate(sub, y01 = as.integer(y == levels(y)[1])))
   hand <- survey::svyglm(y01 ~ x1 + x2, design = des, family = quasibinomial())
   tt   <- dplyr::ungroup(t)
-  tv   <- vapply(tt[[grep(": OR$", names(tt), value = TRUE)[1]]][tt$g == "north"],
+  tv   <- vapply(tt[[grep("^Model ", names(tt), value = TRUE)[1]]][tt$g == "north"],
                  tabxplor::get_num, numeric(1))
   expect_equal(unname(tv[tv != 1]), unname(exp(stats::coef(hand))), tolerance = 1e-5)
 })
@@ -222,7 +222,7 @@ test_that("multiplicator scales a continuous predictor's OR to OR^k, p unchanged
   d <- reg_split_data()
   t0  <- suppressWarnings(tab_logit(d, "y", c("x1", "x2")))
   t10 <- suppressWarnings(tab_logit(d, "y", c("x1", "x2"), multiplicator = c(x2 = 10)))
-  oc  <- grep(": OR$", names(t0), value = TRUE)[1]
+  oc  <- grep("^Model ", names(t0), value = TRUE)[1]
   or0  <- vapply(t0[[oc]],  tabxplor::get_num, numeric(1))
   or10 <- vapply(t10[[oc]], tabxplor::get_num, numeric(1))
   # last row = x2; other rows (Constant, x1 levels) unchanged

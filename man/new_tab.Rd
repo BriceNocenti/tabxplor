@@ -14,6 +14,7 @@ new_tab(
   ci_settings = NULL,
   vars = NULL,
   empirical_tips = NULL,
+  reg_meta = NULL,
   ...,
   class = character()
 )
@@ -28,6 +29,7 @@ new_grouped_tab(
   ci_settings = NULL,
   vars = NULL,
   empirical_tips = NULL,
+  reg_meta = NULL,
   ...,
   class = character()
 )
@@ -63,6 +65,10 @@ rather than guessed back from it afterwards. \code{NULL} (the default) makes
 \item{empirical_tips}{Multinomial crude-companion tooltip data (a \code{tibble} keyed by column,
 predictor and level), set by \code{tab_reg(empirical = TRUE)}. \code{NULL} (default) for every
 other table. Carried through dplyr verbs; the HTML render appends it as a "crude:" tooltip fragment.}
+
+\item{reg_meta}{A regression table's model record (family, effect, dependent, reference level,
+predictors, ...), set by \code{\link{tab_reg}}. Drives the reg title/caption, the "Model:" legend
+line and the colour-legend wording. \code{NULL} (the default) means the table is not a regression.}
 
 \item{...}{Needed to implement subclasses.}
 
