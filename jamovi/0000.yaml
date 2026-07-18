@@ -26,6 +26,14 @@ analyses:
     category: analyses
     usesNative: true
     minApp: 1.0.8
+  - title: Regressions
+    name: jmvtab_reg
+    ns: tabxplor
+    menuGroup: tabxplor
+    menuTitle: Regressions
+    category: analyses
+    usesNative: true
+    minApp: 1.0.8
 usesNative: true
 minApp: 1.0.8
 

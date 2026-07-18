@@ -3,6 +3,12 @@
 # tabxplor 1.4.0 (in development)
 
 ## New features
+* **New jamovi "Regressions" analysis (`jmvtab_reg`).** A live, user-friendly jamovi UI for `tab_reg()`
+  covering every family (linear / logistic / Poisson / multinomial / ordinal), multiple outcomes,
+  survey weights (with an advanced cluster / strata / fpc panel), a per-predictor reference-level picker,
+  the crude-vs-model (`empirical`) companion columns, and Excel / HTML / Markdown export. Changing the
+  display, colours or a predictor's reference level re-renders instantly by reusing the fitted model
+  (references are recomputed without refitting).
 * **Confidence intervals for ratios and richer CI methods.** `color = "ratio"` on a numeric mean now
   produces a real **ratio-of-means** confidence interval (it used to silently show the *difference*
   interval). Three new arguments choose the interval method, each reproducing the matching regression:

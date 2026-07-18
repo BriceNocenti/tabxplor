@@ -35,7 +35,8 @@ tab_reg(
   na = c("keep", "drop_all"),
   cleannames = NULL,
   subtext = "",
-  empirical_OR = lifecycle::deprecated()
+  empirical_OR = lifecycle::deprecated(),
+  .fit_cache = NULL
 )
 }
 \arguments{
@@ -183,6 +184,11 @@ Uses \code{getOption("tabxplor.cleannames")} when \code{NULL}.}
 
 \item{empirical_OR}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Renamed \code{empirical} (now cross-family, not
 OR-only). Passing it now errors; use \code{empirical}.}
+
+\item{.fit_cache}{Internal, for the jamovi live UI (Phase 15b): a mutable cache environment
+(see \code{jmvreg_cache_env()}) that memoizes fitted models so display / colour / reference toggles
+avoid a refit. On the single-equation GLM coefficient path a factor-predictor reference change is
+reparametrized from the cached fit (no refit). \code{NULL} (the default) leaves ordinary calls unchanged.}
 }
 \value{
 A \code{tabxplor_grouped_tab} (grouped by predictor), one effect column per model / dependent.

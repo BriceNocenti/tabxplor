@@ -1,0 +1,308 @@
+title: Regressions
+name: jmvtab_reg
+jus: '3.0'
+stage: 0
+compilerMode: tame
+events:
+  update: ./jmvtab_reg::update
+children:
+  - type: VariableSupplier
+    name: variablesupplier
+    persistentItems: false
+    stretchFactor: 1
+    children:
+      - type: TargetLayoutBox
+        label: <b>dependent = <i>(outcome variable[s])</i></b>
+        children:
+          - type: VariablesListBox
+            name: dependent
+            isTarget: true
+            events:
+              change: ./jmvtab_reg::onChange_vars
+      - type: TargetLayoutBox
+        label: <b>predictors = <i>(explanatory variables)</i></b>
+        children:
+          - type: VariablesListBox
+            name: predictors
+            isTarget: true
+            events:
+              change: ./jmvtab_reg::onChange_vars
+      - type: TargetLayoutBox
+        label: <b>wt = <i>(survey weights)</i></b>
+        children:
+          - type: VariablesListBox
+            name: wt
+            maxItemCount: 1
+            isTarget: true
+            events:
+              change: ./jmvtab_reg::onChange_vars
+      - type: TargetLayoutBox
+        label: <b>split_var = <i>(fit within each group)</i></b>
+        children:
+          - type: VariablesListBox
+            name: split_var
+            maxItemCount: 1
+            isTarget: true
+
+  - type: CollapseBox
+    label: <b>Model</b>
+    stretchFactor: 1
+    collapsed: false
+    children:
+      - type: LayoutBox
+        margin: large
+        children:
+          - type: Label
+            label: family = <i>(model type)</i>
+            children:
+              - type: ComboBox
+                name: family
+          - type: Label
+            label: exponentiate = <i>(effect scale)</i>
+            children:
+              - type: ComboBox
+                name: exponentiate
+          - type: Label
+            label: effect = <i>(estimand)</i>
+            children:
+              - type: RadioButton
+                name: effect_1
+                optionName: effect
+                optionPart: coefficient
+              - type: RadioButton
+                name: effect_2
+                optionName: effect
+                optionPart: ame
+          - type: Label
+            label: at = <i>(profile, marginal effects)</i>
+            children:
+              - type: RadioButton
+                name: at_1
+                optionName: at
+                optionPart: average
+                enable: (effect_2 || family:multinomial)
+              - type: RadioButton
+                name: at_2
+                optionName: at
+                optionPart: reference
+                enable: (effect_2 || family:multinomial)
+          - type: Label
+            label: estimate_display = <i>(cell layout)</i>
+            children:
+              - type: RadioButton
+                name: estimate_display_1
+                optionName: estimate_display
+                optionPart: value
+              - type: RadioButton
+                name: estimate_display_2
+                optionName: estimate_display
+                optionPart: ci
+              - type: RadioButton
+                name: estimate_display_3
+                optionName: estimate_display
+                optionPart: prob
+                enable: (family:binomial && effect_1)
+              - type: RadioButton
+                name: estimate_display_4
+                optionName: estimate_display
+                optionPart: ame
+                enable: (family:binomial && effect_1)
+          - type: CheckBox
+            name: inverse_two_level_factors
+            enable: (family:binomial || family:auto)
+
+  - type: CollapseBox
+    label: <b>Empirical (crude / observed) companion</b>
+    stretchFactor: 1
+    collapsed: false
+    children:
+      - type: LayoutBox
+        margin: large
+        children:
+          - type: CheckBox
+            name: empirical
+
+  - type: CollapseBox
+    label: <b>References (baseline levels)</b>
+    stretchFactor: 1
+    collapsed: true
+    children:
+      - type: LayoutBox
+        margin: none
+        children:
+          - type: CustomControl
+            name: refPickerCtrl
+            stretchFactor: 1
+            events:
+              creating: ./jmvtab_reg::refPickerCtrl_creating
+              updated: ./jmvtab_reg::refPickerCtrl_updated
+
+  - type: CollapseBox
+    label: <b>Confidence intervals</b>
+    stretchFactor: 1
+    collapsed: true
+    children:
+      - type: LayoutBox
+        margin: large
+        children:
+          - type: Label
+            label: "Confidence level:"
+            children:
+              - type: TextBox
+                name: conf_level
+                format: number
+          - type: Label
+            label: method = <i>(interval)</i>
+            children:
+              - type: RadioButton
+                name: method_1
+                optionName: method
+                optionPart: wald
+              - type: RadioButton
+                name: method_2
+                optionName: method
+                optionPart: profile
+                enable: (family:binomial || family:poisson)
+          - type: CheckBox
+            name: stars
+
+  - type: CollapseBox
+    label: <b>Colors</b>
+    stretchFactor: 1
+    collapsed: true
+    children:
+      - type: LayoutBox
+        margin: large
+        children:
+          - type: Label
+            label: color = <i>(color helper)</i>
+            children:
+              - type: ComboBox
+                name: color
+          - type: Label
+            label: color_signif = <i>(significance)</i>
+            children:
+              - type: ComboBox
+                name: color_signif
+
+  - type: CollapseBox
+    label: <b>Missing values and formatting</b>
+    stretchFactor: 1
+    collapsed: true
+    children:
+      - type: LayoutBox
+        margin: large
+        children:
+          - type: Label
+            label: na = <i>(missing values)</i>
+            children:
+              - type: ComboBox
+                name: na
+          - type: CheckBox
+            name: cleannames
+          - type: CheckBox
+            name: footer
+      - type: LayoutBox
+        margin: none
+        children:
+          - type: Label
+            label: <b>Note below the table:</b>
+          - type: TextBox
+            name: subtext
+            format: string
+            width: largest
+      - type: LayoutBox
+        margin: large
+        children:
+          - type: TextBox
+            name: wrap_rows
+            format: number
+          - type: TextBox
+            name: wrap_cols
+            format: number
+
+  - type: CollapseBox
+    label: "<b>Advanced — survey design (used with a weight)</b>"
+    stretchFactor: 1
+    collapsed: true
+    children:
+      - type: VariableSupplier
+        name: surveysupplier
+        persistentItems: false
+        stretchFactor: 1
+        children:
+          - type: TargetLayoutBox
+            label: <b>ids = <i>(cluster ids)</i></b>
+            children:
+              - type: VariablesListBox
+                name: ids
+                isTarget: true
+          - type: TargetLayoutBox
+            label: <b>strata = <i>(strata)</i></b>
+            children:
+              - type: VariablesListBox
+                name: strata
+                isTarget: true
+          - type: TargetLayoutBox
+            label: <b>fpc = <i>(finite population)</i></b>
+            children:
+              - type: VariablesListBox
+                name: fpc
+                maxItemCount: 1
+                isTarget: true
+      - type: LayoutBox
+        margin: none
+        children:
+          - type: CheckBox
+            name: nest
+
+  - type: LayoutBox
+    margin: large
+    stretchFactor: 1
+    children:
+      - type: LayoutBox
+        cell:
+          column: 0
+          row: 0
+        stretchFactor: 0
+        children:
+          - type: Label
+            label: <b>Export format:</b>
+          - type: ComboBox
+            name: export_format
+            events:
+              change: ./jmvtab_reg::export_format_changed
+      - type: LayoutBox
+        margin: none
+        cell:
+          column: 1
+          row: 0
+        stretchFactor: 1
+        children:
+          - type: Label
+            label: <b>Save to (path or file name):</b>
+          - type: TextBox
+            name: path
+            format: string
+            width: largest
+      - type: LayoutBox
+        cell:
+          column: 0
+          row: 1
+        stretchFactor: 0
+        children:
+          - type: ActionButton
+            name: exportExcel
+            label: Export to Excel
+            events:
+              change: ./jmvtab_reg::exportExcel_changed
+      - type: LayoutBox
+        margin: none
+        cell:
+          column: 1
+          row: 1
+        stretchFactor: 0
+        children:
+          - type: CheckBox
+            name: xl_replace
+            label: Replace existing file

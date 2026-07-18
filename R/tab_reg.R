@@ -879,8 +879,7 @@ reg_fit <- function(data, dependent, predictors, family, design_spec, do_exp,
     # weighted svyglm, OR a 14v-ii phi-scaled poisson/grouped-binomial -- an estimated dispersion moves
     # the reference off z onto t, matching a quasi fit).
     disp_known <- !weighted && family %in% c("binomial", "poisson") && !scaled
-    crit <- if (disp_known) stats::qnorm(1 - (1 - conf_level) / 2)
-            else            stats::qt(1 - (1 - conf_level) / 2, df = stats::df.residual(fit))
+    crit <- reg_wald_crit(disp_known, stats::df.residual(fit), conf_level)   # shared with reg_reref (15b)
     lo <- td$estimate - crit * td$std.error
     hi <- td$estimate + crit * td$std.error
     # 14v-ii: with the SE scaled and the t reference, recompute the Wald p from est/se so p <-> CI <->
@@ -1498,7 +1497,10 @@ reg_gof_tibble <- function(fits, fit_first_col, family, weighted, grouped_by_fit
     f    <- fits[[i]]
     keep <- reg_footer_stats(family, weighted, isTRUE(grouped_by_fit[[i]]), stats)
     if (length(keep) == 0) return(NULL)                        # stats = FALSE -> no glance, no warnings
-    g    <- reg_glance(f$fit, family, isTRUE(grouped_by_fit[[i]]), weighted, nobs_by_fit[[i]])
+    # Phase 15b: the reref fast path carries the reference-invariant glance in `f$glance` (the raw fit
+    # was discarded); a real reg_fit() result has no `$glance` -> compute from `f$fit` as before.
+    g    <- if (!is.null(f$glance)) f$glance
+            else reg_glance(f$fit, family, isTRUE(grouped_by_fit[[i]]), weighted, nobs_by_fit[[i]])
     g    <- g[g$test %in% keep, , drop = FALSE]
     g    <- g[order(match(g$test, keep)), , drop = FALSE]        # spec order
     if (nrow(g) == 0) return(NULL)
@@ -1636,6 +1638,104 @@ reg_compare_rows <- function(reg_gof, fits, specs, family, weighted, fit_first_c
 }
 
 
+# === Phase 15b: jamovi live-UI fit cache -- digest + reference reparametrization =================
+# A factor-predictor reference change is a LINEAR reparametrization of the SAME fit (likelihood,
+# fitted values and dispersion are invariant), so the whole table at any reference is recomputable
+# from the canonical fit's coefficients + covariance -- NO refit (the reg analogue of jmvtab's
+# jmv_tab3_reref). reg_build_digest() fits ONCE at the natural-first-level (canonical) reference and
+# returns a small, reference-INDEPENDENT digest (coef + vcov + the reference-invariant glance +
+# scalars); reg_reref_fit_res() reparametrizes it to any display reference, producing a fit_res
+# drop-in for reg_column() / reg_gof_tibble(). Reached ONLY with .fit_cache present, on the
+# single-equation GLM coefficient path (method="wald", value/ci display, no split/multiplicator/trials
+# /compound/ame/mnl-vs-rest). Locked byte-identical to a real refit by test-jmvtab-reg-cache.R.
+
+# Critical value for a Wald interval: z for a fixed-dispersion glm (binomial/poisson, unweighted,
+# unscaled), else t on the residual df -- the same rule reg_fit()'s Wald else-branch uses.
+reg_wald_crit <- function(disp_known, df_residual, conf_level) {
+  if (disp_known) stats::qnorm(1 - (1 - conf_level) / 2)
+  else            stats::qt(1 - (1 - conf_level) / 2, df = df_residual)
+}
+
+# Fit ONCE at the canonical (natural-first-level) reference and distil the reference-independent
+# quantities. reg_fit() de-orders factor predictors + drops NA rows deterministically, so the
+# canonical coefficient basis does not depend on `reference`. The raw fit is DISCARDED (only coef /
+# vcov / scalars / glance are kept -- kilobytes, not the megabyte model object).
+reg_build_digest <- function(data, sp, family, design_spec, do_exp, inverse_two_level_factors,
+                             conf_level, weighted) {
+  f   <- reg_fit(data, sp$dependent, sp$predictors, family, design_spec, do_exp,
+                 inverse_two_level_factors, conf_level, method = "wald",
+                 trials = sp$trials, formula = sp$formula, multiplicator = NULL)
+  fit <- f$fit
+  coef_v <- stats::coef(fit)
+  V      <- stats::vcov(fit)
+  names(coef_v) <- stringr::str_remove_all(names(coef_v), "`")   # match skeleton terms (as reg_fit does)
+  dn <- stringr::str_remove_all(rownames(V), "`")
+  dimnames(V) <- list(dn, dn)
+  grouped    <- family == "binomial" && !is.null(sp$trials) && is.null(sp$formula)
+  over_disp  <- !weighted && (family == "poisson" || grouped)
+  phi        <- if (over_disp) reg_dispersion(fit) else NA_real_
+  scaled     <- over_disp && !is.na(phi) && phi > 0
+  disp_known <- !weighted && family %in% c("binomial", "poisson") && !scaled
+  list(coef = coef_v, vcov = V, df_residual = stats::df.residual(fit),
+       phi = phi, scaled = scaled, disp_known = disp_known, do_exp = do_exp,
+       var_y = f$var_y, positive_level = f$positive_level, nobs = f$nobs,
+       glance = reg_glance(fit, family, grouped, weighted, f$nobs), family = family)
+}
+
+# Reparametrize a canonical digest to the DISPLAY reference encoded in `skeleton` (built on the
+# releveled data). Each display term is a linear contrast L over the canonical coefficients: a factor
+# level j vs the display reference r is L = e_{p j} - e_{p r} (a canonical term absent = the canonical
+# first level = a 0 column); the intercept at the display profile is e_0 + sum_p e_{p r_p}; a numeric
+# predictor is the identity. estimate = L'b, se = sqrt(L' V L); then the SAME Wald finalize reg_fit()
+# uses (phi scaling, z/t crit, p as the CI's dual, exp) -> byte-identical to a real refit-at-r.
+reg_reref_fit_res <- function(digest, reference, sp, skeleton, conf_level) {
+  coef_v <- digest$coef
+  V      <- digest$vcov
+  cn     <- names(coef_v)
+  preds  <- setdiff(unique(skeleton$var), "Constant")
+  ref_of <- stats::setNames(vapply(preds, function(p) {
+    r <- skeleton$level[skeleton$var == p & skeleton$is_ref]
+    if (length(r)) as.character(r[[1]]) else NA_character_
+  }, character(1)), preds)
+
+  rows <- skeleton[!is.na(skeleton$term), , drop = FALSE]        # (Intercept) + non-reference terms
+  n    <- nrow(rows)
+  est  <- numeric(n); se <- numeric(n)
+  for (i in seq_len(n)) {
+    p <- rows$var[i]; t <- rows$term[i]
+    L <- stats::setNames(numeric(length(cn)), cn)
+    if (identical(t, "(Intercept)")) {
+      if ("(Intercept)" %in% cn) L["(Intercept)"] <- 1
+      for (pp in preds) {
+        if (is.na(ref_of[[pp]])) next
+        rn <- paste0(pp, ref_of[[pp]])
+        if (rn %in% cn) L[rn] <- L[rn] + 1
+      }
+    } else if (p %in% preds && !is.na(ref_of[[p]])) {            # factor level j vs display ref r_p
+      rn <- paste0(p, ref_of[[p]])
+      if (t  %in% cn) L[t]  <- L[t]  + 1
+      if (rn %in% cn) L[rn] <- L[rn] - 1
+    } else if (t %in% cn) {                                      # numeric predictor: identity
+      L[t] <- 1
+    }
+    est[i] <- sum(L * coef_v)
+    se[i]  <- sqrt(as.numeric(t(L) %*% V %*% L))
+  }
+  if (isTRUE(digest$scaled)) se <- se * sqrt(digest$phi)
+  crit <- reg_wald_crit(digest$disp_known, digest$df_residual, conf_level)
+  lo   <- est - crit * se
+  hi   <- est + crit * se
+  p    <- if (digest$disp_known) 2 * stats::pnorm(-abs(est / se))
+          else                   2 * stats::pt(-abs(est / se), df = digest$df_residual)
+  est_o <- est
+  if (isTRUE(digest$do_exp)) { est_o <- exp(est_o); lo <- exp(lo); hi <- exp(hi) }
+  list(tidy = tibble::tibble(term = rows$term, estimate = est_o,
+                             conf.low = lo, conf.high = hi, p.value = p),
+       nobs = digest$nobs, var_y = digest$var_y, positive_level = digest$positive_level,
+       glance = digest$glance, fit = NULL, data = NULL)
+}
+
+
 # The shared builder: fit every column spec, align to one skeleton, assemble a grouped_tab. specs =
 # list of list(dependent, predictors, label, trials, formula, compound). The data-skeleton (union of
 # the specs' predictors) is used unless a spec is a compound formula (single model), in which case the
@@ -1647,6 +1747,7 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
                       cleannames, subtext, eff_word, effect = "coefficient", at = "average",
                       stats = NULL, compare = "none", baseline = NULL, split_var = NULL,
                       multiplicator = NULL, empirical = FALSE, estimate_display = "value",
+                      .fit_cache = NULL, reference = NULL, reref = FALSE,
                       skeleton_data = data) {
   # split_var (Phase 12g): the regression analogue of tab()'s tab_vars -- fit the SAME model(s) within
   # each level of a grouping variable and STACK the per-group tables into one grouped_tab (grouped by
@@ -1666,7 +1767,8 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
                        inverse_two_level_factors, conf_level, method, color, color_signif,
                        cleannames, subtext, eff_word, effect, at, stats, compare, baseline,
                        split_var = NULL, multiplicator = multiplicator, empirical = empirical,
-                       estimate_display = estimate_display, skeleton_data = data)
+                       estimate_display = estimate_display, .fit_cache = .fit_cache,
+                       reference = NULL, reref = FALSE, skeleton_data = data)
       tst <- get_test(tg); if (!is.null(tst) && nrow(tst) > 0) tst$row_var <- as.character(g)
       list(data = tibble::add_column(tibble::as_tibble(dplyr::ungroup(tg)),
                                      "{split_var}" := factor(g, levels = sl), .before = 1L),
@@ -1684,11 +1786,37 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
     )
   }
 
-  fits <- purrr::map(specs, function(sp) {
-    reg_fit(data, sp$dependent, sp$predictors, family, design_spec, do_exp,
-            inverse_two_level_factors, conf_level, method,
-            trials = sp$trials, formula = sp$formula, multiplicator = multiplicator)
-  })
+  # Phase 15b jamovi live reref: `data` arrives at the CANONICAL (natural-first) reference; fit the
+  # digest once on it (cached, reference-independent) and reparametrize to the display `reference`,
+  # which is baked into the skeleton (built on the releveled data). `data` is releveled here so the
+  # skeleton + empirical companions use the display reference, while `data_canon` fits the digest.
+  data_canon <- data
+  skeleton <- NULL
+  if (isTRUE(reref)) {
+    if (!is.null(reference)) data <- reg_apply_references(data, reference, union_predictors)
+    skeleton <- reg_skeleton(data, union_predictors)
+    fits <- purrr::map(specs, function(sp) {
+      digest <- jmvreg_cached(
+        .fit_cache, "digest", jmvreg_fit_key(sp, data_canon, family, design_spec),
+        function() reg_build_digest(data_canon, sp, family, design_spec, do_exp,
+                                    inverse_two_level_factors, conf_level, weighted))
+      reg_reref_fit_res(digest, reference, sp, skeleton, conf_level)
+    })
+  } else {
+    fits <- purrr::map(specs, function(sp) {
+      thunk <- function() reg_fit(data, sp$dependent, sp$predictors, family, design_spec, do_exp,
+                                  inverse_two_level_factors, conf_level, method,
+                                  trials = sp$trials, formula = sp$formula, multiplicator = multiplicator)
+      # .fit_cache present but not on the reref path (ame / profile / mnl-vs-rest / compound): cache the
+      # RAW reg_fit result keyed on the (already display-referenced) data -> a reference change refits.
+      if (is.null(.fit_cache)) thunk()
+      else jmvreg_cached(.fit_cache, "fit",
+                         jmvreg_fit_key(sp, data, family, design_spec,
+                                        extra = list(method, do_exp, conf_level, effect, at,
+                                                     estimate_display, multiplicator)),
+                         thunk)
+    })
+  }
 
   # marginaleffects paths (effect="ame", and the MNL "j vs rest" OR at the reference profile) always key
   # by the ORIGINAL variables, so a compound formula still gets a clean bare-variable skeleton; the plain
@@ -1697,9 +1825,10 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
   # defaults to `data`, so non-split builds are unchanged.
   compound   <- purrr::map_lgl(specs, ~ isTRUE(.$compound))
   mnl_vsrest <- effect == "coefficient" && at == "reference" && family == "multinomial"
-  skeleton <- if (effect == "ame" || mnl_vsrest) reg_skeleton(skeleton_data, union_predictors)
-              else if (any(compound))            reg_skeleton_from_fit(fits[[1]]$fit)
-              else                               reg_skeleton(skeleton_data, union_predictors)
+  if (is.null(skeleton))
+    skeleton <- if (effect == "ame" || mnl_vsrest) reg_skeleton(skeleton_data, union_predictors)
+                else if (any(compound))            reg_skeleton_from_fit(fits[[1]]$fit)
+                else                               reg_skeleton(skeleton_data, union_predictors)
 
   multi_col     <- family == "multinomial"
   prefix_dep    <- length(specs) > 1L
@@ -2091,6 +2220,10 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
 #' @param cleannames Logical. If `TRUE`, strips numeric prefixes from factor levels for display.
 #'   Uses `getOption("tabxplor.cleannames")` when `NULL`.
 #' @param subtext Optional character. A note shown below the table.
+#' @param .fit_cache Internal, for the jamovi live UI (Phase 15b): a mutable cache environment
+#'   (see `jmvreg_cache_env()`) that memoizes fitted models so display / colour / reference toggles
+#'   avoid a refit. On the single-equation GLM coefficient path a factor-predictor reference change is
+#'   reparametrized from the cached fit (no refit). `NULL` (the default) leaves ordinary calls unchanged.
 #'
 #' @return A `tabxplor_grouped_tab` (grouped by predictor), one effect column per model / dependent.
 #'
@@ -2147,7 +2280,7 @@ tab_reg <- function(data, dependent, predictors = NULL,
                     color = NULL, color_signif = NULL, stars = TRUE,
                     na = c("keep", "drop_all"),
                     cleannames = NULL, subtext = "",
-                    empirical_OR = lifecycle::deprecated()) {
+                    empirical_OR = lifecycle::deprecated(), .fit_cache = NULL) {
   method  <- match.arg(method)
   effect  <- match.arg(effect)
   at      <- match.arg(at)
@@ -2345,7 +2478,18 @@ tab_reg <- function(data, dependent, predictors = NULL,
     }
   }
 
-  if (!is.null(reference)) {
+  # Phase 15b (jamovi live reref): with a `.fit_cache`, a single-equation GLM coefficient table can be
+  # recomputed at any factor-predictor reference from ONE canonical fit (reg_build_digest) -- no refit.
+  # On that path the body does NOT relevel; reg_build fits the canonical digest + reparametrizes to
+  # `reference`. Everything the reparametrization can't handle (ame / profile / mnl-vs-rest / compound /
+  # multinomial / ordinal / split / multiplicator / trials / model comparison) keeps the refit path.
+  reref <- !is.null(.fit_cache) && effect == "coefficient" && !mnl_vsrest &&
+    estimate_display %in% c("value", "ci") && method == "wald" &&
+    family %in% c("gaussian", "binomial", "poisson", "quasipoisson") &&
+    !formula_mode && is.null(split_var) && is.null(multiplicator) && is.null(trials) &&
+    compare == "none" && !is_comparison
+
+  if (!is.null(reference) && !reref) {
     # A multinomial's baseline is the OUTCOME factor's first level, so `reference` keyed by the
     # dependent relevels it too (unified "reference level of any variable"). An ordinal outcome must
     # keep its order -> never releveled; predictor contrasts are releveled for every family.
@@ -2446,7 +2590,8 @@ tab_reg <- function(data, dependent, predictors = NULL,
                    cleannames, subtext, eff_word, effect, at,
                    stats = stats, compare = compare, baseline = baseline, split_var = split_var,
                    multiplicator = multiplicator, empirical = empirical,
-                   estimate_display = estimate_display)
+                   estimate_display = estimate_display,
+                   .fit_cache = .fit_cache, reference = reference, reref = reref)
 
   # stars = TRUE (default) for regression tables -- the per-cell pvalue is stored by reg_build so the
   # main display shows significance stars. stars = FALSE strips it (pvalue is stars-only; colours read

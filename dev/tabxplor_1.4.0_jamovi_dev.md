@@ -1241,3 +1241,37 @@ file I/O / no picker (`p=13515`, `t=132`), sandboxing (`t=3679`), debugging/F10 
 runtime control setting (`t=440`). **Live capture: `dev/jamovi/dev_console_live_capture/`
 (Jamovi 2.6.44.0, tabxplor 1.3.1, bundled R 4.4.1-x64), analysed 2026-07-08** — the authority
 for §5–§7. Vendored verbatim source: `dev/jamovi/reference/`.
+
+---
+
+## §15. Phase 15b — the `jmvtab_reg` (Regressions) analysis
+
+A second jamovi analysis wrapping `tab_reg()`, built from the `jmvtab` template. Files:
+`jamovi/jmvtab_reg.{a,u,r}.yaml`, `jamovi/js/jmvtab_reg.js`, `R/jmvtab_reg.b.R`,
+`R/jmvtab_reg-cache.R`; registered as a 2nd entry in `jamovi/0000.yaml`. `R/jmvtab_reg.h.R` is the
+usual generated header (a maintainer `jmvtools::prepare()` step — not created headlessly).
+
+**Scope (15b-i, done).** Single-model UI: every family (`auto`/gaussian/binomial/poisson/
+quasipoisson/multinomial/ordinal), multiple dependents, `exponentiate`/`effect`/`at`/
+`estimate_display`, `empirical` (crude companion), a per-predictor **reference-level picker**
+(the `refPickerCtrl` CustomControl, simplified from jmvtab: axis = the `predictors` list, factor-only,
+no `ref2`), CI/`method`/`stars`, colours, `na`/`cleannames`/footer, survey `wt` + an **Advanced
+survey-design** collapse (a 2nd `VariableSupplier` for `ids`/`strata`/`fpc` + `nest`, greyed by JS
+when `wt` is empty), and Excel/HTML/MD export (reuses `R/jmvtab-export.R` verbatim). The
+model-comparison "+" builder + `compare`/`multiplicator`/`trials` are deferred to 15b-ii.
+
+**The live cache (the maintainer's headline requirement) — a fit cache, not an aggregate cache.**
+`jmvtab_reg_build()` drives `tab_reg(..., .fit_cache = cache_env)`. The store (hidden `cache_state`
+Image `$state`) memoizes fitted models so display / colour / reference toggles avoid a refit. A
+factor-predictor **reference change is reparametrized live from a cached fit — no refit** (the reg
+analogue of jmvtab's `jmv_tab3_reref`): `reg_build_digest()` caches `coef`+`vcov`+`glance` (KB), and
+`reg_reref_fit_res()` builds the display-reference tidy by coefficient contrasts (byte-identical to a
+real refit; `test-jmvtab-reg-cache.R`). Decided with the maintainer over serializing megabyte model
+objects. Heavy paths (ame/profile/mnl-vs-rest/compound/MNL/ordinal/split) cache the raw fit and refit
+on a reference change.
+
+**Gotchas re-confirmed.** No option named `levels` (a `jmvcore::Options` member — `method`/`family`/
+`effect`/`at`/`color`/`reference` are all safe, verified against `jmvcore/options.R`). `utils.clone`
+not `context.clone` (jus 3.0). Two `VariableSupplier`s (main + survey) is fine. The `.b.R` R6
+`inherit = jmvtab_regBase` is lazy, so the file loads / `R CMD check`s before `prepare()` generates
+the header (until then `check()` NOTEs `jmvtab_regBase` as an undefined global — expected).
