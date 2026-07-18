@@ -2055,7 +2055,7 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
 #'   difference per category in the HTML tooltip (columns would explode). Also works with a vector of
 #'   dependents. Ordinal has no clean crude analogue and is ignored (with a message). Default `FALSE`.
 #' @param empirical_OR `r lifecycle::badge("deprecated")` Renamed `empirical` (now cross-family, not
-#'   OR-only).
+#'   OR-only). Passing it now errors; use `empirical`.
 #' @param stats The goodness-of-fit statistics shown in the model-summary **footer** (one block per
 #'   model). `NULL` (default) uses the per-family set: linear models show N, R square, adjusted R
 #'   square, the overall F-test and the residual SD; other models show N, the likelihood-ratio test
@@ -2155,11 +2155,11 @@ tab_reg <- function(data, dependent, predictors = NULL,
   estimate_display <- match.arg(estimate_display)
   na      <- match.arg(na)
   cleannames <- if (is.null(cleannames)) getOption("tabxplor.cleannames", TRUE) else cleannames
-  # Phase 14v: `empirical_OR` renamed to `empirical` (now cross-family, not OR-only). Soft-deprecated
-  # alias for the maintainer's existing scripts; resolved before the multi-dependent recursion below.
+  # Phase 14v: `empirical_OR` renamed to `empirical` (now cross-family, not OR-only). Phase 14x hard-
+  # deprecates the alias (it never shipped in a CRAN release, so there is no retro-compat debt): calling
+  # it now errors with a pointer to `empirical`, rather than silently forwarding.
   if (lifecycle::is_present(empirical_OR)) {
-    lifecycle::deprecate_warn("1.4.0", "tab_reg(empirical_OR)", "tab_reg(empirical)")
-    empirical <- empirical_OR
+    lifecycle::deprecate_stop("1.4.0", "tab_reg(empirical_OR)", "tab_reg(empirical)")
   }
 
 
@@ -2512,10 +2512,12 @@ tab_logit <- function(data, dependent, predictors, wt = NULL,
                       method = c("wald", "profile"),
                       stats = NULL, estimate_display = c("value", "ci", "prob", "ame"),
                       color_signif = c("grey_non_signif", "ignore", "guaranteed_effect"),
-                      stars = TRUE, cleannames = NULL, subtext = "") {
+                      stars = TRUE, na = c("keep", "drop_all"),
+                      cleannames = NULL, subtext = "") {
   method       <- match.arg(method)
   color_signif <- match.arg(color_signif)
   estimate_display <- match.arg(estimate_display)
+  na           <- match.arg(na)
   stopifnot(is.character(predictors), length(predictors) >= 1L)
   tab_reg(data, dependent = dependent, predictors = predictors, family = "binomial", wt = wt,
           ids = ids, strata = strata, fpc = fpc, nest = nest, split_var = split_var,
@@ -2523,7 +2525,8 @@ tab_logit <- function(data, dependent, predictors, wt = NULL,
           conf_level = conf_level, method = method, stats = stats,
           estimate_display = estimate_display,
           inverse_two_level_factors = inverse_two_level_factors,
-          color_signif = color_signif, stars = stars, cleannames = cleannames, subtext = subtext)
+          color_signif = color_signif, stars = stars, na = na,
+          cleannames = cleannames, subtext = subtext)
 }
 
 
@@ -2535,11 +2538,14 @@ tab_logit <- function(data, dependent, predictors, wt = NULL,
 #'
 #' @inheritParams tab_logit
 #' @inheritParams tab_reg
-#' @param dependent Character. Name of the single binary dependent variable.
+#' @param dependent Character. Name of the binary dependent variable. May be a **vector** of several
+#'   binary dependents: the model comparison is then run once per dependent and the per-dependent
+#'   tables are returned as a list (one sheet each when exported to Excel).
 #' @param models A named list of character vectors; each element is one model's predictor set and its
 #'   name labels the column. Unnamed elements are labelled `model1`, `model2`, ...
 #'
-#' @return A `tabxplor_grouped_tab` (grouped by predictor), one odds-ratio column per model.
+#' @return A `tabxplor_grouped_tab` (grouped by predictor), one odds-ratio column per model; or, for
+#'   several `dependent`s, a `tabxplor_tabs` list of such tables (one per dependent).
 #'
 #' @examples
 #' data <- forcats::gss_cat |>
@@ -2563,12 +2569,16 @@ multi_logit <- function(data, dependent, models, wt = NULL,
                         stats = NULL, compare = c("none", "baseline", "sequential"), baseline = NULL,
                         estimate_display = c("value", "ci", "prob", "ame"),
                         color_signif = c("grey_non_signif", "ignore", "guaranteed_effect"),
-                        stars = TRUE, cleannames = NULL, subtext = "") {
+                        stars = TRUE, na = c("keep", "drop_all"),
+                        cleannames = NULL, subtext = "") {
   method       <- match.arg(method)
   compare      <- match.arg(compare)
   color_signif <- match.arg(color_signif)
   estimate_display <- match.arg(estimate_display)
-  stopifnot(is.character(dependent), length(dependent) == 1L, is.list(models), length(models) >= 1L)
+  na           <- match.arg(na)
+  # Phase 14x: `dependent` may be a VECTOR -> the model comparison runs once per dependent (tab_reg's K
+  # mode: a models list + several dependents -> one table each, returned as a tabxplor_tabs list).
+  stopifnot(is.character(dependent), length(dependent) >= 1L, is.list(models), length(models) >= 1L)
   tab_reg(data, dependent = dependent, predictors = models, family = "binomial", wt = wt,
           ids = ids, strata = strata, fpc = fpc, nest = nest, split_var = split_var,
           multiplicator = multiplicator, empirical = empirical,
@@ -2576,5 +2586,6 @@ multi_logit <- function(data, dependent, models, wt = NULL,
           stats = stats, compare = compare, baseline = baseline,
           estimate_display = estimate_display,
           inverse_two_level_factors = inverse_two_level_factors,
-          color_signif = color_signif, stars = stars, cleannames = cleannames, subtext = subtext)
+          color_signif = color_signif, stars = stars, na = na,
+          cleannames = cleannames, subtext = subtext)
 }

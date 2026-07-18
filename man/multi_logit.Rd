@@ -25,6 +25,7 @@ multi_logit(
   estimate_display = c("value", "ci", "prob", "ame"),
   color_signif = c("grey_non_signif", "ignore", "guaranteed_effect"),
   stars = TRUE,
+  na = c("keep", "drop_all"),
   cleannames = NULL,
   subtext = ""
 )
@@ -34,7 +35,9 @@ multi_logit(
 \code{\link[survey:svrepdesign]{survey::svrepdesign()}}). When a design is passed, its weights (and clustering / stratification /
 calibration) drive the estimation and \code{wt} / \code{ids} / \code{strata} / \code{fpc} are ignored.}
 
-\item{dependent}{Character. Name of the single binary dependent variable.}
+\item{dependent}{Character. Name of the binary dependent variable. May be a \strong{vector} of several
+binary dependents: the model comparison is then run once per dependent and the per-dependent
+tables are returned as a list (one sheet each when exported to Excel).}
 
 \item{models}{A named list of character vectors; each element is one model's predictor set and its
 name labels the column. Unnamed elements are labelled \code{model1}, \code{model2}, ...}
@@ -117,13 +120,20 @@ only odds ratios whose confidence interval excludes 1 and greys the rest.}
 \item{stars}{Logical (default \code{TRUE} for regression tables, where significance stars are standard).
 When \code{FALSE}, the per-cell p-value is dropped and no stars are shown (colours still read the CI).}
 
+\item{na}{How missing values are handled across a model comparison. \code{"keep"} (default) drops
+\code{NA} rows per model (each model uses its own complete cases). \code{"drop_all"} fits every model on ONE
+shared complete-case population (rows with no \code{NA} on any predictor / dependent / design variable),
+so nested models get equal N and the likelihood-ratio comparison can run; note this \strong{changes all
+estimates} (shared population), hence opt-in. Ignored for a prebuilt survey design.}
+
 \item{cleannames}{Logical. If \code{TRUE}, strips numeric prefixes from factor levels for display.
 Uses \code{getOption("tabxplor.cleannames")} when \code{NULL}.}
 
 \item{subtext}{Optional character. A note shown below the table.}
 }
 \value{
-A \code{tabxplor_grouped_tab} (grouped by predictor), one odds-ratio column per model.
+A \code{tabxplor_grouped_tab} (grouped by predictor), one odds-ratio column per model; or, for
+several \code{dependent}s, a \code{tabxplor_tabs} list of such tables (one per dependent).
 }
 \description{
 Convenience wrapper of \code{\link[=tab_reg]{tab_reg()}} for the binomial family in model-comparison mode: fits several

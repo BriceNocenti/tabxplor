@@ -1,7 +1,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: tabxplor 1.3.1.9000\n"
-"POT-Creation-Date: 2026-07-17 00:35\n"
+"POT-Creation-Date: 2026-07-18 19:16\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -23,6 +23,12 @@ msgid "ref."
 msgstr ""
 
 msgid "indep."
+msgstr ""
+
+msgid "SD"
+msgstr ""
+
+msgid "points"
 msgstr ""
 
 msgid "Shades of blue"
@@ -64,7 +70,22 @@ msgstr ""
 msgid "Wald interval"
 msgstr ""
 
+msgid "robust-Poisson (delta) interval"
+msgstr ""
+
+msgid "quasi-Poisson interval"
+msgstr ""
+
+msgid "Poisson interval"
+msgstr ""
+
+msgid "confidence interval"
+msgstr ""
+
 msgid "Welch t interval"
+msgstr ""
+
+msgid "Student t interval"
 msgstr ""
 
 msgid "Katz interval on the log risk-ratio"
@@ -74,9 +95,6 @@ msgid "Newcombe score interval"
 msgstr ""
 
 msgid "Wald interval with Agresti-Caffo adjustment"
-msgstr ""
-
-msgid "confidence interval"
 msgstr ""
 
 msgid "%s%% confidence"
@@ -100,6 +118,9 @@ msgstr ""
 msgid "bg"
 msgstr ""
 
+msgid "grey: non-significant or under %s"
+msgstr ""
+
 msgid "significant only"
 msgstr ""
 
@@ -107,12 +128,6 @@ msgid "significant, error-adjusted"
 msgstr ""
 
 msgid "cells"
-msgstr ""
-
-msgid "SD"
-msgstr ""
-
-msgid "points"
 msgstr ""
 
 msgid "%s %s %s"
@@ -127,7 +142,10 @@ msgstr ""
 msgid "Background colour (%s):"
 msgstr ""
 
-msgid "Grey: not significantly different from %s (%s)."
+msgid "Coloured: significantly different from %s (%s), by at least the first colour threshold. Uncoloured: either not significant, or a difference under %s."
+msgstr ""
+
+msgid "Coloured: significantly different from %s (%s), by at least the first colour threshold. Uncoloured: either not significant, or too small a difference to colour."
 msgstr ""
 
 msgid "Grey: not significantly different from %s after the margin of error."
@@ -176,6 +194,9 @@ msgid "data is of length 0 (possibly after filter or na = 'drop')"
 msgstr ""
 
 msgid "unknown method_diff:"
+msgstr ""
+
+msgid "unknown method_mean_ratio:"
 msgstr ""
 
 msgid "total rows were added, since color == 'contrib' needs them"

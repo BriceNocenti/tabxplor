@@ -182,7 +182,7 @@ Uses \code{getOption("tabxplor.cleannames")} when \code{NULL}.}
 \item{subtext}{Optional character. A note shown below the table.}
 
 \item{empirical_OR}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Renamed \code{empirical} (now cross-family, not
-OR-only).}
+OR-only). Passing it now errors; use \code{empirical}.}
 }
 \value{
 A \code{tabxplor_grouped_tab} (grouped by predictor), one effect column per model / dependent.

@@ -203,3 +203,39 @@ test_that("color_signif = 'ignore' colours non-significant odds ratios too", {
   skip_if(length(cand) == 0)
   expect_true(all(txt[cand] != 0))                                   # coloured under "ignore"
 })
+
+
+# --- Phase 14x: na= forwarding + multi_logit K mode ------------------------------------------------
+
+test_that("tab_logit()/multi_logit() forward na = 'drop_all'", {
+  skip_if_not_installed("broom")
+  d <- logit_data()
+  # na = "drop_all" fits on the shared complete-case population -> runs without error and keeps shape.
+  t1 <- tab_logit(d, "married", c("race", "rincome"), na = "drop_all")
+  expect_s3_class(t1, "tabxplor_grouped_tab")
+  expect_true("Model OR" %in% names(t1))
+
+  t2 <- multi_logit(d, "married",
+                    models = list(demo = "race", full = c("race", "rincome")),
+                    na = "drop_all", compare = "sequential")
+  expect_s3_class(t2, "tabxplor_grouped_tab")
+  # a bad na value is rejected by match.arg (not silently forwarded)
+  expect_error(tab_logit(d, "married", "race", na = "nonsense"))
+})
+
+test_that("multi_logit() accepts several dependents (K mode -> a list of tables)", {
+  skip_if_not_installed("broom")
+  # second dependent NOT derived from a predictor (else the model is perfectly separated -> glm warns)
+  d <- logit_data() |>
+    dplyr::mutate(heavy_tv = factor(dplyr::if_else(tvhours >= 3, "heavy", "light")))
+  mt <- multi_logit(d, dependent = c("married", "heavy_tv"),
+                    models = list(demo = c("race", "age"), full = c("race", "age", "rincome")))
+  expect_s3_class(mt, "tabxplor_tabs")
+  expect_length(mt, 2L)
+  expect_identical(names(mt), c("married", "heavy_tv"))
+  expect_s3_class(mt[[1]], "tabxplor_grouped_tab")
+
+  # one dependent still returns a single table (not a length-1 list)
+  st <- multi_logit(d, "married", models = list(a = "race", b = c("race", "age")))
+  expect_s3_class(st, "tabxplor_grouped_tab")
+})

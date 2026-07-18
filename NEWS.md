@@ -201,7 +201,11 @@
   SD-standardized scale as the model beta); **poisson** adds `Emp. rate` + `Emp. IRR`; **multinomial**
   shows the crude % + difference per category **in the HTML tooltip** (one column per category would be
   too many). It also works with a vector of dependents (one crude companion per outcome). The old
-  `empirical_OR =` argument is soft-deprecated in favour of `empirical =`.
+  `empirical_OR =` argument is now defunct (it errors, pointing to `empirical =`) --- it never shipped
+  in a released version, so there is no code depending on it.
+* `tab_logit()` and `multi_logit()` gain `na =` (`"keep"` / `"drop_all"`), forwarded to `tab_reg()`.
+  `multi_logit()` also accepts **several `dependent`s**: the model comparison is then run once per
+  dependent and returned as a list of tables (one Excel sheet each).
 * Fixed `set_display("ratio")` (and `fmt(display = "ratio")`): it printed the raw count instead of the
   ratio. `"ratio"` is now the canonical display token (matching the field name); the legacy `"rr"` keeps
   working.
@@ -501,6 +505,20 @@
   export to Excel, install `openxlsx2`. The produced workbooks look essentially the same.
 
 ## Bug corrections
+* **`levels = "first"` now handles missing values consistently.** A two-level column variable used to
+  keep its `NA` column visible under `na = "keep"`, and a column variable with three or more levels used
+  to keep the dropped-`NA` observations *inside* the percentage base under `na = "drop"`. Now, for any
+  number of levels, `na = "keep"` counts the missing values in the base but hides the `NA` column (like
+  the non-first levels), and `na = "drop"` removes them from the base --- matching `levels = "all"`. The
+  same applies to soft-deprecated `sup_cols` (which use `levels = "first"`).
+* **The space between a mean and its `(sd)` aligns in exports.** The narrow no-break space that joined
+  `2.8` and `(σ2.3)` was narrower than a digit, so the `(sd)` slipped out of the column in `tab_md()`
+  and `tab_kable()`; it is now a figure space (exactly one digit wide) in html and markdown, and a plain
+  space in the (monospace) console.
+* **Colour legend wording is clearer for the `grey_non_signif` policy.** The note now names the actual
+  first colour threshold --- "Uncoloured: either not significant, or a difference under ±5 points"
+  (or "×1.15", "±0.2 SD", … depending on the measure) --- and the compact console tag reads
+  `[grey: non-significant or under ±5 points]`.
 * **Excel numbers really render in the number font now.** They were named `DejaVu Sans` in the file
   but drawn in `DejaVu Sans Condensed`: every font tabxplor wrote was tagged as "the theme's body
   font", so Excel resolved it from the workbook theme (which is Condensed) and ignored the name.

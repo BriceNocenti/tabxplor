@@ -23,6 +23,7 @@ tab_logit(
   estimate_display = c("value", "ci", "prob", "ame"),
   color_signif = c("grey_non_signif", "ignore", "guaranteed_effect"),
   stars = TRUE,
+  na = c("keep", "drop_all"),
   cleannames = NULL,
   subtext = ""
 )
@@ -104,6 +105,12 @@ only odds ratios whose confidence interval excludes 1 and greys the rest.}
 
 \item{stars}{Logical (default \code{TRUE} for regression tables, where significance stars are standard).
 When \code{FALSE}, the per-cell p-value is dropped and no stars are shown (colours still read the CI).}
+
+\item{na}{How missing values are handled across a model comparison. \code{"keep"} (default) drops
+\code{NA} rows per model (each model uses its own complete cases). \code{"drop_all"} fits every model on ONE
+shared complete-case population (rows with no \code{NA} on any predictor / dependent / design variable),
+so nested models get equal N and the likelihood-ratio comparison can run; note this \strong{changes all
+estimates} (shared population), hence opt-in. Ignored for a prebuilt survey design.}
 
 \item{cleannames}{Logical. If \code{TRUE}, strips numeric prefixes from factor levels for display.
 Uses \code{getOption("tabxplor.cleannames")} when \code{NULL}.}

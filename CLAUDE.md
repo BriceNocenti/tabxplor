@@ -2481,7 +2481,34 @@ Tests: new `test-tab_reg-14w.R`; existing reg tests updated to the "Model `<eff>
 6. NA values management with `levels="first"`
 - By default, when `na="keep"`, I want NA columns to be taken into account at calculation, but to be discarded like the second column (only keep the first column of the related col_vars, discard second and other levels, discard na level) ; obviously, NA rows in row_vars should stay.
 
+##### Done (2026-07-18)
 
+All six landed. Full suite **FAIL 0 | WARN 0 | SKIP 4 | PASS 3517**; `document()` clean. Conscious
+golden regen: **`_snaps/golden.md` only** (verified byte-for-byte to be the mean/sd joiner glyph swap
+U+202F -> U+2007 and NOTHING else -- mapping both spaces to one marker makes old == new); no `.rds`
+golden, no `render-html.md` (it has no mean cells and no grey_non_signif legend).
+
+1. **`empirical_OR` hard-deprecated** -> `lifecycle::deprecate_stop` (defunct: errors, points to
+   `empirical`). Never CRAN-released, so no retro-compat debt. The 2 alias tests now expect `defunctError`.
+2. **`na=` forwarded** to `tab_logit`/`multi_logit`; **`multi_logit` now accepts a VECTOR `dependent`**
+   (K mode: reuses `tab_reg`'s dependents-x-models recursion -> a `tabxplor_tabs` list, one sheet each).
+   K mode belongs to `multi_logit` (it has the models LIST); `tab_logit`'s `predictors` is one model, so
+   it only gains `na=`.
+3+5. **grey_non_signif legend names the FIRST THRESHOLD** (shared `legend_threshold_phrase()`, R/fmt_class.R):
+   `"±5 points"` / `"×1.15"` / `"±0.2 SD"` per measure. Terse tag -> `[grey: non-significant or under <thr>]`;
+   prose -> "Uncoloured: either not significant, or a difference under <thr>." + FR. ⚠ **The prose format
+   string is ONE literal, not `paste0("a ","b")`**: `xgettext` extracts each constant separately, so a
+   paste0-split message never matches the paste0-JOINED string `gettextf` looks up at runtime -- the
+   translation silently dies. (The old code had this latent bug; a prior phase had manually combined the
+   po entry, which `update_pkg_po` would re-split.)
+4. **mean/sd joiner U+202F -> `pad`** (fmt_class.R:2119): ASCII space in console/md-source, figure space
+   (digit-width, the maintainer's pick) in html + `tab_md`'s rendered target. The plot backend's
+   `unbrk`-strip sites are for ROW LABELS (the `unbreakable_spaces` option), untouched.
+6. **`levels="first"` NA handling unified** (tab.R tab_prepare_pop): the pre-merge no longer folds NA into
+   a level -- NA stays NA so the leaf's `na` handling is authoritative -- and `remove_levels` always
+   appends `"NA"` (every arity). Fixes (a) a 2-level col_var showing its NA column under `na="keep"` and
+   (b) a 3+-level col_var keeping dropped-NA rows in the base under `na="drop"`. Now matches the jmvtab
+   defer path. Also reaches `sup_cols` (they use `levels="first"`).
 
 ---
 
@@ -2490,7 +2517,7 @@ Tests: new `test-tab_reg-14w.R`; existing reg tests updated to the "Model `<eff>
 
 #### Phase 15a – create Windows-side script to build and test .jmo files
 
-I would want an automated script, Windows-side, that would : temporarily clone tabxplor current repo from github (not on D:/Statistiques/github, really a temp folder) ; load in R script with devtools, install package deps if needed, and install() jamovi module to build windows .jmo file.
+I would want a fully automated R script (or Bash + R), Windows-side, that would : temporarily clone tabxplor current repo from github (not on D:/Statistiques/github, really a temp folder) ; load the package with devtools, install package deps if needed, and install() jamovi module to build windows .jmo file.
 
 ```r
 load_all() ; jmvtools::install(home = 'C:/Program Files/jamovi 2.7.37.0') ; load_all()
@@ -2507,6 +2534,10 @@ One user-friendly, fast, clear and simple regression analysis, starting from jmv
 
 
 #### Phase 15c — Jamovi UI French translation
+
+
+#### Phase 16 — final maintainer’s review
+
 
 
 

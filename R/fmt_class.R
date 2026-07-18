@@ -2116,14 +2116,19 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
       # and the stars appended later ride outside the prefix, so this offset stays valid.
       if (isTRUE(bold_split)) prim_nchar[disp_mean_sd] <- nchar(out[disp_mean_sd])
 
-      out[disp_mean_sd] <- paste0(out[disp_mean_sd], unbrk, "(", sigma_sign, sd, ")")
+      # Phase 14x: the mean <-> "(sigma sd)" joiner is the medium `pad`, not a narrow no-break space
+      # (U+202F). `pad` is a plain ASCII space in the monospace media (console, markdown -- one digit
+      # wide there, and no exotic glyph to confuse a raw-file editor / copy-paste) and a FIGURE SPACE
+      # (U+2007, exactly one digit wide) in html, so the number and the "(sd)" tail keep the same
+      # digit-grid gap as the rest of the row instead of a tighter, off-grid one.
+      out[disp_mean_sd] <- paste0(out[disp_mean_sd], pad, "(", sigma_sign, sd, ")")
 
       # WARNING: this pads by CHARACTER COUNT, which is exact only in a monospace medium (console,
       # markdown). In html/Excel it lands within about one digit-width, because "(", sigma and ")"
       # are not digit-wide -- no run of spaces can match them exactly there. An exact fix needs
       # markup (a hidden tail), not padding; that belongs to the html engine, not to format().
       if (any(disp_mean_nosd)) {
-        tail_w <- nchar(unbrk) + nchar(sigma_sign) + 2L + max(stringr::str_length(sd))
+        tail_w <- nchar(pad) + nchar(sigma_sign) + 2L + max(stringr::str_length(sd))
         if (isTRUE(bold_split)) prim_nchar[disp_mean_nosd] <- nchar(out[disp_mean_nosd])
         out[disp_mean_nosd] <- paste0(out[disp_mean_nosd], strrep(pad, tail_w))
       }
@@ -2983,6 +2988,24 @@ legend_break_tokens <- function(plan, is_std, is_mean, channel, lang) {
        under = mk_side(plan$under_breaks, plan$under_slots, -1L))
 }
 
+# Phase 14x: the FIRST colour threshold as a compact phrase -- the smallest departure from the
+# reference a cell must reach to be coloured. Shared by the grey_non_signif terse tag AND prose note so
+# they name the SAME concrete threshold instead of the vague "too small a difference". Additive
+# measures (pct / standardized diff) are symmetric -> "±<v> points" / "±<v> SD"; multiplicative
+# ones (ratio / OR / contrib) -> "×<v>". NA when the scale carries no first break (an uncoloured table).
+legend_threshold_phrase <- function(plan, is_std, lang) {
+  if (is.null(plan) || length(plan$over_breaks) == 0L) return(NA_character_)
+  brk <- plan$over_breaks[[1]]
+  if (is.na(brk)) return(NA_character_)
+  if (identical(plan$measure, "diff")) {
+    val  <- if (isTRUE(is_std)) legend_num(abs(brk), lang) else legend_num(abs(brk) * 100, lang)
+    unit <- if (isTRUE(is_std)) gettext("SD") else gettext("points")
+    paste0("\u00b1", val, " ", unit)
+  } else {
+    paste0(.lg_times, legend_num(abs(brk), lang))
+  }
+}
+
 # join tokens with a plain-text separator.
 legend_join <- function(toks, sep) {
   if (length(toks) == 0) return(list())
@@ -3169,8 +3192,14 @@ legend_tokens_terse <- function(spec, lang, show_names) {
   if (!is.null(spec$plan_txt)) toks <- c(toks, add_channel(spec$plan_txt, "", FALSE))
   if (!is.null(spec$plan_bg))  toks <- c(toks, list(.lg_tok(if (identical(lang, "fr")) " ; " else "; ")),
                                          add_channel(spec$plan_bg, paste0(gettext("bg"), " "), TRUE))
+  # Phase 14x: grey_non_signif names the first threshold a cell must reach ("or under ±5 points"), so
+  # the tag no longer implies the false converse (grey == not significant). A grey cell is EITHER not
+  # significant OR below that threshold; the guarantee is only coloured => significant.
+  primary <- if (is.null(spec$plan_txt)) spec$plan_bg else spec$plan_txt
+  thr     <- legend_threshold_phrase(primary, spec$is_std, lang)
   pn <- switch(spec$policy,
-               "grey_non_signif"   = gettext("significant only"),
+               "grey_non_signif"   = if (!is.na(thr)) gettextf("grey: non-significant or under %s", thr)
+                                     else             gettext("significant only"),
                "guaranteed_effect" = gettext("significant, error-adjusted"),
                "")
   if (nzchar(pn)) toks <- c(toks, list(.lg_tok(paste0(" [", pn, "]"))))
@@ -3240,11 +3269,22 @@ legend_tokens_prose <- function(spec, lang, show_names) {
   # effect reaches the first break, so an UNCOLOURED cell may be significant-but-small (some even carry
   # stars). The old "Grey: not significantly different" was therefore statistically false: the only
   # guarantee is coloured => significant. State that directly.
-  if (identical(spec$policy, "grey_non_signif"))
-    toks <- c(toks, list(.lg_tok(paste0(" ", gettextf(
-      paste0("Coloured: significantly different from %s (%s), by at least the first colour ",
-             "threshold. Uncoloured: either not significant, or too small a difference to colour."),
-      ref_phrase, meth_phrase)))))
+  # Phase 14x: name the first threshold concretely ("or a difference under ±5 points" -- generalised to
+  # ×1.15 for ratios, ±0.2 SD for standardized means, and custom breaks) instead of "too small a
+  # difference to colour". Falls back to the vague form only when the scale has no first break.
+  # NB: the format string is ONE literal, not paste0("a ", "b"): xgettext extracts each string constant
+  # separately, so a paste0-split message never matches the paste0-JOINED string gettextf looks up at
+  # runtime -> the translation silently fails (the split-part po entries are dead). Keep it on one line.
+  if (identical(spec$policy, "grey_non_signif")) {
+    thr  <- legend_threshold_phrase(primary, spec$is_std, lang)
+    note <- if (!is.na(thr))
+      gettextf("Coloured: significantly different from %s (%s), by at least the first colour threshold. Uncoloured: either not significant, or a difference under %s.",
+               ref_phrase, meth_phrase, thr)
+    else
+      gettextf("Coloured: significantly different from %s (%s), by at least the first colour threshold. Uncoloured: either not significant, or too small a difference to colour.",
+               ref_phrase, meth_phrase)
+    toks <- c(toks, list(.lg_tok(paste0(" ", note))))
+  }
   else if (identical(spec$policy, "guaranteed_effect"))
     toks <- c(toks, list(.lg_tok(paste0(" ", gettextf(
       "Grey: not significantly different from %s after the margin of error.", ref_phrase)))))

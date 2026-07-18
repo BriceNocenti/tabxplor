@@ -261,10 +261,9 @@ test_that("empirical: gaussian now produces crude columns (Phase 14v)", {
   expect_true(all(c("Emp. mean", "Emp. diff") %in% names(tg)))
 })
 
-test_that("the deprecated empirical_OR argument still works, with a warning (Phase 14t)", {
+test_that("the empirical_OR argument is hard-deprecated (Phase 14x: errors)", {
   d <- reg_split_data()
-  lifecycle::expect_deprecated(
-    t <- tab_reg(d, "y", "x1", family = "binomial", empirical_OR = TRUE),
-    "empirical")
-  expect_true(all(c("Emp. %", "Emp. OR") %in% names(t)))
+  expect_error(
+    tab_reg(d, "y", "x1", family = "binomial", empirical_OR = TRUE),
+    class = "defunctError")
 })

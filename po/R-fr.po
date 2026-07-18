@@ -1,7 +1,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: tabxplor 1.1.3\n"
-"POT-Creation-Date: 2026-07-17 00:35\n"
+"POT-Creation-Date: 2026-07-18 19:16\n"
 "PO-Revision-Date: 2024-07-31 18:51+0200\n"
 "Last-Translator: Automatically generated\n"
 "Language-Team: none\n"
@@ -25,6 +25,12 @@ msgstr "réf."
 
 msgid "indep."
 msgstr "indép."
+
+msgid "SD"
+msgstr "écarts-types"
+
+msgid "points"
+msgstr "points"
 
 msgid "Shades of blue"
 msgstr "Nuances de bleu"
@@ -65,12 +71,6 @@ msgstr "intervalle de Wald sur l'échelle logarithmique"
 msgid "Wald interval"
 msgstr "intervalle de Wald"
 
-msgid "Welch t interval"
-msgstr "intervalle t de Welch"
-
-msgid "Student t interval"
-msgstr "intervalle t de Student"
-
 msgid "robust-Poisson (delta) interval"
 msgstr "intervalle de Poisson robuste (delta)"
 
@@ -80,6 +80,15 @@ msgstr "intervalle quasi-Poisson"
 msgid "Poisson interval"
 msgstr "intervalle de Poisson"
 
+msgid "confidence interval"
+msgstr "intervalle de confiance"
+
+msgid "Welch t interval"
+msgstr "intervalle t de Welch"
+
+msgid "Student t interval"
+msgstr "intervalle t de Student"
+
 msgid "Katz interval on the log risk-ratio"
 msgstr "intervalle de Katz sur le log rapport de risques"
 
@@ -88,9 +97,6 @@ msgstr "intervalle de Newcombe"
 
 msgid "Wald interval with Agresti-Caffo adjustment"
 msgstr "intervalle de Wald avec ajustement d'Agresti-Caffo"
-
-msgid "confidence interval"
-msgstr "intervalle de confiance"
 
 msgid "%s%% confidence"
 msgstr "seuil de confiance à %s %%"
@@ -113,6 +119,9 @@ msgstr "contribution au Chi2"
 msgid "bg"
 msgstr "fond"
 
+msgid "grey: non-significant or under %s"
+msgstr "gris : non significatif ou sous %s"
+
 msgid "significant only"
 msgstr "significatif seulement"
 
@@ -121,12 +130,6 @@ msgstr "significatif, marge déduite"
 
 msgid "cells"
 msgstr "cases"
-
-msgid "SD"
-msgstr "écarts-types"
-
-msgid "points"
-msgstr "points"
 
 msgid "%s %s %s"
 msgstr "%s %s à %s"
@@ -139,6 +142,14 @@ msgstr "après soustraction de la marge d'erreur (%s)"
 
 msgid "Background colour (%s):"
 msgstr "Couleur de fond (%s) :"
+
+msgid ""
+"Coloured: significantly different from %s (%s), by at least the first colour "
+"threshold. Uncoloured: either not significant, or a difference under %s."
+msgstr ""
+"Coloré : significativement différent de %s (%s), d'au moins le premier seuil "
+"de couleur. Non coloré : soit non significatif, soit une différence "
+"inférieure à %s."
 
 msgid ""
 "Coloured: significantly different from %s (%s), by at least the first colour "
@@ -197,6 +208,9 @@ msgid "data is of length 0 (possibly after filter or na = 'drop')"
 msgstr ""
 
 msgid "unknown method_diff:"
+msgstr ""
+
+msgid "unknown method_mean_ratio:"
 msgstr ""
 
 msgid "total rows were added, since color == 'contrib' needs them"

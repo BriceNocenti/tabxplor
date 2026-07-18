@@ -294,10 +294,12 @@ test_that("display = 'ratio' renders the ratio field; legacy 'rr' still works", 
   expect_true(any(grepl("\u00d7", r_ratio)))                # shows a ratio (multiply sign)
 })
 
-test_that("empirical_OR is a soft-deprecated alias for empirical", {
+test_that("empirical_OR is hard-deprecated (errors, pointing to empirical)", {
   d <- emp_data()
-  lifecycle::expect_deprecated(
-    t <- tab_reg(d, "married", "race", family = "binomial", empirical_OR = TRUE, cleannames = FALSE),
-    "empirical")
+  expect_error(
+    tab_reg(d, "married", "race", family = "binomial", empirical_OR = TRUE, cleannames = FALSE),
+    class = "defunctError")
+  # the replacement works:
+  t <- tab_reg(d, "married", "race", family = "binomial", empirical = TRUE, cleannames = FALSE)
   expect_true(all(c("Emp. %", "Emp. OR") %in% names(t)))
 })

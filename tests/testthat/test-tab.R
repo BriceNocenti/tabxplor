@@ -556,9 +556,12 @@ testthat::test_that("tab colors are calculated with counts and pct", {
 
 testthat::test_that("tab colors are calculated with text supplementary columns", {
   withr::local_options(lifecycle_verbosity = "quiet")
+  # Phase 14x: sup_cols use levels = "first", so their NA column is now discarded (like the non-first
+  # levels); check the displayed first-level column. (diff_ci colours nothing for this fixture -- the
+  # only significant sup cell was the now-dropped NA column -- so it stays a build check.)
   tab(data, sex, hair_color, pct = "row", sup_cols = eye_color, color = "diff"    ) %>% dplyr::pull(black_eye_color) %>% expect_color()
-  tab(data, sex, hair_color, pct = "row", sup_cols = eye_color, color = "diff_ci" ) %>% dplyr::pull(`NA`) %>% expect_color()
   tab(data, sex, hair_color, pct = "row", sup_cols = eye_color, color = "auto"    ) %>% dplyr::pull(black_eye_color) %>% expect_color()
+  tab(data, sex, hair_color, pct = "row", sup_cols = eye_color, color = "diff_ci" ) %>% testthat::expect_s3_class("tabxplor_tab")
 })
 
 testthat::test_that("tab colors are calculated with mean supplementary columns", {
@@ -675,3 +678,56 @@ testthat::test_that("no_col_var placeholder is not rendered as a col_var name (P
 #   print(tabs)
 # })
 
+
+
+# --- Phase 14x: levels = "first" NA handling (unified across factor arity + na modes) ---------------
+# A 2-level col_var used to keep its NA column visible under na = "keep" (no pre-merge fired), and a
+# 3+-level col_var used to keep the NA rows IN the base under na = "drop" (the pre-merge folded NA into
+# a real level, so the leaf found nothing to drop). Both are now consistent with levels = "all".
+
+testthat::test_that("levels = 'first' discards the NA column for every factor arity (na = 'keep')", {
+  d <- tibble::tibble(
+    g     = rep(c("A", "B"), each = 10),
+    two   = factor(c("x","x","x","x", "y","y","y","y", NA, NA,
+                     "x","x","x","x","x","x", "y","y", NA, NA)),
+    three = factor(c("p","p","p", "q","q","q", "r","r", NA, NA,
+                     "p","p","p","p","p", "q", "r","r", NA, NA))
+  )
+
+  # 2-level: only "x" kept; "y" AND the NA column are dropped; NA still counts in the base (row total).
+  t2 <- tab(d, g, two, pct = "row", levels = "first", na = "keep")
+  testthat::expect_true("x" %in% names(t2))
+  testthat::expect_false(any(c("y", "NA") %in% names(t2)))
+  testthat::expect_equal(get_n(t2[["Total"]]), c(10, 10, 20))     # base INCLUDES the 2 NA per group
+  testthat::expect_equal(get_pct(t2[["x"]])[1:2], c(0.4, 0.6))    # 4/10 , 6/10
+
+  # 3-level: same rule -- only "p" kept, "q"/"r"/NA dropped, NA counted in the base.
+  t3 <- tab(d, g, three, pct = "row", levels = "first", na = "keep")
+  testthat::expect_true("p" %in% names(t3))
+  testthat::expect_false(any(c("q", "r", "NA") %in% names(t3)))
+  testthat::expect_equal(get_n(t3[["Total"]]), c(10, 10, 20))
+})
+
+testthat::test_that("levels = 'first' + na = 'drop' drops NA from the base for every arity", {
+  d <- tibble::tibble(
+    g     = rep(c("A", "B"), each = 10),
+    two   = factor(c("x","x","x","x", "y","y","y","y", NA, NA,
+                     "x","x","x","x","x","x", "y","y", NA, NA)),
+    three = factor(c("p","p","p", "q","q","q", "r","r", NA, NA,
+                     "p","p","p","p","p", "q", "r","r", NA, NA))
+  )
+  # base now EXCLUDES the NA rows (was the 3+-level bug: base stayed at 10).
+  t2 <- tab(d, g, two,   pct = "row", levels = "first", na = "drop")
+  testthat::expect_equal(get_n(t2[["Total"]]), c(8, 8, 16))
+  t3 <- tab(d, g, three, pct = "row", levels = "first", na = "drop")
+  testthat::expect_equal(get_n(t3[["Total"]]), c(8, 8, 16))       # 3+-level base bug fixed
+})
+
+testthat::test_that("levels = 'first' keeps NA rows in the row_var (na = 'keep')", {
+  d <- tibble::tibble(
+    g   = factor(c("A","A","B","B", NA, NA)),                    # a row_var with NA
+    two = factor(c("x","y","x","y","x","y"))
+  )
+  t <- tab(d, g, two, pct = "row", levels = "first", na = "keep")
+  testthat::expect_true("NA" %in% as.character(t[[1]]))          # the NA row_var group stays
+})

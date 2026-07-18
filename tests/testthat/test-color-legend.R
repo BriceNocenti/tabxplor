@@ -34,9 +34,12 @@ testthat::test_that("the CI method + confidence level come from the stored ci_se
              color_signif = "grey_non_signif", ci = "diff")
   l1  <- leg_en(tb1)
   # Phase 14q: the note states the true guarantee (coloured => significant), not the false
-  # "grey => non-significant" (a grey cell may be significant-but-small).
+  # "grey => non-significant" (a grey cell may be significant-but-small). Phase 14x names the first
+  # threshold concretely ("or a difference under +-5 points") instead of "too small a difference".
   testthat::expect_match(l1, "Coloured: significantly different from the Total row")
-  testthat::expect_match(l1, "Uncoloured: either not significant, or too small a difference")
+  testthat::expect_match(l1, "Uncoloured: either not significant, or a difference under ")
+  testthat::expect_match(l1, "difference under \u00b15 points")  # generalised threshold (pct)
+  testthat::expect_no_match(l1, "too small a difference")
   testthat::expect_no_match(l1, "Grey: not significantly different")
   testthat::expect_match(l1, "Newcombe score interval, 95% confidence")
 

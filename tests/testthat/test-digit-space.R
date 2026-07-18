@@ -12,7 +12,8 @@
 
 fig <- stringi::stri_unescape_unicode("\\u2007")   # FIGURE SPACE, one digit wide
 sig <- stringi::stri_unescape_unicode("\\u03c3")   # sigma
-nbs <- stringi::stri_unescape_unicode("\\u202f")   # the mean/sd joiner (narrow no-break space)
+nbs <- stringi::stri_unescape_unicode("\\u202f")   # Phase 14x: the OLD mean/sd joiner -- must be GONE
+                                                   # now (replaced by `pad`: ASCII in console, fig in md/html)
 
 # === the thousands mark follows `pad` =============================================
 
@@ -54,19 +55,25 @@ mean_col <- function(digits = 1L) {
 
 testthat::test_that("format(): a mean with no sd is padded to the tail, so the means align", {
   f <- format(mean_col(), special_formatting = TRUE)
+  # Phase 14x: the mean <-> "(sd)" joiner is the medium `pad` -- a plain ASCII space in the console,
+  # not the narrow no-break space that used to sit there.
   testthat::expect_identical(f, c(paste0("1.0", strrep(" ", 7)),
-                                  paste0("1.7", nbs, "(", sig, "2.1)"),
-                                  paste0("10.2", nbs, "(", sig, "3.0)")))
+                                  paste0("1.7 (", sig, "2.1)"),
+                                  paste0("10.2 (", sig, "3.0)")))
+  testthat::expect_false(any(grepl(nbs, f, fixed = TRUE)))
   # what alignment MEANS here: every cell's tail is the same width, so the column's right-align
   # lines the means up (it is the mean, not the cell, that must align).
   tails <- nchar(f) - nchar(c("1.0", "1.7", "10.2"))
   testthat::expect_identical(length(unique(tails)), 1L)
 })
 
-testthat::test_that("format(): the sd-less pad follows `pad` too", {
+testthat::test_that("format(): the sd-less pad AND the sd joiner follow `pad`", {
   h <- format(mean_col(), special_formatting = TRUE, html = TRUE)
   testthat::expect_identical(h[1], paste0("1.0", strrep(fig, 7)))
   testthat::expect_false(grepl(" ", h[1], fixed = TRUE))
+  # the joiner is a FIGURE space in html (digit-width), never the narrow no-break space
+  testthat::expect_identical(h[2], paste0("1.7", fig, "(", sig, "2.1)"))
+  testthat::expect_false(any(grepl(nbs, h, fixed = TRUE)))
 })
 
 testthat::test_that("format(): an EMPTY mean cell stays NA -- it is not padded", {
@@ -107,10 +114,12 @@ testthat::test_that("format(): primary_nchar is attached only when something spl
 testthat::test_that("tab_md(): a bold row bolds the mean, not the sd", {
   t <- tab(forcats::gss_cat, marital, tvhours, pct = "row", color = FALSE)
   md <- tab_md(t, color = FALSE, css = FALSE, color_legend = FALSE)
-  # bold closes BEFORE the joiner: "**3.0**<nbsp>(sigma2.6)", never "**3.0 (sigma2.6)**"
-  testthat::expect_match(md, paste0("\\*\\*[0-9.]+\\*\\*", nbs, "\\(", sig), all = FALSE)
-  testthat::expect_no_match(md, paste0("\\*\\*[0-9.]+", nbs, "\\(", sig, "[0-9. ]+\\)\\*\\*"),
+  # bold closes BEFORE the joiner: "**3.0**<figsp>(sigma2.6)", never "**3.0 (sigma2.6)**".
+  # Phase 14x: the joiner is now the FIGURE space (markdown renders in a proportional host font).
+  testthat::expect_match(md, paste0("\\*\\*[0-9.]+\\*\\*", fig, "\\(", sig), all = FALSE)
+  testthat::expect_no_match(md, paste0("\\*\\*[0-9.]+", fig, "\\(", sig, "[0-9. ]+\\)\\*\\*"),
                             all = TRUE)
+  testthat::expect_false(any(grepl(nbs, md, fixed = TRUE)))   # the narrow no-break space is gone
 })
 
 # === Phase 14m-ii: markdown value-internal padding is figure space ================

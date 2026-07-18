@@ -1732,11 +1732,18 @@ tab_prepare_pop <- function(ctx) {
 
   }
 
-  # Where only first levels are kept, merge others to minimise useless calculations.
+  # Where only first levels are kept, merge the OTHER (non-first) levels to minimise useless
+  # calculations. Phase 14x: the NA is NOT folded into a level here -- it stays NA, so the leaf's own
+  # na handling remains authoritative (na = "keep" makes an explicit "NA" column counted in the base;
+  # na = "drop" drops those rows from the base). The NA column is then discarded from DISPLAY for EVERY
+  # arity by appending "NA" to remove_levels below (any_of ignores it when absent). The old pre-merge
+  # folded NA into "remove_levels" for 3+-level factors only, which had two bugs: (a) it left the NA
+  # column visible for 2-level factors under na = "keep" (no pre-merge fired, and "NA" was never added
+  # to remove_levels), and (b) it defeated na = "drop" for 3+-level factors (NA became a real level, so
+  # the leaf found nothing to drop and the base wrongly included the NA rows). This now matches the
+  # jmvtab defer path exactly.
   # Phase 7e: skip the PRE-aggregate merge when defer_level_merge (jmvtab) -- keep full levels so the
-  # aggregate + test are cacheable; the drop happens in tab_assemble. remove_levels then lists every
-  # non-first level (+ the explicit "NA" column made by the leaves under na = "keep"; any_of ignores
-  # it when absent), so the final table still shows only the first level.
+  # aggregate + test are cacheable; the drop happens in tab_assemble.
   lv1 <- lvs == "first" & col_vars_text
   if (any(lv1)) {
     if (!isTRUE(defer_level_merge)) {
@@ -1747,19 +1754,17 @@ tab_prepare_pop <- function(ctx) {
       if (any(col_vars_3levels)) {
 
         rm_levels_by_col_vars <- dplyr::select(data, !!!col_vars[col_vars_3levels]) |>
-          purrr::map(~ purrr::set_names(c(levels(.)[-1], "NA"), "remove_levels"))
+          purrr::map(~ purrr::set_names(levels(.)[-1], "remove_levels"))
 
         data <- data %>%
           dplyr::mutate(dplyr::across(
             tidyselect::all_of(as.character(col_vars[col_vars_3levels])),
-            ~ suppressWarnings(forcats::fct_na_value_to_level(., level = "NA") |>
-                                 forcats::fct_recode(rlang::splice(rm_levels_by_col_vars[[dplyr::cur_column()]] )))
+            ~ suppressWarnings(forcats::fct_recode(., rlang::splice(rm_levels_by_col_vars[[dplyr::cur_column()]] )))
           ))
       }
     }
 
-    remove_levels <- purrr::map(dplyr::select(data, !!!col_vars[lv1]), ~ levels(.)[-1])
-    if (isTRUE(defer_level_merge)) remove_levels <- purrr::map(remove_levels, ~ c(.x, "NA"))
+    remove_levels <- purrr::map(dplyr::select(data, !!!col_vars[lv1]), ~ c(levels(.)[-1], "NA"))
   }
 
 
