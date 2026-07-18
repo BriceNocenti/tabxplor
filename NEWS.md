@@ -402,6 +402,18 @@
   that will open the workbook.
 
 ## Internal
+* **Dependency footprint trimmed and clarified.** `broom` moved from `Suggests` to `Imports`, so
+  `tab_reg()` / `tab_logit()` / `multi_logit()` now work out of the box for the common models
+  (linear / logistic / Poisson) with no extra install; the model-specific back-ends (`survey`,
+  `nnet`, `MASS`, `marginaleffects`, `brant`, `svyVGAM`/`VGAM`) stay optional `Suggests`. `crayon`
+  (superseded) was dropped entirely — the console colours are now built with `cli` (already a
+  dependency). The unused `grDevices` `Suggests` entry was removed. `htmltools` and `knitr` moved to
+  `Imports` (they are used on the core render paths), which lets `kableExtra` move to `Suggests`.
+* **New `?tabxplor-options` help page** documents every `tabxplor.*` global option (defaults,
+  purpose) in one place, cross-linked from `?tab`.
+* Fixed two option-default inconsistencies: `tabxplor.totcol_range` is now set once in `.onLoad`
+  (default `"off"`) and read from a single place, and `tabxplor.cleannames`'s fallback is `FALSE`
+  everywhere (a stray `TRUE` in `tab_reg()` disagreed with the load-time default). No behaviour change.
 * Examples that need a `Suggests` package (`tab_reg()`, `tab_logit()`, `multi_logit()` → **broom**,
   plus **marginaleffects** / **nnet** / **MASS** for the AME, multinomial and ordinal cases;
   `tab_xl()` → **openxlsx2**; `tab_plot()` → **ggpubr**/**gtable**/**ggplot2**) are now wrapped in
@@ -470,6 +482,11 @@
   gain (~1.05–1.30× at 15M rows, more at larger N / sparser data).
 
 ## Changes that may affect existing code
+* **`kableExtra` is now an optional (`Suggests`) dependency.** The default HTML engine is tabxplor's
+  own dependency-free renderer, so most users are unaffected and installs are lighter (no
+  `kableExtra` and its `xml2`/`rvest`/`svglite`/`systemfonts` chain). Only the legacy
+  `tab_kable(engine = "kableExtra")` (and `kable_tabxplor_style()`) now require `kableExtra` to be
+  installed — they raise a clear message pointing to `engine = "html"` if it is absent.
 * **Significance stars are now opt-in (off by default).** A plain `tab()` no longer prints `*`/`**`/`***`
   after the cells: pass `stars = TRUE` (or set `options(tabxplor.stars = TRUE)`) to get them. Regression
   tables from `tab_reg()`/`tab_logit()`/`multi_logit()` still show stars by default (pass

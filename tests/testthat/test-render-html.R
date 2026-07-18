@@ -241,9 +241,9 @@ testthat::test_that("legend break-words are bold in every medium (Phase 14c)", {
   coloured <- purrr::keep(runs, ~ !is.na(.$color))
   testthat::expect_true(length(coloured) > 0)
   testthat::expect_true(all(purrr::map_lgl(coloured, "bold")))
-  # console: crayon bold wraps the colour style. `cli.num_colors` is the real gate (crayon defers to
-  # cli::num_ansi_colors(), which reads it FIRST) -- testthat pins it to 1 for reproducible output.
-  withr::with_options(list(cli.num_colors = 256, crayon.enabled = TRUE, crayon.colors = 256), {
+  # console: cli::style_bold wraps the colour style. `cli.num_colors` is the gate (read by
+  # cli::num_ansi_colors()) -- testthat pins it to 1 for reproducible output, so force it here.
+  withr::with_options(list(cli.num_colors = 256), {
     testthat::expect_match(tab_color_legend(tb, medium = "console"), "\033[[]1m")
   })
 })

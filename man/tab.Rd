@@ -450,4 +450,9 @@ tab(dplyr::storms, category, c(status, pressure, wind)) \%>\%
 tab(data, race, marital, year, pct = "row") \%>\%
   dplyr::arrange(year, is_totrow(.), desc(Married))
   }
+
+}
+\seealso{
+\link{tabxplor-options} for the package-wide \code{options()} that set the display,
+colour, statistics and export defaults.
 }

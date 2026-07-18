@@ -394,6 +394,9 @@ NULL
 #' tab(data, race, marital, year, pct = "row") %>%
 #'   dplyr::arrange(year, is_totrow(.), desc(Married))
 #'   }
+#'
+#' @seealso [tabxplor-options] for the package-wide `options()` that set the display,
+#'   colour, statistics and export defaults.
 tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
                 pct = "no", color = "no", color_signif = "ignore",
                 OR = "no", test = FALSE,

@@ -2449,17 +2449,17 @@ pillar_shaft.tabxplor_fmt <- function(x, ..., .ref = NULL) {
     # Phase 5 engine: two integer slot vectors (text + background channel; 0 = uncolored). The
     # text channel uses the current-option palette (back-compat with color_style_type); the
     # background channel always uses the pale bg palette, stacked on top (a cell can carry both).
-    channels     <- fmt_color_channels(x)
-    text_crayons <- get_color_style()                  # current type/theme/24-bit options
-    bg_crayons   <- get_color_style(type = "bg")
+    channels    <- fmt_color_channels(x)
+    text_styles <- get_color_style()                  # current type/theme/24-bit options (ANSI, cli)
+    bg_styles   <- get_color_style(type = "bg")
 
     for (s in sort(unique(channels$text_slot[channels$text_slot > 0L & ok]))) {
       cells <- ok & channels$text_slot == s
-      out[cells] <- text_crayons[[s]](out[cells])
+      out[cells] <- text_styles[[s]](out[cells])
     }
     for (s in sort(unique(channels$bg_slot[channels$bg_slot > 0L & ok]))) {
       cells <- ok & channels$bg_slot == s
-      out[cells] <- bg_crayons[[s]](out[cells])
+      out[cells] <- bg_styles[[s]](out[cells])
     }
     totals <- if (!is.null(.ref)) .ref$all_totals else get_reference(x, "all_totals") #c("cells","lines")
     # Phase 14q: a reference ROW is also an anchor. A regression EMPIRICAL column carries
@@ -2481,9 +2481,9 @@ pillar_shaft.tabxplor_fmt <- function(x, ..., .ref = NULL) {
     # widths in the console unaesthetically. The underline+"|" was the border-imitation try.
     # - use underline and | to make the imitate the borders of a table
     # if (any(totrows)) out <- dplyr::if_else(totrows & ! totcol,
-    #                                         crayon::underline(out), out)
+    #                                         cli::style_underline(out), out)
     # if (totcol)       out <- dplyr::if_else(totrows,
-    #                                         paste0(crayon::underline(out), "|"),
+    #                                         paste0(cli::style_underline(out), "|"),
     #                                         paste0(out, "|"))
 
     # # - normal cells a bit grayer to see the totals better
@@ -2610,7 +2610,7 @@ mutate.tabxplor_fmt <- function(.data, ...) {
 #                                  direction into palette slots (0 = uncolored). C-level, no
 #                                  per-cell reduce (the old keep_last_break hotspot is gone).
 #   fmt_color_channels(x)       -> list(text_slot, bg_slot): the only artifact consumers map to
-#                                  crayon/hex. (bg wired at Step 4.)
+#                                  ansi/hex. (bg wired at Step 4.)
 # Significance gates read the Phase-3a ci_inf/ci_sup bounds. See dev/new_colors_UI.md §8-9.
 # Byte-identity gate: factor "diff" (incl. the x2), "contrib", "OR", and the mean CI-gated modes
 # are reproduced exactly; numeric "diff" (Glass's delta) and the pct CI-gated modes change
@@ -2912,7 +2912,7 @@ fmt_channel_codes <- function(x, theme = "light") {
 #   legend_tokens_terse / _prose            a TOKEN stream (plain-text | coloured-break tokens);
 #                                           `terse` = compact (console), `prose` = full sentences
 #                                           (exports), translated via gettext (domain "R-tabxplor").
-#   legend_render_line(tokens, medium)      console crayon / html text_spec / md pandoc span /
+#   legend_render_line(tokens, medium)      console ansi (cli) / html text_spec / md pandoc span /
 #                                           excel fmt_txt runs / plain.
 # The break-word colours come from the engine's per-side slots (over 1:4, under 5:8) indexed into the
 # 8-hex palette -- the exact path fmt_channel_codes() / tx_slot_class() use for the cells.
@@ -3341,7 +3341,7 @@ legend_render_line <- function(tokens, medium, theme, colored, classes = FALSE) 
       # `theme` is an argument, so the palette must follow it -- reading the option here silently
       # rendered a legend the caller never asked for (it disagreed with slot_hex above).
       style <- get_color_style("crayon", type = fam(tk$ch), theme = pal)[[tk$c]]
-      crayon::bold(style(tk$t))
+      cli::style_bold(style(tk$t))
     } else if (identical(medium, "html")) {
       # DESIGN: the span is emitted inline rather than via kableExtra::text_spec(). text_spec()'s
       # byte output is version-unstable (1.4.0 -> 1.4.1 moved the rgba alpha 255 -> 1, dropped the

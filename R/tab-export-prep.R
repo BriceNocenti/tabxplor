@@ -203,13 +203,16 @@ tab_label_runs <- function(tab, label_names) {
 #   get_tot_wn()/get_wn() -- the tab_ci()/tab_apply_n_min() rule (tab.R). Built INERT in Phase 10d
 #   (nothing consumes `text` yet -> byte-identical); the exporters overwrite the Total cell strings
 #   in Phase 10e/10f (a conscious golden change then).
-# `style`: "range" -> "[min;max]" (default), "min" -> the smallest (safest) base
-# (option "tabxplor.totcol_range").
+# `style`: "range" (default) -> "[min;max]", "min" -> the smallest (safest) base, "off" -> uniform
+# (no per-row range). Only ONE site reads option "tabxplor.totcol_range": the console
+# (tab.R tab_fold_addn_incell), which passes `style` explicitly here (and only for "range"/"min").
+# The export prep always computes the range into the render model, so this default is a plain "range".
 #' @keywords internal
 tab_totcol_range <- function(tab, fmt_cols, col_var_map, totcols,
-                             style = getOption("tabxplor.totcol_range", "range")) {
+                             style = "range") {
   n_row <- nrow(tab)
   empty <- list(col = totcols, text = character(0), differ = logical(0))
+  if (identical(style, "off")) return(empty)
   if (length(fmt_cols) == 0 || length(totcols) == 0) return(empty)
 
   # One representative base per col_var per row: within a col_var+row the base is constant, so read

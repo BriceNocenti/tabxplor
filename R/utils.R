@@ -68,6 +68,12 @@ NULL
 
   options("tabxplor.ci_print" = "ci") # or "moe"
 
+  # Phase 10: how a Total column's in-cell base is shown when a table's col_vars have DIFFERING bases
+  # (e.g. na = "drop"). "off" (default) = each row's own base, uniform "{pct} (n={n})"; "range" =
+  # the per-row "[min;max]" across col_vars; "min" = the smallest (safest) base. Read by both the
+  # console (tab_fold_addn_incell) and the exporter prep (tab_totcol_range), so set once here.
+  options("tabxplor.totcol_range" = "off")
+
   # Phase 3a significance stars (universal CI-inclusion). `stars` default (OPT-IN: FALSE, so a plain
   # tab() stores no per-cell pvalue and shows no stars; tab_reg() sets stars = TRUE itself), and the
   # star thresholds/labels read by get_stars(). Thresholds are nested p-value cutoffs.
@@ -1400,24 +1406,6 @@ justify_grob <- function(grob, hjust = "left", vjust = "top", pad = 5){
 
   return(grob)
 }
-
-
-
-
-# # cowplot:::as_grob.ggplot
-# as_grob.ggplot <- function (plot, device = NULL) {
-#   if (is.null(device)) {
-#     device <- null_dev_env$current
-#   }
-#   cur_dev <- grDevices::dev.cur()
-#   device(width = 6, height = 6)
-#   null_dev <- grDevices::dev.cur()
-#   on.exit({
-#     grDevices::dev.off(null_dev)
-#     if (cur_dev > 1) grDevices::dev.set(cur_dev)
-#   })
-#   ggplot2::ggplotGrob(plot)
-# }
 
 
 

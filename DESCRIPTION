@@ -24,9 +24,8 @@ Suggests:
     bench (>= 1.1.0),
     DescTools (>= 0.99.0),
     fansi (>= 0.5.0),
-    htmltools (>= 0.5.0),
     jmvcore (>= 2.4.0),
-    knitr,
+    kableExtra (>= 1.3.0),
     mirai (>= 2.5.0),
     openxlsx2 (>= 1.0.0),
     pkgload (>= 1.3.0),
@@ -35,13 +34,11 @@ Suggests:
     ggplot2 (>= 3.4.0),
     cowplot (>= 1.1.1),
     gtable,
-    grDevices,
     grid,
     rmarkdown,
     rstudioapi (>= 0.1),
     testthat (>= 3.0.0),
     labelled (>= 2.0.0),
-    broom (>= 1.0.0),
     MASS (>= 7.3.0),
     nnet (>= 7.3.0),
     brant (>= 0.3.0),
@@ -55,10 +52,9 @@ Suggests:
 Config/testthat/edition: 3
 Config/testthat/parallel: true
 Config/testthat/start-first: tab_reg*, tab_logit, parallel-parity, jmvtab-cache, export*
-Imports: 
+Imports:
     dplyr (>= 1.0.3),
     stringr (>= 1.4.0),
-    crayon (>= 1.3.0),
     forcats (>= 0.5.0),
     magrittr (>= 1.5.0),
     purrr (>= 0.3.0),
@@ -72,7 +68,9 @@ Imports:
     pillar (>= 1.6.0),
     stats (>= 4.0.0),
     utils,
-    kableExtra (>= 1.3.0),
+    broom (>= 1.0.0),
+    htmltools (>= 0.5.0),
+    knitr,
     lifecycle (>= 1.0.0),
     data.table,
 Depends:

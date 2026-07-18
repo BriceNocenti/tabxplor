@@ -165,7 +165,7 @@ testthat::test_that("the console legend honours its `theme` argument, not the op
   # It used to read getOption("tabxplor.color_style_theme") and silently disagree with the palette
   # every other medium resolved from `theme`.
   tb <- tab(gss, marital, race, pct = "row", color = "diff")
-  withr::with_options(list(cli.num_colors = 256, crayon.enabled = TRUE, crayon.colors = 256,
+  withr::with_options(list(cli.num_colors = 256,
                            tabxplor.color_style_theme = "light"), {
     lite <- suppressWarnings(tab_color_legend(tb, medium = "console", theme = "light"))
     dark <- suppressWarnings(tab_color_legend(tb, medium = "console", theme = "dark"))

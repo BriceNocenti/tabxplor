@@ -70,6 +70,6 @@ headers. Nothing in the package has ever called it.
 tabs <- tibble::tibble(nm      = c("First", "Second", "Total"),
                        column1 = c(1, 2, 3),
                        column2 = c(4, 5, 6)                    )
-kable_tabxplor_style(tabs)
+if (requireNamespace("kableExtra", quietly = TRUE)) kable_tabxplor_style(tabs)
 }
 }

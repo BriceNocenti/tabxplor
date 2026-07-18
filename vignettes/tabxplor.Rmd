@@ -21,13 +21,15 @@ library(tabxplor)
 # threads_option <- Sys.getenv("OMP_THREAD_LIMIT")
 #Sys.setenv("OMP_THREAD_LIMIT" = 2)
 
-
+# Force 256-colour ANSI so the console tables render coloured when knitted (tabxplor builds its
+# terminal styles with cli, which reads options("cli.num_colors")). Set BEFORE the palette is
+# (re)built below; fansi::sgr_to_html() then turns the ANSI into the HTML shown in this vignette.
+options(cli.num_colors = 256)
 
 set_color_style(type = "text", theme = "light")
 ```
 
 ```{r, echo = FALSE, include = FALSE}
-options(crayon.enabled = TRUE)
 knitr::knit_hooks$set(output = function(x, options){
   paste0(
     '<pre class="r-output"><code>',
@@ -35,10 +37,6 @@ knitr::knit_hooks$set(output = function(x, options){
     '</code></pre>'
   )
 })
-
-num_colors <- function(forget = TRUE) 256
-library(crayon)
-assignInNamespace("num_colors", num_colors, pos = "package:crayon")
 ```
 
 ```{css, echo = FALSE}

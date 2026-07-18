@@ -353,8 +353,9 @@ when the scale is symmetric, or a \code{list(over =, under =)} of magnitudes oth
 \item{custom_palette}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} A former 10/11-slot palette; its 4
 over- and 4 under-represented colours are mapped onto \code{set_color_palette()}.}
 
-\item{mode}{By default, \code{get_color_style} returns a list of \pkg{crayon} coloring
-functions. Set to \code{"color_code"} to return html color codes.}
+\item{mode}{By default, \code{get_color_style} returns a list of terminal (ANSI) coloring
+functions (the historical value \code{"crayon"}, now built with \pkg{cli}). Set to
+\code{"color_code"} to return html color codes.}
 
 \item{...}{Scales passed individually and named, e.g.
 \code{set_color_breaks(pct_diff = c(0.05, 0.1, 0.2), mean_ratio = c(1.15, 1.5, 2, 4))}. Each
@@ -390,7 +391,7 @@ A single logical.
 Sets the internal color palettes (invisibly) and the option
 \code{"tabxplor.color_style_theme"}.
 
-A list of 8 crayon color functions, or a vector of 8 color html codes.
+A list of 8 terminal (ANSI) color-style functions, or a vector of 8 color html codes.
 
 Sets the global option "tabxplor.color_breaks" (a named list of scales) and returns
 it invisibly.
@@ -430,15 +431,15 @@ scale drops that measure for its column type.
 
 \item \code{set_color_palette()}: customise the color palette used to print \code{\link{tab}}. Each palette
 is 4 hex codes ordered faint -> strong. Provide only the ones you want to change; the OKLCH
-defaults are used otherwise. The crayon styles are (re)built once, not per cell.
+defaults are used otherwise. The ANSI styles are (re)built once, not per cell.
 
 \item \code{set_color_style()}: \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Superseded by \code{set_color_palette()}.
 Kept as a back-compat shim: \code{type}/\code{theme} still take effect (as options);
 \code{custom_palette} maps its over/under colours onto the new 4+4 palette; \code{html_24_bit}
 is inert (exports are always 24-bit).
 
-\item \code{get_color_style()}: get the color palette as \pkg{crayon} functions or html codes: an 8-element
-vector (4 over-represented intensities then 4 under-represented), indexed by the engine slot.
+\item \code{get_color_style()}: get the color palette as terminal (ANSI) style functions or html codes: an
+8-element vector (4 over-represented intensities then 4 under-represented), indexed by the engine slot.
 
 \item \code{set_color_breaks()}: set the breaks used to print colors.
 

@@ -99,8 +99,10 @@ testthat::test_that("md/kable/html show the col_var name spanning header (single
   testthat::expect_match(lines[3], "race")
   testthat::expect_match(lines[3], "[*]race[*]", perl = TRUE)   # italic: it reads as a sub-heading
   testthat::expect_no_match(lines[1], "race")
-  hk <- as.character(tab_kable(t, engine = "kableExtra"))
-  testthat::expect_true(grepl("race</div>", hk))               # add_header_above cell
+  if (requireNamespace("kableExtra", quietly = TRUE)) {
+    hk <- as.character(tab_kable(t, engine = "kableExtra"))
+    testthat::expect_true(grepl("race</div>", hk))             # add_header_above cell
+  }
   hh <- as.character(tab_kable(t, engine = "html"))
   testthat::expect_match(hh, 'colspan="3"[^>]*>race<')         # html engine colspan cell
 })

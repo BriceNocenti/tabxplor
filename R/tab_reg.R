@@ -72,16 +72,11 @@
 
 # === Internal engine ================================================================
 
-# broom is needed for every fit; survey only for the weighted (wt) path; nnet / MASS for the
-# nominal (multinomial) / ordinal (proportional-odds) families (both R Recommended -> normally present);
-# marginaleffects only for effect="ame" (the AME / adjusted-prediction engine, Phase 12e).
+# broom is an Import (every fit is tidied with it), so it needs no guard here; survey only for the
+# weighted (wt) path; nnet / MASS for the nominal (multinomial) / ordinal (proportional-odds) families
+# (both R Recommended -> normally present); marginaleffects only for effect="ame" (the AME /
+# adjusted-prediction engine, Phase 12e).
 reg_check_deps <- function(family, weighted, needs_marginaleffects = FALSE) {
-  if (!requireNamespace("broom", quietly = TRUE)) {
-    cli::cli_abort(c(
-      "{.pkg broom} is required for regression tables.",
-      "i" = 'Install it with {.code install.packages("broom")}.'
-    ))
-  }
   if (needs_marginaleffects && !requireNamespace("marginaleffects", quietly = TRUE)) {
     cli::cli_abort(c(
       '{.pkg marginaleffects} is required for {.code effect = "ame"} and the {.code at = "reference"} ',
@@ -2287,7 +2282,9 @@ tab_reg <- function(data, dependent, predictors = NULL,
   compare <- match.arg(compare)
   estimate_display <- match.arg(estimate_display)
   na      <- match.arg(na)
-  cleannames <- if (is.null(cleannames)) getOption("tabxplor.cleannames", TRUE) else cleannames
+  # Fallback FALSE matches .onLoad's default and tab()'s read sites (the option is always set to FALSE
+  # on load, so this only bites if someone unsets it; TRUE here was an inconsistency, not an intent).
+  cleannames <- if (is.null(cleannames)) getOption("tabxplor.cleannames", FALSE) else cleannames
   # Phase 14v: `empirical_OR` renamed to `empirical` (now cross-family, not OR-only). Phase 14x hard-
   # deprecates the alias (it never shipped in a CRAN release, so there is no retro-compat debt): calling
   # it now errors with a pointer to `empirical`, rather than silently forwarding.

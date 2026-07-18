@@ -1089,7 +1089,7 @@ tab_kable <- function(tabs,
 #' tabs <- tibble::tibble(nm      = c("First", "Second", "Total"),
 #'                        column1 = c(1, 2, 3),
 #'                        column2 = c(4, 5, 6)                    )
-#' kable_tabxplor_style(tabs)
+#' if (requireNamespace("kableExtra", quietly = TRUE)) kable_tabxplor_style(tabs)
 #' }
 kable_tabxplor_style <- function(tabs,
                                  caption = knitr::opts_current$get("tab.cap"),
@@ -1102,6 +1102,15 @@ kable_tabxplor_style <- function(tabs,
                                  subtext = "",
                                  ...) {
   lifecycle::deprecate_soft("1.4.0", "kable_tabxplor_style()", "tab_kable()")
+
+  # kableExtra is now Suggests-only; this superseded renderer is the only public entry point that
+  # still requires it (tab_kable(engine = "html") does not).
+  if (!requireNamespace("kableExtra", quietly = TRUE)) {
+    cli::cli_abort(c(
+      "{.fn kable_tabxplor_style} needs the {.pkg kableExtra} package.",
+      "i" = "Install it, or use {.fn tab_kable} (the default {.code engine = \"html\"} needs no extra dependency)."
+    ))
+  }
 
   html_font <-
     if (is.null(html_font)) {getOption("tabxplor.kable_html_font")} else {html_font}
@@ -3627,7 +3636,7 @@ default_dark_background_colors_neg <- c(
 # (light/dark theme x text/background channel x over-/under-represented side), plus the two Phase-14c
 # bg_legend sides (the font stand-in for the fills, light only) -- each 4 hex codes
 # (faint -> strong), position-based (no pos1..neg5 names, no ratio slot). They are composed into
-# 8-element slot vectors (4 over + 4 under) and pre-built once into crayon style functions, stored
+# 8-element slot vectors (4 over + 4 under) and pre-built once into ANSI style functions (cli), stored
 # in an internal env and only rebuilt by set_color_palette(). The engine indexes them by the
 # integer slot from fmt_color_slots() (1:4 = over intensities, 5:8 = under). See dev/new_colors_UI.md.
 #' @keywords internal
@@ -3650,9 +3659,9 @@ default_palette_base <- function() {
   )
 }
 
-# Compose the base palettes into the 8-slot hex vectors + pre-built crayon functions. The console
-# uses 24-bit OKLCH, except in the RStudio console (no truecolor) where the curated 8-bit fallback
-# is used; exports (mode = "color_code") always use the 24-bit hex.
+# Compose the base palettes into the 8-slot hex vectors + pre-built ANSI style functions (cli). The
+# console uses 24-bit OKLCH, except in the RStudio console (no truecolor) where the curated 8-bit
+# fallback is used; exports (mode = "color_code") always use the 24-bit hex.
 #' @keywords internal
 build_palettes <- function() {
   e <- tabxplor_palette_env
@@ -3671,12 +3680,12 @@ build_palettes <- function() {
     bg_legend_dark  = c(b$dark_background_colors,  b$dark_background_colors_neg)
   )
   bit8 <- isTRUE(Sys.getenv("RSTUDIO") == "1")
-  ncol <- if (bit8) 256L else crayon::num_colors()
+  ncol <- if (bit8) 256L else cli::num_ansi_colors()
   mk <- function(key, is_bg) {
     src <- if (bit8) palette_8bit[[key]] else e$hex[[key]]
-    purrr::map(src, ~ crayon::make_style(., bg = is_bg, colors = ncol))
+    purrr::map(src, ~ cli::make_ansi_style(., bg = is_bg, colors = ncol))
   }
-  e$crayon <- list(
+  e$ansi <- list(
     text_light = mk("text_light", FALSE), text_dark = mk("text_dark", FALSE),
     bg_light   = mk("bg_light",   TRUE),  bg_dark   = mk("bg_dark",   TRUE)
   )
@@ -3686,7 +3695,7 @@ build_palettes <- function() {
 #' Define the color palette used to print \code{\link{tab}}
 #' @describeIn tab_many customise the color palette used to print \code{\link{tab}}. Each palette
 #' is 4 hex codes ordered faint -> strong. Provide only the ones you want to change; the OKLCH
-#' defaults are used otherwise. The crayon styles are (re)built once, not per cell.
+#' defaults are used otherwise. The ANSI styles are (re)built once, not per cell.
 #' @param text_colors,text_colors_neg,background_colors,background_colors_neg Light-theme palettes
 #' (4 hex each): the text (font) and background (fill) colours for the over- (\code{*_colors}) and
 #' under-represented (\code{*_colors_neg}) sides.
@@ -3795,18 +3804,21 @@ set_color_style <- function(type = c("text", "bg"), theme = NULL,
 }
 # === end COMPAT (Phase 13a) ======================================================================
 
-#' @describeIn tab_many get the color palette as \pkg{crayon} functions or html codes: an 8-element
-#' vector (4 over-represented intensities then 4 under-represented), indexed by the engine slot.
-#' @param mode By default, \code{get_color_style} returns a list of \pkg{crayon} coloring
-#' functions. Set to \code{"color_code"} to return html color codes.
+#' @describeIn tab_many get the color palette as terminal (ANSI) style functions or html codes: an
+#' 8-element vector (4 over-represented intensities then 4 under-represented), indexed by the engine slot.
+#' @param mode By default, \code{get_color_style} returns a list of terminal (ANSI) coloring
+#' functions (the historical value \code{"crayon"}, now built with \pkg{cli}). Set to
+#' \code{"color_code"} to return html color codes.
 #' @param type \code{"text"} (font colour), \code{"bg"} (background fill), or \code{"bg_legend"}
 #' (\code{mode = "color_code"} only): the darker FONT stand-in for the background palette, for the
 #' media that cannot fill (an Excel rich-text run, a \pkg{ggpubr} text label) -- see the colour legend.
 #' @param theme \code{"light"} or \code{"dark"}; defaults to the current setting. (A palette is always
 #' one or the other: the export theme \code{"auto"} resolves to \code{"light"} here.)
 #' @param ... Absorbs deprecated arguments (e.g. \code{html_24_bit}); ignored.
-#' @return A list of 8 crayon color functions, or a vector of 8 color html codes.
+#' @return A list of 8 terminal (ANSI) color-style functions, or a vector of 8 color html codes.
 #' @export
+# The public value "crayon" is frozen for back-compat (it once returned crayon functions); the styles
+# are now built with cli (crayon is superseded) and stored in the internal `e$ansi` slot.
 get_color_style <- function(mode = c("crayon", "color_code"), type = NULL, theme = NULL, ...) {
   # Phase 14l: `type` (the palette-FAMILY selector) stays; the OPTION tabxplor.color_style_type is
   # deprecated -- it never chose a family, it globally repointed the TEXT channel into the FILL
@@ -3836,37 +3848,12 @@ get_color_style <- function(mode = c("crayon", "color_code"), type = NULL, theme
   if (identical(mode[1], "crayon")) {
     # bg_legend exists only to substitute for a fill in media that have no fill; a console HAS one.
     if (identical(fam, "bg_legend")) {
-      cli::cli_abort('{.arg type} {.val bg_legend} has no crayon styles: use {.code mode = "color_code"},
+      cli::cli_abort('{.arg type} {.val bg_legend} has no terminal styles: use {.code mode = "color_code"},
                       or {.arg type} {.val bg} for a real background.')
     }
-    e$crayon[[key]]
+    e$ansi[[key]]
   } else e$hex[[key]]
 }
-
-
-
-
-# cat_style <- function(styles = tabxplor_color_style) cat("\n",
-#                                            styles$pos1("42%" ), styles$neg1("42%\n" ),
-#                                            styles$pos2("42%" ), styles$neg2("42%\n" ),
-#                                            styles$pos3("42%" ), styles$neg3("42%\n" ),
-#                                            styles$pos4("42%" ), styles$neg4("42%\n" ),
-#                                            styles$pos5("42%" ), styles$neg5("42%\n" ) )
-#
-# set_color_style(n = 5) %>%
-#   purrr::map(~ crayon::make_style(., colors = 256)) %>% cat_style()
-#
-# set_color_style(console_theme = "light", n = 5) %>%
-#   purrr::map(~ crayon::make_style(., colors = 256)) %>% cat_style()
-#
-# set_color_style(type = "bg", n = 5) %>%
-#   purrr::map(~ crayon::make_style(., bg = TRUE, colors = 256)) %>% cat_style()
-#
-# set_color_style(type = "bg", console_theme = "light", n = 5)  %>%
-#   purrr::map(~ crayon::make_style(., bg = TRUE, colors = 256)) %>% cat_style()
-
-#crayon::show_ansi_colors()
-
 
 
 #Color breaks for printing fmt in tabs ------------------------------------------------

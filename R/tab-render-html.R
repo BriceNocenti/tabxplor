@@ -87,6 +87,15 @@ render_kable_html <- function(rd, meta,
                               get_data = FALSE, in_knitr = FALSE, ...) {
   engine <- match.arg(engine)
 
+  # Phase "Last b": kableExtra moved Imports -> Suggests (the default "html" engine is dependency-free).
+  # Guard the one legacy path that still needs it; the html engine never reaches a kableExtra:: call.
+  if (engine == "kableExtra" && !requireNamespace("kableExtra", quietly = TRUE)) {
+    cli::cli_abort(c(
+      "The {.val kableExtra} table engine needs the {.pkg kableExtra} package.",
+      "i" = "Install it, or use the default {.code engine = \"html\"} (no extra dependency)."
+    ))
+  }
+
   # per-table graceful degrade (mirrors md_render_one(): a list may hold a malformed table)
   if (isTRUE(rd$vars$degrade)) {
     if (isTRUE(rd$vars$notify)) tab_degrade_inform(rd$vars$reason)  # batch-aware (see tab_export_prep)
