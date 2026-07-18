@@ -98,13 +98,17 @@ test_that("tab_reg() poisson IRR / CI / p match glm(poisson); fmt uses the OR sh
   expect_identical(get_ci_type(col), "or")
 
   dm <- d |> dplyr::filter(!is.na(tvhours), !is.na(age), !is.na(race))
-  m  <- stats::glm(tvhours ~ age + race, data = dm, family = stats::poisson())
-  co <- summary(m)$coefficients
-  z  <- stats::qnorm(0.975)
-  irr <- exp(co[, 1])
-  lo  <- exp(co[, 1] - z * co[, 2])
-  hi  <- exp(co[, 1] + z * co[, 2])
-  pm  <- co[, 4]
+  # 14v-ii: an unweighted over-dispersed Poisson is fit by MLE (so the IRR = exp(coef) is the Poisson
+  # estimate) but its SEs are scaled by sqrt(dispersion) and the interval uses t(df.residual) -- exactly
+  # a quasi-Poisson fit's Wald interval. So the CI/p reference is quasipoisson, the point estimate poisson.
+  m   <- stats::glm(tvhours ~ age + race, data = dm, family = stats::poisson())
+  mq  <- stats::glm(tvhours ~ age + race, data = dm, family = stats::quasipoisson())
+  coq <- summary(mq)$coefficients
+  crit <- stats::qt(0.975, df = stats::df.residual(mq))
+  irr <- exp(stats::coef(m))
+  lo  <- exp(coq[, 1] - crit * coq[, 2])
+  hi  <- exp(coq[, 1] + crit * coq[, 2])
+  pm  <- coq[, 4]
 
   keep <- !is.na(get_pvalue(col))
   expect_equal(sort(get_or(col)[keep]),     sort(unname(irr)), tolerance = 1e-6)
@@ -191,15 +195,19 @@ test_that("grouped binomial (trials=) matches glm(cbind(s, q-s)); OR fmt shape",
 
   dm <- d |> dplyr::filter(!is.na(score), !is.na(race))
   dm$race <- forcats::fct_drop(factor(dm$race))
-  g  <- stats::glm(cbind(score, 10 - score) ~ race, data = dm, family = stats::binomial())
-  co <- summary(g)$coefficients
-  z  <- stats::qnorm(0.975)
+  # 14v-ii: a grouped/summed-score binomial is over-dispersible, so tab_reg scales its SEs by
+  # sqrt(dispersion) + t(df.residual) = a quasi-binomial Wald interval; the OR = exp(coef) stays the
+  # binomial MLE estimate.
+  g   <- stats::glm(cbind(score, 10 - score) ~ race, data = dm, family = stats::binomial())
+  gq  <- stats::glm(cbind(score, 10 - score) ~ race, data = dm, family = stats::quasibinomial())
+  coq <- summary(gq)$coefficients
+  crit <- stats::qt(0.975, df = stats::df.residual(gq))
 
   keep <- !is.na(get_pvalue(col))
-  expect_equal(sort(get_or(col)[keep]),     sort(exp(unname(co[, 1]))),          tolerance = 1e-6)
-  expect_equal(sort(get_ci_inf(col)[keep]), sort(exp(unname(co[, 1] - z * co[, 2]))), tolerance = 1e-6)
-  expect_equal(sort(get_ci_sup(col)[keep]), sort(exp(unname(co[, 1] + z * co[, 2]))), tolerance = 1e-6)
-  expect_equal(sort(get_pvalue(col)[keep]), sort(unname(co[, 4])),               tolerance = 1e-6)
+  expect_equal(sort(get_or(col)[keep]),     sort(exp(unname(stats::coef(g)))),          tolerance = 1e-6)
+  expect_equal(sort(get_ci_inf(col)[keep]), sort(exp(unname(coq[, 1] - crit * coq[, 2]))), tolerance = 1e-6)
+  expect_equal(sort(get_ci_sup(col)[keep]), sort(exp(unname(coq[, 1] + crit * coq[, 2]))), tolerance = 1e-6)
+  expect_equal(sort(get_pvalue(col)[keep]), sort(unname(coq[, 4])),               tolerance = 1e-6)
   # the first race level is the reference (OR == 1, no CI/p)
   ref <- is_refrow(col) & as.character(t1$var) == "race"
   expect_true(all(get_or(col)[ref] == 1))

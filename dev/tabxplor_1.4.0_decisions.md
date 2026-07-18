@@ -4309,3 +4309,209 @@ identity + the feature tests). Samples: `dev/review_manual/phase14v_empirical.{h
   binary `positive_level`); the maintainer's ct13 scripts hit this.
 - **multinomial empirical is HTML-tooltip-only** — md / Excel / console do not carry it.
 - **reg-table titles still mis-generate** (the 14l/14w flag: reg tables record no `vars` attribute).
+
+
+## 48. Phase 14v-ii — CI methods, over-dispersion, and empirical CIs (DESIGN 2026-07-18)
+
+Follow-up to §47, from the maintainer's two statistical questions about the crude-vs-model CI relation.
+This section is the DESIGN record; CLAUDE.md Phase 14v-ii is the implementation brief. Everything below
+was reproduced empirically on `gss_cat` (`tvhours` by `race`, White = reference; Black/White ratio =
+1.508, difference = 1.408; dispersion var/mean = **2.94 Black, 1.93 White** — over-dispersed AND
+heteroscedastic in dispersion). The three findings drive the whole design.
+
+### The keystone — ONE variance-assumption framework for every cell CI
+
+A CI on a between-group comparison is fixed by TWO axes: the **quantity** (difference vs ratio) and the
+**variance assumption** (each group its own empirical variance = robust/heteroscedastic, vs one common
+variance/dispersion = pooled/homoscedastic). tab() should default to the **robust** row (assumption-
+light, the same spirit as its existing Welch diff default) and offer the **pooled/model** row as an
+opt-in, so a user can reproduce a regression's interval exactly.
+
+| quantity | robust default (each group's own variance) | pooled / model-matching opt-in | matches which regression |
+|---|---|---|---|
+| proportion cell | Wilson (`method_cell`, exists) | — | — |
+| proportion diff | Newcombe / AC (`method_diff`, exists) | — | two-proportion score / logistic-ish |
+| proportion **ratio** | **Katz log-RR** (`method_ratio`, NEW; only value for now) | — | log-binomial / Poisson RR |
+| numeric **diff** | **Welch** (`method_mean_diff = "welch"`, default) | **pooled Student t** (`"student"`) | linear reg (OLS coef CI) |
+| numeric **ratio** | **robust-Poisson** (`method_mean_ratio = "robust"`, default) | **quasi-Poisson** (`"quasipoisson"`), naive **Poisson** (`"poisson"`) | quasi-Poisson / Poisson reg |
+
+Measured, to anchor the three numeric-ratio methods (Black/White = 1.508):
+
+```text
+naive Poisson (Var = mu)         [1.469; 1.549]   one dispersion = 1
+quasi-Poisson (Var = phi*mu)     [1.452; 1.567]   one GLOBAL phi = 2.10, Poisson SE x sqrt(phi)
+robust-Poisson / delta-log       [1.444; 1.576]   each group's OWN empirical variance
+Poisson + sandwich (HC0) SE      [1.444; 1.576]   <- IDENTICAL to robust-Poisson (= modified Poisson, Zou)
+```
+
+And the numeric diff (Black-White = 1.408):
+
+```text
+OLS lm() coef CI (pooled, all groups, df=n-k)   [1.276; 1.540]   <- tab_reg gaussian
+Welch (each group's variance, Welch df)          [1.235; 1.582]   <- tab() default
+pooled Student t (2-group)                       [1.276; 1.541]   ~= OLS  (the "student" opt-in)
+```
+
+### 1. `ci = "ratio"` must work everywhere + the new `method_*` args (maintainer's choice)
+
+**The bug it fixes** (verified): `tab(..., color = "ratio", ci = "ratio")` on a NUMERIC mean stores
+`ci_type = "diff"` and `ci_inf/ci_sup` byte-identical to the DIFFERENCE CI — i.e. it silently shows the
+diff interval (centred on 1.408) mislabelled as a ratio (should be centred on 1.508). The Phase-14b
+Katz ratio CI is proportions-only; a ratio of MEANS was never implemented, so it fell through to the
+diff bounds. 14v-ii makes `ci = "ratio"` compute a real ratio-of-means CI.
+
+**New CI-method arguments** (consistent with the existing `method_cell` / `method_diff`, and named to
+say they are for means/numeric variables), each a `match.arg` with the first value the default:
+
+- `method_ratio    = "katz"`                          — proportion (factor col_var) ratio CI. One value
+  for now (Katz log-RR); added anyway so the expert sees every case on the table (the maintainer's
+  "all cases visible" principle).
+- `method_mean_diff  = c("welch", "student")`         — numeric diff CI. Welch default; `"student"` =
+  pooled-variance Student t (df = n1+n2-2), matching linear regression's OLS coefficient CI.
+- `method_mean_ratio = c("robust", "quasipoisson", "poisson")` — numeric ratio CI. `"robust"` default
+  (delta method on log(ratio), each group's own empirical variance = modified/robust Poisson);
+  `"quasipoisson"` = Poisson SE x sqrt(pooled phi), matching a quasi-Poisson regression; `"poisson"` =
+  naive Var=mu.
+
+roxygen must spell out, per argument, WHAT quantity + WHICH regression it reproduces (the two tables
+above are the source). All five `method_*` values are recorded in the `ci_settings` table attribute so
+`tab_color_legend()` names the actual method used (Welch vs Student, robust vs quasi vs Poisson, Katz).
+
+**Closed-form engines** (add beside `ci_pivot`/`ci_wilson`/`ci_newcombe`/`ci_katz` in `R/tab-agg.R`,
+same style):
+- numeric diff: Welch `SE = sqrt(sB^2/nB + sW^2/nW)` (Welch-Satterthwaite df) | Student pooled
+  `sp^2 = ((nB-1)sB^2 + (nW-1)sW^2)/(nB+nW-2)`, `SE = sp*sqrt(1/nB+1/nW)`, df = nB+nW-2.
+- numeric ratio (log scale, exp back): robust `SE_logR = sqrt((sB^2/nB)/mB^2 + (sW^2/nW)/mW^2)` |
+  poisson `SE_logR = sqrt(1/SB + 1/SW)` (S = group total count) | quasipoisson = poisson x sqrt(phi),
+  phi = pooled Pearson dispersion over the two groups. Quantile: z (qnorm) with stars off, the matching
+  t with stars on (mirrors the §15 CI<->stars duality); ratio CIs are z on the log scale.
+
+Wire it through the existing 14b `ci_scale` seam: `color = "ratio"` (or the ratio text channel) already
+sets `ci_scale = "ratio"` -> `tab_ci()`; the numeric arm must dispatch on `method_mean_ratio` instead of
+falling back to the diff bounds. `ci_type` must become `"ratio"` (not `"diff"`) so `format()` renders a
+ratio bracket.
+
+### 2. Over-dispersion — `family = "poisson"` and grouped/summed-score binomial: MLE fit + scaled SEs (maintainer's choice A)
+
+Verified: unweighted `tab_reg` fits PLAIN `poisson`/`binomial` today (`reg_fit` L693-698; quasi only when
+weighted), and a true quasi fit has **no likelihood** (`AIC`/`logLik` = `NA`), which would blank
+AIC/McFadden/LR/BIC in the footer. The maintainer chose the hybrid that avoids that:
+
+- **Keep the Poisson/binomial MLE fit** (so AIC/McFadden/LR/BIC stay), but **report dispersion-scaled
+  SEs/CIs/stars by default**: multiply the coefficient SEs by `sqrt(phi)`, phi = Pearson dispersion
+  (`reg_dispersion`, already computed). Verified EXACT: Poisson SE x sqrt(phi) = the quasi-Poisson SE
+  (0.02221 x sqrt(2.101) = 0.0322 = quasi's 0.0322). Auto-degrades to naive when phi ~= 1.
+- **Scope**: poisson AND grouped/summed-score binomial (`trials`) — both can be over-dispersed. A true
+  **Bernoulli binary** outcome CANNOT be over-dispersed (dispersion is not identifiable for a single
+  0/1 — `reg_dispersion` already returns nothing there), so it is unchanged. **gaussian/lm** has no
+  "over-dispersion" concept (the variance sigma^2 is a free parameter); its analogue is
+  heteroscedasticity, handled by the Welch/Student choice on the tab side and the residual SD in the
+  footer — no dispersion indicator, no change.
+- **Footer**: the dispersion phi must be shown for poisson + grouped-binomial (it already is via
+  `reg_dispersion`); it now also DRIVES the SEs, so the note should read as the active adjustment, not
+  just a diagnostic. The explicit `family = "quasipoisson"` path stays for a user who wants the true
+  quasi fit (and accepts the NA GOF).
+- p-value quantile stays `t(df.residual)` for the scaled (quasi-like) inference, matching broom's quasi
+  behaviour (already the `reg_wald_from_tidy` branch for quasi/lm).
+
+This makes the tab() numeric-ratio `"quasipoisson"` opt-in reproduce the tab_reg poisson column exactly,
+and the `"student"` diff opt-in reproduce the tab_reg gaussian column exactly. Because the scaling
+auto-degrades to naive Poisson when phi ~= 1 (no over-dispersion), the reg's interval IS the naive
+Poisson interval in that case — so `method_mean_ratio = "poisson"` is kept as a tab() option to
+reproduce it (maintainer's note). The three `method_mean_ratio` values thus span the full ladder:
+`poisson` (Var=mu) -> `quasipoisson` (one phi) -> `robust` (per-group phi, the default).
+
+### 3. Empirical (crude) columns get CIs — same method as the model (maintainer's choice)
+
+The crude companion columns (`Emp. %`, `Emp. OR`, `Emp. diff`, `Emp. mean`, `Emp. rate`, `Emp. IRR`, and
+the multinomial tooltip) stop being purely descriptive. Each gets a **crude CI computed with the SAME
+method as the model** — i.e. the single-predictor model's interval, which IS the crude quantity (§47's
+parity). Used for:
+- **colour** (significance-based, like a normal cell — the empirical columns move off
+  `color_signif = "ignore"` to a CI-driven policy), and
+- **their own tooltip** (the CI text), and
+- **significance stars** (a `pvalue` is stored). The maintainer accepts that stars on a crude column may
+  confuse users who think stars are model-only; a doc note will state that a crude star = the unadjusted
+  association is significant.
+- **NOT shown inside the cell by default** — the cell keeps `Emp. 42%` / `Emp. OR 1.8`; a user who wants
+  the bracket in-cell uses a custom `display` (`"{or} {ci}"`), exactly as for model columns.
+
+Per-family crude CI (all closed-form, matching the model's method so crude and adjusted are comparable):
+- `Emp. %` (a proportion): Wilson cell CI (`method_cell`).
+- `Emp. OR` (binomial coef): crude log-OR Wald / Woolf SE `sqrt(1/a+1/b+1/c+1/d)` — the existing
+  empirical-OR test engine (§19 already computes the log-OR Wald for the crude OR).
+- `Emp. diff` (binomial AME): crude risk-difference CI = Newcombe (`method_diff`).
+- `Emp. mean` (gaussian): a mean cell CI (t on the mean).
+- `Emp. diff` (gaussian): crude mean-diff CI via `method_mean_diff` (matches the model's diff method).
+- `Emp. rate` (poisson): a crude rate cell CI.
+- `Emp. IRR` (poisson): crude rate-ratio CI via `method_mean_ratio` (matches the model — so the
+  dispersion-scaled default lines up with the poisson model's scaled SEs).
+- multinomial tooltip: crude % + crude effect, each with its CI, in the fragment.
+
+Because the crude CI uses the empirical (group-specific) variance, it also automatically absorbs the
+over-dispersion of a **summed-score binomial** (see §47 Q2 below) — no special handling.
+
+### The summed-score-binomial question (maintainer's point 1, confirmed)
+
+A sum of k binary items is a grouped binomial with over-dispersion: within-person item correlation rho
+inflates the variance over plain binomial by the design effect `1 + (k-1)rho`
+([beta-binomial](https://pmc.ncbi.nlm.nih.gov/articles/PMC5736152/)). CONFIRMED: for tab(), **nothing
+extra is needed and the user need not declare it is a summed score** — treated as a numeric variable,
+the Welch diff and robust-Poisson ratio read the dispersion off the EMPIRICAL variance, which already
+contains the item correlation, so they are correct without modelling rho. The one trap to avoid is
+treating score/k as a plain binomial proportion (Newcombe/Katz assuming independent items), which is
+anti-conservative by the design effect — that is the proportion path, not the numeric path. (On the
+reg side, the §2 dispersion-scaling gives grouped-binomial the same protection.)
+
+### What else — framework consistency (maintainer's point 3)
+
+- **Legend**: `tab_color_legend()` must name the method actually used (Welch / Student / robust-Poisson /
+  quasi-Poisson / Poisson / Katz / Wilson / Newcombe), read from `ci_settings`. Regression legends must
+  say the reg used dispersion-scaled (quasi-like) SEs when phi was applied.
+- **Default mismatch is intentional and resolvable**: tab() standalone defaults to the ROBUST row
+  (Welch, robust-Poisson) while a regression uses the model row (OLS pooled, dispersion-scaled). They
+  differ by design; the `method_*` opt-ins reproduce the model exactly. The EMPIRICAL columns, by
+  contrast, use the MODEL's method (§3), so crude-vs-adjusted inside one reg table is always comparable.
+- **`ci_type`**: the numeric ratio is `ci_type = "ratio"` regardless of method (robust/quasi/poisson);
+  the method is a `ci_settings` scalar, not a new `ci_type`. No new fmt field.
+- Deferred / out of scope: a robust (HC/sandwich) SE option ON `lm`/`svyglm` (to make the reg match
+  tab's Welch — the reverse direction; the maintainer chose the tab-side `student` opt-in instead);
+  Fieller (exact, unbounded-aware) as a fourth `method_mean_ratio` (delta/log is the pragmatic default).
+
+### DONE (2026-07-18)
+
+Full suite **FAIL 0 | WARN 0 | SKIP 4 | PASS 3462**; `document()` clean. Conscious golden regen: **7
+`_golden/*.rds`** only — 4 `ci_settings`-only (the attribute grew 3→6 fields), 3 mean-CI data
+(`n_mean_ci`, `n_ci_tabvars`, `n_ci_tabvars_all`, rule B z→t). **No `_color_golden` and no `_snaps`
+moved** (rule B did not flip any golden's significance; the numeric mean-CI *display* is not snapshotted).
+Samples: `dev/review_manual/phase14v_ii_*.{html,md,xlsx}`.
+
+**The maintainer chose rule B on principle** (method determines df, not the stars toggle): **t** where a
+variance/dispersion is estimated (mean cell → t(n−1), welch-diff → Welch-t, student-diff → t(n1+n2−2),
+quasipoisson-ratio → t(n1+n2−2)), **z** where the variance is a fixed function of the mean (robust
+ratio, naive poisson, all proportion CIs). This **reverses the §15/§19 stars-gating** and reaches the
+mean **cell** CI too (the largest churn; flagged and accepted). `ci_mean_diff2` now always uses the
+method's df; `ci_pivot` guards `df ≤ 0` (n=1 → clean NA, no NaN warning — also fixes the pre-existing
+`n_ci_tabvars` NaN drift).
+
+- **Part 1**: `ci_mean_ratio` / `ci_or` engines (`R/tab-agg.R`); `method_ratio`/`method_mean_diff`/
+  `method_mean_ratio` public args on `tab`/`tab_many`/`tab_ci` (+ `ci_settings` grows to 6 fields, named
+  in `legend_method_name` + FR). The bug is fixed: a ratio-coloured **mean** stores `ci_type = "ratio"`
+  and real ratio-of-means bounds (was the diff bounds mislabelled). Trigger =
+  `color_pct_text_is_ratio()` generalised to means (`by_type` `mean = "ratio"`; flat `color = "ratio"`
+  already fired), threaded into `tab_num` (path A, the pipeline mean CI) + `tab_ci` (path B).
+- **Part 2**: `reg_fit` scales SEs by √φ for unweighted poisson / grouped-binomial (MLE fit kept → GOF
+  footer intact), t(df.residual), p recomputed. `reg_dispersion` made pure; the over-dispersion warning
+  moved into `reg_fit` (single fire, reworded to the active adjustment, still contains "dispersion").
+- **Part 3**: empirical columns gain a crude CI + pvalue + significance colour (caller's `color_signif`),
+  method-matched (Newcombe / Woolf `ci_or` / Student=OLS / quasi-Poisson / Wilson); `Emp. mean` stays
+  uncoloured (cell CI for stars/tooltip). Multinomial tooltip carries Wilson + Newcombe CIs.
+  `reg_footer_lines` now threads `ci_settings`. **Pre-existing bug fixed**: `reg_empirical` saw the RAW
+  0/1-numeric outcome but `positive_level` is the labelled `"<dep>"` → crude base silently 0; now mirrors
+  `reg_prep_binary`'s recode.
+
+**Reg-legend prose deferred to 14w** (Q3): the empirical mean columns already name their method (Emp.
+rate → "quasi-Poisson interval"), but the `Emp. IRR` column's `ci_type = "or"` still reads "log
+odds-ratio" (should be rate-ratio) — a 14w refinement. **Concurrent maintainer change**: a new
+`gss_cat_data_formatting()` in `R/utils.R` (theirs, untouched); this session's `document()` generated
+its `.Rd` + NAMESPACE export.

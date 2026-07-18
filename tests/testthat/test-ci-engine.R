@@ -38,6 +38,81 @@ testthat::test_that("ci_mean_diff2() p-value and interval equal a Welch two-samp
   }
 })
 
+# === SECTION: 14v-ii engines (student diff, ratio-of-means, Woolf OR) ================
+
+testthat::test_that("ci_mean_diff2(method='student') equals a pooled two-sample t-test = OLS", {
+  set.seed(212)
+  for (i in seq_len(20)) {
+    n1 <- sample(4:50, 1); n2 <- sample(4:50, 1)
+    x <- stats::rnorm(n1, 5, 2); y <- stats::rnorm(n2, 6, 2)
+    res <- ci_mean_diff2(mean(x), stats::var(x), n1, mean(y), stats::var(y), n2,
+                         conf_level = 0.95, want_p = TRUE, method = "student")
+    tt <- stats::t.test(x, y, var.equal = TRUE)     # pooled Student, = the two-group OLS coef
+    testthat::expect_equal(res$pvalue, tt$p.value, tolerance = 1e-10)
+    testthat::expect_equal(c(res$inf, res$sup), as.numeric(tt$conf.int), tolerance = 1e-10)
+  }
+})
+
+testthat::test_that("ci_mean_ratio() matches exp(log(R) +/- q*se) for all three methods", {
+  set.seed(213)
+  z <- stats::qnorm(0.975)
+  for (i in seq_len(20)) {
+    n1 <- sample(20:200, 1); n2 <- sample(20:200, 1)
+    x <- abs(stats::rnorm(n1, 5, 2)) + 0.5; y <- abs(stats::rnorm(n2, 4, 2)) + 0.5
+    m1 <- mean(x); v1 <- stats::var(x); m2 <- mean(y); v2 <- stats::var(y)
+    lr <- log(m1 / m2)
+    # robust (delta on log, each group's own variance) -> z
+    rob <- ci_mean_ratio(m1, v1, n1, m2, v2, n2, method = "robust")
+    se_r <- sqrt((v1 / n1) / m1^2 + (v2 / n2) / m2^2)
+    testthat::expect_equal(c(rob$inf, rob$sup), exp(lr + c(-1, 1) * z * se_r), tolerance = 1e-9)
+    # naive poisson (S = m*n) -> z
+    poi <- ci_mean_ratio(m1, v1, n1, m2, v2, n2, method = "poisson")
+    se_p <- sqrt(1 / (m1 * n1) + 1 / (m2 * n2))
+    testthat::expect_equal(c(poi$inf, poi$sup), exp(lr + c(-1, 1) * z * se_p), tolerance = 1e-9)
+    # quasipoisson (poisson * sqrt(pooled phi)) -> t(n1+n2-2)
+    qp  <- ci_mean_ratio(m1, v1, n1, m2, v2, n2, method = "quasipoisson", want_p = TRUE)
+    phi <- ((n1 - 1) * v1 / m1 + (n2 - 1) * v2 / m2) / (n1 + n2 - 2)
+    se_q <- se_p * sqrt(phi); crit <- stats::qt(0.975, df = n1 + n2 - 2)
+    testthat::expect_equal(c(qp$inf, qp$sup), exp(lr + c(-1, 1) * crit * se_q), tolerance = 1e-9)
+    testthat::expect_equal(qp$pvalue, 2 * stats::pt(-abs(lr / se_q), df = n1 + n2 - 2), tolerance = 1e-9)
+  }
+})
+
+testthat::test_that("ci_mean_ratio(method='quasipoisson') equals a quasi-Poisson regression", {
+  set.seed(214)
+  n <- 300
+  grp <- factor(sample(c("a", "b"), n, TRUE))
+  y   <- stats::rpois(n, lambda = ifelse(grp == "a", 3, 5)) + stats::rpois(n, 2)  # over-dispersed
+  a <- y[grp == "a"]; b <- y[grp == "b"]
+  res <- ci_mean_ratio(mean(b), stats::var(b), length(b), mean(a), stats::var(a), length(a),
+                       method = "quasipoisson", want_p = TRUE)
+  fq  <- stats::glm(y ~ grp, family = stats::quasipoisson())
+  co  <- summary(fq)$coefficients["grpb", ]
+  crit <- stats::qt(0.975, df = stats::df.residual(fq))
+  testthat::expect_equal(c(res$inf, res$sup),
+                         exp(co["Estimate"] + c(-1, 1) * crit * co["Std. Error"]) |> unname(),
+                         tolerance = 1e-6)
+  testthat::expect_equal(res$pvalue, unname(co["Pr(>|t|)"]), tolerance = 1e-6)
+})
+
+testthat::test_that("ci_or() is Woolf's log-OR Wald and matches a logistic regression", {
+  # hand Woolf on a 2x2
+  a <- 30; b <- 70; cc <- 45; d <- 55
+  r <- ci_or(a, b, cc, d)
+  lor <- log((a * d) / (b * cc)); se <- sqrt(1 / a + 1 / b + 1 / cc + 1 / d)
+  z <- stats::qnorm(0.975)
+  testthat::expect_equal(c(r$inf, r$sup), exp(lor + c(-1, 1) * z * se), tolerance = 1e-12)
+  testthat::expect_equal(r$pvalue, 2 * stats::pnorm(-abs(lor / se)), tolerance = 1e-12)
+  # a saturated logit on the 2x2 reproduces the same OR + Wald interval (confint.default = z-Wald)
+  dd  <- data.frame(y = c(1, 0, 1, 0), g = factor(c("x", "x", "r", "r")), w = c(a, b, cc, d))
+  fit <- stats::glm(y ~ g, weights = w, family = stats::binomial(), data = dd)
+  testthat::expect_equal(unname(exp(stats::coef(fit)["gx"])), (a * d) / (b * cc), tolerance = 1e-6)
+  # cross-check vs the logit Wald interval (a hair looser -- confint.default's SE has a tiny
+  # finite-sample difference from the closed-form Woolf SE checked exactly above).
+  testthat::expect_equal(c(r$inf, r$sup),
+                         unname(exp(stats::confint.default(fit)["gx", ])), tolerance = 1e-4)
+})
+
 testthat::test_that("ci_pivot() reproduces the t-test across confidence levels", {
   set.seed(303)
   x <- stats::rnorm(30, 1, 3)

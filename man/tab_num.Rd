@@ -18,6 +18,9 @@ tab_num(
   ci = NULL,
   conf_level = 0.95,
   stars = NULL,
+  method_mean_diff = "welch",
+  method_mean_ratio = "robust",
+  ci_scale = "diff",
   totaltab = "line",
   totaltab_name = "Ensemble",
   tot = NULL,
@@ -110,6 +113,14 @@ as a single numeric between 0 and 1. Default to 0.95 (95\%).}
 \item{stars}{Logical (opt-in; default \code{FALSE}, or \code{options("tabxplor.stars")} when \code{NULL}).
 With \code{ci = "diff"}, print per-cell Welch t significance stars for the difference from the
 reference row; the mean-diff interval then uses the Welch t quantile (z when \code{FALSE}).}
+
+\item{method_mean_diff, method_mean_ratio}{Character strings, the numeric-mean CI methods -- see
+\code{\link{tab}}. \code{method_mean_diff}: mean difference (\code{"welch"} / \code{"student"}).
+\code{method_mean_ratio}: mean ratio (\code{"robust"} / \code{"quasipoisson"} / \code{"poisson"}).}
+
+\item{ci_scale}{Character string, the scale the \code{ci = "diff"} interval is expressed on:
+\code{"diff"} (default, neutral 0) or \code{"ratio"} (a ratio-of-means interval, neutral 1, stored
+as \code{ci_type = "ratio"}). \code{tab()} sets it from the colour (\code{color = "ratio"}).}
 
 \item{totaltab}{The total table,
 if there are subtables/groups (i.e. when \code{tab_vars} is provided) :

@@ -39,7 +39,8 @@ utils::globalVariables(c("table_id", "row_id", "col_id", "o", "rowtot", "coltot"
 utils::globalVariables(c(
   "by_table", "chi2", "chi2_num", "cleannames", "col_vars", "col_vars_num", "col_vars_quo",
   "col_vars_text", "color_ci", "color_ctr", "color_diff_OR", "color_num", "comp", "conf_level",
-  "data", "digits", "fine_fused", "fine_num", "lv1", "method_cell", "method_diff", "na",
+  "data", "digits", "fine_fused", "fine_num", "lv1", "method_cell", "method_diff",
+  "method_ratio", "method_mean_diff", "method_mean_ratio", "na",
   "na_drop_all_quo", "na_num", "na_text", "names_prefix", "names_sort", "other_if_less_than",
   "other_level", "output", "pct", "pct_vect", "ref", "ref2", "remove_levels", "row_vars",
   "row_vars_quo", "spread_vars", "stars", "subtext", "tab_row_names", "tab_vars", "tab_vars_quo",
@@ -50,7 +51,9 @@ utils::globalVariables(c(
 # NSE column symbols in dplyr verbs over ordinary data frames:
 #   `var`               -- reg_build()'s group_by(var) on the regression skeleton (R/tab_reg.R)
 #   `name`/`size`/`color` -- tab_xl_plan_one()'s font/style plan tibbles (R/tab_xl.R)
-utils::globalVariables(c("var", "name", "size", "color"))
+#   marital/race/partyid/rincome/relig -- gss_cat_data_formatting()'s mutate() over forcats::gss_cat
+utils::globalVariables(c("var", "name", "size", "color",
+                         "marital", "race", "partyid", "rincome", "relig"))
 
 # mirai daemon globals (R/tab-parallel.R): `tabx_opts`/`tabx_ship` are list2env()'d into each
 # daemon's .GlobalEnv by tab_pmap(); `.stop` is mirai_map()'s own collection selector.
@@ -3085,7 +3088,24 @@ legend_method_name <- function(spec) {
   }
   if (identical(spec$measure_text, "or")) return(gettext("Wald interval on the log odds-ratio"))
   if (identical(spec$measure_text, "contrib")) return(NA_character_)
-  if (isTRUE(spec$is_mean)) return(gettext("Welch t interval"))
+  # 14v-ii: a mean names the method actually used, from ci_settings. A ratio-of-means (ci_type "ratio")
+  # is one of the dispersion-ladder intervals (robust / quasi / naive Poisson); a mean difference is
+  # Welch or pooled Student (method_mean_diff).
+  if (isTRUE(spec$is_mean)) {
+    if (identical(spec$ci_type, "ratio")) {
+      mmr <- cis$method_mean_ratio; if (is.null(mmr)) mmr <- "robust"
+      return(switch(mmr,
+                    "robust"       = gettext("robust-Poisson (delta) interval"),
+                    "quasipoisson" = gettext("quasi-Poisson interval"),
+                    "poisson"      = gettext("Poisson interval"),
+                    gettext("confidence interval")))
+    }
+    mmd <- cis$method_mean_diff; if (is.null(mmd)) mmd <- "welch"
+    return(switch(mmd,
+                  "welch"   = gettext("Welch t interval"),
+                  "student" = gettext("Student t interval"),
+                  gettext("confidence interval")))
+  }
   # Phase 14b: the STORED interval names itself. A ratio-coloured proportion column carries the Katz
   # log-RR bounds, not one of the `method_diff` difference approximations the switch below names --
   # and the legend must not claim a method the bracket was never built with.

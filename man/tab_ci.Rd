@@ -14,6 +14,9 @@ tab_ci(
   stars = NULL,
   method_cell = "wilson",
   method_diff = "newcombe",
+  method_ratio = "katz",
+  method_mean_diff = "welch",
+  method_mean_ratio = "robust",
   ci_scale = "diff"
 )
 }
@@ -66,13 +69,18 @@ stars and the bracket never disagree. \code{FALSE} skips the significance comput
 (Agresti-Caffo) or \code{"wald"}. Whatever the method, the stars come from that interval.
 It selects among the \emph{difference} methods only -- see \code{ci_scale}.}
 
+\item{method_ratio, method_mean_diff, method_mean_ratio}{Character strings, the ratio / numeric-mean
+CI methods -- see \code{\link{tab}}. \code{method_ratio}: proportion ratio (\code{"katz"}).
+\code{method_mean_diff}: mean difference (\code{"welch"} / \code{"student"}). \code{method_mean_ratio}:
+mean ratio (\code{"robust"} / \code{"quasipoisson"} / \code{"poisson"}).}
+
 \item{ci_scale}{Character string, the scale the \code{ci = "diff"} interval is expressed on:
 \code{"diff"} (default) for a difference interval (neutral 0, one of the \code{method_diff}
-methods), or \code{"ratio"} for Katz's log-risk-ratio interval (neutral 1), stored as
-\code{ci_type = "ratio"} and centred on the cell/reference ratio. \code{tab()} sets it from the
-colour: the measure the reader sees owns the interval, so \code{color = "ratio"} (or
-\code{c("ratio", "diff")}) asks for the ratio one. Percentage columns only -- a mean keeps its
-difference interval, a ratio of means being a different problem (Fieller's theorem).}
+methods), or \code{"ratio"} for a ratio interval (neutral 1), stored as \code{ci_type = "ratio"} and
+centred on the cell/reference ratio -- Katz's log-risk-ratio for proportions (\code{method_ratio}),
+or a ratio-of-means interval for numeric means (\code{method_mean_ratio}). \code{tab()} sets it from
+the colour: the measure the reader sees owns the interval, so \code{color = "ratio"} (or
+\code{c("ratio", "diff")}) asks for the ratio one.}
 }
 \value{
 A \code{tibble} of class \code{tab}, colored based on differences (from

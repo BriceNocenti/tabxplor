@@ -232,6 +232,14 @@ NULL
 #' @param method_cell,method_diff Character strings choosing the confidence-interval method for
 #' \code{ci = "cell"} (\code{"wilson"} default, or \code{"wald"}) / \code{ci = "diff"}
 #' (\code{"newcombe"} default, \code{"ac"} or \code{"wald"}). See \code{\link{tab_many}}.
+#' @param method_ratio,method_mean_diff,method_mean_ratio Character strings choosing the
+#' confidence-interval method for the ratio / numeric-mean intervals. \code{method_ratio} (proportion
+#' ratio, \code{color = "ratio"}): \code{"katz"} (log risk-ratio, the only value). \code{method_mean_diff}
+#' (numeric mean difference): \code{"welch"} (default, each group's own variance) or \code{"student"}
+#' (pooled variance = a linear-regression coefficient interval). \code{method_mean_ratio} (numeric mean
+#' ratio, \code{color = "ratio"} on a mean): \code{"robust"} (default, each group's own variance =
+#' modified/robust Poisson), \code{"quasipoisson"} (dispersion-scaled = a quasi-Poisson regression) or
+#' \code{"poisson"} (naive). See \code{\link{tab_many}}.
 # @param ci_visible By default, confidence intervals are calculated and used to set
 # colors, but not printed. Set to \code{TRUE} to print them in the result.
 #' @param color Which measure(s) to color, on which visual channel. \code{FALSE} (default)
@@ -395,6 +403,8 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
                 ref = "auto", ref2 = "first", comp = "tab",
                 ci = "no", conf_level = 0.95, stars = NULL,
                 method_cell = "wilson", method_diff = "newcombe",
+                method_ratio = "katz", method_mean_diff = "welch",
+                method_mean_ratio = "robust",
                 totaltab = "line", totaltab_name = "Ensemble",
                 tot = c("row", "col"), total_names = "Total",
                 add_n = TRUE, add_pct = FALSE,
@@ -570,6 +580,8 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
            conf_level = conf_level,
            stars = stars,
            method_cell = method_cell, method_diff = method_diff,
+           method_ratio = method_ratio, method_mean_diff = method_mean_diff,
+           method_mean_ratio = method_mean_ratio,
            OR = OR,
            color = color,
            # Phase 14a: the NORMALIZED policy (post the "color_all_signif" COMPAT rename), so
@@ -777,24 +789,24 @@ finalize_color_spec <- function(x, spec) {
   dplyr::mutate(x, dplyr::across(dplyr::where(is_fmt), ~ finalize_one_col(.x, spec)))
 }
 
-# Phase 14b: does the TEXT channel of a PROPORTION column carry the ratio measure? That is the
-# trigger for the Katz ratio CI: the measure the reader sees owns the stored interval, and any second
-# channel derives from it (fmt_color_plan()'s rescale_bound). Decided here, on the spec, because the
-# `legacy` string tab_resolve_settings() runs on cannot express it -- legacy_union() maps every ratio
-# onto a diff-family string, which is exactly why the policy had to be threaded separately in 14a.
+# Phase 14b / 14v-ii: does the EXPLICIT text channel carry the ratio measure? That is the trigger for
+# the ratio CI: the measure the reader sees owns the stored interval, and any second channel derives
+# from it (fmt_color_plan()'s rescale_bound). Decided here, on the spec, because the `legacy` string
+# tab_resolve_settings() runs on cannot express it -- legacy_union() maps every ratio onto a diff-family
+# string, which is exactly why the policy had to be threaded separately in 14a.
 #
-# PROPORTIONS ONLY. Katz is a risk-RATIO interval for two proportions; a ratio of MEANS would need
-# Fieller's theorem (out of scope), so numeric columns keep their difference CI whatever their text
-# channel is. That is also what keeps the numeric default on today's behaviour: under color = TRUE a
-# mean column's text channel IS the ratio (resolve_col_measures below).
+# 14v-ii: both proportions (-> Katz log-RR) AND numeric means (-> ci_mean_ratio, the ratio-of-means CI)
+# are covered now; the Fieller-scope limit is lifted. Fires ONLY on an EXPLICIT ratio channel (flat
+# `color = "ratio"` or a by_type `pct = "ratio"` / `mean = "ratio"`); `color = TRUE` is "auto" mode ->
+# NA -> FALSE, so a mean's auto text channel (which IS the ratio) keeps its difference CI, unchanged.
 #' @keywords internal
 color_pct_text_is_ratio <- function(spec) {
   if (is.null(spec) || is.null(spec$mode)) return(FALSE)
   m <- switch(spec$mode,
               "flat"    = spec$text,
-              "by_type" = spec$types[["pct"]][1],
-              NA_character_)   # "auto" -> a pct column's text channel is "diff"; "off" -> no colour
-  identical(unname(m), "ratio")
+              "by_type" = c(spec$types[["pct"]][1], spec$types[["mean"]][1]),
+              NA_character_)   # "auto" -> a column's text channel is resolved later; "off" -> no colour
+  "ratio" %in% unname(m)
 }
 
 # The per-column measure vector (text[, background]) the spec assigns to a column, given its built
@@ -1000,6 +1012,16 @@ finalize_one_col <- function(col, spec) {
 #' \code{ci = "diff"}. One of \code{"newcombe"} (default, the hybrid-score interval, dual of the
 #' two-proportion score test), \code{"ac"} (Agresti-Caffo) or \code{"wald"}. Whatever method is
 #' chosen, the stars come from that same interval, so they always agree with the bracket.
+#' @param method_ratio Character string, the proportion \emph{ratio} interval (\code{color = "ratio"}):
+#' \code{"katz"} (the log risk-ratio interval, the only value for now).
+#' @param method_mean_diff Character string, the numeric mean-\emph{difference} interval: \code{"welch"}
+#' (default, each group's own variance, Welch--Satterthwaite df) or \code{"student"} (pooled variance,
+#' df \eqn{= n_1 + n_2 - 2}, reproducing a linear-regression coefficient interval).
+#' @param method_mean_ratio Character string, the numeric mean-\emph{ratio} interval (\code{color =
+#' "ratio"} on a mean): \code{"robust"} (default, each group's own variance = modified/robust Poisson),
+#' \code{"quasipoisson"} (Poisson SE scaled by the dispersion, reproducing a quasi-Poisson regression)
+#' or \code{"poisson"} (naive Var = mean). All are the log-scale Wald/t interval, exp-back. As for the
+#' other methods, the significance stars come from the same interval so bracket and stars always agree.
 #' @param color Which measure(s) to color, on which visual channel -- see \code{\link{tab}}
 #' for the full grammar (\code{FALSE}/\code{TRUE}, a measure such as \code{"diff"}, a positional
 #' two-channel \code{c("diff", "ratio")}, or a per-type \code{c(pct = , mean = )} /
@@ -1083,6 +1105,8 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
                      ref = "auto", ref2 = "first", comp = "tab",
                      ci = "no", conf_level = 0.95, stars = NULL, #ci_visible = FALSE,
                      method_cell = "wilson", method_diff = "newcombe",
+                     method_ratio = "katz", method_mean_diff = "welch",
+                     method_mean_ratio = "robust",
                      totaltab = "line", totaltab_name = "Ensemble",
                      totrow = TRUE, totcol = "last", total_names = "Total",
                      add_n = TRUE, add_pct = FALSE,
@@ -1141,7 +1165,9 @@ tab_many <- function(data, row_vars, col_vars, tab_vars, wt,
     cleannames = cleannames, other_if_less_than = other_if_less_than,
     other_level = other_level, ref = ref, ref2 = ref2, comp = comp, ci = ci,
     conf_level = conf_level, stars = stars, method_cell = method_cell,
-    method_diff = method_diff, totaltab = totaltab, totaltab_name = totaltab_name,
+    method_diff = method_diff, method_ratio = method_ratio,
+    method_mean_diff = method_mean_diff, method_mean_ratio = method_mean_ratio,
+    totaltab = totaltab, totaltab_name = totaltab_name,
     totrow = totrow, totcol = totcol, total_names = total_names,
     add_n = add_n, add_pct = add_pct, digits = digits, subtext = subtext, n_min = n_min,
     parallel = parallel,
@@ -1191,6 +1217,8 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
                       ref = "auto", ref2 = "first", comp = "tab",
                       ci = "no", conf_level = 0.95, stars = NULL, #ci_visible = FALSE,
                       method_cell = "wilson", method_diff = "newcombe",
+                      method_ratio = "katz", method_mean_diff = "welch",
+                      method_mean_ratio = "robust",
                       totaltab = "line", totaltab_name = "Ensemble",
                       totrow = TRUE, totcol = "last", total_names = "Total",
                       add_n = TRUE, add_pct = FALSE,
@@ -1232,7 +1260,8 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
     cleannames = cleannames, output = output,
     other_if_less_than = other_if_less_than, other_level = other_level,
     ref = ref, ref2 = ref2, comp = comp, ci = ci, conf_level = conf_level, stars = stars,
-    method_cell = method_cell, method_diff = method_diff,
+    method_cell = method_cell, method_diff = method_diff, method_ratio = method_ratio,
+    method_mean_diff = method_mean_diff, method_mean_ratio = method_mean_ratio,
     totaltab = totaltab, totaltab_name = totaltab_name, totrow = totrow, totcol = totcol,
     total_names = total_names, add_n = add_n, add_pct = add_pct, digits = digits,
     subtext = subtext, n_min = n_min, by_table = .by_table,
@@ -1841,6 +1870,10 @@ tab_transform <- function(ctx) {
   # broadcast over col_vars when a leaner ctx reached transform without it.
   if (!exists("cached_tests", inherits = FALSE)) cached_tests <- NULL
   if (!exists("ref_vect",     inherits = FALSE)) ref_vect     <- rep(ref, length(col_vars))
+  # 14v-ii: the CI-method args (leaner ctxs -- tab_counts / stage tests -- may omit them).
+  if (!exists("method_ratio",      inherits = FALSE)) method_ratio      <- "katz"
+  if (!exists("method_mean_diff",  inherits = FALSE)) method_mean_diff  <- "welch"
+  if (!exists("method_mean_ratio", inherits = FALSE)) method_mean_ratio <- "robust"
   cached_test <- if (is.null(cached_tests)) NULL else cached_tests[[row_var]]
 
   # --- numeric col_vars: one tab_num() (adopts the per-row_var moment aggregate fine_num) ---
@@ -1850,6 +1883,8 @@ tab_transform <- function(ctx) {
     tabs_num <- tab_num(data, !!rv, as.character(col_vars)[col_vars_num], as.character(tab_vars),
                         wt = !!wt_sym, na = na_num, digits = digits[col_vars_num],
                         ref = ref, ci = ci, conf_level = conf_level, stars = stars, comp = comp,
+                        method_mean_diff = method_mean_diff, method_mean_ratio = method_mean_ratio,
+                        ci_scale = ci_scale[1],
                         color = color_num, totaltab = totaltab, totaltab_name = totaltab_name,
                         tot = dplyr::if_else(totrow, "row", "no"), total_names = total_names,
                         .fine = fine_num, .by_table = .by_table,
@@ -1906,6 +1941,8 @@ tab_transform <- function(ctx) {
                                  color_ctr = color_ctr, color_ci = color_ci,
                                  conf_level = conf_level, stars = stars,
                                  method_cell = method_cell, method_diff = method_diff,
+                                 method_ratio = method_ratio, method_mean_diff = method_mean_diff,
+                                 method_mean_ratio = method_mean_ratio,
                                  ci_scale = ci_scale, cached_test = cached_test)
     tabs_text <- applied$tab
     tests     <- applied$test
@@ -2040,10 +2077,14 @@ tab_assemble_tables <- function(ctx) {
   has_real_colvar <- any(fmt_here & get_col_var(tab) != "no_col_var")
   render_extras <- list(add_n  = isTRUE(add_n)  && has_real_colvar,
                         add_pct = isTRUE(add_pct) && has_real_colvar)
-  # Phase 13b: record which CI method / confidence level was actually used, so tab_color_legend() can
-  # name it (only meaningful when a CI was computed; harmless otherwise -- absent settings fall back).
+  # Phase 13b / 14v-ii: record which CI method / confidence level was actually used, so
+  # tab_color_legend() can name it (only meaningful when a CI was computed; harmless otherwise -- absent
+  # settings fall back). 14v-ii adds the numeric + ratio methods (welch/student, robust/quasi/poisson,
+  # katz); the legend picks the relevant one off the column's type / ci_type.
   ci_settings <- if (!identical(ci, "no")) {
-    list(conf_level = conf_level, method_cell = method_cell, method_diff = method_diff)
+    list(conf_level = conf_level, method_cell = method_cell, method_diff = method_diff,
+         method_ratio = method_ratio, method_mean_diff = method_mean_diff,
+         method_mean_ratio = method_mean_ratio)
   } else NULL
   # Phase 14d: record the variable ROLES here, where they are known. Recovering them from the finished
   # table is guesswork (and wrong after tab_compact) -- see get_vars_attr() in R/tab_classes.R.
@@ -3961,6 +4002,12 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, OR, color, pct,
 #'   }
 #' @param conf_level The confidence level for the confidence intervals,
 #'  as a single numeric between 0 and 1. Default to 0.95 (95%).
+#' @param method_mean_diff,method_mean_ratio Character strings, the numeric-mean CI methods -- see
+#'  \code{\link{tab}}. \code{method_mean_diff}: mean difference (\code{"welch"} / \code{"student"}).
+#'  \code{method_mean_ratio}: mean ratio (\code{"robust"} / \code{"quasipoisson"} / \code{"poisson"}).
+#' @param ci_scale Character string, the scale the \code{ci = "diff"} interval is expressed on:
+#'  \code{"diff"} (default, neutral 0) or \code{"ratio"} (a ratio-of-means interval, neutral 1, stored
+#'  as \code{ci_type = "ratio"}). \code{tab()} sets it from the colour (\code{color = "ratio"}).
 #' @param stars Logical (opt-in; default \code{FALSE}, or `options("tabxplor.stars")` when \code{NULL}).
 #' With \code{ci = "diff"}, print per-cell Welch t significance stars for the difference from the
 #' reference row; the mean-diff interval then uses the Welch t quantile (z when \code{FALSE}).
@@ -3994,6 +4041,7 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
                     na = c("keep", "drop", "drop_fct", "drop_num"),
                     ref = "tot", comp = c("tab", "all"),
                     ci = NULL, conf_level = 0.95, stars = NULL, #ci_visible = FALSE,
+                    method_mean_diff = "welch", method_mean_ratio = "robust", ci_scale = "diff",
                     totaltab = "line", totaltab_name = "Ensemble",
                     tot = NULL, total_names = "Total",
                     subtext = "", digits = 0, num = FALSE, df = FALSE,
@@ -4527,12 +4575,23 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
         vv <- tabs[[paste0(v, "_var")]]
         nn <- tabs[[paste0(v, "_en")]]
         if (ci == "cell") {
-          res <- ci_pivot(m, sqrt(vv / nn), df = Inf, conf_level = conf_level, want_p = FALSE)
+          # Rule B (14v-ii, §48): a mean cell interval estimates the variance -> one-sample Student
+          # t(n-1), not z (df = Inf). z was a large-sample approximation; t is the textbook cell CI.
+          res <- ci_pivot(m, sqrt(vv / nn), df = nn - 1, conf_level = conf_level, want_p = FALSE)
         } else {
           mr <- tabs[[paste0(v, "_refm")]]
           vr <- tabs[[paste0(v, "_refv")]]
           nr <- tabs[[paste0(v, "_refn")]]
-          res <- ci_mean_diff2(m, vv, nn, mr, vr, nr, conf_level = conf_level, want_p = want_p)
+          # 14v-ii: the mean interval follows the measure the reader sees (ci_scale). "ratio" -> a real
+          # ratio-of-means CI (method_mean_ratio); else the mean-DIFFERENCE CI (method_mean_diff). The
+          # old path always used the difference bounds, so a ratio-coloured mean showed the diff CI
+          # mislabelled as a ratio (decisions §48).
+          res <- if (identical(ci_scale[1], "ratio"))
+            ci_mean_ratio(m, vv, nn, mr, vr, nr, method = method_mean_ratio,
+                          conf_level = conf_level, want_p = want_p)
+          else
+            ci_mean_diff2(m, vv, nn, mr, vr, nr, method = method_mean_diff,
+                          conf_level = conf_level, want_p = want_p)
           # A reference row has no CI/test against itself.
           res$inf[refrows] <- NA_real_
           res$sup[refrows] <- NA_real_
@@ -4674,7 +4733,11 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
           pvalue    = a[[11]], or = NA_reals, tot_n = NA_reals,
           in_totrow = totrow_vector, in_tottab = tottab_vector, in_refrow = refrows),
         meta  = list(
-          type      = "mean", comp_all = comp_1, ref = ref_1, ci_type = ci, col_var = a[[7]],
+          # 14v-ii: a ratio-scale mean interval is stored as ci_type = "ratio" (neutral 1), so
+          # ci_center()/format()/the colour gate read the ratio bounds, not a diff mislabelled ratio.
+          type      = "mean", comp_all = comp_1, ref = ref_1,
+          ci_type   = if (identical(ci_scale[1], "ratio") && ci == "diff") "ratio" else ci,
+          col_var   = a[[7]],
           totcol    = FALSE, refcol = FALSE, color = color, color_signif = "ignore")
       )
     })
@@ -5464,13 +5527,17 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
 #' \code{"newcombe"} (default, hybrid-score, dual of the two-proportion score test), \code{"ac"}
 #' (Agresti-Caffo) or \code{"wald"}. Whatever the method, the stars come from that interval.
 #' It selects among the \emph{difference} methods only -- see \code{ci_scale}.
+#' @param method_ratio,method_mean_diff,method_mean_ratio Character strings, the ratio / numeric-mean
+#' CI methods -- see \code{\link{tab}}. \code{method_ratio}: proportion ratio (\code{"katz"}).
+#' \code{method_mean_diff}: mean difference (\code{"welch"} / \code{"student"}). \code{method_mean_ratio}:
+#' mean ratio (\code{"robust"} / \code{"quasipoisson"} / \code{"poisson"}).
 #' @param ci_scale Character string, the scale the \code{ci = "diff"} interval is expressed on:
 #' \code{"diff"} (default) for a difference interval (neutral 0, one of the \code{method_diff}
-#' methods), or \code{"ratio"} for Katz's log-risk-ratio interval (neutral 1), stored as
-#' \code{ci_type = "ratio"} and centred on the cell/reference ratio. \code{tab()} sets it from the
-#' colour: the measure the reader sees owns the interval, so \code{color = "ratio"} (or
-#' \code{c("ratio", "diff")}) asks for the ratio one. Percentage columns only -- a mean keeps its
-#' difference interval, a ratio of means being a different problem (Fieller's theorem).
+#' methods), or \code{"ratio"} for a ratio interval (neutral 1), stored as \code{ci_type = "ratio"} and
+#' centred on the cell/reference ratio -- Katz's log-risk-ratio for proportions (\code{method_ratio}),
+#' or a ratio-of-means interval for numeric means (\code{method_mean_ratio}). \code{tab()} sets it from
+#' the colour: the measure the reader sees owns the interval, so \code{color = "ratio"} (or
+#' \code{c("ratio", "diff")}) asks for the ratio one.
 #' @param color The type of colors to print, as a single string.
 #' \itemize{
 #'   \item \code{"no"}: by default, no colors are printed
@@ -5533,12 +5600,17 @@ tab_ci <- function(tabs,
                    visible = FALSE,
                    stars = NULL,
                    method_cell = "wilson", method_diff = "newcombe",
+                   method_ratio = "katz", method_mean_diff = "welch",
+                   method_mean_ratio = "robust",
                    ci_scale = "diff") {
   stopifnot(all(ci %in% c("auto", "cell", "diff", "no")), #"r_to_r", "c_to_c", "tab_to_tab",
             all(ci_scale %in% c("diff", "ratio")),
             all(comp %in%  c("tab", "all")),
             all(method_cell %in% c("wilson", "wald")),
-            all(method_diff %in% c("newcombe", "ac", "wald"))
+            all(method_diff %in% c("newcombe", "ac", "wald")),
+            all(method_ratio %in% "katz"),
+            all(method_mean_diff %in% c("welch", "student")),
+            all(method_mean_ratio %in% c("robust", "quasipoisson", "poisson"))
   )
   # Phase 3a: significance stars default (universal CI-inclusion). NULL -> option default.
   stars <- if (is.null(stars)) getOption("tabxplor.stars", FALSE) else stars
@@ -5693,8 +5765,9 @@ tab_ci <- function(tabs,
         ci[[nm]],
         "cell" = switch(
           tp,
+          # Rule B (14v-ii, §48): one-sample Student t(n-1) cell interval (variance is estimated).
           "mean" = ci_pivot(get_mean(col), sqrt(get_var(col) / x_n[[nm]]),
-                            df = Inf, conf_level = conf_level, want_p = FALSE),
+                            df = x_n[[nm]] - 1, conf_level = conf_level, want_p = FALSE),
           # Phase 7g: the proportion cell CI honours method_cell (default wilson; wald opt-in).
           switch(method_cell,
                  "wilson" = ci_wilson(get_pct(col), x_n[[nm]], conf_level = conf_level),
@@ -5702,20 +5775,26 @@ tab_ci <- function(tabs,
         "diff_col" = ,
         "diff_row" = switch(
           tp,
-          # Phase 14b: a MEAN keeps the difference interval whatever the colour asks -- a ratio of
-          # means would need Fieller's theorem, not Katz (which is a two-PROPORTION method). This is
-          # also what keeps the numeric default unchanged: under color = TRUE a mean's text channel
-          # already IS the ratio.
-          "mean" = ci_mean_diff2(get_mean(col), get_var(col), x_n[[nm]],
-                                 ref[[nm]], ref_var[[nm]], ref_n[[nm]],
-                                 conf_level = conf_level, want_p = want_p),
+          # 14v-ii: a MEAN's interval now also follows the measure the reader sees (ci_scale). "ratio"
+          # -> a real ratio-of-means CI (ci_mean_ratio, method_mean_ratio: robust / quasipoisson /
+          # poisson); else the mean-DIFFERENCE CI (method_mean_diff: welch / student). Was a plain
+          # ci_mean_diff2 whatever the colour, which showed the diff bounds mislabelled as a ratio.
+          "mean" = if (identical(ci_scale[1], "ratio"))
+            ci_mean_ratio(get_mean(col), get_var(col), x_n[[nm]],
+                          ref[[nm]], ref_var[[nm]], ref_n[[nm]], method = method_mean_ratio,
+                          conf_level = conf_level, want_p = want_p)
+          else
+            ci_mean_diff2(get_mean(col), get_var(col), x_n[[nm]],
+                          ref[[nm]], ref_var[[nm]], ref_n[[nm]], method = method_mean_diff,
+                          conf_level = conf_level, want_p = want_p),
           # Proportions: the interval follows the measure the reader sees (ci_scale, resolved once in
-          # tab_resolve_settings()). "ratio" -> Katz log-RR bounds on the ratio scale; else the
-          # difference methods. `method_diff` selects among the DIFFERENCE approximations only --
-          # Katz is the sole ratio interval offered, so it is not one of its values.
+          # tab_resolve_settings()). "ratio" -> Katz log-RR bounds on the ratio scale (method_ratio,
+          # currently only "katz"); else the difference methods. `method_diff` selects among the
+          # DIFFERENCE approximations only.
           if (identical(ci_scale[1], "ratio"))
-            ci_katz_rr(get_pct(col), x_n[[nm]], ref[[nm]], ref_n[[nm]],
-                       conf_level = conf_level, want_p = want_p)
+            switch(method_ratio,
+                   "katz" = ci_katz_rr(get_pct(col), x_n[[nm]], ref[[nm]], ref_n[[nm]],
+                                       conf_level = conf_level, want_p = want_p))
           else
             ci_prop_diff(get_pct(col), x_n[[nm]], ref[[nm]], ref_n[[nm]],
                          conf_level = conf_level, method = method_diff, want_p = want_p)))
@@ -5757,12 +5836,13 @@ tab_ci <- function(tabs,
 
     #Change ci_type and color, even for totals with no ci result
     ci_with_ref <- stringr::str_remove(ci_with_ref, "_row|_col")
-    # Phase 14b: name the SCALE the bounds were actually built on, so every reader (ci_center(),
-    # format()'s bracket, the colour significance gate, the legend) dispatches off the stored
-    # attribute rather than re-deriving the colour spec. Only the proportion diff columns switch:
-    # `ci_scale` is a whole-table setting, but means took the difference branch above regardless.
+    # Phase 14b / 14v-ii: name the SCALE the bounds were actually built on, so every reader
+    # (ci_center(), format()'s bracket, the colour significance gate, the legend) dispatches off the
+    # stored attribute rather than re-deriving the colour spec. 14v-ii: means now also take the ratio
+    # branch above (ci_mean_ratio), so the `type != "mean"` exclusion is gone -- a ratio mean gets
+    # ci_type = "ratio" (neutral 1, bare bracket) like a ratio proportion.
     if (identical(ci_scale[1], "ratio")) {
-      is_ratio_ci <- ci_with_ref == "diff" & type != "mean"
+      is_ratio_ci <- ci_with_ref == "diff"
       ci_with_ref[is_ratio_ci] <- "ratio"
     }
     ci_yes_ref  <- !is.na(ci_with_ref) & !ci_with_ref == "no"
@@ -6749,6 +6829,8 @@ resolve_ref_vector <- function(ref, row_vars_chr, what = "row_var") {
 # "no"` skips the CI step. WARNING: keep byte-identical to the pre-6a two-batch passes.
 tab_apply_tests <- function(tab, do_chi2, ci, comp, color_ctr, color_ci,
                             conf_level, stars, method_cell, method_diff,
+                            method_ratio = "katz", method_mean_diff = "welch",
+                            method_mean_ratio = "robust",
                             ci_scale = "diff", cached_test = NULL) {
   if (isTRUE(do_chi2)) {
     # Phase 7e tier-2 cache: on a hit (cached_test supplied) and the common non-contrib path,
@@ -6773,7 +6855,8 @@ tab_apply_tests <- function(tab, do_chi2, ci, comp, color_ctr, color_ci,
     tab <- tab_ci(tabs = tab, ci = ci, comp = comp, conf_level = conf_level,
                   color = color_ci, visible = ci == "cell", stars = stars,
                   method_cell = method_cell, method_diff = method_diff,
-                  ci_scale = ci_scale)
+                  method_ratio = method_ratio, method_mean_diff = method_mean_diff,
+                  method_mean_ratio = method_mean_ratio, ci_scale = ci_scale)
   }
 
   list(tab = tab, test = test)

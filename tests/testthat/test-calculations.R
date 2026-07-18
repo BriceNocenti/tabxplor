@@ -451,10 +451,11 @@ testthat::test_that("zscore_formula matches qnorm", {
 
 # === SECTION: Mean confidence intervals =======================================
 
-testthat::test_that("mean CI matches z * sqrt(var/n) using stats::var()", {
+testthat::test_that("mean cell CI matches t(n-1) * sqrt(var/n) using stats::var() (rule B)", {
+  # Rule B (14v-ii, decisions §48): a mean cell interval estimates the variance, so it is the
+  # one-sample Student t(n-1), not z. (Was z = qnorm before 14v-ii.)
   tabs <- tab_num(sw, sex, height, na = "drop", ci = "cell", conf_level = 0.95)
   sex_levels <- levels(sw$sex)
-  z <- stats::qnorm(0.025, lower.tail = FALSE)
 
   for (s in sex_levels) {
     tab_row <- tabs |> dplyr::filter(sex == s)
@@ -466,18 +467,17 @@ testthat::test_that("mean CI matches z * sqrt(var/n) using stats::var()", {
     n <- nrow(d)
     # tab_num uses stats::var() (n-1 denominator) for unweighted data
     v <- stats::var(d$height)
-    expected_ci <- z * sqrt(v / n)
+    expected_ci <- stats::qt(0.025, df = n - 1, lower.tail = FALSE) * sqrt(v / n)
 
     testthat::expect_equal(tab_ci, expected_ci, tolerance = 1e-4,
                            label = paste0("mean CI [", s, "]"))
   }
 })
 
-testthat::test_that("mean diff CI (stars off) matches z * sqrt(var1/n1 + var2/n2)", {
-  # Phase 3a: with stars OFF the mean-diff interval keeps the z quantile (stars ON -> Welch-t,
-  # tested separately below).
+testthat::test_that("mean diff CI matches Welch-t * sqrt(var1/n1 + var2/n2) (rule B)", {
+  # Rule B (14v-ii): the mean-diff interval is always Welch-t -- the df no longer flips with stars
+  # (stars on/off give the same bracket now; only the pvalue is added when stars are on).
   tabs <- tab_num(sw, sex, height, na = "drop", ci = "diff", conf_level = 0.95, stars = FALSE)
-  z <- stats::qnorm(0.025, lower.tail = FALSE)
 
   # Reference: total row stats
   d_all <- sw |> dplyr::filter(!is.na(height) & !is.na(sex))
@@ -496,7 +496,9 @@ testthat::test_that("mean diff CI (stars off) matches z * sqrt(var1/n1 + var2/n2
     n <- nrow(d)
     v <- stats::var(d$height)
 
-    expected_ci <- z * sqrt(v / n + var_ref / n_ref)
+    se2 <- v / n + var_ref / n_ref
+    df  <- se2^2 / ((v / n)^2 / (n - 1) + (var_ref / n_ref)^2 / (n_ref - 1))
+    expected_ci <- stats::qt(0.025, df = df, lower.tail = FALSE) * sqrt(se2)
     testthat::expect_equal(tab_ci, expected_ci, tolerance = 1e-4,
                            label = paste0("mean diff CI [", s, "]"))
   }

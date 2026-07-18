@@ -71,11 +71,13 @@ testthat::test_that("ci = 'cell' has no ratio counterpart (a one-proportion inte
   testthat::expect_identical(get_ci_type(t$Married), "cell")
 })
 
-testthat::test_that("a MEAN keeps the difference interval under a ratio colour (no Fieller)", {
+testthat::test_that("a MEAN now gets a ratio-of-means interval under a ratio colour (14v-ii)", {
+  # Was: a mean kept the difference interval whatever the colour (a ratio of means "needed Fieller").
+  # 14v-ii ships ci_mean_ratio, so a ratio-coloured mean owns a real ratio interval (ci_type "ratio").
   t <- tab(d, race, c(marital, tvhours), pct = "row", color = "ratio",
            color_signif = "grey_non_signif")
   testthat::expect_identical(get_ci_type(t$Married), "ratio")
-  testthat::expect_identical(get_ci_type(t$tvhours), "diff")
+  testthat::expect_identical(get_ci_type(t$tvhours), "ratio")
 })
 
 testthat::test_that("tab_resolve_settings only asks for the ratio scale where a diff CI is built", {
@@ -186,4 +188,65 @@ testthat::test_that("the significance gate keys on the stored ci_type, not on th
   testthat::expect_identical(get_ci_type(cc), "ratio")
   bg <- fmt_color_channels(cc)$bg
   testthat::expect_true(any(!is.na(bg) & bg > 0L))     # not greyed wholesale by a neutral mismatch
+})
+
+
+# --- 14v-ii: numeric ratio-of-means (the ci_type="diff" bug fix) ---------------------------
+
+testthat::test_that("a ratio-coloured MEAN stores ci_type='ratio' + ratio-scale bounds (14v-ii)", {
+  # Regression lock for the §48 bug: tab(mean, color='ratio', ci='diff') used to store the DIFFERENCE
+  # bounds mislabelled as a ratio. It must now store a real ratio-of-means interval (centred on the
+  # cell/reference ratio, neutral 1).
+  d2 <- forcats::gss_cat |> dplyr::mutate(race = forcats::fct_rev(race)) |>
+    dplyr::filter(!is.na(tvhours))
+  t   <- tab(d2, race, tvhours, ref = 1, color = "ratio", ci = "diff", stars = TRUE)
+  col <- t$tvhours
+  testthat::expect_identical(get_ci_type(col), "ratio")
+  testthat::expect_equal(ci_center(col), get_ratio(col))          # centred on the ratio, not the diff
+  # the stored bounds bracket the ratio, not the difference; a diff CI would bracket get_diff (~1.4)
+  k <- !is.na(get_ci_inf(col))
+  testthat::expect_true(all(get_ci_inf(col)[k] <= get_ratio(col)[k] &
+                            get_ratio(col)[k] <= get_ci_sup(col)[k]))
+})
+
+testthat::test_that("the three method_mean_ratio values give the three decisions-48 intervals", {
+  d2 <- forcats::gss_cat |> dplyr::mutate(race = forcats::fct_rev(race)) |>
+    dplyr::filter(!is.na(tvhours))
+  g  <- d2 |> dplyr::filter(race %in% c("White", "Black"))
+  hand <- function(method, want_p = FALSE) {
+    gb <- g$tvhours[g$race == "Black"]; gw <- g$tvhours[g$race == "White"]
+    ci_mean_ratio(mean(gb), stats::var(gb), length(gb),
+                  mean(gw), stats::var(gw), length(gw), method = method, want_p = want_p)
+  }
+  for (m in c("robust", "quasipoisson", "poisson")) {
+    t   <- tab(g |> dplyr::mutate(race = forcats::fct_drop(race)), race, tvhours, ref = 1,
+               color = "ratio", ci = "diff", method_mean_ratio = m, stars = TRUE)
+    col <- t$tvhours
+    k   <- which(as.character(t$race) == "Black")  # Black vs White = ref (Total row also has a CI)
+    ref <- hand(m, want_p = TRUE)
+    testthat::expect_equal(get_ci_inf(col)[k], ref$inf, tolerance = 1e-6, label = m)
+    testthat::expect_equal(get_ci_sup(col)[k], ref$sup, tolerance = 1e-6, label = m)
+  }
+})
+
+testthat::test_that("the ratio-of-means bracket renders bare (no %, >= 2 digits)", {
+  d2 <- forcats::gss_cat |> dplyr::mutate(race = forcats::fct_rev(race)) |>
+    dplyr::filter(!is.na(tvhours))
+  t <- tab(d2, race, tvhours, ref = 1, color = "ratio", ci = "diff")
+  b <- format(set_display(t$tvhours, "ci"))
+  b <- b[!is.na(b) & nzchar(trimws(b))]
+  testthat::expect_false(any(grepl("%", b, fixed = TRUE)))
+  testthat::expect_true(any(grepl("^\\[[0-9]+\\.[0-9]{2};[0-9]+\\.[0-9]{2}\\]$", trimws(b))))
+})
+
+testthat::test_that("the legend names the ratio-of-means method (Welch/Student/robust/quasi/Poisson)", {
+  d2 <- forcats::gss_cat |> dplyr::mutate(race = forcats::fct_rev(race))
+  leg <- function(...) paste(tab_color_legend(
+    tab(d2, race, tvhours, ref = 1, ci = "diff", color_signif = "grey_non_signif", ...),
+    medium = "plain", lang = "en"), collapse = " ")
+  testthat::expect_match(leg(color = "ratio"),                                   "robust-Poisson")
+  testthat::expect_match(leg(color = "ratio", method_mean_ratio = "quasipoisson"), "quasi-Poisson")
+  testthat::expect_match(leg(color = "ratio", method_mean_ratio = "poisson"),    "Poisson interval")
+  testthat::expect_match(leg(color = "diff"),                                    "Welch t interval")
+  testthat::expect_match(leg(color = "diff", method_mean_diff = "student"),      "Student t interval")
 })

@@ -237,7 +237,8 @@ new_vars_attr <- function(row_vars = character(0), col_vars = character(0),
 }
 # The package CI defaults (mirror tab()'s formals), used when a table carries no `ci_settings`.
 default_ci_settings <- function() {
-  list(conf_level = 0.95, method_cell = "wilson", method_diff = "newcombe")
+  list(conf_level = 0.95, method_cell = "wilson", method_diff = "newcombe",
+       method_ratio = "katz", method_mean_diff = "welch", method_mean_ratio = "robust")
 }
 
 # === SECTION: the ONE table-attribute carry (Phase 14d) ============================================
@@ -1710,7 +1711,9 @@ reg_footer_lines <- function(tabs) {
 
   # `test` dropped -> idempotent; `vars` + `empirical_tips` (Phase 14v) threaded through the rebuild,
   # else the multinomial crude tooltip attribute is lost the moment the GOF footer is materialised.
-  new_tab(tabs2, subtext = subtext, vars = get_vars_attr(tabs),
+  # 14v-ii: thread ci_settings too (the crude-CI methods + conf_level the legend names) -- the
+  # tab_pvalue_lines rebuild already does; this one did not, dropping it at footer materialisation.
+  new_tab(tabs2, subtext = subtext, vars = get_vars_attr(tabs), ci_settings = get_ci_settings(tabs),
           empirical_tips = get_empirical_tips(tabs)) |>
     dplyr::group_by(!!!rlang::syms(group_chr))
 }

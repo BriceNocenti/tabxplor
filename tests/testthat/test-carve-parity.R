@@ -28,6 +28,7 @@ carve_ctx <- function(data, row_vars, col_vars, tab_vars = rlang::quo(NULL),
     cleannames = NULL, output = "single", other_if_less_than = 0, other_level = "Others",
     ref = "auto", ref2 = "first", comp = "tab", ci = "no", conf_level = 0.95, stars = NULL,
     method_cell = "wilson", method_diff = "newcombe",
+    method_ratio = "katz", method_mean_diff = "welch", method_mean_ratio = "robust",
     totaltab = "line", totaltab_name = "Ensemble", totrow = TRUE, totcol = "last",
     total_names = "Total", add_n = TRUE, add_pct = FALSE, digits = 0, subtext = "",
     by_table = FALSE, spread_vars = character(), names_prefix = NULL, names_sort = FALSE

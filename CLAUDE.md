@@ -30,8 +30,12 @@ R/
 │                              tab_lump_others/tab_cleannames_relabel (extracted from tab_prepare)
 ├── tab-agg.R        (~500 L) Aggregate-core (Phase 2-3): num_derive_stats/num_rollup, num_moment_scan
 │                              + tab_aggregate_num (numeric tier-1 producer, Phase 7d-i),
-│                              CI engine (ci_pivot/ci_wilson/ci_newcombe/ci_katz_rr/…: 14b's Katz
-│                              log-RR is the RATIO-scale interval, ci_type="ratio"), agg_chi2/agg_anova
+│                              CI engine (ci_pivot/ci_wilson/ci_newcombe/ci_katz_rr/ci_mean_diff2/
+│                              …: 14b's Katz log-RR + 14v-ii's ci_mean_ratio [robust/quasipoisson/
+│                              poisson] are the RATIO-scale intervals ci_type="ratio"; ci_mean_diff2
+│                              gains method welch/student; ci_or = Woolf log-OR for the empirical crude
+│                              OR; RULE B [§48]: numeric CIs are t where a variance is estimated, z
+│                              otherwise -- NOT stars-gated; ci_pivot guards df<=0 -> NA), agg_chi2/agg_anova
 ├── tab-counts.R     (~360 L) tab_counts() from-the-middle constructor (Phase 4): reshape any
 │                              input shape → count-aggregate → tab_plain(.fine) + shared finalize
 ├── tab-resolve.R    (~200 L) tab_resolve_settings() (Phase 7b): the ONE pure arg-overwrite
@@ -2124,7 +2128,7 @@ single unnamed reg table exported alone still mis-titles (the 14l flag, still op
 
 ---
 
-#### Phase 14v — finish the `empirical = TRUE` framework
+#### Phase 14v-i — improve the `empirical = TRUE` framework
 
 `empirical = TRUE` (renamed from `empirical_OR`) adds the DESCRIPTIVE crude companion of the model effect: the *unadjusted* bivariate association between a factor predictor and the outcome, which IS the modelised quantity when there is a single predictor. This is the standard "crude vs adjusted" comparison (epidemiology / social science good practice): a large gap between the crude and the model column signals confounding /adjustment.
 
@@ -2246,6 +2250,83 @@ By the way, there’s a bug to correct with `display = "ratio"` : it prints `n` 
 - What would be the best way to store a tooltip fragments, already formatted, without having to create a new vctrs field ? Use a named vector as column-level attribute, with names as levels, then to retrieve at export join it with levels column by names ? Can you think about a more reliable way to do it without creating a new vctrs field ?
 
 
+#### Phase 14v-ii — CI methods, over-dispersion, and empirical CIs
+
+
+**Read `dev/tabxplor_1.4.0_decisions.md` §48 first** — it holds the full design, the maintainer's
+settled choices, and the measured numbers that justify every default. This is the implementation brief.
+A follow-up to 14v (§47), fixing/completing the crude-vs-model CI relation. All defaults are the
+robust/heteroscedastic row (assumption-light, matching tab()'s existing Welch diff spirit); opt-ins
+reproduce a regression's interval. Golden churn is EXPECTED here (reg poisson/grouped-binomial SEs
+widen; the numeric ratio CI becomes a real ratio CI; empirical columns gain colour/CI/stars) — regen
+consciously and diff each.
+
+##### Part 1 — `ci = "ratio"` works everywhere + the new `method_*` args
+
+- **The bug** (verified §48): `ci = "ratio"` on a NUMERIC mean silently stores `ci_type = "diff"` and the
+  diff bounds (the diff interval mislabelled as a ratio). Make it compute a real ratio-of-means CI and
+  set `ci_type = "ratio"`.
+- **New args** (consistent with `method_cell` / `method_diff`; named for means/numeric), `match.arg`,
+  first value default: `method_ratio = "katz"` (proportion ratio; one value for now, added so the expert
+  sees every case); `method_mean_diff = c("welch", "student")` (numeric diff; `"student"` = pooled t =
+  linear reg); `method_mean_ratio = c("robust", "quasipoisson", "poisson")` (numeric ratio; `"robust"` =
+  delta-log per-group = modified Poisson, default; `"quasipoisson"` = Poisson SE × √φ = quasi-Poisson
+  reg; `"poisson"` = naive Var=μ, reproduces a reg with no over-dispersion). roxygen: per arg, state the
+  quantity + which regression it reproduces (the §48 tables).
+- **Closed-form engines** in `R/tab-agg.R` beside `ci_pivot`/`ci_wilson`/`ci_newcombe`/`ci_katz` (formulas
+  in §48). Quantile: z with stars off, matching t with stars on (§15 duality); ratio CIs are z on the
+  log scale. Wire through the 14b `ci_scale` seam (`color = "ratio"` → `ci_scale = "ratio"` → `tab_ci()`);
+  the numeric arm must dispatch on `method_mean_ratio`, not fall to the diff bounds.
+- Record all five `method_*` in the `ci_settings` attribute so `tab_color_legend()` names the actual
+  method (Welch/Student/robust-Poisson/quasi-Poisson/Poisson/Katz/Wilson/Newcombe). No new fmt field:
+  the method is a `ci_settings` scalar; `ci_type` stays `"ratio"` regardless of method.
+
+##### Part 2 — over-dispersion: MLE fit + dispersion-scaled SEs (maintainer's choice A)
+
+- `family = "poisson"` and grouped/summed-score binomial (`trials`): keep the **MLE fit** (so
+  AIC/McFadden/LR/BIC stay in the footer) but **scale the coefficient SEs by √φ** (φ = `reg_dispersion`
+  Pearson dispersion) for the CIs/stars **by default**. Verified EXACT: Poisson SE × √φ = quasi-Poisson
+  SE; auto-degrades to naive when φ ≈ 1. `reg_fit`/`reg_wald_from_tidy` (`R/tab_reg.R`): apply √φ to the
+  SEs before CI/p; p quantile stays `t(df.residual)` (the quasi/lm branch).
+- **Bernoulli binary**: unchanged (dispersion not identifiable). **gaussian/lm**: unchanged (no
+  over-dispersion concept; heteroscedasticity is the analogue, handled tab-side). The explicit
+  `family = "quasipoisson"` path stays (true quasi, NA GOF accepted).
+- Footer: φ already shows (`reg_dispersion`); it now DRIVES the SEs — word it as the active adjustment.
+
+##### Part 3 — empirical (crude) columns get CIs (same method as the model)
+
+Each crude column (`Emp. %`/`OR`/`diff`/`mean`/`rate`/`IRR` + the multinomial tooltip) gains a **crude
+CI computed with the SAME method as the model** (= the single-predictor model's interval, §47 parity),
+used for: **colour** (significance-based — move off `color_signif = "ignore"` to a CI-driven policy),
+**its own tooltip** (the CI text), and **significance stars** (store a `pvalue`). **NOT shown in-cell by
+default** (a custom `display = "{or} {ci}"` adds the bracket, like model columns). Per-family crude CI in
+§48 (Wilson %, Woolf log-OR, Newcombe risk-diff, Welch/Student mean-diff, robust/quasi rate-ratio). Add
+a doc note that a crude star = the *unadjusted* association is significant (the maintainer accepts the
+possible confusion). The empirical variance auto-absorbs a summed-score binomial's over-dispersion — no
+special handling, and the user need not declare a summed score (§48 confirms it changes nothing vs a
+plain numeric variable).
+
+##### Verify
+
+- **Parity (extend `test-tab_reg-empirical.R`)**: single-predictor model CI == empirical-column CI ==
+  `tab()` CI under the matching `method_*` — gaussian (`student` == OLS), poisson (`quasipoisson` ==
+  quasi-Poisson reg; `poisson` == naive), binomial OR (Woolf), AME (Newcombe). To 1e-6.
+- `ci = "ratio"` on a numeric mean now stores `ci_type = "ratio"` and a ratio-scale bracket (regression
+  test the exact bug); the three `method_mean_ratio` values give the three §48 intervals.
+- Empirical columns render colour + stars + a CI tooltip; a crosstab is unaffected (no leakage).
+- Full suite (sanctioned recipe); `document()` clean; conscious golden/snapshot regen (list what moved
+  and why). Samples to `dev/review_manual/`.
+
+##### Gotchas
+
+- `ci_settings` must carry the new methods AND survive the reg footer/pvalue rebuilds (`reg_footer_lines`
+  / `tab_pvalue_lines` — the recurring 14n/14v landmine: thread every table attribute through `new_tab()`).
+- Empirical columns moving off `color_signif = "ignore"` changes their colouring (significant-only) —
+  intended, but audit the 14v colour goldens/samples.
+- Deferred (out of scope, note only): robust HC SEs on `lm`/`svyglm` (reverse-direction match); Fieller
+  as a 4th `method_mean_ratio`.
+
+
 #### Phase 14w — reg tables titles, legends, and headers
 
 1. **[14u] The reg-table SHEET/TITLE mis-titling is still open** (the 14l flag). I want the above table title to be more informative, specific to regressions, of the type : "logistic regression : <dependent> by <explanatory_1, explanatory_2>, + <x> more", "linear regression : ...", "poisson regression : ...", "multinomial logistic regression : ...", "ordinal logistic regression : ..." ("tabbed by" with a split var). Sheet title : "linear_<dependent>_<explanatory_1>_etc", "logit...", "poisson...", "mlogit", "ologit...".
@@ -2304,6 +2385,8 @@ Exemple with Multinomial + AME
     "Logistic regressions (models comparison) : married, "01-Married" (OR)    # title above table
      | levels |  demo  |  full  |"
 
+5. Emp. IRR's ci_type = "or" still reads "log odds-ratio" where it's, actually a rate-ratio.
+
 Tell me where they would need a new column-level or table-level attribute to store model metadata.
 
 
@@ -2330,7 +2413,8 @@ Tell me where they would need a new column-level or table-level attribute to sto
 5. Small change to crosstables color legends.
 - `color_sign = "grey_non_signif"`. "Uncoloured: either not significant, or too small a difference to colour." A clearer text would be : "Uncoloured: either not significant, or difference under ±5 points."
 
-
+6. NA values management with `levels="first"`
+- By default, when `na="keep"`, I want NA columns to be taken into account at calculation, but to be discarded like the second column (only keep the first column of the related col_vars, discard second and other levels, discard na level) ; obviously, NA rows in row_vars should stay.
 
 
 
@@ -2362,9 +2446,180 @@ Reuse patterns from jmvtab primarily. Customise .js to grey out options that are
 
 ### Last Phase — verif and package user-friendly documentation
 
+
 #### Last Phase a – Bug corrections
 
-See below for known bugs yet to fix.
+Look below for known bugs yet to fix.
+
+#### Last Phase b – rethink package dependencies
+
+Package dependencies : are there imports or suggests that are used very little ? Imports and suggest that in general could be easily replaced with custom functions, or by copying a hand of opensource functions (thanking authors in the code) ?
+
+Are there Suggest that we should better add to imports, since they are important for many functions ? Adding `broom::` in imports to be able to use `tab_reg()` natively in all cases, and only Suggests the packages necessary for more specific models ? Adding what else ? How many packages is it recommended to have at maximum and, particularly, after which threshold CRAN is currently giving a R CMD CHECK Note (do web searches) ?
+
+
+#### Last Phase c – simplify main user-facing functions arguments and roxygen documentation
+
+Simplify `tab()` and `tab_reg()` and other main functions documentation, to make it more easily understandable and more helpful to students that are not statistical experts and may have difficulties with programming. And less terrifying – because the length of the current documentation may be terrifying for newcomers in R (specially my literary sociology students).
+- Would there be possibilities to nest some of the more complex argument in other functions ? For example, all the complex customisation things about ci refer to tab_ci(), with a link for the user to go further if he wants to ? All the complex things about color customisation somewhere else ? All the helpers set / get etc. somewhere else too, but with a ling to them somewhere in tab() page. What else could be grouped and put out of the main user-facing functions documentation ?
+- The order of the arguments matters, what comes first is / must be what really matters for base users/beginners (like variables, percentages, colors, etc.)
+
+Can you think about remaining possible simplifications of the arguments themselves, specially the new arguments introduced in v 1.4.0, since once they become public it will be difficult to modify them in next versions ? How could the main user-facing functions be more user-friendly ?
+
+
+#### Last Phase d – Create meaningful and user-friendly vignettes
+
+Each vignette must be user-friendly, understandable by novices for the base crosstables one and regression models one, while still having just enough technical detail for the experts to known exactly what important technical choices were done internally.
+- For each vignette, carefully study the dev history in `dev/tabxplor_1.4.0_decisions.md`, `dev/tabxplor_1.4.0_roadmap_DONE_PHASES.md`, or other `dev/` .md when relevant : the aim is of course not to give the user any information about how the package was implement (would be useless to him), but to retrieve the more data possible about what were the intended real world use cases of each option, then **select** which part is **really** important for the user.
+- For real-world examples, use `gss_simple <- gss_cat_data_formatting()` (exported), which is classic `forcats::gss_cat` formatted with merged levels for cleaner tables, and first levels chosen to be used as references (for color helpers, regressions, etc.).
+
+##### base package introduction / tab() vignette
+
+The current vignette should be the basis for non-expert users, while also permitting expert users to understand what this package is really interesting for : crosstables, factors and means, colors, references, confidence intervals, exports, etc.
+
+##### tab_reg() vignette
+tab_reg should come with it’s own very detailed vignette
+- A section for each kind of regression model : binomial, gaussian, poisson, etc.
+- Meaningful examples in each section, that should remember the novice in what situation and what kind of variable he should use each kind of model, and briefly inform the expert about the exact underlying methodological choices. 
+- Since tabxplor differenciates from other packages by the possibility to compare regression models estimates with their relative empirical/observed quantity, each section vignette should include a full detailed explanation with meaningful examples of what the `empirical = TRUE` framework does in this case (how to use and what to compare to what, which ci are calculated and why, what tab() code with ci compares to what tab_reg() one dependent/one predictor model, etc.).
+
+##### programming with tabxplor vignette
+All the part about "programming with tabxplor" and its vctrs fields should come in their own vignette, and it must be updaded and extended, with user-friendly example stating the possibilities.
+
+
+#### Last Phase e – full `pkgdown` documentation + test coverage
+
+Add test coverage to github actions.
+
+Implement a full pkgdown documentation.
+- Where ? On github pages ? Elsewhere with tidyverse ecosystem provided servers ?
+
+
+#### Last Phase f – tabxplor R french translation
+
+All legends should be carefully translated to French.
+Could the package documentation be translated for French users ? Could the whole pkgdown easily have a french version, with the possibility to choose on the webpage ?  
+What other strings should be translated in French ?
+
+
+
+### Reference — bugs, benchmarks, perf
+
+#### Discovered bugs
+
+- ~~**A pre-existing golden drift.** `n_ci_tabvars.rds` / `n_ci_tabvars_all.rds` had a `ci_sup` `NaN`
+   where a clean run wants `NA`.~~ **FIXED in 14v-ii**: the cause was `n <= 1` cells (`df = n - 1 <= 0`
+   feeding `qt`); `ci_pivot()` now coerces `df <= 0` to `NA` (clean NA, no NaN, no warning). The two
+   goldens were regenerated with the rule-B mean CIs and no longer carry the NaN.
+
+- **NEW (2026-07-16, seen live in jamovi on WSL; COSMETIC, pre-existing — not a migration issue).**
+  A live `jmvtab` session prints, 3×, while the user adds the analysis and picks variables:
+  *"! tabxplor formatting and colors skipped: the table has no tabxplor_fmt columns (not a
+  tabxplor table). ℹ Rendering the plain table instead."* — the Phase 10c `tab_render_vars()`
+  degrade path ([R/tab.R:2494](R/tab.R#L2494)). **The real tables are unaffected** (colours render
+  correctly); this fires only on the transient degenerate shapes jamovi passes mid-selection.
+  Reproduced (scripts in the C3 session; `jmvtab_build()` + `tab_kable(engine="html")`):
+  + **`data` with 1 column, no vars selected** → emits the message **even though the built table
+    HAS an fmt column** (`fmt=1/2`) ⇒ the degrade is reached on some *other* table inside
+    `tab_kable`'s prep than the one returned, and **the message is misleading, not just noisy**.
+    Start at `tab_export_prep()` / `tab_materialize_extras()`, not at `tab_render_vars()`.
+  + **0-row `data` + named vars** → hard **ERROR** `"data is of length 0 (possibly after filter or
+    na = 'drop_all')"` from `tab_plain()` via `purrr::pmap()` ([R/tab.R:1814](R/tab.R#L1814)).
+    A 0-row table should degrade gracefully, not abort.
+  + NOT the cause (each tested and cleared): the tier-3 **carrier** cache (all of fresh build /
+    exact-tuple hit / digits re-apply / colour re-apply / `saveRDS` round-trip keep `fmt=4/5`);
+    empty `row_vars`/`col_vars` against full data; `jmvtab_build()` itself.
+  Fix in whichever phase next touches the exporter prep. Add the degenerate shapes to
+  `test-edge-cases.R`.
+
+In-code these are tagged for grep: `# KNOWN-BUG:` (bugs below), `# FIXME:` / `# FIXME(clarify):` / `# FIXME(future):` (suspect logic or future work, several tied to the Phase 5 color work), `# OBSOLETE:` (dead-code banners, e.g. the stale `tab_xl` duplicate). Fix each bug inside the phase that rewrites the relevant code, not as a separate pass.
+
+- FIXED (Phase 1a): `fmt()` public constructor cast `totcol` into `refcol` (the `refcol` argument was silently ignored). Now casts `refcol`. Low impact (refcol is normally set internally).
+- FIXED (Phase 7g-iii, golden-locked): two latent `ref` bugs surfaced by the reference picker. (1) `diff_index()` matched a level label as a REGEX, so a metacharacter label (e.g. `"$25000 or more"`) silently mismatched (the reported "picking the 2nd row_var does nothing" — `rincome` has `$` levels) and a substring label multi-matched — now EXACT-match-first, then regex. (2) `resolve_ref_vector()`'s `length(ref)==1` early return recycled even a NAMED length-1 ref, so `c(race = "Black")` leaked to every col_var — now only an UNNAMED length-1 recycles; a named one is name-matched. Both byte-identical on existing goldens (the goldens' refs are `first`/`tot`/non-substring labels).
+- FIXED (Phase 6e, golden-locked; hardened Phase 7d-i): `tab_num(..., <tab_vars>, ci="cell")` used to error ("some columns don't belong to the data.table: [tab_var]") in the `tot="no"` grand-total-only grouping-set / `na="keep"` reorder path. 6e made the grand total a length-1 list so `num_rollup()` keeps every tab_var present; 7d-i added a defensive `intersect(tab_vars, names(tabs_tot))` guard at the reorder + an `expect_no_error` regression in `test-num-fuse-parity.R`. Locked by golden `n_ci_tabvars` / `n_ci_tabvars_all`, both `comp` modes.
+- FIXED (Phase 14b): `tab_kable(engine = "html", popover = TRUE)` rendered its own escaped ATTRIBUTE STRING as the popover content (`data-content="data-toggle=&quot;popover&quot;..."`). `tab_kable_print_tooltip(popover = TRUE)` returned `kableExtra::spec_popover()`'s attributes from a *text* builder, and the html engine wrapped them again. Attributes now live only in `tab_tooltip_attrs()`; the arg is deleted. The same builder also ends a second drift: the html popover omitted `data-trigger`, so it needed a CLICK where kableExtra's opened on HOVER.
+- FIXED (Phase 14v-ii): `empirical = TRUE` with a **0/1 numeric** binary outcome silently produced a crude base of 0 (every `Emp. %`/`Emp. OR`/diff column blank). `reg_prep_binary()` recodes a 0/1 outcome to the labelled factor `c("Not <dep>", "<dep>")` with `positive_level = "<dep>"`, but `reg_empirical()` saw the RAW 0/1 data, so `as.character(0/1) == "<dep>"` never matched. `reg_empirical()` now mirrors the recode. Pre-existing (the crude columns were always 0 for a numeric 0/1 outcome), surfaced by adding CIs to those columns.
+- FIXED (Phase 14v-ii): a mean cell CI at `n = 1` (`df = n - 1 = 0`) made `qt(0.975, 0)` emit `NaN` + a "NaNs produced" warning (rule B put means on `t`). `ci_pivot()` now coerces `df <= 0` to `NA` -> a clean `NA` interval (an undefined-variance cell is left blank/uncoloured). Also retires the pre-existing `n_ci_tabvars` NaN drift.
+- FIXED (Phase 14b): the tooltip fragment join left a dangling `"f1: 5 ;"` / leading `"; f10: 5"` past 4 adjacent empty fragments — `str_replace_all(";  ; ", "; ")` matches non-overlapping, so the 3 repeats could not collapse a longer run. Latent (no cell reached 5 empties) until the 10th fragment made 9-empty runs reachable. Now an exact per-cell non-empty join.
+- FIXED (2026-07-15, CI green-up): `tab_color_legend()`'s `lang` argument silently did nothing on **Linux** (`lang="fr"` returned English) — `Sys.setenv(LANGUAGE=)` alone can't switch gettext once glibc has cached a lookup. Now flushed via `flush_gettext_cache()` before/after/on-exit. Caught only because the snapshot tests SHIP and run on CI's Linux jobs. Cannot work under `LANG=C` (gettext ignores `LANGUAGE` there) — a documented gettext rule, not a package bug.
+- FIXED (2026-07-15, CI green-up): 6 unqualified `globalVariables()` calls in `R/fmt_class.R` with `utils` declared nowhere — `pkgload::load_all()` crashed ("could not find function globalVariables") in any process without `utils` attached, e.g. a testthat parallel worker. Now `utils::globalVariables()` + `utils` in Imports. Latent since forever; surfaced by turning on `Config/testthat/parallel`.
+- FIXED (2026-07-15, CI green-up): `test-tab_logit.R` "colour_signif='ignore'" asserted a symmetric OR break (`mag > 1.16`) against the **asymmetric** `mean_ratio` scale (`under` starts at 1.5 since Phase 13a) — wrong test; failed in isolation everywhere and on macOS CI, passing elsewhere only via a leaked global scale. Now derives the threshold per direction from the scale in force and pins it.
+- **NOT a bug, but confirm the intent**: row labels are rendered with **U+202F narrow no-break spaces** in place of ASCII spaces by BOTH html engines (`"No answer"` -> `No<U+202F>answer`). Consistent across engines so it looks deliberate (keeps labels from wrapping), but it means HTML copy-paste yields NBSPs and any test comparing rendered cells to `levels()` silently matches nothing.
+- `set_color_style(custom_palette=)` (`tab_classes.R` ~L3120): length check requires 10 but the message says 11 and 11 names (`pos1..neg5, ratio`) are applied — the `ratio` slot ends up valueless, so custom palettes are broken for the ratio color. Fix by accepting length 11.
+- **FIXED (Phase 7e)**: `tab(data, >=2 row_vars, >=2 col_vars)` used to error "pct can't be recycled" for ANY `pct` (the multi×multi tables jmvtab drives). `tab()` recycles `pct` to a per-col_var vector (`pct = c(rep(pct, length(col_var)), ...)`), but `pct_vect` only broadcasts a per-col_var vector when there is exactly ONE row_var (branch B); with ≥2 row_vars it falls to the `else` stop. Fix: add a branch `is.character(pct) & length(pct) == length(col_vars)` → `rep(list(pct), length(row_vars))`. Pre-existing (reproduces pre-7d-ii on `git stash`); low impact (multi×multi + output_list); fix with the recycling code.
+- `tab()` errors on a `data.table` **input** (works on tibble/data.frame). `tab(as.data.table(gss), marital, race)` → `tab_num()` "Selections can't have missing values" from `tidyselect::eval_select(col_vars, data)` (`tab.R` ~L3203) — under a data.table input the numeric-col_var index path (`as.character(col_vars)[col_vars_num]`, `tab.R` ~L1304) yields an NA selection. Low impact (users pass tibbles/data.frames; `tab()` does its own `setDT` on a narrowed copy internally). Discovered in the Phase 6b PoC (§26). Fix belongs with the Phase 2/6 aggregate-core / col_var-classification code, not a separate pass.
+- FIXED (this session): `set_num()` wrote `display=="diff"` via `set_pct()` (should be `set_diff()`), so setting the displayed value of a diff cell went to the wrong field. Now uses `set_diff()`.
+- FIXED (workstream 5): `relabel_levels_in_varnames()` (`tab.R` ~L5592) made big weighted tables ~60× slower. Its `across(where(...))` predicate ran on **every** column with vectorised `&`/`|`, so the character branch `any(. %in% names(data))` coerced whole 8M-row numeric/factor columns to strings (~15s × 2 calls). Rewrote it to examine **only the `col_vars` targets** with short-circuit `&&`/`||` (numeric targets cost ~0); output byte-identical. 8M `tab(wt=)`: ~30s → ~0.2s; unweighted tables also faster + ~90% less memory.
+
+
+##### mirai parallel crash under load_all + `pct`/`OR` recycle warning (FIXED 2026-07-13)
+
+Two byte-identical fixes (full suite green FAIL 0 / PASS 2070, NO golden regen).
+1. **`tab(parallel=)` crashed under `devtools::load_all()`** with `object 'tab_build_one' not found`
+   whenever the call had **≥ 2 row_vars** (1 row_var stays serial below `parallel_min = 2`). Root cause:
+   the mirai daemons bind the *installed* (stale) tabxplor namespace, which lacks `tab_build_one`; an
+   installed 1.4.0 works, but dev sessions don't. Fix ([R/tab-parallel.R](R/tab-parallel.R)): new
+   `tab_dev_pkg_path()` (dev detected via the loaded namespace path + an `R/` source check) + a
+   `tab_pool_ensure()` branch that `pkgload::load_all()`s the dev source on each freshly spawned daemon
+   (once per pool, before dispatch). Inert once installed (`tab_dev_pkg_path()` → NULL). No manual pre-warm
+   needed anymore. New `test-parallel-parity.R` case locks the auto-load (parallel without `warm_pool()`).
+2. **Spurious recycle warning** `In pct == "row" & OR %in% c(...) : longer object length is not a
+   multiple of shorter object length` on multi-row_var × multi-col_var tables whose counts don't divide
+   (e.g. 3 × 4), independent of OR/parallel/`levels`. Root cause: [tab.R:1341](R/tab.R#L1341) combined the
+   per-col_var `pct` (length ncolvars) with the per-row_var `OR` (length nrowvars) via vectorised `&` —
+   the twin of the Phase 9a L1859 fix, missed. Fix: `all(pct == "row") && all(OR %in% c(...))`
+   (byte-identical: `all(A & B) ≡ all(A) && all(B)` for any lengths, minus the recycle).
+
+##### colour `color_all_signif` ratio channel + significance-stars UX (FIXED 2026-07-13)
+
+Interrupted Phase 12 to fix two colour/significance defects + redesign stars. Full suite green
+(FAIL 0 / PASS 2068); goldens byte-identical (RDS reverted via stars-pinned CI fixtures; one conscious
+display-snapshot regen for the new star padding).
+
+1. **`color_all_signif` mis-coloured the `ratio` channel** ([R/fmt_class.R](R/fmt_class.R)
+   `fmt_color_plan()`). The "guaranteed effect" branch set `score` = the raw **difference** CI bound
+   (centre 0, ~0.05); the ratio channel then folded it around centre 1 (`1/0.05 ≈ 20`) → nearly every
+   significant cell, INCLUDING over-represented ones, got the strongest *under-represented* colour.
+   Fix: compute the guaranteed magnitude on the measure's OWN scale — `ratio` (no native CI) converts
+   the shared diff floor to a guaranteed ratio `1 + (get_ratio − 1)·(guar_diff/get_diff)` (centre 1);
+   `diff`/`or` unchanged. Consistency now provable: 0 direction-mismatches across the reported shapes
+   (a `test-color-engine.R` slot-lock encodes it). The reported "scalar `color="diff"` colours nothing"
+   was NOT a separate bug — the two-channel case merely looked coloured because of the flooded ratio
+   background; the diff text channel was always correct, and the two cases are now consistent.
+2. **Significance stars → opt-in, default off, right-padded, no tooltip leak.** Stars were a global
+   option (default TRUE) appended by `format()` to *every* field (so `tab_kable` tooltips leaked stars
+   onto pct/n/rr/…), unaligned. New design (STORAGE-driven; `pvalue` feeds ONLY stars, colour reads the
+   bounds): `options(tabxplor.stars)` default → **FALSE** ([R/utils.R](R/utils.R)) so a plain `tab()`
+   stores no `pvalue`; `format(x, stars = FALSE)` default — the MAIN sites (`pillar_shaft`, `tab_kable`,
+   `tab_md`, `tab_xl` numFmt fold) pass `stars = TRUE`, tooltips keep the default → **leak fixed for
+   free**; `format()` **right-pads** the star field to the column-max width so numbers stay aligned
+   (`str_trim(side="left")` in `tab_md`). `tab_reg()`/`tab_logit()`/`multi_logit()` gained
+   `stars = TRUE` (strip the `pvalue` post-build when `FALSE`) so regression tables keep stars by
+   default. `test-stars.R` (16) locks it. The `*** but no colour` complaint was a symptom of always-on
+   stars: under `color_all_signif` a significant cell whose GUARANTEED effect is below the first break
+   is correctly starred-but-uncoloured — legitimate, and now off by default.
+
+Flagged out of scope: weight column literally named `"wt"` → `num_moment_scan` name-collision crash;
+`contrib` + `color_all_signif` colours nothing (contrib has no diff CI — pre-existing gap). (The
+multi-row_var `pct`/`OR` length-mismatch warning + the mirai load_all crash were FIXED 2026-07-13, above.)
+
+##### contrib rendering crashes (Phase 10j-B) (FIXED 2026-07-12)
+Fixing the flagged `color="contrib"` + `comp="all"` colour crash surfaced THREE distinct render bugs (all now fixed, golden-locked, byte-identical  to every working path):
+  1. **Colour engine** — `get_mean_contrib()` returned length 0 under `comp="all"` when there is NO total
+     table (no tab_vars), so `fmt_color_plan()`'s `get_ctr(x) / get_mean_contrib(x)` errored
+     `false must have size N, not size 0` (both `tab_kable`/`tab_xl`). Fix: new shared `grand_totrow()`
+     ([R/fmt_class.R](R/fmt_class.R)) = `is_totrow & is_tottab`, **degrading to `is_totrow` when there is
+     no total-table axis** so a single table is its own total table; used by BOTH `get_mean_contrib()`
+     (read) and `chi2_write_contrib()`'s seed protection ([R/tab.R](R/tab.R)) so the mean-contribution seed
+     is stored where it is read. `get_mean_contrib()` also never returns length 0 now (graceful → NA).
+  2. **Kable tooltip** — `cond_ctr` ([R/tab_classes.R](R/tab_classes.R)) did `get_pct(x) == 1` on the Total
+     column (whose `pct` is NA while `ctr` is written), yielding NA → `if (any(cond_ctr))` crashed **any**
+     contrib table via `tab_kable(tooltip=TRUE)`, incl. the default `comp="tab"`. Fix: NA-safe guard
+     (mirrors the sibling `cond_pct`).
+  3. **Markdown** — `tab_md()`'s tab_var-blanking loop ([R/tab_md.R](R/tab_md.R)) did `vals[i]==vals[i-1]`
+     without NA-safety, crashing on the NA tab_var of a **materialised p-value row** → **any**
+     `chi2=TRUE` + tab_vars table via `tab_md`. Fix: blank NA/repeat cells NA-safely (kable already tolerated).
+  **Semantics confirmed (the maintainer's note):** the code DOES implement the wanted behaviour — `comp="all"` ungroups the table ([tab.R:5557](R/tab.R#L5557)) so chi2 + contributions are computed on the WHOLE table  (all row_var × tab_var level combinations, referenced to the grand total); `comp="tab"` keeps per-subtable  grouping so a chi2 + contributions are computed PER subtable (each vs its own total row). Coverage added: `c_contrib_all` / `c_contrib_all_notab` colour goldens + an exporter render-no-crash test (`test-export.R`).
 
 ##### CI green-up (2026-07-15) — 3 causes, none R-version-related
 
@@ -2451,146 +2706,6 @@ Two of this section's own findings are settled by that, and both should be read 
   **"Nuances de bleu"**, and the file runs **43 pass / 0 skip** — the FR tests actually exercise here
   rather than passing vacuously. **Linux-only defects now surface before CI.** (The `LANG=C` capability
   probe still governs: under `R CMD check`, which forces `LANGUAGE=en`, they skip by design.)
-
-#### Last Phase b – simplify main user-facing functions roxygen documentation
-
-Simplify tab() and other main functions documentation, to make it more easily understandable and more helpful to students that are not statistical experts and may have difficulties with programming.
-
-#### Last Phase c – Create several vignettes
-
-The current vignette should be the basis for non-expert users, while also permitting expert users to understand what this package is really interesting for.
-
-All the part about "programming with tabxplor" and its vctrs fields should come in their own vignette, and it must be uptaded and extended.
-
-tab_logit should come with it’s own vignette.
-
-
-#### Last Phase d – full `pkgdown` documentation + test coverage
-
-Add test coverage to github actions.
-
-Implement a full pkgdown documentation.
-- Where ? On github pages ? Elsewhere with tidyverse ecosystem provided servers ?
-
-
-
-
-### Reference — bugs, benchmarks, perf
-
-#### Discovered bugs
-
-- **A pre-existing golden drift, now baked in.** `n_ci_tabvars.rds` / `n_ci_tabvars_all.rds` have a
-   `ci_sup` `NA` where the code now produces `NaN`. It **reproduces on unmodified HEAD** (so it is not
-   Phase 14's), and `expect_equal`'s tolerance treats NA and NaN as equal, which is why no test ever
-   saw it. Regenerating the goldens necessarily wrote it in. Worth a look: a NaN there may be a real
-   edge in the mean-CI path (n≤1?), or merely cosmetic.
-
-- **NEW (2026-07-16, seen live in jamovi on WSL; COSMETIC, pre-existing — not a migration issue).**
-  A live `jmvtab` session prints, 3×, while the user adds the analysis and picks variables:
-  *"! tabxplor formatting and colors skipped: the table has no tabxplor_fmt columns (not a
-  tabxplor table). ℹ Rendering the plain table instead."* — the Phase 10c `tab_render_vars()`
-  degrade path ([R/tab.R:2494](R/tab.R#L2494)). **The real tables are unaffected** (colours render
-  correctly); this fires only on the transient degenerate shapes jamovi passes mid-selection.
-  Reproduced (scripts in the C3 session; `jmvtab_build()` + `tab_kable(engine="html")`):
-  + **`data` with 1 column, no vars selected** → emits the message **even though the built table
-    HAS an fmt column** (`fmt=1/2`) ⇒ the degrade is reached on some *other* table inside
-    `tab_kable`'s prep than the one returned, and **the message is misleading, not just noisy**.
-    Start at `tab_export_prep()` / `tab_materialize_extras()`, not at `tab_render_vars()`.
-  + **0-row `data` + named vars** → hard **ERROR** `"data is of length 0 (possibly after filter or
-    na = 'drop_all')"` from `tab_plain()` via `purrr::pmap()` ([R/tab.R:1814](R/tab.R#L1814)).
-    A 0-row table should degrade gracefully, not abort.
-  + NOT the cause (each tested and cleared): the tier-3 **carrier** cache (all of fresh build /
-    exact-tuple hit / digits re-apply / colour re-apply / `saveRDS` round-trip keep `fmt=4/5`);
-    empty `row_vars`/`col_vars` against full data; `jmvtab_build()` itself.
-  Fix in whichever phase next touches the exporter prep. Add the degenerate shapes to
-  `test-edge-cases.R`.
-
-In-code these are tagged for grep: `# KNOWN-BUG:` (bugs below), `# FIXME:` / `# FIXME(clarify):` / `# FIXME(future):` (suspect logic or future work, several tied to the Phase 5 color work), `# OBSOLETE:` (dead-code banners, e.g. the stale `tab_xl` duplicate). Fix each bug inside the phase that rewrites the relevant code, not as a separate pass.
-
-- FIXED (Phase 1a): `fmt()` public constructor cast `totcol` into `refcol` (the `refcol` argument was silently ignored). Now casts `refcol`. Low impact (refcol is normally set internally).
-- FIXED (Phase 7g-iii, golden-locked): two latent `ref` bugs surfaced by the reference picker. (1) `diff_index()` matched a level label as a REGEX, so a metacharacter label (e.g. `"$25000 or more"`) silently mismatched (the reported "picking the 2nd row_var does nothing" — `rincome` has `$` levels) and a substring label multi-matched — now EXACT-match-first, then regex. (2) `resolve_ref_vector()`'s `length(ref)==1` early return recycled even a NAMED length-1 ref, so `c(race = "Black")` leaked to every col_var — now only an UNNAMED length-1 recycles; a named one is name-matched. Both byte-identical on existing goldens (the goldens' refs are `first`/`tot`/non-substring labels).
-- FIXED (Phase 6e, golden-locked; hardened Phase 7d-i): `tab_num(..., <tab_vars>, ci="cell")` used to error ("some columns don't belong to the data.table: [tab_var]") in the `tot="no"` grand-total-only grouping-set / `na="keep"` reorder path. 6e made the grand total a length-1 list so `num_rollup()` keeps every tab_var present; 7d-i added a defensive `intersect(tab_vars, names(tabs_tot))` guard at the reorder + an `expect_no_error` regression in `test-num-fuse-parity.R`. Locked by golden `n_ci_tabvars` / `n_ci_tabvars_all`, both `comp` modes.
-- FIXED (Phase 14b): `tab_kable(engine = "html", popover = TRUE)` rendered its own escaped ATTRIBUTE STRING as the popover content (`data-content="data-toggle=&quot;popover&quot;..."`). `tab_kable_print_tooltip(popover = TRUE)` returned `kableExtra::spec_popover()`'s attributes from a *text* builder, and the html engine wrapped them again. Attributes now live only in `tab_tooltip_attrs()`; the arg is deleted. The same builder also ends a second drift: the html popover omitted `data-trigger`, so it needed a CLICK where kableExtra's opened on HOVER.
-- FIXED (Phase 14b): the tooltip fragment join left a dangling `"f1: 5 ;"` / leading `"; f10: 5"` past 4 adjacent empty fragments — `str_replace_all(";  ; ", "; ")` matches non-overlapping, so the 3 repeats could not collapse a longer run. Latent (no cell reached 5 empties) until the 10th fragment made 9-empty runs reachable. Now an exact per-cell non-empty join.
-- FIXED (2026-07-15, CI green-up): `tab_color_legend()`'s `lang` argument silently did nothing on **Linux** (`lang="fr"` returned English) — `Sys.setenv(LANGUAGE=)` alone can't switch gettext once glibc has cached a lookup. Now flushed via `flush_gettext_cache()` before/after/on-exit. Caught only because the snapshot tests SHIP and run on CI's Linux jobs. Cannot work under `LANG=C` (gettext ignores `LANGUAGE` there) — a documented gettext rule, not a package bug.
-- FIXED (2026-07-15, CI green-up): 6 unqualified `globalVariables()` calls in `R/fmt_class.R` with `utils` declared nowhere — `pkgload::load_all()` crashed ("could not find function globalVariables") in any process without `utils` attached, e.g. a testthat parallel worker. Now `utils::globalVariables()` + `utils` in Imports. Latent since forever; surfaced by turning on `Config/testthat/parallel`.
-- FIXED (2026-07-15, CI green-up): `test-tab_logit.R` "colour_signif='ignore'" asserted a symmetric OR break (`mag > 1.16`) against the **asymmetric** `mean_ratio` scale (`under` starts at 1.5 since Phase 13a) — wrong test; failed in isolation everywhere and on macOS CI, passing elsewhere only via a leaked global scale. Now derives the threshold per direction from the scale in force and pins it.
-- **NOT a bug, but confirm the intent**: row labels are rendered with **U+202F narrow no-break spaces** in place of ASCII spaces by BOTH html engines (`"No answer"` -> `No<U+202F>answer`). Consistent across engines so it looks deliberate (keeps labels from wrapping), but it means HTML copy-paste yields NBSPs and any test comparing rendered cells to `levels()` silently matches nothing.
-- `set_color_style(custom_palette=)` (`tab_classes.R` ~L3120): length check requires 10 but the message says 11 and 11 names (`pos1..neg5, ratio`) are applied — the `ratio` slot ends up valueless, so custom palettes are broken for the ratio color. Fix by accepting length 11.
-- **FIXED (Phase 7e)**: `tab(data, >=2 row_vars, >=2 col_vars)` used to error "pct can't be recycled" for ANY `pct` (the multi×multi tables jmvtab drives). `tab()` recycles `pct` to a per-col_var vector (`pct = c(rep(pct, length(col_var)), ...)`), but `pct_vect` only broadcasts a per-col_var vector when there is exactly ONE row_var (branch B); with ≥2 row_vars it falls to the `else` stop. Fix: add a branch `is.character(pct) & length(pct) == length(col_vars)` → `rep(list(pct), length(row_vars))`. Pre-existing (reproduces pre-7d-ii on `git stash`); low impact (multi×multi + output_list); fix with the recycling code.
-- `tab()` errors on a `data.table` **input** (works on tibble/data.frame). `tab(as.data.table(gss), marital, race)` → `tab_num()` "Selections can't have missing values" from `tidyselect::eval_select(col_vars, data)` (`tab.R` ~L3203) — under a data.table input the numeric-col_var index path (`as.character(col_vars)[col_vars_num]`, `tab.R` ~L1304) yields an NA selection. Low impact (users pass tibbles/data.frames; `tab()` does its own `setDT` on a narrowed copy internally). Discovered in the Phase 6b PoC (§26). Fix belongs with the Phase 2/6 aggregate-core / col_var-classification code, not a separate pass.
-- FIXED (this session): `set_num()` wrote `display=="diff"` via `set_pct()` (should be `set_diff()`), so setting the displayed value of a diff cell went to the wrong field. Now uses `set_diff()`.
-- FIXED (workstream 5): `relabel_levels_in_varnames()` (`tab.R` ~L5592) made big weighted tables ~60× slower. Its `across(where(...))` predicate ran on **every** column with vectorised `&`/`|`, so the character branch `any(. %in% names(data))` coerced whole 8M-row numeric/factor columns to strings (~15s × 2 calls). Rewrote it to examine **only the `col_vars` targets** with short-circuit `&&`/`||` (numeric targets cost ~0); output byte-identical. 8M `tab(wt=)`: ~30s → ~0.2s; unweighted tables also faster + ~90% less memory.
-
-
-##### mirai parallel crash under load_all + `pct`/`OR` recycle warning (FIXED 2026-07-13)
-
-Two byte-identical fixes (full suite green FAIL 0 / PASS 2070, NO golden regen).
-1. **`tab(parallel=)` crashed under `devtools::load_all()`** with `object 'tab_build_one' not found`
-   whenever the call had **≥ 2 row_vars** (1 row_var stays serial below `parallel_min = 2`). Root cause:
-   the mirai daemons bind the *installed* (stale) tabxplor namespace, which lacks `tab_build_one`; an
-   installed 1.4.0 works, but dev sessions don't. Fix ([R/tab-parallel.R](R/tab-parallel.R)): new
-   `tab_dev_pkg_path()` (dev detected via the loaded namespace path + an `R/` source check) + a
-   `tab_pool_ensure()` branch that `pkgload::load_all()`s the dev source on each freshly spawned daemon
-   (once per pool, before dispatch). Inert once installed (`tab_dev_pkg_path()` → NULL). No manual pre-warm
-   needed anymore. New `test-parallel-parity.R` case locks the auto-load (parallel without `warm_pool()`).
-2. **Spurious recycle warning** `In pct == "row" & OR %in% c(...) : longer object length is not a
-   multiple of shorter object length` on multi-row_var × multi-col_var tables whose counts don't divide
-   (e.g. 3 × 4), independent of OR/parallel/`levels`. Root cause: [tab.R:1341](R/tab.R#L1341) combined the
-   per-col_var `pct` (length ncolvars) with the per-row_var `OR` (length nrowvars) via vectorised `&` —
-   the twin of the Phase 9a L1859 fix, missed. Fix: `all(pct == "row") && all(OR %in% c(...))`
-   (byte-identical: `all(A & B) ≡ all(A) && all(B)` for any lengths, minus the recycle).
-
-##### colour `color_all_signif` ratio channel + significance-stars UX (FIXED 2026-07-13)
-
-Interrupted Phase 12 to fix two colour/significance defects + redesign stars. Full suite green
-(FAIL 0 / PASS 2068); goldens byte-identical (RDS reverted via stars-pinned CI fixtures; one conscious
-display-snapshot regen for the new star padding).
-
-1. **`color_all_signif` mis-coloured the `ratio` channel** ([R/fmt_class.R](R/fmt_class.R)
-   `fmt_color_plan()`). The "guaranteed effect" branch set `score` = the raw **difference** CI bound
-   (centre 0, ~0.05); the ratio channel then folded it around centre 1 (`1/0.05 ≈ 20`) → nearly every
-   significant cell, INCLUDING over-represented ones, got the strongest *under-represented* colour.
-   Fix: compute the guaranteed magnitude on the measure's OWN scale — `ratio` (no native CI) converts
-   the shared diff floor to a guaranteed ratio `1 + (get_ratio − 1)·(guar_diff/get_diff)` (centre 1);
-   `diff`/`or` unchanged. Consistency now provable: 0 direction-mismatches across the reported shapes
-   (a `test-color-engine.R` slot-lock encodes it). The reported "scalar `color="diff"` colours nothing"
-   was NOT a separate bug — the two-channel case merely looked coloured because of the flooded ratio
-   background; the diff text channel was always correct, and the two cases are now consistent.
-2. **Significance stars → opt-in, default off, right-padded, no tooltip leak.** Stars were a global
-   option (default TRUE) appended by `format()` to *every* field (so `tab_kable` tooltips leaked stars
-   onto pct/n/rr/…), unaligned. New design (STORAGE-driven; `pvalue` feeds ONLY stars, colour reads the
-   bounds): `options(tabxplor.stars)` default → **FALSE** ([R/utils.R](R/utils.R)) so a plain `tab()`
-   stores no `pvalue`; `format(x, stars = FALSE)` default — the MAIN sites (`pillar_shaft`, `tab_kable`,
-   `tab_md`, `tab_xl` numFmt fold) pass `stars = TRUE`, tooltips keep the default → **leak fixed for
-   free**; `format()` **right-pads** the star field to the column-max width so numbers stay aligned
-   (`str_trim(side="left")` in `tab_md`). `tab_reg()`/`tab_logit()`/`multi_logit()` gained
-   `stars = TRUE` (strip the `pvalue` post-build when `FALSE`) so regression tables keep stars by
-   default. `test-stars.R` (16) locks it. The `*** but no colour` complaint was a symptom of always-on
-   stars: under `color_all_signif` a significant cell whose GUARANTEED effect is below the first break
-   is correctly starred-but-uncoloured — legitimate, and now off by default.
-
-Flagged out of scope: weight column literally named `"wt"` → `num_moment_scan` name-collision crash;
-`contrib` + `color_all_signif` colours nothing (contrib has no diff CI — pre-existing gap). (The
-multi-row_var `pct`/`OR` length-mismatch warning + the mirai load_all crash were FIXED 2026-07-13, above.)
-
-##### contrib rendering crashes (Phase 10j-B) (FIXED 2026-07-12)
-Fixing the flagged `color="contrib"` + `comp="all"` colour crash surfaced THREE distinct render bugs (all now fixed, golden-locked, byte-identical  to every working path):
-  1. **Colour engine** — `get_mean_contrib()` returned length 0 under `comp="all"` when there is NO total
-     table (no tab_vars), so `fmt_color_plan()`'s `get_ctr(x) / get_mean_contrib(x)` errored
-     `false must have size N, not size 0` (both `tab_kable`/`tab_xl`). Fix: new shared `grand_totrow()`
-     ([R/fmt_class.R](R/fmt_class.R)) = `is_totrow & is_tottab`, **degrading to `is_totrow` when there is
-     no total-table axis** so a single table is its own total table; used by BOTH `get_mean_contrib()`
-     (read) and `chi2_write_contrib()`'s seed protection ([R/tab.R](R/tab.R)) so the mean-contribution seed
-     is stored where it is read. `get_mean_contrib()` also never returns length 0 now (graceful → NA).
-  2. **Kable tooltip** — `cond_ctr` ([R/tab_classes.R](R/tab_classes.R)) did `get_pct(x) == 1` on the Total
-     column (whose `pct` is NA while `ctr` is written), yielding NA → `if (any(cond_ctr))` crashed **any**
-     contrib table via `tab_kable(tooltip=TRUE)`, incl. the default `comp="tab"`. Fix: NA-safe guard
-     (mirrors the sibling `cond_pct`).
-  3. **Markdown** — `tab_md()`'s tab_var-blanking loop ([R/tab_md.R](R/tab_md.R)) did `vals[i]==vals[i-1]`
-     without NA-safety, crashing on the NA tab_var of a **materialised p-value row** → **any**
-     `chi2=TRUE` + tab_vars table via `tab_md`. Fix: blank NA/repeat cells NA-safely (kable already tolerated).
-  **Semantics confirmed (the maintainer's note):** the code DOES implement the wanted behaviour — `comp="all"` ungroups the table ([tab.R:5557](R/tab.R#L5557)) so chi2 + contributions are computed on the WHOLE table  (all row_var × tab_var level combinations, referenced to the grand total); `comp="tab"` keeps per-subtable  grouping so a chi2 + contributions are computed PER subtable (each vs its own total row). Coverage added: `c_contrib_all` / `c_contrib_all_notab` colour goldens + an exporter render-no-crash test (`test-export.R`).
 
 
 

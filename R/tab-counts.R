@@ -315,6 +315,9 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
     other_if_less_than = 0, other_level = "Others",
     ref = ref, ref2 = ref2, comp = comp, ci = ci, conf_level = conf_level, stars = stars,
     method_cell = method_cell, method_diff = method_diff,
+    # 14v-ii: the numeric/ratio CI methods are inert for count data (factor col_vars, no ratio CI
+    # reachable here) but the shared ctx / ci_settings expect them -- pass the package defaults.
+    method_ratio = "katz", method_mean_diff = "welch", method_mean_ratio = "robust",
     totaltab = totaltab, totaltab_name = totaltab_name, totrow = totrow, totcol = totcol,
     total_names = total_names, add_n = add_n, add_pct = add_pct, digits = digits,
     subtext = subtext, by_table = FALSE,

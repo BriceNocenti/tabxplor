@@ -264,6 +264,9 @@ wilson_bounds <- function(p, n, z) {
 # z-based (df = Inf) and t-based (Welch df) means, and AC/Wald proportion diffs (the caller
 # builds the adjusted `estimate`/`se`). `want_p = FALSE` skips significance (returns NA).
 ci_pivot <- function(estimate, se, df = Inf, conf_level = 0.95, want_p = TRUE) {
+  # df <= 0 (e.g. a mean cell with n = 1 -> df = n - 1 = 0) has no defined t interval: coerce to NA so
+  # qt/pt return NA cleanly (df = 0 would be NaN + a warning) -> such a cell is left uncoloured/blank.
+  df     <- ifelse(df > 0, df, NA_real_)
   q      <- stats::qt(1 - (1 - conf_level) / 2, df)
   half   <- q * se
   pvalue <- if (want_p) 2 * stats::pt(-abs(estimate / se), df) else NA_real_
@@ -377,12 +380,77 @@ ci_katz_rr <- function(p1, n1, p2, n2, conf_level = 0.95, want_p = TRUE) {
   list(inf = inf, sup = sup, pvalue = pvalue)
 }
 
-# Mean-difference CI + inclusion significance (Welch-t pivot when stars are on, z otherwise).
-# Weighted rule (§14): weighted means/variances, unweighted n1/n2.
-ci_mean_diff2 <- function(m1, v1, n1, m2, v2, n2, conf_level = 0.95, want_p = TRUE) {
-  se <- sqrt(v1 / n1 + v2 / n2)
-  df <- if (want_p) se^4 / ((v1 / n1)^2 / (n1 - 1) + (v2 / n2)^2 / (n2 - 1)) else Inf
+# Mean-difference CI + inclusion significance. Rule B (14v-ii, decisions §48): the reference
+# distribution is a property of the METHOD, not of the stars toggle -- a mean variance is always
+# ESTIMATED, so this is a Student t with the method's own df. `method = "welch"` (default) uses each
+# group's own variance + the Welch-Satterthwaite df (heteroscedastic, tab()'s assumption-light default);
+# `method = "student"` uses the pooled variance + df = n1+n2-2 (homoscedastic = an OLS two-group
+# coefficient CI). want_p gates ONLY whether the inversion p-value is computed; the df (hence the
+# bracket width) no longer flips with stars. Weighted rule (§14): weighted means/variances, unweighted
+# n1/n2.
+ci_mean_diff2 <- function(m1, v1, n1, m2, v2, n2, conf_level = 0.95, want_p = TRUE,
+                          method = "welch") {
+  if (identical(method, "student")) {
+    sp2 <- ((n1 - 1) * v1 + (n2 - 1) * v2) / (n1 + n2 - 2)
+    se  <- sqrt(sp2 * (1 / n1 + 1 / n2))
+    df  <- n1 + n2 - 2
+  } else {
+    se <- sqrt(v1 / n1 + v2 / n2)
+    df <- se^4 / ((v1 / n1)^2 / (n1 - 1) + (v2 / n2)^2 / (n2 - 1))
+  }
   ci_pivot(m1 - m2, se, df = df, conf_level = conf_level, want_p = want_p)
+}
+
+# MULTIPLICATIVE shape, ratio of MEANS (14v-ii, decisions §48): exp(log(m1/m2) +/- q * se_logR), the
+# ratio counterpart of ci_mean_diff2. Three variance assumptions (`method`) spanning the dispersion
+# ladder a Poisson / quasi-Poisson regression walks -- all closed-form from the two groups' means /
+# variances / bases, reproducing the matching regression exactly:
+#   robust       each group's OWN empirical variance (delta method on log = modified/robust Poisson,
+#                GEE sandwich): z (asymptotic, no exact small-sample t).
+#   poisson      naive Var = mu, so se_logR = sqrt(1/S1 + 1/S2), S = m*n the group total count: z.
+#   quasipoisson Poisson se * sqrt(phi), phi the pooled two-group Pearson dispersion (= quasi-Poisson
+#                regression's se): Student t(n1+n2-2). Auto-degrades to the naive Poisson when phi ~= 1.
+# Rule B (§48): the df is the method's own, not stars-gated. Neutral 1 on the ratio scale
+# (ci_type = "ratio"); dual = the log-ratio Wald/t test, so bracket <-> stars stay duals. Weighted
+# rule (§14): weighted means/variances, unweighted n1/n2. WARNING: undefined at m <= 0 -> NA bounds/p
+# (an empty group is left uncoloured/unstarred).
+ci_mean_ratio <- function(m1, v1, n1, m2, v2, n2, conf_level = 0.95, want_p = TRUE,
+                          method = "robust") {
+  lr <- log(m1 / m2)
+  se <- switch(
+    method,
+    "robust"       = sqrt((v1 / n1) / m1^2 + (v2 / n2) / m2^2),
+    "poisson"      = sqrt(1 / (m1 * n1) + 1 / (m2 * n2)),
+    "quasipoisson" = {
+      phi <- ((n1 - 1) * v1 / m1 + (n2 - 1) * v2 / m2) / (n1 + n2 - 2)
+      sqrt(1 / (m1 * n1) + 1 / (m2 * n2)) * sqrt(phi)
+    },
+    stop("unknown method_mean_ratio: ", method)
+  )
+  df  <- if (identical(method, "quasipoisson")) n1 + n2 - 2 else Inf
+  res <- ci_pivot(lr, se, df = df, conf_level = conf_level, want_p = want_p)
+  inf <- exp(res$inf); sup <- exp(res$sup)
+  bad <- !is.finite(lr) | !is.finite(se) | se == 0
+  inf[bad] <- NA_real_; sup[bad] <- NA_real_; res$pvalue[bad] <- NA_real_
+  list(inf = inf, sup = sup, pvalue = res$pvalue)
+}
+
+# MULTIPLICATIVE shape, ODDS RATIO from a 2x2 (14v-ii): Woolf's log-OR Wald interval, the crude-OR
+# counterpart used by the empirical binomial column (dual = the log-OR Wald test -> bracket <-> stars
+# duals). a/b = the level's (positive, negative) counts, c/d = the reference's. Weighted rule (§14):
+# the caller builds the cells from the WEIGHTED proportion x the UNWEIGHTED base (a = p1*n1,
+# b = (1-p1)*n1, ...). z-based (an OR has no exact small-sample t). WARNING: undefined when any cell
+# is 0 (log 0 / 1/0) -> NA bounds/p.
+ci_or <- function(a, b, c, d, conf_level = 0.95, want_p = TRUE) {
+  lor <- log((a * d) / (b * c))
+  se  <- sqrt(1 / a + 1 / b + 1 / c + 1 / d)
+  z   <- zscore_formula(conf_level)
+  inf <- exp(lor - z * se); sup <- exp(lor + z * se)
+  pvalue <- if (want_p) 2 * stats::pnorm(-abs(lor / se)) else vctrs::vec_recycle(NA_real_, length(lor))
+  pvalue <- vctrs::vec_recycle(pvalue, length(lor))
+  bad <- !is.finite(lor) | !is.finite(se) | se == 0
+  inf[bad] <- NA_real_; sup[bad] <- NA_real_; pvalue[bad] <- NA_real_
+  list(inf = inf, sup = sup, pvalue = pvalue)
 }
 
 

@@ -742,6 +742,24 @@ reg_fit <- function(data, dependent, predictors, family, design_spec, do_exp,
     td$std.error <- td$std.error * abs(mult_vec)
   }
 
+  # 14v-ii over-dispersion (decisions §48): an unweighted Poisson / grouped-binomial MLE fit reports
+  # naive (fixed-dispersion) SEs. Scale them by sqrt(phi) (phi = Pearson dispersion) so the Wald CI +
+  # stars match a quasi-Poisson / quasi-binomial fit, while the MLE fit keeps its likelihood for the
+  # AIC / McFadden / LR / BIC footer. Auto-degrades to naive when phi ~= 1. Bernoulli-binary dispersion
+  # is not identifiable (reg_dispersion -> NA) and gaussian has no dispersion, so both are untouched.
+  over_disp <- !weighted && (family == "poisson" || grouped)
+  phi       <- if (over_disp) reg_dispersion(fit) else NA_real_
+  scaled    <- over_disp && !is.na(phi) && phi > 0
+  if (scaled) {
+    td$std.error <- td$std.error * sqrt(phi)
+    if (phi > 1.5) cli::cli_warn(c(
+      "!" = paste0("Over-dispersion (Pearson dispersion = {signif(phi, 3)}",
+                   "{if (phi > 2) ', strong' else ''}); standard errors are scaled by sqrt(dispersion) ",
+                   "(quasi-{family}-like)."),
+      "i" = "The footer reports the dispersion; use {.code family = \"quasipoisson\"} for the fully quasi fit."
+    ))
+  }
+
   use_profile <- method == "profile" && !weighted && family %in% c("binomial", "poisson")
   if (method == "profile" && weighted) {
     cli::cli_inform(c("!" = paste0("Profile-likelihood intervals are not defined for survey-weighted ",
@@ -759,12 +777,18 @@ reg_fit <- function(data, dependent, predictors, family, design_spec, do_exp,
     lrp <- reg_lr_pvalues(fit)
     td$p.value <- unname(lrp[match(td$term, names(lrp))])
   } else {
-    # z for fixed-dispersion glm (binomial/poisson, unweighted); else t (lm, quasi*, weighted svyglm)
-    disp_known <- !weighted && family %in% c("binomial", "poisson")
+    # z for fixed-dispersion glm (binomial/poisson, unweighted); else t on df.residual (lm, quasi*,
+    # weighted svyglm, OR a 14v-ii phi-scaled poisson/grouped-binomial -- an estimated dispersion moves
+    # the reference off z onto t, matching a quasi fit).
+    disp_known <- !weighted && family %in% c("binomial", "poisson") && !scaled
     crit <- if (disp_known) stats::qnorm(1 - (1 - conf_level) / 2)
             else            stats::qt(1 - (1 - conf_level) / 2, df = stats::df.residual(fit))
     lo <- td$estimate - crit * td$std.error
     hi <- td$estimate + crit * td$std.error
+    # 14v-ii: with the SE scaled and the t reference, recompute the Wald p from est/se so p <-> CI <->
+    # stars stay duals (broom's td$p.value was the un-scaled fixed-dispersion model p).
+    if (scaled)
+      td$p.value <- 2 * stats::pt(-abs(td$estimate / td$std.error), df = stats::df.residual(fit))
   }
 
   est <- td$estimate
@@ -873,6 +897,11 @@ reg_empirical <- function(data, fac_preds, dependent, family, positive_level, wt
   w  <- if (is.null(wt)) rep(1, nrow(data)) else as.numeric(data[[wt]])
   yv <- data[[dependent]]
   bin <- family == "binomial"
+  # A 0/1 numeric outcome is fit as the labelled factor c("Not <dep>", "<dep>") with positive_level =
+  # "<dep>" (reg_prep_binary). reg_empirical sees the RAW data, so mirror that recode -- else
+  # as.character(0/1) never matches the label and the crude base is silently 0 (pre-14v-ii bug).
+  if (bin && is.numeric(yv) && all(stats::na.omit(yv) %in% c(0, 1)))
+    yv <- factor(yv, levels = c(0, 1), labels = c(paste0("Not ", dependent), dependent))
   if (bin) pos  <- as.character(yv) == positive_level else ynum <- as.numeric(yv)
   purrr::map_dfr(fac_preds, function(p) {
     x  <- data[[p]]
@@ -886,36 +915,45 @@ reg_empirical <- function(data, fac_preds, dependent, family, positive_level, wt
       } else {
         n1 <- sum(m); wn <- sum(w[m]); s1 <- sum(w[m] * ynum[m]); s2 <- sum(w[m] * ynum[m]^2)
         mean_l <- s1 / wn
-        # match tab()/num_derive_stats: unweighted -> stats::var (n-1), weighted -> ML (s2/wn - mean^2)
-        var_l  <- if (family == "gaussian") {
+        # match tab()/num_derive_stats: unweighted -> stats::var (n-1), weighted -> ML (s2/wn - mean^2).
+        # 14v-ii: poisson gets the count variance too (drives its crude rate-ratio CI, ci_mean_ratio).
+        var_l  <- if (family %in% c("gaussian", "poisson")) {
           if (is.null(wt)) (s2 - s1^2 / n1) / (n1 - 1) else round(s2 / wn - (s1 / wn)^2, 10)
         } else NA_real_
         list(base = mean_l, ratio_raw = mean_l, var = var_l, n = n1)
       }
     })
     ref <- per[[1]]
+    # 14v-ii: the reference level's stats (constant within a var), so reg_empirical_columns can build the
+    # crude CI of each level vs its reference with the same engines tab()/the model use.
     tibble::tibble(
       var = p, level = lv,
       emp_base  = purrr::map_dbl(per, "base"),
       emp_diff  = purrr::map_dbl(per, ~ .$base - ref$base),
       emp_ratio = purrr::map_dbl(per, ~ .$ratio_raw / ref$ratio_raw),
       emp_var   = purrr::map_dbl(per, "var"),
-      emp_n     = purrr::map_int(per, ~ as.integer(.$n))
+      emp_n     = purrr::map_int(per, ~ as.integer(.$n)),
+      emp_ref_base = ref$base, emp_ref_var = ref$var, emp_ref_n = as.integer(ref$n)
     )
   })
 }
 
 # Two fmt columns aligned to the skeleton (base descriptive + crude effect mirroring the model's
 # measure & colour scale), for reg_build to prepend before the model column. Numeric predictors / the
-# Constant -> empty cells; reference levels -> neutral (diff 0 / OR 1) + in_refrow. Descriptive: no
-# CI / stars. Per (family, effect):
-#   binomial coef : Emp. % (colour = risk-diff) + Emp. OR (colour = ratio, like the model OR).
+# Constant -> empty cells; reference levels -> neutral (diff 0 / OR 1) + in_refrow. 14v-ii: each column
+# now carries a crude CI + pvalue computed with the SAME method as the model (so crude and adjusted are
+# directly comparable) and is coloured by significance (the caller's `color_signif`, like the model
+# columns) -- except the descriptive Emp. mean, which stays uncoloured (its CI feeds only stars/tooltip).
+# Per (family, effect):
+#   binomial coef : Emp. % (risk-diff colour, Newcombe CI) + Emp. OR (ratio colour, Woolf log-OR CI).
 #   binomial ame  : Emp. % + Emp. diff (crude risk-diff; the AME shows a difference, not an OR).
-#   gaussian      : Emp. mean (mean+sd, UNCOLOURED -- get_ref_var is meaningless on the flat reg
-#                   skeleton) + Emp. diff (crude mean-diff, type="coef" var=var(Y) -> diff/SD(Y),
-#                   the SAME standardized scale as the model beta, so crude vs adjusted are comparable).
-#   poisson       : Emp. rate (mean count, colour = rate-ratio) + Emp. IRR (crude rate-ratio, like IRR).
-reg_empirical_columns <- function(skeleton, emp, fac_preds, family, effect, var_y) {
+#   gaussian      : Emp. mean (mean+sd, UNCOLOURED, one-sample t cell CI) + Emp. diff (crude mean-diff,
+#                   Student t = OLS, type="coef" var=var(Y) -> diff/SD(Y), the model beta's scale).
+#   poisson       : Emp. rate (rate-ratio colour) + Emp. IRR (crude rate-ratio, quasi-Poisson CI = the
+#                   phi-scaled model's method). want_p = TRUE always: the pvalue is stored (stars are
+#                   stripped post-build when stars = FALSE, exactly like the model columns).
+reg_empirical_columns <- function(skeleton, emp, fac_preds, family, effect, var_y,
+                                  conf_level = 0.95, color_signif = "grey_non_signif") {
   mi      <- match(paste(skeleton$var, skeleton$level, sep = "\r"),
                    paste(emp$var, emp$level, sep = "\r"))
   n_rows  <- nrow(skeleton)
@@ -923,59 +961,82 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, family, effect, var_
   refrows <- skeleton$is_ref & is_fac
   base <- emp$emp_base[mi]; diffv <- emp$emp_diff[mi]; ratio <- emp$emp_ratio[mi]
   varv <- emp$emp_var[mi];  nv    <- emp$emp_n[mi]
+  rb   <- emp$emp_ref_base[mi]; rv <- emp$emp_ref_var[mi]; rn <- emp$emp_ref_n[mi]
+  # a reference level has no CI/test against itself (like the model column's zeroed reference).
+  na_ref <- function(ci) { ci$inf[refrows] <- NA_real_; ci$sup[refrows] <- NA_real_
+                           ci$pvalue[refrows] <- NA_real_; ci }
 
   if (family == "binomial") {
+    rd <- na_ref(ci_prop_diff(base, nv, rb, rn, conf_level = conf_level,
+                              method = "newcombe", want_p = TRUE))          # crude risk-difference
     base_col <- fmt(pct = base, diff = diffv, n = nv, tot_n = nv,
-                    type = "row", display = "pct", digits = 0L, ref = "tot",
-                    color = "diff", color_signif = "ignore", col_var = "Emp. %",
+                    ci_inf = rd$inf, ci_sup = rd$sup, pvalue = rd$pvalue,
+                    type = "row", display = "pct", digits = 0L, ref = "tot", ci_type = "diff",
+                    color = "diff", color_signif = color_signif, col_var = "Emp. %",
                     comp_all = FALSE, in_refrow = refrows)
     if (effect == "ame") {
       # the AME models the risk-DIFFERENCE from the reference, so the crude companion is the crude
       # risk-difference (not the OR, which the AME table does not display).
       eff_col <- fmt(pct = base, diff = diffv, n = nv, tot_n = nv,
+                     ci_inf = rd$inf, ci_sup = rd$sup, pvalue = rd$pvalue,
                      type = "row", display = "diff", digits = 0L, ref = "tot",
-                     ci_type = "diff", color = "diff", color_signif = "ignore",
+                     ci_type = "diff", color = "diff", color_signif = color_signif,
                      col_var = "Emp. diff", comp_all = FALSE, in_refrow = refrows)
       return(list("Emp. %" = base_col, "Emp. diff" = eff_col))
     }
-    eff_col <- fmt(or = ratio, n = nv, type = "row", display = "or", digits = 2L,
-                   ref = "1", ci_type = "or", color = "OR", color_signif = "ignore",
+    or_ci <- na_ref(ci_or(base * nv, (1 - base) * nv, rb * rn, (1 - rb) * rn,   # Woolf log-OR Wald
+                          conf_level = conf_level, want_p = TRUE))
+    eff_col <- fmt(or = ratio, n = nv, ci_inf = or_ci$inf, ci_sup = or_ci$sup, pvalue = or_ci$pvalue,
+                   type = "row", display = "or", digits = 2L,
+                   ref = "1", ci_type = "or", color = "OR", color_signif = color_signif,
                    col_var = "Emp. OR", comp_all = FALSE, in_refrow = refrows)
     return(list("Emp. %" = base_col, "Emp. OR" = eff_col))
   }
 
   if (family == "gaussian") {
+    cell <- ci_pivot(base, sqrt(varv / nv), df = nv - 1, conf_level = conf_level, want_p = FALSE)
     base_col <- fmt(mean = base, var = varv, n = nv, tot_n = nv,
-                    type = "mean", display = "mean", digits = 2L,
+                    ci_inf = cell$inf, ci_sup = cell$sup,
+                    type = "mean", display = "mean", digits = 2L, ci_type = "cell",
                     color = "", color_signif = "ignore", col_var = "Emp. mean",
                     comp_all = FALSE, in_refrow = refrows)
+    md <- na_ref(ci_mean_diff2(base, varv, nv, rb, rv, rn, method = "student",   # pooled t = OLS coef CI
+                               conf_level = conf_level, want_p = TRUE))
     eff_col  <- fmt(diff = diffv, var = rep(var_y, n_rows), n = nv,
+                    ci_inf = md$inf, ci_sup = md$sup, pvalue = md$pvalue,
                     type = "coef", display = "coef", digits = 2L, ci_type = "diff",
-                    color = "diff", color_signif = "ignore", col_var = "Emp. diff",
+                    color = "diff", color_signif = color_signif, col_var = "Emp. diff",
                     comp_all = FALSE, in_refrow = refrows)
     return(list("Emp. mean" = base_col, "Emp. diff" = eff_col))
   }
 
   if (family == "poisson") {
+    # one crude rate-ratio CI (quasi-Poisson, = the phi-scaled model's method) drives both columns:
+    # Emp. rate (ratio colour, ci_type "ratio") and Emp. IRR (OR colour, ci_type "or"). Same bounds.
+    rr <- na_ref(ci_mean_ratio(base, varv, nv, rb, rv, rn, method = "quasipoisson",
+                               conf_level = conf_level, want_p = TRUE))
     base_col <- fmt(mean = base, ratio = ratio, n = nv, tot_n = nv,
-                    type = "mean", display = "mean", digits = 2L, ref = "1",
-                    color = "ratio", color_signif = "ignore", col_var = "Emp. rate",
+                    ci_inf = rr$inf, ci_sup = rr$sup, pvalue = rr$pvalue,
+                    type = "mean", display = "mean", digits = 2L, ref = "1", ci_type = "ratio",
+                    color = "ratio", color_signif = color_signif, col_var = "Emp. rate",
                     comp_all = FALSE, in_refrow = refrows)
-    eff_col  <- fmt(or = ratio, n = nv, type = "row", display = "or", digits = 2L,
-                    ref = "1", ci_type = "or", color = "OR", color_signif = "ignore",
+    eff_col  <- fmt(or = ratio, n = nv, ci_inf = rr$inf, ci_sup = rr$sup, pvalue = rr$pvalue,
+                    type = "row", display = "or", digits = 2L,
+                    ref = "1", ci_type = "or", color = "OR", color_signif = color_signif,
                     col_var = "Emp. IRR", comp_all = FALSE, in_refrow = refrows)
     return(list("Emp. rate" = base_col, "Emp. IRR" = eff_col))
   }
   list()
 }
 
-# Multinomial crude tooltip data (Phase 14v): one column per outcome CATEGORY would explode the layout,
-# so the crude companion for multinomial is TOOLTIP-only. For each FACTOR predictor level and each
-# outcome category, the weighted observed proportion of that category and its difference from the
-# predictor's reference level (the crude analogue of the model's per-category effect). Returns a long
-# tibble keyed by (var, level [raw], category): prop, diff. reg_build turns it into the `empirical_tips`
-# table attribute (col = final column label, var, level [displayed], tip); the render appends it.
-reg_empirical_tips <- function(data, fac_preds, dependent, wt) {
+# Multinomial crude tooltip data (Phase 14v / 14v-ii): one column per outcome CATEGORY would explode the
+# layout, so the crude companion for multinomial is TOOLTIP-only. For each FACTOR predictor level and
+# each outcome category, the weighted observed proportion of that category, its difference from the
+# predictor's reference level, and 14v-ii each with a crude CI (Wilson on the %, Newcombe on the diff --
+# the same engines the model / tab() use). Weighted rule (§14): weighted proportions, unweighted n.
+# Returns a long tibble keyed by (var, level [raw], category): prop, diff + the four CI bounds. reg_build
+# turns it into the `empirical_tips` table attribute (col, var, level [displayed], tip); the render appends it.
+reg_empirical_tips <- function(data, fac_preds, dependent, wt, conf_level = 0.95) {
   w    <- if (is.null(wt)) rep(1, nrow(data)) else as.numeric(data[[wt]])
   yv   <- as.factor(data[[dependent]])
   cats <- levels(forcats::fct_drop(yv))
@@ -984,14 +1045,19 @@ reg_empirical_tips <- function(data, fac_preds, dependent, wt) {
     ok <- !is.na(x) & !is.na(yv) & !is.na(w)
     lv <- levels(forcats::fct_drop(as.factor(x[ok])))
     grid <- purrr::map_dfr(lv, function(l) {
-      m  <- ok & x == l
-      wl <- sum(w[m])
-      tibble::tibble(level = l, category = cats,
+      m  <- ok & x == l; wl <- sum(w[m])
+      tibble::tibble(level = l, category = cats, n = sum(m),
                      prop = purrr::map_dbl(cats, ~ sum(w[m & yv == .x]) / wl))
     })
-    ref <- stats::setNames(grid$prop[grid$level == lv[1]], grid$category[grid$level == lv[1]])
-    grid$diff <- grid$prop - ref[grid$category]
+    ref_p <- stats::setNames(grid$prop[grid$level == lv[1]], grid$category[grid$level == lv[1]])
+    ref_n <- grid$n[grid$level == lv[1]][1]
+    grid$diff <- grid$prop - ref_p[grid$category]
     grid$var  <- p
+    pw <- ci_wilson(grid$prop, grid$n, conf_level = conf_level)                  # crude % cell CI
+    dd <- ci_prop_diff(grid$prop, grid$n, ref_p[grid$category], ref_n,           # crude diff CI
+                       conf_level = conf_level, method = "newcombe", want_p = FALSE)
+    grid$prop_inf <- pw$inf; grid$prop_sup <- pw$sup
+    grid$diff_inf <- dd$inf; grid$diff_sup <- dd$sup
     grid
   })
 }
@@ -1217,24 +1283,16 @@ reg_null_loglik <- function(fit, family) {
        df = attr(llf, "df") - attr(ll0, "df"))
 }
 
-# Pearson dispersion (over/under-dispersion diagnosis): poisson / grouped binomial only -- the
-# dispersion parameter is not identifiable for ungrouped Bernoulli data. phi = Sum(pearson resid^2) /
-# df.residual (better-behaved than deviance/df). A warning fires at >1.5 (strong >2), mirroring the
-# reg_ordinal_diagnostic() pattern.
+# Pearson dispersion (over/under-dispersion): poisson / grouped binomial only -- the dispersion
+# parameter is not identifiable for ungrouped Bernoulli data. phi = Sum(pearson resid^2) / df.residual
+# (better-behaved than deviance/df). PURE (14v-ii): the over-dispersion warning moved to reg_fit(),
+# where the SEs are now actually scaled by sqrt(phi) -- so it is emitted ONCE per fit (this helper is
+# also called by reg_glance for the footer, which must stay silent).
 reg_dispersion <- function(fit) {
   rp  <- tryCatch(stats::residuals(fit, type = "pearson"), error = function(e) NULL)
   dfr <- tryCatch(stats::df.residual(fit), error = function(e) NA_real_)
   if (is.null(rp) || is.na(dfr) || dfr <= 0) return(NA_real_)
-  phi <- sum(rp^2, na.rm = TRUE) / dfr
-  if (!is.na(phi) && phi > 1.5) {
-    cli::cli_warn(c(
-      "!" = paste0("Over-dispersion detected (Pearson dispersion = {signif(phi, 3)}",
-                   "{if (phi > 2) ', strong' else ''}); standard errors may be too small."),
-      "i" = paste0("Consider {.code family = \"quasipoisson\"} (scaled SEs) or a negative-binomial ",
-                   "model.")
-    ))
-  }
-  phi
+  sum(rp^2, na.rm = TRUE) / dfr
 }
 
 # AIC as a single number. AIC.svyglm (Rao-Scott survey AIC) returns a NAMED vector
@@ -1676,7 +1734,8 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
         var_y_i <- if (family == "gaussian")
           suppressWarnings(stats::var(as.numeric(data[[dep_i]]), na.rm = TRUE)) else NA_real_
         emp_i   <- reg_empirical(data, fac_preds_e, dep_i, family, pos_i, design_spec$wt)
-        emp_by_fit[[i]] <- reg_empirical_columns(skeleton, emp_i, fac_preds_e, family, effect, var_y_i)
+        emp_by_fit[[i]] <- reg_empirical_columns(skeleton, emp_i, fac_preds_e, family, effect, var_y_i,
+                                                 conf_level = conf_level, color_signif = color_signif)
       }
     }
   }
@@ -1713,7 +1772,8 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
       union_predictors, ~ is.numeric(skeleton_data[[.x]]))]
     has_cat <- any(!purrr::map_lgl(built, ~ is.null(.$emp_key)))
     if (length(fac_preds_t) > 0L && has_cat) {
-      tipsd <- reg_empirical_tips(data, fac_preds_t, specs[[1]]$dependent, design_spec$wt)
+      tipsd <- reg_empirical_tips(data, fac_preds_t, specs[[1]]$dependent, design_spec$wt,
+                                  conf_level = conf_level)
       tk    <- paste(tipsd$var, tipsd$level, tipsd$category, sep = "\r")
       is_fac_t <- skeleton$var %in% fac_preds_t
       tip_rows <- purrr::compact(purrr::imap(built, function(b, i) {
@@ -1721,14 +1781,19 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
         mi2  <- match(paste(skeleton$var, skeleton$level, b$emp_key, sep = "\r"), tk)
         keep <- is_fac_t & !is.na(mi2) & !is.na(tipsd$prop[mi2])
         if (!any(keep)) return(NULL)
-        pr <- tipsd$prop[mi2][keep]; df <- tipsd$diff[mi2][keep]
+        k  <- mi2[keep]
+        pr <- tipsd$prop[k]; df <- tipsd$diff[k]
+        # 14v-ii: the crude % carries its Wilson CI; a non-reference level also shows its crude
+        # difference from the reference and that difference's Newcombe CI (percentage points).
         tibble::tibble(
           col   = labels[i],
           var   = as.character(skeleton$var[keep]),
           level = disp_levels[keep],
           tip   = ifelse(skeleton$is_ref[keep],
-                         sprintf("crude: %.0f%%", pr * 100),
-                         sprintf("crude: %.0f%% (%+.0f)", pr * 100, df * 100)))
+                         sprintf("crude: %.0f%% [%.0f; %.0f]",
+                                 pr * 100, tipsd$prop_inf[k] * 100, tipsd$prop_sup[k] * 100),
+                         sprintf("crude: %.0f%% (%+.0f pts [%+.0f; %+.0f])",
+                                 pr * 100, df * 100, tipsd$diff_inf[k] * 100, tipsd$diff_sup[k] * 100)))
       }))
       if (length(tip_rows)) empirical_tips <- purrr::list_rbind(tip_rows)
     }
@@ -1739,8 +1804,11 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
   # never baked into the fmt columns (the coefficient skeleton stays intact for downstream reads).
   tab |>
     new_tab(subtext = subtext, test = reg_gof, empirical_tips = empirical_tips,
+            # 14v-ii: the numeric/ratio methods the empirical columns use (Student mean-diff = OLS,
+            # quasi-Poisson rate-ratio = the phi-scaled model), so the legend can name them (14w).
             ci_settings = list(conf_level = conf_level, method_cell = NA_character_,
-                               method_diff = method)) |>
+                               method_diff = method, method_ratio = "katz",
+                               method_mean_diff = "student", method_mean_ratio = "quasipoisson")) |>
     dplyr::group_by(var)
 }
 

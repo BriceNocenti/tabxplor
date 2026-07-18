@@ -3,6 +3,23 @@
 # tabxplor 1.4.0 (in development)
 
 ## New features
+* **Confidence intervals for ratios and richer CI methods.** `color = "ratio"` on a numeric mean now
+  produces a real **ratio-of-means** confidence interval (it used to silently show the *difference*
+  interval). Three new arguments choose the interval method, each reproducing the matching regression:
+  `method_mean_diff` (`"welch"` default, or `"student"` = a linear-regression coefficient interval);
+  `method_mean_ratio` (`"robust"` default, `"quasipoisson"` = a quasi-Poisson regression, or naive
+  `"poisson"`); and `method_ratio` for the proportion ratio (`"katz"`). Each CI's significance stars come
+  from the same interval, and `tab_color_legend()` now names the method used. Numeric mean intervals are
+  now Student-t throughout (they estimate the variance), matching `t.test()` / `lm()`; on large samples
+  this is indistinguishable from before.
+* **`tab_reg()` handles over-dispersion.** An unweighted Poisson or grouped/summed-score binomial model
+  now reports dispersion-scaled standard errors by default (matching a quasi-Poisson / quasi-binomial
+  fit) while keeping the AIC / McFadden / LR / BIC footer — so over-dispersed counts get honest,
+  wider confidence intervals automatically.
+* **Crude (`empirical`) columns get confidence intervals.** With `empirical = TRUE`, the descriptive
+  "Emp." companion columns now carry a confidence interval, significance stars and significance-based
+  colour, computed with the same method as the model — so crude and adjusted effects are directly
+  comparable. The multinomial crude tooltip gains its intervals too.
 * **Variable names are written once, and you choose which ones.** A table built from several
   `row_vars` used to repeat the row-variable name on every single row, under a meaningless `row_var`
   header. Every exporter now names each block **once**: `tab_kable()` spans one cell over the block and

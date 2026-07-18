@@ -107,6 +107,71 @@ test_that("binomial AME: single-predictor risk-diff (Emp. diff) == observed risk
   expect_true(any(grepl("model %", names(t), fixed = TRUE)))
 })
 
+# --- 14v-ii CRUDE CI PARITY: the empirical column's CI == the single-predictor model's CI ----------
+# Each crude CI uses the SAME method as the model, so crude vs adjusted are directly comparable. Exact
+# parity for the mean methods needs a 2-level predictor (pairwise engines vs multi-level pooled lm/glm).
+
+emp_2lvl <- function() {
+  d <- emp_data()
+  d <- d[d$race %in% c("Black", "White"), , drop = FALSE]
+  d$race <- forcats::fct_drop(d$race)
+  d
+}
+
+test_that("gaussian Emp. diff CI == OLS lm coefficient CI (Student, 2-level)", {
+  d <- emp_2lvl()
+  t <- tab_reg(d, "tvhours", "race", family = "gaussian", empirical = TRUE, cleannames = FALSE)
+  ed <- t[["Emp. diff"]]; k <- which(!is.na(get_ci_inf(ed)))            # the non-reference level
+  lev <- as.character(t$levels)[k]
+  ols <- stats::confint(stats::lm(tvhours ~ race, d))[paste0("race", lev), ]
+  expect_equal(get_ci_inf(ed)[k], unname(ols[1]), tolerance = 1e-6)
+  expect_equal(get_ci_sup(ed)[k], unname(ols[2]), tolerance = 1e-6)
+})
+
+test_that("poisson Emp. IRR CI == quasi-Poisson regression CI (2-level)", {
+  d <- emp_2lvl()
+  t <- suppressWarnings(tab_reg(d, "tvhours", "race", family = "poisson", empirical = TRUE,
+                                cleannames = FALSE))
+  ei <- t[["Emp. IRR"]]; k <- which(!is.na(get_ci_inf(ei)))
+  lev <- as.character(t$levels)[k]
+  fq <- stats::glm(tvhours ~ race, d, family = stats::quasipoisson())
+  co <- summary(fq)$coefficients[paste0("race", lev), ]
+  crit <- stats::qt(0.975, df = stats::df.residual(fq))
+  expect_equal(get_ci_inf(ei)[k], unname(exp(co[1] - crit * co[2])), tolerance = 1e-6)
+  expect_equal(get_ci_sup(ei)[k], unname(exp(co[1] + crit * co[2])), tolerance = 1e-6)
+})
+
+test_that("binomial Emp. OR CI == crude logistic-regression CI (Woolf = Wald, per level)", {
+  d <- emp_data()
+  t <- tab_reg(d, "married", "race", family = "binomial", empirical = TRUE, cleannames = FALSE)
+  eo <- t[["Emp. OR"]]
+  pos <- emp_positive_level(t, d, "married")
+  fit <- stats::glm((married == pos) ~ race, d, family = stats::binomial())
+  ci  <- exp(stats::confint.default(fit))
+  for (k in which(!is.na(get_ci_inf(eo)))) {
+    lev <- as.character(t$levels)[k]
+    expect_equal(get_ci_inf(eo)[k], unname(ci[paste0("race", lev), 1]), tolerance = 1e-6, label = lev)
+    expect_equal(get_ci_sup(eo)[k], unname(ci[paste0("race", lev), 2]), tolerance = 1e-6, label = lev)
+  }
+})
+
+test_that("binomial AME Emp. diff CI == Newcombe risk-difference CI", {
+  d <- emp_data()
+  t <- tab_reg(d, "married", "race", effect = "ame", family = "binomial", empirical = TRUE,
+               cleannames = FALSE)
+  ed  <- t[["Emp. diff"]]
+  pos <- emp_positive_level(t, d, "married")
+  y   <- as.integer(d$married == pos)
+  pr  <- tapply(y, d$race, mean); nn <- tapply(y, d$race, length)
+  r1  <- levels(d$race)[1]
+  for (k in which(!is.na(get_ci_inf(ed)))) {
+    lev <- as.character(t$levels)[k]
+    hand <- ci_newcombe(pr[[lev]], nn[[lev]], pr[[r1]], nn[[r1]], want_p = TRUE)
+    expect_equal(get_ci_inf(ed)[k], hand$inf, tolerance = 1e-6, label = lev)
+    expect_equal(get_ci_sup(ed)[k], hand$sup, tolerance = 1e-6, label = lev)
+  }
+})
+
 test_that("multinomial: single-predictor RRR per category == crude 2x2 odds ratio", {
   skip_if_not_installed("nnet")
   d  <- emp_data()

@@ -55,7 +55,8 @@ on the background channel (`color = c("diff", "ratio")`, default `pct_ratio = li
   runs / plain). `tab_color_legend(x, medium=, style=, lang=)`: console = terse, exports = prose
   (translatable via `gettext`, domain `R-tabxplor`, FR in `po/R-fr.po`; `lang` sets the `LANGUAGE`
   env for the build). It NAMES the CI method/level from the table's stored **`ci_settings`** attribute
-  (`list(conf_level, method_cell, method_diff)`, set in `tab_assemble_tables`, carried through dplyr;
+  (`list(conf_level, method_cell, method_diff, method_ratio, method_mean_diff, method_mean_ratio)` since
+  14v-ii — the legend picks the relevant one off the column type/ci_type, set in `tab_assemble_tables`, carried through dplyr;
   `default_ci_settings()` fallback). Shade names ("blue"/"yellow-red") come from `legend_shade_names()`
   (default palette only). Changing legend wording → regen `_snaps/golden.md` + `_snaps/render-html.md`
   (per-CELL hex `test-color-golden.R` must stay green — the legend never touches cell colours).

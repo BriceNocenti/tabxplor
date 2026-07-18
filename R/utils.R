@@ -411,7 +411,71 @@ fct_recode_helper <- function(data, .cols = -where(is.numeric), name_in, name_ou
   invisible(recode)
 }
 
+#' `forcats::gss_cat` test dataframe, from US General Social Survey, 
+#'   but formatted with merged levels for cleaner tables,
+#'   and first levels chosen to be used as references (for color helpers, regressions, etc.)
+#' @export
+gss_cat_data_formatting <- function() {
+forcats::gss_cat |>
+dplyr::mutate(
+  married = factor(dplyr::if_else(marital == "Married",
+  "01-Married",
+  "02-Not married")
+),
+black = factor(dplyr::if_else(race == "Black",
+  "01-Black",
+  "02-Not black")
+),
+race = forcats::fct_relevel(race, "White", "Black", "Other"), 
+marital = forcats::fct_relevel(marital, "Married", "Separated", "Divorced", "Widowed", "Never married", "No answer"),
 
+dplyr::across(dplyr::where(is.factor), ~ forcats::fct_recode(., "NULL" = "No answer", "NULL" = "Refused", "NULL" = "Don't know", "NULL" = "Not applicable")),
+
+rincome = forcats::fct_recode(   # "new" = "old" 
+  rincome,
+  "1-Lt $10000"      = "Lt $1000"      ,
+  "1-Lt $10000"      = "$1000 to 2999" ,
+  "1-Lt $10000"      = "$3000 to 3999" ,
+  "1-Lt $10000"      = "$4000 to 4999" ,
+  "1-Lt $10000"      = "$5000 to 5999" ,
+  "1-Lt $10000"      = "$6000 to 6999" ,
+  "1-Lt $10000"      = "$7000 to 7999" ,
+  "1-Lt $10000"      = "$8000 to 9999" ,
+  "2-10000 to 14999" = "$10000 - 14999",
+  "3-15000 to 24999" = "$15000 - 19999",
+  "4-15000 to 24999" = "$20000 - 24999",
+  "5-25000 or more"  = "$25000 or more"
+) |> 
+forcats::fct_relevel(sort) |>
+as.ordered(),
+
+party3 = factor(dplyr::case_when(
+  grepl("democrat", partyid)   ~ "Democrat",
+  grepl("republican", partyid) ~ "Republican",
+  partyid %in% c("Independent", "Ind,near rep", "Ind,near dem") ~ "Independent"),
+levels = c("Democrat", "Independent", "Republican")), 
+
+relig = forcats::fct_recode( 
+  relig,
+  "1-Protestant"        = "Protestant"             , # 50% 10 846
+  "2-Catholic"          = "Catholic"               , # 24%  5 124
+  "3-Other christian"   = "Christian"              , #  3%    689
+  "3-Other christian"   = "Orthodox-christian"     , #  0%     95
+  "4-Jewish"            = "Jewish"                 , #  2%    388
+  "5-Buddhist/Hinduist" = "Hinduism"               , #  0%     71
+  "5-Buddhist/Hinduist" = "Buddhism"               , #  1%    147
+  "6-Muslim"            = "Moslem/islam"           , #  0%    104
+  "7-Other"             = "Inter-nondenominational", #  1%    109
+  "7-Other"             = "Native american"        , #  0%     23
+  "7-Other"             = "Other eastern"          , #  0%     32
+  "7-Other"             = "Other"                  , #  1%    224
+  "8-None"              = "None"                   , # 16%  3 523
+  "NULL"                = "No answer"              , #  0%     93
+  "NULL"                = "Don't know"             , #  0%     15
+),
+
+)
+}
 
 #' @keywords internal
 get_user_documents <- function() {

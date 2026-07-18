@@ -36,6 +36,9 @@ tab_many(
   stars = NULL,
   method_cell = "wilson",
   method_diff = "newcombe",
+  method_ratio = "katz",
+  method_mean_diff = "welch",
+  method_mean_ratio = "robust",
   totaltab = "line",
   totaltab_name = "Ensemble",
   totrow = TRUE,
@@ -242,6 +245,19 @@ significance computation entirely. \code{NULL} uses \code{options("tabxplor.star
 \code{ci = "diff"}. One of \code{"newcombe"} (default, the hybrid-score interval, dual of the
 two-proportion score test), \code{"ac"} (Agresti-Caffo) or \code{"wald"}. Whatever method is
 chosen, the stars come from that same interval, so they always agree with the bracket.}
+
+\item{method_ratio}{Character string, the proportion \emph{ratio} interval (\code{color = "ratio"}):
+\code{"katz"} (the log risk-ratio interval, the only value for now).}
+
+\item{method_mean_diff}{Character string, the numeric mean-\emph{difference} interval: \code{"welch"}
+(default, each group's own variance, Welch--Satterthwaite df) or \code{"student"} (pooled variance,
+df \eqn{= n_1 + n_2 - 2}, reproducing a linear-regression coefficient interval).}
+
+\item{method_mean_ratio}{Character string, the numeric mean-\emph{ratio} interval (\code{color =
+"ratio"} on a mean): \code{"robust"} (default, each group's own variance = modified/robust Poisson),
+\code{"quasipoisson"} (Poisson SE scaled by the dispersion, reproducing a quasi-Poisson regression)
+or \code{"poisson"} (naive Var = mean). All are the log-scale Wald/t interval, exp-back. As for the
+other methods, the significance stars come from the same interval so bracket and stars always agree.}
 
 \item{totaltab}{The total table, if there are subtables/groups
 (i.e. when \code{tab_vars} is provided). Vectorised over \code{row_vars}.

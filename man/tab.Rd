@@ -29,6 +29,9 @@ tab(
   stars = NULL,
   method_cell = "wilson",
   method_diff = "newcombe",
+  method_ratio = "katz",
+  method_mean_diff = "welch",
+  method_mean_ratio = "robust",
   totaltab = "line",
   totaltab_name = "Ensemble",
   tot = c("row", "col"),
@@ -227,6 +230,15 @@ itself (universal CI-inclusion). \code{NULL} uses \code{options("tabxplor.stars"
 \item{method_cell, method_diff}{Character strings choosing the confidence-interval method for
 \code{ci = "cell"} (\code{"wilson"} default, or \code{"wald"}) / \code{ci = "diff"}
 (\code{"newcombe"} default, \code{"ac"} or \code{"wald"}). See \code{\link{tab_many}}.}
+
+\item{method_ratio, method_mean_diff, method_mean_ratio}{Character strings choosing the
+confidence-interval method for the ratio / numeric-mean intervals. \code{method_ratio} (proportion
+ratio, \code{color = "ratio"}): \code{"katz"} (log risk-ratio, the only value). \code{method_mean_diff}
+(numeric mean difference): \code{"welch"} (default, each group's own variance) or \code{"student"}
+(pooled variance = a linear-regression coefficient interval). \code{method_mean_ratio} (numeric mean
+ratio, \code{color = "ratio"} on a mean): \code{"robust"} (default, each group's own variance =
+modified/robust Poisson), \code{"quasipoisson"} (dispersion-scaled = a quasi-Poisson regression) or
+\code{"poisson"} (naive). See \code{\link{tab_many}}.}
 
 \item{totaltab}{The total table, if there are subtables/groups
 (i.e. when \code{tab_vars} is provided) :

@@ -68,6 +68,18 @@ msgstr "intervalle de Wald"
 msgid "Welch t interval"
 msgstr "intervalle t de Welch"
 
+msgid "Student t interval"
+msgstr "intervalle t de Student"
+
+msgid "robust-Poisson (delta) interval"
+msgstr "intervalle de Poisson robuste (delta)"
+
+msgid "quasi-Poisson interval"
+msgstr "intervalle quasi-Poisson"
+
+msgid "Poisson interval"
+msgstr "intervalle de Poisson"
+
 msgid "Katz interval on the log risk-ratio"
 msgstr "intervalle de Katz sur le log rapport de risques"
 
