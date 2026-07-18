@@ -16,7 +16,7 @@ reg_opts <- function(...) {
     inverse_two_level_factors = TRUE, empirical = FALSE, reference = NULL, conf_level = 0.95,
     method = "wald", stars = TRUE, color = NULL, color_signif = "grey_non_signif", na = "keep",
     cleannames = TRUE, stats = NULL, subtext = "",
-    compare = "none", baseline = 1L, multiplicator = NULL, trials = NULL
+    compare = "none", baseline = 1L, multiplier = NULL, trials = NULL
   )
   utils::modifyList(o, list(...))
 }
@@ -236,7 +236,7 @@ test_that("jmvtab_reg_models folds the builder into predictors (list or flat poo
 })
 
 
-# --- 6. numeric-predictor scaling (multiplicator) -----------------------------------------
+# --- 6. numeric-predictor scaling (multiplier) -----------------------------------------
 test_that("jmvtab_reg_mult_vector folds the scaling picker into a named numeric", {
   expect_null(jmvtab_reg_mult_vector(list()))
   expect_null(jmvtab_reg_mult_vector(list(list(var = "age", k = ""))))
@@ -247,14 +247,14 @@ test_that("jmvtab_reg_mult_vector folds the scaling picker into a named numeric"
   )
 })
 
-test_that("a multiplicator change is keyed (not stale) and matches tab_reg()", {
+test_that("a multiplier change is keyed (not stale) and matches tab_reg()", {
   gss  <- gss_reg()
-  o10  <- reg_opts(predictors = c("race", "age"), family = "binomial", multiplicator = c(age = 10))
-  o05  <- reg_opts(predictors = c("race", "age"), family = "binomial", multiplicator = c(age = 5))
+  o10  <- reg_opts(predictors = c("race", "age"), family = "binomial", multiplier = c(age = 10))
+  o05  <- reg_opts(predictors = c("race", "age"), family = "binomial", multiplier = c(age = 5))
   b10  <- quiet(jmvtab_reg_build(gss, o10, NULL))
   b05  <- quiet(jmvtab_reg_build(gss, o05, b10$store))       # a different scaling -> a fresh fit, not stale
   expect_false(identical(reg_render(b10$tabs), reg_render(b05$tabs)))
   d10  <- quiet(tab_reg(gss, "married", c("race", "age"),
-                        family = "binomial", multiplicator = c(age = 10), cleannames = TRUE))
+                        family = "binomial", multiplier = c(age = 10), cleannames = TRUE))
   expect_identical(reg_render(b10$tabs), reg_render(d10))
 })

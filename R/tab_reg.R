@@ -66,7 +66,7 @@
 #     group on a SHARED skeleton (skeleton_data) and stacks into a grouped_tab (split_var + var), so
 #     tab_spread(split_var) pivots groups to columns (no tab_spread change: split_var placed first so
 #     `levels` stays the row_var; console footer is group-aware, export footer skipped for splits).
-#     `multiplicator` (c(var=k)) scales a continuous predictor's native coef by k before CI/exp (OR^k),
+#     `multiplier` (c(var=k)) scales a continuous predictor's native coef by k before CI/exp (OR^k),
 #     p unchanged.
 # See: CLAUDE.md Phase 12c-12g ; dev/tabxplor_1.4.0_decisions.md S37.
 
@@ -722,7 +722,7 @@ reg_relevel_design <- function(design, reference, relevelable) {
 # the CI and the stars are exact duals. method="profile" (unweighted glm) swaps to confint + LR p.
 reg_fit <- function(data, dependent, predictors, family, design_spec, do_exp,
                     inverse_two_level_factors, conf_level, method,
-                    trials = NULL, formula = NULL, multiplicator = NULL) {
+                    trials = NULL, formula = NULL, multiplier = NULL) {
   drop_vars <- unique(c(dependent, predictors, reg_design_vars(design_spec)))
   mdata     <- tidyr::drop_na(data, tidyselect::all_of(drop_vars))
 
@@ -821,15 +821,15 @@ reg_fit <- function(data, dependent, predictors, family, design_spec, do_exp,
   td <- broom::tidy(fit)                            # native scale: estimate, std.error, p.value
   td$term <- stringr::str_remove_all(td$term, "`")  # strip formula backticks -> match skeleton
 
-  # multiplicator (Phase 12g): a k-unit change of a continuous predictor multiplies its native-scale
+  # multiplier (Phase 12g): a k-unit change of a continuous predictor multiplies its native-scale
   # coefficient by k (beta -> beta*k, se -> se*|k|; exp() then gives OR^k). Applied on the native scale
   # BEFORE the CI so the Wald interval scales automatically; the profile CI (monotone reparametrisation)
   # scales linearly too. The z / LR p is scale-invariant (testing beta=0 <=> k*beta=0) -> unchanged.
   mult_vec <- rep(1, nrow(td))
-  if (!is.null(multiplicator)) {
-    for (v in names(multiplicator)) {
+  if (!is.null(multiplier)) {
+    for (v in names(multiplier)) {
       mi <- td$term == v
-      if (any(mi)) mult_vec[mi] <- as.numeric(multiplicator[[v]])
+      if (any(mi)) mult_vec[mi] <- as.numeric(multiplier[[v]])
     }
     td$estimate  <- td$estimate  * mult_vec
     td$std.error <- td$std.error * abs(mult_vec)
@@ -1641,7 +1641,7 @@ reg_compare_rows <- function(reg_gof, fits, specs, family, weighted, fit_first_c
 # returns a small, reference-INDEPENDENT digest (coef + vcov + the reference-invariant glance +
 # scalars); reg_reref_fit_res() reparametrizes it to any display reference, producing a fit_res
 # drop-in for reg_column() / reg_gof_tibble(). Reached ONLY with .fit_cache present, on the
-# single-equation GLM coefficient path (method="wald", value/ci display, no split/multiplicator/trials
+# single-equation GLM coefficient path (method="wald", value/ci display, no split/multiplier/trials
 # /compound/ame/mnl-vs-rest). Locked byte-identical to a real refit by test-jmvtab-reg-cache.R.
 
 # Critical value for a Wald interval: z for a fixed-dispersion glm (binomial/poisson, unweighted,
@@ -1659,7 +1659,7 @@ reg_build_digest <- function(data, sp, family, design_spec, do_exp, inverse_two_
                              conf_level, weighted) {
   f   <- reg_fit(data, sp$dependent, sp$predictors, family, design_spec, do_exp,
                  inverse_two_level_factors, conf_level, method = "wald",
-                 trials = sp$trials, formula = sp$formula, multiplicator = NULL)
+                 trials = sp$trials, formula = sp$formula, multiplier = NULL)
   fit <- f$fit
   coef_v <- stats::coef(fit)
   V      <- stats::vcov(fit)
@@ -1741,7 +1741,7 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
                       inverse_two_level_factors, conf_level, method, color, color_signif,
                       cleannames, subtext, eff_word, effect = "coefficient", at = "average",
                       stats = NULL, compare = "none", baseline = NULL, split_var = NULL,
-                      multiplicator = NULL, empirical = FALSE, estimate_display = "value",
+                      multiplier = NULL, empirical = FALSE, estimate_display = "value",
                       .fit_cache = NULL, reference = NULL, reref = FALSE,
                       skeleton_data = data) {
   # split_var (Phase 12g): the regression analogue of tab()'s tab_vars -- fit the SAME model(s) within
@@ -1761,7 +1761,7 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
       tg  <- reg_build(sub, specs, union_predictors, family, ds_g, weighted, do_exp, effect_shape,
                        inverse_two_level_factors, conf_level, method, color, color_signif,
                        cleannames, subtext, eff_word, effect, at, stats, compare, baseline,
-                       split_var = NULL, multiplicator = multiplicator, empirical = empirical,
+                       split_var = NULL, multiplier = multiplier, empirical = empirical,
                        estimate_display = estimate_display, .fit_cache = .fit_cache,
                        reference = NULL, reref = FALSE, skeleton_data = data)
       tst <- get_test(tg); if (!is.null(tst) && nrow(tst) > 0) tst$row_var <- as.character(g)
@@ -1801,14 +1801,14 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
     fits <- purrr::map(specs, function(sp) {
       thunk <- function() reg_fit(data, sp$dependent, sp$predictors, family, design_spec, do_exp,
                                   inverse_two_level_factors, conf_level, method,
-                                  trials = sp$trials, formula = sp$formula, multiplicator = multiplicator)
+                                  trials = sp$trials, formula = sp$formula, multiplier = multiplier)
       # .fit_cache present but not on the reref path (ame / profile / mnl-vs-rest / compound): cache the
       # RAW reg_fit result keyed on the (already display-referenced) data -> a reference change refits.
       if (is.null(.fit_cache)) thunk()
       else jmvreg_cached(.fit_cache, "fit",
                          jmvreg_fit_key(sp, data, family, design_spec,
                                         extra = list(method, do_exp, conf_level, effect, at,
-                                                     estimate_display, multiplicator)),
+                                                     estimate_display, multiplier)),
                          thunk)
     })
   }
@@ -1940,12 +1940,12 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
   if (cleannames) {
     disp_levels <- stringr::str_remove_all(disp_levels, cleannames_condition())
   }
-  # multiplicator (Phase 12g): relabel the display level of each scaled numeric predictor so the row
+  # multiplier (Phase 12g): relabel the display level of each scaled numeric predictor so the row
   # reads "<var> | per <k>" (the effect is now per k units). Numeric predictors have level == var.
-  if (!is.null(multiplicator)) {
-    for (v in names(multiplicator)) {
+  if (!is.null(multiplier)) {
+    for (v in names(multiplier)) {
       hit <- skeleton$var == v & skeleton$level == v
-      if (any(hit)) disp_levels[hit] <- paste0("per ", multiplicator[[v]])
+      if (any(hit)) disp_levels[hit] <- paste0("per ", multiplier[[v]])
     }
   }
 
@@ -2166,7 +2166,7 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
 #'   per-group tables are stacked into one grouped table (grouped by `split_var`), sharing the
 #'   variable/level stub. Use [tab_spread()] on `split_var` to pivot the groups into side-by-side
 #'   columns for an easy across-group comparison. A level absent from a group shows empty cells.
-#' @param multiplicator Optional named numeric vector `c(var = k)` rescaling a **continuous**
+#' @param multiplier Optional named numeric vector `c(var = k)` rescaling a **continuous**
 #'   predictor's effect to a k-unit change (e.g. `c(age = 10)` shows the odds ratio / beta per decade
 #'   of age = OR^10 / beta*10). The confidence interval scales with it; the p-value is unchanged. Names
 #'   must be numeric predictors; not available for multinomial / ordinal outcomes.
@@ -2201,7 +2201,9 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
 #'   family); `"prob"` folds the model-adjusted predicted probability into the odds-ratio cell
 #'   (`2.34 (16%)`); `"ame"` folds the average marginal effect (`2.34 (+8%)`). `"prob"`/`"ame"` need the
 #'   `marginaleffects` package and apply to binomial (logistic) coefficient models only (they degrade to
-#'   `"ci"` otherwise, with a message).
+#'   `"ci"` otherwise, with a message). Note `estimate_display = "ame"` *adds* an AME beside the odds
+#'   ratio, whereas `effect = "ame"` makes the whole column an AME (probability scale); the two are
+#'   different and, when both are set, `effect = "ame"` wins and `estimate_display` is reset to `"value"`.
 #' @param color,color_signif How the effect measure is coloured (`NULL` uses the per-family default:
 #'   `"OR"` magnitude for ratios, standardized `"diff"` for betas; significance policy
 #'   `"grey_non_signif"`). See [tab()].
@@ -2269,7 +2271,7 @@ tab_reg <- function(data, dependent, predictors = NULL,
                     effect = c("coefficient", "ame"), at = c("average", "reference"),
                     trials = NULL, conf_level = getOption("tabxplor.conf_level", 0.95), method = c("wald", "profile"),
                     reference = NULL, inverse_two_level_factors = TRUE, split_var = NULL,
-                    multiplicator = NULL, empirical = FALSE,
+                    multiplier = NULL, empirical = FALSE,
                     stats = NULL, compare = c("none", "baseline", "sequential"), baseline = NULL,
                     estimate_display = c("value", "ci", "prob", "ame"),
                     color = NULL, color_signif = NULL, stars = TRUE,
@@ -2314,7 +2316,7 @@ tab_reg <- function(data, dependent, predictors = NULL,
               ids = ids, strata = strata, fpc = fpc, nest = nest, exponentiate = exponentiate,
               effect = effect, at = at, trials = tri, conf_level = conf_level, method = method,
               reference = reference, inverse_two_level_factors = inverse_two_level_factors,
-              split_var = split_var, multiplicator = multiplicator, empirical = empirical,
+              split_var = split_var, multiplier = multiplier, empirical = empirical,
               stats = stats, compare = compare, baseline = baseline,
               estimate_display = estimate_display, color = color, color_signif = color_signif,
               stars = stars, na = na, cleannames = cleannames, subtext = subtext)
@@ -2479,11 +2481,11 @@ tab_reg <- function(data, dependent, predictors = NULL,
   # recomputed at any factor-predictor reference from ONE canonical fit (reg_build_digest) -- no refit.
   # On that path the body does NOT relevel; reg_build fits the canonical digest + reparametrizes to
   # `reference`. Everything the reparametrization can't handle (ame / profile / mnl-vs-rest / compound /
-  # multinomial / ordinal / split / multiplicator / trials / model comparison) keeps the refit path.
+  # multinomial / ordinal / split / multiplier / trials / model comparison) keeps the refit path.
   reref <- !is.null(.fit_cache) && effect == "coefficient" && !mnl_vsrest &&
     estimate_display %in% c("value", "ci") && method == "wald" &&
     family %in% c("gaussian", "binomial", "poisson", "quasipoisson") &&
-    !formula_mode && is.null(split_var) && is.null(multiplicator) && is.null(trials) &&
+    !formula_mode && is.null(split_var) && is.null(multiplier) && is.null(trials) &&
     compare == "none" && !is_comparison
 
   if (!is.null(reference) && !reref) {
@@ -2548,20 +2550,20 @@ tab_reg <- function(data, dependent, predictors = NULL,
     }
   }
 
-  # multiplicator (Phase 12g): a named numeric vector c(var = k) scaling a CONTINUOUS predictor's effect
+  # multiplier (Phase 12g): a named numeric vector c(var = k) scaling a CONTINUOUS predictor's effect
   # to per-k units (OR^k / beta*k). Names must be numeric predictors of the glm-family models.
-  if (!is.null(multiplicator)) {
-    if (!is.numeric(multiplicator) || is.null(names(multiplicator))) {
-      cli::cli_abort("{.arg multiplicator} must be a named numeric vector, e.g. {.code c(age = 10)}.")
+  if (!is.null(multiplier)) {
+    if (!is.numeric(multiplier) || is.null(names(multiplier))) {
+      cli::cli_abort("{.arg multiplier} must be a named numeric vector, e.g. {.code c(age = 10)}.")
     }
     if (family %in% c("multinomial", "ordinal")) {
-      cli::cli_abort("{.arg multiplicator} is not supported for {.val {family}} models.")
+      cli::cli_abort("{.arg multiplier} is not supported for {.val {family}} models.")
     }
     num_preds <- all_predictors[!purrr::map_lgl(
       all_predictors, ~ is.factor(data[[.x]]) || is.character(data[[.x]]))]
-    bad <- setdiff(names(multiplicator), num_preds)
+    bad <- setdiff(names(multiplier), num_preds)
     if (length(bad) > 0L) {
-      cli::cli_abort(c("{.arg multiplicator} names must be numeric predictors.",
+      cli::cli_abort(c("{.arg multiplier} names must be numeric predictors.",
                        "x" = "Not numeric predictor{?s}: {.val {bad}}."))
     }
   }
@@ -2586,7 +2588,7 @@ tab_reg <- function(data, dependent, predictors = NULL,
                    inverse_two_level_factors, conf_level, method, color, color_signif,
                    cleannames, subtext, eff_word, effect, at,
                    stats = stats, compare = compare, baseline = baseline, split_var = split_var,
-                   multiplicator = multiplicator, empirical = empirical,
+                   multiplier = multiplier, empirical = empirical,
                    estimate_display = estimate_display,
                    .fit_cache = .fit_cache, reference = reference, reref = reref)
 
@@ -2648,7 +2650,7 @@ tab_reg <- function(data, dependent, predictors = NULL,
 #' @export
 tab_logit <- function(data, dependent, predictors, wt = NULL,
                       ids = NULL, strata = NULL, fpc = NULL, nest = FALSE,
-                      inverse_two_level_factors = TRUE, split_var = NULL, multiplicator = NULL,
+                      inverse_two_level_factors = TRUE, split_var = NULL, multiplier = NULL,
                       empirical = FALSE,
                       conf_level = getOption("tabxplor.conf_level", 0.95),
                       method = c("wald", "profile"),
@@ -2663,7 +2665,7 @@ tab_logit <- function(data, dependent, predictors, wt = NULL,
   stopifnot(is.character(predictors), length(predictors) >= 1L)
   tab_reg(data, dependent = dependent, predictors = predictors, family = "binomial", wt = wt,
           ids = ids, strata = strata, fpc = fpc, nest = nest, split_var = split_var,
-          multiplicator = multiplicator, empirical = empirical,
+          multiplier = multiplier, empirical = empirical,
           conf_level = conf_level, method = method, stats = stats,
           estimate_display = estimate_display,
           inverse_two_level_factors = inverse_two_level_factors,
@@ -2704,7 +2706,7 @@ tab_logit <- function(data, dependent, predictors, wt = NULL,
 #' @export
 multi_logit <- function(data, dependent, models, wt = NULL,
                         ids = NULL, strata = NULL, fpc = NULL, nest = FALSE,
-                        inverse_two_level_factors = TRUE, split_var = NULL, multiplicator = NULL,
+                        inverse_two_level_factors = TRUE, split_var = NULL, multiplier = NULL,
                         empirical = FALSE,
                         conf_level = getOption("tabxplor.conf_level", 0.95),
                         method = c("wald", "profile"),
@@ -2723,7 +2725,7 @@ multi_logit <- function(data, dependent, models, wt = NULL,
   stopifnot(is.character(dependent), length(dependent) >= 1L, is.list(models), length(models) >= 1L)
   tab_reg(data, dependent = dependent, predictors = models, family = "binomial", wt = wt,
           ids = ids, strata = strata, fpc = fpc, nest = nest, split_var = split_var,
-          multiplicator = multiplicator, empirical = empirical,
+          multiplier = multiplier, empirical = empirical,
           conf_level = conf_level, method = method,
           stats = stats, compare = compare, baseline = baseline,
           estimate_display = estimate_display,

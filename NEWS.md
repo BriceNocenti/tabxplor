@@ -202,7 +202,7 @@
   same model is fitted **within each level** of a grouping variable and the per-group tables are stacked.
   Use `tab_spread()` on the grouping variable to place the groups side by side for an across-group
   comparison.
-* `tab_reg()` gains `multiplicator =` (a named vector like `c(age = 10)` showing a continuous predictor's
+* `tab_reg()` gains `multiplier =` (a named vector like `c(age = 10)` showing a continuous predictor's
   effect **per k units**, e.g. the odds ratio per decade) and **`empirical =`** --- the crude
   (unadjusted, single-predictor) companion of the model effect, the standard "crude vs adjusted"
   comparison. It now works across families: **binomial** adds `Emp. %` + `Emp. OR` (coefficient) or

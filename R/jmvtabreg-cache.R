@@ -11,7 +11,7 @@
 #       list(tabs, store, hits). Kept engine-free so it is unit-testable without a live jamovi session.
 #       Picker folders map the hidden Array UI options into tab_reg() args: jmvtab_reg_ref_vector()
 #       (references), jmvtab_reg_models() (the model-comparison "+" builder -> `predictors` list or the
-#       flat pool), jmvtab_reg_mult_vector() (numeric-predictor scaling -> `multiplicator`).
+#       flat pool), jmvtab_reg_mult_vector() (numeric-predictor scaling -> `multiplier`).
 # KEY CONSTRAINTS:
 #   - jmvtabreg.h.R is GENERATED from jmvtabreg.a.yaml (jmvtools::prepare()); never hand-edit it.
 #   - Persist plain lists (coef vectors, vcov matrices, tibbles) -- NEVER a live object bound to an env.
@@ -190,8 +190,8 @@ jmvtab_reg_models <- function(models, pool) {
   stats::setNames(built, labels)
 }
 
-# Fold the per-numeric-predictor scaling picker (`multiplicator` Array of Group{var, k}) into
-# tab_reg()'s named numeric `multiplicator`. Blank / non-numeric k dropped; NULL when nothing set.
+# Fold the per-numeric-predictor scaling picker (the jamovi `multiplicator` Array of Group{var, k})
+# into tab_reg()'s named numeric `multiplier`. Blank / non-numeric k dropped; NULL when nothing set.
 # Mirrors jmvtab_reg_ref_vector().
 #' @keywords internal
 #' @noRd
@@ -266,7 +266,7 @@ jmvtab_reg_build <- function(data, opts, store = NULL) {
     subtext      = opts$subtext,
     compare       = if (is.null(opts$compare)) "none" else opts$compare,
     baseline      = opts$baseline,
-    multiplicator = opts$multiplicator,
+    multiplier    = opts$multiplier,
     trials        = opts$trials,
     .fit_cache   = cache_env
   )

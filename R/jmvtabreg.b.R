@@ -71,9 +71,10 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         # model-comparison test (footer): needs >=2 models; baseline = the chosen model's position.
         compare      = self$options$compare,
         baseline     = self$options$baseline,
-        # multiplicator (numeric-predictor scaling): not for multinomial / ordinal -> NULL there so a
-        # family switch never aborts tab_reg().
-        multiplicator = if (self$options$family %in% c("multinomial", "ordinal")) NULL
+        # multiplier (numeric-predictor scaling): not for multinomial / ordinal -> NULL there so a
+        # family switch never aborts tab_reg(). NB the jamovi option key is still `multiplicator`
+        # (unchanged so no `jmvtools::prepare()` regen is needed); only the R-facing arg is renamed.
+        multiplier   = if (self$options$family %in% c("multinomial", "ordinal")) NULL
                         else jmvtab_reg_mult_vector(self$options$multiplicator),
         # trials (grouped / summed-score binomial): binomial only -> NULL for other families.
         trials       = if (self$options$family %in% c("binomial", "auto"))

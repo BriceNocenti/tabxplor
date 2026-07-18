@@ -217,11 +217,11 @@ test_that("split_var rejects an invalid grouping column", {
   expect_error(tab_logit(d, "y", "x1", split_var = "x2"), "factor or character")
 })
 
-# --- Phase 12g-iv: multiplicator + empirical_OR ----------------------------------------------------
-test_that("multiplicator scales a continuous predictor's OR to OR^k, p unchanged", {
+# --- Phase 12g-iv: multiplier + empirical_OR ----------------------------------------------------
+test_that("multiplier scales a continuous predictor's OR to OR^k, p unchanged", {
   d <- reg_split_data()
   t0  <- suppressWarnings(tab_logit(d, "y", c("x1", "x2")))
-  t10 <- suppressWarnings(tab_logit(d, "y", c("x1", "x2"), multiplicator = c(x2 = 10)))
+  t10 <- suppressWarnings(tab_logit(d, "y", c("x1", "x2"), multiplier = c(x2 = 10)))
   oc  <- grep("^Model ", names(t0), value = TRUE)[1]
   or0  <- vapply(t0[[oc]],  tabxplor::get_num, numeric(1))
   or10 <- vapply(t10[[oc]], tabxplor::get_num, numeric(1))
@@ -232,9 +232,9 @@ test_that("multiplicator scales a continuous predictor's OR to OR^k, p unchanged
   expect_equal(tabxplor:::get_pvalue(t0[[oc]]), tabxplor:::get_pvalue(t10[[oc]]))
 })
 
-test_that("multiplicator rejects non-numeric predictors / wrong families", {
+test_that("multiplier rejects non-numeric predictors / wrong families", {
   d <- reg_split_data()
-  expect_error(suppressWarnings(tab_logit(d, "y", c("x1", "x2"), multiplicator = c(x1 = 2))),
+  expect_error(suppressWarnings(tab_logit(d, "y", c("x1", "x2"), multiplier = c(x1 = 2))),
                "numeric predictors")
 })
 

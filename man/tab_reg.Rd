@@ -23,7 +23,7 @@ tab_reg(
   reference = NULL,
   inverse_two_level_factors = TRUE,
   split_var = NULL,
-  multiplicator = NULL,
+  multiplier = NULL,
   empirical = FALSE,
   stats = NULL,
   compare = c("none", "baseline", "sequential"),
@@ -122,7 +122,7 @@ per-group tables are stacked into one grouped table (grouped by \code{split_var}
 variable/level stub. Use \code{\link[=tab_spread]{tab_spread()}} on \code{split_var} to pivot the groups into side-by-side
 columns for an easy across-group comparison. A level absent from a group shows empty cells.}
 
-\item{multiplicator}{Optional named numeric vector \code{c(var = k)} rescaling a \strong{continuous}
+\item{multiplier}{Optional named numeric vector \code{c(var = k)} rescaling a \strong{continuous}
 predictor's effect to a k-unit change (e.g. \code{c(age = 10)} shows the odds ratio / beta per decade
 of age = OR^10 / beta*10). The confidence interval scales with it; the p-value is unchanged. Names
 must be numeric predictors; not available for multinomial / ordinal outcomes.}
@@ -162,7 +162,9 @@ estimate (e.g. \code{2.34}); \code{"ci"} adds a visible confidence-interval brac
 family); \code{"prob"} folds the model-adjusted predicted probability into the odds-ratio cell
 (\verb{2.34 (16\%)}); \code{"ame"} folds the average marginal effect (\verb{2.34 (+8\%)}). \code{"prob"}/\code{"ame"} need the
 \code{marginaleffects} package and apply to binomial (logistic) coefficient models only (they degrade to
-\code{"ci"} otherwise, with a message).}
+\code{"ci"} otherwise, with a message). Note \code{estimate_display = "ame"} \emph{adds} an AME beside the odds
+ratio, whereas \code{effect = "ame"} makes the whole column an AME (probability scale); the two are
+different and, when both are set, \code{effect = "ame"} wins and \code{estimate_display} is reset to \code{"value"}.}
 
 \item{color, color_signif}{How the effect measure is coloured (\code{NULL} uses the per-family default:
 \code{"OR"} magnitude for ratios, standardized \code{"diff"} for betas; significance policy
