@@ -3,7 +3,7 @@
 # tabxplor 1.4.0 (in development)
 
 ## New features
-* **New jamovi "Regressions" analysis (`jmvtab_reg`).** A live, user-friendly jamovi UI for `tab_reg()`
+* **New jamovi "Regressions" analysis (`jmvtabreg`).** A live, user-friendly jamovi UI for `tab_reg()`
   covering every family (linear / logistic / Poisson / multinomial / ordinal), multiple outcomes,
   survey weights (with an advanced cluster / strata / fpc panel), a per-predictor reference-level picker,
   the crude-vs-model (`empirical`) companion columns, and Excel / HTML / Markdown export. Changing the

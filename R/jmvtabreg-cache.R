@@ -1,4 +1,4 @@
-# PURPOSE: The jmvtab_reg live-UI fit cache (Phase 15b) + the engine-free build core jmvtab_reg_build().
+# PURPOSE: The jmvtabreg live-UI fit cache (Phase 15b) + the engine-free build core jmvtab_reg_build().
 # ROLE: Drives tab_reg() with a mutable cache environment injected via its internal `.fit_cache` arg.
 #       reg_build() (R/tab_reg.R) fetches through jmvreg_cached(): on the single-equation GLM
 #       coefficient path a KB-sized "digest" (coef + vcov + reference-invariant glance) whose key is
@@ -6,11 +6,11 @@
 #       (ame / profile / mnl-vs-rest / compound / multinomial / ordinal / split) the raw reg_fit result
 #       keyed on the (already display-referenced) data + transform settings. Content-addressed,
 #       schema-versioned, byte-bounded LRU, persisted to the hidden `cache_state` Image $state.
-# ROLE (build core): jmvtab_reg_build() is the pure, engine-free entry the R6 backend (R/jmvtab_reg.b.R)
+# ROLE (build core): jmvtab_reg_build() is the pure, engine-free entry the R6 backend (R/jmvtabreg.b.R)
 #       calls -- it maps the plain options list onto tab_reg(..., .fit_cache = cache_env) and returns
 #       list(tabs, store, hits). Kept engine-free so it is unit-testable without a live jamovi session.
 # KEY CONSTRAINTS:
-#   - jmvtab_reg.h.R is GENERATED from jmvtab_reg.a.yaml (jmvtools::prepare()); never hand-edit it.
+#   - jmvtabreg.h.R is GENERATED from jmvtabreg.a.yaml (jmvtools::prepare()); never hand-edit it.
 #   - Persist plain lists (coef vectors, vcov matrices, tibbles) -- NEVER a live object bound to an env.
 #   - The digest key is reference-INDEPENDENT so a reference change is a HIT; the `na` mode + weights are
 #     captured through the per-column fingerprint of the (already prepared) data, not as extra key parts.

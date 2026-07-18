@@ -1,10 +1,10 @@
 title: Regressions
-name: jmvtab_reg
+name: jmvtabreg
 jus: '3.0'
 stage: 0
 compilerMode: tame
 events:
-  update: ./jmvtab_reg::update
+  update: ./jmvtabreg::update
 children:
   - type: VariableSupplier
     name: variablesupplier
@@ -18,7 +18,7 @@ children:
             name: dependent
             isTarget: true
             events:
-              change: ./jmvtab_reg::onChange_vars
+              change: ./jmvtabreg::onChange_vars
       - type: TargetLayoutBox
         label: <b>predictors = <i>(explanatory variables)</i></b>
         children:
@@ -26,7 +26,7 @@ children:
             name: predictors
             isTarget: true
             events:
-              change: ./jmvtab_reg::onChange_vars
+              change: ./jmvtabreg::onChange_vars
       - type: TargetLayoutBox
         label: <b>wt = <i>(survey weights)</i></b>
         children:
@@ -35,7 +35,7 @@ children:
             maxItemCount: 1
             isTarget: true
             events:
-              change: ./jmvtab_reg::onChange_vars
+              change: ./jmvtabreg::onChange_vars
       - type: TargetLayoutBox
         label: <b>split_var = <i>(fit within each group)</i></b>
         children:
@@ -134,8 +134,8 @@ children:
             name: refPickerCtrl
             stretchFactor: 1
             events:
-              creating: ./jmvtab_reg::refPickerCtrl_creating
-              updated: ./jmvtab_reg::refPickerCtrl_updated
+              creating: ./jmvtabreg::refPickerCtrl_creating
+              updated: ./jmvtabreg::refPickerCtrl_updated
 
   - type: CollapseBox
     label: <b>Confidence intervals</b>
@@ -271,7 +271,7 @@ children:
           - type: ComboBox
             name: export_format
             events:
-              change: ./jmvtab_reg::export_format_changed
+              change: ./jmvtabreg::export_format_changed
       - type: LayoutBox
         margin: none
         cell:
@@ -295,7 +295,7 @@ children:
             name: exportExcel
             label: Export to Excel
             events:
-              change: ./jmvtab_reg::exportExcel_changed
+              change: ./jmvtabreg::exportExcel_changed
       - type: LayoutBox
         margin: none
         cell:

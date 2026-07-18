@@ -1244,11 +1244,11 @@ for §5–§7. Vendored verbatim source: `dev/jamovi/reference/`.
 
 ---
 
-## §15. Phase 15b — the `jmvtab_reg` (Regressions) analysis
+## §15. Phase 15b — the `jmvtabreg` (Regressions) analysis
 
 A second jamovi analysis wrapping `tab_reg()`, built from the `jmvtab` template. Files:
-`jamovi/jmvtab_reg.{a,u,r}.yaml`, `jamovi/js/jmvtab_reg.js`, `R/jmvtab_reg.b.R`,
-`R/jmvtab_reg-cache.R`; registered as a 2nd entry in `jamovi/0000.yaml`. `R/jmvtab_reg.h.R` is the
+`jamovi/jmvtabreg.{a,u,r}.yaml`, `jamovi/js/jmvtabreg.js`, `R/jmvtabreg.b.R`,
+`R/jmvtabreg-cache.R`; registered as a 2nd entry in `jamovi/0000.yaml`. `R/jmvtabreg.h.R` is the
 usual generated header (a maintainer `jmvtools::prepare()` step — not created headlessly).
 
 **Scope (15b-i, done).** Single-model UI: every family (`auto`/gaussian/binomial/poisson/
@@ -1266,12 +1266,12 @@ Image `$state`) memoizes fitted models so display / colour / reference toggles a
 factor-predictor **reference change is reparametrized live from a cached fit — no refit** (the reg
 analogue of jmvtab's `jmv_tab3_reref`): `reg_build_digest()` caches `coef`+`vcov`+`glance` (KB), and
 `reg_reref_fit_res()` builds the display-reference tidy by coefficient contrasts (byte-identical to a
-real refit; `test-jmvtab-reg-cache.R`). Decided with the maintainer over serializing megabyte model
+real refit; `test-jmvtabreg-cache.R`). Decided with the maintainer over serializing megabyte model
 objects. Heavy paths (ame/profile/mnl-vs-rest/compound/MNL/ordinal/split) cache the raw fit and refit
 on a reference change.
 
 **Gotchas re-confirmed.** No option named `levels` (a `jmvcore::Options` member — `method`/`family`/
 `effect`/`at`/`color`/`reference` are all safe, verified against `jmvcore/options.R`). `utils.clone`
 not `context.clone` (jus 3.0). Two `VariableSupplier`s (main + survey) is fine. The `.b.R` R6
-`inherit = jmvtab_regBase` is lazy, so the file loads / `R CMD check`s before `prepare()` generates
-the header (until then `check()` NOTEs `jmvtab_regBase` as an undefined global — expected).
+`inherit = jmvtabregBase` is lazy, so the file loads / `R CMD check`s before `prepare()` generates
+the header (until then `check()` NOTEs `jmvtabregBase` as an undefined global — expected).

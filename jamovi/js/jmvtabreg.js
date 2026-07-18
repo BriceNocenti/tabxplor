@@ -1,4 +1,4 @@
-// Custom UI events for the jmvtab_reg (Regressions) analysis.
+// Custom UI events for the jmvtabreg (Regressions) analysis.
 // NOTE: the jamovi compiler ships this file verbatim (comments included) to every user, so keep it
 // lean. jus 3.0: use the GLOBAL `utils.clone` (the events `this` has no `.clone`, unlike jus 2.0).
 

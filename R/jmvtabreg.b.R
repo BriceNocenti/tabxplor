@@ -1,12 +1,12 @@
-# PURPOSE: Jamovi module backend for the `jmvtab_reg` analysis (Regressions).
+# PURPOSE: Jamovi module backend for the `jmvtabreg` analysis (Regressions).
 # ROLE: A thin orchestrator (Phase 15b), the sibling of R/jmvtab.b.R. `.run()` reads the options from
-#       jamovi/jmvtab_reg.a.yaml, restores the live fit cache from the hidden `cache_state` result
-#       element's $state, calls the pure jmvtab_reg_build() (R/jmvtab_reg-cache.R -- which drives
+#       jamovi/jmvtabreg.a.yaml, restores the live fit cache from the hidden `cache_state` result
+#       element's $state, calls the pure jmvtab_reg_build() (R/jmvtabreg-cache.R -- which drives
 #       tab_reg() with the cache injected via `.fit_cache`), persists the updated store, and renders
 #       the table as HTML via tab_kable().
 # KEY CONSTRAINTS:
-#   - jmvtab_reg.h.R is GENERATED from jmvtab_reg.a.yaml (jmvtools::prepare()); never hand-edit it. The
-#     R6Class `inherit = jmvtab_regBase` is evaluated LAZILY (at instantiation, in the running app), so
+#   - jmvtabreg.h.R is GENERATED from jmvtabreg.a.yaml (jmvtools::prepare()); never hand-edit it. The
+#     R6Class `inherit = jmvtabregBase` is evaluated LAZILY (at instantiation, in the running app), so
 #     this file loads / checks fine before the .h.R exists.
 #   - The module runs in Jamovi's bundled R -- keep dependencies to what the package Imports/Suggests.
 #   - The cache lives ONLY in $state (survives the engine reset); never rely on R globals.
@@ -14,9 +14,9 @@
 # See: dev/tabxplor_1.4.0_jamovi_dev.md ; CLAUDE.md > 1.4.0 roadmap > Phase 15b.
 
 # @rdname jamovi
-jmvtab_regClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
-  "jmvtab_regClass",
-  inherit = jmvtab_regBase,
+jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
+  "jmvtabregClass",
+  inherit = jmvtabregBase,
   private = list(
 
     .run = function() {
