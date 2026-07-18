@@ -238,9 +238,9 @@ test_that("multiplicator rejects non-numeric predictors / wrong families", {
                "numeric predictors")
 })
 
-test_that("empirical_OR crude OR matches the weighted 2x2 odds ratio", {
+test_that("empirical crude OR matches the weighted 2x2 odds ratio", {
   d   <- reg_split_data()
-  t   <- suppressWarnings(tab_logit(d, "y", "x1", empirical_OR = TRUE))
+  t   <- suppressWarnings(tab_logit(d, "y", "x1", empirical = TRUE))
   expect_true(all(c("Emp. %", "Emp. OR") %in% names(t)))
   eo  <- vapply(dplyr::ungroup(t)[["Emp. OR"]], tabxplor::get_num, numeric(1))
   # hand crude OR of each x1 level vs the reference "a", positive outcome = first level of y
@@ -254,9 +254,18 @@ test_that("empirical_OR crude OR matches the weighted 2x2 odds ratio", {
   expect_equal(unname(eo_fac), unname(hand), tolerance = 1e-8)
 })
 
-test_that("empirical_OR is refused outside a single binary coefficient model", {
+test_that("empirical is ignored (with a message) outside a single binary logistic model (Phase 14t)", {
   d <- reg_split_data()
-  expect_error(
-    tab_reg(d, "x2", "x1", family = "gaussian", empirical_OR = TRUE),
+  expect_message(
+    t <- tab_reg(d, "x2", "x1", family = "gaussian", empirical = TRUE),
     "single binary logistic")
+  expect_false(any(grepl("^Emp\\.", names(t))))     # no empirical columns
+})
+
+test_that("the deprecated empirical_OR argument still works, with a warning (Phase 14t)", {
+  d <- reg_split_data()
+  lifecycle::expect_deprecated(
+    t <- tab_reg(d, "y", "x1", family = "binomial", empirical_OR = TRUE),
+    "empirical")
+  expect_true(all(c("Emp. %", "Emp. OR") %in% names(t)))
 })

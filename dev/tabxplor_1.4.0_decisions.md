@@ -4214,3 +4214,57 @@ numbers+numFmt; the heterogeneous-column reality made per-column numFmt impossib
 writing a large `tab_xl` change, so v1 writes coloured text. Revisit with a per-cell writer if editable
 transposed numbers matter. (b) The `has_color` grey-shade (g1/g2) on a mixed transposed column is
 `any(source has_color)` (cosmetic only). (c) `tab_plot()` transpose is best-effort (it is soft-deprecated).
+
+## 45. Phase 14t — the empirical (crude / unadjusted) framework (DESIGN + partial DONE 2026-07-18)
+
+The roadmap refers to a "§37" for this; it never existed, so the design lives here. `empirical = TRUE`
+(renamed from `empirical_OR`) adds the DESCRIPTIVE crude companion of the model effect: the *unadjusted*
+bivariate association between a factor predictor and the outcome, which IS the modelised quantity when
+there is a single predictor. This is the standard "crude vs adjusted" comparison (epidemiology / social
+science good practice): a large gap between the crude and the model column signals confounding /
+adjustment.
+
+### The family-appropriate crude quantity (design)
+
+| family        | modelised (adjusted)         | empirical (crude / unadjusted)                          | placement          |
+|---------------|------------------------------|---------------------------------------------------------|--------------------|
+| binomial (OR) | model OR per level           | crude % (P(pos\|level)) + crude OR (2x2) + crude risk-diff | explicit columns ✅ |
+| binomial (AME)| avg marginal effect (prob)   | observed % per level + observed risk-difference          | explicit columns ✅ |
+| gaussian      | beta (adjusted mean-diff)    | crude mean(Y\|level) + crude mean-difference             | explicit columns ⏸ |
+| poisson (IRR) | model IRR                    | crude rate (mean count) + crude rate-ratio               | explicit columns ⏸ |
+| multinomial   | one OR col per category      | observed category % + crude diff, PER category           | tooltip only ⏸     |
+
+Placement rule (settled with the maintainer): **explicit columns when few** (binomial, gaussian,
+poisson), **tooltip-only when many** (multinomial — a column per category x empirical would explode the
+layout).
+
+### What landed this session (solid, colour-safe)
+
+- **Rename** `empirical_OR` -> `empirical` on `tab_reg()` / `tab_logit()` / `multi_logit()`. `tab_reg()`
+  keeps `empirical_OR = lifecycle::deprecated()` (warns, forwards) so the maintainer's scripts keep
+  working; the wrappers took the new name directly (1.4.0-dev, no released user).
+- **Binomial**, both `effect = "coefficient"` AND `effect = "ame"`: the crude `Emp. %` (coloured by the
+  crude risk-difference) + `Emp. OR` columns. Widening it to AME answers the review's "base % + empirical
+  diff" and un-blocks the `effect = "ame" + empirical` error (now these columns, no error).
+- Other families / multinomial: `empirical = TRUE` now emits a MESSAGE ("available only for a single
+  binary logistic outcome; ignored") and proceeds, instead of aborting.
+
+### Why gaussian / poisson / multinomial are DEFERRED (needs the maintainer)
+
+- **Gaussian / poisson colour is genuinely under-specified.** An `Emp. mean` column of `type = "mean"`
+  coloured by `color = "diff"` uses the sd-STANDARDIZED difference (Glass's Delta = diff / sd_ref, §18),
+  but the crude path has no reference variance (`var` field), so the colour scale is undefined. Options
+  to settle: (a) compute + store the crude sd_ref; (b) colour the crude mean by the ratio (`mean_breaks`)
+  instead; (c) leave the crude column uncoloured. This is a visual-design call.
+- **The multinomial x AME tooltip is a REAL field conflict, not just fiddly.** The tooltip builder
+  (`tab_kable_print_tooltip`) reads the `ratio` / `ctr` / `mean` fields for a `type = "row"`/`"mean"`
+  column (`out_rr` / `out_ctr` / `out_mean`), so stashing the crude % / diff in any of them makes a
+  SPURIOUS "ratio:" / "contrib:" line appear — exactly the "would mess with tab() tooltips or other
+  tab_reg() tooltips" the maintainer worried about. A clean version needs EITHER a genuinely free field
+  (none is safe for a row-type column) OR a new tooltip fragment gated on a reg marker (touches the
+  shared builder). The maintainer already called this feature "genuinely marginal (a rarely-read
+  crude-vs-adjusted check on a crowded table)" and said to defer if fragile. It is fragile. Deferred.
+
+**Recommendation for the maintainer**: confirm the gaussian/poisson crude-column COLOUR rule (options
+above), then those two families are a small extension of `reg_empirical_columns`. The multinomial tooltip
+should stay deferred / opt-in unless a dedicated reg-only tooltip field is worth the shared-builder cost.

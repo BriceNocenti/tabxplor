@@ -634,6 +634,10 @@
 * Multinomial `tab_reg()` tables no longer draw borders between the outcome-category columns of one
   model (they now share one spanning header naming the model). And a regression table whose columns are
   named after the model no longer repeats that name in a redundant spanning row above the headers.
+* `tab_reg()`'s `empirical_OR` argument is renamed **`empirical`** (the old name still works with a
+  deprecation warning). It now also adds the crude percentage / odds-ratio companion columns to an
+  `effect = "ame"` table (was coefficient-only), and is a message rather than an error for the families
+  where the crude companion is not yet available (gaussian, poisson, multinomial).
 
 ## Deprecations
 * `tab_transpose()` is **soft-deprecated** in favour of the exporters' `transpose = TRUE` argument.

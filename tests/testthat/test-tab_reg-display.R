@@ -162,7 +162,7 @@ test_that("model effect columns drop the whole-model n; footer cells have no too
 test_that("empirical columns keep the per-LEVEL n in the tooltip (Item D)", {
   skip_if_not_installed("broom")
   d <- reg_data()
-  t <- tab_reg(d, "married", c("race", "rincome"), family = "binomial", empirical_OR = TRUE)
+  t <- tab_reg(d, "married", c("race", "rincome"), family = "binomial", empirical = TRUE)
   tips <- tabxplor:::tab_kable_print_tooltip(t[["Emp. OR"]])
   expect_true(any(grepl("n: ", tips)))          # per-level counts survive
 })

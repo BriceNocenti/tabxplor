@@ -1385,7 +1385,7 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
                       inverse_two_level_factors, conf_level, method, color, color_signif,
                       cleannames, subtext, eff_word, effect = "coefficient", at = "average",
                       stats = NULL, compare = "none", baseline = NULL, split_var = NULL,
-                      multiplicator = NULL, empirical_OR = FALSE, estimate_display = "value",
+                      multiplicator = NULL, empirical = FALSE, estimate_display = "value",
                       skeleton_data = data) {
   # split_var (Phase 12g): the regression analogue of tab()'s tab_vars -- fit the SAME model(s) within
   # each level of a grouping variable and STACK the per-group tables into one grouped_tab (grouped by
@@ -1404,7 +1404,7 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
       tg  <- reg_build(sub, specs, union_predictors, family, ds_g, weighted, do_exp, effect_shape,
                        inverse_two_level_factors, conf_level, method, color, color_signif,
                        cleannames, subtext, eff_word, effect, at, stats, compare, baseline,
-                       split_var = NULL, multiplicator = multiplicator, empirical_OR = empirical_OR,
+                       split_var = NULL, multiplicator = multiplicator, empirical = empirical,
                        estimate_display = estimate_display, skeleton_data = data)
       tst <- get_test(tg); if (!is.null(tst) && nrow(tst) > 0) tst$row_var <- as.character(g)
       list(data = tibble::add_column(tibble::as_tibble(dplyr::ungroup(tg)),
@@ -1553,9 +1553,11 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
     var    = forcats::fct_inorder(skeleton$var),
     levels = forcats::fct_inorder(disp_levels)
   )
-  # empirical_OR (Phase 12g, binary coefficient path): the descriptive crude % + OR of each FACTOR
-  # predictor level, placed just before the model OR (aligned to the shared skeleton).
-  if (isTRUE(empirical_OR) && family == "binomial" && effect == "coefficient") {
+  # empirical (Phase 12g/14t): the descriptive crude % + OR of each FACTOR predictor level, placed just
+  # before the model column (aligned to the shared skeleton). The crude % (coloured by the crude risk-
+  # difference) + crude OR are the unadjusted companion of BOTH the coefficient OR and the AME (Phase 14t
+  # widened it from coefficient-only): the observed % per level answers "base % + empirical diff".
+  if (isTRUE(empirical) && family == "binomial" && effect %in% c("coefficient", "ame")) {
     fac_preds_e <- union_predictors[!purrr::map_lgl(
       union_predictors, ~ is.numeric(skeleton_data[[.x]]))]
     pos_lvl <- fits[[1]]$positive_level
@@ -1692,10 +1694,12 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
 #'   predictor's effect to a k-unit change (e.g. `c(age = 10)` shows the odds ratio / beta per decade
 #'   of age = OR^10 / beta*10). The confidence interval scales with it; the p-value is unchanged. Names
 #'   must be numeric predictors; not available for multinomial / ordinal outcomes.
-#' @param empirical_OR Logical (binary logistic outcome only). If `TRUE`, adds a descriptive **crude
-#'   percentage** and **crude odds ratio** column (`"Emp. %"`, `"Emp. OR"`) beside the model odds ratio,
-#'   for each factor predictor level -- the unadjusted "OR + PCT" companion connecting the model to the
-#'   descriptive crosstab. Default `FALSE`.
+#' @param empirical Logical (binary logistic outcome only, for now). If `TRUE`, adds a descriptive
+#'   **crude percentage** and **crude odds ratio** column (`"Emp. %"`, `"Emp. OR"`) beside the model
+#'   effect, for each factor predictor level -- the unadjusted bivariate association (which IS the
+#'   modelised quantity when there is a single predictor), connecting the model to the descriptive
+#'   crosstab. Works for both the coefficient and the `effect = "ame"` display. Default `FALSE`.
+#' @param empirical_OR `r lifecycle::badge("deprecated")` Renamed to `empirical`.
 #' @param stats The goodness-of-fit statistics shown in the model-summary **footer** (one block per
 #'   model). `NULL` (default) uses the per-family set: linear models show N, R square, adjusted R
 #'   square, the overall F-test and the residual SD; other models show N, the likelihood-ratio test
@@ -1776,17 +1780,22 @@ tab_reg <- function(data, dependent, predictors = NULL,
                     effect = c("coefficient", "ame"), at = c("average", "reference"),
                     trials = NULL, conf_level = 0.95, method = c("wald", "profile"),
                     reference = NULL, inverse_two_level_factors = TRUE, split_var = NULL,
-                    multiplicator = NULL, empirical_OR = FALSE,
+                    multiplicator = NULL, empirical = FALSE,
                     stats = NULL, compare = c("none", "baseline", "sequential"), baseline = NULL,
                     estimate_display = c("value", "ci", "prob", "ame"),
                     color = NULL, color_signif = NULL, stars = TRUE,
-                    cleannames = NULL, subtext = "") {
+                    cleannames = NULL, subtext = "", empirical_OR = lifecycle::deprecated()) {
   method  <- match.arg(method)
   effect  <- match.arg(effect)
   at      <- match.arg(at)
   compare <- match.arg(compare)
   estimate_display <- match.arg(estimate_display)
   cleannames <- if (is.null(cleannames)) getOption("tabxplor.cleannames", TRUE) else cleannames
+  # Phase 14t: `empirical_OR` renamed to `empirical` (it is now family-general, not OR-only).
+  if (lifecycle::is_present(empirical_OR)) {
+    lifecycle::deprecate_warn("1.4.0", "tab_reg(empirical_OR)", "tab_reg(empirical)")
+    empirical <- empirical_OR
+  }
 
   # Phase 12g: `data` may be a PREBUILT survey design (survey.design / svyrep.design), gtsummary-style.
   # Extract its model frame for family-detect / reference / skeleton; keep the design for the fits.
@@ -1996,13 +2005,17 @@ tab_reg <- function(data, dependent, predictors = NULL,
     }
   }
 
-  # empirical_OR (Phase 12g): the descriptive crude % + OR beside the model OR -- binary logit,
-  # coefficient effect, one outcome only (the crude OR is a 2x2 quantity per factor-predictor level).
-  if (isTRUE(empirical_OR)) {
-    if (family != "binomial" || effect != "coefficient" || length(dependent) != 1L) {
-      cli::cli_abort(c(
-        "{.arg empirical_OR} is only available for a single binary logistic outcome (coefficient effect).",
-        "i" = "It shows the descriptive crude odds ratio / percentage beside the model odds ratio."))
+  # empirical (Phase 12g/14t): the descriptive crude % + OR beside the model effect -- the unadjusted
+  # bivariate association (which IS the modelised quantity when there is a single predictor). Binary
+  # logistic, one outcome, coefficient OR ame (the crude 2x2 % / OR is meaningful for both). Other
+  # families (gaussian mean-diff, poisson rate-ratio) and multinomial are DESIGNED but not yet wired
+  # (decisions.md Sec 37) -> a message, not an error, and `empirical` is dropped for this call.
+  if (isTRUE(empirical)) {
+    if (family != "binomial" || length(dependent) != 1L) {
+      cli::cli_inform(c("i" = paste0(
+        "{.arg empirical} (crude descriptive companion) is currently available only for a single ",
+        "binary logistic outcome; ignored here.")))
+      empirical <- FALSE
     }
   }
 
@@ -2013,7 +2026,7 @@ tab_reg <- function(data, dependent, predictors = NULL,
                    inverse_two_level_factors, conf_level, method, color, color_signif,
                    cleannames, subtext, eff_word, effect, at,
                    stats = stats, compare = compare, baseline = baseline, split_var = split_var,
-                   multiplicator = multiplicator, empirical_OR = empirical_OR,
+                   multiplicator = multiplicator, empirical = empirical,
                    estimate_display = estimate_display)
 
   # stars = TRUE (default) for regression tables -- the per-cell pvalue is stored by reg_build so the
@@ -2056,7 +2069,7 @@ tab_reg <- function(data, dependent, predictors = NULL,
 tab_logit <- function(data, dependent, predictors, wt = NULL,
                       ids = NULL, strata = NULL, fpc = NULL, nest = FALSE,
                       inverse_two_level_factors = TRUE, split_var = NULL, multiplicator = NULL,
-                      empirical_OR = FALSE,
+                      empirical = FALSE,
                       conf_level = 0.95,
                       method = c("wald", "profile"),
                       stats = NULL, estimate_display = c("value", "ci", "prob", "ame"),
@@ -2068,7 +2081,7 @@ tab_logit <- function(data, dependent, predictors, wt = NULL,
   stopifnot(is.character(predictors), length(predictors) >= 1L)
   tab_reg(data, dependent = dependent, predictors = predictors, family = "binomial", wt = wt,
           ids = ids, strata = strata, fpc = fpc, nest = nest, split_var = split_var,
-          multiplicator = multiplicator, empirical_OR = empirical_OR,
+          multiplicator = multiplicator, empirical = empirical,
           conf_level = conf_level, method = method, stats = stats,
           estimate_display = estimate_display,
           inverse_two_level_factors = inverse_two_level_factors,
@@ -2106,7 +2119,7 @@ tab_logit <- function(data, dependent, predictors, wt = NULL,
 multi_logit <- function(data, dependent, models, wt = NULL,
                         ids = NULL, strata = NULL, fpc = NULL, nest = FALSE,
                         inverse_two_level_factors = TRUE, split_var = NULL, multiplicator = NULL,
-                        empirical_OR = FALSE,
+                        empirical = FALSE,
                         conf_level = 0.95,
                         method = c("wald", "profile"),
                         stats = NULL, compare = c("none", "baseline", "sequential"), baseline = NULL,
@@ -2120,7 +2133,7 @@ multi_logit <- function(data, dependent, models, wt = NULL,
   stopifnot(is.character(dependent), length(dependent) == 1L, is.list(models), length(models) >= 1L)
   tab_reg(data, dependent = dependent, predictors = models, family = "binomial", wt = wt,
           ids = ids, strata = strata, fpc = fpc, nest = nest, split_var = split_var,
-          multiplicator = multiplicator, empirical_OR = empirical_OR,
+          multiplicator = multiplicator, empirical = empirical,
           conf_level = conf_level, method = method,
           stats = stats, compare = compare, baseline = baseline,
           estimate_display = estimate_display,

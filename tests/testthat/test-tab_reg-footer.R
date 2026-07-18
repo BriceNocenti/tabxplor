@@ -212,7 +212,7 @@ test_that("ordinal footer carries a Brant PO test p-value row (Item I)", {
 test_that("reg reference cells and GOF footer render black + bold, data cells stay grey (Items D/J)", {
   skip_if_not_installed("broom")
   d <- reg_data()
-  t <- tab_reg(d, "married", c("race", "rincome"), family = "binomial", empirical_OR = TRUE)
+  t <- tab_reg(d, "married", c("race", "rincome"), family = "binomial", empirical = TRUE)
   rd <- tabxplor:::tab_export_prep(t, backend = "kable", wrap = NULL)$tables[[1]]
   tabm <- rd$tab
 

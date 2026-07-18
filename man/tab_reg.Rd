@@ -24,7 +24,7 @@ tab_reg(
   inverse_two_level_factors = TRUE,
   split_var = NULL,
   multiplicator = NULL,
-  empirical_OR = FALSE,
+  empirical = FALSE,
   stats = NULL,
   compare = c("none", "baseline", "sequential"),
   baseline = NULL,
@@ -33,7 +33,8 @@ tab_reg(
   color_signif = NULL,
   stars = TRUE,
   cleannames = NULL,
-  subtext = ""
+  subtext = "",
+  empirical_OR = lifecycle::deprecated()
 )
 }
 \arguments{
@@ -124,10 +125,11 @@ predictor's effect to a k-unit change (e.g. \code{c(age = 10)} shows the odds ra
 of age = OR^10 / beta*10). The confidence interval scales with it; the p-value is unchanged. Names
 must be numeric predictors; not available for multinomial / ordinal outcomes.}
 
-\item{empirical_OR}{Logical (binary logistic outcome only). If \code{TRUE}, adds a descriptive \strong{crude
-percentage} and \strong{crude odds ratio} column (\code{"Emp. \%"}, \code{"Emp. OR"}) beside the model odds ratio,
-for each factor predictor level -- the unadjusted "OR + PCT" companion connecting the model to the
-descriptive crosstab. Default \code{FALSE}.}
+\item{empirical}{Logical (binary logistic outcome only, for now). If \code{TRUE}, adds a descriptive
+\strong{crude percentage} and \strong{crude odds ratio} column (\code{"Emp. \%"}, \code{"Emp. OR"}) beside the model
+effect, for each factor predictor level -- the unadjusted bivariate association (which IS the
+modelised quantity when there is a single predictor), connecting the model to the descriptive
+crosstab. Works for both the coefficient and the \code{effect = "ame"} display. Default \code{FALSE}.}
 
 \item{stats}{The goodness-of-fit statistics shown in the model-summary \strong{footer} (one block per
 model). \code{NULL} (default) uses the per-family set: linear models show N, R square, adjusted R
@@ -166,6 +168,8 @@ When \code{FALSE}, the per-cell p-value is dropped and no stars are shown (colou
 Uses \code{getOption("tabxplor.cleannames")} when \code{NULL}.}
 
 \item{subtext}{Optional character. A note shown below the table.}
+
+\item{empirical_OR}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Renamed to \code{empirical}.}
 }
 \value{
 A \code{tabxplor_grouped_tab} (grouped by predictor), one effect column per model / dependent.

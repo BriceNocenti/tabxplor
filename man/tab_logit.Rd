@@ -16,7 +16,7 @@ tab_logit(
   inverse_two_level_factors = TRUE,
   split_var = NULL,
   multiplicator = NULL,
-  empirical_OR = FALSE,
+  empirical = FALSE,
   conf_level = 0.95,
   method = c("wald", "profile"),
   stats = NULL,
@@ -64,10 +64,11 @@ predictor's effect to a k-unit change (e.g. \code{c(age = 10)} shows the odds ra
 of age = OR^10 / beta*10). The confidence interval scales with it; the p-value is unchanged. Names
 must be numeric predictors; not available for multinomial / ordinal outcomes.}
 
-\item{empirical_OR}{Logical (binary logistic outcome only). If \code{TRUE}, adds a descriptive \strong{crude
-percentage} and \strong{crude odds ratio} column (\code{"Emp. \%"}, \code{"Emp. OR"}) beside the model odds ratio,
-for each factor predictor level -- the unadjusted "OR + PCT" companion connecting the model to the
-descriptive crosstab. Default \code{FALSE}.}
+\item{empirical}{Logical (binary logistic outcome only, for now). If \code{TRUE}, adds a descriptive
+\strong{crude percentage} and \strong{crude odds ratio} column (\code{"Emp. \%"}, \code{"Emp. OR"}) beside the model
+effect, for each factor predictor level -- the unadjusted bivariate association (which IS the
+modelised quantity when there is a single predictor), connecting the model to the descriptive
+crosstab. Works for both the coefficient and the \code{effect = "ame"} display. Default \code{FALSE}.}
 
 \item{conf_level}{Confidence level for the intervals. Default \code{0.95}.}
 

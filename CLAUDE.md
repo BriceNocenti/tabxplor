@@ -2035,6 +2035,25 @@ carries the right value; `tab()` tooltips unaffected — assert a crosstab toolt
 feature (a rarely-read crude-vs-adjusted check on a crowded table). If the field hack proves fragile,
 make it opt-in or defer — surface this during the design step rather than forcing a hack.
 
+##### Done (partial) + DESIGN (2026-07-18) — full design in `dev/tabxplor_1.4.0_decisions.md` §45
+
+The tooltip field-hack IS fragile (proven, not guessed), so per the maintainer's own guidance the
+fragile parts are DEFERRED with a written design; the solid, colour-safe core landed. Full suite
+**FAIL 0 | WARN 0 | SKIP 4 | PASS 3246**; `document()` clean; **no golden / no snapshot moved**.
+
+- **LANDED (solid)**: `empirical_OR` → **`empirical`** (rename; `tab_reg()` keeps `empirical_OR =
+  lifecycle::deprecated()` warning-alias, the wrappers took the new name). The binomial crude `Emp. %`
+  (coloured by crude risk-diff) + `Emp. OR` columns now show for BOTH `effect = "coefficient"` and
+  `effect = "ame"` (widened from coefficient-only — answers the review's "base % + empirical diff" and
+  un-blocks the `ame + empirical` error). Non-binomial / multinomial: a MESSAGE + ignore, not an abort.
+- **DEFERRED (needs a maintainer visual/design call, §45)**: (1) gaussian/poisson explicit crude columns
+  — the `Emp. mean` colour is under-specified (a `type="mean"` `color="diff"` column needs a reference
+  variance the crude path lacks; options in §45). (2) the multinomial×AME crude-in-tooltip — a REAL
+  field conflict: the tooltip reads `ratio`/`ctr`/`mean` for row/mean columns, so any stash makes a
+  spurious "ratio:"/"contrib:" line. A clean fix needs a dedicated reg-only tooltip field (shared-builder
+  cost) — the maintainer flagged this feature "marginal", so it stays deferred/opt-in.
+- ⚠ **The roadmap's "§37" for this never existed** — the design is now §45.
+
 ---
 
 #### Phase 14u — DESIGN-FIRST: tab_reg model-comparison structure
