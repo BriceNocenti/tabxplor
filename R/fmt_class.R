@@ -1281,17 +1281,6 @@ new_fmt <- function(n         = integer(),
 #' @keywords internal
 fmt0 <- function(display = "n", digits = 0, type = "n") {
   new_fmt(n = 0L, display = display, digits = as.integer(digits), type = type)
-  # switch (display,
-  #   "n"       = new_fmt(display = display, n = 0L,                           digits = as.integer(digits)),
-  #   "wn"      = new_fmt(display = display, n = 0L, wn = 0,                   digits = as.integer(digits)),
-  #   "pct"     = ,
-  #   "pct_ci"  = new_fmt(display = display, n = 0L, wn = 0, pct = 0,          digits = as.integer(digits)),
-  #   "ctr"     = new_fmt(display = display, n = 0L, wn = 0, pct = 0, ctr = 0, digits = as.integer(digits)),
-  #   "mean"    = ,
-  #   "mean_ci" = new_fmt(display = display, n = 0L, wn = 0, mean = 0, var = 0, digits = as.integer(digits)),
-  #   "var"      = new_fmt(display = display, n = 0L, wn = 0, mean = 0, var = 0, digits = as.integer(digits)),
-  #   "ci"      = new_fmt(display = display, n = 0L, ci = 0,                   digits = as.integer(digits)),
-  # )
 }
 
 

@@ -141,7 +141,7 @@ R/
 │                              overridden (a host document is not ours). tab_kable_join(theme=) carries
 │                              the intent, but ONLY when our stylesheet ships (engine html + nzchar(css))
 │                              -- painting a page we did not style = an unreadable table.
-├── utils.R         (~1350 L) Pipe re-export, .onLoad() options setup, factor utilities.
+├── utils.R         (~940 L)  Pipe re-export, .onLoad() options setup, factor utilities.
 │                              NOT the colour-palette DESIGN tools (preview_color_grid /
 │                              simulate_cvd_farver / plot_oklch_hue_strip_cvd / set_luminance...):
 │                              they live in dev/color_palette_tools.R and must stay there -- they

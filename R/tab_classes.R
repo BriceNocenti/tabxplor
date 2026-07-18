@@ -487,24 +487,6 @@ reg_blank_cell  <- function() fmt(display = "blank", type = "n", n = NA_integer_
 # }
 
 
-# as_tab <- function(x, ...) {
-#   UseMethod("as_tab")
-# }
-# as_tab.default <- function(x, ...) {
-#   #vctrs::vec_cast(x, tab())
-# }
-
-#' @keywords internal
-untab <- function(tabs) {
-  if (lv1_group_vars(tabs)) {
-    `class<-`(tabs, class(tabs) %>% purrr::discard(. == "tabxplor_tab"))
-  } else {
-    `class<-`(tabs, class(tabs) %>%
-                purrr::discard(. %in% c("tabxplor_grouped_tab", "tabxplor_tab")))
-  }
-}
-
-
 #Methods to print class tabxplor_tab -----------------------------------------------------
 
 #' Printing method for class tabxplor_tab
@@ -2073,84 +2055,11 @@ if (color_legend & length(color_cols) != 0) {
         dplyr::mutate(text = stringr::str_replace_all(.data$text, unbrk, " "))
     })
 
-
-
-  # color_legend <- color_legend |>
-  #   purrr::map_dfr(
-  #     ~ purrr::map_dfr(unique(.$color), function(.color)
-  #       . |>
-  #         dplyr::mutate(
-  #           in_color = color %in% .color,
-  #           group    = cumsum(in_color != dplyr::lag(in_color, default = FALSE))
-  #         ) |>
-  #         dplyr::group_by(group) |>
-  #         dplyr::summarise(
-  #           in_color = dplyr::first(in_color),
-  #           text     = paste(.data$text, collapse = " "),
-  #           .groups  = "drop"
-  #         ) |>
-  #         dplyr::mutate(text = dplyr::if_else(in_color,
-  #                                             true  = paste0('"', .data$text, '"'),
-  #                                             false = paste0('phantom("', .data$text, '")' ))
-  #         ) |>
-  #         dplyr::summarise(
-  #           text = paste0("bold(", paste(.data$text, collapse = " * "),")") |>
-  #             stringr::str_squish(),
-  #         ) |>
-  #         dplyr::mutate(
-  #           color = .color,
-  #           n     = dplyr::first(.$n),
-  #           .before = 1
-  #         )
-  #
-  #     )
-  #   )
-
-  # if (length(subtext) != 0) {
-  #   color_legend <- list(
-  #     color_legend,
-  #     tibble::tibble(color = text_color,
-  #                    text  = subtext, # paste0('"', subtext, '"'),
-  #                    # n     = 1:length(subtext)
-  #     ) |>
-  #       dplyr::rowwise() |>
-  #       dplyr::group_split()
-  #   ) |>
-  #     purrr::flatten()
-  # }
-
-
-# # If no color legend, just subtext
-#   } else if (length(subtext) != 0) {
-#     color_legend <-
-#         tibble::tibble(color = text_color,
-#                        text  = subtext, # paste0('"', subtext, '"'),
-#                        # n     = 1:length(subtext)
-#         ) |>
-#       dplyr::rowwise() |>
-#       dplyr::group_split()
-
   } else {
     color_legend <- NULL
   }
 
   if (length(color_legend) != 0) {
-    #if (nrow(color_legend) != 0) {
-
-      # color_legend_plot <- color_legend |>
-      #   dplyr::group_by(!!rlang::sym("n")) |>
-      #   dplyr::group_split() |>
-      #   purrr::map(
-      #     ~ dplyr::mutate(., n = max(.data$n) - .data$n) |>
-      #       ggplot2::ggplot(ggplot2::aes(y     = .data$n,
-      #                                    label = .data$text,
-      #                                    color = .data$color)) +
-      #       ggplot2::geom_text(x = 0, parse = TRUE, hjust = 0, size = 3.5) +
-      #       ggplot2::scale_color_identity() +
-      #       ggplot2::theme_void() #+
-      #       #ggplot2::theme()
-      #   )
-
       tab_legend <- color_legend |>
         purrr::map_dfr(
           ~ dplyr::select(., "text") |>
@@ -2208,8 +2117,7 @@ if (color_legend & length(color_cols) != 0) {
 
       tabgrob <- gtable::gtable_add_rows(
         tabgrob,
-        heights = grid::grobHeight(legendgrob), #+
-        #ggplot2::unit(1, "line"),
+        heights = grid::grobHeight(legendgrob),
         pos = -1
       )
       tabgrob <- gtable::gtable_add_grob(tabgrob, legendgrob,
@@ -2218,44 +2126,6 @@ if (color_legend & length(color_cols) != 0) {
                                          l = 1,
                                          r = ncol(tabgrob))
       tabs_gg <- tab_return_same_class_as_input(tabgrob, input = tabs_gg)
-
-
-      # dim_gg     <- tab_get_wrapped_dimensions(tabs)
-      # dim_legend <- tab_get_wrapped_dimensions(tab_legend)
-      #
-      # tabgrob    <- get_tablegrob(tabs_gg) |> justify_grob()
-      # legendgrob <- get_tablegrob(tab_legend_plot) |> justify_grob()
-      #
-      # tabs_gg    <- tab_return_same_class_as_input(tabgrob, input = tabs_gg)
-      # tab_legend_plot <- tab_return_same_class_as_input(legendgrob, input = tab_legend_plot)
-      #
-      # tabs_gg <-
-      #   ggpubr::ggarrange(
-      #     tabs_gg,
-      #     tab_legend_plot,
-      #     ncol = 1L,
-      #     #align = "v",
-      #     heights = c(dim_gg[2], dim_legend[2] - 1L)
-      #   )
-
-
-
-      # for (i in 1:length(color_legend_plot)) {
-      #   # ggpubr::tab_add_footnote
-      #   tabgrob    <- get_tablegrob(tabs_gg)
-      #   legendgrob <- cowplot::as_grob(color_legend_plot[[i]])
-      # #
-      #   tabgrob <- gtable::gtable_add_rows(
-      #     tabgrob,
-      #     heights = grid::grobHeight(legendgrob) +
-      #       ggplot2::unit(1 + dplyr::if_else(i == 1, 0.5, 0), "line"),
-      #     pos = -1
-      #   )
-      #   tabgrob <- gtable::gtable_add_grob(tabgrob, legendgrob, t = nrow(tabgrob),
-      #                                      b = nrow(tabgrob), l = 1, r = ncol(tabgrob))
-      #   tabs_gg <- tab_return_same_class_as_input(tabgrob, input = tabs_gg)
-      # }
-    #}
   }
 
 
@@ -2263,16 +2133,6 @@ if (color_legend & length(color_cols) != 0) {
   tabgrob <- get_tablegrob(tabs_gg)
   tabgrob <- justify_grob(tabgrob)
   tabs_gg <- tab_return_same_class_as_input(tabgrob, input = tabs_gg)
-
-  # if (length(color_legend) != 0) {
-  #   if (nrow(color_legend) != 0) {
-  #     tabs_gg$color_palette <- color_palette
-  #   }
-  # }
-
-  # tabs_gg$height <- grid::grobHeight(tabgrob) |> grid::convertHeight(unitTo = "points") # |> as.double()
-  # tabs_gg$width  <- grid::grobWidth(tabgrob)  |> grid::convertWidth (unitTo = "points") # |> as.double()
-  # # seem not ok...
 
   return(tabs_gg)
 }
