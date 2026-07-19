@@ -72,8 +72,12 @@ vs adjusted" comparison; a large gap signals confounding). Per family: \strong{b
 \itemize{
 \item \verb{Emp. OR} (coefficient) or \verb{Emp. \%} + \verb{Emp. diff} (AME); \strong{gaussian} adds \verb{Emp. mean} +
 \verb{Emp. diff}; \strong{poisson} adds \verb{Emp. rate} + \verb{Emp. IRR}; \strong{multinomial} shows the crude \% +
-difference per category in the HTML tooltip (columns would explode). Also works with a vector of
-dependents. Ordinal has no clean crude analogue and is ignored (with a message). Default \code{FALSE}.
+difference per category in the HTML tooltip (columns would explode). By design every crude quantity
+is computed on \strong{exactly the same complete-case population as the model} (listwise-complete on the
+dependent, all predictors and any design variable), so crude and adjusted are directly comparable
+and not confounded by differing missingness (reproduce it with \code{\link[dplyr:filter]{dplyr::filter()}} + \code{\link[=tab]{tab()}} on the
+same rows). Also works with a vector of dependents. Ordinal has no clean crude analogue and is
+ignored (with a message). Default \code{FALSE}.
 }}
 
 \item{conf_level}{Confidence level for the intervals. Default \code{0.95}.}

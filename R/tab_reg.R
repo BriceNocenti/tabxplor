@@ -318,7 +318,7 @@ reg_shared_col_var <- function(family, dependent, positive_level, cleannames) {
   } else dependent
 }
 
-# Phase 14w (item 3): the single-model column NAME ("Model OR" / "Model IRR" / "Model AME (model %)"),
+# Phase 14w (item 3): the single-model column NAME ("Model OR" / "Model IRR" / "Model AME (adjusted %)"),
 # so the effect word lives in the column, not repeated in the span. Comparison mode keeps the model name;
 # a multi-dependent (several outcomes, one predictor set) suffixes the dependent so the names stay unique.
 reg_model_col_name <- function(eff_word, dependent, is_comparison, model_label, n_dep) {
@@ -1185,7 +1185,8 @@ reg_reference_grid_values <- function(data, predictors) {
 #                       averaging / no weights). `comparison = "lnor"` (MNL "j vs rest" OR at the
 #                       profile) returns log-odds-ratios, exp()'d here into odds ratios.
 reg_marginal <- function(fit, data, predictors, conf_level, wt = NULL,
-                         at = "average", comparison = NULL, want_pred = TRUE) {
+                         at = "average", comparison = NULL, want_pred = TRUE,
+                         want_unadj = FALSE) {
   ref_vals <- if (at == "reference") reg_reference_grid_values(data, predictors) else NULL
   ref_grid <- if (at == "reference")
     do.call(marginaleffects::datagrid, c(list(model = fit), ref_vals)) else NULL
@@ -1231,15 +1232,37 @@ reg_marginal <- function(fit, data, predictors, conf_level, wt = NULL,
         utils::modifyList(ref_vals, stats::setNames(list(levels(as.factor(data[[v]]))), v))))
       as.data.frame(marginaleffects::predictions(fit, newdata = grid_v, conf_level = conf_level))
     } else {
+      # Change A (decisions doc S50): the adjusted % is the marginal-STANDARDIZED prediction --
+      # `variables = v` sets v to each level for the WHOLE sample (keeping every other covariate as
+      # observed) and averages = g-computation / direct standardization. This is the covariate-adjusted
+      # quantity that COHERES with the AME (adjusted%(ref) + AME(level) == adjusted%(level)); `by = v`
+      # would instead reproduce the estimation-sample OBSERVED rate (score-equation identity) and is not
+      # adjusted. `want_unadj` additionally returns that observed-group prediction as a control (change D).
       as.data.frame(do.call(marginaleffects::avg_predictions, c(
-        list(fit, by = v, newdata = data, conf_level = conf_level), wts_arg)))
+        list(fit, variables = v, newdata = data, conf_level = conf_level), wts_arg)))
     }
     grp <- if ("group" %in% names(ap)) as.character(ap$group) else NA_character_
     tibble::tibble(var = v, level = as.character(ap[[v]]), group = grp, pred = ap$estimate)
   }) else list()
   pred <- dplyr::bind_rows(purrr::compact(predlist))
 
-  list(ame = ame, pred = pred)
+  # Change D (decisions doc S50): the model's UNADJUSTED predicted % = avg_predictions(by = v), the
+  # observed-group average (each observation keeps its own covariates, grouped by its actual level). By the
+  # logit score-equation identity this reproduces the estimation-sample observed rate, so it equals the
+  # same-frame `Emp. %` exactly -- a control shown beside the adjusted (standardized) prediction. Only for
+  # at = "average" factor predictors (a reference profile has no observed-group average).
+  pred_unadj <- if (want_unadj && at != "reference") {
+    ul <- purrr::map(predictors, function(v) {
+      if (!(is.factor(data[[v]]) || is.character(data[[v]]))) return(NULL)
+      ap <- as.data.frame(do.call(marginaleffects::avg_predictions, c(
+        list(fit, by = v, newdata = data, conf_level = conf_level), wts_arg)))
+      grp <- if ("group" %in% names(ap)) as.character(ap$group) else NA_character_
+      tibble::tibble(var = v, level = as.character(ap[[v]]), group = grp, pred = ap$estimate)
+    })
+    dplyr::bind_rows(purrr::compact(ul))
+  } else NULL
+
+  list(ame = ame, pred = pred, pred_unadj = pred_unadj)
 }
 
 # Build ONE fmt column from a reg_marginal() result, for a given outcome `group` (NA for a single-outcome
@@ -1313,6 +1336,26 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, numeric_preds,
       comp_all = FALSE, in_refrow = refrows
     )
   }
+}
+
+# Change D (decisions doc S50): the model's UNADJUSTED predicted % as a plain (uncoloured) `pct` column,
+# aligned to the skeleton. Value = avg_predictions(by = level) (marg$pred_unadj) = the observed-group rate,
+# which equals the same-frame `Emp. %` exactly (score-equation identity) -- a verification control beside
+# the AME cell's adjusted %. Factor levels IN the model only; numeric / Constant / out-of-model -> blank.
+reg_unadj_column <- function(skeleton, marg, model_predictors, col_var) {
+  prd <- marg$pred_unadj
+  key <- paste(skeleton$var, skeleton$level, sep = "\r")
+  pv  <- if (!is.null(prd) && nrow(prd))
+           prd$pred[match(key, paste(prd$var, prd$level, sep = "\r"))]
+         else rep(NA_real_, nrow(skeleton))
+  in_model <- skeleton$var %in% model_predictors
+  is_const <- skeleton$var == "Constant"
+  display  <- rep("blank", nrow(skeleton))
+  display[in_model & !is_const & !is.na(pv)] <- "pct"
+  fmt(n = rep(NA_integer_, nrow(skeleton)),
+      pct = pv, type = "row", display = display, digits = 0L,
+      color = "", color_signif = "ignore", col_var = col_var,
+      comp_all = FALSE, in_refrow = skeleton$is_ref & in_model & !is_const)
 }
 
 # Split ONE multinomial fit into one OR column per non-reference outcome category. Each category's
@@ -1740,7 +1783,8 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
                       inverse_two_level_factors, conf_level, method, color, color_signif,
                       cleannames, subtext, eff_word, effect = "coefficient", at = "average",
                       stats = NULL, compare = "none", baseline = NULL, split_var = NULL,
-                      multiplier = NULL, empirical = FALSE, estimate_display = "value",
+                      multiplier = NULL, empirical = FALSE, predicted_unadjusted = FALSE,
+                      estimate_display = "value",
                       .fit_cache = NULL, reference = NULL, reref = FALSE,
                       skeleton_data = data) {
   # split_var (Phase 12g): the regression analogue of tab()'s tab_vars -- fit the SAME model(s) within
@@ -1761,6 +1805,7 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
                        inverse_two_level_factors, conf_level, method, color, color_signif,
                        cleannames, subtext, eff_word, effect, at, stats, compare, baseline,
                        split_var = NULL, multiplier = multiplier, empirical = empirical,
+                       predicted_unadjusted = predicted_unadjusted,
                        estimate_display = estimate_display, .fit_cache = .fit_cache,
                        reference = NULL, reref = FALSE, skeleton_data = data)
       tst <- get_test(tg); if (!is.null(tst) && nrow(tst) > 0) tst$row_var <- as.character(g)
@@ -1843,7 +1888,8 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
     shape        <- if (prob_scale) "prob" else "raw"
     built_per_fit <- purrr::map2(fits, specs, function(f, sp) {
       marg  <- reg_marginal(f$fit, f$data, sp$predictors, conf_level, design_spec$wt,
-                            at = at, want_pred = prob_scale)
+                            at = at, want_pred = prob_scale,
+                            want_unadj = predicted_unadjusted && family == "binomial")
       var_y <- if (!prob_scale) suppressWarnings(stats::var(as.numeric(f$data[[sp$dependent]])))
                else NA_real_
       if (per_category) {                            # one AME column per OUTCOME category (all levels)
@@ -1851,7 +1897,7 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
         purrr::map(groups, function(g) {
           jc  <- if (cleannames) stringr::str_remove_all(g, cleannames_condition()) else g
           # Phase 14s (G) + 14w (item 3): the per-category AME columns of one model share `sp$label`
-          # ("<dep>: AME (model %)") as col_var (no inter-category border, one span names the effect
+          # ("<dep>: AME (adjusted %)") as col_var (no inter-category border, one span names the effect
           # once); the visible NAME is just the category (the repeated ": AME" is stripped).
           lab <- paste0(if (prefix_dep) paste0(sp$dependent, " - ") else "", jc)
           list(label = lab, emp_key = g,   # emp_key: raw category, for the empirical tooltip (Phase 14v)
@@ -1867,13 +1913,23 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
           exp(td$estimate[match(skeleton$term, td$term)])
         } else NULL
         # Phase 14w (item 3): the single AME column shares the outcome col_var with its empirical
-        # companions; its NAME carries the effect ("Model AME (model %)").
+        # companions; its NAME carries the effect ("Model AME (adjusted %)").
         cv <- if (is_comparison) sp$label
               else reg_shared_col_var(family, sp$dependent, f$positive_level, cleannames)
-        list(list(label = reg_model_col_name(eff_word, sp$dependent, is_comparison, sp$label, n_dep),
-                  col   = reg_marginal_column(skeleton, marg, sp$predictors, numeric_preds, shape,
-                                              var_y, f$nobs, NA_character_, color, color_signif,
-                                              cv, or_tip = or_tip)))
+        entries <- list(list(
+          label = reg_model_col_name(eff_word, sp$dependent, is_comparison, sp$label, n_dep),
+          col   = reg_marginal_column(skeleton, marg, sp$predictors, numeric_preds, shape,
+                                      var_y, f$nobs, NA_character_, color, color_signif,
+                                      cv, or_tip = or_tip)))
+        # Change D: the unadjusted control column is appended AFTER the model column (so fit_first_idx --
+        # and thus the GOF footer -- still keys on the model column). Shares the outcome col_var.
+        if (predicted_unadjusted && family == "binomial") {
+          entries <- c(entries, list(list(
+            label = paste0("Model % (unadj.)",
+                           if (n_dep > 1L) paste0(" (", sp$dependent, ")") else ""),
+            col   = reg_unadj_column(skeleton, marg, sp$predictors, cv))))
+        }
+        entries
       }
     })
   } else if (mnl_vsrest) {
@@ -1967,9 +2023,18 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
         dep_i   <- specs[[i]]$dependent
         pos_i   <- if (family == "binomial") fits[[i]]$positive_level else NULL
         if (family == "binomial" && is.null(pos_i)) next   # grouped-binomial / compound: no crude 2x2
+        # Change B (decisions doc S50): every crude companion is computed on the SAME complete-case
+        # population as the model fit -- mirror reg_fit()'s `mdata` (drop rows missing the dependent, ANY
+        # model predictor, or a design var). `union_predictors` == the model's predictors when not
+        # comparing; in comparison mode it is the shared population where all compared models overlap
+        # (na = "drop_all" makes the model columns share it too). Recomputed from `data` (NOT fits[[i]]$data,
+        # which is NULL on the reref/digest path). On this listwise-complete frame reg_empirical()'s
+        # per-predictor NA filter is a no-op, so the crude reference level / n exactly match the model.
+        emp_vars <- intersect(unique(c(dep_i, union_predictors, reg_design_vars(design_spec))), names(data))
+        mdata_i  <- tidyr::drop_na(data, tidyselect::all_of(emp_vars))
         var_y_i <- if (family == "gaussian")
-          suppressWarnings(stats::var(as.numeric(data[[dep_i]]), na.rm = TRUE)) else NA_real_
-        emp_i   <- reg_empirical(data, fac_preds_e, dep_i, family, pos_i, design_spec$wt)
+          suppressWarnings(stats::var(as.numeric(mdata_i[[dep_i]]), na.rm = TRUE)) else NA_real_
+        emp_i   <- reg_empirical(mdata_i, fac_preds_e, dep_i, family, pos_i, design_spec$wt)
         cols_i  <- reg_empirical_columns(skeleton, emp_i, fac_preds_e, family, effect, var_y_i,
                                          conf_level = conf_level, color_signif = color_signif)
         # Phase 14w (item 3): the crude companions share the model column's outcome col_var (one span,
@@ -2014,7 +2079,11 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
       union_predictors, ~ is.numeric(skeleton_data[[.x]]))]
     has_cat <- any(!purrr::map_lgl(built, ~ is.null(.$emp_key)))
     if (length(fac_preds_t) > 0L && has_cat) {
-      tipsd <- reg_empirical_tips(data, fac_preds_t, specs[[1]]$dependent, design_spec$wt,
+      # Change B: multinomial crude tooltips on the model's complete-case frame (union-predictor frame).
+      tip_vars <- intersect(unique(c(specs[[1]]$dependent, union_predictors,
+                                     reg_design_vars(design_spec))), names(data))
+      mdata_t  <- tidyr::drop_na(data, tidyselect::all_of(tip_vars))
+      tipsd <- reg_empirical_tips(mdata_t, fac_preds_t, specs[[1]]$dependent, design_spec$wt,
                                   conf_level = conf_level)
       tk    <- paste(tipsd$var, tipsd$level, tipsd$category, sep = "\r")
       is_fac_t <- skeleton$var %in% fac_preds_t
@@ -2038,6 +2107,28 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
                                  pr * 100, df * 100, tipsd$diff_inf[k] * 100, tipsd$diff_sup[k] * 100)))
       }))
       if (length(tip_rows)) empirical_tips <- purrr::list_rbind(tip_rows)
+    }
+  }
+
+  # Change D (decisions doc S50): the unadjusted-% control ALSO rides the html tooltip of the adjusted AME
+  # cell -- reusing the `empirical_tips` pipeline (no new attribute / fmt field). Read straight from the
+  # built unadjusted column, keyed to each fit's AME column (fit_first_idx points at the model column, the
+  # unadjusted column is the entry right after it).
+  if (predicted_unadjusted && family == "binomial" && effect == "ame") {
+    utip <- purrr::compact(purrr::map(seq_along(fit_first_idx), function(fi) {
+      ame_lab   <- labels[fit_first_idx[fi]]
+      unadj_lab <- labels[fit_first_idx[fi] + 1L]
+      if (is.na(unadj_lab) || is.null(tab[[unadj_lab]])) return(NULL)
+      upct <- as.numeric(vctrs::field(tab[[unadj_lab]], "pct"))
+      keep <- !is.na(upct)
+      if (!any(keep)) return(NULL)
+      tibble::tibble(col = ame_lab, var = as.character(skeleton$var[keep]),
+                     level = disp_levels[keep],
+                     tip = sprintf("model unadjusted: %.0f%%", upct[keep] * 100))
+    }))
+    if (length(utip)) {
+      ut <- purrr::list_rbind(utip)
+      empirical_tips <- if (is.null(empirical_tips)) ut else vctrs::vec_rbind(empirical_tips, ut)
     }
   }
 
@@ -2150,11 +2241,15 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
 #'   (marginal effects are always on the response scale).
 #' @param effect The interpretation scale, orthogonal to `family`. `"coefficient"` (default) shows the
 #'   native per-family effect (beta / OR / IRR / cumulative-OR). `"ame"` shows **average marginal
-#'   effects** with the adjusted **predicted probability** in parentheses (e.g. `-8%*** (16%)`): a
+#'   effects** with the **adjusted predicted probability** in parentheses (e.g. `-8%*** (16%)`): a
 #'   probability-scale, cross-model-comparable summary (Mood 2010) for logistic / multinomial / ordinal
 #'   outcomes (percentage points), the expected-count change for poisson, and the coefficient itself for
-#'   gaussian. Requires the `marginaleffects` package. A multinomial / ordinal outcome gets one AME
-#'   column per outcome category.
+#'   gaussian. The parenthetical is a *marginal-standardized* prediction (`avg_predictions(variables=)`:
+#'   the predictor set to each level for the whole sample, other covariates kept as observed, then
+#'   averaged), so it is genuinely covariate-adjusted and coheres with the effect --- adjusted-%(reference)
+#'   + AME(level) equals adjusted-%(level). Read it as a standardized comparison ("holding the measured
+#'   covariates' distribution fixed"), not a manipulation. Requires the `marginaleffects` package. A
+#'   multinomial / ordinal outcome gets one AME column per outcome category.
 #' @param at Where the profile-conditional quantities are evaluated (needs `marginaleffects`).
 #'   `"average"` (default) is the sample average (the AME / adjusted prediction over the data).
 #'   `"reference"` evaluates at the **reference profile** --- every other predictor held at its
@@ -2196,8 +2291,19 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
 #'   vs adjusted" comparison; a large gap signals confounding). Per family: **binomial** adds `Emp. %`
 #'   + `Emp. OR` (coefficient) or `Emp. %` + `Emp. diff` (AME); **gaussian** adds `Emp. mean` +
 #'   `Emp. diff`; **poisson** adds `Emp. rate` + `Emp. IRR`; **multinomial** shows the crude % +
-#'   difference per category in the HTML tooltip (columns would explode). Also works with a vector of
-#'   dependents. Ordinal has no clean crude analogue and is ignored (with a message). Default `FALSE`.
+#'   difference per category in the HTML tooltip (columns would explode). By design every crude quantity
+#'   is computed on **exactly the same complete-case population as the model** (listwise-complete on the
+#'   dependent, all predictors and any design variable), so crude and adjusted are directly comparable
+#'   and not confounded by differing missingness (reproduce it with [dplyr::filter()] + [tab()] on the
+#'   same rows). Also works with a vector of dependents. Ordinal has no clean crude analogue and is
+#'   ignored (with a message). Default `FALSE`.
+#' @param predicted_unadjusted Logical, binomial `effect = "ame"` only. If `TRUE`, adds a
+#'   `Model % (unadj.)` control column (and an HTML tooltip on the adjusted-% cell) showing the model's
+#'   *unadjusted* predicted probability (`avg_predictions(by=)`, the observed-group average). This equals
+#'   the same-frame `Emp. %` exactly (a logistic-model identity), so it is only a cross-check that the
+#'   crude companion is computed on the model's population; the adjusted `(...)` prediction in the AME
+#'   cell is the substantive quantity. Ignored (with a message) for any other family/effect. Default
+#'   `FALSE`.
 #' @param empirical_OR `r lifecycle::badge("deprecated")` Renamed `empirical` (now cross-family, not
 #'   OR-only). Passing it now errors; use `empirical`.
 #' @param stats The goodness-of-fit statistics shown in the model-summary **footer** (one block per
@@ -2291,7 +2397,7 @@ tab_reg <- function(data, dependent, predictors = NULL,
                     effect = c("coefficient", "ame"), at = c("average", "reference"),
                     trials = NULL, conf_level = getOption("tabxplor.conf_level", 0.95), method = c("wald", "profile"),
                     reference = NULL, inverse_two_level_factors = TRUE, split_var = NULL,
-                    multiplier = NULL, empirical = FALSE,
+                    multiplier = NULL, empirical = FALSE, predicted_unadjusted = FALSE,
                     stats = NULL, compare = c("none", "baseline", "sequential"), baseline = NULL,
                     estimate_display = c("value", "ci", "prob", "ame"),
                     color = NULL, color_signif = NULL, stars = TRUE,
@@ -2337,6 +2443,7 @@ tab_reg <- function(data, dependent, predictors = NULL,
               effect = effect, at = at, trials = tri, conf_level = conf_level, method = method,
               reference = reference, inverse_two_level_factors = inverse_two_level_factors,
               split_var = split_var, multiplier = multiplier, empirical = empirical,
+              predicted_unadjusted = predicted_unadjusted,
               stats = stats, compare = compare, baseline = baseline,
               estimate_display = estimate_display, color = color, color_signif = color_signif,
               stars = stars, na = na, cleannames = cleannames, subtext = subtext)
@@ -2435,11 +2542,12 @@ tab_reg <- function(data, dependent, predictors = NULL,
   effect_shape <- if (do_exp) "ratio" else "additive"
   eff_word     <- reg_effect_word(family, do_exp, effect, at)
   # Phase 14v: with an empirical companion, a prob-scale AME/MER cell folds in the model-adjusted
-  # predicted % as "{diff} ({pct})"; name it in the header ("... AME (model %)") so the parenthetical is
-  # unambiguous next to the crude "Emp. %". Gated on `empirical` (the maintainer's disambiguation case),
-  # prob-scale families only (gaussian/poisson AME is a bare effect, no % fold).
+  # predicted % as "{diff} ({pct})"; name it in the header ("... AME (adjusted %)") so the parenthetical is
+  # unambiguous next to the crude "Emp. %". The parenthetical is the marginal-STANDARDISED predicted
+  # probability (decisions doc S50, change A/C), hence "adjusted %" not "model %". Gated on `empirical`
+  # (the maintainer's disambiguation case), prob-scale families only (gaussian/poisson AME is a bare effect).
   if (effect == "ame" && isTRUE(empirical) && family %in% c("binomial", "multinomial", "ordinal")) {
-    eff_word <- paste0(eff_word, " (model %)")
+    eff_word <- paste0(eff_word, " (adjusted %)")
   }
 
   # Phase 12h: `estimate_display` = the estimate-cell layout. "value" (plain) / "ci" (a visible interval,
@@ -2601,6 +2709,18 @@ tab_reg <- function(data, dependent, predictors = NULL,
     empirical <- FALSE
   }
 
+  # predicted_unadjusted (decisions doc S50, change D): an opt-in control column + html tooltip showing the
+  # model's UNADJUSTED predicted % (avg_predictions(by = level) = the observed-group average, which equals
+  # the same-frame `Emp. %` exactly by the score-equation identity). Only meaningful for a binomial AME
+  # (the adjusted-% fold); ignored otherwise.
+  predicted_unadjusted <- isTRUE(predicted_unadjusted)
+  if (predicted_unadjusted && !(effect == "ame" && family == "binomial")) {
+    cli::cli_inform(c("i" = paste0(
+      "{.arg predicted_unadjusted} applies to a binomial {.code effect = \"ame\"} table only; ",
+      "ignored here.")))
+    predicted_unadjusted <- FALSE
+  }
+
   design_spec <- list(design = design_obj, wt = wt, ids = ids, strata = strata, fpc = fpc, nest = nest)
   reg_check_deps(family, weighted, needs_marginaleffects = effect == "ame" || mnl_vsrest ||
                    estimate_display %in% c("prob", "ame"))
@@ -2609,6 +2729,7 @@ tab_reg <- function(data, dependent, predictors = NULL,
                    cleannames, subtext, eff_word, effect, at,
                    stats = stats, compare = compare, baseline = baseline, split_var = split_var,
                    multiplier = multiplier, empirical = empirical,
+                   predicted_unadjusted = predicted_unadjusted,
                    estimate_display = estimate_display,
                    .fit_cache = .fit_cache, reference = reference, reref = reref)
 

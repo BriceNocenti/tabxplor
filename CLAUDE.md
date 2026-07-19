@@ -778,6 +778,41 @@ display grid physically drive the export appender — assessed as a net complexi
 export-placement plumbing into the console display model; the CONTENT is already shared via the helpers).
 
 
+#### Phase 16b — adjusted percentages (DONE)
+
+The maintainer's ruling: `adjusted %` must **always** be the real adjusted percentage, and every empirical
+companion must be computed on **exactly the same complete-case population as the model**, by design. Four
+changes, all in `R/tab_reg.R` (no fmt-field change, no cache-schema bump; the digest never stores
+predictions or empirical columns, so byte-identity holds there):
+
+- **A — adjusted %.** `reg_marginal()`'s `at="average"` prediction switched from `avg_predictions(by=v)`
+  to **`avg_predictions(variables=v)`** (marginal standardization). The parenthetical is now the
+  covariate-standardized prediction that coheres with the AME (verified: adjusted-%(White) 0.5132 +
+  AME(Black) −0.198 = adjusted-%(Black) 0.3152). Also standardizes the multinomial AME `pct` and the
+  `estimate_display="prob"` fold.
+- **B — empirical on the model frame.** The `reg_build()` empirical loop + multinomial-tip block recompute
+  the per-spec **complete-case frame** (`drop_na(data, c(dependent, union_predictors, design_vars))`,
+  mirroring `reg_fit()`'s `mdata`) and feed it to `reg_empirical()` / `reg_empirical_tips()` / `var_y`.
+  Recomputed from `data`, **not** `fits[[i]]$data` (which is `NULL` on the reref/digest path). For a **model
+  comparison** (one crude block, N model frames) the union-predictor complete-case frame is used — the
+  shared population where all compared models overlap (and, under `na="drop_all"`, the models' own frame).
+  Verified: `Emp. %` cell counts now sum to the model N (12 960), not full-data N (21 483).
+- **C — rename.** The header token `(model %)` → **`(adjusted %)`** (one behavioral site + comments).
+- **D — `predicted_unadjusted` (new opt-in arg, binomial AME only).** Adds a `Model % (unadj.)` control
+  column + an HTML tooltip on the adjusted-% cell showing `avg_predictions(by=v)` (the observed-group
+  average). By the logit score-equation identity this **equals the same-frame `Emp. %` exactly** (verified
+  to 2e-13) — a pure cross-check that the crude companion sits on the model's population. Column + tooltip
+  reuse the existing `empirical_tips` pipeline (no new attribute/field). jamovi exposure deferred (no
+  `.a.yaml` option, no `prepare()` regen). One-time `cli_inform` + no-op outside binomial AME.
+
+Tests: the AME-prediction oracle in `test-tab_reg.R` flipped to `variables=`; the empirical header
+assertion to `"adjusted %"`; new `test-tab_reg-empirical.R` cases lock B (Emp. N == model N < full N), A
+(adjusted%(ref)+AME==adjusted%(level)) and D (Emp.% == unadjusted %). **No golden/snapshot regen** (reg
+tables are not snapshotted). Interpretation guidance for the docs is the "Do adjusted % mean something?"
+section above (standardization / comparison, never manipulation; Table-2 fallacy).
+
+
+
 
 ### Last Phase — final simplifications and package user-friendly documentation
 

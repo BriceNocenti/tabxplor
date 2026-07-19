@@ -25,6 +25,7 @@ tab_reg(
   split_var = NULL,
   multiplier = NULL,
   empirical = FALSE,
+  predicted_unadjusted = FALSE,
   stats = NULL,
   compare = c("none", "baseline", "sequential"),
   baseline = NULL,
@@ -79,11 +80,17 @@ betas raw); \code{TRUE} / \code{FALSE} force it on / off for all columns. Ignore
 
 \item{effect}{The interpretation scale, orthogonal to \code{family}. \code{"coefficient"} (default) shows the
 native per-family effect (beta / OR / IRR / cumulative-OR). \code{"ame"} shows \strong{average marginal
-effects} with the adjusted \strong{predicted probability} in parentheses (e.g. \verb{-8\%*** (16\%)}): a
+effects} with the \strong{adjusted predicted probability} in parentheses (e.g. \verb{-8\%*** (16\%)}): a
 probability-scale, cross-model-comparable summary (Mood 2010) for logistic / multinomial / ordinal
 outcomes (percentage points), the expected-count change for poisson, and the coefficient itself for
-gaussian. Requires the \code{marginaleffects} package. A multinomial / ordinal outcome gets one AME
-column per outcome category.}
+gaussian. The parenthetical is a \emph{marginal-standardized} prediction (\code{avg_predictions(variables=)}:
+the predictor set to each level for the whole sample, other covariates kept as observed, then
+averaged), so it is genuinely covariate-adjusted and coheres with the effect --- adjusted-\%(reference)
+\itemize{
+\item AME(level) equals adjusted-\%(level). Read it as a standardized comparison ("holding the measured
+covariates' distribution fixed"), not a manipulation. Requires the \code{marginaleffects} package. A
+multinomial / ordinal outcome gets one AME column per outcome category.
+}}
 
 \item{at}{Where the profile-conditional quantities are evaluated (needs \code{marginaleffects}).
 \code{"average"} (default) is the sample average (the AME / adjusted prediction over the data).
@@ -134,9 +141,21 @@ vs adjusted" comparison; a large gap signals confounding). Per family: \strong{b
 \itemize{
 \item \verb{Emp. OR} (coefficient) or \verb{Emp. \%} + \verb{Emp. diff} (AME); \strong{gaussian} adds \verb{Emp. mean} +
 \verb{Emp. diff}; \strong{poisson} adds \verb{Emp. rate} + \verb{Emp. IRR}; \strong{multinomial} shows the crude \% +
-difference per category in the HTML tooltip (columns would explode). Also works with a vector of
-dependents. Ordinal has no clean crude analogue and is ignored (with a message). Default \code{FALSE}.
+difference per category in the HTML tooltip (columns would explode). By design every crude quantity
+is computed on \strong{exactly the same complete-case population as the model} (listwise-complete on the
+dependent, all predictors and any design variable), so crude and adjusted are directly comparable
+and not confounded by differing missingness (reproduce it with \code{\link[dplyr:filter]{dplyr::filter()}} + \code{\link[=tab]{tab()}} on the
+same rows). Also works with a vector of dependents. Ordinal has no clean crude analogue and is
+ignored (with a message). Default \code{FALSE}.
 }}
+
+\item{predicted_unadjusted}{Logical, binomial \code{effect = "ame"} only. If \code{TRUE}, adds a
+\verb{Model \% (unadj.)} control column (and an HTML tooltip on the adjusted-\% cell) showing the model's
+\emph{unadjusted} predicted probability (\code{avg_predictions(by=)}, the observed-group average). This equals
+the same-frame \verb{Emp. \%} exactly (a logistic-model identity), so it is only a cross-check that the
+crude companion is computed on the model's population; the adjusted \code{(...)} prediction in the AME
+cell is the substantive quantity. Ignored (with a message) for any other family/effect. Default
+\code{FALSE}.}
 
 \item{stats}{The goodness-of-fit statistics shown in the model-summary \strong{footer} (one block per
 model). \code{NULL} (default) uses the per-family set: linear models show N, R square, adjusted R

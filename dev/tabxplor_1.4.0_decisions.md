@@ -4238,13 +4238,13 @@ single-predictor model estimate == empirical column == `tab()` (no-model) quanti
 
 ### The family-appropriate crude quantity + colour (each family: a base descriptive col + a crude-effect col mirroring the model's measure & colour scale)
 
-| family | base col | effect col | effect colour |
-|---|---|---|---|
-| binomial coef | `Emp. %` (risk-diff) | `Emp. OR` | ratio scale (like model OR) |
-| binomial AME | `Emp. %` | `Emp. diff` (crude risk-diff) | pct-diff scale (like the AME) |
-| gaussian | `Emp. mean` (mean+sd, **uncoloured**) | `Emp. diff` (crude mean-diff) | **diff / SD(Y)**, `var = var(Y)`, `type = "coef"` — the SAME Cohen scale as the model beta |
-| poisson | `Emp. rate` (ratio) | `Emp. IRR` (crude rate-ratio) | ratio scale (like model IRR) |
-| multinomial | — | tooltip only | — |
+| family        | base col                              | effect col                    | effect colour                                                                              |
+|---------------|---------------------------------------|-------------------------------|--------------------------------------------------------------------------------------------|
+| binomial coef | `Emp. %` (risk-diff)                  | `Emp. OR`                     | ratio scale (like model OR)                                                                |
+| binomial AME  | `Emp. %`                              | `Emp. diff` (crude risk-diff) | pct-diff scale (like the AME)                                                              |
+| gaussian      | `Emp. mean` (mean+sd, **uncoloured**) | `Emp. diff` (crude mean-diff) | **diff / SD(Y)**, `var = var(Y)`, `type = "coef"` — the SAME Cohen scale as the model beta |
+| poisson       | `Emp. rate` (ratio)                   | `Emp. IRR` (crude rate-ratio) | ratio scale (like model IRR)                                                               |
+| multinomial   | —                                     | tooltip only                  | —                                                                                          |
 
 **The gaussian colour decision (the one open question).** The maintainer's tentative "colour by ratio"
 is wrong for the additive beta; the real blocker was mis-stated. It is NOT "the crude path lacks a
@@ -4328,13 +4328,13 @@ variance/dispersion = pooled/homoscedastic). tab() should default to the **robus
 light, the same spirit as its existing Welch diff default) and offer the **pooled/model** row as an
 opt-in, so a user can reproduce a regression's interval exactly.
 
-| quantity | robust default (each group's own variance) | pooled / model-matching opt-in | matches which regression |
-|---|---|---|---|
-| proportion cell | Wilson (`method_cell`, exists) | — | — |
-| proportion diff | Newcombe / AC (`method_diff`, exists) | — | two-proportion score / logistic-ish |
-| proportion **ratio** | **Katz log-RR** (`method_ratio`, NEW; only value for now) | — | log-binomial / Poisson RR |
-| numeric **diff** | **Welch** (`method_mean_diff = "welch"`, default) | **pooled Student t** (`"student"`) | linear reg (OLS coef CI) |
-| numeric **ratio** | **robust-Poisson** (`method_mean_ratio = "robust"`, default) | **quasi-Poisson** (`"quasipoisson"`), naive **Poisson** (`"poisson"`) | quasi-Poisson / Poisson reg |
+| quantity             | robust default (each group's own variance)                   | pooled / model-matching opt-in                                        | matches which regression            |
+|----------------------|--------------------------------------------------------------|-----------------------------------------------------------------------|-------------------------------------|
+| proportion cell      | Wilson (`method_cell`, exists)                               | —                                                                     | —                                   |
+| proportion diff      | Newcombe / AC (`method_diff`, exists)                        | —                                                                     | two-proportion score / logistic-ish |
+| proportion **ratio** | **Katz log-RR** (`method_ratio`, NEW; only value for now)    | —                                                                     | log-binomial / Poisson RR           |
+| numeric **diff**     | **Welch** (`method_mean_diff = "welch"`, default)            | **pooled Student t** (`"student"`)                                    | linear reg (OLS coef CI)            |
+| numeric **ratio**    | **robust-Poisson** (`method_mean_ratio = "robust"`, default) | **quasi-Poisson** (`"quasipoisson"`), naive **Poisson** (`"poisson"`) | quasi-Poisson / Poisson reg         |
 
 Measured, to anchor the three numeric-ratio methods (Black/White = 1.508):
 
@@ -4492,7 +4492,7 @@ legend time from `reg_meta$family`/`effect` + the column's own `ci_type`/`type`;
 told apart by the `"Emp. "` name prefix (consistent with the already name-keyed `test`/`empirical_tips`).
 
 Plumbing (the 14n/14v landmine): `reg_meta` is a `new_tab()`/`new_grouped_tab()` formal + `get/set_reg_meta`
-+ ONE `tab_attrs()` line + threaded through the two footer rebuilds (`reg_footer_lines`, `tab_pvalue_lines`).
+- ONE `tab_attrs()` line + threaded through the two footer rebuilds (`reg_footer_lines`, `tab_pvalue_lines`).
 `reg_footer_lines()` DROPS `test`, so `is_reg` must not depend on it — the legend now reads
 `!is.null(get_reg_meta(x))`, which survives footer materialisation.
 
@@ -4525,9 +4525,114 @@ Plumbing (the 14n/14v landmine): `reg_meta` is a `new_tab()`/`new_grouped_tab()`
 **Verification**: full suite green (FAIL 0, PASS 3492 + new `test-tab_reg-14w.R`); **no golden and no
 snapshot moved** (crosstab legends byte-identical, reg tables are not snapshotted). Existing reg tests
 updated to the new column names (mechanical: "`<x>`: OR" -> "Model OR", multinomial ": OR" stripped, the
-survey greps switched to `^Model ` / ` vs `). Samples: `dev/review_manual/phase14w_reg.{html,md,xlsx}`.
+survey greps switched to `^Model` / ` vs `). Samples: `dev/review_manual/phase14w_reg.{html,md,xlsx}`.
 
 **Flagged / open**: a BARE single-model reg table (no empirical) now shows a 2-row header (the outcome
 span over "Model `<eff>`") where it used to be one row — the literal reading of item 3's "col_var name
 should ALWAYS be `<dep>: <level>`"; the maintainer can collapse it for the no-companion case if desired.
 `tab_plot()` does NOT yet show the "Model:" line (limited footer space; the colour legend still renders).
+
+---
+
+## 50. "Adjusted / model %" — how to name and phrase a predicted probability, and which quantity `effect="ame"` should show (vignette e-ii, 2026-07-19)
+
+Triggered by the regression vignette (`vignettes/tabxplor-reg.Rmd`, the `effect="ame", empirical=TRUE`
+section): the draft narrates the AME cell's parenthetical `model %` as *"income, age and religion being
+equal, 30.9% of black americans are married (compared to 52% of white americans)"*. The maintainer felt
+the sentence was wrong. It is — and the reason is **both** a phrasing problem **and** a quantity problem
+(the number shown is not the adjusted quantity the sentence describes). This section records the
+web-research on current good practice **and** the concrete audit of what `reg_marginal()` computes.
+
+### Research grounding — what a "predicted probability" is called and how the reflexive camp phrases it
+
+- **Predicted / adjusted probabilities (not raw ORs) are the interpretable quantity** — the position the
+  vignette rightly leans on. Odds ratios are **non-collapsible**: a logit coefficient changes when you add
+  a control *even if that control is orthogonal to the predictor*, because it rescales with unobserved
+  heterogeneity, so ORs are **not comparable across models, groups or samples** (Mood 2010, *Eur. Sociol.
+  Rev.* 26(1):67–82, <https://doi.org/10.1093/esr/jcp006>). Her recommended fix — and the sociology
+  standard (Long & Freese; Williams 2012) — is the **average marginal effect (AME)** on the probability
+  scale, which is near-immune to that rescaling. So `effect="ame"` is the right instrument; the issue is
+  the *companion prediction* beside it.
+- **Three DIFFERENT "predicted probabilities", routinely conflated** (Williams 2012, *Stata Journal*
+  12(2):308–331, <https://journals.sagepub.com/doi/10.1177/1536867X1201200209>; Muller & MacLehose 2014,
+  *Int. J. Epidemiol.* 43(3):962–970, <https://academic.oup.com/ije/article-abstract/43/3/962/763470>;
+  ggeffects docs, <https://strengejacke.github.io/ggeffects/articles/ggeffects.html>):
+  1. **at the means (MEM / "at means")** — set every non-focal covariate to its mean. Muller & MacLehose:
+     **"prediction at the means should not be used with binary confounders"** — a factor (religion, income
+     band) has no mean; "mean religion" is a fictional unit. Rules this out for tabxplor's use case.
+  2. **at representative values (MER)** — set covariates to a chosen profile (e.g. each factor at its
+     first level). This is what tabxplor's `at="reference"` axis does; the caveat (already documented in
+     `reg_reference_grid_values`) is that a first-level baseline can be an odd unit ("No answer" income).
+  3. **average / counterfactual / "marginal standardization"** — set the focal variable to a level for
+     the **whole sample**, keep every other covariate **as observed**, predict, average. This is
+     g-computation / direct standardization; **it is the method for inference to the overall population**
+     (Muller & MacLehose), and its between-level **difference is exactly the categorical AME**. ggeffects
+     calls it the `"empirical"`/`"counterfactual"`/`"average"` margin and glosses it with the **"if
+     everyone…"** counterfactual phrasing.
+- **Phrase it as a comparison, never as a manipulation.** Gelman's rule (*Statistical Modeling…*,
+  2013-01-05, <https://statmodeling.stat.columbia.edu/2013/01/05/understanding-regression-models-and-regression-coefficients/>):
+  **"regression tells you nothing at all about change. It's a structured way of computing average
+  comparisons in data"**, and *"unless the data support it, one usually can't change one predictor while
+  holding all others constant."* So the honest reading of an adjusted prediction is a **between-group
+  comparison among units alike on the *measured* controls**, or an explicit standardization ("if the whole
+  sample kept its income/age/religion distribution but everyone were Black, an estimated X% would be
+  married"), **not** "being black, income/age/religion being equal, causes 30.9%".
+- **The reflexive-sociology backbone the maintainer asked for.** Regression control gives at most
+  **robust / consistent association**, which Goldthorpe (2001, *Eur. Sociol. Rev.* 17(1):1–20,
+  <https://academic.oup.com/esr/article-abstract/17/1/1/502739>) contrasts with causation-as-generative-
+  process and treats as *descriptive*, not explanatory; Lieberson (*Making It Count*, 1985), Abbott
+  ("The Causal Devolution", 1998, *Sociol. Methods & Res.*) and Freedman argue statistical control on
+  observational data does **not** license a causal reading and urge showing *"what is happening"* (good
+  description) before *"why"*. The tabxplor move — **the crude/`Emp.` column beside the model column** — is
+  precisely this reflexive gesture: the "all correlations entangled" number next to the "some correlations
+  disentangled" number. It is defensible and distinctive; the discipline it requires is **naming both
+  honestly** and not narrating the adjusted one as a manipulable, purified causal fact.
+- **Table 2 fallacy** (Westreich & Greenland 2013, *Am. J. Epidemiol.* 177(4):292–298,
+  <https://academic.oup.com/aje/article/177/4/292/147738>): an adjusted estimate for a predictor in a
+  multivariable model is a **direct/conditional effect** (net of *these* controls), can itself still be
+  confounded, and mixes total- and direct-effect interpretations across the rows of one table. "income,
+  age and religion being equal" invites reading race's row as a clean, manipulable total effect — the
+  exact error. Race is not manipulable; income/age/religion may be **mediators** (a collider/mediator, not
+  a confounder) of a race→marriage association, so "holding them equal" can remove part of the very thing
+  one wants to describe.
+
+**Terminology verdict (for the vignette + column/legend naming).** Prefer **"adjusted predicted
+probability"** or **"model-standardized %"** over "adjusted percentage"; state it as a **comparison /
+standardization**, not a manipulation; keep the crude-vs-model juxtaposition but label the crude one
+plainly ("observed % — every correlation still entangled") and the model one as "the % that remains once
+the model holds the *measured* predictors alike — an association net of those controls, not a proven
+cause".
+
+### The concrete finding — tabxplor's `model %` is the wrong one of the three, and is contaminated by listwise deletion
+
+Audited `reg_marginal()` ([R/tab_reg.R](../R/tab_reg.R#L1227)) and verified numerically on
+`gss_simple` (probe in scratch; complete-case n = 12 960 of 21 483):
+
+- With `effect="ame"` and the default `at="average"`, the parenthetical **`model %` (`pred`) is
+  `marginaleffects::avg_predictions(fit, by = v)`** — the **observed-subgroup** average (Stata `margins,
+  over()`), NOT the counterfactual `variables=`/`margins` standardization. By the logit score-equation
+  identity (`Σ_{i∈g}(y_i − p̂_i)=0` for any main-effect group indicator), `avg_predictions(by=g)`
+  **exactly reproduces the estimation-sample observed rate** for that group. Confirmed: `model %`(Black)
+  `= 0.3086` **= the complete-case observed Black marriage rate to 4 dp**. So `model %` carries **no
+  adjustment at all** — it is the raw rate on the model's rows.
+- Meanwhile the **AME `diff` is `avg_comparisons(fit, variables = v)`** — the *counterfactual*
+  standardized contrast. So the two halves of the same `{diff} ({pct})` cell are **different estimands**
+  that don't reconcile: the standardized margins are White `0.5132` / Black `0.3152` (their difference =
+  the shown AME −0.198), but the cell shows the `by=` rates White `0.520` / Black `0.309`. Ref% + AME =
+  0.520 − 0.198 = 0.322 ≠ 0.309 shown ≠ 0.315 true-standardized. Mild but real incoherence.
+- **The 28% → 30.9% "adjustment" in the vignette is mostly a sample artifact.** `Emp. %`(Black)=28% is on
+  the **full 21 483** rows; `model %`=30.9% is on the **12 960 complete cases** (listwise deletion of
+  missing income/religion, whose Black subset happens to marry more). Computed on the *same* complete-case
+  frame the two would be **equal** (both 30.9%), exposing that `by=` adds nothing over the crude rate.
+
+### Do adjusted % only read as "error", or do they mean something?
+They're genuinely interpretable — a standardized rate, not just an error term. Three honest sentence-forms, from most to least conservative:
+
+1. **As a standardization (the level itself)**: "If the whole sample kept the income, age and religion composition it actually has, but everyone were Black, the model predicts 31.5% would be married — versus 51.3% if everyone were White." (This is literally what marginal standardization computes: vary race for everyone, average over the real covariate mix.)
+
+2. **As the adjusted gap (the difference of adjusted levels = the AME)**: "Comparing Black and White respondents who are alike in income, age and religion, being Black is associated with a marriage rate about 20 points lower, on average."
+
+3. **As a decomposition (observed vs adjusted, same population)**: "Blacks marry at 30.9% in this sample; standardizing their income/age/religion to the population mix moves that only to 31.5% — so almost none of the Black–White gap is accounted for by differences in those three variables; it persists after adjustment."
+
+That third reading is the payoff of your crude-vs-adjusted design: here adjustment barely moves the number, which is the substantive finding ("the gap is not explained by income/age/religion"). Always a **comparison/standardization**, never "changing someone's race causes X" (Gelman; Table-2 fallacy).
+

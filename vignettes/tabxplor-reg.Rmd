@@ -13,6 +13,7 @@ knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
 
 ```{r setup}
 library(tabxplor)
+library(dplyr)
 
 # As in the introduction vignette, tables are shown as the coloured console output turned to HTML.
 options(cli.num_colors = 256)
@@ -27,7 +28,7 @@ knitr::knit_hooks$set(output = function(x, options) {
 })
 ```
 
-`tab_reg()` builds a **regression table** that looks and behaves like a `tabxplor` cross-table: one row per predictor level, significance stars, colours that grey out non-significant effects, and the same Excel, html or markdown exports. You give it a data frame, an **outcome** (`dependent`) and some **predictors**, and it tries to picks the right kind of model from the outcome's type. Its distinctive feature is `empirical = TRUE`, which shows the **observed / crude / empirical effect right next to the model's adjusted one**, so you can see what "controlling for the other variables" actually changed.
+`tab_reg()` builds a **regression table** that looks and behaves like a `tabxplor` cross-table: one row per predictor level, significance stars, colours that grey out non-significant effects, and the same Excel, html or markdown exports. You give it a data frame, an **outcome** (`dependent`) and some **predictors**, and it tries to pick the right kind of model from the outcome's type. Its distinctive feature is `empirical = TRUE`, which shows the **observed / crude / empirical effect right next to the model's adjusted one**, so you can see what "controlling for the other variables" actually changed.
 
 We use a formatted version of the `forcats::gss_cat` data, from the US General Social Survey:
 
@@ -55,9 +56,9 @@ With `empirical = TRUE`, each model column is joined by a crude/observed compani
 - poisson (counts) → observed rate and observed rate ratio
 
 
-## Logistic regression
+## Logistic regression (a binary factor)
 
-When the outcome is a two-levels factor, here "married" versus "not married", `tab_reg()` chooses a **binomial** family to fit a logistic regression and reports **odds ratios** (the reference level of each predictor shows the neutral value `1`). 
+When the outcome is a two-level factor, here "married" versus "not married", `tab_reg()` chooses a **binomial** family to fit a logistic regression and reports **odds ratios** (the reference level of each predictor shows the neutral value `1`). 
 - Like in every regression model, the effect of a predictor level on the dependent variable reads "all the others chosen predictors being equals".
 - Colors read like any `tabxplor` table: an odds ratio above 1 (blue) means *more likely to be married* than the reference level, below 1 (red) means *less likely*; stars and colors both flag significance.
 
@@ -73,32 +74,67 @@ tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"), empirical =
 
 The raw percentages `Emp. %` is a summary of the base empirical results everything in the model is derived from :"28% of black americans are married, compared to 51% for white americans" 
 - The plain difference from reference is colored (28% - 51% = -23%).
-- Cells that are non-significantly different from the reference are greyed out (base on a Newcombe confidence interval for differences of proportions).
+- Cells that are non-significantly different from the reference are greyed out (based on a Newcombe confidence interval for differences of proportions).
 
 The **modelised odds-ratios** `Model OR` directly compared to the **empirical odds-ratios** `Emp. OR` :
 - Comparing the two tells you what adjustment the model did: if a predictor's **model** OR is much closer to 1 than its **crude** OR, the raw association was largely explained by the other predictors.
-- Here, "all things being unequal", black americans have 2.68 less odds to be married than white americans. "All things being equal" (more precisely : income, age and religion being equal), black americans still have 2.4 less odds to be married than white americans. The result holds, it’s not explained by income differences or religious differences.
+- Here, "all things being unequal", black americans have 2.68 lower odds to be married than white americans. "All things being equal" (more precisely : income, age and religion being equal), black americans still have 2.4 lower odds to be married than white americans. The result holds, it’s not explained by income differences or religious differences.
 
-The **empirical odds-ratio** are the same that can be calculated from percentages only in a crosstable : 
+The **empirical odds-ratio** are the same as those you can calculate from percentages only in a crosstable : 
 - Colors and significance stars use a **Woolf OR confidence interval** that matches what is done in the regression model. 
+- The population of the table must match the complete-cases population of the model, filtering out indivivuals with `NA` at any involved variable.
 
 ```{r}
-tab(gss_simple, race, married, pct = "row", OR = "OR", color = "OR", color_signif = "grey_non_signif")
+gss_simple |> 
+  dplyr::filter(dplyr::if_all(all_of(c("race", "age", "rincome", "relig")), ~ !is.na(.) )) |> 
+  tab(race, married, pct = "row", na = "drop", 
+    OR = "OR", color = "OR", color_signif = "grey_non_signif"
+   )
 ```
 
-Another way to interpret a logistic regression is to use **average marginal effects** (AME) :
-- Instead of reading the OR, `effect = "ame"` starts from it to modelise the average difference of percentage of each level compared to the reference.
-- We can then use `empirical = TRUE` to compare this new modelised quantity to the raw, observed difference of percentage `Emp. diff` (the 28% - 51% = -23 points of percentages in marriages for black americans compared to white americans).
-- We can also compare the raw percentage `Emp. %` to the adjusted/modelised percentage `model %` : the observed fact is "28% of black americans are married", the adjusted is "income, age and religion being equal, 30.9% of black americans are married" (compared to 52% of white americans).
+### Average marginal effects (AME) of a logistic regression
+
+Another way to interpret a logistic regression is to use **average marginal effects** (AME) with `effect = "ame"` :
+- Instead of directly reading the modelised odd-ratio we can infer, from it, the average difference of percentage of each level compared to the reference.
+- Here `Model AME` reads like this : "Comparing Black and White respondents who are alike in income, age and religion, being Black is associated with a marriage rate 19.8 points lower, on average."
 
 ```{r}
 tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"), effect = "ame", empirical = TRUE)
 ```
 
+```{r, echo=FALSE, eval=FALSE}
+# Check if the raw empirical percentages ar the same than the model predicted unadjusted probabilities 
+tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"), effect = "ame", 
+        empirical = TRUE, predicted_unadjusted = TRUE
+        ) |> 
+          tab_kable()
+ ```
+
+Then we can use `empirical = TRUE` to compare this new modelised quantity to the **raw, observed difference of percentages** : 
+- In the sample (`Emp. diff`), we observe a rate of marriages 23 points lower for black americans compared to white american (`28% - 51% = -23%`).
+- The modelised difference `Model AME` is very close, `-19.8%`, so very little of this difference between black and white can be explained by age, income or religion.
+
+We can also compare the raw percentage `Emp. %` with the modelised percentage `adjusted %` : 
+- Adjusted percentage, which is a result of the model, reads this way : "if the whole sample kept its income/age/religion distribution but everyone were Black, an estimated 31.5% would be married, vs 51.3% if everyone were White". 
+- Blacks marry at 30.9% in this sample (observed); standardizing their income/age/religion to the population mix moves that only to 31.5% — so almost none of the Black–White gap is accounted for by differences in those three variables; it persists after adjustment.
+
+We can, again, get the same empirical differences and confidence intervals with a plain table : 
+
+```{r}
+dependent  <- "married"
+predictors <- c("race", "age", "rincome", "relig")
+factor_predictors <- c("race", "rincome", "relig")
+gss_simple |>
+  dplyr::filter(dplyr::if_all(all_of(c(predictors, dependent)), ~ !is.na(.) )) |> 
+  tab(all_of(factor_predictors), all_of(dependent), pct = "row", na = "drop", 
+      color = "diff", ref = 1, color_signif = "grey_non_signif", stars = TRUE
+      ) |>
+  dplyr::mutate(diff = set_display(`01-Married`, "diff"))
+ ```
 
 
 
-### Ordinal and nominal outcomes (3+ levels)
+## Ordinal and nominal outcomes (a factor with 3+ levels)
 
 An **ordered** factor outcome is fit as a proportional-odds (cumulative) logistic model:
 
@@ -116,7 +152,7 @@ tab_reg(gss_simple, "party3", c("race", "age", "rincome", "relig"))
 
 Relative risk ratios may be quite difficult to read because they are relative to **two** reference levels : not only the reference chosen for the predictor, but also the reference level chosen for the dependent variable. It’s specially difficult when it’s difficult to find a good reference level corresponding to the most common situation (like "married" for matrimonial status).
 
-Most of the time, average marginal effects (AME) are easier to interpret, because they make the second reference level dissapear, and directly modelise, for each level of the dependent variable, difference of percentages of each predictor compared to their reference level (a less abstract quantity than odds ratios). 
+Most of the time, average marginal effects (AME) are easier to interpret, because they make the second reference level disappear, and directly modelise, for each level of the dependent variable, difference of percentages of each predictor compared to their reference level (a less abstract quantity than odds ratios). 
 
 ```{r, eval = requireNamespace("nnet", quietly = TRUE)}
 # install.packages("nnet")
@@ -126,7 +162,7 @@ tab_reg(gss_simple, "party3", c("race", "age", "rincome", "relig"), effect = "am
 With `empirical = TRUE`, the crude/observed/unajusted differences and raw percentages appear in html tooltips available at mouse hover of each cell.
 
 
-### Linear regression (a numeric outcome)
+## Linear regression (a numeric outcome)
 
 A continuous outcome gives plain linear regression coefficients (here we set `family` explicitly, because an integer like `age` is ambiguous — it could also be modelled as a count):
 
@@ -142,7 +178,7 @@ tab_reg(gss_simple, "age", c("race", "marital", "relig", "rincome"), family = "g
 The empirical mean ages, and differences of mean ages from reference, can be computed in a simple table with : 
 
 ```{r}
-tab(gss_simple, "race", "age", pct = "row", digits = 2, 
+tab(gss_simple, "race", "age", pct = "row", digits = 2, na = "drop",
     color = "diff", ref = 1,  method_mean_diff = "student"
 ) |> 
   mutate(diff = set_display(age, "diff"))
@@ -150,7 +186,7 @@ tab(gss_simple, "race", "age", pct = "row", digits = 2,
 ```
 
 
-### Poisson regression (a count outcome)
+## Poisson regression (a count outcome)
 
 ```{r}
 tab_reg(gss_simple, "tvhours", c("race", "marital", "relig", "rincome"), family = "poisson")
@@ -164,25 +200,21 @@ In the case of a poisson regression, the **empirical/observed counterpart of the
 tab_reg(gss_simple, "tvhours", c("race", "marital", "relig", "rincome"), family = "poisson", empirical = TRUE)
 ```
 
-The empirical average TV hours per deay, and differences of rate of television watching from reference, can be computed in a simple table with : 
+The empirical average TV hours per day, and differences of rate of television watching from reference, can be computed in a simple table with : 
 
 ```{r}
-tab(gss_simple, "race", "age", pct = "row", digits = 2, 
+tab(gss_simple, "race", "tvhours", pct = "row", digits = 2, na = "drop",
     color = "ratio", ref = 1,  method_mean_ratio = "quasipoisson"
 ) |> 
-  mutate(IRR = set_display(age, "ratio"))
+  mutate(IRR = set_display(tvhours, "ratio"))
 # default method for confidence intervals is robust ratio of means with unequal variable ;
 #  we use "quasipoisson" to match those computed by quasi-poisson regression 
 #  (assumption : variance is proportional to mean). 
 ```
 
-
-
-
-
 ## Weighted and survey data
 
-Passing a weight column with `wt =` switches estimation to a **survey design** (`survey::svyglm()`), which gives correct *design-based* standard errors. The framework `tabxplor` uses is simple: the **estimate is weighted**, the number of observations in the sample in the basis for confidence intervals and pvalues calculations, and inference uses the **survey design** so that unequal weights widen the intervals honestly.
+Passing a weight column with `wt =` switches estimation to a **survey design** (`survey::svyglm()`), which gives correct *design-based* standard errors. The framework `tabxplor` uses is simple: the **estimate is weighted**, the number of observations in the sample and the survey design arethe basis for confidence intervals and pvalues calculations, and survey design ensure unequal weights widen the intervals honestly.
 
 ```{r, eval = FALSE}
 # `weight` is a survey weight column in your data:

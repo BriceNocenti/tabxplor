@@ -475,7 +475,9 @@ test_that("binomial AME: diff/pct/CI/p match marginaleffects; AME-first composed
   g   <- stats::glm(married ~ race + age, data = dm, family = stats::binomial())
   acr <- as.data.frame(marginaleffects::avg_comparisons(g, variables = "race", newdata = dm))
   aca <- as.data.frame(marginaleffects::avg_comparisons(g, variables = "age",  newdata = dm))
-  ap  <- as.data.frame(marginaleffects::avg_predictions(g, by = "race", newdata = dm))
+  # decisions doc S50 (change A): the adjusted % is the marginal-STANDARDIZED prediction (variables=),
+  # which coheres with the AME -- NOT the observed-group average (by=).
+  ap  <- as.data.frame(marginaleffects::avg_predictions(g, variables = "race", newdata = dm))
 
   keep <- !is.na(get_diff(col))
   expect_equal(sort(get_diff(col)[keep]),   sort(c(acr$estimate, aca$estimate)),   tolerance = 1e-6)

@@ -101,10 +101,10 @@ test_that("binomial AME: single-predictor risk-diff (Emp. diff) == observed risk
   for (lev in names(rdif)[-1]) {
     expect_equal(unname(emp_diff[lev]), unname(rdif[lev]), tolerance = 1e-6)
   }
-  # the AME column carries "Emp. diff", NOT "Emp. OR", and the header names the (model %)
+  # the AME column carries "Emp. diff", NOT "Emp. OR", and the header names the (adjusted %)
   expect_true("Emp. diff" %in% names(t))
   expect_false("Emp. OR"  %in% names(t))
-  expect_true(any(grepl("model %", names(t), fixed = TRUE)))
+  expect_true(any(grepl("adjusted %", names(t), fixed = TRUE)))
 })
 
 # --- 14v-ii CRUDE CI PARITY: the empirical column's CI == the single-predictor model's CI ----------
@@ -302,4 +302,48 @@ test_that("empirical_OR is hard-deprecated (errors, pointing to empirical)", {
   # the replacement works:
   t <- tab_reg(d, "married", "race", family = "binomial", empirical = TRUE, cleannames = FALSE)
   expect_true(all(c("Emp. %", "Emp. OR") %in% names(t)))
+})
+
+
+# --- decisions doc S50: adjusted % (marginal standardization) + empirical on the model frame ---------
+
+test_that("change B: empirical companions use the model's complete-case frame, not full data", {
+  skip_if_not_installed("broom")
+  d <- emp_data()
+  expect_true(anyNA(d$inc3) && !anyNA(d$race))     # differential missingness: inc3 has NAs, race none
+  t  <- tab_reg(d, "married", c("race", "inc3"), family = "binomial", empirical = TRUE,
+                cleannames = FALSE)
+  dm <- d[stats::complete.cases(d[, c("married", "race", "inc3")]), , drop = FALSE]
+  expect_lt(nrow(dm), nrow(d))                      # listwise deletion actually bites
+
+  # the crude Emp.% cell counts for the race predictor sum to the MODEL frame N, not the full-data N
+  race_rows <- as.character(t$var) == "race"
+  n_emp <- sum(get_n(t[["Emp. %"]])[race_rows], na.rm = TRUE)
+  expect_equal(n_emp, nrow(dm))
+  expect_lt(n_emp, nrow(d))
+})
+
+test_that("change A/D: adjusted % coheres with the AME, and the unadjusted control == Emp. %", {
+  skip_if_not_installed("marginaleffects")
+  d <- emp_data()
+  t <- tab_reg(d, "married", c("race", "inc3"), family = "binomial", effect = "ame",
+               empirical = TRUE, predicted_unadjusted = TRUE, cleannames = FALSE)
+
+  # change A: adjusted%(reference) + AME(level) == adjusted%(level) -- the standardized prediction and
+  # the AME are the SAME estimand (avg_predictions(variables=) / avg_comparisons(variables=)).
+  amecol    <- t[["Model AME (adjusted %)"]]
+  race_rows <- which(as.character(t$var) == "race")
+  rl  <- as.character(t$levels)[race_rows]
+  adj <- get_pct(amecol)[race_rows];  names(adj) <- rl
+  ame <- get_diff(amecol)[race_rows]; names(ame) <- rl
+  ref <- rl[is.na(ame)][1]
+  for (lv in rl[!is.na(ame)]) {
+    expect_equal(unname(adj[ref] + ame[lv]), unname(adj[lv]), tolerance = 1e-6)
+  }
+
+  # change D: the unadjusted control column == the same-frame Emp. % exactly (score-equation identity)
+  emp   <- get_pct(t[["Emp. %"]])
+  unadj <- get_pct(t[["Model % (unadj.)"]])
+  keep  <- !is.na(unadj)
+  expect_equal(emp[keep], unadj[keep], tolerance = 1e-6)
 })

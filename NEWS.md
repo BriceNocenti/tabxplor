@@ -37,7 +37,16 @@
 * **Crude (`empirical`) columns get confidence intervals.** With `empirical = TRUE`, the descriptive
   "Emp." companion columns now carry a confidence interval, significance stars and significance-based
   colour, computed with the same method as the model — so crude and adjusted effects are directly
-  comparable. The multinomial crude tooltip gains its intervals too.
+  comparable. The multinomial crude tooltip gains its intervals too. Every crude quantity is now computed
+  on **exactly the same complete-case population as the model** (listwise-complete on the outcome, all
+  predictors and any design variable), so the crude-vs-adjusted comparison is never confounded by
+  differing missingness.
+* **`effect = "ame"` shows a genuine adjusted percentage.** The predicted probability in parentheses beside
+  each average marginal effect is now a *marginal-standardized* prediction (`avg_predictions(variables=)`),
+  which is truly covariate-adjusted and coheres with the effect (adjusted-%(reference) + AME = adjusted-%
+  (level)). The header names it `(adjusted %)`. A new optional `predicted_unadjusted = TRUE` (binomial AME)
+  adds a `Model % (unadj.)` control column showing the model's unadjusted predicted % (which equals the
+  crude `Emp. %` on the same population — a built-in cross-check).
 * **`color_signif` and significance stars now work on empirical odds ratios in crosstabs.**
   `tab(..., color = "OR")` gained a confidence interval (Woolf log-odds-ratio), so
   `color_signif = "grey_non_signif"` / `"guaranteed_effect"` grey out or highlight odds-ratio cells by
