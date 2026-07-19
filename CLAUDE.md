@@ -787,6 +787,15 @@ What other strings should be translated in French ?
 
 #### Discovered bugs
 
+- **OPEN (found Last Phase e, low impact):** `options(tabxplor.output_kable = TRUE)` + a **two-channel
+  colour** (a background channel, e.g. the `color = TRUE` auto scheme = `c("diff","ratio")` = diff text
+  + ratio background) errors on the auto-print with *"no applicable method for 'mutate' applied to ...
+  tabxplor_kable"*. The failing site is `tab.R:2219` (`tabs %>% tab_kable()` inside `tab()`), reached
+  ONLY through the `output_kable` internal switch: `tab_kable(tab(..., color = TRUE))` and the console
+  print BOTH work, and single-channel `color = "auto"`/`"diff"` work under `output_kable` too. So the
+  finalize/kable ordering diverges only on that one path. Narrow (an internal switch); the new
+  `vignette("tabxplor")` sidesteps it by rendering tables as coloured console output (fansi), the way a
+  console user sees them. Fix when the `output_kable` / print path is next touched.
 - ~~**A pre-existing golden drift.** `n_ci_tabvars.rds` / `n_ci_tabvars_all.rds` had a `ci_sup` `NaN`
    where a clean run wants `NA`.~~ **FIXED in 14v-ii**: the cause was `n <= 1` cells (`df = n - 1 <= 0`
    feeding `qt`); `ci_pivot()` now coerces `df <= 0` to `NA` (clean NA, no NaN, no warning). The two

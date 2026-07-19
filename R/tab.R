@@ -2216,6 +2216,9 @@ tab_assemble_output <- function(ctx) {
   if (output != "list" &
       is.list(tabs) & !is.data.frame(tabs) & length(tabs) == 1) tabs <- tabs[[1]]
 
+  # KNOWN-BUG (Last Phase e): with a two-channel colour (a background channel, e.g. color = TRUE ->
+  # c("diff","ratio")) this tab_kable() errors "no applicable method for 'mutate' ... tabxplor_kable".
+  # Only via this output_kable switch; tab_kable(tab(..., color = TRUE)) and console print both work.
   if (getOption("tabxplor.output_kable") == TRUE) tabs <- tabs %>% tab_kable()
 
   tabs
