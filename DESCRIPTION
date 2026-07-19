@@ -14,7 +14,8 @@ Description: Make it easy to deal with multiple cross-tables in data exploration
   manipulated. In the same time, time-taking operations are done with 'data.table'
   to go faster with big dataframes. Tables can be exported with formats and colors 
   to 'Excel', html, markdown and plot.
-URL: https://github.com/BriceNocenti/tabxplor
+URL: https://github.com/BriceNocenti/tabxplor,
+    https://bricenocenti.github.io/tabxplor/
 BugReports: https://github.com/BriceNocenti/tabxplor/issues
 License: GPL (>= 3)
 Encoding: UTF-8
@@ -52,6 +53,8 @@ Suggests:
 Config/testthat/edition: 3
 Config/testthat/parallel: true
 Config/testthat/start-first: tab_reg*, tab_logit, parallel-parity, jmvtab-cache, export*
+Config/Needs/website: pkgdown
+Config/Needs/coverage: covr
 Imports:
     dplyr (>= 1.0.3),
     stringr (>= 1.4.0),

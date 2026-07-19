@@ -1,0 +1,98 @@
+url: https://bricenocenti.github.io/tabxplor/
+
+template:
+  bootstrap: 5
+
+reference:
+- title: Cross-tables
+  desc: >
+    Make and customise cross-tables. Colour scales and palettes are set with `set_color_breaks()`,
+    `set_color_palette()` and `set_color_style()` (documented on the `tab_many()` page).
+  contents:
+  - tab
+  - tab_many
+  - tab_num
+  - tab_plain
+  - tab_counts
+
+- title: Building a table step by step
+  desc: The pipeline behind `tab_many()`; each step is exported and usable on its own.
+  contents:
+  - tab_prepare
+  - tab_pct
+  - tab_tot
+  - tab_totaltab
+  - tab_ci
+  - tab_chi2
+
+- title: Regression tables
+  desc: Model-effect tables that behave like a cross-table.
+  contents:
+  - tab_reg
+  - tab_logit
+  - multi_logit
+  - or_plot
+  - lm_plots
+
+- title: Reshape and combine
+  contents:
+  - tab_spread
+  - tab_compact
+  - tab_transpose
+  - complete_partial_totals
+
+- title: Export
+  desc: Send a finished table to HTML, Markdown, Excel or a plot.
+  contents:
+  - tab_kable
+  - tab_md
+  - tab_xl
+  - tab_plot
+  - tab_export
+  - tab_css
+  - tab_md_css
+  - kable_tabxplor_style
+
+- title: The fmt cell type
+  desc: >
+    The `tabxplor_fmt` vctrs record and its field / attribute accessors, plus the structural
+    predicates (total rows, total tables, reference rows and columns).
+  contents:
+  - fmt
+  - new_tab
+  - fmt_get_color_code
+
+- title: Options and data
+  contents:
+  - tabxplor-options
+  - gss_cat_data_formatting
+
+- title: Jamovi
+  contents:
+  - jmvtab
+  - jmvtabreg
+
+- title: Other helpers
+  contents:
+  - fct_recode_helper
+  - score_from_lv1
+  - tab_get_wrapped_dimensions
+  - tab_wrap_text
+  - tab_parallel_stop
+  - "%>%"
+
+- title: internal
+  desc: >
+    S3 methods (so that dplyr verbs, printing and arithmetic keep the tabxplor classes) and internal
+    helpers. Not part of the public workflow.
+  contents:
+  - matches("\\.")
+  - has_keyword("internal")
+
+articles:
+- title: Get started
+  navbar: ~
+  contents:
+  - tabxplor
+  - tabxplor-reg
+  - tabxplor-programming

@@ -4,7 +4,7 @@
 \alias{[[<-.tabxplor_grouped_tab}
 \title{set sub-subset method for class tabxplor_grouped_tab}
 \usage{
-"x[[...]] <- value"
+\method{[[}{tabxplor_grouped_tab}(x, ...) <- value
 }
 \arguments{
 \item{x}{A tabxplor_grouped_tab object.}

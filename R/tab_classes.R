@@ -1539,6 +1539,7 @@ tab_collapse_total_rows <- function(tab) {
 #' @param tabs A tabxplor_tab (with chi2 table as attribute).
 #'
 #' @return A tabxplor_tab.
+#' @keywords internal
 # @export
 #
 # @examples
@@ -2823,8 +2824,6 @@ dplyr_reconstruct.tabxplor_grouped_tab <- function(data, template) {
 #' @param drop For matrices and arrays. If TRUE the result is coerced to the lowest
 #' possible dimension (see the examples). This only works for extracting elements,
 #' not for the replacement.
-#' @usage "x[i]  ;  x[i, j, ... , drop = TRUE]"
-#' @method `[` tabxplor_grouped_tab
 #' @return An object of class \code{tabxplor_grouped_tab}.
 #' @export
 `[.tabxplor_grouped_tab` <- function(x, i, j, drop = FALSE) {
@@ -2841,8 +2840,6 @@ dplyr_reconstruct.tabxplor_grouped_tab <- function(data, template) {
 #' @param x A tabxplor_grouped_tab object.
 #' @param i,j,... Indices.
 #' @param value The new value.
-#' @usage "x[i] <- value  ;   x[i, j, ...] <- value"
-#' @method `[<-` tabxplor_grouped_tab
 #' @return An object of class \code{tabxplor_grouped_tab}.
 #' @export
 `[<-.tabxplor_grouped_tab` <- function(x, i, j, ..., value) {
@@ -2858,8 +2855,6 @@ dplyr_reconstruct.tabxplor_grouped_tab <- function(data, template) {
 #' @param x A tabxplor_grouped_tab object.
 #' @param ... Indices
 #' @param value The new value.
-#' @usage "x[[...]] <- value"
-#' @method `[[<-` tabxplor_grouped_tab
 #' @return An object of class \code{tabxplor_grouped_tab}.
 #' @export
 `[[<-.tabxplor_grouped_tab` <- function(x, ..., value) {

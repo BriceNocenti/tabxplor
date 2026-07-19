@@ -4,7 +4,7 @@
 \alias{[.tabxplor_grouped_tab}
 \title{subset method for class tabxplor_grouped_tab}
 \usage{
-"x[i]  ;  x[i, j, ... , drop = TRUE]"
+\method{[}{tabxplor_grouped_tab}(x, i, j, drop = FALSE)
 }
 \arguments{
 \item{x}{A tabxplor_grouped_tab object.}

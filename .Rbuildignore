@@ -18,3 +18,7 @@
 ^\.vscode$
 ^\.claude$
 ^dev$
+^_pkgdown\.yml$
+^docs$
+^pkgdown$
+^codecov\.yml$
