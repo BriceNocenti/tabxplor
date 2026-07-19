@@ -16,14 +16,20 @@ knitr::opts_chunk$set(
 
 ```{r setup}
 library(tabxplor)
+```
 
-# The tables below are shown exactly as they appear in the R console --- coloured. tabxplor builds
-# its terminal colours with cli (which reads options("cli.num_colors")); the hook just below turns
-# that ANSI into the coloured HTML you see here (via fansi). In a report you would instead export
+```{r hiddensetup, echo=FALSE}
+library(tabxplor)
+
+# The tables below are shown exactly as they appear in the R console --- colored. tabxplor builds
+# its terminal colors with cli (which reads options("cli.num_colors")); the hook just below turns
+# that ANSI into the colored HTML you see here (via fansi). In a report you would instead export
 # with tab_kable() (HTML) or tab_xl() (Excel) --- see the "Exporting" section.
 options(cli.num_colors = 256)
-set_color_style(type = "text", theme = "light")
+set_color_palette(theme = "light") # type = "text"
 ```
+
+
 
 ```{r, echo = FALSE, include = FALSE}
 knitr::knit_hooks$set(output = function(x, options) {
@@ -33,11 +39,11 @@ knitr::knit_hooks$set(output = function(x, options) {
 })
 ```
 
-`tabxplor` helps you **explore data with cross-tables**: it makes them quickly, and — its main idea — it **colours the cells so you can read a table at a glance**. Over-represented cells turn blue/green, under-represented ones turn red/orange, so patterns jump out without you squinting at every number.
+`tabxplor` helps you **explore data with cross-tables**: it makes them quickly and **colors the cells so you can read a table at a glance**. Over-represented cells use shades of blue, under-represented ones turn red/orange, so patterns jump out without you squinting at every number.
 
-Everything is a `tibble`, so the result works with the usual `dplyr` verbs, and tables export to Excel, HTML and Markdown *with their colours*. Heavy computations run on `data.table`, so it stays fast on large survey data.
+Everything is a `tibble`, so the result works with the usual `dplyr` verbs, and tables export to Excel, HTML and Markdown with their colors. Heavy computations run on `data.table`, so it stays fast on large survey data.
 
-Throughout this vignette we use `gss_simple`, a cleaned-up version of the General Social Survey (`forcats::gss_cat`) shipped with the package. Its factors have merged, tidy levels, and their **first level is chosen to be a sensible reference** (which matters for colours and for `tab_reg()`).
+Throughout this vignette we use `gss_simple`, a cleaned-up version of the General Social Survey (`forcats::gss_cat`) with factors levels merged and reordered.
 
 ```{r, echo = TRUE}
 gss_simple <- gss_cat_data_formatting()
@@ -63,31 +69,37 @@ When the column variable is **numeric**, `tab()` shows its **mean** in each row 
 tab(gss_simple, marital, age)
 ```
 
-You can pass **several column variables at once** — factors and numerics mixed. `levels = "first"` keeps only the first level of each factor, which is handy for compact summary tables:
+You can pass **several row and column variables at once**. 
 
 ```{r, echo = TRUE}
-tab(gss_simple, race, c(marital, age, tvhours), pct = "row", levels = "first")
+tab(gss_simple, c(race, relig), c(party3, tvhours), na = "drop", pct = "row")
 ```
 
-A few other everyday arguments: `wt =` for a weight variable, `na = "drop"` to drop missing values from the base, `digits =` for the number of decimals, and `cleannames = TRUE` to strip prefixes like `"1-"` from level names. See `?tab` for the full list, grouped by purpose.
+`levels = "first"` keeps only the first level of each column factor, which is handy to display many binary factors/survey questions with multiple answers, all at once, in a compact way :
+
+```{r, echo = TRUE}
+tab(gss_simple, relig, c(married, black, income25k), pct = "row", levels = "first")
+```
+
+A few other everyday arguments: `wt =` for a weight variable, `na = "drop"` to drop missing values from the base, `digits =` for the number of decimals, and `cleannames = TRUE` to strip prefixes like `"1-"` from level names. See `?tab` for the full list.
 
 ## Sub-tables
 
-Give `tab()` a third variable as `tab_vars` and it builds **one sub-table per group** (here, one per race). The result is *grouped*: `dplyr` operations then run within each sub-table.
+Give `tab()` a third variable as `tab_vars` and it builds **one sub-table per group** (here, one per income group). The result is *grouped*: `dplyr` operations then run within each sub-table.
 
 ```{r, echo = TRUE}
-tab(gss_simple, marital, partyid, race, pct = "row")
+tab(gss_simple, race, party3, rincome, na = "drop", pct = "row")
 ```
 
-## Colours: reading helpers
+## colors: reading helpers
 
-This is what `tabxplor` is really for. `color = "diff"` colours each cell by **how far it sits from its reference** — by default the Total of its row or column. Cells clearly above the average turn **blue**, cells clearly below turn **red/orange**, and a colour legend is printed underneath.
+This is the main purpose of `tabxplor`. `color = "diff"` colors each cell by **how far it sits from its reference** — by default the Total of its row or column. Cells clearly above the average turn **blue**, cells clearly below turn **red/orange**, the more , and a color legend is printed underneath.
 
 ```{r, echo = TRUE}
-tab(gss_simple, race, marital, pct = "row", color = "diff")
+tab(gss_simple, race, party3, pct = "row", color = "diff")
 ```
 
-`color = TRUE` picks a sensible scheme automatically for each column type (differences for percentages, ratios for means, …), so you rarely need to think about it:
+`color = TRUE` picks a sensible scheme automatically for each column type (differences for percentages, ratios for means, …), check which one in the legend:
 
 ```{r, echo = TRUE}
 tab(gss_simple, race, c(marital, partyid), pct = "row", color = TRUE)
@@ -99,59 +111,77 @@ tab(gss_simple, race, c(marital, partyid), pct = "row", color = TRUE)
 - with sub-tables, `comp = "all"` compares against the **overall** Total instead of each sub-table's own Total.
 
 ```{r, echo = TRUE}
-gss_year <- dplyr::mutate(gss_simple, year = as.factor(year))
-tab(gss_year, year, marital, pct = "row", color = "diff", ref = "first")
+tab(gss_simple, year, marital, pct = "row", color = "diff", ref = 1)
 ```
 
-Colour thresholds and the palette are set **once for the whole session** with `set_color_breaks()` and `set_color_palette()` — you do not repeat them on every table.
+color thresholds and the palette are set **once for the whole session** with `set_color_breaks()` and `set_color_palette()` — not to repeat on every table.
 
-## Colours that respect significance
+## colors that respect significance
 
-The colours above show the *size* of a deviation, but not whether it is **statistically reliable**. On small samples a big-looking difference can be pure noise. The `color_signif` argument brings significance into the colouring:
+The colors above show the *size* of a deviation, but not whether it is **statistically reliable**. On small samples a big-looking difference can be pure noise. The `color_signif` argument brings significance into the coloring:
 
-- `"ignore"` (default): colour every deviation by its observed size.
-- `"grey_non_signif"`: colour by size, but **grey out cells that are not significant**. A coloured cell is then guaranteed to be significantly different from its reference.
-- `"guaranteed_effect"`: colour only by the part of the effect you can be confident about (its confidence bound), with dimmer, conservative colours. Use it on **small samples** to highlight only the differences you have the right to interpret.
+- `"ignore"` (default): color every deviation by its observed size. Grey out small differences below a certain threshold.
+- `"grey_non_signif"`: color by size of the effect, grey out small effects below a certain threshold, but also **grey out cells with important effects that are not significant**. Every colored cell is then guaranteed to be significantly different from its reference, without being bothered by very small significant differences. 
+- `"guaranteed_effect"`: color only by the part of the effect you can be confident about (its confidence bound), with dimmer, conservative colors. Use it on **small samples** to **highlight all the differences you have the right to interpret**. Everything colored is significant ; nothing grey is. 
 
 ```{r, echo = TRUE}
-tab(gss_simple, race, marital, pct = "row", color = "diff",
-    color_signif = "grey_non_signif")
+tab(gss_simple, race, party3, pct = "row", color = "diff", color_signif = "grey_non_signif")
 ```
 
 ```{r, echo = TRUE}
-tab(gss_simple, race, marital, pct = "row", color = "diff",
-    color_signif = "guaranteed_effect")
+gss_simple |>
+  dplyr::filter(year == "2012") |> # n=1 974
+  tab(race, party3, pct = "row", color = "diff", color_signif = "guaranteed_effect")
 ```
 
 ## Confidence intervals, tests and contributions
 
-Print confidence intervals for each cell with `ci = "cell"`, and add significance stars with `stars = TRUE`:
+Print confidence intervals for each cell with `ci = "cell"` : 
 
 ```{r, echo = TRUE}
-tab(gss_simple, race, marital, pct = "row", ci = "cell")
+tab(gss_simple, race, party3, pct = "row", ci = "cell") # by default, conf_level = 0.95
 ```
 
-`test = TRUE` adds a statistical test of independence per (sub-)table — **Chi-squared** for factor columns, **Welch's F** for numeric ones:
+Print the confidence intervals of the difference with a reference, used to calculate significance (if 0 belongs to the confidence interval, the cell is not significantly different from the reference, here the Total row) : 
+```{r, echo = TRUE}
+gss_simple |>
+  dplyr::filter(year == "2012") |> # n=1 974
+  tab(race, party3, pct = "row", color = TRUE, color_signif = "guaranteed_effect", display = "{ci}")
+```
+
+Add significance stars with `stars = TRUE`. They tell the same story than confidence intervals of the difference with the reference, but for different confidence levels (99%, 95%, 90%) :
 
 ```{r, echo = TRUE}
-tab(gss_simple, race, marital, pct = "row", test = TRUE)
+gss_simple |>
+  dplyr::filter(year == "2012") |> # n=1 974
+  tab(race, party3, pct = "row", display = "{ci}", stars = TRUE) 
 ```
 
-`color = "contrib"` colours cells by their **contribution to the Chi-squared** — the cells that would stand out in a correspondence analysis (here, being Black is strongly associated with *Never married* and *Separated*):
+`test = TRUE` adds a statistical test of independence per (sub-)table — **Chi-squared** for factor columns, **Welch's F ANOVA** for numeric variables:
 
 ```{r, echo = TRUE}
-tab(gss_simple, race, marital, color = "contrib")
+tab(gss_simple, race, c(party3, tvhours), pct = "row", test = TRUE)
 ```
+
+`color = "contrib"` colors cells by their **contribution to the Chi-squared** — the cells that would stand out in a correspondence analysis (here, being Black is statistically associated with *Never married* and *Separated*):
+
+```{r, echo = TRUE}
+tab(gss_simple, race, party3, color = "contrib")
+# tab(gss_simple, race, party3, pct="row", color = "contrib") # works with pct, but independent from rows/columns
+```
+
+See below for the detail of how confidence intervals and colors can be composed 
+
 
 ## Exporting
 
-A finished table exports with its colours to Excel, HTML or Markdown:
+A finished table exports with its colors to Excel, HTML or Markdown:
 
 ```{r, echo = TRUE, eval = FALSE}
-t <- tab(gss_simple, race, marital, pct = "row", color = "diff")
-tab_xl(t, path = "table.xlsx")   # Excel, with colours
-tab_kable(t)                     # HTML (for R Markdown / Quarto)
-tab_md(t)                        # Markdown (with pandoc colour spans)
+t <- tab(gss_simple, race, party3, pct = "row", color = "diff")
+tab_xl(t, path = "table.xlsx")   # Excel, with colors
+tab_kable(t)                     # HTML (for RStudio Viewer / R Markdown / Quarto)
+tab_md(t)                        # Markdown (with pandoc color spans)
 ```
 
 ## Working with the result
@@ -160,28 +190,68 @@ tab_md(t)                        # Markdown (with pandoc colour spans)
 
 ```{r, echo = TRUE, message = FALSE}
 library(dplyr)
-tab(gss_simple, race, marital, pct = "row") %>%
-  arrange(is_totrow(.), desc(Married))
+tab(gss_simple, race, marital, pct = "row") |>
+  arrange(desc(Married))
 ```
 
-## Expert reference: `color` × `color_signif`
 
-For the record, here is what the two colour arguments combine to. `color` chooses **what** to colour; `color_signif` chooses **how significance gates it**.
+## Confidence intervals and colors composition : variable_type × `color` × `color_signif`
 
-| `color` measure | what it shows | works with |
-|:----------------|:--------------|:-----------|
-| `"diff"`  | difference from the reference (percentage points; Glass's Δ for means) | `pct`, means |
-| `"ratio"` | relative risk (factors) or mean ratio (numerics) | `pct`, means |
-| `"contrib"` | signed contribution to the Chi-squared (reference-free) | counts |
-| `"OR"` | empirical odds ratio | `pct` |
+Below are, <to finish>
 
-| `color_signif` policy | effect on the colouring |
-|:----------------------|:------------------------|
-| `"ignore"` (default) | colour every deviation by its observed size |
-| `"grey_non_signif"` | grey out non-significant cells; a coloured cell is significant |
-| `"guaranteed_effect"` | colour only the confidence-bounded effect (conservative; for small samples) |
+The type is determined by the column variable, which is either a factor (proportions/percentages are calculated) or a numeric (means are calculated). (The row variable is always coerced to a factor.)
 
-Significance uses the confidence level `conf_level` (default 95%); the interval method can be tuned with `method_cell` / `method_diff` (see `?tab_ci`).
+The most important confidence intervals compare a cell to its reference, and are uses for colors : 
+
+| type | color     | measure formula      | confidence interval: default | ci option 2 | ci option 3 |
+|------|-----------|----------------------|------------------------------|-------------|-------------|
+| pct  | `diff`    | $%_{cell} - %_{ref}$ | Newcombe                     | Agresti-Caffo |             |
+| pct  | `ratio`   |                      |                              |             |             |
+| pct  | `or`      |                      | *only `tab_reg()`*           |             |             |
+| pct  | `contrib` |                      |                              |             |             |
+|------|-----------|----------------------|------------------------------|-------------|-------------|
+| mean | `diff`    |                      |                              |             |             |
+| mean | `ratio`   |                      |                              |             |             |
+
+The interval method can be tuned with `method_diff` / `method_ratio` / `method_mean_diff` / `method_mean_ratio` (see `?tab_ci`). Significance uses the confidence level `conf_level` (default 95%). 
+
+And the equivalent for simple, cell-by-cell confidence intervals : 
+
+| type | color     | confidence interval: default | ci option 2               |
+|------|-----------|------------------------------|---------------------------|
+| pct  | `cell`    | Wilson score interval        | Wald normal approximation |
+| mean | `cell`    |                              |                           |
+
+`method_cell` 
+
+
+
+| type | color     | `color_signif="ignore"`    | `="grey_non_signif"`                                 | `="guaranteed_effect"`     |
+|------|-----------|----------------------------|------------------------------------------------------|----------------------------|
+| pct  | `diff`    | observed diff, all cells   | observed diff, grey where $diff-CI ∋ 0$              | diff CI-floor              |
+| pct  | `ratio`   | observed ratio, all cells  | observed ratio, grey where $cell=ref$ not rejected   | ratio CI-floor             |
+| pct  | `or`      | observed odds-ratio, all   | observed OR, grey where $OR-CI ∋ 1$                  | OR CI-floor                |
+| pct  | `contrib` | χ² contribution share, all | contribution, grey where $\|resid\| < z(conf_level)$ | significant residuals only |
+|------|-----------|----------------------------|------------------------------------------------------|----------------------------|
+| mean | `diff`    | observed diff, all cells   | observed diff, grey where $diff-CI ∋ 0$              | diff CI-floor              |
+| mean | `ratio`   | observed ratio, all cells  | observed ratio, grey where $cell=ref$ not rejected   | ratio CI-floor             |
+
+Examples : 
+
+```{r, eval=FALSE}
+# type : pct / proportion
+tab(gss_simple, race, party3, pct = "row", color = "diff" , color_signif = "grey_non_signif")
+tab(gss_simple, race, party3, pct = "row", color = "ratio", color_signif = "guaranteed_effect")
+tab(gss_simple, rincome, married, pct = "row", color = "OR", OR = TRUE, ref2 = 1)
+tab(gss_simple, rincome, party3 , color = "contrib") # pct = "row" and pct = "col" works too
+
+# type : mean
+tab(gss_simple, rincome, tvhours, color = "diff" , color_signif = "guaranteed_effect")
+tab(gss_simple, rincome, tvhours, color = "diff" , color_signif = "grey_non_signif", 
+   color_breaks = list(mean_diff = c(0.4, 0.8, 1.6)), ref = 1
+   ) # with a custom scale for differences
+tab(gss_simple, rincome, tvhours, color = "ratio", color_signif = "grey_non_signif")
+```
 
 ## Where to go next
 

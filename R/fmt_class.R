@@ -3208,8 +3208,8 @@ legend_tokens_terse <- function(spec, lang, show_names) {
   thr     <- legend_threshold_phrase(primary, spec$is_std, lang)
   pn <- switch(spec$policy,
                "grey_non_signif"   = if (!is.na(thr)) gettextf("grey: non-significant or under %s", thr)
-                                     else             gettext("significant only"),
-               "guaranteed_effect" = gettext("significant, error-adjusted"),
+                                     else             gettext("grey: non-significant or small"),
+               "guaranteed_effect" = gettext("all that is significant is colored, error-adjusted"),
                "")
   if (nzchar(pn)) toks <- c(toks, list(.lg_tok(paste0(" [", pn, "]"))))
   toks

@@ -437,34 +437,49 @@ black = factor(dplyr::if_else(race == "Black",
   "01-Black",
   "02-Not black")
 ),
+income25k = factor(dplyr::if_else(rincome == "$25000 or more",
+"01-$25000 or more",
+"02-Less than 25k")
+),
 race = forcats::fct_relevel(race, "White", "Black", "Other"), 
 marital = forcats::fct_relevel(marital, "Married", "Separated", "Divorced", "Widowed", "Never married", "No answer"),
-
+year = as.factor(year),
+  
 dplyr::across(dplyr::where(is.factor), ~ forcats::fct_recode(., "NULL" = "No answer", "NULL" = "Refused", "NULL" = "Don't know", "NULL" = "Not applicable")),
 
 rincome = forcats::fct_recode(   # "new" = "old" 
   rincome,
-  "1-Lt $10000"      = "Lt $1000"      ,
-  "1-Lt $10000"      = "$1000 to 2999" ,
-  "1-Lt $10000"      = "$3000 to 3999" ,
-  "1-Lt $10000"      = "$4000 to 4999" ,
-  "1-Lt $10000"      = "$5000 to 5999" ,
-  "1-Lt $10000"      = "$6000 to 6999" ,
-  "1-Lt $10000"      = "$7000 to 7999" ,
-  "1-Lt $10000"      = "$8000 to 9999" ,
-  "2-10000 to 14999" = "$10000 - 14999",
-  "3-15000 to 24999" = "$15000 - 19999",
-  "4-15000 to 24999" = "$20000 - 24999",
-  "5-25000 or more"  = "$25000 or more"
+  "1-Lt $10000"      = "Lt $1000"       , #  1%   286
+  "1-Lt $10000"      = "$1000 to 2999"  , #  2%   395
+  "1-Lt $10000"      = "$3000 to 3999"  , #  1%   276
+  "1-Lt $10000"      = "$4000 to 4999"  , #  1%   226
+  "1-Lt $10000"      = "$5000 to 5999"  , #  1%   227
+  "1-Lt $10000"      = "$6000 to 6999"  , #  1%   215
+  "1-Lt $10000"      = "$7000 to 7999"  , #  1%   188
+  "1-Lt $10000"      = "$8000 to 9999"  , #  2%   340
+  "2-$10000 to 14999" = "$10000 - 14999", #  5% 1 168
+  "3-$15000 to 24999" = "$15000 - 19999", #  5% 1 048
+  "3-$15000 to 24999" = "$20000 - 24999", #  6% 1 283
+  "4-$25000 or more"  = "$25000 or more"  # 34% 7 363
 ) |> 
 forcats::fct_relevel(sort) |>
 as.ordered(),
 
-party3 = factor(dplyr::case_when(
-  grepl("democrat", partyid)   ~ "Democrat",
-  grepl("republican", partyid) ~ "Republican",
-  partyid %in% c("Independent", "Ind,near rep", "Ind,near dem") ~ "Independent"),
-levels = c("Democrat", "Independent", "Republican")), 
+  
+party3 = forcats::fct_recode(   # "new" = "old" 
+  partyid,
+  "NULL"                 = "No answer"         , #  1%   154
+  "NULL"                 = "Don't know"        , #  0%     1
+  "3-Republican"         = "Strong republican" , # 11% 2 314
+  "3-Republican"         = "Not str republican", # 14% 3 032
+  "3-Republican"         = "Ind,near rep"      , #  8% 1 791
+  "2-Independent, other" = "Independent"       , # 19% 4 119
+  "2-Independent, other" = "Other party"       , #  2%   393
+  "1-Democrat"           = "Ind,near dem"      , # 12% 2 499
+  "1-Democrat"           = "Not str democrat"  , # 17% 3 690
+  "1-Democrat"           = "Strong democrat"   , # 16% 3 490
+  ) |> forcats::fct_relevel(sort),
+  
 
 relig = forcats::fct_recode( 
   relig,
@@ -483,7 +498,7 @@ relig = forcats::fct_recode(
   "8-None"              = "None"                   , # 16%  3 523
   "NULL"                = "No answer"              , #  0%     93
   "NULL"                = "Don't know"             , #  0%     15
-),
+) |> forcats::fct_relevel(sort),
 
 )
 }

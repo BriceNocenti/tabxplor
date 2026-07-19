@@ -689,9 +689,17 @@ The per-dependent named `trials` vector (only off/observed/fixed-integer is expo
 
 #### Last Phase a – Bug corrections
 
-Look below for known bugs yet to fix.
+##### Last Phase a – Bug corrections (round 1) (DONE)
+
+
 
 #### Last Phase b – rethink package dependencies (DONE)
+
+Package dependencies : are there Imports or Suggests that are used very little ? Imports and Suggests that in general could be easily replaced with custom functions, or by copying a hand of opensource functions (thanking authors in the code) ?
+
+Are there Suggests that we should better add to Imports, since they are important for many functions ? Adding `broom::` in Imports to be able to use `tab_reg()` natively in all cases, and only Suggests the packages necessary for more specific models ? Adding what else ? How many packages is it recommended to have at maximum and, particularly, after which threshold is CRAN currently giving a R CMD CHECK Note (do web searches) ?
+
+Among the new global options created in 1.4.0, are they all useful and clearly named and documentated ?
 
 Done: `broom` Suggests→Imports (common `tab_reg()` models native; model-specific back-ends stay
 Suggests). `htmltools` + `knitr` Suggests→Imports (core render paths) so `kableExtra` Imports→Suggests
@@ -704,13 +712,7 @@ in `.onLoad` "off", read one place; `cleannames` fallback FALSE everywhere). Sui
 no snapshot churn. NB: `document()` also materialised the pending Phase-15b `export(jmvtabreg)` +
 `man/jmvtabreg.Rd`.
 
-Package dependencies : are there Imports or Suggests that are used very little ? Imports and Suggests that in general could be easily replaced with custom functions, or by copying a hand of opensource functions (thanking authors in the code) ?
-
-Are there Suggests that we should better add to Imports, since they are important for many functions ? Adding `broom::` in Imports to be able to use `tab_reg()` natively in all cases, and only Suggests the packages necessary for more specific models ? Adding what else ? How many packages is it recommended to have at maximum and, particularly, after which threshold is CRAN currently giving a R CMD CHECK Note (do web searches) ?
-
-Among the new global options created in 1.4.0, are they all useful and clearly named and documentated ?
-
-#### Last Phase c – code and framework simplifications
+#### Last Phase c – code and framework simplifications (DONE)
 
 How to further simplify tabxplor package framework ? Do four round of simplification, each on a fresh Claude Code session.
 - How to further integrate the internal functions into a reliable and simple ecosystem aimed at global code simplification ?
@@ -718,19 +720,106 @@ How to further simplify tabxplor package framework ? Do four round of simplifica
 - What are the missing attributes, at table-level, column-level or fmt_cell-level, that would be necessary for a more reliable and straighforward architecture, or that would be necessary for further simplifications of the code/of the arguments ? At the contrary, what are the attributes that seem ad hoc, unnecessary, adding useless complexity to the code, and how to remove or modify them for simplification ?
 - What new arguments of v 1.4.0 could be merged or redesigned for simplicty of use, consistency and clarify ?
 
-##### Last Phase c-i  – First round of simplification
+##### Last Phase c-i: internal-function ecosystem simplification (round 1) (DONE)
+
+Remove verified-dead internal code so the internal surface reads as one
+reliable ecosystem instead of accreted dev leftovers. Every removed function
+is non-exported, non-S3, and has zero live callers (checked across
+R/, tests/, jamovi/, inst/).
+
+R/utils.R (1481 -> 938):
+  - dead factor-helper cluster: fct_to_na / fct_replace / fct_rename /
+    fct_detect_replace / fct_detect_rename / fct_case_when_recode /
+    fct_levels_from_vector (self-contained, superseded by fct_clean +
+    the exported fct_recode_helper)
+  - dead vendored map cluster: pmap_if / map2_if / probe / as_predicate
+  - dead singletons: get_user_documents (superseded by resolveExportPath's
+    getHome), prepare_fct_recode, bind_datas_for_tab
+  - dead commented-out blocks: old fct_clean, formats_SAS_to_R
+  Kept: tr_ / po_to_dt (upcoming Phase h French translation may reuse them).
+
+R/tab_classes.R: drop dead `untab` + ~90 lines of half-commented dead code
+  in tab_plot()'s legend block (flagged in the 14c dev notes).
+R/fmt_class.R: drop dead commented switch() in fmt0().
+
+##### Last Phase c-ii: option single-source + honour tabxplor.conf_level (round 2) (DONE)
+
+The white-elephant fruit was already cleared in earlier phases (no dead
+option remained), so this round tightens config consistency instead.
+
+- .onLoad is now the single source of truth for two stray defaults that lived
+  only at their read sites: seed `tabxplor.conf_level` (0.95) and
+  `tabxplor.xl_or_numeric` (FALSE), matching the stated architecture rule.
+- `tabxplor.conf_level` now does what its doc claims. It used to be read in
+  exactly ONE place (the contrib colour-significance alpha) while tab()'s
+  interval CIs used a hard-coded 0.95 arg default. The public entry points
+  tab() / tab_many() / tab_num() / tab_ci() / tab_reg() / tab_logit() /
+  multi_logit() now default `conf_level = getOption("tabxplor.conf_level",
+  0.95)`, so the option is the global default and the per-call argument still
+  overrides it. Default value unchanged (0.95) -> byte-identical goldens.
+  New lock-in test in test-calculations.R (option widens the CI monotonically;
+  arg overrides the option).
+- Retire the dead `tabxplor.pvalue_lines` option: its .onLoad seed was already
+  commented out and its only reads were dead commented lines in tab.R.
+- Doc drift: correct the CLAUDE.md repo map (removed tab_logit*.R; jmvtabreg.h.R
+  now exists) and the conf_level option help.
+
+Deliberately NOT touched (agent-confirmed, retro-compat-constrained): the
+experimental `conditional_format` arg (maintainer may still build it) and the
+`totcol` legacy-value parser (needs a deliberate consolidation, not a sweep).
+
+##### Last Phase c-iii: attribute audit -> correct stale docs (round 3) (DONE)
+
+Full audit of the 18 fmt fields, 9 column attributes and 7 table attributes
+(usage mapped by grep across R/, NAMESPACE, tests/). Honest outcome: the
+1.4.0 combined field surgery already left the attribute set lean and correctly
+placed -- there is NO safe, high-value structural consolidation left:
+  - all 18 fmt fields are user contract ($/mutate) and none is vestigial;
+  - all 9 column attributes have EXPORTED getters AND are required per-column
+    so format()/the colour engine work on a standalone extracted fmt column
+    (the apparent redundancies -- refcol/in_refrow, totcol/in_totrow -- are
+    orthogonal column-vs-row encodings, not duplicates);
+  - the 7 table attributes are already threaded through one shared tab_attrs()
+    line each, so merging the 5 scalar metadata lists would be high churn for
+    little gain (and touches the exported new_tab() formals).
+
+So the round's real deliverable is fixing stale documentation the audit
+surfaced (which would otherwise mislead future attribute work):
+  - the `mean`-field overload is GONE (Phase 5 landed): mean is now mean-only
+    on type=="mean" columns, the pct "*2 rule" ratio lives in the `ratio`
+    field, and the colour engine reads get_ratio(); CLAUDE.md + the
+    architecture doc still described this as a not-yet-done Phase 5 item, and
+    the architecture doc contradicted itself (line 302 vs 33/304).
+  - add the missing 7th table attribute `ci_settings` to the CLAUDE.md list.
+
+##### Last Phase c-iiii: rename multiplicator -> multiplier; new-arg review (round 4) (DONE)
+
+Fourth simplification round: review the NEW v1.4.0 arguments for merge/rename
+BEFORE the CRAN freeze (they're never-released, so still free to change).
+
+The one outright naming defect: `multiplicator` is non-idiomatic English for
+what every stats audience calls a **multiplier**. Renamed the R-facing
+argument on tab_reg() / tab_logit() / multi_logit() + all internal plumbing
++ tests. The jamovi module is deliberately untouched: the internal jamovi
+option KEY stays `multiplicator` and jmvtabreg.b.R bridges it to the renamed
+`multiplier` arg, so NO `jmvtools::prepare()` regeneration (which recompiles
+the uijs blob) is needed and the module keeps working as-is.
+
+Reviewed but deliberately NOT changed:
+- The five `method_*` args: merging into one named `method` vector would lose
+  autocomplete discoverability + per-slot validation for rarely-touched expert
+  knobs -- a net regression. Kept.
+- `output_list` / `color`+`color_signif` / `var_names` / `stars` / the
+  `stats`/`compare`/`baseline` group: already well-designed and consistent.
+- `estimate_display` value collision: its "ame"/"prob" values are also jamovi
+  option values, so renaming them ("with_ame"/"with_prob") would need a jamovi
+  bridge or a maintainer prepare() -- net complexity for a subtle, documented
+  clash. Deferred; instead the roxygen now explicitly distinguishes
+  `estimate_display = "ame"` (adds an AME beside the OR) from `effect = "ame"`
+  (the whole column IS the AME), which is the actual confusion.
 
 
-##### Last Phase c-ii  – Second round of simplification
-
-
-##### Last Phase c-iii  – Third round of simplification
-
-
-##### Last Phase c-iiii  – Forth round of simplification
-
-
-#### Last Phase d – simplify main user-facing functions arguments and roxygen documentation
+#### Last Phase d – make tab() / tab_reg() docs approachable for beginners (DONE)
 
 Simplify `tab()` and `tab_reg()` and other main functions documentation, to make it more easily understandable and more helpful to students that are not statistical experts and may be true beginners with programming. And less terrifying – because the length of the current documentation may be terrifying for newcomers in R (specially my literary sociology students).
 - Would there be possibilities to nest some of the more complex argument in other functions ? For example, all the complex customisation things about ci refer to tab_ci(), with a link for the user to go further if he wants to ? All the complex things about color customisation somewhere else ? All the helpers set / get etc. somewhere else too, but with a ling to them somewhere in tab() page. What else could be grouped and put out of the main user-facing functions documentation ?
@@ -738,36 +827,156 @@ Simplify `tab()` and `tab_reg()` and other main functions documentation, to make
 
 Can you think about remaining possible simplifications of the arguments themselves, specially the new arguments introduced in v 1.4.0, since once they become public it will be difficult to modify them in next versions ? How could the main user-facing functions be more user-friendly ?
 
+The two flagship functions have huge argument lists (tab() alone documents 42
+params) that read as a terrifying wall to newcomers. Add a beginner on-ramp
+without touching any signature (doc-only, zero behaviour/test risk):
 
-#### Last Phase e – Create meaningful and user-friendly vignettes
+tab():
+- Warmer @description that says what the function does in one breath and tells
+  a newcomer the four arguments to start with (data/row_vars/col_vars/pct),
+  plus a pointer to vignette("tabxplor").
+- New @details "which arguments to learn first" MAP: the args grouped by
+  purpose (the table / what each cell shows / colors / comparisons / statistics
+  / totals & missing / advanced), so a beginner can navigate instead of reading
+  42 params top to bottom, and the complex CI-method knobs are pointed to
+  tab_ci() where they are fully documented.
+- @seealso rebuilt into a helper map (tab_many, tab_reg, tab_ci, the color
+  setters, tab_chi2/tab_pct/tab_tot, the four exporters, tabxplor-options).
+
+tab_reg():
+- @details opens with the three-argument first model + how the family is
+  auto-detected + the empirical crude-vs-adjusted idea + a vignette pointer,
+  then the same purpose-grouped argument map.
+
+Deliberately NOT done: physically reordering the @param blocks. tab()/tab_many()
+/tab_num() share near-identical @param text, so string-moving a block risks
+editing the wrong function's docs; the signature/usage already lists
+pct/color early and the new @details map gives the "essentials first" guidance
+the reorder was meant to provide.
+
+
+
+#### Last Phase e – Create meaningful and user-friendly vignettes (DONE)
 
 Each vignette must be user-friendly, understandable by novices for the base crosstables one and regression models one, while still having just enough technical detail for the experts to known exactly what important technical choices were done internally.
 - For each vignette, carefully study the dev history in `dev/tabxplor_1.4.0_decisions.md`, `dev/tabxplor_1.4.0_roadmap_DONE_PHASES.md`, or other `dev/` .md when relevant : the aim is of course not to give the user any information about how the package was implement (would be useless to him), but to retrieve the more data possible about what were the intended real world use cases of each option, then **select** which part is **really** important for the user.
 - For real-world examples, use `gss_simple <- gss_cat_data_formatting()` (exported), which is classic `forcats::gss_cat` formatted with merged levels for cleaner tables, and first levels chosen to be used as references (for color helpers, regressions, etc.).
 
-##### Last Phase e-i – base package introduction / tab() vignette
+##### Last Phase e-i – rewrite the introductory vignette for beginners (DONE)
 
 The current vignette should be the simple and useful basis for non-expert users, a light and direct introduction to what tabxplor do better than other packages (but with more humility than that !) : color helpers, references and confidence intervals for crosstables (factors and means), with exports, etc. It shall also permit expert users to understand what this package is really interesting for, by giving only the really necessary technical details. Maybe first a simple explanation about what do with color helpers, without significance ; then a concrete explanation of color_signif, for exemple "guaranteed_effect" to highligh all significant on tables from small samples ; and add, somewhere, the measure×color_signif summary table for experts, and other, to know exactly what are the possibilities.
 
 Something very close is what’s to be used for `README.Rmd` (never edit `README.md` manually). Or maybe do a much more concise introduction in the `README.Rmd`, presenting only the really interesting features of tabxplor for exploratory analysis (mostly colors helpers for crosstables, possibly taking significance into account, with at the end a last example of logistic regression with a meaningful comparaison of modelised quantities versus empirical/observed quantities) ?
 
-##### Last Phase e-i – tab_reg() vignette
+Rewrite vignettes/tabxplor.Rmd around the current 1.4.0 API and a beginner
+path. It used deprecated forms (sup_cols, chi2 =, color = "diff_ci"/"after_ci");
+now it uses col_vars + levels = "first", test =, and the color / color_signif
+split, on the shipped gss_simple = gss_cat_data_formatting() dataset (tidy
+merged levels; first level = reference).
+
+Structure: first crosstables (counts / pct / means / several col_vars) ->
+sub-tables -> COLOUR HELPERS without significance (color = "diff" / TRUE, and
+references ref/comp) -> then colours that RESPECT SIGNIFICANCE (color_signif =
+grey_non_signif / guaranteed_effect, the latter for small samples) ->
+confidence intervals, tests, contributions -> exporting -> dplyr -> an EXPERT
+reference table of color x color_signif -> where to go next.
+
+Rendering: the vignette shows tables as coloured console output turned to HTML
+(cli + fansi), the way a console user sees them; a report would use tab_kable()
+/ tab_xl() (shown in the Exporting section). Verified: rmarkdown::render()
+produces the coloured tables (blue/red/grey spans + legends), no errors.
+
+Also records a bug found while writing it (CLAUDE.md discovered-bugs + an
+in-code KNOWN-BUG tag at tab.R:2219): options(tabxplor.output_kable = TRUE) +
+a two-channel colour errors on auto-print; the real export tab_kable() and the
+console path both work, so the vignette sidesteps it.
+
+##### Last Phase e-ii – add the tab_reg() regression vignette (DONE)
 tab_reg should come with it’s own very detailed vignette
 - A section for each kind of regression model : binomial, gaussian, poisson, etc. Explain how to use weighted models,  xplaining clearly and simply for beginners what is the chosen framework for weights (see dev history) and how to use simple survey weights (referto survey:: documentation for more complex cases, stating cleardy that stratified surveys can gain a bit of precision an narrow a bit confidence intervals if the strata variables are given).
 - Meaningful examples in each section, that should help the novice remember in what situation and what kind of variable he should use each kind of model, and briefly inform the expert about the exact underlying methodological choices.
 - Since tabxplor differenciates from other packages by the possibility to compare regression models estimates with their relative empirical/observed quantity, each section vignette should include a full detailed explanation with meaningful examples of what the `empirical = TRUE` framework does in this case (how to use and what to compare to what, which ci are calculated and why, what tab() code with ci compares to what tab_reg() one dependent/one predictor model, etc.).
 - Explain, in a simple way, what the different summary statistics for each case are for.
 
-##### Last Phase e-i – programming with tabxplor vignette
+New vignette vignettes/tabxplor-reg.Rmd (the vignette("tabxplor-reg") linked
+from ?tab_reg and the intro vignette). Covers, on gss_simple:
+
+- a first three-argument model, and how the outcome's type picks the family
+  (binomial OR / gaussian beta / poisson IRR / multinomial / ordinal), with a
+  worked example of each (nnet / MASS chunks guarded with requireNamespace so
+  the vignette still builds without the Suggests);
+- the distinctive `empirical = TRUE` framework, spelled out: the crude
+  companion column is the SAME quantity as a cross-table, shown next to
+  tab(race, married, OR = "OR") so the reader sees crude == empirical, plus
+  what each family's crude measure is and how to read model-vs-crude;
+- weighted / survey data: the weighted-estimate + design-based-SE framework in
+  plain words, the wt / ids / strata syntax, and a pointer to survey::svydesign
+  for the complex cases;
+- model comparison (a named predictor list + compare=);
+- how to read each footer statistic; and the or_plot() / lm_plots() plots.
+
+##### Last Phase e-iii – add the "Programming with tabxplor" vignette (DONE)
 All the part about "programming with tabxplor" and its vctrs fields should come in their own vignette, and it must be updaded and extended, with user-friendly example stating the possibilities.
 
+New vignette vignettes/tabxplor-programming.Rmd (the vignette("tabxplor-
+programming") linked from the intro vignette), moving the vctrs-field material
+out of the README into its own page and updating + extending it for 1.4.0:
 
-#### Last Phase f – full `pkgdown` documentation + test coverage
+- what a tabxplor_fmt cell is (a vctrs record) and how it survives dplyr;
+- getting plain numbers out (get_num / format / the per-field getters);
+- the CURRENT 18-field table -- the README list was stale (`rr` is now
+  `ratio`, the single `ci` is now the `ci_inf`/`ci_sup` bounds read by
+  get_ci(), and `pvalue` / `tot_n` were missing);
+- reading/writing fields ($ / vctrs::field / vec_data / set_display / mutate on
+  an fmt vector), with the sd-from-variance worked example;
+- the structural predicates (is_totrow/tottab/refrow, is_totcol/refcol);
+- the column attributes (type/color/col_var/comp_all/totcol/refcol) with their
+  current allowed values;
+- building cells with fmt(); and the tab_prepare -> tab_plain/num -> tab_pct ->
+  tab_ci -> tab_chi2 step-by-step pipeline.
 
-Implement a full pkgdown framework for online documentation.
-- Where ? On github pages ? Elsewhere with tidyverse ecosystem provided servers ?
 
-Add test coverage to github actions.
+##### Last Phase e-iiii: programming vignette uses exported field access only (DONE)
+
+R CMD check builds vignettes against the INSTALLED namespace, not load_all, so
+a vignette may only call EXPORTED functions. The programming vignette reached
+for the internal field getters get_pct() / get_ci() / get_ci_inf() /
+get_ci_sup() / get_diff() / get_mean() / get_n() / get_or(), which would fail
+the check (they render fine under load_all, masking it). Switch to the
+package's public field-access idioms -- `$field` on the fmt column,
+vctrs::field(), get_num() -- exactly as the README's programming section does
+(no public-surface expansion). Re-audited all three vignettes: clean.
+
+
+#### Last Phase f – pkgdown site + coverage CI (DONE)
+
+Full pkgdown framework + a test-coverage GitHub Action.
+
+pkgdown:
+- _pkgdown.yml (validated: pkgdown::check_pkgdown() = "No problems found"):
+  bootstrap 5, the site URL, a reference organised into purpose groups
+  (cross-tables / build steps / regression / reshape / export / the fmt type /
+  options+data / jamovi / helpers) with an `internal` catch-all for the S3
+  methods + keyword-internal helpers, and the three vignettes as articles.
+- .github/workflows/pkgdown.yaml: build + deploy to GitHub Pages (gh-pages),
+  the standard r-lib/actions v2 recipe.
+- DESCRIPTION URL gains the site (https://bricenocenti.github.io/tabxplor/);
+  Config/Needs/website: pkgdown. _pkgdown.yml / docs / pkgdown .Rbuildignore'd.
+
+Two Rd fixes pkgdown surfaced (both harmless to R CMD check, fatal to pkgdown):
+- the `[` / `[<-` / `[[<-` methods for tabxplor_grouped_tab had a manual
+  `@usage "x[i] ; ..."` STRING (invalid Rd usage). Dropped the manual @usage
+  AND the redundant backtick `@method` tags so roxygen auto-generates the
+  standard \method{...} usage; NAMESPACE S3 registrations are byte-equivalent
+  (just re-quoted), suite green (3611).
+- tab_pvalue_lines (internal, unexported) lacked @keywords internal.
+
+test coverage:
+- .github/workflows/test-coverage.yaml: covr -> Codecov (r-lib/actions v2);
+  Config/Needs/coverage: covr; codecov.yml with informational (non-blocking)
+  status.
+
+
 
 #### Last Phase g – NEWS.md simplification
 
@@ -781,6 +990,19 @@ What other strings should be translated in French ?
 
 
 
+
+
+
+
+
+## Deferred / needs the maintainer
+
+- **README.Rmd rewrite** — deferred per the roadmap's own note (*"only update before release"*); it depends on 8 hand-made colored-table screenshots that must be regenerated, which isn't scriptable here. The pkgdown site now renders the vignettes with real colors as the online showcase.
+- **Known bug, recorded** (`# KNOWN-BUG` at `tab.R:2219` + CLAUDE.md): `options(tabxplor.output_kable=TRUE)` + a two-channel colour (`color=TRUE`) errors on auto-print — narrow (internal switch); `tab_kable()` and console both work.
+- **`estimate_display` value collision** (`"ame"` means two things) — deferred because renaming would need a jamovi bridge/`prepare()`; instead the roxygen now explicitly distinguishes it from `effect="ame"`.
+- **Maintainer steps**: run `devtools::check()` (the CRAN gate — I did not run it to avoid the orphaned-worker risk the CLAUDE.md warns about); enable GitHub Pages (gh-pages) + optional `CODECOV_TOKEN`; `jmvtools::prepare()` (already pending). One out-of-band deletion (`dev/review_manual/~$…xlsx`, an Office lock file) is left unstaged for you to decide.
+
+- Maintainer steps (can't be done headless): enable GitHub Pages (gh-pages) in the repo settings; add a CODECOV_TOKEN secret if the repo is private.
 
 
 ### Reference — bugs, benchmarks, perf
