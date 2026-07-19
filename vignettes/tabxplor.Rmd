@@ -93,7 +93,7 @@ tab(gss_simple, race, party3, rincome, na = "drop", pct = "row")
 
 ## colors: reading helpers
 
-This is the main purpose of `tabxplor`. `color = "diff"` colors each cell by **how far it sits from its reference** — by default the Total of its row or column. Cells clearly above the average turn **blue**, cells clearly below turn **red/orange**, the more , and a color legend is printed underneath.
+This is the main purpose of `tabxplor`. `color = "diff"` colors each cell by **how far it sits from its reference** — by default the Total of its row or column. Cells clearly above the average turn **blue**, cells clearly below turn **red/orange** — the further a cell sits from its reference, the stronger the shade — and a color legend is printed underneath.
 
 ```{r, echo = TRUE}
 tab(gss_simple, race, party3, pct = "row", color = "diff")
@@ -103,6 +103,12 @@ tab(gss_simple, race, party3, pct = "row", color = "diff")
 
 ```{r, echo = TRUE}
 tab(gss_simple, race, c(marital, partyid), pct = "row", color = TRUE)
+```
+
+Numeric columns are colored the same way, on their **means** (here, hours of TV per day by income):
+
+```{r, echo = TRUE}
+tab(gss_simple, rincome, tvhours, color = "diff")
 ```
 
 **Which cell is the reference?** By default each cell is compared to its Total. Two useful alternatives:
@@ -197,60 +203,74 @@ tab(gss_simple, race, marital, pct = "row") |>
 
 ## Confidence intervals and colors composition : variable_type × `color` × `color_signif`
 
-Below are, <to finish>
+This section is the reference behind the two color sections above. It shows how the parameters fit together — the **variable type**, the **measure** you color (`color`), and the **significance policy** (`color_signif`).
 
-The type is determined by the column variable, which is either a factor (proportions/percentages are calculated) or a numeric (means are calculated). (The row variable is always coerced to a factor.)
+The **type** is set by the column variable — a **factor** (percentages are computed, `pct`) or a **numeric** (means are computed, `mean`). The row variable is always turned into a factor.
 
-The most important confidence intervals compare a cell to its reference, and are uses for colors : 
+Every colored table answers three questions:
 
-| type | color     | measure formula      | confidence interval: default | ci option 2 | ci option 3 |
-|------|-----------|----------------------|------------------------------|-------------|-------------|
-| pct  | `diff`    | $%_{cell} - %_{ref}$ | Newcombe                     | Agresti-Caffo |             |
-| pct  | `ratio`   |                      |                              |             |             |
-| pct  | `or`      |                      | *only `tab_reg()`*           |             |             |
-| pct  | `contrib` |                      |                              |             |             |
-|------|-----------|----------------------|------------------------------|-------------|-------------|
-| mean | `diff`    |                      |                              |             |             |
-| mean | `ratio`   |                      |                              |             |             |
+- **Which measure?** `color =` picks what a color *means*: `"diff"` (distance from the reference), `"ratio"` (relative risk for percentages, mean ratio for means), `"contrib"` (weight in the Chi-squared), `"OR"` (odds ratio). `color = TRUE` picks a sensible one per column type.
+- **How confident are we?** every color reads one **confidence interval** at `conf_level` (95% by default). A cell is *significant* when that interval excludes its neutral value — **0** for a difference, **1** for a ratio or odds ratio. The printed bracket, the significance stars and the greying all read that same interval, so they can never disagree.
+- **How to show significance?** `color_signif` — `"ignore"`, `"grey_non_signif"` or `"guaranteed_effect"` ; `stars = TRUE` to use significance stars instead of, and stacked with, colors.
 
-The interval method can be tuned with `method_diff` / `method_ratio` / `method_mean_diff` / `method_mean_ratio` (see `?tab_ci`). Significance uses the confidence level `conf_level` (default 95%). 
+**The confidence interval used for the colors and stars** compare each cell to its reference cell (by default, the corresponding cell in the Total row or Total column):
 
-And the equivalent for simple, cell-by-cell confidence intervals : 
+| type | color     | what the color measures                  | confidence interval (default) |
+|------|-----------|------------------------------------------|-------------------------------|
+| pct  | `diff`    | cell % - reference % (percentage points) | Newcombe hybrid-score         |
+| pct  | `ratio`   | cell % / reference % (relative risk)     | Katz log-risk-ratio           |
+| pct  | `OR`      | empirical odds ratio (needs `OR = TRUE`) | Woolf log-odds-ratio          |
+| pct  | `contrib` | signed χ² contribution (no reference)    | — (standardized residual)     |
+| mean | `diff`    | cell mean - reference mean (SD units)    | Welch *t*                     |
+| mean | `ratio`   | cell mean / reference mean               | robust ratio-of-means         |
 
-| type | color     | confidence interval: default | ci option 2               |
-|------|-----------|------------------------------|---------------------------|
-| pct  | `cell`    | Wilson score interval        | Wald normal approximation |
-| mean | `cell`    |                              |                           |
+Alternative interval methods (see `?tab_ci`): 
+- `method_diff = "ac"` (Agresti-Caffo) or `"wald"` for a percentage difference; 
+- `method_mean_diff = "student"` (pooled, the OLS two-group interval) for a mean difference; 
+- `method_mean_ratio = "quasipoisson"` or `"poisson"` for a mean ratio. 
+- The relative-risk (`method_ratio = "katz"`) and odds-ratio (Woolf) intervals have no alternative. 
+- A mean **difference** is colored **standardized** — Glass's Δ, the difference divided by the reference's standard deviation — so the `mean_diff` color breaks are read in SD units.
 
-`method_cell` 
+**Simple, cell-by-cell confidence intervals** (`ci = "cell"`) compare each cell to 0 % (or a mean of 0), *not* to a reference:
 
+| type | color  | confidence interval (default) | other method                    |
+|------|--------|-------------------------------|---------------------------------|
+| pct  | `cell` | Wilson score interval         | `method_cell = "wald"` (normal) |
+| mean | `cell` | one-sample Student *t* (n-1)  | —                               |
 
+Because they compare to 0 and not to a reference, cell intervals are purely descriptive: they carry **no significance and no stars**. `method_cell` chooses `"wilson"` (default) or `"wald"` for percentages; a mean cell interval is always the one-sample Student *t*.
 
-| type | color     | `color_signif="ignore"`    | `="grey_non_signif"`                                 | `="guaranteed_effect"`     |
-|------|-----------|----------------------------|------------------------------------------------------|----------------------------|
-| pct  | `diff`    | observed diff, all cells   | observed diff, grey where $diff-CI ∋ 0$              | diff CI-floor              |
-| pct  | `ratio`   | observed ratio, all cells  | observed ratio, grey where $cell=ref$ not rejected   | ratio CI-floor             |
-| pct  | `or`      | observed odds-ratio, all   | observed OR, grey where $OR-CI ∋ 1$                  | OR CI-floor                |
-| pct  | `contrib` | χ² contribution share, all | contribution, grey where $\|resid\| < z(conf_level)$ | significant residuals only |
-|------|-----------|----------------------------|------------------------------------------------------|----------------------------|
-| mean | `diff`    | observed diff, all cells   | observed diff, grey where $diff-CI ∋ 0$              | diff CI-floor              |
-| mean | `ratio`   | observed ratio, all cells  | observed ratio, grey where $cell=ref$ not rejected   | ratio CI-floor             |
+**`color_signif` turns that interval into a coloring policy.** 
+- `"ignore"` colors **every** cell by its **observed effect** size, for example the observed difference compared to the Total row. Grey cells have an observed effect below the threshold (for example, differences of less than ±5 points of percentages). 
+- `"grey_non_signif"` and `"guaranteed_effect"` both color **only significant cells**, but differ in the *intensity basis*: 
+  + `grey_non_signif` colors by the **observed** effect, like "ignore", greying out small deviations, but it also **greys out any large deviation that turns to be non-significant**. Ideal for large samples.
+  + `guaranteed_effect` colors by the **guaranteed** effect — the confidence-bound (CI-floor), the **smallest deviation that is assured at a given confidence level** (default 95%) — so its colors are dimmer and conservative, but **all significative differences are colored**, which is ideal for small samples.
 
-Examples : 
+| type | color     | `="ignore"`     | `="grey_non_signif"`               | `="guaranteed_effect"`      |
+|------|-----------|-----------------|------------------------------------|-----------------------------|
+| pct  | `diff`    | observed diff   | grey if the diff-CI contains 0     | diff CI-floor               |
+| pct  | `ratio`   | observed ratio  | grey if the ratio-CI contains 1    | ratio CI-floor              |
+| pct  | `OR`      | observed OR     | grey if the OR-CI contains 1       | OR CI-floor                 |
+| pct  | `contrib` | χ² contribution | grey if residual < 1.96 (conf 95%) | residual >= 1.96 (conf 95%) |
+| mean | `diff`    | observed diff   | grey if the diff-CI contains 0     | diff CI-floor               |
+| mean | `ratio`   | observed ratio  | grey if the ratio-CI contains 1    | ratio CI-floor              |
+
+Examples :
 
 ```{r, eval=FALSE}
-# type : pct / proportion
-tab(gss_simple, race, party3, pct = "row", color = "diff" , color_signif = "grey_non_signif")
+# --- factors: percentages -------------------------------------------------
+tab(gss_simple, race, party3, pct = "row", color = "diff",  color_signif = "grey_non_signif")
 tab(gss_simple, race, party3, pct = "row", color = "ratio", color_signif = "guaranteed_effect")
 tab(gss_simple, rincome, married, pct = "row", color = "OR", OR = TRUE, ref2 = 1)
-tab(gss_simple, rincome, party3 , color = "contrib") # pct = "row" and pct = "col" works too
+tab(gss_simple, rincome, party3, color = "contrib")   # works with pct = "row"/"col" too
 
-# type : mean
-tab(gss_simple, rincome, tvhours, color = "diff" , color_signif = "guaranteed_effect")
-tab(gss_simple, rincome, tvhours, color = "diff" , color_signif = "grey_non_signif", 
-   color_breaks = list(mean_diff = c(0.4, 0.8, 1.6)), ref = 1
-   ) # with a custom scale for differences
+# --- numerics: means ------------------------------------------------------
+tab(gss_simple, rincome, tvhours, color = "diff",  color_signif = "guaranteed_effect")
 tab(gss_simple, rincome, tvhours, color = "ratio", color_signif = "grey_non_signif")
+
+#    a custom scale for differences in means, and a "first row" reference
+tab(gss_simple, rincome, tvhours, color = "diff", color_signif = "grey_non_signif",
+    color_breaks = list(mean_diff = c(0.4, 0.8, 1.6)), ref = 1)
 ```
 
 ## Where to go next

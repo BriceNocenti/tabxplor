@@ -246,9 +246,10 @@ NULL
 #'    \item \code{"auto"}: \code{ci = "diff"} for means and row/col percentages,
 #'      \code{ci = "cell"} for frequencies ("all", "all_tabs").
 #'   }
-#'  By default, for percentages, with Wilson's method is used,
-#'  and with \code{ci = "diff"} Wald's method along Agresti and Caffo's adjustment.
-#'  Means use classic method. This can be changed in \code{\link{tab_many}}. By
+#'  By default, for percentages, \code{ci = "cell"} uses the Wilson score interval and
+#'  \code{ci = "diff"} the Newcombe hybrid-score interval (its dual, so the bracket and the
+#'  significance stars always agree); means use the Welch t interval. The method can be changed
+#'  in \code{\link{tab_many}} (\code{method_cell} / \code{method_diff} / \code{method_mean_diff}). By
 #'  default, with \code{ci = "cell"}, the result is printed in the `[inf;sup]` form.
 #'  Set `options("tabxplor.ci_print" = "moe")` to print `pct +- moe` instead.
 #' @param conf_level The confidence level, as a single numeric between 0 and 1.
