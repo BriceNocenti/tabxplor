@@ -506,15 +506,10 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
     range_totcol = range_totcol,
     col_var_header = col_var_header,
     subtext = subtext,
-    # Phase 14w (item 2): the regression "Model:" line, prepended BEFORE the colour legend by every
-    # backend (a reader must know what the numbers ARE before how they are coloured). NULL on a crosstab.
-    reg_line = reg_model_line(get_reg_meta(tab)),
-    # Phase 16d: two more plain (uncoloured) footer lines every backend threads -- "Weighted by <wt>."
-    # OPENS the footer, the significance-stars legend CLOSES the colour block. Both NULL when absent.
-    weight_line  = tab_weight_line(tab),
-    stars_legend = suppressWarnings(tab_stars_legend(tab)),
-    # Phase 14w (item 1): the regression title/caption, used when the exporter has no user caption. NA on
-    # a crosstab (those keep their own caption / auto-title path).
+    # Phase 16e: the plain footer one-liners (weight / Model: / stars) are no longer pre-computed here --
+    # every backend now builds its whole footer through tab_footer_streams(), the ONE shared ordered model.
+    # Phase 14w (item 1): the regression title/caption stays -- that is the CAPTION (above the table), used
+    # when the exporter has no user caption. NA on a crosstab (those keep their own caption / auto-title path).
     reg_title = reg_title(get_reg_meta(tab)),
     # Phase 14v: multinomial crude-companion tooltip fragments, per column -> per-row char vector
     # (resolved above while `var` was present); reg_append_empirical_tip() appends them at html render.

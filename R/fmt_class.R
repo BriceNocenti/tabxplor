@@ -2949,6 +2949,35 @@ fmt_channel_codes <- function(x, theme = "light") {
 .lg_div   <- "\u00f7"   # /  (division)
 .lg_beta  <- "\u03b2"   # beta
 
+# Phase 16e: the per-measure fact table -- every language-invariant display fact of a colour measure in
+# ONE place, instead of ~5 scattered switch arms the earlier code kept in sync by hand. Adding a measure
+# is a row; a per-measure divergence (contrib colours BOTH sides "x N of the mean", ratio uses x over /
+# div under) is a FIELD, not a switch case one can forget. Fields:
+#   word / word_i18n   the measure word (gettext at render when word_i18n; "OR" is a literal).
+#   break_over/under   the break-label glyph per side (see legend_break_label); break_scale = TRUE means a
+#                      factor pct diff is shown x100 (gated by is_pct).
+#   ref_kind           the baseline concept: "category" (a reference level), "indep" (independence), or NA
+#                      = read the column's own tot/level reference.
+#   threshold_mult     the grey-note first-break glyph is x (TRUE) or the symmetric +/- (FALSE).
+#   unit_kind          drives the prose unit suffix: "diff" (points/SD/none by is_pct/is_std) | "contrib"
+#                      ("the mean contribution") | "none".
+#   has_ref_lead       the effect is stated vs a reference in the sentence LEAD (diff/ratio) rather than
+#                      being already relative to it (or/contrib/reg effect).
+MEASURES <- list(
+  diff    = list(word = "difference",           word_i18n = TRUE,  break_over = "+",       break_under = "-",
+                 break_scale = TRUE,  ref_kind = NA_character_, threshold_mult = FALSE, unit_kind = "diff",
+                 has_ref_lead = TRUE),
+  ratio   = list(word = "ratio",                word_i18n = TRUE,  break_over = .lg_times, break_under = .lg_div,
+                 break_scale = FALSE, ref_kind = NA_character_, threshold_mult = TRUE,  unit_kind = "none",
+                 has_ref_lead = TRUE),
+  or      = list(word = "OR",                   word_i18n = FALSE, break_over = "",        break_under = "1/",
+                 break_scale = FALSE, ref_kind = "category",    threshold_mult = TRUE,  unit_kind = "none",
+                 has_ref_lead = FALSE),
+  contrib = list(word = "contribution to Chi2", word_i18n = TRUE,  break_over = .lg_times, break_under = .lg_times,
+                 break_scale = FALSE, ref_kind = "indep",       threshold_mult = TRUE,  unit_kind = "contrib",
+                 has_ref_lead = FALSE)
+)
+
 # a legend token: plain text (c = NA) or a coloured break-word (c = palette slot 1:8).
 # Phase 13d: the CSS class is not stored -- it is tx_slot_class(ch, c), derived at render time, so a
 # legend break-word and the cells it describes cannot name different classes.
@@ -3000,25 +3029,16 @@ legend_ref_short <- function(spec, lang) {
          "")
 }
 
-# one break threshold -> its bare label (no colour), per measure. `is_pct` = a factor pct-point diff
-# (x100 units); a numeric-mean / coef diff (is_pct FALSE) shows the raw break value, whether it is
-# sd-standardized (SD units) or raw (custom mean_diff breaks). Phase 16d.
+# one break threshold -> its bare label (no colour), per measure. Phase 16e: fully MEASURES-driven --
+# each side's glyph is a data field (contrib's "x N on BOTH sides", ratio's x / div, or's N / 1/N). `is_pct`
+# = a factor pct-point diff (x100 units, break_scale); a numeric-mean / coef diff (is_pct FALSE) shows the
+# raw break value, whether it is sd-standardized (SD units) or raw (custom mean_diff breaks).
 legend_break_label <- function(measure, brk, dir, is_pct, lang) {
-  neg <- dir < 0L
-  if (identical(measure, "diff") && isTRUE(is_pct)) {          # factor pct-points
-    paste0(if (neg) "-" else "+", legend_num(abs(brk) * 100, lang))
-  } else if (identical(measure, "diff")) {                     # numeric: SD-standardized OR raw
-    paste0(if (neg) "-" else "+", legend_num(abs(brk), lang))
-  } else if (identical(measure, "ratio")) {
-    paste0(if (neg) .lg_div else .lg_times, legend_num(abs(brk), lang))
-  } else if (identical(measure, "contrib")) {
-    # Phase 16d: contrib is an ADDITIVE signed magnitude (x N of the MEAN contribution); over and under
-    # are the SAME magnitudes, distinguished by colour, so BOTH sides read "x N" -- never "/ N" (which
-    # would falsely imply reciprocals, as if the under side were 1/N of the mean).
-    paste0(.lg_times, legend_num(abs(brk), lang))
-  } else if (identical(measure, "or")) {
-    if (neg) paste0("1/", legend_num(abs(brk), lang)) else legend_num(abs(brk), lang)
-  } else as.character(brk)
+  m <- MEASURES[[measure]]
+  if (is.null(m)) return(as.character(brk))
+  scale <- if (isTRUE(m$break_scale) && isTRUE(is_pct)) 100 else 1
+  glyph <- if (dir < 0L) m$break_under else m$break_over
+  paste0(glyph, legend_num(abs(brk) * scale, lang))
 }
 
 # the coloured break tokens of one channel, split over / under (each a list of tokens). Slot 0 (a
@@ -3048,12 +3068,12 @@ legend_threshold_phrase <- function(plan, is_pct, is_std, lang) {
   if (is.null(plan) || length(plan$over_breaks) == 0L) return(NA_character_)
   brk <- plan$over_breaks[[1]]
   if (is.na(brk)) return(NA_character_)
-  if (identical(plan$measure, "diff")) {
+  if (isTRUE(MEASURES[[plan$measure]]$threshold_mult)) {   # ratio / OR / contrib
+    paste0(.lg_times, legend_num(abs(brk), lang))
+  } else {                                                 # diff: symmetric +/- <v> [unit]
     val  <- if (isTRUE(is_pct)) legend_num(abs(brk) * 100, lang) else legend_num(abs(brk), lang)
     unit <- if (isTRUE(is_pct)) gettext("points") else if (isTRUE(is_std)) gettext("SD") else ""
     if (nzchar(unit)) paste0("\u00b1", val, " ", unit) else paste0("\u00b1", val)
-  } else {
-    paste0(.lg_times, legend_num(abs(brk), lang))
   }
 }
 
@@ -3125,11 +3145,12 @@ legend_ref_label <- function(x, col, orientation) {
 # for the multiplicative effects. (Imprecise for a numeric predictor's per-unit beta, whose null is 0
 # -- the same approximation the OR arm has always made.)
 legend_ref_info <- function(x, col, measure, orientation, is_coef = FALSE, is_reg = FALSE) {
-  if (identical(measure, "contrib"))
+  base_kind <- MEASURES[[measure]]$ref_kind          # Phase 16e: the measure's baseline concept, one field
+  if (identical(base_kind, "indep"))
     return(list(kind = "indep", label = NA_character_, orientation = orientation))
   # Phase 14w: a regression table has no total row -- every reg column (incl. AME, ci_type "diff", and the
   # empirical crude columns) is compared to the predictor's REFERENCE CATEGORY, never "the Total row".
-  if (isTRUE(is_reg) || identical(measure, "or") || isTRUE(is_coef))
+  if (isTRUE(is_reg) || identical(base_kind, "category") || isTRUE(is_coef))
     return(list(kind = "category", label = legend_ref_label(x, col, "row"), orientation = "row"))
   ref <- get_ref_type(col); ref <- if (length(ref)) as.character(ref)[1] else "tot"
   if (identical(ref, "tot"))
@@ -3208,15 +3229,14 @@ legend_method_phrase <- function(spec, lang) {
   if (is.na(m)) conf else gettextf("%s, %s", m, conf)
 }
 
-# the measure / effect word (reg effect word takes precedence).
+# the measure / effect word (reg effect word takes precedence). Phase 16e: MEASURES-driven -- the only
+# non-table special-case is the sd-standardized diff wording (a spec fact, not a measure fact).
 legend_measure_word <- function(measure, is_std, eff_word, lang) {
   if (!is.na(eff_word)) return(eff_word)
-  switch(measure,
-         "diff"    = if (isTRUE(is_std)) gettext("standardized difference") else gettext("difference"),
-         "ratio"   = gettext("ratio"),
-         "or"      = "OR",
-         "contrib" = gettext("contribution to Chi2"),
-         measure)
+  if (identical(measure, "diff") && isTRUE(is_std)) return(gettext("standardized difference"))
+  m <- MEASURES[[measure]]
+  if (is.null(m)) return(measure)
+  if (isTRUE(m$word_i18n)) gettext(m$word) else m$word
 }
 
 legend_ucfirst <- function(s) {
@@ -3224,7 +3244,38 @@ legend_ucfirst <- function(s) {
   paste0(toupper(substr(s, 1, 1)), substr(s, 2, nchar(s)))
 }
 
-# ---- assemblers: spec -> token stream --------------------------------------------------------------
+# Phase 16e: pre-compute EVERY per-measure / per-channel display fact into the spec ONCE (called between
+# legend_specs and grouping, under the render language), so the token assemblers below are dumb templates
+# -- no switch(measure), no is_reg / is_coef branch. Per-channel facts (subject / has_ref_lead / unit) are
+# resolved for BOTH the text and background measures into spec$txt / spec$bg; the scalar phrases
+# (ref_phrase / method_phrase / threshold_phrase) once. The measure WORD stays a legend_measure_word()
+# call at the (few) use sites -- it is a MEASURES lookup, not a switch, and the text vs background channels
+# feed it different eff_word, matching the historical wording exactly.
+legend_resolve_spec <- function(spec, lang) {
+  chan <- function(measure) {
+    if (is.na(measure)) return(NULL)
+    md   <- MEASURES[[measure]]
+    subj <- if (!is.na(spec$eff_word)) spec$eff_word
+            else if (identical(measure, "or")) "OR" else gettext("cells")
+    unit <- switch(md$unit_kind,
+                   "diff"    = if (isTRUE(spec$is_pct)) paste0(" ", gettext("points"))
+                               else if (isTRUE(spec$is_std)) paste0(" ", gettext("SD")) else "",
+                   "contrib" = paste0(" ", gettext("the mean contribution")),
+                   "")
+    list(subject      = subj,
+         has_ref_lead = isTRUE(md$has_ref_lead) && !isTRUE(spec$is_coef) && !isTRUE(spec$is_reg),
+         unit         = unit)
+  }
+  spec$txt <- chan(spec$measure_text)
+  spec$bg  <- chan(spec$measure_bg)
+  spec$ref_phrase       <- legend_ref_phrase(spec, lang)
+  spec$method_phrase    <- legend_method_phrase(spec, lang)
+  primary <- if (is.null(spec$plan_txt)) spec$plan_bg else spec$plan_txt
+  spec$threshold_phrase <- legend_threshold_phrase(primary, spec$is_pct, spec$is_std, lang)
+  spec
+}
+
+# ---- assemblers: spec -> token stream (dumb templates over legend_resolve_spec() fields) ------------
 
 # TERSE (console): compact, one line per group -- names? + measure (ref): <breaks>  [; bg]  [policy].
 legend_tokens_terse <- function(spec, lang, show_names) {
@@ -3246,8 +3297,7 @@ legend_tokens_terse <- function(spec, lang, show_names) {
   # Phase 14x: grey_non_signif names the first threshold a cell must reach ("or under ±5 points"), so
   # the tag no longer implies the false converse (grey == not significant). A grey cell is EITHER not
   # significant OR below that threshold; the guarantee is only coloured => significant.
-  primary <- if (is.null(spec$plan_txt)) spec$plan_bg else spec$plan_txt
-  thr     <- legend_threshold_phrase(primary, spec$is_pct, spec$is_std, lang)
+  thr <- spec$threshold_phrase
   pn <- switch(spec$policy,
                "grey_non_signif"   = if (!is.na(thr)) gettextf("grey: non-significant or under %s", thr)
                                      else             gettext("grey: non-significant or small"),
@@ -3262,8 +3312,6 @@ legend_tokens_terse <- function(spec, lang, show_names) {
 # measure inside one_side(), so the text channel (e.g. diff) and the background channel (e.g. ratio)
 # each describe themselves correctly.
 legend_tokens_prose <- function(spec, lang, show_names) {
-  ref_phrase  <- legend_ref_phrase(spec, lang)
-  meth_phrase <- legend_method_phrase(spec, lang)
   # French typography: a (thin) space before the high punctuation ; : (matches the user's examples).
   semi  <- if (identical(lang, "fr")) " ; " else "; "
   colon <- if (identical(lang, "fr")) " : " else ": "
@@ -3273,30 +3321,21 @@ legend_tokens_prose <- function(spec, lang, show_names) {
     bt   <- legend_break_tokens(plan, spec$is_pct, spec$is_mean, if (is_bg) "bg" else "text", lang)
     side <- if (dir > 0) bt$over else bt$under
     if (length(side) == 0) return(NULL)
-    measure <- plan$measure
-    subject <- if (!is.na(spec$eff_word)) spec$eff_word
-               else if (identical(measure, "or")) "OR" else gettext("cells")
-    # coef / OR / any regression measure carry the ref in the note only (a reg effect -- AME, crude diff --
-    # is already expressed relative to the reference, so "AME >= the reference category +5" is redundant).
-    # Phase 16d: contrib names its magnitude reference ("the mean contribution") as a UNIT suffix, not a
-    # lead ("cells >= x1; ... the mean contribution"), so the lead is not "cells >= independence x1".
-    has_ref_lead <- !identical(measure, "or") && !identical(measure, "contrib") &&
-                    !isTRUE(spec$is_coef) && !isTRUE(spec$is_reg)
-    unit <- switch(measure,
-                   "diff"    = if (isTRUE(spec$is_pct)) paste0(" ", gettext("points"))
-                               else if (isTRUE(spec$is_std)) paste0(" ", gettext("SD")) else "",
-                   "contrib" = paste0(" ", gettext("the mean contribution")),
-                   "")
+    # Phase 16e: subject / has_ref_lead / unit are resolved per channel in legend_resolve_spec (coef / OR /
+    # contrib / reg carry the ref in the note only -> has_ref_lead FALSE; contrib's "the mean contribution"
+    # is a unit suffix, not a lead). The template just reads them.
+    cf    <- if (is_bg) spec$bg else spec$txt
     cmp   <- if (dir > 0) .lg_ge else .lg_le
     shade <- if (no_shade) NA_character_ else if (dir > 0) spec$shades[["over"]] else spec$shades[["under"]]
-    lead  <- if (has_ref_lead) gettextf("%s %s %s", subject, cmp, ref_phrase) else gettextf("%s %s", subject, cmp)
+    lead  <- if (cf$has_ref_lead) gettextf("%s %s %s", cf$subject, cmp, spec$ref_phrase)
+             else                 gettextf("%s %s", cf$subject, cmp)
     head_toks <- if (!is.na(shade)) list(.lg_tok(paste0(shade, colon, lead, " ")))
                  else               list(.lg_tok(paste0(legend_ucfirst(lead), " ")))
     # guaranteed_effect: the coloured thresholds are the CI floor -> annotate the OVER sentence
     # ("..., after subtracting the margin of error (<method>).") instead of a bare ".".
     tail <- if (dir > 0 && identical(spec$policy, "guaranteed_effect"))
-              paste0(unit, ", ", gettextf("after subtracting the margin of error (%s)", meth_phrase), ".")
-            else paste0(unit, ".")
+              paste0(cf$unit, ", ", gettextf("after subtracting the margin of error (%s)", spec$method_phrase), ".")
+            else paste0(cf$unit, ".")
     c(head_toks, legend_join(side, semi), list(.lg_tok(tail)))
   }
 
@@ -3332,18 +3371,18 @@ legend_tokens_prose <- function(spec, lang, show_names) {
   # separately, so a paste0-split message never matches the paste0-JOINED string gettextf looks up at
   # runtime -> the translation silently fails (the split-part po entries are dead). Keep it on one line.
   if (identical(spec$policy, "grey_non_signif")) {
-    thr  <- legend_threshold_phrase(primary, spec$is_pct, spec$is_std, lang)
+    thr  <- spec$threshold_phrase
     note <- if (!is.na(thr))
       gettextf("Coloured: significantly different from %s (%s), by at least the first colour threshold. Uncoloured: either not significant, or a difference under %s.",
-               ref_phrase, meth_phrase, thr)
+               spec$ref_phrase, spec$method_phrase, thr)
     else
       gettextf("Coloured: significantly different from %s (%s), by at least the first colour threshold. Uncoloured: either not significant, or too small a difference to colour.",
-               ref_phrase, meth_phrase)
+               spec$ref_phrase, spec$method_phrase)
     toks <- c(toks, list(.lg_tok(paste0(" ", note))))
   }
   else if (identical(spec$policy, "guaranteed_effect"))
     toks <- c(toks, list(.lg_tok(paste0(" ", gettextf(
-      "Grey: not significantly different from %s after the margin of error.", ref_phrase)))))
+      "Grey: not significantly different from %s after the margin of error.", spec$ref_phrase)))))
   toks
 }
 
@@ -3444,8 +3483,8 @@ legend_specs <- function(x) {
 
   # One spec per colored column (was one per col_var), so several measures sharing a col_var -- a reg
   # table's model + empirical columns under one outcome span (Phase 14w) -- each get their own spec.
-  # split(sig) below collapses identical signatures, so a crosstab's level columns still fold to one line
-  # (byte-identical legends): same sig -> one group -> the col_var prefix.
+  # legend_group_by_body() below collapses columns with an IDENTICAL rendered body, so a crosstab's level
+  # columns still fold to one line (byte-identical legends): same body -> one group -> the col_var prefix.
   reps <- purrr::imap(col_vars_levels, function(cols, cv) {
     cc <- cols[cols %in% kept_names]
     purrr::map(cc, function(cn) list(cn = cn, cv = cv))
@@ -3453,11 +3492,11 @@ legend_specs <- function(x) {
   reps <- purrr::flatten(purrr::compact(reps))
   if (length(reps) == 0) return(list())
 
-  # Build the rich specs FIRST, without `sig`. For a reg table the empirical companion + model columns
-  # describe the SAME colour scale but differ superficially (the emp/model `role`, the additive effect
-  # word "AME"/"beta" vs the neutral "cells", and a recovered-vs-NA reference label). Those are
-  # reconciled per col_var (legend_canonicalise_reg) BEFORE the sig, so "same sig => same rendered body"
-  # holds and one legend line covers both. A crosstab is untouched (role uniformly "model").
+  # Build the rich specs. For a reg table the empirical companion + model columns describe the SAME colour
+  # scale but differ superficially (the emp/model `role`, the additive effect word "AME"/"beta" vs the
+  # neutral "cells", and a recovered-vs-NA reference label). Those are reconciled per col_var
+  # (legend_reg_adapter) so the emp + model bodies MATCH and one legend line (legend_group_by_body)
+  # covers both. A crosstab is untouched (role uniformly "model").
   specs <- purrr::map(reps, function(e) {
     cn <- e$cn; cv <- e$cv
     col      <- x[[cn]]
@@ -3494,15 +3533,24 @@ legend_specs <- function(x) {
   specs <- purrr::compact(specs)
   if (length(specs) == 0) return(list())
 
-  if (isTRUE(is_reg)) specs <- legend_canonicalise_reg(specs)
+  if (isTRUE(is_reg)) specs <- legend_reg_adapter(specs)
+  specs
+}
 
-  # The grouping signature -- deliberately EXCLUDES `role` (Phase 16d: an empirical companion folds into
-  # its model sibling), derived AFTER the reconciliation so identical signatures render identically.
-  purrr::map(specs, function(s) {
-    s$sig <- paste(s$measure_text, s$measure_bg, s$policy, s$orientation, s$is_std, s$is_pct,
-                   s$eff_word, s$ref$kind, s$ref$label, s$ci_type, sep = "\r")
-    s
-  })
+# Phase 16e: group the per-column specs into legend lines by their RENDERED BODY (the name-less token
+# stream for the style in force), replacing the hand-maintained 10-field `sig` string. Two specs share a
+# line iff they render the same body -- so grouping can NEVER drift from what actually prints (the 16d
+# is_pct-in-sig patch was exactly such a drift: a fact that changes the body but was forgotten in the
+# sig). Grouping is style-local (terse vs prose may fold differently -- correct: each medium groups by
+# what it shows), and groups keep first-occurrence (column-reading) order.
+legend_group_by_body <- function(specs, style, lang) {
+  body_of <- function(s) {
+    toks <- if (identical(style, "prose")) legend_tokens_prose(s, lang, FALSE)
+            else                           legend_tokens_terse(s, lang, FALSE)
+    paste0(vapply(toks, function(tk) tk$t, character(1)), collapse = "")
+  }
+  bodies <- vapply(specs, body_of, character(1))
+  lapply(unique(bodies), function(k) specs[bodies == k])
 }
 
 # Phase 16d: reconcile the empirical + model specs of each col_var of a REG table so they fold into one
@@ -3515,7 +3563,7 @@ legend_specs <- function(x) {
 # the column-name prefix + the "Model:" line. Multiplicative OR/IRR keep their word (both siblings carry
 # it, and legend_method_name reads it for the "rate-ratio" vs "odds-ratio" wording). A no-empirical
 # AME/beta/MER table is left untouched (no sibling to fold with), keeping its effect word in the body.
-legend_canonicalise_reg <- function(specs) {
+legend_reg_adapter <- function(specs) {
   by_cv <- split(seq_along(specs), purrr::map_chr(specs, "col_var"))
   for (idx in by_cv) {
     labs <- unique(stats::na.omit(vapply(specs[idx], function(s) s$ref$label, character(1))))
@@ -3549,6 +3597,49 @@ legend_name_list <- function(names, max_n = 6L, lang = "en") {
   paste(norm, collapse = ", ")
 }
 
+# Phase 16e: the colour-legend token streams (one per body-group), UNRENDERED. The grouping + prefix logic
+# factored out of tab_color_legend so BOTH tab_color_legend (renders per medium) and tab_footer_streams
+# (concatenates them with the plain footer lines) share ONE legend core. Returns a list of token-lists,
+# empty when nothing is coloured. Built under the render language (with_legend_lang). The specs are resolved
+# ONCE here (legend_resolve_spec), so grouping-by-body and the assemblers both read plain fields.
+legend_streams <- function(x, style, lang) {
+  with_legend_lang(lang, function(lg) {
+    specs <- legend_specs(x)
+    if (length(specs) == 0) return(list())
+    specs <- lapply(specs, function(s) legend_resolve_spec(s, lg))
+    grp   <- legend_group_by_body(specs, style, lg)
+    show_global <- length(grp) > 1
+    # Phase 14w: a col_var spawning SEVERAL legend lines (a reg outcome span -> model + empirical) is
+    # prefixed by the COLUMN names (the col_var alone is ambiguous); a single-line col_var keeps its name.
+    cv_lines <- table(unlist(lapply(grp, function(g) unique(purrr::map_chr(g, "col_var")))))
+    lapply(grp, function(g) {
+      spec <- g[[1]]
+      cvs  <- unique(purrr::map_chr(g, "col_var"))
+      # Phase 16d: a role-MIXED group (empirical + model merge) always shows a prefix and names the COLUMNS
+      # (Emp. OR, Model OR) -- the col_var alone is ambiguous, and the prefix now carries the folded effect
+      # identity. A role-uniform group (a crosstab, one multinomial span) keeps the old rule.
+      mixed       <- length(unique(purrr::map_chr(g, "role"))) > 1
+      show_this   <- show_global || mixed
+      name_by_col <- mixed || any(cv_lines[cvs] > 1)
+      spec$col_names <- if (name_by_col) unique(purrr::map_chr(g, "col_name")) else cvs
+      if (identical(style, "prose")) legend_tokens_prose(spec, lg, show_this)
+      else                           legend_tokens_terse(spec, lg, show_this)
+    })
+  })
+}
+
+# Phase 16e: render a list of RAW token-streams for one medium -> a character vector (one string per
+# stream), or, for "runs", a list of run-lists (Excel / plot). enc2utf8 guards the gettext catalog output.
+render_streams <- function(streams, medium, theme, colored, classes = FALSE) {
+  if (identical(medium, "runs")) {
+    return(unname(lapply(streams, function(toks)
+      lapply(legend_render_line(toks, "runs", theme, colored, classes),
+             function(r) { r$text <- enc2utf8(r$text); r }))))
+  }
+  enc2utf8(vapply(streams, function(toks)
+    legend_render_line(toks, medium, theme, colored, classes), character(1)))
+}
+
 #' Build the colour legend of a table
 #'
 #' Internal. Returns one legend line per colour-signature group. For \code{medium = "runs"} each line
@@ -3574,59 +3665,9 @@ tab_color_legend <- function(x, medium = c("console", "html", "md", "runs", "pla
   medium <- match.arg(medium)
   if (is.null(style))      style      <- if (identical(medium, "console")) "terse" else "prose"
   if (is.null(theme))      theme      <- getOption("tabxplor.color_style_theme", "light")
-
-  # apply the resolved language for the gettext lookups. LANGUAGE env is the reliable, mid-session,
-  # R>=4.1 lever (Sys.setLanguage() needs R>=4.2 and is flaky on Windows); restored on exit.
-  # WARNING: setting LANGUAGE is NOT enough on its own -- glibc caches translated strings, and the
-  # cache is only invalidated by setlocale()/bindtextdomain()/textdomain(). Without a flush the
-  # switch silently no-ops on Linux once the cache is warm (it happens to work on Windows/macOS,
-  # which is why this went unnoticed until CI): `lang = "fr"` returned English. Flush BEFORE (drop
-  # any entry cached under the previous language) and AFTER (don't leak ours to the next caller).
-  # bindtextdomain() is the portable lever -- the older Sys.setlocale() trick fails on musl
-  # (withr#213); this mirrors withr::local_language(), which we can't call (Suggests-only).
-  # NOTE: gettext ignores LANGUAGE altogether when the locale is "C", so this cannot translate
-  # under LANG=C (e.g. inside testthat, which sets LANG=C) -- that is a gettext rule, not a bug here.
-  lg  <- legend_resolve_lang(lang)
-  old <- Sys.getenv("LANGUAGE", unset = NA_character_)
-  flush_gettext_cache()
-  Sys.setenv(LANGUAGE = lg)
-  flush_gettext_cache()
-  on.exit({
-    if (is.na(old)) Sys.unsetenv("LANGUAGE") else Sys.setenv(LANGUAGE = old)
-    flush_gettext_cache()
-  }, add = TRUE)
-
-  specs <- legend_specs(x)
-  if (length(specs) == 0) return(NULL)
-
-  grp         <- split(specs, purrr::map_chr(specs, "sig"))
-  show_global <- length(grp) > 1
-  # Phase 14w: a col_var that spawns SEVERAL legend lines (a reg table's shared outcome col_var -> model +
-  # empirical) is prefixed by the COLUMN names (the col_var alone would be identical, hence ambiguous); a
-  # col_var with a single line keeps the col_var name (crosstabs, one multinomial span).
-  cv_lines <- table(unlist(lapply(grp, function(g) unique(purrr::map_chr(g, "col_var")))))
-  lines <- purrr::map(grp, function(g) {
-    spec <- g[[1]]
-    cvs  <- unique(purrr::map_chr(g, "col_var"))
-    # Phase 16d: a role-MIXED group is an empirical+model merge -- it always shows a prefix (even as the
-    # only line, where show_global is FALSE) and names the COLUMNS (Emp. OR, Model OR), since the col_var
-    # alone is ambiguous and the prefix is now where the folded effect identity lives. A role-uniform
-    # group (every crosstab, a multinomial span) keeps the old rule.
-    mixed       <- length(unique(purrr::map_chr(g, "role"))) > 1
-    show_this   <- show_global || mixed
-    name_by_col <- mixed || any(cv_lines[cvs] > 1)
-    spec$col_names <- if (name_by_col) unique(purrr::map_chr(g, "col_name")) else cvs
-    toks <- if (identical(style, "prose")) legend_tokens_prose(spec, lg, show_this)
-            else                           legend_tokens_terse(spec, lg, show_this)
-    legend_render_line(toks, medium, theme, colored, classes = classes)
-  })
-
-  # enc2utf8 the catalog output (gettext may return the native encoding on some platforms).
-  if (identical(medium, "runs")) {
-    return(unname(purrr::map(lines, function(line)
-      purrr::map(line, function(r) { r$text <- enc2utf8(r$text); r }))))  # run-lists
-  }
-  enc2utf8(unname(unlist(lines)))
+  streams <- legend_streams(x, style, lang)
+  if (length(streams) == 0) return(NULL)
+  render_streams(streams, medium, theme, colored, classes)
 }
 # tab_color_legend(tabs[[7]], medium = "console") %>% cli::cat_line()
 
@@ -3642,6 +3683,57 @@ with_legend_lang <- function(lang, f) {
     flush_gettext_cache()
   }, add = TRUE)
   f(lg)
+}
+
+# DESIGN: every footer line is a TOKEN STREAM -- there is no plain-vs-legend kind split, because
+# legend_render_line() already renders uncoloured tokens, so a plain one-liner is just a 1-token stream.
+# One renderer (render_footer) therefore covers the whole footer; the `role` only picks the console subtle.
+# Phase 16e: THE ordered below-table footer of a table, as a list of typed token-streams -- one shared
+# definition of what goes below a table and in what order (weight -> Model: -> colour-legend group(s) ->
+# stars -> user subtext), replacing the 5x per-backend re-ordering + the 2x export-prep field pre-compute.
+# Every line is a token-stream: the plain one-liners (weight / Model / stars / subtext, each self-
+# translated) wrap as a single .lg_tok, the colour legend contributes its unrendered groups. Each stream
+# carries a `role` so render_footer() can subtle the plain lines whole while a legend keeps its colours.
+# `subtext` = the user subtext lines (backend-specific: the console/md/html pass it, Excel keeps user
+# subtext on its own plain rows below the rich-text legend and passes character(0)); `legend = FALSE`
+# drops the colour legend (a backend's color_legend = FALSE).
+# Phase 16e: the legend style for EXPORTS (md / html / Excel). Default "prose" (full sentences); a user can
+# set options(tabxplor.legend_style = "terse") for the compact console-style one-liner. The console itself
+# always uses "terse" (a terminal is width-bound). Any value but "terse" resolves to "prose".
+legend_export_style <- function() {
+  if (identical(getOption("tabxplor.legend_style", "prose"), "terse")) "terse" else "prose"
+}
+
+tab_footer_streams <- function(x, style = "prose", lang = NULL,
+                               subtext = character(0), legend = TRUE) {
+  lg      <- legend_resolve_lang(lang)
+  streams <- list()
+  push <- function(tokens, role) if (length(tokens))
+    streams[[length(streams) + 1L]] <<- list(tokens = tokens, role = role)
+  wl <- tab_weight_line(x, lang = lg);   if (!is.null(wl)) push(list(.lg_tok(wl)), "weight")
+  rl <- reg_model_line(get_reg_meta(x)); if (!is.null(rl)) push(list(.lg_tok(rl)), "reg")   # NOT translated
+  if (isTRUE(legend)) for (toks in legend_streams(x, style, lg)) push(toks, "legend")
+  sl <- suppressWarnings(tab_stars_legend(x, lang = lg)); if (!is.null(sl)) push(list(.lg_tok(sl)), "stars")
+  for (s in subtext) if (nzchar(s)) push(list(.lg_tok(s)), "subtext")
+  streams
+}
+
+# Phase 16e: render the footer streams for one medium. Console applies the "# " subtle prefix per line,
+# role-aware: a legend keeps its coloured break-words (only the prefix is subtle), every other line is
+# subtle whole (matching the historical tbl_format_footer wrapping). Other media return the rendered
+# character vector (md/html/plain) or run-lists (runs); the caller places them (tfoot, xl rows, ...).
+render_footer <- function(streams, medium, theme = NULL, colored = TRUE, classes = FALSE) {
+  if (is.null(theme)) theme <- getOption("tabxplor.color_style_theme", "light")
+  if (length(streams) == 0) return(if (identical(medium, "runs")) list() else character(0))
+  toks_list <- lapply(streams, function(s) s$tokens)
+  out <- render_streams(toks_list, medium, theme, colored, classes)
+  if (identical(medium, "console")) {
+    roles <- vapply(streams, function(s) s$role, character(1))
+    out <- ifelse(roles == "legend",
+                  paste0(pillar::style_subtle("# "), out),
+                  pillar::style_subtle(paste0("# ", out)))
+  }
+  out
 }
 
 # Phase 16d: the significance-stars legend line, shown when any DISPLAYED, star-applicable fmt column

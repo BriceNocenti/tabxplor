@@ -95,6 +95,10 @@ NULL
   # add_n). Console always shows the full N/statistic/p-value summary block, so this is export-only.
   options("tabxplor.test_lines"    = "pvalue")
 
+  # Phase 16e: the colour-legend style in EXPORTS (md/html/Excel). "prose" (default) = the full
+  # sentences; "terse" = the compact one-line console form. The console itself is always terse.
+  options("tabxplor.legend_style"  = "prose")
+
   # Default confidence level for the intervals and significance tests. The per-call `conf_level`
   # argument of tab() / tab_num() / tab_ci() / tab_reg() (and its wrappers) overrides it; it is also
   # the fallback alpha of the `contrib` colour-significance gate. Single source of truth (Last Phase c).

@@ -646,25 +646,12 @@ tbl_sum.tabxplor_grouped_tab <- function(x, ...) {
 #' @method tbl_format_footer tabxplor_tab
 tbl_format_footer.tabxplor_tab <- function(x, setup, ...) {
   default_footer <- NextMethod()
-
-  print_colors <- suppressWarnings(tab_color_legend(x))
-  subtext <- get_subtext(x) %>% purrr::discard(. == "")
-  # Phase 14w (item 2): the regression "Model:" line comes BEFORE the colour legend (the reader must know
-  # what the numbers ARE before reading how they are coloured). NULL on a crosstab.
-  reg_line <- reg_model_line(get_reg_meta(x))
-  # Phase 16d: the "Weighted by <wt>." line opens the footer (NULL when unweighted); the significance-
-  # stars legend closes the colour block (NULL when no star is displayed).
-  weight_line <- tab_weight_line(x)
-  stars_line  <- suppressWarnings(tab_stars_legend(x))
-  if (length(print_colors) != 0) print_colors <- paste0(
-    pillar::style_subtle("# "), print_colors
-  )
-  if (length(subtext) != 0) subtext <- pillar::style_subtle( paste0("# ", subtext) )
-  if (!is.null(reg_line)) reg_line <- pillar::style_subtle(paste0("# ", reg_line))
-  if (!is.null(weight_line)) weight_line <- pillar::style_subtle(paste0("# ", weight_line))
-  if (!is.null(stars_line)) stars_line <- pillar::style_subtle(paste0("# ", stars_line))
-
-  c(default_footer, weight_line, reg_line, print_colors, stars_line, subtext)
+  # Phase 16e: the whole below-table footer (weight -> Model: -> colour legend -> stars -> user subtext) is
+  # ONE shared model now -- tab_footer_streams() builds the ordered typed streams, render_footer() applies
+  # the console "# " subtle prefix (role-aware: a legend keeps its colours, the plain lines are subtle whole).
+  streams <- suppressWarnings(tab_footer_streams(
+    x, style = "terse", subtext = get_subtext(x) %>% purrr::discard(. == "")))
+  c(default_footer, render_footer(streams, medium = "console"))
 }
 
 
@@ -845,24 +832,15 @@ tab_kable <- function(tabs,
   parts <- purrr::map(prep$tables, function(rd) {
     subtext <- character(0)
     if (!isTRUE(rd$vars$degrade)) {
-      subtext <- rd$subtext
-      # Phase 16d: stars legend (plain) closes the colour block, above the user subtext.
-      if (!is.null(rd$stars_legend)) subtext <- c(rd$stars_legend, subtext)
-      if (color_legend && length(rd$roles$color_cols) != 0) {
-        subtext <- c(
-          suppressWarnings(tab_color_legend(
-            if (is.null(rd$color_src)) rd$tab else rd$color_src,
-            medium = "html", style = "prose", lang = lang,
-            theme = theme[1],
-            # Phase 13d: the html engine ships a tabxplor stylesheet, so the legend uses the same slot
-            # classes as the cells and follows any theme toggle with them. kableExtra does not.
-            classes = identical(engine, "html"))),
-          subtext)
-      }
-      # Phase 14w (item 2): the "Model:" line above the colour legend (reg tables only; NULL otherwise).
-      if (!is.null(rd$reg_line)) subtext <- c(rd$reg_line, subtext)
-      # Phase 16d: "Weighted by <wt>." opens the whole footer (NULL when unweighted).
-      if (!is.null(rd$weight_line)) subtext <- c(rd$weight_line, subtext)
+      # Phase 16e: the whole footer (weight -> Model: -> colour legend -> stars -> user subtext) via the ONE
+      # shared builder. The html engine ships a tabxplor stylesheet, so its legend break-words carry slot
+      # CLASSES (theme-toggle-safe) rather than inline hex; kableExtra does not (classes = engine == "html").
+      src         <- if (is.null(rd$color_src)) rd$tab else rd$color_src
+      want_legend <- color_legend && length(rd$roles$color_cols) != 0
+      subtext <- suppressWarnings(render_footer(
+        tab_footer_streams(src, style = legend_export_style(), lang = lang,
+                           subtext = rd$subtext, legend = want_legend),
+        medium = "html", theme = theme[1], classes = identical(engine, "html")))
     }
     # Phase 14w (item 1): a reg table auto-captions itself from `reg_title` when the user gave no caption.
     cap <- caption
@@ -1829,34 +1807,33 @@ tab_plot <- function(tabs,
 
 
 
-if (color_legend & length(color_cols) != 0) {
-
-  # Phase 14c: read the legend's RUN stream (text + hex per token) directly. It used to be scraped back
-  # out of the html rendering with regexes that had silently stopped matching (Phase 13b replaced
-  # kableExtra's `color: rgba(...)` spans with inline hex), so every legend token rendered as a raw
-  # html fragment in black. "runs" is the medium built for exactly this: draw-as-text, no fill (a
-  # background break-word borrows the darker bg_legend palette, as in Excel).
-  color_legend <- suppressWarnings(tab_color_legend(
-                                   if (is.null(rd$color_src)) tabs else rd$color_src,
-                                   medium     = "runs", style = "prose", lang = lang,
-                                   theme      = theme[1])) |>
-    purrr::map(function(line) {
-      text  <- purrr::map_chr(line, "text")
-      color <- purrr::map_chr(line, "color")
-      color[is.na(color)] <- text_color
-      # one ggtexttable column per token is wasteful (and the separators are their own tokens): fold
-      # each run of same-coloured tokens into one cell.
-      grp <- cumsum(color != dplyr::lag(color, default = ""))
-      tibble::tibble(
-        text  = vapply(split(text, grp), paste0, character(1), collapse = ""),
-        color = color[!duplicated(grp)]
-      ) |>
-        # otherwise, unbreakable spaces fail in some graphic devices
-        dplyr::mutate(text = stringr::str_replace_all(.data$text, unbrk, " "))
-    })
-
-  } else {
-    color_legend <- NULL
+# Phase 16e: the FULL footer below the plot (weight -> Model: -> colour legend -> stars -> user subtext) via
+# the ONE shared builder -- previously the plot showed ONLY the colour legend, silently dropping the weight,
+# Model:, stars and user subtext lines. Each footer RUN line (text + hex per token) folds into one
+# ggtexttable row (a plain line is a single black cell). "runs" is the medium built for this: draw-as-text,
+# no fill (a background break-word borrows the darker bg_legend palette, as in Excel). The colour legend is
+# included only when colouring is on; the plain lines always.
+{
+  footer_src  <- if (is.null(rd$color_src)) tabs else rd$color_src
+  footer_runs <- suppressWarnings(render_footer(
+    tab_footer_streams(footer_src, style = legend_export_style(), lang = lang,
+                       subtext = subtext, legend = color_legend && length(color_cols) != 0),
+    medium = "runs", theme = theme[1]))
+  color_legend <- purrr::map(footer_runs, function(line) {
+    text  <- purrr::map_chr(line, "text")
+    color <- purrr::map_chr(line, "color")
+    color[is.na(color)] <- text_color
+    # one ggtexttable column per token is wasteful (and the separators are their own tokens): fold
+    # each run of same-coloured tokens into one cell.
+    grp <- cumsum(color != dplyr::lag(color, default = ""))
+    tibble::tibble(
+      text  = vapply(split(text, grp), paste0, character(1), collapse = ""),
+      color = color[!duplicated(grp)]
+    ) |>
+      # otherwise, unbreakable spaces fail in some graphic devices
+      dplyr::mutate(text = stringr::str_replace_all(.data$text, unbrk, " "))
+  })
+  if (length(color_legend) == 0) color_legend <- NULL
   }
 
   if (length(color_legend) != 0) {
@@ -1933,6 +1910,20 @@ if (color_legend & length(color_cols) != 0) {
   tabgrob <- get_tablegrob(tabs_gg)
   tabgrob <- justify_grob(tabgrob)
   tabs_gg <- tab_return_same_class_as_input(tabgrob, input = tabs_gg)
+
+  # Phase 16e: draw the caption as a bold title row ABOVE the plot (the `caption` arg was accepted but never
+  # drawn). A reg table auto-captions itself from reg_title when the user gave none (mirrors tab_kable).
+  cap <- caption
+  if (is.null(cap) && !is.null(rd$reg_title) && !is.na(rd$reg_title)) cap <- rd$reg_title
+  if (!is.null(cap) && length(cap) == 1L && !is.na(cap) && nzchar(cap)) {
+    titlegrob <- grid::textGrob(cap, x = 0, hjust = 0,
+                                gp = grid::gpar(fontface = "bold", fontsize = 11, col = text_color))
+    tabgrob <- get_tablegrob(tabs_gg)
+    tabgrob <- gtable::gtable_add_rows(
+      tabgrob, heights = grid::grobHeight(titlegrob) + grid::unit(4, "mm"), pos = 0)
+    tabgrob <- gtable::gtable_add_grob(tabgrob, titlegrob, t = 1, b = 1, l = 1, r = ncol(tabgrob))
+    tabs_gg <- tab_return_same_class_as_input(tabgrob, input = tabs_gg)
+  }
 
   return(tabs_gg)
 }

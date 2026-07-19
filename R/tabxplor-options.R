@@ -50,6 +50,9 @@
 #'     [tab_xl()]) append: `"pvalue"` (default, the single p-value row) or `"stat"` (adds a
 #'     test-statistic row above it). N is never added -- it is already shown by `add_n`. The console
 #'     summary block always shows the full N / statistic / p-value table.}
+#'   \item{`tabxplor.legend_style`}{the colour-legend style in exports ([tab_md()], [tab_kable()],
+#'     [tab_xl()], [tab_plot()]): `"prose"` (default, full sentences) or `"terse"` (the compact
+#'     one-line form the console uses). The console itself is always terse.}
 #'   \item{`tabxplor.kish_neff`}{`FALSE` (default): use Kish's effective sample size
 #'     `(sum w)^2 / sum w^2` for weighted numeric (mean) confidence intervals / significance.}
 #'   \item{`tabxplor.conf_level`}{confidence level for the intervals and significance tests, default

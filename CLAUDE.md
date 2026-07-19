@@ -14,14 +14,20 @@ R/
 │                              format/pillar methods, vctrs arithmetic/casting,
 │                              color engine (fmt_color_plan/fmt_color_slots/fmt_color_channels;
 │                              per-side fold + findInterval; slots 1-4 over / 5-8 under);
-│                              colour legend (legend_specs -> legend_canonicalise_reg [16d: drop `role`
-│                              from sig, share reg emp+model ref-label + neutralise the additive
-│                              AME/beta subject so a companion FOLDS into its model line] -> tokens ->
-│                              legend_render_line; legend_name_list = 16d prefix normalise [<br>/U+202F
-│                              -> U+00A0, cap 6 +N vars]; contrib legend = x N BOTH sides "vs the mean";
-│                              is_pct/is_std 3-way diff = pct/SD/raw). Footer helpers tab_weight_line
-│                              ("Weighted by <wt>.") + tab_stars_legend (gated by fmt_stars_applicable
-│                              = not contrib)
+│                              colour legend + footer (16e ONE model): MEASURES table = per-measure facts
+│                              (word/glyph/ref_kind/unit/has_ref_lead, one row not ~5 switch arms) ->
+│                              legend_specs -> legend_reg_adapter (reg emp+model fold: share ref-label,
+│                              neutralise the additive AME/beta subject) -> legend_resolve_spec (every
+│                              per-channel fact into the spec ONCE) -> legend_tokens_terse/_prose = DUMB
+│                              templates (no switch/is_reg) -> legend_group_by_body (group by RENDERED body,
+│                              not a sig string -> can't drift) -> legend_render_line. legend_name_list =
+│                              prefix normalise [<br>/U+202F -> U+00A0, cap 6 +N vars]. tab_footer_streams =
+│                              THE ordered footer as typed token-streams (weight -> Model: -> legend -> stars
+│                              -> subtext), render_footer = per-medium render+join (role-aware console
+│                              subtle); every backend calls these two (was 5x re-ordered + 2x prep fields).
+│                              Plain one-liners tab_weight_line/reg_model_line/tab_stars_legend wrap as
+│                              1-token streams. legend_export_style() = options(tabxplor.legend_style)
+│                              terse-in-exports. contrib legend = x N BOTH sides "vs the mean"
 ├── tab.R           (~6200 L) Main API: tab(), tab_many(), tab_plain(), tab_num(),
 │                              tab_apply_reference() (Phase 7f carve; Phase 9d: matrix-sweep internals;
 │                              14z: also the empirical-OR Woolf CI [ci_or on the {level j, ref2 level} x
@@ -123,7 +129,9 @@ R/
 │                              col-side drop moved INTO tab_col_var_header(name_cols=) -- one rule with
 │                              the level labels, since a level header may say "mean (sd)" only while the
 │                              span says the variable; tab_export_labels()/the `labels` slot DELETED (it
-│                              ran on every export and nothing read it)
+│                              ran on every export and nothing read it). 16e: the plain footer fields
+│                              (reg_line/weight_line/stars_legend) DELETED too -- every backend now builds
+│                              its whole footer via tab_footer_streams(); only reg_title (the caption) stays
 ├── tab-transpose-render.R (~230 L) Phase 14o: THE render-level transpose. tx_transpose_render(rd,
 │                              backend) flips a FINISHED prep_one_table() model (a transposed column is
 │                              heterogeneous -> not an fmt column, cannot be format()ted; so colours +
@@ -900,11 +908,40 @@ regenerated + a few value assertions updated):
 `tab(gss_simple, race, party3, pct = "row", display = "{ci}", stars = TRUE)`
 - A legend is needed for significance stars. Here is a French version, to keep for French but to translate in English : "*** : chiffre significativement différent de celui de la modalité de référence (en gras), au seuil de confiance de 99  % ; ** : au seuil de 95  % ; * : au seuil de 90  % ; aucune étoile : non significatif."
 
+#### Phase 16e — further simplify and integrate the legend/footer system
+
+After 16a + 16d, a table is wrapped by three separate explanatory-text subsystems, each with its own per-medium rendering and its own threading into the backends:
+- Colour legend — tab_color_legend() → token stream → 5 media.
+- Test / GOF grid (16a) — test_summary_grid() + test_render_console() / export appenders, rendered in a different position (above the table on console, inline rows in exports).
+- Three ad-hoc one-liners — weight, reg Model: line, stars — threaded by hand at every footer site.
+The real cost isn't any one of these — each is clean. It's the orchestration layer: ~16 helper calls across ~5 backends (tbl_format_footer, md_render_one, tab_kable, tab_xl, tab_plot), each re-specifying what goes below the table and in what order. That ordering is duplicated 5×.
+
+How to further simplify and integrate the whole color legend framework at package level (tab() + tab_reg() ) ?
+
+1. One footer model + one per-medium footer renderer (highest value, heaviest)
+Define the below-table footer once as an ordered list of typed blocks — {kind:"plain", text} for weight/model/stars/subtext, {kind:"legend", tokens} for the colour legend — and let a single render_footer(blocks, medium) dispatch per kind. Each backend calls it once.
+
+Gain: the 5-site ordering dup collapses to one definition; a new footer element becomes one block, not five edits; weight/stars/model stop being special-cased.
+Give up: nothing functional — no backend needs independent ordering. But it touches all 5 backends → real regression surface (snapshots). The test grid can't fully join (different position) but could share the plain-block renderer + the gettext/lang plumbing.
+
+2. Replace the hand-picked sig with body-text grouping (clean, low-risk win) legend_canonicalise_reg() (16d) now makes "same rendered body ⟺ mergeable" actually true, which is exactly the precondition the earlier design lacked. So group columns by their rendered prose body (minus prefix) instead of the 10-field sig string.
+
+Gain: removes a whole bug class — the model had to extend sig with is_pct in 16d; forget that and the grouping silently drifts from what renders. Body-grouping can't drift.
+Give up: a negligible double-render. This is the one I'd do first.
+
+3. A per-measure descriptor table (medium value)
+Measure facts are scattered across five functions: word (legend_measure_word), break glyph (legend_break_label), unit (one_side), reference concept (legend_ref_info), CI-method family (legend_method_name). Collapse to one MEASURES[[m]] = list(word, glyph, unit, ref_kind, …).
+Gain: the contrib-vs-ratio divergence just fixed (÷ vs ×) becomes a data field, not a switch arm you can forget; adding a measure is one row.
+Give up: a little indirection.
+
+4. Consolidate the reg-specific legend logic — is_reg branches live in four functions. A single "reg legend adapter" that normalizes a reg column into a plain spec would let the core assemblers stop knowing regressions exist, so tab() and tab_reg() truly share one core.
+
+5. Keep the terse console form for the legend, and add the possibility to use it in exports using a global option.
 
 
-#### Phase 16e — Dark mode colors in positron console, ci and stars improvements
+#### Phase 16f — Dark mode colors in positron console, ci and stars improvements
 
-Finally, is there a reliable way to detect Dark mode in Positron, in order to use Dark mode colors in it’s R Console automatically ? Look at dev history, I remember we found a Positron way for html at a point, then implement the most reliable solution.
+Finally, is there a reliable way to detect Dark mode in Positron, in order to use Dark mode colors in it’s R Console automatically ? Look at dev history in `dev/`, I remember we found a Positron way for html at a point, then implement the most reliable solution.
 
 `tab(gss_simple, race, party3, pct = "row", ci = "diff", display = "ci")`
     'Error in `validate_display_template()` at tabxplor/R/tab.R:671:3:
@@ -916,10 +953,6 @@ Finally, is there a reliable way to detect Dark mode in Positron, in order to us
 `tab(gss_simple, race, party3, pct = "row", display = "{ci}", stars = TRUE)`
 - No stars appear, since color_signif is "ignore", but with no message : if user forces to `stars = TRUE` with or without colors, ci should be overriden to `"diff"` if not set, for the stars to appear. 
 - works well : `tab(gss_simple, race, party3, pct = "row", ci="diff", display = "{ci}", stars = TRUE)`
-
-`tab(gss_simple, race, party3, color = "contrib")`
-- strangely, this prints significance stars even when they are not opt-in (and color_signif isn’t even use for the colors !)
-- **RESOLVED in Phase 16d** (needed so the new stars legend never appears on a contrib table): `fmt_stars_applicable()` (`R/fmt_class.R`) suppresses stars on a `contrib` column — its stored `pvalue` is a standardized-residual (independence) p, not a "vs the reference" test. Gated in `format()`, `has_stars` (tab-export-prep) and `tab_stars_legend()`.
 
 
 

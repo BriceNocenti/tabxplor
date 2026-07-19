@@ -53,6 +53,9 @@ robust) or \code{"classic"} (pooled variance). Both are always stored in the \co
 \code{\link[=tab_xl]{tab_xl()}}) append: \code{"pvalue"} (default, the single p-value row) or \code{"stat"} (adds a
 test-statistic row above it). N is never added -- it is already shown by \code{add_n}. The console
 summary block always shows the full N / statistic / p-value table.}
+\item{\code{tabxplor.legend_style}}{the colour-legend style in exports (\code{\link[=tab_md]{tab_md()}}, \code{\link[=tab_kable]{tab_kable()}},
+\code{\link[=tab_xl]{tab_xl()}}, \code{\link[=tab_plot]{tab_plot()}}): \code{"prose"} (default, full sentences) or \code{"terse"} (the compact
+one-line form the console uses). The console itself is always terse.}
 \item{\code{tabxplor.kish_neff}}{\code{FALSE} (default): use Kish's effective sample size
 \verb{(sum w)^2 / sum w^2} for weighted numeric (mean) confidence intervals / significance.}
 \item{\code{tabxplor.conf_level}}{confidence level for the intervals and significance tests, default

@@ -3,6 +3,12 @@
 # tabxplor 1.4.0 (in development)
 
 ## New features
+* **Compact legends in exports, and a fuller plot footer.** A new option
+  `options(tabxplor.legend_style = "terse")` renders the compact one-line colour legend (the form the
+  console uses) in Markdown / HTML / Excel exports, instead of the default full sentences (`"prose"`).
+  `tab_plot()` now draws the *same* footer as the other exports below the plot -- the "Weighted by ...",
+  "Model: ..." and significance-stars lines and the user subtext, not only the colour legend -- and
+  draws its `caption` (a regression plot auto-captions itself), both of which it previously ignored.
 * **Clearer odds ratios and a dedicated OR colour scale.** For a **binary** factor, `OR = TRUE` now
   shows an odds ratio for *both* levels (each versus the other, reciprocals of one another) instead of
   forcing the first level to a meaningless `1`; both carry a Woolf confidence interval. `ref2` is now
@@ -448,6 +454,12 @@
   that will open the workbook.
 
 ## Internal
+* **Unified colour-legend + footer system.** The colour legend, the test/GOF summary and the three
+  footer one-liners (weight / `Model:` / significance stars) used to be re-ordered by hand in each of
+  the five rendering backends. They now flow through one ordered model (`tab_footer_streams()` +
+  `render_footer()`), and the colour-legend engine groups columns by their *rendered* text (so a legend
+  line can no longer drift from what it describes) and reads a single per-measure fact table. No change
+  to any table's output.
 * **Dependency footprint trimmed and clarified.** `broom` moved from `Suggests` to `Imports`, so
   `tab_reg()` / `tab_logit()` / `multi_logit()` now work out of the box for the common models
   (linear / logistic / Poisson) with no extra install; the model-specific back-ends (`survey`,

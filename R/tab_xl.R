@@ -246,26 +246,14 @@ tab_xl <-
     # legend occupies the first `length(legend_runs)` subtext rows, overwritten with rich text below.
     subtext <- purrr::map(tabs_src, get_subtext) |>
       purrr::map(~ stringr::str_replace_all(., "\\\n", " ") |> stringr::str_replace_all(" +", " "))
-    legend_runs <- rep(list(list()), length(tabs))
-    if (isTRUE(color_legend)) {
-      legend_runs <- purrr::map(tabs_src, ~ suppressWarnings(
-        tab_color_legend(., medium = "runs", style = "prose", lang = lang,
-                         theme = theme)))
-      legend_runs <- purrr::map(legend_runs, ~ if (is.null(.)) list() else .)
-    }
-    # Phase 14w (item 2) + 16d: prepend the "Weighted by <wt>." + regression "Model:" lines and append the
-    # significance-stars legend as plain (uncoloured) run lines. They ride the SAME rich-text block as the
-    # colour legend (so the legend_row overwrite stays aligned). Order: weight | Model | colours | stars.
-    legend_runs <- purrr::map2(tabs_src, legend_runs, function(t, runs) {
-      plain_line <- function(s) list(list(text = s, color = NA_character_, bold = FALSE))
-      wl <- tab_weight_line(t, lang = lang)
-      rl <- reg_model_line(get_reg_meta(t))
-      sl <- suppressWarnings(tab_stars_legend(t, lang = lang))
-      head_lines <- c(if (!is.null(wl)) list(plain_line(wl)),
-                      if (!is.null(rl)) list(plain_line(rl)))
-      tail_lines <- if (!is.null(sl)) list(plain_line(sl))
-      c(head_lines, runs, tail_lines)
-    })
+    # Phase 16e: the whole footer (weight -> Model: -> colour legend -> stars) as rich-text run lines via the
+    # ONE shared builder -- replaces the hand-built plain-line head/tail sandwich around the colour legend.
+    # They ride the SAME rich-text block (so the legend_row overwrite stays aligned); the user subtext stays
+    # plain black on its own rows below (subtext = character(0) here, merged next).
+    legend_runs <- purrr::map(tabs_src, function(t) suppressWarnings(render_footer(
+      tab_footer_streams(t, style = legend_export_style(), lang = lang,
+                         subtext = character(0), legend = isTRUE(color_legend)),
+      medium = "runs", theme = theme)))
     if (any(purrr::map_lgl(legend_runs, ~ length(.) > 0L))) {
       legend_plain <- purrr::map(legend_runs, ~ purrr::map_chr(
         ., function(line) paste0(purrr::map_chr(line, "text"), collapse = "")))
