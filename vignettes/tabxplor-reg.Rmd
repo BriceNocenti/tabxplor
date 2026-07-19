@@ -98,35 +98,85 @@ tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"), effect = "a
 
 
 
-### Nominal and ordinal outcomes (3+ levels)
+### Ordinal and nominal outcomes (3+ levels)
 
-A nominal outcome with three or more unordered levels is fit as one **multinomial** model, giving one odds-ratio column per outcome category (versus the reference category):
-
-```{r, eval = requireNamespace("nnet", quietly = TRUE)}
-tab_reg(gss_simple, "party3", c("race", "age"))
-```
-
-An **ordered** outcome is fit as a proportional-odds (cumulative) model:
+An **ordered** factor outcome is fit as a proportional-odds (cumulative) logistic model:
 
 ```{r, eval = requireNamespace("MASS", quietly = TRUE)}
-tab_reg(gss_simple, "rincome", "race")
+# install.packages("MASS")
+tab_reg(gss_simple, "rincome", c("race", "age", "relig"))
 ```
+
+A nominal outcome with three or more unordered levels is fit as one **multinomial** logistic model, giving one odds-ratio column per outcome category versus the reference category, also called relative risk ratios:
+
+```{r, eval = requireNamespace("nnet", quietly = TRUE)}
+# install.packages("nnet")
+tab_reg(gss_simple, "party3", c("race", "age", "rincome", "relig"))
+```
+
+Relative risk ratios may be quite difficult to read because they are relative to **two** reference levels : not only the reference chosen for the predictor, but also the reference level chosen for the dependent variable. It’s specially difficult when it’s difficult to find a good reference level corresponding to the most common situation (like "married" for matrimonial status).
+
+Most of the time, average marginal effects (AME) are easier to interpret, because they make the second reference level dissapear, and directly modelise, for each level of the dependent variable, difference of percentages of each predictor compared to their reference level (a less abstract quantity than odds ratios). 
+
+```{r, eval = requireNamespace("nnet", quietly = TRUE)}
+# install.packages("nnet")
+tab_reg(gss_simple, "party3", c("race", "age", "rincome", "relig"), effect = "ame", empirical = TRUE) # |> tab_kable()
+```
+
+With `empirical = TRUE`, the crude/observed/unajusted differences and raw percentages appear in html tooltips available at mouse hover of each cell.
+
 
 ### Linear regression (a numeric outcome)
 
-A continuous outcome gives plain regression coefficients (here we set `family` explicitly, because an integer like `age` is ambiguous — it could also be modelled as a count):
+A continuous outcome gives plain linear regression coefficients (here we set `family` explicitly, because an integer like `age` is ambiguous — it could also be modelled as a count):
 
 ```{r}
-tab_reg(gss_simple, "age", c("race", "marital"), family = "gaussian")
+tab_reg(gss_simple, "age", c("race", "marital", "relig", "rincome"), family = "gaussian")
 ```
+
+In the case of a linear regression, the **empirical/observed counterpart of the model coefficient** for a categorical predictor is simply the **difference of means** : here, the difference of mean age, per level of the predictor, compared to the reference level. 
+```{r}
+tab_reg(gss_simple, "age", c("race", "marital", "relig", "rincome"), family = "gaussian", empirical = TRUE)
+```
+
+The empirical mean ages, and differences of mean ages from reference, can be computed in a simple table with : 
+
+```{r}
+tab(gss_simple, "race", "age", pct = "row", digits = 2, 
+    color = "diff", ref = 1,  method_mean_diff = "student"
+) |> 
+  mutate(diff = set_display(age, "diff"))
+# student : confidence intervals with pooled variance, to match those computed by linear regression
+```
+
 
 ### Poisson regression (a count outcome)
 
 ```{r}
-tab_reg(gss_simple, "tvhours", c("race", "marital"), family = "poisson")
+tab_reg(gss_simple, "tvhours", c("race", "marital", "relig", "rincome"), family = "poisson")
 ```
 
-An **incidence-rate ratio** of 1.2 means "20% more hours of TV". Unweighted Poisson models automatically use dispersion-scaled (quasi-Poisson) standard errors, so over-dispersed counts get honest, wider intervals.
+An **incidence-rate ratio** (IRR) of 1.5 means "50% more hours of TV per day". Unweighted Poisson models automatically use dispersion-scaled (quasi-Poisson) standard errors, so over-dispersed counts get honest, wider intervals.
+
+In the case of a poisson regression, the **empirical/observed counterpart of the model’s exponentiated coefficient** for a categorical predictor is the **ratio of means** : here, the ratio of average TV hours compared to the reference level.
+
+```{r}
+tab_reg(gss_simple, "tvhours", c("race", "marital", "relig", "rincome"), family = "poisson", empirical = TRUE)
+```
+
+The empirical average TV hours per deay, and differences of rate of television watching from reference, can be computed in a simple table with : 
+
+```{r}
+tab(gss_simple, "race", "age", pct = "row", digits = 2, 
+    color = "ratio", ref = 1,  method_mean_ratio = "quasipoisson"
+) |> 
+  mutate(IRR = set_display(age, "ratio"))
+# default method for confidence intervals is robust ratio of means with unequal variable ;
+#  we use "quasipoisson" to match those computed by quasi-poisson regression 
+#  (assumption : variance is proportional to mean). 
+```
+
+
 
 
 
