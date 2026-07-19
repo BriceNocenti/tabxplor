@@ -75,9 +75,14 @@ tabxplor creates, manipulates, and formats color-coded cross-tabulation tables f
   is filled for factor columns, ANOVA F for mean columns (both computed by the vectorised engine in
   `R/tab-agg.R` — `agg_chi2()` / `agg_anova()` — via `tab_chi2()`). Read it with `get_test()` (which also
   falls back to the old `chi2` attribute); `get_chi2()` is a kept alias. Rendered by the shared summary
-  framework in `R/tab-test-display.R` (Phase 16a): `test_summary_grid()` → a backend-independent grid,
-  `test_render_console()` → the console GFM block, and the inline export rows (`tab_pvalue_lines()` /
-  `reg_footer_lines()`) reusing its formatters + the `min_e < 5` weak-test label.
+  framework in `R/tab-test-display.R` (Phase 16a). Three shared layers, each used by both crosstab and
+  regression: (1) CONTENT — `test_display_rows()`, `test_cell_label_weak()` (label + `min_e < 5` weak
+  flag), the `test_fmt_*` formatters and the fmt-cell builders (`pvalue_line_fmt` / `reg_gof_cell` /
+  `stat_line_fmt`) + `reg_footer_spec()`; (2) CONSOLE — `test_summary_grid()` → a backend-free grid,
+  `test_render_console()` → the GFM block; (3) EXPORT — `tab_append_footer()`, the ONE fmt-frame append
+  engine behind BOTH inline-row appenders (`tab_pvalue_lines()` / `reg_footer_lines()`, in
+  `R/tab_classes.R` next to `tab_materialize_extras`, now thin arm-specific configs over it — a crosstab
+  supplies the p-value/statistic rows keyed by grouping ∩ `test`, a regression the per-split GOF block).
 - `render_extras` (Phase 10i-B) / `ci_settings` (Phase 13b) — the display-only intents, above.
 - `vars` (Phase 14d): `list(row_vars, col_vars, tab_vars, compacted)` — the table's OWN record of its
   variable roles, written where the truth is known (`tab_assemble_tables()` / `tab_compact()`, and

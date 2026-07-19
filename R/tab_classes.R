@@ -174,14 +174,10 @@ get_subtext <- purrr::attr_getter("subtext")
 
 # Phase 3b: the whole-table test results (Chi2 for factor col_vars, ANOVA F for mean col_vars,
 # future tests) live in the `test` table attribute -- a TIDY tibble, one row per
-# (subtable x col_var x test-type). Renamed from the pre-1.4.0 `chi2` attribute (§16/§17).
-# get_test() reads `test`, FALLING BACK to the old `chi2` attribute name (older objects /
-# robustness); get_chi2() is kept as a working back-compat alias so pre-1.4.0 user code runs.
-get_test <- function(x) {
-  out <- attr(x, "test", exact = TRUE)
-  if (is.null(out)) out <- attr(x, "chi2", exact = TRUE)
-  out
-}
+# (subtable x col_var x test-type). Renamed from the pre-1.4.0 `chi2` attribute (§16/§17: the old
+# `chi2` attribute is an accepted break -- 1.4.0 tabs are re-created from code, never deserialized).
+# get_chi2() is kept as a working back-compat ALIAS so pre-1.4.0 user code that CALLS it still runs.
+get_test <- function(x) attr(x, "test", exact = TRUE)
 get_chi2 <- function(x) get_test(x)
 
 # set_test() -- write the whole-table `test` tibble attribute on a built table. Used by the
@@ -403,101 +399,9 @@ new_test_tibble <- local({
   }
 })
 
-# Pick the DISPLAYED test row per (subtable x col_var): chi2 for factor col_vars, and for mean
-# col_vars the option-selected ANOVA F (Welch by default). Both F rows are stored; this chooses one.
-test_display_rows <- function(test_tbl, anova = getOption("tabxplor.anova", "welch")) {
-  keep_f <- paste0("F_", anova)
-  dplyr::filter(test_tbl, .data$test == "chi2" | .data$test == keep_f)
-}
-
-# Build the fmt "pvalue" cells for a p-value display row, reproducing the pre-1.4.0 cell fields
-# (display "pvalue"; pct = p; diff drives the >=5% flag; n cleared). Vectorised over p.
-# Phase 12f: `label` (per col_var, e.g. "Chi2" / "F, Welch") turns the cell into the composite
-# display "{pvalue} (<label>)" -- the in-cell test label that self-documents a mixed factor/mean row.
-# NA / "" leaves the bare "pvalue" token (byte-identical to the pre-12f cell). The label is a text-
-# backend suffix only (Excel keeps the raw p-value number).
-pvalue_line_fmt <- function(p, label = NA_character_) {
-  disp <- ifelse(is.na(label) | !nzchar(label), "pvalue", paste0("{pvalue} (", label, ")"))
-  fmt(display = disp, type = "n", n = NA_integer_,
-      var = p, pct = p, ci_inf = 0, ci_sup = 0, ctr = 0,
-      diff = dplyr::if_else(p > 0.05, -0.5, 0), digits = 2L, col_var = "chi2_cols")
-}
-
-# The label shown in a crosstab p-value cell for each test type (Phase 12f). NULL -> no in-cell label.
-test_cell_label <- function(test) {
-  switch(test, "chi2" = "Chi2", "F_welch" = "F, Welch", "F_classic" = "F", NA_character_)
-}
-
-
-# === Regression model-summary footer (Phase 12f) =================================================
-# GOF stats travel in the whole-table `test` attribute with reg-specific discriminators (built by
-# reg_gof_tibble() / reg_compare_rows() in R/tab_reg.R). The CONSOLE block is now the shared
-# test_render_console(test_summary_grid()) (R/tab-test-display.R, Phase 16a); the EXPORT rows are still
-# appended by reg_footer_lines() (parallel to tab_pvalue_lines). The discriminators are DISJOINT from
-# the crosstab "chi2"/"F_*", so tab_pvalue_lines no-ops on a regression table and reg_footer_lines
-# no-ops on a crosstab -- one `test` attribute, one console renderer, two export appenders.
-
-# One entry per footer stat: its row label + how the cell renders. kind "gof" -> a plain number (the
-# "gof" display token reading the `statistic` value); kind "pvalue" -> a p-value cell (from `pvalue`).
-# `digits` applies to gof cells. Order here = the display / fallback order.
-reg_footer_spec <- function() list(
-  n                    = list(label = "N",                    kind = "gof",    digits = 0L),
-  lr_null              = list(label = "LR vs null",           kind = "pvalue"),
-  wald_null            = list(label = "Wald vs null",         kind = "pvalue"),
-  f_model              = list(label = "F",                    kind = "pvalue"),
-  r2                   = list(label = "R2",              kind = "gof",   digits = 3L),
-  r2_adj               = list(label = "Adjusted R2",     kind = "gof",   digits = 3L),
-  mcfadden_r2          = list(label = "McFadden R2",     kind = "gof",   digits = 3L),
-  nagelkerke_r2        = list(label = "Nagelkerke R2",   kind = "gof",   digits = 3L),
-  cox_snell_r2         = list(label = "Cox-Snell R2",    kind = "gof",   digits = 3L),
-  sigma                = list(label = "Residual SD",          kind = "gof",   digits = 2L),
-  aic                  = list(label = "AIC",                  kind = "gof",   digits = 0L),
-  bic                  = list(label = "BIC",                  kind = "gof",   digits = 0L),
-  dispersion           = list(label = "Dispersion",           kind = "gof",   digits = 2L),
-  brant_po             = list(label = "Brant PO test",         kind = "pvalue"),
-  compare_baseline     = list(label = "LR vs baseline",       kind = "pvalue"),
-  compare_baseline_f   = list(label = "F vs baseline",        kind = "pvalue"),
-  compare_baseline_wald = list(label = "Wald vs baseline",    kind = "pvalue"),
-  compare_baseline_aic = list(label = "Delta-AIC vs baseline", kind = "gof",  digits = 0L),
-  compare_seq          = list(label = "LR vs previous",       kind = "pvalue"),
-  compare_seq_f        = list(label = "F vs previous",        kind = "pvalue"),
-  compare_seq_wald     = list(label = "Wald vs previous",     kind = "pvalue"),
-  compare_seq_aic      = list(label = "Delta-AIC vs previous", kind = "gof",  digits = 0L)
-)
-reg_footer_test_types <- function() names(reg_footer_spec())
-reg_footer_labels     <- function() unname(vapply(reg_footer_spec(), `[[`, character(1), "label"))
-is_reg_footer <- function(test_tbl)
-  !is.null(test_tbl) && nrow(test_tbl) > 0 && any(test_tbl$test %in% reg_footer_test_types())
-
-# A single footer cell (one fmt value), for the appended export rows. gof -> the "gof" token (value in
-# `diff`); pvalue -> the pvalue_line_fmt shape (no in-cell label: the reg row label already names the
-# stat). A missing stat -> a "blank" cell (renders "").
-reg_gof_cell   <- function(value, digits) fmt(display = "gof", type = "n", n = NA_integer_,
-                                              diff = value, digits = as.integer(digits))
-reg_pvalue_cell <- function(p) pvalue_line_fmt(p)
-reg_blank_cell  <- function() fmt(display = "blank", type = "n", n = NA_integer_)
-
-# Phase 16a: the inline-export STATISTIC cell (the `tabxplor.test_lines = "stat"` row) -- a "gof" number
-# carrying the test statistic with adaptive precision (integers over 100, else 1-2 decimals). The df is
-# dropped in exports (the p-value row's "(Chi2)"/"(F, Welch)" label names the test; the console keeps the
-# full "1911 (df 6)"). Vectorised; an NA statistic -> a blank cell.
-stat_line_fmt <- function(statistic) {
-  d <- ifelse(is.na(statistic), 0L,
-              ifelse(abs(statistic) >= 100, 0L, ifelse(abs(statistic) >= 10, 1L, 2L)))
-  cells <- lapply(seq_along(statistic), function(i)
-    if (is.na(statistic[i])) reg_blank_cell()
-    else fmt(display = "gof", type = "n", n = NA_integer_, diff = statistic[i], digits = d[i]))
-  do.call(vctrs::vec_c, cells)
-}
-
-# # In doc exemple they do :
-#  df_colour <- function(x) {
-# if (inherits(x, "my_tibble")) {
-#   attr(x, "colour")
-# } else {
-#   NULL
-# }
-# }
+# Phase 16a: test_display_rows / pvalue_line_fmt / test_cell_label / reg_footer_spec+siblings /
+# the fmt-cell builders (reg_gof_cell/reg_pvalue_cell/reg_blank_cell/stat_line_fmt) MOVED to
+# R/tab-test-display.R (all `test`-attribute display in one module).
 
 
 #Methods to print class tabxplor_tab -----------------------------------------------------
@@ -1489,121 +1393,80 @@ tab_collapse_total_rows <- function(tab) {
 #   tab_pvalue_lines()
 # }
 tab_pvalue_lines <- function(tabs) {
-  subtext  <- get_subtext(tabs)
-  render_extras <- get_render_extras(tabs)
-  ci_settings   <- get_ci_settings(tabs)
-  vars_attr     <- get_vars_attr(tabs)   # Phase 14n: carry the roles record (incl. `compacted`)
-  reg_meta_attr <- get_reg_meta(tabs)    # Phase 14w: carry the reg model record through the rebuild
   test_tbl <- get_test(tabs)
   if (is.null(test_tbl) || nrow(test_tbl) == 0) return(tabs)
 
-  groups   <- dplyr::groups(tabs)
-  gv       <- tab_get_vars(tabs)
-  row_var  <- gv$row_var
-  # Phase 14n: key the p-value rows by the table's GROUPING columns (its subtable axis) intersected
-  # with the test tibble -- the tab_vars for a tab_vars table (byte-identical to the old gv$tab_vars
-  # keying), the synthetic `row_var` column for a COMPACTED several-row_vars table. Keying on
-  # gv$tab_vars alone dropped the compacted discriminator, so two row_vars' tests collided into one
-  # col_var column -> a "values not uniquely identified" list-col + a single mis-placed row (row_var NA).
-  disc <- intersect(purrr::map_chr(groups, rlang::as_name), names(test_tbl))
+  group_chr <- purrr::map_chr(dplyr::groups(tabs), rlang::as_name)
+  gv        <- tab_get_vars(tabs)
+  row_var   <- gv$row_var
+  # Phase 14n: key the p-value rows by the table's GROUPING columns (its subtable axis) intersected with
+  # the test tibble -- the tab_vars for a tab_vars table, the synthetic `row_var` column for a COMPACTED
+  # several-row_vars table (== group_chr on a crosstab, so it also drives the per-group placement).
+  disc <- intersect(group_chr, names(test_tbl))
 
-  # first-level column of each col_var (where the p-value cell is placed): col_var -> column name
+  # first-level column of each col_var (where the p-value cell is placed): col_var <-> column name
   first_lv  <- gv$col_vars_levels |> purrr::map_chr(~ rlang::as_name(dplyr::first(.)))
   cv_to_col <- purrr::set_names(unname(first_lv), names(first_lv))
+  col_to_cv <- purrr::set_names(names(cv_to_col), unname(cv_to_col))
 
   # one displayed test per (subtable x col_var): chi2 (factors) / chosen F (means)
   disp <- test_display_rows(test_tbl)
   disp <- dplyr::filter(disp, .data$col_var %in% names(cv_to_col), !is.na(.data$pvalue))
   if (nrow(disp) == 0) return(tabs)
 
-  # one p-value row per subtable, the p-value fmt cell placed under each col_var's first-level col.
-  # Phase 12f: the cell embeds the test label ("Chi2" / "F, Welch") so a mixed factor/mean p-value row
-  # self-documents which test each column ran (composite "{pvalue} (<label>)" display). Phase 16a: the
-  # label now flags a weak chi2 (min_e < 5 -> "Chi2 !"); `tabxplor.test_lines = "stat"` prepends a
-  # statistic row (the df is dropped in the export -- see stat_line_fmt).
-  summary_line <- function(cell, label_fct) disp |>
-    dplyr::mutate(.col = unname(cv_to_col[.data$col_var]), .cell = cell) |>
-    dplyr::select(tidyselect::any_of(disc), ".col", ".cell") |>
-    tidyr::pivot_wider(names_from = ".col", values_from = ".cell") |>
-    dplyr::mutate(!!rlang::sym(row_var) := forcats::as_factor(label_fct))
+  # Phase 16a: the crosstab footer is now built by the shared tab_append_footer() engine (as the reg
+  # GOF footer). Always the p-value row; `tabxplor.test_lines = "stat"` prepends a statistic row. The
+  # p-value cell embeds the test label ("Chi2" / "F, Welch"), flagged "!" for a weak chi2 (min_e < 5).
+  add_stat   <- getOption("tabxplor.test_lines", "pvalue") %in% c("stat", "all")
+  row_labels <- if (add_stat) c("statistic", "pvalue") else "pvalue"
+  K          <- length(row_labels)
 
-  pvalue_line <- summary_line(
-    pvalue_line_fmt(disp$pvalue,
-                    label = purrr::map2_chr(disp$test, disp$min_e, test_cell_label_weak)),
-    "pvalue")
+  # group id per existing row + per displayed-test row (the disc-key tuple; "" when ungrouped)
+  gid <- function(df) if (length(disc))
+      do.call(paste, c(lapply(disc, function(d) as.character(df[[d]])), sep = "\r"))
+    else rep("", nrow(df))
+  grp_of      <- gid(tabs)
+  disp$.grp   <- gid(disp)
+  disp$.label <- purrr::map2_chr(disp$test, disp$min_e, test_cell_label_weak)
+  key         <- paste(disp$col_var, disp$.grp, sep = "\r")
 
-  add_stat <- getOption("tabxplor.test_lines", "pvalue") %in% c("stat", "all")
-  tabs_pvalue_lines <- if (add_stat)
-    dplyr::bind_rows(summary_line(stat_line_fmt(disp$statistic), "statistic"), pvalue_line)
-    else pvalue_line
-
-  # Phase 9b-6 (Boundary B): append the p-value row(s) on PLAIN field-frames instead of
-  # map2_df(bind_rows(tabs, pvalue), tabs, vec_restore) + a masked fill -- BOTH were full tabxplor_fmt
-  # record reconstructions (the ~9% pass-4 residue). Row ORDER + the non-fmt columns come from the SAME
-  # bind_rows + group_by + arrange, run on a fmt-FREE skeleton; each fmt column is then rebuilt ONCE:
-  # origin cells ++ the appended cells (the pvalue_line_fmt cell where present, else the fill
-  # fmt0(first(display), type) with n = NA -- subsuming the pass-3 masked fill), sliced to the arranged
-  # order, materialized with tabs' OWN meta (the old vec_restore(., tabs) discarded the added row's
-  # attrs, so there is no L3 reconcile). The fill's first(display)/type are column-uniform, so tabs'
-  # global first == the old grouped mutate's per-group first (byte-identical, locked by test-golden).
-  n0      <- nrow(tabs)
-  k       <- nrow(tabs_pvalue_lines)
-  fmt_nms <- names(tabs)[purrr::map_lgl(tabs, is_fmt)]
-  skel_df <- function(x, nms, src) tibble::new_tibble(
-    c(purrr::set_names(lapply(nms, function(nm) x[[nm]]), nms), list(.src = src)),
-    nrow = length(src))
-
-  # 1. row order + the combined non-fmt columns: the IDENTICAL bind_rows + group_by + arrange, but on
-  # the fmt-free projection. `.src` tags each final row's source (positive -> origin row of `tabs`;
-  # negative -> p-value row of `tabs_pvalue_lines`).
-  skel <- dplyr::bind_rows(
-    skel_df(tabs,              setdiff(names(tabs),              fmt_nms),  seq_len(n0)),
-    skel_df(tabs_pvalue_lines, setdiff(names(tabs_pvalue_lines), fmt_nms), -seq_len(k))
-  ) |>
-    dplyr::group_by(!!!rlang::syms(groups)) |>
-    dplyr::arrange(.by_group = TRUE) |>
-    dplyr::ungroup()
-  src <- skel$.src
-  pos <- dplyr::if_else(src > 0, src, n0 - src)   # index into c(origin 1..n0, appended n0+1..n0+k)
-  skel <- dplyr::select(skel, -".src")
-
-  # 2. rebuild each fmt column once: origin fields ++ the k appended fields, sliced to `pos`.
-  build_col <- function(nm) {
-    of    <- as.list(vctrs::vec_data(tabs[[nm]]))
-    of$wn <- get_wn(tabs[[nm]])                    # the vec_cast wn fallback (as in tab_stack_tables)
-    fill  <- fmt0(dplyr::first(get_display(tabs[[nm]])), type = get_type(tabs[[nm]]))
-    vctrs::field(fill, "n") <- NA_integer_
-    af    <- lapply(as.list(vctrs::vec_data(fill)), function(v) rep(v, k))   # k fill rows
-    pv    <- tabs_pvalue_lines[[nm]]
-    if (!is.null(pv) && is_fmt(pv)) {
-      present <- !is.na(get_display(pv))           # subtables that got a displayed test in this col_var
-      if (any(present)) {
-        pvd <- as.list(vctrs::vec_data(pv))
-        for (f in names(af)) af[[f]][present] <- pvd[[f]][present]
-      }
-    }
-    frame <- purrr::set_names(
-      lapply(names(of), function(f) vctrs::vec_c(of[[f]], af[[f]])[pos]), names(of))
-    meta  <- purrr::set_names(
-      lapply(fmt_col_attrs, function(a) attr(tabs[[nm]], a, exact = TRUE)), fmt_col_attrs)
-    fmt_materialize_col(frame, meta)
+  # the per-column fill for a non-value / no-test-here position: the column's first display token with
+  # n = NA (byte-identical to the pre-16a masked fill, locked by test-golden / export-parity).
+  fill_cell <- function(nm) {
+    f <- fmt0(dplyr::first(get_display(tabs[[nm]])), type = get_type(tabs[[nm]]))
+    vctrs::field(f, "n") <- NA_integer_
+    f
+  }
+  one_cell <- function(nm, g, rl) {
+    if (!nm %in% names(col_to_cv)) return(fill_cell(nm))  # not a col_var's first-level column
+    cv <- col_to_cv[[nm]]
+    r <- disp[key == paste(cv, g, sep = "\r"), , drop = FALSE]
+    if (nrow(r) == 0) return(fill_cell(nm))               # this col_var has no displayed test in group g
+    if (identical(rl, "pvalue")) pvalue_line_fmt(r$pvalue[1], label = r$.label[1])
+    else                         stat_line_fmt(r$statistic[1])
+  }
+  fmt_cell   <- function(nm, g) do.call(vctrs::vec_c, lapply(row_labels, one_cell, nm = nm, g = g))
+  nonfmt_val <- function(nm, g) {
+    if (nm == row_var) return(row_labels)                 # the row-label column: "statistic" / "pvalue"
+    i <- match(nm, disc)                                  # a grouping column: its group level
+    if (!is.na(i)) return(rep(strsplit(g, "\r", fixed = TRUE)[[1]][i], K))
+    rep(NA_character_, K)
   }
 
-  out  <- purrr::set_names(lapply(names(tabs), function(nm)
-    if (nm %in% fmt_nms) build_col(nm) else skel[[nm]]), names(tabs))
-  tabs <- tibble::new_tibble(out, nrow = n0 + k)
-
-  new_tab(tabs, subtext = subtext, render_extras = render_extras, ci_settings = ci_settings,
-          vars = vars_attr, empirical_tips = get_empirical_tips(tabs), reg_meta = reg_meta_attr) |>
-    dplyr::group_by(!!!rlang::syms(groups))
+  tab_append_footer(tabs, grp_of, K, fmt_cell, nonfmt_val,
+    attrs = list(subtext = get_subtext(tabs), render_extras = get_render_extras(tabs),
+                 ci_settings = get_ci_settings(tabs), vars = get_vars_attr(tabs),
+                 empirical_tips = get_empirical_tips(tabs), reg_meta = get_reg_meta(tabs)),
+    regroup = group_chr,
+    footer_groups = unique(disp$.grp))   # only subtables with a displayed test get a p-value row
 }
 
 # Phase 12f: materialise the regression GOF footer as appended rows (one row per stat, a "Model fit"
-# group), the export analogue of tab_pvalue_lines(). Each stat cell is placed under its model column
-# (the first output column of the fit; MNL/ordinal blank the other category columns), and the row-label
-# column carries the stat label. Reuses the tab_pvalue_lines fmt-frame append (fmt_stack_frames on plain
-# field-vectors). Idempotent: the `test` attribute is dropped, so a second call no-ops. Renders nothing
-# on a crosstab (is_reg_footer FALSE).
+# group). Each stat cell is placed under its model column (the fit's first output column; MNL/ordinal
+# blank the other category columns), and the row-label column carries the stat label. Phase 16a: a THIN
+# config over the shared tab_append_footer() engine (R/tab-test-display.R) -- exactly like the crosstab
+# tab_pvalue_lines(); it only supplies `grp_of` (per split group), the per-cell builder and the non-fmt
+# labels. Idempotent: `test` is dropped, so a second call no-ops. Renders nothing on a crosstab.
 reg_footer_lines <- function(tabs) {
   test_tbl <- get_test(tabs)
   if (!is_reg_footer(test_tbl)) return(tabs)
@@ -1611,12 +1474,10 @@ reg_footer_lines <- function(tabs) {
   reg  <- test_tbl[test_tbl$test %in% names(spec), , drop = FALSE]
   if (nrow(reg) == 0) return(tabs)
 
-  subtext   <- get_subtext(tabs)
   groups    <- dplyr::groups(tabs)
   group_chr <- purrr::map_chr(groups, rlang::as_name)
 
-  fmt_nms <- names(tabs)[purrr::map_lgl(tabs, is_fmt)]
-  nonfmt  <- setdiff(names(tabs), fmt_nms)
+  nonfmt  <- names(tabs)[!purrr::map_lgl(tabs, is_fmt)]
   # the row-label column = the non-grouping factor (reg groups by `var`; the label column is `levels`).
   rlc     <- setdiff(nonfmt, group_chr)
   row_lab_col <- if (length(rlc) >= 1L) rlc[length(rlc)] else nonfmt[length(nonfmt)]
@@ -1627,14 +1488,12 @@ reg_footer_lines <- function(tabs) {
   footer_labels <- unname(vapply(stats_present, function(s) spec[[s]]$label, character(1)))
 
   # split_var (Phase 12h): a split table carries per-group GOF (the group level tagged in `reg$row_var`;
-  # split_var is the FIRST grouping column). It gets one "Model fit" footer block PER group, placed at
-  # the end of that group's rows; a plain table gets one block at the end (a single pseudo-group ""). The
-  # rebuild iterates groups in row order, interleaving [group data | group footer], so order is preserved.
+  # split_var is the FIRST grouping column). It gets one "Model fit" footer block PER group; a plain
+  # table gets one block at the end (a single pseudo-group ""). tab_append_footer interleaves in row order.
   reg_rv    <- if (is.null(reg$row_var)) rep(NA_character_, nrow(reg)) else reg$row_var
   is_split  <- any(nzchar(reg_rv[!is.na(reg_rv)]))
   split_col <- if (is_split) group_chr[[1]] else NA_character_
   grp_of    <- if (is_split) as.character(tabs[[split_col]]) else rep("", nrow(tabs))
-  grp_lv    <- unique(grp_of)
 
   cell_for <- function(nm, s, g) {
     sel <- reg$col_var == nm & reg$test == s &
@@ -1644,51 +1503,20 @@ reg_footer_lines <- function(tabs) {
     sp <- spec[[s]]
     if (identical(sp$kind, "gof")) reg_gof_cell(r$statistic[1], sp$digits) else reg_pvalue_cell(r$pvalue[1])
   }
-  footer_frame <- function(nm, g) {
-    fcol  <- do.call(vctrs::vec_c, lapply(stats_present, function(s) cell_for(nm, s, g)))
-    fr    <- as.list(vctrs::vec_data(fcol)); fr$wn <- get_wn(fcol); fr
-  }
-  # per fmt column: interleave [group field-frame, group footer-frame] over groups, then stack once.
-  build_col <- function(nm) {
-    meta   <- purrr::set_names(
-      lapply(fmt_col_attrs, function(a) attr(tabs[[nm]], a, exact = TRUE)), fmt_col_attrs)
-    frames <- unlist(lapply(grp_lv, function(g) {
-      idx <- which(grp_of == g)
-      of  <- as.list(vctrs::vec_data(tabs[[nm]][idx])); of$wn <- get_wn(tabs[[nm]][idx])
-      list(of, footer_frame(nm, g))
-    }), recursive = FALSE)
-    fmt_stack_frames(frames, meta)
-  }
-  # non-fmt column: each group's original values then its K footer values (labels / group / "Model fit").
-  build_nonfmt <- function(nm) {
-    orig <- tabs[[nm]]
-    combined <- unlist(lapply(grp_lv, function(g) {
-      base <- as.character(orig)[grp_of == g]
-      foot <- if (nm == row_lab_col)          footer_labels
-              else if (identical(nm, split_col)) rep(g, K)
-              else                             rep("Model fit", K)
-      c(base, foot)
-    }))
-    if (is.factor(orig)) {
-      lv <- levels(orig)
-      factor(combined, levels = c(lv, setdiff(unique(combined), lv)))
-    } else combined
-  }
+  fmt_cell   <- function(nm, g) do.call(vctrs::vec_c, lapply(stats_present, cell_for, nm = nm, g = g))
+  nonfmt_val <- function(nm, g)
+    if (nm == row_lab_col)             footer_labels
+    else if (identical(nm, split_col)) rep(g, K)
+    else                               rep("Model fit", K)
 
-  out <- purrr::set_names(lapply(names(tabs), function(nm) {
-    if (nm %in% fmt_nms) build_col(nm) else build_nonfmt(nm)
-  }), names(tabs))
-  tabs2 <- tibble::new_tibble(out, nrow = length(out[[1]]))
-
-  # `test` dropped -> idempotent; `vars` + `empirical_tips` (Phase 14v) threaded through the rebuild,
-  # else the multinomial crude tooltip attribute is lost the moment the GOF footer is materialised.
-  # 14v-ii: thread ci_settings too (the crude-CI methods + conf_level the legend names) -- the
-  # tab_pvalue_lines rebuild already does; this one did not, dropping it at footer materialisation.
-  # 14w: thread reg_meta too -- reg_footer_lines DROPS `test`, so is_reg detection must not depend on it;
-  # the legend reads reg_meta instead, and it must survive the footer materialisation.
-  new_tab(tabs2, subtext = subtext, vars = get_vars_attr(tabs), ci_settings = get_ci_settings(tabs),
-          empirical_tips = get_empirical_tips(tabs), reg_meta = get_reg_meta(tabs)) |>
-    dplyr::group_by(!!!rlang::syms(group_chr))
+  # `test` dropped -> idempotent; thread the display attributes through the rebuild (vars / empirical_tips
+  # 14v; ci_settings 14v-ii; reg_meta 14w -- is_reg detection must not depend on the dropped `test`, the
+  # legend reads reg_meta, and all must survive the footer materialisation).
+  tab_append_footer(tabs, grp_of, K, fmt_cell, nonfmt_val,
+    attrs = list(subtext = get_subtext(tabs), vars = get_vars_attr(tabs),
+                 ci_settings = get_ci_settings(tabs), empirical_tips = get_empirical_tips(tabs),
+                 reg_meta = get_reg_meta(tabs)),
+    regroup = group_chr)
 }
 
 

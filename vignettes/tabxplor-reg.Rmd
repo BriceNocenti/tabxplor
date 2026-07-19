@@ -65,24 +65,36 @@ When the outcome is a two-levels factor, here "married" versus "not married", `t
 tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"))
 ```
 
-For a simple logistic regression, `empirical = TRUE` add raw percentages and crude unmodelised odds-ratios 
+For a simple logistic regression, `empirical = TRUE` add **raw percentages** and **crude unmodelised odds-ratios** for each predictor.
 
 ```{r}
 tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"), empirical = TRUE)
 ```
 
+The raw percentages `Emp. %` is a summary of the base empirical results everything in the model is derived from :"28% of black americans are married, compared to 51% for white americans" 
+- The plain difference from reference is colored (28% - 51% = -23%).
+- Cells that are non-significantly different from the reference are greyed out (base on a Newcombe confidence interval for differences of proportions).
 
- With `empirical = TRUE`, each model column is joined by a **crude** companion column showing the *unadjusted, single-predictor* effect — the effect you would see with no controls at all:
-"all things being unequal"
+The **modelised odds-ratios** `Model OR` directly compared to the **empirical odds-ratios** `Emp. OR` :
+- Comparing the two tells you what adjustment the model did: if a predictor's **model** OR is much closer to 1 than its **crude** OR, the raw association was largely explained by the other predictors.
+- Here, "all things being unequal", black americans have 2.68 less odds to be married than white americans. "All things being equal" (more precisely : income, age and religion being equal), black americans still have 2.4 less odds to be married than white americans. The result holds, it’s not explained by income differences or religious differences.
 
-
-The **"Emp." column is the same descriptive quantity you would get from a cross-table**. For a single predictor, the model's crude odds ratio equals `tab()`'s empirical odds ratio:
+The **empirical odds-ratio** are the same that can be calculated from percentages only in a crosstable : 
+- Colors and significance stars use a **Woolf OR confidence interval** that matches what is done in the regression model. 
 
 ```{r}
-tab(gss_simple, race, married, pct = "row", OR = "OR")
+tab(gss_simple, race, married, pct = "row", OR = "OR", color = "OR", color_signif = "grey_non_signif")
 ```
 
-Comparing the two tells you what adjustment did: if a predictor's **model** OR is much closer to 1 than its **crude** OR, the raw association was largely explained by the other predictors. The empirical columns carry their own confidence intervals and stars, computed the same way as the model's, so the comparison is fair. Each family has its matching crude measure:
+Another way to interpret a logistic regression is to use **average marginal effects** (AME) :
+- Instead of reading the OR, `effect = "ame"` starts from it to modelise the average difference of percentage of each level compared to the reference.
+- We can then use `empirical = TRUE` to compare this new modelised quantity to the raw, observed difference of percentage `Emp. diff` (the 28% - 51% = -23 points of percentages in marriages for black americans compared to white americans).
+- We can also compare the raw percentage `Emp. %` to the adjusted/modelised percentage `model %` : the observed fact is "28% of black americans are married", the adjusted is "income, age and religion being equal, 30.9% of black americans are married" (compared to 52% of white americans).
+
+```{r}
+tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"), effect = "ame", empirical = TRUE)
+```
+
 
 
 

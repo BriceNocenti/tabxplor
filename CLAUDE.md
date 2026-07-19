@@ -764,8 +764,18 @@ the p-value row (N omitted — `add_n` shows it); default `"pvalue"` byte-identi
 the vestigial `variance` column (10->9; goldens regenerated, variance-only). A reg `split_var` now
 renders in HTML/Excel as a merged, VERTICAL first column (`tab-export-prep` keeps it when other tab_vars
 are dropped) — previously lost in exports (only `tab_md` kept it). Suite green (0 fail); new
-`test-test-display.R`. Kept the two export row-appenders separate (they share the weak-flag label);
-`var`-column drop in reg html/xl is pre-existing and left as-is.
+`test-test-display.R`. `var`-column drop in reg html/xl is pre-existing and left as-is.
+
+**Further simplification (same phase):** the two inline-row export appenders (`tab_pvalue_lines` +
+`reg_footer_lines`, ~190 L of duplicated fmt-frame surgery) now run on ONE shared engine
+`tab_append_footer()` (in `R/tab-test-display.R`) — each is a thin arm-specific config (its `grp_of` /
+per-cell builder / non-fmt labels); a `footer_groups` arg lets a crosstab skip subtables with no
+computable test. All `test`-display CONTENT helpers moved into that one module (test_display_rows /
+pvalue_line_fmt / test_cell_label / reg_footer_spec+siblings / the fmt-cell builders); dead
+`chi2`-attribute fallback dropped from `get_test()` (§17: 1.4.0 tabs are re-created, never
+deserialized). Byte-identical — full suite green, NO golden/snapshot regen. NOT done: making the
+display grid physically drive the export appender — assessed as a net complexity ADD (it would push
+export-placement plumbing into the console display model; the CONTENT is already shared via the helpers).
 
 
 
