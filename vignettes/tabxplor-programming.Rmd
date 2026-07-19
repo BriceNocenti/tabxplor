@@ -50,10 +50,10 @@ To get the character strings instead (formatted, but without colours), use `form
 tabs %>% mutate(across(where(is_fmt), format))
 ```
 
-Each field also has its own getter — `get_pct()`, `get_n()`, `get_diff()`, `get_mean()`, `get_or()`, `get_ci()` … :
+Individual fields are read most simply with `$` on the fmt column (see "Reading and changing fields" below):
 
 ```{r}
-get_pct(tabs$Married)
+tabs$Married$pct
 ```
 
 ## The fields of a cell
@@ -94,12 +94,12 @@ tabs %>% mutate(across(where(is_fmt), ~ .$pct))
 tabs %>% mutate(across(where(is_fmt), ~ vctrs::field(., "pct")))
 ```
 
-Confidence intervals are stored as their two bounds; `get_ci()` returns the half-width, `get_ci_inf()` / `get_ci_sup()` the bounds:
+Confidence intervals are stored as their two bounds, the `ci_inf` and `ci_sup` fields:
 
 ```{r}
 ci_tab <- tab(gss_simple, race, marital, pct = "row", ci = "cell")
-get_ci_inf(ci_tab$Married)
-get_ci_sup(ci_tab$Married)
+ci_tab$Married$ci_inf
+ci_tab$Married$ci_sup
 ```
 
 Switch the displayed field with `set_display()`:
