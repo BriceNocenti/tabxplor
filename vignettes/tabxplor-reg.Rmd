@@ -1,0 +1,174 @@
+---
+title: "Regression tables with tab_reg()"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Regression tables with tab_reg()}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+```{r setup}
+library(tabxplor)
+
+# As in the introduction vignette, tables are shown as the coloured console output turned to HTML.
+options(cli.num_colors = 256)
+set_color_style(type = "text", theme = "light")
+```
+
+```{r, echo = FALSE, include = FALSE}
+knitr::knit_hooks$set(output = function(x, options) {
+  paste0('<pre class="r-output"><code>',
+         fansi::sgr_to_html(x = htmltools::htmlEscape(x), warn = FALSE),
+         '</code></pre>')
+})
+```
+
+`tab_reg()` builds a **regression table** that looks and behaves like a `tabxplor` cross-table: one row per predictor level, significance stars, colours that grey out non-significant effects, and the same exports. You give it a data frame, an **outcome** (`dependent`) and some **predictors**, and it picks the right kind of model from the outcome's type. Its distinctive feature is `empirical = TRUE`, which shows the **crude (observed) effect right next to the model's adjusted one**, so you can see what "controlling for the other variables" actually changed.
+
+We use the same example dataset as the introduction vignette:
+
+```{r}
+gss_simple <- gss_cat_data_formatting()
+```
+
+## One model, three arguments
+
+A logistic regression of *being married* on race and age. `married` is a two-level factor, so `tab_reg()` chooses a **binomial** model and reports **odds ratios** (the reference level of each predictor shows the neutral value `1`):
+
+```{r}
+tab_reg(gss_simple, "married", c("race", "age"))
+```
+
+Read it like any `tabxplor` table: an odds ratio above 1 (blue) means *more likely to be married* than the reference level, below 1 (red) means *less likely*; stars and colours flag significance. The footer reports model-fit statistics (N, a likelihood-ratio test against the null model, McFadden's pseudo-R², AIC/BIC).
+
+## The outcome's type chooses the model
+
+You rarely set `family` by hand — `tab_reg()` detects it:
+
+| Outcome | Detected model | Effect measure |
+|:--------|:---------------|:---------------|
+| 2-level factor | binomial (logistic) | odds ratio (OR) |
+| numeric (continuous) | gaussian (linear) | coefficient β |
+| count | poisson | incidence-rate ratio (IRR) |
+| 3+ level unordered factor | multinomial | one OR column per category vs. the reference |
+| 3+ level ordered factor | ordinal (proportional odds) | cumulative OR |
+
+`tab_logit()` and `multi_logit()` are shorthands for the binomial case.
+
+### Linear regression (a numeric outcome)
+
+A continuous outcome gives plain regression coefficients (here we set `family` explicitly, because an integer like `age` is ambiguous — it could also be modelled as a count):
+
+```{r}
+tab_reg(gss_simple, "age", c("race", "marital"), family = "gaussian")
+```
+
+### Poisson regression (a count outcome)
+
+```{r}
+tab_reg(gss_simple, "tvhours", c("race", "marital"), family = "poisson")
+```
+
+An **incidence-rate ratio** of 1.2 means "20% more hours of TV". Unweighted Poisson models automatically use dispersion-scaled (quasi-Poisson) standard errors, so over-dispersed counts get honest, wider intervals.
+
+### Nominal and ordinal outcomes (3+ levels)
+
+A nominal outcome with three or more unordered levels is fit as one **multinomial** model, giving one odds-ratio column per outcome category (versus the reference category):
+
+```{r, eval = requireNamespace("nnet", quietly = TRUE)}
+tab_reg(gss_simple, "party3", c("race", "age"))
+```
+
+An **ordered** outcome is fit as a proportional-odds (cumulative) model:
+
+```{r, eval = requireNamespace("MASS", quietly = TRUE)}
+tab_reg(gss_simple, "rincome", "race")
+```
+
+## Comparing modelled and observed effects: `empirical = TRUE`
+
+This is where `tab_reg()` differs from other packages. With `empirical = TRUE`, each model column is joined by a **crude** companion column showing the *unadjusted, single-predictor* effect — the effect you would see with no controls at all:
+
+```{r}
+tab_reg(gss_simple, "married", c("race", "age"), empirical = TRUE)
+```
+
+The **"Emp." column is the same descriptive quantity you would get from a cross-table**. For a single predictor, the model's crude odds ratio equals `tab()`'s empirical odds ratio:
+
+```{r}
+tab(gss_simple, race, married, pct = "row", OR = "OR")
+```
+
+Comparing the two tells you what adjustment did: if a predictor's **model** OR is much closer to 1 than its **crude** OR, the raw association was largely explained by the other predictors. The crude columns carry their own confidence intervals and stars, computed the same way as the model's, so the comparison is fair. Each family has its matching crude measure:
+
+- binomial → crude % and crude OR,
+- gaussian → group means and their difference,
+- poisson → crude rate and rate ratio,
+- multinomial → the crude ORs are shown as a tooltip on the model cells.
+
+## Weighted and survey data
+
+Passing a weight column with `wt =` switches estimation to a **survey design** (`survey::svyglm()`), which gives correct *design-based* standard errors rather than the frequency-inflated ones of `glm(weights = )`. The framework `tabxplor` uses is simple: the **estimate is weighted**, and inference uses the **survey design** — so a self-weighting sample and an unweighted model agree, while unequal weights widen the intervals honestly.
+
+```{r, eval = FALSE}
+# `weight` is a survey weight column in your data:
+tab_reg(gss_simple, "married", c("race", "age"), wt = "weight")
+
+# A stratified / clustered design (strata usually *narrow* the intervals, clusters widen them):
+tab_reg(gss_simple, "married", c("race", "age"),
+        wt = "weight", ids = "psu", strata = "stratum")
+
+# Or pass a design you built yourself with survey::svydesign() as `data` (see ?survey::svydesign
+# for calibration, replicate weights and the more complex cases):
+```
+
+If you only have simple weights, `wt =` is all you need. Give `strata =` when you have them: stratification typically buys a little precision (narrower confidence intervals) when the strata variables are related to the outcome.
+
+## Comparing several models
+
+Pass a **named list** of predictor sets instead of a vector to fit and show several models side by side, and `compare =` adds a comparison test in the footer (`"baseline"` = each model vs. the first; `"sequential"` = each vs. the previous):
+
+```{r}
+tab_reg(gss_simple,
+        "married",
+        list("Race only"   = "race",
+             "+ age"        = c("race", "age"),
+             "+ party"      = c("race", "age", "party3")),
+        compare = "baseline")
+```
+
+Already-fitted models are reused, so only the new ones are actually fit.
+
+## Reading the footer statistics
+
+The footer summarises model fit; which statistics appear depends on the family:
+
+- **N** — the number of observations used.
+- **LR vs null** — a likelihood-ratio test of the whole model against the intercept-only model (is the model worth anything?).
+- **McFadden R²** — a pseudo-R² for GLMs (higher = the predictors explain more; values are much smaller than a linear R²).
+- **AIC / BIC** — information criteria for comparing models on the same data (lower = better; BIC penalises complexity more).
+- Linear models add the usual **R² / adjusted R² / F / σ**; Poisson adds a **dispersion** check.
+
+For weighted models a reduced set is reported (a Wald test against the null, Nagelkerke / Cox–Snell pseudo-R², a Rao–Scott AIC), because the likelihood-based quantities do not apply to a design-based fit.
+
+## Plots
+
+`or_plot()` draws a forest plot of the odds ratios of a finished table (no refit), and `lm_plots()` draws the standard 2×2 linear-model diagnostics:
+
+```{r, eval = FALSE}
+t <- tab_reg(gss_simple, "married", c("race", "age"))
+or_plot(t)
+
+m <- tab_reg(gss_simple, "age", c("race", "marital"), family = "gaussian")
+lm_plots(m)
+```
+
+## Where to go next
+
+- `vignette("tabxplor")` — cross-tables and the colour helpers.
+- `?tab_reg` for every argument (grouped by purpose), and `?tab_reg` &rarr; *Details* for the modelling choices.
+- `survey::svydesign()` for complex designs (calibration, replicate weights, finite-population corrections).
