@@ -52,7 +52,7 @@
 #     footer is invisible to the crosstab renderers and vice versa). reg_compare_rows() adds a
 #     model-comparison row (compare = baseline / sequential; anova LR, F for lm/quasi; Delta-AIC + a
 #     message on non-nesting / N-mismatch). The footer is DISPLAY-ONLY (R/tab_classes.R:
-#     print_reg_footer console block, reg_footer_lines export rows); the built object stays the
+#     summary console block, reg_footer_lines export rows); the built object stays the
 #     coefficient skeleton. `stats=` picks the set (FALSE hides it). No new fmt fields; ONE new display
 #     token "gof" (a plain model-fit number, forced uncoloured).
 #   - 12g: SURVEY designs + companion features. `wt` (+ optional ids/strata/fpc/nest) builds a
@@ -1339,9 +1339,9 @@ reg_columns_multinom <- function(skeleton, f, sp, effect_shape, color, color_sig
 
 # === Model-summary footer (Phase 12f): GOF stats stored in the `test` attribute ==================
 # The regression GOF is stored in the SAME whole-table `test` tibble crosstabs use (schema
-# new_test_tibble(): row_var/col_var/test/statistic/df1/df2/pvalue/n/variance/min_e), adding ROWS with
+# new_test_tibble(): row_var/col_var/test/statistic/df1/df2/pvalue/n/min_e), adding ROWS with
 # NEW `test` discriminators that never collide with the crosstab "chi2"/"F_welch"/"F_classic" -- so
-# test_display_rows() (chi2/F only) makes print_chi2()/tab_pvalue_lines() auto-no-op on a reg table,
+# test_display_rows() (chi2/F only) makes the summary block / tab_pvalue_lines() auto-no-op on a reg table,
 # and the reg renderers (R/tab_classes.R) auto-no-op on a crosstab. Value-stats (n/r2/aic/...) carry
 # the number in `statistic` (pvalue NA); test-stats (lr_null/f_model/wald_null/compare_*) carry
 # statistic + df + pvalue. `col_var` = the model's FIRST output column label (MNL/ordinal place the
@@ -1501,7 +1501,7 @@ reg_gof_tibble <- function(fits, fit_first_col, family, weighted, grouped_by_fit
     if (nrow(g) == 0) return(NULL)
     tibble::tibble(row_var = "", col_var = fit_first_col[[i]], test = g$test,
                    statistic = g$statistic, df1 = g$df1, df2 = g$df2, pvalue = g$pvalue,
-                   n = as.numeric(nobs_by_fit[[i]]), variance = NA_real_, min_e = NA_real_)
+                   n = as.numeric(nobs_by_fit[[i]]), min_e = NA_real_)
   })
   rows <- purrr::compact(rows)
   if (length(rows) == 0) return(new_test_tibble())
@@ -1581,8 +1581,7 @@ reg_compare_rows <- function(reg_gof, fits, specs, family, weighted, fit_first_c
   row <- function(test, col_var, statistic = NA_real_, df1 = NA_real_, df2 = NA_real_,
                   pvalue = NA_real_, nobs = NA_real_)
     tibble::tibble(row_var = "", col_var = col_var, test = test, statistic = statistic,
-                   df1 = df1, df2 = df2, pvalue = pvalue, n = nobs,
-                   variance = NA_real_, min_e = NA_real_)
+                   df1 = df1, df2 = df2, pvalue = pvalue, n = nobs, min_e = NA_real_)
 
   tag  <- if (compare == "sequential") "seq" else "baseline"
   rows <- purrr::map(seq_len(n), function(i) {

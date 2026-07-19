@@ -3,6 +3,15 @@
 # tabxplor 1.4.0 (in development)
 
 ## New features
+* **Readable summary statistics.** The chi-squared / ANOVA tests of a crosstab (`test = TRUE`) and the
+  model-fit statistics of a `tab_reg()` regression now print above the table as a clean, aligned
+  summary table (column variables in columns, row variables / sub-tables / `split_var` groups in rows)
+  instead of dense unformatted lines. Non-significant p-values (≥ 5%) are shown in red, and a chi-squared
+  whose smallest expected count is below 5 is flagged `!` (its result may be unreliable). In exports
+  (Markdown / HTML / Excel) a weak chi-squared carries the same `!`; the new option
+  `options(tabxplor.test_lines = "stat")` adds a test-statistic row above the p-value row. A regression
+  `split_var` (the population each model was fit on) now appears in HTML and Excel as a merged, vertical
+  first column, so exported split models are self-documenting.
 * **New jamovi "Regressions" analysis (`jmvtabreg`).** A live, user-friendly jamovi UI for `tab_reg()`
   covering every family (linear / logistic / Poisson / multinomial / ordinal), multiple outcomes,
   survey weights (with an advanced cluster / strata / fpc panel), a per-predictor reference-level picker,

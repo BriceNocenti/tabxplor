@@ -2182,7 +2182,7 @@ tab_assemble_output <- function(ctx) {
   # Phase 10i-B: p-value rows are NO LONGER baked at build. The whole-table `test` attribute is KEPT
   # (tab_assemble_tables set it and nothing drops it now), and the p-value rows are materialised at
   # DISPLAY -- as body rows by the exporters (tab_export_prep / tab_xl via tab_materialize_extras), and
-  # as the print_chi2() block in the console (decision 2). This lets every reserved-"pvalue"-row
+  # as the summary block in the console (Phase 16a). This lets every reserved-"pvalue"-row
   # special-case downstream (n_min, jmvtab re-ref, ...) shrink, and keeps the built tab the "core"
   # table (see dev/tabxplor_1.4.0_decisions.md §34).
 
@@ -6171,8 +6171,7 @@ chi2_compute_test <- function(tabs, comp, row_var, col_vars_levels,
         dplyr::transmute(
           .data$subtab, .data$col_var, test = "chi2",
           statistic = .data$statistic, df1 = as.double(.data$df), df2 = NA_real_,
-          pvalue = .data$pvalue, n = as.double(.data$n),
-          variance = NA_real_, min_e = .data$min_e)
+          pvalue = .data$pvalue, n = as.double(.data$n), min_e = .data$min_e)
     }
   }
 
@@ -6205,11 +6204,11 @@ chi2_compute_test <- function(tabs, comp, row_var, col_vars_levels,
       welch <- dplyr::transmute(
         baseA, .data$subtab, .data$col_var, test = "F_welch",
         statistic = .data$statistic, df1 = .data$df1, df2 = .data$df2,
-        pvalue = .data$pvalue, n = as.double(.data$n), variance = NA_real_, min_e = NA_real_)
+        pvalue = .data$pvalue, n = as.double(.data$n), min_e = NA_real_)
       classic <- dplyr::transmute(
         baseA, .data$subtab, .data$col_var, test = "F_classic",
         statistic = .data$statistic_classic, df1 = .data$df1_classic, df2 = .data$df2_classic,
-        pvalue = .data$pvalue_classic, n = as.double(.data$n), variance = NA_real_, min_e = NA_real_)
+        pvalue = .data$pvalue_classic, n = as.double(.data$n), min_e = NA_real_)
       anova_rows <- dplyr::bind_rows(welch, classic)
     }
   }

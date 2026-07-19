@@ -90,6 +90,11 @@ NULL
   # stored in the `test` attribute; this only picks the p-value shown in the p-value row/stars.
   options("tabxplor.anova"         = "welch")
 
+  # Phase 16a: how many crosstab test rows the EXPORTERS append (md/html/Excel). "pvalue" (default) =
+  # the single p-value row; "stat" = a test-statistic row above it (N is omitted -- already shown by
+  # add_n). Console always shows the full N/statistic/p-value summary block, so this is export-only.
+  options("tabxplor.test_lines"    = "pvalue")
+
   # Default confidence level for the intervals and significance tests. The per-call `conf_level`
   # argument of tab() / tab_num() / tab_ci() / tab_reg() (and its wrappers) overrides it; it is also
   # the fallback alpha of the `contrib` colour-significance gate. Single source of truth (Last Phase c).

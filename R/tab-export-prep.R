@@ -288,6 +288,11 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
   }
 
   tab_vars <- rv$tab_vars
+  # Phase 16a: a regression `split_var` (the population each model was fit on) is a tab_var, but -- unlike
+  # a crosstab tab_var whose level rides on a Total row -- it has NO Total row to carry its level, so
+  # dropping it loses that information entirely. Keep it (rendered as a vertical/merged name column
+  # below, like a merged row_var name) even when the other tab_vars are dropped for html/Excel.
+  split_var_col <- intersect(get_reg_meta(tab)$split_var, tab_vars)
   subtext  <- get_subtext(tab) %>% purrr::discard(. == "")
 
   # Phase 14v: resolve the multinomial crude-companion tooltip fragments to a per-column, per-ROW list
@@ -310,7 +315,8 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
 
   tab <- dplyr::ungroup(tab)
   if (drop_tab_vars && length(tab_vars) > 0) {
-    tab <- dplyr::select(tab, -tidyselect::all_of(tab_vars))
+    drop_these <- setdiff(tab_vars, split_var_col)   # Phase 16a: keep a reg split_var
+    if (length(drop_these) > 0) tab <- dplyr::select(tab, -tidyselect::all_of(drop_these))
   }
   # Phase 14i: `var_names` drops the row-side variable-NAME annotation -- the merged table's synthetic
   # `row_var` column, whose values ARE the names. Done HERE, before the role detection, so every index
@@ -381,7 +387,9 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
   # / Excel backends rotate. Both are named-int, indexed on the FINAL tab like every role above.
   label_names <- intersect(c(name_col, tab_vars), names(tab))
   label_cols  <- stats::setNames(match(label_names, names(tab)), label_names)
-  var_name_col <- label_cols[names(label_cols) %in% name_col]
+  # Phase 16a: a kept reg split_var also rotates vertical (via var_name_col), but is NOT added to
+  # `name_col` so `var_names` never drops it (its levels are data, not a variable name).
+  var_name_col <- label_cols[names(label_cols) %in% c(name_col, split_var_col)]
   label_runs  <- tab_label_runs(tab, label_names)
 
   # Phase 14l: the Excel-only "<var>_sd" siblings tab_materialize_extras(backend = "xl") splits off a

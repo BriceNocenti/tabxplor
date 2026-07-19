@@ -68,10 +68,16 @@ tabxplor creates, manipulates, and formats color-coded cross-tabulation tables f
 - `subtext` (character vector): Legend lines printed below the table.
 - `test` (tidy tibble, 1.4.0 — renamed from `chi2`): whole-table test results, one row per
   (sub-table × col_var × test-type). Columns: `[tab_vars…]`, `row_var`, `col_var`, `test`
-  (`"chi2"` / `"F_welch"` / `"F_classic"`), `statistic`, `df1`, `df2`, `pvalue`, `n`, `variance`,
-  `min_e`. Chi-squared is filled for factor columns, ANOVA F for mean columns (both computed by the
-  vectorised engine in `R/tab-agg.R` — `agg_chi2()` / `agg_anova()` — via `tab_chi2()`). Read it with
-  `get_test()` (which also falls back to the old `chi2` attribute); `get_chi2()` is a kept alias.
+  (`"chi2"` / `"F_welch"` / `"F_classic"`; regression GOF reuses the same tibble with disjoint
+  discriminators — `"n"`/`"lr_null"`/`"aic"`/… — keyed by fit column, split level in `row_var`),
+  `statistic`, `df1`, `df2`, `pvalue`, `n`, `min_e` (smallest expected chi2 count, drives the weak-test
+  flag). *(Phase 16a dropped the vestigial `variance` column — it was written `NA` everywhere.)* Chi-squared
+  is filled for factor columns, ANOVA F for mean columns (both computed by the vectorised engine in
+  `R/tab-agg.R` — `agg_chi2()` / `agg_anova()` — via `tab_chi2()`). Read it with `get_test()` (which also
+  falls back to the old `chi2` attribute); `get_chi2()` is a kept alias. Rendered by the shared summary
+  framework in `R/tab-test-display.R` (Phase 16a): `test_summary_grid()` → a backend-independent grid,
+  `test_render_console()` → the console GFM block, and the inline export rows (`tab_pvalue_lines()` /
+  `reg_footer_lines()`) reusing its formatters + the `min_e < 5` weak-test label.
 - `render_extras` (Phase 10i-B) / `ci_settings` (Phase 13b) — the display-only intents, above.
 - `vars` (Phase 14d): `list(row_vars, col_vars, tab_vars, compacted)` — the table's OWN record of its
   variable roles, written where the truth is known (`tab_assemble_tables()` / `tab_compact()`, and

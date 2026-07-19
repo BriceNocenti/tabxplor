@@ -397,7 +397,7 @@ new_test_tibble <- local({
       cached <<- tibble::tibble(row_var   = character(), col_var   = character(), test = character(),
                                 statistic = double()   , df1       = double()   ,
                                 df2       = double()   , pvalue    = double()   ,
-                                n         = double()   , variance  = double()   , min_e = double())
+                                n         = double()   , min_e     = double())
     }
     cached
   }
@@ -431,11 +431,11 @@ test_cell_label <- function(test) {
 
 # === Regression model-summary footer (Phase 12f) =================================================
 # GOF stats travel in the whole-table `test` attribute with reg-specific discriminators (built by
-# reg_gof_tibble() / reg_compare_rows() in R/tab_reg.R). This section renders them as a console block
-# (print_reg_footer, parallel to print_chi2) or appended export rows (reg_footer_lines, parallel to
-# tab_pvalue_lines). The discriminators are DISJOINT from the crosstab "chi2"/"F_*", so print_chi2 /
-# tab_pvalue_lines no-op on a regression table and these renderers no-op on a crosstab -- one `test`
-# attribute, two rendering paths, no crosstab byte-identity impact.
+# reg_gof_tibble() / reg_compare_rows() in R/tab_reg.R). The CONSOLE block is now the shared
+# test_render_console(test_summary_grid()) (R/tab-test-display.R, Phase 16a); the EXPORT rows are still
+# appended by reg_footer_lines() (parallel to tab_pvalue_lines). The discriminators are DISJOINT from
+# the crosstab "chi2"/"F_*", so tab_pvalue_lines no-ops on a regression table and reg_footer_lines
+# no-ops on a crosstab -- one `test` attribute, one console renderer, two export appenders.
 
 # One entry per footer stat: its row label + how the cell renders. kind "gof" -> a plain number (the
 # "gof" display token reading the `statistic` value); kind "pvalue" -> a p-value cell (from `pvalue`).
@@ -477,6 +477,19 @@ reg_gof_cell   <- function(value, digits) fmt(display = "gof", type = "n", n = N
 reg_pvalue_cell <- function(p) pvalue_line_fmt(p)
 reg_blank_cell  <- function() fmt(display = "blank", type = "n", n = NA_integer_)
 
+# Phase 16a: the inline-export STATISTIC cell (the `tabxplor.test_lines = "stat"` row) -- a "gof" number
+# carrying the test statistic with adaptive precision (integers over 100, else 1-2 decimals). The df is
+# dropped in exports (the p-value row's "(Chi2)"/"(F, Welch)" label names the test; the console keeps the
+# full "1911 (df 6)"). Vectorised; an NA statistic -> a blank cell.
+stat_line_fmt <- function(statistic) {
+  d <- ifelse(is.na(statistic), 0L,
+              ifelse(abs(statistic) >= 100, 0L, ifelse(abs(statistic) >= 10, 1L, 2L)))
+  cells <- lapply(seq_along(statistic), function(i)
+    if (is.na(statistic[i])) reg_blank_cell()
+    else fmt(display = "gof", type = "n", n = NA_integer_, diff = statistic[i], digits = d[i]))
+  do.call(vctrs::vec_c, cells)
+}
+
 # # In doc exemple they do :
 #  df_colour <- function(x) {
 # if (inherits(x, "my_tibble")) {
@@ -514,15 +527,14 @@ print.tabxplor_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = N
   }
 
   # Phase 10i-B: materialise the add_n (in-cell {pct} (n={n})) / add_pct (col_pct) display extras for
-  # the console (backend "text"); p-value stays the print_chi2() block (pvalue = FALSE), NOT rows.
+  # the console (backend "text"); p-value stays the summary BLOCK (pvalue = FALSE), NOT body rows.
   x <- tab_materialize_extras(x, backend = "text", pvalue = FALSE)
 
-  # Phase 10i-B (decision 2): the console shows the compact chi2/F test block (print_chi2), NOT
-  # p-value body rows. It sits AFTER the kable branch so `print = "kable"` renders p-value ROWS (via
-  # tab_kable -> tab_export_prep materialize) rather than the block. print_chi2() now fires for a
-  # normal tab() too, because the `test` attribute is no longer dropped at build (Phase 10i-B).
-  print_chi2(x, width = width)
-  print_reg_footer(x, width = width)  # Phase 12f: regression GOF block (no-op on crosstabs)
+  # Phase 16a (was 10i-B decision 2): the console shows the summary block -- a GFM-aligned table of the
+  # `test` attribute (chi2 / ANOVA-F for a crosstab, the GOF footer for a regression), printed above the
+  # tibble -- NOT p-value body rows. It sits AFTER the kable branch so `print = "kable"` renders p-value
+  # ROWS (via tab_kable -> tab_export_prep materialize) instead. Nothing prints without a test attribute.
+  test_render_console(test_summary_grid(x))
 
   # Use pillar::char() on row_var to control truncation. Phase 10c: robust, position-independent
   # detection (degrade -> no min-width fixup, prints the plain tibble without crashing).
@@ -591,10 +603,10 @@ print.tabxplor_grouped_tab <- function(x, width = NULL, ..., n = 100,
   # Phase 10i-B: materialise add_n / add_pct for the console (backend "text"); p-value stays the block.
   x <- tab_materialize_extras(x, backend = "text", pvalue = FALSE)
 
-  # Phase 10i-B (decision 2): see print.tabxplor_tab -- the console shows the chi2/F block, not
-  # p-value rows; placed after the kable branch so `print = "kable"` renders p-value rows instead.
-  print_chi2(x, width = width)
-  print_reg_footer(x, width = width)  # Phase 12f: regression GOF block (no-op on crosstabs)
+  # Phase 16a: see print.tabxplor_tab -- the console shows the summary block (a GFM-aligned table of the
+  # `test` attribute), not p-value body rows; placed after the kable branch so `print = "kable"` renders
+  # p-value rows instead.
+  test_render_console(test_summary_grid(x))
 
   # Use pillar::char() on row_var to control truncation. Phase 10c: robust, position-independent
   # detection (degrade -> no min-width fixup, prints the plain tibble without crashing).
@@ -685,81 +697,8 @@ knit_print.tabxplor_tabs <- function(x, ...) {
 }
 
 
-#' @keywords internal
-# Phase 3b: render the tidy `test` attribute (Chi2 + ANOVA F) as a readable, colored block above
-# the table. In the normal tab() flow the p-values are materialised as body rows by
-# tab_pvalue_lines() (which drops the attribute), so this block mainly shows for tables that keep
-# the attribute (e.g. a manual tab_plain() |> tab_chi2()). One line per (subtable x col_var).
-print_chi2 <- function(x, width = NULL) {
-  test_tbl <- get_test(x)
-  if (is.null(test_tbl) || nrow(test_tbl) == 0) return(NULL)
-  disp <- test_display_rows(test_tbl)
-  disp <- dplyr::filter(disp, !is.na(.data$pvalue))
-  if (nrow(disp) == 0) return(NULL)
-
-  cs  <- get_color_style()
-  tvs <- purrr::map_chr(tab_get_vars(x)$tab_vars, rlang::as_name)
-  tvs <- intersect(tvs, names(disp))
-
-  lines <- purrr::pmap_chr(disp, function(...) {
-    r <- list(...)
-    stat_lbl <- if (r$test == "chi2") "Chi2" else "F"
-    df_txt   <- if (r$test == "chi2") paste0("df=", r$df1)
-                else                  paste0("df=", r$df1, ",", round(r$df2, 1))
-    prefix   <- if (length(tvs) > 0) {
-      paste0(paste(purrr::map_chr(tvs, ~ as.character(r[[.x]])), collapse = " / "), " - ")
-    } else ""
-    p_txt <- paste0(formatC(r$pvalue * 100, format = "g", digits = 3), "%")
-    p_txt <- if (isTRUE(r$pvalue >= 0.05)) cs[[8]](p_txt) else cs[[4]](p_txt)
-    paste0("# ", prefix, r$col_var, ": ", stat_lbl, "=",
-           formatC(r$statistic, format = "g", digits = 3), " (", df_txt, ") p=", p_txt)
-  })
-
-  cli::cat_line(lines)
-  cli::cat_line()
-}
-
-#' @keywords internal
-# Phase 12f: render the regression GOF footer as a console block (one line per model column), from the
-# reg-specific rows of the `test` attribute. Parallel to print_chi2(); no-op on a crosstab (no reg
-# discriminators). A gof stat shows "<label>=<value>"; a p-value stat shows "<label> p=<p%>" (coloured
-# red/green by >=0.05, like print_chi2). Called from both print methods, after print_chi2().
-print_reg_footer <- function(x, width = NULL) {
-  test_tbl <- get_test(x)
-  if (!is_reg_footer(test_tbl)) return(NULL)
-  spec <- reg_footer_spec()
-  reg  <- test_tbl[test_tbl$test %in% names(spec), , drop = FALSE]
-  if (nrow(reg) == 0) return(NULL)
-  cs <- get_color_style()
-
-  fmt_val <- function(v, digits) prettyNum(formatC(v, format = "f", digits = digits),
-                                           big.mark = " ")
-  # One footer line per model column, and -- under split_var (Phase 12g) -- per split group (the group
-  # level is tagged in `row_var`): "# <col_var> | <group>: ..." so the per-group N / GOF stay separate
-  # instead of being concatenated onto one line. row_var = "" (no split) -> just "# <col_var>: ...".
-  reg$row_var <- if (is.null(reg$row_var)) "" else ifelse(is.na(reg$row_var), "", reg$row_var)
-  keys  <- unique(reg[, c("col_var", "row_var"), drop = FALSE])
-  lines <- purrr::pmap_chr(keys, function(col_var, row_var) {
-    sub   <- reg[reg$col_var == col_var & reg$row_var == row_var, , drop = FALSE]
-    sub   <- sub[order(match(sub$test, names(spec))), , drop = FALSE]
-    parts <- purrr::pmap_chr(sub, function(...) {
-      r  <- list(...)
-      sp <- spec[[r$test]]
-      if (identical(sp$kind, "gof")) {
-        paste0(sp$label, "=", fmt_val(r$statistic, sp$digits))
-      } else {
-        p_txt <- if (isTRUE(r$pvalue < 0.0001)) "<0.01%"
-                 else paste0(formatC(r$pvalue * 100, format = "g", digits = 3), "%")
-        p_txt <- if (isTRUE(r$pvalue >= 0.05)) cs[[8]](p_txt) else cs[[4]](p_txt)
-        paste0(sp$label, " p=", p_txt)
-      }
-    })
-    lbl <- if (nzchar(row_var)) paste0(col_var, " | ", row_var) else col_var
-    paste0("# ", lbl, ": ", paste(parts, collapse = "  "))
-  })
-  cli::cat_line(lines)
-  cli::cat_line()
-}
+# Phase 16a: print_chi2() + print_reg_footer() were REPLACED by the shared, aligned GFM summary block
+# test_render_console(test_summary_grid(x)) in R/tab-test-display.R (called from both print methods).
 
 
 #' Table headers for class tab
@@ -1392,7 +1331,7 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
 # `render_extras` attribute (the add_n/add_pct flags). This helper hydrates a core table into the
 # rendered shape and is the ONE place the extras are built, called by every DISPLAY path:
 # tab_export_prep() (kable/md/plot/xl), tab_xl() before tab_transpose(), and -- for add_n/add_pct
-# only, NOT p-value -- the console print methods (the console shows the print_chi2() block instead of
+# only, NOT p-value -- the console print methods (the console shows the summary block instead of
 # p-value body rows; Phase 10i-B decision 2).
 #
 # `backend`: "text" (console/kable/md) folds add_n into the Total cell (in-cell {pct} (n={n})); "xl"
@@ -1579,14 +1518,24 @@ tab_pvalue_lines <- function(tabs) {
 
   # one p-value row per subtable, the p-value fmt cell placed under each col_var's first-level col.
   # Phase 12f: the cell embeds the test label ("Chi2" / "F, Welch") so a mixed factor/mean p-value row
-  # self-documents which test each column ran (composite "{pvalue} (<label>)" display).
-  tabs_pvalue_lines <- disp |>
-    dplyr::mutate(.col  = unname(cv_to_col[.data$col_var]),
-                  .cell = pvalue_line_fmt(.data$pvalue,
-                                          label = purrr::map_chr(.data$test, test_cell_label))) |>
+  # self-documents which test each column ran (composite "{pvalue} (<label>)" display). Phase 16a: the
+  # label now flags a weak chi2 (min_e < 5 -> "Chi2 !"); `tabxplor.test_lines = "stat"` prepends a
+  # statistic row (the df is dropped in the export -- see stat_line_fmt).
+  summary_line <- function(cell, label_fct) disp |>
+    dplyr::mutate(.col = unname(cv_to_col[.data$col_var]), .cell = cell) |>
     dplyr::select(tidyselect::any_of(disc), ".col", ".cell") |>
     tidyr::pivot_wider(names_from = ".col", values_from = ".cell") |>
-    dplyr::mutate(!!rlang::sym(row_var) := forcats::as_factor("pvalue"))
+    dplyr::mutate(!!rlang::sym(row_var) := forcats::as_factor(label_fct))
+
+  pvalue_line <- summary_line(
+    pvalue_line_fmt(disp$pvalue,
+                    label = purrr::map2_chr(disp$test, disp$min_e, test_cell_label_weak)),
+    "pvalue")
+
+  add_stat <- getOption("tabxplor.test_lines", "pvalue") %in% c("stat", "all")
+  tabs_pvalue_lines <- if (add_stat)
+    dplyr::bind_rows(summary_line(stat_line_fmt(disp$statistic), "statistic"), pvalue_line)
+    else pvalue_line
 
   # Phase 9b-6 (Boundary B): append the p-value row(s) on PLAIN field-frames instead of
   # map2_df(bind_rows(tabs, pvalue), tabs, vec_restore) + a masked fill -- BOTH were full tabxplor_fmt

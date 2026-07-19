@@ -25,6 +25,9 @@ tab_plain(
   digits = 0,
   num = FALSE,
   df = FALSE,
+  conf_level = 0.95,
+  stars = FALSE,
+  color_signif = "ignore",
   .fine = NULL,
   .by_table = FALSE
 )

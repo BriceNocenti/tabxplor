@@ -165,7 +165,7 @@ test_that("compare no-ops (message) for a single model", {
 test_that("the regression footer renders (console block + export rows) without error", {
   skip_if_not_installed("broom")
   t1 <- tab_reg(reg_data(), "married", c("race", "age"), family = "binomial")
-  expect_output(print(t1), "N=")                         # the console footer block
+  expect_output(print(t1), "Model fit")                  # the console footer block (Phase 16a GFM table)
   md <- tab_md(t1, print = FALSE)
   expect_true(any(grepl("Model fit", md)))               # the export footer rows
   expect_true(any(grepl("McFadden", md)))
@@ -180,13 +180,13 @@ test_that("the regression footer renders (console block + export rows) without e
 test_that("a crosstab p-value cell embeds its test label ('(Chi2)')", {
   ct <- tab(forcats::gss_cat, marital, race, pct = "row", test = TRUE)
   md <- tab_md(ct, print = FALSE)
-  expect_true(any(grepl("\\(Chi2\\)", md)))
+  expect_true(any(grepl("\\(Chi2", md)))                 # "(Chi2)" or "(Chi2 !)" (Phase 16a weak flag)
 })
 
 test_that("a mixed factor/mean table labels each p-value cell by its own test", {
   ct <- tab(forcats::gss_cat, marital, c(race, tvhours), pct = "row", test = TRUE)
   md <- tab_md(ct, print = FALSE)
-  expect_true(any(grepl("\\(Chi2\\)", md)))              # the factor col_var
+  expect_true(any(grepl("\\(Chi2", md)))                 # the factor col_var ("(Chi2)" / "(Chi2 !)")
   expect_true(any(grepl("\\(F", md)))                    # the mean col_var (ANOVA F)
 })
 

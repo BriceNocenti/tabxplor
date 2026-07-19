@@ -46,6 +46,10 @@
 #' \describe{
 #'   \item{`tabxplor.anova`}{which one-way ANOVA F is shown for mean columns: `"welch"` (default,
 #'     robust) or `"classic"` (pooled variance). Both are always stored in the `test` attribute.}
+#'   \item{`tabxplor.test_lines`}{how many crosstab test rows the exporters ([tab_md()], [tab_kable()],
+#'     [tab_xl()]) append: `"pvalue"` (default, the single p-value row) or `"stat"` (adds a
+#'     test-statistic row above it). N is never added -- it is already shown by `add_n`. The console
+#'     summary block always shows the full N / statistic / p-value table.}
 #'   \item{`tabxplor.kish_neff`}{`FALSE` (default): use Kish's effective sample size
 #'     `(sum w)^2 / sum w^2` for weighted numeric (mean) confidence intervals / significance.}
 #'   \item{`tabxplor.conf_level`}{confidence level for the intervals and significance tests, default
