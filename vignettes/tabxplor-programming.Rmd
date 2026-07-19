@@ -1,0 +1,168 @@
+---
+title: "Programming with tabxplor"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Programming with tabxplor}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+```{r setup}
+library(tabxplor)
+library(dplyr)
+
+options(cli.num_colors = 256)
+set_color_style(type = "text", theme = "light")
+```
+
+```{r, echo = FALSE, include = FALSE}
+knitr::knit_hooks$set(output = function(x, options) {
+  paste0('<pre class="r-output"><code>',
+         fansi::sgr_to_html(x = htmltools::htmlEscape(x), warn = FALSE),
+         '</code></pre>')
+})
+```
+
+This vignette is for users who want to **program with** `tabxplor` — write their own helpers, pull the underlying numbers out, or reshape a table cell by cell. If you only want to make and read tables, `vignette("tabxplor")` is the place to start.
+
+Every numeric column of a `tabxplor` table is a single vector of class **`tabxplor_fmt`** ("formatted number"). It is a [`vctrs` record](https://vctrs.r-lib.org/reference/new_rcrd.html): behind the one value you see printed, each cell stores **all the data needed to compute the displayed number, its format and its colour** — counts, percentages, differences, confidence-interval bounds, and so on. Because it is a proper vector, it survives every `dplyr` verb, and you can read or rewrite any of its fields.
+
+```{r}
+gss_simple <- gss_cat_data_formatting()
+tabs <- tab(gss_simple, race, marital, pct = "row", color = "diff")
+```
+
+## Getting the plain numbers out
+
+The quickest way to recover the underlying numbers as ordinary numeric vectors is `get_num()`, which extracts whatever field is currently displayed:
+
+```{r}
+tabs %>% mutate(across(where(is_fmt), get_num))
+```
+
+To get the character strings instead (formatted, but without colours), use `format()`:
+
+```{r, eval = FALSE}
+tabs %>% mutate(across(where(is_fmt), format))
+```
+
+Each field also has its own getter — `get_pct()`, `get_n()`, `get_diff()`, `get_mean()`, `get_or()`, `get_ci()` … :
+
+```{r}
+get_pct(tabs$Married)
+```
+
+## The fields of a cell
+
+A `tabxplor_fmt` cell carries **18 fields** (many are `NA` when the relevant quantity was not requested). The user-facing ones are:
+
+| Field | Meaning |
+|:------|:--------|
+| `n`         | unweighted count (integer) |
+| `wn`        | weighted count |
+| `pct`       | percentage |
+| `mean`      | mean (numeric column variables) |
+| `diff`      | difference from the total / reference cell |
+| `ratio`     | ratio to the reference (the "×2 rule"; relative risk) |
+| `ci_inf`, `ci_sup` | confidence-interval bounds |
+| `pvalue`    | per-cell significance p-value (feeds the stars) |
+| `or`        | odds ratio / relative-risk ratio |
+| `ctr`       | contribution to the chi-squared (`color = "contrib"`) |
+| `var`       | variance (numeric columns; chi-squared variance with `pct`) |
+| `tot_n`     | the cell's own base — the count its percentage is computed on |
+| `digits`    | number of decimals to display (per cell) |
+| `display`   | which field is shown (per cell) |
+| `in_totrow`, `in_tottab`, `in_refrow` | is the cell in a total row / total table / reference row (logical) |
+
+See the whole underlying data frame of a column with `vctrs::vec_data()`:
+
+```{r}
+vctrs::vec_data(tabs$Married)
+```
+
+## Reading and changing fields
+
+Read a field with `$` (the friendliest way), or `vctrs::field()`:
+
+```{r, eval = FALSE}
+tabs$Married$pct
+tabs %>% mutate(across(where(is_fmt), ~ .$pct))
+tabs %>% mutate(across(where(is_fmt), ~ vctrs::field(., "pct")))
+```
+
+Confidence intervals are stored as their two bounds; `get_ci()` returns the half-width, `get_ci_inf()` / `get_ci_sup()` the bounds:
+
+```{r}
+ci_tab <- tab(gss_simple, race, marital, pct = "row", ci = "cell")
+get_ci_inf(ci_tab$Married)
+get_ci_sup(ci_tab$Married)
+```
+
+Switch the displayed field with `set_display()`:
+
+```{r, eval = FALSE}
+tabs %>% set_display("diff")
+tabs %>% mutate(across(where(is_fmt), ~ set_display(., "diff")))
+```
+
+To change a field, the easiest route is `dplyr::mutate()` **on the fmt vector itself** — a `tabxplor_fmt` behaves like a little data frame of its fields. For example, round every cell to two decimals:
+
+```{r, eval = FALSE}
+tabs %>% mutate(across(where(is_fmt), ~ mutate(., digits = 2L)))
+```
+
+A fuller example: turn a means table's variance into a standard deviation and add it as a new, un-coloured column shown to one decimal:
+
+```{r, eval = FALSE}
+tab_num(gss_simple, race, c(age, tvhours), digits = 1L) %>%
+  mutate(across(
+    c(age, tvhours),
+    ~ mutate(., var = sqrt(var), display = "var", digits = 1L) %>% set_color("no"),
+    .names = "{.col}_sd"
+  ))
+```
+
+## Total rows, reference rows and columns
+
+Helper predicates let you act on structural parts of a table: `is_totrow()` / `is_tottab()` / `is_refrow()` (cell-level, logical vectors), and `is_totcol()` / `is_refcol()` (column-level). They are what keeps totals in place when you re-order or when you write conditional formatting:
+
+```{r, eval = FALSE}
+# more decimals on the total row than on the body:
+tab(gss_simple, race, marital, race, pct = "row") %>%
+  mutate(across(
+    where(is_fmt),
+    ~ if_else(is_totrow(.), mutate(., digits = 1L), mutate(., digits = 2L))
+  ))
+```
+
+## Column attributes
+
+Besides its per-cell fields, each `fmt` column carries a few **column-level attributes**, read and set with `get_*` / `set_*` (or `is_*` / `as_*` for the logical ones):
+
+- `type` — `get_type()` / `set_type()`: `"n"`, `"mean"`, `"row"`, `"col"`, `"all"`, `"all_tabs"` (or `"coef"` for regression betas). It drives which calculations `tab_*` functions perform.
+- `color` — `get_color()` / `set_color()`: the colour measure of the column (`""`, `"no"`, `"diff"`, `"ratio"`, `"contrib"`, `"OR"`).
+- `col_var` — `get_col_var()`: the name of the column variable (a table can hold several).
+- `comp_all` — `get_comp_all()`: with `tab_vars`, is the comparison reference the sub-table (`FALSE`) or the whole table (`TRUE`)?
+- `totcol` / `refcol` — `is_totcol()` / `is_refcol()`: is this a total column / a reference column?
+
+## Building cells from scratch
+
+`fmt()` constructs an `fmt` vector directly from numbers — handy for tests, or to add a hand-computed column. Everything the display and colour engine needs can be supplied:
+
+```{r}
+fmt(n = c(10L, 20L, 30L), pct = c(0.1, 0.2, 0.7), display = "pct", digits = 0L)
+```
+
+## Step by step, under the hood
+
+`tab()` is a wrapper around `tab_many()`, which itself chains a small pipeline you can call yourself for maximum control: `tab_prepare()` (data cleaning) → `tab_plain()` / `tab_num()` (the count / mean core) → `tab_pct()` → `tab_ci()` → `tab_chi2()`. These building blocks are exported (the percentage / interval / test steps are now thin wrappers over one internal aggregate core), so you can assemble a bespoke table or a new helper function on top of them.
+
+## See also
+
+- `vignette("tabxplor")` — cross-tables and the colour helpers.
+- `vignette("tabxplor-reg")` — regression tables.
+- `?fmt`, `?tab_num`, `?tab_ci` for the reference documentation of the type and its building blocks.
