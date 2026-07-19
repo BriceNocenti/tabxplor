@@ -1269,6 +1269,11 @@ tab_materialize_extras <- function(tab, backend = c("text", "xl"), pvalue = TRUE
     tab <- set_render_extras(tab, NULL)          # consumed -> a second call is a no-op (idempotent)
   }
 
+  # Phase 16c: an OR/RRR table's "100%" total column is meaningless. Console with add_n keeps it as a
+  # base-n cell (folded above); Excel exports only the base-n column, and the console add_n=FALSE case
+  # has no base to show -> drop the % total column in both.
+  tab <- tab_or_total_col(tab, backend, add_n)
+
   # --- Excel-only: a mean + sd twin column (Phase 13c-v) ---------------------------------------
   # Console / kable / md show the sd inline as "mean (sigma sd)" (special_formatting); Excel cannot, so
   # for each numeric mean column insert an uncoloured sibling "<var>_sd" holding sd = sqrt(var) (display
@@ -3491,8 +3496,9 @@ get_color_style <- function(mode = c("crayon", "color_code"), type = NULL, theme
 #Color breaks for printing fmt in tabs ------------------------------------------------
 
 # PURPOSE: the canonical color-break representation (Phase 13a) and its accessors.
-# The stored option "tabxplor.color_breaks" is a named list of the five measure scales
-#   pct_diff, pct_ratio, mean_diff, mean_ratio, contrib
+# The stored option "tabxplor.color_breaks" is a named list of the six measure scales
+#   pct_diff, pct_ratio, odds_ratio, mean_diff, mean_ratio, contrib
+#   (odds_ratio is the dedicated OR scale, read by the "or" colour measure in fmt_color_plan)
 # each a list(center, strict, std, over = list(breaks, slots), under = list(breaks, slots)):
 #   - over/under : the two sides, each a list(breaks = <ascending POSITIVE magnitudes>,
 #                  slots = <intensities 1:4 into the 4-colour palette>). An empty side is off.
@@ -3560,12 +3566,12 @@ parse_color_side <- function(v, name) {
 #     the standardized (Glass's delta) default.
 #' @keywords internal
 mk_color_scale <- function(name, values) {
-  valid <- c("pct_diff", "pct_ratio", "mean_diff", "mean_ratio", "contrib")
+  valid <- c("pct_diff", "pct_ratio", "odds_ratio", "mean_diff", "mean_ratio", "contrib")
   if (!name %in% valid) {
     cli::cli_abort(c("Unknown color-break scale {.val {name}}.",
                      "i" = "Valid scales: {.val {valid}}."))
   }
-  center <- if (name %in% c("pct_ratio", "mean_ratio")) 1 else 0
+  center <- if (name %in% c("pct_ratio", "odds_ratio", "mean_ratio")) 1 else 0
   strict <- name != "contrib"
 
   # NULL / empty: drop the measure, except mean_diff -> standardized default.
@@ -3633,24 +3639,29 @@ mk_color_scale <- function(name, values) {
 default_color_scales <- function() {
   list(
     pct_diff   = mk_color_scale("pct_diff",   c(0.05, 0.1, 0.2, 0.3)),
-    pct_ratio  = mk_color_scale("pct_ratio",  list(over = 2)),
+    pct_ratio  = mk_color_scale("pct_ratio",  list(over = c(NA, 1.5, 2, 4), under = c(NA, 1.5, 2, 4)) ),
+    odds_ratio = mk_color_scale("odds_ratio", list(over = c(1.2, 1.5, 2, 4), under = c(1.2, 1.5, 2, 4)) ),
     mean_diff  = mk_color_scale("mean_diff",  NULL),
-    mean_ratio = mk_color_scale("mean_ratio", list(over = c(1.15, 1.5, 2, 4), under = c(1.5, 2, 4))),
+    mean_ratio = mk_color_scale("mean_ratio", list(over = c(1.2, 1.5, 2, 4), under = c(1.2, 1.5, 2, 4)) ),
     contrib    = mk_color_scale("contrib",    c(1, 2, 5, 10))
   )
 }
+# odds_ratio is the dedicated OR scale (symmetric): OR colour reads it (fmt_color_plan), so pct_ratio /
+# mean_ratio are free to be set asymmetrically without changing OR breaks. pct_ratio stays symmetric by
+# default here as a design choice, not a constraint.
 
 
 #' Set the breaks used to print colors
 #' @describeIn tab_many set the breaks used to print colors.
-#' @description Color breaks are a named list of the five measure scales \code{pct_diff},
-#' \code{pct_ratio}, \code{mean_diff}, \code{mean_ratio} and \code{contrib}. Each is a vector
-#' of positive-only thresholds (the under-represented side is mirrored automatically), 1 to 5
+#' @description Color breaks are a named list of the six measure scales \code{pct_diff},
+#' \code{pct_ratio}, \code{odds_ratio}, \code{mean_diff}, \code{mean_ratio} and \code{contrib}. Each is
+#' a vector of positive-only thresholds (the under-represented side is mirrored automatically), 1 to 5
 #' values, one per color step: \code{pct_diff} colors percentage-point differences,
-#' \code{pct_ratio} the relative risk (the "x2 rule"), \code{mean_diff} the standardized mean
-#' difference (Glass's delta) by default (supply data-unit values for absolute coloring),
-#' \code{mean_ratio} the mean ratio, \code{contrib} the chi2 contribution. An empty/\code{NULL}
-#' scale drops that measure for its column type.
+#' \code{pct_ratio} the relative risk (the "x2 rule"), \code{odds_ratio} the odds ratio (\code{color =
+#' "OR"}; symmetric by default), \code{mean_diff} the standardized mean difference (Glass's delta) by
+#' default (supply data-unit values for absolute coloring), \code{mean_ratio} the mean ratio,
+#' \code{contrib} the chi2 contribution. An empty/\code{NULL} scale drops that measure for its column
+#' type.
 #' @param breaks A named list of scales to set, e.g.
 #' \code{list(pct_diff = c(0.05, 0.1, 0.2, 0.3), pct_ratio = list(over = 2))}. Unset scales keep
 #' their current value.
@@ -3793,7 +3804,7 @@ pop_color_breaks <- function(state) {
 #' Get the breaks currently used to print colors
 #' @describeIn tab_many get the color breaks currently in use, in the canonical Phase-5 shape.
 #' @param brk When missing, return the full named list of break scales (\code{pct_diff},
-#' \code{pct_ratio}, \code{mean_diff}, \code{mean_ratio}, \code{contrib}) -- the same shape
+#' \code{pct_ratio}, \code{odds_ratio}, \code{mean_diff}, \code{mean_ratio}, \code{contrib}) -- the same shape
 #' \code{\link{set_color_breaks}} accepts, so it round-trips. Specify one scale name to return
 #' only its breaks. The old aliases \code{"pct"} (-> \code{pct_diff}) and \code{"mean"} (->
 #' \code{mean_ratio}) are still accepted.

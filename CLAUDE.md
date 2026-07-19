@@ -812,6 +812,104 @@ tables are not snapshotted). Interpretation guidance for the docs is the "Do adj
 section above (standardization / comparison, never manipulation; Table-2 fallacy).
 
 
+#### Phase 16c — tab() binary OR calculations, breaks improvements (DONE)
+
+`tab(gss_simple, rincome, married, pct = "row", color = "OR", OR = TRUE)`
+- By default, with `OR = TRUE`, `ref2` is 1, so the first level with is often the interesting one for a binary factor, just says "1". I want another default : in reality, for binary factors, odds-ratio do not need a second reference ref2, since the OR of each level is calculated against the other level (none have to show "1", it’s more sound statistically, and as a bonus it shows the beginner user that the OR of the two levels are the inverse of one another) ; keep the `ref2` argument for 3+ levels factors only, where we necessary need to chose a second reference (keep `ref2=1` as default). Also ensure Woolf CI are right for both levels of a binary factor.
+- The Total "100%" column (or row with pct="col") is misleading with OR or RRR (they do not add up to 1) : keep the column, but only display the "n= ... " part in console (so the "100%" and the parenthesis are not printed), and only export the n column with no 100% column (or even nothing at all if `add_n = FALSE`)
+
+If have changed `default_color_scales()` to add a specific odds_ratio breaks scale, with default : `odds_ratio = mk_color_scale("or",  list(over = c(1.2, 1.5, 2, 4), under = c(1.2, 1.5, 2, 4)) )` For now they are not wired to anything in the code. Please **modify the code to implement them and integrate them in the current framework completely**.
+- Reason : otherwise, if OR use the pct_ratio scale, the user can’t set an asymmetrical pct_ratio scale, often useful to not highlight very small deviations (like : only keep the x2 rule), it also renders the OR scale useless (it should be symmetrical).
+
+`tab(gss_simple, race, party3, pct = "row", color = TRUE, color_signif = "guaranteed_effect", color_breaks = list(pct_ratio = c(NA, 2) ))`
+- Here all cells with positive guaranteed effect are colored with the supposedly `x2` background color : "bg ratio: ×1 [significant, error-adjusted]" This is a local failure of the rule applied on "guaranteed_effect" breaks, "substract or divide all breaks by the first break to have 0 or 1 as bound" ; useless information, because they are already cells with text color and the x1 rule tell nothing about effect size ; it’s even worse, here, because x2 is asymmetrical have have no /2, so only positive ones have background.
+- **Rule should be** : when both text and background channels are used, if a channel only have one break in "over" (same for "under"), and the resulting "guaranteed_effect" breaks scale is useless (+0, -0, ×1, ÷1), just disable this particular one and remove it’s legend too (here, only pct_ratio have just one break and must be disabled). If both text and background channels are this way, only keep the first channel (text).
+
+Four changes, all landed (full suite green, 3697 pass; only `_color_golden/c_or.rds` + `_snaps/render-html.md`
+regenerated + a few value assertions updated):
+
+- **Binary-factor OR** (`R/tab.R` `tab_apply_reference`): the single `refcols` ref2 column became a PER-COLUMN
+  `ref_col_idx` — a BINARY col_var (exactly 2 non-Total levels) references the COMPLEMENT level, so both
+  levels show reciprocal ORs (neither forced to `1`, ref2 ignored) with a Woolf CI each; 3+ levels stay
+  byte-identical (`rep(ridx0, k)`). The shared Woolf block's gate was rewritten (it keyed on a
+  self-referencing `refcols_vector` column, which for binary is empty → it silently skipped both CIs). The
+  bare-`1` display follows automatically via `get_reference()` (no fmt_class change). pct="col" binary
+  mirror DEFERRED (row axis needs a per-comp-group complement; noted).
+- **odds_ratio colour scale** (`R/tab_classes.R`, `R/fmt_class.R`): `mk_color_scale()` accepts the new
+  `odds_ratio` (multiplicative, center 1); `default_color_scales()` wires it; `fmt_color_plan()`'s `or`
+  measure reads `sc$odds_ratio` (was `sc$mean_ratio`). The maintainer's symmetric `pct_ratio` /
+  `mean_ratio` WIP defaults are KEPT — OR no longer borrows a ratio scale, so `pct_ratio` is free to be
+  asymmetric. `set_color_breaks(odds_ratio=)` / `tab(color_breaks=list(odds_ratio=))` work.
+- **OR total column** (`R/tab.R` `tab_is_or_display` / OR-aware `tab_fold_addn_incell` / `tab_or_total_col`
+  wired into `tab_materialize_extras`): an OR table (displayed `or`/`or_pct`) drops the meaningless
+  "100%" — console shows only `n={n}`, Excel exports only the base-`n` column, nothing when `add_n=FALSE`.
+  Scoped to pct="row" `OR = TRUE`; pct="col" total-ROW deferred with the binary mirror; the string forms
+  `OR="OR"`/`"OR_pct"` build no total column at all (pre-existing `tot`-resolution quirk).
+- **Degenerate guaranteed_effect channel** (`R/fmt_class.R`): `fmt_color_plan()` returns a `degenerate`
+  flag (guaranteed_effect + single-break-per-side scale, pre-offset, excluding `color="ci"`); the new
+  shared `resolve_color_channel_plans()` (used by BOTH `fmt_color_channels` + `legend_specs`) drops a
+  degenerate channel and its legend line, but never the last one (a lone/both-degenerate table keeps the
+  text channel). `fmt_get_color_code()` (single-channel golden) is left un-arbitrated.
+
+
+#### Phase 16d — Color legends / table footers improvements
+
+`tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"), empirical = TRUE)`
+"Emp. OR: OR (ref.): 1/4 1/2 1/1.5 1.15 1.5 2 4 [grey: non-significant or under ×1.15]
+ Model OR: OR (ref.): 1/4 1/2 1/1.5 1.15 1.5 2 4 [grey: non-significant or under ×1.15]"
+- Here the legend is repeated, either though by construction the colors reads the same for empirical OR and modelised OR : the main modelised quantity and the related crude/empirical quantity should have a unified legend.
+- It’s even worse in the full legend (html, Excel), where the 5 lines block is duplicated with the only difference being the leading "Emp. OR —" or "Model OR —".
+- I want you to **redesign the shared functions for color legend**, with this simple rule : **if different columns have the same color measure**, they should share their legend block, starting with the related list of variables, for example "Emp. OR, Model OR — Shades of blue:..." Display the name of the first six variables that have this legend, then "… +2 vars". It’s very rare that different columns of the same table have the same color measure bet not the same color_signif, so in this case duplication is ok.
+- Note : tab already mostly have the right no duplication behaviour, for example `tab(gss_simple, race, c(married, income25k), pct = "row", na = "drop",color = "ratio", color_signif = "grey_non_signif")` only have one legend block for both col_var. But adding `color = "OR"` duplicates the legend : `tab(gss_simple, race, c(married, income25k), pct = "row", na = "drop", OR = "OR", color = "OR", color_signif = "grey_non_signif")`. Result :
+    "01-Married, 01-$25000 or
+    more — Shades of blue: OR ≥ 1.2; 1.5; 2; 4. Shades of yellow to red: OR ≤ 1/1.2; 1/1.5; 1/2; 1/4. Coloured: significantly different from the reference category (White) (Wald interval on the log odds-ratio, 95% confidence), by at least the first colour threshold. Uncoloured: either not significant, or a difference under ×1.2.
+    02-Not married, 02-Less than
+    25k — Shades of blue: OR ≥ 1.2; 1.5; 2; 4. Shades of yellow to red: OR ≤ 1/1.2; 1/1.5; 1/2; 1/4. Coloured: significantly different from the reference category (White) (Wald interval on the log odds-ratio, 95% confidence), by at least the first colour threshold. Uncoloured: either not significant, or a difference under ×1.2."
+- Also, you can see in the above legend that there a strange line breaks appearing where they should not, in the middle of the levels names. The same happens to the one below, after "Model AME".
+- `tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"), effect = "ame", empirical = TRUE)` Here a verify small difference, "AME ≥ +5..." on one side, "cells ≥ +5..." on the other, create a useless duplication. Please find a way to integrate this color legend framework better to avoid such duplications on small irrelevant details (here : what is specific to the logistic regression model and AME must live in the "Model:" part of the legend ; everything common must be shared with the empirical counterpart ; if the confidence interval is not the same, well this is a statistically problem we must resolve, since the rule is : for each empirical counterpart of the modelised quantity, we find the ci calculation that matches the one in the model best when the model only have one predictor). (Same problem with `family = "gaussian" + empirical = TRUE`, and `family = "poisson" + empirical = TRUE` ; poisson is even worse, it duplicates the same legend *three times*.) Here the full legend is :
+    "Model: logistic regression; marginal effects on the probability scale (percentage points) (sample-averaged); each cell shows the effect vs the reference level and, in parentheses, the adjusted predicted probability.
+    Model AME
+    (adjusted %) — Shades of blue: AME ≥ +5; +10; +20; +30 points. Shades of yellow to red: AME ≤ -5; -10; -20; -30 points. Coloured:    significantly different from the reference category (Wald interval, 95% confidence), by at least the first colour threshold.    Uncoloured: either not significant, or a difference under ±5 points.
+    Emp. %, Emp. diff — Shades of blue: cells ≥ +5; +10; +20; +30 points. Shades of yellow to red: cells ≤ -5; -10; -20; -30 points. Coloured: significantly different from the reference category (Wald interval, 95% confidence), by at least the first colour threshold. Uncoloured: either not significant, or a difference under ±5 points."
+- More generally, **I want you to make a structured and thorough inspections of the color legends**, visually reviewing the resulting tables of the rendered tables of the introduction vignette and regression model vignette, and maybe in other relevant tests, **to find possible inconsistencies, statistically absurd things, confidence intervals no applying to the right quantities, useless duplications, possible improvements of clarify and precision, and the like.**.
+- For every duplication or near-duplication, ask yourself : how to remove it without creating inconsistencies on near identical cases with a few different details ? Then ask yourself : what too detailed informations should we remove in order to be able to merge the legend in a consistent way ?
+
+`tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"))`
+"Model: logistic regression; odds ratios (vs the reference category)."
+- Here, the "vs the reference category" is misleading : binary/standard odds-ratios are always calculated against `1-p` / the other category. For 2-level only, replace with "odds ratios (vs the second category)".
+
+`tab(gss_simple, race, party3, color = "contrib")`
+- The simple legend in console says : "contribution to Chi2 (indep.): ÷10 ÷5 ÷2 ÷1 ×1 ×2 ×5 ×10" That’s not clear, the user must know it’s compared to the **mean contribution**. And the underrepresented part is false : "negative" colors are also the mean contribution ×1 ×2 ×5 ×10, but with another sign ! Verify if only the legends are wrong, or if the code have been messed up (CRAN tabxplor 1.3.1 was ok, but we may have broken it).
+- When a weight variable is provided, always start legend/table footer with "Weighted by {wt}." ("Pondéré par {wt}." in French translation).
+
+`tab(gss_simple, rincome, tvhours, color = "diff" , color_signif = "grey_non_signif", color_breaks = list(mean_diff = c(0.4, 0.8, 1.6)), ref = 1)`
+- with a custom scale for mean differences, the console legend still says "standardized difference (1-Lt $10000) ... [grey: non-significant or under ±0.4 SD]". It is a legend error, or a code error (custom scales for mean diff not working anymore), or do we chose to never implement the "user provides custom scale means it’s not standardised anymore", or is it implemented but recalculated in "number of sd" for the legend only  ? Also check the full legend of exports.
+
+
+`tab(gss_simple, race, party3, pct = "row", display = "{ci}", stars = TRUE)`
+- A legend is needed for significance stars. Here is a French version, to keep for French but to translate in English : "*** : chiffre significativement différent de celui de la modalité de référence (en gras), au seuil de confiance de 99  % ; ** : au seuil de 95  % ; * : au seuil de 90  % ; aucune étoile : non significatif."
+
+
+
+#### Phase 16e — Dark mode in positron, ci and stars improvements
+
+Finally, is there a reliable way to detect Dark mode in Positron, in order to use Dark mode colors in it’s R Console automatically ? Look at dev history, I remember we found a Positron way for html at a point, then implement the most reliable solution.
+
+`tab(gss_simple, race, party3, pct = "row", ci = "diff", display = "ci")`
+    'Error in `validate_display_template()` at tabxplor/R/tab.R:671:3:
+    ! Invalid `display` value "ci".
+    ℹ Composite display uses a {} template listing the fields to combine, e.g. `{pct} (n={n})` or `{diff}
+      [{ci}]`.'
+- `display = "ci"` should still work to display the confidence interval, internally mapping to the right custom display.
+
+`tab(gss_simple, race, party3, pct = "row", display = "{ci}", stars = TRUE)`
+- No stars appear, since color_signif is "ignore", but with no message : if user forces to `stars = TRUE` with or without colors, ci should be overriden to `"diff"` if not set, for the stars to appear. 
+- works well : `tab(gss_simple, race, party3, pct = "row", ci="diff", display = "{ci}", stars = TRUE)`
+
+`tab(gss_simple, race, party3, color = "contrib")`
+- strangely, this prints significance stars even when they are not opt-in (and color_signif isn’t even use for the colors !)
+
+
 
 
 ### Last Phase — final simplifications and package user-friendly documentation

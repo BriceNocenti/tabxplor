@@ -2679,7 +2679,7 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
   scale   <- switch(measure,
                     "diff"    = if (is_std_diff) sc$mean_diff  else sc$pct_diff,
                     "ratio"   = if (is_mean)     sc$mean_ratio else sc$pct_ratio,
-                    "or"      = sc$mean_ratio,
+                    "or"      = sc$odds_ratio,
                     "contrib" = sc$contrib)
   center <- if (is.null(scale)) 0 else scale$center
   strict <- if (is.null(scale)) TRUE else scale$strict
@@ -2813,9 +2813,19 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
     }
   }
 
+  # Phase 16c: a `guaranteed_effect` channel whose scale has a single break per side collapses under
+  # offset_guaranteed_breaks() to the neutral value -> findInterval() paints EVERY significant cell with
+  # one flat intensity (a gradient-less "x1" fill, redundant with the text channel). Flag it so the
+  # cross-channel arbiter (resolve_color_channel_plans) can disable it -- unless it is the only channel.
+  # Read the PRE-offset scale breaks; the legacy `color = "ci"` (single0) INTENTIONALLY has one break
+  # and is excluded.
+  degenerate <- identical(policy, "guaranteed_effect") && !isTRUE(mp$single0) && !is.null(scale) &&
+    max(length(scale$over$breaks), length(scale$under$breaks)) <= 1L
+
   list(measure = measure, policy = policy, score = score, center = center, strict = strict,
        over_breaks = over_breaks, over_slots = over_slots,
-       under_breaks = under_breaks, under_slots = under_slots, gate = gate)
+       under_breaks = under_breaks, under_slots = under_slots, gate = gate,
+       degenerate = degenerate)
 }
 
 #' @keywords internal
@@ -2857,12 +2867,31 @@ fmt_color_slots <- function(x, plan) {
   slot
 }
 
+# resolve_color_channel_plans() -- Phase 16c. Builds the text + background plans for a column AND applies
+# the cross-channel arbitration that fmt_color_plan() (per-channel) cannot see: under `guaranteed_effect`
+# a channel whose scale is a single break per side is `degenerate` (a flat "x1" fill, no gradient, and
+# redundant with the other channel). Drop a degenerate channel, but NEVER the last one -- if the text
+# channel is degenerate it survives only when a non-degenerate background does not (so a lone / both-
+# degenerate table keeps the text channel, per the roadmap "keep the first channel"). Shared by both the
+# cells (fmt_color_channels) and the legend (legend_specs) so they can never disagree.
+#' @keywords internal
+resolve_color_channel_plans <- function(x) {
+  text <- fmt_color_plan(x, "text", color = get_color(x))
+  bg   <- fmt_color_plan(x, "bg",   color = get_color_bg(x))
+  keep_bg   <- !is.null(bg)   && !isTRUE(bg$degenerate)
+  keep_text <- !is.null(text) && (!isTRUE(text$degenerate) || !keep_bg)
+  list(text = if (keep_text) text else NULL,
+       bg   = if (keep_bg)   bg   else NULL)
+}
+
 #' @keywords internal
 fmt_color_channels <- function(x) {
   # text channel = the primary measure on the text slot table; background channel = the second
   # measure (get_color_bg, NA when absent) on the bg slot table. Each is an integer slot vector.
-  list(text_slot = fmt_color_slots(x, fmt_color_plan(x, "text", color = get_color(x))),
-       bg_slot   = fmt_color_slots(x, fmt_color_plan(x, "bg",   color = get_color_bg(x))))
+  # The cross-channel `guaranteed_effect` degenerate-drop lives in resolve_color_channel_plans().
+  pl <- resolve_color_channel_plans(x)
+  list(text_slot = fmt_color_slots(x, pl$text),
+       bg_slot   = fmt_color_slots(x, pl$bg))
 }
 
 # The single slot -> hex mapping shared by the exporters (tab_kable / tab_plot / tab_xl). Returns the
@@ -3405,8 +3434,11 @@ legend_specs <- function(x) {
   specs <- purrr::map(reps, function(e) {
     cn <- e$cn; cv <- e$cv
     col      <- x[[cn]]
-    plan_txt <- fmt_color_plan(col, "text", color = get_color(col))
-    plan_bg  <- fmt_color_plan(col, "bg",   color = get_color_bg(col))
+    # Phase 16c: same cross-channel arbiter as the cells (drops a degenerate guaranteed_effect channel),
+    # so a disabled channel loses its legend line too.
+    pl       <- resolve_color_channel_plans(col)
+    plan_txt <- pl$text
+    plan_bg  <- pl$bg
     if (is.null(plan_txt) && is.null(plan_bg)) return(NULL)
     type     <- get_type(col)
     is_coef  <- identical(type, "coef")

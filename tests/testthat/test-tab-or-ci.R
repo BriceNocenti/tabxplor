@@ -41,10 +41,17 @@ test_that("a colour policy gives the empirical OR a Woolf interval (matches the 
   expect_equal(get_ci_inf(yes)[3], w$inf, tolerance = 1e-8)
   expect_equal(get_ci_sup(yes)[3], w$sup, tolerance = 1e-8)
 
-  # the reference row and the ref2 level column carry NO interval (OR = 1 by construction)
+  # the reference row carries no interval (OR = 1 by construction)
   expect_true(is.na(get_ci_inf(yes)[1]))            # ref row (group a)
-  expect_true(all(is.na(get_ci_inf(t[["no"]]))))    # ref2 level column
-  expect_true(all(as.character(get_ci_type(t[["no"]])) == ""))
+  # Phase 16c: a BINARY col_var references the OTHER level, so BOTH columns carry reciprocal ORs +
+  # intervals (no column is forced to "1"); ref2 is ignored. The "no" column is the exact reciprocal
+  # of "yes", with reciprocal-swapped bounds; only the reference row stays NA.
+  no <- t[["no"]]
+  expect_identical(as.character(get_ci_type(no))[1], "or")
+  expect_equal(get_or(no)[3],     1 / w$or,  tolerance = 1e-8)
+  expect_equal(get_ci_inf(no)[3], 1 / w$sup, tolerance = 1e-8)
+  expect_equal(get_ci_sup(no)[3], 1 / w$inf, tolerance = 1e-8)
+  expect_true(is.na(get_ci_inf(no)[1]))             # ref row still NA
 })
 
 test_that("stars = TRUE populates the CI-inversion pvalue (dual of the interval)", {
@@ -96,4 +103,37 @@ test_that("3+ level factor: OR of each level vs the ref2 baseline is the conditi
 
   # the baseline level (d1 = ref2) column has no interval
   expect_true(all(is.na(get_ci_inf(t[["d1"]]))))
+})
+
+
+# --- Phase 16c: binary-factor odds ratios + the OR total column -----------------------------------
+
+test_that("Phase 16c: a binary col_var references the complement (no column forced to '1')", {
+  t   <- tab(or_data(), g, y, pct = "row", color = "OR", OR = TRUE, ref2 = 1,
+             color_signif = "grey_non_signif")
+  yes <- get_or(t[["yes"]]); no <- get_or(t[["no"]])
+  # neither level column is a constant OR = 1 (the old forced-ref2 behaviour) ...
+  expect_false(all(yes[!is.na(yes)] == 1))
+  expect_false(all(no[!is.na(no)]  == 1))
+  # ... the two are exact reciprocals, and both carry an OR interval (ref2 is ignored for binary)
+  expect_equal(no[!is.na(no)], (1 / yes)[!is.na(yes)], tolerance = 1e-8)
+  expect_identical(as.character(get_ci_type(t[["yes"]]))[1], "or")
+  expect_identical(as.character(get_ci_type(t[["no"]]))[1],  "or")
+})
+
+test_that("Phase 16c: an OR table's total column shows only the base n, not 100%", {
+  t   <- tab(or_data(), g, y, pct = "row", OR = TRUE)
+  # console/text: the Total cell folds to `n={n}` (no "100%" / "{pct}")
+  mt  <- tab_materialize_extras(t, backend = "text", pvalue = FALSE)
+  d   <- as.character(get_display(mt[["Total"]]))
+  expect_true (all(grepl("n=",  d, fixed = TRUE)))
+  expect_false(any(grepl("pct", d, fixed = TRUE)))
+  # add_n = FALSE drops the meaningless % total column entirely
+  t0  <- tab(or_data(), g, y, pct = "row", OR = TRUE, add_n = FALSE)
+  mt0 <- tab_materialize_extras(t0, backend = "text", pvalue = FALSE)
+  expect_false("Total" %in% names(mt0))
+  # Excel exports only the base-n column, no % total
+  mx  <- tab_materialize_extras(t, backend = "xl", pvalue = FALSE)
+  expect_false("Total" %in% names(mx))
+  expect_true ("n" %in% names(mx))
 })

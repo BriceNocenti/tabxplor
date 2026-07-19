@@ -198,8 +198,8 @@ testthat::test_that("lang = 'fr' applies the French decimal comma (locale-indepe
   # holds even when the compiled .mo is absent.
   tb  <- tab(gss, marital, tvhours, comp = "all", color = "ratio")   # mean-ratio: decimal breaks
   l   <- suppressWarnings(tab_color_legend(tb, medium = "plain", style = "prose", lang = "fr"))
-  testthat::expect_match(l, "1,15")               # FR decimal comma (not "1.15")
-  testthat::expect_no_match(l, "1\\.15", perl = TRUE)
+  testthat::expect_match(l, "1,2")                # FR decimal comma (not "1.2")
+  testthat::expect_no_match(l, "1\\.2", perl = TRUE)
 })
 
 testthat::test_that("French catalog translates the prose when the .mo is available", {

@@ -99,7 +99,7 @@ This is the main purpose of `tabxplor`. `color = "diff"` colors each cell by **h
 tab(gss_simple, race, party3, pct = "row", color = "diff")
 ```
 
-`color = TRUE` picks a sensible scheme automatically for each column type (differences for percentages, ratios for means, …), check which one in the legend:
+`color = TRUE` picks a sensible scheme automatically for each column type (both differences and ratio for percentages, only ratios for means, …), check which one in the legend:
 
 ```{r, echo = TRUE}
 tab(gss_simple, race, c(marital, partyid), pct = "row", color = TRUE)
@@ -113,14 +113,14 @@ tab(gss_simple, rincome, tvhours, color = "diff")
 
 **Which cell is the reference?** By default each cell is compared to its Total. Two useful alternatives:
 
-- `ref = "first"` compares each row to the **first row** — perfect for reading an evolution over time.
+- `ref = 1` compares each row to the **first row** — perfect for reading an evolution over time or an ordinal factor.
 - with sub-tables, `comp = "all"` compares against the **overall** Total instead of each sub-table's own Total.
 
 ```{r, echo = TRUE}
 tab(gss_simple, year, marital, pct = "row", color = "diff", ref = 1)
 ```
 
-color thresholds and the palette are set **once for the whole session** with `set_color_breaks()` and `set_color_palette()` — not to repeat on every table.
+Color thresholds and the palette are set **once for the whole session** with `set_color_breaks()` and `set_color_palette()` — not to repeat on every table.
 
 ## colors that respect significance
 
@@ -128,7 +128,7 @@ The colors above show the *size* of a deviation, but not whether it is **statist
 
 - `"ignore"` (default): color every deviation by its observed size. Grey out small differences below a certain threshold.
 - `"grey_non_signif"`: color by size of the effect, grey out small effects below a certain threshold, but also **grey out cells with important effects that are not significant**. Every colored cell is then guaranteed to be significantly different from its reference, without being bothered by very small significant differences. 
-- `"guaranteed_effect"`: color only by the part of the effect you can be confident about (its confidence bound), with dimmer, conservative colors. Use it on **small samples** to **highlight all the differences you have the right to interpret**. Everything colored is significant ; nothing grey is. 
+- `"guaranteed_effect"`: color only by the part of the effect you can be confident about (its confidence bound), with dimmer, conservative colors. Use it on **small samples** to **highlight all the differences you have the right to interpret**. Everything colored is significant ; nothing grey is.
 
 ```{r, echo = TRUE}
 tab(gss_simple, race, party3, pct = "row", color = "diff", color_signif = "grey_non_signif")
@@ -160,7 +160,7 @@ Add significance stars with `stars = TRUE`. They tell the same story than confid
 ```{r, echo = TRUE}
 gss_simple |>
   dplyr::filter(year == "2012") |> # n=1 974
-  tab(race, party3, pct = "row", display = "{ci}", stars = TRUE) 
+  tab(race, party3, pct = "row", display = "ci", stars = TRUE) 
 ```
 
 `test = TRUE` adds a statistical test of independence per (sub-)table — **Chi-squared** for factor columns, **Welch's F ANOVA** for numeric variables:
@@ -176,7 +176,7 @@ tab(gss_simple, race, party3, color = "contrib")
 # tab(gss_simple, race, party3, pct="row", color = "contrib") # works with pct, but independent from rows/columns
 ```
 
-See below for the detail of how confidence intervals and colors can be composed 
+See below for the detail of how confidence intervals and colors can be composed.
 
 
 ## Exporting

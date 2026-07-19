@@ -16,7 +16,7 @@ library(tabxplor)
 library(dplyr)
 
 options(cli.num_colors = 256)
-set_color_style(type = "text", theme = "light")
+set_color_palette(theme = "light")
 ```
 
 ```{r, echo = FALSE, include = FALSE}
@@ -29,7 +29,7 @@ knitr::knit_hooks$set(output = function(x, options) {
 
 This vignette is for users who want to **program with** `tabxplor` — write their own helpers, pull the underlying numbers out, or reshape a table cell by cell. If you only want to make and read tables, `vignette("tabxplor")` is the place to start.
 
-Every numeric column of a `tabxplor` table is a single vector of class **`tabxplor_fmt`** ("formatted number"). It is a [`vctrs` record](https://vctrs.r-lib.org/reference/new_rcrd.html): behind the one value you see printed, each cell stores **all the data needed to compute the displayed number, its format and its colour** — counts, percentages, differences, confidence-interval bounds, and so on. Because it is a proper vector, it survives every `dplyr` verb, and you can read or rewrite any of its fields.
+Every numeric column of a `tabxplor` table is a single vector of class **`tabxplor_fmt`** ("formatted number"). It is a [`vctrs` record](https://vctrs.r-lib.org/reference/new_rcrd.html): behind the one value you see printed, each cell stores **all the data needed to compute the displayed number, its format and its colour** — counts, percentages, differences, relative risks, confidence-interval bounds, odds-ratios, and so on. Because it is a proper vector, it survives every `dplyr` verb, and you can read or rewrite any of its fields.
 
 ```{r}
 gss_simple <- gss_cat_data_formatting()
@@ -41,13 +41,13 @@ tabs <- tab(gss_simple, race, marital, pct = "row", color = "diff")
 The quickest way to recover the underlying numbers as ordinary numeric vectors is `get_num()`, which extracts whatever field is currently displayed:
 
 ```{r}
-tabs %>% mutate(across(where(is_fmt), get_num))
+tabs |> mutate(across(where(is_fmt), get_num))
 ```
 
 To get the character strings instead (formatted, but without colours), use `format()`:
 
 ```{r, eval = FALSE}
-tabs %>% mutate(across(where(is_fmt), format))
+tabs |> mutate(across(where(is_fmt), format))
 ```
 
 Individual fields are read most simply with `$` on the fmt column (see "Reading and changing fields" below):
@@ -90,8 +90,8 @@ Read a field with `$` (the friendliest way), or `vctrs::field()`:
 
 ```{r, eval = FALSE}
 tabs$Married$pct
-tabs %>% mutate(across(where(is_fmt), ~ .$pct))
-tabs %>% mutate(across(where(is_fmt), ~ vctrs::field(., "pct")))
+tabs |> mutate(across(where(is_fmt), ~ .$pct))
+tabs |> mutate(across(where(is_fmt), ~ vctrs::field(., "pct")))
 ```
 
 Confidence intervals are stored as their two bounds, the `ci_inf` and `ci_sup` fields:
@@ -105,23 +105,23 @@ ci_tab$Married$ci_sup
 Switch the displayed field with `set_display()`:
 
 ```{r, eval = FALSE}
-tabs %>% set_display("diff")
-tabs %>% mutate(across(where(is_fmt), ~ set_display(., "diff")))
+tabs |> set_display("diff")
+tabs |> mutate(across(where(is_fmt), ~ set_display(., "diff")))
 ```
 
 To change a field, the easiest route is `dplyr::mutate()` **on the fmt vector itself** — a `tabxplor_fmt` behaves like a little data frame of its fields. For example, round every cell to two decimals:
 
 ```{r, eval = FALSE}
-tabs %>% mutate(across(where(is_fmt), ~ mutate(., digits = 2L)))
+tabs |> mutate(across(where(is_fmt), ~ mutate(., digits = 2L)))
 ```
 
 A fuller example: turn a means table's variance into a standard deviation and add it as a new, un-coloured column shown to one decimal:
 
 ```{r, eval = FALSE}
-tab_num(gss_simple, race, c(age, tvhours), digits = 1L) %>%
+tab_num(gss_simple, race, c(age, tvhours), digits = 1L) |>
   mutate(across(
     c(age, tvhours),
-    ~ mutate(., var = sqrt(var), display = "var", digits = 1L) %>% set_color("no"),
+    ~ mutate(., var = sqrt(var), display = "var", digits = 1L) |> set_color("no"),
     .names = "{.col}_sd"
   ))
 ```
@@ -132,7 +132,7 @@ Helper predicates let you act on structural parts of a table: `is_totrow()` / `i
 
 ```{r, eval = FALSE}
 # more decimals on the total row than on the body:
-tab(gss_simple, race, marital, race, pct = "row") %>%
+tab(gss_simple, race, marital, race, pct = "row") |>
   mutate(across(
     where(is_fmt),
     ~ if_else(is_totrow(.), mutate(., digits = 1L), mutate(., digits = 2L))
@@ -157,9 +157,6 @@ Besides its per-cell fields, each `fmt` column carries a few **column-level attr
 fmt(n = c(10L, 20L, 30L), pct = c(0.1, 0.2, 0.7), display = "pct", digits = 0L)
 ```
 
-## Step by step, under the hood
-
-`tab()` is a wrapper around `tab_many()`, which itself chains a small pipeline you can call yourself for maximum control: `tab_prepare()` (data cleaning) → `tab_plain()` / `tab_num()` (the count / mean core) → `tab_pct()` → `tab_ci()` → `tab_chi2()`. These building blocks are exported (the percentage / interval / test steps are now thin wrappers over one internal aggregate core), so you can assemble a bespoke table or a new helper function on top of them.
 
 ## See also
 

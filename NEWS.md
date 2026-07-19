@@ -3,6 +3,16 @@
 # tabxplor 1.4.0 (in development)
 
 ## New features
+* **Clearer odds ratios and a dedicated OR colour scale.** For a **binary** factor, `OR = TRUE` now
+  shows an odds ratio for *both* levels (each versus the other, reciprocals of one another) instead of
+  forcing the first level to a meaningless `1`; both carry a Woolf confidence interval. `ref2` is now
+  only needed for factors with 3+ levels. Odds ratios get their own symmetric colour scale
+  `odds_ratio` (`set_color_breaks(odds_ratio = ...)`), so `pct_ratio` is free to be set asymmetrically
+  (e.g. the "×2 rule") without changing OR colours. Because odds ratios don't sum to 100%, an OR
+  table's total column drops its "100%" and shows only the base `n` (nothing when `add_n = FALSE`).
+  A `color_signif = "guaranteed_effect"` colour channel whose scale has a single break (which would
+  paint every significant cell one flat shade) is now disabled along with its legend, unless it is the
+  only channel.
 * **Readable summary statistics.** The chi-squared / ANOVA tests of a crosstab (`test = TRUE`) and the
   model-fit statistics of a `tab_reg()` regression now print above the table as a clean, aligned
   summary table (column variables in columns, row variables / sub-tables / `split_var` groups in rows)

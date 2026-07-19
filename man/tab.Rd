@@ -94,7 +94,8 @@ odds-ratio columns: \code{or}). Otherwise a measure name, on the \strong{text} c
 the standardized difference Glass's \eqn{\Delta} for numeric means).
 \item \code{"ratio"}: relative risk (factors) or mean ratio (numerics) vs the reference.
 \item \code{"contrib"}: signed contribution to the chi-squared (reference-free).
-\item \code{"OR"}: empirical odds ratio (for \code{pct = "row"}/\code{"col"}).
+\item \code{"OR"}: empirical odds ratio (for \code{pct = "row"}/\code{"col"}), coloured on its
+own symmetric \code{odds_ratio} scale (so \code{pct_ratio} stays free for \code{"ratio"}).
 }
 The grammar: \strong{position picks the channel} (1st value -> text, 2nd -> background) and
 \strong{names pick the column type} (\code{pct} / \code{mean}). So \code{c("diff", "ratio")}
@@ -126,7 +127,9 @@ the "OR (j vs reference)" from a multinomial \code{\link[=tab_reg]{tab_reg()}} m
 \item \code{"no"}: by default, no OR are calculated.
 \item \code{"OR"}: print OR (instead of percentages).
 \item \code{"OR_pct"}: print OR, with percentages in bracket.
-}}
+}
+Odds ratios don't add up to 100\\%, so the total column drops its "100\\%" and shows only the base
+\code{n} (console), exports the base-\code{n} column only, or nothing when \code{add_n = FALSE}.}
 
 \item{test}{Set to \code{TRUE} to calculate a statistical test of independence for each
 (sub)table: \strong{Chi-squared} for factor \code{col_vars}, \strong{Welch's F} (one-way
@@ -190,9 +193,11 @@ column or row, otherwise you get a warning message.
 \item \code{"no"}: not use ref and not calculate diffs to gain calculation time.
 }}
 
-\item{ref2}{A second reference cell is needed to calculate odds ratios
-(or relative risks ratios). The first cell of the row or column is used by default.
-See \code{ref} above for the full list of possible values.}
+\item{ref2}{The second reference level for odds ratios (or relative risk ratios), needed
+only for a factor with \strong{3 levels or more} (the "OR of each level versus \code{ref2}"). The
+first level is used by default. For a \strong{binary} factor \code{ref2} is ignored: each level's
+OR is computed against the \emph{other} level, so both levels show a value (reciprocals of one
+another) instead of one being forced to \code{1}. See \code{ref} above for the list of possible values.}
 
 \item{comp}{The comparison level : by subtables/groups, or for the whole table.
 \itemize{

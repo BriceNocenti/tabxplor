@@ -18,7 +18,7 @@ testthat::test_that("set_color_breaks() sets named scales, keeps the others (lis
   testthat::expect_equal(cur$pct_diff$over$breaks, c(0.05, 0.15, 0.3))
   testthat::expect_equal(cur$pct_ratio$over$breaks, 3)
   testthat::expect_length(cur$pct_ratio$under$breaks, 0L)         # over-only -> no under
-  testthat::expect_equal(cur$mean_ratio$over$breaks, c(1.15, 1.5, 2, 4))  # untouched
+  testthat::expect_equal(cur$mean_ratio$over$breaks, c(1.2, 1.5, 2, 4))  # untouched (symmetric default)
   # the `...` named-scale form works too
   set_color_breaks(contrib = c(1, 2, 5))
   testthat::expect_equal(getOption("tabxplor.color_breaks")$contrib$over$breaks, c(1, 2, 5))
@@ -85,26 +85,27 @@ testthat::test_that("get_color_breaks(type = 'all') gives the signed / reciproca
   testthat::expect_equal(get_color_breaks("pct_diff", "all"),
                          c(-0.3, -0.2, -0.1, -0.05, 0.05, 0.1, 0.2, 0.3))
   testthat::expect_equal(get_color_breaks("mean_ratio", "all"),
-                         c(1/4, 1/2, 1/1.5, 1.15, 1.5, 2, 4))
+                         c(1/4, 1/2, 1/1.5, 1/1.2, 1.2, 1.5, 2, 4))
   testthat::expect_equal(get_color_breaks("contrib", "all"), c(-10, -5, -2, -1, 1, 2, 5, 10))
-  # pct_ratio over-only default: no under side
-  testthat::expect_equal(get_color_breaks("pct_ratio", "all"), 2)
+  # pct_ratio symmetric default (Phase 16c): both sides c(NA, 1.5, 2, 4) -> breaks 1.5, 2, 4
+  testthat::expect_equal(get_color_breaks("pct_ratio", "all"), c(1/4, 1/2, 1/1.5, 1.5, 2, 4))
+  # odds_ratio (Phase 16c): the dedicated OR scale, symmetric
+  testthat::expect_equal(get_color_breaks("odds_ratio", "all"), c(1/4, 1/2, 1/1.5, 1/1.2, 1.2, 1.5, 2, 4))
 })
 
 testthat::test_that("get_color_breaks returns a readable form and round-trips", {
   withr::defer(reset_breaks())
   reset_breaks()
   gb <- get_color_breaks()
-  testthat::expect_named(gb, c("pct_diff", "pct_ratio", "mean_diff", "mean_ratio", "contrib"))
+  testthat::expect_named(gb, c("pct_diff", "pct_ratio", "odds_ratio", "mean_diff", "mean_ratio", "contrib"))
   testthat::expect_equal(gb$pct_diff, c(0.05, 0.1, 0.2, 0.3))    # symmetric -> plain magnitudes
-  testthat::expect_equal(gb$pct_ratio, list(over = 2))           # over-only -> list form
+  testthat::expect_equal(gb$pct_ratio, c(1.5, 2, 4))            # symmetric (Phase 16c) -> plain magnitudes
   testthat::expect_equal(get_color_breaks("pct"),  c(0.05, 0.1, 0.2, 0.3))   # old alias
-  testthat::expect_equal(get_color_breaks("mean"), list(over = c(1.15, 1.5, 2, 4),
-                                                        under = c(1.5, 2, 4)))
+  testthat::expect_equal(get_color_breaks("mean"), c(1.2, 1.5, 2, 4))         # mean_ratio symmetric default
   # round-trips through set_color_breaks()
   set_color_breaks(get_color_breaks())
   testthat::expect_equal(get_color_breaks()$pct_diff, c(0.05, 0.1, 0.2, 0.3))
-  testthat::expect_equal(get_color_breaks("pct_ratio"), list(over = 2))
+  testthat::expect_equal(get_color_breaks("pct_ratio"), c(1.5, 2, 4))
 })
 
 # --- the tab() color / color_signif argument grammar (position = channel, names = type) ---

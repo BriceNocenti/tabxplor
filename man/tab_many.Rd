@@ -137,7 +137,9 @@ the "OR (j vs reference)" from a multinomial \code{\link[=tab_reg]{tab_reg()}} m
 \item \code{"no"}: by default, no OR are calculated.
 \item \code{"OR"}: print OR (instead of percentages).
 \item \code{"OR_pct"}: print OR, with percentages in bracket.
-}}
+}
+Odds ratios don't add up to 100\\%, so the total column drops its "100\\%" and shows only the base
+\code{n} (console), exports the base-\code{n} column only, or nothing when \code{add_n = FALSE}.}
 
 \item{chi2}{Set to \code{TRUE} to calculate Chi2 summaries with \code{\link{tab_chi2}}.
 Useful to print metadata, and to color cells based on their contribution to variance
@@ -196,9 +198,11 @@ column or row, otherwise you get a warning message.
 \item \code{"no"}: not use ref and not calculate diffs to gain calculation time.
 }}
 
-\item{ref2}{A second reference cell is needed to calculate odds ratios
-(or relative risks ratios). The first cell of the row or column is used by default.
-See \code{ref} above for the full list of possible values.}
+\item{ref2}{The second reference level for odds ratios (or relative risk ratios), needed
+only for a factor with \strong{3 levels or more} (the "OR of each level versus \code{ref2}"). The
+first level is used by default. For a \strong{binary} factor \code{ref2} is ignored: each level's
+OR is computed against the \emph{other} level, so both levels show a value (reciprocals of one
+another) instead of one being forced to \code{1}. See \code{ref} above for the list of possible values.}
 
 \item{comp}{The comparison level : by subtables/groups, or for the whole table.
 Vectorised over \code{row_vars}.
@@ -370,7 +374,7 @@ or a \code{list(over =, under =)} of magnitudes (no mirror; omit a side to switc
 their current value.}
 
 \item{brk}{When missing, return the full named list of break scales (\code{pct_diff},
-\code{pct_ratio}, \code{mean_diff}, \code{mean_ratio}, \code{contrib}) -- the same shape
+\code{pct_ratio}, \code{odds_ratio}, \code{mean_diff}, \code{mean_ratio}, \code{contrib}) -- the same shape
 \code{\link{set_color_breaks}} accepts, so it round-trips. Specify one scale name to return
 only its breaks. The old aliases \code{"pct"} (-> \code{pct_diff}) and \code{"mean"} (->
 \code{mean_ratio}) are still accepted.}
@@ -414,14 +418,15 @@ Since objects of class \code{tabxplor_tab} are also of class \code{tibble}, you 
 \code{\link[dplyr:arrange]{arrange}}, \code{\link[dplyr:filter]{filter}}
 or \code{\link[dplyr:mutate]{mutate}}.
 
-Color breaks are a named list of the five measure scales \code{pct_diff},
-\code{pct_ratio}, \code{mean_diff}, \code{mean_ratio} and \code{contrib}. Each is a vector
-of positive-only thresholds (the under-represented side is mirrored automatically), 1 to 5
+Color breaks are a named list of the six measure scales \code{pct_diff},
+\code{pct_ratio}, \code{odds_ratio}, \code{mean_diff}, \code{mean_ratio} and \code{contrib}. Each is
+a vector of positive-only thresholds (the under-represented side is mirrored automatically), 1 to 5
 values, one per color step: \code{pct_diff} colors percentage-point differences,
-\code{pct_ratio} the relative risk (the "x2 rule"), \code{mean_diff} the standardized mean
-difference (Glass's delta) by default (supply data-unit values for absolute coloring),
-\code{mean_ratio} the mean ratio, \code{contrib} the chi2 contribution. An empty/\code{NULL}
-scale drops that measure for its column type.
+\code{pct_ratio} the relative risk (the "x2 rule"), \code{odds_ratio} the odds ratio (\code{color =
+"OR"}; symmetric by default), \code{mean_diff} the standardized mean difference (Glass's delta) by
+default (supply data-unit values for absolute coloring), \code{mean_ratio} the mean ratio,
+\code{contrib} the chi2 contribution. An empty/\code{NULL} scale drops that measure for its column
+type.
 }
 \section{Functions}{
 \itemize{

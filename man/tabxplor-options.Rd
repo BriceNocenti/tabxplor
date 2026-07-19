@@ -34,7 +34,7 @@ variables have differing bases (e.g. \code{na = "drop"}): \code{"off"} (default)
 
 \describe{
 \item{\code{tabxplor.color_breaks}}{the colour-break scales (a named list of \code{pct_diff},
-\code{pct_ratio}, \code{mean_diff}, \code{mean_ratio}, \code{contrib}). Set with \code{\link[=set_color_breaks]{set_color_breaks()}}.}
+\code{pct_ratio}, \code{odds_ratio}, \code{mean_diff}, \code{mean_ratio}, \code{contrib}). Set with \code{\link[=set_color_breaks]{set_color_breaks()}}.}
 \item{\code{tabxplor.color_style_theme}}{the \emph{console} palette theme, \code{"light"} or \code{"dark"}; set by
 \code{\link[=set_color_palette]{set_color_palette()}} (which auto-detects the editor theme on load). NOT the export theme
 (\code{tabxplor.theme}).}

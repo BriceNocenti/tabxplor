@@ -107,7 +107,7 @@ tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"), effect = "a
 tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"), effect = "ame", 
         empirical = TRUE, predicted_unadjusted = TRUE
         ) |> 
-          tab_kable()
+  tab_kable()
  ```
 
 Then we can use `empirical = TRUE` to compare this new modelised quantity to the **raw, observed difference of percentages** : 
@@ -143,7 +143,7 @@ An **ordered** factor outcome is fit as a proportional-odds (cumulative) logisti
 tab_reg(gss_simple, "rincome", c("race", "age", "relig"))
 ```
 
-A nominal outcome with three or more unordered levels is fit as one **multinomial** logistic model, giving one odds-ratio column per outcome category versus the reference category, also called relative risk ratios:
+A nominal outcome with three or more unordered levels is fit as one **multinomial** logistic model, giving one odds-ratio column per outcome category versus the reference category (also called relative risks ratios) :
 
 ```{r, eval = requireNamespace("nnet", quietly = TRUE)}
 # install.packages("nnet")
@@ -159,7 +159,7 @@ Most of the time, average marginal effects (AME) are easier to interpret, becaus
 tab_reg(gss_simple, "party3", c("race", "age", "rincome", "relig"), effect = "ame", empirical = TRUE) # |> tab_kable()
 ```
 
-With `empirical = TRUE`, the crude/observed/unajusted differences and raw percentages appear in html tooltips available at mouse hover of each cell.
+With `empirical = TRUE`, the crude/observed/unajusted differences and raw percentages appear in html tooltips, available at mouse hover of a cell.
 
 
 ## Linear regression (a numeric outcome)

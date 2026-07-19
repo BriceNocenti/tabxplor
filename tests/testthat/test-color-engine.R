@@ -243,3 +243,46 @@ testthat::test_that("engine: contrib + guaranteed_effect colours every significa
   }
   testthat::expect_gt(n_col, 0L)
 })
+
+
+# --- Phase 16c: a degenerate guaranteed_effect channel is disabled (never the last one) -----------
+
+testthat::test_that("Phase 16c: a single-break guaranteed_effect bg channel is disabled, text kept", {
+  # a 1-break-per-side ratio scale (the x2 rule) collapses to the neutral under guaranteed_effect ->
+  # a gradient-less "x1" fill. On the BACKGROUND channel (color = TRUE = diff text + ratio bg) it is
+  # redundant with the text channel, so it is dropped. The arbiter is checked directly (independent of
+  # whether any cell qualifies): the bg plan is NULL under guaranteed_effect, non-NULL otherwise.
+  withr::local_options(list(tabxplor.color_breaks = {
+    sc <- default_color_scales()
+    sc$pct_ratio <- mk_color_scale("pct_ratio", list(over = 2))   # single break per side
+    sc
+  }))
+  col_of <- function(t) t[[names(t)[purrr::map_lgl(t, is_fmt)][1]]]
+  t_ge   <- tab(forcats::gss_cat, race, marital, pct = "row", color = TRUE,
+                color_signif = "guaranteed_effect")
+  t_grey <- tab(forcats::gss_cat, race, marital, pct = "row", color = TRUE,
+                color_signif = "grey_non_signif")
+  # arbiter: guaranteed_effect drops the degenerate bg, keeps text; a non-degenerate policy keeps bg
+  pl_ge <- resolve_color_channel_plans(col_of(t_ge))
+  testthat::expect_null(pl_ge$bg)
+  testthat::expect_false(is.null(pl_ge$text))
+  testthat::expect_false(is.null(resolve_color_channel_plans(col_of(t_grey))$bg))
+  # and the cells follow: no background slot anywhere under guaranteed_effect
+  bg_any <- function(t) any(purrr::map_lgl(t[purrr::map_lgl(t, is_fmt)],
+                                           ~ any(fmt_color_channels(.)$bg_slot > 0)))
+  testthat::expect_false(bg_any(t_ge))
+})
+
+testthat::test_that("Phase 16c: a LONE degenerate guaranteed_effect channel is NOT disabled", {
+  withr::local_options(list(tabxplor.color_breaks = {
+    sc <- default_color_scales()
+    sc$pct_ratio <- mk_color_scale("pct_ratio", list(over = 2))
+    sc
+  }))
+  tx_any <- function(t) any(purrr::map_lgl(t[purrr::map_lgl(t, is_fmt)],
+                                           ~ any(fmt_color_channels(.)$text_slot > 0)))
+  # single-channel ratio (no background) -> the only channel, kept even though degenerate
+  t <- tab(forcats::gss_cat, race, marital, pct = "row", color = "ratio",
+           color_signif = "guaranteed_effect")
+  testthat::expect_true(tx_any(t))
+})

@@ -71,7 +71,9 @@ the "OR (j vs reference)" from a multinomial \code{\link[=tab_reg]{tab_reg()}} m
 \item \code{"no"}: by default, no OR are calculated.
 \item \code{"OR"}: print OR (instead of percentages).
 \item \code{"OR_pct"}: print OR, with percentages in bracket.
-}}
+}
+Odds ratios don't add up to 100\\%, so the total column drops its "100\\%" and shows only the base
+\code{n} (console), exports the base-\code{n} column only, or nothing when \code{add_n = FALSE}.}
 
 \item{na}{The policy to adopt with missing values, as a single string.
 \itemize{
@@ -97,9 +99,11 @@ column or row, otherwise you get a warning message.
 \item \code{"no"}: not use ref and not calculate diffs to gain calculation time.
 }}
 
-\item{ref2}{A second reference cell is needed to calculate odds ratios
-(or relative risks ratios). The first cell of the row or column is used by default.
-See \code{ref} above for the full list of possible values.}
+\item{ref2}{The second reference level for odds ratios (or relative risk ratios), needed
+only for a factor with \strong{3 levels or more} (the "OR of each level versus \code{ref2}"). The
+first level is used by default. For a \strong{binary} factor \code{ref2} is ignored: each level's
+OR is computed against the \emph{other} level, so both levels show a value (reciprocals of one
+another) instead of one being forced to \code{1}. See \code{ref} above for the list of possible values.}
 
 \item{comp}{Comparison level. When \code{tab_vars} are present, should the
 contributions to variance be calculated for each subtable/group (by default,

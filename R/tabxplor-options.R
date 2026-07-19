@@ -33,7 +33,7 @@
 #' @section Colours and theme:
 #' \describe{
 #'   \item{`tabxplor.color_breaks`}{the colour-break scales (a named list of `pct_diff`,
-#'     `pct_ratio`, `mean_diff`, `mean_ratio`, `contrib`). Set with [set_color_breaks()].}
+#'     `pct_ratio`, `odds_ratio`, `mean_diff`, `mean_ratio`, `contrib`). Set with [set_color_breaks()].}
 #'   \item{`tabxplor.color_style_theme`}{the *console* palette theme, `"light"` or `"dark"`; set by
 #'     [set_color_palette()] (which auto-detects the editor theme on load). NOT the export theme
 #'     (`tabxplor.theme`).}

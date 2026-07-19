@@ -208,9 +208,11 @@ NULL
 #'   column or row, otherwise you get a warning message.
 #'   \item \code{"no"}: not use ref and not calculate diffs to gain calculation time.
 #' }
-#' @param ref2 A second reference cell is needed to calculate odds ratios
-#' (or relative risks ratios). The first cell of the row or column is used by default.
-#' See `ref` above for the full list of possible values.
+#' @param ref2 The second reference level for odds ratios (or relative risk ratios), needed
+#' only for a factor with **3 levels or more** (the "OR of each level versus \code{ref2}"). The
+#' first level is used by default. For a **binary** factor \code{ref2} is ignored: each level's
+#' OR is computed against the *other* level, so both levels show a value (reciprocals of one
+#' another) instead of one being forced to \code{1}. See `ref` above for the list of possible values.
 #' @param comp The comparison level : by subtables/groups, or for the whole table.
 #' \itemize{
 #'   \item \code{"tab"}: by default, contributions to variance,
@@ -229,6 +231,8 @@ NULL
 #'   \item \code{"OR"}: print OR (instead of percentages).
 #'   \item \code{"OR_pct"}: print OR, with percentages in bracket.
 #' }
+#' Odds ratios don't add up to 100\%, so the total column drops its "100\%" and shows only the base
+#' \code{n} (console), exports the base-\code{n} column only, or nothing when \code{add_n = FALSE}.
 #' @param test Set to \code{TRUE} to calculate a statistical test of independence for each
 #' (sub)table: \strong{Chi-squared} for factor \code{col_vars}, \strong{Welch's F} (one-way
 #' ANOVA) for numeric ones -- see \code{\link{tab_chi2}}. Useful to print metadata, and to
@@ -280,7 +284,8 @@ NULL
 #'   the standardized difference Glass's \eqn{\Delta} for numeric means).
 #'   \item \code{"ratio"}: relative risk (factors) or mean ratio (numerics) vs the reference.
 #'   \item \code{"contrib"}: signed contribution to the chi-squared (reference-free).
-#'   \item \code{"OR"}: empirical odds ratio (for \code{pct = "row"}/\code{"col"}).
+#'   \item \code{"OR"}: empirical odds ratio (for \code{pct = "row"}/\code{"col"}), coloured on its
+#'   own symmetric \code{odds_ratio} scale (so \code{pct_ratio} stays free for \code{"ratio"}).
 #'  }
 #' The grammar: \strong{position picks the channel} (1st value -> text, 2nd -> background) and
 #' \strong{names pick the column type} (\code{pct} / \code{mean}). So \code{c("diff", "ratio")}
@@ -989,9 +994,11 @@ finalize_one_col <- function(col, spec) {
 #'   column or row, otherwise you get a warning message.
 #'   \item \code{"no"}: not use ref and not calculate diffs to gain calculation time.
 #' }
-#' @param ref2 A second reference cell is needed to calculate odds ratios
-#' (or relative risks ratios). The first cell of the row or column is used by default.
-#' See `ref` above for the full list of possible values.
+#' @param ref2 The second reference level for odds ratios (or relative risk ratios), needed
+#' only for a factor with **3 levels or more** (the "OR of each level versus \code{ref2}"). The
+#' first level is used by default. For a **binary** factor \code{ref2} is ignored: each level's
+#' OR is computed against the *other* level, so both levels show a value (reciprocals of one
+#' another) instead of one being forced to \code{1}. See `ref` above for the list of possible values.
 #' @param comp The comparison level : by subtables/groups, or for the whole table.
 #' Vectorised over `row_vars`.
 #' \itemize{
@@ -1011,6 +1018,8 @@ finalize_one_col <- function(col, spec) {
 #'   \item \code{"OR"}: print OR (instead of percentages).
 #'   \item \code{"OR_pct"}: print OR, with percentages in bracket.
 #' }
+#' Odds ratios don't add up to 100\%, so the total column drops its "100\%" and shows only the base
+#' \code{n} (console), exports the base-\code{n} column only, or nothing when \code{add_n = FALSE}.
 #' @param chi2 Set to \code{TRUE} to calculate Chi2 summaries with \code{\link{tab_chi2}}.
 #' Useful to print metadata, and to color cells based on their contribution to variance
 #'  (\code{color = "contrib"}). Vectorised over `row_vars`.
@@ -3055,9 +3064,11 @@ fmt_stack_frames <- function(frames, meta) {
 #'   column or row, otherwise you get a warning message.
 #'   \item \code{"no"}: not use ref and not calculate diffs to gain calculation time.
 #' }
-#' @param ref2 A second reference cell is needed to calculate odds ratios
-#' (or relative risks ratios). The first cell of the row or column is used by default.
-#' See `ref` above for the full list of possible values.
+#' @param ref2 The second reference level for odds ratios (or relative risk ratios), needed
+#' only for a factor with **3 levels or more** (the "OR of each level versus \code{ref2}"). The
+#' first level is used by default. For a **binary** factor \code{ref2} is ignored: each level's
+#' OR is computed against the *other* level, so both levels show a value (reciprocals of one
+#' another) instead of one being forced to \code{1}. See `ref` above for the list of possible values.
 #' @param comp Comparison level. When \code{tab_vars} are present, should the
 #' contributions to variance be calculated for each subtable/group (by default,
 #'  \code{comp = "tab"}) ? Should they be calculated for the whole table
@@ -3073,6 +3084,8 @@ fmt_stack_frames <- function(frames, meta) {
 #'   \item \code{"OR"}: print OR (instead of percentages).
 #'   \item \code{"OR_pct"}: print OR, with percentages in bracket.
 #' }
+#' Odds ratios don't add up to 100\%, so the total column drops its "100\%" and shows only the base
+#' \code{n} (console), exports the base-\code{n} column only, or nothing when \code{add_n = FALSE}.
 #' @param color The type of colors to print, as a single string :
 #'  \itemize{
 #'   \item \code{"no"}: by default, no colors are printed.
@@ -3897,29 +3910,38 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, OR, color, pct,
     # Odds ratio (when pct = "row")
     if (OR %in% c("OR", "OR_pct", "or", "or_pct") | color %in% c("or", "OR")) {
 
-      # Relative risks : cell / reference COLUMN
-      refcols <- dplyr::nth(names(cols),
-                            diff_index(ref2,
-                                       row_var   = dplyr::pull(tabs_pct, !!row_var),
-                                       num_names = names(cols),
-                                       pct       = "col"))
-      refcols_vector <- names(cols) == refcols
+      # Phase 16c: PER-COLUMN reference index. For a BINARY col_var (exactly 2 non-Total level columns)
+      # each level's OR is computed against the OTHER level (the two columns are reciprocals, neither is
+      # forced to "1", and ref2 is unused). For 3+ levels every column references the single ref2 column
+      # (which then shows OR = 1) -- byte-identical to the former `P / P[, refcols]`. `nm == "Total"` is
+      # the caller's own convention (tab.R below, pre-rename); tab_plain has ONE factor col_var so the
+      # non-Total columns ARE its levels.
+      ridx0   <- diff_index(ref2, row_var = dplyr::pull(tabs_pct, !!row_var),
+                            num_names = names(cols), pct = "col")
+      ok_ref2 <- length(ridx0) != 0 && !is.na(ridx0) && ridx0 >= 1L && ridx0 <= k
+      lv      <- which(nm != "Total")
+      binary  <- length(lv) == 2L
 
-      if (length(refcols) != 0 & !is.na(refcols)) {
-        RR <- P / P[, refcols]
+      if (binary || ok_ref2) {
+        ref_col_idx <- rep(if (ok_ref2) as.integer(ridx0) else NA_integer_, k)
+        if (binary) { ref_col_idx[lv[1]] <- lv[2]; ref_col_idx[lv[2]] <- lv[1] }
+        RR <- P / P[, ref_col_idx, drop = FALSE]
       } else {
-        remove(refcols, refcols_vector) # test if exists after
         warning(paste0(
           "in ref2 = '", ref2, "' , no columns were found as reference for comparison ; ",
           "to remove this warning, precise the value of ref ",
           "until there is one column matched"
         ))
+        ref_col_idx <- rep(NA_integer_, k)
         RR <- matrix(NA_real_, n, k)
       }
+      # self-referencing columns show OR = 1 by construction: the ref2 column for 3+ levels, none for binary
+      refcols_vector <- !is.na(ref_col_idx) & ref_col_idx == seq_len(k)
+
       tabs_rr <- data.table::copy(tabs_pct)
       set_cols(tabs_rr, RR)
 
-      # Odds ratio (binary) or per-level OR vs the reference (3+ levels) : rr / reference ROW
+      # Odds ratio (binary complement, or per-level vs ref2 for 3+ levels) : rr / reference ROW
       tabs_or <- data.table::copy(tabs_pct)
       set_cols(tabs_or, RR / RR[ra, , drop = FALSE])
     }
@@ -3966,46 +3988,54 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, OR, color, pct,
       tabs_rr <- data.table::copy(tabs_pct)
       set_cols(tabs_rr, RR)
 
-      # Odds ratio (binary) or per-level OR vs the reference (3+ levels) : rr / reference COLUMN
+      # Per-level OR vs the reference COLUMN. Phase 16c: the pct="col" binary-row mirror is deferred
+      # (see decisions doc); the reference is the single `refcols` column (level 1 shows OR = 1), as
+      # before. `ref_col_idx` (all pointing at the ref column) feeds the shared Woolf block below, keeping
+      # the pct="col" interval byte-identical.
       tabs_or <- data.table::copy(tabs_pct)
       if (length(refcols) != 0 & !is.na(refcols)) {
         set_cols(tabs_or, RR / RR[, refcols])
       } else {
         set_cols(tabs_or, matrix(NA_real_, n, k))
       }
+      ref_col_idx <- rep(which(refcols_vector)[1], k)
     }
   }
 
   # 14z: Woolf log-OR Wald interval for the empirical odds ratio, computed ONLY when the caller needs
   # it (a colour policy / stars) -- signalled by a non-NULL `tabs_totn`, the UNWEIGHTED base. The 2x2 is
-  # CONDITIONAL on {level j, ref2 level `refcol`} x {row i, ref row `ra`}, built the §14 way (WEIGHTED
-  # proportion P x UNWEIGHTED base N, so the totals cancel). For a 2-level col_var `refcol` is the
-  # complement -> the textbook OR; for 3+ levels it is the "j vs the ref2 baseline" conditional OR, the
-  # crude counterpart of the multinomial (Begg-Gray) coefficient -- a single-predictor saturated
-  # multinomial logit yields the same estimate. ci_or() (R/tab-agg.R) is the shared engine and gives the
-  # CI-inversion pvalue (want_p = stars) that duals with the bracket, exactly like the modelled OR.
+  # CONDITIONAL on {level j, its reference level} x {row i, ref row `ra`}, built the §14 way (WEIGHTED
+  # proportion P x UNWEIGHTED base N, so the totals cancel). Phase 16c: `ref_col_idx` is the PER-COLUMN
+  # reference index -- the ref2 column for 3+ levels (that column's OR = 1), the COMPLEMENT level for a
+  # binary col_var (both levels get a real, reciprocal interval; only the ref row is NA'd), or the single
+  # ref column for pct="col". For 3+ / pct="col" `ref_col_idx` is constant, so B/D are byte-identical to
+  # the former single-`ridx` broadcast. The gate now fires whenever the OR was computed (any non-NA
+  # reference), not only when a self-referencing `refcols_vector` column exists -- which for binary is
+  # empty, so the old gate silently skipped its intervals. ci_or() (R/tab-agg.R) is the shared engine and
+  # gives the CI-inversion pvalue (want_p = stars) that duals with the bracket, like the modelled OR.
   or_ci_inf <- or_ci_sup <- or_pvalue <- NULL
   if (!is.null(tabs_totn) && exists("tabs_or", inherits = FALSE) &&
-      exists("refcols_vector", inherits = FALSE) && exists("ra", inherits = FALSE) &&
-      !is.null(refrows)) {
-    ridx <- which(refcols_vector)[1]
-    if (!is.na(ridx)) {
-      N  <- as.matrix(tabs_totn[, nm, with = FALSE]) * 1.0
-      A  <- P * N                                     # a = level j, this row      (positive cell)
-      B  <- matrix(P[, ridx] * N[, ridx], n, k)       # b = ref2 level, this row   (negative cell)
-      Cc <- P[ra, , drop = FALSE] * N[ra, , drop = FALSE]   # c = level j, ref row
-      D  <- matrix(Cc[, ridx], n, k)                  # d = ref2 level, ref row
-      oc <- ci_or(as.vector(A), as.vector(B), as.vector(Cc), as.vector(D),
-                  conf_level = conf_level, want_p = isTRUE(stars))
-      OINF <- matrix(oc$inf, n, k); OSUP <- matrix(oc$sup, n, k); OPV <- matrix(oc$pvalue, n, k)
-      # No interval on a reference position (OR = 1 there by construction): the ref row and ref2 column.
-      rrm <- !is.na(refrows) & refrows
-      OINF[rrm, ] <- NA_real_; OSUP[rrm, ] <- NA_real_; OPV[rrm, ] <- NA_real_
+      exists("ref_col_idx", inherits = FALSE) && exists("ra", inherits = FALSE) &&
+      !is.null(refrows) && any(!is.na(ref_col_idx))) {
+    N  <- as.matrix(tabs_totn[, nm, with = FALSE]) * 1.0
+    PN <- P * N
+    A  <- PN                                         # a = level j, this row      (positive cell)
+    B  <- PN[, ref_col_idx, drop = FALSE]            # b = reference level, this row  (negative cell)
+    Cc <- P[ra, , drop = FALSE] * N[ra, , drop = FALSE]   # c = level j, ref row
+    D  <- Cc[, ref_col_idx, drop = FALSE]            # d = reference level, ref row
+    oc <- ci_or(as.vector(A), as.vector(B), as.vector(Cc), as.vector(D),
+                conf_level = conf_level, want_p = isTRUE(stars))
+    OINF <- matrix(oc$inf, n, k); OSUP <- matrix(oc$sup, n, k); OPV <- matrix(oc$pvalue, n, k)
+    # No interval on a reference position (OR = 1 there by construction): the ref row and any
+    # self-referencing column (the ref2/ref column; none for a binary col_var).
+    rrm <- !is.na(refrows) & refrows
+    OINF[rrm, ] <- NA_real_; OSUP[rrm, ] <- NA_real_; OPV[rrm, ] <- NA_real_
+    if (exists("refcols_vector", inherits = FALSE) && any(refcols_vector)) {
       OINF[, refcols_vector] <- NA_real_; OSUP[, refcols_vector] <- NA_real_; OPV[, refcols_vector] <- NA_real_
-      or_ci_inf <- data.table::copy(tabs_pct); set_cols(or_ci_inf, OINF)
-      or_ci_sup <- data.table::copy(tabs_pct); set_cols(or_ci_sup, OSUP)
-      or_pvalue <- data.table::copy(tabs_pct); set_cols(or_pvalue, OPV)
     }
+    or_ci_inf <- data.table::copy(tabs_pct); set_cols(or_ci_inf, OINF)
+    or_ci_sup <- data.table::copy(tabs_pct); set_cols(or_ci_sup, OSUP)
+    or_pvalue <- data.table::copy(tabs_pct); set_cols(or_pvalue, OPV)
   }
 
   list(
@@ -7234,6 +7264,18 @@ tab_add_n_pct <- function(tabs_text, add_n, add_pct) {
 }
 
 
+# tab_is_or_display() -- Phase 16c. TRUE when the table DISPLAYS odds ratios (any fmt value column with
+# display "or"/"or_pct"). The "100%" total column is meaningless for such a table (ORs don't sum to 1),
+# so the Total column shows only the base n (console) / is dropped in favour of the base-n column
+# (export). Keyed on the DISPLAYED quantity, NOT ci_type: `color = "OR"` with `OR = "no"` shows real
+# percentages (a meaningful 100% total) yet can still carry an OR interval.
+tab_is_or_display <- function(tab) {
+  if (!is.data.frame(tab)) return(FALSE)
+  fc <- purrr::map_lgl(tab, is_fmt)
+  if (!any(fc)) return(FALSE)
+  any(purrr::map_lgl(tab[fc], ~ any(get_display(.) %in% c("or", "or_pct"))))
+}
+
 # tab_fold_addn_incell() -- Phase 10i-B decision 1. For TEXT backends (console / kable / md), the
 # add_n base moves out of a separate `n` COLUMN and into the Total cell as an in-cell composite
 # `{pct} (n={n})` (via the Phase-10i-A display grammar). The materialiser first builds the real `n`
@@ -7241,19 +7283,26 @@ tab_add_n_pct <- function(tabs_text, add_n, add_pct) {
 # base into the Total column's display. Default (`tabxplor.totcol_range = "off"`): each Total cell
 # shows its OWN base `{n}`. Option `"range"` / `"min"`: the cross-col_var base via tab_totcol_range()
 # (a per-row literal `[min;max]` / smallest), for tables whose col_vars have differing NA bases.
+# Phase 16c: for an OR/RRR table the "100%" is dropped -> the cell shows only `n={n}` (the base).
 # NB: run BEFORE tab_pvalue_lines(), so the Total column has only data/total cells (all eligible).
 tab_fold_addn_incell <- function(tab) {
   tot_nm <- dplyr::last(names(tab)[is_totcol(tab) & get_type(tab) == "row" &
                                      get_col_var(tab) != "no_col_var"])
   if (length(tot_nm) != 1 || is.na(tot_nm)) return(dplyr::select(tab, -tidyselect::any_of("n")))
   style <- getOption("tabxplor.totcol_range", "off")
+  is_or <- tab_is_or_display(tab)
 
-  tmpl <- if (identical(style, "off")) {
+  rng <- if (!identical(style, "off")) {
+    fmt_cols <- which(purrr::map_lgl(tab, is_fmt))
+    tab_totcol_range(tab, fmt_cols, get_col_var(tab), which(is_totcol(tab)), style = style)
+  } else NULL
+
+  tmpl <- if (is_or) {                                # OR/RRR: show only the base n, drop the "100%"
+    if (is.null(rng)) rep("n={n}", nrow(tab))
+    else dplyr::if_else(is.na(rng$text), "", paste0("n=", rng$text))
+  } else if (is.null(rng)) {
     NULL                                              # uniform "{pct} (n={n})"
   } else {
-    fmt_cols <- which(purrr::map_lgl(tab, is_fmt))
-    rng      <- tab_totcol_range(tab, fmt_cols, get_col_var(tab), which(is_totcol(tab)),
-                                 style = style)
     # per-row literal: "{pct} (n=<base>)"; a row with no base falls back to "{pct}".
     dplyr::if_else(is.na(rng$text), "{pct}", paste0("{pct} (n=", rng$text, ")"))
   }
@@ -7267,6 +7316,22 @@ tab_fold_addn_incell <- function(tab) {
     if (is.null(tmpl)) d[elig] <- "{pct} (n={n})" else d[elig] <- tmpl[elig]
     set_display(col, d)
   }))
+}
+
+# tab_or_total_col() -- Phase 16c. Complements tab_fold_addn_incell for the cases the in-cell fold does
+# not cover: the "100%" total column is meaningless on an OR/RRR table, so drop it for EXCEL (the base n
+# is exported as its own `n` column when add_n is on, nothing otherwise) and for the CONSOLE add_n=FALSE
+# case (no base to fold -> nothing). The console add_n=TRUE case is already handled by the fold above
+# (the Total cell shows `n={n}`), so this no-ops there.
+tab_or_total_col <- function(tab, backend, add_n_on) {
+  if (!is.data.frame(tab) || !tab_is_or_display(tab)) return(tab)
+  tot_nm <- names(tab)[purrr::map_lgl(tab, ~ is_fmt(.) && is_totcol(.) &&
+                                        get_type(.) == "row" && get_col_var(.) != "no_col_var")]
+  if (!length(tot_nm)) return(tab)
+  if (identical(backend, "xl") || !isTRUE(add_n_on)) {
+    tab <- dplyr::select(tab, -tidyselect::all_of(tot_nm))
+  }
+  tab
 }
 
 
