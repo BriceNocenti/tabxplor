@@ -1655,7 +1655,7 @@ tab_setup <- function(ctx) {
     row_vars = row_vars, col_vars = col_vars, tab_vars = tab_vars, wt = wt,
     col_vars_num = col_vars_num, col_vars_text = col_vars_text,
     tab_row_names = tab_row_names, na_drop_all = na_drop_all,
-    cleannames = cleannames, stars = stars, lvs = lvs,
+    cleannames = cleannames, stars = stars, lvs = lvs, color_signif = color_signif,
     totaltab = totaltab, totrow = totrow, ref = ref, ref2 = ref2, ref_vect = ref_vect,
     OR = OR, comp = comp, color = color, ci = ci, ci_scale = ci_scale, chi2 = chi2,
     digits = digits, total_names = total_names, conf_level = conf_level, na = na,
@@ -1961,6 +1961,7 @@ tab_transform <- function(ctx) {
                   digits = .digits, pct = .pct, ref = .ref, ref2 = ref2, comp = comp, OR = OR,
                   color = color_diff_OR, totaltab = totaltab, totaltab_name = totaltab_name,
                   tot = c("row", "col"), total_names = total_names,
+                  conf_level = conf_level, stars = stars, color_signif = color_signif,
                   .fine = fine_for_pair(.fine, row_var, .col_var), .by_table = .by_table)
     ) |> purrr::set_names(as.character(col_vars[col_vars_text]))
 
@@ -3115,6 +3116,7 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
                       tot = NULL, total_names = "Total",
                       subtext = "", digits = 0,
                       num = FALSE, df = FALSE,
+                      conf_level = 0.95, stars = FALSE, color_signif = "ignore",
                       .fine = NULL, .by_table = FALSE
 ) {
 
@@ -3547,15 +3549,24 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
       # jmvtab tier-3 re-ref). It returns diff / ratio(=tabs_mean) and, when OR/color needs them, rr /
       # or + the ref-col vector; refrows is the ref-row marker. Assign each only when produced so the
       # downstream exists() guards behave exactly as with the former inline locals.
+      # 14z: compute the OR interval only when a colour policy or stars needs it (else a NULL tabs_totn
+      # skips it in tab_apply_reference -> no ci_type/bounds change, so existing ignore-OR tables stay
+      # byte-identical). color_signif reads the bounds; stars read the (want_p-gated) pvalue.
+      or_want_ci <- (OR %in% c("OR", "OR_pct", "or", "or_pct") | color %in% c("or", "OR")) &&
+        (!identical(color_signif[1], "ignore") || isTRUE(stars))
       ref_res <- tab_apply_reference(
         tabs = tabs, tabs_pct = tabs_pct, ref = ref, ref2 = ref2, comp = comp, OR = OR,
         color = color, pct = pct, tab_row_names = tab_row_names, tab_vars = tab_vars,
-        row_var = row_var, tottab_vector = tottab_vector, totrow_vector = totrow_vector, cols = cols
+        row_var = row_var, tottab_vector = tottab_vector, totrow_vector = totrow_vector, cols = cols,
+        tabs_totn = if (or_want_ci) tabs_totn else NULL, conf_level = conf_level, stars = stars
       )
       tabs_diff <- ref_res$diff
       tabs_mean <- ref_res$ratio
       if (!is.null(ref_res$rr))             tabs_rr        <- ref_res$rr
       if (!is.null(ref_res$or))             tabs_or        <- ref_res$or
+      if (!is.null(ref_res$or_ci_inf))      tabs_or_ci_inf <- ref_res$or_ci_inf
+      if (!is.null(ref_res$or_ci_sup))      tabs_or_ci_sup <- ref_res$or_ci_sup
+      if (!is.null(ref_res$or_pvalue))      tabs_or_pvalue <- ref_res$or_pvalue
       if (!is.null(ref_res$refcols_vector)) refcols_vector <- ref_res$refcols_vector
       if (!is.null(ref_res$refrows))        refrows        <- ref_res$refrows
     }
@@ -3572,6 +3583,9 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
   if (exists("tabs_mean", rlang::current_env(), inherits = F)) tabs_mean[, names(text_vars) := NULL]
   if (exists("tabs_rr"  , rlang::current_env(), inherits = F)) tabs_rr  [, names(text_vars) := NULL]
   if (exists("tabs_or"  , rlang::current_env(), inherits = F)) tabs_or  [, names(text_vars) := NULL]
+  if (exists("tabs_or_ci_inf", rlang::current_env(), inherits = F)) tabs_or_ci_inf[, names(text_vars) := NULL]
+  if (exists("tabs_or_ci_sup", rlang::current_env(), inherits = F)) tabs_or_ci_sup[, names(text_vars) := NULL]
+  if (exists("tabs_or_pvalue", rlang::current_env(), inherits = F)) tabs_or_pvalue[, names(text_vars) := NULL]
   if (exists("tabs_totn", rlang::current_env(), inherits = F)) tabs_totn[, names(text_vars) := NULL]
   #if (exists("tabs_ci"  , rlang::current_env(), inherits = F)) tabs_ci  [, names(text_vars) := NULL]
 
@@ -3630,7 +3644,10 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
          totcol_vector,
          if (exists("refcols_vector", rlang::current_env(), inherits = F)) { refcols_vector } else {
            rep(FALSE, length(cols)) },
-         if (exists("tabs_totn", rlang::current_env(), inherits = F)) { tabs_totn } else { list(NA_reals) }
+         if (exists("tabs_totn", rlang::current_env(), inherits = F)) { tabs_totn } else { list(NA_reals) },
+         if (exists("tabs_or_ci_inf", rlang::current_env(), inherits = F)) { tabs_or_ci_inf } else { list(NA_reals) },
+         if (exists("tabs_or_ci_sup", rlang::current_env(), inherits = F)) { tabs_or_ci_sup } else { list(NA_reals) },
+         if (exists("tabs_or_pvalue", rlang::current_env(), inherits = F)) { tabs_or_pvalue } else { list(NA_reals) }
     ) |>
     # Phase 9b-3: build the plain carrier column (frame + meta) then materialize via the single
     # fmt_materialize_col() (== the former inline new_fmt, byte-identical). pmap_dfc is KEPT so the
@@ -3639,15 +3656,19 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
     # ratio measure); `mean` is NA for pct columns (the old mean-overload is gone; colour reads ratio).
     purrr::pmap_dfc(function(...) {
       a <- list(...)
+      # 14z: a[[11..13]] carry the empirical-OR interval (all-NA unless a colour policy/stars asked for
+      # it). ci_type "or" is set PER COLUMN only where real bounds exist -> the ref2/Total columns (NA'd
+      # in tab_apply_reference) and every non-OR table keep ci_type "" byte-for-byte.
       fmt_materialize_col(
         frame = list(
           n         = as.integer(a[[1]]), display = display_1, digits = digits_v,
           wn        = a[[2]], pct = a[[3]], mean = NA_reals, diff = a[[4]], ratio = a[[5]],
-          ctr       = NA_reals, var = NA_reals, ci_inf = NA_reals, ci_sup = NA_reals,
-          pvalue    = NA_reals, or = a[[7]], tot_n = a[[10]],
+          ctr       = NA_reals, var = NA_reals, ci_inf = a[[11]], ci_sup = a[[12]],
+          pvalue    = a[[13]], or = a[[7]], tot_n = a[[10]],
           in_totrow = totrow_vector, in_tottab = tottab_vector, in_refrow = refrows),
         meta  = list(
-          type      = type_1, comp_all = comp_1, ref = ref_1, ci_type = "", col_var = colvar_1,
+          type      = type_1, comp_all = comp_1, ref = ref_1,
+          ci_type   = if (!all(is.na(a[[11]]))) "or" else "", col_var = colvar_1,
           totcol    = a[[8]], refcol = a[[9]], color = color_1, color_signif = "ignore")
       )
     })
@@ -3818,7 +3839,8 @@ finalize_total_rows <- function(tabs, extra, cols_get_total, tab_row_names) {
 #' @keywords internal
 #' @noRd
 tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, OR, color, pct,
-                                tab_row_names, tab_vars, row_var, tottab_vector, totrow_vector, cols) {
+                                tab_row_names, tab_vars, row_var, tottab_vector, totrow_vector, cols,
+                                tabs_totn = NULL, conf_level = 0.95, stars = FALSE) {
   # Phase 9d: the reference arithmetic (diff = cell - ref, ratio = cell / ref, rr / or) runs on a
   # plain numeric matrix via base-R sweep instead of the former per-cell data.table `:=` +
   # purrr::map_if -- byte-identical, ~100x faster on the isolated block (proven across 648 shapes:
@@ -3954,11 +3976,46 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, OR, color, pct,
     }
   }
 
+  # 14z: Woolf log-OR Wald interval for the empirical odds ratio, computed ONLY when the caller needs
+  # it (a colour policy / stars) -- signalled by a non-NULL `tabs_totn`, the UNWEIGHTED base. The 2x2 is
+  # CONDITIONAL on {level j, ref2 level `refcol`} x {row i, ref row `ra`}, built the §14 way (WEIGHTED
+  # proportion P x UNWEIGHTED base N, so the totals cancel). For a 2-level col_var `refcol` is the
+  # complement -> the textbook OR; for 3+ levels it is the "j vs the ref2 baseline" conditional OR, the
+  # crude counterpart of the multinomial (Begg-Gray) coefficient -- a single-predictor saturated
+  # multinomial logit yields the same estimate. ci_or() (R/tab-agg.R) is the shared engine and gives the
+  # CI-inversion pvalue (want_p = stars) that duals with the bracket, exactly like the modelled OR.
+  or_ci_inf <- or_ci_sup <- or_pvalue <- NULL
+  if (!is.null(tabs_totn) && exists("tabs_or", inherits = FALSE) &&
+      exists("refcols_vector", inherits = FALSE) && exists("ra", inherits = FALSE) &&
+      !is.null(refrows)) {
+    ridx <- which(refcols_vector)[1]
+    if (!is.na(ridx)) {
+      N  <- as.matrix(tabs_totn[, nm, with = FALSE]) * 1.0
+      A  <- P * N                                     # a = level j, this row      (positive cell)
+      B  <- matrix(P[, ridx] * N[, ridx], n, k)       # b = ref2 level, this row   (negative cell)
+      Cc <- P[ra, , drop = FALSE] * N[ra, , drop = FALSE]   # c = level j, ref row
+      D  <- matrix(Cc[, ridx], n, k)                  # d = ref2 level, ref row
+      oc <- ci_or(as.vector(A), as.vector(B), as.vector(Cc), as.vector(D),
+                  conf_level = conf_level, want_p = isTRUE(stars))
+      OINF <- matrix(oc$inf, n, k); OSUP <- matrix(oc$sup, n, k); OPV <- matrix(oc$pvalue, n, k)
+      # No interval on a reference position (OR = 1 there by construction): the ref row and ref2 column.
+      rrm <- !is.na(refrows) & refrows
+      OINF[rrm, ] <- NA_real_; OSUP[rrm, ] <- NA_real_; OPV[rrm, ] <- NA_real_
+      OINF[, refcols_vector] <- NA_real_; OSUP[, refcols_vector] <- NA_real_; OPV[, refcols_vector] <- NA_real_
+      or_ci_inf <- data.table::copy(tabs_pct); set_cols(or_ci_inf, OINF)
+      or_ci_sup <- data.table::copy(tabs_pct); set_cols(or_ci_sup, OSUP)
+      or_pvalue <- data.table::copy(tabs_pct); set_cols(or_pvalue, OPV)
+    }
+  }
+
   list(
     diff           = tabs_diff,
     ratio          = tabs_mean,
     rr             = if (exists("tabs_rr",        inherits = FALSE)) tabs_rr        else NULL,
     or             = if (exists("tabs_or",        inherits = FALSE)) tabs_or        else NULL,
+    or_ci_inf      = or_ci_inf,
+    or_ci_sup      = or_ci_sup,
+    or_pvalue      = or_pvalue,
     refcols_vector = if (exists("refcols_vector", inherits = FALSE)) refcols_vector else NULL,
     refrows        = refrows
   )

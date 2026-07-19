@@ -211,9 +211,9 @@ Every colored table answers three questions:
 
 - **Which measure?** `color =` picks what a color *means*: `"diff"` (distance from the reference), `"ratio"` (relative risk for percentages, mean ratio for means), `"contrib"` (weight in the Chi-squared), `"OR"` (odds ratio). `color = TRUE` picks a sensible one per column type.
 - **How confident are we?** every color reads one **confidence interval** at `conf_level` (95% by default). A cell is *significant* when that interval excludes its neutral value — **0** for a difference, **1** for a ratio or odds ratio. The printed bracket, the significance stars and the greying all read that same interval, so they can never disagree.
-- **How to show significance?** `color_signif` — `"ignore"`, `"grey_non_signif"` or `"guaranteed_effect"` ; `stars = TRUE` to use significance stars instead of, and stacked with, colors.
+- **How to show significance?** `color_signif` — `"ignore"`, `"grey_non_signif"` or `"guaranteed_effect"` ; `stars = TRUE` to use significance stars instead of, or stacked with, colors.
 
-**The confidence interval used for the colors and stars** compare each cell to its reference cell (by default, the corresponding cell in the Total row or Total column):
+**The confidence interval used for the colors and stars** compares each cell to its reference cell (by default, the corresponding cell in the Total row or Total column):
 
 | type | color     | what the color measures                  | confidence interval (default) |
 |------|-----------|------------------------------------------|-------------------------------|
@@ -228,8 +228,9 @@ Alternative interval methods (see `?tab_ci`):
 - `method_diff = "ac"` (Agresti-Caffo) or `"wald"` for a percentage difference; 
 - `method_mean_diff = "student"` (pooled, the OLS two-group interval) for a mean difference; 
 - `method_mean_ratio = "quasipoisson"` or `"poisson"` for a mean ratio. 
-- The relative-risk (`method_ratio = "katz"`) and odds-ratio (Woolf) intervals have no alternative. 
+- The relative-risk (`method_ratio = "katz"`) and odds-ratio (Woolf) intervals have no alternative.
 - A mean **difference** is colored **standardized** — Glass's Δ, the difference divided by the reference's standard deviation — so the `mean_diff` color breaks are read in SD units.
+- For a factor with **3 or more levels**, the odds ratio (and its interval) compares each level to the `ref2` baseline level — the crude counterpart of a multinomial *level-vs-baseline* odds ratio. The OR interval is computed only when `color_signif` or `stars` needs it.
 
 **Simple, cell-by-cell confidence intervals** (`ci = "cell"`) compare each cell to 0 % (or a mean of 0), *not* to a reference:
 

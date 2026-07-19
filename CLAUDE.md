@@ -15,7 +15,10 @@ R/
 │                              color engine (fmt_color_plan/fmt_color_slots/fmt_color_channels;
 │                              per-side fold + findInterval; slots 1-4 over / 5-8 under)
 ├── tab.R           (~6200 L) Main API: tab(), tab_many(), tab_plain(), tab_num(),
-│                              tab_apply_reference() (Phase 7f carve; Phase 9d: matrix-sweep internals),
+│                              tab_apply_reference() (Phase 7f carve; Phase 9d: matrix-sweep internals;
+│                              14z: also the empirical-OR Woolf CI [ci_or on the {level j, ref2 level} x
+│                              {row i, ref row} 2x2, gated by tabs_totn!=NULL = a color_signif/stars ask;
+│                              tab_plain threads conf_level/stars/color_signif] so color_signif works on OR),
 │                              leaf_wide_pct() + build_total_rows()/finalize_total_rows() (Phase 9d:
 │                              base-R/matrix leaf math for tab_plain pct/tot_n + total rows),
 │                              tab_prepare(), tab_pct(), tab_ci(), tab_chi2(),
@@ -34,7 +37,8 @@ R/
 │                              …: 14b's Katz log-RR + 14v-ii's ci_mean_ratio [robust/quasipoisson/
 │                              poisson] are the RATIO-scale intervals ci_type="ratio"; ci_mean_diff2
 │                              gains method welch/student; ci_or = Woolf log-OR for the empirical crude
-│                              OR; RULE B [§48]: numeric CIs are t where a variance is estimated, z
+│                              OR, used by tab_reg(empirical) AND (14z) tab()'s OR colour via
+│                              tab_apply_reference; RULE B [§48]: numeric CIs are t where a variance is estimated, z
 │                              otherwise -- NOT stars-gated; ci_pivot guards df<=0 -> NA), agg_chi2/agg_anova
 ├── tab-counts.R     (~360 L) tab_counts() from-the-middle constructor (Phase 4): reshape any
 │                              input shape → count-aggregate → tab_plain(.fine) + shared finalize

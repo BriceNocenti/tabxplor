@@ -29,6 +29,12 @@
   "Emp." companion columns now carry a confidence interval, significance stars and significance-based
   colour, computed with the same method as the model — so crude and adjusted effects are directly
   comparable. The multinomial crude tooltip gains its intervals too.
+* **`color_signif` and significance stars now work on empirical odds ratios in crosstabs.**
+  `tab(..., color = "OR")` gained a confidence interval (Woolf log-odds-ratio), so
+  `color_signif = "grey_non_signif"` / `"guaranteed_effect"` grey out or highlight odds-ratio cells by
+  significance, and `stars = TRUE` shows stars — exactly as they already did for differences and ratios.
+  For a factor with 3 or more levels the odds ratio compares each level to the `ref2` baseline (the crude
+  counterpart of a multinomial level-vs-baseline odds ratio). Tables without a colour policy are unchanged.
 * **`tab_reg()` tables are clearer to read.** Regression tables now title themselves ("Logistic
   regression: `<outcome>` by `<predictors>`", one sheet name per model in Excel), print a plain
   "Model: …" description **above** the colour legend, and their headers are less repetitive: a model
