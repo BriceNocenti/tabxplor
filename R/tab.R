@@ -2149,8 +2149,11 @@ tab_assemble_tables <- function(ctx) {
   } else NULL
   # Phase 14d: record the variable ROLES here, where they are known. Recovering them from the finished
   # table is guesswork (and wrong after tab_compact) -- see get_vars_attr() in R/tab_classes.R.
+  # Phase 16d: also record the weight column NAME (character(0) when unweighted) -> the footer "Weighted
+  # by <wt>." line. `wt` is a local from list2env(ctx) -- the resolved weight name (see tab_transform()).
   vars_attr <- new_vars_attr(row_vars = row_var, col_vars = as.character(col_vars),
-                             tab_vars = as.character(tab_vars))
+                             tab_vars = as.character(tab_vars),
+                             wt = if (length(wt) == 0L) NA_character_ else as.character(wt)[1])
   if (!lv1_group_vars(tab)) {
     tab    <- dplyr::group_by(tab, !!!tab_vars)
     groups <- dplyr::group_data(tab)
@@ -2639,7 +2642,8 @@ tab_transpose <- function(tabs, name = NULL) {
   attrs$test <- test
   attrs$vars <- new_vars_attr(row_vars = name,
                               col_vars = unique(purrr::map_chr(wide[new_fmtc], get_col_var)),
-                              tab_vars = character(0))
+                              tab_vars = character(0),
+                              wt = get_vars_attr(tabs)$wt)   # Phase 16d: the weight survives a transpose
   rlang::exec(new_tab, wide, !!!attrs)
 }
 

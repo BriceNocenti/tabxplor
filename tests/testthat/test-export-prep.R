@@ -23,7 +23,8 @@ testthat::test_that("tab_export_prep returns a tabxplor_render with tables/meta"
   rd <- p$tables[[1]]
   testthat::expect_named(rd, c("tab", "vars", "roles", "ann", "bold_rows",
                                "bold_cols", "range_totcol", "col_var_header", "subtext",
-                               "reg_line", "reg_title", "empirical_tips"))
+                               "reg_line", "weight_line", "stars_legend", "reg_title",
+                               "empirical_tips"))
   testthat::expect_false(rd$vars$degrade)
 })
 

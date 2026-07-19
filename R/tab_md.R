@@ -230,15 +230,18 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   # Phase 13b: prepend the colour legend as a prose line, its break-words wrapped in the SAME pandoc
   # span classes the cells use (both call tx_slot_class(), so tab_css() colours them identically).
   # Only when coloured (a legend describes the colours). Prepended above the user subtext.
+  color_leg <- NULL
   if (isTRUE(color) && isTRUE(color_legend) && length(rd$roles$color_cols) != 0) {
     # Phase 14o: a transposed model's `tab` is plain character; the legend reads the original fmt table.
     leg_tab <- if (is.null(rd$color_src)) tabs else rd$color_src
-    leg <- suppressWarnings(tab_color_legend(leg_tab, medium = "md", style = "prose", lang = lang,
-                                             theme = theme))
-    if (length(leg)) subtext_text <- c(leg, subtext_text)
+    color_leg <- suppressWarnings(tab_color_legend(leg_tab, medium = "md", style = "prose", lang = lang,
+                                                   theme = theme))
   }
-  # Phase 14w (item 2): the "Model:" line above the colour legend (reg tables only; NULL otherwise).
-  if (!is.null(rd$reg_line)) subtext_text <- c(rd$reg_line, subtext_text)
+  # Phase 16d + 14w (item 2): assemble the footer prose block in one ordered pass --
+  #   Weighted by <wt>. | Model: ... | <colour legend> | <stars legend> | <user subtext>
+  weight_leg <- tab_weight_line(tabs, lang = lang)
+  stars_leg  <- suppressWarnings(tab_stars_legend(tabs, lang = lang))
+  subtext_text <- c(weight_leg, rd$reg_line, color_leg, stars_leg, subtext_text)
 
   # md drops the trailing separator (no line after the last row); the prep's new_group is the base.
   new_group <- rd$roles$new_group

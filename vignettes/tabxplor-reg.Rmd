@@ -127,7 +127,8 @@ factor_predictors <- c("race", "rincome", "relig")
 gss_simple |>
   dplyr::filter(dplyr::if_all(all_of(c(predictors, dependent)), ~ !is.na(.) )) |> 
   tab(all_of(factor_predictors), all_of(dependent), pct = "row", na = "drop", 
-      color = "diff", ref = 1, color_signif = "grey_non_signif", stars = TRUE
+      color = "diff", ref = 1, color_signif = "grey_non_signif", stars = TRUE, 
+      method_diff = "wald"
       ) |>
   dplyr::mutate(diff = set_display(`01-Married`, "diff"))
  ```

@@ -22,6 +22,18 @@
   `options(tabxplor.test_lines = "stat")` adds a test-statistic row above the p-value row. A regression
   `split_var` (the population each model was fit on) now appears in HTML and Excel as a merged, vertical
   first column, so exported split models are self-documenting.
+* **Clearer, de-duplicated colour legends and table footers.** When several columns share the same
+  colour scale — most visibly a `tab_reg(empirical = TRUE)` table's crude (`Emp.`) and modelised
+  (`Model`) columns — they now share a **single** legend line, prefixed by the columns it covers
+  (e.g. `Emp. OR, Model OR — …`, the first six then `… +N vars`). The `color = "contrib"` legend now
+  reads correctly ("×N the **mean contribution**" on *both* sides, no longer a misleading `÷`); a
+  custom `color_breaks = list(mean_diff = …)` scale is described as a raw difference instead of wrongly
+  saying "standardized … SD"; and legend column names no longer break mid-word in HTML. A new
+  **significance-stars legend** ("\*\*\*: …at the 99% confidence level; …") is printed whenever a table
+  shows stars, and `color = "contrib"` no longer prints stars it never opted into. When a table is
+  weighted, its footer now opens with **"Weighted by `<wt>`."**. For a `tab_reg(empirical = TRUE)`
+  logistic table, the crude risk-difference companion now uses the two-proportion **Wald** interval
+  (matching the model's marginal-effect interval), so the shared legend names one honest method.
 * **New jamovi "Regressions" analysis (`jmvtabreg`).** A live, user-friendly jamovi UI for `tab_reg()`
   covering every family (linear / logistic / Poisson / multinomial / ordinal), multiple outcomes,
   survey weights (with an advanced cluster / strata / fpc panel), a per-predictor reference-level picker,

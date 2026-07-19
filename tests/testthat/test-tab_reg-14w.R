@@ -137,7 +137,9 @@ test_that("item 5: an Emp. IRR / model IRR legend names the RATE-ratio, not the 
     suppressWarnings(tab_reg(forcats::gss_cat, "tvhours", "race", family = "poisson",
                              empirical = TRUE, cleannames = FALSE)),
     medium = "md", style = "prose")
-  irr <- leg[grepl("^(Emp\\. IRR|Model IRR)", leg)]
+  # Phase 16d: Emp. IRR + Model IRR now fold into ONE legend line ("Emp. IRR, Model IRR - ...", the
+  # prefix names joined with no-break spaces), so match the line by "IRR" rather than a space-anchored prefix.
+  irr <- leg[grepl("IRR", leg)]
   expect_true(length(irr) >= 1)
   expect_true(all(grepl("rate-ratio", irr)))
   expect_false(any(grepl("odds-ratio", irr)))

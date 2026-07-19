@@ -13,7 +13,15 @@ R/
 ├── fmt_class.R     (3341 L)  Core type: tabxplor_fmt vctrs record, getters/setters,
 │                              format/pillar methods, vctrs arithmetic/casting,
 │                              color engine (fmt_color_plan/fmt_color_slots/fmt_color_channels;
-│                              per-side fold + findInterval; slots 1-4 over / 5-8 under)
+│                              per-side fold + findInterval; slots 1-4 over / 5-8 under);
+│                              colour legend (legend_specs -> legend_canonicalise_reg [16d: drop `role`
+│                              from sig, share reg emp+model ref-label + neutralise the additive
+│                              AME/beta subject so a companion FOLDS into its model line] -> tokens ->
+│                              legend_render_line; legend_name_list = 16d prefix normalise [<br>/U+202F
+│                              -> U+00A0, cap 6 +N vars]; contrib legend = x N BOTH sides "vs the mean";
+│                              is_pct/is_std 3-way diff = pct/SD/raw). Footer helpers tab_weight_line
+│                              ("Weighted by <wt>.") + tab_stars_legend (gated by fmt_stars_applicable
+│                              = not contrib)
 ├── tab.R           (~6200 L) Main API: tab(), tab_many(), tab_plain(), tab_num(),
 │                              tab_apply_reference() (Phase 7f carve; Phase 9d: matrix-sweep internals;
 │                              14z: also the empirical-OR Woolf CI [ci_or on the {level j, ref2 level} x
@@ -194,10 +202,13 @@ R/
 │                              skeleton_data, stacks grouped_tab (split_var,var); tab_spread works,
 │                              group-aware print_reg_footer). multiplier (OR^k) + 14v `empirical`
 │                              (renamed from empirical_OR; cross-family crude companion: reg_empirical /
-│                              reg_empirical_columns per family -- binomial %/OR|%/diff, gaussian
+│                              reg_empirical_columns per family -- binomial %/OR|%/diff [16d: the
+│                              risk-diff companion CI = two-proportion WALD, matching method_diff="wald"
+│                              + the model AME's Wald so the merged legend names ONE method], gaussian
 │                              mean/diff [diff/SD(Y), type=coef], poisson rate/IRR; multinomial =
 │                              tooltip via reg_empirical_tips -> `empirical_tips` table attr; per-spec
-│                              for a dependents vector). No new fmt fields.
+│                              for a dependents vector). No new fmt fields. 16d: reg_meta$wt (weight
+│                              name for the "Weighted by" footer).
 │                              12h (display): estimate_display= arg -> est_ci token (estimate + visible
 │                              [ci_inf;ci_sup] bracket, no 1/x; fmt_class.R only) | "prob"/"ame" fold
 │                              predicted prob / AME into the OR cell via {} grammar (binomial coef only,
@@ -852,7 +863,7 @@ regenerated + a few value assertions updated):
   text channel). `fmt_get_color_code()` (single-channel golden) is left un-arbitrated.
 
 
-#### Phase 16d — Color legends / table footers improvements
+#### Phase 16d — color legends and table footers improvements
 
 `tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"), empirical = TRUE)`
 "Emp. OR: OR (ref.): 1/4 1/2 1/1.5 1.15 1.5 2 4 [grey: non-significant or under ×1.15]
@@ -891,7 +902,7 @@ regenerated + a few value assertions updated):
 
 
 
-#### Phase 16e — Dark mode in positron, ci and stars improvements
+#### Phase 16e — Dark mode colors in positron console, ci and stars improvements
 
 Finally, is there a reliable way to detect Dark mode in Positron, in order to use Dark mode colors in it’s R Console automatically ? Look at dev history, I remember we found a Positron way for html at a point, then implement the most reliable solution.
 
@@ -908,6 +919,7 @@ Finally, is there a reliable way to detect Dark mode in Positron, in order to us
 
 `tab(gss_simple, race, party3, color = "contrib")`
 - strangely, this prints significance stars even when they are not opt-in (and color_signif isn’t even use for the colors !)
+- **RESOLVED in Phase 16d** (needed so the new stars legend never appears on a contrib table): `fmt_stars_applicable()` (`R/fmt_class.R`) suppresses stars on a `contrib` column — its stored `pvalue` is a standardized-residual (independence) p, not a "vs the reference" test. Gated in `format()`, `has_stars` (tab-export-prep) and `tab_stars_legend()`.
 
 
 

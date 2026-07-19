@@ -64,10 +64,14 @@ testthat::test_that("weighted counts (real n + weighted wn) == weighted microdat
     dplyr::group_by(marital, race) |>
     dplyr::summarise(n = dplyr::n(), wn = sum(w), .groups = "drop")
 
+  # Phase 16d: the `vars$wt` (weight column NAME for the "Weighted by <wt>." footer) legitimately differs
+  # by ENTRY POINT -- the microdata path names the weight "w", the from-the-middle path names its weighted-
+  # count column "wn" -- while the NUMBERS are identical. Strip that footer-only detail before comparing.
+  strip_wt <- function(t) { a <- attr(t, "vars"); a$wt <- NULL; attr(t, "vars") <- a; t }
   for (cc in c("no", "cell", "diff")) {
     testthat::expect_equal(
-      tab_counts(cw, marital, race, counts = n, wt_counts = wn, pct = "row", ci = cc, test = TRUE),
-      tab(gss, marital, race, wt = w, pct = "row", ci = cc, test = TRUE),
+      strip_wt(tab_counts(cw, marital, race, counts = n, wt_counts = wn, pct = "row", ci = cc, test = TRUE)),
+      strip_wt(tab(gss, marital, race, wt = w, pct = "row", ci = cc, test = TRUE)),
       info = paste0("ci=", cc))
   }
 })

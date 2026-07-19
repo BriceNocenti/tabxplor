@@ -155,7 +155,9 @@ test_that("binomial Emp. OR CI == crude logistic-regression CI (Woolf = Wald, pe
   }
 })
 
-test_that("binomial AME Emp. diff CI == Newcombe risk-difference CI", {
+# Phase 16d: the crude risk-difference companion uses the two-proportion WALD interval (matching the
+# reg's method_diff = "wald" and the model AME's Wald delta interval), not Newcombe.
+test_that("binomial AME Emp. diff CI == Wald risk-difference CI", {
   d <- emp_data()
   t <- tab_reg(d, "married", "race", effect = "ame", family = "binomial", empirical = TRUE,
                cleannames = FALSE)
@@ -166,7 +168,7 @@ test_that("binomial AME Emp. diff CI == Newcombe risk-difference CI", {
   r1  <- levels(d$race)[1]
   for (k in which(!is.na(get_ci_inf(ed)))) {
     lev <- as.character(t$levels)[k]
-    hand <- ci_newcombe(pr[[lev]], nn[[lev]], pr[[r1]], nn[[r1]], want_p = TRUE)
+    hand <- ci_prop_diff(pr[[lev]], nn[[lev]], pr[[r1]], nn[[r1]], method = "wald", want_p = TRUE)
     expect_equal(get_ci_inf(ed)[k], hand$inf, tolerance = 1e-6, label = lev)
     expect_equal(get_ci_sup(ed)[k], hand$sup, tolerance = 1e-6, label = lev)
   }

@@ -434,3 +434,26 @@ msgid ""
 "tab should be an object from either ggpubr::ggtexttable() or "
 "gridExtra::tableGrob()."
 msgstr ""
+
+# Phase 16d -- colour-legend / footer strings (English wired via gettext; .mo recompiled in the
+# dedicated French-translation phase). FR for the stars legend + weighted footer from the roadmap.
+msgid "Weighted by %s."
+msgstr "Pondéré par %s."
+
+msgid "%s: significantly different from the reference category (in bold) at the %s%% confidence level"
+msgstr "%s : chiffre significativement différent de celui de la modalité de référence (en gras), au seuil de confiance de %s %%"
+
+msgid "%s: at the %s%% level"
+msgstr "%s : au seuil de %s %%"
+
+msgid "no star: not significant"
+msgstr "aucune étoile : non significatif"
+
+msgid "vs the mean"
+msgstr "p. r. à la moyenne"
+
+msgid "the mean contribution"
+msgstr "la contribution moyenne"
+
+msgid "… +%d vars"
+msgstr "… +%d var."

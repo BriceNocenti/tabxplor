@@ -246,9 +246,15 @@ set_reg_meta <- function(x, reg_meta) {
   x
 }
 new_vars_attr <- function(row_vars = character(0), col_vars = character(0),
-                          tab_vars = character(0), compacted = FALSE) {
-  list(row_vars = as.character(row_vars), col_vars = as.character(col_vars),
-       tab_vars = as.character(tab_vars), compacted = isTRUE(compacted))
+                          tab_vars = character(0), compacted = FALSE, wt = NA_character_) {
+  out <- list(row_vars = as.character(row_vars), col_vars = as.character(col_vars),
+              tab_vars = as.character(tab_vars), compacted = isTRUE(compacted))
+  # Phase 16d: the weight column NAME drives the footer "Weighted by <wt>." line. It is stored ONLY when
+  # there IS a weight -- an unweighted table's `vars` attribute is unchanged (no field), so no golden /
+  # serialized table churns and get_vars_attr(x)$wt is simply NULL. (get_weight_name reads it either way.)
+  wt <- if (length(wt)) as.character(wt)[1] else NA_character_
+  if (!is.na(wt) && nzchar(wt)) out$wt <- wt
+  out
 }
 # The package CI defaults (mirror tab()'s formals), used when a table carries no `ci_settings`.
 default_ci_settings <- function() {
@@ -646,13 +652,19 @@ tbl_format_footer.tabxplor_tab <- function(x, setup, ...) {
   # Phase 14w (item 2): the regression "Model:" line comes BEFORE the colour legend (the reader must know
   # what the numbers ARE before reading how they are coloured). NULL on a crosstab.
   reg_line <- reg_model_line(get_reg_meta(x))
+  # Phase 16d: the "Weighted by <wt>." line opens the footer (NULL when unweighted); the significance-
+  # stars legend closes the colour block (NULL when no star is displayed).
+  weight_line <- tab_weight_line(x)
+  stars_line  <- suppressWarnings(tab_stars_legend(x))
   if (length(print_colors) != 0) print_colors <- paste0(
     pillar::style_subtle("# "), print_colors
   )
   if (length(subtext) != 0) subtext <- pillar::style_subtle( paste0("# ", subtext) )
   if (!is.null(reg_line)) reg_line <- pillar::style_subtle(paste0("# ", reg_line))
+  if (!is.null(weight_line)) weight_line <- pillar::style_subtle(paste0("# ", weight_line))
+  if (!is.null(stars_line)) stars_line <- pillar::style_subtle(paste0("# ", stars_line))
 
-  c(default_footer, reg_line, print_colors, subtext)
+  c(default_footer, weight_line, reg_line, print_colors, stars_line, subtext)
 }
 
 
@@ -834,6 +846,8 @@ tab_kable <- function(tabs,
     subtext <- character(0)
     if (!isTRUE(rd$vars$degrade)) {
       subtext <- rd$subtext
+      # Phase 16d: stars legend (plain) closes the colour block, above the user subtext.
+      if (!is.null(rd$stars_legend)) subtext <- c(rd$stars_legend, subtext)
       if (color_legend && length(rd$roles$color_cols) != 0) {
         subtext <- c(
           suppressWarnings(tab_color_legend(
@@ -847,6 +861,8 @@ tab_kable <- function(tabs,
       }
       # Phase 14w (item 2): the "Model:" line above the colour legend (reg tables only; NULL otherwise).
       if (!is.null(rd$reg_line)) subtext <- c(rd$reg_line, subtext)
+      # Phase 16d: "Weighted by <wt>." opens the whole footer (NULL when unweighted).
+      if (!is.null(rd$weight_line)) subtext <- c(rd$weight_line, subtext)
     }
     # Phase 14w (item 1): a reg table auto-captions itself from `reg_title` when the user gave no caption.
     cap <- caption
@@ -1173,7 +1189,8 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
     }),
     col_vars  = longest_col_vars,
     tab_vars  = character(0),          # guaranteed: the tab_vars bail above returned already
-    compacted = TRUE
+    compacted = TRUE,
+    wt        = get_vars_attr(tabs[[1]])$wt   # Phase 16d: the weight survives a compact merge
   )
 
   tabs_chi2 <- purrr::map_df(tabs, ~get_test(.) )

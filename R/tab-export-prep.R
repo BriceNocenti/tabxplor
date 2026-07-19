@@ -357,7 +357,8 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
   # Sans. get_stars() is "" for an absent/NA pvalue, so this is TRUE exactly when a star will render --
   # read by the html engine (adds the `tx-has-stars` class), tab_xl (picks font_num_stars) and tab_plot.
   has_stars <- length(fmt_cols) > 0 &&
-    any(vapply(fmt_cols, function(j) any(nzchar(get_stars(tab[[j]]))), logical(1)))
+    any(vapply(fmt_cols, function(j) fmt_stars_applicable(tab[[j]]) &&
+                                     any(nzchar(get_stars(tab[[j]]))), logical(1)))
 
   col_var_map   <- get_col_var(tab)
   real_col_vars <- unique(col_var_map[fmt_mask])
@@ -508,6 +509,10 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
     # Phase 14w (item 2): the regression "Model:" line, prepended BEFORE the colour legend by every
     # backend (a reader must know what the numbers ARE before how they are coloured). NULL on a crosstab.
     reg_line = reg_model_line(get_reg_meta(tab)),
+    # Phase 16d: two more plain (uncoloured) footer lines every backend threads -- "Weighted by <wt>."
+    # OPENS the footer, the significance-stars legend CLOSES the colour block. Both NULL when absent.
+    weight_line  = tab_weight_line(tab),
+    stars_legend = suppressWarnings(tab_stars_legend(tab)),
     # Phase 14w (item 1): the regression title/caption, used when the exporter has no user caption. NA on
     # a crosstab (those keep their own caption / auto-title path).
     reg_title = reg_title(get_reg_meta(tab)),

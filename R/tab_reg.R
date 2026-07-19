@@ -1059,8 +1059,11 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, family, effect, var_
                            ci$pvalue[refrows] <- NA_real_; ci }
 
   if (family == "binomial") {
+    # Phase 16d: the crude risk-difference companion uses the two-proportion WALD interval, matching the
+    # reg's `method_diff = "wald"` (and the model AME's Wald delta interval) so the shared colour legend
+    # names ONE honest method -- for a saturated single-predictor logit the AME IS this crude Wald diff.
     rd <- na_ref(ci_prop_diff(base, nv, rb, rn, conf_level = conf_level,
-                              method = "newcombe", want_p = TRUE))          # crude risk-difference
+                              method = "wald", want_p = TRUE))              # crude risk-difference
     base_col <- fmt(pct = base, diff = diffv, n = nv, tot_n = nv,
                     ci_inf = rd$inf, ci_sup = rd$sup, pvalue = rd$pvalue,
                     type = "row", display = "pct", digits = 0L, ref = "tot", ci_type = "diff",
@@ -2754,10 +2757,16 @@ tab_reg <- function(data, dependent, predictors = NULL,
         pl
       })
     } else rep(NA_character_, length(dependent))
+  # Phase 16d: the weight column NAME (or NA) drives the footer "Weighted by <wt>." line. `wt` is a
+  # character column name or a formula (reg_design_formula accepts both); a prebuilt design carries its
+  # own weights and cannot be named -> NA.
+  wt_disp <- if (is.null(wt) || (length(wt) == 1L && is.na(wt))) NA_character_
+             else if (rlang::is_formula(wt)) all.vars(wt)[1]
+             else as.character(wt)[1]
   reg_meta <- list(
     family = family, effect = effect, at = at, do_exp = do_exp, eff_word = eff_word,
     dependent = dependent, positive_level = positive_levels, predictors = union_predictors,
-    split_var = split_var, comparison = is_comparison,
+    split_var = split_var, comparison = is_comparison, wt = wt_disp,
     model_labels = if (is_comparison) labels else NULL, conf_level = conf_level
   )
   set_reg_meta(res, reg_meta)

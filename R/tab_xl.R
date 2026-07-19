@@ -253,13 +253,18 @@ tab_xl <-
                          theme = theme)))
       legend_runs <- purrr::map(legend_runs, ~ if (is.null(.)) list() else .)
     }
-    # Phase 14w (item 2): prepend the regression "Model:" line as a plain (uncoloured) run line. It rides
-    # the SAME rich-text block as the colour legend (so the legend_row overwrite stays aligned) and prints
-    # FIRST. NULL on a crosstab -> nothing prepended.
+    # Phase 14w (item 2) + 16d: prepend the "Weighted by <wt>." + regression "Model:" lines and append the
+    # significance-stars legend as plain (uncoloured) run lines. They ride the SAME rich-text block as the
+    # colour legend (so the legend_row overwrite stays aligned). Order: weight | Model | colours | stars.
     legend_runs <- purrr::map2(tabs_src, legend_runs, function(t, runs) {
+      plain_line <- function(s) list(list(text = s, color = NA_character_, bold = FALSE))
+      wl <- tab_weight_line(t, lang = lang)
       rl <- reg_model_line(get_reg_meta(t))
-      if (is.null(rl)) runs
-      else c(list(list(list(text = rl, color = NA_character_, bold = FALSE))), runs)
+      sl <- suppressWarnings(tab_stars_legend(t, lang = lang))
+      head_lines <- c(if (!is.null(wl)) list(plain_line(wl)),
+                      if (!is.null(rl)) list(plain_line(rl)))
+      tail_lines <- if (!is.null(sl)) list(plain_line(sl))
+      c(head_lines, runs, tail_lines)
     })
     if (any(purrr::map_lgl(legend_runs, ~ length(.) > 0L))) {
       legend_plain <- purrr::map(legend_runs, ~ purrr::map_chr(
