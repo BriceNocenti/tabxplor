@@ -99,8 +99,8 @@
 #' # openxlsx2 is Suggests-only and tab_xl() stops without it, so guard the example: \donttest{}
 #' # does NOT exempt it from R CMD check --as-cran, which CRAN also runs without Suggests.
 #' if (requireNamespace("openxlsx2", quietly = TRUE)) {
-#'   forcats::gss_cat %>%
-#'     tab(marital, race, pct = "row", color = "diff") %>%
+#'   forcats::gss_cat |>
+#'     tab(marital, race, pct = "row", color = "diff") |>
 #'     tab_xl()
 #' }
 #' }
@@ -245,7 +245,7 @@ tab_xl <-
     # the runs so it matches byte-for-byte) is merged into `subtext` for the geometry / styling; the
     # legend occupies the first `length(legend_runs)` subtext rows, overwritten with rich text below.
     subtext <- purrr::map(tabs_src, get_subtext) |>
-      purrr::map(~ stringr::str_replace_all(., "\\\n", " ") |> stringr::str_replace_all(" +", " "))
+      purrr::map(~ stringi::stri_replace_all_regex(., "\\\n", " ") |> stringi::stri_replace_all_regex(" +", " "))
     # Phase 16e: the whole footer (weight -> Model: -> colour legend -> stars) as rich-text run lines via the
     # ONE shared builder -- replaces the hand-built plain-line head/tail sandwich around the colour legend.
     # They ride the SAME rich-text block (so the legend_row overwrite stays aligned); the user subtext stays
@@ -299,15 +299,15 @@ tab_xl <-
     # Clean AFTER the 25-char cut and BEFORE the de-duplication below: openxlsx2 would otherwise do
     # the identical substitution itself (with a warning) at add_worksheet() time -- i.e. after our
     # de-duplication, which would then have run on names that are not the final ones.
-    sheet_titles <- sheet_base[newsheet] |> stringr::str_sub(1, 25) |> xl_clean_sheet_name()
+    sheet_titles <- sheet_base[newsheet] |> stringi::stri_sub(1, 25) |> xl_clean_sheet_name()
     sheet_titles <- dplyr::if_else(duplicated(sheet_titles),
-                                   stringr::str_c(sheet_titles, ".2"), sheet_titles)
+                                   stringi::stri_c(sheet_titles, ".2"), sheet_titles)
     nb <- 2
     while (length(unique(sheet_titles)) != length(sheet_titles)) {
       nb <- nb + 1
       sheet_titles <- dplyr::if_else(
         duplicated(sheet_titles),
-        stringr::str_c(stringr::str_remove(sheet_titles, "..$"), ".", nb), sheet_titles)
+        stringi::stri_c(stringi::stri_replace_first_regex(sheet_titles, "..$", ""), ".", nb), sheet_titles)
     }
 
     # Colour palettes built ONCE (Phase 5): TEXT channel -> font colour (the text palette),
@@ -379,17 +379,17 @@ tab_xl_resolve_path <- function(path, replace) {
   } else {
     path <- path[[1]]
   }
-  if (stringr::str_detect(path, "\\\\|/")) {
-    dir_path <- path |> stringr::str_remove("\\\\[^\\\\]+$|/[^/]+$")
+  if (stringi::stri_detect_regex(path, "\\\\|/")) {
+    dir_path <- path |> stringi::stri_replace_first_regex("\\\\[^\\\\]+$|/[^/]+$", "")
     if (!dir.exists(dir_path)) dir.create(dir_path, recursive = TRUE)
   }
-  path_name <- stringr::str_remove(path, "\\.xlsx$")
-  if (!stringr::str_detect(path, "\\.xlsx$")) path <- stringr::str_c(path, ".xlsx")
+  path_name <- stringi::stri_replace_first_regex(path, "\\.xlsx$", "")
+  if (!stringi::stri_detect_regex(path, "\\.xlsx$")) path <- stringi::stri_c(path, ".xlsx")
   if (isFALSE(replace)) {
     i <- 0
     while (file.exists(path)) {
       i <- i + 1
-      path <- stringr::str_c(path_name, i, ".xlsx")
+      path <- stringi::stri_c(path_name, i, ".xlsx")
     }
   }
   path
@@ -514,7 +514,7 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
       # an unstarred "" is width 0, so the max over every value cell IS the column-max star width.
       # formatC() padded with ASCII spaces, half a digit wide in the proportional font Excel renders.
       w      <- max(nchar(st[val]))
-      st_pad <- stringr::str_pad(st, w, side = "right", pad = fig_space) # glyphs left, pad right
+      st_pad <- stringi::stri_pad(st, w, side = "right", pad = fig_space) # glyphs left, pad right
       code[val] <- paste0(code[val], '"', st_pad[val], '"')
     }
     # Phase 12h: fold an in-cell TEST LABEL ("{pvalue} (Chi2)") into the numFmt literal so Excel shows

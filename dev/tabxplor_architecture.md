@@ -856,10 +856,11 @@ Markdown export. Standalone file (does not modify existing code). Handles:
 
 Utilities and initialization:
 
-- Pipe re-export (`%>%` from magrittr)
 - `.onLoad()` — sets all default options
 - `quo_miss_na_null_empty_no()` — helper to check for missing/empty quosures
 - Factor manipulation utilities (`fct_recode_helper`, etc.)
+- `tx_str_wrap()` / `tx_str_trunc()` — stringi-based replacements for `stringr::str_wrap` / `str_trunc`
+  (Last Phase b-ii dropped `stringr` and `magrittr`; the package uses base `|>` and `stringi` now)
 - `score_from_lv1()` — scoring helper for survey data
 
 ### R/tab_reg.R (Phase 12c — LIVE; renamed from R/tab_logit.R)

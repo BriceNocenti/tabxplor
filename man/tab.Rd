@@ -436,7 +436,7 @@ tab(dplyr::storms, category, c(status, pressure, wind))
 }
 
 # Colors to help the user read the table:
-data <- forcats::gss_cat \%>\%
+data <- forcats::gss_cat |>
   dplyr::filter(year \%in\% c(2000, 2006, 2012), !marital \%in\% c("No answer", "Widowed"))
 gss  <- "Source: General social survey 2000-2014"
 gss2 <- "Source: General social survey 2000, 2006 and 2012"
@@ -454,7 +454,7 @@ tab(data, race, marital, year, subtext = gss2, pct = "row", color = "diff",
 
 # Historical differences:
 \donttest{
-data2 <- data \%>\% dplyr::mutate(year = as.factor(year))
+data2 <- data |> dplyr::mutate(year = as.factor(year))
 tab(data2, year, marital, race, subtext = gss2, pct = "row",
     color = "diff", ref = "first", tot = "col")
 
@@ -472,15 +472,15 @@ tab(forcats::gss_cat, race, marital, subtext = gss, color = "contrib")
 # Since the result is a tibble, you can use all dplyr verbs to modify it :
 \donttest{
 library(dplyr)
-tab(dplyr::storms, category, c(status, pressure, wind)) \%>\%
-  dplyr::filter(category != "-1") \%>\%
-  dplyr::select(-`tropical depression`) \%>\%
+tab(dplyr::storms, category, c(status, pressure, wind)) |>
+  dplyr::filter(category != "-1") |>
+  dplyr::select(-`tropical depression`) |>
   dplyr::arrange(is_totrow(.), desc(category))
 }
 
 \donttest{
 # With `dplyr::arrange`, don't forget to keep the order of tab variables and total rows:
-tab(data, race, marital, year, pct = "row") \%>\%
+tab(data, race, marital, year, pct = "row") |>
   dplyr::arrange(year, is_totrow(.), desc(Married))
   }
 

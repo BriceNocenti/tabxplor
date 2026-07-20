@@ -170,7 +170,7 @@ testthat::test_that("tab_xl(): the star literal is padded with figure spaces", {
   testthat::expect_identical(st, c("***", "", "*"))
   # the width every cell's star field is padded to = the column max ("" counts 0)
   w  <- max(nchar(st))
-  padded <- stringr::str_pad(st, w, side = "right", pad = fig)
+  padded <- stringi::stri_pad(st, w, side = "right", pad = fig)
   testthat::expect_identical(nchar(padded), rep(w, 3L))
   testthat::expect_false(any(grepl(" ", padded, fixed = TRUE)))
   # and format()'s own star pad agrees, glyph for glyph

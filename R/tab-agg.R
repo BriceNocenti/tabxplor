@@ -192,7 +192,7 @@ tab_aggregate_num <- function(data, row_var, col_vars, tab_vars, wt,
                               na = c("keep", "drop")) {
   row_var_quo <- rlang::enquo(row_var)
   if (quo_miss_na_null_empty_no(row_var_quo)) {
-    data <- data %>% dplyr::mutate(no_row_var = factor("no_row_var"))
+    data <- data |> dplyr::mutate(no_row_var = factor("no_row_var"))
     row_var <- rlang::sym("no_row_var")
   } else {
     row_var <- rlang::ensym(row_var)
@@ -200,7 +200,7 @@ tab_aggregate_num <- function(data, row_var, col_vars, tab_vars, wt,
 
   col_vars <- rlang::enquo(col_vars)
   if (quo_miss_na_null_empty_no(col_vars)) {
-    data     <- data %>% dplyr::mutate(no_col_var = factor("n"))
+    data     <- data |> dplyr::mutate(no_col_var = factor("n"))
     col_vars <- rlang::syms("no_col_var")
   } else {
     pos_col_vars <- tidyselect::eval_select(col_vars, data)
@@ -226,8 +226,8 @@ tab_aggregate_num <- function(data, row_var, col_vars, tab_vars, wt,
   na <- na[1]
   stopifnot(na %in% c("keep", "drop"))
 
-  data <- data %>%
-    dplyr::select(!!!tab_vars, !!row_var, !!!col_vars, !!wt) %>%
+  data <- data |>
+    dplyr::select(!!!tab_vars, !!row_var, !!!col_vars, !!wt) |>
     dplyr::mutate(dplyr::across((!!wt | tidyselect::all_of(as.character(col_vars))) &
                                   !where(is.numeric), as.numeric)
     )

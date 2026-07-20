@@ -42,10 +42,10 @@ total row is always computed, one total column shown). \code{tab_tot()} still wo
 existing tab.
 }
 \examples{
-\donttest{data <- dplyr::starwars \%>\% tab_prepare(sex, hair_color)
+\donttest{data <- dplyr::starwars |> tab_prepare(sex, hair_color)
 
-data \%>\%
-  tab_plain(sex, hair_color) \%>\%
+data |>
+  tab_plain(sex, hair_color) |>
   tab_tot("col", totcol = "each")
   }
 }

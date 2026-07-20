@@ -136,8 +136,8 @@ global options with \code{\link{set_color_style}} and \code{\link{set_color_brea
 # openxlsx2 is Suggests-only and tab_xl() stops without it, so guard the example: \donttest{}
 # does NOT exempt it from R CMD check --as-cran, which CRAN also runs without Suggests.
 if (requireNamespace("openxlsx2", quietly = TRUE)) {
-  forcats::gss_cat \%>\%
-    tab(marital, race, pct = "row", color = "diff") \%>\%
+  forcats::gss_cat |>
+    tab(marital, race, pct = "row", color = "diff") |>
     tab_xl()
 }
 }

@@ -13,9 +13,9 @@ testthat::test_that("tab_xl creates an Excel file", {
 
   test_path <- file.path(tempdir(), "tab_xl_test.xlsx")
 
-  tabs %>%
+  tabs |>
     tab_xl(path = test_path, sheets = "unique",
-           replace = TRUE, open = FALSE) %>%
+           replace = TRUE, open = FALSE) |>
     testthat::expect_invisible()
 
  testthat::expect_true(file.exists(test_path))
@@ -30,9 +30,9 @@ testthat::test_that("tab_xl work with  after_ci", {
 
   test_path <- file.path(tempdir(), "tab_xl_test.xlsx")
 
-  tabs %>%
+  tabs |>
     tab_xl(path = test_path, sheets = "unique",
-           replace = TRUE, open = FALSE) %>%
+           replace = TRUE, open = FALSE) |>
     testthat::expect_invisible()
 
   testthat::expect_true(file.exists(test_path))

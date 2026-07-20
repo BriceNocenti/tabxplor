@@ -158,7 +158,7 @@ render_kableExtra_engine <- function(rd, meta, subtext, caption, tooltips, popov
   if (in_knitr) {
     tabs <- tabs |>
       dplyr::mutate(dplyr::across(dplyr::where(is.character),
-                                  ~ stringr::str_replace_all(., "\\*", "\\\\*")))
+                                  ~ stringi::stri_replace_all_regex(., "\\*", "\\\\*")))
   }
 
   new_group   <- rd$roles$new_group
@@ -181,7 +181,7 @@ render_kableExtra_engine <- function(rd, meta, subtext, caption, tooltips, popov
   # Phase 13c-ii: partial-bold composite cells -- format(bold_split = TRUE) marks the primary-field
   # width; html_cell_text() escapes the value AND wraps a bold cell's composite suffix in a normal
   # <span>, then cell_spec(escape = FALSE) (byte-identical to escape = TRUE for non-composite cells).
-  out <- tabs %>%
+  out <- tabs |>
     dplyr::mutate(dplyr::across(
       where(is_fmt),
       ~ {
@@ -231,14 +231,14 @@ render_kableExtra_engine <- function(rd, meta, subtext, caption, tooltips, popov
   }
 
   if (theme == "light") {
-    out <- out %>% kableExtra::kable_classic(
+    out <- out |> kableExtra::kable_classic(
       lightable_options = "hover",
       full_width = full_width,
       html_font = html_font,
       ...
     )
   } else {
-    out <- out %>% kableExtra::kable_material_dark(
+    out <- out |> kableExtra::kable_material_dark(
       lightable_options = "hover",
       bootstrap_options = c("hover", "condensed", "responsive"),
       full_width = full_width,
@@ -253,23 +253,23 @@ render_kableExtra_engine <- function(rd, meta, subtext, caption, tooltips, popov
   tot_rows_last <- rd$roles$totblock_bottom
 
   if (length(subtext) != 0) {
-    out <- out %>% kableExtra::add_footnote(subtext, notation = "none", escape = FALSE)
+    out <- out |> kableExtra::add_footnote(subtext, notation = "none", escape = FALSE)
   }
 
-  out <- out %>%
+  out <- out |>
     kableExtra::row_spec(
       0, color = text_color, bold = TRUE,
       extra_css = "border-top: 0px solid ; border-bottom: 1px solid ;font-size: 90%;vertical-align: bottom;line-height: 0.9;padding: 3px;text-align: center;"
-    ) %>%
-    kableExtra::row_spec(tot_or_ref, bold = TRUE) %>%
-    kableExtra::row_spec(tot_rows_1, extra_css = "border-top: 1px solid ;") %>%
-    kableExtra::row_spec(tot_rows_last, extra_css = "border-bottom: 1px solid ;") %>%
-    kableExtra::column_spec(fmt_cols, extra_css = "white-space: nowrap;") %>%
-    kableExtra::column_spec(unique(c(new_col_var, ncol(tabs))), border_right = TRUE) %>%
-    kableExtra::column_spec(other_cols, border_left = TRUE) %>%
-    kableExtra::column_spec(totcols, border_left = TRUE, width_min = 11) %>%
-    kableExtra::column_spec(row_var, width_min = 20) %>%
-    kableExtra::row_spec(new_group, extra_css = "border-bottom: 2px solid;") %>%
+    ) |>
+    kableExtra::row_spec(tot_or_ref, bold = TRUE) |>
+    kableExtra::row_spec(tot_rows_1, extra_css = "border-top: 1px solid ;") |>
+    kableExtra::row_spec(tot_rows_last, extra_css = "border-bottom: 1px solid ;") |>
+    kableExtra::column_spec(fmt_cols, extra_css = "white-space: nowrap;") |>
+    kableExtra::column_spec(unique(c(new_col_var, ncol(tabs))), border_right = TRUE) |>
+    kableExtra::column_spec(other_cols, border_left = TRUE) |>
+    kableExtra::column_spec(totcols, border_left = TRUE, width_min = 11) |>
+    kableExtra::column_spec(row_var, width_min = 20) |>
+    kableExtra::row_spec(new_group, extra_css = "border-bottom: 2px solid;") |>
     kableExtra::row_spec(nrow(tabs), extra_css = "border-bottom: 1px solid;") |>
     kableExtra::row_spec(1:nrow(tabs), extra_css = "vertical-align: top; line-height: 0.85;padding: 3px;")
 

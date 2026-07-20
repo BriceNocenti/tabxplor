@@ -226,11 +226,11 @@ utils::globalVariables(c("tabx_opts", "tabx_ship", ".stop"))
 #'
 #' # To identify the total columns, and work with them :
 #' is_totcol(tabs)
-#' tabs %>% mutate(across(where(is_totcol), ~ "total column"))
+#' tabs |> mutate(across(where(is_totcol), ~ "total column"))
 #'
 #' # To identify the total rows, and work with them :
 #' is_totrow(tabs)
-#' tabs %>%
+#' tabs |>
 #'   mutate(across(
 #'     where(is_fmt),
 #'     ~ if_else(is_totrow(.), true = "into_total_row", false = "normal_cell")
@@ -238,17 +238,17 @@ utils::globalVariables(c("tabx_opts", "tabx_ship", ".stop"))
 #'
 #' # To identify the total tables, and work with them :
 #' tottabs <- is_tottab(tabs)
-#' tabs %>% tibble::add_column(tottabs) %>%
+#' tabs |> tibble::add_column(tottabs) |>
 #'   mutate(total = if_else(tottabs, "part of a total table", "normal cell"))
 #'
 #' # To access the displayed numbers, as numeric vectors :
-#' tabs %>% mutate(across(where(is_fmt), get_num))
+#' tabs |> mutate(across(where(is_fmt), get_num))
 #'
 #' # To access the displayed numbers, as character vectors (without colors) :
-#' tabs %>% mutate(across(where(is_fmt), format))
+#' tabs |> mutate(across(where(is_fmt), format))
 #'
 #' # To access the (non-displayed) differences of the cells percentages from totals :
-#' tabs %>% mutate(across(where(is_fmt), ~ vctrs::field(., "diff")))
+#' tabs |> mutate(across(where(is_fmt), ~ vctrs::field(., "diff")))
 #'
 #'
 #' # To do more complex operations, like creating a new column with standard deviation and
@@ -304,8 +304,8 @@ fmt <- function(n         = integer(),
   # DESIGN: these 8 fields set the recycling reference length. display, diff, ratio, or,
   # the ci bounds, pvalue, tot_n and the in_* flags are recycled TO it below, so they must
   # not be passed longer than these (vec_recycle would error, not extend).
-  max_size <- list(n, wn, pct, digits, ctr, mean, var, ci) %>% #display
-    purrr::map_int(length) %>% max()
+  max_size <- list(n, wn, pct, digits, ctr, mean, var, ci) |> #display
+    purrr::map_int(length) |> max()
 
   display <- vctrs::vec_recycle(vctrs::vec_cast(display, character()), size = max_size)
   n       <- vctrs::vec_recycle(vctrs::vec_cast(n      , integer())  , size = max_size)
@@ -666,7 +666,7 @@ return(x)
 #' @return A fmt vectors with the wanted display.
 #' @export
 set_display.tabxplor_fmt <- function(x, value) {
-  value <- vctrs::vec_cast(value, character()) %>% vctrs::vec_recycle(size = length(x))
+  value <- vctrs::vec_cast(value, character()) |> vctrs::vec_recycle(size = length(x))
   vctrs::`field<-`(x, "display", value)
 }
 #' Set the "display" vctrs::field of a \code{fmt} vector.
@@ -1120,8 +1120,8 @@ validate_display_template <- function(recipe) {
              e.g. {.code {{pct}} (n={{n}})} or {.code {{diff}} [{{ci}}]}."
     ))
   }
-  opens  <- stringr::str_count(recipe, "\\{")
-  closes <- stringr::str_count(recipe, "\\}")
+  opens  <- stringi::stri_count_regex(recipe, "\\{")
+  closes <- stringi::stri_count_regex(recipe, "\\}")
   toks   <- regmatches(recipe, gregexpr("\\{[^{}]+\\}", recipe))[[1]]
   fields_used <- trimws(gsub("[{}]", "", toks))
   if (opens != closes || length(toks) != opens || any(!nzchar(fields_used))) {
@@ -1232,7 +1232,7 @@ new_fmt <- function(n         = integer(),
   #   type %in% c("row", "col", "all", "all_tabs", "mixed", NA_character_)
   # )
 
-  # list(display, n, wn, pct, digits, ctr, mean, var, ci, col_var, totcol, type) %>%
+  # list(display, n, wn, pct, digits, ctr, mean, var, ci, col_var, totcol, type) |>
   #   purrr::map(print)
   # cat("\n")
 
@@ -1317,7 +1317,7 @@ get_n      <- fmt_field_factory("n")
 get_wn     <- function(x) { #If there is no weighted counts, take counts
   out <- vctrs::field(x, "wn")
   if (any(is.na(out))) {
-    counts <- vctrs::field(x, "n") %>% as.double()
+    counts <- vctrs::field(x, "n") |> as.double()
     out[is.na(out)] <- counts[is.na(out)]
   }
   out
@@ -1461,10 +1461,10 @@ get_mean_contrib <- function(x) {
   } else {
     tibble::tibble(
       ctr = ctr,
-      gr = cumsum(as.integer(totrows)) - as.integer(totrows) ) %>%
-      dplyr::mutate(nb = dplyr::row_number()) %>%
-      dplyr::with_groups("gr", ~ dplyr::mutate(., nb = dplyr::last(.data$nb))) %>%
-      dplyr::mutate(mean_ctr = .data$ctr[.data$nb]) %>% dplyr::pull(.data$mean_ctr)
+      gr = cumsum(as.integer(totrows)) - as.integer(totrows) ) |>
+      dplyr::mutate(nb = dplyr::row_number()) |>
+      dplyr::with_groups("gr", ~ dplyr::mutate(., nb = dplyr::last(.data$nb))) |>
+      dplyr::mutate(mean_ctr = .data$ctr[.data$nb]) |> dplyr::pull(.data$mean_ctr)
   }
 }
 
@@ -1486,10 +1486,10 @@ get_ref_means <- function(x) {
   } else {
     tibble::tibble(
       mean = mean,
-      gr = cumsum(as.integer(refrows)) - as.integer(refrows) ) %>%
-      dplyr::mutate(nb = dplyr::row_number()) %>%
-      dplyr::with_groups("gr", ~ dplyr::mutate(., nb = dplyr::last(.data$nb))) %>%
-      dplyr::mutate(ref_means = .data$mean[.data$nb]) %>%
+      gr = cumsum(as.integer(refrows)) - as.integer(refrows) ) |>
+      dplyr::mutate(nb = dplyr::row_number()) |>
+      dplyr::with_groups("gr", ~ dplyr::mutate(., nb = dplyr::last(.data$nb))) |>
+      dplyr::mutate(ref_means = .data$mean[.data$nb]) |>
       dplyr::pull(.data$ref_means)
   }
 }
@@ -1509,10 +1509,10 @@ get_ref_pct <- function(x) {
   } else {
     tibble::tibble(
       pct = pct,
-      gr = cumsum(as.integer(refrows)) - as.integer(refrows) ) %>%
-      dplyr::mutate(nb = dplyr::row_number()) %>%
-      dplyr::with_groups("gr", ~ dplyr::mutate(., nb = dplyr::last(.data$nb))) %>%
-      dplyr::mutate(ref_pcts = .data$pct[.data$nb]) %>%
+      gr = cumsum(as.integer(refrows)) - as.integer(refrows) ) |>
+      dplyr::mutate(nb = dplyr::row_number()) |>
+      dplyr::with_groups("gr", ~ dplyr::mutate(., nb = dplyr::last(.data$nb))) |>
+      dplyr::mutate(ref_pcts = .data$pct[.data$nb]) |>
       dplyr::pull(.data$ref_pcts)
   }
 }
@@ -1535,10 +1535,10 @@ get_ref_var <- function(x) {
   } else {
     tibble::tibble(
       var = var,
-      gr = cumsum(as.integer(refrows)) - as.integer(refrows) ) %>%
-      dplyr::mutate(nb = dplyr::row_number()) %>%
-      dplyr::with_groups("gr", ~ dplyr::mutate(., nb = dplyr::last(.data$nb))) %>%
-      dplyr::mutate(ref_vars = .data$var[.data$nb]) %>%
+      gr = cumsum(as.integer(refrows)) - as.integer(refrows) ) |>
+      dplyr::mutate(nb = dplyr::row_number()) |>
+      dplyr::with_groups("gr", ~ dplyr::mutate(., nb = dplyr::last(.data$nb))) |>
+      dplyr::mutate(ref_vars = .data$var[.data$nb]) |>
       dplyr::pull(.data$ref_vars)
   }
 }
@@ -1568,14 +1568,14 @@ get_ref_var <- function(x) {
 detect_firstcol <- function(tabs) {
   col_vars <- get_col_var(tabs)
   firstcol <- which(col_vars != dplyr::lag(col_vars, default = NA_character_))
-  if (any(col_vars == "all_col_vars")) firstcol <- firstcol %>%
-    purrr::discard(names(.) == names(col_vars)[col_vars == "all_col_vars"])
+  if (any(col_vars == "all_col_vars"))
+    firstcol <- purrr::discard(firstcol, names(firstcol) == names(col_vars)[col_vars == "all_col_vars"])
 
   res <- purrr::map(1:ncol(tabs), function(.i)
     tidyr::replace_na(
       dplyr::last(names(firstcol[firstcol <= .i]) ),
-      "")) %>%
-    rlang::syms() %>%
+      "")) |>
+    rlang::syms() |>
     purrr::set_names(names(tabs))
 
   if (any(col_vars == "all_col_vars")) {
@@ -1602,7 +1602,7 @@ detect_refcol <- function(tabs) {
   res <- purrr::map(seq_len(ncol(tabs)), function(.i) {
     in_grp <- which(col_vars == col_vars[.i] & refcol)
     if (length(in_grp) >= 1L) rlang::sym(nms[in_grp[1]]) else firstcols[[.i]]
-  }) %>%
+  }) |>
     purrr::set_names(nms)
   # mirror detect_firstcol: no reference column for the all_col_vars total group
   if (any(col_vars == "all_col_vars")) res[col_vars == "all_col_vars"] <- rlang::syms("")
@@ -1618,8 +1618,8 @@ detect_totcols <- function(tabs) {
   tot <- which(is_totcol(tabs) | get_col_var(tabs) == "no_col_var")
 
   purrr::map(1:ncol(tabs), function(.i)
-    tidyr::replace_na(names(tot[tot >= .i])[1], "")) %>%
-    rlang::syms() %>%
+    tidyr::replace_na(names(tot[tot >= .i])[1], "")) |>
+    rlang::syms() |>
     purrr::set_names(names(tabs))
 
 
@@ -1634,7 +1634,7 @@ detect_totcols <- function(tabs) {
 #' @keywords internal
 fmt_set_field_factory <- function(.field, cast) {
   function(x, value) {
-    value <- vctrs::vec_cast(value, cast) %>% vctrs::vec_recycle(size = length(x))
+    value <- vctrs::vec_cast(value, cast) |> vctrs::vec_recycle(size = length(x))
     vctrs::`field<-`(x, .field, value)
   }
 }
@@ -1691,7 +1691,7 @@ set_ci_sup  <- fmt_set_field_factory("ci_sup" , cast = double()   )
 #' @keywords internal
 # @export
 set_ci      <- function(x, value) {
-  value <- vctrs::vec_cast(value, double()) %>% vctrs::vec_recycle(size = length(x))
+  value <- vctrs::vec_cast(value, double()) |> vctrs::vec_recycle(size = length(x))
   ctr   <- dplyr::coalesce(ci_center(x), 0)
   x <- set_ci_sup(x, ctr + value)
   x <- set_ci_inf(x, ctr - value)
@@ -1720,9 +1720,9 @@ set_tot_n   <- fmt_set_field_factory("tot_n"  , cast = double()   )
 
 #' @keywords internal
 print_num <- function(num, digits) {
-  sprintf(paste0("%-0.", digits, "f"), num) %>%
-    stringr::str_replace("^0.0+$|^-0.0+$", "0") %>%
-    stringr::str_replace("^100.0+$", "100")
+  sprintf(paste0("%-0.", digits, "f"), num) |>
+    stringi::stri_replace_first_regex("^0.0+$|^-0.0+$", "0") |>
+    stringi::stri_replace_first_regex("^100.0+$", "100")
 }
 
 # WARNING: currently a no-op passthrough. Rendering CIs as HTML/LaTeX subscripts (the
@@ -1730,7 +1730,7 @@ print_num <- function(num, digits) {
 # Jamovi, so subscript formatting is disabled until a Jamovi-safe encoding is found.
 ci_html_subscript <- function(x, html = FALSE) {
   if (html) x <- dplyr::if_else(
-    condition = stringr::str_detect(x,"^ *$" ),
+    condition = stringi::stri_detect_regex(x,"^ *$" ),
     true      = "",
     false     = x #paste0("$_{", x, "}$")
       # paste0('<span style="vertical-align: baseline; position: relative;top: -0.5em;>', x, '</span>')
@@ -1924,14 +1924,14 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
                            false = get_ci_moe(x)[plus_ci] * 100)
 
       ci_print_trim <- function(x) {
-        x <- stringr::str_remove_all(x, paste0("^", pm, "0$|^", pm, "0.0+$|^", pm, "-0.0+$|^",
-                                               pm, "NA"))
-        stringr::str_pad(x, max(stringr::str_length(x)), pad = pad)
+        x <- stringi::stri_replace_all_regex(x, paste0("^", pm, "0$|^", pm, "0.0+$|^", pm, "-0.0+$|^",
+                                               pm, "NA"), "")
+        stringi::stri_pad(x, max(stringi::stri_length(x)), pad = pad)
       }
 
 
       # ci_print_pad <- function(x) {
-      #   stringr::str_pad(x, max(stringr::str_length(x)))
+      #   stringi::stri_pad(x, max(stringi::stri_length(x)))
       # }
 
       out_ci <-
@@ -1941,7 +1941,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
                  paste0("%-0.",
                         digits[plus_ci] + dplyr::if_else(pct_ci[plus_ci] & digits[plus_ci] == 0, 1L, 0L),
                         "f"), ci
-               )) ) %>% ci_html_subscript(html = html)
+               )) ) |> ci_html_subscript(html = html)
         )
 
     } else if (any(plus_disp_ci) ) { # !ci_print_moe
@@ -2003,7 +2003,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   # the very alignment the figure-space padding around it had just bought. `pad` resolves per medium
   # (ASCII in the console/markdown, where it is already exactly one digit wide; fig_space in
   # html/Excel), so the mark can never again disagree with the padding it sits in.
-  out[n_wn] <- out[n_wn] %>% prettyNum(big.mark = pad, preserve.width = "individual")
+  out[n_wn] <- out[n_wn] |> prettyNum(big.mark = pad, preserve.width = "individual")
   out[pct_no_ci] <- paste0(out[pct_no_ci], "%") #pillar::style_subtle()
 
   # Phase 13c-i: ratio (rr) display shows the multiplicative sign, so ratios read symmetrically (like
@@ -2025,7 +2025,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
     nn  <- !is.na(rv)
     val[nn] <- paste0(sym[nn], num[nn])
     if (any(nn))
-      val[nn] <- stringr::str_pad(val[nn], max(stringr::str_length(val[nn])), side = "left",
+      val[nn] <- stringi::stri_pad(val[nn], max(stringi::stri_length(val[nn])), side = "left",
                                   pad = pad)
     out[disp_rr] <- val
   }
@@ -2067,7 +2067,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
      "row"     = ,
      "col"     = ,
      "all"     = ,
-     "all_tabs"= paste0(pm, out[type_ci], "%") |> stringr::str_replace_all("%%", "%")
+     "all_tabs"= paste0(pm, out[type_ci], "%") |> stringi::stri_replace_all_regex("%%", "%")
    )
  }
 
@@ -2111,7 +2111,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
                                               suppressWarnings(sqrt(get_var(x[disp_mean_sd]))) ), "var")),
                   digits = get_digits(x[disp_mean_sd])) # + 1L
       sd <- sd |>
-        stringr::str_pad(width = max(stringr::str_length(sd)), side = "right", pad = pad)
+        stringi::stri_pad(width = max(stringi::stri_length(sd)), side = "right", pad = pad)
 
       # Phase 14h: bold only the MEAN of a "mean (sigma sd)" cell in a bold row, exactly as a
       # composite "{pct} (n={n})" cell does -- bold glyphs are wider than plain ones, so a fully
@@ -2131,7 +2131,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
       # are not digit-wide -- no run of spaces can match them exactly there. An exact fix needs
       # markup (a hidden tail), not padding; that belongs to the html engine, not to format().
       if (any(disp_mean_nosd)) {
-        tail_w <- nchar(pad) + nchar(sigma_sign) + 2L + max(stringr::str_length(sd))
+        tail_w <- nchar(pad) + nchar(sigma_sign) + 2L + max(stringi::stri_length(sd))
         if (isTRUE(bold_split)) prim_nchar[disp_mean_nosd] <- nchar(out[disp_mean_nosd])
         out[disp_mean_nosd] <- paste0(out[disp_mean_nosd], strrep(pad, tail_w))
       }
@@ -2142,8 +2142,8 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
       if (is.null(ref_cells)) ref_cells <- get_reference(x, "cells")
       ref     <- ref_cells[disp_diff]
       reffmt  <- set_display(x[disp_diff],
-                             ifelse(type %in% c("n", "mean"), "mean", "pct")) %>%
-        format() #%>% stringr::str_trim()
+                             ifelse(type %in% c("n", "mean"), "mean", "pct")) |>
+        format() #|> stringi::stri_trim()
       out[disp_diff] <- ifelse(ref,
                                paste0("ref:", reffmt),
                                out[disp_diff])
@@ -2153,7 +2153,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
       if (is.null(ref_cells)) ref_cells <- get_reference(x, "cells")
       ref     <- ref_cells[disp_moe]
       reffmt  <- set_display(x[disp_moe],
-                             ifelse(type %in% c("n", "mean"), "mean", "pct")) %>%
+                             ifelse(type %in% c("n", "mean"), "mean", "pct")) |>
         format()
       out[disp_moe] <- ifelse(ref,
                               paste0("ref:x-", reffmt),
@@ -2171,8 +2171,8 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
       } else {
         disp_ctr & totrows & !totcol
       }
-      out[mctr] <- paste0("mean:", stringr::str_trim(out[mctr])) %>%
-        stringr::str_remove("mean:Inf%|NA")
+      out[mctr] <- paste0("mean:", stringi::stri_trim(out[mctr])) |>
+        stringi::stri_replace_first_regex("mean:Inf%|NA", "")
     }
 
     if (any(disp_or)) {
@@ -2190,12 +2190,12 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
 
       recip       <- !is.na(or_val) & or_val > 0 & or_val < 1
       vals[recip] <- paste0("1/", print_num(1 / or_val[recip], or_dig[recip]))
-      one         <- stringr::str_replace(vals, "1\\.0+", "1")
+      one         <- stringi::stri_replace_first_regex(vals, "1\\.0+", "1")
 
       if (any(!is.na(get_pct(x)[disp_or]))) {                # empirical-OR crosstab: annotate ref %
         reffmt <- set_display(x[disp_or], "pct") |> set_digits(0L) |> format()
         reffmt <- suppressWarnings(
-          stringr::str_pad(reffmt, suppressWarnings(max(stringr::str_length(reffmt), na.rm = TRUE)),
+          stringi::stri_pad(reffmt, suppressWarnings(max(stringi::stri_length(reffmt), na.rm = TRUE)),
                            pad = pad)
         )
         out[disp_or] <- ifelse(refer & !is.na(reffmt), paste0(one, " (", reffmt, ")"), vals)
@@ -2253,7 +2253,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
     val <- !is.na(out) & nzchar(out) & !(display %in% c("gof", "pvalue"))
     if (any(val & nzchar(st))) {
       w  <- max(nchar(st[val]))
-      st_pad <- stringr::str_pad(st, w, side = "right", pad = pad)  # glyphs left, pad right
+      st_pad <- stringi::stri_pad(st, w, side = "right", pad = pad)  # glyphs left, pad right
       out[val] <- paste0(out[val], st_pad[val])
     }
   }
@@ -2288,7 +2288,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
       toks <- lapply(toks, function(s) {
         keep <- !is.na(s)
         if (any(keep))
-          s[keep] <- stringr::str_pad(s[keep], max(stringr::str_length(s[keep])), side = "left",
+          s[keep] <- stringi::stri_pad(s[keep], max(stringi::stri_length(s[keep])), side = "left",
                                      pad = pad)
         s
       })
@@ -2324,7 +2324,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   # `any(!is.na())`: with nothing to split the result stays attribute-free, as before Phase 14h.
   if (!is.null(prim_nchar) && any(!is.na(prim_nchar))) attr(out, "primary_nchar") <- prim_nchar
 
-  #out <- stringr::str_pad(out, max(stringr::str_length(out), na.rm = TRUE))
+  #out <- stringi::stri_pad(out, max(stringi::stri_length(out), na.rm = TRUE))
   out
 }
 
@@ -2384,8 +2384,8 @@ pillar_shaft.tabxplor_fmt <- function(x, ..., .ref = NULL) {
   #   if (any(disp_diff)) {
   #     ref     <- get_reference(x[disp_diff], mode = "cells")
   #     reffmt  <- set_display(x[disp_diff],
-  #                            ifelse(type %in% c("n", "mean"), "mean", "pct")) %>%
-  #       format() #%>% stringr::str_trim()
+  #                            ifelse(type %in% c("n", "mean"), "mean", "pct")) |>
+  #       format() #|> stringi::stri_trim()
   #     out[disp_diff] <- dplyr::if_else(ref,
   #                                      paste0("ref:", reffmt),
   #                                      out[disp_diff])
@@ -2394,7 +2394,7 @@ pillar_shaft.tabxplor_fmt <- function(x, ..., .ref = NULL) {
   #   if (any(disp_ci)) {
   #     ref     <- get_reference(x[disp_ci], mode = "cells")
   #     reffmt  <- set_display(x[disp_ci],
-  #                            ifelse(type %in% c("n", "mean"), "mean", "pct")) %>%
+  #                            ifelse(type %in% c("n", "mean"), "mean", "pct")) |>
   #       format()
   #     out[disp_ci] <- dplyr::if_else(ref,
   #                                    paste0("ref:x-", reffmt),
@@ -2407,19 +2407,19 @@ pillar_shaft.tabxplor_fmt <- function(x, ..., .ref = NULL) {
   #     } else {
   #       disp_ctr & totrows & !totcol
   #     }
-  #     out[mctr] <- paste0("mean:", stringr::str_trim(out[mctr])) %>%
-  #       stringr::str_remove("mean:Inf%|NA")
+  #     out[mctr] <- paste0("mean:", stringi::stri_trim(out[mctr])) |>
+  #       stringi::stri_replace_first_regex("mean:Inf%|NA", "")
   #   }
   #
   #   if (any(disp_or)) {
   #     # refcol  <- is_refcol(x)
   #     ref     <- get_reference(x[disp_or], mode = "all_totals")
-  #     reffmt  <- set_display(x[disp_or], "pct") %>% # ifelse(refcol, "pct", "rr")
-  #       set_digits(0L) |> format() #%>% stringr::str_trim()
-  #     reffmt <- stringr::str_pad(reffmt, max(stringr::str_length(reffmt)) )
+  #     reffmt  <- set_display(x[disp_or], "pct") |> # ifelse(refcol, "pct", "rr")
+  #       set_digits(0L) |> format() #|> stringi::stri_trim()
+  #     reffmt <- stringi::stri_pad(reffmt, max(stringi::stri_length(reffmt)) )
   #     out[disp_or] <- dplyr::if_else(
   #       ref,
-  #       paste0(stringr::str_replace(out[disp_or], "1.0+", "1"),
+  #       paste0(stringi::stri_replace_first_regex(out[disp_or], "1.0+", "1"),
   #             " (", reffmt, ")"),
   #       out[disp_or]
   #     )
@@ -2505,9 +2505,9 @@ pillar_shaft.tabxplor_fmt <- function(x, ..., .ref = NULL) {
     # totals <- get_reference(x, mode = "all_totals")
     # out[ok & !totals] <- fmtgrey4(out[ok & !totals])
 
-    out[ok] <- out[ok] %>%
-      stringr::str_replace("^0%$|^-0%$", pillar::style_subtle("0%")) %>% # 0 in gray
-      stringr::str_replace("^0$|^0$", pillar::style_subtle("0"))
+    out[ok] <- out[ok] |>
+      stringi::stri_replace_first_regex("^0%$|^-0%$", pillar::style_subtle("0%")) |> # 0 in gray
+      stringi::stri_replace_first_regex("^0$|^0$", pillar::style_subtle("0"))
 
     # Phase 16f: an uncolored column (e.g. the Total column, or a plain table) has no text-coloured
     # cells, so only the reference/total anchors are bold -- the same `totals` mask the coloured branch uses.
@@ -3695,7 +3695,7 @@ tab_color_legend <- function(x, medium = c("console", "html", "md", "runs", "pla
   if (length(streams) == 0) return(NULL)
   render_streams(streams, medium, theme, colored, classes)
 }
-# tab_color_legend(tabs[[7]], medium = "console") %>% cli::cat_line()
+# tab_color_legend(tabs[[7]], medium = "console") |> cli::cat_line()
 
 # Phase 16d: run f(lg) with LANGUAGE set for the gettext lookups (flushing glibc's cache before/after,
 # mirroring tab_color_legend). Shared by the plain-text footer helpers below (stars / weight legend),
@@ -3925,7 +3925,7 @@ get_reference <- function(x, mode = c("cells", "lines", "all_totals")) {
 vec_ptype_abbr.tabxplor_fmt <- function(x, ...) {
   # Phase 10i-A: a composite column shows its PRIMARY type in the tibble header (e.g. "row%"), not
   # the raw "{pct} (n={n})" template.
-  display  <- display_primary(get_display(x)) %>% unique()
+  display  <- display_primary(get_display(x)) |> unique()
   if (identical(sort(display), c("pct", "pvalue"))) display <- "pct"
   display  <- ifelse(length(display) > 1, "mixed", display)
   type     <- get_type(x)
@@ -3935,14 +3935,14 @@ vec_ptype_abbr.tabxplor_fmt <- function(x, ...) {
   if (display == "ci" & ci %in% c("cell", "diff")) display <- paste0("ci_", ci)
 
 
-  out <- paste0(type, "-", display) %>%
-    stringr::str_replace("^n-n", "n") %>%
-    stringr::str_replace("^mean-mean", "mean") %>%
-    stringr::str_replace("^coef-coef", "coef") %>%   # Phase 12c
-    stringr::str_replace("^mixed-mixed", "mixed") %>%
-    stringr::str_replace("([^%]+%)-pct", "\\1") %>%
-    stringr::str_remove("^NA") %>%
-    stringr::str_remove("_ci$")
+  out <- paste0(type, "-", display) |>
+    stringi::stri_replace_first_regex("^n-n", "n") |>
+    stringi::stri_replace_first_regex("^mean-mean", "mean") |>
+    stringi::stri_replace_first_regex("^coef-coef", "coef") |>   # Phase 12c
+    stringi::stri_replace_first_regex("^mixed-mixed", "mixed") |>
+    stringi::stri_replace_first_regex("([^%]+%)-pct", "$1") |>
+    stringi::stri_replace_first_regex("^NA", "") |>
+    stringi::stri_replace_first_regex("_ci$", "")
   #if (get_comp_all(x)) out <- paste0(out, "-all")
 
   out
@@ -3955,7 +3955,7 @@ vec_ptype_abbr.tabxplor_fmt <- function(x, ...) {
 #' @return A single string with full fmt type.
 #' @export
 vec_ptype_full.tabxplor_fmt <- function(x, ...) {
-  display  <- display_primary(get_display(x)) %>% unique()
+  display  <- display_primary(get_display(x)) |> unique()
   display  <- ifelse(length(display) > 1, "mixed", display)
   type     <- get_type(x)
   row_mean <- type %in% c("row", "mean")
@@ -3963,21 +3963,21 @@ vec_ptype_full.tabxplor_fmt <- function(x, ...) {
   ci <- get_ci_type(x)
   if (display == "ci" & ci %in% c("cell", "diff")) display <- paste0("ci_", ci)
 
-  out <- paste0("fmt-", type, "-", display) %>%
-    stringr::str_replace("-n-n", "-n") %>%
-    stringr::str_replace("-mean-mean", "-mean") %>%
-    stringr::str_replace("-coef-coef", "-coef") %>%   # Phase 12c
-    stringr::str_replace("-mixed-mixed", "-mixed") %>%
-    stringr::str_replace("([^%]+%)-pct", "\\1") %>%
-    stringr::str_remove("-NA") %>%
-    stringr::str_remove("_ci$")
+  out <- paste0("fmt-", type, "-", display) |>
+    stringi::stri_replace_first_regex("-n-n", "-n") |>
+    stringi::stri_replace_first_regex("-mean-mean", "-mean") |>
+    stringi::stri_replace_first_regex("-coef-coef", "-coef") |>   # Phase 12c
+    stringi::stri_replace_first_regex("-mixed-mixed", "-mixed") |>
+    stringi::stri_replace_first_regex("([^%]+%)-pct", "$1") |>
+    stringi::stri_replace_first_regex("-NA", "") |>
+    stringi::stri_replace_first_regex("_ci$", "")
   #if (get_comp_all(x)) out <- paste0(out, "-all")
 
   out
 }
 # x <- fmt(7, "row", pct = 0.6)
-# x %>% vec_data()
-# x %>% attributes()
+# x |> vec_data()
+# x |> attributes()
 
 #Coertion and convertion methods for formatted numbers -------------------------
 
@@ -4141,7 +4141,7 @@ vec_cast.tabxplor_fmt.double   <- function(x, to, ...)
 #' @return A double vector
 #' @method vec_cast.double tabxplor_fmt
 #' @export
-vec_cast.double.tabxplor_fmt  <- function(x, to, ...) get_num(x) %>% as.double() #vctrs::field(x, "pct")
+vec_cast.double.tabxplor_fmt  <- function(x, to, ...) get_num(x) |> as.double() #vctrs::field(x, "pct")
 
 #' Convert integer into fmt
 #' @param x A integer vector
@@ -4169,7 +4169,7 @@ vec_cast.tabxplor_fmt.integer <- function(x, to, ...)
 #' @return An integer vector
 #' @method vec_cast.integer tabxplor_fmt
 #' @export
-vec_cast.integer.tabxplor_fmt    <- function(x, to, ...) get_num(x) %>% as.integer() #vctrs::field(x, "pct") %>% as.integer()
+vec_cast.integer.tabxplor_fmt    <- function(x, to, ...) get_num(x) |> as.integer() #vctrs::field(x, "pct") |> as.integer()
 
 #' Convert fmt into character
 #' @param x A fmt vector
@@ -4271,8 +4271,8 @@ vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
     "+" = ,
     "-" = new_fmt(
       display = get_display(x),      #dplyr::if_else(get_display(x) == get_display(x)), true = get_display(x), false = "n),
-      n       = vctrs::vec_arith_base(op, get_n(x)  , get_n(y)  ), #%>% positive_integer(),
-      wn      = vctrs::vec_arith_base(op, get_wn(x) , get_wn(y) ), #%>% positive_double(),
+      n       = vctrs::vec_arith_base(op, get_n(x)  , get_n(y)  ), #|> positive_integer(),
+      wn      = vctrs::vec_arith_base(op, get_wn(x) , get_wn(y) ), #|> positive_double(),
       pct     = if (same_type & !type_x %in% c("col", "mean", "n") ) {
         tidyr::replace_na(vctrs::vec_arith_base(op, get_pct(x), get_pct(y)), NA_real_)
       } else {
@@ -4444,7 +4444,7 @@ vec_math.tabxplor_fmt <- function(.fn, .x, ...) {
                          wn     = vctrs::vec_math_base(.fn, get_wn(.x) , ...),
                          pct    = ifelse(! get_type(.x) %in% c("row", "col"),
                                          yes = vctrs::vec_math_base(.fn, get_pct(.x), ...),
-                                         no  = NA_real_) %>%
+                                         no  = NA_real_) |>
                            tidyr::replace_na(NA_real_),
                          diff   = NA_real_,
                          ratio  = NA_real_,

@@ -166,11 +166,11 @@ Plain single cross-table
 \examples{
 # A typical workflow with tabxplor step-by-step functions :
 \donttest{
-data <- dplyr::starwars \%>\% tab_prepare(sex, hair_color)
+data <- dplyr::starwars |> tab_prepare(sex, hair_color)
 
-data \%>\%
-  tab_plain(sex, hair_color, tot = c("row", "col"), pct = "row") \%>\%
-  tab_chi2() \%>\%
+data |>
+  tab_plain(sex, hair_color, tot = c("row", "col"), pct = "row") |>
+  tab_chi2() |>
   tab_ci(color = "after_ci")
 }
 }

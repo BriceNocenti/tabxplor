@@ -182,7 +182,7 @@ of means and standard deviations.
 }
 \examples{
 \donttest{
-data <- dplyr::storms \%>\% tab_prepare(category, wind, na_drop_all = wind)
+data <- dplyr::storms |> tab_prepare(category, wind, na_drop_all = wind)
 tab_num(data, category, wind, tot = "row", color = "after_ci")
 }
 }

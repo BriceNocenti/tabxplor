@@ -16,7 +16,7 @@ testthat::test_that("format(): stars are opt-in (default off), appended only wit
   x <- star_col()
   testthat::expect_false(any(grepl("\\*", format(x))))          # default: none
   out <- format(x, stars = TRUE)
-  testthat::expect_equal(stringr::str_count(out, "\\*"), c(3L, 0L, 1L))  # ***, none, *
+  testthat::expect_equal(stringi::stri_count_regex(out, "\\*"), c(3L, 0L, 1L))  # ***, none, *
 })
 
 testthat::test_that("stars are right-padded so numbers stay aligned (monospace)", {

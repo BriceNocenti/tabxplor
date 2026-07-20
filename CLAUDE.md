@@ -161,7 +161,7 @@ R/
 │                              overridden (a host document is not ours). tab_kable_join(theme=) carries
 │                              the intent, but ONLY when our stylesheet ships (engine html + nzchar(css))
 │                              -- painting a page we did not style = an unreadable table.
-├── utils.R         (~940 L)  Pipe re-export, .onLoad() options setup, factor utilities.
+├── utils.R         (~945 L)  .onLoad() options setup, factor/list utilities, tx_str_wrap/tx_str_trunc
 │                              NOT the colour-palette DESIGN tools (preview_color_grid /
 │                              simulate_cvd_farver / plot_oklch_hue_strip_cvd / set_luminance...):
 │                              they live in dev/color_palette_tools.R and must stay there -- they
@@ -696,9 +696,20 @@ live-review the builder with `gss_simple`.
 The per-dependent named `trials` vector (only off/observed/fixed-integer is exposed) is an expert-only
 `tab_reg` feature, deferred.
 
+#### Phase 15c — Jamovi UI maintainer’s review
+
+Both jmvtab and jmvtabreg analysis.
+
+The width of the box in which is see the resulting html table is not enough, I currently only see a small part of the table, with a big part that’s blank. My screen is 4K 32" (Windows scaling 150%) so it’s not everybody’s display, but I would want a good default that would be wide enough on different configurations. At least the double of the current one seems a possibility, keeping the horizontal scroll box for tables that are bigger than that (verify the html width itself inside the scroll box will not cut the result before the end of the last column).
+I did struggle in the past to set the width of the scroll box in Jamovi results UI, I think I even added an invisible empty plot element to tweak the width as a workaround : how to do it more cleanl and  reliably for different display hardware ? Please study jamovi dev folder, make relevant web searches, and propose me a solution. Also, if one image with the right width must be kept, please remove "plot" `jamovi/jmvtab.r.yaml`, since "cache_state" can do the same job and is needed for the cache system anyway.
 
 
-#### Phase 15c — Jamovi UI French translation
+
+
+
+
+
+#### Phase 15d — Jamovi UI French translation
 
 
 ### Phase 16 — final maintainer’s review
@@ -1044,7 +1055,9 @@ Are there Suggests that we should better add to Imports, since they are importan
 
 Among the new global options created in 1.4.0, are they all useful and clearly named and documentated ?
 
-Done: `broom` Suggests→Imports (common `tab_reg()` models native; model-specific back-ends stay
+##### DONE
+
+`broom` Suggests→Imports (common `tab_reg()` models native; model-specific back-ends stay
 Suggests). `htmltools` + `knitr` Suggests→Imports (core render paths) so `kableExtra` Imports→Suggests
 (default `html` engine is dependency-free; legacy `engine="kableExtra"` + `kable_tabxplor_style()`
 now guarded). `crayon` dropped entirely → console colours built with `cli` (already a dep; internal
@@ -1071,6 +1084,35 @@ Remove labelled:: form Suggests, since it’s possible to read and write variabl
 Is VGAM really needed in Suggests, since we only use svyVGAM and it’s already there ?
 
 In the case we manage to reduce the Imports number, to still pass the CRAN R CMD CHECK of less than 20 imports, the Suggest packages I would want to add to Imports are, in this order (we just move the first ones until we get to 19 ; the first three are specially important to me) : survey, marginaleffects, nnet, svyVGAM, openxlsx2, MASS, brant.
+
+##### DONE
+
+Non-default Imports 18 -> **19** (target). The CRAN rule was verified from `tools:::.check_package_depends`:
+the NOTE fires at **>20** non-default imports (CRAN's `_R_CHECK_EXCESSIVE_IMPORTS_`); only the 14
+base-priority packages are excluded, so recommended pkgs (nnet/MASS) DO count.
+
+- **magrittr dropped ENTIRELY** (Imports + the `%>%` re-export + tests): every `%>%` -> `|>` (R/ + tests/);
+  ~15 hard `.`-placeholder idioms rewritten to explicit `\(x)`/`~` lambdas or by dropping the leading `.`
+  (an AST walker found every stray dot the grep missed -- `dev`-style `find_dots`); `magrittr::set_names`/
+  `set_class` -> `rlang::set_names` / base `` `class<-` ``. NAMESPACE `export("%>%")` + `man/pipe.Rd` gone
+  (users use `|>`, or dplyr's `%>%`).
+- **stringr dropped ENTIRELY** -> stringi (R/ + tests): pure name-swaps (str_detect/replace/length/c/sub/
+  count/extract/to_upper/split -> `stri_*`; str_pad -> `stri_pad`, str_trim -> `stri_trim`, same `side=`
+  signature), a balanced-paren rewrite for str_remove(_all) -> `stri_replace_*_regex(..., "")`, `\\N`->`$N`
+  ICU backrefs for the 7 backref replacements, str_squish -> trim+collapse, and two internal helpers
+  `tx_str_wrap`/`tx_str_trunc` (stri_wrap needs a per-element `\n`-collapse; there is no stri_trunc). Every
+  mapping was proven byte-identical vs stringr before the sweep.
+- **labelled removed** from Suggests: `get_variable_labels()` -> `purrr::map(data, \(c) attr(c, "label",
+  exact = TRUE))` (identical named-list shape).
+- **survey + nnet + MASS promoted** Suggests -> Imports (the maintainer chose MASS over the heavier
+  `marginaleffects`, which stays a guarded Suggest alongside svyVGAM/VGAM/brant/openxlsx2). `reg_check_deps()`
+  is kept intact (it still guards the Suggests-only reg pkgs; the promoted three just always pass).
+- **NOT changed** (reported): knitr + lifecycle stay Imports (genuine runtime -- knitr in tab_md/kable/
+  context-detection, lifecycle in the deprecate machinery); VGAM stays a Suggest (`VGAM::multinomial()` is
+  called directly and deliberately guarded).
+
+Full suite green (FAIL 0, PASS 3719), **zero golden/snapshot churn** (a stringr/magrittr swap must not
+change any output); the only Rd churn is `%>%`->`|>` in `@examples` + the pipe.Rd deletion.
 
 
 

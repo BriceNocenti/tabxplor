@@ -1,24 +1,10 @@
-# PURPOSE: Package initialization (.onLoad), pipe re-export, factor/list utilities.
+# PURPOSE: Package initialization (.onLoad), factor/list/string utilities (incl. stringi-based
+#          tx_str_wrap/tx_str_trunc, the two str_wrap/str_trunc replacements after stringr was dropped).
 # ROLE: Sets all tabxplor.* options defaults. Entry point for package configuration.
 # KEY CONSTRAINTS:
 #   - .onLoad() is the single source of truth for all option defaults.
 #   - Changing a default here affects every user on package load.
 #   - set_color_style() and set_color_breaks() are defined in tab_classes.R but called here.
-
-#' Pipe operator
-#'
-#' See \code{magrittr::\link[magrittr:pipe]{\%>\%}} for details.
-#'
-#' @name %>%
-#' @rdname pipe
-#' @keywords internal
-#' @export
-#' @importFrom magrittr %>%
-#' @usage lhs \%>\% rhs
-#' @param lhs A value or the magrittr placeholder.
-#' @param rhs A function call using the magrittr semantics.
-#' @return Pipe an object forward into a function or call expression.
-NULL
 
 # Rlang .data to bind data masking variable in dplyr
 #' @keywords internal
@@ -28,6 +14,27 @@ NULL
 
 
 
+
+# Internal stringi-based replacements for the two stringr functions with no direct stringi
+# equivalent (Last Phase b-ii: stringr dropped as a dependency). Signatures mirror the stringr
+# originals (arg names + order), so every call site is a plain name swap.
+
+# str_wrap(): wrap each element to `width`; stri_wrap returns a list of lines, join with "\n".
+tx_str_wrap <- function(string, width = 80, exdent = 0, whitespace_only = TRUE) {
+  wrapped <- stringi::stri_wrap(string, width = width, exdent = exdent,
+                                whitespace_only = whitespace_only, simplify = FALSE)
+  vapply(wrapped, function(lines) stringi::stri_c(lines, collapse = "\n"), character(1))
+}
+
+# str_trunc(): truncate to `width` with a trailing ellipsis (right side only, the sole use).
+tx_str_trunc <- function(string, width, ellipsis = "...") {
+  too_long <- !is.na(string) & stringi::stri_length(string) > width
+  string[too_long] <- stringi::stri_c(
+    stringi::stri_sub(string[too_long], 1L, width - stringi::stri_length(ellipsis)),
+    ellipsis
+  )
+  string
+}
 
 #' @keywords internal
 .onLoad <- function(libname, pkgname) {
@@ -285,7 +292,7 @@ score_from_lv1 <- function (data, name, vars_list) {
 #' @return When the number of variables is less than 5, a text in console as a side effect.
 #' With more than 5 variables, a temporary R file. A `tibble` with the recode text as a
 #' character variable is returned invisibly (or as main result if `cat = TRUE`).
-#' If the `labelled` package in installed, the variable label is used as title in a comment.
+#' When a column carries a variable label (its `label` attribute), it is used as title in a comment.
 #' @export
 fct_recode_helper <- function(data, .cols = -where(is.numeric), name_in, name_out,
                               freq = NULL, 
@@ -293,10 +300,10 @@ fct_recode_helper <- function(data, .cols = -where(is.numeric), name_in, name_ou
   no_name_in <- missing(name_in)
   if (no_name_in) {
     name_in <- deparse(substitute(data))
-    if (stringr::str_detect(name_in, "\\(")) {
+    if (stringi::stri_detect_regex(name_in, "\\(")) {
       name_in <-
-        stringr::str_extract(name_in, "[^\\(]+$") |>
-        stringr::str_remove_all("\\).*$")
+        stringi::stri_extract_first_regex(name_in, "[^\\(]+$") |>
+        stringi::stri_replace_all_regex("\\).*$", "")
       # name_in <- "data"
     }
   }
@@ -305,14 +312,14 @@ fct_recode_helper <- function(data, .cols = -where(is.numeric), name_in, name_ou
   pos_cols <- tidyselect::eval_select(rlang::enquo(.cols), data)
   data <- data[pos_cols]
 
-  with_variable_label_as_title <- requireNamespace("labelled", quietly = TRUE)
-  if (with_variable_label_as_title) {
-    var_labs <- labelled::get_variable_labels(data)
-    var_labs <- var_labs[purrr::map_lgl(var_labs, ~ !is.null(.))]
-    if (length(var_labs) == 0) with_variable_label_as_title <- FALSE
+  # Variable labels as titles: the `label` attribute (e.g. from haven / labelled-imported data).
+  # get_variable_labels() returned exactly this per-column named list, so read it with base attr()
+  # and drop the `labelled` dependency (Last Phase b-ii).
+  var_labs <- purrr::map(data, \(col) attr(col, "label", exact = TRUE))
+  var_labs <- var_labs[purrr::map_lgl(var_labs, ~ !is.null(.))]
+  with_variable_label_as_title <- length(var_labs) > 0
 
-    # var_labs <- purrr::imap(var_labs, ~ paste0(.y, " with a lot of text"))
-  }
+  # var_labs <- purrr::imap(var_labs, ~ paste0(.y, " with a lot of text"))
 
   data <- data |> dplyr::mutate(dplyr::across(.cols = dplyr::everything(), .fns = as.factor))
   
@@ -332,13 +339,13 @@ fct_recode_helper <- function(data, .cols = -where(is.numeric), name_in, name_ou
           dplyr::filter(!is_totrow(.data$pct)) |>
           dplyr::rename_with(~ "lvs", .cols = 1) |>
           dplyr::mutate(lvs = paste0("\"",
-                              stringr::str_replace_all(lvs, "\"", "'"),
+                              stringi::stri_replace_all_regex(lvs, "\"", "'"),
                               "\""),
                  pct = format(.data$pct),
                  n   = format(n),
-                 txt = paste0(stringr::str_pad(pct, max(stringr::str_length(pct))),
+                 txt = paste0(stringi::stri_pad(pct, max(stringi::stri_length(pct))),
                               " ",
-                              stringr::str_pad(n, max(stringr::str_length(n)))
+                              stringi::stri_pad(n, max(stringi::stri_length(n)))
                  )
           ) |>
           dplyr::select(lvs, txt)
@@ -347,8 +354,8 @@ fct_recode_helper <- function(data, .cols = -where(is.numeric), name_in, name_ou
     
     recode <- frequencies |>
       purrr::map(
-        ~ paste0(stringr::str_pad(.x$lvs, max(stringr::str_length(.x$lvs)), "right"), " = ",
-                 stringr::str_pad(.x$lvs, max(stringr::str_length(.x$lvs)), "right"), 
+        ~ paste0(stringi::stri_pad(.x$lvs, max(stringi::stri_length(.x$lvs)), "right"), " = ",
+                 stringi::stri_pad(.x$lvs, max(stringi::stri_length(.x$lvs)), "right"), 
                  ", # ", 
                  .x$txt
         )
@@ -359,14 +366,14 @@ fct_recode_helper <- function(data, .cols = -where(is.numeric), name_in, name_ou
     recode <- data |>
       purrr::map(~ paste0("\"",
                           #stringi::stri_escape_unicode(
-                          stringr::str_replace_all(
+                          stringi::stri_replace_all_regex(
                             levels(.), "\"", "'"
                             #)
                           ),
                           "\"")) |>
       purrr::map(
-        ~ paste0(stringr::str_pad(., max(stringr::str_length(.)), "right"), " = ",
-                 stringr::str_pad(., max(stringr::str_length(.)), "right"), collapse = ",\n")
+        ~ paste0(stringi::stri_pad(., max(stringi::stri_length(.)), "right"), " = ",
+                 stringi::stri_pad(., max(stringi::stri_length(.)), "right"), collapse = ",\n")
       )
     
   }
@@ -534,7 +541,7 @@ relig = forcats::fct_recode(
 # @export
 # @examples
 fct_clean <- function(factor, pattern = cleannames_condition()) {
-  forcats::fct_relabel(factor, ~ stringr::str_remove_all(.x, pattern))
+  forcats::fct_relabel(factor, ~ stringi::stri_replace_all_regex(.x, pattern, ""))
 }
 
 
@@ -554,15 +561,15 @@ compare_levels <-
   function(data, vars = c("var1", "var2")) {
     if ("character" %in% class(data)) {
       db_names <- data
-      db <- data %>% purrr::map(~ eval(str2expression(.)) %>%
-                                  dplyr::select(tidyselect::any_of(vars)) ) %>%
-        magrittr::set_names(data)
+      db <- data |> purrr::map(~ eval(str2expression(.)) |>
+                                  dplyr::select(tidyselect::any_of(vars)) ) |>
+        rlang::set_names(data)
     } else if (all(purrr::map_lgl(data, ~ "data.frame" %in% class(.)))) {
-      db <- data %>% purrr::map(~ dplyr::select(., tidyselect::any_of(vars)))
+      db <- data |> purrr::map(~ dplyr::select(., tidyselect::any_of(vars)))
       db_names <- names(db)
     }
 
-    non_empty_db <- db %>% purrr::map(~ ncol(.)) != 0
+    non_empty_db <- db |> purrr::map(~ ncol(.)) != 0
     first_non_empty_db <- which(non_empty_db == TRUE)[1]
     non_empty_non_first_db <- non_empty_db
     non_empty_non_first_db[first_non_empty_db] <- FALSE
@@ -571,38 +578,38 @@ compare_levels <-
       stop("No variable was found.")
     }
 
-    db_var_names <- db %>%
+    db_var_names <- db |>
       purrr::map_if(non_empty_db,
-                    ~ stringr::str_c("$", colnames(.)[1]),
+                    ~ stringi::stri_c("$", colnames(.)[1]),
                     .else = ~ "")
 
-    class <- db %>%
-      purrr::map_if(non_empty_db, ~ stringr::str_c(" : class = ", class(dplyr::pull(., 1))),
+    class <- db |>
+      purrr::map_if(non_empty_db, ~ stringi::stri_c(" : class = ", class(dplyr::pull(., 1))),
                     .else = ~"")
 
-    same_name <- db %>%
+    same_name <- db |>
       purrr::map_if(non_empty_non_first_db,
-                    ~ stringr::str_c( " ; same name = ", (names(.) %in% names(db[[first_non_empty_db]])) ),
+                    ~ stringi::stri_c( " ; same name = ", (names(.) %in% names(db[[first_non_empty_db]])) ),
                     .else = ~ "")
     same_name[first_non_empty_db] <- " ; BASIS FOR COMPARISON"
 
-    levelsdb <- db %>%
-      purrr::map_if(non_empty_db, ~ dplyr::pull(., 1) %>% as.factor(.) %>% levels,
-                    .else = NA_character_) %>%
-      magrittr::set_names(stringr::str_c(db_names, db_var_names, class, same_name))
+    levelsdb <- db |>
+      purrr::map_if(non_empty_db, \(x) levels(as.factor(dplyr::pull(x, 1))),
+                    .else = NA_character_) |>
+      rlang::set_names(stringi::stri_c(db_names, db_var_names, class, same_name))
     #print(levelsdb)
 
-    comp_true_false <- levelsdb %>%
+    comp_true_false <- levelsdb |>
       purrr::map_if(non_empty_db, ~ dplyr::if_else(. %in% levelsdb[[first_non_empty_db]],
                                                    "Same      : \"",
                                                    "Different : \""))
-    comp_true_false[[first_non_empty_db]] <-comp_true_false[[first_non_empty_db]] %>%
-      stringr::str_replace("^Same", "Base")
-    #%>%
-    #magrittr::set_names(stringr::str_c(names(.), " (compared to ", names(levelsdb)[first_non_empty_db], ")"))
+    comp_true_false[[first_non_empty_db]] <-comp_true_false[[first_non_empty_db]] |>
+      stringi::stri_replace_first_regex("^Same", "Base")
+    #|>
+    #rlang::set_names(stringi::stri_c(names(.), " (compared to ", names(levelsdb)[first_non_empty_db], ")"))
 
     result <- purrr::map2(comp_true_false, levelsdb,
-                          ~ stringr::str_c(.x, .y))
+                          ~ stringi::stri_c(.x, .y))
     result[!non_empty_db] <- "No variable with this name"
     return(result)
   }
@@ -671,42 +678,43 @@ formats_SAS_to_R <- function (path, name_in, name_out, open = TRUE, remove_at_en
   f <- readLines(con)
 
   f <- f |>
-    stringr::str_remove_all("\t") |>
-    stringr::str_replace_all(text_aposthophe, stringi::stri_unescape_unicode("\\u2019")) |>
-    stringr::str_replace_all("\"", "'") |>
-    stringr::str_replace_all(";value", "value") |>
-    stringr::str_squish()
+    stringi::stri_replace_all_regex("\t", "") |>
+    stringi::stri_replace_all_regex(text_aposthophe, stringi::stri_unescape_unicode("\\u2019")) |>
+    stringi::stri_replace_all_regex("\"", "'") |>
+    stringi::stri_replace_all_regex(";value", "value") |>
+    stringi::stri_replace_all_regex("\\s+", " ") |>
+    stringi::stri_trim_both()
 
-  f <- f[stringr::str_detect(f, "^value|=") & !stringr::str_detect(f, "^proc")] # "^value *\\$|="
-  f[stringr::str_detect(f, "=")] <-
-    f[stringr::str_detect(f, "=")] |>
-    stringr::str_replace("^([^ =]+) ", "'\\1' ") |>
-    #stringr::str_replace("^([^ ]+) ", "'\\1' ") |>
-    stringr::str_replace("''", "'") |>
-    stringr::str_replace("' += +'", "'='") |>
-    stringr::str_replace("'([^']+)'='([^']+)'", "'\\1-\\2' = '\\1',") |>
-    stringr::str_remove(";$")
-  f_var <- stringr::str_extract(f[stringr::str_detect(f, "^value")],  "[^ ]+$")
-  if (!is.null(remove_at_end_of_var)) f_var <- stringr::str_remove(f_var, paste0(remove_at_end_of_var, "$"))
+  f <- f[stringi::stri_detect_regex(f, "^value|=") & !stringi::stri_detect_regex(f, "^proc")] # "^value *\\$|="
+  f[stringi::stri_detect_regex(f, "=")] <-
+    f[stringi::stri_detect_regex(f, "=")] |>
+    stringi::stri_replace_first_regex("^([^ =]+) ", "'$1' ") |>
+    #stringi::stri_replace_first_regex("^([^ ]+) ", "'\\1' ") |>
+    stringi::stri_replace_first_regex("''", "'") |>
+    stringi::stri_replace_first_regex("' += +'", "'='") |>
+    stringi::stri_replace_first_regex("'([^']+)'='([^']+)'", "'$1-$2' = '$1',") |>
+    stringi::stri_replace_first_regex(";$", "")
+  f_var <- stringi::stri_extract_first_regex(f[stringi::stri_detect_regex(f, "^value")],  "[^ ]+$")
+  if (!is.null(remove_at_end_of_var)) f_var <- stringi::stri_replace_first_regex(f_var, paste0(remove_at_end_of_var, "$"), "")
 
   f[1:30]
 
   if (not_if_numeric) {
-    f[stringr::str_detect(f, "^value")] <-
+    f[stringi::stri_detect_regex(f, "^value")] <-
       paste0("if('",
              f_var, "' %in% names(", name_out, ") & !is.numeric(",
              name_out, "$", f_var, ")) {\n", name_out, "$", f_var,
              " <- forcats::fct_recode(", name_in, "$", f_var,
              ",")
   } else {
-    f[stringr::str_detect(f, "^value")] <-
+    f[stringi::stri_detect_regex(f, "^value")] <-
       paste0("if('",
              f_var, "' %in% names(", name_out, ")) {\n", name_out,
              "$", f_var, " <- forcats::fct_recode(as.factor(",
              name_in, "$", f_var, "),")
   }
   data <- dplyr::tibble(f = f) |>  # ???
-    dplyr::mutate(group = cumsum(as.integer(stringr::str_detect(f, "^if\\(")))) |>
+    dplyr::mutate(group = cumsum(as.integer(stringi::stri_detect_regex(f, "^if\\(")))) |>
     dplyr::group_by(.data$group) |>
     dplyr::mutate(f = dplyr::if_else(dplyr::row_number() == dplyr::n(),
                                      paste0(f, ")\n}\n"),
@@ -716,10 +724,10 @@ formats_SAS_to_R <- function (path, name_in, name_out, open = TRUE, remove_at_en
     dplyr::ungroup()
 
   data <- data |>
-    dplyr::mutate(var = dplyr::if_else(stringr::str_detect(f, "^if\\("),
-                         true  = stringr::str_extract(f, "^if\\('[^']+'") |>
-                           stringr::str_remove("if\\(") |> stringr::str_remove_all("'"),
-                         false = NA_character_                         )
+    dplyr::mutate(var = dplyr::if_else(stringi::stri_detect_regex(f, "^if\\("),
+                         true  = stringi::stri_extract_first_regex(f, "^if\\('[^']+'") |>
+                           stringi::stri_replace_first_regex("if\\(", "") |> stringi::stri_replace_all_regex("'", ""),
+                         false = NA_character_)
     ) |>
     tidyr::fill(tidyselect::all_of(c("var")))
 
@@ -728,14 +736,14 @@ formats_SAS_to_R <- function (path, name_in, name_out, open = TRUE, remove_at_en
     path_out <- file.path(tempdir(), paste0("formats_R-", name_out, ".R"))
   }
 
-  # if (stringr::str_detect(path, "\\\\|/")) {
+  # if (stringi::stri_detect_regex(path, "\\\\|/")) {
   #
   #
-  #   path_out <- stringr::str_c(stringr::str_replace_all(path, "/", "\\\\") |>
-  #                                stringr::str_remove("[^\\\\]+$"),
+  #   path_out <- stringi::stri_c(stringi::stri_replace_all_regex(path, "/", "\\\\") |>
+  #                                stringi::stri_replace_first_regex("[^\\\\]+$", ""),
   #                              "formats_R-", name_out, ".R")
   # } else {
-  #   path_out <- stringr::str_c("formats_R-", name_out, ".R")
+  #   path_out <- stringi::stri_c("formats_R-", name_out, ".R")
   # }
 
   writeLines(data$f, path_out, useBytes = TRUE)
@@ -808,7 +816,7 @@ tx_num_font_html_stars <-
 #   #     url('../inst/fonts/dejavu-sans-condensed-webfont.woff') format('woff'),
 #   #     url('../inst/fonts/dejavu-sans-condensed-webfont.ttf') format('truetype'),
 #   # }" |>
-#   #   stringr::str_remove("\n")
+#   #   stringi::stri_replace_first_regex("\n", "")
 #
 #   #"@font-face{font-family:'DejaVu Sans Condensed';src:url(https://github.com/web-fonts/dejavu-sans-condensed/fonts/dejavu-sans-condensed-webfont.eot);src:url(https://github.com/web-fonts/dejavu-sans-condensed/fonts/dejavu-sans-condensed-webfont.eot?#iefix) format('embedded-opentype'),url(https://github.com/web-fonts/dejavu-sans-condensed/fonts/dejavu-sans-condensed-webfont.woff2) format('woff2'),url(https://github.com/web-fonts/dejavu-sans-condensed/fonts/dejavu-sans-condensed-webfont.woff) format('woff'),url(https://github.com/web-fonts/dejavu-sans-condensed/fonts/dejavu-sans-condensed-webfont.ttf) format('truetype'),url(https://github.com/web-fonts/dejavu-sans-condensed/fonts/dejavu-sans-condensed-webfont.svg#dejavu_sans_condensedregular) format('svg')}"
 #
@@ -920,25 +928,25 @@ po_to_dt <- function(file) {
   po <- po |>
     dplyr::filter(.data$base != "") |>
     dplyr::mutate(
-      ok = stringr::str_detect(.data$base, "#:|msgid|msgstr"),
+      ok = stringi::stri_detect_regex(.data$base, "#:|msgid|msgstr"),
       ok = cumsum(as.integer(.data$ok))
     ) |>
     dplyr::group_by(!!rlang::sym("ok")) |>
     dplyr::group_split() |>
     purrr::map(
       ~ paste0(.$base, collapse = "") |>
-        stringr::str_remove_all("\"")
+        stringi::stri_replace_all_regex("\"", "")
     ) |>
     purrr::flatten_chr()
 
   po <- tibble::tibble(text = po) |>
     dplyr::mutate(
-      type  = stringr::str_extract(.data$text, "^[^ ]+ ") |> stringr::str_trim(),
+      type  = stringi::stri_extract_first_regex(.data$text, "^[^ ]+ ") |> stringi::stri_trim(),
       group = cumsum(as.integer(.data$type == "#:")),
       .before = 1
     ) |>
     dplyr::mutate(
-      text = stringr::str_remove(.data$text, "^[^ ]+ "),
+      text = stringi::stri_replace_first_regex(.data$text, "^[^ ]+ ", ""),
     ) |>
     tidyr::pivot_wider(id_cols  = "group", names_from = "type", values_from = "text") |>
     dplyr::select(-"group") |>

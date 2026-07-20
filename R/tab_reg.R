@@ -313,7 +313,7 @@ reg_sheet_name <- function(meta) {
 reg_shared_col_var <- function(family, dependent, positive_level, cleannames) {
   if (family == "binomial" && !is.null(positive_level) && !is.na(positive_level)) {
     pl <- positive_level
-    if (isTRUE(cleannames)) pl <- stringr::str_remove_all(pl, cleannames_condition())
+    if (isTRUE(cleannames)) pl <- stringi::stri_replace_all_regex(pl, cleannames_condition(), "")
     paste0(dependent, ": ", pl)
   } else dependent
 }
@@ -459,7 +459,7 @@ reg_skeleton_from_fit <- function(fit) {
 # Strip a term's own name off its coefficient names for a shorter `level` label (best-effort):
 # "poly(age, 2)1" -> "1"; a name we can't shorten is left whole. Regex-escaped so poly()/I() are safe.
 term_prefix <- function(label) {
-  stringr::str_replace_all(label, "([.\\\\+*?\\[^\\]$(){}=!<>|:#/-])", "\\\\\\1")
+  stringi::stri_replace_all_regex(label, "([.\\\\+*?\\[^\\]$(){}=!<>|:#/-])", "\\\\$1")
 }
 
 # Per-coefficient LIKELIHOOD-RATIO p-values (the dual of the profile-likelihood CI). Each coefficient
@@ -481,7 +481,7 @@ reg_lr_pvalues <- function(fit) {
     ))
     stats::pchisq(red$deviance - dev_full, df = 1, lower.tail = FALSE)
   }, numeric(1))
-  stats::setNames(p, stringr::str_remove_all(colnames(X), "`"))
+  stats::setNames(p, stringi::stri_replace_all_regex(colnames(X), "`", ""))
 }
 
 # Wald CI + p from a tidy carrying `estimate` + `std.error` on the log scale. multinom / polr are ML
@@ -533,7 +533,7 @@ reg_fit_multinom <- function(mdata, dependent, predictors, do_exp, conf_level, m
                        "i" = "Unexpected coefficient names: {.val {nm[is.na(k)]}}."))
     }
     ylev <- y_levels[-1]                               # non-reference categories, in level order
-    td   <- tibble::tibble(y.level = ylev[k], term = stringr::str_remove_all(trm, "`"),
+    td   <- tibble::tibble(y.level = ylev[k], term = stringi::stri_replace_all_regex(trm, "`", ""),
                            estimate = unname(cf), std.error = unname(se[nm]))
     td   <- reg_wald_from_tidy(td, conf_level, do_exp)
     return(list(tidy = td, nobs = nrow(mdata), var_y = NA_real_, positive_level = NULL,
@@ -542,7 +542,7 @@ reg_fit_multinom <- function(mdata, dependent, predictors, do_exp, conf_level, m
 
   fit <- nnet::multinom(fml, data = mdata, trace = FALSE)
   td  <- broom::tidy(fit)                              # y.level, term, estimate, std.error, ...
-  td$term <- stringr::str_remove_all(td$term, "`")     # strip formula backticks -> match skeleton
+  td$term <- stringi::stri_replace_all_regex(td$term, "`", "")     # strip formula backticks -> match skeleton
   td  <- reg_wald_from_tidy(td, conf_level, do_exp)
   list(tidy = td, nobs = nrow(mdata), var_y = NA_real_, positive_level = NULL,
        fit = fit, data = mdata, y_ref = y_levels[1], y_levels = y_levels[-1])
@@ -584,7 +584,7 @@ reg_fit_ordinal <- function(mdata, dependent, predictors, do_exp, conf_level, me
     )
     cf  <- fit$coefficients
     se  <- sqrt(diag(stats::vcov(fit)))[names(cf)]
-    td  <- tibble::tibble(term = stringr::str_remove_all(names(cf), "`"),
+    td  <- tibble::tibble(term = stringi::stri_replace_all_regex(names(cf), "`", ""),
                           estimate = unname(cf), std.error = unname(se))
     td  <- reg_wald_from_tidy(td, conf_level, do_exp)
     cli::cli_inform(c("i" = paste0("The proportional-odds (parallel-lines) assumption is not tested for ",
@@ -596,7 +596,7 @@ reg_fit_ordinal <- function(mdata, dependent, predictors, do_exp, conf_level, me
   fit <- MASS::polr(fml, data = mdata, Hess = TRUE, method = "logistic")
   td  <- broom::tidy(fit)
   td  <- td[td$coef.type == "coefficient", , drop = FALSE]   # drop cut-point ("scale") intercepts
-  td$term <- stringr::str_remove_all(td$term, "`")
+  td$term <- stringi::stri_replace_all_regex(td$term, "`", "")
   td  <- reg_wald_from_tidy(td, conf_level, do_exp)
   # Brant PO test -> warn (gated on brant); stash the omnibus p on the fit so reg_glance() can add the
   # "Brant PO test" footer row without recomputing (Phase 14q Item I).
@@ -819,7 +819,7 @@ reg_fit <- function(data, dependent, predictors, family, design_spec, do_exp,
   if (weighted) fit <- reg_svyglm_env(fit)   # make survey::svyglm visible to AIC / anova null-refits
 
   td <- broom::tidy(fit)                            # native scale: estimate, std.error, p.value
-  td$term <- stringr::str_remove_all(td$term, "`")  # strip formula backticks -> match skeleton
+  td$term <- stringi::stri_replace_all_regex(td$term, "`", "")  # strip formula backticks -> match skeleton
 
   # multiplier (Phase 12g): a k-unit change of a continuous predictor multiplies its native-scale
   # coefficient by k (beta -> beta*k, se -> se*|k|; exp() then gives OR^k). Applied on the native scale
@@ -865,7 +865,7 @@ reg_fit <- function(data, dependent, predictors, family, design_spec, do_exp,
                        "i" = '- Install it, or use {.code method = "wald"} (the default).'))
     }
     ci  <- suppressMessages(stats::confint(fit, level = conf_level))   # log/native scale
-    idx <- match(td$term, stringr::str_remove_all(rownames(ci), "`"))
+    idx <- match(td$term, stringi::stri_replace_all_regex(rownames(ci), "`", ""))
     lo  <- unname(ci[idx, 1]) * mult_vec; hi <- unname(ci[idx, 2]) * mult_vec  # scale profile bounds
     lrp <- reg_lr_pvalues(fit)
     td$p.value <- unname(lrp[match(td$term, names(lrp))])
@@ -1367,12 +1367,12 @@ reg_unadj_column <- function(skeleton, marg, model_predictors, col_var) {
 # dependent when several dependents / models coexist, to disambiguate). Returns a list of {label, col}.
 reg_columns_multinom <- function(skeleton, f, sp, effect_shape, color, color_signif,
                                  eff_word, cleannames, prefix_dep) {
-  y_ref <- if (cleannames) stringr::str_remove_all(f$y_ref, cleannames_condition()) else f$y_ref
+  y_ref <- if (cleannames) stringi::stri_replace_all_regex(f$y_ref, cleannames_condition(), "") else f$y_ref
   purrr::map(f$y_levels, function(j) {
     sub      <- f
     sub$tidy <- f$tidy[f$tidy$y.level == j,
                        setdiff(names(f$tidy), "y.level"), drop = FALSE]
-    jc  <- if (cleannames) stringr::str_remove_all(j, cleannames_condition()) else j
+    jc  <- if (cleannames) stringi::stri_replace_all_regex(j, cleannames_condition(), "") else j
     lab <- paste0(if (prefix_dep) paste0(sp$dependent, " - ") else "",
                   jc, " vs ", y_ref)
     # Phase 14s (G) + 14w (item 3): every category column of ONE model shares `sp$label` ("<dep>: OR")
@@ -1708,8 +1708,8 @@ reg_build_digest <- function(data, sp, family, design_spec, do_exp, inverse_two_
   fit <- f$fit
   coef_v <- stats::coef(fit)
   V      <- stats::vcov(fit)
-  names(coef_v) <- stringr::str_remove_all(names(coef_v), "`")   # match skeleton terms (as reg_fit does)
-  dn <- stringr::str_remove_all(rownames(V), "`")
+  names(coef_v) <- stringi::stri_replace_all_regex(names(coef_v), "`", "")   # match skeleton terms (as reg_fit does)
+  dn <- stringi::stri_replace_all_regex(rownames(V), "`", "")
   dimnames(V) <- list(dn, dn)
   grouped    <- family == "binomial" && !is.null(sp$trials) && is.null(sp$formula)
   over_disp  <- !weighted && (family == "poisson" || grouped)
@@ -1898,7 +1898,7 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
       if (per_category) {                            # one AME column per OUTCOME category (all levels)
         groups <- levels(as.factor(f$data[[sp$dependent]]))
         purrr::map(groups, function(g) {
-          jc  <- if (cleannames) stringr::str_remove_all(g, cleannames_condition()) else g
+          jc  <- if (cleannames) stringi::stri_replace_all_regex(g, cleannames_condition(), "") else g
           # Phase 14s (G) + 14w (item 3): the per-category AME columns of one model share `sp$label`
           # ("<dep>: AME (adjusted %)") as col_var (no inter-category border, one span names the effect
           # once); the visible NAME is just the category (the repeated ": AME" is stripped).
@@ -1912,7 +1912,7 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
         # carried in the AME column's `or` field for the tooltip. Binomial single-outcome only -- for
         # gaussian/poisson the coefficient is not an OR. NA on reference / out-of-model rows (term NA).
         or_tip <- if (family == "binomial") {
-          td <- broom::tidy(f$fit); td$term <- stringr::str_remove_all(td$term, "`")
+          td <- broom::tidy(f$fit); td$term <- stringi::stri_replace_all_regex(td$term, "`", "")
           exp(td$estimate[match(skeleton$term, td$term)])
         } else NULL
         # Phase 14w (item 3): the single AME column shares the outcome col_var with its empirical
@@ -1943,7 +1943,7 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
                              at = "reference", comparison = "lnor", want_pred = FALSE)
       groups <- levels(as.factor(f$data[[sp$dependent]]))
       purrr::map(groups, function(g) {
-        jc  <- if (cleannames) stringr::str_remove_all(g, cleannames_condition()) else g
+        jc  <- if (cleannames) stringi::stri_replace_all_regex(g, cleannames_condition(), "") else g
         # Phase 14s (G) + 14w (item 3): shared col_var (`sp$label`) across the "vs rest" category columns
         # of one model; the repeated ": OR" is stripped from the visible NAME (the span carries it).
         lab <- paste0(if (prefix_dep) paste0(sp$dependent, " - ") else "", jc, " vs rest")
@@ -1996,7 +1996,7 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
 
   disp_levels <- skeleton$level
   if (cleannames) {
-    disp_levels <- stringr::str_remove_all(disp_levels, cleannames_condition())
+    disp_levels <- stringi::stri_replace_all_regex(disp_levels, cleannames_condition(), "")
   }
   # multiplier (Phase 12g): relabel the display level of each scaled numeric predictor so the row
   # reads "<var> | per <k>" (the effect is now per k units). Numeric predictors have level == var.
@@ -2647,7 +2647,7 @@ tab_reg <- function(data, dependent, predictors = NULL,
       # a summed-score / compound-formula binomial has no single "positive level" -> label by name
       base <- if (family == "binomial" && !formula_mode && is.null(trials_for(d))) {
         pl <- reg_positive_level(data, d, inverse_two_level_factors)
-        if (cleannames) pl <- stringr::str_remove_all(pl, cleannames_condition())
+        if (cleannames) pl <- stringi::stri_replace_all_regex(pl, cleannames_condition(), "")
         pl
       } else d
       paste0(base, ": ", eff_word)
@@ -2753,7 +2753,7 @@ tab_reg <- function(data, dependent, predictors = NULL,
       purrr::map_chr(dependent, function(d) {
         if (!is.null(trials_for(d))) return(NA_character_)
         pl <- reg_positive_level(data, d, inverse_two_level_factors)
-        if (isTRUE(cleannames)) pl <- stringr::str_remove_all(pl, cleannames_condition())
+        if (isTRUE(cleannames)) pl <- stringi::stri_replace_all_regex(pl, cleannames_condition(), "")
         pl
       })
     } else rep(NA_character_, length(dependent))

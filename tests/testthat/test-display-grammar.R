@@ -103,9 +103,9 @@ testthat::test_that("stars ride the PRIMARY token, not the secondary (not double
   # stars are opt-in in format(): request them explicitly (they show at the main display).
   plain <- format(x, stars = TRUE)                            # "40%***", "60%*"
   comp  <- format(set_display(x, "{pct} ({n})"), stars = TRUE)  # "40%*** (100)", "60%* (100)"
-  testthat::expect_identical(stringr::str_count(plain, "\\*"),
-                             stringr::str_count(comp,  "\\*"))   # same star count -> not doubled
-  testthat::expect_true(any(stringr::str_count(plain, "\\*") > 0))  # the test is meaningful
+  testthat::expect_identical(stringi::stri_count_regex(plain, "\\*"),
+                             stringi::stri_count_regex(comp,  "\\*"))   # same star count -> not doubled
+  testthat::expect_true(any(stringi::stri_count_regex(plain, "\\*") > 0))  # the test is meaningful
 })
 
 testthat::test_that("a composite cell missing a field is left as the plain primary", {

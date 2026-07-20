@@ -467,10 +467,10 @@ print.tabxplor_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = N
   # line for tabxplor_tab (out[4] in the grouped method, which has one extra header line).
   if (length(n_row_var) != 0) {
     regular_ex <-
-      paste0("^(", paste0(rep("[^<]+<", n_row_var), collapse = ""), ")<char>") %>%
-      stringr::str_replace("<\\)<", ")<")
+      paste0("^(", paste0(rep("[^<]+<", n_row_var), collapse = ""), ")<char>") |>
+      stringi::stri_replace_first_regex("<\\)<", ")<")
 
-    out[3] <- out[3] %>% stringr::str_replace(regular_ex, "\\1<fct> ")
+    out[3] <- out[3] |> stringi::stri_replace_first_regex(regular_ex, "$1<fct> ")
   }
 
 
@@ -537,10 +537,10 @@ print.tabxplor_grouped_tab <- function(x, width = NULL, ..., n = 100,
   # here (a grouped_tab prints one extra header line).
   if (length(n_row_var) != 0) {
     regular_ex <-
-      paste0("^(", paste0(rep("[^<]+<", n_row_var), collapse = ""), ")<char>") %>%
-      stringr::str_replace("<\\)<", ")<")
+      paste0("^(", paste0(rep("[^<]+<", n_row_var), collapse = ""), ")<char>") |>
+      stringi::stri_replace_first_regex("<\\)<", ")<")
 
-    out[4] <- out[4] %>% stringr::str_replace(regular_ex, "\\1<fct> ")
+    out[4] <- out[4] |> stringi::stri_replace_first_regex(regular_ex, "$1<fct> ")
   }
 
   # writeLines(format(x, width = width, ..., n = n, max_extra_cols = max_extra_cols,
@@ -650,7 +650,7 @@ tbl_format_footer.tabxplor_tab <- function(x, setup, ...) {
   # ONE shared model now -- tab_footer_streams() builds the ordered typed streams, render_footer() applies
   # the console "# " subtle prefix (role-aware: a legend keeps its colours, the plain lines are subtle whole).
   streams <- suppressWarnings(tab_footer_streams(
-    x, style = "terse", subtext = get_subtext(x) %>% purrr::discard(. == "")))
+    x, style = "terse", subtext = get_subtext(x) |> purrr::discard(\(s) s == "")))
   c(default_footer, render_footer(streams, medium = "console"))
 }
 
@@ -669,11 +669,11 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
   body_data  <- default_body[-(1:2)]
   ind   <- dplyr::group_indices(setup$x)[1:length(body_data)]
   ind   <- tidyr::replace_na(ind != dplyr::lag(ind, default = 1L), FALSE)
-  body_data <- body_data %>%
-    purrr::map2(ind, function(.x, .y) if (.y) {c("", .x)} else {.x}) %>%
+  body_data <- body_data |>
+    purrr::map2(ind, function(.x, .y) if (.y) {c("", .x)} else {.x}) |>
     purrr::flatten_chr()
 
-  c(default_body[1:2], body_data) %>% `class<-`("pillar_vertical")
+  c(default_body[1:2], body_data) |> `class<-`("pillar_vertical")
 }
 
 
@@ -935,7 +935,7 @@ kable_tabxplor_style <- function(tabs,
     if (is.null(html_font)) {getOption("tabxplor.kable_html_font")} else {html_font}
 
 
-  tabs <- tabs %>% dplyr::ungroup()
+  tabs <- tabs |> dplyr::ungroup()
 
   tabs <- tabs |>
     tab_wrap_text(wrap_rows = wrap_rows,
@@ -958,7 +958,7 @@ kable_tabxplor_style <- function(tabs,
   # table.attr changes css style of table_classic (no upper and lower big lines)
 
   if (theme[1] == "light") {
-    out <- out %>% kableExtra::kable_classic(
+    out <- out |> kableExtra::kable_classic(
       lightable_options = "hover", # "striped", ?
       #bootstrap_options = c("hover", "condensed", "responsive", "bordered"), #"striped",
       full_width = full_width,
@@ -968,7 +968,7 @@ kable_tabxplor_style <- function(tabs,
     )
 
   } else {
-    out <- out %>% kableExtra::kable_material_dark(
+    out <- out |> kableExtra::kable_material_dark(
       lightable_options = "hover",
       bootstrap_options = c("hover", "condensed", "responsive"), #"striped",
       full_width = full_width,
@@ -982,27 +982,27 @@ kable_tabxplor_style <- function(tabs,
   # `if (subtext != "")` on a length-2 subtext is an error since R 4.2 ("the condition has length > 1")
   # -- unreachable so far only because nothing calls this. any() is what the sibling engine does.
   if (any(nzchar(subtext))) {
-    out <- out %>% kableExtra::add_footnote(subtext, notation = "none", escape = FALSE)
+    out <- out |> kableExtra::add_footnote(subtext, notation = "none", escape = FALSE)
   }
 
-  totcols <- which(stringr::str_detect(names(tabs), "^Total|^Ensemble"))
-  totrows <- which(stringr::str_detect(tabs[[1]], "^Total|^Ensemble"))
+  totcols <- which(stringi::stri_detect_regex(names(tabs), "^Total|^Ensemble"))
+  totrows <- which(stringi::stri_detect_regex(tabs[[1]], "^Total|^Ensemble"))
 
-  out <- out %>%
+  out <- out |>
     kableExtra::row_spec(
       0, bold = TRUE, # color = "black"
       extra_css = "border-top: 0px solid ; border-bottom: 1px solid ;font-size: 90%;vertical-align: bottom;line-height: 0.9;padding: 3px;text-align: center;" #
-    ) %>%
-    #kableExtra::row_spec(refs2, bold = TRUE) %>%
+    ) |>
+    #kableExtra::row_spec(refs2, bold = TRUE) |>
     kableExtra::row_spec(
       nrow(tabs), extra_css = "border-bottom: 1px solid ;"
-    ) %>%
-     #kableExtra::column_spec(fmt_cols, extra_css = "white-space: nowrap;") %>%
-    #kableExtra::column_spec(unique(c(new_col_var, ncol(tabs))), border_right = TRUE) %>%
-    #kableExtra::column_spec(other_cols, border_left = TRUE) %>%
-    kableExtra::column_spec(1, width_min = 20, border_left = TRUE, border_right = TRUE) %>%
-    kableExtra::column_spec(ncol(tabs), border_right = TRUE) %>%
-     #kableExtra::row_spec(new_group, extra_css = "border-bottom: 1px solid;") %>%
+    ) |>
+     #kableExtra::column_spec(fmt_cols, extra_css = "white-space: nowrap;") |>
+    #kableExtra::column_spec(unique(c(new_col_var, ncol(tabs))), border_right = TRUE) |>
+    #kableExtra::column_spec(other_cols, border_left = TRUE) |>
+    kableExtra::column_spec(1, width_min = 20, border_left = TRUE, border_right = TRUE) |>
+    kableExtra::column_spec(ncol(tabs), border_right = TRUE) |>
+     #kableExtra::row_spec(new_group, extra_css = "border-bottom: 1px solid;") |>
     #kableExtra::row_spec(nrow(tabs), extra_css = "border-bottom: 1px solid;") |>
     kableExtra::row_spec(
       1:nrow(tabs),
@@ -1040,7 +1040,7 @@ kable_tabxplor_style <- function(tabs,
       # "<script async src=\"https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML\"></script>",
       # "\n",
       as.character(out) #|>
-      #stringr::str_replace_all("<td style", '<td class = "align-top"; style')
+      #stringi::stri_replace_all_regex("<td style", '<td class = "align-top"; style')
     ) |>
       vctrs::vec_restore(out)
   }
@@ -1205,7 +1205,7 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
   #                                  names(get_col_var(tabs)) != "n" &
   #                                  !str_detect(names(get_col_var(tabs)), "^Total") ]
 
-  if (sum(stringr::str_detect(names(tabs), "^Total_")) == 1) {
+  if (sum(stringi::stri_detect_regex(names(tabs), "^Total_")) == 1) {
     tabs <- tabs |>
       dplyr::rename_with(~ "Total", .cols = tidyselect::starts_with("Total_"))
   }
@@ -1716,11 +1716,11 @@ tab_plot <- function(tabs,
       ),
       dplyr::across( # otherwise, unbreakable spaces fail in some graphic devices
         where(is.factor),
-        ~ forcats::fct_relabel(., ~ stringr::str_replace_all(., unbrk, " "))
+        ~ forcats::fct_relabel(., ~ stringi::stri_replace_all_regex(., unbrk, " "))
       ),
       dplyr::across( # otherwise, unbreakable spaces fail in some graphic devices
         where(is.character),
-        ~ stringr::str_replace_all(., unbrk, " ")
+        ~ stringi::stri_replace_all_regex(., unbrk, " ")
       ),
       # # unbreakable space at the starting of names, otherwise doesn't fit with hjust = "right"
       # dplyr::across(
@@ -1800,10 +1800,10 @@ tab_plot <- function(tabs,
     # )
 
     ## bold
-    # kableExtra::row_spec(refs2, bold = TRUE) %>%
+    # kableExtra::row_spec(refs2, bold = TRUE) |>
 
     ## wrap
-    # kableExtra::column_spec(fmt_cols, extra_css = "white-space: nowrap;") %>%
+    # kableExtra::column_spec(fmt_cols, extra_css = "white-space: nowrap;") |>
 
 
 
@@ -1831,7 +1831,7 @@ tab_plot <- function(tabs,
       color = color[!duplicated(grp)]
     ) |>
       # otherwise, unbreakable spaces fail in some graphic devices
-      dplyr::mutate(text = stringr::str_replace_all(.data$text, unbrk, " "))
+      dplyr::mutate(text = stringi::stri_replace_all_regex(.data$text, unbrk, " "))
   })
   if (length(color_legend) == 0) color_legend <- NULL
   }
@@ -1964,7 +1964,7 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
 
   # Phase 14b: format() right-pads a column to its widest cell so the numbers align in the TABLE; in
   # a prose tooltip that pad is noise ("ratio:   x1"). Every interpolated value goes through this.
-  tip_num <- function(v) stringr::str_trim(format(v))
+  tip_num <- function(v) stringi::stri_trim(format(v))
 
   # Phase 14b: diff and ratio are ONE comparison group -- one gate, one "ref" token.
   # `comparable` is the exclusion the diff line always had (a Total-column / total-row cell that IS
@@ -2011,7 +2011,7 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
   out_ci   <- if (any(has_ci)) {
     dplyr::if_else(
       condition = has_ci,
-      true      = paste0(ci_start, tip_num(set_display(x, "ci") %>%
+      true      = paste0(ci_start, tip_num(set_display(x, "ci") |>
                                              set_digits(dplyr::if_else(digits == 0L,
                                                                        digits + 1L,
                                                                        digits))) ),
@@ -2023,8 +2023,8 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
   # never compared to itself -> NA bounds), which would otherwise leave a trailing space.
   out_diff <- switch(ci_type,
                      "diff"  = ,
-                     "ratio" = stringr::str_trim(paste0(out_diff, " ",
-                                                        stringr::str_remove(out_ci, "%$"))),
+                     "ratio" = stringi::stri_trim(paste0(out_diff, " ",
+                                                        stringi::stri_replace_first_regex(out_ci, "%$", ""))),
                      out_diff)
   out_ci   <- switch(ci_type, "cell" = out_ci, "")
 
@@ -2071,7 +2071,7 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
     mctr      <- if (get_comp_all(x)) { totrows & tottabs & !totcol } else { totrows & !totcol }
     ctr_start <- dplyr::if_else(mctr, "mean_ctr: ", "contrib: ")
     dplyr::if_else(cond_ctr,
-                   paste0(ctr_start, tip_num(set_display(x, "ctr")) %>% stringr::str_remove("^-")),
+                   paste0(ctr_start, tip_num(set_display(x, "ctr")) |> stringi::stri_replace_first_regex("^-", "")),
                    "")
   } else blank
 
@@ -2128,43 +2128,43 @@ tab_wrap_text <- function(tabs, wrap_rows = 35L, wrap_cols = 15L, exdent = 1,
 
   tabs <- tabs |>
     dplyr::rename_with(
-      ~ stringr::str_wrap(., wrap_cols, exdent = 0, whitespace_only = whitespace_only) |>
-        stringr::str_replace_all("\n", brk)
+      ~ tx_str_wrap(., wrap_cols, exdent = 0, whitespace_only = whitespace_only) |>
+        stringi::stri_replace_all_regex("\n", brk)
     ) |>
     dplyr::mutate(
       dplyr::across(
         where(is.factor),
         ~ forcats::fct_relabel(
-          ., ~ stringr::str_wrap(.,
+          ., ~ tx_str_wrap(.,
                                  width           = wrap_rows,
                                  exdent          = exdent,
                                  whitespace_only = whitespace_only) |>
-            stringr::str_replace_all("\n", brk)
+            stringi::stri_replace_all_regex("\n", brk)
         )
       ),
       dplyr::across(
         where(is.character),
-        ~ stringr::str_wrap(.,
+        ~ tx_str_wrap(.,
                             width           = wrap_rows,
                             exdent          = exdent,
                             whitespace_only = whitespace_only) |>
-          stringr::str_replace_all("\n", brk)
+          stringi::stri_replace_all_regex("\n", brk)
       )
     )
 
   if (unbreakable_spaces) {
     tabs <- tabs |>
       dplyr::rename_with(
-        ~ stringr::str_replace_all(., " ", unbrk)
+        ~ stringi::stri_replace_all_regex(., " ", unbrk)
       ) |>
       dplyr::mutate(
         dplyr::across(
           where(is.factor),
-          ~ forcats::fct_relabel(., ~ stringr::str_replace_all(., " ", unbrk) )
+          ~ forcats::fct_relabel(., ~ stringi::stri_replace_all_regex(., " ", unbrk) )
         ),
         dplyr::across(
         where(is.character),
-        ~ stringr::str_replace_all(., " ", unbrk)
+        ~ stringi::stri_replace_all_regex(., " ", unbrk)
       ),
 
       )
@@ -2204,7 +2204,7 @@ tab_get_wrapped_dimensions <- function(tabs, no_tab_vars = FALSE,
   height <- tabs_with_colnames |>
     dplyr::mutate(dplyr::across(
       tidyselect::everything(),
-      ~ 1L + stringr::str_count(., "\n")
+      ~ 1L + stringi::stri_count_regex(., "\n")
     )) |>
     dplyr::rowwise() |>
     dplyr::mutate(n = max(dplyr::c_across(cols = tidyselect::everything()))) |>
@@ -2216,9 +2216,9 @@ tab_get_wrapped_dimensions <- function(tabs, no_tab_vars = FALSE,
 
   width <- tabs_with_colnames |>
     purrr::map(
-      ~ stringr::str_split(., "\n") |>
+      ~ stringi::stri_split_regex(., "\n") |>
         purrr::flatten_chr() |>
-        stringr::str_length() |>
+        stringi::stri_length() |>
         max()
     ) |>
     purrr::map_int(
@@ -2402,7 +2402,7 @@ group_by.tabxplor_tab <- function(.data,
 rowwise.tabxplor_tab <- function(data, ...) {
   out <- NextMethod()
   out <- rlang::exec(new_grouped_tab, out, dplyr::group_data(out), !!!tab_attrs(data))
-  `class<-`(out, stringr::str_replace(class(out), "grouped_df", "rowwise_df"))
+  `class<-`(out, stringi::stri_replace_first_regex(class(out), "grouped_df", "rowwise_df"))
 }
 
 
@@ -2670,7 +2670,7 @@ rowwise.tabxplor_grouped_tab <- function(data, ...) {
   groups <- dplyr::group_data(out)
 
   out <- rlang::exec(new_grouped_tab, out, groups, !!!tab_attrs(data))
-  `class<-`(out, stringr::str_replace(class(out), "grouped_df", "rowwise_df"))
+  `class<-`(out, stringi::stri_replace_first_regex(class(out), "grouped_df", "rowwise_df"))
 }
 
 # #' @method rbind tabxplor_grouped_tab
@@ -3030,7 +3030,7 @@ vec_cast.data.frame.tabxplor_grouped_tab <- function(x, to, ...) {
 #                    if(length(new   ) != 0){new   } else {NULL},
 #                    if(length(new2  ) != 0){new2  } else {NULL},
 #                    if(length(new3  ) != 0){new3  } else {NULL}
-#   ) %>% purrr::set_names(.)
+#   ) |> purrr::set_names(.)
 #   color_scale <- color_scale[!duplicated(names(color_scale))]
 #
 #   ggplot2::ggplot(colors, ggplot2::aes(x = x, y = y, color = color, label = text)) +
@@ -3796,17 +3796,17 @@ pop_color_breaks <- function(state) {
 # pct_ci_brksup   <- c(pct_ci_breaks [2:length(pct_ci_breaks) ], Inf)
 # mean_ci_brksup  <- c(mean_ci_breaks[2:length(mean_ci_breaks)], Inf)
 #
-# pct_breaks         <- pct_breaks     %>% c(., -.)
-# mean_breaks        <- mean_breaks    %>% c(., 1/.)
-# contrib_breaks     <- contrib_breaks %>% c(., -.)
-# pct_ci_breaks      <- pct_ci_breaks  %>% c(., -.)
-# mean_ci_breaks     <- mean_ci_breaks %>% c(., -.) #then - again
+# pct_breaks         <- pct_breaks     |> c(., -.)
+# mean_breaks        <- mean_breaks    |> c(., 1/.)
+# contrib_breaks     <- contrib_breaks |> c(., -.)
+# pct_ci_breaks      <- pct_ci_breaks  |> c(., -.)
+# mean_ci_breaks     <- mean_ci_breaks |> c(., -.) #then - again
 #
-# pct_brksup      <- pct_brksup     %>% c(., -.)
-# mean_brksup     <- mean_brksup    %>% c(., 1/.)
-# contrib_brksup  <- contrib_brksup %>% c(., -.)
-# pct_ci_brksup   <- pct_ci_brksup  %>% c(., -.)
-# mean_ci_brksup  <- mean_ci_brksup %>% c(., -.) #then - again
+# pct_brksup      <- pct_brksup     |> c(., -.)
+# mean_brksup     <- mean_brksup    |> c(., 1/.)
+# contrib_brksup  <- contrib_brksup |> c(., -.)
+# pct_ci_brksup   <- pct_ci_brksup  |> c(., -.)
+# mean_ci_brksup  <- mean_ci_brksup |> c(., -.) #then - again
 
 
 #' Get the breaks currently used to print colors
@@ -3868,11 +3868,11 @@ get_color_breaks <- function(brk, type = c("positive", "all")) {
 
 
 # Tests -----
-# new_tab() %>% get_chi2()
-# new_tab() %>% get_total_table()
-# new_tab() %>% get_subtext()
+# new_tab() |> get_chi2()
+# new_tab() |> get_total_table()
+# new_tab() |> get_subtext()
 
-# vec_ptype2(new_tab(), new_tab()) %>% attributes()
+# vec_ptype2(new_tab(), new_tab()) |> attributes()
 #
 # vec_rbind(red, red)
 # vec_rbind(green, green)

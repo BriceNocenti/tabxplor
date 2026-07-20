@@ -291,7 +291,7 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
       raw     <- format(col, special_formatting = special_formatting, na = "", stars = TRUE,
                         bold_split = TRUE, pad = fig_space, .ref = ann_ref(rd$ann[[nm]]))
       pn      <- attr(raw, "primary_nchar")
-      trimmed <- stringr::str_trim(raw, side = "left")
+      trimmed <- stringi::stri_trim(raw, side = "left")
       lead    <- nchar(raw) - nchar(trimmed)
       trimmed[is.na(trimmed)] <- ""
       list(txt  = trimmed,
@@ -311,7 +311,7 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   # A pipe cell cannot hold a raw newline, so md "wrap" means "do not truncate by default".
   if (!is.null(wrap_rows)) {
     for (j in other_cols) {
-      cell_data[[j]] <- stringr::str_trunc(cell_data[[j]], wrap_rows)
+      cell_data[[j]] <- tx_str_trunc(cell_data[[j]], wrap_rows)
     }
   }
 
@@ -442,18 +442,18 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
     if (is_bold && nchar(text) > 0) {
       bold_text <- md_bold(text, split_at)                # partial (composite) or whole-cell bold
       if (is_right) {
-        stringr::str_pad(bold_text, width, side = "left")
+        stringi::stri_pad(bold_text, width, side = "left")
       } else {
-        stringr::str_pad(bold_text, width, side = "right")
+        stringi::stri_pad(bold_text, width, side = "right")
       }
     } else {
       # Non-bold, or bold with empty text (just pad normally)
       if (is_right) {
         # Right-align: pad text to (width - 2) then add 2 trailing spaces
-        paste0(stringr::str_pad(text, width - 2L, side = "left"), "  ")
+        paste0(stringi::stri_pad(text, width - 2L, side = "left"), "  ")
       } else {
         # Left-align: 1 leading space + text padded to (width - 2) + 1 trailing space
-        paste0(" ", stringr::str_pad(text, width - 2L, side = "right"), " ")
+        paste0(" ", stringi::stri_pad(text, width - 2L, side = "right"), " ")
       }
     }
   }
@@ -487,7 +487,7 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
         # widen every column below it.
         nm_cell <- paste0(" *", lbl, "*")
         header_parts <- c(header_parts,
-                          stringr::str_pad(nm_cell, col_width[j], side = "right"))
+                          stringi::stri_pad(nm_cell, col_width[j], side = "right"))
         if (j_end > j) header_parts <- c(header_parts,
                                          strrep(" ", col_width[(j + 1L):j_end]))
         # Add separator column between real col_var groups (multi col_var only)
@@ -509,10 +509,10 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   for (j in seq_len(n_cols)) {
     header_cells[j] <- if (is_right[j]) {
       # Right-aligned header
-      paste0(stringr::str_pad(col_names[j], col_width[j] - 2L, side = "left"), "  ")
+      paste0(stringi::stri_pad(col_names[j], col_width[j] - 2L, side = "left"), "  ")
     } else {
       # Left-aligned header
-      paste0(" ", stringr::str_pad(col_names[j], col_width[j] - 2L, side = "right"), " ")
+      paste0(" ", stringi::stri_pad(col_names[j], col_width[j] - 2L, side = "right"), " ")
     }
   }
 
@@ -689,7 +689,7 @@ md_color_cell <- function(text, attr, num_width, total_width, is_bold, split_at 
   # into the pad instead of pushing the value right.
   vis  <- nchar(text) + md_extra(text, is_bold, split_at)
   body <- paste0(strrep(" ", max(0L, num_width - vis)), open, content, close)
-  stringr::str_pad(paste0(" ", body), total_width, side = "right")
+  stringi::stri_pad(paste0(" ", body), total_width, side = "right")
 }
 
 # How many RAW columns of markup precede a cell's last visible character. md_bold() adds "**" twice:

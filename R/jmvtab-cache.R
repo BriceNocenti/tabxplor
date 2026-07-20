@@ -381,7 +381,7 @@ jmv_cache_store_tests <- function(ctx) {
 #' @noRd
 jmvtab_cleannames_display <- function(tabs) {
   cond <- cleannames_condition()
-  strip <- function(x) stringr::str_remove_all(x, cond)
+  strip <- function(x) stringi::stri_replace_all_regex(x, cond, "")
   one <- function(tb) {
     vars <- tab_get_vars(tb)
     # Label columns = the row_var / tab_var text columns. For a compacted multi-row_var table these

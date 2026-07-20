@@ -70,16 +70,16 @@ testthat::test_that("arithmetic between fmt and fmt works", {
 })
 
 testthat::test_that("arithmetic between fmt and numeric works", {
-  (fmt(45, "row" , 4, pct =  0.55, wn = 5.1) + 0.7)%>% testthat::expect_s3_class("tabxplor_fmt")
-  (fmt(55, "mean", 3, mean = 2.55, wn = 55.1) - 1) %>% testthat::expect_s3_class("tabxplor_fmt")
-  (fmt(65, "row", 2, pct =  0.55, wn = 65.1) / 2)  %>% testthat::expect_s3_class("tabxplor_fmt")
-  (fmt(75, "n" ,-1, pct =  0.55, wn = 75.1) * 3)   %>% testthat::expect_s3_class("tabxplor_fmt")
-  (fmt(1) + 1)                                     %>% testthat::expect_s3_class("tabxplor_fmt")
-  (1 + fmt(1, "row", pct = 0.12))                  %>% testthat::expect_s3_class("tabxplor_fmt")
-  (1 - fmt(1, "row", pct = 0.12))                  %>% testthat::expect_s3_class("tabxplor_fmt")
-  (2 / fmt(3, "row", pct = 0.12))                  %>% testthat::expect_s3_class("tabxplor_fmt")
-  (5 * fmt(1, "n", 2)           )                  %>% testthat::expect_s3_class("tabxplor_fmt")
-  (-fmt(1, "row", pct = 0.12)   )                  %>% testthat::expect_s3_class("tabxplor_fmt")
+  (fmt(45, "row" , 4, pct =  0.55, wn = 5.1) + 0.7)|> testthat::expect_s3_class("tabxplor_fmt")
+  (fmt(55, "mean", 3, mean = 2.55, wn = 55.1) - 1) |> testthat::expect_s3_class("tabxplor_fmt")
+  (fmt(65, "row", 2, pct =  0.55, wn = 65.1) / 2)  |> testthat::expect_s3_class("tabxplor_fmt")
+  (fmt(75, "n" ,-1, pct =  0.55, wn = 75.1) * 3)   |> testthat::expect_s3_class("tabxplor_fmt")
+  (fmt(1) + 1)                                     |> testthat::expect_s3_class("tabxplor_fmt")
+  (1 + fmt(1, "row", pct = 0.12))                  |> testthat::expect_s3_class("tabxplor_fmt")
+  (1 - fmt(1, "row", pct = 0.12))                  |> testthat::expect_s3_class("tabxplor_fmt")
+  (2 / fmt(3, "row", pct = 0.12))                  |> testthat::expect_s3_class("tabxplor_fmt")
+  (5 * fmt(1, "n", 2)           )                  |> testthat::expect_s3_class("tabxplor_fmt")
+  (-fmt(1, "row", pct = 0.12)   )                  |> testthat::expect_s3_class("tabxplor_fmt")
 })
 
 testthat::test_that("math (sum and mean) between fmt and fmt works", {
@@ -89,7 +89,7 @@ testthat::test_that("math (sum and mean) between fmt and fmt works", {
 
 testthat::test_that("fmt vectors works with mutate", {
 
-  data <- dplyr::starwars %>%
+  data <- dplyr::starwars |>
     tab_prepare("sex", "hair_color", "eye_color", "mass", "gender",
                 other_if_less_than = 5)
 
@@ -173,9 +173,9 @@ testthat::test_that("tab(display = ) writes the {} template into the display FIE
 # sum(y)
 # sum(z)
 #
-# sum(x) %>% vec_data()
-# sum(y) %>% vec_data()
-# sum(z) %>% vec_data()
+# sum(x) |> vec_data()
+# sum(y) |> vec_data()
+# sum(z) |> vec_data()
 #
 # (get_pct(x)[1]*get_n(x)[1] + get_pct(x)[2]*get_n(x)[2]) / (get_n(x)[1] + get_n(x)[2])
 # get_n(y)[1] + get_n(y)[2]

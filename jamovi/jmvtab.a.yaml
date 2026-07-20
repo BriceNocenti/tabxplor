@@ -132,53 +132,6 @@ options:
             }
            How significance gates these colors is set separately by \code{color_signif}.
 
-    - name: color_signif
-      title: color_signif = (significance policy)
-      type: List
-      options:
-        - title: "ignore <i>(color every deviation)</i>"
-          name:  ignore
-        - title: "grey_non_signif <i>(grey out non-significant cells)</i>"
-          name:  grey_non_signif
-        - title: "guaranteed_effect <i>(only the CI-guaranteed effect)</i>"
-          name:  guaranteed_effect
-      default: ignore
-      description:
-          R: >
-           How statistical significance gates the colors, as a single string.
-            \itemize{
-              \item \code{"ignore"}: by default, color every deviation by its observed size.
-              \item \code{"grey_non_signif"}: color by observed size, but grey out cells whose
-              deviation is not significant (at \code{conf_level}). A confidence interval on the
-              difference is computed automatically.
-              \item \code{"guaranteed_effect"}: color by the guaranteed (confidence-bound) effect --
-              only cells whose interval clears the threshold show, with dimmer colors.
-            }
-
-    - name: chi2
-      title: "Statistical test <i>(Chi-square for categorical, ANOVA F for numeric columns)</i>"
-      type: Bool
-      default: false
-      description:
-          R: >
-           Set to \code{TRUE} to add a test p-value row: a Chi-square test for categorical column
-           variables and an ANOVA F-test for numeric ones (chosen automatically per column type).
-           Also enables colouring cells by their contribution to variance.
-
-    - name: anova
-      title: "ANOVA F"
-      type: List
-      options:
-        - title: "Welch <i>(unequal variances, default)</i>"
-          name:  welch
-        - title: "classic <i>(equal variances)</i>"
-          name:  classic
-      default: welch
-      description:
-          R: >
-           Which F statistic to display for numeric column variables when the test is on:
-           Welch's F (default, does not assume equal variances) or the classic pooled F.
-
     - name: OR
       title: OR
       type: List
@@ -200,6 +153,56 @@ options:
             \item \code{"OR"}: print OR (instead of percentages).
             \item \code{"OR_pct"}: print OR, with percentages in bracket.
            }
+
+    - name: color_signif
+      title: color_signif = (significance policy)
+      type: List
+      options:
+        - title: "ignore <i>(color deviations by observed size)</i>"
+          name:  ignore
+        - title: "grey_non_signif <i>(same + uncolor non-significant)</i>"
+        #####    "guaranteed_effect <i>(only the CI-guaranteed effect)</i>"
+          name:  grey_non_signif
+        - title: "guaranteed_effect <i>(col. all CI-floor/small sample)</i>"
+          name:  guaranteed_effect
+      default: ignore
+      description:
+          R: >
+           How statistical significance gates the colors, as a single string.
+            \itemize{
+              \item \code{"ignore"}: by default, color every deviation by its observed size.
+              \item \code{"grey_non_signif"}: color by observed size, but grey out cells whose
+              deviation is not significant (at \code{conf_level}). A confidence interval on the
+              difference is computed automatically.
+              \item \code{"guaranteed_effect"}: color by the guaranteed (confidence-bound) effect --
+              all cells whose interval clears the threshold show, with dimmer colors.
+            }
+
+    - name: chi2
+      title: "Add statistical test"
+      type: Bool
+      default: false
+      description:
+          R: >
+           Set to \code{TRUE} to add a test p-value row: a Chi-square test for categorical column
+           variables and an ANOVA F-test for numeric ones (chosen automatically per column type).
+           Also enables colouring cells by their contribution to variance.
+
+    - name: anova
+      title: "ANOVA F (numeric)"
+      type: List
+      options:
+        - title: "Welch <i>(unequal variances)</i>"
+          name:  welch
+        - title: "classic <i>(equal variances)</i>"
+          name:  classic
+      default: welch
+      description:
+          R: >
+           Which F statistic to display for numeric column variables when the test is on:
+           Welch's F (default, does not assume equal variances) or the classic pooled F.
+
+
 
 # Missing values and levels
     - name: na
@@ -455,7 +458,7 @@ options:
     - name: stars
       title: "stars = <i>(significance stars)</i>"
       type: Bool
-      default: true
+      default: false
       description:
           R: >
            With \code{ci = "diff"}, print significance stars (\code{*} \code{**} \code{***}) for

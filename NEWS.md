@@ -556,6 +556,14 @@
   `kableExtra` and its `xml2`/`rvest`/`svglite`/`systemfonts` chain). Only the legacy
   `tab_kable(engine = "kableExtra")` (and `kable_tabxplor_style()`) now require `kableExtra` to be
   installed — they raise a clear message pointing to `engine = "html"` if it is absent.
+* **The `%>%` pipe is no longer re-exported, and the dependency list was slimmed down.** `magrittr` and
+  `stringr` are dropped entirely — tabxplor now uses the base R `|>` pipe internally and `stringi` for
+  string operations — and `labelled` is no longer suggested (variable labels are read with base
+  `attr()`). Practical effect: code relying on `library(tabxplor)` alone to provide `%>%` should switch
+  to the base `|>` pipe, or load `dplyr`/`magrittr` explicitly (most scripts already do). In exchange,
+  `survey`, `nnet` and `MASS` are now hard dependencies, so weighted, multinomial and ordinal
+  `tab_reg()` models work out of the box; `marginaleffects`, `svyVGAM`, `VGAM` and `brant` remain
+  optional `Suggests` for the less common paths.
 * **Significance stars are now opt-in (off by default).** A plain `tab()` no longer prints `*`/`**`/`***`
   after the cells: pass `stars = TRUE` (or set `options(tabxplor.stars = TRUE)`) to get them. Regression
   tables from `tab_reg()`/`tab_logit()`/`multi_logit()` still show stars by default (pass

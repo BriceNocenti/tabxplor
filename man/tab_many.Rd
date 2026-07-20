@@ -485,7 +485,7 @@ number of cases, unless you opt in to Kish's effective sample size with
 \donttest{
 library(dplyr)
 first_lvs <- c("Married", "$25000 or more", "Strong republican", "Protestant")
-data <- forcats::gss_cat \%>\% mutate(across(
+data <- forcats::gss_cat |> mutate(across(
   where(is.factor),
   ~ forcats::fct_relevel(., first_lvs[first_lvs \%in\% levels(.)])
 ))

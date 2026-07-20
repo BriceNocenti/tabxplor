@@ -279,7 +279,7 @@ tx_format_source_cols <- function(tab, ann, order_i, backend) {
     } else if (identical(backend, "md")) {
       raw <- format(col, special_formatting = TRUE, na = "", stars = TRUE, bold_split = TRUE,
                     pad = fig_space, .ref = rf)
-      txt[[k]] <- stringr::str_trim(raw, side = "left")        # strip the source column's own pad
+      txt[[k]] <- stringi::stri_trim(raw, side = "left")        # strip the source column's own pad
       txt[[k]][is.na(txt[[k]])] <- ""
     } else if (identical(backend, "kable")) {
       txt[[k]] <- format(col, html = TRUE, special_formatting = TRUE, na = "", stars = TRUE,

@@ -41,11 +41,7 @@ Suggests:
     rmarkdown,
     rstudioapi (>= 0.1),
     testthat (>= 3.0.0),
-    labelled (>= 2.0.0),
-    MASS (>= 7.3.0),
-    nnet (>= 7.3.0),
     brant (>= 0.3.0),
-    survey (>= 3.0.0),
     svyVGAM (>= 1.2),
     VGAM (>= 1.1.0),
     marginaleffects (>= 0.20.0),
@@ -59,9 +55,7 @@ Config/Needs/website: pkgdown
 Config/Needs/coverage: covr
 Imports:
     dplyr (>= 1.0.3),
-    stringr (>= 1.4.0),
     forcats (>= 0.5.0),
-    magrittr (>= 1.5.0),
     purrr (>= 0.3.0),
     rlang (>= 1.0.0),
     tibble (>= 3.1.0),
@@ -78,6 +72,9 @@ Imports:
     knitr,
     lifecycle (>= 1.0.0),
     data.table,
+    survey (>= 3.0.0),
+    nnet (>= 7.3.0),
+    MASS (>= 7.3.0),
 Depends:
     R (>= 4.1.0)
 VignetteBuilder: knitr

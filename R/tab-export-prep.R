@@ -293,7 +293,7 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
   # dropping it loses that information entirely. Keep it (rendered as a vertical/merged name column
   # below, like a merged row_var name) even when the other tab_vars are dropped for html/Excel.
   split_var_col <- intersect(get_reg_meta(tab)$split_var, tab_vars)
-  subtext  <- get_subtext(tab) %>% purrr::discard(. == "")
+  subtext  <- get_subtext(tab) |> purrr::discard(\(s) s == "")
 
   # Phase 14v: resolve the multinomial crude-companion tooltip fragments to a per-column, per-ROW list
   # NOW -- while the predictor `var` column is still present (drop_tab_vars removes it below). Keyed by

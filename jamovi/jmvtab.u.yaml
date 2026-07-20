@@ -198,10 +198,22 @@ children:
         style: inline
         children:
           - type: Label
-            label: Statistical test <i>(Chi-square for categorical columns, ANOVA F for numeric columns)</i>
+            label: Statistical test <i>(Chi2 for categorical columns; ANOVA F for numeric columns)</i>
+            children:
+          - type: LayoutBox
+            cell:
+              column: 0
+              row: 0
+            stretchFactor: 2
             children:
               - type: CheckBox
                 name: chi2
+          - type: LayoutBox
+            cell:
+              column: 1
+              row: 0
+            stretchFactor: 3
+            children:
               - type: ComboBox
                 name: anova
                 label: ANOVA F
