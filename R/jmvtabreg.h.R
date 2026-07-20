@@ -8,30 +8,28 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         initialize = function(
             dependent = NULL,
             predictors = NULL,
-            wt = NULL,
             split_var = NULL,
-            family = "auto",
-            exponentiate = "nongaussian",
+            wt = NULL,
+            depFamily = NULL,
+            depModelLevel = NULL,
+            depTrials = NULL,
+            exponentiate = TRUE,
             effect = "coefficient",
             at = "average",
-            estimate_display = "value",
-            inverse_two_level_factors = TRUE,
             empirical = FALSE,
-            compare = "none",
-            trials_mode = "off",
-            trials_n = 1,
-            refLevels = NULL,
             models = NULL,
             baseline = 1,
+            compare = "none",
+            na = "drop_by_model",
+            refLevels = NULL,
             multiplicator = NULL,
             conf_level = 0.95,
             method = "wald",
             stars = TRUE,
-            color = "default",
+            color = TRUE,
             color_signif = "grey_non_signif",
-            na = "keep",
+            estimate_display = "value",
             cleannames = TRUE,
-            footer = TRUE,
             subtext = "",
             wrap_rows = 35,
             wrap_cols = 15,
@@ -66,14 +64,6 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                     "numeric",
                     "factor"),
                 default=NULL)
-            private$..wt <- jmvcore::OptionVariable$new(
-                "wt",
-                wt,
-                suggested=list(
-                    "continuous"),
-                permitted=list(
-                    "numeric"),
-                default=NULL)
             private$..split_var <- jmvcore::OptionVariable$new(
                 "split_var",
                 split_var,
@@ -83,26 +73,63 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 permitted=list(
                     "factor"),
                 default=NULL)
-            private$..family <- jmvcore::OptionList$new(
-                "family",
-                family,
-                options=list(
-                    "auto",
-                    "gaussian",
-                    "binomial",
-                    "poisson",
-                    "quasipoisson",
-                    "multinomial",
-                    "ordinal"),
-                default="auto")
-            private$..exponentiate <- jmvcore::OptionList$new(
+            private$..wt <- jmvcore::OptionVariable$new(
+                "wt",
+                wt,
+                suggested=list(
+                    "continuous"),
+                permitted=list(
+                    "numeric"),
+                default=NULL)
+            private$..depFamily <- jmvcore::OptionArray$new(
+                "depFamily",
+                depFamily,
+                hidden=TRUE,
+                default=NULL,
+                template=jmvcore::OptionGroup$new(
+                    "depFamily",
+                    NULL,
+                    elements=list(
+                        jmvcore::OptionVariable$new(
+                            "var",
+                            NULL),
+                        jmvcore::OptionString$new(
+                            "family",
+                            NULL))))
+            private$..depModelLevel <- jmvcore::OptionArray$new(
+                "depModelLevel",
+                depModelLevel,
+                hidden=TRUE,
+                default=NULL,
+                template=jmvcore::OptionGroup$new(
+                    "depModelLevel",
+                    NULL,
+                    elements=list(
+                        jmvcore::OptionVariable$new(
+                            "var",
+                            NULL),
+                        jmvcore::OptionString$new(
+                            "level",
+                            NULL))))
+            private$..depTrials <- jmvcore::OptionArray$new(
+                "depTrials",
+                depTrials,
+                hidden=TRUE,
+                default=NULL,
+                template=jmvcore::OptionGroup$new(
+                    "depTrials",
+                    NULL,
+                    elements=list(
+                        jmvcore::OptionVariable$new(
+                            "var",
+                            NULL),
+                        jmvcore::OptionString$new(
+                            "n",
+                            NULL))))
+            private$..exponentiate <- jmvcore::OptionBool$new(
                 "exponentiate",
                 exponentiate,
-                options=list(
-                    "nongaussian",
-                    "yes",
-                    "no"),
-                default="nongaussian")
+                default=TRUE)
             private$..effect <- jmvcore::OptionList$new(
                 "effect",
                 effect,
@@ -117,59 +144,10 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                     "average",
                     "reference"),
                 default="average")
-            private$..estimate_display <- jmvcore::OptionList$new(
-                "estimate_display",
-                estimate_display,
-                options=list(
-                    "value",
-                    "ci",
-                    "prob",
-                    "ame"),
-                default="value")
-            private$..inverse_two_level_factors <- jmvcore::OptionBool$new(
-                "inverse_two_level_factors",
-                inverse_two_level_factors,
-                default=TRUE)
             private$..empirical <- jmvcore::OptionBool$new(
                 "empirical",
                 empirical,
                 default=FALSE)
-            private$..compare <- jmvcore::OptionList$new(
-                "compare",
-                compare,
-                options=list(
-                    "none",
-                    "baseline",
-                    "sequential"),
-                default="none")
-            private$..trials_mode <- jmvcore::OptionList$new(
-                "trials_mode",
-                trials_mode,
-                options=list(
-                    "off",
-                    "observed",
-                    "fixed"),
-                default="off")
-            private$..trials_n <- jmvcore::OptionInteger$new(
-                "trials_n",
-                trials_n,
-                min=1,
-                default=1)
-            private$..refLevels <- jmvcore::OptionArray$new(
-                "refLevels",
-                refLevels,
-                hidden=TRUE,
-                default=NULL,
-                template=jmvcore::OptionGroup$new(
-                    "refLevels",
-                    NULL,
-                    elements=list(
-                        jmvcore::OptionVariable$new(
-                            "var",
-                            NULL),
-                        jmvcore::OptionString$new(
-                            "ref",
-                            NULL))))
             private$..models <- jmvcore::OptionArray$new(
                 "models",
                 models,
@@ -194,6 +172,36 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 hidden=TRUE,
                 min=1,
                 default=1)
+            private$..compare <- jmvcore::OptionList$new(
+                "compare",
+                compare,
+                options=list(
+                    "none",
+                    "baseline",
+                    "sequential"),
+                default="none")
+            private$..na <- jmvcore::OptionList$new(
+                "na",
+                na,
+                options=list(
+                    "drop_by_model",
+                    "drop_all_models"),
+                default="drop_by_model")
+            private$..refLevels <- jmvcore::OptionArray$new(
+                "refLevels",
+                refLevels,
+                hidden=TRUE,
+                default=NULL,
+                template=jmvcore::OptionGroup$new(
+                    "refLevels",
+                    NULL,
+                    elements=list(
+                        jmvcore::OptionVariable$new(
+                            "var",
+                            NULL),
+                        jmvcore::OptionString$new(
+                            "ref",
+                            NULL))))
             private$..multiplicator <- jmvcore::OptionArray$new(
                 "multiplicator",
                 multiplicator,
@@ -226,16 +234,10 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 "stars",
                 stars,
                 default=TRUE)
-            private$..color <- jmvcore::OptionList$new(
+            private$..color <- jmvcore::OptionBool$new(
                 "color",
                 color,
-                options=list(
-                    "default",
-                    "OR",
-                    "diff",
-                    "ratio",
-                    "no"),
-                default="default")
+                default=TRUE)
             private$..color_signif <- jmvcore::OptionList$new(
                 "color_signif",
                 color_signif,
@@ -244,20 +246,18 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                     "ignore",
                     "guaranteed_effect"),
                 default="grey_non_signif")
-            private$..na <- jmvcore::OptionList$new(
-                "na",
-                na,
+            private$..estimate_display <- jmvcore::OptionList$new(
+                "estimate_display",
+                estimate_display,
                 options=list(
-                    "keep",
-                    "drop_all"),
-                default="keep")
+                    "value",
+                    "ci",
+                    "prob",
+                    "ame"),
+                default="value")
             private$..cleannames <- jmvcore::OptionBool$new(
                 "cleannames",
                 cleannames,
-                default=TRUE)
-            private$..footer <- jmvcore::OptionBool$new(
-                "footer",
-                footer,
                 default=TRUE)
             private$..subtext <- jmvcore::OptionString$new(
                 "subtext",
@@ -319,30 +319,28 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 
             self$.addOption(private$..dependent)
             self$.addOption(private$..predictors)
-            self$.addOption(private$..wt)
             self$.addOption(private$..split_var)
-            self$.addOption(private$..family)
+            self$.addOption(private$..wt)
+            self$.addOption(private$..depFamily)
+            self$.addOption(private$..depModelLevel)
+            self$.addOption(private$..depTrials)
             self$.addOption(private$..exponentiate)
             self$.addOption(private$..effect)
             self$.addOption(private$..at)
-            self$.addOption(private$..estimate_display)
-            self$.addOption(private$..inverse_two_level_factors)
             self$.addOption(private$..empirical)
-            self$.addOption(private$..compare)
-            self$.addOption(private$..trials_mode)
-            self$.addOption(private$..trials_n)
-            self$.addOption(private$..refLevels)
             self$.addOption(private$..models)
             self$.addOption(private$..baseline)
+            self$.addOption(private$..compare)
+            self$.addOption(private$..na)
+            self$.addOption(private$..refLevels)
             self$.addOption(private$..multiplicator)
             self$.addOption(private$..conf_level)
             self$.addOption(private$..method)
             self$.addOption(private$..stars)
             self$.addOption(private$..color)
             self$.addOption(private$..color_signif)
-            self$.addOption(private$..na)
+            self$.addOption(private$..estimate_display)
             self$.addOption(private$..cleannames)
-            self$.addOption(private$..footer)
             self$.addOption(private$..subtext)
             self$.addOption(private$..wrap_rows)
             self$.addOption(private$..wrap_cols)
@@ -360,30 +358,28 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
     active = list(
         dependent = function() private$..dependent$value,
         predictors = function() private$..predictors$value,
-        wt = function() private$..wt$value,
         split_var = function() private$..split_var$value,
-        family = function() private$..family$value,
+        wt = function() private$..wt$value,
+        depFamily = function() private$..depFamily$value,
+        depModelLevel = function() private$..depModelLevel$value,
+        depTrials = function() private$..depTrials$value,
         exponentiate = function() private$..exponentiate$value,
         effect = function() private$..effect$value,
         at = function() private$..at$value,
-        estimate_display = function() private$..estimate_display$value,
-        inverse_two_level_factors = function() private$..inverse_two_level_factors$value,
         empirical = function() private$..empirical$value,
-        compare = function() private$..compare$value,
-        trials_mode = function() private$..trials_mode$value,
-        trials_n = function() private$..trials_n$value,
-        refLevels = function() private$..refLevels$value,
         models = function() private$..models$value,
         baseline = function() private$..baseline$value,
+        compare = function() private$..compare$value,
+        na = function() private$..na$value,
+        refLevels = function() private$..refLevels$value,
         multiplicator = function() private$..multiplicator$value,
         conf_level = function() private$..conf_level$value,
         method = function() private$..method$value,
         stars = function() private$..stars$value,
         color = function() private$..color$value,
         color_signif = function() private$..color_signif$value,
-        na = function() private$..na$value,
+        estimate_display = function() private$..estimate_display$value,
         cleannames = function() private$..cleannames$value,
-        footer = function() private$..footer$value,
         subtext = function() private$..subtext$value,
         wrap_rows = function() private$..wrap_rows$value,
         wrap_cols = function() private$..wrap_cols$value,
@@ -400,30 +396,28 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
     private = list(
         ..dependent = NA,
         ..predictors = NA,
-        ..wt = NA,
         ..split_var = NA,
-        ..family = NA,
+        ..wt = NA,
+        ..depFamily = NA,
+        ..depModelLevel = NA,
+        ..depTrials = NA,
         ..exponentiate = NA,
         ..effect = NA,
         ..at = NA,
-        ..estimate_display = NA,
-        ..inverse_two_level_factors = NA,
         ..empirical = NA,
-        ..compare = NA,
-        ..trials_mode = NA,
-        ..trials_n = NA,
-        ..refLevels = NA,
         ..models = NA,
         ..baseline = NA,
+        ..compare = NA,
+        ..na = NA,
+        ..refLevels = NA,
         ..multiplicator = NA,
         ..conf_level = NA,
         ..method = NA,
         ..stars = NA,
         ..color = NA,
         ..color_signif = NA,
-        ..na = NA,
+        ..estimate_display = NA,
         ..cleannames = NA,
-        ..footer = NA,
         ..subtext = NA,
         ..wrap_rows = NA,
         ..wrap_cols = NA,
@@ -489,51 +483,45 @@ jmvtabregBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'
 #' 
 #' @param data A data.frame.
-#' @param dependent The outcome variable(s). One effect column is built per
-#'   dependent. The family is auto-detected from the outcome unless set below.
+#' @param dependent The outcome variable(s). One model is built per dependent.
+#'   Set each outcome's family (and, for a binomial outcome, its modelled level
+#'   or number of trials) in the Model table.
 #' @param predictors The explanatory variables of the model. Factors are shown
 #'   one line per level (the reference level as the neutral value); numeric
 #'   predictors as a single line.
+#' @param split_var A grouping variable. The same model is fitted within each
+#'   of its levels and the tables are stacked (like tab_vars for crosstables).
 #' @param wt A survey weight variable. Switches to design-based estimation
 #'   (scale-invariant sandwich standard errors). Leave empty for unweighted
 #'   results.
-#' @param split_var A grouping variable. The same model is fitted within each
-#'   of its levels and the tables are stacked (like tab_vars for crosstables).
-#' @param family The model family. "auto" detects it from the outcome (2
-#'   values -> binomial, ordered factor -> ordinal, unordered factor ->
-#'   multinomial, non-integer numeric -> gaussian). Integer counts are
-#'   ambiguous: set poisson / gaussian explicitly.
-#' @param exponentiate Whether to exponentiate the coefficients: "auto" gives
-#'   odds / rate ratios for every non-gaussian family and raw coefficients for
-#'   gaussian.
+#' @param depFamily .
+#' @param depModelLevel .
+#' @param depTrials .
+#' @param exponentiate Exponentiate the coefficients into ratios (odds ratios
+#'   / incidence-rate ratios), automatically leaving gaussian linear
+#'   coefficients on their raw scale. Uncheck to keep every coefficient on the
+#'   coefficient (log / linear) scale.
 #' @param effect "coefficient" is the native per-family effect (beta / OR /
 #'   IRR). "AME" is the average marginal effect on the response scale (needs the
 #'   marginaleffects package).
 #' @param at Where marginal effects are evaluated: averaged over the sample,
 #'   or at the reference profile (other predictors at their reference level /
 #'   mean).
-#' @param estimate_display The estimate-cell layout. "ci" shows a visible
-#'   interval; "prob" / "ame" fold the adjusted predicted probability / marginal
-#'   effect into the OR cell (binomial coefficient models only).
-#' @param inverse_two_level_factors For a binomial outcome, model the first
-#'   level of a two-level outcome (maintainer convention, e.g. "1-Married"
-#'   first).
 #' @param empirical Add the crude, unadjusted, single-predictor companion
 #'   columns beside the model effect (the bivariate association that IS the
 #'   modelised quantity with a single predictor). Binomial / gaussian / poisson
 #'   only.
-#' @param compare With several models (a predictor-subset list), add a
-#'   comparison-test footer row: "baseline" tests each model against the chosen
-#'   baseline model, "sequential" against the previous one (LR / F / Wald, or an
-#'   AIC difference when not nested).
-#' @param trials_mode Grouped-binomial (summed-score) outcomes: fit
-#'   cbind(score, trials - score). "observed" uses each outcome's maximum score;
-#'   "fixed" a set item count. Binomial only.
-#' @param trials_n The fixed number of items behind a summed score (used when
-#'   trials = "fixed").
-#' @param refLevels .
 #' @param models .
 #' @param baseline .
+#' @param compare With several models (a predictor-subset list), add a
+#'   likelihood-ratio / F / Wald comparison-test footer row: "baseline" tests
+#'   each model against the chosen baseline model, "sequential" against the
+#'   previous one (an AIC difference when not nested).
+#' @param na "drop by model" fits each model / outcome on its own complete
+#'   cases; "drop all models" uses one shared complete-case population across
+#'   all predictors (equal N; changes the estimates), which a valid
+#'   likelihood-ratio comparison test needs.
+#' @param refLevels .
 #' @param multiplicator .
 #' @param conf_level The confidence level for intervals and the significance
 #'   stars.
@@ -542,14 +530,16 @@ jmvtabregBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   MASS).
 #' @param stars Show per-cell significance stars (the colours read the
 #'   confidence interval either way).
-#' @param color The color helper scale. "default" chooses by family (OR for
-#'   ratios, difference for gaussian betas).
-#' @param color_signif How significance interacts with the colours.
-#' @param na "keep" fits each model on its own complete cases; "drop all" uses
-#'   one shared complete-case population across all predictors (equal N; changes
-#'   the estimates).
+#' @param color Colour the effect cells with the sensible per-family colour
+#'   helper (OR magnitude for ratios, standardized difference for gaussian
+#'   betas). Uncheck for no colours.
+#' @param color_signif How significance interacts with the colours: grey out
+#'   non-significant cells, ignore significance, or colour only the guaranteed
+#'   (error-adjusted) effect.
+#' @param estimate_display The estimate-cell layout. "ci" shows a visible
+#'   interval; "prob" / "ame" fold the adjusted predicted probability / marginal
+#'   effect into the OR cell (binomial coefficient models only).
 #' @param cleannames Strip numeric prefixes from factor level labels.
-#' @param footer Show the model-summary footer (N, pseudo-R2, AIC / BIC, ...).
 #' @param subtext A free note printed below the table.
 #' @param wrap_rows .
 #' @param wrap_cols .
@@ -582,30 +572,28 @@ jmvtabreg <- function(
     data,
     dependent = NULL,
     predictors = NULL,
-    wt = NULL,
     split_var = NULL,
-    family = "auto",
-    exponentiate = "nongaussian",
+    wt = NULL,
+    depFamily = NULL,
+    depModelLevel = NULL,
+    depTrials = NULL,
+    exponentiate = TRUE,
     effect = "coefficient",
     at = "average",
-    estimate_display = "value",
-    inverse_two_level_factors = TRUE,
     empirical = FALSE,
-    compare = "none",
-    trials_mode = "off",
-    trials_n = 1,
-    refLevels = NULL,
     models = NULL,
     baseline = 1,
+    compare = "none",
+    na = "drop_by_model",
+    refLevels = NULL,
     multiplicator = NULL,
     conf_level = 0.95,
     method = "wald",
     stars = TRUE,
-    color = "default",
+    color = TRUE,
     color_signif = "grey_non_signif",
-    na = "keep",
+    estimate_display = "value",
     cleannames = TRUE,
-    footer = TRUE,
     subtext = "",
     wrap_rows = 35,
     wrap_cols = 15,
@@ -625,8 +613,8 @@ jmvtabreg <- function(
 
     if ( ! missing(dependent)) dependent <- jmvcore::resolveQuo(jmvcore::enquo(dependent))
     if ( ! missing(predictors)) predictors <- jmvcore::resolveQuo(jmvcore::enquo(predictors))
-    if ( ! missing(wt)) wt <- jmvcore::resolveQuo(jmvcore::enquo(wt))
     if ( ! missing(split_var)) split_var <- jmvcore::resolveQuo(jmvcore::enquo(split_var))
+    if ( ! missing(wt)) wt <- jmvcore::resolveQuo(jmvcore::enquo(wt))
     if ( ! missing(ids)) ids <- jmvcore::resolveQuo(jmvcore::enquo(ids))
     if ( ! missing(strata)) strata <- jmvcore::resolveQuo(jmvcore::enquo(strata))
     if ( ! missing(fpc)) fpc <- jmvcore::resolveQuo(jmvcore::enquo(fpc))
@@ -635,8 +623,8 @@ jmvtabreg <- function(
             parent.frame(),
             `if`( ! missing(dependent), dependent, NULL),
             `if`( ! missing(predictors), predictors, NULL),
-            `if`( ! missing(wt), wt, NULL),
             `if`( ! missing(split_var), split_var, NULL),
+            `if`( ! missing(wt), wt, NULL),
             `if`( ! missing(ids), ids, NULL),
             `if`( ! missing(strata), strata, NULL),
             `if`( ! missing(fpc), fpc, NULL))
@@ -646,30 +634,28 @@ jmvtabreg <- function(
     options <- jmvtabregOptions$new(
         dependent = dependent,
         predictors = predictors,
-        wt = wt,
         split_var = split_var,
-        family = family,
+        wt = wt,
+        depFamily = depFamily,
+        depModelLevel = depModelLevel,
+        depTrials = depTrials,
         exponentiate = exponentiate,
         effect = effect,
         at = at,
-        estimate_display = estimate_display,
-        inverse_two_level_factors = inverse_two_level_factors,
         empirical = empirical,
-        compare = compare,
-        trials_mode = trials_mode,
-        trials_n = trials_n,
-        refLevels = refLevels,
         models = models,
         baseline = baseline,
+        compare = compare,
+        na = na,
+        refLevels = refLevels,
         multiplicator = multiplicator,
         conf_level = conf_level,
         method = method,
         stars = stars,
         color = color,
         color_signif = color_signif,
-        na = na,
+        estimate_display = estimate_display,
         cleannames = cleannames,
-        footer = footer,
         subtext = subtext,
         wrap_rows = wrap_rows,
         wrap_cols = wrap_cols,
