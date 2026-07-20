@@ -31,40 +31,6 @@ NULL
 # #            - error when after cleannames, two levels have the same name ("P6Q_27-OQ-A aliment PME" / "P6Q_28-OQ-A aliment PME")
 # #            - error with empty tabs when calculating Chi2
 
-# #' @examples
-# #' tab(forcats::gss_cat, marital, race)
-# #'
-# #' tab(forcats::gss_cat, marital, race, perc = "row")
-# #'
-# #' tab(forcats::gss_cat, marital, race, year, perc = "row")
-# #'
-# #' dplyr::storms |>
-# #'   tab(status, category) |>
-# #'   tab_sup(sup_rows = c("pressure", "wind"), print_sup = TRUE)
-# #'
-# #' \donttest{
-# #' forcats::gss_cat |>
-# #'   tab(marital, race, perc = "row") |>
-# #'   tab_xl()
-# #' }
-# #'
-# #' # To program several tables with different parameters at the same time :
-# #' purrr::pmap(
-# #'   tibble::tribble(
-# #'     ~var1    , ~var2       ,  ~perc,
-# #'     "marital", "race"      ,  "no" ,
-# #'     "marital", "race"      ,  "row",
-# #'     "marital", "race"      ,  "col",
-# #'     "relig"  , "race"      ,  "no" ,
-# #'     "relig"  , "race"      ,  "row",
-# #'     "relig"  , "race"      ,  "col",
-# #'   ),
-# #'   .f = tab,
-# #'   data = forcats::gss_cat, sort_by = c("White", "desc")) #|>
-# #' #tab_xl(only_one_sheet = TRUE)
-# tab_last <- function() {"Nothing"}
-
-
 # MAIN USER-FRIENDLY FUNCTIONS ###########################################################
 
 
@@ -2329,71 +2295,7 @@ tab_spread <- function(tabs, spread_vars, names_prefix, names_sort = FALSE,
 
     # if two tab_vars or more, calculate totals for each level of spread_var
     if (length(tab_vars_new) != 0 & any(tottab_rows)) {
-
-      # if (recalculate) {
-      #   if (any(get_type(tabs) == "mean")) {
-      #     warning(paste0("Since there are several tab_vars, some totals are missing. ",
-      #                    "Means for the new general total row were recalculated based on a ",
-      #                    "weighted mean, which is only an approximation"))
-      #   }
-      #   new_totals <- tabs |>
-      #     dplyr::filter(.data$totrows) |>
-      #     dplyr::group_by(!!!rlang::syms(spread_vars)) |>
-      #     dplyr::summarise(dplyr::across(
-      #       where(is_fmt),
-      #       ~ new_fmt(display = get_display(.)[1],
-      #                 digits  = max(get_digits(.)),
-      #                 n       = sum(get_n(.), na.rm = TRUE),
-      #                 wn      = sum(get_wn(.), na.rm = TRUE),
-      #                 pct     = sum(get_wn(.), na.rm = TRUE) / sum(get_wn(.)/get_pct(.), na.rm = TRUE),
-      #                 diff    = NA_real_,
-      #                 ctr     = NA_real_,
-      #                 mean    = stats::weighted.mean(get_mean(.), get_wn(.), na.rm = TRUE),
-      #                 var     = NA_real_,
-      #                 ci      = NA_real_,
-      #
-      #                 in_totrow = TRUE,
-      #                 in_refrow = FALSE,
-      #                 in_tottab = all(is_tottab(.)), #any ?
-      #
-      #                 type      = get_type    (.),
-      #                 comp_all  = get_comp_all(., replace_na = FALSE),
-      #                 ref = get_ref_type(.),
-      #                 ci_type   = get_ci_type (.),
-      #                 col_var   = get_col_var (.),
-      #                 totcol    = is_totcol   (.),
-      #                 refcol    = is_refcol   (.),
-      #                 color     = get_color   (.)
-      #       ), .groups = "drop"
-      #     ))
-      #   tabs_colors <- get_color(tabs)
-      #
-      #   ensemble_names <- tabs |>
-      #     dplyr::filter(tottab_line) |>
-      #     dplyr::ungroup() |>
-      #     select(tab_vars_new) |> purrr::map_chr(~ as.character(dplyr::first(.)))
-      #
-      #   total_ensemble <- tabs |>
-      #     dplyr::filter(tottab_line) |>
-      #     dplyr::pull(row_var) |> as.character()
-      #
-      #   new_totals <- new_totals |>
-      #     tab_pct(just_diff = TRUE) |>
-      #     dplyr::mutate(dplyr::across(where(is_fmt),
-      #                                 ~ set_color(., tabs_colors[dplyr::cur_column()]))) |>
-      #     dplyr::mutate(!!rlang::sym(row_var) := factor(total_ensemble))
-      #
-      #   new_totals <- new_totals |>
-      #     purrr::reduce2(.x = names(ensemble_names), .y = ensemble_names, .init = new_totals,
-      #                    .f = ~ dplyr::mutate(..1, !!rlang::sym(..2) := factor(..3))
-      #     )  |>
-      #     dplyr::filter(!is_tottab(.))
-      #
-      # }
-
       tabs <- tabs |> dplyr::filter(!tottab_line)
-
-      #if (recalculate) tabs <- tabs |> dplyr::bind_rows(new_totals)
     }
 
     new_levels <- tabs |>
@@ -2941,13 +2843,9 @@ tab_prepare <-
 #   frame : named list of the 18 per-cell FIELDS, each length nrow, correctly typed (landmine L1):
 #           n/digits integer, in_totrow/in_tottab/in_refrow logical, display character, the 12
 #           other numerics double. new_fmt() does NO casting, so the carrier owns the types.
-#   meta  : named list of the 9 per-column ATTRIBUTES (type, comp_all, ref, ci_type, col_var,
-#           totcol, refcol, color, color_signif). `color` is carried WHOLE (length 1 or 2).
-# The field / attribute name order is the new_fmt() contract (fmt_class.R); do NOT reorder. The 18
-# per-cell field NAMES are not kept as a constant -- the leaves build the frame inline; only the 9
-# per-column ATTRIBUTE names (below) are needed as a shared vector (fmt_unwrap / tab_stack_tables).
-fmt_col_attrs    <- c("type", "comp_all", "ref", "ci_type", "col_var",
-                      "totcol", "refcol", "color", "color_signif")
+#   meta  : named list of the per-column ATTRIBUTES = `fmt_col_attrs` (defined in fmt_class.R, DERIVED
+#           from new_fmt()'s formals so an attribute can never again be forgotten here). `color` is
+#           carried WHOLE (length 1 or 2). The field / attribute name order is the new_fmt() contract.
 
 # WARNING: pass `comp_all` by EXACT name (not `comp`). The leaves historically wrote `comp = x`,
 # which PARTIAL-MATCHES the `comp_all` formal (verified) -- `comp_all = x` is the identical result.
@@ -2964,13 +2862,13 @@ fmt_materialize_col <- function(frame, meta) do.call(new_fmt, c(frame, meta))
 #   is_fmt  : logical over the data columns (rebuild order + fmt/factor split).
 #   factors : the non-fmt columns, passed through WHOLE (length-nrow, own attrs kept).
 #   fmt     : named list, one entry per fmt column = list(frame, meta) -- frame = as.list(vec_data())
-#             (the 18 raw fields, exact types), meta = the 9 fmt_col_attrs read by exact name.
+#             (the 18 raw fields, exact types), meta = the fmt_col_attrs read by exact name.
 #   attrs   : attributes(tab) VERBATIM (class / names / row.names / subtext / test / groups).
 # fmt_wrap(carrier) is the exact inverse: materialize each fmt column via the single
 # fmt_materialize_col() seam, pass the factor columns through, restore `attrs` wholesale.
 #
 # Byte-identity: new_fmt() does NO casting (L1) so vec_data() -> new_fmt() preserves every field's
-# storage type; the 9 attrs are read/written by exact name; restoring attributes() reproduces the
+# storage type; the fmt_col_attrs are read/written by exact name; restoring attributes() reproduces the
 # grouped/ungrouped class, subtext and test attribute. Provably identical() to the input (locked by
 # test-carrier-parity.R).
 fmt_unwrap <- function(tab) {
@@ -2997,7 +2895,7 @@ fmt_wrap <- function(carrier) {
 # is a list of per-source field-frames (each = as.list(vctrs::vec_data(col)), the 18 raw fields);
 # concat field-by-field with vctrs::vec_c (type-stable, so L1 holds: int+int -> int, NA_integer_ vs
 # NA_real_ preserved) and materialize ONCE via the fmt_materialize_col() seam with the supplied `meta`
-# (the 9 fmt_col_attrs). This replaces a vec_rbind over the tabxplor_fmt RECORDS (which casts +
+# (the fmt_col_attrs). This replaces a vec_rbind over the tabxplor_fmt RECORDS (which casts +
 # restores every row of every column) in tab_compact() / tab_pvalue_lines(). The caller supplies `meta`
 # per its reconcile policy: tab_compact() = vctrs::vec_ptype_common() across the stacked tables (reuses
 # vec_ptype2's attribute reconcile = L3, byte-identical, O(#tables) not O(#rows)); tab_pvalue_lines() =
@@ -4198,7 +4096,7 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, OR, color, pct,
 #' }
 tab_num <- function(data, row_var, col_vars, tab_vars, wt,
                     color = "auto", color_signif = "ignore",
-                    na = c("keep", "drop", "drop_fct", "drop_num"),
+                    na = c("keep", "drop"),
                     ref = "tot", comp = c("tab", "all"),
                     ci = NULL, conf_level = getOption("tabxplor.conf_level", 0.95), stars = NULL, #ci_visible = FALSE,
                     method_mean_diff = "welch", method_mean_ratio = "robust", ci_scale = "diff",
@@ -4604,7 +4502,11 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
     if (ref == "first" ) return(1L )
     if (is.numeric(ref)) return(as.integer(ref[1]))
 
-    index <- which(stringi::stri_detect_regex(row_var, ref))
+    # Try an EXACT label match first (Phase 7g-iii rule, ported from diff_index): a level whose text
+    # contains regex metacharacters ("$25000 or more") or is a substring of another level must match
+    # itself, not spuriously via regex. Regex only as the fallback.
+    exact <- which(row_var == ref)
+    index <- if (length(exact) >= 1L) exact else which(stringi::stri_detect_regex(row_var, ref))
 
     if (length(index) >= 2) warning(paste0(
       "with ref = '", ref, "' , several rows were found as ",
@@ -6289,11 +6191,11 @@ chi2_compute_test <- function(tabs, comp, row_var, col_vars_levels,
 }
 
 
-# var_contrib_ctr_signed() -- the plain-vector form of var_contrib(x, tot, "ctr_with_sign", comp) used
-# by chi2_write_contrib(): the signed absolute contribution of each cell to the (weighted) chi2, from
-# the column's weighted counts `xwn` (get_wn) and its total column's `twn`, using the LAST element as
-# the grand total. comp = "all" first zeroes the intermediate total rows/tabs (all but the last).
-# Byte-identical to var_contrib()'s "ctr_with_sign" branch (R/tab.R), read plainly.
+# var_contrib_ctr_signed() -- the signed absolute contribution of each cell to the (weighted) chi2,
+# from the column's weighted counts `xwn` (get_wn) and its total column's `twn`, using the LAST
+# element as the grand total. comp = "all" first zeroes the intermediate total rows/tabs (all but the
+# last). (The former fmt-vector helper var_contrib() with its "ctr_with_sign" branch was removed in
+# Phase 17a; this plain-vector form, used by chi2_write_contrib(), is the sole live path.)
 var_contrib_ctr_signed <- function(xwn, twn, in_totrow, in_tottab, comp) {
   n <- length(xwn)
   if (comp == "all") {
@@ -6342,7 +6244,7 @@ chi2_write_contrib <- function(tabs, calc, comp, color, col_vars_levels,
                                col_vars_levels_no_tot, is_a_mean, all_col_tot, tot_cols) {
   do_ctr  <- "ctr" %in% calc
   fmt_nms <- names(tabs)[purrr::map_lgl(tabs, is_fmt)]
-  # var_contrib / the ctr seed are PER SUBTABLE: the pre-9b-5 writes were GROUPED mutates, so each
+  # var_contrib_ctr_signed / the ctr seed are PER SUBTABLE: the pre-9b-5 writes were GROUPED mutates, so each
   # subtable's contributions use its own last (total) row. gid = the (post-prep) subtable of each row
   # (all 1s when ungrouped, e.g. comp = "all"). The row-wise ctr divide + colour don't depend on it.
   gid <- dplyr::group_indices(tabs)
@@ -6609,19 +6511,10 @@ tab_match_comp_and_tottab <- function(tabs, comp) {
 # helper that recomputed weighted.mean() on every call (the old double scan). The ML-vs-sample
 # variance question it flagged is tracked for Phase 3 (dev/tabxplor_1.4.0_decisions.md §14).
 
-#' @keywords internal
-zscore_formula <- function(conf_level) {
-  # Calculate the z-score for the given confidence level (thanks to mindcrime) :
-  # https://datascience.stackexchange.com/questions/10093/how-to-find-a-confidence-level-given-the-z-value
-  stopifnot(conf_level >= 0, conf_level <= 1)
-  stats::qnorm((1 - conf_level)/2,lower.tail = FALSE)
-}
-
-
 # Phase 3a: the scalar mean-CI helpers ci_mean()/ci_mean_diff() and the DescTools proportion-CI
 # closures ci_base()/ci_diff() were removed. All CI math now lives in the vectorised closed-form
-# engine (ci_pivot/ci_wilson/ci_newcombe/ci_prop_diff/ci_mean_diff2, R/tab-agg.R). zscore_formula()
-# above is kept -- the engine uses it for the normal quantile.
+# engine (ci_pivot/ci_wilson/ci_newcombe/ci_prop_diff/ci_mean_diff2, R/tab-agg.R), alongside
+# zscore_formula() (moved there in Phase 17a) which supplies the normal quantile.
 
 
 #' @keywords internal
@@ -6650,40 +6543,6 @@ diff_formula <- function(x, type, ref, refer) {
                      NA_real_)
   )
 }
-
-
-#' @keywords internal
-var_contrib <- function(x, tot, calc = c("ctr", "expected_freq", "spread",
-                                         "binding_ratio",
-                                         "ctr_with_sign"),
-                        comp = NULL) {
-  # x   <- tabs$Encadrant
-  # tot <- tabs$Total
-  xout             <- get_wn(x)
-  tot <- get_wn(tot)
-  if (!is.null(comp)) { if (comp == "all") {
-    tot_row_or_tab <- is_totrow(x[-length(x)]) | is_tottab(x[-length(x)])
-    xout[-length(x)] <-
-      dplyr::if_else(tot_row_or_tab, rep(0, length(x) -1), xout[-length(x)])
-
-    tot[-length(x)] <-
-      dplyr::if_else(tot_row_or_tab, rep(0, length(x) -1), tot [-length(x)])
-  }}
-
-  observed_freq     <- xout / dplyr::last(tot)
-  expected_freq     <- dplyr::last(xout) * tot / dplyr::last(tot)^2
-  spread            <- observed_freq - expected_freq
-  switch(calc[1],
-         "ctr"           = spread^2 / expected_freq, # = expected_freq * binding_ratio^2,
-         "spread"        = spread                  ,
-         "binding_ratio" = spread   / expected_freq,
-         "expected_freq" = expected_freq           ,
-         "ctr_with_sign" = sign(spread) * spread ^2 / expected_freq
-  )
-  #tidyr::replace_na(res, 0)
-}
-
-
 
 
 #' @keywords internal
@@ -6855,146 +6714,6 @@ calculate_refrows <- function(tabs, ref, comp, tab_row_names, tab_vars,
   return(refrows)
 }
 
-
-
-# tab_ci former implementation ----
-# tabs_nogroup <- tabs |> dplyr::ungroup() |> .[ci_yes]
-#
-# #Compute all variables needed to calculate ci in different tabs
-# xbase <- tabs_nogroup |>
-#   dplyr::mutate(dplyr::across(.cols = dplyr::everything(), .fns =  ~ dplyr::if_else(
-#     condition = get_display(.) == "mean",
-#     true      = get_mean(.),
-#     false     = get_pct(.)
-#   )))
-#
-# xvar <- tabs_nogroup |>
-#   dplyr::mutate(dplyr::across(.cols = dplyr::everything(), .fns = ~ dplyr::if_else(
-#     condition = get_display(.) == "mean",
-#     true      = get_var(.),
-#     false     = NA_real_
-#   )))
-#
-# ybase <-
-#   tibble::tibble(ci, tot_cols, names = rlang::syms(names(tabs))) |>
-#   dplyr::filter(ci_yes) |>
-#   purrr::pmap_df(function(ci, tot_cols, names) switch(
-#     ci,
-#     "cell"     = NA_real_,
-#     "diff_col" = dplyr::pull(tabs, !!tot_cols),
-#     "diff_row" = dplyr::mutate(tabs, comp = dplyr::last(!!names)) |>
-#       dplyr::pull(comp)
-#   ))
-#
-# yvar <- ybase |>
-#   dplyr::mutate(dplyr::across(where(~ !get_type(.)=="mean"), ~NA_real_)) |>
-#   dplyr::mutate(dplyr::across(where(~ get_type(.) =="mean"), get_var))
-#
-# ybase <- ybase |>
-#   dplyr::mutate(dplyr::across(
-#     where(~ is_fmt(.) & !get_type(.) == "mean"),
-#     get_pct
-#   )) |>
-#   dplyr::mutate(dplyr::across( where(~ get_type(.) == "mean"), get_mean))
-#
-# xn <-
-#   tibble::tibble(type, tot_cols, names = rlang::syms(names(tabs))) |>
-#   dplyr::filter(ci_yes) |>
-#   purrr::pmap_df(function(type, tot_cols, names) switch(
-#     type,
-#     "row"      = dplyr::pull(tabs, !!tot_cols) |> get_n(),
-#     "mean"     = dplyr::pull(tabs, !!names   ) |> get_n(),
-#     "col"      = dplyr::mutate(tabs, xn = dplyr::last(get_n(!!names)) ) |>
-#       dplyr::pull(xn),
-#     "all"      = ,
-#     "all_tabs" = dplyr::mutate(tabs, xn = dplyr::last(get_n(!!tot_cols)) ) |>
-#       dplyr::pull(xn),
-#     NA_integer_
-#   ))
-#
-# yn <-
-#   tibble::tibble(ci, type, tot_cols, names = rlang::syms(names(tabs))) |>
-#   dplyr::filter(ci_yes) |>
-#   purrr::pmap_df(function(ci, type, tot_cols, names) switch(
-#     ci,
-#     "cell"       = NA_real_,
-#     "diff_col"   =
-#       switch(type,
-#              "row"      = dplyr::pull(tabs, !!tot_cols) |> get_n(),
-#              "col"      = ,
-#              "all"      = ,
-#              "all_tabs" =
-#                dplyr::transmute(tabs, yn = dplyr::last(get_n(!!tot_cols)) ) |>
-#                dplyr::pull(yn),
-#              NA_real_
-#       ),
-#     "diff_row"   =
-#       switch(type,
-#              "mean"     = ,
-#              "col"      =
-#                dplyr::transmute(tabs, yn = dplyr::last(get_n(!!names)) ) |>
-#                dplyr::pull(yn),
-#              "row"      = ,
-#              "all"      = ,
-#              "all_tabs" =
-#                dplyr::transmute(tabs, yn = dplyr::last(get_n(!!tot_cols)) ) |>
-#                dplyr::pull(yn),
-#              NA_real_
-#       )
-#   ) )
-#
-#
-# ci_map <-
-#   list(xbase = xbase, xvar = xvar,
-#        ybase = ybase, yvar = yvar,
-#        xn = xn, yn = yn) |>
-#   purrr::map(~purrr::map(., ~ .)) |>
-#   purrr::transpose() |> purrr::map(~ tibble::as_tibble(.)) |>
-#   tibble::tibble(.name_repair = ~ "ci_map") |>
-#   tibble::add_column(ci = ci[ci_yes], type = type[ci_yes]) |>
-#   dplyr::mutate(ci_map = dplyr::if_else(
-#     ci %in% c("diff_col", "diff_row"),
-#     true  = purrr::map(ci_map, ~ dplyr::mutate(., xn = dplyr::if_else(
-#       condition =
-#         ( comp == "tab" & is_totrow(tabs) ) |
-#         ( comp == "all" & append(rep(FALSE, nrow(tabs) - 1), TRUE)),
-#       true      = NA_integer_,
-#       false     = xn)
-#     )),
-#     false = ci_map
-#   ) |> purrr::set_names(names(tabs)[ci_yes])
-#   )
-#
-# calculations <- ci_map |>
-#   purrr::pmap(function(ci_map, ci, type)
-#     dplyr::mutate(ci_map, res = switch(
-#       ci,
-#       "cell"        = switch(type,
-#                              "mean" = ci_mean(xvar = xvar, xn = xn),
-#                              ci_base(xpct = xbase, xn = xn)
-#       ),
-#       "diff_col"   = ,
-#       "diff_row"   = switch(type,
-#                             "mean" = ci_mean_diff(xvar = xvar, xn = xn,
-#                                                   yvar = yvar, yn = yn),
-#                             ci_diff(xpct = xbase, xn = xn,
-#                                     ypct = ybase, yn = yn)
-#       ),
-#       # "spread_col" = ,
-#       # "spread_row" = switch(type,
-#       #                       "mean" = ci_mean_spread(
-#       #                         xmean = xbase,  xvar = xvar, xn = xn,
-#       #                         ymean = ybase,  yvar = yvar, yn = yn
-#       #                       ),
-#       #                       ci_diff_spread(xpct = xbase, xn = xn,
-#       #                                      ypct = ybase, yn = yn)
-#       # ),
-#       "no"         = NA_real_,
-#     ) ) )
-#
-# result <- calculations |> purrr::map_df(~ dplyr::pull(., res))
-#
-# tabs[ci_yes] <- purrr::map2_df(tabs[ci_yes], result, ~ set_ci(.x, .y) )
 
 # resolve_ref_vector() -- Phase 6d (§4): resolve a `ref` spec against a set of variable keys.
 # A scalar applies to every key (recycled -- byte-identical to the old behaviour). A NAMED
@@ -7268,24 +6987,6 @@ tab_add_n_pct <- function(tabs_text, add_n, add_pct) {
       }
 
     }
-
-
-    # tabs_text |>
-    #   purrr::map(
-    #     ~ dplyr::mutate(., dplyr::across(
-    #       dplyr::where(is_totcol),
-    #       ~ set_display(., "n") |> set_type("n") |>
-    #         as_totcol(FALSE) |> set_color("no"),
-    #       .names = "{.col}_.nnnnnn" # paste0(, "_n")
-    #     )
-    #     ) |>
-    #       dplyr::rename(all_of(
-    #         purrr::set_names(
-    #           names(.)[stringi::stri_detect_regex(names(.), "_.nnnnnn$")],
-    #           paste0(get_col_var(.)[stringi::stri_detect_regex(names(.), "_.nnnnnn$")], "_n")
-    #         )
-    #       ))
-    #   )
 
 
   tabs_text

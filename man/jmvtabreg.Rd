@@ -8,30 +8,28 @@ jmvtabreg(
   data,
   dependent = NULL,
   predictors = NULL,
-  wt = NULL,
   split_var = NULL,
-  family = "auto",
-  exponentiate = "nongaussian",
+  wt = NULL,
+  depFamily = NULL,
+  depModelLevel = NULL,
+  depTrials = NULL,
+  exponentiate = TRUE,
   effect = "coefficient",
   at = "average",
-  estimate_display = "value",
-  inverse_two_level_factors = TRUE,
   empirical = FALSE,
-  compare = "none",
-  trials_mode = "off",
-  trials_n = 1,
-  refLevels = NULL,
   models = NULL,
   baseline = 1,
+  compare = "none",
+  na = "drop_by_model",
+  refLevels = NULL,
   multiplicator = NULL,
   conf_level = 0.95,
   method = "wald",
   stars = TRUE,
-  color = "default",
+  color = TRUE,
   color_signif = "grey_non_signif",
-  na = "keep",
+  estimate_display = "value",
   cleannames = TRUE,
-  footer = TRUE,
   subtext = "",
   wrap_rows = 35,
   wrap_cols = 15,
@@ -50,28 +48,31 @@ jmvtabreg(
 \arguments{
 \item{data}{A data.frame.}
 
-\item{dependent}{The outcome variable(s). One effect column is built per
-dependent. The family is auto-detected from the outcome unless set below.}
+\item{dependent}{The outcome variable(s). One model is built per dependent.
+Set each outcome's family (and, for a binomial outcome, its modelled level
+or number of trials) in the Model table.}
 
 \item{predictors}{The explanatory variables of the model. Factors are shown
 one line per level (the reference level as the neutral value); numeric
 predictors as a single line.}
 
+\item{split_var}{A grouping variable. The same model is fitted within each
+of its levels and the tables are stacked (like tab_vars for crosstables).}
+
 \item{wt}{A survey weight variable. Switches to design-based estimation
 (scale-invariant sandwich standard errors). Leave empty for unweighted
 results.}
 
-\item{split_var}{A grouping variable. The same model is fitted within each
-of its levels and the tables are stacked (like tab_vars for crosstables).}
+\item{depFamily}{.}
 
-\item{family}{The model family. "auto" detects it from the outcome (2
-values -> binomial, ordered factor -> ordinal, unordered factor ->
-multinomial, non-integer numeric -> gaussian). Integer counts are
-ambiguous: set poisson / gaussian explicitly.}
+\item{depModelLevel}{.}
 
-\item{exponentiate}{Whether to exponentiate the coefficients: "auto" gives
-odds / rate ratios for every non-gaussian family and raw coefficients for
-gaussian.}
+\item{depTrials}{.}
+
+\item{exponentiate}{Exponentiate the coefficients into ratios (odds ratios
+/ incidence-rate ratios), automatically leaving gaussian linear
+coefficients on their raw scale. Uncheck to keep every coefficient on the
+coefficient (log / linear) scale.}
 
 \item{effect}{"coefficient" is the native per-family effect (beta / OR /
 IRR). "AME" is the average marginal effect on the response scale (needs the
@@ -81,36 +82,26 @@ marginaleffects package).}
 or at the reference profile (other predictors at their reference level /
 mean).}
 
-\item{estimate_display}{The estimate-cell layout. "ci" shows a visible
-interval; "prob" / "ame" fold the adjusted predicted probability / marginal
-effect into the OR cell (binomial coefficient models only).}
-
-\item{inverse_two_level_factors}{For a binomial outcome, model the first
-level of a two-level outcome (maintainer convention, e.g. "1-Married"
-first).}
-
 \item{empirical}{Add the crude, unadjusted, single-predictor companion
 columns beside the model effect (the bivariate association that IS the
 modelised quantity with a single predictor). Binomial / gaussian / poisson
 only.}
 
-\item{compare}{With several models (a predictor-subset list), add a
-comparison-test footer row: "baseline" tests each model against the chosen
-baseline model, "sequential" against the previous one (LR / F / Wald, or an
-AIC difference when not nested).}
-
-\item{trials_mode}{Grouped-binomial (summed-score) outcomes: fit
-cbind(score, trials - score). "observed" uses each outcome's maximum score;
-"fixed" a set item count. Binomial only.}
-
-\item{trials_n}{The fixed number of items behind a summed score (used when
-trials = "fixed").}
-
-\item{refLevels}{.}
-
 \item{models}{.}
 
 \item{baseline}{.}
+
+\item{compare}{With several models (a predictor-subset list), add a
+likelihood-ratio / F / Wald comparison-test footer row: "baseline" tests
+each model against the chosen baseline model, "sequential" against the
+previous one (an AIC difference when not nested).}
+
+\item{na}{"drop by model" fits each model / outcome on its own complete
+cases; "drop all models" uses one shared complete-case population across
+all predictors (equal N; changes the estimates), which a valid
+likelihood-ratio comparison test needs.}
+
+\item{refLevels}{.}
 
 \item{multiplicator}{.}
 
@@ -124,18 +115,19 @@ MASS).}
 \item{stars}{Show per-cell significance stars (the colours read the
 confidence interval either way).}
 
-\item{color}{The color helper scale. "default" chooses by family (OR for
-ratios, difference for gaussian betas).}
+\item{color}{Colour the effect cells with the sensible per-family colour
+helper (OR magnitude for ratios, standardized difference for gaussian
+betas). Uncheck for no colours.}
 
-\item{color_signif}{How significance interacts with the colours.}
+\item{color_signif}{How significance interacts with the colours: grey out
+non-significant cells, ignore significance, or colour only the guaranteed
+(error-adjusted) effect.}
 
-\item{na}{"keep" fits each model on its own complete cases; "drop all" uses
-one shared complete-case population across all predictors (equal N; changes
-the estimates).}
+\item{estimate_display}{The estimate-cell layout. "ci" shows a visible
+interval; "prob" / "ame" fold the adjusted predicted probability / marginal
+effect into the OR cell (binomial coefficient models only).}
 
 \item{cleannames}{Strip numeric prefixes from factor level labels.}
-
-\item{footer}{Show the model-summary footer (N, pseudo-R2, AIC / BIC, ...).}
 
 \item{subtext}{A free note printed below the table.}
 

@@ -259,6 +259,15 @@ tab_aggregate_num <- function(data, row_var, col_vars, tab_vars, wt,
 # Validated against DescTools/prop.test/t.test in dev/verify_ci_inclusion.R.
 # See: CLAUDE.md > 1.4.0 roadmap > Phase 3a; dev/tabxplor_1.4.0_decisions.md §20.
 
+# The normal quantile (z-score) for a two-sided confidence level -- the engine's z for the
+# Wilson/Newcombe/Wald intervals below. (Moved here from tab.R in Phase 17a: it belongs beside its
+# only callers, the CI engine.)
+#' @keywords internal
+zscore_formula <- function(conf_level) {
+  stopifnot(conf_level >= 0, conf_level <= 1)
+  stats::qnorm((1 - conf_level) / 2, lower.tail = FALSE)
+}
+
 # Wilson score bounds at a given z (internal core, reused by the Newcombe inversion).
 wilson_bounds <- function(p, n, z) {
   d    <- 1 + z^2 / n

@@ -223,3 +223,22 @@ testthat::test_that("group_split on a grouped tab returns class-preserving tabs"
   testthat::expect_true(all(vapply(parts, is_tab, logical(1))))
 })
 
+
+
+# ---- Phase 17a janitorial fixes: failing-first fixture ----
+
+test_that("grouped ptype2 reconciles BOTH operands' attributes (Defect 4, Phase 17a)", {
+  # gtab_ptype2()/gtab_cast() used to take attributes from a single side (tab_attrs(x)/tab_attrs(to)),
+  # unlike the plain path (tab_bind_attrs). So the `test` block and `subtext` of the other operand
+  # were lost. They now reconcile both sides: `test` row-bound (vec_rbind), `subtext` unioned.
+  g1 <- tab(dplyr::filter(forcats::gss_cat, year %in% 2000), marital, race, year, test = TRUE)
+  g2 <- tab(dplyr::filter(forcats::gss_cat, year %in% 2006), marital, race, year, test = TRUE)
+  expect_equal(nrow(get_test(g1)), 1L)
+  attr(g1, "subtext") <- "AAA"
+  attr(g2, "subtext") <- "BBB"
+
+  p <- gtab_ptype2(g1, g2)
+  expect_s3_class(p, "tabxplor_grouped_tab")
+  expect_equal(nrow(get_test(p)), 2L)                    # both test blocks survive
+  expect_setequal(get_subtext(p), c("AAA", "BBB"))       # subtext unioned
+})

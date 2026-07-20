@@ -12,7 +12,7 @@ tab_num(
   wt,
   color = "auto",
   color_signif = "ignore",
-  na = c("keep", "drop", "drop_fct", "drop_num"),
+  na = c("keep", "drop"),
   ref = "tot",
   comp = c("tab", "all"),
   ci = NULL,

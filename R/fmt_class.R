@@ -1309,6 +1309,23 @@ new_fmt <- function(n         = integer(),
   #vec_data() return the tibble with all fields
 }
 
+# The 18 per-cell record FIELDS of new_fmt(), single-sourced so the column-attribute list below can be
+# DERIVED rather than hand-maintained. (Defect: model_family became a 10th attribute in Phase 15e but
+# was never added to the hand-written fmt_col_attrs -> it was silently dropped on every carrier
+# round-trip / bind.) Adding a FIELD updates this vector (the /vctrs-field checklist forces it);
+# adding an ATTRIBUTE (a new_fmt() formal that is not a field) needs NO change here -- it appears in
+# fmt_col_attrs automatically. Order follows the new_rcrd() list() above; do NOT reorder.
+fmt_field_names <- c("n", "display", "digits", "wn", "pct", "mean", "diff", "ratio", "ctr", "var",
+                     "ci_inf", "ci_sup", "pvalue", "or", "tot_n",
+                     "in_totrow", "in_tottab", "in_refrow")
+
+# The per-column ATTRIBUTE names carried when a fmt column is rebuilt/round-tripped: every new_fmt()
+# formal that is NOT a per-cell field (and not `...`/`class`). Order follows new_fmt()'s signature =
+# type, comp_all, ref, ci_type, col_var, totcol, refcol, color, color_signif, model_family.
+# Read by fmt_unwrap / tab_stack_tables (tab.R), the column reconcile (tab_classes.R) and
+# tab-test-display.R. `color` is carried WHOLE (length 1 or 2).
+fmt_col_attrs <- setdiff(names(formals(new_fmt)), c(fmt_field_names, "...", "class"))
+
 
 
 
@@ -1349,6 +1366,17 @@ get_wn     <- function(x) { #If there is no weighted counts, take counts
     out[is.na(out)] <- counts[is.na(out)]
   }
   out
+}
+
+# as.list(vec_data(col)) with the `wn` field MATERIALISED -- the frame shape vec_cast produces via the
+# getters. Raw vec_data() keeps wn's NAs, but get_wn() is the only getter with a fallback (NA -> the n
+# field); every other field is a raw read, so only wn needs the fixup. Shared by tab_stack_tables()
+# (tab_classes.R) and the test-display column stacker (tab-test-display.R).
+#' @keywords internal
+fmt_data_wn <- function(col) {
+  fr <- as.list(vctrs::vec_data(col))
+  fr$wn <- get_wn(col)
+  fr
 }
 # @describeIn fmt get the "pct" field
 #' @keywords internal
@@ -1753,20 +1781,6 @@ print_num <- function(num, digits) {
     stringi::stri_replace_first_regex("^100.0+$", "100")
 }
 
-# WARNING: currently a no-op passthrough. Rendering CIs as HTML/LaTeX subscripts (the
-# commented `$_{...}$` / <sub> variants below) worked in console and RMarkdown but broke in
-# Jamovi, so subscript formatting is disabled until a Jamovi-safe encoding is found.
-ci_html_subscript <- function(x, html = FALSE) {
-  if (html) x <- dplyr::if_else(
-    condition = stringi::stri_detect_regex(x,"^ *$" ),
-    true      = "",
-    false     = x #paste0("$_{", x, "}$")
-      # paste0('<span style="vertical-align: baseline; position: relative;top: -0.5em;>', x, '</span>')
-      # paste0("<p><sub>", x, "</sub></p>")
-  )
-  x
-}
-
 # Format/printing methods for class tabxplor_fmt -----------------------------------------
 #The first method for every class should almost always be a format() method.
 #This should return a character vector the same length as x.
@@ -1965,11 +1979,16 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
       out_ci <-
         paste0(print_num(out[plus_ci], digits[plus_ci]),
                dplyr::if_else(pct_ci[plus_ci], "%", ""),
-               ci_print_trim(paste0(pm, sprintf(
-                 paste0("%-0.",
-                        digits[plus_ci] + dplyr::if_else(pct_ci[plus_ci] & digits[plus_ci] == 0, 1L, 0L),
-                        "f"), ci
-               )) ) |> ci_html_subscript(html = html)
+               {
+                 .ci <- ci_print_trim(paste0(pm, sprintf(
+                   paste0("%-0.",
+                          digits[plus_ci] + dplyr::if_else(pct_ci[plus_ci] & digits[plus_ci] == 0, 1L, 0L),
+                          "f"), ci
+                 )) )
+                 # Phase 17a: was ci_html_subscript() -- a no-op except it blanks whitespace-only CI
+                 # strings under html (subscript formatting is disabled; it broke in Jamovi).
+                 if (html) dplyr::if_else(stringi::stri_detect_regex(.ci, "^ *$"), "", .ci) else .ci
+               }
         )
 
     } else if (any(plus_disp_ci) ) { # !ci_print_moe
@@ -2392,81 +2411,6 @@ pillar_shaft.tabxplor_fmt <- function(x, ..., .ref = NULL) {
   # everywhere by default, so this is a no-op unless opted in. Read fresh so a mid-session toggle applies.
   bold_on <- isTRUE(getOption("tabxplor.console_bold"))
 
-
-
-
-
-  #
-  #   comp <- get_comp_all(x)
-  #
-  #   ci_type   <- get_ci_type(x)
-  #   pct       <- get_type(x)
-
-  #
-  #   disp_diff <- display == "diff" & !nas
-  #   disp_ci   <- display == "ci" & ci_type == "diff" & !nas
-  #   disp_ctr  <- display == "ctr" & !nas
-  #   disp_or   <- display == "or" & !nas
-  #   disp_or_pct<-display == "or_pct" & !nas
-  #
-  #   if (any(disp_diff)) {
-  #     ref     <- get_reference(x[disp_diff], mode = "cells")
-  #     reffmt  <- set_display(x[disp_diff],
-  #                            ifelse(type %in% c("n", "mean"), "mean", "pct")) |>
-  #       format() #|> stringi::stri_trim()
-  #     out[disp_diff] <- dplyr::if_else(ref,
-  #                                      paste0("ref:", reffmt),
-  #                                      out[disp_diff])
-  #   }
-  #
-  #   if (any(disp_ci)) {
-  #     ref     <- get_reference(x[disp_ci], mode = "cells")
-  #     reffmt  <- set_display(x[disp_ci],
-  #                            ifelse(type %in% c("n", "mean"), "mean", "pct")) |>
-  #       format()
-  #     out[disp_ci] <- dplyr::if_else(ref,
-  #                                    paste0("ref:x-", reffmt),
-  #                                    out[disp_ci])
-  #   }
-  #
-  #   if (any(disp_ctr)) {
-  #     mctr <- if (comp) {
-  #       disp_ctr & totrows & tottabs & !totcol
-  #     } else {
-  #       disp_ctr & totrows & !totcol
-  #     }
-  #     out[mctr] <- paste0("mean:", stringi::stri_trim(out[mctr])) |>
-  #       stringi::stri_replace_first_regex("mean:Inf%|NA", "")
-  #   }
-  #
-  #   if (any(disp_or)) {
-  #     # refcol  <- is_refcol(x)
-  #     ref     <- get_reference(x[disp_or], mode = "all_totals")
-  #     reffmt  <- set_display(x[disp_or], "pct") |> # ifelse(refcol, "pct", "rr")
-  #       set_digits(0L) |> format() #|> stringi::stri_trim()
-  #     reffmt <- stringi::stri_pad(reffmt, max(stringi::stri_length(reffmt)) )
-  #     out[disp_or] <- dplyr::if_else(
-  #       ref,
-  #       paste0(stringi::stri_replace_first_regex(out[disp_or], "1.0+", "1"),
-  #             " (", reffmt, ")"),
-  #       out[disp_or]
-  #     )
-  #     # out[disp_or] <- dplyr::case_when(
-  #     #   ref & type == "row" & refcol ~ paste0("1 (ref)"),
-  #     #   ref & type == "row"          ~ paste0("1 (rel ", reffmt, ")"),
-  #     #   ref & type == "col" & refrows~ paste0("1 (ref)"),
-  #     #   ref & type == "col"          ~ paste0("1 (rel ", reffmt, ")"),
-  #     #   TRUE                         ~ out[disp_or]
-  #     # )
-  #   }
-  #
-  #   if (any(disp_or_pct)) {
-  #     reffmt  <- set_display(x[disp_or_pct], "pct") |> set_digits(0L) |> format()
-  #     out[disp_or_pct] <- paste0(out[disp_or_pct], " (", reffmt, ")")
-  #   }
-
-
-
   # DESIGN: color="contrib" needs total rows because the per-(sub)table MEAN contribution
   # to variance is stored ON the total row (see get_mean_contrib), not in each cell.
   if (color == "contrib" & !any(totrows)) warning(
@@ -2547,40 +2491,6 @@ pillar_shaft.tabxplor_fmt <- function(x, ..., .ref = NULL) {
 
   pillar::new_pillar_shaft_simple(out, align = "right", na = "")
 }
-
-#' Print Chi2 tables columns
-#' @param x A fmt object.
-#' @param ... Other parameter.
-#' @export
-#' @return A Chi2 table column printed in a pillar.
-# @keywords internal
-# @method pillar_shaft tab_chi2_fmt
-pillar_shaft.tab_chi2_fmt <- function(x, ...) {
-  # print color type somewhere (and brk legend beneath ?) ----
-
-  out     <- format(x)
-  # Phase 12f: a p-value cell may carry an in-cell test label ("{pvalue} (Chi2)"); resolve the
-  # composite to its PRIMARY token so the red/green colouring still fires on the labelled cell.
-  display <- display_primary(get_display(x))
-  nas     <- is.na(display)
-
-  color_style <- get_color_style()
-
-  is_p     <- !nas & display == "pvalue"
-  pvalues  <- out[is_p]
-  p_values <- get_num(x)[is_p]
-
-  # Non-significant p-values (>= 5%) print in the strongest under-represented colour (slot 8),
-  # significant ones in the strongest over-represented colour (slot 4): a warning colour flags a
-  # (sub)table that may not differ from the independence hypothesis.
-  out[is_p] <-
-    dplyr::if_else(condition = p_values >= 0.05,
-                   true      = color_style[[8]](pvalues),
-                   false     = color_style[[4]](pvalues) )
-
-  pillar::new_pillar_shaft_simple(out, align = "right", na = "")
-}
-
 
 #' mutate method to access vctrs::fields of tabxplor_fmt vectors
 #' @importFrom dplyr mutate
@@ -3951,35 +3861,39 @@ get_reference <- function(x, mode = c("cells", "lines", "all_totals")) {
 
 
 
+# Shared body of vec_ptype_abbr/vec_ptype_full (Phase 17a). The two differ only by the label `prefix`
+# ("" for abbr, "fmt-" for full) -- which also flips the doubled-type / trailing-NA collapse anchor
+# from "^" to the prefix's trailing "-" -- and by `pct_pvalue_collapse` (a pct/pvalue composite shows
+# as "pct" in the abbreviation only). Phase 10i-A: a composite column shows its PRIMARY type.
+fmt_ptype_label <- function(x, prefix, pct_pvalue_collapse) {
+  display <- display_primary(get_display(x)) |> unique()
+  if (pct_pvalue_collapse && identical(sort(display), c("pct", "pvalue"))) display <- "pct"
+  display <- ifelse(length(display) > 1, "mixed", display)
+  type    <- get_type(x)
+  if (type %in% c("row", "col", "all", "all_tabs")) type <- paste0(type, "%")
+  ci <- get_ci_type(x)
+  if (display == "ci" & ci %in% c("cell", "diff")) display <- paste0("ci_", ci)
+
+  pat_anchor <- if (nzchar(prefix)) "-" else "^"   # boundary before a doubled "<t>-<t>"
+  rep_anchor <- if (nzchar(prefix)) "-" else ""
+  out <- paste0(prefix, type, "-", display)
+  for (t in c("n", "mean", "coef", "mixed")) {     # Phase 12c added "coef"
+    out <- stringi::stri_replace_first_regex(out, paste0(pat_anchor, t, "-", t),
+                                             paste0(rep_anchor, t))
+  }
+  out |>
+    stringi::stri_replace_first_regex("([^%]+%)-pct", "$1") |>
+    stringi::stri_replace_first_regex(paste0(pat_anchor, "NA"), "") |>
+    stringi::stri_replace_first_regex("_ci$", "")
+}
+
 #' Abbreviated display name for class fmt in tibbles
 #' @param x A fmt object.
 #' @param ... Other parameter.
 #' @return A single string with abbreviated fmt type.
 #' @export
 vec_ptype_abbr.tabxplor_fmt <- function(x, ...) {
-  # Phase 10i-A: a composite column shows its PRIMARY type in the tibble header (e.g. "row%"), not
-  # the raw "{pct} (n={n})" template.
-  display  <- display_primary(get_display(x)) |> unique()
-  if (identical(sort(display), c("pct", "pvalue"))) display <- "pct"
-  display  <- ifelse(length(display) > 1, "mixed", display)
-  type     <- get_type(x)
-  row_mean <- type %in% c("row", "mean")
-  if (type %in% c("row", "col", "all", "all_tabs")) type <- paste0(type, "%")
-  ci <- get_ci_type(x)
-  if (display == "ci" & ci %in% c("cell", "diff")) display <- paste0("ci_", ci)
-
-
-  out <- paste0(type, "-", display) |>
-    stringi::stri_replace_first_regex("^n-n", "n") |>
-    stringi::stri_replace_first_regex("^mean-mean", "mean") |>
-    stringi::stri_replace_first_regex("^coef-coef", "coef") |>   # Phase 12c
-    stringi::stri_replace_first_regex("^mixed-mixed", "mixed") |>
-    stringi::stri_replace_first_regex("([^%]+%)-pct", "$1") |>
-    stringi::stri_replace_first_regex("^NA", "") |>
-    stringi::stri_replace_first_regex("_ci$", "")
-  #if (get_comp_all(x)) out <- paste0(out, "-all")
-
-  out
+  fmt_ptype_label(x, prefix = "", pct_pvalue_collapse = TRUE)
 }
 
 
@@ -3989,25 +3903,7 @@ vec_ptype_abbr.tabxplor_fmt <- function(x, ...) {
 #' @return A single string with full fmt type.
 #' @export
 vec_ptype_full.tabxplor_fmt <- function(x, ...) {
-  display  <- display_primary(get_display(x)) |> unique()
-  display  <- ifelse(length(display) > 1, "mixed", display)
-  type     <- get_type(x)
-  row_mean <- type %in% c("row", "mean")
-  if (type %in% c("row", "col", "all", "all_tabs")) type <- paste0(type, "%")
-  ci <- get_ci_type(x)
-  if (display == "ci" & ci %in% c("cell", "diff")) display <- paste0("ci_", ci)
-
-  out <- paste0("fmt-", type, "-", display) |>
-    stringi::stri_replace_first_regex("-n-n", "-n") |>
-    stringi::stri_replace_first_regex("-mean-mean", "-mean") |>
-    stringi::stri_replace_first_regex("-coef-coef", "-coef") |>   # Phase 12c
-    stringi::stri_replace_first_regex("-mixed-mixed", "-mixed") |>
-    stringi::stri_replace_first_regex("([^%]+%)-pct", "$1") |>
-    stringi::stri_replace_first_regex("-NA", "") |>
-    stringi::stri_replace_first_regex("_ci$", "")
-  #if (get_comp_all(x)) out <- paste0(out, "-all")
-
-  out
+  fmt_ptype_label(x, prefix = "fmt-", pct_pvalue_collapse = FALSE)
 }
 # x <- fmt(7, "row", pct = 0.6)
 # x |> vec_data()
@@ -4347,19 +4243,6 @@ vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
       color    = fmt_color_attr(x),
       color_signif = get_color_signif(x),
       model_family = get_model_family(x)
-
-      # type     = dplyr::if_else(same_type,
-      #                           true  = type_x,
-      #                           false = vctrs::vec_recycle("mixed", l )),
-      # comp_all = dplyr::if_else(same_comp,
-      #                           true  = comp_x,
-      #                           false = vctrs::vec_recycle(FALSE, l )),
-      # ci_type  = dplyr::if_else(same_ci_type,
-      #                           true  = ci_type_x,
-      #                           false = vctrs::vec_recycle(NA_character_, l )),
-      # col_var  = dplyr::if_else(same_col_var,
-      #                           true  = col_var_x,
-      #                           false = vctrs::vec_recycle("several_vars", l )),
     ),
     "/" = ,
     "*" = new_fmt(
@@ -4396,19 +4279,6 @@ vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
       color    = fmt_color_attr(x),
       color_signif = get_color_signif(x),
       model_family = get_model_family(x)
-
-      # type     = dplyr::if_else(same_type,
-      #                           true  = type_x,
-      #                           false = vctrs::vec_recycle("mixed", l )),
-      # comp_all = dplyr::if_else(same_comp,
-      #                           true  = comp_x,
-      #                           false = vctrs::vec_recycle(FALSE, l )),
-      # ci_type  = dplyr::if_else(same_ci_type,
-      #                           true  = ci_type_x,
-      #                           false = vctrs::vec_recycle(NA_character_, l )),
-      # col_var  = dplyr::if_else(same_col_var,
-      #                           true  = col_var_x,
-      #                           false = vctrs::vec_recycle("several_vars", l )),
     ),
     vctrs::stop_incompatible_op(op, x, y)
   )
@@ -4420,13 +4290,6 @@ vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
 #' @export
 vec_arith.tabxplor_fmt.numeric <- function(op, x, y, ...) {
   set_num(x, vctrs::vec_arith_base(op, get_num(x), y))
-  # new_fmt(pct    = vec_arith_base(op, vctrs::field(x, "pct"), y),
-  #          display   = vctrs::field(x, "display"  ),
-  #          digits = vctrs::field(x, "digits"),
-  #          n      = vctrs::field(x, "n"     ),
-  #          wn     = vctrs::field(x, "wn"    ),
-  #          var     = vctrs::field(x, "var"    ),
-  #          ci     = vctrs::field(x, "ci"    )                     )
 }
 
 #' @describeIn vec_arith.tabxplor_fmt vec_arith method for numeric + fmt
@@ -4435,13 +4298,6 @@ vec_arith.tabxplor_fmt.numeric <- function(op, x, y, ...) {
 #' @export
 vec_arith.numeric.tabxplor_fmt <- function(op, x, y, ...) {
   set_num(y, vctrs::vec_arith_base(op, x, get_num(y)))
-  # new_fmt(pct    = vec_arith_base(op, x, vctrs::field(y, "pct")),
-  #          display   = vctrs::field(y, "display"  ),
-  #          digits = vctrs::field(y, "digits"),
-  #          n      = vctrs::field(y, "n"     ),
-  #          wn     = vctrs::field(y, "wn"    ),
-  #          var     = vctrs::field(y, "var"    ),
-  #          ci     = vctrs::field(y, "ci"    )                     )
 }
 
 #' @describeIn vec_arith.tabxplor_fmt vec_arith method for -fmt
@@ -4451,13 +4307,6 @@ vec_arith.numeric.tabxplor_fmt <- function(op, x, y, ...) {
 vec_arith.tabxplor_fmt.MISSING <- function(op, x, y, ...) { #unary + and - operators
   switch(op,
          `-` = set_num(x, get_num(x) * -1),
-         # new_fmt(pct    = vctrs::field(x, "pct"   ) * -1,
-         #              display   = vctrs::field(x, "display"  ),
-         #              digits = vctrs::field(x, "digits"),
-         #              n      = vctrs::field(x, "n"     ),
-         #              wn     = vctrs::field(x, "wn"    ),
-         #              var     = vctrs::field(x, "var"    ),
-         #              ci     = vctrs::field(x, "ci"    )       ),
          `+` = x,
          vctrs::stop_incompatible_op(op, x, y)
   )
@@ -4511,7 +4360,9 @@ vec_math.tabxplor_fmt <- function(.fn, .x, ...) {
                          col_var   = get_col_var (.x),
                          totcol    = is_totcol   (.x),
                          refcol    = is_refcol   (.x),
-                         color     = get_color   (.x)
+                         color        = fmt_color_attr   (.x),
+                         color_signif = get_color_signif (.x),
+                         model_family = get_model_family (.x)
          ),
          "mean" = new_fmt(display = get_display(.x)[1],
                           digits  = max(get_digits(.x)),
@@ -4542,7 +4393,9 @@ vec_math.tabxplor_fmt <- function(.fn, .x, ...) {
                           col_var   = get_col_var (.x),
                           totcol    = is_totcol   (.x),
                           refcol    = is_refcol   (.x),
-                          color     = get_color   (.x)
+                          color        = fmt_color_attr   (.x),
+                          color_signif = get_color_signif (.x),
+                          model_family = get_model_family (.x)
          ),
          vctrs::vec_math_base(.fn, get_num(.x), ...) )
 }

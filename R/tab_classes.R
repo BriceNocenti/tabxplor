@@ -256,10 +256,15 @@ new_vars_attr <- function(row_vars = character(0), col_vars = character(0),
   if (!is.na(wt) && nzchar(wt)) out$wt <- wt
   out
 }
-# The package CI defaults (mirror tab()'s formals), used when a table carries no `ci_settings`.
+# The package CI defaults, used when a table carries no `ci_settings`. DERIVED from tab()'s formals
+# (Phase 17a) rather than hand-mirrored, so the two can never drift: each default is the tab() formal
+# evaluated (conf_level resolves getOption("tabxplor.conf_level", 0.95), exactly as tab() would).
 default_ci_settings <- function() {
-  list(conf_level = 0.95, method_cell = "wilson", method_diff = "newcombe",
-       method_ratio = "katz", method_mean_diff = "welch", method_mean_ratio = "robust")
+  fm <- formals(tab)
+  ce <- environment()
+  lapply(fm[c("conf_level", "method_cell", "method_diff",
+              "method_ratio", "method_mean_diff", "method_mean_ratio")],
+         eval, envir = ce)
 }
 
 # === SECTION: the ONE table-attribute carry (Phase 14d) ============================================
@@ -463,14 +468,16 @@ print.tabxplor_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = N
 
   # DESIGN: pillar::char(min_chars=) above is used only to force a minimum width on the
   # row_var column, but it makes pillar print that column's type as <char>. Rewrite it back
-  # to <fct> in the header line so the displayed type stays correct. out[3] is the type-tag
-  # line for tabxplor_tab (out[4] in the grouped method, which has one extra header line).
+  # to <fct> in the header line so the displayed type stays correct. The type-tag line is out[3]
+  # for a plain tabxplor_tab, out[4] for a grouped_tab (which prints one extra header line) --
+  # this ONE method serves both classes (print.tabxplor_grouped_tab is an alias below).
   if (length(n_row_var) != 0) {
     regular_ex <-
       paste0("^(", paste0(rep("[^<]+<", n_row_var), collapse = ""), ")<char>") |>
       stringi::stri_replace_first_regex("<\\)<", ")<")
 
-    out[3] <- out[3] |> stringi::stri_replace_first_regex(regular_ex, "$1<fct> ")
+    hdr <- 3L + inherits(x, "grouped_df")
+    out[hdr] <- out[hdr] |> stringi::stri_replace_first_regex(regular_ex, "$1<fct> ")
   }
 
 
@@ -499,60 +506,10 @@ print.tabxplor_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = N
 #' @export
 #' @return A printed grouped table.
 #' @method print tabxplor_grouped_tab
-print.tabxplor_grouped_tab <- function(x, width = NULL, ..., n = 100,
-                                       max_extra_cols = NULL,max_footer_lines = NULL,
-                                       min_row_var = 30, get_text = FALSE) {
-  # Phase 13a: install this table's per-table color_breaks override for the render (no-op otherwise).
-  .cb <- push_color_breaks(x); on.exit(pop_color_breaks(.cb), add = TRUE)
-  if (getOption("tabxplor.print") == "kable") {
-    x <- tab_kable(x)
-    print(x)
-    return(invisible(x))
-  }
-
-  # Phase 10i-B: materialise add_n / add_pct for the console (backend "text"); p-value stays the block.
-  x <- tab_materialize_extras(x, backend = "text", pvalue = FALSE)
-
-  # Phase 16a: see print.tabxplor_tab -- the console shows the summary block (a GFM-aligned table of the
-  # `test` attribute), not p-value body rows; placed after the kable branch so `print = "kable"` renders
-  # p-value rows instead.
-  test_render_console(test_summary_grid(x))
-
-  # Use pillar::char() on row_var to control truncation. Phase 10c: robust, position-independent
-  # detection (degrade -> no min-width fixup, prints the plain tibble without crashing).
-  rv        <- tab_render_vars(x)
-  row_var   <- if (isTRUE(rv$degrade)) character(0) else rv$row_var
-  n_row_var <- which(names(x) == row_var)
-
-  out <- dplyr::mutate(x, dplyr::across(
-    tidyselect::all_of(row_var),
-    ~ pillar::char(as.character(.), min_chars = min_row_var)
-  ))
-
-  # out <- format(out, width = NULL)
-  out <- format(out, width = width, ..., n = n, max_extra_cols = max_extra_cols,
-                max_footer_lines = max_footer_lines)
-
-  # Same <char>-back-to-<fct> workaround as print.tabxplor_tab; the type-tag line is out[4]
-  # here (a grouped_tab prints one extra header line).
-  if (length(n_row_var) != 0) {
-    regular_ex <-
-      paste0("^(", paste0(rep("[^<]+<", n_row_var), collapse = ""), ")<char>") |>
-      stringi::stri_replace_first_regex("<\\)<", ")<")
-
-    out[4] <- out[4] |> stringi::stri_replace_first_regex(regular_ex, "$1<fct> ")
-  }
-
-  # writeLines(format(x, width = width, ..., n = n, max_extra_cols = max_extra_cols,
-  #                   max_footer_lines = max_footer_lines))
-  if (get_text) {
-    out
-  } else {
-    writeLines(out)
-    invisible(x)
-  }
-
-  }
+# The grouped print is byte-identical to print.tabxplor_tab except the <char>->
+# <fct> header-line index (out[4] vs out[3]), which that method now derives from
+# inherits(x, "grouped_df"). So it is the SAME function (Phase 17a merge).
+print.tabxplor_grouped_tab <- print.tabxplor_tab
 
 
 # === SECTION: tabxplor_tabs -- the multi-table list class (Phase 13c-iv) =========================
@@ -1071,7 +1028,7 @@ promote_totrow_to_refrow <- function(col) {
 # columns, the tab_compact() same-col_vars contract) on PLAIN field-frames, byte-identical to
 # purrr::imap_dfr() / vec_rbind but without the per-row tabxplor_fmt reconstruction. Per column name:
 #   - non-fmt (the "levels" / "row_var" factors): vctrs::vec_c() -> factor level union, like bind_rows.
-#   - fmt: vctrs::vec_ptype_common() across the tables reconciles the 9 attrs via the SAME
+#   - fmt: vctrs::vec_ptype_common() across the tables reconciles the fmt_col_attrs via the SAME
 #     vec_ptype2.tabxplor_fmt reduce vec_rbind would use (L3: differing attr -> neutral) but is
 #     O(#tables x #attrs), not O(#rows) (a ptype is length-0). promote_totrow_to_refrow runs per table
 #     (L4, per subtable) before the field read.
@@ -1086,13 +1043,9 @@ tab_stack_tables <- function(tables) {
     if (is_fmt(pieces[[1]])) {
       frames <- purrr::map(pieces, function(col) {
         col   <- promote_totrow_to_refrow(col)   # L4, per subtable (one in_refrow field write, cheap)
-        fr    <- as.list(vctrs::vec_data(col))
-        # The old imap_dfr / vec_rbind cast each column via vec_cast.tabxplor_fmt.tabxplor_fmt, which
-        # reads fields through the GETTERS. get_wn() is the only getter with a fallback (NA -> the n
-        # field), so it MATERIALISES wn -- reproduce it here (raw vec_data keeps NA). All other getters
-        # are raw field reads, so the rest of the frame already matches.
-        fr$wn <- get_wn(col)
-        fr
+        # The old imap_dfr / vec_rbind cast each column via vec_cast.tabxplor_fmt.tabxplor_fmt, reading
+        # fields through the GETTERS; fmt_data_wn() reproduces that frame (only wn needs materialising).
+        fmt_data_wn(col)
       })
       common <- do.call(vctrs::vec_ptype_common, pieces)   # L3 reconcile via ptype2, O(#tables)
       meta   <- purrr::set_names(
@@ -2370,13 +2323,7 @@ group_by.tabxplor_tab <- function(.data,
 
     if (length(groups) > 0) out <- out |> dplyr::group_by(!!!groups)
 
-    if (lv1_group_vars(out)) {
-      rlang::exec(new_tab, out, !!!tab_attrs(.data))
-
-    } else {
-      groups <- dplyr::group_data(out)
-      rlang::exec(new_grouped_tab, out, groups, !!!tab_attrs(.data))
-    }
+    tab_restore(out, .data)
 
 }
 # tabs <- tab(forcats::gss_cat, race, marital, year, pct = "row", color = "diff")
@@ -2710,12 +2657,7 @@ rowwise.tabxplor_grouped_tab <- function(data, ...) {
 #' @export
 summarise.tabxplor_grouped_tab <- function(.data, ..., .groups = NULL) {
   out <- NextMethod()
-  groups <- dplyr::group_data(out)
-  if (lv1_group_vars(out)) {
-    rlang::exec(new_tab, out, !!!tab_attrs(.data))
-  } else {
-    rlang::exec(new_grouped_tab, out, groups, !!!tab_attrs(.data))
-  }
+  tab_restore(out, .data)
 }
 
 
@@ -2730,12 +2672,7 @@ summarise.tabxplor_grouped_tab <- function(.data, ..., .groups = NULL) {
 #' @export
 select.tabxplor_grouped_tab <- function(.data, ...) {
   out <- NextMethod()
-  groups <- dplyr::group_data(out)
-  if (lv1_group_vars(out)) {
-    rlang::exec(new_tab, out, !!!tab_attrs(.data))
-  } else {
-    rlang::exec(new_grouped_tab, out, groups, !!!tab_attrs(.data))
-  }
+  tab_restore(out, .data)
 }
 
 #' rename method for class tabxplor_grouped_tab
@@ -2747,12 +2684,7 @@ select.tabxplor_grouped_tab <- function(.data, ...) {
 #' @export
 rename.tabxplor_grouped_tab <- function(.data, ...) {
   out <- NextMethod()
-  groups <- dplyr::group_data(out)
-  if (lv1_group_vars(out)) {
-    rlang::exec(new_tab, out, !!!tab_attrs(.data))
-  } else {
-    rlang::exec(new_grouped_tab, out, groups, !!!tab_attrs(.data))
-  }
+  tab_restore(out, .data)
 }
 
 #' rename_with method for class tabxplor_grouped_tab
@@ -2775,12 +2707,7 @@ rename_with.tabxplor_grouped_tab <- function(.data, .fn, .cols = dplyr::everythi
   bare     <- .data
   class(bare) <- setdiff(class(bare), "tabxplor_grouped_tab")
   out <- dplyr::rename_with(bare, .fn, !!cols_quo, ...)
-  groups <- dplyr::group_data(out)
-  if (lv1_group_vars(out)) {
-    rlang::exec(new_tab, out, !!!tab_attrs(.data))
-  } else {
-    rlang::exec(new_grouped_tab, out, groups, !!!tab_attrs(.data))
-  }
+  tab_restore(out, .data)
 }
 
 
@@ -2795,12 +2722,7 @@ rename_with.tabxplor_grouped_tab <- function(.data, .fn, .cols = dplyr::everythi
 #' @export
 relocate.tabxplor_grouped_tab <- function(.data, ...) { #.before = NULL, .after = NULL
   out <- NextMethod()
-  groups <- dplyr::group_data(out)
-  if (lv1_group_vars(out)) {
-    rlang::exec(new_tab, out, !!!tab_attrs(.data))
-  } else {
-    rlang::exec(new_grouped_tab, out, groups, !!!tab_attrs(.data))
-  }
+  tab_restore(out, .data)
 } # dplyr:::relocate.grouped_df
 
 # #' distinct_ method for class tabxplor_grouped_tab
@@ -2843,7 +2765,7 @@ gtab_cast <- function(x, to, ..., x_arg = "", to_arg = "") {
   gdf <- dplyr::grouped_df(df, vars, drop = drop)
 
   groups <- dplyr::group_data(gdf)
-  rlang::exec(new_grouped_tab, gdf, groups, !!!tab_attrs(to))
+  rlang::exec(new_grouped_tab, gdf, groups, !!!tab_bind_attrs(x, to))
 }
 
 #' @rdname tab_cast
@@ -2859,7 +2781,7 @@ gtab_ptype2 <- function(x, y, ..., x_arg = "", y_arg = "") {
   gdf <-  dplyr::grouped_df(common, vars, drop = drop)
 
   groups <- dplyr::group_data(gdf)
-  rlang::exec(new_grouped_tab, gdf, groups, !!!tab_attrs(x))
+  rlang::exec(new_grouped_tab, gdf, groups, !!!tab_bind_attrs(x, y))
 }
 
 #Self-self
@@ -2986,66 +2908,6 @@ vec_cast.data.frame.tabxplor_grouped_tab <- function(x, to, ...) {
 
 
 #Colors for printing fmt in tabs -------------------------------------------------------
-
-# # Test function to see how colors print
-# #' @keywords internal
-# color_graph <- function(former = NULL, new = NULL, new2 = NULL, new3 = NULL) {
-#   HCLformer <- tibble::as_tibble(t(round(jamba::col2hcl(former)[-4,], 0)))
-#   HCLnew    <- tibble::as_tibble(t(round(jamba::col2hcl(new   )[-4,], 0)))
-#   HCLnew2   <- tibble::as_tibble(t(round(jamba::col2hcl(new2  )[-4,], 0)))
-#   HCLnew3   <- tibble::as_tibble(t(round(jamba::col2hcl(new3  )[-4,], 0)))
-#
-#   colors <- tibble::tibble(
-#     color = rep(c(former, new, new2, new3), 4),
-#     text = c(former, new, new2, new3,
-#              HCLformer$H, HCLnew$H, HCLnew2$H, HCLnew3$H,
-#              HCLformer$C, HCLnew$C, HCLnew2$C, HCLnew3$C,
-#              HCLformer$L, HCLnew$L, HCLnew2$L, HCLnew3$L ),
-#     x = rep(c(if(length(former) != 0){1:length(former)} else {NULL},
-#               if(length(new   ) != 0){1:length(new)   } else {NULL},
-#               if(length(new2  ) != 0){1:length(new2)  } else {NULL},
-#               if(length(new3  ) != 0){1:length(new3)  } else {NULL} ), 4),
-#     y = c(rep(1 , length(former)),
-#           rep(0 , length(new   )),
-#           rep(-1, length(new2  )),
-#           rep(-2, length(new3  )),
-#
-#           rep(-4, length(former)),
-#           rep(-5, length(new   )),
-#           rep(-6, length(new2  )),
-#           rep(-7, length(new3  )),
-#
-#           rep(-9, length(former)),
-#           rep(-10, length(new   )),
-#           rep(-11, length(new2  )),
-#           rep(-12, length(new3  )),
-#
-#           rep(-14, length(former)),
-#           rep(-15, length(new   )),
-#           rep(-16, length(new2  )),
-#           rep(-17, length(new3  ))
-#     )
-#   )
-#   color_scale <- c(if(length(former) != 0){former} else {NULL},
-#                    if(length(new   ) != 0){new   } else {NULL},
-#                    if(length(new2  ) != 0){new2  } else {NULL},
-#                    if(length(new3  ) != 0){new3  } else {NULL}
-#   ) |> purrr::set_names(.)
-#   color_scale <- color_scale[!duplicated(names(color_scale))]
-#
-#   ggplot2::ggplot(colors, ggplot2::aes(x = x, y = y, color = color, label = text)) +
-#     ggplot2::geom_text(fontface = "bold") +
-#     ggplot2::scale_color_manual(values = color_scale) +
-#     ggplot2::theme_minimal() +
-#     ggplot2::theme(panel.grid = ggplot2::element_line(colour = "white")) +
-#     ggplot2::ylim(-18, 3) +
-#     ggplot2::annotate("text", x = 1, y =   2, label = "Colors :") +
-#     ggplot2::annotate("text", x = 1, y =  -3, label = "Hue :") +
-#     ggplot2::annotate("text", x = 1, y =  -8, label = "Chroma :") +
-#     ggplot2::annotate("text", x = 1, y = -13, label = "Luminance :")
-#
-# }
-
 
 ## 8-BIT FALLBACK PALETTES (RStudio console only) ----
 # The console default is the 24-bit OKLCH palette (below). RStudio's console does not render
@@ -3849,151 +3711,3 @@ get_color_breaks <- function(brk, type = c("positive", "all")) {
   }
   as_form(scales[[brk]])
 }
-
-# get_color_breaks()
-#
-# set_color_breaks(pct_breaks = c(0.05, 0.10, 0.15, 0.25, 0.35))
-
-# get_full_color_breaks()
-
-# pct_breaks     = c(0.05, 0.10, 0.15, 0.25, 0.35)
-# mean_breaks    = c(1.15, 1.25, 1.5 , 2   , 4   )
-# contrib_breaks = c(0.5 , 1   , 2   , 5   , 10  )
-
-
-
-
-
-
-
-
-# Tests -----
-# new_tab() |> get_chi2()
-# new_tab() |> get_total_table()
-# new_tab() |> get_subtext()
-
-# vec_ptype2(new_tab(), new_tab()) |> attributes()
-#
-# vec_rbind(red, red)
-# vec_rbind(green, green)
-# vec_rbind(green, red)
-#
-# vec_rbind(red, tibble::tibble(x = 10:12))
-# vec_rbind(red, data.frame(x = 10:12))
-
-
-
-# vctrs documentation --------------------------------------------------------------------
-
-# howto-faq-coercion-data-frame
-# FAQ - How to implement ptype2 and cast methods? (Data frames)
-# Description
-# This guide provides a practical recipe for implementing vec_ptype2() and vec_cast() methods
-# for coercions of data frame subclasses. Related topics:
-#  - For an overview of the coercion mechanism in vctrs, see ?theory-faq-coercion.
-#  - For an example of implementing coercion methods for simple vectors, see ?howto-faq-coercion.
-# Coercion of data frames occurs when different data frame classes are combined in some way. The
-# two main methods of combination are currently row-binding with vec_rbind() and col-binding
-# with vec_cbind() (which are in turn used by a number of dplyr and tidyr functions). These functions
-# take multiple data frame inputs and automatically coerce them to their common type.
-# vctrs is generally strict about the kind of automatic coercions that are performed when combining
-# inputs. In the case of data frames we have decided to be a bit less strict for convenience. Instead of
-# throwing an incompatible type error, we fall back to a base data frame or a tibble if we don't know
-# how to combine two data frame subclasses. It is still a good idea to specify the proper coercion
-# behaviour for your data frame subclasses as soon as possible.
-# We will see two examples in this guide. The first example is about a data frame subclass that has
-# no particular attributes to manage. In the second example, we implement coercion methods for a
-# tibble subclass that includes potentially incompatible attributes.
-
-# Roxygen workflow:
-#   To implement methods for generics, first import the generics in your namespace and redocument:
-#   #' @importFrom vctrs vec_ptype2 vec_cast
-#   NULL
-# Note that for each batches of methods that you add to your package, you need to export the
-# methods and redocument immediately, even during development. Otherwise they won't be in
-# scope when you run unit tests e.g. with testthat.
-# Implementing double dispatch methods is very similar to implementing regular S3 methods. In
-# these examples we are using roxygen2 tags to register the methods, but you can also register the
-# methods manually in your NAMESPACE file or lazily with s3_register().
-
-# Parent methods:
-#   Most of the common type determination should be performed by the parent class. In vctrs, double
-# dispatch is implemented in such a way that you need to call the methods for the parent class manually.
-# For vec_ptype2() this means you need to call df_ptype2() (for data frame subclasses) or
-# tib_ptype2() (for tibble subclasses). Similarly, df_cast() and tib_cast() are the workhorses
-# for vec_cast() methods of subtypes of data.frame and tbl_df. These functions take the union
-# of the columns in x and y, and ensure shared columns have the same type.
-# These functions are much less strict than vec_ptype2() and vec_cast() as they accept any
-# subclass of data frame as input. They always return a data.frame or a tbl_df. You will probably
-# want to write similar functions for your subclass to avoid repetition in your code. You may want
-# to export them as well if you are expecting other people to derive from your class.
-
-# A data.tabxplor_tab le example:
-# [...]
-
-# #A tibble example:
-# #  In this example we implement coercion methods for a tibble subclass that carries a colour as a
-# #scalar metadata:
-#
-#   # User constructor
-#   my_tibble <- function(colour = NULL, ...) {
-#     new_my_tibble(tibble::tibble(...), colour = colour)
-#   }
-# # Developer constructor
-# new_my_tibble <- function(x, colour = NULL) {
-#   stopifnot(is.data.frame(x))
-#   tibble::new_tibble(
-#     x,
-#     colour = colour,
-#     class = "my_tibble",
-#     nrow = nrow(x)
-#   )
-# }
-# df_colour <- function(x) {
-#   if (inherits(x, "my_tibble")) {
-#     attr(x, "colour")
-#   } else {
-#     NULL
-#   }
-# }
-# #'@export
-# print.my_tibble <- function(x, ...) {
-#   cat(sprintf("<%s: %s>\n", class(x)[[1]], df_colour(x)))
-#   cli::cat_line(format(x)[-1])
-# }
-# #This subclass is very simple. All it does is modify the header.
-# red <- my_tibble("red", x = 1, y = 1:2)
-# red
-# #> <my_tibble: red>
-# #> x y
-# #> <dbl> <int>
-# #> 1 1 1
-# #> 2 1 2
-# red[2]
-# #> <my_tibble: red>
-# #> y
-# #> <int>
-# #> 1 1
-# #> 2 2
-# green <- my_tibble("green", z = TRUE)
-# green
-# #> <my_tibble: green>
-# #> z
-#
-# #> <lgl>
-# #> 1 TRUE
-# #Combinations do not work properly out of the box, instead vctrs falls back to a bare tibble:
-#   vec_rbind(red, tibble::tibble(x = 10:12))
-# #> # A tibble: 5 x 2
-# #> x y
-# #> <dbl> <int>
-# #> 1 1 1
-# #> 2 1 2
-# #> 3 10 NA
-# #> 4 11 NA
-# #> 5 12 NA
-# # Instead of falling back to a data frame, we would like to return a <my_tibble> when combined
-# # with a data frame or a tibble. Because this subclass has more metadata than normal data frames
-# # (it has a colour), it is a supertype of tibble and data frame, i.e. it is the richer type. This is similar
-# # to how a grouped tibble is a more general type than a tibble or a data frame. Conceptually, the
-# # latter are pinned to a single constant group.

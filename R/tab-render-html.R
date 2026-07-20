@@ -533,7 +533,8 @@ tab_kable_join <- function(parts, engine, css = "", theme = NULL) {
     # and knits it (knit_print.kableExtra). Without it this was a bare `knitr_kable`, whose print just
     # cat()s the markup to the console -- so the maintainer had to re-class it by hand to see a table.
     # We produce the same thing kableExtra does (an HTML fragment, `format = "html"`), so we claim the
-    # class rather than duplicate its two methods. kableExtra is an Import, so both always exist.
+    # class rather than duplicate its two methods. (kableExtra is Suggests, not Imports -- when it is
+    # absent, print.tabxplor_kable's Viewer path degrades; graceful degradation is Phase 17g.)
     # Phase 14k prepends `tabxplor_kable`, whose print() paints the Viewer's page (below).
     out <- structure(out, format = "html",
                      class = c("tabxplor_kable", "kableExtra", "knitr_kable"))

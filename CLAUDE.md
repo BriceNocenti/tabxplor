@@ -10,7 +10,9 @@
 
 ```
 R/
-├── fmt_class.R     (3341 L)  Core type: tabxplor_fmt vctrs record, getters/setters,
+├── fmt_class.R     (~4400 L) Core type: tabxplor_fmt vctrs record, getters/setters, new_fmt() +
+│                              fmt_field_names (the 18 fields) + DERIVED fmt_col_attrs (17a: moved here
+│                              from tab.R, = new_fmt formals minus the fields, so it can't miss an attr);
 │                              format/pillar methods, vctrs arithmetic/casting,
 │                              color engine (fmt_color_plan/fmt_color_slots/fmt_color_channels;
 │                              per-side fold + findInterval; slots 1-4 over / 5-8 under);
@@ -28,7 +30,7 @@ R/
 │                              Plain one-liners tab_weight_line/reg_model_line/tab_stars_legend wrap as
 │                              1-token streams. legend_export_style() = options(tabxplor.legend_style)
 │                              terse-in-exports. contrib legend = x N BOTH sides "vs the mean"
-├── tab.R           (~6200 L) Main API: tab(), tab_many(), tab_plain(), tab_num(),
+├── tab.R           (~7150 L) Main API: tab(), tab_many(), tab_plain(), tab_num(),
 │                              tab_apply_reference() (Phase 7f carve; Phase 9d: matrix-sweep internals;
 │                              14z: also the empirical-OR Woolf CI [ci_or on the {level j, ref2 level} x
 │                              {row i, ref row} 2x2, gated by tabs_totn!=NULL = a color_signif/stars ask;
@@ -53,7 +55,8 @@ R/
 │                              gains method welch/student; ci_or = Woolf log-OR for the empirical crude
 │                              OR, used by tab_reg(empirical) AND (14z) tab()'s OR colour via
 │                              tab_apply_reference; RULE B [§48]: numeric CIs are t where a variance is estimated, z
-│                              otherwise -- NOT stars-gated; ci_pivot guards df<=0 -> NA), agg_chi2/agg_anova
+│                              otherwise -- NOT stars-gated; ci_pivot guards df<=0 -> NA; zscore_formula =
+│                              the normal quantile, 17a: moved here from tab.R), agg_chi2/agg_anova
 ├── tab-counts.R     (~360 L) tab_counts() from-the-middle constructor (Phase 4): reshape any
 │                              input shape → count-aggregate → tab_plain(.fine) + shared finalize
 ├── tab-resolve.R    (~200 L) tab_resolve_settings() (Phase 7b): the ONE pure arg-overwrite
@@ -63,7 +66,7 @@ R/
 ├── tab-parallel.R   (~200 L) Phase 8/9a row-axis dispatch (Suggests-only mirai): tab_pmap() + trampoline,
 │                              named "tabxplor" pool (tab_pool_ensure/tab_parallel_workers/
 │                              tab_parallel_stop), tab_build_one() (the per-row_var worker, serial OR mirai).
-├── tab_classes.R   (3554 L)  tabxplor_tab/grouped_tab classes, 30+ dplyr S3 methods,
+├── tab_classes.R   (~3700 L) tabxplor_tab/grouped_tab classes, 30+ dplyr S3 methods,
 │                              print methods, tab_kable(), tab_plot(), tab_compact(),
 │                              OKLCH color palettes, set_color_palette()/get_color_style(),
 │                              set_color_breaks() (over/under scales), color_breaks table attr;
@@ -349,7 +352,7 @@ Cell display values reach exporters by two **non-unified** paths — keep them i
 
 - **`format.tabxplor_fmt()`** (`fmt_class.R`) is the single source of truth for markdown (`tab_md()`), knitr/HTML (`tab_kable()`), and the console (`pillar_shaft`).
 - **`tab_xl()`** (Excel) writes the raw `get_num()` value and delegates numeric formatting to Excel's engine, but it now sources the per-cell Excel number-format codes from `format(x, syntax = "excel")` (Phase 10g) — the SAME `format()` masks the text backends use — so a display/digits change no longer needs manual mirroring in `tab_xl.R` (the old `numfmt()` desync is gone). Colours come from `fmt_color_channels()`; roles/refs/bold from `tab_export_prep()`.
-- Color is safe: all exporters call the same `fmt_color_selection()`.
+- Color is safe: all exporters call the same `fmt_color_channels()` / `fmt_channel_codes()`.
 
 When adding or changing a `tabxplor_fmt` field, follow the `/vctrs-field` skill — it encodes the full ~11-step checklist across `fmt_class.R`, `tab.R`, and the exporters.
 
@@ -369,7 +372,7 @@ Note: `ref` is **reinterpreted by `pct`** — a reference **row** under `pct="ro
 
 1. **Palettes** (`tab_classes.R` ~L2892): 6 named color vectors (dark/light text, 24-bit blue-red/green-red, dark/light background), each with 11 hex codes: `pos1`-`pos5` (over-represented), `neg1`-`neg5` (under-represented), `ratio`. Hues are hand-tuned so intensity levels are eye-distinguishable on real tables; 8-bit variants target non-truecolor terminals; the 24-bit blue-red variant is more colorblind-friendly than green-red (fuller colorblind support is a future goal).
 2. **Breaks** (`set_color_breaks()` in `tab_classes.R`): stored in `options("tabxplor.color_breaks")`. Default pct: `c(0.05, 0.1, 0.2, 2, 0.3)` — the `2` means "twice the reference" (ratio mode). Mirrored for negative. Mean breaks: `c(1.15, 1.5, 2, 4)` — always ratios. *(1.4.0 §18 adds `mean_diff_breaks` `c(0.2, 0.5, 0.8, 1.2)` — sd-standardized differences for the numeric diff mode, Phase 5.)*
-3. **Selection** (`fmt_color_selection()` in `fmt_class.R`): iterates breaks, applies `color_formula()` per break level, `keep_last_break()` picks the strongest matching threshold per cell. Different boolean formulas for each color mode: `diff`, `diff_ci`, `ci`, `after_ci`, `contrib`, `OR` (+ the 1.4.0 additions `ratio`/`diff_ratio`, Phase 5).
+3. **Selection** (the Phase-5 `findInterval` engine in `fmt_class.R`: `fmt_color_plan` → `fmt_color_slots` → `fmt_color_channels`/`fmt_channel_codes`, the shared artifact every backend consumes; the old `fmt_color_selection`/`keep_last_break` are gone): per-side fold + `findInterval` over the break scale picks the strongest matching threshold per cell. Different measures per color mode: `diff`, `diff_ci`, `ci`, `after_ci`, `contrib`, `OR` (+ the 1.4.0 additions `ratio`/`diff_ratio`, Phase 5).
 
 ### dplyr Integration
 
@@ -685,6 +688,12 @@ Read first: analysis §2.4, §2.5, §3; the audit refs below.
 7. **Small single-sourcing**: adopt `tab_restore()` in the 6 hand-rolled restore blocks (select/rename/rename_with/relocate/summarise/arrange tails); merge the twin console print methods (`out[3 + inherits(x, "grouped_df")]`); merge `vec_ptype_abbr`/`vec_ptype_full`; single-source the `get_wn` NA→n fallback (4 copies: fmt_class.R:1345/2620, tab_classes.R:1091, tab-test-display.R:490); make `default_ci_settings()` derive from `tab()`'s formals instead of hand-mirroring them.
 
 Verification: full suite, zero golden churn; the new fixtures are the only new tests.
+
+**DONE (2026-07-20).** Full suite green (FAIL 0, PASS 3794, SKIP 4 = the usual Suggests/benchmark opt-ins), zero golden/snapshot churn (byte-identity held everywhere except the four new defect fixtures).
+- **Defects.** (1) `fmt_col_attrs` is now DERIVED in `fmt_class.R` — `setdiff(names(formals(new_fmt)), c(fmt_field_names, "...", "class"))` off the new single-source `fmt_field_names` (the 18 fields) — so it can never again miss an attribute; it now carries `model_family` (10 attrs). (2) `vec_math.tabxplor_fmt` sum/mean arms now use `fmt_color_attr` + pass `color_signif`/`model_family`. (3) `diff_index_mean` (nested in `tab_num`) tries an exact label match first. (4) `gtab_cast`/`gtab_ptype2` reconcile via `tab_bind_attrs(x, ...)` like the plain path. Each ships a failing-first fixture (test-fmt_class.R ×2, test-tab.R, test-tab_classes.R).
+- **Dead weight deleted.** `var_contrib()`, the `tab_num(na=)` `drop_fct`/`drop_num` values, the `tab_last` relic, `ci_html_subscript` (inlined at its one caller), `pillar_shaft.tab_chi2_fmt` (unreachable — NAMESPACE regenerated), the vendored `path_sanitize`, `fct_clean`, `compare_levels`; `formats_SAS_to_R` MOVED to `dev/formats_SAS_to_R.R`; `zscore_formula` MOVED to `tab-agg.R` (beside the CI engine); ~500 lines of commented-out dead code (old `tab_ci`, pillar/vec_arith relics, `color_graph`, vctrs-FAQ transcription, old total-recalc + totcol-neutralising blocks).
+- **Single-sourced.** `tab_restore()` adopted at the 6 dplyr restore tails; the two console `print` methods merged into one (grouped is an alias; header index via `inherits(x, "grouped_df")`); `vec_ptype_abbr`/`vec_ptype_full` share `fmt_ptype_label()`; the 3 get_wn materialise sites use `fmt_data_wn()`; `default_ci_settings()` DERIVES from `formals(tab)`.
+- **Docs.** Defect 9 corrections (CLAUDE.md colour-engine claim + repo-map line counts, `tab-render-html.R` kableExtra-Import comment); the stale "9 fmt_col_attrs" comments updated to "the fmt_col_attrs".
 
 ---
 

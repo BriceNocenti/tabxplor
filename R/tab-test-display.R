@@ -487,9 +487,9 @@ tab_append_footer <- function(tabs, group_of, K, fmt_cell, nonfmt_val, attrs, re
       lapply(fmt_col_attrs, function(a) attr(tabs[[nm]], a, exact = TRUE)), fmt_col_attrs)
     frames <- unlist(lapply(grp_lv, function(g) {
       idx <- which(group_of == g)
-      of  <- as.list(vctrs::vec_data(tabs[[nm]][idx])); of$wn <- get_wn(tabs[[nm]][idx])
+      of  <- fmt_data_wn(tabs[[nm]][idx])
       if (!g %in% footer_groups) return(list(of))
-      fc  <- fmt_cell(nm, g); fr <- as.list(vctrs::vec_data(fc)); fr$wn <- get_wn(fc)
+      fr  <- fmt_data_wn(fmt_cell(nm, g))
       list(of, fr)
     }), recursive = FALSE)
     fmt_stack_frames(frames, meta)

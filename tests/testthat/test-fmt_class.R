@@ -212,3 +212,36 @@ testthat::test_that("tab(display = ) writes the {} template into the display FIE
 # get_mean(x)
 # get_var(x)
 # get_ci(x)
+
+
+# ---- Phase 17a janitorial fixes: failing-first fixtures ----
+
+test_that("model_family is carried through the fmt carrier round-trip (Defect 1, Phase 17a)", {
+  # A regression column carries its own model_family (Phase 15e). fmt_col_attrs -- the per-column
+  # attribute list used by every carry/round-trip -- must include it, else it is silently dropped.
+  # Pre-17a fmt_col_attrs was hand-written with 9 names and omitted model_family.
+  expect_true("model_family" %in% fmt_col_attrs)
+  expect_length(fmt_col_attrs, 10L)
+
+  tb <- tab(forcats::gss_cat, marital, race)
+  tb[["Black"]] <- set_model_family(tb[["Black"]], "binomial")
+  expect_identical(get_model_family(tb[["Black"]]), "binomial")
+
+  round <- fmt_wrap(fmt_unwrap(tb))                       # the carrier round-trip (jmvtab / stacking)
+  expect_identical(get_model_family(round[["Black"]]), "binomial")
+})
+
+test_that("vec_math sum/mean keep both colour channels + signif + model_family (Defect 2, Phase 17a)", {
+  # color = TRUE gives a two-channel colour c(diff, ratio); the sum/mean arms of vec_math used to
+  # rebuild with get_color() (first channel only) and drop color_signif / model_family.
+  x <- tab(forcats::gss_cat, marital, race, pct = "row", color = TRUE)[["Black"]]
+  x <- set_color_signif(x, "grey_non_signif")
+  x <- set_model_family(x, "binomial")
+  expect_length(fmt_color_attr(x), 2L)
+
+  for (s in list(sum(x), mean(x))) {
+    expect_identical(fmt_color_attr(s), fmt_color_attr(x))   # both channels, not just the first
+    expect_identical(get_color_signif(s), "grey_non_signif")
+    expect_identical(get_model_family(s), "binomial")
+  }
+})

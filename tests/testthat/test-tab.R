@@ -731,3 +731,18 @@ testthat::test_that("levels = 'first' keeps NA rows in the row_var (na = 'keep')
   t <- tab(d, g, two, pct = "row", levels = "first", na = "keep")
   testthat::expect_true("NA" %in% as.character(t[[1]]))          # the NA row_var group stays
 })
+
+
+# ---- Phase 17a janitorial fixes: failing-first fixture ----
+
+test_that("mean-table ref matches an exact label with regex metacharacters (Defect 3, Phase 17a)", {
+  # rincome's "$25000 or more" begins with `$` (a regex end-anchor), so a pure-regex reference match
+  # (pre-17a diff_index_mean) fails to find the row. diff_index_mean now tries an EXACT match first.
+  d  <- forcats::gss_cat |> dplyr::filter(!is.na(tvhours))
+  tt <- tab_num(d, "rincome", "tvhours", ref = "$25000 or more", comp = "tab")
+
+  ref_idx <- which(is_refrow(tt$tvhours))
+  expect_length(ref_idx, 1L)                                       # exactly one reference row
+  expect_identical(as.character(tt$rincome)[ref_idx], "$25000 or more")
+  expect_equal(get_diff(tt$tvhours)[ref_idx], 0)                   # a row compared to itself
+})

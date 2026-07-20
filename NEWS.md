@@ -632,6 +632,15 @@
   export to Excel, install `openxlsx2`. The produced workbooks look essentially the same.
 
 ## Bug corrections
+* **A mean/numeric `ref =` now matches an exact row label, even one with special characters.** A label
+  such as `"$25000 or more"` (whose `$` is a regular-expression character) was matched only as a pattern,
+  so `tab_num(..., ref = "$25000 or more")` failed to find the reference row; an exact-label match is now
+  tried first (as it already was for percentage tables).
+* **Regression column families, colour metadata and grouped-table attributes now survive more operations.**
+  A per-column model family (in a mixed-family `tab_reg()` table) is no longer dropped when the table is
+  rebuilt or exported; `sum()` / `mean()` on a coloured `tabxplor_fmt` column keep both colour channels and
+  the significance policy; and binding two grouped (sub-tabled) tables now merges *both* tables' test and
+  legend information instead of keeping only one side's.
 * **`stars = TRUE` now shows stars even without a confidence interval.** Significance stars are read from
   a per-cell p-value that is only computed alongside a difference interval, so `tab(..., stars = TRUE)`
   used to show nothing unless `ci = "diff"` was also set. `stars = TRUE` now requests that interval
