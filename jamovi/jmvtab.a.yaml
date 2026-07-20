@@ -73,7 +73,7 @@ options:
 
 # Percentages, colors and Chi2
     - name: pct
-      title: pct = (Percentages)
+      title: pct
       type: List
       options:
         - title: "no (counts)"
@@ -98,7 +98,7 @@ options:
             }
 
     - name: color
-      title: color = (what to measure for colors)
+      title: color
       type: List
       options:
         - title: "no <i>(no colors)</i>"
@@ -155,7 +155,7 @@ options:
            }
 
     - name: color_signif
-      title: color_signif = (significance policy)
+      title: color_signif
       type: List
       options:
         - title: "ignore <i>(color deviations by observed size)</i>"
@@ -206,7 +206,7 @@ options:
 
 # Missing values and levels
     - name: na
-      title: "na = <i>(missing values)</i>"
+      title: na
       type: List
       options:
         - title: "keep <i>(NA as a level)</i>"
@@ -236,7 +236,7 @@ options:
     # method, so a `levels` option collides ("symbol already has a regular binding"). The UI
     # label still reads "levels"; .b.R maps `lvs` onto tab()'s `levels` argument.
     - name: lvs
-      title: "levels = <i>(which col_var levels to keep)</i>"
+      title: levels
       type: List
       options:
         - title: all
@@ -405,7 +405,7 @@ options:
 
 # Confidence intervals
     - name: ci
-      title: "ci = <i>(confidence intervals)</i>"
+      title: ci
       type: List
       options:
         - title: auto
@@ -457,7 +457,7 @@ options:
            Set to "moe" to use pct +- moe instead.
 
     - name: stars
-      title: "stars = <i>(significance stars)</i>"
+      title: stars
       type: Bool
       default: false
       description:
@@ -467,7 +467,7 @@ options:
            that is displayed, so stars and bracket always agree.
 
     - name: method_cell
-      title: "method_cell = <i>(cell proportion)</i>"
+      title: method_cell
       type: List
       options:
         - title: "wilson <i>(score, default)</i>"
@@ -481,7 +481,7 @@ options:
            (the score interval, default) or \code{"wald"} (the normal approximation).
 
     - name: method_diff
-      title: "method_diff = <i>(difference in proportion)</i>"
+      title: method_diff
       type: List
       options:
         - title: "newcombe <i>(hybrid score)</i>"
@@ -498,7 +498,7 @@ options:
            significance stars always agree.
 
     - name: method_ratio
-      title: "method_ratio = <i>(proportion / rate ratio)</i>"
+      title: method_ratio
       type: List
       options:
         - title: "katz <i>(log ratio)</i>"
@@ -510,7 +510,7 @@ options:
            (\code{ci = "ratio"} on percentages): Katz's log-ratio interval.
 
     - name: method_mean_diff
-      title: "method_mean_diff = <i>(mean difference)</i>"
+      title: method_mean_diff
       type: List
       options:
         - title: "welch <i>(unequal variances, default)</i>"
@@ -524,7 +524,7 @@ options:
            (means with \code{ci = "diff"}): Welch (default) or Student (pooled variance).
 
     - name: method_mean_ratio
-      title: "method_mean_ratio = <i>(mean ratio)</i>"
+      title: method_mean_ratio
       type: List
       options:
         - title: "robust <i>(each group's variance, default)</i>"
@@ -543,7 +543,7 @@ options:
 
 # Other formatting
     - name: totaltab
-      title: "totaltab = <i>(add a total table)</i>"
+      title: totaltab
       type: List
       options:
         - title: line
@@ -673,7 +673,7 @@ options:
            an integer vector the same length as \code{col_vars}.
 
     - name: n_min
-      title: "n_min = <i>(hide small-base rows)</i>"
+      title: n_min
       type: Integer
       min: 0
       default: 0

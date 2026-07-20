@@ -20,8 +20,9 @@ options:
       default: NULL
       description:
           R: >
-           The outcome variable(s). One effect column is built per dependent.
-           The family is auto-detected from the outcome unless set below.
+           The outcome variable(s). One model is built per dependent. Set each outcome's
+           family (and, for a binomial outcome, its modelled level or number of trials) in
+           the Model table.
 
     - name: predictors
       title: "<b>predictors = <i>(explanatory variables)</i></b>"
@@ -33,19 +34,6 @@ options:
            The explanatory variables of the model. Factors are shown one line per
            level (the reference level as the neutral value); numeric predictors as
            a single line.
-
-    - name: wt
-      title: "<b>wt = <i>(survey weights)</i></b>"
-      type: Variable
-      suggested:
-        - continuous
-      permitted:
-        - numeric
-      default: NULL
-      description:
-          R: >
-           A survey weight variable. Switches to design-based estimation (scale-invariant
-           sandwich standard errors). Leave empty for unweighted results.
 
     - name: split_var
       title: "<b>split_var = <i>(fit within each group)</i></b>"
@@ -61,50 +49,73 @@ options:
            A grouping variable. The same model is fitted within each of its levels
            and the tables are stacked (like tab_vars for crosstables).
 
-# Model
-    - name: family
-      title: family = (model type)
-      type: List
-      options:
-        - title: "auto (detect from outcome)"
-          name:  auto
-        - title: "gaussian (linear, numeric outcome)"
-          name:  gaussian
-        - title: "binomial (logistic, 2-level outcome)"
-          name:  binomial
-        - title: "poisson (counts)"
-          name:  poisson
-        - title: "quasipoisson (over-dispersed counts)"
-          name:  quasipoisson
-        - title: "multinomial (nominal 3+ levels)"
-          name:  multinomial
-        - title: "ordinal (ordered 3+ levels)"
-          name:  ordinal
-      default: auto
+    - name: wt
+      title: "<b>wt = <i>(survey weights)</i></b>"
+      type: Variable
+      suggested:
+        - continuous
+      permitted:
+        - numeric
+      default: NULL
       description:
           R: >
-           The model family. "auto" detects it from the outcome (2 values -> binomial,
-           ordered factor -> ordinal, unordered factor -> multinomial, non-integer numeric
-           -> gaussian). Integer counts are ambiguous: set poisson / gaussian explicitly.
+           A survey weight variable. Switches to design-based estimation (scale-invariant
+           sandwich standard errors). Leave empty for unweighted results.
+
+# ============================ Model ============================
+# Per-dependent Model table (family / modelled level / trials) -> the hidden arrays below,
+# driven by the `modelTableCtrl` CustomControl (one row per dependent).
+    - name: depFamily
+      title: "Family (per dependent)"
+      type: Array
+      hidden: true
+      default:
+      template:
+          type: Group
+          elements:
+              - name: var
+                type: Variable
+              - name: family
+                type: String
+
+    - name: depModelLevel
+      title: "Binomial modelled level (per dependent)"
+      type: Array
+      hidden: true
+      default:
+      template:
+          type: Group
+          elements:
+              - name: var
+                type: Variable
+              - name: level
+                type: String
+
+    - name: depTrials
+      title: "Binomial trials (per dependent)"
+      type: Array
+      hidden: true
+      default:
+      template:
+          type: Group
+          elements:
+              - name: var
+                type: Variable
+              - name: n
+                type: String
 
     - name: exponentiate
-      title: exponentiate = (effect scale)
-      type: List
-      options:
-        - title: "auto (ratios except gaussian)"
-          name:  nongaussian
-        - title: "ratios (OR / IRR)"
-          name:  'yes'
-        - title: "coefficients (log scale)"
-          name:  'no'
-      default: nongaussian
+      title: exponentiate
+      type: Bool
+      default: true
       description:
           R: >
-           Whether to exponentiate the coefficients: "auto" gives odds / rate ratios
-           for every non-gaussian family and raw coefficients for gaussian.
+           Exponentiate the coefficients into ratios (odds ratios / incidence-rate ratios),
+           automatically leaving gaussian linear coefficients on their raw scale. Uncheck to
+           keep every coefficient on the coefficient (log / linear) scale.
 
     - name: effect
-      title: effect = (estimand)
+      title: effect
       type: List
       options:
         - title: "coefficient (per-family effect)"
@@ -119,7 +130,7 @@ options:
            marginaleffects package).
 
     - name: at
-      title: at = (profile)
+      title: at
       type: List
       options:
         - title: "average (over the sample)"
@@ -132,37 +143,8 @@ options:
            Where marginal effects are evaluated: averaged over the sample, or at the
            reference profile (other predictors at their reference level / mean).
 
-    - name: estimate_display
-      title: estimate_display = (cell layout)
-      type: List
-      options:
-        - title: "value (plain estimate)"
-          name:  value
-        - title: "with confidence interval"
-          name:  ci
-        - title: "with predicted probability"
-          name:  prob
-        - title: "with marginal effect"
-          name:  ame
-      default: value
-      description:
-          R: >
-           The estimate-cell layout. "ci" shows a visible interval; "prob" / "ame"
-           fold the adjusted predicted probability / marginal effect into the OR cell
-           (binomial coefficient models only).
-
-    - name: inverse_two_level_factors
-      title: "model the FIRST level of a 2-level factor"
-      type: Bool
-      default: true
-      description:
-          R: >
-           For a binomial outcome, model the first level of a two-level outcome
-           (maintainer convention, e.g. "1-Married" first).
-
-# Empirical (crude) companion
     - name: empirical
-      title: "add empirical (crude / observed) columns"
+      title: empirical
       type: Bool
       default: false
       description:
@@ -171,58 +153,7 @@ options:
            model effect (the bivariate association that IS the modelised quantity with
            a single predictor). Binomial / gaussian / poisson only.
 
-# Model comparison (Phase 15b-ii)
-    - name: compare
-      title: compare = (model-comparison test)
-      type: List
-      options:
-        - { title: "none (no comparison test)", name: none }
-        - { title: "vs a baseline model",       name: baseline }
-        - { title: "sequential (vs previous)",  name: sequential }
-      default: none
-      description:
-          R: >
-           With several models (a predictor-subset list), add a comparison-test footer
-           row: "baseline" tests each model against the chosen baseline model, "sequential"
-           against the previous one (LR / F / Wald, or an AIC difference when not nested).
-
-    - name: trials_mode
-      title: "trials = (grouped / summed-score binomial)"
-      type: List
-      options:
-        - { title: "off (binary logit)",       name: 'off' }
-        - { title: "observed max per outcome", name: observed }
-        - { title: "fixed number of trials",   name: fixed }
-      default: 'off'
-      description:
-          R: >
-           Grouped-binomial (summed-score) outcomes: fit cbind(score, trials - score).
-           "observed" uses each outcome's maximum score; "fixed" a set item count. Binomial only.
-
-    - name: trials_n
-      title: "number of trials"
-      type: Integer
-      min: 1
-      default: 1
-      description:
-          R: >
-           The fixed number of items behind a summed score (used when trials = "fixed").
-
-# References (hidden picker-backed option)
-    - name: refLevels
-      title: "Reference levels (per predictor)"
-      type: Array
-      hidden: true
-      default:
-      template:
-          type: Group
-          elements:
-              - name: var
-                type: Variable
-              - name: ref
-                type: String
-
-# Model-builder + scaling (hidden picker-backed options)
+# ================= Model comparison (+ predictor subsets) =================
     - name: models
       title: "Predictor subsets (model comparison)"
       type: Array
@@ -245,6 +176,49 @@ options:
       min: 1
       default: 1
 
+    - name: compare
+      title: compare
+      type: List
+      options:
+        - { title: "none",                      name: none }
+        - { title: "vs a baseline model",       name: baseline }
+        - { title: "sequential (vs previous)",  name: sequential }
+      default: none
+      description:
+          R: >
+           With several models (a predictor-subset list), add a likelihood-ratio / F / Wald
+           comparison-test footer row: "baseline" tests each model against the chosen baseline
+           model, "sequential" against the previous one (an AIC difference when not nested).
+
+    - name: na
+      title: na
+      type: List
+      options:
+        - title: "drop by model (per-model complete cases)"
+          name:  drop_by_model
+        - title: "drop all models (one shared population)"
+          name:  drop_all_models
+      default: drop_by_model
+      description:
+          R: >
+           "drop by model" fits each model / outcome on its own complete cases; "drop all
+           models" uses one shared complete-case population across all predictors (equal N;
+           changes the estimates), which a valid likelihood-ratio comparison test needs.
+
+# ================= References and predictor scaling =================
+    - name: refLevels
+      title: "Reference levels (per predictor)"
+      type: Array
+      hidden: true
+      default:
+      template:
+          type: Group
+          elements:
+              - name: var
+                type: Variable
+              - name: ref
+                type: String
+
     - name: multiplicator
       title: "Predictor scaling (per k units)"
       type: Array
@@ -258,7 +232,7 @@ options:
               - name: k
                 type: String
 
-# Confidence intervals
+# ============================ Significance ============================
     - name: conf_level
       title: "Confidence level"
       type: Number
@@ -270,7 +244,7 @@ options:
            The confidence level for intervals and the significance stars.
 
     - name: method
-      title: method = (interval)
+      title: method
       type: List
       options:
         - title: "Wald"
@@ -292,29 +266,17 @@ options:
            Show per-cell significance stars (the colours read the confidence interval
            either way).
 
-# Colors
     - name: color
-      title: color = (color helper)
-      type: List
-      options:
-        - title: "default (by family)"
-          name:  default
-        - title: "OR / IRR scale"
-          name:  'OR'
-        - title: "coefficient (difference)"
-          name:  diff
-        - title: "ratio"
-          name:  ratio
-        - title: "no colors"
-          name:  'no'
-      default: default
+      title: color
+      type: Bool
+      default: true
       description:
           R: >
-           The color helper scale. "default" chooses by family (OR for ratios,
-           difference for gaussian betas).
+           Colour the effect cells with the sensible per-family colour helper (OR magnitude
+           for ratios, standardized difference for gaussian betas). Uncheck for no colours.
 
     - name: color_signif
-      title: color_signif = (significance)
+      title: color_signif
       type: List
       options:
         - title: "grey non-significant"
@@ -326,22 +288,28 @@ options:
       default: grey_non_signif
       description:
           R: >
-           How significance interacts with the colours.
+           How significance interacts with the colours: grey out non-significant cells,
+           ignore significance, or colour only the guaranteed (error-adjusted) effect.
 
-# Missing values and formatting
-    - name: na
-      title: na = (missing values)
+# ==================== Missing values and display ====================
+    - name: estimate_display
+      title: estimate_display
       type: List
       options:
-        - title: "keep (per-model complete cases)"
-          name:  keep
-        - title: "drop all (one shared population)"
-          name:  drop_all
-      default: keep
+        - title: "value (plain estimate)"
+          name:  value
+        - title: "with confidence interval"
+          name:  ci
+        - title: "with predicted probability"
+          name:  prob
+        - title: "with marginal effect"
+          name:  ame
+      default: value
       description:
           R: >
-           "keep" fits each model on its own complete cases; "drop all" uses one shared
-           complete-case population across all predictors (equal N; changes the estimates).
+           The estimate-cell layout. "ci" shows a visible interval; "prob" / "ame"
+           fold the adjusted predicted probability / marginal effect into the OR cell
+           (binomial coefficient models only).
 
     - name: cleannames
       title: "clean level names"
@@ -350,14 +318,6 @@ options:
       description:
           R: >
            Strip numeric prefixes from factor level labels.
-
-    - name: footer
-      title: "model-summary footer"
-      type: Bool
-      default: true
-      description:
-          R: >
-           Show the model-summary footer (N, pseudo-R2, AIC / BIC, ...).
 
     - name: subtext
       title: "Note below the table"
@@ -380,7 +340,7 @@ options:
       min: 0
       default: 15
 
-# Advanced: survey design (only used with a weight)
+# ================ Advanced: survey design (only used with a weight) ================
     - name: ids
       title: "<b>ids = <i>(cluster ids)</i></b>"
       type: Variables
@@ -414,7 +374,7 @@ options:
           R: >
            Set when cluster ids are reused across strata (survey design).
 
-# Export
+# ============================ Export ============================
     - name: export_format
       title: Export format
       type: List

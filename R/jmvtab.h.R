@@ -31,6 +31,9 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             stars = FALSE,
             method_cell = "wilson",
             method_diff = "newcombe",
+            method_ratio = "katz",
+            method_mean_diff = "welch",
+            method_mean_ratio = "robust",
             totaltab = "line",
             wrap_rows = 35,
             wrap_cols = 15,
@@ -42,7 +45,9 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             n_min = 0,
             export_format = "excel",
             exportExcel = FALSE,
-            path = "~/Documents/Table",
+            export_dir = "~/Documents",
+            export_filename = "Table",
+            resetPath = FALSE,
             xl_replace = FALSE, ...) {
 
             super$initialize(
@@ -219,7 +224,8 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 options=list(
                     "auto",
                     "cell",
-                    "diff"),
+                    "diff",
+                    "ratio"),
                 default="auto")
             private$..conf_level <- jmvcore::OptionNumber$new(
                 "conf_level",
@@ -253,6 +259,27 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                     "ac",
                     "wald"),
                 default="newcombe")
+            private$..method_ratio <- jmvcore::OptionList$new(
+                "method_ratio",
+                method_ratio,
+                options=list(
+                    "katz"),
+                default="katz")
+            private$..method_mean_diff <- jmvcore::OptionList$new(
+                "method_mean_diff",
+                method_mean_diff,
+                options=list(
+                    "welch",
+                    "student"),
+                default="welch")
+            private$..method_mean_ratio <- jmvcore::OptionList$new(
+                "method_mean_ratio",
+                method_mean_ratio,
+                options=list(
+                    "robust",
+                    "quasipoisson",
+                    "poisson"),
+                default="robust")
             private$..totaltab <- jmvcore::OptionList$new(
                 "totaltab",
                 totaltab,
@@ -300,7 +327,8 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             private$..subtext <- jmvcore::OptionString$new(
                 "subtext",
                 subtext,
-                default="")
+                default="",
+                hidden=TRUE)
             private$..digits <- jmvcore::OptionList$new(
                 "digits",
                 digits,
@@ -329,10 +357,17 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             private$..exportExcel <- jmvcore::OptionAction$new(
                 "exportExcel",
                 exportExcel)
-            private$..path <- jmvcore::OptionString$new(
-                "path",
-                path,
-                default="~/Documents/Table")
+            private$..export_dir <- jmvcore::OptionString$new(
+                "export_dir",
+                export_dir,
+                default="~/Documents")
+            private$..export_filename <- jmvcore::OptionString$new(
+                "export_filename",
+                export_filename,
+                default="Table")
+            private$..resetPath <- jmvcore::OptionAction$new(
+                "resetPath",
+                resetPath)
             private$..xl_replace <- jmvcore::OptionBool$new(
                 "xl_replace",
                 xl_replace,
@@ -363,6 +398,9 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$.addOption(private$..stars)
             self$.addOption(private$..method_cell)
             self$.addOption(private$..method_diff)
+            self$.addOption(private$..method_ratio)
+            self$.addOption(private$..method_mean_diff)
+            self$.addOption(private$..method_mean_ratio)
             self$.addOption(private$..totaltab)
             self$.addOption(private$..wrap_rows)
             self$.addOption(private$..wrap_cols)
@@ -374,7 +412,9 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$.addOption(private$..n_min)
             self$.addOption(private$..export_format)
             self$.addOption(private$..exportExcel)
-            self$.addOption(private$..path)
+            self$.addOption(private$..export_dir)
+            self$.addOption(private$..export_filename)
+            self$.addOption(private$..resetPath)
             self$.addOption(private$..xl_replace)
         }),
     active = list(
@@ -403,6 +443,9 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         stars = function() private$..stars$value,
         method_cell = function() private$..method_cell$value,
         method_diff = function() private$..method_diff$value,
+        method_ratio = function() private$..method_ratio$value,
+        method_mean_diff = function() private$..method_mean_diff$value,
+        method_mean_ratio = function() private$..method_mean_ratio$value,
         totaltab = function() private$..totaltab$value,
         wrap_rows = function() private$..wrap_rows$value,
         wrap_cols = function() private$..wrap_cols$value,
@@ -414,7 +457,9 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         n_min = function() private$..n_min$value,
         export_format = function() private$..export_format$value,
         exportExcel = function() private$..exportExcel$value,
-        path = function() private$..path$value,
+        export_dir = function() private$..export_dir$value,
+        export_filename = function() private$..export_filename$value,
+        resetPath = function() private$..resetPath$value,
         xl_replace = function() private$..xl_replace$value),
     private = list(
         ..row_vars = NA,
@@ -442,6 +487,9 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         ..stars = NA,
         ..method_cell = NA,
         ..method_diff = NA,
+        ..method_ratio = NA,
+        ..method_mean_diff = NA,
+        ..method_mean_ratio = NA,
         ..totaltab = NA,
         ..wrap_rows = NA,
         ..wrap_cols = NA,
@@ -453,7 +501,9 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         ..n_min = NA,
         ..export_format = NA,
         ..exportExcel = NA,
-        ..path = NA,
+        ..export_dir = NA,
+        ..export_filename = NA,
+        ..resetPath = NA,
         ..xl_replace = NA)
 )
 
@@ -462,7 +512,6 @@ jmvtabResults <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
     inherit = jmvcore::Group,
     active = list(
         html_table = function() private$.items[["html_table"]],
-        plot = function() private$.items[["plot"]],
         cache_state = function() private$.items[["cache_state"]]),
     private = list(),
     public=list(
@@ -475,13 +524,6 @@ jmvtabResults <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 options=options,
                 name="html_table",
                 title="Table"))
-            self$add(jmvcore::Image$new(
-                options=options,
-                name="plot",
-                title="",
-                width=1080,
-                height=0,
-                renderFun=".plot"))
             self$add(jmvcore::Image$new(
                 options=options,
                 name="cache_state",
@@ -630,6 +672,14 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #' @param method_diff The proportion confidence-interval method for \code{ci =
 #'   "diff"}. \code{"newcombe"} (default) is the dual of the two-proportion
 #'   score test, so the interval and the significance stars always agree.
+#' @param method_ratio The confidence-interval method for a ratio of
+#'   proportions or rates (\code{ci = "ratio"} on percentages): Katz's log-ratio
+#'   interval.
+#' @param method_mean_diff The confidence-interval method for the difference
+#'   of numeric means (means with \code{ci = "diff"}): Welch (default) or
+#'   Student (pooled variance).
+#' @param method_mean_ratio The confidence-interval method for a ratio of
+#'   numeric means (means with \code{ci = "ratio"}).
 #' @param totaltab The total table, if there are subtables/groups   (i.e. when
 #'   \code{tab_vars} is provided). Vectorised over \code{row_vars}.  \itemize{
 #'   \item \code{"line"}: by default, add a general total line (necessary for
@@ -658,15 +708,20 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   row/column and the p-value line are always kept. Recomputes nothing.
 #' @param export_format The export file format: Excel (\code{.xlsx}), HTML
 #'   (\code{.html}) or Markdown (\code{.md}).
-#' @param exportExcel Press to export the table to the chosen format.
-#' @param path Where to save the file. A full path, or a bare name (saved in
-#'   your Documents folder). The extension is added automatically from the
-#'   chosen format. \code{~} expands to your home folder.
+#' @param exportExcel Press to export the table to the chosen format (the
+#'   button label follows the format).
+#' @param export_dir The folder to save the exported file in. \code{~} expands
+#'   to your home folder (resolved to your real Documents folder inside jamovi's
+#'   bundled R). Blank saves to your Documents.
+#' @param export_filename The bare file name, with NO extension (the chosen
+#'   format adds it). Illegal characters are removed automatically. Blank saves
+#'   as "Table".
+#' @param resetPath Reset the folder and file name to their defaults (your
+#'   Documents folder and "Table").
 #' @param xl_replace "Set to \code{TRUE} to overwrite an existing file."
 #' @return A results object containing:
 #' \tabular{llllll}{
 #'   \code{results$html_table} \tab \tab \tab \tab \tab a html \cr
-#'   \code{results$plot} \tab \tab \tab \tab \tab an image \cr
 #'   \code{results$cache_state} \tab \tab \tab \tab \tab an image \cr
 #' }
 #'
@@ -698,6 +753,9 @@ jmvtab <- function(
     stars = FALSE,
     method_cell = "wilson",
     method_diff = "newcombe",
+    method_ratio = "katz",
+    method_mean_diff = "welch",
+    method_mean_ratio = "robust",
     totaltab = "line",
     wrap_rows = 35,
     wrap_cols = 15,
@@ -709,7 +767,9 @@ jmvtab <- function(
     n_min = 0,
     export_format = "excel",
     exportExcel = FALSE,
-    path = "~/Documents/Table",
+    export_dir = "~/Documents",
+    export_filename = "Table",
+    resetPath = FALSE,
     xl_replace = FALSE) {
 
     if ( ! requireNamespace("jmvcore", quietly=TRUE))
@@ -755,6 +815,9 @@ jmvtab <- function(
         stars = stars,
         method_cell = method_cell,
         method_diff = method_diff,
+        method_ratio = method_ratio,
+        method_mean_diff = method_mean_diff,
+        method_mean_ratio = method_mean_ratio,
         totaltab = totaltab,
         wrap_rows = wrap_rows,
         wrap_cols = wrap_cols,
@@ -766,7 +829,9 @@ jmvtab <- function(
         n_min = n_min,
         export_format = export_format,
         exportExcel = exportExcel,
-        path = path,
+        export_dir = export_dir,
+        export_filename = export_filename,
+        resetPath = resetPath,
         xl_replace = xl_replace)
 
     analysis <- jmvtabClass$new(

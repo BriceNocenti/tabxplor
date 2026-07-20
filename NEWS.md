@@ -2,6 +2,17 @@
 # tabxplor 1.4.0 (in development)
 
 ## New features
+* **Simpler `tab_reg()` arguments.** `exponentiate` and `color` are now plain `TRUE` / `FALSE`:
+  `exponentiate = TRUE` (default) gives ratios (odds / rate ratios) for every family except gaussian,
+  `FALSE` keeps coefficients; `color = TRUE` (default) auto-picks the sensible per-family colour,
+  `FALSE` turns colours off (power users may still pass a measure string). The `na` values are renamed
+  to the clearer `"drop_by_model"` (default) and `"drop_all_models"`. `inverse_two_level_factors` now
+  also accepts a **named** logical vector, so several binomial outcomes can each choose the level they
+  model. Scaled numeric predictors keep their name in the row label (`age (per 2)`, not a bare `per 2`).
+* **Nicer HTML / kable table titles and fonts.** The table title (caption) is now left-aligned, pure
+  black, and sits above the table so it no longer widens or wraps a thin table. Numeric column *headers*
+  stay in the condensed sans font (only cell *values* switch to monospace when significance stars are
+  on), and the table draws a top border.
 * **Compact legends in exports, and a fuller plot footer.** A new option
   `options(tabxplor.legend_style = "terse")` renders the compact one-line colour legend (the form the
   console uses) in Markdown / HTML / Excel exports, instead of the default full sentences (`"prose"`).

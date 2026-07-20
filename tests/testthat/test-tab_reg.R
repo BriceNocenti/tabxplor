@@ -763,7 +763,7 @@ test_that("L2: a SUPERSET baseline is recognised as nested (LR, not the AIC fall
   r <- tab_reg(d, "married",
                predictors = list(small = c("race", "age"), complete = c("race", "age", "rincome")),
                family = "binomial", compare = "baseline", baseline = "complete",
-               na = "drop_all", cleannames = FALSE)
+               na = "drop_all_models", cleannames = FALSE)
   cmp <- get_test(r) |> dplyr::filter(grepl("^compare", test))
   expect_true("compare_baseline" %in% cmp$test)            # LR test
   expect_false(any(grepl("_aic$", cmp$test)))              # NOT the AIC fallback
@@ -774,7 +774,7 @@ test_that("na = 'drop_all' fits every model on one shared complete-case populati
   d <- reg_2dep_data()                                     # rincome has NAs -> N would differ per model
   r <- tab_reg(d, "married",
                predictors = list(a = "race", b = c("race", "rincome")),
-               family = "binomial", stats = "n", na = "drop_all", cleannames = FALSE)
+               family = "binomial", stats = "n", na = "drop_all_models", cleannames = FALSE)
   ns <- get_test(r) |> dplyr::filter(test == "n")
   expect_equal(length(unique(ns$statistic)), 1L)           # both models share N
 })

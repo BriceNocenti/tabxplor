@@ -41,7 +41,9 @@ jmvtabreg(
   nest = FALSE,
   export_format = "excel",
   exportExcel = FALSE,
-  path = "~/Documents/Regression",
+  export_dir = "~/Documents",
+  export_filename = "Regression",
+  resetPath = FALSE,
   xl_replace = FALSE
 )
 }
@@ -154,9 +156,18 @@ weight.}
 
 \item{export_format}{.}
 
-\item{exportExcel}{.}
+\item{exportExcel}{Press to export the table to the chosen format (the
+button label follows the format).}
 
-\item{path}{.}
+\item{export_dir}{The folder to save the exported file in. \code{~} expands
+to your home folder. Blank saves to your Documents.}
+
+\item{export_filename}{The bare file name, with NO extension (the chosen
+format adds it). Illegal characters are removed automatically. Blank saves
+as "Table".}
+
+\item{resetPath}{Reset the folder and file name to their defaults (your
+Documents folder and "Regression").}
 
 \item{xl_replace}{.}
 }

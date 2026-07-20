@@ -463,8 +463,12 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
     paste0('<tr>', paste0(span_cells, collapse = ""), '</tr>')
   } else ""
 
+  # Phase 15d: the title is a `<div>` sibling BEFORE the <table>, not a `<caption>` child -- a caption
+  # participates in the table's width (a long centred title widened / wrapped thin tables). As a left-
+  # aligned block it fills the container and wraps only past the table's own width. See R/tab-css.R
+  # (.tabxplor-caption).
   cap <- if (!is.null(caption) && length(caption) && nzchar(caption)) {
-    paste0('<caption>', htmltools::htmlEscape(caption), '</caption>')
+    paste0('<div class="tabxplor-caption">', htmltools::htmlEscape(caption), '</div>')
   } else ""
 
   # Phase 14j: the footnote goes in a `tx-foot` div, which is what stops it SIZING the table. Its cell
@@ -485,7 +489,8 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
   # Sans. The class -- not an inline font -- keeps the look restyleable and tab_css() table-independent.
   tbl_class <- if (isTRUE(roles$has_stars)) "tabxplor-tab tx-has-stars" else "tabxplor-tab"
   paste0(
-    '<table class="', tbl_class, '">', cap,
+    cap,
+    '<table class="', tbl_class, '">',
     '<thead>', span_thead, thead, '</thead>',
     '<tbody>', body, '</tbody>',
     tfoot,

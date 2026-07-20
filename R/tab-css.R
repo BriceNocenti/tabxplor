@@ -157,6 +157,10 @@ tx_css_rules <- function(chrome = TRUE) {
     add(".tabxplor-tab tbody tr:hover", "background", cl$hover, cd$hover)
     add(".g1", "color", cl$grey,  cd$grey)
     add(".g2", "color", cl$grey2, cd$grey2)
+    # Phase 15d: the table title -- FULL-contrast in both themes (pure black in light, white in dark), not
+    # the softened body grey. Theme-aware so a dark-mode page keeps it legible; jamovi results are light,
+    # where it is the maintainer's requested pure black.
+    add(".tabxplor-caption", "color", "#000000", "#FFFFFF")
   }
 
   # Phase 14l: the text channel uses the text family and the bg channel the bg family -- the loop
@@ -239,7 +243,15 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE) {
     paste0(".tabxplor-tab,.tabxplor-tab table{border-collapse:collapse;",
            "border-top-width:0;border-bottom-width:0;",
            "margin:0;font-family:\"DejaVu Sans Condensed\",\"DejaVu Sans\",Arial,helvetica,sans-serif;}"),
-    ".tabxplor-tab caption{text-align:center;font-weight:bold;font-size:120%;}",
+    # Phase 15d: the table TITLE is a `<div class="tabxplor-caption">` sibling emitted BEFORE the <table>
+    # (render_html_engine), not a `<caption>` child -- a `<caption>` participates in the table's width, so
+    # a long centred title widened / wrapped thin tables. As a block div it is LEFT-aligned, fills the
+    # container, and `white-space:normal` lets it wrap only when it genuinely exceeds the table width
+    # (never forcing extra width, its max-content being the longest word). Its colour is theme-aware
+    # (full-contrast: pure black in light, white in dark -- the maintainer's "always black, not grey"),
+    # added to the rule table below. font-size 110% = a touch bigger than the table, smaller than the old
+    # 120%. The legacy kableExtra engine keeps a real <caption> styled in inst/tab.css.
+    ".tabxplor-caption{text-align:left;font-weight:bold;font-size:110%;white-space:normal;}",
     ".tabxplor-tab tfoot{font-size:80%;text-align:left;}",
     # readable-compact: a real vertical rhythm (line-height 0.85 crammed the rows) + ~1mm of side
     # padding, so text no longer touches the column borders.
@@ -264,6 +276,14 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE) {
     paste0(".tabxplor-tab thead th{font-weight:bold;font-size:90%;text-align:center;",
            "vertical-align:bottom;line-height:1;border-top-width:0;",
            "border-bottom-style:solid;border-bottom-width:1px;}"),
+    # Phase 15d: draw the table's TOP edge -- the top-most header row (the col_var spanning row, e.g. the
+    # "model1 model2 model3" span in a model comparison) had only a border-BOTTOM, so the table was open
+    # at the top. `> thead > tr:first-child > *` is html-engine-only BY SELECTOR: it needs thead as a
+    # DIRECT child of `.tabxplor-tab` (true only when `.tabxplor-tab` IS the <table>; in md it wraps a
+    # nested <table>, so this never matches there and md keeps its own chrome). (0,2,2) out-specifies the
+    # `thead th` border-top-width:0 (0,1,2). Longhands only -- the border-colour contract (no shorthand).
+    paste0(".tabxplor-tab > thead > tr:first-child > *{",
+           "border-top-style:solid;border-top-width:1px;}"),
     paste0(".tabxplor-tab .tx-span{font-weight:bold;font-size:90%;text-align:center;",
            "border-bottom-style:solid;border-bottom-width:1px;}"),
     ".tabxplor-tab .tx-r{text-align:right;}",
@@ -275,12 +295,17 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE) {
     # a table that SHOWS significance stars carries a `tx-has-stars` class and its numbers switch to the
     # monospace stack -- the one case where a proportional "*" (narrower than a digit) breaks alignment.
     # Both rules ship in every stylesheet (so tab_css() stays table-independent); the per-table class
-    # picks which applies. `.tabxplor-tab.tx-has-stars .tx-num` (0,3,0) out-specifies the default (0,2,0).
-    # The size bump (Cascadia Mono reads small) is BODY-only (`td.tx-num`, never the `<th>` headers) and
-    # keeps the row height: font-size 1.1em x line-height 1 = 1.1*base = the text rows' line box.
-    paste0(".tabxplor-tab .tx-num{white-space:nowrap;",
+    # picks which applies.
+    # Phase 15d: the monospace/number FONT is BODY-only (`td.tx-num`). A numeric column HEADER carries the
+    # same `tx-num` class (align + nowrap), but a `<th>` must stay in the table-wide condensed sans stack
+    # -- a monospace header (esp. under tx-has-stars, where it flipped to Cascadia) looked wrong. `td` in
+    # the selector keeps headers on the default; `th.tx-num` inherits `.tabxplor-tab{font-family:...}`.
+    # `.tabxplor-tab.tx-has-stars td.tx-num` (0,3,1) out-specifies the no-star `.tabxplor-tab td.tx-num`
+    # (0,2,1). The size bump (Cascadia Mono reads small) keeps the row height: 1.1em x line-height 1.
+    ".tabxplor-tab .tx-num{white-space:nowrap;}",
+    paste0(".tabxplor-tab td.tx-num{",
            "font-family:", getOption("tabxplor.tab_kable_num_font", tx_num_font_html), ";}"),
-    paste0(".tabxplor-tab.tx-has-stars .tx-num{font-family:",
+    paste0(".tabxplor-tab.tx-has-stars td.tx-num{font-family:",
            getOption("tabxplor.tab_kable_num_font_stars", tx_num_font_html_stars), ";}"),
     ".tabxplor-tab.tx-has-stars td.tx-num{font-size:1.1em;line-height:1;}",
     ".tabxplor-tab .tx-br{border-right-style:solid;border-right-width:1px;}",

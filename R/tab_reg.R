@@ -1045,7 +1045,13 @@ reg_empirical <- function(data, fac_preds, dependent, family, positive_level, wt
 #                   phi-scaled model's method). want_p = TRUE always: the pvalue is stored (stars are
 #                   stripped post-build when stars = FALSE, exactly like the model columns).
 reg_empirical_columns <- function(skeleton, emp, fac_preds, family, effect, var_y,
-                                  conf_level = 0.95, color_signif = "grey_non_signif") {
+                                  conf_level = 0.95, color_signif = "grey_non_signif",
+                                  color = NULL) {
+  # Phase 15d: when the model is uncoloured (`color = FALSE` -> "no"), the crude companion columns must
+  # be uncoloured too (else the table shows coloured empirical columns beside plain model columns).
+  emp_off <- !is.null(color) && color %in% c("no", "")
+  ecol <- function(m) if (emp_off) "" else m
+  esig <- if (emp_off) "ignore" else color_signif
   mi      <- match(paste(skeleton$var, skeleton$level, sep = "\r"),
                    paste(emp$var, emp$level, sep = "\r"))
   n_rows  <- nrow(skeleton)
@@ -1067,7 +1073,7 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, family, effect, var_
     base_col <- fmt(pct = base, diff = diffv, n = nv, tot_n = nv,
                     ci_inf = rd$inf, ci_sup = rd$sup, pvalue = rd$pvalue,
                     type = "row", display = "pct", digits = 0L, ref = "tot", ci_type = "diff",
-                    color = "diff", color_signif = color_signif, col_var = "Emp. %",
+                    color = ecol("diff"), color_signif = esig, col_var = "Emp. %",
                     comp_all = FALSE, in_refrow = refrows)
     if (effect == "ame") {
       # the AME models the risk-DIFFERENCE from the reference, so the crude companion is the crude
@@ -1075,7 +1081,7 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, family, effect, var_
       eff_col <- fmt(pct = base, diff = diffv, n = nv, tot_n = nv,
                      ci_inf = rd$inf, ci_sup = rd$sup, pvalue = rd$pvalue,
                      type = "row", display = "diff", digits = 0L, ref = "tot",
-                     ci_type = "diff", color = "diff", color_signif = color_signif,
+                     ci_type = "diff", color = ecol("diff"), color_signif = esig,
                      col_var = "Emp. diff", comp_all = FALSE, in_refrow = refrows)
       return(list("Emp. %" = base_col, "Emp. diff" = eff_col))
     }
@@ -1083,7 +1089,7 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, family, effect, var_
                           conf_level = conf_level, want_p = TRUE))
     eff_col <- fmt(or = ratio, n = nv, ci_inf = or_ci$inf, ci_sup = or_ci$sup, pvalue = or_ci$pvalue,
                    type = "row", display = "or", digits = 2L,
-                   ref = "1", ci_type = "or", color = "OR", color_signif = color_signif,
+                   ref = "1", ci_type = "or", color = ecol("OR"), color_signif = esig,
                    col_var = "Emp. OR", comp_all = FALSE, in_refrow = refrows)
     return(list("Emp. %" = base_col, "Emp. OR" = eff_col))
   }
@@ -1100,7 +1106,7 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, family, effect, var_
     eff_col  <- fmt(diff = diffv, var = rep(var_y, n_rows), n = nv,
                     ci_inf = md$inf, ci_sup = md$sup, pvalue = md$pvalue,
                     type = "coef", display = "coef", digits = 2L, ci_type = "diff",
-                    color = "diff", color_signif = color_signif, col_var = "Emp. diff",
+                    color = ecol("diff"), color_signif = esig, col_var = "Emp. diff",
                     comp_all = FALSE, in_refrow = refrows)
     return(list("Emp. mean" = base_col, "Emp. diff" = eff_col))
   }
@@ -1113,11 +1119,11 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, family, effect, var_
     base_col <- fmt(mean = base, ratio = ratio, n = nv, tot_n = nv,
                     ci_inf = rr$inf, ci_sup = rr$sup, pvalue = rr$pvalue,
                     type = "mean", display = "mean", digits = 2L, ref = "1", ci_type = "ratio",
-                    color = "ratio", color_signif = color_signif, col_var = "Emp. rate",
+                    color = ecol("ratio"), color_signif = esig, col_var = "Emp. rate",
                     comp_all = FALSE, in_refrow = refrows)
     eff_col  <- fmt(or = ratio, n = nv, ci_inf = rr$inf, ci_sup = rr$sup, pvalue = rr$pvalue,
                     type = "row", display = "or", digits = 2L,
-                    ref = "1", ci_type = "or", color = "OR", color_signif = color_signif,
+                    ref = "1", ci_type = "or", color = ecol("OR"), color_signif = esig,
                     col_var = "Emp. IRR", comp_all = FALSE, in_refrow = refrows)
     return(list("Emp. rate" = base_col, "Emp. IRR" = eff_col))
   }
@@ -1667,9 +1673,11 @@ reg_compare_rows <- function(reg_gof, fits, specs, family, weighted, fit_first_c
       }
     }
     daic <- tryCatch(reg_aic_value(m_full) - reg_aic_value(m_ref), error = function(e) NA_real_)
-    cli::cli_inform(c("i" = paste0(
-      "Column {.val {col}}: models are not nested or N differs -> showing the AIC difference vs the ",
-      "{if (compare == 'sequential') 'previous' else 'baseline'} model instead of a likelihood-ratio test.")))
+    cli::cli_inform(c(
+      "i" = paste0(
+        "Column {.val {col}}: models are not nested or N differs -> showing the AIC difference vs the ",
+        "{if (compare == 'sequential') 'previous' else 'baseline'} model instead of a likelihood-ratio test."),
+      "i" = 'A different N is usually the per-model missing-value drop; set {.code na = "drop_all_models"} to fit every model on the same complete cases so the likelihood-ratio test can run.'))
     row(paste0("compare_", tag, "_aic"), col, statistic = daic, nobs = fits[[i]]$nobs)
   })
   rows <- purrr::compact(rows)
@@ -1838,16 +1846,20 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
     if (!is.null(reference)) data <- reg_apply_references(data, reference, union_predictors)
     skeleton <- reg_skeleton(data, union_predictors)
     fits <- purrr::map(specs, function(sp) {
+      # Phase 15d: the modelled-level choice is per-dependent (sp$inverse); fall back to the shared
+      # scalar for any spec that predates it (e.g. a direct reg_build caller).
+      inv_sp <- if (is.null(sp$inverse)) inverse_two_level_factors else sp$inverse
       digest <- jmvreg_cached(
         .fit_cache, "digest", jmvreg_fit_key(sp, data_canon, family, design_spec),
         function() reg_build_digest(data_canon, sp, family, design_spec, do_exp,
-                                    inverse_two_level_factors, conf_level, weighted))
+                                    inv_sp, conf_level, weighted))
       reg_reref_fit_res(digest, reference, sp, skeleton, conf_level)
     })
   } else {
     fits <- purrr::map(specs, function(sp) {
+      inv_sp <- if (is.null(sp$inverse)) inverse_two_level_factors else sp$inverse
       thunk <- function() reg_fit(data, sp$dependent, sp$predictors, family, design_spec, do_exp,
-                                  inverse_two_level_factors, conf_level, method,
+                                  inv_sp, conf_level, method,
                                   trials = sp$trials, formula = sp$formula, multiplier = multiplier)
       # .fit_cache present but not on the reref path (ame / profile / mnl-vs-rest / compound): cache the
       # RAW reg_fit result keyed on the (already display-referenced) data -> a reference change refits.
@@ -1998,12 +2010,16 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
   if (cleannames) {
     disp_levels <- stringi::stri_replace_all_regex(disp_levels, cleannames_condition(), "")
   }
-  # multiplier (Phase 12g): relabel the display level of each scaled numeric predictor so the row
-  # reads "<var> | per <k>" (the effect is now per k units). Numeric predictors have level == var.
+  # multiplier (Phase 12g / 15d): relabel the display level of each scaled numeric predictor so the row
+  # reads "<var> (per <k>)" (the effect is now per k units) -- KEEP the predictor name (dropping it left
+  # a bare "per 2" the user could not read). Numeric predictors have level == var; k == 1 is a no-op
+  # (no scaling), so leave the plain name.
   if (!is.null(multiplier)) {
     for (v in names(multiplier)) {
+      k <- as.numeric(multiplier[[v]])
+      if (is.na(k) || k == 1) next
       hit <- skeleton$var == v & skeleton$level == v
-      if (any(hit)) disp_levels[hit] <- paste0("per ", multiplier[[v]])
+      if (any(hit)) disp_levels[hit] <- paste0(disp_levels[hit], " (per ", multiplier[[v]], ")")
     }
   }
 
@@ -2030,7 +2046,7 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
         # population as the model fit -- mirror reg_fit()'s `mdata` (drop rows missing the dependent, ANY
         # model predictor, or a design var). `union_predictors` == the model's predictors when not
         # comparing; in comparison mode it is the shared population where all compared models overlap
-        # (na = "drop_all" makes the model columns share it too). Recomputed from `data` (NOT fits[[i]]$data,
+        # (na = "drop_all_models" makes the model columns share it too). Recomputed from `data` (NOT fits[[i]]$data,
         # which is NULL on the reref/digest path). On this listwise-complete frame reg_empirical()'s
         # per-predictor NA filter is a no-op, so the crude reference level / n exactly match the model.
         emp_vars <- intersect(unique(c(dep_i, union_predictors, reg_design_vars(design_spec))), names(data))
@@ -2039,7 +2055,8 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
           suppressWarnings(stats::var(as.numeric(mdata_i[[dep_i]]), na.rm = TRUE)) else NA_real_
         emp_i   <- reg_empirical(mdata_i, fac_preds_e, dep_i, family, pos_i, design_spec$wt)
         cols_i  <- reg_empirical_columns(skeleton, emp_i, fac_preds_e, family, effect, var_y_i,
-                                         conf_level = conf_level, color_signif = color_signif)
+                                         conf_level = conf_level, color_signif = color_signif,
+                                         color = color)
         # Phase 14w (item 3): the crude companions share the model column's outcome col_var (one span,
         # no border). NOT in comparison mode (the crude block stays a distinct col_var beside the models).
         if (!is_comparison) {
@@ -2238,10 +2255,11 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
 #'   design-based variances (a flat `ids = ~1` can understate them). Ignored when `data` is a design.
 #' @param nest Logical. Passed to [survey::svydesign()]: set `TRUE` when cluster ids are reused across
 #'   strata. Default `FALSE`.
-#' @param exponentiate Whether to exponentiate coefficients into ratios. `"nongaussian"` (default)
-#'   exponentiates every family except gaussian (odds ratios / incidence-rate ratios, leaving linear
-#'   betas raw); `TRUE` / `FALSE` force it on / off for all columns. Ignored when `effect = "ame"`
-#'   (marginal effects are always on the response scale).
+#' @param exponentiate Logical. `TRUE` (default) exponentiates coefficients into ratios (odds ratios
+#'   for logistic, incidence-rate ratios for poisson, cumulative odds ratios for ordinal),
+#'   automatically leaving gaussian linear betas on their raw scale. `FALSE` keeps every coefficient on
+#'   the coefficient (log / linear) scale. Ignored when `effect = "ame"` (marginal effects are always
+#'   on the response scale).
 #' @param effect The interpretation scale, orthogonal to `family`. `"coefficient"` (default) shows the
 #'   native per-family effect (beta / OR / IRR / cumulative-OR). `"ame"` shows **average marginal
 #'   effects** with the **adjusted predicted probability** in parentheses (e.g. `-8%*** (16%)`): a
@@ -2333,16 +2351,19 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
 #'   `"ci"` otherwise, with a message). Note `estimate_display = "ame"` *adds* an AME beside the odds
 #'   ratio, whereas `effect = "ame"` makes the whole column an AME (probability scale); the two are
 #'   different and, when both are set, `effect = "ame"` wins and `estimate_display` is reset to `"value"`.
-#' @param color,color_signif How the effect measure is coloured (`NULL` uses the per-family default:
-#'   `"OR"` magnitude for ratios, standardized `"diff"` for betas; significance policy
-#'   `"grey_non_signif"`). See [tab()].
+#' @param color,color_signif Colouring of the effect cells. `color = TRUE` (default) auto-picks the
+#'   sensible per-family measure (`"OR"` magnitude for ratios, standardized `"diff"` for betas);
+#'   `color = FALSE` turns colouring off for every column (model and empirical). Power users may pass a
+#'   measure string (`"OR"`, `"diff"`, `"ratio"`, `"no"`) to override. `color_signif` is the
+#'   significance policy (default `"grey_non_signif"`). See [tab()].
 #' @param stars Logical (default `TRUE` for regression tables, where significance stars are standard).
 #'   When `FALSE`, the per-cell p-value is dropped and no stars are shown (colours still read the CI).
-#' @param na How missing values are handled across a model comparison. `"keep"` (default) drops
-#'   `NA` rows per model (each model uses its own complete cases). `"drop_all"` fits every model on ONE
-#'   shared complete-case population (rows with no `NA` on any predictor / dependent / design variable),
-#'   so nested models get equal N and the likelihood-ratio comparison can run; note this **changes all
-#'   estimates** (shared population), hence opt-in. Ignored for a prebuilt survey design.
+#' @param na How missing values are handled across models. `"drop_by_model"` (default) drops `NA`
+#'   rows per model (each model / dependent uses its own complete cases). `"drop_all_models"` fits every
+#'   model on ONE shared complete-case population (rows with no `NA` on any predictor / dependent /
+#'   design variable), so nested models get equal N and the likelihood-ratio comparison can run; note
+#'   this **changes all estimates** (shared population), hence opt-in. Ignored for a prebuilt survey
+#'   design.
 #' @param cleannames Logical. If `TRUE`, strips numeric prefixes from factor levels for display.
 #'   Uses `getOption("tabxplor.cleannames")` when `NULL`.
 #' @param subtext Optional character. A note shown below the table.
@@ -2396,15 +2417,15 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
 #' @export
 tab_reg <- function(data, dependent, predictors = NULL,
                     family = "auto", wt = NULL, ids = NULL, strata = NULL, fpc = NULL, nest = FALSE,
-                    exponentiate = "nongaussian",
+                    exponentiate = TRUE,
                     effect = c("coefficient", "ame"), at = c("average", "reference"),
                     trials = NULL, conf_level = getOption("tabxplor.conf_level", 0.95), method = c("wald", "profile"),
                     reference = NULL, inverse_two_level_factors = TRUE, split_var = NULL,
                     multiplier = NULL, empirical = FALSE, predicted_unadjusted = FALSE,
                     stats = NULL, compare = c("none", "baseline", "sequential"), baseline = NULL,
                     estimate_display = c("value", "ci", "prob", "ame"),
-                    color = NULL, color_signif = NULL, stars = TRUE,
-                    na = c("keep", "drop_all"),
+                    color = TRUE, color_signif = NULL, stars = TRUE,
+                    na = c("drop_by_model", "drop_all_models"),
                     cleannames = NULL, subtext = "",
                     empirical_OR = lifecycle::deprecated(), .fit_cache = NULL) {
   method  <- match.arg(method)
@@ -2540,8 +2561,13 @@ tab_reg <- function(data, dependent, predictors = NULL,
     at <- "average"
   }
 
-  do_exp       <- isTRUE(exponentiate) ||
-    (identical(exponentiate, "nongaussian") && family != "gaussian")
+  # `exponentiate` is logical: TRUE (default) exponentiates every family EXCEPT gaussian to ratios
+  # (OR / IRR); FALSE keeps the coefficient (log / linear) scale everywhere. Gaussian is never
+  # exponentiated. Legacy strings ("nongaussian"/"yes" -> TRUE, "no" -> FALSE) are still accepted so the
+  # jamovi bridge and old scripts keep working.
+  exp_on <- isTRUE(exponentiate) ||
+    (is.character(exponentiate) && exponentiate %in% c("nongaussian", "yes"))
+  do_exp       <- exp_on && family != "gaussian"
   effect_shape <- if (do_exp) "ratio" else "additive"
   eff_word     <- reg_effect_word(family, do_exp, effect, at)
   # Phase 14v: with an empirical companion, a prob-scale AME/MER cell folds in the model-adjusted
@@ -2586,21 +2612,37 @@ tab_reg <- function(data, dependent, predictors = NULL,
     }
   }
 
-  # base `%||%` is R >= 4.4 only; the package supports R >= 4.1, so use explicit is.null().
+  # Phase 15d: `inverse_two_level_factors` may be a NAMED logical vector (one choice per dependent) so
+  # several binomial-factor outcomes can each pick which level is modelled as "success" (first level =
+  # TRUE, the default). A plain scalar keeps every existing call byte-identical. inverse_for(d) resolves
+  # to a scalar for each spec (unknown dependent -> the default TRUE).
+  inverse_for <- if (length(inverse_two_level_factors) > 1L ||
+                     !is.null(names(inverse_two_level_factors))) {
+    function(d) { v <- inverse_two_level_factors[[d]]; if (is.null(v) || is.na(v)) TRUE else isTRUE(v) }
+  } else {
+    function(d) isTRUE(inverse_two_level_factors)
+  }
+
+  # `color` is logical-primary: TRUE (default) auto-picks the per-family measure below; FALSE turns
+  # every column (model AND empirical companion) uncoloured. The string measures ("OR"/"diff"/"ratio"/
+  # "no") stay accepted as a power-user escape hatch (documented as such). NULL == TRUE (auto).
+  if (isTRUE(color) || is.null(color)) color <- NA_character_   # sentinel: auto-derive just below
+  else if (isFALSE(color))             color <- "no"
+  # base `%||%` is R >= 4.4 only; the package supports R >= 4.1, so use explicit is.null()/is.na().
   # effect="ame" always colours the marginal effect as a difference (neutral 0), never as a ratio.
-  if (is.null(color))        color        <- if (effect_shape == "ratio" && effect != "ame") "OR" else "diff"
+  if (is.na(color))          color        <- if (effect_shape == "ratio" && effect != "ame") "OR" else "diff"
   if (is.null(color_signif)) color_signif <- "grey_non_signif"
 
   all_predictors <- if (is_comparison) unique(purrr::flatten_chr(predictors)) else predictors
 
-  # Phase 14u (L2): na = "drop_all" fits every model on ONE shared complete-case population -- the union
-  # of all predictors + the dependent + design vars -- so genuinely-nested models get EQUAL N and the LR
-  # comparison fires (the default per-model NA drop can make N differ -> the AIC fallback). It CHANGES all
-  # estimates (shared population), hence opt-in. Not applied to a prebuilt survey design (subsetting is
-  # the design's own concern).
-  if (identical(na, "drop_all") && !formula_mode) {
+  # Phase 14u (L2): na = "drop_all_models" fits every model on ONE shared complete-case population -- the
+  # union of all predictors + the dependent + design vars -- so genuinely-nested models get EQUAL N and
+  # the LR comparison fires (the default per-model "drop_by_model" NA drop can make N differ -> the AIC
+  # fallback). It CHANGES all estimates (shared population), hence opt-in. Not applied to a prebuilt
+  # survey design (subsetting is the design's own concern).
+  if (identical(na, "drop_all_models") && !formula_mode) {
     if (!is.null(design_obj)) {
-      cli::cli_inform(c("i" = '{.code na = "drop_all"} is ignored for a prebuilt survey design.'))
+      cli::cli_inform(c("i" = '{.code na = "drop_all_models"} is ignored for a prebuilt survey design.'))
     } else {
       keep_vars <- intersect(unique(c(dependent, all_predictors, wt, ids, strata, fpc, split_var)),
                              names(data))
@@ -2640,13 +2682,14 @@ tab_reg <- function(data, dependent, predictors = NULL,
     labels <- make.unique(names(models))
     specs  <- purrr::map2(models, labels,
                           ~ list(dependent = dependent, predictors = .x, label = .y,
-                                 trials = trials_for(dependent), compound = FALSE, formula = NULL))
+                                 trials = trials_for(dependent), inverse = inverse_for(dependent),
+                                 compound = FALSE, formula = NULL))
     union_predictors <- reg_order_union(models)          # Phase 14u (L1): complete-model order if any
   } else {
     labels <- purrr::map_chr(dependent, function(d) {
       # a summed-score / compound-formula binomial has no single "positive level" -> label by name
       base <- if (family == "binomial" && !formula_mode && is.null(trials_for(d))) {
-        pl <- reg_positive_level(data, d, inverse_two_level_factors)
+        pl <- reg_positive_level(data, d, inverse_for(d))
         if (cleannames) pl <- stringi::stri_replace_all_regex(pl, cleannames_condition(), "")
         pl
       } else d
@@ -2655,8 +2698,8 @@ tab_reg <- function(data, dependent, predictors = NULL,
     labels <- make.unique(labels)
     specs  <- purrr::map2(dependent, labels,
                           ~ list(dependent = .x, predictors = predictors, label = .y,
-                                 trials = trials_for(.x), compound = formula_mode,
-                                 formula = raw_formula))
+                                 trials = trials_for(.x), inverse = inverse_for(.x),
+                                 compound = formula_mode, formula = raw_formula))
     union_predictors <- predictors
   }
 
@@ -2752,7 +2795,7 @@ tab_reg <- function(data, dependent, predictors = NULL,
     if (family == "binomial" && !formula_mode) {
       purrr::map_chr(dependent, function(d) {
         if (!is.null(trials_for(d))) return(NA_character_)
-        pl <- reg_positive_level(data, d, inverse_two_level_factors)
+        pl <- reg_positive_level(data, d, inverse_for(d))
         if (isTRUE(cleannames)) pl <- stringi::stri_replace_all_regex(pl, cleannames_condition(), "")
         pl
       })
@@ -2806,7 +2849,7 @@ tab_logit <- function(data, dependent, predictors, wt = NULL,
                       method = c("wald", "profile"),
                       stats = NULL, estimate_display = c("value", "ci", "prob", "ame"),
                       color_signif = c("grey_non_signif", "ignore", "guaranteed_effect"),
-                      stars = TRUE, na = c("keep", "drop_all"),
+                      stars = TRUE, na = c("drop_by_model", "drop_all_models"),
                       cleannames = NULL, subtext = "") {
   method       <- match.arg(method)
   color_signif <- match.arg(color_signif)
@@ -2863,7 +2906,7 @@ multi_logit <- function(data, dependent, models, wt = NULL,
                         stats = NULL, compare = c("none", "baseline", "sequential"), baseline = NULL,
                         estimate_display = c("value", "ci", "prob", "ame"),
                         color_signif = c("grey_non_signif", "ignore", "guaranteed_effect"),
-                        stars = TRUE, na = c("keep", "drop_all"),
+                        stars = TRUE, na = c("drop_by_model", "drop_all_models"),
                         cleannames = NULL, subtext = "") {
   method       <- match.arg(method)
   compare      <- match.arg(compare)

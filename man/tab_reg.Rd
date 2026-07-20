@@ -14,7 +14,7 @@ tab_reg(
   strata = NULL,
   fpc = NULL,
   nest = FALSE,
-  exponentiate = "nongaussian",
+  exponentiate = TRUE,
   effect = c("coefficient", "ame"),
   at = c("average", "reference"),
   trials = NULL,
@@ -30,10 +30,10 @@ tab_reg(
   compare = c("none", "baseline", "sequential"),
   baseline = NULL,
   estimate_display = c("value", "ci", "prob", "ame"),
-  color = NULL,
+  color = TRUE,
   color_signif = NULL,
   stars = TRUE,
-  na = c("keep", "drop_all"),
+  na = c("drop_by_model", "drop_all_models"),
   cleannames = NULL,
   subtext = "",
   empirical_OR = lifecycle::deprecated(),
@@ -73,10 +73,11 @@ design-based variances (a flat \code{ids = ~1} can understate them). Ignored whe
 \item{nest}{Logical. Passed to \code{\link[survey:svydesign]{survey::svydesign()}}: set \code{TRUE} when cluster ids are reused across
 strata. Default \code{FALSE}.}
 
-\item{exponentiate}{Whether to exponentiate coefficients into ratios. \code{"nongaussian"} (default)
-exponentiates every family except gaussian (odds ratios / incidence-rate ratios, leaving linear
-betas raw); \code{TRUE} / \code{FALSE} force it on / off for all columns. Ignored when \code{effect = "ame"}
-(marginal effects are always on the response scale).}
+\item{exponentiate}{Logical. \code{TRUE} (default) exponentiates coefficients into ratios (odds ratios
+for logistic, incidence-rate ratios for poisson, cumulative odds ratios for ordinal),
+automatically leaving gaussian linear betas on their raw scale. \code{FALSE} keeps every coefficient on
+the coefficient (log / linear) scale. Ignored when \code{effect = "ame"} (marginal effects are always
+on the response scale).}
 
 \item{effect}{The interpretation scale, orthogonal to \code{family}. \code{"coefficient"} (default) shows the
 native per-family effect (beta / OR / IRR / cumulative-OR). \code{"ame"} shows \strong{average marginal
@@ -185,18 +186,21 @@ family); \code{"prob"} folds the model-adjusted predicted probability into the o
 ratio, whereas \code{effect = "ame"} makes the whole column an AME (probability scale); the two are
 different and, when both are set, \code{effect = "ame"} wins and \code{estimate_display} is reset to \code{"value"}.}
 
-\item{color, color_signif}{How the effect measure is coloured (\code{NULL} uses the per-family default:
-\code{"OR"} magnitude for ratios, standardized \code{"diff"} for betas; significance policy
-\code{"grey_non_signif"}). See \code{\link[=tab]{tab()}}.}
+\item{color, color_signif}{Colouring of the effect cells. \code{color = TRUE} (default) auto-picks the
+sensible per-family measure (\code{"OR"} magnitude for ratios, standardized \code{"diff"} for betas);
+\code{color = FALSE} turns colouring off for every column (model and empirical). Power users may pass a
+measure string (\code{"OR"}, \code{"diff"}, \code{"ratio"}, \code{"no"}) to override. \code{color_signif} is the
+significance policy (default \code{"grey_non_signif"}). See \code{\link[=tab]{tab()}}.}
 
 \item{stars}{Logical (default \code{TRUE} for regression tables, where significance stars are standard).
 When \code{FALSE}, the per-cell p-value is dropped and no stars are shown (colours still read the CI).}
 
-\item{na}{How missing values are handled across a model comparison. \code{"keep"} (default) drops
-\code{NA} rows per model (each model uses its own complete cases). \code{"drop_all"} fits every model on ONE
-shared complete-case population (rows with no \code{NA} on any predictor / dependent / design variable),
-so nested models get equal N and the likelihood-ratio comparison can run; note this \strong{changes all
-estimates} (shared population), hence opt-in. Ignored for a prebuilt survey design.}
+\item{na}{How missing values are handled across models. \code{"drop_by_model"} (default) drops \code{NA}
+rows per model (each model / dependent uses its own complete cases). \code{"drop_all_models"} fits every
+model on ONE shared complete-case population (rows with no \code{NA} on any predictor / dependent /
+design variable), so nested models get equal N and the likelihood-ratio comparison can run; note
+this \strong{changes all estimates} (shared population), hence opt-in. Ignored for a prebuilt survey
+design.}
 
 \item{cleannames}{Logical. If \code{TRUE}, strips numeric prefixes from factor levels for display.
 Uses \code{getOption("tabxplor.cleannames")} when \code{NULL}.}

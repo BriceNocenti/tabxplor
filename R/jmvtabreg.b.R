@@ -74,47 +74,39 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         # model-comparison test (footer): needs >=2 models; baseline = the chosen model's position.
         compare      = self$options$compare,
         baseline     = self$options$baseline,
-        # multiplier (numeric-predictor scaling): not for multinomial / ordinal -> NULL there so a
-        # family switch never aborts tab_reg(). NB the jamovi option key is still `multiplicator`
-        # (unchanged so no `jmvtools::prepare()` regen is needed); only the R-facing arg is renamed.
-        multiplier   = if (self$options$family %in% c("multinomial", "ordinal")) NULL
-                        else jmvtab_reg_mult_vector(self$options$multiplicator),
-        # trials (grouped / summed-score binomial): binomial only -> NULL for other families.
-        trials       = if (self$options$family %in% c("binomial", "auto"))
-                         switch(self$options$trials_mode,
-                                "observed" = TRUE,
-                                "fixed"    = { n <- self$options$trials_n
-                                               if (is.null(n) || is.na(n) || n < 1) NULL
-                                               else as.integer(n) },
-                                NULL)
-                       else NULL,
+        # Phase 15d: the per-dependent Model table drives family / modelled level / trials. The raw
+        # arrays are passed through; jmvtab_reg_build() resolves each outcome's family (auto-detect for
+        # a blank pick), groups the outcomes by family, and calls tab_reg() once per family group.
+        depFamily     = self$options$depFamily,
+        depModelLevel = self$options$depModelLevel,
+        depTrials     = self$options$depTrials,
+        # numeric-predictor scaling (raw array; the build core drops it for multinomial / ordinal
+        # groups so a family switch never aborts tab_reg()). NB the jamovi option key is still
+        # `multiplicator` (unchanged so no prepare() regen); only the R-facing arg is renamed.
+        multiplicator = self$options$multiplicator,
         wt           = wt,
         ids          = self$options$ids,
         strata       = self$options$strata,
         fpc          = self$options$fpc,
         nest         = self$options$nest,
         split_var    = self$options$split_var,
-        family       = self$options$family,
-        # exponentiate: the List gives "nongaussian" / "yes" / "no" -> tab_reg's "nongaussian"/TRUE/FALSE
-        exponentiate = switch(self$options$exponentiate, "yes" = TRUE, "no" = FALSE, "nongaussian"),
+        # exponentiate / color are now logical checkboxes (TRUE = ratios-when-sensible / colour on).
+        exponentiate = isTRUE(self$options$exponentiate),
         effect       = self$options$effect,
         at           = self$options$at,
         estimate_display = self$options$estimate_display,
-        inverse_two_level_factors = self$options$inverse_two_level_factors,
         empirical    = self$options$empirical,
         # the reference-level picker (refLevels) -> tab_reg's `reference` named vector (NULL = default)
         reference    = jmvtab_reg_ref_vector(self$options$refLevels),
         conf_level   = self$options$conf_level,
         method       = self$options$method,
         stars        = self$options$stars,
-        # color: "default" -> NULL (per-family default); else the chosen measure / "no"
-        color        = if (identical(self$options$color, "default")) NULL else self$options$color,
+        color        = isTRUE(self$options$color),
         color_signif = self$options$color_signif,
         na           = self$options$na,
         cleannames   = self$options$cleannames,
-        # footer: TRUE -> the default GOF set (NULL); FALSE -> no footer ("none")
-        stats        = if (isTRUE(self$options$footer)) NULL else "none",
         subtext      = self$options$subtext
+        # footer removed (Phase 15d): the model-summary footer is always shown (tab_reg stats = NULL).
       )
     },
 

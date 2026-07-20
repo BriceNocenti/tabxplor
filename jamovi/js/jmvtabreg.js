@@ -85,9 +85,20 @@ var onUpdate = function(ui) {
     applyWtEnables(ui);
     renderSubtext(ui);
     stretchTextBox(ui, "export_dir");
+    renderModelTable(ui);
     renderRefPicker(ui);
     renderModelBuilder(ui);
     applyCompareEnables(ui);
+};
+
+// Phase 15d: a valid model-comparison test needs every model fit on the SAME cases. Choosing a
+// comparison forces `na = "drop_all_models"` (the shared complete-case population); the user may switch
+// back to per-model dropping afterwards (re-opt-in). Guarded setValue -> idempotent, no update loop.
+var forceNaForCompare = function(ui) {
+    if (!ui.compare || !ui.na) return;
+    var c = ui.compare.value();
+    if ((c === "baseline" || c === "sequential") && ui.na.value() !== "drop_all_models")
+        ui.na.setValue("drop_all_models");
 };
 
 // ---- Reference-level picker CustomControl (refPickerCtrl) ---------------------------------
@@ -97,7 +108,7 @@ var onUpdate = function(ui) {
 // no reference (a note). A reference change is reparametrized live from a cached fit (no refit).
 
 var TABX = {
-    refRow:  "display:grid;grid-template-columns:120px 1fr;align-items:center;gap:8px;width:66%;min-width:300px;box-sizing:border-box;padding:5px 8px;margin:4px 6px;border:1px solid rgba(0,0,0,0.12);border-radius:4px;background:rgba(0,0,0,0.03);",
+    refRow:  "display:grid;grid-template-columns:120px 1fr;align-items:center;gap:8px;width:74%;min-width:360px;box-sizing:border-box;padding:5px 8px;margin:4px 6px;border:1px solid rgba(0,0,0,0.12);border-radius:4px;background:rgba(0,0,0,0.03);",
     refName: "font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;",
     refSel:  "width:100%;min-width:0;box-sizing:border-box;padding:2px 4px;border:1px solid rgba(0,0,0,0.28);border-radius:3px;background:#fff;color:#000;cursor:pointer;",
     refNote: "opacity:0.6;font-style:italic;",
@@ -111,8 +122,13 @@ var TABX = {
     cardVars: "display:flex;flex-wrap:wrap;gap:4px 14px;",
     cardChk:  "display:inline-flex;align-items:center;gap:3px;white-space:nowrap;cursor:pointer;",
     addBtn:   "margin:4px 6px 8px;padding:4px 12px;border:1px dashed rgba(0,0,0,0.35);border-radius:4px;background:rgba(0,0,0,0.03);color:#000;cursor:pointer;font-weight:600;",
-    multWrap: "display:flex;align-items:center;gap:2px;min-width:0;",
-    multInp:  "width:70px;box-sizing:border-box;padding:2px 4px;border:1px solid rgba(0,0,0,0.28);border-radius:3px;background:#fff;color:#000;"
+    // Phase 15d: `white-space:nowrap` keeps "x [k] per unit (numeric)" on ONE line (it used to wrap).
+    multWrap: "display:flex;align-items:center;gap:2px;min-width:0;white-space:nowrap;",
+    multInp:  "width:70px;box-sizing:border-box;padding:2px 4px;border:1px solid rgba(0,0,0,0.28);border-radius:3px;background:#fff;color:#000;",
+    // per-dependent Model table: [name] [family select] [modelled level / trials]
+    mtRow:   "display:grid;grid-template-columns:130px 190px 1fr;align-items:center;gap:8px;width:82%;min-width:440px;box-sizing:border-box;padding:5px 8px;margin:4px 6px;border:1px solid rgba(0,0,0,0.12);border-radius:4px;background:rgba(0,0,0,0.03);",
+    mtSel:   "width:100%;min-width:0;box-sizing:border-box;padding:2px 4px;border:1px solid rgba(0,0,0,0.28);border-radius:3px;background:#fff;color:#000;cursor:pointer;",
+    mtTrials:"width:90px;box-sizing:border-box;padding:2px 4px;border:1px solid rgba(0,0,0,0.28);border-radius:3px;background:#fff;color:#000;"
 };
 
 var levelsCache = {};     // var -> [labels] | null (numeric/no-levels) | FETCHING sentinel
@@ -266,6 +282,166 @@ var renderRefPicker = function(ui) {
         preds.forEach(function(v) { renderRefVarCard(ui, frag, v); });
     }
     var root = ui.refPickerCtrl.$el[0];
+    root.innerHTML = ""; root.appendChild(frag);
+};
+
+// ---- Per-dependent Model table CustomControl (modelTableCtrl) ----------------------------
+// One row per DEPENDENT = [name] [family select filtered by the outcome's R type] [col-3]. col-3 is
+// the binomial MODELLED level (for a 2-level factor, default the FIRST level = the modelled/success
+// level) or the number of TRIALS (for a numeric binomial outcome; blank -> the observed max). Stored in
+// the hidden depFamily / depModelLevel / depTrials arrays, folded by jmvtab_reg_* into tab_reg(family /
+// inverse_two_level_factors / trials). Family "auto" (default, stored as an empty entry) lets tab_reg
+// detect it from the outcome. Mirrors the refPicker's async column fetch (own cache: it needs the
+// measureType, which the refPicker's levels cache drops).
+
+var mtCache = {};          // var -> {mt: measureType, levels: [labels]|null} | FETCHING
+var lastModelSig = null;
+
+var FAMILY_LABEL = {
+    auto: "auto (detected)", gaussian: "gaussian (linear)", binomial: "binomial (logistic)",
+    poisson: "poisson (counts)", quasipoisson: "quasipoisson (over-dispersed)",
+    multinomial: "multinomial (nominal)", ordinal: "ordinal (ordered)"
+};
+
+var modelTableSig = function(ui) {
+    var deps = utils.clone(ui.dependent.value(), []);
+    var fams = ui.depFamily ? utils.clone(ui.depFamily.value(), []) : [];
+    return JSON.stringify([deps, fams]);       // families included so col-3 re-renders on a family flip
+};
+
+var afterFetchMT = function(ui) {
+    if (ui.modelTableCtrl && ui.modelTableCtrl.$el) renderModelTable(ui);
+};
+
+// families offered for an outcome's R type (numeric / 2-level factor / 3+ factor). "auto" first.
+var familyOptionsFor = function(c) {
+    if (!c || c.levels === null) return ["auto", "gaussian", "binomial", "poisson", "quasipoisson"];
+    if (c.levels.length === 2) return ["auto", "binomial"];
+    if (c.mt === "ordinal")    return ["auto", "ordinal", "multinomial"];
+    return ["auto", "multinomial", "ordinal"];
+};
+
+// stored per-dependent value from a {var, <key>} array ("" if unset).
+var arrGet = function(ui, opt, v, key) {
+    if (!ui[opt]) return "";
+    var arr = utils.clone(ui[opt].value(), []);
+    for (var i = 0; i < arr.length; i++)
+        if (arr[i].var === v) return (arr[i][key] == null ? "" : String(arr[i][key]));
+    return "";
+};
+
+// set/replace a per-dependent {var, <key>:val} entry; a blank val removes it (-> backend default).
+// Guarded (JSON compare) so an unchanged pick never re-fires `update`.
+var arrWrite = function(ui, opt, v, key, val) {
+    if (!ui[opt]) return;
+    var arr = utils.clone(ui[opt].value(), []), kept = [], found = false, e;
+    for (var i = 0; i < arr.length; i++) {
+        if (arr[i].var !== v) { kept.push(arr[i]); continue; }
+        found = true;
+        if (val != null && String(val).length > 0) { e = { var: v }; e[key] = String(val); kept.push(e); }
+    }
+    if (!found && val != null && String(val).length > 0) { e = { var: v }; e[key] = String(val); kept.push(e); }
+    if (JSON.stringify(arr) !== JSON.stringify(kept)) ui[opt].setValue(kept);
+};
+
+// drop entries whose var is no longer a dependent (guarded).
+var reconcileArr = function(ui, opt, deps) {
+    if (!ui[opt]) return;
+    var cur = utils.clone(ui[opt].value(), []);
+    var kept = cur.filter(function(e) { return deps.indexOf(e.var) >= 0; });
+    if (kept.length !== cur.length) ui[opt].setValue(kept);
+};
+
+var makeSelect = function(style, options, labelOf, selected, onPick) {
+    var sel = document.createElement("select"); sel.style.cssText = style;
+    options.forEach(function(o) {
+        var opt = document.createElement("option");
+        opt.value = o; opt.textContent = labelOf ? (labelOf[o] || o) : o;
+        if (o === selected) opt.selected = true;
+        sel.appendChild(opt);
+    });
+    sel.addEventListener("change", function() { onPick(sel.value); });
+    return sel;
+};
+
+var renderModelRow = function(ui, frag, v) {
+    var c = (v in mtCache) ? mtCache[v] : undefined;
+    if (c === FETCHING) c = undefined;
+    if (c === undefined) {
+        var ph = document.createElement("div"); ph.style.cssText = TABX.mtRow;
+        var b0 = document.createElement("b"); b0.style.cssText = TABX.refName; b0.textContent = v;
+        var d0 = document.createElement("span"); d0.style.cssText = TABX.refNote; d0.textContent = "…";
+        ph.appendChild(b0); ph.appendChild(d0);
+        frag.appendChild(ph);
+        if (!(v in mtCache)) {
+            mtCache[v] = FETCHING;
+            ui.modelTableCtrl.requestData("column",
+                { columnName: v, properties: ["measureType", "levels"] })
+                .then(function(col) {
+                    mtCache[v] = (!col || col.measureType === "continuous")
+                        ? { mt: "continuous", levels: null }
+                        : { mt: col.measureType, levels: col.levels.map(function(l) { return l.label; }) };
+                    afterFetchMT(ui);
+                })
+                .catch(function() { mtCache[v] = { mt: "continuous", levels: null }; afterFetchMT(ui); });
+        }
+        return;
+    }
+    var row = document.createElement("div"); row.style.cssText = TABX.mtRow;
+    var nm  = document.createElement("b"); nm.style.cssText = TABX.refName; nm.textContent = v;
+    row.appendChild(nm);
+
+    var opts    = familyOptionsFor(c);
+    var storedF = arrGet(ui, "depFamily", v, "family");
+    var famSel  = (storedF && opts.indexOf(storedF) >= 0) ? storedF : "auto";
+    row.appendChild(makeSelect(TABX.mtSel, opts, FAMILY_LABEL, famSel,
+        function(f) { arrWrite(ui, "depFamily", v, "family", f === "auto" ? "" : f); renderModelTable(ui); }));
+
+    // col-3: a 2-level factor -> modelled-level picker; a numeric outcome set to binomial -> trials.
+    var isBinFactor = c.levels && c.levels.length === 2;
+    var isNumBinom  = (c.levels === null) && (famSel === "binomial");
+    if (isBinFactor) {
+        var storedL = arrGet(ui, "depModelLevel", v, "level");
+        var selL = (storedL && c.levels.indexOf(storedL) >= 0) ? storedL : c.levels[0];  // default first
+        var wrapL = document.createElement("div"); wrapL.style.cssText = TABX.multWrap;
+        var preL  = document.createElement("span"); preL.style.cssText = TABX.refNote; preL.textContent = "model ";
+        wrapL.appendChild(preL);
+        wrapL.appendChild(makeSelect(TABX.mtSel, c.levels, null, selL,
+            function(l) { arrWrite(ui, "depModelLevel", v, "level", l === c.levels[0] ? "" : l); }));
+        row.appendChild(wrapL);
+    } else if (isNumBinom) {
+        var wrapT = document.createElement("div"); wrapT.style.cssText = TABX.multWrap;
+        var inp = document.createElement("input");
+        inp.type = "number"; inp.step = "1"; inp.min = "1"; inp.style.cssText = TABX.mtTrials;
+        inp.placeholder = "max"; inp.value = arrGet(ui, "depTrials", v, "n");
+        inp.addEventListener("change", function() { arrWrite(ui, "depTrials", v, "n", inp.value); });
+        var sufT = document.createElement("span"); sufT.style.cssText = TABX.refNote; sufT.textContent = " trials";
+        wrapT.appendChild(inp); wrapT.appendChild(sufT);
+        row.appendChild(wrapT);
+    } else {
+        row.appendChild(document.createElement("span"));       // keep the 3-column grid aligned
+    }
+    frag.appendChild(row);
+};
+
+var renderModelTable = function(ui) {
+    if (!ui.modelTableCtrl || !ui.dependent) return;
+    lastModelSig = modelTableSig(ui);
+    var deps = utils.clone(ui.dependent.value(), []);
+    reconcileArr(ui, "depFamily", deps);
+    reconcileArr(ui, "depModelLevel", deps);
+    reconcileArr(ui, "depTrials", deps);
+
+    var frag = document.createElement("div");
+    frag.setAttribute("data-tabx-model", "1");
+    if (deps.length === 0) {
+        var hint = document.createElement("div"); hint.style.cssText = TABX.hint;
+        hint.textContent = "Add one or more outcome variables to choose each one's model family.";
+        frag.appendChild(hint);
+    } else {
+        deps.forEach(function(v) { renderModelRow(ui, frag, v); });
+    }
+    var root = ui.modelTableCtrl.$el[0];
     root.innerHTML = ""; root.appendChild(frag);
 };
 
@@ -444,14 +620,16 @@ module.exports = {
     // may have changed -> reconcile cards / scaling) + re-apply the survey greying.
     onChange_vars: function(ui) {
         applyWtEnables(ui);
+        renderModelTable(ui);
         renderRefPicker(ui);
         renderModelBuilder(ui);
         applyCompareEnables(ui);
     },
 
-    // `compare` changed: re-render the builder (baseline markers show only when compare == "baseline")
-    // and re-apply the >=2-models greying.
+    // `compare` changed: force the shared complete-case population for a valid test, re-render the
+    // builder (baseline markers show only when compare == "baseline"), re-apply the >=2-models greying.
     onChange_compare: function(ui) {
+        forceNaForCompare(ui);
         renderModelBuilder(ui);
         applyCompareEnables(ui);
     },
@@ -482,6 +660,21 @@ module.exports = {
                          root.firstChild.getAttribute("data-tabx-refpick") === "1");
         if (sig === lastRefSig && present) return;
         renderRefPicker(ui);
+    },
+
+    // modelTableCtrl: build on create. On `updated`, re-render ONLY when the dependent set / chosen
+    // families changed OR jamovi replaced our $el subtree -- a family / level / trials pick writes the
+    // hidden depFamily/depModelLevel/depTrials (a family flip IS in the signature, so col-3 repaints),
+    // so an in-place edit that keeps the signature is SKIPPED and the DOM edit stands.
+    modelTableCtrl_creating: function(ui) { renderModelTable(ui); },
+    modelTableCtrl_updated:  function(ui) {
+        if (!ui.modelTableCtrl || !ui.dependent) return;
+        var sig  = modelTableSig(ui);
+        var root = ui.modelTableCtrl.$el[0];
+        var present = !!(root && root.firstChild && root.firstChild.getAttribute &&
+                         root.firstChild.getAttribute("data-tabx-model") === "1");
+        if (sig === lastModelSig && present) return;
+        renderModelTable(ui);
     },
 
     // subtextCtrl: the full-width auto-grow <textarea> for the below-table note (Phase 15c).

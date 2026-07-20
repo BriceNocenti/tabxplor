@@ -28,6 +28,15 @@ children:
             events:
               change: ./jmvtabreg::onChange_vars
       - type: TargetLayoutBox
+        label: <b>split_var = <i>(fit within each group)</i></b>
+        children:
+          - type: VariablesListBox
+            name: split_var
+            maxItemCount: 1
+            isTarget: true
+            events:
+              change: ./jmvtabreg::onChange_vars
+      - type: TargetLayoutBox
         label: <b>wt = <i>(survey weights)</i></b>
         children:
           - type: VariablesListBox
@@ -36,107 +45,72 @@ children:
             isTarget: true
             events:
               change: ./jmvtabreg::onChange_vars
-      - type: TargetLayoutBox
-        label: <b>split_var = <i>(fit within each group)</i></b>
-        children:
-          - type: VariablesListBox
-            name: split_var
-            maxItemCount: 1
-            isTarget: true
 
   - type: CollapseBox
     label: <b>Model</b>
     stretchFactor: 1
     collapsed: false
     children:
+      # Per-dependent Model table: one row per outcome -> [name] [family] [modelled level / trials].
+      - type: LayoutBox
+        margin: none
+        children:
+          - type: CustomControl
+            name: modelTableCtrl
+            stretchFactor: 1
+            events:
+              creating: ./jmvtabreg::modelTableCtrl_creating
+              updated:  ./jmvtabreg::modelTableCtrl_updated
       - type: LayoutBox
         margin: large
         children:
-          - type: Label
-            label: family = <i>(model type)</i>
-            children:
-              - type: ComboBox
-                name: family
-          - type: Label
-            label: exponentiate = <i>(effect scale)</i>
-            children:
-              - type: ComboBox
-                name: exponentiate
-          - type: Label
-            label: effect = <i>(estimand)</i>
-            children:
-              - type: RadioButton
-                name: effect_1
-                optionName: effect
-                optionPart: coefficient
-              - type: RadioButton
-                name: effect_2
-                optionName: effect
-                optionPart: ame
-          - type: Label
-            label: at = <i>(profile, marginal effects)</i>
-            children:
-              - type: RadioButton
-                name: at_1
-                optionName: at
-                optionPart: average
-                enable: (effect_2 || family:multinomial)
-              - type: RadioButton
-                name: at_2
-                optionName: at
-                optionPart: reference
-                enable: (effect_2 || family:multinomial)
-          - type: Label
-            label: estimate_display = <i>(cell layout)</i>
-            children:
-              - type: RadioButton
-                name: estimate_display_1
-                optionName: estimate_display
-                optionPart: value
-              - type: RadioButton
-                name: estimate_display_2
-                optionName: estimate_display
-                optionPart: ci
-              - type: RadioButton
-                name: estimate_display_3
-                optionName: estimate_display
-                optionPart: prob
-                enable: (family:binomial && effect_1)
-              - type: RadioButton
-                name: estimate_display_4
-                optionName: estimate_display
-                optionPart: ame
-                enable: (family:binomial && effect_1)
           - type: CheckBox
-            name: inverse_two_level_factors
-            enable: (family:binomial || family:auto)
-
-  - type: CollapseBox
-    label: <b>Empirical (crude / observed) companion</b>
-    stretchFactor: 1
-    collapsed: false
-    children:
-      - type: LayoutBox
-        margin: large
-        children:
+            name: exponentiate
+            label: exponentiate = <i>(odds / rate ratios when it makes sense)</i>
+          # effect and at on one row (two columns).
+          - type: LayoutBox
+            margin: none
+            children:
+              - type: LayoutBox
+                cell: { column: 0, row: 0 }
+                children:
+                  - type: Label
+                    label: effect = <i>(estimand)</i>
+                    children:
+                      - type: RadioButton
+                        name: effect_1
+                        optionName: effect
+                        optionPart: coefficient
+                      - type: RadioButton
+                        name: effect_2
+                        optionName: effect
+                        optionPart: ame
+              - type: LayoutBox
+                cell: { column: 1, row: 0 }
+                children:
+                  - type: Label
+                    label: at = <i>(profile, marginal effects)</i>
+                    children:
+                      - type: RadioButton
+                        name: at_1
+                        optionName: at
+                        optionPart: average
+                        enable: (effect_2)
+                      - type: RadioButton
+                        name: at_2
+                        optionName: at
+                        optionPart: reference
+                        enable: (effect_2)
           - type: CheckBox
             name: empirical
+            label: empirical = <i>(compare model estimates with observed values)</i>
 
   - type: CollapseBox
     label: <b>Model comparison (+ predictor subsets)</b>
     stretchFactor: 1
     collapsed: true
     children:
-      - type: LayoutBox
-        margin: large
-        children:
-          - type: Label
-            label: compare = <i>(model-comparison test)</i>
-            children:
-              - type: ComboBox
-                name: compare
-                events:
-                  change: ./jmvtabreg::onChange_compare
+      # The model-builder "+" cards first, then the comparison test, then how missing values are dropped.
       - type: LayoutBox
         margin: none
         children:
@@ -150,15 +124,23 @@ children:
         margin: large
         children:
           - type: Label
-            label: trials = <i>(grouped / summed-score binomial)</i>
+            label: compare = <i>(nested-model LR / F test)</i>
             children:
               - type: ComboBox
-                name: trials_mode
-                enable: (family:binomial || family:auto)
-              - type: TextBox
-                name: trials_n
-                format: number
-                enable: ((family:binomial || family:auto) && trials_mode:fixed)
+                name: compare
+                events:
+                  change: ./jmvtabreg::onChange_compare
+          - type: Label
+            label: na = <i>(missing values)</i>
+            children:
+              - type: RadioButton
+                name: na_1
+                optionName: na
+                optionPart: drop_by_model
+              - type: RadioButton
+                name: na_2
+                optionName: na
+                optionPart: drop_all_models
 
   - type: CollapseBox
     label: <b>References and predictor scaling</b>
@@ -176,36 +158,70 @@ children:
               updated: ./jmvtabreg::refPickerCtrl_updated
 
   - type: CollapseBox
-    label: <b>Confidence intervals</b>
+    label: <b>Significance</b>
     stretchFactor: 1
     collapsed: true
     children:
+      # Confidence level, interval method and stars on one row.
+      - type: LayoutBox
+        margin: none
+        children:
+          - type: LayoutBox
+            cell: { column: 0, row: 0 }
+            children:
+              - type: Label
+                label: "Confidence level:"
+                children:
+                  - type: TextBox
+                    name: conf_level
+                    format: number
+          - type: LayoutBox
+            cell: { column: 1, row: 0 }
+            children:
+              - type: Label
+                label: method = <i>(interval)</i>
+                children:
+                  - type: RadioButton
+                    name: method_1
+                    optionName: method
+                    optionPart: wald
+                  - type: RadioButton
+                    name: method_2
+                    optionName: method
+                    optionPart: profile
+          - type: LayoutBox
+            cell: { column: 2, row: 0 }
+            children:
+              - type: CheckBox
+                name: stars
+      # Colours: a single on/off, then the significance policy (greyed out when colours are off).
       - type: LayoutBox
         margin: large
         children:
-          - type: Label
-            label: "Confidence level:"
-            children:
-              - type: TextBox
-                name: conf_level
-                format: number
-          - type: Label
-            label: method = <i>(interval)</i>
-            children:
-              - type: RadioButton
-                name: method_1
-                optionName: method
-                optionPart: wald
-              - type: RadioButton
-                name: method_2
-                optionName: method
-                optionPart: profile
-                enable: (family:binomial || family:poisson)
           - type: CheckBox
-            name: stars
+            name: color
+            label: color = <i>(colour helpers)</i>
+          - type: Label
+            label: color_signif = <i>(significance policy)</i>
+            children:
+              - type: RadioButton
+                name: color_signif_1
+                optionName: color_signif
+                optionPart: ignore
+                enable: (color)
+              - type: RadioButton
+                name: color_signif_2
+                optionName: color_signif
+                optionPart: grey_non_signif
+                enable: (color)
+              - type: RadioButton
+                name: color_signif_3
+                optionName: color_signif
+                optionPart: guaranteed_effect
+                enable: (color)
 
   - type: CollapseBox
-    label: <b>Colors</b>
+    label: <b>Missing values and display</b>
     stretchFactor: 1
     collapsed: true
     children:
@@ -213,39 +229,34 @@ children:
         margin: large
         children:
           - type: Label
-            label: color = <i>(color helper)</i>
+            label: estimate_display = <i>(cell layout)</i>
             children:
-              - type: ComboBox
-                name: color
-          - type: Label
-            label: color_signif = <i>(significance)</i>
-            children:
-              - type: ComboBox
-                name: color_signif
-
-  - type: CollapseBox
-    label: <b>Missing values and formatting</b>
-    stretchFactor: 1
-    collapsed: true
-    children:
-      - type: LayoutBox
-        margin: large
-        children:
-          - type: Label
-            label: na = <i>(missing values)</i>
-            children:
-              - type: ComboBox
-                name: na
+              - type: RadioButton
+                name: estimate_display_1
+                optionName: estimate_display
+                optionPart: value
+              - type: RadioButton
+                name: estimate_display_2
+                optionName: estimate_display
+                optionPart: ci
+              - type: RadioButton
+                name: estimate_display_3
+                optionName: estimate_display
+                optionPart: prob
+                enable: (effect_1)
+              - type: RadioButton
+                name: estimate_display_4
+                optionName: estimate_display
+                optionPart: ame
+                enable: (effect_1)
           - type: CheckBox
             name: cleannames
-          - type: CheckBox
-            name: footer
       - type: LayoutBox
         margin: none
         children:
           # Phase 15c: a full-width, auto-grow <textarea> (CustomControl) drives the hidden `subtext`.
           - type: Label
-            label: <b>Note below the table:</b>
+            label: subtext = <i>(note below the table)</i>
             children:
               - type: CustomControl
                 name: subtextCtrl

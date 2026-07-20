@@ -41,7 +41,9 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             nest = FALSE,
             export_format = "excel",
             exportExcel = FALSE,
-            path = "~/Documents/Regression",
+            export_dir = "~/Documents",
+            export_filename = "Regression",
+            resetPath = FALSE,
             xl_replace = FALSE, ...) {
 
             super$initialize(
@@ -260,7 +262,8 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             private$..subtext <- jmvcore::OptionString$new(
                 "subtext",
                 subtext,
-                default="")
+                default="",
+                hidden=TRUE)
             private$..wrap_rows <- jmvcore::OptionNumber$new(
                 "wrap_rows",
                 wrap_rows,
@@ -298,10 +301,17 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             private$..exportExcel <- jmvcore::OptionAction$new(
                 "exportExcel",
                 exportExcel)
-            private$..path <- jmvcore::OptionString$new(
-                "path",
-                path,
-                default="~/Documents/Regression")
+            private$..export_dir <- jmvcore::OptionString$new(
+                "export_dir",
+                export_dir,
+                default="~/Documents")
+            private$..export_filename <- jmvcore::OptionString$new(
+                "export_filename",
+                export_filename,
+                default="Regression")
+            private$..resetPath <- jmvcore::OptionAction$new(
+                "resetPath",
+                resetPath)
             private$..xl_replace <- jmvcore::OptionBool$new(
                 "xl_replace",
                 xl_replace,
@@ -342,7 +352,9 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$.addOption(private$..nest)
             self$.addOption(private$..export_format)
             self$.addOption(private$..exportExcel)
-            self$.addOption(private$..path)
+            self$.addOption(private$..export_dir)
+            self$.addOption(private$..export_filename)
+            self$.addOption(private$..resetPath)
             self$.addOption(private$..xl_replace)
         }),
     active = list(
@@ -381,7 +393,9 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         nest = function() private$..nest$value,
         export_format = function() private$..export_format$value,
         exportExcel = function() private$..exportExcel$value,
-        path = function() private$..path$value,
+        export_dir = function() private$..export_dir$value,
+        export_filename = function() private$..export_filename$value,
+        resetPath = function() private$..resetPath$value,
         xl_replace = function() private$..xl_replace$value),
     private = list(
         ..dependent = NA,
@@ -419,7 +433,9 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         ..nest = NA,
         ..export_format = NA,
         ..exportExcel = NA,
-        ..path = NA,
+        ..export_dir = NA,
+        ..export_filename = NA,
+        ..resetPath = NA,
         ..xl_replace = NA)
 )
 
@@ -545,8 +561,15 @@ jmvtabregBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   weight.
 #' @param nest Set when cluster ids are reused across strata (survey design).
 #' @param export_format .
-#' @param exportExcel .
-#' @param path .
+#' @param exportExcel Press to export the table to the chosen format (the
+#'   button label follows the format).
+#' @param export_dir The folder to save the exported file in. \code{~} expands
+#'   to your home folder. Blank saves to your Documents.
+#' @param export_filename The bare file name, with NO extension (the chosen
+#'   format adds it). Illegal characters are removed automatically. Blank saves
+#'   as "Table".
+#' @param resetPath Reset the folder and file name to their defaults (your
+#'   Documents folder and "Regression").
 #' @param xl_replace .
 #' @return A results object containing:
 #' \tabular{llllll}{
@@ -592,7 +615,9 @@ jmvtabreg <- function(
     nest = FALSE,
     export_format = "excel",
     exportExcel = FALSE,
-    path = "~/Documents/Regression",
+    export_dir = "~/Documents",
+    export_filename = "Regression",
+    resetPath = FALSE,
     xl_replace = FALSE) {
 
     if ( ! requireNamespace("jmvcore", quietly=TRUE))
@@ -654,7 +679,9 @@ jmvtabreg <- function(
         nest = nest,
         export_format = export_format,
         exportExcel = exportExcel,
-        path = path,
+        export_dir = export_dir,
+        export_filename = export_filename,
+        resetPath = resetPath,
         xl_replace = xl_replace)
 
     analysis <- jmvtabregClass$new(

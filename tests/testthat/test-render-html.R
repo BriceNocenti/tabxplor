@@ -379,10 +379,11 @@ testthat::test_that("numbers are DejaVu Sans by default, monospace only for a st
   # table-independent). The size bump (Cascadia reads small) is body-only and preserves the row height.
   css <- tab_css(style_tag = FALSE)
   testthat::expect_match(css, "font-family:\"DejaVu Sans Condensed\"", fixed = TRUE)   # text: Condensed
-  def_rule <- regmatches(css, regexpr("[.]tabxplor-tab [.]tx-num\\{[^}]*\\}", css))    # default: DejaVu Sans
+  # Phase 15d: the number FONT is body-only (`td.tx-num`) so numeric HEADERS keep the condensed sans.
+  def_rule <- regmatches(css, regexpr("[.]tabxplor-tab td[.]tx-num\\{[^}]*\\}", css))  # default: DejaVu Sans
   testthat::expect_match(def_rule, "DejaVu Sans", fixed = TRUE)
   testthat::expect_no_match(def_rule, "monospace")
-  star_rule <- regmatches(css, regexpr("[.]tx-has-stars [.]tx-num\\{[^}]*\\}", css))   # stars: Cascadia mono
+  star_rule <- regmatches(css, regexpr("[.]tx-has-stars td[.]tx-num\\{[^}]*\\}", css))  # stars: Cascadia mono
   testthat::expect_match(star_rule, "Cascadia Mono", fixed = TRUE)
   testthat::expect_match(star_rule, "monospace;}")
   testthat::expect_match(css, "[.]tx-has-stars td[.]tx-num\\{font-size:1.1em;line-height:1;\\}")  # body bump
@@ -390,8 +391,8 @@ testthat::test_that("numbers are DejaVu Sans by default, monospace only for a st
   css2 <- withr::with_options(
     list(tabxplor.tab_kable_num_font = "\"Georgia\", serif",
          tabxplor.tab_kable_num_font_stars = "\"Courier New\", monospace"), tab_css(style_tag = FALSE))
-  testthat::expect_match(css2, "[.]tabxplor-tab [.]tx-num\\{[^}]*Georgia")
-  testthat::expect_match(css2, "[.]tx-has-stars [.]tx-num\\{[^}]*Courier New")
+  testthat::expect_match(css2, "[.]tabxplor-tab td[.]tx-num\\{[^}]*Georgia")
+  testthat::expect_match(css2, "[.]tx-has-stars td[.]tx-num\\{[^}]*Courier New")
 })
 
 testthat::test_that("the html engine flags a starred table with tx-has-stars, a plain one not", {

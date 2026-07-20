@@ -8,17 +8,30 @@
 skip_if_not_installed("broom")
 
 # --- helpers ------------------------------------------------------------------------------
+# Phase 15d: the per-dependent Model table (depFamily / depModelLevel / depTrials arrays) replaced the
+# single family / trials / inverse options. This helper keeps the convenience fields `family` / `trials`
+# / `multiplier` readable (the tests use them to build the direct tab_reg() comparison call) AND derives
+# the arrays the build core actually reads.
 reg_opts <- function(...) {
-  o <- list(
+  o <- utils::modifyList(list(
     dependent = "married", predictors = c("race", "age"), wt = character(), ids = NULL, strata = NULL,
-    fpc = NULL, nest = FALSE, split_var = NULL, family = "binomial", exponentiate = "nongaussian",
+    fpc = NULL, nest = FALSE, split_var = NULL, family = "binomial", exponentiate = TRUE,
     effect = "coefficient", at = "average", estimate_display = "value",
     inverse_two_level_factors = TRUE, empirical = FALSE, reference = NULL, conf_level = 0.95,
-    method = "wald", stars = TRUE, color = NULL, color_signif = "grey_non_signif", na = "keep",
+    method = "wald", stars = TRUE, color = NULL, color_signif = "grey_non_signif", na = "drop_by_model",
     cleannames = TRUE, stats = NULL, subtext = "",
     compare = "none", baseline = 1L, multiplier = NULL, trials = NULL
-  )
-  utils::modifyList(o, list(...))
+  ), list(...))
+  # derive the Model-table arrays from the convenience fields
+  o$depFamily     <- if (identical(o$family, "auto")) list()
+                     else lapply(o$dependent, function(d) list(var = d, family = o$family))
+  o$depModelLevel <- list()
+  o$depTrials     <- if (is.null(o$trials)) list()
+                     else lapply(o$dependent, function(d) list(var = d, n = as.character(o$trials)))
+  o$multiplicator <- if (is.null(o$multiplier)) list()
+                     else Map(function(v, k) list(var = v, k = as.character(k)),
+                              names(o$multiplier), unname(o$multiplier))
+  o
 }
 
 gss_reg <- function() gss_cat_data_formatting()
@@ -184,7 +197,7 @@ test_that("compare = baseline adds a comparison footer row", {
   gss <- gss_reg()
   o   <- reg_opts(predictors = list(small = c("race", "age"),
                                     full  = c("race", "age", "rincome")),
-                  family = "binomial", compare = "baseline", baseline = 2L, na = "drop_all")
+                  family = "binomial", compare = "baseline", baseline = 2L, na = "drop_all_models")
   t   <- quiet(jmvtab_reg_build(gss, o, NULL))$tabs
   cmp <- get_test(t) |> dplyr::filter(grepl("^compare", test))
   expect_gte(nrow(cmp), 1L)

@@ -207,17 +207,17 @@ test_that("color_signif = 'ignore' colours non-significant odds ratios too", {
 
 # --- Phase 14x: na= forwarding + multi_logit K mode ------------------------------------------------
 
-test_that("tab_logit()/multi_logit() forward na = 'drop_all'", {
+test_that("tab_logit()/multi_logit() forward na = 'drop_all_models'", {
   skip_if_not_installed("broom")
   d <- logit_data()
   # na = "drop_all" fits on the shared complete-case population -> runs without error and keeps shape.
-  t1 <- tab_logit(d, "married", c("race", "rincome"), na = "drop_all")
+  t1 <- tab_logit(d, "married", c("race", "rincome"), na = "drop_all_models")
   expect_s3_class(t1, "tabxplor_grouped_tab")
   expect_true("Model OR" %in% names(t1))
 
   t2 <- multi_logit(d, "married",
                     models = list(demo = "race", full = c("race", "rincome")),
-                    na = "drop_all", compare = "sequential")
+                    na = "drop_all_models", compare = "sequential")
   expect_s3_class(t2, "tabxplor_grouped_tab")
   # a bad na value is rejected by match.arg (not silently forwarded)
   expect_error(tab_logit(d, "married", "race", na = "nonsense"))

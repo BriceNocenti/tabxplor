@@ -133,6 +133,7 @@ jmvreg_fit_key <- function(sp, data, family, design_spec, extra = NULL) {
     dependent  = sp$dependent,
     predictors = sp$predictors,
     trials     = sp$trials,
+    inverse    = sp$inverse,
     formula    = if (!is.null(sp$formula)) paste(deparse(sp$formula), collapse = " ") else NULL,
     family     = family,
     nrow       = nrow(data),
@@ -206,6 +207,55 @@ jmvtab_reg_mult_vector <- function(multiplicator) {
 }
 
 
+# === Per-dependent Model table -> tab_reg() args (Phase 15d) ================================
+# The Model table (depFamily / depModelLevel / depTrials arrays) sets one family + modelled level +
+# trials per outcome. These three helpers resolve ONE dependent; jmvtab_reg_build() then groups the
+# outcomes by family (same family -> one shared table; different families -> a tabxplor_tabs list, the
+# interim until the mixed-family single table lands -- roadmap 15d, deferred).
+
+# The chosen family for `dep` (an explicit non-blank pick) else auto-detected from the outcome.
+#' @keywords internal
+#' @noRd
+jmvtab_reg_dep_family <- function(depFamily, dep, data) {
+  if (length(depFamily)) for (e in depFamily) {
+    if (identical(as.character(e$var), dep) && length(e$family) && nzchar(as.character(e$family)))
+      return(as.character(e$family))
+  }
+  reg_detect_family(data, dep)
+}
+
+# TRUE (the default) = model the FIRST level of a 2-level factor outcome. depModelLevel stores a level
+# ONLY when the user picked a NON-first level as the modelled one -> FALSE.
+#' @keywords internal
+#' @noRd
+jmvtab_reg_dep_modelled_first <- function(depModelLevel, dep) {
+  if (length(depModelLevel)) for (e in depModelLevel) {
+    if (identical(as.character(e$var), dep) && length(e$level) && nzchar(as.character(e$level)))
+      return(FALSE)
+  }
+  TRUE
+}
+
+# The number of trials for a numeric binomial outcome: an explicit entry, else the observed max when the
+# outcome is a >1 integer count (a summed score). NA -> ordinary binary logit (a factor, or a 0/1 numeric).
+#' @keywords internal
+#' @noRd
+jmvtab_reg_dep_trials <- function(depTrials, dep, data) {
+  if (length(depTrials)) for (e in depTrials) {
+    if (identical(as.character(e$var), dep) && length(e$n) && nzchar(as.character(e$n))) {
+      n <- suppressWarnings(as.integer(round(as.numeric(e$n))))
+      if (!is.na(n) && n >= 1L) return(n)
+    }
+  }
+  x <- data[[dep]]
+  if (is.numeric(x) && !is.factor(x)) {
+    m <- suppressWarnings(max(x, na.rm = TRUE))
+    if (is.finite(m) && m > 1) return(as.integer(round(m)))
+  }
+  NA_integer_
+}
+
+
 # === The engine-free build core ============================================================
 
 # Drive tab_reg() with the live fit cache injected. `opts` is the plain list the R6 backend's .opts()
@@ -237,39 +287,72 @@ jmvtab_reg_build <- function(data, opts, store = NULL) {
     return(list(tabs = NULL, store = cache_env$store, hits = 0L))
   }
 
-  tabs <- tab_reg(
-    data,
-    dependent    = dep,
-    predictors   = preds,
-    family       = opts$family,
-    wt           = nz(opts$wt),
-    ids          = nz(opts$ids),
-    strata       = nz(opts$strata),
-    fpc          = nz(opts$fpc),
-    nest         = isTRUE(opts$nest),
-    exponentiate = opts$exponentiate,
-    effect       = opts$effect,
-    at           = opts$at,
-    conf_level   = opts$conf_level,
-    method       = opts$method,
-    reference    = opts$reference,
-    inverse_two_level_factors = isTRUE(opts$inverse_two_level_factors),
-    split_var    = nz(opts$split_var),
-    empirical    = isTRUE(opts$empirical),
-    stats        = opts$stats,
-    estimate_display = opts$estimate_display,
-    color        = opts$color,
-    color_signif = opts$color_signif,
-    stars        = isTRUE(opts$stars),
-    na           = opts$na,
-    cleannames   = opts$cleannames,
-    subtext      = opts$subtext,
-    compare       = if (is.null(opts$compare)) "none" else opts$compare,
-    baseline      = opts$baseline,
-    multiplier    = opts$multiplier,
-    trials        = opts$trials,
-    .fit_cache   = cache_env
-  )
+  # Phase 15d: resolve each outcome's family / modelled level / trials from the Model table, then group
+  # the outcomes so every tab_reg() call is family-homogeneous (its family / trials-mode uniform). One
+  # group -> one table; several -> a tabxplor_tabs list (the mixed-family single table is deferred).
+  fams <- vapply(dep, function(d) jmvtab_reg_dep_family(opts$depFamily, d, data), character(1))
+  invs <- vapply(dep, function(d) jmvtab_reg_dep_modelled_first(opts$depModelLevel, d), logical(1))
+  # trials are binomial-only (grouped / summed-score); non-binomial outcomes never carry one.
+  tris <- vapply(seq_along(dep), function(i) {
+    if (identical(fams[i], "binomial")) jmvtab_reg_dep_trials(opts$depTrials, dep[i], data)
+    else NA_integer_
+  }, integer(1))
+  key  <- paste0(fams, "|", ifelse(is.na(tris), "b", "t"))     # split binary-logit vs grouped-binomial
+  groups <- unique(key)                                        # first-appearance order
+
+  build_group <- function(k) {
+    gdep <- dep[key == k]
+    gfam <- fams[key == k][1L]
+    ginv <- invs[key == k]
+    inv_arg <- if (all(ginv)) TRUE else stats::setNames(ginv, gdep)   # scalar unless a pick overrode it
+    gtri <- tris[key == k]
+    tri_arg <- if (all(is.na(gtri))) NULL else stats::setNames(as.integer(gtri), gdep)
+    mult_arg <- if (gfam %in% c("multinomial", "ordinal")) NULL
+                else jmvtab_reg_mult_vector(opts$multiplicator)
+    tab_reg(
+      data,
+      dependent    = gdep,
+      predictors   = preds,
+      family       = gfam,
+      wt           = nz(opts$wt),
+      ids          = nz(opts$ids),
+      strata       = nz(opts$strata),
+      fpc          = nz(opts$fpc),
+      nest         = isTRUE(opts$nest),
+      exponentiate = opts$exponentiate,
+      effect       = opts$effect,
+      at           = opts$at,
+      conf_level   = opts$conf_level,
+      method       = opts$method,
+      reference    = opts$reference,
+      inverse_two_level_factors = inv_arg,
+      split_var    = nz(opts$split_var),
+      empirical    = isTRUE(opts$empirical),
+      stats        = opts$stats,
+      estimate_display = opts$estimate_display,
+      color        = opts$color,
+      color_signif = opts$color_signif,
+      stars        = isTRUE(opts$stars),
+      na           = opts$na,
+      cleannames   = opts$cleannames,
+      subtext      = opts$subtext,
+      compare      = if (is.null(opts$compare)) "none" else opts$compare,
+      baseline     = opts$baseline,
+      multiplier   = mult_arg,
+      trials       = tri_arg,
+      .fit_cache   = cache_env
+    )
+  }
+
+  if (length(groups) == 1L) {
+    tabs <- build_group(groups)
+  } else {
+    parts <- lapply(groups, build_group)
+    # flatten any nested tabxplor_tabs (e.g. a split_var group) into one flat list of tables.
+    flat  <- list()
+    for (p in parts) if (inherits(p, "tabxplor_tabs")) flat <- c(flat, as.list(p)) else flat <- c(flat, list(p))
+    tabs <- new_tabxplor_tabs(flat)
+  }
 
   cache_env$store <- jmvreg_cache_evict(cache_env$store)
   list(tabs = tabs, store = cache_env$store, hits = cache_env$hits)
