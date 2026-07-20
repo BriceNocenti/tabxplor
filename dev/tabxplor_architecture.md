@@ -35,7 +35,7 @@ tabxplor creates, manipulates, and formats color-coded cross-tabulation tables f
 | `var` | double | Variance (used for CI calculation) |
 | `ci_inf` | double | Lower confidence-interval bound (Phase 1a; real asymmetric bounds written in Phase 3) |
 | `ci_sup` | double | Upper (absolute) confidence-interval bound. `get_ci()` = `ci_sup − ci_center` (upper arm) |
-| `pvalue` | double | Per-cell significance p-value (Phase 3a: CI-inversion p; drives `get_stars()`) |
+| `pvalue` | double | Per-cell significance p-value (Phase 3a: CI-inversion p; drives `get_stars()`). Phase 17c: also the HONEST home of a chi2/F test row's p (`display == "pvalue"` cells; was overloaded into `pct`/`var` with a fake `diff = -0.5`). `get_stars()` is gated to `""` on `gof`/`pvalue`/`blank` cells; `fmt_color_slots()` colours a non-significant test row (p > alpha) with the deepest under-slot on the `diff` channel |
 | `or` | double | Odds ratio or relative risk ratio |
 | `tot_n` | double | The cell's own (unweighted) percentage base — its row/column/grand total per `pct` (written by `tab_plain()` in Phase 2; `NA` for count tables and mean cells). The weighted base is recovered on demand by `get_tot_wn()` = `wn/pct` (not a stored field) |
 | `in_totrow` | logical | Cell belongs to a total row |
@@ -53,7 +53,12 @@ tabxplor creates, manipulates, and formats color-coded cross-tabulation tables f
 | `col_var` | character | Name of the column variable this belongs to |
 | `totcol` | logical | This column is a total column |
 | `refcol` | logical | This column is a reference column |
-| `color` | character | Color scheme: "no", "diff", "diff_ci", "after_ci", "contrib", "or", "OR" |
+| `color` | character | Color scheme (length 1 text, or 2 with a background channel): "no", "diff", "ratio", "contrib", "or", "OR", … |
+| `color_signif` | character | Significance policy: `"ignore"` / `"grey_non_signif"` / `"guaranteed_effect"` |
+| `model_family` | character | Phase 15e: a reg column's own family (`"binomial"`/`"gaussian"`/`"poisson"`/…), `""` on crosstabs — lets one `tab_reg()` table mix families |
+| `role` | character | Phase 17c: a reg column's role, `"model"` / `"emp"` (`""` on crosstabs) — read by the colour legend to name each column's effect without matching its `"Emp."` label (internal `get_role`) |
+
+The attribute list is **derived** (Phase 17a): `fmt_col_attrs <- setdiff(names(formals(new_fmt)), c(fmt_field_names, "...", "class"))`, so adding an attribute (a `new_fmt()` formal that is not a field) needs no carry-site edit here — but every explicit reconstructor (`vec_cast`/`vec_ptype2`/`vec_arith`/`vec_math`) still hand-lists it beside `model_family`.
 
 **Critical distinction:** Fields are per-cell vectors (every cell can have a different `n`, `pct`, etc.). Attributes are scalar values describing the entire column (all cells in the column share the same `type`, `color`, etc.). Do not confuse the two when modifying the class.
 
@@ -93,11 +98,12 @@ sub-field (a `NULL` value removes it). The sub-fields:
 - `color_breaks` (Phase 13a) — the per-table colour-break override; joined `meta` in Phase 17b so it now
   SURVIVES a dplyr pipeline (was a standalone attribute set last, silently dropped by any verb between
   build and render — defect 7). Still installed transiently at render by `push_color_breaks()`.
-- `vars` (Phase 14d): `list(row_vars, col_vars, tab_vars, compacted, wt, caption)` — the table's OWN
-  record of its variable roles, written where the truth is known (`tab_assemble_tables()` /
+- `vars` (Phase 14d): `list(row_vars, col_vars, tab_vars, compacted, wt, caption, row_roles)` — the
+  table's OWN record of its variable roles, written where the truth is known (`tab_assemble_tables()` /
   `tab_compact()` / `tab_plain()` at build since Phase 17b, and re-keyed by `tab_transpose()`). The
   `caption` sub-field is set by the exported `set_caption()` / read by `get_caption()` and every
-  exporter's caption fallback (ahead of `reg_title`). **The roles cannot be recovered from a built
+  exporter's caption fallback (ahead of `reg_title`). The `row_roles` sub-field is the **row-role model**
+  (Phase 17c, below). **The roles cannot be recovered from a built
   table**: `tab_compact()`
   renames column 1 to the literal `"levels"` and keeps the row-variable names only as levels of a
   synthetic column *named* `row_var`, so the "last factor is the row_var, the others are tab_vars"
@@ -124,6 +130,31 @@ Phase 14d each verb named every attribute by hand (~34-site edits, silent drops)
 the six 1.4.0-new attrs into `meta` so the carry list is now three lines total. The jamovi tier-3 carrier
 stores `attributes(tab)` verbatim, so `meta` round-trips transparently (schema bumped to invalidate
 stores holding the old multi-attr shape).
+
+### The row-role model (`meta$vars$row_roles`, Phase 17c)
+
+Synthetic rows created at DISPLAY time — the add_n / add_pct base-`n` and `row_pct` rows, the chi2/F
+`pvalue` rows, the regression `gof`/`blank` footer rows — used to be re-detected downstream by matching
+their rendered English row label (`%in% c("n", "pvalue", "row_pct", …)`), which silently broke under
+jamovi's gettext translation. Phase 17c stores each row's **kind** instead. `meta$vars$row_roles` is a
+positional character vector (`"data"`/`"total"`/`"n"`/`"row_pct"`/`"pvalue"`/`"gof"`/`"blank"`), length
+`nrow`, stamped entirely within the one uninterrupted materialise pass:
+
+- **seeded** at the top of `tab_materialize_extras()` from the drift-free `is_totrow()` flag;
+- **extended** by each row-adder — `tab_add_n_pct()` threads `role` through `tab_append_pctcol_rows()`
+  (spliced by the SAME re-order as the rows), `tab_append_footer()` interleaves a `row_role(g)` closure
+  per group exactly as it interleaves the non-fmt columns;
+- **sliced** by `tab_collapse_total_rows()` alongside its row drop.
+
+It is never persisted in the user-facing built table (materialise is display-only). Consumers read the
+resolver **`tab_row_roles(tab)`** (`R/tab.R`, next to `tab_render_vars`): the stored vector when present
+and length-matching, else a clearly-marked FALLBACK reproducing the old `is_totrow` + English-label
+detection for hand-/step-built tables (a table with no stored vector never has a `row_pct` row, so the
+fallback needs no `row_pct` case — exact by construction). The retired consumers: export-prep's tot-block
+border (`tab_row_roles(tab) != "data"`), `tab_collapse_total_rows`'s summary-row sweep, and the transpose
+absorb heuristic (fixed structurally on `col_var == "all_col_vars"`, since transposed "rows" come from
+original columns). Column-side kinds stayed structural and English-free (`<var>_sd` suffix, `type=="n"`,
+`col_var=="all_col_vars"`, `is_totcol()`), so there is deliberately **no** `col_roles` vector.
 
 ### tabxplor_grouped_tab — Subtabled Results
 

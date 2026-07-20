@@ -176,6 +176,9 @@ utils::globalVariables(c("tabx_opts", "tabx_ship", ".stop"))
 #' (\code{"binomial"}, \code{"gaussian"}, \code{"poisson"}, \code{"multinomial"}, \code{"ordinal"}),
 #' as a single string. Empty (\code{""}) on cross-tables. Lets a table mix several dependents with
 #' different families, each column keeping its own effect wording.
+#' @param role For regression tables (\code{\link{tab_reg}}): the column's role, \code{"model"} for a
+#' model-estimate column or \code{"emp"} for an empirical (crude) companion column. Empty (\code{""})
+#' on cross-tables. Read by the colour legend to name each column's effect without matching its label.
 #' @return A vector of class \code{tabxplor_fmt}.
 #' @export
 #'
@@ -304,7 +307,8 @@ fmt <- function(n         = integer(),
                 refcol    = FALSE,
                 color     = ""    ,
                 color_signif = "ignore",
-                model_family = ""   ) {   # Phase 15e: per-column regression family ("" on crosstabs)
+                model_family = ""   ,   # Phase 15e: per-column regression family ("" on crosstabs)
+                role         = ""   ) {   # Phase 17c: per-column role -- "model"/"emp" on reg columns
 
   # DESIGN: these 8 fields set the recycling reference length. display, diff, ratio, or,
   # the ci bounds, pvalue, tot_n and the in_* flags are recycled TO it below, so they must
@@ -357,6 +361,7 @@ fmt <- function(n         = integer(),
   color        <- vctrs::vec_cast(color, character())
   color_signif <- vctrs::vec_recycle(vctrs::vec_cast(color_signif, character()), size = 1)
   model_family <- vctrs::vec_recycle(vctrs::vec_cast(model_family, character()), size = 1)
+  role         <- vctrs::vec_recycle(vctrs::vec_cast(role        , character()), size = 1)
 
   new_fmt(n = n, display = display, digits = digits,
           wn = wn, pct = pct,  mean = mean,
@@ -365,7 +370,8 @@ fmt <- function(n         = integer(),
           in_totrow = in_totrow, in_tottab = in_tottab, in_refrow = in_refrow,
           type = type, comp_all = comp_all,  ref = ref,
           ci_type = ci_type, col_var = col_var, totcol = totcol, refcol = refcol,
-          color = color, color_signif = color_signif, model_family = model_family)
+          color = color, color_signif = color_signif, model_family = model_family,
+          role = role)
 }
 
 #' @describeIn fmt a test function for class fmt.
@@ -415,7 +421,7 @@ get_num <- function(x) {
   nas     <- is.na(display)
   out[!nas & display == "wn"     ] <- get_wn  (x)[!nas & display == "wn"     ]
   out[!nas & display == "pct"    ] <- get_pct (x)[!nas & display == "pct"    ]
-  out[!nas & display == "pvalue" ] <- get_pct (x)[!nas & display == "pvalue" ]
+  out[!nas & display == "pvalue" ] <- get_pvalue(x)[!nas & display == "pvalue" ]  # Phase 17c: honest p in the pvalue field
   out[!nas & display == "diff"   ] <- get_diff(x)[!nas & display == "diff"   ]
   out[!nas & display == "coef"   ] <- get_diff(x)[!nas & display == "coef"   ]  # Phase 12c: raw regression coef -> diff field
   out[!nas & display == "gof"    ] <- get_diff(x)[!nas & display == "gof"    ]  # Phase 12f: model-fit stat (N/R2/AIC/...) -> diff field
@@ -930,6 +936,17 @@ set_model_family <- function(x, model_family) {
   `attr<-`(x ,"model_family" , model_family)
 }
 
+# Phase 17c: the per-column `role` attribute -- "model"/"emp" on a regression column, "" on a crosstab
+# column. Written by the reg builders (R/tab_reg.R), read by the legend adapters (legend_specs /
+# legend_reg_eff_word) instead of matching the "Emp." name prefix. Internal (no exported getter yet).
+#' @keywords internal
+#' @noRd
+get_role <- function(x, ...) {
+  if (is.data.frame(x)) return(purrr::map_chr(x, get_role))
+  r <- attr(x, "role", exact = TRUE)
+  if (is.null(r)) "" else r
+}
+
 
 
 #' @describeIn fmt test function for reference columns (at \code{fmt} level or \code{tab} level)
@@ -1253,6 +1270,7 @@ new_fmt <- function(n         = integer(),
                     color     = ""   ,
                     color_signif = "ignore",
                     model_family = ""   ,   # Phase 15e: regression model family per column ("" on crosstabs)
+                    role      = ""   ,   # Phase 17c: column role -- "model"/"emp" on reg columns, "" on crosstabs
                     ..., class = character()
 ) {
   # stopifnot(
@@ -1304,6 +1322,7 @@ new_fmt <- function(n         = integer(),
     type = type, comp_all = comp_all, ref = ref,
     ci_type = ci_type, col_var = col_var, totcol = totcol, refcol = refcol,
     color = color, color_signif = color_signif[1], model_family = model_family[1],
+    role = role[1],
     class = c(class, "tabxplor_fmt"))
   #access with fields() n_fields() vctrs::field() vctrs::`field<-`() ;
   #vec_data() return the tibble with all fields
@@ -1321,7 +1340,7 @@ fmt_field_names <- c("n", "display", "digits", "wn", "pct", "mean", "diff", "rat
 
 # The per-column ATTRIBUTE names carried when a fmt column is rebuilt/round-tripped: every new_fmt()
 # formal that is NOT a per-cell field (and not `...`/`class`). Order follows new_fmt()'s signature =
-# type, comp_all, ref, ci_type, col_var, totcol, refcol, color, color_signif, model_family.
+# type, comp_all, ref, ci_type, col_var, totcol, refcol, color, color_signif, model_family, role.
 # Read by fmt_unwrap / tab_stack_tables (tab.R), the column reconcile (tab_classes.R) and
 # tab-test-display.R. `color` is carried WHOLE (length 1 or 2).
 fmt_col_attrs <- setdiff(names(formals(new_fmt)), c(fmt_field_names, "...", "class"))
@@ -1448,6 +1467,11 @@ get_stars  <- function(x, p = get_pvalue(x)) {
   nb  <- rowSums(outer(p, brk, `<`), na.rm = TRUE)
   out <- c("", lab)[nb + 1L]
   out[is.na(p)] <- ""
+  # Phase 17c: a footer cell (a "gof" stat, a "pvalue" test row, or a "blank" filler) now carries a real
+  # `pvalue` field (honest storage), but it is NOT a "different from the reference" comparison, so it must
+  # never print a star -- nor flip prep's has_stars / tab_xl's star padding. format() already excludes
+  # these from the star APPEND; gating here makes every get_stars() caller agree at the source.
+  out[display_primary(get_display(x)) %in% c("gof", "pvalue", "blank")] <- ""
   out
 }
 # Phase 16d: whether a column's stored pvalue drives significance STARS. A `contrib` column stores a
@@ -2078,7 +2102,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   }
 
   if (any(pvalue)) {
-    p    <- get_pct(x[pvalue])
+    p    <- get_pvalue(x[pvalue])                       # Phase 17c: honest p in the pvalue field
 
     out[pvalue]    <- paste0(
       ifelse(
@@ -2834,7 +2858,22 @@ fmt_color_slots <- function(x, plan) {
   # in both channels and in fmt_get_color_code (which all route through here).
   # Phase 12f: a "gof" cell (a model-fit stat: N/R2/AIC/BIC/dispersion) is never effect-coloured --
   # a large AIC in the `diff` field would otherwise score to the strongest colour slot.
-  slot[get_display(x) %in% c("blank", "gof")] <- 0L
+  disp0 <- display_primary(get_display(x))
+  slot[disp0 %in% c("blank", "gof")] <- 0L
+  # Phase 17c: a "pvalue" test cell colours as a SIGNIFICANCE WARNING, not as a data effect -- a
+  # non-significant test (p > alpha) gets the deepest under-slot (deep red), a significant one stays
+  # uncoloured. It reads the honest `pvalue` field (defect 5: this used to be steered by a fake
+  # diff = -0.5, so red never fired under grey_non_signif / guaranteed_effect). Scoped to the additive
+  # `diff` channel -- the crosstab default -- so a p-value cell paints red TEXT with no background,
+  # exactly as before on the common table, and stays uncoloured on non-diff measures (OR / ratio /
+  # contrib), where it was uncoloured too.
+  is_pv <- disp0 == "pvalue"
+  if (any(is_pv) && identical(plan$measure, "diff")) {
+    alpha  <- 1 - getOption("tabxplor.conf_level", 0.95)
+    pv     <- get_pvalue(x)
+    slot[is_pv] <- 0L                                    # significant -> uncoloured
+    slot[is_pv & !is.na(pv) & pv > alpha] <- max(plan$under_slots)   # non-significant -> deep-red warning
+  }
   slot
 }
 
@@ -3069,7 +3108,7 @@ legend_shade_names <- function() {
 # which the 14w header rename dropped ("Model OR" / "Ind vs Rep" no longer end in ": <word>"). An
 # EMPIRICAL crude column (% / mean / diff / rate) has no effect word; an empirical OR/IRR takes the
 # family's multiplicative word, so its legend names the right scale (Emp. IRR -> rate-ratio, item 5).
-legend_reg_eff_word <- function(col, cn, meta) {
+legend_reg_eff_word <- function(col, meta) {
   # Phase 15e: the OR-vs-IRR split reads the column's OWN family (the `model_family` fmt attribute), so a
   # mixed table names each column correctly; fall back to the table's scalar family when unset. `effect`/
   # `at` stay table-level (one per call). A `coef`-type column in coefficient mode is always the additive
@@ -3078,7 +3117,7 @@ legend_reg_eff_word <- function(col, cn, meta) {
   fam <- get_model_family(col); if (!nzchar(fam)) fam <- meta$family
   if (identical(get_ci_type(col), "or"))
     return(if (fam %in% c("poisson", "quasipoisson")) "IRR" else "OR")
-  if (!startsWith(cn, "Emp.")) {                       # a model (not crude) column
+  if (!identical(get_role(col), "emp")) {              # Phase 17c: a model (not crude) column, by stored role
     if (identical(meta$effect, "ame")) return(if (identical(meta$at, "reference")) "MER" else "AME")
     if (identical(get_type(col), "coef")) return(.lg_beta)   # gaussian beta
   }
@@ -3094,7 +3133,7 @@ legend_ref_label <- function(x, col, orientation) {
       idx <- which(purrr::map_lgl(x, ~ is_fmt(.) && isTRUE(is_refcol(.))))
       if (length(idx) == 0) return(NA_character_)
       nm <- names(x)[idx[[1]]]
-      if (startsWith(nm, "Total")) NA_character_ else nm     # a total column -> the generic "Total"
+      if (isTRUE(is_totcol(x[[idx[[1]]]]))) NA_character_ else nm   # Phase 17c: a total column (by stored attr) -> generic "Total"
     } else {
       rv <- tab_get_vars(x)$row_var
       if (is.null(rv) || length(rv) == 0 || is.na(rv)) return(NA_character_)
@@ -3489,8 +3528,10 @@ legend_specs <- function(x) {
     m_txt    <- if (!is.null(plan_txt)) plan_txt$measure else NA_character_
     m_bg     <- if (!is.null(plan_bg))  plan_bg$measure  else NA_character_
     orient   <- if (identical(type, "col")) "col" else "row"
-    eff_word <- if (isTRUE(is_reg)) legend_reg_eff_word(col, cn, meta) else NA_character_
-    role     <- if (isTRUE(is_reg) && startsWith(cn, "Emp.")) "emp" else "model"
+    eff_word <- if (isTRUE(is_reg)) legend_reg_eff_word(col, meta) else NA_character_
+    # Phase 17c: the emp/model split reads the column's STORED `role` attr (written by the reg builders),
+    # not the "Emp." name prefix. Fall back to "model" if an old/hand-built reg column lacks it.
+    role     <- if (isTRUE(is_reg)) { r <- get_role(col); if (nzchar(r)) r else "model" } else "model"
     ref      <- legend_ref_info(x, col, m_txt, orient, is_coef = is_coef, is_reg = is_reg)
     ci_type  <- get_ci_type(col)
     list(col_var = cv, col_name = cn, plan_txt = plan_txt, plan_bg = plan_bg,
@@ -3949,6 +3990,8 @@ vec_ptype2.tabxplor_fmt.tabxplor_fmt    <- function(x, y, ...) {
   same_signif  <- signif_x == get_color_signif(y)
   mf_x         <- get_model_family(x)
   same_mf      <- mf_x == get_model_family(y)
+  role_x       <- get_role(x)
+  same_role    <- role_x == get_role(y)
   #l            <- length(x)
 
   # Phase 9c: the reconcile is scalar-attribute picking; base-R if/else replaces the 9 dplyr::if_else
@@ -3969,7 +4012,8 @@ vec_ptype2.tabxplor_fmt.tabxplor_fmt    <- function(x, y, ...) {
     color    = if (length(same_color) == 1L) { if (same_color) color_x else "" }
                else ifelse(same_color, color_x, ""),
     color_signif = if (same_signif) signif_x else "ignore",
-    model_family = if (same_mf) mf_x else ""
+    model_family = if (same_mf) mf_x else "",
+    role         = if (same_role) role_x else ""
   )
 }
 #' Find common ptype between fmt and double
@@ -4038,7 +4082,8 @@ vec_cast.tabxplor_fmt.tabxplor_fmt  <- function(x, to, ...)
           refcol    = is_refcol   (to),
           color     = fmt_color_attr(to),          # full attribute (both channels)
           color_signif = get_color_signif(to),
-          model_family = get_model_family(to)
+          model_family = get_model_family(to),
+          role         = get_role(to)
 
   )
 
@@ -4067,6 +4112,7 @@ vec_cast.tabxplor_fmt.double   <- function(x, to, ...)
       color     = fmt_color_attr(to),
       color_signif = get_color_signif(to),
       model_family = get_model_family(to),
+      role         = get_role(to),
 
   )
 #' Convert fmt into double
@@ -4095,7 +4141,8 @@ vec_cast.tabxplor_fmt.integer <- function(x, to, ...)
       refcol    = is_refcol   (to),
       color    = fmt_color_attr(to),
       color_signif = get_color_signif(to),
-      model_family = get_model_family(to)
+      model_family = get_model_family(to),
+      role         = get_role(to)
 
   ) #new_fmt(pct = as.double(x))
 #' Convert fmt into integer
@@ -4242,7 +4289,8 @@ vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
       refcol   = FALSE                                                  ,
       color    = fmt_color_attr(x),
       color_signif = get_color_signif(x),
-      model_family = get_model_family(x)
+      model_family = get_model_family(x),
+      role         = get_role(x)
     ),
     "/" = ,
     "*" = new_fmt(
@@ -4278,7 +4326,8 @@ vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
       refcol   = FALSE                                                  ,
       color    = fmt_color_attr(x),
       color_signif = get_color_signif(x),
-      model_family = get_model_family(x)
+      model_family = get_model_family(x),
+      role         = get_role(x)
     ),
     vctrs::stop_incompatible_op(op, x, y)
   )
@@ -4362,7 +4411,8 @@ vec_math.tabxplor_fmt <- function(.fn, .x, ...) {
                          refcol    = is_refcol   (.x),
                          color        = fmt_color_attr   (.x),
                          color_signif = get_color_signif (.x),
-                         model_family = get_model_family (.x)
+                         model_family = get_model_family (.x),
+                         role         = get_role         (.x)
          ),
          "mean" = new_fmt(display = get_display(.x)[1],
                           digits  = max(get_digits(.x)),
@@ -4395,7 +4445,8 @@ vec_math.tabxplor_fmt <- function(.fn, .x, ...) {
                           refcol    = is_refcol   (.x),
                           color        = fmt_color_attr   (.x),
                           color_signif = get_color_signif (.x),
-                          model_family = get_model_family (.x)
+                          model_family = get_model_family (.x),
+                          role         = get_role         (.x)
          ),
          vctrs::vec_math_base(.fn, get_num(.x), ...) )
 }

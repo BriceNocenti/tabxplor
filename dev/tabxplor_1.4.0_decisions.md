@@ -4694,3 +4694,47 @@ byte-identical (verified old-vs-new). New tests: mixed binomial+gaussian byte-pa
 +poisson OR/IRR legend words, the per-family "Model:" lines, the mixed GOF stat rows, per-spec auto-colour,
 the named-family vector + per-dependent auto-abort, the `model_family` fmt-attribute round-trip/reconcile,
 and the jamovi one-table build.
+
+## 52. Phase 17c — the role model: everything knows what it is (IMPLEMENTED 2026-07-21)
+
+Cures disease pattern "roles are guessed, not stored". Three additions, all internal, no fmt-field surgery.
+
+**(C) reg column `role` attribute** (11th column attr, `"model"`/`"emp"`/`""`, internal `get_role`). Written
+by the reg builders, read by `legend_specs`/`legend_reg_eff_word` instead of `startsWith(cn, "Emp.")`;
+`legend_ref_label` uses `is_totcol()` instead of `startsWith(nm, "Total")`. Added safely now that
+`fmt_col_attrs` is DERIVED (17a) — but every explicit reconstructor (`vec_cast`/`vec_ptype2`/`vec_arith`/
+`vec_math`) still hand-lists it beside `model_family`. `legend_reg_eff_word` dropped its now-dead `cn` arg.
+
+**(B) honest p-value cells** (fixes defect 5). `pvalue_line_fmt()` stores the p in the dedicated `pvalue`
+FIELD (was overloaded into `pct`+`var`, with a fake `diff = -0.5` non-sig flag and a write-only
+`col_var = "chi2_cols"` marker). `format()`/`get_num()` read `get_pvalue`; `get_stars()` gained a
+`display %in% c("gof","pvalue","blank") → ""` gate (a test row is not a "vs-reference" comparison, and this
+closes the leak where a stored p flipped prep's `has_stars` / tab_xl's star padding). Colour: an explicit
+rule in `fmt_color_slots()` paints a NON-significant test row (`p > alpha`, from the honest field) with the
+deepest under-slot on the `diff` channel — **byte-identical to the old default** (which the `diff = -0.5`
+already produced under `ignore`), now ALSO firing under `grey_non_signif`/`guaranteed_effect` (the bug was
+the gate reading the fake `ci_inf = 0, ci_sup = 0` bounds). Scoped to the `diff` channel so a p-value cell
+paints red TEXT with no background, and stays uncoloured on OR/ratio/contrib measures (as before).
+
+**(A) the row-role model** — `meta$vars$row_roles`, a positional display-time vector
+(`"data"`/`"total"`/`"n"`/`"row_pct"`/`"pvalue"`/`"gof"`/`"blank"`). Its ONE irreplaceable job is the
+`row_pct` row, whose cells are display "pct" — indistinguishable from data by any stored per-cell signal;
+every other kind is derivable (`is_totrow` + display tokens), so the fallback is exact and no `col_roles`
+vector is needed (column kinds were already structural: `<var>_sd` suffix, `type=="n"`,
+`col_var=="all_col_vars"`, `is_totcol()`). Seeded in `tab_materialize_extras`, extended by
+`tab_append_pctcol_rows(role=)` / `tab_append_footer(row_role=)`, sliced by `tab_collapse_total_rows`;
+resolver `tab_row_roles()` (stored-or-fallback). Retired: export-prep's tot-block English whitelist,
+collapse's summary-row sweep, the two secondary-display sites (via an injected `.__srole` column — inside
+`add_column` the `.data` pronoun would otherwise mask the table), and the transpose absorb heuristic (fixed
+structurally on `col_var == "all_col_vars"`; the old `level_vals %in% c("pvalue","row_pct")` was dead there
+— transposed "rows" come from original columns — and missed `col_pct`).
+
+**Carrier design.** `row_roles` rides `meta$vars` (survives every verb via `tab_attrs()`/`tab_bind_attrs()`,
+like `caption`); it is never persisted in the built table (materialise is display-only), and the one
+row-slice afterward (collapse) slices it. `emp_tips` (prep) is the working precedent that ungroup/select/
+wrap never reorder rows.
+
+**Verification.** Full suite green (**3848 pass, 0 fail, 4 skip**). Conscious regen: 36 structural goldens +
+`fmt-contract` (a script proved the ONLY delta is the added `role=""` attr) + `render-html` (the p-value
+cell lost its bogus `diff/contrib` tooltip; value byte-identical). Failing-first fixtures: the grey-non-sig
+p-value red (B), the relabelled-table role-wins-over-label (A), the mixed-family per-column legend (C).

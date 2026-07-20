@@ -32,10 +32,12 @@ fmt_contract_field_types <- c(
 # is now a per-cell `display`-FIELD {} template ("{pct} (n={n})"), not a column attribute.
 # Phase 15e ADDED `model_family` (9 -> 10): the per-column regression family ("" on cross-tables), so
 # one table can mix several dependents of different families and each column keeps its effect wording.
+# Phase 17c ADDED `role` (10 -> 11): a reg column's role ("model"/"emp", "" on cross-tables), read by
+# the colour legend to name each column's effect without matching its rendered "Emp." label.
 fmt_contract_attr_defaults <- list(
   type = "n", comp_all = NA, ref = "", ci_type = "",
   col_var = "", totcol = FALSE, refcol = FALSE, color = "", color_signif = "ignore",
-  model_family = ""
+  model_family = "", role = ""
 )
 
 testthat::test_that("fmt has exactly the contracted fields, in order", {

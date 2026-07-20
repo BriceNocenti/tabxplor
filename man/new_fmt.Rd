@@ -34,6 +34,7 @@ new_fmt(
   color = "",
   color_signif = "ignore",
   model_family = "",
+  role = "",
   ...,
   class = character()
 )

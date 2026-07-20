@@ -260,3 +260,73 @@ testthat::test_that("Phase 14n Part B: tab_vars and plain p-value placement unch
   lv_pl <- as.character(m_pl[[tab_get_vars(m_pl)$row_var]])
   testthat::expect_equal(sum(lv_pl == "pvalue"), 1L)                    # one bottom row
 })
+
+
+# ---- Phase 17c: honest p-value cells -- stored in the `pvalue` field, coloured by an explicit rule ----
+testthat::test_that("p-value cell stores p in the pvalue field, not pct/var/diff, and shows no star", {
+  m   <- tabxplor:::tab_materialize_extras(
+    tab(forcats::gss_cat, marital, race, pct = "row", color = "diff", test = TRUE),
+    backend = "text", pvalue = TRUE)
+  col <- m[[names(m)[purrr::map_lgl(m, is_fmt)][1]]]
+  pv  <- which(tabxplor:::display_primary(get_display(col)) == "pvalue")
+  testthat::expect_length(pv, 1L)
+  testthat::expect_false(is.na(get_pvalue(col)[pv]))                    # honest: p in the pvalue field
+  testthat::expect_true(is.na(get_pct(col)[pv]))                       # no more pct/var double-write
+  testthat::expect_true(is.na(get_diff(col)[pv]))                      # no more diff = -0.5 magic
+  testthat::expect_identical(get_stars(col)[pv], "")                   # a test row never prints a star
+  testthat::expect_false(any(get_col_var(col) == "chi2_cols"))         # the write-only marker is gone
+})
+
+testthat::test_that("a NON-significant p-value cell fires red under EVERY color_signif policy (defect 5)", {
+  set.seed(1)                                                          # independent data -> non-significant chi2
+  n <- 400
+  d <- data.frame(a = factor(sample(c("x", "y", "z"), n, TRUE)),
+                  b = factor(sample(c("p", "q"),      n, TRUE)))
+  slot_pv <- function(signif) {
+    t   <- tab(d, a, b, pct = "row", color = "diff", color_signif = signif, test = TRUE)
+    m   <- tabxplor:::tab_materialize_extras(t, backend = "text", pvalue = TRUE)
+    col <- m[[names(m)[purrr::map_lgl(m, is_fmt)][1]]]
+    pv  <- which(tabxplor:::display_primary(get_display(col)) == "pvalue")
+    testthat::expect_gt(get_pvalue(col)[pv], 0.05)                     # the fixture really is non-significant
+    tabxplor:::fmt_color_slots(col, tabxplor:::fmt_color_plan(col))[pv]
+  }
+  # deepest UNDER slot (deep red) in all three -- before 17c only "ignore" fired (the fake ci_inf=0 bug)
+  testthat::expect_gte(slot_pv("ignore"),            5L)
+  testthat::expect_gte(slot_pv("grey_non_signif"),   5L)
+  testthat::expect_gte(slot_pv("guaranteed_effect"), 5L)
+})
+
+
+# ---- Phase 17c: the row-role model -- stored kind, not the English label ----------------------------
+testthat::test_that("materialised synthetic rows carry a STORED role aligned to the rows", {
+  m  <- tabxplor:::tab_materialize_extras(
+    tab(forcats::gss_cat, c(race, marital), relig, pct = "col", add_n = TRUE, add_pct = TRUE, test = TRUE),
+    backend = "text", pvalue = TRUE)
+  rr  <- tabxplor:::tab_row_roles(m)
+  testthat::expect_length(rr, nrow(m))
+  lab <- as.character(m[[tabxplor:::tab_render_vars(m)$row_var]])
+  # the stored role agrees with the (English) label on every synthetic row
+  testthat::expect_true(all(rr[lab == "n"]       == "n"))
+  testthat::expect_true(all(rr[lab == "row_pct"] == "row_pct"))
+  testthat::expect_true(all(rr[lab == "pvalue"]  == "pvalue"))
+  testthat::expect_true(all(rr[lab == "Total"]   == "total"))
+  testthat::expect_true(any(rr == "n") && any(rr == "row_pct") && any(rr == "pvalue"))
+})
+
+testthat::test_that("the stored role WINS over a relabelled row (jamovi-gettext robustness)", {
+  m   <- tabxplor:::tab_materialize_extras(
+    tab(forcats::gss_cat, race, relig, pct = "col", add_n = TRUE, add_pct = TRUE, test = TRUE),
+    backend = "text", pvalue = TRUE)
+  rvc <- tabxplor:::tab_render_vars(m)$row_var
+  # simulate a translated UI: rename the n / row_pct / pvalue labels away from English
+  lv  <- levels(m[[rvc]])
+  levels(m[[rvc]])[match(c("n", "row_pct", "pvalue"), lv)] <- c("effectif", "%_ligne", "p")
+  # the STORED role vector is unchanged -> the synthetic rows are still known
+  rr  <- tabxplor:::tab_row_roles(m)
+  testthat::expect_true(any(rr == "n") && any(rr == "row_pct") && any(rr == "pvalue"))
+  testthat::expect_true(all(tabxplor:::tab_row_roles(m)[!rr %in% "data"] != "data"))
+  # WITHOUT the stored vector the label fallback would MISS them (proving the vector is load-bearing)
+  m2  <- tabxplor:::set_row_roles(m, NULL)
+  fb  <- tabxplor:::tab_row_roles(m2)
+  testthat::expect_false(any(fb %in% c("n", "row_pct")))   # translated labels are invisible to the fallback
+})

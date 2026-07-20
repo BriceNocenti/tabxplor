@@ -2650,6 +2650,29 @@ tab_get_vars <- function(tabs, vars = c("row_var", "col_vars", "tab_vars")) {
 # BYTE-IDENTICAL to tab_get_vars() for every well-formed table (verified across the fixtures);
 # it only fixes the mis-positioned-factor case and the no-factor/no-fmt crashes.
 #' @keywords internal
+# Phase 17c: the resolved per-row role vector ("data"/"total"/"n"/"row_pct"/"pvalue"/"gof"/"blank"),
+# length nrow(tab). Returns the STORED display-time vector (seeded by tab_materialize_extras(), extended
+# by the row-adding materialisers, sliced by tab_collapse_total_rows) when present and length-matching;
+# else a FALLBACK for hand-/step-built tables, reproducing the old is_totrow + English-label detection.
+# A table with no stored vector never has a "row_pct" row (only materialise creates one, and it stamps
+# the vector), so the fallback needs no row_pct case -- exact by construction. Consumers read THIS, never
+# a rendered row label -- the role-model contract (survives jamovi gettext, unlike a label whitelist).
+tab_row_roles <- function(tab) {
+  n <- nrow(tab)
+  stored <- get_row_roles_raw(tab)
+  if (!is.null(stored) && length(stored) == n) return(as.character(stored))
+  roles <- rep("data", n)
+  rv  <- tryCatch(tab_render_vars(tab)$row_var, error = function(e) NULL)
+  lab <- if (!is.null(rv) && length(rv) == 1L && !is.na(rv) && rv %in% names(tab))
+    as.character(tab[[rv]]) else rep(NA_character_, n)
+  roles[lab %in% "n"]                 <- "n"
+  roles[lab %in% "row_pct"]           <- "row_pct"
+  roles[lab %in% "pvalue"]            <- "pvalue"
+  roles[lab %in% reg_footer_labels()] <- "gof"
+  roles[is_totrow(tab)]               <- "total"
+  roles
+}
+
 tab_render_vars <- function(tabs) {
   if (!is.data.frame(tabs))
     return(list(degrade = TRUE, reason = "the object is not a data frame"))
@@ -6817,7 +6840,10 @@ tab_apply_tests <- function(tab, do_chi2, ci, comp, color_ctr, color_ci,
 # WARNING: the group column must NOT be relabelled -- the copy keeps its sub-table's `row_var` value
 # so it stays inside that group; `transform` only relabels tab_get_vars()$row_var (= "levels" on a
 # compacted tab, the real row_var otherwise).
-tab_append_pctcol_rows <- function(tab, transform) {
+# Phase 17c: `role` -- the stored kind ("row_pct" / "n") of the appended rows. The incoming
+# meta$vars$row_roles is extended by K then spliced through the SAME re-order, so it stays aligned to
+# the rows (NA role = don't touch, for any non-materialiser caller).
+tab_append_pctcol_rows <- function(tab, transform, role = NA_character_) {
   gv   <- dplyr::group_vars(tab)
   flat <- dplyr::ungroup(tab)
   n0   <- nrow(flat)
@@ -6835,7 +6861,13 @@ tab_append_pctcol_rows <- function(tab, transform) {
   src    <- src[ord]; anchor <- anchor[ord]
   out    <- dplyr::bind_rows(flat, transform(dplyr::slice(flat, src)))
   # splice: bind_rows put the new rows at the very end, so re-order by "just after my sub-table".
-  out    <- dplyr::slice(out, order(c(seq_len(n0), anchor + 0.5)))
+  reord  <- order(c(seq_len(n0), anchor + 0.5))
+  out    <- dplyr::slice(out, reord)
+  if (!is.na(role)) {                                # extend + splice row_roles alongside the rows
+    rr <- get_row_roles_raw(tab)
+    if (is.null(rr) || length(rr) != n0) rr <- dplyr::if_else(is_totrow(flat), "total", "data")
+    out <- set_row_roles(out, c(rr, rep(role, length(src)))[reord])
+  }
   if (length(gv) > 0) dplyr::group_by(out, dplyr::across(tidyselect::all_of(gv))) else out
 }
 
@@ -6958,7 +6990,7 @@ tab_add_n_pct <- function(tabs_text, add_n, add_pct) {
                           ~ factor("row_pct")
                         )
                       )
-                  })
+                  }, role = "row_pct")
                 } else {
                   ..1
                 }
@@ -6990,7 +7022,7 @@ tab_add_n_pct <- function(tabs_text, add_n, add_pct) {
                                     ~ factor("n")
                                   )
                                 )
-                            })
+                            }, role = "n")
                           } else {
                             ..1
                           }

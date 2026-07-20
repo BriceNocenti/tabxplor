@@ -90,17 +90,17 @@ test_display_rows <- function(test_tbl, anova = getOption("tabxplor.anova", "wel
   dplyr::filter(test_tbl, .data$test == "chi2" | .data$test == keep_f)
 }
 
-# Build the fmt "pvalue" cells for a p-value display row, reproducing the pre-1.4.0 cell fields
-# (display "pvalue"; pct = p; diff drives the >=5% flag; n cleared). Vectorised over p.
+# Build the fmt "pvalue" cells for a p-value display row. Phase 17c: the p lives HONESTLY in the
+# dedicated `pvalue` FIELD (was overloaded into pct/var, with a fake diff = -0.5 non-sig flag and a
+# write-only col_var = "chi2_cols" marker). Its colour is now an explicit rule in fmt_color_slots()
+# (a non-significant test -> deep-red warning), reading the real p -- so it fires under EVERY
+# color_signif policy, not only the default (defect 5). Vectorised over p.
 # Phase 12f: `label` (per col_var, e.g. "Chi2" / "F, Welch") turns the cell into the composite
 # display "{pvalue} (<label>)" -- the in-cell test label that self-documents a mixed factor/mean row.
-# NA / "" leaves the bare "pvalue" token (byte-identical to the pre-12f cell). The label is a text-
-# backend suffix only (Excel keeps the raw p-value number).
+# NA / "" leaves the bare "pvalue" token. The label is a text-backend suffix only (Excel keeps the raw p).
 pvalue_line_fmt <- function(p, label = NA_character_) {
   disp <- ifelse(is.na(label) | !nzchar(label), "pvalue", paste0("{pvalue} (", label, ")"))
-  fmt(display = disp, type = "n", n = NA_integer_,
-      var = p, pct = p, ci_inf = 0, ci_sup = 0, ctr = 0,
-      diff = dplyr::if_else(p > 0.05, -0.5, 0), digits = 2L, col_var = "chi2_cols")
+  fmt(display = disp, type = "n", n = NA_integer_, pvalue = p, digits = 2L)
 }
 
 # The label shown in a crosstab p-value cell for each test type (Phase 12f). NULL -> no in-cell label.
@@ -477,9 +477,23 @@ mk_align <- function(w, side) {
 #                   no computable test (e.g. a total-table group) is excluded, so it keeps its data rows
 #                   with no p-value row appended.
 tab_append_footer <- function(tabs, group_of, K, fmt_cell, nonfmt_val, attrs, regroup,
-                              footer_groups = unique(group_of)) {
+                              footer_groups = unique(group_of), row_role = NULL) {
   grp_lv  <- unique(group_of)
   fmt_nms <- names(tabs)[purrr::map_lgl(tabs, is_fmt)]
+
+  # Phase 17c: extend the stored row-role vector (meta$vars$row_roles) in the SAME group-interleaved
+  # order build_nonfmt uses, so the appended footer rows carry their stored kind. row_role(g) returns
+  # the K roles of group g's footer block ("pvalue" / "gof"). Consumers then read tab_row_roles()
+  # instead of matching the English footer label.
+  if (!is.null(row_role)) {
+    rr_in <- attrs$meta$vars$row_roles
+    if (is.null(rr_in) || length(rr_in) != length(group_of))
+      rr_in <- dplyr::if_else(is_totrow(tabs), "total", "data")
+    attrs$meta$vars$row_roles <- unlist(lapply(grp_lv, function(g) {
+      base <- rr_in[group_of == g]
+      if (g %in% footer_groups) c(base, row_role(g)) else base
+    }))
+  }
 
   # per fmt column: interleave [group field-frame, group footer-frame] over groups, stack once.
   build_col <- function(nm) {

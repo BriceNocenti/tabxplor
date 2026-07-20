@@ -221,7 +221,8 @@ test_that("model_family is carried through the fmt carrier round-trip (Defect 1,
   # attribute list used by every carry/round-trip -- must include it, else it is silently dropped.
   # Pre-17a fmt_col_attrs was hand-written with 9 names and omitted model_family.
   expect_true("model_family" %in% fmt_col_attrs)
-  expect_length(fmt_col_attrs, 10L)
+  expect_true("role" %in% fmt_col_attrs)                   # Phase 17c: the 11th column attribute
+  expect_length(fmt_col_attrs, 11L)
 
   tb <- tab(forcats::gss_cat, marital, race)
   tb[["Black"]] <- set_model_family(tb[["Black"]], "binomial")

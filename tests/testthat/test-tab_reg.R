@@ -196,8 +196,24 @@ test_that("mixed binomial + poisson: legend effect words are OR and IRR per colu
   irr_col <- mix[[grep("tvhours", names(mix), value = TRUE)[1]]]
   expect_identical(get_model_family(irr_col), "poisson")
   # the per-column effect word reads the column's OWN family, not the table scalar
-  expect_identical(tabxplor:::legend_reg_eff_word(or_col,  "Model OR",  meta), "OR")
-  expect_identical(tabxplor:::legend_reg_eff_word(irr_col, "Model IRR", meta), "IRR")
+  expect_identical(tabxplor:::legend_reg_eff_word(or_col,  meta), "OR")
+  expect_identical(tabxplor:::legend_reg_eff_word(irr_col, meta), "IRR")
+})
+
+test_that("Phase 17c: reg columns carry a stored `role` (model vs emp), not an 'Emp.' name match", {
+  skip_if_not_installed("broom")
+  m <- suppressWarnings(tab_reg(reg_data(), "married", c("age", "race"),
+                                family = "binomial", empirical = TRUE, cleannames = FALSE))
+  role <- tabxplor:::get_role(m)
+  fmt_cols <- names(m)[purrr::map_lgl(m, is_fmt)]
+  emp   <- fmt_cols[startsWith(fmt_cols, "Emp.")]        # the crude companion columns
+  model <- setdiff(fmt_cols, emp)                        # the model-estimate column(s)
+  expect_true(length(emp) >= 1L && length(model) >= 1L)
+  expect_true(all(role[emp]   == "emp"))                 # written by reg_empirical_columns
+  expect_true(all(role[model] == "model"))               # written by reg_column
+  # and the legend reads the role, not the label: rename an Emp. column, role is unchanged
+  names(m)[match(emp[1], names(m))] <- "Crude"
+  expect_identical(tabxplor:::get_role(m[["Crude"]]), "emp")
 })
 
 test_that("mixed-family 'Model:' footer = one line per family; homogeneous = one unprefixed line", {

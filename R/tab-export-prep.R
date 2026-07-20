@@ -405,15 +405,12 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
   }, logical(1))]
 
   # Total-BLOCK border rows (block D borders), lifted verbatim from tab_kable (derive-once, shared by
-  # both render engines). A "total block" is a maximal run of total rows OR the reserved n/pvalue/
-  # row_pct label rows; the first row of each run gets a top border, the last a bottom border.
-  # WARNING: the c("n","pvalue","row_pct") whitelist is un-translated (English row labels) -> it
-  # silently misses jamovi's gettext labels. Kept as-is for byte-identity; a real fix needs a per-row
-  # role flag on the add_n/add_pct/pvalue rows rather than a value match on the row-label column.
-  # Phase 12f: the reg GOF footer rows (row-label "N"/"AIC"/... ) form a total-block too -> the box.
-  # A crosstab never contains those labels, so its tot_block is byte-identical (render-html unchanged).
-  tot_block <- is_totrow(tab) |
-    (!is_totrow(tab) & tab[[row_var_col]] %in% c("n", "pvalue", "row_pct", reg_footer_labels()))
+  # both render engines). A "total block" is a maximal run of total rows OR the synthetic n / pvalue /
+  # row_pct / reg-GOF rows; the first row of each run gets a top border, the last a bottom border.
+  # Phase 17c: read the STORED per-row role (tab_row_roles) instead of matching un-translated English row
+  # labels -- so it no longer silently misses jamovi's gettext labels (the role model retires the
+  # c("n","pvalue","row_pct", reg_footer_labels()) whitelist). Byte-identical on every stored-role table.
+  tot_block <- tab_row_roles(tab) != "data"
   totblock_top <-
     which(dplyr::if_else(tot_block, !dplyr::lag(tot_block), FALSE))
   totblock_bottom <-

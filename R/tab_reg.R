@@ -955,7 +955,7 @@ reg_column <- function(skeleton, fit_res, model_predictors, col_var, effect_shap
       or = est, ci_inf = lo, ci_sup = hi, pvalue = p,
       type = "row", display = "or", digits = 2L, ref = "1", ci_type = "or",
       color = color, color_signif = color_signif, col_var = col_var,
-      comp_all = FALSE, in_refrow = refrows, model_family = model_family
+      comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model"
     )
   } else {
     fmt(
@@ -964,7 +964,7 @@ reg_column <- function(skeleton, fit_res, model_predictors, col_var, effect_shap
       var = rep(fit_res$var_y, n_rows),                 # var(Y): standardizes beta/SD(Y) for colour
       type = "coef", display = "coef", digits = 2L, ci_type = "diff",
       color = color, color_signif = color_signif, col_var = col_var,
-      comp_all = FALSE, in_refrow = refrows, model_family = model_family
+      comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model"
     )
   }
 }
@@ -1108,7 +1108,7 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, family, effect, var_
                     ci_inf = rd$inf, ci_sup = rd$sup, pvalue = rd$pvalue,
                     type = "row", display = "pct", digits = 0L, ref = "tot", ci_type = "diff",
                     color = ecol("diff"), color_signif = esig, col_var = "Emp. %",
-                    comp_all = FALSE, in_refrow = refrows, model_family = family)
+                    comp_all = FALSE, in_refrow = refrows, model_family = family, role = "emp")
     if (effect == "ame") {
       # the AME models the risk-DIFFERENCE from the reference, so the crude companion is the crude
       # risk-difference (not the OR, which the AME table does not display).
@@ -1117,7 +1117,7 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, family, effect, var_
                      type = "row", display = "diff", digits = 0L, ref = "tot",
                      ci_type = "diff", color = ecol("diff"), color_signif = esig,
                      col_var = "Emp. diff", comp_all = FALSE, in_refrow = refrows,
-                     model_family = family)
+                     model_family = family, role = "emp")
       return(list("Emp. %" = base_col, "Emp. diff" = eff_col))
     }
     or_ci <- na_ref(ci_or(base * nv, (1 - base) * nv, rb * rn, (1 - rb) * rn,   # Woolf log-OR Wald
@@ -1126,7 +1126,7 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, family, effect, var_
                    type = "row", display = "or", digits = 2L,
                    ref = "1", ci_type = "or", color = ecol("OR"), color_signif = esig,
                    col_var = "Emp. OR", comp_all = FALSE, in_refrow = refrows,
-                   model_family = family)
+                   model_family = family, role = "emp")
     return(list("Emp. %" = base_col, "Emp. OR" = eff_col))
   }
 
@@ -1136,14 +1136,14 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, family, effect, var_
                     ci_inf = cell$inf, ci_sup = cell$sup,
                     type = "mean", display = "mean", digits = 2L, ci_type = "cell",
                     color = "", color_signif = "ignore", col_var = "Emp. mean",
-                    comp_all = FALSE, in_refrow = refrows, model_family = family)
+                    comp_all = FALSE, in_refrow = refrows, model_family = family, role = "emp")
     md <- na_ref(ci_mean_diff2(base, varv, nv, rb, rv, rn, method = "student",   # pooled t = OLS coef CI
                                conf_level = conf_level, want_p = TRUE))
     eff_col  <- fmt(diff = diffv, var = rep(var_y, n_rows), n = nv,
                     ci_inf = md$inf, ci_sup = md$sup, pvalue = md$pvalue,
                     type = "coef", display = "coef", digits = 2L, ci_type = "diff",
                     color = ecol("diff"), color_signif = esig, col_var = "Emp. diff",
-                    comp_all = FALSE, in_refrow = refrows, model_family = family)
+                    comp_all = FALSE, in_refrow = refrows, model_family = family, role = "emp")
     return(list("Emp. mean" = base_col, "Emp. diff" = eff_col))
   }
 
@@ -1156,12 +1156,12 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, family, effect, var_
                     ci_inf = rr$inf, ci_sup = rr$sup, pvalue = rr$pvalue,
                     type = "mean", display = "mean", digits = 2L, ref = "1", ci_type = "ratio",
                     color = ecol("ratio"), color_signif = esig, col_var = "Emp. rate",
-                    comp_all = FALSE, in_refrow = refrows, model_family = family)
+                    comp_all = FALSE, in_refrow = refrows, model_family = family, role = "emp")
     eff_col  <- fmt(or = ratio, n = nv, ci_inf = rr$inf, ci_sup = rr$sup, pvalue = rr$pvalue,
                     type = "row", display = "or", digits = 2L,
                     ref = "1", ci_type = "or", color = ecol("OR"), color_signif = esig,
                     col_var = "Emp. IRR", comp_all = FALSE, in_refrow = refrows,
-                    model_family = family)
+                    model_family = family, role = "emp")
     return(list("Emp. rate" = base_col, "Emp. IRR" = eff_col))
   }
   list()
@@ -1357,7 +1357,7 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, numeric_preds,
       pct = pred_v, diff = ame_v, or = or_v, ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
       type = "row", display = display, digits = 1L, ci_type = "diff",
       color = color, color_signif = color_signif, col_var = col_var,
-      comp_all = FALSE, in_refrow = refrows, model_family = model_family
+      comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model"
     )
   } else if (shape == "or") {                                  # MNL "j vs rest" OR at the profile
     display[in_model & !is_const & !is.na(ame_v)] <- "or"
@@ -1368,7 +1368,7 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, numeric_preds,
       or = ame_v, ci_inf = lo_v, ci_sup = hi_v, pvalue = p_v,
       type = "row", display = display, digits = 2L, ref = "1", ci_type = "or",
       color = color, color_signif = color_signif, col_var = col_var,
-      comp_all = FALSE, in_refrow = refrows, model_family = model_family
+      comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model"
     )
   } else {                                                     # "raw" (gaussian / poisson)
     display[in_model & !is_const & !is.na(ame_v)] <- "coef"    # raw AME (gaussian == coef; poisson count)
@@ -1380,7 +1380,7 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, numeric_preds,
       var = rep(var_y, n_rows),                               # var(Y): standardizes the effect-size colour
       type = "coef", display = display, digits = 2L, ci_type = "diff",
       color = color, color_signif = color_signif, col_var = col_var,
-      comp_all = FALSE, in_refrow = refrows, model_family = model_family
+      comp_all = FALSE, in_refrow = refrows, model_family = model_family, role = "model"
     )
   }
 }
@@ -1402,7 +1402,7 @@ reg_unadj_column <- function(skeleton, marg, model_predictors, col_var) {
   fmt(n = rep(NA_integer_, nrow(skeleton)),
       pct = pv, type = "row", display = display, digits = 0L,
       color = "", color_signif = "ignore", col_var = col_var,
-      comp_all = FALSE, in_refrow = skeleton$is_ref & in_model & !is_const)
+      comp_all = FALSE, in_refrow = skeleton$is_ref & in_model & !is_const, role = "model")
 }
 
 # Split ONE multinomial fit into one OR column per non-reference outcome category. Each category's

@@ -67,7 +67,8 @@ fmt(
   refcol = FALSE,
   color = "",
   color_signif = "ignore",
-  model_family = ""
+  model_family = "",
+  role = ""
 )
 
 is_fmt(x)
@@ -254,6 +255,10 @@ difference first.
 (\code{"binomial"}, \code{"gaussian"}, \code{"poisson"}, \code{"multinomial"}, \code{"ordinal"}),
 as a single string. Empty (\code{""}) on cross-tables. Lets a table mix several dependents with
 different families, each column keeping its own effect wording.}
+
+\item{role}{For regression tables (\code{\link{tab_reg}}): the column's role, \code{"model"} for a
+model-estimate column or \code{"emp"} for an empirical (crude) companion column. Empty (\code{""})
+on cross-tables. Read by the colour legend to name each column's effect without matching its label.}
 
 \item{x}{The object to test, to get a field in, or to modify.}
 

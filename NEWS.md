@@ -849,6 +849,10 @@
   so nested models get equal N.
 
 ## Bug fixes
+* A **p-value row now turns red under `color_signif = "grey_non_signif"`** (and
+  `"guaranteed_effect"`) when the test is not significant (p > alpha), the same warning colour it has
+  always shown by default. It previously stayed uncoloured under those policies. P-value cells also no
+  longer carry a spurious tooltip (`diff: +0% ; contrib: 0%`) on HTML export.
 * `tab()` now accepts a **`data.table`** as its `data` input (it used to error with "Selections can't
   have missing values" whenever a numeric column was tabulated).
 * `color = "contrib"` now works **with a significance policy** (`color_signif = "grey_non_signif"` or

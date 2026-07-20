@@ -221,6 +221,19 @@ set_ci_settings <- function(x, ci_settings) set_meta_field(x, "ci_settings", ci_
 get_vars_attr <- function(x) get_meta(x)[["vars"]]
 set_vars_attr <- function(x, vars) set_meta_field(x, "vars", vars)
 
+# Phase 17c: the DISPLAY-time positional row-role vector (values "data"/"total"/"n"/"row_pct"/"pvalue"/
+# "gof"/"blank"), stored in meta$vars$row_roles. Seeded by tab_materialize_extras(), extended by the
+# row-adding materialisers (tab_add_n_pct via tab_append_pctcol_rows, and tab_append_footer), sliced by
+# tab_collapse_total_rows -- so every synthetic-row consumer reads the stored kind instead of matching
+# an English row label. It is never persisted in the user-facing built table (materialise is display-only).
+# The RESOLVER with the hand-built-table fallback is tab_row_roles() (R/tab.R); these are the raw store.
+set_row_roles <- function(x, roles) {
+  v <- get_vars_attr(x); if (is.null(v)) v <- new_vars_attr()
+  v$row_roles <- roles                 # NULL clears it (base-R list semantics)
+  set_vars_attr(x, v)
+}
+get_row_roles_raw <- function(x) get_vars_attr(x)[["row_roles"]]
+
 # Phase 14v: `empirical_tips` -- the multinomial crude-companion tooltip data (see new_tab()).
 get_empirical_tips <- function(x) get_meta(x)[["empirical_tips"]]
 set_empirical_tips <- function(x, empirical_tips) set_meta_field(x, "empirical_tips", empirical_tips)
@@ -1221,6 +1234,12 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
 tab_materialize_extras <- function(tab, backend = c("text", "xl"), pvalue = TRUE) {
   backend <- match.arg(backend)
 
+  # Phase 17c: seed the display-time row-role vector ("total"/"data" from the drift-free is_totrow flag).
+  # Each row-adding step below EXTENDS it (tab_add_n_pct -> "n"/"row_pct", tab_append_footer -> "pvalue"/
+  # "gof"/"blank"); tab_collapse_total_rows slices it. Consumers (export-prep tot_block, collapse) then
+  # read tab_row_roles() instead of matching an English row label -- the whole point of the role model.
+  tab <- set_row_roles(tab, dplyr::if_else(is_totrow(tab), "total", "data"))
+
   # --- add_n / add_pct (from the render_extras intent) -----------------------------------------
   re      <- get_render_extras(tab)
   add_n   <- isTRUE(re$add_n)
@@ -1308,18 +1327,15 @@ tab_collapse_total_rows <- function(tab) {
   fmt_nms <- names(tab)[purrr::map_lgl(tab, is_fmt)]
 
   # A block's total BLOCK = its Total row + the contiguous add_n / add_pct SUMMARY rows that follow it
-  # (row labels "n" / "row_pct" -- tab_materialize_extras()'s base/pct rows, drawn as "Total | row_pct |
-  # n"). A p-value row ("pvalue") is block-SPECIFIC (a different test per row_var), so it is NOT swept in
-  # and survives the collapse. The label match reuses the totblock_top/bottom whitelist (R/tab-export-
-  # prep.R) -- the same convention, not a new fragility; the sweep is gated to the SAME grouping value so
-  # it can never cross into the next block, even if a data level were literally named "n".
-  rv_col  <- tab_render_vars(tab)$row_var
-  lab     <- if (!is.null(rv_col) && rv_col %in% names(tab)) as.character(tab[[rv_col]]) else
-    rep(NA_character_, n_row)
+  # (the add_n / add_pct base/pct rows -- tab_materialize_extras()'s "n" / "row_pct" rows, drawn as
+  # "Total | row_pct | n"). A p-value row is block-SPECIFIC (a different test per row_var), so it is NOT
+  # swept in and survives the collapse. Phase 17c: read the STORED role (seeded/extended in materialise)
+  # instead of matching the English row label; the sweep is still gated to the SAME grouping value so it
+  # can never cross into the next block.
   grp_col <- dplyr::group_vars(tab)
   grp     <- if (length(grp_col) >= 1L && grp_col[1] %in% names(tab)) as.character(tab[[grp_col[1]]]) else
     rep(NA_character_, n_row)
-  is_summary <- !is_tot & lab %in% c("n", "row_pct")
+  is_summary <- tab_row_roles(tab) %in% c("n", "row_pct")
 
   block_rows <- function(i) {
     rows <- i; j <- i + 1L
@@ -1348,7 +1364,11 @@ tab_collapse_total_rows <- function(tab) {
   }
 
   drop_rows <- unlist(blocks[-length(blocks)])             # keep the LAST block's total; drop the rest
-  tab[setdiff(seq_len(n_row), drop_rows), ]                # global indices -> class/attrs/grouping kept
+  keep <- setdiff(seq_len(n_row), drop_rows)
+  out  <- tab[keep, ]                                       # global indices -> class/attrs/grouping kept
+  rr   <- get_row_roles_raw(tab)                            # slice the row-role vector with the rows
+  if (!is.null(rr) && length(rr) == n_row) out <- set_row_roles(out, rr[keep])
+  out
 }
 
 
@@ -1432,7 +1452,8 @@ tab_pvalue_lines <- function(tabs) {
   tab_append_footer(tabs, grp_of, K, fmt_cell, nonfmt_val,
     attrs = list(subtext = get_subtext(tabs), meta = get_meta(tabs)),
     regroup = group_chr,
-    footer_groups = unique(disp$.grp))   # only subtables with a displayed test get a p-value row
+    footer_groups = unique(disp$.grp),   # only subtables with a displayed test get a p-value row
+    row_role = function(g) dplyr::if_else(row_labels == "pvalue", "pvalue", "gof"))  # "statistic" row -> gof
 }
 
 # Phase 12f: materialise the regression GOF footer as appended rows (one row per stat, a "Model fit"
@@ -1488,7 +1509,8 @@ reg_footer_lines <- function(tabs) {
   # the dropped `test`, the legend reads reg_meta, and all must survive the footer materialisation).
   tab_append_footer(tabs, grp_of, K, fmt_cell, nonfmt_val,
     attrs = list(subtext = get_subtext(tabs), meta = get_meta(tabs)),
-    regroup = group_chr)
+    regroup = group_chr,
+    row_role = function(g) vapply(stats_present, function(s) spec[[s]]$kind, character(1)))  # "gof"/"pvalue"
 }
 
 
@@ -2284,16 +2306,24 @@ group_by.tabxplor_tab <- function(.data,
       )
       several_displays <- names(several_displays)[several_displays]
 
+      # Phase 17c: the synthetic add_n / add_pct / p-value rows are found by their STORED role, injected
+      # as a temp column (grouped-transmute needs a per-group-subsettable column, not an env vector) --
+      # byte-identical to the old row-label match on a materialised table, but robust to a relabelled UI.
+      # Compute the flag OUTSIDE add_column: inside it, `.data` resolves to the rlang pronoun, not the table.
+      .srole <- tab_row_roles(.data) %in% c("row_pct", "n", "pvalue")
+      .data <- .data |>
+        dplyr::select(-tidyselect::any_of(".__srole")) |>
+        tibble::add_column(.__srole = .srole)
 
       if (length(several_displays) > 1) {
         .secondary_display <-
-          dplyr::select(.data, !!!groups, tidyselect::all_of(c(row_var)),
+          dplyr::select(.data, !!!groups, ".__srole",
                         tidyselect::all_of(several_displays)) |>
           dplyr::transmute(
             secondary_display = dplyr::if_any(
               tidyselect::all_of(several_displays),
               ~ get_display(.) != dplyr::first(get_display(.))
-            ) | !!rlang::sym(row_var) %in% c("row_pct", "n", "pvalue"),
+            ) | .data$.__srole,
 
             secondary_display = dplyr::if_else(.data$secondary_display,
                                                true  = dplyr::row_number(),
@@ -2304,11 +2334,10 @@ group_by.tabxplor_tab <- function(.data,
 
       } else {
         .secondary_display <-
-          dplyr::select(.data, !!!groups, tidyselect::all_of(c(row_var)),
-                        tidyselect::all_of(several_displays)) |>
+          dplyr::select(.data, !!!groups, ".__srole") |>
           dplyr::transmute(
             secondary_display = dplyr::if_else(
-              !!rlang::sym(row_var) %in% c("row_pct", "n", "pvalue"),
+              .data$.__srole,
               true  = dplyr::row_number(),
               false = 0L
             )
@@ -2317,7 +2346,7 @@ group_by.tabxplor_tab <- function(.data,
       }
 
       .data <- .data |>
-        dplyr::select(-tidyselect::any_of(".secondary_display")) |>
+        dplyr::select(-tidyselect::any_of(c(".secondary_display", ".__srole"))) |>
         tibble::add_column(.secondary_display = .secondary_display)
       dots <- c(rlang::quo(.secondary_display), dots)
     }

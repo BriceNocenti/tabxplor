@@ -173,18 +173,23 @@ tx_transpose_render <- function(rd, backend, meta = NULL) {
   cg <- col_grp; cg[other_cols] <- names(other_cols)
   new_col_var <- which(cg != dplyr::lead(cg, default = "._end") & seq_along(cg) %in% data_pos)
   # horizontal borders between distinct REAL col_var row-groups (mirror of the original's vertical
-  # col_var borders). The Total / n / pvalue rows are absorbed into the preceding group -- no separator,
+  # col_var borders). The Total / n / col_pct rows are absorbed into the preceding group -- no separator,
   # so a single-col_var transpose matches a native pct = "col" table (n right after Total, no rule),
   # while a several-col_var one keeps a rule before each new block (e.g. before the numeric means).
-  row_grp <- unname(cvm[order_i])
-  absorb  <- (order_i %in% roles$totcols) | row_grp == "all_col_vars" |
-             level_vals %in% c("pvalue", "row_pct")
+  # Phase 17c: the absorbed synthetic columns-turned-rows are the total (roles$totcols) + the add_n /
+  # add_pct columns (col_var "all_col_vars") -- both STRUCTURAL. The old `level_vals %in% c("pvalue",
+  # "row_pct")` clause was dead here (level_vals is a COLUMN header, never an original row label) and
+  # missed col_pct; `row_grp == "all_col_vars"` covers n AND col_pct.
+  col_of  <- unname(cvm[order_i])                  # each row's source col_var (STABLE; row_grp is mutated)
+  is_addn <- col_of == "all_col_vars"              # the add_n / add_pct columns-turned-rows
+  row_grp <- col_of
+  absorb  <- (order_i %in% roles$totcols) | is_addn
   row_grp[absorb] <- NA
   for (i in seq_len(n_nrow)[-1]) if (is.na(row_grp[i])) row_grp[i] <- row_grp[i - 1]
   if (is.na(row_grp[1])) row_grp[1] <- "._start"
   new_group <- if (n_nrow > 1) which(row_grp[-n_nrow] != row_grp[-1]) else integer(0)
   # total block (Total row + n row): recompute on the new rows
-  tot_blk <- seq_len(n_nrow) %in% new_totrows | level_vals %in% c("n", "pvalue", "row_pct")
+  tot_blk <- seq_len(n_nrow) %in% new_totrows | is_addn
   totblock_top    <- which(dplyr::if_else(tot_blk, !dplyr::lag(tot_blk),  FALSE))
   totblock_bottom <- which(dplyr::if_else(tot_blk, !dplyr::lead(tot_blk, default = FALSE), FALSE))
   align <- stats::setNames(dplyr::if_else(fmt_mask, "r", "l"), all_names)
