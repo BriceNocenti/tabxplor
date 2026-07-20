@@ -63,7 +63,7 @@ tabxplor creates, manipulates, and formats color-coded cross-tabulation tables f
 
 ### tabxplor_tab — The Table Tibble
 
-`tabxplor_tab` is a tibble subclass created via `tibble::new_tibble()` in `R/tab_classes.R` : it’s strenght is to work with normal `dplyr` workflows. It adds two attributes beyond what a regular tibble carries:
+`tabxplor_tab` is a tibble subclass created via `tibble::new_tibble()` in `R/tab_classes.R` : it’s strenght is to work with normal `dplyr` workflows. It adds **three top-level attributes** beyond what a regular tibble carries — `subtext`, `test`, and a single **`meta`** list (Phase 17b gathered every other table attribute into it):
 
 - `subtext` (character vector): Legend lines printed below the table.
 - `test` (tidy tibble, 1.4.0 — renamed from `chi2`): whole-table test results, one row per
@@ -83,10 +83,22 @@ tabxplor creates, manipulates, and formats color-coded cross-tabulation tables f
   engine behind BOTH inline-row appenders (`tab_pvalue_lines()` / `reg_footer_lines()`, in
   `R/tab_classes.R` next to `tab_materialize_extras`, now thin arm-specific configs over it — a crosstab
   supplies the p-value/statistic rows keyed by grouping ∩ `test`, a regression the per-split GOF block).
+The remaining metadata lives inside the ONE **`meta`** list (Phase 17b), each item an optional sub-field
+(`NULL` when unset; an all-`NULL` meta attaches no attribute at all). Every legacy getter
+(`get_render_extras`/`get_ci_settings`/`get_vars_attr`/`get_empirical_tips`/`get_reg_meta`/
+`get_color_breaks_attr`) is a thin accessor into it; `set_meta_field(x, field, value)` writes one
+sub-field (a `NULL` value removes it). The sub-fields:
+
 - `render_extras` (Phase 10i-B) / `ci_settings` (Phase 13b) — the display-only intents, above.
-- `vars` (Phase 14d): `list(row_vars, col_vars, tab_vars, compacted)` — the table's OWN record of its
-  variable roles, written where the truth is known (`tab_assemble_tables()` / `tab_compact()`, and
-  re-keyed by `tab_transpose()`). **The roles cannot be recovered from a built table**: `tab_compact()`
+- `color_breaks` (Phase 13a) — the per-table colour-break override; joined `meta` in Phase 17b so it now
+  SURVIVES a dplyr pipeline (was a standalone attribute set last, silently dropped by any verb between
+  build and render — defect 7). Still installed transiently at render by `push_color_breaks()`.
+- `vars` (Phase 14d): `list(row_vars, col_vars, tab_vars, compacted, wt, caption)` — the table's OWN
+  record of its variable roles, written where the truth is known (`tab_assemble_tables()` /
+  `tab_compact()` / `tab_plain()` at build since Phase 17b, and re-keyed by `tab_transpose()`). The
+  `caption` sub-field is set by the exported `set_caption()` / read by `get_caption()` and every
+  exporter's caption fallback (ahead of `reg_title`). **The roles cannot be recovered from a built
+  table**: `tab_compact()`
   renames column 1 to the literal `"levels"` and keeps the row-variable names only as levels of a
   synthetic column *named* `row_var`, so the "last factor is the row_var, the others are tab_vars"
   heuristic reported `row_var = "levels", tab_vars = "row_var"` on a merged table with no tab_vars —
@@ -98,16 +110,20 @@ tabxplor creates, manipulates, and formats color-coded cross-tabulation tables f
   ⚠ `tab_get_vars()`'s `row_var`/`tab_vars` stay **column** names (what consumers index with);
   `row_vars` carries the **source** names, which differ on a merged table.
 
-Constructors: `new_tab(tabs, subtext, test, render_extras, ci_settings, vars)` (the old `chi2 =`
-argument still works, mapped to `test`) and `new_grouped_tab(tabs, groups, …)`.
+Constructors: `new_tab(tabs, subtext, test, meta)` (the old `chi2 =` argument still works, mapped to
+`test`; Phase 17b replaced the five 1.4.0-new formals with the single `meta` list) and
+`new_grouped_tab(tabs, groups, …)`.
 
-**Adding a table attribute** is a 3-line job, not a ~34-site one (Phase 14d): a `new_tab()` formal, a
-getter/setter, and one line in **`tab_attrs()`** — the ONE list of the attributes. `tab_restore(out,
-from)` rebuilds a table from a template (used by every dplyr S3 method, with `lv1_group_vars()`'s
+**Adding a `meta` sub-field** is one getter + (rarely) one producer line — never a constructor formal.
+`tab_attrs()` returns exactly **three** things (`subtext`, `test`, `meta`); `tab_restore(out, from)`
+rebuilds a table from a template (used by every dplyr S3 method, with `lv1_group_vars()`'s
 auto-downgrade) and `tab_bind_attrs(x, other)` reconciles a bind (the vctrs `ptype2`/`cast` pair:
-`subtext` unions, the row-bound `test` rbinds, the rest are scalar intents taking x's). Before this,
-each verb named every attribute by hand, so `subtext`/`test`/`render_extras`/`ci_settings` each paid
-the same ~34-site edit, and an attribute dropped in one verb failed silently.
+`subtext` unions, the row-bound `test` rbinds, and `tab_meta_bind()` reconciles the `meta` sub-fields
+element-wise — x wins, other fills a `NULL`, except `color_breaks` which merges per named scale). Before
+Phase 14d each verb named every attribute by hand (~34-site edits, silent drops); Phase 17b collapsed
+the six 1.4.0-new attrs into `meta` so the carry list is now three lines total. The jamovi tier-3 carrier
+stores `attributes(tab)` verbatim, so `meta` round-trips transparently (schema bumped to invalidate
+stores holding the old multi-attr shape).
 
 ### tabxplor_grouped_tab — Subtabled Results
 
@@ -888,10 +904,11 @@ No new fmt fields/attributes — `type` gained the value `"coef"`, `display` the
 Phase 12c + decisions §37. `R/tab_logit.R` and `R/tab_logit_2.R` are emptied (`git rm` pending; the
 parsnip draft + or_plot/lm_plots deferred to a later display phase).
 
-**Phase 14w — the reg display model.** `tab_reg()` attaches ONE table-level attribute **`reg_meta`**
-(list: `family`/`effect`/`at`/`do_exp`/`eff_word`/`dependent`/`positive_level`/`predictors`/`split_var`/
-`comparison`/`model_labels`/`conf_level`), carried like `vars` (a `new_tab()` formal + `get/set_reg_meta`
-+ one `tab_attrs()` line + threaded through `reg_footer_lines`/`tab_pvalue_lines`). It drives: the reg
+**Phase 14w — the reg display model.** `tab_reg()` sets ONE **`reg_meta`** record (list:
+`family`/`effect`/`at`/`do_exp`/`eff_word`/`dependent`/`positive_level`/`predictors`/`split_var`/
+`comparison`/`model_labels`/`conf_level`) via `set_reg_meta()` — since Phase 17b a sub-field of the
+`meta` list (`get/set_reg_meta` are thin accessors into it), carried automatically by the ONE
+`tab_attrs()` `meta` line + threaded through `reg_footer_lines`/`tab_pvalue_lines`). It drives: the reg
 **title/caption** (`reg_title` / `reg_family_display_name` / `reg_family_short` / `reg_sheet_name`; Excel
 title+sheet, md/kable caption); the **"Model:" legend line** (`reg_model_line`, ordered before the colour
 legend at every footer site); and the **colour legend** (`legend_specs()` reads `is_reg = !is.null(reg_meta)`

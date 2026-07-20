@@ -67,7 +67,8 @@ testthat::test_that("weighted counts (real n + weighted wn) == weighted microdat
   # Phase 16d: the `vars$wt` (weight column NAME for the "Weighted by <wt>." footer) legitimately differs
   # by ENTRY POINT -- the microdata path names the weight "w", the from-the-middle path names its weighted-
   # count column "wn" -- while the NUMBERS are identical. Strip that footer-only detail before comparing.
-  strip_wt <- function(t) { a <- attr(t, "vars"); a$wt <- NULL; attr(t, "vars") <- a; t }
+  # Phase 17b: `vars` now lives in the `meta` list -- strip via the getter/setter, not attr("vars").
+  strip_wt <- function(t) { v <- get_vars_attr(t); v$wt <- NULL; set_vars_attr(t, v) }
   for (cc in c("no", "cell", "diff")) {
     testthat::expect_equal(
       strip_wt(tab_counts(cw, marital, race, counts = n, wt_counts = wn, pct = "row", ci = cc, test = TRUE)),

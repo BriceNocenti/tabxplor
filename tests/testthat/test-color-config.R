@@ -200,7 +200,7 @@ testthat::test_that("per-table color_breaks overrides the global at render", {
   d <- forcats::gss_cat
   t_ov <- tab(d, race, marital, pct = "row", color = "diff",
               color_breaks = list(pct_diff = c(0.01, 0.02, 0.03)))
-  testthat::expect_false(is.null(attr(t_ov, "color_breaks")))
+  testthat::expect_false(is.null(get_color_breaks_attr(t_ov)))   # Phase 17b: now in meta$color_breaks
   st <- push_color_breaks(t_ov)
   on.exit(pop_color_breaks(st), add = TRUE)
   # with tiny breaks, a strong cell reaches the top intensity (slot 4 over / 8 under)

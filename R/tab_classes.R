@@ -66,24 +66,27 @@
 #' ANOVA F for mean columns), filled by \code{\link{tab_chi2}}. Renamed from \code{chi2}
 #' in tabxplor 1.4.0.
 #' @param chi2 `r lifecycle::badge("deprecated")` Soft-deprecated alias of \code{test}.
-#' @param render_extras Display-only intent for the \code{add_n} / \code{add_pct} extras, as
-#' \code{list(add_n =, add_pct =)}. Since tabxplor 1.4.0 those rows/columns are no longer baked
-#' into the table: they are materialised at print/export time from this attribute. \code{NULL}
-#' (the default) means no extras.
-#' @param ci_settings Display-only metadata for the colour legend, as
-#' \code{list(conf_level =, method_cell =, method_diff =)}: which confidence level and confidence
-#' interval methods were actually used. \code{NULL} (the default) makes the legend fall back to
-#' the package defaults.
-#' @param vars The table's variable roles, as
-#' \code{list(row_vars =, col_vars =, tab_vars =, compacted =)}, recorded when the table is built
-#' rather than guessed back from it afterwards. \code{NULL} (the default) makes
-#' \code{tab_get_vars()} fall back to detecting them from the column types.
-#' @param empirical_tips Multinomial crude-companion tooltip data (a \code{tibble} keyed by column,
-#' predictor and level), set by \code{tab_reg(empirical = TRUE)}. \code{NULL} (default) for every
-#' other table. Carried through dplyr verbs; the HTML render appends it as a "crude:" tooltip fragment.
-#' @param reg_meta A regression table's model record (family, effect, dependent, reference level,
-#' predictors, ...), set by \code{\link{tab_reg}}. Drives the reg title/caption, the "Model:" legend
-#' line and the colour-legend wording. \code{NULL} (the default) means the table is not a regression.
+#' @param meta The table's metadata, as a single named list gathering (all optional, \code{NULL}
+#' when unset):
+#' \itemize{
+#'   \item \code{render_extras} -- display-only intent for the \code{add_n} / \code{add_pct} extras,
+#'   \code{list(add_n =, add_pct =)}. Since tabxplor 1.4.0 those rows/columns are materialised at
+#'   print/export time from this attribute rather than baked into the table.
+#'   \item \code{ci_settings} -- display-only metadata for the colour legend,
+#'   \code{list(conf_level =, method_cell =, method_diff =, ...)}: which confidence level and
+#'   confidence-interval methods were actually used. Absent makes the legend fall back to defaults.
+#'   \item \code{vars} -- the table's variable roles,
+#'   \code{list(row_vars =, col_vars =, tab_vars =, compacted =, wt =, caption =)}, recorded at build
+#'   rather than guessed back afterwards (see \code{\link{set_caption}} for \code{caption}).
+#'   \item \code{empirical_tips} -- multinomial crude-companion tooltip data (a \code{tibble} keyed by
+#'   column, predictor and level), set by \code{tab_reg(empirical = TRUE)}.
+#'   \item \code{reg_meta} -- a regression table's model record (family, effect, dependent, reference
+#'   level, predictors, ...), set by \code{\link{tab_reg}}; drives the reg title/caption, the "Model:"
+#'   legend line and the colour-legend wording.
+#'   \item \code{color_breaks} -- a per-table override of the colour break scales (see
+#'   \code{\link{set_color_breaks}}), merged over the global option at render time.
+#' }
+#' \code{meta} sub-fields left \code{NULL} are dropped, so a table given nothing carries no attribute.
 #' @param ... Needed to implement subclasses.
 #' @param class Needed to implement subclasses.
 #'
@@ -93,8 +96,7 @@
 new_tab <-
   function(tabs = tibble::tibble(), subtext = "",
            test = new_test_tibble(), chi2 = NULL,
-           render_extras = NULL, ci_settings = NULL, vars = NULL,
-           empirical_tips = NULL, reg_meta = NULL,
+           meta = NULL,
            ..., class = character()) {
     stopifnot(is.data.frame(tabs))
     #vec_assert(subtext    , character())
@@ -104,31 +106,14 @@ new_tab <-
 
     out <- tibble::new_tibble(tabs, subtext = subtext, test = test, ...,
                               nrow = nrow(tabs), class = c(class, "tabxplor_tab"))
-    # Phase 10i-B: `render_extras` (list(add_n=, add_pct=)) is the display-only intent for the add_n /
-    # add_pct extras -- set only when supplied (a NULL attribute would be dropped anyway), so tables
-    # never given it (raw tab_plain, older objects) simply have no attribute -> materialiser no-op.
-    if (!is.null(render_extras)) attr(out, "render_extras") <- render_extras
-    # Phase 13b: `ci_settings` (list(conf_level=, method_cell=, method_diff=)) is display-only metadata
-    # for the colour legend (which CI method / confidence level was actually used). Carried like
-    # `render_extras`; absent -> the legend falls back to package defaults.
-    if (!is.null(ci_settings)) attr(out, "ci_settings") <- ci_settings
-    # Phase 14d: `vars` (list(row_vars=, col_vars=, tab_vars=, compacted=)) is the table's own record
-    # of its variable roles. Absent -> tab_get_vars()/tab_render_vars() fall back to the column-type
-    # heuristic (hand-built tables, tab_plain(), older objects).
-    if (!is.null(vars)) attr(out, "vars") <- vars
-    # Phase 14v: `empirical_tips` -- multinomial crude-companion tooltip data (tibble col/var/level/tip),
-    # keyed by (final column label, predictor, displayed level). TOOLTIP-only (columns would explode);
-    # the render appends a "crude:" fragment. Carried like `vars`; absent -> no empirical tooltip.
-    if (!is.null(empirical_tips)) attr(out, "empirical_tips") <- empirical_tips
-    # Phase 14w: `reg_meta` -- a regression table's OWN record of its model, a small list
-    # list(family=, effect=, at=, do_exp=, dependent=, positive_level=, predictors=, split_var=,
-    # comparison=, model_labels=, conf_level=). Set once by tab_reg(); read by the reg title / caption,
-    # the "Model:" footer line, and the colour legend (is_reg detection, the effect word, the CI-method
-    # scale). Carried like `vars`; absent -> not a regression table. WHY table-level (not a fmt field or
-    # column attribute): family/effect are single per table, and the per-column effect word is DERIVED
-    # from family + the column's ci_type/type (was parsed from the column-name suffix, which the 14w
-    # header rename breaks). Model-vs-empirical columns are told apart by the "Emp. " name prefix.
-    if (!is.null(reg_meta)) attr(out, "reg_meta") <- reg_meta
+    # Phase 17b: every 1.4.0-new table attribute (render_extras / ci_settings / vars / empirical_tips /
+    # reg_meta / color_breaks) is now ONE `meta` named list -- one formal, one attribute, one tab_attrs()
+    # line, one bind reconcile (was six of each). Sub-fields left NULL are dropped, so a table given
+    # nothing carries no `meta` attribute at all (raw tab_plain / hand-built / older objects stay clean).
+    # The former per-field prose lives on the `@param meta` roxygen; the accessors below (get_vars_attr,
+    # get_ci_settings, ...) keep their names and read straight into this list.
+    if (!is.null(meta)) meta <- meta[!vapply(meta, is.null, logical(1))]
+    if (length(meta)) attr(out, "meta") <- meta
     out
   }
 
@@ -140,8 +125,7 @@ new_grouped_tab <-
   function(tabs = tibble::tibble(), groups,
            subtext = "",
            test = new_test_tibble(), chi2 = NULL,
-           render_extras = NULL, ci_settings = NULL, vars = NULL,
-           empirical_tips = NULL, reg_meta = NULL,
+           meta = NULL,
            ..., class = character()) {
     if (missing(groups)) groups <- attr(tabs, "groups")
     class <- c(class, c("tabxplor_grouped_tab", "grouped_df"))
@@ -150,9 +134,7 @@ new_grouped_tab <-
     if (!is.null(chi2)) test <- chi2
 
     new_tab(tabs, groups = groups,
-            subtext = subtext, test = test, render_extras = render_extras,
-            ci_settings = ci_settings, vars = vars, empirical_tips = empirical_tips,
-            reg_meta = reg_meta,
+            subtext = subtext, test = test, meta = meta,
             ...,
             class = class)
   }
@@ -187,35 +169,44 @@ set_test <- function(x, test) {
   x
 }
 
-# Phase 10i-B: `render_extras` -- the DISPLAY-only intent for the add_n / add_pct extras, a small
-# table-level list `list(add_n = <lgl>, add_pct = <lgl>)`. The built tab() no longer carries the add_n
-# `n` column / add_pct `col_pct` column-or-rows; it stores this intent (born in tab_assemble_tables)
-# and tab_materialize_extras() re-creates the rows/cols at display. Carried through dplyr verbs exactly
-# like `subtext`/`test` (every S3 method threads `render_extras = get_render_extras(...)`); the vctrs
-# reconcilers take x's (a scalar intent, not row-bound like `test`). NULL -> no extras.
-get_render_extras <- purrr::attr_getter("render_extras")
-set_render_extras <- function(x, render_extras) {
-  attr(x, "render_extras") <- render_extras
+# Phase 17b: the `meta` table attribute -- ONE named list gathering every 1.4.0-new table attribute
+# (render_extras / ci_settings / vars / empirical_tips / reg_meta / color_breaks). get_meta() returns
+# NULL when absent, so every get_meta(x)[["field"]] yields NULL exactly like the old attr_getter did.
+get_meta <- function(x) attr(x, "meta", exact = TRUE)
+
+# set_meta_field() -- write ONE meta sub-field, preserving the others. Assigning NULL REMOVES the field
+# (base-R list semantics), and an emptied meta drops the whole attribute -- this is what keeps the
+# "absent when unset" property (a table given nothing carries no `meta` attribute) AND makes
+# set_render_extras(x, NULL) (tab_materialize_extras) clear render_extras WITHOUT touching ci_settings /
+# vars. So every set_* below is one call, and byte-identity at the attribute level is preserved.
+set_meta_field <- function(x, field, value) {
+  m <- get_meta(x)
+  if (is.null(m)) m <- list()
+  m[[field]] <- value
+  m <- m[!vapply(m, is.null, logical(1))]
+  attr(x, "meta") <- if (length(m)) m else NULL
   x
 }
 
-# Phase 13b: `ci_settings` -- display-only metadata for the colour legend, a small table-level list
-# `list(conf_level = <num>, method_cell = <chr>, method_diff = <chr>)` recording which CI method /
+# Phase 10i-B: `render_extras` -- the DISPLAY-only intent for the add_n / add_pct extras, a small
+# list `list(add_n = <lgl>, add_pct = <lgl>)`. The built tab() no longer carries the add_n `n` column /
+# add_pct `col_pct` column-or-rows; it stores this intent (born in tab_assemble_tables) and
+# tab_materialize_extras() re-creates the rows/cols at display. NULL -> no extras.
+get_render_extras <- function(x) get_meta(x)[["render_extras"]]
+set_render_extras <- function(x, render_extras) set_meta_field(x, "render_extras", render_extras)
+
+# Phase 13b: `ci_settings` -- display-only metadata for the colour legend, a small list
+# `list(conf_level = <num>, method_cell = <chr>, method_diff = <chr>, ...)` recording which CI method /
 # confidence level tab()/tab_ci() actually used, so tab_color_legend() can name it accurately (e.g.
-# "Newcombe score interval, 95% confidence"). Born in tab_assemble_tables(); carried through dplyr
-# verbs exactly like `render_extras`. Distinct attribute (NOT folded into render_extras) so it
-# survives tab_materialize_extras()'s `set_render_extras(NULL)` clear. get_ci_settings() falls back to
-# the package defaults when absent (heavy dplyr chains / raw tab_plain / older objects).
-get_ci_settings <- purrr::attr_getter("ci_settings")
-set_ci_settings <- function(x, ci_settings) {
-  attr(x, "ci_settings") <- ci_settings
-  x
-}
+# "Newcombe score interval, 95% confidence"). get_ci_settings() falls back to the package defaults when
+# absent (heavy dplyr chains / raw tab_plain / older objects).
+get_ci_settings <- function(x) get_meta(x)[["ci_settings"]]
+set_ci_settings <- function(x, ci_settings) set_meta_field(x, "ci_settings", ci_settings)
 
 # Phase 14d: `vars` -- the table's OWN record of its variable roles,
-# `list(row_vars = <chr>, col_vars = <chr>, tab_vars = <chr>, compacted = <lgl>)`, written where the
-# truth is known (tab_assemble_tables / tab_compact / tab_counts / tab_reg) and read by
-# tab_get_vars() / tab_render_vars().
+# `list(row_vars = <chr>, col_vars = <chr>, tab_vars = <chr>, compacted = <lgl>, wt =, caption =)`,
+# written where the truth is known (tab_assemble_tables / tab_compact / tab_counts / tab_reg / tab_plain)
+# and read by tab_get_vars() / tab_render_vars().
 # WHY: the roles CANNOT be recovered from a built table. tab_compact() renames column 1 to the literal
 # "levels" and stores the row-variable names only as factor LEVELS of a synthetic column named
 # "row_var" -- so the "last factor column is the row_var, the others are tab_vars" heuristic reports
@@ -225,26 +216,45 @@ set_ci_settings <- function(x, ci_settings) {
 # ad-hoc layer this replaces: record the roles instead of inferring them.
 # `compacted` = several row_vars were merged into one table (so `row_vars` has length > 1 and the
 # row-variable name lives in the `row_var` column's values, not in a column name).
-# The heuristic stays as the fallback for hand-built tables (tab_plain(), a raw tibble of fmt columns,
-# an object from an older version), so nothing user-facing breaks.
-get_vars_attr <- purrr::attr_getter("vars")
-set_vars_attr <- function(x, vars) {
-  attr(x, "vars") <- vars
-  x
-}
+# The heuristic stays as the fallback for hand-built tables (a raw tibble of fmt columns, an object from
+# an older version), so nothing user-facing breaks.
+get_vars_attr <- function(x) get_meta(x)[["vars"]]
+set_vars_attr <- function(x, vars) set_meta_field(x, "vars", vars)
 
 # Phase 14v: `empirical_tips` -- the multinomial crude-companion tooltip data (see new_tab()).
-get_empirical_tips <- purrr::attr_getter("empirical_tips")
-set_empirical_tips <- function(x, empirical_tips) {
-  attr(x, "empirical_tips") <- empirical_tips
-  x
-}
+get_empirical_tips <- function(x) get_meta(x)[["empirical_tips"]]
+set_empirical_tips <- function(x, empirical_tips) set_meta_field(x, "empirical_tips", empirical_tips)
+
 # Phase 14w: `reg_meta` -- a regression table's model record (see new_tab()).
-get_reg_meta <- purrr::attr_getter("reg_meta")
-set_reg_meta <- function(x, reg_meta) {
-  attr(x, "reg_meta") <- reg_meta
-  x
+get_reg_meta <- function(x) get_meta(x)[["reg_meta"]]
+set_reg_meta <- function(x, reg_meta) set_meta_field(x, "reg_meta", reg_meta)
+
+#' Store a caption on a tabxplor table
+#'
+#' Records a caption/title on a \code{tabxplor_tab} that survives a dplyr pipeline (it is kept in the
+#' table's \code{meta$vars$caption}, carried through every verb) and is read by the exporters
+#' (\code{\link{tab_md}}, \code{\link{tab_kable}}, \code{\link{tab_xl}}, \code{\link{tab_plot}}) as the
+#' table title, ahead of a regression table's auto-title, when the exporter's own \code{caption=}
+#' argument is not supplied. \code{get_caption()} reads it back (\code{NULL} when none is stored).
+#'
+#' @param x A \code{tabxplor_tab} (or a \code{tabxplor_tabs} list of them).
+#' @param caption A single string, or \code{NULL} / \code{NA} to remove any stored caption.
+#' @return \code{x}, with its stored caption set (\code{set_caption}) ; the caption or \code{NULL}
+#'   (\code{get_caption}).
+#' @export
+set_caption <- function(x, caption) {
+  if (is.list(x) && !is.data.frame(x)) return(purrr::map(x, set_caption, caption))
+  if (!is.null(caption) && (length(caption) != 1L || is.na(caption) || !nzchar(caption)))
+    caption <- NULL
+  v <- get_vars_attr(x)
+  if (is.null(v)) v <- new_vars_attr()
+  v$caption <- caption          # NULL removes the sub-field (base-R list semantics)
+  set_vars_attr(x, v)
 }
+
+#' @rdname set_caption
+#' @export
+get_caption <- function(x) get_meta(x)[["vars"]][["caption"]]
 new_vars_attr <- function(row_vars = character(0), col_vars = character(0),
                           tab_vars = character(0), compacted = FALSE, wt = NA_character_) {
   out <- list(row_vars = as.character(row_vars), col_vars = as.character(col_vars),
@@ -267,22 +277,18 @@ default_ci_settings <- function() {
          eval, envir = ce)
 }
 
-# === SECTION: the ONE table-attribute carry (Phase 14d) ============================================
+# === SECTION: the ONE table-attribute carry (Phase 14d / 17b) ======================================
 # Every table-level attribute is listed HERE, once. Before this, each of the ~34 dplyr S3 methods /
-# vctrs reconcilers named all of them by hand, so `subtext`/`test`/`render_extras`/`ci_settings` each
-# paid the same ~34-site edit; a table that lost an attribute lost it silently, in one verb only.
-# Adding an attribute is now: a `new_tab()` formal, a getter/setter, and one line in tab_attrs().
+# vctrs reconcilers named all of them by hand, so each attribute paid the same ~34-site edit; a table
+# that lost an attribute lost it silently, in one verb only. Phase 17b collapsed the six 1.4.0-new
+# attrs into ONE `meta` list, so tab_attrs() now carries just THREE things.
 # WARNING: `test` is ROW-BOUND (one row per subtable x col_var), so a bind must vec_rbind it -- that
 # is why the vctrs reconcilers still name it explicitly and only take tab_attrs() for the rest.
 #' @keywords internal
 tab_attrs <- function(from) {
-  list(subtext        = get_subtext(from),
-       test           = get_test(from),
-       render_extras  = get_render_extras(from),
-       ci_settings    = get_ci_settings(from),
-       vars           = get_vars_attr(from),
-       empirical_tips = get_empirical_tips(from),
-       reg_meta       = get_reg_meta(from))
+  list(subtext = get_subtext(from),
+       test    = get_test(from),
+       meta    = get_meta(from))
 }
 
 # Rebuild `out` as the right tab class, carrying every table attribute of `from`. `lv1_group_vars()`
@@ -297,18 +303,33 @@ tab_restore <- function(out, from, attrs = tab_attrs(from)) {
 }
 
 # The attribute reconcile for a BIND of two tables (the vctrs ptype2/cast pair). `subtext` unions;
-# `test` is ROW-BOUND (one row per subtable x col_var) so it rbinds; everything else is a scalar
-# intent -> x's, falling back to the other's.
+# `test` is ROW-BOUND (one row per subtable x col_var) so it rbinds; the `meta` sub-fields reconcile
+# element-wise (x wins, other fills a NULL), EXCEPT `color_breaks` which merges per named scale (so a
+# partial override on either side survives -- matching push_color_breaks() precedence).
+#' @keywords internal
+tab_meta_bind <- function(mx, my) {
+  if (is.null(mx) && is.null(my)) return(NULL)
+  if (is.null(mx)) mx <- list()
+  if (is.null(my)) my <- list()
+  out <- list()
+  for (nm in union(names(mx), names(my))) out[[nm]] <- mx[[nm]] %||% my[[nm]]
+  cbx <- mx[["color_breaks"]]; cby <- my[["color_breaks"]]
+  if (!is.null(cbx) || !is.null(cby)) {
+    merged <- if (is.null(cby)) list() else cby
+    if (!is.null(cbx)) for (s in names(cbx)) merged[[s]] <- cbx[[s]]
+    out[["color_breaks"]] <- merged
+  }
+  out <- out[!vapply(out, is.null, logical(1))]
+  if (length(out)) out else NULL
+}
+
 #' @keywords internal
 tab_bind_attrs <- function(x, other) {
-  a <- tab_attrs(x)
-  b <- tab_attrs(other)
-  for (nm in setdiff(names(a), c("subtext", "test"))) if (is.null(a[[nm]])) a[[nm]] <- b[[nm]]
   subtext <- unique(vctrs::vec_c(get_subtext(x), get_subtext(other)))
   if (length(subtext) > 1) subtext <- subtext[subtext != ""]
-  a$subtext <- subtext
-  a$test    <- vctrs::vec_rbind(get_test(x), get_test(other))
-  a
+  list(subtext = subtext,
+       test    = vctrs::vec_rbind(get_test(x), get_test(other)),
+       meta    = tab_meta_bind(get_meta(x), get_meta(other)))
 }
 
 
@@ -799,8 +820,9 @@ tab_kable <- function(tabs,
                            subtext = rd$subtext, legend = want_legend),
         medium = "html", theme = theme[1], classes = identical(engine, "html")))
     }
-    # Phase 14w (item 1): a reg table auto-captions itself from `reg_title` when the user gave no caption.
+    # Phase 14w (item 1) / 17b: fall back to a stored caption (set_caption()) then `reg_title`.
     cap <- caption
+    if (is.null(cap)) cap <- rd$caption
     if (is.null(cap) && !is.null(rd$reg_title) && !is.na(rd$reg_title)) cap <- rd$reg_title
     render_kable_html(rd, prep$meta, engine = engine, subtext = subtext, caption = cap,
                       tooltips = tooltips, popover = popover, html_font = html_font,
@@ -1165,8 +1187,8 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
 
   # Phase 10i-B: carry the add_n/add_pct intent through the merge (all per-row_var tabs share it).
   tabs <- new_tab(tabs, subtext = subtext, test = tabs_chi2,
-                  render_extras = render_extras_first, ci_settings = ci_settings_first,
-                  vars = vars_merged) |>
+                  meta = list(render_extras = render_extras_first,
+                              ci_settings = ci_settings_first, vars = vars_merged)) |>
     dplyr::group_by(!!rlang::sym("row_var"))
 
   # if (pvalue_lines) {
@@ -1406,10 +1428,9 @@ tab_pvalue_lines <- function(tabs) {
     rep(NA_character_, K)
   }
 
+  # Phase 17b: the whole `meta` list is threaded through the rebuild in one shot (was six getters).
   tab_append_footer(tabs, grp_of, K, fmt_cell, nonfmt_val,
-    attrs = list(subtext = get_subtext(tabs), render_extras = get_render_extras(tabs),
-                 ci_settings = get_ci_settings(tabs), vars = get_vars_attr(tabs),
-                 empirical_tips = get_empirical_tips(tabs), reg_meta = get_reg_meta(tabs)),
+    attrs = list(subtext = get_subtext(tabs), meta = get_meta(tabs)),
     regroup = group_chr,
     footer_groups = unique(disp$.grp))   # only subtables with a displayed test get a p-value row
 }
@@ -1462,13 +1483,11 @@ reg_footer_lines <- function(tabs) {
     else if (identical(nm, split_col)) rep(g, K)
     else                               rep("Model fit", K)
 
-  # `test` dropped -> idempotent; thread the display attributes through the rebuild (vars / empirical_tips
-  # 14v; ci_settings 14v-ii; reg_meta 14w -- is_reg detection must not depend on the dropped `test`, the
-  # legend reads reg_meta, and all must survive the footer materialisation).
+  # `test` dropped -> idempotent; thread the whole `meta` list through the rebuild (Phase 17b -- was
+  # vars / empirical_tips / ci_settings / reg_meta named one by one; is_reg detection must not depend on
+  # the dropped `test`, the legend reads reg_meta, and all must survive the footer materialisation).
   tab_append_footer(tabs, grp_of, K, fmt_cell, nonfmt_val,
-    attrs = list(subtext = get_subtext(tabs), vars = get_vars_attr(tabs),
-                 ci_settings = get_ci_settings(tabs), empirical_tips = get_empirical_tips(tabs),
-                 reg_meta = get_reg_meta(tabs)),
+    attrs = list(subtext = get_subtext(tabs), meta = get_meta(tabs)),
     regroup = group_chr)
 }
 
@@ -1865,8 +1884,9 @@ tab_plot <- function(tabs,
   tabs_gg <- tab_return_same_class_as_input(tabgrob, input = tabs_gg)
 
   # Phase 16e: draw the caption as a bold title row ABOVE the plot (the `caption` arg was accepted but never
-  # drawn). A reg table auto-captions itself from reg_title when the user gave none (mirrors tab_kable).
+  # drawn). Falls back to a stored caption (set_caption(), 17b) then reg_title (mirrors tab_kable).
   cap <- caption
+  if (is.null(cap)) cap <- rd$caption
   if (is.null(cap) && !is.null(rd$reg_title) && !is.na(rd$reg_title)) cap <- rd$reg_title
   if (!is.null(cap) && length(cap) == 1L && !is.na(cap) && nzchar(cap)) {
     titlegrob <- grid::textGrob(cap, x = 0, hjust = 0,
@@ -2620,32 +2640,6 @@ rowwise.tabxplor_grouped_tab <- function(data, ...) {
   `class<-`(out, stringi::stri_replace_first_regex(class(out), "grouped_df", "rowwise_df"))
 }
 
-# #' @method rbind tabxplor_grouped_tab
-# #' @export
-# rbind.tabxplor_grouped_tab <- function(...) {
-#   out <- NextMethod()
-#   groups <- dplyr::group_data(out)
-#   if (lv1_group_vars(out)) {
-#     new_tab(out, subtext = get_subtext(.data), test = get_test(.data), render_extras = get_render_extras(.data), ci_settings = get_ci_settings(.data))
-#   } else {
-#     new_grouped_tab(out, groups, subtext = get_subtext(.data), test = get_test(.data), render_extras = get_render_extras(.data), ci_settings = get_ci_settings(.data))
-#   }
-# }
-# # dplyr:::rbind.grouped_df
-#
-# #' @method cbind tabxplor_grouped_tab
-# #' @export
-# cbind.tabxplor_grouped_tab <- function(...) {
-#   out <- NextMethod()
-#   groups <- dplyr::group_data(out)
-#   if (lv1_group_vars(out)) {
-#     new_tab(out, subtext = get_subtext(.data), test = get_test(.data), render_extras = get_render_extras(.data), ci_settings = get_ci_settings(.data))
-#   } else {
-#     new_grouped_tab(out, groups, subtext = get_subtext(.data), test = get_test(.data), render_extras = get_render_extras(.data), ci_settings = get_ci_settings(.data))
-#   }
-# }
-# # dplyr:::cbind.grouped_df
-
 #' summarise method for class tabxplor_grouped_tab
 #' @importFrom dplyr summarise
 #' @method summarise tabxplor_grouped_tab
@@ -2724,24 +2718,6 @@ relocate.tabxplor_grouped_tab <- function(.data, ...) { #.before = NULL, .after 
   out <- NextMethod()
   tab_restore(out, .data)
 } # dplyr:::relocate.grouped_df
-
-# #' distinct_ method for class tabxplor_grouped_tab
-# #' @importFrom dplyr distinct_
-# #' @method distinct_ tabxplor_grouped_tab
-# #' @param .data A tibble of class \code{tabxplor_tab}.
-# #' @return An object of class \code{tabxplor_grouped_tab}.
-# #' @export
-# distinct_.tabxplor_grouped_tab <- function(.data, ..., .dots = list(), .keep_all = FALSE) {
-#   out <- NextMethod()
-#   groups <- dplyr::group_data(out)
-#   if (lv1_group_vars(out)) {
-#     new_tab(out, subtext = get_subtext(.data), test = get_test(.data), render_extras = get_render_extras(.data), ci_settings = get_ci_settings(.data))
-#   } else {
-#     new_grouped_tab(out, groups, subtext = get_subtext(.data), test = get_test(.data), render_extras = get_render_extras(.data), ci_settings = get_ci_settings(.data))
-#   }
-# }
-# # dplyr:::distinct_.grouped_df
-
 
 
 
@@ -3593,13 +3569,14 @@ set_color_breaks <- function(breaks = NULL, ...) {
 }
 
 
-# --- Per-table color_breaks override (Phase 13a) --------------------------------------------------
+# --- Per-table color_breaks override (Phase 13a / 17b) --------------------------------------------
 # `tab(color_breaks = list(...))` validates the user scales into a PARTIAL canonical list and stores
-# it as the table attribute "color_breaks" (set at the very END of tab(), so no dplyr verb strips it
-# before the user gets it). At render time, push_color_breaks() merges that partial list OVER the live
-# global option for the duration of the render, then pop restores. Robust by design: a missing / NULL /
-# malformed attribute simply falls back to the global breaks. A heavy dplyr chain between build and
-# render drops the attribute -> global fallback (documented; the global set_color_breaks() still works).
+# it as `meta$color_breaks` (set at the very END of tab()). At render time, push_color_breaks() merges
+# that partial list OVER the live global option for the duration of the render, then pop restores.
+# Robust by design: a missing / NULL / malformed field simply falls back to the global breaks.
+# Phase 17b: color_breaks joined the carried `meta` list, so it now SURVIVES a dplyr chain between build
+# and render (was dropped before -> silent global fallback; that was defect 7). Still set last, so the
+# change is purely additive survival. The global set_color_breaks() option path is unchanged.
 
 #' @keywords internal
 resolve_color_breaks_arg <- function(color_breaks) {
@@ -3612,11 +3589,14 @@ resolve_color_breaks_arg <- function(color_breaks) {
 }
 
 #' @keywords internal
+get_color_breaks_attr <- function(x) get_meta(x)[["color_breaks"]]
+
+#' @keywords internal
 set_color_breaks_attr <- function(x, cb) {
   if (is.null(cb)) return(x)
   if (is.list(x) && !is.data.frame(x)) return(purrr::map(x, set_color_breaks_attr, cb))
-  attr(x, "color_breaks") <- cb
-  x
+  # set_meta_field MERGES into any existing meta (vars / ci_settings / render_extras built earlier).
+  set_meta_field(x, "color_breaks", cb)
 }
 
 # Install a table's color_breaks attribute as the transient global option; returns a state to restore
@@ -3625,8 +3605,8 @@ set_color_breaks_attr <- function(x, cb) {
 #' @keywords internal
 push_color_breaks <- function(tabs) {
   tb <- if (is.list(tabs) && !is.data.frame(tabs)) {
-    if (length(tabs) >= 1L) attr(tabs[[1]], "color_breaks", exact = TRUE) else NULL
-  } else attr(tabs, "color_breaks", exact = TRUE)
+    if (length(tabs) >= 1L) get_color_breaks_attr(tabs[[1]]) else NULL
+  } else get_color_breaks_attr(tabs)
   if (is.null(tb) || !is.list(tb) || length(tb) == 0L) return(NULL)
   old  <- getOption("tabxplor.color_breaks")
   base <- if (is.null(old) || is.null(old$pct_diff)) default_color_scales() else old

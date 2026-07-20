@@ -62,7 +62,7 @@ testthat::test_that("guaranteed_effect annotates the margin of error on the over
 testthat::test_that("graceful fallback to package defaults when ci_settings is absent", {
   tb <- tab(gss, marital, race, pct = "row", color = "diff",
             color_signif = "grey_non_signif", ci = "diff")
-  attr(tb, "ci_settings") <- NULL                 # simulate a heavy dplyr chain dropping it
+  tb <- set_ci_settings(tb, NULL)                 # Phase 17b: ci_settings lives in meta -> drop via setter
   l <- leg_en(tb)
   testthat::expect_match(l, "Newcombe score interval, 95% confidence")   # the defaults
 })

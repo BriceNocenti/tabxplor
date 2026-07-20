@@ -2131,15 +2131,14 @@ tab_assemble_tables <- function(ctx) {
   vars_attr <- new_vars_attr(row_vars = row_var, col_vars = as.character(col_vars),
                              tab_vars = as.character(tab_vars),
                              wt = if (length(wt) == 0L) NA_character_ else as.character(wt)[1])
+  # Phase 17b: the three 1.4.0-new attrs are now ONE `meta` list (drop-NULL happens in new_tab()).
+  meta <- list(render_extras = render_extras, ci_settings = ci_settings, vars = vars_attr)
   if (!lv1_group_vars(tab)) {
     tab    <- dplyr::group_by(tab, !!!tab_vars)
     groups <- dplyr::group_data(tab)
-    tab    <- new_grouped_tab(tab, groups = groups, subtext = subtext, test = tests,
-                              render_extras = render_extras, ci_settings = ci_settings,
-                              vars = vars_attr)
+    tab    <- new_grouped_tab(tab, groups = groups, subtext = subtext, test = tests, meta = meta)
   } else {
-    tab <- new_tab(tab, subtext = subtext, test = tests, render_extras = render_extras,
-                   ci_settings = ci_settings, vars = vars_attr)
+    tab <- new_tab(tab, subtext = subtext, test = tests, meta = meta)
   }
 
   # Row_var finishing done: ctx$tabs is the single finished tabxplor_tab/grouped_tab (the whole-table
@@ -2553,10 +2552,12 @@ tab_transpose <- function(tabs, name = NULL) {
   # old row_vars -- `compacted` is FALSE again: the merged shape is gone, undone by the pivot.
   attrs <- tab_attrs(tabs)
   attrs$test <- test
-  attrs$vars <- new_vars_attr(row_vars = name,
-                              col_vars = unique(purrr::map_chr(wide[new_fmtc], get_col_var)),
-                              tab_vars = character(0),
-                              wt = get_vars_attr(tabs)$wt)   # Phase 16d: the weight survives a transpose
+  # Phase 17b: `vars` is a sub-field of the carried `meta` list now.
+  if (is.null(attrs$meta)) attrs$meta <- list()
+  attrs$meta$vars <- new_vars_attr(row_vars = name,
+                                   col_vars = unique(purrr::map_chr(wide[new_fmtc], get_col_var)),
+                                   tab_vars = character(0),
+                                   wt = get_vars_attr(tabs)$wt)   # Phase 16d: weight survives transpose
   rlang::exec(new_tab, wide, !!!attrs)
 }
 
@@ -3661,12 +3662,25 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
   tab_var_1lv <- all(purrr::map_lgl(dplyr::select(tabs, !!!tab_vars),
                                     ~ length(unique(.)) == 1))
 
+  # Phase 17b: record the variable ROLES here, where they are known -- so tab_render_vars() reads them
+  # instead of guessing (the last-factor heuristic). The recorded roles MUST match that heuristic:
+  # row_var = the row_var column (last non-group factor); tab_vars = the SURVIVING tab_var columns only
+  # (dropped in the 1-level branch -> character(0), else the heuristic's `all(tab_vars %in% nms)` guard
+  # would fail and silently fall back). col_var "no_col_var" is not a real col_var.
+  plain_col_vars <- if (identical(as.character(col_var), "no_col_var")) character(0)
+                    else as.character(col_var)
+  plain_wt <- if (length(wt) == 0L) NA_character_ else as.character(wt)[1]
   if (tab_var_1lv) {
-    new_tab(tabs, subtext = subtext) |>
+    vars_attr <- new_vars_attr(row_vars = rlang::as_name(row_var), col_vars = plain_col_vars,
+                               tab_vars = character(0), wt = plain_wt)
+    new_tab(tabs, subtext = subtext, meta = list(vars = vars_attr)) |>
       dplyr::select(-tidyselect::any_of(purrr::map_chr(tab_vars, as.character)))
   } else {
+    vars_attr <- new_vars_attr(row_vars = rlang::as_name(row_var), col_vars = plain_col_vars,
+                               tab_vars = purrr::map_chr(tab_vars, rlang::as_name), wt = plain_wt)
     tabs <- tabs |> dplyr::group_by(!!!tab_vars)
-    new_grouped_tab(tabs, dplyr::group_data(tabs), subtext = subtext)
+    new_grouped_tab(tabs, dplyr::group_data(tabs), subtext = subtext,
+                    meta = list(vars = vars_attr))
   }
 }
 

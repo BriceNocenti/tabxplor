@@ -1874,8 +1874,8 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
     return(
       combined |>
         new_tab(subtext = subtext, test = tests,
-                ci_settings = list(conf_level = conf_level, method_cell = NA_character_,
-                                   method_diff = method)) |>
+                meta = list(ci_settings = list(conf_level = conf_level, method_cell = NA_character_,
+                                               method_diff = method))) |>
         dplyr::group_by(!!rlang::sym(split_var), var)
     )
   }
@@ -2242,12 +2242,15 @@ reg_build <- function(data, specs, union_predictors, family, design_spec, weight
   # the crosstab renderers ignore it); it is materialised as a console block / export rows at display,
   # never baked into the fmt columns (the coefficient skeleton stays intact for downstream reads).
   tab |>
-    new_tab(subtext = subtext, test = reg_gof, empirical_tips = empirical_tips,
-            # 14v-ii: the numeric/ratio methods the empirical columns use (Student mean-diff = OLS,
-            # quasi-Poisson rate-ratio = the phi-scaled model), so the legend can name them (14w).
-            ci_settings = list(conf_level = conf_level, method_cell = NA_character_,
-                               method_diff = method, method_ratio = "katz",
-                               method_mean_diff = "student", method_mean_ratio = "quasipoisson")) |>
+    new_tab(subtext = subtext, test = reg_gof,
+            meta = list(empirical_tips = empirical_tips,
+                        # 14v-ii: the numeric/ratio methods the empirical columns use (Student mean-diff
+                        # = OLS, quasi-Poisson rate-ratio = the phi-scaled model), so the legend names
+                        # them (14w).
+                        ci_settings = list(conf_level = conf_level, method_cell = NA_character_,
+                                           method_diff = method, method_ratio = "katz",
+                                           method_mean_diff = "student",
+                                           method_mean_ratio = "quasipoisson"))) |>
     dplyr::group_by(var)
 }
 

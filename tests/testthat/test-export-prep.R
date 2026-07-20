@@ -25,7 +25,7 @@ testthat::test_that("tab_export_prep returns a tabxplor_render with tables/meta"
   # backend now builds its whole footer via tab_footer_streams(). reg_title (the caption) stays.
   testthat::expect_named(rd, c("tab", "vars", "roles", "ann", "bold_rows",
                                "bold_cols", "range_totcol", "col_var_header", "subtext",
-                               "reg_title", "empirical_tips"))
+                               "reg_title", "caption", "empirical_tips"))
   testthat::expect_false(rd$vars$degrade)
 })
 

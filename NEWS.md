@@ -2,6 +2,13 @@
 # tabxplor 1.4.0 (in development)
 
 ## New features
+* **Store a caption on a table with `set_caption()`.** A caption set this way travels through a dplyr
+  pipeline and is used as the table title by every exporter (`tab_md()`, `tab_kable()`, `tab_xl()`,
+  `tab_plot()`) when you do not pass their own `caption=` argument, ahead of a regression table's
+  auto-title. `get_caption()` reads it back.
+* **A per-table `color_breaks` now survives a dplyr pipeline.** `tab(..., color_breaks = ...)` followed
+  by `filter()` / `mutate()` / etc. keeps the table's own colour breaks at print/export (previously a
+  pipeline between build and render silently fell back to the global breaks).
 * **`tab_reg()` models several outcomes with different families in one table.** `family` is now
   resolved per dependent, so `tab_reg(data, c("married", "income", "satisfaction"))` builds one table
   with a logistic, a Poisson and an ordinal column-group side by side (one per outcome). `family`

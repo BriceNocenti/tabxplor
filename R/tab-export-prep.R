@@ -511,6 +511,9 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
     # Phase 14w (item 1): the regression title/caption stays -- that is the CAPTION (above the table), used
     # when the exporter has no user caption. NA on a crosstab (those keep their own caption / auto-title path).
     reg_title = reg_title(get_reg_meta(tab)),
+    # Phase 17b: a stored caption (set_caption(), in meta$vars$caption) survives the pipeline and takes
+    # precedence over reg_title when the exporter's own caption= is not supplied. NULL when none stored.
+    caption = get_caption(tab),
     # Phase 14v: multinomial crude-companion tooltip fragments, per column -> per-row char vector
     # (resolved above while `var` was present); reg_append_empirical_tip() appends them at html render.
     empirical_tips = emp_tips

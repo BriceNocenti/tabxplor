@@ -23,7 +23,8 @@
 
 
 # === Constants =============================================================================
-JMVREG_CACHE_SCHEMA     <- 1L                    # bump on any store-shape change -> discard stale stores
+JMVREG_CACHE_SCHEMA     <- 2L                    # bump on any store-shape change -> discard stale stores
+                                                 #   (2 = Phase 17b: table attrs merged into one `meta` list)
 JMVREG_MAX_DIGEST_BYTES <- 512L * 1024L          # per-entry ceiling for the KB-sized digests
 # A raw reg_fit value (glm + model frame + tidy) is ~9-11 MB on survey-scale data (e.g. 21k rows).
 # MODEL COMPARISON forces this raw-fit tier (the reference-invariant digest fast-path is single-model

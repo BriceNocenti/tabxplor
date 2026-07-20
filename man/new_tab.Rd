@@ -10,11 +10,7 @@ new_tab(
   subtext = "",
   test = new_test_tibble(),
   chi2 = NULL,
-  render_extras = NULL,
-  ci_settings = NULL,
-  vars = NULL,
-  empirical_tips = NULL,
-  reg_meta = NULL,
+  meta = NULL,
   ...,
   class = character()
 )
@@ -25,11 +21,7 @@ new_grouped_tab(
   subtext = "",
   test = new_test_tibble(),
   chi2 = NULL,
-  render_extras = NULL,
-  ci_settings = NULL,
-  vars = NULL,
-  empirical_tips = NULL,
-  reg_meta = NULL,
+  meta = NULL,
   ...,
   class = character()
 )
@@ -47,28 +39,27 @@ in tabxplor 1.4.0.}
 
 \item{chi2}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Soft-deprecated alias of \code{test}.}
 
-\item{render_extras}{Display-only intent for the \code{add_n} / \code{add_pct} extras, as
-\code{list(add_n =, add_pct =)}. Since tabxplor 1.4.0 those rows/columns are no longer baked
-into the table: they are materialised at print/export time from this attribute. \code{NULL}
-(the default) means no extras.}
-
-\item{ci_settings}{Display-only metadata for the colour legend, as
-\code{list(conf_level =, method_cell =, method_diff =)}: which confidence level and confidence
-interval methods were actually used. \code{NULL} (the default) makes the legend fall back to
-the package defaults.}
-
-\item{vars}{The table's variable roles, as
-\code{list(row_vars =, col_vars =, tab_vars =, compacted =)}, recorded when the table is built
-rather than guessed back from it afterwards. \code{NULL} (the default) makes
-\code{tab_get_vars()} fall back to detecting them from the column types.}
-
-\item{empirical_tips}{Multinomial crude-companion tooltip data (a \code{tibble} keyed by column,
-predictor and level), set by \code{tab_reg(empirical = TRUE)}. \code{NULL} (default) for every
-other table. Carried through dplyr verbs; the HTML render appends it as a "crude:" tooltip fragment.}
-
-\item{reg_meta}{A regression table's model record (family, effect, dependent, reference level,
-predictors, ...), set by \code{\link{tab_reg}}. Drives the reg title/caption, the "Model:" legend
-line and the colour-legend wording. \code{NULL} (the default) means the table is not a regression.}
+\item{meta}{The table's metadata, as a single named list gathering (all optional, \code{NULL}
+when unset):
+\itemize{
+\item \code{render_extras} -- display-only intent for the \code{add_n} / \code{add_pct} extras,
+\code{list(add_n =, add_pct =)}. Since tabxplor 1.4.0 those rows/columns are materialised at
+print/export time from this attribute rather than baked into the table.
+\item \code{ci_settings} -- display-only metadata for the colour legend,
+\code{list(conf_level =, method_cell =, method_diff =, ...)}: which confidence level and
+confidence-interval methods were actually used. Absent makes the legend fall back to defaults.
+\item \code{vars} -- the table's variable roles,
+\code{list(row_vars =, col_vars =, tab_vars =, compacted =, wt =, caption =)}, recorded at build
+rather than guessed back afterwards (see \code{\link{set_caption}} for \code{caption}).
+\item \code{empirical_tips} -- multinomial crude-companion tooltip data (a \code{tibble} keyed by
+column, predictor and level), set by \code{tab_reg(empirical = TRUE)}.
+\item \code{reg_meta} -- a regression table's model record (family, effect, dependent, reference
+level, predictors, ...), set by \code{\link{tab_reg}}; drives the reg title/caption, the "Model:"
+legend line and the colour-legend wording.
+\item \code{color_breaks} -- a per-table override of the colour break scales (see
+\code{\link{set_color_breaks}}), merged over the global option at render time.
+}
+\code{meta} sub-fields left \code{NULL} are dropped, so a table given nothing carries no attribute.}
 
 \item{...}{Needed to implement subclasses.}
 

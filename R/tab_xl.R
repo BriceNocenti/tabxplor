@@ -272,8 +272,11 @@ tab_xl <-
       titles <- purrr::pmap_chr(
         list(tabs_src, row_vars, col_vars_plain, tab_vars, seq_along(tabs)),
         function(t, rv, cv, tv, i) {
-          rt <- reg_title(get_reg_meta(t))
-          if (!is.na(rt)) rt
+          # Phase 17b: a stored caption (set_caption()) wins over the reg auto-title, then named/auto.
+          cap <- get_caption(t)
+          rt  <- reg_title(get_reg_meta(t))
+          if (!is.null(cap)) cap
+          else if (!is.na(rt)) rt
           else if (named_tabs) base_nm[[i]]
           else tab_get_titles(t, rv, cv, tv)
         })

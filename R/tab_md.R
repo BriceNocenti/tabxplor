@@ -137,8 +137,10 @@ tab_md <- function(tabs,
                           what = "tab_md()")
 
   parts   <- purrr::imap_chr(prep$tables, function(rd, i) {
-    # Phase 14w (item 1): a reg table auto-captions itself from `reg_title` when the user gave no caption.
+    # Phase 14w (item 1) / 17b: fall back to a stored caption (set_caption()) then a reg table's
+    # auto-title (`reg_title`) when the user gave no caption= .
     cap <- if (i == 1) caption else NULL
+    if (is.null(cap)) cap <- rd$caption
     if (is.null(cap) && !is.null(rd$reg_title) && !is.na(rd$reg_title)) cap <- rd$reg_title
     md_render_one(rd, special_formatting = special_formatting, wrap_rows = wrap_rows,
                   subtext = subtext, color = color, css = css,
