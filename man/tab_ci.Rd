@@ -28,6 +28,8 @@ tab_ci(
 intervals. Set to "diff" to calculate the confidence intervals of the difference
 between a cell and the relative total cell (or the reference cell,
 when \code{ref} is not \code{"tot"} in \code{\link{tab_plain}} or \code{\link{tab_num}}).
+Set to "ratio" for the same interval on the \emph{ratio} (relative risk / mean ratio)
+scale (the Katz interval) rather than the difference scale.
 By default, "diff" ci are calculated for means and row and col percentages,
 "cell" ci for frequencies ("all", "all_tabs"). By default, with \code{ci = "cell"},
 the result is printed in the \verb{[inf;sup]} form. Set

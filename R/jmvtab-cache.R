@@ -561,7 +561,8 @@ jmv_tab3_base_key <- function(opts, ce, row_vars, col_vars, tab_vars, wt_chr) {
   )
   reapplied  <- c("digits", "display", "cleannames", "color", "color_signif",
                   "ref", "ref2", "comp", "OR", "ci", "conf_level",
-                  "method_cell", "method_diff", "stars", "n_min")
+                  "method_cell", "method_diff", "method_ratio", "method_mean_diff",
+                  "method_mean_ratio", "stars", "n_min")
   # Phase 7g-ii: `levels_order` is intentionally NOT in `reapplied` -> it lands in `structural`, so a
   # reorder forces a tier-3 rebuild (fmt/colour) while agg_id (raw fingerprints) is unchanged -> tiers
   # 1-2 hit (design 4e). The rebuild also recomputes the reorder-driven ref shift (ref="first" /
@@ -594,7 +595,9 @@ jmv_tab3_arming <- function(color) {
 jmv_tab3_tuple <- function(opts, ci_resolved, arming) {
   list(arming = arming, or = opts$OR, ref = opts$ref, ref2 = opts$ref2, comp = opts$comp,
        ci = ci_resolved, conf_level = opts$conf_level,
-       method_cell = opts$method_cell, method_diff = opts$method_diff, stars = opts$stars)
+       method_cell = opts$method_cell, method_diff = opts$method_diff,
+       method_ratio = opts$method_ratio, method_mean_diff = opts$method_mean_diff,
+       method_mean_ratio = opts$method_mean_ratio, stars = opts$stars)
 }
 
 # Whether a cached armed CARRIER can be RE-REFERENCED (Phase 9b-7): only ref/ref2 changed and the
@@ -606,7 +609,8 @@ jmv_tab3_tuple <- function(opts, ci_resolved, arming) {
 #' @keywords internal
 #' @noRd
 jmv_tab3_rerefable <- function(old_tuple, new_tuple) {
-  keys <- c("arming", "or", "comp", "ci", "conf_level", "method_cell", "method_diff", "stars")
+  keys <- c("arming", "or", "comp", "ci", "conf_level", "method_cell", "method_diff",
+            "method_ratio", "method_mean_diff", "method_mean_ratio", "stars")
   identical(old_tuple[keys], new_tuple[keys]) &&                       # everything but ref/ref2 identical
     !identical(old_tuple[c("ref", "ref2")], new_tuple[c("ref", "ref2")]) &&  # ... and ref/ref2 DID change
     identical(new_tuple$arming, "diff") &&                            # diff/ratio/auto colour (not OR/contrib)
@@ -710,7 +714,9 @@ jmv_tab3_reref <- function(carrier, opts, ci_resolved, tuple) {
     rec  <- fmt_wrap(carrier)
     rec  <- tab_ci(tabs = rec, ci = ci_resolved, comp = comp, conf_level = tuple$conf_level,
                    color = "no", visible = identical(ci_resolved, "cell"), stars = tuple$stars,
-                   method_cell = tuple$method_cell, method_diff = tuple$method_diff)
+                   method_cell = tuple$method_cell, method_diff = tuple$method_diff,
+                   method_ratio = tuple$method_ratio, method_mean_diff = tuple$method_mean_diff,
+                   method_mean_ratio = tuple$method_mean_ratio)
     ci_d <- fmt_unwrap(rec)
     for (nm in names(carrier$fmt)) {
       cd <- ci_d$fmt[[nm]]$frame
@@ -751,6 +757,9 @@ jmv_tab3_build_armed <- function(data, opts, color, color_signif, ci, wt_sym,
     stars        = opts$stars,
     method_cell  = opts$method_cell,
     method_diff  = opts$method_diff,
+    method_ratio      = opts$method_ratio,       # Phase 15c: the three added CI expert methods
+    method_mean_diff  = opts$method_mean_diff,
+    method_mean_ratio = opts$method_mean_ratio,
     cleannames   = FALSE,                        # cleannames applied at display (jmvtab_build)
     totaltab     = opts$totaltab,
     digits       = opts$digits,

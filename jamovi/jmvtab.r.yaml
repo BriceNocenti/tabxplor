@@ -31,13 +31,9 @@ items:
     #     #   format: zto,pvalue
 
 
-    # Empty plot needed to be able to set the value of the plotting zone
-    - name: plot
-      title: ""
-      type: Image
-      width: 1080 # 2060 ?
-      height: 0
-      renderFun: .plot
+    # Phase 15c: the former width-forcing `plot` Image is GONE. Results width is now handled purely by
+    # the html scroll box (tab_render_scrollbox: width:max-content; max-width; overflow-x:auto), so no
+    # spacer Image is needed -- jmvtabreg has always worked with cache_state alone.
 
     # Phase 7e: hidden state carrier for the multi-tier live cache. Only Image elements persist a
     # `$state` across the engine reset, so this 0-size Image hosts the (gzip-RDS'd) store. It renders

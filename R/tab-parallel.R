@@ -153,8 +153,7 @@ tab_pmap_trampoline <- function(row, .f_name, .const, .ship_names) {
 tab_pmap <- function(.l, .f_name, .const = list(), .ship = list(),
                      workers = 0L, compute = tabxplor_compute) {
   f    <- get(.f_name, envir = asNamespace("tabxplor"))
-  # Recycle length-1 per-unit args to the common length (pmap does this; transpose() does not) --
-  # e.g. na = "drop_all" makes na_num / na_text a single "keep".
+  # Recycle length-1 per-unit args to the common length (pmap does this; transpose() does not).
   rows <- purrr::transpose(vctrs::vec_recycle_common(!!!.l))
 
   serial <- workers <= 1L ||

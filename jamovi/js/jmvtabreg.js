@@ -2,12 +2,53 @@
 // NOTE: the jamovi compiler ships this file verbatim (comments included) to every user, so keep it
 // lean. jus 3.0: use the GLOBAL `utils.clone` (the events `this` has no `.clone`, unlike jus 2.0).
 
-var exportLabels = { excel: "Excel", html: "HTML", md: "Markdown" };
+var exportLabels = { excel: "Excel", html: "HTML", md: "markdown" };
 
 var setExportLabel = function(ui) {
     if (!ui.export_format || !ui.exportExcel) return;
     var fmt = ui.export_format.value();
-    ui.exportExcel.setPropertyValue("label", "Export to " + (exportLabels[fmt] || "Excel"));
+    ui.exportExcel.setPropertyValue("label", "Export " + (exportLabels[fmt] || "Excel"));
+};
+
+// Pin the export button to the widest label's width ("Export markdown") so its text changes but not
+// its size. Re-applied on each onUpdate (jamovi re-renders may drop inline styles).
+var fixExportBtnWidth = function(ui) {
+    var c = ui.exportExcel;
+    if (!c || !c.$el || !c.$el[0]) return;
+    var btn = c.$el[0].querySelector("button") || c.$el[0];
+    btn.style.width = "150px";
+    btn.style.boxSizing = "border-box";
+};
+
+// Phase 15c: the `subtext` note is a full-width, auto-grow <textarea> (a CustomControl driving the
+// hidden `subtext` String option). Built once; re-syncs the option value into the textarea only when
+// they diverge (e.g. reset / load). setValue is on `change` (blur), not per keystroke.
+var autoGrowSubtext = function(ta) {
+    ta.style.height = "auto";
+    ta.style.height = (ta.scrollHeight + 2) + "px";
+};
+var renderSubtext = function(ui) {
+    if (!ui.subtextCtrl || !ui.subtextCtrl.$el || !ui.subtextCtrl.$el[0]) return;
+    var root = ui.subtextCtrl.$el[0];
+    var val  = ui.subtext ? String(ui.subtext.value() || "") : "";
+    var ta   = root.querySelector("textarea[data-tabx-subtext]");
+    if (!ta) {
+        root.innerHTML = "";
+        ta = document.createElement("textarea");
+        ta.setAttribute("data-tabx-subtext", "1");
+        ta.rows = 3;
+        ta.style.cssText = "width:100%;box-sizing:border-box;resize:vertical;min-height:3.6em;" +
+                           "font-family:inherit;font-size:inherit;padding:4px 6px;" +
+                           "border:1px solid rgba(0,0,0,0.28);border-radius:3px;background:#fff;color:#000;";
+        ta.value = val;
+        ta.addEventListener("input",  function() { autoGrowSubtext(ta); });
+        ta.addEventListener("change", function() { if (ui.subtext) ui.subtext.setValue(ta.value); });
+        root.appendChild(ta);
+        autoGrowSubtext(ta);
+    } else if (ta.value !== val) {
+        ta.value = val;
+        autoGrowSubtext(ta);
+    }
 };
 
 // Grey the survey-design controls (cluster ids / strata / fpc / nest), which are only used with a
@@ -40,9 +81,10 @@ var stretchTextBox = function(ui, name) {
 
 var onUpdate = function(ui) {
     setExportLabel(ui);
+    fixExportBtnWidth(ui);
     applyWtEnables(ui);
-    stretchTextBox(ui, "subtext");
-    stretchTextBox(ui, "path");
+    renderSubtext(ui);
+    stretchTextBox(ui, "export_dir");
     renderRefPicker(ui);
     renderModelBuilder(ui);
     applyCompareEnables(ui);
@@ -442,9 +484,14 @@ module.exports = {
         renderRefPicker(ui);
     },
 
-    // Keep the export button label in sync with the chosen format.
+    // subtextCtrl: the full-width auto-grow <textarea> for the below-table note (Phase 15c).
+    subtextCtrl_creating: function(ui) { renderSubtext(ui); },
+    subtextCtrl_updated:  function(ui) { renderSubtext(ui); },
+
+    // Keep the export button label + width in sync with the chosen format.
     export_format_changed: function(ui) {
         setExportLabel(ui);
+        fixExportBtnWidth(ui);
     },
 
     // Reset the export action button shortly after a click, so a second export re-fires the event.
@@ -453,6 +500,15 @@ module.exports = {
             setTimeout(function() {
                 ui.exportExcel.setValue(false);
             }, 2000);
+        }
+    },
+
+    // Reset the export folder + file name to their defaults, then clear the action so it can re-fire.
+    resetPath_changed: function(ui) {
+        if (ui.resetPath && ui.resetPath.value()) {
+            if (ui.export_dir)      ui.export_dir.setValue("~/Documents");
+            if (ui.export_filename) ui.export_filename.setValue("Regression");
+            ui.resetPath.setValue(false);
         }
     }
 

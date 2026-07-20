@@ -1,44 +1,89 @@
-# PURPOSE: Jamovi module export helpers (Phase 7g) -- write a built table to Excel / HTML /
-#          Markdown, and resolve a user-typed path robustly inside Jamovi's Electron-locked engine.
+# PURPOSE: Jamovi module export helpers (Phase 7g; Phase 15c robustness pass) -- write a built table
+#          to Excel / HTML / Markdown, and resolve a user-typed FOLDER + FILENAME robustly inside
+#          Jamovi's Electron-locked engine.
 # ROLE: Engine-free, session-free helpers so the export logic is unit-testable without a live
 #       jamovi session. jmvtab.b.R detects the export click, resolves the path, and calls
 #       jmvtab_export(); the click is a boolean read (§5.3) and the result is reported via a Notice.
 # KEY CONSTRAINTS:
-#   - No native file/folder picker exists for a module (dev guide §14) -- a typed path string is
-#     the only route; resolveExportPath() makes it robust (Windows "Copy as path", ~, extension).
-#   - The module runs in Jamovi's BUNDLED R where path.expand("~") -> Documents, so we expand ~
-#     via Sys.getenv("USERPROFILE") (dev guide §5.2 / §14.3), NOT path.expand()/sub().
-# See: dev/tabxplor_1.4.0_jamovi_dev.md §14 ; CLAUDE.md > 1.4.0 roadmap > Phase 7g.
+#   - No native file/folder picker exists for a module (dev guide §14) -- typed strings are the only
+#     route. Phase 15c splits the old single `path` into a FOLDER box + a bare FILENAME box (the
+#     format's extension is authoritative, never typed); resolveExportPath() composes + sanitises them.
+#   - The module runs in Jamovi's BUNDLED R where path.expand("~") -> Documents, so we expand ~ via
+#     the OS home (fs::path_home() / USERPROFILE / HOME), NOT path.expand()/sub() (§5.2 / §14.3 bug).
+#   - `fs` (Suggests) makes path_home / path_sanitize / dir_create cross-platform-robust; every use is
+#     guarded with a base-R fallback so export never HARD-depends on it.
+# See: dev/tabxplor_1.4.0_jamovi_dev.md §14 ; CLAUDE.md > 1.4.0 roadmap > Phase 7g / Phase 15c.
 
-# Resolve a user-typed export path to an absolute path with the right extension. Adapted from
-# SummaryTables::resolveExportPath (dev/jamovi/reference/SummaryTables/export.R), generalised so
-# the caller's `ext` (from the chosen format) decides the extension.
+# The OS home folder. fs::path_home() reads USERPROFILE (Windows) / HOME (Unix) via libuv -- more
+# robust than either env var alone; fall back to the env vars when `fs` is absent.
 #' @keywords internal
 #' @noRd
-resolveExportPath <- function(path, ext = "xlsx") {
-  path <- trimws(path)
-  path <- gsub("^[\"']|[\"']$", "", path)                       # strip Windows "Copy as path" quotes
-
-  getHome <- function() {                                        # USERPROFILE on Windows, HOME elsewhere
-    h <- Sys.getenv("USERPROFILE")
-    if (h == "") h <- Sys.getenv("HOME")
-    h
+export_home_dir <- function() {
+  if (requireNamespace("fs", quietly = TRUE)) {
+    h <- tryCatch(as.character(fs::path_home()), error = function(e) "")
+    if (length(h) && nzchar(h[1])) return(h[1])
   }
+  h <- Sys.getenv("USERPROFILE")
+  if (!nzchar(h)) h <- Sys.getenv("HOME")
+  h
+}
 
-  # Blank or directory-only input -> a friendly default in the real Documents folder.
-  if (nchar(path) == 0 || path %in% c("~", "~/")) path <- paste0("~/Documents/Table.", ext)
+# The default export folder: the user's Documents. <home>/Documents is correct on all three platforms
+# (in jamovi's bundled R path.expand("~") already IS Documents, so we build it from the home instead --
+# NOT path.expand() -- to avoid a Documents/Documents double, §14.3).
+#' @keywords internal
+#' @noRd
+export_documents_dir <- function() file.path(export_home_dir(), "Documents")
 
-  # Expand a leading ~ with paste0(substring()), NOT sub() -- USERPROFILE holds backslashes that
-  # sub() would read as backreferences (the §14.3 bug).
-  if (grepl("^~", path)) path <- paste0(getHome(), substring(path, 2))
+# Expand a leading ~ to the OS home with substring() (NOT sub(): USERPROFILE holds backslashes sub()
+# would read as backreferences, the §14.3 bug).
+#' @keywords internal
+#' @noRd
+export_expand_home <- function(p) if (grepl("^~", p)) paste0(export_home_dir(), substring(p, 2)) else p
 
-  # A bare filename (no separator) lands in Documents.
-  if (!grepl("[/\\\\]", path)) path <- file.path(getHome(), "Documents", path)
+# Strip surrounding quotes / brackets a user may paste around a path or name ("Copy as path", <..>, ..).
+#' @keywords internal
+#' @noRd
+export_unwrap <- function(s) {
+  s <- trimws(as.character(if (length(s)) s[1] else ""))
+  # The set of wrapping chars to strip from either end. `]` is FIRST so the POSIX bracket class reads
+  # it literally (backslash does NOT escape inside a POSIX class), and `[` mid-class is literal too.
+  wrap <- "[]'\"<>[(){}]"
+  s <- sub(paste0("^", wrap, "+"), "", s)
+  s <- sub(paste0(wrap, "+$"), "", s)
+  trimws(s)
+}
 
-  # Ensure the extension AFTER path assembly (so ~ and dirs stay intact).
-  if (!grepl(paste0("\\.", ext, "$"), path, ignore.case = TRUE)) path <- paste0(path, ".", ext)
+# Turn a user-typed name into a safe, bare file name (no directory, no extension, no OS-illegal
+# chars / reserved names). fs::path_sanitize() is the robust route (removes control/reserved chars,
+# Windows reserved names, trailing dots); a base-R fallback strips the same illegal set.
+#' @keywords internal
+#' @noRd
+export_sanitize_filename <- function(name) {
+  name <- basename(export_unwrap(name))                    # drop any directory pasted into the name box
+  if (requireNamespace("fs", quietly = TRUE)) {
+    name <- tryCatch(as.character(fs::path_sanitize(name)), error = function(e) name)
+  } else {
+    name <- gsub('[/\\\\?<>:*|":[:cntrl:]]', "", name)     # OS-illegal characters
+    name <- sub("[. ]+$", "", name)                        # trailing dots / spaces (invalid on Windows)
+  }
+  sub("\\.[A-Za-z0-9]{1,5}$", "", trimws(name))            # drop any extension the user typed
+}
 
-  normalizePath(path, mustWork = FALSE)
+# Resolve a user-typed FOLDER + bare FILENAME + the format's extension into one absolute file path.
+# Blank folder -> Documents; blank / all-illegal filename -> "Table"; the `ext` (from the chosen
+# format) is always authoritative. Never touches the filesystem.
+#' @keywords internal
+#' @noRd
+resolveExportPath <- function(dir, filename, ext = "xlsx") {
+  dir  <- export_unwrap(dir)
+  base <- export_sanitize_filename(filename)
+
+  if (!nzchar(dir))  dir  <- export_documents_dir()
+  dir <- export_expand_home(dir)
+  if (!nzchar(base)) base <- "Table"
+
+  normalizePath(file.path(dir, paste0(base, ".", ext)), mustWork = FALSE)
 }
 
 # Render a built tab (or list of tabs) to a self-contained HTML string via the Phase 10e home-built
@@ -68,21 +113,37 @@ tab_html_string <- function(tabs, wrap_rows = 35, wrap_cols = 15, standalone = T
 #' @noRd
 jmvtab_export <- function(tabs, format = c("excel", "html", "md"), path, replace = FALSE, ...) {
   format <- match.arg(format)
-  dir <- dirname(path)                                          # writeLines/tab_md need it to exist
-  if (nzchar(dir) && !dir.exists(dir)) dir.create(dir, recursive = TRUE, showWarnings = FALSE)
+
+  # Pre-flight, friendly checks (concise, non-expert). These run BEFORE the writer so the common
+  # failures surface as a clear "what to do" instead of a deep internal error.
+  if (format == "excel" && !requireNamespace("openxlsx2", quietly = TRUE)) {
+    stop("Excel export needs the 'openxlsx2' package. Install it with ",
+         'install.packages("openxlsx2"), or choose HTML or Markdown instead.', call. = FALSE)
+  }
+
+  # Ensure the target folder exists (create it if we can); a permission failure is a friendly stop,
+  # not a deep file-connection error.
+  dir <- dirname(path)
+  if (nzchar(dir) && !dir.exists(dir)) {
+    created <- tryCatch({
+      if (requireNamespace("fs", quietly = TRUE)) fs::dir_create(dir)
+      else dir.create(dir, recursive = TRUE, showWarnings = FALSE)
+      dir.exists(dir)
+    }, error = function(e) FALSE, warning = function(w) FALSE)
+    if (!created) {
+      stop("Can't create the folder:\n  ", dir,
+           "\nChoose a folder that exists, or check you're allowed to write there.", call. = FALSE)
+    }
+  }
+
+  # The writer itself is left UNwrapped: a low-level failure keeps its full rlang cause chain, which
+  # the backend surfaces via conditionMessage() (Phase 15c un-masking) -- not the bare "In index: 1."
   switch(
     format,
-    excel = {
-      if (!requireNamespace("openxlsx2", quietly = TRUE)) {
-        stop("Package 'openxlsx2' is required for Excel export.", call. = FALSE)
-      }
-      tab_xl(tabs, path = path, sheets = "unique", open = FALSE, replace = replace)
-    },
-    html = {
-      # Phase 10e: html export uses the self-contained home-built engine -> no kableExtra needed.
-      writeLines(tab_html_string(tabs, ...), path)
-    },
-    md = tab_md(tabs, file = path, print = FALSE)
+    excel = tab_xl(tabs, path = path, sheets = "unique", open = FALSE, replace = replace),
+    # Phase 10e: html export uses the self-contained home-built engine -> no kableExtra needed.
+    html  = writeLines(tab_html_string(tabs, ...), path),
+    md    = tab_md(tabs, file = path, print = FALSE)
   )
   invisible(path)
 }

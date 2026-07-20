@@ -10,6 +10,7 @@ jmv_opts <- function(...) {
             pct = "no", color = "no", color_signif = "ignore", OR = "no", chi2 = FALSE,
             na = "keep", levels = "all", ref = "auto", ref2 = "first", comp = "tab", ci = "auto",
             conf_level = 0.95, stars = TRUE, method_cell = "wilson", method_diff = "newcombe",
+            method_ratio = "katz", method_mean_diff = "welch", method_mean_ratio = "robust",
             totaltab = "line", digits = 0, other_if_less_than = 0, add_n = TRUE, add_pct = FALSE,
             subtext = "", totaltab_name = "Ensemble", total_names = "Total", other_level = "Others",
             output_list = FALSE, cleannames = FALSE, display = "auto")
@@ -86,6 +87,22 @@ test_that("cold build == tab(cleannames = FALSE); warm == cold", {
     warm <- jmvtab_build(gss, o, cold$store)
     expect_equal(cold$tabs, jmv_oracle(o, gss))
     expect_equal(warm$tabs, cold$tabs)
+  }
+})
+
+# Phase 15c: na = "drop_all" used to collapse na_num to a SCALAR "keep", but jmv_cache_aggregate()'s
+# numeric tier-1 loop indexes ctx$na_num[[i]] per row_var -> "subscript out of bounds" for a 2nd
+# row_var with a numeric col_var. tab_prepare_pop() now emits a per-row_var list; still byte-identical.
+test_that("na = 'drop_all' builds with >=2 row_vars + numeric col (no subscript error)", {
+  cases <- list(
+    jmv_opts(row_vars = c("marital", "relig"), col_vars = c("race", "tvhours"),
+             pct = "row", na = "drop_all"),
+    jmv_opts(row_vars = c("marital", "relig"), col_vars = "tvhours", na = "drop_all"),
+    jmv_opts(row_vars = c("marital", "relig", "race"), col_vars = "partyid", na = "drop_all")
+  )
+  for (o in cases) {
+    expect_no_error(cold <- jmvtab_build(gss, o, NULL))
+    expect_equal(cold$tabs, jmv_oracle(o, gss))
   }
 })
 

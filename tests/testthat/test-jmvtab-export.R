@@ -5,27 +5,46 @@
 gss <- forcats::gss_cat
 tabs <- tab(gss, marital, race, pct = "row")
 
-testthat::test_that("resolveExportPath: quotes, ~, extension, bare name -> Documents", {
-  home <- Sys.getenv("USERPROFILE"); if (home == "") home <- Sys.getenv("HOME")
+testthat::test_that("resolveExportPath(dir, filename, ext): folder + bare name + format extension", {
+  # folder + bare filename -> folder/filename.ext (extension from the format, not typed)
+  p1 <- resolveExportPath("/tmp/reports", "My Table", ext = "xlsx")
+  testthat::expect_match(p1, "My Table\\.xlsx$", ignore.case = TRUE)
+  testthat::expect_match(p1, "reports", fixed = TRUE)
 
-  # quote strip + extension append
-  p1 <- resolveExportPath('"C:/tmp/My Table"', ext = "xlsx")
-  testthat::expect_false(grepl('"', p1))
-  testthat::expect_match(p1, "\\.xlsx$", ignore.case = TRUE)
-
-  # bare filename -> Documents, with the requested extension
-  p2 <- resolveExportPath("Report", ext = "html")
+  # blank folder -> Documents; blank filename -> "Table"
+  p2 <- resolveExportPath("", "", ext = "html")
   testthat::expect_match(p2, "Documents", fixed = TRUE)
-  testthat::expect_match(p2, "\\.html$", ignore.case = TRUE)
+  testthat::expect_match(p2, "Table\\.html$", ignore.case = TRUE)
 
-  # ~ expands via the home dir (NOT R's Documents-remapped path.expand)
-  p3 <- resolveExportPath("~/Desktop/t", ext = "md")
-  testthat::expect_match(p3, "\\.md$", ignore.case = TRUE)
-  testthat::expect_false(grepl("^~", p3))
+  # a typed extension (even a WRONG one) is dropped; the format's extension wins
+  p3 <- resolveExportPath("/tmp", "report.csv", ext = "md")
+  testthat::expect_match(p3, "report\\.md$", ignore.case = TRUE)
+  testthat::expect_false(grepl("csv", p3))
 
-  # blank -> the Documents default
-  p4 <- resolveExportPath("", ext = "xlsx")
-  testthat::expect_match(p4, "Table\\.xlsx$", ignore.case = TRUE)
+  # surrounding quotes / brackets are stripped from BOTH parts
+  p4 <- resolveExportPath('"/tmp/out"', "<Report>", ext = "xlsx")
+  testthat::expect_false(grepl('["<>]', p4))
+  testthat::expect_match(p4, "Report\\.xlsx$")
+
+  # OS-illegal filename characters are removed (fs::path_sanitize or the base-R fallback)
+  p5 <- resolveExportPath("/tmp", 'a/b:c*d?e', ext = "md")
+  testthat::expect_false(grepl('[/:*?]', basename(p5)))
+  testthat::expect_match(p5, "\\.md$")
+
+  # ~ in the folder expands via the OS home (NOT R's Documents-remapped path.expand)
+  p6 <- resolveExportPath("~/Desktop", "t", ext = "md")
+  testthat::expect_false(grepl("^~", p6))
+  testthat::expect_match(p6, "t\\.md$")
+
+  # a directory pasted into the FILENAME box is reduced to its bare base name
+  p7 <- resolveExportPath("/tmp", "sub/dir/Name", ext = "xlsx")
+  testthat::expect_match(basename(p7), "^Name\\.xlsx$")
+})
+
+testthat::test_that("jmvtab_export gives a friendly error when the folder can't be created", {
+  # a path under a location we can't write to -> a clear, actionable message (not a raw connection error)
+  bad <- "/proc/tabxplor_nope/sub/Table.md"
+  testthat::expect_error(jmvtab_export(tabs, "md", bad), "folder", ignore.case = TRUE)
 })
 
 testthat::test_that("tab_html_string produces self-contained HTML (table + inlined CSS)", {

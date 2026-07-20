@@ -12,10 +12,10 @@ jmvtab(
   wt = NULL,
   pct = "no",
   color = "no",
+  OR = "no",
   color_signif = "ignore",
   chi2 = FALSE,
   anova = "welch",
-  OR = "no",
   na = "keep",
   lvs = "all",
   other_if_less_than = 0,
@@ -28,7 +28,7 @@ jmvtab(
   ci = "auto",
   conf_level = 0.95,
   ci_print = "ci",
-  stars = TRUE,
+  stars = FALSE,
   method_cell = "wilson",
   method_diff = "newcombe",
   totaltab = "line",
@@ -83,13 +83,20 @@ the relative risk (factors) or mean ratio (numeric).    \item
 \code{pct == "row"}, color based on odds ratios.  } How significance gates
 these colors is set separately by \code{color_signif}.}
 
+\item{OR}{With \code{pct = "row"} or \code{pct = "col"}, calculate and
+print odds ratios  (for binary variables) or relative risks ratios (for
+variables with 3 levels  or more). \itemize{  \item \code{"no"}: by
+default, no OR are calculated.  \item \code{"OR"}: print OR (instead of
+percentages).  \item \code{"OR_pct"}: print OR, with percentages in
+bracket. }}
+
 \item{color_signif}{How statistical significance gates the colors, as a
 single string.  \itemize{    \item \code{"ignore"}: by default, color every
 deviation by its observed size.    \item \code{"grey_non_signif"}: color by
 observed size, but grey out cells whose    deviation is not significant (at
 \code{conf_level}). A confidence interval on the    difference is computed
 automatically.    \item \code{"guaranteed_effect"}: color by the guaranteed
-(confidence-bound) effect --    only cells whose interval clears the
+(confidence-bound) effect --    all cells whose interval clears the
 threshold show, with dimmer colors.  }}
 
 \item{chi2}{Set to \code{TRUE} to add a test p-value row: a Chi-square test
@@ -100,13 +107,6 @@ their contribution to variance.}
 \item{anova}{Which F statistic to display for numeric column variables when
 the test is on: Welch's F (default, does not assume equal variances) or the
 classic pooled F.}
-
-\item{OR}{With \code{pct = "row"} or \code{pct = "col"}, calculate and
-print odds ratios  (for binary variables) or relative risks ratios (for
-variables with 3 levels  or more). \itemize{  \item \code{"no"}: by
-default, no OR are calculated.  \item \code{"OR"}: print OR (instead of
-percentages).  \item \code{"OR_pct"}: print OR, with percentages in
-bracket. }}
 
 \item{na}{The policy to adopt with missing values. It must be a single
 string.  \itemize{    \item \code{na = "keep"}: by default, prints
@@ -152,9 +152,9 @@ it it used as a regular expression,    to match with the names of the rows
 otherwise you get a warning message.    \item \code{"no"}: not use ref and
 not calculate diffs to gain calculation time.  }}
 
-\item{ref2}{A second reference cell is needed to calculate odds ratios  (or
-relative risks ratios). The first cell of the row or column is used by
-default.  See \code{ref}  for the full list of possible values.}
+\item{ref2}{With \code{OR = OR} (odds-ratios) and a 3+ levels factor, a
+second reference cell  is needed to calculate relative risks ratios. First
+cell by default.}
 
 \item{comp}{The comparison level : by subtables/groups, or for the whole
 table.}

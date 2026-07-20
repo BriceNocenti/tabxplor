@@ -161,6 +161,11 @@ R/
 │                              overridden (a host document is not ours). tab_kable_join(theme=) carries
 │                              the intent, but ONLY when our stylesheet ships (engine html + nzchar(css))
 │                              -- painting a page we did not style = an unreadable table.
+│                              15c: tab_render_scrollbox() (jamovi results only) = scoped <style> +
+│                              .tx-scrollbox class (width:max-content; max-width base; overflow-x:auto),
+│                              NOT an inline max-width (would out-specify @media). 15c-ii: OS-scaling-
+│                              aware cap via @media (device-width) tiers (CSS px = already scaled; screen
+│                              not iframe-viewport = no feedback loop); base cap stands if unsupported.
 ├── utils.R         (~945 L)  .onLoad() options setup, factor/list utilities, tx_str_wrap/tx_str_trunc
 │                              NOT the colour-palette DESIGN tools (preview_color_grid /
 │                              simulate_cvd_farver / plot_oklch_hue_strip_cvd / set_luminance...):
@@ -232,9 +237,14 @@ R/
 │                             (engine-free core; reuses tab() via .cache) + jmvtab_ref_vector (ref-picker)
 │                             + jmvtab_levels_order/jmv_relevel_cols (7g-ii level-reorder,
 │                             post-aggregate; .levels_order arg on tab())
-├── jmvtab-export.R  (~120 L)  jmvtab export helpers (Phase 7g): resolveExportPath (typed path →
-│                             Documents/USERPROFILE), tab_html_string (self-contained HTML),
-│                             jmvtab_export (Excel/HTML/MD dispatch)
+├── jmvtab-export.R  (~160 L)  jmvtab export helpers (Phase 7g; 15c robustness): resolveExportPath now
+│                             takes (dir, filename, ext) -- fs::path_home Documents default + fs::
+│                             path_sanitize filename + quote/bracket strip + format-driven extension
+│                             (export_home_dir/_documents_dir/_expand_home/_unwrap/_sanitize_filename
+│                             helpers, all fs-guarded w/ base-R fallback); tab_html_string (self-
+│                             contained HTML); jmvtab_export (Excel/HTML/MD dispatch) w/ friendly
+│                             pre-flight (openxlsx2 / dir-create) + UNwrapped writer so the .b.R
+│                             conditionMessage() surfaces the real cause (not "In index: 1.")
 ├── jmvtab.b.R       (~200 L)  Jamovi module backend (R6): thin orchestrator over jmvtab_build + $state
 ├── jmvtab.h.R       (605 L)  Jamovi module UI (auto-generated, do not edit)
 ├── jmvtabreg-cache.R (~290 L) Phase 15b: the jmvtabreg (Regressions) live-UI fit cache +
@@ -698,30 +708,109 @@ The per-dependent named `trials` vector (only off/observed/fixed-integer is expo
 
 #### Phase 15c — Jamovi UI maintainer’s review
 
-Both jmvtab and jmvtabreg analysis.
+Unless specified, the problem must be correctly in both `jmvtab` and jmvt`abreg analyses. When both use the same framework, it’s best if the code in note duplicated, but integrated at package level.
 
 The width of the box in which is see the resulting html table is not enough, I currently only see a small part of the table, with a big part that’s blank. My screen is 4K 32" (Windows scaling 150%) so it’s not everybody’s display, but I would want a good default that would be wide enough on different configurations. At least the double of the current one seems a possibility, keeping the horizontal scroll box for tables that are bigger than that (verify the html width itself inside the scroll box will not cut the result before the end of the last column).
 I did struggle in the past to set the width of the scroll box in Jamovi results UI, I think I even added an invisible empty plot element to tweak the width as a workaround : how to do it more cleanl and  reliably for different display hardware ? Please study jamovi dev folder, make relevant web searches, and propose me a solution. Also, if one image with the right width must be kept, please remove "plot" `jamovi/jmvtab.r.yaml`, since "cache_state" can do the same job and is needed for the cache system anyway.
 
 I can’t manage to the the `subtext` text box width to take all horizontal width available : how to do it ? Also, would it be possible to have a dynamic text box, adding more vertical space when the user use multiple lines ? Or at least, a three lines static height.
 
+`Reorder levels` collapse boxes : not collapse box needed for "Row variables", "Columns variables" etc. since each level already have it’s own collapse box. Replace with normal boxes, not collapsable, but keep the colors and display.
+
+Export :
+- I want the export button label to change depending on what is chosen in export format : "Export Excel", "Export html", "Export markdown". Fixed button width to the text with the max width, so the button changes text, not size.
+- Put export format bellow the export button. For the second column, keep "save to" above "replace"
+- Ensure the "Save to" text box takes all the normal horizontal space left at it’s right.
+- I currently have an "Export failed: In index: 1." error on jmvtab with the default "~/Documents/Table".
+  + "D:/Documents/", "D:/Documents/Table" and "D:/Documents/Table.xlsx" also fails, the same between "" too.
+  + I would prefer path and filename to be two different text boxes.
+  + Add a button, below, to reset the default path and filename to user `Documents` folder, and "Table" for filename. Useful if the user is lost.
+  + It should handle edges cases : extension set or not set, wrong extensions (better if the user doesn’t choose extension but only type of export), path between brackets or not, filename cleaning with special characters not permitted by OS filesystem, etc. If jamovi Electron session cannot create new directory, a directory not existing should trigger a message, a path not found too. Most common errors should trigger a user-friendly message, concice, clear, understandable by people not expert in computers, with what to do to solve. If some R packages exists that handles this very robustly, we can add the best one in Suggests.
+  + It should be robust on all platforms : Windows 11, Linux, Mac OS. The default user profile `Documents` folder particularly, should be robust enough to be found on all platforms.
+
 jmvtab :
 - `na="drop_all"` button not working  : "Error in ctx$na_num[[i]]: subscript out of bounds"
 - replace `comp` with a drop list, on the same line than it’s label.
 - add the `ci = "ratio"` option.
-- All all new ci methods. All the confidence intervals experts method under the same common label, each method type on it’s own line, first text then drop box, all drop boxes of the different methods aligned. This display should not mess with the column width of the former ci arguments (`ci` to `stars`), which it currently does. 
+- All all new ci methods. All the confidence intervals experts method under the same common label, each method type on it’s own line, first text then drop box, all drop boxes of the different methods aligned. This display should not mess with the column width of the former ci arguments (`ci` to `stars`), which it currently does.
 
-n_min, cleannames, etc., not appearing ?
+Also, I may have messed with something because now I have this error :
+
+```r
+> load_all() ; jmvtools::install(home = 'flatpak') ; load_all()
+# ℹ Loading tabxplor
+
+# jamovi compiler
+
+# jamovi 2.7.36 found at /usr/bin/flatpak
+# wrote: fr.json
+# wrote: jmvtab.h.R
+
+# TypeError: Cannot read properties of null (reading 'length')
+#     at removeMissingOptions (file:///home/dev1/R/x86_64-pc-linux-gnu-library/4.6/jmvtools/node_modules/jamovi-compiler/uicompiler.js:205:32)
+#     at removeMissingOptions (file:///home/dev1/R/x86_64-pc-linux-gnu-library/4.6/jmvtools/node_modules/jamovi-compiler/uicompiler.js:210:32)
+#     at removeMissingOptions (file:///home/dev1/R/x86_64-pc-linux-gnu-library/4.6/jmvtools/node_modules/jamovi-compiler/uicompiler.js:210:32)
+#     at removeMissingOptions (file:///home/dev1/R/x86_64-pc-linux-gnu-library/4.6/jmvtools/node_modules/jamovi-compiler/uicompiler.js:210:32)
+#     at uicompile (file:///home/dev1/R/x86_64-pc-linux-gnu-library/4.6/jmvtools/node_modules/jamovi-compiler/uicompiler.js:63:19)
+#     at file:///home/dev1/R/x86_64-pc-linux-gnu-library/4.6/jmvtools/node_modules/jamovi-compiler/index.js:417:13
+#     at file:///home/dev1/R/x86_64-pc-linux-gnu-library/4.6/jmvtools/node_modules/jamovi-compiler/index.js:665:3
+#     at ModuleJob.run (node:internal/modules/esm/module_job:197:25)
+#     at async Promise.all (index 0)
+#     at async ESMLoader.import (node:internal/modules/esm/loader:337:24)
+
+#Cannot read properties of null (reading 'length')
+```
 
 
 
 
+#### Phase 15d — Jamovi UI maintainer’s review 2
+
+`jmvtabreg` UI improvements.
+
+variable selector:
+- swap `wt` and `split_var` : so wt is at the same place than in `jmvtab`.
+
+New main collapsable boxes / main outline of the `jmvtabreg` UI : 
+- `Model`:
+  + Start with a table-like user-friendly menu using aligned drop lists like in current "References and predictor scaling" ; dependent variable label in the first column ; to match the chosen family in drop list in the second column ; for a numeric variable, if binomial is chosen, then  a third column depending on the R class of the variable : reference level selection for factors, default the first level (remove "model the first level of a 2-level factor", it’s only R/internals, not jamovi UI), make a "trials" text box appear in this third column for numeric variables (default value the max observed value for this outcome, modifiable by user). In the second column, only the families that are possible for the R type of each variable that is selected must appear. Treat integer() and double() alike, since to avoid the bad jamovi behaviour to coerce all integers to ordinal factors by default, I turn all integers to doubles. Keep ordinal logreg a possibility for all 3+ levels factors, even not "ordered", since users often do not use ordered R class. Remember that several dependent variable is a real-world use case that is useful, so it must fully work with several dependant variable to get several models size by size (only predictors subset give the current message that it’s not possible with several row vars, otherwise it’s too much and will be laggy and long in jamovi live UI, user can do it one variable at a time an export).
+  + `effect` and `at` on the same UI row (two columns).
+  + Put `empirical` into the `Model` box too : "empirical = <i>(compare model estimates with observed values)</i>"
+  + `exponentiate` : would it be possible to transform this into a TRUE / FALSE variable, in `jmvtabreg` but also in `tab_reg()`, TRUE being "auto-exporentiate when it makes sense" (not for gaussian), FALSE being keep base model coefficient ? 
+  + Put estimate_display in `Missing values and display`
+- `Model comparison (+predictor subsets)`: put the models selections and "+" menu first ; `compare =` below (not repeating the same legend in label and argument title both, useless, waste space ; making it clear to the user that it’s likelihood-ratio tests and the like) ; no `trials` here.
+- `References and predictor scaling`: good. Numeric predictors multiplier : just add a little more horizontal space so that "per unit (numeric)" appear in one line instead of being wrapped over too. 
+- `Significance` : new box to merge confidence intervals (conf level, method and stars on the same line, concise, not ) + colors current boxes (use the same kind of radio button than jmvtab, and the same color_signif display and text than jmvtab ; `color` argument seems meaningless here, since colors are by family, and changing the color doesn’t compute the related quantity because most of the time it have to meaning for the current models ; unless you can see cases where it’s actually useful to the user to change color, and doable with the data in the vctrs field, maybe we just remove the complexity, only keeping TRUE (default, auto depending onfamily/effect/exp) and FALSE (no colors at all) ? Just in jmvtabreg ? Also in tabxplor `tab_reg()` ? )
+- `Missing values and display` :
+  + `na = "keep"` is a very misleading arguments here, because it’s actually equivalent to `tab()`’s `na = "keep"` (!) and models never keep na values. Change it in jmvtabreg and tab_reg both. Here we shall use : "drop_by_model", "drop_all_models". Use radio buttons instead of drop box for the user to always know what are the possibilities.
+  + remove "model-summary footer" button : always model-summary footer
+  + subtext : keep the `subtext =` form, and use the same kind of autogrowth text box than jmvtab exactly. 
+  + put estimate_display here
+
+Model comparison and predictors subsets:
+- If I create 3 models and select out predictors, and I can change subsets live with no problem. This time compare with baseline or sequential works, but there’s something I don’t understand : I use `gss_simple`, dependent is `"married"`, predictors are `c(rincome, race, age)`, baseline is just `c(rincome)`, but when I add age inside a subset, LR test versus baseline pvalue disappear and is replaced with Delta-AIC, do you understand what happens ?
+- Just before, twice in a row, and with the same simple models (no ame, no nothing), models comparisons where completely freezing jamovi (infinite loading on very fast/simple models with no ame etc.) and I add to restart jamovi completely (removing the whole regression table manually not working). This time, it happened again when I added a new 4th model (after having added a new variable in variable selector) ; compare was set to "sequential" at that time. When I retry to first do three models, then add "party3" as predictor (with compare="none", or baseline, or even sequential) it works, the new variable just comes unchecked in the different models, and I can choose when I want it which is great. So I can’t really reproduce the freeze, but it happens too often.
+
+Jamovi UI display :
+- With predictors subsets, the upper border of the whole table / first row (model1, model2, model3) is missing.
+- I don’t know if it’s a custom html problem, a kable problem, or a jamovi css problem, but currently the font for tabxplor_fmt columns headers is the monospace one (when significance stars are on, Cascadia Code should only be for numbers, not for headers and text, that should stay "DejaVu Sans Condensed" with a "DejaVu Sans" fallback and other all platforms safe fallbacks if needed).
+- Whenever you can, **keep the "real_R_argument = <quick legend>" syntax** (like : "color = <i>(color helpers)</i>"), since I use the jamovi package as a progressive approach to teach R / tabxplor on R to literary students (it’s also why we do not want to translate the argument in French, only their legend).
+- In general, **do not repeat the same legend twice in the argument title (.a.yaml), and in it’s UI label (.u.yaml)**.
+
+I also have these message in jamovi devtools :
+- "quill-D_8j3Q9F.js:21 [Deprecation] Listener added for a 'DOMNodeInserted' mutation event. This event type is deprecated, and will be removed from this browser VERY soon. Usage of this event listener will cause performance issues today, and represents a large risk of imminent site breakage. Consider using MutationObserver instead. See https://chromestatus.com/feature/5083947249172480 for more information."
+- "addRange(): The given range isn't in document. value @ quill-D_8j3Q9F.js:21"
+
+Is there a simple way to add a custom tabxplor jamovi module icon/thumbnail/button image (in UI to choose an analysis among the module) ? Can you find online and in `https://github.com/jamovi` how jamovi module "icons" where created in the first place ? If you find some code to create such "icons", we could match the style and format to create a custom one for the package.
+
+
+html exports improvements :
+- Here in jamovi UI, we see very well that he title of the table bad looking with centered alignment, specially on thin tables. I want the default to be, in jamovi UI and elsewhere : left align ; if possible put the title out of the , so that the title can take the whole line without unnecessary wrapping, without artificially widening the whole table unnecessarily ; if not possible or too complicated, just a bit smaller font size but that would still be a bit bigger than the table font size (color always pure black, not grey).
 
 
 
 
-
-#### Phase 15d — Jamovi UI French translation
+#### Phase 15e — Jamovi UI French translation
 
 
 ### Phase 16 — final maintainer’s review

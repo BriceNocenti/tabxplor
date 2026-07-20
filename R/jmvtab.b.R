@@ -60,12 +60,14 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
       if (isTRUE(self$options$exportExcel)) {
         fmt <- self$options$export_format
         ext <- switch(fmt, "excel" = "xlsx", "html" = "html", "md" = "md", "xlsx")
-        p   <- resolveExportPath(self$options$path, ext)
+        p   <- resolveExportPath(self$options$export_dir, self$options$export_filename, ext)
         tryCatch({
           jmvtab_export(tabs, format = fmt, path = p, replace = self$options$xl_replace)
           private$.notice(paste0("Saved to: ", p), ok = TRUE)
         }, error = function(err) {
-          private$.notice(paste0("Export failed: ", err$message), ok = FALSE)
+          # conditionMessage() (not err$message) surfaces the FULL rlang cause chain -- the bare
+          # err$message is only the top "In index: 1." wrapper (Phase 15c un-masking).
+          private$.notice(paste0("Export failed: ", conditionMessage(err)), ok = FALSE)
         })
       }
 
@@ -118,6 +120,10 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         stars        = self$options$stars,
         method_cell  = self$options$method_cell,
         method_diff  = self$options$method_diff,
+        # Phase 15c: the three additional CI expert methods (mean-diff / mean-ratio / prop-rate ratio).
+        method_ratio      = self$options$method_ratio,
+        method_mean_diff  = self$options$method_mean_diff,
+        method_mean_ratio = self$options$method_mean_ratio,
         cleannames   = self$options$cleannames,      # applied at DISPLAY (Phase 7e)
         totaltab     = self$options$totaltab,
         digits       = as.integer(self$options$digits),  # `digits` is a List -> a "0".."6" string

@@ -12,10 +12,10 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             wt = NULL,
             pct = "no",
             color = "no",
+            OR = "no",
             color_signif = "ignore",
             chi2 = FALSE,
             anova = "welch",
-            OR = "no",
             na = "keep",
             lvs = "all",
             other_if_less_than = 0,
@@ -28,7 +28,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             ci = "auto",
             conf_level = 0.95,
             ci_print = "ci",
-            stars = TRUE,
+            stars = FALSE,
             method_cell = "wilson",
             method_diff = "newcombe",
             totaltab = "line",
@@ -110,6 +110,14 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                     "contrib",
                     "OR"),
                 default="no")
+            private$..OR <- jmvcore::OptionList$new(
+                "OR",
+                OR,
+                options=list(
+                    "no",
+                    "OR",
+                    "OR_pct"),
+                default="no")
             private$..color_signif <- jmvcore::OptionList$new(
                 "color_signif",
                 color_signif,
@@ -129,14 +137,6 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                     "welch",
                     "classic"),
                 default="welch")
-            private$..OR <- jmvcore::OptionList$new(
-                "OR",
-                OR,
-                options=list(
-                    "no",
-                    "OR",
-                    "OR_pct"),
-                default="no")
             private$..na <- jmvcore::OptionList$new(
                 "na",
                 na,
@@ -237,7 +237,7 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             private$..stars <- jmvcore::OptionBool$new(
                 "stars",
                 stars,
-                default=TRUE)
+                default=FALSE)
             private$..method_cell <- jmvcore::OptionList$new(
                 "method_cell",
                 method_cell,
@@ -344,10 +344,10 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$.addOption(private$..wt)
             self$.addOption(private$..pct)
             self$.addOption(private$..color)
+            self$.addOption(private$..OR)
             self$.addOption(private$..color_signif)
             self$.addOption(private$..chi2)
             self$.addOption(private$..anova)
-            self$.addOption(private$..OR)
             self$.addOption(private$..na)
             self$.addOption(private$..lvs)
             self$.addOption(private$..other_if_less_than)
@@ -384,10 +384,10 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         wt = function() private$..wt$value,
         pct = function() private$..pct$value,
         color = function() private$..color$value,
+        OR = function() private$..OR$value,
         color_signif = function() private$..color_signif$value,
         chi2 = function() private$..chi2$value,
         anova = function() private$..anova$value,
-        OR = function() private$..OR$value,
         na = function() private$..na$value,
         lvs = function() private$..lvs$value,
         other_if_less_than = function() private$..other_if_less_than$value,
@@ -423,10 +423,10 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         ..wt = NA,
         ..pct = NA,
         ..color = NA,
+        ..OR = NA,
         ..color_signif = NA,
         ..chi2 = NA,
         ..anova = NA,
-        ..OR = NA,
         ..na = NA,
         ..lvs = NA,
         ..other_if_less_than = NA,
@@ -543,13 +543,19 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   (factor columns only).    \item \code{"OR"}: for \code{pct == "col"} or
 #'   \code{pct == "row"}, color based on odds ratios.  } How significance gates
 #'   these colors is set separately by \code{color_signif}.
+#' @param OR With \code{pct = "row"} or \code{pct = "col"}, calculate and
+#'   print odds ratios  (for binary variables) or relative risks ratios (for
+#'   variables with 3 levels  or more). \itemize{  \item \code{"no"}: by
+#'   default, no OR are calculated.  \item \code{"OR"}: print OR (instead of
+#'   percentages).  \item \code{"OR_pct"}: print OR, with percentages in
+#'   bracket. }
 #' @param color_signif How statistical significance gates the colors, as a
 #'   single string.  \itemize{    \item \code{"ignore"}: by default, color every
 #'   deviation by its observed size.    \item \code{"grey_non_signif"}: color by
 #'   observed size, but grey out cells whose    deviation is not significant (at
 #'   \code{conf_level}). A confidence interval on the    difference is computed
 #'   automatically.    \item \code{"guaranteed_effect"}: color by the guaranteed
-#'   (confidence-bound) effect --    only cells whose interval clears the
+#'   (confidence-bound) effect --    all cells whose interval clears the
 #'   threshold show, with dimmer colors.  }
 #' @param chi2 Set to \code{TRUE} to add a test p-value row: a Chi-square test
 #'   for categorical column variables and an ANOVA F-test for numeric ones
@@ -558,12 +564,6 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #' @param anova Which F statistic to display for numeric column variables when
 #'   the test is on: Welch's F (default, does not assume equal variances) or the
 #'   classic pooled F.
-#' @param OR With \code{pct = "row"} or \code{pct = "col"}, calculate and
-#'   print odds ratios  (for binary variables) or relative risks ratios (for
-#'   variables with 3 levels  or more). \itemize{  \item \code{"no"}: by
-#'   default, no OR are calculated.  \item \code{"OR"}: print OR (instead of
-#'   percentages).  \item \code{"OR_pct"}: print OR, with percentages in
-#'   bracket. }
 #' @param na The policy to adopt with missing values. It must be a single
 #'   string.  \itemize{    \item \code{na = "keep"}: by default, prints
 #'   \code{NA}'s as explicit \code{"NA"} level.    \item \code{na = "drop"}:
@@ -601,9 +601,9 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   (or columns). Be precise enough to match only one    column or row,
 #'   otherwise you get a warning message.    \item \code{"no"}: not use ref and
 #'   not calculate diffs to gain calculation time.  }
-#' @param ref2 A second reference cell is needed to calculate odds ratios  (or
-#'   relative risks ratios). The first cell of the row or column is used by
-#'   default.  See \code{ref}  for the full list of possible values.
+#' @param ref2 With \code{OR = OR} (odds-ratios) and a 3+ levels factor, a
+#'   second reference cell  is needed to calculate relative risks ratios. First
+#'   cell by default.
 #' @param comp The comparison level : by subtables/groups, or for the whole
 #'   table.
 #' @param ci The type of confidence intervals to calculate, passed to
@@ -679,10 +679,10 @@ jmvtab <- function(
     wt = NULL,
     pct = "no",
     color = "no",
+    OR = "no",
     color_signif = "ignore",
     chi2 = FALSE,
     anova = "welch",
-    OR = "no",
     na = "keep",
     lvs = "all",
     other_if_less_than = 0,
@@ -695,7 +695,7 @@ jmvtab <- function(
     ci = "auto",
     conf_level = 0.95,
     ci_print = "ci",
-    stars = TRUE,
+    stars = FALSE,
     method_cell = "wilson",
     method_diff = "newcombe",
     totaltab = "line",
@@ -736,10 +736,10 @@ jmvtab <- function(
         wt = wt,
         pct = pct,
         color = color,
+        OR = OR,
         color_signif = color_signif,
         chi2 = chi2,
         anova = anova,
-        OR = OR,
         na = na,
         lvs = lvs,
         other_if_less_than = other_if_less_than,

@@ -44,16 +44,19 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
       }
 
       # Export (Excel / HTML / Markdown): the `exportExcel` Action is a boolean click. The format picks
-      # the extension; the user-typed `path` is resolved (Documents default) and reported via a Notice.
+      # the extension; the user-typed FOLDER + FILENAME are resolved (Documents default) and reported
+      # via a Notice.
       if (isTRUE(self$options$exportExcel)) {
         fmt <- self$options$export_format
         ext <- switch(fmt, "excel" = "xlsx", "html" = "html", "md" = "md", "xlsx")
-        p   <- resolveExportPath(self$options$path, ext)
+        p   <- resolveExportPath(self$options$export_dir, self$options$export_filename, ext)
         tryCatch({
           jmvtab_export(tabs, format = fmt, path = p, replace = self$options$xl_replace)
           private$.notice(paste0("Saved to: ", p), ok = TRUE)
         }, error = function(err) {
-          private$.notice(paste0("Export failed: ", err$message), ok = FALSE)
+          # conditionMessage() (not err$message) surfaces the FULL rlang cause chain -- the bare
+          # err$message is only the top "In index: 1." wrapper (Phase 15c un-masking).
+          private$.notice(paste0("Export failed: ", conditionMessage(err)), ok = FALSE)
         })
       }
 

@@ -243,12 +243,16 @@ children:
       - type: LayoutBox
         margin: none
         children:
+          # Phase 15c: a full-width, auto-grow <textarea> (CustomControl) drives the hidden `subtext`.
           - type: Label
             label: <b>Note below the table:</b>
-          - type: TextBox
-            name: subtext
-            format: string
-            width: largest
+            children:
+              - type: CustomControl
+                name: subtextCtrl
+                stretchFactor: 1
+                events:
+                  creating: ./jmvtabreg::subtextCtrl_creating
+                  updated: ./jmvtabreg::subtextCtrl_updated
       - type: LayoutBox
         margin: large
         children:
@@ -298,49 +302,62 @@ children:
     margin: large
     stretchFactor: 1
     children:
-      - type: LayoutBox
-        cell:
-          column: 0
-          row: 0
-        stretchFactor: 0
-        children:
-          - type: Label
-            label: <b>Export format:</b>
-          - type: ComboBox
-            name: export_format
-            events:
-              change: ./jmvtabreg::export_format_changed
+      # Row of two columns: [Export button / Format below it]  |  [Save-to file name / Replace].
       - type: LayoutBox
         margin: none
-        cell:
-          column: 1
-          row: 0
-        stretchFactor: 1
+        children:
+          - type: LayoutBox
+            cell:
+              column: 0
+              row: 0
+            stretchFactor: 0
+            children:
+              - type: ActionButton
+                name: exportExcel
+                label: Export Excel
+                events:
+                  change: ./jmvtabreg::exportExcel_changed
+              - type: Label
+                label: <b>Format:</b>
+                children:
+                  - type: ComboBox
+                    name: export_format
+                    events:
+                      change: ./jmvtabreg::export_format_changed
+          - type: LayoutBox
+            margin: none
+            cell:
+              column: 1
+              row: 0
+            stretchFactor: 1
+            children:
+              - type: Label
+                label: <b>Save to (file name):</b>
+                children:
+                  - type: TextBox
+                    name: export_filename
+                    format: string
+                    width: largest
+              - type: CheckBox
+                name: xl_replace
+                label: Replace existing file
+      # The destination folder, taking all the remaining width (stretched to 100% in js/jmvtabreg.js).
+      - type: LayoutBox
+        margin: none
         children:
           - type: Label
-            label: <b>Save to (path or file name):</b>
-          - type: TextBox
-            name: path
-            format: string
-            width: largest
+            label: <b>Folder:</b>
+            children:
+              - type: TextBox
+                name: export_dir
+                format: string
+                width: largest
+      # Reset the folder + file name to their defaults.
       - type: LayoutBox
-        cell:
-          column: 0
-          row: 1
-        stretchFactor: 0
+        margin: none
         children:
           - type: ActionButton
-            name: exportExcel
-            label: Export to Excel
+            name: resetPath
+            label: Reset to defaults
             events:
-              change: ./jmvtabreg::exportExcel_changed
-      - type: LayoutBox
-        margin: none
-        cell:
-          column: 1
-          row: 1
-        stretchFactor: 0
-        children:
-          - type: CheckBox
-            name: xl_replace
-            label: Replace existing file
+              change: ./jmvtabreg::resetPath_changed

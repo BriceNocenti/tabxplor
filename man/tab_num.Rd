@@ -103,6 +103,8 @@ contributions to variance be calculated for each subtable/group (by default,
 \item \code{"cell"}: absolute confidence intervals of cells percentages.
 \item \code{"diff"}: confidence intervals of the difference between a cell and the
 relative total cell (or relative first cell when \code{ref = "first"}).
+\item \code{"ratio"}: like \code{"diff"}, but the interval is on the \emph{ratio}
+(relative risk / mean ratio) scale between a cell and its reference (the Katz interval).
 \item \code{"auto"}: \code{ci = "diff"} for means and row/col percentages,
 \code{ci = "cell"} for frequencies ("all", "all_tabs").
 }}

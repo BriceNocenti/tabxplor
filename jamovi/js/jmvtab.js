@@ -3,12 +3,22 @@
 // it lean. See dev/tabxplor_1.4.0_jamovi_dev.md (§12 ref picker, §14 export) for the events API.
 // jus 3.0: use the GLOBAL `utils.clone` (the events `this` has no `.clone`, unlike jus 2.0).
 
-var exportLabels = { excel: "Excel", html: "HTML", md: "Markdown" };
+var exportLabels = { excel: "Excel", html: "HTML", md: "markdown" };
 
 var setExportLabel = function(ui) {
     if (!ui.export_format || !ui.exportExcel) return;
     var fmt = ui.export_format.value();
-    ui.exportExcel.setPropertyValue("label", "Export to " + (exportLabels[fmt] || "Excel"));
+    ui.exportExcel.setPropertyValue("label", "Export " + (exportLabels[fmt] || "Excel"));
+};
+
+// Pin the export button to the widest label's width ("Export markdown") so its TEXT changes with the
+// format but its SIZE does not. Re-applied on each onUpdate (jamovi re-renders may drop inline styles).
+var fixExportBtnWidth = function(ui) {
+    var c = ui.exportExcel;
+    if (!c || !c.$el || !c.$el[0]) return;
+    var btn = c.$el[0].querySelector("button") || c.$el[0];
+    btn.style.width = "150px";
+    btn.style.boxSizing = "border-box";
 };
 
 // Grey the controls that are meaningless without tab_vars (subtables): the total-table type and the
@@ -16,12 +26,45 @@ var setExportLabel = function(ui) {
 // the declarative `enable:` DSL -> imperative setEnabled, re-run from onUpdate + onChange_vars (both
 // fire on every variable change). The value is preserved (the backend forces totaltab="no"/comp="tab"
 // with no tab_vars anyway), so a control returns to its stored value when tab_vars is re-added.
+// Phase 15c: comp is now a single ComboBox (was comp_1 / comp_2 radios).
 var applyVarEnables = function(ui) {
     var tv = ui.tab_vars ? ui.tab_vars.value() : null;
     var hasTab = !!(tv && tv.length > 0);
-    ["totaltab_1", "totaltab_2", "totaltab_3", "comp_1", "comp_2"].forEach(function(nm) {
+    ["totaltab_1", "totaltab_2", "totaltab_3", "comp"].forEach(function(nm) {
         if (ui[nm]) ui[nm].setEnabled(hasTab);
     });
+};
+
+// Phase 15c: the `subtext` note is a full-width, auto-grow <textarea> (a CustomControl driving the
+// hidden `subtext` String option). Built once; on `updated` the option value is only re-synced into
+// the textarea when they diverge (e.g. after the export "Reset" or a load) so typing is never
+// clobbered. setValue is on `change` (blur), NOT every keystroke -> no re-run per character.
+var autoGrowSubtext = function(ta) {
+    ta.style.height = "auto";
+    ta.style.height = (ta.scrollHeight + 2) + "px";
+};
+var renderSubtext = function(ui) {
+    if (!ui.subtextCtrl || !ui.subtextCtrl.$el || !ui.subtextCtrl.$el[0]) return;
+    var root = ui.subtextCtrl.$el[0];
+    var val  = ui.subtext ? String(ui.subtext.value() || "") : "";
+    var ta   = root.querySelector("textarea[data-tabx-subtext]");
+    if (!ta) {
+        root.innerHTML = "";
+        ta = document.createElement("textarea");
+        ta.setAttribute("data-tabx-subtext", "1");
+        ta.rows = 3;
+        ta.style.cssText = "width:100%;box-sizing:border-box;resize:vertical;min-height:3.6em;" +
+                           "font-family:inherit;font-size:inherit;padding:4px 6px;" +
+                           "border:1px solid rgba(0,0,0,0.28);border-radius:3px;background:#fff;color:#000;";
+        ta.value = val;
+        ta.addEventListener("input",  function() { autoGrowSubtext(ta); });
+        ta.addEventListener("change", function() { if (ui.subtext) ui.subtext.setValue(ta.value); });
+        root.appendChild(ta);
+        autoGrowSubtext(ta);
+    } else if (ta.value !== val) {
+        ta.value = val;
+        autoGrowSubtext(ta);
+    }
 };
 
 // jamovi 2.6.44's TextBox `width:` enum caps at `largest` (200px) -- there is NO `auto` (the compiler
@@ -45,9 +88,10 @@ var stretchTextBox = function(ui, name) {
 
 var onUpdate = function(ui) {
     setExportLabel(ui);
+    fixExportBtnWidth(ui);
     applyVarEnables(ui);
-    stretchTextBox(ui, "subtext");
-    stretchTextBox(ui, "path");
+    renderSubtext(ui);
+    stretchTextBox(ui, "export_dir");
     renderRefPicker(ui);   // defined below (call-time resolution)
 };
 
@@ -66,7 +110,7 @@ var onUpdate = function(ui) {
 var TABX_SEL = "#b5caef";   // jamovi's list-selection blue (.selected in analysisui.css)
 var TABX = {
     axis:    "margin:6px 6px 6px 12px;border:1px solid rgba(0,0,0,0.16);border-radius:4px;background:rgba(0,0,0,0.06);",  // left-indented from the outline
-    axisSum: "display:block;list-style:none;font-weight:600;padding:5px 8px;cursor:pointer;",
+    axisTitle: "font-weight:600;padding:5px 8px;",   // non-collapsible axis header (no caret / pointer)
     varD:    "margin:4px 6px;border:1px solid rgba(0,0,0,0.12);border-radius:4px;background:rgba(0,0,0,0.03);",
     varSum:  "display:block;list-style:none;padding:4px 8px;cursor:pointer;",
     body:    "padding:2px 8px 8px 8px;",
@@ -104,22 +148,17 @@ var afterFetch = function(ui) {
     if (ui.refPickerCtrl  && ui.refPickerCtrl.$el)  renderRefPicker(ui);
 };
 
-var makeDetails = function(key, defOpen, boxStyle, sumStyle, summaryText) {
-    var d = document.createElement("details");
+// Phase 15c: a NON-collapsible titled box for the AXIS level of the reorder tree ("Row variables" /
+// "Column variables" / "Table variables") -- same Material tint/border as the old <details>, but a
+// plain title <div> (no <summary>, caret or toggle), always open. The PER-VARIABLE nodes (makeVarNode)
+// stay collapsible <details> -- each level already has its own collapse box.
+var makeTitledBox = function(boxStyle, titleStyle, titleText) {
+    var d = document.createElement("div");
     d.style.cssText = boxStyle;
-    d.open = (key in openState) ? openState[key] : defOpen;
-    var s = document.createElement("summary");
-    s.style.cssText = sumStyle;                    // display:block hides the native marker
-    var caret = document.createElement("span");    // explicit caret -> collapse affordance is CSS-proof
-    caret.style.cssText = "display:inline-block;width:1.1em;";
-    caret.textContent = d.open ? "▾" : "▸";
-    s.appendChild(caret);
-    s.appendChild(document.createTextNode(summaryText));
-    d.addEventListener("toggle", function() {
-        openState[key] = d.open;
-        caret.textContent = d.open ? "▾" : "▸";
-    });
-    d.appendChild(s);
+    var t = document.createElement("div");
+    t.style.cssText = titleStyle;
+    t.textContent = titleText;
+    d.appendChild(t);
     return d;
 };
 
@@ -280,7 +319,7 @@ var renderTree = function(ui) {
     axes.forEach(function(ax) {
         var label = ax[0], vars = ax[1];
         if (vars.length === 0) return;
-        var axD = makeDetails("axis:" + label, true, TABX.axis, TABX.axisSum, label);
+        var axD = makeTitledBox(TABX.axis, TABX.axisTitle, label);
         axD.style.gridColumn = String(ax[2]);
         axD.style.gridRow    = String(ax[3]);
         frag.appendChild(axD);
@@ -551,9 +590,14 @@ module.exports = {
         renderRefPicker(ui);
     },
 
-    // Keep the export button label in sync with the chosen format (Excel / HTML / Markdown).
+    // subtextCtrl: the full-width auto-grow <textarea> for the below-table note (Phase 15c).
+    subtextCtrl_creating: function(ui) { renderSubtext(ui); },
+    subtextCtrl_updated:  function(ui) { renderSubtext(ui); },
+
+    // Keep the export button label + width in sync with the chosen format (Excel / HTML / markdown).
     export_format_changed: function(ui) {
         setExportLabel(ui);
+        fixExportBtnWidth(ui);
     },
 
     // Reset the export action button shortly after it is clicked, so a second export re-fires the
@@ -563,6 +607,15 @@ module.exports = {
             setTimeout(function() {
                 ui.exportExcel.setValue(false);
             }, 2000);
+        }
+    },
+
+    // Reset the export folder + file name to their defaults, then clear the action so it can re-fire.
+    resetPath_changed: function(ui) {
+        if (ui.resetPath && ui.resetPath.value()) {
+            if (ui.export_dir)      ui.export_dir.setValue("~/Documents");
+            if (ui.export_filename) ui.export_filename.setValue("Table");
+            ui.resetPath.setValue(false);
         }
     }
 

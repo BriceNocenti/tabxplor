@@ -618,10 +618,36 @@ print.tabxplor_kable <- function(x, ...) {
   invisible(x)
 }
 
-# Wrap a home-built html fragment in a horizontally-scrollable div (replaces kableExtra::scroll_box
-# for the jamovi results iframe; inline-styled so it needs no external CSS).
+# Wrap a home-built html fragment in a horizontally-scrollable, width-capped box for the jamovi results
+# iframe (replaces kableExtra::scroll_box; self-contained -- needs no external CSS). ONLY the two jmvtab
+# backends call this.
+#
+# Phase 15c width fix: jamovi's results `.jmv-results-html` is a fixed ~500px box whose `.content` caps
+# at max-width:450px and does NOT clip; the iframe auto-sizes to content and reports width+40 to the
+# panel. The old `width:100%` resolved against that 450-500px cap -> a cramped box with a wide blank
+# panel beside it. `width:max-content` sizes the box to the TABLE's own intrinsic width (independent of
+# the host cap, so a small table shows no blank), `max-width:<CAP>px` bounds how wide the panel may grow,
+# and `overflow-x:auto` gives an INTERNAL horizontal scrollbar past the CAP.
+#
+# OS-scaling-aware CAP (Phase 15c-ii): the box CSS lives in a scoped <style> + a `.tx-scrollbox` class
+# (NOT an inline style -- an inline max-width would out-specify the @media rules). `device-width` media
+# features are evaluated against the physical SCREEN (not the iframe's content-sized viewport, so no
+# feedback loop) and are expressed in CSS pixels, which ALREADY fold in OS display scaling -- a 4K panel
+# at Windows 150% reports 2560 CSS px, not 3840. So a cap tiered on device-width fits each machine's
+# real, scaled display. `device-width` is deprecated but still honoured by Chromium/Electron; if a
+# browser ever drops it, no @media matches and the base `max_width` stands -> identical to a plain fixed
+# cap. `@media` order matters (equal specificity, last match wins): the wider 4K@100% tier is placed
+# after the QHD tier so it overrides. NB: needs live review; tune the px thresholds/caps to taste.
 #' @keywords internal
-tab_render_scrollbox <- function(html, width = "100%") {
-  paste0('<div style="overflow-x:auto;width:', width,
-         ';display:block;">', as.character(html), '</div>')
+tab_render_scrollbox <- function(html, max_width = 1600L) {
+  base <- if (is.null(max_width)) 1600L else max_width
+  css <- paste0(
+    "<style>",
+    ".tx-scrollbox{overflow-x:auto;width:max-content;display:block;max-width:", base, "px;}",
+    "@media (min-device-width:2200px){.tx-scrollbox{max-width:2000px;}}",   # QHD / 4K scaled (e.g. 2560)
+    "@media (min-device-width:3200px){.tx-scrollbox{max-width:2600px;}}",   # 4K at 100 % scaling
+    "@media (max-device-width:1500px){.tx-scrollbox{max-width:1200px;}}",   # small / high-scaling laptop
+    "</style>"
+  )
+  paste0(css, '<div class="tx-scrollbox">', as.character(html), '</div>')
 }

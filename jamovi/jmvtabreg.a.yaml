@@ -363,6 +363,7 @@ options:
       title: "Note below the table"
       type: String
       default: ""
+      hidden: true      # driven by the subtextCtrl CustomControl (a full-width auto-grow textarea)
       description:
           R: >
            A free note printed below the table.
@@ -429,11 +430,32 @@ options:
     - name: exportExcel
       title: "Export"
       type: Action
+      description:
+        R: "Press to export the table to the chosen format (the button label follows the format)."
 
-    - name: path
-      title: "Save to (path or file name)"
+    - name: export_dir
+      title: "Folder"
       type: String
-      default: "~/Documents/Regression"
+      default: "~/Documents"
+      description:
+          R: >
+           The folder to save the exported file in. `~` expands to your home folder. Blank saves to
+           your Documents.
+
+    - name: export_filename
+      title: "Save to (file name)"
+      type: String
+      default: "Regression"
+      description:
+          R: >
+           The bare file name, with NO extension (the chosen format adds it). Illegal characters are
+           removed automatically. Blank saves as "Table".
+
+    - name: resetPath
+      title: "Reset to defaults"
+      type: Action
+      description:
+        R: "Reset the folder and file name to their defaults (your Documents folder and \"Regression\")."
 
     - name: xl_replace
       title: "Replace existing file"

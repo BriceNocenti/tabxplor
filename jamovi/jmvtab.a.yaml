@@ -414,6 +414,8 @@ options:
           name:  cell
         - title: "diff <i>(ci on the difference with reference)</i>"
           name:  diff
+        - title: "ratio <i>(ci on the ratio with reference)</i>"
+          name:  ratio
       default: auto
       description:
           R: >
@@ -494,6 +496,48 @@ options:
            The proportion confidence-interval method for \code{ci = "diff"}. \code{"newcombe"}
            (default) is the dual of the two-proportion score test, so the interval and the
            significance stars always agree.
+
+    - name: method_ratio
+      title: "method_ratio = <i>(proportion / rate ratio)</i>"
+      type: List
+      options:
+        - title: "katz <i>(log ratio)</i>"
+          name:  katz
+      default: katz
+      description:
+          R: >
+           The confidence-interval method for a ratio of proportions or rates
+           (\code{ci = "ratio"} on percentages): Katz's log-ratio interval.
+
+    - name: method_mean_diff
+      title: "method_mean_diff = <i>(mean difference)</i>"
+      type: List
+      options:
+        - title: "welch <i>(unequal variances, default)</i>"
+          name:  welch
+        - title: "student <i>(pooled variance)</i>"
+          name:  student
+      default: welch
+      description:
+          R: >
+           The confidence-interval method for the difference of numeric means
+           (means with \code{ci = "diff"}): Welch (default) or Student (pooled variance).
+
+    - name: method_mean_ratio
+      title: "method_mean_ratio = <i>(mean ratio)</i>"
+      type: List
+      options:
+        - title: "robust <i>(each group's variance, default)</i>"
+          name:  robust
+        - title: "quasipoisson <i>(dispersion-scaled)</i>"
+          name:  quasipoisson
+        - title: "poisson <i>(naive counts)</i>"
+          name:  poisson
+      default: robust
+      description:
+          R: >
+           The confidence-interval method for a ratio of numeric means
+           (means with \code{ci = "ratio"}).
 
 
 
@@ -599,6 +643,7 @@ options:
       title: "" # subtext
       type: String
       default: ""
+      hidden: true      # driven by the subtextCtrl CustomControl (a full-width auto-grow textarea)
       description:
           R: >
            A character vector to print rows of legend under the table.
@@ -655,20 +700,34 @@ options:
            The export file format: Excel (`.xlsx`), HTML (`.html`) or Markdown (`.md`).
 
     - name: exportExcel
-      title: "Export to Excel"
+      title: "Export"
       type: Action
       description:
-        R: "Press to export the table to the chosen format."
+        R: "Press to export the table to the chosen format (the button label follows the format)."
 
-    - name: path
+    - name: export_dir
       type: String
-      title: ""
-      default: "~/Documents/Table"
+      title: "Folder"
+      default: "~/Documents"
       description:
           R: >
-           Where to save the file. A full path, or a bare name (saved in your Documents folder).
-           The extension is added automatically from the chosen format. `~` expands to your home
-           folder.
+           The folder to save the exported file in. `~` expands to your home folder (resolved to
+           your real Documents folder inside jamovi's bundled R). Blank saves to your Documents.
+
+    - name: export_filename
+      type: String
+      title: "Save to (file name)"
+      default: "Table"
+      description:
+          R: >
+           The bare file name, with NO extension (the chosen format adds it). Illegal characters are
+           removed automatically. Blank saves as "Table".
+
+    - name: resetPath
+      title: "Reset to defaults"
+      type: Action
+      description:
+        R: "Reset the folder and file name to their defaults (your Documents folder and \"Table\")."
 
     - name: xl_replace
       title: "" #

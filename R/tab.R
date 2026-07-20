@@ -249,6 +249,8 @@ NULL
 #'    \item \code{"cell"}: absolute confidence intervals of cells percentages.
 #'    \item \code{"diff"}: confidence intervals of the difference between a cell and the
 #'    relative total cell (or relative first cell when \code{ref = "first"}).
+#'    \item \code{"ratio"}: like \code{"diff"}, but the interval is on the \emph{ratio}
+#'    (relative risk / mean ratio) scale between a cell and its reference (the Katz interval).
 #'    \item \code{"auto"}: \code{ci = "diff"} for means and row/col percentages,
 #'      \code{ci = "cell"} for frequencies ("all", "all_tabs").
 #'   }
@@ -1031,6 +1033,8 @@ finalize_one_col <- function(col, spec) {
 #'    \item \code{"cell"}: absolute confidence intervals of cells percentages.
 #'    \item \code{"diff"}: confidence intervals of the difference between a cell and the
 #'    relative total cell (or relative first cell when \code{ref = "first"}).
+#'    \item \code{"ratio"}: like \code{"diff"}, but the interval is on the \emph{ratio}
+#'    (relative risk / mean ratio) scale between a cell and its reference (the Katz interval).
 #'    \item \code{"auto"}: \code{ci = "diff"} for means and row/col percentages,
 #'    \code{ci = "cell"} for frequencies ("all", "all_tabs").
 #'   }
@@ -1363,8 +1367,9 @@ tab_build_tables <- function(ctx) {
 # tab_rowvar_ctxs() -- split the post-aggregate ctx into one lean ctx per row_var, ready to map/ship
 # (Phase 9a; replaces ctx_slice() + the tabxplor_rowvar_fields constant). Every field that VARIES per
 # row_var is listed ONCE here (the single source of truth); each unit takes its element (`[[i]]`, so a
-# per-row_var LIST field like fine_num yields its element, an atomic vector its scalar). A field that
-# stays scalar under na = "drop_all" (na_text / na_num collapse to a single "keep") is left as-is.
+# per-row_var LIST field like fine_num yields its element, an atomic vector its scalar). The `length(x)
+# == n` guard means a field left scalar (length 1 != n) rides whole -- so na_text / na_num are now proper
+# per-row_var lists under na = "drop_all" too (tab_prepare_pop), which the guard slices per row_var.
 # Everything else -- per-col_var (pct_vect is nested, but the per-row_var slice is a col_var vector),
 # scalar, or the shared jmvtab cached_tests list (kept whole; the transform picks its row_var entry) --
 # rides in the shared skeleton. `data` / `fine_fused` are dropped (shipped once by tab_pmap); the heavy
@@ -1711,8 +1716,12 @@ tab_prepare_pop <- function(ctx) {
   #If all variables on a subtable are "drop_all", then put na = "keep" to gain time
   if (na == "drop_all") {
     na_drop_all <- as.character(c(row_vars, col_vars, tab_vars))
-    na_text <- "keep"
-    na_num  <- "keep"
+    # Per-row_var lists of "keep" (SAME shape as the else branch): na_num one scalar per row_var,
+    # na_text one char vector (per text col_var) per row_var. Keeping the "keep" value preserves the
+    # speed shortcut; the list shape lets any positional consumer index per row_var -- notably
+    # jmv_cache_aggregate()'s ctx$na_num[[i]], which broke on the former scalar with >=2 row_vars.
+    na_text <- rep(list(rep("keep", sum(col_vars_text))), length(row_vars))
+    na_num  <- rep(list("keep"), length(row_vars))
 
   } else {
     # na_drop_all was resolved to column names in tab_setup (Block B); re-resolve it against the
@@ -4146,6 +4155,8 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, OR, color, pct,
 #'    \item \code{"cell"}: absolute confidence intervals of cells percentages.
 #'    \item \code{"diff"}: confidence intervals of the difference between a cell and the
 #'    relative total cell (or relative first cell when \code{ref = "first"}).
+#'    \item \code{"ratio"}: like \code{"diff"}, but the interval is on the \emph{ratio}
+#'    (relative risk / mean ratio) scale between a cell and its reference (the Katz interval).
 #'    \item \code{"auto"}: \code{ci = "diff"} for means and row/col percentages,
 #'      \code{ci = "cell"} for frequencies ("all", "all_tabs").
 #'   }
@@ -5661,6 +5672,8 @@ tab_pct <- function(tabs, pct = "row", #c("row", "col", "all", "all_tabs", "no")
 #' intervals. Set to "diff" to calculate the confidence intervals of the difference
 #' between a cell and the relative total cell (or the reference cell,
 #'  when `ref` is not `"tot"` in \code{\link{tab_plain}} or \code{\link{tab_num}}).
+#'  Set to "ratio" for the same interval on the \emph{ratio} (relative risk / mean ratio)
+#'  scale (the Katz interval) rather than the difference scale.
 #'  By default, "diff" ci are calculated for means and row and col percentages,
 #'  "cell" ci for frequencies ("all", "all_tabs"). By default, with \code{ci = "cell"},
 #'  the result is printed in the `[inf;sup]` form. Set
@@ -5759,7 +5772,7 @@ tab_ci <- function(tabs,
                    method_ratio = "katz", method_mean_diff = "welch",
                    method_mean_ratio = "robust",
                    ci_scale = "diff") {
-  stopifnot(all(ci %in% c("auto", "cell", "diff", "no")), #"r_to_r", "c_to_c", "tab_to_tab",
+  stopifnot(all(ci %in% c("auto", "cell", "diff", "no", "ratio")), #"r_to_r", "c_to_c", "tab_to_tab",
             all(ci_scale %in% c("diff", "ratio")),
             all(comp %in%  c("tab", "all")),
             all(method_cell %in% c("wilson", "wald")),
@@ -5768,6 +5781,14 @@ tab_ci <- function(tabs,
             all(method_mean_diff %in% c("welch", "student")),
             all(method_mean_ratio %in% c("robust", "quasipoisson", "poisson"))
   )
+  # Phase 15c: a direct `ci = "ratio"` == a difference CI on the ratio (Katz) scale, independent of
+  # colour. Fold it to ci = "diff" + ci_scale = "ratio" (the pipeline already does this via
+  # tab_resolve_settings(); this makes tab_ci() a self-contained entry point too).
+  if (any(ci == "ratio")) {
+    ci_scale <- rep_len(ci_scale, length(ci))
+    ci_scale[ci == "ratio"] <- "ratio"
+    ci[ci == "ratio"] <- "diff"
+  }
   # Phase 3a: significance stars default (universal CI-inclusion). NULL -> option default.
   stars <- if (is.null(stars)) getOption("tabxplor.stars", FALSE) else stars
 

@@ -64,6 +64,13 @@ tab_resolve_settings <- function(color, OR, ci, chi2, ref, pct_vect, col_vars_te
                                  tab_vars = character(), row_vars = character(),
                                  col_vars = character(), filter_expr = NA_character_) {
 
+  # Phase 15c: `ci = "ratio"` is a clean, self-contained entry point for the ratio-scale (Katz)
+  # difference interval -- the SAME bounds a ratio-coloured table stores, but requested directly and
+  # INDEPENDENT of `color`. Normalise it to "diff" for the whole cascade below (which only knows
+  # auto/cell/diff/no), and remember the positions so the ci_scale pass tags them "ratio".
+  ci_ratio_req <- ci == "ratio"
+  if (any(ci_ratio_req)) ci[ci_ratio_req] <- "diff"
+
   # Hoisted out of the `color = "auto"` case_when below, because the Phase 14a `color_signif`
   # forcing needs the SAME predicates and must run BEFORE it (see there).
   pct_rowcol <- purrr::map_lgl(pct_vect, ~ all(.[col_vars_text] %in% c("row", "col")))
@@ -174,6 +181,8 @@ tab_resolve_settings <- function(color, OR, ci, chi2, ref, pct_vect, col_vars_te
   # no reference, so it has no ratio counterpart.
   ci_scale <- rep("diff", length(ci))
   if (isTRUE(color_ratio_ci)) ci_scale[ci == "diff"] <- "ratio"
+  # An explicit `ci = "ratio"` (Phase 15c) rides the ratio scale regardless of the colour measure.
+  ci_scale[ci_ratio_req] <- "ratio"
 
   # Split the one resolved colour into the sub-pass each step reads: the diff/OR colour ->
   # tab_plain(); the contrib colour -> tab_chi2(); the ci colour -> tab_ci(); the numeric
