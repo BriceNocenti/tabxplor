@@ -1117,7 +1117,7 @@ validate_display_template <- function(recipe) {
     cli::cli_abort(c(
       "Invalid {.arg display} value {.val {recipe}}.",
       "i" = "Composite display uses a {{}} template listing the fields to combine,
-             e.g. {.code {{pct}} (n={{n}})} or {.code {{diff}} [{{ci}}]}."
+             e.g. {.code {{pct}} (n={{n}})} or {.code {{diff}} {{ci}}}."
     ))
   }
   opens  <- stringi::stri_count_regex(recipe, "\\{")

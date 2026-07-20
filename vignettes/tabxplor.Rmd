@@ -166,8 +166,16 @@ Add significance stars with `stars = TRUE`. They tell the same story than confid
 ```{r, echo = TRUE}
 gss_simple |>
   dplyr::filter(year == "2012") |> # n=1 974
-  tab(race, party3, pct = "row", display = "ci", stars = TRUE) 
+  tab(race, party3, pct = "row", display = "ci", stars = TRUE)
 ```
+
+**Quick tip — show two numbers in one cell.** `display` is not just for confidence intervals: it takes a **`{}` template** that combines any cell fields. For example `display = "{pct} ({diff})"` prints each percentage followed by its difference from the reference, and `"{pct} (n={n})"` follows it with the count:
+
+```{r, echo = TRUE}
+tab(gss_simple, race, party3, pct = "row", color = "diff", display = "{pct} ({diff})")
+```
+
+The first field in the template is the *primary* one — the value Excel keeps and the one the colours read. `vignette("tabxplor-programming")` explains the full grammar and lists every field you can combine.
 
 `test = TRUE` adds a statistical test of independence per (sub-)table — **Chi-squared** for factor columns, **Welch's F ANOVA** for numeric variables:
 
@@ -194,6 +202,17 @@ t <- tab(gss_simple, race, party3, pct = "row", color = "diff")
 tab_xl(t, path = "table.xlsx")   # Excel, with colors
 tab_kable(t)                     # HTML (for RStudio Viewer / R Markdown / Quarto)
 tab_md(t)                        # Markdown (with pandoc color spans)
+```
+
+`tab_export()` is a single entry point over all four — pick the format (and, optionally, a file `path`). Two options are worth knowing:
+
+- `theme = "auto"` lets an HTML or Markdown export **follow the reader's light/dark mode** (it flips live). For the console, `set_color_palette(theme = "auto")` detects the editor (RStudio, Positron) and picks the matching palette — it is applied automatically when the package loads.
+- `lang = "fr"` translates the colour legend and table footers into French; it works on every exporter.
+
+```{r, echo = TRUE, eval = FALSE}
+tab_export(t, format = "xl", path = "table.xlsx")  # one entry point for "xl"/"kable"/"md"/"plot"
+tab_kable(t, theme = "auto")                       # HTML that follows the reader's light/dark mode
+tab_md(t, lang = "fr")                             # French colour legend and footers
 ```
 
 ## Working with the result

@@ -17,7 +17,7 @@ library(dplyr)
 
 # As in the introduction vignette, tables are shown as the coloured console output turned to HTML.
 options(cli.num_colors = 256)
-set_color_style(type = "text", theme = "light")
+set_color_palette(theme = "light")
 ```
 
 ```{r, echo = FALSE, include = FALSE}
@@ -106,9 +106,9 @@ tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"), effect = "a
 # Check if the raw empirical percentages ar the same than the model predicted unadjusted probabilities 
 tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"), effect = "ame", 
         empirical = TRUE, predicted_unadjusted = TRUE
-        ) |> 
+        ) |>
   tab_kable()
- ```
+```
 
 Then we can use `empirical = TRUE` to compare this new modelised quantity to the **raw, observed difference of percentages** : 
 - In the sample (`Emp. diff`), we observe a rate of marriages 23 points lower for black americans compared to white american (`28% - 51% = -23%`).
@@ -131,7 +131,7 @@ gss_simple |>
       method_diff = "wald"
       ) |>
   dplyr::mutate(diff = set_display(`01-Married`, "diff"))
- ```
+```
 
 
 
@@ -242,6 +242,31 @@ tab_reg(gss_simple,
              "+ age"        = c("race", "age"),
              "+ party"      = c("race", "age", "party3")),
         compare = "sequential")
+```
+
+
+## Fine-tuning the display, and scaling a predictor
+
+A few arguments change *what each cell shows*, or *how a predictor is scaled* — without changing the model itself.
+
+**`estimate_display`** folds a second quantity into each estimate cell. `"ci"` shows the confidence interval beside every estimate (any family):
+
+```{r}
+tab_reg(gss_simple, "married", c("race", "age"), estimate_display = "ci")
+```
+
+For a logistic model you can instead fold the model-adjusted predicted probability (`"prob"`) or the average marginal effect (`"ame"`) into the odds-ratio cell (these two need the `marginaleffects` package). Note the difference: `estimate_display = "ame"` *keeps* the odds-ratio column and adds the AME beside it, whereas `effect = "ame"` (seen above) turns the **whole** column into an AME.
+
+**`multiplier`** rescales a continuous predictor's effect. A one-year change in `age` barely moves the odds, so its odds ratio sits near 1; `multiplier = c(age = 10)` reports the effect **per 10 years** instead (the odds ratio raised to the power 10, with its interval scaled to match):
+
+```{r}
+tab_reg(gss_simple, "married", c("race", "age"), multiplier = c(age = 10))
+```
+
+**`at = "reference"`** evaluates the effect at the reference profile instead of averaging it over the sample — a marginal effect *at the reference* for `effect = "ame"`, or a "category vs. the rest" odds ratio at that profile for a multinomial model:
+
+```{r, eval = FALSE}
+tab_reg(gss_simple, "married", c("race", "age"), effect = "ame", at = "reference")
 ```
 
 

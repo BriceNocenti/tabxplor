@@ -703,6 +703,18 @@ Both jmvtab and jmvtabreg analysis.
 The width of the box in which is see the resulting html table is not enough, I currently only see a small part of the table, with a big part that’s blank. My screen is 4K 32" (Windows scaling 150%) so it’s not everybody’s display, but I would want a good default that would be wide enough on different configurations. At least the double of the current one seems a possibility, keeping the horizontal scroll box for tables that are bigger than that (verify the html width itself inside the scroll box will not cut the result before the end of the last column).
 I did struggle in the past to set the width of the scroll box in Jamovi results UI, I think I even added an invisible empty plot element to tweak the width as a workaround : how to do it more cleanl and  reliably for different display hardware ? Please study jamovi dev folder, make relevant web searches, and propose me a solution. Also, if one image with the right width must be kept, please remove "plot" `jamovi/jmvtab.r.yaml`, since "cache_state" can do the same job and is needed for the cache system anyway.
 
+I can’t manage to the the `subtext` text box width to take all horizontal width available : how to do it ? Also, would it be possible to have a dynamic text box, adding more vertical space when the user use multiple lines ? Or at least, a three lines static height.
+
+jmvtab :
+- `na="drop_all"` button not working  : "Error in ctx$na_num[[i]]: subscript out of bounds"
+- replace `comp` with a drop list, on the same line than it’s label.
+- add the `ci = "ratio"` option.
+- All all new ci methods. All the confidence intervals experts method under the same common label, each method type on it’s own line, first text then drop box, all drop boxes of the different methods aligned. This display should not mess with the column width of the former ci arguments (`ci` to `stars`), which it currently does. 
+
+n_min, cleannames, etc., not appearing ?
+
+
+
 
 
 
@@ -994,7 +1006,7 @@ Finally, is there a reliable way to detect Dark mode in Positron, in order to us
 - `display = "ci"` should still work to display the confidence interval, internally mapping to the right custom display.
 
 `tab(gss_simple, race, party3, pct = "row", display = "{ci}", stars = TRUE)`
-- No stars appear, since color_signif is "ignore", but with no message : if user forces to `stars = TRUE` with or without colors, ci should be overriden to `"diff"` if not set, for the stars to appear. 
+- No stars appear, since color_signif is "ignore", but with no message : if user forces to `stars = TRUE` with or without colors, ci should be overriden to `"diff"` if not set, for the stars to appear.
 - works well : `tab(gss_simple, race, party3, pct = "row", ci="diff", display = "{ci}", stars = TRUE)`
 
 ##### DONE
@@ -1074,12 +1086,12 @@ Study if it would be possible to replace all `stringr::` calls to `stringi::` ca
 
 Study if it would be possible to pass knitr:: as Suggests, instead of import, since kable is now opt-in the the default html tables are custom.
 
-Is lifecycle really needed in Imports, if it mostly helps to generate documentation at dev / roxygen time ? 
+Is lifecycle really needed in Imports, if it mostly helps to generate documentation at dev / roxygen time ?
 
-Remove `magrittr::` from dependencies altogether, replace all `%>%` pipes with native R `|>` pipes. 
+Remove `magrittr::` from dependencies altogether, replace all `%>%` pipes with native R `|>` pipes.
 - You must look for all `%>%` that are still used in a way `|>` can’t directly replace, for example passing the piped argument at different places using the `.` syntax, like `%>% purrr::discard(., .)`.
 
-Remove labelled:: form Suggests, since it’s possible to read and write variable labels with `attr()`/`attr<-`() with the package. There is only one use in the current code, in `R/utils.R` : replace `labelled::get_variable_labels()` with simple attributes reading, giving exaclty the same kind of resulting object than `labelled::get_variable_labels()`. 
+Remove labelled:: form Suggests, since it’s possible to read and write variable labels with `attr()`/`attr<-`() with the package. There is only one use in the current code, in `R/utils.R` : replace `labelled::get_variable_labels()` with simple attributes reading, giving exaclty the same kind of resulting object than `labelled::get_variable_labels()`.
 
 Is VGAM really needed in Suggests, since we only use svyVGAM and it’s already there ?
 
@@ -1111,8 +1123,6 @@ base-priority packages are excluded, so recommended pkgs (nnet/MASS) DO count.
   context-detection, lifecycle in the deprecate machinery); VGAM stays a Suggest (`VGAM::multinomial()` is
   called directly and deliberately guarded).
 
-Full suite green (FAIL 0, PASS 3719), **zero golden/snapshot churn** (a stringr/magrittr swap must not
-change any output); the only Rd churn is `%>%`->`|>` in `@examples` + the pipe.Rd deletion.
 
 
 
@@ -1352,9 +1362,9 @@ package's public field-access idioms -- `$field` on the fmt column,
 vctrs::field(), get_num() -- exactly as the README's programming section does
 (no public-surface expansion). Re-audited all three vignettes: clean.
 
-##### Last Phase e-iiii: NEWS.md elements in vignettes ? 
+##### Last Phase e-iiii: NEWS.md elements in vignettes ?
 
-`NEWS.md` is too long so we’ll trim it badly at the very end of development. But I wonder what would be useful, in it, to put in vignettes to explain how to use important new features.
+`NEWS.md` is too long so we’ll trim it badly, at the very end of development, so that it only keep the most concise and necessary elements. But I wonder what would be useful, in it, to put in vignettes to explain how to use important new features.
 - What should go in introduction vignette ?
 - What should go in programming vignette ?
 - What should go in regression vignette ?

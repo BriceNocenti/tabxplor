@@ -126,6 +126,33 @@ tab_num(gss_simple, race, c(age, tvhours), digits = 1L) |>
   ))
 ```
 
+## Composite display: combining fields
+
+`set_display()` chooses *one* field to show. To show **several fields in one cell**, give it a `{}` **template** instead of a bare field name — the same template you can pass to `tab(display =)` when you build the table. The template is plain text with `{field}` tokens; each token is replaced by that field, formatted as usual:
+
+```{r}
+tabs |> set_display("{pct} ({diff})")
+```
+
+The rules:
+
+- **Valid fields** are `pct`, `n`, `wn`, `mean`, `diff`, `ratio`, `ci`, `or`, `ctr`, `var` — the same set as the single-field displays.
+- The **first** token is the *primary* field: it is what `get_num()` returns, the value Excel keeps (Excel shows the primary only), and the field the colours read.
+- A **bare field name** is shorthand for its own template, so `set_display("ci")` is exactly `set_display("{ci}")`.
+- It is a **display overlay** for text output (the console, `tab_kable()`, `tab_md()`): the stored fields are untouched, so you can switch back at any time.
+- The `{ci}` field already prints its own `[…;…]` brackets, so write `"{pct} {ci}"` — **not** `"{pct} [{ci}]"`, which would double them.
+
+## Creating a column from another field
+
+Because switching the display recomputes nothing — every field is already stored in the cell — you can spin off a **new column that shows a different field**. A percentage table has a reference by default (the Total row), so its `diff` field is already filled; a difference twin of every percentage column is then one `mutate()`:
+
+```{r}
+tab(gss_simple, race, marital, pct = "row") |>
+  mutate(across(where(is_fmt), ~ set_display(., "diff"), .names = "{.col}_diff"))
+```
+
+`.names = "{.col}_diff"` keeps the original percentage columns and adds a `<name>_diff` twin next to each. (If a `diff` column comes out empty, the source table had no reference cell — build it with `ref =` / `comp =`, or with `color = "diff"`.)
+
 ## Total rows, reference rows and columns
 
 Helper predicates let you act on structural parts of a table: `is_totrow()` / `is_tottab()` / `is_refrow()` (cell-level, logical vectors), and `is_totcol()` / `is_refcol()` (column-level). They are what keeps totals in place when you re-order or when you write conditional formatting:

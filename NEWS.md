@@ -350,8 +350,8 @@
   of stopping with an error.
 * New `display` argument in `tab()` for an opt-in **composite display** showing several fields per cell,
   written as a `{}` template listing the fields to combine: `display = "{pct} (n={n})"` prints each
-  percentage with its count (e.g. `76% (n=13)`), `"{n} ({pct})"` the reverse, `"{diff} [{ci}]"` a
-  difference with its interval. Valid fields: `pct`, `n`, `wn`, `mean`, `diff`, `ratio`, `ci`, `or`,
+  percentage with its count (e.g. `76% (n=13)`), `"{n} ({pct})"` the reverse, `"{diff} {ci}"` a
+  difference with its interval (the `{ci}` field already prints its own `[…;…]` brackets). Valid fields: `pct`, `n`, `wn`, `mean`, `diff`, `ratio`, `ci`, `or`,
   `ctr`, `var` (the first is the primary). It is a display overlay for text output (the console,
   `tab_kable()`, `tab_md()`) -- colors, differences and the underlying fields are unchanged, and Excel
   keeps the primary field.

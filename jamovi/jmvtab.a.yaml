@@ -215,7 +215,7 @@ options:
           name:  drop
         - title: "drop_all <i>(drop NA in row_var and all col_vars)</i>"
           name:  drop_all
-        - title: "common_base <i>(single population, historical tab())</i>"
+        - title: "common_base <i>(force to the population of the 1st col_var)</i>"
           name:  common_base
       default: keep
       description:
@@ -387,9 +387,8 @@ options:
       hidden: true
       description:
           R: >
-           A second reference cell is needed to calculate odds ratios
-            (or relative risks ratios). The first cell of the row or column is used by default.
-            See `ref`  for the full list of possible values.
+           With `OR = OR` (odds-ratios) and a 3+ levels factor, a second reference cell 
+           is needed to calculate relative risks ratios. First cell by default.
 
     - name: comp
       title: comp
@@ -466,12 +465,12 @@ options:
            that is displayed, so stars and bracket always agree.
 
     - name: method_cell
-      title: "method_cell = <i>(cell CI method)</i>"
+      title: "method_cell = <i>(cell proportion)</i>"
       type: List
       options:
         - title: "wilson <i>(score, default)</i>"
           name:  wilson
-        - title: "wald <i>(normal approximation)</i>"
+        - title: "wald <i>(normal approx.)</i>"
           name:  wald
       default: wilson
       description:
@@ -480,10 +479,10 @@ options:
            (the score interval, default) or \code{"wald"} (the normal approximation).
 
     - name: method_diff
-      title: "method_diff = <i>(difference CI method)</i>"
+      title: "method_diff = <i>(difference in proportion)</i>"
       type: List
       options:
-        - title: "newcombe <i>(hybrid score, default)</i>"
+        - title: "newcombe <i>(hybrid score)</i>"
           name:  newcombe
         - title: "ac <i>(Agresti-Caffo)</i>"
           name:  ac

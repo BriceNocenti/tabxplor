@@ -280,8 +280,8 @@ children:
           - type: LayoutBox
             margin: none
             cell:
-              column: 2
-              row: 0
+              column: 0
+              row: 1
             stretchFactor: 1
             children:
               - type: Label
@@ -296,7 +296,7 @@ children:
                   - type: CheckBox
                     name: cleannames
               - type: Label
-                label: n_min = <i>(hide rows/cols with a small base)</i>
+                label: n_min = <i>(hide rows/cols with small counts)</i>
                 children:
                   - type: TextBox
                     name: n_min
