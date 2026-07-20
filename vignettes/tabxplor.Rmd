@@ -78,10 +78,16 @@ tab(gss_simple, c(race, relig), c(party3, tvhours), na = "drop", pct = "row")
 `levels = "first"` keeps only the first level of each column factor, which is handy to display many binary factors/survey questions with multiple answers, all at once, in a compact way :
 
 ```{r, echo = TRUE}
-tab(gss_simple, relig, c(married, black, income25k), pct = "row", levels = "first")
+tab(gss_simple, relig, c(married, black, income25k), pct = "row", levels = "first", cleannames = TRUE)
 ```
 
 A few other everyday arguments: `wt =` for a weight variable, `na = "drop"` to drop missing values from the base, `digits =` for the number of decimals, and `cleannames = TRUE` to strip prefixes like `"1-"` from level names. See `?tab` for the full list.
+
+```{r, echo=TRUE, eval=FALSE}
+data(hdv2003, package = "questionr")
+tab(hdv2003, nivetud, occup, wt = poids, pct = "row", na="drop", digits = 1)
+```
+
 
 ## Sub-tables
 
@@ -258,7 +264,7 @@ Because they compare to 0 and not to a reference, cell intervals are purely desc
 
 Examples :
 
-```{r, eval=FALSE}
+```{r, echo=TRUE, eval=FALSE}
 # --- factors: percentages -------------------------------------------------
 tab(gss_simple, race, party3, pct = "row", color = "diff",  color_signif = "grey_non_signif")
 tab(gss_simple, race, party3, pct = "row", color = "ratio", color_signif = "guaranteed_effect")

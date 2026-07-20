@@ -43,6 +43,27 @@ testthat::test_that("tab() stores no pvalue and shows no stars by default; stars
   testthat::expect_true(any(grepl("\\*", format(t1$White, stars = TRUE))))
 })
 
+testthat::test_that("stars = TRUE forces ci = 'diff' when ci is unset (Phase 16f)", {
+  # The reported bug: `stars = TRUE` with no `ci` silently showed nothing, because no difference CI
+  # (hence no pvalue) was computed. stars must now surface on its own, on both factor and mean columns.
+  tf <- tab(gss, marital, race, pct = "row", stars = TRUE)             # factor, NO ci set
+  testthat::expect_true(any(!is.na(get_pvalue(tf$White))))
+  testthat::expect_true(any(grepl("\\*", format(tf$White, stars = TRUE))))
+
+  tn <- tab(gss, marital, tvhours, stars = TRUE)                       # numeric mean, NO ci set
+  ncol <- names(tn)[vapply(tn, is_fmt, logical(1))][[1]]
+  testthat::expect_true(any(!is.na(get_pvalue(tn[[ncol]]))))
+
+  # byte-safety: the default (no stars) still stores no pvalue, so ordinary tables are unchanged
+  t0 <- tab(gss, marital, race, pct = "row")
+  testthat::expect_true(all(is.na(get_pvalue(t0$White))))
+  # and it also folds with a {ci} display: the bracket AND the stars appear (stars opt-in in format())
+  tb <- tab(gss, marital, race, pct = "row", display = "{ci}", stars = TRUE)
+  out <- format(tb$White, stars = TRUE)
+  testthat::expect_true(any(grepl("\\[", out)))                        # the [ci] bracket renders
+  testthat::expect_true(any(grepl("\\*", out)))                        # and stars ride the cell
+})
+
 testthat::test_that("star presence is the dual of the CI excluding neutral (no contradiction)", {
   col <- tab(gss, marital, race, pct = "row", ci = "diff", stars = TRUE)$White
   st  <- get_stars(col)

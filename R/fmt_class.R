@@ -1106,6 +1106,13 @@ parse_display_template <- function(tmpl) {
 #' @keywords internal
 validate_display_template <- function(recipe) {
   recipe <- recipe[[1]]
+  # Ergonomics / back-compat: a bare field name (no braces) that is a known display field is treated as
+  # the single-field template "{field}", so e.g. display = "ci" == display = "{ci}" (and "diff"/"pct"/...).
+  # One general rule, not an ad-hoc "ci" case. A genuinely unknown bare value still hits the abort below.
+  if (!grepl("[{}]", recipe) &&
+      recipe %in% c(tabxplor_display_fields, names(tabxplor_display_aliases))) {
+    recipe <- paste0("{", recipe, "}")
+  }
   if (!grepl("[{}]", recipe)) {
     cli::cli_abort(c(
       "Invalid {.arg display} value {.val {recipe}}.",
@@ -2352,6 +2359,10 @@ pillar_shaft.tabxplor_fmt <- function(x, ..., .ref = NULL) {
   #totcol  <- is_totcol(x)
   totrows <- is_totrow(x)
   #tottabs <- is_tottab(x)
+  # Phase 16f: bold reference/total (+ coloured) cells, but ONLY on a console that renders ANSI bold at
+  # fixed glyph width (tabxplor.console_bold, IDE-gated at load -- Positron / VS Code, never RStudio). Off
+  # everywhere by default, so this is a no-op unless opted in. Read fresh so a mid-session toggle applies.
+  bold_on <- isTRUE(getOption("tabxplor.console_bold"))
 
 
 
@@ -2470,6 +2481,14 @@ pillar_shaft.tabxplor_fmt <- function(x, ..., .ref = NULL) {
     out[ok & unselected & !totals] <-  #fmtgrey3
       pillar::style_subtle(out[ok & unselected & !totals])
 
+    # Phase 16f: export-parity bold = the anchors (totals) PLUS the text-coloured cells, matching
+    # fmt_col_ann()'s `bold = !is.na(text_hex) | keep_black` (R/tab-export-prep.R). pillar measures the
+    # ANSI-stripped width, so bold adds none -- alignment holds on a fixed-width-bold console.
+    if (bold_on) {
+      m <- ok & (totals | channels$text_slot > 0L)
+      out[m] <- cli::style_bold(out[m])
+    }
+
     #Columns with no color
   } else {
     # DESIGN: uncolored columns only grey out zeros here. Styling totals with bold /
@@ -2489,6 +2508,13 @@ pillar_shaft.tabxplor_fmt <- function(x, ..., .ref = NULL) {
     out[ok] <- out[ok] %>%
       stringr::str_replace("^0%$|^-0%$", pillar::style_subtle("0%")) %>% # 0 in gray
       stringr::str_replace("^0$|^0$", pillar::style_subtle("0"))
+
+    # Phase 16f: an uncolored column (e.g. the Total column, or a plain table) has no text-coloured
+    # cells, so only the reference/total anchors are bold -- the same `totals` mask the coloured branch uses.
+    if (bold_on) {
+      tot <- (if (!is.null(.ref)) .ref$all_totals else get_reference(x, "all_totals")) | is_refrow(x)
+      out[ok & tot] <- cli::style_bold(out[ok & tot])
+    }
   }
 
   pillar::new_pillar_shaft_simple(out, align = "right", na = "")

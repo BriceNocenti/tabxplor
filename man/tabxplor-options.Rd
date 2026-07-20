@@ -38,6 +38,10 @@ variables have differing bases (e.g. \code{na = "drop"}): \code{"off"} (default)
 \item{\code{tabxplor.color_style_theme}}{the \emph{console} palette theme, \code{"light"} or \code{"dark"}; set by
 \code{\link[=set_color_palette]{set_color_palette()}} (which auto-detects the editor theme on load). NOT the export theme
 (\code{tabxplor.theme}).}
+\item{\code{tabxplor.console_bold}}{whether to embolden the reference / total (and coloured) cells in the
+\emph{console}, \code{TRUE} or \code{FALSE}. Auto-detected at load: \code{TRUE} in Positron and VS Code (which render
+ANSI bold at a fixed glyph width), \code{FALSE} in RStudio and unknown consoles (there bold is drawn
+wider and would break column alignment). Override it for your own front-end / font.}
 \item{\code{tabxplor.theme}}{the \emph{export} theme, \code{"light"} (default), \code{"dark"} or \code{"auto"} (follow
 the reader). \code{"auto"} needs a stylesheet, so only \code{tab_kable(engine = "html")}, \code{\link[=tab_md]{tab_md()}} and
 \code{\link[=tab_css]{tab_css()}} honour it; static backends resolve it to \code{"light"}.}

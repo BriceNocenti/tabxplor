@@ -48,6 +48,13 @@ NULL
 
   set_color_palette()
 
+  # Phase 16f: bold the reference/total (+ coloured) cells in the CONSOLE, but only on a front-end that
+  # renders ANSI bold at fixed glyph width (Positron / VS Code; RStudio draws it wider and shears table
+  # alignment -- rstudio#1721). IDE-detected default; guarded with is.null so a user's .Rprofile choice
+  # survives (like tabxplor.color_style_theme). Override any time with options(tabxplor.console_bold = ).
+  if (is.null(getOption("tabxplor.console_bold")))
+    options("tabxplor.console_bold" = console_bold_default())
+
   # option "tabxplor.color_breaks" : canonical Phase-13a scales (see set_color_breaks()).
   # pct_ratio is the "only x2" rule (over side only); mean_ratio is asymmetric (4 over / 3 under);
   # mean_diff = NULL restores the standardized (Glass's delta) default.

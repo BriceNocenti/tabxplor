@@ -161,7 +161,9 @@ NULL
 #'   \code{"\{pct\} (n=\{n\})"} (a percentage with its count), \code{"\{n\} (\{pct\})"} or
 #'   \code{"\{diff\} [\{ci\}]"}. Valid fields: \code{pct}, \code{n}, \code{wn}, \code{mean},
 #'   \code{diff}, \code{ratio}, \code{ci}, \code{or}, \code{ctr}, \code{var}; the first field is the
-#'   \emph{primary}, shown alone by Excel and used for coloring. \code{NULL} (default) keeps the plain
+#'   \emph{primary}, shown alone by Excel and used for coloring. A bare field name is also accepted as a
+#'   shorthand for its single-field template, so \code{display = "ci"} is the same as
+#'   \code{display = "\{ci\}"} (it shows the confidence interval). \code{NULL} (default) keeps the plain
 #'   single-field display. It is a display overlay only: colors, differences and the underlying fields
 #'   are unchanged.
 #' @param totaltab The total table, if there are subtables/groups
@@ -1638,7 +1640,7 @@ tab_setup <- function(ctx) {
                                          ref = ref, pct_vect = pct_vect,
                                          col_vars_text = col_vars_text, totrow = totrow,
                                          color_signif = color_signif,
-                                         color_ratio_ci = color_ratio_ci,
+                                         color_ratio_ci = color_ratio_ci, stars = stars,
                                          na = na, wt_name = as.character(wt),
                                          other_if_less_than = other_if_less_than, comp = comp,
                                          tab_vars = as.character(tab_vars),

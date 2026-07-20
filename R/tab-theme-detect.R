@@ -12,19 +12,27 @@
 
 # === SECTION: which IDE are we in ==================================================================
 
-# `.Platform$GUI == "Positron"` holds in the Positron CONSOLE (ark rebinds .Platform in baseenv()).
-# MEASURED 2026-07-17 in this distro's Positron integrated TERMINAL: GUI = "X11", but POSITRON = "1"
-# and TERM_PROGRAM = "vscode" ARE set -- so detection works there too, which matters because that is
-# where R is actually run here. (An earlier note in the roadmap recorded POSITRON as empty in the
-# terminal and concluded terminal-side detection was impossible; that is no longer true.) Treating the
-# integrated terminal as Positron is right on the merits as well: its background IS the editor theme's.
+# The Positron server cache (plain VS Code uses ~/.vscode-server instead). Single source of truth --
+# tx_positron_settings_file() / tx_theme_kind() default their roots inside it.
+# @keywords internal
+tx_positron_server_dir <- function() file.path(path.expand("~"), ".positron-server")
+
+# `.Platform$GUI == "Positron"` holds in the Positron CONSOLE (ark rebinds .Platform in baseenv()), so
+# the ark R console -- where colours are actually printed -- is detected directly. But the env-var
+# signals are UNSTABLE across Positron's other processes and versions: MEASURED 2026-07-17 the integrated
+# TERMINAL had POSITRON = "1" + TERM_PROGRAM = "vscode"; MEASURED 2026-07-20 the same distro's Positron
+# leaves BOTH empty while setting VSCODE_CWD (extension host / remote kernel) -- there tx_ide() fell to
+# "vscode" and dark mode was missed. So do not rely on POSITRON/GUI alone: Positron is a VS Code fork
+# (it sets the VSCODE_* vars) distinguished from plain VS Code by its server-side cache -- if a VS Code
+# env var is set AND ~/.positron-server exists, it is Positron. `positron_dir` is injectable for tests.
 #' @keywords internal
-tx_ide <- function() {
-  if (identical(Sys.getenv("RSTUDIO"), "1"))                        return("rstudio")
-  if (identical(.Platform$GUI, "Positron") ||
-      identical(Sys.getenv("POSITRON"), "1"))                       return("positron")
-  if (nzchar(Sys.getenv("VSCODE_PID")) || nzchar(Sys.getenv("VSCODE_CWD")) ||
-      identical(Sys.getenv("TERM_PROGRAM"), "vscode"))              return("vscode")
+tx_ide <- function(positron_dir = tx_positron_server_dir()) {
+  if (identical(Sys.getenv("RSTUDIO"), "1")) return("rstudio")
+  vscode <- nzchar(Sys.getenv("VSCODE_PID")) || nzchar(Sys.getenv("VSCODE_CWD")) ||
+    identical(Sys.getenv("TERM_PROGRAM"), "vscode")
+  if (identical(.Platform$GUI, "Positron") || identical(Sys.getenv("POSITRON"), "1") ||
+      (vscode && dir.exists(positron_dir)))                         return("positron")
+  if (vscode)                                                       return("vscode")
   "terminal"
 }
 
@@ -63,7 +71,7 @@ tx_rstudio_dark <- function() {
 # jsonlite dependency for a best-effort probe, and (with tx_positron_settings' regex) means no file
 # here is ever fully parsed into R.
 tx_positron_settings_file <- function(
-    root = file.path(path.expand("~"), ".positron-server", "data", "User", "History")) {
+    root = file.path(tx_positron_server_dir(), "data", "User", "History")) {
   tryCatch({
     if (!dir.exists(root)) return(NULL)
     for (d in list.dirs(root, recursive = FALSE)) {
@@ -117,7 +125,7 @@ tx_builtin_themes <- c(
 
 # theme LABEL -> "light"/"dark", via the declaring extension's contributes.themes[].uiTheme.
 tx_theme_kind <- function(name,
-                          ext_dir = file.path(path.expand("~"), ".positron-server", "extensions")) {
+                          ext_dir = file.path(tx_positron_server_dir(), "extensions")) {
   tryCatch({
     if (is.null(name) || !nzchar(name)) return(NULL)
     if (name %in% names(tx_builtin_themes)) return(unname(tx_builtin_themes[[name]]))
@@ -177,4 +185,17 @@ tx_detect_theme <- function() {
     if (!is.na(bg)) return(if (bg %in% c(0:6, 8)) "dark" else "light")
   }
   "light"
+}
+
+# === SECTION: console bold gate ===================================================================
+
+# Phase 16f: whether to BOLD the reference/total (+ coloured) cells in the CONSOLE by default. Bold is
+# only safe where the front-end renders ANSI bold at the SAME glyph width as regular -- true of Positron
+# and of VS Code's xterm.js console, but NOT of RStudio (it draws bold wider, shearing table columns;
+# rstudio/rstudio#1721). So the default is ON only for those two, OFF for RStudio and any unknown console.
+# `ide` is a parameter (default tx_ide()) purely so tests can pass a value without mocking the environment.
+# Seeded into options("tabxplor.console_bold") at .onLoad; users override that option either way.
+#' @keywords internal
+console_bold_default <- function(ide = tryCatch(tx_ide(), error = function(e) "terminal")) {
+  ide %in% c("positron", "vscode")
 }

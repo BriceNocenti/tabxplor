@@ -864,6 +864,13 @@ jmvtab_build <- function(data, opts, store) {
   ci           <- opts$ci
   has_num_col  <- any(vapply(col_vars, function(cv) is.numeric(data[[cv]]), logical(1)))
   if (has_num_col && !isFALSE(color) && color_signif != "ignore" && ci == "auto") ci <- "diff"
+  # Phase 16f: mirror tab_resolve_settings' stars forcing (`stars = TRUE` makes ci = "no" -> "diff" on a
+  # factor row/col pct or a mean, non-OR) so this resolved `ci` matches what tab() will actually build --
+  # it drives the cache tuple, the armed build AND the reref (which recomputes the diff CI + pvalue only
+  # when ci != "no"). Without it, an explicit ci = "no" + stars would arm a pvalue the reref never refreshes.
+  if (isTRUE(opts$stars) && identical(ci, "no") &&
+      !(opts$OR %in% c("OR", "or", "OR_pct", "or_pct")) &&
+      (has_num_col || opts$pct %in% c("row", "col"))) ci <- "diff"
 
   ce <- new.env(parent = emptyenv())
   ce$store  <- jmv_cache_migrate(store)

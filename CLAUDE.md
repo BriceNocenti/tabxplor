@@ -844,6 +844,8 @@ If have changed `default_color_scales()` to add a specific odds_ratio breaks sca
 - Here all cells with positive guaranteed effect are colored with the supposedly `x2` background color : "bg ratio: ×1 [significant, error-adjusted]" This is a local failure of the rule applied on "guaranteed_effect" breaks, "substract or divide all breaks by the first break to have 0 or 1 as bound" ; useless information, because they are already cells with text color and the x1 rule tell nothing about effect size ; it’s even worse, here, because x2 is asymmetrical have have no /2, so only positive ones have background.
 - **Rule should be** : when both text and background channels are used, if a channel only have one break in "over" (same for "under"), and the resulting "guaranteed_effect" breaks scale is useless (+0, -0, ×1, ÷1), just disable this particular one and remove it’s legend too (here, only pct_ratio have just one break and must be disabled). If both text and background channels are this way, only keep the first channel (text).
 
+##### DONE
+
 Four changes, all landed (full suite green, 3697 pass; only `_color_golden/c_or.rds` + `_snaps/render-html.md`
 regenerated + a few value assertions updated):
 
@@ -871,7 +873,7 @@ regenerated + a few value assertions updated):
   text channel). `fmt_get_color_code()` (single-channel golden) is left un-arbitrated.
 
 
-#### Phase 16d — color legends and table footers improvements
+#### Phase 16d — color legends and table footers improvements (DONE)
 
 `tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"), empirical = TRUE)`
 "Emp. OR: OR (ref.): 1/4 1/2 1/1.5 1.15 1.5 2 4 [grey: non-significant or under ×1.15]
@@ -908,7 +910,24 @@ regenerated + a few value assertions updated):
 `tab(gss_simple, race, party3, pct = "row", display = "{ci}", stars = TRUE)`
 - A legend is needed for significance stars. Here is a French version, to keep for French but to translate in English : "*** : chiffre significativement différent de celui de la modalité de référence (en gras), au seuil de confiance de 99  % ; ** : au seuil de 95  % ; * : au seuil de 90  % ; aucune étoile : non significatif."
 
-#### Phase 16e — further simplify and integrate the legend/footer system
+##### DONE
+
+Legend de-duplication (issues 1–3). legend_specs() now reconciles a tab_reg(empirical=TRUE) table's crude + modelised columns per col_var (shared reference label; the additive AME/β subject neutralised to "cells" only when an empirical sibling exists, so a lone AME/β table keeps its word) and drops role from the grouping key, so companions fold into one line prefixed by the columns they cover ("Emp. OR, Model OR — …", first 6 then "… +N vars"):
+
+binom OR + empirical: 3 → 2 lines · AME + empirical: 2 → 1 · gaussian: 2 → 1 · poisson: 3 → 2
+Issue 3 (OR crosstab) already folded on gss_simple — so I skipped the belt-and-suspenders change that would have degraded the correct "(White)" label.
+Wrapping (issue 2). legend_name_list() normalises prefix names (strips the html-path <br>/U+202F, protects intra-name spaces with U+00A0) — "Model AME (adjusted %)" no longer breaks mid-word.
+
+contrib (issue 5). Verified the colour computation was correct (over/under split by sign — not broken vs 1.3.1); only the legend was wrong. Now "×N the mean contribution" on both sides (no misleading ÷), and it no longer prints stars it never opted into (fmt_stars_applicable).
+
+mean_diff (issue 7, your call: raw). Custom mean_diff breaks now read as a plain "difference" (no "SD"), driven by the scale's std flag — a 3-way pct / SD / raw mode kept consistent with how the cells colour.
+
+New: stars legend (issue 8) + "Weighted by <wt>." footer (issue 6) — wired through console, markdown, HTML and Excel; the weight name is persisted on the table (vars attr / reg_meta).
+
+Empirical CI (your scope decision). The binomial risk-difference companion now uses the two-proportion Wald interval, matching the model AME's Wald, so the merged legend names one honest method.
+
+
+#### Phase 16e — further simplify and integrate the legend/footer system (DONE)
 
 After 16a + 16d, a table is wrapped by three separate explanatory-text subsystems, each with its own per-medium rendering and its own threading into the backends:
 - Colour legend — tab_color_legend() → token stream → 5 media.
@@ -938,6 +957,19 @@ Give up: a little indirection.
 
 5. Keep the terse console form for the legend, and add the possibility to use it in exports using a global option.
 
+##### DONE
+
+**Body-text grouping** (legend_group_by_body) replaces the hand-maintained 10-field `sig` string — two columns share a legend line iff they render identically, so a line can never drift from what it describes (the 16d `is_pct`-in-sig patch is now moot).
+**`MEASURES` fact table + resolve-into-spec** (legend_resolve_spec, legend_reg_adapter) — every per-measure/per-channel fact (word, glyph, reference, unit, method) is resolved into the spec once, so legend_tokens_terse/_prose are now **dumb templates with zero `switch(measure)` and zero `is_reg` branches** (verified). tab() and tab_reg() truly share one legend core.
+**Zero-kind footer streams** — tab_footer_streams() + render_footer() are the one definition of what goes below a table and in what order. Every footer line is a token stream (a plain one-liner is just a 1-token stream — `legend_render_line()` already renders uncoloured tokens, so no plain-vs-legend dispatch). This replaced the **5× re-ordering** across console/md/html/Excel/plot and the 2× field pre-compute in export-prep (reg_line/weight_line/stars_legend deleted).
+**Plot parity + terse option** — `tab_plot()` now draws the full footer (weight/`Model:`/stars/subtext) and its `caption`, both previously silently dropped; `options(tabxplor.legend_style = "terse")` switches exports to the compact console legend.
+
+A few honest notes for you :
+
+**Where I diverged from the roadmap**: I used zero-kind streams instead of its `{plain}/{legend}` two-kind dispatch (you approved this) — it reuses the existing renderer rather than adding a parallel plain-text one.
+**One latent bug fixed in passing**: the md backend used to call `tab_weight_line(rd$tab)`, which is stripped for transposed tables — the unified builder standardizes on the fmt source (`rd$color_src`), so a transposed weighted table now keeps its weight line.
+**The test/GOF grid deliberately stays on its own rail** (console = above the table, exports = body rows via fmt-frame surgery) — that position/mechanism split is load-bearing and I did not force-merge it, as flagged during planning.
+**Out of scope (16d wording, untouched)**: the reg legend still says "odds ratios (vs the reference category)" for binary factors — the "vs the second category" refinement is a Phase 16d item, not 16e.
 
 #### Phase 16f — Dark mode colors in positron console, ci and stars improvements
 
@@ -954,6 +986,42 @@ Finally, is there a reliable way to detect Dark mode in Positron, in order to us
 - No stars appear, since color_signif is "ignore", but with no message : if user forces to `stars = TRUE` with or without colors, ci should be overriden to `"diff"` if not set, for the stars to appear. 
 - works well : `tab(gss_simple, race, party3, pct = "row", ci="diff", display = "{ci}", stars = TRUE)`
 
+##### DONE
+
+Three fixes; full suite green (PASS 3711, +2 tests), only `man/tab.Rd` regenerated (no golden/snapshot churn).
+
+- **Positron console dark mode** (`R/tab-theme-detect.R`): the detector already existed (14g) but
+  `tx_ide()` gated Positron on `POSITRON`/`.Platform$GUI`, which this WSL2 remote leaves empty (only
+  `VSCODE_CWD` set) -> misclassified `"vscode"` -> `"light"` while the real theme was dark. Now Positron =
+  a VS Code fork WITH the server cache: a `VSCODE_*` var AND `dir.exists(~/.positron-server)`. New
+  `tx_positron_server_dir()` (one root, injectable `positron_dir` arg for tests). The ark console keeps
+  working via `GUI=="Positron"`; the new clause rescues the terminal/extension-host where the env vars
+  are unset (verified live here: ide=positron, theme=dark). One-shot at load (maintainer confirmed a
+  restart fixes it); `set_color_palette(theme="auto")` still refreshes mid-session.
+- **`display = "ci"`** (`R/fmt_class.R` `validate_display_template`): a bare KNOWN field (no braces) is now
+  wrapped to its `{}` template, so `display = "ci"` == `"{ci}"` (and `"diff"`/`"pct"`/...). One general
+  rule; unknown bare values (`"foo"`) still abort.
+- **`stars = TRUE` with unset `ci`** (`R/tab-resolve.R` gains a `stars` arg + one forcing line, wired from
+  `tab.R:1639`): stars are cut from a stored `pvalue` that only exists alongside a difference CI, so
+  `stars` now forces `ci="diff"` on pct row/col + mean columns (NOT OR -- its own pvalue via the OR path).
+  Runs AFTER colour resolution (never flips a plain `diff` colour to the gated `after_ci`). NB: OR reaches
+  the resolver as a LOGICAL (stringified only in the leaf), so the exclusion uses a robust `or_on`, not the
+  string-testing `auto_or`. Byte-safe (stars default FALSE). Because tab()'s `ci` default IS `"no"`, an
+  EXPLICIT `ci="no"` is indistinguishable from unset and is also forced (stars win).
+- **jmvtab-cache consistency** (`R/jmvtab-cache.R`): the resolved `ci` (drives the tuple + armed build +
+  tier-3 reref) now mirrors the stars forcing, else an explicit `ci="no"`+`stars` armed a pvalue the reref
+  never refreshed (reref != rebuild). One line beside the existing `auto->diff` numeric nudge.
+- **Console bold** (`R/fmt_class.R` `pillar_shaft`, follow-up): the console can now embolden cells, gated
+  to front-ends that render ANSI bold at FIXED glyph width (verified: Positron + VS Code's xterm.js; NOT
+  RStudio, which draws bold wider -- rstudio#1721). New option `tabxplor.console_bold`, seeded at `.onLoad`
+  via `console_bold_default()` = `tx_ide() %in% c("positron","vscode")` (guarded by is.null, so a
+  `.Rprofile` choice survives; read fresh at print so a mid-session toggle applies). The bold SET is
+  export-parity: coloured branch bolds `totals | text_slot>0` (anchors + text-coloured cells, matching
+  `fmt_col_ann()`'s `bold = !is.na(text_hex) | keep_black`); the else branch (uncoloured cols, incl. the
+  Total col) bolds `totals` (anchors) only. pillar measures ANSI-stripped width so bold adds none. Tests
+  pin `console_bold=FALSE` in `setup.R` (IDE-independent suite; ANSI is off under testthat anyway) and
+  force `cli.num_colors` on to assert the emboldening. Maintainer confirmed alignment holds in Positron
+  with a scattered per-cell bold+colour grid.
 
 
 
@@ -966,7 +1034,9 @@ Finally, is there a reliable way to detect Dark mode in Positron, in order to us
 
 
 
-#### Last Phase b – rethink package dependencies (DONE)
+#### Last Phase b – rethink package dependencies
+
+#### Laste Phase b-i – package dependencies pass 1 (DONE)
 
 Package dependencies : are there Imports or Suggests that are used very little ? Imports and Suggests that in general could be easily replaced with custom functions, or by copying a hand of opensource functions (thanking authors in the code) ?
 
@@ -984,6 +1054,26 @@ page documents every `tabxplor.*` option. Fixed 2 option-default inconsistencies
 in `.onLoad` "off", read one place; `cleannames` fallback FALSE everywhere). Suite green (PASS 3609),
 no snapshot churn. NB: `document()` also materialised the pending Phase-15b `export(jmvtabreg)` +
 `man/jmvtabreg.Rd`.
+
+#### Laste Phase b-ii – package dependencies pass 2
+
+Study if it would be possible to replace all `stringr::` calls to `stringi::` calls, since `stringi::` is used anyway but mostly for unescape unicodes and encoding (if there’s a non stringi way to do that without adding other dependency, I’m intereste.
+
+Study if it would be possible to pass knitr:: as Suggests, instead of import, since kable is now opt-in the the default html tables are custom.
+
+Is lifecycle really needed in Imports, if it mostly helps to generate documentation at dev / roxygen time ? 
+
+Remove `magrittr::` from dependencies altogether, replace all `%>%` pipes with native R `|>` pipes. 
+- You must look for all `%>%` that are still used in a way `|>` can’t directly replace, for example passing the piped argument at different places using the `.` syntax, like `%>% purrr::discard(., .)`.
+
+Remove labelled:: form Suggests, since it’s possible to read and write variable labels with `attr()`/`attr<-`() with the package. There is only one use in the current code, in `R/utils.R` : replace `labelled::get_variable_labels()` with simple attributes reading, giving exaclty the same kind of resulting object than `labelled::get_variable_labels()`. 
+
+Is VGAM really needed in Suggests, since we only use svyVGAM and it’s already there ?
+
+In the case we manage to reduce the Imports number, to still pass the CRAN R CMD CHECK of less than 20 imports, the Suggest packages I would want to add to Imports are, in this order (we just move the first ones until we get to 19 ; the first three are specially important to me) : survey, marginaleffects, nnet, svyVGAM, openxlsx2, MASS, brant.
+
+
+
 
 #### Last Phase c – code and framework simplifications (DONE)
 
@@ -1219,6 +1309,17 @@ the check (they render fine under load_all, masking it). Switch to the
 package's public field-access idioms -- `$field` on the fmt column,
 vctrs::field(), get_num() -- exactly as the README's programming section does
 (no public-surface expansion). Re-audited all three vignettes: clean.
+
+##### Last Phase e-iiii: NEWS.md elements in vignettes ? 
+
+`NEWS.md` is too long so we’ll trim it badly at the very end of development. But I wonder what would be useful, in it, to put in vignettes to explain how to use important new features.
+- What should go in introduction vignette ?
+- What should go in programming vignette ?
+- What should go in regression vignette ?
+- What new vignette should we if needed create for specific features ?
+
+In the tabxplor introduction vignette as a quick tip, and in `vignettes/tabxplor-programming.Rmd` in details, please also explain the way the display = `"{pct} ({diff})"` syntax works to customise the display. In `vignettes/tabxplor-programming.Rmd`, also explain how to create a new column displaying diff from a column displaying percentages, or the like.
+- By the way : there is an error in documentation for ci, the way to customise it is `"{pct} {ci}"`, not `"{pct} [{ci}]"` (which in reality doubles the []).
 
 
 #### Last Phase f – pkgdown site + coverage CI (DONE)

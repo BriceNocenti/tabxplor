@@ -61,6 +61,15 @@ testthat::test_that("validate_display_template() passes a valid {} template thro
   testthat::expect_identical(validate_display_template("{ratio}"), "{ratio}")   # alias field ok
 })
 
+testthat::test_that("validate_display_template() wraps a bare known field (display = 'ci' == '{ci}')", {
+  # Phase 16f ergonomics: a bare field name (no braces) is treated as the single-field template, so the
+  # historical display = "ci" (and "diff"/"pct"/...) keeps working, mapping to display = "{ci}".
+  testthat::expect_identical(validate_display_template("ci"),    "{ci}")
+  testthat::expect_identical(validate_display_template("diff"),  "{diff}")
+  testthat::expect_identical(validate_display_template("pct"),   "{pct}")
+  testthat::expect_identical(validate_display_template("ratio"), "{ratio}")   # alias name wraps too
+})
+
 testthat::test_that("validate_display_template() rejects non-template input (no curated sugar)", {
   # Composites use the {} grammar only -- the old recipe strings are no longer accepted.
   testthat::expect_error(validate_display_template("pct (n)"), "[Cc]omposite|template")
@@ -132,6 +141,19 @@ testthat::test_that("tab(display = ) works on grouped tabs, lists and pct = 'col
   tc <- tab(forcats::gss_cat, marital, race, pct = "col", display = "{pct} ({n})")
   fc <- tc[[which(purrr::map_lgl(tc, is_fmt))[1]]]
   testthat::expect_match(format(fc)[1], "\\([0-9 ]+\\)$")
+})
+
+testthat::test_that("tab(display = 'ci') is the bare-field form of display = '{ci}' (Phase 16f)", {
+  gss <- forcats::gss_cat
+  t_ci    <- tab(gss, marital, race, pct = "row", ci = "diff", display = "ci")
+  t_brace <- tab(gss, marital, race, pct = "row", ci = "diff", display = "{ci}")
+  fcol_ci    <- t_ci[[which(purrr::map_lgl(t_ci, is_fmt))[1]]]
+  fcol_brace <- t_brace[[which(purrr::map_lgl(t_brace, is_fmt))[1]]]
+  testthat::expect_identical(get_display(fcol_ci), get_display(fcol_brace))   # same per-cell display
+  testthat::expect_identical(format(fcol_ci), format(fcol_brace))             # same rendered cells
+  # a genuinely unknown bare display value still aborts (not silently wrapped)
+  testthat::expect_error(tab(gss, marital, race, pct = "row", display = "wibble"),
+                         "[Cc]omposite|template")
 })
 
 testthat::test_that("every exporter renders a composite table without error", {

@@ -46,6 +46,9 @@
 # @param color_ratio_ci Scalar logical (Phase 14b): the PCT text channel carries the `ratio`
 #   measure, so the stored cell-vs-reference interval is the Katz one on the ratio scale. From
 #   `color_pct_text_is_ratio()`; like `color_signif` it cannot ride the `color` string.
+# @param stars Scalar logical (Phase 16f): the resolved `stars` setting. When TRUE it forces ci = "diff"
+#   on the columns that can carry a difference CI (so the per-cell pvalue the stars are cut from exists),
+#   unless ci was set explicitly or it is an OR table (its own pvalue via the OR path).
 # @return list(color, chi2, ci, ci_scale, totrow, color_diff_OR, color_ctr, color_ci, color_num,
 #   cache_keys). `ci_scale` ("diff"/"ratio", over row_vars) = the scale the difference CI is
 #   expressed on. `cache_keys` = the symbolic key material for the persisted jmvtab cache tiers
@@ -55,7 +58,7 @@
 # @noRd
 tab_resolve_settings <- function(color, OR, ci, chi2, ref, pct_vect, col_vars_text,
                                  totrow = NULL, color_signif = "ignore",
-                                 color_ratio_ci = FALSE,
+                                 color_ratio_ci = FALSE, stars = FALSE,
                                  na = "keep", wt_name = character(),
                                  other_if_less_than = 0, comp = "tab",
                                  tab_vars = character(), row_vars = character(),
@@ -143,6 +146,21 @@ tab_resolve_settings <- function(color, OR, ci, chi2, ref, pct_vect, col_vars_te
     ))
   }
   ci[color %in% c("diff_ci", "after_ci") & ci != "diff"] <- "diff"
+
+  # Phase 16f: significance stars are cut from a stored per-cell pvalue, which exists ONLY where a
+  # difference CI is computed (tab_ci / tab_num compute it under ci = "diff"; with ci = "no" the whole
+  # tab_ci step is skipped, so stars silently print nothing). `stars = TRUE` (with or without colours)
+  # therefore forces ci = "diff" on the columns that can carry one -- unless the user set ci explicitly
+  # (ci != "no"), or it is an OR table (which stores its OWN ci_type = "or" pvalue via the OR path).
+  # Runs AFTER the colour resolution above so it never flips a plain "diff" colour into the gated
+  # "after_ci": stars must not change the colour MEASURE, only surface the pvalue. Placed before the
+  # ci_scale pass so a ratio-coloured table's forced CI still rides the ratio (Katz) scale it displays.
+  # NB: `or_on` (not `auto_or`) -- OR reaches this pass as a LOGICAL (it is stringified only in the leaf,
+  # tab_plain), so `auto_or`'s string test is FALSE for it and cannot be reused to exclude OR here.
+  if (isTRUE(stars)) {
+    or_on <- if (is.logical(OR)) OR else OR %in% c("OR", "or", "OR_pct", "or_pct")
+    ci[ci == "no" & !or_on & (num_only | pct_rowcol)] <- "diff"
+  }
 
   # Phase 14b: which SCALE the cell-vs-reference interval is expressed on. The interval belongs to
   # the measure the reader SEES (the text channel): when that is the ratio, the bounds are Katz

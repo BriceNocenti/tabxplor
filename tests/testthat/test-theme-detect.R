@@ -131,18 +131,53 @@ testthat::test_that("COLORFGBG is read as the terminal fallback", {
 })
 
 testthat::test_that("tx_ide() names the host", {
-  withr::with_envvar(list(RSTUDIO = "1"), testthat::expect_equal(tabxplor:::tx_ide(), "rstudio"))
+  # positron_dir is injected so the dev box's real ~/.positron-server never leaks into these fixtures.
+  no_dir  <- "/no/such/positron-server"
+  has_dir <- withr::local_tempdir()                 # exists -> the Positron server-cache signal
+  withr::with_envvar(list(RSTUDIO = "1"),
+                     testthat::expect_equal(tabxplor:::tx_ide(no_dir), "rstudio"))
   withr::with_envvar(list(RSTUDIO = "", POSITRON = "1"),
-                     testthat::expect_equal(tabxplor:::tx_ide(), "positron"))
+                     testthat::expect_equal(tabxplor:::tx_ide(no_dir), "positron"))
+  # a VS Code env var + NO positron cache -> plain VS Code
   withr::with_envvar(list(RSTUDIO = "", POSITRON = "", VSCODE_PID = "42", TERM_PROGRAM = ""),
-                     testthat::expect_equal(tabxplor:::tx_ide(), "vscode"))
+                     testthat::expect_equal(tabxplor:::tx_ide(no_dir), "vscode"))
+  # the SAME VS Code env var WITH a positron cache -> Positron (the unstable-POSITRON-var rescue)
+  withr::with_envvar(list(RSTUDIO = "", POSITRON = "", VSCODE_CWD = "/home/u", TERM_PROGRAM = ""),
+                     testthat::expect_equal(tabxplor:::tx_ide(has_dir), "positron"))
   withr::with_envvar(list(RSTUDIO = "", POSITRON = "", VSCODE_PID = "", VSCODE_CWD = "",
                           TERM_PROGRAM = ""),
-                     testthat::expect_equal(tabxplor:::tx_ide(), "terminal"))
+                     testthat::expect_equal(tabxplor:::tx_ide(has_dir), "terminal"))
 })
 
 testthat::test_that("rstudioapi is never called outside RStudio (its isAvailable() lies in ark)", {
   withr::with_envvar(list(RSTUDIO = ""), testthat::expect_null(tabxplor:::tx_rstudio_dark()))
+})
+
+testthat::test_that("console_bold_default() is ON only for fixed-width-bold consoles (Positron / VS Code)", {
+  # Positron and VS Code (xterm.js) render ANSI bold at the same glyph width; RStudio draws it wider
+  # (rstudio#1721) and a bare/unknown terminal is not verified -> OFF, so bold never shears alignment.
+  testthat::expect_true(tabxplor:::console_bold_default("positron"))
+  testthat::expect_true(tabxplor:::console_bold_default("vscode"))
+  testthat::expect_false(tabxplor:::console_bold_default("rstudio"))
+  testthat::expect_false(tabxplor:::console_bold_default("terminal"))
+})
+
+testthat::test_that("console bold: pillar_shaft emboldens anchors + coloured cells ONLY when opted in", {
+  withr::local_options(cli.num_colors = 256L)        # force ANSI so cli::style_bold actually emits codes
+  testthat::skip_if(cli::num_ansi_colors() < 2L)      # else bold is a no-op -> nothing to assert
+  BOLD <- "\033\\[1m"                                 # the bold SGR (never produced by a colour style)
+  t   <- tab(forcats::gss_cat, marital, race, pct = "row", color = "diff")
+  fcol   <- t[[which(vapply(t, is_fmt, logical(1)))[1]]]                           # a coloured column
+  totcol <- t[[which(vapply(t, function(cc) is_fmt(cc) && isTRUE(is_totcol(cc)), logical(1)))[1]]]
+  render <- function(col) format(pillar::pillar_shaft(col), width = 25)
+
+  withr::local_options(tabxplor.console_bold = TRUE)
+  testthat::expect_true(any(grepl(BOLD, render(fcol))))     # coloured branch: anchors + coloured cells
+  testthat::expect_true(any(grepl(BOLD, render(totcol))))   # else branch: the uncoloured Total column
+
+  withr::local_options(tabxplor.console_bold = FALSE)
+  testthat::expect_false(any(grepl(BOLD, render(fcol))))    # off -> no bold anywhere
+  testthat::expect_false(any(grepl(BOLD, render(totcol))))
 })
 
 # === SECTION: the set_color_palette() seam ===============================================

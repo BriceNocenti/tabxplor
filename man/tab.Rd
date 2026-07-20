@@ -295,7 +295,9 @@ Excel falls back to the primary field). A \code{\{\}} template listing the field
 \code{"\{pct\} (n=\{n\})"} (a percentage with its count), \code{"\{n\} (\{pct\})"} or
 \code{"\{diff\} [\{ci\}]"}. Valid fields: \code{pct}, \code{n}, \code{wn}, \code{mean},
 \code{diff}, \code{ratio}, \code{ci}, \code{or}, \code{ctr}, \code{var}; the first field is the
-\emph{primary}, shown alone by Excel and used for coloring. \code{NULL} (default) keeps the plain
+\emph{primary}, shown alone by Excel and used for coloring. A bare field name is also accepted as a
+shorthand for its single-field template, so \code{display = "ci"} is the same as
+\code{display = "\{ci\}"} (it shows the confidence interval). \code{NULL} (default) keeps the plain
 single-field display. It is a display overlay only: colors, differences and the underlying fields
 are unchanged.}
 

@@ -1,4 +1,3 @@
-# tabxplor (development version)
 
 # tabxplor 1.4.0 (in development)
 
@@ -452,6 +451,18 @@
   `"DejaVu Sans Condensed"`, `"DejaVu Sans"` and `"Cascadia Mono"`). Note that xlsx, unlike HTML/CSS,
   has no font-fallback list: only one name is recorded, so set these to a font installed on the machine
   that will open the workbook.
+* **The console picks up a dark editor automatically in Positron.** Console colours already follow the
+  editor's light/dark theme (RStudio, and now Positron), but Positron's environment variables are
+  unreliable across its terminal / kernel / extension-host processes, so a dark theme was sometimes
+  missed. Detection now keys on Positron's own settings cache (`~/.positron-server`), not just those
+  variables. As before, a mid-session theme switch is picked up with `set_color_palette(theme = "auto")`.
+* **`display` accepts a bare field name.** `display = "ci"` (to show the confidence interval) now works
+  as a shorthand for `display = "{ci}"`; likewise `"diff"`, `"pct"`, etc. — any single field can be given
+  without the braces.
+* **Bold reference/total cells in the console** (like the HTML/Excel exports already do). Enabled by
+  default only in front-ends that render bold at a fixed character width — Positron and VS Code — and off
+  in RStudio and unknown consoles, where bold is drawn wider and would break column alignment. Toggle it
+  anywhere with `options(tabxplor.console_bold = TRUE/FALSE)`.
 
 ## Internal
 * **Unified colour-legend + footer system.** The colour legend, the test/GOF summary and the three
@@ -589,6 +600,10 @@
   export to Excel, install `openxlsx2`. The produced workbooks look essentially the same.
 
 ## Bug corrections
+* **`stars = TRUE` now shows stars even without a confidence interval.** Significance stars are read from
+  a per-cell p-value that is only computed alongside a difference interval, so `tab(..., stars = TRUE)`
+  used to show nothing unless `ci = "diff"` was also set. `stars = TRUE` now requests that interval
+  itself (on percentage and mean columns), so the stars appear on their own.
 * **`options(tabxplor.conf_level = )` now sets the confidence level everywhere, as documented.** It used
   to affect only the `contrib` colour-significance test; it is now the default for the confidence
   intervals and significance tests of `tab()`, `tab_num()`, `tab_ci()` and `tab_reg()` (each function's

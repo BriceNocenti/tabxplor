@@ -30,3 +30,8 @@ if (requireNamespace("data.table", quietly = TRUE)) data.table::setDTthreads(1L)
 # maintainer's machine, or the reverse. That divergence is precisely what the 2026-07-15 CI green-up
 # spent a day on. The suite must not depend on where it runs.
 options(tabxplor.color_style_theme = "light")
+
+# Pin console bold OFF (Phase 16f) for the same reason: it is IDE-detected at load (ON in Positron / VS
+# Code), so on the maintainer's machine every colour test would render bold cells while CI would not. Bold
+# is a no-op under testthat's ANSI-off output anyway, but pin it so nothing depends on the front-end.
+options(tabxplor.console_bold = FALSE)

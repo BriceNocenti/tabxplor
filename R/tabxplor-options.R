@@ -37,6 +37,10 @@
 #'   \item{`tabxplor.color_style_theme`}{the *console* palette theme, `"light"` or `"dark"`; set by
 #'     [set_color_palette()] (which auto-detects the editor theme on load). NOT the export theme
 #'     (`tabxplor.theme`).}
+#'   \item{`tabxplor.console_bold`}{whether to embolden the reference / total (and coloured) cells in the
+#'     *console*, `TRUE` or `FALSE`. Auto-detected at load: `TRUE` in Positron and VS Code (which render
+#'     ANSI bold at a fixed glyph width), `FALSE` in RStudio and unknown consoles (there bold is drawn
+#'     wider and would break column alignment). Override it for your own front-end / font.}
 #'   \item{`tabxplor.theme`}{the *export* theme, `"light"` (default), `"dark"` or `"auto"` (follow
 #'     the reader). `"auto"` needs a stylesheet, so only `tab_kable(engine = "html")`, [tab_md()] and
 #'     [tab_css()] honour it; static backends resolve it to `"light"`.}
