@@ -47,6 +47,27 @@ testthat::test_that("comparisons and sorting work", {
   testthat::expect_s3_class(sort(c(fmt(2), fmt(1))), "tabxplor_fmt")
 })
 
+testthat::test_that("model_family column attribute round-trips and reconciles (Phase 15e)", {
+  f <- fmt(c(7, 19), "row", or = c(1.2, 0.8), model_family = "binomial")
+  testthat::expect_identical(get_model_family(f), "binomial")
+  testthat::expect_identical(get_model_family(set_model_family(f, "poisson")), "poisson")
+  testthat::expect_identical(get_model_family(fmt(1, "row", pct = 0.3)), "")   # inert default
+
+  # vec_c of two different families collapses to "" (like col_var -> "several_vars"); same survives
+  testthat::expect_identical(
+    get_model_family(vec_c(f, set_model_family(f, "gaussian"))), "")
+  testthat::expect_identical(
+    get_model_family(vec_c(f, fmt(3, "row", or = 2, model_family = "binomial"))), "binomial")
+
+  # arithmetic carries x's family; cast copies model_family from `to`
+  testthat::expect_identical(get_model_family(f + f), "binomial")
+  testthat::expect_identical(get_model_family(vec_cast(2.5, f)), "binomial")
+
+  # data.frame getter -> one value per column
+  df <- tibble::tibble(a = f, b = fmt(1, "row", pct = 0.3))
+  testthat::expect_identical(unname(get_model_family(df)), c("binomial", ""))
+})
+
 testthat::test_that("arithmetic between fmt and fmt works", {
   a <- fmt(5, "n"  , 0, wn = 5.1)
   b <- fmt(1, "n"   , 0, pct  = 0.25000001, wn =  1.5)

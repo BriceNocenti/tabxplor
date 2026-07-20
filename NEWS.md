@@ -2,6 +2,15 @@
 # tabxplor 1.4.0 (in development)
 
 ## New features
+* **`tab_reg()` models several outcomes with different families in one table.** `family` is now
+  resolved per dependent, so `tab_reg(data, c("married", "income", "satisfaction"))` builds one table
+  with a logistic, a Poisson and an ordinal column-group side by side (one per outcome). `family`
+  accepts a single value (used for every outcome), a vector aligned to `dependent`, or a **named**
+  vector keyed by outcome (`c(income = "poisson", married = "binomial")`); `"auto"` (the default)
+  detects each outcome and, for an ambiguous integer count, asks you to name the family for *that*
+  outcome only. Each column keeps its own effect (OR / IRR / β / AME) in the colour legend, and the
+  model-summary footer shows each outcome's own statistics. (Mixing families needs a shared set of
+  predictors; model comparison still takes one outcome at a time.)
 * **Simpler `tab_reg()` arguments.** `exponentiate` and `color` are now plain `TRUE` / `FALSE`:
   `exponentiate = TRUE` (default) gives ratios (odds / rate ratios) for every family except gaussian,
   `FALSE` keeps coefficients; `color = TRUE` (default) auto-picks the sensible per-family colour,

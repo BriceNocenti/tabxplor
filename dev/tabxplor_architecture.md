@@ -903,6 +903,31 @@ and a multinomial table strips ": OR"/": AME" from each category name — so one
 border between its columns (the 14s span-drop + `new_col_var` border logic are unchanged). See CLAUDE.md
 Phase 14w + decisions §49.
 
+**Phase 15e — mixed-family dependents in one table.** `family` is resolved **per dependent**
+(`family_for(d)`; accepts scalar / positional vector / named vector; `"auto"` detects each outcome, an
+ambiguous integer aborting for that outcome only), so one `tab_reg()` call can model several outcomes with
+different families side by side (one column-group each). The per-dependent shape (`do_exp_for` /
+`effect_shape_for` / `eff_word_for` / auto-`color_for`) rides on each **spec** (like `sp$trials`/
+`sp$inverse`); `reg_build` reads `sp$*` (the scalar `reg_build` args stay the recycled default for direct
+callers / a homogeneous table). Scope: vector-of-dependents mode (shared character `predictors`); model
+comparison stays single-outcome; `split_var` composes unchanged; `at = "reference"` on a mixed table
+degrades to `"average"`. The design question ("what goes column-level") is answered by a new **per-column
+`model_family` fmt attribute** (the 10th; `""` on cross-tables; `get/set_model_family`; reconciled in
+`vec_ptype2`/`vec_cast`/`vec_arith` like the other 9): each reg column self-describes its family, so it
+survives dplyr and the colour legend reads it directly. Set at every reg `fmt()` site (`reg_column` /
+`reg_marginal_column` / `reg_columns_multinom` / `reg_empirical_columns`). Rendering: `legend_reg_eff_word`
+reads `get_model_family(col)` (dropping the scalar `meta$do_exp` that mislabelled a gaussian column in a
+binomial-first table); `reg_gof_tibble` takes a **per-fit family vector** so each column shows its own stat
+set (gaussian R² next to a logit McFadden — `test_grid_reg` already unions the rows and blanks the cross
+cells); new `reg_model_lines()` emits ONE "Model:" footer line per distinct family present, each prefixed
+by the outcomes it covers via `legend_name_list` (homogeneous → the single unprefixed `reg_model_line`,
+byte-identical); `reg_title`/`reg_sheet_name` go generic ("Regression models"/"reg") when mixed. `reg_meta`
+gains `families` (per dependent) + `exponentiate`; its scalar `family` stays the homogeneous fallback.
+jamovi `jmvtab_reg_build()` now calls `tab_reg()` ONCE with per-dependent family/inverse/trials vectors
+(the Phase 15d group-by-family / `tabxplor_tabs` stacking is gone). No fmt-field change; the only
+structural regen was the goldens + the `fmt-contract` snapshot (the inert `model_family=""` attribute).
+See CLAUDE.md Phase 15e.
+
 ### R/jmvtab.b.R and R/jmvtab.h.R
 
 Jamovi module integration. `jmvtab.h.R` is auto-generated from `jamovi/jmvtab.a.yaml` by

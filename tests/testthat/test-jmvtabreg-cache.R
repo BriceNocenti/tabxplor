@@ -75,6 +75,21 @@ test_that("jmvtab_reg_build == tab_reg(), each GLM family", {
   }
 })
 
+test_that("Phase 15e: mixed-family outcomes build ONE table (not a tabxplor_tabs list)", {
+  gss <- gss_reg()
+  o <- reg_opts(dependent = c("married", "tvhours"), predictors = c("race", "age"))
+  o$depFamily <- list(list(var = "married", family = "binomial"),
+                      list(var = "tvhours", family = "gaussian"))
+  built <- quiet(jmvtab_reg_build(gss, o, NULL))$tabs
+  expect_false(inherits(built, "tabxplor_tabs"))       # merged, not stacked
+  mf <- get_model_family(dplyr::ungroup(built))
+  expect_true("binomial" %in% mf && "gaussian" %in% mf)
+  # the cached-reref build (.fit_cache present) matches a direct refit mixed tab_reg()
+  direct <- quiet(tab_reg(gss, c("married", "tvhours"), c("race", "age"),
+                          family = c("binomial", "gaussian"), cleannames = TRUE))
+  expect_identical(reg_render(built), reg_render(direct))
+})
+
 test_that("empirical + weighted builds run and match tab_reg()", {
   gss <- gss_reg()
   o   <- reg_opts(dependent = "married", predictors = c("race", "age"),

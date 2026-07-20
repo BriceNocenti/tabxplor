@@ -158,6 +158,121 @@ test_that("a character `predictors` with several dependents gives one column per
   expect_true(all(c("Model OR (married)", "Model OR (has_tv)") %in% names(t1)))
 })
 
+# ---- Phase 15e: several dependents with DIFFERENT families in one table ----------------------
+
+test_that("mixed binomial + gaussian: per-column families + byte-parity vs standalone builds", {
+  skip_if_not_installed("broom")
+  d   <- reg_data()
+  mix <- tab_reg(d, c("married", "tvhours"), c("age", "race"),
+                 family = c("binomial", "gaussian"), cleannames = FALSE)
+  bin <- tab_reg(d, "married", c("age", "race"), family = "binomial", cleannames = FALSE)
+  gau <- tab_reg(d, "tvhours", c("age", "race"), family = "gaussian", cleannames = FALSE)
+
+  or_col   <- "Model OR (married)"
+  beta_col <- "Model \u03b2 (tvhours)"
+  expect_true(all(c(or_col, beta_col) %in% names(mix)))
+
+  # each column self-describes its own family (the robust per-column attribute)
+  expect_identical(get_model_family(mix[[or_col]]),   "binomial")
+  expect_identical(get_model_family(mix[[beta_col]]), "gaussian")
+  # and keeps its own fmt shape
+  expect_identical(get_ci_type(mix[[or_col]]),   "or")
+  expect_identical(get_type(mix[[beta_col]]),    "coef")
+
+  # a mixed build must NOT perturb any per-column value (identical to the standalone single-family col)
+  expect_equal(get_or(mix[[or_col]]),        get_or(bin[["Model OR"]]))
+  expect_equal(get_pvalue(mix[[or_col]]),    get_pvalue(bin[["Model OR"]]))
+  expect_equal(get_diff(mix[[beta_col]]),    get_diff(gau[["Model \u03b2"]]))
+  expect_equal(get_ci_inf(mix[[beta_col]]),  get_ci_inf(gau[["Model \u03b2"]]))
+})
+
+test_that("mixed binomial + poisson: legend effect words are OR and IRR per column", {
+  skip_if_not_installed("broom")
+  d   <- reg_data()
+  mix <- suppressWarnings(tab_reg(d, c("married", "tvhours"), c("age", "race"),
+                                  family = c("binomial", "poisson"), cleannames = FALSE))
+  meta <- get_reg_meta(mix)
+  or_col  <- mix[[grep("married", names(mix), value = TRUE)[1]]]
+  irr_col <- mix[[grep("tvhours", names(mix), value = TRUE)[1]]]
+  expect_identical(get_model_family(irr_col), "poisson")
+  # the per-column effect word reads the column's OWN family, not the table scalar
+  expect_identical(tabxplor:::legend_reg_eff_word(or_col,  "Model OR",  meta), "OR")
+  expect_identical(tabxplor:::legend_reg_eff_word(irr_col, "Model IRR", meta), "IRR")
+})
+
+test_that("mixed-family 'Model:' footer = one line per family; homogeneous = one unprefixed line", {
+  skip_if_not_installed("broom")
+  d   <- reg_data()
+  mix <- tab_reg(d, c("married", "tvhours"), c("age", "race"),
+                 family = c("binomial", "gaussian"), cleannames = FALSE)
+  hom <- tab_reg(d, "married", c("age", "race"), family = "binomial", cleannames = FALSE)
+
+  ml <- tabxplor:::reg_model_lines(mix)
+  expect_length(ml, 2L)
+  expect_true(any(grepl("logistic regression", ml)) && any(grepl("linear regression", ml)))
+  expect_true(any(grepl("married", ml)) && any(grepl("tvhours", ml)))
+
+  mlh <- tabxplor:::reg_model_lines(hom)
+  expect_length(mlh, 1L)
+  expect_false(grepl("^Model \\(", mlh))                       # no per-family prefix when homogeneous
+  expect_identical(mlh, tabxplor:::reg_model_line(get_reg_meta(hom)))
+})
+
+test_that("mixed-family caption is generic; homogeneous keeps its family name", {
+  skip_if_not_installed("broom")
+  d   <- reg_data()
+  mix <- tab_reg(d, c("married", "tvhours"), c("age", "race"),
+                 family = c("binomial", "gaussian"), cleannames = FALSE)
+  hom <- tab_reg(d, "married", c("age", "race"), family = "binomial", cleannames = FALSE)
+  expect_match(tabxplor:::reg_title(get_reg_meta(mix)), "^Regression models")
+  expect_match(tabxplor:::reg_title(get_reg_meta(hom)), "^Logistic regression")
+})
+
+test_that("mixed-family GOF footer keeps each outcome's own stat set", {
+  skip_if_not_installed("broom")
+  d   <- reg_data()
+  mix <- tab_reg(d, c("married", "tvhours"), c("age", "race"),
+                 family = c("binomial", "gaussian"), cleannames = FALSE)
+  tst <- get_test(mix)
+  or_col   <- "Model OR (married)"
+  beta_col <- "Model \u03b2 (tvhours)"
+  # gaussian stats keyed to the gaussian column, glm stats to the logit column
+  expect_true("r2"          %in% tst$test[tst$col_var == beta_col])
+  expect_true("mcfadden_r2" %in% tst$test[tst$col_var == or_col])
+  expect_false("r2"          %in% tst$test[tst$col_var == or_col])
+  expect_false("mcfadden_r2" %in% tst$test[tst$col_var == beta_col])
+})
+
+test_that("auto colour default is per-family (OR for the logit, diff for the gaussian)", {
+  skip_if_not_installed("broom")
+  d   <- reg_data()
+  mix <- tab_reg(d, c("married", "tvhours"), c("age", "race"),
+                 family = c("binomial", "gaussian"), cleannames = FALSE)
+  expect_identical(get_color(mix[["Model OR (married)"]]),   "OR")
+  expect_identical(get_color(mix[["Model \u03b2 (tvhours)"]]), "diff")
+})
+
+test_that("family accepts a named vector; auto-detection is per dependent (ambiguous integer names itself)", {
+  skip_if_not_installed("broom")
+  d   <- reg_data()
+  # named vector keyed by dependent
+  mix <- tab_reg(d, c("married", "tvhours"), c("age", "race"),
+                 family = c(tvhours = "gaussian", married = "binomial"), cleannames = FALSE)
+  expect_identical(get_model_family(mix[["Model OR (married)"]]),   "binomial")
+  expect_identical(get_model_family(mix[["Model \u03b2 (tvhours)"]]), "gaussian")
+  # auto on an ambiguous integer count aborts naming THAT outcome, not a table-wide "must be binary"
+  expect_error(tab_reg(d, c("married", "tvhours"), "race"), "tvhours")
+})
+
+test_that("mixed-family table exports through md / kable without error", {
+  skip_if_not_installed("broom")
+  d   <- reg_data()
+  mix <- tab_reg(d, c("married", "tvhours"), c("age", "race"),
+                 family = c("binomial", "gaussian"), cleannames = FALSE)
+  expect_no_error(tab_md(mix))
+  expect_no_error(tab_kable(mix, engine = "html"))
+})
+
 test_that("colour: gaussian beta greys non-significant / reference, colours a large standardized beta", {
   skip_if_not_installed("broom")
   t1  <- tab_reg(reg_data(), "tvhours", c("age", "race"), family = "gaussian", cleannames = FALSE)

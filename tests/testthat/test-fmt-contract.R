@@ -24,15 +24,18 @@ fmt_contract_field_types <- c(
   tot_n = "double", in_totrow = "logical", in_tottab = "logical", in_refrow = "logical"
 )
 
-# The 9 per-column attributes and their constructor defaults. Phase 5 added `color_signif`
+# The 10 per-column attributes and their constructor defaults. Phase 5 added `color_signif`
 # (the significance policy: "ignore" / "grey_non_signif" / "guaranteed_effect") -- it cannot fold
 # into `color` (which is measure x channel) and pillar_shaft renders columns standalone, so the
 # policy must live on the column. The `color` attribute is now length 1 (text) or 2 (text, bg).
 # Phase 10i-A DROPPED the Phase-10c `display_spec` attribute (10 -> 9): the opt-in composite display
 # is now a per-cell `display`-FIELD {} template ("{pct} (n={n})"), not a column attribute.
+# Phase 15e ADDED `model_family` (9 -> 10): the per-column regression family ("" on cross-tables), so
+# one table can mix several dependents of different families and each column keeps its effect wording.
 fmt_contract_attr_defaults <- list(
   type = "n", comp_all = NA, ref = "", ci_type = "",
-  col_var = "", totcol = FALSE, refcol = FALSE, color = "", color_signif = "ignore"
+  col_var = "", totcol = FALSE, refcol = FALSE, color = "", color_signif = "ignore",
+  model_family = ""
 )
 
 testthat::test_that("fmt has exactly the contracted fields, in order", {

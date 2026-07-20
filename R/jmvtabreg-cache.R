@@ -207,11 +207,12 @@ jmvtab_reg_mult_vector <- function(multiplicator) {
 }
 
 
-# === Per-dependent Model table -> tab_reg() args (Phase 15d) ================================
+# === Per-dependent Model table -> tab_reg() args (Phase 15d / 15e) ==========================
 # The Model table (depFamily / depModelLevel / depTrials arrays) sets one family + modelled level +
-# trials per outcome. These three helpers resolve ONE dependent; jmvtab_reg_build() then groups the
-# outcomes by family (same family -> one shared table; different families -> a tabxplor_tabs list, the
-# interim until the mixed-family single table lands -- roadmap 15d, deferred).
+# trials per outcome. These three helpers resolve ONE dependent; jmvtab_reg_build() (Phase 15e) passes
+# the resolved per-dependent family / inverse / trials VECTORS to ONE tab_reg() call -- a mixed table
+# (several outcomes, different families) is now one table, one column-group per outcome (no more
+# grouping-by-family / tabxplor_tabs stacking).
 
 # The chosen family for `dep` (an explicit non-blank pick) else auto-detected from the outcome.
 #' @keywords internal
@@ -287,9 +288,9 @@ jmvtab_reg_build <- function(data, opts, store = NULL) {
     return(list(tabs = NULL, store = cache_env$store, hits = 0L))
   }
 
-  # Phase 15d: resolve each outcome's family / modelled level / trials from the Model table, then group
-  # the outcomes so every tab_reg() call is family-homogeneous (its family / trials-mode uniform). One
-  # group -> one table; several -> a tabxplor_tabs list (the mixed-family single table is deferred).
+  # Phase 15e: resolve each outcome's family / modelled level / trials from the Model table, then pass them
+  # to ONE tab_reg() call as per-dependent vectors -- so several outcomes with DIFFERENT families render as
+  # one mixed table (tab_reg builds one column-group per outcome). No more family-grouping / stacking.
   fams <- vapply(dep, function(d) jmvtab_reg_dep_family(opts$depFamily, d, data), character(1))
   invs <- vapply(dep, function(d) jmvtab_reg_dep_modelled_first(opts$depModelLevel, d), logical(1))
   # trials are binomial-only (grouped / summed-score); non-binomial outcomes never carry one.
@@ -297,62 +298,44 @@ jmvtab_reg_build <- function(data, opts, store = NULL) {
     if (identical(fams[i], "binomial")) jmvtab_reg_dep_trials(opts$depTrials, dep[i], data)
     else NA_integer_
   }, integer(1))
-  key  <- paste0(fams, "|", ifelse(is.na(tris), "b", "t"))     # split binary-logit vs grouped-binomial
-  groups <- unique(key)                                        # first-appearance order
 
-  build_group <- function(k) {
-    gdep <- dep[key == k]
-    gfam <- fams[key == k][1L]
-    ginv <- invs[key == k]
-    inv_arg <- if (all(ginv)) TRUE else stats::setNames(ginv, gdep)   # scalar unless a pick overrode it
-    gtri <- tris[key == k]
-    tri_arg <- if (all(is.na(gtri))) NULL else stats::setNames(as.integer(gtri), gdep)
-    mult_arg <- if (gfam %in% c("multinomial", "ordinal")) NULL
-                else jmvtab_reg_mult_vector(opts$multiplicator)
-    tab_reg(
-      data,
-      dependent    = gdep,
-      predictors   = preds,
-      family       = gfam,
-      wt           = nz(opts$wt),
-      ids          = nz(opts$ids),
-      strata       = nz(opts$strata),
-      fpc          = nz(opts$fpc),
-      nest         = isTRUE(opts$nest),
-      exponentiate = opts$exponentiate,
-      effect       = opts$effect,
-      at           = opts$at,
-      conf_level   = opts$conf_level,
-      method       = opts$method,
-      reference    = opts$reference,
-      inverse_two_level_factors = inv_arg,
-      split_var    = nz(opts$split_var),
-      empirical    = isTRUE(opts$empirical),
-      stats        = opts$stats,
-      estimate_display = opts$estimate_display,
-      color        = opts$color,
-      color_signif = opts$color_signif,
-      stars        = isTRUE(opts$stars),
-      na           = opts$na,
-      cleannames   = opts$cleannames,
-      subtext      = opts$subtext,
-      compare      = if (is.null(opts$compare)) "none" else opts$compare,
-      baseline     = opts$baseline,
-      multiplier   = mult_arg,
-      trials       = tri_arg,
-      .fit_cache   = cache_env
-    )
-  }
+  fam_arg <- stats::setNames(fams, dep)
+  inv_arg <- if (all(invs)) TRUE else stats::setNames(invs, dep)   # scalar unless a pick overrode it
+  tri_arg <- if (all(is.na(tris))) NULL else stats::setNames(as.integer(tris), dep)
 
-  if (length(groups) == 1L) {
-    tabs <- build_group(groups)
-  } else {
-    parts <- lapply(groups, build_group)
-    # flatten any nested tabxplor_tabs (e.g. a split_var group) into one flat list of tables.
-    flat  <- list()
-    for (p in parts) if (inherits(p, "tabxplor_tabs")) flat <- c(flat, as.list(p)) else flat <- c(flat, list(p))
-    tabs <- new_tabxplor_tabs(flat)
-  }
+  tabs <- tab_reg(
+    data,
+    dependent    = dep,
+    predictors   = preds,
+    family       = fam_arg,
+    wt           = nz(opts$wt),
+    ids          = nz(opts$ids),
+    strata       = nz(opts$strata),
+    fpc          = nz(opts$fpc),
+    nest         = isTRUE(opts$nest),
+    exponentiate = opts$exponentiate,
+    effect       = opts$effect,
+    at           = opts$at,
+    conf_level   = opts$conf_level,
+    method       = opts$method,
+    reference    = opts$reference,
+    inverse_two_level_factors = inv_arg,
+    split_var    = nz(opts$split_var),
+    empirical    = isTRUE(opts$empirical),
+    stats        = opts$stats,
+    estimate_display = opts$estimate_display,
+    color        = opts$color,
+    color_signif = opts$color_signif,
+    stars        = isTRUE(opts$stars),
+    na           = opts$na,
+    cleannames   = opts$cleannames,
+    subtext      = opts$subtext,
+    compare      = if (is.null(opts$compare)) "none" else opts$compare,
+    baseline     = opts$baseline,
+    multiplier   = jmvtab_reg_mult_vector(opts$multiplicator),   # tab_reg skips mnl/ordinal specs per-spec
+    trials       = tri_arg,
+    .fit_cache   = cache_env
+  )
 
   cache_env$store <- jmvreg_cache_evict(cache_env$store)
   list(tabs = tabs, store = cache_env$store, hits = cache_env$hits)

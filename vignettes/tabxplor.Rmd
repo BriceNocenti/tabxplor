@@ -7,18 +7,11 @@ vignette: >
   %\VignetteEncoding{UTF-8}
 ---
 
-```{r, include = FALSE}
+```{r setup, include = FALSE}
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>"
 )
-```
-
-```{r setup}
-library(tabxplor)
-```
-
-```{r hiddensetup, echo=FALSE}
 library(tabxplor)
 
 # The tables below are shown exactly as they appear in the R console --- colored. tabxplor builds
@@ -29,6 +22,9 @@ options(cli.num_colors = 256)
 set_color_palette(theme = "light") # type = "text"
 ```
 
+```{r, eval = FALSE}
+library(tabxplor)
+```
 
 
 ```{r, echo = FALSE, include = FALSE}
@@ -39,9 +35,9 @@ knitr::knit_hooks$set(output = function(x, options) {
 })
 ```
 
-`tabxplor` helps you **explore data with cross-tables**: it makes them quickly and **colors the cells so you can read a table at a glance**. Over-represented cells use shades of blue, under-represented ones turn red/orange, so patterns jump out without you squinting at every number.
+`tabxplor` helps you **explore data with cross-tables, coloring the cells so you can read a table at a glance**. Over-represented cells use shades of blue, under-represented ones turn red/orange, so patterns jump out without you squinting at every number.
 
-Everything is a `tibble`, so the result works with the usual `dplyr` verbs, and tables export to Excel, HTML and Markdown with their colors. Heavy computations run on `data.table`, so it stays fast on large survey data.
+Everything is a `tibble`, so the result works with the usual `dplyr` verbs, and tables export to Excel, HTML and Markdown with their color helpers. Underlying heavy computations run on `data.table`
 
 Throughout this vignette we use `gss_simple`, a cleaned-up version of the General Social Survey (`forcats::gss_cat`) with factors levels merged and reordered.
 
@@ -169,7 +165,7 @@ gss_simple |>
   tab(race, party3, pct = "row", display = "ci", stars = TRUE)
 ```
 
-**Quick tip — show two numbers in one cell.** `display` is not just for confidence intervals: it takes a **`{}` template** that combines any cell fields. For example `display = "{pct} ({diff})"` prints each percentage followed by its difference from the reference, and `"{pct} (n={n})"` follows it with the count:
+**Show two numbers in one cell.** `display` is not just for confidence intervals: it takes a **`{}` template** that combines any cell fields. For example `display = "{pct} ({diff})"` prints each percentage followed by its difference from the reference, and `"{pct} (n={n})"` follows it with the count:
 
 ```{r, echo = TRUE}
 tab(gss_simple, race, party3, pct = "row", color = "diff", display = "{pct} ({diff})")
@@ -206,8 +202,7 @@ tab_md(t)                        # Markdown (with pandoc color spans)
 
 `tab_export()` is a single entry point over all four — pick the format (and, optionally, a file `path`). Two options are worth knowing:
 
-- `theme = "auto"` lets an HTML or Markdown export **follow the reader's light/dark mode** (it flips live). For the console, `set_color_palette(theme = "auto")` detects the editor (RStudio, Positron) and picks the matching palette — it is applied automatically when the package loads.
-- `lang = "fr"` translates the colour legend and table footers into French; it works on every exporter.
+- `theme = "auto"` lets an HTML or Markdown export **follow the reader's light/dark mode** (it flips live). For the console, `set_color_palette(theme = "auto")` detects the editor (RStudio, Positron, etc.) and picks the matching palette — it is applied automatically when the package loads.
 
 ```{r, echo = TRUE, eval = FALSE}
 tab_export(t, format = "xl", path = "table.xlsx")  # one entry point for "xl"/"kable"/"md"/"plot"
@@ -234,8 +229,8 @@ The **type** is set by the column variable — a **factor** (percentages are com
 
 Every colored table answers three questions:
 
-- **Which measure?** `color =` picks what a color *means*: `"diff"` (distance from the reference), `"ratio"` (relative risk for percentages, mean ratio for means), `"contrib"` (weight in the Chi-squared), `"OR"` (odds ratio). `color = TRUE` picks a sensible one per column type.
-- **How confident are we?** every color reads one **confidence interval** at `conf_level` (95% by default). A cell is *significant* when that interval excludes its neutral value — **0** for a difference, **1** for a ratio or odds ratio. The printed bracket, the significance stars and the greying all read that same interval, so they can never disagree.
+- **How to measure deviation?** `color =` picks what a color *means*: `"diff"` (distance from the reference), `"ratio"` (relative risk for percentages, mean ratio for means), `"contrib"` (weight in the Chi-squared), `"OR"` (odds ratio). `color = TRUE` picks a sensible one per column type.
+- **How confident are we in this measure?** every color reads one **confidence interval** at `conf_level` (95% by default). A cell is *significant* when that interval excludes its neutral value — **0** for a difference, **1** for a ratio or odds ratio. The printed bracket, the significance stars and the greying all read that same interval, so they can never disagree.
 - **How to show significance?** `color_signif` — `"ignore"`, `"grey_non_signif"` or `"guaranteed_effect"` ; `stars = TRUE` to use significance stars instead of, or stacked with, colors.
 
 **The confidence interval used for the colors and stars** compares each cell to its reference cell (by default, the corresponding cell in the Total row or Total column):
@@ -244,7 +239,7 @@ Every colored table answers three questions:
 |------|-----------|------------------------------------------|-------------------------------|
 | pct  | `diff`    | cell % - reference % (percentage points) | Newcombe hybrid-score         |
 | pct  | `ratio`   | cell % / reference % (relative risk)     | Katz log-risk-ratio           |
-| pct  | `OR`      | empirical odds ratio (needs `OR = TRUE`) | Woolf log-odds-ratio          |
+| pct  | `OR`      | empirical odds ratio                     | Woolf log-odds-ratio          |
 | pct  | `contrib` | signed χ² contribution (no reference)    | — (standardized residual)     |
 | mean | `diff`    | cell mean - reference mean (SD units)    | Welch *t*                     |
 | mean | `ratio`   | cell mean / reference mean               | robust ratio-of-means         |
@@ -254,8 +249,8 @@ Alternative interval methods (see `?tab_ci`):
 - `method_mean_diff = "student"` (pooled, the OLS two-group interval) for a mean difference; 
 - `method_mean_ratio = "quasipoisson"` or `"poisson"` for a mean ratio. 
 - The relative-risk (`method_ratio = "katz"`) and odds-ratio (Woolf) intervals have no alternative.
-- A mean **difference** is colored **standardized** — Glass's Δ, the difference divided by the reference's standard deviation — so the `mean_diff` color breaks are read in SD units.
-- For a factor with **3 or more levels**, the odds ratio (and its interval) compares each level to the `ref2` baseline level — the crude counterpart of a multinomial *level-vs-baseline* odds ratio. The OR interval is computed only when `color_signif` or `stars` needs it.
+- A mean **difference** is colored **standardized** — Glass's Δ, the difference divided by the reference's standard deviation — so the `mean_diff` color breaks are read in SD units, unless the user provides a custom break scale.
+- For a factor with **3 or more levels**, the odds ratio (and its interval) compares each level to the `ref2` baseline level : it is a relative risk ratio (RRR) (the same observed quantity that is modelised by a multinomial logistic regression). The OR interval is computed only when `color_signif` or `stars` needs it.
 
 **Simple, cell-by-cell confidence intervals** (`ci = "cell"`) compare each cell to 0 % (or a mean of 0), *not* to a reference:
 
@@ -270,7 +265,7 @@ Because they compare to 0 and not to a reference, cell intervals are purely desc
 - `"ignore"` colors **every** cell by its **observed effect** size, for example the observed difference compared to the Total row. Grey cells have an observed effect below the threshold (for example, differences of less than ±5 points of percentages). 
 - `"grey_non_signif"` and `"guaranteed_effect"` both color **only significant cells**, but differ in the *intensity basis*: 
   + `grey_non_signif` colors by the **observed** effect, like "ignore", greying out small deviations, but it also **greys out any large deviation that turns to be non-significant**. Ideal for large samples.
-  + `guaranteed_effect` colors by the **guaranteed** effect — the confidence-bound (CI-floor), the **smallest deviation that is assured at a given confidence level** (default 95%) — so its colors are dimmer and conservative, but **all significative differences are colored**, which is ideal for small samples.
+  + `guaranteed_effect` colors by the **guaranteed** effect — the confidence-bound (CI-floor), the **smaller deviation that is assured at a given confidence level** (default 95%) — so its colors are dimmer and conservative, but **all significative differences are colored**, which is ideal for small samples.
 
 | type | color     | `="ignore"`     | `="grey_non_signif"`               | `="guaranteed_effect"`      |
 |------|-----------|-----------------|------------------------------------|-----------------------------|

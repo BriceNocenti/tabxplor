@@ -54,11 +54,17 @@ With a \code{predictors} character vector, several names give one effect column 
 of character vectors (one model per element, its name labelling the column). Leave \code{NULL} when
 \code{dependent} is a formula.}
 
-\item{family}{The model family. \code{"auto"} (default) detects a binary (-> \code{"binomial"}), an ordered
-3+ level (-> \code{"ordinal"}), a nominal 3+ level (-> \code{"multinomial"}), or a continuous
-(-> \code{"gaussian"}) outcome and emits a message; an integer count stays ambiguous and must be named.
-Set it explicitly with \code{"gaussian"} (linear), \code{"binomial"} (logistic), \code{"poisson"} /
-\code{"quasipoisson"} (counts), \code{"multinomial"} (nominal 3+ level), \code{"ordinal"} (ordered 3+ level).}
+\item{family}{The model family, \strong{resolved per dependent} so several outcomes with different
+families can share one table (one effect column-group each). \code{"auto"} (default) detects each
+outcome: a binary (-> \code{"binomial"}), an ordered 3+ level (-> \code{"ordinal"}), a nominal 3+ level
+(-> \code{"multinomial"}), or a continuous (-> \code{"gaussian"}) outcome, emitting a message; an integer
+count stays ambiguous and must be named (for that outcome only). Set it explicitly with
+\code{"gaussian"} (linear), \code{"binomial"} (logistic), \code{"poisson"} / \code{"quasipoisson"} (counts),
+\code{"multinomial"} (nominal 3+ level), \code{"ordinal"} (ordered 3+ level). A \strong{scalar} applies to every
+dependent; a \strong{vector} aligned to \code{dependent}, or a \strong{named} vector keyed by dependent
+(e.g. \code{c(income = "poisson", satisfied = "binomial")}), sets one family per outcome. Mixed
+families work only with a character \code{predictors} (one model per outcome); a \code{predictors} list
+(model comparison) is single-outcome, hence single-family.}
 
 \item{wt}{Optional. Name of a weight column (character). Switches to design-based survey estimation
 (\code{\link[survey:svyglm]{survey::svyglm()}}): the sandwich standard errors are scale-invariant, so raw population weights

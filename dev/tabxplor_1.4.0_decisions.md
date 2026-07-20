@@ -4636,3 +4636,61 @@ They're genuinely interpretable — a standardized rate, not just an error term.
 
 That third reading is the payoff of your crude-vs-adjusted design: here adjustment barely moves the number, which is the substantive finding ("the gap is not explained by income/age/religion"). Always a **comparison/standardization**, never "changing someone's race causes X" (Gelman; Table-2 fallacy).
 
+
+## 51. Phase 15e — several dependents with DIFFERENT families in one `tab_reg()` table (IMPLEMENTED 2026-07-20)
+
+**The need.** `tab_reg(gss_simple, c("married", "tvhours"))` errored ("must be binary") because `family`
+was resolved once from `dependent[[1]]` and forced on every outcome. Modelling several outcomes side by
+side, each with its own family (one column-group each), is a real analysis need; Phase 15d had already
+prepared the jamovi per-dependent family selector.
+
+**The maintainer's design question** ("what table-level thing must go column-level, without relying on a
+table attribute a dplyr op could drop? the family? the predictors?") was settled with a **new per-column
+`model_family` fmt attribute** (the 10th; `""` on cross-tables), chosen over vectorising the table-level
+`reg_meta` — because a column attribute rides on the vctrs record and survives `select`/`tab_spread`/
+extraction, and the colour legend already reads per-column attributes (`ci_type`/`type`). **Predictors
+stay table-level** (shared in the mixed-dependent mode; the per-model GOF footer already carries them per
+column) — moving them per-column would be high cost for no current use. `effect`/`at`/`exponentiate` stay
+table-level (one per call — one jamovi UI row). So the ONLY genuinely new per-column datum is the family.
+
+**Scope.** Mixed families work in the **vector-of-dependents** mode (character `predictors`, shared, one
+column-group per outcome). Model comparison (a `predictors` list) is single-outcome, hence single-family.
+`split_var` recursion forwards `specs` intact → composes unchanged. `at = "reference"` (the MNL "j vs
+rest" / MER profile axis keys on the scalar first family and does not generalise) degrades to `"average"`
+with a message on a mixed table — the one deliberate limitation.
+
+**Implementation.** `tab_reg()` resolves `family_for(d)` (per dependent; scalar / positional vector /
+named vector; `"auto"` detects each honestly — an ambiguous integer aborts naming THAT outcome) and the
+per-family derived measures `do_exp_for`/`effect_shape_for`/`eff_word_for`/`color_for`, storing them on
+each **spec** (like `sp$trials`/`sp$inverse`). `reg_build` reads `sp$*` via a small `sp_get(sp, key,
+default)` (the scalar `reg_build` args remain the recycled default for a direct caller / homogeneous
+table, so those paths are byte-identical). The per-family validations (`trials`/`multiplier`/`empirical`/
+`estimate_display`/`predicted_unadjusted`) became **per-spec skips with a message** instead of table-wide
+aborts. The column builders (`reg_column`/`reg_marginal_column`/`reg_columns_multinom`/
+`reg_empirical_columns`) gained a `model_family` param and set the attribute at every `fmt()` site.
+`reg_gof_tibble` takes a **per-fit family vector** so each column shows its own stat set (gaussian R² next
+to a logit McFadden — `test_grid_reg` already unions the rows and blanks the cross cells). The empirical
+loop + multinomial tooltip loop went per-spec (dropping the `specs[[1]]` hardcode). The reref/digest cache
+predicate became `all(families_vec %in% glm)` and threads `sp$family` into `jmvreg_fit_key`/
+`reg_build_digest` so a binomial-vs-gaussian digest can't collide.
+
+**Rendering.** `legend_reg_eff_word` reads `get_model_family(col)` for the OR-vs-IRR split and **drops the
+scalar `meta$do_exp`** — that scalar (from the first outcome) mislabelled a gaussian column in a
+binomial-first table; a `coef`-type column in coefficient mode is always the additive β scale. New
+`reg_model_lines()` emits ONE "Model:" footer line per distinct family present, each prefixed by the
+outcomes it covers (via `legend_name_list`); a homogeneous table returns the single unprefixed
+`reg_model_line`, byte-identical. `reg_title`/`reg_sheet_name` go generic ("Regression models"/"reg") when
+families differ. `reg_meta` gains `families` (per dependent) + `exponentiate`; its scalar `family` is the
+homogeneous fallback.
+
+**jamovi.** `jmvtab_reg_build()` now calls `tab_reg()` ONCE with per-dependent family/inverse/trials
+vectors — the Phase 15d group-by-family / `tabxplor_tabs` stacking is gone. No `.a/.u/.js` change
+(depFamily/depModelLevel/depTrials already exist from 15d), so **no `jmvtools::prepare()`** is needed for
+the R-side behaviour.
+
+**Verification.** Full suite green (**3780 pass, 0 fail**). The only regen was the structural goldens + the
+`fmt-contract` record-shape snapshot — both the inert `model_family=""` attribute, with every cell value
+byte-identical (verified old-vs-new). New tests: mixed binomial+gaussian byte-parity vs standalone builds,
++poisson OR/IRR legend words, the per-family "Model:" lines, the mixed GOF stat rows, per-spec auto-colour,
+the named-family vector + per-dependent auto-abort, the `model_family` fmt-attribute round-trip/reconcile,
+and the jamovi one-table build.

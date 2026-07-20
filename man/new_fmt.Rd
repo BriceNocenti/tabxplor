@@ -33,6 +33,7 @@ new_fmt(
   refcol = FALSE,
   color = "",
   color_signif = "ignore",
+  model_family = "",
   ...,
   class = character()
 )

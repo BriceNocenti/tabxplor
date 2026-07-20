@@ -24,6 +24,8 @@
 \alias{set_ci_type}
 \alias{get_col_var}
 \alias{set_col_var}
+\alias{get_model_family}
+\alias{set_model_family}
 \alias{is_refcol}
 \alias{as_refcol}
 \alias{get_color}
@@ -64,7 +66,8 @@ fmt(
   totcol = FALSE,
   refcol = FALSE,
   color = "",
-  color_signif = "ignore"
+  color_signif = "ignore",
+  model_family = ""
 )
 
 is_fmt(x)
@@ -110,6 +113,10 @@ set_ci_type(x, ci_type)
 get_col_var(x, ...)
 
 set_col_var(x, col_var)
+
+get_model_family(x, ...)
+
+set_model_family(x, model_family)
 
 is_refcol(x, ...)
 
@@ -243,6 +250,11 @@ difference first.
 \item{color_signif}{How significance gates the color, as a single string
 (\code{"ignore"} / \code{"grey_non_signif"} / \code{"guaranteed_effect"}). See \code{\link{tab}}.}
 
+\item{model_family}{For regression tables (\code{\link{tab_reg}}): the column's model family
+(\code{"binomial"}, \code{"gaussian"}, \code{"poisson"}, \code{"multinomial"}, \code{"ordinal"}),
+as a single string. Empty (\code{""}) on cross-tables. Lets a table mix several dependents with
+different families, each column keeping its own effect wording.}
+
 \item{x}{The object to test, to get a field in, or to modify.}
 
 \item{value}{The value you want to inject in some \code{fmt} vector's vctrs::field
@@ -296,6 +308,11 @@ A logical vector with the fmt vectors ci_type attributes
 A modified fmt vector.
 
 A logical vector with the fmt vectors col_var attributes
+
+A modified fmt vector.
+
+A character vector with the fmt vectors' model_family attributes (\code{""} when unset,
+e.g. on cross-tables). On a data.frame, one value per column.
 
 A modified fmt vector.
 
@@ -379,6 +396,11 @@ all of them in the whole tibble.
 \item \code{get_col_var()}: get names of column variable of fmt columns (at \code{fmt} level or \code{tab} level)
 
 \item \code{set_col_var()}: set the "col_var" attribute of a \code{fmt} vector
+
+\item \code{get_model_family()}: get the regression model family of fmt columns (at \code{fmt} or \code{tab} level)
+
+\item \code{set_model_family()}: set the "model_family" attribute of a \code{fmt} vector (Phase 15e: the per-column
+regression family, "" on crosstabs)
 
 \item \code{is_refcol()}: test function for reference columns (at \code{fmt} level or \code{tab} level)
 

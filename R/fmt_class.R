@@ -172,6 +172,10 @@ utils::globalVariables(c("tabx_opts", "tabx_ship", ".stop"))
 #' }
 #' @param color_signif How significance gates the color, as a single string
 #' (\code{"ignore"} / \code{"grey_non_signif"} / \code{"guaranteed_effect"}). See \code{\link{tab}}.
+#' @param model_family For regression tables (\code{\link{tab_reg}}): the column's model family
+#' (\code{"binomial"}, \code{"gaussian"}, \code{"poisson"}, \code{"multinomial"}, \code{"ordinal"}),
+#' as a single string. Empty (\code{""}) on cross-tables. Lets a table mix several dependents with
+#' different families, each column keeping its own effect wording.
 #' @return A vector of class \code{tabxplor_fmt}.
 #' @export
 #'
@@ -299,7 +303,8 @@ fmt <- function(n         = integer(),
                 totcol    = FALSE,
                 refcol    = FALSE,
                 color     = ""    ,
-                color_signif = "ignore") {
+                color_signif = "ignore",
+                model_family = ""   ) {   # Phase 15e: per-column regression family ("" on crosstabs)
 
   # DESIGN: these 8 fields set the recycling reference length. display, diff, ratio, or,
   # the ci bounds, pvalue, tot_n and the in_* flags are recycled TO it below, so they must
@@ -351,6 +356,7 @@ fmt <- function(n         = integer(),
   # recycled to 1 (Phase 5 §9.1). color_signif is the scalar significance policy.
   color        <- vctrs::vec_cast(color, character())
   color_signif <- vctrs::vec_recycle(vctrs::vec_cast(color_signif, character()), size = 1)
+  model_family <- vctrs::vec_recycle(vctrs::vec_cast(model_family, character()), size = 1)
 
   new_fmt(n = n, display = display, digits = digits,
           wn = wn, pct = pct,  mean = mean,
@@ -359,7 +365,7 @@ fmt <- function(n         = integer(),
           in_totrow = in_totrow, in_tottab = in_tottab, in_refrow = in_refrow,
           type = type, comp_all = comp_all,  ref = ref,
           ci_type = ci_type, col_var = col_var, totcol = totcol, refcol = refcol,
-          color = color, color_signif = color_signif)
+          color = color, color_signif = color_signif, model_family = model_family)
 }
 
 #' @describeIn fmt a test function for class fmt.
@@ -904,6 +910,27 @@ set_col_var   <- function(x, col_var) {
 }
 
 
+#' @describeIn fmt get the regression model family of fmt columns (at \code{fmt} or \code{tab} level)
+#' @return A character vector with the fmt vectors' model_family attributes (\code{""} when unset,
+#'   e.g. on cross-tables). On a data.frame, one value per column.
+#' @export
+get_model_family <- function(x, ...) {
+  if (is.data.frame(x)) return(purrr::map_chr(x, get_model_family))
+  mf <- attr(x, "model_family", exact = TRUE)
+  if (is.null(mf)) "" else mf
+}
+
+#' @describeIn fmt set the "model_family" attribute of a \code{fmt} vector (Phase 15e: the per-column
+#'   regression family, "" on crosstabs)
+# @param model_family The regression model family, as a single string.
+#' @return A modified fmt vector.
+#' @export
+set_model_family <- function(x, model_family) {
+  vctrs::vec_assert(model_family, character(), size = 1)
+  `attr<-`(x ,"model_family" , model_family)
+}
+
+
 
 #' @describeIn fmt test function for reference columns (at \code{fmt} level or \code{tab} level)
 #' @return A logical vector with the fmt vectors is_refcol attributes
@@ -1225,6 +1252,7 @@ new_fmt <- function(n         = integer(),
                     refcol    = FALSE,
                     color     = ""   ,
                     color_signif = "ignore",
+                    model_family = ""   ,   # Phase 15e: regression model family per column ("" on crosstabs)
                     ..., class = character()
 ) {
   # stopifnot(
@@ -1275,7 +1303,7 @@ new_fmt <- function(n         = integer(),
          in_refrow = in_refrow),
     type = type, comp_all = comp_all, ref = ref,
     ci_type = ci_type, col_var = col_var, totcol = totcol, refcol = refcol,
-    color = color, color_signif = color_signif[1],
+    color = color, color_signif = color_signif[1], model_family = model_family[1],
     class = c(class, "tabxplor_fmt"))
   #access with fields() n_fields() vctrs::field() vctrs::`field<-`() ;
   #vec_data() return the tibble with all fields
@@ -3132,11 +3160,17 @@ legend_shade_names <- function() {
 # EMPIRICAL crude column (% / mean / diff / rate) has no effect word; an empirical OR/IRR takes the
 # family's multiplicative word, so its legend names the right scale (Emp. IRR -> rate-ratio, item 5).
 legend_reg_eff_word <- function(col, cn, meta) {
+  # Phase 15e: the OR-vs-IRR split reads the column's OWN family (the `model_family` fmt attribute), so a
+  # mixed table names each column correctly; fall back to the table's scalar family when unset. `effect`/
+  # `at` stay table-level (one per call). A `coef`-type column in coefficient mode is always the additive
+  # beta scale (AME is handled by the effect branch above), so no scalar `do_exp` check is needed -- that
+  # scalar would mislabel a gaussian column in a binomial-first mixed table.
+  fam <- get_model_family(col); if (!nzchar(fam)) fam <- meta$family
   if (identical(get_ci_type(col), "or"))
-    return(if (meta$family %in% c("poisson", "quasipoisson")) "IRR" else "OR")
+    return(if (fam %in% c("poisson", "quasipoisson")) "IRR" else "OR")
   if (!startsWith(cn, "Emp.")) {                       # a model (not crude) column
     if (identical(meta$effect, "ame")) return(if (identical(meta$at, "reference")) "MER" else "AME")
-    if (identical(get_type(col), "coef") && !isTRUE(meta$do_exp)) return(.lg_beta)   # gaussian beta
+    if (identical(get_type(col), "coef")) return(.lg_beta)   # gaussian beta
   }
   NA_character_
 }
@@ -3737,7 +3771,7 @@ tab_footer_streams <- function(x, style = "prose", lang = NULL,
   push <- function(tokens, role) if (length(tokens))
     streams[[length(streams) + 1L]] <<- list(tokens = tokens, role = role)
   wl <- tab_weight_line(x, lang = lg);   if (!is.null(wl)) push(list(.lg_tok(wl)), "weight")
-  rl <- reg_model_line(get_reg_meta(x)); if (!is.null(rl)) push(list(.lg_tok(rl)), "reg")   # NOT translated
+  for (rl in reg_model_lines(x)) if (nzchar(rl)) push(list(.lg_tok(rl)), "reg")   # NOT translated (per family)
   if (isTRUE(legend)) for (toks in legend_streams(x, style, lg)) push(toks, "legend")
   sl <- suppressWarnings(tab_stars_legend(x, lang = lg)); if (!is.null(sl)) push(list(.lg_tok(sl)), "stars")
   for (s in subtext) if (nzchar(s)) push(list(.lg_tok(s)), "subtext")
@@ -4017,6 +4051,8 @@ vec_ptype2.tabxplor_fmt.tabxplor_fmt    <- function(x, y, ...) {
   same_color   <- color_x == fmt_color_attr(y)
   signif_x     <- get_color_signif(x)
   same_signif  <- signif_x == get_color_signif(y)
+  mf_x         <- get_model_family(x)
+  same_mf      <- mf_x == get_model_family(y)
   #l            <- length(x)
 
   # Phase 9c: the reconcile is scalar-attribute picking; base-R if/else replaces the 9 dplyr::if_else
@@ -4036,7 +4072,8 @@ vec_ptype2.tabxplor_fmt.tabxplor_fmt    <- function(x, y, ...) {
     refcol   = if (same_refcol)    refcol_x    else FALSE,
     color    = if (length(same_color) == 1L) { if (same_color) color_x else "" }
                else ifelse(same_color, color_x, ""),
-    color_signif = if (same_signif) signif_x else "ignore"
+    color_signif = if (same_signif) signif_x else "ignore",
+    model_family = if (same_mf) mf_x else ""
   )
 }
 #' Find common ptype between fmt and double
@@ -4104,7 +4141,8 @@ vec_cast.tabxplor_fmt.tabxplor_fmt  <- function(x, to, ...)
           totcol    = is_totcol   (to),
           refcol    = is_refcol   (to),
           color     = fmt_color_attr(to),          # full attribute (both channels)
-          color_signif = get_color_signif(to)
+          color_signif = get_color_signif(to),
+          model_family = get_model_family(to)
 
   )
 
@@ -4132,6 +4170,7 @@ vec_cast.tabxplor_fmt.double   <- function(x, to, ...)
       refcol    = is_refcol   (to),
       color     = fmt_color_attr(to),
       color_signif = get_color_signif(to),
+      model_family = get_model_family(to),
 
   )
 #' Convert fmt into double
@@ -4159,7 +4198,8 @@ vec_cast.tabxplor_fmt.integer <- function(x, to, ...)
       totcol   = is_totcol   (to),
       refcol    = is_refcol   (to),
       color    = fmt_color_attr(to),
-      color_signif = get_color_signif(to)
+      color_signif = get_color_signif(to),
+      model_family = get_model_family(to)
 
   ) #new_fmt(pct = as.double(x))
 #' Convert fmt into integer
@@ -4305,7 +4345,8 @@ vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
       totcol   = FALSE                                                  ,
       refcol   = FALSE                                                  ,
       color    = fmt_color_attr(x),
-      color_signif = get_color_signif(x)
+      color_signif = get_color_signif(x),
+      model_family = get_model_family(x)
 
       # type     = dplyr::if_else(same_type,
       #                           true  = type_x,
@@ -4353,7 +4394,8 @@ vec_arith.tabxplor_fmt.tabxplor_fmt <- function(op, x, y, ...) {
       totcol   = FALSE                                                  ,
       refcol   = FALSE                                                  ,
       color    = fmt_color_attr(x),
-      color_signif = get_color_signif(x)
+      color_signif = get_color_signif(x),
+      model_family = get_model_family(x)
 
       # type     = dplyr::if_else(same_type,
       #                           true  = type_x,
