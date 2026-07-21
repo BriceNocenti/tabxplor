@@ -241,6 +241,18 @@ test_that("poisson empirical: Obs_rate (ratio colour) + Obs_IRR", {
   expect_identical(get_type(t[["Obs_IRR"]]),   "row")
 })
 
+test_that("Phase h: quasipoisson empirical rides the poisson crude path (Obs_rate + Obs_IRR)", {
+  d <- emp_data()
+  tq <- suppressWarnings(tab_reg(d, "tvhours", "race", family = "quasipoisson", empirical = TRUE,
+                                 cleannames = FALSE))
+  expect_true(all(c("Obs_rate", "Obs_IRR") %in% names(tq)))    # was a no-op before Phase h
+  # same crude descriptives as a poisson-declared model (the empirical shape is family-agnostic here).
+  tp <- suppressWarnings(tab_reg(d, "tvhours", "race", family = "poisson", empirical = TRUE,
+                                 cleannames = FALSE))
+  expect_equal(get_mean(tq[["Obs_rate"]]), get_mean(tp[["Obs_rate"]]), tolerance = 1e-9)
+  expect_equal(get_or(tq[["Obs_IRR"]]),    get_or(tp[["Obs_IRR"]]),    tolerance = 1e-9)
+})
+
 # ---- Phase g: exponentiate = FALSE colours the coef + logs the empirical companion ----------------
 
 test_that("exponentiate = FALSE: a binomial coefficient is coloured (log_odds scale), not all grey", {

@@ -909,3 +909,19 @@ test_that("na = 'drop_all' fits every model on one shared complete-case populati
   ns <- get_test(r) |> dplyr::filter(test == "n")
   expect_equal(length(unique(ns$statistic)), 1L)           # both models share N
 })
+
+test_that("Phase h: a predictor dropped from one comparison model keeps its reference-row bold", {
+  skip_if_not_installed("broom")
+  d <- reg_2dep_data()
+  r <- tab_reg(d, "married",
+               predictors = list(a = c("race", "age"), b = c("rincome", "age")),
+               family = "binomial", cleannames = FALSE)
+  race_ref <- is_refrow(r[["a"]]) & as.character(r$var) == "race"
+  expect_true(any(race_ref))
+  # race is absent from model `b`; its reference-row flag must survive (union-skeleton fact), else the
+  # shared cross-column bold (tab_bold_rows ANDs in_refrow) drops it -- the pass-4 maintainer report.
+  expect_true(all(is_refrow(r[["b"]])[race_ref]))
+  prep <- tab_export_prep(r, backend = "kable")
+  bold <- if (!is.null(prep$tables)) prep$tables[[1]]$bold_rows else prep$bold_rows
+  expect_true(all(which(race_ref) %in% bold))
+})

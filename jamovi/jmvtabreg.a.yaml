@@ -205,6 +205,13 @@ options:
            models" uses one shared complete-case population across all predictors (equal N;
            changes the estimates), which a valid likelihood-ratio comparison test needs.
 
+    # Phase h: a model comparison (>=2 models) is heavy -- refitting every model on each live edit is
+    # what froze the panel. So with several models the table computes ONLY on this button: the user
+    # picks the models, then clicks to run. Single-model use stays fully live (no button needed).
+    - name: run_compare
+      title: "Run comparison"
+      type: Action
+
 # ================= References and predictor scaling =================
     - name: refLevels
       title: "Reference levels (per predictor)"
@@ -258,7 +265,7 @@ options:
            profile-likelihood intervals (unweighted binomial / poisson only; needs MASS).
 
     - name: stars
-      title: "significance stars"
+      title: stars
       type: Bool
       default: true
       description:
@@ -313,7 +320,7 @@ options:
            (binomial coefficient models only).
 
     - name: cleannames
-      title: "clean level names"
+      title: cleannames
       type: Bool
       default: true
       description:

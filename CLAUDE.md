@@ -1010,7 +1010,6 @@ Other improvements to implement :
 
 #### Last phase h — final Jamovi UI maintainer’s review
 
-
 Jamovi `jmvtabreg` improvements.
 
 For the family selector :
@@ -1056,24 +1055,44 @@ Export menu (`jmvtab` + `jmvtabreg`) :
 - html table export working, but on my Windows 11 computer it totally fails to find my real `Documents` folder : it creates a new "C:\Users\Brice\Documents" folder, but my Windows have a different official location to "D:\Documents" with a pointer towards it in the normal "C:\Users\Brice\" and all `Documents` normal shortcuts. How to find the real folder from inside the locked electron R session ?
 - Above the Export block, always add an empty line, or a clear horizontal rule that inserts well in the current jamovi options pane styling, since it’s not in the collapsable hierarchy and separation must be distinguished easily.
 
+**DONE (2026-07-21), partial — R-side verified green (FAIL 0, PASS 3915, SKIP 4); every jamovi YAML/JS/`.h.R` change is INERT until the maintainer runs `jmvtools::prepare()` + rebuilds, so those parts need a live-app pass.**
+- **R backend (verified, suite-green).** Excel export crash fixed structurally: `tab-xl-backend.R` `xlb_add_data()` resolves the openxlsx2 NA-arg name (`na` vs older `na_strings`) from the method's own formals and passes it via `do.call(list(NULL))` — no more "argument matches multiple formal arguments". `export_documents_dir()` (`jmvtab-export.R`) reads the resolved Windows known-folder from the registry (`Shell Folders\Personal`, base-R `utils::readRegistry`, env-token expansion) so a redirected Documents (D:\Documents) is honoured, `<home>/Documents` fallback off-Windows. `empirical = TRUE` now works for `family = "quasipoisson"` (rides the poisson crude shapes via `fam_key`; `REG_EMPIRICAL` unchanged, 3 gate sites generalised). Comparison **reference-row bold** fixed at the source: `in_refrow` in `reg_column`/`reg_marginal_column` is now the union-skeleton row fact (dropped the `& in_model` gate on the FLAG only; value-zeroing stays gated) so a predictor absent from one model keeps its bold. Fixtures: test-tab_reg.R (bold), test-tab_reg-empirical.R (quasipoisson), test-tab_xl.R (NA-arg). **Reference-selector level order**: verified no sort in R (`jmvtab_reg_ref_vector`) or JS — order is jamovi's `col.levels` = factor order; no change.
+- **Mixed-family + multinomial freeze**: R is fast (≤1.5 s) and correct — NOT the cause. Measured the real suspect: the persisted `cache_state` **serializes ~41.5 MB every run** for a mixed multinomial table (three fits carry their model frames/qr). Safe mitigation shipped: `private$.checkpoint()` before the heavy build in both `.b.R` (flushes queued edits so a newer change supersedes rather than piling up). **Flagged for the maintainer**: a proper shrink (persist digests, not raw multi-fit stores) touches the byte-locked reref/AME paths and needs live-jamovi confirmation — deferred, not hacked.
+- **Model-comparison "Run button, no live" (maintainer's decision).** New `run_compare` Action + hidden `compare_state` Image (persists the last comparison's sig + HTML). In `jmvtabreg.b.R` `.run()`, a ≥2-model comparison (`jmvtab_reg_staged`) computes ONLY on Run/Export; between clicks it re-serves the last render or shows an "outdated → click Run" banner (`.compare_hint`). Single-model use stays live. Pure helpers `jmvtab_reg_staged()`/`jmvtab_reg_compare_sig()` (jmvtabreg-cache.R) unit-tested. JS resets the button like the export one. (The cache STORE shape is unchanged → no schema bump.)
+- **jmvtabreg JS family selector** (jmvtabreg.js): "auto"/"quasipoisson" dropped; the family is detected client-side (`detectFamily`, fetches `dataType` for integer→poisson) and pre-selected + stored explicitly (so the backend never re-detects/aborts); single-option outcomes grey the select; full-width 3-col row, wider levels, the "model " prefix dropped. `effect`/`exponentiate` grey out when all outcomes are gaussian (`applyModelEnables`).
+- **jmvtabreg YAML**: Significance pane → 3-row/3-column layout (Show: colour/stars; conf_level; method label + radios; color_signif full width); "Missing values and display" → **Display** with estimate_display beside a single-title wrap/cleannames stack; subtext stretched full width; export `<hr>` separator; `stars`/`cleannames` `.a.yaml` titles de-duplicated to bare arg names.
+- **jmvtab parity**: same collapse-box CSS spacer (`injectTabxCss`), export `<hr>` separator, full-width subtext.
+- **Not fixable from tabxplor / flagged**: the `DOMNodeInserted` + `addRange()` console warnings are jamovi's own Electron/Chromium option-UI framework (compiled `uijs`), not our YAML/JS. The conf_level up/down stepper isn't a native jamovi control (kept a plain number box, per decision). The collapse-box "spacer" + `<hr>` selectors are best-guess against the live DOM — worth a visual check on rebuild.
 
-#### Last Phase j — 
 
-In tab(), I want to add a new per table summary statistic along Chi2 and Welch pvalues : 
-- Cramér's V / phi to measure effect size of each crosstable. Is there an equivalent for numeric column variables ?
-- Fisher's exact on very small tables.
+#### Last Phase j — last new features 1, effect size statistics and survey-design Chi2 test
 
-I also want to change the way Chi2 et Welch pvalue are calculated for weighted crossatbles / mean tables :
-- I don’t want to go full survey design for all tabxplor calculations including all types of ci, etc., but I would at least want to have a more robust pvalue with survey weights.
+In `tab()`, I want to change the way Chi2 et Welch pvalue are calculated for **weighted** crosstables / mean tables. It should reduce the gap with `tab_reg()` in that matter. Please, **design a sound infrastructure for a minimal opt-in survey design pvalues**, for chi2, and if possible it’s equivalent for ANOVA F / numeric variables. Do not hesisate to do web searches. Write your design in `dev/tabxplor_1.4.0_decisions.md`. The AskUserQuestions, plan and implement.
+- I don’t want to go full survey design for all tabxplor calculations including all types of ci, etc., but I would at least want to have **a opt-in more robust pvalue with survey weights**.
+- I’m thinking about simplified survey design with minimal features like in `tab_reg()`, but I wonder what would be a **good balance between "minimal acceptable survey weights robust pvalue for users who like it" and added complexity ?** What part of this all could be done withouh changign everything ? What part of it would be too complicated in the current framework ?
+- What to use, Rao-Scott second-order corrected chi-square (`survey::svychisq`) ? What informations does it need, anything new not yet in fields ?
+- Implement Kish's effective sample size to factors Chi2 pvalue too, with the opt-in option `options(tabxplor.kish_neff = TRUE)`, since for now it’s only implemented for numeric variables. Implement the possibility to add a strata for stratified surveys to regain a bit ?
+- **What would be the equivalent for Welch / classic Anova F with numeric variables / tables of means ?**
+- Should I accept the possibility to pass a design object instead of data, while saying clearly to the user that it’s only for pvalues and won’t be used for confidence intervals etc. (so most of the pipeline will just extract the normal df from the design object), or is it too complicated ?
 
-Design-based crosstab significance (Rao-Scott / n_eff by default)
+In `tab()`, I also want to add a few new per table summary statistic along Chi2 and Welch pvalues, all triggered by the same `test=TRUE` :
+- Cramér's V / phi to measure effect size of each crosstable. Is there an equivalent for numeric column variables / tables of means here ?
+- Fisher's exact on very small crosstables.
+- Make a default of the current opt-in behaviour to keep the whole summary table for `tab()` too (current default is pvalue line only).
 
-Add full support for **labelled-data (haven/labelled) interop** : 
-- Full use of labelled:: value labels for factors when they exists. Throught fast shared functions that recode all factors levels using value labels attributes, and then work normal on the new levels. When a factor have no value labels, the result should still be exactly the same as now.
+Then, we should also think what to add, minimally, in jmvtab, UI for these new features.
+
+#### Last Phase k — last new features 2, labelled-data
+
+Add full support for **labelled-data (haven/labelled) interop** :
+- Full use of labelled:: value labels for factors when they exists. Throught fast shared functions that recode all factors levels using value labels attributes, and then work normally on the new levels (so value labels are, obviously, hardcoded as true levels in the output tibble). When a factor have no value labels, the result should still be exactly the same as now. (Do not add additional numbering like "1-Non", if the user wants it he can code it in the labels or levels. But remove them from the value label if `cleannames = TRUE`.)
 - Opt-in option to replace variable names with variable labels : what would be the best way ? Store them in col_var, or a row_var column for tables with multiple row_vars, then they aren used in all exports anyway ? Are there caveats, or complexities to it ?
-- All this without adding any dependency to labelled package : working with attr() and `attr<-`() must be enough.
+- All this **without adding any dependency to the labelled package** : working with attr() and `attr<-`() must be enough.
 
+#### Last Phase k — last new features 3, handling of missing table-level attributes
 
+Would it be possible to ensure the tables does not error when table-level attributes are missing, but only remove the behaviours that can’t be computed (all tabxplor_fmt fields or column attributes stay required, since they are more solid) ?
+Would it be possible to ensure nothing will error if a tabxplor_tab is converted to a normal tibble, still doing what can be done with tabxplor_fmt columns metadata and fields data in a somewhat degraded mode ? What would the user really lost (summary stats only in tab(), much more in tab_reg() ? ) ? Maybe just a friendly message in that case, for the user to know it may have remove table attributes or table class in his pipeline ?
 
 
 

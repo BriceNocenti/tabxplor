@@ -140,6 +140,23 @@ jmvtab_reg_models <- function(models, pool) {
   stats::setNames(built, labels)
 }
 
+# Phase h: the staged-comparison gate. A model comparison (>=2 folded models) is heavy -- refitting
+# every model on each live edit is what froze the panel, so its table recomputes ONLY on the Run/Export
+# action (jmvtabreg.b.R). jmvtab_reg_staged() reuses jmvtab_reg_models() so the predicate matches the
+# model set tab_reg() actually sees. jmvtab_reg_compare_sig() fingerprints the resolved build/display
+# options (the `.opts()` list, which already excludes the action + export controls), so `.run()` can
+# tell an unchanged/just-computed table (re-serve) from an outdated one (banner + Run prompt).
+#' @keywords internal
+#' @noRd
+jmvtab_reg_staged <- function(models, predictors) {
+  preds <- jmvtab_reg_models(models, predictors)
+  is.list(preds) && length(preds) >= 2L
+}
+
+#' @keywords internal
+#' @noRd
+jmvtab_reg_compare_sig <- function(opts) jmv_hash(opts)
+
 # Fold the per-numeric-predictor scaling picker (the jamovi `multiplicator` Array of Group{var, k})
 # into tab_reg()'s named numeric `multiplier`. Blank / non-numeric k dropped; NULL when nothing set.
 # Mirrors jmvtab_reg_ref_vector().

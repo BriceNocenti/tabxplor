@@ -987,7 +987,11 @@ reg_column <- function(skeleton, fit_res, model_predictors, col_var, effect_shap
   p[ref_lvl]   <- NA_real_
 
   n_rows   <- nrow(skeleton)
-  refrows  <- ref_lvl | skeleton$var == "Constant"
+  # in_refrow is a UNION-skeleton row fact (any predictor's reference level + the Constant), NOT gated
+  # by in_model: a model that OMITS a predictor must not blank that predictor's reference-row flag, else
+  # the shared cross-column bold (tab_bold_rows ANDs in_refrow) drops its bold in a comparison. The
+  # absent cell stays NA-valued (ref_lvl above zeroes only present predictors) -- only the flag changes.
+  refrows  <- (skeleton$is_ref & skeleton$var != "Constant") | skeleton$var == "Constant"
 
   if (effect_shape == "ratio") {
     fmt(
@@ -1081,7 +1085,7 @@ reg_empirical <- function(data, fac_preds, dependent, family, positive_level, wt
         mean_l <- s1 / wn
         # match tab()/num_derive_stats: unweighted -> stats::var (n-1), weighted -> ML (s2/wn - mean^2).
         # 14v-ii: poisson gets the count variance too (drives its crude rate-ratio CI, ci_mean_ratio).
-        var_l  <- if (family %in% c("gaussian", "poisson")) {
+        var_l  <- if (family %in% c("gaussian", "poisson", "quasipoisson")) {
           if (is.null(wt)) (s2 - s1^2 / n1) / (n1 - 1) else round(s2 / wn - (s1 / wn)^2, 10)
         } else NA_real_
         list(base = mean_l, ratio_raw = mean_l, var = var_l, n = n1)
@@ -1142,7 +1146,10 @@ REG_EMPIRICAL <- list(
 reg_empirical_columns <- function(skeleton, emp, fac_preds, family, effect, var_y,
                                   conf_level = 0.95, color_signif = "grey_non_signif",
                                   color = NULL, do_exp = TRUE) {
-  fam <- REG_EMPIRICAL[[family]]
+  # quasipoisson shares the poisson crude shapes/CI (rate + IRR, quasi-Poisson interval); model_family
+  # below stays the real family so the legend still words it as the model's own.
+  fam_key <- if (family == "quasipoisson") "poisson" else family
+  fam <- REG_EMPIRICAL[[fam_key]]
   if (is.null(fam)) return(list())            # multinomial is tooltip-only; ordinal unsupported
   # Phase 15d: when the model is uncoloured (`color = FALSE` -> "no"), the crude companions must be
   # uncoloured too (else the table shows coloured empirical columns beside plain model columns).
@@ -1204,7 +1211,7 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, family, effect, var_
     return(two(list(col = base_col, shape = fam$base), list(col = eff_col, shape = fam$diff)))
   }
 
-  if (family == "poisson") {
+  if (fam_key == "poisson") {
     # one crude rate-ratio CI (quasi-Poisson, = the phi-scaled model's method) drives BOTH columns.
     rr <- na_ref(ci_mean_ratio(base, varv, nv, rb, rv, rn, method = fam$method_mean_ratio,
                                conf_level = conf_level, want_p = TRUE))
@@ -1375,7 +1382,9 @@ reg_marginal_column <- function(skeleton, marg, model_predictors, numeric_preds,
   is_const <- skeleton$var == "Constant"
   is_ref   <- skeleton$is_ref & !is_const & in_model
   is_num   <- skeleton$var %in% numeric_preds & in_model
-  refrows  <- is_ref | is_const
+  # in_refrow: the UNION-skeleton row fact (see reg_column) so an absent predictor keeps its bold in a
+  # comparison; is_ref above stays in_model-gated for the value/display blanking below.
+  refrows  <- (skeleton$is_ref & !is_const) | is_const
 
   # "blank" (not NA) for the Constant / out-of-model cells: an NA display falls back to get_n() in
   # get_num(), so it must be an explicit blank-token (renders "") rather than left unset.
@@ -2145,7 +2154,8 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
     if (length(fac_preds_e) > 0L) {
       for (i in seq_along(specs)) {
         fam_i   <- specs[[i]]$family
-        if (!fam_i %in% c("binomial", "gaussian", "poisson")) next  # ordinal none; multinomial tooltip
+        # quasipoisson rides the poisson crude path (rate + IRR); ordinal none; multinomial tooltip.
+        if (!fam_i %in% c("binomial", "gaussian", "poisson", "quasipoisson")) next
         col_i   <- specs[[i]]$color               # on/off follows the model column
         dep_i   <- specs[[i]]$dependent
         pos_i   <- if (fam_i == "binomial") fits[[i]]$positive_level else NULL
@@ -2888,7 +2898,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
   # Phase 15e: kept ON whenever ANY outcome supports a crude companion (the per-fit loop skips the
   # ineligible outcomes -- ordinal -- individually). Only dropped when NO outcome is eligible.
   if (isTRUE(empirical) &&
-      !any(families_vec %in% c("binomial", "gaussian", "poisson", "multinomial"))) {
+      !any(families_vec %in% c("binomial", "gaussian", "poisson", "quasipoisson", "multinomial"))) {
     cli::cli_inform(c("i" = paste0(
       "{.arg empirical} (crude descriptive companion) is not available for any of these outcome ",
       "families; ignored here.")))

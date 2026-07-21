@@ -81,16 +81,19 @@ var renderSubtext = function(ui) {
 // persistent <style> because jamovi re-renders controls and drops INLINE styles (the reason the old
 // per-onUpdate inline widening never stuck). Only the two export boxes use `width: largest`, so the
 // selector is effectively scoped to them.
-var injectExportCss = function() {
-    if (document.getElementById("tabx-export-css")) return;
+// Phase h: also spaces the options collapse boxes apart (breathing room below each pane). The collapse-
+// box class differs across jamovi builds, so several candidates are targeted; a wrong one simply no-ops.
+var injectTabxCss = function() {
+    if (document.getElementById("tabx-css")) return;
     var s = document.createElement("style");
-    s.id = "tabx-export-css";
+    s.id = "tabx-css";
     s.textContent =
         // folder box (width: largest): collapse the ~200px floor but keep a comfortable minimum so it
         // stays the wider of the two boxes. Tune the 260px to taste -- this is the "folder a bit wider" knob.
         "input.silky-option-largest-text{min-width:260px !important;width:100% !important;box-sizing:border-box;}" +
         // file-name box (width: large): collapse its floor fully so it takes only its stretch share.
-        "input.silky-option-large-text{min-width:0 !important;width:100% !important;box-sizing:border-box;}";
+        "input.silky-option-large-text{min-width:0 !important;width:100% !important;box-sizing:border-box;}" +
+        ".silky-options-collapse-box,.silky-collapse-box,.jmv-options-collapsebox{margin-bottom:8px;}";
     document.head.appendChild(s);
 };
 
@@ -118,7 +121,7 @@ var bottomAlignInRow = function(ui, name) {
 };
 
 var onUpdate = function(ui) {
-    injectExportCss();
+    injectTabxCss();
     applyVarEnables(ui);
     renderSubtext(ui);
     renderExt(ui);

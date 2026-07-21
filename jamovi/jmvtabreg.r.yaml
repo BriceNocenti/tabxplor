@@ -18,4 +18,14 @@ items:
       width: 1080
       height: 0
       renderFun: .plot
+
+    # Phase h: persists the last COMPUTED comparison (signature + rendered HTML) across engine resets,
+    # so that in staged model-comparison mode `.run()` can re-serve the last table (or flag it outdated)
+    # without recomputing until the Run button is clicked. Same 0-size hidden-Image mechanism.
+    - name: compare_state
+      title: ""
+      type: Image
+      width: 1080
+      height: 0
+      renderFun: .plot
 ...

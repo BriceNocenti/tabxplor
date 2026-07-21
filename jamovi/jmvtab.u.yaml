@@ -641,8 +641,11 @@ children:
     margin: large
     stretchFactor: 1
     children:
+      # Phase h: full-width subtext box (stretchFactor on the label wrapper too, so the <textarea> fills
+      # the width to its right rather than sitting thin under a narrow label).
       - type: Label
         label: subtext = <i>(text to print below the table)</i>
+        stretchFactor: 1
         children:
           - type: CustomControl
             name: subtextCtrl
@@ -650,6 +653,9 @@ children:
             events:
               creating: ./jmvtab::subtextCtrl_creating
               updated: ./jmvtab::subtextCtrl_updated
+  # Phase h: a horizontal rule sets the (outside-the-collapse-hierarchy) Export block apart.
+  - type: Label
+    label: "<hr style='border:none;border-top:1px solid rgba(0,0,0,0.18);margin:10px 0 4px'>"
   - type: LayoutBox
     margin: large
     stretchFactor: 1

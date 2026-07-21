@@ -21,6 +21,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             baseline = 1,
             compare = "none",
             na = "drop_by_model",
+            run_compare = FALSE,
             refLevels = NULL,
             multiplicator = NULL,
             conf_level = 0.95,
@@ -187,6 +188,9 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                     "drop_by_model",
                     "drop_all_models"),
                 default="drop_by_model")
+            private$..run_compare <- jmvcore::OptionAction$new(
+                "run_compare",
+                run_compare)
             private$..refLevels <- jmvcore::OptionArray$new(
                 "refLevels",
                 refLevels,
@@ -332,6 +336,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$.addOption(private$..baseline)
             self$.addOption(private$..compare)
             self$.addOption(private$..na)
+            self$.addOption(private$..run_compare)
             self$.addOption(private$..refLevels)
             self$.addOption(private$..multiplicator)
             self$.addOption(private$..conf_level)
@@ -371,6 +376,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         baseline = function() private$..baseline$value,
         compare = function() private$..compare$value,
         na = function() private$..na$value,
+        run_compare = function() private$..run_compare$value,
         refLevels = function() private$..refLevels$value,
         multiplicator = function() private$..multiplicator$value,
         conf_level = function() private$..conf_level$value,
@@ -409,6 +415,7 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
         ..baseline = NA,
         ..compare = NA,
         ..na = NA,
+        ..run_compare = NA,
         ..refLevels = NA,
         ..multiplicator = NA,
         ..conf_level = NA,
@@ -438,7 +445,8 @@ jmvtabregResults <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
     inherit = jmvcore::Group,
     active = list(
         html_table = function() private$.items[["html_table"]],
-        cache_state = function() private$.items[["cache_state"]]),
+        cache_state = function() private$.items[["cache_state"]],
+        compare_state = function() private$.items[["compare_state"]]),
     private = list(),
     public=list(
         initialize=function(options) {
@@ -453,6 +461,13 @@ jmvtabregResults <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$add(jmvcore::Image$new(
                 options=options,
                 name="cache_state",
+                title="",
+                width=1080,
+                height=0,
+                renderFun=".plot"))
+            self$add(jmvcore::Image$new(
+                options=options,
+                name="compare_state",
                 title="",
                 width=1080,
                 height=0,
@@ -521,6 +536,7 @@ jmvtabregBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   cases; "drop all models" uses one shared complete-case population across
 #'   all predictors (equal N; changes the estimates), which a valid
 #'   likelihood-ratio comparison test needs.
+#' @param run_compare .
 #' @param refLevels .
 #' @param multiplicator .
 #' @param conf_level The confidence level for intervals and the significance
@@ -565,6 +581,7 @@ jmvtabregBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #' \tabular{llllll}{
 #'   \code{results$html_table} \tab \tab \tab \tab \tab a html \cr
 #'   \code{results$cache_state} \tab \tab \tab \tab \tab an image \cr
+#'   \code{results$compare_state} \tab \tab \tab \tab \tab an image \cr
 #' }
 #'
 #' @export
@@ -585,6 +602,7 @@ jmvtabreg <- function(
     baseline = 1,
     compare = "none",
     na = "drop_by_model",
+    run_compare = FALSE,
     refLevels = NULL,
     multiplicator = NULL,
     conf_level = 0.95,
@@ -647,6 +665,7 @@ jmvtabreg <- function(
         baseline = baseline,
         compare = compare,
         na = na,
+        run_compare = run_compare,
         refLevels = refLevels,
         multiplicator = multiplicator,
         conf_level = conf_level,

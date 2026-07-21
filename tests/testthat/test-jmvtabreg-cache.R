@@ -286,3 +286,23 @@ test_that("a multiplier change is keyed (not stale) and matches tab_reg()", {
                         family = "binomial", multiplier = c(age = 10), cleannames = TRUE))
   expect_identical(reg_render(b10$tabs), reg_render(d10))
 })
+
+# --- Phase h: the staged-comparison gate helpers --------------------------------------------
+test_that("Phase h: jmvtab_reg_staged() flags >=2-model comparisons only", {
+  pool <- c("race", "age", "rincome")
+  # no cards -> the flat pool (single model) -> not staged
+  expect_false(jmvtab_reg_staged(list(), pool))
+  # one card -> one model -> not staged (fast, stays live)
+  expect_false(jmvtab_reg_staged(list(list(label = "a", vars = c("race", "age"))), pool))
+  # two cards -> a comparison -> staged (Run-button gated)
+  expect_true(jmvtab_reg_staged(
+    list(list(label = "a", vars = "race"), list(label = "b", vars = c("race", "age"))), pool))
+})
+
+test_that("Phase h: jmvtab_reg_compare_sig() changes with the options, is stable otherwise", {
+  o1 <- list(dependent = "married", predictors = list(a = "race", b = c("race", "age")),
+             conf_level = 0.95, color = TRUE)
+  o2 <- o1; o2$conf_level <- 0.90
+  expect_identical(jmvtab_reg_compare_sig(o1), jmvtab_reg_compare_sig(o1))  # stable
+  expect_false(identical(jmvtab_reg_compare_sig(o1), jmvtab_reg_compare_sig(o2)))  # option change -> new sig
+})

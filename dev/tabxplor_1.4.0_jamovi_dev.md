@@ -1304,3 +1304,42 @@ are all safe, verified against `jmvcore/options.R`). `utils.clone` not `context.
 loads / `R CMD check`s before `prepare()` generates the header (until then `check()` NOTEs `jmvtabregBase`
 as an undefined global — expected). `tab_reg.R` needed **no change** — the multiplicator fit-key was
 already correct (`extra` at `tab_reg.R:1815-1816`).
+
+---
+
+## Phase h — final UI review (2026-07-21)
+
+All jamovi YAML/JS edits below are INERT until `jmvtools::prepare()` regenerates the `.h.R` and the
+module is rebuilt; only the R-backend parts are suite-verifiable.
+
+**Family selector (`js/jmvtabreg.js`).** No "auto (detected)" and no "quasipoisson" rows. `detectFamily(c)`
+computes the family client-side (fetches `dataType` too: integer→poisson, decimal→gaussian; 2-level→
+binomial, 3+ ordered→ordinal, 3+ nominal→multinomial) and PRE-SELECTS it, storing it explicitly in
+`depFamily` so `jmvtab_reg_dep_family` never re-detects (and `reg_detect_family` never aborts on an
+integer count). A single-option outcome greys the `<select>`. `mtRow` is full-width 3-col; the modelled-
+level picker lost its "model " prefix. `applyModelEnables()` greys `effect_1/2` + `exponentiate` when
+every outcome is gaussian (one `anyNonGaussian` predicate; families read from `mtCache`).
+
+**Model-comparison Run button.** `run_compare` (Action, `.a.yaml`) + `compare_state` (hidden Image,
+`.r.yaml`) persist the last comparison's `list(sig, html)`. `jmvtabreg.b.R` `.run()`: `staged` = ≥2 folded
+models (`is.list(opts$predictors) && length >= 2`); when staged and neither `run_compare` nor `exportExcel`
+fired, re-serve `compare_state$html` (sig match) or show `.compare_hint` (outdated banner) — NO refit.
+On a trigger, build + render + persist. Single-model stays live. Pure helpers `jmvtab_reg_staged()` /
+`jmvtab_reg_compare_sig()` (jmvtabreg-cache.R) are unit-tested (test-jmvtabreg-cache.R). JS `run_compare_changed`
+resets the button like `exportExcel_changed`. The cache STORE shape is unchanged → no schema bump.
+
+**Layout (`.u.yaml`).** Significance = 3 rows / 3 equal columns (Show: colour | stars ; conf_level box |
+method legend | method radios ; color_signif full width). "Missing values and display" → **Display**
+(estimate_display beside a single-title wrap_rows/wrap_cols/cleannames stack); subtext stretched full
+width. Export `<hr>` separator above the (outside-the-collapse-hierarchy) Export block. `stars`/`cleannames`
+`.a.yaml` titles bare-arg (de-dup vs the `.u.yaml` legend). `js` `injectTabxCss` (was `injectExportCss`)
+adds a best-guess collapse-box bottom-margin. Same parity edits in `jmvtab.u.yaml` / `js/jmvtab.js`.
+
+**Freeze diagnosis (mixed multinomial).** R build ≤1.5 s and correct — not the cause. The persisted
+`cache_state` serializes ~41.5 MB/run for a 3-fit mixed table (model frames + qr). Mitigation: a
+`private$.checkpoint()` before the heavy build in both `.b.R`. A real shrink (persist digests not raw
+multi-fit stores) touches the byte-locked reref/AME path → flagged for a live-verified follow-up.
+
+**Not fixable from tabxplor.** The `DOMNodeInserted` / `addRange()` console warnings come from jamovi's
+own Electron/Chromium option-UI framework (compiled `uijs`). The `conf_level` up/down 0.01 stepper is not
+a native jamovi control (plain number box kept, per the maintainer's decision).

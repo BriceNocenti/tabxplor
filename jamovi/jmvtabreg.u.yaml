@@ -141,6 +141,15 @@ children:
                 name: na_2
                 optionName: na
                 optionPart: drop_all_models
+      # Phase h: with >=2 models the table computes only on this click (no live refit while picking).
+      - type: LayoutBox
+        margin: large
+        children:
+          - type: ActionButton
+            name: run_compare
+            label: Run comparison
+            events:
+              change: ./jmvtabreg::run_compare_changed
 
   - type: CollapseBox
     label: <b>References and predictor scaling</b>
@@ -162,45 +171,66 @@ children:
     stretchFactor: 1
     collapsed: true
     children:
-      # Confidence level, interval method and stars on one row.
+      # Row 1 (3 equal columns): "Show:" | the colour toggle | the stars toggle.
       - type: LayoutBox
-        margin: none
+        margin: large
         children:
           - type: LayoutBox
             cell: { column: 0, row: 0 }
+            stretchFactor: 1
             children:
               - type: Label
-                label: "Confidence level:"
+                label: "<b>Show:</b>"
+          - type: LayoutBox
+            cell: { column: 1, row: 0 }
+            stretchFactor: 1
+            children:
+              - type: CheckBox
+                name: color
+                label: color = <i>(colour helpers)</i>
+          - type: LayoutBox
+            cell: { column: 2, row: 0 }
+            stretchFactor: 1
+            children:
+              - type: CheckBox
+                name: stars
+                label: stars = <i>(significance stars)</i>
+      # Row 2 (3 columns): confidence level + box | the method legend | its radio buttons (no 2nd title).
+      - type: LayoutBox
+        margin: large
+        children:
+          - type: LayoutBox
+            cell: { column: 0, row: 0 }
+            stretchFactor: 1
+            children:
+              - type: Label
+                label: "conf_level ="
                 children:
                   - type: TextBox
                     name: conf_level
                     format: number
           - type: LayoutBox
             cell: { column: 1, row: 0 }
+            stretchFactor: 1
             children:
               - type: Label
-                label: method = <i>(interval)</i>
-                children:
-                  - type: RadioButton
-                    name: method_1
-                    optionName: method
-                    optionPart: wald
-                  - type: RadioButton
-                    name: method_2
-                    optionName: method
-                    optionPart: profile
+                label: method = <i>(conf. interval)</i>
           - type: LayoutBox
             cell: { column: 2, row: 0 }
+            stretchFactor: 1
             children:
-              - type: CheckBox
-                name: stars
-      # Colours: a single on/off, then the significance policy (greyed out when colours are off).
+              - type: RadioButton
+                name: method_1
+                optionName: method
+                optionPart: wald
+              - type: RadioButton
+                name: method_2
+                optionName: method
+                optionPart: profile
+      # Row 3: the significance policy across the full width (greyed out when colours are off).
       - type: LayoutBox
         margin: large
         children:
-          - type: CheckBox
-            name: color
-            label: color = <i>(colour helpers)</i>
           - type: Label
             label: color_signif = <i>(significance policy)</i>
             children:
@@ -221,42 +251,70 @@ children:
                 enable: (color)
 
   - type: CollapseBox
-    label: <b>Missing values and display</b>
+    label: <b>Display</b>
     stretchFactor: 1
     collapsed: true
     children:
+      # Row 1: estimate_display (left half) | one common title over wrap_rows / wrap_cols / cleannames
+      # (right half) -- one bold group title instead of a legend repeated on every control.
       - type: LayoutBox
         margin: large
         children:
-          - type: Label
-            label: estimate_display = <i>(cell layout)</i>
+          - type: LayoutBox
+            cell: { column: 0, row: 0 }
+            stretchFactor: 1
             children:
-              - type: RadioButton
-                name: estimate_display_1
-                optionName: estimate_display
-                optionPart: value
-              - type: RadioButton
-                name: estimate_display_2
-                optionName: estimate_display
-                optionPart: ci
-              - type: RadioButton
-                name: estimate_display_3
-                optionName: estimate_display
-                optionPart: prob
-                enable: (effect_1)
-              - type: RadioButton
-                name: estimate_display_4
-                optionName: estimate_display
-                optionPart: ame
-                enable: (effect_1)
-          - type: CheckBox
-            name: cleannames
+              - type: Label
+                label: estimate_display = <i>(cell layout)</i>
+                children:
+                  - type: RadioButton
+                    name: estimate_display_1
+                    optionName: estimate_display
+                    optionPart: value
+                  - type: RadioButton
+                    name: estimate_display_2
+                    optionName: estimate_display
+                    optionPart: ci
+                  - type: RadioButton
+                    name: estimate_display_3
+                    optionName: estimate_display
+                    optionPart: prob
+                    enable: (effect_1)
+                  - type: RadioButton
+                    name: estimate_display_4
+                    optionName: estimate_display
+                    optionPart: ame
+                    enable: (effect_1)
+          - type: LayoutBox
+            cell: { column: 1, row: 0 }
+            stretchFactor: 1
+            children:
+              - type: Label
+                label: "<b>Table layout</b>"
+              - type: Label
+                label: "wrap_rows ="
+                children:
+                  - type: TextBox
+                    name: wrap_rows
+                    format: number
+              - type: Label
+                label: "wrap_cols ="
+                children:
+                  - type: TextBox
+                    name: wrap_cols
+                    format: number
+              - type: CheckBox
+                name: cleannames
+                label: cleannames = <i>(tidy level names)</i>
+      # Phase 15c / h: the below-table note is a full-width, auto-grow <textarea> (CustomControl driving
+      # the hidden `subtext`). stretchFactor on the row so the box fills the width to its right.
       - type: LayoutBox
-        margin: none
+        margin: large
+        stretchFactor: 1
         children:
-          # Phase 15c: a full-width, auto-grow <textarea> (CustomControl) drives the hidden `subtext`.
           - type: Label
             label: subtext = <i>(note below the table)</i>
+            stretchFactor: 1
             children:
               - type: CustomControl
                 name: subtextCtrl
@@ -264,15 +322,6 @@ children:
                 events:
                   creating: ./jmvtabreg::subtextCtrl_creating
                   updated: ./jmvtabreg::subtextCtrl_updated
-      - type: LayoutBox
-        margin: large
-        children:
-          - type: TextBox
-            name: wrap_rows
-            format: number
-          - type: TextBox
-            name: wrap_cols
-            format: number
 
   - type: CollapseBox
     label: "<b>Advanced — survey design (used with a weight)</b>"
@@ -308,6 +357,11 @@ children:
         children:
           - type: CheckBox
             name: nest
+
+  # Phase h: the Export block sits OUTSIDE the collapse hierarchy, so a horizontal rule sets it apart
+  # from the panes above (jamovi Labels render inline HTML -- the same path <b>/<i> use).
+  - type: Label
+    label: "<hr style='border:none;border-top:1px solid rgba(0,0,0,0.18);margin:10px 0 4px'>"
 
   - type: LayoutBox
     margin: large

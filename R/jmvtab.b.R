@@ -36,6 +36,9 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
       on.exit(options("tabxplor.anova" = anova_option), add = TRUE)
 
       store <- self$results$cache_state$state          # NULL on the first run
+      # DESIGN (Phase h): flush queued option changes before building so a newer edit supersedes this
+      # run rather than queuing (the jmvcore remedy for UI stutter). Guarded for the non-jamovi harness.
+      try(private$.checkpoint(), silent = TRUE)
       built <- jmvtab_build(data, opts, store)
       self$results$cache_state$setState(built$store)   # persist tiers 1-2 for the next interaction
       tabs  <- built$tabs

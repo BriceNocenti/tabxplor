@@ -74,13 +74,16 @@ var applyWtEnables = function(ui) {
 // so both boxes bottom out at ~200px. Collapse that floor with a persistent <style> (inline styles are
 // dropped on jamovi re-renders). Folder keeps a 260px minimum so it stays the wider box (tune to taste);
 // the file name (width: large) collapses fully. Only the two export boxes use these width classes.
-var injectExportCss = function() {
-    if (document.getElementById("tabx-export-css")) return;
+// Phase h: also spaces the options collapse boxes apart (breathing room below each pane). The collapse-
+// box class differs across jamovi builds, so several candidates are targeted; a wrong one simply no-ops.
+var injectTabxCss = function() {
+    if (document.getElementById("tabx-css")) return;
     var s = document.createElement("style");
-    s.id = "tabx-export-css";
+    s.id = "tabx-css";
     s.textContent =
         "input.silky-option-largest-text{min-width:260px !important;width:100% !important;box-sizing:border-box;}" +
-        "input.silky-option-large-text{min-width:0 !important;width:100% !important;box-sizing:border-box;}";
+        "input.silky-option-large-text{min-width:0 !important;width:100% !important;box-sizing:border-box;}" +
+        ".silky-options-collapse-box,.silky-collapse-box,.jmv-options-collapsebox{margin-bottom:8px;}";
     document.head.appendChild(s);
 };
 
@@ -105,7 +108,7 @@ var bottomAlignInRow = function(ui, name) {
 };
 
 var onUpdate = function(ui) {
-    injectExportCss();
+    injectTabxCss();
     applyWtEnables(ui);
     renderSubtext(ui);
     renderExt(ui);
@@ -152,8 +155,10 @@ var TABX = {
     // Phase 15d: `white-space:nowrap` keeps "x [k] per unit (numeric)" on ONE line (it used to wrap).
     multWrap: "display:flex;align-items:center;gap:2px;min-width:0;white-space:nowrap;",
     multInp:  "width:70px;box-sizing:border-box;padding:2px 4px;border:1px solid rgba(0,0,0,0.28);border-radius:3px;background:#fff;color:#000;",
-    // per-dependent Model table: [name] [family select] [modelled level / trials]
-    mtRow:   "display:grid;grid-template-columns:130px 190px 1fr;align-items:center;gap:8px;width:82%;min-width:440px;box-sizing:border-box;padding:5px 8px;margin:4px 6px;border:1px solid rgba(0,0,0,0.12);border-radius:4px;background:rgba(0,0,0,0.03);",
+    // per-dependent Model table: [name] [family select] [modelled level / trials]. Phase h: full width
+    // (3 columns spanning all the space to the right), a wider family column + a stretching col-3 so long
+    // level labels stay readable.
+    mtRow:   "display:grid;grid-template-columns:150px 210px 1fr;align-items:center;gap:10px;width:100%;min-width:0;box-sizing:border-box;padding:5px 8px;margin:4px 6px;border:1px solid rgba(0,0,0,0.12);border-radius:4px;background:rgba(0,0,0,0.03);",
     mtSel:   "width:100%;min-width:0;box-sizing:border-box;padding:2px 4px;border:1px solid rgba(0,0,0,0.28);border-radius:3px;background:#fff;color:#000;cursor:pointer;",
     mtTrials:"width:90px;box-sizing:border-box;padding:2px 4px;border:1px solid rgba(0,0,0,0.28);border-radius:3px;background:#fff;color:#000;"
 };
@@ -317,17 +322,30 @@ var renderRefPicker = function(ui) {
 // the binomial MODELLED level (for a 2-level factor, default the FIRST level = the modelled/success
 // level) or the number of TRIALS (for a numeric binomial outcome; blank -> the observed max). Stored in
 // the hidden depFamily / depModelLevel / depTrials arrays, folded by jmvtab_reg_* into tab_reg(family /
-// inverse_two_level_factors / trials). Family "auto" (default, stored as an empty entry) lets tab_reg
-// detect it from the outcome. Mirrors the refPicker's async column fetch (own cache: it needs the
-// measureType, which the refPicker's levels cache drops).
+// inverse_two_level_factors / trials). Phase h: the family is DETECTED client-side and stored as an
+// explicit concrete pick (no "auto" default), so the backend never re-detects. Mirrors the refPicker's
+// async column fetch (own cache: it needs measureType + dataType, which the refPicker's cache drops).
 
-var mtCache = {};          // var -> {mt: measureType, levels: [labels]|null} | FETCHING
+var mtCache = {};          // var -> {mt: measureType, dataType, levels: [labels]|null} | FETCHING
 var lastModelSig = null;
 
+// Phase h: no "auto (detected)" row -- the family is detected client-side and pre-selected as a
+// CONCRETE choice; and no "quasipoisson" (an unweighted poisson already scales its SEs for
+// over-dispersion, and it shortens the longest dropdown item). quasipoisson stays available in the R
+// API only. Integer numeric outcomes default to poisson (counts), decimals to gaussian.
 var FAMILY_LABEL = {
-    auto: "auto (detected)", gaussian: "gaussian (linear)", binomial: "binomial (logistic)",
-    poisson: "poisson (counts)", quasipoisson: "quasipoisson (over-dispersed)",
+    gaussian: "gaussian (linear)", binomial: "binomial (logistic)", poisson: "poisson (counts)",
     multinomial: "multinomial (nominal)", ordinal: "ordinal (ordered)"
+};
+
+// The family detected from the outcome's R type (mirrors reg_detect_family, but resolves the integer
+// count -> poisson that the R side leaves to an explicit pick). Stored explicitly so the backend never
+// re-detects (and never aborts on an integer count).
+var detectFamily = function(c) {
+    if (!c || c.levels === null) return (c && c.dataType === "decimal") ? "gaussian" : "poisson";
+    if (c.levels.length === 2) return "binomial";
+    if (c.mt === "ordinal")    return "ordinal";
+    return "multinomial";
 };
 
 var modelTableSig = function(ui) {
@@ -340,12 +358,13 @@ var afterFetchMT = function(ui) {
     if (ui.modelTableCtrl && ui.modelTableCtrl.$el) renderModelTable(ui);
 };
 
-// families offered for an outcome's R type (numeric / 2-level factor / 3+ factor). "auto" first.
+// families offered for an outcome's R type (numeric / 2-level factor / 3+ factor). Concrete only:
+// a 2-level factor has a single option (binomial) -> the select is greyed out (nothing to choose).
 var familyOptionsFor = function(c) {
-    if (!c || c.levels === null) return ["auto", "gaussian", "binomial", "poisson", "quasipoisson"];
-    if (c.levels.length === 2) return ["auto", "binomial"];
-    if (c.mt === "ordinal")    return ["auto", "ordinal", "multinomial"];
-    return ["auto", "multinomial", "ordinal"];
+    if (!c || c.levels === null) return ["gaussian", "binomial", "poisson"];
+    if (c.levels.length === 2) return ["binomial"];
+    if (c.mt === "ordinal")    return ["ordinal", "multinomial"];
+    return ["multinomial", "ordinal"];
 };
 
 // stored per-dependent value from a {var, <key>} array ("" if unset).
@@ -403,14 +422,16 @@ var renderModelRow = function(ui, frag, v) {
         if (!(v in mtCache)) {
             mtCache[v] = FETCHING;
             ui.modelTableCtrl.requestData("column",
-                { columnName: v, properties: ["measureType", "levels"] })
+                { columnName: v, properties: ["measureType", "dataType", "levels"] })
                 .then(function(col) {
                     mtCache[v] = (!col || col.measureType === "continuous")
-                        ? { mt: "continuous", levels: null }
-                        : { mt: col.measureType, levels: col.levels.map(function(l) { return l.label; }) };
+                        ? { mt: "continuous", dataType: col ? col.dataType : "decimal", levels: null }
+                        : { mt: col.measureType, dataType: col.dataType,
+                            levels: col.levels.map(function(l) { return l.label; }) };
                     afterFetchMT(ui);
                 })
-                .catch(function() { mtCache[v] = { mt: "continuous", levels: null }; afterFetchMT(ui); });
+                .catch(function() { mtCache[v] = { mt: "continuous", dataType: "decimal", levels: null };
+                                    afterFetchMT(ui); });
         }
         return;
     }
@@ -418,24 +439,28 @@ var renderModelRow = function(ui, frag, v) {
     var nm  = document.createElement("b"); nm.style.cssText = TABX.refName; nm.textContent = v;
     row.appendChild(nm);
 
-    var opts    = familyOptionsFor(c);
-    var storedF = arrGet(ui, "depFamily", v, "family");
-    var famSel  = (storedF && opts.indexOf(storedF) >= 0) ? storedF : "auto";
-    row.appendChild(makeSelect(TABX.mtSel, opts, FAMILY_LABEL, famSel,
-        function(f) { arrWrite(ui, "depFamily", v, "family", f === "auto" ? "" : f); renderModelTable(ui); }));
+    // Phase h: no "auto" -- pre-select the CONCRETE detected family and store it explicitly (so the
+    // backend never re-detects / aborts on an integer count). A single option (2-level factor) is greyed.
+    var opts     = familyOptionsFor(c);
+    var detected = detectFamily(c);
+    var storedF  = arrGet(ui, "depFamily", v, "family");
+    var famSel   = (storedF && opts.indexOf(storedF) >= 0) ? storedF : detected;
+    if (!storedF) arrWrite(ui, "depFamily", v, "family", detected);   // persist the detected default
+    var famSelEl = makeSelect(TABX.mtSel, opts, FAMILY_LABEL, famSel,
+        function(f) { arrWrite(ui, "depFamily", v, "family", f); renderModelTable(ui); });
+    if (opts.length <= 1) famSelEl.disabled = true;
+    row.appendChild(famSelEl);
 
     // col-3: a 2-level factor -> modelled-level picker; a numeric outcome set to binomial -> trials.
     var isBinFactor = c.levels && c.levels.length === 2;
     var isNumBinom  = (c.levels === null) && (famSel === "binomial");
     if (isBinFactor) {
+        // Phase h: the level dropdown alone (no "model " label -- the user sees it lists the outcome's
+        // levels, so it reads as the modelled-level picker) and it stretches to fill col-3.
         var storedL = arrGet(ui, "depModelLevel", v, "level");
         var selL = (storedL && c.levels.indexOf(storedL) >= 0) ? storedL : c.levels[0];  // default first
-        var wrapL = document.createElement("div"); wrapL.style.cssText = TABX.multWrap;
-        var preL  = document.createElement("span"); preL.style.cssText = TABX.refNote; preL.textContent = "model ";
-        wrapL.appendChild(preL);
-        wrapL.appendChild(makeSelect(TABX.mtSel, c.levels, null, selL,
+        row.appendChild(makeSelect(TABX.mtSel, c.levels, null, selL,
             function(l) { arrWrite(ui, "depModelLevel", v, "level", l === c.levels[0] ? "" : l); }));
-        row.appendChild(wrapL);
     } else if (isNumBinom) {
         var wrapT = document.createElement("div"); wrapT.style.cssText = TABX.multWrap;
         var inp = document.createElement("input");
@@ -470,6 +495,31 @@ var renderModelTable = function(ui) {
     }
     var root = ui.modelTableCtrl.$el[0];
     root.innerHTML = ""; root.appendChild(frag);
+    applyModelEnables(ui);
+};
+
+// Phase h: `effect` (AME) is meaningless for a pure-gaussian selection (AME == the coefficient), and
+// `exponentiate` (odds/rate ratios) only bites on binomial / poisson / multinomial / ordinal. Both
+// therefore enable exactly when SOME selected outcome is non-gaussian. The family is computed, not a
+// declarative option, so grey imperatively (mirrors applyWtEnables); families come from mtCache, filled
+// async -> re-run from renderModelTable / afterFetchMT as columns resolve.
+var anyNonGaussian = function(ui) {
+    if (!ui.dependent) return false;
+    var deps = utils.clone(ui.dependent.value(), []);
+    for (var i = 0; i < deps.length; i++) {
+        var c = mtCache[deps[i]];
+        if (!c || c === FETCHING) continue;
+        var storedF = arrGet(ui, "depFamily", deps[i], "family");
+        var fam = (storedF && FAMILY_LABEL[storedF]) ? storedF : detectFamily(c);
+        if (fam !== "gaussian") return true;
+    }
+    return false;
+};
+var applyModelEnables = function(ui) {
+    var on = anyNonGaussian(ui);
+    ["effect_1", "effect_2", "exponentiate"].forEach(function(nm) {
+        if (ui[nm] && ui[nm].setEnabled) ui[nm].setEnabled(on);
+    });
 };
 
 // ---- Model-comparison builder CustomControl (modelBuilderCtrl) ---------------------------
@@ -722,6 +772,17 @@ module.exports = {
         if (ui.exportExcel.value()) {
             setTimeout(function() {
                 ui.exportExcel.setValue(false);
+            }, 2000);
+        }
+    },
+
+    // Phase h: the "Run comparison" action fires ONE staged compute in the backend; reset it shortly
+    // after (like the export button) so a second click re-fires, and so the backend's follow-up run
+    // (run_compare = false) re-serves the just-computed table instead of recomputing.
+    run_compare_changed: function(ui) {
+        if (ui.run_compare && ui.run_compare.value()) {
+            setTimeout(function() {
+                ui.run_compare.setValue(false);
             }, 2000);
         }
     },

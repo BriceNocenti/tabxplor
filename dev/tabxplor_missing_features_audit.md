@@ -95,7 +95,7 @@ survey designs.** The gaps below are the distance between that sweet spot and th
   produces percentages that sum to >100% over a common base. tabxplor has no `mrset`/`mdset`
   equivalent; every table is a single categorical cross summing to 100% within a base. This is a
   core survey/market-research shape (expss `mrset`, SPSS "Multiple Response Sets", Stata). For many
-  survey datasets it is not optional.
+  survey datasets it is not optional. **Maintainer answer : they *are* present, its `levels = "first"`**. 
 - **Banner / nested tables ARE present — credit it.** `tab()`/`tab_many()` accept several
   `col_vars` and render a genuine banner header with column-group separators
   (`fmt_class.R:1662`, `tab_md.R:249-257`). This matches expss `nest` and SPSS banners and is a

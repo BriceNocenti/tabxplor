@@ -107,15 +107,30 @@ xlb_add_sheet <- function(wb, title)
 xlb_freeze <- function(wb, sheet, active_row = 3L)
   wb$freeze_pane(sheet = sheet, first_active_row = active_row, first_col = TRUE)
 
-# raw numbers written; na = NULL -> blank cells (not #N/A); apply_cell_style = FALSE -> no
-# openxlsx2 auto-styling (tab_xl controls every style itself).
+# DESIGN: openxlsx2 renamed the NA-handling arg `na_strings` -> `na` across versions. Older builds
+# (the jamovi-bundled one on Windows) have ONLY `na_strings`, so a literal `na = NULL` partial-matches
+# BOTH `name` and `na_strings` -> "argument N matches multiple formal arguments" (the Excel-export
+# crash). Resolve the exact arg name once from the method's own formals and pass it by name.
+xlb_na_argname <- function(wb) {
+  fmls <- tryCatch(names(formals(wb$add_data)), error = function(e) character())
+  if ("na" %in% fmls) "na" else "na_strings"
+}
+
+# `list(NULL)` (single-bracket assign) keeps a NULL-VALUED element in the arg list -> passes
+# `na = NULL` / `na_strings = NULL` (blank cells, not #N/A); a `[[<-` NULL would drop it entirely.
+xlb_add_data <- function(wb, ...) {
+  args <- list(..., apply_cell_style = FALSE)
+  args[xlb_na_argname(wb)] <- list(NULL)
+  do.call(wb$add_data, args)
+}
+
+# raw numbers written; blank cells for NA; apply_cell_style = FALSE -> no openxlsx2 auto-styling
+# (tab_xl controls every style itself).
 xlb_write_data <- function(wb, sheet, x, row, col)
-  wb$add_data(sheet = sheet, x = x, start_row = row, start_col = col,
-              col_names = TRUE, na = NULL, apply_cell_style = FALSE)
+  xlb_add_data(wb, sheet = sheet, x = x, start_row = row, start_col = col, col_names = TRUE)
 
 xlb_write_cell <- function(wb, sheet, dims, x)
-  wb$add_data(sheet = sheet, x = x, dims = dims,
-              col_names = FALSE, na = NULL, apply_cell_style = FALSE)
+  xlb_add_data(wb, sheet = sheet, x = x, dims = dims, col_names = FALSE)
 
 # Phase 13b: write ONE rich-text cell (openxlsx2::fmt_txt) from a run list -- each run
 # list(text, color = <hex|NA>, bold). Coloured break-words carry their palette hex + bold; the rest
@@ -132,8 +147,7 @@ xlb_write_richtext <- function(wb, sheet, dims, runs, size = NULL, font = NULL) 
     rt <- if (is.null(rt)) piece else rt + piece
   }
   if (is.null(rt)) return(invisible(wb))
-  wb$add_data(sheet = sheet, x = rt, dims = dims,
-              col_names = FALSE, na = NULL, apply_cell_style = FALSE)
+  xlb_add_data(wb, sheet = sheet, x = rt, dims = dims, col_names = FALSE)
   invisible(wb)
 }
 

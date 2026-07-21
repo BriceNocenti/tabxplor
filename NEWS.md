@@ -572,6 +572,18 @@
 * The jamovi module (`jmvtab`) UI is now consistent with what the analysis actually computes: options that have no effect given the others are greyed out (e.g. the total-table and comparison-table choices when there are no table variables; the significance-stars and difference-CI method when cell intervals are chosen; the significance policy when colors are off; the count/percentage extras when there are no percentages), always keeping their value so it returns when they become relevant again. The number-of-digits control is now a dropdown, and the legend/path text boxes fill their row. The significance policy and the confidence interval are no longer wired to fight each other — choosing "grey non-significant" simply colors accordingly (the needed interval is computed automatically), and never silently changes the CI setting.
 * The jamovi module (`jmvtab`) now uses a live multi-tier cache: after the first table, changing an option (percentages, reference, colors, display, adding a variable) reuses the cached counts and chi-squared/ANOVA instead of recomputing everything, so results update near-instantly on normal survey data. The Jamovi HTML render also drops the per-cell hover tooltips (inert in Jamovi and roughly half the render time). The module drives the same `tab()` pipeline with the cache injected (no separate code path), so its tables stay identical to `tab()`. Beyond the counts/tests, changing only the **display or colours** (number of digits, the displayed value, the colour measure `"diff"`/`"ratio"`, or the `color_signif` significance policy) now reuses the already-built table and only re-paints it, skipping the whole cell rebuild — these toggles are effectively instant even on a big table-of-tables (e.g. a colour change on a 9-table grid dropped from ~1.1 s to ~0.04–0.19 s). Building `tab()` / `tab_num()` tables is also a little faster overall (the per-cell format assembly hoists its constant work out of the inner loop).
 * The jamovi modules (`jmvtab`, `jmvtabreg`) got a usability pass: the results table now uses a much wider box (growing to the table's own width, then scrolling horizontally past a cap that adapts to your display size and OS scaling) instead of a cramped ~500px box; the below-table note is a full-width, auto-growing text area; the export panel has separate **Folder** and **file name** boxes with a "Reset to defaults" button, the export button's label follows the chosen format (Excel / HTML / markdown) at a fixed width, and export paths/names are cleaned robustly across Windows / macOS / Linux with friendly, actionable error messages (the old cryptic "In index: 1." is gone). `jmvtab` also exposes `ci = "ratio"` and all confidence-interval methods (`method_ratio`, `method_mean_diff`, `method_mean_ratio`) in a dedicated "advanced methods" box, turns the `comp` choice into a drop-down, and makes the level-reorder axis boxes non-collapsible. Fixed a crash when `na = "drop_all"` was used with two or more row variables and a numeric column.
+* The jamovi Regressions module (`jmvtabreg`) got a UI pass: the **family** for each outcome is now
+  auto-detected and pre-selected as a concrete choice (no "auto (detected)" row; integer counts default
+  to Poisson; 2-level outcomes lock to binomial), the `quasipoisson` clutter is gone from the dropdown
+  (an unweighted Poisson already handles over-dispersion), the family table spans the full width with
+  readable level labels, and `effect` / `exponentiate` grey out for a purely gaussian model. The
+  **Significance** pane is a clear three-column layout (show colour / stars; confidence level; method;
+  policy) and the old "Missing values and display" box is now just **Display** (missing values moved
+  out). A **model comparison** (two or more predictor subsets) now computes only when you click **Run
+  comparison**, so picking predictors no longer refits every model on each click.
+* Fixed the jamovi **Excel export** failure "argument 6 matches multiple formal arguments" (an
+  `openxlsx2` argument-name change across versions), and made the default export folder follow a
+  **redirected Windows Documents** location instead of always creating `C:\Users\...\Documents`.
 * Rewrote the Chi-squared / ANOVA computation onto a fast, vectorised engine (`R/tab-agg.R`:
   `agg_chi2()`, `agg_anova()`): every (sub)table is tested in a single grouped `data.table` pass
   instead of a per-table `stats::chisq.test()` loop, making `tab_chi2()` about 2.5× faster (it was
@@ -693,6 +705,12 @@
   name works, so no code needs to change. See `?tabxplor-options`.
 
 ## Bug corrections
+* **A predictor dropped from one model in a `tab_reg()` comparison keeps its reference-row in bold.**
+  When comparing predictor subsets, a reference level of a predictor present in some models but not
+  others is now bold in the leftmost column of every model (its reference-row flag is a fact of the
+  shared skeleton, no longer blanked in the models that omit it).
+* **`empirical = TRUE` now works with `family = "quasipoisson"`** (it rides the Poisson crude path:
+  `Obs_rate` + `Obs_IRR`); it was previously ignored for that family.
 * **`options(tabxplor.output_kable = TRUE)` no longer errors with a two-channel colour.** Auto-printing
   a table built with a background colour channel (e.g. `color = TRUE`) under this option used to fail
   with *"no applicable method for 'mutate' … tabxplor_kable"*; the kable render now runs after the

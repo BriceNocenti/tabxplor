@@ -29,12 +29,43 @@ export_home_dir <- function() {
   h
 }
 
-# The default export folder: the user's Documents. <home>/Documents is correct on all three platforms
-# (in jamovi's bundled R path.expand("~") already IS Documents, so we build it from the home instead --
-# NOT path.expand() -- to avoid a Documents/Documents double, §14.3).
+# Expand Windows %VAR% tokens (a `User Shell Folders` value may hold %USERPROFILE%\Documents).
 #' @keywords internal
 #' @noRd
-export_documents_dir <- function() file.path(export_home_dir(), "Documents")
+export_expand_winenv <- function(p) {
+  toks <- regmatches(p, gregexpr("%[^%]+%", p))[[1]]
+  for (t in unique(toks)) {
+    v <- Sys.getenv(gsub("%", "", t, fixed = TRUE))
+    if (nzchar(v)) p <- gsub(t, v, p, fixed = TRUE)
+  }
+  p
+}
+
+# The default export folder: the user's Documents.
+# DESIGN: on Windows a REDIRECTED Documents (e.g. D:\Documents) is invisible to <home>/Documents --
+# the locked jamovi Electron R only sees USERPROFILE=C:\Users\<x>, so it wrongly created
+# C:\Users\<x>\Documents. Read the resolved known-folder path from the registry instead: the
+# `Shell Folders\Personal` value holds the already-expanded absolute path (redirects honoured), with
+# `User Shell Folders\Personal` (env-token form) then <home>/Documents as fallbacks. Off Windows,
+# <home>/Documents is correct (jamovi's ~ already IS Documents, so we build from home, not
+# path.expand(), to avoid a Documents/Documents double -- §14.3).
+#' @keywords internal
+#' @noRd
+export_documents_dir <- function() {
+  fallback <- file.path(export_home_dir(), "Documents")
+  if (.Platform$OS.type != "windows") return(fallback)
+  read_personal <- function(subkey) tryCatch({
+    reg <- utils::readRegistry(
+      file.path("Software", "Microsoft", "Windows", "CurrentVersion", "Explorer", subkey,
+                fsep = "\\"),
+      hive = "HCU", maxdepth = 1L)
+    p <- reg[["Personal"]]
+    if (is.character(p) && length(p) && nzchar(p[1])) export_expand_winenv(p[1]) else NA_character_
+  }, error = function(e) NA_character_)
+  doc <- read_personal("Shell Folders")
+  if (is.na(doc)) doc <- read_personal("User Shell Folders")
+  if (is.na(doc) || !nzchar(doc)) fallback else doc
+}
 
 # Expand a leading ~ to the OS home with substring() (NOT sub(): USERPROFILE holds backslashes sub()
 # would read as backreferences, the §14.3 bug).

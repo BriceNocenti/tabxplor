@@ -29,7 +29,30 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
       wt   <- wr$wt
 
       opts  <- private$.opts(wt)
+
+      # DESIGN (Phase h): a model COMPARISON (>=2 folded models) is heavy -- refitting every model on
+      # each live predictor edit is what froze the panel. In that "staged" mode the table computes ONLY
+      # on the Run button (or an Export, which needs the result): between clicks a changed signature
+      # marks the shown table outdated; an unchanged one (incl. the run_compare auto-reset run) re-serves
+      # the last render. Single-model use stays fully live. compare_state persists sig + HTML across resets.
+      staged  <- is.list(opts$predictors) && length(opts$predictors) >= 2L
+      trigger <- isTRUE(self$options$run_compare) || isTRUE(self$options$exportExcel)
+      cur_sig <- jmvtab_reg_compare_sig(opts)
+      cst     <- self$results$compare_state$state       # list(sig=, html=) or NULL
+
+      if (staged && !trigger) {
+        if (!is.null(cst) && identical(cst$sig, cur_sig)) {
+          self$results$html_table$setContent(cst$html)  # unchanged / just-computed -> re-serve
+        } else {
+          self$results$html_table$setContent(private$.compare_hint(cst))
+        }
+        return(invisible())
+      }
+
       store <- self$results$cache_state$state          # NULL on the first run
+      # Flush queued option changes BEFORE the (potentially heavy) fit so a newer edit supersedes this
+      # run instead of piling up -- the jmvcore remedy for UI stutter. Guarded for the non-jamovi harness.
+      try(private$.checkpoint(), silent = TRUE)
       built <- jmvtab_reg_build(data, opts, store)
       self$results$cache_state$setState(built$store)   # persist the fit digests / raw fits
       tabs  <- built$tabs
@@ -41,7 +64,10 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
 
       # Export (Excel / HTML / Markdown) + HTML render -- the shared jmv_backend_* helpers.
       jmv_backend_export(self, tabs)
-      self$results$html_table$setContent(jmv_backend_render_html(self, tabs))
+      html <- jmv_backend_render_html(self, tabs)
+      self$results$html_table$setContent(html)
+      # Remember the computed comparison so a later live edit can re-serve / flag it (Phase h).
+      if (staged) self$results$compare_state$setState(list(sig = cur_sig, html = html))
     },
 
     # Collect the jamovi options into the plain list jmvtab_reg_build() consumes, ALREADY in tab_reg()
@@ -101,6 +127,20 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
              "Select a <b>dependent</b> (outcome) variable and one or more <b>predictors</b> ",
              "to fit a regression. For a model comparison (predictor subsets), choose a single ",
              "dependent.</div>")
+    },
+
+    # Phase h: shown in staged comparison mode when the model set / options changed but the user has not
+    # clicked Run. Any previous render (cst$html) stays below the banner so the outdated table is visible.
+    .compare_hint = function(cst = NULL) {
+      banner <- paste0(
+        "<div style='padding:10px 12px;margin-bottom:6px;border:1px solid #d0a; ",
+        "border-radius:4px;background:rgba(204,0,170,0.06);'>",
+        if (is.null(cst))
+          "Model comparison staged. Click <b>Run comparison</b> to compute the table."
+        else
+          "The model set or options changed. Click <b>Run comparison</b> to refresh (the table below is outdated).",
+        "</div>")
+      paste0(banner, if (is.null(cst)) "" else cst$html)
     },
 
     .plot = function(image, ...) {

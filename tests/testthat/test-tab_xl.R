@@ -1,3 +1,14 @@
+testthat::test_that("Phase h: xlb_add_data resolves the openxlsx2 NA arg name (no partial-match crash)", {
+  testthat::skip_if_not_installed("openxlsx2")
+  wb <- openxlsx2::wb_workbook()$add_worksheet("s")
+  # The NA arg is `na` (new openxlsx2) or `na_strings` (older jamovi-bundled build); either way the
+  # resolved name MUST be a real formal so it never partial-matches `name` ("argument matches multiple
+  # formal arguments" = the Excel-export crash).
+  nm <- xlb_na_argname(wb)
+  testthat::expect_true(nm %in% names(formals(wb$add_data)))
+  testthat::expect_no_error(xlb_write_data(wb, "s", data.frame(a = c(1, NA)), 1L, 1L))
+})
+
 testthat::test_that("tab_xl creates an Excel file", {
   testthat::skip_if_not_installed("openxlsx2")
   tabs <-
