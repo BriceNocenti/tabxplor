@@ -10,44 +10,7 @@ gss_simple <- gss_cat_data_formatting() # gss_simple with merged levels, and fir
 
 
 
-# pc18 <- readRDS("~/Data/Pratiques culturelles/Pratiques culturelles 2018/pc18.rds")
-# musique_vars <- c("ROCK", "JAZZ", "CLASSIQUE", "VARIETE", "ELECTRO", "METAL", "CHANSON", "WORLD", "RAP", "TRADI")
-# pc18 <- pc18 |>
-#   select(-any_of(c("CHANSON", "WORLD", "TRADI", "VARIETE", "RNB", "ELECTRO", "RAP", "METAL", "ROCK", "JAZZ", "OPERA", "CLASSIQUE"))) |>
-#   rename(any_of(c(CHANSON   = "E1001", WORLD = "E1002", TRADI = "E1003", VARIETE   = "E1004", RNB= "E1005", ELECTRO = "E1006", 
-# RAP= "E1007", METAL= "E1008", ROCK= "E1009", JAZZ= "E1010", OPERA= "E1011", CLASSIQUE = "E1012"
-#   )))
-# pc18$CHANSON   <- forcats::fct_recode(pc18$CHANSON,  "1-Chanson ou variété française" = "1-Chansons ou variétés françaises", "2-Non" = "2-Non")
-# pc18$WORLD     <- forcats::fct_recode(pc18$WORLD,  "1-World" = "1-Musiques du monde", "2-Non" = "2-Non")
-# pc18$TRADI     <- forcats::fct_recode(pc18$TRADI,  "1-Tradi" = "1-Musiques traditionnelles",  "2-Non" = "2-Non")
-# pc18$VARIETE   <- forcats::fct_recode(pc18$VARIETE, "1-Variété inter- nationale" = "1-Variétés internationales", "2-Non" = "2-Non")
-# pc18$ELECTRO   <- forcats::fct_recode(pc18$ELECTRO, "1-Électro, techno" = "1-Musiques électroniques, techno", "2-Non"   = "2-Non")
-# pc18$RAP       <- forcats::fct_recode(pc18$RAP, "1-Rap" = "1-Hip hop, rap", "2-Non"          = "2-Non")
-# pc18$METAL     <- forcats::fct_recode(pc18$METAL,"1-Metal, hard rock" = "1-Metal, hard rock","2-Non"= "2-Non")
-# pc18$ROCK      <- forcats::fct_recode(pc18$ROCK, "1-Pop, rock" = "1-Pop, rock", "2-Non"       = "2-Non")
-# pc18$JAZZ      <- forcats::fct_recode(pc18$JAZZ, "1-Jazz" = "1-Jazz", "2-Non"  = "2-Non")
-# pc18$CLASSIQUE <- forcats::fct_recode(pc18$CLASSIQUE, "1-Classique" = "1-Musique classique", "2-Non" = "2-Non")
-# pc18 <- pc18 |> dplyr::select(-any_of(c("NB_MUSIQUE"))) |> score_from_lv1(name = "NB_MUSIQUES", vars_list = musique_vars)
-
-# pc18_young <- pc18 |> dplyr::filter(AGE >= 18 & AGE < 25) #  593 individuals
-
-
-# # # color = c("diff", "ratio"), color_signif = "ignore"
-# # # set_color_breaks(breaks = list(pct_ratio = c(1.2, 1.5, 2, 4), mean_diff = NULL ) )
-# # set_color_breaks(pct_ratio = list(over = c(NA, 1.5, 2, 4), under = c(NA, 1.5, 2, 4)))
-
-# #   exploratory tables with several row_vars and several col_vars (nb_cine, NB_CONCERTS = numeric variable)
-# rows1 <- c("DIPLOM", "CRITREVENU", "CRITAGE", "CSTOTR")
-# cols1 <- c("CONCERTS", "TELE", "JV", "nb_cine", "NB_CONCERTS")
-
-# #   `levels = "first"`
-# rows2 <- c("SEXE", "DIPLOM", "CRITREVENU", "CRITAGE")
-# cols2 <- c(musique_vars, "NB_MUSIQUES") # plus the related score as numeric variable
-
-
-
 ### exports tests  ---- 
-
 
 # Significance stars etc. in tab_md 
 tab(gss_simple, c(race, rincome, relig), c(party3, marital), pct = "row",  na = "drop", 
@@ -77,7 +40,7 @@ tab(gss_simple, c(race, rincome, relig), c(party3, marital), pct = "row",  na = 
 #   wrap until the wrap_rows limit is reaches ?
 
 
-# # Excel tests
+# # Excel tests working
 # tab(gss_simple, c(race, rincome, relig), c(party3, marital), pct = "row",  na = "drop", 
 #    color = TRUE, color_signif = "grey_non_signif"
 # ) |> 
@@ -146,66 +109,6 @@ tab_reg(gss_simple, dependent = "married", predictors = c("rincome", "party3"), 
 #   to avoid column names clashes)
 # - Rename all "Emp. " to "Obs_" in `Emp. mean` `Emp. diff` `Emp. OR` etc. : `Obs_mean` `Obs_diff` `Obs_OR`, etc. 
 #    is more standard / more clear for the user.
-
-
-
-
-# # odds ratio of each outcome category versus the rest at reference population work
-# # (but in fact, like predicted, it’s still more difficult to read than AME at average)
-# tab_reg(gss_simple, dependent = "marital", predictors = c("race", "rincome"), family = "multinomial", 
-#   effect = "coefficient", at = "reference"
-# )
-
-
-
-
-
-
-
-# Tests ----
-
-# # HTML engine — a font-family stack (install the candidate locally first, or it falls back):
-# options(tabxplor.tab_kable_num_font = "DejaVu Sans") 
-# options(tabxplor.tab_kable_num_font = "DejaVu Sans Mono") # biggest/widest
-# options(tabxplor.tab_kable_num_font = '"IBM Plex Mono", monospace')
-# options(tabxplor.tab_kable_num_font = "Cascadia Mono")  # big/wide
-# options(tabxplor.tab_kable_num_font = "Cascadia Code") 
-# options(tabxplor.tab_kable_num_font = "Consolas")  # too small
-
-# options(tabxplor.tab_kable_num_font = "Liberation Mono") # better than DejaVu Sans Mono
-# # options(tabxplor.tab_kable_num_font = "JSF Mono") # 
-# # options(tabxplor.tab_kable_num_font = "Segoe UI Mono") # 
-# # options(tabxplor.tab_kable_num_font = "Menlo") # 
-# # ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono", Menlo, Consolas, "Liberation Mono", "DejaVu Sans Mono", monospace
-
-# options(tabxplor.tab_kable_num_font = "Cascadia Mono") # big/wide
-# bigger_numbers <- '<style>.tabxplor-tab td.tx-num{font-size:1.1em;line-height:1;}</style>'
-# kab <- tab(pc18, all_of(rows1), all_of(cols1), wt = POND, pct = "row", color = TRUE, na = "drop") |> tab_export() 
-# kab
-# paste0(as.character(kab), bigger_numbers) |> vctrs::vec_restore(kab)
-# tab(pc18, all_of(rows1), all_of(cols1), wt = POND, pct = "row", color = TRUE, na = "drop") |> tab_export(theme="auto") 
-
-
-# options(tabxplor.tab_kable_num_font = "DejaVu Sans") 
-# tab(pc18, all_of(rows1), all_of(cols1), wt = POND, pct = "row", color = TRUE, na = "drop") 
-
-
-# score_risques_phy_logits |> tab_export()
-# tab(gss_simple, marital, race, pct = "row", color = "diff") |> tab_export() 
-
-
-# tab(gss_simple, marital, race, pct = "row", color = "diff") |>
-#   tab_export()   # then open it
-
-# # Excel (single installed name) and plot (device family):
-# options(tabxplor.xl_font_num  = "Cascadia Mono")
-# options(tabxplor.plot_num_font = "JetBrains Mono")
-
-
-
-# options(tabxplor.tab_kable_num_font = 'ui-monospace, "Cascadia Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace')
-
-
 
 
 

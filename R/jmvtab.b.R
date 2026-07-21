@@ -21,17 +21,10 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
 
       data <- self$data
 
-      # --- Weights ---------------------------------------------------------------------------
-      # self$data only holds the selected variables; a Data-level weight (Data >>> Weights) is
-      # carried as an attribute and must be added back by hand. Result: the weight VARIABLE NAME
-      # (a character), or character() when unweighted.
-      wt <- character()
-      if (!is.null(self$options$wt)) {
-        wt <- self$options$wt
-      } else if (!is.null(attr(data, "jmv-weights"))) {
-        data[['.COUNTS']] <- jmvcore::toNumeric(attr(data, "jmv-weights"))
-        wt <- ".COUNTS"
-      }
+      # --- Weights (shared helper: adds a Data-level weight back as .COUNTS) ------------------
+      wr   <- jmv_backend_weights(data, self$options$wt)
+      data <- wr$data
+      wt   <- wr$wt
 
       # --- Build the table through the cached pipeline ---------------------------------------
       opts  <- private$.opts(wt)
@@ -53,26 +46,9 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
       options("tabxplor.ci_print" = if (self$options$ci_print == "moe") "moe" else "ci")
       on.exit(options("tabxplor.ci_print" = ci_print_option), add = TRUE)
 
-      # --- Export (Excel / HTML / Markdown; Phase 7g) ----------------------------------------
-      # The `exportExcel` Action is a boolean click (§5.3). The format chooses the extension; the
-      # user-typed `path` is resolved (Documents default, ~ -> USERPROFILE) and the result reported
-      # via a jmvcore::Notice (info / error). See R/jmvtab-export.R.
-      if (isTRUE(self$options$exportExcel)) {
-        fmt <- self$options$export_format
-        ext <- switch(fmt, "excel" = "xlsx", "html" = "html", "md" = "md", "xlsx")
-        p   <- resolveExportPath(self$options$export_dir, self$options$export_filename, ext)
-        tryCatch({
-          jmvtab_export(tabs, format = fmt, path = p, replace = self$options$xl_replace)
-          private$.notice(paste0("Saved to: ", p), ok = TRUE)
-        }, error = function(err) {
-          # conditionMessage() (not err$message) surfaces the FULL rlang cause chain -- the bare
-          # err$message is only the top "In index: 1." wrapper (Phase 15c un-masking).
-          private$.notice(paste0("Export failed: ", conditionMessage(err)), ok = FALSE)
-        })
-      }
-
-      # --- HTML table ------------------------------------------------------------------------
-      self$results$html_table$setContent(private$.render_html(tabs))
+      # --- Export (Excel / HTML / Markdown; Phase 7g) + HTML render (shared helpers) ----------
+      jmv_backend_export(self, tabs)
+      self$results$html_table$setContent(jmv_backend_render_html(self, tabs))
     },
 
     # Collect the jamovi options into the plain list jmvtab_build() consumes. Kept separate so the
@@ -140,32 +116,8 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
       )
     },
 
-    # Render a tab (or list of tabs) to standalone HTML for the Jamovi results iframe. Phase 10e:
-    # uses the dependency-free, self-contained html engine (inline CSS, no lightable/bootstrap
-    # includeCSS, no kableExtra class-strip hack) wrapped in an inline-styled scroll box. This is
-    # ~3x faster than the old kableExtra path (dev/benchmarks/results_1.4.0/phase10e_after.txt).
-    # tooltips stay OFF here for now; the html engine emits the SAME bootstrap tooltip attributes,
-    # so they can be turned on once verified live in jamovi (they are now cheap -- WS3).
-    .render_html = function(tabs) {
-      tab_kable(
-        tabs, engine = "html",
-        wrap_rows = self$options$wrap_rows,
-        wrap_cols = self$options$wrap_cols,
-        tooltips = FALSE
-      ) |>
-        tab_render_scrollbox()
-    },
-
-    # Report an export result via a native jmvcore::Notice (info / error), inserted at the top of
-    # the results (dev guide §7.6 / §14). Replaces the old hand-built HTML status box.
-    .notice = function(text, ok = TRUE) {
-      notice <- jmvcore::Notice$new(
-        options = self$options, name = "exportNotice",
-        type = if (ok) jmvcore::NoticeType$INFO else jmvcore::NoticeType$ERROR
-      )
-      notice$setContent(text)
-      self$results$insert(1, notice)
-    },
+    # .render_html / .notice / export / weights are the shared jmv_backend_* helpers in
+    # R/jmvtab-export.R (Phase 17i) -- called directly from .run() above.
 
     .plot = function(image, ...) {
       TRUE

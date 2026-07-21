@@ -22,94 +22,180 @@
 # See: dev/tabxplor_jmvtab_cache_design.md ; CLAUDE.md > 1.4.0 roadmap > Phase 7e.
 
 
-# === Constants =============================================================================
-JMVTAB_CACHE_SCHEMA         <- 5L                  # bump on any store-shape change -> discard stale stores
-                                                   #   (2 = Phase 7f: added the tier-3 `tab3` built-table tier)
-                                                   #   (3 = Phase 9b-7: tier-3 stores the CARRIER (plain field
-                                                   #    frames via fmt_unwrap), not a live materialized tab)
-                                                   #   (4 = Phase 17b: table attrs merged into one `meta` list;
-                                                   #    the carrier stores attributes(tab) verbatim -> new shape)
-                                                   #   (5 = Phase 17d: legacy colour strings decoded at the
-                                                   #    boundary -> the carrier stores CLEAN color/color_signif
-                                                   #    attrs (was e.g. "after_ci"); old carriers mis-render)
-JMVTAB_MAX_ENTRY_BYTES      <- 512L * 1024L        # per-entry ceiling for tiers 1-2 (aggregates / tests)
-JMVTAB_TAB3_MAX_ENTRY_BYTES <- 2L * 1024L * 1024L  # tier-3 armed CARRIERS are bigger (all 18 fmt fields) -> looser
-JMVTAB_MAX_STORE_BYTES      <- 12L * 1024L * 1024L  # whole-store budget (serialized every run -> keep bounded)
+# === Cache kernel (shared by the jmvtab crosstab store AND the jmvtabreg fit store) =========
+#
+# ONE byte-bounded LRU store, parameterised by a per-module CONFIG (schema + tier names + per-tier
+# byte ceiling + whole-store budget). Both modules keep their OWN store (their tiers are different --
+# crosstab: agg/test/tab3 ; reg: digest/fit -- and their persisted $state is decoupled), but share
+# this implementation instead of the two drifting copies that predated Phase 17i.
+#
+# Canonical entry shape: list(value = <payload>, bytes = <serialized size>, seq = <LRU clock stamp>).
+# `clock` is a monotone LOGICAL counter (never Sys.time -- that would break determinism/reproducibility).
+#
+# DESIGN: two access patterns, kept deliberately distinct (do NOT "unify" them -- it moves a golden):
+#   * jmv_store_fetch/put  = FUNCTIONAL, store threaded by return value, clock bumped on EVERY touch
+#     (incl. misses). The crosstab store uses these -- its fetch-or-compute is interleaved with the
+#     data.table rebuild + per-row_var key accumulation, so it cannot collapse into a compute_fn closure.
+#   * jmv_store_cached     = ENV-MUTATING fetch-or-compute, clock bumped only on a hit or a store (NOT
+#     a bare miss). The reg store uses this -- its hit/miss tallies + eviction are byte-locked by
+#     test-jmvtabreg-cache.R to this exact semantics.
 
-
-# === Store lifecycle =======================================================================
-
-# A fresh empty store. `clock` is a monotone logical counter used for LRU (no Sys.time -- would break
-# reproducibility / determinism). `agg` and `test` are named lists keyed by content hashes.
+# Config for one store: `entry_bytes` is a NAMED numeric vector (names = the tiers); the tier name
+# selects the per-entry ceiling, so no per-put max_bytes argument is needed.
 #' @keywords internal
 #' @noRd
-jmv_cache_new <- function() {
-  # tab3 (Phase 7f): per base-config (aggregate x pct x na x levels x structural) built ARMED tables
-  # (pre-finalize), stored since Phase 9b-7 as the CARRIER (plain field-frames, jmv_carrier_unwrap).
-  # Reused for display / colour re-paint (exact-tuple hit) and reference re-ref (rerefable tuple), so
-  # display/colour/reference toggles skip the O(cells) rebuild.
-  list(schema = JMVTAB_CACHE_SCHEMA, clock = 0L, agg = list(), test = list(), tab3 = list())
+jmv_cache_config <- function(schema, entry_bytes, store_bytes) {
+  list(schema = schema, tiers = names(entry_bytes),
+       entry_bytes = entry_bytes, store_bytes = store_bytes)
+}
+
+# A fresh empty store: schema + clock + one empty named list per tier.
+#' @keywords internal
+#' @noRd
+jmv_store_new <- function(cfg) {
+  c(list(schema = cfg$schema, clock = 0L),
+    stats::setNames(rep(list(list()), length(cfg$tiers)), cfg$tiers))
 }
 
 # Restore-or-reset: a NULL state (first run) or a schema mismatch (module upgraded between sessions)
 # yields a fresh store rather than a stale-shaped deserialization.
 #' @keywords internal
 #' @noRd
-jmv_cache_migrate <- function(store) {
-  if (is.null(store) || !is.list(store) ||
-      !identical(store$schema, JMVTAB_CACHE_SCHEMA)) {
-    return(jmv_cache_new())
+jmv_store_migrate <- function(cfg, store) {
+  if (is.null(store) || !is.list(store) || !identical(store$schema, cfg$schema)) {
+    return(jmv_store_new(cfg))
   }
   store
 }
 
-
-# === get / put / evict =====================================================================
-
-# Fetch an entry, refreshing its LRU stamp on a hit. Returns list(hit, value, store) so the (bumped)
-# store is threaded back. `tier` is "agg" or "test".
+# A mutable cache environment: the migrated store + a hit / miss tally (diagnostics + tests). Used by
+# the reg module (passed to tab_reg() as `.fit_cache`); the crosstab build wraps its own env inline.
 #' @keywords internal
 #' @noRd
-jmv_cache_fetch <- function(store, tier, key) {
+jmv_store_env <- function(cfg, store = NULL) {
+  ce <- new.env(parent = emptyenv())
+  ce$store  <- jmv_store_migrate(cfg, store)
+  ce$hits   <- 0L
+  ce$misses <- 0L
+  ce
+}
+
+# Fetch an entry, refreshing its LRU stamp on a hit. Bumps the clock on every touch (incl. a miss).
+# Returns list(hit, value, store) so the (bumped) store is threaded back.
+#' @keywords internal
+#' @noRd
+jmv_store_fetch <- function(cfg, store, tier, key) {
   store$clock <- store$clock + 1L
   e <- store[[tier]][[key]]
   if (is.null(e)) return(list(hit = FALSE, value = NULL, store = store))
   e$seq <- store$clock
   store[[tier]][[key]] <- e
-  list(hit = TRUE, value = e$payload, store = store)
+  list(hit = TRUE, value = e$value, store = store)
 }
 
-# Insert/replace an entry unless it exceeds the per-entry byte ceiling (recomputing one scan next run
-# beats persisting a large blob forever). `max_bytes` is looser for the tier-3 built tables.
+# Insert/replace an entry unless it exceeds the tier's byte ceiling (recomputing one scan next run
+# beats persisting a large blob forever). The ceiling comes from cfg$entry_bytes[[tier]].
 #' @keywords internal
 #' @noRd
-jmv_cache_put <- function(store, tier, key, payload, max_bytes = JMVTAB_MAX_ENTRY_BYTES) {
+jmv_store_put <- function(cfg, store, tier, key, value) {
   store$clock <- store$clock + 1L
-  b <- length(serialize(payload, connection = NULL))
-  if (b > max_bytes) return(store)
-  store[[tier]][[key]] <- list(payload = payload, bytes = b, seq = store$clock)
+  b <- length(serialize(value, connection = NULL))
+  if (b > cfg$entry_bytes[[tier]]) return(store)
+  store[[tier]][[key]] <- list(value = value, bytes = b, seq = store$clock)
   store
 }
 
 # Evict least-recently-used entries across ALL tiers until the total serialized size is under budget.
+# DESIGN: O(n log n) -- flatten the tiers ONCE, sort by seq, drop oldest-first in a single pass (the
+# old reg copy re-indexed every tier on every eviction -> O(n^2); this is the surviving implementation).
 #' @keywords internal
 #' @noRd
-jmv_cache_evict <- function(store) {
+jmv_store_evict <- function(cfg, store) {
   tier_ent <- function(tier) lapply(names(store[[tier]]), function(k)
     list(tier = tier, key = k, seq = store[[tier]][[k]]$seq, bytes = store[[tier]][[k]]$bytes))
-  ent <- c(tier_ent("agg"), tier_ent("test"), tier_ent("tab3"))
+  ent <- unlist(lapply(cfg$tiers, tier_ent), recursive = FALSE)
   if (length(ent) == 0L) return(store)
   total <- sum(vapply(ent, function(e) e$bytes, numeric(1)))
-  if (total <= JMVTAB_MAX_STORE_BYTES) return(store)
+  if (total <= cfg$store_bytes) return(store)
   ord <- order(vapply(ent, function(e) e$seq, numeric(1)))  # oldest first
   for (i in ord) {
-    if (total <= JMVTAB_MAX_STORE_BYTES) break
+    if (total <= cfg$store_bytes) break
     e <- ent[[i]]
     store[[e$tier]][[e$key]] <- NULL
     total <- total - e$bytes
   }
   store
 }
+
+# Env-mutating fetch-or-compute-and-put. Returns compute_fn() unchanged when cache_env is NULL (so the
+# caller is usable without a cache). On a hit: refresh the LRU stamp, tally, return the value. On a
+# miss: compute, serialize to measure bytes, store only if under the tier ceiling (an oversized entry
+# is recomputed next time -- graceful, never an error), evict to the store budget. Clock is bumped on a
+# hit or a store, NOT on a bare miss (see DESIGN above).
+#' @keywords internal
+#' @noRd
+jmv_store_cached <- function(cfg, cache_env, tier, key, compute_fn) {
+  if (is.null(cache_env)) return(compute_fn())
+  store <- cache_env$store
+  hit   <- store[[tier]][[key]]
+  if (!is.null(hit)) {
+    store$clock <- store$clock + 1L
+    hit$seq     <- store$clock
+    store[[tier]][[key]] <- hit
+    cache_env$store <- store
+    cache_env$hits  <- cache_env$hits + 1L
+    return(hit$value)
+  }
+  cache_env$misses <- cache_env$misses + 1L
+  value <- compute_fn()
+  bytes <- length(serialize(value, connection = NULL))
+  if (bytes <= cfg$entry_bytes[[tier]]) {
+    store$clock <- store$clock + 1L
+    store[[tier]][[key]] <- list(value = value, bytes = bytes, seq = store$clock)
+    store <- jmv_store_evict(cfg, store)
+    cache_env$store <- store
+  }
+  value
+}
+
+
+# === Constants + config (jmvtab crosstab store) ============================================
+JMVTAB_CACHE_SCHEMA <- 6L   # bump on any store-shape change -> discard stale stores
+  #   history: 2 = Phase 7f tier-3 `tab3` tier | 3 = Phase 9b-7 carrier | 4 = Phase 17b meta-merge
+  #            5 = Phase 17d clean colour attrs | 6 = Phase 17i unified kernel entry list(value,bytes,seq)
+
+# 3 tiers: agg/test aggregates (tiers 1-2) + tab3 armed CARRIERS (all 18 fmt fields -> looser ceiling).
+JMVTAB_CFG <- jmv_cache_config(
+  schema      = JMVTAB_CACHE_SCHEMA,
+  entry_bytes = c(agg = 512L * 1024L, test = 512L * 1024L, tab3 = 2L * 1024L * 1024L),
+  store_bytes = 12L * 1024L * 1024L   # whole-store budget (serialized every run -> keep bounded)
+)
+
+
+# === Store lifecycle (thin wrappers -> the shared kernel with JMVTAB_CFG) ===================
+# These keep the crosstab call sites + tests calling jmv_cache_* unchanged. tab3 (Phase 7f): per
+# base-config built ARMED tables, stored since Phase 9b-7 as the CARRIER (plain field-frames,
+# jmv_carrier_unwrap), re-painted (exact-tuple hit) / re-ref'd (rerefable tuple) on read -- so
+# display/colour/reference toggles skip the O(cells) rebuild.
+#' @keywords internal
+#' @noRd
+jmv_cache_new <- function() jmv_store_new(JMVTAB_CFG)
+
+#' @keywords internal
+#' @noRd
+jmv_cache_migrate <- function(store) jmv_store_migrate(JMVTAB_CFG, store)
+
+#' @keywords internal
+#' @noRd
+jmv_cache_fetch <- function(store, tier, key) jmv_store_fetch(JMVTAB_CFG, store, tier, key)
+
+#' @keywords internal
+#' @noRd
+jmv_cache_put <- function(store, tier, key, payload) jmv_store_put(JMVTAB_CFG, store, tier, key, payload)
+
+#' @keywords internal
+#' @noRd
+jmv_cache_evict <- function(store) jmv_store_evict(JMVTAB_CFG, store)
 
 
 # === Hashing ================================================================================
@@ -914,15 +1000,14 @@ jmvtab_build <- function(data, opts, store) {
     carrier <- jmv_tab3_reref(got$value$carrier, opts, ci, tuple)        # reference / ci re-ref (Phase 9b-7)
     reused  <- TRUE
     ce$store <- jmv_cache_put(ce$store, "tab3", base_key,                # store under the NEW tuple, so a
-                              list(carrier = carrier, tuple = tuple),    #   second identical ref is an exact
-                              JMVTAB_TAB3_MAX_ENTRY_BYTES)               #   re-paint hit
+                              list(carrier = carrier, tuple = tuple))    #   second identical ref is a re-paint hit
   } else {
     armed   <- jmv_tab3_build_armed(data, opts, color, "ignore", ci, wt_sym,
                                     row_vars, col_vars, tab_vars, ce)    # canonical armed (see above)
     carrier <- jmv_carrier_unwrap(armed)
     reused  <- FALSE
     ce$store <- jmv_cache_put(ce$store, "tab3", base_key,
-                              list(carrier = carrier, tuple = tuple), JMVTAB_TAB3_MAX_ENTRY_BYTES)
+                              list(carrier = carrier, tuple = tuple))
   }
   ce$store <- jmv_cache_evict(ce$store)
   ce$hits$tab3 <- reused          # TRUE = armed carrier reused (re-paint / re-ref) -> no O(cells) rebuild

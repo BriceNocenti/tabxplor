@@ -65,8 +65,9 @@ test_that("store: per-entry byte ceiling skips oversized entries", {
   s <- jmv_cache_new()
   # A genuinely large blob (the ceiling measures SERIALIZED bytes -- an ALTREP compact sequence would
   # serialize tiny regardless of length, which is correct: only the real persisted cost counts).
-  big <- list(cols = list(x = strrep("z", JMVTAB_MAX_ENTRY_BYTES + 1e5)), keys = "x")
-  expect_gt(length(serialize(big, connection = NULL)), JMVTAB_MAX_ENTRY_BYTES)
+  agg_ceiling <- JMVTAB_CFG$entry_bytes[["agg"]]
+  big <- list(cols = list(x = strrep("z", agg_ceiling + 1e5)), keys = "x")
+  expect_gt(length(serialize(big, connection = NULL)), agg_ceiling)
   s <- jmv_cache_put(s, "agg", "big", big)
   expect_length(s$agg, 0L)  # not persisted (over the ceiling)
 })
@@ -140,8 +141,8 @@ test_that("tier-2 test is reused across pct/ref toggles and matches a fresh chi2
   r1 <- jmvtab_build(gss, jmv_opts(row_vars = "marital", col_vars = "race", pct = "row", chi2 = TRUE), NULL)
   expect_equal(sum(r1$hits$test), 0)                       # cold: computed
   # stored test is populated (real chi2, not an empty placeholder)
-  expect_equal(nrow(r1$store$test[[1]]$payload), 1L)
-  expect_identical(r1$store$test[[1]]$payload$test, "chi2")
+  expect_equal(nrow(r1$store$test[[1]]$value), 1L)
+  expect_identical(r1$store$test[[1]]$value$test, "chi2")
 
   r2 <- jmvtab_build(gss, jmv_opts(row_vars = "marital", col_vars = "race", pct = "col", chi2 = TRUE), r1$store)
   expect_equal(sum(r2$hits$test), 1)                       # pct change reuses the test
@@ -214,7 +215,7 @@ test_that("defer_level_merge: levels = 'first' tests FULL levels", {
                                  levels = "first", chi2 = TRUE), NULL)
   # race has 3 levels -> full-level df = (nlevels(marital)-1)*(3-1) = 10. tab(levels="first") would
   # give (nlevels(marital)-1)*(2-1) = 5. The cached test carries the FULL-level df.
-  expect_equal(jf$store$test[[1]]$payload$df1, 10)   # full 3-level race x 6-level marital
+  expect_equal(jf$store$test[[1]]$value$df1, 10)   # full 3-level race x 6-level marital
   # displayed table keeps only the first race level
   fmt_cols <- setdiff(names(jf$tabs)[purrr::map_lgl(jf$tabs, is_fmt)], c("n", "wn"))
   expect_true("Other" %in% fmt_cols)
@@ -383,7 +384,7 @@ test_that("Phase 7f: tier-3 armed table survives the $state round-trip and is si
   st   <- jmvtab_build(gss, jmv_opts(row_vars = "marital", col_vars = "race", pct = "row",
                                      color = "diff", chi2 = TRUE), NULL)$store
   expect_length(st$tab3, 1L)
-  expect_lt(st$tab3[[1]]$bytes, JMVTAB_TAB3_MAX_ENTRY_BYTES)      # a real survey table fits the ceiling
+  expect_lt(st$tab3[[1]]$bytes, JMVTAB_CFG$entry_bytes[["tab3"]]) # a real survey table fits the ceiling
   back <- unserialize(serialize(st, connection = NULL))          # jamovi $state gzip-RDS round-trip
   r <- jmvtab_build(gss, jmv_opts(row_vars = "marital", col_vars = "race", pct = "row",
                                   color = "ratio", chi2 = TRUE), back)

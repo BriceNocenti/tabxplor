@@ -179,6 +179,13 @@ tx_str_trunc <- function(string, width, ellipsis = "...") {
   options("tabxplor.parallel"     = FALSE)
   options("tabxplor.parallel_min" = 2L)
 
+  # Phase 17i: the jamovi live-UI caches fingerprint each column by class / factor levels / NA-count
+  # (cheap, per-column). Blind spot: a same-shape VALUE edit (values changed, structure unchanged) is
+  # not caught -> a stale cache HIT (self-heals on the next structural change). TRUE forces a full-value
+  # column hash (slower, exact) in BOTH modules -- the escape hatch for the paranoid. is.null-guarded so
+  # an Rprofile opt-in survives load. See ?tabxplor-options ; R/jmvtab-cache.R jmv_col_fp().
+  if (is.null(getOption("tabxplor.jmv_full_hash"))) options("tabxplor.jmv_full_hash" = FALSE)
+
   # Phase 13b: the colour-legend language. "auto" follows the R/OS locale (English fallback); "en"/"fr"
   # force it. Per-call `lang =` on the exporters overrides. Bind the R-tabxplor gettext catalog to the
   # package's compiled .mo (found under system.file("po"); harmless if absent -> English msgids).

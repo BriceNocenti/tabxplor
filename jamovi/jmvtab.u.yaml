@@ -291,11 +291,25 @@ children:
                   - type: TextBox
                     name: other_if_less_than
                     format: number
+          - type: LayoutBox
+            margin: none
+            cell:
+              column: 1
+              row: 1
+            stretchFactor: 1
+            children:
               - type: Label
-                label: cleannames =
+                label: cleannames = <i>(rm nb prefix)</i>
                 children:
                   - type: CheckBox
                     name: cleannames
+          - type: LayoutBox
+            margin: none
+            cell:
+              column: 0
+              row: 1
+            stretchFactor: 1
+            children:
               - type: Label
                 label: n_min = <i>(hide rows/cols with small counts)</i>
                 children:
@@ -309,7 +323,7 @@ children:
         stretchFactor: 1
         children:
           - type: Label
-            label: <b>Reorder levels</b> <i>(select a level, then move it up/down)</i>
+            label: <b>Reorder levels</b> <i>(click on a level, then move it up/down)</i>
             children:
               - type: CustomControl
                 name: levelOrderCtrl

@@ -75,6 +75,11 @@
   named models by ticking which predictors each one includes, with a comparison test (versus a baseline
   or the previous model), plus per-predictor **effect scaling** (odds ratio / coefficient per *k* units)
   and grouped / summed-score **binomial trials** — reusing already-fitted models so only new ones are fit.
+* **New option `tabxplor.jmv_full_hash`.** The jamovi module caches recognise a changed data column by
+  its class, factor levels and missing-value count. If you edit values in place without changing that
+  structure, a cached table or model can go stale until the next structural change; set
+  `options(tabxplor.jmv_full_hash = TRUE)` to hash the full column values instead (exact, slightly
+  slower). See `?tabxplor-options`.
 * **Confidence intervals for ratios and richer CI methods.** `color = "ratio"` on a numeric mean now
   produces a real **ratio-of-means** confidence interval (it used to silently show the *difference*
   interval). Three new arguments choose the interval method, each reproducing the matching regression:

@@ -1,6 +1,7 @@
 # PURPOSE: Jamovi module export helpers (Phase 7g; Phase 15c robustness pass) -- write a built table
 #          to Excel / HTML / Markdown, and resolve a user-typed FOLDER + FILENAME robustly inside
-#          Jamovi's Electron-locked engine.
+#          Jamovi's Electron-locked engine. Phase 17i also parks here the SHARED R6 backend helpers
+#          (jmv_backend_*) that both module orchestrators (jmvtab.b.R / jmvtabreg.b.R) delegate to.
 # ROLE: Engine-free, session-free helpers so the export logic is unit-testable without a live
 #       jamovi session. jmvtab.b.R detects the export click, resolves the path, and calls
 #       jmvtab_export(); the click is a boolean read (§5.3) and the result is reported via a Notice.
@@ -146,4 +147,76 @@ jmvtab_export <- function(tabs, format = c("excel", "html", "md"), path, replace
     md    = tab_md(tabs, file = path, print = FALSE)
   )
   invisible(path)
+}
+
+
+# === Shared jamovi backend helpers (Phase 17i) =============================================
+# The two module backends (R/jmvtab.b.R, R/jmvtabreg.b.R) are thin sibling orchestrators; these four
+# helpers factor out the blocks that were byte-identical across their .run() / private methods, so a
+# fix lands once. Each takes the live R6 `self` (or the data). They run ONLY inside a live jamovi
+# session, where jmvcore (Suggests) is guaranteed present -- same context as the code they replace.
+
+# Resolve the weight VARIABLE NAME for a build: the explicit `wt` option, else a Data-level weight
+# (Data >>> Weights) carried as the "jmv-weights" attribute (added back as a `.COUNTS` column, since
+# self$data holds only the selected variables). Returns list(data = <possibly with .COUNTS>, wt =
+# <name or character()>).
+#' @keywords internal
+#' @noRd
+jmv_backend_weights <- function(data, opt_wt) {
+  wt <- character()
+  if (!is.null(opt_wt) && length(opt_wt)) {
+    wt <- opt_wt
+  } else if (!is.null(attr(data, "jmv-weights"))) {
+    data[[".COUNTS"]] <- jmvcore::toNumeric(attr(data, "jmv-weights"))
+    wt <- ".COUNTS"
+  }
+  list(data = data, wt = wt)
+}
+
+# Report an export result via a native jmvcore::Notice (info / error), inserted at the top of the
+# results (dev guide §7.6 / §14). Replaces the old hand-built HTML status box.
+#' @keywords internal
+#' @noRd
+jmv_backend_notice <- function(self, text, ok = TRUE) {
+  notice <- jmvcore::Notice$new(
+    options = self$options, name = "exportNotice",
+    type = if (ok) jmvcore::NoticeType$INFO else jmvcore::NoticeType$ERROR
+  )
+  notice$setContent(text)
+  self$results$insert(1, notice)
+}
+
+# Handle the `exportExcel` boolean-click Action (§5.3): resolve the typed FOLDER + FILENAME + the
+# format's extension into a path, write via jmvtab_export(), and report success / failure via a Notice.
+# conditionMessage() (not err$message) surfaces the FULL rlang cause chain (Phase 15c un-masking) --
+# the bare err$message is only the top "In index: 1." wrapper.
+#' @keywords internal
+#' @noRd
+jmv_backend_export <- function(self, tabs) {
+  if (!isTRUE(self$options$exportExcel)) return(invisible())
+  fmt <- self$options$export_format
+  ext <- switch(fmt, "excel" = "xlsx", "html" = "html", "md" = "md", "xlsx")
+  p   <- resolveExportPath(self$options$export_dir, self$options$export_filename, ext)
+  tryCatch({
+    jmvtab_export(tabs, format = fmt, path = p, replace = self$options$xl_replace)
+    jmv_backend_notice(self, paste0("Saved to: ", p), ok = TRUE)
+  }, error = function(err) {
+    jmv_backend_notice(self, paste0("Export failed: ", conditionMessage(err)), ok = FALSE)
+  })
+}
+
+# Render a built tab (or list of tabs) to standalone HTML for the jamovi results iframe: the Phase 10e
+# dependency-free home-built html engine (inline CSS, no kableExtra) wrapped in a scroll box. tooltips
+# stay OFF here for now (the engine emits the SAME bootstrap tooltip attrs, so they can be turned on
+# once verified live).
+#' @keywords internal
+#' @noRd
+jmv_backend_render_html <- function(self, tabs) {
+  tab_kable(
+    tabs, engine = "html",
+    wrap_rows = self$options$wrap_rows,
+    wrap_cols = self$options$wrap_cols,
+    tooltips = FALSE
+  ) |>
+    tab_render_scrollbox()
 }

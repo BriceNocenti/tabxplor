@@ -23,14 +23,10 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
 
       data <- self$data
 
-      # A Data-level weight (Data >>> Weights) is carried as an attribute; add it back as a column.
-      wt <- character()
-      if (!is.null(self$options$wt) && length(self$options$wt)) {
-        wt <- self$options$wt
-      } else if (!is.null(attr(data, "jmv-weights"))) {
-        data[['.COUNTS']] <- jmvcore::toNumeric(attr(data, "jmv-weights"))
-        wt <- ".COUNTS"
-      }
+      # Weights (shared helper: adds a Data-level weight back as .COUNTS).
+      wr   <- jmv_backend_weights(data, self$options$wt)
+      data <- wr$data
+      wt   <- wr$wt
 
       opts  <- private$.opts(wt)
       store <- self$results$cache_state$state          # NULL on the first run
@@ -43,24 +39,9 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         return(invisible())
       }
 
-      # Export (Excel / HTML / Markdown): the `exportExcel` Action is a boolean click. The format picks
-      # the extension; the user-typed FOLDER + FILENAME are resolved (Documents default) and reported
-      # via a Notice.
-      if (isTRUE(self$options$exportExcel)) {
-        fmt <- self$options$export_format
-        ext <- switch(fmt, "excel" = "xlsx", "html" = "html", "md" = "md", "xlsx")
-        p   <- resolveExportPath(self$options$export_dir, self$options$export_filename, ext)
-        tryCatch({
-          jmvtab_export(tabs, format = fmt, path = p, replace = self$options$xl_replace)
-          private$.notice(paste0("Saved to: ", p), ok = TRUE)
-        }, error = function(err) {
-          # conditionMessage() (not err$message) surfaces the FULL rlang cause chain -- the bare
-          # err$message is only the top "In index: 1." wrapper (Phase 15c un-masking).
-          private$.notice(paste0("Export failed: ", conditionMessage(err)), ok = FALSE)
-        })
-      }
-
-      self$results$html_table$setContent(private$.render_html(tabs))
+      # Export (Excel / HTML / Markdown) + HTML render -- the shared jmv_backend_* helpers.
+      jmv_backend_export(self, tabs)
+      self$results$html_table$setContent(jmv_backend_render_html(self, tabs))
     },
 
     # Collect the jamovi options into the plain list jmvtab_reg_build() consumes, ALREADY in tab_reg()
@@ -110,17 +91,8 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
       )
     },
 
-    # Render a tab (or list of tabs) to standalone HTML for the Jamovi results iframe -- the SAME
-    # dependency-free, self-contained html engine + scroll box the crosstab module uses.
-    .render_html = function(tabs) {
-      tab_kable(
-        tabs, engine = "html",
-        wrap_rows = self$options$wrap_rows,
-        wrap_cols = self$options$wrap_cols,
-        tooltips = FALSE
-      ) |>
-        tab_render_scrollbox()
-    },
+    # .render_html / .notice / export / weights are the shared jmv_backend_* helpers in
+    # R/jmvtab-export.R (Phase 17i) -- called directly from .run() above.
 
     # A friendly placeholder when the outcome / predictors are not both selected yet (or a model
     # comparison was requested with several dependents, which tab_reg() does not allow).
@@ -129,16 +101,6 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
              "Select a <b>dependent</b> (outcome) variable and one or more <b>predictors</b> ",
              "to fit a regression. For a model comparison (predictor subsets), choose a single ",
              "dependent.</div>")
-    },
-
-    # Report an export result via a native jmvcore::Notice (info / error), inserted at the top.
-    .notice = function(text, ok = TRUE) {
-      notice <- jmvcore::Notice$new(
-        options = self$options, name = "exportNotice",
-        type = if (ok) jmvcore::NoticeType$INFO else jmvcore::NoticeType$ERROR
-      )
-      notice$setContent(text)
-      self$results$insert(1, notice)
     },
 
     .plot = function(image, ...) {

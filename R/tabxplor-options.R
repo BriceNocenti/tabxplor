@@ -109,6 +109,16 @@
 #'     (fewer runs serially, since the setup would outweigh the gain).}
 #' }
 #'
+#' @section jamovi live cache:
+#' \describe{
+#'   \item{`tabxplor.jmv_full_hash`}{`FALSE` (default): the jamovi module caches (Crosstables and
+#'     Regressions) fingerprint each data column cheaply by its class, factor levels and number of
+#'     missing values, so an unrelated edit does not invalidate every table. A same-shape value edit
+#'     (values changed but class, levels and NA-count unchanged) is therefore not detected and can serve
+#'     a stale cached result until the next structural change. Set to `TRUE` to hash the full column
+#'     values instead (exact, slightly slower) if you edit data in place and need every change caught.}
+#' }
+#'
 #' @name tabxplor-options
 #' @aliases tabxplor.options
 NULL

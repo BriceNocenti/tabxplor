@@ -17,109 +17,57 @@
 #   - Persist plain lists (coef vectors, vcov matrices, tibbles) -- NEVER a live object bound to an env.
 #   - The digest key is reference-INDEPENDENT so a reference change is a HIT; the `na` mode + weights are
 #     captured through the per-column fingerprint of the (already prepared) data, not as extra key parts.
-#   - Reuses jmvtab-cache.R's tier-agnostic primitives jmv_hash() / jmv_col_fp(); the store lifecycle is
-#     its own (2 tiers: digest / fit) to stay decoupled from the crosstab store's tier names.
-# See: dev/tabxplor_1.4.0_jamovi_dev.md ; CLAUDE.md > 1.4.0 roadmap > Phase 15b.
+#   - Rides the SHARED cache kernel (R/jmvtab-cache.R: jmv_cache_config + jmv_store_*) with its own
+#     2-tier config (digest / fit); only the store stays decoupled (its tiers + $state differ from the
+#     crosstab store). Phase 17i replaced this file's duplicated + O(n^2)-evicting store lifecycle.
+#   - INHERITS jmv_col_fp()'s value-edit blind spot (a same-shape edit preserving class / factor levels /
+#     NA-count is NOT caught -> can serve a STALE fit after a data edit; best-effort, self-heals on the
+#     next structural change). Escape hatch for the paranoid: options(tabxplor.jmv_full_hash = TRUE)
+#     forces a full-value column hash (slower, exact) in BOTH modules -- see ?tabxplor-options.
+# See: dev/tabxplor_1.4.0_jamovi_dev.md ; CLAUDE.md > 1.4.0 roadmap > Phase 15b/17i.
 
 
-# === Constants =============================================================================
-JMVREG_CACHE_SCHEMA     <- 2L                    # bump on any store-shape change -> discard stale stores
-                                                 #   (2 = Phase 17b: table attrs merged into one `meta` list)
-JMVREG_MAX_DIGEST_BYTES <- 512L * 1024L          # per-entry ceiling for the KB-sized digests
-# A raw reg_fit value (glm + model frame + tidy) is ~9-11 MB on survey-scale data (e.g. 21k rows).
-# MODEL COMPARISON forces this raw-fit tier (the reference-invariant digest fast-path is single-model
-# only), so the per-fit ceiling MUST clear a realistic fit or comparison never caches -> every display /
-# reference toggle refits every model. The store budget holds a handful of such fits (LRU-bounded).
-JMVREG_MAX_FIT_BYTES    <- 24L * 1024L * 1024L   # per-entry ceiling for a raw fit (comparison / ame / ...)
-JMVREG_MAX_STORE_BYTES  <- 96L * 1024L * 1024L   # whole-store budget (serialized to $state every run -> LRU-bounded)
+# === Constants + config ====================================================================
+# The reg store rides the shared cache kernel (R/jmvtab-cache.R: jmv_cache_config + jmv_store_*) with
+# its own 2-tier config; only the store is decoupled (its tiers + $state differ from the crosstab store).
+JMVREG_CACHE_SCHEMA <- 3L   # bump on any store-shape change -> discard stale stores
+  #   history: 2 = Phase 17b table attrs merged into one `meta` list
+  #            3 = Phase 17i unified kernel entry shape list(value, bytes, seq)
+# 2 tiers: KB-sized `digest` (reference-invariant fast path) + raw `fit`. A raw reg_fit (glm + model
+# frame + tidy) is ~9-11 MB on survey-scale data and MODEL COMPARISON forces the fit tier (the digest
+# fast-path is single-model only), so the fit ceiling MUST clear a realistic fit or comparison never
+# caches -> every display / reference toggle refits. The store budget holds a handful of such fits.
+JMVREG_CFG <- jmv_cache_config(
+  schema      = JMVREG_CACHE_SCHEMA,
+  entry_bytes = c(digest = 512L * 1024L, fit = 24L * 1024L * 1024L),
+  store_bytes = 96L * 1024L * 1024L   # whole-store budget (serialized to $state every run -> LRU-bounded)
+)
 
 
-# === Store lifecycle =======================================================================
-
-# A fresh empty store. `clock` is a monotone logical counter used for LRU (no Sys.time -- determinism).
+# === Store lifecycle (thin wrappers -> the shared kernel with JMVREG_CFG) ===================
 #' @keywords internal
 #' @noRd
-jmvreg_cache_new <- function() {
-  list(schema = JMVREG_CACHE_SCHEMA, clock = 0L, digest = list(), fit = list())
-}
+jmvreg_cache_new <- function() jmv_store_new(JMVREG_CFG)
 
-# Restore-or-reset: a NULL state (first run) or a schema mismatch yields a fresh store.
 #' @keywords internal
 #' @noRd
-jmvreg_cache_migrate <- function(store) {
-  if (is.null(store) || !is.list(store) || !identical(store$schema, JMVREG_CACHE_SCHEMA)) {
-    return(jmvreg_cache_new())
-  }
-  store
-}
+jmvreg_cache_migrate <- function(store) jmv_store_migrate(JMVREG_CFG, store)
 
-# A mutable cache environment: the store + a hit / miss tally (diagnostics + tests). Passed to tab_reg()
-# as `.fit_cache`; reg_build() reads/writes ce$store through jmvreg_cached().
+# A mutable cache environment (store + hit/miss tally) passed to tab_reg() as `.fit_cache`.
 #' @keywords internal
 #' @noRd
-jmvreg_cache_env <- function(store = NULL) {
-  ce <- new.env(parent = emptyenv())
-  ce$store  <- jmvreg_cache_migrate(store)
-  ce$hits   <- 0L
-  ce$misses <- 0L
-  ce
-}
+jmvreg_cache_env <- function(store = NULL) jmv_store_env(JMVREG_CFG, store)
 
-# Byte-bounded LRU: drop the lowest-clock entries across BOTH tiers until the store is under budget.
 #' @keywords internal
 #' @noRd
-jmvreg_cache_evict <- function(store) {
-  index <- function() {
-    idx <- list()
-    for (tier in c("digest", "fit")) {
-      for (k in names(store[[tier]])) {
-        e <- store[[tier]][[k]]
-        idx[[length(idx) + 1L]] <- list(tier = tier, key = k,
-                                        clock = e$.clock, bytes = e$.bytes)
-      }
-    }
-    idx
-  }
-  total <- function(idx) sum(vapply(idx, function(x) as.numeric(x$bytes), numeric(1)))
-  idx <- index()
-  while (length(idx) > 0L && total(idx) > JMVREG_MAX_STORE_BYTES) {
-    victim <- idx[[which.min(vapply(idx, function(x) as.numeric(x$clock), numeric(1)))]]
-    store[[victim$tier]][[victim$key]] <- NULL
-    idx <- index()
-  }
-  store
-}
+jmvreg_cache_evict <- function(store) jmv_store_evict(JMVREG_CFG, store)
 
-# Fetch-or-compute-and-put. Returns compute_fn() unchanged when cache_env is NULL (so tab_reg() /
-# reg_build() are usable without a cache). On a hit: refresh the LRU stamp, tally, return the value.
-# On a miss: compute, serialize to measure bytes, store only if under the tier ceiling (an oversized
-# entry is recomputed next time -- graceful, never an error), evict to the store budget.
+# Fetch-or-compute-and-put on the reg store; the tier ceiling + LRU come from JMVREG_CFG. Reference-
+# INDEPENDENT digest keys mean a reference change is a HIT (recomputed live, no refit).
 #' @keywords internal
 #' @noRd
-jmvreg_cached <- function(cache_env, tier, key, compute_fn) {
-  if (is.null(cache_env)) return(compute_fn())
-  store <- cache_env$store
-  hit   <- store[[tier]][[key]]
-  if (!is.null(hit)) {
-    store$clock <- store$clock + 1L
-    hit$.clock  <- store$clock
-    store[[tier]][[key]] <- hit
-    cache_env$store <- store
-    cache_env$hits  <- cache_env$hits + 1L
-    return(hit$value)
-  }
-  cache_env$misses <- cache_env$misses + 1L
-  value   <- compute_fn()
-  ceiling <- if (identical(tier, "fit")) JMVREG_MAX_FIT_BYTES else JMVREG_MAX_DIGEST_BYTES
-  bytes   <- length(serialize(value, connection = NULL))
-  if (bytes <= ceiling) {
-    store$clock <- store$clock + 1L
-    store[[tier]][[key]] <- list(value = value, .bytes = bytes, .clock = store$clock)
-    store <- jmvreg_cache_evict(store)
-    cache_env$store <- store
-  }
-  value
-}
+jmvreg_cached <- function(cache_env, tier, key, compute_fn)
+  jmv_store_cached(JMVREG_CFG, cache_env, tier, key, compute_fn)
 
 # The content key for one model spec. Reference-INDEPENDENT on the digest path (reference is applied at
 # reparametrization time), so a reference change is a cache HIT. The per-column fingerprint (jmv_col_fp)
