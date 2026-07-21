@@ -115,6 +115,20 @@ tab_reg(gss_simple, dependent = "party3", predictors = c("race", "rincome", "rel
 
 
 
+tab_reg(gss_simple, dependent = "married", predictors = c("rincome", "party3"), split_var = "race",
+        empirical = TRUE, #exponentiate = FALSE
+)
+# - New feature : with a `split_var`, when there is only one dependent var, and only one predictors list, 
+#  and never for a multinomial models (several columns for just one model), auto `tab_spread()` 
+#  so that the results of the different submodels can be compared side-by-side. 
+#  It must work with `empirical = TRUE`, and the `col_var` attribute should include both dependant var name 
+#   and split var level, so that there are borders between the different models and it’s clear to the user 
+#  that they are different models. The levels of the `split_var` must appear clearly : for example, 
+#  not spread mode prints "married: Married", and after tab_spread() it must print "White\nmarried: Married"
+#  with an internal like break / wrapped text to that it reads as two rows in the same cell in html or Excel
+#  (if difficult in console, it’s ok ; but console will have to prefix or suffix the split var level name anyway 
+#   to avoid column names clashes)
+# - Rename all "Emp." to "Obs." in `Emp. mean` `Emp. diff` `Emp. OR` etc. : `Obs. mean` `Obs. diff` `Obs. OR`, 
 
 
 
