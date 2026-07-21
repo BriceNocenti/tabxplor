@@ -36,6 +36,19 @@ tx_str_trunc <- function(string, width, ellipsis = "...") {
   string
 }
 
+# Read a tabxplor option that accepts synonym names (a renamed option's old name, or a
+# convenience alias); the FIRST name that is set (non-NULL) wins, then `default`. Pass the
+# SEEDED/canonical name LAST: the seeded default is always present, so a user's explicit
+# legacy/alias value must be checked before it to win. One resolver for every option synonym --
+# see ?tabxplor-options. (Phase 17j.)
+tx_getOption <- function(names, default = NULL) {
+  for (nm in names) {
+    v <- getOption(nm)
+    if (!is.null(v)) return(v)
+  }
+  default
+}
+
 #' @keywords internal
 .onLoad <- function(libname, pkgname) {
   # option "tabxplor.color_style_theme" is seeded by set_color_palette() below.
@@ -162,7 +175,9 @@ tx_str_trunc <- function(string, width, ellipsis = "...") {
   # Phase 13d: whether tab_kable(engine = "html") inlines the stylesheet with each table (TRUE =
   # self-contained: Viewer, jamovi, standalone .html). Set FALSE in a many-table .Rmd/.qmd that emits
   # tab_css() once at the top -- the CSS is table-independent, so one copy styles every table.
-  options("tabxplor.kable_css" = TRUE)
+  # Phase 17j: renamed tabxplor.kable_css -> tabxplor.tab_kable_css (aligns with the tab_kable_* family).
+  # The old name still works (read via tx_getOption()); only the new one is seeded here.
+  options("tabxplor.tab_kable_css" = TRUE)
 
   # Phase 14i: which variable NAMES the exporters annotate a table with. "both" (default) = today's
   # behaviour; "rows" = only the row-variable names (a merged table's name column); "cols" = only the

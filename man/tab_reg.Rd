@@ -276,43 +276,29 @@ formula} as \code{dependent} -- \code{tab_reg(data, y ~ x1 + poly(x2, 2) + x1:x3
 directly; simple \code{y ~ a + b} formulas behave exactly like \code{dependent = "y"}, \code{predictors = c("a", "b")}, while interactions / \code{poly()} / \code{I()} terms render as best-effort term rows.
 }
 \examples{
-data <- forcats::gss_cat |>
-  dplyr::mutate(married = factor(dplyr::if_else(marital == "Married",
-                                                "Married", "Not married")))
-# Every regression table needs broom; the heavier families need their own engine. Guarding each
-# keeps the examples runnable where Suggests are absent (CRAN checks such a flavour).
-if (requireNamespace("broom", quietly = TRUE)) {
+data <- gss_cat_data_formatting()
+
   # logistic (odds ratios):
-  print(tab_reg(data, dependent = "married", predictors = c("race", "rincome"),
-                family = "binomial"))
+  tab_reg(data, dependent = "married", predictors = c("race", "rincome"), family = "binomial")
   # linear (betas):
-  print(tab_reg(data, dependent = "tvhours", predictors = c("race", "age"),
-                family = "gaussian"))
-  # formula escape-hatch (same model, terser):
-  print(tab_reg(data, married ~ race + rincome, family = "binomial"))
-}
+  tab_reg(data, dependent = "tvhours", predictors = c("rincome", "age"), family = "gaussian")
+  # to use normal R model formulas instead (same model, terser):
+  tab_reg(data, married ~ race + rincome, family = "binomial")
 
 \donttest{
 # average marginal effects + adjusted predictions (needs the marginaleffects package):
-if (requireNamespace("broom", quietly = TRUE) &&
-    requireNamespace("marginaleffects", quietly = TRUE)) {
-  print(tab_reg(data, dependent = "married", predictors = c("race", "rincome"),
-                family = "binomial", effect = "ame"))
+if (requireNamespace("marginaleffects", quietly = TRUE)) {
+  tab_reg(data, dependent = "married", predictors = c("race", "rincome"),
+                family = "binomial", effect = "ame")
   # marginal effects at the reference profile (others at their reference level / mean):
-  print(tab_reg(data, dependent = "married", predictors = c("race", "rincome"),
-                family = "binomial", effect = "ame", at = "reference"))
+  tab_reg(data, dependent = "married", predictors = c("race", "rincome"),
+                family = "binomial", effect = "ame", at = "reference")
 }
 # multinomial (nominal 3+ level): one OR column per outcome category vs the reference
-if (requireNamespace("broom", quietly = TRUE) && requireNamespace("nnet", quietly = TRUE)) {
-  print(tab_reg(forcats::gss_cat, dependent = "partyid", predictors = c("race", "age"),
-                family = "multinomial", reference = c(partyid = "Independent")))
-}
+  tab_reg(data, dependent = "party3", predictors = c("race", "age"),
+                family = "multinomial", reference = c(party3 = "3-Republican"))
 # ordinal (proportional-odds): one cumulative-OR column
-if (requireNamespace("broom", quietly = TRUE) && requireNamespace("MASS", quietly = TRUE)) {
-  income3 <- forcats::gss_cat |>
-    dplyr::mutate(income = factor(rincome, ordered = TRUE))
-  print(tab_reg(income3, dependent = "income", predictors = "race", family = "ordinal"))
-}
+  tab_reg(data, dependent = "rincome", predictors = c("race", "age"), family = "ordinal")
 }
 
 }

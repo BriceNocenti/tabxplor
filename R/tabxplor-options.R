@@ -34,16 +34,17 @@
 #' \describe{
 #'   \item{`tabxplor.color_breaks`}{the colour-break scales (a named list of `pct_diff`,
 #'     `pct_ratio`, `odds_ratio`, `mean_diff`, `mean_ratio`, `contrib`). Set with [set_color_breaks()].}
-#'   \item{`tabxplor.color_style_theme`}{the *console* palette theme, `"light"` or `"dark"`; set by
-#'     [set_color_palette()] (which auto-detects the editor theme on load). NOT the export theme
-#'     (`tabxplor.theme`).}
+#'   \item{`tabxplor.color_style_theme` (alias `tabxplor.console_theme`)}{the *console* palette theme,
+#'     `"light"` or `"dark"`; set by [set_color_palette()] (which auto-detects the editor theme on load).
+#'     NOT the export theme (`tabxplor.theme` / `tabxplor.export_theme`).}
 #'   \item{`tabxplor.console_bold`}{whether to embolden the reference / total (and coloured) cells in the
 #'     *console*, `TRUE` or `FALSE`. Auto-detected at load: `TRUE` in Positron and VS Code (which render
 #'     ANSI bold at a fixed glyph width), `FALSE` in RStudio and unknown consoles (there bold is drawn
 #'     wider and would break column alignment). Override it for your own front-end / font.}
-#'   \item{`tabxplor.theme`}{the *export* theme, `"light"` (default), `"dark"` or `"auto"` (follow
-#'     the reader). `"auto"` needs a stylesheet, so only `tab_kable(engine = "html")`, [tab_md()] and
-#'     [tab_css()] honour it; static backends resolve it to `"light"`.}
+#'   \item{`tabxplor.theme` (alias `tabxplor.export_theme`)}{the *export* theme, `"light"` (default),
+#'     `"dark"` or `"auto"` (follow the reader). `"auto"` needs a stylesheet, so only
+#'     `tab_kable(engine = "html")`, [tab_md()] and [tab_css()] honour it; static backends resolve it
+#'     to `"light"`.}
 #' }
 #'
 #' @section Statistics and confidence intervals:
@@ -68,9 +69,9 @@
 #' \describe{
 #'   \item{`tabxplor.tab_kable_engine`}{`"html"` (default, dependency-free) or `"kableExtra"` (the
 #'     legacy engine; needs the suggested `kableExtra` package).}
-#'   \item{`tabxplor.kable_css`}{`TRUE` (default): inline the stylesheet with each `tab_kable()` /
-#'     [tab_md()] table (self-contained). Set `FALSE` in a many-table document that emits
-#'     [tab_css()] once at the top.}
+#'   \item{`tabxplor.tab_kable_css` (formerly `tabxplor.kable_css`, still accepted)}{`TRUE` (default):
+#'     inline the stylesheet with each `tab_kable()` / [tab_md()] table (self-contained). Set `FALSE`
+#'     in a many-table document that emits [tab_css()] once at the top.}
 #'   \item{`tabxplor.always_add_css_in_tab_kable`}{`TRUE` (default): always include `tab.css` in the
 #'     kableExtra engine's output (a legacy-engine knob).}
 #'   \item{`tabxplor.kable_html_font`}{the CSS font stack for the kableExtra engine.}

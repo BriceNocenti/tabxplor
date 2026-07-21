@@ -177,7 +177,7 @@
   so it applies to `tab_kable(engine = "html")` and `tab_md()`; the static backends (`tab_xl()`,
   `tab_plot()`, and the kableExtra engine, whose themes are baked at render time) resolve it to
   `"light"`. In a document with many tables, emit `tab_css(theme = "auto")` once at the top and set
-  `options(tabxplor.kable_css = FALSE)` -- the stylesheet is the same for every table.
+  `options(tabxplor.tab_kable_css = FALSE)` -- the stylesheet is the same for every table.
   *Note:* the html engine now sets the table's text, background and border colours explicitly. Light
   tables therefore gain a white background, and borders are one colour instead of inheriting each
   cell's colour (a `+20%` cell no longer has a coloured border).
@@ -652,6 +652,12 @@
   also follow the console exactly now.
 * **Excel export now uses `openxlsx2` instead of `openxlsx`** (a Suggests-only dependency). If you
   export to Excel, install `openxlsx2`. The produced workbooks look essentially the same.
+* **A few global options were given clearer, parallel names; the old names still work.**
+  `options(tabxplor.kable_css)` is now `options(tabxplor.tab_kable_css)` (matching the other
+  `tabxplor.tab_kable_*` options), and the two theme options gained parallel aliases:
+  `tabxplor.console_theme` (= `tabxplor.color_style_theme`, the console palette theme) and
+  `tabxplor.export_theme` (= `tabxplor.theme`, the export theme). Setting either the old or the new
+  name works, so no code needs to change. See `?tabxplor-options`.
 
 ## Bug corrections
 * **`options(tabxplor.output_kable = TRUE)` no longer errors with a two-channel colour.** Auto-printing
@@ -872,6 +878,9 @@
   kept; a superset used as the `baseline` is now recognised as nested (a likelihood-ratio test, not the
   AIC fallback); and a new **`na = "drop_all"`** fits every model on one shared complete-case population
   so nested models get equal N.
+* Fixed a crash in `tab_num(<tab_vars>, ci = "cell")` (and thus in `tab()` / the Jamovi module
+  with numeric columns, confidence intervals and subtables): the grand-total-only path built an
+  empty total block and failed reordering by the tab variable.
 
 ## Bug fixes
 * A **p-value row now turns red under `color_signif = "grey_non_signif"`** (and
@@ -950,11 +959,6 @@
   (`color = c(text, background)`). Both still accept their old values (a message is shown).
   As a side effect this corrects an inconsistency: `tab_xl()` used to ignore the option while
   `tab_export(., "xl")` honoured it -- neither does now.
-
-## Bug corrections (Phase 6)
-* Fixed a crash in `tab_num(<tab_vars>, ci = "cell")` (and thus in `tab()` / the Jamovi module
-  with numeric columns, confidence intervals and subtables): the grand-total-only path built an
-  empty total block and failed reordering by the tab variable.
 
 # tabxplor 1.3.1
 

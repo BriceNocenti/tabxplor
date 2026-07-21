@@ -541,7 +541,7 @@ tab_kable_join <- function(parts, engine, css = "", theme = NULL) {
                      class = c("tabxplor_kable", "kableExtra", "knitr_kable"))
     # THE RULE: tabxplor paints a page only when tabxplor's own stylesheet ships with the table -- the
     # same discriminator Phase 13d/14j use for the colour legend ("does our stylesheet ship?"). With
-    # css = "" the document supplies it (options("tabxplor.kable_css" = FALSE) + tab_css()) or nothing
+    # css = "" the document supplies it (options("tabxplor.tab_kable_css" = FALSE) + tab_css()) or nothing
     # does, and in the Viewer there is no document: painting the page #222222 around a table we did not
     # style would leave it black-on-#222222, i.e. unreadable. No attr => print does nothing new.
     if (nzchar(css)) attr(out, "tabxplor_theme") <- theme

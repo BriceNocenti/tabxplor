@@ -201,7 +201,10 @@ R/
 │                              NOT an inline max-width (would out-specify @media). 15c-ii: OS-scaling-
 │                              aware cap via @media (device-width) tiers (CSS px = already scaled; screen
 │                              not iframe-viewport = no feedback loop); base cap stands if unsupported.
-├── utils.R         (~945 L)  .onLoad() options setup, factor/list utilities, tx_str_wrap/tx_str_trunc
+├── utils.R         (~945 L)  .onLoad() options setup + tx_getOption() (17j: the ONE option-synonym
+│                              resolver -- first name set wins, seeded/canonical LAST; backs the
+│                              tab_kable_css [was kable_css] rename + the console_theme/export_theme
+│                              silent aliases), factor/list utilities, tx_str_wrap/tx_str_trunc
 │                              NOT the colour-palette DESIGN tools (preview_color_grid /
 │                              simulate_cvd_farver / plot_oklch_hue_strip_cvd / set_luminance...):
 │                              they live in dev/color_palette_tools.R and must stay there -- they

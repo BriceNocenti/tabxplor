@@ -660,7 +660,7 @@ resolve_export_opts <- function(theme = NULL,
                                 transpose = FALSE, caption = NULL,
                                 var_names = NULL,
                                 allow_auto = FALSE) {
-  if (is.null(theme)) theme <- getOption("tabxplor.theme", "light")
+  if (is.null(theme)) theme <- tx_getOption(c("tabxplor.export_theme", "tabxplor.theme"), "light")
   theme <- match.arg(theme[1], c("light", "dark", "auto"))
   if (identical(theme, "auto") && !isTRUE(allow_auto)) theme <- "light"
   if (is.null(var_names)) var_names <- getOption("tabxplor.var_names", "both")

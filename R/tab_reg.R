@@ -2361,8 +2361,6 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #'   and not confounded by differing missingness (reproduce it with [dplyr::filter()] + [tab()] on the
 #'   same rows). Also works with a vector of dependents. Ordinal has no clean crude analogue and is
 #'   ignored (with a message). Default `FALSE`.
-#' @param empirical_OR `r lifecycle::badge("deprecated")` Renamed `empirical` (now cross-family, not
-#'   OR-only). Passing it now errors; use `empirical`.
 #' @param stats The goodness-of-fit statistics shown in the model-summary **footer** (one block per
 #'   model). `NULL` (default) uses the per-family set: linear models show N, R square, adjusted R
 #'   square, the overall F-test and the residual SD; other models show N, the likelihood-ratio test
@@ -2411,59 +2409,49 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #' @return A `tabxplor_grouped_tab` (grouped by predictor), one effect column per model / dependent.
 #'
 #' @examples
-#' data <- forcats::gss_cat |>
-#'   dplyr::mutate(married = factor(dplyr::if_else(marital == "Married",
-#'                                                 "Married", "Not married")))
-#' # Every regression table needs broom; the heavier families need their own engine. Guarding each
-#' # keeps the examples runnable where Suggests are absent (CRAN checks such a flavour).
-#' if (requireNamespace("broom", quietly = TRUE)) {
+#'   data <- gss_cat_data_formatting()
+#' 
 #'   # logistic (odds ratios):
-#'   print(tab_reg(data, dependent = "married", predictors = c("race", "rincome"),
-#'                 family = "binomial"))
+#'   tab_reg(data, dependent = "married", predictors = c("race", "rincome"), family = "binomial")
 #'   # linear (betas):
-#'   print(tab_reg(data, dependent = "tvhours", predictors = c("race", "age"),
-#'                 family = "gaussian"))
-#'   # formula escape-hatch (same model, terser):
-#'   print(tab_reg(data, married ~ race + rincome, family = "binomial"))
-#' }
+#'   tab_reg(data, dependent = "tvhours", predictors = c("rincome", "age"), family = "gaussian")
+#'   # to use normal R model formulas instead (same model, terser):
+#'   tab_reg(data, married ~ race + rincome, family = "binomial")
 #'
 #' \donttest{
+#'  # logistic : comparison between observed odds-ratio and modelised odds-ratio
+#'   tab_reg(data, dependent = "married", predictors = c("race", "rincome"), family = "binomial",
+#'           empirical = TRUE
+#'   )
 #' # average marginal effects + adjusted predictions (needs the marginaleffects package):
-#' if (requireNamespace("broom", quietly = TRUE) &&
-#'     requireNamespace("marginaleffects", quietly = TRUE)) {
-#'   print(tab_reg(data, dependent = "married", predictors = c("race", "rincome"),
-#'                 family = "binomial", effect = "ame"))
+#' if (requireNamespace("marginaleffects", quietly = TRUE)) {
+#'   tab_reg(data, dependent = "married", predictors = c("race", "rincome"),
+#'                 family = "binomial", effect = "ame")
 #'   # marginal effects at the reference profile (others at their reference level / mean):
-#'   print(tab_reg(data, dependent = "married", predictors = c("race", "rincome"),
-#'                 family = "binomial", effect = "ame", at = "reference"))
+#'   tab_reg(data, dependent = "married", predictors = c("race", "rincome"),
+#'                 family = "binomial", effect = "ame", at = "reference")
 #' }
 #' # multinomial (nominal 3+ level): one OR column per outcome category vs the reference
-#' if (requireNamespace("broom", quietly = TRUE) && requireNamespace("nnet", quietly = TRUE)) {
-#'   print(tab_reg(forcats::gss_cat, dependent = "partyid", predictors = c("race", "age"),
-#'                 family = "multinomial", reference = c(partyid = "Independent")))
-#' }
+#'   tab_reg(data, dependent = "party3", predictors = c("race", "age"),
+#'                 family = "multinomial", reference = c(party3 = "3-Republican"))
 #' # ordinal (proportional-odds): one cumulative-OR column
-#' if (requireNamespace("broom", quietly = TRUE) && requireNamespace("MASS", quietly = TRUE)) {
-#'   income3 <- forcats::gss_cat |>
-#'     dplyr::mutate(income = factor(rincome, ordered = TRUE))
-#'   print(tab_reg(income3, dependent = "income", predictors = "race", family = "ordinal"))
-#' }
+#'   tab_reg(data, dependent = "rincome", predictors = c("race", "age"), family = "ordinal")
 #' }
 #'
 #' @export
-tab_reg <- function(data, dependent, predictors = NULL,
-                    family = "auto", wt = NULL, ids = NULL, strata = NULL, fpc = NULL, nest = FALSE,
-                    exponentiate = TRUE,
-                    effect = c("coefficient", "ame"), at = c("average", "reference"),
-                    trials = NULL, conf_level = getOption("tabxplor.conf_level", 0.95), method = c("wald", "profile"),
-                    reference = NULL, inverse_two_level_factors = TRUE, split_var = NULL,
-                    multiplier = NULL, empirical = FALSE,
+tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = NULL, 
+                    family = "auto", 
+                    effect = c("coefficient", "ame"), at = c("average", "reference"), exponentiate = TRUE, 
+                    trials = NULL, empirical = FALSE,
+                    color = TRUE, color_signif = NULL, stars = TRUE, 
+                    conf_level = getOption("tabxplor.conf_level", 0.95), method = c("wald", "profile"),
+                    reference = NULL, inverse_two_level_factors = TRUE, multiplier = NULL, 
                     stats = NULL, compare = c("none", "baseline", "sequential"), baseline = NULL,
-                    estimate_display = c("value", "ci", "prob", "ame"),
-                    color = TRUE, color_signif = NULL, stars = TRUE,
                     na = c("drop_by_model", "drop_all_models"),
+                    estimate_display = c("value", "ci", "prob", "ame"),
                     cleannames = NULL, subtext = "",
-                    empirical_OR = lifecycle::deprecated(), .fit_cache = NULL) {
+                    ids = NULL, strata = NULL, fpc = NULL, nest = FALSE,
+                    .fit_cache = NULL) {
   method  <- match.arg(method)
   effect  <- match.arg(effect)
   at      <- match.arg(at)
@@ -2473,12 +2461,6 @@ tab_reg <- function(data, dependent, predictors = NULL,
   # Fallback FALSE matches .onLoad's default and tab()'s read sites (the option is always set to FALSE
   # on load, so this only bites if someone unsets it; TRUE here was an inconsistency, not an intent).
   cleannames <- if (is.null(cleannames)) getOption("tabxplor.cleannames", FALSE) else cleannames
-  # Phase 14v: `empirical_OR` renamed to `empirical` (now cross-family, not OR-only). Phase 14x hard-
-  # deprecates the alias (it never shipped in a CRAN release, so there is no retro-compat debt): calling
-  # it now errors with a pointer to `empirical`, rather than silently forwarding.
-  if (lifecycle::is_present(empirical_OR)) {
-    lifecycle::deprecate_stop("1.4.0", "tab_reg(empirical_OR)", "tab_reg(empirical)")
-  }
 
 
   # Phase 14u (K): a LIST of models AND SEVERAL dependents -> one model-comparison table per dependent,

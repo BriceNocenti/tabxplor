@@ -3630,7 +3630,7 @@ tab_color_legend <- function(x, medium = c("console", "html", "md", "runs", "pla
                              theme = NULL, classes = FALSE) {
   medium <- match.arg(medium)
   if (is.null(style))      style      <- if (identical(medium, "console")) "terse" else "prose"
-  if (is.null(theme))      theme      <- getOption("tabxplor.color_style_theme", "light")
+  if (is.null(theme))      theme      <- tx_getOption(c("tabxplor.console_theme", "tabxplor.color_style_theme"), "light")
   streams <- legend_streams(x, style, lang)
   if (length(streams) == 0) return(NULL)
   render_streams(streams, medium, theme, colored, classes)
@@ -3689,7 +3689,7 @@ tab_footer_streams <- function(x, style = "prose", lang = NULL,
 # subtle whole (matching the historical tbl_format_footer wrapping). Other media return the rendered
 # character vector (md/html/plain) or run-lists (runs); the caller places them (tfoot, xl rows, ...).
 render_footer <- function(streams, medium, theme = NULL, colored = TRUE, classes = FALSE) {
-  if (is.null(theme)) theme <- getOption("tabxplor.color_style_theme", "light")
+  if (is.null(theme)) theme <- tx_getOption(c("tabxplor.console_theme", "tabxplor.color_style_theme"), "light")
   if (length(streams) == 0) return(if (identical(medium, "runs")) list() else character(0))
   toks_list <- lapply(streams, function(s) s$tokens)
   out <- render_streams(toks_list, medium, theme, colored, classes)

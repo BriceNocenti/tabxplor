@@ -35,16 +35,17 @@ variables have differing bases (e.g. \code{na = "drop"}): \code{"off"} (default)
 \describe{
 \item{\code{tabxplor.color_breaks}}{the colour-break scales (a named list of \code{pct_diff},
 \code{pct_ratio}, \code{odds_ratio}, \code{mean_diff}, \code{mean_ratio}, \code{contrib}). Set with \code{\link[=set_color_breaks]{set_color_breaks()}}.}
-\item{\code{tabxplor.color_style_theme}}{the \emph{console} palette theme, \code{"light"} or \code{"dark"}; set by
-\code{\link[=set_color_palette]{set_color_palette()}} (which auto-detects the editor theme on load). NOT the export theme
-(\code{tabxplor.theme}).}
+\item{\code{tabxplor.color_style_theme} (alias \code{tabxplor.console_theme})}{the \emph{console} palette theme,
+\code{"light"} or \code{"dark"}; set by \code{\link[=set_color_palette]{set_color_palette()}} (which auto-detects the editor theme on load).
+NOT the export theme (\code{tabxplor.theme} / \code{tabxplor.export_theme}).}
 \item{\code{tabxplor.console_bold}}{whether to embolden the reference / total (and coloured) cells in the
 \emph{console}, \code{TRUE} or \code{FALSE}. Auto-detected at load: \code{TRUE} in Positron and VS Code (which render
 ANSI bold at a fixed glyph width), \code{FALSE} in RStudio and unknown consoles (there bold is drawn
 wider and would break column alignment). Override it for your own front-end / font.}
-\item{\code{tabxplor.theme}}{the \emph{export} theme, \code{"light"} (default), \code{"dark"} or \code{"auto"} (follow
-the reader). \code{"auto"} needs a stylesheet, so only \code{tab_kable(engine = "html")}, \code{\link[=tab_md]{tab_md()}} and
-\code{\link[=tab_css]{tab_css()}} honour it; static backends resolve it to \code{"light"}.}
+\item{\code{tabxplor.theme} (alias \code{tabxplor.export_theme})}{the \emph{export} theme, \code{"light"} (default),
+\code{"dark"} or \code{"auto"} (follow the reader). \code{"auto"} needs a stylesheet, so only
+\code{tab_kable(engine = "html")}, \code{\link[=tab_md]{tab_md()}} and \code{\link[=tab_css]{tab_css()}} honour it; static backends resolve it
+to \code{"light"}.}
 }
 }
 
@@ -73,9 +74,9 @@ overrides it.}
 \describe{
 \item{\code{tabxplor.tab_kable_engine}}{\code{"html"} (default, dependency-free) or \code{"kableExtra"} (the
 legacy engine; needs the suggested \code{kableExtra} package).}
-\item{\code{tabxplor.kable_css}}{\code{TRUE} (default): inline the stylesheet with each \code{tab_kable()} /
-\code{\link[=tab_md]{tab_md()}} table (self-contained). Set \code{FALSE} in a many-table document that emits
-\code{\link[=tab_css]{tab_css()}} once at the top.}
+\item{\code{tabxplor.tab_kable_css} (formerly \code{tabxplor.kable_css}, still accepted)}{\code{TRUE} (default):
+inline the stylesheet with each \code{tab_kable()} / \code{\link[=tab_md]{tab_md()}} table (self-contained). Set \code{FALSE}
+in a many-table document that emits \code{\link[=tab_css]{tab_css()}} once at the top.}
 \item{\code{tabxplor.always_add_css_in_tab_kable}}{\code{TRUE} (default): always include \code{tab.css} in the
 kableExtra engine's output (a legacy-engine knob).}
 \item{\code{tabxplor.kable_html_font}}{the CSS font stack for the kableExtra engine.}

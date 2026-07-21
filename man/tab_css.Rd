@@ -54,7 +54,7 @@ standalone \code{.html}). Nothing to do.
 it:
 
 \if{html}{\out{<div class="sourceCode">}}\preformatted{```\{r, results = "asis"\}
-options(tabxplor.kable_css = FALSE)
+options(tabxplor.tab_kable_css = FALSE)
 tab_css(theme = "auto")
 ```
 }\if{html}{\out{</div>}}

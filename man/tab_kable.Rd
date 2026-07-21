@@ -109,7 +109,7 @@ theme, so it cannot follow the reader's colour scheme. Defaults to
 \code{getOption("tabxplor.tab_kable_engine", "html")}.}
 
 \item{css}{\code{engine = "html"} only: inline the stylesheet with the table, so the output is
-self-contained (default, from \code{getOption("tabxplor.kable_css")}). Set \code{FALSE} in a many-table
+self-contained (default, from \code{getOption("tabxplor.tab_kable_css")}). Set \code{FALSE} in a many-table
 document that emits \code{\link{tab_css}} once at the top -- the stylesheet is table-independent,
 so one copy styles every table. With \code{FALSE} and no \code{\link{tab_css}} call, tables render
 uncoloured.}

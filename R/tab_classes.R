@@ -690,7 +690,7 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #' @param html_24_bit `r lifecycle::badge("deprecated")` Inert since 1.4.0: exports are always
 #' 24-bit (the OKLCH palettes). Kept only so old calls do not error.
 #' @param css `engine = "html"` only: inline the stylesheet with the table, so the output is
-#' self-contained (default, from \code{getOption("tabxplor.kable_css")}). Set `FALSE` in a many-table
+#' self-contained (default, from \code{getOption("tabxplor.tab_kable_css")}). Set `FALSE` in a many-table
 #' document that emits \code{\link{tab_css}} once at the top -- the stylesheet is table-independent,
 #' so one copy styles every table. With `FALSE` and no \code{\link{tab_css}} call, tables render
 #' uncoloured.
@@ -780,7 +780,7 @@ tab_kable <- function(tabs,
   popover <- if (is.null(popover)) {getOption("tabxplor.kable_popover")} else {popover}
   engine  <- if (is.null(engine)) {getOption("tabxplor.tab_kable_engine", "html")} else {engine}
   engine  <- match.arg(engine, c("kableExtra", "html"))
-  css     <- if (is.null(css)) {getOption("tabxplor.kable_css", TRUE)} else {isTRUE(css)}
+  css     <- if (is.null(css)) {tx_getOption(c("tabxplor.kable_css", "tabxplor.tab_kable_css"), TRUE)} else {isTRUE(css)}
 
   # Phase 14o: a transposed table is a render-model flip whose columns are heterogeneous character
   # (see tx_transpose_render()); the kableExtra engine cell_spec()s each fmt column, which no longer
@@ -844,7 +844,7 @@ tab_kable <- function(tabs,
 
   # Phase 13d: the html engine's cells carry slot CLASSES, so the theme lives entirely here. The
   # stylesheet is table-independent (see tab_css()), hence built once per call -- or not at all, when a
-  # document emitted tab_css() itself (options("tabxplor.kable_css" = FALSE)). kableExtra styles inline.
+  # document emitted tab_css() itself (options("tabxplor.tab_kable_css" = FALSE)). kableExtra styles inline.
   style <- if (css && identical(engine, "html")) {
     tab_css(theme = theme, chrome = TRUE, style_tag = FALSE)
   } else ""
@@ -3376,7 +3376,7 @@ get_color_style <- function(mode = c("crayon", "color_code"), type = NULL, theme
       "1.4.0", I('The option "tabxplor.color_style_type"'),
       details = 'The colour CHANNEL is chosen by `color = c(text, background)` (see `?tab`).')
   }
-  theme <- if (is.null(theme)) getOption("tabxplor.color_style_theme") else theme
+  theme <- if (is.null(theme)) tx_getOption(c("tabxplor.console_theme", "tabxplor.color_style_theme")) else theme
   if (is.null(type)  || is.na(type[1]))  type  <- "text"
   if (is.null(theme) || is.na(theme[1])) theme <- "light"
   # Phase 13d: a palette is always light/dark. "auto" is an EXPORT render intent (`theme = "auto"`

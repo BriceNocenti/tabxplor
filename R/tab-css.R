@@ -414,7 +414,7 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE) {
 #'
 #' ````
 #' ```{r, results = "asis"}
-#' options(tabxplor.kable_css = FALSE)
+#' options(tabxplor.tab_kable_css = FALSE)
 #' tab_css(theme = "auto")
 #' ```
 #' ````

@@ -217,7 +217,7 @@ test_that("split_var rejects an invalid grouping column", {
   expect_error(tab_logit(d, "y", "x1", split_var = "x2"), "factor or character")
 })
 
-# --- Phase 12g-iv: multiplier + empirical_OR ----------------------------------------------------
+# --- Phase 12g-iv: multiplier + empirical ----------------------------------------------------
 test_that("multiplier scales a continuous predictor's OR to OR^k, p unchanged", {
   d <- reg_split_data()
   t0  <- suppressWarnings(tab_logit(d, "y", c("x1", "x2")))
@@ -261,9 +261,9 @@ test_that("empirical: gaussian now produces crude columns (Phase 14v)", {
   expect_true(all(c("Emp. mean", "Emp. diff") %in% names(tg)))
 })
 
-test_that("the empirical_OR argument is hard-deprecated (Phase 14x: errors)", {
+test_that("the empirical argument is hard-deprecated (Phase 14x: errors)", {
   d <- reg_split_data()
   expect_error(
-    tab_reg(d, "y", "x1", family = "binomial", empirical_OR = TRUE),
+    tab_reg(d, "y", "x1", family = "binomial", empirical = TRUE),
     class = "defunctError")
 })

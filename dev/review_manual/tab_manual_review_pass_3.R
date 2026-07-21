@@ -85,7 +85,7 @@ gss_simple <- gss_cat_data_formatting() # gss_simple with merged levels, and fir
 
 # logistic (odds ratios):
 tab_reg(gss_simple, dependent = "married", predictors = c("race", "rincome"), family = "binomial", 
-        empirical_OR = TRUE
+        empirical = TRUE
 )  
 # - Summary stats are difficult to read because they are greyed out : 
 #    a vctrs fields trick can certainly resolve this, like considering them as a total rows (study this carefully) ? 
@@ -104,12 +104,12 @@ tab_reg(gss_simple, married ~ race + rincome, family = "binomial", effect = "ame
 
 
 tab_reg(gss_simple, dependent = "married", predictors = c("race", "rincome"), family = "binomial", 
-        effect = "ame", empirical_OR = TRUE
+        effect = "ame", empirical = TRUE
 ) 
 # "Error in `tab_reg()` at dev/review_manual/tab_manual_review_pass_3.R:95:1:
-# ! `empirical_OR` is only available for a single binary logistic outcome (coefficient effect).
+# ! `empirical` is only available for a single binary logistic outcome (coefficient effect).
 # ℹ It shows the descriptive crude odds ratio / percentage beside the model odds ratio."
-# - Replace `empirical_OR` argument with `empirical` (no soft-deprecated : new function in 1.4.0) ;
+# - Replace `empirical` argument with `empirical` (no soft-deprecated : new function in 1.4.0) ;
 #   for  effect = "ame", which prints both modelised difference from reference level (AME ; MER too) 
 #   and modelised/adjusted percentage (predicted probability). 
 #   What would be the right empirical comparison, base percentage + empirical diff ? 
@@ -187,7 +187,7 @@ scores_RPS_logits <-
 tab_reg(
   ct13_reg, 
   dependent = vars_scores_RPS13_final, predictors = scores_RPS_predictors2, wt = "pondqaa", 
-  family = "binomial", trials = nb_questions, empirical_OR = TRUE, compare = "sequential", 
+  family = "binomial", trials = nb_questions, empirical = TRUE, compare = "sequential", 
   cleannames = FALSE
 )
 # "Error in `tab_reg()` at dev/review_manual/tab_manual_review_pass_3.R:169:1:
@@ -202,7 +202,7 @@ score_risques_phy_logits <-
 tab_reg(
   ct13_reg, 
   dependent = vars_scores_RPS13_final[[1]], predictors = scores_RPS_predictors2, wt = "pondqaa", 
-  family = "binomial", trials = nb_questions[[1]], empirical_OR = TRUE, compare = "baseline", 
+  family = "binomial", trials = nb_questions[[1]], empirical = TRUE, compare = "baseline", 
   baseline = "complet",
   cleannames = FALSE
 )

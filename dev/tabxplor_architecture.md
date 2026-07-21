@@ -836,11 +836,20 @@ user-facing, always-current list is the `?tabxplor-options` help page (`R/tabxpl
 table below is a dev subset and lags it (e.g. it still lists the removed `color_style_type` /
 `color_html_24_bit` / `compact`).
 
+**Option synonyms (Phase 17j).** An option may be read under more than one name — a renamed option's
+old name, or a convenience alias — through the ONE resolver `tx_getOption(names, default)` (`R/utils.R`):
+the first name set (non-NULL) wins, with the seeded/canonical name passed LAST so a user's explicit
+legacy/alias value overrides the seeded default. Three synonym pairs exist: `tabxplor.tab_kable_css`
+(seeded; was `tabxplor.kable_css`, a 1.4.0-new name renamed to join the `tab_kable_*` family) and the
+two theme aliases `tabxplor.console_theme` → `tabxplor.color_style_theme` and `tabxplor.export_theme`
+→ `tabxplor.theme` (both canonical names stay seeded/documented; `color_style_theme` is 1.3.1-public,
+so it is aliased, never renamed). Aliases are silent (no deprecation) and unseeded.
+
 | Option | Default | Description |
 | ------ | ------- | ----------- |
 | `tabxplor.totcol_range` | `"off"` | Total-column in-cell base when col_var bases differ: off/range/min |
 | `tabxplor.color_style_type` | `"text"` | Color type: "text" or "bg" |
-| `tabxplor.color_style_theme` | auto-detect | "light" or "dark" (detects RStudio theme) |
+| `tabxplor.color_style_theme` | auto-detect | "light" or "dark" console theme (alias `console_theme`) |
 | `tabxplor.color_html_24_bit` | `"no"` | "green_red", "blue_red", or "no" |
 | `tabxplor.color_breaks` | (see Layer 2) | List of break vectors |
 | `tabxplor.print` | `"console"` | "console" or "kable" |

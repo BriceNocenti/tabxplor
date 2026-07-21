@@ -38,6 +38,8 @@ tab(gss_simple, c(race, rincome, relig), c(party3, marital), pct = "row",  na = 
 #    (except in the rare cases when a line break may be manually added) ? 
 # - Would special chars formatting also be a way to ensure levels names in "levels" do not 
 #   wrap until the wrap_rows limit is reaches ?
+# - `css = TRUE` should be default for markdown export : self-contained.
+#     If the user is in .Rmd/.qmd, he must pass `css = FALSE`
 
 
 # # Excel tests working
