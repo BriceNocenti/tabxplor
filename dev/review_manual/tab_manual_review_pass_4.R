@@ -85,9 +85,9 @@ cols2 <- c(musique_vars, "NB_MUSIQUES") # plus the related score as numeric vari
 gss_simple <- gss_cat_data_formatting() # gss_simple with merged levels, and first levels chosen for reference (colors, regressions)
 
 
-# logistic (odds ratios):
+# No colors and wrong empirical counterpart for logistic models with exponentiate = FALSE
 tab_reg(gss_simple, dependent = "married", predictors = c("race", "rincome", "relig", "age"),
-        family = "binomial", empirical = TRUE, exponentiate = FALSE
+        family = "binomial", empirical = TRUE, exponentiate = FALSE, 
 )
 # - With `exponentiate = FALSE`, the base coefficient of a logistic model is all greyed out, every with *** significance. 
 #   Legend says : "Model β: β (ref.): -0.8 -0.5 -0.2 +0.2 +0.5 +0.8 [grey: non-significant or under ±0.2 SD]" 
@@ -96,15 +96,27 @@ tab_reg(gss_simple, dependent = "married", predictors = c("race", "rincome", "re
 #     > log(c(1/4, 1/2, 1/1.5, 1/1.2, 1.2, 1.5, 2, 4)) |> round(1) |> unique()
 #     [1] -1.4 -0.7 -0.4 -0.2  0.2  0.4  0.7  1.4
 # - With `empirical = TRUE`, the empirical quantity do not match the base model coefficient :
-#   keep `Emp. rate`, log() the IRR and use the diff vctrs field for that, use rename the column `Emp. log(IRR)`, 
-#   same color scale than raw coefficient.
-#   What else would need to be done for it to work consistencly, log the confidence interval ?
+#   keep `Emp. %`, log() the OR and use the diff vctrs field for that, use rename the column `Emp. log(OR)`, 
+#    same color scale than raw coefficient.
+#   What else would need to be done for it to work consistently, in a statistically sound way ? Log the confidence interval ?
 
 
 tab_reg(gss_simple, dependent = "tvhours", predictors = c("race", "rincome", "relig", "age"),
         family = "poisson", empirical = TRUE, exponentiate = FALSE
 )
-# - same two problems than with binomial + `exponentiate = FALSE` here : 
+# - same two problems than with binomial + `exponentiate = FALSE` here : no colors + wrong empirical counterpart.
+#    With empirical = TRUE, keep `Emp. rate`, log() the IRR and use the diff vctrs field for that, 
+#    use rename the column `Emp. log(IRR)`, same color scale than raw coefficient.
+
+tab_reg(gss_simple, dependent = "party3", predictors = c("race", "rincome", "relig", "tvhours"),
+        empirical = TRUE, exponentiate = FALSE
+)
+# - same here, and same for ordinal regression I think. 
+
+
+
+
+
 
 tab_reg(gss_simple, married ~ race + rincome, family = "binomial", effect = "ame", cleannames = FALSE) 
 # - some AME do not appear and may be missing value : but among them, with OR.

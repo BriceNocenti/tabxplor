@@ -45,10 +45,14 @@ R/
 │                              tab_render_vars() (Phase 10c: robust group_vars-based role detection +
 │                              graceful degrade, used by print + exporters),
 │                              tab_add_n_pct() (shared add_n/add_pct, used by tab_many + tab_counts).
-│                              tab_build() = staged pipeline: tab_setup / tab_prepare_pop / tab_aggregate
-│                              / tab_build_tables (Phase 9a: the OUTER row_var map -> tab_build_one, +
-│                              tab_rowvar_ctxs) ; tab_transform / tab_assemble_tables are SCALAR over one
-│                              row_var ; tab_assemble_output (merge/pvalue/unwrap);
+│                              tab_build() = staged pipeline over a TYPED ctx (17e: new_ctx(), one
+│                              defaults list, kills the exists() guards + both hand-written ctx literals):
+│                              tab_setup (builds the SETTINGS SPINE ctx$settings = rows/cols/pairs star
+│                              schema; pairs REPLACES pct_vect/ref_vect -- the axes meet only there) /
+│                              tab_prepare_pop / tab_aggregate / tab_build_tables (Phase 9a: the OUTER
+│                              row_var map -> tab_build_one, + tab_rowvar_ctxs, which 17e slices by KEY --
+│                              length heuristic GONE) ; tab_transform / tab_assemble_tables are SCALAR
+│                              over one row_var ; tab_assemble_output (merge/pvalue/unwrap);
 │                              tab_lump_others/tab_cleannames_relabel (extracted from tab_prepare)
 ├── tab-agg.R        (~500 L) Aggregate-core (Phase 2-3): num_derive_stats/num_rollup, num_moment_scan
 │                              + tab_aggregate_num (numeric tier-1 producer, Phase 7d-i),
@@ -779,6 +783,12 @@ Read first: analysis §5.1.2/7, §2.3; tab.R boundary (`tab()` pre-recycles, `ta
 5. **Argument-surface cuts that live in this same boundary code**: the `totcol` grammar cut (3 of 5), `.by_table` made internal, `filter=` doc-deprecation.
 
 Verification: full suite, **byte-identical** — this is a pure re-plumbing. Sentinels: test-parallel-parity, test-cache-keys, test-fuse-parity, the multi×multi shapes (the past bug fixtures must all stay green). Split seam if long: frame + slicing (17e-i) / typed ctx + cuts (17e-ii).
+
+**DONE (2026-07-21).** Full suite green (FAIL 0, PASS 3855, SKIP 4), **zero golden/snapshot churn** — pure re-plumbing. Done in one session, star schema (maintainer choices).
+- **Typed ctx `new_ctx()`** (R/tab.R, body `ctx_update(defaults, list(...))` so an explicit `totcol = NULL` is a present-but-NULL key — the NULL rule now in the helper). Replaced BOTH hand-written ctx literals (tab_build + tab_counts → the duplication is gone; test-carve-parity's `carve_ctx` too). Deleted the 6 Cluster-A lean-ctx `exists()` guards (`defer_level_merge`/`cached_tests`/`method_ratio`/`method_mean_diff`/`method_mean_ratio`/`n_min` → new_ctx defaults) and converted the `ref_vect` guard to `is.null`. (The ~29 Cluster-B/C `exists()` are inline data.table leaf locals, out of scope.)
+- **The settings spine `ctx$settings` = list(rows, cols, pairs)** built ONCE in `tab_setup` (the star schema). `pairs` (row-major `expand_grid`) carries `pct`/`ref` and **REPLACED** the `pct_vect` (5-branch) + `ref_vect` (2-branch) ctx fields — the two axes now meet only in `pairs`. `tab_rowvar_ctxs` slices by explicit KEY (`rows[i,]` + `pairs[row_var==rv]` + `fine_num[[rv]]` by name) — the `length(x) == n` heuristic + the `per_rv` vector are GONE. `na_text`/`na_num` (population-prep) and `fine_num` (aggregate) stay per-row_var objects sliced by index/name, NOT settings; the flat per-row scalar fields remain alongside `rows` for the pre-slice stages + jmvtab that still read them (17f retires that). `tab_transform`/`tab_assemble`/jmvtab-cache unchanged (unit projection is byte-identical) — no schema bump.
+- **DRY helpers** `resolve_stars()` (3 sites: tab_setup/tab_num/tab_ci) + `force_comp()` (2 leaf sites); full leaf-side removal is 17f.
+- **Arg-surface cuts**: `totcol` keeps only scalar `"last"`/`"all_col_vars"`/`"each"`/`"no"` (the 3 vector grammars — names / `"col"`-`"no"` / numeric — cut; `tot_cols_type == "some"` KEPT, still reached by `each` + mixed factor/numeric col_vars). `.by_table` removed from `tab_many`'s public formals (kept on tab_build/leaves). `filter=` doc-superseded (badge, still works). man/ regenerated (`document()`), NAMESPACE unchanged.
 
 ---
 

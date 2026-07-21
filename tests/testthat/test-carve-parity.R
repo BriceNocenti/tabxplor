@@ -15,25 +15,16 @@ carve_gss <- function() {
 }
 
 # Build the entry-ctx exactly as tab_build()'s argument surface does, for a set of overrides on top
-# of the tab_build() defaults. Mirrors the `ctx <- list(...)` block in tab_build().
+# of the tab_build() defaults. Phase 17e: routes through the SAME typed new_ctx() constructor
+# tab_build() uses, so this stays a faithful mirror (and inherits the lean-ctx guard defaults).
 carve_ctx <- function(data, row_vars, col_vars, tab_vars = rlang::quo(NULL),
                       wt = rlang::quo(NULL), overrides = list()) {
-  base <- list(
-    data = data, with_filter = FALSE,
-    row_vars_quo = row_vars, col_vars_quo = col_vars, tab_vars_quo = tab_vars,
-    wt_quo = wt, na_drop_all_quo = rlang::quo(NULL),
-    pct = "no", color = "no", color_signif = "ignore", color_ratio_ci = FALSE,
-    OR = "no", chi2 = FALSE,
-    na = "keep", levels = "all",
-    cleannames = NULL, output = "single", other_if_less_than = 0, other_level = "Others",
-    ref = "auto", ref2 = "first", comp = "tab", ci = "no", conf_level = 0.95, stars = NULL,
-    method_cell = "wilson", method_diff = "newcombe",
-    method_ratio = "katz", method_mean_diff = "welch", method_mean_ratio = "robust",
-    totaltab = "line", totaltab_name = "Ensemble", totrow = TRUE, totcol = "last",
-    total_names = "Total", add_n = TRUE, add_pct = FALSE, digits = 0, subtext = "",
-    by_table = FALSE, spread_vars = character(), names_prefix = NULL, names_sort = FALSE
-  )
-  utils::modifyList(base, overrides)
+  do.call(tabxplor:::new_ctx, c(
+    list(data = data,
+         row_vars_quo = row_vars, col_vars_quo = col_vars, tab_vars_quo = tab_vars,
+         wt_quo = wt, na_drop_all_quo = rlang::quo(NULL)),
+    overrides
+  ))
 }
 
 # Phase 9a: the row axis is an OUTER map. tab_transform()/tab_assemble_tables() are now scalar over ONE
@@ -75,8 +66,10 @@ testthat::test_that("each stage adds its cache-tier ctx fields (the 7e seam cont
                    overrides = list(pct = "row", color = "diff", ci = "diff"))
 
   ctx <- tabxplor:::tab_setup(ctx)
-  testthat::expect_true(all(c("col_vars_num", "col_vars_text", "tot_cols_type", "pct_vect",
+  testthat::expect_true(all(c("col_vars_num", "col_vars_text", "tot_cols_type", "settings",
                               "color_diff_OR", "cache_keys") %in% names(ctx)))
+  # Phase 17e: the per-pair settings live in the star schema (rows / cols / pairs), not pct_vect.
+  testthat::expect_named(ctx$settings, c("rows", "cols", "pairs"))
   testthat::expect_named(ctx$cache_keys, c("tier0", "tier1_common", "tier2"))
 
   ctx <- tabxplor:::tab_prepare_pop(ctx)

@@ -52,7 +52,6 @@ tab_many(
   color_signif = "ignore",
   color_breaks = NULL,
   parallel = NULL,
-  .by_table = FALSE,
   filter
 )
 
@@ -317,13 +316,12 @@ row; own base below \code{n_min} blanks the cell) without recomputing anything.}
 \pkg{mirai}); see \code{\link{tab}}. \code{NULL} (default) reads the
 \code{tabxplor.parallel} option.}
 
-\item{.by_table}{Internal: force the table-by-table path (disable scan-fusion).}
-
-\item{filter}{A \code{\link[dplyr:filter]{dplyr::filter}} to apply to the data frame
-first, as a single string (which will be converted to code, i.e. to a call).
-Useful when printing multiples tabs with \code{\link[tibble:tribble]{tibble::tribble}},
-to use different filters for similar tables or simply make the field of observation
-more visible into the code.}
+\item{filter}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#superseded}{\figure{lifecycle-superseded.svg}{options: alt='[Superseded]'}}}{\strong{[Superseded]}} A
+\code{\link[dplyr:filter]{dplyr::filter}} to apply to the data frame first, as a single string
+(which will be converted to code, i.e. to a call). Prefer filtering the data with
+\code{\link[dplyr:filter]{dplyr::filter}} upstream of \code{tab()}; this argument is kept
+for back-compatibility (e.g. printing multiple tabs from a
+\code{\link[tibble:tribble]{tibble::tribble}}).}
 
 \item{tabs}{A \code{tibble} of class \code{tab}, made with \code{\link{tab}},
 \code{\link{tab_many}} or \code{\link{tab_plain}}.}

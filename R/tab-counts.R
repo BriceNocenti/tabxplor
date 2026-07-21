@@ -297,17 +297,20 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
   totrow <- "row" %in% tot
   totcol <- if ("col" %in% tot) "last" else "no"
 
-  ctx <- list(
+  # Phase 17e: the same typed new_ctx() constructor tab_build() uses. tab_counts() sets only the fields
+  # it needs and inherits the rest (n_min/parallel/cache_env/defer_level_merge/levels_order/...) from the
+  # ONE defaults list -- the former hand-built ctx-literal duplication is gone. Notes kept:
+  # Phase 14a/b -- tab_counts() takes only the LEGACY colour strings, so `color_signif` is always
+  # "ignore" and `color_ratio_ci` FALSE (a legacy string can never name the ratio measure, so no ratio
+  # CI is built). 14v-ii -- the ratio/mean CI methods are inert here but ci_settings expects them, so
+  # the package defaults (new_ctx's) apply.
+  ctx <- new_ctx(
     data = data_skel, with_filter = FALSE,
     row_vars_quo = rlang::quo(!!row_var), col_vars_quo = rlang::quo(!!col_var),
     tab_vars_quo = if (length(tab_vars) == 0) rlang::quo(NULL)
                    else rlang::quo(c(!!!rlang::syms(tab_vars))),
     wt_quo = if (weighted) rlang::quo(wn) else rlang::quo(NULL),
     na_drop_all_quo = rlang::quo(NULL),
-    # Phase 14a: tab_counts() takes only the LEGACY colour strings (a policy is reachable as
-    # color = "diff_ci" / "after_ci"), so the separate policy the resolver reads is always "ignore".
-    # Phase 14b: same -- a legacy string can never name the `ratio` measure, so the ratio CI is not
-    # reachable here and the difference interval stays the only one built.
     pct = pct, color = color, color_signif = "ignore", color_ratio_ci = FALSE,
     OR = OR, chi2 = test,
     na = na, levels = "all",
@@ -315,13 +318,9 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
     other_if_less_than = 0, other_level = "Others",
     ref = ref, ref2 = ref2, comp = comp, ci = ci, conf_level = conf_level, stars = stars,
     method_cell = method_cell, method_diff = method_diff,
-    # 14v-ii: the numeric/ratio CI methods are inert for count data (factor col_vars, no ratio CI
-    # reachable here) but the shared ctx / ci_settings expect them -- pass the package defaults.
-    method_ratio = "katz", method_mean_diff = "welch", method_mean_ratio = "robust",
     totaltab = totaltab, totaltab_name = totaltab_name, totrow = totrow, totcol = totcol,
     total_names = total_names, add_n = add_n, add_pct = add_pct, digits = digits,
-    subtext = subtext, by_table = FALSE,
-    spread_vars = character(), names_prefix = NULL, names_sort = FALSE
+    subtext = subtext, by_table = FALSE
   )
 
   ctx <- tab_setup(ctx)

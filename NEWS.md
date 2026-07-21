@@ -904,7 +904,12 @@
   `levels = "first"` (`col_vars` already accepts several variables). It still works.
 * `tab_many(totrow =)` and `tab_many(totcol =)` are **soft-deprecated**: a total row is always
   computed and exactly one total column is shown by default; drop/move them afterwards with dplyr
-  (`dplyr::filter(!is_totrow(.))`). Old `totcol` values (`"each"`, `"no"`, names) still work.
+  (`dplyr::filter(!is_totrow(.))`). `totcol` now accepts only the scalar forms `"last"` (the default),
+  `"each"` and `"no"`; the little-used vector forms (a vector of col_var **names**, a `"col"`/`"no"`
+  per-column vector, or numeric column indices) have been removed — select or drop specific total
+  columns with dplyr on the finished table instead.
+* **`filter =` is superseded.** `tab(..., filter = "…")` still works, but prefer filtering the data
+  with `dplyr::filter()` upstream of `tab()`.
 * The `tabxplor.compact` **option is removed**, superseded by the `output_list` argument of
   `tab()`. `tab_many(compact =)` still works.
 * `tab_pct()`, `tab_tot()` and `tab_totaltab()` are **superseded**: percentages, differences and

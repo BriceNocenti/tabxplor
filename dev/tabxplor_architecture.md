@@ -177,9 +177,10 @@ tab(data, row_vars, col_vars, ..., output_list=FALSE)   tab_many(..., compact=) 
        tab_build(...)  = argument surface: defuse NSE args + apply `filter`, build ctx, run:
         ctx |> tab_setup |> tab_prepare_pop |> tab_aggregate |> tab_transform |> tab_assemble
          │
-         ├─ tab_setup(ctx)        (no tier)  RESOLVE + recycle: tidy-select var roles, factor/numeric
-         │      masks, per-row_var/per-col_var arg recycling, totcol→tot_cols_type, pct_vect, and the
-         │      arg-overwrite cascade + cache keys via tab_resolve_settings() (pure, data-free)
+         ├─ tab_setup(ctx)        (no tier)  RESOLVE + build the SETTINGS SPINE: tidy-select var roles,
+         │      factor/numeric masks, totcol→tot_cols_type, the arg-overwrite cascade + cache keys via
+         │      tab_resolve_settings() (pure, data-free), then `ctx$settings` = the rows/cols/pairs star
+         │      schema (Phase 17e — see "The settings spine" below)
          ├─ tab_prepare_pop(ctx)  (tier 0)   PREP the population ONCE: select+relabel, apply filter,
          │      na_text/na_num, tab_prepare() (ordered-strip + listwise removal + lump + cleannames),
          │      zero/NA-weight removal, levels="auto", lv1 non-first-level pre-merge
@@ -201,9 +202,14 @@ tab(data, row_vars, col_vars, ..., output_list=FALSE)   tab_many(..., compact=) 
                 tab_pvalue_lines(), tab_spread(), unwrap, optional tab_kable()]
 ```
 
-The `ctx` list threads the locals tab_build already carried: `chi2` stays the per-row_var logical flag
-and `tests` holds the captured whole-table test tibbles (no name overload).
-`ctx_update()` repacks NULL-safely (single-bracket `[<-`, not `$<-` which deletes on NULL).
+The `ctx` list is built by the typed constructor **`new_ctx()`** (Phase 17e): every field has ONE default
+in one place, so `tab_build()` and `tab_counts()` no longer hand-write (drifting) `list(...)` literals and
+the scattered `exists(<field>, inherits = FALSE)` lean-ctx guards are gone (a leaner caller just omits a
+field and inherits its default). `chi2` stays the per-row_var logical flag and `tests` holds the captured
+whole-table test tibbles (no name overload).
+`ctx_update()` repacks NULL-safely (single-bracket `[<-`, not `$<-` which deletes on NULL); `new_ctx()`
+reuses it as its body, so an explicit `totcol = NULL` is a present-but-NULL key (the rule the downstream
+`list2env()` needs, now encoded in the helper instead of comments).
 `tab_apply_tests()` is the ONE place both `tab_build()` and `tab_counts()` build the chi2/ci calls
 (Phase 6a). `tab_counts()` reuses the SAME stages: it holds its aggregate, so it builds a single-pair
 ctx, runs `tab_setup()` (incl. the `tot`→totrow/totcol translation tab() uses) then `tab_transform()`
@@ -216,8 +222,10 @@ public callers); jmvtab (Phase 7e) runs cleannames at display instead (`jmvtab_c
 mirai).** `tab_build()` runs `tab_setup` + `tab_prepare_pop` + `tab_aggregate` ONCE on main (the global
 `na="drop_all"/"common_base"` population drop lives in prep and cannot move; `tab_aggregate` builds the
 shared `fine_fused` + the per-row_var numeric aggregates + fires the jmvtab hook), then hands off to
-`tab_build_tables()`. That helper resolves one lean ctx per row_var (`tab_rowvar_ctxs()`, which lists the
-row_var-indexed fields ONCE — it replaced `ctx_slice()` + the `tabxplor_rowvar_fields` constant) and maps
+`tab_build_tables()`. That helper resolves one lean ctx per row_var (`tab_rowvar_ctxs()`, which Phase 17e
+now slices from the settings spine by explicit KEY — `settings$rows[i, ]` for the per-row scalars,
+`settings$pairs` filtered to this row_var for each pair's pct/ref — retiring the former
+`if (length(x) == n) x[[i]] else x` heuristic) and maps
 the whole-per-row_var worker `tab_build_one()` = `tab_transform |> tab_assemble_tables` over it via
 `tab_pmap()`: `purrr::map` when serial (the default, byte-identical, zero overhead) or a NAMED `"tabxplor"`
 daemon pool when `parallel` is on and there are ≥ `tabxplor.parallel_min` row_vars (the prepared `data` +
@@ -227,6 +235,28 @@ integrated build — guaranteed by the `tab_assemble` total-col decoupling (`tot
 lone-total rename-back tests the distinct name, not its occurrence count). jmvtab (cache_env) forces serial
 and keeps its hooks (`jmv_cache_aggregate` in `tab_aggregate`; `jmv_cache_store_tests` in `tab_build_tables`,
 reading the gathered pre-merge tests).
+
+### The settings spine (`ctx$settings`, Phase 17e)
+
+The argument-normalisation boundary is the historical "top bug factory": five documented bugs came from
+recycling arguments across the `row_var × col_var` axes with vectorised `&` / length heuristics. Phase 17e
+makes that class unrepresentable by combining the two axes ONCE, in `tab_setup()`, into a **star schema**
+stored at `ctx$settings`:
+
+- **`rows`** — one row per row_var; the per-row_var scalar settings (`color`, `OR`, `chi2`, `ref`, `ref2`,
+  `comp`, `ci`, `ci_scale`, `totaltab`, `totrow`, `color_diff_OR/ctr/ci/num`).
+- **`cols`** — one row per col_var; the per-col_var settings + the factor/numeric masks (`is_num`,
+  `is_text`, `lvs`, `digits`).
+- **`pairs`** — one row per (row_var × col_var), the fact table carrying `pct` and `ref`. Built
+  `row-major` via `expand_grid(row_var, col_var)`, so it is byte-identical to (and REPLACES) the former
+  `pct_vect` (5-branch nested list) and `ref_vect` (2-branch) ctx fields — those axes now meet only here.
+
+`tab_rowvar_ctxs()` slices this by key (above), so the `length(x) == n` guessing is gone. The per-row_var
+**population/aggregate** objects — `na_text`, `na_num` (a `tab_prepare_pop` na-policy detail) and `fine_num`
+(a `tab_aggregate` product) — are NOT settings; they stay per-row_var objects sliced by index / by name.
+The flat per-row scalar ctx fields remain alongside `rows` for the pre-slice stages + the jmvtab cache that
+still read them directly; `rows` is a view assembled from them at build. The typed ctx (`new_ctx()`) and
+this spine are the foundation the Phase 17f reference plan + leaf wrapper/core split build on.
 
 **jmvtab live cache (Phase 7e, `R/jmvtab-cache.R`).** The jamovi module reuses this exact pipeline
 via `jmvtab_build()`, which calls `tab()` with a content-addressed multi-tier store injected through a
@@ -344,8 +374,10 @@ The `ref` argument controls which row serves as the comparison baseline for diff
 `ref` is resolved **per axis variable** by `resolve_ref_vector()`: a scalar applies to all; a
 **named** vector matches by name (unmatched → `"auto"`), including a named length-1 vector like
 `c(race = "Black")`. Under `pct = "col"` a ref **named by col_var** gives each col_var its own
-reference column (Phase 7g-iii): `tab_setup()` builds `ref_vect` (per row_var × per col_var, the
-reference analogue of `pct_vect`) and threads it into the factor leaf `tab_plain()` — the col%
+reference column (Phase 7g-iii): `tab_setup()` writes the per-(row_var × col_var) reference into the
+settings spine's `pairs$ref` column (Phase 17e — it replaced the former standalone `ref_vect` nested
+list, the reference analogue of `pct_vect`), which the slicer projects into the factor leaf `tab_plain()`
+as this row_var's per-col_var reference vector — the col%
 math is unchanged (one col_var per leaf, so the leaf *is* the per-col_var group). `tab_ci()` reads
 the marked reference column via `detect_refcol()` (fmt_class.R) so the diff-CI reference matches
 the diff/colour reference.

@@ -343,11 +343,12 @@ of factor level orders applied post-aggregate, backing the jamovi level-reorderi
 relevel with \code{\link[forcats:fct_relevel]{forcats::fct_relevel}} before calling \code{tab()}).
 All default off; not for direct use.}
 
-\item{filter}{A \code{\link[dplyr:filter]{dplyr::filter}} to apply to the data frame
-first, as a single string (which will be converted to code, i.e. to a call).
-Useful when printing multiples tabs with \code{\link[tibble:tribble]{tibble::tribble}},
-to use different filters for similar tables or simply make the field of observation
-more visible into the code.}
+\item{filter}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#superseded}{\figure{lifecycle-superseded.svg}{options: alt='[Superseded]'}}}{\strong{[Superseded]}} A
+\code{\link[dplyr:filter]{dplyr::filter}} to apply to the data frame first, as a single string
+(which will be converted to code, i.e. to a call). Prefer filtering the data with
+\code{\link[dplyr:filter]{dplyr::filter}} upstream of \code{tab()}; this argument is kept
+for back-compatibility (e.g. printing multiple tabs from a
+\code{\link[tibble:tribble]{tibble::tribble}}).}
 }
 \value{
 A \code{tibble} of class \code{tab}, possibly with colored reading helpers.
