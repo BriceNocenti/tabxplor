@@ -2946,7 +2946,10 @@ tab_render_vars <- function(tabs) {
 
 
 # Phase 10c: the shared "graceful degrade" notice for exporters/print when a table cannot be
-# read as a tabxplor table -- render the plain frame (per backend) instead of crashing.
+# read as a tabxplor table -- render the plain frame (per backend) instead of crashing. Fired once
+# per render batch (the `notify` gate in tab_export_prep dedups within one render); left per-render
+# (not throttled once-per-session) so a knit / loop that re-degrades a genuinely non-tabxplor frame
+# still tells the user each time -- and so the degrade-message tests stay meaningful (test-edge-cases).
 #' @keywords internal
 tab_degrade_inform <- function(reason) {
   cli::cli_inform(c(

@@ -634,6 +634,24 @@ a data frame / no `tabxplor_fmt` columns / no factor variable) it returns
 + a plain kable / pipe table / raw sheet) instead of crashing in role detection. It is byte-identical
 to `tab_get_vars()` on every well-formed table. New `tests/testthat/test-edge-cases.R` locks this.
 
+**Missing-metadata contract (Phase k).** Two tiers of metadata with different guarantees. The
+per-cell `tabxplor_fmt` FIELDS (18) and per-column ATTRIBUTES (11) are **required** — they are the
+solid foundation and travel with the column, so a standalone extracted `tabxplor_fmt` column still
+`format()`s and colours on its own (`format`/`pillar_shaft`/the colour engine read only column attrs,
+cell fields and `getOption("tabxplor.color_breaks")`, never a table attr). The three TABLE-LEVEL
+attributes (`subtext`, `test`, `meta`) are **optional and NULL-safe**: every getter returns `NULL`
+when absent and every consumer treats `NULL` as "absent" (`legend_specs` → `default_ci_settings()`;
+`test_summary_grid` → nothing; `reg_model_lines` → `character(0)`; `tab_footer_streams` guards each
+line). So losing one removes only the behaviour it powered — a missing `test` drops the
+statistic/effect-size/p-value summary; a missing `subtext` drops the note; a missing reg `meta` drops
+the title/caption and the effect-specific legend wording (falling back to the generic crosstab
+legend) — never an error. Because the exporters are class-agnostic (they detect fmt columns via
+`is_fmt`, not the `tabxplor_tab` class), a table downgraded to a plain tibble in a pipeline — or
+`as_tibble()`d, which keeps the attributes — still exports fully coloured. The one thing a *dropped
+class* costs is the console auto-print footer/summary: a bare `print()` on a plain `tbl_df` runs
+dplyr's own printer, which our S3 methods never intercept (the fmt columns still render via `pillar`).
+`tests/testthat/test-degraded-attrs.R` locks the whole contract.
+
 ### The `format.tabxplor_fmt()` display method (`R/fmt_class.R`)
 
 The single source of truth for the console (`pillar_shaft`), `tab_kable`, `tab_md`, `tab_plot`.

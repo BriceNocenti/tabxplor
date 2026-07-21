@@ -24,6 +24,12 @@
   `ids`/`strata`/`fpc`/`nest` arguments; a prebuilt `survey::svydesign` may also be passed as `data`
   (it weights the estimates and drives the p-values). Estimates and CIs stay tabxplor's single-stage
   weighted approximation.
+* **Tables degrade gracefully when table-level metadata is missing.** If a table loses its `subtext`,
+  `test` or `meta` attribute -- or is downgraded to a plain tibble in a pipeline (its `tabxplor_fmt`
+  columns intact) -- printing and every export (`tab_md`/`tab_html`/`tab_xl`/`tab_plot`) still work,
+  fully coloured, dropping only what the missing metadata powered (the test summary, the note, or a
+  regression's title/legend wording) instead of erroring. Cell values and per-column formatting always
+  survive; a single extracted `tabxplor_fmt` column formats and colours on its own.
 * **`tab_html()` is the new name for `tab_kable()`** (both work identically -- `tab_kable()` stays as a
   permanent alias). `tab_html()` names the output (an HTML table); the backend *engine* (home-built or
   kableExtra) is still chosen with `engine =`. `tab_export()`'s first format is now `"html"` (was
