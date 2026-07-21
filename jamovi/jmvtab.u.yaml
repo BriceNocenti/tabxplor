@@ -662,7 +662,7 @@ children:
             cell:
               column: 0
               row: 0
-            stretchFactor: 1
+            stretchFactor: 0
             children:
               - type: ActionButton
                 name: exportExcel
@@ -673,21 +673,12 @@ children:
             cell:
               column: 1
               row: 0
-            stretchFactor: 2
+            stretchFactor: 0
             children:
               - type: ComboBox
                 name: export_format
                 events:
                   change: ./jmvtab::export_format_changed
-          - type: LayoutBox
-            cell:
-              column: 2
-              row: 0
-            stretchFactor: 3
-            children:
-              - type: CheckBox
-                name: xl_replace
-                label: Replace existing file
       # Row 2: ONE full-width path line -- "Path:" <folder> " / " <filename> <.ext>.
       #   folder : filename width = 3 : 2. This ratio only holds because js injectExportCss() collapses
       #   the TextBoxes' ~200px max-content floor -- otherwise both cells bottom out at 200px (see the js).
@@ -699,7 +690,7 @@ children:
             cell:
               column: 0
               row: 0
-            stretchFactor: 2
+            stretchFactor: 0
             children:
               - type: TextBox
                 name: export_dir
@@ -709,7 +700,7 @@ children:
             cell:
               column: 1
               row: 0
-            stretchFactor: 1
+            stretchFactor: 0
             children:
               - type: TextBox
                 name: export_filename
@@ -719,26 +710,26 @@ children:
             cell:
               column: 2
               row: 0
-            stretchFactor: 1
+            stretchFactor: 0
             children:
               - type: CustomControl
                 name: extCtrl
                 events:
                   creating: ./jmvtab::extCtrl_creating
                   updated: ./jmvtab::extCtrl_updated
-      # Row 3: a discreet, right-aligned "default path" reset, sitting under the file-name box.
-      #   The empty cell 0 (stretch 1) pushes the small link-styled button (js: styleResetBtn) to the right.
+      # Row 3: a discreet, right-aligned "default path" reset, sitting under the file-name box.            
       - type: LayoutBox
         margin: none
         children:
-          - type: LayoutBox
-            cell:
-              column: 0
-              row: 0
-            stretchFactor: 0
-            children:
-              - type: ActionButton
-                name: resetPath
-                label: default path
-                events:
-                  change: ./jmvtab::resetPath_changed
+          - type: CheckBox
+            name: xl_replace
+            label: Replace existing file
+       # Row 4: a discreet, right-aligned "default path" reset.
+      - type: LayoutBox
+        margin: none
+        children:
+          - type: ActionButton
+            name: resetPath
+            label: default path
+            events:
+              change: ./jmvtab::resetPath_changed

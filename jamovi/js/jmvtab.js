@@ -86,9 +86,35 @@ var injectExportCss = function() {
     var s = document.createElement("style");
     s.id = "tabx-export-css";
     s.textContent =
-        "input.silky-option-text-input.silky-option-largest-text" +
-        "{min-width:0 !important;width:100% !important;box-sizing:border-box;}";
+        // folder box (width: largest): collapse the ~200px floor but keep a comfortable minimum so it
+        // stays the wider of the two boxes. Tune the 260px to taste -- this is the "folder a bit wider" knob.
+        "input.silky-option-largest-text{min-width:260px !important;width:100% !important;box-sizing:border-box;}" +
+        // file-name box (width: large): collapse its floor fully so it takes only its stretch share.
+        "input.silky-option-large-text{min-width:0 !important;width:100% !important;box-sizing:border-box;}";
     document.head.appendChild(s);
+};
+
+// Push a row-1/row-2 control to the BOTTOM of its (taller) row. jamovi renders each control as a grid
+// item in its row; walking up to that row-item cell and setting `align-self: flex-end` drops the control
+// to the bottom of the row track (which the tall Export button / the text boxes define). The row-item
+// cell is the one whose grid is a direct child of the export block's `margin: large` container -- that
+// test finds it regardless of any inner label wrapper. Re-applied each onUpdate (jamovi re-renders drop
+// inline styles, the same reason the width fix is a persistent stylesheet).
+var bottomAlignInRow = function(ui, name) {
+    var c = ui[name];
+    if (!c || !c.$el || !c.$el[0]) return;
+    var node = c.$el[0], guard = 0;
+    while (node && guard++ < 14) {
+        if (node.classList && node.classList.contains("silky-layout-cell")) {
+            var g = node.parentElement && node.parentElement.parentElement &&
+                    node.parentElement.parentElement.parentElement;
+            if (g && g.classList && g.classList.contains("silky-control-margin-large")) {
+                node.style.alignSelf = "flex-end";
+                return;
+            }
+        }
+        node = node.parentElement;
+    }
 };
 
 var onUpdate = function(ui) {
@@ -97,6 +123,9 @@ var onUpdate = function(ui) {
     renderSubtext(ui);
     renderExt(ui);
     styleResetBtn(ui);
+    bottomAlignInRow(ui, "export_format");   // Format combo -> bottom of row 1 (aligns with Export button)
+    bottomAlignInRow(ui, "xl_replace");      // Replace checkbox -> bottom of row 1
+    bottomAlignInRow(ui, "extCtrl");         // ".ext" text -> bottom of the path row
     renderRefPicker(ui);   // defined below (call-time resolution)
 };
 

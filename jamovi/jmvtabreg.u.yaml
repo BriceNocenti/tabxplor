@@ -313,7 +313,7 @@ children:
     margin: large
     stretchFactor: 1
     children:
-      # Row of two columns: [Export button / Format below it]  |  [Save-to file name / Replace].
+      # Row 1: the Export action, the Format selector, the Replace-existing toggle.
       - type: LayoutBox
         margin: none
         children:
@@ -325,50 +325,71 @@ children:
             children:
               - type: ActionButton
                 name: exportExcel
-                label: Export Excel
+                label: Export
                 events:
                   change: ./jmvtabreg::exportExcel_changed
-              - type: Label
-                label: <b>Format:</b>
-                children:
-                  - type: ComboBox
-                    name: export_format
-                    events:
-                      change: ./jmvtabreg::export_format_changed
           - type: LayoutBox
-            margin: none
             cell:
               column: 1
               row: 0
-            stretchFactor: 1
+            stretchFactor: 0
             children:
-              - type: Label
-                label: <b>Save to (file name):</b>
-                children:
-                  - type: TextBox
-                    name: export_filename
-                    format: string
-                    width: largest
-              - type: CheckBox
-                name: xl_replace
-                label: Replace existing file
-      # The destination folder, taking all the remaining width (stretched to 100% in js/jmvtabreg.js).
+              - type: ComboBox
+                name: export_format
+                events:
+                  change: ./jmvtabreg::exportExcel_changed
+      # Row 2: ONE full-width path line -- "Path:" <folder> " / " <filename> <.ext>.
+      #   folder : filename width = 3 : 2. This ratio only holds because js injectExportCss() collapses
+      #   the TextBoxes' ~200px max-content floor -- otherwise both cells bottom out at 200px (see the js).
+      #   The label / separator / extension cells are stretch 0, so they take only their text width.
       - type: LayoutBox
         margin: none
         children:
-          - type: Label
-            label: <b>Folder:</b>
+          - type: LayoutBox
+            cell:
+              column: 0
+              row: 0
+            stretchFactor: 0
             children:
               - type: TextBox
                 name: export_dir
                 format: string
                 width: largest
-      # Reset the folder + file name to their defaults.
+          - type: LayoutBox
+            cell:
+              column: 1
+              row: 0
+            stretchFactor: 0
+            children:
+              - type: TextBox
+                name: export_filename
+                format: string
+                width: large
+          - type: LayoutBox
+            cell:
+              column: 2
+              row: 0
+            stretchFactor: 0
+            children:
+              - type: CustomControl
+                name: extCtrl
+                events:
+                  creating: ./jmvtabreg::extCtrl_creating
+                  updated: ./jmvtabreg::extCtrl_updated
+      # Row 3: a discreet, right-aligned "default path" reset, sitting under the file-name box.            
+      - type: LayoutBox
+        margin: none
+        children:
+          - type: CheckBox
+            name: xl_replace
+            label: Replace existing file
+       # Row 4: a discreet, right-aligned "default path" reset.
       - type: LayoutBox
         margin: none
         children:
           - type: ActionButton
             name: resetPath
-            label: Reset to defaults
+            label: default path
             events:
               change: ./jmvtabreg::resetPath_changed
+

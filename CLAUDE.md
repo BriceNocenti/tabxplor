@@ -1003,7 +1003,7 @@ Other improvements to implement :
 #### Last phase h — final Jamovi UI maintainer’s review
 
 
-Jamovi jmvtabreg 
+Jamovi `jmvtabreg` improvements.
 
 For the family selector : 
 - Don’t show "auto (detected)", just auto chose the auto detected object in the drop list (ex : "binomial (logistic)" for binary factors). When only one choice is possible, just grey out the dropdown since there’s not choice left. When the auto detection fails, for integers or doubles, please autoselect "poisson" over "gaussian" (more annoying if the models don’t fit in jamovi live UI than in R session). 
@@ -1036,7 +1036,7 @@ I still have these messages in jamovi devtools console :
 
 `Missing values and display` : rename `Display` (missing values are not here anymore)
 - Layout for the first row : first column, half the h space, `estimate_display` ; second column, half the h space : a common bold title + "wrap_rows =" + "wrap cols =" + a label for cleannames + "cleannames =", verticaly stacked (5 rows, matching the 5 rows of `estimate_display` including it’s label) (to not duplicate titles in both label and title)
-- `subtext` auto height growth text box is good, but it’s very thin : make it take all the horizontal space available at its right (same for `jmvtab` subtext box). 
+- `subtext` auto height growth text box is good, but it’s very thin : make it take all the horizontal space available at its right please (same for `jmvtab` subtext box).
 
 Whenever you can, **keep the "real_R_argument = <quick legend>" syntax** (like : "color = <i>(color helpers)</i>"), since I use the jamovi package as a progressive approach to teach R / tabxplor on R to literary students (it’s also why we do not want to translate the argument in French, only their legend).
 
