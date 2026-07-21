@@ -64,6 +64,22 @@ test_fmt_num <- function(v, digits = 0L) {
 # The single red-helper predicate: a p-value at or above 0.05 (a non-significant result). Vectorised.
 test_is_nonsig <- function(p) !is.na(p) & p >= 0.05
 
+# The short symbol for each effect-size measure (ASCII, so every backend renders it): Cramer's V,
+# phi (2x2), eta^2 (numeric / ANOVA). Last Phase j.
+test_es_symbol <- function(es_type)
+  switch(es_type %||% "", "cramer_v" = "V", "phi" = "phi", "eta2" = "eta2", NA_character_)
+
+# The console effect-size cell: "V = 0.18" / "eta2 = 0.05" (symbol prefix aids the learner; the export
+# cell is the bare number, the column type already telling V from eta2). Vectorised; NA -> NA. Two
+# decimals is the effect-size convention (values live in [0, 1]).
+test_fmt_es <- function(effect_size, es_type) {
+  vapply(seq_along(effect_size), function(i) {
+    v <- effect_size[i]; sym <- test_es_symbol(es_type[i])
+    if (is.na(v) || is.na(sym)) NA_character_
+    else paste0(sym, " = ", formatC(v, format = "f", digits = 2L))
+  }, character(1))
+}
+
 # The bare in-cell test label ("Chi2" / "Chi2 !" / "F, Welch"), shared by the console grid and the
 # inline export p-value cell (pvalue_line_fmt wraps it in parens). A trailing " !" flags a weak chi2
 # (smallest expected count < 5, the standard chi2-validity caveat); `min_e` is NA for an F test.
@@ -85,9 +101,18 @@ test_pvalue_label <- function(test, min_e = NA_real_) {
 
 # Pick the DISPLAYED test row per (subtable x col_var): chi2 for factor col_vars, and for mean
 # col_vars the option-selected ANOVA F (Welch by default). Both F rows are stored; this chooses one.
+# Last Phase j: a weak chi2 (min_e < 5) carries a `pvalue_exact` column = the Fisher-exact p on that
+# same row; the p-value cell shows that reliable exact p (labelled "Fisher") instead of the flagged
+# chi2 one. `pvalue_exact` is NA on a strong chi2 / on an older `test` attribute without the column.
 test_display_rows <- function(test_tbl, anova = getOption("tabxplor.anova", "welch")) {
   keep_f <- paste0("F_", anova)
-  dplyr::filter(test_tbl, .data$test == "chi2" | .data$test == keep_f)
+  # Last Phase j: a robust table carries chi2_kish/chi2_svy (factor) or F_kish/F_svy (numeric) INSTEAD
+  # of the classic chi2 / F_welch|F_classic -- one family present per table, so filter on all of them.
+  disp   <- dplyr::filter(test_tbl,
+                          .data$test %in% c("chi2", "chi2_kish", "chi2_svy",
+                                            keep_f, "F_kish", "F_svy"))
+  if (is.null(disp[["pvalue_exact"]])) disp$pvalue_exact <- NA_real_
+  disp
 }
 
 # Build the fmt "pvalue" cells for a p-value display row. Phase 17c: the p lives HONESTLY in the
@@ -104,8 +129,13 @@ pvalue_line_fmt <- function(p, label = NA_character_) {
 }
 
 # The label shown in a crosstab p-value cell for each test type (Phase 12f). NULL -> no in-cell label.
+# Last Phase j: the robust variants name their method (Kish n_eff / Rao-Scott survey design).
 test_cell_label <- function(test) {
-  switch(test, "chi2" = "Chi2", "F_welch" = "F, Welch", "F_classic" = "F", NA_character_)
+  switch(test,
+         "chi2" = "Chi2", "F_welch" = "F, Welch", "F_classic" = "F",
+         "chi2_kish" = "Chi2, Kish", "chi2_svy" = "Chi2, Rao-Scott",
+         "F_kish" = "F, Kish", "F_svy" = "F, survey",
+         NA_character_)
 }
 
 # --- Regression model-summary footer (Phase 12f) -----------------------------------------------------
@@ -223,17 +253,28 @@ test_grid_crosstab <- function(x, test_tbl) {
     idx  <- match(value_cols, sub$col_var)
     stat <- test_fmt_stat(sub$statistic[idx], sub$df1[idx], sub$df2[idx])
     n    <- vapply(sub$n[idx], test_fmt_num, character(1), digits = 0L)
-    plab <- vapply(seq_along(idx), function(k)
-      if (is.na(idx[k])) "" else test_pvalue_label(sub$test[idx[k]], sub$min_e[idx[k]]),
-      character(1))
-    pval <- test_fmt_pvalue(sub$pvalue[idx])
+    # effect size: columns may be absent on a degraded / older `test` attribute -> NA vector.
+    es_v  <- if (!is.null(sub[["effect_size"]])) sub$effect_size[idx] else rep(NA_real_, length(idx))
+    es_ty <- if (!is.null(sub[["es_type"]]))     sub$es_type[idx]     else rep(NA_character_, length(idx))
+    es    <- test_fmt_es(es_v, es_ty)
+    # a weak chi2 shows its Fisher-exact p (labelled "(Fisher)") in place of the flagged chi2 one
+    p_exact <- if (!is.null(sub[["pvalue_exact"]])) sub$pvalue_exact[idx] else rep(NA_real_, length(idx))
+    p_show  <- ifelse(!is.na(p_exact), p_exact, sub$pvalue[idx])
+    plab <- vapply(seq_along(idx), function(k) {
+      if (is.na(idx[k])) return("")
+      if (!is.na(p_exact[k])) "(Fisher)"
+      else test_pvalue_label(sub$test[idx[k]], sub$min_e[idx[k]])
+    }, character(1))
+    pval <- test_fmt_pvalue(p_show)
     pcell <- ifelse(is.na(pval), "", trimws(paste0(pval, " ", plab)))
-    nonsig <- test_is_nonsig(sub$pvalue[idx])
+    nonsig <- test_is_nonsig(p_show)
 
-    rows <- list(
-      list(label = "N",         cells = ifelse(is.na(n),    "", n),    nonsig = rep(FALSE, length(idx))),
-      list(label = "statistic", cells = ifelse(is.na(stat), "", stat), nonsig = rep(FALSE, length(idx))),
-      list(label = "pvalue",    cells = pcell,                         nonsig = nonsig)
+    rows <- c(
+      list(list(label = "N",         cells = ifelse(is.na(n),    "", n),    nonsig = rep(FALSE, length(idx)))),
+      list(list(label = "statistic", cells = ifelse(is.na(stat), "", stat), nonsig = rep(FALSE, length(idx)))),
+      if (any(!is.na(es)))
+        list(list(label = "effect size", cells = ifelse(is.na(es), "", es), nonsig = rep(FALSE, length(idx)))),
+      list(list(label = "pvalue",    cells = pcell,                         nonsig = nonsig))
     )
     list(label_lines = label_lines, rows = rows)
   })

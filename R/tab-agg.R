@@ -519,14 +519,23 @@ agg_chi2 <- function(table_id, row_id, col_id, o, correct = TRUE) {
                                             pmin(0.5, abs(DT$o - DT$e)), 0) else 0
   DT[, contrib := data.table::fifelse(ok, (abs(o - e) - yates)^2 / e, 0)]
   DT[, signed_contrib := sign(o - e) * contrib]
+  # Effect size reads the UNCORRECTED Pearson chi2 (the standard Cramer's V / phi convention, matching
+  # DescTools::CramerV / vcd::assocstats defaults); the p-value keeps the Yates-corrected `contrib`.
+  DT[, contrib_unc := data.table::fifelse(ok, (o - e)^2 / e, 0)]
 
   tables <- DT[ok == TRUE, {
     nr_ <- data.table::uniqueN(row_id)
     nc_ <- data.table::uniqueN(col_id)
     df_ <- (nr_ - 1L) * (nc_ - 1L)
     st_ <- sum(contrib)
-    list(statistic = st_, df = df_, n = grandtot[1], min_e = min(e),
-         pvalue = if (df_ >= 1L) stats::pchisq(st_, df_, lower.tail = FALSE) else NA_real_)
+    n_  <- grandtot[1]
+    # Cramer's V = sqrt(X2 / (N * (min(r, c) - 1))); for a 2x2 this equals phi = sqrt(X2 / N).
+    kdim <- min(nr_, nc_) - 1L
+    es_  <- if (kdim >= 1L) sqrt(sum(contrib_unc) / (n_ * kdim)) else NA_real_
+    list(statistic = st_, df = df_, n = n_, min_e = min(e),
+         pvalue = if (df_ >= 1L) stats::pchisq(st_, df_, lower.tail = FALSE) else NA_real_,
+         effect_size = es_,
+         es_type = if (nr_ == 2L && nc_ == 2L) "phi" else "cramer_v")
   }, by = table_id]
 
   list(tables = tables,
@@ -550,7 +559,7 @@ agg_anova <- function(table_id, group_id, n, mean, var) {
     if (k < 2L) {
       list(k = k, statistic = NA_real_, df1 = NA_real_, df2 = NA_real_, pvalue = NA_real_,
            statistic_classic = NA_real_, df1_classic = NA_real_, df2_classic = NA_real_,
-           pvalue_classic = NA_real_, n = sum(n))
+           pvalue_classic = NA_real_, n = sum(n), effect_size = NA_real_)
     } else {
       sw    <- sum(w)
       xbarw <- sum(w * mean) / sw
@@ -568,9 +577,49 @@ agg_anova <- function(table_id, group_id, n, mean, var) {
       df2c  <- N - k
       Fc    <- (ssb / df1c) / (ssw / df2c)
       pc    <- stats::pf(Fc, df1c, df2c, lower.tail = FALSE)
+      # eta^2 = SSB / SST = the share of variance explained by the row_var groups (the numeric
+      # analogue of Cramer's V). From the same SS the classic F forms; weighted per S14, exact when
+      # unweighted. sst = ssb + ssw > 0 here (k >= 2, var > 0 on at least one kept group).
+      eta2  <- ssb / (ssb + ssw)
       list(k = k, statistic = Fw, df1 = df1w, df2 = df2w, pvalue = pw,
            statistic_classic = Fc, df1_classic = df1c, df2_classic = df2c,
-           pvalue_classic = pc, n = N)
+           pvalue_classic = pc, n = N, effect_size = eta2)
     }
   }, by = table_id]
+}
+
+# agg_fisher() -- Fisher's exact test for the SMALL factor tables where the chi2 is unreliable
+# (smallest expected count < 5, the standard validity threshold that already drives the "!" weak flag).
+# Same long (table_id, row_id, col_id, o = UNWEIGHTED count) inputs as agg_chi2(); `which_ids` bounds the
+# work to the flagged tables (Last Phase j -- a per-table loop, so only ever a handful). Each table is
+# reshaped to its integer count matrix, empty rows/cols dropped (matching agg_chi2's `ok`), and tested.
+# SIZE GUARD: an exact test is meaningful (and feasible) only for a SMALL sample -- a large table with
+# one rare category has a low expected count but a fine chi2, and the exact test would blow up FEXACT's
+# workspace. So a grid over `max_cells` non-empty cells OR a total over `n_exact` uses a Monte-Carlo p
+# (simulate.p.value, B reps); an exact call that still errors falls back to it too. `simulated` flags
+# which was used, so the caller can show the EXACT p only (never a silent cap).
+agg_fisher <- function(table_id, row_id, col_id, o, which_ids,
+                       max_cells = 25L, n_exact = 2000, B = 2000L) {
+  DT <- data.table::data.table(table_id = table_id, row_id = row_id,
+                               col_id = col_id, o = as.double(o))
+  rows <- lapply(which_ids, function(id) {
+    d <- DT[table_id == id]
+    M <- data.table::dcast(d, row_id ~ col_id, value.var = "o", fill = 0, fun.aggregate = sum)
+    M <- as.matrix(M[, -1L])
+    M <- M[rowSums(M) > 0, , drop = FALSE]
+    M <- M[, colSums(M) > 0, drop = FALSE]
+    if (nrow(M) < 2L || ncol(M) < 2L)
+      return(list(table_id = id, pvalue = NA_real_, simulated = FALSE))
+    M   <- round(M)
+    sim <- (nrow(M) * ncol(M)) > max_cells || sum(M) > n_exact
+    res <- tryCatch(
+      if (sim) stats::fisher.test(M, simulate.p.value = TRUE, B = B)
+      else     stats::fisher.test(M),
+      error = function(e) tryCatch(stats::fisher.test(M, simulate.p.value = TRUE, B = B),
+                                   error = function(e2) NULL))
+    if (is.null(res)) list(table_id = id, pvalue = NA_real_, simulated = TRUE)
+    else list(table_id = id, pvalue = res$p.value,
+              simulated = sim || grepl("simulated", res$method, fixed = TRUE))
+  })
+  data.table::rbindlist(rows)
 }

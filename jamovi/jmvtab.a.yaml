@@ -202,6 +202,40 @@ options:
            Which F statistic to display for numeric column variables when the test is on:
            Welch's F (default, does not assume equal variances) or the classic pooled F.
 
+    - name: test_robust
+      title: "test = <i>(robustness of the p-value)</i>"
+      type: List
+      options:
+        - title: "classic"
+          name:  classic
+        - title: "Kish n_eff <i>(weighted)</i>"
+          name:  kish
+        - title: "survey design"
+          name:  survey
+      default: classic
+      description:
+          R: >
+           For a weighted table, a more robust p-value: "classic" (unweighted chi2 / Welch F);
+           "kish" (first-order Rao-Scott rescale to the effective sample size); "survey" (a
+           design-based survey::svychisq / svyglm F using the weight + optional strata/ids).
+
+    - name: strata
+      title: "strata = <i>(survey)</i>"
+      type: Variable
+      default:
+      permitted: [ factor, id, numeric ]
+      description:
+          R: >
+           Optional stratification variable for the survey-design test (test = "survey").
+
+    - name: ids
+      title: "ids = <i>(survey clusters)</i>"
+      type: Variable
+      default:
+      permitted: [ factor, id, numeric ]
+      description:
+          R: >
+           Optional cluster-id variable for the survey-design test (test = "survey").
 
 
 # Missing values and levels

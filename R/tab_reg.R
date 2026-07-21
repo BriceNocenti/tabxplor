@@ -713,30 +713,12 @@ reg_ordinal_diagnostic <- function(fit) {
 # with its model-frame variables replaced by the recoded `mdata` (same rows, same order).
 # `design_spec` = list(design = <prebuilt or NULL>, wt, ids, strata, fpc, nest).
 
-# Coerce a design argument (NULL / a column name or char vector / a formula) to a survey formula.
-reg_design_formula <- function(x) {
-  if (is.null(x)) return(NULL)
-  if (rlang::is_formula(x)) return(x)
-  stats::reformulate(x)
-}
-# The data columns a design spec references (for drop_na, so svydesign never sees NA weights/strata/fpc).
-reg_design_vars <- function(design_spec) {
-  if (!is.null(design_spec$design)) return(character(0))   # a prebuilt design carries its own metadata
-  parts <- list(design_spec$wt, design_spec$ids, design_spec$strata, design_spec$fpc)
-  unique(unlist(purrr::map(parts, function(x) {
-    if (is.null(x)) character(0) else if (rlang::is_formula(x)) all.vars(x) else as.character(x)
-  })))
-}
-reg_make_design <- function(data, wt, ids, strata, fpc, nest) {
-  survey::svydesign(
-    ids     = if (is.null(ids)) stats::as.formula("~1") else reg_design_formula(ids),
-    strata  = reg_design_formula(strata),
-    fpc     = reg_design_formula(fpc),
-    weights = reg_design_formula(wt),
-    data    = data,
-    nest    = nest
-  )
-}
+# Last Phase j: the design constructors are single-sourced in R/survey-design.R (svy_*) and shared with
+# tab()'s survey-design tests. These thin wrappers keep the reg_* call sites + byte-identical behaviour.
+reg_design_formula <- function(x) svy_design_formula(x)
+reg_design_vars    <- function(design_spec) svy_design_vars(design_spec)
+reg_make_design    <- function(data, wt, ids, strata, fpc, nest)
+  svy_make_design(data, wt, ids, strata, fpc, nest)
 # Subset a prebuilt design to the model's complete cases, then swap its model frame for the recoded
 # `mdata` (drop_na + fct_drop + reg_prep_binary + grouped-binomial cols already applied). The design
 # metadata slots (strata / cluster / fpc / prob) are subset by `[` and stay row-aligned with mdata.

@@ -54,15 +54,19 @@ to \code{"light"}.}
 \describe{
 \item{\code{tabxplor.anova}}{which one-way ANOVA F is shown for mean columns: \code{"welch"} (default,
 robust) or \code{"classic"} (pooled variance). Both are always stored in the \code{test} attribute.}
-\item{\code{tabxplor.test_lines}}{how many crosstab test rows the exporters (\code{\link[=tab_md]{tab_md()}}, \code{\link[=tab_kable]{tab_kable()}},
-\code{\link[=tab_xl]{tab_xl()}}) append: \code{"pvalue"} (default, the single p-value row) or \code{"stat"} (adds a
-test-statistic row above it). N is never added -- it is already shown by \code{add_n}. The console
-summary block always shows the full N / statistic / p-value table.}
+\item{\code{tabxplor.test_lines}}{how many crosstab test rows the exporters (\code{\link[=tab_md]{tab_md()}}, \code{\link[=tab_html]{tab_html()}},
+\code{\link[=tab_xl]{tab_xl()}}) append: \code{"summary"} (default: statistic + effect size + p-value), \code{"stat"} (statistic
++ p-value), or \code{"pvalue"} (the single p-value row). N is never added -- it is already shown by
+\code{add_n}. The console summary block always shows the full N / statistic / effect-size / p-value table.}
 \item{\code{tabxplor.legend_style}}{the colour-legend style in exports (\code{\link[=tab_md]{tab_md()}}, \code{\link[=tab_kable]{tab_kable()}},
 \code{\link[=tab_xl]{tab_xl()}}, \code{\link[=tab_plot]{tab_plot()}}): \code{"prose"} (default, full sentences) or \code{"terse"} (the compact
 one-line form the console uses). The console itself is always terse.}
 \item{\code{tabxplor.kish_neff}}{\code{FALSE} (default): use Kish's effective sample size
-\verb{(sum w)^2 / sum w^2} for weighted numeric (mean) confidence intervals / significance.}
+\verb{(sum w)^2 / sum w^2} for the weighted confidence intervals / significance. When \code{TRUE} it also
+switches the whole-table tests (\code{test = TRUE}) to a first-order Rao-Scott correction -- the factor
+chi-square rescaled to \code{n_eff}, the numeric F on per-group \code{n_eff}. For a full design-based test
+(clusters / strata), use \code{test = "survey"} with \verb{wt =}/\verb{strata =}/\verb{ids =}, or pass a
+\code{survey::svydesign} as \code{data}.}
 \item{\code{tabxplor.conf_level}}{confidence level for the intervals and significance tests, default
 \code{0.95}. The per-call \verb{conf_level =} argument of \code{\link[=tab]{tab()}}, \code{\link[=tab_num]{tab_num()}}, \code{\link[=tab_ci]{tab_ci()}} and \code{\link[=tab_reg]{tab_reg()}}
 overrides it.}

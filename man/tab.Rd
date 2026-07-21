@@ -32,6 +32,10 @@ tab(
   method_ratio = "katz",
   method_mean_diff = "welch",
   method_mean_ratio = "robust",
+  ids = NULL,
+  strata = NULL,
+  fpc = NULL,
+  nest = FALSE,
   totaltab = "line",
   totaltab_name = "Ensemble",
   tot = c("row", "col"),
@@ -133,9 +137,20 @@ Odds ratios don't add up to 100\\%, so the total column drops its "100\\%" and s
 
 \item{test}{Set to \code{TRUE} to calculate a statistical test of independence for each
 (sub)table: \strong{Chi-squared} for factor \code{col_vars}, \strong{Welch's F} (one-way
-ANOVA) for numeric ones -- see \code{\link{tab_chi2}}. Useful to print metadata, and to
-color cells based on their contribution to variance (\code{color = "contrib"}).
-Automatically added if needed for \code{color}.}
+ANOVA) for numeric ones -- see \code{\link{tab_chi2}}. The whole-table summary also carries an
+\strong{effect size} (Cramer's V / phi for factors, eta-squared for means) and, on a small sparse
+factor table where the chi-squared is unreliable, an exact \strong{Fisher} p-value. Useful to print
+metadata, and to color cells based on their contribution to variance (\code{color = "contrib"}).
+Automatically added if needed for \code{color}.
+
+For a weighted table you can opt in to a more robust p-value:
+\code{options(tabxplor.kish_neff = TRUE)} switches the tests to a first-order \strong{Rao-Scott}
+correction (the chi-squared rescaled to Kish's effective sample size \code{(sum w)^2 / sum w^2},
+the F on per-group effective n); \code{test = "survey"} runs a fully \strong{design-based} test
+(\code{survey::svychisq} for factors, a \code{svyglm} Wald F for means), built from \code{wt} plus
+the optional \code{ids}/\code{strata}/\code{fpc} arguments. You may also pass a prebuilt
+\code{survey::svydesign} as \code{data}: its weights drive the estimates, the design drives the
+p-values (estimates/CIs stay tabxplor's single-stage weighted approximation).}
 
 \item{na}{The policy to adopt for missing values, as a single string :
 \itemize{
@@ -247,6 +262,11 @@ ratio, \code{color = "ratio"}): \code{"katz"} (log risk-ratio, the only value). 
 ratio, \code{color = "ratio"} on a mean): \code{"robust"} (default, each group's own variance =
 modified/robust Poisson), \code{"quasipoisson"} (dispersion-scaled = a quasi-Poisson regression) or
 \code{"poisson"} (naive). See \code{\link{tab_many}}.}
+
+\item{ids, strata, fpc, nest}{Survey-design specifications (column name(s) / a formula) used only when
+\code{test = "survey"} to build the design for the p-values: cluster ids (default \code{~1}, no
+clustering), strata, finite-population correction, and \code{nest} (are ids nested in strata).
+Ignored otherwise. Mirror the same arguments of \code{\link{tab_reg}}.}
 
 \item{totaltab}{The total table, if there are subtables/groups
 (i.e. when \code{tab_vars} is provided) :

@@ -78,7 +78,13 @@ The attribute list is **derived** (Phase 17a): `fmt_col_attrs <- setdiff(names(f
   `statistic`, `df1`, `df2`, `pvalue`, `n`, `min_e` (smallest expected chi2 count, drives the weak-test
   flag). *(Phase 16a dropped the vestigial `variance` column — it was written `NA` everywhere.)* Chi-squared
   is filled for factor columns, ANOVA F for mean columns (both computed by the vectorised engine in
-  `R/tab-agg.R` — `agg_chi2()` / `agg_anova()` — via `tab_chi2()`). Read it with `get_test()` (which also
+  `R/tab-agg.R` — `agg_chi2()` / `agg_anova()` — via `tab_chi2()`). **Last Phase j** added three columns:
+  `effect_size` + `es_type` (Cramer's V / phi for factors, eta² for means — a companion ON each test's
+  row, not a separate row) and `pvalue_exact` (the Fisher-exact p on a small weak factor table, stored ON
+  the chi2 row so the row count is unchanged; the display prefers it, labelled "(Fisher)"). The opt-in
+  robust modes swap the discriminator: `"chi2_kish"`/`"F_kish"` (first-order Rao-Scott, `tabxplor.kish_neff`)
+  or `"chi2_svy"`/`"F_svy"` (design-based `survey::svychisq` / `svyglm`), computed by `tab_robust_overlay()`
+  in `R/survey-design.R` — the ONE test path that reads the microdata rather than the aggregate. Read it with `get_test()` (which also
   falls back to the old `chi2` attribute); `get_chi2()` is a kept alias. Rendered by the shared summary
   framework in `R/tab-test-display.R` (Phase 16a). Three shared layers, each used by both crosstab and
   regression: (1) CONTENT — `test_display_rows()`, `test_cell_label_weak()` (label + `min_e < 5` weak

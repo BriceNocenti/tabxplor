@@ -4738,3 +4738,85 @@ wrap never reorder rows.
 `fmt-contract` (a script proved the ONLY delta is the added `role=""` attr) + `render-html` (the p-value
 cell lost its bogus `diff/contrib` tooltip; value byte-identical). Failing-first fixtures: the grey-non-sig
 p-value red (B), the relabelled-table role-wins-over-label (A), the mixed-family per-column legend (C).
+
+---
+
+## 51. Last Phase j — effect sizes + opt-in survey-robust omnibus tests (2026-07-21)
+
+Adds three things to `tab(test = TRUE)`, all riding the ONE tidy `test` table attribute (§16/§24/§37-D7,
+"the test vocabulary grows"): whole-table **effect sizes**, an auto **Fisher** exact on small weak
+tables, and a two-tier **opt-in survey-robust p-value**. The default (classic, unweighted chi2 / §14
+Welch F) path is byte-identical — verified: the 36 structural goldens differ ONLY by three new `test`
+columns (`effect_size`, `es_type`, `pvalue_exact`), body untouched.
+
+### The robustness ladder (all on the `test` attribute)
+
+| Mode | Trigger | Factor | Numeric |
+|------|---------|--------|---------|
+| classic (default) | `test = TRUE` | unweighted Pearson chi2 (`"chi2"`) | §14 Welch/classic F (`"F_welch"`/`"F_classic"`) |
+| Kish (Tier 1) | `test = TRUE` + `options(tabxplor.kish_neff = TRUE)` | `"chi2_kish"`: X²(weighted props)·n_eff | `"F_kish"`: F on per-group n_eff |
+| survey (Tier 2) | `test = "survey"` / a `survey.design` as `data` | `"chi2_svy"`: `survey::svychisq` (Rao-Scott 2nd-order F) | `"F_svy"`: `svyglm` + `regTermTest` Wald F |
+
+`n_eff = (Σw)² / Σw²` (Kish). Tier-1 factor chi2 is the first-order single-deff Rao-Scott correction:
+Pearson X² is scale-covariant, so `X²(weighted counts)/Σwn · n_eff = X²(weighted proportions)·n_eff`.
+
+### Where it runs (the one architectural exception)
+
+The classic tests roll off the built table (`chi2_compute_test` → `agg_chi2`/`agg_anova`, from summary
+counts). Tier-1/Tier-2 CANNOT: they need the microdata/design at test time. So a single **overlay**
+(`tab_robust_overlay`, `R/survey-design.R`) runs in `tab_assemble_tables()` — where `ctx$data` is still
+in scope — recomputes each (subtable × col_var) omnibus from the microdata, and REPLACES the
+statistic/df/p/n on the chi2/F rows while carrying the descriptive `effect_size`/`es_type`/`min_e`
+through. Opt-in, per-table (a survey table is 10k–60k rows / a handful of tables), documented. Fisher is
+dropped in robust mode (the robust p is the answer).
+
+Robust tests run on **complete cases of (row_var, col_var) per subtable** (the survey convention); this
+can differ slightly from the classic chi2 when `na = "keep"` counts NA as a category — documented.
+
+### API
+
+- `test` accepts `FALSE`/`TRUE`/`"survey"`. `test` stays size-1; `tab()` derives `test_on` (boolean, not
+  FALSE) + `test_mode` (classic/kish/survey), threaded through `tab_build`/`new_ctx` as `test_mode` +
+  `design_spec` (a `list(design, wt, ids, strata, fpc, nest)`, `NULL` off).
+- New `tab()` args `ids`/`strata`/`fpc`/`nest` (mirror `tab_reg`; column names / formulas / NULL). Only
+  read in survey mode. `tab_prepare_pop` keeps the design-referenced columns so the wt-built design finds
+  strata/fpc on the prepared data.
+- A `survey.design`/`svyrep.design` as `data`: extract `$variables`, set `wt` from `weights(design)`
+  (estimates use the design's weights), keep the design for the p-values, one `cli_inform`.
+
+### Effect sizes (cheap, from the count aggregate, always with `test = TRUE`)
+
+- `agg_chi2`: Cramer's V `= sqrt(X²_uncorrected / (N·(min(r,c)-1)))` (uncorrected chi2 = the DescTools /
+  vcd convention; the p-value keeps Yates); `es_type` `"phi"` for a 2×2 else `"cramer_v"`.
+- `agg_anova`: η² `= SSB/(SSB+SSW)` (`es_type = "eta2"`), from the SS the classic F already forms.
+- Stored as two **columns** on the `test` row (an effect size belongs ON its test's row, not a separate
+  row). Rendered as an "effect size" line in the console grid + the export summary (`test_fmt_es`,
+  "V = 0.18" console / bare number export — the column type tells V from η²).
+
+### Fisher (auto, small weak tables only)
+
+`agg_fisher` per weak table (`min_e < 5`), size-guarded (`n_exact` / `max_cells` → Monte-Carlo, an exact
+call that still errors falls back). Stored as **`pvalue_exact` on the chi2 row** (NOT a separate row —
+keeps the tidy row count, so the jmvtab cache / every `nrow`-asserting consumer is unchanged). Only a
+**non-simulated** (genuinely exact, small-sample) p is kept: a large table drags `min_e` down via one
+rare category but its chi2 is fine, so a simulated fallback is discarded and the chi2 (with its `!` flag)
+stands. The display prefers `pvalue_exact` when present (labelled `(Fisher)`).
+
+### Full-summary export default
+
+`tabxplor.test_lines` default `"pvalue"` → `"summary"` (statistic + effect size + p-value). Console
+always showed the full block. Conscious snapshot regen (render-html + the golden test attribute).
+
+### Shared survey-design helpers
+
+`reg_design_formula`/`reg_design_vars`/`reg_make_design` lifted to `R/survey-design.R` (`svy_*`);
+`tab_reg` delegates via thin wrappers (byte-identical; `svy_design_formula` now `as.character()`-coerces
+a bare symbol, since tab()'s resolved weight is a symbol — identity for tab_reg's char/formula inputs).
+
+**Supersedes** §14's "a weighted (Rao-Scott-style) chi2 is out of 1.4.0 scope" — now an opt-in.
+
+### Not in scope (documented)
+
+Design-based CIs / per-cell survey stars stay §14 (weighted point + n/n_eff); only the omnibus p is
+design-based. jamovi surfaces a `test_robust` selector (classic/kish/survey) + strata/ids — inert until
+the maintainer's `prepare()`.

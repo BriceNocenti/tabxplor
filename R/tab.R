@@ -208,9 +208,24 @@ NULL
 #' \code{n} (console), exports the base-\code{n} column only, or nothing when \code{add_n = FALSE}.
 #' @param test Set to \code{TRUE} to calculate a statistical test of independence for each
 #' (sub)table: \strong{Chi-squared} for factor \code{col_vars}, \strong{Welch's F} (one-way
-#' ANOVA) for numeric ones -- see \code{\link{tab_chi2}}. Useful to print metadata, and to
-#' color cells based on their contribution to variance (\code{color = "contrib"}).
+#' ANOVA) for numeric ones -- see \code{\link{tab_chi2}}. The whole-table summary also carries an
+#' \strong{effect size} (Cramer's V / phi for factors, eta-squared for means) and, on a small sparse
+#' factor table where the chi-squared is unreliable, an exact \strong{Fisher} p-value. Useful to print
+#' metadata, and to color cells based on their contribution to variance (\code{color = "contrib"}).
 #' Automatically added if needed for \code{color}.
+#'
+#' For a weighted table you can opt in to a more robust p-value:
+#' \code{options(tabxplor.kish_neff = TRUE)} switches the tests to a first-order \strong{Rao-Scott}
+#' correction (the chi-squared rescaled to Kish's effective sample size \code{(sum w)^2 / sum w^2},
+#' the F on per-group effective n); \code{test = "survey"} runs a fully \strong{design-based} test
+#' (\code{survey::svychisq} for factors, a \code{svyglm} Wald F for means), built from \code{wt} plus
+#' the optional \code{ids}/\code{strata}/\code{fpc} arguments. You may also pass a prebuilt
+#' \code{survey::svydesign} as \code{data}: its weights drive the estimates, the design drives the
+#' p-values (estimates/CIs stay tabxplor's single-stage weighted approximation).
+#' @param ids,strata,fpc,nest Survey-design specifications (column name(s) / a formula) used only when
+#' \code{test = "survey"} to build the design for the p-values: cluster ids (default \code{~1}, no
+#' clustering), strata, finite-population correction, and \code{nest} (are ids nested in strata).
+#' Ignored otherwise. Mirror the same arguments of \code{\link{tab_reg}}.
 #' @param chi2 `r lifecycle::badge("deprecated")` Renamed to \code{test} in 1.4.0: the test is a
 #' Chi-squared only for factors (numeric \code{col_vars} get Welch's F), so the old name was
 #' misleading. Still works.
@@ -423,6 +438,7 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
                 method_cell = "wilson", method_diff = "newcombe",
                 method_ratio = "katz", method_mean_diff = "welch",
                 method_mean_ratio = "robust",
+                ids = NULL, strata = NULL, fpc = NULL, nest = FALSE,
                 totaltab = "line", totaltab_name = "Ensemble",
                 tot = c("row", "col"), total_names = "Total",
                 add_n = TRUE, add_pct = FALSE,
@@ -459,6 +475,20 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
 
   cleannames <-
     if (is.null(cleannames)) { getOption("tabxplor.cleannames") } else {cleannames}
+
+  # Last Phase j: a prebuilt survey.design / svyrep.design passed as `data` -> its model frame drives the
+  # whole pipeline (the estimates use the design's own weights); the design itself drives ONLY the test
+  # p-values (Rao-Scott). tab()'s estimates / CIs stay the weighted-point + n approximation (S14).
+  design_obj <- NULL
+  if (inherits(data, c("survey.design", "survey.design2", "svyrep.design"))) {
+    if (!requireNamespace("survey", quietly = TRUE))
+      cli::cli_abort("A {.cls survey.design} passed as {.arg data} needs the {.pkg survey} package.")
+    design_obj <- data
+    data       <- as.data.frame(design_obj$variables)
+    cli::cli_inform(c("i" = paste(
+      "Survey design detected: it drives the test p-values;",
+      "estimates and CIs use the design's weights (single-stage approximation).")))
+  }
 
 
   # `row_vars`/`col_vars` accept a <tidy-select> (one variable OR several, e.g. `c(race, relig)`),
@@ -518,6 +548,30 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
   } else {
     wt <- rlang::ensym(wt)
   }
+
+  # Last Phase j: a survey design carries its own weights -> materialise them as the weight column so
+  # the estimates are design-weighted (overrides any user `wt`, which a design makes redundant).
+  if (!is.null(design_obj)) {
+    data[[".svy_weights"]] <- as.double(stats::weights(design_obj))
+    wt <- rlang::sym(".svy_weights")
+  }
+
+  # `test` accepts FALSE / TRUE / "survey": the whole-table test runs whenever it is not FALSE; the
+  # ROBUSTNESS mode (classic / Kish n_eff / survey design) is a separate signal threaded to the overlay.
+  # A survey design as `data` (with test not FALSE) implies survey mode. Kish is the opt-in option, only
+  # meaningful on a weighted table.
+  test_survey <- (is.character(test) && test %in% c("survey", "design")) ||
+    (!is.null(design_obj) && !isFALSE(test))
+  test_on   <- test_survey || isTRUE(test)
+  kish_on   <- isTRUE(getOption("tabxplor.kish_neff", FALSE)) && length(wt) > 0L
+  test_mode <- if (test_survey) "survey" else if (test_on && kish_on) "kish" else "classic"
+  if (test_survey && is.null(design_obj) && length(wt) == 0L)
+    cli::cli_abort(c("A survey-design test needs weights.",
+                     "i" = 'Pass {.arg wt} (+ optional {.arg strata}/{.arg ids}/{.arg fpc}), or a {.cls survey.design} as {.arg data}.'))
+  design_spec <- if (test_survey)
+    list(design = design_obj, wt = if (length(wt)) as.character(wt) else NULL,
+         ids = ids, strata = strata, fpc = fpc, nest = nest)
+  else NULL
 
   vctrs::vec_assert(comp, size = 1)
   # Phase 5: `color` accepts FALSE / TRUE / a scalar / c(text, background) / c(text=, background=),
@@ -589,8 +643,10 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
            ref = ref, ref2 = ref2, #c(ref, rep(ref , length(sup_cols))),
            comp = comp,
            # tab_build()'s internal arg keeps the `chi2` name (it drives tab_chi2(); the ANOVA arm
-           # branches inside tab_transform()); only the PUBLIC tab() surface is renamed.
-           chi2 = test,
+           # branches inside tab_transform()); only the PUBLIC tab() surface is renamed. `test_on` is the
+           # boolean (test not FALSE); `test_mode`/`design_spec` carry the robustness overlay (Phase j).
+           chi2 = test_on,
+           test_mode = test_mode, design_spec = design_spec,
            ci = ci,
            conf_level = conf_level,
            stars = stars,
@@ -1257,7 +1313,8 @@ new_ctx <- function(...) {
     wt_quo = NULL, na_drop_all_quo = NULL,
     # inputs (= each formal's current default)
     pct = "no", color = "no", color_signif = "ignore", color_ratio_ci = FALSE,
-    OR = "no", chi2 = FALSE, na = "keep", levels = "all",
+    OR = "no", chi2 = FALSE, test_mode = "classic", design_spec = NULL,
+    na = "keep", levels = "all",
     cleannames = NULL, output = "single",
     other_if_less_than = 0, other_level = "Others",
     ref = "auto", ref2 = "first", comp = "tab",
@@ -1311,6 +1368,7 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
                       pct = "no", color = "no", color_signif = "ignore",
                       color_ratio_ci = FALSE,
                       OR = "no", chi2 = FALSE,
+                      test_mode = "classic", design_spec = NULL,
                       na = "keep", levels = "all", na_drop_all,
                       cleannames = NULL, output = "single", #pvalue_line = NULL,
                       other_if_less_than = 0, other_level = "Others",
@@ -1359,6 +1417,7 @@ tab_build <- function(data, row_vars, col_vars, tab_vars, wt,
     na_drop_all_quo = rlang::enquo(na_drop_all),
     pct = pct, color = color, color_signif = color_signif,
     color_ratio_ci = color_ratio_ci, OR = OR, chi2 = chi2,
+    test_mode = test_mode, design_spec = design_spec,
     na = na, levels = levels,
     cleannames = cleannames, output = output,
     other_if_less_than = other_if_less_than, other_level = other_level,
@@ -1789,9 +1848,14 @@ tab_prepare_pop <- function(ctx) {
   # diverges from tab(levels = "first"). See dev/tabxplor_jmvtab_cache_design.md 3.3/4e/5.
 
   #Prepare the data
+  data0 <- data
   data <- data |> dplyr::select(!!!tab_vars, !!!row_vars, !!wt, !!!col_vars,
                                  tidyselect::any_of(".filter")) |>
     relabel_levels_in_varnames(as.character(col_vars))
+  # Last Phase j: keep the survey-design-referenced columns (strata / ids / fpc) that are NOT already
+  # row/col/tab/weight vars, so the wt-built survey test can rebuild the design on the prepared data.
+  design_extra <- setdiff(svy_design_vars(design_spec), names(data))
+  if (length(design_extra)) data <- dplyr::bind_cols(data, data0[design_extra])
 
   #  Filters : here after selection (operations on rows copy all columns on memory),
   #     orwhen the tables are made for more speed :
@@ -2241,6 +2305,16 @@ tab_assemble_tables <- function(ctx) {
   # it to an empty test tibble.
   if (is.logical(tests)) tests <- new_test_tibble()
   if (!is.null(chi2_num)) tests <- dplyr::bind_rows(tests, chi2_num)
+
+  # Last Phase j: the OPT-IN robust omnibus overlay (Kish n_eff / survey design). Recomputes each
+  # whole-table p-value from the microdata (`data`, still in ctx) and replaces the classic chi2 / F
+  # rows, keeping the descriptive effect sizes. The default `test_mode = "classic"` never runs it, so
+  # the ordinary path stays byte-identical. new_ctx() defaults keep it present on every ctx.
+  if (!identical(test_mode, "classic") && nrow(tests) > 0) {
+    col_num <- stats::setNames(as.logical(col_vars_num), as.character(col_vars))
+    tests <- tab_robust_overlay(tests, data, row_var, as.character(col_vars), col_num,
+                                as.character(tab_vars), wt, test_mode, design_spec, comp[1])
+  }
 
   # Phase 10i-B: store the add_n / add_pct DISPLAY intent (materialised by tab_materialize_extras()).
   # Phase 14p: add_n / add_pct only make sense beside a col_var (they fold the base `n` / a `col_pct`
@@ -5474,7 +5548,27 @@ chi2_compute_test <- function(tabs, comp, row_var, col_vars_levels,
         dplyr::transmute(
           .data$subtab, .data$col_var, test = "chi2",
           statistic = .data$statistic, df1 = as.double(.data$df), df2 = NA_real_,
-          pvalue = .data$pvalue, n = as.double(.data$n), min_e = .data$min_e)
+          pvalue = .data$pvalue, n = as.double(.data$n), min_e = .data$min_e,
+          effect_size = .data$effect_size, es_type = .data$es_type,
+          pvalue_exact = NA_real_)
+
+      # Last Phase j: Fisher's exact on the SMALL weak tables (smallest expected count < test_weak_min_e
+      # AND a total feasible for an exact test), where the Pearson chi2 is unreliable -- stored as
+      # `pvalue_exact` ON the chi2 row (NOT a separate row, so the tidy shape / row count is unchanged).
+      # Only a NON-simulated (genuinely exact) p is kept: a large table drags min_e down via one rare
+      # category but its chi2 is fine, so agg_fisher simulates there and we keep the chi2 (weak "!" flag).
+      # The display prefers pvalue_exact when present.
+      weak_ids <- res$tables$table_id[!is.na(res$tables$min_e) &
+                                        res$tables$min_e < test_weak_min_e]
+      if (length(weak_ids) > 0) {
+        fish <- tibble::as_tibble(
+          agg_fisher(long$table_id, long$row_id, long$col_id, long$o, weak_ids))
+        fish$pvalue[fish$simulated] <- NA_real_          # keep only the exact (small-sample) p
+        fmap <- dplyr::left_join(map, fish, by = "table_id")
+        chi2_rows$pvalue_exact <- fmap$pvalue[
+          match(paste(chi2_rows$subtab, chi2_rows$col_var, sep = "\r"),
+                paste(fmap$subtab, fmap$col_var, sep = "\r"))]
+      }
     }
   }
 
@@ -5507,11 +5601,13 @@ chi2_compute_test <- function(tabs, comp, row_var, col_vars_levels,
       welch <- dplyr::transmute(
         baseA, .data$subtab, .data$col_var, test = "F_welch",
         statistic = .data$statistic, df1 = .data$df1, df2 = .data$df2,
-        pvalue = .data$pvalue, n = as.double(.data$n), min_e = NA_real_)
+        pvalue = .data$pvalue, n = as.double(.data$n), min_e = NA_real_,
+        effect_size = .data$effect_size, es_type = "eta2")
       classic <- dplyr::transmute(
         baseA, .data$subtab, .data$col_var, test = "F_classic",
         statistic = .data$statistic_classic, df1 = .data$df1_classic, df2 = .data$df2_classic,
-        pvalue = .data$pvalue_classic, n = as.double(.data$n), min_e = NA_real_)
+        pvalue = .data$pvalue_classic, n = as.double(.data$n), min_e = NA_real_,
+        effect_size = .data$effect_size, es_type = "eta2")
       anova_rows <- dplyr::bind_rows(welch, classic)
     }
   }

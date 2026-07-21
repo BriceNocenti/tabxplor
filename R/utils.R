@@ -108,8 +108,9 @@ tx_getOption <- function(names, default = NULL) {
   options("tabxplor.signif_levels" = c(0.10, 0.05, 0.01))
   options("tabxplor.signif_labels" = c("*", "**", "***"))
 
-  # Weighted inference (§14): unweighted n by default; opt in to Kish n_eff = (Sum w)^2/Sum w^2
-  # for the numeric (mean) CIs/tests. Factor-side Kish is deferred (open item).
+  # Weighted inference (§14): unweighted n by default; opt in to Kish n_eff = (Sum w)^2/Sum w^2 for the
+  # weighted CIs/tests. Last Phase j extends it to the FACTOR chi2 + the numeric F table tests
+  # (first-order Rao-Scott rescale), not only the per-cell mean CI. A design-based test is `test="survey"`.
   options("tabxplor.kish_neff"     = FALSE)
 
   # Phase 3b: which one-way ANOVA F is DISPLAYED for mean columns ("welch" = robust default,
@@ -117,10 +118,11 @@ tx_getOption <- function(names, default = NULL) {
   # stored in the `test` attribute; this only picks the p-value shown in the p-value row/stars.
   options("tabxplor.anova"         = "welch")
 
-  # Phase 16a: how many crosstab test rows the EXPORTERS append (md/html/Excel). "pvalue" (default) =
-  # the single p-value row; "stat" = a test-statistic row above it (N is omitted -- already shown by
-  # add_n). Console always shows the full N/statistic/p-value summary block, so this is export-only.
-  options("tabxplor.test_lines"    = "pvalue")
+  # Phase 16a / Last Phase j: how many crosstab test rows the EXPORTERS append (md/html/Excel).
+  # "summary" (the new default) = statistic + effect size + p-value (the console's full block, minus N,
+  # already shown by add_n); "stat" = statistic + p-value; "pvalue" = the single p-value row; "all" =
+  # summary. Console always shows the full N/statistic/effect-size/p-value block, so this is export-only.
+  options("tabxplor.test_lines"    = "summary")
 
   # Phase 16e: the colour-legend style in EXPORTS (md/html/Excel). "prose" (default) = the full
   # sentences; "terse" = the compact one-line console form. The console itself is always terse.

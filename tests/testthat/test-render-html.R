@@ -55,8 +55,9 @@ testthat::test_that("tab_kable kableExtra engine structure is stable", {
     testthat::expect_length(body, 1L)
     testthat::expect_equal(lengths(regmatches(body, gregexpr("<tr", body)))[[1]], nrow(tb))
   }
+  # Last Phase j: the default "summary" test rows are statistic + effect size + p-value (3 extra).
   bc <- rh_tbody(rh_strip_style(suppressWarnings(tab_kable(chi2, engine = "kableExtra"))))
-  testthat::expect_equal(lengths(regmatches(bc, gregexpr("<tr", bc)))[[1]], nrow(chi2) + 1L)
+  testthat::expect_equal(lengths(regmatches(bc, gregexpr("<tr", bc)))[[1]], nrow(chi2) + 3L)
 
   # colouring reaches the cells, and only when asked for. kableExtra bakes colour INLINE (it carries
   # no stylesheet of ours), which is also why its theme shows in the markup -- both are the opposite

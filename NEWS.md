@@ -2,6 +2,20 @@
 # tabxplor 1.4.0 (in development)
 
 ## New features
+* **Effect sizes in `tab(test = TRUE)`.** Every whole-table test now carries an effect size beside its
+  statistic and p-value: **Cramer's V** (or phi for a 2x2) for factor columns, **eta-squared** for
+  numeric ones. Exports show the full summary (statistic + effect size + p-value) by default; set
+  `options(tabxplor.test_lines = "pvalue")` for the old p-value-only footer.
+* **Fisher's exact test**, automatically, on a small sparse factor table where the chi-squared is
+  unreliable (smallest expected count < 5 and few enough observations for an exact test). Its p-value
+  then replaces the flagged chi-squared one in the summary, labelled `(Fisher)`.
+* **Opt-in survey-robust p-values** for weighted tables. `options(tabxplor.kish_neff = TRUE)` now also
+  corrects the whole-table tests (a first-order Rao-Scott rescale to Kish's effective sample size), not
+  only the numeric cell CIs. `tab(test = "survey")` runs a fully design-based test
+  (`survey::svychisq` for factors, a `svyglm` Wald F for means) using `wt` plus the new
+  `ids`/`strata`/`fpc`/`nest` arguments; a prebuilt `survey::svydesign` may also be passed as `data`
+  (it weights the estimates and drives the p-values). Estimates and CIs stay tabxplor's single-stage
+  weighted approximation.
 * **`tab_html()` is the new name for `tab_kable()`** (both work identically -- `tab_kable()` stays as a
   permanent alias). `tab_html()` names the output (an HTML table); the backend *engine* (home-built or
   kableExtra) is still chosen with `engine =`. `tab_export()`'s first format is now `"html"` (was

@@ -221,6 +221,25 @@ children:
                     name: anova
                     label: ANOVA F
                     enable: (chi2)
+          - type: LayoutBox
+            margin: none
+            children:
+              - type: ComboBox
+                name: test_robust
+                label: "test ="
+                enable: (chi2)
+              - type: VariablesListBox
+                name: strata
+                label: "strata ="
+                maxItemCount: 1
+                isTarget: true
+                enable: (chi2)
+              - type: VariablesListBox
+                name: ids
+                label: "ids ="
+                maxItemCount: 1
+                isTarget: true
+                enable: (chi2)
   - type: CollapseBox
     label: <b>Levels and missing values</b>
     stretchFactor: 1

@@ -21,6 +21,7 @@ jmvtabreg(
   baseline = 1,
   compare = "none",
   na = "drop_by_model",
+  run_compare = FALSE,
   refLevels = NULL,
   multiplicator = NULL,
   conf_level = 0.95,
@@ -101,6 +102,8 @@ cases; "drop all models" uses one shared complete-case population across
 all predictors (equal N; changes the estimates), which a valid
 likelihood-ratio comparison test needs.}
 
+\item{run_compare}{.}
+
 \item{refLevels}{.}
 
 \item{multiplicator}{.}
@@ -168,6 +171,7 @@ A results object containing:
 \tabular{llllll}{
 \code{results$html_table} \tab \tab \tab \tab \tab a html \cr
 \code{results$cache_state} \tab \tab \tab \tab \tab an image \cr
+\code{results$compare_state} \tab \tab \tab \tab \tab an image \cr
 }
 }
 \description{

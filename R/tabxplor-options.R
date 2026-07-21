@@ -51,15 +51,19 @@
 #' \describe{
 #'   \item{`tabxplor.anova`}{which one-way ANOVA F is shown for mean columns: `"welch"` (default,
 #'     robust) or `"classic"` (pooled variance). Both are always stored in the `test` attribute.}
-#'   \item{`tabxplor.test_lines`}{how many crosstab test rows the exporters ([tab_md()], [tab_kable()],
-#'     [tab_xl()]) append: `"pvalue"` (default, the single p-value row) or `"stat"` (adds a
-#'     test-statistic row above it). N is never added -- it is already shown by `add_n`. The console
-#'     summary block always shows the full N / statistic / p-value table.}
+#'   \item{`tabxplor.test_lines`}{how many crosstab test rows the exporters ([tab_md()], [tab_html()],
+#'     [tab_xl()]) append: `"summary"` (default: statistic + effect size + p-value), `"stat"` (statistic
+#'     + p-value), or `"pvalue"` (the single p-value row). N is never added -- it is already shown by
+#'     `add_n`. The console summary block always shows the full N / statistic / effect-size / p-value table.}
 #'   \item{`tabxplor.legend_style`}{the colour-legend style in exports ([tab_md()], [tab_kable()],
 #'     [tab_xl()], [tab_plot()]): `"prose"` (default, full sentences) or `"terse"` (the compact
 #'     one-line form the console uses). The console itself is always terse.}
 #'   \item{`tabxplor.kish_neff`}{`FALSE` (default): use Kish's effective sample size
-#'     `(sum w)^2 / sum w^2` for weighted numeric (mean) confidence intervals / significance.}
+#'     `(sum w)^2 / sum w^2` for the weighted confidence intervals / significance. When `TRUE` it also
+#'     switches the whole-table tests (`test = TRUE`) to a first-order Rao-Scott correction -- the factor
+#'     chi-square rescaled to `n_eff`, the numeric F on per-group `n_eff`. For a full design-based test
+#'     (clusters / strata), use `test = "survey"` with `wt =`/`strata =`/`ids =`, or pass a
+#'     \code{survey::svydesign} as `data`.}
 #'   \item{`tabxplor.conf_level`}{confidence level for the intervals and significance tests, default
 #'     `0.95`. The per-call `conf_level =` argument of [tab()], [tab_num()], [tab_ci()] and [tab_reg()]
 #'     overrides it.}

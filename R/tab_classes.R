@@ -427,6 +427,10 @@ pull.tabxplor_grouped_tab <- pull.tabxplor_tab
 
 # The empty-placeholder `test` tibble (used before any test has run). Tidy schema: adding a new
 # test type = adding rows (never a schema change); tab_var columns are added when populated.
+# Last Phase j: two COMPANION columns `effect_size` (double) + `es_type` (character, e.g. "cramer_v"/
+# "phi"/"eta2") ride each omnibus row -- an effect size belongs ON its test's row, so it is a column,
+# not a separate row. Reg-footer / older rows carry NA/"" there (vec_rbind fills, but the uniform
+# schema keeps binds clean).
 # Phase 9b-3: memoized -- tibble() validation is ~1.4 ms/call and this placeholder is built several
 # times per table (~3% of the build). The empty tibble is STATELESS, so the cached copy is shared
 # safely (R copy-on-modify: any caller edit -- bind_rows / mutate / attr<- -- copies first, never
@@ -435,10 +439,12 @@ new_test_tibble <- local({
   cached <- NULL
   function() {
     if (is.null(cached)) {
-      cached <<- tibble::tibble(row_var   = character(), col_var   = character(), test = character(),
-                                statistic = double()   , df1       = double()   ,
-                                df2       = double()   , pvalue    = double()   ,
-                                n         = double()   , min_e     = double())
+      cached <<- tibble::tibble(row_var   = character(), col_var     = character(), test = character(),
+                                statistic = double()   , df1         = double()   ,
+                                df2       = double()   , pvalue      = double()   ,
+                                n         = double()   , min_e       = double()   ,
+                                effect_size = double() , es_type     = character(),
+                                pvalue_exact = double())
     }
     cached
   }
@@ -1454,8 +1460,12 @@ tab_pvalue_lines <- function(tabs) {
   # Phase 16a: the crosstab footer is now built by the shared tab_append_footer() engine (as the reg
   # GOF footer). Always the p-value row; `tabxplor.test_lines = "stat"` prepends a statistic row. The
   # p-value cell embeds the test label ("Chi2" / "F, Welch"), flagged "!" for a weak chi2 (min_e < 5).
-  add_stat   <- getOption("tabxplor.test_lines", "pvalue") %in% c("stat", "all")
-  row_labels <- if (add_stat) c("statistic", "pvalue") else "pvalue"
+  # Last Phase j: "summary" (the new default) = statistic + effect size + p-value; "all" = same;
+  # "stat" = statistic + p-value; "pvalue" = p-value only. The console grid always shows the full block.
+  mode       <- getOption("tabxplor.test_lines", "summary")
+  add_stat   <- mode %in% c("stat", "all", "summary")
+  add_es     <- mode %in% c("all", "summary")
+  row_labels <- c(if (add_stat) "statistic", if (add_es) "effect size", "pvalue")
   K          <- length(row_labels)
 
   # group id per existing row + per displayed-test row (the disc-key tuple; "" when ungrouped)
@@ -1464,7 +1474,11 @@ tab_pvalue_lines <- function(tabs) {
     else rep("", nrow(df))
   grp_of      <- gid(tabs)
   disp$.grp   <- gid(disp)
-  disp$.label <- purrr::map2_chr(disp$test, disp$min_e, test_cell_label_weak)
+  # a weak chi2 with a Fisher-exact companion (Last Phase j): show the exact p, label it "Fisher".
+  has_exact   <- if (!is.null(disp[["pvalue_exact"]])) !is.na(disp$pvalue_exact) else rep(FALSE, nrow(disp))
+  disp$.pshow <- if (any(has_exact)) ifelse(has_exact, disp$pvalue_exact, disp$pvalue) else disp$pvalue
+  disp$.label <- ifelse(has_exact, "Fisher",
+                        purrr::map2_chr(disp$test, disp$min_e, test_cell_label_weak))
   key         <- paste(disp$col_var, disp$.grp, sep = "\r")
 
   # the per-column fill for a non-value / no-test-here position: the column's first display token with
@@ -1479,7 +1493,11 @@ tab_pvalue_lines <- function(tabs) {
     cv <- col_to_cv[[nm]]
     r <- disp[key == paste(cv, g, sep = "\r"), , drop = FALSE]
     if (nrow(r) == 0) return(fill_cell(nm))               # this col_var has no displayed test in group g
-    if (identical(rl, "pvalue")) pvalue_line_fmt(r$pvalue[1], label = r$.label[1])
+    if (identical(rl, "pvalue")) pvalue_line_fmt(r$.pshow[1], label = r$.label[1])
+    else if (identical(rl, "effect size")) {
+      v <- if (!is.null(r[["effect_size"]])) r$effect_size[1] else NA_real_
+      if (is.na(v)) reg_blank_cell() else reg_gof_cell(v, 2L)  # bare number; column type tells V from eta2
+    }
     else                         stat_line_fmt(r$statistic[1])
   }
   fmt_cell   <- function(nm, g) do.call(vctrs::vec_c, lapply(row_labels, one_cell, nm = nm, g = g))
