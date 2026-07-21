@@ -137,11 +137,9 @@ tab_md <- function(tabs,
                           what = "tab_md()")
 
   parts   <- purrr::imap_chr(prep$tables, function(rd, i) {
-    # Phase 14w (item 1) / 17b: fall back to a stored caption (set_caption()) then a reg table's
-    # auto-title (`reg_title`) when the user gave no caption= .
-    cap <- if (i == 1) caption else NULL
-    if (is.null(cap)) cap <- rd$caption
-    if (is.null(cap) && !is.null(rd$reg_title) && !is.na(rd$reg_title)) cap <- rd$reg_title
+    # Phase 14w (item 1) / 17b / 17g: user caption= (FIRST table only) -> stored set_caption() ->
+    # reg auto-title, via the shared rd_caption().
+    cap <- rd_caption(rd, if (i == 1) caption else NULL)
     md_render_one(rd, special_formatting = special_formatting, wrap_rows = wrap_rows,
                   subtext = subtext, color = color, css = css,
                   color_legend = color_legend, lang = lang,
@@ -234,11 +232,11 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   # call tx_slot_class(), so tab_css() colours them identically). The source is the fmt table -- rd$color_src
   # for a transposed model (whose rd$tab is plain character), so weight/stars/legend all read the right
   # attributes (previously weight/stars read the stripped rd$tab). Legend only when coloured.
+  # Phase 17g: rd_footer() folds the shared render_footer(tab_footer_streams(...)) call (md historically
+  # does not thread `lang` into the footer -- kept byte-identical, so lang is omitted here).
   src         <- if (is.null(rd$color_src)) tabs else rd$color_src
   want_legend <- isTRUE(color) && isTRUE(color_legend) && length(rd$roles$color_cols) != 0
-  subtext_text <- suppressWarnings(render_footer(
-    tab_footer_streams(src, style = legend_export_style(), subtext = subtext_text, legend = want_legend),
-    medium = "md", theme = theme))
+  subtext_text <- rd_footer(src, "md", theme = theme, want_legend = want_legend, subtext = subtext_text)
 
   # md drops the trailing separator (no line after the last row); the prep's new_group is the base.
   new_group <- rd$roles$new_group
@@ -473,35 +471,32 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   # argument of its own (it is the same gate the html/kableExtra/xl span rows already used).
   col_var_header_line <- NULL
   if (any(nzchar(cvh$label))) {
+    # Phase 17g: group the spanning col_var-name row by tab_header_runs() (the shared RLE), not a
+    # hand-rolled while-scan. pandoc pipe tables cannot colspan, so the md-specific layout stays: the
+    # name sits in the FIRST cell of its run (italic), the rest are width-padded blanks -- one cell PER
+    # column (a pipe row must keep the table's cell count or pandoc shifts the data). A long name simply
+    # overflows its own cell: the row is deliberately not pipe-ALIGNED, because padding to it would
+    # widen every column below it.
+    runs <- tab_header_runs(cvh$label)
     header_parts <- character(0)
-    j <- 1
-    while (j <= n_cols) {
-      lbl <- cvh$label[j]
+    col_start <- 1L
+    for (r in seq_along(runs$labels)) {
+      lbl   <- runs$labels[r]
+      span  <- runs$spans[r]
+      j_end <- col_start + span - 1L
       if (nzchar(lbl)) {
-        # Group consecutive columns spanned by the same col_var name
-        j_end <- j
-        while (j_end < n_cols && cvh$label[j_end + 1] == lbl) j_end <- j_end + 1
-        group_cols <- j:j_end
-        # The name goes in the FIRST cell of its group, italic; the rest of the group is blank. It is
-        # one cell PER COLUMN, never a merged one -- a pipe row must keep the table's cell count or
-        # pandoc shifts the data. A long name simply overflows its own cell: that row is deliberately
-        # not pipe-ALIGNED (it parses; only a markdown linter minds), because padding to it would
-        # widen every column below it.
         nm_cell <- paste0(" *", lbl, "*")
         header_parts <- c(header_parts,
-                          stringi::stri_pad(nm_cell, col_width[j], side = "right"))
-        if (j_end > j) header_parts <- c(header_parts,
-                                         strrep(" ", col_width[(j + 1L):j_end]))
-        # Add separator column between real col_var groups (multi col_var only)
-        if (j_end %in% new_col_var && j_end < n_cols) {
-          header_parts <- c(header_parts, " ")
-        }
-        j <- j_end + 1
+                          stringi::stri_pad(nm_cell, col_width[col_start], side = "right"))
+        if (span > 1L)
+          header_parts <- c(header_parts, strrep(" ", col_width[(col_start + 1L):j_end]))
+        # separator column between real col_var groups (multi col_var only)
+        if (j_end %in% new_col_var && j_end < n_cols) header_parts <- c(header_parts, " ")
       } else {
-        # Non-grouped column (row var / total / count): empty cell matching column width
-        header_parts <- c(header_parts, strrep(" ", col_width[j]))
-        j <- j + 1
+        # non-grouped columns (row var / total / count): one empty cell each, matching column width
+        header_parts <- c(header_parts, strrep(" ", col_width[col_start:j_end]))
       }
+      col_start <- j_end + 1L
     }
     col_var_header_line <- paste0("|", paste(header_parts, collapse = "|"), "|")
   }

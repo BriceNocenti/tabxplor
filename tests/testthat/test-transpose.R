@@ -165,3 +165,14 @@ testthat::test_that("every exporter accepts transpose = TRUE without error", {
   testthat::skip_if_not_installed("ggpubr")
   testthat::expect_no_error(tab_plot(t, transpose = TRUE))
 })
+
+testthat::test_that("Phase 17g: transpose carries the caption/title through the flip (drift fix)", {
+  # rd2 used to drop reg_title / caption / empirical_tips, so a transposed table lost its title. The
+  # stored set_caption() must survive the flip into md's and html's shared rd_caption() fallback.
+  tc <- tab(gss, c(marital, race), relig, pct = "row", na = "drop") |>
+    set_caption("A transposed caption")
+  testthat::expect_match(tab_md(tc, transpose = TRUE, print = FALSE), "A transposed caption", fixed = TRUE)
+  testthat::expect_match(as.character(tab_kable(tc, transpose = TRUE)), "A transposed caption", fixed = TRUE)
+  # non-vacuous: the caption is present WITHOUT transpose too (so the assertion is not testing nothing)
+  testthat::expect_match(tab_md(tc, print = FALSE), "A transposed caption", fixed = TRUE)
+})

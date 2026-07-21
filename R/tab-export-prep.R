@@ -411,10 +411,9 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
   # labels -- so it no longer silently misses jamovi's gettext labels (the role model retires the
   # c("n","pvalue","row_pct", reg_footer_labels()) whitelist). Byte-identical on every stored-role table.
   tot_block <- tab_row_roles(tab) != "data"
-  totblock_top <-
-    which(dplyr::if_else(tot_block, !dplyr::lag(tot_block), FALSE))
-  totblock_bottom <-
-    which(dplyr::if_else(tot_block, !dplyr::lead(tot_block, default = FALSE), FALSE))
+  tb_edges  <- roles_totblock_edges(tot_block)
+  totblock_top    <- tb_edges$top
+  totblock_bottom <- tb_edges$bottom
 
   # kable/plot col_var transition index (one-liner). md keeps its own real-col_var span loop.
   new_col_var <- col_var_map
@@ -593,6 +592,48 @@ mean_shows_sd <- function(col) {
 tab_header_runs <- function(label) {
   r <- rle(label)
   list(labels = r$values, spans = r$lengths)
+}
+
+# Phase 17g: the ONE footer invocation. Every backend built its footer with the identical
+# render_footer(tab_footer_streams(...)) sandwich, differing only by medium / colour-legend gate /
+# subtext / html-classes. `src` is the fmt SOURCE table (rd$color_src for a transposed model, whose
+# rd$tab is plain character; else rd$tab): weight / Model: / stars / legend all read its attributes.
+# `want_legend` (caller-computed, since the colour-legend guard differs per backend) gates ONLY the
+# colour legend -- the other streams always render. Returns the rendered footer for `medium`.
+#' @keywords internal
+rd_footer <- function(src, medium, theme = NULL, want_legend = TRUE,
+                      subtext = character(0), lang = NULL, classes = FALSE) {
+  suppressWarnings(render_footer(
+    tab_footer_streams(src, style = legend_export_style(), lang = lang,
+                       subtext = subtext, legend = want_legend),
+    medium = medium, theme = theme, classes = classes))
+}
+
+# Phase 17g: the ONE caption fallback shared by md / html / plot -- user caption=, else a stored
+# set_caption() (rd$caption), else a regression table's auto-title (rd$reg_title). xl keeps its own
+# variant (it reads the source tab, not rd, and has two further fallbacks: named tabs, tab_get_titles).
+#' @keywords internal
+rd_caption <- function(rd, user_caption = NULL) {
+  cap <- user_caption
+  if (is.null(cap)) cap <- rd$caption
+  if (is.null(cap) && !is.null(rd$reg_title) && !is.na(rd$reg_title)) cap <- rd$reg_title
+  cap
+}
+
+# Phase 17g: the top/bottom border rows of each "total block" -- a maximal run of TRUE in `in_block`
+# (total rows + the synthetic n / pvalue / row_pct / reg-GOF rows). First row of a run gets a top
+# border, last a bottom border. The formula is a fact of the render model, so it lives ONCE: shared by
+# prep_one_table() (block from the stored tab_row_roles) and tx_transpose_render() (block from the
+# flipped indices). NOTE the rest of the two role models are DIFFERENT computations -- prep derives
+# roles from the fmt table (is_fmt/is_totcol/...), transpose from the flipped positional grid -- so a
+# single roles_from(tab) builder does not fit without rewriting the golden-locked transpose path; only
+# this genuinely-identical derivation is single-sourced.
+#' @keywords internal
+roles_totblock_edges <- function(in_block) {
+  list(
+    top    = which(dplyr::if_else(in_block, !dplyr::lag(in_block), FALSE)),
+    bottom = which(dplyr::if_else(in_block, !dplyr::lead(in_block, default = FALSE), FALSE))
+  )
 }
 
 

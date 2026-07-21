@@ -828,15 +828,13 @@ tab_kable <- function(tabs,
       # CLASSES (theme-toggle-safe) rather than inline hex; kableExtra does not (classes = engine == "html").
       src         <- if (is.null(rd$color_src)) rd$tab else rd$color_src
       want_legend <- color_legend && length(rd$roles$color_cols) != 0
-      subtext <- suppressWarnings(render_footer(
-        tab_footer_streams(src, style = legend_export_style(), lang = lang,
-                           subtext = rd$subtext, legend = want_legend),
-        medium = "html", theme = theme[1], classes = identical(engine, "html")))
+      # Phase 17g: shared rd_footer(); the html engine ships a stylesheet, so its legend break-words
+      # carry slot CLASSES (classes = engine == "html") rather than inline hex.
+      subtext <- rd_footer(src, "html", theme = theme[1], want_legend = want_legend,
+                           subtext = rd$subtext, lang = lang, classes = identical(engine, "html"))
     }
-    # Phase 14w (item 1) / 17b: fall back to a stored caption (set_caption()) then `reg_title`.
-    cap <- caption
-    if (is.null(cap)) cap <- rd$caption
-    if (is.null(cap) && !is.null(rd$reg_title) && !is.na(rd$reg_title)) cap <- rd$reg_title
+    # Phase 14w (item 1) / 17b / 17g: user caption= -> stored set_caption() -> reg_title (shared).
+    cap <- rd_caption(rd, caption)
     render_kable_html(rd, prep$meta, engine = engine, subtext = subtext, caption = cap,
                       tooltips = tooltips, popover = popover, html_font = html_font,
                       full_width = full_width, get_data = get_data, in_knitr = in_knitr, ...)
@@ -1235,69 +1233,106 @@ tab_materialize_extras <- function(tab, backend = c("text", "xl"), pvalue = TRUE
   backend <- match.arg(backend)
 
   # Phase 17c: seed the display-time row-role vector ("total"/"data" from the drift-free is_totrow flag).
-  # Each row-adding step below EXTENDS it (tab_add_n_pct -> "n"/"row_pct", tab_append_footer -> "pvalue"/
-  # "gof"/"blank"); tab_collapse_total_rows slices it. Consumers (export-prep tot_block, collapse) then
-  # read tab_row_roles() instead of matching an English row label -- the whole point of the role model.
+  # Each row-adding spec below EXTENDS it (add_n_pct -> "n"/"row_pct", footer -> "pvalue"/"gof"/"blank");
+  # collapse_totals slices it. Consumers (export-prep tot_block, collapse) read tab_row_roles() rather
+  # than matching an English row label -- the whole point of the role model.
   tab <- set_row_roles(tab, dplyr::if_else(is_totrow(tab), "total", "data"))
 
-  # --- add_n / add_pct (from the render_extras intent) -----------------------------------------
-  re      <- get_render_extras(tab)
-  add_n   <- isTRUE(re$add_n)
-  add_pct <- isTRUE(re$add_pct)
-  if (add_n || add_pct) {
-    # Reuse tab_add_n_pct() verbatim (byte-identical field construction; its grouped outer-mutate
-    # reproduces the per-subtable scoping on the final merged / tab_vars-grouped table -- proven).
-    # It yields the "xl-style" output: a real `n` COLUMN (pct="row" add_n) / `n` ROW (pct="col"),
-    # the add_pct `col_pct` column / `row_pct` row.
-    tab <- tab_add_n_pct(list(tab), add_n = add_n, add_pct = add_pct)[[1]]
-    # TEXT backends fold the add_n `n` COLUMN into the Total cell (`{pct} (n={n})`); Excel keeps the
-    # real numeric column. The pct="col" add_n ROW and add_pct col_pct/row_pct are backend-invariant.
-    if (identical(backend, "text") && add_n && "n" %in% names(tab)) {
-      tab <- tab_fold_addn_incell(tab)
-    }
-    tab <- set_render_extras(tab, NULL)          # consumed -> a second call is a no-op (idempotent)
+  # Phase 17g: the synthetic extras are now DECLARED specs run by tab_materialize(). The add_n / add_pct
+  # display intent is read ONCE here into `ctx` (a spec cannot re-read it after add_n_pct clears
+  # render_extras), and threaded to every spec. The two former build-then-undo cycles are gone: the
+  # add_n `n` COLUMN is built ONLY for xl (text folds directly, no throwaway), and collapse_totals is a
+  # declared display slice reading the stored roles.
+  re  <- get_render_extras(tab)
+  ctx <- list(add_n = isTRUE(re$add_n), add_pct = isTRUE(re$add_pct), pvalue = isTRUE(pvalue))
+  tab_materialize(tab, backend, ctx)
+}
+
+# Phase 17g: run the applicable materialize specs in order. `ctx` carries the shared add_n/add_pct/
+# pvalue intent so specs stay independent of render_extras (which add_n_pct clears mid-run).
+#' @keywords internal
+#' @noRd
+tab_materialize <- function(tab, backend, ctx) {
+  for (spec in materialize_specs()) {
+    if (spec$when(tab, backend, ctx)) tab <- spec$apply(tab, backend, ctx)
   }
+  tab
+}
 
-  # Phase 16c: an OR/RRR table's "100%" total column is meaningless. Console with add_n keeps it as a
-  # base-n cell (folded above); Excel exports only the base-n column, and the console add_n=FALSE case
-  # has no base to show -> drop the % total column in both.
-  tab <- tab_or_total_col(tab, backend, add_n)
+# Phase 17g: the declared inventory of display-time synthetic rows/cols. Each spec names WHAT it adds
+# (kind, matching the stored row-role vocabulary where it adds rows), WHEN it applies (a predicate over
+# tab + backend + intent), and HOW (apply). Reading this list IS the map of every synthetic extra and
+# its per-backend policy -- replacing the old imperative if/else passes.
+#' @keywords internal
+#' @noRd
+materialize_specs <- function() list(
+  # add_n / add_pct: the base-n column/row + the col%/row% companions. xl keeps the real `n` COLUMN;
+  # text folds the base into the Total cell (mat_add_n_pct). Clears the consumed render_extras intent.
+  list(kind = "add_n_pct",
+       when  = function(tab, backend, ctx) ctx$add_n || ctx$add_pct,
+       apply = mat_add_n_pct),
+  # Phase 16c: an OR/RRR table's "100%" total column is meaningless. Console+add_n keeps it as a base-n
+  # cell (folded by add_n_pct); Excel exports only the base-n column, and console add_n=FALSE has no base
+  # -> drop the % total column in both. No-op on a non-OR table.
+  list(kind = "or_total",
+       when  = function(tab, backend, ctx) tab_is_or_display(tab),
+       apply = function(tab, backend, ctx) tab_or_total_col(tab, backend, ctx$add_n)),
+  # Excel-only mean + sd twin column (Phase 13c-v): console/md/kable show sd inline as "mean (sigma sd)".
+  list(kind = "sd_twin",
+       when  = function(tab, backend, ctx) identical(backend, "xl"),
+       apply = function(tab, backend, ctx) mat_sd_twin(tab)),
+  # p-value / GOF footer rows from the kept `test` attribute. tab_pvalue_lines no-ops on a regression
+  # table, so a crosstab gets its chi2 row and a reg table its GOF footer (Phase 12f).
+  list(kind = "footer",
+       when  = function(tab, backend, ctx) ctx$pvalue,
+       apply = function(tab, backend, ctx) {
+         tab <- tab_pvalue_lines(tab)
+         if (is_reg_footer(get_test(tab))) tab <- reg_footer_lines(tab)
+         tab
+       }),
+  # Phase 14n: collapse the redundant per-block Total rows of a compacted several-row_vars table (a
+  # display slice needing the "as displayed" equality). Run LAST, so every role recomputes on the
+  # collapsed table; the core tab() object keeps every total row (nrow unchanged).
+  list(kind = "collapse_totals",
+       when  = function(tab, backend, ctx) TRUE,
+       apply = function(tab, backend, ctx) tab_collapse_total_rows(tab))
+)
 
-  # --- Excel-only: a mean + sd twin column (Phase 13c-v) ---------------------------------------
-  # Console / kable / md show the sd inline as "mean (sigma sd)" (special_formatting); Excel cannot, so
-  # for each numeric mean column insert an uncoloured sibling "<var>_sd" holding sd = sqrt(var) (display
-  # "var" -> get_num() IS the sd; the sigma prefix is added by tab_xl's numFmt). Purely an Excel layout
-  # concern: the built table + the text backends (inline sd) are untouched.
-  if (identical(backend, "xl")) {
-    is_mean_col <- function(col) is_fmt(col) && identical(get_type(col), "mean") &&
-      any(get_display(col) %in% c("mean", "mean_ci"))
-    means <- names(tab)[purrr::map_lgl(tab, is_mean_col)]
-    for (nm in means) {
-      sdc <- tab[[nm]]
-      tab[[paste0(nm, "_sd")]] <-
-        set_color(set_display(set_var(sdc, suppressWarnings(sqrt(get_var(sdc)))), "var"), "no")
-    }
-    if (length(means) > 0) {                     # place each _sd directly after its mean column
-      ord <- names(tab)
-      for (nm in rev(means)) {
-        sd_nm <- paste0(nm, "_sd")
-        rest  <- ord[ord != sd_nm]
-        ord   <- append(rest, sd_nm, after = which(rest == nm))
-      }
-      tab <- tab[ord]
-    }
+# add_n / add_pct spec apply. Reuses tab_add_n_pct() (byte-identical field construction; its grouped
+# outer-mutate reproduces the per-subtable scoping on the final merged / grouped table). `backend` = xl
+# builds the real `n` COLUMN; text skips it (tab_add_n_pct) and folds the base into the Total cell from
+# its OWN `n` field (tab_fold_addn_incell -- no throwaway column). Clears render_extras (idempotent).
+#' @keywords internal
+#' @noRd
+mat_add_n_pct <- function(tab, backend, ctx) {
+  tab <- tab_add_n_pct(list(tab), add_n = ctx$add_n, add_pct = ctx$add_pct, backend = backend)[[1]]
+  if (identical(backend, "text") && ctx$add_n) tab <- tab_fold_addn_incell(tab)
+  set_render_extras(tab, NULL)
+}
+
+# Excel-only sd twin: for each numeric mean column insert an uncoloured sibling "<var>_sd" holding
+# sd = sqrt(var) (display "var" -> get_num() IS the sd; tab_xl's numFmt adds the sigma prefix), placed
+# directly after its mean column. Purely an Excel layout concern (text backends fold sd inline).
+#' @keywords internal
+#' @noRd
+mat_sd_twin <- function(tab) {
+  is_mean_col <- function(col) is_fmt(col) && identical(get_type(col), "mean") &&
+    any(get_display(col) %in% c("mean", "mean_ci"))
+  means <- names(tab)[purrr::map_lgl(tab, is_mean_col)]
+  for (nm in means) {
+    sdc <- tab[[nm]]
+    tab[[paste0(nm, "_sd")]] <-
+      set_color(set_display(set_var(sdc, suppressWarnings(sqrt(get_var(sdc)))), "var"), "no")
   }
-
-  # --- p-value rows (from the kept `test` attribute) -------------------------------------------
-  # tab_pvalue_lines no-ops on a regression table (no chi2/F rows), so the order is safe: a crosstab
-  # gets the chi2 p-value row, a regression table gets its GOF footer rows (Phase 12f).
-  if (pvalue) tab <- tab_pvalue_lines(tab)
-  if (pvalue && is_reg_footer(get_test(tab))) tab <- reg_footer_lines(tab)
-
-  # Phase 14n: collapse the redundant per-block Total rows of a compacted several-row_vars table. A
-  # DISPLAY-ONLY decision (it needs the "as displayed" equality) run last, so all roles recompute on the
-  # collapsed table; the core tab() object keeps every total row (nrow(tab(...)) unchanged).
-  tab <- tab_collapse_total_rows(tab)
+  if (length(means) > 0) {                       # place each _sd directly after its mean column
+    ord <- names(tab)
+    for (nm in rev(means)) {
+      sd_nm <- paste0(nm, "_sd")
+      rest  <- ord[ord != sd_nm]
+      ord   <- append(rest, sd_nm, after = which(rest == nm))
+    }
+    tab <- tab[ord]
+  }
   tab
 }
 
@@ -1809,10 +1844,9 @@ tab_plot <- function(tabs,
 # included only when colouring is on; the plain lines always.
 {
   footer_src  <- if (is.null(rd$color_src)) tabs else rd$color_src
-  footer_runs <- suppressWarnings(render_footer(
-    tab_footer_streams(footer_src, style = legend_export_style(), lang = lang,
-                       subtext = subtext, legend = color_legend && length(color_cols) != 0),
-    medium = "runs", theme = theme[1]))
+  footer_runs <- rd_footer(footer_src, "runs", theme = theme[1],
+                           want_legend = color_legend && length(color_cols) != 0,
+                           subtext = subtext, lang = lang)
   color_legend <- purrr::map(footer_runs, function(line) {
     text  <- purrr::map_chr(line, "text")
     color <- purrr::map_chr(line, "color")
@@ -1906,10 +1940,8 @@ tab_plot <- function(tabs,
   tabs_gg <- tab_return_same_class_as_input(tabgrob, input = tabs_gg)
 
   # Phase 16e: draw the caption as a bold title row ABOVE the plot (the `caption` arg was accepted but never
-  # drawn). Falls back to a stored caption (set_caption(), 17b) then reg_title (mirrors tab_kable).
-  cap <- caption
-  if (is.null(cap)) cap <- rd$caption
-  if (is.null(cap) && !is.null(rd$reg_title) && !is.na(rd$reg_title)) cap <- rd$reg_title
+  # drawn). Phase 17g: user caption= -> stored set_caption() -> reg_title via the shared rd_caption().
+  cap <- rd_caption(rd, caption)
   if (!is.null(cap) && length(cap) == 1L && !is.na(cap) && nzchar(cap)) {
     titlegrob <- grid::textGrob(cap, x = 0, hjust = 0,
                                 gp = grid::gpar(fontface = "bold", fontsize = 11, col = text_color))

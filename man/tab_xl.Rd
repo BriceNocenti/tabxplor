@@ -15,7 +15,6 @@ tab_xl(
   colwidth = 10,
   color_legend = TRUE,
   sheets = "auto",
-  n_min = 0,
   titles,
   caption = NULL,
   font_text = getOption("tabxplor.xl_font_text", "DejaVu Sans Condensed"),
@@ -24,14 +23,12 @@ tab_xl(
   text_size = 10,
   text_size_headers = 9,
   text_size_subtext = 9,
-  hide_near_zero = Inf,
   theme = NULL,
   color_type = lifecycle::deprecated(),
   html_24_bit = NULL,
   color = TRUE,
   transpose = FALSE,
   var_names = NULL,
-  conditional_format = FALSE,
   or_numeric = getOption("tabxplor.xl_or_numeric", FALSE),
   print_color_legend = lifecycle::deprecated()
 )
@@ -70,10 +67,6 @@ Set to \code{"auto"} to let Excel choose.}
 same sheets
 }}
 
-\item{n_min}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} The small-n greying is removed in 1.4.0. The
-argument is kept for back-compatibility but no longer does anything; use \code{tab(n_min = )}, which
-blanks or drops small-n cells at display and flows into every export.}
-
 \item{titles}{The titles of the different tables, as a character vector. When missing
 titles are given based on the names of the variables.}
 
@@ -92,9 +85,6 @@ be named here. Set the options to a font you know is installed.}
 
 \item{text_size, text_size_headers, text_size_subtext}{Font sizes of text elements.}
 
-\item{hide_near_zero}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Removed in 1.4.0 (a rarely used,
-slow feature): the argument is kept for back-compatibility but no longer does anything.}
-
 \item{theme}{By default (\code{"light"}) a white table with black text; set to \code{"dark"}
 for a black table with white text (the colours follow the theme).}
 
@@ -112,10 +102,6 @@ columns). Useful for column percentages tables with several row variables.}
 \code{"rows"}, \code{"cols"} or \code{"none"}. The row-variable name is the leading column a table with
 several \code{row_vars} uses to name each block (merged over it and rotated 90 degrees); the
 column-variable names are the merged row above their level columns. See \code{\link{tab_kable}}.}
-
-\item{conditional_format}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#experimental}{\figure{lifecycle-experimental.svg}{options: alt='[Experimental]'}}}{\strong{[Experimental]}} Reserved for a future opt-in
-to use Excel conditional formatting instead of hard cell colours. Not yet implemented: setting
-it emits a message and falls back to the (fast, exact) hard-style colouring.}
 
 \item{or_numeric}{Odds ratios export as text ("1/x" reciprocal for OR < 1) by default so an OR
 below 1 reads symmetrically to an OR above 1. Set to \code{TRUE} (or the option

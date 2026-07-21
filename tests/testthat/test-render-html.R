@@ -696,3 +696,32 @@ testthat::test_that("tab_html_string() paints the standalone page it builds", {
   # no stylesheet shipped => nothing of ours to match => no paint (the same one rule)
   testthat::expect_no_match(tab_html_string(tb, css = FALSE), "html,body{", fixed = TRUE)
 })
+
+testthat::test_that("Phase 17g: output_kable renders a two-channel colour after finalize", {
+  # Regression: options(tabxplor.output_kable = TRUE) + a two-channel colour (color = TRUE ->
+  # c(text = "diff", bg = "ratio")) used to error "no applicable method for 'mutate' ...
+  # tabxplor_kable" -- the render ran INSIDE the build, before finalize_color_spec, which then
+  # mutate()d the returned kable. The render now runs at tab()'s tail, post-finalize.
+  op <- options(tabxplor.output_kable = TRUE); on.exit(options(op), add = TRUE)
+  k <- tab(gss, marital, race, pct = "row", color = TRUE)   # must not error
+  testthat::expect_s3_class(k, "tabxplor_kable")
+  # the background channel (ratio) must be present -> the finalised two-channel colour reached render:
+  # a coloured cell carries a slot class. Assert non-vacuously that some cell is coloured.
+  h <- rh_strip_style(as.character(k))
+  testthat::expect_match(h, "class=\"[^\"]*tx-", perl = TRUE)
+  # single-channel path (which silently survived the old bug) still works
+  k1 <- tab(gss, marital, race, pct = "row", color = "diff")
+  testthat::expect_s3_class(k1, "tabxplor_kable")
+})
+
+testthat::test_that("Phase 17g: tabxplor_kable print degrades when kableExtra is absent", {
+  km <- tabxplor:::kable_print_mode
+  # non-interactive / no theme / view-off / knitting all fall through to the base method
+  testthat::expect_identical(km("dark", FALSE, TRUE, FALSE, TRUE), "next")
+  testthat::expect_identical(km(NULL,   TRUE,  TRUE, FALSE, TRUE), "next")
+  testthat::expect_identical(km("dark", TRUE,  TRUE, TRUE,  TRUE), "next")
+  # interactive themed print WITH kableExtra -> the themed Viewer page
+  testthat::expect_identical(km("dark", TRUE,  TRUE, FALSE, TRUE), "viewer")
+  # interactive themed print WITHOUT kableExtra -> graceful degrade (note + knitr print), never a crash
+  testthat::expect_identical(km("dark", TRUE,  TRUE, FALSE, FALSE), "degrade")
+})

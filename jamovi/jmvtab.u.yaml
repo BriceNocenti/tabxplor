@@ -197,7 +197,7 @@ children:
         margin: large
         children:
           - type: Label
-            label: Statistical test <i>(Chi2 for categorical columns; ANOVA F for numeric columns)</i>
+            label: <b>Statistical test <i>(Chi2 for categorical columns; ANOVA F for numeric columns)</i></b>
           - type: LayoutBox
             margin: none
             children:

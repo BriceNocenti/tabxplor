@@ -188,10 +188,11 @@ tx_transpose_render <- function(rd, backend, meta = NULL) {
   for (i in seq_len(n_nrow)[-1]) if (is.na(row_grp[i])) row_grp[i] <- row_grp[i - 1]
   if (is.na(row_grp[1])) row_grp[1] <- "._start"
   new_group <- if (n_nrow > 1) which(row_grp[-n_nrow] != row_grp[-1]) else integer(0)
-  # total block (Total row + n row): recompute on the new rows
+  # total block (Total row + n row): recompute on the new rows (shared border formula, Phase 17g)
   tot_blk <- seq_len(n_nrow) %in% new_totrows | is_addn
-  totblock_top    <- which(dplyr::if_else(tot_blk, !dplyr::lag(tot_blk),  FALSE))
-  totblock_bottom <- which(dplyr::if_else(tot_blk, !dplyr::lead(tot_blk, default = FALSE), FALSE))
+  tb_edges <- roles_totblock_edges(tot_blk)
+  totblock_top    <- tb_edges$top
+  totblock_bottom <- tb_edges$bottom
   align <- stats::setNames(dplyr::if_else(fmt_mask, "r", "l"), all_names)
 
   label_names <- if (is.null(var_name_col_name)) character(0) else var_name_col_name
@@ -256,7 +257,13 @@ tx_transpose_render <- function(rd, backend, meta = NULL) {
     bold_cols = bold_cols,
     range_totcol = NULL,
     col_var_header = col_var_header,
-    subtext = rd$subtext
+    subtext = rd$subtext,
+    # Phase 17g: carry the caption/title/tips through the flip (previously dropped -> a transposed
+    # regression table lost its reg_title / set_caption() caption and its multinomial crude tooltips).
+    # These describe the SOURCE table, not the axes, so they survive a transpose unchanged.
+    reg_title = rd$reg_title,
+    caption = rd$caption,
+    empirical_tips = rd$empirical_tips
   )
   rd2
 }

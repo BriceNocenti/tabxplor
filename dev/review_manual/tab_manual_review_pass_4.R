@@ -6,7 +6,11 @@ load_all()
 options(tabxplor.parallel = TRUE, tabxplor.cleannames = TRUE, tabxplor.print = "kable")
 
 
-# pc18 <- readRDS("~/gss_simple/Pratiques culturelles/Pratiques culturelles 2018/pc18.rds")
+gss_simple <- gss_cat_data_formatting() # gss_simple with merged levels, and first levels chosen for reference (colors, regressions)
+
+
+
+# pc18 <- readRDS("~/Data/Pratiques culturelles/Pratiques culturelles 2018/pc18.rds")
 # musique_vars <- c("ROCK", "JAZZ", "CLASSIQUE", "VARIETE", "ELECTRO", "METAL", "CHANSON", "WORLD", "RAP", "TRADI")
 # pc18 <- pc18 |>
 #   select(-any_of(c("CHANSON", "WORLD", "TRADI", "VARIETE", "RNB", "ELECTRO", "RAP", "METAL", "ROCK", "JAZZ", "OPERA", "CLASSIQUE"))) |>
@@ -42,38 +46,50 @@ options(tabxplor.parallel = TRUE, tabxplor.cleannames = TRUE, tabxplor.print = "
 
 
 
-### md tests and others ---- 
+### exports tests  ---- 
 
 
-# # How to handle significance stars in tab_md ? 
-# tab(pc18, all_of(rows2), c(ROCK, JAZZ, CLASSIQUE), wt = POND, pct = "row",  na = "drop", 
-#    color = TRUE, color_signif = "grey_non_signif", ref = 1,  # stars = TRUE
+# Significance stars etc. in tab_md 
+tab(gss_simple, c(race, rincome, relig), c(party3, marital), pct = "row",  na = "drop", 
+   color = TRUE, color_signif = "grey_non_signif", ref = 1, stars = TRUE
+) |> 
+  tab_export("md", css = TRUE)
+# look at resulting markdown and rendered html at : `dev/review_manual/tab_md_test_3.md`, `dev/review_manual/tab_md_test_3.htm`
+# - Significance stars print nice in the html rendered from this markdown, which is good.
+# - With significance stars, references rows (or cols) prints numbers like this : "**77%   **"
+#   It’s not valid markdown bold, so rule should be : don’t add placeholders for stars here 
+#   since stars have no meaning for the reference (it’s never different from itself), 
+#   so ensure it’s always "**77%**" but still try to align the 77% itself with percentages in other 
+#   non reference rows (displayed "7%***"  "7%** "  "7%*  "  "7%   " etc.) 
+# - the html rendered legend, at the contrary, mistake the significance stars for markdown ** and *, and renders : 
+#  "<b><i>: significantly different from the reference category (in bold) at the 99% confidence level;</b> : at the 95% level; : at the 90% level;</i> no star: not significant."
+#  How to avoid this behaviour ? Is there a way to escape stars in pandoc / quarto markdown rendering ? What else otherwise ?
+# - in rendered html, bold or not bold destoys the alignment / padding a bit : is there a way to use 
+#    the monospace font list ("Cascadia Mono", etc.) for numbers stylings here too (with css = TRUE) 
+#    (if we can only style the whole column headers included, its less good, but let’s do it nonetheless) ? 
+# - Would there be a parsimonious way to add vertical borders between different col_var (with `css = TRUE`), 
+#   and more of less match the vertical borders of the other exports ? 
+# - Would there be a parsimonious way to reduce the font size of the footer (with `css = TRUE`) ? 
+# - Custom displays like "100% (n=16 382)" are currently wrapped in different lines in the html render : 
+#   use the relevant special chars to ensure it stays on one line while keeping alignment 
+#    (except in the rare cases when a line break may be manually added) ? 
+# - Would special chars formatting also be a way to ensure levels names in "levels" do not 
+#   wrap until the wrap_rows limit is reaches ?
+
+
+# # Excel tests
+# tab(gss_simple, c(race, rincome, relig), c(party3, marital), pct = "row",  na = "drop", 
+#    color = TRUE, color_signif = "grey_non_signif"
 # ) |> 
-#   tab_export("md", css = TRUE)
-# # - Strangely enough for me, significance stars actually renders well with the md (quarto/pandoc). 
-# # - The rendered html of course does not respect the padding/alignement, but I wonder if there would 
-# #   be a trick for it too work here too ? If instead of normal spaces, we pass the right kind of  
-# #   special space to match the * widths, would the alignment be kept after pandoc html render ?e
-# #  Same thing for the "100% (n= 673)" like column in md, of course (would the 1 digit space work here ?)
-# # - By the way : with color_sign = "grey_non_signif", the tooltip is actually statistically false. 
-# #  It writes : "Grey: not significantly different from the Total row (Newcombe score interval, 95% confidence).", 
-# #   but that is only true with "guaranteed_effect" ; since, with "grey_non_signif", significative 
-# #   differences with small effects are greyed out (and some have stars !), we must change this legend. Here, 
-# #   the only thing we’re sure about, it that all colored cells are significantly different from ref
-# #   (but not all significant cells are colored). Explain it in a clear but straightforward way.
-
-
-
-
-
-
-# # tab(pc18, all_of(rows1), CONCERTS, wt = POND, pct = "row", color = TRUE,
-# #  color_signif = "grey_non_signif", na = "drop", ci="diff", stars = TRUE
-# # ) |> 
-# #   tab_xl(open = FALSE, path = "~/github/tabxplor/dev/review_manual/Excel_stars", replace = TRUE)
-
-# # tab_reg(pc18, "ROCK", rows1, wt = "POND", family = "binomial") |> 
-# #   tab_xl(open = FALSE, path = "~/github/tabxplor/dev/review_manual/Excel_stars_OR", replace = TRUE)
+#   tab_xl(open = FALSE, path = "~/github/tabxplor/dev/review_manual/Excel_test", replace = TRUE)
+#
+# tab(gss_simple, c(race, rincome, relig), c(party3, marital), pct = "row",  na = "drop", 
+#    color = TRUE, color_signif = "grey_non_signif", ref = 1, stars = TRUE
+# ) |> 
+#   tab_xl(open = FALSE, path = "~/github/tabxplor/dev/review_manual/Excel_stars", replace = TRUE)
+#
+# tab_reg(gss_simple, "married", c("race",  "rincome"), family = "binomial") |> 
+#   tab_xl(open = FALSE, path = "~/github/tabxplor/dev/review_manual/Excel_stars_OR", replace = TRUE)
 
 
 
@@ -84,17 +100,6 @@ options(tabxplor.parallel = TRUE, tabxplor.cleannames = TRUE, tabxplor.print = "
 
 
 ### tab_reg tests ----
-
-# c("year", "marital", "age", "race", "rincome", "partyid", "relig", 
-# "denom", "tvhours")
-
-
-
-# library(devtools) ; load_all() ; options(tabxplor.parallel = TRUE, tabxplor.cleannames = TRUE)
-# options(tabxplor.print = "kable")
-
-gss_simple <- gss_cat_data_formatting() # gss_simple with merged levels, and first levels chosen for reference (colors, regressions)
-
 
 # No colors and wrong empirical counterpart for logistic models with exponentiate = FALSE
 tab_reg(gss_simple, dependent = "married", predictors = c("race", "rincome", "relig", "age"),

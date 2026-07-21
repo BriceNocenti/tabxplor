@@ -534,7 +534,8 @@ tab_kable_join <- function(parts, engine, css = "", theme = NULL) {
     # cat()s the markup to the console -- so the maintainer had to re-class it by hand to see a table.
     # We produce the same thing kableExtra does (an HTML fragment, `format = "html"`), so we claim the
     # class rather than duplicate its two methods. (kableExtra is Suggests, not Imports -- when it is
-    # absent, print.tabxplor_kable's Viewer path degrades; graceful degradation is Phase 17g.)
+    # absent, print.tabxplor_kable's interactive Viewer path degrades gracefully: no page, tooltips off,
+    # a one-time note, fall through to knitr's print -- Phase 17g.)
     # Phase 14k prepends `tabxplor_kable`, whose print() paints the Viewer's page (below).
     out <- structure(out, format = "html",
                      class = c("tabxplor_kable", "kableExtra", "knitr_kable"))
@@ -588,6 +589,20 @@ tx_kable_page <- function(html, theme = "light", detected = tx_detect_theme()) {
   )
 }
 
+# Which print path a tabxplor_kable takes. Pure predicate (all inputs passed in) so it is testable --
+# testthat is never interactive(), so the branches below are otherwise unreachable (the tx_kable_page
+# precedent). Returns:
+#   "next"    : fall through to kableExtra/knitr's own print (no theme, non-interactive, view off, knitting)
+#   "degrade" : an interactive themed print the Viewer wants, but kableExtra is absent -> knitr print + note
+#   "viewer"  : paint the themed Viewer page and let kableExtra bind the tooltips
+#' @keywords internal
+#' @noRd
+kable_print_mode <- function(theme, interactive, view_opt, knitting, have_ke) {
+  if (is.null(theme) || !interactive || !isTRUE(view_opt) || knitting) return("next")
+  if (!have_ke) return("degrade")
+  "viewer"
+}
+
 #' Print a tabxplor html table
 #'
 #' Opens the html table \code{\link{tab_kable}} returned in the Viewer, on a page painted to match it
@@ -602,6 +617,7 @@ tx_kable_page <- function(html, theme = "light", detected = tx_detect_theme()) {
 #' @return \code{x}, invisibly.
 #' @seealso \code{\link{tab_kable}}, \code{\link{tab_css}}
 #' @export
+
 print.tabxplor_kable <- function(x, ...) {
   theme <- attr(x, "tabxplor_theme")
   # Everything but an interactive Viewer print falls through to kableExtra's own method, byte for byte:
@@ -611,14 +627,24 @@ print.tabxplor_kable <- function(x, ...) {
   #   - knitting      : the page belongs to the DOCUMENT. Painting its html,body would repaint Quarto
   #                     around the table. knit_print is likewise NOT overridden: dispatch walks the
   #                     class vector on to knit_print.kableExtra, which is what we want.
-  if (is.null(theme) || !interactive() ||
-      !isTRUE(getOption("kableExtra_view_html", TRUE)) ||
-      !is.null(knitr::opts_knit$get("out.format"))) {
+  mode <- kable_print_mode(theme, interactive(),
+                           getOption("kableExtra_view_html", TRUE),
+                           !is.null(knitr::opts_knit$get("out.format")),
+                           requireNamespace("kableExtra", quietly = TRUE))
+  if (identical(mode, "next")) return(NextMethod())
+  # Phase 17g: the themed Viewer page AND the tooltip binding are kableExtra's to attach -- its two
+  # UNEXPORTED html deps (html_dependency_kePrint / _lightable) carry the JS. kableExtra is Suggests, so
+  # when it is absent we cannot reproduce them; degrade cleanly rather than dispatch into a missing
+  # method: a one-time note, then knitr's own print (NextMethod) -- table shows, tooltips simply off.
+  if (identical(mode, "degrade")) {
+    rlang::inform(
+      c("!" = "An interactive Viewer page for tabxplor html tables needs the {kableExtra} package.",
+        "i" = "Install it (install.packages(\"kableExtra\")) for a themed Viewer page with tooltips."),
+      .frequency = "once", .frequency_id = "tabxplor_kable_viewer_no_kableExtra")
     return(NextMethod())
   }
-  # Delegate, never reimplement: kableExtra's print is what attaches jquery + bootstrap + its two
-  # UNEXPORTED html dependencies (html_dependency_kePrint / _lightable) -- the JS that binds our
-  # tooltips in the Viewer. Reproducing it would mean reaching into kableExtra:::.
+  # Delegate, never reimplement: kableExtra's print is what attaches jquery + bootstrap + those two
+  # dependencies -- the JS that binds our tooltips in the Viewer. Reproducing it would mean kableExtra:::.
   print(structure(tx_kable_page(as.character(x), theme),
                   format = "html", class = c("kableExtra", "knitr_kable")), ...)
   invisible(x)

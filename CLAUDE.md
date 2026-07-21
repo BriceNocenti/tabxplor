@@ -93,7 +93,10 @@ R/
 │                              OKLCH color palettes, set_color_palette()/get_color_style(),
 │                              set_color_breaks() (over/under scales), color_breaks table attr;
 │                              Phase 13c-iv tabxplor_tabs (multi-table LIST class: print/[/c/knit_print,
-│                              auto-print + Viewer routing); tab_materialize_extras (+ xl mean/_sd col)
+│                              auto-print + Viewer routing); 17g: tab_materialize_extras -> tab_materialize()
+│                              over materialize_specs() (DECLARED list(kind,when,apply): add_n_pct/or_total/
+│                              sd_twin/footer/collapse_totals; mat_add_n_pct/mat_sd_twin applies; add_n `n`
+│                              COLUMN built xl-ONLY, text folds direct -- no throwaway; collapse = display slice)
 ├── tab_xl.R        (~595 L)  Excel export via openxlsx2 (Suggests-only; Phase 10h). Single-tab-first
 │                              + list. tab_xl() orchestrator -> tab_xl_plan_one() (pure per-table plan:
 │                              raw values + numFmt codes w/ stars + a precomposed per-cell STYLE grid
@@ -101,7 +104,9 @@ R/
 │                              xl_apply_styles = register deduped fonts/fills/borders + composed xf,
 │                              apply by id with set_cell_style, then the numFmt merging pass). Consumes
 │                              tab-export-prep (roles/refs/bold) + format(syntax="excel"); transpose
-│                              arg; conditional_format experimental; n_min/hide_near_zero inert.
+│                              arg. 17g: consumes ann$text_hex/$bg_hex DIRECTLY (private text_pal/bg_pal
+│                              palette GONE, slot->hex single-sourced via fmt_channel_codes); the inert
+│                              n_min/hide_near_zero/conditional_format args DROPPED.
 │                              Phase 13c-v: xl_materialize_data (ci-cell/OR text columns; or_numeric
 │                              arg), +/x/sigma numFmt, mean/_sd twin col, col_var span header + geometry
 ├── tab-xl-backend.R (~110 L) Phase 10h openxlsx2 backend: plumbing xlb_* engine wrappers (in-place R6
@@ -141,6 +146,9 @@ R/
 │                              borders + ugly spacers). chrome-only; tab_md_css() omits them.
 ├── tab-export-prep.R (~570 L) Phase 10d shared exporter prep: tab_export_prep() -> tabxplor_render
 │                              model (roles/ann/bold/range), consumed by kable/md/plot/xl;
+│                              17g: rd_footer()/rd_caption() (the ONE footer sandwich + caption fallback
+│                              every backend shares) + roles_totblock_edges() (border formula shared w/
+│                              transpose);
 │                              resolve_export_opts() (13d: theme=NULL -> options("tabxplor.theme"),
 │                              gains "auto" gated by allow_auto; static backends get "light");
 │                              Phase 13c-iii col_var header model tab_col_var_header()/tab_header_runs()
@@ -167,7 +175,9 @@ R/
 │                              ann); html injects $cells + flipped $tooltips; xl writes coloured TEXT
 │                              (numbers deferred). Materialise is xl-style when transposing (n col -> n
 │                              row); one Total col (14n); leading [var-name, levels] cols; real tab_vars
-│                              aborts. Object-level tab_transpose() soft-deprecated. See decisions §46
+│                              aborts. 17g: rd2 carries reg_title/caption/empirical_tips through the flip
+│                              (drift fix -> transposed reg tables keep title/caption/tooltips); shares
+│                              roles_totblock_edges() w/ prep. Object-level tab_transpose() soft-deprecated. §46
 ├── tab-render-html.R (~370 L) Phase 10e tab_kable render seam: render_kable_html() (kableExtra +
 │                              home-built html engines) + tab_kable_join(css=)/scrollbox. 13d: the html
 │                              engine is THEME-AGNOSTIC -- colour is a slot CLASS, never inline hex
@@ -846,6 +856,11 @@ Read first: analysis §5.3, §2.2; tab-export-prep.R (the model + `tab_header_ru
 
 Verification: full suite; conscious regens limited to md snapshots (1), xl workbook assertions (2/4), transpose locks (5). The transpose≡native and export-parity tests are the sentinels. Split seam: 1-3+6-9 (17g-i, mostly mechanical) / 4-5 (17g-ii, the materializer).
 
+**DONE (2026-07-21).** Full suite green (FAIL 0, PASS 3864, SKIP 4 = the usual Suggests/benchmark opt-ins), **zero golden/snapshot churn** — every item landed byte-identical except the one intended `output_kable` fix + additive fixtures. All 9 items done in one session (no conscious regen needed).
+- **(7) output_kable crash fixed**: the render moved OUT of `tab_assemble_output()` to `tab()`'s tail (post-`finalize_color_spec`/`tab_apply_display`/`set_color_breaks_attr`), so a two-channel colour no longer feeds a `tabxplor_kable` into `finalize_color_spec`'s `mutate()`, and the background channel now renders. Fixture in `test-render-html.R`. **(8) tab_xl arg drop**: `n_min`/`hide_near_zero`/`conditional_format` formals + guards + roxygen removed (man/ regenerated). **(6) kableExtra degrade**: `print.tabxplor_kable` routes through the pure `kable_print_mode()` predicate → when kableExtra is absent the interactive Viewer path emits a one-time note + knitr print (no broken dispatch); stale `:536` Import comment fixed.
+- **(2) xl ann-hex**: `tab_xl` consumes `ann$text_hex`/`ann$bg_hex` directly; its private `text_pal`/`bg_pal` (the two `get_color_style()` calls) deleted — slot→hex single-sourced through `fmt_channel_codes()` (the CSS side's source). **(3) footer/caption helpers**: `rd_footer(src, medium, theme, want_legend, subtext, lang, classes)` + `rd_caption(rd, user_caption)` (in `tab-export-prep.R`) fold the 4× footer sandwich + the md/html/plot caption fallback (xl keeps its named-tabs/`tab_get_titles` tail). **(1) md header**: the spanning-name row groups by the shared `tab_header_runs()` RLE (width-padded per-column blanks stay md-local — pandoc can't colspan).
+- **(5) transpose**: `tx_transpose_render()`'s `rd2` now carries `reg_title`/`caption`/`empirical_tips` through the flip (a transposed reg table keeps its title/caption/tooltips — the audited drift); `roles_totblock_edges()` single-sources the total-block border formula shared with `prep_one_table()` (the rest of the two role models are genuinely different computations — fmt-based vs flipped-positional — so a full `roles_from()` merge would rewrite the golden-locked transpose for marginal gain, not done; documented). **(4) declarative materializer**: `tab_materialize_extras()` → `tab_materialize(tab, backend, ctx)` over `materialize_specs()` (a DECLARED `list(kind, when, apply)` inventory: add_n_pct / or_total / sd_twin / footer / collapse_totals). The two build-then-undo cycles are gone: the add_n `n` COLUMN is built for xl ONLY (`tab_add_n_pct(..., backend=)`; text folds from the Total cell's own `n` field, no throwaway); collapse_totals is a declared display slice on the stored roles. `mat_add_n_pct`/`mat_sd_twin` are the extracted applies. **(9) tab_plot** verified rendering unchanged.
+
 ---
 
 #### Phase 17h — tab_reg integration
@@ -959,15 +974,11 @@ Fixed bugs recorded in `dev/tabxplor_1.4.0_roadmap_DONE_PHASES.md`
 
 #### Open bugs
 
-- **OPEN (found Last Phase e, low impact):** `options(tabxplor.output_kable = TRUE)` + a **two-channel
-  colour** (a background channel, e.g. the `color = TRUE` auto scheme = `c("diff","ratio")` = diff text
-  + ratio background) errors on the auto-print with *"no applicable method for 'mutate' applied to ...
-  tabxplor_kable"*. The failing site is `tab.R:2219` (`tabs %>% tab_kable()` inside `tab()`), reached
-  ONLY through the `output_kable` internal switch: `tab_kable(tab(..., color = TRUE))` and the console
-  print BOTH work, and single-channel `color = "auto"`/`"diff"` work under `output_kable` too. So the
-  finalize/kable ordering diverges only on that one path. Narrow (an internal switch); the new
-  `vignette("tabxplor")` sidesteps it by rendering tables as coloured console output (fansi), the way a
-  console user sees them. Fix when the `output_kable` / print path is next touched.
+- ~~**OPEN (found Last Phase e, low impact):** `options(tabxplor.output_kable = TRUE)` + a **two-channel
+  colour** errors on the auto-print with *"no applicable method for 'mutate' ... tabxplor_kable"*.~~
+  **FIXED in Phase 17g**: the render ran INSIDE the build (`tab_assemble_output`), before
+  `finalize_color_spec`, which then `mutate()`d the returned kable. The render moved to `tab()`'s tail
+  (post-finalize), so it also shows the background channel. Fixture: `test-render-html.R`.
 - ~~**A pre-existing golden drift.** `n_ci_tabvars.rds` / `n_ci_tabvars_all.rds` had a `ci_sup` `NaN`
    where a clean run wants `NA`.~~ **FIXED in 14v-ii**: the cause was `n <= 1` cells (`df = n - 1 <= 0`
    feeding `qt`); `ci_pivot()` now coerces `df <= 0` to `NA` (clean NA, no NaN, no warning). The two

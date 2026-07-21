@@ -43,9 +43,6 @@
 #' Set to \code{"auto"} to let Excel choose.
 #' @param transpose Set to \code{TRUE} to transpose each table before export (rows become
 #'   columns). Useful for column percentages tables with several row variables.
-#' @param conditional_format `r lifecycle::badge("experimental")` Reserved for a future opt-in
-#'   to use Excel conditional formatting instead of hard cell colours. Not yet implemented: setting
-#'   it emits a message and falls back to the (fast, exact) hard-style colouring.
 #' @param or_numeric Odds ratios export as text ("1/x" reciprocal for OR < 1) by default so an OR
 #'   below 1 reads symmetrically to an OR above 1. Set to \code{TRUE} (or the option
 #'   \code{tabxplor.xl_or_numeric}) to keep them as real, editable numbers instead.
@@ -82,11 +79,6 @@
 #'   \item \code{"auto"}: subsequent tables with the same column vars are printed on the
 #'    same sheets
 #' }
-#' @param n_min `r lifecycle::badge("deprecated")` The small-n greying is removed in 1.4.0. The
-#' argument is kept for back-compatibility but no longer does anything; use `tab(n_min = )`, which
-#' blanks or drops small-n cells at display and flows into every export.
-#' @param hide_near_zero `r lifecycle::badge("deprecated")` Removed in 1.4.0 (a rarely used,
-#' slow feature): the argument is kept for back-compatibility but no longer does anything.
 #' @param color_type `r lifecycle::badge("deprecated")` Inert since 1.4.0: the text channel always uses
 #' the text palette. The colour CHANNEL is chosen by `color = c(text, background)` (see \code{\link{tab}}).
 #'
@@ -109,14 +101,14 @@ tab_xl <-
            lang = NULL,
            colnames_rotation = 0, remove_tab_vars = TRUE,
            colwidth = 10, color_legend = TRUE,
-           sheets = "auto", n_min = 0, titles, caption = NULL,
+           sheets = "auto", titles, caption = NULL,
            font_text = getOption("tabxplor.xl_font_text", "DejaVu Sans Condensed"),
            font_num  = getOption("tabxplor.xl_font_num",  "DejaVu Sans"),
            font_num_stars = getOption("tabxplor.xl_font_num_stars", "Cascadia Mono"),
            text_size = 10, text_size_headers = 9, text_size_subtext = 9,
-           hide_near_zero = Inf, theme = NULL,
+           theme = NULL,
            color_type = lifecycle::deprecated(), html_24_bit = NULL, color = TRUE,
-           transpose = FALSE, var_names = NULL, conditional_format = FALSE,
+           transpose = FALSE, var_names = NULL,
            or_numeric = getOption("tabxplor.xl_or_numeric", FALSE),
            print_color_legend = lifecycle::deprecated()) {
 
@@ -131,21 +123,10 @@ tab_xl <-
 
     if (length(replace) == 0) replace <- length(path) != 0
 
-    # Phase 10g soft-deprecations (kept for back-compat but inert; warn only on a non-default value):
-    #   - hide_near_zero: near-zero greying (rarely used, slow).
-    #   - n_min: the small-n greying is dropped; use tab(n_min = ), which blanks/drops small-n cells.
-    if (!identical(hide_near_zero, Inf)) {
-      lifecycle::deprecate_soft("1.4.0", "tab_xl(hide_near_zero)")
-    }
-    if (!identical(n_min, 0) && !identical(n_min, 0L)) {
-      lifecycle::deprecate_soft("1.4.0", "tab_xl(n_min)", "tab(n_min)")
-    }
-    # Phase 10h: conditional_format is reserved but not implemented (the hard-style path is fast,
-    # exact and small; faithful CF would need hidden helper columns). Fall back with a message.
-    if (isTRUE(conditional_format)) {
-      cli::cli_inform(c("!" = paste0("{.arg conditional_format} is experimental and not yet ",
-                                     "implemented; using the (fast, exact) hard cell colours.")))
-    }
+    # Phase 17g: the long-inert `n_min` / `hide_near_zero` / `conditional_format` args were removed
+    # before the 1.4.0 CRAN freeze (they never did anything: n_min moved to tab(n_min=), near-zero
+    # greying was dropped, and Excel conditional formatting was never implemented). Passing them now
+    # errors "unused argument" -- accepted per the Phase 17 §Settled decisions ruling.
 
     # Phase 10j: `print_color_legend` renamed to `color_legend` (unified across exporters).
     if (lifecycle::is_present(print_color_legend)) {
@@ -180,14 +161,13 @@ tab_xl <-
     # (values written as TEXT here; editable numbers deferred -- see tx_transpose_render()).
     colwidth <- vctrs::vec_recycle(colwidth, length(tabs))
 
-    # === Shared exporter prep (Phase 10g/10j) ======================================
+    # === Shared exporter prep (Phase 10g/10j/17g) ==================================
     # Role detection (fmt / other / total columns, total-block borders, references, bold rows) AND the
-    # two-channel colour slots are derived ONCE by the shared framework (R/tab-export-prep.R). compact =
+    # two-channel colour are derived ONCE by the shared framework (R/tab-export-prep.R). compact =
     # FALSE keeps one prep-table per input tab (each -> its own sheet region). Phase 10j: `compute`
-    # includes "colors" so the per-column `ann` carries the text/background slot vectors -- xl consumes
-    # those (no more private fmt_color_channels() pass, which duplicated the shared engine). The slots
-    # are theme-independent; xl still maps them to hex via its own light palette here (a `theme` arg +
-    # ann-hex consumption lands in Phase 10j-A-ii, where xl becomes theme-aware).
+    # includes "colors" so the per-column `ann` carries the theme-resolved colour. Phase 17g: xl now
+    # consumes ann's `text_hex`/`bg_hex` directly (the fmt_channel_codes source the CSS side reads) --
+    # no private slot->hex palette, so xl is theme-aware through the ONE shared colour source.
     compute <- c("refs", "bold")
     if (color) compute <- c(compute, "colors")
     prep <- tab_export_prep(
@@ -250,10 +230,10 @@ tab_xl <-
     # ONE shared builder -- replaces the hand-built plain-line head/tail sandwich around the colour legend.
     # They ride the SAME rich-text block (so the legend_row overwrite stays aligned); the user subtext stays
     # plain black on its own rows below (subtext = character(0) here, merged next).
-    legend_runs <- purrr::map(tabs_src, function(t) suppressWarnings(render_footer(
-      tab_footer_streams(t, style = legend_export_style(), lang = lang,
-                         subtext = character(0), legend = isTRUE(color_legend)),
-      medium = "runs", theme = theme)))
+    # Phase 17g: shared rd_footer(); xl passes the whole run set (no color_cols guard -- legend = the
+    # color_legend arg) and no user subtext here (merged plain, below).
+    legend_runs <- purrr::map(tabs_src, function(t)
+      rd_footer(t, "runs", theme = theme, want_legend = isTRUE(color_legend)))
     if (any(purrr::map_lgl(legend_runs, ~ length(.) > 0L))) {
       legend_plain <- purrr::map(legend_runs, ~ purrr::map_chr(
         ., function(line) paste0(purrr::map_chr(line, "text"), collapse = "")))
@@ -324,8 +304,8 @@ tab_xl <-
       colnames_rotation = colnames_rotation,
       text_size_headers = text_size_headers,
       text_size_subtext = text_size_subtext,
-      text_pal          = get_color_style("color_code", theme = theme, type = "text"),
-      bg_pal            = get_color_style("color_code", theme = theme, type = "bg"),
+      # Phase 17g: no private palette -- slot->hex is single-sourced through ann (fmt_channel_codes),
+      # the same source the CSS side reads. tab_xl_plan_one() consumes ann$text_hex / ann$bg_hex.
       or_numeric        = isTRUE(or_numeric)      # Phase 13c-v: OR as text (1/x) by default
     )
 
@@ -540,17 +520,20 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
   }) else tibble::tibble(col = integer(), row = integer(), code = character())
   numfmt <- dplyr::filter(numfmt, !is.na(.data$code))
 
-  # Colour slots (two channels) come from the shared prep `ann` (Phase 10j): text channel -> font
+  # Colour (two channels) comes from the shared prep `ann` (Phase 10j / 17g): text channel -> font
   # (bold + colour, folded into the font plan below); background channel -> cell fill (applied by the
-  # writer). The slots are theme-independent; uncoloured columns contribute all-zero slots (filtered).
+  # writer). Phase 17g: consume ann's already theme-resolved HEX (`text_hex`/`bg_hex`, produced by
+  # fmt_channel_codes -- the SAME source the CSS side reads) rather than re-index a private palette by
+  # slot. The `slot > 0L` filter keeps exactly the coloured cells (slot 0 <=> hex NA); uncoloured
+  # columns contribute all-zero slots / NA hex, filtered out.
   colour <- if (length(fmt_cols)) purrr::map_dfr(fmt_cols, function(ci) {
     a <- ann[[names(tab)[ci]]]
     if (is.null(a$text_slot)) return(NULL)
     rows <- seq_along(a$text_slot) + data_row0
     dplyr::bind_rows(
-      tibble::tibble(col = as.integer(ci), row = rows, slot = a$text_slot, channel = "text"),
-      tibble::tibble(col = as.integer(ci), row = rows, slot = a$bg_slot,   channel = "bg"))
-  }) else tibble::tibble(col = integer(), row = integer(), slot = integer(), channel = character())
+      tibble::tibble(col = as.integer(ci), row = rows, slot = a$text_slot, hex = a$text_hex, channel = "text"),
+      tibble::tibble(col = as.integer(ci), row = rows, slot = a$bg_slot,   hex = a$bg_hex,   channel = "bg"))
+  }) else tibble::tibble(col = integer(), row = integer(), slot = integer(), hex = character(), channel = character())
   colour <- dplyr::filter(colour, .data$slot > 0L)
 
   subtext_clean <- subtext[!is.na(subtext) & subtext != ""]
@@ -578,7 +561,7 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
     mk_src(subtext_rows, 1L, size = o$text_size_subtext),                        # subtext
     if (nrow(txt_colour)) tibble::tibble(row = txt_colour$row, col = txt_colour$col,
                                          name = NA_character_, size = NA_real_, bold = TRUE,
-                                         color = o$text_pal[txt_colour$slot])    # text-channel colour
+                                         color = txt_colour$hex)                 # text-channel colour
   )
   if (nrow(fonts)) {
     fonts <- fonts |>
@@ -591,9 +574,9 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
         .groups = "drop")
   }
 
-  # Background-channel colour -> per-cell fill hex.
+  # Background-channel colour -> per-cell fill hex (from ann, Phase 17g).
   bg <- dplyr::filter(colour, .data$channel == "bg")
-  bg_fill <- if (nrow(bg)) tibble::tibble(row = bg$row, col = bg$col, fill = o$bg_pal[bg$slot])
+  bg_fill <- if (nrow(bg)) tibble::tibble(row = bg$row, col = bg$col, fill = bg$hex)
              else tibble::tibble(row = integer(), col = integer(), fill = character())
 
   # Precompose the ENTIRE per-cell style (font + fill + border + alignment) into the fewest distinct

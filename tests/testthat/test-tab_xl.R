@@ -205,18 +205,6 @@ testthat::test_that("tab_xl(transpose = TRUE) writes a valid workbook", {
   testthat::expect_true(file.exists(p) && file.size(p) > 0)
 })
 
-# Phase 10h: conditional_format is experimental (message + falls back to hard styles, still writes).
-testthat::test_that("tab_xl(conditional_format = TRUE) informs and falls back", {
-  testthat::skip_if_not_installed("openxlsx2")
-  tb <- tab(forcats::gss_cat, marital, race, pct = "row", color = "diff")
-  p  <- withr::local_tempfile(fileext = ".xlsx")
-  testthat::expect_message(
-    tab_xl(tb, path = p, replace = TRUE, open = FALSE, conditional_format = TRUE),
-    "experimental"
-  )
-  testthat::expect_true(file.exists(p))
-})
-
 # Phase 13c-v: Excel value/format + col_var spanning header.
 
 testthat::test_that("ci = 'cell' exports the CI text (not the raw proportion)", {

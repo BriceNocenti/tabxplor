@@ -632,6 +632,14 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
   # step strips it; installed transiently at render). NULL (default) -> the global breaks apply.
   result <- set_color_breaks_attr(result, resolve_color_breaks_arg(color_breaks))
 
+  # Phase 17g: the `tabxplor.output_kable` convenience render runs HERE -- AFTER colour finalisation,
+  # tab_apply_display and the color_breaks attr -- because tab_kable() consumes the FINALISED table via
+  # format(). It used to run inside tab_assemble_output() (pre-finalize), which both crashed on a
+  # two-channel colour (finalize_color_spec then mutate()d the returned tabxplor_kable) and rendered a
+  # pre-finalize table (missing the background channel). merge_now (tab_assemble_output) still forces the
+  # merge in the build -- that is a build concern; only the render moved.
+  if (isTRUE(getOption("tabxplor.output_kable"))) return(tab_kable(result))
+
   # Phase 13c-iv: a multi-table result becomes a tabxplor_tabs (still a list) so it auto-prints like a
   # single tab and routes to the Viewer under options("tabxplor.print" = "kable"). No-op on a single tab.
   as_tabxplor_tabs(result)
@@ -2334,11 +2342,8 @@ tab_assemble_output <- function(ctx) {
   if (output != "list" &
       is.list(tabs) & !is.data.frame(tabs) & length(tabs) == 1) tabs <- tabs[[1]]
 
-  # KNOWN-BUG (Last Phase e): with a two-channel colour (a background channel, e.g. color = TRUE ->
-  # c("diff","ratio")) this tab_kable() errors "no applicable method for 'mutate' ... tabxplor_kable".
-  # Only via this output_kable switch; tab_kable(tab(..., color = TRUE)) and console print both work.
-  if (getOption("tabxplor.output_kable") == TRUE) tabs <- tabs |> tab_kable()
-
+  # Phase 17g: the `tabxplor.output_kable` render moved to tab()'s tail (post-finalize). Here only its
+  # merge half survives, folded into merge_now above -- the build still merges when output_kable is set.
   tabs
 }
 
@@ -6231,7 +6236,11 @@ tab_append_pctcol_rows <- function(tab, transform, role = NA_character_) {
 # (add_pct) to each built factor table. Extracted verbatim from tab_many()'s finalize so
 # BOTH tab_many() and tab_counts() share ONE implementation (no divergence). Operates on the
 # tabs_text LIST (one entry per row_var); returns it modified. See CLAUDE.md Phase 4.
-tab_add_n_pct <- function(tabs_text, add_n, add_pct) {
+# Phase 17g: `backend` -- the TEXT backends fold the add_n base into the Total cell directly from its
+# own `n` field (tab_fold_addn_incell), so the separate `n` COLUMN would only be built to be dropped.
+# It is therefore built for "xl" ONLY (default "xl" = build it, for any caller not naming a backend);
+# text skips it. The pct = "col" `n` ROW + the add_pct col_pct / row_pct companions are backend-invariant.
+tab_add_n_pct <- function(tabs_text, add_n, add_pct, backend = "xl") {
   if (!add_n && !add_pct) return(tabs_text)
 
     # cols, with pct = "row"
@@ -6273,7 +6282,9 @@ tab_add_n_pct <- function(tabs_text, add_n, add_pct) {
           )
       }
 
-      if (add_n) {
+      # Phase 17g: the add_n `n` COLUMN is an Excel-only layout column -- text folds the base into the
+      # Total cell instead (tab_fold_addn_incell), so building it there just to drop it is skipped.
+      if (add_n && !identical(backend, "text")) {
         tabs_text <- tabs_text |>
           purrr::map2(
             last_totcols_pct_rows, ~ dplyr::mutate(
@@ -6407,10 +6418,11 @@ tab_is_or_display <- function(tab) {
 }
 
 # tab_fold_addn_incell() -- Phase 10i-B decision 1. For TEXT backends (console / kable / md), the
-# add_n base moves out of a separate `n` COLUMN and into the Total cell as an in-cell composite
-# `{pct} (n={n})` (via the Phase-10i-A display grammar). The materialiser first builds the real `n`
-# column with tab_add_n_pct() (byte-identical to the old build), then this drops it and folds the
-# base into the Total column's display. Default (`tabxplor.totcol_range = "off"`): each Total cell
+# add_n base shows in the Total cell as an in-cell composite `{pct} (n={n})` (via the Phase-10i-A
+# display grammar), reading the base from the Total column's OWN `n` field. Phase 17g: text no longer
+# builds the separate `n` COLUMN at all (tab_add_n_pct skips it), so the leading select(-any_of("n"))
+# is now a no-op guard (it still runs for any stray column). Default (`tabxplor.totcol_range = "off"`):
+# each Total cell
 # shows its OWN base `{n}`. Option `"range"` / `"min"`: the cross-col_var base via tab_totcol_range()
 # (a per-row literal `[min;max]` / smallest), for tables whose col_vars have differing NA bases.
 # Phase 16c: for an OR/RRR table the "100%" is dropped -> the cell shows only `n={n}` (the base).

@@ -362,11 +362,9 @@
   single table (one row variable, one column variable, at most one total row/column).
 * `tab_xl()` Excel export was rewritten on the actively-maintained **openxlsx2** engine (replacing
   openxlsx), and now takes a single table or a list. It gains `transpose = TRUE` (transpose each table
-  before export) and an experimental `conditional_format =` (reserved; currently a no-op with a
-  message). Significance stars now show in the exported cells (folded into the Excel number format, so
-  the cell stays a real number). Colors and number styles are applied over the fewest possible cell
-  ranges. The deprecated `n_min` / `hide_near_zero` arguments are still accepted but do nothing (use
-  `tab(n_min = )`).
+  before export). Significance stars now show in the exported cells (folded into the Excel number
+  format, so the cell stays a real number). Colors and number styles are applied over the fewest
+  possible cell ranges.
 * New `tab_export()` --- one entry point for every export format:
   `tab_export(x, format = c("kable", "md", "xl", "plot"))` dispatches to `tab_kable()`, `tab_md()`,
   `tab_xl()` or `tab_plot()` (pass a `path` to write the file). The four exporters now share the same
@@ -653,6 +651,16 @@
   export to Excel, install `openxlsx2`. The produced workbooks look essentially the same.
 
 ## Bug corrections
+* **`options(tabxplor.output_kable = TRUE)` no longer errors with a two-channel colour.** Auto-printing
+  a table built with a background colour channel (e.g. `color = TRUE`) under this option used to fail
+  with *"no applicable method for 'mutate' … tabxplor_kable"*; the kable render now runs after the
+  colours are finalised, so it also shows the background channel correctly.
+* **HTML tables degrade gracefully when kableExtra is absent.** Printing a themed `tab_kable()` result
+  to the interactive Viewer without the (Suggests-only) kableExtra package no longer breaks dispatch:
+  it shows the table and a one-time note that Viewer tooltips need kableExtra, instead of failing.
+* **A transposed regression table keeps its title and tooltips.** `tab_kable(..., transpose = TRUE)`
+  and `tab_md(..., transpose = TRUE)` now keep a regression table's auto-title and any stored
+  `set_caption()` caption (and the multinomial crude-companion tooltips), which the transpose used to drop.
 * **A mean/numeric `ref =` now matches an exact row label, even one with special characters.** A label
   such as `"$25000 or more"` (whose `$` is a regular-expression character) was matched only as a pattern,
   so `tab_num(..., ref = "$25000 or more")` failed to find the reference row; an exact-label match is now
@@ -924,10 +932,10 @@
   existing table.
 * `tab_plot()` is **superseded**: its ggplot rendering is limited and no longer actively developed.
   It keeps working; prefer `tab_kable()` (HTML), `tab_md()` (markdown) or `tab_xl()` (Excel).
-* `tab_xl(n_min =)` and `tab_xl(hide_near_zero =)` are **soft-deprecated** and now inert (they no
-  longer grey out small-n / near-zero cells). For the small-n case use `tab(n_min = )`, which blanks
-  or drops small-n cells at display and flows into the Excel export. Both arguments still accept their
-  old values without error (a message is shown when a non-default value is passed).
+* The long-inert `tab_xl()` arguments `n_min`, `hide_near_zero` and `conditional_format` are
+  **removed**. They never did anything in 1.4.0 (the small-n greying moved to `tab(n_min = )`, which
+  blanks or drops small-n cells at display and flows into the Excel export; near-zero greying was
+  dropped; Excel conditional formatting was never implemented). Passing them now errors.
 * `tab_md(title =)` is **soft-deprecated**, renamed to `tab_md(caption =)` (a single caption name
   shared by every exporter). The old argument still works.
 * `tab_xl(print_color_legend =)` is **soft-deprecated**, renamed to `tab_xl(color_legend =)` (the name
