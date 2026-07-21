@@ -2,22 +2,27 @@
 // NOTE: the jamovi compiler ships this file verbatim (comments included) to every user, so keep it
 // lean. jus 3.0: use the GLOBAL `utils.clone` (the events `this` has no `.clone`, unlike jus 2.0).
 
-var exportLabels = { excel: "Excel", html: "HTML", md: "markdown" };
-
-var setExportLabel = function(ui) {
-    if (!ui.export_format || !ui.exportExcel) return;
-    var fmt = ui.export_format.value();
-    ui.exportExcel.setPropertyValue("label", "Export " + (exportLabels[fmt] || "Excel"));
+// The file extension shown after the file name on the path line -- follows the chosen format. Rendered
+// into the tiny `extCtrl` CustomControl (.u.yaml) on create, on format change, and on each onUpdate.
+// The Export button keeps its static "Export" label (set in .u.yaml) -- no dynamic rename, no fixed width.
+var exportExts = { excel: ".xlsx", html: ".html", md: ".md" };
+var renderExt = function(ui) {
+    if (!ui.extCtrl || !ui.extCtrl.$el || !ui.extCtrl.$el[0]) return;
+    var fmt  = ui.export_format ? ui.export_format.value() : "excel";
+    var root = ui.extCtrl.$el[0];
+    root.textContent = exportExts[fmt] || ".xlsx";
+    root.style.cssText = "color:#555;white-space:nowrap;padding:0 2px;";
 };
 
-// Pin the export button to the widest label's width ("Export markdown") so its text changes but not
-// its size. Re-applied on each onUpdate (jamovi re-renders may drop inline styles).
-var fixExportBtnWidth = function(ui) {
-    var c = ui.exportExcel;
+// Make the "default path" reset discreet: a small, underlined, link-like secondary action rather than a
+// primary button. Re-applied on each onUpdate (jamovi may re-render the control and drop inline styles).
+var styleResetBtn = function(ui) {
+    var c = ui.resetPath;
     if (!c || !c.$el || !c.$el[0]) return;
     var btn = c.$el[0].querySelector("button") || c.$el[0];
-    btn.style.width = "150px";
-    btn.style.boxSizing = "border-box";
+    btn.style.cssText += ";background:transparent;border:none;box-shadow:none;color:#777;" +
+                         "font-size:11px;padding:1px 2px;min-width:0;width:auto;" +
+                         "text-decoration:underline;cursor:pointer;";
 };
 
 // Phase 15c: the `subtext` note is a full-width, auto-grow <textarea> (a CustomControl driving the
@@ -63,28 +68,50 @@ var applyWtEnables = function(ui) {
     });
 };
 
-// jamovi's TextBox `width:` enum has no `auto` (caps at `largest`, ~200px). Widen `subtext` / `path`
-// to fill their cell by clearing the fixed-width cap down to the input. Re-applied on each onUpdate.
-var stretchTextBox = function(ui, name) {
+// WHY the path boxes ignored their stretch: jamovi compiles every grid cell to
+// `minmax(max-content, <stretch>fr)`, so a control claims its min-content width BEFORE the stretch
+// factors divide the row. A `width: largest` TextBox has a ~200px min (class silky-option-largest-text),
+// so both boxes bottom out at ~200px. Collapse that floor with a persistent <style> (inline styles are
+// dropped on jamovi re-renders). Folder keeps a 260px minimum so it stays the wider box (tune to taste);
+// the file name (width: large) collapses fully. Only the two export boxes use these width classes.
+var injectExportCss = function() {
+    if (document.getElementById("tabx-export-css")) return;
+    var s = document.createElement("style");
+    s.id = "tabx-export-css";
+    s.textContent =
+        "input.silky-option-largest-text{min-width:260px !important;width:100% !important;box-sizing:border-box;}" +
+        "input.silky-option-large-text{min-width:0 !important;width:100% !important;box-sizing:border-box;}";
+    document.head.appendChild(s);
+};
+
+// Push a control to the BOTTOM of its (taller) row: walk up to its row-item cell (the one whose grid is a
+// direct child of the export block's `margin: large` container -- true regardless of any inner label
+// wrapper) and set `align-self: flex-end`. Re-applied each onUpdate (re-renders drop inline styles).
+var bottomAlignInRow = function(ui, name) {
     var c = ui[name];
     if (!c || !c.$el || !c.$el[0]) return;
-    var root = c.$el[0];
-    root.style.width = "100%"; root.style.maxWidth = "none";
-    var inp = (c.$input && c.$input[0]) || root.querySelector("input");
-    var node = inp, guard = 0;
-    while (node && node !== root && guard++ < 6) {
-        node.style.width = "100%"; node.style.maxWidth = "none";
+    var node = c.$el[0], guard = 0;
+    while (node && guard++ < 14) {
+        if (node.classList && node.classList.contains("silky-layout-cell")) {
+            var g = node.parentElement && node.parentElement.parentElement &&
+                    node.parentElement.parentElement.parentElement;
+            if (g && g.classList && g.classList.contains("silky-control-margin-large")) {
+                node.style.alignSelf = "flex-end";
+                return;
+            }
+        }
         node = node.parentElement;
     }
-    if (inp) inp.style.width = "100%";
 };
 
 var onUpdate = function(ui) {
-    setExportLabel(ui);
-    fixExportBtnWidth(ui);
+    injectExportCss();
     applyWtEnables(ui);
     renderSubtext(ui);
-    stretchTextBox(ui, "export_dir");
+    renderExt(ui);
+    styleResetBtn(ui);
+    bottomAlignInRow(ui, "export_format");   // Format combo -> bottom of row 1 (aligns with Export button)
+    bottomAlignInRow(ui, "extCtrl");         // ".ext" text -> bottom of the path row
     renderModelTable(ui);
     renderRefPicker(ui);
     renderModelBuilder(ui);
@@ -681,10 +708,13 @@ module.exports = {
     subtextCtrl_creating: function(ui) { renderSubtext(ui); },
     subtextCtrl_updated:  function(ui) { renderSubtext(ui); },
 
-    // Keep the export button label + width in sync with the chosen format.
+    // extCtrl: the small ".ext" label after the file name; follows the chosen format.
+    extCtrl_creating: function(ui) { renderExt(ui); },
+    extCtrl_updated:  function(ui) { renderExt(ui); },
+
+    // The chosen format changed: update the file-extension label on the path line.
     export_format_changed: function(ui) {
-        setExportLabel(ui);
-        fixExportBtnWidth(ui);
+        renderExt(ui);
     },
 
     // Reset the export action button shortly after a click, so a second export re-fires the event.

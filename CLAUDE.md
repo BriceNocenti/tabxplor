@@ -1005,29 +1005,29 @@ Other improvements to implement :
 
 Jamovi `jmvtabreg` improvements.
 
-For the family selector : 
-- Don’t show "auto (detected)", just auto chose the auto detected object in the drop list (ex : "binomial (logistic)" for binary factors). When only one choice is possible, just grey out the dropdown since there’s not choice left. When the auto detection fails, for integers or doubles, please autoselect "poisson" over "gaussian" (more annoying if the models don’t fit in jamovi live UI than in R session). 
-- The model "modelised level" selector in the third column is not wide enough to be readable, and the whole family selector does not take all horizontal available  : make sure the whole family selector is a 3 columns layout taking all horizontal space available right ; give more space for levels names in the drop list ; third column "level" text wastes horizontal space and is not necessary (if it shows the levels of the binomial var, the user see it’s a level picker). 
+For the family selector :
+- Don’t show "auto (detected)", just auto chose the auto detected object in the drop list (ex : "binomial (logistic)" for binary factors). When only one choice is possible, just grey out the dropdown since there’s not choice left. When the auto detection fails, for integers or doubles, please autoselect "poisson" over "gaussian" (more annoying if the models don’t fit in jamovi live UI than in R session).
+- The model "modelised level" selector in the third column is not wide enough to be readable, and the whole family selector does not take all horizontal available  : make sure the whole family selector is a 3 columns layout taking all horizontal space available right ; give more space for levels names in the drop list ; third column "level" text wastes horizontal space and is not necessary (if it shows the levels of the binomial var, the user see it’s a level picker).
 - Only show "poisson (counts)", not quasi-poisson, but do a quasi-poisson anyway, like in the current code (with simple poisson dispersion says 1.46 so I guess it’s that) (would also reduce the width of the drop list since it’s the longest item) ? By the way : with "quasipoisson" selected, `empirical=TRUE` does nothing.
 - In mixed model with one binomial + one poisson, working well, adding a 3 level multinomial freezed jamovi (restart necessary). Same happened the other way round : 3 level multinomial was working well, adding one binomial + 1 poisson made it freeze
 
-Rest of the `Model` pane : 
+Rest of the `Model` pane :
 - Grey out `effect` when there are no binomial/multinomial/ordinal selected, since "AME" il only meaningful in these cases (not for gaussian and poisson, right ?)
-- Grey out `exponentiate` where there are no binomial/multinomial/ordinal/poisson selected ? 
+- Grey out `exponentiate` where there are no binomial/multinomial/ordinal/poisson selected ?
 
-`Model comparison / predictors subset` : 
-- The menu is great, but it still freezes very often : I can’t reproduce the pattern for freeze, but I think just selecting or selecting out predictors too fast may make it freeze (sometimes it doesn’t even feel fast : like it click "+" to add three models, they add, then I select out a level, waiting for 5 sec and not more loading between each action, and it still freezes ; sometime it’s total freeze that require jamovi restart, sometimes it’s still possible to remove the analysis and redo, but this one feels random). Please do thorought web searches about jamovi freeze problems, and help me diagnose the cause and find a solution. Maybe the model comparison panel needs a kind of Ok button : since it’s an heavy operation that have no meaning to be redone every second, maybe the right UI is maybe "the user pick its models, then click the button to start analysis", actually bypassing jamovi UI live display for this one. Once the models to compare are picked, changes in other buttons in the UI keeps them, removing a variable in variable selection remove it in all models then relaunch (maybe guard this one in another way since it had been a source of freeze with model comparison in the past ?), etc. What other guards against jamovi freeze ? 
+`Model comparison / predictors subset` :
+- The menu is great, but it still freezes very often : I can’t reproduce the pattern for freeze, but I think just selecting or selecting out predictors too fast may make it freeze (sometimes it doesn’t even feel fast : like it click "+" to add three models, they add, then I select out a level, waiting for 5 sec and not more loading between each action, and it still freezes ; sometime it’s total freeze that require jamovi restart, sometimes it’s still possible to remove the analysis and redo, but this one feels random). Please do thorought web searches about jamovi freeze problems, and help me diagnose the cause and find a solution. Maybe the model comparison panel needs a kind of Ok button : since it’s an heavy operation that have no meaning to be redone every second, maybe the right UI is maybe "the user pick its models, then click the button to start analysis", actually bypassing jamovi UI live display for this one. Once the models to compare are picked, changes in other buttons in the UI keeps them, removing a variable in variable selection remove it in all models then relaunch (maybe guard this one in another way since it had been a source of freeze with model comparison in the past ?), etc. What other guards against jamovi freeze ?
 - There’s a R side problem too : for a row variable/predictor selection in all models the reference catogory is in bold in the firt "levels" column, with is the right behaviour ; but when the predictor have been selected out in any model, the bold dissapear ; I think it’s just because empty parts of the table doesn’t properly keep the `in_refrow` field, and mess with reference row detection.
 
 `References and predictor scaling` :
 - I have a doubt if the reference selector drop list display the factors levels in the right order, or maybe mess with the order, please check.
 
-`Significance` pane : 
+`Significance` pane :
 - Starts the menu with the two ways of visualising significance, on the same row, in a clear 3 equal-sized columns layout : first column label just says "<b>Show:</b>" ; second column have the `color` tick box ; third column have the `stars` tick box.
-- Second row have : first column "conf_level =" and the number box (use a number box with up and down arrows to increment by 0.01) ; second column "method = <i>(conf. interval)</i>" ; third column with the radio buttons (no duplicate title). 
+- Second row have : first column "conf_level =" and the number box (use a number box with up and down arrows to increment by 0.01) ; second column "method = <i>(conf. interval)</i>" ; third column with the radio buttons (no duplicate title).
 - Third row have color_signif, taking all the horizontal space in the row.
 
-In general for jamovi UI (jmvtab + jmtvtabreg) : 
+In general for jamovi UI (jmvtab + jmtvtabreg) :
 - Add an empty line at the end of each main UI collapsable box, to more clearly separate each menu from the next when the menu is collapsed (when not collapsed, this additional line should not show, compact is good).
 
 I still have these messages in jamovi devtools console :
@@ -1046,6 +1046,7 @@ In general, **do not repeat the same legend twice in the argument title (.a.yaml
 Export menu (`jmvtab` + `jmvtabreg`) :
 - jmvtab Excel export still fails, windows-side, with default parameters : "Export failed: ℹ In index: 1. Caused by error in `wb$add_data()`: ! argument 6 matches multiple formal arguments"
 - html table export working, but on my Windows 11 computer it totally fails to find my real `Documents` folder : it creates a new "C:\Users\Brice\Documents" folder, but my Windows have a different official location to "D:\Documents" with a pointer towards it in the normal "C:\Users\Brice\" and all `Documents` normal shortcuts. How to find the real folder from inside the locked electron R session ?
+- Above the Export block, always add an empty line, or a clear horizontal rule that inserts well in the current jamovi options pane styling, since it’s not in the collapsable hierarchy and separation must be distinguished easily.
 
 
 

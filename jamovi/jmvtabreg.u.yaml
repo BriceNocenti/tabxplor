@@ -337,7 +337,7 @@ children:
               - type: ComboBox
                 name: export_format
                 events:
-                  change: ./jmvtabreg::exportExcel_changed
+                  change: ./jmvtabreg::export_format_changed
       # Row 2: ONE full-width path line -- "Path:" <folder> " / " <filename> <.ext>.
       #   folder : filename width = 3 : 2. This ratio only holds because js injectExportCss() collapses
       #   the TextBoxes' ~200px max-content floor -- otherwise both cells bottom out at 200px (see the js).
