@@ -16,7 +16,8 @@ testthat::test_that("display_primary() leaves simple tokens and NA untouched (fa
 testthat::test_that("display_primary() returns the FIRST {field}, alias-resolved", {
   testthat::expect_identical(display_primary("{pct} (n={n})"), "pct")
   testthat::expect_identical(display_primary("{n} ({pct})"),   "n")
-  testthat::expect_identical(display_primary("{ratio} x"),     "rr")   # ratio -> rr alias
+  testthat::expect_identical(display_primary("{ratio} x"),     "ratio") # Phase 17d: ratio is canonical
+  testthat::expect_identical(display_primary("{rr} x"),        "ratio") # rr is the read-side legacy alias
   testthat::expect_identical(display_primary("{ pct }"),       "pct")  # trims inside braces
   testthat::expect_identical(display_primary("{diff} [{ci}]"), "diff")
   # a mixed vector: composites resolve, simple/NA pass through, position preserved
@@ -41,7 +42,8 @@ testthat::test_that("parse_display_template() splits literals and {tokens} in or
   testthat::expect_identical(p$fields, c("pct", "n"))
 
   testthat::expect_identical(parse_display_template("{n} ({pct})")$fields, c("n", "pct"))
-  testthat::expect_identical(parse_display_template("{ratio}")$fields, "rr")        # alias
+  testthat::expect_identical(parse_display_template("{ratio}")$fields, "ratio")     # canonical
+  testthat::expect_identical(parse_display_template("{rr}")$fields, "ratio")        # rr -> ratio alias
   testthat::expect_identical(parse_display_template("{ pct } x")$fields, "pct")     # trim
   testthat::expect_identical(parse_display_template("{diff} [{ci}]")$fields, c("diff", "ci"))
 })

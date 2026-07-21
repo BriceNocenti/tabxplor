@@ -662,12 +662,27 @@ tab_apply_display <- function(tabs, display) {
 }
 
 
+# Phase 17d (Step 4d): decode a legacy COMBINED colour string into the clean (measure, policy) pair,
+# ONCE, at the argument / storage boundary -- so the resolve cascade, the stored `color` attribute and
+# the colour engine (fmt_color_plan) never carry a composite and never re-parse one. A clean measure
+# passes through with policy = NULL ("leave color_signif as it is"). The one-shade rendering of the old
+# `color = "ci"` (single0) is retired: it folds into guaranteed_effect, i.e. exactly `after_ci`.
+#' @keywords internal
+color_decode_legacy <- function(color) {
+  switch(color,
+         "diff_ci"  = list(measure = "diff", policy = "grey_non_signif"),
+         "after_ci" = list(measure = "diff", policy = "guaranteed_effect"),
+         "ci"       = list(measure = "diff", policy = "guaranteed_effect"),
+         list(measure = color, policy = NULL))
+}
+
 # Phase 13a: `color` grammar -- POSITION = channel (1st -> text, 2nd -> background), NAMES = column
 # type (pct / mean). FALSE -> off; TRUE -> the smart per-type default; a scalar/positional vector ->
 # the same measure(s) on every column; a NAMED vector or a list(pct =, mean =) -> per column type
 # (each entry a positional channel vector). Returns list(mode, legacy, text, bg, types, signif):
-# `legacy` is the scalar string fed to the (text-channel) pipeline so its ci/chi2 side effects still
-# fire; `mode`/`text`/`bg`/`types`/`signif` drive finalize_color_spec() on the built table.
+# `legacy` is the scalar CLEAN measure fed to the (text-channel) pipeline so its ci/chi2 side effects
+# still fire (Phase 17d: no longer a manufactured diff_ci/after_ci -- the policy rides `signif`);
+# `mode`/`text`/`bg`/`types`/`signif` drive finalize_color_spec() on the built table.
 #' @keywords internal
 normalize_color_spec <- function(color, color_signif = "ignore", deprecate = TRUE) {
   signif <- if (length(color_signif) == 0L) "ignore" else color_signif[1]
@@ -719,20 +734,22 @@ normalize_color_spec <- function(color, color_signif = "ignore", deprecate = TRU
       cli::cli_abort("{.val {bg}} cannot go on the background channel (only {.val diff} / {.val ratio}).")
     }
     deprecate_old(text)
+    # Phase 17d: decode a legacy combined string HERE, once. The policy rides `signif` (scalar for the
+    # whole spec); the measure becomes a clean "diff". A clean measure is left untouched (policy NULL).
+    dec <- color_decode_legacy(text)
+    if (!is.null(dec$policy)) { signif <<- dec$policy; text <- dec$measure }
     c(text, if (is.na(bg)) NA_character_ else bg)
   }
 
-  # the pipeline legacy string demanded by a set of measures (ci/chi2/OR side-effects)
+  # the pipeline CLEAN measure demanded by a set of measures (ci/chi2/OR side-effects). Phase 17d: it no
+  # longer manufactures diff_ci/after_ci -- the legacy strings are already decoded (parse_channels) into
+  # a "diff" measure + the `signif` policy, so the cascade reads the clean measure and color_signif apart.
   legacy_union <- function(ms) {
     ms <- ms[!is.na(ms) & ms != ""]
     if ("auto"    %in% ms) return("auto")     # resolved per column type downstream (tab_resolve_settings)
     if ("contrib" %in% ms) return("contrib")
     if ("OR"      %in% ms) return("OR")
-    old <- ms[ms %in% c("diff_ci", "after_ci", "ci")]
-    if (length(old)) return(old[1])
-    if (any(ms %in% c("diff", "ratio"))) {
-      return(switch(signif, "grey_non_signif" = "diff_ci", "guaranteed_effect" = "after_ci", "diff"))
-    }
+    if (any(ms %in% c("diff", "ratio"))) return("diff")  # ratio uses the diff-family CI; ci_scale tags it
     "no"
   }
 
@@ -838,8 +855,8 @@ resolve_col_measures <- function(spec, type, built) {
     m <- spec$types[[key]]
     return(if (is.na(m[2])) m[1] else m)
   }
-  # flat
-  text <- if (identical(spec$text, "auto")) color_measure_policy(built, type)$measure else spec$text
+  # flat -- spec$text is a clean measure here (auto is mode == "auto", handled above)
+  text <- spec$text
   if (text == "" && is.na(spec$bg)) return(NULL)
   if (is.na(spec$bg)) text else c(text, spec$bg)
 }
@@ -5963,14 +5980,23 @@ tab_ci <- function(tabs,
     }
     ci_yes_ref  <- !is.na(ci_with_ref) & !ci_with_ref == "no"
 
+    # Phase 17d: `color` may arrive as a legacy combined string (the resolve cascade's color_ci, or a
+    # direct tab_ci(color = "after_ci") on the deprecated step path). Decode it ONCE into the clean
+    # (measure, policy) pair so the stored attributes are clean and the engine never re-parses -- on the
+    # tab() path finalize_color_spec() overwrites the policy with the spec's, a no-op when they agree.
+    col_dec <- color_decode_legacy(color[1])
+    set_ci_col <- !is.null(color[1]) && !color[1] %in% c("no", "")
     tabs[ci_yes_ref] <-
       purrr::map2_df(tabs[ci_yes_ref],
                      ci_with_ref[ci_yes_ref],
-                     ~ set_ci_type(.x, .y) |>
-                       set_color(
-                         ifelse(!is.null(color[1]) & ! color[1] %in% c("no", ""),
-                                color[1], get_color(.))
-                       ))
+                     function(col, ci_ref) {
+                       col <- set_ci_type(col, ci_ref)
+                       if (set_ci_col) {
+                         col <- set_color(col, col_dec$measure)
+                         if (!is.null(col_dec$policy)) col <- set_color_signif(col, col_dec$policy)
+                       }
+                       col
+                     })
   }
 
 

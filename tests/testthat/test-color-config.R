@@ -154,7 +154,7 @@ testthat::test_that("tab() color argument errors are clear", {
 testthat::test_that("old combined colour strings are soft-deprecated but still colour", {
   d <- forcats::gss_cat
   for (m in c("diff_ci", "after_ci", "ci")) {
-    lifecycle::expect_deprecated(tab(d, marital, race, pct = "row", ci = "cell", color = m))
+    lifecycle::expect_deprecated(tab(d, marital, race, pct = "row", ci = "diff", color = m))
   }
   withr::local_options(lifecycle_verbosity = "quiet")
   t  <- tab(d, marital, race, pct = "row", color = "diff_ci")

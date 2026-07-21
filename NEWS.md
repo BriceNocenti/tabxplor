@@ -602,6 +602,13 @@
   in a monospace font, and they no longer leak into `tab_kable()` tooltips (only the primary value is
   starred). A table built without stars stores no per-cell `pvalue` (`$pvalue` is `NA`); the colour
   significance policies (`color_signif`) are unaffected — they read the confidence bounds, not the stars.
+* **The soft-deprecated combined colour strings behave exactly like their modern equivalent.** `color =
+  "diff_ci"` / `"after_ci"` / `"ci"` are now decoded to `color = "diff"` with the matching
+  `color_signif` policy the moment you pass them, so they follow the same rules as the modern form. Two
+  edge cases change: `color = "ci"` now renders identically to `"after_ci"` (its old distinct one-shade
+  variant is retired), and `color = "after_ci"` / `"diff_ci"` combined with `ci = "cell"` now raises a
+  clear error (use `ci = "diff"`, the confidence interval those modes gate on) instead of silently
+  switching the interval for you. Migrate to `color = "diff"` + `color_signif =` at your convenience.
 * **The unweighted-count `add_n` and the `add_pct` distribution are now display-time additions.** With
   `add_n = TRUE` (the default), the base count no longer sits in a separate `n` column of the built
   table: on the console, `tab_kable()` and `tab_md()` it now appears **inside the Total cell** as

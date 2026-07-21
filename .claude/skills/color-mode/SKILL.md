@@ -18,8 +18,12 @@ Since 1.4.0 coloring is decomposed into **three orthogonal axes** feeding **one 
 - **Axis S — significance policy**: the per-column `color_signif` attribute
   (`get_color_signif(x)`): `"ignore"` / `"grey_non_signif"` / `"guaranteed_effect"`.
 
-The old flat strings (`"diff_ci"`, `"after_ci"`, `"ci"`) are soft-deprecated compositions decoded by
-`color_measure_policy()` — they still work.
+The old flat strings (`"diff_ci"`, `"after_ci"`, `"ci"`) are soft-deprecated compositions still
+accepted at the boundary. Phase 17d: they are decoded ONCE by `color_decode_legacy()` (R/tab.R) in
+`normalize_color_spec()` (and in `tab_ci()` for the deprecated step path) into the clean
+`(measure = "diff", color_signif = policy)` pair — nothing downstream re-parses them, the stored
+`color` attribute is always a clean measure, and `"ci"` folds into `after_ci` (the old single-shade
+`single0` mode is gone). `"after_ci"`/`"diff_ci"` with `ci = "cell"` now error (use `ci = "diff"`).
 
 Re-grep exact line numbers before editing; anchors below drift.
 
@@ -33,9 +37,12 @@ integer** (0 = uncolored, **1..4 = over intensities, 5..8 = under**). `fmt_color
 There is **no x2/slot-11 override anymore** — the "×2 rule" is just a 1-break `pct_ratio` scale carried
 on the background channel (`color = c("diff", "ratio")`, default `pct_ratio = list(over = 2)`).
 
-- **Add/rename a measure**: `color_measure_policy()` (decode string → measure + policy), then the
-  `switch(measure, …)` blocks in `fmt_color_plan()` (scale selection, `raw` per-cell quantity,
-  `guaranteed_effect` floor). Numeric standardized diff divides by `sqrt(get_ref_var(x))`.
+- **Add/rename a measure** (Phase 17d): add ONE row to the `MEASURES` fact table (R/fmt_class.R) —
+  its legend fields (word/break glyphs/ref_kind/…) AND its engine fields (`raw` getter closure,
+  `scale = c(std=, pct=)` keys, `std_when`, `sig_source ∈ {bounds,pvalue}`, `gate_row ∈
+  {refrow,totrow}`). `fmt_color_plan()` reads them; the only per-measure code left there is policy
+  (the diff↔ratio bound rescale + the `guaranteed_effect` floor).
+  Numeric standardized diff divides by `sqrt(get_ref_var(x))`.
   **`guaranteed_effect` floor MUST be on the measure's own scale** (the fold's `center`): `diff` → the
   stored diff bound (centre 0); `or` → the native OR bound (centre 1); `ratio` (no native CI) → convert
   the shared diff floor `1 + (get_ratio − 1)·(guar_diff/get_diff)` (centre 1). Feeding a diff bound

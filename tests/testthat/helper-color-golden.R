@@ -118,10 +118,10 @@ color_golden_cases <- function() {
     c_mean_diff      = function() color_golden_capture_tab(
       tab_num(gss, race, c(age, tvhours), comp = "all", color = "diff", digits = 1L)),
     c_mean_diff_ci   = function() color_golden_capture_tab(suppressWarnings(
-      tab_num(gss, race, c(age, tvhours), comp = "all", ci = "cell",
+      tab_num(gss, race, c(age, tvhours), comp = "all", ci = "diff",
               color = "diff_ci", digits = 1L))),
     c_mean_after_ci  = function() color_golden_capture_tab(suppressWarnings(
-      tab_num(gss, race, c(age, tvhours), comp = "all", ci = "cell",
+      tab_num(gss, race, c(age, tvhours), comp = "all", ci = "diff",
               color = "after_ci", digits = 1L)))
   )
 }

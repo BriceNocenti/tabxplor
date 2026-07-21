@@ -1970,7 +1970,7 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
   ok_diff    <- !is.na(get_diff(x))  & comparable
   # `type == "mean"` was excluded, so a mean column showed no ratio line at all -- though under the
   # default color = TRUE the ratio is exactly what colours it.
-  ok_rr      <- !is.na(get_ratio(x)) & comparable & !disp %in% c("ratio", "rr") &
+  ok_rr      <- !is.na(get_ratio(x)) & comparable & !disp %in% "ratio" &
     type %in% c("col", "row", "mean")
   # A reference cell's whole comparison group collapses to ONE "ref": its diff is 0 and its ratio 1
   # by construction, so "diff: ref ; ratio: x1" said nothing, twice. The cell already prints
@@ -2051,7 +2051,7 @@ tab_kable_print_tooltip <- function(x, .ref = NULL) {
   # color = c("diff","ratio") table (a ratio but no OR) showed an empty value. Format the rr field
   # (the ×/÷ ratio display) under a clearer "ratio:" label. Gate: `show_rr` (Phase 14b, above).
   out_rr <- if (any(show_rr)) {
-    dplyr::if_else(show_rr, paste0("ratio: ", tip_num(set_display(x, "rr")) ), "")
+    dplyr::if_else(show_rr, paste0("ratio: ", tip_num(set_display(x, "ratio")) ), "")
   } else blank
 
   cond_or <- type %in% c("col", "row") & !is.na(get_or(x)) &

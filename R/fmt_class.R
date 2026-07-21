@@ -99,7 +99,8 @@ utils::globalVariables(c("tabx_opts", "tabx_ship", ".stop"))
 #' of \code{n}.
 #' @param display The display type : the name of the field you want to show when printing
 #' the vector. Among \code{"n"}, \code{"wn"}, \code{"pct"}, \code{"diff"}, \code{"ctr"},
-#'  \code{"mean"}, \code{"var"}, \code{"ci"},
+#'  \code{"mean"}, \code{"var"}, \code{"ci"}, \code{"ratio"} (the cell-to-reference ratio;
+#'  the legacy synonym \code{"rr"} still resolves to it),
 #'  \code{"pct_ci"} (percentages with visible confidence interval),
 #'  \code{"mean_ci"} (means with visible confidence interval). As a single string, or a
 #'  character vector the length of \code{n}.
@@ -410,7 +411,7 @@ get_num <- function(x) {
   # display values and the field each reads: n/(default)->n, wn->wn,
   # pct/pct_ci/pvalue->pct, diff->diff, ctr->ctr, mean/mean_ci->mean, var->var,
   # ci->get_ci() (the CI half-width, read from the ci_sup bound via the Phase 1a shim),
-  # ratio (canonical) / rr (legacy synonym) -> the `ratio` field, or/OR/or_pct->or.
+  # ratio (canonical; the legacy synonym rr is aliased to it) -> the `ratio` field, or/OR/or_pct->or.
   # format.tabxplor_fmt() renders these plus the CI/label variants (pct_ci, mean_ci,
   # or_pct, OR_pct). When adding a display value, keep this map, set_num() and format() in
   # sync (see the /vctrs-field skill).
@@ -431,7 +432,7 @@ get_num <- function(x) {
   out[!nas & display == "mean_ci"] <- get_mean(x)[!nas & display == "mean_ci"]
   out[!nas & display == "var"    ] <- get_var (x)[!nas & display == "var"    ]
   out[!nas & display == "ci"     ] <- get_ci   (x)[!nas & display == "ci"     ]
-  out[!nas & display %in% c("ratio", "rr")] <- get_ratio(x)[!nas & display %in% c("ratio", "rr")]
+  out[!nas & display == "ratio"] <- get_ratio(x)[!nas & display == "ratio"]
   out[!nas & display %in% c("or", "OR")] <- get_or(x)[!nas & display %in% c("or", "OR")     ]
   out[!nas & display == "or_pct" ] <- get_or  (x)[!nas & display == "or_pct" ]
   # Phase 12h: est_ci = "<estimate> [ci_inf; ci_sup]" (regression OR / beta with a visible interval).
@@ -469,7 +470,7 @@ set_num <- function(x, value) {
   out[!nas & display == "mean"] <- set_mean(x[!nas & display == "mean"], value[!nas & display == "mean"])
   out[!nas & display == "var" ] <- set_var (x[!nas & display == "var" ], value[!nas & display == "var" ])
   out[!nas & display == "ci"  ] <- set_ci   (x[!nas & display == "ci"  ], value[!nas & display == "ci"  ])
-  out[!nas & display %in% c("ratio", "rr")] <- set_ratio(x[!nas & display %in% c("ratio", "rr")], value[!nas & display %in% c("ratio", "rr")])
+  out[!nas & display == "ratio"] <- set_ratio(x[!nas & display == "ratio"], value[!nas & display == "ratio"])
   out[!nas & display %in% c("or", "OR")] <- set_or(x[!nas & display %in% c("or", "OR")  ], value[!nas & display == "or"  ])
   # Phase 12h: est_ci writes back to its point-estimate field (OR or coefficient), like get_num reads it.
   est_ci_m <- !nas & display == "est_ci"
@@ -1040,9 +1041,10 @@ get_color_signif <- function(x, ...) {
 }
 
 # Normalize a color argument (scalar / unnamed c(text, bg) / named c(text=, background=)) into a
-# positional length-1-or-2 character vector [text, background]. Accepts the new measures
-# (diff/ratio/contrib/or) and, transitionally, the old catalogue strings (diff_ci/after_ci/ci),
-# until Step 4d decodes those into (measure, color_signif) at the argument boundary.
+# positional length-1-or-2 character vector [text, background]. Phase 17d: the stored `color`
+# attribute is a CLEAN measure (diff/ratio/contrib/or); the legacy combined strings are decoded at the
+# argument boundary (color_decode_legacy, R/tab.R) before they ever reach set_color(), so they are no
+# longer accepted here.
 #' @keywords internal
 resolve_color_channels <- function(color) {
   if (length(color) == 0L) return("")
@@ -1057,12 +1059,12 @@ resolve_color_channels <- function(color) {
     if (is.na(m) || identical(m, "no")) "" else if (identical(m, "or")) "OR" else m,
     character(1)))
   if (length(color) > 2L) cli::cli_abort("{.arg color} accepts at most two values (text, background).")
-  ok <- c("diff", "ratio", "contrib", "OR", "diff_ci", "after_ci", "ci", "")
+  ok <- c("diff", "ratio", "contrib", "OR", "")
   if (!all(color %in% ok)) {
     cli::cli_abort(c("Unknown color measure {.val {setdiff(color, ok)}}.",
                      "i" = "Valid measures: {.val {c('diff','ratio','contrib','or')}}."))
   }
-  if (length(color) == 2L && color[2] %in% c("contrib", "OR", "diff_ci", "after_ci", "ci")) {
+  if (length(color) == 2L && color[2] %in% c("contrib", "OR")) {
     cli::cli_abort("{.val {color[2]}} is a whole-cell measure; it cannot go on the background channel.")
   }
   if (length(color) == 2L && color[2] == "") color <- color[1]   # trim an empty bg
@@ -1109,8 +1111,10 @@ set_color_signif <- function(x, color_signif) {
 
 # Field names accepted inside {}; mapped to the internal get_num() display token by the alias table.
 tabxplor_display_fields  <- c("pct", "n", "wn", "mean", "diff", "ratio", "ci", "or", "ctr", "var")
-# user-facing {name} -> internal display token (get_num()'s vocabulary). Only `ratio` differs (`rr`).
-tabxplor_display_aliases <- c(ratio = "rr")
+# Phase 17d: the internal display token is now the canonical `ratio` (was `rr`). The alias table is
+# READ-SIDE ONLY -- the legacy synonym `rr` (bare stored token / a `{rr}` composite) maps to `ratio`,
+# so old objects still resolve, but nothing produces `rr` and every mask matches the single "ratio".
+tabxplor_display_aliases <- c(rr = "ratio")
 
 # Resolve a display-value vector to its PRIMARY simple token: a composite ("{field} ...") -> its
 # first {field} (alias-applied); a simple token / NA -> unchanged. Gated so a column carrying no
@@ -1118,11 +1122,15 @@ tabxplor_display_aliases <- c(ratio = "rr")
 # and falls through to get_num()'s default `n` -- never errors (robust to hand-injected templates).
 display_primary <- function(display) {
   comp <- !is.na(display) & grepl("{", display, fixed = TRUE)
-  if (!any(comp)) return(display)
-  tok <- sub("^[^{]*\\{\\s*([^{}]+?)\\s*\\}.*$", "\\1", display[comp])
-  hit <- tok %in% names(tabxplor_display_aliases)
-  tok[hit] <- unname(tabxplor_display_aliases[tok[hit]])
-  display[comp] <- tok
+  if (any(comp)) display[comp] <- sub("^[^{]*\\{\\s*([^{}]+?)\\s*\\}.*$", "\\1", display[comp])
+  # Read-side alias (Phase 17d): a bare / composite legacy token (only `rr` today) -> its canonical
+  # internal token. The `%in%` guard keeps the common canonical path free of the match() pass, so the
+  # no-alias hot case stays one fixed grepl + one cheap vector `%in%` (Phase 10i-A benchmark).
+  al <- tabxplor_display_aliases
+  if (any(display %in% names(al))) {
+    hit <- match(display, names(al)); aliased <- !is.na(hit)
+    display[aliased] <- unname(al[hit[aliased]])
+  }
   display
 }
 
@@ -1539,89 +1547,47 @@ get_mean_contrib <- function(x) {
     if (!any(grand)) return(rep(NA_real_, length(x)))
     rep(ctr[grand][sum(grand)], length(x))
   } else {
-    tibble::tibble(
-      ctr = ctr,
-      gr = cumsum(as.integer(totrows)) - as.integer(totrows) ) |>
-      dplyr::mutate(nb = dplyr::row_number()) |>
-      dplyr::with_groups("gr", ~ dplyr::mutate(., nb = dplyr::last(.data$nb))) |>
-      dplyr::mutate(mean_ctr = .data$ctr[.data$nb]) |> dplyr::pull(.data$mean_ctr)
+    fmt_broadcast_last(ctr, totrows)
+  }
+}
+
+# fmt_broadcast_last() -- base-R broadcast of the LAST value of each group to every row of that group,
+# where each TRUE in `boundary` closes a group (the reference / total row sits at the group's end).
+# Replaces the per-getter tibble + dplyr::with_groups(last()) idiom on the colour hot path with one
+# base-R pass. Byte-identical to `nb = last(row_number())`: groups are contiguous, so a group's max
+# row index is its last row.
+#' @keywords internal
+fmt_broadcast_last <- function(values, boundary) {
+  gr <- cumsum(boundary) - boundary
+  values[ave(seq_along(values), gr, FUN = max)]
+}
+
+# get_ref_field() -- the reference cell's `getter` value, broadcast to every cell of its reference
+# group (the total / marked reference row ends each subtable; under comp = "all" the total-table
+# reference is broadcast to the whole column). The one helper behind the get_ref_means / get_ref_pct /
+# get_ref_var mirror set (Phase 17d).
+#' @keywords internal
+get_ref_field <- function(x, getter) {
+  refrows <- if (get_ref_type(x) == "tot") is_totrow(x) else is_refrow(x)
+  values  <- getter(x)
+  if (get_comp_all(x)) {
+    refs <- refrows & is_tottab(x)
+    if (!any(refs)) rep(NA_real_, length(x)) else rep(values[refs], length(x))
+  } else {
+    fmt_broadcast_last(values, refrows)
   }
 }
 
 #' @keywords internal
-get_ref_means <- function(x) {
-  comp      <- get_comp_all(x)
-  ref <- get_ref_type(x)
-
-  refrows <- if (ref == "tot") { is_totrow(x) } else { is_refrow(x) }
-  tottabs <- is_tottab(x)
-  mean    <- get_mean(x)
-
-  if (comp) {
-    refs <- refrows & tottabs
-    if (!any(refs)) {rep(NA_real_, length(x))} else {rep(mean[refs], length(x))}
-
-    #refs <- mean[refrows & tottabs]
-   #if (length(refs) == 0) {rep(NA_real_, length(x))} else {rep(mean[refs], length(x))}
-  } else {
-    tibble::tibble(
-      mean = mean,
-      gr = cumsum(as.integer(refrows)) - as.integer(refrows) ) |>
-      dplyr::mutate(nb = dplyr::row_number()) |>
-      dplyr::with_groups("gr", ~ dplyr::mutate(., nb = dplyr::last(.data$nb))) |>
-      dplyr::mutate(ref_means = .data$mean[.data$nb]) |>
-      dplyr::pull(.data$ref_means)
-  }
-}
+get_ref_means <- function(x) get_ref_field(x, get_mean)
 
 #' @keywords internal
-get_ref_pct <- function(x) {
-  comp      <- get_comp_all(x)
-  ref <- get_ref_type(x)
+get_ref_pct <- function(x) get_ref_field(x, get_pct)
 
-  refrows <- if (ref == "tot") { is_totrow(x) } else { is_refrow(x) }
-  tottabs <- is_tottab(x)
-  pct    <- get_pct(x)
-
-  if (comp) {
-    refs <- refrows & tottabs # pct[refrows & tottabs]
-    if (!any(refs)) {rep(NA_real_, length(x))} else {rep(pct[refs], length(x))}
-  } else {
-    tibble::tibble(
-      pct = pct,
-      gr = cumsum(as.integer(refrows)) - as.integer(refrows) ) |>
-      dplyr::mutate(nb = dplyr::row_number()) |>
-      dplyr::with_groups("gr", ~ dplyr::mutate(., nb = dplyr::last(.data$nb))) |>
-      dplyr::mutate(ref_pcts = .data$pct[.data$nb]) |>
-      dplyr::pull(.data$ref_pcts)
-  }
-}
-
-# Phase 5: the reference cell's VARIANCE, broadcast to every cell of its group (mirror of
-# get_ref_means/get_ref_pct reading the `var` field). Used for Glass's delta = diff / sqrt(var_ref),
-# the sd-standardized numeric diff-color scale (§18). NA/0 var_ref -> no color at the call site.
+# Phase 5: the reference cell's VARIANCE, for Glass's delta = diff / sqrt(var_ref), the sd-standardized
+# numeric diff-color scale (§18). NA/0 var_ref -> no color at the call site.
 #' @keywords internal
-get_ref_var <- function(x) {
-  comp <- get_comp_all(x)
-  ref  <- get_ref_type(x)
-
-  refrows <- if (ref == "tot") { is_totrow(x) } else { is_refrow(x) }
-  tottabs <- is_tottab(x)
-  var     <- get_var(x)
-
-  if (comp) {
-    refs <- refrows & tottabs
-    if (!any(refs)) {rep(NA_real_, length(x))} else {rep(var[refs], length(x))}
-  } else {
-    tibble::tibble(
-      var = var,
-      gr = cumsum(as.integer(refrows)) - as.integer(refrows) ) |>
-      dplyr::mutate(nb = dplyr::row_number()) |>
-      dplyr::with_groups("gr", ~ dplyr::mutate(., nb = dplyr::last(.data$nb))) |>
-      dplyr::mutate(ref_vars = .data$var[.data$nb]) |>
-      dplyr::pull(.data$ref_vars)
-  }
-}
+get_ref_var <- function(x) get_ref_field(x, get_var)
 
 # "every S3 method must be exported, even if the generic is not" Really (->CRAN pb) ??
 
@@ -1954,7 +1920,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   # Phase 14b: EVERY diff display is signed (see the sign block below). Means keep their own mask
   # only because their digits are bumped to >= 1 and they take no x100 / "%".
   diff_signed   <- ok & display == "diff"
-  n_wn          <- ok & (display %in% c("n", "wn", "mean", "mean_ci", "var", "rr", "ratio", "or", "or_pct",
+  n_wn          <- ok & (display %in% c("n", "wn", "mean", "mean_ci", "var", "ratio", "or", "or_pct",
                                         "OR", "OR_pct", "gof") |             # Phase 12f: gof -> big.mark
                            (display == "ci" & type == "mean") )
   type_ci       <- ok & display == "ci"
@@ -1977,7 +1943,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
     return(excel_numfmt_code(digits, pct = excel_pct,
                              ci = !nas & display == "ci", text = plus_ci,
                              signed = !nas & display %in% c("ctr", "diff"),
-                             ratio  = !nas & display %in% c("ratio", "rr")))
+                             ratio  = !nas & display == "ratio"))
   }
 
 
@@ -2082,7 +2048,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   # (the divide sign over 1/ratio). Default 1 digit (>= the column's digits), trailing zeros trimmed,
   # right-padded so the column aligns in a monospace font. Text syntax only (Excel returned early
   # above -> ratio stays a real number there, per the Phase 13c Excel decision).
-  disp_rr <- ok & display %in% c("ratio", "rr")   # "ratio" canonical, "rr" legacy synonym
+  disp_rr <- ok & display == "ratio"   # canonical token ("rr" is aliased to it in display_primary)
   if (any(disp_rr)) {
     rv  <- get_ratio(x)[disp_rr]
     inv <- !is.na(rv) & rv > 0 & rv < 1
@@ -2609,26 +2575,6 @@ color_scales <- function(x) {
   sc
 }
 
-# Map the legacy scalar `color` attribute + column type to (measure, policy). Step 4 replaces
-# this with the per-channel color / color_signif attributes; kept here so Step 3 can reroute the
-# console + fmt_get_color_code byte-identically for the locked modes.
-#' @keywords internal
-color_measure_policy <- function(color, type) {
-  measure <- dplyr::case_when(
-    color %in% c("diff", "diff_ci", "after_ci", "ci") ~ "diff",
-    color %in% c("OR", "or")                          ~ "or",
-    color == "contrib"                                ~ "contrib",
-    color == "ratio"                                  ~ "ratio",
-    TRUE                                              ~ ""
-  )
-  policy <- dplyr::case_when(
-    color == "diff_ci"             ~ "grey_non_signif",
-    color %in% c("after_ci", "ci") ~ "guaranteed_effect",
-    TRUE                           ~ "ignore"
-  )
-  list(measure = measure, policy = policy, single0 = color == "ci")
-}
-
 # Phase 14a: shift ONE per-direction break scale so its first break sits at the neutral value, for
 # the `guaranteed_effect` policy (the why is at the call site in fmt_color_plan). `breaks` are
 # POSITIVE magnitudes -- fmt_color_slots() folds each side around the centre -- so the neutral
@@ -2654,15 +2600,14 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
   if (is.null(color)) color <- get_color(x)
   if (length(color) == 0L || is.na(color[1]) || color[1] %in% c("", "no")) return(NULL)
 
-  mp      <- color_measure_policy(color[1], type)
-  measure <- mp$measure
-  if (measure == "") return(NULL)
-  # policy: an explicit `signif` arg wins; else the old combined strings (diff_ci/after_ci/ci)
-  # carry their implied policy (transition, until Step 4d decodes them at the arg boundary); else
-  # the stored per-column color_signif attribute.
-  policy  <- if (!is.null(signif)) signif
-             else if (color[1] %in% c("diff_ci", "after_ci", "ci")) mp$policy
-             else get_color_signif(x)
+  # Phase 17d (Step 4d complete): the stored `color` attribute is now a CLEAN measure -- the legacy
+  # combined strings (diff_ci/after_ci/ci) are decoded ONCE at the argument / storage boundary
+  # (color_decode_legacy, R/tab.R), so the engine never re-parses them. `or`/`OR` is the only surviving
+  # synonym. A non-measure token (e.g. a hand-built column) -> uncoloured.
+  measure <- if (color[1] %in% c("or", "OR")) "or" else color[1]
+  if (!measure %in% names(MEASURES)) return(NULL)
+  # policy: an explicit `signif` arg wins; else the stored per-column color_signif attribute.
+  policy  <- if (!is.null(signif)) signif else get_color_signif(x)
 
   is_mean <- type %in% c("mean", "n")
   # Phase 12c: a "coef" column (gaussian regression beta) colours the STANDARDIZED effect beta/SD(Y)
@@ -2670,22 +2615,18 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
   # the mean_diff scale like a mean-diff, but standardizes by its OWN `var` field (= var(Y), constant),
   # NOT by get_ref_var() (whose refrow-at-END grouping is meaningless for a regression skeleton).
   is_std_diff <- is_mean || type == "coef"
+  # Phase 17d: the measure's engine facts (scale keys, raw getter, sig source, row gate) live in ONE
+  # MEASURES row alongside its legend facts -- fmt_color_plan reads them instead of four switch arms
+  # kept in sync by hand. `std_when` picks the std vs pct scale key per column kind (see MEASURES).
+  md      <- MEASURES[[measure]]
+  use_std <- switch(md$std_when, "std_diff" = is_std_diff, "mean" = is_mean, "na" = TRUE)
   sc      <- color_scales(x)
-  scale   <- switch(measure,
-                    "diff"    = if (is_std_diff) sc$mean_diff  else sc$pct_diff,
-                    "ratio"   = if (is_mean)     sc$mean_ratio else sc$pct_ratio,
-                    "or"      = sc$odds_ratio,
-                    "contrib" = sc$contrib)
+  scale   <- sc[[ md$scale[[if (use_std) "std" else "pct"]] ]]
   center <- if (is.null(scale)) 0 else scale$center
   strict <- if (is.null(scale)) TRUE else scale$strict
 
   # observed per-cell quantity
-  raw <- switch(measure,
-                "diff"    = get_diff(x),
-                "ratio"   = get_ratio(x),
-                "or"      = get_or(x),
-                "contrib" = dplyr::if_else(is_totrow(x), NA_real_,
-                                           get_ctr(x) / get_mean_contrib(x)))
+  raw <- md$raw(x)
 
   # numeric diff is standardized (Glass's delta) unless absolute unit breaks were supplied
   sd_ref <- NULL
@@ -2717,7 +2658,7 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
   # the bounds; direction from the sign of the signed contribution `raw` (ctr/mean_contrib). Previously
   # both signif policies gated on the absent bounds and coloured NOTHING. (The residual p-value is the
   # one place colour reads `pvalue` -- justified because contrib has no interval.)
-  if (measure == "contrib") {
+  if (md$sig_source == "pvalue") {
     alpha   <- 1 - getOption("tabxplor.conf_level", 0.95)
     pv      <- get_pvalue(x)
     ctr_sig <- !is_totrow(x) & !is.na(pv) & pv < alpha
@@ -2726,7 +2667,7 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
   }
 
   if (policy == "guaranteed_effect") {
-    if (measure == "contrib") {
+    if (md$sig_source == "pvalue") {
       # No interval to take a CI-floor of: the guaranteed magnitude IS the contribution, gated by the
       # residual test. The break-offset below (center 0) then colours EVERY significant cell.
       score <- raw
@@ -2772,13 +2713,13 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
   } else {                                   # ignore
     score <- raw
     gate  <- !is.na(raw)
-    if (measure == "contrib") gate <- gate & !is_totrow(x)
+    if (md$gate_row == "totrow") gate <- gate & !is_totrow(x)
   }
 
   # Phase 12c: a reference row is a baseline, not an effect -> never coloured. Redundant for
   # crosstabs (a reference cell's diff is 0 / OR is 1, already slot 0), it uncolours a regression
   # INTERCEPT (in_refrow but a non-neutral baseline value) under every policy.
-  if (measure %in% c("diff", "ratio", "or")) gate <- gate & !is_refrow(x)
+  if (md$gate_row == "refrow") gate <- gate & !is_refrow(x)
 
   # Per-direction breaks + palette slots (Phase 13a). Each side of the scale carries its own
   # magnitudes (over$breaks / under$breaks) and intensities 1:4 (over$slots / under$slots). The
@@ -2786,35 +2727,29 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
   # and reads the intensity: over -> slots 1:4, under -> slots 5:8 (the two halves of the 8-colour
   # palette). The former in-text "x2 rule" is gone -- it is now just a 1-break ratio scale carried on
   # the dedicated background channel (color = c("diff", "ratio")).
-  if (isTRUE(mp$single0)) {                  # legacy color = "ci": one shade per direction, break at 0
-    over_breaks <- 0; over_slots <- c(0L, 3L); under_breaks <- 0; under_slots <- c(0L, 7L)
-  } else {
-    over_breaks  <- scale$over$breaks
-    under_breaks <- scale$under$breaks
-    over_slots   <- c(0L, scale$over$slots)         # 0 = neutral level, then intensities 1:4
-    under_slots  <- c(0L, scale$under$slots + 4L)   # 0 = neutral, then 5:8 (under half of the palette)
+  over_breaks  <- scale$over$breaks
+  under_breaks <- scale$under$breaks
+  over_slots   <- c(0L, scale$over$slots)         # 0 = neutral level, then intensities 1:4
+  under_slots  <- c(0L, scale$under$slots + 4L)   # 0 = neutral, then 5:8 (under half of the palette)
 
-    # Phase 14a: under `guaranteed_effect` the score is the CI FLOOR -- the effect you are confident
-    # of AT LEAST -- so the scale must START at the neutral value: a cell whose interval excludes the
-    # neutral IS a guaranteed effect and must be coloured. Scoring the floor against the ordinary
-    # magnitude breaks left every significant-but-modest cell grey (diff = +7% with ci_inf = +0.4%
-    # scored 0.004 < the 0.05 first break -> uncoloured, though "0 is outside the interval" is exactly
-    # what the mode exists to show). Offset each side by its OWN first break -- the sides are
-    # independent and may be asymmetric (Phase 13a). The user cannot express this (0 / 1 are rejected
-    # as breaks), so it must be internal. `legend_specs()` reads this same plan, so the legend follows.
-    if (identical(policy, "guaranteed_effect")) {
-      over_breaks  <- offset_guaranteed_breaks(over_breaks,  center)
-      under_breaks <- offset_guaranteed_breaks(under_breaks, center)
-    }
+  # Phase 14a: under `guaranteed_effect` the score is the CI FLOOR -- the effect you are confident
+  # of AT LEAST -- so the scale must START at the neutral value: a cell whose interval excludes the
+  # neutral IS a guaranteed effect and must be coloured. Scoring the floor against the ordinary
+  # magnitude breaks left every significant-but-modest cell grey (diff = +7% with ci_inf = +0.4%
+  # scored 0.004 < the 0.05 first break -> uncoloured, though "0 is outside the interval" is exactly
+  # what the mode exists to show). Offset each side by its OWN first break -- the sides are
+  # independent and may be asymmetric (Phase 13a). The user cannot express this (0 / 1 are rejected
+  # as breaks), so it must be internal. `legend_specs()` reads this same plan, so the legend follows.
+  if (identical(policy, "guaranteed_effect")) {
+    over_breaks  <- offset_guaranteed_breaks(over_breaks,  center)
+    under_breaks <- offset_guaranteed_breaks(under_breaks, center)
   }
 
   # Phase 16c: a `guaranteed_effect` channel whose scale has a single break per side collapses under
   # offset_guaranteed_breaks() to the neutral value -> findInterval() paints EVERY significant cell with
   # one flat intensity (a gradient-less "x1" fill, redundant with the text channel). Flag it so the
   # cross-channel arbiter (resolve_color_channel_plans) can disable it -- unless it is the only channel.
-  # Read the PRE-offset scale breaks; the legacy `color = "ci"` (single0) INTENTIONALLY has one break
-  # and is excluded.
-  degenerate <- identical(policy, "guaranteed_effect") && !isTRUE(mp$single0) && !is.null(scale) &&
+  degenerate <- identical(policy, "guaranteed_effect") && !is.null(scale) &&
     max(length(scale$over$breaks), length(scale$under$breaks)) <= 1L
 
   list(measure = measure, policy = policy, score = score, center = center, strict = strict,
@@ -2955,7 +2890,9 @@ fmt_channel_codes <- function(x, theme = "light") {
 # Phase 16e: the per-measure fact table -- every language-invariant display fact of a colour measure in
 # ONE place, instead of ~5 scattered switch arms the earlier code kept in sync by hand. Adding a measure
 # is a row; a per-measure divergence (contrib colours BOTH sides "x N of the mean", ratio uses x over /
-# div under) is a FIELD, not a switch case one can forget. Fields:
+# div under) is a FIELD, not a switch case one can forget.
+# Phase 17d: the ENGINE facts join the display facts here, so ONE row drives both the colour PLAN
+# (fmt_color_plan) and the legend -- they can never diverge. Legend fields:
 #   word / word_i18n   the measure word (gettext at render when word_i18n; "OR" is a literal).
 #   break_over/under   the break-label glyph per side (see legend_break_label); break_scale = TRUE means a
 #                      factor pct diff is shown x100 (gated by is_pct).
@@ -2966,19 +2903,37 @@ fmt_channel_codes <- function(x, theme = "light") {
 #                      ("the mean contribution") | "none".
 #   has_ref_lead       the effect is stated vs a reference in the sentence LEAD (diff/ratio) rather than
 #                      being already relative to it (or/contrib/reg effect).
+# Engine fields (Phase 17d, read by fmt_color_plan):
+#   raw                a getter closure(x) -> the observed per-cell quantity that is scored + coloured.
+#   scale              named c(std=, pct=) of color_scales() keys; `std_when` picks which (see below).
+#   std_when           which column kinds take the `std` scale key: "std_diff" (is_mean || coef, factor
+#                      pct otherwise) | "mean" (is_mean) | "na" (both keys equal -> selector inert).
+#   sig_source         where significance comes from: "bounds" (the stored ci_inf/ci_sup interval) |
+#                      "pvalue" (contrib -- no interval, reads the stored standardized-residual p-value).
+#   gate_row           which structural row this measure never colours: "refrow" (a reference level /
+#                      regression intercept is a baseline) | "totrow" (contrib is undefined on a total).
 MEASURES <- list(
   diff    = list(word = "difference",           word_i18n = TRUE,  break_over = "+",       break_under = "-",
                  break_scale = TRUE,  ref_kind = NA_character_, threshold_mult = FALSE, unit_kind = "diff",
-                 has_ref_lead = TRUE),
+                 has_ref_lead = TRUE,
+                 raw = function(x) get_diff(x),  scale = c(std = "mean_diff",  pct = "pct_diff"),
+                 std_when = "std_diff", sig_source = "bounds", gate_row = "refrow"),
   ratio   = list(word = "ratio",                word_i18n = TRUE,  break_over = .lg_times, break_under = .lg_div,
                  break_scale = FALSE, ref_kind = NA_character_, threshold_mult = TRUE,  unit_kind = "none",
-                 has_ref_lead = TRUE),
+                 has_ref_lead = TRUE,
+                 raw = function(x) get_ratio(x), scale = c(std = "mean_ratio", pct = "pct_ratio"),
+                 std_when = "mean",     sig_source = "bounds", gate_row = "refrow"),
   or      = list(word = "OR",                   word_i18n = FALSE, break_over = "",        break_under = "1/",
                  break_scale = FALSE, ref_kind = "category",    threshold_mult = TRUE,  unit_kind = "none",
-                 has_ref_lead = FALSE),
+                 has_ref_lead = FALSE,
+                 raw = function(x) get_or(x),    scale = c(std = "odds_ratio", pct = "odds_ratio"),
+                 std_when = "na",       sig_source = "bounds", gate_row = "refrow"),
   contrib = list(word = "contribution to Chi2", word_i18n = TRUE,  break_over = .lg_times, break_under = .lg_times,
                  break_scale = FALSE, ref_kind = "indep",       threshold_mult = TRUE,  unit_kind = "contrib",
-                 has_ref_lead = FALSE)
+                 has_ref_lead = FALSE,
+                 raw = function(x) dplyr::if_else(is_totrow(x), NA_real_, get_ctr(x) / get_mean_contrib(x)),
+                 scale = c(std = "contrib", pct = "contrib"),
+                 std_when = "na",       sig_source = "pvalue", gate_row = "totrow")
 )
 
 # a legend token: plain text (c = NA) or a coloured break-word (c = palette slot 1:8).

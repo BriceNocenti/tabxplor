@@ -157,7 +157,8 @@ of \code{n}.}
 
 \item{display}{The display type : the name of the field you want to show when printing
 the vector. Among \code{"n"}, \code{"wn"}, \code{"pct"}, \code{"diff"}, \code{"ctr"},
-\code{"mean"}, \code{"var"}, \code{"ci"},
+\code{"mean"}, \code{"var"}, \code{"ci"}, \code{"ratio"} (the cell-to-reference ratio;
+the legacy synonym \code{"rr"} still resolves to it),
 \code{"pct_ci"} (percentages with visible confidence interval),
 \code{"mean_ci"} (means with visible confidence interval). As a single string, or a
 character vector the length of \code{n}.}

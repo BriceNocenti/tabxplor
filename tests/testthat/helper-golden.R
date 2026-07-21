@@ -55,7 +55,7 @@ golden_cases <- function() {
     f_ref_first      = function() tab(gss, marital, race, pct = "row", ref = "first"),
     f_or             = function() tab(gss, marital, race, pct = "col", OR = "OR"),     # empirical OR; Phase 1 (rr->ratio) / Phase 3 (Wald p, 1/OR)
     f_color_diff     = function() tab(gss, marital, race, pct = "row", color = "diff"),
-    f_color_afterci  = function() suppressWarnings(tab(gss, marital, race, pct = "row", ci = "cell", color = "after_ci", stars = TRUE)),  # deprecated color string; stars opt-in
+    f_color_afterci  = function() suppressWarnings(tab(gss, marital, race, pct = "row", ci = "diff", color = "after_ci", stars = TRUE)),  # deprecated color string; stars opt-in
     f_color_contrib  = function() tab(gss, marital, race, pct = "row", color = "contrib"),
     f_subtab         = function() tab(gss, marital, race, relig, pct = "row"),  # grouped_tab
     f_selfcross      = function() tab(gss, marital, marital, pct = "row"),  # _colvarbis self-crosstab lock (Phase 2)

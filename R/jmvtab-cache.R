@@ -23,12 +23,15 @@
 
 
 # === Constants =============================================================================
-JMVTAB_CACHE_SCHEMA         <- 4L                  # bump on any store-shape change -> discard stale stores
+JMVTAB_CACHE_SCHEMA         <- 5L                  # bump on any store-shape change -> discard stale stores
                                                    #   (2 = Phase 7f: added the tier-3 `tab3` built-table tier)
                                                    #   (3 = Phase 9b-7: tier-3 stores the CARRIER (plain field
                                                    #    frames via fmt_unwrap), not a live materialized tab)
                                                    #   (4 = Phase 17b: table attrs merged into one `meta` list;
                                                    #    the carrier stores attributes(tab) verbatim -> new shape)
+                                                   #   (5 = Phase 17d: legacy colour strings decoded at the
+                                                   #    boundary -> the carrier stores CLEAN color/color_signif
+                                                   #    attrs (was e.g. "after_ci"); old carriers mis-render)
 JMVTAB_MAX_ENTRY_BYTES      <- 512L * 1024L        # per-entry ceiling for tiers 1-2 (aggregates / tests)
 JMVTAB_TAB3_MAX_ENTRY_BYTES <- 2L * 1024L * 1024L  # tier-3 armed CARRIERS are bigger (all 18 fmt fields) -> looser
 JMVTAB_MAX_STORE_BYTES      <- 12L * 1024L * 1024L  # whole-store budget (serialized every run -> keep bounded)

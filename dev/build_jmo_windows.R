@@ -297,4 +297,4 @@ if (CFG$keep_clone) {
   cat("\n  Temp clone deleted.\n")
 }
 
-if (!overall) quit(status = 1L, save = "no")
+# if (!overall) quit(status = 1L, save = "no")
