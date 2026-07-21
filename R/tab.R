@@ -3567,17 +3567,8 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na,
     tabs <- finalize_total_rows(tabs, tabs_tot, unique(unlist(total_vars)), tab_row_names)
   }
 
-  totrow_vector <- dplyr::pull(tabs, !!row_var) == "Total"
-
-  if (length(tab_vars) == 0) {
-    tottab_vector <- rep(FALSE, nrow(tabs))
-  } else {
-    tottab_vector <- dplyr::transmute(tabs, tottab = dplyr::if_all(
-      tidyselect::all_of(as.character(tab_vars)),
-      ~ . == "Total"
-    )) |>
-      tibble::deframe()
-  }
+  tt <- leaf_totrow_tottab(tabs, row_var, tab_vars)
+  totrow_vector <- tt$totrow; tottab_vector <- tt$tottab
 
 
 
@@ -3770,41 +3761,8 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na,
 
   tabs <- dplyr::bind_cols(tibble::as_tibble(tabs_text), tabs)
 
-  #Rename totals
-  if (totaltab %in% c("line", "table") &  totaltab_name != "Total") {
-    tabs <- tabs |> dplyr::mutate(dplyr::across(
-      tidyselect::all_of(as.character(tab_vars)),
-      ~ dplyr::if_else(tottab_vector,
-                       true  = factor(totaltab_name, c(levels(.), totaltab_name)),
-                       false = .) |>
-        forcats::fct_drop()
-    ))
-  }
-
-  if (length(tab_vars) == 0) {
-
-    if ("row" %in% tot & total_names[1] != "Total") tabs <- tabs |>
-        dplyr::mutate(!!row_var := forcats::fct_recode(!!row_var,
-                                                       purrr::set_names("Total", total_names[1])))
-  } else {
-    tabs <- tabs |>
-      tidyr::unite(col = "tabs_tot_names", !!!tab_vars, sep = " ", remove = FALSE) |>
-      dplyr::mutate(
-        !!row_var := dplyr::if_else(
-          totrow_vector,
-          true  = paste(total_names[1], .data$tabs_tot_names) |>
-            forcats::fct_expand(levels(!!row_var)) |>
-            forcats::fct_relevel(levels(!!row_var)),
-          false = !!row_var) |>
-          forcats::fct_drop()
-        #forcats::fct_recode(!!row_var,
-        #                               purrr::set_names("Total", total_names[1]))
-      ) |>
-      select(-"tabs_tot_names")
-  }
-
-  if ("col" %in% tot & total_names[2] != "Total") tabs <- tabs |>
-    dplyr::rename(tidyselect::any_of(purrr::set_names("Total", total_names[2])))
+  tabs <- leaf_rename_totals(tabs, row_var, tab_vars, tot, total_names, totaltab, totaltab_name,
+                             tottab_vector, totrow_vector)
 
 
   # with no col_var
@@ -4627,16 +4585,8 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
 
 
 
-  totrow_vector <- dplyr::pull(tabs, !!row_var) == "Total"
-  if (length(tab_vars) == 0) {
-    tottab_vector <- rep(FALSE, nrow(tabs))
-  } else {
-    tottab_vector <- dplyr::transmute(tabs, tottab = dplyr::if_all(
-      tidyselect::all_of(as.character(tab_vars)),
-      ~ . == "Total"
-    )) |>
-      tibble::deframe()
-  }
+  tt <- leaf_totrow_tottab(tabs, row_var, tab_vars)
+  totrow_vector <- tt$totrow; tottab_vector <- tt$tottab
   comp_group <- if (comp == "tab") { as.character(tab_vars) } else { character() }
 
   #Differences and confidence intervals
@@ -4889,41 +4839,8 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
   tabs <- dplyr::bind_cols(tibble::as_tibble(tabs_text), tabs)
 
 
-  #Rename totals
-  if (totaltab %in% c("line", "table") &  totaltab_name != "Total") {
-    tabs <- tabs |> dplyr::mutate(dplyr::across(
-      tidyselect::all_of(as.character(tab_vars)),
-      ~ dplyr::if_else(tottab_vector,
-                       true  = factor(totaltab_name, c(levels(.), totaltab_name)),
-                       false = .) |>
-        forcats::fct_drop()
-    ))
-  }
-
-  if (length(tab_vars) == 0) {
-
-    if ("row" %in% tot & total_names[1] != "Total") tabs <- tabs |>
-        dplyr::mutate(!!row_var := forcats::fct_recode(!!row_var,
-                                                       purrr::set_names("Total", total_names[1])))
-  } else {
-    tabs <- tabs |>
-      tidyr::unite(col = "tabs_tot_names", !!!tab_vars, sep = " ", remove = FALSE) |>
-      dplyr::mutate(
-        !!row_var := dplyr::if_else(
-          totrow_vector,
-          true  = paste(total_names[1], .data$tabs_tot_names) |>
-            forcats::fct_expand(levels(!!row_var)) |>
-            forcats::fct_relevel(levels(!!row_var)),
-          false = !!row_var) |>
-          forcats::fct_drop()
-        #forcats::fct_recode(!!row_var,
-        #                               purrr::set_names("Total", total_names[1]))
-      ) |>
-      select(-"tabs_tot_names")
-  }
-
-  if ("col" %in% tot & total_names[2] != "Total") tabs <- tabs |>
-    dplyr::rename(tidyselect::any_of(purrr::set_names("Total", total_names[2])))
+  tabs <- leaf_rename_totals(tabs, row_var, tab_vars, tot, total_names, totaltab, totaltab_name,
+                             tottab_vector, totrow_vector)
 
 
 
@@ -5984,6 +5901,69 @@ as_df_merge_rownames <- function(tabs, row_var) {
     tabs[, eval(row_var) := NULL]
     data.table::setDF(tabs, rownames = rnames)
   }
+
+  tabs
+}
+
+
+# leaf_totrow_tottab() -- Phase 17f: the shared total-row / total-table row flags both leaves derive
+# from the built table (`totrow` = a "Total" row_var level; `tottab` = every tab_var == "Total").
+#' @keywords internal
+leaf_totrow_tottab <- function(tabs, row_var, tab_vars) {
+  totrow_vector <- dplyr::pull(tabs, !!row_var) == "Total"
+  tottab_vector <- if (length(tab_vars) == 0) {
+    rep(FALSE, nrow(tabs))
+  } else {
+    dplyr::transmute(tabs, tottab = dplyr::if_all(
+      tidyselect::all_of(as.character(tab_vars)),
+      ~ . == "Total"
+    )) |>
+      tibble::deframe()
+  }
+  list(totrow = totrow_vector, tottab = tottab_vector)
+}
+
+
+# leaf_rename_totals() -- Phase 17f: the shared "#Rename totals" tail both leaves run before the final
+# wrap -- recode the tab_var totals to totaltab_name, rename the total ROW to total_names[1] (prefixed
+# with the subtable name when grouped) and the total COLUMN to total_names[2]. Byte-identical across
+# the two leaves (was verbatim in each), so it lives here once.
+#' @keywords internal
+leaf_rename_totals <- function(tabs, row_var, tab_vars, tot, total_names, totaltab, totaltab_name,
+                               tottab_vector, totrow_vector) {
+  #Rename totals
+  if (totaltab %in% c("line", "table") &  totaltab_name != "Total") {
+    tabs <- tabs |> dplyr::mutate(dplyr::across(
+      tidyselect::all_of(as.character(tab_vars)),
+      ~ dplyr::if_else(tottab_vector,
+                       true  = factor(totaltab_name, c(levels(.), totaltab_name)),
+                       false = .) |>
+        forcats::fct_drop()
+    ))
+  }
+
+  if (length(tab_vars) == 0) {
+
+    if ("row" %in% tot & total_names[1] != "Total") tabs <- tabs |>
+        dplyr::mutate(!!row_var := forcats::fct_recode(!!row_var,
+                                                       purrr::set_names("Total", total_names[1])))
+  } else {
+    tabs <- tabs |>
+      tidyr::unite(col = "tabs_tot_names", !!!tab_vars, sep = " ", remove = FALSE) |>
+      dplyr::mutate(
+        !!row_var := dplyr::if_else(
+          totrow_vector,
+          true  = paste(total_names[1], .data$tabs_tot_names) |>
+            forcats::fct_expand(levels(!!row_var)) |>
+            forcats::fct_relevel(levels(!!row_var)),
+          false = !!row_var) |>
+          forcats::fct_drop()
+      ) |>
+      dplyr::select(-"tabs_tot_names")
+  }
+
+  if ("col" %in% tot & total_names[2] != "Total") tabs <- tabs |>
+    dplyr::rename(tidyselect::any_of(purrr::set_names("Total", total_names[2])))
 
   tabs
 }

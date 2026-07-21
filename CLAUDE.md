@@ -33,15 +33,23 @@ R/
 │                              Plain one-liners tab_weight_line/reg_model_line/tab_stars_legend wrap as
 │                              1-token streams. legend_export_style() = options(tabxplor.legend_style)
 │                              terse-in-exports. contrib legend = x N BOTH sides "vs the mean"
-├── tab.R           (~7150 L) Main API: tab(), tab_many(), tab_plain(), tab_num(),
+├── tab.R           (~6640 L) Main API: tab(), tab_many(), tab_plain(), tab_num(),
 │                              tab_apply_reference() (Phase 7f carve; Phase 9d: matrix-sweep internals;
 │                              14z: also the empirical-OR Woolf CI [ci_or on the {level j, ref2 level} x
 │                              {row i, ref row} 2x2, gated by tabs_totn!=NULL = a color_signif/stars ask;
 │                              tab_plain threads conf_level/stars/color_signif] so color_signif works on OR),
 │                              leaf_wide_pct() + build_total_rows()/finalize_total_rows() (Phase 9d:
-│                              base-R/matrix leaf math for tab_plain pct/tot_n + total rows),
-│                              tab_prepare(), tab_pct(), tab_ci(), tab_chi2(),
-│                              tab_tot(), tab_totaltab(), tab_spread(), tab_get_vars(),
+│                              base-R/matrix leaf math for tab_plain pct/tot_n + total rows).
+│                              17f: the leaves are WRAPPER/CORE splits -- public tab_plain()/tab_num()
+│                              (NSE defuse + validate + normalize colour) -> shared resolver
+│                              plain_resolve()/num_resolve() -> resolved-args core plain_core()/num_core()
+│                              (pure fmt build, returns PRE-FINALISE). tab_transform calls the CORES
+│                              directly, so forcing runs ONCE + colour finalises ONCE downstream (no
+│                              double finalize, no .color_deprecate). df=/num= build normally then pull
+│                              get_num() per cell via leaf_extract_raw(); shared tails leaf_totrow_tottab()
+│                              + leaf_rename_totals(). tab_apply_reference() = the ONE reference executor
+│                              (tab_num's diff_index_mean twin + inline calculate_refrows copy DELETED).
+│                              tab_prepare(), tab_ci(), tab_chi2(), tab_spread(), tab_get_vars(),
 │                              tab_render_vars() (Phase 10c: robust group_vars-based role detection +
 │                              graceful degrade, used by print + exporters),
 │                              tab_add_n_pct() (shared add_n/add_pct, used by tab_many + tab_counts).
@@ -73,6 +81,13 @@ R/
 ├── tab-parallel.R   (~200 L) Phase 8/9a row-axis dispatch (Suggests-only mirai): tab_pmap() + trampoline,
 │                              named "tabxplor" pool (tab_pool_ensure/tab_parallel_workers/
 │                              tab_parallel_stop), tab_build_one() (the per-row_var worker, serial OR mirai).
+├── tab-steps-legacy.R (~700 L) Phase 17f quarantine: the superseded dplyr-era step functions
+│                              tab_pct()/tab_tot()/tab_totaltab() (exported, superseded badge) + their
+│                              trio-exclusive helpers pct_formula()/diff_formula(), moved OUT of the live
+│                              tab.R pipeline. They call INTO shared helpers that stay in tab.R
+│                              (tab_match_groups_and_totrows/tab_add_totcol_if_no/tab_validate_comp/
+│                              tab_match_comp_and_tottab) + live tab_ci()/tab_chi2(); nothing here is
+│                              called BY the aggregate core.
 ├── tab_classes.R   (~3700 L) tabxplor_tab/grouped_tab classes, 30+ dplyr S3 methods,
 │                              print methods, tab_kable(), tab_plot(), tab_compact(),
 │                              OKLCH color palettes, set_color_palette()/get_color_style(),
@@ -805,6 +820,11 @@ Read first: analysis §5.1.3/4/5/6/8, §2.4; tab.R leaves (`tab_plain`, `tab_num
 5. **Quarantine the superseded trio**: `tab_pct`/`tab_tot`/`tab_totaltab` + `pct_formula`/`diff_formula` + their repair machinery (~650 L) move to `R/tab-steps-legacy.R` (exports unchanged); retire the internal `chi2 =` constructor alias and `get_chi2()` reads (10 sites — the public deprecated alias formal stays).
 
 Verification: full suite, byte-identical target throughout (item 2's `diff_index_mean` deletion is covered by 17a's ported fix + fixture). Split seam: leaves + plan (17f-i) / tails + cuts + quarantine (17f-ii).
+
+**DONE (2026-07-21).** Full suite green after every commit (FAIL 0, PASS 3855, SKIP 4 = the usual Suggests/benchmark opt-ins); byte-identical (zero golden/snapshot churn) except the one intended df/num semantics change (below). Landed in the two-session seam.
+- **17f-i (leaves + reference plan).** Both leaves are now WRAPPER/CORE splits: public `tab_plain()`/`tab_num()` (NSE defuse + validate + normalize colour) -> shared resolver `plain_resolve()`/`num_resolve()` -> resolved-args core `plain_core()`/`num_core()` (pure fmt build, returns PRE-FINALISE). `tab_transform` calls the CORES directly, so the argument forcing runs ONCE and colour is finalised ONCE downstream by `tab()`/`tab_many()` -- killing the numeric **double `finalize_color_spec`** and the `.color_deprecate` flag (deleted; deprecation now lives only in the public `tab_num` wrapper). `num_resolve` is forcing-only, so `tab_transform`'s numeric branch replicates the wrapper's digits-cast/total_names-recycle validate; `plain_resolve` does the full validate+forcing. **Reference plan**: deleted `tab_num`'s inline `diff_index_mean()` twin + its inline `calculate_refrows` copy; `tab_num` routes ref-row derivation through the shared `calculate_refrows()`/`diff_index()`. `tab_apply_reference()` signature unchanged (the jmvtab tier-3 reref pins it); `tab_ci`'s marker-based re-derivation left as the single reader (the plan already materialises into fmt markers).
+- **17f-ii (part 1: quarantine + chi2).** Moved `tab_pct()`/`tab_tot()`/`tab_totaltab()` + `pct_formula()`/`diff_formula()` to `R/tab-steps-legacy.R` (exports unchanged; the shared repair helpers used by live `tab_ci`/`tab_chi2` stay in tab.R). Retired the INTERNAL `chi2=` constructor alias in the live `tab_spread`/`tab_ci` (`get_test`/`test=`); the PUBLIC alias (`new_tab`/`new_grouped_tab` `chi2=` formal + `get_chi2()`) is kept.
+- **17f-ii (part 2: df/num + shared tails).** `df=`/`num=` now build the normal table and pull `get_num()` per cell at the very end (shared `leaf_extract_raw`), deleting the 3 pre-1.4.0 `weighted.mean` N-scans + the count-only dcast + both early returns (~90 L). **Intended semantics change** (tests only assert class; undocumented details): a FACTOR table with `pct = "row"` + df/num now returns the displayed percentages, not counts (`df=TRUE` still defaults to `pct = "no"` -> counts for FactoMineR); unweighted counts are `double`; `num=TRUE` without tab_vars is ungrouped. Extracted the byte-identical shared tails `leaf_totrow_tottab()` + `leaf_rename_totals()` (the `tab_var_1lv` wrap + fmt placeholder-injection genuinely differ per leaf -> left separate).
 
 ---
 

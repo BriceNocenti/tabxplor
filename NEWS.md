@@ -582,6 +582,13 @@
   gain (~1.05–1.30× at 15M rows, more at larger N / sparser data).
 
 ## Changes that may affect existing code
+* **`tab_num(df = TRUE)` / `tab_plain(df = TRUE)` (and `num = TRUE`) now return the numbers as
+  displayed.** These escape hatches build the normal table and extract each cell's value, so a table
+  with `pct = "row"` gives the row percentages rather than the raw counts. The common uses are
+  unchanged: `df = TRUE` still defaults to `pct = "no"` and so returns a plain counts data.frame (e.g.
+  for `FactoMineR`), and a numeric table still returns its means. (Two harmless details also changed:
+  unweighted counts come back as `double` rather than `integer`, and `num = TRUE` on a table without
+  `tab_vars` is an ungrouped `tabxplor_tab`.)
 * **`kableExtra` is now an optional (`Suggests`) dependency.** The default HTML engine is tabxplor's
   own dependency-free renderer, so most users are unaffected and installs are lighter (no
   `kableExtra` and its `xml2`/`rvest`/`svglite`/`systemfonts` chain). Only the legacy

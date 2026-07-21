@@ -342,14 +342,20 @@ Two structural limits of `tab_compact()`:
 
 **Bottom line.** What the single-table default gives up is per-row_var flexibility that real data analysis does not use — a *different* colour mode, reference, or CI type for the *same column* across variables. The one case analysts genuinely rely on — each variable coloured against its own total — survives, because it lives in the cell fields and each block's reference is baked in before binding. Everything else is opt-in recoverable with `output_list = TRUE`, which is also the entry point for manual per-table editing.
 
-### tab_plain() — The Aggregation Core
+### The leaves — `tab_plain()` / `tab_num()` (wrapper + resolver + core, Phase 17f)
+
+Since Phase 17f each leaf is a **public wrapper over a resolved-args core**, so the argument forcing runs once and the pipeline never re-does the leaf's resolution:
+
+- **Public `tab_plain()`/`tab_num()`** = the CRAN surface. They defuse the NSE args, then `tab_num` additionally normalizes colour to a spec; then they call the shared resolver and the core. `tab_num` finalises the colour ONCE after the core returns (`tab_plain` never finalises — the outer `tab()`/`tab_many()` does).
+- **Shared resolver `plain_resolve()`/`num_resolve()`** = the pure argument forcing (`pct`/`OR` → `tot` → `comp` → `ref = "auto"` → `totaltab`). `plain_resolve` also does the validate (digits cast, `total_names` recycle); `num_resolve` is forcing-only. **`tab_transform` (the pipeline) calls the resolver + core directly**, so there is no double `finalize_color_spec` and no `.color_deprecate` flag.
+- **Compute core `plain_core()`/`num_core()`** = the data.table aggregation + fmt build, consuming already-resolved scalars. Returns the **pre-finalise** table. Shared tails `leaf_totrow_tottab()` (total-row/total-table flags) and `leaf_rename_totals()` (the `#Rename totals` block) live once. `df=`/`num=` build normally then extract `get_num()` per cell via `leaf_extract_raw()` (no duplicated raw scan).
 
 `tab_plain()` is where raw cross-tabulation happens:
 
 1. **data.table dcast**: `data.table::dcast(DT, row_var ~ col_var, fun.aggregate = sum)` for weighted counts. Column names are temporarily prefixed to avoid data.table reserved name conflicts.
 2. **Wrap in fmt**: Raw counts are wrapped into `fmt` vectors via `new_fmt()`.
 3. **Add totals**: Total rows and/or columns are added based on `tot` argument.
-4. **Pipeline**: Chains to `tab_pct()`, `tab_ci()`, `tab_chi2()` if requested.
+4. **Reference + tests**: the reference-relative fields come from the ONE executor `tab_apply_reference()`; `tab_transform` then runs `tab_apply_tests()` (chi2/CI). The superseded standalone steps `tab_pct()`/`tab_tot()`/`tab_totaltab()` now live in `R/tab-steps-legacy.R`, off the build path.
 5. **Restore names**: Internal prefixes are removed; original column names restored.
 
 ### tab_num() — Numeric Column Variables
@@ -855,13 +861,16 @@ The main API file. Contains:
 - **Lines 390–1520**: `tab_many()` — the full-featured engine with vectorisation, per-row_var loop, pipeline chaining.
 - **Lines 1520–1770**: `tab_spread()`, `tab_get_vars()`, `tab_get_wrapped_dimensions()`.
 - **Lines 1770–1860**: `tab_prepare()` — data cleaning, NA handling, rare level collapsing.
-- **Lines 1860–2890**: `tab_plain()` — data.table aggregation core, total rows/cols, fmt wrapping.
-- **Lines 2890–4200**: `tab_num()` — numeric variable means/variances, similar structure to tab_plain.
-- **Lines 4200–4560**: `tab_pct()` — percentage calculation, difference computation.
-- **Lines 4560–4910**: `tab_ci()` — confidence interval calculation (Wilson/Wald/AC methods).
+- `tab_plain()` (factor) / `tab_num()` (numeric) — each a Phase 17f wrapper + `plain_resolve`/`num_resolve`
+  + `plain_core`/`num_core` (the data.table aggregation core, total rows/cols, reference, fmt wrapping;
+  numeric = moment sums + roll-ups). Shared tails `leaf_totrow_tottab()`/`leaf_rename_totals()`;
+  `df=`/`num=` extract via `leaf_extract_raw()`.
+- `tab_ci()` — confidence interval calculation (Wilson/Wald/AC methods).
 - `tab_chi2()` — chi-squared (factors) + ANOVA F (means) via the vectorised engine
   `agg_chi2()` / `agg_anova()` in `R/tab-agg.R`; contributions to variance for `color="contrib"`.
-- **Lines 5200–5809**: `tab_tot()`, `tab_totaltab()`, internal helpers (`diff_index`, `quo_miss_na_null_empty_no`, etc.).
+- `tab_pct()`, `tab_tot()`, `tab_totaltab()` + `pct_formula()`/`diff_formula()` — the superseded
+  dplyr-era step API, quarantined in **`R/tab-steps-legacy.R`** (Phase 17f), off the build path.
+  Internal helpers `diff_index()`/`calculate_refrows()`/`quo_miss_na_null_empty_no()` stay in `R/tab.R`.
 - `tab_add_n_pct(tabs_text, add_n, add_pct)` — the `add_n`/`add_pct` block, factored out of `tab_many()`'s
   finalize so `tab_many()` and `tab_counts()` share one implementation.
 
