@@ -3392,9 +3392,10 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na,
 
   # DESIGN: fused aggregation. When tab_many supplies a shared finest-grain aggregate (`.fine`),
   # skip the per-table raw-data prep + scan and roll `.fine` up instead (see the aggregation branch
-  # below). `use_raw` keeps the table-by-table path fully intact; forced on by `.by_table`, and
-  # always for the df/num paths (which are never fused).
-  use_raw <- .by_table || is.null(.fine) || df || num
+  # below). `use_raw` keeps the table-by-table path fully intact; forced on by `.by_table`.
+  # Phase 17f: df/num no longer force the raw scan -- they build the normal table then extract the
+  # displayed numbers with get_num() (leaf_extract_raw), so they can adopt `.fine` like any build.
+  use_raw <- .by_table || is.null(.fine)
 
   if (use_raw) {
     data <- data |>
@@ -3458,45 +3459,32 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na,
     stop("data is of length 0 (possibly after filter or na = 'drop_all')")
   }
 
-  if (df | num) {
-    tabs <-
-      data.table::dcast(
-        data[, list(n  = if(length(wt) != 0) {integer() } else {.N },
-                    wn = if(length(wt) != 0) { sum(eval(wt), na.rm = TRUE) } else {double()}),
-             keyby = eval(c(tab_row_names2, "col_var"))],
-        formula = ... ~ col_var,
-        value.var = if (length(wt) != 0) {c("wn")} else {"n"},
-        fill = 0
-      )
-
+  # DESIGN: aggregation source for the default (factor x factor) path. `use_raw` -> table-by-table
+  # (one raw scan per row_var x col_var, current behaviour, kept verbatim). Otherwise roll up the
+  # shared finest-grain aggregate `.fine` (built once in tab_many) for this pair. Both feed the
+  # SAME dcast below, so everything downstream is byte-identical. Fused runs only when col_var is a
+  # factor and there is no col_var/row_var overlap (both guaranteed by tab_many).
+  if (use_raw) {
+    long <- data[, list(n  = .N,
+                        wn = if(length(wt) != 0) { sum(eval(wt), na.rm = TRUE) } else {double()}),
+                 keyby = eval(c(tab_row_names2, "col_var"))]
   } else {
-    # DESIGN: aggregation source for the default (factor x factor) path. `use_raw` -> table-by-table
-    # (one raw scan per row_var x col_var, current behaviour, kept verbatim). Otherwise roll up the
-    # shared finest-grain aggregate `.fine` (built once in tab_many) for this pair. Both feed the
-    # SAME dcast below, so everything downstream is byte-identical. Fused runs only when col_var is a
-    # factor and there is no col_var/row_var overlap (both guaranteed by tab_many).
-    if (use_raw) {
-      long <- data[, list(n  = .N,
-                          wn = if(length(wt) != 0) { sum(eval(wt), na.rm = TRUE) } else {double()}),
-                   keyby = eval(c(tab_row_names2, "col_var"))]
+    ocv  <- as.character(col_var)
+    long <- if (length(wt) != 0) {
+      .fine[, list(n = as.integer(sum(n)), wn = sum(wn)), keyby = eval(c(tab_row_names, ocv))]
     } else {
-      ocv  <- as.character(col_var)
-      long <- if (length(wt) != 0) {
-        .fine[, list(n = as.integer(sum(n)), wn = sum(wn)), keyby = eval(c(tab_row_names, ocv))]
-      } else {
-        .fine[, list(n = as.integer(sum(n))),              keyby = eval(c(tab_row_names, ocv))]
-      }
-      if (ocv != "col_var") data.table::setnames(long, ocv, "col_var")
+      .fine[, list(n = as.integer(sum(n))),              keyby = eval(c(tab_row_names, ocv))]
     }
-
-    tabs <-
-      data.table::dcast(
-        long,
-        formula = ... ~ col_var,
-        value.var = if (length(wt) != 0) {c("n", "wn")} else {"n"},
-        fill = 0
-      )
+    if (ocv != "col_var") data.table::setnames(long, ocv, "col_var")
   }
+
+  tabs <-
+    data.table::dcast(
+      long,
+      formula = ... ~ col_var,
+      value.var = if (length(wt) != 0) {c("n", "wn")} else {"n"},
+      fill = 0
+    )
 
 
   if (any(col_var_in_row_var)) {
@@ -3594,49 +3582,39 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na,
 
 
 
-  if (df | num) {
-    if (length(wt) == 0) {
-      if ("wn" %in% names(tabs)) tabs[, "wn" := NULL]
-    } else {
-      if ("n" %in% names(tabs)) tabs[, "n" := NULL]
+  # Phase 17f: df/num build the normal table like any other and extract get_num() at the very end
+  # (leaf_extract_raw), so this is now the SINGLE aggregation-shaping path (the former df/num early
+  # return + count-only branch are gone).
+  if (length(wt) == 0) {
+    if ("wn" %in% names(tabs)) tabs[, "wn" := NULL]
+
+    text_vars <- !purrr::map_lgl(tabs, is.numeric)
+    text_vars <- text_vars[text_vars]
+
+    if ("col" %in% tot) {
+      tabs[, "Total" := as.integer(rowSums(tabs[, -text_vars, with = FALSE]))] #Problems if not integer.
     }
-
-    if (df) return(as_df_merge_rownames(tabs, rlang::as_name(row_var)))
-
-    return(dplyr::group_by(new_tab(tibble::as_tibble(tabs)), !!!tab_vars))
+    tabs_n <- tabs
 
   } else {
-    if (length(wt) == 0) {
-      if ("wn" %in% names(tabs)) tabs[, "wn" := NULL]
+    text_vars <- !purrr::map_lgl(tabs, is.numeric)
+    n_index  <- stringi::stri_detect_regex(names(tabs), "^n_")  | text_vars
+    wn_index <- stringi::stri_detect_regex(names(tabs), "^wn_") | text_vars
 
-      text_vars <- !purrr::map_lgl(tabs, is.numeric)
-      text_vars <- text_vars[text_vars]
+    text_vars <- text_vars[text_vars]
 
-      if ("col" %in% tot) {
-        tabs[, "Total" := as.integer(rowSums(tabs[, -text_vars, with = FALSE]))] #Problems if not integer.
-      }
-      tabs_n <- tabs
+    tabs_n  <- data.table::setnames(tabs[, n_index, with = FALSE] ,
+                                    function(.x) stringi::stri_replace_first_regex(.x, "^n_" , ""))
+    tabs_wn <- data.table::setnames(tabs[, wn_index, with = FALSE],
+                                    function(.x) stringi::stri_replace_first_regex(.x, "^wn_", ""))
 
-    } else {
-      text_vars <- !purrr::map_lgl(tabs, is.numeric)
-      n_index  <- stringi::stri_detect_regex(names(tabs), "^n_")  | text_vars
-      wn_index <- stringi::stri_detect_regex(names(tabs), "^wn_") | text_vars
+    tabs_wn[, (names(tabs_wn)) := purrr::map(.SD, as.double)]
 
-      text_vars <- text_vars[text_vars]
-
-      tabs_n  <- data.table::setnames(tabs[, n_index, with = FALSE] ,
-                                      function(.x) stringi::stri_replace_first_regex(.x, "^n_" , ""))
-      tabs_wn <- data.table::setnames(tabs[, wn_index, with = FALSE],
-                                      function(.x) stringi::stri_replace_first_regex(.x, "^wn_", ""))
-
-      tabs_wn[, (names(tabs_wn)) := purrr::map(.SD, as.double)]
-
-      if ("col" %in% tot) {
-        tabs_n [, "Total" := as.integer(rowSums(tabs_n[, -names(text_vars), with = FALSE] ))] #Problems if not integer.
-        tabs_wn[, "Total" := rowSums(tabs_wn[, -names(text_vars), with = FALSE])]
-      }
-
+    if ("col" %in% tot) {
+      tabs_n [, "Total" := as.integer(rowSums(tabs_n[, -names(text_vars), with = FALSE] ))] #Problems if not integer.
+      tabs_wn[, "Total" := rowSums(tabs_wn[, -names(text_vars), with = FALSE])]
     }
+
   }
   tabs_text <- tabs[, names(text_vars), with = FALSE] #tibble::as_tibble()
   cols <- purrr::map_lgl(tabs_n, is.numeric)
@@ -3860,7 +3838,7 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na,
   plain_col_vars <- if (identical(as.character(col_var), "no_col_var")) character(0)
                     else as.character(col_var)
   plain_wt <- if (length(wt) == 0L) NA_character_ else as.character(wt)[1]
-  if (tab_var_1lv) {
+  result <- if (tab_var_1lv) {
     vars_attr <- new_vars_attr(row_vars = rlang::as_name(row_var), col_vars = plain_col_vars,
                                tab_vars = character(0), wt = plain_wt)
     new_tab(tabs, subtext = subtext, meta = list(vars = vars_attr)) |>
@@ -3872,6 +3850,9 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na,
     new_grouped_tab(tabs, dplyr::group_data(tabs), subtext = subtext,
                     meta = list(vars = vars_attr))
   }
+
+  # Phase 17f: df/num -> pull the displayed number per cell (leaf_extract_raw); else the fmt table.
+  if (df || num) leaf_extract_raw(result, df, num, row_var) else result
 }
 
 
@@ -4373,6 +4354,9 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
     digits = digits, num = num, df = df, .fine = .fine, .by_table = .by_table
   )
 
+  # Phase 17f: df/num returns plain numbers (no fmt), so skip the colour finalise entirely.
+  if (df || num) return(result)
+
   # Phase 5: set the final two-channel colour / significance-policy attributes (a no-op for a
   # plain scalar colour passed straight through, e.g. when tab_many() drives tab_num()).
   result <- finalize_color_spec(result, color_spec)
@@ -4479,16 +4463,11 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
 
   # Phase 7d: aggregate-injection seam (mirrors tab_plain's `.fine`). When tab_build() supplies a
   # prebuilt moment-sum aggregate (`.fine`, from tab_aggregate_num()), skip the raw-data prep + scan
-  # and adopt it. `use_raw` keeps the table-by-table path intact; forced on by `.by_table` and always
-  # for the df/num mean-direct paths (never fused). The moment MATH lives once in num_moment_scan()
+  # and adopt it. `use_raw` keeps the table-by-table path intact; forced on by `.by_table`. Phase 17f:
+  # df/num no longer force the raw scan -- they build the normal moment aggregate then extract the
+  # means with get_num() (leaf_extract_raw). The moment MATH lives once in num_moment_scan()
   # (R/tab-agg.R), shared with the producer.
-  use_raw <- .by_table || is.null(.fine) || df || num
-
-  # Last Phase a bug-fix: the weight name captured OUTSIDE any data.table `j`, so the mean-direct
-  # (df/num) blocks below reference it as a plain string. data.table `j` exposes columns as variables,
-  # so a column named "wt" would shadow the `wt` ARGUMENT (see num_moment_scan's WARNING); wt_name +
-  # get(wt_name) + `[, (wt_name) := NULL]` (dynamic drop, was the literal `wt`) are shadow-proof.
-  wt_name <- as.character(wt)
+  use_raw <- .by_table || is.null(.fine)
 
   if (use_raw) {
     data <- data |>
@@ -4512,22 +4491,6 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
     # Adopt the prebuilt moment aggregate. copy(): the factor-key coercion + na-order relabel just
     # below mutate `tabs` by reference, so a reused/cached `.fine` must not be corrupted.
     tabs <- data.table::copy(.fine)
-
-  } else if (df | num) {
-    tabs <-
-      if (length(wt) == 0) {
-        data[, purrr::map(.SD,  ~mean(., na.rm = TRUE)),
-             .SDcols = as.character(col_vars),
-             keyby = c(tab_row_names)]
-
-      } else {
-        data[, purrr::map_if(.SD,
-                             names(.SD) != wt_name,
-                             ~ round(stats::weighted.mean(., get(wt_name), na.rm = TRUE), 10),
-                             .else = ~ NA_real_),
-             .SDcols = as.character(c(col_vars, wt)),
-             keyby = c(tab_row_names)][, (wt_name) := NULL]
-      }
 
   } else {
     # Phase 2/7d: sufficient moment sums (n [, wn], s1 = Sigma[w]x, s2 = Sigma[w]x^2) in ONE grouped
@@ -4563,7 +4526,7 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
   # Its moment sums (n [, wn], s1, s2) are ADDITIVE, so both are computed as ROLLUPS of a captured
   # copy of the main aggregate via num_rollup() (R/tab-agg.R) instead of two extra N-row re-scans.
   moment_cols <- setdiff(names(tabs), tab_row_names)
-  main_agg    <- if (!(df | num)) data.table::copy(tabs) else NULL
+  main_agg    <- data.table::copy(tabs)
 
   if ("row" %in% tot | totaltab %in% c("line", "table")) {
     if (length(tab_vars) != 0) {
@@ -4580,55 +4543,19 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
     if (!"row" %in% tot) group_vars <- group_vars[length(group_vars)]
 
 
-    if (df | num) {
-      if (length(wt) == 0) {
-        suppressWarnings(
-          tabs_tot <-
-            purrr::map_dfr(
-              group_vars,
-              ~ data[, c(purrr::set_names(rep("Total", length(c(tab_vars[!tab_vars %in% .], row_var))),
-                                          as.character(c(tab_vars[!tab_vars %in% .], row_var)) ),
-
-                         purrr::map(.SD,  ~mean(., na.rm = TRUE)) ),
-                     .SDcols = as.character(col_vars),
-                     keyby = eval(.)][ , as.character(tab_vars) := purrr::map(.SD, as.factor),
-                                       .SDcols = as.character(tab_vars)]
-            )
-        )
-      } else {
-        suppressWarnings(
-          tabs_tot <-
-            purrr::map_dfr(
-              group_vars,
-              ~ data[, c(purrr::set_names(rep("Total", length(c(tab_vars[!tab_vars %in% .], row_var))),
-                                          as.character(c(tab_vars[!tab_vars %in% .], row_var)) ),
-
-                         purrr::map_if(.SD,
-                                       names(.SD) != wt_name,
-                                       ~ round(stats::weighted.mean(., get(wt_name), na.rm = TRUE), 10),
-                                       .else = ~ NA_real_)),
-                     .SDcols = as.character(c(col_vars, wt)),
-                     keyby = eval(.)][, (wt_name) := NULL][ , as.character(tab_vars) := purrr::map(.SD, as.factor),
-                                                     .SDcols = as.character(tab_vars)]
-            )
-        )
-      }
-
-    } else {
-      # Phase 2 rollup: the total rows are subtotals of the main aggregate (moment sums are
-      # additive), so sum them by each group_vars subset instead of re-scanning N rows. One path
-      # for weighted and unweighted -- moment_cols carries _wn only when weighted.
-      tabs_tot <- purrr::map_dfr(
-        group_vars,
-        ~ num_rollup(
-          main_agg,
-          by           = .,
-          drop_keys    = as.character(c(tab_vars[!tab_vars %in% .], row_var)),
-          moment_cols  = moment_cols,
-          tab_vars_chr = as.character(tab_vars)
-        )
+    # Phase 2 rollup: the total rows are subtotals of the main aggregate (moment sums are
+    # additive), so sum them by each group_vars subset instead of re-scanning N rows. One path
+    # for weighted and unweighted -- moment_cols carries _wn only when weighted.
+    tabs_tot <- purrr::map_dfr(
+      group_vars,
+      ~ num_rollup(
+        main_agg,
+        by           = .,
+        drop_keys    = as.character(c(tab_vars[!tab_vars %in% .], row_var)),
+        moment_cols  = moment_cols,
+        tab_vars_chr = as.character(tab_vars)
       )
-    }
+    )
 
     not_fct <- !purrr::map_lgl(dplyr::select(tabs_tot, tidyselect::any_of(tab_row_names)), is.factor)
     if (any(not_fct)) {
@@ -4661,36 +4588,15 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
   #Calculate means and variances for total table
   if (totaltab == "table") {
 
-    if (df | num) {
-      if (length(wt) == 0) {
-        tabs_totaltab <-
-          data[, c(purrr::set_names(rep("Total", length(tab_vars)), as.character(tab_vars)),
-                   purrr::map(.SD,  ~mean(., na.rm = TRUE)) ),
-               .SDcols = as.character(col_vars),
-               keyby = eval(as.character(row_var))]
-
-      } else {
-        tabs_totaltab <-
-          data[, c(purrr::set_names(rep("Total", length(tab_vars)), as.character(tab_vars)),
-                   purrr::map_if(.SD,
-                                 names(.SD) != wt_name,
-                                 ~ round(stats::weighted.mean(., get(wt_name), na.rm = TRUE), 10),
-                                 .else = ~ NA_real_)),
-               .SDcols = as.character(c(col_vars, wt)),
-               keyby = eval(as.character(row_var))][, (wt_name) := NULL]
-      }
-
-    } else {
-      # Phase 2 rollup: the total table is the main aggregate summed by row_var (its tab_vars
-      # collapsed to "Total"), reusing the additive moment sums instead of a third N-row re-scan.
-      tabs_totaltab <- num_rollup(
-        main_agg,
-        by           = as.character(row_var),
-        drop_keys    = as.character(tab_vars),
-        moment_cols  = moment_cols,
-        tab_vars_chr = as.character(tab_vars)
-      )
-    }
+    # Phase 2 rollup: the total table is the main aggregate summed by row_var (its tab_vars
+    # collapsed to "Total"), reusing the additive moment sums instead of a third N-row re-scan.
+    tabs_totaltab <- num_rollup(
+      main_agg,
+      by           = as.character(row_var),
+      drop_keys    = as.character(tab_vars),
+      moment_cols  = moment_cols,
+      tab_vars_chr = as.character(tab_vars)
+    )
 
     not_fct <- !purrr::map_lgl(dplyr::select(tabs_totaltab, tidyselect::any_of(tab_row_names)), is.factor)
     if (any(not_fct)) {
@@ -4711,13 +4617,6 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
     data.table::setorderv(tabs, tab_row_names)
 
 
-  }
-
-  if (df | num) {
-    if (df) return(as_df_merge_rownames(tabs, rlang::as_name(row_var)))
-
-    return(dplyr::group_by(new_tab(tibble::as_tibble(tabs)),
-                           !!!tab_vars))
   }
 
   # Phase 2 (1.4.0): derive per-col_var mean and variance from the moment sums (<v>_n [, _wn],
@@ -5043,9 +4942,9 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
     new_grouped_tab(tabs, dplyr::group_data(tabs), subtext = subtext)
   }
 
-  # Phase 17f: return the PRE-FINALISE table; colour is finalised once by the caller (the public
-  # tab_num() wrapper, or tab()/tab_many()).
-  result
+  # Phase 17f: df/num -> pull the displayed number per cell (leaf_extract_raw); else return the
+  # PRE-FINALISE fmt table (colour is finalised once by the caller: the public tab_num() wrapper).
+  if (df || num) leaf_extract_raw(result, df, num, row_var) else result
 }
 
 
@@ -6087,6 +5986,23 @@ as_df_merge_rownames <- function(tabs, row_var) {
   }
 
   tabs
+}
+
+
+# leaf_extract_raw() -- Phase 17f: the df=/num= escape hatch. Instead of a duplicated raw-scan branch
+# in each leaf, df/num now build the NORMAL fmt table and pull the displayed number per cell with
+# get_num() at the very end (mean for numeric columns, count for pct = "no", the percentage for a
+# pct table). df -> a plain data.frame with the factor columns merged into rownames (for FactoMineR
+# & co.); num -> a tabxplor_tab of plain numeric columns (grouping preserved).
+#' @keywords internal
+leaf_extract_raw <- function(result, df, num, row_var) {
+  fmt_cols <- names(result)[purrr::map_lgl(result, is_fmt)]
+  nums <- dplyr::mutate(result, dplyr::across(tidyselect::all_of(fmt_cols), get_num))
+  if (num) return(nums)
+  # df: a plain data.frame (drop the tabxplor table attrs) with factor cols merged into rownames.
+  out <- as_df_merge_rownames(data.table::as.data.table(nums), rlang::as_name(row_var))
+  for (a in c("subtext", "test", "meta")) attr(out, a) <- NULL
+  out
 }
 
 #' @keywords internal
