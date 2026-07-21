@@ -119,9 +119,9 @@ confidence interval either way).}
 helper (OR magnitude for ratios, standardized difference for gaussian
 betas). Uncheck for no colours.}
 
-\item{color_signif}{How significance interacts with the colours: grey out
-non-significant cells, ignore significance, or colour only the guaranteed
-(error-adjusted) effect.}
+\item{color_signif}{How significance interacts with the colours: observed
+size + grey out non-significant  cells, colour only the guaranteed
+(error-adjusted) effect, ignore significance.}
 
 \item{estimate_display}{The estimate-cell layout. "ci" shows a visible
 interval; "prob" / "ame" fold the adjusted predicted probability / marginal

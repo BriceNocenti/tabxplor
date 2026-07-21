@@ -50,11 +50,13 @@ testthat::test_that("ratio display trims trailing zeros and pads for alignment",
 
 testthat::test_that("md bolds only the primary field of a composite cell in a bold row", {
   t  <- tab(forcats::gss_cat, marital, race, pct = "row", add_n = TRUE)
-  md <- tab_md(t, color = FALSE, print = FALSE)
-  # the bold Total row's composite: pct bold, "(n=...)" plain -> "**100%** (n=...)"
-  testthat::expect_match(md, "\\*\\*100%\\*\\* \\(n=")
+  md <- tab_md(t, color = FALSE, print = FALSE, css = FALSE)
+  # the bold Total row's composite: pct bold, "(n=...)" plain -> "**100%** (n=...)". Phase g (A6): the
+  # join is a non-breaking space (U+00A0) so html does not wrap the composite.
+  nbsp <- intToUtf8(160L)
+  testthat::expect_match(md, paste0("\\*\\*100%\\*\\*", nbsp, "\\(n="))
   # NOT whole-cell bold ("**100% (n=...)**")
-  testthat::expect_false(grepl("\\*\\*100% \\(n=[0-9 ]+\\)\\*\\*", md))
+  testthat::expect_false(grepl(paste0("\\*\\*100%", nbsp, "\\(n=[0-9 ]+\\)\\*\\*"), md))
 })
 
 testthat::test_that("both html engines bold only the primary field of a composite bold cell", {
@@ -91,7 +93,7 @@ testthat::test_that("shared header model: spanning labels + suffix-stripped clea
 
 testthat::test_that("md/kable/html show the col_var name spanning header (single col_var too)", {
   t  <- tab(forcats::gss_cat, marital, race, pct = "row")
-  md <- tab_md(t, color = FALSE, print = FALSE)
+  md <- tab_md(t, color = FALSE, print = FALSE, css = FALSE)   # css = FALSE: line 3 is the name row
   # Phase 14f: in markdown the name is the first BODY row (line 3: header, delimiter, then it). Above
   # the delimiter it was a second header row, which pandoc does not accept -- it rejected the whole
   # table. Locked by "tab_md() output is valid pandoc" in test-tab_md.R.

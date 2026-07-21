@@ -93,8 +93,8 @@ resolveExportPath <- function(dir, filename, ext = "xlsx") {
 #' @keywords internal
 #' @noRd
 tab_html_string <- function(tabs, wrap_rows = 35, wrap_cols = 15, standalone = TRUE, ...) {
-  k    <- tab_kable(tabs, engine = "html", wrap_rows = wrap_rows,
-                    wrap_cols = wrap_cols, tooltips = FALSE, ...)
+  k    <- tab_html(tabs, engine = "html", wrap_rows = wrap_rows,
+                   wrap_cols = wrap_cols, tooltips = FALSE, ...)
   body <- as.character(k)
   if (!standalone) return(body)
   # Phase 14k: this is the OTHER page tabxplor builds (print.tabxplor_kable()'s Viewer page is the
@@ -212,7 +212,7 @@ jmv_backend_export <- function(self, tabs) {
 #' @keywords internal
 #' @noRd
 jmv_backend_render_html <- function(self, tabs) {
-  tab_kable(
+  tab_html(
     tabs, engine = "html",
     wrap_rows = self$options$wrap_rows,
     wrap_cols = self$options$wrap_cols,

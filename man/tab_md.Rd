@@ -19,7 +19,7 @@ tab_md(
   caption = NULL,
   transpose = FALSE,
   var_names = NULL,
-  css = FALSE,
+  css = TRUE,
   clipboard = FALSE,
   file = NULL,
   print = TRUE,
@@ -76,9 +76,11 @@ above their level columns; the row-variable name is the leading column a table w
 \code{row_vars} uses to name each block (written once per block, in italics). See
 \code{\link{tab_kable}}.}
 
-\item{css}{When \code{TRUE}, prepend an inline \verb{<style>} block (from \code{\link{tab_css}}), so the
-coloured markdown is self-contained. Default \code{FALSE} (bring the stylesheet via the document's
-\verb{css:}, or emit \code{\link{tab_css}} once at the top of the document -- it styles every table).
+\item{css}{When \code{TRUE} (the \strong{default}), prepend an inline \verb{<style>} block (from
+\code{\link{tab_css}}), so the exported markdown is self-contained -- it renders coloured and
+compact on its own. Set \code{FALSE} inside an \code{.Rmd}/\code{.qmd} document (the host page brings the
+stylesheet, or emit \code{\link{tab_css}} once at the top -- it styles every table), otherwise the
+inline \verb{<style>} block is duplicated per table.
 Any \strong{styled} table (coloured, or \code{css = TRUE}) is wrapped in a pandoc fenced div
 \verb{::: \{.tabxplor-tab\}}, which pandoc renders as \verb{<div class="tabxplor-tab">} -- the hook
 \code{\link{tab_css}}'s table styling needs, since pandoc emits a bare \verb{<table>} it could not

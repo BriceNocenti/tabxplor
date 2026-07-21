@@ -80,21 +80,21 @@ test_that("reg_sheet_name is the compact tag", {
 
 # ---- headers (item 3) -----------------------------------------------------------------------
 
-test_that("binomial: model + empirical columns share ONE outcome col_var; model named 'Model OR'", {
+test_that("binomial: model + empirical columns share ONE outcome col_var; model named 'Model_OR'", {
   skip_if_not_installed("broom")
   t   <- tab_reg(w14_data(), "married", c("race", "rincome"), family = "binomial",
                  empirical = TRUE, cleannames = FALSE)
   fmt <- names(t)[purrr::map_lgl(t, tabxplor:::is_fmt)]
-  expect_setequal(fmt, c("Emp. %", "Emp. OR", "Model OR"))
+  expect_setequal(fmt, c("Obs_%", "Obs_OR", "Model_OR"))
   cvs <- purrr::map_chr(t[fmt], ~ tabxplor:::get_col_var(.x)[1])
   expect_equal(length(unique(cvs)), 1L)                       # one span, no border between them
-  expect_identical(unname(cvs[["Model OR"]]), "married: Married")
+  expect_identical(unname(cvs[["Model_OR"]]), "married: Married")
 })
 
 test_that("numeric outcome col_var is the dependent name alone", {
   skip_if_not_installed("broom")
   t <- tab_reg(forcats::gss_cat, "tvhours", "race", family = "gaussian", cleannames = FALSE)
-  expect_identical(tabxplor:::get_col_var(t[["Model \u03b2"]])[1], "tvhours")
+  expect_identical(tabxplor:::get_col_var(t[["Model_\u03b2"]])[1], "tvhours")
 })
 
 test_that("multinomial: category names drop the repeated ': OR'; one shared col_var", {
@@ -131,13 +131,13 @@ test_that("a reg legend says 'reference category', never 'Total row' (AME includ
   expect_false(any(grepl("Total row", leg)))
 })
 
-test_that("item 5: an Emp. IRR / model IRR legend names the RATE-ratio, not the odds-ratio", {
+test_that("item 5: an Obs_IRR / model IRR legend names the RATE-ratio, not the odds-ratio", {
   skip_if_not_installed("broom")
   leg <- tabxplor:::tab_color_legend(
     suppressWarnings(tab_reg(forcats::gss_cat, "tvhours", "race", family = "poisson",
                              empirical = TRUE, cleannames = FALSE)),
     medium = "md", style = "prose")
-  # Phase 16d: Emp. IRR + Model IRR now fold into ONE legend line ("Emp. IRR, Model IRR - ...", the
+  # Phase 16d: Obs_IRR + Model_IRR now fold into ONE legend line ("Obs_IRR, Model_IRR - ...", the
   # prefix names joined with no-break spaces), so match the line by "IRR" rather than a space-anchored prefix.
   irr <- leg[grepl("IRR", leg)]
   expect_true(length(irr) >= 1)

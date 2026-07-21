@@ -470,7 +470,7 @@ print.tabxplor_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = N
   # Phase 13a: install this table's per-table color_breaks override for the render (no-op otherwise).
   .cb <- push_color_breaks(x); on.exit(pop_color_breaks(.cb), add = TRUE)
   if (getOption("tabxplor.print") == "kable") {
-    x <- tab_kable(x)
+    x <- tab_html(x)
     print(x)
     return(invisible(x))
   }
@@ -575,7 +575,7 @@ print.tabxplor_tabs <- function(x, ...) {
   # Mirror print.tabxplor_tab: honour options("tabxplor.print"). "kable" renders all tables joined
   # (routed to the Viewer, like a single tab); otherwise print each element's tibble in sequence.
   if (getOption("tabxplor.print") == "kable") {
-    print(tab_kable(x))
+    print(tab_html(x))
     return(invisible(x))
   }
   for (i in seq_along(x)) {
@@ -594,7 +594,7 @@ c.tabxplor_tabs <- function(...) new_tabxplor_tabs(NextMethod())
 # knit_print so a `tabxplor_tabs` embedded in an Rmd/Quarto chunk renders as the joined kable.
 #' @exportS3Method knitr::knit_print
 knit_print.tabxplor_tabs <- function(x, ...) {
-  knitr::knit_print(tab_kable(x), ...)
+  knitr::knit_print(tab_html(x), ...)
 }
 
 
@@ -748,23 +748,23 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #' @examples
 #' \donttest{
 #' tabs <- tab(forcats::gss_cat, race, marital, year, pct = "row", color = "diff")
-#' tab_kable(tabs, theme = "light")
+#' tab_html(tabs, theme = "light")
 #' }
-tab_kable <- function(tabs,
-                      theme = NULL, color_type = lifecycle::deprecated(), html_24_bit = NULL,
-                      color = TRUE, tooltips = TRUE, popover = NULL, color_legend = TRUE,
-                      lang = NULL,
-                      caption = knitr::opts_current$get("tab.cap"),
-                      transpose = FALSE,
-                      var_names = NULL,
-                      html_font = NULL,
-                      get_data = FALSE,
-                      full_width = FALSE,
-                      wrap_rows = 35, wrap_cols = 15,
-                      whitespace_only = TRUE,
-                      engine = NULL, css = NULL,
-                      ...) {
-  if (lifecycle::is_present(color_type)) lifecycle::deprecate_soft("1.4.0", "tab_kable(color_type)")
+tab_html <- function(tabs,
+                     theme = NULL, color_type = lifecycle::deprecated(), html_24_bit = NULL,
+                     color = TRUE, tooltips = TRUE, popover = NULL, color_legend = TRUE,
+                     lang = NULL,
+                     caption = knitr::opts_current$get("tab.cap"),
+                     transpose = FALSE,
+                     var_names = NULL,
+                     html_font = NULL,
+                     get_data = FALSE,
+                     full_width = FALSE,
+                     wrap_rows = 35, wrap_cols = 15,
+                     whitespace_only = TRUE,
+                     engine = NULL, css = NULL,
+                     ...) {
+  if (lifecycle::is_present(color_type)) lifecycle::deprecate_soft("1.4.0", "tab_html(color_type)")
   # Phase 13a: install a per-table color_breaks override for the render (no-op otherwise).
   .cb <- push_color_breaks(tabs); on.exit(pop_color_breaks(.cb), add = TRUE)
   # Phase 10j: the theme/color/color_legend preamble is the shared resolver. `html_24_bit` is inert
@@ -814,7 +814,7 @@ tab_kable <- function(tabs,
     wrap = list(rows = wrap_rows, cols = wrap_cols, exdent = 2,
                 whitespace_only = whitespace_only, unbreakable_spaces = TRUE, brk = "<br>"),
     theme = theme, var_names = o$var_names,
-    color_legend = color_legend, what = "tab_kable()"
+    color_legend = color_legend, what = "tab_html()"
   )
 
   # Phase 10e: render each prepared table through the engine seam. The colour legend is CONTENT (a
@@ -853,6 +853,13 @@ tab_kable <- function(tabs,
   tab_kable_join(parts, engine, css = style, theme = theme)
 }
 
+#' @rdname tab_html
+#' @details `tab_kable()` is a permanent alias of `tab_html()` -- the two are identical. `tab_html()`
+#'   names the output (an HTML table), while the HTML backend *engine* (home-built or \pkg{kableExtra})
+#'   is chosen with `engine =`.
+#' @export
+tab_kable <- tab_html
+
 
 
 #' Print a tabxplor table in html
@@ -860,7 +867,7 @@ tab_kable <- function(tabs,
 #' @description
 #' `r lifecycle::badge("deprecated")`
 #'
-#' Superseded by [tab_kable()], which renders any table -- `tabxplor_tab` or plain data.frame --
+#' Superseded by [tab_html()], which renders any table -- `tabxplor_tab` or plain data.frame --
 #' through the shared exporter prep. This function predates it and never shared its machinery: it
 #' detects total rows/columns by matching the literal strings `"Total"`/`"Ensemble"` against names and
 #' values, so it is hardcoded to English and French, and it renders no colours, tooltips or spanning
@@ -910,14 +917,14 @@ kable_tabxplor_style <- function(tabs,
                                  whitespace_only = TRUE, # unbreakable_spaces = TRUE,
                                  subtext = "",
                                  ...) {
-  lifecycle::deprecate_soft("1.4.0", "kable_tabxplor_style()", "tab_kable()")
+  lifecycle::deprecate_soft("1.4.0", "kable_tabxplor_style()", "tab_html()")
 
   # kableExtra is now Suggests-only; this superseded renderer is the only public entry point that
-  # still requires it (tab_kable(engine = "html") does not).
+  # still requires it (tab_html(engine = "html") does not).
   if (!requireNamespace("kableExtra", quietly = TRUE)) {
     cli::cli_abort(c(
       "{.fn kable_tabxplor_style} needs the {.pkg kableExtra} package.",
-      "i" = "Install it, or use {.fn tab_kable} (the default {.code engine = \"html\"} needs no extra dependency)."
+      "i" = "Install it, or use {.fn tab_html} (the default {.code engine = \"html\"} needs no extra dependency)."
     ))
   }
 

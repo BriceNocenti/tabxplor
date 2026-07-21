@@ -842,7 +842,9 @@ xl_write_table <- function(wb, plan, o, reg) {
     for (k in seq_along(runs$labels)) {
       c1 <- col0; c2 <- col0 + runs$spans[k] - 1L
       if (nzchar(runs$labels[k])) {
-        xlb_write_cell(wb, s, xl_cell(plan$span_row, c1), runs$labels[k])
+        # Phase g: a split-model span carries a "<br>" (e.g. "White<br>married: Married") -> an in-cell
+        # newline so Excel shows the split level over the outcome (wrap_text set on the span row below).
+        xlb_write_cell(wb, s, xl_cell(plan$span_row, c1), gsub("<br>", "\n", runs$labels[k], fixed = TRUE))
         if (c2 > c1)
           xlb_merge(wb, s, paste0(xl_cell(plan$span_row, c1), ":", xl_cell(plan$span_row, c2)))
       }
@@ -865,9 +867,11 @@ xl_write_table <- function(wb, plan, o, reg) {
   xl_apply_styles(wb, s, plan$styles, reg)
 
   # Phase 13c-iii: style the col_var spanning-name row (bold + centred, like the level header).
+  # Phase g: wrap_text when a span carries a "<br>" split-model line, so the two lines show.
   if (!is.na(plan$span_row)) {
+    span_wrap <- if (any(grepl("<br>", plan$header_runs$labels, fixed = TRUE))) "1" else ""
     xf <- reg$xf_id(o$font_text, o$text_size_headers, TRUE, NA_character_, NA_character_,
-                    0L, 0L, 0L, 0L, "center", "", "", "")
+                    0L, 0L, 0L, 0L, "center", "", span_wrap, "")
     wb$set_cell_style(sheet = s, style = xf,
                       dims = paste0(xl_cell(plan$span_row, 1L), ":", xl_cell(plan$span_row, plan$ncl)))
   }

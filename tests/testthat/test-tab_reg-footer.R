@@ -29,7 +29,7 @@ test_that("binomial footer N/LR-null/McFadden/AIC/BIC match a hand-fit glm; disp
   d   <- reg_data()
   t1  <- tab_reg(d, "married", c("race", "rincome"), family = "binomial", cleannames = FALSE)
   tst <- get_test(t1)
-  cv  <- "Model OR"
+  cv  <- "Model_OR"
   gv  <- function(s) tst$statistic[tst$col_var == cv & tst$test == s]
 
   # the footer is DISPLAY-ONLY: the built object is the coefficient skeleton, no "Model fit" rows
@@ -58,7 +58,7 @@ test_that("the footer does not alter the built coefficient skeleton (stats= togg
   d       <- reg_data()
   with    <- tab_reg(d, "married", "race", family = "binomial", cleannames = FALSE)
   without <- tab_reg(d, "married", "race", family = "binomial", stats = FALSE, cleannames = FALSE)
-  col <- "Model OR"
+  col <- "Model_OR"
   expect_equal(nrow(with), nrow(without))
   expect_equal(get_or(with[[col]]), get_or(without[[col]]))
   expect_equal(sum(!is.na(get_pvalue(with[[col]]))), sum(!is.na(get_pvalue(without[[col]]))))
@@ -84,7 +84,7 @@ test_that("gaussian footer (N/R2/adjR2/F/sigma) matches broom::glance", {
   skip_if_not_installed("broom")
   d   <- reg_data()
   t1  <- tab_reg(d, "tvhours", c("age", "race"), family = "gaussian", cleannames = FALSE)
-  tst <- get_test(t1); cv <- "Model \u03b2"
+  tst <- get_test(t1); cv <- "Model_\u03b2"
   gv  <- function(s) unname(tst$statistic[tst$col_var == cv & tst$test == s])
 
   # the lm default footer set (D7): N + R2 + adjR2 + F + residual SD (no AIC/BIC unless stats= asks)
@@ -111,7 +111,7 @@ test_that("poisson footer carries a Pearson dispersion matching sum(pearson^2)/d
   d <- reg_data()
   expect_warning(t1 <- tab_reg(d, "tvhours", c("age", "race"), family = "poisson",
                                cleannames = FALSE), "dispersion")
-  tst <- get_test(t1); cv <- "Model IRR"
+  tst <- get_test(t1); cv <- "Model_IRR"
   dm  <- d |> dplyr::filter(!is.na(tvhours), !is.na(age), !is.na(race))
   m   <- stats::glm(tvhours ~ age + race, data = dm, family = stats::poisson())
   phi <- sum(stats::residuals(m, "pearson")^2) / stats::df.residual(m)
@@ -166,7 +166,8 @@ test_that("the regression footer renders (console block + export rows) without e
   skip_if_not_installed("broom")
   t1 <- tab_reg(reg_data(), "married", c("race", "age"), family = "binomial")
   expect_output(print(t1), "Model fit")                  # the console footer block (Phase 16a GFM table)
-  md <- tab_md(t1, print = FALSE)
+  # Phase g (A7): a styled md table's label cells use non-breaking spaces; normalise for text greps.
+  md <- gsub(intToUtf8(160L), " ", tab_md(t1, print = FALSE), fixed = TRUE)
   expect_true(any(grepl("Model fit", md)))               # the export footer rows
   expect_true(any(grepl("McFadden", md)))
   expect_no_error(tab_kable(t1))
@@ -204,8 +205,8 @@ test_that("ordinal footer carries a Brant PO test p-value row (Item I)", {
   expect_true("brant_po" %in% tst$test)
   p <- tst$pvalue[tst$test == "brant_po"]
   expect_true(all(!is.na(p) & p >= 0 & p <= 1))
-  # renders as a "Brant PO test" export row
-  md <- tab_md(t, print = FALSE)
+  # renders as a "Brant PO test" export row (A7: normalise non-breaking spaces for the text grep)
+  md <- gsub(intToUtf8(160L), " ", tab_md(t, print = FALSE), fixed = TRUE)
   expect_true(any(grepl("Brant PO test", md)))
 })
 
@@ -216,7 +217,7 @@ test_that("reg reference cells and GOF footer render black + bold, data cells st
   rd <- tabxplor:::tab_export_prep(t, backend = "kable", wrap = NULL)$tables[[1]]
   tabm <- rd$tab
 
-  emp   <- "Emp. %"
+  emp   <- "Obs_%"
   ann_e <- rd$ann[[emp]]
   refr  <- tabxplor::is_refrow(tabm[[emp]])
   expect_true(any(refr))

@@ -568,6 +568,14 @@ tab_col_var_header <- function(tab, roles, name_cols = TRUE) {
       clean[j] <- "sd"
     }
   }
+  # Phase g: a regression column disambiguated across several dependents carries a trailing " [dep]"
+  # bracket in its stored name ("Model_OR [married]"), so the console can tell columns apart. The col_var
+  # span row already names the outcome, so the exported level header strips it. Role-driven (17c): only
+  # "model"/"emp" columns are touched, never a crosstab level that happens to hold brackets.
+  for (j in which(is_level)) {
+    if (is_fmt(tab[[j]]) && get_role(tab[[j]]) %in% c("model", "emp"))
+      clean[j] <- sub(" \\[[^]]*\\]$", "", clean[j])
+  }
   # Phase 14s (L3): if EVERY level column's DISPLAYED header already equals its col_var, the spanning
   # name row would only duplicate the column headers -> drop it. A regression table named after the
   # model / outcome ("Married: OR" over "Married: OR") is the case this targets. Compare the CLEAN

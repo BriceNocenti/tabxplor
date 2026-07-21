@@ -49,9 +49,11 @@
 #'   \code{\link{tab_kable}}.
 #' @param col_var_names `r lifecycle::badge("deprecated")` Replaced by `var_names`:
 #'   `col_var_names = FALSE` is `var_names = "rows"` (or `"none"`).
-#' @param css When `TRUE`, prepend an inline `<style>` block (from \code{\link{tab_css}}), so the
-#'   coloured markdown is self-contained. Default `FALSE` (bring the stylesheet via the document's
-#'   `css:`, or emit \code{\link{tab_css}} once at the top of the document -- it styles every table).
+#' @param css When `TRUE` (the **default**), prepend an inline `<style>` block (from
+#'   \code{\link{tab_css}}), so the exported markdown is self-contained -- it renders coloured and
+#'   compact on its own. Set `FALSE` inside an `.Rmd`/`.qmd` document (the host page brings the
+#'   stylesheet, or emit \code{\link{tab_css}} once at the top -- it styles every table), otherwise the
+#'   inline `<style>` block is duplicated per table.
 #'   Any **styled** table (coloured, or `css = TRUE`) is wrapped in a pandoc fenced div
 #'   `::: {.tabxplor-tab}`, which pandoc renders as `<div class="tabxplor-tab">` -- the hook
 #'   \code{\link{tab_css}}'s table styling needs, since pandoc emits a bare `<table>` it could not
@@ -90,7 +92,7 @@ tab_md <- function(tabs,
                    caption = NULL,
                    transpose = FALSE,
                    var_names = NULL,
-                   css = FALSE,
+                   css = TRUE,
                    clipboard = FALSE,
                    file = NULL,
                    print = TRUE,
@@ -357,6 +359,15 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   # chrome -- blank-row separators the stylesheet collapses to 1px rules (Steps 12/13) instead of the
   # raw-text dash rows. A plain table (`!styled`) keeps the dash rows so its GFM output is byte-clean.
   styled   <- do_color || isTRUE(css)
+  # Phase g (A7): in a styled table (pandoc renders it to html), spaces in a multi-word LEVEL / label
+  # name ("Never married", "Strong republican") let the host wrap it mid-name. Replace them with a
+  # non-breaking space so the label holds on one line up to the wrap_rows truncation limit. nchar is
+  # unchanged (U+00A0 is one codepoint), so the raw-text column layout stays byte-identical; a plain
+  # (unstyled) table keeps ASCII spaces so its GFM output stays byte-clean.
+  if (styled) for (j in other_cols) {
+    nz <- nzchar(cell_data[[j]]) & !is.na(cell_data[[j]])
+    cell_data[[j]][nz] <- gsub(" ", "\u00a0", cell_data[[j]][nz], fixed = TRUE)
+  }
   attr_mat <- NULL
   if (do_color) {
     attr_mat <- matrix("", nrow = nrow(cell_data), ncol = ncol(cell_data))
@@ -703,10 +714,24 @@ md_extra <- function(text, is_bold, split_at) {
 # field's width) only the primary token is bold and the rest ("(n=...)") stays plain; a plain cell
 # (split_at NA / covering the whole text) is bolded whole. Adds exactly one ** pair either way, so the
 # +4 width budget the column-width computation reserves for bold cells is unchanged.
+# Phase g (A1): the alignment pad (leading/trailing spaces -- incl. the star-placeholder pad a reference
+# cell carries, and the figure-space fill) is kept OUTSIDE the ** markers. `**77%   **` is not valid
+# markdown bold (pandoc will not open an emphasis span that ends in whitespace); `**77%**   ` is, and the
+# outer pad still holds the raw-text column alignment (pandoc trims it at render). See review pass 4.
 #' @keywords internal
 md_bold <- function(text, split_at = NA_integer_) {
-  if (is.na(split_at) || split_at < 1L || split_at >= nchar(text)) return(paste0("**", text, "**"))
-  paste0("**", substr(text, 1L, split_at), "**", substr(text, split_at + 1L, nchar(text)))
+  # ws = the alignment fillers: ASCII space, no-break U+00A0, figure U+2007, narrow no-break U+202F.
+  ws <- paste0("[", intToUtf8(c(32L, 160L, 8199L, 8239L)), "]")
+  bold_span <- function(s) {
+    if (!nzchar(s)) return(s)
+    lead  <- regmatches(s, regexpr(paste0("^", ws, "*"), s))
+    trail <- regmatches(s, regexpr(paste0(ws, "*$"), s))
+    core  <- substr(s, nchar(lead) + 1L, nchar(s) - nchar(trail))
+    if (!nzchar(core)) return(s)                    # all-whitespace: nothing to bold
+    paste0(lead, "**", core, "**", trail)
+  }
+  if (is.na(split_at) || split_at < 1L || split_at >= nchar(text)) return(bold_span(text))
+  paste0(bold_span(substr(text, 1L, split_at)), substr(text, split_at + 1L, nchar(text)))
 }
 
 # Phase 13d: md_css_rules() / md_css_block() / md_break_class() / md_slot_class_map() are GONE. The

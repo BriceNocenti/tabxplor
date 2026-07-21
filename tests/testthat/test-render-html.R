@@ -222,26 +222,30 @@ testthat::test_that("the colour legend uses classes on the html engine, hex on k
                          'style="[^"]*color:#')
 })
 
-testthat::test_that("legend break-words are bold in every medium (Phase 14c)", {
-  tb <- tab(gss, marital, race, pct = "row", color = c("diff", "ratio"))
-  # html: inline on BOTH channels, so it holds on the kableExtra path (no stylesheet of ours) and on
-  # the background classes (which are deliberately not bolded by the stylesheet, as the cells aren't).
+testthat::test_that("legend weight: text break-words bold, background break-words plain (Phase g)", {
+  tb <- tab(gss, marital, race, pct = "row", color = c("diff", "ratio"))  # text = diff, bg = ratio
+  # html: TEXT break-words are bold; BACKGROUND break-words are PLAIN (they mirror filled cells, which
+  # a fill alone does not bold). Holds on the class path AND the inline-hex (kableExtra) path.
   for (cl in c(TRUE, FALSE)) {
-    spans <- unlist(regmatches(
-      l <- tab_color_legend(tb, medium = "html", classes = cl),
-      gregexpr("<span [^>]*>", l)))
+    l     <- tab_color_legend(tb, medium = "html", classes = cl)
+    spans <- unlist(regmatches(l, gregexpr("<span [^>]*>", l)))
     testthat::expect_true(length(spans) > 0)
-    testthat::expect_true(all(grepl("font-weight:bold;", spans, fixed = TRUE)))
+    is_bg <- grepl("background", spans) | grepl('class="[ou]', spans)
+    testthat::expect_true(any(is_bg) && any(!is_bg))
+    testthat::expect_true(all(grepl("font-weight:bold;", spans[!is_bg], fixed = TRUE)))
+    testthat::expect_false(any(grepl("font-weight:bold;", spans[is_bg], fixed = TRUE)))
   }
-  # md: `**` so the RAW markdown shows them too (the stylesheet bold only reaches a render).
+  # md: text breaks carry `**`; background breaks do not (plain bracketed span).
   testthat::expect_match(tab_color_legend(tb, medium = "md"), "[*][*]\\[[+]5\\]\\{[.]p1\\}[*][*]")
-  testthat::expect_match(tab_color_legend(tb, medium = "md"), "[*][*]\\[.2\\]\\{[.]o3\\}[*][*]")
-  # runs (excel / plot)
+  testthat::expect_match(tab_color_legend(tb, medium = "md"), "\\[.2\\]\\{[.]o3\\}")
+  testthat::expect_no_match(tab_color_legend(tb, medium = "md"), "[*][*]\\[.2\\]\\{[.]o3\\}")
+  # runs (excel / plot): the text channel is bold, the background channel plain.
   runs <- tab_color_legend(tb, medium = "runs")[[1]]
   coloured <- purrr::keep(runs, ~ !is.na(.$color))
   testthat::expect_true(length(coloured) > 0)
-  testthat::expect_true(all(purrr::map_lgl(coloured, "bold")))
-  # console: cli::style_bold wraps the colour style. `cli.num_colors` is the gate (read by
+  testthat::expect_true(any(purrr::map_lgl(coloured, "bold")))
+  testthat::expect_true(any(!purrr::map_lgl(coloured, "bold")))
+  # console: cli::style_bold wraps the text colour style. `cli.num_colors` is the gate (read by
   # cli::num_ansi_colors()) -- testthat pins it to 1 for reproducible output, so force it here.
   withr::with_options(list(cli.num_colors = 256), {
     testthat::expect_match(tab_color_legend(tb, medium = "console"), "\033[[]1m")
@@ -372,27 +376,21 @@ testthat::test_that("geometry is CLASSES, not inline styles (so a user's CSS can
   }
 })
 
-testthat::test_that("numbers are DejaVu Sans by default, monospace only for a starred table", {
-  # Phase 14m-ii (rework): a proportional "*" is narrower than a digit, so stars break alignment -- but
-  # ONLY a starred table pays the monospace cost; a plain table keeps the compact proportional DejaVu
-  # Sans. Both rules ship; the per-table `tx-has-stars` class picks which applies (tab_css() stays
-  # table-independent). The size bump (Cascadia reads small) is body-only and preserves the row height.
+testthat::test_that("numbers are monospace by default so figures stay column-aligned", {
+  # Phase g: numbers are MONOSPACE by default (was: proportional unless the table showed stars).
+  # Proportional digits drift out of alignment, worse under bold references / significant cells, so the
+  # one `.tx-num` body rule ships the monospace stack + the size bump. Text stays Condensed; numeric
+  # HEADERS (th.tx-num) keep the condensed sans (the rule is `td.tx-num`, body-only). One revert lever.
   css <- tab_css(style_tag = FALSE)
   testthat::expect_match(css, "font-family:\"DejaVu Sans Condensed\"", fixed = TRUE)   # text: Condensed
-  # Phase 15d: the number FONT is body-only (`td.tx-num`) so numeric HEADERS keep the condensed sans.
-  def_rule <- regmatches(css, regexpr("[.]tabxplor-tab td[.]tx-num\\{[^}]*\\}", css))  # default: DejaVu Sans
-  testthat::expect_match(def_rule, "DejaVu Sans", fixed = TRUE)
-  testthat::expect_no_match(def_rule, "monospace")
-  star_rule <- regmatches(css, regexpr("[.]tx-has-stars td[.]tx-num\\{[^}]*\\}", css))  # stars: Cascadia mono
-  testthat::expect_match(star_rule, "Cascadia Mono", fixed = TRUE)
-  testthat::expect_match(star_rule, "monospace;}")
-  testthat::expect_match(css, "[.]tx-has-stars td[.]tx-num\\{font-size:1.1em;line-height:1;\\}")  # body bump
-  # each font is its own revert lever
+  num_rule <- regmatches(css, regexpr("[.]tabxplor-tab td[.]tx-num\\{[^}]*\\}", css))
+  testthat::expect_match(num_rule, "Cascadia Mono", fixed = TRUE)
+  testthat::expect_match(num_rule, "monospace")
+  testthat::expect_match(num_rule, "font-size:1.1em;line-height:1;", fixed = TRUE)     # body size bump
+  # the number font is one revert lever
   css2 <- withr::with_options(
-    list(tabxplor.tab_kable_num_font = "\"Georgia\", serif",
-         tabxplor.tab_kable_num_font_stars = "\"Courier New\", monospace"), tab_css(style_tag = FALSE))
-  testthat::expect_match(css2, "[.]tabxplor-tab td[.]tx-num\\{[^}]*Georgia")
-  testthat::expect_match(css2, "[.]tx-has-stars td[.]tx-num\\{[^}]*Courier New")
+    list(tabxplor.tab_kable_num_font = "\"Courier New\", monospace"), tab_css(style_tag = FALSE))
+  testthat::expect_match(css2, "[.]tabxplor-tab td[.]tx-num\\{[^}]*Courier New")
 })
 
 testthat::test_that("the html engine flags a starred table with tx-has-stars, a plain one not", {
@@ -494,8 +492,10 @@ testthat::test_that("format() pads with FIGURE spaces for html/Excel, ASCII for 
   testthat::expect_true(any(grepl(fig_space, ht, fixed = TRUE)))
   testthat::expect_false(any(grepl(fig_space, mt, fixed = TRUE)))
   testthat::expect_true(any(grepl("  ", mt, fixed = TRUE)))          # the console keeps ASCII runs
-  # same visible text either way -- only the pad character differs
-  testthat::expect_identical(gsub(fig_space, " ", ht, fixed = TRUE), mt)
+  # same visible text either way -- only the pad character differs: a figure space inside numbers, and
+  # (Phase g A6) a non-breaking space at the composite join " (n=..." so html does not wrap it.
+  testthat::expect_identical(
+    gsub(intToUtf8(160L), " ", gsub(fig_space, " ", ht, fixed = TRUE), fixed = TRUE), mt)
   # and it reaches the rendered media
   testthat::expect_true(grepl(fig_space, as.character(tab_kable(t, engine = "html")), fixed = TRUE))
 })

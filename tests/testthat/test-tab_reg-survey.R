@@ -20,7 +20,7 @@ reg_survey_data <- function() {
 }
 
 or_col <- function(tab) {
-  nm <- grep("^Model ", names(tab), value = TRUE)[1]
+  nm <- grep("^Model_", names(tab), value = TRUE)[1]
   vapply(tab[[nm]], tabxplor::get_num, numeric(1))
 }
 
@@ -112,7 +112,7 @@ test_that("weighted ordinal (svyolr) matches a hand svyolr cumulative OR", {
   hand <- survey::svyolr(yo ~ x1 + x2, design = des)
 
   tab <- tab_reg(d, "yo", c("x1", "x2"), family = "ordinal", wt = "w")
-  oc  <- vapply(tab[[grep("^Model ", names(tab), value = TRUE)[1]]], tabxplor::get_num, numeric(1))
+  oc  <- vapply(tab[[grep("^Model_", names(tab), value = TRUE)[1]]], tabxplor::get_num, numeric(1))
   # skeleton = Constant (NA), x1 ref (1), x1lo, x1mid, x2 -> drop NA + reference
   oc  <- oc[!is.na(oc) & oc != 1]
   expect_equal(unname(oc), unname(exp(hand$coefficients)), tolerance = 1e-5)
@@ -160,27 +160,45 @@ reg_split_data <- function() {
 
 test_that("split_var stacks one model per group (grouped by split_var + var)", {
   d <- reg_split_data()
-  t <- tab_logit(d, "y", c("x1", "x2"), split_var = "g")
+  t <- tab_logit(d, "y", c("x1", "x2"), split_var = "g", spread_models = FALSE)
   expect_s3_class(t, "tabxplor_grouped_tab")
   expect_setequal(dplyr::group_vars(t), c("g", "var"))
   expect_true("g" %in% names(t))
   expect_setequal(levels(dplyr::pull(dplyr::ungroup(t), g)), c("north", "south"))
 })
 
+test_that("Phase g: split_var + a single model auto-spreads to side-by-side columns", {
+  d <- reg_split_data()
+  # default spread_models = TRUE: the sub-models sit side by side (no stacked `g` row-column)
+  t <- tab_logit(d, "y", c("x1", "x2"), split_var = "g")
+  expect_false("g" %in% names(t))
+  # each split level's column carries a "{level}<br>{outcome}" col_var -> borders + a two-line span
+  fc <- names(t)[vapply(t, is_fmt, logical(1))]
+  cv <- vapply(fc, function(nm) tabxplor:::get_col_var(t[[nm]]), character(1))
+  expect_true(all(grepl("<br>", cv)))
+  expect_true(any(grepl("^north<br>", cv)) && any(grepl("^south<br>", cv)))
+  # works with empirical = TRUE (crude companions spread too, level-suffixed)
+  te <- suppressWarnings(tab_logit(d, "y", "x1", split_var = "g", empirical = TRUE))
+  expect_true(any(grepl("^Obs_", names(te))))
+  # opt-out keeps the stacked grouped form
+  expect_s3_class(tab_logit(d, "y", "x1", split_var = "g", spread_models = FALSE),
+                  "tabxplor_grouped_tab")
+})
+
 test_that("each split group equals a manual per-subset fit", {
   d <- reg_split_data()
-  t <- dplyr::ungroup(tab_logit(d, "y", c("x1", "x2"), split_var = "g"))
+  t <- dplyr::ungroup(tab_logit(d, "y", c("x1", "x2"), split_var = "g", spread_models = FALSE))
   for (grp in c("north", "south")) {
     sub  <- dplyr::filter(d, g == grp)
     hand <- stats::glm(as.integer(y == levels(y)[1]) ~ x1 + x2, data = sub, family = binomial())
-    tv   <- vapply(t[[grep("^Model ", names(t), value = TRUE)[1]]][t$g == grp], tabxplor::get_num, numeric(1))
+    tv   <- vapply(t[[grep("^Model_", names(t), value = TRUE)[1]]][t$g == grp], tabxplor::get_num, numeric(1))
     expect_equal(unname(tv[tv != 1]), unname(exp(stats::coef(hand))), tolerance = 1e-6)
   }
 })
 
 test_that("tab_spread pivots split groups into side-by-side columns", {
   d  <- reg_split_data()
-  t  <- tab_logit(d, "y", c("x1", "x2"), split_var = "g")
+  t  <- tab_logit(d, "y", c("x1", "x2"), split_var = "g", spread_models = FALSE)
   sp <- tab_spread(t, g)
   expect_s3_class(sp, "tabxplor_tab")
   # one OR column per split level (north / south), sharing the var/level stub
@@ -190,7 +208,7 @@ test_that("tab_spread pivots split groups into side-by-side columns", {
 
 test_that("split_var footer carries per-group GOF", {
   d   <- reg_split_data()
-  t   <- tab_logit(d, "y", "x1", split_var = "g")
+  t   <- tab_logit(d, "y", "x1", split_var = "g", spread_models = FALSE)
   tst <- tabxplor:::get_test(t)
   expect_setequal(unique(tst$row_var), c("north", "south"))   # tagged per split group
   expect_true(all(c("n", "lr_null") %in% tst$test))
@@ -198,14 +216,14 @@ test_that("split_var footer carries per-group GOF", {
 
 test_that("split_var works with survey weights (per-group svyglm)", {
   d <- reg_split_data()
-  t <- tab_logit(d, "y", c("x1", "x2"), wt = "w", split_var = "g")
+  t <- tab_logit(d, "y", c("x1", "x2"), wt = "w", split_var = "g", spread_models = FALSE)
   expect_s3_class(t, "tabxplor_grouped_tab")
   sub  <- dplyr::filter(d, g == "north")
   des  <- survey::svydesign(ids = ~1, weights = ~w,
                             data = dplyr::mutate(sub, y01 = as.integer(y == levels(y)[1])))
   hand <- survey::svyglm(y01 ~ x1 + x2, design = des, family = quasibinomial())
   tt   <- dplyr::ungroup(t)
-  tv   <- vapply(tt[[grep("^Model ", names(tt), value = TRUE)[1]]][tt$g == "north"],
+  tv   <- vapply(tt[[grep("^Model_", names(tt), value = TRUE)[1]]][tt$g == "north"],
                  tabxplor::get_num, numeric(1))
   expect_equal(unname(tv[tv != 1]), unname(exp(stats::coef(hand))), tolerance = 1e-5)
 })
@@ -222,7 +240,7 @@ test_that("multiplier scales a continuous predictor's OR to OR^k, p unchanged", 
   d <- reg_split_data()
   t0  <- suppressWarnings(tab_logit(d, "y", c("x1", "x2")))
   t10 <- suppressWarnings(tab_logit(d, "y", c("x1", "x2"), multiplier = c(x2 = 10)))
-  oc  <- grep("^Model ", names(t0), value = TRUE)[1]
+  oc  <- grep("^Model_", names(t0), value = TRUE)[1]
   or0  <- vapply(t0[[oc]],  tabxplor::get_num, numeric(1))
   or10 <- vapply(t10[[oc]], tabxplor::get_num, numeric(1))
   # last row = x2; other rows (Constant, x1 levels) unchanged
@@ -241,8 +259,8 @@ test_that("multiplier rejects non-numeric predictors / wrong families", {
 test_that("empirical crude OR matches the weighted 2x2 odds ratio", {
   d   <- reg_split_data()
   t   <- suppressWarnings(tab_logit(d, "y", "x1", empirical = TRUE))
-  expect_true(all(c("Emp. %", "Emp. OR") %in% names(t)))
-  eo  <- vapply(dplyr::ungroup(t)[["Emp. OR"]], tabxplor::get_num, numeric(1))
+  expect_true(all(c("Obs_%", "Obs_OR") %in% names(t)))
+  eo  <- vapply(dplyr::ungroup(t)[["Obs_OR"]], tabxplor::get_num, numeric(1))
   # hand crude OR of each x1 level vs the reference "a", positive outcome = first level of y
   pos <- levels(d$y)[1]; lv <- levels(d$x1); ref <- lv[1]
   hand <- vapply(lv, function(l) {
@@ -258,12 +276,5 @@ test_that("empirical: gaussian now produces crude columns (Phase 14v)", {
   d <- reg_split_data()
   # Phase 14v: gaussian empirical is now wired (crude mean + mean-difference), no longer ignored.
   tg <- tab_reg(d, "x2", "x1", family = "gaussian", empirical = TRUE)
-  expect_true(all(c("Emp. mean", "Emp. diff") %in% names(tg)))
-})
-
-test_that("the empirical argument is hard-deprecated (Phase 14x: errors)", {
-  d <- reg_split_data()
-  expect_error(
-    tab_reg(d, "y", "x1", family = "binomial", empirical = TRUE),
-    class = "defunctError")
+  expect_true(all(c("Obs_mean", "Obs_diff") %in% names(tg)))
 })

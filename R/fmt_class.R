@@ -2332,7 +2332,15 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
       strs <- vector("list", length(seg$pieces)); ti <- 0L
       for (j in seq_along(seg$pieces)) {
         if (seg$is_tok[j]) { ti <- ti + 1L; strs[[j]] <- toks[[ti]] }
-        else               { strs[[j]] <- rep(seg$pieces[j], length(cells)) }
+        else {
+          # Phase g (A6): in a non-breaking medium (pad != " ": html / md-with-css), the ASCII spaces
+          # in a template literal like " (n=" must not break -- else "100% (n=16 382)" wraps to two
+          # lines (the inner "16 382" already holds, its big.mark being the figure space). U+00A0 keeps
+          # a normal-width join. Console (pad = " ") is byte-identical.
+          piece <- seg$pieces[j]
+          if (!identical(pad, " ")) piece <- gsub(" ", "\u00a0", piece, fixed = TRUE)
+          strs[[j]] <- rep(piece, length(cells))
+        }
       }
       ok_c <- Reduce(`&`, lapply(toks, function(s) !is.na(s)))
       asm  <- do.call(paste0, strs)
@@ -2588,6 +2596,20 @@ offset_guaranteed_breaks <- function(breaks, center) {
   if (identical(center, 1)) breaks / breaks[1] else breaks - breaks[1]
 }
 
+# Phase g: the additive (center-0) break scale for a NON-gaussian regression coefficient
+# (exponentiate = FALSE), derived by LOGGING the odds_ratio scale and ROUNDING to 1 decimal --
+# log(OR breaks c(1.2, 1.5, 2, 4)) = c(0.18, 0.41, 0.69, 1.39) -> c(0.2, 0.4, 0.7, 1.4). So a
+# log-odds/log-rate coefficient reads ~the same colour intensity as its exponentiated OR/IRR twin
+# (readable breaks, not 4-decimal logs), and follows any user change to `odds_ratio`. `std = FALSE`, so
+# fmt_color_plan's SD-division block skips it (no var(Y) on the link scale). Empty/dropped odds_ratio
+# scale -> empty (uncoloured), the same graceful fallback as any missing scale.
+#' @keywords internal
+log_odds_scale <- function(or_scale) {
+  log_side <- function(side) list(breaks = round(log(side$breaks), 1L), slots = side$slots)
+  list(center = 0, strict = TRUE, std = FALSE,
+       over = log_side(or_scale$over), under = log_side(or_scale$under))
+}
+
 #' @keywords internal
 fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = NULL) {
   channel <- match.arg(channel)
@@ -2615,13 +2637,22 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
   # the mean_diff scale like a mean-diff, but standardizes by its OWN `var` field (= var(Y), constant),
   # NOT by get_ref_var() (whose refrow-at-END grouping is meaningless for a regression skeleton).
   is_std_diff <- is_mean || type == "coef"
+  # Phase g: a NON-gaussian coefficient (exponentiate = FALSE: a log-odds / log-rate / cumulative-logit
+  # coefficient) has no var(Y) to standardize by (it lived on the LINK scale, so SD(Y) is undefined) --
+  # the pre-g code fed sqrt(NA) and greyed every cell out. Instead it colours on the LOG of the
+  # odds_ratio scale (center 0, no SD-division), so a coefficient of log(2) reads the same intensity as
+  # an OR of 2 -- the exponentiate=TRUE twin. Derived from odds_ratio so the two always agree. A
+  # gaussian beta keeps its own SD-standardized mean_diff scale (var(Y) is meaningful there).
+  is_logcoef <- type == "coef" &&
+    get_model_family(x) %in% c("binomial", "poisson", "quasipoisson", "ordinal", "multinomial")
   # Phase 17d: the measure's engine facts (scale keys, raw getter, sig source, row gate) live in ONE
   # MEASURES row alongside its legend facts -- fmt_color_plan reads them instead of four switch arms
   # kept in sync by hand. `std_when` picks the std vs pct scale key per column kind (see MEASURES).
   md      <- MEASURES[[measure]]
   use_std <- switch(md$std_when, "std_diff" = is_std_diff, "mean" = is_mean, "na" = TRUE)
   sc      <- color_scales(x)
-  scale   <- sc[[ md$scale[[if (use_std) "std" else "pct"]] ]]
+  scale   <- if (is_logcoef && measure == "diff") log_odds_scale(sc[["odds_ratio"]])
+             else sc[[ md$scale[[if (use_std) "std" else "pct"]] ]]
   center <- if (is.null(scale)) 0 else scale$center
   strict <- if (is.null(scale)) TRUE else scale$strict
 
@@ -2939,8 +2970,13 @@ MEASURES <- list(
 # a legend token: plain text (c = NA) or a coloured break-word (c = palette slot 1:8).
 # Phase 13d: the CSS class is not stored -- it is tx_slot_class(ch, c), derived at render time, so a
 # legend break-word and the cells it describes cannot name different classes.
-.lg_tok  <- function(t) list(t = t, c = NA_integer_, ch = NA_character_)
-.lg_ctok <- function(t, slot, ch) list(t = t, c = as.integer(slot), ch = ch)
+# Phase g: `b` = an explicit bold flag on a PLAIN token (variable names are bolded in every medium
+# without being coloured). `esc` = escape markdown-active `*` in the md medium (the significance-stars
+# legend), so pandoc does not read `***`/`*` as emphasis. User subtext is NOT flagged (its markdown is
+# left intact). Coloured tokens decide weight in legend_render_line (text = bold, bg = plain).
+.lg_tok  <- function(t, bold = FALSE, esc = FALSE)
+  list(t = t, c = NA_integer_, ch = NA_character_, b = isTRUE(bold), esc = isTRUE(esc))
+.lg_ctok <- function(t, slot, ch) list(t = t, c = as.integer(slot), ch = ch, b = FALSE, esc = FALSE)
 
 # resolve the display language: explicit `lang` > options(tabxplor.lang) > R/OS locale; english default.
 #' @keywords internal
@@ -3245,8 +3281,9 @@ legend_resolve_spec <- function(spec, lang) {
 legend_tokens_terse <- function(spec, lang, show_names) {
   colon <- if (identical(lang, "fr")) " : " else ": "
   toks <- list()
+  # Phase g: variable names are bold in every medium.
   if (show_names) toks <- c(toks, list(.lg_tok(paste0(legend_name_list(spec$col_names, lang = lang),
-                                                      colon))))
+                                                      colon), bold = TRUE)))
   rs <- legend_ref_short(spec, lang)
   add_channel <- function(plan, prefix, is_bg) {
     mw <- legend_measure_word(plan$measure, spec$is_std, spec$eff_word, lang)
@@ -3304,8 +3341,9 @@ legend_tokens_prose <- function(spec, lang, show_names) {
   }
 
   toks <- list()
-  if (show_names)
-    toks <- c(toks, list(.lg_tok(paste0(legend_name_list(spec$col_names, lang = lang), " \u2014 "))))
+  if (show_names)  # Phase g: variable names are bold in every medium.
+    toks <- c(toks, list(.lg_tok(paste0(legend_name_list(spec$col_names, lang = lang), " \u2014 "),
+                                 bold = TRUE)))
 
   is_bg_only <- is.null(spec$plan_txt)
   primary    <- if (is_bg_only) spec$plan_bg else spec$plan_txt
@@ -3352,8 +3390,14 @@ legend_tokens_prose <- function(spec, lang, show_names) {
 
 # ---- render a token stream for one medium ----------------------------------------------------------
 # "runs" -> a list of runs list(text=, color=, bold=); every other medium -> a single string.
-# Phase 14c: EVERY medium bolds its coloured break-words (they must carry the same visual weight as
-# the coloured numbers they describe -- kable/html already bold every text-coloured cell).
+# Phase 14c: coloured break-words carry the visual weight of the coloured numbers they describe.
+# Phase g refines the weight rule per token:
+#   - TEXT-colour break-words stay BOLD (they mirror text-coloured cells, which the engines bold);
+#   - BACKGROUND-colour break-words are PLAIN (they mirror filled cells, where a fill alone bolds
+#     nothing) -- so a background legend reads in normal weight;
+#   - variable NAMES (plain tokens flagged `b = TRUE`) are BOLD in every medium.
+# The md branch also backslash-escapes `*` in plain-token text (the significance-stars legend), so
+# pandoc/quarto does not read `***`/`*` as emphasis markup.
 legend_render_line <- function(tokens, medium, theme, colored, classes = FALSE) {
   # Phase 13d: `theme` may be the render intent "auto"; a palette is always light/dark. Without this,
   # get_color_style() builds the key "text_auto", finds no palette and errors on a length-0 vector.
@@ -3367,57 +3411,64 @@ legend_render_line <- function(tokens, medium, theme, colored, classes = FALSE) 
                       else if (identical(medium, "runs")) "bg_legend" else "bg"
   slot_hex <- function(slot, ch)
     toupper(unname(get_color_style("color_code", type = fam(ch), theme = pal)[slot]))
+  is_colored_tok <- function(tk) isTRUE(colored) && !is.na(tk$c) && tk$c > 0L
+  # text-colour break-word OR flagged name -> bold; background break-word -> plain.
+  is_bold_tok <- function(tk)
+    (is_colored_tok(tk) && !identical(tk$ch, "bg")) || isTRUE(tk$b)
   if (identical(medium, "runs")) {
     return(lapply(tokens, function(tk) {
-      if (isTRUE(colored) && !is.na(tk$c) && tk$c > 0L)
-        list(text = tk$t, color = slot_hex(tk$c, tk$ch), bold = TRUE)
-      else list(text = tk$t, color = NA_character_, bold = FALSE)
+      col <- if (is_colored_tok(tk)) slot_hex(tk$c, tk$ch) else NA_character_
+      list(text = tk$t, color = col, bold = is_bold_tok(tk))
     }))
   }
   parts <- vapply(tokens, function(tk) {
-    if (!isTRUE(colored) || is.na(tk$c) || tk$c == 0L) return(tk$t)
+    bold <- is_bold_tok(tk)
+    if (!is_colored_tok(tk)) {
+      # plain token: a variable name (bold) or footer text (stars, weight line...). The stars token is
+      # `esc`-flagged: escape `*` so pandoc does not read `***`/`*` as emphasis (user subtext is left raw).
+      txt <- tk$t
+      if (identical(medium, "md") && isTRUE(tk$esc)) txt <- gsub("*", "\\*", txt, fixed = TRUE)
+      if (!bold) return(txt)
+      if (identical(medium, "console")) return(cli::style_bold(txt))
+      if (identical(medium, "html"))    return(paste0("<b>", txt, "</b>"))
+      if (identical(medium, "md"))      return(paste0("**", txt, "**"))
+      return(txt)
+    }
     if (identical(medium, "console")) {
       # `theme` is an argument, so the palette must follow it -- reading the option here silently
       # rendered a legend the caller never asked for (it disagreed with slot_hex above).
       style <- get_color_style("crayon", type = fam(tk$ch), theme = pal)[[tk$c]]
-      cli::style_bold(style(tk$t))
+      if (bold) cli::style_bold(style(tk$t)) else style(tk$t)
     } else if (identical(medium, "html")) {
-      # DESIGN: the span is emitted inline rather than via kableExtra::text_spec(). text_spec()'s
-      # byte output is version-unstable (1.4.0 -> 1.4.1 moved the rgba alpha 255 -> 1, dropped the
-      # tile border-radius and leaked `class="TRUE"`), which made every legend-bearing snapshot
-      # hostage to kableExtra's release schedule -- and it was the last kableExtra call on the
-      # home-built "self-contained" html engine's path. Legend tokens are package-generated
-      # ("+5", "x2", "1/1.5"), so they need no escaping (uncoloured tokens are emitted raw too).
-      # Phase 13d: `classes` = "our stylesheet ships with this output", i.e. the html engine. There the
-      # break-word must carry a CLASS, exactly like the cells it describes -- the legend sits in the
-      # table's own <tfoot>, so inline hex would freeze it while the cells follow a theme toggle. The
-      # discriminator is the ENGINE, not the theme: engine = "html" + theme = "light" + css = FALSE is
-      # a real case (a document that emits tab_css("auto") itself), and there hex would be wrong too.
-      # kableExtra carries no tabxplor stylesheet, so it keeps inline hex. (No `!important` on the
-      # class path: it existed to beat kableExtra's lightable rules, which never match here.)
-      # `font-weight:bold` is emitted INLINE, not left to the .p*/.m* stylesheet rule: it must hold on
-      # the background channel too (whose .o*/.u* classes are deliberately not bold -- they mirror the
-      # cells, where a fill alone does not bold), and on the kableExtra path, which ships no CSS of ours.
+      # DESIGN: the span is emitted inline rather than via kableExtra::text_spec() (byte-unstable across
+      # kableExtra releases). Legend tokens are package-generated ("+5", "x2", "1/1.5"), so they need no
+      # escaping. Phase 13d: `classes` = "our stylesheet ships with this output" (the html engine) -> the
+      # break-word carries a slot CLASS (theme-toggle-safe in the table's <tfoot>); kableExtra keeps hex.
+      # Phase g: weight is per-channel -- `font-weight:bold` only on the text channel (the .o*/.u* bg
+      # classes are deliberately not bold, mirroring filled cells, which a fill alone does not bold).
+      wt <- if (bold) "font-weight:bold;" else ""
       if (isTRUE(classes)) {
         cls <- tx_slot_class(tk$ch, tk$c)
         if (identical(tk$ch, "text"))
-          paste0("<span class=\"", cls, "\" style=\"font-weight:bold;\">", tk$t, "</span>")
-        else paste0("<span class=\"", cls, "\" style=\"font-weight:bold;border-radius:4px;",
+          paste0("<span class=\"", cls, "\" style=\"", wt, "\">", tk$t, "</span>")
+        else paste0("<span class=\"", cls, "\" style=\"", wt, "border-radius:4px;",
                     "padding-right:4px;padding-left:4px;\">", tk$t, "</span>")
       } else {
         hex <- slot_hex(tk$c, tk$ch)
         if (identical(tk$ch, "text"))
-          paste0("<span style=\"font-weight:bold;color:", hex, " !important;\">", tk$t, "</span>")
+          paste0("<span style=\"", wt, "color:", hex, " !important;\">", tk$t, "</span>")
         else
-          paste0("<span style=\"font-weight:bold;background-color:", hex,
+          paste0("<span style=\"", wt, "background-color:", hex,
                  " !important;border-radius:4px;padding-right:4px;padding-left:4px;\">",
                  tk$t, "</span>")
       }
     } else if (identical(medium, "md")) {
-      # `**` on top of the .p*/.m* stylesheet bold: it is what makes the break-words stand out in the
-      # RAW markdown too (the file must read well unrendered), and it covers the .o*/.u* channel.
+      # `**` on top of the .p*/.m* stylesheet bold makes the TEXT break-words stand out in the RAW
+      # markdown too; the .o*/.u* background channel is plain (Phase g) -> bracketed span without `**`.
       cls <- tx_slot_class(tk$ch, tk$c)
-      if (!nzchar(cls)) tk$t else paste0("**[", tk$t, "]{.", cls, "}**")
+      if (!nzchar(cls)) tk$t
+      else if (bold)   paste0("**[", tk$t, "]{.", cls, "}**")
+      else             paste0("[", tk$t, "]{.", cls, "}")
     } else tk$t
   }, character(1))
   paste0(parts, collapse = "")
@@ -3478,7 +3529,13 @@ legend_specs <- function(x) {
     # the "SD"/"standardized" wording. Reading mean_diff_std keeps the legend and the cells consistent.
     is_num   <- is_mean || is_coef
     is_pct   <- !is_num
-    is_std   <- is_num && mean_diff_std
+    # Phase g: a NON-gaussian coefficient (exponentiate = FALSE) colours on the LOGGED odds_ratio scale
+    # (log_odds_scale), NOT the SD-standardized mean_diff -- so its legend must NOT say "SD" (the breaks
+    # are log-odds/log-rate units). A gaussian beta keeps is_std (var(Y)-standardized). Mirrors the
+    # is_logcoef gate in fmt_color_plan.
+    is_logcoef <- is_coef &&
+      get_model_family(col) %in% c("binomial", "poisson", "quasipoisson", "ordinal", "multinomial")
+    is_std   <- is_num && mean_diff_std && !is_logcoef
     policy   <- if (!is.null(plan_txt)) plan_txt$policy else plan_bg$policy
     m_txt    <- if (!is.null(plan_txt)) plan_txt$measure else NA_character_
     m_bg     <- if (!is.null(plan_bg))  plan_bg$measure  else NA_character_
@@ -3679,7 +3736,8 @@ tab_footer_streams <- function(x, style = "prose", lang = NULL,
   wl <- tab_weight_line(x, lang = lg);   if (!is.null(wl)) push(list(.lg_tok(wl)), "weight")
   for (rl in reg_model_lines(x)) if (nzchar(rl)) push(list(.lg_tok(rl)), "reg")   # NOT translated (per family)
   if (isTRUE(legend)) for (toks in legend_streams(x, style, lg)) push(toks, "legend")
-  sl <- suppressWarnings(tab_stars_legend(x, lang = lg)); if (!is.null(sl)) push(list(.lg_tok(sl)), "stars")
+  # Phase g: `esc = TRUE` -> the md renderer escapes the `*` glyphs (else pandoc reads them as emphasis).
+  sl <- suppressWarnings(tab_stars_legend(x, lang = lg)); if (!is.null(sl)) push(list(.lg_tok(sl, esc = TRUE)), "stars")
   for (s in subtext) if (nzchar(s)) push(list(.lg_tok(s)), "subtext")
   streams
 }

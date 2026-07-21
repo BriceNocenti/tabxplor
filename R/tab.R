@@ -638,7 +638,7 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
   # two-channel colour (finalize_color_spec then mutate()d the returned tabxplor_kable) and rendered a
   # pre-finalize table (missing the background channel). merge_now (tab_assemble_output) still forces the
   # merge in the build -- that is a build concern; only the render moved.
-  if (isTRUE(getOption("tabxplor.output_kable"))) return(tab_kable(result))
+  if (isTRUE(getOption("tabxplor.output_kable"))) return(tab_html(result))
 
   # Phase 13c-iv: a multi-table result becomes a tabxplor_tabs (still a list) so it auto-prints like a
   # single tab and routes to the Viewer under options("tabxplor.print" = "kable"). No-op on a single tab.

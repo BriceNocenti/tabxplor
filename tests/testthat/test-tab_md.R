@@ -168,8 +168,9 @@ testthat::test_that("tab_md works with numeric tables (tab_num)", {
 # === SECTION: Alignment and structure =========================================
 
 testthat::test_that("tab_md alignment separator uses : for right/left alignment", {
-  
-  md <- tab_md(tabs, print = FALSE)
+  # css = FALSE: the plain byte-clean grammar (the styled default adds blank-row separators + a
+  # stylesheet, which is exercised elsewhere).
+  md <- tab_md(tabs, print = FALSE, css = FALSE)
   lines <- strsplit(md, "\n")[[1]]
 
   # Find separator line
@@ -396,7 +397,8 @@ testthat::test_that("tab_md() output is valid pandoc: it renders as a real <tabl
 
 testthat::test_that("the delimiter row's spacer column is dashes, not a blank", {
   # "| |" is not a valid pandoc delimiter cell -- it is what invalidated multi-col_var tables.
-  md <- tab_md(tab(gss, marital, c(race, relig), pct = "row"), print = FALSE, color = FALSE)
+  md <- tab_md(tab(gss, marital, c(race, relig), pct = "row"), print = FALSE, color = FALSE,
+               css = FALSE)  # css = FALSE: line 2 is the delimiter, not a stylesheet line
   sep <- strsplit(md, "\n")[[1]][2]
   testthat::expect_match(sep, "|-|", fixed = TRUE)
   testthat::expect_no_match(sep, "| |", fixed = TRUE)
@@ -433,7 +435,9 @@ testthat::test_that("the deprecated `col_var_names` still drops the col_var name
 
 testthat::test_that("a pipe in a label is escaped, not a spurious cell", {
   d <- gss; levels(d$marital)[1] <- "yes | no"
-  md <- tab_md(tab(d, marital, race, pct = "row"), print = FALSE, color = FALSE)
+  # css = FALSE: the plain grammar with ASCII spaces (the styled default makes label spaces
+  # non-breaking, tested separately).
+  md <- tab_md(tab(d, marital, race, pct = "row"), print = FALSE, color = FALSE, css = FALSE)
   testthat::expect_match(md, "yes \\| no", fixed = TRUE)
   # every body row still has the same number of cells as the header
   lines <- strsplit(md, "\n")[[1]]
@@ -504,12 +508,14 @@ testthat::test_that("the label column's de-bolding does not desync the column wi
 testthat::test_that("var_names = 'cols' / 'none' drops the row-variable name column", {
   merged <- tab(gss, c(race, marital), relig, pct = "row")
   for (vn in c("cols", "none")) {
-    md <- tab_md(merged, print = FALSE, color = FALSE, var_names = vn)
+    # css = FALSE: plain labels keep ASCII spaces ("Never married"); the styled default makes them
+    # non-breaking.
+    md <- tab_md(merged, print = FALSE, color = FALSE, var_names = vn, css = FALSE)
     testthat::expect_no_match(md, "*race*", fixed = TRUE, label = vn)
     testthat::expect_no_match(md, "*marital*", fixed = TRUE, label = vn)
     testthat::expect_match(md, "Never married", fixed = TRUE, label = vn)   # the levels stay
   }
-  testthat::expect_match(tab_md(merged, print = FALSE, color = FALSE, var_names = "rows"),
+  testthat::expect_match(tab_md(merged, print = FALSE, color = FALSE, var_names = "rows", css = FALSE),
                          "*race*", fixed = TRUE)
 })
 
@@ -527,11 +533,11 @@ md_blank_rows <- function(md) {
 }
 
 testthat::test_that("a coloured table carries the fenced div even with css = FALSE (14m-iii decouple)", {
-  md <- tab_md(tab(gss, marital, race, pct = "row", color = "diff"), print = FALSE)  # css = FALSE
+  md <- tab_md(tab(gss, marital, race, pct = "row", color = "diff"), print = FALSE, css = FALSE)
   testthat::expect_match(md, "::: {.tabxplor-tab}", fixed = TRUE)
   testthat::expect_no_match(md, "<style>", fixed = TRUE)                             # no sheet, just the hook
-  # ... a PLAIN uncoloured table is byte-clean: no div, no scaffold
-  plain <- tab_md(tab(gss, marital, race, pct = "row"), print = FALSE, color = FALSE)
+  # ... a PLAIN uncoloured table (css = FALSE) is byte-clean: no div, no scaffold
+  plain <- tab_md(tab(gss, marital, race, pct = "row"), print = FALSE, color = FALSE, css = FALSE)
   testthat::expect_no_match(plain, ":::", fixed = TRUE)
 })
 
@@ -546,7 +552,7 @@ testthat::test_that("the styled path draws blank-row separators; the plain path 
   # the PLAIN counterpart keeps DASH separator rows (byte-clean GFM), not blank ones
   t_tv_plain <- tab(gss, marital, race, year, pct = "row") |>
     dplyr::filter(year %in% c(2000, 2006))
-  plain <- strsplit(tab_md(t_tv_plain, print = FALSE, color = FALSE), "\n")[[1]]
+  plain <- strsplit(tab_md(t_tv_plain, print = FALSE, color = FALSE, css = FALSE), "\n")[[1]]
   testthat::expect_true(any(grepl("^[|] +-+", plain)))          # a dash separator row survives
 })
 

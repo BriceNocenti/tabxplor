@@ -31,7 +31,7 @@ test_that("or_plot() builds a forest plot from a tab_logit table", {
   d <- reg_plot_data()
   grDevices::pdf(tempfile(fileext = ".pdf")); on.exit(grDevices::dev.off())
   expect_s3_class(or_plot(tab_logit(d, "married", c("race", "age"))), "gtable")
-  # OR < 1 rows + empirical: defaults to the MODEL odds-ratio column (not "Emp. OR"), no message
+  # OR < 1 rows + empirical: defaults to the MODEL odds-ratio column (not "Obs_OR"), no message
   expect_s3_class(or_plot(tab_logit(d, "married", "race", empirical = TRUE)), "gtable")
 })
 

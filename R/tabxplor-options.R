@@ -76,8 +76,8 @@
 #'     kableExtra engine's output (a legacy-engine knob).}
 #'   \item{`tabxplor.kable_html_font`}{the CSS font stack for the kableExtra engine.}
 #'   \item{`tabxplor.kable_popover`}{`FALSE` (default): use click popovers instead of hover tooltips.}
-#'   \item{`tabxplor.tab_kable_num_font`, `tabxplor.tab_kable_num_font_stars`}{the HTML-engine number
-#'     font CSS stacks, without / with significance stars (the second is monospace so stars align).}
+#'   \item{`tabxplor.tab_kable_num_font`}{the HTML/markdown number-font CSS stack. Monospace by
+#'     default so figures stay column-aligned (set a proportional stack to revert).}
 #'   \item{`tabxplor.output_kable`}{`FALSE` (default): internal switch to return kable output.}
 #' }
 #'

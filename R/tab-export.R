@@ -9,16 +9,17 @@
 #' Export a tabxplor table to Excel, HTML, Markdown, or a plot
 #'
 #' A single entry point that dispatches to the format-specific exporters
-#' \code{\link{tab_kable}} (HTML), \code{\link{tab_md}} (Markdown), \code{\link{tab_xl}} (Excel) and
+#' \code{\link{tab_html}} (HTML), \code{\link{tab_md}} (Markdown), \code{\link{tab_xl}} (Excel) and
 #' \code{\link{tab_plot}} (a \code{ggplot}). The four functions share one set of display-option names
 #' and defaults; \code{tab_export()} forwards them and passes any format-specific argument through
 #' \code{...}.
 #'
 #' @param x A table (or list of tables) made with \code{\link{tab}} / \code{\link{tab_many}}.
-#' @param format One of \code{"kable"} (HTML, the default), \code{"md"} (Markdown),
-#'   \code{"xl"} (Excel) or \code{"plot"} (a \code{ggplot}).
+#' @param format One of \code{"html"} (the default), \code{"md"} (Markdown),
+#'   \code{"xl"} (Excel) or \code{"plot"} (a \code{ggplot}). The HTML backend engine
+#'   (home-built or kableExtra) is chosen with \code{engine =} (see \code{\link{tab_html}}).
 #' @param path Optional output file. For \code{"xl"} it is the workbook path; for \code{"md"} and
-#'   \code{"kable"} the rendered text is written to it; ignored for \code{"plot"}.
+#'   \code{"html"} the rendered text is written to it; ignored for \code{"plot"}.
 #' @param theme By default (\code{"light"}) a white table with black text; \code{"dark"} for the
 #'   inverse (colours follow the theme). \code{"auto"} follows the reader's colour scheme (their OS,
 #'   and any dark-mode toggle of the host page), which needs a stylesheet: it works for
@@ -41,7 +42,7 @@
 #'   See \code{\link{tab_kable}}.
 #' @param ... Format-specific arguments passed to the underlying exporter.
 #'
-#' @return The value of the underlying exporter: an HTML/knitr object (\code{"kable"}), a markdown
+#' @return The value of the underlying exporter: an HTML/knitr object (\code{"html"}), a markdown
 #'   string (\code{"md"}), \code{x} invisibly with the Excel file written (\code{"xl"}), or a
 #'   \code{ggplot} (\code{"plot"}).
 #' @export
@@ -51,7 +52,7 @@
 #' tabs <- tab(forcats::gss_cat, race, marital, pct = "row", color = "diff")
 #' tab_export(tabs, "md")
 #' }
-tab_export <- function(x, format = c("kable", "md", "xl", "plot"), path = NULL,
+tab_export <- function(x, format = c("html", "md", "xl", "plot"), path = NULL,
                        theme = NULL, color_type = lifecycle::deprecated(), html_24_bit = NULL,
                        color = TRUE, color_legend = TRUE, lang = NULL, transpose = FALSE,
                        caption = NULL, var_names = NULL, ...) {
@@ -61,11 +62,11 @@ tab_export <- function(x, format = c("kable", "md", "xl", "plot"), path = NULL,
   if (lifecycle::is_present(color_type)) lifecycle::deprecate_soft("1.4.0", "tab_export(color_type)")
   switch(
     format,
-    kable = {
+    html = {
       cap <- if (is.null(caption)) knitr::opts_current$get("tab.cap") else caption
-      k <- tab_kable(x, theme = theme, html_24_bit = html_24_bit,
-                     color = color, color_legend = color_legend, lang = lang, caption = cap,
-                     transpose = transpose, var_names = var_names, ...)
+      k <- tab_html(x, theme = theme, html_24_bit = html_24_bit,
+                    color = color, color_legend = color_legend, lang = lang, caption = cap,
+                    transpose = transpose, var_names = var_names, ...)
       if (!is.null(path)) writeLines(as.character(k), path)
       k
     },

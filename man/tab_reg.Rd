@@ -31,6 +31,7 @@ tab_reg(
   estimate_display = c("value", "ci", "prob", "ame"),
   cleannames = NULL,
   subtext = "",
+  spread_models = TRUE,
   ids = NULL,
   strata = NULL,
   fpc = NULL,
@@ -110,10 +111,10 @@ dependent's observed maximum score. Requires \code{family = "binomial"}.}
 \item{empirical}{Logical. If \code{TRUE}, adds the descriptive \strong{crude} (unadjusted, single-predictor)
 companion of the model effect for each factor-predictor level -- the unadjusted bivariate
 association, which IS the modelised quantity when there is a single predictor (the standard "crude
-vs adjusted" comparison; a large gap signals confounding). Per family: \strong{binomial} adds \verb{Emp. \%}
+vs adjusted" comparison; a large gap signals confounding). Per family: \strong{binomial} adds \verb{Obs_\%}
 \itemize{
-\item \verb{Emp. OR} (coefficient) or \verb{Emp. \%} + \verb{Emp. diff} (AME); \strong{gaussian} adds \verb{Emp. mean} +
-\verb{Emp. diff}; \strong{poisson} adds \verb{Emp. rate} + \verb{Emp. IRR}; \strong{multinomial} shows the crude \% +
+\item \code{Obs_OR} (coefficient) or \verb{Obs_\%} + \code{Obs_diff} (AME); \strong{gaussian} adds \code{Obs_mean} +
+\code{Obs_diff}; \strong{poisson} adds \code{Obs_rate} + \code{Obs_IRR}; \strong{multinomial} shows the crude \% +
 difference per category in the HTML tooltip (columns would explode). By design every crude quantity
 is computed on \strong{exactly the same complete-case population as the model} (listwise-complete on the
 dependent, all predictors and any design variable), so crude and adjusted are directly comparable

@@ -6,7 +6,7 @@
 \usage{
 tab_export(
   x,
-  format = c("kable", "md", "xl", "plot"),
+  format = c("html", "md", "xl", "plot"),
   path = NULL,
   theme = NULL,
   color_type = lifecycle::deprecated(),
@@ -23,11 +23,12 @@ tab_export(
 \arguments{
 \item{x}{A table (or list of tables) made with \code{\link{tab}} / \code{\link{tab_many}}.}
 
-\item{format}{One of \code{"kable"} (HTML, the default), \code{"md"} (Markdown),
-\code{"xl"} (Excel) or \code{"plot"} (a \code{ggplot}).}
+\item{format}{One of \code{"html"} (the default), \code{"md"} (Markdown),
+\code{"xl"} (Excel) or \code{"plot"} (a \code{ggplot}). The HTML backend engine
+(home-built or kableExtra) is chosen with \code{engine =} (see \code{\link{tab_html}}).}
 
 \item{path}{Optional output file. For \code{"xl"} it is the workbook path; for \code{"md"} and
-\code{"kable"} the rendered text is written to it; ignored for \code{"plot"}.}
+\code{"html"} the rendered text is written to it; ignored for \code{"plot"}.}
 
 \item{theme}{By default (\code{"light"}) a white table with black text; \code{"dark"} for the
 inverse (colours follow the theme). \code{"auto"} follows the reader's colour scheme (their OS,
@@ -61,13 +62,13 @@ See \code{\link{tab_kable}}.}
 \item{...}{Format-specific arguments passed to the underlying exporter.}
 }
 \value{
-The value of the underlying exporter: an HTML/knitr object (\code{"kable"}), a markdown
+The value of the underlying exporter: an HTML/knitr object (\code{"html"}), a markdown
 string (\code{"md"}), \code{x} invisibly with the Excel file written (\code{"xl"}), or a
 \code{ggplot} (\code{"plot"}).
 }
 \description{
 A single entry point that dispatches to the format-specific exporters
-\code{\link{tab_kable}} (HTML), \code{\link{tab_md}} (Markdown), \code{\link{tab_xl}} (Excel) and
+\code{\link{tab_html}} (HTML), \code{\link{tab_md}} (Markdown), \code{\link{tab_xl}} (Excel) and
 \code{\link{tab_plot}} (a \code{ggplot}). The four functions share one set of display-option names
 and defaults; \code{tab_export()} forwards them and passes any format-specific argument through
 \code{...}.

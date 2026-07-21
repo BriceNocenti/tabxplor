@@ -143,16 +143,16 @@ tx_getOption <- function(names, default = NULL) {
   # "kableExtra" keeps the legacy renderer (its own themes, baked at render time). R/tab-render-html.R.
   options("tabxplor.tab_kable_engine" = "html")
 
-  # Phase 14m-ii (reworked): the NUMBER font of each font-bearing export, PER whether the table shows
-  # significance stars. No stars -> proportional DejaVu Sans (as before 1.4.0); stars -> a monospace font
-  # (Cascadia Mono) so the stars align. Text (row labels, headers) always stays Condensed. `_stars` is
-  # the with-stars variant; each is a revert lever:
-  #   - html engine  -> two CSS font-family stacks (tab_css()'s `.tx-num` / `.tx-has-stars .tx-num`).
-  #   - Excel        -> two single font names (xlsx has no fallback list, so the option IS the fallback).
-  #   - tab_plot     -> ONE graphics family, applied to the whole plot body only when the table has stars
+  # The NUMBER font of each font-bearing export. Text (row labels, headers) always stays Condensed.
+  # Phase g: html/md numbers are MONOSPACE by default -- one lever `tab_kable_num_font` (was: a
+  # proportional font + a `_stars` monospace variant switched per table). Excel/plot keep the per-stars
+  # split (their alignment complaint is stars-specific, and the review did not touch them):
+  #   - html/md    -> ONE CSS font-family stack (tab_css()'s `.tx-num`), monospace.
+  #   - Excel      -> two single font names, no-stars/stars (xlsx has no fallback list, so the option IS
+  #     the fallback).
+  #   - tab_plot   -> ONE graphics family, applied to the whole plot body only when the table has stars
   #     (ggpubr has no per-column font); "" keeps the ggpubr default. tab_plot() is superseded.
-  options("tabxplor.tab_kable_num_font"       = tx_num_font_html)         # no stars (proportional)
-  options("tabxplor.tab_kable_num_font_stars" = tx_num_font_html_stars)   # stars (monospace)
+  options("tabxplor.tab_kable_num_font"       = tx_num_font_html_stars)   # monospace
   options("tabxplor.xl_font_num"        = "DejaVu Sans")                  # no stars (proportional)
   options("tabxplor.xl_font_num_stars"  = "Cascadia Mono")               # stars (monospace)
   options("tabxplor.xl_font_text"       = "DejaVu Sans Condensed")
@@ -634,15 +634,14 @@ fig_space  <- stringi::stri_unescape_unicode("\\u2007")
 # proportional "*" is narrower than a digit, so a starred cell slides out of its column. In a monospace
 # font every glyph (digits, "%", brackets, "*", the figure-space pad) is one width, so stars and
 # "(n=...)" composites line up. The TEXT channel (row labels, headers) always stays DejaVu Sans Condensed.
-#   - tx_num_font_html       : the html `.tx-num` font when there are NO stars (proportional).
-#   - tx_num_font_html_stars : the html `.tx-num` font when the table HAS stars (Cascadia Mono target,
-#     then Cascadia Code -- same metrics, far more widely installed -- then per-OS monos, then the
-#     generic `monospace`). `ui-monospace` is deliberately absent: it resolves to the OS's OWN mono
-#     (SF Mono, ...), which would override Cascadia; at the tail it is never reached (Menlo/Consolas/
-#     DejaVu already cover every OS), so it would only add noise.
-# Both are options (tabxplor.tab_kable_num_font / _stars); the stylesheet carries BOTH rules and the
-# table gets a `tx-has-stars` class iff it shows stars, so tab_css() stays table-independent.
-tx_num_font_html       <- '"DejaVu Sans", Arial, helvetica, sans-serif'
+#   - tx_num_font_html_stars : the html/md `.tx-num` font -- MONOSPACE (Phase g: numbers are monospace
+#     by default so figures stay column-aligned, worse under the bold references / significant cells the
+#     html render adds). Cascadia Mono target, then Cascadia Code (same metrics, far more widely
+#     installed), then per-OS monos, then the generic `monospace`. `ui-monospace` is deliberately absent:
+#     it resolves to the OS's OWN mono (SF Mono, ...), which would override Cascadia; at the tail it is
+#     never reached (Menlo/Consolas/DejaVu already cover every OS), so it would only add noise.
+# The one option is tabxplor.tab_kable_num_font (default = this monospace stack); tab_css() stays
+# table-independent (one `.tx-num` rule, no per-table class needed).
 tx_num_font_html_stars <-
   '"Cascadia Mono", "Cascadia Code", Menlo, Consolas, "DejaVu Sans Mono", monospace'
 

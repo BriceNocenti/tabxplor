@@ -39,8 +39,11 @@ testthat::test_that("format(): a composite's mark and its padding are the SAME g
   # with an ASCII space -- so the digits the padding had just aligned fell out of line again.
   x <- fmt(n = c(849L, 3648L), pct = c(1, 1), type = "row", display = "{pct} (n={n})")
   h <- format(x, html = TRUE)
-  testthat::expect_identical(h, c(paste0("100% (n=", fig, fig, "849)"),
-                                  paste0("100% (n=3", fig, "648)")))
+  # Phase g (A6): the html/nbsp medium joins the template literal " (n=" with a NON-BREAKING space so
+  # the composite does not wrap; the inner digits keep the figure-space pad.
+  nb <- intToUtf8(160L)
+  testthat::expect_identical(h, c(paste0("100%", nb, "(n=", fig, fig, "849)"),
+                                  paste0("100%", nb, "(n=3", fig, "648)")))
   testthat::expect_identical(length(unique(nchar(h))), 1L)   # one width -> aligned
   # markdown keeps ASCII on both counts
   testthat::expect_identical(format(x), c("100% (n=  849)", "100% (n=3 648)"))

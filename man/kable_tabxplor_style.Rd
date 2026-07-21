@@ -59,7 +59,7 @@ are available in an html tooltip at cells hover.
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}}
 
-Superseded by \code{\link[=tab_kable]{tab_kable()}}, which renders any table -- \code{tabxplor_tab} or plain data.frame --
+Superseded by \code{\link[=tab_html]{tab_html()}}, which renders any table -- \code{tabxplor_tab} or plain data.frame --
 through the shared exporter prep. This function predates it and never shared its machinery: it
 detects total rows/columns by matching the literal strings \code{"Total"}/\code{"Ensemble"} against names and
 values, so it is hardcoded to English and French, and it renders no colours, tooltips or spanning

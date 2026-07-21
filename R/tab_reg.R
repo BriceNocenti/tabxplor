@@ -348,12 +348,15 @@ reg_shared_col_var <- function(family, dependent, positive_level, cleannames) {
   } else dependent
 }
 
-# Phase 14w (item 3): the single-model column NAME ("Model OR" / "Model IRR" / "Model AME (adjusted %)"),
+# Phase 14w (item 3): the single-model column NAME ("Model_OR" / "Model_IRR" / "Model_AME (adjusted %)"),
 # so the effect word lives in the column, not repeated in the span. Comparison mode keeps the model name;
 # a multi-dependent (several outcomes, one predictor set) suffixes the dependent so the names stay unique.
+# Phase g: "Model_" (snake-case) prefix; the multi-dependent disambiguator is a "[dep]" BRACKET, which the
+# console shows and every exporter STRIPS (tab_col_var_header) -- the col_var span row already names the
+# outcome, so repeating it per column wasted export width.
 reg_model_col_name <- function(eff_word, dependent, is_comparison, model_label, n_dep) {
   if (isTRUE(is_comparison)) return(model_label)
-  if (n_dep > 1L) paste0("Model ", eff_word, " (", dependent, ")") else paste0("Model ", eff_word)
+  if (n_dep > 1L) paste0("Model_", eff_word, " [", dependent, "]") else paste0("Model_", eff_word)
 }
 
 # Prepare a binary dependent: a 0/1 numeric becomes a 2-level factor ("Not <dep>" / "<dep>"); any
@@ -1106,23 +1109,31 @@ reg_empirical <- function(data, fac_preds, dependent, family, positive_level, wt
 # different arguments), but the near-identical fmt() calls collapse into ONE builder (emp_col), and the
 # `method_*` literals are the SAME the colour legend names -- ci_settings reads them straight from here
 # (reg_build), so "the empirical CI matches the model CI" is data, not a hand-synced pair (Phase 17h).
-#   binomial : Emp. % (risk-diff colour, WALD) + Emp. OR (ratio, Woolf log-OR) | ame: + Emp. diff (WALD).
-#   gaussian : Emp. mean (mean+sd, UNCOLOURED, one-sample t) + Emp. diff (Student t = OLS, diff/SD(Y)).
-#   poisson  : Emp. rate (rate-ratio colour) + Emp. IRR, one quasi-Poisson CI (the phi-scaled model's).
+#   binomial : Obs_% (risk-diff colour, WALD) + Obs_OR (ratio, Woolf log-OR) | ame: + Obs_diff (WALD).
+#   gaussian : Obs_mean (mean+sd, UNCOLOURED, one-sample t) + Obs_diff (Student t = OLS, diff/SD(Y)).
+#   poisson  : Obs_rate (rate-ratio colour) + Obs_IRR, one quasi-Poisson CI (the phi-scaled model's).
+# Phase g: the crude columns are named "Obs_" (snake-case, "observed"; was "Emp." for "empirical"), on
+# BOTH the exponentiate=TRUE and FALSE paths -- W6 adds the logged Obs_log(OR) / Obs_log(IRR) shapes.
+# Phase g: each multiplicative effect shape (binomial `or`, poisson `irr`) has a LOGGED twin
+# (`or_log` / `irr_log`) used when the model is NOT exponentiated -- a coef-shaped column carrying
+# log(OR) / log(IRR) with a logged CI, so the crude companion matches the raw model coefficient (same
+# link scale, same log_odds_scale colour). reg_empirical_columns picks the twin by `do_exp`.
 REG_EMPIRICAL <- list(
   binomial = list(
     method_diff = "wald",
-    base = list(nm = "Emp. %",    type = "row", display = "pct",  digits = 0L, ref = "tot",           ci_type = "diff",  color = "diff"),
-    ame  = list(nm = "Emp. diff", type = "row", display = "diff", digits = 0L, ref = "tot",           ci_type = "diff",  color = "diff"),
-    or   = list(nm = "Emp. OR",   type = "row", display = "or",   digits = 2L, ref = "1",             ci_type = "or",    color = "OR")),
+    base   = list(nm = "Obs_%",       type = "row",  display = "pct",  digits = 0L, ref = "tot",           ci_type = "diff",  color = "diff"),
+    ame    = list(nm = "Obs_diff",    type = "row",  display = "diff", digits = 0L, ref = "tot",           ci_type = "diff",  color = "diff"),
+    or     = list(nm = "Obs_OR",      type = "row",  display = "or",   digits = 2L, ref = "1",             ci_type = "or",    color = "OR"),
+    or_log = list(nm = "Obs_log(OR)", type = "coef", display = "coef", digits = 2L, ref = NA_character_,   ci_type = "diff",  color = "diff")),
   gaussian = list(
     method_mean_diff = "student",
-    base = list(nm = "Emp. mean", type = "mean", display = "mean", digits = 2L, ref = NA_character_,  ci_type = "cell",  color = ""),
-    diff = list(nm = "Emp. diff", type = "coef", display = "coef", digits = 2L, ref = NA_character_,  ci_type = "diff",  color = "diff")),
+    base = list(nm = "Obs_mean", type = "mean", display = "mean", digits = 2L, ref = NA_character_,  ci_type = "cell",  color = ""),
+    diff = list(nm = "Obs_diff", type = "coef", display = "coef", digits = 2L, ref = NA_character_,  ci_type = "diff",  color = "diff")),
   poisson = list(
     method_mean_ratio = "quasipoisson",
-    base = list(nm = "Emp. rate", type = "mean", display = "mean", digits = 2L, ref = "1",            ci_type = "ratio", color = "ratio"),
-    irr  = list(nm = "Emp. IRR",  type = "row",  display = "or",   digits = 2L, ref = "1",            ci_type = "or",    color = "OR"))
+    base    = list(nm = "Obs_rate",     type = "mean", display = "mean", digits = 2L, ref = "1",           ci_type = "ratio", color = "ratio"),
+    irr     = list(nm = "Obs_IRR",      type = "row",  display = "or",   digits = 2L, ref = "1",           ci_type = "or",    color = "OR"),
+    irr_log = list(nm = "Obs_log(IRR)", type = "coef", display = "coef", digits = 2L, ref = NA_character_, ci_type = "diff",  color = "diff"))
 )
 
 # The base+effect fmt columns aligned to the skeleton, for reg_build to prepend before the model column.
@@ -1130,7 +1141,7 @@ REG_EMPIRICAL <- list(
 # is TRUE (the pvalue is stored; stars are stripped post-build when stars = FALSE, like the model columns).
 reg_empirical_columns <- function(skeleton, emp, fac_preds, family, effect, var_y,
                                   conf_level = 0.95, color_signif = "grey_non_signif",
-                                  color = NULL) {
+                                  color = NULL, do_exp = TRUE) {
   fam <- REG_EMPIRICAL[[family]]
   if (is.null(fam)) return(list())            # multinomial is tooltip-only; ordinal unsupported
   # Phase 15d: when the model is uncoloured (`color = FALSE` -> "no"), the crude companions must be
@@ -1170,9 +1181,16 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, family, effect, var_
                  list(col = emp_col(fam$ame, rd_fields), shape = fam$ame)))
     or_ci <- na_ref(ci_or(base * nv, (1 - base) * nv, rb * rn, (1 - rb) * rn,      # Woolf log-OR Wald
                           conf_level = conf_level, want_p = TRUE))
-    eff_col <- emp_col(fam$or, list(or = ratio, n = nv, ci_inf = or_ci$inf,
-                                    ci_sup = or_ci$sup, pvalue = or_ci$pvalue))
-    return(two(list(col = base_col, shape = fam$base), list(col = eff_col, shape = fam$or)))
+    if (do_exp) {
+      eff_col <- emp_col(fam$or, list(or = ratio, n = nv, ci_inf = or_ci$inf,
+                                      ci_sup = or_ci$sup, pvalue = or_ci$pvalue))
+      return(two(list(col = base_col, shape = fam$base), list(col = eff_col, shape = fam$or)))
+    }
+    # Phase g: exponentiate = FALSE -> the crude companion is Obs_log(OR): the log of the crude OR in
+    # the `diff` field, and the log of the Woolf OR CI (symmetric on the log scale = exact log-OR Wald).
+    eff_col <- emp_col(fam$or_log, list(diff = log(ratio), n = nv, ci_inf = log(or_ci$inf),
+                                        ci_sup = log(or_ci$sup), pvalue = or_ci$pvalue))
+    return(two(list(col = base_col, shape = fam$base), list(col = eff_col, shape = fam$or_log)))
   }
 
   if (family == "gaussian") {
@@ -1192,9 +1210,16 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, family, effect, var_
                                conf_level = conf_level, want_p = TRUE))
     base_col <- emp_col(fam$base, list(mean = base, ratio = ratio, n = nv, tot_n = nv,
                                        ci_inf = rr$inf, ci_sup = rr$sup, pvalue = rr$pvalue))
-    eff_col  <- emp_col(fam$irr, list(or = ratio, n = nv, ci_inf = rr$inf,
-                                      ci_sup = rr$sup, pvalue = rr$pvalue))
-    return(two(list(col = base_col, shape = fam$base), list(col = eff_col, shape = fam$irr)))
+    if (do_exp) {
+      eff_col <- emp_col(fam$irr, list(or = ratio, n = nv, ci_inf = rr$inf,
+                                       ci_sup = rr$sup, pvalue = rr$pvalue))
+      return(two(list(col = base_col, shape = fam$base), list(col = eff_col, shape = fam$irr)))
+    }
+    # Phase g: exponentiate = FALSE -> the crude companion is Obs_log(IRR): log(rate-ratio) in `diff`
+    # with the logged rate-ratio CI (the same link scale as the raw Poisson coefficient).
+    eff_col <- emp_col(fam$irr_log, list(diff = log(ratio), n = nv, ci_inf = log(rr$inf),
+                                         ci_sup = log(rr$sup), pvalue = rr$pvalue))
+    return(two(list(col = base_col, shape = fam$base), list(col = eff_col, shape = fam$irr_log)))
   }
   list()
 }
@@ -1817,6 +1842,26 @@ reg_reref_fit_res <- function(digest, reference, sp, skeleton, conf_level) {
 }
 
 
+# Phase g: with a split_var + a SINGLE model (one dependent, one predictor set, not multinomial), spread
+# the stacked grouped_tab so the per-subpopulation models sit SIDE BY SIDE (spread_models = TRUE). The
+# split level is folded into each spread column's col_var as "{level}<br>{model outcome}", so a border
+# separates the sub-models and the span header reads on two lines (e.g. "White" over "married: Married").
+# The spread column NAME ends with the split level (single col_level -> the name IS the level; several
+# empirical/model columns -> "{col_level}_{level}"); the base col_var (the shared outcome) is read off
+# the pivoted column and prefixed. Console tells the models apart by that name suffix (col_var is not
+# shown there); html / Excel get the two-line span + borders.
+#' @keywords internal
+reg_spread_models <- function(t, split_var, sl) {
+  s <- tab_spread(t, !!rlang::sym(split_var))
+  for (nm in names(s)[vapply(s, is_fmt, logical(1))]) {
+    matches <- sl[vapply(sl, function(g) nm == g || endsWith(nm, paste0("_", g)), logical(1))]
+    if (!length(matches)) next
+    g <- matches[which.max(nchar(matches))]            # longest match disambiguates nested levels
+    s[[nm]] <- set_col_var(s[[nm]], paste0(g, "<br>", get_col_var(s[[nm]])))
+  }
+  s
+}
+
 # The shared builder: fit every column spec, align to one skeleton, assemble a grouped_tab. specs =
 # list of list(dependent, predictors, label, trials, formula, compound). The data-skeleton (union of
 # the specs' predictors) is used unless a spec is a compound formula (single model), in which case the
@@ -1829,8 +1874,8 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
   # the 30-formal signature and its fragile positional re-listing at the split recursion. Contract (every
   # name always present): union_predictors, design_spec, weighted, inverse_two_level_factors, conf_level,
   # method, color_signif, cleannames, subtext, effect, at, stats, compare, baseline, multiplier, empirical,
-  # estimate_display. (`split_var` stays a formal -- it flips to NULL in the recursion, and a NULL value
-  # cannot live in a modifyList()-mergeable list.)
+  # estimate_display, spread_models. (`split_var` stays a formal -- it flips to NULL in the recursion, and
+  # a NULL value cannot live in a modifyList()-mergeable list.)
   list2env(shared, environment())
   # Phase 15e: each spec carries its OWN resolved family / do_exp / effect_shape / eff_word / color (set by
   # tab_reg), read as sp$<key>. The homogeneous-context scalar `family` (first outcome) is still needed by
@@ -1862,13 +1907,18 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
     combined <- vctrs::vec_rbind(!!!purrr::map(parts, "data"))
     tests    <- purrr::list_rbind(purrr::compact(purrr::map(parts, "test")))
     if (is.null(tests) || nrow(tests) == 0) tests <- new_test_tibble()
-    return(
-      combined |>
-        new_tab(subtext = subtext, test = tests,
-                meta = list(ci_settings = list(conf_level = conf_level, method_cell = NA_character_,
-                                               method_diff = method))) |>
-        dplyr::group_by(!!rlang::sym(split_var), var)
-    )
+    grouped <- combined |>
+      new_tab(subtext = subtext, test = tests,
+              meta = list(ci_settings = list(conf_level = conf_level, method_cell = NA_character_,
+                                             method_diff = method))) |>
+      dplyr::group_by(!!rlang::sym(split_var), var)
+    # Phase g: auto tab_spread() when there is ONE model (single dependent + single predictor set) that
+    # is not multinomial (a multinomial has several columns for one model, so side-by-side is ambiguous).
+    # spread_models = FALSE keeps the stacked grouped_tab.
+    if (isTRUE(spread_models) && length(specs) == 1L && !identical(family, "multinomial")) {
+      return(reg_spread_models(grouped, split_var, sl))
+    }
+    return(grouped)
   }
 
   # Phase 15b jamovi live reref: `data` arrives at the CANONICAL (natural-first) reference; fit the
@@ -2106,7 +2156,7 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
         emp_i   <- reg_empirical(mdata_i, fac_preds_e, dep_i, fam_i, pos_i, design_spec$wt)
         cols_i  <- reg_empirical_columns(skeleton, emp_i, fac_preds_e, fam_i, effect, var_y_i,
                                          conf_level = conf_level, color_signif = color_signif,
-                                         color = col_i)
+                                         color = col_i, do_exp = specs[[i]]$do_exp)
         # Phase 14w (item 3): the crude companions share the model column's outcome col_var (one span,
         # no border). NOT in comparison mode (the crude block stays a distinct col_var beside the models).
         if (!is_comparison) {
@@ -2120,9 +2170,11 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
   # one crude companion before all model columns when there is a single dependent (byte-identical
   # layout, incl. a model-comparison list -- all its models share the dependent); per-fit before each
   # fit's first model column when several dependents (names suffixed so they do not collide).
+  # Phase g: the multi-dependent disambiguator is a "[dep]" BRACKET (console shows it; every exporter
+  # STRIPS it via tab_col_var_header, the col_var span already naming the outcome).
   add_emp_cols <- function(tab, cols, suffix) {
     for (nm in names(cols)) {
-      out_nm <- if (nzchar(suffix)) paste0(nm, " (", suffix, ")") else nm
+      out_nm <- if (nzchar(suffix)) paste0(nm, " [", suffix, "]") else nm
       tab[[out_nm]] <- cols[[nm]]
     }
     tab
@@ -2352,9 +2404,9 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
 #' @param empirical Logical. If `TRUE`, adds the descriptive **crude** (unadjusted, single-predictor)
 #'   companion of the model effect for each factor-predictor level -- the unadjusted bivariate
 #'   association, which IS the modelised quantity when there is a single predictor (the standard "crude
-#'   vs adjusted" comparison; a large gap signals confounding). Per family: **binomial** adds `Emp. %`
-#'   + `Emp. OR` (coefficient) or `Emp. %` + `Emp. diff` (AME); **gaussian** adds `Emp. mean` +
-#'   `Emp. diff`; **poisson** adds `Emp. rate` + `Emp. IRR`; **multinomial** shows the crude % +
+#'   vs adjusted" comparison; a large gap signals confounding). Per family: **binomial** adds `Obs_%`
+#'   + `Obs_OR` (coefficient) or `Obs_%` + `Obs_diff` (AME); **gaussian** adds `Obs_mean` +
+#'   `Obs_diff`; **poisson** adds `Obs_rate` + `Obs_IRR`; **multinomial** shows the crude % +
 #'   difference per category in the HTML tooltip (columns would explode). By design every crude quantity
 #'   is computed on **exactly the same complete-case population as the model** (listwise-complete on the
 #'   dependent, all predictors and any design variable), so crude and adjusted are directly comparable
@@ -2449,7 +2501,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
                     stats = NULL, compare = c("none", "baseline", "sequential"), baseline = NULL,
                     na = c("drop_by_model", "drop_all_models"),
                     estimate_display = c("value", "ci", "prob", "ame"),
-                    cleannames = NULL, subtext = "",
+                    cleannames = NULL, subtext = "", spread_models = TRUE,
                     ids = NULL, strata = NULL, fpc = NULL, nest = FALSE,
                     .fit_cache = NULL) {
   method  <- match.arg(method)
@@ -2855,7 +2907,7 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
     inverse_two_level_factors = inverse_two_level_factors, conf_level = conf_level, method = method,
     color_signif = color_signif, cleannames = cleannames, subtext = subtext, effect = effect, at = at,
     stats = stats, compare = compare, baseline = baseline, multiplier = multiplier,
-    empirical = empirical, estimate_display = estimate_display)
+    empirical = empirical, estimate_display = estimate_display, spread_models = spread_models)
   res <- reg_build(data, specs, shared, split_var = split_var,
                    .fit_cache = .fit_cache, reference = reference, reref = reref)
 
@@ -2929,7 +2981,7 @@ tab_logit <- function(data, dependent, predictors, wt = NULL,
                       stats = NULL, estimate_display = c("value", "ci", "prob", "ame"),
                       color_signif = c("grey_non_signif", "ignore", "guaranteed_effect"),
                       stars = TRUE, na = c("drop_by_model", "drop_all_models"),
-                      cleannames = NULL, subtext = "") {
+                      cleannames = NULL, subtext = "", spread_models = TRUE) {
   method       <- match.arg(method)
   color_signif <- match.arg(color_signif)
   estimate_display <- match.arg(estimate_display)
@@ -2942,7 +2994,7 @@ tab_logit <- function(data, dependent, predictors, wt = NULL,
           estimate_display = estimate_display,
           inverse_two_level_factors = inverse_two_level_factors,
           color_signif = color_signif, stars = stars, na = na,
-          cleannames = cleannames, subtext = subtext)
+          cleannames = cleannames, subtext = subtext, spread_models = spread_models)
 }
 
 

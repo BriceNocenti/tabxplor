@@ -84,15 +84,17 @@ test_that("Excel folds the in-cell test label into the numFmt literal", {
 test_that("split_var tables get a per-group export footer; plain tables one footer at the end", {
   skip_if_not_installed("broom")
   d <- reg_data()
-  t_split <- tab_logit(d, "married", "age", split_var = "race")
-  md_s <- tab_md(t_split)
+  # spread_models = FALSE: the STACKED per-group footer (auto-spread side-by-side is tested separately).
+  t_split <- tab_logit(d, "married", "age", split_var = "race", spread_models = FALSE)
+  # Phase g (A7): a styled md table's label cells use non-breaking spaces; normalise for text greps.
+  md_s <- gsub(intToUtf8(160L), " ", tab_md(t_split, print = FALSE), fixed = TRUE)
   expect_true(grepl("Model fit", md_s))
   # one "Model fit" block per split group -> the footer labels repeat once per group
   n_groups <- nlevels(forcats::fct_drop(as.factor(d$race)))
   expect_equal(length(gregexpr("McFadden R2", md_s)[[1]]), n_groups)
 
   t_plain <- tab_logit(d, "married", "age")
-  md_p <- tab_md(t_plain)
+  md_p <- gsub(intToUtf8(160L), " ", tab_md(t_plain, print = FALSE), fixed = TRUE)
   expect_true(grepl("Model fit", md_p))
   expect_equal(length(gregexpr("McFadden R2", md_p)[[1]]), 1L)  # a single block
 
@@ -163,6 +165,6 @@ test_that("empirical columns keep the per-LEVEL n in the tooltip (Item D)", {
   skip_if_not_installed("broom")
   d <- reg_data()
   t <- tab_reg(d, "married", c("race", "rincome"), family = "binomial", empirical = TRUE)
-  tips <- tabxplor:::tab_kable_print_tooltip(t[["Emp. OR"]])
+  tips <- tabxplor:::tab_kable_print_tooltip(t[["Obs_OR"]])
   expect_true(any(grepl("n: ", tips)))          # per-level counts survive
 })

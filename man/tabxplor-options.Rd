@@ -81,8 +81,8 @@ in a many-table document that emits \code{\link[=tab_css]{tab_css()}} once at th
 kableExtra engine's output (a legacy-engine knob).}
 \item{\code{tabxplor.kable_html_font}}{the CSS font stack for the kableExtra engine.}
 \item{\code{tabxplor.kable_popover}}{\code{FALSE} (default): use click popovers instead of hover tooltips.}
-\item{\code{tabxplor.tab_kable_num_font}, \code{tabxplor.tab_kable_num_font_stars}}{the HTML-engine number
-font CSS stacks, without / with significance stars (the second is monospace so stars align).}
+\item{\code{tabxplor.tab_kable_num_font}}{the HTML/markdown number-font CSS stack. Monospace by
+default so figures stay column-aligned (set a proportional stack to revert).}
 \item{\code{tabxplor.output_kable}}{\code{FALSE} (default): internal switch to return kable output.}
 }
 }

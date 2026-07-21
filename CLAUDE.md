@@ -999,6 +999,14 @@ Other improvements to implement :
 - Add "html" argument in `tab_export`, remove "kable" option name altogether (kable can be choosed as an engine, but the type is really html ; hard deprecation of the option name : tab_export is new, it was not in the former public version 1.3.1). Rename `tab_kable()` `tab_html()`, while keeping the alias`tab_kable()` too (not deprecated at all, keep it as normal exported function).
 - In legends and table footers, on all kind of exports : 1. Put variable names in bold ; 2. For background colors legend, breaks text in plain font weight (keep bold for text colors breaks/legend only).
 
+**DONE (2026-07-21).** Full suite green (FAIL 0, PASS 3902, SKIP 4 = the usual benchmark/Suggests opt-ins). Seven workstreams; conscious snapshot regen limited to `_snaps/golden.md` + `_snaps/render-html.md` (md css-default + monospace numbers + footer/nbsp + bold refs + escaped stars + bg-plain legend); everything else byte-identical.
+- **Export rename.** `tab_kable()` → `tab_html()` (full body + roxygen), `tab_kable <- tab_html` a permanent exported alias (`@rdname`); `tab_export(format = c("html","md","xl","plot"))` (`"kable"` hard-removed, new fn); internal callers + `kable_tabxplor_style` deprecation point at `tab_html`. S3 class `tabxplor_kable` kept (internal).
+- **Legend/footer weight (fmt_class.R `legend_render_line`).** `.lg_tok(bold=, esc=)`: variable names bold every medium; the bold decision drops for the **background** channel (text breaks bold, bg breaks plain); the stars token is `esc`-flagged so the md renderer backslash-escapes `*` (pandoc no longer reads `***`/`*` as emphasis). User subtext left raw.
+- **md/html render.** `md_bold` keeps alignment pad OUTSIDE the `**` (valid `**77%**`, no star placeholders on references); `td.tx-num` monospace by default (one `tab_kable_num_font` lever, `_stars` retired); md footer font-size via `.tabxplor-tab p`; best-effort col_var vertical borders (`:has()` on the md spacer column); composite `" (n="` join + styled-md level labels use U+00A0 (no wrap); `tab_md(css = TRUE)` default.
+- **tab_reg naming.** `Obs_%`/`Obs_OR`/`Obs_mean`/`Obs_diff`/`Obs_rate`/`Obs_IRR` (was `Emp. `) + `Model_OR`/`Model_IRR`/`Model_β`; multi-dependent disambiguated by a `[dep]` bracket the console shows and `tab_col_var_header()` strips in exports (role-driven).
+- **exponentiate=FALSE colour + empirical.** New `log_odds_scale()` (fmt_class.R) — a non-gaussian coef (`type=="coef"` + `model_family ∈ binomial/poisson/…`) colours on the LOGGED odds_ratio breaks (center 0, std=FALSE → SD-division skips), so it matches its OR twin; gaussian β keeps SD-standardization. Legend `is_std` false for log-coef (no "SD" unit). `REG_EMPIRICAL` gains `or_log`/`irr_log` twins → `reg_empirical_columns(do_exp=)` builds `Obs_log(OR)`/`Obs_log(IRR)` (logged effect + logged CI).
+- **split_var auto-spread.** `tab_reg(spread_models = TRUE)` (+ `tab_logit`): a single non-multinomial model with a split_var auto-`tab_spread()`s to side-by-side columns; `reg_spread_models()` folds the split level into each column's col_var as `"{level}<br>{outcome}"` (borders + two-line span; xl converts `<br>`→newline+wrap). `FALSE` keeps the stacked grouped_tab.
+
 
 #### Last phase h — final Jamovi UI maintainer’s review
 
@@ -1047,6 +1055,26 @@ Export menu (`jmvtab` + `jmvtabreg`) :
 - jmvtab Excel export still fails, windows-side, with default parameters : "Export failed: ℹ In index: 1. Caused by error in `wb$add_data()`: ! argument 6 matches multiple formal arguments"
 - html table export working, but on my Windows 11 computer it totally fails to find my real `Documents` folder : it creates a new "C:\Users\Brice\Documents" folder, but my Windows have a different official location to "D:\Documents" with a pointer towards it in the normal "C:\Users\Brice\" and all `Documents` normal shortcuts. How to find the real folder from inside the locked electron R session ?
 - Above the Export block, always add an empty line, or a clear horizontal rule that inserts well in the current jamovi options pane styling, since it’s not in the collapsable hierarchy and separation must be distinguished easily.
+
+
+#### Last Phase j — 
+
+In tab(), I want to add a new per table summary statistic along Chi2 and Welch pvalues : 
+- Cramér's V / phi to measure effect size of each crosstable. Is there an equivalent for numeric column variables ?
+- Fisher's exact on very small tables.
+
+I also want to change the way Chi2 et Welch pvalue are calculated for weighted crossatbles / mean tables :
+- I don’t want to go full survey design for all tabxplor calculations including all types of ci, etc., but I would at least want to have a more robust pvalue with survey weights.
+
+Design-based crosstab significance (Rao-Scott / n_eff by default)
+
+Add full support for **labelled-data (haven/labelled) interop** : 
+- Full use of labelled:: value labels for factors when they exists. Throught fast shared functions that recode all factors levels using value labels attributes, and then work normal on the new levels. When a factor have no value labels, the result should still be exactly the same as now.
+- Opt-in option to replace variable names with variable labels : what would be the best way ? Store them in col_var, or a row_var column for tables with multiple row_vars, then they aren used in all exports anyway ? Are there caveats, or complexities to it ?
+- All this without adding any dependency to labelled package : working with attr() and `attr<-`() must be enough.
+
+
+
 
 
 

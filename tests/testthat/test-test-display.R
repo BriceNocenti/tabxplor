@@ -54,7 +54,9 @@ test_that("reg grid: Model fit header, dependent-named columns, a shared predict
 
 test_that("reg grid: split_var levels become the row groups", {
   skip_if_not_installed("broom")
-  g <- test_summary_grid(tab_reg(gss, "married", c("relig", "age"), split_var = "race"))
+  # spread_models = FALSE: the STACKED grouped form, where split levels are the row groups
+  g <- test_summary_grid(tab_reg(gss, "married", c("relig", "age"), split_var = "race",
+                                 spread_models = FALSE))
   expect_length(g$groups, 3L)
   expect_setequal(vapply(g$groups, function(gr) gr$label_lines[[1]], character(1)),
                   c("White", "Black", "Other"))
@@ -106,8 +108,9 @@ test_that("export default = one p-value row; test_lines='stat' adds a statistic 
 
 test_that("a regression split_var renders as a merged, vertical first column in HTML", {
   skip_if_not_installed("broom")
-  r <- tab_reg(gss, "married", c("relig", "age"), split_var = "race")
-  h <- as.character(tab_kable(r, engine = "html"))
+  # spread_models = FALSE: the STACKED form, where the split_var is the merged vertical first column.
+  r <- tab_reg(gss, "married", c("relig", "age"), split_var = "race", spread_models = FALSE)
+  h <- as.character(tab_html(r, engine = "html"))
   # each split level is one rowspan cell with the vertical (tx-vname) class
   for (lv in c("White", "Black", "Other"))
     expect_match(h, sprintf('<td[^>]*tx-vname[^>]*rowspan="[0-9]+">%s', lv))

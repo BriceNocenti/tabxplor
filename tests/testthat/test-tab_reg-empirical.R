@@ -23,11 +23,11 @@ emp_data <- function() {
 
 # --- PARITY: single-predictor model == empirical column == tab() -----------------------------------
 
-test_that("gaussian: single-predictor beta == crude mean-diff (Emp. diff) == tab() diff", {
+test_that("gaussian: single-predictor beta == crude mean-diff (Obs_diff) == tab() diff", {
   d <- emp_data()
   t <- tab_reg(d, "tvhours", "race", family = "gaussian", empirical = TRUE, cleannames = FALSE)
-  emp_diff <- get_diff(t[["Emp. diff"]]); names(emp_diff) <- as.character(t$levels)
-  emp_mean <- get_mean(t[["Emp. mean"]]); names(emp_mean) <- as.character(t$levels)
+  emp_diff <- get_diff(t[["Obs_diff"]]); names(emp_diff) <- as.character(t$levels)
+  emp_mean <- get_mean(t[["Obs_mean"]]); names(emp_mean) <- as.character(t$levels)
 
   beta <- stats::coef(stats::lm(tvhours ~ race, d))          # treatment contrasts: diff vs level 1
   # tab() crude: mean per level + difference vs the first level (ref = 1)
@@ -45,11 +45,11 @@ test_that("gaussian: single-predictor beta == crude mean-diff (Emp. diff) == tab
   expect_equal(unname(emp_mean[common]), unname(tab_mean[common]), tolerance = 1e-6)
 })
 
-test_that("poisson: single-predictor IRR == crude rate-ratio (Emp. IRR) == tab() ratio", {
+test_that("poisson: single-predictor IRR == crude rate-ratio (Obs_IRR) == tab() ratio", {
   d <- emp_data()
   t <- suppressWarnings(tab_reg(d, "tvhours", "race", family = "poisson", empirical = TRUE,
                                 cleannames = FALSE))
-  emp_irr <- get_or(t[["Emp. IRR"]]); names(emp_irr) <- as.character(t$levels)
+  emp_irr <- get_or(t[["Obs_IRR"]]); names(emp_irr) <- as.character(t$levels)
 
   m   <- suppressWarnings(stats::glm(tvhours ~ race, d, family = stats::poisson()))
   irr <- exp(stats::coef(m))
@@ -62,20 +62,20 @@ test_that("poisson: single-predictor IRR == crude rate-ratio (Emp. IRR) == tab()
 })
 
 # tab_reg's `inverse_two_level_factors` can model P(first level), so determine the modelled positive
-# level empirically from Emp. % (it IS P(positive | level)); the hand quantities then match exactly.
+# level empirically from Obs_% (it IS P(positive | level)); the hand quantities then match exactly.
 emp_positive_level <- function(t, d, levcol) {
   r1 <- levels(d$race)[1]
-  e1 <- unname(get_pct(t[["Emp. %"]])[match(r1, as.character(t$levels))])   # P(positive | race == r1)
+  e1 <- unname(get_pct(t[["Obs_%"]])[match(r1, as.character(t$levels))])   # P(positive | race == r1)
   p_first <- mean(d[[levcol]][d$race == r1] == levels(d[[levcol]])[1])
   if (isTRUE(all.equal(e1, p_first, tolerance = 1e-6))) levels(d[[levcol]])[1]
   else                                                  levels(d[[levcol]])[2]
 }
 
-test_that("binomial coefficient: single-predictor OR == crude OR (Emp. OR) == model OR", {
+test_that("binomial coefficient: single-predictor OR == crude OR (Obs_OR) == model OR", {
   d <- emp_data()
   t <- tab_reg(d, "married", "race", family = "binomial", empirical = TRUE, cleannames = FALSE)
-  emp_or <- get_or(t[["Emp. OR"]]); names(emp_or) <- as.character(t$levels)
-  mod_nm <- "Model OR"                                                       # the single-pred model col
+  emp_or <- get_or(t[["Obs_OR"]]); names(emp_or) <- as.character(t$levels)
+  mod_nm <- "Model_OR"                                                       # the single-pred model col
   mod_or <- get_or(t[[mod_nm]]);    names(mod_or) <- as.character(t$levels)
 
   pos <- emp_positive_level(t, d, "married")
@@ -88,11 +88,11 @@ test_that("binomial coefficient: single-predictor OR == crude OR (Emp. OR) == mo
   }
 })
 
-test_that("binomial AME: single-predictor risk-diff (Emp. diff) == observed risk difference", {
+test_that("binomial AME: single-predictor risk-diff (Obs_diff) == observed risk difference", {
   d <- emp_data()
   t <- tab_reg(d, "married", "race", family = "binomial", effect = "ame", empirical = TRUE,
                cleannames = FALSE)
-  emp_diff <- get_diff(t[["Emp. diff"]]); names(emp_diff) <- as.character(t$levels)
+  emp_diff <- get_diff(t[["Obs_diff"]]); names(emp_diff) <- as.character(t$levels)
 
   # a saturated single-predictor logit reproduces the observed proportions -> AME == observed risk diff
   pos  <- emp_positive_level(t, d, "married")
@@ -101,9 +101,9 @@ test_that("binomial AME: single-predictor risk-diff (Emp. diff) == observed risk
   for (lev in names(rdif)[-1]) {
     expect_equal(unname(emp_diff[lev]), unname(rdif[lev]), tolerance = 1e-6)
   }
-  # the AME column carries "Emp. diff", NOT "Emp. OR", and the header names the (adjusted %)
-  expect_true("Emp. diff" %in% names(t))
-  expect_false("Emp. OR"  %in% names(t))
+  # the AME column carries "Obs_diff", NOT "Obs_OR", and the header names the (adjusted %)
+  expect_true("Obs_diff" %in% names(t))
+  expect_false("Obs_OR"  %in% names(t))
   expect_true(any(grepl("adjusted %", names(t), fixed = TRUE)))
 })
 
@@ -118,21 +118,21 @@ emp_2lvl <- function() {
   d
 }
 
-test_that("gaussian Emp. diff CI == OLS lm coefficient CI (Student, 2-level)", {
+test_that("gaussian Obs_diff CI == OLS lm coefficient CI (Student, 2-level)", {
   d <- emp_2lvl()
   t <- tab_reg(d, "tvhours", "race", family = "gaussian", empirical = TRUE, cleannames = FALSE)
-  ed <- t[["Emp. diff"]]; k <- which(!is.na(get_ci_inf(ed)))            # the non-reference level
+  ed <- t[["Obs_diff"]]; k <- which(!is.na(get_ci_inf(ed)))            # the non-reference level
   lev <- as.character(t$levels)[k]
   ols <- stats::confint(stats::lm(tvhours ~ race, d))[paste0("race", lev), ]
   expect_equal(get_ci_inf(ed)[k], unname(ols[1]), tolerance = 1e-6)
   expect_equal(get_ci_sup(ed)[k], unname(ols[2]), tolerance = 1e-6)
 })
 
-test_that("poisson Emp. IRR CI == quasi-Poisson regression CI (2-level)", {
+test_that("poisson Obs_IRR CI == quasi-Poisson regression CI (2-level)", {
   d <- emp_2lvl()
   t <- suppressWarnings(tab_reg(d, "tvhours", "race", family = "poisson", empirical = TRUE,
                                 cleannames = FALSE))
-  ei <- t[["Emp. IRR"]]; k <- which(!is.na(get_ci_inf(ei)))
+  ei <- t[["Obs_IRR"]]; k <- which(!is.na(get_ci_inf(ei)))
   lev <- as.character(t$levels)[k]
   fq <- stats::glm(tvhours ~ race, d, family = stats::quasipoisson())
   co <- summary(fq)$coefficients[paste0("race", lev), ]
@@ -141,10 +141,10 @@ test_that("poisson Emp. IRR CI == quasi-Poisson regression CI (2-level)", {
   expect_equal(get_ci_sup(ei)[k], unname(exp(co[1] + crit * co[2])), tolerance = 1e-6)
 })
 
-test_that("binomial Emp. OR CI == crude logistic-regression CI (Woolf = Wald, per level)", {
+test_that("binomial Obs_OR CI == crude logistic-regression CI (Woolf = Wald, per level)", {
   d <- emp_data()
   t <- tab_reg(d, "married", "race", family = "binomial", empirical = TRUE, cleannames = FALSE)
-  eo <- t[["Emp. OR"]]
+  eo <- t[["Obs_OR"]]
   pos <- emp_positive_level(t, d, "married")
   fit <- stats::glm((married == pos) ~ race, d, family = stats::binomial())
   ci  <- exp(stats::confint.default(fit))
@@ -157,11 +157,11 @@ test_that("binomial Emp. OR CI == crude logistic-regression CI (Woolf = Wald, pe
 
 # Phase 16d: the crude risk-difference companion uses the two-proportion WALD interval (matching the
 # reg's method_diff = "wald" and the model AME's Wald delta interval), not Newcombe.
-test_that("binomial AME Emp. diff CI == Wald risk-difference CI", {
+test_that("binomial AME Obs_diff CI == Wald risk-difference CI", {
   d <- emp_data()
   t <- tab_reg(d, "married", "race", effect = "ame", family = "binomial", empirical = TRUE,
                cleannames = FALSE)
-  ed  <- t[["Emp. diff"]]
+  ed  <- t[["Obs_diff"]]
   pos <- emp_positive_level(t, d, "married")
   y   <- as.integer(d$married == pos)
   pr  <- tapply(y, d$race, mean); nn <- tapply(y, d$race, length)
@@ -220,25 +220,66 @@ test_that("ordinal: single-predictor cumulative OR brackets the cut-specific cru
 
 # --- FEATURE tests --------------------------------------------------------------------------------
 
-test_that("gaussian empirical: Emp. mean uncoloured, Emp. diff coloured by SD(Y) (matches beta)", {
+test_that("gaussian empirical: Obs_mean uncoloured, Obs_diff coloured by SD(Y) (matches beta)", {
   d <- emp_data()
   t <- tab_reg(d, "tvhours", "race", family = "gaussian", empirical = TRUE, cleannames = FALSE)
-  expect_identical(get_color(t[["Emp. mean"]]), "")          # base descriptive: uncoloured
-  expect_identical(get_type(t[["Emp. diff"]]),  "coef")
-  expect_identical(get_color(t[["Emp. diff"]]), "diff")
+  expect_identical(get_color(t[["Obs_mean"]]), "")          # base descriptive: uncoloured
+  expect_identical(get_type(t[["Obs_diff"]]),  "coef")
+  expect_identical(get_color(t[["Obs_diff"]]), "diff")
   # var = var(Y) (constant), so the std-diff colour matches the model beta column exactly
   vy <- stats::var(d$tvhours)
-  vv <- get_var(t[["Emp. diff"]]); vv <- vv[!is.na(vv)]
+  vv <- get_var(t[["Obs_diff"]]); vv <- vv[!is.na(vv)]
   expect_equal(unique(round(vv, 8)), round(vy, 8))
 })
 
-test_that("poisson empirical: Emp. rate (ratio colour) + Emp. IRR", {
+test_that("poisson empirical: Obs_rate (ratio colour) + Obs_IRR", {
   d <- emp_data()
   t <- suppressWarnings(tab_reg(d, "tvhours", "race", family = "poisson", empirical = TRUE,
                                 cleannames = FALSE))
-  expect_true(all(c("Emp. rate", "Emp. IRR") %in% names(t)))
-  expect_identical(get_color(t[["Emp. rate"]]), "ratio")
-  expect_identical(get_type(t[["Emp. IRR"]]),   "row")
+  expect_true(all(c("Obs_rate", "Obs_IRR") %in% names(t)))
+  expect_identical(get_color(t[["Obs_rate"]]), "ratio")
+  expect_identical(get_type(t[["Obs_IRR"]]),   "row")
+})
+
+# ---- Phase g: exponentiate = FALSE colours the coef + logs the empirical companion ----------------
+
+test_that("exponentiate = FALSE: a binomial coefficient is coloured (log_odds scale), not all grey", {
+  skip_if_not_installed("broom")
+  d <- emp_data()
+  t <- suppressWarnings(tab_reg(d, "married", c("race", "inc3"), family = "binomial",
+                                exponentiate = FALSE, cleannames = FALSE))
+  bc <- t[["Model_\u03b2"]]
+  expect_identical(get_type(bc), "coef")
+  expect_identical(get_model_family(bc), "binomial")
+  # the fix: log-odds coefficients are coloured against the LOGGED odds_ratio scale, so a non-trivial
+  # coefficient gets a non-zero palette slot (pre-g fed sqrt(NA) and greyed every cell out)
+  expect_gt(sum(fmt_color_channels(bc)$text != 0), 0L)
+  # the legend expresses beta (log-odds) units, NOT "SD"
+  expect_no_match(tab_color_legend(t, medium = "md"), "SD")
+})
+
+test_that("exponentiate = FALSE + empirical: Obs_log(OR) / Obs_log(IRR), logged effect + logged CI", {
+  skip_if_not_installed("broom")
+  d <- emp_data()
+  # binomial: Obs_% + Obs_log(OR); the logged empirical == log of the OR-version, same colour as the model
+  tb  <- suppressWarnings(tab_reg(d, "married", "race", family = "binomial", empirical = TRUE,
+                                  exponentiate = FALSE, cleannames = FALSE))
+  tbo <- suppressWarnings(tab_reg(d, "married", "race", family = "binomial", empirical = TRUE,
+                                  exponentiate = TRUE,  cleannames = FALSE))
+  expect_true(all(c("Obs_%", "Obs_log(OR)") %in% names(tb)))
+  expect_false("Obs_OR" %in% names(tb))
+  lc <- tb[["Obs_log(OR)"]]
+  expect_identical(get_type(lc), "coef")
+  expect_identical(get_ci_type(lc), "diff")
+  or <- get_or(tbo[["Obs_OR"]]); df <- get_diff(lc); k <- !is.na(or) & !is.na(df)
+  expect_equal(df[k], log(or[k]), tolerance = 1e-8)                 # value: diff == log(OR)
+  expect_equal(get_ci_inf(lc)[k], log(get_ci_inf(tbo[["Obs_OR"]])[k]), tolerance = 1e-8)  # logged CI
+  expect_identical(fmt_color_channels(lc)$text, fmt_color_channels(tb[["Model_\u03b2"]])$text)
+  # poisson: Obs_rate + Obs_log(IRR)
+  tp <- suppressWarnings(tab_reg(d, "tvhours", "race", family = "poisson", empirical = TRUE,
+                                 exponentiate = FALSE, cleannames = FALSE))
+  expect_true(all(c("Obs_rate", "Obs_log(IRR)") %in% names(tp)))
+  expect_identical(get_type(tp[["Obs_log(IRR)"]]), "coef")
 })
 
 test_that("empirical works with a VECTOR of dependents (one crude companion per dependent)", {
@@ -248,9 +289,9 @@ test_that("empirical works with a VECTOR of dependents (one crude companion per 
     t <- tab_reg(d, c("married", "black"), "inc3", family = "binomial", empirical = TRUE,
                  cleannames = FALSE),
     message = "not available")
-  # per-dependent empirical columns, names suffixed by the dependent
-  expect_true(any(grepl("Emp. % \\(married\\)", names(t))))
-  expect_true(any(grepl("Emp. % \\(black\\)",   names(t))))
+  # per-dependent empirical columns, names disambiguated by a [dependent] bracket (Phase g)
+  expect_true(any(grepl("Obs_% \\[married\\]", names(t))))
+  expect_true(any(grepl("Obs_% \\[black\\]",   names(t))))
 })
 
 test_that("multinomial empirical: tooltip-only via the empirical_tips attribute; no crosstab leak", {
@@ -310,12 +351,12 @@ test_that("change B: empirical companions use the model's complete-case frame, n
 
   # the crude Emp.% cell counts for the race predictor sum to the MODEL frame N, not the full-data N
   race_rows <- as.character(t$var) == "race"
-  n_emp <- sum(get_n(t[["Emp. %"]])[race_rows], na.rm = TRUE)
+  n_emp <- sum(get_n(t[["Obs_%"]])[race_rows], na.rm = TRUE)
   expect_equal(n_emp, nrow(dm))
   expect_lt(n_emp, nrow(d))
 })
 
-test_that("change A: adjusted % coheres with the AME; unadjusted prediction == Emp. % (identity)", {
+test_that("change A: adjusted % coheres with the AME; unadjusted prediction == Obs_% (identity)", {
   skip_if_not_installed("marginaleffects")
   d <- emp_data()
   t <- tab_reg(d, "married", c("race", "inc3"), family = "binomial", effect = "ame",
@@ -323,7 +364,7 @@ test_that("change A: adjusted % coheres with the AME; unadjusted prediction == E
 
   # change A: adjusted%(reference) + AME(level) == adjusted%(level) -- the standardized prediction and
   # the AME are the SAME estimand (avg_predictions(variables=) / avg_comparisons(variables=)).
-  amecol    <- t[["Model AME (adjusted %)"]]
+  amecol    <- t[["Model_AME (adjusted %)"]]
   race_rows <- which(as.character(t$var) == "race")
   rl  <- as.character(t$levels)[race_rows]
   adj <- get_pct(amecol)[race_rows];  names(adj) <- rl
@@ -334,14 +375,14 @@ test_that("change A: adjusted % coheres with the AME; unadjusted prediction == E
   }
 
   # score-equation identity: the model's UNADJUSTED predicted % (avg_predictions(by = v), the observed-
-  # group average) equals the same-frame Emp. % exactly. Phase 17h cut the `predicted_unadjusted` control
+  # group average) equals the same-frame Obs_% exactly. Phase 17h cut the `predicted_unadjusted` control
   # column; the identity is asserted here directly, by refitting on the model's complete-case frame.
   # inverse_two_level_factors = TRUE (default) models the FIRST level ("no") as the event, so refit on
-  # that same modelled event to match the Emp. % orientation.
+  # that same modelled event to match the Obs_% orientation.
   dm    <- d[stats::complete.cases(d[, c("married", "race", "inc3")]), , drop = FALSE]
   fit   <- stats::glm((married == "no") ~ race + inc3, data = dm, family = stats::binomial())
   ap    <- as.data.frame(marginaleffects::avg_predictions(fit, by = "race"))
   unadj <- ap$estimate; names(unadj) <- as.character(ap$race)
-  emp   <- get_pct(t[["Emp. %"]])[race_rows]; names(emp) <- rl
+  emp   <- get_pct(t[["Obs_%"]])[race_rows]; names(emp) <- rl
   expect_equal(emp[names(unadj)], unadj, tolerance = 1e-6)
 })

@@ -2,6 +2,31 @@
 # tabxplor 1.4.0 (in development)
 
 ## New features
+* **`tab_html()` is the new name for `tab_kable()`** (both work identically -- `tab_kable()` stays as a
+  permanent alias). `tab_html()` names the output (an HTML table); the backend *engine* (home-built or
+  kableExtra) is still chosen with `engine =`. `tab_export()`'s first format is now `"html"` (was
+  `"kable"`).
+* **Markdown export is self-contained by default** (`tab_md(css = TRUE)`): the exported markdown carries
+  its own stylesheet, so it renders coloured and compact on its own. Inside an `.Rmd`/`.qmd` document,
+  pass `css = FALSE` (the host page brings the stylesheet). Numbers render in a monospace font so
+  figures stay column-aligned, and multi-word level names and `n = ...` composites no longer wrap.
+* **`tab_reg()` auto-compares sub-models side by side.** With a `split_var` and a single model (one
+  dependent, one predictor set, not multinomial), `tab_reg()` now spreads the per-subpopulation models
+  into side-by-side columns automatically, each headed by its split level over the outcome. Pass
+  `spread_models = FALSE` to keep the previous stacked (grouped) layout.
+* **`exponentiate = FALSE` now colours regression coefficients and logs the crude companion.** A
+  non-gaussian coefficient (log-odds / log-rate) is coloured on the log of the odds-ratio scale (so it
+  reads the same intensity as its `exponentiate = TRUE` twin) instead of greying out; with
+  `empirical = TRUE` the crude companion becomes `Obs_log(OR)` / `Obs_log(IRR)` (logged effect and CI),
+  matching the coefficient's scale.
+* **Regression columns are named in snake-case.** The crude-companion columns are `Obs_%`, `Obs_OR`,
+  `Obs_IRR`, `Obs_mean`, `Obs_diff`, `Obs_rate` (was `Emp. ...`), and the model columns `Model_OR`,
+  `Model_IRR`, `Model_β`. When several outcomes share one column name, the console disambiguates with a
+  `[dependent]` bracket that every exporter drops (the spanning header already names the outcome).
+* **Bolder, clearer legends.** Variable names are shown in **bold** in every table footer / colour
+  legend. In a two-channel colour, the text-colour break-words stay bold while the background-colour
+  break-words are plain (they mirror the filled cells). In Markdown export the significance stars in the
+  legend are escaped, so pandoc no longer reads `***` / `*` as emphasis.
 * **Store a caption on a table with `set_caption()`.** A caption set this way travels through a dplyr
   pipeline and is used as the table title by every exporter (`tab_md()`, `tab_kable()`, `tab_xl()`,
   `tab_plot()`) when you do not pass their own `caption=` argument, ahead of a regression table's
