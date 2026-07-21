@@ -266,6 +266,21 @@ R/
 │                              [ci_inf;ci_sup] bracket, no 1/x; fmt_class.R only) | "prob"/"ame" fold
 │                              predicted prob / AME into the OR cell via {} grammar (binomial coef only,
 │                              reg_apply_estimate_display + reg_marginal). No new fmt fields.
+│                              17h (integration, all internal + byte-identical): reg_build takes
+│                              (data, specs, shared, split_var, .fit_cache...) -- the 5 scalar family/
+│                              do_exp/effect_shape/eff_word/color formals + sp_get() are GONE (specs are
+│                              the truth, read as sp$*; the ~18 remaining args ride ONE `shared` list, so
+│                              the split recursion no longer re-lists them). reg_wald_finalize() = the ONE
+│                              est+/-crit.se -> p-dual -> exp assembly (backs reg_wald_from_tidy + the
+│                              reg_fit Wald branch + reg_reref_fit_res); reg_skel_key/reg_skel_match = the
+│                              "\r" skeleton-align idiom; reg_cleanup() = the 8 cleannames sites;
+│                              reg_complete_frame() = the ONE model complete-case frame (reg_fit + the
+│                              empirical/tips emp_frame_of share it). The empirical arms fold into the
+│                              REG_EMPIRICAL fact table (per family: base+effect column SHAPE + CI method)
+│                              driving one emp_col() builder; ci_settings' method_mean_diff/_ratio read
+│                              REG_EMPIRICAL, so "empirical CI == what the legend names" is data. Multinomial
+│                              tips stay a separate arm. predicted_unadjusted CUT (the Emp.%==unadjusted
+│                              identity stays a test-only assertion, test-tab_reg-empirical.R).
 ├── tab_reg_plots.R  (~230 L) Phase 12h display: or_plot() (finalfit-style OR forest plot ON a
 │                              tabxplor_tab -- reads fmt fields, NO refit; gridExtra 2-panel) + lm_plots()
 │                              (ggplot2 2x2 glm/lm diagnostics). ggplot2+gridExtra guarded (Suggests).
@@ -877,6 +892,14 @@ Read first: analysis §5.4, §2.4; tab_reg.R (`reg_build`, `reg_fit`, `reg_colum
 6. Untouched per rulings: `mnl_vsrest`, `method="profile"`, `quasipoisson`, the compound-formula escape hatch, the `.fit_cache` digest/reref math.
 
 Verification: full suite; byte-identical (reg tables are not snapshotted; test-tab_reg* value assertions + the jmvtabreg cache byte-identity lock are the sentinels).
+
+**DONE (2026-07-21).** Full suite green (FAIL 0, WARN 0, SKIP 4 = the usual Suggests/benchmark opt-ins, PASS 3864), **zero golden/snapshot churn** — every task landed byte-identical except the intended `predicted_unadjusted` cut (which touches no golden) + its rewritten fixture. All 5 tasks in one session.
+- **(1) three shared helpers.** `reg_wald_finalize(est, do_exp, se/crit | lo/hi, p, disp_known, df)` = the ONE est±crit·se → p-dual → exp assembly, now behind `reg_wald_from_tidy` + the `reg_fit` Wald else-branch (the profile branch supplies `lo/hi/p`, finalize does the exp) + `reg_reref_fit_res` (the `.fit_cache` reref — byte-identity re-locked by `test-jmvtabreg-cache.R`). `reg_skel_key()`/`reg_skel_match()` = the `"\r"` skeleton-align idiom (5 sites, incl. the 3-part tips key via `extra=`). `reg_cleanup(x, cleannames)` = the 8 inlined `cleannames_condition()` strips.
+- **(2) spec as truth.** Dropped the 5 scalar family/do_exp/effect_shape/eff_word/color formals + the `sp_get()` closure (→ `sp$*`); the residual scalar `family` (mnl_vsrest + reg_compare_rows) derives from `specs[[1]]$family`. Collapsed the signature to `reg_build(data, specs, shared, split_var=NULL, .fit_cache, reference, reref, skeleton_data)` — `shared` (17 settings) is built once in `tab_reg`, unpacked via `list2env`, and the split recursion passes `modifyList(shared, list(design_spec=ds_g))` (split_var stays a formal — a NULL value cannot survive `modifyList`). No external caller (verified), so internal-only.
+- **(3) empirical fact table.** `REG_EMPIRICAL` (per binomial/gaussian/poisson: base + effect column SHAPE + CI method literal) + one `emp_col()` builder replace the four isomorphic `fmt()` arms; `ci_settings`' `method_mean_diff`/`method_mean_ratio` read `REG_EMPIRICAL` (the 16d "empirical CI == model CI" rule is now data). `role = "emp"` written once in `emp_col`. Multinomial tips stay a separate arm.
+- **(4) model frame once.** `reg_complete_frame(data, vars)` = the ONE `drop_na(intersect(unique(vars), names(data)))`; `reg_fit` uses it, the empirical + tips blocks share it via the `emp_frame_of(dep)` closure (the reref/digest fit's `$data` is NULL, so they recompute — from ONE helper now).
+- **(5) `predicted_unadjusted` cut** (arg + `reg_unadj_column` + `reg_marginal`'s `want_unadj`/`pred_unadj` + tooltip rider); the Emp.% == unadjusted-prediction identity survives as a direct-refit assertion in `test-tab_reg-empirical.R`. man/tab_reg.Rd regenerated; NAMESPACE unchanged.
+- **Regression caught + fixed:** the `reg_skel_match` refactor first dropped the `if (nrow(prd))` guard around `prd$pred` (an empty column-less tibble → "Unknown column: pred" warning); restored at both `pred` sites. `reg_build` line count 3096 → 3025.
 
 ---
 

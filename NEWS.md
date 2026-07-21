@@ -98,9 +98,7 @@
 * **`effect = "ame"` shows a genuine adjusted percentage.** The predicted probability in parentheses beside
   each average marginal effect is now a *marginal-standardized* prediction (`avg_predictions(variables=)`),
   which is truly covariate-adjusted and coheres with the effect (adjusted-%(reference) + AME = adjusted-%
-  (level)). The header names it `(adjusted %)`. A new optional `predicted_unadjusted = TRUE` (binomial AME)
-  adds a `Model % (unadj.)` control column showing the model's unadjusted predicted % (which equals the
-  crude `Emp. %` on the same population — a built-in cross-check).
+  (level)). The header names it `(adjusted %)`.
 * **`color_signif` and significance stars now work on empirical odds ratios in crosstabs.**
   `tab(..., color = "OR")` gained a confidence interval (Woolf log-odds-ratio), so
   `color_signif = "grey_non_signif"` / `"guaranteed_effect"` grey out or highlight odds-ratio cells by

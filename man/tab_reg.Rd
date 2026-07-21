@@ -25,7 +25,6 @@ tab_reg(
   split_var = NULL,
   multiplier = NULL,
   empirical = FALSE,
-  predicted_unadjusted = FALSE,
   stats = NULL,
   compare = c("none", "baseline", "sequential"),
   baseline = NULL,
@@ -155,14 +154,6 @@ and not confounded by differing missingness (reproduce it with \code{\link[dplyr
 same rows). Also works with a vector of dependents. Ordinal has no clean crude analogue and is
 ignored (with a message). Default \code{FALSE}.
 }}
-
-\item{predicted_unadjusted}{Logical, binomial \code{effect = "ame"} only. If \code{TRUE}, adds a
-\verb{Model \% (unadj.)} control column (and an HTML tooltip on the adjusted-\% cell) showing the model's
-\emph{unadjusted} predicted probability (\code{avg_predictions(by=)}, the observed-group average). This equals
-the same-frame \verb{Emp. \%} exactly (a logistic-model identity), so it is only a cross-check that the
-crude companion is computed on the model's population; the adjusted \code{(...)} prediction in the AME
-cell is the substantive quantity. Ignored (with a message) for any other family/effect. Default
-\code{FALSE}.}
 
 \item{stats}{The goodness-of-fit statistics shown in the model-summary \strong{footer} (one block per
 model). \code{NULL} (default) uses the per-family set: linear models show N, R square, adjusted R

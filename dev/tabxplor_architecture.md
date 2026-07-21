@@ -973,6 +973,23 @@ exact dual of the Wald p; `method="profile"` = `confint`+LR for unweighted binom
 (assembler → `new_tab() |> group_by(var)`). `broom`/`survey`(/`MASS` for profile) are
 `requireNamespace()`-guarded Suggests.
 
+**Phase 17h — integration (all internal, byte-identical).** `reg_build(data, specs, shared, split_var,
+.fit_cache, …)`: the per-dependent family/do_exp/effect_shape/eff_word/color live ONLY on the specs (read
+as `sp$*`; the scalar formals + `sp_get()` are gone, the homogeneous scalar `family` is derived from
+`specs[[1]]$family`), and every other per-call setting rides ONE `shared` list — so the split recursion
+no longer re-lists ~30 positional args. Shared micro-helpers: `reg_wald_finalize()` (the one
+est±crit·se → p-dual → exp assembly, behind `reg_wald_from_tidy` + the `reg_fit` Wald branch +
+`reg_reref_fit_res`), `reg_skel_key()`/`reg_skel_match()` (the `"\r"` skeleton-align idiom),
+`reg_cleanup()` (the cleannames strip), `reg_complete_frame()` (the ONE model complete-case frame —
+`reg_fit` uses it for the fit, the empirical + multinomial-tip blocks share it via `emp_frame_of()`
+because the reref/digest fit carries no `$data`). The crude-companion columns are driven by the
+**`REG_EMPIRICAL`** fact table (per family: base + effect column SHAPE — fmt type/display/digits/ref/
+ci_type/colour measure/name — plus the CI method literal) through one `emp_col()` builder; `ci_settings`'
+`method_mean_diff`/`method_mean_ratio` read straight from `REG_EMPIRICAL`, so "the empirical CI matches
+what the legend names" is data, not a hand-synced pair. Multinomial crude companions stay a separate
+tooltip arm (`reg_empirical_tips`). The `predicted_unadjusted` control column was cut (its
+Emp.% == unadjusted-prediction identity survives as a test-only assertion).
+
 `exponentiate` (default `"nongaussian"`) drives the fmt shape: **multiplicative** OR/IRR → the `or` field,
 `type="row"`, `display="or"`, `ci_type="or"`, `color="OR"` (neutral 1, `1/x` reciprocal); **additive**
 gaussian β / log-odds → the `diff` field, `type="coef"`, `display="coef"` (raw signed render, no ×100/%/×),

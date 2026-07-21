@@ -325,11 +325,11 @@ test_that("change B: empirical companions use the model's complete-case frame, n
   expect_lt(n_emp, nrow(d))
 })
 
-test_that("change A/D: adjusted % coheres with the AME, and the unadjusted control == Emp. %", {
+test_that("change A: adjusted % coheres with the AME; unadjusted prediction == Emp. % (identity)", {
   skip_if_not_installed("marginaleffects")
   d <- emp_data()
   t <- tab_reg(d, "married", c("race", "inc3"), family = "binomial", effect = "ame",
-               empirical = TRUE, predicted_unadjusted = TRUE, cleannames = FALSE)
+               empirical = TRUE, cleannames = FALSE)
 
   # change A: adjusted%(reference) + AME(level) == adjusted%(level) -- the standardized prediction and
   # the AME are the SAME estimand (avg_predictions(variables=) / avg_comparisons(variables=)).
@@ -343,9 +343,15 @@ test_that("change A/D: adjusted % coheres with the AME, and the unadjusted contr
     expect_equal(unname(adj[ref] + ame[lv]), unname(adj[lv]), tolerance = 1e-6)
   }
 
-  # change D: the unadjusted control column == the same-frame Emp. % exactly (score-equation identity)
-  emp   <- get_pct(t[["Emp. %"]])
-  unadj <- get_pct(t[["Model % (unadj.)"]])
-  keep  <- !is.na(unadj)
-  expect_equal(emp[keep], unadj[keep], tolerance = 1e-6)
+  # score-equation identity: the model's UNADJUSTED predicted % (avg_predictions(by = v), the observed-
+  # group average) equals the same-frame Emp. % exactly. Phase 17h cut the `predicted_unadjusted` control
+  # column; the identity is asserted here directly, by refitting on the model's complete-case frame.
+  # inverse_two_level_factors = TRUE (default) models the FIRST level ("no") as the event, so refit on
+  # that same modelled event to match the Emp. % orientation.
+  dm    <- d[stats::complete.cases(d[, c("married", "race", "inc3")]), , drop = FALSE]
+  fit   <- stats::glm((married == "no") ~ race + inc3, data = dm, family = stats::binomial())
+  ap    <- as.data.frame(marginaleffects::avg_predictions(fit, by = "race"))
+  unadj <- ap$estimate; names(unadj) <- as.character(ap$race)
+  emp   <- get_pct(t[["Emp. %"]])[race_rows]; names(emp) <- rl
+  expect_equal(emp[names(unadj)], unadj, tolerance = 1e-6)
 })
