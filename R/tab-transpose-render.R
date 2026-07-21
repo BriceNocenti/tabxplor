@@ -73,9 +73,11 @@ tx_transpose_render <- function(rd, backend, meta = NULL) {
   # `clean'` = that row's level label. From the original label columns (var_name_col + row_var_col).
   row_lvl <- as.character(tab[[roles$row_var_col]])
   if (isTRUE(rd$vars$compacted) && length(roles$var_name_col) == 1) {
+    # merged: tab[["row_var"]] values already carry the opt-in label swap (done in prep_one_table).
     src_name <- as.character(tab[[roles$var_name_col]])
   } else {
-    src_name <- rep(rd$vars$row_var, n_orow)       # single row_var: its name spans every level column
+    # single row_var: its name spans every level column -- swap it for the label (Phase k, display only).
+    src_name <- rep(var_label_display(rd$vars$row_var, tab), n_orow)
   }
   is_totrow_o <- seq_len(n_orow) %in% roles$totrows
   src_name[is_totrow_o] <- ""                      # a Total column is standalone, under no group name
@@ -145,7 +147,8 @@ tx_transpose_render <- function(rd, backend, meta = NULL) {
     cvname     <- roles$real_col_vars[[1]]
     lead_names <- cvname
     lead_vals  <- list(level_vals)
-    lead_clean <- cvname                           # single label column headed by the col_var name
+    # single label column headed by the col_var name -- shown as the label (Phase k), key stays raw.
+    lead_clean <- var_label_display(cvname, tab)
     row_var_col_name  <- cvname
     var_name_col_name <- NULL
   }

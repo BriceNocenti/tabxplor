@@ -269,7 +269,8 @@ set_caption <- function(x, caption) {
 #' @export
 get_caption <- function(x) get_meta(x)[["vars"]][["caption"]]
 new_vars_attr <- function(row_vars = character(0), col_vars = character(0),
-                          tab_vars = character(0), compacted = FALSE, wt = NA_character_) {
+                          tab_vars = character(0), compacted = FALSE, wt = NA_character_,
+                          var_labels = character(0)) {
   out <- list(row_vars = as.character(row_vars), col_vars = as.character(col_vars),
               tab_vars = as.character(tab_vars), compacted = isTRUE(compacted))
   # Phase 16d: the weight column NAME drives the footer "Weighted by <wt>." line. It is stored ONLY when
@@ -277,6 +278,13 @@ new_vars_attr <- function(row_vars = character(0), col_vars = character(0),
   # serialized table churns and get_vars_attr(x)$wt is simply NULL. (get_weight_name reads it either way.)
   wt <- if (length(wt)) as.character(wt)[1] else NA_character_
   if (!is.na(wt) && nzchar(wt)) out$wt <- wt
+  # Phase k: variable labels (name -> label, haven/labelled) for the opt-in name display-swap. Stored
+  # ONLY when non-empty (same absent-when-unset rule as `wt`), so a label-free table churns nothing.
+  if (length(var_labels) && !is.null(names(var_labels))) {
+    keep       <- !is.na(var_labels) & nzchar(names(var_labels))
+    var_labels <- var_labels[keep]
+    if (length(var_labels)) out$var_labels <- var_labels
+  }
   out
 }
 # The package CI defaults, used when a table carries no `ci_settings`. DERIVED from tab()'s formals
@@ -1167,7 +1175,13 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
     col_vars  = longest_col_vars,
     tab_vars  = character(0),          # guaranteed: the tab_vars bail above returned already
     compacted = TRUE,
-    wt        = get_vars_attr(tabs[[1]])$wt   # Phase 16d: the weight survives a compact merge
+    wt        = get_vars_attr(tabs[[1]])$wt,  # Phase 16d: the weight survives a compact merge
+    # Phase k: the per-tab variable labels (each row_var's + the shared col_vars') survive the merge
+    # too -- union across the merged tables, first name wins, so the opt-in name swap still works.
+    var_labels = {
+      vl <- do.call(c, unname(purrr::map(tabs, ~ get_vars_attr(.)[["var_labels"]])))
+      if (length(vl)) vl[!duplicated(names(vl))] else character(0)
+    }
   )
 
   tabs_chi2 <- purrr::map_df(tabs, ~get_test(.) )

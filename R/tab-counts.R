@@ -122,6 +122,10 @@ tab_counts_normalize <- function(data, row_col, col_col, tab_cols, n_col, wn_col
   if (length(miss) > 0)
     cli::cli_abort("Column{?s} {.field {miss}} not found in {.arg data}.")
 
+  # Phase k: convert labelled (haven/labelled) key columns to value-label factors before the
+  # factor-order coercion below, so a labelled key reads as a factor (byte-identical for non-labelled).
+  data <- data |> tab_apply_val_labels(keys)
+
   raw_n      <- suppressWarnings(as.numeric(data[[n_col]]))
   has_real_n <- all(is.na(raw_n) | abs(raw_n - round(raw_n)) < 1e-8)
 

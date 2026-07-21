@@ -27,7 +27,12 @@
 #'     `"range"` the per-row `[min;max]`; `"min"` the smallest (safest) base.}
 #'   \item{`tabxplor.var_names`}{which variable names the exporters annotate: `"both"` (default),
 #'     `"rows"`, `"cols"`, `"none"`. Per-call `var_names =`.}
-#'   \item{`tabxplor.cleannames`}{`FALSE` (default): clean up variable/level names in output.}
+#'   \item{`tabxplor.var_labels`}{`FALSE` (default): in *exports* (markdown / html / Excel / plot),
+#'     show a variable's *label* (the `haven`/`labelled` `label` attribute, if it has one) instead of
+#'     its name. Display only -- the table structure keeps canonical names, so name-based `select()`
+#'     and references still work; the console always shows names.}
+#'   \item{`tabxplor.cleannames`}{`FALSE` (default): clean up variable/level names in output. Also
+#'     strips a `"1-"`-style prefix from `labelled` value labels turned into factor levels.}
 #' }
 #'
 #' @section Colours and theme:

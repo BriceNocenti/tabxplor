@@ -1327,7 +1327,9 @@ new_ctx <- function(...) {
     spread_vars = character(), names_prefix = NULL, names_sort = FALSE,
     cache_env = NULL, defer_level_merge = FALSE, levels_order = NULL,
     # lean-ctx field whose absence was previously covered by an exists() guard
-    cached_tests = NULL
+    cached_tests = NULL,
+    # Phase k: variable labels (name -> label) captured in tab_setup for the opt-in name display-swap
+    var_labels = character()
   )
   ctx_update(defaults, list(...))
 }
@@ -1564,14 +1566,6 @@ tab_setup <- function(ctx) {
     pos_col_vars <- tidyselect::eval_select(col_vars, data)
     col_vars     <- rlang::syms(names(pos_col_vars))
   }
-  # DESIGN: extract by POSITION with `[[` (not `data[pos_col_vars]`): `df[<int vector>]` is column-
-  # subsetting on a data.frame/tibble but ROW-subsetting on a data.table, which silently mis-classified
-  # col_vars (-> NA col_var -> tab_num eval_select crash) on a data.table input. `data[[<int>]]` is
-  # engine-agnostic.
-  col_vars_num  <- purrr::map_lgl(pos_col_vars, ~ is.numeric(data[[.x]]))
-  col_vars_text <- purrr::map_lgl(pos_col_vars,
-                                  ~ is.factor(data[[.x]]) || is.character(data[[.x]]))
-
   tab_vars <- tab_vars_quo
   if (quo_miss_na_null_empty_no(tab_vars)) {
     #data     <- data |> dplyr::mutate(no_tab_vars = factor(" "))
@@ -1580,6 +1574,23 @@ tab_setup <- function(ctx) {
     pos_tab_vars <- tidyselect::eval_select(tab_vars, data)
     tab_vars     <- rlang::syms(names(pos_tab_vars))
   }
+
+  # Phase k (labelled interop): capture variable labels (the `label` attr) BEFORE labelled
+  # conversion strips them, then convert haven/labelled columns to value-label factors. Doing it
+  # here -- before the numeric/text classification below -- makes a labelled categorical read as a
+  # factor (and an incomplete-labelled numeric keep its real numeric type). The weight is left
+  # untouched (it is numeric). var_labels rides ctx into meta$vars for the opt-in name display-swap.
+  sel_vars   <- unique(c(as.character(row_vars), as.character(col_vars), as.character(tab_vars)))
+  var_labels <- capture_var_labels(data, sel_vars)
+  data       <- data |> tab_apply_val_labels(sel_vars)
+
+  # DESIGN: extract by POSITION with `[[` (not `data[pos_col_vars]`): `df[<int vector>]` is column-
+  # subsetting on a data.frame/tibble but ROW-subsetting on a data.table, which silently mis-classified
+  # col_vars (-> NA col_var -> tab_num eval_select crash) on a data.table input. `data[[<int>]]` is
+  # engine-agnostic.
+  col_vars_num  <- purrr::map_lgl(pos_col_vars, ~ is.numeric(data[[.x]]))
+  col_vars_text <- purrr::map_lgl(pos_col_vars,
+                                  ~ is.factor(data[[.x]]) || is.character(data[[.x]]))
 
   # wt_quo arrives from ctx (defused in tab_build); resolve to a bare symbol or character().
   if (quo_miss_na_null_empty_no(wt_quo)) {
@@ -1826,7 +1837,8 @@ tab_setup <- function(ctx) {
     digits = digits, total_names = total_names, conf_level = conf_level, na = na,
     totcol = totcol, tot_cols_type = tot_cols_type,
     color_diff_OR = color_diff_OR, color_ctr = color_ctr,
-    color_ci = color_ci, color_num = color_num, cache_keys = cache_keys
+    color_ci = color_ci, color_num = color_num, cache_keys = cache_keys,
+    var_labels = var_labels
   ))
 }
 
@@ -2341,7 +2353,8 @@ tab_assemble_tables <- function(ctx) {
   # by <wt>." line. `wt` is a local from list2env(ctx) -- the resolved weight name (see tab_transform()).
   vars_attr <- new_vars_attr(row_vars = row_var, col_vars = as.character(col_vars),
                              tab_vars = as.character(tab_vars),
-                             wt = if (length(wt) == 0L) NA_character_ else as.character(wt)[1])
+                             wt = if (length(wt) == 0L) NA_character_ else as.character(wt)[1],
+                             var_labels = if (exists("var_labels", inherits = FALSE)) var_labels else character())
   # Phase 17b: the three 1.4.0-new attrs are now ONE `meta` list (drop-NULL happens in new_tab()).
   meta <- list(render_extras = render_extras, ci_settings = ci_settings, vars = vars_attr)
   if (!lv1_group_vars(tab)) {
@@ -2947,6 +2960,60 @@ tab_degrade_inform <- function(reason) {
 
 # STEP-BY-STEP FUNCTIONS -----------------------------------------------------------------
 
+# === SECTION: labelled-data (haven/labelled) interop =================================
+
+# Convert ONE haven/labelled column to a factor using its value labels, without any haven/labelled
+# dependency -- keyed only off the base `labels` attribute (a named vector: names = label text,
+# values = codes). Phase k rule: convert ONLY when the labels are COMPLETE (every observed non-NA
+# value is labelled); otherwise strip the labelled class to the underlying vector, so a coded
+# numeric keeps its means path (tab_num) and an incomplete categorical is treated as its real type.
+# A column with no `labels` attribute is returned unchanged (byte-identity for non-labelled data).
+# Idempotent: the result never carries a `labels` attribute, so a second call is a no-op.
+# WARNING: this drops the `label` attribute too -- capture variable labels BEFORE calling it.
+val_labels_to_factor <- function(x) {
+  labs <- attr(x, "labels", exact = TRUE)
+  if (is.null(labs) || length(labs) == 0L) return(x)
+
+  raw <- x
+  attributes(raw) <- NULL                       # bare atomic values, drops labelled/label/class
+
+  observed <- unique(raw[!is.na(raw)])
+  if (!all(observed %in% unname(labs))) return(raw)   # incomplete -> underlying numeric/character
+
+  # DESIGN: levels follow the `labels`-vector order (the survey's intended order), NOT sorted codes.
+  # Duplicate label text merges its codes (base factor() behaviour). Empty labelled levels are
+  # dropped so an unobserved code adds no phantom row.
+  f <- factor(raw, levels = unname(labs), labels = names(labs))
+  forcats::fct_drop(f)
+}
+
+# Apply val_labels_to_factor() across the labelled columns among `vars`. No-op (byte-identical) when
+# none carry a `labels` attribute -- the common case, so this stays free for non-labelled data.
+# WARNING: column access by `[[` (name), never `data[vars]` -- the latter ROW-subsets a data.table
+# (the same engine-agnostic trap tab_setup documents at ~L1567).
+tab_apply_val_labels <- function(data, vars) {
+  vars <- intersect(unique(vars), names(data))
+  for (v in vars) {
+    if (!is.null(attr(data[[v]], "labels", exact = TRUE)))
+      data[[v]] <- val_labels_to_factor(data[[v]])
+  }
+  data
+}
+
+# Read the variable-label (`label` attr) for each of `vars`, as a named character (name -> label).
+# Only variables that HAVE a non-empty label appear -- so an all-unlabelled table yields character()
+# and stores nothing in meta$vars (absent-when-unset, no golden churn). Base attr(), no dependency.
+capture_var_labels <- function(data, vars) {
+  vars <- intersect(unique(vars), names(data))
+  if (length(vars) == 0L) return(character())
+  labs <- vapply(vars, function(v) {
+    l <- attr(data[[v]], "label", exact = TRUE)
+    if (is.null(l) || !nzchar(as.character(l)[[1]])) NA_character_ else as.character(l)[[1]]
+  }, character(1))
+  names(labs) <- vars
+  labs[!is.na(labs)]
+}
+
 # Lump factor levels whose (unweighted) count is below `other_if_less_than` into `other_level`.
 # Phase 7d-ii: extracted verbatim from tab_prepare() so the internal pipeline and the jmvtab cache
 # can run this as a standalone, keyable pre-aggregate step; tab_prepare() still composes it.
@@ -3021,6 +3088,11 @@ tab_prepare <-
       data <- tibble::as_tibble(stats::na.omit(data, na_drop_all))
       #data <- tidyr::drop_na(data, tidyselect::all_of(na_drop_all))
     }
+
+    # Phase k: labelled (haven/labelled) columns become value-label factors BEFORE the numeric
+    # classification below, so a labelled categorical is seen as a factor (and an incomplete-labelled
+    # numeric keeps its real numeric type). Idempotent with tab_setup's earlier call.
+    data <- data |> tab_apply_val_labels(variables)
 
     vars_not_numeric <-
       dplyr::select(data[pos_variables], where(~ !is.numeric(.))) |>
@@ -3477,6 +3549,10 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na,
   use_raw <- .by_table || is.null(.fine)
 
   if (use_raw) {
+    # Phase k: convert labelled (haven/labelled) row/col/tab columns to value-label factors for the
+    # DIRECT tab_plain() entry (no tab_prepare upstream). Idempotent on the tab()/tab_many() path
+    # (already converted -> no-op); the weight is excluded (numeric).
+    data <- data |> tab_apply_val_labels(as.character(c(tab_vars, row_var, col_var)))
     data <- data |>
       dplyr::select(!!!tab_vars, !!row_var, !!col_var, !!wt) |>
       dplyr::mutate(dplyr::across(!!wt & !where(is.numeric), as.numeric)) |>
@@ -4507,6 +4583,10 @@ num_core <- function(data, row_var, col_vars, tab_vars, wt,
   use_raw <- .by_table || is.null(.fine)
 
   if (use_raw) {
+    # Phase k: convert labelled (haven/labelled) GROUPING columns (row_var/tab_vars) to value-label
+    # factors for the direct tab_num() entry. The numeric col_vars are zapped to their codes by the
+    # as.numeric() coercion just below, so they are left out here. Idempotent on the tab() path.
+    data <- data |> tab_apply_val_labels(purrr::map_chr(c(tab_vars, row_var), rlang::as_name))
     data <- data |>
       dplyr::select(!!!tab_vars, !!row_var, !!!col_vars, !!wt) |>
       dplyr::mutate(dplyr::across((!!wt | tidyselect::all_of(as.character(col_vars))) &

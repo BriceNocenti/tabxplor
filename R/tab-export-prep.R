@@ -332,6 +332,11 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
     tab      <- dplyr::select(tab, -tidyselect::all_of(name_col))
     name_col <- character(0)
   }
+  # Phase k: a merged (>=2 row_vars) table shows the SOURCE variable names as the values of the synthetic
+  # `row_var` column. Swap those values for variable labels when tabxplor.var_labels is on (display only;
+  # the swap happens before wrap so a long label wraps too). No-op off / when no label is recorded.
+  if (length(name_col) > 0)
+    tab[["row_var"]] <- var_label_display(as.character(tab[["row_var"]]), tab)
   if (!is.null(wrap)) {
     pre_wrap_names <- names(tab)
     tab <- tab_wrap_text(tab,
@@ -477,6 +482,11 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
     tab, list(col_var_map = col_var_map, real_col_vars = real_col_vars, totcols = totcols,
               var_name_col = var_name_col, sd_cols = sd_cols),
     name_cols = var_names %in% c("both", "cols"))
+  # Phase k: a single-row_var table heads the row-label column with the variable name -- swap it for the
+  # variable label (display only) when tabxplor.var_labels is on. The merged case has no such header
+  # (blanked at var_name_col); "levels" is not a variable name, so it never matches a recorded label.
+  if (length(name_col) == 0 && length(row_var_col) == 1)
+    col_var_header$clean[row_var_col] <- var_label_display(col_var_header$clean[row_var_col], tab)
 
   list(
     tab = tab,
@@ -516,6 +526,22 @@ prep_one_table <- function(tab, backend, drop_tab_vars, wrap, compute,
   )
 }
 
+# Phase k: the opt-in variable-NAME -> variable-LABEL display map. Reads the labels captured at build
+# (meta$vars$var_labels), gated by the tabxplor.var_labels option. DISPLAY ONLY -- the tibble structure
+# (col_var attr, row_var column values, column names) keeps canonical names, so select()/reference by
+# name still work. Returns `x` unchanged when the option is off or no label is recorded for that name;
+# any element whose value IS a recorded variable name is swapped for its label. Shared by the col-var
+# span header, the single-row_var header, and the merged row_var name column.
+#' @keywords internal
+var_label_display <- function(x, tab) {
+  if (!isTRUE(getOption("tabxplor.var_labels", FALSE))) return(x)
+  labs <- get_vars_attr(tab)[["var_labels"]]
+  if (is.null(labs) || length(labs) == 0L) return(x)
+  hit <- !is.na(x) & x %in% names(labs)
+  if (any(hit)) x[hit] <- unname(labs[x[hit]])
+  x
+}
+
 # Phase 13c-iii: the shared col_var HEADER model. Per column, `label` = the spanning col_var NAME, shown
 # only for a real-col_var LEVEL column -- blank for the row var, the count / all_col_vars column, and
 # total columns (a total column is the row marginal, not a col_var level, so it stands alone). `clean` =
@@ -539,7 +565,9 @@ tab_col_var_header <- function(tab, roles, name_cols = TRUE) {
   # column (the marginal, not a level). Kept separate from `label` because the rewrites below must run
   # even when nothing is NAMED -- a "_race" suffix is noise whatever `var_names` says.
   is_level <- (unname(cvm) %in% real) & !totc
-  label    <- ifelse(is_level & isTRUE(name_cols), unname(cvm), "")
+  # Phase k: the spanning col_var name shows the variable LABEL when tabxplor.var_labels is on (display
+  # only -- `cvm` stays the raw name for the suffix-strip + dedup logic below, which is structural).
+  label    <- ifelse(is_level & isTRUE(name_cols), var_label_display(unname(cvm), tab), "")
   clean <- nms
   # Phase 14i: the merged table's name column is headed by the literal "row_var" -- an internal name,
   # never informative, and the loop below never reaches it (it only visits LEVEL columns). Blanked

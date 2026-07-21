@@ -26,7 +26,12 @@ variables have differing bases (e.g. \code{na = "drop"}): \code{"off"} (default)
 \code{"range"} the per-row \verb{[min;max]}; \code{"min"} the smallest (safest) base.}
 \item{\code{tabxplor.var_names}}{which variable names the exporters annotate: \code{"both"} (default),
 \code{"rows"}, \code{"cols"}, \code{"none"}. Per-call \verb{var_names =}.}
-\item{\code{tabxplor.cleannames}}{\code{FALSE} (default): clean up variable/level names in output.}
+\item{\code{tabxplor.var_labels}}{\code{FALSE} (default): in \emph{exports} (markdown / html / Excel / plot),
+show a variable's \emph{label} (the \code{haven}/\code{labelled} \code{label} attribute, if it has one) instead of
+its name. Display only -- the table structure keeps canonical names, so name-based \code{select()}
+and references still work; the console always shows names.}
+\item{\code{tabxplor.cleannames}}{\code{FALSE} (default): clean up variable/level names in output. Also
+strips a \code{"1-"}-style prefix from \code{labelled} value labels turned into factor levels.}
 }
 }
 

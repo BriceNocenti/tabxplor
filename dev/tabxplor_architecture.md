@@ -224,6 +224,21 @@ are the two factor-relabel steps extracted from `tab_prepare()` (which still com
 public callers); jmvtab (Phase 7e) runs cleannames at display instead (`jmvtab_cleannames_display()`).
 `tab_compact()` (`R/tab_classes.R`) is the internal merge invoked when `output = "single"`.
 
+**Labelled-data interop (Phase k, `R/tab.R`, no `haven`/`labelled` dependency).** `val_labels_to_factor()`
+is the shared base-R converter (keyed only off the `labels` attribute): a variable whose value labels are
+*complete* (every observed value labelled) becomes a factor whose levels are the labels, in the labels-vector
+order; an *incomplete* one is stripped to its underlying numeric/character type (so a coded numeric keeps its
+`tab_num` means path); a variable with no `labels` attribute is returned unchanged (byte-identity).
+`tab_apply_val_labels()` applies it across a set of columns by name-`[[` (never `data[vars]`, which
+row-subsets a data.table). It runs in `tab_setup()` (before the numeric/text classification), `tab_prepare()`,
+the two leaf cores, `tab_counts_normalize()`, and `tab_reg()` (before family detection / the skeleton), so
+`cleannames` then strips any `"1-"`-style prefix off the derived levels for free. `capture_var_labels()`
+reads each variable's `label` attribute BEFORE conversion strips it; the map rides `ctx`/`shared` into
+`meta$vars$var_labels` (stored only when non-empty — absent-when-unset, no golden churn, unioned across a
+`tab_compact()` merge). The opt-in `tabxplor.var_labels` swaps names for labels at export via
+`var_label_display()` (`R/tab-export-prep.R`) — the col-var span, the single-row_var header, and the merged
+`row_var` column values (+ the transpose mirror). Display only: the tibble keeps canonical names.
+
 **Row-axis dispatch (Phase 8 parallel + Phase 9a outer-map collapse, `R/tab-parallel.R`, Suggests-only
 mirai).** `tab_build()` runs `tab_setup` + `tab_prepare_pop` + `tab_aggregate` ONCE on main (the global
 `na="drop_all"/"common_base"` population drop lives in prep and cannot move; `tab_aggregate` builds the

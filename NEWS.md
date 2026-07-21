@@ -2,6 +2,14 @@
 # tabxplor 1.4.0 (in development)
 
 ## New features
+* **Labelled-data (`haven`/`labelled`) support**, with no new dependency. When a variable carries value
+  labels (its `labels` attribute) and every observed value is labelled, `tab()`, `tab_num()`,
+  `tab_counts()` and `tab_reg()` now use those labels as the factor levels (an incomplete-labelled
+  numeric keeps its means path; a variable with no labels is unchanged). `cleannames = TRUE` also strips
+  a `"1-"`-style prefix from a label turned into a level. The new option
+  `options(tabxplor.var_labels = TRUE)` shows a variable's *label* (its `label` attribute) instead of
+  its name in exports (markdown / html / Excel / plot); it is display-only -- the table keeps canonical
+  names, so `select()` and references by name still work, and the console keeps names.
 * **Effect sizes in `tab(test = TRUE)`.** Every whole-table test now carries an effect size beside its
   statistic and p-value: **Cramer's V** (or phi for a 2x2) for factor columns, **eta-squared** for
   numeric ones. Exports show the full summary (statistic + effect size + p-value) by default; set

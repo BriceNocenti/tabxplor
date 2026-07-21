@@ -189,6 +189,13 @@ tx_getOption <- function(names, default = NULL) {
   # Per-call `var_names =` on tab_kable/tab_md/tab_xl/tab_plot/tab_export overrides. R/tab-export-prep.R.
   options("tabxplor.var_names" = "both")
 
+  # Phase k: opt-in display-swap of variable NAMES for variable LABELS (the haven/labelled `label`
+  # attribute, captured at build into meta$vars$var_labels). FALSE (default) shows names; TRUE shows
+  # the label where a variable has one (else its name). EXPORTS only (md/html/xl/plot) -- the console
+  # keeps canonical names, which disambiguate. Structure is unchanged, so name-based select()/reference
+  # still work. is.null-guarded so an Rprofile opt-in survives load. R/tab-export-prep.R var_label_map().
+  if (is.null(getOption("tabxplor.var_labels"))) options("tabxplor.var_labels" = FALSE)
+
   # Phase 8: opt-in parallel build of many tables in ONE tab() call (Suggests-only {mirai}).
   # FALSE = off (default); TRUE = auto workers; an integer = that many daemons. `parallel_min` is
   # the smallest row_var count worth dispatching (fewer -> serial: setup would outweigh the gain).

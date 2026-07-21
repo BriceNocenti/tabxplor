@@ -1865,8 +1865,8 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
   # the 30-formal signature and its fragile positional re-listing at the split recursion. Contract (every
   # name always present): union_predictors, design_spec, weighted, inverse_two_level_factors, conf_level,
   # method, color_signif, cleannames, subtext, effect, at, stats, compare, baseline, multiplier, empirical,
-  # estimate_display, spread_models. (`split_var` stays a formal -- it flips to NULL in the recursion, and
-  # a NULL value cannot live in a modifyList()-mergeable list.)
+  # estimate_display, spread_models, var_labels. (`split_var` stays a formal -- it flips to NULL in the
+  # recursion, and a NULL value cannot live in a modifyList()-mergeable list.)
   list2env(shared, environment())
   # Phase 15e: each spec carries its OWN resolved family / do_exp / effect_shape / eff_word / color (set by
   # tab_reg), read as sp$<key>. The homogeneous-context scalar `family` (first outcome) is still needed by
@@ -1901,7 +1901,8 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
     grouped <- combined |>
       new_tab(subtext = subtext, test = tests,
               meta = list(ci_settings = list(conf_level = conf_level, method_cell = NA_character_,
-                                             method_diff = method))) |>
+                                             method_diff = method),
+                          vars = if (length(var_labels)) new_vars_attr(var_labels = var_labels) else NULL)) |>
       dplyr::group_by(!!rlang::sym(split_var), var)
     # Phase g: auto tab_spread() when there is ONE model (single dependent + single predictor set) that
     # is not multinomial (a multinomial has several columns for one model, so side-by-side is ambiguous).
@@ -2236,6 +2237,8 @@ reg_build <- function(data, specs, shared, split_var = NULL, .fit_cache = NULL, 
   tab |>
     new_tab(subtext = subtext, test = reg_gof,
             meta = list(empirical_tips = empirical_tips,
+                        # Phase k: variable labels for the opt-in name display-swap (absent when none).
+                        vars = if (length(var_labels)) new_vars_attr(var_labels = var_labels) else NULL,
                         # 14v-ii / 17h: the numeric/ratio methods the empirical columns use, read STRAIGHT
                         # from the REG_EMPIRICAL fact table (Student mean-diff = OLS, quasi-Poisson rate-
                         # ratio = the phi-scaled model), so the legend names exactly what the crude CI used.
@@ -2594,6 +2597,19 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
     cli::cli_abort("{.arg predictors} must be a character vector or a named list of character vectors.")
   }
 
+  # Phase k (labelled interop): capture variable labels (BEFORE conversion strips them) then convert
+  # labelled (haven/labelled) predictors / dependent / split columns to value-label factors -- so family
+  # detection below, the skeleton and the fit all see real factors (a coded outcome becomes a proper
+  # binomial/multinomial; complete-labelled predictors show their value labels). Covers a prebuilt
+  # survey design's variables too. `var_labels` rides `shared` into the reg table's meta$vars for the
+  # opt-in name display-swap. Idempotent / no-op for non-labelled data.
+  reg_lbl_vars   <- intersect(unique(c(as.character(dependent),
+                                       unlist(predictors, use.names = FALSE),
+                                       as.character(split_var))), names(data))
+  reg_var_labels <- capture_var_labels(data, reg_lbl_vars)
+  data           <- tab_apply_val_labels(data, reg_lbl_vars)
+  if (!is.null(design_obj)) design_obj$variables <- data
+
   # Phase 15e: `family` is resolved PER DEPENDENT, so one call can model several outcomes with
   # DIFFERENT families (one column-group per outcome). Accepts "auto" (detect each outcome), a scalar
   # (recycled to every dependent), a positional length-N vector, or a named vector keyed by dependent
@@ -2899,7 +2915,8 @@ tab_reg <- function(data, dependent, predictors = NULL, split_var = NULL, wt = N
     inverse_two_level_factors = inverse_two_level_factors, conf_level = conf_level, method = method,
     color_signif = color_signif, cleannames = cleannames, subtext = subtext, effect = effect, at = at,
     stats = stats, compare = compare, baseline = baseline, multiplier = multiplier,
-    empirical = empirical, estimate_display = estimate_display, spread_models = spread_models)
+    empirical = empirical, estimate_display = estimate_display, spread_models = spread_models,
+    var_labels = reg_var_labels)
   res <- reg_build(data, specs, shared, split_var = split_var,
                    .fit_cache = .fit_cache, reference = reference, reref = reref)
 
