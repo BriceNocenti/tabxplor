@@ -279,17 +279,18 @@ options:
       title: color_signif
       type: List
       options:
-        - title: "grey non-significant"
+        - title: "grey_non_signif <i>(color effect size + uncolor non-significant)</i>"
+        #####    "guaranteed_effect <i>(only the CI-guaranteed effect)</i>"
           name:  grey_non_signif
-        - title: "ignore significance"
-          name:  ignore
-        - title: "guaranteed effect only"
+        - title: "guaranteed_effect <i>(color all CI-floor, ideal for small sample)</i>"
           name:  guaranteed_effect
+        - title: "ignore <i>(color effect size only, ignore significance)</i>"
+          name:  ignore
       default: grey_non_signif
       description:
           R: >
-           How significance interacts with the colours: grey out non-significant cells,
-           ignore significance, or colour only the guaranteed (error-adjusted) effect.
+           How significance interacts with the colours: observed size + grey out non-significant 
+           cells, colour only the guaranteed (error-adjusted) effect, ignore significance.
 
 # ==================== Missing values and display ====================
     - name: estimate_display

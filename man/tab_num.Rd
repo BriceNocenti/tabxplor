@@ -31,8 +31,7 @@ tab_num(
   df = FALSE,
   color_breaks = NULL,
   .fine = NULL,
-  .by_table = FALSE,
-  .color_deprecate = TRUE
+  .by_table = FALSE
 )
 }
 \arguments{
@@ -164,10 +163,6 @@ correspondence analysis with \pkg{FactoMineR}.}
 \item{.fine, .by_table}{Internal. \code{.fine} is a pre-computed moment-sum aggregate (from
 \code{tab_aggregate_num()}) to adopt instead of scanning the raw data; \code{.by_table} forces
 the table-by-table path (a fresh scan). Both default to the fresh-scan behaviour.}
-
-\item{.color_deprecate}{Internal. Set to \code{FALSE} by \code{tab()}'s pipeline to mark
-\code{color} as an internally-generated legacy string, so re-parsing it raises no deprecation
-against the user. Not for direct use.}
 }
 \value{
 A \code{tibble} of class \code{tabxplor_tab}. If \code{...} (\code{tab_vars})

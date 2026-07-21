@@ -4,6 +4,11 @@
 #   tab_apply_tests(), tab_add_n_pct(), and the superseded step functions
 #   (tab_pct, tab_ci, tab_chi2, tab_tot, tab_totaltab, tab_spread).
 # KEY CONSTRAINTS:
+#   - The leaves are Phase 17f wrapper/core splits: the public tab_plain()/tab_num() = NSE defuse +
+#     validate + normalize colour, then call the shared resolver (plain_resolve/num_resolve) + the
+#     resolved-args compute core (plain_core/num_core). The pipeline (tab_transform) calls the CORES
+#     directly, so argument forcing runs ONCE and colour is finalised ONCE downstream (no double
+#     finalize_color_spec, no .color_deprecate flag). num_core never finalises (returns pre-finalise).
 #   - tab_plain()/tab_num() use data.table internally for aggregation speed.
 #     Column names are temporarily renamed to avoid DT conflicts, then restored.
 #   - tab() and tab_many() BOTH call tab_build(); they differ only in the default `output`
@@ -2019,42 +2024,60 @@ tab_transform <- function(ctx) {
   if (is.null(ref_vect)) ref_vect <- rep(ref, length(col_vars))
   cached_test <- if (is.null(cached_tests)) NULL else cached_tests[[row_var]]
 
-  # --- numeric col_vars: one tab_num() (adopts the per-row_var moment aggregate fine_num) ---
+  # Phase 17f: the pipeline calls the resolved-args CORES directly (num_resolve/num_core and
+  # plain_resolve/plain_core) instead of the public leaf wrappers -- so the argument forcing runs
+  # ONCE, colour is finalised ONCE downstream by tab()/tab_many() (no double finalize_color_spec),
+  # and there is no .color_deprecate dance (the pipeline never re-normalises the legacy colour).
+  tv_syms <- rlang::syms(as.character(tab_vars))
+
+  # --- numeric col_vars: one num_core() (adopts the per-row_var moment aggregate fine_num) ---
+  # num_resolve is forcing-only, so replicate the num-wrapper's validate (digits cast, total_names
+  # recycle) here -- the byte-identical counterpart of tab_num()'s validate block.
   tabs_num <- NULL
   chi2_num <- NULL
   if (sum(col_vars_num) != 0) {
-    tabs_num <- tab_num(data, !!rv, as.character(col_vars)[col_vars_num], as.character(tab_vars),
-                        wt = !!wt_sym, na = na_num, digits = digits[col_vars_num],
-                        ref = ref, ci = ci, conf_level = conf_level, stars = stars, comp = comp,
-                        method_mean_diff = method_mean_diff, method_mean_ratio = method_mean_ratio,
-                        ci_scale = ci_scale[1],
-                        color = color_num, totaltab = totaltab, totaltab_name = totaltab_name,
-                        tot = dplyr::if_else(totrow, "row", "no"), total_names = total_names,
-                        .fine = fine_num, .by_table = .by_table,
-                        # `color_num` is the pipeline's own legacy string (legacy_union() may have
-                        # built "diff_ci"/"after_ci" from the user's color + color_signif), so
-                        # tab_num() must not deprecate it back at the user.
-                        .color_deprecate = FALSE)
+    num_col_syms <- rlang::syms(as.character(col_vars)[col_vars_num])
+    num_digits   <- vctrs::vec_recycle(vctrs::vec_cast(digits[col_vars_num], integer()),
+                                       length(num_col_syms))
+    total_names2 <- vctrs::vec_recycle(total_names, 2)
+    r_num <- num_resolve(color_num, ref, ci, dplyr::if_else(totrow, "row", "no"),
+                         comp[1], totaltab, rv, num_col_syms, tv_syms)
+    tabs_num <- num_core(
+      data, rv, num_col_syms, tv_syms, wt_sym,
+      color = r_num$color, na = na_num[1], ref = r_num$ref, comp = r_num$comp, ci = r_num$ci,
+      ci_visible = r_num$ci_visible, conf_level = conf_level, stars = stars,
+      method_mean_diff = method_mean_diff, method_mean_ratio = method_mean_ratio,
+      ci_scale = ci_scale[1], totaltab = r_num$totaltab, totaltab_name = totaltab_name,
+      tot = r_num$tot, total_names = total_names2, subtext = "", digits = num_digits,
+      num = FALSE, df = FALSE, .fine = fine_num, .by_table = .by_table
+    )
     # Phase 3b: whole-table test for NUMERIC col_vars = one-way ANOVA (Welch + classic F), via
     # tab_chi2()'s test step (it detects mean col_vars and calls agg_anova()). Only the tidy `test`
     # tibble is kept (merged with the factor test at assemble); NULL when chi2 is off for this row_var.
     if (isTRUE(chi2)) chi2_num <- get_test(tab_chi2(tabs = tabs_num, calc = "p", comp = comp))
   }
 
-  # --- factor col_vars: one tab_plain() per col_var, joined into ONE table ---
+  # --- factor col_vars: one plain_core() per col_var, joined into ONE table ---
+  # plain_resolve does the full validate + forcing, so raw args pass straight through it.
   tabs_text <- NULL
   tests     <- chi2   # logical placeholder; assemble's is.logical() fallback handles a numeric-only tab
   if (sum(col_vars_text) != 0) {
     text <- purrr::pmap(
       list(col_vars[col_vars_text], digits[col_vars_text], na_text,
            pct_vect[col_vars_text], ref_vect[col_vars_text]),
-      function(.col_var, .digits, .na, .pct, .ref)
-        tab_plain(data, !!rv, !!.col_var, as.character(tab_vars), wt = !!wt_sym, na = .na,
-                  digits = .digits, pct = .pct, ref = .ref, ref2 = ref2, comp = comp, OR = OR,
-                  color = color_diff_OR, totaltab = totaltab, totaltab_name = totaltab_name,
-                  tot = c("row", "col"), total_names = total_names,
-                  conf_level = conf_level, stars = stars, color_signif = color_signif,
-                  .fine = fine_for_pair(.fine, row_var, .col_var), .by_table = .by_table)
+      function(.col_var, .digits, .na, .pct, .ref) {
+        r_pl <- plain_resolve(.pct, .ref, ref2, OR, .na, totaltab_name, total_names,
+                              c("row", "col"), comp, color_diff_OR, .digits, totaltab, tv_syms)
+        plain_core(
+          data, rv, .col_var, tv_syms, wt_sym,
+          pct = r_pl$pct, color = color_diff_OR, OR = r_pl$OR, na = r_pl$na, ref = r_pl$ref,
+          ref2 = r_pl$ref2, comp = r_pl$comp, totaltab = r_pl$totaltab, totaltab_name = totaltab_name,
+          tot = r_pl$tot, total_names = r_pl$total_names, subtext = "", digits = r_pl$digits,
+          num = FALSE, df = FALSE, conf_level = conf_level, stars = stars,
+          color_signif = color_signif, .fine = fine_for_pair(.fine, row_var, .col_var),
+          .by_table = .by_table
+        )
+      }
     ) |> purrr::set_names(as.character(col_vars[col_vars_text]))
 
     # Rename level names duplicated across col_vars (suffix with the col_var name) before the join.
@@ -3226,6 +3249,30 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
 
 
 
+  # Phase 17f: resolve the leaf's validation + forcing cascade ONCE (shared with tab_transform),
+  # then hand the resolved bundle to the compute core. tab_plain never finalises colour -- the outer
+  # tab()/tab_many() wrapper is the sole finaliser -- so the core returns the built table directly.
+  r <- plain_resolve(pct, ref, ref2, OR, na, totaltab_name, total_names, tot, comp, color,
+                     digits, totaltab, tab_vars)
+  plain_core(
+    data, row_var, col_var, tab_vars, wt,
+    pct = r$pct, color = color, OR = r$OR, na = r$na, ref = r$ref, ref2 = r$ref2, comp = r$comp,
+    totaltab = r$totaltab, totaltab_name = totaltab_name, tot = r$tot, total_names = r$total_names,
+    subtext = subtext, digits = r$digits, num = num, df = df, conf_level = conf_level,
+    stars = stars, color_signif = color_signif, .fine = .fine, .by_table = .by_table
+  )
+}
+
+
+# plain_resolve() -- Phase 17f: the factor leaf's argument validator + forcing cascade (pct/OR ->
+# tot -> comp -> ref="auto" -> digits -> totaltab), shared by the public tab_plain() wrapper and
+# tab_transform() so the pipeline resolves the SAME way instead of the leaf re-deriving. ref = "auto"
+# is type-specific here (OR/OR-colour -> "first", else the total row -> "tot"), differing from the
+# numeric leaf (num_resolve) for a mixed table. Returns the resolved bundle.
+#' @keywords internal
+#' @noRd
+plain_resolve <- function(pct, ref, ref2, OR, na, totaltab_name, total_names, tot, comp, color,
+                          digits, totaltab, tab_vars) {
   vctrs::vec_assert(pct, size = 1)
   vctrs::vec_assert(ref, size = 1)
   ref <- stringi::stri_trim_both(stringi::stri_replace_all_regex(ref, "\\s+", " "))
@@ -3325,6 +3372,21 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt,
     warning("since comp = 'all', a full total table was added to compare with")
     totaltab <- "table"
   }
+
+  list(pct = pct, ref = ref, ref2 = ref2, OR = OR, na = na, total_names = total_names,
+       tot = tot, comp = comp, digits = digits, totaltab = totaltab)
+}
+
+
+# plain_core() -- Phase 17f: the factor leaf's compute core. Consumes ALREADY-RESOLVED scalar settings
+# (from plain_resolve) + the resolved NSE syms; does the count aggregate + pct/diff/ratio/OR + fmt build
+# + totals + reference + the tab_var_1lv wrap, and returns the built table. Colour is NOT finalised here
+# (tab_plain never was) -- the outer tab()/tab_many() wrapper finalises once.
+#' @keywords internal
+#' @noRd
+plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, OR, na, ref, ref2, comp,
+                       totaltab, totaltab_name, tot, total_names, subtext, digits, num, df,
+                       conf_level, stars, color_signif, .fine, .by_table) {
 
 
 
@@ -4218,9 +4280,6 @@ tab_apply_reference <- function(tabs, tabs_pct, ref, ref2, comp, OR, color, pct,
 #' @param .fine,.by_table Internal. `.fine` is a pre-computed moment-sum aggregate (from
 #' \code{tab_aggregate_num()}) to adopt instead of scanning the raw data; `.by_table` forces
 #' the table-by-table path (a fresh scan). Both default to the fresh-scan behaviour.
-#' @param .color_deprecate Internal. Set to \code{FALSE} by \code{tab()}'s pipeline to mark
-#' \code{color} as an internally-generated legacy string, so re-parsing it raises no deprecation
-#' against the user. Not for direct use.
 #'
 #' @return A \code{tibble} of class \code{tabxplor_tab}. If \code{...} (\code{tab_vars})
 #'  are provided, a \code{tab} of class \code{tabxplor_grouped_tab}.
@@ -4246,7 +4305,7 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
                     tot = NULL, total_names = "Total",
                     subtext = "", digits = 0, num = FALSE, df = FALSE,
                     color_breaks = NULL,
-                    .fine = NULL, .by_table = FALSE, .color_deprecate = TRUE
+                    .fine = NULL, .by_table = FALSE
 ) {
 
   row_var_quo <- rlang::enquo(row_var)
@@ -4282,11 +4341,7 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
     wt <- rlang::ensym(wt)
   }
 
-  tab_row_names <- purrr::map_chr(c(tab_vars, row_var), rlang::as_name)
-
   #forbid the level to have the name of the variable, othewise problems ----
-
-
 
   vctrs::vec_assert(ref, size = 1)
   # ci    <-  ci[1]
@@ -4300,12 +4355,39 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
   total_names  <- vctrs::vec_recycle(total_names, 2)
   # Phase 5: `color` accepts the new forms (FALSE/TRUE/scalar/c(text,bg)/named) + `color_signif`.
   # Parse to a spec, run the pipeline on the text-channel legacy string, finalize on the result.
-  # `.color_deprecate = FALSE` (set only by tab_transform()) marks `color` as the pipeline's own
-  # legacy string, so re-parsing it here does not raise a deprecation against the user.
-  color_spec <- normalize_color_spec(color, color_signif, deprecate = .color_deprecate)
+  # Phase 17f: the pipeline calls num_resolve()/num_core() directly with an already-clean legacy
+  # colour, so deprecation lives ONLY here in the public wrapper (the .color_deprecate flag is gone).
+  color_spec <- normalize_color_spec(color, color_signif)
   color      <- color_spec$legacy
   stopifnot(color %in% c("auto", "diff", "diff_ci", "after_ci", "no", ""))
 
+  # Phase 17f: resolve the leaf's forcing cascade ONCE (shared with tab_transform), then hand the
+  # resolved bundle to the compute core. Colour is finalised ONCE, here, after the core returns.
+  r <- num_resolve(color, ref, ci, tot, comp, totaltab, row_var, col_vars, tab_vars)
+  result <- num_core(
+    data, row_var, col_vars, tab_vars, wt,
+    color = r$color, na = na, ref = r$ref, comp = r$comp, ci = r$ci, ci_visible = r$ci_visible,
+    conf_level = conf_level, stars = stars, method_mean_diff = method_mean_diff,
+    method_mean_ratio = method_mean_ratio, ci_scale = ci_scale, totaltab = r$totaltab,
+    totaltab_name = totaltab_name, tot = r$tot, total_names = total_names, subtext = subtext,
+    digits = digits, num = num, df = df, .fine = .fine, .by_table = .by_table
+  )
+
+  # Phase 5: set the final two-channel colour / significance-policy attributes (a no-op for a
+  # plain scalar colour passed straight through, e.g. when tab_many() drives tab_num()).
+  result <- finalize_color_spec(result, color_spec)
+  set_color_breaks_attr(result, resolve_color_breaks_arg(color_breaks))
+}
+
+
+# num_resolve() -- Phase 17f: the numeric leaf's argument resolver (colour-auto -> ci -> ref -> tot ->
+# comp -> totaltab forcing), shared by the public tab_num() wrapper and tab_transform() so the pipeline
+# resolves the SAME way instead of the leaf re-deriving. Takes the already-normalised colour legacy +
+# the raw ref/ci/tot/comp/totaltab; returns the resolved bundle. ref = "auto" is type-specific here
+# (a mean's reference is its total row -> "tot"), the byte-identical counterpart of tab_plain's rule.
+#' @keywords internal
+#' @noRd
+num_resolve <- function(color, ref, ci, tot, comp, totaltab, row_var, col_vars, tab_vars) {
   # Phase 7b: the numeric color = "auto" resolution is the means arm of the shared cascade,
   # in resolve_color_auto_num() (R/tab-resolve.R). A mean has no contrib/OR notion, so it keys
   # only on whether a real difference is possible (a `ref`, and ci != "cell"). Under tab_build()
@@ -4372,6 +4454,25 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
     warning("since comp = 'all', a full total table was added to compare with")
     totaltab <- "table"
   }
+
+  list(color = color, ref = ref, ci = ci, ci_visible = ci_visible,
+       tot = tot, comp = comp, totaltab = totaltab)
+}
+
+
+# num_core() -- Phase 17f: the numeric leaf's compute core. Consumes ALREADY-RESOLVED scalar settings
+# (from num_resolve) + the resolved NSE syms; does the moment aggregate + mean/diff/ratio/CI + fmt build
+# + totals + the tab_var_1lv wrap, and RETURNS THE PRE-FINALISE table. Colour is finalised ONCE by the
+# caller (the public tab_num() wrapper, or tab()/tab_many()); num_core never finalises -> no double pass.
+#' @keywords internal
+#' @noRd
+num_core <- function(data, row_var, col_vars, tab_vars, wt,
+                     color, na, ref, comp, ci, ci_visible,
+                     conf_level, stars, method_mean_diff, method_mean_ratio, ci_scale,
+                     totaltab, totaltab_name, tot, total_names,
+                     subtext, digits, num, df, .fine, .by_table) {
+
+  tab_row_names <- purrr::map_chr(c(tab_vars, row_var), rlang::as_name)
 
 
 
@@ -4639,83 +4740,17 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
   }
   comp_group <- if (comp == "tab") { as.character(tab_vars) } else { character() }
 
-  diff_index_mean <-  function(ref, row_var, num_names) { #needed for ci too
-    if (ref == "tot"   ) return(-1L)
-    if (ref == "first" ) return(1L )
-    if (is.numeric(ref)) return(as.integer(ref[1]))
-
-    # Try an EXACT label match first (Phase 7g-iii rule, ported from diff_index): a level whose text
-    # contains regex metacharacters ("$25000 or more") or is a substring of another level must match
-    # itself, not spuriously via regex. Regex only as the fallback.
-    exact <- which(row_var == ref)
-    index <- if (length(exact) >= 1L) exact else which(stringi::stri_detect_regex(row_var, ref))
-
-    if (length(index) >= 2) warning(paste0(
-      "with ref = '", ref, "' , several rows were found as ",
-      "reference for comparison ; only the first was kept ; ",
-      "to remove this warning, precise the value of ref ",
-      "until there is only one row_var level matched"
-    ))
-
-    index <- tidyr::replace_na(dplyr::first(index), 0)
-    if (length(index) == 0) index <- 0
-
-    index
-  }
-
-
   #Differences and confidence intervals
   if (!ref %in% c("no", "") | ci %in% c("cell", "diff")) {
 
-    if (ref != "tot") {
-      refrows <-
-        if(comp == "tab") {
-          tibble::as_tibble(tabs[, tab_row_names, with = FALSE]) |>
-            dplyr::group_by(!!!tab_vars) |>
-            dplyr::transmute(
-              var =
-                dplyr::row_number() == if (diff_index_mean(ref, !!row_var) == -1) {
-                  dplyr::n()
-                } else {
-                  diff_index_mean(ref, !!row_var)
-                }
-            ) |>
-            dplyr::pull("var")
-
-        } else {
-          tibble::as_tibble(tabs[, tab_row_names, with = FALSE]) |>
-            dplyr::mutate(tottab_vector = tottab_vector) |>
-            dplyr::group_by(!!!tab_vars) |>
-            dplyr::transmute(
-              var = dplyr::if_else(
-                condition = .data$tottab_vector,
-                true  = dplyr::row_number() == if (diff_index_mean(ref, !!row_var) == -1) {
-                  dplyr::n()
-                } else {
-                  diff_index_mean(ref, !!row_var)
-                },
-                false = FALSE
-              )
-            ) |>
-            dplyr::pull("var")
-        }
-
-      if (!any(refrows)) {
-        warning(paste0(
-          "in ref = '", ref, "' , no rows were found as reference for comparison ; ",
-          "to remove this warning, precise the value of ref ",
-          "until there is one row_var level matched"
-        ))
-      }
-
-    } else {
-      refrows <- if (comp == "tab") { totrow_vector } else { totrow_vector & tottab_vector }
-    }
-    #tabs_diff$DIPLOME[refrows] |> as.character()
-
-
-
-    refrows <- tidyr::replace_na(refrows, FALSE)
+    # Phase 17f: the ref-row derivation is the SHARED calculate_refrows() / diff_index() -- the same
+    # executor tab_plain uses -- replacing tab_num's former inline copy + its diff_index_mean() twin.
+    # diff_index(pct = "row") keys on row_var and ignores num_names, so col_vars is a placeholder.
+    refrows <- calculate_refrows(
+      tabs, ref = ref, comp = comp, tab_row_names = tab_row_names, tab_vars = tab_vars,
+      row_var = row_var, tottab_vector = tottab_vector, totrow_vector = totrow_vector,
+      num_names = col_vars
+    )
 
     tabs[, "ref_rows___" := refrows]
 
@@ -5008,10 +5043,9 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt,
     new_grouped_tab(tabs, dplyr::group_data(tabs), subtext = subtext)
   }
 
-  # Phase 5: set the final two-channel colour / significance-policy attributes (a no-op for a
-  # plain scalar colour passed straight through, e.g. when tab_many() drives tab_num()).
-  result <- finalize_color_spec(result, color_spec)
-  set_color_breaks_attr(result, resolve_color_breaks_arg(color_breaks))
+  # Phase 17f: return the PRE-FINALISE table; colour is finalised once by the caller (the public
+  # tab_num() wrapper, or tab()/tab_many()).
+  result
 }
 
 

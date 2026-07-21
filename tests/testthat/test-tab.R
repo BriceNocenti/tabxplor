@@ -737,7 +737,8 @@ testthat::test_that("levels = 'first' keeps NA rows in the row_var (na = 'keep')
 
 test_that("mean-table ref matches an exact label with regex metacharacters (Defect 3, Phase 17a)", {
   # rincome's "$25000 or more" begins with `$` (a regex end-anchor), so a pure-regex reference match
-  # (pre-17a diff_index_mean) fails to find the row. diff_index_mean now tries an EXACT match first.
+  # fails to find the row. Phase 17f routes tab_num through the shared calculate_refrows()/diff_index(),
+  # which try an EXACT label match first (the fix Phase 17a had ported into the now-deleted diff_index_mean).
   d  <- forcats::gss_cat |> dplyr::filter(!is.na(tvhours))
   tt <- tab_num(d, "rincome", "tvhours", ref = "$25000 or more", comp = "tab")
 
