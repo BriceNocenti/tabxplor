@@ -197,7 +197,9 @@ children:
         margin: large
         children:
           - type: Label
-            label: <b>Statistical test <i>(Chi2 for categorical columns; ANOVA F for numeric columns)</i></b>
+            label: >-
+              <b>test = <i>(Statistical test: Chi2 for categorical; ANOVA F for
+              numeric)</i></b>
           - type: LayoutBox
             margin: none
             children:
@@ -285,12 +287,9 @@ children:
               row: 1
             stretchFactor: 1
             children:
-              - type: Label
-                label: other_if_less_than =
-                children:
-                  - type: TextBox
-                    name: other_if_less_than
-                    format: number
+              - type: TextBox
+                name: other_if_less_than
+                format: number
           - type: LayoutBox
             margin: none
             cell:
@@ -298,24 +297,18 @@ children:
               row: 1
             stretchFactor: 1
             children:
-              - type: Label
-                label: cleannames = <i>(rm nb prefix)</i>
-                children:
-                  - type: CheckBox
-                    name: cleannames
+              - type: CheckBox
+                name: cleannames
           - type: LayoutBox
             margin: none
             cell:
               column: 0
-              row: 1
+              row: 2
             stretchFactor: 1
             children:
-              - type: Label
-                label: n_min = <i>(hide rows/cols with small counts)</i>
-                children:
-                  - type: TextBox
-                    name: n_min
-                    format: number
+              - type: TextBox
+                name: n_min
+                format: number
       - type: LayoutBox
         cell:
           column: 0
@@ -323,7 +316,9 @@ children:
         stretchFactor: 1
         children:
           - type: Label
-            label: <b>Reorder levels</b> <i>(click on a level, then move it up/down)</i>
+            label: >-
+              <b>Reorder levels</b> <i>(click on a level, then move it
+              up/down)</i>
             children:
               - type: CustomControl
                 name: levelOrderCtrl
@@ -336,11 +331,6 @@ children:
     stretchFactor: 1
     collapsed: true
     children:
-      # Phase 7g-iii: the reference picker is a Material CustomControl (refPickerCtrl) -- a
-      # single-select level list per variable (Total + levels, in the reordered order), plus a
-      # ref2 section shown only when OR is active. It edits the hidden `refLevels` + `ref2`
-      # options via js/jmvtab.js. Kept in its own margin:none LayoutBox (never mix celled and
-      # cell-less children in one box -> "Cell already exists" panel hang).
       - type: LayoutBox
         margin: none
         children:
@@ -353,47 +343,14 @@ children:
       - type: LayoutBox
         margin: none
         children:
-          # Phase 15c: comp is a ComboBox on the same line as its label (was two RadioButtons). Greyed
-          # imperatively by tab_vars length in js/jmvtab.js applyVarEnables (no declarative `enable:`).
           - type: ComboBox
             name: comp
             label: comp = <i>(reference table with tab_vars)</i>
-      # --- Phase 7g-iii: the old free-text `ref` / `ref2` boxes are REPLACED by refPickerCtrl
-      # --- above. Kept here (commented) for rollback -- to restore, uncomment and remove
-      # --- `hidden: true` from the `ref` / `ref2` options in .a.yaml.
-      # - type: LayoutBox
-      #   margin: none
-      #   children:
-      #     - type: LayoutBox
-      #       margin: none
-      #       cell: { column: 0, row: 0 }
-      #       stretchFactor: 1
-      #       children:
-      #         - type: Label
-      #           label: ref = <i>(expert fallback&#58; tot / first / regex / n)</i>
-      #           children:
-      #             - type: TextBox
-      #               name: ref
-      #               format: string
-      #     - type: LayoutBox
-      #       margin: none
-      #       cell: { column: 0, row: 1 }
-      #       stretchFactor: 0
-      #       children:
-      #         - type: Label
-      #           label: ref2 = <i>(2nd reference col/row for OR)</i>
-      #           children:
-      #             - type: TextBox
-      #               name: ref2
-      #               format: string
-      #               enable: (OR == 'OR' || OR == 'OR_pct')
   - type: CollapseBox
     label: <b>Confidence intervals</b>
     stretchFactor: 1
     collapsed: true
     children:
-      # Primary CI controls in their OWN 2x2 grid (rows 0-1 only), so the advanced method rows below
-      # can never shift their column widths (Phase 15c).
       - type: LayoutBox
         margin: none
         children:
@@ -474,8 +431,6 @@ children:
                   - type: CheckBox
                     name: stars
                     enable: (ci:diff || ci:auto || ci:ratio)
-      # Expert methods: a SEPARATE nested CollapseBox (collapsed). One method per row, [label | dropbox]
-      # with every dropbox in column 1 so they left-align to one column.
       - type: CollapseBox
         label: <b>Confidence-interval methods (advanced)</b>
         stretchFactor: 1
@@ -682,9 +637,6 @@ children:
             children:
               - type: ComboBox
                 name: digits
-  # subtext -- its OWN full-width row: a CustomControl auto-grow <textarea> (js/jmvtab.js drives the
-  # hidden `subtext` String option). Lifted out of the 2-column "Other formatting" grid so it can span
-  # the full panel width (a grid cell is only half-width, and cells can't span columns).
   - type: LayoutBox
     margin: large
     stretchFactor: 1
@@ -702,7 +654,80 @@ children:
     margin: large
     stretchFactor: 1
     children:
-      # Row of two columns: [Export button / Format below it]  |  [Save-to file name / Replace].
+      # Row 1: the Export action, the Format selector, the Replace-existing toggle.
+      - type: LayoutBox
+        margin: none
+        children:
+          - type: LayoutBox
+            cell:
+              column: 0
+              row: 0
+            stretchFactor: 1
+            children:
+              - type: ActionButton
+                name: exportExcel
+                label: Export
+                events:
+                  change: ./jmvtab::exportExcel_changed
+          - type: LayoutBox
+            cell:
+              column: 1
+              row: 0
+            stretchFactor: 2
+            children:
+              - type: ComboBox
+                name: export_format
+                events:
+                  change: ./jmvtab::export_format_changed
+          - type: LayoutBox
+            cell:
+              column: 2
+              row: 0
+            stretchFactor: 3
+            children:
+              - type: CheckBox
+                name: xl_replace
+                label: Replace existing file
+      # Row 2: ONE full-width path line -- "Path:" <folder> " / " <filename> <.ext>.
+      #   folder : filename width = 3 : 2. This ratio only holds because js injectExportCss() collapses
+      #   the TextBoxes' ~200px max-content floor -- otherwise both cells bottom out at 200px (see the js).
+      #   The label / separator / extension cells are stretch 0, so they take only their text width.
+      - type: LayoutBox
+        margin: none
+        children:
+          - type: LayoutBox
+            cell:
+              column: 0
+              row: 0
+            stretchFactor: 2
+            children:
+              - type: TextBox
+                name: export_dir
+                format: string
+                width: largest
+          - type: LayoutBox
+            cell:
+              column: 1
+              row: 0
+            stretchFactor: 1
+            children:
+              - type: TextBox
+                name: export_filename
+                format: string
+                width: large
+          - type: LayoutBox
+            cell:
+              column: 2
+              row: 0
+            stretchFactor: 1
+            children:
+              - type: CustomControl
+                name: extCtrl
+                events:
+                  creating: ./jmvtab::extCtrl_creating
+                  updated: ./jmvtab::extCtrl_updated
+      # Row 3: a discreet, right-aligned "default path" reset, sitting under the file-name box.
+      #   The empty cell 0 (stretch 1) pushes the small link-styled button (js: styleResetBtn) to the right.
       - type: LayoutBox
         margin: none
         children:
@@ -713,51 +738,7 @@ children:
             stretchFactor: 0
             children:
               - type: ActionButton
-                name: exportExcel
-                label: Export Excel
+                name: resetPath
+                label: default path
                 events:
-                  change: ./jmvtab::exportExcel_changed
-              - type: Label
-                label: <b>Format:</b>
-                children:
-                  - type: ComboBox
-                    name: export_format
-                    events:
-                      change: ./jmvtab::export_format_changed
-          - type: LayoutBox
-            margin: none
-            cell:
-              column: 1
-              row: 0
-            stretchFactor: 1
-            children:
-              - type: Label
-                label: <b>Save to (file name):</b>
-                children:
-                  - type: TextBox
-                    name: export_filename
-                    format: string
-                    width: largest
-              - type: CheckBox
-                name: xl_replace
-                label: Replace existing file
-      # The destination folder, taking all the remaining width (stretched to 100% in js/jmvtab.js).
-      - type: LayoutBox
-        margin: none
-        children:
-          - type: Label
-            label: <b>Folder:</b>
-            children:
-              - type: TextBox
-                name: export_dir
-                format: string
-                width: largest
-      # Reset the folder + file name to their defaults.
-      - type: LayoutBox
-        margin: none
-        children:
-          - type: ActionButton
-            name: resetPath
-            label: Reset to defaults
-            events:
-              change: ./jmvtab::resetPath_changed
+                  change: ./jmvtab::resetPath_changed

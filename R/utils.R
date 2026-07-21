@@ -238,14 +238,35 @@ cleannames_condition <- function()
 
 
 
-#' Create a score variable from factors
+#' Create a score variable by counting factors at their first level
+#'
+#' Builds an integer score column that counts, for each row, how many of the
+#' listed factors sit at their **first level**. Each factor contributes 1 when
+#' it equals its first level and 0 otherwise, so the score ranges from 0 to
+#' `length(vars_list)`. This is the natural way to turn a battery of yes/no
+#' (or agree/disagree) survey items into a single summed score, and it feeds
+#' the grouped-binomial outcome of [tab_reg()] (its `trials` argument).
 #'
 #' @param data A data.frame.
-#' @param name The name of the variable to create.
-#' @param vars_list The list of the factors to count
-#' (only the first level is counted, as 1) ; as a character vector.
+#' @param name The name of the score variable to create (unquoted or a string);
+#'   an existing column of that name is replaced.
+#' @param vars_list The factors to count, as a character vector. For each one
+#'   only its **first level** counts (as 1); every other level, including
+#'   missing values, counts as 0.
 #'
-#' @return The data.frame, with a new variable.
+#' @return `data` with the integer score column `name` added (or replaced).
+#'
+#' @details
+#'   The "first level" is `levels(as.factor(x))[1]` -- the reference level of the
+#'   factor. Non-factor columns are coerced with [as.factor()]. Missing values
+#'   are folded into an explicit `"NA"` level before counting (via
+#'   [forcats::fct_na_value_to_level()]), so an `NA` never matches the first
+#'   level and contributes 0.
+#'
+#' @seealso [tab_reg()] and its `trials` argument for modelling a summed score
+#'   as a grouped binomial; `vignette("tabxplor-programming")` for a worked
+#'   example.
+#'
 #' @export
 #'
 #' @examples

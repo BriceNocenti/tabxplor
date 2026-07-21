@@ -163,7 +163,7 @@ options:
         - title: "grey_non_signif <i>(same + uncolor non-significant)</i>"
         #####    "guaranteed_effect <i>(only the CI-guaranteed effect)</i>"
           name:  grey_non_signif
-        - title: "guaranteed_effect <i>(col. all CI-floor/small sample)</i>"
+        - title: "guaranteed_effect <i>(color all CI-floor/small sample)</i>"
           name:  guaranteed_effect
       default: ignore
       description:
@@ -209,13 +209,13 @@ options:
       title: na
       type: List
       options:
-        - title: "keep <i>(NA as a level)</i>"
+        - title: "keep <i>(NA as a normal level)</i>"
           name:  keep
         - title: "drop <i>(each col_var drops its own NA)</i>"
           name:  drop
-        - title: "drop_all <i>(drop NA in row_var and all col_vars)</i>"
+        - title: "drop_all <i>(complete cases in all col_vars)</i>"
           name:  drop_all
-        - title: "common_base <i>(force to the population of the 1st col_var)</i>"
+        - title: "common_base <i>(complete cases of 1st col_var)</i>"
           name:  common_base
       default: keep
       description:
@@ -257,7 +257,7 @@ options:
               }
 
     - name: other_if_less_than
-      title: ""
+      title: <b>other_if_less_than = <i>("Other" level)</i></b>
       type: Number
       min: 0
       default: 0
@@ -267,7 +267,7 @@ options:
            than that will be merged into an "Others" level.
 
     - name: cleannames
-      title: ""
+      title: "<b>cleannames =</b>"
       type: Bool
       default: true
       description:
@@ -673,7 +673,7 @@ options:
            an integer vector the same length as \code{col_vars}.
 
     - name: n_min
-      title: n_min
+      title: <b>n_min = <i>(hide rows/cols with small counts)</i></b>
       type: Integer
       min: 0
       default: 0
@@ -707,7 +707,7 @@ options:
 
     - name: export_dir
       type: String
-      title: "Folder"
+      title: "Path:"
       default: "~/Documents"
       description:
           R: >
@@ -716,7 +716,7 @@ options:
 
     - name: export_filename
       type: String
-      title: "Save to (file name)"
+      title: "/"
       default: "Table"
       description:
           R: >

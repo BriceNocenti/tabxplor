@@ -135,19 +135,29 @@ gss_simple |>
 
 
 
+## Grouped-binomial outcomes (a summed score)
+
+When the outcome is a **summed score** — how many of several yes/no items a respondent answered one way — you model the number of "successes" out of a fixed number of items with `trials =`. `tab_reg()` then fits `cbind(score, trials - score)` as a binomial, so the odds ratios read on the *per-item* probability. `score_from_lv1()` (see `vignette("tabxplor-programming")`) builds such a score by counting factors at their first level:
+
+```{r}
+gss_simple |>
+  score_from_lv1("score", vars_list = c("married", "income25k")) |>   # a 0–2 score
+  tab_reg("score", c("race", "age"), family = "binomial", trials = 2)
+```
+
+Grouped-binomial (like Poisson) models report a Pearson **dispersion** check in the footer, flagging over-dispersed counts.
+
 ## Ordinal and nominal outcomes (a factor with 3+ levels)
 
 An **ordered** factor outcome is fit as a proportional-odds (cumulative) logistic model:
 
-```{r, eval = requireNamespace("MASS", quietly = TRUE)}
-# install.packages("MASS")
+```{r}
 tab_reg(gss_simple, "rincome", c("race", "age", "relig"))
 ```
 
 A nominal outcome with three or more unordered levels is fit as one **multinomial** logistic model, giving one odds-ratio column per outcome category versus the reference category (also called relative risks ratios) :
 
-```{r, eval = requireNamespace("nnet", quietly = TRUE)}
-# install.packages("nnet")
+```{r}
 tab_reg(gss_simple, "party3", c("race", "age", "rincome", "relig"))
 ```
 
@@ -155,8 +165,7 @@ Relative risk ratios may be quite difficult to read because they are relative to
 
 Most of the time, average marginal effects (AME) are easier to interpret, because they make the second reference level disappear, and directly modelise, for each level of the dependent variable, difference of percentages of each predictor compared to their reference level (a less abstract quantity than odds ratios). 
 
-```{r, eval = requireNamespace("nnet", quietly = TRUE)}
-# install.packages("nnet")
+```{r}
 tab_reg(gss_simple, "party3", c("race", "age", "rincome", "relig"), effect = "ame", empirical = TRUE) # |> tab_kable()
 ```
 
@@ -244,6 +253,16 @@ tab_reg(gss_simple,
         compare = "sequential")
 ```
 
+## The same model within sub-populations
+
+`split_var =` is the regression analogue of `tab()`'s `tab_vars`: the same model is fitted **within each level** of a grouping variable, and the per-group tables are stacked into one grouped table. It answers "does this effect hold in every subgroup?". Use `tab_spread()` on the split variable to lay the groups out as side-by-side columns for an easy comparison (a level absent from a group shows empty cells):
+
+```{r}
+tab_reg(gss_simple, "married", c("race", "rincome"), split_var = "year") |>
+  tab_spread(year)
+```
+
+In a flat export the groups stay stacked, sharing one merged, vertical first column that names the split variable.
 
 ## Fine-tuning the display, and scaling a predictor
 
@@ -296,6 +315,7 @@ lm_plots(m)
 
 ## Where to go next
 
+- `tab_reg()` is also available **without writing R code**, as a point-and-click **Regressions** analysis in the [jamovi](https://www.jamovi.org/download) module — install *tabxplor* from jamovi's module library (see `vignette("tabxplor")`).
 - `vignette("tabxplor")` — cross-tables and the colour helpers.
 - `?tab_reg` for every argument (grouped by purpose), and `?tab_reg` &rarr; *Details* for the modelling choices.
 - `survey::svydesign()` for complex designs (calibration, replicate weights, finite-population corrections).

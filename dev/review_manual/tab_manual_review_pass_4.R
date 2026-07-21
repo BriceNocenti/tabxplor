@@ -66,6 +66,25 @@ tab(gss_simple, c(race, rincome, relig), c(party3, marital), pct = "row",  na = 
 
 ### tab_reg tests ----
 
+# Variable name duplication in exports
+tab_reg(gss_simple, dependent = c("married", "tvhours"), predictors = c("race", "rincome", "relig", "age"),
+        family = c("binomial", "poisson"), empirical = TRUE, 
+) |> 
+  tab_export("md")
+# |           | levels               |Emp. % (married)  |Emp. OR (married)  |Model OR (married)  | |Emp. rate (tvhours)  |Emp. IRR (tvhours)  |Model IRR (tvhours)  |
+# |:----------|:---------------------|-----------------:|------------------:|-------------------:|-|--------------------:|-------------------:|--------------------:|
+# |           |                      | *married: 01-Married*|               |                    | | *tvhours*           |
+tab_reg(gss_simple, dependent = c("married", "tvhours"), predictors = c("race", "rincome", "relig", "age"),
+        family = c("binomial", "poisson"), empirical = TRUE, 
+) |> 
+  tab_export()
+# First row : married: 01-Married	tvhours
+# Second row . "levels" "Emp. % (married)" "Emp. OR\n(married)" "Model OR\(married)" "Emp. rate\(tvhours)" "Emp. IRR\(tvhours)" "Model IRR\(tvhours)"
+# - On exports, much space is lost for duplicated informations : the variable name is aldeady on the col_var row,
+#   but it’s also repeated on each column headers / second row. We must keep the "(married)" "(tvhours)" precision in
+#   console, to avoid name clashed, but it’s not needed in exports since the col_var names row already gives the information.
+# - Also, please use brackets instead of parenthesis for variable names in column names in console. For example "[married]"
+
 # No colors and wrong empirical counterpart for logistic models with exponentiate = FALSE
 tab_reg(gss_simple, dependent = "married", predictors = c("race", "rincome", "relig", "age"),
         family = "binomial", empirical = TRUE, exponentiate = FALSE, 

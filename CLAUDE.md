@@ -936,7 +936,7 @@ Verification: full suite; test-jmvtab-cache / test-jmvtabreg-cache cold+warm+rer
 
 ---
 
-#### Phase 17j — options and internal-docs alignment
+#### Phase 17j — options and internal-docs alignment (DONE)
 
 **Goal**: the options namespace is coherent, and the dev docs describe the post-17 architecture with no trace of the removed machinery.
 
@@ -974,9 +974,16 @@ Feature-by-vignette map (a paragraph or short subsection each — an example the
    + `split_var=` — a real section: one model per subpopulation, side by side, `tab_spread`-able; how it appears in exports (the merged vertical first column).
    + `trials=` — grouped-binomial outcomes (the jamovi Model table exposes it; R users currently have no example).
    + `tab_logit()` / `multi_logit()` — one paragraph naming the curated wrappers and when they suffice.
-4. **Placement sanity**: every example must use only exported functions (the Last Phase e-iiii lesson — vignettes build against the installed namespace); guard nnet/MASS/survey chunks with `requireNamespace`; keep each addition short — these are discovery paragraphs, not reference docs (the reference lives in `?help`).
+4. **Placement sanity**: every example must use only exported functions (the Last Phase e-iiii lesson — vignettes build against the installed namespace); keep each addition short — these are discovery paragraphs, not reference docs (the reference lives in `?help`).
 
 Verification: all three vignettes render with colours (the fansi hook); `devtools::build_vignettes()` clean; no new unexported-function calls (grep the chunks); full suite untouched.
+
+**DONE (2026-07-21).** All three vignettes render clean (each chunk evaluated -- verified via `rmarkdown::render`; `build_vignettes()` is deprecated, needs `remotes`); the new `test-score-from-lv1.R` is green (PASS 10); the rest of the suite is byte-unchanged by this phase.
+- **Intro (`tabxplor.Rmd`)**: `n_min=` (relig×race, drops sub-200 rows) appended to the significance section as the small-base companion to `guaranteed_effect`; the weighting sentence (weighted estimate / unweighted n / Kish opt-in) in the CI section; `output_list=` at the end of Sub-tables; `transpose=` + `tab_css()` (one stylesheet, `theme="auto"`, role classes) in Exporting; `subtext=` + `set_caption()`/`get_caption()` in Working-with-the-result; a "point-and-click interface (jamovi)" section (link + module-library install).
+- **Programming (`tabxplor-programming.Rmd`)**: new sections `## Tables from pre-aggregated counts` (`tab_counts()` tidy/table/wide + the counts/wt_counts rule), `## Pivoting a grouped table into columns` (`tab_spread()` / `spread_vars=`), `## A score from several factors` (`score_from_lv1()`), `## Building many tables at once` (`tab_many()` list mode + `purrr::pmap`).
+- **Reg (`tabxplor-reg.Rmd`)**: the three MASS/nnet `requireNamespace` guards stripped (now Imports); `## Grouped-binomial outcomes` (`trials=`, pairs with `score_from_lv1`); `## The same model within sub-populations` (`split_var=` + `tab_spread`); a jamovi bullet in Where-to-go-next. `tab_logit()`/`multi_logit()` deliberately NOT taught (legacy wrappers -- the full `tab_reg()` path + the existing comparison section cover it).
+- **Code**: `score_from_lv1()` roxygen refreshed (description/details on the first-level + NA rule, `@seealso tab_reg` `trials`) + `man/` regenerated; new `test-score-from-lv1.R`.
+- **Pre-existing, NOT this phase**: `test-tab_reg-survey.R:264` (`empirical=TRUE` expected to throw `defunctError`) fails at HEAD (8b3333d) -- `empirical` is the live headline arg since 14v (renamed from `empirical_OR`, which is now simply gone, not lifecycle-defunct), so the test is stale; `git diff HEAD` is empty for `R/tab_reg.R` and this test. Also `devtools::document()` corrected a stale `man/tab_reg.Rd` (formal order drifted from source). Both handed to the maintainer.
 
 ---
 
@@ -984,19 +991,77 @@ Verification: all three vignettes render with colours (the fansi hook); `devtool
 
 ### Last Phase – lasts steps and release
 
-#### Phase 15f — Jamovi UI French translation
+#### Last Phase g — tab_reg() improvements
+
+Carefully study the manual review made by the maintainer at `dev/review_manual/tab_manual_review_pass_4.R`. The problems to resolve, decisions taken by the maintainer and new features to implement are all inside R `#` comments.
+
+Other improvements to implement :
+- Add "html" argument in `tab_export`, remove "kable" option name altogether (kable can be choosed as an engine, but the type is really html ; hard deprecation of the option name : tab_export is new, it was not in the former public version 1.3.1). Rename `tab_kable()` `tab_html()`, while keeping the alias`tab_kable()` too (not deprecated at all, keep it as normal exported function).
+- In legends and table footers, on all kind of exports : 1. Put variable names in bold ; 2. For background colors legend, breaks text in plain font weight (keep bold for text colors breaks/legend only).
 
 
-#### Last Phase g – NEWS.md simplification
+#### Last phase h — final Jamovi UI maintainer’s review
 
 
-#### Last Phase h – tabxplor R french translation
+Jamovi jmvtabreg 
+
+For the family selector : 
+- Don’t show "auto (detected)", just auto chose the auto detected object in the drop list (ex : "binomial (logistic)" for binary factors). When only one choice is possible, just grey out the dropdown since there’s not choice left. When the auto detection fails, for integers or doubles, please autoselect "poisson" over "gaussian" (more annoying if the models don’t fit in jamovi live UI than in R session). 
+- The model "modelised level" selector in the third column is not wide enough to be readable, and the whole family selector does not take all horizontal available  : make sure the whole family selector is a 3 columns layout taking all horizontal space available right ; give more space for levels names in the drop list ; third column "level" text wastes horizontal space and is not necessary (if it shows the levels of the binomial var, the user see it’s a level picker). 
+- Only show "poisson (counts)", not quasi-poisson, but do a quasi-poisson anyway, like in the current code (with simple poisson dispersion says 1.46 so I guess it’s that) (would also reduce the width of the drop list since it’s the longest item) ? By the way : with "quasipoisson" selected, `empirical=TRUE` does nothing.
+- In mixed model with one binomial + one poisson, working well, adding a 3 level multinomial freezed jamovi (restart necessary). Same happened the other way round : 3 level multinomial was working well, adding one binomial + 1 poisson made it freeze
+
+Rest of the `Model` pane : 
+- Grey out `effect` when there are no binomial/multinomial/ordinal selected, since "AME" il only meaningful in these cases (not for gaussian and poisson, right ?)
+- Grey out `exponentiate` where there are no binomial/multinomial/ordinal/poisson selected ? 
+
+`Model comparison / predictors subset` : 
+- The menu is great, but it still freezes very often : I can’t reproduce the pattern for freeze, but I think just selecting or selecting out predictors too fast may make it freeze (sometimes it doesn’t even feel fast : like it click "+" to add three models, they add, then I select out a level, waiting for 5 sec and not more loading between each action, and it still freezes ; sometime it’s total freeze that require jamovi restart, sometimes it’s still possible to remove the analysis and redo, but this one feels random). Please do thorought web searches about jamovi freeze problems, and help me diagnose the cause and find a solution. Maybe the model comparison panel needs a kind of Ok button : since it’s an heavy operation that have no meaning to be redone every second, maybe the right UI is maybe "the user pick its models, then click the button to start analysis", actually bypassing jamovi UI live display for this one. Once the models to compare are picked, changes in other buttons in the UI keeps them, removing a variable in variable selection remove it in all models then relaunch (maybe guard this one in another way since it had been a source of freeze with model comparison in the past ?), etc. What other guards against jamovi freeze ? 
+- There’s a R side problem too : for a row variable/predictor selection in all models the reference catogory is in bold in the firt "levels" column, with is the right behaviour ; but when the predictor have been selected out in any model, the bold dissapear ; I think it’s just because empty parts of the table doesn’t properly keep the `in_refrow` field, and mess with reference row detection.
+
+`References and predictor scaling` :
+- I have a doubt if the reference selector drop list display the factors levels in the right order, or maybe mess with the order, please check.
+
+`Significance` pane : 
+- Starts the menu with the two ways of visualising significance, on the same row, in a clear 3 equal-sized columns layout : first column label just says "<b>Show:</b>" ; second column have the `color` tick box ; third column have the `stars` tick box.
+- Second row have : first column "conf_level =" and the number box (use a number box with up and down arrows to increment by 0.01) ; second column "method = <i>(conf. interval)</i>" ; third column with the radio buttons (no duplicate title). 
+- Third row have color_signif, taking all the horizontal space in the row.
+
+In general for jamovi UI (jmvtab + jmtvtabreg) : 
+- Add an empty line at the end of each main UI collapsable box, to more clearly separate each menu from the next when the menu is collapsed (when not collapsed, this additional line should not show, compact is good).
+
+I still have these messages in jamovi devtools console :
+  "[Deprecation] Listener added for a 'DOMNodeInserted' mutation event. This event type is deprecated, and will be removed from this browser VERY soon. Usage of this event listener will cause performance issues today, and represents a large risk of imminent site breakage. Consider using MutationObserver instead. See <URL> for more information."
+  "addRange(): The given range isn't in document."
+
+`Missing values and display` : rename `Display` (missing values are not here anymore)
+- Layout for the first row : first column, half the h space, `estimate_display` ; second column, half the h space : a common bold title + "wrap_rows =" + "wrap cols =" + a label for cleannames + "cleannames =", verticaly stacked (5 rows, matching the 5 rows of `estimate_display` including it’s label) (to not duplicate titles in both label and title)
+- `subtext` auto height growth text box is good, but it’s very thin : make it take all the horizontal space available at its right (same for `jmvtab` subtext box). 
+
+Whenever you can, **keep the "real_R_argument = <quick legend>" syntax** (like : "color = <i>(color helpers)</i>"), since I use the jamovi package as a progressive approach to teach R / tabxplor on R to literary students (it’s also why we do not want to translate the argument in French, only their legend).
+
+In general, **do not repeat the same legend twice in the argument title (.a.yaml), and in it’s UI label (.u.yaml)**.
+
+
+Export menu (`jmvtab` + `jmvtabreg`) :
+- jmvtab Excel export still fails, windows-side, with default parameters : "Export failed: ℹ In index: 1. Caused by error in `wb$add_data()`: ! argument 6 matches multiple formal arguments"
+- html table export working, but on my Windows 11 computer it totally fails to find my real `Documents` folder : it creates a new "C:\Users\Brice\Documents" folder, but my Windows have a different official location to "D:\Documents" with a pointer towards it in the normal "C:\Users\Brice\" and all `Documents` normal shortcuts. How to find the real folder from inside the locked electron R session ?
+
+
+
+
+#### Phase 15g — Jamovi UI French translation
+
+#### Last Phase x – NEWS.md simplification
+
+
+#### Last Phase y – tabxplor R french translation
 
 All legends should be carefully translated to French.
 Could the package documentation be translated for French users ? Could the whole pkgdown easily have a french version, with the possibility to choose on the webpage ?  
 What other strings should be translated in French ?
 
-#### Last Phase i – github PR and CRAN release
+#### Last Phase z – github PR and CRAN release
 
 
 

@@ -93,6 +93,12 @@ Give `tab()` a third variable as `tab_vars` and it builds **one sub-table per gr
 tab(gss_simple, race, party3, rincome, na = "drop", pct = "row")
 ```
 
+When you pass several **row variables** *without* `tab_vars`, `tab()` merges the mirror tables into a single table by default. `output_list = TRUE` returns instead a **list with one table per row variable** (with `tab_vars`, the result is always a list):
+
+```{r, echo = TRUE}
+tab(gss_simple, c(married, income25k), race, pct = "row", output_list = TRUE)
+```
+
 ## colors: reading helpers
 
 This is the main purpose of `tabxplor`. `color = "diff"` colors each cell by **how far it sits from its reference** — by default the Total of its row or column. Cells clearly above the average turn **blue**, cells clearly below turn **red/orange** — the further a cell sits from its reference, the stronger the shade — and a color legend is printed underneath.
@@ -142,6 +148,14 @@ gss_simple |>
   tab(race, party3, pct = "row", color = "diff", color_signif = "guaranteed_effect")
 ```
 
+On **small samples** a big-looking percentage can rest on a handful of respondents. `n_min =` is a purely visual filter, applied last: it hides cells whose (unweighted) base is below the threshold and drops a row entirely when its largest base falls short — Total rows/columns, the count column and the test line are always kept, and nothing is recomputed. Here the two rarest religions (fewer than 200 respondents) drop out:
+
+```{r, echo = TRUE}
+tab(gss_simple, relig, race, pct = "row", n_min = 200)
+```
+
+`guaranteed_effect` and `n_min` are complementary: the first handles *statistical* uncertainty (thin cells lose their colour on their own), the second handles *presentational* small bases (it removes the noisy cells from view).
+
 ## Confidence intervals, tests and contributions
 
 Print confidence intervals for each cell with `ci = "cell"` : 
@@ -188,6 +202,8 @@ tab(gss_simple, race, party3, color = "contrib")
 
 See below for the detail of how confidence intervals and colors can be composed.
 
+**A note on weights.** With a weight (`wt =`), every estimate is weighted, but the sample size behind the confidence intervals and tests stays the real, **unweighted** number of cases — the honest basis for uncertainty. Opt in to Kish's effective sample size with `options(tabxplor.kish_neff = TRUE)` if you prefer the design-adjusted *n*. (`tab_reg()` is fully design-based — see `vignette("tabxplor-reg")`.)
+
 
 ## Exporting
 
@@ -210,6 +226,22 @@ tab_kable(t, theme = "auto")                       # HTML that follows the reade
 tab_md(t, lang = "fr")                             # French colour legend and footers
 ```
 
+- **Column percentages with several row variables** read better transposed (row variables side by side as columns). Ask the exporter to do it with `transpose = TRUE` — no separate object needed (this supersedes the old `tab_transpose()`):
+
+```{r, echo = TRUE, eval = FALSE}
+tab(gss_simple, c(marital, relig), race, pct = "col") |>
+  tab_kable(transpose = TRUE)   # also tab_xl(transpose = TRUE) / tab_md(transpose = TRUE)
+```
+
+- **One stylesheet for a whole document.** In an `.Rmd`/`.qmd` report, `tab_css()` writes the colour CSS once and every later `tab_kable()` emits only classes, so a single `theme` — including `"auto"`, which follows the reader's light/dark mode — styles every table at once:
+
+```{r, echo = TRUE, eval = FALSE}
+options(tabxplor.tab_kable_css = FALSE)
+tab_css(theme = "auto")   # emit once, near the top of the document
+```
+
+  Nothing is written inline on a cell, so any look is overridable with plain CSS afterwards (column widths, fonts…); see `?tab_css` for the role classes (`.tx-rv`, `.tx-tot`, `.tx-num`).
+
 ## Working with the result
 
 `tab()` returns a `tibble` (of class `tabxplor_tab`), so `dplyr` verbs just work. Use the helper `is_totrow()` to keep the Total row in place when you re-order (it flags total rows, so sorting on it first sends them to the bottom):
@@ -219,6 +251,15 @@ library(dplyr)
 tab(gss_simple, race, marital, pct = "row") |>
   arrange(desc(Married))
 ```
+
+**Titling and annotating.** `subtext =` prints one or more legend lines under a table (a data source, a note). `set_caption()` gives a table a **title that survives a dplyr pipeline** — it is stored in the table's metadata, so it is still there after you `filter()`, `arrange()` or reshape, and every exporter (`tab_kable()`, `tab_xl()`, `tab_md()`) uses it as the table title:
+
+```{r, echo = TRUE}
+tab(gss_simple, race, marital, pct = "row", subtext = "Source: GSS, 2000-2014") |>
+  set_caption("Marital status by race")
+```
+
+The caption is invisible in the console (it is meant for exports); read it back with `get_caption()`.
 
 
 ## Confidence intervals and colors composition : variable_type × `color` × `color_signif`
@@ -293,6 +334,10 @@ tab(gss_simple, rincome, tvhours, color = "ratio", color_signif = "grey_non_sign
 tab(gss_simple, rincome, tvhours, color = "diff", color_signif = "grey_non_signif",
     color_breaks = list(mean_diff = c(0.4, 0.8, 1.6)), ref = 1)
 ```
+
+## A point-and-click interface (jamovi)
+
+Everything above is also available **without writing R code**, through a [jamovi](https://www.jamovi.org/download) module. jamovi is a free, open-source statistical spreadsheet: install it, open the modules menu (the **`+`** at the top-right), choose **jamovi library**, and install *tabxplor*. It adds a **Crosstables** analysis — and a **Regressions** analysis powered by `tab_reg()` — with the same coloured, exportable tables, driven entirely by menus. Handy for teaching, or for colleagues who do not use R.
 
 ## Where to go next
 

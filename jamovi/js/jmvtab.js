@@ -3,22 +3,27 @@
 // it lean. See dev/tabxplor_1.4.0_jamovi_dev.md (§12 ref picker, §14 export) for the events API.
 // jus 3.0: use the GLOBAL `utils.clone` (the events `this` has no `.clone`, unlike jus 2.0).
 
-var exportLabels = { excel: "Excel", html: "HTML", md: "markdown" };
-
-var setExportLabel = function(ui) {
-    if (!ui.export_format || !ui.exportExcel) return;
-    var fmt = ui.export_format.value();
-    ui.exportExcel.setPropertyValue("label", "Export " + (exportLabels[fmt] || "Excel"));
+// The file extension shown after the file name on the path line -- follows the chosen format. Rendered
+// into the tiny `extCtrl` CustomControl (.u.yaml) on create, on format change, and on each onUpdate.
+// The Export button keeps its static "Export" label (set in .u.yaml) -- no dynamic rename, no fixed width.
+var exportExts = { excel: ".xlsx", html: ".html", md: ".md" };
+var renderExt = function(ui) {
+    if (!ui.extCtrl || !ui.extCtrl.$el || !ui.extCtrl.$el[0]) return;
+    var fmt  = ui.export_format ? ui.export_format.value() : "excel";
+    var root = ui.extCtrl.$el[0];
+    root.textContent = exportExts[fmt] || ".xlsx";
+    root.style.cssText = "color:#555;white-space:nowrap;padding:0 2px;";
 };
 
-// Pin the export button to the widest label's width ("Export markdown") so its TEXT changes with the
-// format but its SIZE does not. Re-applied on each onUpdate (jamovi re-renders may drop inline styles).
-var fixExportBtnWidth = function(ui) {
-    var c = ui.exportExcel;
+// Make the "default path" reset discreet: a small, underlined, link-like secondary action rather than a
+// primary button. Re-applied on each onUpdate (jamovi may re-render the control and drop inline styles).
+var styleResetBtn = function(ui) {
+    var c = ui.resetPath;
     if (!c || !c.$el || !c.$el[0]) return;
     var btn = c.$el[0].querySelector("button") || c.$el[0];
-    btn.style.width = "150px";
-    btn.style.boxSizing = "border-box";
+    btn.style.cssText += ";background:transparent;border:none;box-shadow:none;color:#777;" +
+                         "font-size:11px;padding:1px 2px;min-width:0;width:auto;" +
+                         "text-decoration:underline;cursor:pointer;";
 };
 
 // Grey the controls that are meaningless without tab_vars (subtables): the total-table type and the
@@ -67,31 +72,31 @@ var renderSubtext = function(ui) {
     }
 };
 
-// jamovi 2.6.44's TextBox `width:` enum caps at `largest` (200px) -- there is NO `auto` (the compiler
-// rejects it). To let `subtext` and the export `path` fill their (stretchFactor) cell, clear the
-// fixed-width `silky-option-<size>-text` cap in .js: widen the control root + every wrapper down to the
-// input to width:100%. Re-applied on each onUpdate (jamovi may re-render the control and drop inline
-// styles). Purely cosmetic.
-var stretchTextBox = function(ui, name) {
-    var c = ui[name];
-    if (!c || !c.$el || !c.$el[0]) return;
-    var root = c.$el[0];
-    root.style.width = "100%"; root.style.maxWidth = "none";
-    var inp = (c.$input && c.$input[0]) || root.querySelector("input");
-    var node = inp, guard = 0;
-    while (node && node !== root && guard++ < 6) {
-        node.style.width = "100%"; node.style.maxWidth = "none";
-        node = node.parentElement;
-    }
-    if (inp) inp.style.width = "100%";
+// WHY the path boxes ignored their 3fr/2fr stretch: jamovi compiles every grid cell to
+// `minmax(max-content, <stretch>fr)`, so a control claims its min-content width BEFORE the stretch
+// factors divide the row. A `width: largest` TextBox has a ~200px min (class silky-option-largest-text),
+// so both boxes bottom out at ~200px and the fr ratio only splits the little that is left -- which is
+// why folder and filename looked equal and the ".ext" was pushed off the right edge. Collapse that floor
+// to 0 (min-width:0; width:100%) and the stretch factors govern the widths as expected. Done with a
+// persistent <style> because jamovi re-renders controls and drops INLINE styles (the reason the old
+// per-onUpdate inline widening never stuck). Only the two export boxes use `width: largest`, so the
+// selector is effectively scoped to them.
+var injectExportCss = function() {
+    if (document.getElementById("tabx-export-css")) return;
+    var s = document.createElement("style");
+    s.id = "tabx-export-css";
+    s.textContent =
+        "input.silky-option-text-input.silky-option-largest-text" +
+        "{min-width:0 !important;width:100% !important;box-sizing:border-box;}";
+    document.head.appendChild(s);
 };
 
 var onUpdate = function(ui) {
-    setExportLabel(ui);
-    fixExportBtnWidth(ui);
+    injectExportCss();
     applyVarEnables(ui);
     renderSubtext(ui);
-    stretchTextBox(ui, "export_dir");
+    renderExt(ui);
+    styleResetBtn(ui);
     renderRefPicker(ui);   // defined below (call-time resolution)
 };
 
@@ -594,10 +599,13 @@ module.exports = {
     subtextCtrl_creating: function(ui) { renderSubtext(ui); },
     subtextCtrl_updated:  function(ui) { renderSubtext(ui); },
 
-    // Keep the export button label + width in sync with the chosen format (Excel / HTML / markdown).
+    // extCtrl: the small ".ext" label after the file name; follows the chosen format.
+    extCtrl_creating: function(ui) { renderExt(ui); },
+    extCtrl_updated:  function(ui) { renderExt(ui); },
+
+    // The chosen format changed: update the file-extension label on the path line.
     export_format_changed: function(ui) {
-        setExportLabel(ui);
-        fixExportBtnWidth(ui);
+        renderExt(ui);
     },
 
     // Reset the export action button shortly after it is clicked, so a second export re-fires the

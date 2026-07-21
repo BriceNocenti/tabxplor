@@ -243,8 +243,8 @@ jmvtabregOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
                 color_signif,
                 options=list(
                     "grey_non_signif",
-                    "ignore",
-                    "guaranteed_effect"),
+                    "guaranteed_effect",
+                    "ignore"),
                 default="grey_non_signif")
             private$..estimate_display <- jmvcore::OptionList$new(
                 "estimate_display",
@@ -533,9 +533,9 @@ jmvtabregBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #' @param color Colour the effect cells with the sensible per-family colour
 #'   helper (OR magnitude for ratios, standardized difference for gaussian
 #'   betas). Uncheck for no colours.
-#' @param color_signif How significance interacts with the colours: grey out
-#'   non-significant cells, ignore significance, or colour only the guaranteed
-#'   (error-adjusted) effect.
+#' @param color_signif How significance interacts with the colours: observed
+#'   size + grey out non-significant  cells, colour only the guaranteed
+#'   (error-adjusted) effect, ignore significance.
 #' @param estimate_display The estimate-cell layout. "ci" shows a visible
 #'   interval; "prob" / "ame" fold the adjusted predicted probability / marginal
 #'   effect into the OR cell (binomial coefficient models only).

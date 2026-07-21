@@ -8,34 +8,33 @@ tab_reg(
   data,
   dependent,
   predictors = NULL,
-  family = "auto",
+  split_var = NULL,
   wt = NULL,
-  ids = NULL,
-  strata = NULL,
-  fpc = NULL,
-  nest = FALSE,
-  exponentiate = TRUE,
+  family = "auto",
   effect = c("coefficient", "ame"),
   at = c("average", "reference"),
+  exponentiate = TRUE,
   trials = NULL,
+  empirical = FALSE,
+  color = TRUE,
+  color_signif = NULL,
+  stars = TRUE,
   conf_level = getOption("tabxplor.conf_level", 0.95),
   method = c("wald", "profile"),
   reference = NULL,
   inverse_two_level_factors = TRUE,
-  split_var = NULL,
   multiplier = NULL,
-  empirical = FALSE,
   stats = NULL,
   compare = c("none", "baseline", "sequential"),
   baseline = NULL,
-  estimate_display = c("value", "ci", "prob", "ame"),
-  color = TRUE,
-  color_signif = NULL,
-  stars = TRUE,
   na = c("drop_by_model", "drop_all_models"),
+  estimate_display = c("value", "ci", "prob", "ame"),
   cleannames = NULL,
   subtext = "",
-  empirical_OR = lifecycle::deprecated(),
+  ids = NULL,
+  strata = NULL,
+  fpc = NULL,
+  nest = FALSE,
   .fit_cache = NULL
 )
 }
@@ -53,6 +52,16 @@ With a \code{predictors} character vector, several names give one effect column 
 of character vectors (one model per element, its name labelling the column). Leave \code{NULL} when
 \code{dependent} is a formula.}
 
+\item{split_var}{Optional. Name of a grouping variable (character): the regression analogue of
+\code{\link[=tab]{tab()}}'s \code{tab_vars}. The same model(s) are fitted \strong{within each level} of this variable and the
+per-group tables are stacked into one grouped table (grouped by \code{split_var}), sharing the
+variable/level stub. Use \code{\link[=tab_spread]{tab_spread()}} on \code{split_var} to pivot the groups into side-by-side
+columns for an easy across-group comparison. A level absent from a group shows empty cells.}
+
+\item{wt}{Optional. Name of a weight column (character). Switches to design-based survey estimation
+(\code{\link[survey:svyglm]{survey::svyglm()}}): the sandwich standard errors are scale-invariant, so raw population weights
+are handled correctly (no normalisation) and the point estimates match the weighted crosstabs.}
+
 \item{family}{The model family, \strong{resolved per dependent} so several outcomes with different
 families can share one table (one effect column-group each). \code{"auto"} (default) detects each
 outcome: a binary (-> \code{"binomial"}), an ordered 3+ level (-> \code{"ordinal"}), a nominal 3+ level
@@ -64,25 +73,6 @@ dependent; a \strong{vector} aligned to \code{dependent}, or a \strong{named} ve
 (e.g. \code{c(income = "poisson", satisfied = "binomial")}), sets one family per outcome. Mixed
 families work only with a character \code{predictors} (one model per outcome); a \code{predictors} list
 (model comparison) is single-outcome, hence single-family.}
-
-\item{wt}{Optional. Name of a weight column (character). Switches to design-based survey estimation
-(\code{\link[survey:svyglm]{survey::svyglm()}}): the sandwich standard errors are scale-invariant, so raw population weights
-are handled correctly (no normalisation) and the point estimates match the weighted crosstabs.}
-
-\item{ids, strata, fpc}{Optional survey-design specification for the \code{wt} path (each a column name /
-character vector, or a formula such as \code{~psu} / \code{~region}). \code{ids} gives the cluster identifier(s)
-from largest to smallest stage (default no clustering); \code{strata} the stratifying variable(s);
-\code{fpc} the finite-population correction. Give correct clustering/stratification for honest
-design-based variances (a flat \code{ids = ~1} can understate them). Ignored when \code{data} is a design.}
-
-\item{nest}{Logical. Passed to \code{\link[survey:svydesign]{survey::svydesign()}}: set \code{TRUE} when cluster ids are reused across
-strata. Default \code{FALSE}.}
-
-\item{exponentiate}{Logical. \code{TRUE} (default) exponentiates coefficients into ratios (odds ratios
-for logistic, incidence-rate ratios for poisson, cumulative odds ratios for ordinal),
-automatically leaving gaussian linear betas on their raw scale. \code{FALSE} keeps every coefficient on
-the coefficient (log / linear) scale. Ignored when \code{effect = "ame"} (marginal effects are always
-on the response scale).}
 
 \item{effect}{The interpretation scale, orthogonal to \code{family}. \code{"coefficient"} (default) shows the
 native per-family effect (beta / OR / IRR / cumulative-OR). \code{"ame"} shows \strong{average marginal
@@ -106,10 +96,40 @@ reference (factor first level, numeric mean): for \code{effect = "ame"} this giv
 (one column per category). It has no effect on ordinary coefficients (they are profile-independent).
 Note the reference profile can be an unusual baseline (e.g. a factor's first level = \code{"No answer"}).}
 
+\item{exponentiate}{Logical. \code{TRUE} (default) exponentiates coefficients into ratios (odds ratios
+for logistic, incidence-rate ratios for poisson, cumulative odds ratios for ordinal),
+automatically leaving gaussian linear betas on their raw scale. \code{FALSE} keeps every coefficient on
+the coefficient (log / linear) scale. Ignored when \code{effect = "ame"} (marginal effects are always
+on the response scale).}
+
 \item{trials}{Grouped-binomial (summed-score) outcomes only. The number of items behind the score,
 fitting \code{cbind(score, trials - score)} as a binomial. \code{NULL} (default) fits an ordinary binary
 logit; a single integer (or a vector named by dependent) sets the item count; \code{TRUE} uses each
 dependent's observed maximum score. Requires \code{family = "binomial"}.}
+
+\item{empirical}{Logical. If \code{TRUE}, adds the descriptive \strong{crude} (unadjusted, single-predictor)
+companion of the model effect for each factor-predictor level -- the unadjusted bivariate
+association, which IS the modelised quantity when there is a single predictor (the standard "crude
+vs adjusted" comparison; a large gap signals confounding). Per family: \strong{binomial} adds \verb{Emp. \%}
+\itemize{
+\item \verb{Emp. OR} (coefficient) or \verb{Emp. \%} + \verb{Emp. diff} (AME); \strong{gaussian} adds \verb{Emp. mean} +
+\verb{Emp. diff}; \strong{poisson} adds \verb{Emp. rate} + \verb{Emp. IRR}; \strong{multinomial} shows the crude \% +
+difference per category in the HTML tooltip (columns would explode). By design every crude quantity
+is computed on \strong{exactly the same complete-case population as the model} (listwise-complete on the
+dependent, all predictors and any design variable), so crude and adjusted are directly comparable
+and not confounded by differing missingness (reproduce it with \code{\link[dplyr:filter]{dplyr::filter()}} + \code{\link[=tab]{tab()}} on the
+same rows). Also works with a vector of dependents. Ordinal has no clean crude analogue and is
+ignored (with a message). Default \code{FALSE}.
+}}
+
+\item{color, color_signif}{Colouring of the effect cells. \code{color = TRUE} (default) auto-picks the
+sensible per-family measure (\code{"OR"} magnitude for ratios, standardized \code{"diff"} for betas);
+\code{color = FALSE} turns colouring off for every column (model and empirical). Power users may pass a
+measure string (\code{"OR"}, \code{"diff"}, \code{"ratio"}, \code{"no"}) to override. \code{color_signif} is the
+significance policy (default \code{"grey_non_signif"}). See \code{\link[=tab]{tab()}}.}
+
+\item{stars}{Logical (default \code{TRUE} for regression tables, where significance stars are standard).
+When \code{FALSE}, the per-cell p-value is dropped and no stars are shown (colours still read the CI).}
 
 \item{conf_level}{Confidence level for the intervals. Default \code{0.95}.}
 
@@ -129,31 +149,10 @@ passing a formula in \code{dependent} with the terms already coded.}
 \item{inverse_two_level_factors}{Logical, binomial only. If \code{TRUE} (default), models the FIRST
 level of a 2-level factor dependent (e.g. \code{"1-Married"} before \code{"2-Not married"}).}
 
-\item{split_var}{Optional. Name of a grouping variable (character): the regression analogue of
-\code{\link[=tab]{tab()}}'s \code{tab_vars}. The same model(s) are fitted \strong{within each level} of this variable and the
-per-group tables are stacked into one grouped table (grouped by \code{split_var}), sharing the
-variable/level stub. Use \code{\link[=tab_spread]{tab_spread()}} on \code{split_var} to pivot the groups into side-by-side
-columns for an easy across-group comparison. A level absent from a group shows empty cells.}
-
 \item{multiplier}{Optional named numeric vector \code{c(var = k)} rescaling a \strong{continuous}
 predictor's effect to a k-unit change (e.g. \code{c(age = 10)} shows the odds ratio / beta per decade
 of age = OR^10 / beta*10). The confidence interval scales with it; the p-value is unchanged. Names
 must be numeric predictors; not available for multinomial / ordinal outcomes.}
-
-\item{empirical}{Logical. If \code{TRUE}, adds the descriptive \strong{crude} (unadjusted, single-predictor)
-companion of the model effect for each factor-predictor level -- the unadjusted bivariate
-association, which IS the modelised quantity when there is a single predictor (the standard "crude
-vs adjusted" comparison; a large gap signals confounding). Per family: \strong{binomial} adds \verb{Emp. \%}
-\itemize{
-\item \verb{Emp. OR} (coefficient) or \verb{Emp. \%} + \verb{Emp. diff} (AME); \strong{gaussian} adds \verb{Emp. mean} +
-\verb{Emp. diff}; \strong{poisson} adds \verb{Emp. rate} + \verb{Emp. IRR}; \strong{multinomial} shows the crude \% +
-difference per category in the HTML tooltip (columns would explode). By design every crude quantity
-is computed on \strong{exactly the same complete-case population as the model} (listwise-complete on the
-dependent, all predictors and any design variable), so crude and adjusted are directly comparable
-and not confounded by differing missingness (reproduce it with \code{\link[dplyr:filter]{dplyr::filter()}} + \code{\link[=tab]{tab()}} on the
-same rows). Also works with a vector of dependents. Ordinal has no clean crude analogue and is
-ignored (with a message). Default \code{FALSE}.
-}}
 
 \item{stats}{The goodness-of-fit statistics shown in the model-summary \strong{footer} (one block per
 model). \code{NULL} (default) uses the per-family set: linear models show N, R square, adjusted R
@@ -174,6 +173,13 @@ message.}
 \item{baseline}{For \code{compare = "baseline"}: which column is the reference model (its label, or a
 position). Defaults to the first model.}
 
+\item{na}{How missing values are handled across models. \code{"drop_by_model"} (default) drops \code{NA}
+rows per model (each model / dependent uses its own complete cases). \code{"drop_all_models"} fits every
+model on ONE shared complete-case population (rows with no \code{NA} on any predictor / dependent /
+design variable), so nested models get equal N and the likelihood-ratio comparison can run; note
+this \strong{changes all estimates} (shared population), hence opt-in. Ignored for a prebuilt survey
+design.}
+
 \item{estimate_display}{What each effect cell shows beside the estimate. \code{"value"} (default) the plain
 estimate (e.g. \code{2.34}); \code{"ci"} adds a visible confidence-interval bracket (\verb{2.34 [1.20; 4.50]}, any
 family); \code{"prob"} folds the model-adjusted predicted probability into the odds-ratio cell
@@ -183,29 +189,19 @@ family); \code{"prob"} folds the model-adjusted predicted probability into the o
 ratio, whereas \code{effect = "ame"} makes the whole column an AME (probability scale); the two are
 different and, when both are set, \code{effect = "ame"} wins and \code{estimate_display} is reset to \code{"value"}.}
 
-\item{color, color_signif}{Colouring of the effect cells. \code{color = TRUE} (default) auto-picks the
-sensible per-family measure (\code{"OR"} magnitude for ratios, standardized \code{"diff"} for betas);
-\code{color = FALSE} turns colouring off for every column (model and empirical). Power users may pass a
-measure string (\code{"OR"}, \code{"diff"}, \code{"ratio"}, \code{"no"}) to override. \code{color_signif} is the
-significance policy (default \code{"grey_non_signif"}). See \code{\link[=tab]{tab()}}.}
-
-\item{stars}{Logical (default \code{TRUE} for regression tables, where significance stars are standard).
-When \code{FALSE}, the per-cell p-value is dropped and no stars are shown (colours still read the CI).}
-
-\item{na}{How missing values are handled across models. \code{"drop_by_model"} (default) drops \code{NA}
-rows per model (each model / dependent uses its own complete cases). \code{"drop_all_models"} fits every
-model on ONE shared complete-case population (rows with no \code{NA} on any predictor / dependent /
-design variable), so nested models get equal N and the likelihood-ratio comparison can run; note
-this \strong{changes all estimates} (shared population), hence opt-in. Ignored for a prebuilt survey
-design.}
-
 \item{cleannames}{Logical. If \code{TRUE}, strips numeric prefixes from factor levels for display.
 Uses \code{getOption("tabxplor.cleannames")} when \code{NULL}.}
 
 \item{subtext}{Optional character. A note shown below the table.}
 
-\item{empirical_OR}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Renamed \code{empirical} (now cross-family, not
-OR-only). Passing it now errors; use \code{empirical}.}
+\item{ids, strata, fpc}{Optional survey-design specification for the \code{wt} path (each a column name /
+character vector, or a formula such as \code{~psu} / \code{~region}). \code{ids} gives the cluster identifier(s)
+from largest to smallest stage (default no clustering); \code{strata} the stratifying variable(s);
+\code{fpc} the finite-population correction. Give correct clustering/stratification for honest
+design-based variances (a flat \code{ids = ~1} can understate them). Ignored when \code{data} is a design.}
+
+\item{nest}{Logical. Passed to \code{\link[survey:svydesign]{survey::svydesign()}}: set \code{TRUE} when cluster ids are reused across
+strata. Default \code{FALSE}.}
 
 \item{.fit_cache}{Internal, for the jamovi live UI (Phase 15b): a mutable cache environment
 (see \code{jmvreg_cache_env()}) that memoizes fitted models so display / colour / reference toggles
@@ -276,7 +272,7 @@ formula} as \code{dependent} -- \code{tab_reg(data, y ~ x1 + poly(x2, 2) + x1:x3
 directly; simple \code{y ~ a + b} formulas behave exactly like \code{dependent = "y"}, \code{predictors = c("a", "b")}, while interactions / \code{poly()} / \code{I()} terms render as best-effort term rows.
 }
 \examples{
-data <- gss_cat_data_formatting()
+  data <- gss_cat_data_formatting()
 
   # logistic (odds ratios):
   tab_reg(data, dependent = "married", predictors = c("race", "rincome"), family = "binomial")
@@ -286,6 +282,10 @@ data <- gss_cat_data_formatting()
   tab_reg(data, married ~ race + rincome, family = "binomial")
 
 \donttest{
+ # logistic : comparison between observed odds-ratio and modelised odds-ratio
+  tab_reg(data, dependent = "married", predictors = c("race", "rincome"), family = "binomial",
+          empirical = TRUE
+  )
 # average marginal effects + adjusted predictions (needs the marginaleffects package):
 if (requireNamespace("marginaleffects", quietly = TRUE)) {
   tab_reg(data, dependent = "married", predictors = c("race", "rincome"),

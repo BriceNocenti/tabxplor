@@ -495,6 +495,14 @@
   in RStudio and unknown consoles, where bold is drawn wider and would break column alignment. Toggle it
   anywhere with `options(tabxplor.console_bold = TRUE/FALSE)`.
 
+## Documentation
+* **The vignettes now teach the previously-undocumented features.** The introduction vignette covers
+  `n_min=`, `output_list=`, export `transpose=`, `tab_css()`, `subtext=` / `set_caption()`, and the
+  weighting rule (weighted estimate, unweighted *n*); the programming vignette adds sections on
+  `tab_counts()`, `tab_spread()` and `score_from_lv1()`; the regression vignette adds `split_var=` and
+  grouped-binomial `trials=`. All three now mention the jamovi point-and-click module. `score_from_lv1()`
+  gains a fuller help page and a test.
+
 ## Internal
 * **Unified colour-legend + footer system.** The colour legend, the test/GOF summary and the three
   footer one-liners (weight / `Model:` / significance stars) used to be re-ordered by hand in each of

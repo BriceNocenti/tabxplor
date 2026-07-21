@@ -184,6 +184,68 @@ Besides its per-cell fields, each `fmt` column carries a few **column-level attr
 fmt(n = c(10L, 20L, 30L), pct = c(0.1, 0.2, 0.7), display = "pct", digits = 0L)
 ```
 
+## Tables from pre-aggregated counts
+
+Sometimes the data already arrives **cross-tabulated** — a counts table from a report, a `table()`, a matrix of frequencies. `tab_counts()` builds the same coloured `tabxplor` table as `tab()`, but from those counts instead of the raw records; every calculation runs on the counts, so the result is identical to what `tab()` would have produced from individual records.
+
+The commonest input is a **tidy counts** data frame (one row per combination, the count in a column):
+
+```{r}
+counts <- dplyr::count(gss_simple, marital, race)
+tab_counts(counts, marital, race, counts = n, pct = "row")
+# identical to tab(gss_simple, marital, race, pct = "row")
+```
+
+It also melts a `table()` / `xtabs()` / matrix automatically, and reads a **wide** frame (one column per column-variable level) via `cols =` / `col_name =`:
+
+```{r, eval = FALSE}
+tab_counts(table(gss_simple$marital, gss_simple$race), pct = "row")
+
+wide <- tidyr::pivot_wider(counts, names_from = race, values_from = n)
+tab_counts(wide, row_var = marital, cols = c(White, Black, Other),
+           col_name = "race", pct = "row")
+```
+
+Weighting works as in `tab()`: pass the unweighted count in `counts` and the weighted count in `wt_counts` — estimates use the weighted count, confidence intervals and Chi-2 use the unweighted N. When the only figures available are non-whole numbers (percentages × a base, or weighted-only counts), CIs and the Chi-2 test are disabled with a message.
+
+## Pivoting a grouped table into columns
+
+A **grouped** table (built with `tab_vars`) stacks one sub-table per group. `tab_spread()` pivots a grouping variable's levels into **side-by-side columns** — ideal to compare one measure across groups. Select the measure column you want first, then spread:
+
+```{r}
+tab(gss_simple, relig, marital, year, pct = "row", totaltab = "no", tot = "row") |>
+  dplyr::select(year, relig, Married) |>
+  tab_spread(year)
+```
+
+`tab(..., spread_vars = year)` does the same in one call. The regression vignette's `split_var` produces a grouped table you can spread the same way — see `vignette("tabxplor-reg")`.
+
+## A score from several factors
+
+`score_from_lv1()` turns a battery of yes/no (or agree/disagree) factors into a single **summed score**: for each row it counts how many of the listed factors sit at their **first level**. Here we score how many of two markers — being married, and being in the higher income bracket — each respondent has:
+
+```{r}
+gss_simple |>
+  score_from_lv1("score", vars_list = c("married", "income25k")) |>
+  tab(relig, score)
+```
+
+The score ranges from 0 to the number of factors (missing values never count). Such a summed score is exactly the input a **grouped-binomial** regression models — see `trials` in `vignette("tabxplor-reg")`.
+
+## Building many tables at once
+
+`tab_many()` — the engine behind `tab()` — accepts **lists of arguments** to build several differently-shaped tables in one call. For a fully data-driven batch, `purrr::pmap()` over a small specification table is the idiom — one row per table, one column per argument:
+
+```{r, eval = FALSE}
+specs <- tibble::tribble(
+  ~row_var, ~col_var,  ~pct,
+  "race",   "marital", "row",
+  "relig",  "party3",  "row",
+)
+purrr::pmap(specs, \(row_var, col_var, pct)
+            tab(gss_simple, all_of(row_var), all_of(col_var), pct = pct))
+```
+
 
 ## See also
 
