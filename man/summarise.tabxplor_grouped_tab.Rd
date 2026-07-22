@@ -20,3 +20,4 @@ An object of class \code{tabxplor_grouped_tab}.
 \description{
 summarise method for class tabxplor_grouped_tab
 }
+\keyword{internal}

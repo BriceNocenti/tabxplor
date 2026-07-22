@@ -17,3 +17,4 @@ A single logical vector with the totcol attribute
 \description{
 Test function for total columns
 }
+\keyword{internal}

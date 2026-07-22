@@ -18,3 +18,4 @@ An object of class \code{tabxplor_grouped_tab}.
 \description{
 relocate method for class tabxplor_grouped_tab
 }
+\keyword{internal}

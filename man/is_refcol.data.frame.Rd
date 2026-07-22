@@ -17,3 +17,4 @@ A character vector with the ref_col attributes.
 \description{
 Test function for reference columns
 }
+\keyword{internal}

@@ -19,3 +19,4 @@ A fmt vector
 \description{
 Convert double into fmt
 }
+\keyword{internal}

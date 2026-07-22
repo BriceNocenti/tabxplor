@@ -22,3 +22,4 @@ A fmt printed in a pillar.
 \description{
 Pillar_shaft method to print class fmt in a \code{\link[tibble:tibble]{tibble}} column
 }
+\keyword{internal}

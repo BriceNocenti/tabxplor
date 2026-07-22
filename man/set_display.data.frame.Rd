@@ -18,3 +18,4 @@ The entered objects, with all fmt vectors with the wanted display.
 \description{
 Set the "display" vctrs::field of a \code{fmt} vector.
 }
+\keyword{internal}

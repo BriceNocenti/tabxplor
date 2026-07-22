@@ -17,3 +17,4 @@ A single character with the color attribute (the text channel).
 \description{
 Get color
 }
+\keyword{internal}

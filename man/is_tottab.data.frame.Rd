@@ -19,3 +19,4 @@ A list of logical vectors, with the data.frame column's tottab fields.
 \description{
 Test function to detect cells in total tables
 }
+\keyword{internal}

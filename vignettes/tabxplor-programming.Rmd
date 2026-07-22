@@ -248,6 +248,32 @@ purrr::pmap(specs, \(row_var, col_var, pct)
 ```
 
 
+## Advanced options
+
+Beyond the everyday defaults (`vignette("tabxplor")` &rarr; *Session options*), these `options()` tune the exporters and the build. HTML / `tab_kable()`:
+
+- `tabxplor.tab_kable_engine` — `"html"` (dependency-free, the default) or `"kableExtra"` (legacy).
+- `tabxplor.tab_kable_css` — inline the stylesheet with each table (`TRUE`); set `FALSE` in a many-table document and call `tab_css()` once instead.
+- `tabxplor.tab_kable_num_font` / `tabxplor.kable_html_font` — the number and text CSS font stacks.
+- `tabxplor.kable_popover` — click popovers instead of hover tooltips.
+
+Excel / `tab_export("xl")`:
+
+- `tabxplor.xl_font_text` / `tabxplor.xl_font_num` / `tabxplor.xl_font_num_stars` — the label, number and starred-number fonts.
+- `tabxplor.xl_or_numeric` — keep odds ratios as numbers rather than `1/x` text.
+
+Console, stats and paths:
+
+- `tabxplor.console_bold` — embolden reference / total / coloured cells (auto-detected per editor).
+- `tabxplor.signif_levels` / `tabxplor.signif_labels` — the p-value cut-offs and the star labels.
+- `tabxplor.totcol_range` — how a Total column prints when the column variables have different bases.
+- `tabxplor.plot_num_font` — `tab_plot()`'s number font; `tabxplor.export_dir` — the default export directory.
+
+Performance and integration:
+- `tabxplor.parallel` — build one worker per row variable on a background pool (needs `mirai`); `tabxplor.parallel_min` sets the smallest row-variable count worth dispatching. Release the pool with `tab_parallel_stop()`.
+
+See `?tabxplor-options` for the full list and every default.
+
 ## See also
 
 - `vignette("tabxplor")` — cross-tables and the colour helpers.

@@ -26,7 +26,8 @@
 #     is inherently serial -- parallelising it was measured not worth it).
 
 #' Excel output for tabxplor tables, with formatting and colors
-#' @description To modify the colors used into the Excel table, you can change the
+#' @description The Excel exporter behind \code{\link{tab_export}}: `tab_export(x, format = "xl")`
+#' calls this. To modify the colors used into the Excel table, you can change the
 #' global options with \code{\link{set_color_style}} and \code{\link{set_color_breaks}}.
 #' @param tabs A table made with \code{\link{tab}}, \code{\link{tab_many}} or
 #' \code{\link{tab_plain}}, or a list of such tables.

@@ -114,7 +114,8 @@ The table(s) with formatting and colors in an Excel file, as a side effect.
 Invisibly returns \code{tabs}.
 }
 \description{
-To modify the colors used into the Excel table, you can change the
+The Excel exporter behind \code{\link{tab_export}}: \code{tab_export(x, format = "xl")}
+calls this. To modify the colors used into the Excel table, you can change the
 global options with \code{\link{set_color_style}} and \code{\link{set_color_breaks}}.
 }
 \examples{

@@ -19,3 +19,4 @@ A character vector
 \description{
 Convert fmt into character
 }
+\keyword{internal}

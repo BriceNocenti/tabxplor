@@ -17,3 +17,4 @@ A single character with the col_var attribute.
 \description{
 Get names of column variable of fmt columns
 }
+\keyword{internal}

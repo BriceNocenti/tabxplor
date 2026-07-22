@@ -17,3 +17,4 @@ A character vector with the data.frame column's types.
 \description{
 Get types of fmt columns
 }
+\keyword{internal}

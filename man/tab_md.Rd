@@ -106,7 +106,7 @@ return the character string.}
 A character string (visible or invisible depending on \code{print}).
 }
 \description{
-Export a tabxplor table to a markdown table
+The Markdown exporter behind \code{\link{tab_export}}: \code{tab_export(x, format = "md")} calls this.
 }
 \examples{
 \donttest{

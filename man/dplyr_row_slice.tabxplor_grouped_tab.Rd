@@ -19,3 +19,4 @@ An object of class \code{tabxplor_grouped_tab}.
 \description{
 dplyr_row_slice method for class tabxplor_grouped_tab
 }
+\keyword{internal}

@@ -503,6 +503,7 @@ get_type <- function(x, ...) UseMethod("get_type")
 #' @inheritParams fmt
 #' @return An empty character vector.
 #' @export
+#' @keywords internal
 get_type.default     <- function(x, ...) {
   ifelse(! is.null(purrr::attr_getter("type")(x)),
          yes = purrr::attr_getter("type")(x),
@@ -513,11 +514,13 @@ get_type.default     <- function(x, ...) {
 #' @inheritParams fmt
 #' @return A single string with the vector's type.
 #' @export
+#' @keywords internal
 get_type.tabxplor_fmt <- function(x, ...) attr(x, "type", exact = TRUE)
 #' Get types of fmt columns
 #' @inheritParams fmt
 #' @return A character vector with the data.frame column's types.
 #' @export
+#' @keywords internal
 get_type.data.frame <- function(x, ...) purrr::map_chr(x, ~ get_type(.))
 
 #' @describeIn fmt set the column type attribute of a \code{fmt} vector
@@ -545,12 +548,14 @@ is_totrow <- function(x, ...) UseMethod("is_totrow")
 #' @inheritParams fmt
 #' @return A logical vector with \code{FALSE}.
 #' @export
+#' @keywords internal
 is_totrow.default  <-  function(x, ...) rep(FALSE, length(x)) #{
 #' Test function to detect cells in total rows
 #' @method is_totrow tabxplor_fmt
 #' @inheritParams fmt
 #' @return A logical vector with the totrow field.
 #' @export
+#' @keywords internal
 is_totrow.tabxplor_fmt <- function(x, ...) vctrs::field(x, "in_totrow")
 
 # Phase 9b-3: aggregate a per-cell fmt flag (in_totrow / in_tottab / in_refrow) across a data.frame's
@@ -572,6 +577,7 @@ fmt_row_flag <- function(x, field, partial = FALSE) {
 #' @param partial Should partial total rows be counted as total rows ? Default to FALSE.
 #' @return A list of logical vectors, with the data.frame column's totrow fields.
 #' @export
+#' @keywords internal
 is_totrow.data.frame <- function(x, ..., partial = FALSE) {
   fmt_row_flag(x, "in_totrow", partial)
 }
@@ -646,18 +652,21 @@ is_tottab <- function(x, ...) UseMethod("is_tottab")
 #' @inheritParams fmt
 #' @return A logical vector with \code{FALSE}.
 #' @export
+#' @keywords internal
 is_tottab.default  <-  function(x, ...) rep(FALSE, length(x)) #{
 #' Test function to detect cells in total tables
 #' @method is_tottab tabxplor_fmt
 #' @inheritParams fmt
 #' @return A logical vector with the tottab field.
 #' @export
+#' @keywords internal
 is_tottab.tabxplor_fmt <- function(x, ...) vctrs::field(x, "in_tottab")
 #' Test function to detect cells in total tables
 #' @param partial Should partial total tabs be counted as total tabs ? Default to FALSE.
 #' @inheritParams fmt
 #' @return A list of logical vectors, with the data.frame column's tottab fields.
 #' @export
+#' @keywords internal
 is_tottab.data.frame <- function(x, ..., partial = FALSE) {
   fmt_row_flag(x, "in_tottab", partial)
 }
@@ -680,6 +689,7 @@ set_display <- function(x, value) UseMethod("set_display")
 #' @inheritParams fmt
 #' @return The entered vector (nothing happens).
 #' @export
+#' @keywords internal
 set_display.default <- function(x, value) {
 return(x)
 }
@@ -693,6 +703,7 @@ return(x)
 #'   base value.
 #' @return A fmt vectors with the wanted display.
 #' @export
+#' @keywords internal
 set_display.tabxplor_fmt <- function(x, value) {
   # "num_ci" is a type-adaptive alias for the "{base} {ci}" composite: show each value cell with the
   # confidence interval the table already carries (the difference / ratio CI driven by ci = / color,
@@ -726,6 +737,7 @@ fmt_apply_num_ci <- function(col) {
 #' @inheritParams fmt
 #' @return The entered objects, with all fmt vectors with the wanted display.
 #' @export
+#' @keywords internal
 set_display.data.frame <- function(x, value) {
   x |>
     dplyr::mutate(dplyr::across(
@@ -745,6 +757,7 @@ is_totcol <- function(x, ...) UseMethod("is_totcol")
 #' @inheritParams fmt
 #' @return A single logical vector with the totcol attribute
 #' @export
+#' @keywords internal
 is_totcol.default     <- function(x, ...) {
   ifelse(! is.null(purrr::attr_getter("totcol")(x)),
          yes = purrr::attr_getter("totcol")(x),
@@ -754,11 +767,13 @@ is_totcol.default     <- function(x, ...) {
 #' @inheritParams fmt
 #' @return A single logical vector with the totcol attribute
 #' @export
+#' @keywords internal
 is_totcol.tabxplor_fmt <- function(x, ...) attr(x, "totcol", exact = TRUE)
 #' Test function for total columns
 #' @inheritParams fmt
 #' @return A logical vector, with the data.frame column's totcol attributes.
 #' @export
+#' @keywords internal
 is_totcol.data.frame <- function(x, ...) purrr::map_lgl(x, ~ is_totcol(.))
 
 #' @describeIn fmt set the "totcol" attribute of a \code{fmt} vector
@@ -781,12 +796,14 @@ is_refrow <- function(x, ...) UseMethod("is_refrow")
 #' @inheritParams fmt
 #' @return A logical vector with FALSE, the length of x.
 #' @export
+#' @keywords internal
 is_refrow.default  <-  function(x, ...) rep(FALSE, length(x)) #{
 #' Test function to detect cells in reference rows
 #' @method is_refrow tabxplor_fmt
 #' @inheritParams fmt
 #' @return  A logical vector with the in_refrow field.
 #' @export
+#' @keywords internal
 is_refrow.tabxplor_fmt <- function(x, ...) vctrs::field(x, "in_refrow")
 #' Test function to detect cells in reference rows
 #' @method is_refrow data.frame
@@ -794,6 +811,7 @@ is_refrow.tabxplor_fmt <- function(x, ...) vctrs::field(x, "in_refrow")
 #' @inheritParams fmt
 #' @return A list of logical vectors with the in_refrow fields.
 #' @export
+#' @keywords internal
 is_refrow.data.frame <- function(x, ..., partial = TRUE) {
   # Phase 9b-3: same fold as is_totrow/is_tottab (default partial = TRUE -> if_any). See fmt_row_flag.
   fmt_row_flag(x, "in_refrow", partial)
@@ -844,6 +862,7 @@ get_ref_type <- function(x, ...) UseMethod("get_ref_type")
 #' @inheritParams fmt
 #' @return A single character with the ref attribute.
 #' @export
+#' @keywords internal
 get_ref_type.default     <- function(x, ...) {
   ifelse(! is.null(purrr::attr_getter("ref")(x)),
          yes = purrr::attr_getter("ref")(x),
@@ -854,12 +873,14 @@ get_ref_type.default     <- function(x, ...) {
 #' @inheritParams fmt
 #' @return A single character with the ref attribute.
 #' @export
+#' @keywords internal
 get_ref_type.tabxplor_fmt <- function(x, ...) attr(x, "ref", exact = TRUE)
 #' Get differences type of fmt columns
 #' @method get_ref_type data.frame
 #' @inheritParams fmt
 #' @return A character vector with the ref attribute.
 #' @export
+#' @keywords internal
 get_ref_type.data.frame <- function(x, ...) {
   purrr::map_chr(x, ~ get_ref_type(.))
 }
@@ -884,6 +905,7 @@ get_ci_type <- function(x, ...) UseMethod("get_ci_type")
 #' @inheritParams fmt
 #' @return A single character with the ci_type attribute.
 #' @export
+#' @keywords internal
 get_ci_type.default     <- function(x, ...) {
   ifelse(! is.null(purrr::attr_getter("ci_type")(x)),
          yes = purrr::attr_getter("ci_type")(x),
@@ -894,12 +916,14 @@ get_ci_type.default     <- function(x, ...) {
 #' @inheritParams fmt
 #' @return A single character with the ci_type attribute.
 #' @export
+#' @keywords internal
 get_ci_type.tabxplor_fmt <- function(x, ...) attr(x, "ci_type", exact = TRUE)
 #' Get confidence intervals type of fmt columns
 #' @method get_ci_type data.frame
 #' @inheritParams fmt
 #' @return A character vector with the ci_type attributes.
 #' @export
+#' @keywords internal
 get_ci_type.data.frame <- function(x, ...) {
   purrr::map_chr(x, ~ get_ci_type(.))
 }
@@ -929,6 +953,7 @@ get_col_var <- function(x, ...) UseMethod("get_col_var")
 #' @inheritParams fmt
 #' @return A single character with the col_var attribute.
 #' @export
+#' @keywords internal
 get_col_var.default     <- function(x, ...) {
   ifelse(! is.null(purrr::attr_getter("col_var")(x)),
          yes = purrr::attr_getter("col_var")(x),
@@ -939,12 +964,14 @@ get_col_var.default     <- function(x, ...) {
 #' @inheritParams fmt
 #' @return A single character with the col_var attribute.
 #' @export
+#' @keywords internal
 get_col_var.tabxplor_fmt <- function(x, ...) attr(x, "col_var", exact = TRUE)
 #' Get names of column variable of fmt columns
 #' @method get_col_var data.frame
 #' @inheritParams fmt
 #' @return A character vector with the col_var attributes.
 #' @export
+#' @keywords internal
 get_col_var.data.frame <- function(x, ...) purrr::map_chr(x, ~ get_col_var(.))
 
 #' @describeIn fmt set the "col_var" attribute of a \code{fmt} vector
@@ -999,6 +1026,7 @@ is_refcol <- function(x, ...) UseMethod("is_refcol")
 #' @inheritParams fmt
 #' @return A single character with the ref_col attribute.
 #' @export
+#' @keywords internal
 is_refcol.default     <- function(x, ...) {
   ifelse(! is.null(purrr::attr_getter("refcol")(x)),
          yes = purrr::attr_getter("refcol")(x),
@@ -1009,12 +1037,14 @@ is_refcol.default     <- function(x, ...) {
 #' @inheritParams fmt
 #' @return A single character with the ref_col attribute.
 #' @export
+#' @keywords internal
 is_refcol.tabxplor_fmt <- function(x, ...) attr(x, "refcol", exact = TRUE)
 #' Test function for reference columns
 #' @method is_refcol data.frame
 #' @inheritParams fmt
 #' @return A character vector with the ref_col attributes.
 #' @export
+#' @keywords internal
 is_refcol.data.frame <- function(x, ...) purrr::map_lgl(x, ~ is_refcol(.))
 
 
@@ -1044,6 +1074,7 @@ get_color <- function(x, ...) UseMethod("get_color")
 #' @inheritParams fmt
 #' @return A single character with the color attribute.
 #' @export
+#' @keywords internal
 get_color.default     <- function(x, ...) {
   a <- purrr::attr_getter("color")(x)
   if (is.null(a)) "" else a[1]
@@ -1053,12 +1084,14 @@ get_color.default     <- function(x, ...) {
 #' @inheritParams fmt
 #' @return A single character with the color attribute (the text channel).
 #' @export
+#' @keywords internal
 get_color.tabxplor_fmt <- function(x, ...) attr(x, "color", exact = TRUE)[1]
 #' Get color
 #' @method get_color data.frame
 #' @inheritParams fmt
 #' @return A character vector with the color attributes.
 #' @export
+#' @keywords internal
 get_color.data.frame <- function(x, ...) {
   purrr::map_chr(x, ~ get_color(.))
 }
@@ -1926,6 +1959,7 @@ excel_numfmt_code <- function(digits, pct, ci, text, signed = FALSE, ratio = FAL
 #'
 #' @return The fmt printed in a character vector.
 #' @export
+#' @keywords internal
 format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
                                 special_formatting = FALSE, stars = FALSE,
                                 bold_split = FALSE, pad = if (isTRUE(html)) fig_space else " ",
@@ -2452,6 +2486,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
 #' @return A fmt printed in a pillar.
 #' @importFrom pillar pillar_shaft
 #' @export
+#' @keywords internal
 pillar_shaft.tabxplor_fmt <- function(x, ..., .ref = NULL) {
   # print color type somewhere (and brk legend beneath ?) ----
 
@@ -2566,6 +2601,7 @@ pillar_shaft.tabxplor_fmt <- function(x, ..., .ref = NULL) {
 #'     if ungrouped).
 #' @return An object of class \code{tabxplor_fmt}.
 #' @export
+#' @keywords internal
 mutate.tabxplor_fmt <- function(.data, ...) {
   dots <- rlang::enquos(...)
 
@@ -2581,6 +2617,7 @@ mutate.tabxplor_fmt <- function(.data, ...) {
 # @method `$` tabxplor_fmt
 #' @return The relevant field of the tabxplor_fmt.
 #' @export
+#' @keywords internal
 `$.tabxplor_fmt` <- function(x, name) {
   # DESIGN: $wn falls back to the raw count n when there are no weighted counts (same
   # fallback as get_wn() — keep the two in sync). $ci is no longer a stored field (Phase 1a
@@ -4020,6 +4057,7 @@ fmt_ptype_label <- function(x, prefix, pct_pvalue_collapse) {
 #' @param ... Other parameter.
 #' @return A single string with abbreviated fmt type.
 #' @export
+#' @keywords internal
 vec_ptype_abbr.tabxplor_fmt <- function(x, ...) {
   fmt_ptype_label(x, prefix = "", pct_pvalue_collapse = TRUE)
 }
@@ -4030,6 +4068,7 @@ vec_ptype_abbr.tabxplor_fmt <- function(x, ...) {
 #' @param ... Other parameter.
 #' @return A single string with full fmt type.
 #' @export
+#' @keywords internal
 vec_ptype_full.tabxplor_fmt <- function(x, ...) {
   fmt_ptype_label(x, prefix = "fmt-", pct_pvalue_collapse = FALSE)
 }
@@ -4047,6 +4086,7 @@ vec_ptype_full.tabxplor_fmt <- function(x, ...) {
 #' @param ... Other parameter.
 #' @return A fmt vector
 #' @export
+#' @keywords internal
 vec_ptype2.tabxplor_fmt.tabxplor_fmt    <- function(x, y, ...) {
   # DESIGN: common ptype of two fmt columns (drives c() / vec_c()). Any per-column
   # attribute that differs collapses to a neutral value: type->"mixed", col_var->
@@ -4109,6 +4149,7 @@ vec_ptype2.tabxplor_fmt.tabxplor_fmt    <- function(x, y, ...) {
 #' @param ... Other parameter.
 #' @return A fmt vector
 #' @export
+#' @keywords internal
 vec_ptype2.tabxplor_fmt.double  <- function(x, y, ...) x # new_fmt() #double()
 #' Find common ptype between double and fmt
 #' @param x A double vector
@@ -4116,6 +4157,7 @@ vec_ptype2.tabxplor_fmt.double  <- function(x, y, ...) x # new_fmt() #double()
 #' @param ... Other parameter.
 #' @return A fmt vector
 #' @export
+#' @keywords internal
 vec_ptype2.double.tabxplor_fmt  <- function(x, y, ...) y # new_fmt() #double()
 #' Find common ptype between fmt and integer
 #' @param x A fmt vector
@@ -4123,6 +4165,7 @@ vec_ptype2.double.tabxplor_fmt  <- function(x, y, ...) y # new_fmt() #double()
 #' @param ... Other parameter.
 #' @return A fmt vector
 #' @export
+#' @keywords internal
 vec_ptype2.tabxplor_fmt.integer <- function(x, y, ...) x # fmt() #double()
 #' Find common ptype between integer and fmt
 #' @param x An integer vector
@@ -4130,6 +4173,7 @@ vec_ptype2.tabxplor_fmt.integer <- function(x, y, ...) x # fmt() #double()
 #' @param ... Other parameter.
 #' @return A fmt vector
 #' @export
+#' @keywords internal
 vec_ptype2.integer.tabxplor_fmt <- function(x, y, ...) y # new_fmt() #double()
 
 # Conversions :
@@ -4139,6 +4183,7 @@ vec_ptype2.integer.tabxplor_fmt <- function(x, y, ...) y # new_fmt() #double()
 #' @param ... Other parameter.
 #' @return A fmt vector
 #' @export
+#' @keywords internal
 vec_cast.tabxplor_fmt.tabxplor_fmt  <- function(x, to, ...)
   new_fmt(display   = get_display (x),
           n         = get_n       (x),
@@ -4187,6 +4232,7 @@ vec_cast.tabxplor_fmt.tabxplor_fmt  <- function(x, to, ...)
 #' @param ... Other parameter.
 #' @return A fmt vector
 #' @export
+#' @keywords internal
 vec_cast.tabxplor_fmt.double   <- function(x, to, ...)
   fmt(n = NA_integer_            ,
       display   = "wn", wn = x     ,
@@ -4210,6 +4256,7 @@ vec_cast.tabxplor_fmt.double   <- function(x, to, ...)
 #' @return A double vector
 #' @method vec_cast.double tabxplor_fmt
 #' @export
+#' @keywords internal
 vec_cast.double.tabxplor_fmt  <- function(x, to, ...) get_num(x) |> as.double() #vctrs::field(x, "pct")
 
 #' Convert integer into fmt
@@ -4218,6 +4265,7 @@ vec_cast.double.tabxplor_fmt  <- function(x, to, ...) get_num(x) |> as.double() 
 #' @param ... Other parameter.
 #' @return A fmt vector
 #' @export
+#' @keywords internal
 vec_cast.tabxplor_fmt.integer <- function(x, to, ...)
   fmt(n        = x               ,
       type     = get_type    (to),
@@ -4240,6 +4288,7 @@ vec_cast.tabxplor_fmt.integer <- function(x, to, ...)
 #' @return An integer vector
 #' @method vec_cast.integer tabxplor_fmt
 #' @export
+#' @keywords internal
 vec_cast.integer.tabxplor_fmt    <- function(x, to, ...) get_num(x) |> as.integer() #vctrs::field(x, "pct") |> as.integer()
 
 #' Convert fmt into character
@@ -4249,6 +4298,7 @@ vec_cast.integer.tabxplor_fmt    <- function(x, to, ...) get_num(x) |> as.intege
 #' @return A character vector
 #' @method vec_cast.character tabxplor_fmt
 #' @export
+#' @keywords internal
 vec_cast.character.tabxplor_fmt  <- function(x, to, ...) format(x)
 
 #Comparisons and sorting :
@@ -4257,6 +4307,7 @@ vec_cast.character.tabxplor_fmt  <- function(x, to, ...) format(x)
 #' @param ... Other parameter
 #' @return A double vector
 #' @export
+#' @keywords internal
 vec_proxy_equal.tabxplor_fmt   <- function(x, ...) {
   get_num(x)
 }
@@ -4265,6 +4316,7 @@ vec_proxy_equal.tabxplor_fmt   <- function(x, ...) {
 #' @param ... Other parameter
 #' @return A double vector
 #' @export
+#' @keywords internal
 vec_proxy_compare.tabxplor_fmt <- function(x, ...) {
   get_num(x)
 }
@@ -4289,6 +4341,7 @@ vec_proxy_compare.tabxplor_fmt <- function(x, ...) {
 #' @return A fmt vector
 #' @method vec_arith tabxplor_fmt
 #' @export
+#' @keywords internal
 vec_arith.tabxplor_fmt <- function(op, x, y, ...) {
   UseMethod("vec_arith.tabxplor_fmt", y)
 }
@@ -4461,6 +4514,7 @@ vec_arith.tabxplor_fmt.MISSING <- function(op, x, y, ...) { #unary + and - opera
 #' @param ... Other parameter
 #' @return A fmt vector
 #' @export
+#' @keywords internal
 vec_math.tabxplor_fmt <- function(.fn, .x, ...) {
   if (!is.na(get_type(.x) ) & get_type(.x) == "mixed") warning(
     "operation ", .fn,

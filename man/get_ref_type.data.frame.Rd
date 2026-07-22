@@ -17,3 +17,4 @@ A character vector with the ref attribute.
 \description{
 Get differences type of fmt columns
 }
+\keyword{internal}

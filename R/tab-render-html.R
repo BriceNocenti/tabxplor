@@ -624,7 +624,7 @@ kable_print_mode <- function(theme, interactive, view_opt, knitting, have_ke) {
 #' @return \code{x}, invisibly.
 #' @seealso \code{\link{tab_kable}}, \code{\link{tab_css}}
 #' @export
-
+#' @keywords internal
 print.tabxplor_kable <- function(x, ...) {
   theme <- attr(x, "tabxplor_theme")
   # Everything but an interactive Viewer print falls through to kableExtra's own method, byte for byte:

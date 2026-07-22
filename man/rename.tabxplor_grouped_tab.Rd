@@ -17,3 +17,4 @@ An object of class \code{tabxplor_grouped_tab}.
 \description{
 rename method for class tabxplor_grouped_tab
 }
+\keyword{internal}

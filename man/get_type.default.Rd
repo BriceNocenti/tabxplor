@@ -17,3 +17,4 @@ An empty character vector.
 \description{
 Get types of fmt columns
 }
+\keyword{internal}

@@ -1381,7 +1381,7 @@ Please enquire, then modify documentation and architecture documents to state it
 - **Byte-identity**: adding the field regenerated all 36 `_golden/*.rds` + the fmt-contract snapshot (verified: the ONLY per-cell delta is the added all-NA `n_eff` column); display/export snapshots unmoved. New `test-kish-descriptive.R` (failing-first: factor/mean/OR + reg empirical CIs widen on-kish; displayed n + model CI unchanged; off-kish identical; counts-data NA).
 - **Docs**: `?tabxplor-options` (fixed the `FALSE (default): use Kish` wording bug + scope), `?tab` (test para + Weighted-CIs details), `?tab_reg` (`empirical` honours kish), `.onLoad`/architecture/decisions §14 (factor-side open item CLOSED), NEWS. **Vignettes**: intro `## Weights` rewritten as the wt → kish → survey ladder + fixed the self-contradicting L217 note ("not applied to CIs" was false); reg + programming Weights notes.
 
-#### Last Phase w – tabxplor R french translation
+#### Last Phase w-i – tabxplor R french translation
 
 I wonder about the possible scope of this package French translation (the public is actually mostly French for now). Help me choose, then make a first version of all translations : I’ll review and modify them manually. It
 All legends should be carefully translated to French. What other strings should be translated in French ?
@@ -1419,11 +1419,56 @@ English; vignettes/README French drafts DEFERRED (become the site's articles); b
   `dev/french_glossary.md` for maintainer review.
 
 
-#### Last Phase x — Jamovi UI French translation
+#### Last Phase w-ii – vignettes french translation
+
+French vignettes + README (they become the site's French articles), then a real dev/build_site_bilingual.R run
+
+Add in vignettes :
+- How to use ref with several variables (depending on "row" or "col" pct) ?
+- Present the base options in the vignettes ? THe really standard ones in introduction vignette, the more complex and expert ones in programming vignette (some in regression vignette if appropriate).
+
+**DONE (2026-07-22).** The three vignettes are now shipped in French as **web-only pkgdown articles**
+(`vignettes/articles/*-fr.Rmd`, `.Rbuildignore`'d via `^vignettes/articles$` → never on CRAN), and the
+real `dev/build_site_bilingual.R` runs green: `docs/` (EN) + `docs/fr/` (FR) both build, each article
+renders in its own language (FR articles set `options(tabxplor.lang = "fr")` in setup → French legends/
+footers verified in the built HTML; code chunks byte-identical to the English source, argument names +
+column labels kept English per the glossary). **README skipped** (maintainer choice — the FR site home
+keeps the English README; the three FR articles carry the French narrative). `docs/` was built to verify
+and left **uncommitted** (untracked, not `.gitignore`'d → Phase z publishes it).
+- **New English content** (mirrored in French): the intro's colour-reference section gains a "different
+  reference per variable" subsection (`pct = "row"` → a per-row_var **named** `ref` picks a reference
+  **row**; `pct = "col"` → `ref` vectorised over col_vars, **named or positional**, picks a reference
+  **column**); a "Session options" section (everyday `options()`) in the intro; an "Advanced options"
+  section (export fonts / parallel / jamovi) in the programming vignette; a `tabxplor.anova` note in the
+  intro test section. Also corrected the reg vignette's **stale column labels** (`Emp. %`→`Obs_%`,
+  `Model OR`→`Model_OR`, `Emp. OR`→`Obs_OR`, `Model AME`→`Model_AME`, `Emp. diff`→`Obs_diff`, and the
+  `adjusted %` prose → the parenthesised value in `Model_AME (adjusted %)`; Last Phase g renamed them),
+  and removed a dead hidden chunk referencing the Phase-17h-cut `predicted_unadjusted`.
+- **Wiring**: `_pkgdown.fr.yml` `articles:` points at the `articles/*-fr` slugs (French leads,
+  English in an "In English" group); `_pkgdown.yml` mirrors it (English leads, "En français" group);
+  `.Rbuildignore` + the build-script header updated.
+- **Three pre-existing `_pkgdown.yml` bugs fixed** (surfaced by the FIRST-EVER site build): the dead
+  `- "%>%"` reference entry (magrittr is gone — base `|>` only); an **incomplete `articles:` index**,
+  which pkgdown 2.2.1 treats as a HARD ERROR (not the benign warning the roadmap assumed — it builds
+  every article into BOTH trees, so each config must index all six); and `set_caption` (exported in
+  Phase 17b) missing from the reference index.
+- **Flag for maintainer**: a pre-existing `\Documents` unknown-Rd-macro warning in `man/jmvtab.Rd:258`
+  + `man/jmvtabreg.Rd:159` (should be `\\Documents` or escaped in the roxygen source — harmless, not
+  fixed here). The three `dev/french_glossary.md` runtime-string rough-spots (reg-caption colon,
+  comparison-title plural, ambient-locale tooltips) still await review — they are NOT vignette prose.
+  Translations are **first drafts** for the maintainer's hand review.
+
+#### Last Phase x — Jamovi UI French translation (DONE)
 
 
 #### Last Phase y – NEWS.md simplification
 
+`NEWS.md`  `# tabxplor 1.4.0 (in development)` section have accumulated all dev history of the new version, must most of it is really not user-facing and irrevelant (and already in other dev documentation). A **drastic** reduction is needed here, no dev details **at all**, straight to the point, please **reduce 1150 lines to maximum 100 lines**, divide it by 10 :
+- "## New features" should only list the most important things. New exported functions, like tab_counts() and others, should be presented in one quick sentence. New arguments in one quick sentence, rarely more. Everything about `tab_reg()` should be near-zero-words : in spirit, "possibility to do regressions added, see the vignette".
+- Remove "## Internal" and "## Documentation"
+- Drastically reduce "## Changes that may affect existing code", only keep what is really important
+- Drastically reduce bug corrections and bug fixes (same thing really), to only speak about very very few bugs that could have been hit by real user. Remove everything about any new argument or implementation. Make it small.
+- Keep deprecation, reduce it’s size, list elements quickly, but differenciate what is soft deprecated and what is hard deprecated (two different sections).
 
 #### Last Phase z – github PR and CRAN release
 

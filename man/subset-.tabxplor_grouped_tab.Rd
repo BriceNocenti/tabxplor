@@ -19,3 +19,4 @@ An object of class \code{tabxplor_grouped_tab}.
 \description{
 set subset method for class tabxplor_grouped_tab
 }
+\keyword{internal}

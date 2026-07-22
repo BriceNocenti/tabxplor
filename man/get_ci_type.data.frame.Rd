@@ -17,3 +17,4 @@ A character vector with the ci_type attributes.
 \description{
 Get confidence intervals type of fmt columns
 }
+\keyword{internal}

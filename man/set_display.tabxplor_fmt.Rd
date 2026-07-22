@@ -26,3 +26,4 @@ value followed by whatever confidence interval the table carries (a cell, differ
 as driven by \code{ci = } / \code{color}). It is a display overlay: cells with no CI show the bare
 base value.
 }
+\keyword{internal}

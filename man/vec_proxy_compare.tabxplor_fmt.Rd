@@ -17,3 +17,4 @@ A double vector
 \description{
 Compare with fmt vector
 }
+\keyword{internal}

@@ -18,3 +18,4 @@ The entered vector (nothing happens).
 \description{
 Set the "display" vctrs::field of a \code{fmt} vector.
 }
+\keyword{internal}

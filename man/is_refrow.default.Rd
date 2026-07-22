@@ -17,3 +17,4 @@ A logical vector with FALSE, the length of x.
 \description{
 Test function to detect cells in reference rows
 }
+\keyword{internal}

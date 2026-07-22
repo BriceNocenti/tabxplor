@@ -17,3 +17,4 @@ A logical vector, with the data.frame column's totcol attributes.
 \description{
 Test function for total columns
 }
+\keyword{internal}

@@ -35,3 +35,4 @@ The column, or the reconstructed add_n/add_pct column (deprecated), or the base 
 \description{
 Extract a column of a tabxplor tab (with the Phase 10i-B add_n/add_pct back-compat shim)
 }
+\keyword{internal}

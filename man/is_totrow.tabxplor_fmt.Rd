@@ -17,3 +17,4 @@ A logical vector with the totrow field.
 \description{
 Test function to detect cells in total rows
 }
+\keyword{internal}

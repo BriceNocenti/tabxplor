@@ -17,3 +17,4 @@ A logical vector with the tottab field.
 \description{
 Test function to detect cells in total tables
 }
+\keyword{internal}

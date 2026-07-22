@@ -144,6 +144,20 @@ tab(gss_simple, year, marital, pct = "row", color = "diff", ref = 1)
 tab(gss_simple, rincome, party3, race, na = "drop", pct = "row", color = TRUE, comp="all")
 ```
 
+**A different reference for each variable.** `ref` is reinterpreted by `pct`. Under **row** percentages (or means) it picks a reference **row**, so a *named* vector gives each row variable its own — here `race` is read against its first row, `relig` against its Total:
+
+```{r, echo = TRUE}
+tab(gss_simple, c(race, relig), party3, pct = "row", color = "diff",
+    ref = c(race = "first", relig = "tot"), na = "drop")
+```
+
+Under **column** percentages `ref` picks a reference **column** instead, vectorised over the column variables — either named (`ref = c(party3 = "first", marital = "tot")`) or positional, one value per column variable:
+
+```{r, echo = TRUE}
+tab(gss_simple, race, c(party3, marital), pct = "col", color = "diff",
+    ref = c("first", "tot"), na = "drop")
+```
+
 Color thresholds and the palette can be customised : set them **once for the whole session** with `set_color_breaks()` and `set_color_palette()`.
 
 ## colors that respect significance
@@ -214,7 +228,7 @@ tab(gss_simple, race, party3, pct = "row", color = "diff", display = "{pct} ({di
 
 The first field in the template is the *primary* one — the value Excel keeps and the one the colours read. `vignette("tabxplor-programming")` explains the full grammar and lists every field you can combine.
 
-`test = TRUE` adds a statistical test of independence per (sub-)table — **Chi-squared** for factor columns, **Welch's F ANOVA** for numeric variables:
+`test = TRUE` adds a statistical test of independence per (sub-)table — **Chi-squared** for factor columns, **Welch's F ANOVA** for numeric variables (`options(tabxplor.anova = "classic")` switches to the pooled F):
 
 ```{r, echo = TRUE}
 tab(gss_simple, race, c(party3, tvhours), pct = "row", test = TRUE)
@@ -356,6 +370,22 @@ tab(gss_simple, rincome, tvhours, color = "ratio", color_signif = "grey_non_sign
 tab(gss_simple, rincome, tvhours, color = "diff", color_signif = "grey_non_signif",
     color_breaks = list(mean_diff = c(0.4, 0.8, 1.6)), ref = 1)
 ```
+
+## Session options
+
+A handful of `options()` set your preferred defaults once for the whole session — put them at the top of a script, or in your `.Rprofile`. Each one has a per-call argument too; the option just changes the default. The everyday ones:
+
+- `options(tabxplor.print = "html")` — print tables not in console, but as html in RStudio or Positron Viewer Pane by default (recommended)
+- `options(tabxplor.cleannames = TRUE)` — strip `"1-"`-style prefixes from level names everywhere.
+- `options(tabxplor.parallel = 8)` — parallelise tables with multiples variables on different CPU cores by default (needs `mirai`)
+- `options(tabxplor.var_labels = TRUE)` — in exports, show a variable's label (from `haven`/`labelled` data) instead of its bare name.
+- `options(tabxplor.theme = "auto")` — the export theme (`"light"`/`"dark"`/`"auto"`); `set_color_palette(theme = "auto")` does the same for the console.
+- `options(tabxplor.stars = TRUE)` — show significance stars in every table (like `stars = TRUE`).
+- `options(tabxplor.conf_level = 0.9)` — the confidence level for intervals and tests (default `0.95`).
+- `options(tabxplor.ci_print = "moe")` — print a confidence interval as a `pct ± margin of error` instead of a `[low; high]` bracket.
+- `options(tabxplor.lang = "fr")` — the language of the colour legends and footers (`"auto"`/`"en"`/`"fr"`).
+
+Colour thresholds and palettes have their own helpers, `set_color_breaks()` and `set_color_palette()`. `?tabxplor-options` documents every option, and `vignette("tabxplor-programming")` covers the more advanced ones (export fonts, parallel builds…).
 
 ## A point-and-click interface (jamovi)
 

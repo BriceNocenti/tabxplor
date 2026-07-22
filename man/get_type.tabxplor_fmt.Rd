@@ -17,3 +17,4 @@ A single string with the vector's type.
 \description{
 Get types of fmt columns
 }
+\keyword{internal}

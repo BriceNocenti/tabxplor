@@ -17,3 +17,4 @@ A single character with the ref_col attribute.
 \description{
 Test function for reference columns
 }
+\keyword{internal}

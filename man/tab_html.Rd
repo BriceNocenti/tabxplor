@@ -148,7 +148,8 @@ intervals, contribution to variance, and unweighted counts, are available in an 
 cells hover.
 }
 \description{
-Print a tabxplor table in html
+The HTML exporter behind \code{\link{tab_export}}: \code{tab_export(x, format = "html")} calls this, and
+\code{tab_kable()} is a permanent alias of \code{tab_html()}. Use it directly for HTML-specific arguments.
 }
 \details{
 \code{tab_kable()} is a permanent alias of \code{tab_html()} -- the two are identical. \code{tab_html()}

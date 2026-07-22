@@ -390,6 +390,7 @@ tabxplor_deprecated_column <- function(x, name, user_env = rlang::caller_env(2))
 #' @return The column, or the reconstructed add_n/add_pct column (deprecated), or the base method's value.
 #' @method $ tabxplor_tab
 #' @export
+#' @keywords internal
 `$.tabxplor_tab` <- function(x, name) {
   if (name %in% names(x)) return(.subset2(x, name))          # fast path (exact, no partial matching)
   shim <- tabxplor_deprecated_column(x, name, user_env = rlang::caller_env())
@@ -479,6 +480,7 @@ new_test_tibble <- local({
 #' @export
 #' @return A printed table.
 #' @method print tabxplor_tab
+#' @keywords internal
 print.tabxplor_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = NULL,
                                max_footer_lines = NULL, min_row_var = 30, get_text = FALSE) {
   # Phase 13a: install this table's per-table color_breaks override for the render (no-op otherwise).
@@ -554,6 +556,7 @@ print.tabxplor_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = N
 #' @export
 #' @return A printed grouped table.
 #' @method print tabxplor_grouped_tab
+#' @keywords internal
 # The grouped print is byte-identical to print.tabxplor_tab except the <char>->
 # <fct> header-line index (out[4] vs out[3]), which that method now derives from
 # inherits(x, "grouped_df"). So it is the SAME function (Phase 17a merge).
@@ -585,6 +588,7 @@ as_tabxplor_tabs <- function(x) {
 #' @param ... Passed to the per-table print method.
 #' @return \code{x}, invisibly.
 #' @export
+#' @keywords internal
 print.tabxplor_tabs <- function(x, ...) {
   # Mirror print.tabxplor_tab: honour options("tabxplor.print"). "kable" renders all tables joined
   # (routed to the Viewer, like a single tab); otherwise print each element's tibble in sequence.
@@ -623,6 +627,7 @@ knit_print.tabxplor_tabs <- function(x, ...) {
 #' @return A table header
 #' @export
 #' @method tbl_sum tabxplor_tab
+#' @keywords internal
 tbl_sum.tabxplor_tab <- function(x, ...) {
   tbl_header <- NextMethod()
   names(tbl_header)[1] <- "A tabxplor tab"
@@ -634,6 +639,7 @@ tbl_sum.tabxplor_tab <- function(x, ...) {
 #' @param ... Other parameters.
 #' @export
 #' @method tbl_sum tabxplor_grouped_tab
+#' @keywords internal
 tbl_sum.tabxplor_grouped_tab <- function(x, ...) {
   grouped_tbl_header <- NextMethod()
   names(grouped_tbl_header)[1] <- "A tabxplor tab"
@@ -649,6 +655,7 @@ tbl_sum.tabxplor_grouped_tab <- function(x, ...) {
 #' @return A character vector.
 #' @export
 #' @method tbl_format_footer tabxplor_tab
+#' @keywords internal
 tbl_format_footer.tabxplor_tab <- function(x, setup, ...) {
   default_footer <- NextMethod()
   # Phase 16e: the whole below-table footer (weight -> Model: -> colour legend -> stars -> user subtext) is
@@ -668,6 +675,7 @@ tbl_format_footer.tabxplor_tab <- function(x, setup, ...) {
 #' @return A character vector.
 #' @export
 #' @method tbl_format_body tabxplor_tab
+#' @keywords internal
 tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
   default_body <- NextMethod()
 
@@ -684,6 +692,10 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 
 
 #' Print a tabxplor table in html
+#'
+#' @description
+#' The HTML exporter behind \code{\link{tab_export}}: `tab_export(x, format = "html")` calls this, and
+#' `tab_kable()` is a permanent alias of `tab_html()`. Use it directly for HTML-specific arguments.
 #'
 #' @param tabs A table made with \code{\link{tab}} or \code{\link{tab_many}},
 #'   or a `list` of tab with the same `col_vars` and no `tab_vars`.
@@ -2367,6 +2379,7 @@ tab_get_wrapped_dimensions <- function(tabs, no_tab_vars = FALSE,
 #' @method group_by tabxplor_tab
 #' @return A tibble of class \code{tabxplor_grouped_tab}.
 #' @export
+#' @keywords internal
 group_by.tabxplor_tab <- function(.data,
                                   ...,
                                   .add = FALSE,
@@ -2397,6 +2410,7 @@ group_by.tabxplor_tab <- function(.data,
 #' @method arrange tabxplor_tab
 #' @return A tibble of class \code{tabxplor__tab} or \code{tabxplor_grouped_tab}.
 #' @export
+#' @keywords internal
  arrange.tabxplor_tab <-
   function(.data, ..., .by_group = TRUE, .by_totals = TRUE,
            .only_main_display = TRUE, .locale = NULL) {
@@ -2511,6 +2525,7 @@ group_by.tabxplor_tab <- function(.data,
 #' @method rowwise tabxplor_tab
 #' @return A tibble of class \code{tabxplor_grouped_tab} and \code{rowwise_df}.
 #' @export
+#' @keywords internal
 rowwise.tabxplor_tab <- function(data, ...) {
   out <- NextMethod()
   out <- rlang::exec(new_grouped_tab, out, dplyr::group_data(out), !!!tab_attrs(data))
@@ -2645,6 +2660,7 @@ vec_cast.data.frame.tabxplor_tab <- function(x, to, ...) {
 #' @method ungroup tabxplor_grouped_tab
 #' @return An object of class \code{tabxplor_tab} or \code{tabxplor_grouped_tab}.
 #' @export
+#' @keywords internal
 ungroup.tabxplor_grouped_tab <- function (x, ...)
 {
   if (missing(...)) {
@@ -2687,6 +2703,7 @@ lv1_group_vars <- function(tabs) {
 #' @param ... Future parameters.
 #' @return An object of class \code{tabxplor_grouped_tab}.
 #' @export
+#' @keywords internal
 dplyr_row_slice.tabxplor_grouped_tab <- function(data, i, ...) {
   out <- NextMethod()
   tab_restore(out, data)
@@ -2701,6 +2718,7 @@ dplyr_row_slice.tabxplor_grouped_tab <- function(data, i, ...) {
 #'   an existing column.
 #' @return An object of class \code{tabxplor_grouped_tab}.
 #' @export
+#' @keywords internal
 dplyr_col_modify.tabxplor_grouped_tab <- function(data, cols) {
   out <- NextMethod()
   tab_restore(out, data)
@@ -2714,6 +2732,7 @@ dplyr_col_modify.tabxplor_grouped_tab <- function(data, cols) {
 #' @param template Template to use for restoring attributes
 #' @return An object of class \code{tabxplor_grouped_tab}.
 #' @export
+#' @keywords internal
 dplyr_reconstruct.tabxplor_grouped_tab <- function(data, template) {
   out <- NextMethod()
   tab_restore(out, data)
@@ -2728,6 +2747,7 @@ dplyr_reconstruct.tabxplor_grouped_tab <- function(data, template) {
 #' not for the replacement.
 #' @return An object of class \code{tabxplor_grouped_tab}.
 #' @export
+#' @keywords internal
 `[.tabxplor_grouped_tab` <- function(x, i, j, drop = FALSE) {
   out <- NextMethod()
   tab_restore(out, x)
@@ -2744,6 +2764,7 @@ dplyr_reconstruct.tabxplor_grouped_tab <- function(data, template) {
 #' @param value The new value.
 #' @return An object of class \code{tabxplor_grouped_tab}.
 #' @export
+#' @keywords internal
 `[<-.tabxplor_grouped_tab` <- function(x, i, j, ..., value) {
   out <- NextMethod()
   tab_restore(out, x)
@@ -2759,6 +2780,7 @@ dplyr_reconstruct.tabxplor_grouped_tab <- function(data, template) {
 #' @param value The new value.
 #' @return An object of class \code{tabxplor_grouped_tab}.
 #' @export
+#' @keywords internal
 `[[<-.tabxplor_grouped_tab` <- function(x, ..., value) {
   out <- NextMethod()
   tab_restore(out, x)
@@ -2777,6 +2799,7 @@ dplyr_reconstruct.tabxplor_grouped_tab <- function(data, template) {
 #'   combination uniquely identify each row.
 #' @return An object of class \code{tabxplor_grouped_tab} and \code{rowwise_df}.
 #' @export
+#' @keywords internal
 rowwise.tabxplor_grouped_tab <- function(data, ...) {
   out <- NextMethod()
   groups <- dplyr::group_data(out)
@@ -2794,6 +2817,7 @@ rowwise.tabxplor_grouped_tab <- function(data, ...) {
 #' @param .groups Grouping structure of the result.
 #' @return An object of class \code{tabxplor_grouped_tab}.
 #' @export
+#' @keywords internal
 summarise.tabxplor_grouped_tab <- function(.data, ..., .groups = NULL) {
   out <- NextMethod()
   tab_restore(out, .data)
@@ -2809,6 +2833,7 @@ summarise.tabxplor_grouped_tab <- function(.data, ..., .groups = NULL) {
 #'   be used to select a range of variables.
 #' @return An object of class \code{tabxplor_grouped_tab}.
 #' @export
+#' @keywords internal
 select.tabxplor_grouped_tab <- function(.data, ...) {
   out <- NextMethod()
   tab_restore(out, .data)
@@ -2821,6 +2846,7 @@ select.tabxplor_grouped_tab <- function(.data, ...) {
 #' @param ... Use \code{new_name = old_name} to rename selected variables.
 #' @return An object of class \code{tabxplor_grouped_tab}.
 #' @export
+#' @keywords internal
 rename.tabxplor_grouped_tab <- function(.data, ...) {
   out <- NextMethod()
   tab_restore(out, .data)
@@ -2836,6 +2862,7 @@ rename.tabxplor_grouped_tab <- function(.data, ...) {
 #' @param .cols Columns to rename; defaults to all columns.
 #' @return An object of class \code{tabxplor_grouped_tab}.
 #' @export
+#' @keywords internal
 rename_with.tabxplor_grouped_tab <- function(.data, .fn, .cols = dplyr::everything(), ...) {
   # `.cols` is a tidyselect selection, so it cannot go through NextMethod(): that forwards it as the
   # bare symbol `.cols`, dplyr's enquo(.cols) captures THAT, and tidyselect then resolves it as an
@@ -2859,6 +2886,7 @@ rename_with.tabxplor_grouped_tab <- function(.data, .fn, .cols = dplyr::everythi
 #'  will move columns to the left-hand side; specifying both is an error.
 #' @return An object of class \code{tabxplor_grouped_tab}.
 #' @export
+#' @keywords internal
 relocate.tabxplor_grouped_tab <- function(.data, ...) { #.before = NULL, .after = NULL
   out <- NextMethod()
   tab_restore(out, .data)

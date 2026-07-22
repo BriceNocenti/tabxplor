@@ -25,3 +25,4 @@ in. Anything else -- a non-interactive print, a knitted document, or a table tab
 \seealso{
 \code{\link{tab_kable}}, \code{\link{tab_css}}
 }
+\keyword{internal}

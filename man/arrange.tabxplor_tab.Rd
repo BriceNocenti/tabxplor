@@ -41,3 +41,4 @@ A tibble of class \code{tabxplor__tab} or \code{tabxplor_grouped_tab}.
 \description{
 arrange method for class tabxplor_tab
 }
+\keyword{internal}

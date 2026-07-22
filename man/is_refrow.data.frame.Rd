@@ -19,3 +19,4 @@ A list of logical vectors with the in_refrow fields.
 \description{
 Test function to detect cells in reference rows
 }
+\keyword{internal}

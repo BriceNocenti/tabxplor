@@ -17,3 +17,4 @@ A logical vector with the in_refrow field.
 \description{
 Test function to detect cells in reference rows
 }
+\keyword{internal}

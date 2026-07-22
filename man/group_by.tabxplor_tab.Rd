@@ -25,3 +25,4 @@ A tibble of class \code{tabxplor_grouped_tab}.
 \description{
 group_by method for class tabxplor_tab
 }
+\keyword{internal}

@@ -21,3 +21,4 @@ An object of class \code{tabxplor_grouped_tab}.
 \description{
 subset method for class tabxplor_grouped_tab
 }
+\keyword{internal}

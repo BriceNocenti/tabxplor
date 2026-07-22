@@ -17,3 +17,4 @@ A character vector with the color attributes.
 \description{
 Get color
 }
+\keyword{internal}

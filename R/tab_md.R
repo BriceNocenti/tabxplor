@@ -11,6 +11,9 @@
 
 #' Export a tabxplor table to a markdown table
 #'
+#' @description
+#' The Markdown exporter behind \code{\link{tab_export}}: `tab_export(x, format = "md")` calls this.
+#'
 #' @param tabs A table made with \code{\link{tab}} or \code{\link{tab_many}}, or a `list` of tab.
 #'   A list of tables sharing the same `col_vars` (and no `tab_vars`) is merged into one; any other
 #'   list --- several `row_vars` and/or `tab_vars` (e.g. `tab()` with several row variables and a

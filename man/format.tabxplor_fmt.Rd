@@ -58,3 +58,4 @@ The fmt printed in a character vector.
 \description{
 Print method for class tabxplor_fmt
 }
+\keyword{internal}

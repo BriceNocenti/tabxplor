@@ -17,3 +17,4 @@ A logical vector with \code{FALSE}.
 \description{
 Test function to detect cells in total tables
 }
+\keyword{internal}

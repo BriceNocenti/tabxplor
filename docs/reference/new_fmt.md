@@ -1,0 +1,49 @@
+# fmt a constructor for class fmt.
+
+fmt a constructor for class fmt.
+
+## Usage
+
+``` r
+new_fmt(
+  n = integer(),
+  type = "n",
+  digits = rep(0L, length(n)),
+  display = dplyr::case_when(type == "mean" ~ "mean", type %in% c("row", "col", "all",
+    "all_tabs") ~ "pct", TRUE ~ "n"),
+  wn = rep(NA_real_, length(n)),
+  pct = rep(NA_real_, length(n)),
+  mean = rep(NA_real_, length(n)),
+  diff = rep(NA_real_, length(n)),
+  ratio = rep(NA_real_, length(n)),
+  ctr = rep(NA_real_, length(n)),
+  var = rep(NA_real_, length(n)),
+  ci_inf = rep(NA_real_, length(n)),
+  ci_sup = rep(NA_real_, length(n)),
+  pvalue = rep(NA_real_, length(n)),
+  or = rep(NA_real_, length(n)),
+  tot_n = rep(NA_real_, length(n)),
+  n_eff = rep(NA_real_, length(n)),
+  in_totrow = rep(FALSE, length(n)),
+  in_tottab = rep(FALSE, length(n)),
+  in_refrow = rep(FALSE, length(n)),
+  comp_all = NA,
+  ref = "",
+  ci_type = "",
+  col_var = "",
+  totcol = FALSE,
+  refcol = FALSE,
+  color = "",
+  color_signif = "ignore",
+  model_family = "",
+  role = "",
+  ...,
+  class = character()
+)
+```
+
+## Arguments
+
+- class:
+
+  Subclasses to assign to the new object, default: none.

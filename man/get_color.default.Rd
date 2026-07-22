@@ -17,3 +17,4 @@ A single character with the color attribute.
 \description{
 Get color
 }
+\keyword{internal}

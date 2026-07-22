@@ -1,0 +1,14 @@
+pandoc: 3.7.0.2
+pkgdown: 2.2.1
+pkgdown_sha: ~
+articles:
+  articles/tabxplor-fr: tabxplor-fr.html
+  articles/tabxplor-programming-fr: tabxplor-programming-fr.html
+  tabxplor-programming: tabxplor-programming.html
+  articles/tabxplor-reg-fr: tabxplor-reg-fr.html
+  tabxplor-reg: tabxplor-reg.html
+  tabxplor: tabxplor.html
+last_built: 2026-07-22T22:15Z
+urls:
+  reference: https://bricenocenti.github.io/tabxplor/fr//reference
+  article: https://bricenocenti.github.io/tabxplor/fr//articles
