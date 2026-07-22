@@ -339,3 +339,19 @@ testthat::test_that("tab_xl: var_names = 'none' drops both name annotations", {
   testthat::expect_equal(as.character(d[2, 1]), "levels")
   testthat::expect_false(any(grepl('textRotation="90"', wb$styles_mgr$styles$cellXfs)))
 })
+
+testthat::test_that("tab_xl(open = TRUE) never errors when no spreadsheet app is found", {
+  testthat::skip_if_not_installed("openxlsx2")
+  # On a machine with no Excel/spreadsheet app (e.g. WSL2), openxlsx2::xl_open() aborts inside
+  # chooseExcelApp(). A failed open after a successful write must degrade to an info message, not
+  # propagate. Mock the opener to reproduce that failure deterministically (headless CI never opens).
+  testthat::local_mocked_bindings(
+    xlb_open = function(path) cli::cli_abort("No applications (detected) available.")
+  )
+  p <- withr::local_tempfile(fileext = ".xlsx")
+  t <- tab(forcats::gss_cat, race, marital, pct = "row")
+  testthat::expect_no_error(
+    testthat::expect_message(tab_xl(t, path = p, open = TRUE), "[Cc]ould not open")
+  )
+  testthat::expect_true(file.exists(p))   # the write still succeeded
+})

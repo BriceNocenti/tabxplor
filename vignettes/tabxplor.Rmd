@@ -180,27 +180,30 @@ tab(gss_simple, relig, race, pct = "row",  other_if_less_than = 400)
 
 ## Confidence intervals, tests and contributions
 
-Print confidence intervals for the percentage or mean of each cell with `ci = "cell"` : 
+Print confidence intervals for the percentage or mean of each cell with `ci = "cell"` :
 
 ```{r, echo = TRUE}
 tab(gss_simple, race, party3, pct = "row", ci = "cell") # by default, conf_level = 0.95
 ```
 
-Print the confidence intervals of the **difference** with a reference, used to calculate significance (if 0 belongs to the confidence interval, the cell is not significantly different from the reference, here the Total row) : 
+Print the confidence intervals of the **difference** with a reference, used to calculate significance (if 0 belongs to the confidence interval, the cell is not significantly different from the reference, here the Total row) :
 ```{r, echo = TRUE}
 gss_simple |>
   dplyr::filter(year == "2012") |> # n=1 974
-  tab(race, party3, pct = "row", color = TRUE, color_signif = "guaranteed_effect", 
-      display = "{pct} {ci}"
+  tab(race, party3, pct = "row", color = TRUE, color_signif = "guaranteed_effect",
+      display = "num_ci" # "{pct} {ci}"
   )
 ```
+
+`display = "num_ci"` is a type-adaptive shorthand for this: it shows each value with whatever confidence interval the table computes — `{pct} {ci}` on percentage columns and `{mean} {ci}` on numeric columns, chosen per column — so it works for a mix of factors and numbers in one call:
+
 
 Add significance stars with `stars = TRUE`. They tell the same story than confidence intervals of the difference with the reference, but for different confidence levels (99%, 95%, 90%) :
 
 ```{r, echo = TRUE}
 gss_simple |>
   dplyr::filter(year == "2012") |> # n=1 974
-  tab(race, party3, pct = "row", display = "{pct} {ci}", stars = TRUE)
+  tab(rincome, c(party3, tvhours), pct = "row", display = "num_ci", stars = TRUE)
 ```
 
 **Show two numbers in one cell.** `display` is not just for confidence intervals: it takes a **`{}` template** that combines any cell fields. For example `display = "{pct} ({diff})"` prints each percentage followed by its difference from the reference, and `"{pct} (n={n})"` follows it with the count:

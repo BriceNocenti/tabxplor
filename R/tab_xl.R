@@ -349,7 +349,17 @@ xl_finish <- function(write, path, replace, open) {
   path <- tab_xl_resolve_path(path, replace)
   write(path)
   cli::cli_inform(c("v" = "Excel file written to {.file {path}}"))
-  if (isTRUE(open)) xlb_open(path)
+  # A failed *open* after a successful *write* is non-fatal: on a machine with no spreadsheet
+  # application (e.g. WSL2), openxlsx2::xl_open() aborts with "No applications (detected) available."
+  # Downgrade any open failure to a friendly info message rather than erroring out.
+  if (isTRUE(open)) {
+    tryCatch(
+      xlb_open(path),
+      error = function(e) cli::cli_inform(c(
+        "i" = "Could not open the file automatically (no spreadsheet application detected)."
+      ))
+    )
+  }
   invisible(path)
 }
 

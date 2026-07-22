@@ -8,6 +8,14 @@ msgstr ""
 "Language: fr\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
+#: jmvtabreg/ui[6].label
+msgid "<b>Advanced — survey design (used with a weight)</b>"
+msgstr "<b>Avancé — plan de sondage (avec pondération)</b>"
+
+#: jmvtab/options/cleannames.title
+msgid "<b>cleannames =</b>"
+msgstr "<b>cleannames = <i>(nettoyer noms)</i></b>"
+
 #: jmvtab/options/col_vars.title
 #: jmvtab/ui/variablesupplier[1].label
 msgid "<b>col_vars = <i>(column variables)</i></b>"
@@ -15,46 +23,138 @@ msgstr "<b>col_vars = <i>(variables de colonne)</i></b>"
 
 #: jmvtab/ui[4].label
 msgid "<b>Confidence intervals</b>"
-msgstr "<b>Intervalles de confiance</b>"
+msgstr "<b>Intervalles de confiance (IC)</b>"
 
-#: jmvtab/ui[6][3][0].label
-msgid "<b>File name:</b>"
-msgstr "Nom du fichier:"
+#: jmvtab/ui[4][1].label
+msgid "<b>Confidence-interval methods (advanced)</b>"
+msgstr "<b>Méthodes d'IC (avancé)</b>"
 
-#: jmvtab/ui[6][1][0].label
-msgid "<b>Folder:</b>"
-msgstr "Chemin du dossier:"
+#: jmvtabreg/options/dependent.title
+#: jmvtabreg/ui/variablesupplier[0].label
+msgid "<b>dependent = <i>(outcome variable[s])</i></b>"
+msgstr "<b>dependent = <i>(variable[s] à expliquer)</i></b>"
+
+#: jmvtabreg/ui[5].label
+msgid "<b>Display</b>"
+msgstr "<b>Affichage</b>"
+
+#: jmvtabreg/options/fpc.title
+#: jmvtabreg/ui[6]/surveysupplier[2].label
+msgid "<b>fpc = <i>(finite population)</i></b>"
+msgstr "<b>fpc = <i>(population finie)</i></b>"
+
+#: jmvtabreg/options/ids.title
+#: jmvtabreg/ui[6]/surveysupplier[0].label
+msgid "<b>ids = <i>(cluster ids)</i></b>"
+msgstr "<b>ids = <i>(id. de grappes)</i></b>"
 
 #: jmvtab/ui[2].label
 msgid "<b>Levels and missing values</b>"
 msgstr "<b>Valeurs manquantes et modalités</b>"
 
+#: jmvtabreg/ui[2].label
+msgid "<b>Model comparison (+ predictor subsets)</b>"
+msgstr "<b>Comparaison de modèles</b>"
+
+#: jmvtabreg/ui[1].label
+msgid "<b>Model</b>"
+msgstr "<b>Modèle</b>"
+
+#: jmvtab/options/n_min.title
+msgid "<b>n_min = <i>(hide rows/cols with small n)</i></b>"
+msgstr "<b>n_min = <i>(masquer lignes/col. à petit n)</i></b>"
+
 #: jmvtab/ui[5].label
 msgid "<b>Other formatting</b>"
 msgstr "<b>Autres mises en forme</b>"
 
+#: jmvtab/options/other_if_less_than.title
+msgid "<b>other_if_less_than = <i>(\"Other\" level)</i></b>"
+msgstr "<b>other_if_less_than = <i>(modalité « Autres »)</i></b>"
+
 #: jmvtab/ui[1].label
-msgid "<b>Percentages, colors and Chi2 test </b>"
-msgstr "<b>Pourcentages, couleurs et test du Chi2</b>"
+msgid "<b>Percentages, colors and tests</b>"
+msgstr "<b>Pourcentages, couleurs et tests</b>"
+
+#: jmvtabreg/options/predictors.title
+#: jmvtabreg/ui/variablesupplier[1].label
+msgid "<b>predictors = <i>(explanatory variables)</i></b>"
+msgstr "<b>predictors = <i>(variables explicatives)</i></b>"
 
 #: jmvtab/ui[3].label
 msgid "<b>References (points of comparison)</b>"
 msgstr "<b>Références (points de comparaison)</b>"
+
+#: jmvtabreg/ui[3].label
+msgid "<b>References and predictor scaling</b>"
+msgstr "<b>Références et échelle des prédicteurs</b>"
+
+#: jmvtab/ui[2][1][0].label
+msgid "<b>Reorder levels</b> <i>(click on a level, then move it up/down)</i>"
+msgstr "<b>Réordonner les modalités</b> <i>(cliquer, puis monter/descendre)</i>"
 
 #: jmvtab/options/row_vars.title
 #: jmvtab/ui/variablesupplier[0].label
 msgid "<b>row_vars = <i>(row variables)</i></b>"
 msgstr "<b>row_vars = <i>(variables de ligne)</i></b>"
 
+#: jmvtabreg/ui[4][0][0][0].label
+msgid "<b>Show:</b>"
+msgstr "<b>Afficher :</b>"
+
+#: jmvtabreg/ui[4].label
+msgid "<b>Significance</b>"
+msgstr "<b>Significativité</b>"
+
+#: jmvtabreg/options/split_var.title
+#: jmvtabreg/ui/variablesupplier[2].label
+msgid "<b>split_var = <i>(fit within each group)</i></b>"
+msgstr "<b>split_var = <i>(un modèle par groupe)</i></b>"
+
+#: jmvtabreg/options/strata.title
+#: jmvtabreg/ui[6]/surveysupplier[1].label
+msgid "<b>strata = <i>(strata)</i></b>"
+msgstr "<b>strata = <i>(strates)</i></b>"
+
 #: jmvtab/options/tab_vars.title
 #: jmvtab/ui/variablesupplier[2].label
 msgid "<b>tab_vars = <i>(subtables variables)</i></b>"
 msgstr "<b>tab_vars = <i>(variables de sous-tableaux)</i></b>"
 
+#: jmvtabreg/ui[5][0][1][0].label
+msgid "<b>Table layout</b>"
+msgstr "<b>Disposition du tableau</b>"
+
+#: jmvtab/ui[1][1][0].label
+msgid ""
+"<b>test = <i>(Chi2 and Cramer’V for categorical; ANOVA F and eta2 for "
+"numeric)</i></b>"
+msgstr ""
+"<b>test = <i>(Chi2 et V de Cramér si catégorielle ; ANOVA F et eta2 si "
+"numérique)</i></b>"
+
+#: jmvtabreg/options/wt.title
+#: jmvtabreg/ui/variablesupplier[3].label
+msgid "<b>wt = <i>(survey weights)</i></b>"
+msgstr "<b>wt = <i>(poids de sondage)</i></b>"
+
 #: jmvtab/options/wt.title
 #: jmvtab/ui/variablesupplier[3].label
 msgid "<b>wt = <i>(weights)</i></b>"
 msgstr "<b>wt = <i>(poids)</i></b>"
+
+#: jmvtab/options/export_dir.default
+#: jmvtabreg/options/export_dir.default
+msgid "~/Documents"
+msgstr "~/Documents"
+
+#: jmvtab/options/method_diff/ac.title
+msgid "ac <i>(Agresti-Caffo)</i>"
+msgstr "ac <i>(Agresti-Caffo)</i>"
+
+#: jmvtab/options/chi2.title
+msgid "Add statistical test/effect size"
+msgstr "Ajouter test / taille d'effet"
 
 #: jmvtab/ui[5][4][0].label
 msgid "add_n = <i>(see unweighted counts)</i>"
@@ -63,10 +163,6 @@ msgstr "add_n = <i>(voir effectifs non pondérés)</i>"
 #: jmvtab/ui[5][5][0].label
 msgid "add_pct = <i>(see frequencies of 100% total)</i>"
 msgstr "add_pct = <i>(voir freq. des totaux à 100%)</i>"
-
-#: jmvtab/options/color/after_ci.title
-msgid "after_ci <i>(diff, after substracting margin of error)</i>"
-msgstr "after_ci <i>(diff, après soustraction marge d'erreur)</i>"
 
 #: jmvtab/options/pct/all.title
 #: jmvtab/options/lvs/all.title
@@ -81,24 +177,71 @@ msgstr "all <i>(comparer avec le total général)</i>"
 msgid "all_tabs"
 msgstr "all_tabs"
 
-#: jmvtab/options/lvs/auto.title
+#: jmvtabreg/options/effect/ame.title
+msgid "AME (average marginal effect)"
+msgstr "AME (effet marginal moyen)"
+
+#: jmvtab/ui[1][1][1][1]/anova.label
+msgid "ANOVA F"
+msgstr "ANOVA F"
+
+#: jmvtab/options/anova.title
+msgid "ANOVA F (numeric)"
+msgstr "ANOVA F (numérique)"
+
+#: jmvtabreg/options/at.title
+msgid "at"
+msgstr "at"
+
+#: jmvtabreg/ui[1][1][1][1][0].label
+msgid "at = <i>(profile, marginal effects)</i>"
+msgstr "at = <i>(profil, effets marginaux)</i>"
+
+#: jmvtabreg/options/at/reference.title
+msgid "at the reference profile"
+msgstr "au profil de référence"
+
 #: jmvtab/options/ref.default
 #: jmvtab/options/ci/auto.title
 #: jmvtab/options/display/auto.title
 msgid "auto"
 msgstr "auto"
 
+#: jmvtab/options/lvs/auto.title
+msgid "auto <i>(first level if binary)</i>"
+msgstr "auto <i>(1re modalité si binaire)</i>"
+
+#: jmvtab/options/color/auto.title
+msgid "auto <i>(smart default: difference + ratio)</i>"
+msgstr "auto <i>(défaut : différence + ratio)</i>"
+
 #: jmvtab/options/ref.title
 msgid "auto/tot/<i>{row_number}</i>/<i>{row_name}</i>"
 msgstr "auto/tot/<i>{num_ligne}</i>/<i>{nom_ligne}</i>"
+
+#: jmvtabreg/options/at/average.title
+msgid "average (over the sample)"
+msgstr "moyen (sur l'échantillon)"
+
+#: jmvtabreg/options/baseline.title
+msgid "Baseline model position"
+msgstr "Position du modèle de base"
+
+#: jmvtabreg/options/depModelLevel.title
+msgid "Binomial modelled level (per dependent)"
+msgstr "Modalité modélisée (binomial, par var.)"
+
+#: jmvtabreg/options/depTrials.title
+msgid "Binomial trials (per dependent)"
+msgstr "Nombre de questions (par variable)"
 
 #: jmvtab/options/ci/cell.title
 msgid "cell <i>(ci for each cell)</i>"
 msgstr "cell <i>(IC pour chaque case)</i>"
 
-#: jmvtab/ui[1][0][3][0].label
-msgid "chi2 = <i>(Chi2 test)</i>"
-msgstr "chi2 = <i>(test du Chi2)</i>"
+#: jmvtab/options/ci.title
+msgid "ci"
+msgstr "ci"
 
 #: jmvtab/options/display/ci.title
 msgid "ci <i>(confidence intervals)</i>"
@@ -108,42 +251,96 @@ msgstr "ci <i>(IC, intervalles de confiance)</i>"
 msgid "ci <i>(interval display: [inf;sup])</i>"
 msgstr "ci <i>(format: [inf;sup])</i>"
 
-#: jmvtab/options/ci.title
-#: jmvtab/ui[4][0][0].label
+#: jmvtab/ui[4][0][0][0].label
 msgid "ci = <i>(confidence intervals)</i>"
 msgstr "ci = <i>(intervalles de confiance, IC)</i>"
 
-#: jmvtab/ui[2][2][1].label
-msgid "cleannames ="
-msgstr "cleannames = <i>(nettoyer noms)</i>"
+#: jmvtab/options/test_robust/classic.title
+msgid "classic"
+msgstr "classique"
+
+#: jmvtab/options/anova/classic.title
+msgid "classic <i>(equal variances)</i>"
+msgstr "classique <i>(variances égales)</i>"
+
+#: jmvtabreg/options/cleannames.title
+msgid "cleannames"
+msgstr "cleannames"
+
+#: jmvtabreg/ui[5][0][1]/cleannames.label
+msgid "cleannames = <i>(tidy level names)</i>"
+msgstr "cleannames = <i>(noms de modalités nettoyés)</i>"
+
+#: jmvtabreg/options/nest.title
+msgid "cluster ids nested within strata"
+msgstr "grappes emboîtées dans les strates"
+
+#: jmvtabreg/options/effect/coefficient.title
+msgid "coefficient (per-family effect)"
+msgstr "coefficient (effet propre à la famille)"
 
 #: jmvtab/options/pct/col.title
 msgid "col (column)"
 msgstr "col (colonne)"
 
 #: jmvtab/options/color.title
-msgid "color = (Color)"
-msgstr "color = (Couleur)"
+#: jmvtabreg/options/color.title
+msgid "color"
+msgstr "color"
+
+#: jmvtabreg/ui[4][0][1]/color.label
+msgid "color = <i>(colour helpers)</i>"
+msgstr "color = <i>(aides couleurs)</i>"
 
 #: jmvtab/ui[1][0][1][0].label
-msgid "color = <i>(what to use for color helpers)</i>"
-msgstr "color = <i>(aides à l'interprétation)</i>"
+msgid "color = <i>(what to measure for colors)</i>"
+msgstr "color = <i>(que mesurer pour les couleurs)</i>"
+
+#: jmvtab/options/color_signif.title
+#: jmvtabreg/options/color_signif.title
+msgid "color_signif"
+msgstr "color_signif"
+
+#: jmvtab/ui[1][0][3][0].label
+#: jmvtabreg/ui[4][2][0].label
+msgid "color_signif = <i>(significance policy)</i>"
+msgstr "color_signif = <i>(gestion de la significativité)</i>"
+
+#: jmvtab/options/na/common_base.title
+msgid "common_base <i>(complete cases of 1st col_var)</i>"
+msgstr "common_base <i>(cas complets du 1er col_var)</i>"
 
 #: jmvtab/options/comp.title
 msgid "comp"
 msgstr "comp"
 
-#: jmvtab/ui[3][1][0].label
+#: jmvtab/ui[3][1]/comp.label
 msgid "comp = <i>(reference table with tab_vars)</i>"
 msgstr "comp = <i>(tableau de référence, avec tab_vars)</i>"
 
-#: jmvtab/ui[4][2][0].label
+#: jmvtabreg/options/compare.title
+msgid "compare"
+msgstr "compare"
+
+#: jmvtabreg/ui[2][1][0][0].label
+msgid "compare = <i>(nested-model LR/F test)</i>"
+msgstr "compare = <i>(test LR/F entre modèles)</i>"
+
+#: jmvtabreg/ui[4][1][0][0].label
+msgid "conf_level ="
+msgstr "conf_level ="
+
+#: jmvtab/ui[4][0][2][0].label
 msgid "conf_level = <i>(confidence level)</i>"
 msgstr "conf_level = <i>(seuil de confiance)</i>"
 
+#: jmvtabreg/options/conf_level.title
+msgid "Confidence level"
+msgstr "Seuil de confiance"
+
 #: jmvtab/options/color/contrib.title
-msgid "contrib <i>(relative contribution to variance)</i>"
-msgstr "contrib <i>(contribution relative à la variance)</i>"
+msgid "contrib <i>(contribution to variance)</i>"
+msgstr "contrib <i>(contribution à la variance)</i>"
 
 #: package/analyses/jmvtab.title
 #: package/analyses/jmvtab.menuTitle
@@ -162,13 +359,12 @@ msgid "diff <i>(ci on the difference with reference)</i>"
 msgstr "diff <i>(IC sur la différence avec la référence)</i>"
 
 #: jmvtab/options/color/diff.title
+msgid "diff <i>(difference from total, or reference cell)</i>"
+msgstr "diff <i>(écart au total, ou à la case de référence)</i>"
+
 #: jmvtab/options/display/diff.title
 msgid "diff <i>(differences from total, or reference cell)</i>"
 msgstr "diff <i>(différences par rapport au total/référence)</i>"
-
-#: jmvtab/options/color/diff_ci.title
-msgid "diff_ci <i>(differences, only if significant)</i>"
-msgstr "diff_ci <i>(différences, seulement si significatives)</i>"
 
 #: jmvtab/ui[5][6][0].label
 msgid "digits = <i>(number of digits)</i>"
@@ -179,49 +375,168 @@ msgid "display = <i>(which information to display in the table ?)</i>"
 msgstr "display = <i>(quelle information afficher dans le tableau ?)</i>"
 
 #: jmvtab/options/na/drop.title
-msgid "drop <i>(for each col_var)</i>"
-msgstr "drop <i>(enlever, par col_var)</i>"
+msgid "drop <i>(each col_var drops its own NA)</i>"
+msgstr "drop <i>(chaque col_var retire ses NA)</i>"
+
+#: jmvtabreg/options/na/drop_all_models.title
+msgid "drop all models (one shared population)"
+msgstr "tous modèles (population commune)"
+
+#: jmvtabreg/options/na/drop_by_model.title
+msgid "drop by model (per-model complete cases)"
+msgstr "par modèle (cas complets par modèle)"
 
 #: jmvtab/options/na/drop_all.title
-msgid "drop_all <i>(for all col_vars)</i>"
-msgstr "drop_all <i>(pour toutes)</i>"
+msgid "drop_all <i>(complete cases in all col_vars)</i>"
+msgstr "drop_all <i>(cas complets sur tous les col_vars)</i>"
+
+#: jmvtabreg/options/effect.title
+msgid "effect"
+msgstr "effect"
+
+#: jmvtabreg/ui[1][1][1][0][0].label
+msgid "effect = <i>(estimand)</i>"
+msgstr "effect = <i>(estimande)</i>"
+
+#: jmvtabreg/options/empirical.title
+msgid "empirical"
+msgstr "empirical"
+
+#: jmvtabreg/ui[1][1]/empirical.label
+msgid "empirical = <i>(compare model estimates with observed values)</i>"
+msgstr "empirical = <i>(comparer estimations et valeurs observées)</i>"
+
+#: jmvtabreg/options/estimate_display.title
+msgid "estimate_display"
+msgstr "estimate_display"
+
+#: jmvtabreg/ui[5][0][0][0].label
+msgid "estimate_display = <i>(cell layout)</i>"
+msgstr "estimate_display = <i>(disposition de la case)</i>"
+
+#: jmvtab/options/export_format/excel.title
+#: jmvtabreg/options/export_format/excel.title
+msgid "Excel"
+msgstr "Excel"
+
+#: jmvtabreg/options/exponentiate.title
+msgid "exponentiate"
+msgstr "exponentiate"
+
+#: jmvtabreg/ui[1][1]/exponentiate.label
+msgid "exponentiate = <i>(odds / rate ratios when it makes sense)</i>"
+msgstr "exponentiate = <i>(odds/rate ratios quand pertinent)</i>"
 
 #: jmvtab/options/exportExcel.title
-msgid "Export Table to Excel"
-msgstr "Exporter tableau vers Excel"
+#: jmvtab/ui[7][0][0]/exportExcel.label
+#: jmvtabreg/options/exportExcel.title
+#: jmvtabreg/ui[7][0][0]/exportExcel.label
+msgid "Export"
+msgstr "Exporter"
 
-#: jmvtab/ui[6][0]/exportExcel.label
-msgid "Export to Excel"
-msgstr "Export Excel"
+#: jmvtabreg/options/depFamily.title
+msgid "Family (per dependent)"
+msgstr "Famille (par variable)"
 
-#: jmvtab/options/lvs/first.title
 #: jmvtab/options/ref2.default
 msgid "first"
 msgstr "first"
+
+#: jmvtab/options/lvs/first.title
+msgid "first <i>(first level of each col_var)</i>"
+msgstr "first <i>(1re modalité de chaque col_var)</i>"
 
 #: jmvtab/options/ref2.title
 msgid "first/tot/<i>{col_number}</i>"
 msgstr "first/tot/<i>{num_colonne}</i>"
 
+#: jmvtab/options/export_format.title
+#: jmvtabreg/options/export_format.title
+msgid "Format"
+msgstr "Format"
+
+#: jmvtabreg/options/color_signif/grey_non_signif.title
+msgid "grey_non_signif <i>(color effect size + uncolor non-significant)</i>"
+msgstr "grey_non_signif <i>(taille d'effet + griser non signif.)</i>"
+
+#: jmvtab/options/color_signif/grey_non_signif.title
+msgid "grey_non_signif <i>(same + uncolor non-significant)</i>"
+msgstr "grey_non_signif <i>(idem + griser non signif.)</i>"
+
+#: jmvtabreg/options/color_signif/guaranteed_effect.title
+msgid "guaranteed_effect <i>(color all CI-floor, ideal for small sample)</i>"
+msgstr "guaranteed_effect <i>(effet garanti par l'IC, idéal petit échant.)</i>"
+
+#: jmvtab/options/color_signif/guaranteed_effect.title
+msgid "guaranteed_effect <i>(color all CI-floor/small sample)</i>"
+msgstr "guaranteed_effect <i>(effet garanti par l'IC/petit échant.)</i>"
+
+#: jmvtab/options/export_format/html.title
+#: jmvtabreg/options/export_format/html.title
+msgid "HTML"
+msgstr "HTML"
+
+#: jmvtab/options/color_signif/ignore.title
+msgid "ignore <i>(color deviations by observed size)</i>"
+msgstr "ignore <i>(colorer selon la taille observée)</i>"
+
+#: jmvtabreg/options/color_signif/ignore.title
+msgid "ignore <i>(color effect size only, ignore significance)</i>"
+msgstr "ignore <i>(taille d'effet seule, ignorer signif.)</i>"
+
+#: jmvtab/options/method_ratio/katz.title
+msgid "katz <i>(log ratio)</i>"
+msgstr "katz <i>(log du ratio)</i>"
+
 #: jmvtab/options/na/keep.title
-msgid "keep"
-msgstr "keep (conserver NAs)"
+msgid "keep <i>(NA as a normal level)</i>"
+msgstr "keep <i>(NA comme modalité)</i>"
+
+#: jmvtab/options/test_robust/kish.title
+msgid "Kish n_eff <i>(weighted)</i>"
+msgstr "Kish n_eff <i>(pondéré)</i>"
+
+#: jmvtab/options/levelOrder.title
+msgid "Level order (per variable)"
+msgstr "Ordre des modalités (par variable)"
 
 #: jmvtab/options/lvs.title
 msgid "levels"
 msgstr "levels"
 
-#: jmvtab/ui[2][1][0].label
-msgid "levels = <i>(which lvs to keep)</i>"
-msgstr "levels = <i>(modalités)</i>"
+#: jmvtab/ui[2][0][1][0].label
+msgid "levels = <i>(which col_var levels to keep)</i>"
+msgstr "levels = <i>(modalités des col_var à garder)</i>"
 
 #: jmvtab/options/totaltab/line.title
 msgid "line"
 msgstr "line (seulement une ligne)"
 
 #: package.description
-msgid "Make it easy to deal with multiple cross-tables in data exploration, by creating them, manipulating them, and adding color helpers to highlight important informations (differences from totals, comparisons between lines or columns, contributions to variance, confidence intervals, odds ratios, etc.). All functions are pipe-friendly and render data frames which can be easily manipulated. In the same time, time-taking operations are done with 'data.table' to go faster with big dataframes. Tables can be exported to 'Excel', plot and html with formats and colors."
-msgstr "Tableaux croisés multiples faciles à manipuler en exploration de données, avec aides à l'interprétation pour colorer les informations importantes (différences par rapport au total, comparaison entre lignes, contributions à la variance, intervalles de confiance, rapports de chances, etc.) Toutes les fonctions sont adaptées au pipe (|> ou %>%) et retournent des data.frames aisément manipulables. Les opérations les plus lourdes sont réalisées en `data.table` pour gagner du temps avec les grandes bases de données. Les tableaux peuvent être exportés en format `Excel`, graphique ou html avec la mise en forme et les couleurs."
+msgid ""
+"Make it easy to deal with multiple cross-tables in data exploration, by "
+"creating them, manipulating them, and adding color helpers to highlight "
+"important informations (differences from totals, comparisons between lines "
+"or columns, contributions to variance, confidence intervals, odds ratios, "
+"etc.). All functions are pipe-friendly and render data frames which can be "
+"easily manipulated. In the same time, time-taking operations are done with "
+"'data.table' to go faster with big dataframes. Tables can be exported to "
+"'Excel', plot and html with formats and colors."
+msgstr ""
+"Tableaux croisés multiples faciles à manipuler en exploration de données, "
+"avec aides à l'interprétation pour colorer les informations importantes "
+"(différences par rapport au total, comparaison entre lignes, contributions à "
+"la variance, intervalles de confiance, rapports de chances, etc.) Toutes les "
+"fonctions sont adaptées au pipe (|> ou %>%) et retournent des data.frames "
+"aisément manipulables. Les opérations les plus lourdes sont réalisées en "
+"`data.table` pour gagner du temps avec les grandes bases de données. Les "
+"tableaux peuvent être exportés en format `Excel`, graphique ou html avec la "
+"mise en forme et les couleurs."
+
+#: jmvtab/options/export_format/md.title
+#: jmvtabreg/options/export_format/md.title
+msgid "Markdown"
+msgstr "Markdown"
 
 #: jmvtab/options/display/mean.title
 msgid "mean <i>(mean, for numeric variables)</i>"
@@ -230,6 +545,54 @@ msgstr "mean <i>(moyenne, pour les variables numériques)</i>"
 #: jmvtab/options/display/mean_ci.title
 msgid "mean_ci <i>(means with visible conf. intervals)</i>"
 msgstr "mean_ci <i>(moyennes avec IC visibles)</i>"
+
+#: jmvtabreg/options/method.title
+msgid "method"
+msgstr "method"
+
+#: jmvtabreg/ui[4][1][1][0].label
+msgid "method = <i>(conf. interval)</i>"
+msgstr "method = <i>(intervalle de confiance)</i>"
+
+#: jmvtab/options/method_cell.title
+msgid "method_cell"
+msgstr "method_cell"
+
+#: jmvtab/ui[4][1][0][0][0].label
+msgid "method_cell = <i>(cell proportion)</i>"
+msgstr "method_cell = <i>(proportion de la case)</i>"
+
+#: jmvtab/options/method_diff.title
+msgid "method_diff"
+msgstr "method_diff"
+
+#: jmvtab/ui[4][1][0][2][0].label
+msgid "method_diff = <i>(difference in proportion)</i>"
+msgstr "method_diff = <i>(différence de proportion)</i>"
+
+#: jmvtab/options/method_mean_diff.title
+msgid "method_mean_diff"
+msgstr "method_mean_diff"
+
+#: jmvtab/ui[4][1][0][6][0].label
+msgid "method_mean_diff = <i>(mean difference)</i>"
+msgstr "method_mean_diff = <i>(différence de moyennes)</i>"
+
+#: jmvtab/options/method_mean_ratio.title
+msgid "method_mean_ratio"
+msgstr "method_mean_ratio"
+
+#: jmvtab/ui[4][1][0][8][0].label
+msgid "method_mean_ratio = <i>(mean ratio)</i>"
+msgstr "method_mean_ratio = <i>(ratio de moyennes)</i>"
+
+#: jmvtab/options/method_ratio.title
+msgid "method_ratio"
+msgstr "method_ratio"
+
+#: jmvtab/ui[4][1][0][4][0].label
+msgid "method_ratio = <i>(proportion / rate ratio)</i>"
+msgstr "method_ratio = <i>(ratio de proportions/taux)</i>"
 
 #: jmvtab/options/ci_print/moe.title
 msgid "moe <i>(display: pct±margin of error)</i>"
@@ -240,11 +603,19 @@ msgid "n <i>(unweighted counts)</i>"
 msgstr "n <i>(effectifs non pondérés)</i>"
 
 #: jmvtab/options/na.title
-#: jmvtab/ui[2][0][0].label
+#: jmvtabreg/options/na.title
+msgid "na"
+msgstr "na"
+
+#: jmvtab/ui[2][0][0][0].label
+#: jmvtabreg/ui[2][1][1][0].label
 msgid "na = <i>(missing values)</i>"
 msgstr "na = <i>(valeurs manquantes)</i>"
 
-#: jmvtab/options/color/no.title
+#: jmvtab/options/method_diff/newcombe.title
+msgid "newcombe <i>(hybrid score)</i>"
+msgstr "newcombe <i>(score hybride)</i>"
+
 #: jmvtab/options/OR/no.title
 #: jmvtab/options/totaltab/no.title
 msgid "no"
@@ -254,8 +625,20 @@ msgstr "no"
 msgid "no (counts)"
 msgstr "no (effectifs)"
 
+#: jmvtab/options/color/no.title
+msgid "no <i>(no colors)</i>"
+msgstr "no <i>(pas de couleurs)</i>"
+
+#: jmvtabreg/options/compare/none.title
+msgid "none"
+msgstr "aucune"
+
+#: jmvtabreg/options/subtext.title
+msgid "Note below the table"
+msgstr "Note sous le tableau"
+
 #: jmvtab/options/ci_print.title
-#: jmvtab/ui[4][1][0].label
+#: jmvtab/ui[4][0][1][0].label
 msgid "options('tabxplor.ci_print' = ...)"
 msgstr "options('tabxplor.ci_print' = ...)"
 
@@ -264,10 +647,13 @@ msgstr "options('tabxplor.ci_print' = ...)"
 msgid "OR"
 msgstr "OR"
 
-#: jmvtab/options/color/OR.title
 #: jmvtab/options/display/OR.title
 msgid "OR <i>(odds ratios or relative risks ratios)</i>"
 msgstr "OR <i>(odds ratios, rapports de chance)</i>"
+
+#: jmvtab/options/color/OR.title
+msgid "OR <i>(odds ratios)</i>"
+msgstr "OR <i>(rapports de chances)</i>"
 
 #: jmvtab/ui[1][0][2][0].label
 msgid "OR = <i>(Odds Ratio)</i>"
@@ -281,17 +667,18 @@ msgstr "OR_pct <i>(odds ratios, % visibles)</i>"
 msgid "OR_pct <i>(odds ratios with visible percentages)</i>"
 msgstr "OR_pct  <i>(odds ratios avec pourcentages visibles)</i>"
 
-#: jmvtab/ui[2][2][0].label
-msgid "other_if_less_than ="
-msgstr "other_if_less_than = <br> <i>(regrouper modalités rares)</i>"
+#: jmvtab/options/export_dir.title
+#: jmvtabreg/options/export_dir.title
+msgid "Path:"
+msgstr "Chemin :"
+
+#: jmvtab/options/pct.title
+msgid "pct"
+msgstr "pct"
 
 #: jmvtab/options/display/pct.title
 msgid "pct <i>(percentages)</i>"
 msgstr "pct <i>(pourcentages)</i>"
-
-#: jmvtab/options/pct.title
-msgid "pct = (Percentages)"
-msgstr "pct = (Pourcentages)"
 
 #: jmvtab/ui[1][0][0][0].label
 msgid "pct = <i>(type of percentages)</i>"
@@ -301,23 +688,108 @@ msgstr "pct = <i>(type de pourcentages)</i>"
 msgid "pct_ci <i>(percentages with visible conf. intervals)</i>"
 msgstr "pct_ci <i>(pourcentages avec IC visibles)</i>"
 
-#: jmvtab/ui[3][0][0].label
-msgid "ref = <i>(reference row/col for diff/OR)</i>"
-msgstr "ref = <i>(ligne/col de référence pour diff/OR)</i>"
+#: jmvtab/options/method_mean_ratio/poisson.title
+msgid "poisson <i>(naive counts)</i>"
+msgstr "poisson <i>(effectifs bruts)</i>"
 
-#: jmvtab/ui[3][2][0].label
-msgid "ref2 = <i>(2nd reference col/row for OR)</i>"
-msgstr "ref2 = <i>(2e col/ligne de référence pour OR)</i>"
+#: jmvtabreg/options/multiplicator.title
+msgid "Predictor scaling (per k units)"
+msgstr "Échelle des prédicteurs (par k unités)"
+
+#: jmvtabreg/options/models.title
+msgid "Predictor subsets (model comparison)"
+msgstr "Sous-ensembles de prédicteurs (comparaison)"
+
+#: jmvtabreg/options/method/profile.title
+msgid "profile-likelihood"
+msgstr "profil de vraisemblance"
+
+#: jmvtab/options/method_mean_ratio/quasipoisson.title
+msgid "quasipoisson <i>(dispersion-scaled)</i>"
+msgstr "quasipoisson <i>(ajusté à la dispersion)</i>"
+
+#: jmvtab/options/ci/ratio.title
+msgid "ratio <i>(ci on the ratio with reference)</i>"
+msgstr "ratio <i>(IC sur le ratio avec la référence)</i>"
+
+#: jmvtab/options/color/ratio.title
+msgid "ratio <i>(relative risk, or mean ratio)</i>"
+msgstr "ratio <i>(risque relatif, ou ratio de moyennes)</i>"
+
+#: jmvtabreg/options/refLevels.title
+msgid "Reference levels (per predictor)"
+msgstr "Modalités de référence (par prédicteur)"
+
+#: jmvtab/options/refLevels.title
+msgid "Reference levels (per variable)"
+msgstr "Modalités de référence (par variable)"
+
+#: jmvtabreg/options/export_filename.default
+msgid "Reg_model"
+msgstr "Reg_model"
+
+#: jmvtabreg/results.title
+msgid "Regression models"
+msgstr "Modèles de régression"
+
+#: package/analyses/jmvtabreg.title
+#: package/analyses/jmvtabreg.menuTitle
+#: jmvtabreg/options.title
+#: jmvtabreg/ui.title
+msgid "Regressions"
+msgstr "Régressions"
+
+#: jmvtab/ui[7][2]/xl_replace.label
+#: jmvtabreg/ui[7][2]/xl_replace.label
+msgid "Replace existing file"
+msgstr "Remplacer le fichier existant"
+
+#: jmvtab/ui[7][3]/resetPath.label
+#: jmvtabreg/ui[7][3]/resetPath.label
+msgid "Reset default path"
+msgstr "Réinitialiser le chemin"
+
+#: jmvtab/options/resetPath.title
+#: jmvtabreg/options/resetPath.title
+msgid "Reset to defaults"
+msgstr "Réinitialiser"
+
+#: jmvtab/options/method_mean_ratio/robust.title
+msgid "robust <i>(each group's variance, default)</i>"
+msgstr "robust <i>(variance par groupe, défaut)</i>"
 
 #: jmvtab/options/pct/row.title
 msgid "row"
 msgstr "row (ligne)"
 
-#: jmvtab/options/xl_path.default
-msgid "S:/Documents"
-msgstr "S:/Documents"
+#: jmvtabreg/options/run_compare.title
+#: jmvtabreg/ui[2][2]/run_compare.label
+msgid "Run comparison"
+msgstr "Lancer la comparaison"
 
-#: jmvtab/ui[5][7][0].label
+#: jmvtabreg/options/compare/sequential.title
+msgid "sequential (vs prev.)"
+msgstr "séquentielle (vs préc.)"
+
+#: jmvtab/options/stars.title
+#: jmvtabreg/options/stars.title
+msgid "stars"
+msgstr "stars"
+
+#: jmvtab/ui[4][0][3][0].label
+#: jmvtabreg/ui[4][0][2]/stars.label
+msgid "stars = <i>(significance stars)</i>"
+msgstr "stars = <i>(étoiles de significativité)</i>"
+
+#: jmvtab/options/method_mean_diff/student.title
+msgid "student <i>(pooled variance)</i>"
+msgstr "student <i>(variance commune)</i>"
+
+#: jmvtabreg/ui[5][1][0].label
+msgid "subtext = <i>(note below the table)</i>"
+msgstr "subtext = <i>(note sous le tableau)</i>"
+
+#: jmvtab/ui[6][0].label
 msgid "subtext = <i>(text to print below the table)</i>"
 msgstr "subtext = <i>(texte en dessous du tableau)</i>"
 
@@ -329,46 +801,110 @@ msgstr "tab <i>(comparer par sous-tableaux)</i>"
 msgid "table"
 msgstr "table (sous-tableau complet)"
 
+#: jmvtab/options/export_filename.default
 #: jmvtab/results/html_table.title
+#: jmvtabreg/results/html_table.title
 msgid "Table"
 msgstr "Tableau"
 
-#: jmvtab/options/xl_filename.default
-msgid "Table1.xlsx"
-msgstr "Table1.xlsx"
-
 #: package/analyses/jmvtab.menuGroup
+#: package/analyses/jmvtabreg.menuGroup
 #: jmvtab/options.menuGroup
+#: jmvtabreg/options.menuGroup
 msgid "tabxplor"
 msgstr "tabxplor"
 
-#: R\jmvtab.b.R
-msgid "Total"
-msgstr "Total"
-
 #: jmvtab/options/totaltab.title
-msgid "totaltab = <i>(add a total table)</i>"
-msgstr "totaltab = <i>(ajouter un tableau Total général)</i>"
+msgid "totaltab"
+msgstr "totaltab"
 
 #: jmvtab/ui[5][0][0].label
 msgid "totaltab = <i>(with tab_vars, add a total table)</i>"
 msgstr "totaltab = <i>(avec tab_vars, ajouter un tableau Total général)</i>"
 
+#: jmvtab/ui[1][1][1][2]/test_robust.label
+msgid "Type de pvalue"
+msgstr "Type de pvalue"
+
+#: jmvtab/options/test_robust.title
+msgid "Type of p-value"
+msgstr "Type de p-value"
+
 #: package.title
 msgid "User-Friendly Tables with Color Helpers for Data Exploration"
 msgstr "Tableaux avec aides à l'interprétation pour l'exploration de données"
+
+#: jmvtabreg/options/estimate_display/value.title
+msgid "value (plain estimate)"
+msgstr "value (estimation simple)"
 
 #: jmvtab/options/display/var.title
 msgid "var <i>(variance)</i>"
 msgstr "var <i>(variance)</i>"
 
+#: jmvtabreg/options/compare/baseline.title
+msgid "vs a baseline model"
+msgstr "vs un modèle de base"
+
+#: jmvtab/options/method_diff/wald.title
+msgid "wald"
+msgstr "wald"
+
+#: jmvtabreg/options/method/wald.title
+msgid "Wald"
+msgstr "Wald"
+
+#: jmvtab/options/method_cell/wald.title
+msgid "wald <i>(normal approx.)</i>"
+msgstr "wald <i>(approx. normale)</i>"
+
+#: jmvtab/options/method_mean_diff/welch.title
+msgid "welch <i>(unequal variances, default)</i>"
+msgstr "welch <i>(variances inégales, défaut)</i>"
+
+#: jmvtab/options/anova/welch.title
+msgid "Welch <i>(unequal variances)</i>"
+msgstr "Welch <i>(variances inégales)</i>"
+
+#: jmvtab/options/method_cell/wilson.title
+msgid "wilson <i>(score, default)</i>"
+msgstr "wilson <i>(score, défaut)</i>"
+
+#: jmvtabreg/options/estimate_display/ci.title
+msgid "with confidence interval"
+msgstr "avec intervalle de confiance"
+
+#: jmvtabreg/options/estimate_display/ame.title
+msgid "with marginal effect"
+msgstr "avec effet marginal"
+
+#: jmvtabreg/options/estimate_display/prob.title
+msgid "with predicted probability"
+msgstr "avec probabilité prédite"
+
 #: jmvtab/options/display/wn.title
 msgid "wn <i>(weighted counts)</i>"
 msgstr "wn <i>(effectifs pondérés)</i>"
 
+#: jmvtabreg/options/wrap_cols.title
+msgid "Wrap column headers at"
+msgstr "Couper en-têtes de colonne à"
+
+#: jmvtabreg/options/wrap_rows.title
+msgid "Wrap row labels at"
+msgstr "Couper libellés de ligne à"
+
+#: jmvtabreg/ui[5][0][1][2].label
+msgid "wrap_cols ="
+msgstr "wrap_cols ="
+
 #: jmvtab/ui[5][2][0].label
 msgid "wrap_cols = <i>(nb chars for line break)</i>"
 msgstr "wrap_cols = <i>(nb lettres avant saut de ligne)</i>"
+
+#: jmvtabreg/ui[5][0][1][1].label
+msgid "wrap_rows ="
+msgstr "wrap_rows ="
 
 #: jmvtab/ui[5][1][0].label
 msgid "wrap_rows = <i>(nb chars for line break)</i>"

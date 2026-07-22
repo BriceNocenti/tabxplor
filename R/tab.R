@@ -134,9 +134,14 @@ NULL
 #'   \code{diff}, \code{ratio}, \code{ci}, \code{or}, \code{ctr}, \code{var}; the first field is the
 #'   \emph{primary}, shown alone by Excel and used for coloring. A bare field name is also accepted as a
 #'   shorthand for its single-field template, so \code{display = "ci"} is the same as
-#'   \code{display = "\{ci\}"} (it shows the confidence interval). \code{NULL} (default) keeps the plain
-#'   single-field display. It is a display overlay only: colors, differences and the underlying fields
-#'   are unchanged.
+#'   \code{display = "\{ci\}"} (it shows the confidence interval). The special value
+#'   \code{display = "num_ci"} is a type-adaptive shorthand for \code{"\{pct\} \{ci\}"} on percentage
+#'   columns and \code{"\{mean\} \{ci\}"} on numeric (mean) columns, chosen per column, so a mixed
+#'   factor + numeric table shows each value with its confidence interval in one call. Like
+#'   \code{"\{pct\} \{ci\}"} it displays the CI the table computes (the cell, difference or ratio CI
+#'   set by \code{ci = } / \code{color}), so pair it with a \code{ci = } value or a \code{color} that
+#'   needs one. \code{NULL} (default) keeps the plain single-field display. It is a display overlay
+#'   only: colors, differences and the underlying fields are unchanged.
 #' @param totaltab The total table, if there are subtables/groups
 #' (i.e. when \code{tab_vars} is provided) :
 #'  \itemize{
@@ -637,7 +642,6 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, sup_cols,
   stopifnot(all(tot %in% c("row", "col", "both", "no", "")))
   if (tot[1] == "both") tot <- c("row", "col")
 
-
   result <- tab_build(data = data,
            row_vars = tidyselect::all_of(row_var),
            col_vars = tidyselect::all_of(c(col_var, sup_cols)),
@@ -742,6 +746,14 @@ tab_apply_display <- function(tabs, display) {
   if (is.null(display) || length(display) == 0L) return(tabs)
   ds <- display[[1]]
   if (is.na(ds) || ds %in% c("", "no")) return(tabs)
+  # "num_ci" is a type-adaptive alias, not a single {} template: per column it applies "{pct} {ci}"
+  # (percentages) or "{mean} {ci}" (means), so a mixed factor + numeric table resolves each column by
+  # its own type. fmt_apply_num_ci() reuses the same value-cell eligibility as the template path
+  # below, so the CI shown is whatever the table computed (cell / difference / ratio).
+  if (identical(ds, "num_ci")) {
+    set_one <- function(tab) dplyr::mutate(tab, dplyr::across(dplyr::where(is_fmt), fmt_apply_num_ci))
+    return(if (is.data.frame(tabs)) set_one(tabs) else purrr::map(tabs, set_one))
+  }
   tmpl   <- validate_display_template(ds)
   fields <- parse_display_template(tmpl)$fields
   set_one <- function(tab) {

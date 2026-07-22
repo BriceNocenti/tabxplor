@@ -18,3 +18,11 @@ A fmt vectors with the wanted display.
 \description{
 Set the "display" vctrs::field of a \code{fmt} vector.
 }
+\details{
+The special value \code{value = "num_ci"} is a type-adaptive alias for the
+\code{"\{base\} \{ci\}"} composite: it writes \code{"\{pct\} \{ci\}"} on percentage/frequency
+columns and \code{"\{mean\} \{ci\}"} on numeric (mean) columns, so each value cell shows its base
+value followed by whatever confidence interval the table carries (a cell, difference or ratio CI,
+as driven by \code{ci = } / \code{color}). It is a display overlay: cells with no CI show the bare
+base value.
+}

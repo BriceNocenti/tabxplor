@@ -174,6 +174,57 @@ testthat::test_that("every exporter renders a composite table without error", {
   }
 })
 
+# === display = "num_ci": the type-adaptive "{base} {ci}" alias =====================
+
+testthat::test_that("tab(display = 'num_ci') == '{pct} {ci}' / '{mean} {ci}' per column type", {
+  gss <- forcats::gss_cat
+
+  # factors, showing the DIFFERENCE CI a significance colour computes: byte-identical to the explicit
+  # "{pct} {ci}" template, and every eligible value cell renders a [lo;hi] bracket.
+  t_num <- gss |>
+    tab(race, marital, pct = "row", color = TRUE, color_signif = "guaranteed_effect",
+        display = "num_ci")
+  t_tpl <- gss |>
+    tab(race, marital, pct = "row", color = TRUE, color_signif = "guaranteed_effect",
+        display = "{pct} {ci}")
+  testthat::expect_identical(format(t_num), format(t_tpl))
+  fcol <- t_num[[which(purrr::map_lgl(t_num, is_fmt))[2]]]
+  testthat::expect_gt(sum(grepl("\\[.*;.*\\]", format(fcol))), 0L)      # rule 7: the CI really renders
+
+  # numeric means: "{mean} {ci}", byte-identical to the explicit template
+  testthat::expect_identical(
+    format(tab(gss, race, age, ci = "cell", display = "num_ci")),
+    format(tab(gss, race, age, ci = "cell", display = "{mean} {ci}"))
+  )
+
+  # mixed factor + numeric in ONE call: each column resolves by its own type
+  t_mix <- tab(gss, race, c(marital, age), pct = "row", ci = "cell", display = "num_ci")
+  testthat::expect_identical(
+    format(t_mix),
+    format(tab(gss, race, c(marital, age), pct = "row", ci = "cell", display = "{pct} {ci}"))
+  )                                                                     # factors -> {pct}; age col type stays mean
+  testthat::expect_identical(get_type(t_mix[["age"]]), "mean")
+})
+
+testthat::test_that("set_display(x, 'num_ci') == tab(display = 'num_ci') (same overlay, post-hoc)", {
+  gss <- forcats::gss_cat
+  built <- gss |>
+    tab(race, marital, pct = "row", color = TRUE, color_signif = "guaranteed_effect")
+  post  <- set_display(built, "num_ci")
+  live  <- gss |>
+    tab(race, marital, pct = "row", color = TRUE, color_signif = "guaranteed_effect",
+        display = "num_ci")
+  testthat::expect_identical(format(post), format(live))
+  # single fmt column resolves too
+  col <- built[[which(purrr::map_lgl(built, is_fmt))[2]]]
+  testthat::expect_gt(sum(grepl("\\[.*;.*\\]", format(set_display(col, "num_ci")))), 0L)
+})
+
+testthat::test_that("tab_counts(display = 'num_ci') does not abort", {
+  tc <- tibble::tibble(r = c("a", "a", "b"), c = c("x", "y", "x"), n = c(3, 2, 5))
+  testthat::expect_no_error(tab_counts(tc, r, c, counts = n, display = "num_ci"))
+})
+
 # === micro-benchmark: the no-composite gate must be cheap (informational) ==========
 
 testthat::test_that("display_primary() no-composite gate is negligible (informational)", {

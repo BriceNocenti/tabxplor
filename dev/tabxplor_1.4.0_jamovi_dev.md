@@ -116,10 +116,10 @@ Pain points (all addressed below):
 
 ⚠ **A `.jmo` is tied to OS + arch + jamovi series**, so there are **two build paths and they are not interchangeable** (migration A1/C3). Edit source in **one place only** — WSL.
 
-| Target | jamovi | Checkout | Build |
-|---|---|---|---|
-| **Linux `.jmo`** — the dev path | flatpak `org.jamovi.jamovi` **2.7.36**, bundled R **4.5.0** | `~/github/tabxplor` — **authoritative for source** | `jmvtools::install(home = 'flatpak')` |
-| **Windows `.jmo`** — release only | Windows jamovi (**kept forever**; the only 2.6-solid path) | `D:\Statistiques\github\tabxplor` — **pull, build, never edit** | `options(jamovi_home='C:/Program Files/jamovi 2.6.44.0'); jmvtools::install()` |
+| Target                            | jamovi                                                      | Checkout                                                        | Build                                                                          |
+|-----------------------------------|-------------------------------------------------------------|-----------------------------------------------------------------|--------------------------------------------------------------------------------|
+| **Linux `.jmo`** — the dev path   | flatpak `org.jamovi.jamovi` **2.7.36**, bundled R **4.5.0** | `~/github/tabxplor` — **authoritative for source**              | `jmvtools::install(home = 'flatpak')`                                          |
+| **Windows `.jmo`** — release only | Windows jamovi (**kept forever**; the only 2.6-solid path)  | `D:\Statistiques\github\tabxplor` — **pull, build, never edit** | `options(jamovi_home='C:/Program Files/jamovi 2.6.44.0'); jmvtools::install()` |
 
 ⚙ **The Windows build is now scripted** (Phase 15a): `dev/build_jmo_windows.R` (run
 `Rscript dev/build_jmo_windows.R` on Windows). It clones the current branch into a **throwaway temp
@@ -1230,7 +1230,19 @@ HTML. (The `.zip`s in the folder are the raw exports.)
 
 ---
 
-## 19. Sources
+## 19. French translation
+
+Jamovi compiler is needed to automatically create the translation files for the jamovi UI module.
+
+```bash
+NODE=$(Rscript -e 'cat(node::node())' | tr -d '"')
+JMC=$(Rscript -e 'cat(jmvtools:::jmcPath())' | tr -d '"')
+MOD=~/github/tabxplor
+"$NODE" "$JMC" --i18n "$MOD" --update catalog
+"$NODE" "$JMC" --i18n "$MOD" --update fr
+```
+
+## 20. Sources
 
 Official: `dev.jamovi.org` (`/tutorial/tuts01xx`, `/api/*`, `/ui/*`,
 `/ui/advanced-customisation`, `/api/option-action`); legacy `docs.jamovi.org/_pages/*`. Repos:
@@ -1364,15 +1376,15 @@ candidate; the maintainer confirmed which files landed in the real Documents.
 
 ### Windows detection table (jamovi 2.7.37 bundled R)
 
-| method                                 | dir                        | exists | writable |
-|----------------------------------------|----------------------------|:------:|:--------:|
-| powershell GetFolderPath(MyDocuments)  | (empty)                    |   -    |    -     |
-| **registry Shell Folders\Personal**    | **D:\Documents**           | TRUE   | **TRUE** |
-| registry User Shell Folders\Personal   | D:\Documents               | TRUE   | TRUE     |
-| reg.exe query Shell Folders            | D:\Documents               | TRUE   | TRUE     |
-| OneDrive env + \Documents              | (unset)                    |   -    |    -     |
-| home/Documents (naive baseline)        | C:/Users/Brice/Documents   | FALSE  | FALSE    |
-| CURRENT resolveExportPath("~/Documents") | C:/Users/Brice/Documents | FALSE  | FALSE    |
+| method                                   | dir                      | exists | writable |
+|------------------------------------------|--------------------------|:------:|:--------:|
+| powershell GetFolderPath(MyDocuments)    | (empty)                  |   -    |    -     |
+| **registry Shell Folders\Personal**      | **D:\Documents**         |  TRUE  | **TRUE** |
+| registry User Shell Folders\Personal     | D:\Documents             |  TRUE  |   TRUE   |
+| reg.exe query Shell Folders              | D:\Documents             |  TRUE  |   TRUE   |
+| OneDrive env + \Documents                | (unset)                  |   -    |    -     |
+| home/Documents (naive baseline)          | C:/Users/Brice/Documents | FALSE  |  FALSE   |
+| CURRENT resolveExportPath("~/Documents") | C:/Users/Brice/Documents | FALSE  |  FALSE   |
 
 Recommended (auto): **registry Shell Folders\Personal -> D:\Documents**. Decisive env facts:
 
@@ -1391,11 +1403,11 @@ Recommended (auto): **registry Shell Folders\Personal -> D:\Documents**. Decisiv
 
 ### WSL/Linux detection table (flatpak)
 
-| method                    | dir                  | exists | writable |
-|---------------------------|----------------------|:------:|:--------:|
-| xdg-user-dir DOCUMENTS    | /home/dev1           | TRUE   | TRUE     |
-| home/Documents (baseline) | /home/dev1/Documents | FALSE* | (created)|
-| powershell / reg / wslpath | (not found)         |   -    |    -     |
+| method                     | dir                  | exists | writable  |
+|----------------------------|----------------------|:------:|:---------:|
+| xdg-user-dir DOCUMENTS     | /home/dev1           |  TRUE  |   TRUE    |
+| home/Documents (baseline)  | /home/dev1/Documents | FALSE* | (created) |
+| powershell / reg / wslpath | (not found)          |   -    |     -     |
 
 `*` `/home/dev1/Documents` did not pre-exist; the write CREATED it. `xdg-user-dir` IS installed
 (`/usr/bin/xdg-user-dir`) but this distro has no `~/.config/user-dirs.dirs`, so it falls back to

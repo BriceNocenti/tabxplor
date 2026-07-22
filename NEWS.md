@@ -2,6 +2,11 @@
 # tabxplor 1.4.0 (in development)
 
 ## New features
+* **`tab(display = "num_ci")`** — a type-adaptive shorthand for the `"{pct} {ci}"` / `"{mean} {ci}"`
+  composite: it shows each value with the confidence interval the table computes (the cell, difference
+  or ratio CI set by `ci =` / `color`), choosing `{pct}` for percentage columns and `{mean}` for
+  numeric columns per column, so a mixed factor + numeric table shows every value with its CI in one
+  call. Also works via `set_display(x, "num_ci")` on an already-built table.
 * **`tab_counts()` now matches `tab()`'s colour and argument surface.** Building a coloured table from
   pre-aggregated counts — `tab_counts(counts, ..., color = TRUE)` — used to error; it now accepts every
   `color` form `tab()` does (`TRUE` / a measure / two-channel `c(text, background)` / per-type
@@ -774,6 +779,10 @@
   name works, so no code needs to change. See `?tabxplor-options`.
 
 ## Bug corrections
+* **`tab_export(format = "xl")` / `tab_xl()` no longer error when no spreadsheet application is found.**
+  On a machine with no Excel (e.g. WSL2), auto-opening the written file aborted with *"No applications
+  (detected) available."* after the file had already been written successfully. The failed open now
+  degrades to a friendly info message instead of an error.
 * **Table borders now close cleanly in the html and markdown exports.** In the custom html export, the
   vertical row-variable-name column (several `row_vars`) gained its missing bottom border, and the
   column-variable names now float above the grid with no top border boxing them. In the markdown export,

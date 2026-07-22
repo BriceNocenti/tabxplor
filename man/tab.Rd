@@ -323,13 +323,18 @@ columns. Total rows/columns, the added-\code{n} row/column and the p-value line 
 value cell (text output only -- the console, \code{\link{tab_kable}} and \code{\link{tab_md}};
 Excel falls back to the primary field). A \code{\{\}} template listing the fields to combine, e.g.
 \code{"\{pct\} (n=\{n\})"} (a percentage with its count), \code{"\{n\} (\{pct\})"} or
-\code{"\{diff\} \{ci\}"}. Valid fields: \code{pct}, \code{n}, \code{wn}, \code{mean},
+\code{"\{pct\} \{ci\}"}. Valid fields: \code{pct}, \code{n}, \code{wn}, \code{mean},
 \code{diff}, \code{ratio}, \code{ci}, \code{or}, \code{ctr}, \code{var}; the first field is the
 \emph{primary}, shown alone by Excel and used for coloring. A bare field name is also accepted as a
 shorthand for its single-field template, so \code{display = "ci"} is the same as
-\code{display = "\{ci\}"} (it shows the confidence interval). \code{NULL} (default) keeps the plain
-single-field display. It is a display overlay only: colors, differences and the underlying fields
-are unchanged.}
+\code{display = "\{ci\}"} (it shows the confidence interval). The special value
+\code{display = "num_ci"} is a type-adaptive shorthand for \code{"\{pct\} \{ci\}"} on percentage
+columns and \code{"\{mean\} \{ci\}"} on numeric (mean) columns, chosen per column, so a mixed
+factor + numeric table shows each value with its confidence interval in one call. Like
+\code{"\{pct\} \{ci\}"} it displays the CI the table computes (the cell, difference or ratio CI
+set by \code{ci = } / \code{color}), so pair it with a \code{ci = } value or a \code{color} that
+needs one. \code{NULL} (default) keeps the plain single-field display. It is a display overlay
+only: colors, differences and the underlying fields are unchanged.}
 
 \item{color_breaks}{A per-table override of the colour thresholds, a named list of scales like
 \code{\link{set_color_breaks}} accepts, e.g. \code{list(pct_ratio = list(over = 2))}. Stored as

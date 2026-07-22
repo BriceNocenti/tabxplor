@@ -685,11 +685,42 @@ return(x)
 }
 #' Set the "display" vctrs::field of a \code{fmt} vector.
 #' @inheritParams fmt
+#' @details The special value \code{value = "num_ci"} is a type-adaptive alias for the
+#'   \code{"\{base\} \{ci\}"} composite: it writes \code{"\{pct\} \{ci\}"} on percentage/frequency
+#'   columns and \code{"\{mean\} \{ci\}"} on numeric (mean) columns, so each value cell shows its base
+#'   value followed by whatever confidence interval the table carries (a cell, difference or ratio CI,
+#'   as driven by \code{ci = } / \code{color}). It is a display overlay: cells with no CI show the bare
+#'   base value.
 #' @return A fmt vectors with the wanted display.
 #' @export
 set_display.tabxplor_fmt <- function(x, value) {
+  # "num_ci" is a type-adaptive alias for the "{base} {ci}" composite: show each value cell with the
+  # confidence interval the table already carries (the difference / ratio CI driven by ci = / color,
+  # not a forced cell CI). Resolve it per the column's own type -- see fmt_apply_num_ci().
+  if (length(value) == 1L && identical(as.character(value), "num_ci")) return(fmt_apply_num_ci(x))
   value <- vctrs::vec_cast(value, character()) |> vctrs::vec_recycle(size = length(x))
   vctrs::`field<-`(x, "display", value)
+}
+
+# num_ci is a type-adaptive display alias: it writes the composite "{mean} {ci}" template on numeric
+# (mean) columns and "{pct} {ci}" on percentage/frequency columns, so each value cell shows its base
+# value plus whatever confidence interval the table computes (cell, difference or ratio). It is a
+# pure DISPLAY overlay applied with tab_apply_display()'s EXACT value-cell eligibility, so the result
+# is byte-identical to writing the concrete template per column: only genuine value cells where BOTH
+# fields render (non-NA) get it -- count-only, p-value and total-marker cells keep their own token,
+# a cell with no CI keeps its bare base, and a cell already showing value+CI (pct_ci / mean_ci from
+# ci = "cell") is left untouched (it is already "{base} {ci}").
+# Why this exists: shared by set_display.tabxplor_fmt() and tab_apply_display() so the "num_ci" alias
+# resolves the same way whether requested at build (tab(display=)) or post-hoc (set_display()).
+fmt_apply_num_ci <- function(col) {
+  base <- if (identical(get_type(col), "mean")) "mean" else "pct"
+  tmpl <- paste0("{", base, "} {ci}")
+  fields <- parse_display_template(tmpl)$fields
+  d <- get_display(col)
+  elig <- d %in% c("pct", "mean", "n", "wn")
+  for (f in fields) elig <- elig & !is.na(get_num(set_display(col, f)))
+  d[elig] <- tmpl
+  set_display(col, d)
 }
 #' Set the "display" vctrs::field of a \code{fmt} vector.
 #' @inheritParams fmt
