@@ -1323,6 +1323,23 @@ literals (Excel workbooks are not textually snapshotted; rendering is identical)
   in `tab_xl.R`, multiply-sign in `fmt_class.R`); the bare `±` was already unquoted. Fixtures:
   `test-xl-backend.R` (helper + ratio-code no-quote), `test-tab_xl.R` (source codes carry no `"`),
   `test-export-parity.R` (ratio code is `\×#,##0.0`).
+- **Follow-up (same phase): empty summary-row cells no longer export as Excel `#N/A`.** The older bundled
+  openxlsx2's `add_data` NA formal is `na.strings` (dot), which `xlb_na_argname` did not detect (it only
+  knew `na`/`na_strings`) -> our `NULL` was an unused arg -> the default wrote `#N/A` for NA cells on the
+  p-value / Cramér's V rows. `xlb_na_argname` now reads the exact formal off the method (`na` / `na_strings`
+  / `na.strings`). Also `xl_materialize_data` coerces `NaN -> NA` so a NaN cell blanks instead of `#VALUE!`
+  (the na arg only covers NA). Reproduced + verified fixed on the bundled openxlsx2 1.15. Fixtures in
+  `test-xl-backend.R` (argname stub + NaN blanking).
+- **Follow-up (same phase): the jamovi export message now shows the path REALLY written, styled.** The old
+  message reported the requested path even when `xl_replace = FALSE` auto-numbered the file
+  (`Tableau.xlsx` -> `Tableau1.xlsx`), and HTML/MD ignored `replace` entirely (always overwrote). New
+  shared `export_number_path()` (R/jmvtab-export.R) is THE replace/auto-number rule — used by
+  `jmvtab_export()` (once, for every format) AND `tab_xl_resolve_path()` (single-sourced). `jmvtab_export()`
+  returns the actual (numbered) path; `jmv_backend_export()` returns a bold green (real path) / bold red
+  (error) HTML status via new `export_status_html()`, prepended above `html_table` by both `.b.R` backends
+  (jamovi's `Notice` has no green/success type). Removed the now-unused `jmv_backend_notice`. Fixtures in
+  `test-jmvtab-export.R` (numbering, per-format replace + returned path, status styling/escaping). The
+  `.b.R`/`.r.yaml` are inert until the maintainer's rebuild; the R helpers are suite-verified.
 
 #### Last Phase r – last display fixes
 
@@ -1336,7 +1353,7 @@ markdown export still have a few problems on their own pandoc/quarto html render
 - On rows with a row variable name (here : "race", "rincome", "relig"), the leftmost border dissapears just for this cell, which makes the whole table bad looking not-closed. How to fix it ? If style code simplification is needed here for reliability, do it.
 
 `jmvtabreg` UI :
-- "Model comparison" : currently the model boxes created with "+" (to set model name and choose predictors of each model) do not take all the horizontal space available at their right on jamovi option pane. It would really be better if it dis, specially when there are many predictors.
+- "Model comparison" : currently the model boxes created with "+" (to set model name and choose predictors of each model) do not take all the horizontal space available at their right on jamovi option pane. It would really be better if they did, specially when there are many predictors.
 - "Run comparison" button should be more visually striking : let’s get it back to the same look than the Export button, with white text in bold over blue background.
 
 `jmvtab` and `jmvtabreg` UI :

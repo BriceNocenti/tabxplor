@@ -133,6 +133,52 @@ testthat::test_that("jmvtab_export writes a valid Excel workbook", {
   testthat::expect_true(length(openxlsx2::wb_get_sheet_names(wb)) >= 1)
 })
 
+# --- "Replace" rule + honest reported path (this-phase) -----------------------------------
+
+testthat::test_that("export_number_path: replace keeps the name, else auto-numbers past existing files", {
+  tmp <- withr::local_tempdir()
+  p   <- file.path(tmp, "Tableau.xlsx")
+  testthat::expect_identical(export_number_path(p, replace = FALSE), p)  # free -> unchanged
+  file.create(p)
+  testthat::expect_identical(export_number_path(p, replace = TRUE), p)   # replace -> unchanged
+  testthat::expect_identical(export_number_path(p, replace = FALSE), file.path(tmp, "Tableau1.xlsx"))
+  file.create(file.path(tmp, "Tableau1.xlsx"))
+  testthat::expect_identical(export_number_path(p, replace = FALSE), file.path(tmp, "Tableau2.xlsx"))
+  # extension-agnostic + robust to a dotted directory
+  d2 <- file.path(tmp, "a.b"); dir.create(d2); q <- file.path(d2, "t.md"); file.create(q)
+  testthat::expect_identical(export_number_path(q, replace = FALSE), file.path(d2, "t1.md"))
+})
+
+testthat::test_that("jmvtab_export honours replace and RETURNS the path really written (md/html/excel)", {
+  for (fmt in c("md", "html", "excel")) {
+    if (fmt == "html" && !requireNamespace("kableExtra", quietly = TRUE)) next
+    if (fmt == "excel" && !requireNamespace("openxlsx2", quietly = TRUE)) next
+    tmp <- withr::local_tempdir()
+    ext <- switch(fmt, md = "md", html = "html", excel = "xlsx")
+    p   <- file.path(tmp, paste0("Tableau.", ext))
+    a1  <- jmvtab_export(tabs, fmt, p, replace = FALSE)          # first write -> the requested path
+    testthat::expect_identical(a1, p)
+    testthat::expect_true(file.exists(a1))
+    a2  <- jmvtab_export(tabs, fmt, p, replace = FALSE)          # not replacing -> a NEW, numbered file
+    testthat::expect_identical(a2, file.path(tmp, paste0("Tableau1.", ext)))
+    testthat::expect_true(file.exists(a2))
+    a3  <- jmvtab_export(tabs, fmt, p, replace = TRUE)           # replacing -> back to the requested path
+    testthat::expect_identical(a3, p)
+  }
+})
+
+testthat::test_that("export_status_html: bold green success with the path, bold red failure, escaped", {
+  ok <- export_status_html("D:/Documents/Tableau1.xlsx", ok = TRUE)
+  testthat::expect_match(ok, "font-weight:bold")
+  testthat::expect_match(ok, "#1a7f37")                         # green
+  testthat::expect_match(ok, "Saved to: ", fixed = TRUE)
+  testthat::expect_match(ok, "Tableau1.xlsx", fixed = TRUE)     # the REAL (numbered) path
+  bad <- export_status_html("boom <x> & <y>", ok = FALSE)
+  testthat::expect_match(bad, "#c62828")                        # red
+  testthat::expect_match(bad, "Export failed: ", fixed = TRUE)
+  testthat::expect_match(bad, "&lt;x&gt; &amp; &lt;y&gt;", fixed = TRUE)   # HTML-escaped
+})
+
 # --- Reference-level picker helpers (Phase 7g-iii) ----------------------------------------
 
 testthat::test_that("jmvtab_ref_vector: a chosen level -> named vector; none -> free-text", {

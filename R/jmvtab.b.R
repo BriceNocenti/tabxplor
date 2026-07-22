@@ -56,8 +56,10 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
       on.exit(options("tabxplor.ci_print" = ci_print_option), add = TRUE)
 
       # --- Export (Excel / HTML / Markdown; Phase 7g) + HTML render (shared helpers) ----------
-      jmv_backend_export(self, tabs)
-      self$results$html_table$setContent(jmv_backend_render_html(self, tabs))
+      # The export returns a styled status line (bold green with the path REALLY written / bold red on
+      # failure); prepend it above the rendered table (jamovi's Notice has no green success type).
+      status <- jmv_backend_export(self, tabs)
+      self$results$html_table$setContent(paste0(status, jmv_backend_render_html(self, tabs)))
     },
 
     # Collect the jamovi options into the plain list jmvtab_build() consumes. Kept separate so the
@@ -128,7 +130,7 @@ jmvtabClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
       )
     },
 
-    # .render_html / .notice / export / weights are the shared jmv_backend_* helpers in
+    # .render_html / export / weights are the shared jmv_backend_* helpers in
     # R/jmvtab-export.R (Phase 17i) -- called directly from .run() above.
 
     .plot = function(image, ...) {

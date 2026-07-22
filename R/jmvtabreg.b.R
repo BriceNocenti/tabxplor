@@ -69,10 +69,12 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
         return(invisible())
       }
 
-      # Export (Excel / HTML / Markdown) + HTML render -- the shared jmv_backend_* helpers.
-      jmv_backend_export(self, tabs)
+      # Export (Excel / HTML / Markdown) + HTML render -- the shared jmv_backend_* helpers. The export
+      # returns a styled status line (bold green with the path REALLY written / bold red on failure)
+      # prepended above the table; compare_state stores the PURE render so a re-serve stays clean.
+      status <- jmv_backend_export(self, tabs)
       html <- jmv_backend_render_html(self, tabs)
-      self$results$html_table$setContent(html)
+      self$results$html_table$setContent(paste0(status, html))
       # Remember the computed comparison so a later live edit can re-serve / flag it (Phase h).
       if (staged) self$results$compare_state$setState(list(sig = cur_sig, html = html))
     },
@@ -124,7 +126,7 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
       )
     },
 
-    # .render_html / .notice / export / weights are the shared jmv_backend_* helpers in
+    # .render_html / export / weights are the shared jmv_backend_* helpers in
     # R/jmvtab-export.R (Phase 17i) -- called directly from .run() above.
 
     # A friendly placeholder when the outcome / predictors are not both selected yet (or a model

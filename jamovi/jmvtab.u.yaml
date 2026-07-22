@@ -742,6 +742,6 @@ children:
         children:
           - type: ActionButton
             name: resetPath
-            label: default path
+            label: Reset default path
             events:
               change: ./jmvtab::resetPath_changed

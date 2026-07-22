@@ -758,6 +758,16 @@
   side export; a current openxlsx2 escaped it, so plain `tab()`/`tab_reg()` export was unaffected). These
   literals are now backslash-escaped (`0.0%\*\*\*`), which is valid on every openxlsx2 version and renders
   identically in Excel.
+* **Empty cells on the p-value / effect-size (Cramér's V) summary rows now export as blank cells**, not
+  Excel `#N/A`. The older openxlsx2 bundled inside jamovi names its blank-NA argument `na.strings` (not
+  `na_strings`/`na`), so the request for blank cells was silently ignored and the default `#N/A` error was
+  written; the exact argument name is now read from the engine. A cell that computes to `NaN` also exports
+  blank (previously `#VALUE!`).
+* **jamovi export message now shows the file that was really written**, in bold green (bold red on
+  failure). When *Replace existing file* is unchecked and the target exists, the exporter auto-numbers
+  (`Tableau.xlsx` → `Tableau1.xlsx`); the confirmation now reports that numbered path instead of the
+  requested one. The replace / auto-number rule is a single shared function used identically for Excel,
+  HTML and Markdown (previously HTML and Markdown silently overwrote regardless of the setting).
 * **Excel export from the jamovi modules no longer fails** with *"dims must be something like A1 or
   A1:B2."*. The older openxlsx2 bundled inside jamovi rejects the multi-area cell ranges tabxplor uses
   to style non-contiguous cells efficiently (rich tables with a significance row, counts, etc.); each

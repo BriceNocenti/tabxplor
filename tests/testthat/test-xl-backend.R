@@ -66,6 +66,26 @@ test_that("xlb_set_cell_style / xlb_numfmt survive the OLDER openxlsx2 single-ra
   expect_identical(seen$numfmt, c("C7:E8", "F4:F8"))
 })
 
+test_that("xlb_na_argname resolves the exact NA formal across openxlsx2 versions (Phase q)", {
+  # The older jamovi-bundled openxlsx2's add_data NA formal is `na.strings` (dot). Guessing `na_strings`
+  # made the arg UNUSED -> the default #N/A error filled empty summary-stat / p-value cells. Read the real
+  # name off the method's own formals: na (current) / na_strings / na.strings (oldest).
+  mk <- function(f) { e <- new.env(); e$add_data <- f; e }
+  expect_identical(xlb_na_argname(mk(function(name, na.strings) NULL)), "na.strings")
+  expect_identical(xlb_na_argname(mk(function(x, na_strings) NULL)),    "na_strings")
+  expect_identical(xlb_na_argname(mk(function(x, na) NULL)),            "na")
+})
+
+test_that("xl_materialize_data blanks NaN so Excel shows an empty cell, not #VALUE! (Phase q)", {
+  # openxlsx2 renders a NaN numeric cell as an Excel error even when NA is blanked (the na arg only covers
+  # NA), so an empty summary cell that computes to NaN must be coerced to NA before the write.
+  x  <- fmt(n = 1L, mean = NaN, type = "mean", display = "mean", digits = 1L)
+  tb <- tibble::tibble(v = x)
+  out <- xl_materialize_data(tb, fmt_cols = 1L, text_fmt_cols = integer(0))
+  expect_true(is.na(out$v))
+  expect_false(is.nan(out$v))
+})
+
 test_that("numFmt literals are backslash-escaped, never double-quote-wrapped (Phase q)", {
   # A raw " inside <numFmt formatCode="..."/> is left unescaped by the older jamovi-bundled openxlsx2,
   # so its own read_xml round-trip rejects the fragment ("xml import unsuccessful") -- the Windows-side

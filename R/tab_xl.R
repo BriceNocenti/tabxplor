@@ -368,16 +368,10 @@ tab_xl_resolve_path <- function(path, replace) {
     dir_path <- path |> stringi::stri_replace_first_regex("\\\\[^\\\\]+$|/[^/]+$", "")
     if (!dir.exists(dir_path)) dir.create(dir_path, recursive = TRUE)
   }
-  path_name <- stringi::stri_replace_first_regex(path, "\\.xlsx$", "")
   if (!stringi::stri_detect_regex(path, "\\.xlsx$")) path <- stringi::stri_c(path, ".xlsx")
-  if (isFALSE(replace)) {
-    i <- 0
-    while (file.exists(path)) {
-      i <- i + 1
-      path <- stringi::stri_c(path_name, i, ".xlsx")
-    }
-  }
-  path
+  # THE shared "replace" rule (auto-number past an existing file when replace = FALSE), single-sourced so
+  # direct tab_xl() use and the jamovi exporter number identically. See R/jmvtab-export.R.
+  export_number_path(path, replace)
 }
 
 
@@ -397,7 +391,10 @@ xl_materialize_data <- function(tab, fmt_cols, text_fmt_cols, transposed = FALSE
     } else if (ci %in% text_fmt_cols) {
       format(tab[[ci]], special_formatting = TRUE, na = "", stars = TRUE)
     } else {
-      get_num(tab[[ci]])
+      # NaN -> NA so an empty numeric cell (a summary-stat / p-value row where the test does not apply)
+      # writes as a BLANK cell, not the Excel #VALUE!/#N/A error -- openxlsx2 renders NaN as an error even
+      # when NA is blanked (the na arg only covers NA). See xlb_na_argname for the NA half.
+      v <- get_num(tab[[ci]]); v[is.nan(v)] <- NA_real_; v
     }
   }
   tibble::as_tibble(tab)

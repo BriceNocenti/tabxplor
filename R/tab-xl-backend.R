@@ -109,17 +109,23 @@ xlb_add_sheet <- function(wb, title)
 xlb_freeze <- function(wb, sheet, active_row = 3L)
   wb$freeze_pane(sheet = sheet, first_active_row = active_row, first_col = TRUE)
 
-# DESIGN: openxlsx2 renamed the NA-handling arg `na_strings` -> `na` across versions. Older builds
-# (the jamovi-bundled one on Windows) have ONLY `na_strings`, so a literal `na = NULL` partial-matches
-# BOTH `name` and `na_strings` -> "argument N matches multiple formal arguments" (the Excel-export
-# crash). Resolve the exact arg name once from the method's own formals and pass it by name.
+# DESIGN: openxlsx2 renamed the NA-handling arg across versions: `na.strings` (oldest, dot form) ->
+# `na_strings` -> `na` (current). Resolve the EXACT formal name from the method itself and pass by name.
+# Two failures this guards, both on the jamovi-bundled openxlsx2 (Windows-side):
+#   * a literal `na = NULL` partial-matches BOTH `name` and `na_strings`/`na.strings` -> "argument N
+#     matches multiple formal arguments" (an earlier Excel-export crash);
+#   * guessing `na_strings` when the real formal is `na.strings` (dot) makes the arg UNUSED, so the
+#     default (write the Excel #N/A error for NA cells) applies -> summary-stat / p-value rows showed
+#     "#N/A" in empty cells. Reading the real name off the formals fixes both.
 xlb_na_argname <- function(wb) {
   fmls <- tryCatch(names(formals(wb$add_data)), error = function(e) character())
-  if ("na" %in% fmls) "na" else "na_strings"
+  cand <- c("na", "na_strings", "na.strings")
+  hit  <- cand[cand %in% fmls]
+  if (length(hit)) hit[[1]] else "na_strings"
 }
 
-# `list(NULL)` (single-bracket assign) keeps a NULL-VALUED element in the arg list -> passes
-# `na = NULL` / `na_strings = NULL` (blank cells, not #N/A); a `[[<-` NULL would drop it entirely.
+# `list(NULL)` (single-bracket assign) keeps a NULL-VALUED element in the arg list -> passes the
+# resolved NA arg as NULL (blank cells, not #N/A); a `[[<-` NULL would drop it entirely.
 xlb_add_data <- function(wb, ...) {
   args <- list(..., apply_cell_style = FALSE)
   args[xlb_na_argname(wb)] <- list(NULL)

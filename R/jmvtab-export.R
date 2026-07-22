@@ -8,7 +8,8 @@
 #          jmvtest diagnostic toolkit that drove the experiment is archived in dev/jamovi/jmvtest.b.R.
 # ROLE: Engine-free, session-free helpers so the export logic is unit-testable without a live
 #       jamovi session. jmvtab.b.R detects the export click, resolves the path, and calls
-#       jmvtab_export(); the click is a boolean read (§5.3) and the result is reported via a Notice.
+#       jmvtab_export(); the click is a boolean read (§5.3) and the result (the path REALLY written) is
+#       reported as a bold green / red status line prepended above the results table.
 # KEY CONSTRAINTS:
 #   - No native file/folder picker exists for a module (dev guide §14) -- typed strings are the only
 #     route. Phase 15c splits the old single `path` into a FOLDER box + a bare FILENAME box (the
@@ -141,6 +142,39 @@ resolveExportPath <- function(dir, filename, ext = "xlsx") {
   if (!nzchar(base)) base <- "Table"
 
   normalizePath(file.path(dir, paste0(base, ".", ext)), mustWork = FALSE)
+}
+
+# Auto-number a target file when NOT replacing and it already exists: "Table.xlsx" -> "Table1.xlsx" ->
+# "Table2.xlsx" ... (the historical tab_xl scheme, now format-agnostic via tools::file_ext). replace =
+# TRUE, or a free path, returns `path` unchanged. THE single "replace" rule -- shared by tab_xl() (direct
+# R use) AND every jamovi export format, so Excel / HTML / Markdown auto-number identically and the caller
+# can report the path that was REALLY written (jmvtab_export() returns this, not the requested path).
+#' @keywords internal
+#' @noRd
+export_number_path <- function(path, replace = FALSE) {
+  if (isTRUE(replace) || !file.exists(path)) return(path)
+  stem <- tools::file_path_sans_ext(path)
+  ext  <- tools::file_ext(path)
+  dot  <- if (nzchar(ext)) paste0(".", ext) else ""
+  i <- 0L
+  repeat { i <- i + 1L; cand <- paste0(stem, i, dot); if (!file.exists(cand)) return(cand) }
+}
+
+# The export status line shown above the results table: BOLD green on success (with the file's REAL
+# path), BOLD red on failure. jamovi's Notice has no green/success type, so this is inline-styled HTML
+# prepended to the html_table content (the one results Html element that always renders).
+#' @keywords internal
+#' @noRd
+export_status_html <- function(text, ok = TRUE) {
+  esc <- function(s) {
+    s <- gsub("&", "&amp;", s, fixed = TRUE)
+    s <- gsub("<", "&lt;",  s, fixed = TRUE)
+    gsub(">", "&gt;", s, fixed = TRUE)
+  }
+  color <- if (isTRUE(ok)) "#1a7f37" else "#c62828"   # green / red
+  lead  <- if (isTRUE(ok)) "Saved to: " else "Export failed: "
+  paste0("<div style=\"margin:8px 2px;font-weight:bold;color:", color, ";\">",
+         esc(lead), esc(as.character(text)[1]), "</div>")
 }
 
 
@@ -317,16 +351,21 @@ jmvtab_export <- function(tabs, format = c("excel", "html", "md"), path, replace
     }
   }
 
+  # Apply the "replace" rule ONCE, here, for EVERY format (Excel / HTML / Markdown alike) -- so the
+  # auto-numbering and the reported path are identical across formats. tab_xl() is then handed the
+  # already-final path with replace = TRUE so it does not number a second time.
+  path <- export_number_path(path, replace)
+
   # The writer itself is left UNwrapped: a low-level failure keeps its full rlang cause chain, which
   # the backend surfaces via conditionMessage() (Phase 15c un-masking) -- not the bare "In index: 1."
   switch(
     format,
-    excel = tab_xl(tabs, path = path, sheets = "unique", open = FALSE, replace = replace),
+    excel = tab_xl(tabs, path = path, sheets = "unique", open = FALSE, replace = TRUE),
     # Phase 10e: html export uses the self-contained home-built engine -> no kableExtra needed.
     html  = writeLines(tab_html_string(tabs, ...), path),
     md    = tab_md(tabs, file = path, print = FALSE)
   )
-  invisible(path)
+  invisible(path)          # the path REALLY written (auto-numbered), for the caller's status message
 }
 
 
@@ -353,35 +392,23 @@ jmv_backend_weights <- function(data, opt_wt) {
   list(data = data, wt = wt)
 }
 
-# Report an export result via a native jmvcore::Notice (info / error), inserted at the top of the
-# results (dev guide §7.6 / §14). Replaces the old hand-built HTML status box.
-#' @keywords internal
-#' @noRd
-jmv_backend_notice <- function(self, text, ok = TRUE) {
-  notice <- jmvcore::Notice$new(
-    options = self$options, name = "exportNotice",
-    type = if (ok) jmvcore::NoticeType$INFO else jmvcore::NoticeType$ERROR
-  )
-  notice$setContent(text)
-  self$results$insert(1, notice)
-}
-
 # Handle the `exportExcel` boolean-click Action (§5.3): resolve the typed FOLDER + FILENAME + the
-# format's extension into a path, write via jmvtab_export(), and report success / failure via a Notice.
-# conditionMessage() (not err$message) surfaces the FULL rlang cause chain (Phase 15c un-masking) --
-# the bare err$message is only the top "In index: 1." wrapper.
+# format's extension into a path, write via jmvtab_export(), and RETURN a styled status line (bold green
+# with the path REALLY written, bold red on failure) for the caller to prepend above the results table.
+# Returns "" when no export was requested. conditionMessage() (not err$message) surfaces the FULL rlang
+# cause chain (Phase 15c un-masking) -- the bare err$message is only the top "In index: 1." wrapper.
 #' @keywords internal
 #' @noRd
 jmv_backend_export <- function(self, tabs) {
-  if (!isTRUE(self$options$exportExcel)) return(invisible())
+  if (!isTRUE(self$options$exportExcel)) return("")
   fmt <- self$options$export_format
   ext <- switch(fmt, "excel" = "xlsx", "html" = "html", "md" = "md", "xlsx")
   p   <- resolveExportPath(self$options$export_dir, self$options$export_filename, ext)
   tryCatch({
-    jmvtab_export(tabs, format = fmt, path = p, replace = self$options$xl_replace)
-    jmv_backend_notice(self, paste0("Saved to: ", p), ok = TRUE)
+    actual <- jmvtab_export(tabs, format = fmt, path = p, replace = self$options$xl_replace)
+    export_status_html(actual, ok = TRUE)
   }, error = function(err) {
-    jmv_backend_notice(self, paste0("Export failed: ", conditionMessage(err)), ok = FALSE)
+    export_status_html(conditionMessage(err), ok = FALSE)
   })
 }
 
